@@ -26,6 +26,12 @@ struct ClockStamp {
     std::uint64_t transmitUs{};             // when the sender serialized this sample
 };
 
+// Why a window closed (the reason= key, log-contract §1.4): it lasted
+// ClockSync::WindowUs, the link closed (final=1), or the Client's connection
+// resumed from an interruption and the time echo samples again (v7.1
+// outage-resync; the drift regression carries on).
+enum class ClockWindowEnd { Window, Final, Resume };
+
 // One window of samples (about ClockSync::WindowUs), as logged.
 struct ClockWindow {
     std::uint64_t windowUs{};
@@ -37,10 +43,10 @@ struct ClockWindow {
     std::optional<std::int64_t> delayMinUs, delayMaxUs;
     std::optional<double> driftPpm; // offset regression over the windows since the last jump
     bool jump{};  // the offset moved beyond both samples' uncertainty and the drift allowance
-    bool final{}; // the window closed with the link, not after WindowUs
+    ClockWindowEnd end{ClockWindowEnd::Window};
 };
 
-// "clock sync window_ms=... final=0": the line both ends log (pv7 §3; the body
+// "clock sync window_ms=... final=0 reason=window": the line both ends log (pv7 §3; the body
 // of the clock_sync family in docs/object_fps_pvp/log-contract.zh-Hant.md). A
 // drift that is not finite is written as na.
 [[nodiscard]] inline std::string ClockWindowLine(const ClockWindow& window);
@@ -77,8 +83,8 @@ public:
     [[nodiscard]] std::optional<std::pair<std::uint64_t, std::uint64_t>> Echo() const noexcept { return echo_; }
     // An own sample waiting to be sent was replaced by a newer one (D57).
     void NoteReplaced() noexcept { ++replaced_; }
-    // Closes the window once it lasted WindowUs, or at once when final.
-    [[nodiscard]] std::optional<ClockWindow> Roll(std::uint64_t nowUs, bool final = false);
+    // Closes the window once it lasted WindowUs, or at once for any other end.
+    [[nodiscard]] std::optional<ClockWindow> Roll(std::uint64_t nowUs, ClockWindowEnd end = ClockWindowEnd::Window);
 
 private:
     struct Sample {
@@ -123,11 +129,18 @@ public:
     [[nodiscard]] std::optional<std::string> End(std::uint64_t nowUs) {
         if (!active_) return std::nullopt;
         active_ = false;
-        const auto window = clock_.Roll(nowUs, true);
+        const auto window = clock_.Roll(nowUs, ClockWindowEnd::Final);
         std::optional<std::string> line;
         if (window) line = ClientClockSyncLine(player_, *window);
         player_ = 0;
         return line;
+    }
+    // The connection resumed from an interruption: the window ends early and a
+    // new one starts (network-architecture §4, recovery step 1).
+    [[nodiscard]] std::optional<std::string> Resume(std::uint64_t nowUs) {
+        if (!active_) return std::nullopt;
+        const auto window = clock_.Roll(nowUs, ClockWindowEnd::Resume);
+        return window ? std::optional<std::string>(ClientClockSyncLine(player_, *window)) : std::nullopt;
     }
 
 private:
@@ -158,7 +171,8 @@ inline std::string ClockWindowLine(const ClockWindow& window) {
            " negative_delay=" + std::to_string(window.negativeDelay) + " replaced=" + std::to_string(window.replaced) +
            " offset_us=" + detail::Optional(window.offsetUs) + " delay_min_us=" + detail::Optional(window.delayMinUs) +
            " delay_max_us=" + detail::Optional(window.delayMaxUs) + " drift_ppm=" + drift + " jump=" + (window.jump ? "1" : "0") +
-           " final=" + (window.final ? "1" : "0");
+           " final=" + (window.end == ClockWindowEnd::Final ? "1" : "0") + " reason=" +
+           (window.end == ClockWindowEnd::Final ? "final" : window.end == ClockWindowEnd::Resume ? "resume" : "window");
 }
 
 inline std::string ClientClockSyncLine(std::uint64_t player, const ClockWindow& window) {
@@ -205,11 +219,11 @@ inline std::optional<std::pair<std::uint64_t, std::uint64_t>> ClockSync::Observe
     return echo_;
 }
 
-inline std::optional<ClockWindow> ClockSync::Roll(std::uint64_t nowUs, bool final) {
+inline std::optional<ClockWindow> ClockSync::Roll(std::uint64_t nowUs, ClockWindowEnd end) {
     const auto elapsed = nowUs > windowStartUs_ ? nowUs - windowStartUs_ : 0;
-    if (!final && elapsed < WindowUs) return std::nullopt;
+    if (end == ClockWindowEnd::Window && elapsed < WindowUs) return std::nullopt;
     ClockWindow window{.windowUs = elapsed, .samples = samples_, .invalid = invalid_, .negativeDelay = negativeDelay_,
-                       .replaced = replaced_, .final = final};
+                       .replaced = replaced_, .end = end};
     if (best_) {
         window.offsetUs = best_->offsetUs;
         window.delayMinUs = best_->delayUs;

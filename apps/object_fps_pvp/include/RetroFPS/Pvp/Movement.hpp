@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "engine/math/scalar/Angle.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -36,8 +37,10 @@ inline constexpr std::uint32_t InputSendRate = 60;
 // production and each command waits about
 // (1 - InputSendRate / 75) / InputSendRate = 3.3 ms. Bursts are two packets,
 // any three sends span at least 1/InputSendRate, and at most
-// InputSendDrainRate + InputSendBurst sends go in any second, which together
-// with actions and Hello stays inside the Gateway's per-session packet limit.
+// InputSendDrainRate + InputSendBurst = 82 sends go in any second. With the
+// 30 action batches and the Hello probes of an interrupted connection (4 a
+// second, ConnectionInterruptedAfter) that is 116, inside the Gateway's
+// per-session limit of 120 packets a second.
 inline constexpr double InputSendBurst = 2;
 // Above the 75 Hz production of an earlier-moving phase slew (a quarter of
 // each frame, LocalPlayerPrediction), so an earlier debt drains down to the
@@ -84,6 +87,14 @@ inline constexpr std::int32_t MaxMovementSlackMicros = 1'000'000;
 // -MovementResyncLateMicros.
 inline constexpr std::int64_t MovementResyncLateMicros = 20 * 1'000'000 / AuthorityTickRate;
 static_assert(MovementResyncLateMicros == 333'333);
+// The Client's connection liveness while playing (v7.1 outage-resync, D172,
+// D173; network-architecture §4 "連線中斷與恢復"): ConnectionInterruptedAfter
+// (T_int) without a valid snapshot interrupts the connection, and
+// ConnectionTimeoutAfter (T_max) without one ends it. The Gateway keeps its own
+// copies (server.go); tests/object_fps_pvp/fixtures/connection_timing.json binds
+// both ends to these values.
+inline constexpr std::chrono::milliseconds ConnectionInterruptedAfter{500};
+inline constexpr std::chrono::milliseconds ConnectionTimeoutAfter{5000};
 // Connection quality: the Match judges each 10-second window after the first
 // one following a join. A window fails when the median input reference age
 // (the age of the snapshot a window says the Client applied, about RTT plus

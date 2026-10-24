@@ -46,8 +46,11 @@ public:
     // Ticks not newer than the last observed one are ignored. Samples queued by
     // ObserveSample between the last observed tick and this one feed phase
     // tracking in tick order first, unless this state reseeds the prediction;
-    // only this state is reconciled.
-    void Observe(const PlayerState& self, std::uint64_t tick, const std::optional<MovementRules>& rules);
+    // only this state is reconciled. resumed: the batch ended an interruption
+    // (ClientSimulationDrain::resumed); unless this state reseeds anyway, phase
+    // acquisition restarts before those samples (LocalPlayerPrediction::Resume).
+    void Observe(const PlayerState& self, std::uint64_t tick, const std::optional<MovementRules>& rules,
+                 bool resumed = false);
 
     // Samples elapsed time at `now` and advances. Returns the complete window to
     // publish when it changed; the caller forwards it to the connection.

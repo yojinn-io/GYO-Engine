@@ -63,15 +63,21 @@ func boolDigit(value bool) string {
 	return "0"
 }
 
-// line is the "clock sync" line both ends log (pv7 §3).
+// line is the "clock sync" line both ends log (pv7 §3). The reason= key
+// (log-contract §1.4): a Gateway window ends after clockWindowUs or with its
+// link (final); the Client's resume reason has no Gateway writer yet.
 func (w clockWindow) line() string {
+	reason := "window"
+	if w.final {
+		reason = "final"
+	}
 	drift := "na"
 	if w.driftPpm != nil && !math.IsNaN(*w.driftPpm) && !math.IsInf(*w.driftPpm, 0) {
 		drift = strconv.FormatFloat(*w.driftPpm, 'f', 3, 64)
 	}
-	return fmt.Sprintf("clock sync window_ms=%d samples=%d missing=%s invalid=%d negative_delay=%d replaced=%d offset_us=%s delay_min_us=%s delay_max_us=%s drift_ppm=%s jump=%s final=%s",
+	return fmt.Sprintf("clock sync window_ms=%d samples=%d missing=%s invalid=%d negative_delay=%d replaced=%d offset_us=%s delay_min_us=%s delay_max_us=%s drift_ppm=%s jump=%s final=%s reason=%s",
 		w.windowUs/1000, w.samples, boolDigit(w.samples == 0), w.invalid, w.negativeDelay, w.replaced,
-		optionalInt(w.offsetUs), optionalInt(w.delayMinUs), optionalInt(w.delayMaxUs), drift, boolDigit(w.jump), boolDigit(w.final))
+		optionalInt(w.offsetUs), optionalInt(w.delayMinUs), optionalInt(w.delayMaxUs), drift, boolDigit(w.jump), boolDigit(w.final), reason)
 }
 
 type clockPoint struct {

@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <deque>
 #include <optional>
 #include <utility>
@@ -1128,6 +1129,14 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             AddText(draws, "Action pending confirmation", {30,136,620*scale,22*scale},14*scale);
         if (!impl_->weaponFeedback.dead && (!impl_->inputCaptured || !impl_->input->Snapshot().windowFocused))
             AddText(draws, "Click inside the window to resume input", {impl_->width*.5F-190,110,480,30});
+        // network-architecture §4: no valid snapshot for T_int; the session stays
+        // until T_max, then the worker fails and the Lobby shows why.
+        if (impl_->state.interrupted) {
+            const auto silent = std::chrono::duration<double>(Clock::now() - impl_->state.interruptedSince).count();
+            char text[96];
+            std::snprintf(text, sizeof text, "CONNECTION INTERRUPTED - reconnecting (%.1fs)", silent);
+            AddText(draws, text, {impl_->width*.5F-240,impl_->height*.5F+40,480,30});
+        }
         // The Match evicts after ConnectionQualityFailedWindows failed windows in a row.
         const auto& players = impl_->state.snapshot->players;
         if (const auto self = std::find_if(players.begin(), players.end(),

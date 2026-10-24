@@ -116,6 +116,12 @@
     },
     "black_map_watch": {
       "ctest": "object_fps_pvp.black_map_watch"
+    },
+    "diagnostic_isolation": {
+      "ctest": "object_fps_pvp.diagnostic_isolation"
+    },
+    "command_evidence": {
+      "ctest": "object_fps_pvp.command_evidence"
     }
   },
   "mutants": [
@@ -2744,8 +2750,8 @@
       "batch": "v7-09b",
       "what": "A seed clears only what it cleared before B2: the applied shift, the command ages and the reacquisition survive it",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
-      "replace": "    phaseShiftSeconds_ = 0;\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
+      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = after;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
+      "replace": "    phaseShiftSeconds_ = 0;\n    phaseSamples_.clear();\n    settledAfter_ = after;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
       "check": "cpu",
       "expect": "PvP a stall reseed during a late correction drops the rebase and the reacquisition"
     },
@@ -2764,8 +2770,8 @@
       "batch": "v7-09b",
       "what": "A seed keeps the reacquisition: an older sequence passes the seed filter and resets the repeat check",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
-      "replace": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
+      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = after;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
+      "replace": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = after;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
       "check": "cpu",
       "expect": "PvP a stall reseed during a late correction leaves older sequences out of the repeat check"
     },
@@ -4794,8 +4800,8 @@
       "batch": "v71-log-contract",
       "what": "The Client's final clock line loses the session's player",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
-      "find": "        active_ = false;\n        const auto window = clock_.Roll(nowUs, true);",
-      "replace": "        active_ = false;\n        player_ = 0;\n        const auto window = clock_.Roll(nowUs, true);",
+      "find": "        active_ = false;\n        const auto window = clock_.Roll(nowUs, ClockWindowEnd::Final);",
+      "replace": "        active_ = false;\n        player_ = 0;\n        const auto window = clock_.Roll(nowUs, ClockWindowEnd::Final);",
       "check": "ipc",
       "expect": "clock sync player=7 window_ms="
     },
@@ -5819,6 +5825,116 @@
       "replace": "",
       "check": "cpu",
       "expect": "turns a first copy later than N_o into a Resync|asks for one Resync|a sparse substitution|measures N_o in time"
+    },
+    {
+      "id": "ci-interrupt-closes-transport",
+      "batch": "v71-client-interrupted",
+      "what": "An interruption closes the transport",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ++summary.interruptions;\n",
+      "replace": "            ++summary.interruptions;CloseTransport();\n",
+      "check": "worker",
+      "expect": "did not keep the session|did not probe|restarted the transport sequence|mock worker wait timed out"
+    },
+    {
+      "id": "ci-interrupt-resets-actions",
+      "batch": "v71-client-interrupted",
+      "what": "An interruption drops the action window",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ++summary.interruptions;\n",
+      "replace": "            ++summary.interruptions;ResetActions();\n",
+      "check": "worker",
+      "expect": "did not keep the session"
+    },
+    {
+      "id": "ci-interrupt-restarts-sequence",
+      "batch": "v71-client-interrupted",
+      "what": "An interruption restarts the transport sequence",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ++summary.interruptions;\n",
+      "replace": "            ++summary.interruptions;sentSequence=0;\n",
+      "check": "worker",
+      "expect": "restarted the transport sequence"
+    },
+    {
+      "id": "ci-no-interruption",
+      "batch": "v71-client-interrupted",
+      "what": "T_int is gone: a silent connection is never interrupted",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ConnectionLiveness.hpp",
+      "find": "        interrupted_ = true;\n        return Event::Interrupted;",
+      "replace": "        return Event::None;",
+      "check": "cpu",
+      "expect": "interrupted once at T_int|first valid snapshot after an interruption"
+    },
+    {
+      "id": "ci-welcome-extends-tmax",
+      "batch": "v71-client-interrupted",
+      "what": "Every Welcome stands for a snapshot: T_max never ends a session the Gateway answers",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ConnectionLiveness.hpp",
+      "find": "        if (welcomed_) return;\n        welcomed_ = true;\n        if (!playing_) since_ = arrivedAt;",
+      "replace": "        welcomed_ = true;\n        since_ = arrivedAt;",
+      "check": "cpu",
+      "expect": "only the first Welcome|interrupted once at T_int"
+    },
+    {
+      "id": "ci-welcome-extends-tmax-worker",
+      "batch": "v71-client-interrupted",
+      "what": "The same, seen through the worker and a mock Gateway that answers every Hello",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ConnectionLiveness.hpp",
+      "find": "        if (welcomed_) return;\n        welcomed_ = true;\n        if (!playing_) since_ = arrivedAt;",
+      "replace": "        welcomed_ = true;\n        since_ = arrivedAt;",
+      "check": "worker",
+      "expect": "kept a connection without snapshots past T_max|mock worker wait timed out"
+    },
+    {
+      "id": "ci-liveness-reads-time-echo",
+      "batch": "v71-client-interrupted",
+      "what": "The snapshot arrival time liveness reads is shifted by the time echo",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    const auto arrival=liveness.Snapshot(arrivedAt);",
+      "replace": "                    const auto arrival=liveness.Snapshot(arrivedAt+std::chrono::microseconds(clock.Clock().Echo()?clock.Clock().Echo()->first%1000000:0));",
+      "check": "worker",
+      "expect": "an extreme time echo changed a liveness decision"
+    },
+    {
+      "id": "ci-transient-not-transient",
+      "batch": "v71-client-interrupted",
+      "what": "connection_refused is not transient any more",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    return error==asio::error::connection_reset || error==asio::error::connection_refused ||\n        error==asio::error::network_unreachable || error==asio::error::host_unreachable || error==asio::error::network_down ||\n        error==std::errc::connection_reset || error==std::errc::connection_refused ||\n        error==std::errc::network_unreachable || error==std::errc::host_unreachable || error==std::errc::network_down;",
+      "replace": "    return error==asio::error::connection_reset ||\n        error==asio::error::network_unreachable || error==asio::error::host_unreachable || error==asio::error::network_down ||\n        error==std::errc::connection_reset ||\n        error==std::errc::network_unreachable || error==std::errc::host_unreachable || error==std::errc::network_down;",
+      "check": "cpu",
+      "expect": "transient socket errors"
+    },
+    {
+      "id": "ci-resume-always-seeds",
+      "batch": "v71-client-interrupted",
+      "what": "A resume below the tip seeds a new lead and rewrites the commands in flight",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {\n        SeedLead(authority);\n        return;\n    }",
+      "replace": "    SeedLead(authority);\n    return;",
+      "check": "cpu",
+      "expect": "keeps every unacknowledged command|restarts phase acquisition before its late samples"
+    },
+    {
+      "id": "ci-resume-no-reacquire",
+      "batch": "v71-client-interrupted",
+      "what": "A resume restarts nothing",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    if (Reseeds(authority)) return;\n    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {",
+      "replace": "    if (true) return;\n    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {",
+      "check": "cpu",
+      "expect": "keeps every unacknowledged command|seeds a new lead|before its late samples"
+    },
+    {
+      "id": "ci-reader-rejects-resume-reset",
+      "batch": "v71-client-interrupted",
+      "what": "The movement trace reader rejects the resume_reset path",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    phase_paths = {'first', 'window', 'late', 'resume_reset'}",
+      "replace": "    phase_paths = {'first', 'window', 'late'}",
+      "check": "command_evidence",
+      "expect": "test_schema_three_reads_phase_decisions"
     }
   ]
 }

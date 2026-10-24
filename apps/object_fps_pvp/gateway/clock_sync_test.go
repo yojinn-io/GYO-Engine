@@ -77,7 +77,7 @@ func measure(c *clockSync, at uint64, offset, delay int64) {
 func TestClockWindowsReportMissingJumpsAndDrift(t *testing.T) {
 	c := newClockSync(0)
 	if w, _ := c.roll(clockWindowUs, false); w.samples != 0 || w.offsetUs != nil || w.driftPpm != nil ||
-		w.line() != "clock sync window_ms=10000 samples=0 missing=1 invalid=0 negative_delay=0 replaced=0 offset_us=na delay_min_us=na delay_max_us=na drift_ppm=na jump=0 final=0" {
+		w.line() != "clock sync window_ms=10000 samples=0 missing=1 invalid=0 negative_delay=0 replaced=0 offset_us=na delay_min_us=na delay_max_us=na drift_ppm=na jump=0 final=0 reason=window" {
 		t.Fatalf("missing window %q", w.line())
 	}
 	// 1 ppm of drift: the offset grows 10 µs per 10 s window.
@@ -103,7 +103,7 @@ func TestClockWindowsReportMissingJumpsAndDrift(t *testing.T) {
 	if w.jump || !w.final || w.driftPpm == nil {
 		t.Fatalf("after jump %+v", w)
 	}
-	if got := w.line(); got != "clock sync window_ms=10000 samples=1 missing=0 invalid=0 negative_delay=0 replaced=0 offset_us=2140 delay_min_us=100 delay_max_us=100 drift_ppm=90.000 jump=0 final=1" {
+	if got := w.line(); got != "clock sync window_ms=10000 samples=1 missing=0 invalid=0 negative_delay=0 replaced=0 offset_us=2140 delay_min_us=100 delay_max_us=100 drift_ppm=90.000 jump=0 final=1 reason=final" {
 		t.Fatalf("line %q", got)
 	}
 }
@@ -165,7 +165,7 @@ func TestClockWindowLineMatchesTheSharedGolden(t *testing.T) {
 			continue
 		}
 		f := strings.Split(row, "\t")
-		if len(f) != 12 {
+		if len(f) != 13 {
 			t.Fatalf("row %q has %d columns", row, len(f))
 		}
 		u := func(i int) uint64 {
@@ -194,8 +194,11 @@ func TestClockWindowLineMatchesTheSharedGolden(t *testing.T) {
 			}
 			w.driftPpm = &v
 		}
-		if got := w.line(); got != f[11] {
-			t.Errorf("row %q:\n got  %q\n want %q", row, got, f[11])
+		if f[11] == "resume" {
+			t.Fatalf("row %q: the Gateway writes no resume window", row)
+		}
+		if got := w.line(); got != f[12] {
+			t.Errorf("row %q:\n got  %q\n want %q", row, got, f[12])
 		}
 		rows++
 	}

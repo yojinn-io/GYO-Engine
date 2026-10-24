@@ -27,7 +27,13 @@ import (
 	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
+// sessionTimeout is T_max and connectionInterruptedAfter T_int (v7.1
+// outage-resync; network-architecture §4): the same values as the Client's
+// (Movement.hpp), bound by tests/object_fps_pvp/fixtures/connection_timing.json.
+// The Gateway counts T_max from the last uplink packet that refreshed the
+// session; T_int decides the rebinding and clock-window rules of identity-rebind.
 const sessionTimeout = 5 * time.Second
+const connectionInterruptedAfter = 500 * time.Millisecond
 const joinTimeout = 3 * time.Second
 
 type phase uint8

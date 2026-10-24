@@ -26,7 +26,8 @@ void ClientSimulation::ObserveSample(const WorldSnapshot& snapshot, PlayerId sel
         if (player.playerId == self) { samples_.push_back({snapshot.tick, player}); return; }
 }
 
-void ClientSimulation::Observe(const PlayerState& self, std::uint64_t tick, const std::optional<MovementRules>& rules) {
+void ClientSimulation::Observe(const PlayerState& self, std::uint64_t tick, const std::optional<MovementRules>& rules,
+                               bool resumed) {
     if (tick <= lastSnapshotTick_) { samples_.clear(); return; }
     if (rules) prediction_.SetMovementRules(*rules);
     std::stable_sort(samples_.begin(), samples_.end(), [](const Sample& a, const Sample& b) { return a.tick < b.tick; });
@@ -34,6 +35,12 @@ void ClientSimulation::Observe(const PlayerState& self, std::uint64_t tick, cons
     // A state that reseeds starts a new phase: older samples describe the one
     // it discards, and a correction they triggered would never be slewed.
     if (prediction_.Reseeds(self)) samples_.clear();
+    else if (resumed) {
+        // The batch's samples describe commands sent before or during the
+        // interruption, which the resume leaves out of the new acquisition.
+        prediction_.Resume(self);
+        samples_.clear();
+    }
     for (const auto& sample : samples_) {
         if (sample.tick <= taken || sample.tick >= tick || sample.self.playerId != self.playerId) continue;
         prediction_.ObservePhaseSample(sample.self);

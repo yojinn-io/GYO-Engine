@@ -114,7 +114,7 @@ ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const 
     if (newest) {
         // Without the local player the session has nothing to predict.
         if (const auto* self = FindSelf(*newest, drain.playerId))
-            simulation_.Observe(*self, newest->tick, drain.movementRules);
+            simulation_.Observe(*self, newest->tick, drain.movementRules, drain.resumed);
         else simulation_.Reset();
     }
     unmatchedPhaseSamples_ += simulation_.TakeUnmatchedPhaseSamples();

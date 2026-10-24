@@ -98,6 +98,14 @@ public:
     // Reconcile would seed a new lead from this state (new player, life or
     // epoch, or an acknowledgement past the predicted tip): a fresh phase.
     [[nodiscard]] bool Reseeds(const PlayerState& authority) const noexcept;
+    // The connection resumed from an interruption and this state, which does not
+    // reseed, is the newest of the batch (network-architecture §4, recovery step
+    // 3), before any phase sample of that batch. Its cursor at the tip: no command
+    // is in flight, so a new lead is seeded. Below the tip: the unacknowledged
+    // commands and the prediction stay (their identity must not change), only
+    // phase acquisition restarts after the tip. The only input phase tracking
+    // takes about an interruption; it reads no interruption state or duration.
+    void Resume(const PlayerState& authority);
     // True publishes a changed complete window. The network worker owns its
     // independent 60 Hz retransmission deadlines and never creates commands.
     [[nodiscard]] bool Advance(double frameSeconds, float forward, float right,
@@ -125,6 +133,7 @@ public:
 
 private:
     void SeedLead(const PlayerState& authority);
+    void RestartPhaseAcquisition(std::uint64_t after);
     void TrackPhase(const PlayerState& authority);
     void Correct(double error, bool late);
     void TracePhaseDecision(MovementPhasePath path, double error, double deadband, std::size_t samples) const;

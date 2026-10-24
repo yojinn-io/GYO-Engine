@@ -2160,3 +2160,87 @@ TEST_CASE("PvP outage characterization: after an outage that let the authority p
     CHECK(twins.tracked.Observation().phaseLateCorrections == 0);
     CHECK(twins.tracked.Observation().phaseCorrections == 0);
 }
+
+// client-interrupted (v7.1 outage-resync; network-architecture §4, recovery
+// step 3): a resume restarts phase acquisition without rewriting a command in
+// flight. Below the tip the unacknowledged commands and the prediction stay;
+// at the tip a new lead is seeded; a state that reseeds anyway is left to it.
+TEST_CASE("PvP a resume below the tip restarts phase acquisition and keeps every unacknowledged command") {
+    struct TraceScope {
+        std::shared_ptr<MovementTrace> trace = std::make_shared<MovementTrace>();
+        TraceScope() { SetMovementTrace(trace); }
+        ~TraceScope() { SetMovementTrace(nullptr); }
+    } trace;
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    REQUIRE(twins.tracked.PhaseDecided());
+    // Late samples of the interruption start a late correction that is still slewing.
+    static_cast<void>(twins.Frame(MovementTickSeconds, std::nullopt, -1.0));
+    static_cast<void>(twins.Frame(MovementTickSeconds, std::nullopt, -1.0));
+    REQUIRE(twins.tracked.Observation().phaseLateCorrections == 1);
+    auto& client = twins.tracked;
+    const auto tip = client.Observation().latestCommand;
+    const PlayerState authority{1, {2, 0, 2}, 0, 0, tip - InitialCommandLead};
+    REQUIRE_FALSE(client.Reseeds(authority));
+    const auto window = client.PendingInput().commands;
+    const auto predicted = client.Observation().predictedPosition;
+    const auto reseeds = client.Observation().stallReseeds;
+    static_cast<void>(trace.trace->Drain());
+    client.Resume(authority);
+    CHECK(client.PendingInput().commands == window);
+    CHECK(client.Observation().predictedPosition.z == predicted.z);
+    CHECK(client.Observation().stallReseeds == reseeds);
+    CHECK_FALSE(client.PhaseDecided());
+    CHECK(client.Observation().phaseTracking == PhaseTrackingState::Acquiring);
+    const auto events = trace.trace->Drain();
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].kind == MovementTraceKind::PhaseDecision);
+    CHECK(events[0].phasePath == MovementPhasePath::ResumeReset);
+    CHECK(events[0].count == 0);
+    CHECK(events[0].sequence == tip);
+    CHECK(events[0].phaseShiftSeconds < 0); // the remaining late correction, cancelled
+    // Samples of commands from before the resume are no evidence any more.
+    const auto samples = client.Observation().phaseSamples;
+    for (const auto sequence : {tip - 1, tip}) {
+        PlayerState late = authority;
+        SetSlack(late, sequence, -1.0);
+        client.Reconcile(late, ++twins.tick);
+    }
+    CHECK(client.Observation().phaseSamples == samples);
+    CHECK(client.Observation().phaseLateCorrections == 1);
+    // A command generated after the resume is.
+    static_cast<void>(client.Advance(MovementTickSeconds, 0, 0, 0, 0));
+    const auto next = client.Observation().latestCommand;
+    REQUIRE(next > tip);
+    PlayerState fresh = authority;
+    SetSlack(fresh, next, SlackFor(0.0, NewestAge(client)));
+    client.Reconcile(fresh, ++twins.tick);
+    CHECK(client.Observation().phaseSamples == samples + 1);
+}
+
+TEST_CASE("PvP a resume at the tip seeds a new lead and one that reseeds anyway changes nothing") {
+    const auto arena = PredictionArena();
+    PhaseTwins twins(arena);
+    REQUIRE(twins.FramesUntilCorrections(1, 0.0, 12) == -1);
+    auto& client = twins.tracked;
+    const auto tip = client.Observation().latestCommand;
+    // Everything acknowledged: no command is in flight.
+    const PlayerState atTip{1, {2, 0, 2}, 0, 0, tip};
+    client.Reconcile(atTip, ++twins.tick);
+    REQUIRE(client.Observation().pendingCommands == 0);
+    const auto reseeds = client.Observation().stallReseeds;
+    client.Resume(atTip);
+    const auto seeded = client.PendingInput().commands;
+    REQUIRE(seeded.size() == InitialCommandLead);
+    CHECK(seeded.front().sequence == tip + 1);
+    CHECK(seeded.front().moveForward == 0);
+    CHECK_FALSE(client.PhaseDecided());
+    CHECK(client.Observation().stallReseeds == reseeds);
+    // The cursor past the tip: Reconcile reseeds, so Resume leaves it alone.
+    const PlayerState past{1, {2, 0, 2}, 0, 0, tip + 10};
+    REQUIRE(client.Reseeds(past));
+    client.Resume(past);
+    CHECK(client.PendingInput().commands == seeded);
+}
+

@@ -37,7 +37,7 @@ void Require(bool condition,const char* message){if(!condition)throw std::runtim
 void Require(bool condition,const std::string& message){if(!condition)throw std::runtime_error(message);}
 struct Attempt { Clock::time_point at; pb::PlayerInput input; };
 struct ActionAttempt { Clock::time_point at; pb::ActionBatch actions; };
-struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; };
+struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; std::uint32_t sequence{}; };
 // Opaque content digest of the mock arena (pv6 contract §2).
 constexpr std::uint64_t WorkerArenaDigest=0x0123456789abcdefULL;
 class MockGateway {
@@ -75,7 +75,8 @@ public:
             if(error)throw std::runtime_error(error.message());
             const auto packet=wire::Decode(std::span(buffer).first(size));
             Require(packet.has_value() && packet->session==1,"invalid worker UDP envelope");
-            peer=source;packets.push_back({Clock::now(),packet->type,size});
+            peer=source;packets.push_back({Clock::now(),packet->type,size,packet->sequence});
+            if(silent)continue; // an outage in both directions: seen, never answered
             if(packet->type==wire::Type::Hello) {
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
@@ -93,7 +94,12 @@ public:
                 if(hello.has_clock()) {clock->set_origin_us(hello.clock().transmit_us());clock->set_receive_us(welcomeTransmit-(badWelcomeClock?0:1));}
                 if(badWelcomeClock)clock->set_receive_us(welcomeTransmit+1);
                 clock->set_transmit_us(welcomeTransmit);welcomeTransmits.push_back(welcomeTransmit);
-                Send(wire::Type::Welcome,welcome.SerializeAsString());Snapshot(ack);
+                // Extreme diagnostics (the differential oracle of CheckOutage):
+                // the liveness decisions must not see them.
+                if(extremeWelcomeClock) {clock->set_origin_us(1);clock->set_receive_us((std::uint64_t{1}<<53)-1);
+                    clock->set_transmit_us((std::uint64_t{1}<<53)-1);}
+                Send(wire::Type::Welcome,welcome.SerializeAsString());
+                if(snapshotOnHello)Snapshot(ack);
             } else if(packet->type==wire::Type::Input) {
                 pb::PlayerInput input;Require(input.ParseFromString(packet->payload) && input.movement_epoch()>0 && input.movement_epoch()<=epoch &&
                     input.commands_size()>0 && input.commands_size()<=12,"invalid worker input window");
@@ -165,7 +171,9 @@ public:
     std::vector<pb::ClockSample> helloClocks;
     std::vector<std::uint64_t> welcomeTransmits;
     std::uint64_t welcomeTransmit{};
-    bool badWelcomeClock{};
+    bool badWelcomeClock{},extremeWelcomeClock{};
+    // CheckOutage: drop everything (silent), or answer a Hello with a Welcome only.
+    bool silent{},snapshotOnHello{true};
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
     bool includeRules{true};
     std::uint64_t epoch{1};
@@ -187,6 +195,57 @@ PlayerInput Input(std::uint64_t first,std::uint64_t last) {
     PlayerInput result;result.playerId=1;
     for(auto sequence=first;sequence<=last;++sequence)result.commands.push_back({sequence,1,0,0,0});
     return result;
+}
+// network-architecture §4 (v7.1 outage-resync client-interrupted): what one
+// outage did, compared between a normal and an extreme time echo.
+struct OutageOutcome {
+    bool interrupted{},keptSession{},probedFaster{},resumed{},sequenceKept{},timedOutAtTmax{};
+    bool operator==(const OutageOutcome&) const = default;
+};
+OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool extremeClock) {
+    OutageOutcome outcome;
+    gateway.extremeWelcomeClock=extremeClock;
+    connection.Join(gateway.address,"1");
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+    const auto shot=connection.SubmitShot(connection.State().snapshot->tick,0,0);
+    Require(shot.has_value(),"the outage scenario could not submit an action");
+    gateway.Until([&]{return !gateway.actionAttempts.empty();});
+    gateway.Snapshot(0);
+    const auto packetsBefore=gateway.packets.size();
+    gateway.silent=true;
+    const auto silentAt=Clock::now();
+    gateway.Until([&]{return connection.State().interrupted;},1500ms);
+    const auto detectedMs=std::chrono::duration<double,std::milli>(Clock::now()-silentAt).count();
+    outcome.interrupted=detectedMs>=ConnectionInterruptedAfter.count()-5;
+    // Interrupted: the session, its sequence and its actions stay; Hello probes every 250 ms.
+    const auto hellosFrom=gateway.packets.size();
+    gateway.UntilTime(Clock::now()+1s);
+    const auto hellos=std::count_if(gateway.packets.begin()+static_cast<std::ptrdiff_t>(hellosFrom),gateway.packets.end(),
+        [](const PacketAttempt& packet){return packet.type==wire::Type::Hello;});
+    outcome.probedFaster=hellos>=3 && hellos<=5;
+    const auto during=connection.State();
+    outcome.keptSession=during.phase==ConnectionPhase::Playing && during.error.empty() && during.interrupted &&
+        during.actionTransport.retained==1 && during.actionTransport.allocatedThrough==*shot;
+    gateway.silent=false;
+    gateway.Snapshot(0);
+    gateway.Until([&]{return !connection.State().interrupted;});
+    outcome.resumed=connection.State().phase==ConnectionPhase::Playing;
+    outcome.sequenceKept=true;
+    for(auto index=packetsBefore+1;index<gateway.packets.size();++index)
+        outcome.sequenceKept=outcome.sequenceKept && gateway.packets[index].sequence==gateway.packets[index-1].sequence+1;
+    // T_max counts from the last valid snapshot: Welcomes extend nothing.
+    gateway.snapshotOnHello=false;
+    gateway.Snapshot(0);
+    const auto lastSnapshotAt=Clock::now();
+    const auto welcomesFrom=gateway.welcomeTransmits.size();
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;},7000ms);
+    const auto timedOutMs=std::chrono::duration<double,std::milli>(Clock::now()-lastSnapshotAt).count();
+    outcome.timedOutAtTmax=connection.State().error=="Gateway connection timed out" &&
+        timedOutMs>=ConnectionTimeoutAfter.count()-5 && timedOutMs<=ConnectionTimeoutAfter.count()+600 &&
+        gateway.welcomeTransmits.size()>welcomesFrom+10;
+    gateway.snapshotOnHello=true;gateway.extremeWelcomeClock=false;
+    connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
+    return outcome;
 }
 bool Acknowledged(const ClientConnection& connection,std::uint64_t sequence) {
     const auto state=connection.State();
@@ -705,6 +764,17 @@ int main() {
         try{connection.SetArenaIdentities({{"a",1,1},{"a",2,2}});}catch(const std::invalid_argument&){duplicateRejected=true;}
         Require(duplicateRejected,"an arena installed twice was accepted");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+
+        // An outage in both directions, then T_max with Welcomes only; the same
+        // with an extreme time echo must decide the same (differential oracle).
+        const auto outage=RunOutage(gateway,connection,false);
+        Require(outage.interrupted,"the connection was not interrupted at T_int");
+        Require(outage.keptSession,"an interruption did not keep the session, its window and its actions");
+        Require(outage.probedFaster,"an interrupted connection did not probe with Hello every 250 ms");
+        Require(outage.resumed,"a valid snapshot did not resume the connection");
+        Require(outage.sequenceKept,"an interruption restarted the transport sequence");
+        Require(outage.timedOutAtTmax,"a Welcome kept a connection without snapshots past T_max");
+        Require(RunOutage(gateway,connection,true)==outage,"an extreme time echo changed a liveness decision");
 
         // Exercise real receipt overflow, then consume Drain concurrently with
         // worker failure publication. Counts may reset only with generation.

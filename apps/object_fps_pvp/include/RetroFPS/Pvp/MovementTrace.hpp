@@ -18,8 +18,11 @@ enum class MovementTraceKind { Generated, Sent, HostAccepted, Resolved, Reset,
 enum class MovementInputSource { None, Actual, Held, Neutral };
 enum class MovementResetReason { None, Backlog, SequenceExhausted, Starvation, LifeRespawn, Resync };
 // Which rule decided a PhaseDecision: the first decision after a seed (or after
-// a late correction), a later window decision, or late samples (schema 3).
-enum class MovementPhasePath { None, First, Window, Late };
+// a late correction, or after a resume reset), a later window decision, or late
+// samples (schema 3). ResumeReset is no decision: the connection resumed and
+// phase acquisition restarted without a seed (count 0, the shift is the
+// remaining correction it cancelled; v7.1 outage-resync, log-contract §1.4).
+enum class MovementPhasePath { None, First, Window, Late, ResumeReset };
 
 struct MovementTraceEvent final {
     MovementTraceKind kind{};
@@ -146,6 +149,7 @@ inline constexpr std::string_view TracePhasePathName(MovementPhasePath path) noe
     case MovementPhasePath::First: return "first";
     case MovementPhasePath::Window: return "window";
     case MovementPhasePath::Late: return "late";
+    case MovementPhasePath::ResumeReset: return "resume_reset";
     }
     return "invalid";
 }

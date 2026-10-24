@@ -21,6 +21,9 @@ DECIDING = [
     INCLUDE / 'MatchRuntimeHost.hpp',
     INCLUDE / 'MatchSubstitutionRecords.hpp',
     INCLUDE / 'SnapshotTimeline.hpp',
+    # v7.1 outage-resync client-interrupted: the Client's interruption and timeout
+    # decide from arrival times only (network-architecture §4).
+    INCLUDE / 'ConnectionLiveness.hpp',
     SOURCE / 'PvpApplication.cpp',
     SOURCE / 'ShotGate.cpp',
 ]
@@ -41,6 +44,31 @@ class DiagnosticIsolationTest(unittest.TestCase):
             for symbol in DIAGNOSTIC_SYMBOLS:
                 with self.subTest(file=path.name, symbol=symbol):
                     self.assertNotIn(symbol, text, f'{path.relative_to(REPOSITORY)} names {symbol!r} (D32)')
+
+    def test_phase_tracking_learns_of_a_resume_only_by_the_drain_flag(self):
+        # network-architecture §7 (連線中斷與重新對時): the interruption state
+        # belongs to the network worker; phase tracking reads neither it nor its
+        # duration, and decides no gap of its own.
+        for path in [SOURCE / 'LocalPlayerPrediction.cpp', INCLUDE / 'LocalPlayerPrediction.hpp',
+                     SOURCE / 'ClientSimulation.cpp', INCLUDE / 'ClientSimulation.hpp', SOURCE / 'ClientSimulationRole.cpp']:
+            text = path.read_text(encoding='utf-8')
+            for symbol in ('.interrupted', 'interruptedSince', 'ConnectionLiveness', 'ConnectionInterruptedAfter',
+                           'ConnectionTimeoutAfter'):
+                with self.subTest(file=path.name, symbol=symbol):
+                    self.assertNotIn(symbol, text, f'{path.relative_to(REPOSITORY)} names {symbol!r}')
+
+    def test_the_resume_flag_is_set_with_its_snapshot_under_one_lock(self):
+        # §4 recovery step 3: no simulation batch holds the resuming snapshot
+        # without the flag. The flag is set after the lock that also pushes the
+        # snapshot into the simulation history was taken, with no other lock
+        # section in between.
+        text = (SOURCE / 'ClientConnection.cpp').read_text(encoding='utf-8')
+        self.assertEqual(text.count('simulationResumed=true'), 1)
+        flag = text.index('simulationResumed=true')
+        push = text.index('simulationSnapshots.push_back')
+        lock = text.rindex('std::scoped_lock lock(mutex);', 0, flag)
+        self.assertLess(flag, push)
+        self.assertNotIn('scoped_lock', text[lock + len('std::scoped_lock'):push])
 
     def test_no_decision_reads_the_view_tick(self):
         # pv7 §7: the view tick is request content the host only records
