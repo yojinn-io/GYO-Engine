@@ -217,15 +217,19 @@ OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool e
     gateway.Until([&]{return connection.State().interrupted;},1500ms);
     const auto detectedMs=std::chrono::duration<double,std::milli>(Clock::now()-silentAt).count();
     outcome.interrupted=detectedMs>=ConnectionInterruptedAfter.count()-5;
+    if(!outcome.interrupted)return outcome;
     // Interrupted: the session, its sequence and its actions stay; Hello probes every 250 ms.
     const auto hellosFrom=gateway.packets.size();
     gateway.UntilTime(Clock::now()+1s);
     const auto hellos=std::count_if(gateway.packets.begin()+static_cast<std::ptrdiff_t>(hellosFrom),gateway.packets.end(),
         [](const PacketAttempt& packet){return packet.type==wire::Type::Hello;});
     outcome.probedFaster=hellos>=3 && hellos<=5;
+    if(!outcome.probedFaster)return outcome;
     const auto during=connection.State();
     outcome.keptSession=during.phase==ConnectionPhase::Playing && during.error.empty() && during.interrupted &&
         during.actionTransport.retained==1 && during.actionTransport.allocatedThrough==*shot;
+    // Each check names its own failure: a session that was not kept cannot resume.
+    if(!outcome.keptSession)return outcome;
     gateway.silent=false;
     gateway.Snapshot(0);
     gateway.Until([&]{return !connection.State().interrupted;});

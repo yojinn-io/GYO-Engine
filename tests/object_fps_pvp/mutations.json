@@ -4783,7 +4783,7 @@
       "find": "\" negative_delay=\" + std::to_string(window.negativeDelay)",
       "replace": "\" negative_delays=\" + std::to_string(window.negativeDelay)",
       "check": "ipc",
-      "expect": "CHECK\\( ClockWindowLine\\(window\\) == f\\[11\\] \\)"
+      "expect": "CHECK\\( ClockWindowLine\\(window\\) == f\\[12\\] \\)"
     },
     {
       "id": "lc-clock-go-key",
@@ -5834,7 +5834,7 @@
       "find": "            ++summary.interruptions;\n",
       "replace": "            ++summary.interruptions;CloseTransport();\n",
       "check": "worker",
-      "expect": "did not keep the session|did not probe|restarted the transport sequence|mock worker wait timed out"
+      "expect": "did not keep the session|did not probe|restarted the transport sequence"
     },
     {
       "id": "ci-interrupt-resets-actions",
@@ -5914,7 +5914,7 @@
       "find": "    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {\n        SeedLead(authority);\n        return;\n    }",
       "replace": "    SeedLead(authority);\n    return;",
       "check": "cpu",
-      "expect": "keeps every unacknowledged command|restarts phase acquisition before its late samples"
+      "expect": "keeps every unacknowledged command|restarts phase acquisition before its late samples|sends no conflicting window"
     },
     {
       "id": "ci-resume-no-reacquire",

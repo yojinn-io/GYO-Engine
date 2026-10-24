@@ -2282,3 +2282,52 @@ TEST_CASE("PvP host measures N_o in time, so a host stall makes a copy late by t
     CHECK(snapshot->players[0].movementEpoch == 2);
     CHECK(host.TakeIngressStatistics().at(5).lateBeyondNoCommands == 1);
 }
+
+// client-interrupted (network-architecture §7 連線中斷與重新對時, guard): the
+// Match itself stalls past its catch-up limit, so the first snapshot after the
+// interruption has the same epoch and a cursor below the Client's tip. The
+// resume restarts phase acquisition only: the commands in flight keep their
+// content, the window the Client sends next is no conflict, and no sample of a
+// command from before the resume is taken.
+TEST_CASE("PvP a resume after a Match stall keeps the commands in flight and sends no conflicting window") {
+    using fps::pvp::IngressIndex;
+    using fps::pvp::IngressInputRejection;
+    OutageRig rig;
+    rig.Frames(120, OutageRig::Uplink::Deliver, true);
+    const auto epoch = rig.lastPublishedEpoch;
+    static_cast<void>(rig.host.TakeIngressStatistics());
+    // 40 frames without a Host tick: the Client keeps sending until its window is full.
+    for (int frame = 0; frame < 40; ++frame) {
+        rig.now += std::chrono::microseconds(16'667);
+        static_cast<void>(rig.client.Advance(1.0 / 60, 1, 0, 0, 0));
+        const auto packet = rig.client.PendingInput();
+        if (!packet.commands.empty()) rig.Deliver(packet);
+    }
+    REQUIRE(rig.client.Observation().pendingCommands == fps::pvp::MaxPendingCommands);
+    // The Host catches up at most five ticks and drops the rest of the time.
+    REQUIRE(rig.host.Advance(40.0 / 60).steps == 5);
+    const auto snapshot = rig.host.TakeSnapshot();
+    REQUIRE(snapshot);
+    const auto& authority = snapshot->players.front();
+    REQUIRE(authority.movementEpoch == epoch);
+    const auto tip = rig.client.Observation().latestCommand;
+    REQUIRE(authority.lastResolvedCommand < tip);
+    REQUIRE_FALSE(rig.client.Reseeds(authority));
+    std::vector<fps::pvp::MovementCommand> inFlight;
+    for (const auto& command : rig.client.PendingInput().commands)
+        if (command.sequence > authority.lastResolvedCommand) inFlight.push_back(command);
+    const auto samples = rig.client.Observation().phaseSamples;
+    rig.client.Resume(authority);
+    rig.client.Reconcile(authority, snapshot->tick);
+    const auto window = rig.client.PendingInput();
+    CHECK(window.commands == inFlight);
+    CHECK(rig.client.Observation().phaseSamples == samples);
+    rig.Deliver(window);
+    const auto taken = rig.host.TakeIngressStatistics();
+    const auto player = authority.playerId;
+    REQUIRE(taken.count(player) == 1);
+    const auto& counts = taken.at(player);
+    const auto conflicts = counts.rejected[IngressIndex(IngressInputRejection::ConflictQueued)].inputs +
+                           counts.rejected[IngressIndex(IngressInputRejection::ConflictStaged)].inputs;
+    CHECK(conflicts == 0);
+}
