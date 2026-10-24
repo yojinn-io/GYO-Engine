@@ -188,7 +188,8 @@ after-re-evaluate（約 73～102 h）
 ├── 3 測試
 │   ├── worker-probe-repair        high｜修好 worker probe
 │   ├── token-tests                high｜token 的存活突變；測試模型和產品連動
-│   └── client-path-tests          high｜世代檢查與他版計數的正向測試
+│   ├── client-path-tests          high｜世代檢查與他版計數的正向測試
+│   └── event-watch-overlap        high｜Engine 的事件監看重疊測試不靠碰運氣（D186）
 └── 4 發行
     ├── windows-long-path          high｜發行包解壓到深資料夾也能載入 shader
     ├── quick-close                high｜關閉 Client 不再卡 3 秒
@@ -210,6 +211,7 @@ after-re-evaluate（約 73～102 h）
 | worker-probe-repair ✓ | N-worker-probe-stale | worker CTest 通過；22 個 `worker` 突變重新判定（結果：通過、22／22 killed，新增 2 個突變 2／2 killed；`d2844a5`） | 2～4 | 第二個原因（mock 等待逾時）未知：照 §14.3 先建觀測，超過 1.5 倍就停下回報 |
 | token-tests | N-token-test-gaps、C12 | 兩個存活突變登記並 killed；測試模型和產品的 token 規則不再各寫一份 | 4～6 | 依賴 worker-probe-repair |
 | client-path-tests | C17-3、N-client-other-version-untested | 新突變 killed | 3～4 | 依賴 worker-probe-repair；D181 併入 K9：握手期的暫時性錯誤與直接超過 T_max 這兩個分支的執行期測試（+2～3 h） |
+| event-watch-overlap | K11（D186）：Engine 的 `EventWatchTests.cpp:300` 偶發失敗 | 用同步保證「解構時有回呼在跑」，不靠碰運氣；改的是 Engine 測試的判定，照 §14.4 說明緩、緊兩面；L1 | 1～2 | D186。屬 Engine（input-and-present）的測試，排在 `client-path-tests` 之後 |
 | windows-long-path | N-windows-max-path | CI 的套件檢查加上深路徑的情境（Windows L1） | 2～4 |；D185：發行線一開始就在本機背景跑完整突變目錄（約 4～6 h），非 killed 逐個分類，只有「測試失去檢出力」擋發版 |
 | quick-close | F1 | 關閉耗時的測試（門檻事前宣告）；L1 | 2～3 | |
 | wake-reconnect ✗ | N-sleep-reconnect | — | — | **取消（D182）**：使用者「沒有需求，玩家睡眠就是要離開」。短於 T_max（5 s）的睡眠＝中斷，已由 outage-resync 處理（D172 D-11 (w1)）；超過 T_max 照現行回 Lobby，不做自動重新加入（w2） |
