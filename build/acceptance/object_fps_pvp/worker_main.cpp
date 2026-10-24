@@ -66,9 +66,9 @@ public:
         const auto port=http.bind_to_any_port("127.0.0.1");
         Require(port>0,"mock HTTP bind failed");
         address="127.0.0.1:"+std::to_string(port);
-        server=std::jthread([this]{http.listen_after_bind();});
+        server=std::thread([this]{http.listen_after_bind();});
     }
-    ~MockGateway(){http.stop();}
+    ~MockGateway(){http.stop();if(server.joinable())server.join();}
     void Pump() {
         for(int count=0;count<64;++count) {
             std::array<std::uint8_t,2048> buffer{};udp::endpoint source;asio::error_code error;
@@ -195,7 +195,7 @@ private:
     udp::socket socket;
     udp::endpoint peer;
     httplib::Server http;
-    std::jthread server;
+    std::thread server;
     std::uint64_t ack{},tick{};
     std::uint32_t sequence{};
     std::mutex refusalMutex;
@@ -438,13 +438,14 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
         "snapshot lost the hit record");
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
     std::mutex allocatedMutex;std::vector<ActionId> allocated;
-    std::vector<std::jthread> producers;
+    std::vector<std::thread> producers;
     for(unsigned n=0;n<8;++n)producers.emplace_back([&]{
         for(unsigned shot=0;shot<4;++shot) {
             const auto id=connection.SubmitShot(connection.State().snapshot->tick,0,0);
             if(id){std::scoped_lock lock(allocatedMutex);allocated.push_back(*id);}
         }
     });
+    for(auto& producer:producers)producer.join();
     producers.clear();std::sort(allocated.begin(),allocated.end());
     Require(allocated.size()==MaxActionWindow,"concurrent submission lost capacity");
     for(std::size_t n=0;n<allocated.size();++n)Require(allocated[n]==n+1,"action allocation duplicated or skipped an ID");

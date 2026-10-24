@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ClientSimulationHistory.hpp"
 #include "RetroFPS/Pvp/ClockSync.hpp"
+#include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/ConnectionLiveness.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
@@ -26,7 +27,6 @@
 #include <limits>
 #include <random>
 #include <cctype>
-#include <syncstream>
 #include <utility>
 
 namespace fps::pvp {
@@ -194,7 +194,7 @@ struct ClientConnection::Impl {
             [this](Engine::Threads::RoleContext& context){role=&context;Run();});
         if(!started)throw std::runtime_error(Engine::Base::Describe(started.error()));
         worker.emplace(std::move(*started));
-        std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<RoleStartedLine(*worker)<<'\n';
+        ClogLine()<<"[ObjectFPS/PvP] "<<RoleStartedLine(*worker)<<'\n';
     }
     ~Impl(){
         if(!worker)return;
@@ -225,8 +225,8 @@ struct ClientConnection::Impl {
         auto result=state;result.actionTransport=ActionState();result.generation=generation.load();return result;
     }
     void CloseTransport() {
-        if(const auto line=clock.End(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
-        if(summary.player)std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<ConnectionSummaryLine(summary)<<'\n';
+        if(const auto line=clock.End(MicrosNow()))ClogLine()<<*line<<'\n';
+        if(summary.player)ClogLine()<<"[ObjectFPS/PvP] "<<ConnectionSummaryLine(summary)<<'\n';
         summary={};
         asio::error_code error;socket.close(error);
         // Keep credentials until HTTP confirms the idempotent leave. Losing
@@ -254,7 +254,7 @@ struct ClientConnection::Impl {
         simulationHistory.Clear();
         ResetActions();
         state.interrupted=false;state.interruptedSince={};
-        std::osyncstream(std::clog)<<"[ObjectFPS/PvP] connection failed player="<<state.playerId
+        ClogLine()<<"[ObjectFPS/PvP] connection failed player="<<state.playerId
             <<" reason="<<error<<'\n';
         state.phase=ConnectionPhase::Lobby;state.error=std::move(error);state.snapshot.reset();state.playerId=0;
         state.rooms.clear();state.arenaId.clear();roomRefreshFailed=false;
@@ -508,7 +508,7 @@ struct ClientConnection::Impl {
             echo->set_transmit_us(clock.Clock().Stamp(MicrosNow()));
             Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
         }
-        if(const auto line=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
+        if(const auto line=clock.Roll(MicrosNow()))ClogLine()<<*line<<'\n';
         std::array<std::uint8_t,2048> bytes{};
         for(int count=0;count<64;++count) {
             udp::endpoint sender;asio::error_code error;
@@ -642,9 +642,9 @@ struct ClientConnection::Impl {
                     const auto arrival=liveness.Snapshot(arrivedAt);
                     summary.maxGap=std::max(summary.maxGap,arrival.gap);
                     if(arrival.resumed) {
-                        if(const auto line=clock.Resume(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
+                        if(const auto line=clock.Resume(MicrosNow()))ClogLine()<<*line<<'\n';
                         state.interrupted=false;state.interruptedSince={};
-                        std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<ConnectionResumedLine(own,arrival.gap,
+                        ClogLine()<<"[ObjectFPS/PvP] "<<ConnectionResumedLine(own,arrival.gap,
                             interruptedEpoch,authority.movementEpoch)<<'\n';
                     }
                     if(authority.movementEpoch!=submittedEpoch) {
@@ -714,7 +714,7 @@ struct ClientConnection::Impl {
                     if(player.playerId==state.playerId)interruptedEpoch=player.movementEpoch;
             ++summary.interruptions;
             state.interrupted=true;state.interruptedSince=liveness.Since();
-            std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<ConnectionInterruptedLine(state.playerId,
+            ClogLine()<<"[ObjectFPS/PvP] "<<ConnectionInterruptedLine(state.playerId,
                 polledAt-liveness.Since(),interruptedEpoch)<<'\n';
         }
         if(event==ConnectionLiveness::Event::TimedOut)throw std::runtime_error("Gateway connection timed out");
@@ -867,7 +867,7 @@ struct ClientConnection::Impl {
         const auto cpu=CurrentThreadCpuSeconds();
         PlayerId player{};std::uint64_t staleWindows{};
         {std::scoped_lock lock(mutex);player=state.playerId;staleWindows=std::exchange(staleInputWindows,0);}
-        std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
+        ClogLine()<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
             .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
             .otherVersionDatagrams=otherVersionDatagrams,.receivedDatagrams=receivedDatagrams,
             .foreignSenderDatagrams=foreignSenderDatagrams,.undecodableDatagrams=undecodableDatagrams,.staleDatagrams=staleDatagrams,
@@ -875,7 +875,7 @@ struct ClientConnection::Impl {
             .unparsedDatagrams=unparsedDatagrams,.earlyDatagrams=earlyDatagrams,.invalidSnapshotDatagrams=invalidSnapshotDatagrams,
             .ignoredSnapshotDatagrams=ignoredSnapshotDatagrams,.unexpectedKindDatagrams=unexpectedKindDatagrams,
             .staleInputWindows=staleWindows})<<'\n';
-        std::osyncstream(std::clog)<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
+        ClogLine()<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
         receivedDatagrams=foreignSenderDatagrams=undecodableDatagrams=staleDatagrams=sendBlocked=0;
         unparsedDatagrams=earlyDatagrams=invalidSnapshotDatagrams=ignoredSnapshotDatagrams=unexpectedKindDatagrams=0;
@@ -894,13 +894,13 @@ struct ClientConnection::Impl {
             for(;;) {
                 try{io.run();break;}
                 catch(const std::exception& error){
-                    std::osyncstream(std::clog)<<"[ObjectFPS/PvP] network worker failed reason="<<error.what()<<'\n';
+                    ClogLine()<<"[ObjectFPS/PvP] network worker failed reason="<<error.what()<<'\n';
                     try{Failure(std::string("Network worker failed: ")+error.what(),activeGeneration);}catch(...){}
                 }
             }
         }
         try{DisconnectRemote();}
-        catch(const std::exception& error){std::osyncstream(std::clog)<<"[ObjectFPS/PvP] shutdown cleanup failed reason="<<error.what()<<'\n';}
+        catch(const std::exception& error){ClogLine()<<"[ObjectFPS/PvP] shutdown cleanup failed reason="<<error.what()<<'\n';}
     }
 };
 // The socket's own codes (asio::error, the system category) and the portable

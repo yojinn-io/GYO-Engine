@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
+#include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 
 #include <algorithm>
@@ -6,7 +7,6 @@
 #include <exception>
 #include <iostream>
 #include <stdexcept>
-#include <syncstream>
 #include <utility>
 
 namespace fps::pvp {
@@ -151,7 +151,7 @@ ClientSimulationRole::ClientSimulationRole(ClientConnection& connection, std::ve
         [this](Engine::Threads::RoleContext& context) { Body(context); });
     if (!started) throw std::runtime_error(Engine::Base::Describe(started.error()));
     thread_.emplace(std::move(*started));
-    std::osyncstream(std::clog) << "[ObjectFPS/PvP] " << RoleStartedLine(*thread_) << '\n';
+    ClogLine() << "[ObjectFPS/PvP] " << RoleStartedLine(*thread_) << '\n';
 }
 
 ClientSimulationRole::~ClientSimulationRole() = default;
@@ -193,7 +193,7 @@ void ClientSimulationRole::Body(Engine::Threads::RoleContext& context) {
                 intent = intent_;
             }
             auto step = loop_.Run(now, intent, connection_.DrainSimulation());
-            if (step.endedPhase) std::osyncstream(std::clog) << "[ObjectFPS/PvP] " << PhaseSummaryLine(*step.endedPhase) << '\n';
+            if (step.endedPhase) ClogLine() << "[ObjectFPS/PvP] " << PhaseSummaryLine(*step.endedPhase) << '\n';
             if (step.window) connection_.SendInput(std::move(*step.window), step.generation);
             {
                 const std::lock_guard lock(mutex_);
@@ -205,7 +205,7 @@ void ClientSimulationRole::Body(Engine::Threads::RoleContext& context) {
             wakes_.late.Record(wake);
         }
         if (const auto summary = loop_.TakePhaseSummary())
-            std::osyncstream(std::clog) << "[ObjectFPS/PvP] " << PhaseSummaryLine(*summary) << '\n';
+            ClogLine() << "[ObjectFPS/PvP] " << PhaseSummaryLine(*summary) << '\n';
     } catch (const std::exception& error) {
         const std::lock_guard lock(mutex_);
         error_ = error.what();

@@ -6001,8 +6001,8 @@
       "batch": "v71-client-interrupted",
       "what": "A resume drops the worker window in flight",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "                        state.interrupted=false;state.interruptedSince={};\n                        std::osyncstream",
-      "replace": "                        state.interrupted=false;state.interruptedSince={};latestInput.reset();submittedCommands.clear();\n                        std::osyncstream",
+      "find": "                        state.interrupted=false;state.interruptedSince={};\n                        ClogLine()",
+      "replace": "                        state.interrupted=false;state.interruptedSince={};latestInput.reset();submittedCommands.clear();\n                        ClogLine()",
       "check": "worker",
       "expect": "window changed across an interruption"
     },

@@ -1,12 +1,16 @@
 #include <doctest/doctest.h>
 
+#include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 
 #include <chrono>
 #include <future>
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace {
 using namespace fps::pvp;
@@ -199,3 +203,37 @@ TEST_CASE("Role started line names the role's own timer backend (log-contract, N
     role->Join();
 }
 
+// v7.1 cxx-flag-removal (C16): ClogLine, which replaced std::osyncstream, hands
+// each line to std::clog's buffer whole, so concurrent writers never interleave,
+// with default formatting and the manipulators the product uses.
+TEST_CASE("ClogLine writes each line whole under concurrent writers") {
+    std::stringbuf captured;
+    auto* const previous = std::clog.rdbuf(&captured);
+    struct Restore {
+        std::streambuf* buffer;
+        ~Restore() { std::clog.rdbuf(buffer); }
+    } restore{previous};
+    constexpr int Writers = 4;
+    constexpr int Lines = 500;
+    {
+        std::vector<std::thread> writers;
+        for (int writer = 0; writer < Writers; ++writer)
+            writers.emplace_back([writer] {
+                for (int line = 0; line < Lines; ++line)
+                    ClogLine() << "[ObjectFPS/PvP] writer=" << writer << " line=" << line << " tail=" << std::string(40, 'x') << '\n';
+            });
+        for (auto& writer : writers) writer.join();
+    }
+    ClogLine() << "uptime_s=" << std::fixed << std::setprecision(3) << 1.5 << '\n';
+    std::istringstream text(captured.str());
+    std::string line;
+    int count = 0;
+    const std::string tail = " tail=" + std::string(40, 'x');
+    while (std::getline(text, line) && line.starts_with("[ObjectFPS/PvP] writer=")) {
+        CHECK(line.ends_with(tail));
+        CHECK(line.find("[ObjectFPS", 1) == std::string::npos);
+        ++count;
+    }
+    CHECK(count == Writers * Lines);
+    CHECK(line == "uptime_s=1.500");
+}

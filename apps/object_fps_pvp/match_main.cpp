@@ -1,3 +1,4 @@
+#include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
@@ -13,7 +14,6 @@
 #include <iostream>
 #include <optional>
 #include <stdexcept>
-#include <syncstream>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -27,7 +27,7 @@ std::uint64_t WindowMillis(std::chrono::steady_clock::duration window) {
 }
 // One window's ingress lines, written together so no other log line splits them.
 void WriteIngress(const std::vector<std::string>& lines) {
-    std::osyncstream out(std::clog);
+    fps::pvp::ClogLine out;
     for(const auto& line:lines) out<<line<<'\n';
 }
 }
@@ -82,7 +82,7 @@ int main(int argc,char** argv) {
         std::cout<<"Object_FPS_PVP Match ready: "<<listen<<" arena="<<arena->id<<" authority=60Hz\n"<<std::flush;
         // Diagnostics: one statistics line per window, written here so that the
         // tick and IPC threads do no logging I/O for it. The IPC thread logs too,
-        // so this line is emitted through osyncstream as well.
+        // so this line is emitted through ClogLine as well.
         auto windowStart=std::chrono::steady_clock::now();
         auto cpuAtStart=fps::pvp::ProcessCpuSeconds();
         auto ipcAtStart=ipc.Iterations();
@@ -102,11 +102,11 @@ int main(int argc,char** argv) {
             // Taken next to `now`, before any line is written, so window_ms is its window.
             auto taken=runtime.TakeIngressStatistics();
             auto records=runtime.DrainIngressRecords();
-            std::osyncstream(std::clog)<<fps::pvp::MatchStatisticsLine({.windowSeconds=window,
+            fps::pvp::ClogLine()<<fps::pvp::MatchStatisticsLine({.windowSeconds=window,
                 .cpuSeconds=cpu && cpuAtStart ? std::optional<double>(*cpu-*cpuAtStart) : std::nullopt,
                 .cpuTotalSeconds=cpu,.ipcIterations=iterations-ipcAtStart,.ticks=std::move(host.ticks),
                 .snapshotOverwrites=host.snapshotOverwrites,.lockWaits=std::move(host.lockWaits),.pace=std::move(host.pace)})<<'\n';
-            std::osyncstream(std::clog)<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),window,false)<<'\n';
+            fps::pvp::ClogLine()<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),window,false)<<'\n';
             WriteIngress(resync.Lines(taken,false));
             WriteIngress(ingress.Lines(std::move(taken),WindowMillis(now-windowStart),false));
             // The detail file follows the same window; a write failure exits 1 at the end.
@@ -123,7 +123,7 @@ int main(int argc,char** argv) {
         // after it puts them in the detail file before its trace_end.
         auto lastTaken=runtime.TakeIngressStatistics(true);
         const auto lastRecords=runtime.DrainIngressRecords();
-        std::osyncstream(std::clog)<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),
+        fps::pvp::ClogLine()<<fps::pvp::IpcStatisticsLine(ipc.TakeLaneStatistics(),
             std::chrono::duration<double>(stoppedAt-windowStart).count(),true)<<'\n';
         WriteIngress(resync.Lines(lastTaken,true));
         WriteIngress(ingress.Lines(std::move(lastTaken),WindowMillis(stoppedAt-windowStart),true));
@@ -139,7 +139,7 @@ int main(int argc,char** argv) {
         } catch(const std::exception& error) {std::cerr<<error.what()<<'\n';reason="exception";code=1;}
         // log-contract: the Match's own end record, the last line (none when the process is killed,
         // e.g. by TerminateProcess on Windows).
-        std::osyncstream(std::clog)<<"[ObjectFPS/PvP Match] end version=1 reason="<<reason<<" exit_code="<<code
+        fps::pvp::ClogLine()<<"[ObjectFPS/PvP Match] end version=1 reason="<<reason<<" exit_code="<<code
             <<" uptime_s="<<std::fixed<<std::setprecision(3)
             <<std::chrono::duration<double>(std::chrono::steady_clock::now()-processStarted).count()
             <<" authority_tick="<<runtime.TickCount()<<'\n';

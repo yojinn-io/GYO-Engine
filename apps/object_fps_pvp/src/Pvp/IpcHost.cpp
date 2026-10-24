@@ -1,5 +1,6 @@
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/ClockSync.hpp"
+#include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/threads/RoleThread.hpp"
@@ -23,7 +24,6 @@
 #include <optional>
 #include <sstream>
 #include <string_view>
-#include <syncstream>
 #include <utility>
 
 namespace fps::pvp {
@@ -35,7 +35,7 @@ namespace {
 class MatchEventLog final {
 public:
     static void Line(const std::string& text) {
-        std::osyncstream(std::clog) << "[ObjectFPS/PvP Match] " << text << '\n';
+        ClogLine() << "[ObjectFPS/PvP Match] " << text << '\n';
     }
     void Observe(const WorldSnapshot& snapshot, std::uint64_t coalescedSnapshots) {
         std::map<PlayerId, Life> current;

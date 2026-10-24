@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
+#include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
@@ -7,7 +8,6 @@
 #include <chrono>
 #include <stdexcept>
 #include <utility>
-#include <syncstream>
 #include <iostream>
 
 namespace fps::pvp {
@@ -67,7 +67,7 @@ bool MatchRuntimeHost::Start(std::string& error) {
     }
     role_.emplace(std::move(*started));
     // log-contract: the owner names the role's timer backend once it runs.
-    std::osyncstream(std::clog) << "[ObjectFPS/PvP Match] " << RoleStartedLine(*role_) << '\n';
+    ClogLine() << "[ObjectFPS/PvP Match] " << RoleStartedLine(*role_) << '\n';
     return true;
 }
 
