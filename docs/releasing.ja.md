@@ -60,7 +60,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 | Open な PR に `package` label | Package trial | Quick 封装（全製品）を Actions artifacts として upload。Label がある間は push のたびに再 build | `Trial packages / ...`（required ではない） |
 | **Package trial** の手動実行 | Package trial | 選んだ branch で同じ Quick 封装 | — |
 | master への push（merge） | Cross-platform CI | L1 + Quick + `CI gate`。成功すれば `Snapshot / <train>` が train ごとに snapshot を公開。L1 が compiler cache を保存 | `L1 / ...`、`Quick acceptance / ...`、`CI gate`、`Plan snapshot trains`、`Snapshot / tools`、`Snapshot / object_fps_pvp` |
-| **Cross-platform CI** の手動実行 | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）。Snapshot は公開しません。master で実行した場合だけ compiler cache を保存します | 同上（snapshot なし） |
+| **Cross-platform CI** の手動実行 | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）。Snapshot は公開しません。master で実行した場合だけ compiler cache を保存します。L1 の終了後、`Report dispatched L1` が検証した commit に commit status `L1 (dispatch)`（その実行へのリンク）を設定し、その branch の open な PR ごとに目印付きのコメント（commit SHA、platform ごとの L1 結論、実行 URL）を作成または更新します。PR のない branch は status だけです | 同上（snapshot なし）＋`Report dispatched L1`。PR の checks は pull_request event の実行しか表示しないため、Draft PR では `L1 (dispatch)` status とコメントが記録になります |
 | **Prepare Release** | Prepare Release | 1 train の Release 検証、tag、Draft | `Validate train, version and capture source commit`、`Full release acceptance / ...`、`Prepare verified draft and downloads` |
 | Tag の push、**Publish release** | なし | 何も build しません。Publish は既存 Draft を公開するだけです | — |
 
@@ -450,7 +450,7 @@ python3 -m unittest discover -s tests/common/ci -v
 - 未完了の `starter` 添付は有限回再確認し、解決しなければ自動削除せずに報告します。
 - 古い実行の再実行はその commit の workflow を使い、新しい修正を取り込みません。同じ train と version の Prepare Release は並行実行せず、新しい要求で実行中の準備を取り消しません。既存 Draft の prerelease、title、説明は保持します。
 - 公開済みの snapshot に添付の不足があれば変更せずに失敗します。同じ commit を再公開するには、その snapshot を手動で削除します。正式 release に昇格した snapshot は変更しません。
-- Draft job と snapshot job だけが `contents: write` を持ち、build jobs は read-only です。Workflow ファイルを変える branch から tag や Draft を作る時に 403／404 になる場合は、Contents と Workflows の write 権限を持つ token を明示的に設定する必要があります。
+- Draft job と snapshot job だけが `contents: write` を持ち、build jobs は read-only です。`Report dispatched L1` は手動実行の時だけ動き、`actions: read`、`statuses: write`、`pull-requests: write` だけを持ちます。Workflow ファイルを変える branch から tag や Draft を作る時に 403／404 になる場合は、Contents と Workflows の write 権限を持つ token を明示的に設定する必要があります。
 
 ## 13. 今後の課題
 
