@@ -468,6 +468,22 @@ int main() {
         try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+        // First, so a mutant of the outage path fails on the check that guards it:
+        // the mock sends snapshots only on demand, so the later sections pass
+        // through interruptions too.
+        // An outage in both directions, then T_max with Welcomes only; the same
+        // with an extreme time echo must decide the same (differential oracle).
+        const auto outage=RunOutage(gateway,connection,false);
+        Require(outage.interrupted,"the connection was not interrupted at T_int");
+        Require(outage.keptSession,"an interruption did not keep the session, its window and its actions");
+        Require(outage.probedFaster,"an interrupted connection did not probe with Hello every 250 ms");
+        Require(outage.resumed,"a valid snapshot did not resume the connection");
+        Require(outage.sequenceKept,"an interruption restarted the transport sequence");
+        Require(outage.timedOutAtTmax,"a Welcome kept a connection without snapshots past T_max");
+        Require(RunOutage(gateway,connection,true)==outage,"an extreme time echo changed a liveness decision");
+        // The later sections read the mock's records from their own session on.
+        gateway.attempts.clear();gateway.actionAttempts.clear();gateway.packets.clear();
+        gateway.helloClocks.clear();gateway.welcomeTransmits.clear();
         gateway.badWelcomeClock=true; // a bad echo on the first Welcome changes nothing
         connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
@@ -768,17 +784,6 @@ int main() {
         try{connection.SetArenaIdentities({{"a",1,1},{"a",2,2}});}catch(const std::invalid_argument&){duplicateRejected=true;}
         Require(duplicateRejected,"an arena installed twice was accepted");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
-
-        // An outage in both directions, then T_max with Welcomes only; the same
-        // with an extreme time echo must decide the same (differential oracle).
-        const auto outage=RunOutage(gateway,connection,false);
-        Require(outage.interrupted,"the connection was not interrupted at T_int");
-        Require(outage.keptSession,"an interruption did not keep the session, its window and its actions");
-        Require(outage.probedFaster,"an interrupted connection did not probe with Hello every 250 ms");
-        Require(outage.resumed,"a valid snapshot did not resume the connection");
-        Require(outage.sequenceKept,"an interruption restarted the transport sequence");
-        Require(outage.timedOutAtTmax,"a Welcome kept a connection without snapshots past T_max");
-        Require(RunOutage(gateway,connection,true)==outage,"an extreme time echo changed a liveness decision");
 
         // Exercise real receipt overflow, then consume Drain concurrently with
         // worker failure publication. Counts may reset only with generation.
