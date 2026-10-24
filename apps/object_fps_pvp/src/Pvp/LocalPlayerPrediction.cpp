@@ -86,14 +86,38 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     // Tracking measures it from its first real command; the remaining part of
     // any correction described the old phase, and so does every older
     // command's applied shift.
+    RestartPhaseAcquisition(current_.lastResolvedCommand);
+}
+
+// Samples count again only for commands generated after `after`, and the next
+// decision is a first decision.
+void LocalPlayerPrediction::RestartPhaseAcquisition(std::uint64_t after) {
     phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;
     commandAges_ = {};
     phaseSamples_.clear();
-    settledAfter_ = current_.lastResolvedCommand;
+    settledAfter_ = after;
     lateSamples_ = 0;
     settling_ = phaseDecided_ = reacquiring_ = false;
     observation_.phaseTracking = PhaseTrackingState::Acquiring;
     observation_.phaseErrorSeconds.reset();
+}
+
+void LocalPlayerPrediction::Resume(const PlayerState& authority) {
+    if (Reseeds(authority)) return;
+    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {
+        SeedLead(authority);
+        return;
+    }
+    // Below the tip SeedLead would regenerate the unacknowledged sequences
+    // with other content (network-architecture §7: one command identity, one
+    // content). The lead built up while interrupted stays until the Backlog
+    // fuse clears it (P2's second known exception, §7).
+    const double cancelled = phaseShiftSeconds_;
+    RestartPhaseAcquisition(current_.lastResolvedCommand);
+    TraceMovement({.kind = MovementTraceKind::PhaseDecision, .playerId = current_.playerId,
+        .epoch = current_.movementEpoch, .sequence = current_.lastResolvedCommand, .count = 0,
+        .lifeGeneration = current_.lifeGeneration, .phasePath = MovementPhasePath::ResumeReset,
+        .phaseShiftSeconds = cancelled});
 }
 
 // Called only when the previous correction has fully slewed in
@@ -147,6 +171,8 @@ void LocalPlayerPrediction::TrackPhase(const PlayerState& authority) {
             observation_.phaseSampleSequence = sequence;
             if (phaseSamples_.size() > MovementPhaseWindowSamples) phaseSamples_.pop_front();
             lateSamples_ = slack < 0 ? lateSamples_ + 1 : 0;
+        } else {
+            ++unmatchedPhaseSamples_;
         }
     }
     if (settling_ || phaseShiftSeconds_ != 0) return;

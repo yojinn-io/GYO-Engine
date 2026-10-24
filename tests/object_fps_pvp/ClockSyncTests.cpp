@@ -84,7 +84,7 @@ TEST_CASE("PvP clock windows report missing samples, jumps and drift") {
     REQUIRE(window);
     CHECK(ClockWindowLine(*window) ==
           "clock sync window_ms=10000 samples=0 missing=1 invalid=0 negative_delay=0 replaced=0 offset_us=na "
-          "delay_min_us=na delay_max_us=na drift_ppm=na jump=0 final=0");
+          "delay_min_us=na delay_max_us=na drift_ppm=na jump=0 final=0 reason=window");
     constexpr auto W = ClockSync::WindowUs;
     // 1 ppm of drift: the offset grows 10 µs per 10 s window.
     for (std::uint64_t i = 2; i <= 4; ++i) {
@@ -107,11 +107,11 @@ TEST_CASE("PvP clock windows report missing samples, jumps and drift") {
     // Within the floor: no jump, and the drift restarts from the jump.
     Measure(clock, 6 * W - 5'000'000, 40 + 1'200 + 900, 100);
     clock.NoteReplaced();
-    window = clock.Roll(6 * W, true);
+    window = clock.Roll(6 * W, ClockWindowEnd::Final);
     REQUIRE(window);
     CHECK(ClockWindowLine(*window) ==
           "clock sync window_ms=10000 samples=1 missing=0 invalid=0 negative_delay=0 replaced=1 offset_us=2140 "
-          "delay_min_us=100 delay_max_us=100 drift_ppm=90.000 jump=0 final=1");
+          "delay_min_us=100 delay_max_us=100 drift_ppm=90.000 jump=0 final=1 reason=final");
 }
 
 TEST_CASE("PvP clock jumps allow each sample's uncertainty and the drift allowance") {
@@ -162,19 +162,20 @@ TEST_CASE("PvP clock window line matches the shared golden") {
         std::vector<std::string> f;
         std::stringstream cells(row);
         for (std::string cell; std::getline(cells, cell, '\t');) f.push_back(cell);
-        REQUIRE(f.size() == 12);
+        REQUIRE(f.size() == 13);
         const auto optional = [&](int i) -> std::optional<std::int64_t> {
             if (f[i] == "na") return std::nullopt;
             return std::stoll(f[i]);
         };
         ClockWindow window{.windowUs = std::stoull(f[0]), .samples = std::stoull(f[1]), .invalid = std::stoull(f[2]),
                            .negativeDelay = std::stoull(f[3]), .replaced = std::stoull(f[4]), .offsetUs = optional(5),
-                           .delayMinUs = optional(6), .delayMaxUs = optional(7), .jump = f[9] == "1", .final = f[10] == "1"};
+                           .delayMinUs = optional(6), .delayMaxUs = optional(7), .jump = f[9] == "1",
+                           .end = f[11] == "resume" ? ClockWindowEnd::Resume : f[10] == "1" ? ClockWindowEnd::Final : ClockWindowEnd::Window};
         if (f[8] == "nan") window.driftPpm = std::nan("");
         else if (f[8] == "inf") window.driftPpm = INFINITY;
         else if (f[8] != "na") window.driftPpm = std::stod(f[8]);
         CAPTURE(row);
-        CHECK(ClockWindowLine(window) == f[11]);
+        CHECK(ClockWindowLine(window) == f[12]);
         ++rows;
     }
     CHECK(rows >= 8);
@@ -199,5 +200,25 @@ TEST_CASE("PvP Client clock lines name the session's player, also the final one"
     const auto next = session.End(100'000'001);
     REQUIRE(next);
     CHECK(next->rfind("[ObjectFPS/PvP] clock sync player=9 ", 0) == 0);
+}
+
+// network-architecture §4, recovery step 1: a resume ends the window early with
+// reason=resume and final=0; the next one starts there and the drift regression
+// carries on (no jump is forced, the segment is kept).
+TEST_CASE("PvP a Client resume ends the clock window early and keeps the drift regression") {
+    constexpr auto W = ClockSync::WindowUs;
+    ClientClockSession session;
+    CHECK_FALSE(session.Resume(1)); // no session: no line
+    session.Begin(7, 0);
+    Measure(session.Clock(), 5'000'000, 40, 100);
+    REQUIRE(session.Roll(W));
+    Measure(session.Clock(), W + 1'000'000, 41, 100);
+    const auto resumed = session.Resume(W + 2'500'000);
+    REQUIRE(resumed);
+    CHECK(*resumed ==
+          "[ObjectFPS/PvP] clock sync player=7 window_ms=2500 samples=1 missing=0 invalid=0 negative_delay=0 replaced=0 "
+          "offset_us=41 delay_min_us=100 delay_max_us=100 drift_ppm=0.167 jump=0 final=0 reason=resume");
+    CHECK_FALSE(session.Roll(W + 2'500'000 + W - 1)); // the next window starts at the resume
+    REQUIRE(session.Roll(W + 2'500'000 + W));
 }
 

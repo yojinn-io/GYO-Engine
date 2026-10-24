@@ -503,7 +503,7 @@ struct IpcHost::Impl {
     // The log every session end writes once: its last clock window and why
     // it ended (Close, and Stop for a session still connected).
     void LogEnd(const std::string& reason) {
-        if(const auto window=session.clock.Roll(NowMicros(),true)) MatchEventLog::Line(ClockWindowLine(*window));
+        if(const auto window=session.clock.Roll(NowMicros(),ClockWindowEnd::Final)) MatchEventLog::Line(ClockWindowLine(*window));
         session.transport.Roll(Clock::now(),true);
         MatchEventLog::Line("ipc closed reason="+reason);
     }

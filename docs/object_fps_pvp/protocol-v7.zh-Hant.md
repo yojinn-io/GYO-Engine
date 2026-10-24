@@ -50,10 +50,10 @@ pv4～pv6 中沒有在此改寫的條款，pv7 原樣沿用；改寫的條款標
 ### 診斷不進判定（D32）
 
 - 下列值只供觀察：ClockSample 算出的 offset、delay、漂移；dwell、hold；Client 的 GYOP 序號（`client_transport_sequence`）；丟棄回報；動作拒收回覆；Leave 原因；v7.1 的 `view_tick_q16`、`hit_part`。
-- 它們絕不被下列任何一處讀取：250 ms 的 InvalidReference／Expired；160 ms 的品質門檻與逐出；TrackSlack 與 slack 樣本；backlog／starvation；5 秒的 session／runtime／Client 逾時；A1 的判定與冷卻；Client 的相位追蹤、token 規則、射擊閘門與 SnapshotTimeline；Gateway 的 admission 與速率。
+- 它們絕不被下列任何一處讀取：250 ms 的 InvalidReference／Expired；160 ms 的品質門檻與逐出；TrackSlack 與 slack 樣本；backlog／starvation 與 Resync（N_o＝20 Tick，v7.1 `outage-resync`）；5 秒的 session／runtime／Client 逾時；Client 的連線中斷判定（T_int＝0.5 s、T_max＝5 s）與 session 的 endpoint 重新綁定（[network-architecture](network-architecture.zh-Hant.md) §4「連線中斷與恢復」；重新綁定在通用層 session 比較 Gateway 自己收到的傳輸序號，那是 session 的軟狀態；上面所列的診斷值是轉給 Match 的副本 `client_transport_sequence`）；A1 的判定與冷卻；Client 的相位追蹤、token 規則、射擊閘門與 SnapshotTimeline；Gateway 的 admission 與速率。
 - **結構隔離**：時鐘估計器、dwell、hold 與丟棄回報只存在於 I/O 層（Gateway、`IpcHost`、`ClientConnection`），由 `IpcHost` 自己寫對時與 `gw_` 前綴的日誌。`MatchRuntimeHost` 的公開介面不新增任何帶這些值的參數；若一定要經過它，只收不透明的 `DiagnosticCounts`，而且只准在 `TakeIngressStatistics` 內使用。
-- **守衛**：原始碼守衛 CTest 涵蓋 `PvpMatch.cpp`、`LocalPlayerPrediction.cpp`、`MatchRuntimeHost.cpp`／`.hpp`（至少 `SubmitInput`、`Step`、`TrackSlack`、`JudgeConnectionQuality`）、`SnapshotTimeline.hpp`、`PvpApplication.cpp`，以及 `a1-shot-step` 之前的 `FireGate.cpp`。Go 端加測試，確認 session 套件與 `server.go` 的逾時、admission 不引用 ClockSample、dwell、hold 的符號。
-- **差分測試（每個相關突變的 oracle）**：同一個 IpcHost＋Host 情境跑兩次，一次診斷值全缺，一次給極端值（offset ±10 s、跳變、dwell 與 hold 都是 10,000,000）。ShotDecision、參考年齡、slack 樣本與逐出必須逐位元相同。
+- **守衛**：原始碼守衛 CTest 涵蓋 `PvpMatch.cpp`、`LocalPlayerPrediction.cpp`、`MatchRuntimeHost.cpp`／`.hpp`（至少 `SubmitInput`、`Step`、`TrackSlack`、`JudgeConnectionQuality`）、`SnapshotTimeline.hpp`、`PvpApplication.cpp`，以及 `a1-shot-step` 之前的 `FireGate.cpp`。`outage-resync` 的 `client-interrupted` 起加上 `ConnectionLiveness.hpp`；它只收到達時刻（`steady_clock`）與常數，呼叫端不得傳入由 ClockSync 推導的時刻（突變守住）。Go 端加測試，確認 session 套件與 `server.go` 的逾時、admission 不引用 ClockSample、dwell、hold 的符號。
+- **差分測試（每個相關突變的 oracle）**：同一個 IpcHost＋Host 情境跑兩次，一次診斷值全缺，一次給極端值（offset ±10 s、跳變、dwell 與 hold 都是 10,000,000）。ShotDecision、參考年齡、slack 樣本與逐出必須逐位元相同。`outage-resync` 起另外涵蓋：晚到過久（Resync 與 `late_beyond_no`）的判定、帳本讀 SlackTrack 的路徑（`single-store-refactor`），以及 Client 的中斷判定（`client-interrupted`）。
 - 例外：ShotRequest 的 E、S、`view_tick_q16` 是 Client 提供的不可變請求內容，要進 `EqualShot` 與 `ShotRequest::operator==`，參與重送的內容比對（誠實 Client 的重送逐位元相同）；但在 `a1-shot-step` 之前不參與任何判定，Host 只寫影子紀錄。
 
 ### 診斷沒有否決權（依 D-5）

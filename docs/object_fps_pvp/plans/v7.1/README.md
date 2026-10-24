@@ -53,7 +53,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
     ├── 1 系統與引擎
     │   ├── sdl-isolation-plan ✓      「ultracode｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單（D160 核准）」
     │   ├── sdl-isolation ⏸           「high｜產品、probe、產品測試不直接呼叫 SDL（ip3a 關卡）」
-    │   ├── substitution-single-store 「high（判定局部 xhigh）｜被替代的序號只存一份」
+    │   ├── substitution-single-store ✓ 「→ outage-resync（PR #90）的 single-store-refactor、retention-600 完成」
     │   ├── silent-branch-asserts     「high｜無聲分支改成 assert 或計數」
     │   └── cxx-flag-removal          「high｜不再需要 experimental 程式庫」
     ├── 2 觀測工具
@@ -66,8 +66,8 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
     └── 4 發行
         ├── windows-long-path         「high｜深資料夾也能載入 shader」
         ├── quick-close               「high｜關閉 Client 不再卡 3 秒」
-        ├── wake-reconnect            「high｜睡眠醒來不斷線」
-        └── lan15-windows             「high｜Windows LAN 場次」
+        ├── wake-reconnect            「high｜睡眠醒來不斷線；短於 T_max 的睡眠＝中斷已由 outage-resync 處理（D172 D-11 (w1)），其餘仍在本批」
+        └── lan15-windows             「high｜Windows LAN 場次（含 outage-resync 的 L3，D179；預定 10-26）」
 ```
 
 記號：✓ 完成、◐ 實作與 L1 完成、L2 延後、▶ 進行中、⏸ 等使用者決定、◆ 事故後遺症（v7.1 結束前全部結案）、★ 行為改變（各自一批，事前宣告並前後對照）。
@@ -194,5 +194,5 @@ PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四
 - [black-map-observation O2：視窗觀測外掛 `black_map_watch.py`](../../../dev_logs/2026_10_23_pvp_v71_black_map_o2.zh-Hant.md)
 - [black-map-observation O3：已知樣本確認觀測，假說 H1（暖機幀）修正後成立](../../../dev_logs/2026_10_23_pvp_v71_black_map_o3.zh-Hant.md)
 - [black-map-observation O4：L2 的 10 種案例與產品 Client 的觀測跑次，黑屏只在 timing 類露出](../../../dev_logs/2026_10_23_pvp_v71_black_map_o4.zh-Hant.md)
-- [outage-resync：斷線恢復＝重新對時（C13 (b)＋UDP 中斷狀態）](../../../dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md)（進行中；PR #90，分支 `claude/pvp-v71-outage-resync`，合併前連結在本分支上無效）
+- [outage-resync：斷線恢復＝重新對時（C13 (b)＋UDP 中斷狀態）](../../../dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md)（完成、L3 移到 lan15-windows；PR #90，分支 `claude/pvp-v71-outage-resync`，合併前連結在本分支上無效）
 

@@ -139,17 +139,22 @@ class CommandEvidenceTests(unittest.TestCase):
         client.append(self.phase_decision(START + SECOND))
         client.append(self.phase_decision(START + 2 * SECOND, phase_path="late", phase_error_seconds=-0.02,
                                           phase_shift_seconds=-0.02, phase_deadband_seconds=0, count=2))
+        # v7.1 outage-resync client-interrupted: a resume restarts acquisition; no decision, count 0.
+        client.append(self.phase_decision(START + 3 * SECOND, phase_path="resume_reset", phase_error_seconds=0,
+                                          phase_shift_seconds=-0.01, phase_deadband_seconds=0, count=0))
         self.write(directory, client, match, timing)
         result = evidence.analyze_commands(directory)
         self.assertTrue(result['passed'], result['errors'])
         events = list(evidence.read_trace_events(directory / "clients-commands.jsonl"))
-        self.assertEqual([e['phase_path'] for e in events if e['kind'] == 'phase_decision'], ['first', 'late'])
+        self.assertEqual([e['phase_path'] for e in events if e['kind'] == 'phase_decision'],
+                         ['first', 'late', 'resume_reset'])
 
     def test_phase_decision_is_validated(self):
         cases = [({"phase_path": "slow"}, 3, 'invalid phase decision path'),
                  ({"phase_error_seconds": "x"}, 3, 'invalid phase decision value'),
                  ({"phase_deadband_seconds": -0.001}, 3, 'invalid phase decision bounds'),
                  ({"count": 0}, 3, 'invalid phase decision bounds'),
+                 ({"phase_path": "resume_reset", "count": 1}, 3, 'invalid phase decision bounds'),
                  ({}, 2, 'unknown event kind')]   # a schema 2 file has no phase_decision kind
         for changes, schema, message in cases:
             with self.subTest(changes=changes, schema=schema):

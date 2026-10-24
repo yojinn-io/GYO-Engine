@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace fps::pvp {
@@ -37,6 +38,12 @@ struct ClientConnectionState {
     ActionTransportState actionTransport;
     // The connection generation this state belongs to; each session request starts a new one.
     std::uint64_t generation{};
+    // Playing without a valid snapshot for ConnectionInterruptedAfter (the
+    // Client's own observation, network-architecture §4): the session, its
+    // window and its actions stay; interruptedSince is when the last valid
+    // snapshot arrived. Display only: nothing that decides reads it.
+    bool interrupted{};
+    std::chrono::steady_clock::time_point interruptedSince{};
 };
 inline constexpr std::size_t MaxReceivedSnapshots = 64;
 struct ReceivedSnapshot {
@@ -66,7 +73,32 @@ struct ClientSimulationDrain {
     std::optional<MovementRules> movementRules;
     // Snapshots dropped from this history because it was full, cumulative within a generation.
     std::uint64_t overflowCount{};
+    // One-shot: a snapshot of this batch ended an interruption (network-architecture
+    // §4, recovery step 3). Set with that snapshot under one lock, so no batch
+    // holds the snapshot without it; a connection generation boundary clears it.
+    bool resumed{};
 };
+
+// The connection lines of the network worker (log-contract §1.1), without the
+// "[ObjectFPS/PvP] " prefix the worker writes them with. Gaps are whole
+// milliseconds since the last valid snapshot.
+[[nodiscard]] std::string ConnectionInterruptedLine(PlayerId player, std::chrono::steady_clock::duration gap,
+                                                    std::uint64_t epoch);
+[[nodiscard]] std::string ConnectionResumedLine(PlayerId player, std::chrono::steady_clock::duration gap,
+                                                std::uint64_t epochBefore, std::uint64_t epochAfter);
+// The socket errors of a network that may come back (network-architecture §4,
+// D172 D-7: connection reset or refused, network or host unreachable, network
+// down): the worker counts them as no data this time, never a Failure.
+[[nodiscard]] bool TransientSocketError(const std::error_code& error) noexcept;
+// One joined connection, written when its transport closes.
+struct ConnectionSummary final {
+    PlayerId player{};
+    std::uint64_t interruptions{};
+    // The longest interval between two valid snapshots.
+    std::chrono::steady_clock::duration maxGap{};
+    std::uint64_t transientSocketErrors{};
+};
+[[nodiscard]] std::string ConnectionSummaryLine(const ConnectionSummary& summary);
 
 // Owns background I/O. All values crossing this boundary own their storage.
 class ClientConnection final {

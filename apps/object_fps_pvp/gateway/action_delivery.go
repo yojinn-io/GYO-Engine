@@ -183,7 +183,9 @@ func (s *Server) receiveActionResults(in *runtime.ActionResults) error {
 // and inclusion of Hello, stale and malformed authenticated traffic are intact.
 // All per-reservation accounting occurs under Server.mu, matching receivePacket.
 func (s *Server) admit(p *reservation, kind ingressKind, peer netip.AddrPort, sequence uint32, now time.Time) error {
+	before := p.session.LastVerified()
 	err := sessionAdmit(p.session, peer, sequence, now)
+	s.noteVerified(p, before, now)
 	s.trackAdmission(p, kind, now, err)
 	return err
 }

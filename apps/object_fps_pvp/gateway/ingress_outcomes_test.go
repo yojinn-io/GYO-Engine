@@ -150,7 +150,9 @@ func replaceSessionAdmit(t *testing.T, admit func(*session.Session, netip.AddrPo
 
 func replaceSessionHello(t *testing.T, hello func(*session.Session, string, netip.AddrPort, uint32, time.Time) error) {
 	previous := sessionHello
-	sessionHello = hello
+	sessionHello = func(s *session.Session, token string, peer netip.AddrPort, sequence uint32, now time.Time, _ session.Rebinding) (session.Rebound, error) {
+		return session.Rebound{}, hello(s, token, peer, sequence, now)
+	}
 	t.Cleanup(func() { sessionHello = previous })
 }
 

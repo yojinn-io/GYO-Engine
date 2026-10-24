@@ -161,3 +161,140 @@ func TestIdleTimeEarnsNoMoreThanTheBurst(t *testing.T) {
 		t.Fatalf("after 10 s of silence an instant flood admitted %d packets, want 120", admitted)
 	}
 }
+
+// Rebinding (network-architecture §4 "連線中斷與恢復", identity-rebind): a
+// Hello from a new endpoint moves the session only when the token matches, its
+// sequence is newer, the bound endpoint has been silent for the rule's Silence
+// and the session has not expired; the old endpoint is then unauthorized.
+var rebind = Rebinding{Silence: 500 * time.Millisecond, Timeout: 5 * time.Second}
+
+func boundSession(t *testing.T, now time.Time) (*Session, netip.AddrPort, netip.AddrPort) {
+	t.Helper()
+	s, err := New(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := netip.MustParseAddrPort("127.0.0.1:1000")
+	b := netip.MustParseAddrPort("127.0.0.1:2000")
+	if err := s.Hello(s.Token, a, 1, now); err != nil {
+		t.Fatal(err)
+	}
+	return s, a, b
+}
+
+func TestARebindingMovesASilentSessionAndLocksOutTheOldEndpoint(t *testing.T) {
+	now := time.Unix(100, 0)
+	s, a, b := boundSession(t, now)
+	at := now.Add(600 * time.Millisecond)
+	rebound, err := s.HelloRebinding(s.Token, b, 2, at, rebind)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rebound.Previous != a || rebound.Silent != 600*time.Millisecond {
+		t.Fatalf("rebound %+v", rebound)
+	}
+	if s.Endpoint() != b || !s.LastVerified().Equal(at) {
+		t.Fatal("the session did not move to the new endpoint")
+	}
+	if err := s.Admit(a, 3, at); !errors.Is(err, ErrUnauthorized) {
+		t.Fatal("the old endpoint is still authorized")
+	}
+	if err := s.Accept(b, 3, at); err != nil {
+		t.Fatal(err)
+	}
+	// A Hello from the endpoint now bound rebinds nothing.
+	if rebound, err := s.HelloRebinding(s.Token, b, 4, at.Add(time.Second), rebind); err != nil || rebound != (Rebound{}) {
+		t.Fatalf("a bound Hello: %+v %v", rebound, err)
+	}
+}
+
+func TestARebindingNeedsEveryCondition(t *testing.T) {
+	now := time.Unix(100, 0)
+	cases := []struct {
+		name     string
+		token    string
+		sequence uint32
+		at       time.Duration
+		rule     Rebinding
+	}{
+		{"silence too short", "", 2, 499 * time.Millisecond, rebind},
+		{"sequence not newer", "", 1, 600 * time.Millisecond, rebind},
+		{"wrong token", "wrong", 2, 600 * time.Millisecond, rebind},
+		{"session expired", "", 2, 5 * time.Second, rebind},
+		{"no rule (Hello)", "", 2, 4 * time.Second, Rebinding{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, a, b := boundSession(t, now)
+			token := s.Token
+			if c.token != "" {
+				token = c.token
+			}
+			if _, err := s.HelloRebinding(token, b, c.sequence, now.Add(c.at), c.rule); !errors.Is(err, ErrUnauthorized) {
+				t.Fatalf("rebound: %v", err)
+			}
+			if s.Endpoint() != a || !s.LastVerified().Equal(now) {
+				t.Fatal("a refused rebinding moved or refreshed the session")
+			}
+		})
+	}
+}
+
+func TestTheBoundEndpointKeepsItsSessionByAnyVerifiedDatagram(t *testing.T) {
+	now := time.Unix(100, 0)
+	t.Run("a sequence jump from the old endpoint", func(t *testing.T) {
+		s, a, b := boundSession(t, now)
+		if err := s.Admit(a, 1000, now.Add(300*time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.HelloRebinding(s.Token, b, 1001, now.Add(600*time.Millisecond), rebind); !errors.Is(err, ErrUnauthorized) {
+			t.Fatal("a new endpoint rebound within Silence of the old endpoint's last datagram")
+		}
+	})
+	t.Run("only Input from the old endpoint", func(t *testing.T) {
+		s, a, b := boundSession(t, now)
+		sequence := uint32(1)
+		for at := 16 * time.Millisecond; at <= 600*time.Millisecond; at += 16 * time.Millisecond {
+			sequence++
+			if err := s.Accept(a, sequence, now.Add(at)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := s.HelloRebinding(s.Token, b, sequence+1, now.Add(600*time.Millisecond), rebind); !errors.Is(err, ErrUnauthorized) {
+			t.Fatal("a new endpoint rebound while the old one sent Input")
+		}
+	})
+	t.Run("stale and rate-limited datagrams verify too", func(t *testing.T) {
+		s, a, _ := boundSession(t, now)
+		at := now.Add(200 * time.Millisecond)
+		if err := s.Admit(a, 1, at); !errors.Is(err, ErrStale) {
+			t.Fatal(err)
+		}
+		if !s.LastVerified().Equal(at) {
+			t.Fatal("a stale datagram from the bound endpoint did not verify")
+		}
+		limited, refused := at, false
+		for n := 0; n < 1000 && !refused; n++ {
+			limited = limited.Add(time.Microsecond)
+			refused = errors.Is(s.Admit(a, 1, limited), ErrRateLimit)
+		}
+		if !refused {
+			t.Fatal("a burst of datagrams never reached the rate limit")
+		}
+		if !s.LastVerified().Equal(limited) {
+			t.Fatal("a rate-limited datagram from the bound endpoint did not verify")
+		}
+	})
+	t.Run("another endpoint verifies nothing", func(t *testing.T) {
+		s, _, b := boundSession(t, now)
+		if err := s.Admit(b, 2, now.Add(time.Second)); !errors.Is(err, ErrUnauthorized) {
+			t.Fatal(err)
+		}
+		if _, err := s.HelloRebinding("wrong", b, 2, now.Add(time.Second), rebind); !errors.Is(err, ErrUnauthorized) {
+			t.Fatal(err)
+		}
+		if !s.LastVerified().Equal(now) {
+			t.Fatal("another endpoint refreshed the last verified time")
+		}
+	})
+}

@@ -52,7 +52,7 @@ v7.1 的 `re-evaluate` 用 pv7 的數據判斷為「還需要」、交給 v8 的
 
 | 項目 | 為什麼還需要 | 規劃時要注意 |
 |---|---|---|
-| B6：延遲結束後撤回多加的領先（**重新規劃**，不沿用 09b 的 S／M） | 一次 45～60 ms、持續 150 ms 的延遲，會留下約 +25 ms、約 4 秒的延遲（pv7 補量 4/8 個單位）。原因是 late 修正之後的重新擷取在 slew 結束時就決定，用到的還是延遲期間的樣本 | 09b 的 S／M 估計到不了 150 ms 的邊界。先定義玩家可見的目標（撤回時間、不增加 held 與重設），用 schema 3 的 `phase_decision` 補齊「放出相對 slew 結束」的曲線，再比較候選（S、M、放出後依正值樣本撤回、縮短 late 後的決定視窗）。相位追蹤不在 digest 裡，先做 phase-tracking-golden。時序邏輯，規劃用 ultracode 或 xhigh（先問使用者）。09b 1-7 第 3 點一起處理 |
+| B6：延遲結束後撤回多加的領先（**重新規劃**，不沿用 09b 的 S／M） | 一次 45～60 ms、持續 150 ms 的延遲，會留下約 +25 ms、約 4 秒的延遲（pv7 補量 4/8 個單位）。原因是 late 修正之後的重新擷取在 slew 結束時就決定，用到的還是延遲期間的樣本 | 09b 的 S／M 估計到不了 150 ms 的邊界。先定義玩家可見的目標（撤回時間、不增加 held 與重設），用 schema 3 的 `phase_decision` 補齊「放出相對 slew 結束」的曲線，再比較候選（S、M、放出後依正值樣本撤回、縮短 late 後的決定視窗）。相位追蹤不在 digest 裡，先做 phase-tracking-golden。時序邏輯，規劃用 ultracode 或 xhigh（先問使用者）。09b 1-7 第 3 點一起處理。**v7.1 outage-resync 之後（PR #90）**：B6 的基準要在它合併後重新取得。它改了相位追蹤的入口與 slack 的來源：被替代序號只存一份、保留 600 序號；晚到超過 N_o（333,333 µs）的第一份副本不產生樣本，改成 Resync；恢復時 `LocalPlayerPrediction::Resume`（`resume_reset`）。它也留下兩個交給 B6 的已知例外：只上行中斷後，以及 Match 停頓後恢復時，多出的領先量要等 Backlog 清掉（network-architecture §7「連線中斷與重新對時」的已知項目）。`Correct()`、`reacquiring_`、deadband、p90 視窗沒有改 |
 | A4：延遲位移（產生→執行約 38 ms） | 玩家感受得到；A1 之後射擊也照命令步判定。手感上的取捨，不是缺陷 | 改領先會改 backlog 穩態（30 Tick 合計 60→30），碰到 D44 的停止條件；需要 WAN 資料與 phase-tracking-golden |
 | N-analyzer-literal-105 | backlog 門檻 105 與視窗 30 在 Match 與 4 個分析器的 6 處手動維持（AGENTS.md §9） | 改成共用常數，加從 `Movement.hpp` 解析並核對的測試；動到凍結分析器，下一個 L2 重新凍結 |
 | B10：相位追蹤的 golden（D158） | 權威 digest 的 `RunLink` 不經 TrackSlack，35 個情境的相位樣本都是 0，相位追蹤改壞了沒有測試會失敗 | 排在 B6 之前（即上面的 phase-tracking-golden） |

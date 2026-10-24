@@ -425,6 +425,36 @@ TEST_CASE("PvP two late samples in one drained batch correct at once like two la
     CHECK(newestOnly.Observation().phaseLateCorrections == start);
 }
 
+// client-interrupted (network-architecture §4, recovery step 3): the resume of
+// a batch takes effect before its samples, so the late samples of commands sent
+// before or during the interruption correct nothing.
+TEST_CASE("PvP a resumed batch restarts phase acquisition before its late samples") {
+    auto steady = SteadyStart();
+    const auto& history = steady.history;
+    auto first = history[history.size() - 3];
+    auto second = history[history.size() - 2];
+    const auto& newer = history.back();
+    REQUIRE(steady.client.Observation().phaseTracking == PhaseTrackingState::Tracking);
+    first.players.front().movementSlackMicros = -900000;
+    second.players.front().movementSlackMicros = -800000;
+    const auto start = steady.client.Observation().phaseLateCorrections;
+    auto resumed = steady.client;
+    REQUIRE_FALSE(resumed.Observation().lastResolvedCommand >= resumed.Observation().latestCommand);
+    resumed.ObserveSample(first, 1);
+    resumed.ObserveSample(second, 1);
+    resumed.Observe(newer.players.front(), newer.tick, std::nullopt, true);
+    CHECK(resumed.Observation().phaseLateCorrections == start);
+    CHECK(resumed.Observation().phaseTracking == PhaseTrackingState::Acquiring);
+    // The same batch without the resume corrects at once.
+    auto interrupted = steady.client;
+    interrupted.ObserveSample(first, 1);
+    interrupted.ObserveSample(second, 1);
+    interrupted.Observe(newer.players.front(), newer.tick, std::nullopt);
+    CHECK(interrupted.Observation().phaseLateCorrections == start + 1);
+    // Both reconciled the same newest state: the resume rewrote no command.
+    CHECK(resumed.PendingInput().commands == interrupted.PendingInput().commands);
+}
+
 TEST_CASE("PvP prediction phase samples of another epoch or life are not evidence") {
     auto steady = SteadyStart();
     const auto& history = steady.history;

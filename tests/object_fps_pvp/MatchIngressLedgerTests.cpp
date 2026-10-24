@@ -13,29 +13,45 @@ using namespace fps::pvp;
 using namespace std::chrono_literals;
 using TimePoint = std::chrono::steady_clock::time_point;
 
+// The host's pairing (MatchRuntimeHost): the substitution records decide, the
+// ledger reads each arrival and turns each closed record into its detail record.
 struct LedgerFixture final {
+    MatchSubstitutionRecords records;
     MatchIngressLedger ledger;
     std::vector<IngressSubstitution> closed;
     TimePoint now = TimePoint{} + 1s;
     std::size_t clockReads{};
 
-    explicit LedgerFixture(MatchIngressLedger value = MatchIngressLedger{}) : ledger(value) {}
+    explicit LedgerFixture(MatchSubstitutionRecords value = MatchSubstitutionRecords{}) : records(value) {}
 
+    auto Closer() {
+        return [this](PlayerId player, std::uint64_t epoch, std::uint64_t life, const SubstitutionRecord& record,
+                      IngressSubstitutionClose reason) { closed.push_back(ledger.Closed(player, epoch, life, record, reason)); };
+    }
     void Observe(PlayerId player, std::uint64_t epoch, std::uint64_t life, std::uint64_t cursor) {
-        ledger.Observe(player, epoch, life, cursor, [this](const IngressSubstitution& record) { closed.push_back(record); });
+        const bool identity = records.Observe(player, epoch, life, Closer());
+        ledger.Watch(player, cursor, identity);
     }
     // Resolves first..last of one player: the listed sequences substituted at `now`.
     void Resolve(PlayerId player, std::uint64_t first, std::uint64_t last, std::vector<std::uint64_t> substituted = {}) {
         for (auto sequence = first; sequence <= last; ++sequence) {
             const bool missing = std::find(substituted.begin(), substituted.end(), sequence) != substituted.end();
-            ledger.Resolved(player, sequence, missing ? std::optional<TimePoint>{now} : std::nullopt, sequence,
-                [this](const IngressSubstitution& record) { closed.push_back(record); });
+            records.Resolved(player, sequence, missing ? std::optional<TimePoint>{now} : std::nullopt, sequence, Closer());
+            ledger.Resolved(player, sequence);
         }
     }
     IngressCommandClass Arrive(PlayerId player, std::uint64_t sequence, std::uint64_t cursor,
                                std::uint64_t epoch = 1, std::uint64_t life = 1, std::optional<std::int64_t> age = {}) {
-        return ledger.Arrive(player, epoch, life, sequence, cursor, [this] { ++clockReads; return now; },
-            [age] { return age; });
+        const auto arrival = records.Arrive(player, epoch, life, sequence, [this] { ++clockReads; return now; });
+        return ledger.Classify(player, sequence, cursor, arrival, [age] { return age; });
+    }
+    void Remove(PlayerId player) {
+        records.Remove(player, Closer());
+        ledger.Remove(player);
+    }
+    void Clear(IngressSubstitutionClose reason) {
+        records.Clear(reason, Closer());
+        ledger.Clear();
     }
 };
 }
@@ -44,7 +60,7 @@ TEST_CASE("PvP ingress ledger keeps a substitution through the retention and clo
     LedgerFixture fixture;
     fixture.Observe(1, 1, 1, 0);
     fixture.Resolve(1, 1, 602, {2});
-    // cursor 602: sequence 2 is exactly IngressLedgerRetentionSequences behind.
+    // cursor 602: sequence 2 is exactly SubstitutionRetentionSequences behind.
     const bool retainedAtBoundary = fixture.closed.empty();
     CHECK(retainedAtBoundary);
     fixture.now += 5ms;
@@ -75,7 +91,7 @@ TEST_CASE("PvP ingress ledger keeps a substitution through the retention and clo
 }
 
 TEST_CASE("PvP ingress ledger closes the oldest record over capacity and never overflows within the retention") {
-    LedgerFixture small{MatchIngressLedger{IngressLedgerRetentionSequences, 2}};
+    LedgerFixture small{MatchSubstitutionRecords{SubstitutionRetentionSequences, 2}};
     small.Observe(1, 1, 1, 0);
     small.Resolve(1, 1, 2, {1, 2});
     const auto closedAtCapacity = small.closed.size();
@@ -94,11 +110,11 @@ TEST_CASE("PvP ingress ledger closes the oldest record over capacity and never o
     LedgerFixture full;
     full.Observe(1, 1, 1, 0);
     std::vector<std::uint64_t> all;
-    for (std::uint64_t sequence = 1; sequence <= IngressLedgerRetentionSequences + 1; ++sequence) all.push_back(sequence);
-    full.Resolve(1, 1, IngressLedgerRetentionSequences + 1, all);
+    for (std::uint64_t sequence = 1; sequence <= SubstitutionRetentionSequences + 1; ++sequence) all.push_back(sequence);
+    full.Resolve(1, 1, SubstitutionRetentionSequences + 1, all);
     const auto overflowsWithinRetention = full.closed.size();
     CHECK(overflowsWithinRetention == 0);
-    CHECK(full.Arrive(1, 1, IngressLedgerRetentionSequences + 1) == IngressCommandClass::LateFirst);
+    CHECK(full.Arrive(1, 1, SubstitutionRetentionSequences + 1) == IngressCommandClass::LateFirst);
 }
 
 TEST_CASE("PvP ingress ledger names why each record closed") {
@@ -124,13 +140,13 @@ TEST_CASE("PvP ingress ledger names why each record closed") {
     CHECK(lifeClose == IngressSubstitutionClose::Life);
 
     fixture.Resolve(1, 1, 1, {1});
-    fixture.ledger.Remove(1, [&](const IngressSubstitution& record) { fixture.closed.push_back(record); });
+    fixture.Remove(1);
     REQUIRE(fixture.closed.size() == 3);
     const auto removedClose = fixture.closed[2].close;
     CHECK(removedClose == IngressSubstitutionClose::Removed);
     CHECK(fixture.Arrive(1, 1, 1, 3, 2) == IngressCommandClass::ResolvedUntracked);
 
-    fixture.ledger.Clear(IngressSubstitutionClose::Reset, [&](const IngressSubstitution& record) { fixture.closed.push_back(record); });
+    fixture.Clear(IngressSubstitutionClose::Reset);
     REQUIRE(fixture.closed.size() == 4);
     const auto resetClose = fixture.closed[3].close;
     CHECK(resetClose == IngressSubstitutionClose::Reset);
@@ -138,7 +154,7 @@ TEST_CASE("PvP ingress ledger names why each record closed") {
 
     fixture.Observe(2, 1, 1, 0);
     fixture.Resolve(2, 1, 1, {1});
-    fixture.ledger.Clear(IngressSubstitutionClose::End, [&](const IngressSubstitution& record) { fixture.closed.push_back(record); });
+    fixture.Clear(IngressSubstitutionClose::End);
     REQUIRE(fixture.closed.size() == 5);
     CHECK(fixture.closed[4].close == IngressSubstitutionClose::End);
     CHECK(fixture.clockReads == 0);
@@ -160,4 +176,32 @@ TEST_CASE("PvP ingress ledger vouches only for sequences it saw resolved") {
     CHECK(gapCopy == IngressCommandClass::ResolvedUntracked);
     CHECK(fixture.Arrive(1, 10, 10) == IngressCommandClass::ResolvedCopy);
     CHECK(fixture.clockReads == 0);
+}
+
+// v7.1 outage-resync (since retention-600): the first copy of every open
+// record decides once (sample or Resync, by its lateness); a record that aged
+// out is gone, so its copy decides nothing and reads no clock. Until
+// retention-600 only the newest unarrived records could give a sample and an
+// aged candidate was kept (single-store-refactor's transitional rule).
+TEST_CASE("PvP substitution records let the first copy of every open record decide, once") {
+    LedgerFixture fixture{MatchSubstitutionRecords{3, 10}};
+    const auto arrive = [&](std::uint64_t sequence) {
+        return fixture.records.Arrive(1, 1, 1, sequence, [&] { ++fixture.clockReads; return fixture.now; });
+    };
+    fixture.Observe(1, 1, 1, 0);
+    fixture.Resolve(1, 1, 3, {1, 2, 3});
+    const auto oldest = arrive(1);
+    CHECK(oldest.open);
+    CHECK(oldest.first);
+    CHECK(fixture.clockReads == 1);
+    const auto copy = arrive(1);
+    CHECK(copy.open);
+    CHECK_FALSE(copy.first);
+    CHECK(fixture.clockReads == 1);
+    fixture.Resolve(1, 4, 7); // 1, 2 and 3 age out
+    REQUIRE(fixture.closed.size() == 3);
+    const auto aged = arrive(2);
+    CHECK_FALSE(aged.open);
+    CHECK_FALSE(aged.first);
+    CHECK(fixture.clockReads == 1);
 }

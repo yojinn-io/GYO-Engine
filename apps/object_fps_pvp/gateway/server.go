@@ -27,7 +27,14 @@ import (
 	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
 )
 
+// sessionTimeout is T_max and connectionInterruptedAfter T_int (v7.1
+// outage-resync; network-architecture §4): the same values as the Client's
+// (Movement.hpp), bound by tests/object_fps_pvp/fixtures/connection_timing.json.
+// The Gateway counts T_max from the last uplink packet that refreshed the
+// session; T_int is the silence a rebinding needs (receivePacket) and the one that
+// restarts a Client's clock window (echo.go noteVerified).
 const sessionTimeout = 5 * time.Second
+const connectionInterruptedAfter = 500 * time.Millisecond
 const joinTimeout = 3 * time.Second
 
 type phase uint8
@@ -124,7 +131,7 @@ type Server struct {
 // ErrUnauthorized, ErrRateLimit and ErrStale.
 var (
 	sessionAdmit = (*session.Session).Admit
-	sessionHello = (*session.Session).Hello
+	sessionHello = (*session.Session).HelloRebinding
 )
 
 func New(ctx context.Context, cfg Config) (*Server, error) {
@@ -489,12 +496,22 @@ func (s *Server) receivePacket(h framing.Header, payload []byte, peer netip.Addr
 			s.countIngress(p, playerDropMalformedHelloPackets, 1)
 			return nil
 		}
-		admission := sessionHello(p.session, hello.SessionToken, peer, h.Sequence, now)
+		before := p.session.LastVerified()
+		// The product's rule for moving a session to a new endpoint
+		// (network-architecture §4): T_int of silence, within T_max.
+		rebound, admission := sessionHello(p.session, hello.SessionToken, peer, h.Sequence, now,
+			session.Rebinding{Silence: connectionInterruptedAfter, Timeout: sessionTimeout})
+		s.noteVerified(p, before, now)
 		s.trackAdmission(p, ingressHello, now, admission)
 		if admission != nil {
 			return nil
 		}
 		s.noteHello(p, &hello, now)
+		if rebound.Previous.IsValid() {
+			// Ports only: no token and no full address in the log.
+			log.Printf("session rebound version=1 player=%d old_port=%d new_port=%d silent_ms=%d",
+				p.playerID, rebound.Previous.Port(), peer.Port(), rebound.Silent.Milliseconds())
+		}
 		switch p.phase {
 		case reserved:
 			p.phase = joining

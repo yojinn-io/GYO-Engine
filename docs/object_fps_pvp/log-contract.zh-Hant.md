@@ -34,6 +34,10 @@
 | role started（Match 2 條、Client 2 條） | `NetworkStatistics.cpp` `RoleStartedLine`，由各 role 的 owner 在 Start 後寫 | `[ObjectFPS/PvP Match] role started version=1 `、`[ObjectFPS/PvP] role started version=1 ` | 1 | `NetworkStatisticsTests.cpp`＋`keys-v1.tsv` | `ingress_cross_check.py`（2026-10-20 新增：計時器後端） |
 | Match end | `match_main.cpp`（最後一行） | `[ObjectFPS/PvP Match] end version=1 ` | 1 | `keys-v1.tsv` | `ingress_cross_check.py`（被 Windows 的 TerminateProcess 結束時沒有這一行；`authority_tick` 是結束時的 Tick，房間清空時 Match 會重設，所以常是很小的值） |
 | Client hit feedback | `PvpApplication.cpp`（`LocalHitFeedback::Observe` 的結果） | `PvP hit feedback version=1 ` | 1 | `keys-v1.tsv`＋`HitFeedbackTests.cpp`（原因的判斷） | 目前沒有工具（2026-10-20 新增：每次受擊與不閃紅的原因 played／dead／new_life） |
+| Match resync statistics | `IngressStatistics.hpp` `MatchResyncStatisticsLine`（`match_main.cpp` 每個統計視窗、每位玩家一行，沒有 player=0；最後一個視窗以 `final=1` 關閉寫過的每位玩家） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | 1 | `IngressStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-23 新增，v7.1 `outage-resync` 的 `drop-counters`：`slack_clamped_samples`＝被 ±1 s 夾限改變的發布樣本，屬於 `slack_published_samples`；2026-10-23 `match-resync` 起行尾追加 `resyncs`＝Match 換的 Resync epoch 數、`late_beyond_no_commands`＝晚到超過 N_o 而不產生樣本的第一份副本數） |
+| Client phase summary | `ClientSimulationRole.cpp` `PhaseSummaryLine`（模擬 role：連線換代或換玩家時、role 停止時各一行，只在那一代有本機玩家時寫） | `[ObjectFPS/PvP] phase summary version=1 ` | 1 | `ClientSimulationRoleTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-23 新增，`drop-counters`：`phase_samples_unmatched`＝命令已離開 64 格命令環的 slack 樣本，第 5 節的死信） |
+| Client connection interrupted／resumed／summary | `ClientConnection.cpp` `ConnectionInterruptedLine`、`ConnectionResumedLine`、`ConnectionSummaryLine`（網路 worker：進入中斷時、恢復時各一行，連線的傳輸關閉時一行摘要） | `[ObjectFPS/PvP] connection interrupted version=1 `、`[ObjectFPS/PvP] connection resumed version=1 `、`[ObjectFPS/PvP] connection summary version=1 ` | 1 | `ConnectionLivenessTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-24 新增，`client-interrupted`：`gap_ms`＝距上一份有效 snapshot 的整毫秒；`max_gap_ms`＝兩份有效 snapshot 的最長間隔；`transient_socket_errors`＝只計數的暫時性 socket 錯誤） |
+| Gateway session rebound | `server.go`（`receivePacket` 的 Hello，每次改綁一行） | `session rebound version=1 ` | 1 | `rebind_test.go`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-24 新增，`identity-rebind`：`old_port`、`new_port`＝改綁前後的來源埠，`silent_ms`＝原 endpoint 最後驗證之後的整毫秒；不記 token 與完整位址） |
 | clock sync（三端） | 本體 `ClockSync.hpp` `ClockWindowLine`、`clock_sync.go` `line()` | Match `[ObjectFPS/PvP Match] clock sync window_ms=`；Gateway runtime `clock sync window_ms=`；Gateway 每位 Client `client clock sync player=`；Client `[ObjectFPS/PvP] clock sync player=` | 隱含 1 | `fixtures/log_v1/clock-sync.tsv`（C++ 與 Go 讀同一份） | 目前沒有工具（2026-10-20 升 A 級：三端的對時是之後分析的輸入） |
 
 ### 1.2 A 級：JSONL 紀錄檔
@@ -49,6 +53,33 @@
 ### 1.3 B 級
 
 Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `rejected_<reason>=`）、`PvP client gateway source=`、連線階段與錯誤、`cause records`、`connection failed`、`network worker failed`、`shutdown cleanup failed`；Match 的 death／respawn、`statistics tick=`、`gw_transport`、leave、lifecycle；Gateway 的 player statistics、join／hello／active／expired／left 等生命週期行、`UDP stopped`，以及 `runtime disconnected reason=<liveness_timeout|write_timeout|version_mismatch|protocol|eof|other> error=<引號內的原錯誤>`（原因代碼由 `errors.Is` 分類，`disconnect_reason_test.go` 守住；原錯誤的文字不變）。
+
+### 1.4 規劃中的 A 級行族（v7.1 `outage-resync`，D172）
+
+下列行族在各批實作時加進 1.1 的表，附寫出端的釘住測試（`keys-v1.tsv` 與逐字測試），錨點加進 `prefixes.txt`。L2 要讀它們，所以一開始就是 A 級（Design Invariant 1）。都是新的事件名，帶 `version=1`（R2）。鍵照加入的批次排列：後面的批次只在行尾追加（R1、Design Invariant 2）。
+
+| 行族 | 寫出端（預定） | 錨點 | 鍵（依序；括號是加入的批次） |
+|---|---|---|---|
+| Client 相位摘要 | 已在 `drop-counters` 實作，見 1.1 | `[ObjectFPS/PvP] phase summary version=1 ` | `player`、`phase_samples_unmatched`（`drop-counters`） |
+| Client 連線中斷 | 已在 `client-interrupted` 實作，見 1.1 | `[ObjectFPS/PvP] connection interrupted version=1 ` | `player`、`gap_ms`（偵測時距上一份 snapshot）、`epoch`（`client-interrupted`） |
+| Client 連線恢復 | 已在 `client-interrupted` 實作，見 1.1 | `[ObjectFPS/PvP] connection resumed version=1 ` | `player`、`gap_ms`、`epoch_before`、`epoch_after`（`client-interrupted`） |
+| Client 連線摘要 | 已在 `client-interrupted` 實作，見 1.1 | `[ObjectFPS/PvP] connection summary version=1 ` | `player`、`interruptions`、`max_gap_ms`、`transient_socket_errors`（`client-interrupted`） |
+| Match 重新對時統計 | 已實作，見 1.1（`drop-counters` 前三鍵、`match-resync` 後兩鍵） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | `player`、`final`、`slack_clamped_samples`（`drop-counters`）；`resyncs`、`late_beyond_no_commands`（`match-resync`） |
+| Gateway session 重新綁定 | 已在 `identity-rebind` 實作，見 1.1 | `session rebound version=1 ` | `player`、`old_port`、`new_port`、`silent_ms`（`identity-rebind`；不記 token 與完整位址） |
+
+- **各端只記自己觀察到的事**（第 5 節）：`phase_samples_unmatched` 是模擬端的 64 格命令環觀察到的，所以由模擬端寫，不經網路 worker。
+- **不追加到 ingress 行**：ingress 已有 8 組（R3），再加會觸發 Replacement Criteria 1。
+- **clock sync 行（三端，A 級）**：
+  - 每一行行尾追加 `reason=`（R1，D172 的 D-8 (b)），值是：
+    - `window`：10 s 到期；
+    - `final`：連線結束，和 `final=1` 同時；
+    - `resume`：恢復時提前結束，`final=0`。
+  - 已實作（`client-interrupted`，三端都加了 `reason=`）。Client 與 Gateway 的每位 Client 視窗可能出現 `resume`（Gateway 的在 `identity-rebind` 加上：`echo.go` `noteVerified`）；Match 與 Gateway runtime 的 clock sync 行量的是 Gateway↔Match，值只會是 `window` 或 `final`。
+  - 漂移的回歸不因 `resume` 重新開始，`drift_ppm` 的意義不變。
+  - 釘住：`fixtures/log_v1/clock-sync.tsv` 加一欄。
+- **移動紀錄**（schema 3）：`reset` 事件的 `reset_reason` 新增值 `resync`（`match-resync` 起，已實作）。這是既有 kind 的新列舉值，不加欄位、不升版；`command_evidence.py` 遇到未知的值會照字串保留（`command_evidence.py:325-329`）。凍結的讀者在該批先查。
+- **移動紀錄的相位決策**（R4 的例外，`client-interrupted` 起，已實作）：恢復時「只重設相位擷取」寫一筆 `phase_decision`，`phase_path=resume_reset`、`count=0`、`phase_shift_seconds` 記被取消的剩餘修正量。之後的下一次決定照 `first` 記；`MovementTrace.hpp` 對 First 的定義加上「或只重設擷取之後」。和 `reset_reason=resync` 一樣是既有 kind 的新列舉值，不升版，凍結的讀者在該批先查。先查的結果：`command_evidence.py` 原本只接受 first／window／late 與 `count ≥ 1`，會把它當成損壞；repo 裡的讀者只多接受 `resume_reset` 且 `count=0`（`test_command_evidence.py`）。已凍結的副本讀不到含它的紀錄，`resync-l2-l3` 的宣告要重新凍結。
+- **死信**：Client 的 64 格命令環對不上的相位樣本，計 `phase_samples_unmatched`（第 5 節的死信原則；`outage-characterize` 確認它現在無聲丟棄）。
 
 ## 2. 版本與相容
 

@@ -37,7 +37,7 @@ void Require(bool condition,const char* message){if(!condition)throw std::runtim
 void Require(bool condition,const std::string& message){if(!condition)throw std::runtime_error(message);}
 struct Attempt { Clock::time_point at; pb::PlayerInput input; };
 struct ActionAttempt { Clock::time_point at; pb::ActionBatch actions; };
-struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; };
+struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; std::uint32_t sequence{}; };
 // Opaque content digest of the mock arena (pv6 contract §2).
 constexpr std::uint64_t WorkerArenaDigest=0x0123456789abcdefULL;
 class MockGateway {
@@ -75,7 +75,8 @@ public:
             if(error)throw std::runtime_error(error.message());
             const auto packet=wire::Decode(std::span(buffer).first(size));
             Require(packet.has_value() && packet->session==1,"invalid worker UDP envelope");
-            peer=source;packets.push_back({Clock::now(),packet->type,size});
+            peer=source;packets.push_back({Clock::now(),packet->type,size,packet->sequence});
+            if(silent)continue; // an outage in both directions: seen, never answered
             if(packet->type==wire::Type::Hello) {
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
@@ -93,7 +94,14 @@ public:
                 if(hello.has_clock()) {clock->set_origin_us(hello.clock().transmit_us());clock->set_receive_us(welcomeTransmit-(badWelcomeClock?0:1));}
                 if(badWelcomeClock)clock->set_receive_us(welcomeTransmit+1);
                 clock->set_transmit_us(welcomeTransmit);welcomeTransmits.push_back(welcomeTransmit);
-                Send(wire::Type::Welcome,welcome.SerializeAsString());Snapshot(ack);
+                // Extreme diagnostics (the differential oracle of CheckOutage):
+                // the liveness decisions must not see them.
+                // Valid samples (the right origin, increasing transmits) with an
+                // offset of about 2^52 us.
+                if(extremeWelcomeClock && hello.has_clock()) {clock->set_receive_us(clock->receive_us()+ExtremeOffsetUs);
+                    clock->set_transmit_us(welcomeTransmit+ExtremeOffsetUs);}
+                Send(wire::Type::Welcome,welcome.SerializeAsString());
+                if(snapshotOnHello)Snapshot(ack);
             } else if(packet->type==wire::Type::Input) {
                 pb::PlayerInput input;Require(input.ParseFromString(packet->payload) && input.movement_epoch()>0 && input.movement_epoch()<=epoch &&
                     input.commands_size()>0 && input.commands_size()<=12,"invalid worker input window");
@@ -121,7 +129,7 @@ public:
         Until([&]{return Clock::now()>=deadline;},3000ms,where);
     }
     void Snapshot(std::uint64_t resolved) {
-        ack=resolved;pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
+        ack=resolved;snapshotSentAt=Clock::now();pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
         auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
         auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);combat->set_life_generation(1);combat->set_magazine_ammo(7);
         combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2);
@@ -165,7 +173,11 @@ public:
     std::vector<pb::ClockSample> helloClocks;
     std::vector<std::uint64_t> welcomeTransmits;
     std::uint64_t welcomeTransmit{};
-    bool badWelcomeClock{};
+    bool badWelcomeClock{},extremeWelcomeClock{};
+    // CheckOutage: drop everything (silent), or answer a Hello with a Welcome only.
+    bool silent{},snapshotOnHello{true};
+    Clock::time_point snapshotSentAt{}; // when Snapshot last sent one
+    static constexpr std::uint64_t ExtremeOffsetUs=std::uint64_t{1}<<52;
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
     bool includeRules{true};
     std::uint64_t epoch{1};
@@ -187,6 +199,99 @@ PlayerInput Input(std::uint64_t first,std::uint64_t last) {
     PlayerInput result;result.playerId=1;
     for(auto sequence=first;sequence<=last;++sequence)result.commands.push_back({sequence,1,0,0,0});
     return result;
+}
+// network-architecture §4 (v7.1 outage-resync client-interrupted): what one
+// outage did, compared between a normal and an extreme time echo. Mock and
+// Client share one process and one steady_clock, so each decision is timed
+// against the moment the mock sent the last snapshot: liveness may read only
+// arrival times (the differential oracle of §7). The booleans compare equal
+// between the runs; the latencies, within a tolerance.
+struct OutageOutcome {
+    bool interruptedOnTime{},trackedLastSnapshot{},keptSession{},probedFaster{},resumed{},windowKept{},sequenceKept{},
+        timedOutOnTime{};
+    double interruptMs{},timeoutMs{};
+    bool operator==(const OutageOutcome& other) const {
+        return interruptedOnTime==other.interruptedOnTime && trackedLastSnapshot==other.trackedLastSnapshot &&
+            keptSession==other.keptSession && probedFaster==other.probedFaster && resumed==other.resumed &&
+            windowKept==other.windowKept && sequenceKept==other.sequenceKept && timedOutOnTime==other.timedOutOnTime;
+    }
+};
+// A decision on time: no earlier than its threshold after the last snapshot was
+// sent, and not later than a loopback arrival and a worker wake can explain.
+constexpr double DecisionLateToleranceMs=100;
+constexpr double RunsToleranceMs=50;
+bool OnTime(double latencyMs,std::chrono::milliseconds threshold) {
+    return latencyMs>=static_cast<double>(threshold.count())-1 && latencyMs<=static_cast<double>(threshold.count())+DecisionLateToleranceMs;
+}
+double MillisSince(Clock::time_point from,Clock::time_point to){return std::chrono::duration<double,std::milli>(to-from).count();}
+OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool extremeClock) {
+    OutageOutcome outcome;
+    gateway.extremeWelcomeClock=extremeClock;
+    connection.Join(gateway.address,"1");
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+    const auto shot=connection.SubmitShot(connection.State().snapshot->tick,0,0);
+    Require(shot.has_value(),"the outage scenario could not submit an action");
+    gateway.Until([&]{return !gateway.actionAttempts.empty();});
+    // An unacknowledged window in flight, as the Client has during an outage.
+    connection.SendInput(Input(1,3));
+    gateway.Until([&]{return !gateway.attempts.empty();});
+    gateway.Snapshot(0);
+    const auto lastSnapshotAt=gateway.snapshotSentAt;
+    const auto packetsBefore=gateway.packets.size();
+    gateway.silent=true;
+    const auto silentAt=Clock::now();
+    gateway.Until([&]{return connection.State().interrupted;},1500ms);
+    outcome.interruptMs=MillisSince(lastSnapshotAt,Clock::now());
+    // The first version's lower bound (from going silent, 5 ms early) is kept,
+    // so the judgment passes nothing that version failed (AGENTS §14.4).
+    outcome.interruptedOnTime=OnTime(outcome.interruptMs,ConnectionInterruptedAfter) &&
+        MillisSince(silentAt,Clock::now())>=static_cast<double>(ConnectionInterruptedAfter.count())-5;
+    outcome.trackedLastSnapshot=std::abs(MillisSince(lastSnapshotAt,connection.State().interruptedSince))<=20;
+    if(!outcome.interruptedOnTime || !outcome.trackedLastSnapshot)return outcome;
+    // Interrupted: the session, its sequence and its actions stay; Hello probes every 250 ms.
+    const auto hellosFrom=gateway.packets.size();
+    gateway.UntilTime(Clock::now()+1s);
+    const auto hellos=std::count_if(gateway.packets.begin()+static_cast<std::ptrdiff_t>(hellosFrom),gateway.packets.end(),
+        [](const PacketAttempt& packet){return packet.type==wire::Type::Hello;});
+    outcome.probedFaster=hellos>=3 && hellos<=5;
+    if(!outcome.probedFaster)return outcome;
+    const auto during=connection.State();
+    outcome.keptSession=during.phase==ConnectionPhase::Playing && during.error.empty() && during.interrupted &&
+        during.actionTransport.retained==1 && during.actionTransport.allocatedThrough==*shot;
+    // Each check names its own failure: a session that was not kept cannot resume.
+    if(!outcome.keptSession)return outcome;
+    gateway.silent=false;
+    gateway.Snapshot(0);
+    gateway.Until([&]{return !connection.State().interrupted;});
+    outcome.resumed=connection.State().phase==ConnectionPhase::Playing;
+    // The worker resends the same window after the resume (nothing acknowledged it).
+    // A window that stopped being sent is not kept either: wait a bounded time.
+    const auto resumedAt=Clock::now();
+    for(const auto deadline=resumedAt+500ms;gateway.attempts.back().at<=resumedAt && Clock::now()<deadline;) {
+        gateway.Pump();std::this_thread::sleep_for(100us);
+    }
+    if(gateway.attempts.back().at<=resumedAt)return outcome;
+    const auto& resent=gateway.attempts.back().input;
+    outcome.windowKept=resent.movement_epoch()==1 && resent.commands_size()==3;
+    for(int index=0;outcome.windowKept && index<resent.commands_size();++index)
+        outcome.windowKept=resent.commands(index).sequence()==static_cast<std::uint64_t>(index+1);
+    outcome.sequenceKept=true;
+    for(auto index=packetsBefore+1;index<gateway.packets.size();++index)
+        outcome.sequenceKept=outcome.sequenceKept && gateway.packets[index].sequence==gateway.packets[index-1].sequence+1;
+    // T_max counts from the last valid snapshot: Welcomes extend nothing.
+    gateway.snapshotOnHello=false;
+    gateway.Snapshot(0);
+    const auto finalSnapshotAt=gateway.snapshotSentAt;
+    const auto finalSentAfter=Clock::now();
+    const auto welcomesFrom=gateway.welcomeTransmits.size();
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;},7000ms);
+    outcome.timeoutMs=MillisSince(finalSnapshotAt,Clock::now());
+    outcome.timedOutOnTime=connection.State().error=="Gateway connection timed out" &&
+        OnTime(outcome.timeoutMs,ConnectionTimeoutAfter) && gateway.welcomeTransmits.size()>welcomesFrom+10 &&
+        MillisSince(finalSentAfter,Clock::now())>=static_cast<double>(ConnectionTimeoutAfter.count())-5;
+    gateway.snapshotOnHello=true;gateway.extremeWelcomeClock=false;
+    connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
+    return outcome;
 }
 bool Acknowledged(const ClientConnection& connection,std::uint64_t sequence) {
     const auto state=connection.State();
@@ -405,6 +510,26 @@ int main() {
         try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+        // First, so a mutant of the outage path fails on the check that guards it:
+        // the mock sends snapshots only on demand, so the later sections pass
+        // through interruptions too.
+        // An outage in both directions, then T_max with Welcomes only; the same
+        // with an extreme time echo must decide the same (differential oracle).
+        const auto outage=RunOutage(gateway,connection,false);
+        Require(outage.interruptedOnTime,"the connection was not interrupted at T_int after the last snapshot");
+        Require(outage.trackedLastSnapshot,"the interruption did not count from the last snapshot's arrival");
+        Require(outage.keptSession,"an interruption did not keep the session, its window and its actions");
+        Require(outage.probedFaster,"an interrupted connection did not probe with Hello every 250 ms");
+        Require(outage.resumed,"a valid snapshot did not resume the connection");
+        Require(outage.windowKept,"the worker's window changed across an interruption");
+        Require(outage.sequenceKept,"an interruption restarted the transport sequence");
+        Require(outage.timedOutOnTime,"a connection without snapshots did not time out at T_max (a Welcome kept it?)");
+        const auto extreme=RunOutage(gateway,connection,true);
+        Require(extreme==outage && std::abs(extreme.interruptMs-outage.interruptMs)<=RunsToleranceMs &&
+            std::abs(extreme.timeoutMs-outage.timeoutMs)<=RunsToleranceMs,"an extreme time echo changed a liveness decision");
+        // The later sections read the mock's records from their own session on.
+        gateway.attempts.clear();gateway.actionAttempts.clear();gateway.packets.clear();
+        gateway.helloClocks.clear();gateway.welcomeTransmits.clear();
         gateway.badWelcomeClock=true; // a bad echo on the first Welcome changes nothing
         connection.Join(gateway.address,"1");
         gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
@@ -756,7 +881,8 @@ int main() {
             {"token_debt_waits_ms",drainWaits},{"token_debt_publish_intervals_ms",drainIntervals},
             {"burst_third_wait_ms",burstThirdWaitMs},{"discounted_min_span_ms",discountedMinSpanMs},{"stale_wait_next_gaps_ms",staleWaitGapsMs},
             {"atomic_failure_cycles",failureCycles},{"snapshot_history_overflows_exercised",overflowObserved},
-            {"largest_maximum_field_datagram_bytes",maximumDatagram},{"actions",actionEvidence}}.dump()<<'\n';
+            {"largest_maximum_field_datagram_bytes",maximumDatagram},{"actions",actionEvidence},
+            {"outage_interrupt_ms",{outage.interruptMs,extreme.interruptMs}},{"outage_timeout_ms",{outage.timeoutMs,extreme.timeoutMs}}}.dump()<<'\n';
         return 0;
     } catch(const std::exception& error){std::cerr<<"worker acceptance: "<<error.what()<<'\n';return 1;}
 }

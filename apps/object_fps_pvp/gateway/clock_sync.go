@@ -63,15 +63,27 @@ func boolDigit(value bool) string {
 	return "0"
 }
 
-// line is the "clock sync" line both ends log (pv7 §3).
+// line is the "clock sync" line both ends log (pv7 §3). The reason= key
+// (log-contract §1.4): the window lasted clockWindowUs, or ended with its link
+// (final). A window a resume ended early is written by resumeLine.
 func (w clockWindow) line() string {
+	if w.final {
+		return w.format("final")
+	}
+	return w.format("window")
+}
+
+// resumeLine is the line of a window a resume ended early (final=0).
+func (w clockWindow) resumeLine() string { return w.format("resume") }
+
+func (w clockWindow) format(reason string) string {
 	drift := "na"
 	if w.driftPpm != nil && !math.IsNaN(*w.driftPpm) && !math.IsInf(*w.driftPpm, 0) {
 		drift = strconv.FormatFloat(*w.driftPpm, 'f', 3, 64)
 	}
-	return fmt.Sprintf("clock sync window_ms=%d samples=%d missing=%s invalid=%d negative_delay=%d replaced=%d offset_us=%s delay_min_us=%s delay_max_us=%s drift_ppm=%s jump=%s final=%s",
+	return fmt.Sprintf("clock sync window_ms=%d samples=%d missing=%s invalid=%d negative_delay=%d replaced=%d offset_us=%s delay_min_us=%s delay_max_us=%s drift_ppm=%s jump=%s final=%s reason=%s",
 		w.windowUs/1000, w.samples, boolDigit(w.samples == 0), w.invalid, w.negativeDelay, w.replaced,
-		optionalInt(w.offsetUs), optionalInt(w.delayMinUs), optionalInt(w.delayMaxUs), drift, boolDigit(w.jump), boolDigit(w.final))
+		optionalInt(w.offsetUs), optionalInt(w.delayMinUs), optionalInt(w.delayMaxUs), drift, boolDigit(w.jump), boolDigit(w.final), reason)
 }
 
 type clockPoint struct {
@@ -152,6 +164,15 @@ func (c *clockSync) observe(peer clockStamp, receivedUs uint64) {
 	if c.delayMaxUs == nil || delay > *c.delayMaxUs {
 		c.delayMaxUs = &delay
 	}
+}
+
+// resume closes the window at once without ending the link: a Client's
+// verified datagram ended a silence (network-architecture §4). The drift
+// regression carries on, as for any window.
+func (c *clockSync) resume(nowUs uint64) clockWindow {
+	w, _ := c.roll(nowUs, true)
+	w.final = false
+	return w
 }
 
 // roll closes the window once it lasted clockWindowUs, or at once when final.

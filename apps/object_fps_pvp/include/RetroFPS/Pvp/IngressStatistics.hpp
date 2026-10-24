@@ -10,6 +10,8 @@
 // player=0 holds unknown players and is written every window; final=1 marks
 // the last line. Keys are "<reason>[_<kind>]_<unit>" and new keys are only
 // ever appended. The golden lines live in tests/object_fps_pvp/fixtures/ingress_v1.
+#include "RetroFPS/Pvp/MatchSubstitutionRecords.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -48,8 +50,8 @@ enum class IngressStagedDiscard : std::uint8_t { HandoffRejected, RotationDiscar
 enum class IngressActionRejection : std::uint8_t {
     OverBatch, Malformed, Resetting, InvalidPlayer, InvalidBatch, Conflict, OutsideWindow, Full, Count
 };
-// How a substitution record closed (MatchIngressLedger.hpp).
-enum class IngressSubstitutionClose : std::uint8_t { Aged, Epoch, Life, Removed, Reset, Overflow, End, Count };
+// IngressSubstitutionClose (the close reasons of a substitution record) is the
+// substitution records' own vocabulary: MatchSubstitutionRecords.hpp.
 enum class IngressUnit : std::uint8_t { Inputs, Commands, Batches, Shots, Acks, Samples };
 
 // The only spelling of each word, shared by the statistics line and the
@@ -176,8 +178,9 @@ struct MatchIngressCounts final {
     std::uint64_t resetDiscardedActionAcks{};
     // Appended keys (batch 08c F2b-2): the movement slack samples of this
     // player on their way to the IPC (known gap 6, host side). A candidate is
-    // an executed sequence's first receipt or a late first arrival still in
-    // the 64-entry substitution track. Each publication carries only the
+    // an executed sequence's first receipt or the first copy of an open
+    // substitution record no later than N_o (v7.1 outage-resync; until
+    // retention-600, of the newest 64 such records). Each publication carries only the
     // smallest candidate since the previous one; the others are merged.
     //   S1: slackExecuted + slackLate == slackMerged + slackDiscarded + slackPublished
     //   S2: slackPublished == slackOverwritten + slackTaken + slackUnclaimed
@@ -198,6 +201,14 @@ struct MatchIngressCounts final {
     std::uint64_t slackCoalescedSamples{};
     // Published samples still waiting for the IPC at a reset or the end.
     std::uint64_t slackUnclaimedSamples{};
+    // Published samples the +-1 s clamp changed (part of slackPublishedSamples).
+    // Not on the ingress line (eight key groups, log-contract Replacement
+    // Criteria 1): the resync statistics line carries it (v7.1 outage-resync).
+    std::uint64_t slackClampedSamples{};
+    // v7.1 outage-resync (resync statistics line too): first copies later
+    // than N_o, which give no sample, and the Resync epochs the Match made.
+    std::uint64_t lateBeyondNoCommands{};
+    std::uint64_t resyncs{};
     // Appended key (D56): players whose pending action acknowledgement a
     // Leave or an eviction discarded before the tick handed it on.
     std::uint64_t leaveDiscardedActionAcks{};
@@ -295,6 +306,36 @@ public:
         for (const auto& [player, counts] : taken)
             lines.push_back(MatchIngressStatisticsLine({.player = player, .windowMs = windowMs, .final = final, .counts = counts}));
         return lines;
+    }
+
+private:
+    std::set<std::uint64_t> written_;
+};
+
+// log-contract §1.1 (v7.1 outage-resync drop-counters): the slack flow's line
+// for what the ingress line cannot carry. One line per player and window, no
+// player=0 line (a sample always has a player); the final window also closes
+// each player written before with a final=1 line, zero counts included.
+[[nodiscard]] inline std::string MatchResyncStatisticsLine(std::uint64_t player, bool final,
+                                                           const MatchIngressCounts& counts) {
+    return "[ObjectFPS/PvP Match] resync statistics version=1 player=" + std::to_string(player) + " final=" +
+        (final ? "1" : "0") + " slack_clamped_samples=" + std::to_string(counts.slackClampedSamples) +
+        " resyncs=" + std::to_string(counts.resyncs) + " late_beyond_no_commands=" + std::to_string(counts.lateBeyondNoCommands);
+}
+
+class MatchResyncStatisticsWriter final {
+public:
+    [[nodiscard]] std::vector<std::string> Lines(const std::map<std::uint64_t, MatchIngressCounts>& taken, bool final) {
+        std::map<std::uint64_t, MatchIngressCounts> lines;
+        for (const auto& [player, counts] : taken)
+            if (player != 0) lines.emplace(player, counts);
+        for (const auto& [player, counts] : lines) written_.insert(player);
+        if (final)
+            for (const auto player : written_) lines.try_emplace(player);
+        std::vector<std::string> result;
+        result.reserve(lines.size());
+        for (const auto& [player, counts] : lines) result.push_back(MatchResyncStatisticsLine(player, final, counts));
+        return result;
     }
 
 private:

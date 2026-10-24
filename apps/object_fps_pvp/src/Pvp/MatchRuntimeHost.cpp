@@ -12,9 +12,11 @@
 namespace fps::pvp {
 namespace {
 constexpr std::size_t kMaximumControls = 64;
-// Bounds the host's own bookkeeping, not gameplay: substituted sequences kept
-// for late arrivals, and input reference ages per connection-quality window.
-constexpr std::size_t kMaximumSubstitutedSequences = 64;
+// Bounds the host's own bookkeeping, not gameplay: how far back one tick's
+// slack tracking walks the sequences it resolved, and input reference ages per
+// connection-quality window. (The substitution records' bounds are in
+// MatchSubstitutionRecords.hpp.)
+constexpr std::size_t kSlackLookbackSequences = 64;
 constexpr std::size_t kMaximumReferenceAgeSamples = 2048;
 constexpr std::int64_t kMaximumReferenceAgeMicros = 1'000'000;
 std::int64_t Micros(std::chrono::steady_clock::duration value) {
@@ -102,7 +104,9 @@ PlayerId MatchRuntimeHost::IngressBucketId(PlayerId playerId) const {
 
 MatchIngressCounts& MatchRuntimeHost::IngressBucket(PlayerId playerId) { return ingress_[IngressBucketId(playerId)]; }
 
-void MatchRuntimeHost::SubstitutionClosed(const IngressSubstitution& record) {
+void MatchRuntimeHost::SubstitutionClosed(PlayerId playerId, std::uint64_t epoch, std::uint64_t life,
+                                          const SubstitutionRecord& closed, IngressSubstitutionClose reason) {
+    const auto record = ledger_.Closed(playerId, epoch, life, closed, reason);
     if (!record.firstArrival) ++ingress_[record.playerId].unarrived[IngressIndex(record.close)];
     records_.Add(record);
 }
@@ -218,25 +222,31 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     auto& track = slack_[input.playerId];
     if (track.movementEpoch != input.movementEpoch || track.lifeGeneration != input.lifeGeneration) {
         DiscardSlack(input.playerId, track);
-        track = {input.movementEpoch, input.lifeGeneration, cursor, {}, {}, std::nullopt};
+        track = {input.movementEpoch, input.lifeGeneration, cursor, {}, std::nullopt};
     }
     for (const auto sequence : newlyAccepted) track.receipts.try_emplace(sequence, at());
     std::size_t lateCommands{};
     for (const auto& command : input.commands) {
         if (command.sequence > cursor) continue;
-        // Counting only, by the ledger's substitution records; the ledger
-        // reads the clock only for a late_first.
-        const auto arrival = ledger_.Arrive(input.playerId, input.movementEpoch, input.lifeGeneration,
-            command.sequence, cursor, at, referenceAge);
-        ++ingress.classified[IngressIndex(arrival)];
-        if (arrival == IngressCommandClass::LateFirst || arrival == IngressCommandClass::LateCopy) ++lateCommands;
-        // A command whose sequence was already substituted reports how late it came.
-        const auto late = track.substituted.find(command.sequence);
-        if (late == track.substituted.end()) continue;
-        const auto micros = -Micros(at() - late->second);
+        // The substitution records read the clock only for the first copy of a record.
+        const auto arrival = substitutions_.Arrive(input.playerId, input.movementEpoch, input.lifeGeneration,
+            command.sequence, at);
+        // Counting only: the ledger reads what the records found.
+        const auto classified = ledger_.Classify(input.playerId, command.sequence, cursor, arrival, referenceAge);
+        ++ingress.classified[IngressIndex(classified)];
+        if (classified == IngressCommandClass::LateFirst || classified == IngressCommandClass::LateCopy) ++lateCommands;
+        // The first copy of a record: later than N_o (network-architecture §4),
+        // no sample and a Resync epoch; otherwise it reports how late it came.
+        if (!arrival.first) continue;
+        const auto late = Micros(at() - arrival.substitutedAt);
+        if (late > MovementResyncLateMicros) {
+            ++ingress.lateBeyondNoCommands;
+            static_cast<void>(match_.RequestMovementResync(input.playerId));
+            continue;
+        }
+        const auto micros = -late;
         ++ingress.slackLateSamples;
         OfferSlackSample(input.playerId, track, command.sequence, micros);
-        track.substituted.erase(late);
     }
     if (lateCommands == input.commands.size()) ++ingress.lateOnlyInputs;
     // Connection quality samples the reference age of windows bringing new commands.
@@ -488,6 +498,8 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
                 auto& counts = ingress_[playerId];
                 ++counts.slackPublishedSamples;
                 if (track.pending->second < 0) ++counts.slackPublishedNegativeSamples;
+                if (track.pending->second < -MaxMovementSlackMicros || track.pending->second > MaxMovementSlackMicros)
+                    ++counts.slackClampedSamples;
             }
             track.pending.reset();
         }
@@ -547,7 +559,8 @@ MatchRuntimeHost::Statistics MatchRuntimeHost::TakeStatistics() {
 std::map<PlayerId, MatchIngressCounts> MatchRuntimeHost::TakeIngressStatistics(bool final) {
     std::lock_guard lock(mutex_);
     if (final) {
-        ledger_.Clear(IngressSubstitutionClose::End, [this](const auto& record) { SubstitutionClosed(record); });
+        substitutions_.Clear(IngressSubstitutionClose::End, [this](auto&&... closed) { SubstitutionClosed(closed...); });
+        ledger_.Clear();
         for (auto& [playerId, track] : slack_) {
             DiscardSlack(playerId, track);
             track.pending.reset();
@@ -613,7 +626,8 @@ void MatchRuntimeHost::RemovePlayerState(PlayerId playerId, std::uint64_t resolv
     if (const auto actions = pendingActions_.find(playerId); actions != pendingActions_.end())
         ingress_[playerId].leaveDiscardedActionShots += actions->second.size();
     if (pendingActionAcknowledgements_.contains(playerId)) ++ingress_[playerId].leaveDiscardedActionAcks;
-    ledger_.Remove(playerId, [this](const auto& record) { SubstitutionClosed(record); });
+    substitutions_.Remove(playerId, [this](auto&&... closed) { SubstitutionClosed(closed...); });
+    ledger_.Remove(playerId);
     if (const auto track = slack_.find(playerId); track != slack_.end()) DiscardSlack(playerId, track->second);
     pendingInputs_.erase(playerId);
     pendingActions_.erase(playerId);
@@ -633,15 +647,16 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
             found->second.lifeGeneration != player.lifeGeneration) {
             if (found != slack_.end()) DiscardSlack(player.playerId, found->second);
             found = slack_.insert_or_assign(player.playerId, SlackTrack{player.movementEpoch, player.lifeGeneration,
-                player.lastResolvedCommand, {}, {}, std::nullopt}).first;
+                player.lastResolvedCommand, {}, std::nullopt}).first;
         }
         auto& track = found->second;
-        if (player.lastResolvedCommand > track.lastResolved + kMaximumSubstitutedSequences)
-            track.lastResolved = player.lastResolvedCommand - kMaximumSubstitutedSequences;
-        // The ledger follows the sequences this loop visits, from the same
-        // starting cursor, and takes its times from the same clock reading.
-        const auto closed = [this](const auto& record) { SubstitutionClosed(record); };
-        ledger_.Observe(player.playerId, player.movementEpoch, player.lifeGeneration, track.lastResolved, closed);
+        if (player.lastResolvedCommand > track.lastResolved + kSlackLookbackSequences)
+            track.lastResolved = player.lastResolvedCommand - kSlackLookbackSequences;
+        // The records and the ledger follow the sequences this loop visits,
+        // from the same starting cursor, with times from the same clock reading.
+        const auto closed = [this](auto&&... record) { SubstitutionClosed(record...); };
+        const bool identity = substitutions_.Observe(player.playerId, player.movementEpoch, player.lifeGeneration, closed);
+        ledger_.Watch(player.playerId, track.lastResolved, identity);
         for (auto sequence = track.lastResolved + 1; sequence <= player.lastResolvedCommand; ++sequence) {
             if (!at) at = now_();
             const auto receipt = track.receipts.find(sequence);
@@ -649,17 +664,16 @@ void MatchRuntimeHost::TrackSlack(WorldSnapshot& state, std::optional<std::chron
                 const auto micros = Micros(*at - receipt->second);
                 ++ingress_[player.playerId].slackExecutedSamples;
                 OfferSlackSample(player.playerId, track, sequence, micros);
-                ledger_.Resolved(player.playerId, sequence, std::nullopt, match_.TickCount(), closed);
+                substitutions_.Resolved(player.playerId, sequence, std::nullopt, match_.TickCount(), closed);
             } else {
-                track.substituted[sequence] = *at;
                 ++ingress_[player.playerId].substitutedCommands;
-                ledger_.Resolved(player.playerId, sequence, *at, match_.TickCount(), closed);
+                substitutions_.Resolved(player.playerId, sequence, *at, match_.TickCount(), closed);
             }
+            ledger_.Resolved(player.playerId, sequence);
         }
         track.lastResolved = Engine::Math::Max(track.lastResolved, player.lastResolvedCommand);
         while (!track.receipts.empty() && track.receipts.begin()->first <= track.lastResolved)
             track.receipts.erase(track.receipts.begin());
-        while (track.substituted.size() > kMaximumSubstitutedSequences) track.substituted.erase(track.substituted.begin());
         if (track.pending) {
             player.movementSlackSequence = track.pending->first;
             player.movementSlackMicros = static_cast<std::int32_t>(Engine::Math::Clamp<std::int64_t>(
@@ -680,6 +694,8 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
     for (auto& [playerId, track] : quality_) {
         const auto quality = match_.GetMovementQuality(playerId);
         if (!quality) continue;
+        ingress_[playerId].resyncs += quality->resyncs - track.resyncs;
+        track.resyncs = quality->resyncs;
         if (tick - track.windowStartTick >= ConnectionQualityWindowTicks) {
             if (track.judged) {
                 auto& ages = track.referenceAgesMicros;
@@ -751,7 +767,8 @@ void MatchRuntimeHost::ClearState() {
         static_cast<void>(through);
         ++ingress_[playerId].resetDiscardedActionAcks;
     }
-    ledger_.Clear(IngressSubstitutionClose::Reset, [this](const auto& record) { SubstitutionClosed(record); });
+    substitutions_.Clear(IngressSubstitutionClose::Reset, [this](auto&&... closed) { SubstitutionClosed(closed...); });
+    ledger_.Clear();
     for (const auto& [playerId, track] : slack_) DiscardSlack(playerId, track);
     if (snapshot_) CountSlackSamples(*snapshot_, &MatchIngressCounts::slackUnclaimedSamples);
     match_.Reset();

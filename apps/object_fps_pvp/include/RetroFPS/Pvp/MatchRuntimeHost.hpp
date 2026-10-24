@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/MatchIngressLedger.hpp"
 #include "RetroFPS/Pvp/MatchIngressTrace.hpp"
+#include "RetroFPS/Pvp/MatchSubstitutionRecords.hpp"
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
@@ -116,6 +117,8 @@ public:
     // window, host stopped) first closes every open substitution record as end
     // and counts the slack samples still pending or unclaimed as such. Each
     // call also starts a new window for the detail file's rejection bound.
+    // Nothing is submitted after a final take (match_main stops the IPC and
+    // the host first): the records are gone, so a late copy gives no sample.
     [[nodiscard]] std::map<PlayerId, MatchIngressCounts> TakeIngressStatistics(bool final = false);
     // Diagnostics only, since the previous call: the bounded records of
     // match-ingress.jsonl (MatchIngressTrace.hpp). Rejections keep the first
@@ -157,15 +160,15 @@ private:
         bool dirty{};
     };
     // Movement slack of one player's current epoch/life: first receipt of
-    // each unresolved sequence, resolution time of recently substituted ones
-    // (a late arrival reports how late it was) and the smallest sample since
-    // the last publication. Published with snapshots; never fed to Match.
+    // each unresolved sequence and the smallest sample since the last
+    // publication. Substituted sequences (a late arrival reports how late it
+    // was) are the substitution records' (substitutions_). Published with
+    // snapshots; never fed to Match.
     struct SlackTrack final {
         std::uint64_t movementEpoch{};
         std::uint64_t lifeGeneration{};
         std::uint64_t lastResolved{};
         std::map<std::uint64_t, std::chrono::steady_clock::time_point> receipts;
-        std::map<std::uint64_t, std::chrono::steady_clock::time_point> substituted;
         std::optional<std::pair<std::uint64_t, std::int64_t>> pending;
     };
     // Connection-quality window of one player: its start tick and movement
@@ -177,6 +180,8 @@ private:
         std::vector<std::uint32_t> referenceAgesMicros;
         bool judged{};
         std::uint32_t failures{};
+        // The Match's Resync count already added to the ingress counts.
+        std::uint64_t resyncs{};
     };
     struct PublishedReference final {
         std::uint64_t tick{};
@@ -196,8 +201,10 @@ private:
     void DiscardSlack(PlayerId playerId, const SlackTrack& track);
     // Adds one to field for every player whose slack sample this snapshot carries. Under the lock.
     void CountSlackSamples(const WorldSnapshot& snapshot, std::uint64_t MatchIngressCounts::*field);
-    // Counts a substitution record the ledger closed. Under the lock.
-    void SubstitutionClosed(const IngressSubstitution& record);
+    // A substitution record closed: the ledger turns it into its detail
+    // record, which is counted and kept. Under the lock.
+    void SubstitutionClosed(PlayerId playerId, std::uint64_t epoch, std::uint64_t life,
+                            const SubstitutionRecord& record, IngressSubstitutionClose reason);
     // Advance's work under the lock; published tells Advance to notify.
     [[nodiscard]] Engine::Runtime::FixedTickAdvance Step(double elapsedSeconds, bool& published);
     void Body(Engine::Threads::RoleContext& context);
@@ -227,8 +234,11 @@ private:
     Statistics statistics_;
     // Not part of the match state: ClearState and RemovePlayerState keep it.
     std::map<PlayerId, MatchIngressCounts> ingress_;
-    // Substitution records; ClearState and RemovePlayerState close them.
-    // Only observes: slack samples, quality and the Match never read it.
+    // The only record of substituted sequences and their first arrivals (the
+    // slack sample path's); ClearState and RemovePlayerState close them.
+    MatchSubstitutionRecords substitutions_;
+    // Reads substitutions_ and receives its closed records; slack samples,
+    // quality and the Match never read it.
     MatchIngressLedger ledger_;
     // match-ingress.jsonl records waiting for DrainIngressRecords.
     MatchIngressRecordBuffer records_;

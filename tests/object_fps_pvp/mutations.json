@@ -116,6 +116,12 @@
     },
     "black_map_watch": {
       "ctest": "object_fps_pvp.black_map_watch"
+    },
+    "diagnostic_isolation": {
+      "ctest": "object_fps_pvp.diagnostic_isolation"
+    },
+    "command_evidence": {
+      "ctest": "object_fps_pvp.command_evidence"
     }
   },
   "mutants": [
@@ -1074,18 +1080,18 @@
       "batch": "v7-flow",
       "what": "F2b-1 update: the host does not count a late_first the ledger classified",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "        ++ingress.classified[IngressIndex(arrival)];\n",
-      "replace": "        if (arrival != IngressCommandClass::LateFirst) ++ingress.classified[IngressIndex(arrival)];\n",
+      "find": "        ++ingress.classified[IngressIndex(classified)];\n",
+      "replace": "        if (classified != IngressCommandClass::LateFirst) ++ingress.classified[IngressIndex(classified)];\n",
       "check": "cpu",
       "expect": "CHECK\\( lateFirstCommands == 1 \\) is NOT correct"
     },
     {
       "id": "v7-flow-ledger-hook-perturbs-slack",
       "batch": "v7-flow",
-      "what": "F2b-1 update: the ledger hook consumes the slack track entry of a late_first before the sample path",
+      "what": "single-store-refactor: the ledger's late_first classification consumes the slack sample of the arrival (the sample path depends on the ledger)",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "        ++ingress.classified[IngressIndex(arrival)];\n",
-      "replace": "        ++ingress.classified[IngressIndex(arrival)];\n        if (arrival == IngressCommandClass::LateFirst) { track.substituted.erase(command.sequence); continue; }\n",
+      "find": "        ++ingress.classified[IngressIndex(classified)];\n",
+      "replace": "        ++ingress.classified[IngressIndex(classified)];\n        if (classified == IngressCommandClass::LateFirst) continue;\n",
       "check": "cpu",
       "expect": "CHECK\\( snapshot->players\\[0\\]\\.movementSlackMicros == std::optional<std::int32_t>\\{-8000\\} \\) is NOT correct"
     },
@@ -1562,10 +1568,10 @@
     {
       "id": "v7-flow-ledger-clock-on-copy",
       "batch": "v7-flow",
-      "what": "the ledger reads the clock for every resolved copy, not only for a late_first",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
-      "find": "        auto& player = found->second;\n        if (const auto record = player.open.find(sequence); record != player.open.end()) {\n",
-      "replace": "        auto& player = found->second;\n        static_cast<void>(now());\n        if (const auto record = player.open.find(sequence); record != player.open.end()) {\n",
+      "what": "the substitution records read the clock for every copy, not only for the first copy of a record",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "        auto& player = found->second;\n        SubstitutionArrival arrival{.identity = true};\n",
+      "replace": "        auto& player = found->second;\n        static_cast<void>(now());\n        SubstitutionArrival arrival{.identity = true};\n",
       "check": "cpu",
       "expect": "CHECK\\( copyClockReads == 0 \\) is NOT correct"
     },
@@ -1574,18 +1580,18 @@
       "batch": "v7-flow",
       "what": "classification not exhaustive: a late_copy is not counted in any class (I2)",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "        ++ingress.classified[IngressIndex(arrival)];\n",
-      "replace": "        if (arrival == IngressCommandClass::LateCopy) continue;\n        ++ingress.classified[IngressIndex(arrival)];\n",
+      "find": "        ++ingress.classified[IngressIndex(classified)];\n",
+      "replace": "        if (classified == IngressCommandClass::LateCopy) continue;\n        ++ingress.classified[IngressIndex(classified)];\n",
       "check": "cpu",
       "expect": "CHECK\\( hostClassifiedCommands == hostReceivedCommands \\) is NOT correct"
     },
     {
       "id": "v7-flow-ledger-late-copies-undercount",
       "batch": "v7-flow",
-      "what": "the record is dropped at the first copy (the slack track's rule), so later copies look like executed copies",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
-      "find": "            record->second.referenceAgeMicros = referenceAge();\n            return IngressCommandClass::LateFirst;\n",
-      "replace": "            record->second.referenceAgeMicros = referenceAge();\n            player.open.erase(record);\n            return IngressCommandClass::LateFirst;\n",
+      "what": "the record is dropped at the first copy, so later copies look like executed copies",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "        arrival.first = true;\n        record->second.firstArrival = now();\n        return arrival;\n",
+      "replace": "        arrival.first = true;\n        record->second.firstArrival = now();\n        player.open.erase(record);\n        return arrival;\n",
       "check": "cpu",
       "expect": "CHECK\\( lateCopies == 3 \\) is NOT correct"
     },
@@ -1622,10 +1628,10 @@
     {
       "id": "v7-flow-ledger-retention-64",
       "batch": "v7-flow",
-      "what": "the ledger keeps the slack track's 64 instead of 600",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
-      "find": "inline constexpr std::uint64_t IngressLedgerRetentionSequences = ConnectionQualityWindowTicks;\n",
-      "replace": "inline constexpr std::uint64_t IngressLedgerRetentionSequences = 64;\n",
+      "what": "the substitution records keep 64 sequences instead of 600",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "inline constexpr std::uint64_t SubstitutionRetentionSequences = ConnectionQualityWindowTicks;",
+      "replace": "inline constexpr std::uint64_t SubstitutionRetentionSequences = 64;",
       "check": "cpu",
       "expect": "CHECK\\( beyondSampleLate == 2 \\) is NOT correct"
     },
@@ -1633,7 +1639,7 @@
       "id": "v7-flow-ledger-retention-off-by-one",
       "batch": "v7-flow",
       "what": "a record closes aged at exactly 600 behind instead of past it",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
       "find": "while (!player.open.empty() && player.open.begin()->first + retention_ < sequence)",
       "replace": "while (!player.open.empty() && player.open.begin()->first + retention_ <= sequence)",
       "check": "cpu",
@@ -1653,9 +1659,9 @@
       "id": "v7-flow-ledger-capacity-below-retention",
       "batch": "v7-flow",
       "what": "capacity smaller than one retention of substitutions",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
-      "find": "inline constexpr std::size_t IngressLedgerCapacity = 1024;\n",
-      "replace": "inline constexpr std::size_t IngressLedgerCapacity = 512;\n",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "inline constexpr std::size_t SubstitutionRecordCapacity = 1024;",
+      "replace": "inline constexpr std::size_t SubstitutionRecordCapacity = 512;",
       "check": "cpu",
       "expect": "CHECK\\( overflowsWithinRetention == 0 \\) is NOT correct"
     },
@@ -1663,9 +1669,9 @@
       "id": "v7-flow-ledger-capacity-off-by-one",
       "batch": "v7-flow",
       "what": "overflow closes a record already at capacity instead of over it",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
-      "find": "if (player.open.size() > capacity_) {",
-      "replace": "if (player.open.size() >= capacity_) {",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "if (player.open.size() > capacity_)",
+      "replace": "if (player.open.size() >= capacity_)",
       "check": "cpu",
       "expect": "CHECK\\( closedAtCapacity == 0 \\) is NOT correct"
     },
@@ -1674,7 +1680,7 @@
       "batch": "v7-flow",
       "what": "an overflowed (substituted) sequence is later vouched as an executed copy",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
-      "find": "                player.overflowed.insert(oldest->first);\n",
+      "find": "            if (reason == IngressSubstitutionClose::Overflow) player.overflowed.insert(record.sequence);\n",
       "replace": "",
       "check": "cpu",
       "expect": "CHECK\\( overflowedCopy == IngressCommandClass::ResolvedUntracked \\) is NOT correct"
@@ -1683,7 +1689,7 @@
       "id": "v7-flow-ledger-close-life-as-epoch",
       "batch": "v7-flow",
       "what": "a respawn closes records as epoch instead of life",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
       "find": "found->second.life != life ? IngressSubstitutionClose::Life",
       "replace": "found->second.life != life ? IngressSubstitutionClose::Epoch",
       "check": "cpu",
@@ -1693,9 +1699,9 @@
       "id": "v7-flow-ledger-close-removed-as-reset",
       "batch": "v7-flow",
       "what": "Leave closes records as reset instead of removed",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
-      "find": "        CloseAll(found->second, IngressSubstitutionClose::Removed, closed);\n",
-      "replace": "        CloseAll(found->second, IngressSubstitutionClose::Reset, closed);\n",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "        CloseAll(playerId, found->second, IngressSubstitutionClose::Removed, closed);\n",
+      "replace": "        CloseAll(playerId, found->second, IngressSubstitutionClose::Reset, closed);\n",
       "check": "cpu",
       "expect": "CHECK\\( removedClose == IngressSubstitutionClose::Removed \\) is NOT correct"
     },
@@ -1703,8 +1709,8 @@
       "id": "v7-flow-ledger-rotation-silent",
       "batch": "v7-flow",
       "what": "a new identity drops the old records without closing them",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressLedger.hpp",
-      "find": "        if (found != players_.end())\n            CloseAll(found->second, found->second.life != life ? IngressSubstitutionClose::Life\n                                                               : IngressSubstitutionClose::Epoch, closed);\n",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchSubstitutionRecords.hpp",
+      "find": "        if (found != players_.end())\n            CloseAll(playerId, found->second, found->second.life != life ? IngressSubstitutionClose::Life\n                                                                       : IngressSubstitutionClose::Epoch, closed);\n",
       "replace": "",
       "check": "cpu",
       "expect": "CHECK\\( rotationClosedUnarrived == rotationSubstituted \\) is NOT correct"
@@ -1714,7 +1720,7 @@
       "batch": "v7-flow",
       "what": "Leave does not close the player's records",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "    ledger_.Remove(playerId, [this](const auto& record) { SubstitutionClosed(record); });\n",
+      "find": "    substitutions_.Remove(playerId, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n",
       "replace": "",
       "check": "cpu",
       "expect": "CHECK\\( unarrivedLeft == 1 \\) is NOT correct"
@@ -1722,10 +1728,10 @@
     {
       "id": "v7-flow-ledger-reset-close-uncounted",
       "batch": "v7-flow",
-      "what": "ClearState drops the ledger without closing (counting) its records",
+      "what": "ClearState drops the substitution records without closing (counting) them",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "    ledger_.Clear(IngressSubstitutionClose::Reset, [this](const auto& record) { SubstitutionClosed(record); });\n",
-      "replace": "    ledger_ = MatchIngressLedger{};\n",
+      "find": "    substitutions_.Clear(IngressSubstitutionClose::Reset, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n",
+      "replace": "    substitutions_ = MatchSubstitutionRecords{};\n",
       "check": "cpu",
       "expect": "CHECK\\( unarrivedReset == 2 \\) is NOT correct"
     },
@@ -1734,10 +1740,10 @@
       "batch": "v7-flow",
       "what": "the final window leaves open records uncounted",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
-      "find": "        ledger_.Clear(IngressSubstitutionClose::End, [this](const auto& record) { SubstitutionClosed(record); });\n",
+      "find": "        substitutions_.Clear(IngressSubstitutionClose::End, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n",
       "replace": "        static_cast<void>(final);\n",
       "check": "cpu",
-      "expect": "CHECK\\( endClosedUnarrived == 70 \\) is NOT correct"
+      "expect": "substitution records time a late arrival exactly as its published slack sample"
     },
     {
       "id": "v7-flow-ledger-closed-arrived-counted",
@@ -2744,8 +2750,8 @@
       "batch": "v7-09b",
       "what": "A seed clears only what it cleared before B2: the applied shift, the command ages and the reacquisition survive it",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
-      "replace": "    phaseShiftSeconds_ = 0;\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
+      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = after;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
+      "replace": "    phaseShiftSeconds_ = 0;\n    phaseSamples_.clear();\n    settledAfter_ = after;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
       "check": "cpu",
       "expect": "PvP a stall reseed during a late correction drops the rebase and the reacquisition"
     },
@@ -2764,8 +2770,8 @@
       "batch": "v7-09b",
       "what": "A seed keeps the reacquisition: an older sequence passes the seed filter and resets the repeat check",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
-      "replace": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = current_.lastResolvedCommand;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
+      "find": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = after;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = reacquiring_ = false;\n",
+      "replace": "    phaseShiftSeconds_ = phaseAppliedSeconds_ = 0;\n    commandAges_ = {};\n    phaseSamples_.clear();\n    settledAfter_ = after;\n    lateSamples_ = 0;\n    settling_ = phaseDecided_ = false;\n",
       "check": "cpu",
       "expect": "PvP a stall reseed during a late correction leaves older sequences out of the repeat check"
     },
@@ -4777,7 +4783,7 @@
       "find": "\" negative_delay=\" + std::to_string(window.negativeDelay)",
       "replace": "\" negative_delays=\" + std::to_string(window.negativeDelay)",
       "check": "ipc",
-      "expect": "CHECK\\( ClockWindowLine\\(window\\) == f\\[11\\] \\)"
+      "expect": "CHECK\\( ClockWindowLine\\(window\\) == f\\[12\\] \\)"
     },
     {
       "id": "lc-clock-go-key",
@@ -4794,8 +4800,8 @@
       "batch": "v71-log-contract",
       "what": "The Client's final clock line loses the session's player",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClockSync.hpp",
-      "find": "        active_ = false;\n        const auto window = clock_.Roll(nowUs, true);",
-      "replace": "        active_ = false;\n        player_ = 0;\n        const auto window = clock_.Roll(nowUs, true);",
+      "find": "        active_ = false;\n        const auto window = clock_.Roll(nowUs, ClockWindowEnd::Final);",
+      "replace": "        active_ = false;\n        player_ = 0;\n        const auto window = clock_.Roll(nowUs, ClockWindowEnd::Final);",
       "check": "ipc",
       "expect": "clock sync player=7 window_ms="
     },
@@ -5619,6 +5625,496 @@
       "replace": "            entry[\"kept\"] = (position in (0, len(entries) - 1) or entry[\"class\"] in (\"world\", \"no_hud\"))",
       "check": "black_map_watch",
       "expect": "test_the_command_window_is_captured_densely_and_classified"
+    },
+    {
+      "id": "oc-slack-unclamped",
+      "batch": "v71-outage-characterize",
+      "what": "The published movement slack is no longer clamped to +-1 s",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "static_cast<std::int32_t>(Engine::Math::Clamp<std::int64_t>(\n                track.pending->second, -MaxMovementSlackMicros, MaxMovementSlackMicros));",
+      "replace": "static_cast<std::int32_t>(\n                track.pending->second);",
+      "check": "cpu",
+      "expect": "counts the published slack samples the clamp changed"
+    },
+    {
+      "id": "oc-fuse-never-starves",
+      "batch": "v71-outage-characterize",
+      "what": "The Starvation fuse never fires",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "const bool starved = player.backlogSamples.size() == MovementBacklogSampleTicks &&",
+      "replace": "const bool starved = false && player.backlogSamples.size() == MovementBacklogSampleTicks &&",
+      "check": "cpu",
+      "expect": "outage characterization: (two-way|one-way) outages"
+    },
+    {
+      "id": "oc-client-samples-before-seed",
+      "batch": "v71-outage-characterize",
+      "what": "The Client takes slack samples of commands from before its latest seed (after an outage the seed also clears the command ring, so the outage test alone does not see this)",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "(*authority.movementSlackSequence > settledAfter_ || reacquiring_)",
+      "replace": "(true || reacquiring_)",
+      "check": "cpu",
+      "expect": "samples for commands generated before a correction that is not late settled do not count|leaves older sequences out of the repeat check"
+    },
+    {
+      "id": "dc-clamped-uncounted",
+      "batch": "v71-drop-counters",
+      "what": "A published sample the clamp changed is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "                    ++counts.slackClampedSamples;",
+      "replace": "                    static_cast<void>(0);",
+      "check": "cpu",
+      "expect": "counts the published slack samples the clamp changed"
+    },
+    {
+      "id": "dc-clamped-wrong-branch",
+      "batch": "v71-drop-counters",
+      "what": "Every negative published sample counts as clamped",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "if (track.pending->second < -MaxMovementSlackMicros || track.pending->second > MaxMovementSlackMicros)",
+      "replace": "if (track.pending->second < 0)",
+      "check": "cpu",
+      "expect": "counts the published slack samples the clamp changed"
+    },
+    {
+      "id": "dc-resync-line-player-zero",
+      "batch": "v71-drop-counters",
+      "what": "The resync statistics writer also writes the player=0 bucket",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/IngressStatistics.hpp",
+      "find": "            if (player != 0) lines.emplace(player, counts);",
+      "replace": "            lines.emplace(player, counts);",
+      "check": "cpu",
+      "expect": "resync statistics lines are verbatim"
+    },
+    {
+      "id": "dc-unmatched-uncounted",
+      "batch": "v71-drop-counters",
+      "what": "A slack sample whose command left the ring is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "            ++unmatchedPhaseSamples_;",
+      "replace": "            static_cast<void>(0);",
+      "check": "cpu",
+      "expect": "dropped and counted as unmatched|reports the unmatched phase samples"
+    },
+    {
+      "id": "dc-unmatched-wrong-branch",
+      "batch": "v71-drop-counters",
+      "what": "Matched samples are counted as unmatched",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "            lateSamples_ = slack < 0 ? lateSamples_ + 1 : 0;\n        } else {\n            ++unmatchedPhaseSamples_;\n        }",
+      "replace": "            lateSamples_ = slack < 0 ? lateSamples_ + 1 : 0;\n            ++unmatchedPhaseSamples_;\n        } else {\n        }",
+      "check": "cpu",
+      "expect": "dropped and counted as unmatched|reports the unmatched phase samples"
+    },
+    {
+      "id": "dc-summary-lobby",
+      "batch": "v71-drop-counters",
+      "what": "A generation without a local player also reports a phase summary",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    if (playerId_ == 0) return std::nullopt;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "reports the unmatched phase samples"
+    },
+    {
+      "id": "dc-summary-not-summed",
+      "batch": "v71-drop-counters",
+      "what": "The loop keeps only the last step's unmatched samples",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    unmatchedPhaseSamples_ += simulation_.TakeUnmatchedPhaseSamples();",
+      "replace": "    unmatchedPhaseSamples_ = simulation_.TakeUnmatchedPhaseSamples();",
+      "check": "cpu",
+      "expect": "reports the unmatched phase samples"
+    },
+    {
+      "id": "v7-flow-ledger-drives-sample",
+      "batch": "v71-single-store-refactor",
+      "what": "The lateness decision (sample or Resync) follows the ledger's classification, which also passes its copies of executed commands (diagnostics drive a decision)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (!arrival.first) continue;\n",
+      "replace": "        if (classified != IngressCommandClass::LateFirst && classified != IngressCommandClass::ResolvedCopy) continue;\n",
+      "check": "cpu",
+      "expect": "outage characterization: ((two-way|one-way) outages|partial delivery)"
+    },
+    {
+      "id": "ssr-remove-ledger-first",
+      "batch": "v71-single-store-refactor",
+      "what": "Leave forgets the ledger's annex before the records close",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    substitutions_.Remove(playerId, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n    ledger_.Remove(playerId);\n",
+      "replace": "    ledger_.Remove(playerId);\n    substitutions_.Remove(playerId, [this](auto&&... closed) { SubstitutionClosed(closed...); });\n",
+      "check": "cpu",
+      "expect": "keeps the copies of a record that Leave closes"
+    },
+    {
+      "id": "mr-beyond-still-sampled",
+      "batch": "v71-match-resync",
+      "what": "A first copy later than N_o still gives a slack sample",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            static_cast<void>(match_.RequestMovementResync(input.playerId));\n            continue;\n",
+      "replace": "            static_cast<void>(match_.RequestMovementResync(input.playerId));\n",
+      "check": "cpu",
+      "expect": "turns a first copy later than N_o into a Resync|no sample for any first copy later than N_o"
+    },
+    {
+      "id": "mr-only-trigger-unsampled",
+      "batch": "v71-match-resync",
+      "what": "Only the first copy whose Resync request was taken gives no sample",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (late > MovementResyncLateMicros) {\n            ++ingress.lateBeyondNoCommands;\n            static_cast<void>(match_.RequestMovementResync(input.playerId));\n            continue;\n        }",
+      "replace": "        if (late > MovementResyncLateMicros) {\n            ++ingress.lateBeyondNoCommands;\n            if (match_.RequestMovementResync(input.playerId)) continue;\n        }",
+      "check": "cpu",
+      "expect": "no sample for any first copy later than N_o"
+    },
+    {
+      "id": "mr-sequence-distance",
+      "batch": "v71-match-resync",
+      "what": "N_o is judged by the sequence distance instead of the host clock",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (late > MovementResyncLateMicros) {",
+      "replace": "        if (cursor - command.sequence > 20) {",
+      "check": "cpu",
+      "expect": "measures N_o in time"
+    },
+    {
+      "id": "mr-no-off-by-one",
+      "batch": "v71-match-resync",
+      "what": "N_o is exceeded at 19 ticks",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp",
+      "find": "inline constexpr std::int64_t MovementResyncLateMicros = 20 * 1'000'000 / AuthorityTickRate;\nstatic_assert(MovementResyncLateMicros == 333'333);",
+      "replace": "inline constexpr std::int64_t MovementResyncLateMicros = 19 * 1'000'000 / AuthorityTickRate - 1;",
+      "check": "cpu",
+      "expect": "turns a first copy later than N_o into a Resync"
+    },
+    {
+      "id": "mr-resync-held-by-cooldown",
+      "batch": "v71-match-resync",
+      "what": "A Resync waits for the reset cooldown",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n",
+      "replace": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n    if (found->second.lastMovementResetTick != 0 && tick_ - found->second.lastMovementResetTick < MovementResetCooldownTicks) return false;\n",
+      "check": "cpu",
+      "expect": "Resync rotates the epoch at the next tick inside the reset cooldown"
+    },
+    {
+      "id": "mr-resync-overrides-scheduled",
+      "batch": "v71-match-resync",
+      "what": "A Resync replaces an already scheduled reset",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n",
+      "replace": "    if (found == players_.end()) return false;\n",
+      "check": "cpu",
+      "expect": "Resync rotates the epoch at the next tick inside the reset cooldown|merges into it"
+    },
+    {
+      "id": "mr-resync-quality-uncounted",
+      "batch": "v71-match-resync",
+      "what": "A Resync epoch is not counted as a connection-quality reset",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        reason == MovementResetReason::Resync) ++player.quality.resets;",
+      "replace": "        false) ++player.quality.resets;",
+      "check": "cpu",
+      "expect": "Resync rotates the epoch at the next tick inside the reset cooldown"
+    },
+    {
+      "id": "mr-respawn-keeps-resync",
+      "batch": "v71-match-resync",
+      "what": "A respawn leaves a requested Resync scheduled for the tick after it",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    player.movementResetScheduled = false;\n    player.movementResetReason = MovementResetReason::None;\n",
+      "replace": "    player.movementResetScheduled = reason == MovementResetReason::LifeRespawn && player.movementResetReason == MovementResetReason::Resync;\n    if (!player.movementResetScheduled) player.movementResetReason = MovementResetReason::None;\n",
+      "check": "cpu",
+      "expect": "merges into the respawn"
+    },
+    {
+      "id": "mr-host-resyncs-uncounted",
+      "batch": "v71-match-resync",
+      "what": "The host does not count the Match's Resync epochs",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        ingress_[playerId].resyncs += quality->resyncs - track.resyncs;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "turns a first copy later than N_o into a Resync|asks for one Resync"
+    },
+    {
+      "id": "mr-late-beyond-uncounted",
+      "batch": "v71-match-resync",
+      "what": "A first copy later than N_o is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            ++ingress.lateBeyondNoCommands;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "turns a first copy later than N_o into a Resync|asks for one Resync|a sparse substitution|measures N_o in time"
+    },
+    {
+      "id": "ci-interrupt-closes-transport",
+      "batch": "v71-client-interrupted",
+      "what": "An interruption closes the transport",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ++summary.interruptions;\n",
+      "replace": "            ++summary.interruptions;CloseTransport();\n",
+      "check": "worker",
+      "expect": "did not keep the session|did not probe|restarted the transport sequence"
+    },
+    {
+      "id": "ci-interrupt-resets-actions",
+      "batch": "v71-client-interrupted",
+      "what": "An interruption drops the action window",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ++summary.interruptions;\n",
+      "replace": "            ++summary.interruptions;ResetActions();\n",
+      "check": "worker",
+      "expect": "did not keep the session"
+    },
+    {
+      "id": "ci-interrupt-restarts-sequence",
+      "batch": "v71-client-interrupted",
+      "what": "An interruption restarts the transport sequence",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ++summary.interruptions;\n",
+      "replace": "            ++summary.interruptions;sentSequence=0;\n",
+      "check": "worker",
+      "expect": "restarted the transport sequence"
+    },
+    {
+      "id": "ci-no-interruption",
+      "batch": "v71-client-interrupted",
+      "what": "T_int is gone: a silent connection is never interrupted",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ConnectionLiveness.hpp",
+      "find": "        interrupted_ = true;\n        return Event::Interrupted;",
+      "replace": "        return Event::None;",
+      "check": "cpu",
+      "expect": "interrupted once at T_int|first valid snapshot after an interruption"
+    },
+    {
+      "id": "ci-welcome-extends-tmax",
+      "batch": "v71-client-interrupted",
+      "what": "Every Welcome stands for a snapshot: T_max never ends a session the Gateway answers",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ConnectionLiveness.hpp",
+      "find": "        if (welcomed_) return;\n        welcomed_ = true;\n        if (!playing_) since_ = arrivedAt;",
+      "replace": "        welcomed_ = true;\n        since_ = arrivedAt;",
+      "check": "cpu",
+      "expect": "only the first Welcome|interrupted once at T_int"
+    },
+    {
+      "id": "ci-welcome-extends-tmax-worker",
+      "batch": "v71-client-interrupted",
+      "what": "The same, seen through the worker and a mock Gateway that answers every Hello",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ConnectionLiveness.hpp",
+      "find": "        if (welcomed_) return;\n        welcomed_ = true;\n        if (!playing_) since_ = arrivedAt;",
+      "replace": "        welcomed_ = true;\n        since_ = arrivedAt;",
+      "check": "worker",
+      "expect": "kept a connection without snapshots past T_max|mock worker wait timed out"
+    },
+    {
+      "id": "ci-liveness-reads-time-echo",
+      "batch": "v71-client-interrupted",
+      "what": "The snapshot arrival time liveness reads is shifted by the time echo (a shift below the old tolerance)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    const auto arrival=liveness.Snapshot(arrivedAt);",
+      "replace": "                    const auto arrival=liveness.Snapshot(arrivedAt+std::chrono::microseconds(clock.Clock().Echo()?clock.Clock().Echo()->first%500000:0));",
+      "check": "worker",
+      "expect": "did not count from the last snapshot|not interrupted at T_int|an extreme time echo changed"
+    },
+    {
+      "id": "ci-transient-not-transient",
+      "batch": "v71-client-interrupted",
+      "what": "connection_refused is not transient any more",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    return error==asio::error::connection_reset || error==asio::error::connection_refused ||\n        error==asio::error::network_unreachable || error==asio::error::host_unreachable || error==asio::error::network_down ||\n        error==std::errc::connection_reset || error==std::errc::connection_refused ||\n        error==std::errc::network_unreachable || error==std::errc::host_unreachable || error==std::errc::network_down;",
+      "replace": "    return error==asio::error::connection_reset ||\n        error==asio::error::network_unreachable || error==asio::error::host_unreachable || error==asio::error::network_down ||\n        error==std::errc::connection_reset ||\n        error==std::errc::network_unreachable || error==std::errc::host_unreachable || error==std::errc::network_down;",
+      "check": "cpu",
+      "expect": "transient socket errors"
+    },
+    {
+      "id": "ci-resume-always-seeds",
+      "batch": "v71-client-interrupted",
+      "what": "A resume below the tip seeds a new lead and rewrites the commands in flight",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {\n        SeedLead(authority);\n        return;\n    }",
+      "replace": "    SeedLead(authority);\n    return;",
+      "check": "cpu",
+      "expect": "keeps every unacknowledged command|restarts phase acquisition before its late samples|sends no conflicting window"
+    },
+    {
+      "id": "ci-resume-no-reacquire",
+      "batch": "v71-client-interrupted",
+      "what": "A resume restarts nothing",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    if (Reseeds(authority)) return;\n    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {",
+      "replace": "    if (true) return;\n    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {",
+      "check": "cpu",
+      "expect": "keeps every unacknowledged command|seeds a new lead|before its late samples"
+    },
+    {
+      "id": "ci-reader-rejects-resume-reset",
+      "batch": "v71-client-interrupted",
+      "what": "The movement trace reader rejects the resume_reset path",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    phase_paths = {'first', 'window', 'late', 'resume_reset'}",
+      "replace": "    phase_paths = {'first', 'window', 'late'}",
+      "check": "command_evidence",
+      "expect": "test_schema_three_reads_phase_decisions"
+    },
+    {
+      "id": "ci-liveness-reads-time-echo-static",
+      "batch": "v71-client-interrupted",
+      "what": "The same shift, seen by the static argument check",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    const auto arrival=liveness.Snapshot(arrivedAt);",
+      "replace": "                    const auto arrival=liveness.Snapshot(arrivedAt+std::chrono::microseconds(clock.Clock().Echo()?clock.Clock().Echo()->first%500000:0));",
+      "check": "diagnostic_isolation",
+      "expect": "test_liveness_reads_only_arrival_times"
+    },
+    {
+      "id": "ci-resume-flag-sticks",
+      "batch": "v71-client-interrupted",
+      "what": "The resume flag is handed over without being cleared: every later drain restarts acquisition",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationHistory.hpp",
+      "find": "std::exchange(resumed_, false)",
+      "replace": "resumed_",
+      "check": "cpu",
+      "expect": "hands the resume flag over once"
+    },
+    {
+      "id": "ci-resume-flag-never-raised",
+      "batch": "v71-client-interrupted",
+      "what": "A resuming snapshot does not raise the flag",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationHistory.hpp",
+      "find": "        resumed_ = resumed_ || resumes;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "hands the resume flag over once"
+    },
+    {
+      "id": "ci-role-drops-resume",
+      "batch": "v71-client-interrupted",
+      "what": "The simulation role does not pass the resume on",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "simulation_.Observe(*self, newest->tick, drain.movementRules, drain.resumed);",
+      "replace": "simulation_.Observe(*self, newest->tick, drain.movementRules, false);",
+      "check": "cpu",
+      "expect": "resumed drain restarts phase acquisition once"
+    },
+    {
+      "id": "ci-resume-drops-window",
+      "batch": "v71-client-interrupted",
+      "what": "A resume drops the worker window in flight",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                        state.interrupted=false;state.interruptedSince={};\n                        std::osyncstream",
+      "replace": "                        state.interrupted=false;state.interruptedSince={};latestInput.reset();submittedCommands.clear();\n                        std::osyncstream",
+      "check": "worker",
+      "expect": "window changed across an interruption"
+    },
+    {
+      "id": "ci-receive-error-unclassified",
+      "batch": "v71-client-interrupted",
+      "what": "A receive error fails the session without the transient check",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            if(liveness.Playing() && TransientSocketError(error)) {++summary.transientSocketErrors;continue;}\n",
+      "replace": "",
+      "check": "diagnostic_isolation",
+      "expect": "test_every_socket_error_is_classified_before_it_fails_the_session"
+    },
+    {
+      "id": "ci-trace-resume-reset-name",
+      "batch": "v71-client-interrupted",
+      "what": "The resume reset path is written under another name",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTrace.hpp",
+      "find": "    case MovementPhasePath::ResumeReset: return \"resume_reset\";",
+      "replace": "    case MovementPhasePath::ResumeReset: return \"resume\";",
+      "check": "cpu",
+      "expect": "resume reset as phase_path resume_reset"
+    },
+    {
+      "id": "ir-no-silence",
+      "batch": "v71-identity-rebind",
+      "what": "A rebinding does not wait for the bound endpoint to be silent",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "now.Sub(s.lastVerified) < rule.Silence || ",
+      "replace": "",
+      "check": "gateway_session",
+      "expect": "silence too short|rebound within Silence|while the old one sent Input"
+    },
+    {
+      "id": "ir-no-sequence",
+      "batch": "v71-identity-rebind",
+      "what": "A rebinding accepts a sequence that is not newer",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "if rule.Silence <= 0 || !s.hasSequence || !framing.NewerSequence(sequence, s.sequence) ||",
+      "replace": "if rule.Silence <= 0 ||",
+      "check": "gateway_session",
+      "expect": "sequence_not_newer"
+    },
+    {
+      "id": "ir-no-token",
+      "batch": "v71-identity-rebind",
+      "what": "A Hello is not checked against the token",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\tif !s.MatchesToken(token) || !peer.IsValid() {\n\t\treturn Rebound{}, ErrUnauthorized\n\t}",
+      "replace": "\tif !peer.IsValid() {\n\t\treturn Rebound{}, ErrUnauthorized\n\t}",
+      "check": "gateway_session",
+      "expect": "wrong token|bad token accepted"
+    },
+    {
+      "id": "ir-after-expiry",
+      "batch": "v71-identity-rebind",
+      "what": "An expired session still rebinds",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": " || now.Sub(s.lastSeen) >= rule.Timeout",
+      "replace": "",
+      "check": "gateway_session",
+      "expect": "session_expired"
+    },
+    {
+      "id": "ir-admit-verifies-nothing",
+      "batch": "v71-identity-rebind",
+      "what": "Input and Actions from the bound endpoint do not verify it",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\ts.lastVerified = now // the endpoint matched: verified, before the rate limit\n",
+      "replace": "",
+      "check": "gateway_session",
+      "expect": "rebound within Silence of the old endpoint|rebound while the old one sent Input|did not verify"
+    },
+    {
+      "id": "ir-verify-after-rate",
+      "batch": "v71-identity-rebind",
+      "what": "A rate-limited datagram from the bound endpoint does not verify it",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\ts.lastVerified = now // the endpoint matched: verified, before the rate limit\n\tif err := s.rate(now); err != nil {\n\t\treturn err\n\t}\n",
+      "replace": "\tif err := s.rate(now); err != nil {\n\t\treturn err\n\t}\n\ts.lastVerified = now\n",
+      "check": "gateway_session",
+      "expect": "rate-limited datagram from the bound endpoint did not verify"
+    },
+    {
+      "id": "ir-any-hello-verifies",
+      "batch": "v71-identity-rebind",
+      "what": "A Hello with the token from another endpoint verifies the session before the decision",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\tvar rebound Rebound\n",
+      "replace": "\ts.lastVerified = now\n\tvar rebound Rebound\n",
+      "check": "gateway_session",
+      "expect": "did not move to the new endpoint|refreshed the session"
+    },
+    {
+      "id": "ir-clock-unverified",
+      "batch": "v71-identity-rebind",
+      "what": "The clock window restarts on any datagram after a silence, verified or not",
+      "file": "apps/object_fps_pvp/gateway/echo.go",
+      "find": "!after.After(before) || after.Sub(before) < connectionInterruptedAfter",
+      "replace": "after.IsZero() || now.Sub(before) < connectionInterruptedAfter",
+      "check": "go",
+      "expect": "a datagram from another endpoint restarted"
+    },
+    {
+      "id": "ir-no-rebound-line",
+      "batch": "v71-identity-rebind",
+      "what": "A rebinding writes no line",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\tif rebound.Previous.IsValid() {\n",
+      "replace": "\t\tif false && rebound.Previous.IsValid() {\n",
+      "check": "go",
+      "expect": "want one"
     }
   ]
 }

@@ -118,7 +118,9 @@ def read_trace_events(path):
     allowed = {'generated', 'sent', 'host_accepted', 'resolved', 'reset', 'snapshot_produced',
                'snapshot_received', 'presentation', 'runtime_gap', 'transport', 'lifecycle_cancelled'}
     # Schema 3 (v7.1 D152): schema 2 plus the Client's phase decisions (E1-3).
-    phase_paths = {'first', 'window', 'late'}
+    # resume_reset (v7.1 outage-resync client-interrupted, log-contract §1.4):
+    # acquisition restarted on a resume, no decision, so it alone has count 0.
+    phase_paths = {'first', 'window', 'late', 'resume_reset'}
     with path.open() as stream:
         for line_number, line in enumerate(stream, 1):
             try:
@@ -176,7 +178,8 @@ def read_trace_events(path):
                         value = event[field]
                         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                             raise ValueError('invalid phase decision value')
-                    if event['phase_deadband_seconds'] < 0 or event['count'] < 1 or event['player_id'] < 1:
+                    if event['phase_deadband_seconds'] < 0 or event['player_id'] < 1 or (
+                            event['count'] != 0 if event['phase_path'] == 'resume_reset' else event['count'] < 1):
                         raise ValueError('invalid phase decision bounds')
                 elif any(key.startswith('phase_') for key in event):
                     raise ValueError('phase keys on a non-phase_decision event')
