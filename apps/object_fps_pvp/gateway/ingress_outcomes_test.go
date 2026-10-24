@@ -548,16 +548,23 @@ func TestAnAdmittedSequenceThatDoesNotCommitFailsTheRuntime(t *testing.T) {
 	if available {
 		t.Fatal("the room is still available after a broken invariant")
 	}
-	var line string
-	for _, candidate := range strings.Split(logText(logs), "\n") {
-		if strings.Contains(candidate, "player ingress statistics version=1 player=7 ") {
-			line = candidate
-		}
+	// What the table case checked before D180: the datagram counted only its
+	// own key, and IG, the Gateway-wide conservation, T3 and I0 hold, here
+	// over the lines the failure wrote.
+	logs.waitFinal(t, "commit failed")
+	total := checkIngressLines(t, "commit failed", logs.lines(t), s.rateRejectedPackets.Load())
+	got := playerIngressCounts{}
+	if counts := total.players[p.playerID]; counts != nil {
+		got = *counts
 	}
-	for _, want := range []string{" received_datagrams=1 ", " fwd_handed_actions_packets=1 "} {
-		if !strings.Contains(line+" ", want) {
-			t.Fatalf("final window lacks %q: %s", want, line)
-		}
+	want := playerIngressCounts{}
+	want[playerReceivedDatagrams] = 1
+	want[playerFwdHandedActionsPackets] = 1
+	if window := got[:playerDropLinkRejectedActionsShots+1]; !slicesEqual(window, want[:playerDropLinkRejectedActionsShots+1]) {
+		t.Fatalf("final window lacks \" fwd_handed_actions_packets=1 \" alone: counted %s",
+			countedNames(window, playerIngressKeys[:], playerReceivedDatagrams))
+	}
+	if wantGateway := (gatewayIngressCounts{gatewayReceivedDatagrams: 1}); total.gateway != wantGateway {
+		t.Fatalf("gateway counted %s", countedNames(total.gateway[:], gatewayIngressKeys[:], gatewayReceivedDatagrams))
 	}
 }
-
