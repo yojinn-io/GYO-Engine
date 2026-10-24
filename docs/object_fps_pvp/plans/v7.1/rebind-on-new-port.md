@@ -1,4 +1,4 @@
-# rebind-on-new-port：換埠後的改綁時機與 Hello 間隔（關卡，2026-10-25，等使用者決定）
+# rebind-on-new-port：換埠後的改綁時機與 Hello 間隔（2026-10-25 使用者決定，D187）
 
 日期：2026-10-25。D181 新增的批次，處理 [silent-branch-asserts.md](silent-branch-asserts.md) 第 8 節的 K5、K6。PR #95，分支 `claude/pvp-v71-system-observe-test`。
 
@@ -57,6 +57,10 @@ network-architecture §4 寫明的安全取捨：拿到 token、又能讓原 end
 - Gateway、wire、通用層 session、Design Invariants 都不變。改綁的條件不變，只是 Client 更早送出能讓它成立的 Hello。
 - 要改的契約條文：network-architecture §4 的 Hello 間隔與安全取捨那一段（空窗消失，取捨只剩「拿到 token 又能讓原 endpoint 靜默」）。這是契約的變更，所以放在這個關卡。
 - 速率：最多每秒 4 個 Hello，和 Welcome 之前、中斷期間相同，在已核准的預算（116）內。
+
+## 5a. 決定（D187）
+
+r1＋k3，照第 5 節的規則；契約條文跟著改；實作後做 1 次 xhigh 審查；L2 宣告寫好後再交使用者核准。
 
 ## 6. 驗收（建議；L2 的判定要在執行前另行宣告並核准，§14.1）
 

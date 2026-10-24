@@ -43,9 +43,9 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：`rebind-on-new-port` 的關卡（K5：r1～r4；K6：k1～k3；建議 r1＋k3）。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
+- **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
-- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。`silent-branch-asserts` 完成（D180；L1 run 40096721896 四平台成功）。`client-silent-checks` 完成（D183；L1 run 40108527438 四平台成功，前一次 run 的失敗是 Engine 測試本身，列為 K11，D186）。`cxx-flag-removal` 實作完成（`std::osyncstream` 換成 `ClogLine`，旗標刪除），L1 待確認。`rebind-on-new-port` 的關卡準備好了（[rebind-on-new-port.md](rebind-on-new-port.md)），等使用者決定。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
+- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。`silent-branch-asserts` 完成（D180；L1 run 40096721896 四平台成功）。`client-silent-checks` 完成（D183；L1 run 40108527438 四平台成功，前一次 run 的失敗是 Engine 測試本身，列為 K11，D186）。`cxx-flag-removal` 實作完成（`std::osyncstream` 換成 `ClogLine`，旗標刪除），L1 待確認。`rebind-on-new-port` 實作中（D187：r1＋k3）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
@@ -170,6 +170,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D184 | （2026-10-24）突變的重跑範圍：每批只跑 (1) 新登記的突變、(2) find 落在本批改動範圍內的突變、(3) 負責殺死它的測試檔（以突變的 check 對應的測試來源判斷）被本批改動過、且所在檔案也被改動的突變；每條 PR 線合併前，在背景把改動檔案上的既有突變完整跑一次。取代 after-re-evaluate 決策點 C 引用的「目標檔案被改過的既有突變都要重跑」。原因：目錄已有 613 個，集中在幾個大檔，舊規則每批多 1～2 h；find 過時已由目錄測試檢查 | 使用者：「照建議改：每批只跑新突變、find 落在本批改動範圍的、以及殺死它的測試檔被改動的；每條 PR 線合併前在背景把改動檔案上的既有突變完整跑一次。」 |
 | D185 | （2026-10-24）發版時在本機背景跑完整突變目錄，發行線一開始就啟動。非 killed 的逐個分類：測試失去檢出力（擋發版，發版前修好）、突變過時或等價（更新或移出目錄並寫明理由）；只有前者擋發版。結果寫進發行線的 dev_log。v7.1 的 release 是第一次。目的：(1) 補上 D184 只看改動檔案的缺口（某條線改了共用測試，削弱了未改動產品檔上的突變）；(2) 找出目錄測試抓不到、只有真的跑才看得到的「意義過時」突變並清理：期望訊息過時（wrong_failure：仍被抓到，但改由別的測試或路徑抓到、訊息變了 → 更新 `expect`）、等價突變（survived：周圍程式改了、突變不再改變行為 → 移出目錄並寫明理由）、檢查本身變了（殺死它的測試被改名、刪除或合併 → 改指新的檢查）。文字過時（find 對不上）已由 CTest 的目錄測試每次檢查，不靠這一次 | 使用者：「把剛才的建議，記成決定：發版時在本機背景跑完整突變目錄，發行線一開始就啟動；非 killed 逐個分類，只有「測試失去檢出力」擋發版；結果寫進發行線 dev_log。v7.1 的 release 是第一次。」目的 (2) 是使用者補充：「這個目的也加上」 |
 | D186 | （2026-10-25）K11 列入 `lan15-windows` 之前的已知問題：Engine 的 `platform_sdl_concurrency`（`EventWatchTests.cpp:300`，200 輪中至少一次在回呼執行時解構）靠時序碰運氣，client-silent-checks 的 L1 在 macos-arm64 失敗一次。新批 `event-watch-overlap`：改成用同步保證重疊，排在 `client-path-tests` 之後 | 使用者：「列進 lan15 前的已知問題（K11）：把 EventWatchTests 的重疊檢查改成用同步保證重疊、不靠碰運氣，放在 client-path-tests 之後做。先繼續 cxx-flag-removal。」 |
+| D187 | （2026-10-25）`rebind-on-new-port`（[rebind-on-new-port.md](rebind-on-new-port.md)）採 r1＋k3：Client 在 Welcome 之前、中斷期間、最近 250 ms 沒有送出 Input 或 Actions、或輸入已送出但確認滿 T_int 沒有前進時，Hello 每 250 ms，其他時候每 1 s。Gateway、wire、通用層 session、Design Invariants 不變；network-architecture §4 的 Hello 間隔與安全取捨條文跟著改；實作後做 1 次 xhigh 審查（使用者同意）；L2 宣告寫好後再交使用者核准 | 使用者：「照建議 r1＋k3：Client 在 Welcome 前、中斷期間、最近 250 ms 沒送 Input 或 Actions、或輸入確認滿 T_int 沒前進時，Hello 每 250 ms；契約條文跟著改；實作後做 1 次 xhigh 審查；L2 宣告之後再交我核准。」 |
 
 ## 規劃紀錄（記錄器）
 
