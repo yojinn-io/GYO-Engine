@@ -163,6 +163,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D177 | （2026-10-24）`outage-resync` 的 `retention-600`：確認 L2 宣告第 2 版（D45 檢查後的修訂）：gateway-250ms 的 runner 更正為 `backpressure_probe.py --layers gateway --durations-ms 250`；有效性前提不成立記為 E（停下回報、不自動補跑）；J5a 對 x1／ramp 帶 `--injection`；runtime 要求 end 行 reason=signal、exit_code=0；resyncs／late_beyond_no／resync 重設記為 FLAG 停下回報；S3 的逐玩家完整性與 player 0。開跑，檔位照建議（medium） | 使用者：「照第 2 版宣告開跑，檔位照建議」 |
 | D178 | （2026-10-24）`outage-resync` 的 `resync-l2-l3`：核准 L2 宣告第 2 版（D45 小規模 ultracode 檢查後的改寫：11 項 × 3 輪、J-R1～J-R9、J-R3 只記錄、驅動與判定工具與凍結清單的 sha256）。結果：33 輪全部 P | 使用者：「照建議執行」 |
 | D179 | （2026-10-24）`outage-resync` 的 L3（Windows 與 macOS 拔網路線或關 Wi-Fi，2 s 與 7 s 各一次；`transient_socket_errors` 與 endpoint 的紀錄）移到 after-re-evaluate 的 `lan15-windows`，一起做。outage-resync 不等 L3，L1 確認後合併。Windows 的 WSAECONNRESET（D172 D-7 的推論）在那之前未經實機確認，列為已知項目 | 使用者：「L3需要放到 lan15-windows一起吧。」；說明暫時性 socket 錯誤的風險後：「確實可以放lan15-windows做。時間大概在26日。…在v7.1完結後需要發一個release」 |
+| D180 | （2026-10-24）`silent-branch-asserts` 的列點（[silent-branch-asserts.md](silent-branch-asserts.md)）：Go 端的 assert 用 (g2)「讓 runtime link 失敗」；A1～A12、C1、C2 照表；L1～L7 保留並修正 INVENTORY；C3 也做（Client 丟掉的封包計數，追加在 worker statistics 行尾）；U1～U3 與第 7 節「已計數、註解寫應為 0」的分支在 `lan15-windows` 之前處理，這一批不動 | 使用者：「1、2 照建議。3、還是做吧，處理封包還是不留尾巴比較好。（那個問題列表，也是要v7.1的 lan15-windows前做的，只不過現在先不管）」 |
 
 ## 規劃紀錄（記錄器）
 

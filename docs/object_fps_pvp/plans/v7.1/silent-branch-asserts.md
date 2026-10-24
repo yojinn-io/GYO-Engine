@@ -1,4 +1,4 @@
-# silent-branch-asserts：無聲分支的列點（HEAD `0681463`，等使用者逐點決定）
+# silent-branch-asserts：無聲分支的列點（HEAD `0681463`；2026-10-24 使用者決定，D180）
 
 日期：2026-10-24。after-re-evaluate 的第一批（INVENTORY `N-silent-branches-assert`）。PR #95，分支 `claude/pvp-v71-system-observe-test`。
 
@@ -24,6 +24,7 @@
   - (g2) **讓 runtime link 失敗**：記錄一行原因，房間變成 unavailable。這是現在處理 IPC 協議錯誤的同一條路，所以可見、可恢復（重啟服務），不需要新機制。
   - (g3) **計數加記錄，不中斷**：不會讓人斷線，但不變量壞了之後仍繼續跑。
   - 建議 (g2)：沿用既有的失敗出口，又不會無聲。
+- **D180**：採用 (g2)。A1～A12、C1、C2 照表；L1～L7 保留並修正 INVENTORY；C3 也做。
 
 ## 2. Assert 候選（守衛已確認、外部輸入到不了）
 
@@ -73,6 +74,8 @@
 | U3 | `ClientConnection.cpp:931`、`:949`（`SendInput`） | 無效窗口、錯的玩家、改了未確認命令的呼叫被丟掉；屬於 API 誤用 |
 
 建議：這一批先不動，只記錄；要改的話，每點再追約 30 分鐘。
+
+**D180**：U1～U3 與第 7 節的分支，在 `lan15-windows` 之前處理，這一批不動。
 
 ## 6. 原清單各項的去向
 
