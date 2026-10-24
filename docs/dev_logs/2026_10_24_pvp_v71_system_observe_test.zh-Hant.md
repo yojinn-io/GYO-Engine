@@ -14,8 +14,8 @@
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 完成（D181 新增；D187 r1＋k3，審查後 D188 改為 Hello 一律 250 ms；L2 12／12 P） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | 完成（D181 併入 K7） |
 | `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | 完成（D181 併入 K8；D191 T2） |
-| `analyzer-converge` | high | 5 | 實作完成，L1 待確認（D192） |
-| `token-tests` | high | 4～6 | |
+| `analyzer-converge` | high | 5 | 完成（D192） |
+| `token-tests` | high | 4～6 | 實作完成，L1 待確認 |
 | `client-path-tests` | high | 3～4（K9 另加 2～3） | D181 併入 K9 |
 | `event-watch-overlap` | high | 1～2 | D186 新增（K11） |
 
@@ -232,3 +232,22 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 ### 凍結工具
 
 `command_evidence.py` 是凍結的分析器，它的 sha256 改變了。列有它的凍結清單（例如 `frozen-resync.sha256`）在現在的樹上會被拒絕；要重跑舊 session，得用舊版本的檔案。下一個 L2（`lan15-windows`）要重新凍結（D192 的代價）。
+
+## token-tests：輸入 token 規則只留一份（N-token-test-gaps、C12）
+
+### 做了什麼
+
+- 新增產品內的 `InputSendBudget.hpp`：輸入 token 桶的規則寫成以「送出週期」為單位的純函式，時鐘留在呼叫端：
+  - `RefilledInputTokens`：補充，不超過滿桶；
+  - `FreshInputWindow`：視窗是否帶著從沒送過的命令（別的 epoch、life，或更新的最後序號）；
+  - `InputWindowSendsNow`：新視窗有 1 個 token 就送，舊視窗到重送期限且桶滿才送；
+  - `InputSendCharge`：收費，含晚醒扣除項與滿桶上限，最多折 0.25；
+  - `InputSendWaitPeriods`：還要等幾個週期。
+- `ClientConnection.cpp` 的送出路徑與喚醒期限（原本各寫一份），以及 `MovementRecoveryTests` 的模擬模型（原本另寫一份），都改用這套函式。純重構，算式與求值順序照舊；測試模型的 V6 路徑照舊每次收 1 個 token。
+- 值固定的單元測試（`MovementRecoveryTests.cpp`）：拿掉任一項，結果都會變。例如等待 0.4 個週期、tokens 1.3 時收 0.9，沒有晚醒扣除項會變成 0.75；tokens 1.9、等待 2 個週期時收 0.9，沒有滿桶上限會變成 0.75。
+- 09a 記錄的「每日曆秒 ≤61」那一半照 D158 取消，不做。
+
+### 驗證
+
+- 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49；worker 驗收連跑 2 次通過（送出時序的檢查都在裡面）。
+- **突變**（D184 的挑選）：v7 第 09a 批的 3 個（不折讓、每次都折、等待時刻不清除）的 find 改指新的呼叫處，仍由 worker 驗收判定；新增 5 個（沒有晚醒扣除項、沒有滿桶上限，這兩個就是 N-token-test-gaps 說的會存活的突變；補充不設上限、重送只等 1 個 token、換 life 不算新視窗），由單元測試判定。8／8 killed。
