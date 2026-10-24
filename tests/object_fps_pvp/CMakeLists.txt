@@ -249,6 +249,11 @@ add_test(NAME "${GYO_CURRENT_APP}.backpressure_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_backpressure_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.backpressure_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 
+# The reader of the Match's gw_drop report lines (log-contract; v7.1 contract-readers).
+add_test(NAME "${GYO_CURRENT_APP}.compare_reports"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_compare_reports.py")
+set_tests_properties("${GYO_CURRENT_APP}.compare_reports" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
+
 add_test(NAME "${GYO_CURRENT_APP}.native_window_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_native_window.py")
 set_tests_properties("${GYO_CURRENT_APP}.native_window_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
@@ -333,8 +338,7 @@ gyo_use_app_config(${digest_o0} "${GYO_CURRENT_APP}")
 target_compile_definitions(${digest_o0} PRIVATE ${digest_arena_definitions})
 target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads GYO::Trace nlohmann_json::nlohmann_json)
 # Appended after the configuration's flags, so the last optimisation flag wins.
-target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>
-    $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)
+target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>)
 foreach(target ${digest} ${digest_o0})
     if(WIN32)
         target_compile_definitions(${target} PRIVATE NOMINMAX)

@@ -104,7 +104,16 @@ void LocalPlayerPrediction::RestartPhaseAcquisition(std::uint64_t after) {
 
 void LocalPlayerPrediction::Resume(const PlayerState& authority) {
     if (Reseeds(authority)) return;
+    // Both resume paths leave the same phase record (K8, D191): the reset
+    // restarts phase acquisition after the tip and cancels any shift in flight.
+    const auto recordResume = [&] {
+        TraceMovement({.kind = MovementTraceKind::PhaseDecision, .playerId = current_.playerId,
+            .epoch = current_.movementEpoch, .sequence = current_.lastResolvedCommand, .count = 0,
+            .lifeGeneration = current_.lifeGeneration, .phasePath = MovementPhasePath::ResumeReset,
+            .phaseShiftSeconds = phaseShiftSeconds_});
+    };
     if (authority.lastResolvedCommand == current_.lastResolvedCommand) {
+        recordResume();
         SeedLead(authority);
         return;
     }
@@ -112,12 +121,8 @@ void LocalPlayerPrediction::Resume(const PlayerState& authority) {
     // with other content (network-architecture §7: one command identity, one
     // content). The lead built up while interrupted stays until the Backlog
     // fuse clears it (P2's second known exception, §7).
-    const double cancelled = phaseShiftSeconds_;
+    recordResume();
     RestartPhaseAcquisition(current_.lastResolvedCommand);
-    TraceMovement({.kind = MovementTraceKind::PhaseDecision, .playerId = current_.playerId,
-        .epoch = current_.movementEpoch, .sequence = current_.lastResolvedCommand, .count = 0,
-        .lifeGeneration = current_.lifeGeneration, .phasePath = MovementPhasePath::ResumeReset,
-        .phaseShiftSeconds = cancelled});
 }
 
 // Called only when the previous correction has fully slewed in
@@ -229,17 +234,17 @@ bool LocalPlayerPrediction::Reseeds(const PlayerState& authority) const noexcept
         authority.lastResolvedCommand > current_.lastResolvedCommand;
 }
 
-void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {
+bool LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_t authorityTick) {
     if (authority.playerId == 0 || authority.movementEpoch == 0 || !authority.lifeGeneration ||
         !std::isfinite(authority.verticalVelocity) ||
         (authority.lifeState != LifeState::Alive && authority.lifeState != LifeState::Dead) ||
         authority.contiguousPendingCommands > MaxFutureCommands || !Engine::Math::IsFinite(authority.position) ||
-        !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return;
+        !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return false;
     const bool newPlayer = !observation_.active || current_.playerId != authority.playerId;
     if (!newPlayer && (authorityTick <= observation_.authorityTick ||
         authority.lifeGeneration < current_.lifeGeneration || authority.movementEpoch < current_.movementEpoch ||
         (authority.movementEpoch == current_.movementEpoch &&
-         authority.lastResolvedCommand < observation_.lastResolvedCommand))) return;
+         authority.lastResolvedCommand < observation_.lastResolvedCommand))) return false;
     if (newPlayer || authority.lifeGeneration != current_.lifeGeneration || authority.movementEpoch > current_.movementEpoch) {
         if (!newPlayer && authority.lifeGeneration != current_.lifeGeneration) {
             for (const auto& command : pending_)
@@ -306,6 +311,7 @@ void LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
     observation_.movementEpoch = authority.movementEpoch;
     observation_.serverPendingCommands = authority.contiguousPendingCommands;
     UpdatePresentation();
+    return true;
 }
 
 bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float right,

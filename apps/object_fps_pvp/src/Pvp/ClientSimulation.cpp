@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/ClientSimulation.hpp"
+#include "engine/base/Assert.hpp"
 
 #include <algorithm>
 
@@ -47,7 +48,11 @@ void ClientSimulation::Observe(const PlayerState& self, std::uint64_t tick, cons
         taken = sample.tick;
     }
     samples_.clear();
-    prediction_.Reconcile(self, tick);
+    // ClientConnection validated the state and applied only snapshots that do
+    // not go back; ticks at or before the last were returned above, and Reset
+    // restarts both.
+    const bool reconciled = prediction_.Reconcile(self, tick);
+    GYO_ASSERT(reconciled);
     lastSnapshotTick_ = tick;
 }
 

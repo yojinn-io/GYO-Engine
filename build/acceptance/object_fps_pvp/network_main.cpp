@@ -55,7 +55,7 @@ public:
         const auto port=server_.bind_to_any_port("127.0.0.1");
         Require(port>0,"cannot bind leave-failure acceptance relay");
         address_="127.0.0.1:"+std::to_string(port);
-        worker_=std::jthread([this]{server_.listen_after_bind();});
+        worker_=std::thread([this]{server_.listen_after_bind();});
         Wait([&]{return server_.is_running();},"leave-failure acceptance relay did not start");
     }
     ~LeaveFailureRelay(){server_.stop();if(worker_.joinable())worker_.join();}
@@ -96,7 +96,7 @@ private:
     std::mutex mutex_;
     unsigned leaveAttempts_{},joinAttempts_{};
     bool retriedSameSession_{},cleanupConfirmed_{},cleanupBeforeRejoin_{};
-    std::jthread worker_;
+    std::thread worker_;
 };
 int main(int argc,char** argv) {
     try {

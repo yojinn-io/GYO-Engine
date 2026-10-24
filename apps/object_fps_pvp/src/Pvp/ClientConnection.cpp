@@ -1,10 +1,12 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ClientSimulationHistory.hpp"
 #include "RetroFPS/Pvp/ClockSync.hpp"
+#include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/ConnectionLiveness.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
+#include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/threads/RoleThread.hpp"
 #include "client_v7.pb.h"
@@ -25,7 +27,7 @@
 #include <limits>
 #include <random>
 #include <cctype>
-#include <syncstream>
+#include <utility>
 
 namespace fps::pvp {
 namespace pb=object_fps_pvp::client::v7;
@@ -180,6 +182,10 @@ struct ClientConnection::Impl {
     std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
     // Diagnostics only (log-contract): the worker's own window counts, reset only by ReportStatistics.
     std::uint64_t receivedDatagrams{},foreignSenderDatagrams{},undecodableDatagrams{},staleDatagrams{},sendBlocked{},windowSnapshotOverflows{},windowSimulationOverflows{};
+    // The datagrams of this session that decode but change nothing (v7.1
+    // silent-branch-asserts, D180): every drop below is counted.
+    std::uint64_t unparsedDatagrams{},earlyDatagrams{},invalidSnapshotDatagrams{},ignoredSnapshotDatagrams{},unexpectedKindDatagrams{};
+    std::uint64_t staleInputWindows{}; // guarded by mutex: SendInput runs on the simulation thread
     ClientCauseRecords causes; // the snapshots' holds and the refusal reply, per statistics window
     Engine::Threads::RoleContext* role{}; // the worker's own context, for its precise Waiter
     std::optional<Engine::Threads::RoleThread> worker;
@@ -188,7 +194,7 @@ struct ClientConnection::Impl {
             [this](Engine::Threads::RoleContext& context){role=&context;Run();});
         if(!started)throw std::runtime_error(Engine::Base::Describe(started.error()));
         worker.emplace(std::move(*started));
-        std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<RoleStartedLine(*worker)<<'\n';
+        ClogLine()<<"[ObjectFPS/PvP] "<<RoleStartedLine(*worker)<<'\n';
     }
     ~Impl(){
         if(!worker)return;
@@ -219,8 +225,8 @@ struct ClientConnection::Impl {
         auto result=state;result.actionTransport=ActionState();result.generation=generation.load();return result;
     }
     void CloseTransport() {
-        if(const auto line=clock.End(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
-        if(summary.player)std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<ConnectionSummaryLine(summary)<<'\n';
+        if(const auto line=clock.End(MicrosNow()))ClogLine()<<*line<<'\n';
+        if(summary.player)ClogLine()<<"[ObjectFPS/PvP] "<<ConnectionSummaryLine(summary)<<'\n';
         summary={};
         asio::error_code error;socket.close(error);
         // Keep credentials until HTTP confirms the idempotent leave. Losing
@@ -248,7 +254,7 @@ struct ClientConnection::Impl {
         simulationHistory.Clear();
         ResetActions();
         state.interrupted=false;state.interruptedSince={};
-        std::osyncstream(std::clog)<<"[ObjectFPS/PvP] connection failed player="<<state.playerId
+        ClogLine()<<"[ObjectFPS/PvP] connection failed player="<<state.playerId
             <<" reason="<<error<<'\n';
         state.phase=ConnectionPhase::Lobby;state.error=std::move(error);state.snapshot.reset();state.playerId=0;
         state.rooms.clear();state.arenaId.clear();roomRefreshFailed=false;
@@ -406,10 +412,11 @@ struct ClientConnection::Impl {
         if(error)++sendBlocked;
         return !error;
     }
-    // Hello probes every 250 ms before the Welcome and while interrupted.
-    Clock::duration HelloInterval() const {
-        return welcomed && !liveness.Interrupted()?std::chrono::milliseconds(1000):std::chrono::milliseconds(250);
-    }
+    // A Hello every 250 ms in every phase (network-architecture §4, D188): the
+    // session's last verified time stays within T_int while only Hellos reach
+    // the Gateway, and a Hello from an endpoint the Gateway does not know yet
+    // lets the session rebind soon after the old endpoint went silent.
+    static constexpr auto HelloInterval=std::chrono::milliseconds(250);
     // Validate the complete batch before mutating either decisions or retirement.
     // Snapshot replacement and the game thread never own the only result copy.
     bool AcceptResults(const pb::ActionResults& message,Clock::time_point arrivedAt) {
@@ -495,14 +502,14 @@ struct ClientConnection::Impl {
         // Session liveness belongs to the I/O worker. A busy render thread must
         // not disconnect a healthy socket, and a keepalive must not renew any
         // movement input: active Hello only receives another Welcome.
-        if(now-helloAt>=HelloInterval()) {
+        if(now-helloAt>=HelloInterval) {
             pb::Hello hello;hello.set_session_token(token);
             auto* echo=hello.mutable_clock();
             if(const auto latest=clock.Clock().Echo()) {echo->set_origin_us(latest->first);echo->set_receive_us(latest->second);}
             echo->set_transmit_us(clock.Clock().Stamp(MicrosNow()));
             Send(wire::Type::Hello,hello.SerializeAsString());helloAt=now;
         }
-        if(const auto line=clock.Roll(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
+        if(const auto line=clock.Roll(MicrosNow()))ClogLine()<<*line<<'\n';
         std::array<std::uint8_t,2048> bytes{};
         for(int count=0;count<64;++count) {
             udp::endpoint sender;asio::error_code error;
@@ -524,7 +531,7 @@ struct ClientConnection::Impl {
             }
             if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence))) {++staleDatagrams;continue;}
             if(packet->type==wire::Type::Welcome) {
-                pb::Welcome message;if(!message.ParseFromString(packet->payload))continue;
+                pb::Welcome message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}
                 if(message.has_clock()) { // diagnostics only, before and apart from every check
                     const auto& sample=message.clock();
                     ClockStamp peer{.transmitUs=sample.transmit_us()};
@@ -553,9 +560,10 @@ struct ClientConnection::Impl {
                 state.combatRules=rules;
                 welcomed=true;liveness.Welcome(arrivedAt);
             } else if(packet->type==wire::Type::Snapshot) {
-                if(!welcomed)continue;
-                pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload) ||
-                    message.tick()==0 || message.players_size()>static_cast<int>(MaxPlayers) || message.combat_size()!=message.players_size())continue;
+                if(!welcomed){++earlyDatagrams;continue;}
+                pb::WorldSnapshot message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}
+                if(message.tick()==0 || message.players_size()>static_cast<int>(MaxPlayers) ||
+                   message.combat_size()!=message.players_size()){++invalidSnapshotDatagrams;continue;}
                 causes.Snapshot(message.has_match_hold_us()?std::optional(message.match_hold_us()):std::nullopt,
                     message.has_gateway_hold_us()?std::optional(message.gateway_hold_us()):std::nullopt);
                 WorldSnapshot snapshot;snapshot.tick=message.tick();bool self=false,valid=true;
@@ -563,7 +571,9 @@ struct ClientConnection::Impl {
                     std::scoped_lock lock(mutex);
                     if(activeGeneration!=generation.load())return;
                     own=state.playerId;
-                    if(!state.combatRules)continue;
+                    // welcomed and combatRules are set together; every reset of the
+                    // rules also clears welcomed or changes the generation (checked above).
+                    GYO_ASSERT(state.combatRules.has_value());
                     maximumHp=state.combatRules->maximumHp;magazineCapacity=state.combatRules->magazineCapacity;
                 }
                 for(const auto& p:message.players()) {
@@ -608,7 +618,7 @@ struct ClientConnection::Impl {
                     if(!ValidDamageRecord(record,player.lifeState==LifeState::Dead,player.lifeStateTick,message.tick(),maximumHp)){valid=false;break;}
                     snapshot.combat.push_back(record);
                 }
-                if(!valid)continue;
+                if(!valid){++invalidSnapshotDatagrams;continue;}
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
                 if(!self && state.phase==ConnectionPhase::Playing &&
@@ -623,7 +633,7 @@ struct ClientConnection::Impl {
                                      (player.lifeGeneration>previous.lifeGeneration && player.movementEpoch<=previous.movementEpoch) ||
                                      (player.movementEpoch==previous.movementEpoch && player.lastResolvedCommand<previous.lastResolvedCommand)))valid=false;
                     }
-                    if(!valid)continue;
+                    if(!valid){++invalidSnapshotDatagrams;continue;}
                     const auto& authority=*std::find_if(snapshot.players.begin(),snapshot.players.end(),
                         [&](const auto& player){return player.playerId==own;});
                     // A valid snapshot: liveness, and the recovery flow when it
@@ -633,9 +643,9 @@ struct ClientConnection::Impl {
                     const auto arrival=liveness.Snapshot(arrivedAt);
                     summary.maxGap=std::max(summary.maxGap,arrival.gap);
                     if(arrival.resumed) {
-                        if(const auto line=clock.Resume(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
+                        if(const auto line=clock.Resume(MicrosNow()))ClogLine()<<*line<<'\n';
                         state.interrupted=false;state.interruptedSince={};
-                        std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<ConnectionResumedLine(own,arrival.gap,
+                        ClogLine()<<"[ObjectFPS/PvP] "<<ConnectionResumedLine(own,arrival.gap,
                             interruptedEpoch,authority.movementEpoch)<<'\n';
                     }
                     if(authority.movementEpoch!=submittedEpoch) {
@@ -665,9 +675,13 @@ struct ClientConnection::Impl {
                     // The flag travels with this snapshot (§4 recovery step 3).
                     if(simulationHistory.Push({snapshot,arrivedAt},arrival.resumed))++windowSimulationOverflows;
                     receivedSnapshots.push_back({std::move(snapshot),arrivedAt});
+                } else {
+                    // Not newer than the applied one (pv7 §2a), or without the
+                    // local player before the first: valid, not applied.
+                    ++ignoredSnapshotDatagrams;
                 }
             } else if(packet->type==wire::Type::ActionResults) {
-                if(!welcomed)continue;
+                if(!welcomed){++earlyDatagrams;continue;}
                 pb::ActionResults message;
                 const bool parsed=message.ParseFromString(packet->payload);
                 if(parsed) causes.Results(message.refused_batches(),RefusalName(static_cast<int>(message.last_refusal())));
@@ -675,9 +689,12 @@ struct ClientConnection::Impl {
                 if(activeGeneration!=generation.load())return;
                 if(!parsed || !AcceptResults(message,arrivedAt)){++actionTransport.rejectedResultBatches;continue;}
             } else if(packet->type==wire::Type::Error) {
-                pb::Error message;if(!message.ParseFromString(packet->payload))continue;
+                pb::Error message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}
                 throw std::runtime_error(message.message());
-            } else continue;
+            } else {
+                ++unexpectedKindDatagrams; // a Hello, Input or Actions from the Gateway's address
+                continue;
+            }
             receivedSequence=packet->sequence;haveSequence=true;
         }
         // Only valid snapshots keep a joined connection alive (T_max), and
@@ -698,7 +715,7 @@ struct ClientConnection::Impl {
                     if(player.playerId==state.playerId)interruptedEpoch=player.movementEpoch;
             ++summary.interruptions;
             state.interrupted=true;state.interruptedSince=liveness.Since();
-            std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<ConnectionInterruptedLine(state.playerId,
+            ClogLine()<<"[ObjectFPS/PvP] "<<ConnectionInterruptedLine(state.playerId,
                 polledAt-liveness.Since(),interruptedEpoch)<<'\n';
         }
         if(event==ConnectionLiveness::Event::TimedOut)throw std::runtime_error("Gateway connection timed out");
@@ -795,7 +812,7 @@ struct ClientConnection::Impl {
             std::chrono::duration<double>(NetworkStatisticsSeconds));
         const auto consider=[&](Clock::time_point at){if(!next || at<*next)next=at;};
         if(live) {
-            consider(helloAt+HelloInterval());
+            consider(helloAt+HelloInterval);
             consider(liveness.NextDeadline());
             std::scoped_lock lock(mutex);
             if(welcomed && latestInput) {
@@ -849,15 +866,20 @@ struct ClientConnection::Impl {
         const auto now=Clock::now();
         if(std::chrono::duration<double>(now-statisticsAt).count()<NetworkStatisticsSeconds)return;
         const auto cpu=CurrentThreadCpuSeconds();
-        PlayerId player{};{std::scoped_lock lock(mutex);player=state.playerId;}
-        std::osyncstream(std::clog)<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
+        PlayerId player{};std::uint64_t staleWindows{};
+        {std::scoped_lock lock(mutex);player=state.playerId;staleWindows=std::exchange(staleInputWindows,0);}
+        ClogLine()<<WorkerStatisticsLine({.player=player,.windowSeconds=std::chrono::duration<double>(now-statisticsAt).count(),
             .wakes=wakes,.cpuSeconds=cpu && cpuAt ? std::optional<double>(*cpu-*cpuAt) : std::nullopt,
             .otherVersionDatagrams=otherVersionDatagrams,.receivedDatagrams=receivedDatagrams,
             .foreignSenderDatagrams=foreignSenderDatagrams,.undecodableDatagrams=undecodableDatagrams,.staleDatagrams=staleDatagrams,
-            .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows})<<'\n';
-        std::osyncstream(std::clog)<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
+            .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows,
+            .unparsedDatagrams=unparsedDatagrams,.earlyDatagrams=earlyDatagrams,.invalidSnapshotDatagrams=invalidSnapshotDatagrams,
+            .ignoredSnapshotDatagrams=ignoredSnapshotDatagrams,.unexpectedKindDatagrams=unexpectedKindDatagrams,
+            .staleInputWindows=staleWindows})<<'\n';
+        ClogLine()<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
         receivedDatagrams=foreignSenderDatagrams=undecodableDatagrams=staleDatagrams=sendBlocked=0;
+        unparsedDatagrams=earlyDatagrams=invalidSnapshotDatagrams=ignoredSnapshotDatagrams=unexpectedKindDatagrams=0;
         windowSnapshotOverflows=windowSimulationOverflows=0;
     }
     void Run() {
@@ -873,13 +895,13 @@ struct ClientConnection::Impl {
             for(;;) {
                 try{io.run();break;}
                 catch(const std::exception& error){
-                    std::osyncstream(std::clog)<<"[ObjectFPS/PvP] network worker failed reason="<<error.what()<<'\n';
+                    ClogLine()<<"[ObjectFPS/PvP] network worker failed reason="<<error.what()<<'\n';
                     try{Failure(std::string("Network worker failed: ")+error.what(),activeGeneration);}catch(...){}
                 }
             }
         }
         try{DisconnectRemote();}
-        catch(const std::exception& error){std::osyncstream(std::clog)<<"[ObjectFPS/PvP] shutdown cleanup failed reason="<<error.what()<<'\n';}
+        catch(const std::exception& error){ClogLine()<<"[ObjectFPS/PvP] shutdown cleanup failed reason="<<error.what()<<'\n';}
     }
 };
 // The socket's own codes (asio::error, the system category) and the portable
@@ -926,9 +948,17 @@ void ClientConnection::SendInput(PlayerInput input){
 void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     // Generation changes happen under this mutex, so the check cannot race them.
     std::scoped_lock lock(impl_->mutex);
-    if(generation!=impl_->generation.load())return;
-    if((impl_->state.phase!=ConnectionPhase::Playing && impl_->state.phase!=ConnectionPhase::Connecting) ||
-       input.playerId!=impl_->state.playerId || !PvpMatch::ValidInput(input))return;
+    // A window of another generation: the caller's authority is gone (r1).
+    if(generation!=impl_->generation.load()){++impl_->staleInputWindows;return;}
+    // The simulation predicts only after a snapshot of this generation, which
+    // set Playing; within a generation the phase never goes back (a failure and
+    // a departure change the generation). Its player and commands are this
+    // generation's and valid (r2, r3, r4: API misuse).
+    const bool playing=impl_->state.phase==ConnectionPhase::Playing || impl_->state.phase==ConnectionPhase::Connecting;
+    GYO_ASSERT(playing);
+    GYO_ASSERT(input.playerId==impl_->state.playerId);
+    const bool valid=PvpMatch::ValidInput(input);
+    GYO_ASSERT(valid);
     std::uint64_t resolved{},epoch{1},life{1};
     if(impl_->state.snapshot) {
         for(const auto& player:impl_->state.snapshot->players)
@@ -936,7 +966,10 @@ void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     }
     // Only authority can advance an epoch. Neither a stale application frame
     // nor a caller-provided future epoch can repopulate the worker's window.
-    if(input.lifeGeneration!=life || input.movementEpoch!=epoch || input.movementEpoch!=impl_->submittedEpoch)return;
+    // The simulation built it from an older snapshot than the worker's newest (r5).
+    if(input.lifeGeneration!=life || input.movementEpoch!=epoch || input.movementEpoch!=impl_->submittedEpoch){
+        ++impl_->staleInputWindows;return;
+    }
     std::erase_if(input.commands,[&](const auto& command){return command.sequence<=resolved;});
     std::erase_if(impl_->submittedCommands,[&](const auto& command){return command.sequence<=resolved;});
     if(input.commands.empty())return;
@@ -946,7 +979,9 @@ void ClientConnection::SendInput(PlayerInput input,std::uint64_t generation){
     for(const auto& existing:impl_->submittedCommands) {
         const auto found=std::find_if(input.commands.begin(),input.commands.end(),
             [&](const auto& command){return command.sequence==existing.sequence;});
-        if(found==input.commands.end() || *found!=existing)return;
+        // One command identity, one content (network-architecture §7): the
+        // prediction never regenerates or drops an unacknowledged sequence (r7).
+        GYO_ASSERT(found!=input.commands.end() && *found==existing);
     }
     impl_->submittedCommands=input.commands;
     impl_->latestInput=std::move(input);

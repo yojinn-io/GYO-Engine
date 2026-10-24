@@ -22,6 +22,9 @@
 #include <source_location>
 #include <iostream>
 #include <stdexcept>
+#include <sstream>
+#include <streambuf>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -64,9 +67,9 @@ public:
         const auto port=http.bind_to_any_port("127.0.0.1");
         Require(port>0,"mock HTTP bind failed");
         address="127.0.0.1:"+std::to_string(port);
-        server=std::jthread([this]{http.listen_after_bind();});
+        server=std::thread([this]{http.listen_after_bind();});
     }
-    ~MockGateway(){http.stop();}
+    ~MockGateway(){http.stop();if(server.joinable())server.join();}
     void Pump() {
         for(int count=0;count<64;++count) {
             std::array<std::uint8_t,2048> buffer{};udp::endpoint source;asio::error_code error;
@@ -79,6 +82,8 @@ public:
             if(silent)continue; // an outage in both directions: seen, never answered
             if(packet->type==wire::Type::Hello) {
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
+                // A snapshot and a results frame before the first Welcome (CheckDroppedDatagrams).
+                if(std::exchange(earlyBeforeWelcome,false)) {Snapshot(ack);SendResults(pb::ActionResults{});}
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
                 welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);welcome.set_arena_digest(welcomeArenaDigest.load());
                 if(includeRules) {
@@ -138,6 +143,8 @@ public:
     }
     // A snapshot of the given tick; the next Snapshot follows it.
     void SnapshotAt(std::uint64_t at,std::uint64_t resolved){tick=at-1;Snapshot(resolved);}
+    // A later session's snapshots start from acknowledgement 0 again (nothing is sent).
+    void ResetAck(){ack=0;}
     // A snapshot of the given number of players (ids 1..count), player 1 first.
     void Crowded(unsigned count) {
         pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
@@ -176,6 +183,8 @@ public:
     bool badWelcomeClock{},extremeWelcomeClock{};
     // CheckOutage: drop everything (silent), or answer a Hello with a Welcome only.
     bool silent{},snapshotOnHello{true};
+    bool earlyBeforeWelcome{};
+    void SendRaw(wire::Type type,const std::string& payload){Send(type,payload);}
     Clock::time_point snapshotSentAt{}; // when Snapshot last sent one
     static constexpr std::uint64_t ExtremeOffsetUs=std::uint64_t{1}<<52;
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
@@ -189,7 +198,7 @@ private:
     udp::socket socket;
     udp::endpoint peer;
     httplib::Server http;
-    std::jthread server;
+    std::thread server;
     std::uint64_t ack{},tick{};
     std::uint32_t sequence{};
     std::mutex refusalMutex;
@@ -293,6 +302,169 @@ OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool e
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
     return outcome;
 }
+// Copies what the workers write to std::clog, still writing it through; the
+// statistics lines are read back at the end (CheckDroppedDatagrams).
+class ClogCapture final : public std::streambuf {
+public:
+    explicit ClogCapture(std::streambuf* through):through(through) {}
+    std::string Text(){std::scoped_lock lock(mutex);return text;}
+protected:
+    int overflow(int c) override {
+        if(c==traits_type::eof())return traits_type::not_eof(c);
+        std::scoped_lock lock(mutex);text.push_back(static_cast<char>(c));
+        return through->sputc(static_cast<char>(c));
+    }
+    std::streamsize xsputn(const char* data,std::streamsize size) override {
+        std::scoped_lock lock(mutex);text.append(data,static_cast<std::size_t>(size));
+        return through->sputn(data,size);
+    }
+    int sync() override {return through->pubsync();}
+private:
+    std::streambuf* through;
+    std::mutex mutex;
+    std::string text;
+};
+// v7.1 silent-branch-asserts (D180): datagrams of the session that decode but
+// change nothing are counted on the worker statistics line. Sent early, so the
+// first 10 s window (read at the end) holds them.
+void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
+    gateway.earlyBeforeWelcome=true;
+    connection.Join(gateway.address,"1");
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+    const auto playing=connection.State().snapshot->tick;
+    const std::string garbage("\x0a\x7f",2);
+    gateway.SendRaw(wire::Type::Welcome,garbage);
+    gateway.SendRaw(wire::Type::Snapshot,garbage);
+    gateway.SendRaw(wire::Type::Error,garbage);
+    pb::WorldSnapshot zeroTick;zeroTick.set_tick(0);
+    gateway.SendRaw(wire::Type::Snapshot,zeroTick.SerializeAsString());
+    pb::WorldSnapshot uneven;uneven.set_tick(playing+50);uneven.add_players()->set_player_id(1);
+    gateway.SendRaw(wire::Type::Snapshot,uneven.SerializeAsString());
+    gateway.SnapshotAt(playing,0); // not newer than the applied one
+    // Windows for an authority the worker no longer has (D183): another
+    // connection generation, and an epoch its newest snapshot does not carry.
+    const auto attemptsBefore=gateway.attempts.size();
+    connection.SendInput(Input(1,1),std::numeric_limits<std::uint64_t>::max());
+    auto otherEpoch=Input(1,1);otherEpoch.movementEpoch=gateway.epoch+1;connection.SendInput(std::move(otherEpoch));
+    for(const auto kind:{wire::Type::Hello,wire::Type::Input,wire::Type::Actions})gateway.SendRaw(kind,"");
+    gateway.Snapshot(0);
+    gateway.Until([&]{return connection.State().snapshot->tick>playing;});
+    Require(connection.State().phase==ConnectionPhase::Playing && connection.State().error.empty(),
+        "a dropped datagram changed the session");
+    Require(gateway.attempts.size()==attemptsBefore,"a window for a replaced authority was sent");
+    connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
+}
+// network-architecture §4 (D188): a Hello every 250 ms in every phase: after
+// the Welcome until the first snapshot, while inputs flow and are acknowledged,
+// and while the acknowledgement stands still; never more often (the 120-packet
+// budget counts four a second).
+void CheckHelloCadence(MockGateway& gateway,ClientConnection& connection) {
+    const auto gaps=[&](Clock::time_point from,Clock::time_point to) {
+        std::vector<double> ms;std::optional<Clock::time_point> previous;
+        for(const auto& packet:gateway.packets) {
+            if(packet.type!=wire::Type::Hello || packet.at<from || packet.at>=to)continue;
+            if(previous)ms.push_back(std::chrono::duration<double,std::milli>(packet.at-*previous).count());
+            previous=packet.at;
+        }
+        return ms;
+    };
+    const auto every250=[&](Clock::time_point from,Clock::time_point to,const char* phase) {
+        const auto ms=gaps(from,to);
+        const auto expected=std::chrono::duration<double,std::milli>(to-from).count()/250.0;
+        Require(ms.size()+1>=static_cast<std::size_t>(expected)-1,std::string("Hellos were not every 250 ms ")+phase);
+        for(const auto gap:ms) {
+            Require(gap<=350,std::string("Hellos were not every 250 ms ")+phase);
+            Require(gap>=200,std::string("Hellos came more often than every 250 ms ")+phase);
+        }
+    };
+    // Welcomed, no snapshot yet: only Hellos reach the Gateway.
+    gateway.snapshotOnHello=false;
+    const auto welcomesBefore=gateway.welcomeTransmits.size();
+    connection.Join(gateway.address,"1");
+    gateway.Until([&]{return gateway.welcomeTransmits.size()>welcomesBefore;});
+    const auto welcomedAt=Clock::now();
+    gateway.UntilTime(welcomedAt+1100ms);
+    every250(welcomedAt,Clock::now(),"before the first snapshot");
+    gateway.snapshotOnHello=true;
+    gateway.Snapshot(0);
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+    // Inputs flow and their acknowledgement moves, two commands behind as with
+    // a round trip in flight.
+    std::uint64_t sequence=0;
+    const auto window=[&] {
+        const auto state=connection.State();
+        const auto first=state.snapshot->players.at(0).lastResolvedCommand+1;
+        sequence=std::max(sequence+1,first);
+        connection.SendInput(Input(first,sequence));
+    };
+    const auto flowFrom=Clock::now();
+    while(Clock::now()<flowFrom+1600ms) {
+        window();gateway.UntilTime(Clock::now()+8ms);
+        gateway.Snapshot(sequence>2?sequence-2:0);gateway.UntilTime(Clock::now()+8ms);
+    }
+    every250(flowFrom+300ms,Clock::now(),"while inputs flowed");
+    // The acknowledgement stands still while snapshots still arrive.
+    window();
+    const auto stalledFrom=Clock::now();
+    const auto stalledAt=sequence>2?sequence-2:0;
+    while(Clock::now()<stalledFrom+1300ms){gateway.Snapshot(stalledAt);gateway.UntilTime(Clock::now()+16ms);}
+    Require(connection.State().phase==ConnectionPhase::Playing && !connection.State().interrupted,"the stalled acknowledgement interrupted the connection");
+    every250(stalledFrom+300ms,Clock::now(),"while the acknowledgement stood still");
+    connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
+    gateway.ResetAck();
+}
+// network-architecture §4 (v7.1 contract-readers, K7): the A-class lines one
+// RunOutage writes, from the call sites the session runs through (their
+// builders have goldens in ConnectionLivenessTests and ClockSyncTests): an
+// interruption at T_int, the clock window ended for the resume, the resume with
+// its gap and epochs, the second interruption, and at close the summary.
+void RequireOutageLines(const std::string& captured) {
+    std::vector<std::string> lines;
+    std::istringstream text(captured);
+    for(std::string line;std::getline(text,line);)
+        if(line.find("[ObjectFPS/PvP] connection ")!=std::string::npos || line.find("reason=resume")!=std::string::npos)
+            lines.push_back(line);
+    const auto value=[](const std::string& line,const std::string& key) {
+        const auto at=line.find(" "+key+"=");
+        Require(at!=std::string::npos,"an outage line lacks "+key+": "+line);
+        return line.substr(at+key.size()+2,line.find(' ',at+key.size()+2)-at-key.size()-2);
+    };
+    const auto is=[&](std::size_t index,const std::string& head) {
+        return index<lines.size() && lines[index].find(head)!=std::string::npos;
+    };
+    Require(lines.size()==6,"an outage did not write its six connection lines ("+std::to_string(lines.size())+")");
+    Require(is(0,"[ObjectFPS/PvP] connection interrupted version=1 player=1 ") && is(1,"clock sync player=1 ") &&
+        is(2,"[ObjectFPS/PvP] connection resumed version=1 player=1 ") && is(3,"[ObjectFPS/PvP] connection interrupted version=1 player=1 ") &&
+        is(4,"[ObjectFPS/PvP] connection summary version=1 player=1 ") && is(5,"[ObjectFPS/PvP] connection failed player=1 "),
+        "the outage lines are not interrupted, clock resume, resumed, interrupted, summary, failed");
+    for(const auto index:{std::size_t{0},std::size_t{3}}) {
+        const auto gap=std::stoi(value(lines[index],"gap_ms"));
+        Require(gap>=500 && gap<=520 && value(lines[index],"epoch")=="1","an interrupted line has the wrong gap or epoch: "+lines[index]);
+    }
+    Require(value(lines[1],"final")=="0","the resume did not end the clock window early: "+lines[1]);
+    const auto resumedGap=value(lines[2],"gap_ms");
+    Require(std::stoi(resumedGap)>=1000 && value(lines[2],"epoch_before")=="1" && value(lines[2],"epoch_after")=="1",
+        "the resumed line has the wrong gap or epochs: "+lines[2]);
+    Require(value(lines[4],"interruptions")=="2" && value(lines[4],"max_gap_ms")==resumedGap,
+        "the summary does not count the outage: "+lines[4]);
+}
+// The first worker statistics line counts at least what CheckDroppedDatagrams sent.
+void RequireDroppedCounts(const std::string& captured) {
+    const auto at=captured.find("[ObjectFPS/PvP] worker statistics ");
+    Require(at!=std::string::npos,"no worker statistics line was written");
+    const auto line=captured.substr(at,captured.find('\n',at)-at);
+    const auto count=[&](const std::string& key){
+        const auto found=line.find(" "+key+"=");
+        Require(found!=std::string::npos,"the worker statistics line lacks a dropped-datagram key");
+        return std::stoull(line.substr(found+key.size()+2));
+    };
+    Require(count("unparsed_datagrams")>=3,"unparsed datagrams were not counted");
+    Require(count("early_datagrams")>=2,"datagrams before the Welcome were not counted");
+    Require(count("invalid_snapshot_datagrams")>=2,"invalid snapshots were not counted");
+    Require(count("ignored_snapshot_datagrams")>=1,"snapshots that were not newer were not counted");
+    Require(count("unexpected_kind_datagrams")>=3,"kinds the Gateway does not send were not counted");
+    Require(count("stale_input_windows")>=2,"windows for a replaced authority were not counted");
+}
 bool Acknowledged(const ClientConnection& connection,std::uint64_t sequence) {
     const auto state=connection.State();
     Require(state.error.empty(),"worker connection failed");
@@ -363,13 +535,14 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
         "snapshot lost the hit record");
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
     std::mutex allocatedMutex;std::vector<ActionId> allocated;
-    std::vector<std::jthread> producers;
+    std::vector<std::thread> producers;
     for(unsigned n=0;n<8;++n)producers.emplace_back([&]{
         for(unsigned shot=0;shot<4;++shot) {
             const auto id=connection.SubmitShot(connection.State().snapshot->tick,0,0);
             if(id){std::scoped_lock lock(allocatedMutex);allocated.push_back(*id);}
         }
     });
+    for(auto& producer:producers)producer.join();
     producers.clear();std::sort(allocated.begin(),allocated.end());
     Require(allocated.size()==MaxActionWindow,"concurrent submission lost capacity");
     for(std::size_t n=0;n<allocated.size();++n)Require(allocated[n]==n+1,"action allocation duplicated or skipped an ID");
@@ -412,8 +585,8 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     Require(maxPacketsInSecond<=120,"60+30+Hello exceeded the actual 120-packet session budget");
     // The window above carries resends of one window but no waiting new
     // commands, so the drained input rate is bounded here instead: draining
-    // sends, a full burst, actions with one resend, and Hello.
-    static_assert(InputSendDrainRate+InputSendBurst+(ActionSendRate+1)+2<=120,
+    // sends, a full burst, actions with one resend, and Hello (every 250 ms, D188).
+    static_assert(InputSendDrainRate+InputSendBurst+(ActionSendRate+1)+4<=120,
         "input drain rate exceeds the 120-packet session budget");
     // Reordered results leave an ID-1 hole. Invalid/conflicting batches cannot
     // partially publish ID 1 or retire data which the game has never consumed.
@@ -503,6 +676,8 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
 }
 }
 int main() {
+    ClogCapture capture(std::clog.rdbuf());
+    struct Restore{std::streambuf* previous;~Restore(){std::clog.rdbuf(previous);}} restore{std::clog.rdbuf(&capture)};
     try {
         const auto maximumDatagram=CheckMaximumDatagrams();
         MockGateway gateway;ClientConnection connection;
@@ -510,12 +685,16 @@ int main() {
         try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
-        // First, so a mutant of the outage path fails on the check that guards it:
+        CheckDroppedDatagrams(gateway,connection);
+        CheckHelloCadence(gateway,connection);
+        // Early too, so a mutant of the outage path fails on the check that guards it:
         // the mock sends snapshots only on demand, so the later sections pass
         // through interruptions too.
         // An outage in both directions, then T_max with Welcomes only; the same
         // with an extreme time echo must decide the same (differential oracle).
+        const auto outageFrom=capture.Text().size();
         const auto outage=RunOutage(gateway,connection,false);
+        const auto outageLines=capture.Text().substr(outageFrom);
         Require(outage.interruptedOnTime,"the connection was not interrupted at T_int after the last snapshot");
         Require(outage.trackedLastSnapshot,"the interruption did not count from the last snapshot's arrival");
         Require(outage.keptSession,"an interruption did not keep the session, its window and its actions");
@@ -524,7 +703,10 @@ int main() {
         Require(outage.windowKept,"the worker's window changed across an interruption");
         Require(outage.sequenceKept,"an interruption restarted the transport sequence");
         Require(outage.timedOutOnTime,"a connection without snapshots did not time out at T_max (a Welcome kept it?)");
+        RequireOutageLines(outageLines);
+        const auto extremeFrom=capture.Text().size();
         const auto extreme=RunOutage(gateway,connection,true);
+        RequireOutageLines(capture.Text().substr(extremeFrom));
         Require(extreme==outage && std::abs(extreme.interruptMs-outage.interruptMs)<=RunsToleranceMs &&
             std::abs(extreme.timeoutMs-outage.timeoutMs)<=RunsToleranceMs,"an extreme time echo changed a liveness decision");
         // The later sections read the mock's records from their own session on.
@@ -876,6 +1058,7 @@ int main() {
             }
         }
         connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby && connection.State().error.empty();});
+        RequireDroppedCounts(capture.Text());
         std::cout<<Json{{"passed",true},{"restart_ms",restartMs},{"completed_window_gap_ms",completedWindowGapMs},
             {"partial_ack_gap_ms",partialGapMs},{"unacknowledged_resends_1s",resends},{"fully_acknowledged_60fps_attempts",sixtyAttempts},
             {"token_debt_waits_ms",drainWaits},{"token_debt_publish_intervals_ms",drainIntervals},

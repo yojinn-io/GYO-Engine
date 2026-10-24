@@ -96,6 +96,18 @@ struct WorkerStatisticsWindow final {
     // simulation queues.
     std::uint64_t receivedDatagrams{}, foreignSenderDatagrams{}, undecodableDatagrams{}, staleDatagrams{};
     std::uint64_t sendBlocked{}, snapshotOverflows{}, simulationOverflows{};
+    // v7.1 silent-branch-asserts (D180): datagrams of the session that decode
+    // but change nothing. A payload that does not parse; a Snapshot or results
+    // before the Welcome; a Snapshot with impossible content (zero tick,
+    // sizes, fields, a cursor going back); a valid Snapshot not applied (not
+    // newer, or without the local player before the first); a kind the
+    // Gateway does not send (Hello, Input, Actions).
+    std::uint64_t unparsedDatagrams{}, earlyDatagrams{}, invalidSnapshotDatagrams{}, ignoredSnapshotDatagrams{};
+    std::uint64_t unexpectedKindDatagrams{};
+    // v7.1 client-silent-checks (D183): complete windows the simulation sent
+    // for an authority the worker no longer has (another connection
+    // generation, or an epoch or life the worker's newest snapshot replaced).
+    std::uint64_t staleInputWindows{};
 };
 [[nodiscard]] std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window);
 
