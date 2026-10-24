@@ -6255,6 +6255,86 @@
       "replace": "\t_ = what\n",
       "check": "go",
       "expect": "TestAnAdmittedSequenceThatDoesNotCommitFailsTheRuntime"
+    },
+    {
+      "id": "csc-k2-observe-older-tick",
+      "batch": "v71-client-silent-checks",
+      "what": "The simulation reconciles a state not newer than the last (K2 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "    if (tick <= lastSnapshotTick_) { samples_.clear(); return; }\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "GYO_ASSERT failed: reconciled"
+    },
+    {
+      "id": "csc-k2-invalid-reported-used",
+      "batch": "v71-client-silent-checks",
+      "what": "Reconcile reports an invalid state as used",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return false;",
+      "replace": "        !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return true;",
+      "check": "cpu",
+      "expect": "reports an invalid or older authority state as ignored"
+    },
+    {
+      "id": "csc-k2-older-reported-used",
+      "batch": "v71-client-silent-checks",
+      "what": "Reconcile reports an older state as used",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "         authority.lastResolvedCommand < observation_.lastResolvedCommand))) return false;",
+      "replace": "         authority.lastResolvedCommand < observation_.lastResolvedCommand))) return true;",
+      "check": "cpu",
+      "expect": "reports an invalid or older authority state as ignored"
+    },
+    {
+      "id": "csc-r1-uncounted",
+      "batch": "v71-client-silent-checks",
+      "what": "A window of another generation is dropped uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    if(generation!=impl_->generation.load()){++impl_->staleInputWindows;return;}",
+      "replace": "    if(generation!=impl_->generation.load()){return;}",
+      "check": "worker",
+      "expect": "windows for a replaced authority were not counted"
+    },
+    {
+      "id": "csc-r1-sent",
+      "batch": "v71-client-silent-checks",
+      "what": "A window of another generation is sent",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    if(generation!=impl_->generation.load()){++impl_->staleInputWindows;return;}",
+      "replace": "    if(false){++impl_->staleInputWindows;return;}",
+      "check": "worker",
+      "expect": "a window for a replaced authority was sent"
+    },
+    {
+      "id": "csc-r5-uncounted",
+      "batch": "v71-client-silent-checks",
+      "what": "A window for a replaced epoch or life is dropped uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        ++impl_->staleInputWindows;return;\n    }\n",
+      "replace": "        return;\n    }\n",
+      "check": "worker",
+      "expect": "windows for a replaced authority were not counted"
+    },
+    {
+      "id": "csc-line-drops-key",
+      "batch": "v71-client-silent-checks",
+      "what": "The worker statistics line leaves out stale_input_windows",
+      "file": "apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp",
+      "find": "\n    line << \" stale_input_windows=\" << window.staleInputWindows;",
+      "replace": "",
+      "check": "cpu",
+      "expect": "stale_input_windows"
+    },
+    {
+      "id": "csc-s2-rotation-keeps-old-life",
+      "batch": "v71-client-silent-checks",
+      "what": "The Tick's rotation keeps staging of a replaced life (S2 or A1 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch ||\n                player->lifeGeneration != input->second.lifeGeneration) {",
+      "replace": "            if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch) {",
+      "check": "cpu",
+      "expect": "GYO_ASSERT failed: (submitted|merged.commands.empty)"
     }
   ]
 }
