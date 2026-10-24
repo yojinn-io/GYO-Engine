@@ -81,6 +81,9 @@ func (s *Server) actionPackets(now time.Time) ([]outbound, time.Time, bool) {
 		p.outSequence++
 		packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: adapter.ActionResults, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
 		if err != nil {
+			// A results frame holds at most eight bounded decisions, far below
+			// the datagram limit (ResultsForClient).
+			s.invariantFailed("a results frame does not encode: " + err.Error())
 			continue
 		}
 		packets = append(packets, outbound{peer: p.session.Endpoint(), packet: packet, actionPlayer: p.playerID,
@@ -121,7 +124,9 @@ func (s *Server) receiveActions(p *reservation, h framing.Header, payload []byte
 	}
 	// D-11: decoding succeeded, so the sequence and liveness commit (Admit
 	// found the sequence fresh; stale action packets were dropped there).
-	_ = p.session.CommitSequence(h.Sequence, now)
+	if err := p.session.CommitSequence(h.Sequence, now); err != nil {
+		s.invariantFailed("an admitted actions sequence did not commit: " + err.Error())
+	}
 	// The overflow sample (§4, 33) carries the bounds and count of the
 	// batch's action ids: an ACK-only batch has none (ids 0; the drop ledger
 	// counts the batch itself as its one item).

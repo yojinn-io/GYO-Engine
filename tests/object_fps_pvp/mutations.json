@@ -1510,10 +1510,10 @@
       "batch": "v7-flow",
       "what": "Handed actions are counted only when the sequence commits",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t_ = p.session.CommitSequence(h.Sequence, now)\n\t// The overflow sample",
-      "replace": "\tif p.session.CommitSequence(h.Sequence, now) != nil {\n\t\treturn nil\n\t}\n\t// The overflow sample",
+      "find": "\t\ts.invariantFailed(\"an admitted actions sequence did not commit: \" + err.Error())\n\t}\n\t// The overflow sample",
+      "replace": "\t\ts.invariantFailed(\"an admitted actions sequence did not commit: \" + err.Error())\n\t\treturn nil\n\t}\n\t// The overflow sample",
       "check": "go",
-      "expect": "case handed/actions_commit_failed: counted none"
+      "expect": "final window lacks \" fwd_handed_actions_packets=1 \""
     },
     {
       "id": "v7-flow-fwd-stale-not-exclusive",

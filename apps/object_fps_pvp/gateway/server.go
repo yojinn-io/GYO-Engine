@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -630,6 +631,9 @@ type queuedControl struct {
 func (s *Server) sendControl(p *reservation, kind uint16, message proto.Message) {
 	payload, err := proto.Marshal(message)
 	if err != nil {
+		// Strings were UTF-8-validated when the runtime message was read; the
+		// other fields are numbers or constants.
+		s.invariantFailed("a control message does not marshal: " + err.Error())
 		return
 	}
 	select {
@@ -646,6 +650,10 @@ func (s *Server) controlPacket(c queuedControl) (outbound, bool) {
 	c.p.outSequence++
 	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: c.kind, SessionID: c.p.session.ID, Sequence: c.p.outSequence}, c.payload)
 	if err != nil {
+		// Every control fits: a Welcome by ReadyFitsWelcome, a join_rejected
+		// reason by the size check where the JoinResult is read, the other
+		// errors are constant.
+		s.invariantFailed("a control packet does not encode: " + err.Error())
 		return outbound{}, false
 	}
 	return outbound{peer: c.p.session.Endpoint(), packet: packet, player: c.p.playerID,
@@ -660,10 +668,23 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 		return
 	}
 	if result := e.GetJoinResult(); result != nil {
+		// A rejection's reason travels to the Client in an Error control: it
+		// must fit one datagram (C1).
+		if proto.Size(&client.Error{Code: "join_rejected", Message: result.Reason}) > framing.MaxDatagram-framing.HeaderSize {
+			s.runtimeFailed(protocolError{errors.New("join result reason exceeds the datagram limit")})
+			return
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		p := s.players[result.PlayerId]
-		if p == nil || p.phase != joining {
+		if p == nil {
+			// The player left or timed out while its Join was in flight.
+			return
+		}
+		if p.phase != joining {
+			// The Gateway sends one Join per player, at its first Hello: a
+			// second result is an IPC contract violation (C2).
+			go s.runtimeFailed(protocolError{fmt.Errorf("join result for player %d, which is not joining", p.playerID)})
 			return
 		}
 		if !result.Accepted {
@@ -722,6 +743,9 @@ func (s *Server) runtimeMessage(e *runtime.RuntimeEnvelope) {
 			select {
 			case s.snapshotOut <- frame:
 			default:
+				// The slot was just drained and only this reader goroutine
+				// fills it.
+				s.invariantFailed("the snapshot slot was refilled while the runtime reader held it")
 			}
 		}
 		return
@@ -853,13 +877,17 @@ func (s *Server) snapshotForPeer(remaining []uint64, frame snapshotFrame) (snaps
 	// This player's hold: from reading the IPC frame to this write (pv7 §5).
 	hold := dwellMicros(frame.read, time.Now())
 	frame.snapshot.GatewayHoldUs = &hold
+	// runtimeMessage marshalled this snapshot with the widest hold and checked
+	// its size; this hold is no wider, so neither step can fail here.
 	payload, err := proto.Marshal(frame.snapshot)
 	if err != nil {
+		s.invariantFailed("a client snapshot does not marshal: " + err.Error())
 		return frame, outbound{}
 	}
 	p.outSequence++
 	packet, err := framing.EncodeDatagram(framing.Header{Version: adapter.ClientVersion, Type: adapter.Snapshot, SessionID: p.session.ID, Sequence: p.outSequence}, payload)
 	if err != nil {
+		s.invariantFailed("a client snapshot does not encode: " + err.Error())
 		return frame, outbound{}
 	}
 	return frame, outbound{peer: p.session.Endpoint(), packet: packet, player: p.playerID,
@@ -1085,6 +1113,18 @@ func (s *Server) remove(p *reservation) {
 	delete(s.sessions, p.session.ID)
 	delete(s.requests, p.requestID)
 }
+
+// invariantFailed reports a broken internal invariant of the Gateway, a
+// Programmer Error (docs/architecture/error-handling.md; D180 (g2)): the
+// runtime fails as it does for a protocol error, so the room becomes
+// unavailable instead of going on with a silently dropped packet. The log
+// line is "runtime disconnected reason=other error=\"gateway invariant
+// failed: ...\"". The failure runs on its own goroutine, so callers may hold
+// s.mu (runtimeFailed takes it, and calls sendControl).
+func (s *Server) invariantFailed(what string) {
+	go s.runtimeFailed(fmt.Errorf("gateway invariant failed: %s", what))
+}
+
 func (s *Server) runtimeFailed(err error) {
 	s.mu.Lock()
 	if !s.available {
@@ -1120,7 +1160,9 @@ func (s *Server) forwardInput(p *reservation, in *runtime.PlayerInput, sequence 
 	// Admit and CommitSequence both run under s.mu and Admit found this
 	// sequence fresh, so the commit cannot fail.
 	if !stale {
-		_ = p.session.CommitSequence(sequence, now)
+		if err := p.session.CommitSequence(sequence, now); err != nil {
+			s.invariantFailed("an admitted input sequence did not commit: " + err.Error())
+		}
 	}
 	e := s.datagram
 	e.epoch, e.life = in.MovementEpoch, in.LifeGeneration
