@@ -50,7 +50,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
   - outage-resync（PR #90，已合併）取代了 after-re-evaluate 的 `substitution-single-store`，並把 `wake-reconnect` 的「短於 T_max 的睡眠＝中斷」（w1）併進來；其餘的 wake-reconnect 取消（D182）。
-  - 進行中與未開始（after-re-evaluate，D159、D181、D182）：系統與引擎的 `silent-branch-asserts`（PR #95，L1 待確認）、`client-silent-checks`、`cxx-flag-removal`、`rebind-on-new-port`；觀測工具的 `contract-readers`、`trace-no-overwrite`、`analyzer-converge`；測試的 `token-tests`、`client-path-tests`；發行的 `windows-long-path`、`quick-close`、`lan15-windows`。D159 的三條 PR 線中，「系統其餘＋觀測＋測試」是 PR #95，「發行」還沒開。
+  - 未開始（after-re-evaluate，D159、D181、D182、D186）：觀測工具的 `contract-readers`（含 K7）、`trace-no-overwrite`（含 K8）、`analyzer-converge`；測試的 `token-tests`、`client-path-tests`（含 K9）、`event-watch-overlap`（K11）；發行的 `windows-long-path`、`quick-close`、`lan15-windows`（含 K10）。K12 的去處待定。系統與引擎的 4 批已在 PR #95 完成。D159 的三條 PR 線中，「系統其餘＋觀測＋測試」是 PR #95，「發行」還沒開。
   - 記錄器分支：2026-10-24 經 PR #93 合進 master（`489905d`），`worker-probe-repair` 的修正（`d2844a5`）也一起進了 master。之後本文件在 outage-resync 線上更新，隨 PR #90 合併。
   - 不做：INVENTORY 的 G2（D159）。
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
