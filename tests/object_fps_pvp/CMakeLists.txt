@@ -266,6 +266,10 @@ add_test(NAME "${GYO_CURRENT_APP}.client_delay_runner"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_client_delay.py")
 set_tests_properties("${GYO_CURRENT_APP}.client_delay_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 # observability-tools OT-2: late corrections counted as increments, the two sources cross-checked.
+# v7.1 outage-resync resync-l2-l3: the outage injection relay and its evidence checks.
+add_test(NAME "${GYO_CURRENT_APP}.outage_runner"
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_run_outage.py")
+set_tests_properties("${GYO_CURRENT_APP}.outage_runner" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
 add_test(NAME "${GYO_CURRENT_APP}.late_count"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_late_count.py")
 set_tests_properties("${GYO_CURRENT_APP}.late_count" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 30)
