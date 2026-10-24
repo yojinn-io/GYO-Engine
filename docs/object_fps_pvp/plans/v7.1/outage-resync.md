@@ -44,6 +44,7 @@
 - 2026-10-24：判定變更 J-A～J-C 與 L2 宣告草案核准（D176）。觸發 L1，準備 L2。
 - 2026-10-24：L1（run 40052105536）的四平台 L1 job 成功；Windows 的 toolchain Quick acceptance 有一個 Engine 測試失敗（`SdlLogBridge keeps every line under concurrent logging`），推論是 Test 的競態，和本線無關。L2 工具已備好（D45 檢查後的第 2 版宣告），等你確認第 6 節的修訂後開跑。
 - 2026-10-24：第 6 節第 2 版確認（D177），L2 開跑（檔位 medium）。
+- 2026-10-24：`retention-600` 的 L2 通過，9／9 P（[判定變更文件第 7 節](retention-600-judgment-change.md)）。L1 的 Windows Engine 測試失敗由 PR #91 修正（master `253808a`）。下一批 `client-interrupted`（high，計時與恢復路徑局部 xhigh）。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 

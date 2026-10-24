@@ -151,3 +151,23 @@
   - resyncs=1 → FLAG。
   - 副本在 `judge-tamper/`。
 - **試跑**（探索用，不算受入判定）：x1、ramp、gateway-250ms 各 1 次，新 judge 都判 P。
+
+## 7. L2 的結果（2026-10-24，session `pvp-v71-retention-600-l2-20261024`）
+
+**通過**：9／9 都是 P。沒有 E、沒有 FLAG，不需要補跑。summary.json 的 passed 為 true，stopped 為 null。
+
+| 項目 | S1、S2、J5a | S3（late_first，player 1／2） | resyncs／late_beyond_no／clamped | 換 epoch（只記錄） | Late 決定（只記錄） |
+|---|---|---|---|---|---|
+| x1 × 3 | 全部 passed（帶 `--injection`） | 71／71、70／70、70／71，等式都成立 | 都是 0 | 每次 starvation 4、backlog 1、life_respawn 1 | 11、10、10 |
+| ramp × 3 | 全部 passed（帶 `--injection`） | 55／55、56／55、55／55 | 都是 0 | 每次 starvation 4、backlog 1、life_respawn 1 | 9、8、8 |
+| gateway-250ms × 3 | 全部 passed | 11／10、12／10、11／11 | 都是 0 | 無 | 0 |
+
+- **runtime**：每次 end 行都是 reason=signal、exit_code=0。
+- **runner 自己的判定**：全部 passed。
+- **phase_samples_unmatched**：都是 0。player 0 的 late_first 與 slack_late 都是 0。
+- **和語料的比較**（只記錄）：
+  - x1、ramp 的換 epoch 組合（starvation 4、backlog 1），和 d44 判定工具記錄的 edge-input L2 所有 x1／ramp 跑次（`DELAY_IN_WINDOW`）相同。
+  - resyncs、late_beyond_no、phase_samples_unmatched 在語料裡沒有基準，因為那時還沒有這些行。
+- **意義**：這是不退步的紀錄。P 不能當作 retention-600 行為改變的證據，那由第 1、2 節的測試證明。
+- **證據**：`build/target/_build/test/logs/pvp-v71-retention-600-l2-20261024/`（`summary.json`、`progress.jsonl`、`files.sha256`、各項的 `*-judge.json`）。
+
