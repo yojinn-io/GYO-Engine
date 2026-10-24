@@ -191,6 +191,14 @@ class QuadCommandTests(Corpora):
         self.assertEqual(result['commands'], MAX_PLAYERS * DURATION * 60)
         self.assertEqual(tuple(result), quad.ROOM_KEYS)
 
+    def test_any_non_match_trace_is_a_client_trace(self):
+        # Room runs name their Client traces bots-commands.jsonl or gui-commands.jsonl, not the two-Client names.
+        directory = self.four_players()
+        (directory / 'clients-commands.jsonl').rename(directory / 'bots-commands.jsonl')
+        result = room_form(directory)
+        self.assertNotIn('Missing Match or Client trace', result['errors'])
+        self.assertTrue(result['passed'], result['errors'])
+
     def test_a_silent_player_fails(self):
         result = room_form(self.four_players(players=range(1, MAX_PLAYERS + 2)))
         self.assertIn(reference.evidence.EVERY_PLAYER_ERROR, result['errors'])
