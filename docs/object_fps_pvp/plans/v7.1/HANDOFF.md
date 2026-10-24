@@ -43,7 +43,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：`outage-resync` 的 `retention-600`：判定變更 J-A～J-C（§14.4，獨立核對已做）與 L2 不退步紀錄的宣告草案（本線分支的 `retention-600-judgment-change.md`）。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
+- **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D175）。已完成到 `match-resync`；`retention-600` 的程式完成，等核准後跑 L1 與 L2。之後是 `client-interrupted`、`identity-rebind`、`resync-l2-l3`、`line-close`。本線的細節見該分支計畫的「現況」一節。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
@@ -158,6 +158,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D173 | （2026-10-23）`outage-resync` 關卡 `gate-characterize`（舊稱 G1）：T_int＝0.5 s（clean 語料 snapshot 最大間隔 0.119 s）；N_o＝20 Tick（語料晚到最大 13.3 Tick，可抓到延遲 0.5 s 的部分送達）；D-15（只有上行中斷後的 12 命令領先量要 0.5～1 s 才由 Backlog 清掉）選 (a) 只記錄、交給 v8 B6，契約寫成 P2 的已知例外。特性報告：本線分支的 `outage-characterize-report.md` | 使用者：「G1 照建議：T_int 0.5 s、N_o 20 Tick、D-15 選 (a) 只記錄、交給 B6。L1 確認後開始 resync-contract。」 |
 | D174 | （2026-10-23）`outage-resync` 關卡 `gate-contract` 核准：`resync-contract` 的條文照現狀（network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants、protocol-v7 §2、log-contract §1.4、ingress README；含 xhigh 審查 3 輪的修訂：恢復時權威 < tip 只重設相位擷取、N_o 以時間判斷與 `late_beyond_no`、最後驗證時刻、P2 的第二個例外等）。開始 `drop-counters` | 使用者：「gate-contract 核准目前的條文（含三輪審查的修訂）。開始 drop-counters。」 |
 | D175 | （2026-10-23）`outage-resync` 的 `single-store-refactor` 之後：network-architecture §7「被替代序號的單一紀錄」的權威名稱照實作由 SlackTrack 改為 `MatchSubstitutionRecords`（MatchRuntimeHost 的 `substitutions_`），帳本附欄的列舉照實作補齊；意圖不變。`match-resync` 在 L1 通過後以 xhigh 開始 | 使用者：「核准 §7 owner 改名為 MatchSubstitutionRecords。L1 通過後用 xhigh 開始 match-resync。」 |
+| D176 | （2026-10-24）`outage-resync` 的 `retention-600`：核准判定變更 J-A（稀疏替代的守衛：600 序號以外的副本不再 Resync）、J-B（紀錄的單元測試換成新規則）、J-C（`v7-flow-ledger-drives-sample` 的改寫），以及 L2 不退步紀錄的宣告草案（x1、ramp、gateway-250ms 各 3 次，只跑頭；S1、S2、J5a、S3 與 runtimeFailed 0，0 容許，不重試）。先觸發 L1，再準備 L2 | 使用者：「核准 retention-600 的判定變更 J-A～J-C 與 L2 不退步紀錄的宣告草案。先觸發 L1，再準備 L2。」 |
 
 ## 規劃紀錄（記錄器）
 
