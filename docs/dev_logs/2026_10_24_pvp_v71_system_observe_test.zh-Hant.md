@@ -12,8 +12,8 @@
 | `client-silent-checks` | high | 4～6 | 完成（D183） |
 | `cxx-flag-removal` | high | 3～4 | 完成（L1 run 40110961077 成功） |
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 完成（D181 新增；D187 r1＋k3，審查後 D188 改為 Hello 一律 250 ms；L2 12／12 P） |
-| `contract-readers` | medium | 3～4（K7 另加 2～3） | 實作完成，L1 待確認（D181 併入 K7） |
-| `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | D181 併入 K8 |
+| `contract-readers` | medium | 3～4（K7 另加 2～3） | 完成（D181 併入 K7） |
+| `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | 實作完成，L1 待確認（D181 併入 K8；D191 T2） |
 | `analyzer-converge` | high | 5 | |
 | `token-tests` | high | 4～6 | |
 | `client-path-tests` | high | 3～4（K9 另加 2～3） | D181 併入 K9 |
@@ -178,3 +178,30 @@ INVENTORY 的 N-compare-reports-untracked、N-host-lock-keys-uncontracted，加�
 
 - 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49（多了 compare_reports）；worker 驗收連跑 3 次通過。
 - **突變**（D184 的挑選）：新增 6 個（compare_reports 把每個跑次都判相等、忽略違規；K7 的中斷行、恢復行、時鐘 resume 行不寫、摘要不計中斷），6／6 killed；沒有 find 落在改動範圍或斷言附近被改過的既有突變。
+
+## trace-no-overwrite：重啟不覆寫 trace（D191）、K8
+
+INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
+
+### 做了什麼
+
+- **檔名規則（T2，D191）**：新增產品內的 `TracePaths.hpp`。`--movement-trace` 指定的檔案、或跟著它決定檔名的 `-ingress.jsonl`、`-shots.jsonl` 已經存在時，改用下一個沒用過的編號名（`match-commands.jsonl` → `match.2-commands.jsonl` …；其他名字把編號插在副檔名前），三個檔一起換號；`--ingress-trace` 明確指定時也照同一規則。無法檢查存在與否的路徑當成可用，讓開檔時大聲失敗。Match 與 Client 都用；啟動時把實際檔名寫進 B 級行（Match 的 `trace files`、Client 的 `PvP client trace file`）。
+- **K8**：`LocalPlayerPrediction::Resume` 的 tip 分支也寫 `phase_path=resume_reset` 的相位紀錄，和 tip 之下的分支共用同一段（內容與順序不變），寫在播種的命令之前。
+- 文件：log-contract（重啟時的檔名、B 級行）、v7 的 LAN 手冊（兩處「手動改名」加註 D191 之後不必）。
+
+### 驗證
+
+- 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49；目錄、日誌契約、diagnostic_isolation 通過。
+- 單元測試：編號名的 4 種形式；第一次用原名、原名存在用 `.2`、`.2` 的衍生檔存在就用 `.3`；選名不會截斷舊檔。tip 恢復的測試加上「先寫 resume_reset 紀錄，cursor 超過 tip 時不寫」。
+- **實機**：同一個 `--movement-trace` 把 Match 啟動、停止兩次：第二次寫成 `match.2-commands.jsonl`、`match.2-ingress.jsonl`、`match.2-shots.jsonl`，第一次的三個檔都保留，每個檔各有一個 `trace_end`；`match.log` 兩行 `trace files` 記下實際檔名。
+- **突變**（D184 的挑選）：outage-resync 的 `ci-resume-always-seeds`、`ci-resume-no-reacquire` 的 find 落在 K8 改到的行，照原意改指新程式碼並重跑；新增 4 個（重用既有檔、忽略衍生檔、編號放錯位置、tip 恢復不寫紀錄）。6／6 killed。
+
+### Architecture Delta（AGENTS §3：Runtime 與 Editor／工具之間的 Data Contract 變更）
+
+1. 需要它的項目：N-trace-overwrite-on-restart（LAN 場次中途重啟 Match 會截斷前一段 trace，lan15-windows 之前會碰到）。
+2. 現在的問題：重啟時 `TraceSink` 以截斷模式開同一個檔名。
+3. 變化的邊界：trace 檔名的規則（log-contract §1.2 的紀錄檔）。檔案格式、檔頭、一檔一段不變。
+4. 影響：object_fps_pvp 的 Match 與 Client；讀者（`command_evidence.py` 等）不改，L2 每輪用新資料夾，不受影響。Engine 的 `TraceSink` 不變。
+5. 依賴方向：不變（規則在產品內）。
+6. Ownership：不變（檔名規則屬於產品的 trace 輸出）。
+7. 更小的做法：T3（已存在就拒絕啟動）較小，但 LAN 場次中途重啟要操作者現場打新檔名；使用者選 T2。

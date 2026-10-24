@@ -103,7 +103,7 @@ D180 的補充要求在 `lan15-windows` 之前處理已知問題。整理出的�
 | K5 | 換來源埠時，改綁前 snapshot 仍送舊埠，改綁要等下一個 Hello（約 2 s） | outage-resync 的 dev_log（只記錄的 code smell） | `rebind-on-new-port`（先開關卡） |
 | K6 | Hello 間隔 1 s 造成的改綁空窗（契約的安全取捨） | 同上 | `rebind-on-new-port` |
 | K7 | 寫出新 A 級行的呼叫點沒有執行期守衛 | 同上（m6 的另一半） | `contract-readers`（完成：worker 驗收的 `RequireOutageLines`） |
-| K8 | 在 tip 恢復時的 SeedLead 不留移動紀錄 | 同上（m7） | `trace-no-overwrite` |
+| K8 | 在 tip 恢復時的 SeedLead 不留移動紀錄 | 同上（m7） | `trace-no-overwrite`（完成：tip 恢復也寫 `resume_reset`） |
 | K9 | 握手期的暫時性錯誤、直接超過 T_max 這兩個新分支沒有執行期測試 | 同上 | `client-path-tests` |
 | K10 | 凍結的 `run_case` 在 probe 失敗後立刻關服務，L2 看不到 Gateway 端的 session 到期 | 同上 | `lan15-windows` 的工具準備 |
 | K11 | Engine 的 `EventWatchTests.cpp:300` 靠時序碰運氣（200 輪中至少一次在回呼執行時解構），L1 偶發失敗 | client-silent-checks 的 L1（run 40107059342，macos-arm64） | 新批 `event-watch-overlap`，接在 `client-path-tests` 之後（D186） |
