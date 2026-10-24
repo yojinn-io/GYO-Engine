@@ -230,9 +230,23 @@ def recovery_actual_intervals(resolutions, generated, player_ids, release_ns):
     return result
 
 
-def analyze_commands(directory, *, enforce=True):
+# The two-Client analyzers expect both players; a room-capacity run (players=None) every declared one.
+TWO_PLAYER_ERROR = 'Expected both players to generate commands across the measurement window'
+EVERY_PLAYER_ERROR = 'Expected every player to generate commands across the measurement window'
+
+
+def analyze_commands(directory, *, enforce=True, players=2, write=True):
+    """The command stage of one run directory.
+
+    players: the room the run must show. 2 (the two-Client analyzers): exactly two players and the named Client
+    trace files. None (room-capacity runs, quad_evidence; v7.1 analyzer-converge, D192): every player the timing
+    declares, any non-Match trace counts as a Client trace, and a fault recovery is refused. write: also write
+    command-evidence.json into the directory.
+    """
     directory = Path(directory)
     start, end, timing = measurement_window(directory)
+    if players is None and timing.get('release_ns', 0):
+        raise ValueError('quad command evidence has no fault recovery; use the two-Client analyzers')
     generated, all_generated, sent, sent_started, accepted, resolved = {}, {}, {}, {}, {}, {}
     sources, event_counts = Counter(), Counter()
     errors, trace_files, gaps, resets = [], [], [], []
@@ -322,8 +336,11 @@ def analyze_commands(directory, *, enforce=True):
         except ValueError as exc:
             errors.append(str(exc))
         trace_files.append({'name': path.name, 'events': count, 'complete': ended, 'schema_version':schema})
+    # A room-capacity run: any non-Match trace is a Client trace (the bots' shared file, a GUI participant's own).
+    clients = (lambda name: not name.startswith('match')) if players is None else (
+        lambda name: name in ('clients-commands.jsonl','create-commands.jsonl','join-commands.jsonl'))
     if not trace_files or not any(p['name'].startswith('match') for p in trace_files) or not any(
-            p['name'] in ('clients-commands.jsonl','create-commands.jsonl','join-commands.jsonl') for p in trace_files):
+            clients(p['name']) for p in trace_files):
         errors.append('Missing Match or Client trace')
     def reset_reason(reset):
         # Schema 1 traces carry no reason; never guess one.
@@ -375,8 +392,8 @@ def analyze_commands(directory, *, enforce=True):
                 missing += 1
     n = len(generated)
     expected_players = timing.get('player_ids', sorted(per_player))
-    if len(expected_players) != 2 or set(expected_players) != set(per_player):
-        errors.append('Expected both players to generate commands across the measurement window')
+    if (players is not None and len(expected_players) != players) or set(expected_players) != set(per_player):
+        errors.append(TWO_PLAYER_ERROR if players == 2 else EVERY_PLAYER_ERROR)
     expected_count = (end-start) * 60 / 1e9
     # Two boundary steps per run. A LifeRespawn starts a new fixed-step phase (up to one step) and the
     # new epoch's first phase correction moves it up to MovementPhaseMaximumCorrectionSeconds (two ticks).
@@ -422,7 +439,9 @@ def analyze_commands(directory, *, enforce=True):
     if frames_file.exists():
         with frames_file.open() as frames:
             for frame in csv.DictReader(frames):
-                if max(float(frame['remote_age_a']),float(frame['remote_age_b']))>=.1:
+                # Every remote-age column (a two-Client run writes remote_age_a and remote_age_b; quad none).
+                ages=[float(value) for column,value in frame.items() if column.startswith('remote_age_')]
+                if ages and max(ages)>=.1:
                     remote_stale_frames+=1
     disturbed = bool(remote_stale_frames or gaps or receipt_gaps or timing.get('gaps_100ms') or timing.get('injected') or
         timing.get('history_overflows') or transport_max_age >= .1)
@@ -464,7 +483,8 @@ def analyze_commands(directory, *, enforce=True):
             'roles': {role: frame_interval_statistics(values) for role, values in sorted(presented.items())}},
         'quantile': 'nearest-rank; missing/substituted actual executions are positive infinity (JSON null)',
         'clock_scope':'same-host steady clock; not input-to-photon'}
-    (directory/'command-evidence.json').write_text(json.dumps(result,indent=2)+'\n')
+    if write:
+        (directory/'command-evidence.json').write_text(json.dumps(result,indent=2)+'\n')
     return result
 
 if __name__ == '__main__':

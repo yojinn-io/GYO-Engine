@@ -1,7 +1,7 @@
-"""Room-capacity evidence: value-by-value cross-validation with command_evidence and the quad verdicts.
+"""Room-capacity evidence: the room form of command_evidence (D192) and the quad verdicts.
 
-The two-player corpora come from test_command_evidence's own builders, so both analyzers read
-exactly the traces that analyzer's tests already pin down.
+The two-player corpora come from test_command_evidence's own builders, so both forms read exactly the
+traces that analyzer's tests already pin down.
 """
 import copy
 import csv
@@ -128,12 +128,23 @@ TWO_PLAYER_CORPORA = {
 }
 
 
-class CrossValidationTests(Corpora):
-    def test_every_two_player_corpus_matches_command_evidence_value_by_value(self):
+def room_form(directory, **options):
+    """The command stage as quad_evidence runs it (every declared player, nothing written)."""
+    return reference.evidence.analyze_commands(directory, players=None, write=False, **options)
+
+
+class RoomFormTests(Corpora):
+    """v7.1 analyzer-converge (D192): one analyzer; on two-player runs its room form agrees with its two-Client form
+    value by value, except that the two-Client form names both players."""
+    def test_every_two_player_corpus_agrees_with_the_two_client_form(self):
         for name, options in TWO_PLAYER_CORPORA.items():
             with self.subTest(corpus=name):
                 directory = self.corpus(**options)
-                self.assertEqual(quad.cross_validate(directory), {})
+                two = reference.evidence.analyze_commands(directory, enforce=False)
+                room = room_form(directory, enforce=False)
+                two['errors'] = [reference.evidence.EVERY_PLAYER_ERROR if error == reference.evidence.TWO_PLAYER_ERROR
+                                 else error for error in two['errors']]
+                self.assertEqual(room, two)
 
     def test_the_corpora_cover_passing_and_failing_runs(self):
         outcomes = {name: reference.evidence.analyze_commands(self.corpus(**options), enforce=False)['passed']
@@ -143,27 +154,25 @@ class CrossValidationTests(Corpora):
         self.assertIn(True, outcomes.values())
         self.assertGreaterEqual(list(outcomes.values()).count(False), 5)
 
-    def test_the_comparison_reports_a_difference(self):
-        # Three producers: command_evidence names both players, the N-player form accepts them.
+    def test_three_producers_fail_the_two_client_form_only(self):
         directory = self.corpus(players=(1, 2, 3))
         timing = json.loads((directory / 'timing.json').read_text())
         timing['player_ids'] = [1, 2, 3]
         (directory / 'timing.json').write_text(json.dumps(timing))
-        self.assertIn('errors', quad.cross_validate(directory))
+        self.assertIn(reference.evidence.TWO_PLAYER_ERROR,
+                      reference.evidence.analyze_commands(directory, enforce=False)['errors'])
+        self.assertNotIn(reference.evidence.EVERY_PLAYER_ERROR, room_form(directory, enforce=False)['errors'])
 
-    def test_a_recorded_gameplay_run_is_compared_on_a_copy_with_the_gameplay_window(self):
+    def test_the_room_form_writes_nothing(self):
         directory = self.corpus()
-        (directory / 'timing.json').unlink()
-        # gameplay_evidence's fixed window [start + 1 s, start + 15 s); both analyzers judge the same window.
-        (directory / 'action-client.json').write_text(json.dumps({'start_ns': START - SECOND, 'player_ids': [1, 2]}))
-        self.assertEqual(quad.cross_validate_recorded(directory), {})
-        self.assertEqual(sorted(path.name for path in directory.iterdir()),
-                         ['action-client.json', 'clients-commands.jsonl', 'match-commands.jsonl'])
+        before = sorted(path.name for path in directory.iterdir())
+        room_form(directory)
+        self.assertEqual(sorted(path.name for path in directory.iterdir()), before)
 
     def test_fault_recovery_is_left_to_the_two_client_analyzers(self):
         directory = self.corpus(release=START + SECOND)
         with self.assertRaises(ValueError):
-            quad.command_metrics(directory)
+            room_form(directory)
 
 
 class QuadCommandTests(Corpora):
@@ -173,18 +182,21 @@ class QuadCommandTests(Corpora):
         return self.corpus(every_player, players=tuple(range(1, MAX_PLAYERS + 1)),
                            **{key: value for key, value in options.items() if key != 'players'})
 
-    def test_a_full_room_at_60_hz_passes(self):
-        result = quad.command_metrics(self.four_players())
+    def test_a_full_room_at_60_hz_passes_in_the_quad_shape(self):
+        # D192 acceptance (relayed from the user): the converged analyzer does not fall back to two players; the
+        # room size comes from the declared player_ids. The protocol's limit stays MaxPlayers = 4.
+        result = quad.room_shape(room_form(self.four_players()))
         self.assertTrue(result['passed'], result['errors'])
         self.assertEqual(result['players'], MAX_PLAYERS)
         self.assertEqual(result['commands'], MAX_PLAYERS * DURATION * 60)
+        self.assertEqual(tuple(result), quad.ROOM_KEYS)
 
     def test_a_silent_player_fails(self):
-        result = quad.command_metrics(self.four_players(players=range(1, MAX_PLAYERS + 2)))
-        self.assertIn(quad.EVERY_PLAYER_ERROR, result['errors'])
+        result = room_form(self.four_players(players=range(1, MAX_PLAYERS + 2)))
+        self.assertIn(reference.evidence.EVERY_PLAYER_ERROR, result['errors'])
 
     def test_half_rate_production_fails(self):
-        self.assertFalse(quad.command_metrics(self.four_players(rate=30), enforce=False)['passed'])
+        self.assertFalse(room_form(self.four_players(rate=30), enforce=False)['passed'])
 
 
 QUAD_SPAWNS = [[2.0, 0.0, 2.0], [8.0, 0.0, 8.0], [2.0, 0.0, 8.0], [8.0, 0.0, 2.0]]

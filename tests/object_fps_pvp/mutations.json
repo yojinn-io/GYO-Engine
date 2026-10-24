@@ -512,11 +512,11 @@
       "id": "16-quad-two-player-error",
       "batch": "16",
       "what": "The N-player command stage renames no two-player error",
-      "file": "build/acceptance/object_fps_pvp/quad_evidence.py",
-      "find": "    expected_errors = [EVERY_PLAYER_ERROR if error == TWO_PLAYER_ERROR else error for error in reference['errors']]",
-      "replace": "    expected_errors = list(reference['errors'])",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "        errors.append(TWO_PLAYER_ERROR if players == 2 else EVERY_PLAYER_ERROR)",
+      "replace": "        errors.append(TWO_PLAYER_ERROR)",
       "check": "quad_evidence",
-      "expect": "test_every_two_player_corpus_matches_command_evidence_value_by_value"
+      "expect": "test_a_silent_player_fails|test_every_two_player_corpus_agrees"
     },
     {
       "id": "17-arena-any-version",
@@ -6488,6 +6488,66 @@
       "replace": "        SeedLead(authority);\n        return;",
       "check": "cpu",
       "expect": "seeds a new lead and one that reseeds anyway"
+    },
+    {
+      "id": "ac-room-two-players",
+      "batch": "v71-analyzer-converge",
+      "what": "The analyzer falls back to two players",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    if (players is not None and len(expected_players) != players) or set(expected_players) != set(per_player):",
+      "replace": "    if len(expected_players) != 2 or set(expected_players) != set(per_player):",
+      "check": "quad_evidence",
+      "expect": "test_a_full_room_at_60_hz_passes_in_the_quad_shape"
+    },
+    {
+      "id": "ac-room-named-clients",
+      "batch": "v71-analyzer-converge",
+      "what": "The room form needs the two-Client trace names",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    clients = (lambda name: not name.startswith('match')) if players is None else (",
+      "replace": "    clients = (lambda name: name in ('clients-commands.jsonl','create-commands.jsonl','join-commands.jsonl')) if players is None else (",
+      "check": "quad_evidence",
+      "expect": "test_"
+    },
+    {
+      "id": "ac-room-writes",
+      "batch": "v71-analyzer-converge",
+      "what": "The room form writes command-evidence.json",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    if write:\n",
+      "replace": "    if True:\n",
+      "check": "quad_evidence",
+      "expect": "test_the_room_form_writes_nothing"
+    },
+    {
+      "id": "ac-room-recovery-accepted",
+      "batch": "v71-analyzer-converge",
+      "what": "The room form accepts a fault recovery",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    if players is None and timing.get('release_ns', 0):",
+      "replace": "    if False and timing.get('release_ns', 0):",
+      "check": "quad_evidence",
+      "expect": "test_fault_recovery_is_left_to_the_two_client_analyzers"
+    },
+    {
+      "id": "ac-shape-players-wrong",
+      "batch": "v71-analyzer-converge",
+      "what": "room_shape reports the commands, not the room size",
+      "file": "build/acceptance/object_fps_pvp/quad_evidence.py",
+      "find": "    shaped = dict(commands, players=len(commands['production_allowance_steps']))",
+      "replace": "    shaped = dict(commands, players=commands['commands'])",
+      "check": "quad_evidence",
+      "expect": "test_a_full_room_at_60_hz_passes_in_the_quad_shape"
+    },
+    {
+      "id": "ac-frames-first-column",
+      "batch": "v71-analyzer-converge",
+      "what": "Only the first remote-age column counts",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "                if ages and max(ages)>=.1:",
+      "replace": "                if ages and ages[0]>=.1:",
+      "check": "command_evidence",
+      "expect": "remote|test_"
     }
   ]
 }
