@@ -13,8 +13,8 @@
 | `cxx-flag-removal` | high | 3～4 | 完成（L1 run 40110961077 成功） |
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 完成（D181 新增；D187 r1＋k3，審查後 D188 改為 Hello 一律 250 ms；L2 12／12 P） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | 完成（D181 併入 K7） |
-| `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | 完成（D181 併入 K8；D191 T2） |
-| `analyzer-converge` | high | 5 | 完成（D192） |
+| `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | 完成（D181 併入 K8；D191 T2；L1 run 40123957938） |
+| `analyzer-converge` | high | 5 | 完成（D192；L1 run 40123957938） |
 | `token-tests` | high | 4～6 | 實作完成，L1 待確認 |
 | `client-path-tests` | high | 3～4（K9 另加 2～3） | D181 併入 K9 |
 | `event-watch-overlap` | high | 1～2 | D186 新增（K11） |
@@ -196,7 +196,7 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 - **實機**：同一個 `--movement-trace` 把 Match 啟動、停止兩次：第二次寫成 `match.2-commands.jsonl`、`match.2-ingress.jsonl`、`match.2-shots.jsonl`，第一次的三個檔都保留，每個檔各有一個 `trace_end`；`match.log` 兩行 `trace files` 記下實際檔名。
 - **突變**（D184 的挑選）：outage-resync 的 `ci-resume-always-seeds`、`ci-resume-no-reacquire` 的 find 落在 K8 改到的行，照原意改指新程式碼並重跑；新增 4 個（重用既有檔、忽略衍生檔、編號放錯位置、tip 恢復不寫紀錄）。6／6 killed。
 
-- **L1**：run 40121940587（`cb5c460`）在 windows-x64 失敗：`DiagnosticFileTests.cpp(216)` 的 `remove_all` 丟出「檔案正被另一個程序使用」。歸類：測試本身。新加的測試以 `std::ifstream` 讀舊檔，檔案還開著就刪資料夾；Windows 不能刪除開著的檔案，macOS、Linux 可以，所以本機沒看出來。修正：讀檔的串流先關閉再刪（`test(pvp-v71)` 的修正 commit）。之後觸發的 run 40123864272 還沒有這個修正，會以同樣原因失敗。
+- **L1**：run 40121940587（`cb5c460`）在 windows-x64 失敗：`DiagnosticFileTests.cpp(216)` 的 `remove_all` 丟出「檔案正被另一個程序使用」。歸類：測試本身。新加的測試以 `std::ifstream` 讀舊檔，檔案還開著就刪資料夾；Windows 不能刪除開著的檔案，macOS、Linux 可以，所以本機沒看出來。修正：讀檔的串流先關閉再刪（`test(pvp-v71)` 的修正 commit）。之後觸發的 run 40123864272（`554650c`，analyzer-converge）還沒有這個修正，在 windows-x64 以同樣原因失敗（已確認）。修正後的 run 40123957938（`d50e87b`）四平台成功，涵蓋 trace-no-overwrite 與 analyzer-converge。
 
 ### Architecture Delta（AGENTS §3：Runtime 與 Editor／工具之間的 Data Contract 變更）
 
