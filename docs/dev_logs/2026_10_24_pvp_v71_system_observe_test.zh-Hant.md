@@ -92,4 +92,7 @@
   - 既有 8 個：find 落在改動範圍 1 個；worker 驗收裡統計檢查那一段被改過，所以重跑 C3 的 7 個。
   - **存活 → 等價突變**：`csc-s2-rotation-keeps-old-life`（Tick 換生命時不清掉舊生命的暫存）存活。使用者要求補主機層級的擊殺與重生測試（時限 2 小時）。查證後發現補測試也殺不死它：Match 唯一讓 life 加 1 的地方是重生（`PvpMatch.cpp:272`），同一個 Tick 內一定呼叫 `ResetMovementEpoch` 讓 epoch 加 1（`:286`），所以輪替條件裡「life 不同」永遠被「epoch 不同」蓋住。這是等價突變，移出目錄（照 outage-resync 的先例）；產品的 life 條件保留，它寫明意圖、成本為 0。
   - **替換**：`csc-s2-rotation-keeps-old-epoch`（拿掉「epoch 不同」那一半），killed，由 S2 或 A1 的 assert 觸發，證明 assert 在上游前提壞掉時有作用。用時約 15 分鐘。
+- **L1**：
+  - run 40107059342（`3db1070`）失敗：Quick acceptance / toolchain / macos-arm64 的 Engine CTest `platform_sdl_concurrency`，`EventWatchTests.cpp:300`「Destroying an event watch waits for a callback on another thread」的 `CHECK(overlappedRounds > 0)`，實際 0。歸類：測試本身（靠時序碰運氣的斷言：200 輪中至少一次在回呼執行時解構），環境的時序是觸發條件；不是本線的實作，兩次 run 之間只差突變目錄與文件，Engine 沒有改動。同一個 CTest 先前在 L1 #561（windows-x64，`19e32be` 補了推送執行緒的握手）與 outage-resync 的 L1（windows-x64，`LogBridgeTests.cpp:172`）各失敗過一次。屬於 Engine（input-and-present）的範圍，本線不修，交使用者決定。
+  - run 40108527438（`9f31da6`）四平台成功。
 - **K1、S3、S4 沒有突變**：K1 的 assert 在 App 端，cpu 測試跑不到；S3、S4 走不到，沒有能讓它們失敗的上游突變（和 D180 的 A4～A7 相同）。
