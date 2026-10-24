@@ -47,6 +47,7 @@
 - 2026-10-24：`retention-600` 的 L2 通過，9／9 P（[判定變更文件第 7 節](retention-600-judgment-change.md)）。L1 的 Windows Engine 測試失敗由 PR #91 修正（master `253808a`）。下一批 `client-interrupted`（high，計時與恢復路徑局部 xhigh）。
 - 2026-10-24：本線與 master 同步（`4d40ab8`）。`client-interrupted` 實作完成（`d0efbed` 等）：本機測試與突變 72 個全部通過，L1 進行中。和本計畫的差異（Gateway 時鐘視窗的重開移到 `identity-rebind`、`command_evidence.py` 多接受 `resume_reset`、旗標的守衛改成靜態檢查、暫時性錯誤的呼叫點沒有執行期測試）見 dev_log 的 client-interrupted 一節。
 - 2026-10-24：對抗式審查（xhigh，1 位）：Critical 0、Major 2、Minor 6。使用者核准補強計畫與 5 項偏離的修正建議。補強完成（`eeb8207`、`08f490a`，見 dev_log），M2 的 §14.4 1～5 使用者核准。使用者指示：outage-resync 照計畫做完、不再擴大，不嚴重的問題只記錄。下一批 `identity-rebind`（xhigh，使用者同意）。
+- 2026-10-24：補強後的 L1 run 40074065448 四平台成功。`identity-rebind` 完成：本機 Go 與 ctest 全過、突變 77 個全部 killed；Hello 間隔維持 1 s（契約交給本批的決定，見 dev_log）。下一批 `resync-l2-l3`：L2 的判定在看結果前宣告、交使用者核准（§14.1）。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 

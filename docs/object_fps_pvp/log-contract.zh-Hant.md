@@ -37,6 +37,7 @@
 | Match resync statistics | `IngressStatistics.hpp` `MatchResyncStatisticsLine`（`match_main.cpp` 每個統計視窗、每位玩家一行，沒有 player=0；最後一個視窗以 `final=1` 關閉寫過的每位玩家） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | 1 | `IngressStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-23 新增，v7.1 `outage-resync` 的 `drop-counters`：`slack_clamped_samples`＝被 ±1 s 夾限改變的發布樣本，屬於 `slack_published_samples`；2026-10-23 `match-resync` 起行尾追加 `resyncs`＝Match 換的 Resync epoch 數、`late_beyond_no_commands`＝晚到超過 N_o 而不產生樣本的第一份副本數） |
 | Client phase summary | `ClientSimulationRole.cpp` `PhaseSummaryLine`（模擬 role：連線換代或換玩家時、role 停止時各一行，只在那一代有本機玩家時寫） | `[ObjectFPS/PvP] phase summary version=1 ` | 1 | `ClientSimulationRoleTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-23 新增，`drop-counters`：`phase_samples_unmatched`＝命令已離開 64 格命令環的 slack 樣本，第 5 節的死信） |
 | Client connection interrupted／resumed／summary | `ClientConnection.cpp` `ConnectionInterruptedLine`、`ConnectionResumedLine`、`ConnectionSummaryLine`（網路 worker：進入中斷時、恢復時各一行，連線的傳輸關閉時一行摘要） | `[ObjectFPS/PvP] connection interrupted version=1 `、`[ObjectFPS/PvP] connection resumed version=1 `、`[ObjectFPS/PvP] connection summary version=1 ` | 1 | `ConnectionLivenessTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-24 新增，`client-interrupted`：`gap_ms`＝距上一份有效 snapshot 的整毫秒；`max_gap_ms`＝兩份有效 snapshot 的最長間隔；`transient_socket_errors`＝只計數的暫時性 socket 錯誤） |
+| Gateway session rebound | `server.go`（`receivePacket` 的 Hello，每次改綁一行） | `session rebound version=1 ` | 1 | `rebind_test.go`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-24 新增，`identity-rebind`：`old_port`、`new_port`＝改綁前後的來源埠，`silent_ms`＝原 endpoint 最後驗證之後的整毫秒；不記 token 與完整位址） |
 | clock sync（三端） | 本體 `ClockSync.hpp` `ClockWindowLine`、`clock_sync.go` `line()` | Match `[ObjectFPS/PvP Match] clock sync window_ms=`；Gateway runtime `clock sync window_ms=`；Gateway 每位 Client `client clock sync player=`；Client `[ObjectFPS/PvP] clock sync player=` | 隱含 1 | `fixtures/log_v1/clock-sync.tsv`（C++ 與 Go 讀同一份） | 目前沒有工具（2026-10-20 升 A 級：三端的對時是之後分析的輸入） |
 
 ### 1.2 A 級：JSONL 紀錄檔
@@ -64,7 +65,7 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
 | Client 連線恢復 | 已在 `client-interrupted` 實作，見 1.1 | `[ObjectFPS/PvP] connection resumed version=1 ` | `player`、`gap_ms`、`epoch_before`、`epoch_after`（`client-interrupted`） |
 | Client 連線摘要 | 已在 `client-interrupted` 實作，見 1.1 | `[ObjectFPS/PvP] connection summary version=1 ` | `player`、`interruptions`、`max_gap_ms`、`transient_socket_errors`（`client-interrupted`） |
 | Match 重新對時統計 | 已實作，見 1.1（`drop-counters` 前三鍵、`match-resync` 後兩鍵） | `[ObjectFPS/PvP Match] resync statistics version=1 ` | `player`、`final`、`slack_clamped_samples`（`drop-counters`）；`resyncs`、`late_beyond_no_commands`（`match-resync`） |
-| Gateway session 重新綁定 | 產品 Gateway | `session rebound version=1 ` | `player`、`old_port`、`new_port`、`silent_ms`（`identity-rebind`；不記 token 與完整位址） |
+| Gateway session 重新綁定 | 已在 `identity-rebind` 實作，見 1.1 | `session rebound version=1 ` | `player`、`old_port`、`new_port`、`silent_ms`（`identity-rebind`；不記 token 與完整位址） |
 
 - **各端只記自己觀察到的事**（第 5 節）：`phase_samples_unmatched` 是模擬端的 64 格命令環觀察到的，所以由模擬端寫，不經網路 worker。
 - **不追加到 ingress 行**：ingress 已有 8 組（R3），再加會觸發 Replacement Criteria 1。
@@ -73,7 +74,7 @@ Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `reject
     - `window`：10 s 到期；
     - `final`：連線結束，和 `final=1` 同時；
     - `resume`：恢復時提前結束，`final=0`。
-  - 已實作（`client-interrupted`，三端都加了 `reason=`）。Client 與 Gateway 的每位 Client 視窗可能出現 `resume`（Gateway 的在 `identity-rebind` 加上）；Match 與 Gateway runtime 的 clock sync 行量的是 Gateway↔Match，值只會是 `window` 或 `final`。
+  - 已實作（`client-interrupted`，三端都加了 `reason=`）。Client 與 Gateway 的每位 Client 視窗可能出現 `resume`（Gateway 的在 `identity-rebind` 加上：`echo.go` `noteVerified`）；Match 與 Gateway runtime 的 clock sync 行量的是 Gateway↔Match，值只會是 `window` 或 `final`。
   - 漂移的回歸不因 `resume` 重新開始，`drift_ppm` 的意義不變。
   - 釘住：`fixtures/log_v1/clock-sync.tsv` 加一欄。
 - **移動紀錄**（schema 3）：`reset` 事件的 `reset_reason` 新增值 `resync`（`match-resync` 起，已實作）。這是既有 kind 的新列舉值，不加欄位、不升版；`command_evidence.py` 遇到未知的值會照字串保留（`command_evidence.py:325-329`）。凍結的讀者在該批先查。

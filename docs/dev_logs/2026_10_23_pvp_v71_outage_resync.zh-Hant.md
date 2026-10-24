@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 完成（對抗式審查後補強）。下一批是 `identity-rebind`。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 完成（對抗式審查後補強）。`identity-rebind` 完成，L1 進行中。下一批是 `resync-l2-l3`。
 
 相關文件：
 
@@ -20,7 +20,8 @@
 | `single-store-refactor`（`832eca4`、`187d945`） | high，紀錄身分與關閉順序局部 xhigh | 被替代序號的紀錄只存一份：新元件 `MatchSubstitutionRecords`（行為側）持有，帳本只讀到達結果、接收關閉的紀錄，只留附欄；SlackTrack 的 `substituted` 刪除；過渡規則逐位元模擬現狀 | CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；`match_ingress_cli`、`authority_digest` 不變；突變 79／79＋4／4；xhigh 等價性審查（差分 fuzz 1380 次 0 差異）；L1 run 39967478342 四平台成功 |
 | `match-resync`（`426aa4b` 等） | xhigh（使用者同意） | 晚到超過 N_o（20 Tick＝333,333 µs，Host 時鐘）的第一份副本不產生樣本、計 `late_beyond_no`，並以 `PvpMatch::RequestMovementResync` 在下一個 Tick 換 Resync epoch（不受冷卻、每 epoch 一次、和排定的重設與 LifeRespawn 合併、計入品質 resets）；`resync statistics` 行尾追加兩鍵；特性測試升格為 §7 守衛 | 先 Red（4 個以斷言失敗）再 Green；CPU 測試全過；`ctest -L pvp` 44／45（已知的 worker）；突變 10／10＋受影響的 10 個重判（見下）；L1 run 39974643016 四平台成功 |
 | `retention-600`（`d1bcb47` 等） | xhigh（使用者同意） | 拿掉過渡規則：保留中每一筆紀錄的第一份副本判斷一次，600 序號以外關閉的紀錄不再判斷；S3 加進 C++ 守恆檢查 | CPU 測試全過；突變 84／84；§14.4 的 J-A～J-C 經獨立核對修正，使用者核准（D176）；L1 run 40052105536 四平台 L1 job 成功（Windows 的 toolchain Quick acceptance 因 Engine 測試的競態失敗，已由 PR #91 修正）；L2 9／9 P（D177） |
-| `client-interrupted`（`d0efbed` 等） | high，計時與恢復路徑局部 xhigh | Client 的連線中斷狀態（`ConnectionLiveness`）、暫時性錯誤、Hello 250 ms、T_max 從 snapshot 起算、恢復流程（clock `reason=resume`、一次性 `resumed` 旗標、`LocalPlayerPrediction::Resume`）、HUD、新的 A 級行 3 個、clock sync 三端 `reason=` | CPU 測試 319／319；`ctest -R object_fps_pvp -L "cpu\|network"` 45／45；Go 通過；突變 72＋7 個全部 killed（見下）；L1 run 40067465114 四平台成功（補強前）；對抗式審查 1 次與補強（見下） |
+| `client-interrupted`（`d0efbed` 等） | high，計時與恢復路徑局部 xhigh | Client 的連線中斷狀態（`ConnectionLiveness`）、暫時性錯誤、Hello 250 ms、T_max 從 snapshot 起算、恢復流程（clock `reason=resume`、一次性 `resumed` 旗標、`LocalPlayerPrediction::Resume`）、HUD、新的 A 級行 3 個、clock sync 三端 `reason=` | CPU 測試 319／319；`ctest -R object_fps_pvp -L "cpu\|network"` 45／45；Go 通過；突變 72＋7 個全部 killed（見下）；L1 run 40067465114 四平台成功（補強前），補強後 L1 run 40074065448 四平台成功；對抗式審查 1 次與補強（見下） |
+| `identity-rebind`（`3e2a242` 等） | xhigh（使用者同意） | 通用層 session 的最後驗證時刻與 `HelloRebinding`（四個條件都成立才改綁、舊 endpoint 隨即 `ErrUnauthorized`）；產品 Gateway 的 A 級 `session rebound` 行、驗證後靜默 ≥ T_int 時以 `reason=resume` 重開每位 Client 的時鐘視窗；`state_whitelist_test.go` 不變 | Go 全部通過；`ctest` 47／47；突變 77 個全部 killed（見下）；L1 進行中 |
 
 ## 規劃
 
@@ -301,3 +302,35 @@
 3. **收緊的面**：沒有。
 4. **其他判定是否仍守住**：其他路徑照舊要求 `count ≥ 1`（反向測試 `{"count": 0}`）；`resume_reset` 配 `count=1` 被拒絕（新的反向測試）；寫出端的名稱與欄位由 `DiagnosticFileTests.cpp` 的 golden 固定。
 5. **根據**：log-contract §1.4 的條文（D174）規定這種紀錄；突變 `ci-reader-rejects-resume-reset` killed。已凍結的副本讀不到它，`resync-l2-l3` 宣告時重新凍結。
+
+## identity-rebind
+
+檔位：xhigh（使用者 2026-10-24 同意，照計畫）。
+
+### 做了什麼
+
+照 network-architecture §4「連線中斷與恢復」的 Gateway 部分（Delta-3）：
+
+- **通用層 `session`**：
+  - 新欄位「最後驗證時刻」`lastVerified`：已綁定 endpoint 的 token 相符 Hello、`Admit` 的 endpoint 比對通過時刷新，不論序號、payload、限速（刷新在限速之前）。其他 endpoint 的資料包不刷新它。
+  - `HelloRebinding(token, peer, sequence, now, Rebinding{Silence, Timeout})`：新 endpoint 的 Hello 在四個條件都成立時改綁（token 正確、序號較新、原 endpoint 靜默 ≥ Silence、未到期），判斷在任何刷新之前。改綁後原 endpoint 是 `ErrUnauthorized`。
+  - `Hello` 維持原樣（規則為零，不改綁），`LastVerified()` 供產品讀取。
+- **產品 Gateway**：
+  - Hello 走 `HelloRebinding`，規則在呼叫處給 T_int（`connectionInterruptedAfter`）與 T_max（`sessionTimeout`），不新增套件變數，`state_whitelist_test.go` 不變。
+  - 每次改綁寫 A 級的 `session rebound version=1 player= old_port= new_port= silent_ms=`（只記埠，不記 token 與完整位址）。
+  - 時鐘：Hello 與 `admit` 前後各讀一次最後驗證時刻。驗證通過、而且和前一次相隔 ≥ T_int 時，以 `reason=resume` 提前結束該 Client 的時鐘視窗（`echo.go` `noteVerified`，`clockSync.resume`）。沒有通過驗證的資料包不刷新、不重開。
+- **clock-sync.tsv** 加一列 `resume`，C++ 與 Go 兩端寫出相同的本文。
+
+### 決定（契約交給本批的）
+
+- **Hello 間隔維持 1 s**，不縮到 T_int／2 以下。契約的安全取捨已寫明：只送 Hello 的期間（收到 Welcome 後、第一份 snapshot 前；沒有新命令、窗口全部確認時），最後驗證時刻有一半時間超過 T_int，拿到 token 又能讓原 endpoint 靜默的人可以改綁。Client 的模擬端每個 Tick 都產生命令，Playing 期間 60 Hz 的 Input 一直刷新它，所以這段只出現在握手後的短時間。縮短 Hello 會改變既有 L2 的 Hello／Welcome 計數基線；使用者指示保住基線、不擴大範圍，所以只記錄。
+
+### 驗證
+
+- Go：`services/gyo_gateway/session` 新增 4 個測試（改綁與鎖住舊 endpoint；條件少一項就拒絕 5 種；原 endpoint 以跳號封包、只送 Input、stale 與限速的資料包都算驗證；其他 endpoint 不刷新）。產品 Gateway 新增 2 個（改綁的端到端與 A 級行、時鐘視窗只在驗證後的靜默重開：60 Hz Input＋每秒 Hello 不重開、其他 endpoint 不重開也不刷新、靜默 0.8 s 後恰好重開 1 次）。
+- 突變：本批 9 個，加上 Gateway 的既有突變（`session.go`、`echo.go`、`clock_sync.go`、`server.go` 的 go／gateway_session 類）共 77 個：72 killed、4 wrong_failure、1 timeout。
+  - 3 個 wrong_failure 是預期文字的問題：Go 把子測試名稱的空白換成底線。改預期文字。
+  - `ir-clock-unverified` 的替換讓變數沒被用到，Go 編譯失敗。改成仍用到它的寫法。
+  - 既有的 `v71rl-credit-unbounded` 逾時：新測試「送到被限速為止」的迴圈沒有上限。改成最多 1000 次，送不到限速就失敗。
+  - 這 5 個重跑 5／5 killed。證據：`pvp-v71-identity-rebind-mutants-20261024/`、`-rerun-20261024/`。
+- 本機：Go 兩個模組全部通過；`ctest -R object_fps_pvp -L "cpu|network|go"` 47／47。
