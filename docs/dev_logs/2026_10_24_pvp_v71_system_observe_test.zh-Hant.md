@@ -9,7 +9,7 @@
 | 批次 | 檔位 | 估時（h） | 狀態 |
 |---|---|---|---|
 | `silent-branch-asserts` | high | 4～6（C3 另加 1～2） | 實作完成，L1 待確認（D180） |
-| `client-silent-checks` | high | 4～6 | 實作中（D181 新增；D183 決定） |
+| `client-silent-checks` | high | 4～6 | 實作完成，L1 待確認；1 個存活突變等使用者決定（D183） |
 | `cxx-flag-removal` | high | 3～4 | |
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | D181 新增（K5、K6） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | D181 併入 K7 |
@@ -64,3 +64,31 @@
 4. （沒有放寬的面，不適用。）
 5. **證據**：在提交失敗的位置做 4 個臨時突變（多計一個鍵、換成別的鍵、不計、多計一次 received），新測試 4／4 失敗。這幾種都是舊表格判定會判失敗的情況。
 - **經過**：第一版搬家（`eaeb40b`）只檢查了兩個鍵，少了「只計這兩個」與守恆，算放寬。完成前自己發現，`c3243f3` 補回後才符合上面的描述。
+
+## client-silent-checks：Client 的再檢查與「應為 0」的分支
+
+守衛的追蹤與決定見 [client-silent-checks.md](../object_fps_pvp/plans/v7.1/client-silent-checks.md)（D181 排入，D183 決定）。
+
+### 做了什麼
+
+- **K1**：`PvpApplication.cpp` 對 `SnapshotTimeline::Push` 的回傳值 assert。
+- **K2**：`LocalPlayerPrediction::Reconcile` 改成回傳 `bool`（是否採用），`ClientSimulation::Observe` 對它 assert。
+  - 和 client-silent-checks.md 的 (b) 不同的一點：沒有加 `[[nodiscard]]`。測試直接呼叫 `Reconcile` 的地方有 117 處，加了每處都會出警告；產品只有一個呼叫端，那裡有 assert。
+- **K3**：`ClientConnection::SendInput`
+  - r2（不在 Playing／Connecting）、r3（別的玩家）、r4（無效輸入）、r7（改了或少了未確認的命令，守 network-architecture §7「一個命令身分只有一種內容」）改成 assert；
+  - r1（別的世代）、r5（epoch 或 life 已被最新 snapshot 取代）計數，worker statistics 行尾追加 `stale_input_windows`（日誌契約 R1；`log-contract.zh-Hant.md` 已加註）。計數在 `SendInput` 的鎖內累加（它在模擬執行緒上跑），統計行在同一把鎖裡取走；
+  - r6（全部已確認）保留。
+- **K4**：
+  - Match 端 S1（`StagedOverWindow`）、S2（`HandoffRejected`）改成 assert；S2 原本寫 trace 的分支變成死碼，一起刪掉。日誌鍵 `staged_over_window`、`handoff_rejected` 照日誌契約 R1 保留，一直為 0；
+  - Gateway 的 S3（`ErrInput`）、S4（`ErrActions`）改成 `invariantFailed`，同時保留原本的計數，維持每個資料包只計一個結果（IG）。
+
+### 驗證
+
+- 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 48／48，沒有任何 assert 觸發；目錄、日誌契約、ingress_evidence 的測試通過；Go `./...` 與 `-race` 通過。
+- **worker 驗收**：在 `CheckDroppedDatagrams` 裡送一個別的世代、一個別的 epoch 的窗口，要求兩個都沒送出，且第一行 worker statistics 的 `stale_input_windows` ≥2。實測 2。
+- **單元測試**：`PredictionTests.cpp` 新增「無效或較舊的權威狀態回報為未採用」。
+- **突變**（D184 的挑選：新突變、find 落在本批改動範圍、斷言附近被改過；挑選腳本在會話的工作目錄）：16 個，15 killed，1 survived。
+  - 新增 8 個（`batch` 是 `v71-client-silent-checks`）：K2 的上游前提被弄壞時 assert 觸發、`Reconcile` 把無效或較舊的狀態報成已採用（2 個）、r1／r5 不計數或照送（3 個）、統計行少一個鍵、S2 的上游前提被弄壞。
+  - 既有 8 個：find 落在改動範圍 1 個；worker 驗收裡統計檢查那一段被改過，所以重跑 C3 的 7 個。
+  - **存活**：`csc-s2-rotation-keeps-old-life`（Tick 換生命時不清掉舊生命的暫存，S2 或 A1 的 assert 應該觸發）。原因是既有的測試缺口：Match 端「換 epoch 時丟棄暫存」有測試（`PvpMatchTests.cpp` 的 `RotationDiscarded`），「換生命時丟棄暫存」沒有；補測試需要主機層級的擊殺與重生情境，現有測試沒有這種工具。等使用者決定。
+- **K1、S3、S4 沒有突變**：K1 的 assert 在 App 端，cpu 測試跑不到；S3、S4 走不到，沒有能讓它們失敗的上游突變（和 D180 的 A4～A7 相同）。
