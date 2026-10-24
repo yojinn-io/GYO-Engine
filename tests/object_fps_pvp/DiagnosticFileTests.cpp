@@ -233,10 +233,13 @@ TEST_CASE("PvP a restarted trace takes the next free numbered name") {
     // Only a derived file of the second name exists: the third name is the free one.
     std::ofstream(directory / "match.2-shots.jsonl") << "kept\n";
     CHECK(FreshTracePath(movement, shots) == directory / "match.3-commands.jsonl");
-    // The earlier files are never truncated by the choice.
-    std::ifstream first(movement);
+    // The earlier files are never truncated by the choice. The stream closes
+    // before the directory goes (Windows cannot remove an open file).
     std::string text;
-    std::getline(first, text);
+    {
+        std::ifstream first(movement);
+        std::getline(first, text);
+    }
     CHECK(text == "first run");
     std::filesystem::remove_all(directory);
 }

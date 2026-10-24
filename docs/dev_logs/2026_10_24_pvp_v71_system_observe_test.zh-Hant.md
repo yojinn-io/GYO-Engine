@@ -196,6 +196,8 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 - **實機**：同一個 `--movement-trace` 把 Match 啟動、停止兩次：第二次寫成 `match.2-commands.jsonl`、`match.2-ingress.jsonl`、`match.2-shots.jsonl`，第一次的三個檔都保留，每個檔各有一個 `trace_end`；`match.log` 兩行 `trace files` 記下實際檔名。
 - **突變**（D184 的挑選）：outage-resync 的 `ci-resume-always-seeds`、`ci-resume-no-reacquire` 的 find 落在 K8 改到的行，照原意改指新程式碼並重跑；新增 4 個（重用既有檔、忽略衍生檔、編號放錯位置、tip 恢復不寫紀錄）。6／6 killed。
 
+- **L1**：run 40121940587（`cb5c460`）在 windows-x64 失敗：`DiagnosticFileTests.cpp(216)` 的 `remove_all` 丟出「檔案正被另一個程序使用」。歸類：測試本身。新加的測試以 `std::ifstream` 讀舊檔，檔案還開著就刪資料夾；Windows 不能刪除開著的檔案，macOS、Linux 可以，所以本機沒看出來。修正：讀檔的串流先關閉再刪（`test(pvp-v71)` 的修正 commit）。之後觸發的 run 40123864272 還沒有這個修正，會以同樣原因失敗。
+
 ### Architecture Delta（AGENTS §3：Runtime 與 Editor／工具之間的 Data Contract 變更）
 
 1. 需要它的項目：N-trace-overwrite-on-restart（LAN 場次中途重啟 Match 會截斷前一段 trace，lan15-windows 之前會碰到）。
