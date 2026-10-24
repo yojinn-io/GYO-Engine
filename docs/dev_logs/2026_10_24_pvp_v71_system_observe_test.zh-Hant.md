@@ -121,3 +121,38 @@ INVENTORY 的 C16 與 N-osyncstream-experimental。`-fexperimental-library` 只�
 ### Architecture
 
 - 沒有新的依賴邊；`ClogLine` 是產品內的標頭，取代標準程式庫的 experimental 部分。建置設定只少了一個編譯選項，模組結構不變。
+
+## rebind-on-new-port：換埠後的改綁時機與 Hello 間隔
+
+INVENTORY 之外的已知問題 K5、K6（D181）。關卡與經過見 [rebind-on-new-port.md](../object_fps_pvp/plans/v7.1/rebind-on-new-port.md)。
+
+### 經過
+
+- **關卡（D187）**：約 2 s 的延遲只發生在「上行換埠、下行仍到舊埠」的不對稱情況，Client 不判中斷，只能等每秒一次的 Hello。選 r1＋k3：Client 在「最近 250 ms 沒送 Input／Actions」與「已送出的命令確認滿 T_int 沒前進」時也每 250 ms 送 Hello。實作 `aed91dd`，6 個突變 killed。
+- **xhigh 審查推翻了 (b) 的前提**：Match 收不到命令時用替代命令（Held，之後 Neutral）解決下一個序號，確認照樣每個 Tick 前進；純不對稱換埠時 (b) 要等 Starvation 換 epoch 後再過 T_int 才成立（約 t0＋1.1 s）。L2 的 C10 是「先雙向斷 1 s 再換埠」，(b) 剛好成立，worker 測試與計畫中的 L2 都看不出差別；關卡文件第 2 節把 C10 當成純不對稱換埠是誤認。審查也找到條文巢狀錯誤（`037e27b` 修正）與數個測試缺口。
+- **重新決定（D188）**：選 P3，Hello 一律每 250 ms，取代 D187。拿掉 (a)、(b) 與其狀態（`ClientConnection.cpp` 相對於 D187 之前只差 7 行）。
+
+### 做了什麼（D188）
+
+- `ClientConnection.cpp`：`HelloInterval` 改成固定 250 ms 的常數。
+- 契約：network-architecture §4 的「Hello 間隔」改寫（所有階段一律 250 ms；註明 D188 之前的證據裡 Hello／Welcome 計數是舊規則）、保活與安全取捨的條文、Design Invariants 的守衛清單。
+- 預算註解：`Movement.hpp`（Hello 每秒 4 個，116 仍成立）、`worker_main.cpp` 的 static_assert（Hello 由 +2 改 +4，117 ≤120）。
+- **worker 驗收** `CheckHelloCadence`：第一份 snapshot 前、輸入流動且確認落後 2 個時、確認停住而 snapshot 仍到時，Hello 都每 250 ms（間隔 ≤350 ms），而且不更頻繁（間隔 ≥200 ms）。MockGateway 加 `ResetAck()`，讓之後的情境從確認 0 開始。
+
+### §14.4：Design Invariants 守衛測試的判定變更（D189，使用者核准）
+
+`test_diagnostic_isolation.py` 的 `test_liveness_reads_only_arrival_times`，liveness 呼叫次數由 12 改成 11。
+
+1. **守護的性質**：網路 worker 交給 `ConnectionLiveness` 的只有資料包到達時讀的 steady_clock 或「現在」，不是時鐘回聲推出的時刻（network-architecture「連線中斷與重新對時」的 Design Invariant「中斷判定只讀到達時刻與常數」）。計數讓每個新的呼叫處都被看到。
+2. **放寬的面**：剛好 11 個呼叫的原始碼，以前判失敗、現在判通過。具體是現在的程式：和以前相比只少了一個不帶參數的 `Interrupted()` 讀取（舊的 Hello 間隔用的）。
+3. **收緊的面**：12 個呼叫的原始碼（例如 D188 之前的程式）現在判失敗。
+4. **性質由哪裡繼續守住**：同一個測試的逐一呼叫的方法與參數表、`polledAt=Clock::now()`／`Poll(polledAt)` 的精確比對、`arrivedAt` 定義成 `Clock::now()` 的檢查。把推導時刻餵給 liveness 的 6 種突變，新舊判定都失敗。
+5. **證據**：`206d967` 的 diff；測試輸出 `11 != 12`；突變表（現在的程式：舊失敗／新通過；D188 之前的程式：舊通過／新失敗；Poll 餵回聲時刻、Snapshot 餵 arrivedAt＋1 ms、多一個餵回聲時刻的呼叫、少一個呼叫：新舊都失敗）。獨立審查者在副本上重跑，結果相同，並列出現在的 11 個呼叫，確認唯一消失的是那個 `Interrupted()`。
+- 核對時發現的既有缺口：解析器看不到的呼叫（別名、方法名前多空格、區域內重新宣告 `arrivedAt`）新舊判定都擋不住，計數本來也擋不住。列為 K12。
+
+### 驗證
+
+- 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 48／48（`-j4`）；worker 驗收單獨連跑 5 次通過。
+- **一次失敗與切分**：在 `-j8` 並行時 worker 驗收失敗一次（`worker emitted a resend catch-up burst`）。這些時序檢查量的是 mock 收到封包的時刻，CPU 負載高時 mock 可能一次讀進兩個封包。切分：加 16 個忙碌程序的負載，D188 跑 10 次失敗 2 次（`a token wait outlived four commands`），舊規則（暫時改回、跑完還原）同樣負載下也失敗 2 次（`the waiting sends did not drain the token debt`）。歸類：測試本身對負載敏感（環境是觸發條件），不是 D188 的缺陷。這不是事前宣告的受入試行。
+- **突變**（D184 的挑選）：D187 的 6 個已移除（對應的程式不存在了）；D188 新增 3 個（Hello 回到每 1 s、每次 worker 經過都送、喚醒晚到 1 s），加上斷言附近被改過的 1 個，4／4 killed。
+- **L2**：宣告寫好後交使用者核准（D187）。
