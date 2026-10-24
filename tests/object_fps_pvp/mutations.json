@@ -6335,6 +6335,26 @@
       "replace": "            if (player == state.players.end() || player->lifeGeneration != input->second.lifeGeneration) {",
       "check": "cpu",
       "expect": "GYO_ASSERT failed: (submitted|merged.commands.empty)"
+    },
+    {
+      "id": "cfr-clogline-writes-nothing",
+      "batch": "v71-cxx-flag-removal",
+      "what": "ClogLine hands nothing to std::clog",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClogLine.hpp",
+      "find": "            if (target_) target_->sputn(text.data(), static_cast<std::streamsize>(text.size()));",
+      "replace": "            static_cast<void>(text);",
+      "check": "cpu",
+      "expect": "ClogLine writes each line whole"
+    },
+    {
+      "id": "cfr-clogline-ignores-manipulators",
+      "batch": "v71-cxx-flag-removal",
+      "what": "ClogLine drops manipulators such as std::fixed",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClogLine.hpp",
+      "find": "    ClogLine& operator<<(std::ios_base& (*manipulator)(std::ios_base&)) {\n        buffer_ << manipulator;",
+      "replace": "    ClogLine& operator<<(std::ios_base& (*manipulator)(std::ios_base&)) {\n        static_cast<void>(manipulator);",
+      "check": "cpu",
+      "expect": "uptime_s=1\\.500"
     }
   ]
 }
