@@ -19,6 +19,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <source_location>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -33,6 +34,7 @@ namespace pb=object_fps_pvp::client::v7;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
+void Require(bool condition,const std::string& message){if(!condition)throw std::runtime_error(message);}
 struct Attempt { Clock::time_point at; pb::PlayerInput input; };
 struct ActionAttempt { Clock::time_point at; pb::ActionBatch actions; };
 struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; };
@@ -82,6 +84,7 @@ public:
                     auto* rules=welcome.mutable_combat_rules();rules->set_maximum_hp(200);rules->set_shot_damage(37);
                     rules->set_cooldown_ticks(9);rules->set_shot_range(140);rules->set_maximum_reference_age_ms(333);
                     rules->set_magazine_capacity(7);rules->set_reload_ticks(88);rules->set_respawn_ticks(177);
+                    rules->set_maximum_shot_damage(111); // pv7 §7: shot_damage <= maximum_shot_damage <= maximum_hp
                 }
                 // The time echo (pv7 §3): echo the Hello, stamp this Welcome. A bad
                 // echo (receive after transmit) must change nothing for the Client.
@@ -104,20 +107,25 @@ public:
             }
         }
     }
-    void Until(const std::function<bool()>& condition,std::chrono::milliseconds timeout=3000ms) {
+    // A timeout names the waiting line, so a failure points at the step that stalled.
+    void Until(const std::function<bool()>& condition,std::chrono::milliseconds timeout=3000ms,
+               std::source_location where=std::source_location::current()) {
         const auto deadline=Clock::now()+timeout;
         while(true) {
             Pump();if(condition())return;
-            Require(Clock::now()<deadline,"mock worker wait timed out");
+            Require(Clock::now()<deadline,"mock worker wait timed out at worker_main.cpp:"+std::to_string(where.line()));
             std::this_thread::sleep_for(100us);
         }
     }
-    void UntilTime(Clock::time_point deadline){Until([&]{return Clock::now()>=deadline;});}
+    void UntilTime(Clock::time_point deadline,std::source_location where=std::source_location::current()) {
+        Until([&]{return Clock::now()>=deadline;},3000ms,where);
+    }
     void Snapshot(std::uint64_t resolved) {
         ack=resolved;pb::WorldSnapshot snapshot;snapshot.set_tick(++tick);
         auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
         auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);combat->set_life_generation(1);combat->set_magazine_ammo(7);
-        combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2); // pv6 hit record
+        combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2);
+        combat->set_last_hit_part(pb::HIT_PART_BODY); // pv7 §7 hit record: all four fields set together
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
     // A snapshot of the given tick; the next Snapshot follows it.
@@ -241,11 +249,12 @@ std::size_t CheckMaximumDatagrams() {
 Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     const auto rules=connection.State().combatRules;
     Require(rules && rules->maximumHp==200 && rules->shotDamage==37 && rules->cooldownTicks==9 &&
-        rules->shotRange==140 && rules->maximumReferenceAge==333ms && rules->magazineCapacity==7 && rules->reloadTicks==88 && rules->respawnTicks==177,"client duplicated authoritative combat defaults");
+        rules->shotRange==140 && rules->maximumReferenceAge==333ms && rules->magazineCapacity==7 && rules->reloadTicks==88 && rules->respawnTicks==177 && rules->maximumShotDamage==111,"client duplicated authoritative combat defaults");
     Require(connection.State().snapshot->combat.at(0).hp==74 &&
         connection.State().snapshot->combat.at(0).nextAllowedShotTick==900,"snapshot lost independent combat state");
     Require(connection.State().snapshot->combat.at(0).lastDamageTick==connection.State().snapshot->tick &&
-        connection.State().snapshot->combat.at(0).damageCount==3 && connection.State().snapshot->combat.at(0).lastAttackerId==2,
+        connection.State().snapshot->combat.at(0).damageCount==3 && connection.State().snapshot->combat.at(0).lastAttackerId==2 &&
+        connection.State().snapshot->combat.at(0).lastHitPart==HitPart::Body,
         "snapshot lost the hit record");
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
     std::mutex allocatedMutex;std::vector<ActionId> allocated;
