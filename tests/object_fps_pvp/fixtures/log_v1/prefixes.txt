@@ -11,3 +11,4 @@ phrase	[ObjectFPS/PvP] phase summary
 phrase	[ObjectFPS/PvP] connection interrupted
 phrase	[ObjectFPS/PvP] connection resumed
 phrase	[ObjectFPS/PvP] connection summary
+phrase	session rebound

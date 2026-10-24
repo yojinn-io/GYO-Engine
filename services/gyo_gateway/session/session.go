@@ -26,6 +26,12 @@ type Session struct {
 	mu          sync.Mutex
 	endpoint    netip.AddrPort
 	lastSeen    time.Time
+	// When the bound endpoint last sent a datagram that passed this session's
+	// verification: a Hello with the token, or an Admit endpoint match,
+	// whatever its sequence, payload or rate. Only the bound endpoint
+	// refreshes it, so a forger can only keep it fresh (block a rebinding),
+	// never make the endpoint look silent.
+	lastVerified time.Time
 	sequence    uint32
 	hasSequence bool
 	// The rate limit's virtual schedule (GCRA): when the session's next packet
@@ -62,23 +68,69 @@ func (s *Session) MatchesToken(token string) bool {
 	return subtle.ConstantTimeCompare([]byte(token), []byte(s.Token)) == 1
 }
 
+// Rebinding is the caller's rule for moving a session to a new endpoint: the
+// bound endpoint silent for at least Silence, and the session not expired
+// under Timeout (as Expired). A zero Silence never rebinds.
+type Rebinding struct {
+	Silence, Timeout time.Duration
+}
+
+// Rebound describes a Hello that moved the session: the endpoint it left and
+// how long that endpoint had been silent.
+type Rebound struct {
+	Previous netip.AddrPort
+	Silent   time.Duration
+}
+
 // Hello is idempotent. A repeated authenticated sequence may receive a reply,
-// but only a fresh sequence refreshes liveness. Endpoint rebinding is not in v1.
+// but only a fresh sequence refreshes liveness. It never rebinds: a Hello from
+// another endpoint is unauthorized.
 func (s *Session) Hello(token string, peer netip.AddrPort, sequence uint32, now time.Time) error {
+	_, err := s.HelloRebinding(token, peer, sequence, now, Rebinding{})
+	return err
+}
+
+// HelloRebinding is Hello, and a Hello from another endpoint moves the session
+// there when every condition holds: the token matches, the sequence is newer
+// than the session's, the bound endpoint has sent no verified datagram for
+// rule.Silence, and the session has not expired. The old endpoint is then
+// unauthorized. The decision is taken before anything is refreshed.
+func (s *Session) HelloRebinding(token string, peer netip.AddrPort, sequence uint32, now time.Time, rule Rebinding) (Rebound, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.MatchesToken(token) ||
-		!peer.IsValid() || (s.endpoint.IsValid() && s.endpoint != peer) {
-		return ErrUnauthorized
+	if !s.MatchesToken(token) || !peer.IsValid() {
+		return Rebound{}, ErrUnauthorized
+	}
+	var rebound Rebound
+	moving := s.endpoint.IsValid() && s.endpoint != peer
+	if moving {
+		if rule.Silence <= 0 || !s.hasSequence || !framing.NewerSequence(sequence, s.sequence) ||
+			now.Sub(s.lastVerified) < rule.Silence || now.Sub(s.lastSeen) >= rule.Timeout {
+			return Rebound{}, ErrUnauthorized
+		}
+		rebound = Rebound{Previous: s.endpoint, Silent: now.Sub(s.lastVerified)}
+	} else {
+		s.lastVerified = now // the bound (or first) endpoint, verified before the rate limit
 	}
 	if err := s.rate(now); err != nil {
-		return err
+		return Rebound{}, err
+	}
+	if moving {
+		s.lastVerified = now
 	}
 	s.endpoint = peer
 	if !s.hasSequence || framing.NewerSequence(sequence, s.sequence) {
 		s.sequence, s.hasSequence, s.lastSeen = sequence, true, now
 	}
-	return nil
+	return rebound, nil
+}
+
+// LastVerified is when the bound endpoint last sent a verified datagram
+// (zero before the first Hello).
+func (s *Session) LastVerified() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastVerified
 }
 
 func (s *Session) Accept(peer netip.AddrPort, sequence uint32, now time.Time) error {
@@ -97,6 +149,7 @@ func (s *Session) Admit(peer netip.AddrPort, sequence uint32, now time.Time) err
 	if !s.endpoint.IsValid() || s.endpoint != peer {
 		return ErrUnauthorized
 	}
+	s.lastVerified = now // the endpoint matched: verified, before the rate limit
 	if err := s.rate(now); err != nil {
 		return err
 	}

@@ -31,3 +31,4 @@ client_phase_summary	cpp	apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp	ph
 client_connection_interrupted	cpp	apps/object_fps_pvp/src/Pvp/ClientConnection.cpp	connection interrupted version=1 player=	[ObjectFPS/PvP] connection interrupted version=1 	version player gap_ms epoch
 client_connection_resumed	cpp	apps/object_fps_pvp/src/Pvp/ClientConnection.cpp	connection resumed version=1 player=	[ObjectFPS/PvP] connection resumed version=1 	version player gap_ms epoch_before epoch_after
 client_connection_summary	cpp	apps/object_fps_pvp/src/Pvp/ClientConnection.cpp	connection summary version=1 player=	[ObjectFPS/PvP] connection summary version=1 	version player interruptions max_gap_ms transient_socket_errors
+gateway_session_rebound	go	apps/object_fps_pvp/gateway/server.go	session rebound version=1 player=%d old_port=	session rebound version=1 	version player old_port new_port silent_ms

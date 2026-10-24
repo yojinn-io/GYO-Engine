@@ -194,10 +194,11 @@ func TestClockWindowLineMatchesTheSharedGolden(t *testing.T) {
 			}
 			w.driftPpm = &v
 		}
+		got := w.line()
 		if f[11] == "resume" {
-			t.Fatalf("row %q: the Gateway writes no resume window", row)
+			got = w.resumeLine()
 		}
-		if got := w.line(); got != f[12] {
+		if got != f[12] {
 			t.Errorf("row %q:\n got  %q\n want %q", row, got, f[12])
 		}
 		rows++

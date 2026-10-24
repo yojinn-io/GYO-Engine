@@ -64,13 +64,19 @@ func boolDigit(value bool) string {
 }
 
 // line is the "clock sync" line both ends log (pv7 §3). The reason= key
-// (log-contract §1.4): a Gateway window ends after clockWindowUs or with its
-// link (final); the Client's resume reason has no Gateway writer yet.
+// (log-contract §1.4): the window lasted clockWindowUs, or ended with its link
+// (final). A window a resume ended early is written by resumeLine.
 func (w clockWindow) line() string {
-	reason := "window"
 	if w.final {
-		reason = "final"
+		return w.format("final")
 	}
+	return w.format("window")
+}
+
+// resumeLine is the line of a window a resume ended early (final=0).
+func (w clockWindow) resumeLine() string { return w.format("resume") }
+
+func (w clockWindow) format(reason string) string {
 	drift := "na"
 	if w.driftPpm != nil && !math.IsNaN(*w.driftPpm) && !math.IsInf(*w.driftPpm, 0) {
 		drift = strconv.FormatFloat(*w.driftPpm, 'f', 3, 64)
@@ -158,6 +164,15 @@ func (c *clockSync) observe(peer clockStamp, receivedUs uint64) {
 	if c.delayMaxUs == nil || delay > *c.delayMaxUs {
 		c.delayMaxUs = &delay
 	}
+}
+
+// resume closes the window at once without ending the link: a Client's
+// verified datagram ended a silence (network-architecture §4). The drift
+// regression carries on, as for any window.
+func (c *clockSync) resume(nowUs uint64) clockWindow {
+	w, _ := c.roll(nowUs, true)
+	w.final = false
+	return w
 }
 
 // roll closes the window once it lasted clockWindowUs, or at once when final.

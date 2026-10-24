@@ -6005,6 +6005,96 @@
       "replace": "    case MovementPhasePath::ResumeReset: return \"resume\";",
       "check": "cpu",
       "expect": "resume reset as phase_path resume_reset"
+    },
+    {
+      "id": "ir-no-silence",
+      "batch": "v71-identity-rebind",
+      "what": "A rebinding does not wait for the bound endpoint to be silent",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "now.Sub(s.lastVerified) < rule.Silence || ",
+      "replace": "",
+      "check": "gateway_session",
+      "expect": "silence too short|rebound within Silence|while the old one sent Input"
+    },
+    {
+      "id": "ir-no-sequence",
+      "batch": "v71-identity-rebind",
+      "what": "A rebinding accepts a sequence that is not newer",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "if rule.Silence <= 0 || !s.hasSequence || !framing.NewerSequence(sequence, s.sequence) ||",
+      "replace": "if rule.Silence <= 0 ||",
+      "check": "gateway_session",
+      "expect": "sequence not newer"
+    },
+    {
+      "id": "ir-no-token",
+      "batch": "v71-identity-rebind",
+      "what": "A Hello is not checked against the token",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\tif !s.MatchesToken(token) || !peer.IsValid() {\n\t\treturn Rebound{}, ErrUnauthorized\n\t}",
+      "replace": "\tif !peer.IsValid() {\n\t\treturn Rebound{}, ErrUnauthorized\n\t}",
+      "check": "gateway_session",
+      "expect": "wrong token|bad token accepted"
+    },
+    {
+      "id": "ir-after-expiry",
+      "batch": "v71-identity-rebind",
+      "what": "An expired session still rebinds",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": " || now.Sub(s.lastSeen) >= rule.Timeout",
+      "replace": "",
+      "check": "gateway_session",
+      "expect": "session expired"
+    },
+    {
+      "id": "ir-admit-verifies-nothing",
+      "batch": "v71-identity-rebind",
+      "what": "Input and Actions from the bound endpoint do not verify it",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\ts.lastVerified = now // the endpoint matched: verified, before the rate limit\n",
+      "replace": "",
+      "check": "gateway_session",
+      "expect": "a sequence jump from the old endpoint|only Input from the old endpoint|stale and rate-limited"
+    },
+    {
+      "id": "ir-verify-after-rate",
+      "batch": "v71-identity-rebind",
+      "what": "A rate-limited datagram from the bound endpoint does not verify it",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\ts.lastVerified = now // the endpoint matched: verified, before the rate limit\n\tif err := s.rate(now); err != nil {\n\t\treturn err\n\t}\n",
+      "replace": "\tif err := s.rate(now); err != nil {\n\t\treturn err\n\t}\n\ts.lastVerified = now\n",
+      "check": "gateway_session",
+      "expect": "rate-limited datagram from the bound endpoint did not verify"
+    },
+    {
+      "id": "ir-any-hello-verifies",
+      "batch": "v71-identity-rebind",
+      "what": "A Hello with the token from another endpoint verifies the session before the decision",
+      "file": "services/gyo_gateway/session/session.go",
+      "find": "\tvar rebound Rebound\n",
+      "replace": "\ts.lastVerified = now\n\tvar rebound Rebound\n",
+      "check": "gateway_session",
+      "expect": "did not move to the new endpoint|refreshed the session"
+    },
+    {
+      "id": "ir-clock-unverified",
+      "batch": "v71-identity-rebind",
+      "what": "The clock window restarts on any datagram after a silence, verified or not",
+      "file": "apps/object_fps_pvp/gateway/echo.go",
+      "find": "!after.After(before) || after.Sub(before) < connectionInterruptedAfter",
+      "replace": "now.Sub(before) < connectionInterruptedAfter",
+      "check": "go",
+      "expect": "a datagram from another endpoint restarted"
+    },
+    {
+      "id": "ir-no-rebound-line",
+      "batch": "v71-identity-rebind",
+      "what": "A rebinding writes no line",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\tif rebound.Previous.IsValid() {\n",
+      "replace": "\t\tif false && rebound.Previous.IsValid() {\n",
+      "check": "go",
+      "expect": "want one"
     }
   ]
 }
