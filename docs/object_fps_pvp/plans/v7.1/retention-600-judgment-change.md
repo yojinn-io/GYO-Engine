@@ -94,7 +94,7 @@
 - **「拿掉 64 的上限不改變樣本」**：成立。上界約 30 筆，不是 20 筆，已修正。依賴「Host 時鐘與 Advance 的 elapsed 互相耦合」這個產品條件。
 - **文件小誤**：§7 寫「之前兩個方向都不保證（187 對 64）」，這只適用於 match-resync 之前；match-resync 到 retention-600 之間，只有稀疏的方向會破壞 S3。已修正。
 
-## 6. L2 不退步紀錄的宣告（D176 核准草案；第 2 版依 D45 檢查修訂，**修訂部分等你確認**）
+## 6. L2 不退步紀錄的宣告（D176 核准草案；第 2 版依 D45 檢查修訂，D177 確認）
 
 - **目的**：確認 `retention-600`（以及到它為止的 `match-resync`、`single-store-refactor`）在既有的網路情境下沒有退步。
   - 這批的行為改變只影響「10 s 以前被替代的序號」，既有語料不會出現，所以這是不退步的紀錄，不是行為改變的證明。
@@ -104,21 +104,21 @@
   - `x1`：`run_client_delay.py --profile x1 --delay-ms 200 --window-ms 2000 --fault-at 7.5 --rounds 1`（d44 的參數）；
   - `ramp`：`run_client_delay.py --profile ramp --peak-ms 250 --rise-ms 1500 --fall-ms 500 --fault-at 7.5 --rounds 1`；
   - `gateway-250ms`：**更正**：草案寫成 `run_network.py`，正確的是 `backpressure_probe.py --layers gateway --durations-ms 250`，只跑這一個案例。語料（pv7-checkpoint）是一次依序跑 6 個案例、gateway-250ms 排第 3，所以順序與暖機條件不同，和語料比較時列為差異。
-- **有效性的前提**（**新增，等你確認**；不是判定，不成立時記為 E）：
+- **有效性的前提**（新增，D177 確認；不是判定，不成立時記為 E）：
   - x1、ramp：`summary.json` 的 completed 為 true；剛好 1 輪，status 是 completed；`plan.json` 的 profile 參數、fault_at [7.5]、rounds 1 與上面一致；
   - gateway-250ms：`backpressure.json` 存在，layer 是 gateway、requested_ms 是 250，fault 的 start_ns 與 release_ns 都有值，relay_error 是 null。
   - **E 的處理**：E 不算 P 也不算 F，session 停下回報，並區分原因（環境、Test、實作）。不自動補跑；要不要補跑由你決定。
   - 語料中出現過環境造成的 E：d44 的 ramp-r7，send lateness p99 22 ms 超過 10 ms。審查者估計，這次 6 次 x1、ramp 至少碰到一次的機率約 11%。
 - **判定**（每次都要成立，0 容許）：
-  - **S1、S2、J5a**：凍結的 `ingress_evidence.py` 報告 passed。**J5a 的範圍（新增，等你確認）**：x1、ramp 是注入跑次，帶 `--injection`，也就是另外要求 never_arrived＝0，比照 README 的注入判定式；gateway-250ms 不帶。
+  - **S1、S2、J5a**：凍結的 `ingress_evidence.py` 報告 passed。**J5a 的範圍（新增，D177 確認）**：x1、ramp 是注入跑次，帶 `--injection`，也就是另外要求 never_arrived＝0，比照 README 的注入判定式；gateway-250ms 不帶。
   - **S3**：
     - 每位玩家（0 以外）都恰好有 1 行 final=1 的 ingress 行與 1 行 final=1 的 resync statistics 行，必要的鍵都在；
     - `late_first == slack_late + late_beyond_no`；
     - 至少要有 1 位玩家；
     - player 0（沒有 resync 行）要求 `late_first == slack_late`。
     - 完整性與 player 0 是新增的收緊。
-  - **runtime**（**收緊，等你確認**）：Match 的 end 行恰好 1 行，reason 是 signal、exit_code 是 0，而且沒有 "Match simulation failed"。草案只寫「不是 runtime_failed」；`reason=exception` 代表診斷資料遺失，也算不成立。
-- **旗標**（**新增，等你確認**；判定都成立、但要停下回報，記為 FLAG）：`resyncs` > 0、`late_beyond_no_commands` > 0，或移動紀錄裡出現 resync 重設。
+  - **runtime**（收緊，D177 確認）：Match 的 end 行恰好 1 行，reason 是 signal、exit_code 是 0，而且沒有 "Match simulation failed"。草案只寫「不是 runtime_failed」；`reason=exception` 代表診斷資料遺失，也算不成立。
+- **旗標**（新增，D177 確認；判定都成立、但要停下回報，記為 FLAG）：`resyncs` > 0、`late_beyond_no_commands` > 0，或移動紀錄裡出現 resync 重設。
   - 理由：語料中這三種情境的晚到最大是 gateway-250ms 221 ms、x1 166 ms、ramp 68 ms，都小於 N_o（333 ms），出現 Resync 就是沒預期到的變化。
   - 所有判定都抓不到 Resync 的退步：門檻只決定副本計進 slack_late 還是 late_beyond_no，S3 的總和不變。所以要靠旗標。
 - **只記錄、不判定**：
