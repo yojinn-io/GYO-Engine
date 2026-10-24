@@ -1,4 +1,4 @@
-# outage-resync：resync-l2-l3 的 L2 宣告（第 2 版，待核准）
+# outage-resync：resync-l2-l3 的 L2 宣告（第 2 版；2026-10-24 使用者核准，D178）
 
 日期：2026-10-24。分支 `claude/pvp-v71-outage-resync`。
 
