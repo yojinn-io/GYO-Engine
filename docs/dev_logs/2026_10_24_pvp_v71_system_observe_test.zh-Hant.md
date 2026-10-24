@@ -12,7 +12,7 @@
 | `client-silent-checks` | high | 4～6 | 完成（D183） |
 | `cxx-flag-removal` | high | 3～4 | 完成（L1 run 40110961077 成功） |
 | `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 完成（D181 新增；D187 r1＋k3，審查後 D188 改為 Hello 一律 250 ms；L2 12／12 P） |
-| `contract-readers` | medium | 3～4（K7 另加 2～3） | D181 併入 K7 |
+| `contract-readers` | medium | 3～4（K7 另加 2～3） | 實作完成，L1 待確認（D181 併入 K7） |
 | `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | D181 併入 K8 |
 | `analyzer-converge` | high | 5 | |
 | `token-tests` | high | 4～6 | |
@@ -160,3 +160,21 @@ INVENTORY 之外的已知問題 K5、K6（D181）。關卡與經過見 [rebind-o
   - D45 對抗式檢查：6 點，都已修正（最重要的是 N9 第 1 版放得太寬，加上「改綁後最多一次 Backlog」）。檢查中也發現凍結判定會寫回 `ingress-evidence.json`：本會話曾直接重判舊 session 的兩輪，以 `files.sha256` 核對 638 個檔案全部相符。之後的重判都用副本。
   - 結果：session `pvp-v71-rebind-l2-20261025`，**12／12 P**。C10 的改綁從窗口結束後約 1004 ms 縮到約 229～246 ms；C0 的 Hello 每秒 4.00、間隔 249.8～250.4 ms、Welcome＝Hello。
 - **L1**：run 40117207196（`56aed98`）四平台成功；之後只改文件。
+
+## contract-readers：契約讀者收進 repo、host_lock 鍵進契約、K7
+
+INVENTORY 的 N-compare-reports-untracked、N-host-lock-keys-uncontracted，加上 D181 併入的 K7。
+
+### 做了什麼
+
+- **compare_reports**：log-contract 指定的 Match `gw_drop` 回報讀者，原本只存在 git 忽略的 drop-report 證據目錄（在主 checkout，`pvp-v71-drop-report-20261016/`）。原封不動搬進 `build/acceptance/object_fps_pvp/compare_reports.py`，位元組相同，以前用雜湊載入它的 L2 工具仍然對得上。
+  - 單元測試 `test_compare_reports.py`（5 個：相等通過並列出沒有 final 的流、Match 少讀一則、內容不同、有違規、只看有 match.log 的目錄），CTest `object_fps_pvp.compare_reports`（標籤 cpu、pvp、acceptance）。
+  - 凍結清單只檢查列出的檔案（`run_client_delay.frozen_problems`），在目錄裡新增檔案不會讓既有的凍結工具失效。
+  - 用 drop-report 的舊證據重跑（工具只讀不寫）：證據目錄那份和 repo 這份輸出逐位元相同，11 個跑次、20 則回報全部相等、0 個違規。
+- **host_lock 鍵**：log-contract 的 Match network statistics 列記下 `host_lock_input_*`、`host_lock_step_*`（由 `MatchRuntimeHost` 量，`edge-input-passthrough` 起，L2 的判定工具直接讀）；protocol-v7 的批次表把「IpcHost 層」改正為 host mutex 的擁有者 `MatchRuntimeHost`。分析器的彙總不在這一項的範圍內。
+- **K7**：outage-resync 新增的 Client A 級行只有組行函式的 golden。worker 驗收新增 `RequireOutageLines`：每次 `RunOutage`（一般與極端時鐘回聲各一次）期間寫出的連線行，必須依序是中斷（`gap_ms` 500～520、`epoch=1`）、時鐘視窗的 `reason=resume`（`final=0`）、恢復（`gap_ms` ≥1000、epoch 1→1）、第二次中斷、摘要（`interruptions=2`、`max_gap_ms` 等於恢復的 `gap_ms`）、逾時失敗。
+
+### 驗證
+
+- 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49（多了 compare_reports）；worker 驗收連跑 3 次通過。
+- **突變**（D184 的挑選）：新增 6 個（compare_reports 把每個跑次都判相等、忽略違規；K7 的中斷行、恢復行、時鐘 resume 行不寫、摘要不計中斷），6／6 killed；沒有 find 落在改動範圍或斷言附近被改過的既有突變。

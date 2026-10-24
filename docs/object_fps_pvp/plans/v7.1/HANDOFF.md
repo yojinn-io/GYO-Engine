@@ -45,7 +45,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 
 - **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
-- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。下一批 `contract-readers`（含 K7）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
+- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。`contract-readers`（含 K7）實作完成，L1 待確認。下一批 `trace-no-overwrite`（含 K8）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
@@ -751,7 +751,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 過渡原因的樣本身分不完整：16、17、20、21、28 沒有 action id 範圍；22～26 的 dwell 起點是計數時刻。edge 批刪除過渡原因時一併消失；28（結果寫出失敗）的 action id 範圍在 `edge-results-*` 補。
   - Match 照單接收違規回報的值、繼續往下比對（不標不可信）；L2 分析要把出現過違規的串流視為不可信。
   - 兩個 `coalesced_snapshots`：`gateway transport coalesced_snapshots` 含送出迴圈中途的取代，新鍵 45 只計讀取端；在 `log-contract` 統一。**（已處理：D142，鍵名不改，差額由 `backpressure_test.go` 守住）**
-  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。**（仍未收進，2026-10-21；已補進 INVENTORY 為 N-compare-reports-untracked，D158）**
+  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。**（v7.1 contract-readers 已收進 `build/acceptance/object_fps_pvp/`；以下是當時的紀錄。仍未收進，2026-10-21；已補進 INVENTORY 為 N-compare-reports-untracked，D158）**
 - **`edge-contract` 的約束**（文件會話，設計事故行動 4）：契約節的標題改成英文 `Design Invariants`，不隨文件語言翻譯（使用者的決定，文件會話 PR #80，2026-10-16 通知時尚未合併；這更正了 PR #79 時「標題逐字保持『不可破壞的契約』」的要求）。
   - `edge-contract` 把 Gateway 的正式條文寫在 `network-architecture.zh-Hant.md` 的 `### Design Invariants` 節下。PR #80 已合併到 master（`8f2f3fe`，四平台 L1 通過）；本分支在 `edge-results-resend` commit 之後同步 master，不自行改名。master 的 AGENTS.md 另新增 §14 Test and Defect Handling（原 §14、§15 往後移），同步後照新規則做。
   - AGENTS.md §3 改成一般規則「状態の権威（State Authority）」，不再列 Gateway 的細節；Gateway 的允許／禁止清單（protocol-v7 §2a）只放在 Design Invariants 節。
