@@ -82,6 +82,16 @@ TEST_CASE("PvP movement trace lines keep the bytes of the schema version 3 write
     for (std::size_t k = 0; k < events.size(); ++k) CHECK(MovementTraceLine(events[k]) == GoldenLines[k]);
 }
 
+// client-interrupted (log-contract §1.4): a resume that restarts phase
+// acquisition, count 0, the cancelled remainder as the shift.
+TEST_CASE("PvP movement trace writes a resume reset as phase_path resume_reset") {
+    MovementTraceEvent e{};
+    e.kind = MovementTraceKind::PhaseDecision; e.timeNs = 8; e.playerId = 2; e.epoch = 3; e.sequence = 90;
+    e.phasePath = MovementPhasePath::ResumeReset; e.phaseShiftSeconds = -0.0125;
+    CHECK(MovementTraceLine(e) ==
+          R"G({"schema_version":3,"kind":"phase_decision","time_ns":8,"player_id":2,"life_generation":1,"epoch":3,"sequence":90,"authority_tick":0,"source":"none","queued":0,"pending":0,"seeded_neutral":false,"dropped_seconds":0,"frame_seconds":0,"count":0,"age_seconds":0,"reset_reason":"none","started_ns":0,"phase_path":"resume_reset","phase_error_seconds":0,"phase_shift_seconds":-0.012500000000000001,"phase_deadband_seconds":0})G");
+}
+
 TEST_CASE("PvP movement trace file keeps its bytes and ends with trace_end") {
     const auto path = DiagnosticPath("movement");
     {

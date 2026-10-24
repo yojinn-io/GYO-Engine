@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/ClientSimulationHistory.hpp"
 #include "RetroFPS/Pvp/ClockSync.hpp"
 #include "RetroFPS/Pvp/ConnectionLiveness.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
@@ -133,11 +134,8 @@ struct ClientConnection::Impl {
     std::deque<ReceivedSnapshot> receivedSnapshots;
     bool snapshotOverflow{};
     std::uint64_t snapshotOverflowCount{};
-    // The simulation role's own copy of the history (DrainSimulation).
-    std::deque<ReceivedSnapshot> simulationSnapshots;
-    bool simulationConsumer{};
-    std::uint64_t simulationOverflowCount{};
-    bool simulationResumed{}; // the next DrainSimulation's one-shot flag
+    // The simulation role's own copy of the history and its resume flag (DrainSimulation).
+    ClientSimulationHistory simulationHistory;
     std::vector<ArenaIdentity> installedArenas;
     std::atomic<std::uint64_t> generation{0};
     asio::io_context io;
@@ -236,7 +234,7 @@ struct ClientConnection::Impl {
         CloseTransport();
         std::scoped_lock lock(mutex);latestInput.reset();submittedCommands.clear();submittedEpoch=1;
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
-        simulationSnapshots.clear();simulationOverflowCount=0;simulationResumed=false;
+        simulationHistory.Clear();
         ResetActions();
     }
     void Failure(std::string error,std::uint64_t failedGeneration) {
@@ -247,7 +245,7 @@ struct ClientConnection::Impl {
         // reset together. Drain must not see an old generation's count reset.
         latestInput.reset();submittedCommands.clear();submittedEpoch=1;
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
-        simulationSnapshots.clear();simulationOverflowCount=0;simulationResumed=false;
+        simulationHistory.Clear();
         ResetActions();
         state.interrupted=false;state.interruptedSince={};
         std::osyncstream(std::clog)<<"[ObjectFPS/PvP] connection failed player="<<state.playerId
@@ -265,7 +263,7 @@ struct ClientConnection::Impl {
         state.phase=ConnectionPhase::Requesting;
         latestInput.reset();submittedCommands.clear();
         receivedSnapshots.clear();snapshotOverflow=false;snapshotOverflowCount=0;
-        simulationSnapshots.clear();simulationOverflowCount=0;simulationResumed=false;
+        simulationHistory.Clear();
         ResetActions();
         state.interrupted=false;state.interruptedSince={};
         PostService();
@@ -401,7 +399,9 @@ struct ClientConnection::Impl {
     bool Send(wire::Type type,const std::string& payload) {
         const auto bytes=wire::Encode({type,session,++sentSequence,payload});
         asio::error_code error;socket.send_to(asio::buffer(bytes),endpoint,0,error);
-        if(error && TransientSocketError(error)) {++summary.transientSocketErrors;return false;}
+        // Transient only while playing (connected or interrupted, network-architecture §4);
+        // during the handshake every socket error still fails the join at once.
+        if(error && liveness.Playing() && TransientSocketError(error)) {++summary.transientSocketErrors;return false;}
         if(error && error!=asio::error::would_block && error!=asio::error::try_again)throw std::runtime_error(error.message());
         if(error)++sendBlocked;
         return !error;
@@ -508,7 +508,8 @@ struct ClientConnection::Impl {
             udp::endpoint sender;asio::error_code error;
             const auto size=socket.receive_from(asio::buffer(bytes),sender,0,error);
             if(error==asio::error::would_block || error==asio::error::try_again)break;
-            if(TransientSocketError(error)) {++summary.transientSocketErrors;break;}
+            // No data this time; datagrams queued behind it are still read in this pass.
+            if(liveness.Playing() && TransientSocketError(error)) {++summary.transientSocketErrors;continue;}
             if(error)throw std::runtime_error(error.message());
             const auto arrivedAt=Clock::now();
             ++receivedDatagrams;
@@ -634,7 +635,6 @@ struct ClientConnection::Impl {
                     if(arrival.resumed) {
                         if(const auto line=clock.Resume(MicrosNow()))std::osyncstream(std::clog)<<*line<<'\n';
                         state.interrupted=false;state.interruptedSince={};
-                        if(simulationConsumer)simulationResumed=true;
                         std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<ConnectionResumedLine(own,arrival.gap,
                             interruptedEpoch,authority.movementEpoch)<<'\n';
                     }
@@ -662,12 +662,8 @@ struct ClientConnection::Impl {
                             .epoch=player.movementEpoch,.sequence=player.lastResolvedCommand,.authorityTick=snapshot.tick,
                             .queued=player.contiguousPendingCommands,.count=snapshotOverflowCount,.lifeGeneration=player.lifeGeneration});
                     state.snapshot=snapshot;state.phase=ConnectionPhase::Playing;
-                    if(simulationConsumer) {
-                        if(simulationSnapshots.size()==MaxReceivedSnapshots) {
-                            simulationSnapshots.pop_front();++simulationOverflowCount;++windowSimulationOverflows;
-                        }
-                        simulationSnapshots.push_back({snapshot,arrivedAt});
-                    }
+                    // The flag travels with this snapshot (§4 recovery step 3).
+                    if(simulationHistory.Push({snapshot,arrivedAt},arrival.resumed))++windowSimulationOverflows;
                     receivedSnapshots.push_back({std::move(snapshot),arrivedAt});
                 }
             } else if(packet->type==wire::Type::ActionResults) {
@@ -688,9 +684,12 @@ struct ClientConnection::Impl {
         // their absence interrupts it (T_int); a Welcome counts only until the
         // first snapshot. The socket, credentials, sequence, window and actions
         // all stay while interrupted.
-        switch(const auto polledAt=Clock::now();liveness.Poll(polledAt)) {
-        case ConnectionLiveness::Event::TimedOut:throw std::runtime_error("Gateway connection timed out");
-        case ConnectionLiveness::Event::Interrupted:{
+        // A worker stall or a sleep past T_max still records the interruption
+        // the connection ended in, so its summary does not read as uninterrupted.
+        const auto polledAt=Clock::now();
+        const auto event=liveness.Poll(polledAt);
+        if(event==ConnectionLiveness::Event::Interrupted ||
+           (event==ConnectionLiveness::Event::TimedOut && liveness.Playing() && !liveness.Interrupted())) {
             std::scoped_lock lock(mutex);
             if(activeGeneration!=generation.load())return;
             interruptedEpoch=0;
@@ -701,10 +700,8 @@ struct ClientConnection::Impl {
             state.interrupted=true;state.interruptedSince=liveness.Since();
             std::osyncstream(std::clog)<<"[ObjectFPS/PvP] "<<ConnectionInterruptedLine(state.playerId,
                 polledAt-liveness.Since(),interruptedEpoch)<<'\n';
-            break;
         }
-        case ConnectionLiveness::Event::None:break;
-        }
+        if(event==ConnectionLiveness::Event::TimedOut)throw std::runtime_error("Gateway connection timed out");
         std::optional<PlayerInput> input;
         {std::scoped_lock lock(mutex);
             if(activeGeneration!=generation.load())return;
@@ -1008,12 +1005,8 @@ ClientConnectionDrain ClientConnection::Drain(){
 }
 ClientSimulationDrain ClientConnection::DrainSimulation(){
     std::scoped_lock lock(impl_->mutex);
-    impl_->simulationConsumer=true;
-    ClientSimulationDrain result{{},impl_->generation.load(),impl_->state.playerId,impl_->state.arenaId,
-        impl_->state.movementRules,impl_->simulationOverflowCount,std::exchange(impl_->simulationResumed,false)};
-    result.snapshots.reserve(impl_->simulationSnapshots.size());
-    for(auto& received:impl_->simulationSnapshots)result.snapshots.push_back(std::move(received));
-    impl_->simulationSnapshots.clear();
-    return result;
+    auto taken=impl_->simulationHistory.Take();
+    return {std::move(taken.snapshots),impl_->generation.load(),impl_->state.playerId,impl_->state.arenaId,
+        impl_->state.movementRules,taken.overflowCount,taken.resumed};
 }
 }

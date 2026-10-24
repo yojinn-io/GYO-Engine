@@ -57,18 +57,54 @@ class DiagnosticIsolationTest(unittest.TestCase):
                 with self.subTest(file=path.name, symbol=symbol):
                     self.assertNotIn(symbol, text, f'{path.relative_to(REPOSITORY)} names {symbol!r}')
 
-    def test_the_resume_flag_is_set_with_its_snapshot_under_one_lock(self):
+    def test_the_resume_flag_is_raised_only_with_its_snapshot_under_one_lock(self):
         # §4 recovery step 3: no simulation batch holds the resuming snapshot
-        # without the flag. The flag is set after the lock that also pushes the
-        # snapshot into the simulation history was taken, with no other lock
-        # section in between.
+        # without the flag. ClientSimulationHistory raises the flag only in
+        # Push, with the snapshot; the worker pushes once, passing the liveness
+        # arrival's resume, inside the lock it took for that snapshot with no
+        # other lock section in between.
+        history = (INCLUDE / 'ClientSimulationHistory.hpp').read_text(encoding='utf-8')
+        self.assertEqual(history.count('resumed_ = resumed_ || resumes;'), 1)
+        self.assertEqual(len(re.findall(r'resumed_ = (?!resumed_ \|\| resumes;)', history)), 1)  # Clear only
         text = (SOURCE / 'ClientConnection.cpp').read_text(encoding='utf-8')
-        self.assertEqual(text.count('simulationResumed=true'), 1)
-        flag = text.index('simulationResumed=true')
-        push = text.index('simulationSnapshots.push_back')
-        lock = text.rindex('std::scoped_lock lock(mutex);', 0, flag)
-        self.assertLess(flag, push)
+        self.assertEqual(text.count('simulationHistory.Push('), 1)
+        push = text.index('simulationHistory.Push({snapshot,arrivedAt},arrival.resumed)')
+        arrival = text.index('const auto arrival=liveness.Snapshot(arrivedAt);')
+        lock = text.rindex('std::scoped_lock lock(mutex);', 0, arrival)
         self.assertNotIn('scoped_lock', text[lock + len('std::scoped_lock'):push])
+
+    def test_liveness_reads_only_arrival_times(self):
+        # §7 (連線中斷與重新對時): the worker passes ConnectionLiveness the
+        # steady_clock it read when a datagram arrived, or now; never a time
+        # derived from the clock echo. Every call's argument is one of these.
+        text = (SOURCE / 'ClientConnection.cpp').read_text(encoding='utf-8')
+        calls = []
+        for match in re.finditer(r'\bliveness\.(\w+)\(', text):
+            depth, end = 1, match.end()
+            while depth:
+                depth += {'(': 1, ')': -1}.get(text[end], 0)
+                end += 1
+            calls.append((match.group(1), text[match.end():end - 1]))
+        self.assertEqual(len(calls), 12)
+        allowed = {'Begin': {'Clock::now()'}, 'Welcome': {'arrivedAt'}, 'Snapshot': {'arrivedAt'}, 'Poll': {'polledAt'},
+                   'Interrupted': {''}, 'Playing': {''}, 'Since': {''}, 'NextDeadline': {''}}
+        for method, argument in calls:
+            with self.subTest(method=method, argument=argument):
+                self.assertIn(method, allowed)
+                self.assertIn(argument, allowed[method])
+        self.assertIn('const auto polledAt=Clock::now();\n        const auto event=liveness.Poll(polledAt);', text)
+        for arrival in re.findall(r'const auto (arrivedAt)=([^;]*);', text):
+            self.assertEqual(arrival[1], 'Clock::now()')
+
+    def test_every_socket_error_is_classified_before_it_fails_the_session(self):
+        # network-architecture §4 (D172 D-7): at both places where a socket
+        # error ends the session, the transient check comes first.
+        text = (SOURCE / 'ClientConnection.cpp').read_text(encoding='utf-8')
+        throws = [m.start() for m in re.finditer(r'throw std::runtime_error\(error\.message\(\)\)', text)]
+        self.assertEqual(len(throws), 2)
+        for at in throws:
+            before = text[text.rindex('\n', 0, text.rindex('\n', 0, at)):at]
+            self.assertIn('TransientSocketError(error)', before)
 
     def test_no_decision_reads_the_view_tick(self):
         # pv7 §7: the view tick is request content the host only records

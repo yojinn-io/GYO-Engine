@@ -5889,12 +5889,12 @@
     {
       "id": "ci-liveness-reads-time-echo",
       "batch": "v71-client-interrupted",
-      "what": "The snapshot arrival time liveness reads is shifted by the time echo",
+      "what": "The snapshot arrival time liveness reads is shifted by the time echo (a shift below the old tolerance)",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
       "find": "                    const auto arrival=liveness.Snapshot(arrivedAt);",
-      "replace": "                    const auto arrival=liveness.Snapshot(arrivedAt+std::chrono::microseconds(clock.Clock().Echo()?clock.Clock().Echo()->first%1000000:0));",
+      "replace": "                    const auto arrival=liveness.Snapshot(arrivedAt+std::chrono::microseconds(clock.Clock().Echo()?clock.Clock().Echo()->first%500000:0));",
       "check": "worker",
-      "expect": "an extreme time echo changed a liveness decision"
+      "expect": "did not count from the last snapshot|not interrupted at T_int|an extreme time echo changed"
     },
     {
       "id": "ci-transient-not-transient",
@@ -5935,6 +5935,76 @@
       "replace": "    phase_paths = {'first', 'window', 'late'}",
       "check": "command_evidence",
       "expect": "test_schema_three_reads_phase_decisions"
+    },
+    {
+      "id": "ci-liveness-reads-time-echo-static",
+      "batch": "v71-client-interrupted",
+      "what": "The same shift, seen by the static argument check",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    const auto arrival=liveness.Snapshot(arrivedAt);",
+      "replace": "                    const auto arrival=liveness.Snapshot(arrivedAt+std::chrono::microseconds(clock.Clock().Echo()?clock.Clock().Echo()->first%500000:0));",
+      "check": "diagnostic_isolation",
+      "expect": "test_liveness_reads_only_arrival_times"
+    },
+    {
+      "id": "ci-resume-flag-sticks",
+      "batch": "v71-client-interrupted",
+      "what": "The resume flag is handed over without being cleared: every later drain restarts acquisition",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationHistory.hpp",
+      "find": "std::exchange(resumed_, false)",
+      "replace": "resumed_",
+      "check": "cpu",
+      "expect": "hands the resume flag over once"
+    },
+    {
+      "id": "ci-resume-flag-never-raised",
+      "batch": "v71-client-interrupted",
+      "what": "A resuming snapshot does not raise the flag",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationHistory.hpp",
+      "find": "        resumed_ = resumed_ || resumes;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "hands the resume flag over once"
+    },
+    {
+      "id": "ci-role-drops-resume",
+      "batch": "v71-client-interrupted",
+      "what": "The simulation role does not pass the resume on",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "simulation_.Observe(*self, newest->tick, drain.movementRules, drain.resumed);",
+      "replace": "simulation_.Observe(*self, newest->tick, drain.movementRules, false);",
+      "check": "cpu",
+      "expect": "resumed drain restarts phase acquisition once"
+    },
+    {
+      "id": "ci-resume-drops-window",
+      "batch": "v71-client-interrupted",
+      "what": "A resume drops the worker window in flight",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                        state.interrupted=false;state.interruptedSince={};\n                        std::osyncstream",
+      "replace": "                        state.interrupted=false;state.interruptedSince={};latestInput.reset();submittedCommands.clear();\n                        std::osyncstream",
+      "check": "worker",
+      "expect": "window changed across an interruption"
+    },
+    {
+      "id": "ci-receive-error-unclassified",
+      "batch": "v71-client-interrupted",
+      "what": "A receive error fails the session without the transient check",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            if(liveness.Playing() && TransientSocketError(error)) {++summary.transientSocketErrors;continue;}\n",
+      "replace": "",
+      "check": "diagnostic_isolation",
+      "expect": "test_every_socket_error_is_classified_before_it_fails_the_session"
+    },
+    {
+      "id": "ci-trace-resume-reset-name",
+      "batch": "v71-client-interrupted",
+      "what": "The resume reset path is written under another name",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTrace.hpp",
+      "find": "    case MovementPhasePath::ResumeReset: return \"resume_reset\";",
+      "replace": "    case MovementPhasePath::ResumeReset: return \"resume\";",
+      "check": "cpu",
+      "expect": "resume reset as phase_path resume_reset"
     }
   ]
 }

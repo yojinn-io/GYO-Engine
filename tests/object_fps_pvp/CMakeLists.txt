@@ -13,7 +13,8 @@ target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
     PVP_PRODUCT_ARENA_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/pvp_arena.json"
     PVP_CONNECTION_TIMING_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/connection_timing.json")
-target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} ${client_simulation} GYO::Net gyo_test_support nlohmann_json::nlohmann_json doctest::doctest)
+target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} ${client_simulation} GYO::Net gyo_test_support nlohmann_json::nlohmann_json doctest::doctest
+    asio::asio) # ConnectionLivenessTests: the socket error codes asio reports
 if(WIN32)
     target_compile_definitions(${tests} PRIVATE NOMINMAX)
 endif()

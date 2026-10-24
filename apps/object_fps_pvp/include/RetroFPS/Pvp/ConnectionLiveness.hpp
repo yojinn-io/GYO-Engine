@@ -52,6 +52,8 @@ public:
         return Event::Interrupted;
     }
     [[nodiscard]] bool Interrupted() const noexcept { return interrupted_; }
+    // A valid snapshot arrived: the connection is in the connected or the interrupted state.
+    [[nodiscard]] bool Playing() const noexcept { return playing_; }
     // The last valid snapshot, or what stands for it before the first one.
     [[nodiscard]] Clock::time_point Since() const noexcept { return since_; }
     // When Poll next has something to report.

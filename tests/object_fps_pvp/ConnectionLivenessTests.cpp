@@ -5,6 +5,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ConnectionLiveness.hpp"
 
+#include <asio.hpp>
 #include <doctest/doctest.h>
 #include <nlohmann/json.hpp>
 
@@ -97,7 +98,9 @@ TEST_CASE("PvP connection interrupted, resumed and summary lines") {
 }
 
 // D172 D-7: which socket errors only count. Any other error still fails the
-// session (the worker's call sites are covered by the L3 cable and Wi-Fi runs).
+// session. The call sites are checked statically (test_diagnostic_isolation.py);
+// Windows reports a refused port on an unconnected UDP socket as
+// WSAECONNRESET, which the L3 cable and Wi-Fi runs exercise.
 TEST_CASE("PvP transient socket errors are the five of a network that may come back") {
     for (const auto error : {std::errc::connection_reset, std::errc::connection_refused, std::errc::network_unreachable,
                              std::errc::host_unreachable, std::errc::network_down})
@@ -106,4 +109,9 @@ TEST_CASE("PvP transient socket errors are the five of a network that may come b
                              std::errc::address_not_available, std::errc::operation_not_permitted})
         CHECK_FALSE(TransientSocketError(std::make_error_code(error)));
     CHECK_FALSE(TransientSocketError({}));
+    // The socket's own codes (system category, as asio reports them) too.
+    for (const auto error : {asio::error::connection_reset, asio::error::connection_refused, asio::error::network_unreachable,
+                             asio::error::host_unreachable, asio::error::network_down})
+        CHECK(TransientSocketError(asio::error_code(error)));
+    CHECK_FALSE(TransientSocketError(asio::error_code(asio::error::message_size)));
 }

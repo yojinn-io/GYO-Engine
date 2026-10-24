@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/ClientSimulationHistory.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/ShotGate.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
@@ -679,3 +681,64 @@ TEST_CASE("PvP the simulation loop reports the unmatched phase samples of a gene
     CHECK(PhaseSummaryLine(*step.endedPhase) == "phase summary version=1 player=5 phase_samples_unmatched=2");
     CHECK_FALSE(loop.TakePhaseSummary());
 }
+
+// client-interrupted (network-architecture §4, recovery step 3): the worker
+// raises the resume flag only with the snapshot that ended the interruption,
+// and the simulation takes it exactly once.
+TEST_CASE("PvP the simulation history hands the resume flag over once, with its snapshot") {
+    ClientSimulationHistory history;
+    const auto received = [](std::uint64_t tick) { return ReceivedSnapshot{WorldSnapshot{tick, {}, {}}, {}}; };
+    CHECK_FALSE(history.Push(received(1), true)); // no simulation role yet: nothing is kept
+    auto taken = history.Take();
+    CHECK(taken.snapshots.empty());
+    CHECK_FALSE(taken.resumed);
+    static_cast<void>(history.Push(received(2), false));
+    static_cast<void>(history.Push(received(3), true));
+    static_cast<void>(history.Push(received(4), false));
+    taken = history.Take();
+    REQUIRE(taken.snapshots.size() == 3);
+    CHECK(taken.resumed); // two resumes or one: once
+    CHECK_FALSE(history.Take().resumed);
+    static_cast<void>(history.Push(received(5), true));
+    history.Clear();
+    taken = history.Take();
+    CHECK(taken.snapshots.empty());
+    CHECK_FALSE(taken.resumed);
+    // A full history drops its oldest snapshot and counts it until the next Clear.
+    for (std::uint64_t tick = 10; tick < 10 + MaxReceivedSnapshots; ++tick) CHECK_FALSE(history.Push(received(tick), false));
+    CHECK(history.Push(received(100), false));
+    taken = history.Take();
+    CHECK(taken.overflowCount == 1);
+    CHECK(taken.snapshots.front().snapshot.tick == 11);
+}
+
+TEST_CASE("PvP a resumed drain restarts phase acquisition once and tracking decides again") {
+    struct TraceScope {
+        std::shared_ptr<MovementTrace> trace = std::make_shared<MovementTrace>();
+        TraceScope() { SetMovementTrace(trace); }
+        ~TraceScope() { SetMovementTrace(nullptr); }
+    } trace;
+    constexpr double ResumeAt = 2;
+    bool raised = false;
+    Options options;
+    options.transform = [&](double now, ClientSimulationDrain& drain) {
+        if (now < ResumeAt || raised || drain.snapshots.empty()) return;
+        drain.resumed = true;
+        raised = true;
+    };
+    const auto run = RunRole({Every(1.0 / 60.0), Moving}, options);
+    REQUIRE(raised);
+    const auto before = std::find_if(run.steps.rbegin(), run.steps.rend(), [&](const StepRecord& step) { return step.at < ResumeAt; });
+    REQUIRE(before->observation.phaseTracking == PhaseTrackingState::Tracking);
+    const auto resumed = std::find_if(run.steps.begin(), run.steps.end(),
+        [&](const StepRecord& step) { return step.at >= ResumeAt && step.delivered > 0; });
+    REQUIRE(resumed != run.steps.end());
+    CHECK(resumed->observation.phaseTracking == PhaseTrackingState::Acquiring);
+    CHECK(resumed->observation.stallReseeds == before->observation.stallReseeds);
+    std::size_t resets = 0;
+    for (const auto& event : trace.trace->Drain())
+        if (event.kind == MovementTraceKind::PhaseDecision && event.phasePath == MovementPhasePath::ResumeReset) ++resets;
+    CHECK(resets == 1);
+    CHECK(run.steps.back().observation.phaseTracking == PhaseTrackingState::Tracking);
+}
+
