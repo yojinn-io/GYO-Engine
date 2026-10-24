@@ -971,7 +971,8 @@ python() { printf '%s\\n' "$@" > python-arguments; }
                     expected.append(pulls)
                 if writes:
                     expected.append(jobs)
-                body = str(root / "l1-dispatch-comment.md")
+                # The script joins RUNNER_TEMP with "/" on every host, Windows included.
+                body = f"{temporary}/l1-dispatch-comment.md"
                 for pull in open_pulls.split("\n") if writes else ():
                     expected.append(comments.format(pull=pull))
                     if existing:
