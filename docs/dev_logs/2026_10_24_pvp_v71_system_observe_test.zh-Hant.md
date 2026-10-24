@@ -10,8 +10,8 @@
 |---|---|---|---|
 | `silent-branch-asserts` | high | 4～6（C3 另加 1～2） | 實作完成，L1 待確認（D180） |
 | `client-silent-checks` | high | 4～6 | 完成（D183） |
-| `cxx-flag-removal` | high | 3～4 | 實作完成，L1 待確認 |
-| `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 實作中（D181 新增；D187 r1＋k3，審查後 D188 改為 Hello 一律 250 ms） |
+| `cxx-flag-removal` | high | 3～4 | 完成（L1 run 40110961077 成功） |
+| `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | 完成（D181 新增；D187 r1＋k3，審查後 D188 改為 Hello 一律 250 ms；L2 12／12 P） |
 | `contract-readers` | medium | 3～4（K7 另加 2～3） | D181 併入 K7 |
 | `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | D181 併入 K8 |
 | `analyzer-converge` | high | 5 | |
@@ -155,4 +155,8 @@ INVENTORY 之外的已知問題 K5、K6（D181）。關卡與經過見 [rebind-o
 - 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 48／48（`-j4`）；worker 驗收單獨連跑 5 次通過。
 - **一次失敗與切分**：在 `-j8` 並行時 worker 驗收失敗一次（`worker emitted a resend catch-up burst`）。這些時序檢查量的是 mock 收到封包的時刻，CPU 負載高時 mock 可能一次讀進兩個封包。切分：加 16 個忙碌程序的負載，D188 跑 10 次失敗 2 次（`a token wait outlived four commands`），舊規則（暫時改回、跑完還原）同樣負載下也失敗 2 次（`the waiting sends did not drain the token debt`）。歸類：測試本身對負載敏感（環境是觸發條件），不是 D188 的缺陷。這不是事前宣告的受入試行。
 - **突變**（D184 的挑選）：D187 的 6 個已移除（對應的程式不存在了）；D188 新增 3 個（Hello 回到每 1 s、每次 worker 經過都送、喚醒晚到 1 s），加上斷言附近被改過的 1 個，4／4 killed。
-- **L2**：宣告寫好後交使用者核准（D187）。
+- **L2**（[宣告](../object_fps_pvp/plans/v7.1/rebind-on-new-port-l2-declaration.md)第 2 版，D190）：
+  - 宣告前：探索性試跑 4 項各 1 輪（不判定）發現凍結的「J-R9 epoch」在 C10 會因 D188 判 F。原因是 outage-resync 已知的 P2 例外：C10 恢復後到改綁前的不對稱期間累積的領先量，改綁後約 0.5 s 由 Backlog 清掉。舊行為改綁晚，那次 Backlog 落在計數窗外；D188 讓它落進來。宣告以 N9 取代（§14.4 的 1～5 在宣告第 3 節）。
+  - D45 對抗式檢查：6 點，都已修正（最重要的是 N9 第 1 版放得太寬，加上「改綁後最多一次 Backlog」）。檢查中也發現凍結判定會寫回 `ingress-evidence.json`：本會話曾直接重判舊 session 的兩輪，以 `files.sha256` 核對 638 個檔案全部相符。之後的重判都用副本。
+  - 結果：session `pvp-v71-rebind-l2-20261025`，**12／12 P**。C10 的改綁從窗口結束後約 1004 ms 縮到約 229～246 ms；C0 的 Hello 每秒 4.00、間隔 249.8～250.4 ms、Welcome＝Hello。
+- **L1**：run 40117207196（`56aed98`）四平台成功；之後只改文件。
