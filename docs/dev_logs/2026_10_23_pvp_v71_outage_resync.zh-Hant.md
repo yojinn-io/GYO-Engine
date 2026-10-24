@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 完成（對抗式審查後補強）。`identity-rebind` 完成（L1 run 40077174310 四平台成功）。`resync-l2-l3` 的 L2 通過（D178，33 輪全部 P），L3 待使用者在場。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 完成（對抗式審查後補強）。`identity-rebind` 完成（L1 run 40077174310 四平台成功）。`resync-l2-l3` 的 L2 通過（D178，33 輪全部 P）；L3 移到 `lan15-windows`（D179）。`line-close` 完成。
 
 相關文件：
 
@@ -354,7 +354,7 @@
 - **L2**（D178：使用者核准宣告第 2 版）：session `pvp-v71-resync-l2-20261024`，33 輪全部 P。
   - 中斷行 `gap_ms` 全部 500；C9 的 T_max 4983.6～4999.5 ms；恢復後 3 s 內被接受的命令 130～191 個；改綁每位玩家 1 次。
   - J-R3（只記錄）只在只上行的 C4、C5 出現，是 §7 已知的 P2 例外，見宣告第 9 節。
-- **L3**：還沒做，需要使用者在場（宣告第 6 節）。
+- **L3**：D179 移到 after-re-evaluate 的 `lan15-windows`，內容寫在該批的驗收欄。宣告第 2 版改寫時漏掉了第 1 版的 L3 一節，以該欄為準。
 
 
 ## line-close（不依賴 L3 的部分，2026-10-24）
@@ -409,9 +409,11 @@
   - `identity-rebind` 的 Hello 間隔。
   - I-3（防竄改的 session 證明，pv8）。
 
-### 剩下的事
+### 收尾
 
-- **L3**（使用者在場，宣告第 6 節）：
-  - Windows 與 macOS 各拔網路線或關 Wi-Fi，2 s 與 7 s 各一次；
-  - 記錄 `transient_socket_errors` 與 endpoint 有沒有改變。
-- L3 之後：補上結果，PR #90 由 draft 改成 ready，跑全量 L1，使用者確認後以 `gh pr merge --merge` 合併。
+- **L3**：D179 移到 after-re-evaluate 的 `lan15-windows`（預定 2026-10-26 前後），內容寫在該批的驗收欄。
+- **已知項目**：Windows 的 WSAECONNRESET（D172 D-7 的推論）在 `lan15-windows` 之前未經實機確認。
+  - 已確認：分類函式在 windows-x64 的 L1 上通過；兩個會讓連線失敗的位置都先做暫時性判斷（靜態守衛）。
+  - 未確認：拔線或關 Wi-Fi 時，Windows 實際丟出的是不是這幾種錯誤。
+  - 猜錯時：Client 立刻回 Lobby，也就是改版前的行為，不會比以前更差。
+- PR #90 改成 ready，跑全量 L1，使用者確認後以 `gh pr merge --merge` 合併。

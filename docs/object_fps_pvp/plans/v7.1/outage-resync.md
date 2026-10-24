@@ -51,6 +51,7 @@
 - 2026-10-24：`identity-rebind` 的 L1 run 40077174310 四平台成功。`resync-l2-l3` 準備完成：注入工具 `run_outage.py`（`11ed8a6`、`54c0022`）、驅動與判定工具（git 忽略的證據目錄）、[L2 宣告第 2 版](resync-l2-l3-declaration.md)。D45 對抗式檢查（ultracode 小規模）後改寫；乾跑 11 項全部 P、判定工具的竄改檢查 10／10。**等使用者核准宣告**後開跑。
 - 2026-10-24：使用者核准 L2 宣告第 2 版（D178），照宣告開跑。
 - 2026-10-24：`resync-l2-l3` 的 L2 **通過**，33 輪全部 P（[宣告第 9 節](resync-l2-l3-declaration.md)）。剩 L3（使用者在場）與 `line-close`。
+- 2026-10-24：`line-close` 完成（`93deeb7`）。L3 移到 after-re-evaluate 的 `lan15-windows`（D179，預定 2026-10-26 前後），內容寫在該批的驗收欄。PR #90 改成 ready，跑全量 L1。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 

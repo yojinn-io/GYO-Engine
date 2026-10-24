@@ -193,4 +193,4 @@
   - 這不是「沿用中斷前的樣本」，而是 §7 已知的 P2 例外（這段領先量留到 Backlog 清掉）。
   - 其他情境都是 0 筆。
 - **證據**：`build/target/_build/test/logs/pvp-v71-resync-l2-20261024/`（`summary.json`、`progress.jsonl`、`files.sha256` 638 個檔案、各輪的 `judge.json`）。
-- **L3**：還沒做，需要使用者在場（第 6 節）。
+- **L3**：D179 移到 after-re-evaluate 的 `lan15-windows`，和 Windows LAN 場次一起做，內容寫在 `after-re-evaluate.md` 的 `lan15-windows` 列。第 1 版有 L3 一節（Windows 與 macOS 拔網路線或關 Wi-Fi，2 s 與 7 s 各一次），第 2 版改寫時漏掉了，以該列為準。

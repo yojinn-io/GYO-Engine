@@ -44,6 +44,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
 - **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
+- **之後要做**：`lan15-windows` 預定 2026-10-26 前後（含 outage-resync 的 L3，D179）。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。
 - **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D178）。`resync-l2-l3` 的 L2 通過（33 輪全部 P）；`line-close` 已做（2026-10-24）。L3 移到 `lan15-windows`（D179），PR #90 在 L1 確認後合併。記錄器分支經 PR [#93](https://github.com/yojinn-io/GYO-Engine/pull/93) 合進 master（`489905d`），本線已同步 master。使用者指示：照計畫做完、不再擴大，不嚴重的問題只記錄。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
@@ -161,7 +162,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D176 | （2026-10-24）`outage-resync` 的 `retention-600`：核准判定變更 J-A（稀疏替代的守衛：600 序號以外的副本不再 Resync）、J-B（紀錄的單元測試換成新規則）、J-C（`v7-flow-ledger-drives-sample` 的改寫），以及 L2 不退步紀錄的宣告草案（x1、ramp、gateway-250ms 各 3 次，只跑頭；S1、S2、J5a、S3 與 runtimeFailed 0，0 容許，不重試）。先觸發 L1，再準備 L2 | 使用者：「核准 retention-600 的判定變更 J-A～J-C 與 L2 不退步紀錄的宣告草案。先觸發 L1，再準備 L2。」 |
 | D177 | （2026-10-24）`outage-resync` 的 `retention-600`：確認 L2 宣告第 2 版（D45 檢查後的修訂）：gateway-250ms 的 runner 更正為 `backpressure_probe.py --layers gateway --durations-ms 250`；有效性前提不成立記為 E（停下回報、不自動補跑）；J5a 對 x1／ramp 帶 `--injection`；runtime 要求 end 行 reason=signal、exit_code=0；resyncs／late_beyond_no／resync 重設記為 FLAG 停下回報；S3 的逐玩家完整性與 player 0。開跑，檔位照建議（medium） | 使用者：「照第 2 版宣告開跑，檔位照建議」 |
 | D178 | （2026-10-24）`outage-resync` 的 `resync-l2-l3`：核准 L2 宣告第 2 版（D45 小規模 ultracode 檢查後的改寫：11 項 × 3 輪、J-R1～J-R9、J-R3 只記錄、驅動與判定工具與凍結清單的 sha256）。結果：33 輪全部 P | 使用者：「照建議執行」 |
-| D179 | （2026-10-24）`outage-resync` 的 L3（Windows 與 macOS 拔網路線或關 Wi-Fi，2 s 與 7 s 各一次；`transient_socket_errors` 與 endpoint 的紀錄）移到 after-re-evaluate 的 `lan15-windows`，一起做。outage-resync 不等 L3，L1 確認後合併。Windows 的 WSAECONNRESET（D172 D-7 的推論）在那之前未經實機確認，列為已知項目 | 使用者：「L3需要放到 lan15-windows一起吧。」 |
+| D179 | （2026-10-24）`outage-resync` 的 L3（Windows 與 macOS 拔網路線或關 Wi-Fi，2 s 與 7 s 各一次；`transient_socket_errors` 與 endpoint 的紀錄）移到 after-re-evaluate 的 `lan15-windows`，一起做。outage-resync 不等 L3，L1 確認後合併。Windows 的 WSAECONNRESET（D172 D-7 的推論）在那之前未經實機確認，列為已知項目 | 使用者：「L3需要放到 lan15-windows一起吧。」；說明暫時性 socket 錯誤的風險後：「確實可以放lan15-windows做。時間大概在26日。…在v7.1完結後需要發一個release」 |
 
 ## 規劃紀錄（記錄器）
 
