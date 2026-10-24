@@ -221,7 +221,7 @@ core 結束時（records 開始前）：
 
 - **A 級釘住的語言**：計畫寫「寫出端的語言各有一個釘住測試」。直接以 `log.Printf`／串流寫出的行（Gateway 的 statistics、transport、evicted、start／HTTP，Match 的 start／ready／join／evicted／ipc）沒有可呼叫的組行函式，改由 Python 的 CTest 讀寫出端原始碼、抽出該敘述的鍵序列比對。它守得住改名、刪鍵、重排（突變證明），但不是執行期的輸出。
 - **ingress 的完整行 golden**：計畫寫「完整的 ingress 行由 Go 與 C++ 的寫出端逐字比對」。改成用真實跑次的樣本由凍結讀者讀（未知鍵 0），寫出端的鍵序列由既有的 ingress 測試（含 `appendedZeros`）守住；沒有新增逐字 golden。
-- 既有突變 `v71te-hello-without-echo` 的錨點因 `ClientClockSession` 的改寫而過時，照同一語意更新（它的 check 是 `worker`，那個測試本來就壞，`N-worker-probe-stale`）。
+- 既有突變 `v71te-hello-without-echo` 的錨點因 `ClientClockSession` 的改寫而過時，照同一語意更新（它的 check 是 `worker`，那個測試本來就壞，`N-worker-probe-stale`）。**（2026-10-21 補記：`worker-probe-repair` 修好 worker probe 之後重判為 killed。）**
 
 ### LC-10（實作中發現，需要你同意）
 

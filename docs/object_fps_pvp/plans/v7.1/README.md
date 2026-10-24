@@ -1,7 +1,7 @@
 # PvP v7.1 hotfix 分批計畫
 
-更新：2026-10-21（v7.1 成為穩定基線，D157）；初版 2026-10-15。Owner：`object_fps_pvp`。
-**狀態：v7.1 完成並成為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)，D157）：pv7-line 以 PR #78 合併（`0fabb52`），after-pv7 以 PR #82 合併（`5ee499a`）；樹狀總覽的各批都已完成。剩下 `after-re-evaluate`（INVENTORY 處置為「re-evaluate 之後」的項目，由使用者排序）與 docs-close 的系列紀錄。
+更新：2026-10-21（after-re-evaluate 的判斷與批次草案，D158；v7.1 成為穩定基線，D157）；初版 2026-10-15。Owner：`object_fps_pvp`。
+**狀態：v7.1 完成並成為穩定基線**（[STABLE_BASELINE](STABLE_BASELINE.md)，D157）：pv7-line 以 PR #78 合併（`0fabb52`），after-pv7 以 PR #82 合併（`5ee499a`）；樹狀總覽的各批都已完成。剩下 `after-re-evaluate`：判斷已確定（D158，[after-re-evaluate.md](after-re-evaluate.md)），批次已核准（D159），進行中；docs-close 的系列紀錄（G2）還沒決定。
 
 版本號：v7.1＝遊戲版本（v7 之後、v8 之前），pvN＝網路協議版本（[v6 交接](../v6/HANDOFF.md) D20）。v7 停在 pv6；**pv7 在 v7.1**。
 本目錄和 `v5`～`v8` 同層，是計畫文件，不是新的 Architecture Concept。
@@ -48,11 +48,26 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── incident-close ✓◆             「medium｜事故紀錄結案」
 │   ├── observability-tools ✓         「high｜相位決策進 trace、增量計數、加寬偵測器、遺失種子」
 │   └── re-evaluate ✓                 「medium｜用新數據重新評估相位追蹤與 D44，交使用者排序」
-└── after-re-evaluate ⏸               「內容不變，評估後和結果一起排」
-    ├── architecture                  「SDL 隔離、-fexperimental-library、code smell、分析器收斂、相位追蹤 golden」
-    ├── measurement                   「Windows LAN、其餘觀測工具」
-    ├── platform                      「關閉阻塞、LogFile、AssetWatcher、SIGINT、不穩的測試等」
-    └── docs-close                    「系列紀錄、STABLE_BASELINE v7.1」
+└── after-re-evaluate ▶               「D158 判斷還需要的項目；D159 核准，worker-probe-repair 提到最前面」
+    ├── 0 worker-probe-repair ✓       「high｜修好 worker probe（決策點 C）」
+    ├── 1 系統與引擎
+    │   ├── sdl-isolation-plan ✓      「ultracode｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單（D160 核准）」
+    │   ├── sdl-isolation ⏸           「high｜產品、probe、產品測試不直接呼叫 SDL（ip3a 關卡）」
+    │   ├── substitution-single-store 「high（判定局部 xhigh）｜被替代的序號只存一份」
+    │   ├── silent-branch-asserts     「high｜無聲分支改成 assert 或計數」
+    │   └── cxx-flag-removal          「high｜不再需要 experimental 程式庫」
+    ├── 2 觀測工具
+    │   ├── contract-readers          「medium｜compare_reports 收進工具目錄、host_lock 鍵進日誌契約」
+    │   ├── trace-no-overwrite        「high｜重啟 Match 不覆寫前一段 trace」
+    │   └── analyzer-converge         「high｜兩個命令分析器收斂成 N 人版」
+    ├── 3 測試
+    │   ├── token-tests               「high｜token 的存活突變、測試模型與產品連動」
+    │   └── client-path-tests         「high｜世代檢查與他版計數的正向測試」
+    └── 4 發行
+        ├── windows-long-path         「high｜深資料夾也能載入 shader」
+        ├── quick-close               「high｜關閉 Client 不再卡 3 秒」
+        ├── wake-reconnect            「high｜睡眠醒來不斷線」
+        └── lan15-windows             「high｜Windows LAN 場次」
 ```
 
 記號：✓ 完成、◐ 實作與 L1 完成、L2 延後、▶ 進行中、⏸ 等使用者決定、◆ 事故後遺症（v7.1 結束前全部結案）、★ 行為改變（各自一批，事前宣告並前後對照）。
@@ -66,7 +81,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | prep | 約 3 h |
 | pv7-line | 約 178～193 h〔推論〕（README 初版估 91 h；pv7-design 重估 111 h；D94 改為無狀態邊緣後為 170～179 h；§2a 的 xhigh 檢查後為 177～191 h，使用者已接受（D96）；再加 GYOP 序號欄位的 1～2 h） |
 | after-pv7 | 約 54～64 h |
-| after-re-evaluate | 約 91～101 h，另加 re-evaluate 決定的修正（未估） |
+| after-re-evaluate | 約 73～102 h（D158、D159） |
 
 停止規則：每批開始前寫出估計；實際超過 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
 
@@ -109,19 +124,11 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | observability-tools | 相位決策寫進 trace（觀測缺口 3）；late 修正改用增量計數、加寬 D44 偵測器；網路案例換不同的遺失種子；Gateway→Match 延遲注入改成正式模式 | 工具的單元測試、新舊各分析一次／—／— | 10～13 | re-evaluate 的前提 |
 | re-evaluate | 用 pv7 之後的數據重新評估：相位追蹤（B6～B9）、延遲位移（A4）、偶發 epoch 重設（A5）、連線品質的參考年齡等；交出建議，由使用者排序 | —／—／使用者排序 | 3 | 缺工具時直接告訴使用者 |
 
-## after-re-evaluate（內容不變，評估後再排）
+## after-re-evaluate（D158）
 
-| 代號（暫定） | 內容 | 工時 | 依賴、備註 |
-|---|---|---|---|
-| phase-tracking-golden | 相位追蹤的閉環 golden（B10） | 約 7 | 只要 re-evaluate 決定修正相位追蹤，就排在那些修正批之前 |
-| sdl-isolation | IP-3、IP-4＋原第 12 批：產品、probe、產品測試不直接呼叫 SDL（不是移除 SDL） | 26～34 | 依賴 `tt2-trace`；IP-3 的公開介面要 1 次 xhigh 審查（v7 D39）；v8 的音效依賴 IP-3 |
-| cxx-flag-removal | 移除 `-fexperimental-library`（`std::jthread`、`std::osyncstream`） | 4 | 依賴 `tt2-trace` |
-| smell-cleanup | token 規則三份拷貝、被替代的序號存兩份、第 04 批審查遺留（「衝突檢查重疊」隨 edge 批刪除 Gateway 的衝突檢查而消失） | 約 16 | 哪個修正批直接需要（例如改 token 規則），就在那一批做（AGENTS.md §1） |
-| analyzer-converge | `quad_evidence.py`、`command_evidence.py` 收斂成 N 人版 | 5 | 用既有的 pv6 語料新舊各分析一次 |
-| lan15-windows | Windows LAN 場次；跨機器偏移與漂移（≥15 分鐘）；Windows 的晚醒、Tick 精度、App Nap 等 | 7～8 | 依賴 `time-echo`；要排朋友的時間 |
-| observability-rest | 量測時間基準統一、probe 起點的幀相位、HUD 來源 tick 等 | 約 3 | |
-| platform-fixes | 關閉時阻塞約 3 秒、`LogFile` 非同步、`AssetWatcher` 的時間基準、背景 Client 忽略 SIGINT、Gateway 測試在高負載下不穩 | 13～15 | `AssetWatcher` 未估；`LogFile` 和 `tt2-trace` 一起 |
-| docs-close | 「時鐘到網路路徑」系列紀錄（第 ⑤ 集要等 `time-echo`）；STABLE_BASELINE v7.1；v7 略過的驗收要不要補 | 約 8＋未估 | STABLE_BASELINE v7.1 已寫（[STABLE_BASELINE.md](STABLE_BASELINE.md)，D157）；v7 略過的驗收不補（D157）；系列紀錄未做 |
+INVENTORY 處置為「re-evaluate 之後」的 37 項，加上 HANDOFF「未結事項」補列的 6 項，逐項判斷還需不需要繼續（[after-re-evaluate.md](after-re-evaluate.md)）：還需要 20 列，排成上面樹狀總覽的 15 批；交給 v8 4 項（B10、N-correct-invariant-assert、E3、E5）；有條件 3 項；取消、已解決、已被取代共 15 項。順序依使用者的優先序：系統與引擎 → 觀測工具 → 測試 → 發行。各批的內容、驗收、估時與決策點見該文件第 9 節。
+
+舊的分組（phase-tracking-golden、smell-cleanup、observability-rest、platform-fixes 等）由這份判斷取代；docs-close 的 STABLE_BASELINE 已寫（D157）、v7 略過的驗收不補（D157），系列紀錄（G2）還沒決定。
 
 ## 跨分支依賴
 
@@ -136,7 +143,10 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 - `tt2-trace` → `log-contract` 的實作、`sdl-isolation`（IP-3 用到日誌 facade）、`cxx-flag-removal`
 - `d44-regression-pv7`、`observability-tools`、`log-contract` → `re-evaluate`
 - `time-echo` → `lan15-windows`、系列紀錄第 ⑤ 集
-- `re-evaluate` 決定修正相位追蹤 → 先做 `phase-tracking-golden`
+- `re-evaluate` 決定修正相位追蹤 → 先做 `phase-tracking-golden`（D158：B10 跟 B6 交給 v8）
+- `sdl-isolation-plan` → `sdl-isolation`
+- `worker-probe-repair` → `token-tests`、`client-path-tests`
+- `contract-readers`、`trace-no-overwrite`、`windows-long-path`、`quick-close`、`wake-reconnect` → `lan15-windows`
 
 ## 取消的項目
 
@@ -155,6 +165,34 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 | 規劃 | 本目錄、同步 master、v8 README 的備註更正 |
 | pv7-line | `pv7-design`～`pv7-merge`，三個角色同一個 PR |
 | after-pv7 | `tt2-trace`～`re-evaluate`；Engine 的 TT-2 和它的第一個消費端同一個 PR |
-| after-re-evaluate | 評估之後再定 |
+| after-re-evaluate | sdl-isolation 兩批一條、系統其餘＋觀測＋測試（含 worker-probe-repair）一條、發行一條（D159） |
 
 PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四平台 L1，用 `gh pr merge --merge`。
+
+## 開發紀錄
+
+每批完成時，做那一批的會話把 dev_log 和該批放在同一個變更提交，並加進這份清單（AGENTS.md §15）。下列依批次順序；路徑相對於本目錄。
+
+- [pv7-design：pv7 的契約一次定完，Gateway 回到無狀態邊緣](../../../dev_logs/2026_10_16_pvp_v71_pv7_design.zh-Hant.md)
+- [proto-rename-v7、version-errors：協議改名為 v7，版本 6→7，版本不符時說清楚](../../../dev_logs/2026_10_16_pvp_v71_version.zh-Hant.md)
+- [heartbeat-sync、time-echo：Match↔Gateway 心跳對時，Client↔Gateway 時間回聲](../../../dev_logs/2026_10_17_pvp_v71_clock.zh-Hant.md)
+- [drop-report：Gateway 把丟了什麼、為什麼丟，回報給 Match](../../../dev_logs/2026_10_16_pvp_v71_drop_report.zh-Hant.md)
+- [edge-results-resend、edge-input-passthrough、edge-results-passthrough：Gateway 回到無狀態邊緣之一，Match 在 ACK 前重送結果、輸入與結果原樣轉送](../../../dev_logs/2026_10_17_pvp_v71_edge_input_results.zh-Hant.md)
+- [edge-actions-passthrough、edge-analyzers、edge-contract：動作原樣轉送、守恆分析器重新凍結、無狀態邊緣的約束與守衛](../../../dev_logs/2026_10_18_pvp_v71_edge_actions_contract.zh-Hant.md)
+- [edge-rate-limit：限速改成 token bucket（K1），並跑 edge-actions-passthrough 的 L2](../../../dev_logs/2026_10_18_pvp_v71_edge_rate_limit.zh-Hant.md)
+- [cause-records、hitbox-fields：原因紀錄（E2、動作拒收回覆、Leave 原因）與 hitbox 欄位、E 和 S 的影子紀錄](../../../dev_logs/2026_10_18_pvp_v71_cause_hitbox.zh-Hant.md)
+- [pv7-checkpoint：A1 之前的整體回歸，v7 基準對現在 232 項 0 停止](../../../dev_logs/2026_10_19_pvp_v71_pv7_checkpoint.zh-Hant.md)
+- [a1-shot-step＋pv7-merge：射擊照命令步判定，FireGate 退役，pv7-line 合併](../../../dev_logs/2026_10_20_pvp_v71_a1_merge.zh-Hant.md)
+- [log-contract：日誌 Data Contract v1，凍結分析器不會靜默讀錯](../../../dev_logs/2026_10_20_pvp_v71_log_contract.zh-Hant.md)（Engine 側的 tt2-trace 見 [Engine TT-2](../../../dev_logs/2026_10_20_engine_tt2.zh-Hant.md)）
+- [dead-letter-position＋incident-close：死信維持兩份契約，兩份事故紀錄結案](../../../dev_logs/2026_10_21_pvp_v71_dead_letter_incident.zh-Hant.md)
+- [d44-regression-pv7：pv7 上線後的 D44 回歸，290 個 case-run 加長測 0 次](../../../dev_logs/2026_10_21_pvp_v71_d44_regression.zh-Hant.md)
+- [observability-tools：相位決策寫進 trace、增量計數、加寬偵測器、遺失種子](../../../dev_logs/2026_10_21_pvp_v71_observability.zh-Hant.md)
+- [re-evaluate：用 pv7 之後的數據判斷相位追蹤與 D44 的項目還要不要繼續](../../../dev_logs/2026_10_21_pvp_v71_re_evaluate.zh-Hant.md)
+- [worker-probe-repair、sdl-isolation-plan：修好 worker probe，排定 SDL 隔離的計畫](../../../dev_logs/2026_10_21_pvp_v71_probe_sdl_plan.zh-Hant.md)
+- [sdl-isolation：產品、probe、產品測試不再直接呼叫 SDL（Engine IP-3／IP-4 與產品側 IP-4，L2 通過）](../../../dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md)（PR #85，`054b08f`；Engine 側見 [IP-3](../../../dev_logs/2026_10_22_engine_ip3.zh-Hant.md)、[IP-4](../../../dev_logs/2026_10_22_engine_ip4.zh-Hant.md)）
+- [black-map-observation O1：黑屏分類工具 `black_frame.py`](../../../dev_logs/2026_10_23_pvp_v71_black_map_o1.zh-Hant.md)
+- [black-map-observation O2：視窗觀測外掛 `black_map_watch.py`](../../../dev_logs/2026_10_23_pvp_v71_black_map_o2.zh-Hant.md)
+- [black-map-observation O3：已知樣本確認觀測，假說 H1（暖機幀）修正後成立](../../../dev_logs/2026_10_23_pvp_v71_black_map_o3.zh-Hant.md)
+- [black-map-observation O4：L2 的 10 種案例與產品 Client 的觀測跑次，黑屏只在 timing 類露出](../../../dev_logs/2026_10_23_pvp_v71_black_map_o4.zh-Hant.md)
+- [outage-resync：斷線恢復＝重新對時（C13 (b)＋UDP 中斷狀態）](../../../dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md)（進行中；PR #90，分支 `claude/pvp-v71-outage-resync`，合併前連結在本分支上無效）
+

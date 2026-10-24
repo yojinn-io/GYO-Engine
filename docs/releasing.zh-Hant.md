@@ -60,7 +60,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 | 開啟中的 PR 加上 `package` 標籤 | Package trial | 以 Quick 封裝全部產品並上傳 Actions artifacts；標籤存在期間，每次推送都重新建置 | `Trial packages / ...`（不是必要檢查） |
 | 手動執行 **Package trial** | Package trial | 在所選分支執行相同的 Quick 封裝 | — |
 | 推送 master（合併） | Cross-platform CI | L1 + Quick + `CI gate`；通過後 `Snapshot / <train>` 為每條 train 發佈 snapshot；L1 儲存編譯快取 | `L1 / ...`、`Quick acceptance / ...`、`CI gate`、`Plan snapshot trains`、`Snapshot / tools`、`Snapshot / object_fps_pvp` |
-| 手動執行 **Cross-platform CI** | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）；不發佈 snapshot；只有在 master 上執行時才儲存編譯快取 | 同上（沒有 snapshot） |
+| 手動執行 **Cross-platform CI** | Cross-platform CI | L1 + Quick + `CI gate`（理由 `integration`）；不發佈 snapshot；只有在 master 上執行時才儲存編譯快取。L1 結束後 `Report dispatched L1` 在受測 commit 設定 commit status `L1 (dispatch)`（連到該次執行），並在該分支每個 open PR 建立或更新一則帶標記的留言（commit SHA、各平台 L1 結論、執行 URL）；沒有 PR 的分支只設定 status | 同上（沒有 snapshot）＋`Report dispatched L1`。PR 的 checks 只列 pull_request 事件的執行，所以 Draft PR 上以 `L1 (dispatch)` status 與留言為紀錄 |
 | **Prepare Release** | Prepare Release | 一條 train 的 Release 驗收、tag 與 Draft | `Validate train, version and capture source commit`、`Full release acceptance / ...`、`Prepare verified draft and downloads` |
 | 推送 tag、**Publish release** | 無 | 不建置任何東西；Publish 只公開既有 Draft | — |
 
@@ -450,7 +450,7 @@ python3 -m unittest discover -s tests/common/ci -v
 - 未完成的 `starter` 附件先有限次重查，仍未完成則回報，不自動刪除。
 - 重跑舊執行時使用該 commit 的 workflow，不會取得新版本的修正。同一 train 與版本的 Prepare Release 不並行；新的請求不取消正在進行的準備。既有 Draft 的 prerelease、標題與說明保持原值。
 - 已發佈的 snapshot 若缺少附件，不修改並直接失敗；要重新發佈同一 commit，先手動刪除該 snapshot。已升格為正式 release 的 snapshot 不修改。
-- 只有 Draft job 與 snapshot job 具有 `contents: write`，建置 jobs 保持唯讀。從變更 workflow 檔案的分支建立 tag 或 Draft 時若遇到 403／404，需要另外設定具備 Contents 與 Workflows 寫入權限的 token。
+- 只有 Draft job 與 snapshot job 具有 `contents: write`，建置 jobs 保持唯讀。`Report dispatched L1` 只在手動執行時運作，只持有 `actions: read`、`statuses: write`、`pull-requests: write`。從變更 workflow 檔案的分支建立 tag 或 Draft 時若遇到 403／404，需要另外設定具備 Contents 與 Workflows 寫入權限的 token。
 
 ## 13. 後續工作
 

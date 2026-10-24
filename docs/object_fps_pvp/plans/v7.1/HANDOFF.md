@@ -37,11 +37,24 @@
 
 停下來等使用者、或回報里程碑之前，先更新本節再回報。「等你決定」只列需要使用者決定的事；決定之後移到決策紀錄，並從本節刪掉。
 
-- **等你決定**：無。
-- **進行中**：基線文件的 PR（分支 `claude/pvp-v71-stable-baseline`，只改文件）。PR #82 已合併為 `5ee499a`，master 的 CI #541（run 39577489227）19 個 job 全 success。
-- **下一步**：基線文件的 PR 合併；`after-re-evaluate` 由你排序；v8 的規劃（含 v7.1 交過去的 B6、A4、N-analyzer-literal-105、E1-2 的剩餘）等你開始；docs-close 的「時鐘到網路路徑」系列紀錄還沒做。
+dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉達）：
+
+- 每批完成時，該批的 dev_log 與該批放在同一個變更裡提交，並列入該批的完成條件。
+- v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
+- sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
+
+- **等你決定**：無。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
+- **進行中**：`outage-resync`（PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90)，draft；D171～D177）。已完成到 `identity-rebind`（L1 run 40077174310 四平台成功）。`resync-l2-l3`：**等你核准 L2 宣告第 2 版**（本線的 `resync-l2-l3-declaration.md`）。之後是 L3（你在場）與 `line-close`。使用者指示：照計畫做完、不再擴大，不嚴重的問題只記錄。
+- **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
+- **任務線總覽**：
+  - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）。
+  - 進行中：outage-resync（PR #90），取代 after-re-evaluate 的 `substitution-single-store`，並把 `wake-reconnect` 的「短於 T_max 的睡眠＝中斷」（w1）併進來；其餘的 wake-reconnect 仍在原批。
+  - 未開始（after-re-evaluate，D159）：系統與引擎的 `silent-branch-asserts`、`cxx-flag-removal`；觀測工具的 `contract-readers`、`trace-no-overwrite`、`analyzer-converge`；測試的 `token-tests`、`client-path-tests`；發行的 `windows-long-path`、`quick-close`、`wake-reconnect`、`lan15-windows`。D159 的 PR 分三條，其中「系統其餘＋觀測＋測試」與「發行」兩條還沒開。
+  - 完成但還沒進 master：`worker-probe-repair` 的修正（`d2844a5`）只在本記錄器分支。本分支比 master 多 40 多個 commit，沒有 PR。
+  - 不做：INVENTORY 的 G2（D159）。
+  - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-20，`dead-letter-position` 實作（D145）：反方向守衛、突變、log-contract 第 5.1 節的對應表。守衛第一次執行抓到計畫沒列的兩類（已刪除路徑 11 個、另一個單位 1 個），改成三類宣告；不改 wire、不改 D57 的結論。
+- **最後更新**：2026-10-23，整理現況（關卡改名、過時的「下一步」與「最後更新」刪除、加上任務線總覽）。
 
 ## 閱讀入口
 
@@ -127,6 +140,26 @@
 | D155 | （2026-10-21）`re-evaluate` 補量之後：B6 交給 v8 重新規劃（不沿用 09b 的 S／M；09b 1-7 第 3 點隨它）；B7、A5 取消（A5 照設計保留，連同門檻 105 重推、快速正向回收）。**`re-evaluate` 結案** | 使用者：「OK，那是否需要重新規劃一下B6的計劃，如果直接沿用之前測方案，我怕達不到最好的效果。」「B6交給v8吧。B7、A5 取消就好。」 |
 | D156 | （2026-10-21）PR #82（after-pv7 線：`tt2-trace`、`log-contract`、`dead-letter-position`、`d44-regression-pv7`、`incident-close`、`observability-tools`、`re-evaluate`）轉 ready 並合併。最後一次程式變更的四平台 L1 是 #532（`d5a4cec`），之後只有文件 | 使用者：「那沒問題了。#82合併。」 |
 | D157 | （2026-10-21）v7.1 的穩定基線：master 的 CI 通過之後，v7.1 成為穩定基線（v5、v6 是事故前的缺陷版本），寫正式的 `STABLE_BASELINE.md`（參照 v7）。`N-v7-skipped-acceptance`：v7 跳過的驗收不補做，照樣列為「跳過（使用者決定）」。LC-8 四項（D143 移到 `observability-tools`，計畫裡漏列）收尾：rotation 拆分取消、逐筆到達事件跟著 B6 交給 v8、樣本流失取消、週期性 IPC 寫出延遲取消；INVENTORY 另外更正 records 已做完的 4 列 | 使用者：「v5、v6在事故前是缺陷版本，v7.1 CI 過了就變成穩定基線。」「寫成正式的v7.1基線文件，。參照v7的STABLE_BASELINE.md」；N-v7-skipped-acceptance 選「不補，照樣列跳過」；「這些收尾處理了吧，你看要不要補？」「OK，就照這樣。」 |
+| D158 | （2026-10-21）`after-re-evaluate` 的判斷（[after-re-evaluate.md](after-re-evaluate.md) 第 2 版）：照第 1 版，另外 C12 併進 N-token-test-gaps，F4 取消並記成「沒有檢測手段」。還需要的 20 列依使用者的優先序（系統與引擎 → 觀測工具 → 測試 → 發行）排成 15 批的草案，等使用者核准；B10、N-correct-invariant-assert、E3、E5 跟 B6／A4 交給 v8。HANDOFF「未結事項」的 6 項補進 INVENTORY（N-worker-probe-stale、N-compare-reports-untracked、N-host-lock-keys-uncontracted、N-client-other-version-untested、N-sleep-reconnect、N-drop-ledger-growth）。G2 還沒決定 | 使用者：「先評估這份清單，然後優先處理系統和引擎的，其次是觀測工具，再來是測試、最後發行。用這個優先度來調整。」「C12 併進 N-token-test-gaps；F4 取消，記成沒有檢測手段。照這樣出第 2 版、同步 INVENTORY／README／HANDOFF，然後拆批給我看。」 |
+| D159 | （2026-10-21）核准 `after-re-evaluate` 的批次草案（[after-re-evaluate.md](after-re-evaluate.md) 第 9 節）：決策點 A 選 (a)，substitution-single-store 在批內先寫 slack 樣本的特性測試；B：sdl-isolation-plan 用 ultracode；C：worker-probe-repair 提到最前面；PR 分三條（sdl-isolation 兩批、系統其餘＋觀測＋測試、發行）；G2 先不做。從 worker-probe-repair 開始 | 使用者：「核准批次草案：A 選 (a) 批內特性測試；B 用 ultracode；C 把 worker-probe-repair 提到最前面；PR 分三條。G2 先不做。從 worker-probe-repair 開始。」 |
+| D160 | （2026-10-21）核准 `sdl-isolation` 的計畫：Engine 側 IP-3／IP-4（IP 的 D31，U1～U10 照建議，含接受約 56～73 h 的估時、各子批開始前重估、超過 1.5 倍就停）；產品側 `sdl-isolation.md` 的 S1 選 (b)（保留 `Platform()`，只移除 `SdlGpuRenderDevice&` 的公開）、S2 選「base 與頭各用自己的 probe」。設計寫成架構文件 `docs/architecture/platform-sdl.md`、`input.md`（使用者要求） | 使用者：「OK，照計劃執行，記得把這個設計落到架構文件中去。」 |
+| D161 | （2026-10-21）核准 ip3a 的事前宣告（IP 的 D32）；`sdl-isolation.md` 的 S3 選 (a)：受擊回饋的 A 級日誌行改走 `Base::Log`，日誌檔的位元組不變，釘住測試的讀取位置跟著改。開始 ip3b | 使用者：「核准 ip3a 的事前宣告；S3 選 (a)。開始 ip3b。」 |
+| D162 | （2026-10-21～22）`sdl-isolation` 的 ip3b、ip3c 期間的決定：巢狀 `PumpEvents` 保留（IP 的 D33）；`SampleClockPair` 加讀取注入的接縫、契約條文 (2) 修正（D34）；核准 ip3c 的判定變更（D35，§14.4，獨立核對 3 輪）。另：使用者要求開 PR，sdl-isolation 線開 draft PR #85（標題照 v7.1 的格式） | 使用者：「選 (a)：保留巢狀 PumpEvents…」「要不然你開一個PR吧。工作不少。」「版本還是用v7.1的」「選 (b)：SampleClockPair 加讀取注入的接縫…」「核准 ip3c 的判定變更（第 3 版）。」 |
+| D163 | （2026-10-22）ip3d 完成後繼續 ip3e，檔位照建議（high，日誌橋局部 xhigh）。使用者睡前指示「可以的話把 IP-3、IP-4 跑完」，之後指示「跑完手頭上的任務就先暫停」（Mac 需要休息）。ip3e 完成後暫停 | 使用者：「檔位照建議」「我去睡覺了。可以的話吧IP-3、IP-4跑完。」「你跑完手頭上的任務就先暫停一下吧。我的mac幾天沒休息了。」 |
+| D164 | （2026-10-22）ip3e 的 P1～P3（IP 的 D36）：P1、P2 合成一條，`docs/architecture/error-handling.md` 加「平台邊界的例外」條款並註明理由（照字面遵守會讓程式錯誤不可見，無法測試）；日誌橋的解構子回 noexcept、改 death test；`RunEntry` 不改；P3 改逐執行緒守恆。之後做 ip3f，L3 排最後 | 使用者（分支會話）：「其實P1和P2是一樣的問題呀。」「嗯，可以，但是需要註明為何會加這個條款。」；本會話：「處理完P1-P3後，處理ip3f，L3排最後。」 |
+| D165 | （2026-10-22）ip3f 的 L3 通過（附兩項觀察：輸入「:」時卡住，推論是輸入法組字；手感的停頓是 IP-2 已知的 drawable 取得停頓）。v8 加一個候選：大廳的按鈕與位址輸入框元件化，並修改 ui_editor | 使用者：「OK了，第一項輸入的時候。在輸入：的時候忽然卡住，我不知道是不是輸入法的問題。其他功能是正常的，但是感覺操作手感怪怪的。v8排一個任務，組件化這些按鈕和輸入框，順便修改uieditor。」 |
+| D166 | （2026-10-22）IP-4 介面審查（U10）後的修正（IP 的 D37）：Design Invariant 7 改寫（查詢類在 observer 與 live frame 內允許、操作類斷言、`EventWatch` 不參照 platform、分派深度的斷言）；回傳型別修正；刪除 ip4b 的「AddEventWatch 失敗路徑」驗收（§14.4）。之後宣告並做 ip4a | 使用者：「核准：DI 7 照建議改寫…；M2 照建議改回傳型別、刪除 AddEventWatch 失敗路徑的驗收。其餘意見照你的處理，宣告後做 ip4a。」 |
+| D167 | （2026-10-22）ip4b 的 xhigh 審查之後（IP 的 D38）：時間戳判定採方案 B（區間＋兩條精確等式；§14.4，獨立核對後）；Design Invariant 7 加「`EventWatch` 只在主執行緒解構」（GYO_ASSERT＋death test）；Design Invariant 3 的守衛清單補上 watch 路徑。之後提交、推上 PR #85 | 使用者：「核准：F4 採方案 B（區間＋兩條精確等式）；F10 加 DI：EventWatch 只在主執行緒解構（GYO_ASSERT＋death test）；DI 3 守衛清單補上 watch 路徑。然後提交、推上 PR #85。」 |
+| D168 | （2026-10-23）產品側 IP-4 的分批與事前宣告（`sdl-isolation-ip4-declaration.md` 第 2 版）核准，P1～P5 照建議：P1 節奏改用 Waiter、P2 產品加中立的 `RenderDeviceInfo()` 存取點、P3 pointer capture 改 golden 並由 Engine 補 s06（J1 的 §14.4 核准之後另交）、P4 gui-probe 放進 L2、P5 L2 第 2 版。判定原則：基準改變的量只記錄、不判定；和基準無關的量（產品行為、各樹各自的絕對門檻）照判 | 使用者：「基準變了的量，只記錄不判定；跟基準無關的量（產品行為、各自的絕對門檻）照樣判定。照建議執行。」 |
+| D169 | （2026-10-23）sdl-isolation J1（pointer capture 的凍結 oracle 改 golden）的 §14.4 判定變更核准，採全欄位版 golden；v-s08～s10 選 (a)：Engine 在 `input.md` 的 Contracts 寫明本視窗的焦點喪失、按鍵、滑鼠鍵事件不去重，補 3 個測試與突變。之後提交、推上 PR #85、觸發 L1，接著準備 L2 第 3 版 | 使用者：「核准 J1 的判定變更（golden 全欄位版）；v-s08～s10 選 (a)：Engine 契約寫明不去重，補 3 個測試與突變。然後提交、推上 PR #85、觸發 L1，接著準備 L2 的第 3 版。」 |
+| D170 | （2026-10-23）sdl-isolation 的 L2 第 3 版核准。語料重判選 (a)：改成 11 個 pv7 跑次，兩層（分類、重新分析）都要相同，6 個 pv6 跑次排除。capture BMP 選 (a)：前置改成頭的 `render.sdl_gpu_capture_file` 通過，拿掉 `--capture-bmp`。改好後列出開跑前的準備 | 使用者：「核准 L2 第 3 版：語料重判選 (a)，改成 11 個 pv7 跑次、兩層都要相同；capture BMP 選 (a)，改用頭的 render.sdl_gpu_capture_file 通過，拿掉 --capture-bmp。改好後告訴我開跑 L2 前要準備什麼。」 |
+| D171 | （2026-10-23）`substitution-single-store`（C13）選 (b)：以 SlackTrack（行為紀錄）為唯一來源，帳本改讀它。保留範圍沿用帳本的 600 個序號，所以遲到 1～10 秒的命令也會產生 slack 樣本（行為改變）。斷線恢復時 Client 會收到很大的負 slack，這個問題用斷線重連（重新對時）處理；斷線偵測與重連只走 UDP（旁支會話轉達，記憶 udp-only-liveness）。新開 PR 線，規劃用 ultracode | 使用者：「選（b），合併後：遲到 1～10 秒的命令也會產生 slack 樣本，斷線恢復時，Client 會收到很大的負值的這個問題，用斷線重連的方式（重新對時？）來做。新開PR，用Ultracode來跑這個case的規劃」 |
+| D172 | （2026-10-23）`outage-resync` 計畫第 2 版的 D-1～D-14 全部照建議：完整範圍（約 59～85 h）；D-2 選 I-2（session 在靜默 ≥T_int 後可改綁 endpoint，wire 不變，I-3 記到 v8 候選）；D-3 選 M-B′（晚到 >N_o 換 epoch、Resync 不受冷卻限制）；D-4 T_int 與 N_o 在 G1 依特性報告決定；D-5 T_max 從最後一份 snapshot 起算；D-6 C13 (b) 的兩面一起核准（§14.4 的材料在 retention-600 交）；D-7 照列表；D-8 (b) `reason=resume`；D-9 (a) 中斷期間照常送；D-10 品質照算；D-11 T_max 維持 5 s、wake 選 (w1)；D-12 照 K5；D-13 的判定、門檻、次數在 L2 前另行宣告核准；D-14 同意 Delta-1～3、新 Invariant 與 Replacement Criteria、`ConnectionLiveness`、wire 留 pv7、after-re-evaluate 決策點 A 選 (a) | 使用者：「OK，照建議」 |
+| D173 | （2026-10-23）`outage-resync` 關卡 `gate-characterize`（舊稱 G1）：T_int＝0.5 s（clean 語料 snapshot 最大間隔 0.119 s）；N_o＝20 Tick（語料晚到最大 13.3 Tick，可抓到延遲 0.5 s 的部分送達）；D-15（只有上行中斷後的 12 命令領先量要 0.5～1 s 才由 Backlog 清掉）選 (a) 只記錄、交給 v8 B6，契約寫成 P2 的已知例外。特性報告：本線分支的 `outage-characterize-report.md` | 使用者：「G1 照建議：T_int 0.5 s、N_o 20 Tick、D-15 選 (a) 只記錄、交給 B6。L1 確認後開始 resync-contract。」 |
+| D174 | （2026-10-23）`outage-resync` 關卡 `gate-contract` 核准：`resync-contract` 的條文照現狀（network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants、protocol-v7 §2、log-contract §1.4、ingress README；含 xhigh 審查 3 輪的修訂：恢復時權威 < tip 只重設相位擷取、N_o 以時間判斷與 `late_beyond_no`、最後驗證時刻、P2 的第二個例外等）。開始 `drop-counters` | 使用者：「gate-contract 核准目前的條文（含三輪審查的修訂）。開始 drop-counters。」 |
+| D175 | （2026-10-23）`outage-resync` 的 `single-store-refactor` 之後：network-architecture §7「被替代序號的單一紀錄」的權威名稱照實作由 SlackTrack 改為 `MatchSubstitutionRecords`（MatchRuntimeHost 的 `substitutions_`），帳本附欄的列舉照實作補齊；意圖不變。`match-resync` 在 L1 通過後以 xhigh 開始 | 使用者：「核准 §7 owner 改名為 MatchSubstitutionRecords。L1 通過後用 xhigh 開始 match-resync。」 |
+| D176 | （2026-10-24）`outage-resync` 的 `retention-600`：核准判定變更 J-A（稀疏替代的守衛：600 序號以外的副本不再 Resync）、J-B（紀錄的單元測試換成新規則）、J-C（`v7-flow-ledger-drives-sample` 的改寫），以及 L2 不退步紀錄的宣告草案（x1、ramp、gateway-250ms 各 3 次，只跑頭；S1、S2、J5a、S3 與 runtimeFailed 0，0 容許，不重試）。先觸發 L1，再準備 L2 | 使用者：「核准 retention-600 的判定變更 J-A～J-C 與 L2 不退步紀錄的宣告草案。先觸發 L1，再準備 L2。」 |
+| D177 | （2026-10-24）`outage-resync` 的 `retention-600`：確認 L2 宣告第 2 版（D45 檢查後的修訂）：gateway-250ms 的 runner 更正為 `backpressure_probe.py --layers gateway --durations-ms 250`；有效性前提不成立記為 E（停下回報、不自動補跑）；J5a 對 x1／ramp 帶 `--injection`；runtime 要求 end 行 reason=signal、exit_code=0；resyncs／late_beyond_no／resync 重設記為 FLAG 停下回報；S3 的逐玩家完整性與 player 0。開跑，檔位照建議（medium） | 使用者：「照第 2 版宣告開跑，檔位照建議」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -593,9 +626,70 @@
 - 2026-10-21：PR #82 合併（D156，`5ee499a`；轉 ready 後 head 經分支會話與文件會話各推一個只改文件的 commit：`111e3ad` 改「後日談」、`71f550e` 四層總表）。master 的 CI #541 全部通過，v7.1 成為穩定基線（D157）。寫 [STABLE_BASELINE.md](STABLE_BASELINE.md)（參照 v7；pv7-line 的事實由代理彙整、逐項附出處）。寫之前發現兩件事：`N-v7-skipped-acceptance` 標「STABLE_BASELINE v7.1 前決定」，使用者選不補；log-contract 的 LC-8 四項（D143 移到 `observability-tools`）在它的計畫裡漏列、結案時也沒核對，使用者同意照「還需不需要」收尾（D157）。INVENTORY 另外更正 records 已做完卻沒更新的 4 列。
 - 2026-10-21：使用者要求在 2026-10-15 設計事故紀錄第 11 節（後日談）開頭補「補丁有多少」的四層總表（Gateway 自己長出的狀態 8 種機制、留下的 33 個計數鍵與 11 個過渡原因、建在截斷資料上的 3 組推導、待評估清單的 9 項），原表保留為第 4 層細目；2026-10-10 事故紀錄第 7 節補充處加連結。由文件會話撰寫，併進 PR #82。
 
+- 2026-10-21：`after-re-evaluate` 開始（PR #83 合併為 `fa3f02d`、文件會話的 #84 合併為 `6fbb6a9` 之後）。使用者：「先評估這份清單，然後優先處理系統和引擎的，其次是觀測工具，再來是測試、最後發行。」範圍是 INVENTORY 處置為「re-evaluate 之後」的項目，加上本文件「未結事項」裡沒進 INVENTORY 的項目。做法同 `re-evaluate` 第 2 版：只判斷還需不需要（附根據與重開條件），再依優先序分組排列；不寫修法。證據收集由 4 個唯讀子 agent（檔位 medium）分組進行，判斷由主對話做。估約 2 h。
+
+- 2026-10-21：`after-re-evaluate` 判斷第 1 版（[after-re-evaluate.md](after-re-evaluate.md)）。共 47 項：還需要 16 項（系統與引擎 4、觀測工具 4、測試 4、發行 4）、交給 v8 隨 B6／A4 4 項、有條件 3 項、不需要繼續 21 列、不在四類 1 項（G2）、清單更正 1 項（N-v7-skipped-acceptance）。HANDOFF「未結事項」裡沒進 INVENTORY 的 6 項給了 `N-` 代號。順帶發現：產品直接呼叫 SDL 的次數在 tt2-trace 後變多（`ForwardEngineLog`）；`compare_reports.py` 只存在 git 忽略的目錄，卻是 log-contract 指定的讀者；worker probe 壞掉讓 22 個 `worker` 突變判不了。停下等使用者決定。
+
+- 2026-10-21：`after-re-evaluate` 第 2 版（D158）。拆批時發現兩個依賴：(1) `track.substituted` 產生負 slack 樣本，是 late 修正的輸入，可是相位追蹤沒有 golden（B10 在 v8），C13 那批改壞了不會有測試失敗；(2) 22 個 `worker` 突變中 20 個指向 `ClientConnection.cpp`，系統類的 cxx-flag-removal 會改到那個檔案，worker probe 壞著就判不了。兩者都列成決策點。INVENTORY 統計對過：121 列，表格逐列解析的結果與統計表一致。
+
+- 2026-10-21：`after-re-evaluate` 批次核准（D159）。`worker-probe-repair` 開始（檔位 high，估 2～4 h，超過 6 h 停下回報）。已知原因一：mock Welcome 沒填 `maximum_shot_damage`；原因二（補上後的 mock 等待逾時）未知，照 §14.3 先重現，查不出就加觀測再停。
+
+- 2026-10-21：`worker-probe-repair` 完成（probe 修正 `d2844a5`，新突變 `5044702`）。
+  - 原因兩個，都是 hitbox-fields（`91b0264`）加了契約欄位、mock 沒跟上，不是產品缺陷（§14：先判斷哪一邊錯；Client 照 pv7 §7 拒收是對的）：
+    - mock Welcome 沒填 `maximum_shot_damage`，Client 判成「Invalid Match combat rules」。
+    - mock snapshot 的命中紀錄只填 3 欄、少了 `last_hit_part`；pv7 §7 要求 4 欄全 0 或全填，Client 把 snapshot **安靜丟掉**，所以只看到「等待逾時」。
+  - 找第二個原因的方法：讓 `Until` 的逾時訊息帶出等待的行號（`std::source_location`），定位到「等 Playing」那一步，再對照 Client 收 snapshot 的驗證。這個觀測留在 probe 裡。
+  - 判定只收緊：probe 另外確認 Client 收到的 `maximumShotDamage==111`、`lastHitPart==Body`。照 §14.4 事後報告：守的性質是「Client 照 Welcome／snapshot 的權威值保存，不自己補預設」；沒有放寬的面；收緊的面是 Client 把 `maximum_shot_damage` 抄成 `shot_damage`、或讀錯命中部位時會失敗；檢出力由新突變 `wpr-client-maximum-damage-from-shot-damage`、`wpr-client-body-hit-read-as-head` 證明（2／2 killed）。
+  - 驗收：本機 worker CTest 通過（6.3～6.8 秒，連跑 5 次 0 失敗）；22 個 `worker` 突變重判 22／22 killed；`object_fps_pvp.mutation_tool` 通過。四平台 L1 未跑（worker 不在 CI 範圍；這次只改 probe 與突變目錄）。
+  - 實際約 1 h（估 2～4 h）。
+  - Architecture Delta：無。
+
+- 2026-10-21：`sdl-isolation-plan`（D159，ultracode）。分支 `claude/pvp-v71-sdl-isolation`（從 master 開，`sdl-isolation` 的 PR 線）。8 個 agent：Engine 端與產品端各 1 位盤點（medium）、3 個獨立方案（high）、1 位評審合成（high）、1 位 xhigh 公開介面審查（v7 D39）、1 次對抗式檢查（high）；約 38 分鐘。
+  - xhigh 審查：有條件接受，三個設計前提成立，必修 6 項已併入草案。對抗式檢查的高嚴重度 3 項：時間戳的整合判定被 clamp 吸收（突變殺不掉）；PR 結構與 v7 P4「一起合併」衝突（照 P4 與 D159 改成一個 PR，Engine 側記為 IP 的 D29）；產品的符號守衛沒有範圍與突變（改成兩層並宣告突變）。產品的工作清單原本寫在 Engine 的 PLAN，屬 Ownership 漂移並違反 Engine 計畫的匿名規則，移到 `sdl-isolation.md`。
+  - 產出（`b2024c3`）：Engine 的 IP PLAN 文末的 IP-3／IP-4 草案（API、時間戳契約、日誌橋、子批 ip3a～f、ip4a～d、Design Invariants 與 Replacement Criteria、遷移清單、U1～U10）；IP 的 HANDOFF 的規劃紀錄與決策 D29、D30；產品側 `sdl-isolation.md`（工作清單、符號守衛、L2、估時、S1、S2）。
+  - 估時：Engine 37～46.5 h＋產品 19～26 h，約 56～73 h；after-re-evaluate 第 9 節原估 26～34 h，約 2 倍。照時間盒規則停下，交你決定（Engine 的 U1）。
+  - 實際約 1.5 h（估 4～6 h，含 ultracode 約 38 分鐘）。
+
+- 2026-10-21：`sdl-isolation` 計畫核准（D160）。ip3a 完成（約 1 h，估 3～4 h）：設計寫成架構文件 `platform-sdl.md`、`input.md`（標明已核准、尚未實作，每條寫出由哪個里程碑成立、由哪個守衛守住）；事前宣告；消費端日誌契約的核對發現 A 級的受擊回饋行經 SDL 寫出，列為 S3。停在關卡。
+
+- 2026-10-21：ip3b 完成（`5e8b353`，分支 `claude/pvp-v71-sdl-isolation` 已推送）。標頭去 SDL、Native 層、G1／G2（先 Red 後 Green）、機械修改 52 處；突變 4／4 killed；`test` preset 78／78；兩樹權威 digest scale 1、3 各 36 情境 0 差異。產品、probe 與 pointer capture 測試暫時改連 Native 目標（IP-4 移除）。發現：IP-2 的測試明確支援巢狀 pump，與架構文件 DI 7 衝突，ip3c 前交使用者決定。四平台 L1 #548 執行中。
+
+- 2026-10-21～22：ip3b 的 L1 #548 成功；draft PR #85。ip3c（事件時間換算到 Engine 時間基準）完成：xhigh 審查發現事前宣告的整合判定在 Linux 與 Apple Silicon 上會誤判正確實作，經 §14.4 與 3 輪獨立核對後改判定（D35），並補讀取注入的接縫（D34）；突變 22／22 killed。實際約 6 h（估 4～5 h）。L1 #550 執行中。
+
+- 2026-10-22：ip3d（文字輸入與剪貼簿，`6ed2952`；原記「L1 #553 成功」不實，見 2026-10-22 的更正；產品的位址輸入改用 Engine，差異：數字鍵盤的 Enter 也會確認）。ip3e（進入點、執行檔目錄、平台名、SDL 日誌橋，`97e2a22`；產品的日誌經 Base 寫檔、位元組不變）。xhigh 審查重現並修正日誌橋的競態；突變 36／36 killed。待決 P1～P3。依使用者指示暫停（D163）。
+
+- 2026-10-22：ip3e 的 P1～P3 依 D164 處理；ip3f 完成（突變 36／36，dev_log）。IP-3 的實作完成，只剩 L3。
+
+- 2026-10-22：ip3f 的 L3 通過（D165）；**IP-3 完成**。v8 候選加「大廳 UI 的元件化（按鈕、位址輸入框）並修改 ui_editor」。
+
+- 2026-10-22：IP-4 介面審查（U10，接受但需修改，D166）；ip4a（查詢、操作、注入，突變 11／11）完成。產品本體（`main.cpp`、`PvpApplication.cpp`）的 SDL 符號歸零，不再連 Native。
+
+- 2026-10-22：ip4b（觀測 hook、capture）完成。
+  - watch 的執行緒與生命週期做了局部 xhigh 審查（F1～F14）並修正。
+  - 時間戳判定變更與主執行緒規則（D167）。
+  - 突變 74／74 殺掉。
+  - 提交 `b3f6386`。
+
+- 2026-10-22（更正）：PR #85 是 draft，推送觸發的 run 只做範圍判斷，L1 job 跳過。#553（ip3d）、#554（ip3e）、#558（ip4a）、#560（ip4b）都沒有真的跑 L1，之前記為「成功」不實；真正跑過四平台的只有手動觸發的 #548（ip3b）、#550（ip3c）。已手動觸發 #561（`b3f6386`），補 ip3d～ip4b。
+
 ## 未結事項
 
-- `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
+- **（已處理，2026-10-23）v7.1 README 的「開發紀錄」清單**：PR #88（`c31887f`）合併後，記錄器分支同步 master，並在 README 加上「開發紀錄」一節。sdl-isolation 那一項標為「進行中，隨 PR #85」，該分支合併後改成連結。
+
+- **（已結論，2026-10-23）`N-gui-black-map-intermittent`**：GUI 測試偶發的地圖黑屏。
+  - 原因：timing probe 的暖機幀。觀測見 [black-map-observation](black-map-observation.md)，PR #89（`cdb9b07`）。
+    - 產品在 `InitializeGraphics` 送出暖機幀：背景純黑、沒有地圖與 HUD、只有人物與武器。
+    - timing probe 的 `RunLatency` 先擺放視窗（`gui_main.cpp:389`），讓視窗顯示，接著量計時器基準約 3 秒不 Render（`:390`），所以螢幕停在暖機幀上約 2.5 秒。
+    - 只出現在 timing 類跑次（O3、O4 合計 6 次中 5 次），其他 8 種案例和產品 Client（連續啟動 5 次）都沒有。
+  - 使用者的決定（2026-10-23）：
+    - 只記錄，不改 probe，因為對測試的正確性影響不大；
+    - 「預熱幀不得讓玩家看到」是需求，放進 v8。大地圖之後，這個問題可能會被放大。
+    - 已加到 [v8 README](../v8/README.md) 的候選表，以及「預計壓力」第 8 項。
+  - 還沒解釋、只記錄的兩點：
+    - 「視野內沒有玩家的那一端整個黑」：兩端的暖機幀應該相同；
+    - timing 那 1 次視窗晚約 4 秒才顯示。
+    - 若之後還看得到，可以直接用 `black_map_watch.py` 追。
+- **（已處理：`worker-probe-repair`，`d2844a5`）** `N-worker-probe-stale`（2026-10-19，`a1-shot-step` 途中發現，範圍外只記錄）：CTest `object_fps_pvp.worker`（標籤 `network`，不在 `test` preset 與 CI 的 `cpu|shader` 範圍）在 HEAD 也失敗。原因一：`worker_main.cpp:82-84` 的 mock Welcome 沒有填 `maximum_shot_damage`，`hitbox-fields` 之後 Client 的 `ReadRules` 要求 shot_damage≤maximum_shot_damage，所以判成「Invalid Match combat rules」；補上之後又在後面的一個等待逾時（`mock worker wait timed out`），起點未查。修 mock 與查等待逾時要另排；之前「本機 CTest 72／72」的說法只涵蓋 `cpu|shader` 範圍。
 - `N-shadow-join-key`（2026-10-18，D127）：`pv7-checkpoint` 的宣告必須把影子紀錄的對接寫成判定：(1) 對接鍵在 (player, E, life, S) 之外加上連線或時間順序（重連後 Match 會 reset，A 與序號從頭算，鍵可能重複）；(2) 對接率：每個 on_time 路徑的裁決都要對得到 `match-commands.jsonl` 的 resolved 事件，對不到就是工具無效。影子紀錄這一側的順序鍵：D128 已在 `match-shots.jsonl` 每筆加 `time_ns`（和 `match-commands.jsonl` 同一個時鐘）。
 
 - `N-movement-recovery-flake`（2026-10-18）：`MovementRecoveryTests.cpp:456`「PvP a delayed first rendered frame does not establish a persistent bootstrap backlog」在 CI macos-x64（Rosetta 2）的 run 39102188643 第 1 次失敗（product 路徑 fps 30、RTT 0、gap 108、worker 4000、authority 6000：`unexpectedRejections` 1），重跑通過；本機 Intel x64 220 次 0 失敗。測試用注入時鐘與固定種子，應是決定性的。要找出非決定性的來源（實作、測試或環境）；在那之前，這個案例的失敗不當成程式碼的回歸。調查（2026-10-18，另一個 session）：本機 x64 在所有試行裡事件序列完全一致，重現不了，分類未切分；依 §14.3 只加了失敗時才輸出的觀測（分支 `claude/bold-hermann-282919` 的 `923bd0e`，只改測試、判定不變，未開 PR、未合併）。使用者：只記錄，其他不處理。
@@ -606,20 +700,20 @@
   - **edge 系列收尾的 `edge-rate-limit`（D119；原為發版前，D118）**：重新測試，並重新評估方案 (a)（token bucket：每秒補 120、容量 120；改 `network-architecture.zh-Hant.md:950` 的契約條文，先寫失敗的重放測試）；(b)、(c) 見同一條目。評估時一併看 `edge-contract` 的 Gateway 狀態白名單（限速是 Gateway 的狀態與丟棄）。
   - 背景（使用者，2026-10-18）：網路在 v7.1 多次修改，很多是改網路機制；這可能是舊 Gateway 留下的痕跡。分析：限速本身是通用層的防洪機制（v5 以前就有），不是產品層的狀態副本；但它的兩個假設（Gateway 即時讀封包；流量遠低於 120）被 v7／v7.1 的修改侵蝕（30 Hz 動作批、時間回聲、09a 的 82 包輸入上限，開槍玩家平時已約 91 包／秒）。
 
-- **筆電睡眠後 Client 會斷線（休眠重連，體驗優化）**（2026-10-17 睡眠測試）：Client 的逾時用 `steady_clock`，睡眠時繼續走，醒來就判定 Gateway 逾時。既有行為，不在 v7.1 範圍。使用者（2026-10-17）：「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」之後排進體驗優化（醒來後重連、或用不含睡眠的時鐘判逾時）。
+- **（已補進 INVENTORY 為 N-sleep-reconnect，D158）** **筆電睡眠後 Client 會斷線（休眠重連，體驗優化）**（2026-10-17 睡眠測試）：Client 的逾時用 `steady_clock`，睡眠時繼續走，醒來就判定 Gateway 逾時。既有行為，不在 v7.1 範圍。使用者（2026-10-17）：「休眠重連紀錄到未結束事項中，這個屬於體驗優化的情況，給後面調整。」之後排進體驗優化（醒來後重連、或用不含睡眠的時鐘判逾時）。
 
-- **`edge-input-passthrough` 的 xhigh note**（記錄）：
+- **`edge-input-passthrough` 的 xhigh note**（記錄；D158：N3、N10 結案，N5 補進 INVENTORY 為 N-host-lock-keys-uncontracted）：
   - N3：佇列項目攜帶收包時刻與 GYOP 序號（回報 32 的 dwell 起點），字面上和 D105「單次呼叫的脈絡不得跨資料包保留」衝突。建議 `edge-contract` 把它歸類為「隨佇列項目攜帶的診斷狀態」，由你決定。
   - N5：protocol-v7 §9 寫鎖等待直方圖在「IpcHost 層」，實作在 `MatchRuntimeHost`；`network_statistics.py` 不彙總 `host_lock_*`，L2 的 judge 直接讀。
   - N10：`fwd_main_input_packets` 現在是「交給 link」，溢出的資料包同時算它和回報 32；`edge-analyzers` 照這個語意定義 I0。
 
-- **`edge-results-resend` 的 xhigh note**（記錄，之後的批次處理）：
+- **`edge-results-resend` 的 xhigh note**（記錄；D158：N1、N2 被取代，N3 前提消失，N4 只在 Match 與 Gateway 跨機器時重開）：
   - N1：這批 Match 的「ACK-only 補送退役」只在競態下觸發（link 只在 ACK 超前退役時才送 ACK-only），Client 漏收退役仍由 Gateway session 補送；`edge-results-passthrough` 讓 link 原樣轉送 ACK-only 後才真的用到。
   - N2：link 對每個副本都 `notify()` 一次，每位玩家約 30 Hz 多一次 writer 檢查，不影響時序；可改成合併有變化時才喚醒。
   - N3：link 對無法裁決的被拒請求照舊 30 Hz 重送，現在 Match 每次都回一框；L2 的流量數字會看到雙向 30 Hz。
   - N4：重送的副本排在 snapshot 前面；只有 TCP 低於約 120 框／秒才有影響（推論，loopback 可忽略）。
 
-- **丟棄帳本的 `ended`**（D105）：只增不減，上限是離開過的玩家數；長時間執行的 Gateway 會累積。在 `edge-contract` 時一起看。
+- **（已補進 INVENTORY 為 N-drop-ledger-growth，D158：取消）** **丟棄帳本的 `ended`**（D105）：只增不減，上限是離開過的玩家數；長時間執行的 Gateway 會累積。在 `edge-contract` 時一起看。
 
 - **保留的 worktree 與本機分支**：
   - `GYO-Engine-v7final`（`6d3f287`）、`GYO-Engine-c2-after`（`d685d1e`）：v7 的基準與凍結工具副本，保留到 `d44-regression-pv7` 完成（D146 DR-8 延到 `re-evaluate` 結束）。**（已處理，2026-10-21）**：`re-evaluate` 已結束；worktree 的清理由使用者交給架構會話。
@@ -628,9 +722,9 @@
   - 任何刪除都要先經使用者同意。
 - **（已處理：D142）D58 (1)(8) 的暫定決定**：在 `log-contract` 一起確認。
 - **檔位**：`pv7-design`、`log-contract` 開始前先問 ultracode（v7 D45）；`pv7-design` 另做 1 次 xhigh 對抗式檢查；每次 L2 宣告前做門檻來源的對抗式檢查（D45）。
-- **after-re-evaluate 的項目**：內容不變，等 `re-evaluate` 之後和評估結果一起排（README）。`re-evaluate` 已結束（D155），等使用者排序。
-- **Client 的 `other_version_datagrams`**：只確認了接線（短跑次值為 0），沒有正向測試：統計視窗 10 秒，補測試會讓 worker 測試變長很多。在 `drop-report` 或 `observability-tools` 補。**（仍未補，2026-10-21）**：兩批都沒有處理。
-- **`heartbeat-sync` 留下的項目**（xhigh 檢查的 note）：
+- **after-re-evaluate 的項目**：判斷已確定（D158），批次草案等核准（[after-re-evaluate.md](after-re-evaluate.md) 第 9 節）。
+- **Client 的 `other_version_datagrams`**：只確認了接線（短跑次值為 0），沒有正向測試：統計視窗 10 秒，補測試會讓 worker 測試變長很多。在 `drop-report` 或 `observability-tools` 補。**（仍未補，2026-10-21）**：兩批都沒有處理。**（已補進 INVENTORY 為 N-client-other-version-untested，D158）**
+- **`heartbeat-sync` 留下的項目**（xhigh 檢查的 note；D158：「只為測試存在的狀態」已由 edge-contract 分類，結案）：
   - Match 回覆「排在 controls、action lane、snapshot 之後」沒有可決定的測試（asio 下同一個 socket 可寫優先於可讀），只靠審查與 L2。
   - 差分測試不到 10 秒，所以視窗只在關閉時結算一次，跳變與漂移沒有在差分中算到（估計器另有單元測試，且結構上隔離）；也不跑滿品質視窗（600 tick × 3），逐出與 160 ms 門檻沒有在差分中判定。要延長會讓 CI 多數十秒。
   - Match 被 `Stop()`（不經過 `Close`）時沒有最後一個視窗的 log；runner 先停 Gateway，所以平常會走 `Close`。
@@ -643,8 +737,86 @@
   - 過渡原因的樣本身分不完整：16、17、20、21、28 沒有 action id 範圍；22～26 的 dwell 起點是計數時刻。edge 批刪除過渡原因時一併消失；28（結果寫出失敗）的 action id 範圍在 `edge-results-*` 補。
   - Match 照單接收違規回報的值、繼續往下比對（不標不可信）；L2 分析要把出現過違規的串流視為不可信。
   - 兩個 `coalesced_snapshots`：`gateway transport coalesced_snapshots` 含送出迴圈中途的取代，新鍵 45 只計讀取端；在 `log-contract` 統一。**（已處理：D142，鍵名不改，差額由 `backpressure_test.go` 守住）**
-  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。**（仍未收進，2026-10-21）**
+  - L2 的比對腳本 `compare_reports.py` 還在證據目錄；L2 事前宣告前要收進 `build/acceptance/object_fps_pvp` 並加測試（會動到凍結清單：新增檔案）。**（仍未收進，2026-10-21；已補進 INVENTORY 為 N-compare-reports-untracked，D158）**
 - **`edge-contract` 的約束**（文件會話，設計事故行動 4）：契約節的標題改成英文 `Design Invariants`，不隨文件語言翻譯（使用者的決定，文件會話 PR #80，2026-10-16 通知時尚未合併；這更正了 PR #79 時「標題逐字保持『不可破壞的契約』」的要求）。
   - `edge-contract` 把 Gateway 的正式條文寫在 `network-architecture.zh-Hant.md` 的 `### Design Invariants` 節下。PR #80 已合併到 master（`8f2f3fe`，四平台 L1 通過）；本分支在 `edge-results-resend` commit 之後同步 master，不自行改名。master 的 AGENTS.md 另新增 §14 Test and Defect Handling（原 §14、§15 往後移），同步後照新規則做。
   - AGENTS.md §3 改成一般規則「状態の権威（State Authority）」，不再列 Gateway 的細節；Gateway 的允許／禁止清單（protocol-v7 §2a）只放在 Design Invariants 節。
   - 同節新增 `Replacement Criteria`：新建元件或加大既有元件的責務之前，先在 Design Invariants 寫下「什麼情況就換掉它」。`edge-contract` 時提案 Gateway 的 Replacement Criteria，由你決定（**已處理**：`network-architecture.zh-Hant.md` 的 Design Invariants「Gateway」一節已有 Replacement Criteria）。
+
+- 2026-10-22：L1 #561 的 windows-x64 失敗。原因是測試自身：並行解構的測試缺握手。延後推送執行緒啟動可以在本機重現，加握手後通過；修正後重跑 #562，四平台成功。
+- 2026-10-22：ip4c 完成（`98f5025`）：後端的 SDL3 改成 PRIVATE，加上 G3，突變 78／78 殺掉。L1 #564 四平台成功。
+
+- 2026-10-22：ip4d 完成（`e455d98`、`18b6c03`）：突變全跑一次、沒有重跑，IP 78／78、TT 14／14；寫 IP-4 的 dev_log；L3（live resize）通過。**IP-4 的 Engine 側完成。** 主 checkout 的分支依文件會話轉達的使用者交代，合併 master（#87，`df0fefb`）。
+
+- 2026-10-22：產品側 IP-4 開始規劃（使用者：「開始產品側 IP-4 遷移：先整理工作分批、事前宣告（含 L2 門檻、U5／U6 的判定變更草案）給我核准，核准前不動 probe。」）。3 個唯讀子 agent 盤點：probe 的 SDL 使用 276 行（A 約 186、B 約 21、C 約 67）、L2 門檻來源、pointer capture 的 oracle。草案第 1 版的 L2 經 D45 對抗式檢查改寫為第 2 版（G8、G1、G9、停止規則重寫）。估時 19～25 h（含 L2）。
+
+- 2026-10-23：D168 核准後開始實作。`probe_queries_entry`（檔位 high）完成，提交 `5ef5e69`：
+  - probe 的進入點改成 `GyoMain`；查詢、操作、capture 改用 Engine API；產品加 `RenderDeviceInfo()`。
+  - `test` preset 80／80；GUI 短測 1 次 P。
+  - L1 #573 執行中。
+  - `object_fps_pvp.worker` 失敗：這是已知的 `N-worker-probe-stale`，修正 `d2844a5` 只在本分支，還沒進 sdl-isolation 分支。
+  - L1 #573（`5ef5e69`）四平台成功。
+- 2026-10-23：`probe_injector`（檔位 high）完成：probe 的輸入改用 `SdlInputInjector`。本機 GUI 驗收（`pvp_arena`）：
+  - action60 P：事件 80、檢查 21／21、注入射擊 16，與 pv7-checkpoint 的通過跑次相同。
+  - capture P、player60 P、gui-bots P。
+  - timing-combat：凍結的分析器只因 HUD 判 F，依 D83／D84 改用 v7 HUD 規則判 P；移動 Actual 37.51／37.60 ms。
+  - 第一次跑時，場地誤給 `pvp_corners.json`，頭與 base 以相同的方式失敗。這是操作錯誤（E 類），不是缺陷，證據已保留。之前的通過跑次都用 `pvp_arena.json`；batch 1 的 timing 短測也用錯了場地（判的是移動，仍通過），記為「場地不合慣例」。
+  - 提交 `d5ecfa3`；手動觸發 L1。
+  - L1 #575（`d5ecfa3`）四平台成功。
+- 2026-10-23：`probe_window_move`（檔位 high，事件順序局部 xhigh）完成（`089c0b5`）：合成 MOVED 改成真的移動視窗（J2）。
+  - xhigh 審查：macOS 上 MOVED 在 `SetWindowPosition` 內就已排進佇列（實測 20／20），沒有誤判的路徑。修正 M1、m2～m4：寫入移動紀錄、改正註解、錯誤訊息帶 detail、drag 前要求擷取中。
+  - 本機 action60 4 次、gui-probe 2 次都通過，G8 三行都是 true，`Sync()` <1 ms。
+  - L1 #577 四平台成功。
+- 2026-10-23：`probe_watch_pacing`（檔位 high，watch 執行緒局部 xhigh）完成（`bbc716a`）：
+  - 兩個 watch 改用 `EventWatch`；13 處睡眠改用 `Waiter`；標籤改名；probe 拿掉 Native，沒有 SDL 的 include 路徑也能建置。
+  - xhigh 審查：沒有 critical 或 major。minor 5 項已修，測試缺口 T1～T4 記在宣告第 9 節。
+  - 本機：
+    - timing-short、timing-combat 都 P：synthetic 20／0，沒有受干擾，實測 FPS 59.8，符合 G5 的預測。
+    - player60、action60、gui-bots 都 P。
+    - phase-stalls 6／6 恢復，下限比 v6 低 1～2 ms。
+  - L1 #579（`bbc716a`）四平台成功（先前誤記為 #578）。
+  - 下一批 `capture_golden_guard`：J1 的 §14.4 要使用者核准。實作與核對做完就停下，等核准。
+- 2026-10-23：`capture_golden_guard`（檔位 high）進行到 J1 的核准關卡，停下。
+  - Engine 側不需要核准的已提交：`8d7182e`（insideWindow 依處理時的大小）、`0e977cf`（取得焦點會設 windowFocused）。
+  - 工作樹裡已完成、尚未提交：golden（15014 幀，除時間戳以外的全欄位，0 不一致）、新測試、符號守衛 (a)(b)、產品突變工具的 `expect_build_failure`。突變：產品 34／34，Engine 2／2。
+  - 獨立核對：第 1、3 點成立，第 2、4、5 點部分成立。指出的 L5（欄位投影）與 v-s07 已處理；v-s08～s10 交使用者決定。
+- 2026-10-23：D169。`capture_golden_guard` 完成：`e0de346`（Engine 不去重的契約、測試、突變 3／3）與 `7f7b704`（golden、新測試、守衛 (a)(b)、突變工具）。L1 #582 執行中。下一步 `l2_interleaved` 的第 3 版。
+- 2026-10-23：L1 #582（`7f7b704`）四平台成功。L2 第 3 版準備完成（`3106b5b`）：
+  - 兩樹 B `2307a56`、A `7f7b704` 都在專用 worktree 完整建置；權威 digest 0 差分。
+  - 工具 `run_si.py`／`judge_si.py` 等已寫好，乾跑 117／118（唯一不符的一項是 dryrun 受現況影響）。
+  - 開發跑次 12 次全部 P。
+  - 照字面做不到的兩項交使用者決定。
+- 2026-10-23：D170 已實作：語料重判 11／11（排除 6），頭的 capture 測試通過，乾跑 118／118，預檢通過。L2 等使用者在場時開跑。
+- 2026-10-23：sdl-isolation 產品側的 dev_log 已加上（`9e36d0b`），涵蓋已完成的 5 批；L2 完成後補寫。
+- 2026-10-23：`l2_interleaved` 完成。
+  - 第一次 session 依使用者的「先等等」，在第一項開始前停下（沒有項目跑過）。
+  - 第二次 session `pvp-v71-sdl-isolation-l2-20261023b`：**通過**。20／20 P，G1～G3、G6～G8、G10、G11 成立；G3 最大差 0.32 ms；G5 的預測成立；沒有受干擾。
+  - **產品側 IP-4 完成**：提交 `d51cbc1`，PR #85 的清單已更新。
+  - 記錄上的錯誤：`7ae0588` 的腳本把宣告清空後提交（先以寫入模式打開再讀取），D170 的修改一起遺失。已在 `d51cbc1` 從 `3106b5b` 還原並重新套用。
+- 2026-10-23：PR #85（sdl-isolation：Engine IP-3／IP-4 與產品側 IP-4）合併，merge commit `054b08f`。
+  - 合併前：同步 master（含 PR #88）、轉成 ready；L1 #592（手動觸發）與 #591（PR）都是四平台成功，PR 狀態 CLEAN。
+  - 本分支同步 master 時，`tests/object_fps_pvp/mutations.json` 發生衝突：本分支的 worker-probe-repair 突變與 master 的 sdl-isolation 突變都加在目錄末尾。兩邊都保留（共 521 個，id 不重複），目錄測試 7／7 通過。
+  - README「開發紀錄」裡 sdl-isolation 的連結，目標檔案現在已在本分支上。
+- 2026-10-23：`substitution-single-store` 開始（檔位 high）。
+  - 讀程式碼後停在關卡：兩份「被替代的序號」由同一個迴圈、同一次時鐘讀取寫入（`MatchRuntimeHost.cpp:647-657`），只差保留範圍（64／600）與用途（判定／診斷）。帳本不能驅動判定（`network-architecture.zh-Hant.md:771`）。
+  - 提了三個選項：(a) 只記錄並加守衛；(b) 以 SlackTrack 為唯一來源合併；(c) 以帳本為唯一來源合併（不可行）。
+  - 使用者選 (b)，並擴大範圍：見 D171。
+  - 使用者補充設計原則（2026-10-23）：重連後要重新建立的是「時間上的對齊」。
+    - 時鐘：時間回聲重新取樣，不沿用斷線期間的時鐘視窗；
+    - 相位：重新擷取送命令的時機，不沿用斷線前的領先量（B6 那一區的機制）；
+    - 命令序列：用新的移動 epoch 重新起步，斷線期間的舊命令直接丟棄，不補算；
+    - 身分：同一位玩家、同一個 session 要能接回來，這是 Gateway 無狀態原則要特別設計的部分。
+    - 整體是 UDP 加應用層的存活判斷，重連時重新對時。要寫成明確的狀態與規則：偵測門檻、中斷期間的行為、恢復流程、真正斷線的上限。
+- 2026-10-23：`outage-resync` 分線。從 master `cdb9b07` 開出 `claude/pvp-v71-outage-resync`，draft PR #90。
+  - ultracode（workflow `wf_3c8b9349-036`）：2 位偵察、3 份計畫（最小契約 52、契約先行 53、風險優先 58，滿分 70）、評審綜合、對抗式審查。
+  - 審查判定「必須修訂」：草案漏讀上面的設計原則（身分接回被縮成同一 endpoint）；部分送達、只有上行、冷卻期內的大負值沒有處理；`slack_clamped` 追加到 ingress 行會觸發 log-contract 的 Replacement Criteria。主會話抽查程式，三點都成立。
+  - 第 2 版：狀態與規則寫成表；Match 端加「晚到過久就換 epoch」（N_o）；身分接回列為 D-2（建議 session 的 endpoint 重新綁定，wire 不變）；L2 讀的行改成新的 A 級行族。估時約 59～85 h（不做身分接回時約 53～76 h）。
+  - 本線的現況與 dev_log 在本線分支（計畫的「現況」一節、`docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`）；本文件只在分線、決定、收尾時更新。
+
+- 2026-10-23：`outage-resync` 的關卡改名：G1 → `gate-characterize`、G2 → `gate-contract`。原因：和 INVENTORY 的項目代號 G1、G2 撞名，使用者從分支會話看到「等你決定」寫著 G2，誤以為和 D159「G2 先不做」有關。同時整理「現況」：刪掉過時的「下一步」（sdl-isolation 已合併）與「最後更新」（2026-10-20），加上任務線總覽。本線分支同步（`42b8e72`）。
+- 2026-10-24：`outage-resync` 完成 `single-store-refactor`、`match-resync`（L1 都四平台成功），`retention-600` 的程式完成，等使用者核准判定變更與 L2 宣告。使用者睡前指示「弄完或要確認的內容就等明天」，停在這裡。
+- 2026-10-24：`outage-resync` 的 `retention-600` 完成：L2 9／9 P（session `pvp-v71-retention-600-l2-20261024`）。L1 的 Windows Quick acceptance 中 Engine 測試的競態，由另一個會話以 PR #91 修正並合併（master `253808a`）。
+- 2026-10-24：`outage-resync` 與 master 同步（帶進 PR #91）。`client-interrupted` 實作完成（`d0efbed` 等）：本機測試全過、突變 72 個全部 killed；本線也帶進本分支 `d2844a5` 的 worker probe 修正（`3547c05`），worker CTest 在本線恢復通過。
+- 2026-10-24：`client-interrupted` 的對抗式審查（xhigh 1 位）Major 2、Minor 6，使用者核准補強；補強完成，M2（差分 oracle）的 §14.4 1～5 使用者核准。Gateway 時鐘視窗的重開移到 `identity-rebind`（使用者核准）。
+- 2026-10-24：`client-interrupted` 補強後 L1（run 40074065448）四平台成功。`identity-rebind` 完成：通用層 session 的最後驗證時刻與有條件的改綁、Gateway 的 `session rebound` 行與時鐘視窗重開；突變 77 個全部 killed。Hello 間隔維持 1 s（只記錄）。
+- 2026-10-24：`resync-l2-l3` 準備完成：注入工具 `run_outage.py`、L2 宣告第 2 版（D45 小規模 ultracode 後改寫：Critical 1、Major 7、Minor 6 全部處置）、乾跑 11 項全部 P、判定工具的竄改檢查 10／10。等使用者核准。

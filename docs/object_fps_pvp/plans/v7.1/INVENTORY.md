@@ -1,6 +1,6 @@
 # PvP v7.1 清單核對結果
 
-更新：2026-10-21（D157：re-evaluate 與 LC-8 的處置、records 已做完的 4 列；先前 2026-10-16：P5 等項目的處置依 D94 改為 `edge-contract`）；初版 2026-10-15。Owner：`object_fps_pvp`。計畫與批次見 [README](README.md)，決策見 [交接](HANDOFF.md)。
+更新：2026-10-21（D158：after-re-evaluate 的判斷，見 [after-re-evaluate.md](after-re-evaluate.md)；補列 6 項 N-，證據以 `6fbb6a9` 為準；D157：re-evaluate 與 LC-8 的處置、records 已做完的 4 列；先前 2026-10-16：P5 等項目的處置依 D94 改為 `edge-contract`）；初版 2026-10-15。Owner：`object_fps_pvp`。計畫與批次見 [README](README.md)，決策見 [交接](HANDOFF.md)。
 
 v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法：5 位讀者分組對照程式與文件；2 位對抗式核對，提出的更正已套用；1 位完整性評審補列缺項。各 agent 的原始輸出留在規劃會話的工作檔，不放進 repo；本文件是核對後的結論。
 
@@ -12,7 +12,10 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 - **處置**：
   - 批次代號：見 README 的樹狀總覽；
   - `re-evaluate`：pv7 之後用新數據重新評估；
-  - `re-evaluate 之後`：內容不變，等評估之後再排；
+  - `re-evaluate 之後`：內容不變，等評估之後再排（D158 之後只剩 G2）；
+  - `after-re-evaluate`：D158 判斷還需要，批次見 [after-re-evaluate.md](after-re-evaluate.md) 第 9 節；
+  - `有條件`：條件出現時才需要；
+  - `v8`：交給 v8，見 [v8 README](../v8/README.md)「v7.1 交過來的項目」；
   - 取消、已解決、已被取代：附決策編號。
 - **代號**：照使用者的初始清單（P、A、B、C、D、E、F、G）。和 2026-10-14 種子 README 的對照：A4＝A2、A5＝A3、B6～B11＝B1～B6、C12～C17＝C1～C6、D58-*＝D-1、D-LOG＝D-2。M0、TT2-B10、IP34-B12、LAN15 是種子 README 第 10～13 項。重複的項目已合併，並在項目欄標「合併」。
 
@@ -23,13 +26,15 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | pv7-line | 20 |
 | after-pv7 | 26 |
 | re-evaluate | 5 |
-| re-evaluate 之後 | 37 |
+| re-evaluate 之後 | 1 |
+| after-re-evaluate | 20 |
+| 有條件 | 3 |
 | plan-sync-docs | 3 |
-| 取消 | 13 |
-| 已解決 | 3 |
-| 已被取代 | 3 |
-| v8 | 5 |
-| 合計 | 115 |
+| 取消 | 22 |
+| 已解決 | 7 |
+| 已被取代 | 5 |
+| v8 | 9 |
+| 合計 | 121 |
 
 ## P. pv7 與相關任務
 
@@ -66,23 +71,23 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | B7 | Match 在命令到達時就發布 slack 樣本。更正：採用就要改 movement_slack 的語意，算改 wire。 | 取消（D155：要解的撤回邊界改由 B6 在 v8 重新規劃；Match 端看不出收益，而且要改 wire） | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:585-627`<br>`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:224-233` | 要 | 否 | 取消（D155） |
 | B8 | late 修正的幅度依遲到量決定，或改「連續 N 次」 | 取消（re-evaluate，D154：N＝2 沒有誤觸發；x1 型由 backlog 重設回收，瓶頸不在幅度。重開：late 修正追不上又沒有 backlog 重設接手） | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:149`<br>`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:155-158` | 否 | 否 | re-evaluate |
 | B9 | 停頓後的 reseed 用過時的 snapshot 播種，領先實際歸零 | 已解決（re-evaluate，D154：已知限制。背壓 120 次中 12 次領先不足，都在 0.25 s 內恢復、替代 0。重開：抖動網路下那 0.25 s 出現 held） | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:218-223`<br>`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:67-97` | 否 | 可能 | re-evaluate |
-| B10 | 權威 digest 不保護相位追蹤：補一層相位追蹤的 golden | 未解決 | `tests/object_fps_pvp/AuthorityDigest.cpp:474-480`<br>`tests/object_fps_pvp/AuthorityDigest.cpp:572-575` | 否 | 會 | re-evaluate 之後（修正批之前） |
+| B10 | 權威 digest 不保護相位追蹤：補一層相位追蹤的 golden | 未解決（after-re-evaluate，D158：還需要，跟 B6：`RunLink` 仍不經 TrackSlack） | `tests/object_fps_pvp/AuthorityDigest.cpp:474-480`<br>`tests/object_fps_pvp/AuthorityDigest.cpp:572-575` | 否 | 會 | v8（D158） |
 | B11 | FireGate.cpp 的 earliest 寫死減 2，領先改變時估晚 | 未解決 | `apps/object_fps_pvp/src/Pvp/FireGate.cpp:21-22`<br>`apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:437-442` | 否 | 否 | 取消（D90：A1 讓 FireGate 退役） |
 
 ## C. Code smell
 
 | 代號 | 項目 | 狀態 | 證據（c742836） | 改 wire | 動 digest | 處置 |
 |---|---|---|---|---|---|---|
-| C12 | token 規則三份拷貝，抽成純函式 | 未解決 | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:596-622`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:690-699` | 否 | 否 | re-evaluate 之後 |
-| C13 | 被替代的序號存兩份：SlackTrack.substituted（64）與 ingress 帳本（600） | 未解決 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:13-15`<br>`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:606-622` | 否 | 否 | re-evaluate 之後 |
-| C14 | Gateway 的 p.commands 衝突檢查和 runtime link 的內容比對重疊 | 未解決 | `apps/object_fps_pvp/gateway/server.go:53`<br>`apps/object_fps_pvp/gateway/server.go:1005-1013` | 否 | 否 | re-evaluate 之後 |
-| C15 | quad_evidence.py 和 command_evidence.py 收斂成 N 人版 | 未解決 | `build/acceptance/object_fps_pvp/quad_evidence.py:1-13`<br>`build/acceptance/object_fps_pvp/quad_evidence.py:25-28,:37-45` | 否 | 否 | re-evaluate 之後 |
-| C17 | 第 04 批 xhigh 審查只記錄的項目（總項） | 未解決 | `docs/object_fps_pvp/plans/v7/04-client-roles.md:180-184`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:453` | 否 | 否 | re-evaluate 之後 |
-| C17-1 | 時間倒退的意圖（多個發布者時） | 未解決 | `apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp:142-146`<br>`apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp:60-72` | 否 | 否 | re-evaluate 之後 |
-| C17-2 | 網路 probe 不再以真實 socket 涵蓋伺服器端的輸入逾時 | 未解決 | `build/acceptance/object_fps_pvp/network_main.cpp:275-280`<br>`build/acceptance/object_fps_pvp/network_main.cpp:282-297` | 否 | 否 | re-evaluate 之後 |
-| C17-3 | SendInput(input, generation) 的世代檢查與角色送出路徑沒有 L1 | 未解決 | `apps/object_fps_pvp/include/RetroFPS/Pvp/ClientConnection.hpp:91-95`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:784-787` | 否 | 否 | re-evaluate 之後 |
+| C12 | token 規則三份拷貝，抽成純函式 | 未解決（after-re-evaluate，D158：還需要：併進 N-token-test-gaps（測試模型與產品不連動是突變存活的根因）） | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:596-622`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:690-699` | 否 | 否 | after-re-evaluate（D158） |
+| C13 | 被替代的序號存兩份：SlackTrack.substituted（64）與 ingress 帳本（600） | 未解決（after-re-evaluate，D158：還需要：同一事實存兩份，`track.substituted` 參與 slack 判定） | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:13-15`<br>`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:606-622` | 否 | 否 | after-re-evaluate（D158） |
+| C14 | Gateway 的 p.commands 衝突檢查和 runtime link 的內容比對重疊 | 已被取代（after-re-evaluate，D158：edge 批刪除了 Gateway 的命令表與衝突檢查） | `apps/object_fps_pvp/gateway/server.go:53`<br>`apps/object_fps_pvp/gateway/server.go:1005-1013` | 否 | 否 | 已被取代（D158） |
+| C15 | quad_evidence.py 和 command_evidence.py 收斂成 N 人版 | 未解決（after-re-evaluate，D158：還需要：兩支仍各算一份命令指標，105 的 6 處有 3 處在這裡） | `build/acceptance/object_fps_pvp/quad_evidence.py:1-13`<br>`build/acceptance/object_fps_pvp/quad_evidence.py:25-28,:37-45` | 否 | 否 | after-re-evaluate（D158） |
+| C17 | 第 04 批 xhigh 審查只記錄的項目（總項） | 已解決（after-re-evaluate，D158：C17-4 的 FireGate 已隨 A1 刪除；C17-1～3 各自判斷） | `docs/object_fps_pvp/plans/v7/04-client-roles.md:180-184`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:453` | 否 | 否 | 已解決（D158） |
+| C17-1 | 時間倒退的意圖（多個發布者時） | 未解決（after-re-evaluate，D158：取消：產品只有一個發布者。重開：新增第二個意圖發布者） | `apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp:142-146`<br>`apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp:60-72` | 否 | 否 | 取消（D158） |
+| C17-2 | 網路 probe 不再以真實 socket 涵蓋伺服器端的輸入逾時 | 未解決（after-re-evaluate，D158：取消：v7 第 04 批就決定只記錄，PvpMatchTests 有 L1。重開：伺服器端輸入逾時出現缺陷） | `build/acceptance/object_fps_pvp/network_main.cpp:275-280`<br>`build/acceptance/object_fps_pvp/network_main.cpp:282-297` | 否 | 否 | 取消（D158） |
+| C17-3 | SendInput(input, generation) 的世代檢查與角色送出路徑沒有 L1 | 未解決（after-re-evaluate，D158：還需要：重連時的世代檢查沒有任何測試或突變） | `apps/object_fps_pvp/include/RetroFPS/Pvp/ClientConnection.hpp:91-95`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:784-787` | 否 | 否 | after-re-evaluate（D158） |
 | C17-4 | 負向 slew 期間 FireGate 最多保守 0.25×經過時間 | 未解決 | `apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp:38-46`<br>`apps/object_fps_pvp/src/Pvp/FireGate.cpp:11-24` | 否 | 否 | 取消（D90：FireGate 退役） |
-| C16 | 移除 AppleClang 的 -fexperimental-library | 未解決 | `apps/object_fps_pvp/CMakeLists.txt:30-32`<br>`tests/object_fps_pvp/CMakeLists.txt:253-254` | 否 | 否 | re-evaluate 之後 |
+| C16 | 移除 AppleClang 的 -fexperimental-library | 未解決（after-re-evaluate，D158：還需要：`std::jthread` 已消失，只剩 `std::osyncstream`；旗標是 PUBLIC） | `apps/object_fps_pvp/CMakeLists.txt:30-32`<br>`tests/object_fps_pvp/CMakeLists.txt:253-254` | 否 | 否 | after-re-evaluate（D158） |
 
 ## D. 暫定決定
 
@@ -100,9 +105,9 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | 代號 | 項目 | 狀態 | 證據（c742836） | 改 wire | 動 digest | 處置 |
 |---|---|---|---|---|---|---|
 | E2 | 需要 wire 資料的紀錄（原本「併入第 11 批」） | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:384`<br>`docs/object_fps_pvp/plans/v7.1/README.md:86` | 要 | 否 | cause-records |
-| E3 | 量測工具時間基準統一（t_frame 與 t_c） | 未解決 | `apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTrace.hpp:16-17`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1069` | 否 | 否 | re-evaluate 之後 |
+| E3 | 量測工具時間基準統一（t_frame 與 t_c） | 未解決（after-re-evaluate，D158：還需要，跟 B6：只有要和 09b 的 t_frame 數字對照時才碰到） | `apps/object_fps_pvp/include/RetroFPS/Pvp/MovementTrace.hpp:16-17`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1069` | 否 | 否 | v8（D158） |
 | E4 | network 案例的遺失種子是固定的 | 未解決 | `build/acceptance/object_fps_pvp/action_probe.py:230`<br>`build/acceptance/object_fps_pvp/impaired_network.py:156-157` | 否 | 否 | observability-tools |
-| E5 | probe 起點的幀相位（D46⑦） | 未解決 | `build/acceptance/object_fps_pvp/gameplay_action.hpp:109`<br>`build/acceptance/object_fps_pvp/gameplay_action.hpp:170` | 否 | 否 | re-evaluate 之後 |
+| E5 | probe 起點的幀相位（D46⑦） | 未解決（after-re-evaluate，D158：還需要，跟 A4：跨建置比較時才碰到） | `build/acceptance/object_fps_pvp/gameplay_action.hpp:109`<br>`build/acceptance/object_fps_pvp/gameplay_action.hpp:170` | 否 | 否 | v8（D158） |
 | E1 | 第 10 批「觀測缺口清單」1～7 在 v7 之後的剩餘 | 部分（a700b66、6abd35a、8a36855、d49ee1e、f535b81） | `docs/object_fps_pvp/plans/v7/HANDOFF.md:385-392`<br>`docs/object_fps_pvp/plans/v7/08c-drop-report.md:763` | 可選 | 否 | log-contract＋observability-tools |
 | E1-1 | 觀測缺口 1：Gateway 的丟棄沒有計數或 log | 已解決（8a36855、a700b66、6abd35a） | `apps/object_fps_pvp/gateway/ingress_statistics.go:9-24`<br>`apps/object_fps_pvp/gateway/server.go:836、:859、:863` | 可選 | 否 | 已解決 |
 | E1-2 | 觀測缺口 2：Match 的 host_accepted 只記新收下的序號 | 部分（d49ee1e、f535b81；逐筆到達事件的剩餘，D157：跟著 B6 交給 v8） | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:221-226`<br>`apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:243` | 可選 | 否 | v8（D157，隨 B6） |
@@ -116,13 +121,13 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 
 | 代號 | 項目 | 狀態 | 證據（c742836） | 改 wire | 動 digest | 處置 |
 |---|---|---|---|---|---|---|
-| F1 | ClientConnection 關閉時阻塞約 3 秒（httplib） | 未解決 | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:50-52`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:154-157` | 否 | 否 | re-evaluate 之後 |
-| F2 | LogFile 非同步化 | 未解決 | `apps/object_fps_pvp/src/Pvp/LogFile.cpp:134-139`<br>`apps/object_fps_pvp/src/Pvp/LogFile.cpp:97-109` | 否 | 否 | re-evaluate 之後（和 TT-2 一起） |
-| F3 | AssetWatcher 的 detectedNs 改用 Engine 的時間基準 | 未解決 | `engine/asset/src/AssetWatcher.cpp:168-172`<br>`engine/asset/include/engine/asset/hot_reload/AssetChange.hpp:34` | 否 | 否 | re-evaluate 之後 |
-| F4 | D30 門檻可能被逐漸變長的發布間隔逐級放大 | 未解決 | `apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationRole.hpp:54-65`<br>`apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp:55-58、:66-70` | 否 | 否 | re-evaluate 之後 |
-| F5 | 期限前自旋（忙等） | 未解決 | `engine/time/include/engine/time/Waiter.hpp:53-65`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:458` | 否 | 否 | re-evaluate 之後 |
-| F6 | App Nap（Spaces、縮小時的斷線） | 未解決 | `docs/object_fps_pvp/plans/v7/05-30fps-comparison.md:107、:161`<br>`docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:136、:197` | 否 | 否 | re-evaluate 之後 |
-| F7 | Windows Match 的 Tick 與 IPC 精度。2026-10-16 的全 Windows LAN 臨時測試有第一份實機數據：主機上沒開 Client 時晚醒 ≥2 ms 佔 1.67%（9632 Tick 中 161 個，最大 14.7 ms），開著時 0（33707 Tick，最大 1.6 ms）〔推論：本機 GPU 程式改變了計時器解析度或省電狀態；樣本只有 16 個窗口〕 | 未解決 | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:499-510`<br>`engine/time/include/engine/time/Waiter.hpp:27-29、:60-65`<br>`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/` | 否 | 否 | re-evaluate 之後 |
+| F1 | ClientConnection 關閉時阻塞約 3 秒（httplib） | 未解決（after-re-evaluate，D158：還需要：關閉 Client 時卡在同步的 /leave，最多 3 秒） | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:50-52`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:154-157` | 否 | 否 | after-re-evaluate（D158） |
+| F2 | LogFile 非同步化 | 已解決（after-re-evaluate，D158：tt2-trace：改走 TraceSink 的背景執行緒，另加 crash flush） | `apps/object_fps_pvp/src/Pvp/LogFile.cpp:134-139`<br>`apps/object_fps_pvp/src/Pvp/LogFile.cpp:97-109` | 否 | 否 | 已解決（D158） |
+| F3 | AssetWatcher 的 detectedNs 改用 Engine 的時間基準 | 未解決（after-re-evaluate，D158：取消：產品沒有讀者，時間基準已寫在註解。重開：有程式拿 detectedNs 和 Engine 的時間比較） | `engine/asset/src/AssetWatcher.cpp:168-172`<br>`engine/asset/include/engine/asset/hot_reload/AssetChange.hpp:34` | 否 | 否 | 取消（D158） |
+| F4 | D30 門檻可能被逐漸變長的發布間隔逐級放大 | 未解決（after-re-evaluate，D158：取消：記為已知限制，沒有檢測手段（門檻與過期判定沒有寫進任何 log）。重開：玩家回報幀率慢慢變差時移動不對，或有批次要改意圖過期的判定） | `apps/object_fps_pvp/include/RetroFPS/Pvp/ClientSimulationRole.hpp:54-65`<br>`apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp:55-58、:66-70` | 否 | 否 | 取消（D158） |
+| F5 | 期限前自旋（忙等） | 未解決（after-re-evaluate，D158：有條件：拿到 lan15-windows 的 Windows 晚醒數據時） | `engine/time/include/engine/time/Waiter.hpp:53-65`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:458` | 否 | 否 | 有條件（D158） |
+| F6 | App Nap（Spaces、縮小時的斷線） | 未解決（after-re-evaluate，D158：取消：從未重現。重開：切換 Spaces 或縮小時斷線） | `docs/object_fps_pvp/plans/v7/05-30fps-comparison.md:107、:161`<br>`docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:136、:197` | 否 | 否 | 取消（D158） |
+| F7 | Windows Match 的 Tick 與 IPC 精度。2026-10-16 的全 Windows LAN 臨時測試有第一份實機數據：主機上沒開 Client 時晚醒 ≥2 ms 佔 1.67%（9632 Tick 中 161 個，最大 14.7 ms），開著時 0（33707 Tick，最大 1.6 ms）〔推論：本機 GPU 程式改變了計時器解析度或省電狀態；樣本只有 16 個窗口〕 | 未解決（after-re-evaluate，D158：還需要：併進 LAN15，數據靠那個場次） | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:499-510`<br>`engine/time/include/engine/time/Waiter.hpp:27-29、:60-65`<br>`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/` | 否 | 否 | after-re-evaluate（D158） |
 
 ## G. 文件
 
@@ -137,8 +142,8 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 |---|---|---|---|---|---|---|
 | M0 | M0 影子量測與 FireGate 常數的完整推導（合成時間線 1～10 項改寫） | 部分（6587030） | `git worktree list`<br>`git log HEAD..m0-probe-5ef8a89` | 否 | 否 | 取消（D90：A1 讓 FireGate 退役） |
 | TT2-B10 | TT-2（Engine 的 GYO::Trace）＋原第 10 批（任務 8 的紀錄；日誌定為產品 Data Contract） | 部分（10003b9） | `docs/architecture/plans/time-threads-trace/README.md:4`<br>`docs/architecture/plans/time-threads-trace/README.md:26` | 可選 | 否 | tt2-trace＋log-contract |
-| IP34-B12 | IP-3、IP-4（Engine 的 SDL 隔離）＋原第 12 批（產品、probe、產品測試不再直接用 SDL） | 未解決 | `docs/architecture/plans/input-and-present/README.md:42-43`<br>`engine/platform/sdl/CMakeLists.txt:11-14` | 否 | 否 | re-evaluate 之後 |
-| LAN15 | 原第 15 批：Windows LAN 場次（含 Mac Gateway↔Windows Client 偏移與漂移 ≥15 分鐘）。更正：wire 需求在 P3。 | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:425-427`<br>`docs/object_fps_pvp/plans/v7/09-firegate-c2.md:132` | 否 | 否 | re-evaluate 之後（可選的評估資料） |
+| IP34-B12 | IP-3、IP-4（Engine 的 SDL 隔離）＋原第 12 批（產品、probe、產品測試不再直接用 SDL） | 未解決（after-re-evaluate，D158：還需要：v8 音效的前置；產品的 SDL 直呼在 tt2-trace 後反而變多） | `docs/architecture/plans/input-and-present/README.md:42-43`<br>`engine/platform/sdl/CMakeLists.txt:11-14` | 否 | 否 | after-re-evaluate（D158） |
+| LAN15 | 原第 15 批：Windows LAN 場次（含 Mac Gateway↔Windows Client 偏移與漂移 ≥15 分鐘）。更正：wire 需求在 P3。 | 未解決（after-re-evaluate，D158：還需要：完整 pv7 從沒在 Windows 實機跑過；F7 併入） | `docs/object_fps_pvp/plans/v7/HANDOFF.md:425-427`<br>`docs/object_fps_pvp/plans/v7/09-firegate-c2.md:132` | 否 | 否 | after-re-evaluate（D158） |
 
 ## 盤點新發現（N-）
 
@@ -155,32 +160,32 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | N-shot-origin-lag | 射擊在到達後的 Tick 以當時的權威位置判定，射手起點比 Client 畫面落後約 1～2 步〔推論〕 | 未解決 | `apps/object_fps_pvp/src/Pvp/PvpMatch.cpp:147`<br>`apps/object_fps_pvp/src/Pvp/PvpMatch.cpp:321-322` | 可選 | 會 | a1-shot-step |
 | N-analyzer-pv6-pin | 凍結分析器與驗收工具寫死協議版本 6（合併：N-frozen-judges-pv6-locked、N-analyzer-v7-overlays） | 未解決 | `build/acceptance/object_fps_pvp/acceptance_util.py:8`<br>`build/acceptance/object_fps_pvp/gameplay_evidence.py:140-141` | 否 | 否 | version-errors（凍結 pv7 版分析器） |
 | N-analyzer-literal-105 | 驗收分析器寫死 backlog 門檻 105，和產品常數不連動 | 未解決（re-evaluate，D154：還需要，同一常數 6 處手動維持） | `apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp:56`<br>`build/acceptance/object_fps_pvp/command_evidence.py:201,:423` | 否 | 否 | v8（D154） |
-| N-token-test-gaps | token 折讓式的測試缺口：存活突變與「每日曆秒 ≤61」斷言 | 未解決 | `docs/object_fps_pvp/plans/v7/09a-input-send-pinning.md:99`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:616-618` | 否 | 否 | re-evaluate 之後 |
-| N-osyncstream-experimental | std::osyncstream 也依賴 -fexperimental-library（C16 的前提要更正） | 未解決 | `apps/object_fps_pvp/match_main.cpp:14、:26-28、:98`<br>`apps/object_fps_pvp/src/Pvp/IpcHost.cpp:22、:33` | 否 | 否 | re-evaluate 之後（和 C16 一起） |
-| N-tt1-l2-wake-record | TT-1 L2 的起床精度記錄程式未合入（分支 claude/tt1-l2-wake-record）（合併：N-tt1-l2-branch） | 未解決 | `git: a8f9535 不是 HEAD 的祖先；分支 claude/tt1-l2-wake-record 存在`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:451-452` | 否 | 否 | re-evaluate 之後 |
+| N-token-test-gaps | token 折讓式的測試缺口：存活突變與「每日曆秒 ≤61」斷言 | 未解決（after-re-evaluate，D158：還需要：只留存活突變那一半（≤61 已不是契約，取消）；C12 併入） | `docs/object_fps_pvp/plans/v7/09a-input-send-pinning.md:99`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:616-618` | 否 | 否 | after-re-evaluate（D158） |
+| N-osyncstream-experimental | std::osyncstream 也依賴 -fexperimental-library（C16 的前提要更正） | 未解決（after-re-evaluate，D158：還需要：與 C16 同批） | `apps/object_fps_pvp/match_main.cpp:14、:26-28、:98`<br>`apps/object_fps_pvp/src/Pvp/IpcHost.cpp:22、:33` | 否 | 否 | after-re-evaluate（D158） |
+| N-tt1-l2-wake-record | TT-1 L2 的起床精度記錄程式未合入（分支 claude/tt1-l2-wake-record）（合併：N-tt1-l2-branch） | 未解決（after-re-evaluate，D158：有條件：lan15-windows 要量 Waiter 本身的精度時；分支去留由使用者決定） | `git: a8f9535 不是 HEAD 的祖先；分支 claude/tt1-l2-wake-record 存在`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:451-452` | 否 | 否 | 有條件（D158） |
 | N-wait-backend-not-logged | 產品日誌沒有記錄 Waiter 的後端 | 已解決（log-contract records，D143：`role started` 行的 `wait_backend`） | `engine/time/include/engine/time/Waiter.hpp:29、:84`<br>`engine/threads/include/engine/threads/RoleThread.hpp` | 否 | 否 | log-contract |
 | N-d37-log-location | D37：日誌的位置（留在執行檔旁）仍待確認 | 已解決（log-contract core，D142） | `apps/object_fps_pvp/main.cpp:37-49`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:138` | 否 | 否 | log-contract |
-| N-hud-source-tick | HUD 來源 tick 不在觀測 API（分析器只能用區間規則） | 未解決 | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:186` | 否 | 否 | re-evaluate 之後 |
-| N-gateway-race-flaky | Gateway 的時間敏感測試在高負載下不穩（合併：N-gateway-cadence-test-flaky） | 未解決 | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:190`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:50` | 否 | 否 | re-evaluate 之後 |
-| N-sigint-background-client | 腳本在背景啟動的 Client 忽略 SIGINT（合併：N-client-sigint-background） | 未解決 | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:191` | 否 | 否 | re-evaluate 之後 |
+| N-hud-source-tick | HUD 來源 tick 不在觀測 API（分析器只能用區間規則） | 未解決（after-re-evaluate，D158：取消：只有 GUI 驗收需要，v7 跳過的 GUI 輪不補（D157）。重開：重新跑 GUI 的 HUD 判定） | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:186` | 否 | 否 | 取消（D158） |
+| N-gateway-race-flaky | Gateway 的時間敏感測試在高負載下不穩（合併：N-gateway-cadence-test-flaky） | 已被取代（after-re-evaluate，D158：失敗過的那支測試已隨 edge-actions-passthrough 刪除，v7.1 沒有新實例。重開：Gateway 測試在高負載下再次偶發失敗） | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:190`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:50` | 否 | 否 | 已被取代（D158） |
+| N-sigint-background-client | 腳本在背景啟動的 Client 忽略 SIGINT（合併：N-client-sigint-background） | 未解決（after-re-evaluate，D158：取消：一直只記錄，SIGTERM 與 Esc 可替代。重開：腳本需要用 SIGINT 停 Client） | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:191` | 否 | 否 | 取消（D158） |
 | N-v7-devlog-gap | v7 第 08 批以後沒有 dev_log | 已解決（0c2ef14） | `docs/object_fps_pvp/plans/v7/README.md:148`<br>`docs/dev_logs/` | 否 | 否 | 已解決 |
 | N-branch-sync-pr75 | 規劃分支 HEAD 和 origin/master 已經分岔（PR #75） | 未解決 | `git log c742836..origin/master`<br>`git diff --stat c742836 origin/master` | 否 | 否 | plan-sync-docs |
 | N-lan3p-v7-kit | v7 的 3 人 LAN 測試改期（D83），要不要在 v7.1 之前跑 | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:128`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:126` | 否 | 否 | 取消（D91：不跑） |
 | N-v7-release-tag | v7 沒有發行，GitHub 的 Latest 仍是缺陷版 v1.1.0 | 未解決 | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:203-208`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:125` | 否 | 否 | 取消（D91：v7 不發行） |
-| N-8ms-client-crosscheck | C1 的 8 ms 狀態與 Client 端主機狀態的橫向對比 | 部分（36c77d4） | `docs/object_fps_pvp/plans/v7/HANDOFF.md:450`<br>`docs/object_fps_pvp/plans/v7/09-firegate-c2.md:788-797` | 否 | 否 | re-evaluate 之後 |
-| N-phase-estimator-wan-noise | 相位估計器在 WAN 雜訊下的穩定性（v6 的候選，v7.1／v8 都沒收） | 未解決（re-evaluate，D154：有條件，真實 WAN 樣本是 0） | `docs/object_fps_pvp/plans/v6/HANDOFF.md:649`<br>`docs/object_fps_pvp/plans/v6/HANDOFF.md:327` | 可選 | 否 | re-evaluate 之後（WAN 測試時，D154） |
+| N-8ms-client-crosscheck | C1 的 8 ms 狀態與 Client 端主機狀態的橫向對比 | 部分（36c77d4）（after-re-evaluate，D158：取消：動機是 FireGate 的常數，已隨 A1 消失。重開：又有常數依賴主機的計時狀態） | `docs/object_fps_pvp/plans/v7/HANDOFF.md:450`<br>`docs/object_fps_pvp/plans/v7/09-firegate-c2.md:788-797` | 否 | 否 | 取消（D158） |
+| N-phase-estimator-wan-noise | 相位估計器在 WAN 雜訊下的穩定性（v6 的候選，v7.1／v8 都沒收） | 未解決（re-evaluate，D154：有條件，真實 WAN 樣本是 0） | `docs/object_fps_pvp/plans/v6/HANDOFF.md:649`<br>`docs/object_fps_pvp/plans/v6/HANDOFF.md:327` | 可選 | 否 | 有條件（WAN 測試時，D154、D158） |
 | N-rotation-discarded-detail | rotation_discarded 沒有逐筆紀錄，原因也沒拆 | 取消（D157：原本為了 D44 的成因；D44 未再現，需要時可從移動紀錄的 HostAccepted−Resolved 推出。重開：D44 型的重設再出現、需要逐筆歸因時） | `apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp:433-441`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:490` | 否 | 否 | 取消（D157） |
 | N-conflict-window-permanent-loss | 衝突窗口併進主線造成的永久損失（protocol-v6 已知缺口 9） | 已解決（re-evaluate，D154：「永久」來自 Gateway 的併入與去重，pv7 已刪除；Match 整則拒收，游標越過後恢復） | `docs/object_fps_pvp/protocol-v6.zh-Hant.md:98`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:487` | 可選 | 否 | re-evaluate |
-| N-silent-branches-assert | 推論走不到的無聲分支改成 assert（Programmer Error） | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:491`<br>`apps/object_fps_pvp/gateway/server.go:638-641` | 否 | 否 | re-evaluate 之後 |
+| N-silent-branches-assert | 推論走不到的無聲分支改成 assert（Programmer Error） | 未解決（after-re-evaluate，D158：還需要：原清單已被 edge 批重寫，要對 HEAD 重新列點） | `docs/object_fps_pvp/plans/v7/HANDOFF.md:491`<br>`apps/object_fps_pvp/gateway/server.go:638-641` | 否 | 否 | after-re-evaluate（D158） |
 | N-09b-followup-measures | 09b §5 裡沒有對應使用者代號的量測與方法項 | 已解決（re-evaluate，D154：已拆到 D153、E3 與 B6） | `docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1373`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1376` | 否 | 否 | re-evaluate |
 | N-phase-1-7-items-3-6 | 09b 1-7 節的第 3、6 項已知限制（B6 沒涵蓋） | 部分（D154：第 6 點已滿足；第 3 點隨 B6） | `docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1176`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1179` | 否 | 否 | v8（D155，隨 B6） |
 | N-summary-counter-wrap | Client 重新加入後，每秒摘要行的武器計數器下溢（例：`actions_submitted=18446744073709551466`）：離開 Playing 時基準值沒有歸零。只影響日誌（2026-10-16 全 Windows LAN 臨時測試） | 已解決（log-contract core，D142） | `apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:712-717、:737-741`<br>`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/logs/clientB_logs/client-20261016-105531.log:337` | 否 | 否 | log-contract |
 | N-hit-feedback-not-logged | 受擊效果（紅色閃光）沒有寫進日誌，Client 的 HP 只有每秒取樣；使用者回報 Main Client 有一次受擊沒閃紅，時間不記得，無法定位。設計上致命一擊、同一 Snapshot 內致死的連續傷害、新生命的第一個狀態都不閃 | 已解決（log-contract records，D143：`PvP hit feedback version=1` 行） | `apps/object_fps_pvp/src/Pvp/HitFeedback.cpp:78-100`<br>`apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:357-366` | 否 | 否 | log-contract |
-| N-windows-max-path | Windows 發行包的 shader 路徑很深（檔名是 64 字元的雜湊），解壓到較深的資料夾就超過 MAX_PATH（260），Client 開不了 shader。CI 的驗收路徑較短，所以沒抓到 | 未解決 | 2026-10-16 實例：271 字元，`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/logs/clientA/logs/client-20261016-104011.log:2` | 否 | 否 | re-evaluate 之後 |
+| N-windows-max-path | Windows 發行包的 shader 路徑很深（檔名是 64 字元的雜湊），解壓到較深的資料夾就超過 MAX_PATH（260），Client 開不了 shader。CI 的驗收路徑較短，所以沒抓到 | 未解決（after-re-evaluate，D158：還需要：玩家解壓到較深的資料夾就開不了遊戲） | 2026-10-16 實例：271 字元，`build/target/_build/test/logs/pvp-v71-windows-lan-20261016/logs/clientA/logs/client-20261016-104011.log:2` | 否 | 否 | after-re-evaluate（D158） |
 | N-firegate-unmeasured-residuals | FireGate 的盲點：GUI 取不到 earliest、spread 的假設沒量過 | 未解決 | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:165`<br>`docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:182-184` | 否 | 否 | 取消（D90：FireGate 退役） |
-| N-trace-overwrite-on-restart | 重新啟動 Match 會覆寫前一段的 movement trace 與 ingress 細節檔 | 未解決 | `docs/object_fps_pvp/plans/v7/LAN_TEST.md:94` | 否 | 否 | re-evaluate 之後（D152） |
+| N-trace-overwrite-on-restart | 重新啟動 Match 會覆寫前一段的 movement trace 與 ingress 細節檔 | 未解決（after-re-evaluate，D158：還需要：LAN 場次重啟會丟前一段 trace，`-shots.jsonl` 也一樣） | `docs/object_fps_pvp/plans/v7/LAN_TEST.md:94` | 否 | 否 | after-re-evaluate（D158） |
 | N-v8-wire-pv8 | v8 需要改 wire 的候選（排 pv8，v7.1 不預留） | 未解決 | `docs/object_fps_pvp/plans/v8/README.md:41`<br>`docs/object_fps_pvp/plans/v8/README.md:43` | 否 | 否 | 已被取代（D87：pv7 只支持 hitbox） |
-| N-v8-deps-on-v71 | v8 依賴 v7.1 的項目：IP-3 與 A1 | 未解決 | `docs/object_fps_pvp/plans/v8/README.md:27`<br>`docs/object_fps_pvp/plans/v8/README.md:40` | 否 | 否 | re-evaluate 之後（IP-3） |
+| N-v8-deps-on-v71 | v8 依賴 v7.1 的項目：IP-3 與 A1 | 已解決（after-re-evaluate，D158：A1 已完成；IP-3 那一半就是 IP34-B12） | `docs/object_fps_pvp/plans/v8/README.md:27`<br>`docs/object_fps_pvp/plans/v8/README.md:40` | 否 | 否 | 已解決（D158） |
 | N-firegate-repush-other-conditions | FireGate 重推條件 1、2、3、5、6、9 也會被 v7.1 的其他批次觸發；條件 4 同時是心跳／時間回聲的設計約束（完整性評審補列） | 未解決 | `docs/object_fps_pvp/plans/v7/09-firegate-c2.md:127`<br>`docs/object_fps_pvp/plans/v7/09-firegate-c2.md:128-129` | — | — | 取消（D90：FireGate 退役，條件 1～11 結案） |
 | N-firegate-cond11-rewrite-gate | 08c 對重推條件 11 的改寫建議尚未核准（決策關卡）（完整性評審補列） | 未解決 | `docs/object_fps_pvp/plans/v7/08c-drop-report.md:761`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:1354` | — | — | 取消（D90：FireGate 退役） |
 | N-wire-clock-domain | pv7 上時間戳的時鐘域沒有定義（Go 單調時鐘、C++ steady_clock、SDL ticks 不同域）（完整性評審補列） | 未解決 | `engine/time/include/engine/time/MonotonicClock.hpp:8-18`<br>`apps/object_fps_pvp/src/Pvp/PvpApplication.cpp:219` | — | — | pv7-design＋heartbeat-sync |
@@ -191,12 +196,18 @@ v7.1 規劃時的唯讀盤點，以 HEAD `c742836`（v7 結束）為準。做法
 | N-client-side-loss-counters | Client 端的樣本流失、本地丟棄與送出失敗沒有原因計數（完整性評審補列） | 已解決（log-contract records，D143：本地丟棄與送出失敗；slack 樣本流失的部分 D157 取消，主要用途 B7 已取消。重開：B6 規劃時證明需要） | `docs/object_fps_pvp/protocol-v6.zh-Hant.md:95`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:491` | — | — | log-contract |
 | N-downstream-drops-report | 下行丟棄 D1、D2（Match 不知道自己的 snapshot 被拒）與 D5、D6（UDP 寫出錯誤、control 佇列滿）的回報與計數（完整性評審補列） | 未解決 | `docs/object_fps_pvp/protocol-v6.zh-Hant.md:93`<br>`docs/object_fps_pvp/plans/v7/08c-drop-report.md:763` | — | — | pv7-design＋drop-report |
 | N-stale-seq-actions | 舊序號的 Actions／其他種類仍由 Gateway 直接丟棄（★ 只套用在 Input）（完整性評審補列） | 未解決 | `docs/object_fps_pvp/protocol-v6.zh-Hant.md:90`<br>`docs/object_fps_pvp/plans/v7/08c-drop-report.md:723-724` | — | — | pv7-design＋drop-report |
-| N-correct-invariant-assert | D68 ①：Correct() 的不變式要不要改成 GYO_ASSERT，決定一直沒有做（完整性評審補列） | 未解決 | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:98-106`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:113` | — | — | re-evaluate 之後（修正批之前） |
+| N-correct-invariant-assert | D68 ①：Correct() 的不變式要不要改成 GYO_ASSERT，決定一直沒有做（完整性評審補列） | 未解決（after-re-evaluate，D158：還需要，跟 B6：B6 動手前決定） | `apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp:98-106`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:113` | — | — | v8（D158） |
 | N-late-count-detector-increment | late 修正的計數方式：之後的 L2 改用凍結 D48 偵測器的計數器增量，不用 judge_l2.py 的最大值（D63 ④）（完整性評審補列） | 未解決 | `docs/object_fps_pvp/plans/v7/08c-drop-report.md:733`<br>`docs/object_fps_pvp/plans/v7/09b-phase-tracking.md:38` | — | — | observability-tools |
 | N-d44-network-detector-narrow | D44 回歸的網路母體偵測範圍很窄：E3 只比 6 秒停頓前後的 epoch（完整性評審補列） | 未解決 | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:125`<br>`docs/object_fps_pvp/plans/v7/16-integration-acceptance.md:188` | — | — | observability-tools |
 | N-injection-official-mode | Gateway→Match 的 IPC 延遲注入（D50 的 b1 替換 IpcPause）要變成常設回歸時，要升級為凍結工具的正式模式（完整性評審補列） | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:95`<br>`docs/object_fps_pvp/plans/v7/Incident/2026-10-10-gateway-silent-drop.md:219` | — | — | observability-tools |
 | N-log-contract-vs-frozen-analyzers | 日誌 Data Contract 改版會碰到凍結分析器解析的行；P2-log 的統計行還是非正式格式（完整性評審補列） | 已解決（log-contract core，D142） | `docs/object_fps_pvp/plans/v7/08c-drop-report.md:77`<br>`docs/object_fps_pvp/plans/v7/p2-log-network-statistics.md:42-44` | — | — | log-contract |
-| N-ip3-review-and-migration | IP-3／IP-4 的前置：公開介面 xhigh 審查（D39）、Engine PLAN 未撰寫、ui_editor 與未啟用產品的遷移清單（D33）（完整性評審補列） | 未解決 | `docs/object_fps_pvp/plans/v7/HANDOFF.md:140`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:82` | — | — | re-evaluate 之後（和 SDL 隔離一起） |
-| N-v7-skipped-acceptance | v7 跳過或沒做的驗收，v7.1 升格時要不要補做（完整性評審補列） | 已解決（D157：不補做，v7.1 基線照樣列為「跳過（使用者決定）」；L3 的「關閉視窗後重新加入」與 room_full 隨 LAN15 補） | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:153-167`<br>`docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:139` | — | — | re-evaluate 之後（STABLE_BASELINE v7.1 前決定） |
+| N-ip3-review-and-migration | IP-3／IP-4 的前置：公開介面 xhigh 審查（D39）、Engine PLAN 未撰寫、ui_editor 與未啟用產品的遷移清單（D33）（完整性評審補列） | 未解決（after-re-evaluate，D158：還需要：PLAN、xhigh 審查、遷移清單都還沒有） | `docs/object_fps_pvp/plans/v7/HANDOFF.md:140`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:82` | — | — | after-re-evaluate（D158） |
+| N-v7-skipped-acceptance | v7 跳過或沒做的驗收，v7.1 升格時要不要補做（完整性評審補列） | 已解決（D157：不補做，v7.1 基線照樣列為「跳過（使用者決定）」；L3 的「關閉視窗後重新加入」與 room_full 隨 LAN15 補） | `docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:153-167`<br>`docs/object_fps_pvp/plans/v7/STABLE_BASELINE.md:139` | — | — | 已解決（D157） |
 | N-respawn-reject-volume | respawn 案例的 epoch_old 每跑次 828（預測約 147），「單位與來源之後核對」一直沒有核對（完整性評審補列） | 已解決（re-evaluate，D154：Client 在重設後重送同一個 12 命令窗口，pv7 的 Match 算每一份副本；147 是 pv6 在 Gateway 去重之後的計數，計數點不同） | `docs/object_fps_pvp/plans/v7/08c-drop-report.md:719` | — | — | re-evaluate |
 | N-baseline-worktrees | v7.1 新舊對比要用的 before 樹與本機未推送分支，要決定保留哪些（完整性評審補列） | 未解決 | `git worktree list`<br>`docs/object_fps_pvp/plans/v7/HANDOFF.md:125` | — | — | plan-sync-docs（HANDOFF 未結事項） |
+| N-worker-probe-stale | CTest `object_fps_pvp.worker` 在 HEAD 失敗：mock Welcome 沒填 `maximum_shot_damage`，補上後又有 mock 等待逾時（起點未查）；不在 CI 的 `cpu\|shader` 範圍。22 個 `worker` 突變因此判不了（after-re-evaluate 補列，原在 HANDOFF 未結事項） | 已解決（worker-probe-repair，`d2844a5`：mock 補上 `maximum_shot_damage` 與 `last_hit_part`；22 個 `worker` 突變重判全部 killed） | `build/acceptance/object_fps_pvp/worker_main.cpp:82-84`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:81` | 否 | 否 | after-re-evaluate（D158） |
+| N-compare-reports-untracked | drop-report 的比對腳本 `compare_reports.py` 只存在 git 忽略的證據目錄，卻是 log-contract 指定的 `gw_drop` 回報讀者（after-re-evaluate 補列，原在 HANDOFF 未結事項） | 未解決（after-re-evaluate，D158：還需要；清掉 build 就會遺失） | `build/target/_build/test/logs/pvp-v71-drop-report-20261016/compare_reports.py`<br>`docs/object_fps_pvp/log-contract.zh-Hant.md:27` | 否 | 否 | after-re-evaluate（D158） |
+| N-host-lock-keys-uncontracted | `host_lock_*` 鍵 L2 直接讀，卻不在日誌契約、分析器也不彙總；protocol-v7 寫它在 IpcHost 層，實作在 MatchRuntimeHost（after-re-evaluate 補列，原為 edge-input-passthrough 的 xhigh note N5） | 未解決（after-re-evaluate，D158：還需要） | `docs/object_fps_pvp/protocol-v7.zh-Hant.md:433`<br>`apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp` | 否 | 否 | after-re-evaluate（D158） |
+| N-client-other-version-untested | Client 的 `other_version_datagrams` 累加路徑沒有正向測試與突變（after-re-evaluate 補列，原在 HANDOFF 未結事項） | 未解決（after-re-evaluate，D158：還需要；計數在日誌契約 A 級行族） | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:500`<br>`tests/object_fps_pvp/NetworkStatisticsTests.cpp:84-85` | 否 | 否 | after-re-evaluate（D158） |
+| N-sleep-reconnect | 筆電睡眠醒來約 1 秒後 Client 判 Gateway 逾時而斷線（`steady_clock` 睡眠時繼續走）；使用者歸為體驗優化（after-re-evaluate 補列，原在 HANDOFF 未結事項） | 未解決（after-re-evaluate，D158：還需要；做法先交使用者決定） | `apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:31`<br>`apps/object_fps_pvp/src/Pvp/ClientConnection.cpp:654` | 否 | 否 | after-re-evaluate（D158） |
+| N-drop-ledger-growth | Gateway 丟棄帳本的 `ended` 與 Match 的串流表依玩家 id 只增不減（D105；after-re-evaluate 補列，原在 HANDOFF 未結事項） | 未解決（after-re-evaluate，D158：取消：每位玩家一個 map 項目，edge-contract 已分類為診斷狀態，還沒到防濫用的規模。重開：Gateway 當公開伺服器長時間執行，或要防濫用） | `apps/object_fps_pvp/gateway/drop_report.go:131`<br>`apps/object_fps_pvp/src/Pvp/IpcHost.cpp:293-294` | 否 | 否 | 取消（D158） |
