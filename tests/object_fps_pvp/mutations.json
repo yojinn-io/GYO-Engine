@@ -6327,12 +6327,12 @@
       "expect": "stale_input_windows"
     },
     {
-      "id": "csc-s2-rotation-keeps-old-life",
+      "id": "csc-s2-rotation-keeps-old-epoch",
       "batch": "v71-client-silent-checks",
-      "what": "The Tick's rotation keeps staging of a replaced life (S2 or A1 fires)",
+      "what": "The Tick's rotation keeps staging of a replaced epoch (S2 or A1 fires)",
       "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
       "find": "            if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch ||\n                player->lifeGeneration != input->second.lifeGeneration) {",
-      "replace": "            if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch) {",
+      "replace": "            if (player == state.players.end() || player->lifeGeneration != input->second.lifeGeneration) {",
       "check": "cpu",
       "expect": "GYO_ASSERT failed: (submitted|merged.commands.empty)"
     }
