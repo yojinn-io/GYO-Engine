@@ -356,3 +356,62 @@
   - J-R3（只記錄）只在只上行的 C4、C5 出現，是 §7 已知的 P2 例外，見宣告第 9 節。
 - **L3**：還沒做，需要使用者在場（宣告第 6 節）。
 
+
+## line-close（不依賴 L3 的部分，2026-10-24）
+
+檔位：medium。本線同步 master（含 PR #93，記錄器分支已合進 master）。記錄器的文件（HANDOFF、README、after-re-evaluate、v8 README）更新在本線，隨 PR #90 合併。
+
+### Fitness Check（AGENTS.md §12，對 master 的差異：65 個檔案）
+
+- **Dependency**：
+  - Engine 沒有任何改動。
+  - 新增的依賴邊有兩條：
+    - Host → PvpMatch 的排程介面 `RequestMovementResync`（Delta-2，方向和既有的 Host → PvpMatch 相同）；
+    - 產品 Gateway → 通用層 session 的 `HelloRebinding`／`LastVerified`（Delta-3，產品依賴通用層，方向不變）。
+  - 沒有循環依賴，CMake 的依賴圖沒有變。
+- **Ownership**：
+  - 被替代序號只由 `MatchSubstitutionRecords` 持有（Delta-1，D175），帳本只讀。
+  - 中斷狀態由 Client 的網路 worker 持有，相位追蹤只收一次性的旗標（`ClientSimulationHistory`），有靜態守衛。
+  - endpoint 與最後驗證時刻由通用層 session 持有。
+  - Gateway 的 `state_whitelist_test.go` 沒有改，沒有新增 Gateway 狀態。
+- **Product Removability**：
+  - 新檔案都在 `apps/object_fps_pvp`、`tests/object_fps_pvp`、`build/acceptance/object_fps_pvp`。
+  - 通用層 session 的新介面不含產品名稱：T_int、T_max 由產品以 `Rebinding` 傳入。
+  - 刪除產品不需要改公共層。
+- **Editor／Runtime Separation**：不涉及。
+- **Architecture Concepts**：沒有新的 top-level 目錄。新元件 4 個，都在產品內：`MatchSubstitutionRecords`、`ConnectionLiveness`、`ClientSimulationHistory`，以及驗收工具 `run_outage.py`。
+
+### Architecture Report（AGENTS.md §15）
+
+- **Architecture Delta**（D172 D-14 同意）：
+  - Delta-1：被替代序號的單一紀錄（`single-store-refactor`、`retention-600`）。
+  - Delta-2：連線中斷狀態與重新對時的契約化。包含：
+    - `ConnectionLiveness`；
+    - Resync 這個換 epoch 的原因與 Host → PvpMatch 的排程介面；
+    - `LocalPlayerPrediction::Resume`；
+    - 一次性的恢復旗標。
+  - Delta-3：session 的 endpoint 重新綁定與最後驗證時刻。
+- **新的依賴**：見上方 Dependency。
+- **Data Contract 的變更**（wire 留在 pv7）：
+  - 新的 A 級行：`resync statistics`、`phase summary`、`connection interrupted／resumed／summary`、`session rebound`。
+  - clock sync 行三端都加了 `reason=`。
+  - schema 3 的 `reset_reason=resync` 與 `phase_path=resume_reset`，凍結讀者 `command_evidence.py` 只多接受後者。
+  - 共用 fixture `connection_timing.json`。
+- **Design Invariants**：network-architecture §7 的「連線中斷與重新對時」與「被替代序號的單一紀錄」（D174、D175），附 Replacement Criteria。本線期間沒有觸發任何一條 Replacement Criteria。
+- **發現的 Code Smell（只記錄）**：
+  - 換來源埠時，Gateway 在改綁之前仍把 snapshot 送往舊埠，Client 因此先恢復，改綁要等下一個每秒一次的 Hello（約 2 s）。
+  - Hello 間隔維持 1 s，所以只送 Hello 的期間有改綁的空窗（契約的安全取捨）。
+  - 凍結的 `run_case` 在 probe 失敗後立刻結束服務，L2 看不到 Gateway 端的 session 到期。
+  - 寫出新 A 級行的呼叫點沒有執行期守衛。
+  - 在 tip 恢復時的 SeedLead 不留移動紀錄。
+- **將來的 Refactoring 候選**：
+  - v8 B6：P2 的兩個已知例外（多出的領先量留到 Backlog 清掉），基準要在本線合併後重新取得（已寫進 v8 README）。
+  - `identity-rebind` 的 Hello 間隔。
+  - I-3（防竄改的 session 證明，pv8）。
+
+### 剩下的事
+
+- **L3**（使用者在場，宣告第 6 節）：
+  - Windows 與 macOS 各拔網路線或關 Wi-Fi，2 s 與 7 s 各一次；
+  - 記錄 `transient_socket_errors` 與 endpoint 有沒有改變。
+- L3 之後：補上結果，PR #90 由 draft 改成 ready，跑全量 L1，使用者確認後以 `gh pr merge --merge` 合併。
