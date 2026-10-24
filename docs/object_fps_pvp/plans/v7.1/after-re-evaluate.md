@@ -178,7 +178,9 @@ after-re-evaluate（約 73～102 h）
 │   ├── sdl-isolation              high｜產品、probe、產品測試不直接呼叫 SDL
 │   ├── substitution-single-store  high，判定的部分局部 xhigh｜被替代的序號只存一份
 │   ├── silent-branch-asserts      high｜無聲分支改成 assert 或計數
-│   └── cxx-flag-removal           high｜不再需要 experimental 程式庫
+│   ├── client-silent-checks       high｜Client 對已驗證資料的再檢查、「應為 0」的分支（D181）
+│   ├── cxx-flag-removal           high｜不再需要 experimental 程式庫
+│   └── rebind-on-new-port         先開關卡，判定的部分局部 xhigh｜換埠後不必等 Hello 才改綁（D181）
 ├── 2 觀測工具
 │   ├── contract-readers           medium｜compare_reports 收進工具目錄；host_lock 鍵寫進日誌契約
 │   ├── trace-no-overwrite         high｜重啟 Match 不覆寫前一段的 trace
@@ -200,17 +202,19 @@ after-re-evaluate（約 73～102 h）
 | sdl-isolation | 照 PLAN 實作 IP-3、IP-4，產品、probe、產品測試改用 Engine 的介面 | 四平台 L1；D33 的完成條件（產品、probe、產品測試的 SDL 符號為 0，用守衛檢查）；L3 手動遊玩（文字輸入、剪貼簿、視窗） | 22～28 | 依賴 sdl-isolation-plan；PLAN 可能再拆成多批 |
 | substitution-single-store ✓ | C13 | 先寫固定 slack 樣本的特性測試，再改；權威 digest 不變；突變；L1 | 4～6 | 決策點 A 選 (a)（D172 D-14）。整批移到 outage-resync（PR #90）：`outage-characterize`（特性測試）、`single-store-refactor`、`retention-600` 完成 |
 | silent-branch-asserts | N-silent-branches-assert | 先對 HEAD 重新列點，逐點交你決定是 Assert 還是 Result（`docs/architecture/error-handling.md`）；突變；L1 | 4～6 | 列點後是一個關卡 |
+| client-silent-checks | silent-branch-asserts 的 U1～U3 與第 7 節（D181 的 K1～K4） | 每點先追守衛（約 0.5 h），再逐點交你決定 assert 或計數；突變；L1 | 4～6 | D181：接在 silent-branch-asserts 之後；第 7 節改成 assert 等於把計數換成讓 runtime 失敗，要你決定 |
 | cxx-flag-removal | C16、N-osyncstream-experimental | 四平台 L1（旗標只在 AppleClang）；日誌位元組不變（既有 golden） | 3～4 | 會改 `ClientConnection.cpp` 的 8 處（見決策點 C） |
-| contract-readers | N-compare-reports-untracked、N-host-lock-keys-uncontracted | 工具的單元測試；用 drop-report 的舊證據重跑，結果相同；log-contract 與 protocol-v7 的條文 | 3～4 | 收進工具目錄會改凍結清單（新增檔案） |
-| trace-no-overwrite | N-trace-overwrite-on-restart | 日誌 Data Contract 的變更（檔名或附加的規則）照版本規則處理，凍結讀者一起改；L1 | 4～6 | Data Contract 變更，照 AGENTS.md §3 報告 Architecture Delta |
+| rebind-on-new-port | outage-resync 只記錄的換埠延遲與 Hello 間隔（D181 的 K5、K6） | 先開關卡：會碰 network-architecture §7 的改綁規則（Design Invariants）；K6 若改 Hello 間隔，L2 的 Hello／Welcome 計數基線要重取；Go 測試、突變；L1 | 5～8 | D181。outage-resync 時使用者要求保住基線（只記錄），K6 在關卡重新決定 |
+| contract-readers | N-compare-reports-untracked、N-host-lock-keys-uncontracted | 工具的單元測試；用 drop-report 的舊證據重跑，結果相同；log-contract 與 protocol-v7 的條文 | 3～4 | 收進工具目錄會改凍結清單（新增檔案）；D181 併入 K7：寫出新 A 級行的呼叫點加上執行期守衛（+2～3 h） |
+| trace-no-overwrite | N-trace-overwrite-on-restart | 日誌 Data Contract 的變更（檔名或附加的規則）照版本規則處理，凍結讀者一起改；L1 | 4～6 | Data Contract 變更，照 AGENTS.md §3 報告 Architecture Delta；D181 併入 K8：在 tip 恢復的 SeedLead 留下移動紀錄（m7，+1～2 h） |
 | analyzer-converge | C15 | 用既有的 pv6／pv7 語料新舊各分析一次，結果相同 | 5 | v8 的 N-analyzer-literal-105 會少 3 處要同步 |
 | worker-probe-repair ✓ | N-worker-probe-stale | worker CTest 通過；22 個 `worker` 突變重新判定（結果：通過、22／22 killed，新增 2 個突變 2／2 killed；`d2844a5`） | 2～4 | 第二個原因（mock 等待逾時）未知：照 §14.3 先建觀測，超過 1.5 倍就停下回報 |
 | token-tests | N-token-test-gaps、C12 | 兩個存活突變登記並 killed；測試模型和產品的 token 規則不再各寫一份 | 4～6 | 依賴 worker-probe-repair |
-| client-path-tests | C17-3、N-client-other-version-untested | 新突變 killed | 3～4 | 依賴 worker-probe-repair |
+| client-path-tests | C17-3、N-client-other-version-untested | 新突變 killed | 3～4 | 依賴 worker-probe-repair；D181 併入 K9：握手期的暫時性錯誤與直接超過 T_max 這兩個分支的執行期測試（+2～3 h） |
 | windows-long-path | N-windows-max-path | CI 的套件檢查加上深路徑的情境（Windows L1） | 2～4 | |
 | quick-close | F1 | 關閉耗時的測試（門檻事前宣告）；L1 | 2～3 | |
 | wake-reconnect | N-sleep-reconnect | 睡眠測試要你在場（D102）；L1 | 4～8 | 做法（醒來後重連，或改用不含睡眠的時鐘判逾時）先交你決定。短於 T_max（5 s）的睡眠＝中斷，已由 outage-resync 處理（D172 D-11 (w1)）；超過 T_max 的睡眠照現行回 Lobby，自動重新加入（w2）仍在本批 |
-| lan15-windows | LAN15、F7（App Nap 已取消） | L2 事前宣告，D45 門檻來源的對抗式檢查；含 v7 L3 的「關閉視窗後重新加入」與 `room_full`；含 outage-resync 的 L3（D179）：Windows 與 macOS 拔網路線或關 Wi-Fi 2 s 與 7 s 各一次，2 s 恢復不回 Lobby、7 s 約 5 s 回 Lobby 並顯示 `Gateway connection timed out`，記錄 `transient_socket_errors`（WSAECONNRESET，D172 D-7 的推論）與 endpoint 有沒有改變。預定 2026-10-26 前後。本列是 outage-resync L3 的唯一出處（[resync-l2-l3 宣告](resync-l2-l3-declaration.md)第 2 版改寫時漏掉了第 1 版的 L3 一節） | 7～8 | 依賴 contract-readers、trace-no-overwrite 與發行類的前三批；要排朋友的時間；規劃時一起決定 F5、N-tt1-l2-wake-record |
+| lan15-windows | LAN15、F7（App Nap 已取消） | L2 事前宣告，D45 門檻來源的對抗式檢查；含 v7 L3 的「關閉視窗後重新加入」與 `room_full`；含 outage-resync 的 L3（D179）：Windows 與 macOS 拔網路線或關 Wi-Fi 2 s 與 7 s 各一次，2 s 恢復不回 Lobby、7 s 約 5 s 回 Lobby 並顯示 `Gateway connection timed out`，記錄 `transient_socket_errors`（WSAECONNRESET，D172 D-7 的推論）與 endpoint 有沒有改變。預定 2026-10-26 前後。本列是 outage-resync L3 的唯一出處（[resync-l2-l3 宣告](resync-l2-l3-declaration.md)第 2 版改寫時漏掉了第 1 版的 L3 一節） | 7～8 | 依賴 contract-readers、trace-no-overwrite 與發行類的前三批；要排朋友的時間；規劃時一起決定 F5、N-tt1-l2-wake-record；D181：K10（凍結的 run_case 在 probe 失敗後立刻關服務，看不到 Gateway 端的 session 到期）在本批的工具準備修；本批延到本線全部與 rebind-on-new-port、client-silent-checks 完成之後 |
 
 ### 決策點
 

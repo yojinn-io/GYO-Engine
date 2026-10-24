@@ -89,3 +89,22 @@
 ## 7. 已經計數、但註解寫「應為 0」的分支（不在本清單，供參考）
 
 `MatchRuntimeHost.cpp:198-200`（`StagedOverWindow`）、`:411-418`（`HandoffRejected`）、`server.go:1130-1134`（`ErrInput`）、`action_delivery.go:137-141`（`ErrActions`）。它們不是無聲的；要不要也改成 assert，可以之後再決定。
+
+## 8. lan15-windows 之前的已知問題（D181）
+
+D180 的補充要求在 `lan15-windows` 之前處理已知問題。整理出的清單與 D181 的去處：
+
+| 代號 | 內容 | 來源 | 去處（D181） |
+|---|---|---|---|
+| K1 | U1：`timeline.Push` 的回傳值被丟掉 | 本文件第 5 節 | `client-silent-checks` |
+| K2 | U2：`Reconcile` 遇到無效或倒退的權威狀態時無聲 return | 第 5 節 | `client-silent-checks` |
+| K3 | U3：`SendInput` 的 API 誤用被無聲丟掉 | 第 5 節 | `client-silent-checks` |
+| K4 | 已計數、註解寫「應為 0」的 4 個分支要不要改成 assert | 第 7 節 | `client-silent-checks` |
+| K5 | 換來源埠時，改綁前 snapshot 仍送舊埠，改綁要等下一個 Hello（約 2 s） | outage-resync 的 dev_log（只記錄的 code smell） | `rebind-on-new-port`（先開關卡） |
+| K6 | Hello 間隔 1 s 造成的改綁空窗（契約的安全取捨） | 同上 | `rebind-on-new-port` |
+| K7 | 寫出新 A 級行的呼叫點沒有執行期守衛 | 同上（m6 的另一半） | `contract-readers` |
+| K8 | 在 tip 恢復時的 SeedLead 不留移動紀錄 | 同上（m7） | `trace-no-overwrite` |
+| K9 | 握手期的暫時性錯誤、直接超過 T_max 這兩個新分支沒有執行期測試 | 同上 | `client-path-tests` |
+| K10 | 凍結的 `run_case` 在 probe 失敗後立刻關服務，L2 看不到 Gateway 端的 session 到期 | 同上 | `lan15-windows` 的工具準備 |
+
+不列入：m8（取消的 join 也寫摘要，和既有的時鐘行一致）；替代紀錄裡產品走不到的差異（程式已註明前提）；`N-movement-recovery-flake`（只在 macos-x64，照平台優先序只記錄）；黑畫面的預熱幀（已交給 v8）。

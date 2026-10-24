@@ -9,12 +9,14 @@
 | 批次 | 檔位 | 估時（h） | 狀態 |
 |---|---|---|---|
 | `silent-branch-asserts` | high | 4～6（C3 另加 1～2） | 實作完成，L1 待確認（D180） |
+| `client-silent-checks` | high | 4～6 | D181 新增（K1～K4） |
 | `cxx-flag-removal` | high | 3～4 | |
-| `contract-readers` | medium | 3～4 | |
-| `trace-no-overwrite` | high | 4～6 | |
+| `rebind-on-new-port` | 先開關卡，局部 xhigh | 5～8 | D181 新增（K5、K6） |
+| `contract-readers` | medium | 3～4（K7 另加 2～3） | D181 併入 K7 |
+| `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | D181 併入 K8 |
 | `analyzer-converge` | high | 5 | |
 | `token-tests` | high | 4～6 | |
-| `client-path-tests` | high | 3～4 | |
+| `client-path-tests` | high | 3～4（K9 另加 2～3） | D181 併入 K9 |
 
 時間框：任一批超過估時 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
 
