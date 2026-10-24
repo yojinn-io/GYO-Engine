@@ -197,3 +197,14 @@
   - 變動檔案上的 84 個：84／84 killed。
 - **補記**：match-resync 那一節對 `v7-flow-ledger-drives-sample` 的描述（「晚到過久的判斷改跟帳本的分類走」），是 match-resync 時的版本；retention-600 之後的版本見 J-C。
 - **未做**：L1（等核准後與 L2 一起）、L2 不退步紀錄（宣告草案在判定變更文件第 6 節）。
+- **L1（run 40052105536，`1713191`）**：
+  - 四平台的 L1 job 都成功；
+  - Quick acceptance / toolchain / windows-x64 失敗：Engine 的 `platform_sdl_concurrency` 中 `SdlLogBridge keeps every line under concurrent logging`（`tests/common/platform_sdl/LogBridgeTests.cpp:172`），8 個執行緒的 `pushedBy` 全部是 0。
+  - **歸類**：〔推論〕Test 自身的競態，還沒有重現。主執行緒的 200 輪沒有等記錄執行緒開始，就把 `stop` 設成 true；Windows 的執行緒啟動延遲讓每個執行緒一行都還沒記錄。這和 IP-4 時修過的 Windows 並行測試沒有交握是同一類問題。
+  - 本線沒有改到 Engine。這次的失敗記錄在這裡，不以之後的成功覆蓋（§14.1）。
+- **L2 的準備**：
+  - 工具：`run_r600.py`、`judge_r600.py`、凍結清單、artifacts；
+  - 試跑 3 次，都判 P；
+  - D45 檢查：小規模 ultracode，判定「還不能開跑」，必修 3 項、建議 7 項，都已處理；
+  - judge 的竄改測試 9／9 判對。
+  - 宣告第 6 節依此改成第 2 版，新增有效性前提（E）、J5a 的範圍、更嚴格的 runtime、旗標（FLAG），並更正 runner 名稱。新增的部分等使用者確認。
