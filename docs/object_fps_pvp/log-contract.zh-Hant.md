@@ -50,9 +50,11 @@
 
 三種檔頭不同，照實登記、不改。新的紀錄檔用 `{schema, version}`。
 
+**重啟時的檔名**（v7.1 `trace-no-overwrite`，D191）：Match 或 Client 啟動時，若 `--movement-trace` 指定的檔案、或跟著它決定檔名的 `-ingress.jsonl`、`-shots.jsonl` 已經存在，就改用下一個沒用過的編號名：`match-commands.jsonl` → `match.2-commands.jsonl` → `match.3-commands.jsonl`（不以 `-commands.jsonl` 結尾的名字，編號插在副檔名前）。三個檔一起換號。每個檔仍然只有一次執行、一個 `trace_end`，讀者不變；同一個資料夾裡 `match.2` 是重啟後那一段的角色名。實際檔名寫在啟動時的 B 級行。
+
 ### 1.3 B 級
 
-Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `rejected_<reason>=`）、`PvP client gateway source=`、連線階段與錯誤、`cause records`、`connection failed`、`network worker failed`、`shutdown cleanup failed`；Match 的 death／respawn、`statistics tick=`、`gw_transport`、leave、lifecycle；Gateway 的 player statistics、join／hello／active／expired／left 等生命週期行、`UDP stopped`，以及 `runtime disconnected reason=<liveness_timeout|write_timeout|version_mismatch|protocol|eof|other> error=<引號內的原錯誤>`（原因代碼由 `errors.Is` 分類，`disconnect_reason_test.go` 守住；原錯誤的文字不變）。
+Match 的 `trace files movement= ingress= shots=`、Client 的 `PvP client trace file movement=`（D191，啟動時的實際 trace 檔名）；Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `rejected_<reason>=`）、`PvP client gateway source=`、連線階段與錯誤、`cause records`、`connection failed`、`network worker failed`、`shutdown cleanup failed`；Match 的 death／respawn、`statistics tick=`、`gw_transport`、leave、lifecycle；Gateway 的 player statistics、join／hello／active／expired／left 等生命週期行、`UDP stopped`，以及 `runtime disconnected reason=<liveness_timeout|write_timeout|version_mismatch|protocol|eof|other> error=<引號內的原錯誤>`（原因代碼由 `errors.Is` 分類，`disconnect_reason_test.go` 守住；原錯誤的文字不變）。
 
 ### 1.4 規劃中的 A 級行族（v7.1 `outage-resync`，D172）
 

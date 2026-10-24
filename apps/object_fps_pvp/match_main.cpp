@@ -6,6 +6,7 @@
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
+#include "RetroFPS/Pvp/TracePaths.hpp"
 #include "gyo/AppConfig.hpp"
 #include <chrono>
 #include <csignal>
@@ -54,6 +55,15 @@ int main(int argc,char** argv) {
             else if(argument=="--log") logPath=argv[++index];
             else {std::cerr<<"Unknown argument: "<<argument<<'\n';return 2;}
         }
+        // A restart never truncates an earlier run's files (D191): the movement
+        // trace takes the next free name whose ingress and shot files are free too.
+        movementTrace=fps::pvp::FreshTracePath(movementTrace,[&](const std::filesystem::path& candidate) {
+            std::string ignored;
+            return std::vector<std::filesystem::path>{
+                ingressTraceOverride.empty()?fps::pvp::MatchIngressTracePath(candidate,{},ignored):std::filesystem::path{},
+                fps::pvp::MatchShotTracePath(candidate)};
+        });
+        ingressTraceOverride=fps::pvp::FreshTracePath(ingressTraceOverride);
         // The ingress detail file (match-ingress.jsonl) is written only with a movement trace.
         std::string usage;
         const auto ingressTracePath=fps::pvp::MatchIngressTracePath(movementTrace,ingressTraceOverride,usage);
@@ -69,6 +79,9 @@ int main(int argc,char** argv) {
         auto arena=fps::pvp::Arena::Load(arenaPath,error);
         if(!arena){std::cerr<<error<<'\n';return 1;}
         std::clog<<"[ObjectFPS/PvP Match] arena id="<<arena->id<<" version="<<arena->version<<" spawns="<<arena->spawns.size()<<'\n';
+        if(!movementTrace.empty())
+            std::clog<<"[ObjectFPS/PvP Match] trace files movement="<<movementTrace.string()<<" ingress="<<ingressTracePath.string()
+                     <<" shots="<<fps::pvp::MatchShotTracePath(movementTrace).string()<<'\n';
         fps::pvp::MovementTraceWriter trace(movementTrace);
         std::optional<fps::pvp::MatchIngressTraceFile> ingressTrace;
         if(!ingressTracePath.empty()) ingressTrace.emplace(ingressTracePath);

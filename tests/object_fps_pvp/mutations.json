@@ -5934,8 +5934,8 @@
       "batch": "v71-client-interrupted",
       "what": "A resume below the tip seeds a new lead and rewrites the commands in flight",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {\n        SeedLead(authority);\n        return;\n    }",
-      "replace": "    SeedLead(authority);\n    return;",
+      "find": "    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {\n        recordResume();\n        SeedLead(authority);\n        return;\n    }",
+      "replace": "    recordResume();\n    SeedLead(authority);\n    return;",
       "check": "cpu",
       "expect": "keeps every unacknowledged command|restarts phase acquisition before its late samples|sends no conflicting window"
     },
@@ -5944,8 +5944,8 @@
       "batch": "v71-client-interrupted",
       "what": "A resume restarts nothing",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    if (Reseeds(authority)) return;\n    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {",
-      "replace": "    if (true) return;\n    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {",
+      "find": "    if (Reseeds(authority)) return;\n    // Both resume paths",
+      "replace": "    if (true) return;\n    // Both resume paths",
       "check": "cpu",
       "expect": "keeps every unacknowledged command|seeds a new lead|before its late samples"
     },
@@ -6448,6 +6448,46 @@
       "replace": "",
       "check": "worker",
       "expect": "the summary does not count the outage"
+    },
+    {
+      "id": "tno-existing-reused",
+      "batch": "v71-trace-no-overwrite",
+      "what": "A restart reuses (truncates) the existing trace",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/TracePaths.hpp",
+      "find": "        bool free = !taken(candidate);",
+      "replace": "        bool free = true;",
+      "check": "cpu",
+      "expect": "takes the next free numbered name"
+    },
+    {
+      "id": "tno-derived-ignored",
+      "batch": "v71-trace-no-overwrite",
+      "what": "A restart ignores the derived files",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/TracePaths.hpp",
+      "find": "        if (free && derived)",
+      "replace": "        if (false && derived)",
+      "check": "cpu",
+      "expect": "takes the next free numbered name"
+    },
+    {
+      "id": "tno-number-after-commands",
+      "batch": "v71-trace-no-overwrite",
+      "what": "The number goes after -commands",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/TracePaths.hpp",
+      "find": "        numbered.replace_filename(name.substr(0, name.size() - commands.size()) + mark + std::string(commands));",
+      "replace": "        numbered.replace_filename(name + mark);",
+      "check": "cpu",
+      "expect": "takes the next free numbered name"
+    },
+    {
+      "id": "k8-tip-no-record",
+      "batch": "v71-trace-no-overwrite",
+      "what": "A resume at the tip writes no phase record",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        recordResume();\n        SeedLead(authority);\n        return;",
+      "replace": "        SeedLead(authority);\n        return;",
+      "check": "cpu",
+      "expect": "seeds a new lead and one that reseeds anyway"
     }
   ]
 }

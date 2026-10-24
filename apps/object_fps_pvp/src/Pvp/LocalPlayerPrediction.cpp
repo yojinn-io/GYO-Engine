@@ -104,7 +104,16 @@ void LocalPlayerPrediction::RestartPhaseAcquisition(std::uint64_t after) {
 
 void LocalPlayerPrediction::Resume(const PlayerState& authority) {
     if (Reseeds(authority)) return;
+    // Both resume paths leave the same phase record (K8, D191): the reset
+    // restarts phase acquisition after the tip and cancels any shift in flight.
+    const auto recordResume = [&] {
+        TraceMovement({.kind = MovementTraceKind::PhaseDecision, .playerId = current_.playerId,
+            .epoch = current_.movementEpoch, .sequence = current_.lastResolvedCommand, .count = 0,
+            .lifeGeneration = current_.lifeGeneration, .phasePath = MovementPhasePath::ResumeReset,
+            .phaseShiftSeconds = phaseShiftSeconds_});
+    };
     if (authority.lastResolvedCommand == current_.lastResolvedCommand) {
+        recordResume();
         SeedLead(authority);
         return;
     }
@@ -112,12 +121,8 @@ void LocalPlayerPrediction::Resume(const PlayerState& authority) {
     // with other content (network-architecture §7: one command identity, one
     // content). The lead built up while interrupted stays until the Backlog
     // fuse clears it (P2's second known exception, §7).
-    const double cancelled = phaseShiftSeconds_;
+    recordResume();
     RestartPhaseAcquisition(current_.lastResolvedCommand);
-    TraceMovement({.kind = MovementTraceKind::PhaseDecision, .playerId = current_.playerId,
-        .epoch = current_.movementEpoch, .sequence = current_.lastResolvedCommand, .count = 0,
-        .lifeGeneration = current_.lifeGeneration, .phasePath = MovementPhasePath::ResumeReset,
-        .phaseShiftSeconds = cancelled});
 }
 
 // Called only when the previous correction has fully slewed in
