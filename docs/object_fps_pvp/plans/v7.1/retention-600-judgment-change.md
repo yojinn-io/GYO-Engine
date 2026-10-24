@@ -94,25 +94,60 @@
 - **「拿掉 64 的上限不改變樣本」**：成立。上界約 30 筆，不是 20 筆，已修正。依賴「Host 時鐘與 Advance 的 elapsed 互相耦合」這個產品條件。
 - **文件小誤**：§7 寫「之前兩個方向都不保證（187 對 64）」，這只適用於 match-resync 之前；match-resync 到 retention-600 之間，只有稀疏的方向會破壞 S3。已修正。
 
-## 6. L2 不退步紀錄的宣告草案（D-13 的一部分，請一起核准或修改）
+## 6. L2 不退步紀錄的宣告（D176 核准草案；第 2 版依 D45 檢查修訂，**修訂部分等你確認**）
 
 - **目的**：確認 `retention-600`（以及到它為止的 `match-resync`、`single-store-refactor`）在既有的網路情境下沒有退步。
-  - 這批的行為改變只影響「10 s 以前被替代的序號」，既有語料裡不會出現，所以這是不退步的紀錄，不是行為改變的證明。
-  - 行為改變由第 1、2 節的測試證明。
-- **樹**：只跑頭（`retention-600` 的 commit），不做 base 對照。比較用的數字取自既有語料：pv7-checkpoint、d44 的同一情境。
-- **項目**（每項 3 次，共 9 次）：
-  - `x1`：`run_client_delay.py`，d44 的 x1 情境；
-  - `ramp`：`run_client_delay.py`，d44 的 ramp 情境；
-  - `gateway-250ms`：`run_network.py`，pv7-checkpoint 的 backpressure 中的 gateway-250ms 子情境。
+  - 這批的行為改變只影響「10 s 以前被替代的序號」，既有語料不會出現，所以這是不退步的紀錄，不是行為改變的證明。
+  - **P 不能當作 retention-600 行為改變的證據**；那由第 1、2 節的測試證明。
+- **樹**：只跑頭（measured commit `1713191`，之後只允許改文件），不做 base 對照。比較用的數字取自既有語料（pv7-checkpoint、d44 的同一情境）。
+- **項目**：3 輪，每輪依序 x1、ramp、gateway-250ms，共 9 次。
+  - `x1`：`run_client_delay.py --profile x1 --delay-ms 200 --window-ms 2000 --fault-at 7.5 --rounds 1`（d44 的參數）；
+  - `ramp`：`run_client_delay.py --profile ramp --peak-ms 250 --rise-ms 1500 --fall-ms 500 --fault-at 7.5 --rounds 1`；
+  - `gateway-250ms`：**更正**：草案寫成 `run_network.py`，正確的是 `backpressure_probe.py --layers gateway --durations-ms 250`，只跑這一個案例。語料（pv7-checkpoint）是一次依序跑 6 個案例、gateway-250ms 排第 3，所以順序與暖機條件不同，和語料比較時列為差異。
+- **有效性的前提**（**新增，等你確認**；不是判定，不成立時記為 E）：
+  - x1、ramp：`summary.json` 的 completed 為 true；剛好 1 輪，status 是 completed；`plan.json` 的 profile 參數、fault_at [7.5]、rounds 1 與上面一致；
+  - gateway-250ms：`backpressure.json` 存在，layer 是 gateway、requested_ms 是 250，fault 的 start_ns 與 release_ns 都有值，relay_error 是 null。
+  - **E 的處理**：E 不算 P 也不算 F，session 停下回報，並區分原因（環境、Test、實作）。不自動補跑；要不要補跑由你決定。
+  - 語料中出現過環境造成的 E：d44 的 ramp-r7，send lateness p99 22 ms 超過 10 ms。審查者估計，這次 6 次 x1、ramp 至少碰到一次的機率約 11%。
 - **判定**（每次都要成立，0 容許）：
-  - S1、S2、J5a 成立（凍結的 `ingress_evidence.py`）；
-  - S3 成立：ingress 行的 `late_first` 等於 `slack_late`＋`resync statistics` 行的 `late_beyond_no_commands`，由新的判定工具計算，工具的雜湊在開跑前記錄；
-  - runtimeFailed 為 0：Match 的 end 行不是 `runtime_failed`。
+  - **S1、S2、J5a**：凍結的 `ingress_evidence.py` 報告 passed。**J5a 的範圍（新增，等你確認）**：x1、ramp 是注入跑次，帶 `--injection`，也就是另外要求 never_arrived＝0，比照 README 的注入判定式；gateway-250ms 不帶。
+  - **S3**：
+    - 每位玩家（0 以外）都恰好有 1 行 final=1 的 ingress 行與 1 行 final=1 的 resync statistics 行，必要的鍵都在；
+    - `late_first == slack_late + late_beyond_no`；
+    - 至少要有 1 位玩家；
+    - player 0（沒有 resync 行）要求 `late_first == slack_late`。
+    - 完整性與 player 0 是新增的收緊。
+  - **runtime**（**收緊，等你確認**）：Match 的 end 行恰好 1 行，reason 是 signal、exit_code 是 0，而且沒有 "Match simulation failed"。草案只寫「不是 runtime_failed」；`reason=exception` 代表診斷資料遺失，也算不成立。
+- **旗標**（**新增，等你確認**；判定都成立、但要停下回報，記為 FLAG）：`resyncs` > 0、`late_beyond_no_commands` > 0，或移動紀錄裡出現 resync 重設。
+  - 理由：語料中這三種情境的晚到最大是 gateway-250ms 221 ms、x1 166 ms、ramp 68 ms，都小於 N_o（333 ms），出現 Resync 就是沒預期到的變化。
+  - 所有判定都抓不到 Resync 的退步：門檻只決定副本計進 slack_late 還是 late_beyond_no，S3 的總和不變。所以要靠旗標。
 - **只記錄、不判定**：
-  - `resyncs`、`late_beyond_no_commands`、`slack_clamped_samples`；
+  - `slack_clamped_samples`、換 epoch 的原因與次數；
   - Client 的 `phase_samples_unmatched`、Late 決定次數；
-  - 換 epoch 的次數與原因。
-  - 推論（不作判定）：gateway-250ms 的晚到最大約 13 Tick，小於 N_o，`resyncs` 應為 0。
-- **重試規則**：不重試。任何一次判定不成立，就停下回報，不以之後的成功覆蓋（§14.1）。
-- **估時**：準備（判定工具、乾跑）2～3 h，執行約 1～1.5 h。你在場與否都可以，不需要 GUI。
-- **D45**：宣告前做一次門檻來源的對抗式檢查，用小規模 ultracode：約 3 個方案、1 位審查者、1 次對抗式檢查。
+  - runner 自己的判定（x1、ramp 的 run_case.passed、輪的 status；gateway-250ms 的 backpressure.json passed、command evidence 的 errors、blockage 期間的權威 Tick）；
+  - timer baseline 前後的值；完整的 ingress evidence。
+  - 有語料基準的量，和只有試跑一次的量，報告時分開寫。
+- **停止規則**：
+  - 不重試。F、E、FLAG、逾時（記為 E）、項目結束後有程序殘留，都停下回報，不以之後的成功覆蓋（§14.1）；
+  - 逾時照 run_d44 的方式處理：先 SIGTERM，15 s 後對整個程序群組 SIGKILL。
+- **工具**（證據夾 `build/target/_build/test/logs/pvp-v71-retention-600-l2-prep-20261024/`，git 忽略）：
+  - `run_r600.py` sha256 `58987b1c…`；
+  - `judge_r600.py` `9f425876…`；
+  - `artifacts.sha256` `977d6afd…`：Match、Gateway、action／timing probe、場地檔；Gateway 的 vcs.revision 是 `1713191`，vcs.modified false；
+  - `frozen-r600-rooted.sha256` `f3c1fec7…`：re-evaluate 凍結的 59 個分析器，只有 `test_presentation_evidence.py` 之後改過，以目前的雜湊重新凍結；
+  - measured commit `171319158b…`。
+  - 完整值在 `literals.txt`；`--preflight` 已通過。
+- **估時**：約 5～6 分鐘（試跑：x1、ramp 約 40 s，gateway-250ms 約 13 s）。不需要 GUI，也不需要你在場；跑的時候主機不要有其他重負載。
+
+### D45 檢查（小規模 ultracode：2 位審查者＋1 位對抗式驗證者，2026-10-24）
+
+- **判定**：照原本的準備不能開跑。必修的有 3 項：有效性前提、更正 runner 名稱、寫明 J5a 的範圍。另有 7 項建議修正。全部已處理，而且沒有放寬任何已宣告的判定。
+- **被驗證者駁回的修正方法**（用了會把「只記錄」的量變成判定）：
+  - 「沒有 failure.json」當有效條件：command evidence 不成立時，backpressure.json 與 failure.json 會同時寫出；
+  - 「blockage 期間的權威 Tick > 0」當有效條件。
+- **judge 的檢出力**（§14.2，竄改試跑的副本，9／9 判對）：
+  - injection_invalid → E、plan 的 profile 不符 → E、沒有 backpressure.json → E；
+  - 缺 final resync 行 → F、end 是 runtime_failed → F、end 是 exception → F、S3 被破壞 → F、resync 行缺鍵 → F；
+  - resyncs=1 → FLAG。
+  - 副本在 `judge-tamper/`。
+- **試跑**（探索用，不算受入判定）：x1、ramp、gateway-250ms 各 1 次，新 judge 都判 P。
