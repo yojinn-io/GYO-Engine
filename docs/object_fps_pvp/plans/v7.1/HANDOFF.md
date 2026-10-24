@@ -159,6 +159,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D174 | （2026-10-23）`outage-resync` 關卡 `gate-contract` 核准：`resync-contract` 的條文照現狀（network-architecture §4「連線中斷與恢復」、§7 兩節 Design Invariants、protocol-v7 §2、log-contract §1.4、ingress README；含 xhigh 審查 3 輪的修訂：恢復時權威 < tip 只重設相位擷取、N_o 以時間判斷與 `late_beyond_no`、最後驗證時刻、P2 的第二個例外等）。開始 `drop-counters` | 使用者：「gate-contract 核准目前的條文（含三輪審查的修訂）。開始 drop-counters。」 |
 | D175 | （2026-10-23）`outage-resync` 的 `single-store-refactor` 之後：network-architecture §7「被替代序號的單一紀錄」的權威名稱照實作由 SlackTrack 改為 `MatchSubstitutionRecords`（MatchRuntimeHost 的 `substitutions_`），帳本附欄的列舉照實作補齊；意圖不變。`match-resync` 在 L1 通過後以 xhigh 開始 | 使用者：「核准 §7 owner 改名為 MatchSubstitutionRecords。L1 通過後用 xhigh 開始 match-resync。」 |
 | D176 | （2026-10-24）`outage-resync` 的 `retention-600`：核准判定變更 J-A（稀疏替代的守衛：600 序號以外的副本不再 Resync）、J-B（紀錄的單元測試換成新規則）、J-C（`v7-flow-ledger-drives-sample` 的改寫），以及 L2 不退步紀錄的宣告草案（x1、ramp、gateway-250ms 各 3 次，只跑頭；S1、S2、J5a、S3 與 runtimeFailed 0，0 容許，不重試）。先觸發 L1，再準備 L2 | 使用者：「核准 retention-600 的判定變更 J-A～J-C 與 L2 不退步紀錄的宣告草案。先觸發 L1，再準備 L2。」 |
+| D177 | （2026-10-24）`outage-resync` 的 `retention-600`：確認 L2 宣告第 2 版（D45 檢查後的修訂）：gateway-250ms 的 runner 更正為 `backpressure_probe.py --layers gateway --durations-ms 250`；有效性前提不成立記為 E（停下回報、不自動補跑）；J5a 對 x1／ramp 帶 `--injection`；runtime 要求 end 行 reason=signal、exit_code=0；resyncs／late_beyond_no／resync 重設記為 FLAG 停下回報；S3 的逐玩家完整性與 player 0。開跑，檔位照建議（medium） | 使用者：「照第 2 版宣告開跑，檔位照建議」 |
 
 ## 規劃紀錄（記錄器）
 
