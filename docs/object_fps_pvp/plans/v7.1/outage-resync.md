@@ -45,7 +45,8 @@
 - 2026-10-24：L1（run 40052105536）的四平台 L1 job 成功；Windows 的 toolchain Quick acceptance 有一個 Engine 測試失敗（`SdlLogBridge keeps every line under concurrent logging`），推論是 Test 的競態，和本線無關。L2 工具已備好（D45 檢查後的第 2 版宣告），等你確認第 6 節的修訂後開跑。
 - 2026-10-24：第 6 節第 2 版確認（D177），L2 開跑（檔位 medium）。
 - 2026-10-24：`retention-600` 的 L2 通過，9／9 P（[判定變更文件第 7 節](retention-600-judgment-change.md)）。L1 的 Windows Engine 測試失敗由 PR #91 修正（master `253808a`）。下一批 `client-interrupted`（high，計時與恢復路徑局部 xhigh）。
-- 2026-10-24：本線與 master 同步（`4d40ab8`）。`client-interrupted` 實作完成（`d0efbed` 等）：本機測試與突變 72 個全部通過，L1 進行中。和本計畫的差異（Gateway 時鐘視窗的重開移到 `identity-rebind`、`command_evidence.py` 多接受 `resume_reset`、旗標的守衛改成靜態檢查、暫時性錯誤的呼叫點沒有執行期測試）見 dev_log 的 client-interrupted 一節，待使用者確認。
+- 2026-10-24：本線與 master 同步（`4d40ab8`）。`client-interrupted` 實作完成（`d0efbed` 等）：本機測試與突變 72 個全部通過，L1 進行中。和本計畫的差異（Gateway 時鐘視窗的重開移到 `identity-rebind`、`command_evidence.py` 多接受 `resume_reset`、旗標的守衛改成靜態檢查、暫時性錯誤的呼叫點沒有執行期測試）見 dev_log 的 client-interrupted 一節。
+- 2026-10-24：對抗式審查（xhigh，1 位）：Critical 0、Major 2、Minor 6。使用者核准補強計畫與 5 項偏離的修正建議。補強完成（`eeb8207`、`08f490a`，見 dev_log），M2 的 §14.4 1～5 使用者核准。使用者指示：outage-resync 照計畫做完、不再擴大，不嚴重的問題只記錄。下一批 `identity-rebind`（xhigh，使用者同意）。
 - 本線的現況寫在這一節，每批與工作同一個變更更新。開發紀錄是 `docs/dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md`，從 `outage-characterize` 起每批同步寫。
 - v7.1 的 HANDOFF、README、after-re-evaluate 只在記錄器分支更新：分線時、你做決定時、收尾時各更新一次。
 
@@ -366,8 +367,8 @@ outage-resync（約 59～85 h）
 ├── single-store-refactor   high，紀錄身分與關閉順序局部 xhigh｜單一紀錄，行為逐位元不變
 ├── match-resync            xhigh｜晚到過久就換 epoch，Resync 不受冷卻限制
 ├── retention-600           xhigh｜保留範圍改成 600（§14.4）
-├── client-interrupted      high，計時與恢復路徑局部 xhigh｜中斷狀態、恢復流程、HUD、Gateway 時鐘視窗
-├── identity-rebind         xhigh｜session 重新綁定（D-2 選 I-2 時）
+├── client-interrupted      high，計時與恢復路徑局部 xhigh｜中斷狀態、恢復流程、HUD（Gateway 時鐘視窗移到 identity-rebind）
+├── identity-rebind         xhigh｜session 重新綁定（D-2 選 I-2 時）、Gateway 時鐘視窗的重開
 ├── resync-l2-l3            medium，工具 high；門檻來源的對抗式檢查用小規模 ultracode｜注入中斷的 L2、你在場的 L3
 └── line-close              medium｜收尾
 ```
@@ -385,8 +386,8 @@ outage-resync（約 59～85 h）
 | single-store-refactor | 照 Delta-1。暫時規則是聯集：600 序號內，或屬於最新 64 筆就保留，樣本只給最新 64 筆。每筆紀錄要有 eligible 旗標，才能逐位元模擬現在的裁切（審查 minor 1）。SubmitInput 端的重建與帳本關閉時刻要對齊 | L1；既有判定原樣通過（包括 `:1363`）；`match-ingress.jsonl` 位元組相同；73 個突變重新判定並登記 | 8～12 | 動手前你同意 Delta-1 |
 | match-resync | 照 §14.3，先 Red 後 Green：晚到 > N_o 換 epoch（Resync）、不受冷卻限制、同 epoch 至多一次、觸發的命令不產生樣本。schema 3 列舉、`command_evidence.py`、log-contract 同步 | L1；突變（N_o 差一、雙重換 epoch、受冷卻限制、觸發命令仍產生樣本）killed；權威 digest 的 35 個情境不變 | 7～10 | D-3 |
 | retention-600 | 拿掉「最新 64 筆」的條件；`:1363` 的判定反轉（§14.4 的 1～5、突變、另一位審查者核對）；文件與註解的 64 改成 600；C++ 守恆檢查加 S3 | §14.4 的流程與你的核准；L1；L2 的不退步紀錄（x1、ramp、gateway-250ms 子集） | 4～6（另加 L2 2～3） | D-6 |
-| client-interrupted | `ConnectionLiveness.hpp`；第 3.1 節的狀態與恢復流程；HUD；暫時性錯誤；Hello 250 ms；T_max 改從 snapshot 起算；Gateway 的 per-client 時鐘視窗；速率註解重算 | L1（worker CTest＋Go）；突變（中斷時 CloseTransport、ResetActions、sentSequence 歸零；拿掉 T_int；暫時性錯誤仍丟例外；Liveness 吃時鐘回聲；恢復時不 SeedLead；Welcome 延長 T_max）killed；差分 oracle；37 個既有突變重新判定 | 10～14 | D-4、D-5、D-7～D-9 |
-| identity-rebind | 第 3.3 節的重新綁定；`session_test.go`；契約 `:540`；A 級行 | Go 測試；突變（不檢查靜默、不檢查序號、不檢查 token、到期後仍允許）killed；`state_whitelist_test.go` 不變 | 6～9 | D-2 |
+| client-interrupted | `ConnectionLiveness.hpp`；第 3.1 節的狀態與恢復流程；HUD；暫時性錯誤；Hello 250 ms；T_max 改從 snapshot 起算；速率註解重算（Gateway 的 per-client 時鐘視窗移到 `identity-rebind`，2026-10-24 使用者核准） | L1（worker CTest＋Go）；突變（中斷時 CloseTransport、ResetActions、sentSequence 歸零；拿掉 T_int；暫時性錯誤仍丟例外；Liveness 吃時鐘回聲；恢復時不 SeedLead；Welcome 延長 T_max）killed；差分 oracle；37 個既有突變重新判定 | 10～14 | D-4、D-5、D-7～D-9 |
+| identity-rebind | 第 3.3 節的重新綁定；`session_test.go`；契約 `:540`；A 級行；Gateway 的 per-client 時鐘視窗重開（最後驗證時刻）與 `reason=resume` | Go 測試；突變（不檢查靜默、不檢查序號、不檢查 token、到期後仍允許）killed；`state_whitelist_test.go` 不變 | 6～9 | D-2 |
 | resync-l2-l3 | relay 工具加中斷視窗（雙向、只下行、只上行、部分送達、換來源埠）；既有情境的位元組不變；判定在看結果前宣告並經你核准。L3：Windows 與 macOS 各拔網路線或關 Wi-Fi，2 s 與 7 s 各一次，並記錄 endpoint 有沒有改變 | 宣告的判定成立；失敗的跑次不被之後的成功覆蓋（§14.1）；你確認 L3 | 7～10（不含你在場 1～2） | D-13 |
 | line-close | 記錄器分支的 HANDOFF、README、after-re-evaluate（substitution-single-store 指向本線、wake-reconnect 的處置）；v8 README 的 B6 交接；Fitness Check（§12）；Architecture Report（§15）；PR 本文用日語 | L1 全綠 | 1～2 | 合併時機 |
 
