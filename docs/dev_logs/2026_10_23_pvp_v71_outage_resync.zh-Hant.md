@@ -2,7 +2,7 @@
 
 日期：2026-10-23 起。分支 `claude/pvp-v71-outage-resync`（從 master `cdb9b07`）。
 
-**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 完成（對抗式審查後補強）。`identity-rebind` 完成（L1 run 40077174310 四平台成功）。`resync-l2-l3` 的 L2 宣告待使用者核准。
+**狀態：進行中**。計畫已核准（D172），`gate-characterize` 已決定（D173）。`resync-contract` 的條文核准（`gate-contract`，D174）。`drop-counters` 完成（L1 run 39956082177 四平台成功）。`single-store-refactor` 完成（L1 run 39967478342 四平台成功）。`match-resync` 完成（L1 run 39974643016 四平台成功）。`retention-600` 完成（判定變更 D176、L2 宣告第 2 版 D177、L2 通過）。`client-interrupted` 完成（對抗式審查後補強）。`identity-rebind` 完成（L1 run 40077174310 四平台成功）。`resync-l2-l3` 的 L2 通過（D178，33 輪全部 P），L3 待使用者在場。
 
 相關文件：
 
@@ -335,7 +335,7 @@
   - 這 5 個重跑 5／5 killed。證據：`pvp-v71-identity-rebind-mutants-20261024/`、`-rerun-20261024/`。
 - 本機：Go 兩個模組全部通過；`ctest -R object_fps_pvp -L "cpu|network|go"` 47／47。
 
-## resync-l2-l3（準備中）
+## resync-l2-l3
 
 檔位：medium，工具 high；門檻來源的對抗式檢查用小規模 ultracode（計畫）。
 
@@ -351,5 +351,8 @@
 - **竄改檢查**：判定工具 10／10 判出預期的 F／E。
 - **探索紀錄**：工具開發期間的 17 輪（5 個工具版本），只用來確認注入有效。
 - **只記錄的觀察**：換來源埠時，Gateway 在改綁前仍把 snapshot 送往舊埠，Client 先恢復，改綁要等下一個每秒一次的 Hello（約 2 s）。
-- **下一步**：使用者核准宣告後開跑 L2（33 輪，約 30 分鐘）。L3 需要使用者在場。
+- **L2**（D178：使用者核准宣告第 2 版）：session `pvp-v71-resync-l2-20261024`，33 輪全部 P。
+  - 中斷行 `gap_ms` 全部 500；C9 的 T_max 4983.6～4999.5 ms；恢復後 3 s 內被接受的命令 130～191 個；改綁每位玩家 1 次。
+  - J-R3（只記錄）只在只上行的 C4、C5 出現，是 §7 已知的 P2 例外，見宣告第 9 節。
+- **L3**：還沒做，需要使用者在場（宣告第 6 節）。
 
