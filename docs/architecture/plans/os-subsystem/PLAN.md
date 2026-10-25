@@ -458,6 +458,20 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - L1：既有測試不改判定；Windows 長路徑的 arena 案例 Red→Green。（D52：log 的案例移到 os-trace-writers，因為 log 檔的寫入走 TraceSink。）
   - L3：Windows 深路徑（P 約 235）下寫得出 log、讀得到 arenas.json。
 
+### 7.8b io-native-paths：io 原生路徑契約（D54；high，局部 xhigh，ultracode 契約審查；12～19 h）
+
+- 白話：讓 engine/io 的 file:// 規則對齊作業系統，路徑照 OS 的規則運作，不再有字面規則造成的個別差異。
+- 依賴：os-files-write。
+- 做：
+  - 原生路徑轉成 file:// 時不再依字面消去 `..`；開檔照 OS（POSIX 跟著 symlink；Windows 由 `GetFullPathNameW` 依字面處理）。字面正規化只留給比較與顯示（AssetPathResolver、MountTable 的包含檢查）。修改 io.md Invariant 3 與 D44。
+  - 取消 D46，支援 UNC：原生 `//X/Y`（或 `\\X\Y`）↔ `file://X/Y`，各平台相同；主機為 localhost 的 UNC 寫成 `file:////localhost/...`。Windows 長路徑用 `\\?\UNC\`。
+  - POSIX 以 `//` 開頭的路徑不再當成 UNC 拒絕（經同一個對應，開檔時由 OS 當成 `/`）。
+  - 非 UTF-8 的目前目錄照 D43 維持現狀，寫成明確的契約。
+  - AssetPathResolver 的根目錄照原樣保留，包含檢查照舊。
+- 驗收：
+  - L1：POSIX 的 symlink 加 `..`；Windows 的 UNC 往返與長路徑（`\\localhost\C$`，CI 做不到就 Skipped）；重寫的 UriTests 不動點測試；既有的 mount、長路徑前綴、`/C:/x` 判定不變。
+  - AGENTS §14.4：放寬面與收緊面開工前已得同意；新判定的突變檢查與獨立審查（ultracode）完成後，判定與 Invariant 3 的新條文交使用者定案。
+
 ### 7.9 os-tool-files：編輯器的檔案服務與系統字型目錄（high，6～9 h）
 
 - 白話：把 UI 編輯器的原子存檔、路徑比較與系統字型目錄改用 engine/os，編輯器不再自己判斷 OS。
