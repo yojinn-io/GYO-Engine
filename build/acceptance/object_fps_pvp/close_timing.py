@@ -6,11 +6,12 @@
 The worker probe (--close MODE) joins its mock Gateway, prints "close requested" and destroys the product's
 ClientConnection, whose network worker sends the closing /leave; this script times that line to the process exit.
 
-Declared before the run and approved (docs/object_fps_pvp/plans/v7.1/quick-close.md, D202): every one of the runs
-must stay within its limit, no retries; the numbers are not loosened after a run.
+Declared and approved (docs/object_fps_pvp/plans/v7.1/quick-close.md, D202 and D203): every one of the runs must
+stay within its limit, no retries; the numbers are not loosened after a run.
 - responding (the Gateway answers the /leave): <= 500 ms
 - down (the Gateway's HTTP listener is gone): <= 1000 ms
-- stalled (the Gateway accepts the /leave and holds it): recorded only, the Red of the fix (2 s and more before it)
+- stalled (the Gateway accepts the /leave and holds it; 2 s and more before the fix): <= 1000 ms (D203)
+CTest runs it with --runs 1 as the regression test of the closing /leave.
 """
 import argparse
 import json
@@ -20,8 +21,8 @@ import sys
 import time
 from pathlib import Path
 
-LIMITS_MS = {"responding": 500, "down": 1000}
-RECORDED = ("stalled",)
+LIMITS_MS = {"responding": 500, "down": 1000, "stalled": 1000}
+RECORDED = ()
 
 
 def run_once(probe: Path, mode: str) -> dict:

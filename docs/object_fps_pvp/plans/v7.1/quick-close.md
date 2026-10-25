@@ -1,4 +1,4 @@
-# quick-close：關閉 Client 時卡住約 3 秒（2026-10-25：D202 選 q1、門檻核准；macOS 驗收通過，Windows 待跑）
+# quick-close：關閉 Client 時卡住約 3 秒（2026-10-25：D202 選 q1、門檻核准；D203 加 stalled 判定；macOS 驗收通過，Windows 待跑）
 
 發行線的第二批（INVENTORY `F1`）。唯讀調查，還沒有改任何程式。
 
@@ -31,3 +31,13 @@
 - **Red（探索，修正前，各 3 次）**：responding 2.7～2.9 ms、down 2.2～2.6 ms、stalled 2003～2004 ms。**核准的兩個判定在修正前也通過**：本機關掉 Gateway 時連線立刻被拒，不會等；會卡住的是 Gateway 收下請求卻不回（或主機不在、連線逾時）的情況，對應 stalled。
 - **macOS 驗收（修正後，各 10 次，Intel Mac，背景同時在跑全量突變）**：通過。responding 最大 2.7 ms、down 最大 2.3 ms；stalled（記錄）303.5～304.1 ms。
 - **Windows**：使用者在 D201 的 Windows 機器上跑同一個腳本。
+
+## stalled 列入判定與回歸測試（D203）
+
+使用者看過 Red 與第一次 macOS 驗收後決定：「加：stalled ≤1 s 列入驗收判定（macOS、Windows 各 10 次），並加一個 ctest 回歸測試讓突變抓得到。」判定是在看過 stalled 的結果（約 304 ms）之後加的，這裡照實記下；它只收緊，不放寬既有的兩條。
+
+- 判定（`close_timing.py`）：responding ≤500 ms、down ≤1000 ms、stalled ≤1000 ms，各 10 次全部符合、不重試。
+- 回歸測試：CTest `object_fps_pvp.close_timing`（`--runs 1`，三種情境、同一組門檻）。
+- 突變：`qc-closing-uses-request-timeout`（關閉時改用 2 秒的逾時）、`qc-closing-timeout-too-long`（逾時改成 1500 ms）都被這個 CTest 殺死（2／2）。
+- **macOS 驗收（D203 的判定，各 10 次）**：通過。responding 最大 1.2 ms、down 最大 1.6 ms、stalled 301.5～302.6 ms。
+- **Windows（使用者，與 D201 一起）**：在發行線的建置目錄執行 `python build/acceptance/object_fps_pvp/close_timing.py --probe <建置目錄>/acceptance/object_fps_pvp/gyo_object_fps_pvp_worker_probe.exe --runs 10 --output close-timing-windows.json`，exit 0 才算通過；不通過時先回報，不重跑。

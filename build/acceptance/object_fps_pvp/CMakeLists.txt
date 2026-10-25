@@ -63,6 +63,11 @@ gyo_copy_runtime_dlls(${gui_quad})
 if(BUILD_TESTING)
     add_test(NAME "${GYO_CURRENT_APP}.worker" COMMAND ${worker})
     set_tests_properties("${GYO_CURRENT_APP}.worker" PROPERTIES LABELS "network;pvp" TIMEOUT 60)
+    # v7.1 quick-close (D203): closing a playing connection stays within the declared limits, one run per case.
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME "${GYO_CURRENT_APP}.close_timing" COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/close_timing.py" --probe $<TARGET_FILE:${worker}> --runs 1)
+    set_tests_properties("${GYO_CURRENT_APP}.close_timing" PROPERTIES LABELS "network;pvp" TIMEOUT 60)
     add_test(NAME "${GYO_CURRENT_APP}.wire" COMMAND ${probe} --self-test)
     set_tests_properties("${GYO_CURRENT_APP}.wire" PROPERTIES LABELS "cpu;pvp" TIMEOUT 10)
 endif()

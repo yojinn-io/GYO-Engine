@@ -198,4 +198,5 @@ PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四
 - [black-map-observation O4：L2 的 10 種案例與產品 Client 的觀測跑次，黑屏只在 timing 類露出](../../../dev_logs/2026_10_23_pvp_v71_black_map_o4.zh-Hant.md)
 - [outage-resync：斷線恢復＝重新對時（C13 (b)＋UDP 中斷狀態）](../../../dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md)（完成、L3 移到 lan15-windows；PR #90，分支 `claude/pvp-v71-outage-resync`，合併前連結在本分支上無效）
 - [windows-long-path：發行包解壓到深資料夾時也讀得到 shader（P1～P5）](../../../dev_logs/2026_10_25_pvp_v71_windows_long_path.zh-Hant.md)（發行線 `claude/pvp-v71-release`；實機驗收待做）
+- [quick-close：關閉 Client 不再卡在 /leave](../../../dev_logs/2026_10_25_pvp_v71_quick_close.zh-Hant.md)（發行線；Windows 驗收待做）
 

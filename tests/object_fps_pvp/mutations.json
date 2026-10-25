@@ -125,6 +125,12 @@
     },
     "compare_reports": {
       "ctest": "object_fps_pvp.compare_reports"
+    },
+    "close_timing": {
+      "build": [
+        "gyo_object_fps_pvp_worker_probe"
+      ],
+      "ctest": "object_fps_pvp.close_timing"
     }
   },
   "mutants": [
@@ -6668,6 +6674,26 @@
       "replace": "        if(event==ConnectionLiveness::Event::Interrupted) {",
       "check": "diagnostic_isolation",
       "expect": "test_a_poll_records_interruptions_through_the_shared_rule"
+    },
+    {
+      "id": "qc-closing-uses-request-timeout",
+      "batch": "v71-quick-close",
+      "what": "The closing /leave waits with the 2 s timeouts of the other requests",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        try{DisconnectRemote(true);}",
+      "replace": "        try{DisconnectRemote();}",
+      "check": "close_timing",
+      "expect": "FAILED \\{'mode': 'stalled'"
+    },
+    {
+      "id": "qc-closing-timeout-too-long",
+      "batch": "v71-quick-close",
+      "what": "The closing /leave timeout grows past the declared limit",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "constexpr auto ClosingLeaveTimeout=std::chrono::milliseconds(300);",
+      "replace": "constexpr auto ClosingLeaveTimeout=std::chrono::milliseconds(1500);",
+      "check": "close_timing",
+      "expect": "FAILED \\{'mode': 'stalled'"
     }
   ]
 }
