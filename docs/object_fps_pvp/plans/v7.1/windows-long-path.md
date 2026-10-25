@@ -86,4 +86,19 @@ OS 統一子系統的任務（另開的會話「規劃 Engine 的 OS 統一子�
 使用者：「你來做！！！，那邊只修架構，你等那邊修好了，就做。產品任務和架構分開。」
 
 - OS 子系統任務：只做架構（建立 `engine/os`、把系統相關的實作從 `engine/io` 移過去、照 D196 的契約整理），完成後通知本會話。
-- v7.1（本會話）：windows-long-path 的修正與驗收（Windows 上的長路徑能讀、開檔失敗時記錄 OS 錯誤碼與路徑長度、asset 的讀檔接上、產品端的呼叫端、windows-x64 的 L1 深路徑情境），在架構完成後實作。兩邊的確切界線和那個會話確認後記在這裡。
+- v7.1（本會話）：windows-long-path 的修正與驗收（Windows 上的長路徑能讀、開檔失敗時記錄 OS 錯誤碼與路徑長度、asset 的讀檔接上、產品端的呼叫端、windows-x64 的 L1 深路徑情境），在架構完成後實作。兩邊的確切界線如下（OS 子系統的會話提出，寫進它的 PLAN，使用者核准 PLAN 時一併確認；代號暫定，以 PLAN 為準）。
+
+劃線原則：架構決定「OS 差異放在哪、對外承諾什麼」（新子系統、依賴方向、介面與路徑契約、Design Invariants 與守衛測試）；修正讓這次事故的行為在那個位置上成立（長路徑、錯誤記錄、接線、驗收）。長路徑程式碼的位置由架構決定，寫它屬於修正。另外更正：`engine/io` 目前沒有任何 OS 相關的實作可搬（`engine/io/src/fs/*.cpp` 只有空的 namespace），原生實作是在 `engine/os` 新寫。
+
+| 代號 | 歸屬 | 內容 |
+|---|---|---|
+| A1 | 架構（OS 子系統任務） | 建立 `engine/os`：目錄與建置登錄；Design Invariants 文件；守衛測試（OS 標頭與巨集只允許在 `engine/os`，既有位置列入允許清單後逐批縮小） |
+| A2 | 架構 | `engine/io` 的契約：Engine 內的路徑字串一律 UTF-8；`ParseUri` 的 `file://` 規則修正與三平台解析測試；`IoError` 帶 OS 錯誤碼的方式 |
+| A3 | 架構 | Files 骨架：`engine/os` 裡 `IFileSystem` 的只讀原生實作（`Open`、`Exists`、`Stat`，其他 NotSupported）；三平台的一般路徑能讀；UTF-8 轉原生字串（Windows 轉 UTF-16） |
+| P1 | 修正（v7.1，本會話） | Windows 長路徑真正讀得到：寫在 `engine/os` 的 Files Windows 實作裡（絕對化、`\\?\` 前綴），遵守 `engine/os` 的 Design Invariants |
+| P2 | 修正 | 開檔失敗時記錄 OS 錯誤碼與路徑長度（用 A2 定的 `IoError` 方式） |
+| P3 | 修正 | asset 的讀檔接上 `IFileSystem`：`NativeFileAssetSource`（類別名與 API 不變，當薄轉接層）、`ContentManifest.cpp:93`、`AssetCatalog.cpp:30`；`IAssetSource` 不刪不改（去留由 PLAN 決定） |
+| P4 | 修正 | 5 個 resolver 根目錄呼叫端改用 UTF-8，和 P3 同一個變更（P3 之後改由 Files 以 UTF-8 解讀，呼叫端不改會讓現在能用的非 ASCII 路徑壞掉）。只有 `PvpApplication.cpp:812` 屬於 object_fps_pvp；`object_fps`、`object_fps_v2` 的 `ObjectFpsApplication.cpp:71`、ui_editor 的 `ReadOnlyAssetCatalog.cpp:46` 屬於其他 owner，`ContentManifest.cpp:104` 在 Engine。這是 Engine 契約的遷移，同一變更改完所有消費端並在說明裡寫明 |
+| P5 | 修正 | 驗收：Engine 單元測試（Windows 上 300 字元以上的路徑讀得到、一般路徑不變）、windows-x64 的 L1 深路徑情境、lan15-windows |
+
+時程：A1～A3 在 OS 子系統的 PLAN 經使用者核准後實作，完成時那個會話通知本會話分支與 commit；PLAN 裡的其他部件（Wait、Threads、Process、NetErrors、`IAssetSource` 的去留）v7.1 不必等。
