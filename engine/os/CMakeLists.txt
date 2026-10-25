@@ -2,11 +2,18 @@
 # branches on the OS (docs/architecture/os.md). A leaf directly above
 # GYO::Base: it links nothing else, no other Engine module, no SDL and no
 # product, so every module above it, GYO::Engine included, may use it.
-# Sources that do not depend on the OS live in src/common; per-OS sources are
-# added under src/<os> and selected here.
+# Sources that do not depend on the OS live in src/common; one source per OS
+# family lives under src/<os> and is selected here (the build layer may branch
+# on the OS).
 add_library(gyo_os STATIC
     src/common/OsError.cpp
+    src/common/Paths.cpp
 )
+if(WIN32)
+    target_sources(gyo_os PRIVATE src/windows/Files.cpp)
+else()
+    target_sources(gyo_os PRIVATE src/posix/Files.cpp)
+endif()
 add_library(GYO::Os ALIAS gyo_os)
 
 target_include_directories(gyo_os PUBLIC

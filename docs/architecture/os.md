@@ -24,8 +24,8 @@ primitives here.
 
 | Component | What it gives | Status |
 |---|---|---|
-| `OsError` | The layer's error; the detail keeps the native error code | os-skeleton |
-| Files | Read primitives with UTF-8 paths; later write, create, atomic replace | os-files-read, os-files-write |
+| `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
+| Files | Read primitives with UTF-8 paths (`ReadFile`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later write, create, atomic replace | read: os-files-read (landed); write: os-files-write |
 | System | System font directories | os-tool-files |
 | Process | Executable path, process and thread CPU time, local calendar time | os-process-info |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests | os-console-shutdown |
@@ -38,8 +38,13 @@ Only the components whose batch has landed exist; the others are planned in the 
 ## Contracts
 
 - **Errors.** `Base::Result<T, OsError>`; `OsErrorCode` starts at 1. The detail is `errno=<n>` or `win32=<n>`,
-  followed by `; path_bytes=<n>` when the failure concerns a path (`Os::NativeErrorDetail`). An outer module keeps
-  it with `Base::CauseDetail` (error-handling.md rule 5).
+  followed by `; path_bytes=<n>` when the failure concerns a path (`Os::NativeErrorDetail`). An argument the layer
+  refuses before any OS call (an empty path, a NUL, invalid UTF-8) has no native error: its detail is
+  `path_bytes=<n>` alone. An outer module keeps the detail with `Base::CauseDetail` (error-handling.md rule 5).
+- **Files.** A missing path is `NotFound` (and `Exists` is false). Opening a directory is `InvalidPath` on every
+  platform (POSIX would open it and fail later; Windows refuses it with `ERROR_ACCESS_DENIED`). Reads may return
+  fewer bytes than asked; 0 is the end of the file. `MakeAbsolute` resolves against the current directory the
+  platform's own way (`GetFullPathNameW` on Windows) and answers in `/` form.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.

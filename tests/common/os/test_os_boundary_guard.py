@@ -117,6 +117,12 @@ class Rules(GuardTree):
         self.assertReported("engine/os/src/common/B.cpp:2: R5 SDL3/SDL.h")
         self.assertReported("engine/os/src/common/B.cpp:3: R5 asio.hpp")
 
+    def test_engine_os_relative_includes_must_stay_inside_engine_os(self):
+        self.write("engine/os/src/posix/Files.cpp", '#include "../common/Paths.hpp"\n#include "./Local.hpp"\n')
+        self.assertClean()
+        self.write("engine/os/src/posix/Up.cpp", '#include "../../../io/include/engine/io/IoError.hpp"\n')
+        self.assertReported("engine/os/src/posix/Up.cpp:1: R5 ../../../io/include/engine/io/IoError.hpp")
+
     def test_an_empty_root_fails(self):
         (self.root / "engine/base/src/Base.cpp").unlink()
         (self.root / "engine/base/src").mkdir(exist_ok=True)

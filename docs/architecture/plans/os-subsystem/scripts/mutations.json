@@ -261,6 +261,110 @@
       "target": "engine_tests",
       "cases": "Uri:*",
       "expect": "FileUriFromNativePath accepted (C:|\\\\x)"
+    },
+    {
+      "id": "os-f1-posix-notfound",
+      "what": "A missing file (ENOENT) is no longer NotFound on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    case ENOENT:\n    case ENOTDIR:\n        return OsErrorCode::NotFound;",
+      "replace": "    case ENOTDIR:\n        return OsErrorCode::NotFound;",
+      "target": "gyo_os_tests",
+      "cases": "*NotFound*",
+      "expect": "CHECK\\( file.error\\(\\).code == OsErrorCode::NotFound \\) is NOT correct"
+    },
+    {
+      "id": "os-f2-utf8",
+      "what": "Invalid UTF-8 reaches the OS instead of being refused",
+      "file": "engine/os/src/common/Paths.cpp",
+      "find": "    if (!IsValidUtf8(utf8Path)) {",
+      "replace": "    if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*invalid arguments*",
+      "expect": "CHECK\\( OpenError\\(invalid\\) == OsErrorCode::InvalidEncoding \\) is NOT correct"
+    },
+    {
+      "id": "os-f3-posix-directory",
+      "what": "A directory opens as a file on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (S_ISDIR(status.st_mode)) return Base::Err(FromErrno(EISDIR, \"not a regular file\", utf8Path));\n",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "cases": "*directory*",
+      "expect": "ReadFile::Open accepted"
+    },
+    {
+      "id": "os-f4-windows-acp",
+      "what": "Windows converts paths with the ANSI code page instead of UTF-8",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8Path.data(), bytes, nullptr, 0)",
+      "replace": "::MultiByteToWideChar(CP_ACP, 0, utf8Path.data(), bytes, nullptr, 0)",
+      "target": "gyo_os_tests",
+      "cases": "*ANSI code page*",
+      "expect": "cannot open"
+    },
+    {
+      "id": "os-f5-windows-notfound",
+      "what": "ERROR_FILE_NOT_FOUND is no longer NotFound on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    case ERROR_FILE_NOT_FOUND:\n",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "cases": "*NotFound*",
+      "expect": "CHECK\\( file.error\\(\\).code == OsErrorCode::NotFound \\) is NOT correct"
+    },
+    {
+      "id": "io-n1-caps",
+      "what": "The native backend keeps the default canOpenWrite = true",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        caps.canOpenWrite = false;\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK_FALSE\\( caps.canOpenWrite \\) is NOT correct"
+    },
+    {
+      "id": "io-n2-write-mode",
+      "what": "The native backend opens a file for a write mode",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        if (!IsReadOnly(mode)) return Base::Err(Unsupported(\"opening for writing\"));\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "NativeFileSystem opened mode"
+    },
+    {
+      "id": "io-n3-cause",
+      "what": "An engine/os failure loses its code name and native detail",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "Base::CauseDetail(error, nativePath));",
+      "replace": "std::string(nativePath));",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( opened.error\\(\\).detail.starts_with\\(expectedStart\\) \\) is NOT correct"
+    },
+    {
+      "id": "io-n4-notfound",
+      "what": "An engine/os NotFound becomes OpenFailed, so a VFS overlay stops instead of trying the next mount",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "            case Os::OsErrorCode::NotFound:        return IoErrorCode::NotFound;",
+      "replace": "            case Os::OsErrorCode::NotFound:        return otherwise;",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( opened.error\\(\\).code == IoErrorCode::NotFound \\) is NOT correct"
     }
   ]
 }

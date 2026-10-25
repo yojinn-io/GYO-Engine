@@ -7,7 +7,10 @@ expected message. A mutant with "expect_build_failure": true is killed instead
 when its build fails with the expected message (a configure-time guard). A
 mutant with "command" (a list; "{python}" stands for this interpreter) runs
 that command from the repository root instead of building a target, for
-checks that are scripts (a source guard). The
+checks that are scripts (a source guard). A mutant with "platforms" (prefixes
+of sys.platform, such as "win32", "darwin", "linux") runs only there: it
+mutates code that is compiled on those platforms only, and elsewhere it is
+reported as skipped and left out of the count. The
 unmutated tree must pass every used check first; every
 file is restored afterwards. Python only, with subprocess timeouts, so it runs
 the same on Windows, Linux and macOS.
@@ -79,6 +82,10 @@ def main():
     mutants = json.loads((REPOSITORY / args.catalog).read_text(encoding="utf-8"))["mutants"]
     if args.only:
         mutants = [m for m in mutants if m["id"] in args.only]
+    skipped = [m for m in mutants if m.get("platforms") and not sys.platform.startswith(tuple(m["platforms"]))]
+    for mutant in skipped:
+        print(f"{mutant['id']}: skipped (runs on {', '.join(mutant['platforms'])}; this is {sys.platform})")
+    mutants = [m for m in mutants if m not in skipped]
     for mutant in {check_key(m): m for m in mutants}.values():
         status, output = check(mutant, build_dir, args.cmake)
         if status != "passed":
@@ -110,7 +117,7 @@ def main():
     # Rebuild the restored sources so the build tree matches the checkout again.
     for target in sorted({m["target"] for m in mutants if "target" in m}):
         run([args.cmake, "--build", str(build_dir), "--target", target], 1800)
-    print(f"{killed}/{len(mutants)} killed")
+    print(f"{killed}/{len(mutants)} killed" + (f", {len(skipped)} skipped on this platform" if skipped else ""))
     return 0 if killed == len(mutants) else 1
 
 

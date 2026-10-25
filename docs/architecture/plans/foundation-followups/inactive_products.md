@@ -184,3 +184,10 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
   - `AssetPathResolver` 在允許 scheme（預設）時，`file:///x`、`file://localhost/x` 現在是絕對路徑而被拒；過去會被當成 assets 根目錄下的相對路徑。未啟用產品的 shader bundle resolver 也用預設值，但它們的 manifest 沒有 file:// 條目。
   - `MountTable::Resolve` 拒絕含 `..` 段的請求。
 - 選用：未啟用產品若要把原生絕對路徑交給 engine/io，用 `FileUriFromNativePath`／`NativePathFromFileUri`，不要自己拼 `file://` 字串。
+
+### os-files-read 唯讀檔案原語與原生檔案系統
+
+狀態：實作與本機 L1 完成（2026-10-25），未合併。
+
+- 破損：無。新增 `Engine::Os::Files`（`GYO::Os`）與 `Engine::IO::FS::NativeFileSystem`；`GYO::Engine` 多了 PRIVATE 依賴 `GYO::Os`，未啟用產品不需要改 CMake。
+- 選用：未啟用產品若要讀原生檔案，經 engine/io（`NativeFileSystem` 或掛上它的 `Vfs`），或直接用 `Engine::Os::Files`；路徑一律交 UTF-8（`PathToUtf8`），不要用 `path::string()`。

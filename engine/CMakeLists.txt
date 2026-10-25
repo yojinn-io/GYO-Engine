@@ -31,6 +31,7 @@ target_sources(engine
     # io/fs
     io/src/fs/DirectoryIterator.cpp
     io/src/fs/MountTable.cpp
+    io/src/fs/NativeFileSystem.cpp
     io/src/fs/Vfs.cpp
     # io/helpers
     io/src/helpers/ReadAllBytes.cpp
@@ -67,7 +68,8 @@ target_sources(engine
 )
 target_link_libraries(engine
     PUBLIC GYO::Base GYO::Math GYO::Time
-    PRIVATE nlohmann_json::nlohmann_json
+    # engine/io's native file system calls the OS layer; no engine/io public header names an engine/os type.
+    PRIVATE nlohmann_json::nlohmann_json GYO::Os
 )
 
 # SDL_image is an optional decoder implementation. GYO::Engine remains

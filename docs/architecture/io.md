@@ -57,6 +57,11 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
   (`res:///a` is `a`).
 - **Mounts stay inside their root.** `MountTable::Resolve` rejects a request with a `..` segment
   (`PathEscapesRoot`), so a mount never names a path outside its root.
+- **The native backend** (`FS::NativeFileSystem`, os-files-read) serves `file://` URIs through engine/os. It is
+  read-only for now: `Open` takes read modes only, `Exists`, `Stat` and `ToNativePathString` work, every other
+  operation is `NotSupported`, and `Capabilities()` sets every field to say exactly that (the defaults of
+  `FileSystemCapabilities` are mostly true). A missing file is `NotFound`, so a VFS read overlay falls through to
+  the next mount. `caseSensitivePaths` is the platform default from engine/os; a volume may differ.
 - **Errors.** Failures are `IoError`. When a backend converts an engine/os failure, it chooses the `IoErrorCode`,
   keeps the inner message, and records the cause with `Base::CauseDetail(osError, outerDetail)`, for example
   `C:/x/y.dxil; NotFound: win32=3; path_bytes=271`. The native error code is never dropped.
@@ -76,7 +81,7 @@ Behaviour that changed with this contract (io-contracts):
    only. Checked by the OS boundary guard (R1–R4 cover engine/io; mutant os-g4).
 2. **Every path string is UTF-8.** No engine/io API takes or returns a path in another encoding. engine/io does
    not transcode: path bytes pass through unchanged (`UriTests`, the UTF-8 case); an invalid sequence is refused
-   by engine/os with `InvalidEncoding` when the path reaches the OS (os-files-read).
+   by engine/os with `InvalidEncoding` before any OS call (`tests/common/os/FilesTests.cpp`).
 3. **One `file://` mapping on every platform.** Parsing, printing and the native-path helpers follow the rules above
    as pure, locale-independent string rules, so the same input gives the same result on Windows, Linux and macOS;
    the round trip through the canonical form is a fixed point (`tests/common/core/io/UriTests.cpp`).

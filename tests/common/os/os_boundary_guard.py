@@ -14,6 +14,7 @@ Usage: python3 os_boundary_guard.py [--root REPOSITORY]
 Exit status 0 when clean; 1 with one line per finding otherwise.
 """
 import argparse
+import posixpath
 import re
 import sys
 from collections import Counter
@@ -133,8 +134,13 @@ def file_findings(relative, text):
         if not os_source and R1_INCLUDE.match(header):
             yield number, "R1", header
         if in_os:
-            forbidden = (kind == '"' and "/" in header and not R5_ALLOWED_QUOTED.match(header)) or (
-                R5_FORBIDDEN_ANGLED.match(header) and not R5_ALLOWED_QUOTED.match(header))
+            if kind == '"' and header.startswith(("./", "../")):
+                # A relative include is judged by the file it names: it must stay inside engine/os or engine/base.
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(relative), header))
+                forbidden = not target.startswith(("engine/os/", "engine/base/"))
+            else:
+                forbidden = (kind == '"' and "/" in header and not R5_ALLOWED_QUOTED.match(header)) or (
+                    R5_FORBIDDEN_ANGLED.match(header) and not R5_ALLOWED_QUOTED.match(header))
             if forbidden:
                 yield number, "R5", header
     if os_source:
