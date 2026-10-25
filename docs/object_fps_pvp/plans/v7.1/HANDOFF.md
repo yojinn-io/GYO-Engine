@@ -43,11 +43,11 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **進行中（發行線）**：`windows-long-path` 的 P1～P5 程式與自動驗收完成（D199；分支 `claude/pvp-v71-release`，從 PR #95 的 `a0e6668` 切出並併進 A1～A3；Red run 40176646387 在 windows-x64 如預期失敗，Green run 40177623030 四平台成功，windows-x64 的深路徑檢查在 P＝200 讀完 4 個 `.dxil`（最長 318 字元）；PR #95 的 K9、K11（D200）已併進發行線（`8e86f0d`）；dev_log `docs/dev_logs/2026_10_25_pvp_v71_windows_long_path.zh-Hant.md`）。剩下的併進 lan15-windows（D201）：明天依序跑 Windows 專用突變 5 個、實機在 P＝156 與 P 約 210 各啟動一次、lan15。發行線的 PR 還沒開。
+- **進行中（發行線）**：`windows-long-path` 的 P1～P5 程式與自動驗收完成（D199；分支 `claude/pvp-v71-release`，從 PR #95 的 `a0e6668` 切出並併進 A1～A3；Red run 40176646387 在 windows-x64 如預期失敗，Green run 40177623030 四平台成功，windows-x64 的深路徑檢查在 P＝200 讀完 4 個 `.dxil`（最長 318 字元）；PR #95 的 K9、K11（D200）已併進發行線（`8e86f0d`）；dev_log `docs/dev_logs/2026_10_25_pvp_v71_windows_long_path.zh-Hant.md`）。剩下的併進 lan15-windows（D201）：明天依序跑 Windows 專用突變 5 個、實機在 P＝156 與 P 約 210 各啟動一次、lan15。發行線的 PR 是 [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)（draft，L1 run 40182973785 在 `90200d7` 上派發）。
 - **等你決定（發行線）**：`quick-close` 的做法與事前宣告的門檻（[quick-close.md](quick-close.md)，建議 q1，門檻草案在文件裡）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
 - INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
-- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。`contract-readers`（含 K7）完成。`trace-no-overwrite`（含 K8）完成。`analyzer-converge`（D192）完成。`token-tests` 完成。`client-path-tests`（含 K9，D200 (b)）完成。`event-watch-overlap`（K11，D200 核准）完成。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
+- **完成**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)，2026-10-25 合併，merge commit `37d533d`，L1 run 40179729383 四平台成功）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。`contract-readers`（含 K7）完成。`trace-no-overwrite`（含 K8）完成。`analyzer-converge`（D192）完成。`token-tests` 完成。`client-path-tests`（含 K9，D200 (b)）完成。`event-watch-overlap`（K11，D200 核准）完成。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
@@ -57,7 +57,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 不做：INVENTORY 的 G2（D159）。
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-25，windows-long-path 的 P1～P5（D199）。
+- **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟。
 
 ## 閱讀入口
 
