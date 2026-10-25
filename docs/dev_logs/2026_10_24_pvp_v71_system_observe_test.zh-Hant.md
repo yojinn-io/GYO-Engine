@@ -17,7 +17,7 @@
 | `analyzer-converge` | high | 5 | 完成（D192；L1 run 40123957938） |
 | `token-tests` | high | 4～6 | 完成 |
 | `client-path-tests` | high | 3～4（K9 另加 2～3） | C17-3 與他版計數完成；K9 等使用者決定 |
-| `event-watch-overlap` | high | 1～2 | 改寫完成、未提交，判定變更等使用者核准（D186 新增，K11） |
+| `event-watch-overlap` | high | 1～2 | 完成（D186 新增，K11；D200 核准判定變更） |
 
 時間框：任一批超過估時 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
 
@@ -266,7 +266,7 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 - 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49；worker 驗收與 cpu 測試通過。
 - **突變**：新增 2 個（他版資料包不計數、窗口的世代填 0），2／2 killed。
 
-## event-watch-overlap：Engine 事件監看的重疊測試不靠碰運氣（K11，等使用者核准）
+## event-watch-overlap：Engine 事件監看的重疊測試不靠碰運氣（K11，D200 核准）
 
 `tests/common/platform_sdl/EventWatchTests.cpp` 的「Destroying an event watch waits for a callback on another thread」。舊版的 200 輪任意時刻解構，以 `CHECK(overlappedRounds > 0)` 要求至少一輪剛好在回呼執行時解構，client-silent-checks 的 L1（run 40107059342，macos-arm64）出現過 0。
 
@@ -285,3 +285,7 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 3. **收緊的面**：握手輪次 200 輪每一輪都要有回呼在跑；`!finishedInFlight` 多檢查 200 輪；出錯時帶訊息失敗。
 4. **被放寬的性質由什麼守**：「有做到重疊」由握手輪次的 `overlappedRounds == 200`（強度如第 1 點）守；「解構會等」由兩段的 `!finishedInFlight` 守。突變的證據：Engine 目錄裡真正跑這個測試的只有 `m-order`（killed）；另外 4 個（`m17`、`m-depth-watch`、`m-dispatch`、`m-main-thread`）跑的是別的案例，只代表沒有回歸。審查者另做的 nowait（解構不等）、nocall（回呼不被呼叫）在修正版下 killed。
 5. **證據**：修正版 patch（`docs/architecture/plans/input-and-present/patches/k11-event-watch-overlap.patch`）；本機連跑 30 次（第二版）與 5 次（修正版）；審查者的連跑 20 次與突變結果（額外突變目錄在會話的工作目錄）。
+
+### 核准後（D200）
+
+使用者 2026-10-25：「K9、K11照建議開始」。patch 套進 `EventWatchTests.cpp` 並提交（patch 檔刪除，內容就在這個變更裡）。套用後本機連跑 10 次通過；Engine 突變 `m17`、`m-order`、`m-depth-watch`、`m-dispatch`、`m-main-thread` 5／5 killed。
