@@ -68,4 +68,14 @@ private:
     bool interrupted_{};
 };
 
+// Whether a Poll event records an interruption: one that starts now, or the
+// timeout of a session that was playing and not yet interrupted (a worker
+// stall or a sleep longer than T_max jumps past T_int), so the summary of a
+// session that ended that way does not read as uninterrupted.
+[[nodiscard]] constexpr bool PollRecordsInterruption(ConnectionLiveness::Event event, bool playing,
+                                                     bool interrupted) noexcept {
+    return event == ConnectionLiveness::Event::Interrupted ||
+           (event == ConnectionLiveness::Event::TimedOut && playing && !interrupted);
+}
+
 } // namespace fps::pvp

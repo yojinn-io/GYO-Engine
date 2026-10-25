@@ -406,12 +406,11 @@ struct ClientConnection::Impl {
     bool Send(wire::Type type,const std::string& payload) {
         const auto bytes=wire::Encode({type,session,++sentSequence,payload});
         asio::error_code error;socket.send_to(asio::buffer(bytes),endpoint,0,error);
-        // Transient only while playing (connected or interrupted, network-architecture §4);
-        // during the handshake every socket error still fails the join at once.
-        if(error && liveness.Playing() && TransientSocketError(error)) {++summary.transientSocketErrors;return false;}
-        if(error && error!=asio::error::would_block && error!=asio::error::try_again)throw std::runtime_error(error.message());
-        if(error)++sendBlocked;
-        return !error;
+        const auto action=SocketErrorActionFor(error,liveness.Playing());
+        if(action==SocketErrorAction::Tolerate) {++summary.transientSocketErrors;return false;}
+        if(action==SocketErrorAction::Fail)throw std::runtime_error(error.message());
+        if(action==SocketErrorAction::Blocked)++sendBlocked;
+        return action==SocketErrorAction::Proceed;
     }
     // A Hello every 250 ms in every phase (network-architecture §4, D188): the
     // session's last verified time stays within T_int while only Hellos reach
@@ -515,10 +514,11 @@ struct ClientConnection::Impl {
         for(int count=0;count<64;++count) {
             udp::endpoint sender;asio::error_code error;
             const auto size=socket.receive_from(asio::buffer(bytes),sender,0,error);
-            if(error==asio::error::would_block || error==asio::error::try_again)break;
+            const auto action=SocketErrorActionFor(error,liveness.Playing());
+            if(action==SocketErrorAction::Blocked)break;
             // No data this time; datagrams queued behind it are still read in this pass.
-            if(liveness.Playing() && TransientSocketError(error)) {++summary.transientSocketErrors;continue;}
-            if(error)throw std::runtime_error(error.message());
+            if(action==SocketErrorAction::Tolerate) {++summary.transientSocketErrors;continue;}
+            if(action==SocketErrorAction::Fail)throw std::runtime_error(error.message());
             const auto arrivedAt=Clock::now();
             ++receivedDatagrams;
             if(sender!=endpoint) {++foreignSenderDatagrams;continue;}
@@ -703,11 +703,10 @@ struct ClientConnection::Impl {
         // first snapshot. The socket, credentials, sequence, window and actions
         // all stay while interrupted.
         // A worker stall or a sleep past T_max still records the interruption
-        // the connection ended in, so its summary does not read as uninterrupted.
+        // the connection ended in (PollRecordsInterruption).
         const auto polledAt=Clock::now();
         const auto event=liveness.Poll(polledAt);
-        if(event==ConnectionLiveness::Event::Interrupted ||
-           (event==ConnectionLiveness::Event::TimedOut && liveness.Playing() && !liveness.Interrupted())) {
+        if(PollRecordsInterruption(event,liveness.Playing(),liveness.Interrupted())) {
             std::scoped_lock lock(mutex);
             if(activeGeneration!=generation.load())return;
             interruptedEpoch=0;
@@ -903,6 +902,11 @@ bool TransientSocketError(const std::error_code& error) noexcept {
         error==asio::error::network_unreachable || error==asio::error::host_unreachable || error==asio::error::network_down ||
         error==std::errc::connection_reset || error==std::errc::connection_refused ||
         error==std::errc::network_unreachable || error==std::errc::host_unreachable || error==std::errc::network_down;
+}
+SocketErrorAction SocketErrorActionFor(const std::error_code& error,bool playing) noexcept {
+    if(!error)return SocketErrorAction::Proceed;
+    if(error==asio::error::would_block || error==asio::error::try_again)return SocketErrorAction::Blocked;
+    return playing && TransientSocketError(error) ? SocketErrorAction::Tolerate : SocketErrorAction::Fail;
 }
 std::string ConnectionInterruptedLine(PlayerId player,Clock::duration gap,std::uint64_t epoch){
     return "connection interrupted version=1 player="+std::to_string(player)+" gap_ms="+std::to_string(WholeMillis(gap))+

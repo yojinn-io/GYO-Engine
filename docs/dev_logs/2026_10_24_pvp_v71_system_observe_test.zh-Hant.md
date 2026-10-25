@@ -16,7 +16,7 @@
 | `trace-no-overwrite` | high | 4～6（K8 另加 1～2） | 完成（D181 併入 K8；D191 T2；L1 run 40123957938） |
 | `analyzer-converge` | high | 5 | 完成（D192；L1 run 40123957938） |
 | `token-tests` | high | 4～6 | 完成 |
-| `client-path-tests` | high | 3～4（K9 另加 2～3） | C17-3 與他版計數完成；K9 等使用者決定 |
+| `client-path-tests` | high | 3～4（K9 另加 2～3） | 完成（K9 照 D200 用純函式） |
 | `event-watch-overlap` | high | 1～2 | 完成（D186 新增，K11；D200 核准判定變更） |
 
 時間框：任一批超過估時 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
@@ -252,7 +252,7 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 - 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49；worker 驗收連跑 2 次通過（送出時序的檢查都在裡面）。
 - **突變**（D184 的挑選）：v7 第 09a 批的 3 個（不折讓、每次都折、等待時刻不清除）的 find 改指新的呼叫處，仍由 worker 驗收判定；新增 5 個（沒有晚醒扣除項、沒有滿桶上限，這兩個就是 N-token-test-gaps 說的會存活的突變；補充不設上限、重送只等 1 個 token、換 life 不算新視窗），由單元測試判定。8／8 killed。
 
-## client-path-tests：重連後的世代檢查、他版資料包的計數（C17-3、N-client-other-version-untested）；K9 待決定
+## client-path-tests：重連後的世代檢查、他版資料包的計數（C17-3、N-client-other-version-untested）；K9（D200 選 (b)）
 
 ### 做了什麼
 
@@ -265,6 +265,23 @@ INVENTORY 的 N-trace-overwrite-on-restart，加上 D181 併入的 K8。
 
 - 本機：`ctest -R object_fps_pvp -L "cpu|network|go"` 49／49；worker 驗收與 cpu 測試通過。
 - **突變**：新增 2 個（他版資料包不計數、窗口的世代填 0），2／2 killed。
+
+### K9：兩個分支的判斷抽成純函式（D200，選項 (b)）
+
+使用者 2026-10-25：「K9、K11照建議開始」。
+
+- **做了什麼**：
+  - `SocketErrorActionFor(error, playing)`（`ClientConnection.hpp`）：沒有錯誤 Proceed、會阻塞 Blocked、遊玩中（連線或中斷）的暫時性錯誤 Tolerate、其他一律 Fail；所以握手期的暫時性錯誤也是 Fail。送與收兩處都改成依它的結果處理，行為不變。
+  - `PollRecordsInterruption(event, playing, interrupted)`（`ConnectionLiveness.hpp`，與 Liveness 同一個判定檔）：Interrupted，或「遊玩中、尚未中斷時直接 TimedOut」才記中斷。worker 的那個 if 改成呼叫它。
+  - 產品沒有加只給測試用的入口。
+- **測試**：`ConnectionLivenessTests.cpp` 加兩個案例：直接跳過 T_int 到 T_max 的 Poll 仍記中斷（先中斷再逾時、從未遊玩的逾時都不記）；暫時性錯誤在握手期 Fail、遊玩中 Tolerate（std 與 asio 兩種錯誤碼），會阻塞的兩種是 Blocked，其他是 Fail。接線由 `test_diagnostic_isolation.py` 守：每個 Fail 前面都有 Tolerate 的處理、兩處都呼叫 `SocketErrorActionFor`、worker 的中斷判定只經 `PollRecordsInterruption`（新的檢查）。執行期的情況（Windows 拔線時的 WSAECONNRESET）仍交給 lan15-windows 的 L3。
+- **判定的變更（§14.4）**：`test_every_socket_error_is_classified_before_it_fails_the_session` 原本要求兩個 throw 的前兩行裡有 `TransientSocketError(error)`，現在要求有 `if(action==SocketErrorAction::Tolerate)` 與 `if(action==SocketErrorAction::Fail)`，並要求 `SocketErrorActionFor(error,liveness.Playing())` 恰好兩處。
+  1. 守的性質：讓連線結束的 socket 錯誤，先經過暫時性的分類。
+  2. 放寬的面：沒有。舊判定抓到的突變 `ci-receive-error-unclassified`（刪掉接收端的暫時性處理）重新定位到新的那一行後，新判定仍殺死它；送出端的同型突變 `k9-send-error-unclassified` 也被殺。「哪些錯誤算暫時性、只在遊玩中」改由 `SocketErrorActionFor` 的單元測試守（`k9-handshake-tolerates-transient` 被殺）。
+  3. 收緊的面：多要求 Fail 的分支、呼叫次數恰好兩處。
+  4. （無放寬面）
+  5. 證據：下列突變結果。
+- **驗證**：本機 `ctest` 90／90。突變（D184：新的、重新定位的、殺它的測試檔被改動的）10／10 killed：`k9-send-error-unclassified`、`k9-handshake-tolerates-transient`、`k9-blocked-fails`、`k9-stall-skips-interruption`、`k9-site-bypasses-rule`、`ci-receive-error-unclassified`（重新定位），以及 `ci-no-interruption`、`ci-welcome-extends-tmax`、`ci-transient-not-transient`、`ci-liveness-reads-time-echo-static`。
 
 ## event-watch-overlap：Engine 事件監看的重疊測試不靠碰運氣（K11，D200 核准）
 

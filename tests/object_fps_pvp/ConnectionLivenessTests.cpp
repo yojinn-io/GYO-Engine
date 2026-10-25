@@ -115,3 +115,52 @@ TEST_CASE("PvP transient socket errors are the five of a network that may come b
         CHECK(TransientSocketError(asio::error_code(error)));
     CHECK_FALSE(TransientSocketError(asio::error_code(asio::error::message_size)));
 }
+
+// v7.1 K9: the two branches the worker cannot be driven into from a test (a
+// worker stall past T_max, a transient socket error during the handshake) are
+// decided by these functions; ClientConnection.cpp calls them at each site
+// (test_diagnostic_isolation.py checks the calls).
+TEST_CASE("PvP a poll that jumps past T_int to T_max still records the interruption") {
+    // Playing, then the next poll comes only after T_max (a worker stall or a sleep).
+    ConnectionLiveness stalled;
+    stalled.Begin(T0);
+    stalled.Welcome(T0 + 10ms);
+    static_cast<void>(stalled.Snapshot(T0 + 20ms));
+    const auto event = stalled.Poll(T0 + 20ms + ConnectionTimeoutAfter);
+    REQUIRE(event == Event::TimedOut);
+    CHECK(PollRecordsInterruption(event, stalled.Playing(), stalled.Interrupted()));
+
+    // Interrupted at T_int first: the timeout records nothing more.
+    ConnectionLiveness interrupted;
+    interrupted.Begin(T0);
+    static_cast<void>(interrupted.Snapshot(T0 + 20ms));
+    const auto start = interrupted.Poll(T0 + 20ms + ConnectionInterruptedAfter);
+    CHECK(PollRecordsInterruption(start, interrupted.Playing(), interrupted.Interrupted()));
+    const auto end = interrupted.Poll(T0 + 20ms + ConnectionTimeoutAfter);
+    REQUIRE(end == Event::TimedOut);
+    CHECK_FALSE(PollRecordsInterruption(end, interrupted.Playing(), interrupted.Interrupted()));
+
+    // A join that never played times out without an interruption.
+    ConnectionLiveness joining;
+    joining.Begin(T0);
+    const auto timedOut = joining.Poll(T0 + ConnectionTimeoutAfter);
+    REQUIRE(timedOut == Event::TimedOut);
+    CHECK_FALSE(PollRecordsInterruption(timedOut, joining.Playing(), joining.Interrupted()));
+    CHECK_FALSE(PollRecordsInterruption(Event::None, true, false));
+}
+
+TEST_CASE("PvP a transient socket error fails the handshake and only counts while playing") {
+    using Action = SocketErrorAction;
+    for (const bool playing : {false, true}) {
+        CAPTURE(playing);
+        CHECK(SocketErrorActionFor({}, playing) == Action::Proceed);
+        CHECK(SocketErrorActionFor(asio::error_code(asio::error::would_block), playing) == Action::Blocked);
+        CHECK(SocketErrorActionFor(asio::error_code(asio::error::try_again), playing) == Action::Blocked);
+        CHECK(SocketErrorActionFor(asio::error_code(asio::error::message_size), playing) == Action::Fail);
+        for (const auto error : {std::errc::connection_reset, std::errc::connection_refused, std::errc::network_unreachable,
+                                 std::errc::host_unreachable, std::errc::network_down})
+            CHECK(SocketErrorActionFor(std::make_error_code(error), playing) == (playing ? Action::Tolerate : Action::Fail));
+        for (const auto error : {asio::error::connection_reset, asio::error::connection_refused})
+            CHECK(SocketErrorActionFor(asio::error_code(error), playing) == (playing ? Action::Tolerate : Action::Fail));
+    }
+}

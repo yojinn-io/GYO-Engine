@@ -6014,7 +6014,7 @@
       "batch": "v71-client-interrupted",
       "what": "A receive error fails the session without the transient check",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "            if(liveness.Playing() && TransientSocketError(error)) {++summary.transientSocketErrors;continue;}\n",
+      "find": "            if(action==SocketErrorAction::Tolerate) {++summary.transientSocketErrors;continue;}\n",
       "replace": "",
       "check": "diagnostic_isolation",
       "expect": "test_every_socket_error_is_classified_before_it_fails_the_session"
@@ -6618,6 +6618,56 @@
       "replace": "    step.generation = 0;",
       "check": "cpu",
       "expect": "windowGeneration"
+    },
+    {
+      "id": "k9-send-error-unclassified",
+      "batch": "v71-client-path-tests",
+      "what": "A send error fails the session without the transient case",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        if(action==SocketErrorAction::Tolerate) {++summary.transientSocketErrors;return false;}\n",
+      "replace": "",
+      "check": "diagnostic_isolation",
+      "expect": "test_every_socket_error_is_classified_before_it_fails_the_session"
+    },
+    {
+      "id": "k9-handshake-tolerates-transient",
+      "batch": "v71-client-path-tests",
+      "what": "A transient socket error during the handshake only counts instead of failing the join",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    return playing && TransientSocketError(error) ? SocketErrorAction::Tolerate : SocketErrorAction::Fail;",
+      "replace": "    return TransientSocketError(error) ? SocketErrorAction::Tolerate : SocketErrorAction::Fail;",
+      "check": "cpu",
+      "expect": "transient socket error fails the handshake"
+    },
+    {
+      "id": "k9-blocked-fails",
+      "batch": "v71-client-path-tests",
+      "what": "A socket that would block fails the session",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    if(error==asio::error::would_block || error==asio::error::try_again)return SocketErrorAction::Blocked;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "transient socket error fails the handshake"
+    },
+    {
+      "id": "k9-stall-skips-interruption",
+      "batch": "v71-client-path-tests",
+      "what": "A poll that jumps past T_int to T_max records no interruption",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ConnectionLiveness.hpp",
+      "find": "    return event == ConnectionLiveness::Event::Interrupted ||\n           (event == ConnectionLiveness::Event::TimedOut && playing && !interrupted);",
+      "replace": "    return event == ConnectionLiveness::Event::Interrupted;",
+      "check": "cpu",
+      "expect": "jumps past T_int to T_max still records the interruption"
+    },
+    {
+      "id": "k9-site-bypasses-rule",
+      "batch": "v71-client-path-tests",
+      "what": "The worker records only interruptions that start now, not the rule",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        if(PollRecordsInterruption(event,liveness.Playing(),liveness.Interrupted())) {",
+      "replace": "        if(event==ConnectionLiveness::Event::Interrupted) {",
+      "check": "diagnostic_isolation",
+      "expect": "test_a_poll_records_interruptions_through_the_shared_rule"
     }
   ]
 }
