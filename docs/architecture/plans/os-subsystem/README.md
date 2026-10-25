@@ -1,7 +1,7 @@
 # OS 子系統：分批計畫與進度
 
 更新：2026-10-25。Owner：Engine（新增 `engine/os`；`engine/io` 新增原生後端與路徑契約；`engine/time`、`engine/threads`、`engine/trace`、`engine/platform/sdl` 之後改呼叫 `engine/os`）。
-**狀態：計畫已核准**（2026-10-25，D46）；下一步是 os-skeleton 與 io-contracts（可並行），等使用者說開始。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
+**狀態：A1～A3 完成**（2026-10-25，四平台 L1 run 40173730672）；接著由消費端做長路徑修正（P1～P5），本計畫的其餘批次排在消費端發行之後（D46）。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
 
 Engine 目前沒有處理 OS 差異的 owner：
 
@@ -60,10 +60,10 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | 批次 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|
 | os-plan-docs 計畫 | medium | 完成（2026-10-25 核准，D46；[dev_log](../../../dev_logs/2026_10_25_engine_os_plan_docs.zh-Hant.md)） | 本夾三份文件與 dev_log |
-| os-skeleton（A1） | high | 本機 L1 完成（2026-10-25；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_skeleton.zh-Hant.md)） | engine/os、GYO::Os、OsError、os.md、守衛（Engine 範圍）、突變 runner 擴充 |
-| io-contracts（A2） | high；字串規則局部 xhigh；契約審查 ultracode（先問） | 本機 L1 完成（2026-10-25；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_io_contracts.zh-Hant.md)） | io.md、UTF-8 路徑、file:// 對應、ParseUri／ToString／MountTable 修正、IoError detail |
-| os-files-read（A3） | high；UTF-8↔UTF-16 與錯誤對應局部 xhigh；公開介面 1 位 xhigh 審查（先問） | 本機 L1 完成、xhigh 審查已修正（2026-10-25，D47；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_files_read.zh-Hant.md)） | engine/os 的唯讀檔案原語、engine/io 的唯讀 NativeFileSystem |
-| （消費端 P1～P5） | 由消費端決定 | 等 A1～A3 | 長路徑行為、錯誤記錄、asset 接線、UTF-8 呼叫端、驗收（不屬於本計畫） |
+| os-skeleton（A1） | high | 完成（2026-10-25；四平台 L1 run 40173730672；[dev_log](../../../dev_logs/2026_10_25_engine_os_skeleton.zh-Hant.md)） | engine/os、GYO::Os、OsError、os.md、守衛（Engine 範圍）、突變 runner 擴充 |
+| io-contracts（A2） | high；字串規則局部 xhigh；契約審查 ultracode（先問） | 完成（2026-10-25；四平台 L1 run 40173730672；[dev_log](../../../dev_logs/2026_10_25_engine_os_io_contracts.zh-Hant.md)） | io.md、UTF-8 路徑、file:// 對應、ParseUri／ToString／MountTable 修正、IoError detail |
+| os-files-read（A3） | high；UTF-8↔UTF-16 與錯誤對應局部 xhigh；公開介面 1 位 xhigh 審查（先問） | 完成（2026-10-25；xhigh 審查已修正，D47；四平台 L1 run 40173730672；[dev_log](../../../dev_logs/2026_10_25_engine_os_files_read.zh-Hant.md)） | engine/os 的唯讀檔案原語、engine/io 的唯讀 NativeFileSystem |
+| （消費端 P1～P5） | 由消費端決定 | 可以開始（A1～A3 完成，2026-10-25） | 長路徑行為、錯誤記錄、asset 接線、UTF-8 呼叫端、驗收（不屬於本計畫） |
 | os-guard-wide（A1b） | medium；規則調整 high | 未開始 | 守衛擴到產品、工具、產品測試、驗收程式 |
 | os-process-info | high | 未開始 | 執行檔路徑、CPU 時間、本地時間 |
 | os-console-shutdown | xhigh | 未開始 | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |

@@ -1,6 +1,6 @@
 # Engine os-skeleton：建立 engine/os 與守衛
 
-日期：2026-10-25。**本機 L1 完成**；四平台 L1 要等分支推送。
+日期：2026-10-25。**完成**：四平台 L1 通過（run 40173730672，和 A2、A3 一起跑）。
 計畫見 [os-skeleton](../architecture/plans/os-subsystem/PLAN.md)（第 7.1 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-skeleton」。
 
 ## 做了什麼

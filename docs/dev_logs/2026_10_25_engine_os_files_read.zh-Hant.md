@@ -1,6 +1,6 @@
 # Engine os-files-read：唯讀檔案原語與原生檔案系統
 
-日期：2026-10-25。**本機 L1 完成，xhigh 審查已修正**（D47）；四平台 L1 待推送。
+日期：2026-10-25。**完成**：xhigh 審查已修正（D47），四平台 L1 第二次通過（run 40173730672）。
 計畫見 [os-files-read](../architecture/plans/os-subsystem/PLAN.md)（第 3.2、3.3、7.3 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-files-read」。
 
 ## 做了什麼
@@ -60,6 +60,8 @@
   - 失敗只在測試檔：include windows.h 又寫了 `using namespace` 的翻譯單元裡，類別 `ReadFile` 和 Win32 的 `::ReadFile` 撞名。
   - engine/os 的 Windows 實作與 NativeFileSystem 第一次在 MSVC 上編譯，都成功了。
 - 處理：類別改名為 `FileReader`，並在 os.md 寫下命名規則。
+- 第二次（[run 40173730672](https://github.com/yojinn-io/GYO-Engine/actions/runs/40173730672)，`96fd2fc`）：四平台全部成功，windows-x64 的 CTest 87／87。
+- 只記錄的資料（Windows 的 `GetACP()` 值、長路徑的原生錯誤碼）沒有出現在記錄裡，因為 CTest 只在失敗時印出測試輸出。能確定的是 `GetACP() != CP_UTF8` 的檢查通過了。
 
 ## 證據
 

@@ -1,6 +1,6 @@
 # Engine io-contracts：engine/io 的路徑契約
 
-日期：2026-10-25。**本機 L1 完成**；四平台 L1 要等分支推送。
+日期：2026-10-25。**完成**：四平台 L1 通過（run 40173730672，和 A1、A3 一起跑）。
 計畫見 [io-contracts](../architecture/plans/os-subsystem/PLAN.md)（第 3.4、7.2 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「io-contracts」。
 
 ## 做了什麼

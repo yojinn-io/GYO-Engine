@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：計畫已核准**（D46）；A1～A3（os-skeleton、io-contracts、os-files-read）本機 L1 完成，os-files-read 的 xhigh 審查已修正（D47）；四平台 L1 待推送。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：計畫已核准**（D46）；A1～A3（os-skeleton、io-contracts、os-files-read）完成：四平台 L1 通過（run 40173730672，`96fd2fc`），已通知消費端的發行任務；接著由消費端做 P1～P5。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -10,7 +10,8 @@
 - io-contracts：file:// 對應、ParseUri／ParseUriLoose／ToString 修正、io.md、MountTable 不越出根目錄完成；Red→Green、契約審查（ultracode）的發現已修正、本機 L1 全過、突變 11／11 killed。
 - os-files-read：使用者說「先不推送，繼續做 os-files-read，A1～A3 都完成後再一起跑 L1」。engine/os 的唯讀檔案原語（POSIX、Windows）與 engine/io 的 NativeFileSystem 完成，本機 L1 全過，突變在本機 7／7 killed，另有 2 個 Windows 專用的突變要到 Windows 才能跑。
 - os-files-read 的 xhigh 審查（使用者同意：審查公開介面與 Windows 實作，修完後再推送）：沒有 blocker。1 個 major，即 `PathToUtf8`／`PathFromUtf8` 在 Windows 會丟例外 → 使用者決定改成回傳 Result（D47）。其餘 minor、nit 已修，測試缺口已補。本機突變 34／34 killed（2 個 Windows 專用的跳過）。
-- 下一步：推送本分支，手動觸發 `cross-platform.yml` 跑四平台 L1。Windows 的程式碼第一次在 CI 編譯。
+- 四平台 L1：第一次 windows-x64 失敗（測試檔裡 `ReadFile` 撞名）→ 類別改名為 `FileReader`。第二次全部通過：[run 40173730672](https://github.com/yojinn-io/GYO-Engine/actions/runs/40173730672)，`96fd2fc`。
+- 下一步：A1～A3 完成，已通知消費端的發行任務（分支與 commit）。本計畫接下來的批次，依 D46 排在消費端發行之後。
 - 消費端的發行任務已收到分工、交接內容與 D46（A1～A3 併進它的發行線 PR），等 A1～A3 完成（L1 通過後通知分支與 commit）。
 
 ## 閱讀入口
@@ -261,6 +262,13 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - engine/os 的 `src/windows/Files.cpp` 與 NativeFileSystem 第一次在 MSVC 上編譯，都成功了。
   - 這正是審查 finding 15 預警的陷阱。產品的翻譯單元會經 asio 間接看到 windows.h，所以只在測試裡加命名空間不夠：趁還沒有任何使用者，把類別改名為 `FileReader`。os.md 的 Contracts 加上命名規則：不重用 Win32 函式名，也不用 windows.h 的 A／W 巨集名。突變目錄的 find 與 expect 字串同步改名。
   - 改名後本機：ctest 30／30，守衛通過，相關突變 12／12 killed。
+- 2026-10-25：第二次四平台 L1：[run 40173730672](https://github.com/yojinn-io/GYO-Engine/actions/runs/40173730672)，`96fd2fc`。
+  - 全部成功：windows-x64、macos-x64、macos-arm64、linux-x64 的 L1，quick acceptance（toolchain、消費端）與 CI gate。
+  - windows-x64 的 CTest 87／87，其中 gyo_os_tests、os.boundary_guard、os.boundary_guard_selftest、engine_tests 都通過。
+  - 只記錄的資料沒有取得：CTest 只在失敗時才印出 doctest 的 MESSAGE，所以 Windows runner 的 `GetACP()` 實際值，以及超過 260 字元路徑的原生錯誤碼，都不在記錄裡。
+  - 能確定的是 `CHECK(GetACP() != CP_UTF8)` 通過了，所以非 ACP 測試對「改用 ACP 轉換」這類缺陷有檢出力。
+  - 要看實際值，可以在 Windows 上直接執行 `gyo_os_tests -s`，P1 開始時也可以順便看。
+- 本批完成（A1～A3 都完成）。
 
 ## 未結事項
 
@@ -272,7 +280,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - A1～A3 若在發行線開好之前完成，就等它開好再併。P4 在產品檔案的那一行，以及和消費端其他線的衝突，由消費端在發行線處理。
   - 完成時通知消費端：分支名稱與最後的 commit。
 - ~~os-skeleton 開始時：用空 allowlist 實跑守衛，產生 Engine 的基準，對照盤點。~~ 2026-10-25 完成，和盤點一致。
-- A1～A3 的四平台 L1：使用者決定 A1～A3 都完成、審查修完後再推送（2026-10-25）。D46 決定 A1～A3 併進消費端的發行線 PR，所以先推送本分支，再手動觸發 `cross-platform.yml`。
+- ~~A1～A3 的四平台 L1~~ 2026-10-25 通過（run 40173730672）。
 - ~~os-files-read 的公開介面 xhigh 審查（1 位）：等使用者同意。~~ 2026-10-25 完成，修正見「os-files-read」。
 - Windows 專用的突變 os-f4、os-f5 要在 Windows 機器上執行（CI 不跑突變）。在那之前，Windows 端的檢出力只有 L1 的測試本身。
 - os-files-read 的非 ACP 測試：對「改用 ACP 轉換」這類突變，只要 runner 的 ACP 不是 UTF-8（65001）就有檢出力。測試同時含日文、正體中文與 é，在 1252 與 932 上都有效。新增的 Windows 專用案例「record the process ANSI code page」會印出 `GetACP()`，並檢查它不是 65001；第一次 windows-x64 L1 從它的輸出確認。
@@ -281,4 +289,4 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - ~~io-contracts 開始時：契約審查用 ultracode（1 審查者＋1 對抗檢查），先問。~~ 2026-10-25 完成。
 - 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。
 - ~~os-files-read 開始時：確認 Windows CI runner 的 ACP，選它表示不了的字元做測試。~~ 改成選一般 Western code page 表示不了的日文與正體中文，確認放到第一次 windows-x64 L1（見上）。
-- A1～A3 完成後：通知消費端的發行任務（分支與 commit）。
+- ~~A1～A3 完成後：通知消費端的發行任務（分支與 commit）。~~ 2026-10-25 完成。
