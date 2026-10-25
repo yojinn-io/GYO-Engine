@@ -75,8 +75,17 @@ Json Response(const httplib::Result& result) {
     }
     return body;
 }
-std::unique_ptr<httplib::Client> Http(const std::string& base) {
+// Closing the Client waits for its /leave at most this long per step and
+// twice that in all (v7.1 quick-close, q1): past it the Gateway's session
+// expiry (T_max) frees the seat instead. Every other request keeps 2 s.
+constexpr auto ClosingLeaveTimeout=std::chrono::milliseconds(300);
+std::unique_ptr<httplib::Client> Http(const std::string& base,const bool closing=false) {
     auto client=std::make_unique<httplib::Client>(base);
+    if(closing) {
+        client->set_connection_timeout(ClosingLeaveTimeout);client->set_read_timeout(ClosingLeaveTimeout);
+        client->set_write_timeout(ClosingLeaveTimeout);client->set_max_timeout(2*ClosingLeaveTimeout);
+        return client;
+    }
     client->set_connection_timeout(2,0);client->set_read_timeout(2,0);client->set_write_timeout(2,0);
     client->set_max_timeout(3000);return client;
 }
@@ -294,11 +303,12 @@ struct ClientConnection::Impl {
                 (digest?Hex64(*digest):std::string("missing"))+", this Client "+Hex64(installed->digest)+")");
         state.arenaId=id;
     }
-    void DisconnectRemote() {
+    // closing: the Client itself is closing, so the /leave uses the short timeouts.
+    void DisconnectRemote(const bool closing=false) {
         Close();
         if(session && !base.empty() && !room.empty()) {
             try {
-                auto http=Http(base);
+                auto http=Http(base,closing);
                 const Json body={{"session_id",session},{"session_token",token}};
                 const auto released=Response(http->Post("/rooms/"+room+"/leave",body.dump(),"application/json"));
                 if(!released.is_object() || !released.value("left",false))
@@ -891,7 +901,7 @@ struct ClientConnection::Impl {
                 }
             }
         }
-        try{DisconnectRemote();}
+        try{DisconnectRemote(true);}
         catch(const std::exception& error){ClogLine()<<"[ObjectFPS/PvP] shutdown cleanup failed reason="<<error.what()<<'\n';}
     }
 };

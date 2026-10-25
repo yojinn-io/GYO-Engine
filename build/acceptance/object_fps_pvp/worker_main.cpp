@@ -13,9 +13,11 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <functional>
 #include <limits>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -25,6 +27,7 @@
 #include <sstream>
 #include <streambuf>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -62,6 +65,8 @@ public:
             response.set_content(reply.dump(),"application/json");
         });
         http.Post("/rooms/1/leave",[&](const auto&,auto& response){
+            // A Gateway that holds the /leave (RunClose): it answers only once the mock stops.
+            if(leaveStalls) {std::unique_lock lock(stallMutex);stallReleased.wait_for(lock,10s,[&]{return released;});}
             ++leaves;response.set_content(R"({"left":true})","application/json");
         });
         const auto port=http.bind_to_any_port("127.0.0.1");
@@ -69,7 +74,13 @@ public:
         address="127.0.0.1:"+std::to_string(port);
         server=std::thread([this]{http.listen_after_bind();});
     }
-    ~MockGateway(){http.stop();if(server.joinable())server.join();}
+    ~MockGateway(){StopHttp();}
+    // The Gateway's HTTP side goes away; a held /leave is let go first.
+    void StopHttp() {
+        {std::scoped_lock lock(stallMutex);released=true;}
+        stallReleased.notify_all();
+        http.stop();if(server.joinable())server.join();
+    }
     void Pump() {
         for(int count=0;count<64;++count) {
             std::array<std::uint8_t,2048> buffer{};udp::endpoint source;asio::error_code error;
@@ -199,7 +210,11 @@ public:
     std::uint64_t epoch{1};
     bool autoAck{};
     std::atomic<std::uint64_t> leaves{};
+    std::atomic<bool> leaveStalls{};
 private:
+    std::mutex stallMutex;
+    std::condition_variable stallReleased;
+    bool released{};
     void Send(wire::Type type,const std::string& payload){const auto bytes=wire::Encode({type,1,++sequence,payload});socket.send_to(asio::buffer(bytes),peer);}
     asio::io_context io;
     udp::socket socket;
@@ -698,7 +713,30 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
         {"main_stall_ms",1100},{"restored_action_id",*resumed}};
 }
 }
-int main() {
+// v7.1 quick-close: close a playing connection while the Gateway answers
+// (responding), is gone (down: its HTTP listener stopped) or holds the /leave
+// (stalled). close_timing.py times "close requested" to the process exit.
+int RunClose(const std::string_view mode) {
+    Require(mode=="responding" || mode=="down" || mode=="stalled","--close takes responding, down or stalled");
+    MockGateway gateway;
+    auto connection=std::make_unique<ClientConnection>();
+    connection->SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+    connection->Join(gateway.address,"1");
+    gateway.Until([&]{return connection->State().phase==ConnectionPhase::Playing;});
+    if(mode=="down")gateway.StopHttp();
+    gateway.leaveStalls=mode=="stalled";
+    std::cout<<"close requested"<<std::endl;
+    const auto closing=Clock::now();
+    connection.reset(); // the Client's network closes as the application does
+    const auto closeMs=std::chrono::duration<double,std::milli>(Clock::now()-closing).count();
+    std::cout<<Json{{"mode",mode},{"close_ms",closeMs},{"leaves",gateway.leaves.load()}}.dump()<<std::endl;
+    return 0;
+}
+int main(int argc,char** argv) {
+    if(argc==3 && std::string_view(argv[1])=="--close") {
+        try{return RunClose(argv[2]);}
+        catch(const std::exception& error){std::cerr<<"worker close: "<<error.what()<<'\n';return 1;}
+    }
     ClogCapture capture(std::clog.rdbuf());
     struct Restore{std::streambuf* previous;~Restore(){std::clog.rdbuf(previous);}} restore{std::clog.rdbuf(&capture)};
     try {
