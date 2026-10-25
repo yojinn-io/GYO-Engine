@@ -25,6 +25,11 @@
 - 突變：結束要求的三個 POSIX 突變，前兩次檢查的訊號順序各漏掉一個（handler 重設、後來的要求蓋掉理由），定為「第一個、第一個、另一個」後都抓到。
 - xhigh 審查：沒有 blocker、major。改了 4 件：Windows 第二次 Ctrl+C 的行為改回舊的（原本沒宣告）、安裝改成全部成功或全部還原、補上 `SA_RESTART` 與 Windows Ctrl+C 的檢查、os.md 同步。POSIX 拒絕非 UTF-8 參數與 shell32 守衛由使用者定案（D50）。shell32 守衛的 AGENTS §14.4 核對裡，我原本寫「沒有收緊面」是錯的，審查者實測指出 Windows 上「只有 GYO::Base」改成失敗。
 - 本機能跑的突變都被抓到；Windows 專用的 6 個（os-c4、os-c5、os-c6、os-c8、os-c9、os-g18）要到 Windows 上跑。
+- 四平台 L1：
+  - 第一次（run 40202449713）只有 Windows 的 `os.console_close` 失敗：探測程式活到 10 秒逾時，關閉事件沒送到。主控台真的關閉時，OS 最晚在 handler 返回時結束程序，所以這是測試手段在 CI 上不成立，不是實作的錯。
+  - Windows 的 Ctrl+C、Ctrl+Break、UTF-8 參數與 Linux 的旗標比對都在 CI 上通過。
+  - 第一次修正（「3 秒後視窗還在就 skip」）在第二次 run 40203783441 沒有觸發，仍失敗。依約定停下，交使用者決定。
+  - 使用者選定 D51：關閉模式下逾時就判為「關閉事件沒送到」並 skip；關閉主控台的路徑在 lan15 的 Windows 實機驗證。
 - 本機 macOS Intel：core 33／33，產品組態的相關測試 20／20。
 
 ## 證據

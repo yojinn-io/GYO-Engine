@@ -66,6 +66,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-25 | D48：OS 子系統其餘的批次現在開始，不等消費端發行；取代 D46 的開放決策 1。<br>預設決定：<br>產品與工具的呼叫端由架構批次一起改（可觀察行為不變，日誌格式逐 byte 不變）；<br>開放決策 7 採 (b)，os-net-errors 只做等價搬移，排在消費端的發行線 PR 合併後；<br>開放決策 2、6、8、9、10、11、12 照 PLAN 第 11 節的建議；<br>計時核心（os-threads-backend、os-wait-backend）排在最後，L2 實機量測在消費端的 lan15 之後安排，判定數值（開放決策 13）在看結果之前先交使用者核准並凍結。<br>分支併入消費端的發行線，動到發行線 PR 差異裡的檔案前，先通知消費端 | 使用者在消費端的發行任務會話說：「我覺得，現在開始  OS 統一子系統的工作比較好。」（消費端 D205）；回到本會話確認時，對「要我現在開始 OS 子系統剩下的批次嗎？」選：「開始，照預設決定」 |
 | 2026-10-25 | D49：os-console-shutdown 開工前的四個決定。<br>檔位：主會話照現在的設定（high），signal handler、主控台 handler、結束旗標三處逐行論證，實作後 1 位 xhigh 唯讀審查者看這三處。<br>error-handling.md 的「平台邊界的例外」不延伸到 engine/os：handler 只寫 lock-free atomic、宣告 noexcept；改寫 os.md Invariant 6 的預告（Design Invariants 節的變更）。<br>連結守衛允許 Windows 上 `gyo_os` 連 shell32（`CommandLineToArgvW`）：放寬面只有這一個名字；定案前做突變檢查，並請 1 位審查者用實際資料核對 AGENTS §14.4 的 1～5，結果交使用者看。<br>開放決策 9 的收尾上限：關閉主控台時 handler 最多等 4 秒（OS 約 5 秒強制結束）；主控台的輸出 code page 在正常結束時還原 | 使用者：「開始 os-console-shutdown。先說明檔位、★ Windows 行為變更的內容，以及需要我同意的地方（error-handling.md 的延伸、連結守衛加 shell32）。」；對四個問題選：「high＋三處論證＋xhigh 審查」「不延伸，改寫 Invariant 6」「同意，先做突變與獨立審查」「等 4 秒、正常結束還原」 |
 | 2026-10-25 | D50：xhigh 審查後的兩個決定。<br>POSIX 上不是 UTF-8 的命令列參數照現狀拒絕（`CommandLineUtf8` 守住「輸出一定是 UTF-8」），記為 Invariant 9 的事前宣告差異。<br>shell32 連結守衛定案（AGENTS §14.4 的 1～5 依審查者的實測修正：收緊面其實有一個，即 Windows 上「正好只有 GYO::Base」改成失敗）；審查者發現 `gyo_expect_links` 會丟掉名字是 CMake 假值的項目，這是既有漏洞，另開後續 | 使用者對「POSIX 上不是 UTF-8 的命令列參數要怎麼處理？」選「照現狀拒絕，宣告為差異」；對「shell32 連結守衛的變更要定案嗎？」選「定案，假值漏洞另開後續」 |
+| 2026-10-26 | D51：`os.console_close` 在關閉模式下，探測程式活到逾時又沒收到要求，就判為「關閉事件沒送到」並回 77（CTest 顯示 Skipped）。依據：主控台真的關閉時，handler 會記錄要求，或 OS 最晚在 handler 返回時結束程序，所以活到逾時只可能是事件沒送到。關閉主控台的路徑改在 lan15 的 Windows 實機驗證（L3 與 Windows 專用突變 os-c4）。這是這個測試第 2 次改判定方法 | 使用者：「照 (b)：關閉模式下，活到逾時又沒收到要求就判為「關閉事件沒送到」並回 77（skip）；推送後再跑一次 L1。關閉路徑在 lan15 實機驗證。」 |
 ## 消費端的壓力摘要
 
 提出需求的消費端是一個線上遊戲，有繪製畫面的程序、權威模擬的伺服器端程序，以及 Go 的轉送程序。以下是與 Engine 有關的事實；未標「實機」的是靜態分析。
@@ -397,6 +398,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 新加的「3 秒後視窗還在就回 5」沒有觸發，所以 3 秒時 `IsWindow` 對那個 handle 回 false：視窗不在了（或那個 handle 本來就不是這個程序看得到的視窗），而主控台的關閉事件沒有送到探測程式，程序也沒有被 OS 結束。
   - 能確定的：活到 10 秒、沒有要求的探測程式，只可能是關閉事件沒有送到（送到的話，handler 會記錄要求，或 OS 會在 handler 返回時結束程序）。實作的關閉分支在 CI 上仍然沒有被驗證到。
   - 依先前對使用者說的「再失敗就停下回報」與 AGENTS §14（同一問題改了判定方法仍沒有結論時停下回報），在這裡停下，交使用者決定下一步。這個測試至今改過 1 次判定方法。
+- 2026-10-26：使用者選 (b)（D51）。探測程式在關閉模式下逾時就印「the close event never came」並回 5，檢查回 77；拿掉第 1 次加的 `IsWindow` 判斷（它包含在新規則裡）。
 - 已知、留給 os-path-utf8-sweep：Match 的 `arena_file=` 與 ui_editor 的 `valid:` 仍用 `path::string()` 印路徑。在 Windows 上，ANSI code page 以外的路徑會在印出時丟例外。以前這種路徑在 argv 就變成 `?`，同樣開不了，所以沒有可用的情況變壞。
 
 ## 未結事項
@@ -421,5 +423,6 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - ~~A1～A3 完成後：通知消費端的發行任務（分支與 commit）。~~ 2026-10-25 完成。
 - ~~os-guard-wide 與 os-process-info 的四平台 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
 - 後續（D50）：`tests/common/time/CMakeLists.txt` 的 `gyo_expect_links` 以 `if(entry AND …)` 過濾，會把名字是 CMake 假值的連結項目（N、NO、OFF、FALSE、IGNORE、0、*-NOTFOUND）丟掉，例如 `shell32 OFF` 也會通過。修正只會收緊，依 AGENTS §14.4 由 time-threads-trace 的 owner 修並事後報告。
-- os-console-shutdown 的四平台 L1 與 Windows 專用突變（os-c4、os-c5、os-c6、os-c8、os-c9、os-g18）。`os.console_shutdown`（Ctrl+Break）、`os.console_ctrl_c`、`os.console_close` 在 CI 上是否能跑，看 L1 是 Passed 還是 Skipped。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過，已通知消費端的發行任務。~~CPU 測試修正後重跑 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
+- os-console-shutdown 的四平台 L1（D51 的修正後重跑）。CI 上 `os.console_shutdown`（Ctrl+Break）與 `os.console_ctrl_c` 已實際通過；`os.console_close` 在 CI 上關閉事件送不到，會是 Skipped。
+- lan15 的 Windows 實機（D51）：用 Ctrl+C、Ctrl+Break、關閉主控台視窗結束 Match，log 最後一行都是 end 紀錄（PLAN 第 7.7 節的 L3）；在實機上跑 `os.console_close`（應為 Passed）與 Windows 專用突變 os-c4、os-c5、os-c6、os-c8、os-c9、os-g18（以及 os-f4、os-f5、os-g16、os-p5）。Windows 11 的預設終端是 Windows Terminal 時，`os.console_close` 可能也是 Skipped，那就用傳統主控台（conhost）視窗跑。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過，已通知消費端的發行任務。~~CPU 測試修正後重跑 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

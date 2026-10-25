@@ -50,6 +50,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 11. **D50**：xhigh 審查後的兩個決定。
     - POSIX 上不是 UTF-8 的命令列參數照現狀拒絕，記為事前宣告的差異。
     - shell32 連結守衛定案；`gyo_expect_links` 丟掉假值名字的既有漏洞另開後續。
+12. **D51**：`os.console_close` 逾時又沒收到要求時判為「關閉事件沒送到」（Skipped）；關閉主控台的路徑在 lan15 的 Windows 實機驗證。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 

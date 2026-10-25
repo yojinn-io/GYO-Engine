@@ -9,9 +9,12 @@
 //                        and SIGTERM handlers.
 //   --close-own-console  like --shutdown, but close the console window the
 //                        process runs in (Windows); exit 5 without one, or
-//                        when the window is still there 3 s after WM_CLOSE
-//                        (a host that ignores it, such as some CI runners and
-//                        pseudo consoles: the close event never came).
+//                        when the wait ends with no request (D51): a closed
+//                        console sends the close event at once and the OS
+//                        ends the process at the latest when the handler
+//                        returns, so a probe alive at the timeout without a
+//                        request never got the event (some CI runners and
+//                        pseudo consoles ignore WM_CLOSE).
 //   --ctrl-c-own-console N
 //                        like --shutdown, but send Ctrl+C N times to the
 //                        process's own console (Windows; started with a new
@@ -85,12 +88,9 @@ int WaitForShutdown(const Trigger trigger, const int count) {
         return 5;
 #endif
     }
-#if defined(_WIN32)
-    HWND console = nullptr;
-#endif
     if (trigger == Trigger::CloseOwnConsole) {
 #if defined(_WIN32)
-        console = ::GetConsoleWindow();
+        const HWND console = ::GetConsoleWindow();
         if (console == nullptr) {
             std::printf("no console window\n");
             return 5;
@@ -101,21 +101,13 @@ int WaitForShutdown(const Trigger trigger, const int count) {
         return 5;
 #endif
     }
-    const auto start = std::chrono::steady_clock::now();
-    const auto until = start + 10s;
-    while (!RequestedShutdown() && std::chrono::steady_clock::now() < until) {
-#if defined(_WIN32)
-        // A closed console sends the close event at once, and the OS ends this
-        // process at the latest when the handler returns; a window still there
-        // without a request means the host ignored WM_CLOSE.
-        if (console != nullptr && std::chrono::steady_clock::now() - start > 3s && ::IsWindow(console)) {
-            std::printf("the console window did not close on WM_CLOSE\n");
+    const auto until = std::chrono::steady_clock::now() + 10s;
+    while (!RequestedShutdown() && std::chrono::steady_clock::now() < until) std::this_thread::sleep_for(10ms);
+    if (!RequestedShutdown()) {
+        if (trigger == Trigger::CloseOwnConsole) {
+            std::printf("the close event never came\n");
             return 5;
         }
-#endif
-        std::this_thread::sleep_for(10ms);
-    }
-    if (!RequestedShutdown()) {
         std::printf("timeout\n");
         return 4;
     }
