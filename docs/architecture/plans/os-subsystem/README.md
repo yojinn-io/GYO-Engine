@@ -1,7 +1,7 @@
 # OS 子系統：分批計畫與進度
 
 更新：2026-10-25。Owner：Engine（新增 `engine/os`；`engine/io` 新增原生後端與路徑契約；`engine/time`、`engine/threads`、`engine/trace`、`engine/platform/sdl` 之後改呼叫 `engine/os`）。
-**狀態：A1～A3 完成**（2026-10-25，四平台 L1 run 40173730672）；接著由消費端做長路徑修正（P1～P5），本計畫的其餘批次排在消費端發行之後（D46）。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
+**狀態：A1～A3 完成**（2026-10-25，四平台 L1 run 40173730672），消費端的 P1～P5 也完成；D48：其餘批次已開始。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
 
 Engine 目前沒有處理 OS 差異的 owner：
 
@@ -37,6 +37,11 @@ Engine 目前沒有處理 OS 差異的 owner：
    - 開放決策 15：A1～A3 併進消費端的發行線 PR（兩個任務，一個 PR）。
    - 同意 A1～A3 的 Delta：新 target `GYO::Os`、os.md 與 io.md 的 Design Invariants 節。
 8. **D47**：`Os::Files::PathToUtf8`／`PathFromUtf8` 回傳 `Base::Result`，不合法的輸入回 InvalidEncoding，不丟例外（修訂 PLAN 第 3.2 節）。
+9. **D48**：其餘批次現在開始，不等消費端發行，取代 D46 的開放決策 1。
+   - 產品呼叫端由架構批次一起改，行為與日誌格式不變。
+   - os-net-errors 只做等價搬移，排在消費端發行線 PR 合併後。
+   - 開放決策 2、6、8～12 照建議。
+   - 計時核心最後做，L2 在 lan15 之後；判定數值事先核准。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -90,7 +95,7 @@ os-plan-docs ─┬─→ os-skeleton ─┐
 
 - 關鍵路徑（消費端的修正之前）：os-skeleton 與 io-contracts 並行，接 os-files-read，約 20～29 h 工時。
 - 整條線：約 100～150 h。
-- 依 D46：A1～A3 以外都排在消費端發行之後；A1～A3 併進消費端的發行線 PR。
+- 依 D48：其餘批次現在開始（取代 D46 的「發行後」）；A1～A3 已併進消費端的發行線 PR。
 
 ## 尚待回答的開放決策
 

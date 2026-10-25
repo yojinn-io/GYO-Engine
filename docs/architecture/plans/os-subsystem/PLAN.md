@@ -648,15 +648,15 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
 
 ## 11. 開放決策
 
-1、14、15 已在核准時決定（D46）；其餘在對應批次開始前回答。
+1、14、15 已在核准時決定（D46）；1 由 D48 改成「現在開始」；2、6、7、8～12 由 D48 決定（7 採 (b)，其餘照建議）；4 照 (a) 維持；13 在 os-wait-backend 開始前回答。
 
-1. **剩餘部件與消費端發行的先後**。**已決定（D46）：(a)。**
+1. **剩餘部件與消費端發行的先後**。**已決定（D46）：(a)。之後由 D48 改成：其餘批次現在開始，不等發行。**
    - (a) A1～A3 在發行前完成，其他全部排在發行之後，順序是 os-guard-wide → os-process-info → os-console-shutdown → os-files-write → os-tool-files → os-trace-writers → os-path-utf8-sweep，計時的兩批最後；time-threads-invariants 與 os-wake-record 不改程式，可以並行。
    - (b) os-process-info 也排進發行前。
    - 取捨：(a) 符合「先完成穩定版本再重構」，hotfix 範圍最小；代價是發行期間產品仍有 OS 分支，但守衛會凍結它們，不會再增加。(b) 產品的 OS 分支提早消失，但多改和日誌契約有關的程式。
    - 證據：D45；`LogFile.cpp:22-84`；`NetworkStatistics.cpp:11-80`。
    - 建議：(a)。
-2. **trace 與產品的寫檔怎麼接到檔案抽象**。
+2. **trace 與產品的寫檔怎麼接到檔案抽象**。**已決定（D48）：照建議。**
    - (a) GYO::Trace 直接 PRIVATE 連 GYO::Os，呼叫寫入原語；trace.md Invariant 7 改成「exactly GYO::Threads and GYO::Os」。
    - (b) 把 engine/io 拆成獨立 target GYO::IO，Trace 經 IFileSystem 寫檔。
    - (c) Trace 不接，維持 ofstream。
@@ -671,35 +671,35 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
    - 取捨：(a) 改動為零，但檔案來源的抽象仍有兩份，pak 或 memory 會被要求實作兩次。(b) 去掉重複，呼叫端只改型別名。(c) 抽象最少，但 IFileSystem 的介面很大，所有 asset 測試的 fake 都要改寫。
    - 建議：先 (a)。等第二個非原生來源出現時，再在 (b) 與 (c) 之間決定；觸發條件寫進 io.md 的 Replacement Criteria。
 5. （刪除）Wait 與 Threads 是否永久例外：D41 已定「Waiter、RoleThread 改呼叫 engine/os」，所以只剩順序。L2 不通過時，依 §14.1 先回報、revert，再由使用者決定下一步。
-6. **WaitBackend 列舉放在哪裡**。
+6. **WaitBackend 列舉放在哪裡**。**已決定（D48）：照建議。**
    - (a) 留在 Time 的公開介面，engine/os 另有 WaitMechanism，Waiter 做 1:1 映射。
    - (b) 移到 engine/os。
    - 取捨：(a) 日誌字串契約仍由 Time 擁有，產品不必改，只是多一個映射。(b) 只有一份定義，但 OS 機制名稱直接變成公開契約。
    - 建議：(a)。
-7. **socket 錯誤分類要不要搬**。
+7. **socket 錯誤分類要不要搬**。**已決定（D48）：(b)，只搬分類（等價），排在消費端發行線 PR 合併後。**
    - (a) 先不搬，等 Windows 實機確認 WSAECONNRESET 真的出現。
    - (b) 搬分類，政策留在消費端。
    - (c) 搬分類，並加上 Windows 的 SIO_UDP_CONNRESET。
    - 取捨：(c) 要碰 socket handle，觸發 Replacement Criteria 1。
    - 建議：(a)；看到實機證據後，再在 (b) 與 (c) 之間決定。
-8. **「執行檔在哪裡」以誰為權威**。
+8. **「執行檔在哪裡」以誰為權威**。**已決定（D48）：照建議。**
    - (a) 兩個不同的事實各自為權威：Os::Process 給執行檔映像的路徑，PlatformSDL::BaseDirectory 給 SDL 的資源基準目錄（macOS app bundle 時是 Resources），文件寫明兩者的差異。
    - (b) BaseDirectory 改成呼叫 engine/os：會改變 macOS app bundle 的語意。
    - 建議：(a)。
-9. **Windows 上哪些主控台事件算結束要求**。
+9. **Windows 上哪些主控台事件算結束要求**。**已決定（D48）：照建議。**
    - (a) CTRL_C、CTRL_BREAK、CTRL_CLOSE 都算；CTRL_CLOSE 時，收尾的上限低於 OS 的約 5 秒。
    - (b) 只算 CTRL_C 與 CTRL_BREAK。
    - 建議：(a)。收尾上限在 os-console-shutdown 開始時寫定。
-10. **系統字型目錄的時點**。D41 已定工具不再判斷 OS，只剩時點。
+10. **系統字型目錄的時點**。D41 已定工具不再判斷 OS，只剩時點。**已決定（D48）：照建議。**
     - (a) 在 os-tool-files 搬。
     - (b) 延到 os-close 之前。
     - 建議：(a)。
-11. **engine/os 內部依 OS 選擇程式碼的方式**。
+11. **engine/os 內部依 OS 選擇程式碼的方式**。**已決定（D48）：照建議。**
     - (a) 每個 OS 一個翻譯單元，由 CMake 依 OS 選檔。
     - (b) 同一檔內用 #if。
     - (c) 新部件用 (a)；Wait 與 Thread 的搬移批先用 (b)，diff 最小，方便審查與 L2 對照，穩定後再評估。
     - 建議：(c)。
-12. **shader pipeline 主機工具**（獨立的 CMake project GyoShaderTools）。
+12. **shader pipeline 主機工具**（獨立的 CMake project GyoShaderTools）。**已決定（D48）：照建議。**
     - (a) 守衛只套用 R1～R3，凍結即可，不連 GYO::Os。
     - (b) 把 engine/os 一起編入。
     - (c) 完全排除。
