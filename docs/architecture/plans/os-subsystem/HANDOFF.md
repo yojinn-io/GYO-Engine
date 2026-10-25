@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide 本機完成、未推送），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info 本機完成、未推送），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -16,6 +16,7 @@
 - 2026-10-25：D48，其餘批次現在開始。本分支併入消費端的發行線（`c4f9430`；含 PR #95、A1～A3、P1～P5），合併後基準 ctest 30／30、守衛通過。順序：先做不碰發行線檔案的 os-guard-wide、os-process-info、time-threads-invariants、os-wake-record，os-net-errors 排在發行線 PR 合併後，計時核心最後。
 - 消費端的發行任務已收到分工、交接內容與 D46（A1～A3 併進它的發行線 PR），等 A1～A3 完成（L1 通過後通知分支與 commit）。
 - 2026-10-25：os-guard-wide 本機完成（本機 commit，未推送）。守衛擴到 apps、tools、build/acceptance、tests，產品、工具與驗收程式各有自己的 allowlist；設定期檢查與標頭衛生測試加入。本機 ctest 31／31、守衛通過、相關突變 16／16 killed（Windows 專用 1 個跳過）。四平台 L1 等推送（要使用者同意）。下一批是 os-process-info。
+- 2026-10-25：使用者說「先不推送，繼續做 os-process-info，做完再和 os-guard-wide 一起跑四平台 L1」。os-process-info 本機完成（本機 commit，未推送）：engine/os 新增 Process，消費端的執行檔路徑、CPU 時間、本地時間改呼叫它。本機 ctest 31／31，產品組態的相關測試 12／12，突變 7／7 killed（Windows 專用 1 個跳過）。下一步：推送並跑四平台 L1（要使用者同意），之後是 os-console-shutdown。
 
 ## 閱讀入口
 
@@ -296,6 +297,39 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - os-g14 第一次是 wrong_failure：檢查正確，但 CMake 把長訊息折行，期望的正則對不上。改成印相對路徑，正則的空白改用 `\s+`。
 - 證據：本機執行輸出（git 忽略）；重跑方式見 [dev_log](../../../dev_logs/2026_10_25_engine_os_guard_wide.zh-Hant.md)。
 
+### os-process-info
+
+- 2026-10-25：開始（high），基準是本分支 `7a673c0`。改到的消費端檔案（`LogFile.hpp`、`LogFile.cpp`、`NetworkStatistics.cpp`、`main.cpp`、產品的 `CMakeLists.txt`、`tests/object_fps_pvp/CMakeLists.txt`、`DiagnosticFileTests.cpp`）都不在消費端發行線 PR 的差異裡；日誌格式不變，所以依 D48 不必事先通知，完成後告知。
+- 實作：
+  - `engine/os/include/engine/os/Process.hpp`：`ExecutablePath`、`ProcessCpuTime`、`CurrentThreadCpuTime`、`ToLocalTime`（`LocalTime`：年月日時分秒與 UTC 偏移秒數）。每次都向 OS 讀。
+  - `src/posix/Process.cpp`、`src/windows/Process.cpp`：照舊實作的 OS 呼叫（GetModuleFileNameW、/proc/self/exe、_NSGetExecutablePath＋realpath、GetProcessTimes／GetThreadTimes、getrusage、clock_gettime、localtime_r／localtime_s）。Windows 會去掉 `\\?\` 前綴（Invariant 5）。
+  - `src/common/Calendar.cpp`：由 localtime 的欄位算 UTC 偏移，不另用 `_get_timezone` 之類的 CRT API，三平台同一套算法。
+  - 錯誤碼：ExecutablePath 的 OS 失敗是 IoFailed（原生碼在 detail；沒有呼叫端依錯誤碼分支），Windows 路徑過長是 TooLarge，沒有 UTF-8 形式是 InvalidEncoding；CPU 與本地時間的失敗是 Unsupported。沒有動 `Files.cpp`（它在發行線 PR 的差異裡），所以錯誤碼沒有共用 Files 的對應表。
+  - 消費端：`LogTimestamp`、`RunningExecutablePath`、`ProcessCpuSeconds`、`CurrentThreadCpuSeconds` 保留名稱與簽名，改成呼叫 engine/os 的薄轉接；`ClientConnection.cpp`（在發行線 PR 裡）和 `match_main.cpp` 都不用改。新增純函式 `FormatLogTimestamp`、`LogFileName`、`LocalWallClock`，`main.cpp` 的預設 log 檔名改用它們。
+  - 連結：`match_domain` 多了 PUBLIC `GYO::Os`（標頭用到 `LocalTime`）；重新編譯 domain 原始碼的 `authority_digest_o0` 也加上 `GYO::Os`。
+- 位元組對照（PLAN 第 7.6 節的驗收）：
+  - Engine 測試（`tests/common/os/ProcessTests.cpp`）在 5 個固定 TZ（UTC0、JST-9、IST-5:30、NST3:30NDT、PST8PDT）×6 個固定時間點下，比對 `ToLocalTime` 的欄位與偏移、以及呼叫端照 `%04d`／`%02d` 與「±hhmm」組出來的字串，和 C runtime 的 `localtime_*`＋`strftime`（`%Y-%m-%dT%H:%M:%S`、`%Y%m%d-%H%M%S`、`%z`）逐 byte 相同。在 Windows 上這就是 PLAN 要求的「確認 UCRT `%z` 的現行輸出」；結果要等 windows-x64 的 L1。
+  - 消費端測試：`FormatLogTimestamp`／`LogFileName` 對固定欄位給出固定的字串。
+  - 執行檔路徑：Engine 測試把舊的各平台查法寫成參照，比對結果相同，且指向測試執行檔本身。
+  - CPU 時間：不會減少、呼叫執行緒做事後會增加、程序的不小於呼叫執行緒的、新執行緒的只算它自己。
+- 事前宣告的差異（Invariant 9；都不改日誌格式）：
+  1. CPU 秒數改由整數奈秒換算成 double。舊碼對 user、kernel 各自換算再相加，最後一位元可能不同；日誌印到小數 3 位，而且量測本身不可重現。
+  2. 執行檔路徑在 Windows 經 UTF-8 轉回，再用 `make_preferred` 換回 `\`，對 GetModuleFileNameW 的一般結果逐字相同。不同的只有：帶 `\\?\` 前綴的模組路徑（前綴被去掉）、含未配對 surrogate 的路徑（現在是錯誤）、POSIX 上不是 UTF-8 的路徑（現在是 InvalidEncoding，D43）。
+  3. 找不到執行檔時的例外訊息改成 `Cannot locate the executable (<OsError>)`。
+  4. 本地時間轉不了時（目前時刻不會發生），印出舊的零值 `std::tm` 的欄位、偏移 +0000；舊碼在 Windows 會印本地偏移。
+- 檢查與經過：
+  - Red：先寫 ProcessTests，在沒有實作時連結失敗。
+  - `object_fps_pvp.cpu` 第一次逾時（60 秒）。原因是環境：本機的產品組態沒有指定建置類型（未最佳化），直接執行要 3 分 17 秒；preset 用 RelWithDebInfo。改成 RelWithDebInfo 重建後 23 秒通過。
+  - 背景的整體建置會 clone 並建置 DXC（shader 主機工具），和本批無關，中途停掉；Client 與 Match 的入口檔用 compile_commands 做語法檢查。
+- L1（本機 macOS Intel）：
+  - core preset：ctest 31／31（gyo_os_tests 新增 6 個案例），守衛通過。
+  - 產品組態（RelWithDebInfo）：gyo_os_tests、os.*、object_fps_pvp 的 cpu、sdl_symbol_guard、diagnostic_isolation、log_contract、mutation_tool、network_statistics、steady_clock、authority_digest，12／12。
+  - `main.cpp`、`match_main.cpp` 只做了語法檢查；Client 與 Match 執行檔沒有連結（要等 DXC 等 shader 主機工具）。
+- allowlist：`apps/object_fps_pvp` 從 15 條縮到 7 條（main.cpp、NetworkStatistics.cpp 的全部，LogFile.cpp 的 R1～R3，LogFile.cpp 的 R4 從 4 降到 2）。
+- 突變：新增 os-p1～os-p6；本機 7／7 killed（含重跑的 os-g7、os-g17），os-p5（Windows 的 GetThreadTimes）跳過。消費端格式化的探索性突變 3 個（零偏移的符號、月份不補零、檔名少了秒）都被消費端測試抓到；它們改的是產品的檔案，不進 Engine 的突變目錄。
+- 證據：本機執行輸出（git 忽略）；重跑方式見 [dev_log](../../../dev_logs/2026_10_25_engine_os_process_info.zh-Hant.md)。
+- 2026-10-25：消費端確認：分析腳本讀的 CPU 值只到小數 3 位，驗收腳本與 log-contract 不讀「Cannot locate the executable」與執行檔路徑字串，所以宣告的差異 1～3 沒有讀取端；這些檔案在發行線上也沒有要動。
+
 ## 未結事項
 
 - ~~使用者核准 PLAN，回答開放決策 1、14、15，並同意 A1～A3 的 Delta。~~ 2026-10-25 完成（D46）。
@@ -308,7 +342,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - ~~os-skeleton 開始時：用空 allowlist 實跑守衛，產生 Engine 的基準，對照盤點。~~ 2026-10-25 完成，和盤點一致。
 - ~~A1～A3 的四平台 L1~~ 2026-10-25 通過（run 40173730672）。
 - ~~os-files-read 的公開介面 xhigh 審查（1 位）：等使用者同意。~~ 2026-10-25 完成，修正見「os-files-read」。
-- Windows 專用的突變 os-f4、os-f5、os-g16（以及消費端的 p1、p4）要在 Windows 機器上執行（CI 不跑突變）。在那之前，Windows 端的檢出力只有 L1 的測試本身。
+- Windows 專用的突變 os-f4、os-f5、os-g16、os-p5（以及消費端的 p1、p4）要在 Windows 機器上執行（CI 不跑突變）。在那之前，Windows 端的檢出力只有 L1 的測試本身。
 - os-files-read 的非 ACP 測試：對「改用 ACP 轉換」這類突變，只要 runner 的 ACP 不是 UTF-8（65001）就有檢出力。測試同時含日文、正體中文與 é，在 1252 與 932 上都有效。新增的 Windows 專用案例「record the process ANSI code page」會印出 `GetACP()`，並檢查它不是 65001；第一次 windows-x64 L1 從它的輸出確認。
 - ~~os-files-write 開始前：先定好命名規則（審查的 finding 15）。~~ 2026-10-25 寫進 os.md 的 Contracts（Names）。第一次 windows-x64 L1 實際撞到之後，`ReadFile` 改名為 `FileReader`。os-files-write 的寫入類名稱照這條規則取。
 - io-contracts 起的既有契約問題（審查的 finding 10）已在 os-files-read 處理：NativeFileSystem 用 `Os::Files::IsAbsolutePath` 拒絕「在這個平台不是絕對路徑」的 file URI 路徑。
@@ -316,5 +350,5 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。
 - ~~os-files-read 開始時：確認 Windows CI runner 的 ACP，選它表示不了的字元做測試。~~ 改成選一般 Western code page 表示不了的日文與正體中文，確認放到第一次 windows-x64 L1（見上）。
 - ~~A1～A3 完成後：通知消費端的發行任務（分支與 commit）。~~ 2026-10-25 完成。
-- os-guard-wide 的四平台 L1：推送要使用者同意。推送後手動觸發（draft PR 不跑 L1）。
+- os-guard-wide 與 os-process-info 的四平台 L1：推送要使用者同意。推送後手動觸發（draft PR 不跑 L1）。windows-x64 上要看 `Os process local time matches the C runtime's fields and %z` 是否通過：失敗時，doctest 會印出 UCRT 的 `%z` 實際輸出，依 PLAN 第 7.6 節當成 Data Contract 問題處理，不改判定。結果（通過或 UCRT 的實際輸出）要通知消費端的發行任務：lan15 會讀 log 的時間戳（消費端 2026-10-25 的回覆）。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

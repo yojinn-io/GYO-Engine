@@ -6,13 +6,14 @@
 # family lives under src/<os> and is selected here (the build layer may branch
 # on the OS).
 add_library(gyo_os STATIC
+    src/common/Calendar.cpp
     src/common/OsError.cpp
     src/common/Paths.cpp
 )
 if(WIN32)
-    target_sources(gyo_os PRIVATE src/windows/Files.cpp)
+    target_sources(gyo_os PRIVATE src/windows/Files.cpp src/windows/Process.cpp)
 else()
-    target_sources(gyo_os PRIVATE src/posix/Files.cpp)
+    target_sources(gyo_os PRIVATE src/posix/Files.cpp src/posix/Process.cpp)
 endif()
 add_library(GYO::Os ALIAS gyo_os)
 

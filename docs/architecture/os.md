@@ -27,7 +27,7 @@ primitives here.
 | `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
 | Files | Read primitives with UTF-8 paths (`FileReader`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later write, create, atomic replace | read: os-files-read (landed); write: os-files-write |
 | System | System font directories | os-tool-files |
-| Process | Executable path, process and thread CPU time, local calendar time | os-process-info |
+| Process | Executable path, process and thread CPU time, local calendar time (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`) | os-process-info (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests | os-console-shutdown |
 | Thread | Thread name and priority hint for the current thread | os-threads-backend |
 | Wait | The wake primitive behind `Time::Waiter` | os-wait-backend |
@@ -69,6 +69,23 @@ Only the components whose batch has landed exist; the others are planned in the 
   - `PathToUtf8` and `PathFromUtf8` return `InvalidEncoding` for a path with no UTF-8 form (an unpaired surrogate
     on Windows, bytes that are not UTF-8 on POSIX) and for text that is not UTF-8 (D47); they never throw.
   - Write times are 0 when the file system keeps none and saturate outside the range of `std::chrono::nanoseconds`.
+- **Process.**
+  - `ExecutablePath` is the running image as an absolute UTF-8 path, read from the OS on every call:
+    `GetModuleFileNameW` on Windows (a `\\?\` or `\\?\UNC\` prefix is removed, Invariant 5), `/proc/self/exe` on
+    Linux, `_NSGetExecutablePath` with links resolved (`realpath`) on macOS; `Unsupported` elsewhere. It answers in
+    `/` form like every engine/os path. It is not the resource directory of an application: a macOS app bundle
+    keeps those apart, and engine/platform/sdl's `BaseDirectory` stays the authority for SDL's resource base
+    (os-subsystem open decision 8).
+  - `ProcessCpuTime` and `CurrentThreadCpuTime` are user plus kernel time in `std::chrono::nanoseconds`:
+    `GetProcessTimes`/`GetThreadTimes` on Windows (scheduler ticks, about 15.6 ms), `getrusage(RUSAGE_SELF)` and
+    `clock_gettime(CLOCK_THREAD_CPUTIME_ID)` on POSIX. A refused query is `Unsupported` with the native error.
+  - `ToLocalTime` converts the whole seconds of a `system_clock` time point (`to_time_t`) with `localtime_r` or
+    `localtime_s`, in the time zone the C runtime last read; it does not call `tzset`. It returns the calendar
+    fields (month 1–12) and the offset from UTC in seconds, computed from those fields, so a caller printing the
+    offset as a sign (`+` for zero), hours and minutes gets the bytes strftime's `%z` gave on every platform. A time
+    point the platform cannot convert is `Unsupported` with the native error (Windows: after the year 3000).
+  - An OS failure of `ExecutablePath` is `IoFailed` (the native error stays in the detail; no caller branches on
+    the code), a path longer than Windows allows is `TooLarge`, and a path with no UTF-8 form is `InvalidEncoding`.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.

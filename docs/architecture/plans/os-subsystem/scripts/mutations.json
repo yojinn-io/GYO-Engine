@@ -577,6 +577,80 @@
       "replace": "",
       "target": "gyo_os_header_tests",
       "expect": "not included by OsHeaderHygieneTests\\.cpp:\\s*engine/os/OsError\\.hpp"
+    },
+    {
+      "id": "os-p1-thread-clock",
+      "what": "The thread CPU time reads the process clock on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Process.cpp",
+      "find": "::clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time)",
+      "replace": "::clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time)",
+      "target": "gyo_os_tests",
+      "cases": "*belongs to the calling thread only*",
+      "expect": "CHECK\\( \\*fresh < \\*process \\) is NOT correct"
+    },
+    {
+      "id": "os-p2-offset-sign",
+      "what": "The UTC offset is computed with the wrong sign (west for east)",
+      "file": "engine/os/src/common/Calendar.cpp",
+      "find": "std::chrono::seconds{asUtc - static_cast<std::int64_t>(time)}",
+      "replace": "std::chrono::seconds{static_cast<std::int64_t>(time) - asUtc}",
+      "target": "gyo_os_tests",
+      "cases": "*local time*",
+      "expect": "FormatOffset\\(local->utcOffset\\) == Strftime\\(\"%z\", reference\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-p3-month-zero-based",
+      "what": "The month keeps std::tm's zero-based tm_mon",
+      "file": "engine/os/src/common/Calendar.cpp",
+      "find": "            .month = month,\n",
+      "replace": "            .month = local.tm_mon,\n",
+      "target": "gyo_os_tests",
+      "cases": "*local time matches*",
+      "expect": "CHECK\\( local->month == reference.tm_mon \\+ 1 \\) is NOT correct"
+    },
+    {
+      "id": "os-p4-rusage-units",
+      "what": "The process CPU time reads getrusage's microseconds as nanoseconds",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Process.cpp",
+      "find": "std::chrono::seconds{time.tv_sec} + std::chrono::microseconds{time.tv_usec}",
+      "replace": "std::chrono::seconds{time.tv_sec} + std::chrono::nanoseconds{time.tv_usec}",
+      "target": "gyo_os_tests",
+      "cases": "*covers the calling thread*",
+      "expect": "CHECK\\( \\*process >= \\*thread \\) is NOT correct"
+    },
+    {
+      "id": "os-p5-windows-thread-times",
+      "what": "The thread CPU time reads the process times on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Process.cpp",
+      "find": "::GetThreadTimes(::GetCurrentThread(), &creation, &exited, &kernel, &user)",
+      "replace": "::GetProcessTimes(::GetCurrentProcess(), &creation, &exited, &kernel, &user)",
+      "target": "gyo_os_tests",
+      "cases": "*belongs to the calling thread only*",
+      "expect": "CHECK\\( \\*fresh < \\*process \\) is NOT correct"
+    },
+    {
+      "id": "os-p6-executable-path",
+      "what": "The executable path is taken from the current directory instead of the image",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/posix/Process.cpp",
+      "find": "    const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(buffer.data(), nullptr), &std::free);",
+      "replace": "    const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(\".\", nullptr), &std::free);",
+      "target": "gyo_os_tests",
+      "cases": "*executable path*",
+      "expect": "stem\\(\\) == \"gyo_os_tests\""
     }
   ]
 }

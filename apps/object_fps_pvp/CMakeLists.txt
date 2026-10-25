@@ -25,7 +25,7 @@ foreach(contract client_v7 runtime_v7)
 endforeach()
 
 gyo_app_add_library(match_domain OUT_TARGET domain SOURCES ${PVP_DOMAIN_SOURCES}
-    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision GYO::Time GYO::Trace
+    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision GYO::Time GYO::Trace GYO::Os
     PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
 gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHost.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Threads)

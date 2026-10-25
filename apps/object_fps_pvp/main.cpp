@@ -14,7 +14,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
-#include <ctime>
 #include <filesystem>
 #include <iostream>
 #include <optional>
@@ -63,16 +62,7 @@ void WriteClientLog(const Engine::Base::LogMessage& message) noexcept {
 
 // Without --log the Client writes logs/client-<local time>.log next to its executable.
 std::filesystem::path DefaultLogPath(const std::filesystem::path& base) {
-    const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::tm local{};
-#if defined(_WIN32)
-    localtime_s(&local, &now);
-#else
-    localtime_r(&now, &local);
-#endif
-    char name[64]{};
-    std::strftime(name, sizeof name, "client-%Y%m%d-%H%M%S.log", &local);
-    return base / "logs" / name;
+    return base / "logs" / fps::pvp::LogFileName("client", fps::pvp::LocalWallClock(std::chrono::system_clock::now()));
 }
 } // namespace
 

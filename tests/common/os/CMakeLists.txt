@@ -1,6 +1,6 @@
 # Tests of the OS layer (docs/architecture/os.md). This is the one common test
 # directory allowed to assert per OS; the boundary guard does not scan it.
-add_executable(gyo_os_tests OsErrorTests.cpp FilesTests.cpp)
+add_executable(gyo_os_tests OsErrorTests.cpp FilesTests.cpp ProcessTests.cpp)
 target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)
 add_test(NAME gyo_os_tests COMMAND gyo_os_tests)
 set_tests_properties(gyo_os_tests PROPERTIES LABELS "cpu" TIMEOUT 60)

@@ -137,6 +137,31 @@ TEST_CASE("PvP log file lines keep their timestamp format and order, appended") 
     }
 }
 
+// The bytes of the timestamp and the default file name for given local fields.
+// That the fields and the offset equal what localtime and strftime's %z gave
+// before is checked per platform by the OS layer's tests (tests/common/os).
+TEST_CASE("PvP log timestamps and file names keep their bytes for given local time fields") {
+    using namespace std::chrono_literals;
+    using Engine::Os::Process::LocalTime;
+    const auto at = [](int year, int month, int day, int hour, int minute, int second, std::chrono::seconds offset) {
+        return LocalTime{year, month, day, hour, minute, second, offset};
+    };
+    CHECK(FormatLogTimestamp(at(2026, 10, 16, 10, 40, 11, 9h), 7, 42) == "2026-10-16T10:40:11.007+0900 mono_ns=42");
+    CHECK(FormatLogTimestamp(at(2026, 1, 15, 8, 30, 0, -(3h + 30min)), 999, 0) ==
+          "2026-01-15T08:30:00.999-0330 mono_ns=0");
+    CHECK(FormatLogTimestamp(at(2026, 1, 15, 17, 30, 59, 5h + 30min), 0, 9'000'000'000'000) ==
+          "2026-01-15T17:30:59.000+0530 mono_ns=9000000000000");
+    CHECK(FormatLogTimestamp(at(2026, 1, 15, 12, 0, 0, 0s), 0, 1) == "2026-01-15T12:00:00.000+0000 mono_ns=1");
+    // An offset with seconds prints its whole minutes, as %z does.
+    CHECK(FormatLogTimestamp(at(1890, 1, 1, 0, 0, 0, 9h + 18min + 59s), 0, 1) == "1890-01-01T00:00:00.000+0918 mono_ns=1");
+    // The fallback fields print what a zero-initialized std::tm printed.
+    CHECK(FormatLogTimestamp(at(1900, 1, 0, 0, 0, 0, 0s), 0, 0) == "1900-01-00T00:00:00.000+0000 mono_ns=0");
+    CHECK(LogFileName("client", at(2026, 10, 16, 10, 40, 11, 9h)) == "client-20261016-104011.log");
+    CHECK(LogFileName("client", at(2026, 1, 5, 8, 3, 9, 0s)) == "client-20260105-080309.log");
+    // The current time converts, so no fallback appears in a log.
+    CHECK(LocalWallClock(std::chrono::system_clock::now()).year >= 2026);
+}
+
 TEST_CASE("PvP movement trace counts an event a producer records after Finish") {
     const auto path = DiagnosticPath("movement-late");
     MovementTraceWriter writer(path);

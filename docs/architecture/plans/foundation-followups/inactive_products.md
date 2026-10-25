@@ -200,3 +200,10 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 - 守衛：`os.boundary_guard` 現在掃 engine、apps、tools、build/acceptance、tests；R4（直接開檔）也套用到 apps 與 tools。`apps/object_fps`、`apps/object_fps_v2`、`tests/object_fps`、`tests/object_fps_v2`、`build/acceptance/object_fps{,_v2}` 實跑都沒有發現，所以沒有 allowlist。重新啟用時若新增 OS 標頭、OS 巨集、列管的 OS API 或直接開檔，會被守衛擋下；真的需要時，在該產品自己的目錄放 `os_boundary_allowlist.txt`，只能列自己目錄下的檔案。
 - 設定期檢查：產品的 target 與目錄不可以有識別 OS 的 compile definition（名稱含 `WIN32`、`APPLE`、`LINUX` 等 OS 字，或以 `$<PLATFORM_ID:...>` 為條件）。未啟用產品現有的 `NOMINMAX` 只設定 Windows 標頭、不識別 OS，可以保留。
 - 選用：無。
+
+### os-process-info 程序事實
+
+狀態：本機完成（2026-10-25），四平台 L1 待推送後執行；未合併。
+
+- 破損：無。新增 `Engine::Os::Process`（`GYO::Os`），沒有改任何既有介面。
+- 選用：未啟用產品若需要執行檔路徑、CPU 時間或本地時間，用 `Engine::Os::Process`（`ExecutablePath`、`ProcessCpuTime`、`CurrentThreadCpuTime`、`ToLocalTime`），不要自己寫 `localtime_s`／`localtime_r` 或各平台的查法；時間戳的格式由產品自己決定。資源目錄仍用 platform/sdl 的 `BaseDirectory`，它和執行檔路徑是不同的事實。

@@ -10,6 +10,7 @@
 // from <string> or <filesystem>, so a macro check would fail without a violation.
 #include "engine/os/Files.hpp"
 #include "engine/os/OsError.hpp"
+#include "engine/os/Process.hpp"
 
 #if defined(_WINDOWS_) || defined(_INC_WINDOWS) || defined(_WINSOCKAPI_) || defined(_WINSOCK2API_)
 constexpr bool kWindowsHeaderReached = true;
