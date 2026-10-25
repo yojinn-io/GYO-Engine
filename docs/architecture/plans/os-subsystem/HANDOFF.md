@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 本機完成、L1 run 40213916104 執行中；io-native-paths 進行中），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 進行中），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -441,6 +441,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 新增 2 條：`osfw-arena-size-unchecked`、`osfw-trace-open-failure-ignored`。後者一開始寫成拿掉 `setstate`，是等價突變（`operator bool` 本身也看 `Good()`），改成讓 `operator bool` 一律回 true。
   - 依消費端 D184，用本機的產品組態（RelWithDebInfo）跑這 34 條：34／34 killed。消費端 runner 拒絕有未提交改動的工作樹，第一次沒有跑；改用 `--allow-dirty` 重跑，跑完確認工作樹只剩預期的改動。
   - 協調：消費端在 `ed63c24` 改了目錄裡 2 條的 expect，提交本批前合併發行線；`csc-r5-uncounted` 由消費端另外處理。
+- 2026-10-26：推送 `31a5849`，四平台 L1：[run 40213916104](https://github.com/yojinn-io/GYO-Engine/actions/runs/40213916104)。全部成功：四平台的 L1（含 Windows 上 FileWriterTests 與 C++ 檔案串流的位元組比對、深路徑）、quick acceptance（toolchain、消費端，含 trace 檔的 CRLF 比對）、CI validation、CI gate。本批完成。
 
 ### io-native-paths
 

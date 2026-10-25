@@ -217,7 +217,7 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 
 ### os-files-write 寫入原語
 
-狀態：本機進行中（2026-10-26）；未合併。
+狀態：完成（2026-10-26，四平台 L1 通過），未合併。
 
 - 破損：無。`NativeFileSystem` 多了寫入與建目錄（`Capabilities()` 的 canOpenWrite、canCreateDirectories 改成 true）；只用讀取的呼叫端不受影響。未啟用產品沒有直接開檔的站點。
 - 選用：未啟用產品若要寫檔或建目錄，經 engine/io 的 `NativeFileSystem`（`Write | CreateIfMissing` 加 `Truncate` 或 `Append`；要和以前的文字模式 `std::ofstream` 相同的位元組時加 `Text`），原生路徑用 `FS::NativeFileUri` 轉成 URI；不要用 fstream 或 `std::filesystem` 的檔案操作。

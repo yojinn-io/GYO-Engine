@@ -88,7 +88,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-guard-wide（A1b） | medium；規則調整 high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_guard_wide.zh-Hant.md)） | 守衛擴到產品、工具、產品測試、驗收程式 |
 | os-process-info | high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_process_info.zh-Hant.md)） | 執行檔路徑、CPU 時間、本地時間 |
 | os-console-shutdown | xhigh（D49：high＋三處論證＋1 位 xhigh 審查） | 完成（2026-10-26；四平台 L1 run 40205158822，關閉主控台在 CI 為 Skipped、留給 lan15；[dev_log](../../../dev_logs/2026_10_25_engine_os_console_shutdown.zh-Hant.md)） | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
-| os-files-write | high＋1 位 xhigh 審查（D52） | 進行中（2026-10-26） | 寫入原語、消費端的 arena 讀取與 trace 寫檔（ReplaceFile 等移到 os-tool-files，D52） |
+| os-files-write | high＋1 位 xhigh 審查（D52） | 完成（2026-10-26；四平台 L1 run 40213916104；[dev_log](../../../dev_logs/2026_10_26_engine_os_files_write.zh-Hant.md)） | 寫入原語、消費端的 arena 讀取與 trace 寫檔（ReplaceFile 等移到 os-tool-files，D52） |
 | io-native-paths（D54） | high；Uri 規則與 Windows UNC 局部 xhigh；ultracode 契約審查 | 進行中（2026-10-26） | file:// 對齊 OS：`..` 交給 OS、UNC、POSIX 的 `//`、非 UTF-8 目前目錄的契約 |
 | os-tool-files | high | 未開始 | 編輯器的原子存檔、路徑比較、系統字型目錄 |
 | os-trace-writers | high | 未開始 | TraceSink 經 engine/os（開放決策 2） |
