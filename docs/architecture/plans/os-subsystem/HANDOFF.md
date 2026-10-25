@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 本機完成、L1 run 40213916104 執行中；io-native-paths 進行中），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -441,6 +441,24 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 新增 2 條：`osfw-arena-size-unchecked`、`osfw-trace-open-failure-ignored`。後者一開始寫成拿掉 `setstate`，是等價突變（`operator bool` 本身也看 `Good()`），改成讓 `operator bool` 一律回 true。
   - 依消費端 D184，用本機的產品組態（RelWithDebInfo）跑這 34 條：34／34 killed。消費端 runner 拒絕有未提交改動的工作樹，第一次沒有跑；改用 `--allow-dirty` 重跑，跑完確認工作樹只剩預期的改動。
   - 協調：消費端在 `ed63c24` 改了目錄裡 2 條的 expect，提交本批前合併發行線；`csc-r5-uncounted` 由消費端另外處理。
+
+### io-native-paths
+
+- 2026-10-26：開始（D54）。基準是本分支 `31a5849`。開工前已預先通知消費端（Client 的資產讀取 P3 會受影響）。
+- 契約的設計（實作時定下的細節，定案前交使用者看）：
+  - 原生路徑與 file URI 的對應仍是各平台相同的純字串規則；路徑照原樣保留，只把 `\\` 換成 `/`。
+  - URI：authority 空或 localhost 是本機；本機時路徑以一個 `/` 開頭是本機路徑，以兩個以上開頭（`file:////host`、`file://///host`，RFC 8089 附錄 E）是 UNC；其他 authority 是 UNC 主機。
+  - 原生：一個 `/` 開頭是本機路徑，兩個是 UNC（`//host`，沒有主機才拒絕），三個以上照 POSIX 視為根目錄 `/`。`\\x`、`C:`、`/C:/x`、命名空間前綴、NUL 照舊拒絕。
+  - UNC 在 Uri 內部存成「authority 空、路徑以 `//host` 開頭」；正規形式印成 `file://host/...`，主機為 localhost 時印成 `file:////localhost/...`。手工把主機放在 authority 的 Uri 也對應到 `//host` + 路徑。
+  - 和開工前的 §14.4 表不同的一點：缺 share 的 UNC（`file://server`、`//server`）不改成 InvalidPath，而是照樣對應，由 OS 決定（再放寬一點；定案時列出）。
+- Red：先改寫 UriTests（23 個案例），在舊實作上 5 個案例失敗、31 個斷言失敗，第 13 個案例對錯誤的 Result 呼叫 `.value()` 而中止。
+- Green：`Uri.cpp` 改寫（`CanonicalFilePath`、`FilePathFromRest`、`ToString`、`FileUriFromNativePath`、`NativePathFromFileUri`），UriTests 23／23；本機 core 33／33（資產、NativeFileSystem 的既有測試照過）。
+- 2026-10-26：使用者去睡，關了 caffeinate，說「你跑完就休眠好了」。停在這裡，本機 commit，未推送。
+- 下一步（依 PLAN 第 7.8b 節與 D54）：
+  1. engine/os：Windows 的 UNC 長路徑改用 `\\?\UNC\`，以 `\\localhost\C$` 測試（CI 做不到就 Skipped）；POSIX `MakeAbsolute` 在目前目錄不是 UTF-8 時回 InvalidEncoding（D43 的明確契約）。
+  2. 呼叫端：AssetPathResolver 的根目錄照原樣保留；POSIX 的 symlink 加 `..` 測試（NativeFileSystem）；重新定位相關突變（io-m1、io-m8、io-m10 等）。
+  3. 突變檢查與 ultracode 契約審查（1 審查者＋1 對抗檢查，兼做 §14.4 的獨立核對），然後把判定與 io.md Invariant 3 的新條文交使用者定案。
+  4. io.md 的路徑契約與 Invariant 3、os.md 的長路徑說明、dev_log。
 
 ## 未結事項
 

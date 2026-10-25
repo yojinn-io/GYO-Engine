@@ -10,7 +10,10 @@ using namespace Engine::IO;
 
 // The file:// rule of docs/architecture/io.md: one mapping between a file URI
 // and a native absolute path, as pure strings, so every case below gives the
-// same result on every platform.
+// same result on every platform. The path is kept as written (io-native-paths,
+// D54): dot segments, repeated and trailing slashes reach the OS, which applies
+// its own rules (symbolic links on POSIX); a "//host/..." path is a UNC path on
+// Windows and the root-relative path the OS makes of it on POSIX.
 
 namespace {
 std::string FilePath(std::string_view text) {
@@ -60,11 +63,17 @@ TEST_CASE("Uri: a drive letter in the authority is rejected") {
     CHECK(FileError("file://c:") == IoErrorCode::InvalidPath);
 }
 
-TEST_CASE("Uri: UNC file URIs are not supported in this round") {
-    CHECK(FileError("file://server/share/x") == IoErrorCode::NotSupported);
-    // The four-slash spelling names the same UNC path, not a local one.
-    CHECK(FileError("file:////server/share/x") == IoErrorCode::NotSupported);
-    CHECK(FileError("file:///\\\\server\\share\\x") == IoErrorCode::NotSupported);
+TEST_CASE("Uri: a UNC file URI names the native path //host/share") {
+    CHECK(FilePath("file://server/share/x") == "//server/share/x");
+    // The four-slash and backslash spellings name the same UNC path.
+    CHECK(FilePath("file:////server/share/x") == "//server/share/x");
+    CHECK(FilePath("file:///\\\\server\\share\\x") == "//server/share/x");
+    // A host alone, or a host and share: the OS decides what it names.
+    CHECK(FilePath("file://server") == "//server");
+    CHECK(FilePath("file://server/share") == "//server/share");
+    // A UNC host named localhost is spelled with four slashes: file://localhost/ is the local machine.
+    CHECK(FilePath("file:////localhost/C$/x") == "//localhost/C$/x");
+    CHECK(FilePath("file:////LocalHost/C$") == "//LocalHost/C$");
 }
 
 TEST_CASE("Uri: long-path and device prefixes are not file paths") {
@@ -81,21 +90,26 @@ TEST_CASE("Uri: a file URI needs a path") {
 
 TEST_CASE("Uri: backslashes in a file URI path are separators") {
     CHECK(FilePath("file:///C:\\x\\y") == "C:/x/y");
-    CHECK(FileError("file:///C:\\a\\..\\..\\x") == IoErrorCode::PathEscapesRoot);
+    CHECK(FilePath("file:///C:\\a\\..\\..\\x") == "C:/a/../../x");
 }
 
-TEST_CASE("Uri: a POSIX path whose first segment looks like a drive has no file URI") {
-    // Its URI would name the drive path instead.
-    CHECK(FileError("file:///./C:/x") == IoErrorCode::InvalidPath);
-    CHECK(FileError("file:///a/../C:/x") == IoErrorCode::InvalidPath);
+TEST_CASE("Uri: a drive is the first segment as written") {
+    // "/C:/x" names the drive path; a drive further in is a POSIX segment.
+    CHECK(FilePath("file:///./C:/x") == "/./C:/x");
+    CHECK(FilePath("file:///a/../C:/x") == "/a/../C:/x");
     CHECK(FilePath("file:///C:x") == "/C:x");
 }
 
-TEST_CASE("Uri: dot segments resolve inside the root and may not escape it") {
-    CHECK(FilePath("file:///a/./b/../c") == "/a/c");
-    CHECK(FilePath("file:///C:/a/../b") == "C:/b");
-    CHECK(FileError("file:///a/../../x") == IoErrorCode::PathEscapesRoot);
-    CHECK(FileError("file:///C:/../x") == IoErrorCode::PathEscapesRoot);
+TEST_CASE("Uri: dot segments, repeated and trailing slashes are kept for the OS") {
+    // The OS resolves them: on POSIX "link/.." is the parent of the link's target.
+    CHECK(FilePath("file:///a/./b/../c") == "/a/./b/../c");
+    CHECK(FilePath("file:///C:/a/../b") == "C:/a/../b");
+    CHECK(FilePath("file:///a/../../x") == "/a/../../x");
+    CHECK(FilePath("file:///C:/../x") == "C:/../x");
+    CHECK(FilePath("file:///a//b/") == "/a//b/");
+    // After an empty authority, two or more slashes start a UNC path (file:////host and
+    // file://///host, RFC 8089 appendix E); a local path has one.
+    CHECK(FilePath("file://///a") == "//a");
 }
 
 TEST_CASE("Uri: a file path keeps UTF-8 bytes and is not percent-decoded") {
@@ -119,10 +133,16 @@ TEST_CASE("Uri: a file URI prints its canonical form, which parses to the same p
     }
     CHECK(Path::ParseUri("file://localhost/Users/x").value().ToString() == "file:///Users/x");
     CHECK(Path::ParseUri("file:///C:").value().ToString() == "file:///C:/");
-    CHECK(Path::ParseUri("file:///a//b/").value().ToString() == "file:///a/b");
+    CHECK(Path::ParseUri("file:///a//b/").value().ToString() == "file:///a//b/");
+    CHECK(Path::ParseUri("file:///a/./b/../c").value().ToString() == "file:///a/./b/../c");
+    CHECK(Path::ParseUri("file:////server/share/x").value().ToString() == "file://server/share/x");
+    CHECK(Path::ParseUri("file://server").value().ToString() == "file://server");
+    CHECK(Path::ParseUri("file:////localhost/C$/x").value().ToString() == "file:////localhost/C$/x");
     // Parsing the canonical form is a fixed point, whatever spelling it came from.
     for (const char* text : {"file:///Users/x", "file://LocalHost/C:/x", "file:///C:\\x\\y", "file:///a/./b/../c",
-                             "file:///a//b/", "file:///tmp/a#b?c", "file:///C:x", "file:///C:"}) {
+                             "file:///a//b/", "file:///tmp/a#b?c", "file:///C:x", "file:///C:", "file://server/share/x",
+                             "file:////server/share", "file:///\\\\server\\share", "file://server",
+                             "file:////localhost/C$/x", "file://///a", "file:///a/../../x"}) {
         const auto first = Path::ParseUri(text);
         REQUIRE_MESSAGE(first, text);
         const auto second = Path::ParseUri(first.value().ToString());
@@ -145,7 +165,7 @@ TEST_CASE("Uri: the loose parser applies the file rule and keeps other schemes a
 }
 
 TEST_CASE("Uri: a file URI that ParseUri rejects is no file URI for the loose parser either") {
-    for (const char* text : {"file://server/share", "file://C:/x", "file:///C:/../x", "file://", "file:////server/x"}) {
+    for (const char* text : {"file://C:/x", "file://", "file://localhost", "file:////?/C:/x"}) {
         const auto uri = Path::ParseUriLoose(text);
         CHECK_MESSAGE(uri.scheme != Path::UriScheme::File, text);
         CHECK_MESSAGE(!Path::NativePathFromFileUri(uri), text);
@@ -200,16 +220,20 @@ TEST_CASE("Uri: a mount never reaches outside its root") {
         REQUIRE_FALSE_MESSAGE(resolved, request);
         CHECK(resolved.error().code == IoErrorCode::PathEscapesRoot);
     }
-    // A rejected file root never becomes a native path.
-    mount.rootUri = Path::ParseUriLoose("file://server/share");
+    // A UNC root works as any other file root, and still keeps its requests inside.
+    mount.rootUri = Path::ParseUriLoose("file://server/share/assets");
     const auto unc = table.Resolve(mount, Path::ParseUriLoose("asset://a.png"));
     REQUIRE(unc);
-    CHECK_FALSE(Path::NativePathFromFileUri(unc.value().nativeUri));
+    const auto native = Path::NativePathFromFileUri(unc.value().nativeUri);
+    REQUIRE(native);
+    CHECK(native.value() == "//server/share/assets/a.png");
+    CHECK(table.Resolve(mount, Path::ParseUriLoose("asset://../secret")).error().code == IoErrorCode::PathEscapesRoot);
 }
 
 TEST_CASE("Uri: a native absolute path becomes a file URI and comes back unchanged") {
     for (const char* native : {"/Users/x", "/", "C:/game/assets", "c:/x", "C:/",
-                               "/Users/\xE8\xB3\x87\xE6\x96\x99/a#b?c"}) {
+                               "/Users/\xE8\xB3\x87\xE6\x96\x99/a#b?c", "/a/link/../x", "/a//b/", "C:/a/../../x",
+                               "//server/share/x", "//server", "//localhost/C$/x", "//a/b"}) {
         const auto uri = Path::FileUriFromNativePath(native);
         REQUIRE_MESSAGE(uri, "FileUriFromNativePath failed for " << native);
         const auto back = Path::NativePathFromFileUri(uri.value());
@@ -223,9 +247,14 @@ TEST_CASE("Uri: a native absolute path becomes a file URI and comes back unchang
     CHECK(Path::FileUriFromNativePath("C:/x").value().ToString() == "file:///C:/x");
 }
 
-TEST_CASE("Uri: a native path is normalized to the '/' form") {
+TEST_CASE("Uri: a native path keeps its segments and takes the '/' form") {
     CHECK(Path::FileUriFromNativePath("C:\\game\\assets").value().path.Str() == "C:/game/assets");
-    CHECK(Path::FileUriFromNativePath("/a//b/./c/../d").value().path.Str() == "/a/b/d");
+    CHECK(Path::FileUriFromNativePath("/a//b/./c/../d").value().path.Str() == "/a//b/./c/../d");
+    CHECK(Path::FileUriFromNativePath("\\\\server\\share\\x").value().path.Str() == "//server/share/x");
+    CHECK(Path::FileUriFromNativePath("\\\\server\\share\\x").value().ToString() == "file://server/share/x");
+    CHECK(Path::FileUriFromNativePath("\\\\localhost\\C$").value().ToString() == "file:////localhost/C$");
+    // Three or more leading slashes are the root, as the OS reads them.
+    CHECK(Path::FileUriFromNativePath("///a").value().path.Str() == "/a");
 }
 
 TEST_CASE("Uri: only native absolute paths become file URIs") {
@@ -235,7 +264,7 @@ TEST_CASE("Uri: only native absolute paths become file URIs") {
     CHECK(NativeError("C:x") == IoErrorCode::InvalidPath);
     CHECK(NativeError("C:") == IoErrorCode::InvalidPath);
     CHECK(NativeError("\\x") == IoErrorCode::InvalidPath);
-    CHECK(NativeError("/a/../../x") == IoErrorCode::PathEscapesRoot);
+    CHECK(NativeError(std::string("/a\0b", 4)) == IoErrorCode::InvalidPath);
     // A POSIX path whose first segment looks like a drive: its URI would name the drive path.
     CHECK(NativeError("/C:/x") == IoErrorCode::InvalidPath);
     CHECK(NativeError("/C:") == IoErrorCode::InvalidPath);
@@ -245,9 +274,9 @@ TEST_CASE("Uri: only native absolute paths become file URIs") {
     CHECK(NativeError("\\\\?\\UNC\\server\\share") == IoErrorCode::InvalidPath);
     CHECK(NativeError("\\\\.\\C:") == IoErrorCode::InvalidPath);
     CHECK(NativeError("\\??\\C:\\x") == IoErrorCode::InvalidPath);
-    // UNC roots are not supported in this round (os-subsystem D46).
-    CHECK(NativeError("//server/share/x") == IoErrorCode::NotSupported);
-    CHECK(NativeError("\\\\server\\share\\x") == IoErrorCode::NotSupported);
+    CHECK(NativeError("//./NUL") == IoErrorCode::InvalidPath);
+    // A UNC path with no host is no path.
+    CHECK(NativeError("//") == IoErrorCode::InvalidPath);
 }
 
 TEST_CASE("Uri: only an absolute file URI has a native path") {
@@ -258,7 +287,7 @@ TEST_CASE("Uri: only an absolute file URI has a native path") {
     CHECK(NoNativePath(relative) == IoErrorCode::InvalidPath);
 }
 
-TEST_CASE("Uri: a file Uri built by hand names a path only in the mapping's normalized form") {
+TEST_CASE("Uri: a file Uri built by hand names a path only in the mapping's canonical form") {
     const auto make = [](std::string path) {
         Path::Uri uri;
         uri.scheme = Path::UriScheme::File;
@@ -268,14 +297,20 @@ TEST_CASE("Uri: a file Uri built by hand names a path only in the mapping's norm
     const auto plain = Path::NativePathFromFileUri(make("/a/b"));
     REQUIRE(plain);
     CHECK(plain.value() == "/a/b");
-    CHECK(NoNativePath(make("/a/../b")) == IoErrorCode::InvalidPath);
+    // Dot segments are kept, so a path with them is canonical; a backslash is not.
+    CHECK(Path::NativePathFromFileUri(make("/a/../b")).value() == "/a/../b");
     CHECK(NoNativePath(make("C:/x\\..\\y")) == IoErrorCode::InvalidPath);
     CHECK(NoNativePath(make("/C:/x")) == IoErrorCode::InvalidPath);
     CHECK(NoNativePath(make(std::string("/a\0b", 4))) == IoErrorCode::InvalidPath);
+    // A host in the authority names the UNC path //host + path.
     auto unc = make("/share/x");
     unc.authority = "server";
-    CHECK(NoNativePath(unc) == IoErrorCode::NotSupported);
+    CHECK(Path::NativePathFromFileUri(unc).value() == "//server/share/x");
     CHECK(unc.ToString() == "file://server/share/x");
+    CHECK(Path::NativePathFromFileUri(make("//server/share/x")).value() == "//server/share/x");
+    auto prefixed = make("/C:/x");
+    prefixed.authority = "?";
+    CHECK(NoNativePath(prefixed) == IoErrorCode::InvalidPath);
     auto local = make("/x");
     local.authority = "localhost";
     const auto localPath = Path::NativePathFromFileUri(local);
