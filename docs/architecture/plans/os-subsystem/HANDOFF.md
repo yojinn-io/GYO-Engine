@@ -392,6 +392,11 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - `os.console_close` 的輸出：`['ready', 'timeout']`，以 4 結束，花了 10 秒。
   - 原因的切分（AGENTS §14.1）：測試手段在這個環境不成立，不是實作。主控台真的關閉時，OS 最晚在 handler 返回時（4 秒）結束程序，探測程式不可能活到 10 秒的逾時；所以 WM_CLOSE 沒有讓主控台關閉，handler 沒收到事件。審查者預告過 Windows Terminal（ConPTY）會這樣；CI 的 runner 也一樣。
   - 修正（測試，第 1 次）：探測程式送出 WM_CLOSE 3 秒後若沒有要求、視窗也還在，就印「the console window did not close on WM_CLOSE」並回 5，檢查回 77（CTest 顯示為 Skipped）。主控台真的關了卻沒收到要求時，程序會被 OS 結束，檢查仍然失敗，所以 os-c4 在手段成立的機器上照樣抓得到。CI 上的缺口：關閉主控台的路徑在 CI 沒有自動驗證，留給 lan15 實機（L3）與 Windows 上的突變。
+- 2026-10-25：推送 `86f30b0`，第二次四平台 L1：[run 40203783441](https://github.com/yojinn-io/GYO-Engine/actions/runs/40203783441)。
+  - 結果：失敗，和第一次相同：只有 windows-x64 的 L1 與 toolchain 列的 `os.console_close` 失敗，輸出仍是 `['ready', 'timeout']`、結束碼 4、10 秒。其餘（含 Windows 的 `os.console_arguments`、`os.console_shutdown`、`os.console_ctrl_c`）都通過。
+  - 新加的「3 秒後視窗還在就回 5」沒有觸發，所以 3 秒時 `IsWindow` 對那個 handle 回 false：視窗不在了（或那個 handle 本來就不是這個程序看得到的視窗），而主控台的關閉事件沒有送到探測程式，程序也沒有被 OS 結束。
+  - 能確定的：活到 10 秒、沒有要求的探測程式，只可能是關閉事件沒有送到（送到的話，handler 會記錄要求，或 OS 會在 handler 返回時結束程序）。實作的關閉分支在 CI 上仍然沒有被驗證到。
+  - 依先前對使用者說的「再失敗就停下回報」與 AGENTS §14（同一問題改了判定方法仍沒有結論時停下回報），在這裡停下，交使用者決定下一步。這個測試至今改過 1 次判定方法。
 - 已知、留給 os-path-utf8-sweep：Match 的 `arena_file=` 與 ui_editor 的 `valid:` 仍用 `path::string()` 印路徑。在 Windows 上，ANSI code page 以外的路徑會在印出時丟例外。以前這種路徑在 argv 就變成 `?`，同樣開不了，所以沒有可用的情況變壞。
 
 ## 未結事項
