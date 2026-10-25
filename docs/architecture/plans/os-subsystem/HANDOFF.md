@@ -472,7 +472,8 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - ~~os-skeleton 開始時：用空 allowlist 實跑守衛，產生 Engine 的基準，對照盤點。~~ 2026-10-25 完成，和盤點一致。
 - ~~A1～A3 的四平台 L1~~ 2026-10-25 通過（run 40173730672）。
 - ~~os-files-read 的公開介面 xhigh 審查（1 位）：等使用者同意。~~ 2026-10-25 完成，修正見「os-files-read」。
-- Windows 專用的突變 os-f4、os-f5、os-g16、os-p5（以及消費端的 p1、p4）要在 Windows 機器上執行（CI 不跑突變）。在那之前，Windows 端的檢出力只有 L1 的測試本身。
+- Windows 專用的突變 os-f4、os-f5、os-g16、os-p5（以及消費端的 p1、p4）要在 Windows 機器上執行（CI 不跑突變）。
+- 2026-10-26：消費端在發行線上跑的全量突變（消費端 D185）：Engine 的目錄 133／133 killed（含本計畫的突變，平台不符的照 platforms 跳過）。產品 654 條裡，8 條歸因於負載、2 條期望訊息過時（`ed63c24` 已改）、1 條是檢出力問題（`csc-r5-uncounted`，`f4ccd5c` 已修，worker 檢查的 47 條 47／47 killed）。兩個 commit 都已併進本分支（`92f6b11`）。Windows 專用突變照消費端 D206 在 lan15 實機跑。在那之前，Windows 端的檢出力只有 L1 的測試本身。
 - os-files-read 的非 ACP 測試：對「改用 ACP 轉換」這類突變，只要 runner 的 ACP 不是 UTF-8（65001）就有檢出力。測試同時含日文、正體中文與 é，在 1252 與 932 上都有效。新增的 Windows 專用案例「record the process ANSI code page」會印出 `GetACP()`，並檢查它不是 65001；第一次 windows-x64 L1 從它的輸出確認。
 - ~~os-files-write 開始前：先定好命名規則（審查的 finding 15）。~~ 2026-10-25 寫進 os.md 的 Contracts（Names）。第一次 windows-x64 L1 實際撞到之後，`ReadFile` 改名為 `FileReader`。os-files-write 的寫入類名稱照這條規則取。
 - io-contracts 起的既有契約問題（審查的 finding 10）已在 os-files-read 處理：NativeFileSystem 用 `Os::Files::IsAbsolutePath` 拒絕「在這個平台不是絕對路徑」的 file URI 路徑。
