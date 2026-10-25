@@ -67,6 +67,8 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-25 | D49：os-console-shutdown 開工前的四個決定。<br>檔位：主會話照現在的設定（high），signal handler、主控台 handler、結束旗標三處逐行論證，實作後 1 位 xhigh 唯讀審查者看這三處。<br>error-handling.md 的「平台邊界的例外」不延伸到 engine/os：handler 只寫 lock-free atomic、宣告 noexcept；改寫 os.md Invariant 6 的預告（Design Invariants 節的變更）。<br>連結守衛允許 Windows 上 `gyo_os` 連 shell32（`CommandLineToArgvW`）：放寬面只有這一個名字；定案前做突變檢查，並請 1 位審查者用實際資料核對 AGENTS §14.4 的 1～5，結果交使用者看。<br>開放決策 9 的收尾上限：關閉主控台時 handler 最多等 4 秒（OS 約 5 秒強制結束）；主控台的輸出 code page 在正常結束時還原 | 使用者：「開始 os-console-shutdown。先說明檔位、★ Windows 行為變更的內容，以及需要我同意的地方（error-handling.md 的延伸、連結守衛加 shell32）。」；對四個問題選：「high＋三處論證＋xhigh 審查」「不延伸，改寫 Invariant 6」「同意，先做突變與獨立審查」「等 4 秒、正常結束還原」 |
 | 2026-10-25 | D50：xhigh 審查後的兩個決定。<br>POSIX 上不是 UTF-8 的命令列參數照現狀拒絕（`CommandLineUtf8` 守住「輸出一定是 UTF-8」），記為 Invariant 9 的事前宣告差異。<br>shell32 連結守衛定案（AGENTS §14.4 的 1～5 依審查者的實測修正：收緊面其實有一個，即 Windows 上「正好只有 GYO::Base」改成失敗）；審查者發現 `gyo_expect_links` 會丟掉名字是 CMake 假值的項目，這是既有漏洞，另開後續 | 使用者對「POSIX 上不是 UTF-8 的命令列參數要怎麼處理？」選「照現狀拒絕，宣告為差異」；對「shell32 連結守衛的變更要定案嗎？」選「定案，假值漏洞另開後續」 |
 | 2026-10-26 | D51：`os.console_close` 在關閉模式下，探測程式活到逾時又沒收到要求，就判為「關閉事件沒送到」並回 77（CTest 顯示 Skipped）。依據：主控台真的關閉時，handler 會記錄要求，或 OS 最晚在 handler 返回時結束程序，所以活到逾時只可能是事件沒送到。關閉主控台的路徑改在 lan15 的 Windows 實機驗證（L3 與 Windows 專用突變 os-c4）。這是這個測試第 2 次改判定方法 | 使用者：「照 (b)：關閉模式下，活到逾時又沒收到要求就判為「關閉事件沒送到」並回 77（skip）；推送後再跑一次 L1。關閉路徑在 lan15 實機驗證。」 |
+| 2026-10-26 | D52：os-files-write 開工前的四個決定。<br>檔位：high，Windows 寫入語意（截斷／附加、共用模式、換行、長路徑）逐行論證，實作後 1 位 xhigh 唯讀審查。<br>換行（os.md Replacement Criteria 5 觸發，交使用者決定）：Windows 維持 CRLF，呼叫端用 engine/io 既有的 `FileOpenMode::Text`，engine/os 的 Windows 寫入把 `\n` 換成 `\r\n`；把換行當成 Data Contract 的決定延到消費端發行之後。<br>範圍：`ReplaceFile`、`SamePathComponent` 移到 os-tool-files（消費端是編輯器）；「Windows 長路徑的 log」驗收移到 os-trace-writers（log 檔的寫入走 TraceSink）；這批驗 arena 的長路徑讀取。<br>消費端突變目錄裡因本批過期的約 32 條，由本計畫重新定位（只對應到新程式碼，不改意圖；expect 要變時逐條寫理由），動之前先通知消費端，以它最新的目錄為基礎 | 使用者對四個問題選：「high＋1 位 xhigh 審查」「維持 CRLF，由 Text 模式轉換」「照建議移到後面的批次」「這裡做，先通知 v7.1」 |
+| 2026-10-26 | D53：xhigh 審查發現的路徑差異（產品與 AssetWatcher 改走 engine/io 後，依 io.md 的 file:// 規則：POSIX 的 `..` 依字面消去、`//` 開頭被當成 UNC、Windows 的 UNC 拒絕、目前目錄不是 UTF-8 時相對路徑失敗、AssetWatcher 的字串在 Windows 上改以 UTF-8 解讀）補進 os-files-write 的事前宣告差異，程式不改，並告知消費端。使用者沒有選擇偏好，採建議的做法（只動文件，可撤回） | 使用者對「審查發現的路徑差異要怎麼處理？」回答「[No preference]」 |
 ## 消費端的壓力摘要
 
 提出需求的消費端是一個線上遊戲，有繪製畫面的程序、權威模擬的伺服器端程序，以及 Go 的轉送程序。以下是與 Engine 有關的事實；未標「實機」的是靜態分析。
@@ -401,6 +403,43 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 2026-10-26：使用者選 (b)（D51）。探測程式在關閉模式下逾時就印「the close event never came」並回 5，檢查回 77；拿掉第 1 次加的 `IsWindow` 判斷（它包含在新規則裡）。
 - 2026-10-26：推送 `c507c59`，第三次四平台 L1：[run 40205158822](https://github.com/yojinn-io/GYO-Engine/actions/runs/40205158822)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。windows-x64 的 `os.console_close` 是 Skipped（CTest 的「did not run」也列出），`os.console_arguments`、`os.console_shutdown`、`os.console_ctrl_c` 是 Passed。本批完成；關閉主控台的路徑留給 lan15 的實機。
 - 已知、留給 os-path-utf8-sweep：Match 的 `arena_file=` 與 ui_editor 的 `valid:` 仍用 `path::string()` 印路徑。在 Windows 上，ANSI code page 以外的路徑會在印出時丟例外。以前這種路徑在 argv 就變成 `?`，同樣開不了，所以沒有可用的情況變壞。
+
+### os-files-write
+
+- 2026-10-26：開始。使用者先要求說明檔位、要動的消費端檔案與需要同意的地方，回答四個問題後定為 D52（high＋1 位 xhigh 審查；Windows 維持 CRLF，用 `FileOpenMode::Text`；`ReplaceFile`、`SamePathComponent` 移到 os-tool-files，Windows 長路徑 log 的驗收移到 os-trace-writers；消費端突變由本計畫重新定位）。基準是本分支 `bbef352`。開工前通知消費端（PR #96 差異裡的 engine/os Files、NativeFileSystem、消費端突變目錄）。
+- 實作：
+  - engine/os：`FileWriter`（`WriteMode::Truncate`／`Append`，`LineEndings::AsWritten`／`Native`）、`CreateDirectories`。POSIX 在 `posix/Files.cpp`，Windows 在 `windows/Files.cpp`（沿用 P1 的 `OsCallPath`，共用模式 `FILE_SHARE_READ | FILE_SHARE_WRITE`，附加用 append-only handle）。
+  - engine/io：`NativeFileSystem` 開放寫入（`Write | CreateIfMissing` 加 `Truncate` 或 `Append`，`Text` 換成平台的換行）與 `CreateDirectories`；`Capabilities()` 的 canOpenWrite、canCreateDirectories 改成 true。新增 `FS::NativeFileUri`（原生 UTF-8 路徑到 file URI，相對路徑先絕對化）。
+  - engine/asset：`AssetWatcher` 的 exists／last_write_time 改經 `NativeFileSystem::Stat`；Engine 的 allowlist 拿掉它的 2 條。
+  - 消費端：新增產品內的 `NativeFiles.hpp`／`.cpp`（`ReadNativeFile`、`NativePathExists`、`CreateNativeDirectories`、`NativeTextFile`），`Arena.cpp`、`LogFile.cpp`（FileSha256 的讀取、log 目錄的建立）、`MatchShotTrace.hpp`、`MatchIngressTrace.hpp`、`TracePaths.hpp` 改用它。錯誤訊息的文字不變。產品的 allowlist 清空，檔案刪除。
+  - 產品測試的目錄新增 `os_boundary_allowlist.txt`（1 條永久：深路徑 arena 測試在 Windows 上替自己的建立與清理加長路徑前綴）。
+- 事前宣告的差異（Invariant 9）：
+  1. `AssetChange::writeTimeNs` 改成檔案系統自己的時間（Unix epoch 起的奈秒）；以前經每個程序取樣一次的時鐘差換算，數值會差到微秒等級。
+  2. 建不了 log 目錄時的例外訊息改成 `Cannot create directory: <path> (<IoError>)`；以前是 `std::filesystem::filesystem_error` 的訊息。
+  3. trace 檔不再經 C++ 的檔案緩衝：位元組在 flush、緩衝滿與 Close 時寫到 OS，寫出的內容相同。
+  4. （D53，xhigh 審查後補宣告）這些站點的原生路徑先轉成 file URI，所以照 io.md 的規則（D44、D46）解析：
+     - POSIX 上的 `..` 依字面消去，不先解析 symlink（`link/../x` 指向 link 所在目錄下的 x，以前是 link 目標的上一層）；
+     - POSIX 上以 `//` 開頭的路徑被當成 UNC 而拒絕（以前 OS 當成 `/`）；
+     - Windows 的 UNC 路徑一律拒絕，目前目錄在 UNC 上時的相對路徑也是；
+     - POSIX 上目前目錄不是 UTF-8 時，相對路徑失敗；
+     - `AssetWatcher::Watch` 收到的字串在 Windows 上以 UTF-8 解讀（以前是 ANSI code page；目前只有測試呼叫）。
+     Client 的資產讀取從 P3 起已是如此；這次第一次波及 Linux 上的 Match 與 AssetWatcher。
+- 已知的缺口：產品漏掉 `Text` 旗標的突變只在 Windows 上會有差，而消費端的突變 runner 沒有 platforms 欄位，所以沒有放進它的目錄；由 Engine 端的 io-w3（Windows）與產品測試「PvP shot and ingress trace files keep the bytes the text-mode stream wrote」在 windows-x64 的 L1 上守住。
+- 突變（Engine）：新增 os-w1～os-w6、io-w1～io-w4；本機 os-w1、os-w4、os-w5、io-w1、io-w2、io-w4 killed，Windows 專用的 os-w2、os-w3、os-w6、io-w3 跳過。A3 的 io-n1-caps、io-n2-write-mode 因唯讀後端的程式碼改掉而過期，照原意圖重新定位（io-n1 改守仍為 false 的 canList；io-n2 改守「讀寫同時開」的拒絕），重跑 killed。
+- xhigh 審查（1 位，D52）：沒有 blocker、major。
+  - Windows 寫入（截斷、共用模式、附加、換行含 `\r\n` 變 `\r\r\n`、迴圈、目錄判定、長路徑）與 POSIX 寫入、engine/io 的寫入規則都沒有缺陷；審查者在本機另寫程式實測 POSIX 的部分。
+  - minor：上面第 4 項的路徑差異沒有宣告 → D53 補宣告。
+  - minor：Windows 的 `CreateDirectories` 會拿 `\\?`、`\\server` 這種根的一部分去建目錄，而且前綴 `C:` 檢查的是那個磁碟的目前目錄 → 改成先算出路徑的根（磁碟、UNC、長路徑形式、裝置），從根之後才逐層建立（os-w10）。根的規則另用 Python 版逐例核對 11 個情況。
+  - nit：`NativeTextFile` 在成功 Close 之後 `operator bool` 是 false，和 std::ofstream 不同 → 改成成功 Close 後仍為 true，第二次 Close 失敗。
+  - nit：新的錯誤訊息用 `path::string()`，Windows 上碰到 ANSI code page 以外的字會丟例外 → 改用 UTF-8。
+  - nit：測試插在 D191 的註解與它的測試之間 → 移開。os.md 把 Windows 的附加寫成「和 C++ 串流相同」，其實 append-only handle 對其他寫入者是原子的、CRT 是每次寫前 seek → 改寫描述，並註明 os-trace-writers 搬移附加的呼叫端時要宣告這個差異。
+  - 補上的測試（審查列的缺口）：第二個寫入者能同時開、Windows 上持有中的檔案不能刪（os-w9）；兩個附加寫入者交錯寫入（os-w7、os-w8）；開目錄只接受 InvalidPath；超過 16 KiB 緩衝的寫入、未 Close 就解構時仍寫出、Linux 的 `/dev/full` 寫入失敗會被回報（osfw-buffer-overflow-dropped、osfw-destructor-no-flush）；深路徑下寫 trace；新的建目錄錯誤訊息。
+  - 沒有處理、記成後續：Capabilities 改成可寫之後，若有人把 NativeFileSystem 掛進 Vfs，寫入會導到它（目前沒有）；`/dev/full` 的檢查在 macOS 上跳過（消費端 runner 沒有 platforms 欄位，所以沒有為 sync 失敗加突變）。
+- 突變（消費端）：
+  - 本批改動的產品檔（Arena.cpp、MatchShotTrace.hpp、MatchIngressTrace.hpp、LogFile.cpp、TracePaths.hpp）裡共有 32 條消費端突變。實際檢查 find 字串，**沒有任何一條過期**（它們指的是邏輯，不在檔案存取的那幾行），所以 D52 預定的「重新定位」不需要改任何既有條目。
+  - 新增 2 條：`osfw-arena-size-unchecked`、`osfw-trace-open-failure-ignored`。後者一開始寫成拿掉 `setstate`，是等價突變（`operator bool` 本身也看 `Good()`），改成讓 `operator bool` 一律回 true。
+  - 依消費端 D184，用本機的產品組態（RelWithDebInfo）跑這 34 條：34／34 killed。消費端 runner 拒絕有未提交改動的工作樹，第一次沒有跑；改用 `--allow-dirty` 重跑，跑完確認工作樹只剩預期的改動。
+  - 協調：消費端在 `ed63c24` 改了目錄裡 2 條的 expect，提交本批前合併發行線；`csc-r5-uncounted` 由消費端另外處理。
 
 ## 未結事項
 

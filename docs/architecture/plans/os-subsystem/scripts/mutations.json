@@ -328,20 +328,20 @@
     },
     {
       "id": "io-n1-caps",
-      "what": "The native backend keeps the default canOpenWrite = true",
+      "what": "The native backend keeps a default capability (canList = true) instead of setting it",
       "file": "engine/io/src/fs/NativeFileSystem.cpp",
-      "find": "        caps.canOpenWrite = false;\n",
+      "find": "        caps.canList = false;\n",
       "replace": "",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
-      "expect": "CHECK_FALSE\\( caps.canOpenWrite \\) is NOT correct"
+      "expect": "CHECK_FALSE\\( caps.canList \\) is NOT correct"
     },
     {
       "id": "io-n2-write-mode",
-      "what": "The native backend opens a file for a write mode",
+      "what": "The native backend opens a mode it does not support (read and write together)",
       "file": "engine/io/src/fs/NativeFileSystem.cpp",
-      "find": "        if (WantsWrite(mode)) return Base::Err(Unsupported(\"opening for writing\"));\n",
-      "replace": "",
+      "find": "            if (Stream::CanRead(mode) || !Stream::Has(mode, FileOpenMode::CreateIfMissing) ||",
+      "replace": "            if (!Stream::Has(mode, FileOpenMode::CreateIfMissing) ||",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "NativeFileSystem opened mode"
@@ -848,6 +848,183 @@
         "ctrl-c"
       ],
       "expect": "interrupt twice: the second request must end the process"
+    },
+    {
+      "id": "os-w1-append-truncates",
+      "what": "Append empties the file on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "(mode == WriteMode::Append ? O_APPEND : O_TRUNC)",
+      "replace": "(O_TRUNC)",
+      "target": "gyo_os_tests",
+      "cases": "*append to a file*",
+      "expect": "append to a file, creating it when missing"
+    },
+    {
+      "id": "os-w2-windows-append-truncates",
+      "what": "Append empties the file on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "const DWORD creation = mode == WriteMode::Append ? OPEN_ALWAYS : CREATE_ALWAYS;",
+      "replace": "const DWORD creation = CREATE_ALWAYS;",
+      "target": "gyo_os_tests",
+      "cases": "*append to a file*",
+      "expect": "append to a file, creating it when missing"
+    },
+    {
+      "id": "os-w3-windows-endings-ignored",
+      "what": "Native line endings write the bytes as given on Windows (no \\r\\n)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (impl_->endings == LineEndings::AsWritten) return WriteAll(impl_->handle, bytes.data(), bytes.size(), impl_->path);",
+      "replace": "    if (impl_->endings != LineEndings::Native || true) return WriteAll(impl_->handle, bytes.data(), bytes.size(), impl_->path);",
+      "target": "gyo_os_tests",
+      "cases": "*same bytes as a C++ file stream*",
+      "expect": "same bytes as a C\\+\\+ file stream"
+    },
+    {
+      "id": "os-w4-mkdir-leaf-only",
+      "what": "CreateDirectories makes only the last directory",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        if (end != path.size() && path[end] != '/') continue;",
+      "replace": "        if (end != path.size()) continue;",
+      "target": "gyo_os_tests",
+      "cases": "*create directories*",
+      "expect": "create directories with their missing parents"
+    },
+    {
+      "id": "os-w5-mkdir-file-accepted",
+      "what": "CreateDirectories takes an existing file for a directory",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "            if (::stat(prefix.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) continue;",
+      "replace": "            continue;",
+      "target": "gyo_os_tests",
+      "cases": "*create directories*",
+      "expect": "create directories with their missing parents"
+    },
+    {
+      "id": "os-w6-windows-no-share",
+      "what": "A Windows writer shares its file with no reader",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE;",
+      "replace": "constexpr DWORD kShareWriter = 0;",
+      "target": "gyo_os_tests",
+      "cases": "*let a reader open*",
+      "expect": "let a reader open a file a writer holds"
+    },
+    {
+      "id": "io-w1-create-directories-dropped",
+      "what": "NativeFileSystem::CreateDirectories reports success without creating",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        auto created = Os::Files::CreateDirectories(native.value());",
+      "replace": "        auto created = Base::Result<void, Os::OsError>{};",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "creates directories and keeps the engine/os cause"
+    },
+    {
+      "id": "io-w2-write-mode-loose",
+      "what": "NativeFileSystem opens a write that neither truncates nor appends",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "(!append && !Stream::Has(mode, FileOpenMode::Truncate))",
+      "replace": "false",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "says what it supports"
+    },
+    {
+      "id": "io-w3-windows-text-ignored",
+      "what": "NativeFileSystem ignores FileOpenMode::Text on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "const auto endings = Stream::Has(mode, FileOpenMode::Text) ? Os::Files::LineEndings::Native",
+      "replace": "const auto endings = false ? Os::Files::LineEndings::Native",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "the platform's line endings"
+    },
+    {
+      "id": "io-w4-watcher-missing-is-error",
+      "what": "AssetWatcher takes a missing file for a probe failure",
+      "file": "engine/asset/src/AssetWatcher.cpp",
+      "find": "        if (status.error().code != IO::IoErrorCode::NotFound) return false;",
+      "replace": "        return false;",
+      "target": "engine_tests",
+      "cases": "AssetWatcher*",
+      "expect": "AssetWatcher: removed"
+    },
+    {
+      "id": "os-w7-append-without-o-append",
+      "what": "Append opens without O_APPEND on POSIX (writes land at the start)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "(mode == WriteMode::Append ? O_APPEND : O_TRUNC)",
+      "replace": "(mode == WriteMode::Append ? 0 : O_TRUNC)",
+      "target": "gyo_os_tests",
+      "cases": "*append*",
+      "expect": "append"
+    },
+    {
+      "id": "os-w8-windows-append-not-append-only",
+      "what": "Append opens a plain write handle on Windows (writes land at the start)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "mode == WriteMode::Append ? (FILE_APPEND_DATA | SYNCHRONIZE) : GENERIC_WRITE",
+      "replace": "GENERIC_WRITE",
+      "target": "gyo_os_tests",
+      "cases": "*append*",
+      "expect": "append"
+    },
+    {
+      "id": "os-w9-windows-share-delete",
+      "what": "A Windows writer lets others delete the file it holds",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE;",
+      "replace": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;",
+      "target": "gyo_os_tests",
+      "cases": "*let a reader open*",
+      "expect": "let a reader open a file a writer holds"
+    },
+    {
+      "id": "os-w10-windows-root-created",
+      "what": "Windows CreateDirectories starts at the first character instead of after the root",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    for (std::size_t end = RootLength(utf8Path) + 1; end <= utf8Path.size(); ++end) {",
+      "replace": "    for (std::size_t end = 1; end <= utf8Path.size(); ++end) {",
+      "target": "gyo_os_tests",
+      "cases": "*create directories*",
+      "expect": "create directories"
     }
   ]
 }

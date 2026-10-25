@@ -214,3 +214,10 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 
 - 破損：無。新增 `Engine::Os::Console`（`GYO::Os`），沒有改任何既有介面。未啟用產品走 SDL 入口，argv 本來就是 UTF-8。
 - 選用：未啟用產品若有不經 SDL 入口的主控台程式，用 `CommandLineUtf8` 取得 UTF-8 參數、`Utf8ConsoleOutput` 讓 Windows 主控台顯示 UTF-8、`InstallShutdownRequests`／`RequestedShutdown` 接結束要求；不要自己寫 `std::signal` 或 `SetConsoleCtrlHandler`。
+
+### os-files-write 寫入原語
+
+狀態：本機進行中（2026-10-26）；未合併。
+
+- 破損：無。`NativeFileSystem` 多了寫入與建目錄（`Capabilities()` 的 canOpenWrite、canCreateDirectories 改成 true）；只用讀取的呼叫端不受影響。未啟用產品沒有直接開檔的站點。
+- 選用：未啟用產品若要寫檔或建目錄，經 engine/io 的 `NativeFileSystem`（`Write | CreateIfMissing` 加 `Truncate` 或 `Append`；要和以前的文字模式 `std::ofstream` 相同的位元組時加 `Text`），原生路徑用 `FS::NativeFileUri` 轉成 URI；不要用 fstream 或 `std::filesystem` 的檔案操作。

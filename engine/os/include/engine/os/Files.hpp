@@ -15,8 +15,8 @@
 // The native file primitives of the OS layer (docs/architecture/os.md). Paths
 // are UTF-8: on Windows they become UTF-16 for the wide APIs, never the ANSI
 // code page. An argument the layer refuses itself (empty, a NUL, invalid
-// UTF-8, a value out of range) fails before any OS call. These are read-only
-// for now; engine/io's native file system is built on them.
+// UTF-8, a value out of range) fails before any OS call. engine/io's native
+// file system is built on them.
 
 namespace Engine::Os::Files {
 
@@ -60,6 +60,52 @@ private:
     explicit FileReader(std::unique_ptr<Impl> impl) noexcept;
     std::unique_ptr<Impl> impl_;
 };
+
+// How a FileWriter opens its file; both create a missing file.
+enum class WriteMode : std::uint8_t {
+    Truncate = 1, // an existing file starts empty
+    Append,       // every write goes to the end of the file
+};
+
+// What a FileWriter does with '\n'.
+enum class LineEndings : std::uint8_t {
+    AsWritten = 1, // the bytes as given, on every platform
+    Native,        // each '\n' becomes the platform's line ending ("\r\n" on
+                   // Windows, '\n' elsewhere), as a C++ text-mode stream writes it
+};
+
+// A native file open for writing. Move-only; the file is closed when the
+// object is destroyed (Close reports a failure the destructor cannot). Other
+// processes may read and write the file while it is open. Nothing is
+// buffered: each Write hands its bytes to the OS (not to the disk). A
+// moved-from or closed FileWriter may only be destroyed or assigned to;
+// calling anything else on it is a Programmer Error.
+class FileWriter final {
+public:
+    [[nodiscard]] static Base::Result<FileWriter, OsError> Open(std::string_view utf8Path, WriteMode mode,
+                                                                LineEndings endings);
+
+    FileWriter(FileWriter&& other) noexcept;
+    FileWriter& operator=(FileWriter&& other) noexcept;
+    FileWriter(const FileWriter&) = delete;
+    FileWriter& operator=(const FileWriter&) = delete;
+    ~FileWriter();
+
+    // Writes all the bytes, or fails. An empty span calls no OS.
+    [[nodiscard]] Base::Result<void, OsError> Write(std::span<const std::byte> bytes);
+    // Closes the file; the writer is closed afterwards even when it fails.
+    [[nodiscard]] Base::Result<void, OsError> Close();
+
+private:
+    struct Impl;
+    explicit FileWriter(std::unique_ptr<Impl> impl) noexcept;
+    std::unique_ptr<Impl> impl_;
+};
+
+// Creates the directory and its missing parents, as
+// std::filesystem::create_directories does; an existing directory is fine. A
+// path (or a parent) that exists as anything else is InvalidPath.
+[[nodiscard]] Base::Result<void, OsError> CreateDirectories(std::string_view utf8Path);
 
 // Both follow symbolic links, so they describe the file a FileReader opens.
 // A missing path is NotFound.

@@ -57,10 +57,16 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
   (`res:///a` is `a`).
 - **Mounts stay inside their root.** `MountTable::Resolve` rejects a request with a `..` segment
   (`PathEscapesRoot`), so a mount never names a path outside its root.
-- **The native backend** (`FS::NativeFileSystem`, os-files-read) serves `file://` URIs through engine/os. It is
-  read-only for now: `Open` takes read modes only, `Exists`, `Stat` and `ToNativePathString` work, every other
-  operation is `NotSupported`, and `Capabilities()` sets every field to say exactly that (the defaults of
-  `FileSystemCapabilities` are mostly true). A missing file is `NotFound`, so a VFS read overlay falls through to
+- **The native backend** (`FS::NativeFileSystem`, os-files-read, os-files-write) serves `file://` URIs through
+  engine/os. `Open` reads, or writes a file it creates when missing: `Write | CreateIfMissing` with `Truncate` or
+  `Append`, and `Text` for the platform's line endings (`\r\n` on Windows, as a text-mode C++ stream writes;
+  without it the bytes go as given). Its write stream has no position and no buffer (each `Write` reaches the OS,
+  `Flush` has nothing left to do), and `Close` reports a failure. Read and write together, overwriting in place
+  and writing an existing file only are `NotSupported`. `Exists`, `Stat`, `CreateDirectories` and
+  `ToNativePathString` work; every other operation is `NotSupported`, and `Capabilities()` sets every field to
+  say exactly that (the defaults of `FileSystemCapabilities` are mostly true).
+  - `FS::NativeFileUri` gives the file URI of a native UTF-8 path for this backend, making a relative path
+    absolute against the current directory first, as the OS would. A missing file is `NotFound`, so a VFS read overlay falls through to
   the next mount. `caseSensitivePaths` is the platform default from engine/os; a volume may differ.
   - The path must also be absolute on the platform the backend runs on (`Os::Files::IsAbsolutePath`): `/x` names
     the root of the current drive on Windows and `C:/x` is relative on POSIX, so the backend refuses them

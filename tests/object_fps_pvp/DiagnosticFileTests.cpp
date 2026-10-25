@@ -3,7 +3,9 @@
 #include "AssertTestSupport.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "RetroFPS/Pvp/NativeFiles.hpp"
 #include "RetroFPS/Pvp/TracePaths.hpp"
+#include "RetroFPS/Pvp/MatchIngressTrace.hpp"
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 
 #include <chrono>
@@ -33,6 +35,11 @@ std::filesystem::path DiagnosticPath(const std::string& name) {
 // and after the move onto the trace sink.
 std::string ReadFile(const std::filesystem::path& path) {
     std::ifstream input(path);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+std::string ReadBinary(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
@@ -234,6 +241,79 @@ TEST_CASE("PvP log file writes a failed assertion before the previous handler ru
     }
     CHECK(rethrown);
     CHECK(ReadLines(path).size() == 2);
+}
+
+// os-files-write moved these files from std::ofstream to engine/io: the same
+// lines, with the platform's line endings ("\r\n" on Windows), as the
+// text-mode stream wrote them, and the same failure messages.
+TEST_CASE("PvP shot and ingress trace files keep the bytes the text-mode stream wrote") {
+    const auto shots = DiagnosticPath("shots");
+    {
+        MatchShotTraceFile file(shots);
+        file.Finish({});
+    }
+    const auto ingress = DiagnosticPath("ingress");
+    {
+        MatchIngressTraceFile file(ingress);
+        file.Finish({});
+    }
+    const auto reference = DiagnosticPath("reference");
+    { std::ofstream(reference) << MatchShotTraceEndLine(0, 0, 0) << '\n'; }
+    CHECK(ReadBinary(shots) == ReadBinary(reference));
+    { std::ofstream(reference) << MatchIngressTraceEndLine(0, 0, 0) << '\n'; }
+    CHECK(ReadBinary(ingress) == ReadBinary(reference));
+    const auto absent = DiagnosticPath("absent") / "x.jsonl";
+    CHECK_THROWS_WITH_AS(MatchShotTraceFile{absent}, doctest::Contains("Cannot open shot trace: "), std::runtime_error);
+    CHECK_THROWS_WITH_AS(MatchIngressTraceFile{absent}, doctest::Contains("Cannot open ingress trace: "),
+                         std::runtime_error);
+}
+
+TEST_CASE("PvP native text files buffer past their buffer, flush when destroyed and report a failed write") {
+    // More than the 16 KiB buffer, in pieces, through Close.
+    const auto large = DiagnosticPath("large");
+    std::string expected;
+    {
+        NativeTextFile file(large);
+        REQUIRE(file);
+        for (int line = 0; line < 2000; ++line) {
+            const std::string text = "line " + std::to_string(line) + std::string(20, 'x');
+            file.Stream() << text << '\n';
+            expected += text + '\n';
+        }
+        CHECK(file.Close());
+        CHECK(file); // still good after a good Close, as std::ofstream
+        CHECK_FALSE(file.Close());
+    }
+    CHECK(ReadFile(large) == expected);
+    // Destroyed without Close: what was written reaches the file.
+    const auto unclosed = DiagnosticPath("unclosed");
+    {
+        NativeTextFile file(unclosed);
+        file.Stream() << "kept\n";
+    }
+    CHECK(ReadFile(unclosed) == "kept\n");
+    // A device that refuses every write (Linux): the trace file reports it.
+    if (std::filesystem::exists("/dev/full")) {
+        NativeTextFile full("/dev/full");
+        REQUIRE(full);
+        full.Stream() << "lost\n" << std::flush;
+        CHECK_FALSE(full.Stream());
+        CHECK_FALSE(full);
+        MatchShotTraceFile shots("/dev/full");
+        CHECK_THROWS_WITH_AS(shots.Finish({}), doctest::Contains("Shot trace failed to write"), std::runtime_error);
+    }
+}
+
+TEST_CASE("PvP log directories that cannot be made name the directory and the cause") {
+    const auto file = DiagnosticPath("not-a-directory");
+    { std::ofstream(file) << "x"; }
+    CHECK_THROWS_WITH_AS(CreateNativeDirectories(file / "logs"), doctest::Contains("Cannot create directory: "),
+                         std::runtime_error);
+    try {
+        CreateNativeDirectories(file / "logs");
+    } catch (const std::runtime_error& error) {
+        CHECK(std::string(error.what()).find("(InvalidPath") != std::string::npos);
+    }
 }
 
 // v7.1 trace-no-overwrite (D191): a restart takes the next free name, and the

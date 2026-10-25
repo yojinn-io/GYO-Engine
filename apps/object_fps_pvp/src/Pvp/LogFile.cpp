@@ -1,5 +1,7 @@
 #include "RetroFPS/Pvp/LogFile.hpp"
 
+#include "RetroFPS/Pvp/NativeFiles.hpp"
+
 #include "engine/base/Assert.hpp"
 #include "engine/base/Sha256.hpp"
 #include "engine/os/Files.hpp"
@@ -8,8 +10,6 @@
 #include <chrono>
 #include <cstdio>
 #include <exception>
-#include <fstream>
-#include <iterator>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -63,10 +63,10 @@ std::filesystem::path RunningExecutablePath() {
 }
 
 std::string FileSha256(const std::filesystem::path& path) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) return "unavailable";
-    const std::vector<char> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-    return Engine::Base::Sha256(std::as_bytes(std::span(bytes)));
+    NativeReadFailure failure;
+    const auto bytes = ReadNativeFile(path, failure);
+    if (!bytes) return "unavailable";
+    return Engine::Base::Sha256(std::as_bytes(std::span(*bytes)));
 }
 
 // Forwards every character to the stream's own buffer and, per completed line,
@@ -105,7 +105,7 @@ private:
 
 namespace {
 Engine::Trace::TraceSink OpenLogSink(const std::filesystem::path& path, std::size_t capacity) {
-    if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path());
+    if (path.has_parent_path()) CreateNativeDirectories(path.parent_path());
     auto sink = Engine::Trace::TraceSink::Open(
         {.path = path, .append = true, .capacity = capacity, .threadName = "pvp-log", .flushEachLine = true});
     if (!sink) throw std::runtime_error("Cannot open log file: " + path.string() + " (" +

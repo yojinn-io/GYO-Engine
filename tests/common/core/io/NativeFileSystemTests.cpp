@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <limits>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -182,16 +183,20 @@ TEST_CASE("NativeFileSystem takes only paths absolute on this platform") {
     CHECK((posix.error().code == IoErrorCode::NotFound) != (drive.error().code == IoErrorCode::NotFound));
 }
 
-TEST_CASE("NativeFileSystem is read-only and says so") {
+// os-files-write opened writing (a file it creates, emptied or appended to) and
+// CreateDirectories; the rest stays NotSupported and Capabilities() says so.
+TEST_CASE("NativeFileSystem says what it supports") {
     const TempTree tree;
     tree.Write("e.bin", "x");
     FS::NativeFileSystem fs;
     const auto uri = tree.Uri("e.bin");
-    CHECK(OpenError(fs, uri, Stream::OpenWriteBinaryTruncate()) == IoErrorCode::NotSupported);
-    CHECK(OpenError(fs, uri, Stream::OpenWriteBinaryAppend()) == IoErrorCode::NotSupported);
-    CHECK(OpenError(fs, uri, Stream::FileOpenMode::Read | Stream::FileOpenMode::CreateIfMissing) ==
-          IoErrorCode::NotSupported);
-    CHECK(fs.CreateDirectories(uri).error().code == IoErrorCode::NotSupported);
+    using Stream::FileOpenMode;
+    CHECK(OpenError(fs, uri, FileOpenMode::Read | FileOpenMode::CreateIfMissing) == IoErrorCode::NotSupported);
+    CHECK(OpenError(fs, uri, FileOpenMode::Read | FileOpenMode::Write | FileOpenMode::Truncate |
+                                 FileOpenMode::CreateIfMissing) == IoErrorCode::NotSupported);
+    // Overwriting in place, or writing an existing file only, is not offered.
+    CHECK(OpenError(fs, uri, FileOpenMode::Write | FileOpenMode::CreateIfMissing) == IoErrorCode::NotSupported);
+    CHECK(OpenError(fs, uri, Stream::OpenWriteBinaryTruncate(false)) == IoErrorCode::NotSupported);
     CHECK(fs.Remove(uri, {}).error().code == IoErrorCode::NotSupported);
     CHECK(fs.Move(uri, uri).error().code == IoErrorCode::NotSupported);
     CHECK(fs.Copy(uri, uri).error().code == IoErrorCode::NotSupported);
@@ -204,16 +209,79 @@ TEST_CASE("NativeFileSystem is read-only and says so") {
     CHECK(caps.canStat);
     CHECK(caps.supportsToNativePath);
     CHECK(caps.supportsMtime);
-    CHECK_FALSE(caps.canOpenWrite);
+    CHECK(caps.canOpenWrite);
+    CHECK(caps.canCreateDirectories);
     CHECK_FALSE(caps.canList);
     CHECK_FALSE(caps.canIterate);
-    CHECK_FALSE(caps.canCreateDirectories);
     CHECK_FALSE(caps.canRemove);
     CHECK_FALSE(caps.canRemoveRecursive);
     CHECK_FALSE(caps.canMove);
     CHECK_FALSE(caps.canCopy);
     CHECK_FALSE(caps.supportsWatch);
     CHECK_FALSE(caps.supportsRecursiveWatch);
+}
+
+std::filesystem::path FromUtf8(const std::string& native) {
+    return std::filesystem::path(std::u8string(native.begin(), native.end()));
+}
+
+std::string ReadBack(const std::string& native) {
+    std::ifstream file(FromUtf8(native), std::ios::binary);
+    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+
+void WriteText(FS::NativeFileSystem& fs, const Path::Uri& uri, const Stream::FileOpenMode mode,
+               const std::string& text) {
+    auto stream = fs.Open(uri, mode);
+    REQUIRE_MESSAGE(stream, (stream ? std::string{} : stream.error().message + " " + stream.error().detail));
+    const auto caps = stream.value()->Caps();
+    CHECK(caps.writable);
+    CHECK_FALSE(caps.readable);
+    CHECK_FALSE(caps.seekable);
+    auto wrote = stream.value()->Write(text.data(), text.size());
+    REQUIRE(wrote);
+    CHECK(wrote.value() == text.size());
+    CHECK(stream.value()->Flush());
+    CHECK(stream.value()->Close());
+    CHECK_FALSE(stream.value()->IsOpen());
+    CHECK(stream.value()->Write(text.data(), text.size()).error().code == IoErrorCode::WriteFailed);
+}
+
+TEST_CASE("NativeFileSystem writes files: truncate, append and the platform's line endings") {
+    const TempTree tree;
+    FS::NativeFileSystem fs;
+    const auto uri = tree.Uri("trace.jsonl");
+    WriteText(fs, uri, Stream::OpenWriteBinaryTruncate(), "0123456789");
+    WriteText(fs, uri, Stream::OpenWriteBinaryTruncate(), "abc\n");
+    CHECK(ReadBack(tree.Native("trace.jsonl")) == "abc\n");
+    WriteText(fs, uri, Stream::OpenWriteBinaryAppend(), "def\n");
+    CHECK(ReadBack(tree.Native("trace.jsonl")) == "abc\ndef\n");
+
+    // Text: the bytes a text-mode C++ stream writes ("\r\n" on Windows).
+    const auto text = tree.Uri("text.jsonl");
+    using Stream::FileOpenMode;
+    WriteText(fs, text, FileOpenMode::Write | FileOpenMode::Truncate | FileOpenMode::CreateIfMissing | FileOpenMode::Text,
+              "a\nb\n");
+    { std::ofstream(FromUtf8(tree.Native("reference.jsonl"))) << "a\nb\n"; }
+    CHECK(ReadBack(tree.Native("text.jsonl")) == ReadBack(tree.Native("reference.jsonl")));
+}
+
+TEST_CASE("NativeFileSystem creates directories and keeps the engine/os cause of a write failure") {
+    const TempTree tree;
+    FS::NativeFileSystem fs;
+    REQUIRE(fs.CreateDirectories(tree.Uri("logs/2026/10")));
+    CHECK(std::filesystem::is_directory(FromUtf8(tree.Native("logs/2026/10"))));
+    WriteText(fs, tree.Uri("logs/2026/10/client.log"), Stream::OpenWriteBinaryAppend(), "line\n");
+
+    auto missing = fs.Open(tree.Uri("absent/x.log"), Stream::OpenWriteBinaryTruncate());
+    REQUIRE_FALSE(missing);
+    CHECK(missing.error().code == IoErrorCode::NotFound);
+    CHECK(missing.error().detail.find("NotFound: ") != std::string::npos);
+    CHECK(missing.error().detail.find("path_bytes=") != std::string::npos);
+
+    auto onFile = fs.CreateDirectories(tree.Uri("logs/2026/10/client.log"));
+    REQUIRE_FALSE(onFile);
+    CHECK(onFile.error().code == IoErrorCode::InvalidPath);
 }
 
 TEST_CASE("NativeFileSystem takes file URIs only") {

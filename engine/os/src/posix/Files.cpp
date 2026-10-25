@@ -163,6 +163,92 @@ Base::Result<std::uint64_t, OsError> FileReader::Tell() const {
     return static_cast<std::uint64_t>(position);
 }
 
+struct FileWriter::Impl {
+    int descriptor = -1;
+    std::string path;
+
+    Impl(const int fd, std::string utf8Path) : descriptor(fd), path(std::move(utf8Path)) {}
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
+    ~Impl() {
+        if (descriptor >= 0) ::close(descriptor);
+    }
+};
+
+FileWriter::FileWriter(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
+FileWriter::FileWriter(FileWriter&& other) noexcept = default;
+FileWriter& FileWriter::operator=(FileWriter&& other) noexcept = default;
+FileWriter::~FileWriter() = default;
+
+// '\n' is the line ending here, so Native writes the bytes as given.
+Base::Result<FileWriter, OsError> FileWriter::Open(const std::string_view utf8Path, const WriteMode mode,
+                                                   LineEndings /*endings*/) {
+    if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    std::string path(utf8Path);
+    // As a C++ file stream opens it (fopen "w" or "a"): created with 0666 less the umask.
+    const int flags = O_WRONLY | O_CREAT | O_CLOEXEC | (mode == WriteMode::Append ? O_APPEND : O_TRUNC);
+    int fd = -1;
+    do {
+        fd = ::open(path.c_str(), flags, 0666);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot open file for writing", utf8Path));
+    }
+    return FileWriter(std::make_unique<Impl>(fd, std::move(path)));
+}
+
+Base::Result<void, OsError> FileWriter::Write(const std::span<const std::byte> bytes) {
+    GYO_ASSERT(impl_ != nullptr);
+    std::size_t done = 0;
+    while (done < bytes.size()) {
+        const std::size_t chunk = (std::min)(bytes.size() - done, kMaximumRead);
+        const ssize_t wrote = ::write(impl_->descriptor, bytes.data() + done, chunk);
+        if (wrote < 0) {
+            const int error = errno;
+            if (error == EINTR) continue;
+            return Base::Err(FromErrno(error, "cannot write file", impl_->path));
+        }
+        done += static_cast<std::size_t>(wrote);
+    }
+    return {};
+}
+
+Base::Result<void, OsError> FileWriter::Close() {
+    GYO_ASSERT(impl_ != nullptr);
+    const int fd = std::exchange(impl_->descriptor, -1);
+    const std::string path = std::move(impl_->path);
+    impl_.reset();
+    // EINTR still closed the descriptor (Linux, macOS); retrying could close another one.
+    if (::close(fd) != 0 && errno != EINTR) {
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot close file", path));
+    }
+    return {};
+}
+
+Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
+    if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    const std::string path(utf8Path);
+    // Every prefix that ends at a '/' or at the end, from the outermost: each
+    // either is a directory already or is made one.
+    for (std::size_t end = 1; end <= path.size(); ++end) {
+        if (end != path.size() && path[end] != '/') continue;
+        const std::string prefix = path.substr(0, end);
+        if (prefix.back() == '/') continue;
+        if (::mkdir(prefix.c_str(), 0777) == 0) continue;
+        const int error = errno;
+        if (error == EEXIST) {
+            struct stat status {};
+            if (::stat(prefix.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) continue;
+            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "exists and is not a directory",
+                                         {NativeErrorDomain::Errno, error}, utf8Path.size()));
+        }
+        return Base::Err(FromErrno(error, "cannot create directory", utf8Path));
+    }
+    return {};
+}
+
 Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     const std::string path(utf8Path);

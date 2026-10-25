@@ -11,6 +11,7 @@
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -31,6 +32,8 @@ constexpr DWORD kMaximumRead = DWORD{1} << 30;
 // FILETIME counts 100 ns intervals since 1601-01-01; the Unix epoch is this many intervals later.
 constexpr std::int64_t kUnixEpochInFileTime = 116444736000000000LL;
 constexpr DWORD kShareAll = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+// A writer shares its file as the C runtime's streams do (_SH_DENYNO): others may read and write, not delete.
+constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE;
 
 OsErrorCode CodeFromWin32(const DWORD error) noexcept {
     switch (error) {
@@ -316,6 +319,158 @@ Base::Result<std::uint64_t, OsError> FileReader::Tell() const {
         return Base::Err(FromWin32(error, "cannot read file position", impl_->path));
     }
     return static_cast<std::uint64_t>(position.QuadPart);
+}
+
+struct FileWriter::Impl {
+    HANDLE handle = INVALID_HANDLE_VALUE;
+    std::string path;
+    LineEndings endings;
+
+    Impl(const HANDLE file, std::string utf8Path, const LineEndings lineEndings)
+        : handle(file), path(std::move(utf8Path)), endings(lineEndings) {}
+    Impl(const Impl&) = delete;
+    Impl& operator=(const Impl&) = delete;
+    ~Impl() {
+        if (handle != INVALID_HANDLE_VALUE) ::CloseHandle(handle);
+    }
+};
+
+FileWriter::FileWriter(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
+FileWriter::FileWriter(FileWriter&& other) noexcept = default;
+FileWriter& FileWriter::operator=(FileWriter&& other) noexcept = default;
+FileWriter::~FileWriter() = default;
+
+Base::Result<FileWriter, OsError> FileWriter::Open(const std::string_view utf8Path, const WriteMode mode,
+                                                   const LineEndings endings) {
+    if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    auto path = OsCallPath(utf8Path);
+    if (!path) return Base::Err(std::move(path.error()));
+    // As the C runtime opens a stream for "w" (CREATE_ALWAYS) or "a"; an append-only handle
+    // puts every write at the end of the file.
+    const DWORD access = mode == WriteMode::Append ? (FILE_APPEND_DATA | SYNCHRONIZE) : GENERIC_WRITE;
+    const DWORD creation = mode == WriteMode::Append ? OPEN_ALWAYS : CREATE_ALWAYS;
+    const HANDLE file = ::CreateFileW(path.value().c_str(), access, kShareWriter, nullptr, creation,
+                                      FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+        const DWORD error = ::GetLastError();
+        // Opening a directory is refused with ERROR_ACCESS_DENIED; report it as POSIX does.
+        if (error == ERROR_ACCESS_DENIED && IsDirectory(path.value())) {
+            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "is a directory",
+                                         {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)},
+                                         utf8Path.size()));
+        }
+        return Base::Err(FromWin32(error, "cannot open file for writing", utf8Path));
+    }
+    return FileWriter(std::make_unique<Impl>(file, std::string(utf8Path), endings));
+}
+
+namespace {
+
+Base::Result<void, OsError> WriteAll(const HANDLE file, const std::byte* data, std::size_t size,
+                                     const std::string_view path) {
+    while (size > 0) {
+        const DWORD chunk = static_cast<DWORD>((std::min)(size, static_cast<std::size_t>(kMaximumRead)));
+        DWORD wrote = 0;
+        if (!::WriteFile(file, data, chunk, &wrote, nullptr)) {
+            const DWORD error = ::GetLastError();
+            return Base::Err(FromWin32(error, "cannot write file", path));
+        }
+        data += wrote;
+        size -= wrote;
+    }
+    return {};
+}
+
+} // namespace
+
+Base::Result<void, OsError> FileWriter::Write(const std::span<const std::byte> bytes) {
+    GYO_ASSERT(impl_ != nullptr);
+    if (impl_->endings == LineEndings::AsWritten) return WriteAll(impl_->handle, bytes.data(), bytes.size(), impl_->path);
+    // As the C runtime's text mode writes: every '\n' becomes "\r\n", whatever precedes it.
+    std::vector<std::byte> translated;
+    translated.reserve(bytes.size() + bytes.size() / 16 + 1);
+    for (const std::byte byte : bytes) {
+        if (byte == std::byte{'\n'}) translated.push_back(std::byte{'\r'});
+        translated.push_back(byte);
+    }
+    return WriteAll(impl_->handle, translated.data(), translated.size(), impl_->path);
+}
+
+Base::Result<void, OsError> FileWriter::Close() {
+    GYO_ASSERT(impl_ != nullptr);
+    const HANDLE file = std::exchange(impl_->handle, INVALID_HANDLE_VALUE);
+    const std::string path = std::move(impl_->path);
+    impl_.reset();
+    if (!::CloseHandle(file)) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot close file", path));
+    }
+    return {};
+}
+
+namespace {
+
+bool IsDriveLetter(const char c) noexcept {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+// The position after the next separator at or after from, or the size.
+std::size_t AfterSeparator(const std::string_view path, std::size_t from) noexcept {
+    while (from < path.size() && !IsSlash(path[from])) ++from;
+    return from < path.size() ? from + 1 : path.size();
+}
+
+// The length of the root a path starts with, which CreateDirectories never
+// makes: "C:/" or "C:" (drive), "/" (the current drive's root),
+// "//server/share/" (UNC), "//?/C:/" or "//?/UNC/server/share/" (long-path
+// forms) and "//./device/". 0 for a relative path. Either separator counts.
+std::size_t RootLength(const std::string_view path) noexcept {
+    if (path.size() >= 2 && IsDriveLetter(path[0]) && path[1] == ':') {
+        return path.size() >= 3 && IsSlash(path[2]) ? 3 : 2;
+    }
+    if (path.empty() || !IsSlash(path[0])) return 0;
+    if (path.size() < 2 || !IsSlash(path[1])) return 1;
+    std::size_t at = 2;
+    if (path.size() >= 4 && (path[2] == '?' || path[2] == '.') && IsSlash(path[3])) {
+        at = 4;
+        if (path.size() >= at + 2 && IsDriveLetter(path[at]) && path[at + 1] == ':') {
+            return path.size() >= at + 3 && IsSlash(path[at + 2]) ? at + 3 : at + 2;
+        }
+        if (path[2] == '.' || path.size() < at + 4 || path.substr(at, 3) != "UNC" || !IsSlash(path[at + 3])) {
+            return AfterSeparator(path, at);
+        }
+        at += 4;
+    }
+    // server, then share.
+    return AfterSeparator(path, AfterSeparator(path, at));
+}
+
+} // namespace
+
+Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
+    if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    // Every prefix after the root that ends at a separator or at the end, from
+    // the outermost: each either is a directory already or is made one, as
+    // std::filesystem::create_directories does.
+    for (std::size_t end = RootLength(utf8Path) + 1; end <= utf8Path.size(); ++end) {
+        if (end != utf8Path.size() && !IsSlash(utf8Path[end])) continue;
+        const std::string_view prefix = utf8Path.substr(0, end);
+        if (IsSlash(prefix.back())) continue;
+        auto native = OsCallPath(prefix);
+        if (!native) return Base::Err(std::move(native.error()));
+        if (IsDirectory(native.value())) continue;
+        if (::CreateDirectoryW(native.value().c_str(), nullptr)) continue;
+        const DWORD error = ::GetLastError();
+        if (error == ERROR_ALREADY_EXISTS) {
+            // Another process may have made it meanwhile.
+            if (IsDirectory(native.value())) continue;
+            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "exists and is not a directory",
+                                         {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)},
+                                         utf8Path.size()));
+        }
+        return Base::Err(FromWin32(error, "cannot create directory", utf8Path));
+    }
+    return {};
 }
 
 Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {

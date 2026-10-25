@@ -25,7 +25,7 @@ primitives here.
 | Component | What it gives | Status |
 |---|---|---|
 | `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
-| Files | Read primitives with UTF-8 paths (`FileReader`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later write, create, atomic replace | read: os-files-read (landed); write: os-files-write |
+| Files | Read and write primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later atomic replace and path-component comparison | read: os-files-read; write: os-files-write (landed); replace: os-tool-files (D52) |
 | System | System font directories | os-tool-files |
 | Process | Executable path, process and thread CPU time, local calendar time (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`) | os-process-info (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
@@ -69,6 +69,21 @@ Only the components whose batch has landed exist; the others are planned in the 
   - `PathToUtf8` and `PathFromUtf8` return `InvalidEncoding` for a path with no UTF-8 form (an unpaired surrogate
     on Windows, bytes that are not UTF-8 on POSIX) and for text that is not UTF-8 (D47); they never throw.
   - Write times are 0 when the file system keeps none and saturate outside the range of `std::chrono::nanoseconds`.
+  - `FileWriter` opens a file it creates when missing, either emptied (`WriteMode::Truncate`) or appended to
+    (`WriteMode::Append`, every write at the end, also after another process's writes). Truncate opens as a C++
+    file stream does (POSIX `open` with 0666 less the umask; Windows `GENERIC_WRITE` with `CREATE_ALWAYS`).
+    Append is `O_APPEND` on POSIX, as there; on Windows it is an append-only handle (`FILE_APPEND_DATA`,
+    `OPEN_ALWAYS`), atomic against other appenders, where the C runtime seeks to the end before each write; the
+    batch that moves an appending caller (os-trace-writers) declares that difference. Other processes may read and write
+    the file meanwhile, not delete it (the C runtime's `_SH_DENYNO` on Windows). Nothing is buffered: each `Write`
+    hands all its bytes to the OS, not to the disk. A directory is `InvalidPath`; `Close` reports a failure the
+    destructor cannot. Long paths on Windows go through the same `\\?\` form as reads.
+  - Line endings (D52): `LineEndings::AsWritten` writes the bytes as given; `LineEndings::Native` turns each `\n`
+    into `\r\n` on Windows, whatever precedes it, and writes the bytes unchanged elsewhere, which is what a
+    text-mode C++ stream writes (Invariant 9). Replacement Criterion 5 was met here and put to the user, who kept
+    the bytes; making line endings a Data Contract is a later decision.
+  - `CreateDirectories` makes the directory and its missing parents, as `std::filesystem::create_directories`
+    does; an existing directory is fine, and a path or parent that exists as anything else is `InvalidPath`.
 - **Process.**
   - `ExecutablePath` is the running image as an absolute UTF-8 path, read from the OS on every call:
     `GetModuleFileNameW` on Windows (a `\\?\` or `\\?\UNC\` prefix is removed, Invariant 5), `/proc/self/exe` on

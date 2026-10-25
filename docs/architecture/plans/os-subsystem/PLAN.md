@@ -450,12 +450,12 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 - 白話：擴充寫檔、建目錄、原子取代等原語，讓消費端剩下的直接開檔都改走 engine/io。
 - 依賴：os-files-read、消費端的長路徑修正。
 - 做：
-  - WriteFile（truncate／append）、CreateDirectories、ReplaceFile、SamePathComponent；NativeFileSystem 開放對應方法與 Capabilities。
+  - WriteFile（truncate／append）、CreateDirectories；NativeFileSystem 開放對應方法與 Capabilities。（D52：ReplaceFile、SamePathComponent 移到 os-tool-files。）
   - 改 `Arena.cpp:64、127`、`LogFile.cpp:87、129`、`MatchShotTrace.hpp:286`、`MatchIngressTrace.hpp:255`、`AssetWatcher.cpp:178、186`。
   - 換行：寫出的位元組必須和現在的文字模式 ofstream 相同（Windows 為 CRLF），做法依開放決策 2。
   - 依消費端 D184 重新定位約 29 個消費端突變。
 - 驗收：
-  - L1：既有測試不改判定；Windows 長路徑的 arena 與 log 案例 Red→Green。
+  - L1：既有測試不改判定；Windows 長路徑的 arena 案例 Red→Green。（D52：log 的案例移到 os-trace-writers，因為 log 檔的寫入走 TraceSink。）
   - L3：Windows 深路徑（P 約 235）下寫得出 log、讀得到 arenas.json。
 
 ### 7.9 os-tool-files：編輯器的檔案服務與系統字型目錄（high，6～9 h）
@@ -467,6 +467,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - DocumentSession.cpp:229。
   - ImGuiSdlRendererHost.cpp:39-111 的系統字型目錄，改由 engine/os 提供 FontDirectories；字型檔名的選擇留在工具。
   - 和延後的 AtomicWriteFile（輸入與呈現計畫 IP-5）協調，只留一份實作。
+  - （D52 從 os-files-write 移來）engine/os 的 ReplaceFile（原子取代）、SamePathComponent（路徑成分的比較），NativeFileSystem 開放對應方法。
 - 驗收：L1：工具既有測試不改判定；ReplaceFile 能覆蓋既有檔，失敗時原檔不變。
 
 ### 7.10 os-trace-writers：trace 寫檔（high，3～5 h）
@@ -474,6 +475,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 - 白話：讓 trace 寫檔也走 engine/os，寫出的位元組（含 Windows 的 CRLF）、喚醒與順序都不變。
 - 依賴：os-files-write；依開放決策 2。
 - 做：改 `TraceSink.cpp:102`；修訂 trace.md Invariant 7 與 `tests/common/trace/CMakeLists.txt:11`，依 §14.4 先寫 1～5 點並取得同意；更新 tt2-* 突變。
+- （D52 從 os-files-write 移來）驗收加上：Windows 長路徑的 log 案例 Red→Green（log 檔經 TraceSink 寫）。
 - 驗收：L1：TraceSinkTests 不改判定；Windows 長路徑 trace 案例 Red→Green；tt2 突變照舊被殺。
 
 ### 7.11 os-path-utf8-sweep：剩下的窄字串路徑（high，8～12 h）

@@ -1,0 +1,6 @@
+# Product-test sites the OS boundary guard reports (docs/architecture/os.md). Owner: object_fps_pvp.
+# Format: path rule count  # reason. Only shrinks.
+
+# Permanent: the deep-folder arena test spells the Windows long-path prefix out for its own setup and cleanup,
+# since the standard library has no long-path handling on Windows; the product code under test does not.
+tests/object_fps_pvp/ArenaDigestTests.cpp R2 1  # long-path prefix for the test's own setup (permanent)

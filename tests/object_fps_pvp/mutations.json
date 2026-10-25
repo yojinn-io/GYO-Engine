@@ -6694,6 +6694,46 @@
       "replace": "constexpr auto ClosingLeaveTimeout=std::chrono::milliseconds(1500);",
       "check": "close_timing",
       "expect": "FAILED \\{'mode': 'stalled'"
+    },
+    {
+      "id": "osfw-arena-size-unchecked",
+      "batch": "os-files-write",
+      "what": "An arena larger than 256 KiB is read",
+      "file": "apps/object_fps_pvp/src/Pvp/NativeFiles.cpp",
+      "find": "    if (status.value().sizeBytes > maxBytes) {",
+      "replace": "    if (false) {",
+      "check": "cpu",
+      "expect": "An arena keeps its open and size messages"
+    },
+    {
+      "id": "osfw-trace-open-failure-ignored",
+      "batch": "os-files-write",
+      "what": "A trace file that did not open counts as open",
+      "file": "apps/object_fps_pvp/src/Pvp/NativeFiles.cpp",
+      "find": "NativeTextFile::operator bool() const noexcept { return buffer_->Good() && static_cast<bool>(stream_); }",
+      "replace": "NativeTextFile::operator bool() const noexcept { return true; }",
+      "check": "cpu",
+      "expect": "keep the bytes the text-mode stream wrote"
+    },
+    {
+      "id": "osfw-buffer-overflow-dropped",
+      "batch": "os-files-write",
+      "what": "A character that fills the trace buffer is dropped",
+      "file": "apps/object_fps_pvp/src/Pvp/NativeFiles.cpp",
+      "find": "            *pptr() = traits_type::to_char_type(character);\n            pbump(1);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP native text files buffer past their buffer"
+    },
+    {
+      "id": "osfw-destructor-no-flush",
+      "batch": "os-files-write",
+      "what": "A trace file destroyed without Close loses its buffer",
+      "file": "apps/object_fps_pvp/src/Pvp/NativeFiles.cpp",
+      "find": "    if (buffer_ && buffer_->Open()) static_cast<void>(buffer_->Close());\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP native text files buffer past their buffer"
     }
   ]
 }

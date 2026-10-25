@@ -51,6 +51,12 @@ Engine 目前沒有處理 OS 差異的 owner：
     - POSIX 上不是 UTF-8 的命令列參數照現狀拒絕，記為事前宣告的差異。
     - shell32 連結守衛定案；`gyo_expect_links` 丟掉假值名字的既有漏洞另開後續。
 12. **D51**：`os.console_close` 逾時又沒收到要求時判為「關閉事件沒送到」（Skipped）；關閉主控台的路徑在 lan15 的 Windows 實機驗證。
+13. **D52**：os-files-write 的四個決定。
+    - 檔位：high，Windows 寫入語意逐行論證，實作後 1 位 xhigh 審查。
+    - 換行：Windows 維持 CRLF（`FileOpenMode::Text`，engine/os 轉換）；換行的 Data Contract 決定延到消費端發行後。
+    - `ReplaceFile`、`SamePathComponent` 移到 os-tool-files；Windows 長路徑 log 的驗收移到 os-trace-writers。
+    - 消費端突變目錄的重新定位由本計畫做，先通知消費端。
+14. **D53**：os-files-write 的路徑差異（產品改走 engine/io 的 file:// 規則後的 5 項）補進事前宣告；程式不改。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -81,7 +87,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-guard-wide（A1b） | medium；規則調整 high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_guard_wide.zh-Hant.md)） | 守衛擴到產品、工具、產品測試、驗收程式 |
 | os-process-info | high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_process_info.zh-Hant.md)） | 執行檔路徑、CPU 時間、本地時間 |
 | os-console-shutdown | xhigh（D49：high＋三處論證＋1 位 xhigh 審查） | 完成（2026-10-26；四平台 L1 run 40205158822，關閉主控台在 CI 為 Skipped、留給 lan15；[dev_log](../../../dev_logs/2026_10_25_engine_os_console_shutdown.zh-Hant.md)） | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
-| os-files-write | high | 未開始 | 寫入原語、消費端的 log／arena／trace 寫檔 |
+| os-files-write | high＋1 位 xhigh 審查（D52） | 進行中（2026-10-26） | 寫入原語、消費端的 arena 讀取與 trace 寫檔（ReplaceFile 等移到 os-tool-files，D52） |
 | os-tool-files | high | 未開始 | 編輯器的原子存檔、路徑比較、系統字型目錄 |
 | os-trace-writers | high | 未開始 | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high | 未開始 | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |

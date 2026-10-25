@@ -15,12 +15,12 @@
 // an I/O failure does (the caller checks Good()).
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/MatchIngressLedger.hpp"
+#include "RetroFPS/Pvp/NativeFiles.hpp"
 
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <map>
 #include <optional>
 #include <ostream>
@@ -252,18 +252,17 @@ private:
 // The Match's file: opening and writing fail loudly (the Match then exits 1).
 class MatchIngressTraceFile final {
 public:
-    explicit MatchIngressTraceFile(const std::filesystem::path& path) : file_(path), writer_(file_) {
+    explicit MatchIngressTraceFile(const std::filesystem::path& path) : file_(path), writer_(file_.Stream()) {
         if (!file_) throw std::runtime_error("Cannot open ingress trace: " + path.string());
     }
     void Write(const IngressRecords& drained) { writer_.Write(drained); }
     void Finish(const IngressRecords& last) {
         writer_.Finish(last);
-        file_.close();
-        if (!file_) throw std::runtime_error("Ingress trace failed to close");
+        if (!file_.Close()) throw std::runtime_error("Ingress trace failed to close");
     }
 
 private:
-    std::ofstream file_;
+    NativeTextFile file_;
     MatchIngressTraceWriter writer_;
 };
 
