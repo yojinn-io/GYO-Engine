@@ -48,7 +48,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - (b) 把兩個分支的判斷抽成純函式做單元測試；判斷有測，接線（是否真的呼叫）沒有執行期測試。
   - (c) 不做執行期測試，交給 `lan15-windows` 的 L3（拔線時 Windows 真的會丟 WSAECONNRESET），只記錄。
   - 建議 (b)：不在產品加測試入口；接線由既有的靜態檢查（暫時性判斷在兩個 Failure 之前）與 L3 補上。
-- **等你決定（發行線）**：`windows-long-path`：A1～A3 已完成（`claude/trusting-joliot-f13b78` 的 `d56a8fc`，L1 成功），P1～P5 等你說開工；照 D198，發行線要在 PR #95 合併後才切出；`quick-close` 的做法與事前宣告的門檻（[quick-close.md](quick-close.md)，建議 q1，門檻草案在文件裡）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
+- **進行中（發行線）**：`windows-long-path` 的 P1～P5 程式與自動驗收完成（D199；分支 `claude/pvp-v71-release`，從 PR #95 的 `a0e6668` 切出並併進 A1～A3；Red run 40176646387 在 windows-x64 如預期失敗，Green run 40177623030 待確認；dev_log `docs/dev_logs/2026_10_25_pvp_v71_windows_long_path.zh-Hant.md`）。剩下：實機在 P＝156 與 P 約 210 各啟動一次（需要你）、Windows 專用突變 5 個。發行線的 PR 還沒開。
+- **等你決定（發行線）**：`quick-close` 的做法與事前宣告的門檻（[quick-close.md](quick-close.md)，建議 q1，門檻草案在文件裡）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
 - **等你核准**：`event-watch-overlap`（K11）的測試判定變更（Engine 的 `EventWatchTests.cpp`；有放寬面，§14.4 要核准）。改寫已做好但**沒有提交**，patch 在 `docs/architecture/plans/input-and-present/patches/k11-event-watch-overlap.patch`；1～5、突變與獨立核對見 dev_log 的 event-watch-overlap 一節。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
 - **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。`contract-readers`（含 K7）完成。`trace-no-overwrite`（含 K8）完成。`analyzer-converge`（D192）完成。`token-tests` 完成。`client-path-tests` 的 C17-3 與他版計數完成，K9 等使用者決定（見「等你決定」）。`event-watch-overlap`（K11）的改寫等使用者核准（見「等你核准」）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
@@ -61,7 +62,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 不做：INVENTORY 的 G2（D159）。
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-24，outage-resync 合併（PR #90）。
+- **最後更新**：2026-10-25，windows-long-path 的 P1～P5（D199）。
 
 ## 閱讀入口
 
@@ -188,6 +189,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D196 | （2026-10-25）L4 的子決策定案：先開 `engine/os`，`IFileSystem` 的原生實作放在那裡（`engine/io` 只留中立抽象），路徑字串改成 UTF-8，現在就修 `ParseUri` 的 `file://` 規則。這一片由 OS 子系統任務在 PLAN 經使用者核准後實作，就是 windows-long-path 的修正；v7.1 不再自己實作，`lan15-windows` 等它完成。產品 `PvpApplication.cpp` 會和 PR #95 碰到同一個檔案，合併順序之後協調。細節見 [windows-long-path.md](windows-long-path.md) 的 D196 一節 | 使用者在 OS 子系統的會話：「你要先開engine/os，然後把io下嗎相關系統的實作移動過去。」「現在改成 UTF-8」「現在就修 ParseUri」「你的目標不是修路徑，你的目標是整理OS的子系統。」（經該會話轉達） |
 | D197 | （2026-10-25）分工更正：OS 子系統任務只做架構（`engine/os` 與從 `engine/io` 移過去的系統實作），windows-long-path 的修正與驗收由 v7.1（本會話）在架構完成後實作。產品任務和架構分開。界線和那個會話確認後記在 [windows-long-path.md](windows-long-path.md) 的 D197 一節 | 使用者：「你來做！！！，那邊只修架構，你等那邊修好了，就做。產品任務和架構分開。」 |
 | D198 | （2026-10-25）OS 子系統的 PLAN 核准（Engine D46）。對 v7.1：A1～A3（`engine/os` 骨架、`engine/io` 契約、唯讀檔案）在發行前、由 OS 子系統任務在它的分支完成，併進發行線 PR，加上本會話的 P1～P5（兩個任務、一個 PR）；UNC 根目錄這一輪不支援；P4 多兩處（`ContentManifest.cpp:110`、`ReadOnlyAssetCatalog.cpp:55`）；P5 的驗收條件見 [windows-long-path.md](windows-long-path.md) 的 D198 一節；其他 OS 部件排在發行後 | 使用者在 OS 子系統的會話：「核准 os-subsystem 的 PLAN。開放決策 1、14、15 照建議……同意 A1～A3 的 Delta（新 target GYO::Os、os.md 與 io.md 的 Design Invariants 節）。」（經該會話轉達） |
+| D199 | （2026-10-25）windows-long-path 的 P1～P5 開工。發行線 `claude/pvp-v71-release` 不等 PR #95 合併，從 PR #95 目前的最新提交 `a0e6668` 切出，再 `--no-ff` 併進 A1～A3（`f3a6770`，無衝突）；PR #95 合併後，發行線相對 master 的差異同樣只剩 A1～A3 與 P1～P5。P1 的行為變更（Windows 上完整路徑達 248 字元以上時交給 API 的是 `\\?\` 加完整路徑）與 P5 的驗收在執行前宣告，見 [windows-long-path.md](windows-long-path.md) 的 D199 一節 | 使用者經 OS 子系統的會話轉達：「讓v7.1會話開始P1～P5的任務」；分支的先後由本會話判斷（該會話：「先後怎麼排……由你判斷，必要時再問使用者」） |
 
 ## 規劃紀錄（記錄器）
 
