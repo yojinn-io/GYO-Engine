@@ -1,4 +1,4 @@
-# windows-long-path：發行包解壓到深資料夾時開不了 shader（2026-10-25：D193 → L4（D195）→ 子決策定案（D196）→ 分工更正（D197）：OS 子系統任務只做架構，windows-long-path 由 v7.1 在架構完成後實作）
+# windows-long-path：發行包解壓到深資料夾時開不了 shader（2026-10-25：D193 → L4（D195）→ 子決策定案（D196）→ 分工更正（D197）→ OS 子系統的 PLAN 核准（D198）：A1～A3 由 OS 子系統任務做，併進發行線 PR；P1～P5 由本會話在 A1～A3 完成後實作）
 
 發行線的第一批（INVENTORY `N-windows-max-path`）。唯讀調查，還沒有改任何程式。
 
@@ -104,3 +104,20 @@ OS 統一子系統的任務（另開的會話「規劃 Engine 的 OS 統一子�
 | P5 | 修正 | 驗收：Engine 單元測試（Windows 上 300 字元以上的路徑讀得到、一般路徑不變）、windows-x64 的 L1 深路徑情境、lan15-windows |
 
 時程：A1～A3 在 OS 子系統的 PLAN 經使用者核准後實作，完成時那個會話通知本會話分支與 commit；PLAN 裡的其他部件（Wait、Threads、Process、NetErrors、`IAssetSource` 的去留）v7.1 不必等。
+
+## OS 子系統的 PLAN 核准後（D198）
+
+OS 子系統的 PLAN 核准（Engine D46；計畫文件 `docs/architecture/plans/os-subsystem/`，交接在 PLAN 第 8 節）。使用者：「核准 os-subsystem 的 PLAN。開放決策 1、14、15 照建議：(1) A1～A3 在發行前，其他全部排在發行後；(14) UNC 根目錄這一輪暫不支援；(15) A1～A3 併進消費端的發行線 PR。同意 A1～A3 的 Delta（新 target GYO::Os、os.md 與 io.md 的 Design Invariants 節）。」
+
+對本批的影響：
+- **PR 的形態**：A1～A3（os-skeleton、io-contracts、os-files-read）在 OS 子系統的分支完成，併進 v7.1 的發行線 PR，再加上 P1～P5：兩個任務、一個 PR。
+- **UNC**：這一輪不支援 UNC 根目錄（io.md 會寫明），P1 不寫 `\\?\UNC\` 的分支。
+- **P4 多兩處**：`ContentManifest.cpp:110`（`AppendFromFile((assetRoot / path).string())`）與 `ReadOnlyAssetCatalog.cpp:55`（`LoadFromFile(catalogPath.string())`），共 7 處。漏掉的話，catalog 路徑會以系統 code page 的字串交給 UTF-8 契約，造成退步。
+- **P5 驗收條件**（本會話宣告；以下是 PLAN 列的交接條件）：
+  - Windows 上超過 300 字元的路徑：先在未修正的樹確認 Red，再確認 Green；
+  - windows-x64 L1 的深路徑套件情境：P 取在 145 到約 219 之間（例如 200），讀完所有 `.dxil`；
+  - Windows 非 code page 字元的根目錄下，`ContentManifest::Load` 仍然成功；
+  - 實機在 P＝156 與 P 約 210 各啟動一次；
+  - 守衛 allowlist 中 asset 的條目刪除。
+- P1～P5 之後的下一個失敗點是產品自己開的 `arenas.json`（約 P≥219），屬於發行之後的 os-files-write。其他部件（Process、主控台與結束要求、寫檔、trace、計時等）都排在 v7.1 發行之後。
+- A1～A3 估計 20～29 h（A1 與 A2 可以並行），等使用者說開始；完成時那個會話通知分支與 commit。
