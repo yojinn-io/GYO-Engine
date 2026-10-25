@@ -12,6 +12,7 @@
 - os-files-read 的 xhigh 審查（使用者同意：審查公開介面與 Windows 實作，修完後再推送）：沒有 blocker。1 個 major，即 `PathToUtf8`／`PathFromUtf8` 在 Windows 會丟例外 → 使用者決定改成回傳 Result（D47）。其餘 minor、nit 已修，測試缺口已補。本機突變 34／34 killed（2 個 Windows 專用的跳過）。
 - 四平台 L1：第一次 windows-x64 失敗（測試檔裡 `ReadFile` 撞名）→ 類別改名為 `FileReader`。第二次全部通過：[run 40173730672](https://github.com/yojinn-io/GYO-Engine/actions/runs/40173730672)，`96fd2fc`。
 - 下一步：A1～A3 完成，已通知消費端的發行任務（分支與 commit）。本計畫接下來的批次，依 D46 排在消費端發行之後。
+- 2026-10-25：使用者一度考慮把剩下的 13 批也提前到發行前，之後確認維持 D46：「這13批還是照原計劃放到v7.1發佈後吧，工程量有些大，現在先讓v7.1做完他的工作。完成後我回來讓你開始」。本計畫在消費端發行之後、使用者說開始時再繼續，從 os-guard-wide 開始。
 - 消費端的發行任務已收到分工、交接內容與 D46（A1～A3 併進它的發行線 PR），等 A1～A3 完成（L1 通過後通知分支與 commit）。
 
 ## 閱讀入口
