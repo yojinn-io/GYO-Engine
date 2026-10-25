@@ -33,5 +33,6 @@
 ## 還沒做
 
 - 實機（P5-6）：Windows 上解壓到 P＝156 與 P 約 210 各啟動 Client 一次，對照事故 log 第 2 行。需要使用者。
-- Windows 專用的突變（P1 兩個、P4 一個、os-f4、os-f5）要在 Windows 機器上跑；發行時的完整突變（D185）若在 Windows 上跑會一併涵蓋。
+- Windows 專用的突變（P1 兩個、P4 一個、os-f4、os-f5）要在 Windows 機器上跑；建議排在 lan15-windows 用 Windows 機器時一起跑（OS 子系統會話的建議），發行時的完整突變（D185）若在 Windows 上跑也會涵蓋。
+- OS 子系統會話審查了 engine/os 與 engine/io 的改動（`d56a8fc..432142c`），只指出 Engine 擁有的檔案裡出現消費端的版本名（os.md Invariant 7、AGENTS §7）；`1c16f8d` 改成 os-subsystem PLAN 的交接代號或行為描述（4 處，含審查沒列到的 `NativeFileAssetSourceTests.cpp`）。
 - 下一個失敗點：產品自己開的 `arenas.json`（約 P≥219）、log 與 trace（約 P≥229），屬於發行後的 os-files-write、os-trace-writers。
