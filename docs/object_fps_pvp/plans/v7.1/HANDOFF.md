@@ -190,6 +190,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D201 | （2026-10-25）windows-long-path 的實機驗收（P5-6）併進 lan15-windows。2026-10-26 在 Windows 機器上依序做：Windows 專用的 5 個突變（`p1-no-long-path-form`、`p1-long-path-from-too-high`、`p4-manifest-ansi-path`、`os-f4-windows-acp`、`os-f5-windows-notfound`）→ 實機在 P＝156 與 P 約 210 各啟動 Client 一次 → lan15 | 使用者：「這個能合到 lan15去吧，明天我先跑 Windows 專用的5個突變，在跑驗收，最後 lan15.」 |
 | D202 | （2026-10-25）quick-close 採 q1：Client 關閉時的 `/leave` 改用 300 ms 的逾時（總上限 600 ms），其他請求維持 2 秒。驗收門檻在執行前核准：從關閉要求到程序結束，Gateway 可連 ≤500 ms、Gateway 關掉 ≤1 s，macOS 與 Windows 各 10 次全部符合、不重試、跑完不放寬 | 使用者：「q1，門檻核准」 |
 | D203 | （2026-10-25）quick-close 的驗收判定加「Gateway 收下 `/leave` 卻不回（stalled）≤1 s」，macOS 與 Windows 各 10 次；另加 CTest 回歸測試 `object_fps_pvp.close_timing`（每種情境 1 次、同一組門檻），讓突變抓得到。這條判定是在看過 Red（修正前 2004 ms）與第一次 macOS 驗收（約 304 ms）之後加的，只收緊 | 使用者：「加：stalled ≤1 s 列入驗收判定（macOS、Windows 各 10 次），並加一個 ctest 回歸測試讓突變抓得到。」 |
+| D204 | （2026-10-25）`object_fps_pvp.close_timing` 維持 `network` 標籤（和 `object_fps_pvp.worker` 一樣用本機 socket），CI 的 L1 不跑它；quick-close 在 Windows 上的證據靠 D201 的手動 10 次 | 使用者：「維持 network 標籤，Windows 證據靠晚上手動的 10 次。」 |
 
 ## 規劃紀錄（記錄器）
 
