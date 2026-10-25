@@ -187,7 +187,7 @@ def check_close(probe):
         return fail(f"probe never got ready: {running.finish()}")
     code, output = running.finish()
     if code == 5:
-        print(f"console check: skipped, the probe has no console window on this runner: {output}")
+        print(f"console check: skipped, closing the probe's console did not reach it on this runner: {output}")
         return SKIP
     if code != 0 or "requested reason=console_close" not in output:
         return fail(f"expected exit 0 with 'requested reason=console_close', got {code}: {output}")

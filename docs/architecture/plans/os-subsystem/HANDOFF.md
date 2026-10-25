@@ -386,6 +386,12 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 沒有處理、記成後續：拿掉 install-once 的突變存活（無害）；`Wide.cpp` 與 `Files.cpp` 的 UTF-16→UTF-8 重複，等發行線 PR 合併後再合一；Windows 11 預設終端是 Windows Terminal 時，`os.console_close` 可能逾時而不是 skip（ConPTY 的假視窗可能不理 WM_CLOSE），要在 lan15 的實機上確認；runner 的 code page 已是 65001 或沒有主控台時，還原的路徑不會被走到。
   - §14.4 的獨立核對（shell32）：1 確認；2 確認但有但書（不限可見性；MSVC 預設的標準函式庫本來就有 shell32.lib，實際的連結命令列沒變）；3 原本寫「沒有收緊面」不成立（Windows 上只有 GYO::Base 改成失敗，無害）；4 確認（os-g8 在 macOS 被殺，os-g18 用 `WIN32=1` 模擬失敗），另有既有的假值漏洞；5 部分（os.md 的 Guard 說明要補，已改）。使用者定案（D50）。
 - 修正後的檢查：`os.console_shutdown` 通過，macOS 上讀回的旗標是 `reference_flags=0x2`、`sigint_flags=0x2`、`sigterm_flags=0x2`。突變重跑：os-c1、os-c2、os-c3、os-c7、os-g8 killed；Windows 專用的 os-c4、os-c5、os-c6、os-c8、os-c9、os-g18 跳過。
+- 2026-10-25：使用者說「推送本分支，手動觸發四平台 L1，驗 os-console-shutdown」。推送 `4ebfd7b`，[run 40202449713](https://github.com/yojinn-io/GYO-Engine/actions/runs/40202449713)。
+  - 結果：失敗。macOS 兩列、Linux 的 L1 與 quick acceptance 都成功；windows-x64 的 L1 與 toolchain 列只有 `os.console_close` 失敗（CI validation、CI gate 跟著失敗）。
+  - 通過的：windows-x64 第一次編譯 `Console.cpp`、`Wide.cpp`，連 shell32 時設定期檢查通過；`os.console_arguments`、`os.console_shutdown`（Ctrl+Break：一次是要求、第二次直接結束）、`os.console_ctrl_c`（自己的主控台，一次是要求、第二次直接結束）都 Passed。linux-x64 的 `os.console_shutdown` 通過，glibc 上 handler 的 `sa_flags` 和 `std::signal` 相同（審查時只依原始碼判斷，現在實測確認）。
+  - `os.console_close` 的輸出：`['ready', 'timeout']`，以 4 結束，花了 10 秒。
+  - 原因的切分（AGENTS §14.1）：測試手段在這個環境不成立，不是實作。主控台真的關閉時，OS 最晚在 handler 返回時（4 秒）結束程序，探測程式不可能活到 10 秒的逾時；所以 WM_CLOSE 沒有讓主控台關閉，handler 沒收到事件。審查者預告過 Windows Terminal（ConPTY）會這樣；CI 的 runner 也一樣。
+  - 修正（測試，第 1 次）：探測程式送出 WM_CLOSE 3 秒後若沒有要求、視窗也還在，就印「the console window did not close on WM_CLOSE」並回 5，檢查回 77（CTest 顯示為 Skipped）。主控台真的關了卻沒收到要求時，程序會被 OS 結束，檢查仍然失敗，所以 os-c4 在手段成立的機器上照樣抓得到。CI 上的缺口：關閉主控台的路徑在 CI 沒有自動驗證，留給 lan15 實機（L3）與 Windows 上的突變。
 - 已知、留給 os-path-utf8-sweep：Match 的 `arena_file=` 與 ui_editor 的 `valid:` 仍用 `path::string()` 印路徑。在 Windows 上，ANSI code page 以外的路徑會在印出時丟例外。以前這種路徑在 argv 就變成 `?`，同樣開不了，所以沒有可用的情況變壞。
 
 ## 未結事項
