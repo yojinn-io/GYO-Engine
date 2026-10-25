@@ -1,4 +1,4 @@
-# windows-long-path：發行包解壓到深資料夾時開不了 shader（2026-10-25 使用者決定 w2，D193；之後另開任務規劃 OS 統一子系統，D194，實作暫停、等它的 os-longpath-decision）
+# windows-long-path：發行包解壓到深資料夾時開不了 shader（2026-10-25：D193 的 w2 由 L4 取代，D195；子決策在「規劃 Engine 的 OS 統一子系統」會話確認中，實作等定案與使用者說開始）
 
 發行線的第一批（INVENTORY `N-windows-max-path`）。唯讀調查，還沒有改任何程式。
 
@@ -37,3 +37,32 @@
 3. 開工前先掃 Asset 模組，確認所有資產（字型、圖片等載入器）都經過 `IAssetSource`；有繞過的改成經過它，不在各載入器重複處理。
 
 驗收：Asset 模組的單元測試（Windows 上 300 字元以上的路徑讀得到，一般路徑不變）；windows-x64 的 L1 套件檢查加上「解壓到深資料夾」的情境（Client 的煙霧測試能載入 shader）。估時 2～4 h。
+
+## 改為 L4（D195，取代 D193 的範圍）
+
+OS 統一子系統的任務（另開的會話「規劃 Engine 的 OS 統一子系統」）做了 os-longpath-decision，使用者採 L4：「v7.1 的 windows-long-path 採 L4：為 engine/io 的 IFileSystem 寫只讀的原生實作，asset 的讀檔改走它。」
+
+內容（轉達時的理解，子決策定案後再更新）：
+- `engine/io` 的 `IFileSystem` 目前沒有原生實作（`engine/io/src/fs/*.cpp` 是空殼，`Vfs` 只有測試在用）。L4 寫一個只讀的原生實作：`Open`（只讀）、`Exists`、`Stat`，其他回 NotSupported（介面的 Capabilities 允許部分實作）。Windows 的長路徑在這個實作內部處理（絕對化、`\\?\` 前綴、寬字元）。
+- asset 的讀檔改走它：`NativeFileAssetSource`（類別名與 API 不變，產品與 ui_editor 不用改）、`ContentManifest.cpp:93`、`AssetCatalog.cpp:30`。產品自己的 `Arena.cpp` 與 `AssetWatcher` 的 stat 不在範圍內。
+- v7.1 不開 `engine/os`（L3 不採用）；L4 的原生實作之後成為 OS 子系統 Files 部件的起點。
+
+判斷用的證據（由 `build/target/object_fps_pvp` 的實際檔案配置算出；P＝路徑到 `bin\` 為止的字元數，事故時 P＝156）：
+
+| 檔案 | 失敗時的 P |
+|---|---|
+| shader `.dxil`（`bin\` 之後 115 字元） | ≥145 |
+| 其他資產 | ≥164 |
+| `content.json`／`asset_catalog.json` | ≥約 220 |
+| 產品的場地檔 | 約 222 |
+| log | ≥229 |
+| movement trace | ≥234 |
+| 執行檔本身 | ≥238（推論：之後 Windows 本身就開不了） |
+
+同一台機器、同一個執行檔往上搬兩層就正常（clientA 的 `client-20261016-104436.log`）。
+
+另外兩個發現：
+1. 現在的錯誤訊息分不出「路徑太長」與「檔案不存在」（`ifstream` 沒有 OS 錯誤碼）。Explorer 內建解壓若跳過長路徑的檔案，改程式也沒用（推論，沒在測試機確認）。建議 L4 的驗收加上：開檔失敗時記錄 OS 錯誤碼與路徑長度。
+2. Windows 上路徑以 ANSI code page 的窄字串傳遞（`path::string()`），code page 以外的字元不論長短都會失敗（推論，依 MSVC 語意）。v7.1 是否改成 UTF-8 是待定的子決策。
+
+待使用者決定的子決策（在那個會話確認）：原生實作放在 `engine/io` 的哪裡（建議 `engine/io/src/fs/native/`，OS 程式只在這個資料夾）；v7.1 的路徑編碼（建議維持系統 code page）；`file://` Uri 與原生絕對路徑的對應契約（建議 v7.1 由轉接層直接建 Uri，不改 `ParseUri`，不一致處記給 os-plan）。估時暫定 6～9 h。
