@@ -1,4 +1,4 @@
-# windows-long-path：發行包解壓到深資料夾時開不了 shader（2026-10-25：D193 的 w2 由 L4 取代，D195；子決策在「規劃 Engine 的 OS 統一子系統」會話確認中，實作等定案與使用者說開始）
+# windows-long-path：發行包解壓到深資料夾時開不了 shader（2026-10-25：D193 → L4（D195）→ 子決策定案（D196）：由 OS 子系統任務以 `engine/os` 的第一片實作，v7.1 等它完成）
 
 發行線的第一批（INVENTORY `N-windows-max-path`）。唯讀調查，還沒有改任何程式。
 
@@ -66,3 +66,17 @@ OS 統一子系統的任務（另開的會話「規劃 Engine 的 OS 統一子�
 2. Windows 上路徑以 ANSI code page 的窄字串傳遞（`path::string()`），code page 以外的字元不論長短都會失敗（推論，依 MSVC 語意）。v7.1 是否改成 UTF-8 是待定的子決策。
 
 待使用者決定的子決策（在那個會話確認）：原生實作放在 `engine/io` 的哪裡（建議 `engine/io/src/fs/native/`，OS 程式只在這個資料夾）；v7.1 的路徑編碼（建議維持系統 code page）；`file://` Uri 與原生絕對路徑的對應契約（建議 v7.1 由轉接層直接建 Uri，不改 `ParseUri`，不一致處記給 os-plan）。估時暫定 6～9 h。
+
+## 子決策定案：由 OS 子系統任務以 engine/os 的第一片實作（D196）
+
+使用者在 OS 子系統的會話定案（經該會話轉達）：
+- 實作位置：「你要先開engine/os，然後把io下嗎相關系統的實作移動過去。」`engine/os` 在 v7.1 發行前建立；`IFileSystem` 的原生實作放在 `engine/os`，`engine/io` 只留中立的抽象；asset 的讀檔（`NativeFileAssetSource`、`ContentManifest`、`AssetCatalog`）改走 `IFileSystem`。
+- 路徑編碼：「現在改成 UTF-8」。同一片內改；產生 resolver 根目錄的 5 個呼叫端一起改：產品 `object_fps_pvp` 的 `PvpApplication.cpp:812`、`object_fps` 與 `object_fps_v2` 的 `ObjectFpsApplication.cpp:71`、ui_editor 的 `ReadOnlyAssetCatalog.cpp:46`、Engine 的 `ContentManifest.cpp:104`。
+- `file://` 契約：「現在就修 ParseUri」（三平台的解析測試）。
+- 另外：「你的目標不是修路徑，你的目標是整理OS的子系統。」
+
+對 v7.1 的影響：
+- 這一片就是 windows-long-path 的修正，由 OS 子系統任務在它的 PLAN 經使用者核准後實作；D193、D195 的實作不再由 v7.1 進行。
+- 第一片的檔位、驗收與估時寫在 OS 子系統的 PLAN；預定納入：Windows 上 300 字元以上的路徑讀得到、開檔失敗時記錄 OS 錯誤碼與路徑長度、windows-x64 的 L1 套件檢查加深路徑情境。
+- `PvpApplication.cpp` 會有一行變更，和 v7.1 的分支（PR #95）碰到同一個檔案，合併順序之後協調。
+- `lan15-windows` 照舊等這一片完成。
