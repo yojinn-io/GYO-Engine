@@ -287,31 +287,31 @@
       "expect": "CHECK\\( OpenError\\(invalid\\) == OsErrorCode::InvalidEncoding \\) is NOT correct"
     },
     {
-      "id": "os-f3-posix-directory",
-      "what": "A directory opens as a file on POSIX",
+      "id": "os-f3-posix-regular",
+      "what": "A directory or FIFO opens as a file on POSIX",
       "platforms": [
         "darwin",
         "linux"
       ],
       "file": "engine/os/src/posix/Files.cpp",
-      "find": "    if (S_ISDIR(status.st_mode)) return Base::Err(FromErrno(EISDIR, \"not a regular file\", utf8Path));\n",
-      "replace": "",
+      "find": "    if (!S_ISREG(status.st_mode)) {",
+      "replace": "    if (false) {",
       "target": "gyo_os_tests",
-      "cases": "*directory*",
+      "cases": "*regular files only*",
       "expect": "ReadFile::Open accepted"
     },
     {
       "id": "os-f4-windows-acp",
-      "what": "Windows converts paths with the ANSI code page instead of UTF-8",
+      "what": "Windows converts paths with the ANSI code page instead of UTF-8 (both directions)",
       "platforms": [
         "win32"
       ],
       "file": "engine/os/src/windows/Files.cpp",
-      "find": "::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8Path.data(), bytes, nullptr, 0)",
-      "replace": "::MultiByteToWideChar(CP_ACP, 0, utf8Path.data(), bytes, nullptr, 0)",
+      "find": "constexpr UINT kPathCodePage = CP_UTF8;",
+      "replace": "constexpr UINT kPathCodePage = CP_ACP;",
       "target": "gyo_os_tests",
       "cases": "*ANSI code page*",
-      "expect": "cannot open"
+      "expect": "PathToUtf8 failed|cannot open"
     },
     {
       "id": "os-f5-windows-notfound",
@@ -340,7 +340,7 @@
       "id": "io-n2-write-mode",
       "what": "The native backend opens a file for a write mode",
       "file": "engine/io/src/fs/NativeFileSystem.cpp",
-      "find": "        if (!IsReadOnly(mode)) return Base::Err(Unsupported(\"opening for writing\"));\n",
+      "find": "        if (WantsWrite(mode)) return Base::Err(Unsupported(\"opening for writing\"));\n",
       "replace": "",
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
@@ -365,6 +365,64 @@
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( opened.error\\(\\).code == IoErrorCode::NotFound \\) is NOT correct"
+    },
+    {
+      "id": "os-f6-posix-moved-from",
+      "what": "A moved-from ReadFile is read without the Programmer Error check",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> into) {\n    GYO_ASSERT(impl_ != nullptr);\n",
+      "replace": "Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> into) {\n",
+      "target": "gyo_os_tests",
+      "cases": "*moved-from*",
+      "expect": "CRASHED|SIGSEGV|GYO_CHECK_ASSERTS"
+    },
+    {
+      "id": "os-f7-posix-path-to-utf8",
+      "what": "PathToUtf8 returns bytes that are not UTF-8 on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (!Detail::IsValidUtf8(out)) {",
+      "replace": "    if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*no UTF-8 form*",
+      "expect": "REQUIRE_FALSE\\( text \\) is NOT correct"
+    },
+    {
+      "id": "os-f8-overlong",
+      "what": "An overlong three-byte UTF-8 form is taken for valid",
+      "file": "engine/os/src/common/Paths.cpp",
+      "find": "(length == 3 && code < 0x800) || ",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "cases": "*invalid arguments*",
+      "expect": "CHECK\\( OpenError\\(invalid\\) == OsErrorCode::InvalidEncoding \\) is NOT correct"
+    },
+    {
+      "id": "io-n5-seek-past-end",
+      "what": "The native read stream seeks past the end, unlike the other read-only streams",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "                    static_cast<std::uint64_t>(base + offset) > size.value()) {",
+      "replace": "                    false) {",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "GYO_ASSERT failed"
+    },
+    {
+      "id": "io-n6-platform-absolute",
+      "what": "The native backend hands a path that is not absolute on this platform to the OS",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "            if (!Os::Files::IsAbsolutePath(native.value())) {",
+      "replace": "            if (false) {",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "\\(posix.error\\(\\).code == IoErrorCode::InvalidPath\\) != \\(drive.error\\(\\).code == IoErrorCode::InvalidPath\\) \\) is NOT correct"
     }
   ]
 }

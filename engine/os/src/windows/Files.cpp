@@ -3,6 +3,8 @@
 
 #include "../common/Paths.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include <algorithm>
 #include <climits>
 #include <cstdint>
@@ -22,10 +24,13 @@ namespace Engine::Os::Files {
 
 namespace {
 
+// Every path conversion uses this code page: UTF-8, never the ANSI code page.
+constexpr UINT kPathCodePage = CP_UTF8;
 // One read asks for at most this much (a DWORD count).
 constexpr DWORD kMaximumRead = DWORD{1} << 30;
 // FILETIME counts 100 ns intervals since 1601-01-01; the Unix epoch is this many intervals later.
 constexpr std::int64_t kUnixEpochInFileTime = 116444736000000000LL;
+constexpr DWORD kShareAll = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 
 OsErrorCode CodeFromWin32(const DWORD error) noexcept {
     switch (error) {
@@ -51,55 +56,125 @@ OsErrorCode CodeFromWin32(const DWORD error) noexcept {
     }
 }
 
+// The error is passed in, read with GetLastError right after the failing call,
+// before any string is built.
 OsError FromWin32(const DWORD error, std::string message, const std::string_view path) {
     return MakeOsError(CodeFromWin32(error), std::move(message),
                        {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)}, path.size());
 }
 
-bool IsNotFound(const DWORD error) noexcept {
-    return CodeFromWin32(error) == OsErrorCode::NotFound;
-}
-
 // The UTF-16 form of a checked UTF-8 path, with '\' separators.
-Base::Result<std::wstring, OsError> WidePath(const std::string_view utf8Path) {
+Base::Result<std::wstring, OsError> ToWide(const std::string_view utf8Path) {
     if (utf8Path.size() > static_cast<std::size_t>(INT_MAX)) {
-        return Base::Err(FromWin32(ERROR_FILENAME_EXCED_RANGE, "path is too long", utf8Path));
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "path is too long", utf8Path.size()));
     }
     const int bytes = static_cast<int>(utf8Path.size());
-    const int length = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8Path.data(), bytes, nullptr, 0);
-    if (length <= 0) return Base::Err(FromWin32(::GetLastError(), "cannot convert path to UTF-16", utf8Path));
+    const int length = ::MultiByteToWideChar(kPathCodePage, MB_ERR_INVALID_CHARS, utf8Path.data(), bytes, nullptr, 0);
+    if (length <= 0) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot convert path to UTF-16", utf8Path));
+    }
     std::wstring wide(static_cast<std::size_t>(length), L'\0');
-    if (::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8Path.data(), bytes, wide.data(), length) != length) {
-        return Base::Err(FromWin32(::GetLastError(), "cannot convert path to UTF-16", utf8Path));
+    if (::MultiByteToWideChar(kPathCodePage, MB_ERR_INVALID_CHARS, utf8Path.data(), bytes, wide.data(), length) !=
+        length) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot convert path to UTF-16", utf8Path));
     }
     std::replace(wide.begin(), wide.end(), L'/', L'\\');
     return wide;
 }
 
-Base::Result<std::string, OsError> Utf8Path(const std::wstring_view wide, const std::string_view forErrors) {
+// The form of a path handed to a file API (CreateFileW, GetFileAttributesExW).
+// Only here may it differ from ToWide: the long-path form of the consumer's
+// fix (\\?\) belongs in this function, so it never reaches a result such as
+// MakeAbsolute's (Design Invariant 5).
+Base::Result<std::wstring, OsError> OsCallPath(const std::string_view utf8Path) {
+    return ToWide(utf8Path);
+}
+
+// UTF-16 to UTF-8 in '/' form; an unpaired surrogate is InvalidEncoding, not a silent U+FFFD.
+Base::Result<std::string, OsError> ToUtf8(const std::wstring_view wide, const std::string_view forErrors) {
     if (wide.empty()) return std::string{};
+    if (wide.size() > static_cast<std::size_t>(INT_MAX)) {
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "path is too long", forErrors.size()));
+    }
     const int length = static_cast<int>(wide.size());
-    const int bytes = ::WideCharToMultiByte(CP_UTF8, 0, wide.data(), length, nullptr, 0, nullptr, nullptr);
-    if (bytes <= 0) return Base::Err(FromWin32(::GetLastError(), "cannot convert path to UTF-8", forErrors));
+    const int bytes =
+        ::WideCharToMultiByte(kPathCodePage, WC_ERR_INVALID_CHARS, wide.data(), length, nullptr, 0, nullptr, nullptr);
+    if (bytes <= 0) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot convert path to UTF-8", forErrors));
+    }
     std::string utf8(static_cast<std::size_t>(bytes), '\0');
-    if (::WideCharToMultiByte(CP_UTF8, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {
-        return Base::Err(FromWin32(::GetLastError(), "cannot convert path to UTF-8", forErrors));
+    if (::WideCharToMultiByte(kPathCodePage, WC_ERR_INVALID_CHARS, wide.data(), length, utf8.data(), bytes, nullptr,
+                              nullptr) != bytes) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot convert path to UTF-8", forErrors));
     }
     std::replace(utf8.begin(), utf8.end(), '\\', '/');
     return utf8;
 }
 
+// 0 when the file system keeps no time; saturates outside the range of nanoseconds.
 std::chrono::nanoseconds SinceUnixEpoch(const FILETIME& time) noexcept {
     ULARGE_INTEGER value{};
     value.LowPart = time.dwLowDateTime;
     value.HighPart = time.dwHighDateTime;
+    if (value.QuadPart == 0) return std::chrono::nanoseconds{0};
+    if (value.QuadPart > static_cast<ULONGLONG>((std::numeric_limits<std::int64_t>::max)())) {
+        return (std::chrono::nanoseconds::max)();
+    }
     const auto intervals = static_cast<std::int64_t>(value.QuadPart) - kUnixEpochInFileTime;
+    constexpr std::int64_t kLimit = (std::numeric_limits<std::int64_t>::max)() / 100;
+    if (intervals > kLimit) return (std::chrono::nanoseconds::max)();
+    if (intervals < -kLimit) return (std::chrono::nanoseconds::min)();
     return std::chrono::nanoseconds(intervals * 100);
 }
 
-bool IsDirectory(const std::wstring& wide) noexcept {
-    const DWORD attributes = ::GetFileAttributesW(wide.c_str());
+// What Stat and Exists report about the file a path names.
+struct NativeStatus final {
+    DWORD attributes = 0;
+    std::uint64_t sizeBytes = 0;
+    FILETIME written{};
+};
+
+std::uint64_t SizeFrom(const DWORD high, const DWORD low) noexcept {
+    return (static_cast<std::uint64_t>(high) << 32) | low;
+}
+
+// GetFileAttributesExW describes a symbolic link itself; for a reparse point
+// the target is opened and described instead, as POSIX stat does.
+Base::Result<NativeStatus, OsError> QueryStatus(const std::wstring& path, const std::string_view utf8Path) {
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (!::GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot read file status", utf8Path));
+    }
+    if ((data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
+        return NativeStatus{data.dwFileAttributes, SizeFrom(data.nFileSizeHigh, data.nFileSizeLow),
+                            data.ftLastWriteTime};
+    }
+    const HANDLE target = ::CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, kShareAll, nullptr, OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (target == INVALID_HANDLE_VALUE) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot read file status", utf8Path));
+    }
+    BY_HANDLE_FILE_INFORMATION info{};
+    const BOOL described = ::GetFileInformationByHandle(target, &info);
+    const DWORD error = described ? ERROR_SUCCESS : ::GetLastError();
+    ::CloseHandle(target);
+    if (!described) return Base::Err(FromWin32(error, "cannot read file status", utf8Path));
+    return NativeStatus{info.dwFileAttributes, SizeFrom(info.nFileSizeHigh, info.nFileSizeLow), info.ftLastWriteTime};
+}
+
+bool IsDirectory(const std::wstring& path) noexcept {
+    const DWORD attributes = ::GetFileAttributesW(path.c_str());
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+bool IsSlash(const char c) noexcept {
+    return c == '/' || c == '\\';
 }
 
 } // namespace
@@ -123,25 +198,31 @@ ReadFile::~ReadFile() = default;
 
 Base::Result<ReadFile, OsError> ReadFile::Open(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto wide = WidePath(utf8Path);
-    if (!wide) return Base::Err(std::move(wide.error()));
-    const HANDLE file = ::CreateFileW(wide.value().c_str(), GENERIC_READ,
-                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+    auto path = OsCallPath(utf8Path);
+    if (!path) return Base::Err(std::move(path.error()));
+    const HANDLE file = ::CreateFileW(path.value().c_str(), GENERIC_READ, kShareAll, nullptr, OPEN_EXISTING,
                                       FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
         const DWORD error = ::GetLastError();
         // Opening a directory is refused with ERROR_ACCESS_DENIED; report it as POSIX does.
-        if (error == ERROR_ACCESS_DENIED && IsDirectory(wide.value())) {
+        if (error == ERROR_ACCESS_DENIED && IsDirectory(path.value())) {
             return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "not a regular file",
                                          {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)},
                                          utf8Path.size()));
         }
         return Base::Err(FromWin32(error, "cannot open file", utf8Path));
     }
-    return ReadFile(std::make_unique<Impl>(file, std::string(utf8Path)));
+    auto impl = std::make_unique<Impl>(file, std::string(utf8Path));
+    // A device (NUL, CON, a pipe) opens too; only disk files are files here, as on POSIX.
+    if (::GetFileType(file) != FILE_TYPE_DISK) {
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidPath, "not a regular file", utf8Path.size()));
+    }
+    return ReadFile(std::move(impl));
 }
 
 Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> into) {
+    GYO_ASSERT(impl_ != nullptr);
+    if (into.empty()) return std::size_t{0};
     const DWORD asked = static_cast<DWORD>((std::min)(into.size(), static_cast<std::size_t>(kMaximumRead)));
     DWORD got = 0;
     // The Win32 function, not this class.
@@ -154,81 +235,101 @@ Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> int
 }
 
 Base::Result<std::uint64_t, OsError> ReadFile::Size() const {
+    GYO_ASSERT(impl_ != nullptr);
     LARGE_INTEGER size{};
     if (!::GetFileSizeEx(impl_->handle, &size)) {
-        return Base::Err(FromWin32(::GetLastError(), "cannot read file size", impl_->path));
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot read file size", impl_->path));
     }
     return static_cast<std::uint64_t>(size.QuadPart);
 }
 
 Base::Result<void, OsError> ReadFile::Seek(const std::uint64_t offset) {
+    GYO_ASSERT(impl_ != nullptr);
     if (offset > static_cast<std::uint64_t>((std::numeric_limits<LONGLONG>::max)())) {
-        return Base::Err(MakeOsError(OsErrorCode::TooLarge, "seek offset is too large",
-                                     {NativeErrorDomain::Win32, ERROR_NEGATIVE_SEEK}, impl_->path.size()));
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "seek offset is too large", impl_->path.size()));
     }
     LARGE_INTEGER distance{};
     distance.QuadPart = static_cast<LONGLONG>(offset);
     if (!::SetFilePointerEx(impl_->handle, distance, nullptr, FILE_BEGIN)) {
-        return Base::Err(FromWin32(::GetLastError(), "cannot seek in file", impl_->path));
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot seek in file", impl_->path));
     }
     return {};
 }
 
 Base::Result<std::uint64_t, OsError> ReadFile::Tell() const {
+    GYO_ASSERT(impl_ != nullptr);
     LARGE_INTEGER zero{};
     LARGE_INTEGER position{};
     if (!::SetFilePointerEx(impl_->handle, zero, &position, FILE_CURRENT)) {
-        return Base::Err(FromWin32(::GetLastError(), "cannot read file position", impl_->path));
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot read file position", impl_->path));
     }
     return static_cast<std::uint64_t>(position.QuadPart);
 }
 
 Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto wide = WidePath(utf8Path);
-    if (!wide) return Base::Err(std::move(wide.error()));
-    WIN32_FILE_ATTRIBUTE_DATA data{};
-    if (!::GetFileAttributesExW(wide.value().c_str(), GetFileExInfoStandard, &data)) {
-        return Base::Err(FromWin32(::GetLastError(), "cannot read file status", utf8Path));
-    }
+    auto path = OsCallPath(utf8Path);
+    if (!path) return Base::Err(std::move(path.error()));
+    auto status = QueryStatus(path.value(), utf8Path);
+    if (!status) return Base::Err(std::move(status.error()));
     FileStatus out;
-    if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) out.kind = FileKind::Directory;
-    else if ((data.dwFileAttributes & FILE_ATTRIBUTE_DEVICE) != 0) out.kind = FileKind::Other;
+    const DWORD attributes = status.value().attributes;
+    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) out.kind = FileKind::Directory;
+    else if ((attributes & FILE_ATTRIBUTE_DEVICE) != 0) out.kind = FileKind::Other;
     else out.kind = FileKind::Regular;
-    if (out.kind == FileKind::Regular) {
-        out.sizeBytes = (static_cast<std::uint64_t>(data.nFileSizeHigh) << 32) | data.nFileSizeLow;
-    }
-    out.modifiedSinceUnixEpoch = SinceUnixEpoch(data.ftLastWriteTime);
+    if (out.kind == FileKind::Regular) out.sizeBytes = status.value().sizeBytes;
+    out.modifiedSinceUnixEpoch = SinceUnixEpoch(status.value().written);
     return out;
 }
 
 Base::Result<bool, OsError> Exists(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto wide = WidePath(utf8Path);
-    if (!wide) return Base::Err(std::move(wide.error()));
-    if (::GetFileAttributesW(wide.value().c_str()) != INVALID_FILE_ATTRIBUTES) return true;
-    const DWORD error = ::GetLastError();
-    if (IsNotFound(error)) return false;
-    return Base::Err(FromWin32(error, "cannot read file status", utf8Path));
+    auto path = OsCallPath(utf8Path);
+    if (!path) return Base::Err(std::move(path.error()));
+    auto status = QueryStatus(path.value(), utf8Path);
+    if (status) return true;
+    if (status.error().code == OsErrorCode::NotFound) return false;
+    return Base::Err(std::move(status.error()));
 }
 
 Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
-    auto wide = WidePath(utf8Path);
+    auto wide = ToWide(utf8Path);
     if (!wide) return Base::Err(std::move(wide.error()));
     DWORD needed = ::GetFullPathNameW(wide.value().c_str(), 0, nullptr, nullptr);
     while (true) {
-        if (needed == 0) return Base::Err(FromWin32(::GetLastError(), "cannot make the path absolute", utf8Path));
+        if (needed == 0) {
+            const DWORD error = ::GetLastError();
+            return Base::Err(FromWin32(error, "cannot make the path absolute", utf8Path));
+        }
         std::wstring full(needed, L'\0');
         const DWORD written = ::GetFullPathNameW(wide.value().c_str(), needed, full.data(), nullptr);
-        if (written == 0) return Base::Err(FromWin32(::GetLastError(), "cannot make the path absolute", utf8Path));
+        if (written == 0) {
+            const DWORD error = ::GetLastError();
+            return Base::Err(FromWin32(error, "cannot make the path absolute", utf8Path));
+        }
         if (written < needed) {
             full.resize(written);
-            return Utf8Path(full, utf8Path);
+            return ToUtf8(full, utf8Path);
         }
         // The current directory changed between the two calls; ask again with the new size.
         needed = written;
     }
+}
+
+bool IsAbsolutePath(const std::string_view utf8Path) noexcept {
+    if (utf8Path.size() >= 2 && IsSlash(utf8Path[0]) && IsSlash(utf8Path[1])) return true;
+    const bool letter = utf8Path.size() >= 3 && ((utf8Path[0] >= 'A' && utf8Path[0] <= 'Z') ||
+                                                 (utf8Path[0] >= 'a' && utf8Path[0] <= 'z'));
+    return letter && utf8Path[1] == ':' && IsSlash(utf8Path[2]);
+}
+
+Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path) {
+    // From the native UTF-16 directly: the standard library would throw on an unpaired surrogate.
+    return ToUtf8(path.native(), {});
 }
 
 bool DefaultCaseSensitivePaths() noexcept {

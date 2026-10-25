@@ -39,12 +39,27 @@ Only the components whose batch has landed exist; the others are planned in the 
 
 - **Errors.** `Base::Result<T, OsError>`; `OsErrorCode` starts at 1. The detail is `errno=<n>` or `win32=<n>`,
   followed by `; path_bytes=<n>` when the failure concerns a path (`Os::NativeErrorDetail`). An argument the layer
-  refuses before any OS call (an empty path, a NUL, invalid UTF-8) has no native error: its detail is
-  `path_bytes=<n>` alone. An outer module keeps the detail with `Base::CauseDetail` (error-handling.md rule 5).
-- **Files.** A missing path is `NotFound` (and `Exists` is false). Opening a directory is `InvalidPath` on every
-  platform (POSIX would open it and fail later; Windows refuses it with `ERROR_ACCESS_DENIED`). Reads may return
-  fewer bytes than asked; 0 is the end of the file. `MakeAbsolute` resolves against the current directory the
-  platform's own way (`GetFullPathNameW` on Windows) and answers in `/` form.
+  refuses itself, before or instead of an OS call (an empty path, a NUL, invalid UTF-8, an offset or length out of
+  range, a file that is not a regular file), has no native error: its detail is `path_bytes=<n>` alone; no native
+  code is made up. An outer module keeps the detail with `Base::CauseDetail` (error-handling.md rule 5).
+- **Files.**
+  - A missing path is `NotFound`, and `Exists` is false (also for a missing parent and a dangling link).
+  - Only regular files open: a directory, a FIFO or a device is `InvalidPath` on every platform. POSIX opens with
+    `O_NONBLOCK`, so a FIFO is refused at once instead of waiting for a writer.
+  - `Stat` and `Exists` follow symbolic links on every platform. On Windows a reparse point is opened and its
+    target described, as POSIX `stat` does.
+  - Reads may return fewer bytes than asked; 0 for a non-empty span is the end of the file; an empty span returns 0
+    without an OS call. Seeking past the end is allowed and reads nothing.
+  - A moved-from `ReadFile` may only be destroyed or assigned to; anything else is a Programmer Error
+    (`GYO_ASSERT`).
+  - `MakeAbsolute` resolves against the current directory the platform's own way: `GetFullPathNameW` on Windows
+    also removes dot segments and trailing dots and spaces; POSIX joins the current directory as it is. It answers
+    in `/` form and never returns a long-path prefix.
+  - `IsAbsolutePath` answers per platform as a pure string rule: `/x` on POSIX; `C:/x`, `C:\x` or a `\\` or `//`
+    prefix on Windows.
+  - `PathToUtf8` and `PathFromUtf8` return `InvalidEncoding` for a path with no UTF-8 form (an unpaired surrogate
+    on Windows, bytes that are not UTF-8 on POSIX) and for text that is not UTF-8 (D47); they never throw.
+  - Write times are 0 when the file system keeps none and saturate outside the range of `std::chrono::nanoseconds`.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.

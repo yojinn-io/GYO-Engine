@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：計畫已核准**（D46）；A1～A3（os-skeleton、io-contracts、os-files-read）本機 L1 完成，四平台 L1 與 os-files-read 的公開介面 xhigh 審查待使用者同意。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：計畫已核准**（D46）；A1～A3（os-skeleton、io-contracts、os-files-read）本機 L1 完成，os-files-read 的 xhigh 審查已修正（D47）；四平台 L1 待推送。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -9,7 +9,8 @@
 - os-skeleton：GYO::Os、OsError、os.md、守衛（Engine 範圍）、突變 runner 擴充完成，本機 core preset 的 L1 全過、突變 11／11 killed。四平台 L1 要等分支推送（見未結事項）。
 - io-contracts：file:// 對應、ParseUri／ParseUriLoose／ToString 修正、io.md、MountTable 不越出根目錄完成；Red→Green、契約審查（ultracode）的發現已修正、本機 L1 全過、突變 11／11 killed。
 - os-files-read：使用者說「先不推送，繼續做 os-files-read，A1～A3 都完成後再一起跑 L1」。engine/os 的唯讀檔案原語（POSIX、Windows）與 engine/io 的 NativeFileSystem 完成，本機 L1 全過，突變在本機 7／7 killed，另有 2 個 Windows 專用的突變要到 Windows 才能跑。
-- 下一步：使用者同意後，做 os-files-read 的公開介面 xhigh 審查（1 位）；推送分支並手動觸發四平台 L1。Windows 的程式碼只在 CI 編譯得到。
+- os-files-read 的 xhigh 審查（使用者同意：審查公開介面與 Windows 實作，修完後再推送）：沒有 blocker。1 個 major，即 `PathToUtf8`／`PathFromUtf8` 在 Windows 會丟例外 → 使用者決定改成回傳 Result（D47）。其餘 minor、nit 已修，測試缺口已補。本機突變 34／34 killed（2 個 Windows 專用的跳過）。
+- 下一步：推送本分支，手動觸發 `cross-platform.yml` 跑四平台 L1。Windows 的程式碼第一次在 CI 編譯。
 - 消費端的發行任務已收到分工、交接內容與 D46（A1～A3 併進它的發行線 PR），等 A1～A3 完成（L1 通過後通知分支與 commit）。
 
 ## 閱讀入口
@@ -55,6 +56,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-25 | D44：現在就修 ParseUri 的 file:// 規則；file:// 與原生絕對路徑只有一種對應，三平台都有解析測試 | 使用者對「file:// 的 Uri 和原生絕對路徑的對應怎麼定？」選：「現在就修 ParseUri」 |
 | 2026-10-25 | D45：產品任務和架構分開。<br>本計畫只交付結構與契約。<br>長路徑的行為修正與驗收（P1～P5）由消費端的發行任務在 A1～A3 完成後進行；P1 寫在 engine/os 的 Windows 檔案原語內，遵守它的 Design Invariants | 使用者在消費端的發行任務會話說：「你來做！！！，那邊只修架構，你等那邊修好了，就做。產品任務和架構分開。」（經該會話轉達，消費端 D197）；界線由本計畫依架構需要劃定，在核准 PLAN 時一併確認 |
 | 2026-10-25 | D46：核准 PLAN 第 1 版。<br>開放決策 1：A1～A3 在消費端發行前完成，其他全部排在發行之後。<br>開放決策 14：UNC 根目錄這一輪暫不支援，io.md 寫明限制，P1 不寫 `\\?\UNC\` 分支。<br>開放決策 15：A1～A3 併進消費端的發行線 PR。<br>同意 A1～A3 的 Delta（新 target GYO::Os、os.md 與 io.md 的 Design Invariants 節） | 使用者：「核准 os-subsystem 的 PLAN。開放決策 1、14、15 照建議：(1) A1～A3 在發行前，其他全部排在發行後；(14) UNC 根目錄這一輪暫不支援；(15) A1～A3 併進消費端的發行線 PR。同意 A1～A3 的 Delta（新 target GYO::Os、os.md 與 io.md 的 Design Invariants 節）。」 |
+| 2026-10-25 | D47：`Os::Files::PathToUtf8`／`PathFromUtf8` 改成回傳 `Base::Result<…, OsError>`，不合法的輸入一律回 InvalidEncoding，兩平台一致、不丟例外。修訂 PLAN 第 3.2 節的簽名。起因：xhigh 審查發現 MSVC 的 `std::filesystem::path` 遇到不合法的 UTF-8 或未配對 surrogate 會丟例外，違反 os.md Invariant 5、6 | 使用者對「PathToUtf8／PathFromUtf8 遇到不合法的輸入時要怎麼處理？」選：「改成回傳 Result」 |
 
 ## 消費端的壓力摘要
 
@@ -216,6 +218,43 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 突變：本機 7／7 killed（os-f1～os-f3、io-n1～io-n4）。os-f4（Windows 改用 CP_ACP）、os-f5（Windows 的 NotFound 對應）只在 Windows 跑，本機標為 skipped，見未結事項。
 - Windows 的程式碼在本機編譯不到，第一次編譯會是四平台 L1 的 windows-x64。
 - 證據：本機執行輸出（git 忽略）。
+- 2026-10-25：xhigh 審查（1 位，使用者同意涵蓋公開介面與 Windows 實作）。審查者逐行以 MSVC 的方式讀 Windows 實作：
+  - 名稱查找（`::ReadFile`）、巨集衝突、narrowing、警告設定（repo 沒有 /WX）、UTF-16 轉換的緩衝、`GetFullPathNameW` 迴圈，都沒有問題。
+  - 沒有 blocker。
+  - 1 個 major：`PathToUtf8`／`PathFromUtf8` 在 Windows 會丟 `std::system_error` → D47，改成回傳 Result。Windows 的 `PathToUtf8` 直接由 `path.native()` 以 `WC_ERR_INVALID_CHARS` 轉換。
+  - 這一批同時修正的 minor 與 nit：
+    - Windows 的 `Stat`／`Exists` 原本不跟隨 symbolic link → reparse point 改開目標並描述它。
+    - FILETIME 為 0 與超出範圍時的有號溢位 → 0 與飽和；POSIX 的 tv_sec 同樣處理。
+    - `Seek(INT64_MIN)` 的 `-offset` 是未定義行為 → 改成 `offset < -base`。
+    - moved-from 的 `ReadFile` → `GYO_ASSERT`，並在標頭寫明。
+    - `GetLastError`／`errno` 在組字串之前就先讀出。
+    - `WideCharToMultiByte` 改用 `WC_ERR_INVALID_CHARS`，未配對 surrogate 不再被默默換成 U+FFFD。
+    - seek 超過檔尾 → 和其他唯讀串流一樣回 SeekFailed（io.md）。
+    - `MakeAbsolute` 兩平台的差異 → 寫進標頭與 os.md。
+    - 在這個平台不是絕對路徑的 file URI 路徑 → 新增 `IsAbsolutePath`，由 NativeFileSystem 拒絕。
+    - 層自己拒絕的引數不再捏造原生碼 → detail 只有 path_bytes。
+    - 空 span 的 Read 不呼叫 OS。
+    - FIFO 與裝置 → POSIX 用 O_NONBLOCK 開啟，只接受一般檔案；Windows 用 `GetFileType` 判斷。
+    - 關閉後的串流與無效 mode 的錯誤碼。
+  - Windows 原語裡，「UTF-16 轉換」（`ToWide`）和「交給檔案 API 的形式」（`OsCallPath`）分成兩個函式，給 P1 加長路徑前綴的位置（PLAN 第 8 節）。
+  - 補上的測試缺口：
+    - 3、4 位元組的 overlong；
+    - 父路徑是檔案；
+    - `MakeAbsolute` 的非 ASCII；
+    - `Seek(UINT64_MAX)`；
+    - move 與 moved-from；
+    - 沒有 UTF-8 形式的 path；
+    - io 層的錯誤碼對應；
+    - mtime 對照寫入前後的時鐘；
+    - 目錄的 sizeBytes；
+    - FIFO 與 NUL；
+    - symbolic link；
+    - `Seek(INT64_MIN)` 與超過檔尾；
+    - Windows 的 `GetACP` 記錄；
+    - 平台絕對路徑。
+  - 測試數：gyo_os_tests 19 個案例、NativeFileSystemTests 9 個。
+  - 突變：os-f4 改成兩個方向都換成 ACP。新增 os-f6～os-f8、io-n5、io-n6。整份目錄在本機 34／34 killed，Windows 專用的 2 個跳過。
+  - 本機 L1：ctest 30／30，守衛通過。
 
 ## 未結事項
 
@@ -227,10 +266,12 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - A1～A3 若在發行線開好之前完成，就等它開好再併。P4 在產品檔案的那一行，以及和消費端其他線的衝突，由消費端在發行線處理。
   - 完成時通知消費端：分支名稱與最後的 commit。
 - ~~os-skeleton 開始時：用空 allowlist 實跑守衛，產生 Engine 的基準，對照盤點。~~ 2026-10-25 完成，和盤點一致。
-- A1～A3 的四平台 L1：分支還沒推送。使用者決定 A1～A3 都完成後一起跑（2026-10-25）。D46 決定 A1～A3 併進消費端的發行線 PR，所以要先推送本分支，再手動觸發 L1（推送前徵求使用者同意）。
-- os-files-read 的公開介面 xhigh 審查（1 位）：等使用者同意。
+- A1～A3 的四平台 L1：使用者決定 A1～A3 都完成、審查修完後再推送（2026-10-25）。D46 決定 A1～A3 併進消費端的發行線 PR，所以先推送本分支，再手動觸發 `cross-platform.yml`。
+- ~~os-files-read 的公開介面 xhigh 審查（1 位）：等使用者同意。~~ 2026-10-25 完成，修正見「os-files-read」。
 - Windows 專用的突變 os-f4、os-f5 要在 Windows 機器上執行（CI 不跑突變）。在那之前，Windows 端的檢出力只有 L1 的測試本身。
-- os-files-read 的非 ACP 測試只有在 Windows runner 的 ACP 表示不了日文與正體中文時才有檢出力。runner 的 ACP 在第一次 windows-x64 L1 時從記錄確認。
+- os-files-read 的非 ACP 測試：對「改用 ACP 轉換」這類突變，只要 runner 的 ACP 不是 UTF-8（65001）就有檢出力。測試同時含日文、正體中文與 é，在 1252 與 932 上都有效。新增的 Windows 專用案例「record the process ANSI code page」會印出 `GetACP()`，並檢查它不是 65001；第一次 windows-x64 L1 從它的輸出確認。
+- os-files-write 開始前：先定好命名規則。windows.h 把 `CreateDirectory`、`DeleteFile`、`MoveFile`、`CopyFile` 定義成 A／W 巨集；產品 TU 會經 asio 間接 include windows.h，`ReadFile` 這類名稱在那裡也可能有歧義（審查的 finding 15）。
+- io-contracts 起的既有契約問題（審查的 finding 10）已在 os-files-read 處理：NativeFileSystem 用 `Os::Files::IsAbsolutePath` 拒絕「在這個平台不是絕對路徑」的 file URI 路徑。
 - ~~io-contracts 開始時：契約審查用 ultracode（1 審查者＋1 對抗檢查），先問。~~ 2026-10-25 完成。
 - 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。
 - ~~os-files-read 開始時：確認 Windows CI runner 的 ACP，選它表示不了的字元做測試。~~ 改成選一般 Western code page 表示不了的日文與正體中文，確認放到第一次 windows-x64 L1（見上）。

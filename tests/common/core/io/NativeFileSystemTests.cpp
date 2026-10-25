@@ -2,7 +2,9 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -101,11 +103,26 @@ TEST_CASE("NativeFileSystem streams are readable and seekable, not writable") {
     CHECK(stream.Seek(1, Stream::SeekWhence::Current).value() == 3);
     CHECK(stream.Tell().value() == 3);
     CHECK_FALSE(stream.IsEof());
+    // Like the other read-only streams, a target outside [0, Size()] fails, INT64_MIN included.
     CHECK(stream.Seek(-4, Stream::SeekWhence::Current).error().code == IoErrorCode::SeekFailed);
+    CHECK(stream.Seek(11, Stream::SeekWhence::Begin).error().code == IoErrorCode::SeekFailed);
+    CHECK(stream.Seek(1, Stream::SeekWhence::End).error().code == IoErrorCode::SeekFailed);
+    for (const auto whence : {Stream::SeekWhence::Begin, Stream::SeekWhence::Current, Stream::SeekWhence::End}) {
+        CHECK(stream.Seek((std::numeric_limits<std::int64_t>::min)(), whence).error().code ==
+              IoErrorCode::SeekFailed);
+    }
+    CHECK(stream.Tell().value() == 3);
+    CHECK(stream.Seek(0, Stream::SeekWhence::End).value() == 10);
+    // A read of zero bytes is not the end of the file.
+    CHECK(stream.Seek(0, Stream::SeekWhence::Begin).value() == 0);
+    CHECK(stream.Read(tail, 0).value() == 0);
+    CHECK_FALSE(stream.IsEof());
     CHECK(stream.Write("x", 1).error().code == IoErrorCode::NotSupported);
     REQUIRE(stream.Close());
     CHECK_FALSE(stream.IsOpen());
     CHECK(stream.Read(tail, 1).error().code == IoErrorCode::ReadFailed);
+    CHECK(stream.Tell().error().code == IoErrorCode::SeekFailed);
+    CHECK(stream.Seek(0, Stream::SeekWhence::Begin).error().code == IoErrorCode::SeekFailed);
 }
 
 TEST_CASE("NativeFileSystem answers Exists and Stat") {
@@ -136,6 +153,33 @@ TEST_CASE("NativeFileSystem keeps the engine/os cause of a failure") {
     CHECK(opened.error().detail.starts_with(expectedStart));
     CHECK(opened.error().detail.ends_with("; path_bytes=" + std::to_string(missing.size())));
     CHECK(fs.Stat(tree.Uri("missing.bin")).error().code == IoErrorCode::NotFound);
+}
+
+TEST_CASE("NativeFileSystem maps the other engine/os failures") {
+    const TempTree tree;
+    tree.Write("dir/h.bin", "x");
+    FS::NativeFileSystem fs;
+    // A directory is not a file (engine/os InvalidPath).
+    CHECK(OpenError(fs, tree.Uri("dir"), Stream::OpenReadBinary()) == IoErrorCode::InvalidPath);
+    // A path that is not UTF-8 never reaches the OS (engine/os InvalidEncoding).
+    auto invalid = Path::FileUriFromNativePath(tree.Native() + "/\xC0\xAF");
+    REQUIRE(invalid);
+    CHECK(OpenError(fs, invalid.value(), Stream::OpenReadBinary()) == IoErrorCode::InvalidPath);
+    CHECK(fs.Stat(invalid.value()).error().code == IoErrorCode::InvalidPath);
+    // A mode that contradicts itself.
+    CHECK(OpenError(fs, tree.Uri("dir/h.bin"), Stream::FileOpenMode::None) == IoErrorCode::InvalidPath);
+}
+
+TEST_CASE("NativeFileSystem takes only paths absolute on this platform") {
+    // "/x" is the root of the current drive on Windows, "C:/x" a relative path on POSIX: exactly one of them is
+    // refused before the OS is asked, the other is simply missing.
+    FS::NativeFileSystem fs;
+    const auto posix = fs.Stat(Path::ParseUri("file:///gyo-no-such-directory/x.bin").value());
+    const auto drive = fs.Stat(Path::ParseUri("file:///C:/gyo-no-such-directory/x.bin").value());
+    REQUIRE_FALSE(posix);
+    REQUIRE_FALSE(drive);
+    CHECK((posix.error().code == IoErrorCode::InvalidPath) != (drive.error().code == IoErrorCode::InvalidPath));
+    CHECK((posix.error().code == IoErrorCode::NotFound) != (drive.error().code == IoErrorCode::NotFound));
 }
 
 TEST_CASE("NativeFileSystem is read-only and says so") {

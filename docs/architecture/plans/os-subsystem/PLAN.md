@@ -105,11 +105,18 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   [[nodiscard]] Base::Result<FileStatus, OsError> Stat(std::string_view utf8Path);   // missing -> NotFound
   [[nodiscard]] Base::Result<bool, OsError> Exists(std::string_view utf8Path);
   [[nodiscard]] Base::Result<std::string, OsError> MakeAbsolute(std::string_view utf8Path); // generic '/' form, UTF-8
-  [[nodiscard]] std::string PathToUtf8(const std::filesystem::path&);
-  [[nodiscard]] std::filesystem::path PathFromUtf8(std::string_view);
+  [[nodiscard]] bool IsAbsolutePath(std::string_view utf8Path) noexcept; // per platform, pure string rule
+  // D47: Result, not plain values -- invalid input is InvalidEncoding on every platform, never an exception
+  [[nodiscard]] Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path&);
+  [[nodiscard]] Base::Result<std::filesystem::path, OsError> PathFromUtf8(std::string_view);
   [[nodiscard]] bool DefaultCaseSensitivePaths() noexcept; // platform default only; volumes may differ
   }
   ```
+
+  實作時的調整（2026-10-25，os-files-read 的 xhigh 審查之後）：
+  - `PathToUtf8`／`PathFromUtf8` 改成回傳 Result（D47）。原因：MSVC 的 `std::filesystem::path` 遇到不合法的 UTF-8 或未配對 surrogate 會丟例外，違反 Invariant 5、6。
+  - 新增 `IsAbsolutePath`。原因：engine/io 的原生後端不能自己判斷 OS，又必須拒絕「在這個平台不是絕對路徑」的 file URI 路徑，例如 Windows 上的 `/x`。
+  - `ReadFile::Open` 只接受一般檔案，`Stat`／`Exists` 跟隨 symbolic link。詳見 os.md 的 Contracts。
 
 - 不含：
   - Uri、IFileSystem、IStream、Vfs、mount、watcher（留在 engine/io，engine/os 不認識它們）。
@@ -556,11 +563,19 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 
 | 代號 | 內容 | 位置 |
 |---|---|---|
-| P1 | Windows 長路徑真正讀得到：絕對化、正規化、`/` 轉 `\`、加 `\\?\`、已有前綴時不重複加；遵守 os.md Invariant 5。UNC 依開放決策 14 | engine/os 的 Windows 檔案原語 |
+| P1 | Windows 長路徑真正讀得到：絕對化、正規化、`/` 轉 `\`、加 `\\?\`、已有前綴時不重複加；遵守 os.md Invariant 5。UNC 依開放決策 14。位置與注意事項見表後 | engine/os 的 Windows 檔案原語（`engine/os/src/windows/Files.cpp` 的 `OsCallPath`） |
 | P2 | 開檔失敗時記錄 OS 錯誤碼與路徑長度，取自 OsError 的 detail 格式（第 3.1 節） | asset 的錯誤路徑 |
 | P3 | asset 的讀檔改經 engine/io 的 IFileSystem：`NativeFileAssetSource.cpp:21`、`AssetCatalog.cpp:30`、`ContentManifest.cpp:93`。NativeFileAssetSource 保留類別名與 API；IAssetSource 不刪也不改 | engine/asset |
 | P4 | 和 P3 放在**同一個變更**：resolver 根目錄與 catalog 路徑改成 UTF-8，位置是 `PvpApplication.cpp:812`、兩個 `ObjectFpsApplication.cpp:71`、`ReadOnlyAssetCatalog.cpp:46、55`、`ContentManifest.cpp:104、110`。這是 Engine 契約的遷移，所以同一變更改完所有消費端與工具 | 產品、工具、engine/asset |
 | P5 | 驗收，見下 | 消費端 |
+
+P1 的位置與注意事項（os-files-read 的 xhigh 審查提出，架構已預留）：
+
+- Windows 原語裡，「UTF-8 轉 UTF-16」（`ToWide`）和「交給檔案 API 的形式」（`OsCallPath`）已經分成兩個函式。長路徑前綴只加在 `OsCallPath`。
+- `MakeAbsolute` 用的是 `ToWide`，不經過 `OsCallPath`，所以它的結果永遠不會帶前綴（Invariant 5）。
+- 呼叫端自己傳入的 `//?/C:/x` 形式，engine/io 會拒絕（io.md Invariant 4）；engine/os 直接收到時，P1 要決定怎麼處理，並在 os.md 寫明。
+- `\\?\` 會關掉 Win32 的路徑正規化（結尾的點與空白、保留的裝置名）。這是 Invariant 9 要求事先宣告（★）的行為變更，P1 要在開始時宣告。
+- os-files-read 已放好給 P1 的 Red：`FilesTests.cpp` 的「missing path longer than 260 characters」只記錄目前的錯誤碼。P1 還要再加一個「存在的長路徑檔案讀得到」的 Red→Green。
 
 P5 的驗收由發行任務宣告，本計畫只列交接條件：
 

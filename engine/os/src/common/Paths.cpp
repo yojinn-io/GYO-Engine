@@ -3,6 +3,7 @@
 #include "engine/os/Files.hpp"
 
 #include <string>
+#include <utility>
 
 namespace Engine::Os {
 
@@ -46,14 +47,17 @@ bool IsValidUtf8(const std::string_view text) noexcept {
     return true;
 }
 
+OsError RefusedArgument(const OsErrorCode code, std::string message, const std::size_t pathBytes) {
+    return OsError::Make(code, std::move(message), "path_bytes=" + std::to_string(pathBytes));
+}
+
 Base::Result<void, OsError> CheckPath(const std::string_view utf8Path) {
-    const std::string detail = "path_bytes=" + std::to_string(utf8Path.size());
-    if (utf8Path.empty()) return Base::Err(OsError::Make(OsErrorCode::InvalidPath, "path is empty", detail));
+    if (utf8Path.empty()) return Base::Err(RefusedArgument(OsErrorCode::InvalidPath, "path is empty", 0));
     if (utf8Path.find('\0') != std::string_view::npos) {
-        return Base::Err(OsError::Make(OsErrorCode::InvalidPath, "path contains a NUL byte", detail));
+        return Base::Err(RefusedArgument(OsErrorCode::InvalidPath, "path contains a NUL byte", utf8Path.size()));
     }
     if (!IsValidUtf8(utf8Path)) {
-        return Base::Err(OsError::Make(OsErrorCode::InvalidEncoding, "path is not valid UTF-8", detail));
+        return Base::Err(RefusedArgument(OsErrorCode::InvalidEncoding, "path is not valid UTF-8", utf8Path.size()));
     }
     return {};
 }
@@ -62,12 +66,11 @@ Base::Result<void, OsError> CheckPath(const std::string_view utf8Path) {
 
 namespace Files {
 
-std::string PathToUtf8(const std::filesystem::path& path) {
-    const std::u8string text = path.generic_u8string();
-    return std::string(text.begin(), text.end());
-}
-
-std::filesystem::path PathFromUtf8(const std::string_view utf8) {
+Base::Result<std::filesystem::path, OsError> PathFromUtf8(const std::string_view utf8) {
+    // Validated first: on Windows the standard library would throw on invalid UTF-8.
+    if (!Detail::IsValidUtf8(utf8)) {
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path is not valid UTF-8", utf8.size()));
+    }
     std::u8string text;
     text.reserve(utf8.size());
     for (const char c : utf8) text.push_back(static_cast<char8_t>(c));

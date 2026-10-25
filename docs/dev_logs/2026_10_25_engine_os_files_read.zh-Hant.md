@@ -1,6 +1,6 @@
 # Engine os-files-read：唯讀檔案原語與原生檔案系統
 
-日期：2026-10-25。**本機 L1 完成**；公開介面的 xhigh 審查與四平台 L1 待使用者同意。
+日期：2026-10-25。**本機 L1 完成，xhigh 審查已修正**（D47）；四平台 L1 待推送。
 計畫見 [os-files-read](../architecture/plans/os-subsystem/PLAN.md)（第 3.2、3.3、7.3 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-files-read」。
 
 ## 做了什麼
@@ -34,6 +34,25 @@
 - 突變：本機 7／7 killed。Windows 專用的 2 個（改用 CP_ACP、NotFound 對應）本機標為 skipped，要在 Windows 機器上跑。
 - 突變 runner 加上 `platforms` 欄位。守衛的 R5 改成依實際指向判斷相對 include。
 - Windows 的程式碼在本機編譯不到，第一次編譯會是四平台 L1 的 windows-x64。
+
+## xhigh 審查
+
+- 使用者同意由 1 位 xhigh 審查者檢查公開介面與 Windows 實作。沒有 blocker，Windows 的第一次編譯預期能過。
+- 1 個 major：`PathToUtf8`／`PathFromUtf8` 在 Windows 會丟例外（MSVC 的 `std::filesystem::path`），違反「例外不穿過公開邊界」。使用者決定改成回傳 Result（D47）。
+- 這一批同時修正：
+  - symbolic link 的 Stat；
+  - 時間換算溢位；
+  - `Seek(INT64_MIN)`；
+  - moved-from 物件；
+  - `GetLastError`／`errno` 的讀取順序；
+  - surrogate 被默默替換；
+  - seek 超過檔尾；
+  - FIFO 與裝置；
+  - 平台絕對路徑（新增 `IsAbsolutePath`）；
+  - 捏造的原生碼；
+  - 補上審查列出的測試缺口。
+- 為 P1 預留了加長路徑前綴的位置：Windows 原語的 `OsCallPath`（PLAN 第 8 節）。
+- 修正後：gyo_os_tests 19 個案例、NativeFileSystemTests 9 個；整份突變目錄在本機 34／34 killed（Windows 專用的 2 個跳過）；ctest 30／30。
 
 ## 證據
 

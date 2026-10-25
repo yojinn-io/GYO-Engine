@@ -62,6 +62,11 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
   operation is `NotSupported`, and `Capabilities()` sets every field to say exactly that (the defaults of
   `FileSystemCapabilities` are mostly true). A missing file is `NotFound`, so a VFS read overlay falls through to
   the next mount. `caseSensitivePaths` is the platform default from engine/os; a volume may differ.
+  - The path must also be absolute on the platform the backend runs on (`Os::Files::IsAbsolutePath`): `/x` names
+    the root of the current drive on Windows and `C:/x` is relative on POSIX, so the backend refuses them
+    (`InvalidPath`) instead of letting the OS reinterpret them.
+  - Its read stream seeks like the other read-only streams (`MemoryStream`, `SpanStream`): a target outside
+    `[0, Size()]` is `SeekFailed`; a read of zero bytes is not the end of the file.
 - **Errors.** Failures are `IoError`. When a backend converts an engine/os failure, it chooses the `IoErrorCode`,
   keeps the inner message, and records the cause with `Base::CauseDetail(osError, outerDetail)`, for example
   `C:/x/y.dxil; NotFound: win32=3; path_bytes=271`. The native error code is never dropped.

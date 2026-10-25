@@ -36,6 +36,7 @@ Engine 目前沒有處理 OS 差異的 owner：
    - 開放決策 14：UNC 根目錄這一輪暫不支援；io.md 定義 UNC 的 Uri 對應並寫明這個限制，P1 不寫 `\\?\UNC\` 分支。
    - 開放決策 15：A1～A3 併進消費端的發行線 PR（兩個任務，一個 PR）。
    - 同意 A1～A3 的 Delta：新 target `GYO::Os`、os.md 與 io.md 的 Design Invariants 節。
+8. **D47**：`Os::Files::PathToUtf8`／`PathFromUtf8` 回傳 `Base::Result`，不合法的輸入回 InvalidEncoding，不丟例外（修訂 PLAN 第 3.2 節）。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -61,7 +62,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-plan-docs 計畫 | medium | 完成（2026-10-25 核准，D46；[dev_log](../../../dev_logs/2026_10_25_engine_os_plan_docs.zh-Hant.md)） | 本夾三份文件與 dev_log |
 | os-skeleton（A1） | high | 本機 L1 完成（2026-10-25；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_skeleton.zh-Hant.md)） | engine/os、GYO::Os、OsError、os.md、守衛（Engine 範圍）、突變 runner 擴充 |
 | io-contracts（A2） | high；字串規則局部 xhigh；契約審查 ultracode（先問） | 本機 L1 完成（2026-10-25；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_io_contracts.zh-Hant.md)） | io.md、UTF-8 路徑、file:// 對應、ParseUri／ToString／MountTable 修正、IoError detail |
-| os-files-read（A3） | high；UTF-8↔UTF-16 與錯誤對應局部 xhigh；公開介面 1 位 xhigh 審查（先問） | 本機 L1 完成（2026-10-25；xhigh 審查與四平台 L1 待同意；[dev_log](../../../dev_logs/2026_10_25_engine_os_files_read.zh-Hant.md)） | engine/os 的唯讀檔案原語、engine/io 的唯讀 NativeFileSystem |
+| os-files-read（A3） | high；UTF-8↔UTF-16 與錯誤對應局部 xhigh；公開介面 1 位 xhigh 審查（先問） | 本機 L1 完成、xhigh 審查已修正（2026-10-25，D47；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_files_read.zh-Hant.md)） | engine/os 的唯讀檔案原語、engine/io 的唯讀 NativeFileSystem |
 | （消費端 P1～P5） | 由消費端決定 | 等 A1～A3 | 長路徑行為、錯誤記錄、asset 接線、UTF-8 呼叫端、驗收（不屬於本計畫） |
 | os-guard-wide（A1b） | medium；規則調整 high | 未開始 | 守衛擴到產品、工具、產品測試、驗收程式 |
 | os-process-info | high | 未開始 | 執行檔路徑、CPU 時間、本地時間 |

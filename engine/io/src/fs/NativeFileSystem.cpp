@@ -40,11 +40,22 @@ namespace Engine::IO::FS {
                                  std::string("NativeFS: ") + operation + " is not supported (read-only backend)");
         }
 
-        bool IsReadOnly(const Stream::FileOpenMode mode) noexcept {
+        bool WantsWrite(const Stream::FileOpenMode mode) noexcept {
             using Stream::FileOpenMode;
-            return Stream::IsValid(mode) && Stream::CanRead(mode) && !Stream::CanWrite(mode) &&
-                   !Stream::Has(mode, FileOpenMode::Append) && !Stream::Has(mode, FileOpenMode::Truncate) &&
-                   !Stream::Has(mode, FileOpenMode::CreateIfMissing);
+            return Stream::CanWrite(mode) || Stream::Has(mode, FileOpenMode::Append) ||
+                   Stream::Has(mode, FileOpenMode::Truncate) || Stream::Has(mode, FileOpenMode::CreateIfMissing);
+        }
+
+        // The native path of a file URI, absolute on the platform this runs on: "/x" names the root of the
+        // current drive on Windows and "C:/x" a relative path on POSIX, so neither is a file there.
+        IoResult<std::string> NativePath(const Path::Uri& uri) {
+            auto native = Path::NativePathFromFileUri(uri);
+            if (!native) return Base::Err(std::move(native.error()));
+            if (!Os::Files::IsAbsolutePath(native.value())) {
+                return Base::Err(IoError::Make(IoErrorCode::InvalidPath,
+                                               "NativeFS: the path is not absolute on this platform", native.value()));
+            }
+            return native;
         }
 
         FileType TypeFrom(const Os::Files::FileKind kind) noexcept {
@@ -70,7 +81,7 @@ namespace Engine::IO::FS {
             bool IsEof() const noexcept override { return eof_; }
 
             Base::Result<std::size_t, IoError> Read(void* dst, const std::size_t bytes) override {
-                if (!file_) return Base::Err(Closed());
+                if (!file_) return Base::Err(Closed(IoErrorCode::ReadFailed));
                 auto got = file_->Read(std::span(static_cast<std::byte*>(dst), bytes));
                 if (!got) return Base::Err(FromOs(got.error(), path_, IoErrorCode::ReadFailed));
                 if (got.value() == 0 && bytes != 0) eof_ = true;
@@ -82,23 +93,30 @@ namespace Engine::IO::FS {
             }
 
             Base::Result<std::uint64_t, IoError> Tell() const override {
-                if (!file_) return Base::Err(Closed());
+                if (!file_) return Base::Err(Closed(IoErrorCode::SeekFailed));
                 auto position = file_->Tell();
                 if (!position) return Base::Err(FromOs(position.error(), path_, IoErrorCode::SeekFailed));
                 return position.value();
             }
 
+            // Like the other read-only streams (MemoryStream, SpanStream), a target outside [0, Size()] fails.
             Base::Result<std::uint64_t, IoError> Seek(const std::int64_t offset,
                                                       const Stream::SeekWhence whence) override {
-                if (!file_) return Base::Err(Closed());
+                if (!file_) return Base::Err(Closed(IoErrorCode::SeekFailed));
+                auto size = Size();
+                if (!size) return Base::Err(std::move(size.error()));
                 std::int64_t base = 0;
-                if (whence != Stream::SeekWhence::Begin) {
-                    auto from = whence == Stream::SeekWhence::Current ? Tell() : Size();
-                    if (!from) return Base::Err(std::move(from.error()));
-                    base = static_cast<std::int64_t>(from.value());
+                if (whence == Stream::SeekWhence::Current) {
+                    auto position = Tell();
+                    if (!position) return Base::Err(std::move(position.error()));
+                    base = static_cast<std::int64_t>(position.value());
+                } else if (whence == Stream::SeekWhence::End) {
+                    base = static_cast<std::int64_t>(size.value());
                 }
-                if ((offset < 0 && base < -offset) ||
-                    (offset > 0 && base > (std::numeric_limits<std::int64_t>::max)() - offset)) {
+                // base >= 0, so -base never overflows (offset may be INT64_MIN).
+                if ((offset < 0 && offset < -base) ||
+                    (offset > 0 && base > (std::numeric_limits<std::int64_t>::max)() - offset) ||
+                    static_cast<std::uint64_t>(base + offset) > size.value()) {
                     return Base::Err(IoError::Make(IoErrorCode::SeekFailed, "NativeFS: seek outside the file", path_));
                 }
                 const auto target = static_cast<std::uint64_t>(base + offset);
@@ -110,7 +128,7 @@ namespace Engine::IO::FS {
             }
 
             Base::Result<std::uint64_t, IoError> Size() const override {
-                if (!file_) return Base::Err(Closed());
+                if (!file_) return Base::Err(Closed(IoErrorCode::ReadFailed));
                 auto size = file_->Size();
                 if (!size) return Base::Err(FromOs(size.error(), path_, IoErrorCode::ReadFailed));
                 return size.value();
@@ -126,8 +144,8 @@ namespace Engine::IO::FS {
             }
 
         private:
-            IoError Closed() const {
-                return IoError::Make(IoErrorCode::ReadFailed, "NativeFS: the stream is closed", path_);
+            IoError Closed(const IoErrorCode code) const {
+                return IoError::Make(code, "NativeFS: the stream is closed", path_);
             }
 
             std::optional<Os::Files::ReadFile> file_;
@@ -139,8 +157,11 @@ namespace Engine::IO::FS {
 
     IoResult<std::unique_ptr<Stream::IStream>> NativeFileSystem::Open(const Path::Uri& uri,
                                                                       const Stream::FileOpenMode mode) {
-        if (!IsReadOnly(mode)) return Base::Err(Unsupported("opening for writing"));
-        auto native = Path::NativePathFromFileUri(uri);
+        if (!Stream::IsValid(mode)) {
+            return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "NativeFS: invalid FileOpenMode"));
+        }
+        if (WantsWrite(mode)) return Base::Err(Unsupported("opening for writing"));
+        auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
         auto file = Os::Files::ReadFile::Open(native.value());
         if (!file) return Base::Err(FromOs(file.error(), native.value(), IoErrorCode::OpenFailed));
@@ -149,7 +170,7 @@ namespace Engine::IO::FS {
     }
 
     IoResult<bool> NativeFileSystem::Exists(const Path::Uri& uri) {
-        auto native = Path::NativePathFromFileUri(uri);
+        auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
         auto exists = Os::Files::Exists(native.value());
         if (!exists) return Base::Err(FromOs(exists.error(), native.value(), IoErrorCode::ReadFailed));
@@ -157,7 +178,7 @@ namespace Engine::IO::FS {
     }
 
     IoResult<FileInfo> NativeFileSystem::Stat(const Path::Uri& uri) {
-        auto native = Path::NativePathFromFileUri(uri);
+        auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
         auto status = Os::Files::Stat(native.value());
         if (!status) return Base::Err(FromOs(status.error(), native.value(), IoErrorCode::ReadFailed));
@@ -170,7 +191,7 @@ namespace Engine::IO::FS {
     }
 
     IoResult<std::string> NativeFileSystem::ToNativePathString(const Path::Uri& uri) {
-        return Path::NativePathFromFileUri(uri);
+        return NativePath(uri);
     }
 
     FileSystemCapabilities NativeFileSystem::Capabilities() const noexcept {

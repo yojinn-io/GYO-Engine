@@ -190,4 +190,4 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 狀態：實作與本機 L1 完成（2026-10-25），未合併。
 
 - 破損：無。新增 `Engine::Os::Files`（`GYO::Os`）與 `Engine::IO::FS::NativeFileSystem`；`GYO::Engine` 多了 PRIVATE 依賴 `GYO::Os`，未啟用產品不需要改 CMake。
-- 選用：未啟用產品若要讀原生檔案，經 engine/io（`NativeFileSystem` 或掛上它的 `Vfs`），或直接用 `Engine::Os::Files`；路徑一律交 UTF-8（`PathToUtf8`），不要用 `path::string()`。
+- 選用：未啟用產品若要讀原生檔案，經 engine/io（`NativeFileSystem` 或掛上它的 `Vfs`），或直接用 `Engine::Os::Files`；路徑一律交 UTF-8（`PathToUtf8`，回傳 Result，D47），不要用 `path::string()`。

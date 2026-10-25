@@ -3,8 +3,11 @@
 
 #include "../common/Paths.hpp"
 
+#include "engine/base/Assert.hpp"
+
 #include <algorithm>
 #include <cerrno>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <utility>
@@ -21,6 +24,8 @@ namespace {
 
 // One read asks for at most this much: macOS refuses reads above INT_MAX bytes.
 constexpr std::size_t kMaximumRead = std::size_t{1} << 30;
+// The whole seconds std::chrono::nanoseconds (64-bit) can hold with room for the fraction.
+constexpr std::int64_t kMaximumSeconds = (std::numeric_limits<std::int64_t>::max)() / 1'000'000'000 - 1;
 
 OsErrorCode CodeFromErrno(const int error) noexcept {
     switch (error) {
@@ -43,6 +48,8 @@ OsErrorCode CodeFromErrno(const int error) noexcept {
     }
 }
 
+// The error is passed in, read from errno right after the failing call, before
+// any string is built.
 OsError FromErrno(const int error, std::string message, const std::string_view path) {
     return MakeOsError(CodeFromErrno(error), std::move(message), {NativeErrorDomain::Errno, error}, path.size());
 }
@@ -53,7 +60,10 @@ std::chrono::nanoseconds ModifiedTime(const struct stat& status) noexcept {
 #else
     const timespec& time = status.st_mtim;
 #endif
-    return std::chrono::seconds(time.tv_sec) + std::chrono::nanoseconds(time.tv_nsec);
+    const auto seconds = static_cast<std::int64_t>(time.tv_sec);
+    if (seconds > kMaximumSeconds) return (std::chrono::nanoseconds::max)();
+    if (seconds < -kMaximumSeconds) return (std::chrono::nanoseconds::min)();
+    return std::chrono::seconds(seconds) + std::chrono::nanoseconds(time.tv_nsec);
 }
 
 FileKind KindOf(const mode_t mode) noexcept {
@@ -85,49 +95,71 @@ Base::Result<ReadFile, OsError> ReadFile::Open(const std::string_view utf8Path) 
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     std::string path(utf8Path);
     int fd = -1;
+    // O_NONBLOCK so that opening a FIFO does not wait for a writer; it does not change reads of regular files.
     do {
-        fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+        fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     } while (fd < 0 && errno == EINTR);
-    if (fd < 0) return Base::Err(FromErrno(errno, "cannot open file", utf8Path));
+    if (fd < 0) {
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot open file", utf8Path));
+    }
     auto impl = std::make_unique<Impl>(fd, std::move(path));
     struct stat status {};
-    if (::fstat(fd, &status) != 0) return Base::Err(FromErrno(errno, "cannot read file status", utf8Path));
-    // A directory opens on POSIX; reading it would fail later with EISDIR, so refuse it here like Windows does.
-    if (S_ISDIR(status.st_mode)) return Base::Err(FromErrno(EISDIR, "not a regular file", utf8Path));
+    if (::fstat(fd, &status) != 0) {
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot read file status", utf8Path));
+    }
+    // A directory, FIFO or device opens on POSIX; only regular files are files here, as on Windows.
+    if (!S_ISREG(status.st_mode)) {
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidPath, "not a regular file", utf8Path.size()));
+    }
     return ReadFile(std::move(impl));
 }
 
 Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> into) {
+    GYO_ASSERT(impl_ != nullptr);
+    if (into.empty()) return std::size_t{0};
     const std::size_t asked = std::min(into.size(), kMaximumRead);
     ssize_t got = -1;
     do {
         got = ::read(impl_->descriptor, into.data(), asked);
     } while (got < 0 && errno == EINTR);
-    if (got < 0) return Base::Err(FromErrno(errno, "cannot read file", impl_->path));
+    if (got < 0) {
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot read file", impl_->path));
+    }
     return static_cast<std::size_t>(got);
 }
 
 Base::Result<std::uint64_t, OsError> ReadFile::Size() const {
+    GYO_ASSERT(impl_ != nullptr);
     struct stat status {};
     if (::fstat(impl_->descriptor, &status) != 0) {
-        return Base::Err(FromErrno(errno, "cannot read file status", impl_->path));
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot read file status", impl_->path));
     }
     return static_cast<std::uint64_t>(status.st_size);
 }
 
 Base::Result<void, OsError> ReadFile::Seek(const std::uint64_t offset) {
+    GYO_ASSERT(impl_ != nullptr);
     if (offset > static_cast<std::uint64_t>((std::numeric_limits<off_t>::max)())) {
-        return Base::Err(FromErrno(EOVERFLOW, "seek offset is too large", impl_->path));
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "seek offset is too large", impl_->path.size()));
     }
     if (::lseek(impl_->descriptor, static_cast<off_t>(offset), SEEK_SET) < 0) {
-        return Base::Err(FromErrno(errno, "cannot seek in file", impl_->path));
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot seek in file", impl_->path));
     }
     return {};
 }
 
 Base::Result<std::uint64_t, OsError> ReadFile::Tell() const {
+    GYO_ASSERT(impl_ != nullptr);
     const off_t position = ::lseek(impl_->descriptor, 0, SEEK_CUR);
-    if (position < 0) return Base::Err(FromErrno(errno, "cannot read file position", impl_->path));
+    if (position < 0) {
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot read file position", impl_->path));
+    }
     return static_cast<std::uint64_t>(position);
 }
 
@@ -135,7 +167,10 @@ Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     const std::string path(utf8Path);
     struct stat status {};
-    if (::stat(path.c_str(), &status) != 0) return Base::Err(FromErrno(errno, "cannot read file status", utf8Path));
+    if (::stat(path.c_str(), &status) != 0) {
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot read file status", utf8Path));
+    }
     FileStatus out;
     out.kind = KindOf(status.st_mode);
     out.sizeBytes = out.kind == FileKind::Regular ? static_cast<std::uint64_t>(status.st_size) : 0;
@@ -158,12 +193,27 @@ Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path)
     if (utf8Path.front() == '/') return std::string(utf8Path);
     std::vector<char> buffer(256);
     while (::getcwd(buffer.data(), buffer.size()) == nullptr) {
-        if (errno != ERANGE) return Base::Err(FromErrno(errno, "cannot read the current directory", utf8Path));
+        const int error = errno;
+        if (error != ERANGE) return Base::Err(FromErrno(error, "cannot read the current directory", utf8Path));
         buffer.resize(buffer.size() * 2);
     }
     std::string out(buffer.data());
     if (out.empty() || out.back() != '/') out.push_back('/');
     out.append(utf8Path);
+    return out;
+}
+
+bool IsAbsolutePath(const std::string_view utf8Path) noexcept {
+    return !utf8Path.empty() && utf8Path.front() == '/';
+}
+
+Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path) {
+    // POSIX paths are bytes; they are UTF-8 only if the bytes are.
+    const std::u8string text = path.generic_u8string();
+    std::string out(text.begin(), text.end());
+    if (!Detail::IsValidUtf8(out)) {
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path is not valid UTF-8", out.size()));
+    }
     return out;
 }
 
