@@ -31,6 +31,16 @@ gyo_register_acceptance_probe(OWNER "${GYO_CURRENT_APP}" ROLE quad TARGET ${quad
 if(MSVC)
     target_compile_options(${probe} PRIVATE /utf-8)
 endif()
+# Reads the installed content without a window (v7.1 windows-long-path, P5);
+# content_deep_path.py runs it from a package copied to a deep folder.
+set(content "gyo_${GYO_CURRENT_APP}_content_probe")
+add_executable(${content} content_main.cpp)
+target_compile_features(${content} PRIVATE cxx_std_20)
+target_link_libraries(${content} PRIVATE GYO::Engine GYO::Render GYO::Os)
+gyo_register_acceptance_probe(OWNER "${GYO_CURRENT_APP}" ROLE content TARGET ${content})
+if(MSVC)
+    target_compile_options(${content} PRIVATE /utf-8)
+endif()
 gyo_get_app_target("${GYO_CURRENT_APP}" app_support support)
 set(gui "gyo_${GYO_CURRENT_APP}_gui_probe")
 add_executable(${gui} gui_main.cpp)
