@@ -90,6 +90,13 @@ struct ClientSimulationDrain {
 // D172 D-7: connection reset or refused, network or host unreachable, network
 // down): the worker counts them as no data this time, never a Failure.
 [[nodiscard]] bool TransientSocketError(const std::error_code& error) noexcept;
+// What the network worker does with the result of one send or receive:
+// Proceed without an error; Blocked when the socket would block; Tolerate a
+// transient error while playing (connected or interrupted: count it, no data
+// this time); Fail otherwise, so during the handshake every socket error,
+// transient or not, fails the join at once.
+enum class SocketErrorAction { Proceed, Blocked, Tolerate, Fail };
+[[nodiscard]] SocketErrorAction SocketErrorActionFor(const std::error_code& error, bool playing) noexcept;
 // One joined connection, written when its transport closes.
 struct ConnectionSummary final {
     PlayerId player{};

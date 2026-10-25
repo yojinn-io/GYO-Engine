@@ -104,9 +104,9 @@ D180 的補充要求在 `lan15-windows` 之前處理已知問題。整理出的�
 | K6 | Hello 間隔 1 s 造成的改綁空窗（契約的安全取捨） | 同上 | `rebind-on-new-port` |
 | K7 | 寫出新 A 級行的呼叫點沒有執行期守衛 | 同上（m6 的另一半） | `contract-readers`（完成：worker 驗收的 `RequireOutageLines`） |
 | K8 | 在 tip 恢復時的 SeedLead 不留移動紀錄 | 同上（m7） | `trace-no-overwrite`（完成：tip 恢復也寫 `resume_reset`） |
-| K9 | 握手期的暫時性錯誤、直接超過 T_max 這兩個新分支沒有執行期測試 | 同上 | `client-path-tests` |
+| K9 | 握手期的暫時性錯誤、直接超過 T_max 這兩個新分支沒有執行期測試 | 同上 | `client-path-tests`（完成：D200 (b)，純函式＋靜態檢查，執行期交給 L3） |
 | K10 | 凍結的 `run_case` 在 probe 失敗後立刻關服務，L2 看不到 Gateway 端的 session 到期 | 同上 | `lan15-windows` 的工具準備 |
-| K11 | Engine 的 `EventWatchTests.cpp:300` 靠時序碰運氣（200 輪中至少一次在回呼執行時解構），L1 偶發失敗 | client-silent-checks 的 L1（run 40107059342，macos-arm64） | 新批 `event-watch-overlap`，接在 `client-path-tests` 之後（D186） |
+| K11 | Engine 的 `EventWatchTests.cpp:300` 靠時序碰運氣（200 輪中至少一次在回呼執行時解構），L1 偶發失敗 | client-silent-checks 的 L1（run 40107059342，macos-arm64） | 新批 `event-watch-overlap`，接在 `client-path-tests` 之後（D186；完成，D200） |
 | K12 | `test_diagnostic_isolation.py` 的 liveness 檢查只看得到 `liveness.方法(` 這種寫法：別名（`auto& l=liveness;`）、方法名前多空格、在區域內重新宣告 `arrivedAt` 的呼叫，解析器看不到，擋不住推導出來的時刻。既有缺口，不是 D188 造成的 | rebind-on-new-port 的守衛判定變更的獨立核對（D189） | 去處待定（建議併入 `client-path-tests`） |
 
 不列入：m8（取消的 join 也寫摘要，和既有的時鐘行一致）；替代紀錄裡產品走不到的差異（程式已註明前提）；`N-movement-recovery-flake`（只在 macos-x64，照平台優先序只記錄）；黑畫面的預熱幀（已交給 v8）。

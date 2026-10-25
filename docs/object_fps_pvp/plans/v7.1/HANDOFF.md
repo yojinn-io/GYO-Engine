@@ -43,16 +43,11 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **等你決定**：`client-path-tests` 的 K9（握手期的暫時性 socket 錯誤立刻失敗、直接超過 T_max 時先記中斷）要執行期測試，但兩種情況在測試程序裡都造不出來（本機未連線的 UDP socket 收不到 ICMP 錯誤；worker 執行緒無法從外部暫停）。選項：
-  - (a) 在 `ClientConnection` 加窄的測試掛鉤（注入一次收包錯誤、讓 worker 延後一次輪詢），worker 驗收用它造兩種情況；產品多一個只給測試用的入口。
-  - (b) 把兩個分支的判斷抽成純函式做單元測試；判斷有測，接線（是否真的呼叫）沒有執行期測試。
-  - (c) 不做執行期測試，交給 `lan15-windows` 的 L3（拔線時 Windows 真的會丟 WSAECONNRESET），只記錄。
-  - 建議 (b)：不在產品加測試入口；接線由既有的靜態檢查（暫時性判斷在兩個 Failure 之前）與 L3 補上。
 - **進行中（發行線）**：`windows-long-path` 的 P1～P5 程式與自動驗收完成（D199；分支 `claude/pvp-v71-release`，從 PR #95 的 `a0e6668` 切出並併進 A1～A3；Red run 40176646387 在 windows-x64 如預期失敗，Green run 40177623030 待確認；dev_log `docs/dev_logs/2026_10_25_pvp_v71_windows_long_path.zh-Hant.md`）。剩下：實機在 P＝156 與 P 約 210 各啟動一次（需要你）、Windows 專用突變 5 個。發行線的 PR 還沒開。
 - **等你決定（發行線）**：`quick-close` 的做法與事前宣告的門檻（[quick-close.md](quick-close.md)，建議 q1，門檻草案在文件裡）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
-- **等你核准**：`event-watch-overlap`（K11）的測試判定變更（Engine 的 `EventWatchTests.cpp`；有放寬面，§14.4 要核准）。改寫已做好但**沒有提交**，patch 在 `docs/architecture/plans/input-and-present/patches/k11-event-watch-overlap.patch`；1～5、突變與獨立核對見 dev_log 的 event-watch-overlap 一節。INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
+- INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
-- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。`contract-readers`（含 K7）完成。`trace-no-overwrite`（含 K8）完成。`analyzer-converge`（D192）完成。`token-tests` 完成。`client-path-tests` 的 C17-3 與他版計數完成，K9 等使用者決定（見「等你決定」）。`event-watch-overlap`（K11）的改寫等使用者核准（見「等你核准」）。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
+- **進行中**：「系統其餘＋觀測＋測試」線（PR [#95](https://github.com/yojinn-io/GYO-Engine/pull/95)）。完成：`silent-branch-asserts`（D180）、`client-silent-checks`（D183）、`cxx-flag-removal`（L1 run 40110961077）、`rebind-on-new-port`（D188；L2 `pvp-v71-rebind-l2-20261025` 12／12 P，L1 run 40117207196）。`contract-readers`（含 K7）完成。`trace-no-overwrite`（含 K8）完成。`analyzer-converge`（D192）完成。`token-tests` 完成。`client-path-tests`（含 K9，D200 (b)）完成。`event-watch-overlap`（K11，D200 核准）完成。前一條線：`outage-resync` 完成，PR [#90](https://github.com/yojinn-io/GYO-Engine/pull/90) 2026-10-24 合併（merge commit `03453e2`，完整 L1 run 40089491812 四平台成功；D171～D179）。L3 移到 `lan15-windows`（D179）。
 - **關卡改名（2026-10-23）**：`outage-resync` 的關卡 G1、G2 和 INVENTORY 的項目代號 G1、G2 撞名，改成 `gate-characterize`（舊 G1）、`gate-contract`（舊 G2）。決策紀錄與 commit 訊息裡指這兩個關卡的 G1、G2 照此讀。
 - **任務線總覽**：
   - 完成：pv7-line、after-pv7（PR #82）、sdl-isolation-plan 與 sdl-isolation（PR #85）、black-map-observation（PR #89）、記錄器分支（PR #93）、outage-resync（PR #90）。
@@ -190,6 +185,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D197 | （2026-10-25）分工更正：OS 子系統任務只做架構（`engine/os` 與從 `engine/io` 移過去的系統實作），windows-long-path 的修正與驗收由 v7.1（本會話）在架構完成後實作。產品任務和架構分開。界線和那個會話確認後記在 [windows-long-path.md](windows-long-path.md) 的 D197 一節 | 使用者：「你來做！！！，那邊只修架構，你等那邊修好了，就做。產品任務和架構分開。」 |
 | D198 | （2026-10-25）OS 子系統的 PLAN 核准（Engine D46）。對 v7.1：A1～A3（`engine/os` 骨架、`engine/io` 契約、唯讀檔案）在發行前、由 OS 子系統任務在它的分支完成，併進發行線 PR，加上本會話的 P1～P5（兩個任務、一個 PR）；UNC 根目錄這一輪不支援；P4 多兩處（`ContentManifest.cpp:110`、`ReadOnlyAssetCatalog.cpp:55`）；P5 的驗收條件見 [windows-long-path.md](windows-long-path.md) 的 D198 一節；其他 OS 部件排在發行後 | 使用者在 OS 子系統的會話：「核准 os-subsystem 的 PLAN。開放決策 1、14、15 照建議……同意 A1～A3 的 Delta（新 target GYO::Os、os.md 與 io.md 的 Design Invariants 節）。」（經該會話轉達） |
 | D199 | （2026-10-25）windows-long-path 的 P1～P5 開工。發行線 `claude/pvp-v71-release` 不等 PR #95 合併，從 PR #95 目前的最新提交 `a0e6668` 切出，再 `--no-ff` 併進 A1～A3（`f3a6770`，無衝突）；PR #95 合併後，發行線相對 master 的差異同樣只剩 A1～A3 與 P1～P5。P1 的行為變更（Windows 上完整路徑達 248 字元以上時交給 API 的是 `\\?\` 加完整路徑）與 P5 的驗收在執行前宣告，見 [windows-long-path.md](windows-long-path.md) 的 D199 一節 | 使用者經 OS 子系統的會話轉達：「讓v7.1會話開始P1～P5的任務」；分支的先後由本會話判斷（該會話：「先後怎麼排……由你判斷，必要時再問使用者」） |
+| D200 | （2026-10-25）K9 照建議 (b)：握手期暫時性錯誤與直接超過 T_max 的兩個判斷抽成純函式（`SocketErrorActionFor`、`PollRecordsInterruption`）做單元測試，接線由 `test_diagnostic_isolation.py` 的靜態檢查守，產品不加測試入口；執行期由 lan15-windows 的 L3 補。K11 的判定變更核准，patch 套進 `EventWatchTests.cpp`。細節見 dev_log 的 client-path-tests 與 event-watch-overlap 兩節 | 使用者：「K9、K11照建議開始」 |
 
 ## 規劃紀錄（記錄器）
 
