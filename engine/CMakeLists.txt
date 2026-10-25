@@ -3,6 +3,9 @@
 # either.
 add_subdirectory(base)
 add_subdirectory(math)
+# The OS layer sits directly above Base and below every module that needs the
+# operating system (docs/architecture/os.md).
+add_subdirectory(os)
 # The engine time base, role threads and trace transport sit directly above
 # Base, below GYO::Engine, so modules that do not link the engine library may
 # use them.
@@ -28,6 +31,7 @@ target_sources(engine
     # io/fs
     io/src/fs/DirectoryIterator.cpp
     io/src/fs/MountTable.cpp
+    io/src/fs/NativeFileSystem.cpp
     io/src/fs/Vfs.cpp
     # io/helpers
     io/src/helpers/ReadAllBytes.cpp
@@ -64,7 +68,8 @@ target_sources(engine
 )
 target_link_libraries(engine
     PUBLIC GYO::Base GYO::Math GYO::Time
-    PRIVATE nlohmann_json::nlohmann_json
+    # engine/io's native file system calls the OS layer; no engine/io public header names an engine/os type.
+    PRIVATE nlohmann_json::nlohmann_json GYO::Os
 )
 
 # SDL_image is an optional decoder implementation. GYO::Engine remains

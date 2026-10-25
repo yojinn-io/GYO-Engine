@@ -163,3 +163,31 @@ TT 計畫的批次完成時，由該批更新本節。
 - 連結：只有用到 `GYO::Trace` 的目標需要連結它；`GYO::Engine` 不依賴它。
 - 選用：未啟用產品若要背景寫紀錄檔，使用 `Engine::Trace::TraceSink`，不要自己開執行緒輪詢。
 
+
+## 5. OS（OS 子系統計畫）
+
+OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成時，由該批更新本節。
+
+### os-skeleton 建立 engine/os 與守衛
+
+狀態：完成（2026-10-25，四平台 L1 通過），未合併（併進消費端的發行線 PR，D46）。
+
+- 破損：無。新增 `GYO::Os`（只依賴 Base）與 `OsError`；沒有任何既有介面改變。
+- 守衛：`os.boundary_guard` 這一批只掃 engine 與 tests/common。未啟用產品的 OS 分支（`apps/object_fps{,_v2}/main.cpp` 等）在 os-guard-wide 才會列進各自目錄的 `os_boundary_allowlist.txt`；在那之後，重新啟用時若新增 OS 標頭、OS 巨集或直接開檔，會被守衛擋下。
+- 選用：未啟用產品若要處理 OS 差異，等對應部件完成後使用 `engine/os`，不要自己寫 `#if`。
+
+### io-contracts engine/io 的路徑契約
+
+狀態：完成（2026-10-25，四平台 L1 通過），未合併（併進消費端的發行線 PR，D46）。
+
+- 破損：無編譯破損。行為變更：
+  - `AssetPathResolver` 在允許 scheme（預設）時，`file:///x`、`file://localhost/x` 現在是絕對路徑而被拒；過去會被當成 assets 根目錄下的相對路徑。未啟用產品的 shader bundle resolver 也用預設值，但它們的 manifest 沒有 file:// 條目。
+  - `MountTable::Resolve` 拒絕含 `..` 段的請求。
+- 選用：未啟用產品若要把原生絕對路徑交給 engine/io，用 `FileUriFromNativePath`／`NativePathFromFileUri`，不要自己拼 `file://` 字串。
+
+### os-files-read 唯讀檔案原語與原生檔案系統
+
+狀態：完成（2026-10-25，四平台 L1 通過），未合併（併進消費端的發行線 PR，D46）。
+
+- 破損：無。新增 `Engine::Os::Files`（`GYO::Os`）與 `Engine::IO::FS::NativeFileSystem`；`GYO::Engine` 多了 PRIVATE 依賴 `GYO::Os`，未啟用產品不需要改 CMake。
+- 選用：未啟用產品若要讀原生檔案，經 engine/io（`NativeFileSystem` 或掛上它的 `Vfs`），或直接用 `Engine::Os::Files`；路徑一律交 UTF-8（`PathToUtf8`，回傳 Result，D47），不要用 `path::string()`。

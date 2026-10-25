@@ -103,6 +103,25 @@ TEST_CASE("AssetPathResolver: normalize a scheme path under assets root") {
     CHECK_FALSE(out.value().IsAbsoluteLike());
 }
 
+// The file:// rule of docs/architecture/io.md: a file URI always names an
+// absolute path, so a resolver that allows schemes rejects it like any other
+// absolute path; other schemes still resolve under the assets root.
+TEST_CASE("AssetPathResolver: a file URI is absolute even when schemes are allowed") {
+    AssetPathResolver::Options options;
+    options.assetsRoot = "/game/shaders";
+    REQUIRE(options.allowSchemes);
+    AssetPathResolver r(options);
+
+    for (const auto* path : {"file:///x.dxil", "file://localhost/x.dxil"}) {
+        const auto out = r.Resolve(path);
+        REQUIRE_FALSE(out);
+        CHECK(out.error().code == Engine::Asset::AssetErrorCode::InvalidPath);
+    }
+    const auto res = r.Resolve("res:///x.dxil");
+    REQUIRE(res);
+    CHECK(res.value().Str() == "/game/shaders/x.dxil");
+}
+
 TEST_CASE("AssetPathResolver: allow escape root when explicitly enabled") {
     AssetPathResolver::Options options;
     options.assetsRoot = "assets/game";
