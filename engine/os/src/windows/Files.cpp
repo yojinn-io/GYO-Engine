@@ -179,7 +179,7 @@ bool IsSlash(const char c) noexcept {
 
 } // namespace
 
-struct ReadFile::Impl {
+struct FileReader::Impl {
     HANDLE handle = INVALID_HANDLE_VALUE;
     std::string path;
 
@@ -191,12 +191,12 @@ struct ReadFile::Impl {
     }
 };
 
-ReadFile::ReadFile(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
-ReadFile::ReadFile(ReadFile&& other) noexcept = default;
-ReadFile& ReadFile::operator=(ReadFile&& other) noexcept = default;
-ReadFile::~ReadFile() = default;
+FileReader::FileReader(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
+FileReader::FileReader(FileReader&& other) noexcept = default;
+FileReader& FileReader::operator=(FileReader&& other) noexcept = default;
+FileReader::~FileReader() = default;
 
-Base::Result<ReadFile, OsError> ReadFile::Open(const std::string_view utf8Path) {
+Base::Result<FileReader, OsError> FileReader::Open(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     auto path = OsCallPath(utf8Path);
     if (!path) return Base::Err(std::move(path.error()));
@@ -217,10 +217,10 @@ Base::Result<ReadFile, OsError> ReadFile::Open(const std::string_view utf8Path) 
     if (::GetFileType(file) != FILE_TYPE_DISK) {
         return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidPath, "not a regular file", utf8Path.size()));
     }
-    return ReadFile(std::move(impl));
+    return FileReader(std::move(impl));
 }
 
-Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> into) {
+Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {
     GYO_ASSERT(impl_ != nullptr);
     if (into.empty()) return std::size_t{0};
     const DWORD asked = static_cast<DWORD>((std::min)(into.size(), static_cast<std::size_t>(kMaximumRead)));
@@ -234,7 +234,7 @@ Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> int
     return static_cast<std::size_t>(got);
 }
 
-Base::Result<std::uint64_t, OsError> ReadFile::Size() const {
+Base::Result<std::uint64_t, OsError> FileReader::Size() const {
     GYO_ASSERT(impl_ != nullptr);
     LARGE_INTEGER size{};
     if (!::GetFileSizeEx(impl_->handle, &size)) {
@@ -244,7 +244,7 @@ Base::Result<std::uint64_t, OsError> ReadFile::Size() const {
     return static_cast<std::uint64_t>(size.QuadPart);
 }
 
-Base::Result<void, OsError> ReadFile::Seek(const std::uint64_t offset) {
+Base::Result<void, OsError> FileReader::Seek(const std::uint64_t offset) {
     GYO_ASSERT(impl_ != nullptr);
     if (offset > static_cast<std::uint64_t>((std::numeric_limits<LONGLONG>::max)())) {
         return Base::Err(Detail::RefusedArgument(OsErrorCode::TooLarge, "seek offset is too large", impl_->path.size()));
@@ -258,7 +258,7 @@ Base::Result<void, OsError> ReadFile::Seek(const std::uint64_t offset) {
     return {};
 }
 
-Base::Result<std::uint64_t, OsError> ReadFile::Tell() const {
+Base::Result<std::uint64_t, OsError> FileReader::Tell() const {
     GYO_ASSERT(impl_ != nullptr);
     LARGE_INTEGER zero{};
     LARGE_INTEGER position{};

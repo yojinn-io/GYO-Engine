@@ -298,7 +298,7 @@
       "replace": "    if (false) {",
       "target": "gyo_os_tests",
       "cases": "*regular files only*",
-      "expect": "ReadFile::Open accepted"
+      "expect": "FileReader::Open accepted"
     },
     {
       "id": "os-f4-windows-acp",
@@ -368,14 +368,14 @@
     },
     {
       "id": "os-f6-posix-moved-from",
-      "what": "A moved-from ReadFile is read without the Programmer Error check",
+      "what": "A moved-from FileReader is read without the Programmer Error check",
       "platforms": [
         "darwin",
         "linux"
       ],
       "file": "engine/os/src/posix/Files.cpp",
-      "find": "Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> into) {\n    GYO_ASSERT(impl_ != nullptr);\n",
-      "replace": "Base::Result<std::size_t, OsError> ReadFile::Read(const std::span<std::byte> into) {\n",
+      "find": "Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {\n    GYO_ASSERT(impl_ != nullptr);\n",
+      "replace": "Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {\n",
       "target": "gyo_os_tests",
       "cases": "*moved-from*",
       "expect": "CRASHED|SIGSEGV|GYO_CHECK_ASSERTS"

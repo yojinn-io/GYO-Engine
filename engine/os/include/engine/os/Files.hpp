@@ -33,17 +33,17 @@ struct FileStatus final {
 
 // A native file open for reading. Move-only; the file is closed when the
 // object is destroyed. Only regular files open: a directory, a FIFO or a
-// device is InvalidPath. A moved-from ReadFile may only be destroyed or
+// device is InvalidPath. A moved-from FileReader may only be destroyed or
 // assigned to; calling anything else on it is a Programmer Error.
-class ReadFile final {
+class FileReader final {
 public:
-    [[nodiscard]] static Base::Result<ReadFile, OsError> Open(std::string_view utf8Path);
+    [[nodiscard]] static Base::Result<FileReader, OsError> Open(std::string_view utf8Path);
 
-    ReadFile(ReadFile&& other) noexcept;
-    ReadFile& operator=(ReadFile&& other) noexcept;
-    ReadFile(const ReadFile&) = delete;
-    ReadFile& operator=(const ReadFile&) = delete;
-    ~ReadFile();
+    FileReader(FileReader&& other) noexcept;
+    FileReader& operator=(FileReader&& other) noexcept;
+    FileReader(const FileReader&) = delete;
+    FileReader& operator=(const FileReader&) = delete;
+    ~FileReader();
 
     // Reads up to into.size() bytes at the current position. A read may
     // return fewer bytes than asked; 0 for a non-empty span is the end of the
@@ -57,11 +57,11 @@ public:
 
 private:
     struct Impl;
-    explicit ReadFile(std::unique_ptr<Impl> impl) noexcept;
+    explicit FileReader(std::unique_ptr<Impl> impl) noexcept;
     std::unique_ptr<Impl> impl_;
 };
 
-// Both follow symbolic links, so they describe the file a ReadFile opens.
+// Both follow symbolic links, so they describe the file a FileReader opens.
 // A missing path is NotFound.
 [[nodiscard]] Base::Result<FileStatus, OsError> Stat(std::string_view utf8Path);
 // A missing path (or a missing parent directory, or a dangling link) is false.

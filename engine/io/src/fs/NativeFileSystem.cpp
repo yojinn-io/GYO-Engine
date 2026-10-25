@@ -71,7 +71,7 @@ namespace Engine::IO::FS {
         // A read stream over an engine/os file.
         class NativeReadStream final : public Stream::IStream {
         public:
-            NativeReadStream(Os::Files::ReadFile file, std::string nativePath)
+            NativeReadStream(Os::Files::FileReader file, std::string nativePath)
                 : file_(std::move(file)), path_(std::move(nativePath)) {}
 
             Stream::StreamCaps Caps() const noexcept override {
@@ -148,7 +148,7 @@ namespace Engine::IO::FS {
                 return IoError::Make(code, "NativeFS: the stream is closed", path_);
             }
 
-            std::optional<Os::Files::ReadFile> file_;
+            std::optional<Os::Files::FileReader> file_;
             std::string path_;
             bool eof_ = false;
         };
@@ -163,7 +163,7 @@ namespace Engine::IO::FS {
         if (WantsWrite(mode)) return Base::Err(Unsupported("opening for writing"));
         auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
-        auto file = Os::Files::ReadFile::Open(native.value());
+        auto file = Os::Files::FileReader::Open(native.value());
         if (!file) return Base::Err(FromOs(file.error(), native.value(), IoErrorCode::OpenFailed));
         return std::unique_ptr<Stream::IStream>(
             std::make_unique<NativeReadStream>(std::move(file.value()), native.value()));

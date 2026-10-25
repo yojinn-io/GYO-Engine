@@ -255,6 +255,12 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 測試數：gyo_os_tests 19 個案例、NativeFileSystemTests 9 個。
   - 突變：os-f4 改成兩個方向都換成 ACP。新增 os-f6～os-f8、io-n5、io-n6。整份目錄在本機 34／34 killed，Windows 專用的 2 個跳過。
   - 本機 L1：ctest 30／30，守衛通過。
+- 2026-10-25：推送本分支，手動觸發四平台 L1：[run 40172686040](https://github.com/yojinn-io/GYO-Engine/actions/runs/40172686040)，`04beea4`。
+  - 結果：失敗。macos-x64、macos-arm64、linux-x64 的 L1 與 quick acceptance 都成功；windows-x64 的 L1 與兩個 quick acceptance 失敗。
+  - 原因：只有 `tests/common/os/FilesTests.cpp` 編譯失敗（`error C2872: 'ReadFile': ambiguous symbol`）。這個測試為了 `GetACP` include 了 windows.h，又寫了 `using namespace Engine::Os::Files;`，類別 `ReadFile` 因此和 Win32 的 `::ReadFile` 撞名。
+  - engine/os 的 `src/windows/Files.cpp` 與 NativeFileSystem 第一次在 MSVC 上編譯，都成功了。
+  - 這正是審查 finding 15 預警的陷阱。產品的翻譯單元會經 asio 間接看到 windows.h，所以只在測試裡加命名空間不夠：趁還沒有任何使用者，把類別改名為 `FileReader`。os.md 的 Contracts 加上命名規則：不重用 Win32 函式名，也不用 windows.h 的 A／W 巨集名。突變目錄的 find 與 expect 字串同步改名。
+  - 改名後本機：ctest 30／30，守衛通過，相關突變 12／12 killed。
 
 ## 未結事項
 
@@ -270,7 +276,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - ~~os-files-read 的公開介面 xhigh 審查（1 位）：等使用者同意。~~ 2026-10-25 完成，修正見「os-files-read」。
 - Windows 專用的突變 os-f4、os-f5 要在 Windows 機器上執行（CI 不跑突變）。在那之前，Windows 端的檢出力只有 L1 的測試本身。
 - os-files-read 的非 ACP 測試：對「改用 ACP 轉換」這類突變，只要 runner 的 ACP 不是 UTF-8（65001）就有檢出力。測試同時含日文、正體中文與 é，在 1252 與 932 上都有效。新增的 Windows 專用案例「record the process ANSI code page」會印出 `GetACP()`，並檢查它不是 65001；第一次 windows-x64 L1 從它的輸出確認。
-- os-files-write 開始前：先定好命名規則。windows.h 把 `CreateDirectory`、`DeleteFile`、`MoveFile`、`CopyFile` 定義成 A／W 巨集；產品 TU 會經 asio 間接 include windows.h，`ReadFile` 這類名稱在那裡也可能有歧義（審查的 finding 15）。
+- ~~os-files-write 開始前：先定好命名規則（審查的 finding 15）。~~ 2026-10-25 寫進 os.md 的 Contracts（Names）。第一次 windows-x64 L1 實際撞到之後，`ReadFile` 改名為 `FileReader`。os-files-write 的寫入類名稱照這條規則取。
 - io-contracts 起的既有契約問題（審查的 finding 10）已在 os-files-read 處理：NativeFileSystem 用 `Os::Files::IsAbsolutePath` 拒絕「在這個平台不是絕對路徑」的 file URI 路徑。
 - ~~io-contracts 開始時：契約審查用 ultracode（1 審查者＋1 對抗檢查），先問。~~ 2026-10-25 完成。
 - 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。

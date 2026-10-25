@@ -6,7 +6,7 @@
 ## 做了什麼
 
 - `engine/os` 的 Files 部件（唯讀）：
-  - `ReadFile` 提供 Open、Read、Size、Seek、Tell。
+  - `FileReader` 提供 Open、Read、Size、Seek、Tell。原名 `ReadFile`；第一次 windows-x64 L1 顯示它和 Win32 的 `::ReadFile` 撞名，因此改名。
   - 另有 `Stat`、`Exists`、`MakeAbsolute`、`PathToUtf8`／`PathFromUtf8`。
   - 路徑一律是 UTF-8：Windows 轉成 UTF-16 呼叫寬字元 API，POSIX 原樣使用。
   - 空字串、NUL、不合法 UTF-8 在呼叫 OS 前就拒絕。
@@ -53,6 +53,13 @@
   - 補上審查列出的測試缺口。
 - 為 P1 預留了加長路徑前綴的位置：Windows 原語的 `OsCallPath`（PLAN 第 8 節）。
 - 修正後：gyo_os_tests 19 個案例、NativeFileSystemTests 9 個；整份突變目錄在本機 34／34 killed（Windows 專用的 2 個跳過）；ctest 30／30。
+
+## 四平台 L1
+
+- 第一次（[run 40172686040](https://github.com/yojinn-io/GYO-Engine/actions/runs/40172686040)，`04beea4`）：macOS 兩個平台與 Linux 成功，windows-x64 失敗。
+  - 失敗只在測試檔：include windows.h 又寫了 `using namespace` 的翻譯單元裡，類別 `ReadFile` 和 Win32 的 `::ReadFile` 撞名。
+  - engine/os 的 Windows 實作與 NativeFileSystem 第一次在 MSVC 上編譯，都成功了。
+- 處理：類別改名為 `FileReader`，並在 os.md 寫下命名規則。
 
 ## 證據
 

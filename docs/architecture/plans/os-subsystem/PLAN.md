@@ -95,9 +95,9 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   namespace Engine::Os::Files {
   enum class FileKind : std::uint8_t { None = 0, Regular, Directory, Other };
   struct FileStatus final { FileKind kind; std::uint64_t sizeBytes; std::chrono::nanoseconds modifiedSinceUnixEpoch; };
-  class ReadFile final {            // move-only; native handle kept opaque (pimpl), no HANDLE or fd in the header
+  class FileReader final {            // move-only; native handle kept opaque (pimpl), no HANDLE or fd in the header
   public:
-      [[nodiscard]] static Base::Result<ReadFile, OsError> Open(std::string_view utf8Path);
+      [[nodiscard]] static Base::Result<FileReader, OsError> Open(std::string_view utf8Path);
       [[nodiscard]] Base::Result<std::size_t, OsError> Read(std::span<std::byte> into);
       [[nodiscard]] Base::Result<std::uint64_t, OsError> Size() const;
       [[nodiscard]] Base::Result<void, OsError> Seek(std::uint64_t offset);
@@ -116,7 +116,8 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   實作時的調整（2026-10-25，os-files-read 的 xhigh 審查之後）：
   - `PathToUtf8`／`PathFromUtf8` 改成回傳 Result（D47）。原因：MSVC 的 `std::filesystem::path` 遇到不合法的 UTF-8 或未配對 surrogate 會丟例外，違反 Invariant 5、6。
   - 新增 `IsAbsolutePath`。原因：engine/io 的原生後端不能自己判斷 OS，又必須拒絕「在這個平台不是絕對路徑」的 file URI 路徑，例如 Windows 上的 `/x`。
-  - `ReadFile::Open` 只接受一般檔案，`Stat`／`Exists` 跟隨 symbolic link。詳見 os.md 的 Contracts。
+  - `FileReader::Open` 只接受一般檔案，`Stat`／`Exists` 跟隨 symbolic link。詳見 os.md 的 Contracts。
+  - 類別原名 `ReadFile`，改成 `FileReader`。原因：第一次 windows-x64 L1 顯示，include 了 windows.h 的翻譯單元裡，它和 Win32 的 `::ReadFile` 會產生歧義（審查 finding 15 預警過）。命名規則寫進 os.md 的 Contracts。
 
 - 不含：
   - Uri、IFileSystem、IStream、Vfs、mount、watcher（留在 engine/io，engine/os 不認識它們）。
@@ -128,7 +129,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 
 - 責任：實作 `IFileSystem` 的 file:// 後端，所有 OS 呼叫交給 `Os::Files`，本身不含 OS 標頭、OS 巨集或 fstream。這實現了 `IFileSystem.hpp:26-28` 預告、由「platform 側」提供的原生實作；本計畫確定「platform 側」就是 engine/os 加上這個後端。
 - 唯讀起步：
-  - `Open` 只接受讀取模式，回傳包住 `Os::Files::ReadFile` 的 IStream；另外提供 `Exists`、`Stat`、`ToNativePathString`（呼叫 `NativePathFromFileUri`）。
+  - `Open` 只接受讀取模式，回傳包住 `Os::Files::FileReader` 的 IStream；另外提供 `Exists`、`Stat`、`ToNativePathString`（呼叫 `NativePathFromFileUri`）。
   - `Capabilities()` 明確把寫入類欄位設成 false：canOpenWrite、canList、canIterate、canCreateDirectories、canRemove、**canRemoveRecursive**、canMove、canCopy、supportsWatch。`FileSystemCapabilities.hpp` 的預設值多半是 true，不能沿用。supportsToNativePath 設成 true。caseSensitivePaths 取自 `Os::Files::DefaultCaseSensitivePaths()`，io.md 註明實際值依磁碟區而異。
   - 其他方法回傳 `IoErrorCode::NotSupported`，等到有消費端需要時才實作。
 - OsError 轉成 IoError 時，用 CauseDetail 保留原生錯誤碼。
@@ -387,7 +388,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 - 白話：在 engine/os 寫好三個平台的唯讀檔案原語（UTF-8 路徑轉原生路徑），並在 engine/io 加上呼叫它們的唯讀原生檔案系統。
 - 依賴：os-skeleton、io-contracts。
 - 做：
-  - 第 3.2、3.3 節。Windows 用 CreateFileW／ReadFile，POSIX 用 open／read／fstat。
+  - 第 3.2、3.3 節。Windows 用 CreateFileW／ReadFile（Win32 函式），POSIX 用 open／read／fstat。
   - GYO::Engine → PRIVATE GYO::Os。
   - Windows 上加一個只記錄的測試：超過 260 字元的路徑目前回報什麼原生錯誤碼。讓消費端的 P1 一開始就有現成的 Red，P2 也有格式可以比對。
 - 不做：長路徑（P1）、asset 接線（P3）、寫入、列舉、platform/sdl 的 PathFromUtf8 移除。

@@ -71,7 +71,7 @@ private:
     std::filesystem::path path_;
 };
 
-std::string ReadAll(ReadFile& file) {
+std::string ReadAll(FileReader& file) {
     std::string out;
     std::vector<std::byte> buffer(4);
     while (true) {
@@ -83,8 +83,8 @@ std::string ReadAll(ReadFile& file) {
 }
 
 OsErrorCode OpenError(const std::string& path) {
-    auto file = ReadFile::Open(path);
-    REQUIRE_MESSAGE(!file, "ReadFile::Open accepted " << path);
+    auto file = FileReader::Open(path);
+    REQUIRE_MESSAGE(!file, "FileReader::Open accepted " << path);
     return file.error().code;
 }
 
@@ -94,7 +94,7 @@ TEST_CASE("Os files read a whole file through its UTF-8 path") {
     const TempDirectory temp("gyo-os-files");
     const std::string bytes("hello\0world", 11);
     const auto path = temp.Write("a.bin", bytes);
-    auto file = ReadFile::Open(Utf8(path));
+    auto file = FileReader::Open(Utf8(path));
     REQUIRE(file);
     CHECK(file.value().Size().value() == 11);
     CHECK(ReadAll(file.value()) == bytes);
@@ -111,7 +111,7 @@ TEST_CASE("Os files open a path outside the ANSI code page") {
         temp.Write(Native("\xE8\xB3\x87\xE6\x96\x99\xE5\xA4\xBE-\xC3\xA9\xE6\x97\xA5\xE6\x9C\xAC/b.txt"), "UTF-8 path");
     const std::string utf8 = Utf8(path);
     CHECK(utf8.find("\xE8\xB3\x87\xE6\x96\x99\xE5\xA4\xBE") != std::string::npos);
-    auto file = ReadFile::Open(utf8);
+    auto file = FileReader::Open(utf8);
     REQUIRE_MESSAGE(file, "cannot open " << utf8);
     CHECK(ReadAll(file.value()) == "UTF-8 path");
     CHECK(Exists(utf8).value());
@@ -119,7 +119,7 @@ TEST_CASE("Os files open a path outside the ANSI code page") {
 
 TEST_CASE("Os files seek and tell") {
     const TempDirectory temp("gyo-os-files");
-    auto file = ReadFile::Open(Utf8(temp.Write("c.bin", "hello world")));
+    auto file = FileReader::Open(Utf8(temp.Write("c.bin", "hello world")));
     REQUIRE(file);
     REQUIRE(file.value().Seek(6));
     CHECK(file.value().Tell().value() == 6);
@@ -137,12 +137,12 @@ TEST_CASE("Os files seek and tell") {
 
 TEST_CASE("Os files move an open file and refuse a moved-from one") {
     const TempDirectory temp("gyo-os-files");
-    auto opened = ReadFile::Open(Utf8(temp.Write("m.bin", "moved")));
+    auto opened = FileReader::Open(Utf8(temp.Write("m.bin", "moved")));
     REQUIRE(opened);
-    ReadFile first = std::move(opened.value());
-    ReadFile second = std::move(first);
+    FileReader first = std::move(opened.value());
+    FileReader second = std::move(first);
     CHECK(ReadAll(second) == "moved");
-    auto other = ReadFile::Open(Utf8(temp.Write("n.bin", "assigned")));
+    auto other = FileReader::Open(Utf8(temp.Write("n.bin", "assigned")));
     REQUIRE(other);
     second = std::move(other.value());
     REQUIRE(second.Seek(0));
@@ -155,7 +155,7 @@ TEST_CASE("Os files move an open file and refuse a moved-from one") {
 TEST_CASE("Os files report a missing file as NotFound with the native code") {
     const TempDirectory temp("gyo-os-files");
     const std::string missing = Utf8(temp.Path() / "missing.bin");
-    auto file = ReadFile::Open(missing);
+    auto file = FileReader::Open(missing);
     REQUIRE_FALSE(file);
     CHECK(file.error().code == OsErrorCode::NotFound);
 #if defined(_WIN32)
@@ -201,7 +201,7 @@ TEST_CASE("Os files refuse invalid arguments before the OS sees them") {
         CHECK(MakeAbsolute(invalid).error().code == OsErrorCode::InvalidEncoding);
         CHECK(PathFromUtf8(invalid).error().code == OsErrorCode::InvalidEncoding);
     }
-    const auto refused = ReadFile::Open("\xC0\xAF");
+    const auto refused = FileReader::Open("\xC0\xAF");
     REQUIRE_FALSE(refused);
     CHECK(refused.error().detail == "path_bytes=2");
 }
@@ -284,7 +284,7 @@ TEST_CASE("Os files make a relative path absolute") {
     const auto file = Utf8(temp.Write("e.bin", "abc"));
     const auto same = MakeAbsolute(file);
     REQUIRE(same);
-    auto opened = ReadFile::Open(same.value());
+    auto opened = FileReader::Open(same.value());
     REQUIRE(opened);
     CHECK(ReadAll(opened.value()) == "abc");
 }
@@ -338,7 +338,7 @@ TEST_CASE("Os files record the failure of a missing path longer than 260 charact
     for (int i = 0; i < 8; ++i) deep /= std::string(40, static_cast<char>('a' + i));
     const std::string path = Utf8(deep / "shader.dxil");
     REQUIRE(path.size() > 300);
-    const auto file = ReadFile::Open(path);
+    const auto file = FileReader::Open(path);
     REQUIRE_FALSE(file);
     MESSAGE("long path (" << path.size() << " bytes): " << std::string(ToString(file.error().code)) << " "
                           << file.error().detail);

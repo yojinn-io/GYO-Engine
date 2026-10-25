@@ -25,7 +25,7 @@ primitives here.
 | Component | What it gives | Status |
 |---|---|---|
 | `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
-| Files | Read primitives with UTF-8 paths (`ReadFile`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later write, create, atomic replace | read: os-files-read (landed); write: os-files-write |
+| Files | Read primitives with UTF-8 paths (`FileReader`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later write, create, atomic replace | read: os-files-read (landed); write: os-files-write |
 | System | System font directories | os-tool-files |
 | Process | Executable path, process and thread CPU time, local calendar time | os-process-info |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests | os-console-shutdown |
@@ -50,7 +50,7 @@ Only the components whose batch has landed exist; the others are planned in the 
     target described, as POSIX `stat` does.
   - Reads may return fewer bytes than asked; 0 for a non-empty span is the end of the file; an empty span returns 0
     without an OS call. Seeking past the end is allowed and reads nothing.
-  - A moved-from `ReadFile` may only be destroyed or assigned to; anything else is a Programmer Error
+  - A moved-from `FileReader` may only be destroyed or assigned to; anything else is a Programmer Error
     (`GYO_ASSERT`).
   - `MakeAbsolute` resolves against the current directory the platform's own way: `GetFullPathNameW` on Windows
     also removes dot segments and trailing dots and spaces; POSIX joins the current directory as it is. It answers
@@ -64,6 +64,11 @@ Only the components whose batch has landed exist; the others are planned in the 
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
 - **Data and time.** Bytes are `std::span<std::byte>`; durations and time points are `std::chrono`.
+- **Names.** engine/os names never reuse a Win32 function name or a `windows.h` A/W macro name (`ReadFile`,
+  `WriteFile`, `CreateDirectory`, `DeleteFile`, `MoveFile`, `CopyFile`, `GetFileAttributes` and the like): product
+  translation units see `windows.h` indirectly (through asio), and a name that collides there is ambiguous or
+  renamed by the preprocessor. The read primitive was renamed from `ReadFile` to `FileReader` when windows-x64
+  showed the ambiguity (os-files-read).
 - **Policy stays with the caller.** Which socket errors are transient, what to do on a shutdown request and how to
   format a time stamp are the caller's decisions.
 
