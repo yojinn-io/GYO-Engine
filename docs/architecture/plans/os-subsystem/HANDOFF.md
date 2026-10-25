@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info 本機完成、未推送），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info 完成，四平台 L1 run 40194493434），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -17,6 +17,7 @@
 - 消費端的發行任務已收到分工、交接內容與 D46（A1～A3 併進它的發行線 PR），等 A1～A3 完成（L1 通過後通知分支與 commit）。
 - 2026-10-25：os-guard-wide 本機完成（本機 commit，未推送）。守衛擴到 apps、tools、build/acceptance、tests，產品、工具與驗收程式各有自己的 allowlist；設定期檢查與標頭衛生測試加入。本機 ctest 31／31、守衛通過、相關突變 16／16 killed（Windows 專用 1 個跳過）。四平台 L1 等推送（要使用者同意）。下一批是 os-process-info。
 - 2026-10-25：使用者說「先不推送，繼續做 os-process-info，做完再和 os-guard-wide 一起跑四平台 L1」。os-process-info 本機完成（本機 commit，未推送）：engine/os 新增 Process，消費端的執行檔路徑、CPU 時間、本地時間改呼叫它。本機 ctest 31／31，產品組態的相關測試 12／12，突變 7／7 killed（Windows 專用 1 個跳過）。下一步：推送並跑四平台 L1（要使用者同意），之後是 os-console-shutdown。
+- 2026-10-25：使用者說「推送本分支，手動觸發四平台 L1，一起驗 os-guard-wide 和 os-process-info」。第一次 run 40192938131 只有 macos-arm64 的 toolchain 列失敗（本批新加的 CPU 測試前提錯，見「os-process-info」），修正 `a9219fa` 後第二次 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。兩批完成。下一批是 os-console-shutdown（xhigh，★ Windows 行為變更）。
 
 ## 閱讀入口
 
@@ -339,6 +340,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 量到的事實：macOS 上 `getrusage` 的程序時間，對正在執行的那一段比 `clock_gettime(CLOCK_THREAD_CPUTIME_ID)` 晚更新，兩個不同來源的時鐘在同一瞬間不必一致。「程序 ≥ 執行緒」不是結構性質。
   - 第 2 次修正：拿掉跨時鐘的比較，改成在 engine/os 讀數前後，用舊碼讀的同一個時鐘各讀一次（`getrusage`／`GetProcessTimes`、`clock_gettime`／`GetThreadTimes`），engine/os 的值要落在兩次之間。這是同一個單調時鐘的確定性質，根據來自 OS 而不是推測（§14.2）。本機 1000 次 0 失敗；os-p1～os-p6 重跑 5／5 killed（os-p4 改由這個案例殺），Windows 專用 os-p5 跳過。
   - 改的是本批新加、還沒有通過過任何驗收的測試，不是受入判定或 Design Invariants 的守衛（§14.4 的 1～5 不適用）；理由記在這裡與 commit。
+- 2026-10-25：推送 `a9219fa`，第二次四平台 L1：[run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。本批完成（os-guard-wide 同時完成）。
 
 ## 未結事項
 
@@ -360,5 +362,5 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。
 - ~~os-files-read 開始時：確認 Windows CI runner 的 ACP，選它表示不了的字元做測試。~~ 改成選一般 Western code page 表示不了的日文與正體中文，確認放到第一次 windows-x64 L1（見上）。
 - ~~A1～A3 完成後：通知消費端的發行任務（分支與 commit）。~~ 2026-10-25 完成。
-- os-guard-wide 與 os-process-info 的四平台 L1：推送要使用者同意。推送後手動觸發（draft PR 不跑 L1）。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過；要通知消費端的發行任務（lan15 會讀 log 的時間戳）。L1 要在 CPU 測試修正後重跑一次。
+- ~~os-guard-wide 與 os-process-info 的四平台 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過，已通知消費端的發行任務。~~CPU 測試修正後重跑 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

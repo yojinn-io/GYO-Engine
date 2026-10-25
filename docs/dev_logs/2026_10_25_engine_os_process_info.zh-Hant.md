@@ -1,6 +1,6 @@
 # Engine os-process-info：執行檔路徑、CPU 時間、本地時間搬進 engine/os
 
-日期：2026-10-25。**本機完成**，四平台 L1 待推送後和 os-guard-wide 一起執行。
+日期：2026-10-25。**完成**：四平台 L1 通過（[run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434)，和 os-guard-wide 一起跑）。
 計畫見 [os-process-info](../architecture/plans/os-subsystem/PLAN.md)（第 3.5、7.6 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-process-info」。
 
 ## 做了什麼
@@ -19,7 +19,7 @@
 ## 驗證與經緯
 
 - 位元組不變的證據：
-  - Engine 測試在 5 個固定時區 × 6 個固定時間點下，確認「`ToLocalTime` 的欄位與偏移，照呼叫端的方式印出來」和以前的 `localtime`＋`strftime`（含 `%z`）逐 byte 相同。Windows 的 UCRT `%z` 要等 windows-x64 的 L1 才確認。
+  - Engine 測試在 5 個固定時區 × 6 個固定時間點下，確認「`ToLocalTime` 的欄位與偏移，照呼叫端的方式印出來」和以前的 `localtime`＋`strftime`（含 `%z`）逐 byte 相同。四平台的 L1 都通過，Windows 的 UCRT `%z` 也一樣。
   - 消費端測試確認固定欄位會印成固定的字串。
   - 執行檔路徑和舊的各平台查法得到同一個路徑。
 - 事前宣告的差異（都不改日誌格式）：
@@ -32,7 +32,8 @@
   - core preset：ctest 31／31，守衛通過。
   - 產品組態：相關的 12 個 CTest 通過，產品測試 326 個案例全過。
   - Client 與 Match 的入口檔只做了語法檢查（連結要等 shader 主機工具）。
-- 突變：新增 os-p1～os-p6，本機 7／7 killed，Windows 專用的 os-p5 跳過。消費端格式化的 3 個探索性突變都被抓到（不進突變目錄）。
+- 第一次四平台 L1（run 40192938131）只有 macos-arm64 的 toolchain 列失敗：本批新加的「程序 CPU 時間不小於呼叫執行緒的」前提錯。macOS 的 `getrusage` 比執行緒時鐘晚更新，兩個時鐘在同一瞬間不必一致（本機量到差 250～350 µs）。第一次以為是微秒截斷、加 2 µs 容許值，仍失敗，所以改成「在 engine/os 讀數前後用同一個時鐘各讀一次，值要落在中間」。本機 1000 次 0 失敗，第二次 L1 全部成功。實作沒改。
+- 突變：新增 os-p1～os-p6，本機 7／7 killed，Windows 專用的 os-p5 跳過；測試修正後 os-p1～os-p6 重跑 5／5 killed。消費端格式化的 3 個探索性突變都被抓到（不進突變目錄）。
 
 ## 證據
 

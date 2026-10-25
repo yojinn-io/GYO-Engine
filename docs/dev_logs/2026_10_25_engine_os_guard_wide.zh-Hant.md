@@ -1,6 +1,6 @@
 # Engine os-guard-wide：守衛擴到產品、工具、產品測試與驗收程式
 
-日期：2026-10-25。**本機完成**，四平台 L1 待推送後執行。
+日期：2026-10-25。**完成**：四平台 L1 通過（[run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434)，和 os-process-info 一起跑）。
 計畫見 [os-guard-wide](../architecture/plans/os-subsystem/PLAN.md)（第 7.5 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-guard-wide」。
 
 ## 做了什麼
