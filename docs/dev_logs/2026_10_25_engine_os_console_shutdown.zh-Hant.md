@@ -1,6 +1,6 @@
 # Engine os-console-shutdown：命令列、主控台輸出、結束要求搬進 engine/os
 
-日期：2026-10-25。**本機完成**：xhigh 審查已修正（D50），四平台 L1 待推送後執行。
+日期：2026-10-25～26。**完成**：四平台 L1 通過（[run 40205158822](https://github.com/yojinn-io/GYO-Engine/actions/runs/40205158822)）；關閉主控台的檢查在 CI 是 Skipped，留給 lan15 的 Windows 實機（D51）。
 計畫見 [os-console-shutdown](../architecture/plans/os-subsystem/PLAN.md)（第 3.6、7.7 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-console-shutdown」；開工前的決定是 D49，審查後的決定是 D50。
 
 ## 做了什麼
@@ -30,6 +30,7 @@
   - Windows 的 Ctrl+C、Ctrl+Break、UTF-8 參數與 Linux 的旗標比對都在 CI 上通過。
   - 第一次修正（「3 秒後視窗還在就 skip」）在第二次 run 40203783441 沒有觸發，仍失敗。依約定停下，交使用者決定。
   - 使用者選定 D51：關閉模式下逾時就判為「關閉事件沒送到」並 skip；關閉主控台的路徑在 lan15 的 Windows 實機驗證。
+  - 第三次（run 40205158822）全部成功，`os.console_close` 是 Skipped。
 - 本機 macOS Intel：core 33／33，產品組態的相關測試 20／20。
 
 ## 證據

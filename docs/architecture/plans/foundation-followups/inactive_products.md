@@ -210,7 +210,7 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 
 ### os-console-shutdown 命令列、主控台輸出、結束要求
 
-狀態：本機進行中（2026-10-25）；未合併。
+狀態：完成（2026-10-26，四平台 L1 通過），未合併。
 
 - 破損：無。新增 `Engine::Os::Console`（`GYO::Os`），沒有改任何既有介面。未啟用產品走 SDL 入口，argv 本來就是 UTF-8。
 - 選用：未啟用產品若有不經 SDL 入口的主控台程式，用 `CommandLineUtf8` 取得 UTF-8 參數、`Utf8ConsoleOutput` 讓 Windows 主控台顯示 UTF-8、`InstallShutdownRequests`／`RequestedShutdown` 接結束要求；不要自己寫 `std::signal` 或 `SetConsoleCtrlHandler`。

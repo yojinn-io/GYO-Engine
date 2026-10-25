@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info 完成，四平台 L1 run 40194493434），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -399,6 +399,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 能確定的：活到 10 秒、沒有要求的探測程式，只可能是關閉事件沒有送到（送到的話，handler 會記錄要求，或 OS 會在 handler 返回時結束程序）。實作的關閉分支在 CI 上仍然沒有被驗證到。
   - 依先前對使用者說的「再失敗就停下回報」與 AGENTS §14（同一問題改了判定方法仍沒有結論時停下回報），在這裡停下，交使用者決定下一步。這個測試至今改過 1 次判定方法。
 - 2026-10-26：使用者選 (b)（D51）。探測程式在關閉模式下逾時就印「the close event never came」並回 5，檢查回 77；拿掉第 1 次加的 `IsWindow` 判斷（它包含在新規則裡）。
+- 2026-10-26：推送 `c507c59`，第三次四平台 L1：[run 40205158822](https://github.com/yojinn-io/GYO-Engine/actions/runs/40205158822)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。windows-x64 的 `os.console_close` 是 Skipped（CTest 的「did not run」也列出），`os.console_arguments`、`os.console_shutdown`、`os.console_ctrl_c` 是 Passed。本批完成；關閉主控台的路徑留給 lan15 的實機。
 - 已知、留給 os-path-utf8-sweep：Match 的 `arena_file=` 與 ui_editor 的 `valid:` 仍用 `path::string()` 印路徑。在 Windows 上，ANSI code page 以外的路徑會在印出時丟例外。以前這種路徑在 argv 就變成 `?`，同樣開不了，所以沒有可用的情況變壞。
 
 ## 未結事項
@@ -423,6 +424,6 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - ~~A1～A3 完成後：通知消費端的發行任務（分支與 commit）。~~ 2026-10-25 完成。
 - ~~os-guard-wide 與 os-process-info 的四平台 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
 - 後續（D50）：`tests/common/time/CMakeLists.txt` 的 `gyo_expect_links` 以 `if(entry AND …)` 過濾，會把名字是 CMake 假值的連結項目（N、NO、OFF、FALSE、IGNORE、0、*-NOTFOUND）丟掉，例如 `shell32 OFF` 也會通過。修正只會收緊，依 AGENTS §14.4 由 time-threads-trace 的 owner 修並事後報告。
-- os-console-shutdown 的四平台 L1（D51 的修正後重跑）。CI 上 `os.console_shutdown`（Ctrl+Break）與 `os.console_ctrl_c` 已實際通過；`os.console_close` 在 CI 上關閉事件送不到，會是 Skipped。
+- ~~os-console-shutdown 的四平台 L1~~ 2026-10-26 [run 40205158822](https://github.com/yojinn-io/GYO-Engine/actions/runs/40205158822) 全部成功（`os.console_close` Skipped）。
 - lan15 的 Windows 實機（D51）：用 Ctrl+C、Ctrl+Break、關閉主控台視窗結束 Match，log 最後一行都是 end 紀錄（PLAN 第 7.7 節的 L3）；在實機上跑 `os.console_close`（應為 Passed）與 Windows 專用突變 os-c4、os-c5、os-c6、os-c8、os-c9、os-g18（以及 os-f4、os-f5、os-g16、os-p5）。Windows 11 的預設終端是 Windows Terminal 時，`os.console_close` 可能也是 Skipped，那就用傳統主控台（conhost）視窗跑。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過，已通知消費端的發行任務。~~CPU 測試修正後重跑 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

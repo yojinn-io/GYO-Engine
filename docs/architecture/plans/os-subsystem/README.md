@@ -1,7 +1,7 @@
 # OS 子系統：分批計畫與進度
 
 更新：2026-10-25。Owner：Engine（新增 `engine/os`；`engine/io` 新增原生後端與路徑契約；`engine/time`、`engine/threads`、`engine/trace`、`engine/platform/sdl` 之後改呼叫 `engine/os`）。
-**狀態：A1～A3 完成**（2026-10-25，四平台 L1 run 40173730672），消費端的 P1～P5 也完成；D48：其餘批次已開始，os-guard-wide、os-process-info 完成。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
+**狀態：A1～A3 完成**（2026-10-25，四平台 L1 run 40173730672），消費端的 P1～P5 也完成；D48：其餘批次已開始，os-guard-wide、os-process-info、os-console-shutdown 完成。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
 
 Engine 目前沒有處理 OS 差異的 owner：
 
@@ -80,7 +80,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | （消費端 P1～P5） | 由消費端決定 | 完成（消費端的發行線，2026-10-25） | 長路徑行為、錯誤記錄、asset 接線、UTF-8 呼叫端、驗收（不屬於本計畫） |
 | os-guard-wide（A1b） | medium；規則調整 high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_guard_wide.zh-Hant.md)） | 守衛擴到產品、工具、產品測試、驗收程式 |
 | os-process-info | high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_process_info.zh-Hant.md)） | 執行檔路徑、CPU 時間、本地時間 |
-| os-console-shutdown | xhigh（D49：high＋三處論證＋1 位 xhigh 審查） | 本機完成（2026-10-25；xhigh 審查已修正，D50；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_console_shutdown.zh-Hant.md)） | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
+| os-console-shutdown | xhigh（D49：high＋三處論證＋1 位 xhigh 審查） | 完成（2026-10-26；四平台 L1 run 40205158822，關閉主控台在 CI 為 Skipped、留給 lan15；[dev_log](../../../dev_logs/2026_10_25_engine_os_console_shutdown.zh-Hant.md)） | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
 | os-files-write | high | 未開始 | 寫入原語、消費端的 log／arena／trace 寫檔 |
 | os-tool-files | high | 未開始 | 編輯器的原子存檔、路徑比較、系統字型目錄 |
 | os-trace-writers | high | 未開始 | TraceSink 經 engine/os（開放決策 2） |
