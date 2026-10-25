@@ -1,12 +1,13 @@
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
+#include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
+#include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
 #include <utility>
-#include <syncstream>
 #include <iostream>
 
 namespace fps::pvp {
@@ -66,7 +67,7 @@ bool MatchRuntimeHost::Start(std::string& error) {
     }
     role_.emplace(std::move(*started));
     // log-contract: the owner names the role's timer backend once it runs.
-    std::osyncstream(std::clog) << "[ObjectFPS/PvP Match] " << RoleStartedLine(*role_) << '\n';
+    ClogLine() << "[ObjectFPS/PvP Match] " << RoleStartedLine(*role_) << '\n';
     return true;
 }
 
@@ -176,11 +177,16 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
     const auto snapshot = match_.Snapshot();
     const auto player = std::find_if(snapshot.players.begin(), snapshot.players.end(),
         [&](const auto& state) { return state.playerId == input.playerId; });
+    GYO_ASSERT(player != snapshot.players.end()); // AdmitInput accepted a player of the Match
     const auto cursor = player->lastResolvedCommand;
     // Validate the complete merge before committing any command. Separate batches
     // must not erase one another or change an immutable pending command.
     auto merged = pendingInputs_[input.playerId];
     if (merged.movementEpoch != input.movementEpoch || merged.lifeGeneration != input.lifeGeneration) {
+        // Only a new, empty entry: the tick that changes an identity also erases
+        // the staging of the old one, counted (Step), and AdmitInput accepted
+        // only the current identity.
+        GYO_ASSERT(merged.commands.empty() && merged.stagedSequences.empty());
         merged.commands.clear();
         merged.stagedSequences.clear();
         merged.movementEpoch = input.movementEpoch;
@@ -195,9 +201,10 @@ bool MatchRuntimeHost::SubmitInput(const PlayerInput& input) {
         if (inserted) { newlyAccepted.push_back(command.sequence); merged.stagedSequences.insert(command.sequence); }
         else ++pendingCopies;
     }
-    // Should stay 0: admission already bounds each command to (cursor,
-    // cursor + MaxFutureCommands] and staging only keeps commands past the cursor.
-    if (merged.commands.size() > MaxFutureCommands) return refuse(IngressInputRejection::StagedOverWindow);
+    // Admission already bounds each command to (cursor, cursor +
+    // MaxFutureCommands] and staging only keeps commands past the cursor
+    // (D183: the staged_over_window key stays 0).
+    GYO_ASSERT(merged.commands.size() <= MaxFutureCommands);
     merged.dirty = merged.dirty || !newlyAccepted.empty();
     pendingInputs_[input.playerId] = std::move(merged);
     ++ingress.acceptedInputs;
@@ -388,8 +395,12 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             }
             results_.push_back(std::move(result));
         }
-        for (const auto& [playerId, through] : pendingActionAcknowledgements_)
-            static_cast<void>(match_.AcknowledgeActions(playerId, through));
+        for (const auto& [playerId, through] : pendingActionAcknowledgements_) {
+            // Each value was validated at receipt, and validity only grows with
+            // through until the player leaves (which erases the entry).
+            const bool acknowledged = match_.AcknowledgeActions(playerId, through);
+            GYO_ASSERT(acknowledged);
+        }
         pendingActionAcknowledgements_.clear();
         for (const auto& [playerId, shots] : pendingActions_) {
             for (std::size_t first = 0; first < shots.size(); first += MaxActionBatch) {
@@ -406,27 +417,12 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             if (!pending.dirty) continue;
             PlayerInput input{playerId, {}, pending.movementEpoch, pending.lifeGeneration};
             const auto handoff = [&] {
-                // A snapshot may have advanced life after ingress validation.
-                // Recheck the complete identity at the simulation boundary.
-                if (!match_.CanSubmitInput(input)) {
-                    // Should stay 0: rotation below discards a stale identity
-                    // before the next handoff, and ingress checks the current one.
-                    // Were it not, these commands stay staged and a rotation
-                    // after this tick counts them again as rotation_discarded.
-                    ingress_[playerId].discarded[IngressIndex(IngressStagedDiscard::HandoffRejected)] +=
-                        static_cast<std::uint64_t>(std::count_if(input.commands.begin(), input.commands.end(),
-                            [&](const auto& command) { return pending.stagedSequences.contains(command.sequence); }));
-                    const auto current = match_.Snapshot();
-                    const auto player = std::find_if(current.players.begin(), current.players.end(),
-                        [&](const auto& p) { return p.playerId == playerId; });
-                    if (player != current.players.end() && player->lifeGeneration != pending.lifeGeneration) {
-                        for (const auto& command : input.commands)
-                            if (pending.stagedSequences.contains(command.sequence))
-                                TraceMovement({.kind = MovementTraceKind::LifecycleCancelled, .playerId = playerId,
-                                    .epoch = pending.movementEpoch, .sequence = command.sequence,
-                                    .authorityTick = match_.TickCount(), .lifeGeneration = pending.lifeGeneration});
-                    }
-                } else static_cast<void>(match_.SubmitInput(input));
+                // Ingress checked the current identity, the window and the
+                // conflicts; the cursor only advances; Leave erases the staging,
+                // and the Tick that changes an identity discards the old one
+                // (Step below; D183: the handoff_rejected key stays 0).
+                const bool submitted = match_.SubmitInput(input);
+                GYO_ASSERT(submitted);
             };
             for (const auto& [sequence, command] : pending.commands) {
                 static_cast<void>(sequence);
@@ -593,7 +589,10 @@ std::optional<WorldSnapshot> MatchRuntimeHost::TakeSnapshot(std::chrono::steady_
         // The newest reference is the snapshot's own publication.
         const auto reference = std::find_if(publishedReferences_.rbegin(), publishedReferences_.rend(),
             [&](const auto& value) { return value.tick == result->tick; });
-        if (reference != publishedReferences_.rend()) *publishedAt = reference->publishedAt;
+        // Step pushes the reference just before it publishes the snapshot, and
+        // ClearState clears both.
+        GYO_ASSERT(reference != publishedReferences_.rend());
+        *publishedAt = reference->publishedAt;
     }
     return result;
 }
@@ -693,7 +692,9 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
     std::vector<PlayerId> evicted;
     for (auto& [playerId, track] : quality_) {
         const auto quality = match_.GetMovementQuality(playerId);
-        if (!quality) continue;
+        // quality_ holds only players of the Match: added on an accepted Join,
+        // erased with every Leave and by ClearState.
+        GYO_ASSERT(quality.has_value());
         ingress_[playerId].resyncs += quality->resyncs - track.resyncs;
         track.resyncs = quality->resyncs;
         if (tick - track.windowStartTick >= ConnectionQualityWindowTicks) {
@@ -739,7 +740,8 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
         const bool current = player != state.players.end() && pending != pendingInputs_.end() &&
             player->movementEpoch == pending->second.movementEpoch && player->lifeGeneration == pending->second.lifeGeneration;
         const auto resolvedThrough = current ? player->lastResolvedCommand : 0;
-        static_cast<void>(match_.Leave(playerId));
+        const bool left = match_.Leave(playerId); // an evicted player is one of quality_'s
+        GYO_ASSERT(left);
         RemovePlayerState(playerId, resolvedThrough);
         std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });
         std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });

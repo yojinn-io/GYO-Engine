@@ -270,13 +270,8 @@ func outcomeCases() []outcomeCase {
 		// Actions.
 		{name: "handed/actions", player: one(playerFwdHandedActionsPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Actions, 2, shotsMessage(1)) })},
-		{name: "handed/actions_commit_failed", player: one(playerFwdHandedActionsPackets),
-			// Admit cannot pass a sequence CommitSequence refuses; a stand-in
-			// reaches that return.
-			setup: func(t *testing.T, _ *outcomeFixture) {
-				replaceSessionAdmit(t, func(*session.Session, netip.AddrPort, uint32, time.Time) error { return nil })
-			},
-			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Actions, 1, shotsMessage(1)) })},
+		// handed/actions_commit_failed moved to TestAnAdmittedSequenceThatDoesNotCommitFailsTheRuntime:
+		// since D180 that return is a broken invariant that fails the runtime.
 		{name: "inactive/actions", setup: func(_ *testing.T, f *outcomeFixture) { f.p.phase = joining },
 			player: one(playerDropInactiveActionsPackets),
 			packet: fromEndpoint(func(f *outcomeFixture) []byte { return f.datagram(adapter.Actions, 2, shotsMessage(1)) })},
@@ -521,5 +516,55 @@ func TestPlayerIngressOutlivesTheReservation(t *testing.T) {
 	players, _ := s.takeIngress()
 	if c := players[7]; c == nil || c[playerReceivedDatagrams] != 1 || c[playerFwdMainInputPackets] != 1 {
 		t.Fatalf("removed player's outcomes were lost: %v", players[7])
+	}
+}
+
+// D180 (g2): Admit cannot pass a sequence CommitSequence refuses (both under
+// s.mu); a stand-in Admit reaches that path. The datagram still counts exactly
+// one outcome (IG, read from the final window the failure writes), and the
+// broken invariant fails the runtime instead of going on silently.
+func TestAnAdmittedSequenceThatDoesNotCommitFailsTheRuntime(t *testing.T) {
+	logs := captureIngressLog(t)
+	s, p, endpoint, now := actionFixture(t)
+	link := dialedLink(t)
+	link.drops = newDropLedger()
+	s.link = link
+	replaceSessionAdmit(t, func(*session.Session, netip.AddrPort, uint32, time.Time) error { return nil })
+	f := &outcomeFixture{s: s, p: p, endpoint: endpoint, now: now}
+	if err := s.receiveDatagram(f.datagram(adapter.Actions, 1, shotsMessage(1)), endpoint, now); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(logText(logs), "gateway invariant failed: an admitted actions sequence did not commit") ||
+		!strings.Contains(logText(logs), "player ingress statistics version=1 player=7 ") {
+		if time.Now().After(deadline) {
+			t.Fatalf("no invariant failure and final window in\n%s", logText(logs))
+		}
+		time.Sleep(time.Millisecond)
+	}
+	s.mu.Lock()
+	available := s.available
+	s.mu.Unlock()
+	if available {
+		t.Fatal("the room is still available after a broken invariant")
+	}
+	// What the table case checked before D180: the datagram counted only its
+	// own key, and IG, the Gateway-wide conservation, T3 and I0 hold, here
+	// over the lines the failure wrote.
+	logs.waitFinal(t, "commit failed")
+	total := checkIngressLines(t, "commit failed", logs.lines(t), s.rateRejectedPackets.Load())
+	got := playerIngressCounts{}
+	if counts := total.players[p.playerID]; counts != nil {
+		got = *counts
+	}
+	want := playerIngressCounts{}
+	want[playerReceivedDatagrams] = 1
+	want[playerFwdHandedActionsPackets] = 1
+	if window := got[:playerDropLinkRejectedActionsShots+1]; !slicesEqual(window, want[:playerDropLinkRejectedActionsShots+1]) {
+		t.Fatalf("final window lacks \" fwd_handed_actions_packets=1 \" alone: counted %s",
+			countedNames(window, playerIngressKeys[:], playerReceivedDatagrams))
+	}
+	if wantGateway := (gatewayIngressCounts{gatewayReceivedDatagrams: 1}); total.gateway != wantGateway {
+		t.Fatalf("gateway counted %s", countedNames(total.gateway[:], gatewayIngressKeys[:], gatewayReceivedDatagrams))
 	}
 }

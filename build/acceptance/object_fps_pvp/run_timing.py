@@ -391,9 +391,9 @@ def run_round(args, output, fps):
         match.terminate();match.wait(timeout=10)
         if match.returncode:raise RuntimeError('Match failed while flushing diagnostics')
         if bot_count:
-            # command_evidence covers two players; the bots' room uses its N-player form.
-            from quad_evidence import command_metrics
-            evidence=command_metrics(output,enforce=not args.report_only)
+            # The bots' room: every declared player (analyze_commands with players=None, in quad_evidence's shape).
+            from quad_evidence import room_shape
+            evidence=room_shape(analyze_commands(output,enforce=not args.report_only,players=None,write=False))
             evidence['bots']=bots.evidence()
         else:
             evidence=analyze_commands(output,enforce=not args.report_only and not args.stall_ms)

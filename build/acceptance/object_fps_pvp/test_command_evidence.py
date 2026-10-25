@@ -540,6 +540,17 @@ class CommandEvidenceTests(unittest.TestCase):
         self.assertTrue(result["disturbed"])
         self.assertEqual(result["remote_stale_frames"], 1)
 
+    def test_a_remote_age_spike_of_either_client_counts(self):
+        # Every remote-age column counts (v7.1 analyzer-converge), the second Client's as well.
+        directory, *_ = self.make_run()
+        with (directory / "frames.csv").open("w", newline="") as output:
+            writer = csv.writer(output)
+            writer.writerow(["time_ns", "remote_age_a", "remote_age_b"])
+            writer.writerow([START + SECOND, .02, .101])
+        result = evidence.analyze_commands(directory)
+        self.assertEqual(result["remote_stale_frames"], 1)
+        self.assertTrue(result["disturbed"])
+
     def test_unread_history_overflow_is_not_clean(self):
         directory, client, match, timing = self.make_run()
         timing["history_overflows"] = 1

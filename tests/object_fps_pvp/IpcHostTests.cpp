@@ -329,7 +329,7 @@ TEST_CASE("PvP IPC resets the Match between connections") {
 }
 
 // Captures what the Match writes to std::clog (its event log). The IPC thread
-// writes through std::osyncstream, so the buffer locks its own reads and writes.
+// writes through ClogLine, so the buffer locks its own reads and writes.
 class ClogCapture final : public std::streambuf {
 public:
     ClogCapture() : previous_(std::clog.rdbuf(this)) {}

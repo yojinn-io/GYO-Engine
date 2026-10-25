@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include "RetroFPS/Pvp/InputSendBudget.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
@@ -277,18 +278,17 @@ RecoveryResult RunRecovery(int fps, int rttMs, int stallMs, bool impaired,
                 }
             }
             if (!published.commands.empty()) {
-                tokens = (std::min)(InputSendBurst, tokens + double(now - tokensAt) / double(workerPeriod));
+                // The product's rule itself (InputSendBudget.hpp, v7.1 token-tests): this
+                // model no longer keeps a copy that a product change could leave behind.
+                tokens = RefilledInputTokens(tokens, double(now - tokensAt) / double(workerPeriod));
                 tokensAt = now;
-                const bool fresh = !haveSent || published.movementEpoch != sentEpoch ||
-                    published.lifeGeneration != sentLife || published.commands.back().sequence > sentThrough;
-                if ((fresh && tokens >= 1) || (now >= nextSend && tokens >= InputSendBurst)) {
-                    double charge = 1;
-                    if (path == Path::Product && fresh && waitSince) {
-                        const double waited = double(now - *waitSince) / double(workerPeriod) - (tokens - 1.0);
-                        charge -= (std::min)(1.0 - InputSendRate / InputSendDrainRate,
-                            (std::max)(0.0, (std::min)(waited, InputSendBurst - tokens)));
-                    }
-                    tokens -= charge;
+                const bool fresh = FreshInputWindow(haveSent, published.movementEpoch, sentEpoch,
+                    published.lifeGeneration, sentLife, false, published.commands.back().sequence, sentThrough);
+                if (InputWindowSendsNow(fresh, tokens, now >= nextSend)) {
+                    // Path::V6 keeps v6final's charge of one token.
+                    const auto waited = path == Path::Product && waitSince
+                        ? std::optional<double>(double(now - *waitSince) / double(workerPeriod)) : std::nullopt;
+                    tokens -= InputSendCharge(fresh, waited, tokens);
                     waitSince.reset();
                     ++inputNumber;
                     ++result.inputPackets;
@@ -721,4 +721,41 @@ TEST_CASE("PvP phase tracking holds the latency while the Client clock drifts ag
                 CHECK(tracked.maximumInputPacketsPerSecond <= InputSendRate + 1);
             }
     }
+}
+
+// v7.1 token-tests (N-token-test-gaps, C12): the input token rule is one set of
+// pure functions shared by the network worker and the model above, so its
+// terms are pinned here by value. Each case changes if one term is dropped.
+TEST_CASE("PvP input token rule: refill, freshness, sending, charge and wait") {
+    using namespace fps::pvp;
+    CHECK(RefilledInputTokens(0.5, 0.25) == doctest::Approx(0.75));
+    CHECK(RefilledInputTokens(1.9, 0.5) == doctest::Approx(InputSendBurst)); // never above a full bucket
+
+    CHECK(FreshInputWindow(false, 1, 1, 1, 1, false, 5, 5));      // nothing sent yet
+    CHECK(FreshInputWindow(true, 2, 1, 1, 1, false, 5, 5));       // another epoch
+    CHECK(FreshInputWindow(true, 1, 1, 2, 1, false, 5, 5));       // another life
+    CHECK(FreshInputWindow(true, 1, 1, 1, 1, false, 6, 5));       // a newer last sequence
+    CHECK_FALSE(FreshInputWindow(true, 1, 1, 1, 1, false, 5, 5)); // the unchanged window
+    CHECK_FALSE(FreshInputWindow(true, 1, 1, 1, 1, true, 0, 5));  // empty: nothing newer
+
+    CHECK(InputWindowSendsNow(true, 1.0, false));
+    CHECK_FALSE(InputWindowSendsNow(true, 0.99, true));
+    CHECK(InputWindowSendsNow(false, InputSendBurst, true));
+    CHECK_FALSE(InputWindowSendsNow(false, InputSendBurst, false)); // not before its resend deadline
+    CHECK_FALSE(InputWindowSendsNow(false, 1.5, true));             // a resend leaves one token
+
+    CHECK(InputSendCharge(false, 3.0, 1.0) == 1);         // a resend pays one token
+    CHECK(InputSendCharge(true, std::nullopt, 1.0) == 1); // a fresh window that did not wait
+    // The late-wake deduction: 0.4 periods of wait with 1.3 tokens is 0.1 of real wait.
+    CHECK(InputSendCharge(true, 0.4, 1.3) == doctest::Approx(0.9));
+    // The full-bucket cap: with 1.9 tokens only 0.1 can be discounted.
+    CHECK(InputSendCharge(true, 2.0, 1.9) == doctest::Approx(0.9));
+    // The largest discount, 1 - InputSendRate / InputSendDrainRate = 0.25.
+    CHECK(InputSendCharge(true, 5.0, 1.0) == doctest::Approx(0.75));
+    // A late wake past the wait never makes a send cost more than one token.
+    CHECK(InputSendCharge(true, 0.1, 1.5) == 1);
+
+    CHECK(InputSendWaitPeriods(true, 0.4) == doctest::Approx(0.6));
+    CHECK(InputSendWaitPeriods(false, 0.4) == doctest::Approx(InputSendBurst - 0.4));
+    CHECK(InputSendWaitPeriods(true, 1.5) == 0);
 }
