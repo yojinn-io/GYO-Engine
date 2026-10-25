@@ -15,6 +15,7 @@ add_executable(engine_tests
     runtime/RuntimePortTests.cpp
     io/BufferedStreamTests.cpp
     io/StreamReaderTests.cpp
+    io/UriTests.cpp
     io/VfsTests.cpp
 )
 

@@ -8,7 +8,12 @@
       "file": "engine/trace/src/TraceSink.cpp",
       "find": "#include \"engine/trace/TraceSink.hpp\"\n",
       "replace": "#include \"engine/trace/TraceSink.hpp\"\n#include <unistd.h>\n",
-      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
       "expect": "engine/trace/src/TraceSink\\.cpp:\\d+: R1 unistd\\.h"
     },
     {
@@ -17,7 +22,12 @@
       "file": "engine/asset/src/AssetCatalog.cpp",
       "find": "namespace Engine::Asset {\n",
       "replace": "#if defined(_WIN32)\n#endif\nnamespace Engine::Asset {\n",
-      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
       "expect": "engine/asset/src/AssetCatalog\\.cpp:\\d+: R2 _WIN32"
     },
     {
@@ -26,7 +36,12 @@
       "file": "engine/time/src/LateWakeStats.cpp",
       "find": "namespace Engine::Time {\n",
       "replace": "namespace Engine::Time {\nvoid LocalTimeProbe(const long* t, void* out) { localtime_r(t, out); }\n",
-      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
       "expect": "engine/time/src/LateWakeStats\\.cpp:\\d+: R3 localtime_r"
     },
     {
@@ -35,7 +50,12 @@
       "file": "engine/io/src/fs/Vfs.cpp",
       "find": "namespace Engine::IO::FS {\n",
       "replace": "namespace Engine::IO::FS {\nstatic std::ifstream probe;\n",
-      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
       "expect": "engine/io/src/fs/Vfs\\.cpp:\\d+: R4 std::ifstream"
     },
     {
@@ -44,7 +64,12 @@
       "file": "engine/os/src/common/OsError.cpp",
       "find": "#include \"engine/os/OsError.hpp\"\n",
       "replace": "#include \"engine/os/OsError.hpp\"\n#include \"engine/io/IoError.hpp\"\n",
-      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
       "expect": "engine/os/src/common/OsError\\.cpp:\\d+: R5 engine/io/IoError\\.hpp"
     },
     {
@@ -53,7 +78,12 @@
       "file": "tests/common/os/os_boundary_allowlist.txt",
       "find": "engine/trace/src/TraceSink.cpp R4 1 ",
       "replace": "engine/trace/src/TraceSink.cpp R4 2 ",
-      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
       "expect": "TraceSink\\.cpp R4 has 1 findings, allowlisted 2; shrink the allowlist"
     },
     {
@@ -62,7 +92,12 @@
       "file": "engine/os/include/engine/os/OsError.hpp",
       "find": "#include \"engine/base/Error.hpp\"\n",
       "replace": "#include \"engine/base/Error.hpp\"\n#include <windows.h>\n",
-      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
       "expect": "engine/os/include/engine/os/OsError\\.hpp:\\d+: R1 windows\\.h"
     },
     {
@@ -81,7 +116,16 @@
       "file": "tests/common/os/os_boundary_guard.py",
       "find": "\"__linux__\", ",
       "replace": "",
-      "command": ["{python}", "-m", "unittest", "discover", "-s", "tests/common/os", "-p", "test_*.py"],
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
       "expect": "FAIL: test_linux_branch_is_reported"
     },
     {
@@ -90,7 +134,12 @@
       "file": "engine/asset/src/AssetCatalog.cpp",
       "find": "namespace Engine::Asset {\n",
       "replace": "namespace Engine::Asset {\nstatic const bool probe = std::filesystem::is_regular_file(\"x\");\n",
-      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
       "expect": "engine/asset/src/AssetCatalog\\.cpp:\\d+: R4 std::filesystem::is_regular_file"
     },
     {
@@ -102,6 +151,116 @@
       "target": "gyo_os_tests",
       "cases": "*fixed form*",
       "expect": "CHECK\\( NativeErrorDetail\\(\\{NativeErrorDomain::Win32, 3\\}\\) == \"win32=3\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m1-root",
+      "what": "A file URI path loses its leading '/' (the pre-io-contracts behaviour)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        return NormalizeFilePath(native);\n",
+      "replace": "        return NormalizeFilePath(native.substr(1));\n",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "ParseUri failed for file:///Users/x"
+    },
+    {
+      "id": "io-m2-drive-case",
+      "what": "Only an upper-case drive letter is recognized",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');",
+      "replace": "return (c >= 'A' && c <= 'Z');",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( FilePath\\(\"file:///c:/game\"\\) == \"c:/game\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m3-to-string",
+      "what": "ToString prints a drive path in the old file://C:/ form",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            if (path.Empty() || path.Str().front() != '/') out += \"/\";\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( uri.value\\(\\).ToString\\(\\) == text \\) is NOT correct"
+    },
+    {
+      "id": "io-m4-localhost-case",
+      "what": "The localhost authority is matched case-sensitively",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "authority.empty() || ToLower(authority) == \"localhost\"",
+      "replace": "authority.empty() || authority == \"localhost\"",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "ParseUri failed for file://LOCALHOST/C:/x"
+    },
+    {
+      "id": "io-m5-long-prefix",
+      "what": "A long-path prefix is accepted into an engine/io path",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (HasNamespacePrefix(path)) {\n",
+      "replace": "        if (false) {\n",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( NativeError\\(\"\\\\\\\\\\\\\\\\\\?\\\\\\\\C:\\\\\\\\x\"\\) == IoErrorCode::InvalidPath \\) is NOT correct"
+    },
+    {
+      "id": "io-m6-loose-fallback",
+      "what": "The loose parser keeps the file scheme for a file URI that ParseUri rejects",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            // A file URI that ParseUri rejects is no file URI here either: it keeps no scheme, so it\n",
+      "replace": "            u.scheme = UriScheme::File;\n",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( uri.scheme != Path::UriScheme::File \\) is NOT correct"
+    },
+    {
+      "id": "io-m7-mount-escape",
+      "what": "A mount request with a '..' segment resolves outside the mount root",
+      "file": "engine/io/include/engine/io/fs/MountTable.hpp",
+      "find": "            if (Engine::IO::Path::ContainsTraversal(rel)) {",
+      "replace": "            if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "REQUIRE_FALSE\\( resolved \\) is NOT correct"
+    },
+    {
+      "id": "io-m8-four-slash-unc",
+      "what": "file:////server/share is taken for a local path",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        // \"file:////server/share\" is the other spelling of a UNC URI.\n        if (path.starts_with(\"//\")) {",
+      "replace": "        // \"file:////server/share\" is the other spelling of a UNC URI.\n        if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "ParseUri accepted file:////server/share/x"
+    },
+    {
+      "id": "io-m9-hand-made",
+      "what": "NativePathFromFileUri accepts a path that does not normalize to itself",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (normalized.value() != uri.path.Str()) {",
+      "replace": "        if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "NativePathFromFileUri accepted /a/\\.\\./b"
+    },
+    {
+      "id": "io-m10-posix-drive",
+      "what": "A POSIX path whose first segment looks like a drive gets a file URI",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (root == \"/\" && StartsWithDrive(std::string_view(out).substr(1))) {",
+      "replace": "        if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "FileUriFromNativePath accepted /C:/x"
+    },
+    {
+      "id": "io-m11-drive-relative",
+      "what": "The drive-relative native forms C: and \\x are taken for absolute paths",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (utf8AbsolutePath.starts_with('\\\\') || (path.size() == 2 && IsDriveLetter(path))) {",
+      "replace": "        if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "FileUriFromNativePath accepted (C:|\\\\x)"
     }
   ]
 }

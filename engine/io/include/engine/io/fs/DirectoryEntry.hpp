@@ -11,7 +11,7 @@ namespace Engine::IO::FS {
     /// ディレクトリ列挙で返す1件
     /// - VFS を想定して “path は URI 文字列” で持つ（表示/UI用に name も別で持つ）
     struct DirectoryEntry final {
-        std::string path;   // 例: "assets://textures/a.png" / "file://C:/..."
+        std::string path;   // 例: "assets://textures/a.png" / "file:///C:/..." (docs/architecture/io.md)
         std::string name;   // 例: "a.png"
         FileType type = FileType::None;
 

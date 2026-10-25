@@ -16,6 +16,7 @@
 #include "engine/io/fs/IFileSystem.hpp"
 #include "engine/io/stream/FileOpenMode.hpp"
 #include "engine/io/fs/MountPoint.hpp"
+#include "engine/io/path/PathUtils.hpp"
 
 namespace Engine::IO::FS {
 
@@ -137,6 +138,11 @@ namespace detail {
         IoResult<ResolvedMount> Resolve(const MountPoint& mp, const Engine::IO::Path::Uri& vfsUri) const {
             const std::string u = detail::UriText(vfsUri);
             const std::string_view rel = detail::ExtractAfterScheme(u);
+            // A mount never reaches outside its root (docs/architecture/io.md).
+            if (Engine::IO::Path::ContainsTraversal(rel)) {
+                return Base::Err(IoError::Make(Engine::IO::IoErrorCode::PathEscapesRoot,
+                                               "MountTable: the request has a '..' segment", std::string(rel)));
+            }
             ResolvedMount r;
             r.mp = &mp;
             r.nativeUri = detail::JoinRootAndRel(mp.rootUri, rel);

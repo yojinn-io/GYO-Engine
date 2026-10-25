@@ -1,13 +1,14 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：計畫已核准**（D46）；os-skeleton 本機 L1 完成（四平台 L1 待推送）；io-contracts 進行中。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：計畫已核准**（D46）；os-skeleton、io-contracts 本機 L1 完成（四平台 L1 待推送）；os-files-read 未開始。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
 
 - 2026-10-25：使用者核准 PLAN 第 1 版（D46），說「開始 os-skeleton 與 io-contracts」。
 - os-skeleton：GYO::Os、OsError、os.md、守衛（Engine 範圍）、突變 runner 擴充完成，本機 core preset 的 L1 全過、突變 11／11 killed。四平台 L1 要等分支推送（見未結事項）。
-- io-contracts：進行中。
+- io-contracts：file:// 對應、ParseUri／ParseUriLoose／ToString 修正、io.md、MountTable 不越出根目錄完成；Red→Green、契約審查（ultracode）的發現已修正、本機 L1 全過、突變 11／11 killed。
+- 下一步：os-files-read（A3），等使用者說開始。
 - 消費端的發行任務已收到分工、交接內容與 D46（A1～A3 併進它的發行線 PR），等 A1～A3 完成。
 
 ## 閱讀入口
@@ -153,6 +154,39 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 未啟用產品的遷移清單加「OS」節（foundation-followups/inactive_products.md）。
 - 證據：本機執行輸出（git 忽略）；突變與守衛可用 PLAN 第 6 節的指令重跑。
 
+### io-contracts
+
+- 2026-10-25：開始。檔位 high；字串規則局部 xhigh；契約審查 ultracode（1 審查者＋1 對抗檢查）。PLAN 標「先問」，依使用者先前的指示（標先問的 ultracode 照計畫直接開）沒有再問。
+- Red（§14.3）：先寫 `tests/common/core/io/UriTests.cpp`，在舊碼上跑，12 個案例中 11 個失敗。例如 `file:///Users/x` 得到 `Users/x`、`file://C:/x` 被接受、`#` 被拆成 fragment。剩下 1 個案例釘住非 file scheme 的既有行為。
+- 實作：
+  - `Uri.cpp`：file:// 由獨立分支處理，非 file scheme 的程式碼不變。
+  - `ToString` 印出正規形式。
+  - `ParseUriLoose` 對 file:// 套同一規則。
+  - 新增 `FileUriFromNativePath`、`NativePathFromFileUri`。
+  - `DirectoryEntry.hpp` 的範例改成 `file:///C:/...`。
+  - `docs/architecture/io.md`（英文）：路徑契約、行為變更、Design Invariants 1-5、Replacement Criteria 1-4。
+- 契約審查（workflow `wf_ab6de80a-f62`）：兩位都判「先修再提交」。審查者 13 項（5 major），對抗檢查者 9 項（7 major），重疊很多。這一批修正的：
+  - ParseUriLoose 對被拒的 file URI 退回舊規則，經 MountTable 往返後，UNC 與 drive-authority 變成有效路徑 → 被拒的 file URI 在 Loose 裡不帶 scheme，永遠沒有原生路徑。
+  - `file:////server/share`（四斜線 UNC）被當成本機路徑 → NotSupported。
+  - `/C:/x` 與 `file:///C:\x` 往返後指向另一個檔案 → 先把反斜線轉成 `/` 再判斷磁碟機；「看起來像磁碟機的 POSIX 路徑」一律 InvalidPath；加上不動點測試。
+  - MountTable 請求裡的 `..` 會在新的正規化中被解析掉，越出 mount 根目錄 → `Resolve` 遇到 `..` 段回 PathEscapesRoot。這是本批新加的正規化造成的退步，所以在本批修；審查者建議先和使用者確認範圍，修法與理由已向使用者回報。
+  - native 的 `C:`、`\x`（相對於目前磁碟機）、裝置與 NT 前綴（`\\.\`、`\??\`）→ InvalidPath。
+  - `NativePathFromFileUri` 對手工建立的 Uri 重新驗證：authority、query、fragment 不可有；路徑必須正規化後與自身相同；NUL 不可有。
+  - Loose 的 file scheme 判斷不分大小寫。
+  - 磁碟機代號只認 ASCII（不受 locale 影響）。
+  - io.md 裡「正式的 resolver 都不允許 scheme」與事實不符：shader bundle 的 resolver 用預設值允許 scheme → 改正敘述，並在 AssetPathResolverTests 加一個新判定。
+  - io.md 的 Invariant 2、4 改寫成可以檢查的形式。
+- 不在本批修的既有問題：ParseUriLoose 對未知 scheme 不設定 schemeText，所以 `pak://...` 經 MountTable 往返後會失去 scheme（與 HEAD 相同）。屬於 io.md 的 Replacement Criteria 1、4，等有 pack 後端時處理。
+- 行為變更（寫在 io.md）：
+  - 允許 scheme 的 resolver 現在把 `file:///x`、`file://localhost/x` 當成絕對路徑而拒絕。出貨的 catalog 與 manifest 都沒有 file:// 條目。
+  - `MountTable::Resolve` 拒絕 `..` 段。
+  - 既有的 VfsTests 與 AssetPathResolverTests 不改判定也通過。
+- L1（本機 macOS Intel，core preset）：
+  - engine_tests 103／103 案例。UriTests 共 23 個案例；AssetPathResolverTests 新增 1 個。
+  - ctest 30／30；守衛通過。
+- 突變：io-m1～io-m11，11／11 killed。包含 PLAN 要求的三個：開頭斜線、只認大寫、ToString 舊形式。
+- 證據：本機執行輸出（git 忽略）；審查的探測程式在本機會話暫存。
+
 ## 未結事項
 
 - ~~使用者核准 PLAN，回答開放決策 1、14、15，並同意 A1～A3 的 Delta。~~ 2026-10-25 完成（D46）。
@@ -163,7 +197,8 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - A1～A3 若在發行線開好之前完成，就等它開好再併。P4 在產品檔案的那一行，以及和消費端其他線的衝突，由消費端在發行線處理。
   - 完成時通知消費端：分支名稱與最後的 commit。
 - ~~os-skeleton 開始時：用空 allowlist 實跑守衛，產生 Engine 的基準，對照盤點。~~ 2026-10-25 完成，和盤點一致。
-- os-skeleton 的四平台 L1：分支還沒推送。D46 決定 A1～A3 併進消費端的發行線 PR，所以要先推送本分支，再手動觸發 L1（推送前徵求使用者同意）。
-- io-contracts 開始時：契約審查用 ultracode（1 審查者＋1 對抗檢查），先問。
+- os-skeleton、io-contracts 的四平台 L1：分支還沒推送。D46 決定 A1～A3 併進消費端的發行線 PR，所以要先推送本分支，再手動觸發 L1（推送前徵求使用者同意）。
+- ~~io-contracts 開始時：契約審查用 ultracode（1 審查者＋1 對抗檢查），先問。~~ 2026-10-25 完成。
+- 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。
 - os-files-read 開始時：確認 Windows CI runner 的 ACP，選它表示不了的字元做測試。
 - A1～A3 完成後：通知消費端的發行任務（分支與 commit）。
