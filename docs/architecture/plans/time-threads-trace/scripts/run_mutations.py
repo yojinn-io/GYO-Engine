@@ -4,7 +4,10 @@ Each mutant in mutations.json replaces one exact text in one source file, rebuil
 its target, runs its test executable (optionally filtered to doctest test cases)
 and counts as killed only when the run fails AND its output matches the mutant's
 expected message. A mutant with "expect_build_failure": true is killed instead
-when its build fails with the expected message (a configure-time guard). The
+when its build fails with the expected message (a configure-time guard). A
+mutant with "command" (a list; "{python}" stands for this interpreter) runs
+that command from the repository root instead of building a target, for
+checks that are scripts (a source guard). The
 unmutated tree must pass every used check first; every
 file is restored afterwards. Python only, with subprocess timeouts, so it runs
 the same on Windows, Linux and macOS.
@@ -46,7 +49,16 @@ def executable(build_dir, name):
     raise SystemExit(f"test executable {name} not found under {build_dir}")
 
 
+def check_key(mutant):
+    if "command" in mutant:
+        return "command|" + "\0".join(mutant["command"])
+    return mutant["target"] + "|" + mutant.get("cases", "")
+
+
 def check(mutant, build_dir, cmake):
+    if "command" in mutant:
+        command = [sys.executable if part == "{python}" else part for part in mutant["command"]]
+        return run(command, mutant.get("timeout", 300))
     status, output = run([cmake, "--build", str(build_dir), "--target", mutant["target"]], 1800)
     if status != "passed":
         return "build_failed", output
@@ -67,10 +79,10 @@ def main():
     mutants = json.loads((REPOSITORY / args.catalog).read_text(encoding="utf-8"))["mutants"]
     if args.only:
         mutants = [m for m in mutants if m["id"] in args.only]
-    for mutant in {m["target"] + "|" + m.get("cases", ""): m for m in mutants}.values():
+    for mutant in {check_key(m): m for m in mutants}.values():
         status, output = check(mutant, build_dir, args.cmake)
         if status != "passed":
-            print(f"baseline {mutant['target']} {mutant.get('cases', '')}: {status}\n{output[-2000:]}")
+            print(f"baseline {check_key(mutant)}: {status}\n{output[-2000:]}")
             return 2
     killed = 0
     for mutant in mutants:
@@ -96,7 +108,7 @@ def main():
             outcome = status if status != "passed" else "survived"
         print(f"{mutant['id']}: {outcome}")
     # Rebuild the restored sources so the build tree matches the checkout again.
-    for target in sorted({m["target"] for m in mutants}):
+    for target in sorted({m["target"] for m in mutants if "target" in m}):
         run([args.cmake, "--build", str(build_dir), "--target", target], 1800)
     print(f"{killed}/{len(mutants)} killed")
     return 0 if killed == len(mutants) else 1

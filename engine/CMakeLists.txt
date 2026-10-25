@@ -3,6 +3,9 @@
 # either.
 add_subdirectory(base)
 add_subdirectory(math)
+# The OS layer sits directly above Base and below every module that needs the
+# operating system (docs/architecture/os.md).
+add_subdirectory(os)
 # The engine time base, role threads and trace transport sit directly above
 # Base, below GYO::Engine, so modules that do not link the engine library may
 # use them.

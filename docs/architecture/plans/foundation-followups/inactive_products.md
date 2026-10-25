@@ -163,3 +163,15 @@ TT 計畫的批次完成時，由該批更新本節。
 - 連結：只有用到 `GYO::Trace` 的目標需要連結它；`GYO::Engine` 不依賴它。
 - 選用：未啟用產品若要背景寫紀錄檔，使用 `Engine::Trace::TraceSink`，不要自己開執行緒輪詢。
 
+
+## 5. OS（OS 子系統計畫）
+
+OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成時，由該批更新本節。
+
+### os-skeleton 建立 engine/os 與守衛
+
+狀態：實作與本機 L1 完成（2026-10-25），未合併。
+
+- 破損：無。新增 `GYO::Os`（只依賴 Base）與 `OsError`；沒有任何既有介面改變。
+- 守衛：`os.boundary_guard` 這一批只掃 engine 與 tests/common。未啟用產品的 OS 分支（`apps/object_fps{,_v2}/main.cpp` 等）在 os-guard-wide 才會列進各自目錄的 `os_boundary_allowlist.txt`；在那之後，重新啟用時若新增 OS 標頭、OS 巨集或直接開檔，會被守衛擋下。
+- 選用：未啟用產品若要處理 OS 差異，等對應部件完成後使用 `engine/os`，不要自己寫 `#if`。

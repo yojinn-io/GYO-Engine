@@ -59,7 +59,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | 批次 | 建議檔位 | 狀態 | 交付邊界 |
 |---|---|---|---|
 | os-plan-docs 計畫 | medium | 完成（2026-10-25 核准，D46；[dev_log](../../../dev_logs/2026_10_25_engine_os_plan_docs.zh-Hant.md)） | 本夾三份文件與 dev_log |
-| os-skeleton（A1） | high | 未開始 | engine/os、GYO::Os、OsError、os.md、守衛（Engine 範圍）、突變 runner 擴充 |
+| os-skeleton（A1） | high | 本機 L1 完成（2026-10-25；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_skeleton.zh-Hant.md)） | engine/os、GYO::Os、OsError、os.md、守衛（Engine 範圍）、突變 runner 擴充 |
 | io-contracts（A2） | high；字串規則局部 xhigh；契約審查 ultracode（先問） | 未開始 | io.md、UTF-8 路徑、file:// 對應、ParseUri／ToString／MountTable 修正、IoError detail |
 | os-files-read（A3） | high；UTF-8↔UTF-16 與錯誤對應局部 xhigh；公開介面 1 位 xhigh 審查（先問） | 未開始 | engine/os 的唯讀檔案原語、engine/io 的唯讀 NativeFileSystem |
 | （消費端 P1～P5） | 由消費端決定 | 等 A1～A3 | 長路徑行為、錯誤記錄、asset 接線、UTF-8 呼叫端、驗收（不屬於本計畫） |

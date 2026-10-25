@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the os-subsystem plan. A mutant is killed only when its check fails with the expected message. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/os-subsystem/scripts/mutations.json.",
+  "mutants": [
+    {
+      "id": "os-g1-header",
+      "what": "An Engine module outside engine/os includes a POSIX header (R1)",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "#include \"engine/trace/TraceSink.hpp\"\n",
+      "replace": "#include \"engine/trace/TraceSink.hpp\"\n#include <unistd.h>\n",
+      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "expect": "engine/trace/src/TraceSink\\.cpp:\\d+: R1 unistd\\.h"
+    },
+    {
+      "id": "os-g2-macro",
+      "what": "An Engine module outside engine/os branches on _WIN32 (R2)",
+      "file": "engine/asset/src/AssetCatalog.cpp",
+      "find": "namespace Engine::Asset {\n",
+      "replace": "#if defined(_WIN32)\n#endif\nnamespace Engine::Asset {\n",
+      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "expect": "engine/asset/src/AssetCatalog\\.cpp:\\d+: R2 _WIN32"
+    },
+    {
+      "id": "os-g3-api",
+      "what": "An Engine module outside engine/os calls localtime_r (R3)",
+      "file": "engine/time/src/LateWakeStats.cpp",
+      "find": "namespace Engine::Time {\n",
+      "replace": "namespace Engine::Time {\nvoid LocalTimeProbe(const long* t, void* out) { localtime_r(t, out); }\n",
+      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "expect": "engine/time/src/LateWakeStats\\.cpp:\\d+: R3 localtime_r"
+    },
+    {
+      "id": "os-g4-io-opens",
+      "what": "engine/io opens a file itself instead of calling engine/os (R4, D41)",
+      "file": "engine/io/src/fs/Vfs.cpp",
+      "find": "namespace Engine::IO::FS {\n",
+      "replace": "namespace Engine::IO::FS {\nstatic std::ifstream probe;\n",
+      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "expect": "engine/io/src/fs/Vfs\\.cpp:\\d+: R4 std::ifstream"
+    },
+    {
+      "id": "os-g5-upward",
+      "what": "engine/os includes a module above it (R5)",
+      "file": "engine/os/src/common/OsError.cpp",
+      "find": "#include \"engine/os/OsError.hpp\"\n",
+      "replace": "#include \"engine/os/OsError.hpp\"\n#include \"engine/io/IoError.hpp\"\n",
+      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "expect": "engine/os/src/common/OsError\\.cpp:\\d+: R5 engine/io/IoError\\.hpp"
+    },
+    {
+      "id": "os-g6-stale",
+      "what": "An allowlist entry stays larger after a site moved",
+      "file": "tests/common/os/os_boundary_allowlist.txt",
+      "find": "engine/trace/src/TraceSink.cpp R4 1 ",
+      "replace": "engine/trace/src/TraceSink.cpp R4 2 ",
+      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "expect": "TraceSink\\.cpp R4 has 1 findings, allowlisted 2; shrink the allowlist"
+    },
+    {
+      "id": "os-g7-public-header",
+      "what": "An engine/os public header includes windows.h (Invariant 4)",
+      "file": "engine/os/include/engine/os/OsError.hpp",
+      "find": "#include \"engine/base/Error.hpp\"\n",
+      "replace": "#include \"engine/base/Error.hpp\"\n#include <windows.h>\n",
+      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "expect": "engine/os/include/engine/os/OsError\\.hpp:\\d+: R1 windows\\.h"
+    },
+    {
+      "id": "os-g8-link",
+      "what": "gyo_os links a module above it (Invariant 3, configure-time check)",
+      "file": "engine/os/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_os PUBLIC GYO::Base)",
+      "replace": "target_link_libraries(gyo_os PUBLIC GYO::Base GYO::Time)",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_os links .*expected exactly GYO::Base"
+    },
+    {
+      "id": "os-g9-macro-list",
+      "what": "The guard forgets __linux__ in its macro list",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "\"__linux__\", ",
+      "replace": "",
+      "command": ["{python}", "-m", "unittest", "discover", "-s", "tests/common/os", "-p", "test_*.py"],
+      "expect": "FAIL: test_linux_branch_is_reported"
+    },
+    {
+      "id": "os-g10-filesystem-op",
+      "what": "Runtime code asks the file system through std::filesystem (R4)",
+      "file": "engine/asset/src/AssetCatalog.cpp",
+      "find": "namespace Engine::Asset {\n",
+      "replace": "namespace Engine::Asset {\nstatic const bool probe = std::filesystem::is_regular_file(\"x\");\n",
+      "command": ["{python}", "tests/common/os/os_boundary_guard.py", "--root", "."],
+      "expect": "engine/asset/src/AssetCatalog\\.cpp:\\d+: R4 std::filesystem::is_regular_file"
+    },
+    {
+      "id": "os-e1-detail",
+      "what": "The native error detail drops its fixed domain prefix",
+      "file": "engine/os/src/common/OsError.cpp",
+      "find": "? \"win32=\" : \"errno=\"",
+      "replace": "? \"\" : \"errno=\"",
+      "target": "gyo_os_tests",
+      "cases": "*fixed form*",
+      "expect": "CHECK\\( NativeErrorDetail\\(\\{NativeErrorDomain::Win32, 3\\}\\) == \"win32=3\" \\) is NOT correct"
+    }
+  ]
+}
