@@ -191,6 +191,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D202 | （2026-10-25）quick-close 採 q1：Client 關閉時的 `/leave` 改用 300 ms 的逾時（總上限 600 ms），其他請求維持 2 秒。驗收門檻在執行前核准：從關閉要求到程序結束，Gateway 可連 ≤500 ms、Gateway 關掉 ≤1 s，macOS 與 Windows 各 10 次全部符合、不重試、跑完不放寬 | 使用者：「q1，門檻核准」 |
 | D203 | （2026-10-25）quick-close 的驗收判定加「Gateway 收下 `/leave` 卻不回（stalled）≤1 s」，macOS 與 Windows 各 10 次；另加 CTest 回歸測試 `object_fps_pvp.close_timing`（每種情境 1 次、同一組門檻），讓突變抓得到。這條判定是在看過 Red（修正前 2004 ms）與第一次 macOS 驗收（約 304 ms）之後加的，只收緊 | 使用者：「加：stalled ≤1 s 列入驗收判定（macOS、Windows 各 10 次），並加一個 ctest 回歸測試讓突變抓得到。」 |
 | D204 | （2026-10-25）`object_fps_pvp.close_timing` 維持 `network` 標籤（和 `object_fps_pvp.worker` 一樣用本機 socket），CI 的 L1 不跑它；quick-close 在 Windows 上的證據靠 D201 的手動 10 次 | 使用者：「維持 network 標籤，Windows 證據靠晚上手動的 10 次。」 |
+| D205 | （2026-10-25）OS 統一子系統其餘的批次改成現在就開始，不等 v7.1 發行（取代 D46 的「發行後」）。協調：那個會話的分支從發行線 `claude/pvp-v71-release` 切出（已含 A1～A3、P1～P5、quick-close），PR #96 合併前要改發行線也改到的檔案時先通知本會話；lan15 若需要修正，由本會話在發行線做，再由那邊併入 | 使用者：「我覺得，現在開始  OS 統一子系統的工作比較好。」 |
 
 ## 規劃紀錄（記錄器）
 
