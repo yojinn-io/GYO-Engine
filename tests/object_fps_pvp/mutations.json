@@ -3542,7 +3542,7 @@
       "find": "    if (input.lifeGeneration != life)\n        return input.lifeGeneration < life ? InputAdmission::LifeOld : InputAdmission::LifeFuture;\n",
       "replace": "    static_cast<void>(life);\n",
       "check": "ipc",
-      "expect": "CHECK\\( once\\.(snapshot|decisions) == copied\\.(snapshot|decisions) \\) is NOT correct"
+      "expect": "GYO_ASSERT failed: merged\\.commands\\.empty\\(\\) && merged\\.stagedSequences\\.empty\\(\\)|CHECK\\( once\\.(snapshot|decisions) == copied\\.(snapshot|decisions) \\) is NOT correct"
     },
     {
       "id": "v71ip-input-wait-unrecorded",
@@ -5923,7 +5923,7 @@
       "find": "                    const auto arrival=liveness.Snapshot(arrivedAt);",
       "replace": "                    const auto arrival=liveness.Snapshot(arrivedAt+std::chrono::microseconds(clock.Clock().Echo()?clock.Clock().Echo()->first%500000:0));",
       "check": "worker",
-      "expect": "did not count from the last snapshot|not interrupted at T_int|an extreme time echo changed"
+      "expect": "did not count from the last snapshot|not interrupted at T_int|an extreme time echo changed|an outage did not write its six connection lines"
     },
     {
       "id": "ci-transient-not-transient",

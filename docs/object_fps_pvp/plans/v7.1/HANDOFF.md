@@ -57,7 +57,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 不做：INVENTORY 的 G2（D159）。
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **發行的完整突變（D185）**：2026-10-25 開始，在獨立的 worktree（固定在發行線 `d8873fd`，會話的 scratchpad 內）以 `caffeinate -i` 背景執行：Engine 三個目錄（time-threads-trace、input-and-present、os-subsystem）與產品目錄。結果分類後寫進發行線的 dev_log；只有「測試失去檢出力」擋發版。
+- **發行的完整突變（D185）**：完成（2026-10-25T10:01Z～15:17Z）。Engine 133／133（另 5 個 Windows 專用待 D201）；產品 643／654，非 killed 的 11 個：8 個是負載造成（單獨重跑 killed）、2 個期望訊息過時（`ed63c24` 更新）、1 個測試失去檢出力（`csc-r5-uncounted`，worker 的過期窗口檢查被 C17-3 削弱，已修，worker 為檢查的 47 個突變 47／47 killed）。擋發版的條件已解除。dev_log：`docs/dev_logs/2026_10_26_pvp_v71_release_full_mutation.zh-Hant.md`
 - **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟、完整突變開始。
 
 ## 閱讀入口
@@ -192,6 +192,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D203 | （2026-10-25）quick-close 的驗收判定加「Gateway 收下 `/leave` 卻不回（stalled）≤1 s」，macOS 與 Windows 各 10 次；另加 CTest 回歸測試 `object_fps_pvp.close_timing`（每種情境 1 次、同一組門檻），讓突變抓得到。這條判定是在看過 Red（修正前 2004 ms）與第一次 macOS 驗收（約 304 ms）之後加的，只收緊 | 使用者：「加：stalled ≤1 s 列入驗收判定（macOS、Windows 各 10 次），並加一個 ctest 回歸測試讓突變抓得到。」 |
 | D204 | （2026-10-25）`object_fps_pvp.close_timing` 維持 `network` 標籤（和 `object_fps_pvp.worker` 一樣用本機 socket），CI 的 L1 不跑它；quick-close 在 Windows 上的證據靠 D201 的手動 10 次 | 使用者：「維持 network 標籤，Windows 證據靠晚上手動的 10 次。」 |
 | D205 | （2026-10-25）OS 統一子系統其餘的批次改成現在就開始，不等 v7.1 發行（取代 D46 的「發行後」）。協調：那個會話的分支從發行線 `claude/pvp-v71-release` 切出（已含 A1～A3、P1～P5、quick-close），PR #96 合併前要改發行線也改到的檔案時先通知本會話；lan15 若需要修正，由本會話在發行線做，再由那邊併入 | 使用者：「我覺得，現在開始  OS 統一子系統的工作比較好。」 |
+| D206 | （2026-10-26）lan15 的 Windows 機器上加做 OS 子系統的主控台實機驗證（Engine D51，PLAN 第 7.7 節的 L3，只記錄）：Match 在主控台裡用 Ctrl+C、Ctrl+Break、關閉主控台視窗三種方式結束，log 最後一行都是 `end version=1 reason=signal exit_code=0`；結束要求後再按一次 Ctrl+C 會直接結束、沒有 end 紀錄（補充）；可以的話跑 `ctest -R "^os\.console_close$"`（Windows Terminal 下可能 Skipped，改用 conhost）與 os-subsystem 目錄的 Windows 專用突變（os-c4、os-c5、os-c6、os-c8、os-c9、os-g18、os-f4、os-f5、os-g16、os-p5 與 v7.1 的 p1 兩個、p4）。這些在 OS 子系統的分支 `claude/trusting-joliot-f13b78`（`c507c59`）上，不在發行線；結果回給那個會話 | OS 子系統的會話轉達使用者的決定 D51 |
 
 ## 規劃紀錄（記錄器）
 
