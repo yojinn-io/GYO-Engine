@@ -121,3 +121,4 @@ OS 子系統的 PLAN 核准（Engine D46；計畫文件 `docs/architecture/plans
   - 守衛 allowlist 中 asset 的條目刪除。
 - P1～P5 之後的下一個失敗點是產品自己開的 `arenas.json`（約 P≥219），屬於發行之後的 os-files-write。其他部件（Process、主控台與結束要求、寫檔、trace、計時等）都排在 v7.1 發行之後。
 - A1～A3 估計 20～29 h（A1 與 A2 可以並行），等使用者說開始；完成時那個會話通知分支與 commit。
+- **合併的安排**（暫定，兩邊都記下）：A1～A3 用分支 `claude/trusting-joliot-f13b78`（從 master `23fab75` 切出，不帶 PR #95；開工前若 master 有新提交，先同步並告知新的基準）。PR #95 合併後，本會話從 master 切 `claude/pvp-v71-release`；A1～A3 完成後用 `git merge --no-ff` 併進發行線（不 rebase、不 squash），再做 P1～P5；整個 PR 用 `gh pr merge --merge` 合進 master。P4 那一行與 PR #95 的衝突由本會話在發行線處理。
