@@ -8,6 +8,7 @@
 // Only Windows is checked by macro. On the POSIX side the boundary guard's text
 // scan of engine/os/include covers it: libc++ and libstdc++ define _PTHREAD_H
 // from <string> or <filesystem>, so a macro check would fail without a violation.
+#include "engine/os/Console.hpp"
 #include "engine/os/Files.hpp"
 #include "engine/os/OsError.hpp"
 #include "engine/os/Process.hpp"

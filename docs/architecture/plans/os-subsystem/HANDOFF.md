@@ -64,6 +64,8 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-25 | D46：核准 PLAN 第 1 版。<br>開放決策 1：A1～A3 在消費端發行前完成，其他全部排在發行之後。<br>開放決策 14：UNC 根目錄這一輪暫不支援，io.md 寫明限制，P1 不寫 `\\?\UNC\` 分支。<br>開放決策 15：A1～A3 併進消費端的發行線 PR。<br>同意 A1～A3 的 Delta（新 target GYO::Os、os.md 與 io.md 的 Design Invariants 節） | 使用者：「核准 os-subsystem 的 PLAN。開放決策 1、14、15 照建議：(1) A1～A3 在發行前，其他全部排在發行後；(14) UNC 根目錄這一輪暫不支援；(15) A1～A3 併進消費端的發行線 PR。同意 A1～A3 的 Delta（新 target GYO::Os、os.md 與 io.md 的 Design Invariants 節）。」 |
 | 2026-10-25 | D47：`Os::Files::PathToUtf8`／`PathFromUtf8` 改成回傳 `Base::Result<…, OsError>`，不合法的輸入一律回 InvalidEncoding，兩平台一致、不丟例外。修訂 PLAN 第 3.2 節的簽名。起因：xhigh 審查發現 MSVC 的 `std::filesystem::path` 遇到不合法的 UTF-8 或未配對 surrogate 會丟例外，違反 os.md Invariant 5、6 | 使用者對「PathToUtf8／PathFromUtf8 遇到不合法的輸入時要怎麼處理？」選：「改成回傳 Result」 |
 | 2026-10-25 | D48：OS 子系統其餘的批次現在開始，不等消費端發行；取代 D46 的開放決策 1。<br>預設決定：<br>產品與工具的呼叫端由架構批次一起改（可觀察行為不變，日誌格式逐 byte 不變）；<br>開放決策 7 採 (b)，os-net-errors 只做等價搬移，排在消費端的發行線 PR 合併後；<br>開放決策 2、6、8、9、10、11、12 照 PLAN 第 11 節的建議；<br>計時核心（os-threads-backend、os-wait-backend）排在最後，L2 實機量測在消費端的 lan15 之後安排，判定數值（開放決策 13）在看結果之前先交使用者核准並凍結。<br>分支併入消費端的發行線，動到發行線 PR 差異裡的檔案前，先通知消費端 | 使用者在消費端的發行任務會話說：「我覺得，現在開始  OS 統一子系統的工作比較好。」（消費端 D205）；回到本會話確認時，對「要我現在開始 OS 子系統剩下的批次嗎？」選：「開始，照預設決定」 |
+| 2026-10-25 | D49：os-console-shutdown 開工前的四個決定。<br>檔位：主會話照現在的設定（high），signal handler、主控台 handler、結束旗標三處逐行論證，實作後 1 位 xhigh 唯讀審查者看這三處。<br>error-handling.md 的「平台邊界的例外」不延伸到 engine/os：handler 只寫 lock-free atomic、宣告 noexcept；改寫 os.md Invariant 6 的預告（Design Invariants 節的變更）。<br>連結守衛允許 Windows 上 `gyo_os` 連 shell32（`CommandLineToArgvW`）：放寬面只有這一個名字；定案前做突變檢查，並請 1 位審查者用實際資料核對 AGENTS §14.4 的 1～5，結果交使用者看。<br>開放決策 9 的收尾上限：關閉主控台時 handler 最多等 4 秒（OS 約 5 秒強制結束）；主控台的輸出 code page 在正常結束時還原 | 使用者：「開始 os-console-shutdown。先說明檔位、★ Windows 行為變更的內容，以及需要我同意的地方（error-handling.md 的延伸、連結守衛加 shell32）。」；對四個問題選：「high＋三處論證＋xhigh 審查」「不延伸，改寫 Invariant 6」「同意，先做突變與獨立審查」「等 4 秒、正常結束還原」 |
+| 2026-10-25 | D50：xhigh 審查後的兩個決定。<br>POSIX 上不是 UTF-8 的命令列參數照現狀拒絕（`CommandLineUtf8` 守住「輸出一定是 UTF-8」），記為 Invariant 9 的事前宣告差異。<br>shell32 連結守衛定案（AGENTS §14.4 的 1～5 依審查者的實測修正：收緊面其實有一個，即 Windows 上「正好只有 GYO::Base」改成失敗）；審查者發現 `gyo_expect_links` 會丟掉名字是 CMake 假值的項目，這是既有漏洞，另開後續 | 使用者對「POSIX 上不是 UTF-8 的命令列參數要怎麼處理？」選「照現狀拒絕，宣告為差異」；對「shell32 連結守衛的變更要定案嗎？」選「定案，假值漏洞另開後續」 |
 ## 消費端的壓力摘要
 
 提出需求的消費端是一個線上遊戲，有繪製畫面的程序、權威模擬的伺服器端程序，以及 Go 的轉送程序。以下是與 Engine 有關的事實；未標「實機」的是靜態分析。
@@ -342,6 +344,50 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 改的是本批新加、還沒有通過過任何驗收的測試，不是受入判定或 Design Invariants 的守衛（§14.4 的 1～5 不適用）；理由記在這裡與 commit。
 - 2026-10-25：推送 `a9219fa`，第二次四平台 L1：[run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。本批完成（os-guard-wide 同時完成）。
 
+### os-console-shutdown
+
+- 2026-10-25：開始。使用者先要求說明檔位、★ Windows 行為變更與需要同意的地方，回答四個問題後定為 D49（high＋三處逐行論證＋1 位 xhigh 審查；平台邊界例外不延伸、改寫 Invariant 6；連結守衛允許 Windows 的 shell32，定案前做突變與獨立審查；關閉主控台最多等 4 秒、正常結束還原 code page）。基準是本分支 `83add69`。
+- 協調：`tools/ui_editor/CMakeLists.txt` 與突變 runner `time-threads-trace/scripts/run_mutations.py` 在消費端發行線 PR 的差異裡。動 CMake 前已通知消費端（加一行 `gyo_ui_editor PRIVATE GYO::Os`）；runner 的擴充是向下相容的，完成時一起告知。
+- 實作：
+  - `engine/os/include/engine/os/Console.hpp`：`CommandLineUtf8`、`Utf8ConsoleOutput`、`ShutdownReason`、`InstallShutdownRequests`、`RequestedShutdown`。
+  - `src/common/Shutdown.cpp`：結束要求旗標（lock-free 的 `std::atomic<std::uint8_t>`，第一個要求的理由贏），engine/os 唯一的程序狀態。
+  - `src/posix/Console.cpp`：`sigaction` 處理 SIGINT、SIGTERM，`SA_RESTART`、不重設 handler、只擋住處理中的訊號，和舊的 `std::signal` 相同；argv 照原樣交出，不是 UTF-8 的參數回 InvalidEncoding。
+  - `src/windows/Console.cpp`：`SetConsoleCtrlHandler` 處理 Ctrl+C、Ctrl+Break、關閉主控台（最多等 4 秒）；登出與關機照 OS 的預設。`GetCommandLineW`＋`CommandLineToArgvW` 轉 UTF-8（`src/windows/Wide.cpp`，不改分隔字元）。主控台的輸出 code page 設成 UTF-8，解構時還原。
+  - `gyo_os` 在 Windows 上 PRIVATE 連 shell32；守衛 `gyo_expect_os_links` 在 Windows 上要求正好是 GYO::Base＋shell32（D49）。
+  - 呼叫端：Match（`match_main.cpp`）改用 `InstallShutdownRequests`／`RequestedShutdown`、`CommandLineUtf8`＋`PathFromUtf8`、`Utf8ConsoleOutput`；end 紀錄仍是 `reason=signal`，start 與 end 兩行的字串不變。ui_editor 的 `Main.cpp`、`CommandLine.cpp` 改用 UTF-8 命令列與主控台輸出，`gyo_ui_editor` 多連 GYO::Os。
+  - 產品的 allowlist 從 7 條縮到 5 條（`match_main.cpp` 的 R1、R3）。
+- 測試：
+  - `tests/common/os/ConsoleTests.cpp`（gyo_os_tests）：命令列、非 UTF-8 參數、主控台輸出的套用與還原、沒有要求時為空、理由的名稱。
+  - `ConsoleProbe.cpp`＋`console_check.py`（CTest `os.console_arguments`、`os.console_shutdown`，Windows 另有 `os.console_close`）：真的子程序。
+    - 參數：日文、é、韓文、emoji、空白、引號、反斜線、tab、空字串，九個參數回來是相同的 UTF-8。外部參照是 Python 的 subprocess 依 Microsoft 規則組出的命令列。
+    - 結束要求：POSIX 送「同一個訊號兩次，再送另一個」，程序不會被結束、理由是第一個；Windows 對新程序群組送 Ctrl+Break 三次。
+    - 關閉主控台（只有 Windows）：探測程式對自己的主控台視窗送 WM_CLOSE。runner 沒有主控台視窗、或送不出主控台事件時回 77，CTest 顯示為 skipped，缺口看得到。
+  - ui_editor 的核心測試補上 UTF-8 路徑參數與非 UTF-8 參數。
+  - 實機（本機 macOS）：真的 Match 收到 SIGTERM、SIGINT（各兩次）都優雅結束，exit 0，log 最後一行是 `end version=1 reason=signal`；UTF-8 的 `--arena` 路徑原樣出現在錯誤訊息裡。
+  - 消費端提醒有兩個讀取端依賴 POSIX 的 SIGTERM（`tests/object_fps_pvp/ingress_cross_check.py:80、174`，`build/acceptance/object_fps_pvp/run_timing.py:389`）。本機產品組態跑 `object_fps_pvp.ingress_cross`（SIGTERM 結束 Match，讀最後一行的 `reason=signal exit_code=0`）通過，已回覆消費端。
+- 突變：新增 os-c1～os-c9、os-g18。runner 擴充：command 型可以同時指定 target（先建置），`{exe:NAME}` 代表建好的執行檔。
+  - 本機：os-c1（拿掉 SIGTERM 註冊）、os-c2（handler 重設）、os-c3（後來的要求蓋掉理由）killed，連同重跑的 os-g7、os-g8、os-g17。
+  - os-c2 第一次存活：檢查送的第二個訊號和第一個不同，`SA_RESETHAND` 只重設處理過的訊號。改成再送一次第一個訊號後，os-c3 又存活（第三個訊號和第一個相同，最後一個贏也是同一個理由）。最後定為「第一個、第一個、另一個」，三個都 killed。
+  - Windows 專用：os-c4（拿掉關閉主控台的分支）、os-c5（拿掉 Ctrl+Break）、os-c6（命令列改用 ANSI code page）、os-g18（多連 ws2_32）要在 Windows 上跑。
+- L1（本機 macOS Intel）：core 33／33；產品組態的 os、object_fps_pvp 相關與 ui_editor 共 20／20。Windows 的程式碼在本機編不到，第一次編譯是四平台 L1 的 windows-x64。
+- 事前宣告的差異（Invariant 9；★ 是 Windows 行為變更）：
+  1. ★ Windows 的 Match：Ctrl+Break 與關閉主控台視窗會優雅結束並寫 end 紀錄（以前直接被終止）。第一次 Ctrl+C 本來就會優雅結束，不變；之後再按 Ctrl+C 或 Ctrl+Break 會直接結束程序，和以前第二次 Ctrl+C 相同（收尾卡住時的出口）。驗收腳本的 `terminate()`（TerminateProcess）不經過 handler，不變。
+  2. ★ Windows 的 Match 與 ui_editor：命令列是 UTF-8，ANSI code page 以外的字不再變成 `?`。切分改由 `CommandLineToArgvW` 做，引號內連續 `""` 之類的少見寫法可能和 C runtime 的 argv 切法不同；Python 的 subprocess 組出的命令列兩者切法相同。
+  3. ★ Windows 的 Match 與 ui_editor：主控台的輸出 code page 在執行期間是 UTF-8，正常結束時還原；重導到檔案或 pipe 的輸出不受影響。
+  4. POSIX：不是 UTF-8 的參數現在會被拒絕（Match 與 ui_editor 回 2），以前照位元組使用。範圍包含 `--listen` 這類非路徑參數（D50，使用者同意）。
+  5. 結束要求的 handler 裝不起來時，Match 在 stderr 印一行；以前 `std::signal` 的失敗被忽略。
+- xhigh 審查（1 位，D49）：
+  - 三處重點沒有 blocker、major。POSIX 的 `sigaction` 旗標在 macOS 實測和 `std::signal` 相同（`0x2`）；glibc 依原始碼判斷相同。狀態權威沒有問題；start、end 兩行的字串不變。
+  - minor：Windows 上第二次 Ctrl+C 的行為變了，沒有宣告（舊的 UCRT 在呼叫 handler 前重設成預設，所以第二次會直接結束）→ 改回：要求之後的 Ctrl+C、Ctrl+Break 照預設處理。
+  - minor：POSIX 拒絕非 UTF-8 參數是 Invariant 9 的變更 → D50。
+  - minor：os.md 有四處沒同步（元件狀態、守衛的連結說明、已解決的盲點、Invariant 6）→ 已改，並寫進 Console 的 Contracts。
+  - nit：安裝失敗一半時沒有還原、並行呼叫時第二個會先拿到成功 → 改成加鎖、全部成功或全部還原。
+  - 測試缺口：拿掉 `SA_RESTART` 的突變存活 → 探測程式讀回旗標，和同一個 C library 上 `std::signal` 設的旗標比對（os-c7）。Windows 的 Ctrl+C 沒有 L1 → 探測程式在自己新開的主控台送 Ctrl+C（`os.console_ctrl_c`，os-c8、os-c9）。
+  - 沒有處理、記成後續：拿掉 install-once 的突變存活（無害）；`Wide.cpp` 與 `Files.cpp` 的 UTF-16→UTF-8 重複，等發行線 PR 合併後再合一；Windows 11 預設終端是 Windows Terminal 時，`os.console_close` 可能逾時而不是 skip（ConPTY 的假視窗可能不理 WM_CLOSE），要在 lan15 的實機上確認；runner 的 code page 已是 65001 或沒有主控台時，還原的路徑不會被走到。
+  - §14.4 的獨立核對（shell32）：1 確認；2 確認但有但書（不限可見性；MSVC 預設的標準函式庫本來就有 shell32.lib，實際的連結命令列沒變）；3 原本寫「沒有收緊面」不成立（Windows 上只有 GYO::Base 改成失敗，無害）；4 確認（os-g8 在 macOS 被殺，os-g18 用 `WIN32=1` 模擬失敗），另有既有的假值漏洞；5 部分（os.md 的 Guard 說明要補，已改）。使用者定案（D50）。
+- 修正後的檢查：`os.console_shutdown` 通過，macOS 上讀回的旗標是 `reference_flags=0x2`、`sigint_flags=0x2`、`sigterm_flags=0x2`。突變重跑：os-c1、os-c2、os-c3、os-c7、os-g8 killed；Windows 專用的 os-c4、os-c5、os-c6、os-c8、os-c9、os-g18 跳過。
+- 已知、留給 os-path-utf8-sweep：Match 的 `arena_file=` 與 ui_editor 的 `valid:` 仍用 `path::string()` 印路徑。在 Windows 上，ANSI code page 以外的路徑會在印出時丟例外。以前這種路徑在 argv 就變成 `?`，同樣開不了，所以沒有可用的情況變壞。
+
 ## 未結事項
 
 - ~~使用者核准 PLAN，回答開放決策 1、14、15，並同意 A1～A3 的 Delta。~~ 2026-10-25 完成（D46）。
@@ -362,5 +408,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。
 - ~~os-files-read 開始時：確認 Windows CI runner 的 ACP，選它表示不了的字元做測試。~~ 改成選一般 Western code page 表示不了的日文與正體中文，確認放到第一次 windows-x64 L1（見上）。
 - ~~A1～A3 完成後：通知消費端的發行任務（分支與 commit）。~~ 2026-10-25 完成。
-- ~~os-guard-wide 與 os-process-info 的四平台 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過，已通知消費端的發行任務。~~CPU 測試修正後重跑 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
+- ~~os-guard-wide 與 os-process-info 的四平台 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
+- 後續（D50）：`tests/common/time/CMakeLists.txt` 的 `gyo_expect_links` 以 `if(entry AND …)` 過濾，會把名字是 CMake 假值的連結項目（N、NO、OFF、FALSE、IGNORE、0、*-NOTFOUND）丟掉，例如 `shell32 OFF` 也會通過。修正只會收緊，依 AGENTS §14.4 由 time-threads-trace 的 owner 修並事後報告。
+- os-console-shutdown 的四平台 L1 與 Windows 專用突變（os-c4、os-c5、os-c6、os-c8、os-c9、os-g18）。`os.console_shutdown`（Ctrl+Break）、`os.console_ctrl_c`、`os.console_close` 在 CI 上是否能跑，看 L1 是 Passed 還是 Skipped。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過，已通知消費端的發行任務。~~CPU 測試修正後重跑 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

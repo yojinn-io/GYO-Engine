@@ -651,6 +651,203 @@
       "target": "gyo_os_tests",
       "cases": "*executable path*",
       "expect": "stem\\(\\) == \"gyo_os_tests\""
+    },
+    {
+      "id": "os-c1-sigterm",
+      "what": "SIGTERM is no longer a shutdown request on POSIX (the process dies by it)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Console.cpp",
+      "find": "constexpr int signals[] = {SIGINT, SIGTERM};",
+      "replace": "constexpr int signals[] = {SIGINT};",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "sa_flags differ|probe exited -15"
+    },
+    {
+      "id": "os-c2-reset-handler",
+      "what": "The POSIX handler is reset after the first signal, so a second one ends the process",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Console.cpp",
+      "find": "action.sa_flags = SA_RESTART;",
+      "replace": "action.sa_flags = SA_RESTART | SA_RESETHAND;",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "sa_flags differ|a later request must not end it"
+    },
+    {
+      "id": "os-c3-last-wins",
+      "what": "A later shutdown request overwrites the first one's reason",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/common/Shutdown.cpp",
+      "find": "    std::uint8_t none = 0;\n    requested.compare_exchange_strong(none, static_cast<std::uint8_t>(reason), std::memory_order_acq_rel,\n                                      std::memory_order_acquire);\n",
+      "replace": "    requested.store(static_cast<std::uint8_t>(reason), std::memory_order_release);\n",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "the first request wins"
+    },
+    {
+      "id": "os-c4-no-close-branch",
+      "what": "Closing the console is not handled on Windows (the OS ends the process at once)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Console.cpp",
+      "find": "    case CTRL_CLOSE_EVENT:\n        Detail::RecordShutdown(ShutdownReason::ConsoleClose);",
+      "replace": "    case CTRL_CLOSE_EVENT + 100:\n        Detail::RecordShutdown(ShutdownReason::ConsoleClose);",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "close"
+      ],
+      "expect": "expected exit 0 with 'requested reason=console_close'"
+    },
+    {
+      "id": "os-c5-no-break",
+      "what": "Ctrl+Break is not a shutdown request on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Console.cpp",
+      "find": "    case CTRL_C_EVENT:\n    case CTRL_BREAK_EVENT:\n",
+      "replace": "    case CTRL_C_EVENT:\n",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "break once: expected exit 0"
+    },
+    {
+      "id": "os-c6-ansi-arguments",
+      "what": "Windows converts the command line with the ANSI code page instead of UTF-8",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Wide.cpp",
+      "find": "const int bytes = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,",
+      "replace": "const int bytes = ::WideCharToMultiByte(CP_ACP, 0,",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "arguments"
+      ],
+      "expect": "arguments came back as|probe exited"
+    },
+    {
+      "id": "os-g18-windows-extra-link",
+      "what": "gyo_os links a Windows library beyond shell32 (Invariant 3, configure-time check)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_os PRIVATE shell32)",
+      "replace": "target_link_libraries(gyo_os PRIVATE shell32 ws2_32)",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_os links .*expected exactly GYO::Base;shell32"
+    },
+    {
+      "id": "os-c7-no-restart",
+      "what": "The POSIX handlers lose SA_RESTART, unlike std::signal (Design Invariant 9)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Console.cpp",
+      "find": "action.sa_flags = SA_RESTART;",
+      "replace": "action.sa_flags = 0;",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "sa_flags differ"
+    },
+    {
+      "id": "os-c8-no-ctrl-c",
+      "what": "Ctrl+C is not a shutdown request on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Console.cpp",
+      "find": "    case CTRL_C_EVENT:\n    case CTRL_BREAK_EVENT:\n",
+      "replace": "    case CTRL_BREAK_EVENT:\n",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "ctrl-c"
+      ],
+      "expect": "interrupt once: expected exit 0"
+    },
+    {
+      "id": "os-c9-second-press-handled",
+      "what": "A second Ctrl+C no longer ends the process on Windows (the way out of a hung shutdown)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Console.cpp",
+      "find": "        if (RequestedShutdown()) return FALSE;\n",
+      "replace": "",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "ctrl-c"
+      ],
+      "expect": "interrupt twice: the second request must end the process"
     }
   ]
 }

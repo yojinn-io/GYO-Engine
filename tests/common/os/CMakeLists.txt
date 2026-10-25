@@ -1,6 +1,6 @@
 # Tests of the OS layer (docs/architecture/os.md). This is the one common test
 # directory allowed to assert per OS; the boundary guard does not scan it.
-add_executable(gyo_os_tests OsErrorTests.cpp FilesTests.cpp ProcessTests.cpp)
+add_executable(gyo_os_tests OsErrorTests.cpp FilesTests.cpp ProcessTests.cpp ConsoleTests.cpp)
 target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)
 add_test(NAME gyo_os_tests COMMAND gyo_os_tests)
 set_tests_properties(gyo_os_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
@@ -25,12 +25,35 @@ add_test(NAME os.boundary_guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_*.py" -v)
 set_tests_properties(os.boundary_guard os.boundary_guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
 
+# Console (command line, shutdown requests) needs a child process: the probe
+# is started by console_check.py, which exits 77 for a check this runner cannot
+# run (CTest shows it as skipped, so a gap stays visible).
+add_executable(gyo_os_console_probe ConsoleProbe.cpp)
+target_link_libraries(gyo_os_console_probe PRIVATE GYO::Os)
+set(gyo_os_console_checks arguments shutdown)
+if(WIN32)
+    list(APPEND gyo_os_console_checks ctrl-c close)
+endif()
+foreach(check IN LISTS gyo_os_console_checks)
+    string(REPLACE "-" "_" name "${check}")
+    add_test(NAME os.console_${name}
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/console_check.py"
+            --probe "$<TARGET_FILE:gyo_os_console_probe>" --check ${check})
+    set_tests_properties(os.console_${name} PROPERTIES LABELS "cpu" TIMEOUT 90 SKIP_RETURN_CODE 77)
+endforeach()
+
 # The OS layer is the lowest layer above GYO::Base: its links, private and
-# interface alike, are exactly GYO::Base (gyo_expect_links is defined with the
-# time tests, which configure first). Checked once the whole project is
-# configured, so an edge added later from another directory is seen too.
+# interface alike, are exactly GYO::Base and, on Windows, shell32 for
+# CommandLineToArgvW (an OS system library, Design Invariant 3; D49).
+# gyo_expect_links is defined with the time tests, which configure first.
+# Checked once the whole project is configured, so an edge added later from
+# another directory is seen too.
 function(gyo_expect_os_links)
-    gyo_expect_links(gyo_os GYO::Base)
+    if(WIN32)
+        gyo_expect_links(gyo_os GYO::Base shell32)
+    else()
+        gyo_expect_links(gyo_os GYO::Base)
+    endif()
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_os_links)
 

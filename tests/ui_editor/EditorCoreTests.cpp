@@ -65,6 +65,16 @@ void TestCommandLine() {
     const auto explicitRoot = ParseCommandLine(both);
     Expect(explicitRoot && explicitRoot->assetRoot == "assets" &&
         explicitRoot->catalogPath == "elsewhere/catalog.json", "explicit catalog overrides manifest selection");
+
+    // The arguments are UTF-8 on every platform (Os::Console::CommandLineUtf8):
+    // a path outside any ANSI code page keeps its characters.
+    constexpr std::string_view utf8[]{"--open", "\xE6\x97\xA5\xE6\x9C\xAC/\xED\x95\x9C.json"};
+    const auto unicode = ParseCommandLine(utf8);
+    Expect(unicode && unicode->inputPath &&
+        unicode->inputPath->generic_u8string() == u8"\u65E5\u672C/\uD55C.json",
+        "a UTF-8 path argument keeps its characters");
+    constexpr std::string_view notUtf8[]{"--open", "\xFF.json"};
+    Expect(!ParseCommandLine(notUtf8), "a path argument that is not UTF-8 is refused");
 }
 
 void TestContentManifestMount(const std::filesystem::path& root) {

@@ -5,9 +5,11 @@ its target, runs its test executable (optionally filtered to doctest test cases)
 and counts as killed only when the run fails AND its output matches the mutant's
 expected message. A mutant with "expect_build_failure": true is killed instead
 when its build fails with the expected message (a configure-time guard). A
-mutant with "command" (a list; "{python}" stands for this interpreter) runs
-that command from the repository root instead of building a target, for
-checks that are scripts (a source guard). A mutant with "platforms" (prefixes
+mutant with "command" (a list; "{python}" stands for this interpreter and
+"{exe:NAME}" for the built executable NAME) runs that command from the
+repository root instead of the target's executable, for checks that are
+scripts (a source guard, or a script that drives a built probe); with a
+"target" as well, that target is built first. A mutant with "platforms" (prefixes
 of sys.platform, such as "win32", "darwin", "linux") runs only there: it
 mutates code that is compiled on those platforms only, and elsewhere it is
 reported as skipped and left out of the count. The
@@ -54,17 +56,25 @@ def executable(build_dir, name):
 
 def check_key(mutant):
     if "command" in mutant:
-        return "command|" + "\0".join(mutant["command"])
+        return "command|" + mutant.get("target", "") + "|" + "\0".join(mutant["command"])
     return mutant["target"] + "|" + mutant.get("cases", "")
 
 
+def command_part(part, build_dir):
+    if part == "{python}":
+        return sys.executable
+    if part.startswith("{exe:") and part.endswith("}"):
+        return str(executable(build_dir, part[len("{exe:"):-1]))
+    return part
+
+
 def check(mutant, build_dir, cmake):
+    if mutant.get("target"):
+        status, output = run([cmake, "--build", str(build_dir), "--target", mutant["target"]], 1800)
+        if status != "passed":
+            return "build_failed", output
     if "command" in mutant:
-        command = [sys.executable if part == "{python}" else part for part in mutant["command"]]
-        return run(command, mutant.get("timeout", 300))
-    status, output = run([cmake, "--build", str(build_dir), "--target", mutant["target"]], 1800)
-    if status != "passed":
-        return "build_failed", output
+        return run([command_part(part, build_dir) for part in mutant["command"]], mutant.get("timeout", 300))
     command = [str(executable(build_dir, mutant["target"]))]
     if mutant.get("cases"):
         command.append("-tc=" + mutant["cases"])

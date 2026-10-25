@@ -28,7 +28,7 @@ primitives here.
 | Files | Read primitives with UTF-8 paths (`FileReader`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later write, create, atomic replace | read: os-files-read (landed); write: os-files-write |
 | System | System font directories | os-tool-files |
 | Process | Executable path, process and thread CPU time, local calendar time (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`) | os-process-info (landed) |
-| Console | UTF-8 command line, UTF-8 console output, shutdown requests | os-console-shutdown |
+| Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the current thread | os-threads-backend |
 | Wait | The wake primitive behind `Time::Waiter` | os-wait-backend |
 | Net (conditional) | Neutral classification of socket error codes | os-net-errors |
@@ -86,6 +86,24 @@ Only the components whose batch has landed exist; the others are planned in the 
     point the platform cannot convert is `Unsupported` with the native error (Windows: after the year 3000).
   - An OS failure of `ExecutablePath` is `IoFailed` (the native error stays in the detail; no caller branches on
     the code), a path longer than Windows allows is `TooLarge`, and a path with no UTF-8 form is `InvalidEncoding`.
+- **Console.**
+  - `CommandLineUtf8` gives the process's arguments in UTF-8, the program name first. Windows reads
+    `GetCommandLineW` and splits it with `CommandLineToArgvW` (shell32), whatever the ANSI code page is; its rules
+    for quotes inside quotes can differ from the C runtime's narrow `argv` in corner cases. POSIX hands `argv` on
+    as given, and an argument that is not UTF-8 is `InvalidEncoding` (D50).
+  - `Utf8ConsoleOutput` sets the Windows console's output code page to UTF-8 while it lives and restores the
+    previous one when destroyed; it is not applied without a console. POSIX needs no change and counts as applied.
+    Output redirected to a file or a pipe is bytes either way.
+  - `InstallShutdownRequests` installs the process's handlers once (all or nothing); `RequestedShutdown` reads the
+    first request's reason from any thread. The flag is the one process state engine/os owns (Invariant 8); what a
+    program does on a request is its policy.
+    - POSIX: SIGINT and SIGTERM with `sigaction`, carrying the `sa_flags` `std::signal` sets on the platform's C
+      library (`SA_RESTART`, the handler kept): later signals only repeat the request.
+    - Windows: Ctrl+C, Ctrl+Break and closing the console with `SetConsoleCtrlHandler`. After a request, another
+      Ctrl+C or Ctrl+Break gets the default handling and ends the process at once, as a second Ctrl+C did when
+      the C runtime's SIGINT handling reset itself. On a close the handler waits up to 4 s, since the OS ends the
+      process when it returns (about 5 s after the close); the program's own exit ends the wait sooner. Log off
+      and system shutdown keep the default handling. `TerminateProcess` never reaches a handler.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
@@ -128,7 +146,8 @@ engine/ and tests/common/; any other allowlist covers only files under its own d
 deletes its allowlist and no common file changes.
 
 Two configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
-links exactly `GYO::Base`, and no target or directory under the scanned roots outside engine/os and
+links exactly `GYO::Base` (and, on Windows, `shell32` for `CommandLineToArgvW`, a system library Invariant 3
+allows; D49, D50), and no target or directory under the scanned roots outside engine/os and
 tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
 name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
 so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
@@ -152,8 +171,8 @@ Known blind spots, left to review:
   `if(WIN32)`): it configures a header and is not identification, so it is allowed. `-D` flags in
   `CMAKE_<LANG>_FLAGS` or inside a generator expression in `COMPILE_OPTIONS`, and third_party's interface
   definitions (asio's `_WIN32_WINNT` and `WIN32_LEAN_AND_MEAN`), are not checked.
-- Paths taken from narrow `argv` strings: on Windows they are in the ANSI code page, not UTF-8, without any OS call
-  in the caller (os-console-shutdown).
+- Paths taken from narrow `argv` strings in programs that do not use `Os::Console::CommandLineUtf8` (today the
+  acceptance programs): on Windows they are in the ANSI code page, not UTF-8, without any OS call in the caller.
 - R3's bare `signal(` also matches a variable or declaration named `signal`. Such a false positive is listed in the
   owner's allowlist with its reason; the pattern is not loosened.
 
@@ -193,8 +212,10 @@ Known blind spots, left to review:
    before the OS call; they are never returned or written into an error.
 6. **Failures are Runtime Errors.** Functions return `Base::Result<_, OsError>`; the detail keeps the native error
    in the fixed form of the Contracts section. No exception crosses the public boundary or an OS callback (signal
-   handler, console control handler). error-handling.md's "Exception at the platform boundary" extends to
-   engine/os when os-console-shutdown lands (with consent).
+   handler, console control handler). The OS callbacks only write a lock-free atomic (and, on a console close,
+   wait) and are `noexcept`, so engine/os needs none of error-handling.md's "Exception at the platform boundary"
+   rules (no `catch (...)`, no destructor checking global state); that section's scope stays engine/platform/sdl
+   (D49).
 7. **No product knowledge, no policy.** No product or tool name, file name, schema or log field appears in
    engine/os. Which socket errors are transient, what follows a shutdown request and how a time stamp is formatted
    are decided by the caller.

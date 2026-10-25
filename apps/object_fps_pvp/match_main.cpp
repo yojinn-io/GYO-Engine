@@ -7,9 +7,10 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/TracePaths.hpp"
+#include "engine/os/Console.hpp"
+#include "engine/os/Files.hpp"
 #include "gyo/AppConfig.hpp"
 #include <chrono>
-#include <csignal>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
@@ -20,9 +21,6 @@
 #include <vector>
 
 namespace {
-volatile std::sig_atomic_t stopping=0;
-void Stop(int){stopping=1;}
-
 std::uint64_t WindowMillis(std::chrono::steady_clock::duration window) {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(window).count());
 }
@@ -35,25 +33,38 @@ void WriteIngress(const std::vector<std::string>& lines) {
 
 int main(int argc,char** argv) {
     const auto processStarted=std::chrono::steady_clock::now();
+    // UTF-8 shows as UTF-8 on a Windows console until main returns.
+    const auto utf8Console=Engine::Os::Console::Utf8ConsoleOutput::Enable();
     try {
         std::string listen="127.0.0.1:27016";
         std::optional<std::filesystem::path> explicitArena;
         std::filesystem::path movementTrace,ingressTraceOverride,logPath;
-        for(int index=1;index<argc;++index) {
-            const std::string argument=argv[index];
+        // UTF-8 arguments on every platform (the narrow argv is the ANSI code page on Windows).
+        const auto commandLine=Engine::Os::Console::CommandLineUtf8(argc,argv);
+        if(!commandLine){std::cerr<<Engine::Base::Describe(commandLine.error())<<'\n';return 2;}
+        const auto& arguments=*commandLine;
+        std::string invalidPath;
+        const auto pathArgument=[&invalidPath](const std::string& text) {
+            auto path=Engine::Os::Files::PathFromUtf8(text);
+            if(!path){invalidPath=Engine::Base::Describe(path.error());return std::filesystem::path{};}
+            return std::move(*path);
+        };
+        for(std::size_t index=1;index<arguments.size();++index) {
+            const std::string& argument=arguments[index];
             if(argument=="--help") {
                 std::cout<<"Match runtime: [--arena path (default: the release arena pvp_corners.json)] [--listen 127.0.0.1:27016]\n"
                            "  [--movement-trace path [--ingress-trace path (default: next to it, -commands.jsonl -> -ingress.jsonl)]]\n"
                            "  (with a movement trace, the shadow records go next to it: -commands.jsonl -> -shots.jsonl)\n"
                            "  [--log path (also append console output, timestamped)]\n";return 0;
             }
-            if(index+1>=argc){std::cerr<<"Missing argument\n";return 2;}
-            if(argument=="--arena") explicitArena=argv[++index];
-            else if(argument=="--listen") listen=argv[++index];
-            else if(argument=="--movement-trace") movementTrace=argv[++index];
-            else if(argument=="--ingress-trace") ingressTraceOverride=argv[++index];
-            else if(argument=="--log") logPath=argv[++index];
+            if(index+1>=arguments.size()){std::cerr<<"Missing argument\n";return 2;}
+            if(argument=="--arena") explicitArena=pathArgument(arguments[++index]);
+            else if(argument=="--listen") listen=arguments[++index];
+            else if(argument=="--movement-trace") movementTrace=pathArgument(arguments[++index]);
+            else if(argument=="--ingress-trace") ingressTraceOverride=pathArgument(arguments[++index]);
+            else if(argument=="--log") logPath=pathArgument(arguments[++index]);
             else {std::cerr<<"Unknown argument: "<<argument<<'\n';return 2;}
+            if(!invalidPath.empty()){std::cerr<<"Invalid path for "<<argument<<": "<<invalidPath<<'\n';return 2;}
         }
         // A restart never truncates an earlier run's files (D191): the movement
         // trace takes the next free name whose ingress and shot files are free too.
@@ -91,7 +102,9 @@ int main(int argc,char** argv) {
         fps::pvp::IpcHost ipc(runtime,*arena);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}
         if(!ipc.Start(listen,error)){std::cerr<<error<<'\n';return 1;}
-        std::signal(SIGINT,Stop);std::signal(SIGTERM,Stop);
+        // SIGINT and SIGTERM, and on Windows Ctrl+C, Ctrl+Break and closing the console, end the loop below.
+        if(auto installed=Engine::Os::Console::InstallShutdownRequests();!installed)
+            std::cerr<<"[ObjectFPS/PvP Match] shutdown requests unavailable: "<<Engine::Base::Describe(installed.error())<<'\n';
         std::cout<<"Object_FPS_PVP Match ready: "<<listen<<" arena="<<arena->id<<" authority=60Hz\n"<<std::flush;
         // Diagnostics: one statistics line per window, written here so that the
         // tick and IPC threads do no logging I/O for it. The IPC thread logs too,
@@ -104,7 +117,7 @@ int main(int argc,char** argv) {
         fps::pvp::MatchIngressStatisticsWriter ingress;
         fps::pvp::MatchResyncStatisticsWriter resync;
         std::optional<std::string> failed;
-        while(!stopping && !(failed=runtime.Error())) {
+        while(!Engine::Os::Console::RequestedShutdown() && !(failed=runtime.Error())) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             const auto now=std::chrono::steady_clock::now();
             const double window=std::chrono::duration<double>(now-windowStart).count();

@@ -9,11 +9,16 @@ add_library(gyo_os STATIC
     src/common/Calendar.cpp
     src/common/OsError.cpp
     src/common/Paths.cpp
+    src/common/Shutdown.cpp
 )
 if(WIN32)
-    target_sources(gyo_os PRIVATE src/windows/Files.cpp src/windows/Process.cpp)
+    target_sources(gyo_os PRIVATE
+        src/windows/Console.cpp src/windows/Files.cpp src/windows/Process.cpp src/windows/Wide.cpp)
+    # CommandLineToArgvW (Console): a Windows system library, as Design
+    # Invariant 3 allows (D49).
+    target_link_libraries(gyo_os PRIVATE shell32)
 else()
-    target_sources(gyo_os PRIVATE src/posix/Files.cpp src/posix/Process.cpp)
+    target_sources(gyo_os PRIVATE src/posix/Console.cpp src/posix/Files.cpp src/posix/Process.cpp)
 endif()
 add_library(GYO::Os ALIAS gyo_os)
 

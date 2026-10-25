@@ -2,10 +2,6 @@
 # Format: path rule count  # reason and the batch that removes it (docs/architecture/plans/os-subsystem).
 # Only shrinks: a batch that moves a site deletes or lowers its entry in the same change.
 
-# Stop request on SIGINT and SIGTERM (os-console-shutdown).
-apps/object_fps_pvp/match_main.cpp R1 1  # csignal
-apps/object_fps_pvp/match_main.cpp R3 2  # std::signal
-
 # Native file access, moved behind engine/os (os-files-write).
 apps/object_fps_pvp/src/Pvp/LogFile.cpp R4 2  # executable hash read, log directory creation
 apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp R4 1  # trace file write

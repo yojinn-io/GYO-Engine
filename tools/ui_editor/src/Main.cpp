@@ -4,7 +4,10 @@
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
+#include "engine/os/Console.hpp"
+
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -70,10 +73,18 @@ int Validate(const Gyo::Tools::UiEditor::CommandLineOptions& options) {
 
 int main(const int argc, char* argv[]) {
     using namespace Gyo::Tools::UiEditor;
+    // UTF-8 shows as UTF-8 on a Windows console until main returns.
+    const auto utf8Console = Engine::Os::Console::Utf8ConsoleOutput::Enable();
+    // UTF-8 arguments on every platform (the narrow argv is the ANSI code page on Windows).
+    const auto commandLine = Engine::Os::Console::CommandLineUtf8(argc, argv);
+    if (!commandLine) {
+        std::cerr << "error: " << Engine::Base::Describe(commandLine.error()) << "\n\n" << CommandLineHelp();
+        return 2;
+    }
     std::vector<std::string_view> arguments;
-    arguments.reserve(argc > 1 ? static_cast<std::size_t>(argc - 1) : 0U);
-    for (int index = 1; index < argc; ++index) {
-        arguments.emplace_back(argv[index]);
+    arguments.reserve(commandLine->size() > 1 ? commandLine->size() - 1 : 0U);
+    for (std::size_t index = 1; index < commandLine->size(); ++index) {
+        arguments.emplace_back((*commandLine)[index]);
     }
 
     const auto parsed = ParseCommandLine(arguments);

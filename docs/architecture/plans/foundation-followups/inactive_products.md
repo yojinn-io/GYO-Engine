@@ -207,3 +207,10 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 
 - 破損：無。新增 `Engine::Os::Process`（`GYO::Os`），沒有改任何既有介面。
 - 選用：未啟用產品若需要執行檔路徑、CPU 時間或本地時間，用 `Engine::Os::Process`（`ExecutablePath`、`ProcessCpuTime`、`CurrentThreadCpuTime`、`ToLocalTime`），不要自己寫 `localtime_s`／`localtime_r` 或各平台的查法；時間戳的格式由產品自己決定。資源目錄仍用 platform/sdl 的 `BaseDirectory`，它和執行檔路徑是不同的事實。
+
+### os-console-shutdown 命令列、主控台輸出、結束要求
+
+狀態：本機進行中（2026-10-25）；未合併。
+
+- 破損：無。新增 `Engine::Os::Console`（`GYO::Os`），沒有改任何既有介面。未啟用產品走 SDL 入口，argv 本來就是 UTF-8。
+- 選用：未啟用產品若有不經 SDL 入口的主控台程式，用 `CommandLineUtf8` 取得 UTF-8 參數、`Utf8ConsoleOutput` 讓 Windows 主控台顯示 UTF-8、`InstallShutdownRequests`／`RequestedShutdown` 接結束要求；不要自己寫 `std::signal` 或 `SetConsoleCtrlHandler`。

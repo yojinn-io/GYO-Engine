@@ -42,6 +42,14 @@ Engine 目前沒有處理 OS 差異的 owner：
    - os-net-errors 只做等價搬移，排在消費端發行線 PR 合併後。
    - 開放決策 2、6、8～12 照建議。
    - 計時核心最後做，L2 在 lan15 之後；判定數值事先核准。
+10. **D49**：os-console-shutdown 的四個決定。
+    - 檔位：high，三處逐行論證，實作後 1 位 xhigh 唯讀審查。
+    - error-handling.md 的平台邊界例外不延伸到 engine/os；改寫 os.md Invariant 6 的預告。
+    - 連結守衛允許 Windows 上 `gyo_os` 連 shell32；定案前做突變檢查與獨立審查（AGENTS §14.4），結果交使用者看。
+    - 關閉主控台時最多等 4 秒；主控台的輸出 code page 在正常結束時還原。
+11. **D50**：xhigh 審查後的兩個決定。
+    - POSIX 上不是 UTF-8 的命令列參數照現狀拒絕，記為事前宣告的差異。
+    - shell32 連結守衛定案；`gyo_expect_links` 丟掉假值名字的既有漏洞另開後續。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -71,7 +79,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | （消費端 P1～P5） | 由消費端決定 | 完成（消費端的發行線，2026-10-25） | 長路徑行為、錯誤記錄、asset 接線、UTF-8 呼叫端、驗收（不屬於本計畫） |
 | os-guard-wide（A1b） | medium；規則調整 high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_guard_wide.zh-Hant.md)） | 守衛擴到產品、工具、產品測試、驗收程式 |
 | os-process-info | high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_process_info.zh-Hant.md)） | 執行檔路徑、CPU 時間、本地時間 |
-| os-console-shutdown | xhigh | 未開始 | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
+| os-console-shutdown | xhigh（D49：high＋三處論證＋1 位 xhigh 審查） | 本機完成（2026-10-25；xhigh 審查已修正，D50；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_25_engine_os_console_shutdown.zh-Hant.md)） | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
 | os-files-write | high | 未開始 | 寫入原語、消費端的 log／arena／trace 寫檔 |
 | os-tool-files | high | 未開始 | 編輯器的原子存檔、路徑比較、系統字型目錄 |
 | os-trace-writers | high | 未開始 | TraceSink 經 engine/os（開放決策 2） |
