@@ -3,6 +3,7 @@
 #include "AssertTestSupport.hpp"
 #include "engine/os/Files.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -329,18 +330,75 @@ TEST_CASE("Os files record the process ANSI code page") {
 }
 #endif
 
-// Record only: what a path longer than the Windows MAX_PATH (260) reports
-// today. The long-path fix of the consumer (P1) turns the Windows case into a
-// successful open; on POSIX a missing long path is NotFound.
-TEST_CASE("Os files record the failure of a missing path longer than 260 characters") {
-    const TempDirectory temp("gyo-os-files");
-    std::filesystem::path deep = temp.Path();
+// A directory tree deeper than the Windows MAX_PATH (260): eight levels of 40
+// characters under a fresh temporary directory, 300+ bytes in all.
+std::filesystem::path DeepPath(const std::filesystem::path& root) {
+    std::filesystem::path deep = root;
     for (int i = 0; i < 8; ++i) deep /= std::string(40, static_cast<char>('a' + i));
-    const std::string path = Utf8(deep / "shader.dxil");
+    return deep;
+}
+
+// The form the test itself uses to create and remove files on a deep path: on
+// Windows the standard library has no long-path handling of its own, so the
+// setup spells the long-path prefix out.
+std::filesystem::path SetupPath(const std::filesystem::path& path) {
+#if defined(_WIN32)
+    return std::filesystem::path(L"\\\\?\\" + std::filesystem::absolute(path).make_preferred().native());
+#else
+    return path;
+#endif
+}
+
+// A missing path longer than the Windows MAX_PATH (260) is NotFound on every
+// platform: on Windows the open reaches the file system (long-path form)
+// instead of failing on the length. The error never shows the long-path form.
+TEST_CASE("Os files report a missing path longer than 260 characters as not found") {
+    const TempDirectory temp("gyo-os-files");
+    const std::string path = Utf8(DeepPath(temp.Path()) / "shader.dxil");
     REQUIRE(path.size() > 300);
     const auto file = FileReader::Open(path);
     REQUIRE_FALSE(file);
     MESSAGE("long path (" << path.size() << " bytes): " << std::string(ToString(file.error().code)) << " "
                           << file.error().detail);
-    CHECK((file.error().code == OsErrorCode::NotFound || file.error().code == OsErrorCode::InvalidPath));
+    CHECK(file.error().code == OsErrorCode::NotFound);
+    CHECK(file.error().detail.find("path_bytes=" + std::to_string(path.size())) != std::string::npos);
+    CHECK(file.error().detail.find('?') == std::string::npos);
+    CHECK_FALSE(Exists(path).value());
+}
+
+// A file of a package unpacked under a folder deep enough that its path
+// exceeds 260 characters opens, reads and stats through
+// its plain UTF-8 path, in '/' form and, on Windows, in '\' form.
+TEST_CASE("Os files read an existing file under a path longer than 300 characters") {
+    const TempDirectory temp("gyo-os-files");
+    const auto deep = DeepPath(temp.Path());
+    const std::string bytes("long\0path", 10);
+    std::filesystem::create_directories(SetupPath(deep));
+    std::ofstream(SetupPath(deep / "shader.dxil"), std::ios::binary)
+        .write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    std::string path = Utf8(deep / "shader.dxil");
+    REQUIRE(path.size() > 300);
+    std::vector<std::string> forms{path};
+#if defined(_WIN32)
+    forms.push_back(path);
+    std::replace(forms.back().begin(), forms.back().end(), '/', '\\');
+#endif
+    for (const auto& form : forms) {
+        CAPTURE(form);
+        auto file = FileReader::Open(form);
+        REQUIRE_MESSAGE(file, "cannot open a " << form.size() << "-byte path: "
+                                               << (file ? std::string{} : file.error().detail));
+        CHECK(file.value().Size().value() == bytes.size());
+        CHECK(ReadAll(file.value()) == bytes);
+        const auto status = Stat(form);
+        REQUIRE(status);
+        CHECK(status.value().kind == FileKind::Regular);
+        CHECK(status.value().sizeBytes == bytes.size());
+        CHECK(Exists(form).value());
+    }
+    const auto folder = Stat(Utf8(deep));
+    REQUIRE(folder);
+    CHECK(folder.value().kind == FileKind::Directory);
+    std::error_code ignored;
+    std::filesystem::remove_all(SetupPath(temp.Path() / std::string(40, 'a')), ignored);
 }

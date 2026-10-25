@@ -52,10 +52,12 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
     ├── 0 worker-probe-repair ✓       「high｜修好 worker probe（決策點 C）」
     ├── 1 系統與引擎
     │   ├── sdl-isolation-plan ✓      「ultracode｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單（D160 核准）」
-    │   ├── sdl-isolation ⏸           「high｜產品、probe、產品測試不直接呼叫 SDL（ip3a 關卡）」
+    │   ├── sdl-isolation ✓           「high｜產品、probe、產品測試不直接呼叫 SDL（PR #85）」
     │   ├── substitution-single-store ✓ 「→ outage-resync（PR #90）的 single-store-refactor、retention-600 完成」
-    │   ├── silent-branch-asserts     「high｜無聲分支改成 assert 或計數」
-    │   └── cxx-flag-removal          「high｜不再需要 experimental 程式庫」
+    │   ├── silent-branch-asserts ▶   「high｜無聲分支改成 assert 或計數（PR #95）」
+    │   ├── client-silent-checks      「high｜Client 對已驗證資料的再檢查、「應為 0」的分支（D181）」
+    │   ├── cxx-flag-removal          「high｜不再需要 experimental 程式庫」
+    │   └── rebind-on-new-port        「先開關卡｜換埠後不必等 Hello 才改綁（D181）」
     ├── 2 觀測工具
     │   ├── contract-readers          「medium｜compare_reports 收進工具目錄、host_lock 鍵進日誌契約」
     │   ├── trace-no-overwrite        「high｜重啟 Match 不覆寫前一段 trace」
@@ -66,8 +68,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
     └── 4 發行
         ├── windows-long-path         「high｜深資料夾也能載入 shader」
         ├── quick-close               「high｜關閉 Client 不再卡 3 秒」
-        ├── wake-reconnect            「high｜睡眠醒來不斷線；短於 T_max 的睡眠＝中斷已由 outage-resync 處理（D172 D-11 (w1)），其餘仍在本批」
-        └── lan15-windows             「high｜Windows LAN 場次（含 outage-resync 的 L3，D179；預定 10-26）」
+        └── lan15-windows             「high｜Windows LAN 場次（含 outage-resync 的 L3，D179；D181 延到前面各批之後）」
 ```
 
 記號：✓ 完成、◐ 實作與 L1 完成、L2 延後、▶ 進行中、⏸ 等使用者決定、◆ 事故後遺症（v7.1 結束前全部結案）、★ 行為改變（各自一批，事前宣告並前後對照）。
@@ -146,7 +147,7 @@ INVENTORY 處置為「re-evaluate 之後」的 37 項，加上 HANDOFF「未結�
 - `re-evaluate` 決定修正相位追蹤 → 先做 `phase-tracking-golden`（D158：B10 跟 B6 交給 v8）
 - `sdl-isolation-plan` → `sdl-isolation`
 - `worker-probe-repair` → `token-tests`、`client-path-tests`
-- `contract-readers`、`trace-no-overwrite`、`windows-long-path`、`quick-close`、`wake-reconnect` → `lan15-windows`
+- `contract-readers`、`trace-no-overwrite`、`windows-long-path`、`quick-close`、`client-silent-checks`、`rebind-on-new-port`、本線其餘各批 → `lan15-windows`（D181）
 
 ## 取消的項目
 
@@ -157,6 +158,7 @@ INVENTORY 處置為「re-evaluate 之後」的 37 項，加上 HANDOFF「未結�
 | 輸入防偽造 | D90 | 還沒到那個規模 |
 | v7 的 3 人 LAN 測試（pv6） | D91 | 先處理完問題 |
 | v7 發行 `object_fps_pvp-v1.2.0` | D91 | 發行需要的 Windows 實機證據來自上一項；下一次發行在 v7.1 之後 |
+| `wake-reconnect`（N-sleep-reconnect：睡眠超過 T_max 後自動重新加入） | D182 | 使用者：沒有需求。睡眠就是要離開；留在場上只會變成靶子。短於 T_max 的睡眠仍是中斷（outage-resync，D172 D-11 (w1)） |
 
 ## PR 線
 
@@ -195,4 +197,6 @@ PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四
 - [black-map-observation O3：已知樣本確認觀測，假說 H1（暖機幀）修正後成立](../../../dev_logs/2026_10_23_pvp_v71_black_map_o3.zh-Hant.md)
 - [black-map-observation O4：L2 的 10 種案例與產品 Client 的觀測跑次，黑屏只在 timing 類露出](../../../dev_logs/2026_10_23_pvp_v71_black_map_o4.zh-Hant.md)
 - [outage-resync：斷線恢復＝重新對時（C13 (b)＋UDP 中斷狀態）](../../../dev_logs/2026_10_23_pvp_v71_outage_resync.zh-Hant.md)（完成、L3 移到 lan15-windows；PR #90，分支 `claude/pvp-v71-outage-resync`，合併前連結在本分支上無效）
+- [windows-long-path：發行包解壓到深資料夾時也讀得到 shader（P1～P5）](../../../dev_logs/2026_10_25_pvp_v71_windows_long_path.zh-Hant.md)（發行線 `claude/pvp-v71-release`；實機驗收待做）
+- [quick-close：關閉 Client 不再卡在 /leave](../../../dev_logs/2026_10_25_pvp_v71_quick_close.zh-Hant.md)（發行線；Windows 驗收待做）
 

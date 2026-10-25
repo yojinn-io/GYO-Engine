@@ -15,8 +15,8 @@
 
 | 行族 | 寫出端 | 錨點 | 版本 | 釘住 | 讀者（凍結的標 ※） |
 |---|---|---|---|---|---|
-| Match network statistics | `NetworkStatistics.cpp` `MatchStatisticsLine`（2026-10-20 起行尾有 `tick_overrun_*`、`tick_stalls`、`advance_*`，E1-5） | `[ObjectFPS/PvP Match] network statistics ` | 隱含 1 | `NetworkStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | `network_statistics.py`※、`ingress_evidence.py`※（視窗邊界）、`judge_c2.py`、edge 系列與 tt2 的判定工具 |
-| Client worker statistics | `NetworkStatistics.cpp` `WorkerStatisticsLine`（2026-10-20 起行尾有 worker 自己的流失計數） | `[ObjectFPS/PvP] worker statistics ` | 隱含 1 | 同上 | `network_statistics.py`※ |
+| Match network statistics | `NetworkStatistics.cpp` `MatchStatisticsLine`（`host_lock_input_*`、`host_lock_step_*`：host mutex 的鎖等待直方圖，由 `MatchRuntimeHost` 量、`edge-input-passthrough` 起，L2 的判定工具直接讀，v7.1 contract-readers 補進契約；2026-10-20 起行尾有 `tick_overrun_*`、`tick_stalls`、`advance_*`，E1-5） | `[ObjectFPS/PvP Match] network statistics ` | 隱含 1 | `NetworkStatisticsTests.cpp`（逐字）＋`keys-v1.tsv` | `network_statistics.py`※、`ingress_evidence.py`※（視窗邊界）、`judge_c2.py`、edge 系列與 tt2 的判定工具 |
+| Client worker statistics | `NetworkStatistics.cpp` `WorkerStatisticsLine`（2026-10-20 起行尾有 worker 自己的流失計數；2026-10-24 起再追加 Client 捨棄的封包計數 `unparsed_datagrams`、`early_datagrams`、`invalid_snapshot_datagrams`、`ignored_snapshot_datagrams`、`unexpected_kind_datagrams`，silent-branch-asserts C3；之後再追加 `stale_input_windows`＝模擬端送來、但權威已被取代的窗口數，client-silent-checks D183） | `[ObjectFPS/PvP] worker statistics ` | 隱含 1 | 同上 | `network_statistics.py`※ |
 | Match ingress statistics | `IngressStatistics.hpp` | `[ObjectFPS/PvP Match] ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/match.txt` | `ingress_evidence.py`※、08c 的判定工具 |
 | Gateway player／gateway ingress statistics | `ingress_statistics.go` | `player ingress statistics version=1 `、`gateway ingress statistics version=1 ` | 1 | `fixtures/ingress_v1/gateway-*.txt` | `ingress_evidence.py`※、edge-rate-limit 的 `judge_l2.py`（證據目錄） |
 | Gateway statistics | `server.go` | `gateway statistics players=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※（視窗配對） |
@@ -24,7 +24,7 @@
 | Gateway transport | `server.go`（Close） | `gateway transport ` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py`（證據目錄；只取限速鍵） |
 | Gateway runtime transport | `runtime_link.go`（link 關閉） | `runtime transport ` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py`（各 L2 的證據目錄） |
 | Gateway drop report | `drop_report.go` `dropReportLine` | `drop report player=` | 隱含 1 | `keys-v1.tsv` | `judge_l2.py`（各 L2 的證據目錄） |
-| Match gw_drop report／violation | `IpcHost.cpp` | `[ObjectFPS/PvP Match] gw_drop report `、`… gw_drop violation ` | 隱含 1 | `IpcHostTests.cpp` | `compare_reports.py`（drop-report 的證據目錄） |
+| Match gw_drop report／violation | `IpcHost.cpp` | `[ObjectFPS/PvP Match] gw_drop report `、`… gw_drop violation ` | 隱含 1 | `IpcHostTests.cpp` | `compare_reports.py`（`build/acceptance/object_fps_pvp/`，CTest `object_fps_pvp.compare_reports`；v7.1 contract-readers 起，之前只在 drop-report 的證據目錄） |
 | Gateway player evicted | `server.go` | `player evicted player=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、`judge_l2.py`（各 L2 的證據目錄） |
 | Gateway start／HTTP | `cmd/main.go` | `Object FPS Gateway start executable_sha256=`、`Object FPS Gateway HTTP=` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、`judge_l2.py`（各 L2 的證據目錄） |
 | Match start／ready | `match_main.cpp` | `[ObjectFPS/PvP Match] start executable_sha256=`、`Object_FPS_PVP Match ready: ` | 隱含 1 | `keys-v1.tsv` | `ingress_evidence.py`※、各 runner 等待 ready |
@@ -50,9 +50,11 @@
 
 三種檔頭不同，照實登記、不改。新的紀錄檔用 `{schema, version}`。
 
+**重啟時的檔名**（v7.1 `trace-no-overwrite`，D191）：Match 或 Client 啟動時，若 `--movement-trace` 指定的檔案、或跟著它決定檔名的 `-ingress.jsonl`、`-shots.jsonl` 已經存在，就改用下一個沒用過的編號名：`match-commands.jsonl` → `match.2-commands.jsonl` → `match.3-commands.jsonl`（不以 `-commands.jsonl` 結尾的名字，編號插在副檔名前）。三個檔一起換號。每個檔仍然只有一次執行、一個 `trace_end`，讀者不變；同一個資料夾裡 `match.2` 是重啟後那一段的角色名。實際檔名寫在啟動時的 B 級行。
+
 ### 1.3 B 級
 
-Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `rejected_<reason>=`）、`PvP client gateway source=`、連線階段與錯誤、`cause records`、`connection failed`、`network worker failed`、`shutdown cleanup failed`；Match 的 death／respawn、`statistics tick=`、`gw_transport`、leave、lifecycle；Gateway 的 player statistics、join／hello／active／expired／left 等生命週期行、`UDP stopped`，以及 `runtime disconnected reason=<liveness_timeout|write_timeout|version_mismatch|protocol|eof|other> error=<引號內的原錯誤>`（原因代碼由 `errors.Is` 分類，`disconnect_reason_test.go` 守住；原錯誤的文字不變）。
+Match 的 `trace files movement= ingress= shots=`、Client 的 `PvP client trace file movement=`（D191，啟動時的實際 trace 檔名）；Client 的 `PvP summary`（2026-10-20 起行尾有依 Match 原因分的 `rejected_<reason>=`）、`PvP client gateway source=`、連線階段與錯誤、`cause records`、`connection failed`、`network worker failed`、`shutdown cleanup failed`；Match 的 death／respawn、`statistics tick=`、`gw_transport`、leave、lifecycle；Gateway 的 player statistics、join／hello／active／expired／left 等生命週期行、`UDP stopped`，以及 `runtime disconnected reason=<liveness_timeout|write_timeout|version_mismatch|protocol|eof|other> error=<引號內的原錯誤>`（原因代碼由 `errors.Is` 分類，`disconnect_reason_test.go` 守住；原錯誤的文字不變）。
 
 ### 1.4 規劃中的 A 級行族（v7.1 `outage-resync`，D172）
 

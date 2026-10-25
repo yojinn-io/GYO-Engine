@@ -90,7 +90,9 @@ public:
     void Reset() noexcept;
     void SetMovementRules(MovementRules rules);
     void ClearJumpRequest() noexcept { pendingJump_ = false; }
-    void Reconcile(const PlayerState& authority, std::uint64_t authorityTick);
+    // False ignores an invalid state, or one older than the last reconciled
+    // (tick, life, epoch or acknowledgement); nothing changes then.
+    bool Reconcile(const PlayerState& authority, std::uint64_t authorityTick);
     // Phase evidence only: the slack sample of an authority state older than the
     // next one Reconcile receives (several snapshots in one drained batch). No
     // acknowledgement, correction of position or reseed happens here.

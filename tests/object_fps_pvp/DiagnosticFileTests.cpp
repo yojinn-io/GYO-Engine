@@ -3,6 +3,8 @@
 #include "AssertTestSupport.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "RetroFPS/Pvp/TracePaths.hpp"
+#include "RetroFPS/Pvp/MatchShotTrace.hpp"
 
 #include <chrono>
 #include <exception>
@@ -207,4 +209,37 @@ TEST_CASE("PvP log file writes a failed assertion before the previous handler ru
     }
     CHECK(rethrown);
     CHECK(ReadLines(path).size() == 2);
+}
+
+// v7.1 trace-no-overwrite (D191): a restart takes the next free name, and the
+// files named after a movement trace must be free too.
+TEST_CASE("PvP a restarted trace takes the next free numbered name") {
+    CHECK(NumberedTracePath("logs/match-commands.jsonl", 1) == std::filesystem::path("logs/match-commands.jsonl"));
+    CHECK(NumberedTracePath("logs/match-commands.jsonl", 2) == std::filesystem::path("logs/match.2-commands.jsonl"));
+    CHECK(NumberedTracePath("logs/trace.jsonl", 3) == std::filesystem::path("logs/trace.3.jsonl"));
+    CHECK(NumberedTracePath("logs/trace", 2) == std::filesystem::path("logs/trace.2"));
+    CHECK(FreshTracePath({}).empty());
+
+    const auto directory = std::filesystem::temp_directory_path() / "gyo_pvp_fresh_trace_test";
+    std::filesystem::remove_all(directory);
+    std::filesystem::create_directories(directory);
+    const auto movement = directory / "match-commands.jsonl";
+    const auto shots = [](const std::filesystem::path& candidate) {
+        return std::vector<std::filesystem::path>{MatchShotTracePath(candidate)};
+    };
+    CHECK(FreshTracePath(movement, shots) == movement);
+    std::ofstream(movement) << "first run\n";
+    CHECK(FreshTracePath(movement, shots) == directory / "match.2-commands.jsonl");
+    // Only a derived file of the second name exists: the third name is the free one.
+    std::ofstream(directory / "match.2-shots.jsonl") << "kept\n";
+    CHECK(FreshTracePath(movement, shots) == directory / "match.3-commands.jsonl");
+    // The earlier files are never truncated by the choice. The stream closes
+    // before the directory goes (Windows cannot remove an open file).
+    std::string text;
+    {
+        std::ifstream first(movement);
+        std::getline(first, text);
+    }
+    CHECK(text == "first run");
+    std::filesystem::remove_all(directory);
 }

@@ -9,6 +9,16 @@
       "environment": [],
       "platforms": ["windows-x64", "linux-x64", "macos-arm64", "macos-x64"],
       "gpu": false
+    },
+    {
+      "name": "content_deep_path",
+      "command": ["@PYTHON@", "@CHECK_ROOT@/content_deep_path.py", "--package", "@PACKAGE_ROOT@",
+                  "--probe", "@PROBE:content@", "--product", "object_fps_pvp", "--prefix-length", "200"],
+      "profiles": ["quick", "release"],
+      "timeout": 180,
+      "environment": [],
+      "platforms": ["windows-x64", "linux-x64", "macos-arm64", "macos-x64"],
+      "gpu": false
     }
   ],
   "release_evidence": [

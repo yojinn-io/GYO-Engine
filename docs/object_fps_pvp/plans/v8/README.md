@@ -24,6 +24,21 @@
   - 理由（D76）：和網路與重構無關；使用者決定音效不是 v7 的發行條件。
   - 依賴：AU-1 需要 TT-1（v7 已完成）與 IP-3。IP-3（SDL 隔離）原本移到 v7.1，但沒有在 v7.1 完成，目前在 v7.1 的「re-evaluate 之後」那組（[v7.1 穩定基線](../v7.1/STABLE_BASELINE.md)），尚未排定。
 
+- 網路協議升級（需求；2026-10-25 使用者，v7.1 期間的技術討論）：
+  - 需求：「迷你版逃離塔科夫」要有背包、裝備、人物屬性、PvP、PvE（Boss 戰、小怪）、物品收集。現在的 pv7 契約滿足不了，協議必須升級（新的 pvN）。
+  - 為什麼 pv7 不夠：每個 Tick 送一份完整 snapshot、必須塞進一個資料包（下面「預計壓力」第 4 項），而且每個 Client 都收全部實體。玩家維持 4 人、只把地圖變大還撐得住；小怪、投射物、地上的物品會讓 snapshot 塞不下；背包只該給本人看，不該送給所有人。
+  - 討論出的方向（未定案，v8 規劃時再決定）：
+    - 多個邏輯通道，底下都走 UDP；需要可靠的通道在 UDP 上自己做編號、ACK、重送、去重（現有的動作通道就是這種做法，可以當樣板）。
+    - 高頻狀態（玩家、怪物、Boss 的位置）：每個 Client 一份、只放附近的（interest management），再加差分。
+    - 世界事件（物品生成、被撿走、Boss 換階段）：可靠的事件串流，只在變化時送。
+    - 私人狀態（背包、裝備、屬性）：只送給本人，變化時才送。
+    - 玩家動作（撿物品、使用道具、攻擊）：擴充現有的動作通道。
+    - 各通道依需要定頻率；Tick 維持 60 Hz，不以提高 Tick 率解決容量問題。
+    - 權威只有一個擁有者：所有判定留在 Match 的模擬執行緒；I/O 執行緒只寫輸入佇列、讀輸出佇列（AGENTS §3「狀態的權威」）。
+  - 要使用者決定的架構點：可靠串流與差分基準需要記狀態，放在 Match 還是 Gateway。放在 Gateway 會讓它變成有狀態，違背 Gateway 原本「無狀態邊緣」的設計。
+  - 前提：照「功能 → 契約 → 架構」（AGENTS §2），先寫具體的玩法需求：同時存在的小怪、投射物、地上物品的數量；背包與裝備的格數與內容；人物屬性；Boss 的規模；PvP 與 PvE 的組合方式。目前只有「迷你版逃離塔科夫」這個方向，沒有具體需求。
+  - 相關：下面「預計壓力」第 4、5、6 項，「未決事項」a。
+
 ## 規劃方式
 
 - v8 開始時依變速箱規則規劃：先列出要做的玩法項目並由使用者排序，再分批。
@@ -54,7 +69,7 @@ v7.1 的 `re-evaluate` 用 pv7 的數據判斷為「還需要」、交給 v8 的
 |---|---|---|
 | B6：延遲結束後撤回多加的領先（**重新規劃**，不沿用 09b 的 S／M） | 一次 45～60 ms、持續 150 ms 的延遲，會留下約 +25 ms、約 4 秒的延遲（pv7 補量 4/8 個單位）。原因是 late 修正之後的重新擷取在 slew 結束時就決定，用到的還是延遲期間的樣本 | 09b 的 S／M 估計到不了 150 ms 的邊界。先定義玩家可見的目標（撤回時間、不增加 held 與重設），用 schema 3 的 `phase_decision` 補齊「放出相對 slew 結束」的曲線，再比較候選（S、M、放出後依正值樣本撤回、縮短 late 後的決定視窗）。相位追蹤不在 digest 裡，先做 phase-tracking-golden。時序邏輯，規劃用 ultracode 或 xhigh（先問使用者）。09b 1-7 第 3 點一起處理。**v7.1 outage-resync 之後（PR #90）**：B6 的基準要在它合併後重新取得。它改了相位追蹤的入口與 slack 的來源：被替代序號只存一份、保留 600 序號；晚到超過 N_o（333,333 µs）的第一份副本不產生樣本，改成 Resync；恢復時 `LocalPlayerPrediction::Resume`（`resume_reset`）。它也留下兩個交給 B6 的已知例外：只上行中斷後，以及 Match 停頓後恢復時，多出的領先量要等 Backlog 清掉（network-architecture §7「連線中斷與重新對時」的已知項目）。`Correct()`、`reacquiring_`、deadband、p90 視窗沒有改 |
 | A4：延遲位移（產生→執行約 38 ms） | 玩家感受得到；A1 之後射擊也照命令步判定。手感上的取捨，不是缺陷 | 改領先會改 backlog 穩態（30 Tick 合計 60→30），碰到 D44 的停止條件；需要 WAN 資料與 phase-tracking-golden |
-| N-analyzer-literal-105 | backlog 門檻 105 與視窗 30 在 Match 與 4 個分析器的 6 處手動維持（AGENTS.md §9） | 改成共用常數，加從 `Movement.hpp` 解析並核對的測試；動到凍結分析器，下一個 L2 重新凍結 |
+| N-analyzer-literal-105 | backlog 門檻 105 與視窗 30 在 Match 與 4 個分析器的 6 處手動維持（AGENTS.md §9） | 改成共用常數，加從 `Movement.hpp` 解析並核對的測試；動到凍結分析器，下一個 L2 重新凍結（v7.1 analyzer-converge 後：`quad_evidence.py` 的那一處隨 `command_metrics` 刪除，分析器剩 `command_evidence.py` 2 處、`gameplay_evidence.py` 2 處、`gameplay_soak_evidence.py` 1 處） |
 | B10：相位追蹤的 golden（D158） | 權威 digest 的 `RunLink` 不經 TrackSlack，35 個情境的相位樣本都是 0，相位追蹤改壞了沒有測試會失敗 | 排在 B6 之前（即上面的 phase-tracking-golden） |
 | N-correct-invariant-assert（D158） | `Correct()` 的前提（前一次修正已 slew 完）只寫在註解，D68 ① 要不要改成 assert 一直沒決定 | B6 動到 late 修正之後的流程，動手前決定 |
 | E3：量測工具的時間基準統一（D158） | 09b 的「70～87 ms 邊界」用 t_frame 量，凍結的 `measure.py` 用 t_c，兩者差 13.7～24.1 ms | 只在 B6 要拿 09b 的數字對照時需要；只用 `phase_decision` 的時刻就不需要 |

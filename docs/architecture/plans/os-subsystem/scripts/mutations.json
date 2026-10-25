@@ -423,6 +423,65 @@
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "\\(posix.error\\(\\).code == IoErrorCode::InvalidPath\\) != \\(drive.error\\(\\).code == IoErrorCode::InvalidPath\\) \\) is NOT correct"
+    },
+    {
+      "id": "p1-no-long-path-form",
+      "what": "OsCallPath hands a long full path to the API without the long-path form (consumer windows-long-path P1)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    return std::wstring(L\"\\\\\\\\?\\\\\") + full.value();",
+      "replace": "    return wide;",
+      "target": "gyo_os_tests",
+      "cases": "*longer than 300*",
+      "expect": "cannot open a"
+    },
+    {
+      "id": "p1-long-path-from-too-high",
+      "what": "The long-path form starts only far above MAX_PATH (P1)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "constexpr std::size_t kLongPathFrom = MAX_PATH - 12;",
+      "replace": "constexpr std::size_t kLongPathFrom = MAX_PATH * 4;",
+      "target": "gyo_os_tests",
+      "cases": "*longer than 300*",
+      "expect": "cannot open a"
+    },
+    {
+      "id": "p2-asset-detail-drops-cause",
+      "what": "NativeFileAssetSource reports only the path, without the OS error code and path length (P2)",
+      "file": "engine/asset/src/NativeFileAssetSource.cpp",
+      "find": "            Base::CauseDetail(cause, causeNamesPath ? std::string_view{} : std::string_view(path))));",
+      "replace": "            path + (causeNamesPath ? cause.message : std::string{})));",
+      "target": "engine_tests",
+      "cases": "*invalid and missing*",
+      "expect": "detail.rfind\\(\"NotFound: \", 0\\) == 0 \\) is NOT correct"
+    },
+    {
+      "id": "p3-relative-path-not-absolute",
+      "what": "NativeFileAssetSource hands a relative path to the file URI mapping (P3)",
+      "file": "engine/asset/src/NativeFileAssetSource.cpp",
+      "find": "    if (!Os::Files::IsAbsolutePath(absolute)) {",
+      "replace": "    if (absolute.empty()) {",
+      "target": "engine_tests",
+      "cases": "*relative path*",
+      "expect": "REQUIRE\\( direct \\) is NOT correct"
+    },
+    {
+      "id": "p4-manifest-ansi-path",
+      "what": "ContentManifest turns its paths into text with path::string() (the ANSI code page on Windows) again (P4)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/asset/src/ContentManifest.cpp",
+      "find": "    auto text = Os::Files::PathToUtf8(path);\n",
+      "replace": "    auto text = Base::Result<std::string, Os::OsError>(path.string());\n",
+      "target": "engine_tests",
+      "cases": "*outside the ANSI code page*",
+      "expect": "outside the ANSI code page"
     }
   ]
 }

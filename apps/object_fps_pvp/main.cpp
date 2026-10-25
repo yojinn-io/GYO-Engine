@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "RetroFPS/Pvp/TracePaths.hpp"
 #include "gyo/AppConfig.hpp"
 
 #include "RetroFPS/Pvp/ClientLog.hpp"
@@ -103,6 +104,8 @@ int GyoMain(int argc, char* argv[]) {
             return 2;
         }
     }
+    // A restart never truncates an earlier trace (D191): the next free name.
+    movementTrace = fps::pvp::FreshTracePath(movementTrace);
     const auto baseDirectory = Engine::Platform::Sdl::BaseDirectory();
     if (!baseDirectory) {
         ClientLog(LogLevel::Error, "Cannot locate executable directory");
@@ -138,6 +141,8 @@ int GyoMain(int argc, char* argv[]) {
         // log-contract (original batch 10): whether the Gateway address came from --gateway or the default.
         ClientLog(LogLevel::Info, "PvP client gateway source=%s address=%s", gatewayFromArgument ? "argument" : "default",
                   options.gateway.c_str());
+        if (!movementTrace.empty())
+            ClientLog(LogLevel::Info, "PvP client trace file movement=%s", movementTrace.string().c_str());
     }
     try {
         fps::pvp::MovementTraceWriter trace(movementTrace);

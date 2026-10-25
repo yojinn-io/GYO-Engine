@@ -27,9 +27,6 @@ endforeach()
 gyo_app_add_library(match_domain OUT_TARGET domain SOURCES ${PVP_DOMAIN_SOURCES}
     PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision GYO::Time GYO::Trace
     PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
-# Apple libc++ hides std::jthread/std::stop_token behind its experimental gate.
-# Every product target reaches the domain library, so the flag stays product-local.
-target_compile_options(${domain} PUBLIC $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>)
 gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHost.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Threads)
 gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
@@ -48,7 +45,7 @@ gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplicatio
         src/Pvp/PlayerPresentation.cpp src/App/CharacterPresentationDefinition.cpp
         src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
     PUBLIC_LIBRARIES ${domain} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
-    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer nlohmann_json::nlohmann_json
+    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer GYO::Os nlohmann_json::nlohmann_json
     PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}
     COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)

@@ -1,16 +1,26 @@
 #include "engine/asset/ContentManifest.hpp"
 
 #include "engine/asset/catalog/CatalogParser.hpp"
+#include "engine/asset/loading/NativeFileAssetSource.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
+#include "engine/os/Files.hpp"
 
 #include <nlohmann/json.hpp>
 #include <algorithm>
-#include <fstream>
-#include <iterator>
 #include <set>
 
 namespace Engine::Asset {
 namespace {
+
+// Engine paths are UTF-8 (docs/architecture/io.md), never the ANSI code page of path::string().
+Base::Result<std::string, AssetError> Utf8Path(const std::filesystem::path& path) {
+    auto text = Os::Files::PathToUtf8(path);
+    if (!text) {
+        return Base::Err(AssetError::Make(AssetErrorCode::InvalidPath, "Content path has no UTF-8 form",
+                                          Base::CauseDetail(text.error())));
+    }
+    return std::move(text.value());
+}
 
 bool IsRelativeContentPath(const std::string& path) {
     if (path.empty() || path == "." || path.front() == '/' ||
@@ -89,11 +99,16 @@ Base::Result<ContentManifest, AssetError> ContentManifest::Parse(
 
 Base::Result<ContentManifest, AssetError> ContentManifest::Load(
     const std::filesystem::path& assetRoot) {
-    const auto path = assetRoot / "content.json";
-    std::ifstream stream(path, std::ios::binary);
-    if (!stream) return Base::Err(AssetError::Make(AssetErrorCode::SourceNotFound, "Cannot open content manifest", path.string()));
-    const std::string text{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
-    return Parse(text, path.string());
+    auto path = Utf8Path(assetRoot / "content.json");
+    if (!path) return Base::Err(std::move(path.error()));
+    Loading::NativeFileAssetSource source;
+    auto bytes = source.ReadAll(path.value());
+    if (!bytes) {
+        return Base::Err(AssetError::Make(AssetErrorCode::SourceNotFound, "Cannot open content manifest",
+                                          bytes.error().detail));
+    }
+    const auto& data = bytes.value();
+    return Parse(std::string(reinterpret_cast<const char*>(data.data()), data.size()), path.value());
 }
 
 Base::Result<AssetCatalog, AssetError> ContentManifest::LoadCatalogs(
@@ -101,13 +116,17 @@ Base::Result<AssetCatalog, AssetError> ContentManifest::LoadCatalogs(
     AssetCatalog catalog;
     Catalog::CatalogParser parser;
     Resolver::AssetPathResolver::Options options;
-    options.assetsRoot = assetRoot.string();
+    auto root = Utf8Path(assetRoot);
+    if (!root) return Base::Err(std::move(root.error()));
+    options.assetsRoot = std::move(root.value());
     options.allowAbsolutePath = false;
     options.allowEscapeAssetsRoot = false;
     options.allowSchemes = false;
     Resolver::AssetPathResolver resolver(std::move(options));
     for (const auto& path : catalogs) {
-        auto loaded = catalog.AppendFromFile((assetRoot / path).string(), parser, resolver);
+        auto catalogPath = Utf8Path(assetRoot / path);
+        if (!catalogPath) return Base::Err(std::move(catalogPath.error()));
+        auto loaded = catalog.AppendFromFile(catalogPath.value(), parser, resolver);
         if (!loaded) return Base::Err(std::move(loaded.error()));
     }
     for (const auto* entry : catalog.Entries()) {

@@ -122,6 +122,15 @@
     },
     "command_evidence": {
       "ctest": "object_fps_pvp.command_evidence"
+    },
+    "compare_reports": {
+      "ctest": "object_fps_pvp.compare_reports"
+    },
+    "close_timing": {
+      "build": [
+        "gyo_object_fps_pvp_worker_probe"
+      ],
+      "ctest": "object_fps_pvp.close_timing"
     }
   },
   "mutants": [
@@ -509,11 +518,11 @@
       "id": "16-quad-two-player-error",
       "batch": "16",
       "what": "The N-player command stage renames no two-player error",
-      "file": "build/acceptance/object_fps_pvp/quad_evidence.py",
-      "find": "    expected_errors = [EVERY_PLAYER_ERROR if error == TWO_PLAYER_ERROR else error for error in reference['errors']]",
-      "replace": "    expected_errors = list(reference['errors'])",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "        errors.append(TWO_PLAYER_ERROR if players == 2 else EVERY_PLAYER_ERROR)",
+      "replace": "        errors.append(TWO_PLAYER_ERROR)",
       "check": "quad_evidence",
-      "expect": "test_every_two_player_corpus_matches_command_evidence_value_by_value"
+      "expect": "test_a_silent_player_fails|test_every_two_player_corpus_agrees"
     },
     {
       "id": "17-arena-any-version",
@@ -1510,10 +1519,10 @@
       "batch": "v7-flow",
       "what": "Handed actions are counted only when the sequence commits",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
-      "find": "\t_ = p.session.CommitSequence(h.Sequence, now)\n\t// The overflow sample",
-      "replace": "\tif p.session.CommitSequence(h.Sequence, now) != nil {\n\t\treturn nil\n\t}\n\t// The overflow sample",
+      "find": "\t\ts.invariantFailed(\"an admitted actions sequence did not commit: \" + err.Error())\n\t}\n\t// The overflow sample",
+      "replace": "\t\ts.invariantFailed(\"an admitted actions sequence did not commit: \" + err.Error())\n\t\treturn nil\n\t}\n\t// The overflow sample",
       "check": "go",
-      "expect": "case handed/actions_commit_failed: counted none"
+      "expect": "final window lacks \" fwd_handed_actions_packets=1 \""
     },
     {
       "id": "v7-flow-fwd-stale-not-exclusive",
@@ -2620,8 +2629,8 @@
       "batch": "v7-09a",
       "what": "A send that waited is charged a whole token again (no discount)",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "                    if(fresh && inputWaitSince) {\n                        const double waited=std::chrono::duration<double>(now-*inputWaitSince)/period-(inputTokens-1.0);\n                        charge-=Engine::Math::Min(1.0-InputSendRate/InputSendDrainRate,\n                            Engine::Math::Max(0.0,Engine::Math::Min(waited,InputSendBurst-inputTokens)));\n                    }\n",
-      "replace": "",
+      "find": "inputTokens-=InputSendCharge(fresh,waited,inputTokens);inputWaitSince.reset();",
+      "replace": "inputTokens-=1.0;inputWaitSince.reset();",
       "check": "worker",
       "expect": "did not drain"
     },
@@ -2630,8 +2639,8 @@
       "batch": "v7-09a",
       "what": "Every send is charged 60/R, waited or not",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "                    if(fresh && inputWaitSince) {\n                        const double waited=std::chrono::duration<double>(now-*inputWaitSince)/period-(inputTokens-1.0);\n                        charge-=Engine::Math::Min(1.0-InputSendRate/InputSendDrainRate,\n                            Engine::Math::Max(0.0,Engine::Math::Min(waited,InputSendBurst-inputTokens)));\n                    }\n",
-      "replace": "                    charge-=1.0-InputSendRate/InputSendDrainRate;\n",
+      "find": "inputTokens-=InputSendCharge(fresh,waited,inputTokens);inputWaitSince.reset();",
+      "replace": "inputTokens-=InputSendRate/InputSendDrainRate;inputWaitSince.reset();",
       "check": "worker",
       "expect": "burst beyond two packets"
     },
@@ -2640,8 +2649,8 @@
       "batch": "v7-09a",
       "what": "The recorded wait is not cleared when its send goes",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "input=latestInput;inputTokens-=charge;inputWaitSince.reset();",
-      "replace": "input=latestInput;inputTokens-=charge;",
+      "find": "inputTokens-=InputSendCharge(fresh,waited,inputTokens);inputWaitSince.reset();",
+      "replace": "inputTokens-=InputSendCharge(fresh,waited,inputTokens);",
       "check": "worker",
       "expect": "left more than one token"
     },
@@ -5931,8 +5940,8 @@
       "batch": "v71-client-interrupted",
       "what": "A resume below the tip seeds a new lead and rewrites the commands in flight",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {\n        SeedLead(authority);\n        return;\n    }",
-      "replace": "    SeedLead(authority);\n    return;",
+      "find": "    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {\n        recordResume();\n        SeedLead(authority);\n        return;\n    }",
+      "replace": "    recordResume();\n    SeedLead(authority);\n    return;",
       "check": "cpu",
       "expect": "keeps every unacknowledged command|restarts phase acquisition before its late samples|sends no conflicting window"
     },
@@ -5941,8 +5950,8 @@
       "batch": "v71-client-interrupted",
       "what": "A resume restarts nothing",
       "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
-      "find": "    if (Reseeds(authority)) return;\n    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {",
-      "replace": "    if (true) return;\n    if (authority.lastResolvedCommand == current_.lastResolvedCommand) {",
+      "find": "    if (Reseeds(authority)) return;\n    // Both resume paths",
+      "replace": "    if (true) return;\n    // Both resume paths",
       "check": "cpu",
       "expect": "keeps every unacknowledged command|seeds a new lead|before its late samples"
     },
@@ -6001,8 +6010,8 @@
       "batch": "v71-client-interrupted",
       "what": "A resume drops the worker window in flight",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "                        state.interrupted=false;state.interruptedSince={};\n                        std::osyncstream",
-      "replace": "                        state.interrupted=false;state.interruptedSince={};latestInput.reset();submittedCommands.clear();\n                        std::osyncstream",
+      "find": "                        state.interrupted=false;state.interruptedSince={};\n                        ClogLine()",
+      "replace": "                        state.interrupted=false;state.interruptedSince={};latestInput.reset();submittedCommands.clear();\n                        ClogLine()",
       "check": "worker",
       "expect": "window changed across an interruption"
     },
@@ -6011,7 +6020,7 @@
       "batch": "v71-client-interrupted",
       "what": "A receive error fails the session without the transient check",
       "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
-      "find": "            if(liveness.Playing() && TransientSocketError(error)) {++summary.transientSocketErrors;continue;}\n",
+      "find": "            if(action==SocketErrorAction::Tolerate) {++summary.transientSocketErrors;continue;}\n",
       "replace": "",
       "check": "diagnostic_isolation",
       "expect": "test_every_socket_error_is_classified_before_it_fails_the_session"
@@ -6115,6 +6124,576 @@
       "replace": "\t\tif false && rebound.Previous.IsValid() {\n",
       "check": "go",
       "expect": "want one"
+    },
+    {
+      "id": "sb-a10-reference-not-pushed",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A step publishes a snapshot without its reference (A10 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        publishedReferences_.push_back({publication->tick, *advancedAt});\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "GYO_ASSERT failed: reference != publishedReferences_.rend\\(\\)"
+    },
+    {
+      "id": "sb-a11-leave-keeps-quality",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A Leave keeps the player's quality track (A11 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "    slack_.erase(playerId);\n    quality_.erase(playerId);\n}",
+      "replace": "    slack_.erase(playerId);\n}",
+      "check": "cpu",
+      "expect": "GYO_ASSERT failed: quality.has_value\\(\\)"
+    },
+    {
+      "id": "sb-a12-join-not-recorded",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A Join request is not recorded, so its result finds no join (A12 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                session.joins.emplace(request,message.join().player_id());\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "GYO_ASSERT failed: result.kind==ControlKind::Leave"
+    },
+    {
+      "id": "sb-c3-welcome-unparsed",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A Welcome that does not parse is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "pb::Welcome message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}",
+      "replace": "pb::Welcome message;if(!message.ParseFromString(packet->payload)){continue;}",
+      "check": "worker",
+      "expect": "unparsed datagrams were not counted"
+    },
+    {
+      "id": "sb-c3-early-snapshot",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A snapshot before the Welcome is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                if(!welcomed){++earlyDatagrams;continue;}\n                pb::WorldSnapshot",
+      "replace": "                if(!welcomed){continue;}\n                pb::WorldSnapshot",
+      "check": "worker",
+      "expect": "datagrams before the Welcome were not counted"
+    },
+    {
+      "id": "sb-c3-early-results",
+      "batch": "v71-silent-branch-asserts",
+      "what": "Action results before the Welcome are not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                if(!welcomed){++earlyDatagrams;continue;}\n                pb::ActionResults",
+      "replace": "                if(!welcomed){continue;}\n                pb::ActionResults",
+      "check": "worker",
+      "expect": "datagrams before the Welcome were not counted"
+    },
+    {
+      "id": "sb-c3-snapshot-shape",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A snapshot of tick 0 or uneven lists is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "message.combat_size()!=message.players_size()){++invalidSnapshotDatagrams;continue;}",
+      "replace": "message.combat_size()!=message.players_size()){continue;}",
+      "check": "worker",
+      "expect": "invalid snapshots were not counted"
+    },
+    {
+      "id": "sb-c3-snapshot-not-newer",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A valid snapshot that is not newer is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    ++ignoredSnapshotDatagrams;\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "snapshots that were not newer were not counted"
+    },
+    {
+      "id": "sb-c3-unexpected-kind",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A kind the Gateway does not send is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                ++unexpectedKindDatagrams; // a Hello",
+      "replace": "                 // a Hello",
+      "check": "worker",
+      "expect": "kinds the Gateway does not send were not counted"
+    },
+    {
+      "id": "sb-c3-line-drops-key",
+      "batch": "v71-silent-branch-asserts",
+      "what": "The worker statistics line leaves out the last dropped-datagram key",
+      "file": "apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp",
+      "find": "\n         << \" unexpected_kind_datagrams=\" << window.unexpectedKindDatagrams;",
+      "replace": ";",
+      "check": "cpu",
+      "expect": "unexpected_kind_datagrams"
+    },
+    {
+      "id": "sb-c1-no-reason-limit",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A join rejection too long for a datagram is relayed",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "Message: result.Reason}) > framing.MaxDatagram-framing.HeaderSize {",
+      "replace": "Message: result.Reason}) > framing.MaxDatagram-framing.HeaderSize && false {",
+      "check": "go",
+      "expect": "TestAJoinRejectionTooLongForADatagramFailsTheRuntime"
+    },
+    {
+      "id": "sb-c2-second-result-ignored",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A JoinResult for a player who is not joining is ignored",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\tgo s.runtimeFailed(protocolError{fmt.Errorf(\"join result for player %d, which is not joining\", p.playerID)})\n",
+      "replace": "",
+      "check": "go",
+      "expect": "TestAJoinResultForAPlayerNotJoiningFailsTheRuntime"
+    },
+    {
+      "id": "sb-c2-left-player-fails",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A JoinResult for a player who left fails the runtime",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\t\t\t// The player left or timed out while its Join was in flight.\n\t\t\treturn\n",
+      "replace": "\t\t\tgo s.runtimeFailed(protocolError{errors.New(\"left\")})\n\t\t\treturn\n",
+      "check": "go",
+      "expect": "TestAJoinResultForAPlayerThatLeftIsIgnored"
+    },
+    {
+      "id": "sb-g2-invariant-silent",
+      "batch": "v71-silent-branch-asserts",
+      "what": "A broken Gateway invariant is dropped silently",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "\tgo s.runtimeFailed(fmt.Errorf(\"gateway invariant failed: %s\", what))\n",
+      "replace": "\t_ = what\n",
+      "check": "go",
+      "expect": "TestAnAdmittedSequenceThatDoesNotCommitFailsTheRuntime"
+    },
+    {
+      "id": "csc-k2-observe-older-tick",
+      "batch": "v71-client-silent-checks",
+      "what": "The simulation reconciles a state not newer than the last (K2 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "    if (tick <= lastSnapshotTick_) { samples_.clear(); return; }\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "GYO_ASSERT failed: reconciled"
+    },
+    {
+      "id": "csc-k2-invalid-reported-used",
+      "batch": "v71-client-silent-checks",
+      "what": "Reconcile reports an invalid state as used",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return false;",
+      "replace": "        !ValidMovementCommand({1, 0, 0, authority.yaw, authority.pitch})) return true;",
+      "check": "cpu",
+      "expect": "reports an invalid or older authority state as ignored"
+    },
+    {
+      "id": "csc-k2-older-reported-used",
+      "batch": "v71-client-silent-checks",
+      "what": "Reconcile reports an older state as used",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "         authority.lastResolvedCommand < observation_.lastResolvedCommand))) return false;",
+      "replace": "         authority.lastResolvedCommand < observation_.lastResolvedCommand))) return true;",
+      "check": "cpu",
+      "expect": "reports an invalid or older authority state as ignored"
+    },
+    {
+      "id": "csc-r1-uncounted",
+      "batch": "v71-client-silent-checks",
+      "what": "A window of another generation is dropped uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    if(generation!=impl_->generation.load()){++impl_->staleInputWindows;return;}",
+      "replace": "    if(generation!=impl_->generation.load()){return;}",
+      "check": "worker",
+      "expect": "windows for a replaced authority were not counted"
+    },
+    {
+      "id": "csc-r1-sent",
+      "batch": "v71-client-silent-checks",
+      "what": "A window of another generation is sent",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    if(generation!=impl_->generation.load()){++impl_->staleInputWindows;return;}",
+      "replace": "    if(false){++impl_->staleInputWindows;return;}",
+      "check": "worker",
+      "expect": "a window for a replaced authority was sent"
+    },
+    {
+      "id": "csc-r5-uncounted",
+      "batch": "v71-client-silent-checks",
+      "what": "A window for a replaced epoch or life is dropped uncounted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        ++impl_->staleInputWindows;return;\n    }\n",
+      "replace": "        return;\n    }\n",
+      "check": "worker",
+      "expect": "windows for a replaced authority were not counted"
+    },
+    {
+      "id": "csc-line-drops-key",
+      "batch": "v71-client-silent-checks",
+      "what": "The worker statistics line leaves out stale_input_windows",
+      "file": "apps/object_fps_pvp/src/Pvp/NetworkStatistics.cpp",
+      "find": "\n    line << \" stale_input_windows=\" << window.staleInputWindows;",
+      "replace": "",
+      "check": "cpu",
+      "expect": "stale_input_windows"
+    },
+    {
+      "id": "csc-s2-rotation-keeps-old-epoch",
+      "batch": "v71-client-silent-checks",
+      "what": "The Tick's rotation keeps staging of a replaced epoch (S2 or A1 fires)",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "            if (player == state.players.end() || player->movementEpoch != input->second.movementEpoch ||\n                player->lifeGeneration != input->second.lifeGeneration) {",
+      "replace": "            if (player == state.players.end() || player->lifeGeneration != input->second.lifeGeneration) {",
+      "check": "cpu",
+      "expect": "GYO_ASSERT failed: (submitted|merged.commands.empty)"
+    },
+    {
+      "id": "cfr-clogline-writes-nothing",
+      "batch": "v71-cxx-flag-removal",
+      "what": "ClogLine hands nothing to std::clog",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClogLine.hpp",
+      "find": "            if (target_) target_->sputn(text.data(), static_cast<std::streamsize>(text.size()));",
+      "replace": "            static_cast<void>(text);",
+      "check": "cpu",
+      "expect": "ClogLine writes each line whole"
+    },
+    {
+      "id": "cfr-clogline-ignores-manipulators",
+      "batch": "v71-cxx-flag-removal",
+      "what": "ClogLine drops manipulators such as std::fixed",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ClogLine.hpp",
+      "find": "    ClogLine& operator<<(std::ios_base& (*manipulator)(std::ios_base&)) {\n        buffer_ << manipulator;",
+      "replace": "    ClogLine& operator<<(std::ios_base& (*manipulator)(std::ios_base&)) {\n        static_cast<void>(manipulator);",
+      "check": "cpu",
+      "expect": "uptime_s=1\\.500"
+    },
+    {
+      "id": "rnp-hello-every-second",
+      "batch": "v71-rebind-on-new-port",
+      "what": "Hello goes every second outside an interruption (the pre-D188 rule)",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    static constexpr auto HelloInterval=std::chrono::milliseconds(250);",
+      "replace": "    static constexpr auto HelloInterval=std::chrono::milliseconds(1000);",
+      "check": "worker",
+      "expect": "Hellos were not every 250 ms"
+    },
+    {
+      "id": "rnp-hello-unbounded",
+      "batch": "v71-rebind-on-new-port",
+      "what": "Hello goes at every worker pass",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        if(now-helloAt>=HelloInterval) {",
+      "replace": "        if(true) {",
+      "check": "worker",
+      "expect": "(Hellos came more often than every 250 ms|exceeded the actual 120-packet session budget)"
+    },
+    {
+      "id": "rnp-wake-late",
+      "batch": "v71-rebind-on-new-port",
+      "what": "The worker wakes for Hello a second after the last one",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            consider(helloAt+HelloInterval);",
+      "replace": "            consider(helloAt+std::chrono::milliseconds(1000));",
+      "check": "worker",
+      "expect": "Hellos were not every 250 ms"
+    },
+    {
+      "id": "cr-equal-always",
+      "batch": "v71-contract-readers",
+      "what": "compare_reports calls every run equal",
+      "file": "build/acceptance/object_fps_pvp/compare_reports.py",
+      "find": "            'equal': gateway == match,",
+      "replace": "            'equal': True,",
+      "check": "compare_reports",
+      "expect": "test_a_report"
+    },
+    {
+      "id": "cr-violations-ignored",
+      "batch": "v71-contract-readers",
+      "what": "compare_reports passes a run with violations",
+      "file": "build/acceptance/object_fps_pvp/compare_reports.py",
+      "find": "    return 0 if all(r['equal'] and not r['violations'] for r in results) else 1",
+      "replace": "    return 0 if all(r['equal'] for r in results) else 1",
+      "check": "compare_reports",
+      "expect": "test_a_violation_fails"
+    },
+    {
+      "id": "k7-no-interrupted-line",
+      "batch": "v71-contract-readers",
+      "what": "An interruption writes no line",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ClogLine()<<\"[ObjectFPS/PvP] \"<<ConnectionInterruptedLine(state.playerId,",
+      "replace": "            if(false)ClogLine()<<\"[ObjectFPS/PvP] \"<<ConnectionInterruptedLine(state.playerId,",
+      "check": "worker",
+      "expect": "an outage did not write its six connection lines"
+    },
+    {
+      "id": "k7-no-resumed-line",
+      "batch": "v71-contract-readers",
+      "what": "A resume writes no line",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                        ClogLine()<<\"[ObjectFPS/PvP] \"<<ConnectionResumedLine(own,arrival.gap,",
+      "replace": "                        if(false)ClogLine()<<\"[ObjectFPS/PvP] \"<<ConnectionResumedLine(own,arrival.gap,",
+      "check": "worker",
+      "expect": "an outage did not write its six connection lines"
+    },
+    {
+      "id": "k7-no-clock-resume-line",
+      "batch": "v71-contract-readers",
+      "what": "A resume does not end the clock window",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                        if(const auto line=clock.Resume(MicrosNow()))ClogLine()<<*line<<'\\n';",
+      "replace": "",
+      "check": "worker",
+      "expect": "an outage did not write its six connection lines"
+    },
+    {
+      "id": "k7-summary-uncounted",
+      "batch": "v71-contract-readers",
+      "what": "The summary does not count interruptions",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "            ++summary.interruptions;\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "the summary does not count the outage"
+    },
+    {
+      "id": "tno-existing-reused",
+      "batch": "v71-trace-no-overwrite",
+      "what": "A restart reuses (truncates) the existing trace",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/TracePaths.hpp",
+      "find": "        bool free = !taken(candidate);",
+      "replace": "        bool free = true;",
+      "check": "cpu",
+      "expect": "takes the next free numbered name"
+    },
+    {
+      "id": "tno-derived-ignored",
+      "batch": "v71-trace-no-overwrite",
+      "what": "A restart ignores the derived files",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/TracePaths.hpp",
+      "find": "        if (free && derived)",
+      "replace": "        if (false && derived)",
+      "check": "cpu",
+      "expect": "takes the next free numbered name"
+    },
+    {
+      "id": "tno-number-after-commands",
+      "batch": "v71-trace-no-overwrite",
+      "what": "The number goes after -commands",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/TracePaths.hpp",
+      "find": "        numbered.replace_filename(name.substr(0, name.size() - commands.size()) + mark + std::string(commands));",
+      "replace": "        numbered.replace_filename(name + mark);",
+      "check": "cpu",
+      "expect": "takes the next free numbered name"
+    },
+    {
+      "id": "k8-tip-no-record",
+      "batch": "v71-trace-no-overwrite",
+      "what": "A resume at the tip writes no phase record",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        recordResume();\n        SeedLead(authority);\n        return;",
+      "replace": "        SeedLead(authority);\n        return;",
+      "check": "cpu",
+      "expect": "seeds a new lead and one that reseeds anyway"
+    },
+    {
+      "id": "ac-room-two-players",
+      "batch": "v71-analyzer-converge",
+      "what": "The analyzer falls back to two players",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    if (players is not None and len(expected_players) != players) or set(expected_players) != set(per_player):",
+      "replace": "    if len(expected_players) != 2 or set(expected_players) != set(per_player):",
+      "check": "quad_evidence",
+      "expect": "test_a_full_room_at_60_hz_passes_in_the_quad_shape"
+    },
+    {
+      "id": "ac-room-named-clients",
+      "batch": "v71-analyzer-converge",
+      "what": "The room form needs the two-Client trace names",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    clients = (lambda name: not name.startswith('match')) if players is None else (",
+      "replace": "    clients = (lambda name: name in ('clients-commands.jsonl','create-commands.jsonl','join-commands.jsonl')) if players is None else (",
+      "check": "quad_evidence",
+      "expect": "test_"
+    },
+    {
+      "id": "ac-room-writes",
+      "batch": "v71-analyzer-converge",
+      "what": "The room form writes command-evidence.json",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    if write:\n",
+      "replace": "    if True:\n",
+      "check": "quad_evidence",
+      "expect": "test_the_room_form_writes_nothing"
+    },
+    {
+      "id": "ac-room-recovery-accepted",
+      "batch": "v71-analyzer-converge",
+      "what": "The room form accepts a fault recovery",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "    if players is None and timing.get('release_ns', 0):",
+      "replace": "    if False and timing.get('release_ns', 0):",
+      "check": "quad_evidence",
+      "expect": "test_fault_recovery_is_left_to_the_two_client_analyzers"
+    },
+    {
+      "id": "ac-shape-players-wrong",
+      "batch": "v71-analyzer-converge",
+      "what": "room_shape reports the commands, not the room size",
+      "file": "build/acceptance/object_fps_pvp/quad_evidence.py",
+      "find": "    shaped = dict(commands, players=len(commands['production_allowance_steps']))",
+      "replace": "    shaped = dict(commands, players=commands['commands'])",
+      "check": "quad_evidence",
+      "expect": "test_a_full_room_at_60_hz_passes_in_the_quad_shape"
+    },
+    {
+      "id": "ac-frames-first-column",
+      "batch": "v71-analyzer-converge",
+      "what": "Only the first remote-age column counts",
+      "file": "build/acceptance/object_fps_pvp/command_evidence.py",
+      "find": "                if ages and max(ages)>=.1:",
+      "replace": "                if ages and ages[0]>=.1:",
+      "check": "command_evidence",
+      "expect": "remote|test_"
+    },
+    {
+      "id": "tok-no-late-deduction",
+      "batch": "v71-token-tests",
+      "what": "The charge counts a late wake as wait (N-token-test-gaps)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "    const double waited = *waitedPeriods - (tokens - 1.0);",
+      "replace": "    const double waited = *waitedPeriods;",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "tok-no-bucket-cap",
+      "batch": "v71-token-tests",
+      "what": "The charge discounts past a full bucket (N-token-test-gaps)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "(std::max)(0.0, (std::min)(waited, InputSendBurst - tokens)));",
+      "replace": "(std::max)(0.0, waited));",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "tok-refill-uncapped",
+      "batch": "v71-token-tests",
+      "what": "Refill goes above a full bucket",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "    return (std::min)(InputSendBurst, tokens + elapsedPeriods);",
+      "replace": "    return tokens + elapsedPeriods;",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "tok-resend-one-token",
+      "batch": "v71-token-tests",
+      "what": "A resend waits for one token only",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "    return (std::max)(0.0, (fresh ? 1.0 : InputSendBurst) - tokens);",
+      "replace": "    return (std::max)(0.0, 1.0 - tokens);",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "tok-fresh-ignores-life",
+      "batch": "v71-token-tests",
+      "what": "Another life is not a fresh window",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/InputSendBudget.hpp",
+      "find": "    return !haveSent || epoch != sentEpoch || life != sentLife || (!empty && lastSequence > sentThrough);",
+      "replace": "    return !haveSent || epoch != sentEpoch || (!empty && lastSequence > sentThrough);",
+      "check": "cpu",
+      "expect": "input token rule"
+    },
+    {
+      "id": "cpt-other-version-uncounted",
+      "batch": "v71-client-path-tests",
+      "what": "A datagram of another version is not counted",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "if(wire::OtherVersion(datagram))++otherVersionDatagrams;",
+      "replace": "if(wire::OtherVersion(datagram)){}",
+      "check": "worker",
+      "expect": "another protocol version was not counted"
+    },
+    {
+      "id": "cpt-step-generation-zero",
+      "batch": "v71-client-path-tests",
+      "what": "A window does not name its generation",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    step.generation = drain.generation;",
+      "replace": "    step.generation = 0;",
+      "check": "cpu",
+      "expect": "windowGeneration"
+    },
+    {
+      "id": "k9-send-error-unclassified",
+      "batch": "v71-client-path-tests",
+      "what": "A send error fails the session without the transient case",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        if(action==SocketErrorAction::Tolerate) {++summary.transientSocketErrors;return false;}\n",
+      "replace": "",
+      "check": "diagnostic_isolation",
+      "expect": "test_every_socket_error_is_classified_before_it_fails_the_session"
+    },
+    {
+      "id": "k9-handshake-tolerates-transient",
+      "batch": "v71-client-path-tests",
+      "what": "A transient socket error during the handshake only counts instead of failing the join",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    return playing && TransientSocketError(error) ? SocketErrorAction::Tolerate : SocketErrorAction::Fail;",
+      "replace": "    return TransientSocketError(error) ? SocketErrorAction::Tolerate : SocketErrorAction::Fail;",
+      "check": "cpu",
+      "expect": "transient socket error fails the handshake"
+    },
+    {
+      "id": "k9-blocked-fails",
+      "batch": "v71-client-path-tests",
+      "what": "A socket that would block fails the session",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "    if(error==asio::error::would_block || error==asio::error::try_again)return SocketErrorAction::Blocked;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "transient socket error fails the handshake"
+    },
+    {
+      "id": "k9-stall-skips-interruption",
+      "batch": "v71-client-path-tests",
+      "what": "A poll that jumps past T_int to T_max records no interruption",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/ConnectionLiveness.hpp",
+      "find": "    return event == ConnectionLiveness::Event::Interrupted ||\n           (event == ConnectionLiveness::Event::TimedOut && playing && !interrupted);",
+      "replace": "    return event == ConnectionLiveness::Event::Interrupted;",
+      "check": "cpu",
+      "expect": "jumps past T_int to T_max still records the interruption"
+    },
+    {
+      "id": "k9-site-bypasses-rule",
+      "batch": "v71-client-path-tests",
+      "what": "The worker records only interruptions that start now, not the rule",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        if(PollRecordsInterruption(event,liveness.Playing(),liveness.Interrupted())) {",
+      "replace": "        if(event==ConnectionLiveness::Event::Interrupted) {",
+      "check": "diagnostic_isolation",
+      "expect": "test_a_poll_records_interruptions_through_the_shared_rule"
+    },
+    {
+      "id": "qc-closing-uses-request-timeout",
+      "batch": "v71-quick-close",
+      "what": "The closing /leave waits with the 2 s timeouts of the other requests",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        try{DisconnectRemote(true);}",
+      "replace": "        try{DisconnectRemote();}",
+      "check": "close_timing",
+      "expect": "FAILED \\{'mode': 'stalled'"
+    },
+    {
+      "id": "qc-closing-timeout-too-long",
+      "batch": "v71-quick-close",
+      "what": "The closing /leave timeout grows past the declared limit",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "constexpr auto ClosingLeaveTimeout=std::chrono::milliseconds(300);",
+      "replace": "constexpr auto ClosingLeaveTimeout=std::chrono::milliseconds(1500);",
+      "check": "close_timing",
+      "expect": "FAILED \\{'mode': 'stalled'"
     }
   ]
 }

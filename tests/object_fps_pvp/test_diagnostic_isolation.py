@@ -85,7 +85,8 @@ class DiagnosticIsolationTest(unittest.TestCase):
                 depth += {'(': 1, ')': -1}.get(text[end], 0)
                 end += 1
             calls.append((match.group(1), text[match.end():end - 1]))
-        self.assertEqual(len(calls), 12)
+        # 11 since v7.1 D188: the Hello interval no longer reads Interrupted() (D189).
+        self.assertEqual(len(calls), 11)
         allowed = {'Begin': {'Clock::now()'}, 'Welcome': {'arrivedAt'}, 'Snapshot': {'arrivedAt'}, 'Poll': {'polledAt'},
                    'Interrupted': {''}, 'Playing': {''}, 'Since': {''}, 'NextDeadline': {''}}
         for method, argument in calls:
@@ -98,13 +99,25 @@ class DiagnosticIsolationTest(unittest.TestCase):
 
     def test_every_socket_error_is_classified_before_it_fails_the_session(self):
         # network-architecture §4 (D172 D-7): at both places where a socket
-        # error ends the session, the transient check comes first.
+        # error ends the session, the transient case is handled first. Which
+        # errors are transient, and only while playing, is SocketErrorActionFor's
+        # rule (ConnectionLivenessTests.cpp); here each Fail follows its Tolerate (v7.1 K9).
         text = (SOURCE / 'ClientConnection.cpp').read_text(encoding='utf-8')
         throws = [m.start() for m in re.finditer(r'throw std::runtime_error\(error\.message\(\)\)', text)]
         self.assertEqual(len(throws), 2)
         for at in throws:
             before = text[text.rindex('\n', 0, text.rindex('\n', 0, at)):at]
-            self.assertIn('TransientSocketError(error)', before)
+            self.assertIn('if(action==SocketErrorAction::Tolerate)', before)
+            self.assertIn('if(action==SocketErrorAction::Fail)', before)
+        self.assertEqual(text.count('SocketErrorActionFor(error,liveness.Playing())'), 2)
+
+    def test_a_poll_records_interruptions_through_the_shared_rule(self):
+        # v7.1 K9: a timeout of a playing, uninterrupted session (a stall past
+        # T_max) records the interruption; the rule is PollRecordsInterruption
+        # (ConnectionLivenessTests.cpp), and the worker decides only through it.
+        text = (SOURCE / 'ClientConnection.cpp').read_text(encoding='utf-8')
+        self.assertEqual(text.count('if(PollRecordsInterruption(event,liveness.Playing(),liveness.Interrupted()))'), 1)
+        self.assertEqual(text.count('Event::TimedOut'), 1)
 
     def test_no_decision_reads_the_view_tick(self):
         # pv7 §7: the view tick is request content the host only records

@@ -10,6 +10,7 @@
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/App/WeaponViewModel.hpp"
+#include "engine/base/Assert.hpp"
 
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/AssetRequest.hpp"
@@ -38,6 +39,7 @@
 #include "engine/math/geometry/Aabb.hpp"
 #include "engine/math/scalar/Angle.hpp"
 #include "engine/math/scalar/Scalar.hpp"
+#include "engine/os/Files.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -443,8 +445,12 @@ struct PvpApplication::Impl final {
         // Consume the complete receipt-stamped batch before selecting this
         // frame's timeline bracket. Never play a stalled backlog one frame at a time.
         // The simulation role observes the same snapshots through its own drain.
-        for (const auto& sample : received.snapshots)
-            static_cast<void>(timeline.Push(sample.snapshot, sample.receivedAt));
+        // ClientConnection queues only validated snapshots, newer than the
+        // applied one, in arrival order; the timeline restarts with it.
+        for (const auto& sample : received.snapshots) {
+            const bool pushed = timeline.Push(sample.snapshot, sample.receivedAt);
+            GYO_ASSERT(pushed);
+        }
     }
 
     void ResetWeaponFeedback() {
@@ -809,7 +815,10 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     impl_->catalog = std::move(catalog).value();
     for (const auto& bundle : manifest.value().shaderBundles) {
         Asset::Resolver::AssetPathResolver::Options options;
-        options.assetsRoot = (assetRoot / bundle.path).string();
+        // Engine paths are UTF-8 (docs/architecture/io.md), not path::string()'s ANSI code page.
+        auto bundleRoot = Engine::Os::Files::PathToUtf8(assetRoot / bundle.path);
+        if (!bundleRoot) { error = "Shader bundle path has no UTF-8 form: " + Engine::Base::CauseDetail(bundleRoot.error()); return false; }
+        options.assetsRoot = std::move(bundleRoot.value());
         options.allowAbsolutePath = false;
         options.allowEscapeAssetsRoot = false;
         const auto loaded = impl_->shaders.AppendBundle(impl_->source,

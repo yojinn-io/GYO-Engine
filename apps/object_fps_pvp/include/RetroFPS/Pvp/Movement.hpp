@@ -38,9 +38,9 @@ inline constexpr std::uint32_t InputSendRate = 60;
 // (1 - InputSendRate / 75) / InputSendRate = 3.3 ms. Bursts are two packets,
 // any three sends span at least 1/InputSendRate, and at most
 // InputSendDrainRate + InputSendBurst = 82 sends go in any second. With the
-// 30 action batches and the Hello probes of an interrupted connection (4 a
-// second, ConnectionInterruptedAfter) that is 116, inside the Gateway's
-// per-session limit of 120 packets a second.
+// 30 action batches and the Hellos (4 a second in every phase since v7.1
+// D188) that is 116, inside the Gateway's per-session limit of 120 packets a
+// second.
 inline constexpr double InputSendBurst = 2;
 // Above the 75 Hz production of an earlier-moving phase slew (a quarter of
 // each frame, LocalPlayerPrediction), so an earlier debt drains down to the

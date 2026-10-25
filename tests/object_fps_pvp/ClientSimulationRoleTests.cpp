@@ -79,6 +79,7 @@ struct StepRecord final {
     ClientPresentation presentation;
     bool stale{};
     std::size_t delivered{};
+    std::uint64_t windowGeneration{};
 };
 
 struct Generated final {
@@ -182,7 +183,7 @@ RoleRun RunRole(const MainThread& main, const Options& options = {}) {
                     Generated{seconds, command, pending.movementEpoch, pending.lifeGeneration});
             if (step.window) inputs.push_back({now + After(options.oneWaySeconds), *step.window});
             run.steps.push_back({seconds, step.window, loop.Simulation().Observation(), step.presentation,
-                step.intentStale, delivered});
+                step.intentStale, delivered, step.generation});
             REQUIRE(step.nextDeadline > now);
             nextSimulation = step.nextDeadline + After(options.lateSeconds);
         }
@@ -354,6 +355,15 @@ TEST_CASE("PvP the simulation role restarts on a new session or player and resee
         CHECK(run.steps.back().observation.active);
         // Each presentation names its session, so the main thread can tell an earlier one.
         for (const auto& step : run.steps) CHECK(step.presentation.generation == (step.at >= ChangeAt ? 2U : 1U));
+        // C17-3 (v7.1 client-path-tests): every window names the generation its authority came from, which
+        // ClientConnection::SendInput checks against the current one.
+        std::size_t windows{};
+        for (const auto& step : run.steps)
+            if (step.window) {
+                ++windows;
+                CHECK(step.windowGeneration == (step.at >= ChangeAt ? 2U : 1U));
+            }
+        CHECK(windows > 100);
     }
     SUBCASE("player id") {
         // The same pawn under a new id: only the id says it is another player.

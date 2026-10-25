@@ -43,7 +43,7 @@ cd gyo-object_fps_pvp\bin
 gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-commands.jsonl
 ```
 
-注意：trace（`.jsonl`）每次啟動都從頭覆寫。中途重啟某個程式時，把它的 trace 檔名改成 `-2`、`-3` …（見第 3 節）。
+注意：trace（`.jsonl`）每次啟動都從頭覆寫。中途重啟某個程式時，把它的 trace 檔名改成 `-2`、`-3` …（見第 3 節）。**v7.1 D191 起**不再覆寫：檔案已存在時自動改用 `client.2-commands.jsonl` 這類編號名，實際檔名寫在 log 裡，不必手動改名。
 結束：Client 按 Esc 離開並關閉視窗 → Mac 的 Gateway 按 Ctrl+C → Match 按 Ctrl+C。
 上傳：Mac 的 `~/gyo-lan-v7/` 中的 `match.log`、`match-commands.jsonl`、`match-ingress.jsonl`、`gateway.log`（Mac 當玩家時加上 `gyo-object_fps_pvp/bin/logs/`），以及每台 Windows 的 `bin\logs\` 整個資料夾。
 
@@ -91,7 +91,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 ```
 
 - v7 新增：指定 `--movement-trace` 時，Match 會在同一個資料夾另外寫 `match-ingress.jsonl`（命令到達 Match 的細節：被替代的序號、晚到多久、被拒的原因）。檔名由 `-commands.jsonl` 換成 `-ingress.jsonl` 自動決定，不需要另外指定。
-- `--log` 是附加寫入；`--movement-trace` 與 `match-ingress.jsonl` 每次啟動都**從頭覆寫**。中途重新啟動 Match 時，先把這兩個 `.jsonl` 改名（例如加 `-1`），否則前一段的 trace 會不見。
+- `--log` 是附加寫入；`--movement-trace` 與 `match-ingress.jsonl` 每次啟動都**從頭覆寫**。中途重新啟動 Match 時，先把這兩個 `.jsonl` 改名（例如加 `-1`），否則前一段的 trace 會不見。**v7.1 D191 起**不再覆寫：已存在時自動改用 `match.2-commands.jsonl`、`match.2-ingress.jsonl`、`match.2-shots.jsonl`，實際檔名寫在 `match.log` 的 `trace files` 行。
 
 終端機 2：Gateway。把 `MAC_IP` 換成實際的位址：
 
