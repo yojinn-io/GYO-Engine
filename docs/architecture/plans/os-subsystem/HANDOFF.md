@@ -459,6 +459,13 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   2. 呼叫端：AssetPathResolver 的根目錄照原樣保留；POSIX 的 symlink 加 `..` 測試（NativeFileSystem）；重新定位相關突變（io-m1、io-m8、io-m10 等）。
   3. 突變檢查與 ultracode 契約審查（1 審查者＋1 對抗檢查，兼做 §14.4 的獨立核對），然後把判定與 io.md Invariant 3 的新條文交使用者定案。
   4. io.md 的路徑契約與 Invariant 3、os.md 的長路徑說明、dev_log。
+- 2026-10-26：消費端回覆（開工時要注意的交集）：
+  - D53：lan15 與 L2 的腳本傳給產品的 `--log`、trace 路徑都是絕對路徑，沒有「symlink/..」也沒有 `//` 開頭；`content_deep_path.py` 的 `\\\\?\\` 只用在 Python 自己複製檔案。消費端會請使用者在 lan15 期間把發行包解壓到本機，不從網路共用執行。
+  - io-native-paths 和發行線的交集：
+    1. P1 的 `OsCallPath`：改成 `\\\\?\\UNC\\` 時一起更新 os.md「Long paths on Windows」；消費端的 Windows 專用突變 `p1-no-long-path-form`（find：`return std::wstring(L"\\\\\\\\?\\\\") + full.value();`）與 `p1-long-path-from-too-high`（find：`constexpr std::size_t kLongPathFrom = MAX_PATH - 12;`）的那兩行若有變動，要重新定位。
+    2. `NativeFileAssetSourceTests.cpp` 的相對路徑案例讀 `./sub/../payload.txt`，`sub` 存在，照 OS 解析結果相同；開工後跑 engine_tests 確認（本機 core 33／33 已通過）。
+    3. `ContentManifest` 的 `IsRelativeContentPath` 自己拒絕 `..`，是內容契約，不改。
+  - 分支會話「規劃 Engine 的 OS 統一子系統」轉達同一個決定，估時寫 6～10 h；本會話開工前的估計是 12～19 h（使用者核准 D54 時看的是後者）。
 
 ## 未結事項
 
