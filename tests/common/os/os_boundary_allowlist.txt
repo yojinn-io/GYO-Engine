@@ -3,9 +3,6 @@
 # Only shrinks: a batch that moves a site deletes or lowers its entry in the same change.
 
 # Native file access, moved behind engine/io and engine/os.
-engine/asset/src/NativeFileAssetSource.cpp R4 1  # asset reads through IFileSystem (consumer P3)
-engine/asset/src/AssetCatalog.cpp R4 1  # asset reads through IFileSystem (consumer P3)
-engine/asset/src/ContentManifest.cpp R4 1  # asset reads through IFileSystem (consumer P3)
 engine/asset/src/AssetWatcher.cpp R4 2  # stat through engine/os (os-files-write)
 engine/trace/src/TraceSink.cpp R4 1  # trace writes through engine/os (os-trace-writers)
 

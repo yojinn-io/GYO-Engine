@@ -1,14 +1,21 @@
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
 
-#include "engine/math/scalar/Scalar.hpp"
+#include "engine/io/fs/NativeFileSystem.hpp"
+#include "engine/io/helpers/ReadAllBytes.hpp"
+#include "engine/io/path/Uri.hpp"
+#include "engine/os/Files.hpp"
 
-#include <fstream>
-#include <limits>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace Engine::Asset::Loading {
 
+// The bytes go through engine/io's native file system, which calls engine/os
+// (docs/architecture/io.md): OS limits such as the Windows path length are
+// handled there, not here. A relative path is made absolute against the
+// current directory first, as the OS would. A failure keeps the cause
+// (Base::CauseDetail): the native path, the OS error code and the path length.
 Base::Result<ByteBuffer, AssetError>
 NativeFileAssetSource::ReadAll(const std::string_view resolvedPath) {
     if (resolvedPath.empty()) {
@@ -18,49 +25,28 @@ NativeFileAssetSource::ReadAll(const std::string_view resolvedPath) {
     }
 
     const std::string path(resolvedPath);
-    std::ifstream stream(path, std::ios::binary | std::ios::ate);
-    if (!stream) {
+    const auto failed = [&path](const auto& cause, const bool causeNamesPath) {
         return Base::Err(AssetError::Make(
             AssetErrorCode::SourceReadFailed,
-            "NativeFileAssetSource: cannot open file",
-            path));
-    }
+            "NativeFileAssetSource: cannot read file",
+            Base::CauseDetail(cause, causeNamesPath ? std::string_view{} : std::string_view(path))));
+    };
 
-    const std::streamoff end = static_cast<std::streamoff>(stream.tellg());
-    const auto maximumReadSize = static_cast<std::uintmax_t>(
-        Math::Min(static_cast<std::uintmax_t>(
-                      (std::numeric_limits<std::size_t>::max)()),
-                  static_cast<std::uintmax_t>(
-                      (std::numeric_limits<std::streamsize>::max)())));
-    if (end < 0 || static_cast<std::uintmax_t>(end) > maximumReadSize) {
-        return Base::Err(AssetError::Make(
-            AssetErrorCode::SourceReadFailed,
-            "NativeFileAssetSource: invalid file size",
-            path));
+    std::string absolute = path;
+    if (!Os::Files::IsAbsolutePath(absolute)) {
+        auto made = Os::Files::MakeAbsolute(absolute);
+        if (!made) return failed(made.error(), false);
+        absolute = std::move(made.value());
     }
+    auto uri = IO::Path::FileUriFromNativePath(absolute);
+    if (!uri) return failed(uri.error(), false);
 
-    const auto size = static_cast<std::size_t>(end);
-    ByteBuffer bytes(size);
-    stream.seekg(0, std::ios::beg);
-    if (!stream) {
-        return Base::Err(AssetError::Make(
-            AssetErrorCode::SourceReadFailed,
-            "NativeFileAssetSource: cannot seek to start of file",
-            path));
-    }
-
-    if (size != 0) {
-        stream.read(reinterpret_cast<char*>(bytes.data()),
-                    static_cast<std::streamsize>(size));
-        if (!stream || static_cast<std::size_t>(stream.gcount()) != size) {
-            return Base::Err(AssetError::Make(
-                AssetErrorCode::SourceReadFailed,
-                "NativeFileAssetSource: failed to read complete file",
-                path));
-        }
-    }
-
-    return std::move(bytes);
+    IO::FS::NativeFileSystem files;
+    auto bytes = IO::Helpers::ReadAllBytes(files, uri.value());
+    // The native file system names the absolute path in its detail; the
+    // caller's path is added only when it was relative.
+    if (!bytes) return failed(bytes.error(), absolute == path);
+    return std::move(bytes.value());
 }
 
 } // namespace Engine::Asset::Loading

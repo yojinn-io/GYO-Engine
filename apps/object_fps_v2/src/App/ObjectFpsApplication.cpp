@@ -15,6 +15,7 @@
 #include "engine/asset/loading/LoaderRegistry.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/runtime/RuntimeLoop.hpp"
 #include "input/backend/sdl/SdlInput.hpp"
 #include "model/backend/ufbx/UfbxModelLoader.hpp"
@@ -68,7 +69,10 @@ bool ObjectFpsApplication::InitializeContent(const std::filesystem::path& assetR
     impl_->catalog = std::move(catalog).value();
     for (const auto& bundle : manifest.value().shaderBundles) {
         Asset::Resolver::AssetPathResolver::Options options;
-        options.assetsRoot = (assetRoot / bundle.path).string();
+        // Engine paths are UTF-8 (docs/architecture/io.md), not path::string()'s ANSI code page.
+        auto bundleRoot = Engine::Os::Files::PathToUtf8(assetRoot / bundle.path);
+        if (!bundleRoot) { error = "Shader bundle path has no UTF-8 form: " + Engine::Base::CauseDetail(bundleRoot.error()); return false; }
+        options.assetsRoot = std::move(bundleRoot.value());
         options.allowAbsolutePath = false;
         options.allowEscapeAssetsRoot = false;
         const auto loaded = impl_->shaders.AppendBundle(impl_->source,

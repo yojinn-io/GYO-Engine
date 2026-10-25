@@ -34,8 +34,8 @@ target_link_libraries(gyo_ui_editor_core
         GYO::Ui
         nlohmann_json::nlohmann_json
 )
-# UndoStack calls Math functions directly.
-target_link_libraries(gyo_ui_editor_core PRIVATE GYO::Math)
+# UndoStack calls Math functions directly; the catalog paths go to UTF-8 through GYO::Os.
+target_link_libraries(gyo_ui_editor_core PRIVATE GYO::Math GYO::Os)
 
 add_executable(gyo_ui_editor src/Main.cpp)
 target_compile_features(gyo_ui_editor PRIVATE cxx_std_20)
