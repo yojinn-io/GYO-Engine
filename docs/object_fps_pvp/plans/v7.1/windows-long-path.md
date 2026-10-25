@@ -154,3 +154,10 @@ OS 子系統的 PLAN 核准（Engine D46；計畫文件 `docs/architecture/plans
 6. 實機（需要使用者）：Windows 上解壓到 P＝156 與 P 約 210 各啟動 Client 一次，對照事故 log 第 2 行（開 shader 的錯誤不再出現）。
 
 **Red 的證據**：run 40176646387（`claude/pvp-v71-release` 的 `80b7208`，只加測試、未修正），`Quick acceptance / toolchain / windows-x64` 的 `gyo_os_tests`：「read an existing file under a path longer than 300 characters」在 `FilesTests.cpp(390)` 失敗，`cannot open a 402-byte path: win32=3; path_bytes=402`（和事故的錯誤碼相同，3＝ERROR_PATH_NOT_FOUND）。「missing path」的案例在未修正的樹也通過（NotFound win32=3），它守的是 detail 的形式，不是 Red。其他三個平台的同一測試通過（POSIX 沒有 260 的限制）。
+
+## 實機驗收併進 lan15-windows（D201）
+
+使用者：「這個能合到 lan15去吧，明天我先跑 Windows 專用的5個突變，在跑驗收，最後 lan15.」2026-10-26 在 Windows 機器上依序做：
+1. Windows 專用的 5 個突變（`p1-no-long-path-form`、`p1-long-path-from-too-high`、`p4-manifest-ansi-path`、`os-f4-windows-acp`、`os-f5-windows-notfound`）；
+2. P5-6：發行包解壓到 P＝156 與 P 約 210 各啟動 Client 一次，對照事故 log 第 2 行；
+3. lan15-windows。

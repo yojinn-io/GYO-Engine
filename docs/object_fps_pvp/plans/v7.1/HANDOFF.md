@@ -43,7 +43,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **進行中（發行線）**：`windows-long-path` 的 P1～P5 程式與自動驗收完成（D199；分支 `claude/pvp-v71-release`，從 PR #95 的 `a0e6668` 切出並併進 A1～A3；Red run 40176646387 在 windows-x64 如預期失敗，Green run 40177623030 四平台成功，windows-x64 的深路徑檢查在 P＝200 讀完 4 個 `.dxil`（最長 318 字元）；PR #95 的 K9、K11（D200）已併進發行線（`8e86f0d`）；dev_log `docs/dev_logs/2026_10_25_pvp_v71_windows_long_path.zh-Hant.md`）。剩下：實機在 P＝156 與 P 約 210 各啟動一次（需要你）、Windows 專用突變 5 個。發行線的 PR 還沒開。
+- **進行中（發行線）**：`windows-long-path` 的 P1～P5 程式與自動驗收完成（D199；分支 `claude/pvp-v71-release`，從 PR #95 的 `a0e6668` 切出並併進 A1～A3；Red run 40176646387 在 windows-x64 如預期失敗，Green run 40177623030 四平台成功，windows-x64 的深路徑檢查在 P＝200 讀完 4 個 `.dxil`（最長 318 字元）；PR #95 的 K9、K11（D200）已併進發行線（`8e86f0d`）；dev_log `docs/dev_logs/2026_10_25_pvp_v71_windows_long_path.zh-Hant.md`）。剩下的併進 lan15-windows（D201）：明天依序跑 Windows 專用突變 5 個、實機在 P＝156 與 P 約 210 各啟動一次、lan15。發行線的 PR 還沒開。
 - **等你決定（發行線）**：`quick-close` 的做法與事前宣告的門檻（[quick-close.md](quick-close.md)，建議 q1，門檻草案在文件裡）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
 - INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
@@ -186,6 +186,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D198 | （2026-10-25）OS 子系統的 PLAN 核准（Engine D46）。對 v7.1：A1～A3（`engine/os` 骨架、`engine/io` 契約、唯讀檔案）在發行前、由 OS 子系統任務在它的分支完成，併進發行線 PR，加上本會話的 P1～P5（兩個任務、一個 PR）；UNC 根目錄這一輪不支援；P4 多兩處（`ContentManifest.cpp:110`、`ReadOnlyAssetCatalog.cpp:55`）；P5 的驗收條件見 [windows-long-path.md](windows-long-path.md) 的 D198 一節；其他 OS 部件排在發行後 | 使用者在 OS 子系統的會話：「核准 os-subsystem 的 PLAN。開放決策 1、14、15 照建議……同意 A1～A3 的 Delta（新 target GYO::Os、os.md 與 io.md 的 Design Invariants 節）。」（經該會話轉達） |
 | D199 | （2026-10-25）windows-long-path 的 P1～P5 開工。發行線 `claude/pvp-v71-release` 不等 PR #95 合併，從 PR #95 目前的最新提交 `a0e6668` 切出，再 `--no-ff` 併進 A1～A3（`f3a6770`，無衝突）；PR #95 合併後，發行線相對 master 的差異同樣只剩 A1～A3 與 P1～P5。P1 的行為變更（Windows 上完整路徑達 248 字元以上時交給 API 的是 `\\?\` 加完整路徑）與 P5 的驗收在執行前宣告，見 [windows-long-path.md](windows-long-path.md) 的 D199 一節 | 使用者經 OS 子系統的會話轉達：「讓v7.1會話開始P1～P5的任務」；分支的先後由本會話判斷（該會話：「先後怎麼排……由你判斷，必要時再問使用者」） |
 | D200 | （2026-10-25）K9 照建議 (b)：握手期暫時性錯誤與直接超過 T_max 的兩個判斷抽成純函式（`SocketErrorActionFor`、`PollRecordsInterruption`）做單元測試，接線由 `test_diagnostic_isolation.py` 的靜態檢查守，產品不加測試入口；執行期由 lan15-windows 的 L3 補。K11 的判定變更核准，patch 套進 `EventWatchTests.cpp`。細節見 dev_log 的 client-path-tests 與 event-watch-overlap 兩節 | 使用者：「K9、K11照建議開始」 |
+| D201 | （2026-10-25）windows-long-path 的實機驗收（P5-6）併進 lan15-windows。2026-10-26 在 Windows 機器上依序做：Windows 專用的 5 個突變（`p1-no-long-path-form`、`p1-long-path-from-too-high`、`p4-manifest-ansi-path`、`os-f4-windows-acp`、`os-f5-windows-notfound`）→ 實機在 P＝156 與 P 約 210 各啟動 Client 一次 → lan15 | 使用者：「這個能合到 lan15去吧，明天我先跑 Windows 專用的5個突變，在跑驗收，最後 lan15.」 |
 
 ## 規劃紀錄（記錄器）
 

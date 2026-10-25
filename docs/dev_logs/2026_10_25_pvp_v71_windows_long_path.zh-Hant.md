@@ -2,7 +2,7 @@
 
 日期：2026-10-25。分支 `claude/pvp-v71-release`（從 PR #95 的 `a0e6668` 切出，再 `--no-ff` 併進 OS 子系統的 `claude/trusting-joliot-f13b78`，D199）。
 
-**狀態：程式與自動驗收完成，實機驗收（P5-6）等使用者**。計畫與宣告見 [windows-long-path.md](../object_fps_pvp/plans/v7.1/windows-long-path.md) 的「P1～P5 的實作（D199）」一節；架構（A1～A3：`engine/os`、`engine/io` 的契約與唯讀原生後端）由 OS 子系統任務做，見 [os-subsystem PLAN](../architecture/plans/os-subsystem/PLAN.md) 第 8 節。使用者經該會話轉達：「讓v7.1會話開始P1～P5的任務」。
+**狀態：程式與自動驗收完成；Windows 專用突變與實機驗收（P5-6）併進 lan15-windows（D201，2026-10-26）**。計畫與宣告見 [windows-long-path.md](../object_fps_pvp/plans/v7.1/windows-long-path.md) 的「P1～P5 的實作（D199）」一節；架構（A1～A3：`engine/os`、`engine/io` 的契約與唯讀原生後端）由 OS 子系統任務做，見 [os-subsystem PLAN](../architecture/plans/os-subsystem/PLAN.md) 第 8 節。使用者經該會話轉達：「讓v7.1會話開始P1～P5的任務」。
 
 ## 做了什麼
 
