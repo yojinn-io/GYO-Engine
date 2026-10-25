@@ -363,11 +363,17 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
     pb::WorldSnapshot uneven;uneven.set_tick(playing+50);uneven.add_players()->set_player_id(1);
     gateway.SendRaw(wire::Type::Snapshot,uneven.SerializeAsString());
     gateway.SnapshotAt(playing,0); // not newer than the applied one
-    // Windows for an authority the worker no longer has (D183): another
-    // connection generation, and an epoch its newest snapshot does not carry.
+    // Windows for an authority the worker no longer has (D183): one of another
+    // connection generation (r1), and three its newest snapshot does not carry
+    // (r5: two other epochs, another life). r5 outnumbers every r1 window of
+    // this statistics window (this one and CheckHelloCadence's), so the count
+    // fails when r5 goes uncounted (D185: csc-r5-uncounted survived with two).
     const auto attemptsBefore=gateway.attempts.size();
     connection.SendInput(Input(1,1),std::numeric_limits<std::uint64_t>::max());
-    auto otherEpoch=Input(1,1);otherEpoch.movementEpoch=gateway.epoch+1;connection.SendInput(std::move(otherEpoch));
+    for(const auto [epoch,life]:{std::pair{gateway.epoch+1,std::uint64_t{1}},std::pair{gateway.epoch+2,std::uint64_t{1}},
+                                 std::pair{gateway.epoch,std::uint64_t{2}}}) {
+        auto replaced=Input(1,1);replaced.movementEpoch=epoch;replaced.lifeGeneration=life;connection.SendInput(std::move(replaced));
+    }
     for(const auto kind:{wire::Type::Hello,wire::Type::Input,wire::Type::Actions})gateway.SendRaw(kind,"");
     gateway.SendOtherVersion(wire::Type::Snapshot); // N-client-other-version-untested
     gateway.Snapshot(0);
@@ -500,7 +506,7 @@ void RequireDroppedCounts(const std::string& captured) {
     Require(count("invalid_snapshot_datagrams")>=2,"invalid snapshots were not counted");
     Require(count("ignored_snapshot_datagrams")>=1,"snapshots that were not newer were not counted");
     Require(count("unexpected_kind_datagrams")>=3,"kinds the Gateway does not send were not counted");
-    Require(count("stale_input_windows")>=2,"windows for a replaced authority were not counted");
+    Require(count("stale_input_windows")>=4,"windows for a replaced authority were not counted");
     Require(count("other_version_datagrams")>=1,"a datagram of another protocol version was not counted");
 }
 bool Acknowledged(const ClientConnection& connection,std::uint64_t sequence) {

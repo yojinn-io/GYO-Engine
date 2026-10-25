@@ -57,7 +57,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 不做：INVENTORY 的 G2（D159）。
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **發行的完整突變（D185）**：2026-10-25 開始，在獨立的 worktree（固定在發行線 `d8873fd`，會話的 scratchpad 內）以 `caffeinate -i` 背景執行：Engine 三個目錄（time-threads-trace、input-and-present、os-subsystem）與產品目錄。結果分類後寫進發行線的 dev_log；只有「測試失去檢出力」擋發版。
+- **發行的完整突變（D185）**：完成（2026-10-25T10:01Z～15:17Z）。Engine 133／133（另 5 個 Windows 專用待 D201）；產品 643／654，非 killed 的 11 個：8 個是負載造成（單獨重跑 killed）、2 個期望訊息過時（`ed63c24` 更新）、1 個測試失去檢出力（`csc-r5-uncounted`，worker 的過期窗口檢查被 C17-3 削弱，已修，worker 為檢查的 47 個突變 47／47 killed）。擋發版的條件已解除。dev_log：`docs/dev_logs/2026_10_26_pvp_v71_release_full_mutation.zh-Hant.md`
 - **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟、完整突變開始。
 
 ## 閱讀入口
