@@ -57,7 +57,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 不做：INVENTORY 的 G2（D159）。
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
-- **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟。
+- **發行的完整突變（D185）**：2026-10-25 開始，在獨立的 worktree（固定在發行線 `d8873fd`，會話的 scratchpad 內）以 `caffeinate -i` 背景執行：Engine 三個目錄（time-threads-trace、input-and-present、os-subsystem）與產品目錄。結果分類後寫進發行線的 dev_log；只有「測試失去檢出力」擋發版。
+- **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟、完整突變開始。
 
 ## 閱讀入口
 
