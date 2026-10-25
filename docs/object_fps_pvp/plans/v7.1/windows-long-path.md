@@ -1,4 +1,4 @@
-# windows-long-path：發行包解壓到深資料夾時開不了 shader（2026-10-25 使用者決定 w2，D193；之後交給架構會話規劃 OS 子系統，D194，實作暫停）
+# windows-long-path：發行包解壓到深資料夾時開不了 shader（2026-10-25 使用者決定 w2，D193；之後另開任務規劃 OS 統一子系統，D194，實作暫停、等它的 os-longpath-decision）
 
 發行線的第一批（INVENTORY `N-windows-max-path`）。唯讀調查，還沒有改任何程式。
 
