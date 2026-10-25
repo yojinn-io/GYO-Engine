@@ -93,23 +93,35 @@ Invariants 1–3 as text, so the result is the same on every platform:
   architecture macros (`_MSC_VER`, `__clang__`, `_M_X64`, `__aarch64__`) are not OS branches.
 - **R3**: a listed OS or CRT-split API (`localtime_r`, `localtime_s`, `std::signal`, `pthread_*`, `kqueue`,
   `GetLastError`, `SetThreadPriority` and others).
-- **R4**: in runtime code (engine outside engine/os and the host shader tool; later apps and tools), fstream,
-  `fopen` and every `std::filesystem` operation that touches the file system. The `path` type and pure path
+- **R4**: in runtime code (engine outside engine/os and the host shader tool, apps and tools), fstream, `fopen`
+  and every `std::filesystem` operation that touches the file system. The `path` type and pure path
   operations are allowed.
 - **R5**: in engine/os, an include of anything but the standard library, OS headers, `engine/base` and
   `engine/os`.
 
 engine/os/src is scanned for R5 only; engine/os/include is scanned for everything. Comments, string literals and
-character literals are ignored; `#include` lines are matched as written. The scan covers engine and tests/common
-today; os-guard-wide extends it to apps, tools, build/acceptance and the product test directories.
+character literals are ignored; `#include` lines are matched as written. The scan covers engine, apps, tools,
+build/acceptance and tests (except tests/common/os, third_party and build/target), and every existing root must
+yield at least one source. The roots name no product, so adding or removing a product changes no guard file.
 
 Existing sites are frozen in ratchet allowlists named `os_boundary_allowlist.txt`. A line is
 `path rule count  # reason`. The count must equal the file's findings for that rule: more fails (a new site), fewer
 fails and asks for the entry to shrink, a missing file fails. The Engine allowlist (`tests/common/os`) covers
 engine/ and tests/common/; any other allowlist covers only files under its own directory, so deleting a product
-deletes its allowlist and no common file changes. A configure-time check keeps `gyo_os` linked to exactly
-`GYO::Base`. The configure-time check that no non-os target gets an OS-identifying compile definition comes with
-os-guard-wide; no such definition exists today.
+deletes its allowlist and no common file changes.
+
+Two configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
+links exactly `GYO::Base`, and no target or directory under the scanned roots outside engine/os and
+tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
+name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
+so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
+value is not read, since paths may contain any word. `COMPILE_DEFINITIONS`, `INTERFACE_COMPILE_DEFINITIONS` and
+the `-D`/`/D` entries of `COMPILE_OPTIONS` are checked, on targets and directories alike.
+
+`OsHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/os public
+headers, no `windows.h` or winsock guard macro and no `min` or `max` macro is defined. It is recorded before
+doctest is included and fails if a public header is not included by the test. The POSIX side is the text scan of
+engine/os/include, since libc++ and libstdc++ define `_PTHREAD_H` from `<string>`.
 
 Known blind spots, left to review:
 
@@ -119,6 +131,14 @@ Known blind spots, left to review:
 - Third-party APIs that open files by path (ImGui's `AddFontFromFileTTF`, SDL's `SDL_SaveBMP` and
   `SDL_IOFromFile`): the third party absorbs the OS difference, so R4 does not cover them; callers pass UTF-8 paths.
 - Code that brings a namespace into scope (`using namespace std::filesystem`) and calls the operations unqualified.
+- A compile definition whose name identifies no OS but which CMake sets on one OS only (`NOMINMAX` under
+  `if(WIN32)`): it configures a header and is not identification, so it is allowed. `-D` flags in
+  `CMAKE_<LANG>_FLAGS` or inside a generator expression in `COMPILE_OPTIONS`, and third_party's interface
+  definitions (asio's `_WIN32_WINNT` and `WIN32_LEAN_AND_MEAN`), are not checked.
+- Paths taken from narrow `argv` strings: on Windows they are in the ANSI code page, not UTF-8, without any OS call
+  in the caller (os-console-shutdown).
+- R3's bare `signal(` also matches a variable or declaration named `signal`. Such a false positive is listed in the
+  owner's allowlist with its reason; the pattern is not loosened.
 
 ## Out of scope
 

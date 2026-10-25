@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide 進行中），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide 本機完成、未推送），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -15,6 +15,7 @@
 - 2026-10-25：（之後由 D48 取代）使用者一度考慮把剩下的 13 批也提前到發行前，之後確認維持 D46：「這13批還是照原計劃放到v7.1發佈後吧，工程量有些大，現在先讓v7.1做完他的工作。完成後我回來讓你開始」。本計畫在消費端發行之後、使用者說開始時再繼續，從 os-guard-wide 開始。
 - 2026-10-25：D48，其餘批次現在開始。本分支併入消費端的發行線（`c4f9430`；含 PR #95、A1～A3、P1～P5），合併後基準 ctest 30／30、守衛通過。順序：先做不碰發行線檔案的 os-guard-wide、os-process-info、time-threads-invariants、os-wake-record，os-net-errors 排在發行線 PR 合併後，計時核心最後。
 - 消費端的發行任務已收到分工、交接內容與 D46（A1～A3 併進它的發行線 PR），等 A1～A3 完成（L1 通過後通知分支與 commit）。
+- 2026-10-25：os-guard-wide 本機完成（本機 commit，未推送）。守衛擴到 apps、tools、build/acceptance、tests，產品、工具與驗收程式各有自己的 allowlist；設定期檢查與標頭衛生測試加入。本機 ctest 31／31、守衛通過、相關突變 16／16 killed（Windows 專用 1 個跳過）。四平台 L1 等推送（要使用者同意）。下一批是 os-process-info。
 
 ## 閱讀入口
 
@@ -272,6 +273,29 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 要看實際值，可以在 Windows 上直接執行 `gyo_os_tests -s`，P1 開始時也可以順便看。
 - 本批完成（A1～A3 都完成）。
 
+### os-guard-wide
+
+- 2026-10-25：開始（medium；規則調整 high），基準是本分支 `1f28598`（併入消費端發行線 `c4f9430` 之後）。依 D48 不等消費端發行。消費端已收到通知：本批動到守衛腳本、自我測試、`tests/common/os/CMakeLists.txt`、突變目錄（只追加）、os.md 與新的 allowlist 檔。
+- 實作：
+  - 守衛的根目錄改成 engine、apps、tools、build/acceptance、tests；R4 的 runtime 根目錄改成 engine、apps、tools。不寫產品名稱。其餘規則不變。
+  - 各 owner 的 allowlist：`apps/object_fps_pvp`（15 條）、`tools/ui_editor`（6 條）、`build/acceptance/object_fps_pvp`（1 條，誤報，見下）。每條寫明理由與移除它的批次。
+  - `OsHeaderHygieneTests`（CTest `os.header_hygiene`，獨立執行檔 `gyo_os_header_tests`）：在 include doctest 之前，記錄 engine/os 公開標頭之後是否定義了 `_WINDOWS_`、`_INC_WINDOWS`、`_WINSOCKAPI_`、`_WINSOCK2API_`、`min`、`max`。另有一個案例檢查 engine/os/include 的每個標頭都被這個測試 include。
+  - 設定期檢查（DEFER，和 `gyo_expect_links` 同樣在整個專案設定完才跑）：走遍掃描根目錄下的目錄與 target（engine/os、tests/common/os、third_party 除外），`COMPILE_DEFINITIONS`、`INTERFACE_COMPILE_DEFINITIONS` 與 `COMPILE_OPTIONS` 的 `-D`／`/D` 裡，名稱含 OS 字或以 `$<PLATFORM_ID:...>` 為條件的定義會讓設定失敗。只看名稱不看值，因為值裡的路徑可能含任何字。
+  - 自我測試新增 5 項（共 30 項）：產品與工具的 R4、產品測試與驗收程式的 R1／R2、根目錄存在但沒有原始檔、根目錄不寫產品名、產品測試與驗收程式的 allowlist 範圍。原本傳入 `WIDE_ROOTS` 的 5 處改用預設值（等價）。
+- 基準（空 allowlist 實跑，產品與工具共 63 個發現、13 個檔案）和盤點對照：
+  - 一致：`LogFile.cpp`、`NetworkStatistics.cpp`、`main.cpp`（localtime）、`match_main.cpp`（std::signal）、`Arena.cpp`、`MatchShotTrace.hpp`、`MatchIngressTrace.hpp`、`FileService.cpp`、`DocumentSession.cpp`、`ImGuiSdlRendererHost.cpp`。
+  - 盤點沒有、守衛有：`TracePaths.hpp:42` 的 `std::filesystem::exists`（找空的 trace 檔名），歸 os-files-write。
+  - 盤點有、守衛沒有：`tools/ui_editor/src/Main.cpp:71`、`CommandLine.cpp:46`、`match_main.cpp` 的命令列。它們把窄字串 argv 直接當路徑，沒有 OS 標頭、巨集或 API，文字規則抓不到；寫進 os.md 的已知盲點，由 os-console-shutdown 處理。
+  - 誤報：`build/acceptance/object_fps_pvp/network_main.cpp:216` 的 `std::ofstream signal(...)`，變數名剛好叫 `signal`，被 R3 的「裸 `signal(`」抓到。依 PLAN 第 6 節「不放寬樣式」，列進該目錄的 allowlist 並寫明是誤報，不改規則。
+    - 經過：一開始把裸 `signal(` 從 R3 拿掉（理由：直接呼叫需要 `<csignal>`，R1 會抓）。之後發現這是守衛判定的放寬（已 allowlist 的 `<csignal>` 檔，或經 asio 間接拿到 `<signal.h>` 的檔，新增裸呼叫就看不到了），依 AGENTS §14.4 要先徵求同意，所以在提交前改回原樣式。
+  - 未啟用產品（object_fps、object_fps_v2 的 apps、tests、build/acceptance）沒有發現；os-skeleton 時 inactive_products.md 預告它們會有 allowlist，已更正。
+- 設定期檢查的基準：現有的定義只有 `NOMINMAX`、`GYO_*` 與 `PVP_*` 的路徑與修訂號，都不識別 OS。third_party 的 asio 在 Windows 有 `_WIN32_WINNT`、`WIN32_LEAN_AND_MEAN`（INTERFACE），屬於 third_party，不檢查，寫進已知盲點。
+- 探索性確認：在產品組態（`GYO_APPS=object_fps_pvp`、`GYO_TOOLS=ui_editor`、`BUILD_TESTING=ON`）下設定成功、沒有誤報；暫時在產品的 CMake 加 `$<$<PLATFORM_ID:Darwin>:PVP_PROBE=1>`，設定失敗並指出該 target，之後還原。這個確認不進突變目錄，因為目錄只改 Engine 的檔案，刪掉產品也不受影響。
+- L1（本機 macOS Intel，core preset）：ctest 31／31（新增 `os.header_hygiene`），守衛通過。產品組態只做了設定，沒有建置。
+- 突變：新增 os-g11～os-g17。重跑守衛相關的 os-g1～os-g17，16／16 killed，os-g16（公開標頭 include windows.h，Windows 專用）跳過。
+  - os-g14 第一次是 wrong_failure：檢查正確，但 CMake 把長訊息折行，期望的正則對不上。改成印相對路徑，正則的空白改用 `\s+`。
+- 證據：本機執行輸出（git 忽略）；重跑方式見 [dev_log](../../../dev_logs/2026_10_25_engine_os_guard_wide.zh-Hant.md)。
+
 ## 未結事項
 
 - ~~使用者核准 PLAN，回答開放決策 1、14、15，並同意 A1～A3 的 Delta。~~ 2026-10-25 完成（D46）。
@@ -284,7 +308,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - ~~os-skeleton 開始時：用空 allowlist 實跑守衛，產生 Engine 的基準，對照盤點。~~ 2026-10-25 完成，和盤點一致。
 - ~~A1～A3 的四平台 L1~~ 2026-10-25 通過（run 40173730672）。
 - ~~os-files-read 的公開介面 xhigh 審查（1 位）：等使用者同意。~~ 2026-10-25 完成，修正見「os-files-read」。
-- Windows 專用的突變 os-f4、os-f5 要在 Windows 機器上執行（CI 不跑突變）。在那之前，Windows 端的檢出力只有 L1 的測試本身。
+- Windows 專用的突變 os-f4、os-f5、os-g16（以及消費端的 p1、p4）要在 Windows 機器上執行（CI 不跑突變）。在那之前，Windows 端的檢出力只有 L1 的測試本身。
 - os-files-read 的非 ACP 測試：對「改用 ACP 轉換」這類突變，只要 runner 的 ACP 不是 UTF-8（65001）就有檢出力。測試同時含日文、正體中文與 é，在 1252 與 932 上都有效。新增的 Windows 專用案例「record the process ANSI code page」會印出 `GetACP()`，並檢查它不是 65001；第一次 windows-x64 L1 從它的輸出確認。
 - ~~os-files-write 開始前：先定好命名規則（審查的 finding 15）。~~ 2026-10-25 寫進 os.md 的 Contracts（Names）。第一次 windows-x64 L1 實際撞到之後，`ReadFile` 改名為 `FileReader`。os-files-write 的寫入類名稱照這條規則取。
 - io-contracts 起的既有契約問題（審查的 finding 10）已在 os-files-read 處理：NativeFileSystem 用 `Os::Files::IsAbsolutePath` 拒絕「在這個平台不是絕對路徑」的 file URI 路徑。
@@ -292,3 +316,5 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。
 - ~~os-files-read 開始時：確認 Windows CI runner 的 ACP，選它表示不了的字元做測試。~~ 改成選一般 Western code page 表示不了的日文與正體中文，確認放到第一次 windows-x64 L1（見上）。
 - ~~A1～A3 完成後：通知消費端的發行任務（分支與 commit）。~~ 2026-10-25 完成。
+- os-guard-wide 的四平台 L1：推送要使用者同意。推送後手動觸發（draft PR 不跑 L1）。
+- R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

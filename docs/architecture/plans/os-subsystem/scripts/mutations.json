@@ -482,6 +482,101 @@
       "target": "engine_tests",
       "cases": "*outside the ANSI code page*",
       "expect": "outside the ANSI code page"
+    },
+    {
+      "id": "os-g11-roots-skip-products",
+      "what": "The guard stops scanning apps, so a new product site goes unseen (Invariant 1, os-guard-wide)",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "ROOTS = (\"engine\", \"apps\", \"tools\", \"build/acceptance\", \"tests\")",
+      "replace": "ROOTS = (\"engine\", \"tools\", \"build/acceptance\", \"tests\")",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_unlisted_product_site_is_reported"
+    },
+    {
+      "id": "os-g12-allowlist-scope",
+      "what": "A product allowlist may list files outside its own directory",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "else (directory + \"/\",)",
+      "replace": "else (\"\",)",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_product_allowlist_covers_only_its_own_tree"
+    },
+    {
+      "id": "os-g13-definition-name",
+      "what": "A non-os target gets an OS-identifying compile definition (Invariant 1, configure-time check)",
+      "file": "engine/CMakeLists.txt",
+      "find": "target_compile_features(engine PUBLIC cxx_std_20)\n",
+      "replace": "target_compile_features(engine PUBLIC cxx_std_20)\ntarget_compile_definitions(engine PRIVATE GYO_ENGINE_POSIX=1)\n",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "OS definition guard:\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_ENGINE_POSIX=1'"
+    },
+    {
+      "id": "os-g14-definition-platform-id",
+      "what": "A directory defines a macro only on one OS through $<PLATFORM_ID> (Invariant 1, configure-time check)",
+      "file": "engine/CMakeLists.txt",
+      "find": "add_subdirectory(base)\n",
+      "replace": "add_compile_definitions($<$<PLATFORM_ID:Windows>:GYO_FAST_PATH>)\nadd_subdirectory(base)\n",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "OS definition guard:\\s+directory\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'\\$<\\$<PLATFORM_ID:Windows>:GYO_FAST_PATH>'"
+    },
+    {
+      "id": "os-g15-runtime-roots",
+      "what": "R4 stops covering products and tools (Invariant 2)",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "RUNTIME_ROOTS = (\"engine\", \"apps\", \"tools\")",
+      "replace": "RUNTIME_ROOTS = (\"engine\",)",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_direct_file_access_in_products_and_tools_is_reported"
+    },
+    {
+      "id": "os-g16-public-header-windows",
+      "what": "An engine/os public header includes windows.h (Invariant 4, header hygiene)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/include/engine/os/Files.hpp",
+      "find": "#include \"engine/os/OsError.hpp\"\n",
+      "replace": "#include \"engine/os/OsError.hpp\"\n#ifndef NOMINMAX\n#define NOMINMAX\n#endif\n#include <windows.h>\n",
+      "target": "gyo_os_header_tests",
+      "expect": "includes windows\\.h or winsock"
+    },
+    {
+      "id": "os-g17-hygiene-coverage",
+      "what": "The header hygiene test stops including an engine/os public header",
+      "file": "tests/common/os/OsHeaderHygieneTests.cpp",
+      "find": "#include \"engine/os/OsError.hpp\"\n",
+      "replace": "",
+      "target": "gyo_os_header_tests",
+      "expect": "not included by OsHeaderHygieneTests\\.cpp:\\s*engine/os/OsError\\.hpp"
     }
   ]
 }

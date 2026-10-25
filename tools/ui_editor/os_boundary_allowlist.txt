@@ -1,0 +1,11 @@
+# Tool sites that still hold OS knowledge outside engine/os (docs/architecture/os.md). Owner: ui_editor.
+# Format: path rule count  # reason and the batch that removes it (docs/architecture/plans/os-subsystem).
+# Only shrinks: a batch that moves a site deletes or lowers its entry in the same change.
+
+# File service, document session and system font directories (os-tool-files).
+tools/ui_editor/src/FileService.cpp R2 3  # atomic replace and path comparison per OS
+tools/ui_editor/src/FileService.cpp R3 2  # MoveFileExW, GetLastError
+tools/ui_editor/src/FileService.cpp R4 12  # weakly_canonical, stat, reads, writes, rename, remove, absolute
+tools/ui_editor/src/DocumentSession.cpp R4 1  # exists
+tools/ui_editor/src/ImGuiSdlRendererHost.cpp R2 3  # system font directory per OS
+tools/ui_editor/src/ImGuiSdlRendererHost.cpp R4 2  # is_regular_file on font candidates

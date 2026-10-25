@@ -20,10 +20,10 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-# Top-level roots scanned for R1-R3, and those of them that are runtime code (R4). os-guard-wide extends both to
-# apps, tools, build/acceptance and the product test directories.
-ROOTS = ("engine", "tests/common")
-RUNTIME_ROOTS = ("engine",)
+# Top-level roots scanned for R1-R3, and those of them that are runtime code (R4). No product is named: removing one
+# leaves this list unchanged (AGENTS.md sections 7 and 9).
+ROOTS = ("engine", "apps", "tools", "build/acceptance", "tests")
+RUNTIME_ROOTS = ("engine", "apps", "tools")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"}
 # Never scanned: the OS layer's own tests (they may assert per OS), vendored code and build output. engine/os/src is
 # scanned for R5 only; engine/os/include for everything, since public headers must not leak the OS either.

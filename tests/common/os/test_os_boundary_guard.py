@@ -7,9 +7,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import os_boundary_guard as guard  # noqa: E402
 
-# The roots os-guard-wide will scan, so the generic rules are tested before they are switched on.
-WIDE_ROOTS = ("engine", "apps", "tools", "build/acceptance", "tests")
-
 
 class GuardTree(unittest.TestCase):
     def setUp(self):
@@ -103,9 +100,23 @@ class Rules(GuardTree):
 
     def test_direct_file_access_in_tests_and_in_engine_os_is_allowed(self):
         self.write("tests/common/a/ATests.cpp", "void F() { std::ofstream out(\"x\"); fs::remove(p); }\n")
+        self.write("tests/sample/SampleTests.cpp", "void F() { std::ofstream out(\"x\"); }\n")
+        self.write("build/acceptance/sample/main.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.write("engine/os/src/posix/Files.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.write("engine/render/shaders/pipeline/src/main.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.assertClean()
+
+    def test_direct_file_access_in_products_and_tools_is_reported(self):
+        self.write("apps/sample/src/Load.cpp", "void F() { std::ifstream in(\"x\"); }\n")
+        self.write("tools/sample/src/Save.cpp", "void F() { std::filesystem::rename(a, b); }\n")
+        self.assertReported("apps/sample/src/Load.cpp:1: R4 std::ifstream")
+        self.assertReported("tools/sample/src/Save.cpp:1: R4 std::filesystem::rename")
+
+    def test_os_knowledge_in_product_tests_and_acceptance_programs_is_reported(self):
+        self.write("tests/sample/SampleTests.cpp", "#include <windows.h>\n")
+        self.write("build/acceptance/sample/main.cpp", "#ifdef _WIN32\n#endif\n")
+        self.assertReported("tests/sample/SampleTests.cpp:1: R1 windows.h")
+        self.assertReported("build/acceptance/sample/main.cpp:1: R2 _WIN32")
 
     def test_engine_os_includes_only_base_and_itself(self):
         self.write("engine/os/src/common/A.cpp", '#include "engine/os/OsError.hpp"\n#include "engine/base/Result.hpp"\n'
@@ -127,6 +138,15 @@ class Rules(GuardTree):
         (self.root / "engine/base/src/Base.cpp").unlink()
         (self.root / "engine/base/src").mkdir(exist_ok=True)
         self.assertReported("engine: no C/C++ source scanned")
+
+    def test_an_existing_product_root_without_sources_fails(self):
+        self.write("apps/sample/project.json", "{}\n")
+        self.assertReported("apps: no C/C++ source scanned")
+
+    def test_roots_name_no_product(self):
+        # Removing or adding a product must leave the scanned roots unchanged (AGENTS.md sections 7 and 9).
+        self.assertEqual(guard.ROOTS, ("engine", "apps", "tools", "build/acceptance", "tests"))
+        self.assertEqual(guard.RUNTIME_ROOTS, ("engine", "apps", "tools"))
 
 
 class Allowlists(GuardTree):
@@ -161,24 +181,34 @@ class Allowlists(GuardTree):
     def test_product_allowlist_covers_only_its_own_tree(self):
         self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
         self.write("apps/sample/os_boundary_allowlist.txt", "apps/sample/src/a.cpp R2 1\n")
-        self.assertClean(WIDE_ROOTS)
+        self.assertClean()
         self.write("apps/sample/os_boundary_allowlist.txt",
                    "apps/sample/src/a.cpp R2 1\nengine/base/src/Base.cpp R2 1\n")
-        self.assertReported("outside this allowlist's directory", WIDE_ROOTS)
+        self.assertReported("outside this allowlist's directory")
 
     def test_removing_a_product_needs_no_common_change(self):
         self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
         self.write("apps/sample/os_boundary_allowlist.txt", "apps/sample/src/a.cpp R2 1\n")
         self.write("apps/other/src/b.cpp", "int B() { return 0; }\n")
-        self.assertClean(WIDE_ROOTS)
+        self.assertClean()
         for path in sorted((self.root / "apps/sample").rglob("*"), reverse=True):
             path.unlink() if path.is_file() else path.rmdir()
         (self.root / "apps/sample").rmdir()
-        self.assertClean(WIDE_ROOTS)
+        self.assertClean()
+
+    def test_product_test_and_acceptance_allowlists_cover_their_own_trees(self):
+        self.write("tests/sample/SampleTests.cpp", "#ifdef __linux__\n#endif\n")
+        self.write("tests/sample/os_boundary_allowlist.txt", "tests/sample/SampleTests.cpp R2 1  # permanent\n")
+        self.write("build/acceptance/sample/main.cpp", "#ifdef _WIN32\n#endif\n")
+        self.write("build/acceptance/sample/os_boundary_allowlist.txt", "build/acceptance/sample/main.cpp R2 1\n")
+        self.assertClean()
+        self.write("tests/sample/os_boundary_allowlist.txt",
+                   "tests/sample/SampleTests.cpp R2 1\nbuild/acceptance/sample/main.cpp R2 1\n")
+        self.assertReported("outside this allowlist's directory")
 
     def test_unlisted_product_site_is_reported(self):
         self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
-        self.assertReported("apps/sample/src/a.cpp:1: R2 __linux__", WIDE_ROOTS)
+        self.assertReported("apps/sample/src/a.cpp:1: R2 __linux__")
 
 
 if __name__ == "__main__":
