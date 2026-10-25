@@ -623,8 +623,8 @@
       "find": "std::chrono::seconds{time.tv_sec} + std::chrono::microseconds{time.tv_usec}",
       "replace": "std::chrono::seconds{time.tv_sec} + std::chrono::nanoseconds{time.tv_usec}",
       "target": "gyo_os_tests",
-      "cases": "*covers the calling thread*",
-      "expect": "CHECK\\( \\*process >= \\*thread \\) is NOT correct"
+      "cases": "*clocks the old lookups read*",
+      "expect": "CHECK\\( processBefore <= \\*process \\) is NOT correct"
     },
     {
       "id": "os-p5-windows-thread-times",

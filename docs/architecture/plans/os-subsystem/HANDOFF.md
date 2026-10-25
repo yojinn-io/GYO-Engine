@@ -329,6 +329,16 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 突變：新增 os-p1～os-p6；本機 7／7 killed（含重跑的 os-g7、os-g17），os-p5（Windows 的 GetThreadTimes）跳過。消費端格式化的探索性突變 3 個（零偏移的符號、月份不補零、檔名少了秒）都被消費端測試抓到；它們改的是產品的檔案，不進 Engine 的突變目錄。
 - 證據：本機執行輸出（git 忽略）；重跑方式見 [dev_log](../../../dev_logs/2026_10_25_engine_os_process_info.zh-Hant.md)。
 - 2026-10-25：消費端確認：分析腳本讀的 CPU 值只到小數 3 位，驗收腳本與 log-contract 不讀「Cannot locate the executable」與執行檔路徑字串，所以宣告的差異 1～3 沒有讀取端；這些檔案在發行線上也沒有要動。
+- 2026-10-25：推送 `9026820`，手動觸發四平台 L1（os-guard-wide 與 os-process-info 一起驗）：[run 40192938131](https://github.com/yojinn-io/GYO-Engine/actions/runs/40192938131)。
+  - 結果：失敗。四個平台的 L1 job、消費端的 quick acceptance 都成功；只有 `Quick acceptance / toolchain / macos-arm64` 失敗（CI validation 與 CI gate 是彙總，跟著失敗）。
+  - 失敗的是本批新加的 `Os process CPU time covers the calling thread's`：`CHECK( 197516000ns >= 197516916ns )`。
+  - windows-x64：gyo_os_tests（含 5 個時區 × 6 個時間點的 `%z` 比對、3000 年以後的拒絕）、os.header_hygiene、os.boundary_guard 都通過。UCRT 的 `%z` 和新實作逐 byte 相同：PLAN 第 7.6 節要求的確認完成，沒有 Data Contract 變更。
+- 失敗原因的切分（AGENTS §14.1：實作、測試、環境）：測試的前提錯，實作不變。
+  - 本機重現：100 次失敗 3 次。
+  - 第 1 次修正：以為差距只來自 `getrusage` 的微秒截斷（user、system 各截斷，最多不到 2 µs），加 2 µs 的容許值。本機 1000 次仍失敗 64 次，差距是 250～350 µs，所以這個解釋不對。
+  - 量到的事實：macOS 上 `getrusage` 的程序時間，對正在執行的那一段比 `clock_gettime(CLOCK_THREAD_CPUTIME_ID)` 晚更新，兩個不同來源的時鐘在同一瞬間不必一致。「程序 ≥ 執行緒」不是結構性質。
+  - 第 2 次修正：拿掉跨時鐘的比較，改成在 engine/os 讀數前後，用舊碼讀的同一個時鐘各讀一次（`getrusage`／`GetProcessTimes`、`clock_gettime`／`GetThreadTimes`），engine/os 的值要落在兩次之間。這是同一個單調時鐘的確定性質，根據來自 OS 而不是推測（§14.2）。本機 1000 次 0 失敗；os-p1～os-p6 重跑 5／5 killed（os-p4 改由這個案例殺），Windows 專用 os-p5 跳過。
+  - 改的是本批新加、還沒有通過過任何驗收的測試，不是受入判定或 Design Invariants 的守衛（§14.4 的 1～5 不適用）；理由記在這裡與 commit。
 
 ## 未結事項
 
@@ -350,5 +360,5 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 既有問題（不屬於本計畫的批次）：ParseUriLoose 對未知 scheme 不設定 schemeText，`pak://` 之類的 root 經 MountTable 往返會失去 scheme。等有 pack 後端時，依 io.md 的 Replacement Criteria 處理。
 - ~~os-files-read 開始時：確認 Windows CI runner 的 ACP，選它表示不了的字元做測試。~~ 改成選一般 Western code page 表示不了的日文與正體中文，確認放到第一次 windows-x64 L1（見上）。
 - ~~A1～A3 完成後：通知消費端的發行任務（分支與 commit）。~~ 2026-10-25 完成。
-- os-guard-wide 與 os-process-info 的四平台 L1：推送要使用者同意。推送後手動觸發（draft PR 不跑 L1）。windows-x64 上要看 `Os process local time matches the C runtime's fields and %z` 是否通過：失敗時，doctest 會印出 UCRT 的 `%z` 實際輸出，依 PLAN 第 7.6 節當成 Data Contract 問題處理，不改判定。結果（通過或 UCRT 的實際輸出）要通知消費端的發行任務：lan15 會讀 log 的時間戳（消費端 2026-10-25 的回覆）。
+- os-guard-wide 與 os-process-info 的四平台 L1：推送要使用者同意。推送後手動觸發（draft PR 不跑 L1）。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過；要通知消費端的發行任務（lan15 會讀 log 的時間戳）。L1 要在 CPU 測試修正後重跑一次。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

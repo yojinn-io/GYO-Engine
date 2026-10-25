@@ -21,8 +21,12 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#elif defined(__APPLE__)
+#else
+#include <sys/resource.h>
+#include <time.h>
+#if defined(__APPLE__)
 #include <mach-o/dyld.h>
+#endif
 #endif
 
 using namespace Engine::Os;
@@ -61,6 +65,42 @@ std::filesystem::path ReferenceExecutablePath() {
     return std::filesystem::canonical(buffer.data());
 #else
     return {};
+#endif
+}
+
+// The CPU clocks the product read before engine/os had them
+// (NetworkStatistics.cpp), in nanoseconds.
+#if defined(_WIN32)
+std::chrono::nanoseconds FromFileTime(const FILETIME& time) {
+    ULARGE_INTEGER value{};
+    value.LowPart = time.dwLowDateTime;
+    value.HighPart = time.dwHighDateTime;
+    return std::chrono::nanoseconds{static_cast<std::int64_t>(value.QuadPart) * 100};
+}
+#endif
+
+std::chrono::nanoseconds ReferenceProcessCpu() {
+#if defined(_WIN32)
+    FILETIME creation{}, exited{}, kernel{}, user{};
+    REQUIRE(GetProcessTimes(GetCurrentProcess(), &creation, &exited, &kernel, &user));
+    return FromFileTime(kernel) + FromFileTime(user);
+#else
+    rusage usage{};
+    REQUIRE(getrusage(RUSAGE_SELF, &usage) == 0);
+    return std::chrono::seconds{usage.ru_utime.tv_sec + usage.ru_stime.tv_sec} +
+           std::chrono::microseconds{usage.ru_utime.tv_usec + usage.ru_stime.tv_usec};
+#endif
+}
+
+std::chrono::nanoseconds ReferenceThreadCpu() {
+#if defined(_WIN32)
+    FILETIME creation{}, exited{}, kernel{}, user{};
+    REQUIRE(GetThreadTimes(GetCurrentThread(), &creation, &exited, &kernel, &user));
+    return FromFileTime(kernel) + FromFileTime(user);
+#else
+    timespec time{};
+    REQUIRE(clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time) == 0);
+    return std::chrono::seconds{time.tv_sec} + std::chrono::nanoseconds{time.tv_nsec};
 #endif
 }
 
@@ -158,16 +198,27 @@ TEST_CASE("Os process CPU times never decrease and the calling thread's grows wi
     CHECK(*threadAfter > *thread);
 }
 
-TEST_CASE("Os process CPU time covers the calling thread's") {
-    // The process's time includes this thread's, read before it.
-    const auto until = std::chrono::steady_clock::now() + 100ms;
+TEST_CASE("Os process CPU times read the clocks the old lookups read") {
+    // Each clock is read the old way just before and just after engine/os
+    // reads it on the same thread: a monotonic clock puts engine/os's answer
+    // between the two, in the same unit. (Two different clocks, such as the
+    // process's getrusage and the thread's clock on macOS, need not agree at
+    // any one instant, so they are not compared with each other.)
+    const auto until = std::chrono::steady_clock::now() + 20ms;
     volatile std::uint64_t spin = 0;
     while (std::chrono::steady_clock::now() < until) spin = spin + 1;
-    const auto thread = Process::CurrentThreadCpuTime();
+    const auto processBefore = ReferenceProcessCpu();
     const auto process = Process::ProcessCpuTime();
-    REQUIRE(thread);
+    const auto processAfter = ReferenceProcessCpu();
+    const auto threadBefore = ReferenceThreadCpu();
+    const auto thread = Process::CurrentThreadCpuTime();
+    const auto threadAfter = ReferenceThreadCpu();
     REQUIRE(process);
-    CHECK(*process >= *thread);
+    REQUIRE(thread);
+    CHECK(processBefore <= *process);
+    CHECK(*process <= processAfter);
+    CHECK(threadBefore <= *thread);
+    CHECK(*thread <= threadAfter);
 }
 
 TEST_CASE("Os process thread CPU time belongs to the calling thread only") {
