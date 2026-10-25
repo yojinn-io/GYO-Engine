@@ -122,3 +122,17 @@ OS 子系統的 PLAN 核准（Engine D46；計畫文件 `docs/architecture/plans
 - P1～P5 之後的下一個失敗點是產品自己開的 `arenas.json`（約 P≥219），屬於發行之後的 os-files-write。其他部件（Process、主控台與結束要求、寫檔、trace、計時等）都排在 v7.1 發行之後。
 - A1～A3 估計 20～29 h（A1 與 A2 可以並行），等使用者說開始；完成時那個會話通知分支與 commit。
 - **合併的安排**（暫定，兩邊都記下）：A1～A3 用分支 `claude/trusting-joliot-f13b78`（從 master `23fab75` 切出，不帶 PR #95；開工前若 master 有新提交，先同步並告知新的基準）。PR #95 合併後，本會話從 master 切 `claude/pvp-v71-release`；A1～A3 完成後用 `git merge --no-ff` 併進發行線（不 rebase、不 squash），再做 P1～P5；整個 PR 用 `gh pr merge --merge` 合進 master。P4 那一行與 PR #95 的衝突由本會話在發行線處理。
+
+## A1～A3 完成（2026-10-25，OS 子系統的會話通知）
+
+- 分支 `claude/trusting-joliot-f13b78`（從 master `23fab75`，不含 PR #95）；最後的 commit `d56a8fc`，程式的最後一個 commit `96fd2fc`。四平台 L1：run 40173730672（`96fd2fc`，全部成功）。
+- 給 P1～P5 的介面（細節：`docs/architecture/plans/os-subsystem/PLAN.md` 第 8 節、`docs/architecture/os.md`、`docs/architecture/io.md`）：
+  1. **P1** 寫在 `engine/os/src/windows/Files.cpp` 的 `OsCallPath()`。UTF-16 轉換（`ToWide`）與交給檔案 API 的形式（`OsCallPath`）已分開，前綴只加在 `OsCallPath`；`MakeAbsolute` 走 `ToWide`，結果不帶前綴（os.md Invariant 5）。`\\?\` 會關掉 Win32 的正規化（結尾的點與空白、保留的裝置名），這是 Invariant 9 要求的事先宣告。UNC 不支援。`FilesTests.cpp` 有一個只記錄的「missing path longer than 260」案例；「存在的長路徑檔案讀得到」的 Red→Green 由 P1 新增。
+  2. 讀取原語的類別是 `Engine::Os::Files::FileReader`（原名 `ReadFile`，和 Win32 的 `::ReadFile` 撞名而改名）。
+  3. **D47**：`Os::Files::PathToUtf8`／`PathFromUtf8` 回傳 `Base::Result`（不合法時 `InvalidEncoding`）。P4 把 `std::filesystem::path` 轉成 UTF-8 時用 `PathToUtf8`，不用 `path::string()`；它在 `GYO::Os` 裡，產品目標要明寫連結 `GYO::Os`。
+  4. **P3** 接 `Engine::IO::FS::NativeFileSystem`（唯讀的 `file://` 後端）：原生絕對路徑轉 URI 用 `Engine::IO::Path::FileUriFromNativePath`，讀整個檔用 `Engine::IO::Helpers::ReadAllBytes(fs, uri)`。`NativeFileSystem` 拒絕在該平台不是絕對路徑的路徑；resolver 的根目錄若是相對路徑（例如 ui_editor 預設的 `"."`），先用 `Os::Files::MakeAbsolute`。
+  5. **P2**：開檔失敗的 `IoError` detail 格式是「<原生路徑>; NotFound: win32=3; path_bytes=271」，直接取用。
+  6. **P4** 的 7 處：`PvpApplication.cpp:812`、兩個 `ObjectFpsApplication.cpp:71`、`ReadOnlyAssetCatalog.cpp:46`、`:55`、`ContentManifest.cpp:104`、`:110`。
+  7. **守衛**：`tests/common/os/os_boundary_allowlist.txt` 有 asset 的 3 條（`NativeFileAssetSource.cpp`、`AssetCatalog.cpp`、`ContentManifest.cpp`），P3 的同一變更要刪掉。
+  8. 尚未驗證：Windows 專用的 2 個突變（os-f4、os-f5）要在 Windows 機器上跑（CI 不跑突變）；Windows runner 的 `GetACP()` 實際值沒有取得，只確定不是 UTF-8。
+- P1～P5 的開工等使用者指示（發行線要在 PR #95 合併後才切出，D198 的暫定安排）。
