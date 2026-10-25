@@ -54,7 +54,7 @@ TEST_CASE("NativeFileAssetSource reports invalid and missing paths") {
     REQUIRE_FALSE(absent);
     CHECK(absent.error().code == AssetErrorCode::SourceReadFailed);
     // The detail keeps the cause: the path, the OS error code and the path
-    // length (v7.1 windows-long-path, P2).
+    // length (os-subsystem PLAN section 8, P2).
     const std::string& detail = absent.error().detail;
     INFO(detail);
     CHECK(detail.rfind("NotFound: ", 0) == 0);

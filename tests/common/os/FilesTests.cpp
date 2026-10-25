@@ -366,8 +366,8 @@ TEST_CASE("Os files report a missing path longer than 260 characters as not foun
     CHECK_FALSE(Exists(path).value());
 }
 
-// The incident of v7.1 windows-long-path: a file of a release unpacked deep
-// enough that its path exceeds 260 characters opens, reads and stats through
+// A file of a package unpacked under a folder deep enough that its path
+// exceeds 260 characters opens, reads and stats through
 // its plain UTF-8 path, in '/' form and, on Windows, in '\' form.
 TEST_CASE("Os files read an existing file under a path longer than 300 characters") {
     const TempDirectory temp("gyo-os-files");

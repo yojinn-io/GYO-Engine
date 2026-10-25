@@ -55,7 +55,7 @@ Only the components whose batch has landed exist; the others are planned in the 
   - `MakeAbsolute` resolves against the current directory the platform's own way: `GetFullPathNameW` on Windows
     also removes dot segments and trailing dots and spaces; POSIX joins the current directory as it is. It answers
     in `/` form and never returns a long-path prefix.
-  - Long paths on Windows (v7.1 windows-long-path, P1): `FileReader::Open`, `Stat` and `Exists` read a file whose
+  - Long paths on Windows (os-subsystem PLAN section 8, P1): `FileReader::Open`, `Stat` and `Exists` read a file whose
     full path (`GetFullPathNameW`) is 248 characters (`MAX_PATH - 12`) or longer by handing the API `\\?\` plus
     that full path. The full path already carries Win32's normalization (dot segments, trailing dots and spaces),
     so turning normalization off with the prefix changes nothing for it; this is the change declared beforehand

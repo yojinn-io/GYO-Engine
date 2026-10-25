@@ -121,7 +121,7 @@ constexpr std::size_t kLongPathFrom = MAX_PATH - 12;
 // Only here may it differ from ToWide, so the long-path form never reaches a
 // result such as MakeAbsolute's or an error (Design Invariant 5).
 //
-// v7.1 windows-long-path (P1): a path whose full path is kLongPathFrom
+// The long-path form (os-subsystem PLAN section 8, P1): a path whose full path is kLongPathFrom
 // characters or longer goes to the API as \\?\ plus that full path, so Win32
 // does not refuse it for its length. The full path comes from GetFullPathNameW,
 // which already applied Win32's normalization (dot segments, trailing dots and
