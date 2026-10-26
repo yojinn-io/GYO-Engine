@@ -2,9 +2,11 @@
 #include <doctest/doctest.h>
 
 #include "engine/base/Log.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/trace/TraceSink.hpp"
 
 #include <atomic>
+#include <cstddef>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -46,7 +48,7 @@ std::vector<std::string> ReadLines(const std::filesystem::path& path) {
 
 TraceSink OpenSink(const std::filesystem::path& path, std::size_t capacity = 8192, bool append = false) {
     auto sink = TraceSink::Open({.path = path, .append = append, .capacity = capacity, .threadName = "gyo-test-trace"});
-    REQUIRE(sink.has_value());
+    REQUIRE_MESSAGE(sink.has_value(), (sink ? std::string{} : Engine::Base::Describe(sink.error())));
     return std::move(*sink);
 }
 
@@ -243,11 +245,79 @@ TEST_CASE("Trace appends to an existing file when asked") {
     CHECK(lines[1] == "added");
 }
 
+// A trace file whose path is longer than 300 characters, the Windows MAX_PATH
+// incident (os-subsystem P1; this case moved here from os-files-write, D52).
+// The directory stays under Win32's directory limit and the file name takes
+// the path past it, so the test sets it up with the standard library; it reads
+// the file back and removes it through engine/os, which takes long paths on
+// every platform.
+TEST_CASE("Trace writes a file under a path longer than 300 characters") {
+    // About the temporary directory plus 140 characters, well under Win32's 248 for a directory.
+    const auto directory = TempPath("long") / std::string(100, 'd');
+    std::filesystem::create_directories(directory);
+    const auto path = directory / (std::string(200, 'f') + ".jsonl");
+    const auto text = Engine::Os::Files::PathToUtf8(path);
+    REQUIRE(text);
+    REQUIRE(text.value().size() > 300);
+    // Removed on every way out of the case: std::filesystem could not remove a path this long on Windows.
+    struct RemoveTree final {
+        const std::string& file;
+        const std::filesystem::path& directory;
+        ~RemoveTree() {
+            static_cast<void>(Engine::Os::Files::RemoveFile(file));
+            std::error_code ignored;
+            std::filesystem::remove(directory, ignored);
+            std::filesystem::remove(directory.parent_path(), ignored);
+        }
+    } removeTree{text.value(), directory};
+    {
+        auto sink = OpenSink(path);
+        CHECK(sink.Push("first"));
+        static_cast<void>(sink.Close([](const TraceCounts& c) { return EndLine(c); }));
+        CHECK(sink.Good());
+    }
+    {
+        auto sink = OpenSink(path, 16, true);
+        CHECK(sink.Push("second"));
+        static_cast<void>(sink.Close());
+        CHECK(sink.Good());
+    }
+    std::string bytes;
+    {
+        auto file = Engine::Os::Files::FileReader::Open(text.value());
+        REQUIRE_MESSAGE(file, (file ? std::string{} : Engine::Base::Describe(file.error())));
+        std::byte buffer[256];
+        for (;;) {
+            auto got = file.value().Read(buffer);
+            REQUIRE(got);
+            if (got.value() == 0) break;
+            bytes.append(reinterpret_cast<const char*>(buffer), got.value());
+        }
+    }
+    const std::string newline(Newline);
+    CHECK(bytes == "first" + newline + "end written=1 dropped=0" + newline + "second" + newline);
+}
+
+TEST_CASE("Trace replaces an existing file unless asked to append") {
+    const auto path = TempPath("replace");
+    { std::ofstream(path) << "old line\n"; }
+    auto sink = OpenSink(path, 16);
+    CHECK(sink.Push("new"));
+    static_cast<void>(sink.Close());
+    const auto lines = ReadLines(path);
+    REQUIRE(lines.size() == 1);
+    CHECK(lines[0] == "new");
+}
+
 TEST_CASE("Trace reports a file it cannot open") {
     const auto path = TempPath("missing-directory") / "nested" / "trace.jsonl";
     const auto sink = TraceSink::Open({.path = path});
     REQUIRE_FALSE(sink.has_value());
     CHECK(sink.error().code == TraceErrorCode::OpenFailed);
+    // The detail names the path in UTF-8, then the engine/os cause.
+    const auto text = Engine::Os::Files::PathToUtf8(path);
+    REQUIRE(text);
+    CHECK(sink.error().detail.rfind(text.value() + "; NotFound: ", 0) == 0);
 }
 
 #if defined(__linux__)

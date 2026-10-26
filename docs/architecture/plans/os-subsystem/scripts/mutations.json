@@ -76,15 +76,15 @@
       "id": "os-g6-stale",
       "what": "An allowlist entry stays larger after a site moved",
       "file": "tests/common/os/os_boundary_allowlist.txt",
-      "find": "engine/trace/src/TraceSink.cpp R4 1 ",
-      "replace": "engine/trace/src/TraceSink.cpp R4 2 ",
+      "find": "engine/time/src/Waiter.cpp R1 3 ",
+      "replace": "engine/time/src/Waiter.cpp R1 4 ",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
         "--root",
         "."
       ],
-      "expect": "TraceSink\\.cpp R4 has 1 findings, allowlisted 2; shrink the allowlist"
+      "expect": "Waiter\\.cpp R1 has 3 findings, allowlisted 4; shrink the allowlist"
     },
     {
       "id": "os-g7-public-header",
@@ -1485,6 +1485,102 @@
       "target": "engine_tests",
       "cases": "NativeFileSystem*",
       "expect": "CHECK\\( failing.removed == std::vector<std::string>\\{failing.opened.front\\(\\)\\} \\) is NOT correct"
+    },
+    {
+      "id": "tt-x1-trace-links-engine",
+      "what": "gyo_trace links GYO::Engine (trace.md Invariant 7, configure-time check)",
+      "file": "engine/trace/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os GYO::Engine)",
+      "target": "gyo_trace_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_trace links GYO::Engine;GYO::Os;GYO::Threads; expected exactly\\s+GYO::Os;GYO::Threads"
+    },
+    {
+      "id": "tt-x2-trace-without-os",
+      "what": "gyo_trace no longer links GYO::Os, so it could not write through engine/os (trace.md Invariant 7, configure-time check)",
+      "file": "engine/trace/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads)",
+      "target": "gyo_trace_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_trace links GYO::Threads; expected exactly GYO::Os;GYO::Threads"
+    },
+    {
+      "id": "tt-x3-windows-trace-as-written",
+      "what": "The trace file keeps '\\n' on Windows instead of the text-mode \"\\r\\n\"",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "        Os::Files::LineEndings::Native);",
+      "replace": "        Os::Files::LineEndings::AsWritten);",
+      "target": "gyo_trace_tests",
+      "cases": "*longer than 300*",
+      "expect": "CHECK\\( bytes == \"first\" \\+ newline"
+    },
+    {
+      "id": "tt-x4-trace-append-truncates",
+      "what": "An appending trace sink empties the file",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "options.append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate",
+      "replace": "Os::Files::WriteMode::Truncate",
+      "target": "gyo_trace_tests",
+      "cases": "*appends*",
+      "expect": "REQUIRE\\( lines.size\\(\\) == 2 \\) is NOT correct"
+    },
+    {
+      "id": "tt-x5-linux-trace-write-failure-ignored",
+      "what": "A failed write leaves the sink good (Linux: /dev/full)",
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "            if (!file->Write(bytes)) failed.store(true, std::memory_order_release);",
+      "replace": "            static_cast<void>(file->Write(bytes));",
+      "target": "gyo_trace_tests",
+      "cases": "*failed write*",
+      "expect": "CHECK_FALSE\\( sink.Good\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "tt-x6-trace-batch-end-unwritten",
+      "what": "The end of a batch stays in the writer's buffer, so FlushNow returns before the file has it",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "            }\n            WritePending();\n",
+      "replace": "            }\n",
+      "target": "gyo_trace_tests",
+      "cases": "*FlushNow returns*",
+      "expect": "CHECK\\( size == busy.size\\(\\) \\+ Newline.size\\(\\) \\+ marker.size\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "tt-x7-trace-os-public",
+      "what": "gyo_trace links GYO::Os publicly, so its users get engine/os headers (trace.md Invariant 7, configure-time check)",
+      "file": "engine/trace/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads GYO::Os)",
+      "target": "gyo_trace_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_trace exposes GYO::Os to its users; link it PRIVATE"
+    },
+    {
+      "id": "tt-x8-trace-truncate-appends",
+      "what": "A sink that should replace the file appends to it",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "options.append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate",
+      "replace": "Os::Files::WriteMode::Append",
+      "target": "gyo_trace_tests",
+      "cases": "*replaces an existing file*",
+      "expect": "REQUIRE\\( lines.size\\(\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "tt-x9-trace-detail-without-path",
+      "what": "The open failure's detail loses the path",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "                                          Base::CauseDetail(file.error(), path.value())));",
+      "replace": "                                          Base::CauseDetail(file.error())));",
+      "target": "gyo_trace_tests",
+      "cases": "*cannot open*",
+      "expect": "detail.rfind\\(text.value\\(\\) \\+ \"; NotFound: \", 0\\) == 0 \\) is NOT correct"
     }
   ]
 }

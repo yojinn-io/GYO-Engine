@@ -1,21 +1,37 @@
 #include "engine/trace/TraceSink.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/threads/RoleThread.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <fstream>
+#include <cstddef>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <thread>
 #include <utility>
 #include <vector>
 
 namespace Engine::Trace {
 
+namespace {
+
+// The writer hands its bytes to the file at the end of a batch, or once this
+// many are waiting (os-subsystem D58: a C++ stream wrote at its own buffer's
+// size; the bytes in the file are the same).
+constexpr std::size_t kWriteChunk = std::size_t{64} * 1024;
+
+} // namespace
+
 struct TraceSink::Impl final {
-    std::ofstream file;
+    // The file through engine/os, in the platform's line endings ("\r\n" on
+    // Windows), as the text-mode C++ stream it replaced wrote it.
+    std::optional<Os::Files::FileWriter> file;
+    // Bytes waiting to be written; the writer thread's alone, then the owner's after the join.
+    std::string pending;
     std::size_t capacity{};
     bool flushEachLine{};
 
@@ -43,6 +59,19 @@ struct TraceSink::Impl final {
     bool finished{};
     TraceCounts closeCounts;
 
+    // Hands the waiting bytes to the file in one write. After a failure
+    // nothing more is written, as a failed stream wrote nothing more.
+    void WritePending() {
+        if (pending.empty()) return;
+        if (!failed.load(std::memory_order_acquire)) {
+            const auto bytes = std::as_bytes(std::span(pending.data(), pending.size()));
+            if (!file->Write(bytes)) failed.store(true, std::memory_order_release);
+        }
+        pending.clear();
+        // A very long line leaves no large buffer behind, as the stream's fixed buffer did not.
+        if (pending.capacity() > 4 * kWriteChunk) std::string().swap(pending);
+    }
+
     void RunWriter(Threads::RoleContext& context) {
         {
             std::scoped_lock lock(progressMutex);
@@ -61,11 +90,11 @@ struct TraceSink::Impl final {
                 through = accepted;
             }
             for (const auto& line : batch) {
-                file << line << '\n';
-                if (flushEachLine) file.flush();
+                pending += line;
+                pending += '\n';
+                if (flushEachLine || pending.size() >= kWriteChunk) WritePending();
             }
-            if (!batch.empty()) file.flush();
-            if (!file) failed.store(true, std::memory_order_release);
+            WritePending();
             {
                 std::scoped_lock lock(progressMutex);
                 written += batch.size();
@@ -99,15 +128,24 @@ Base::Result<TraceSink, TraceError> TraceSink::Open(TraceSinkOptions options) {
     auto impl = std::make_unique<Impl>();
     impl->capacity = options.capacity;
     impl->flushEachLine = options.flushEachLine;
-    impl->file.open(options.path, options.append ? std::ios::out | std::ios::app : std::ios::out | std::ios::trunc);
-    if (!impl->file)
-        return Base::Err(TraceError::Make(TraceErrorCode::OpenFailed, "Cannot open trace file", options.path.string()));
+    // Engine paths are UTF-8 (docs/architecture/os.md), not path::string()'s ANSI code page.
+    auto path = Os::Files::PathToUtf8(options.path);
+    if (!path)
+        return Base::Err(TraceError::Make(TraceErrorCode::OpenFailed, "Cannot open trace file",
+                                          Base::CauseDetail(path.error())));
+    auto file = Os::Files::FileWriter::Open(
+        path.value(), options.append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate,
+        Os::Files::LineEndings::Native);
+    if (!file)
+        return Base::Err(TraceError::Make(TraceErrorCode::OpenFailed, "Cannot open trace file",
+                                          Base::CauseDetail(file.error(), path.value())));
+    impl->file.emplace(std::move(file.value()));
     auto* state = impl.get();
     auto writer = Threads::RoleThread::Start({.name = std::move(options.threadName)},
                                              [state](Threads::RoleContext& context) { state->RunWriter(context); });
     if (!writer)
         return Base::Err(TraceError::Make(TraceErrorCode::StartFailed, "Cannot start the trace writer",
-                                          Base::CauseDetail(writer.error(), options.path.string())));
+                                          Base::CauseDetail(writer.error(), path.value())));
     impl->writer.emplace(std::move(*writer));
     return TraceSink(std::move(impl));
 }
@@ -175,12 +213,14 @@ TraceCounts TraceSink::Close(const EndLine& endLine) {
     impl_->writer->Join();
     // The writer has returned: the file is the owner's alone from here.
     const TraceCounts counts = Counts();
-    if (endLine)
-        if (const auto line = endLine(counts)) impl_->file << *line << '\n';
-    impl_->file.flush();
-    if (!impl_->file) impl_->failed.store(true, std::memory_order_release);
-    impl_->file.close();
-    if (impl_->file.fail()) impl_->failed.store(true, std::memory_order_release);
+    if (endLine) {
+        if (const auto line = endLine(counts)) {
+            impl_->pending += *line;
+            impl_->pending += '\n';
+        }
+    }
+    impl_->WritePending();
+    if (!impl_->file->Close()) impl_->failed.store(true, std::memory_order_release);
     impl_->finished = true;
     impl_->closeCounts = counts;
     return counts;

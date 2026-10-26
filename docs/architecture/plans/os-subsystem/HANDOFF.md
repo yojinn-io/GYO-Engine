@@ -19,7 +19,9 @@
 - 2026-10-25：使用者說「先不推送，繼續做 os-process-info，做完再和 os-guard-wide 一起跑四平台 L1」。os-process-info 本機完成（本機 commit，未推送）：engine/os 新增 Process，消費端的執行檔路徑、CPU 時間、本地時間改呼叫它。本機 ctest 31／31，產品組態的相關測試 12／12，突變 7／7 killed（Windows 專用 1 個跳過）。下一步：推送並跑四平台 L1（要使用者同意），之後是 os-console-shutdown。
 - 2026-10-25：使用者說「推送本分支，手動觸發四平台 L1，一起驗 os-guard-wide 和 os-process-info」。第一次 run 40192938131 只有 macos-arm64 的 toolchain 列失敗（本批新加的 CPU 測試前提錯，見「os-process-info」），修正 `a9219fa` 後第二次 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。兩批完成。下一批是 os-console-shutdown（xhigh，★ Windows 行為變更）。
 - 2026-10-26：io-native-paths（D54）完成，判定已定案（D55）。四平台 L1 [run 40295007179](https://github.com/yojinn-io/GYO-Engine/actions/runs/40295007179) 全部成功，Windows 的 UNC 探針兩項 Passed。Windows／Linux 專用的突變待對應平台。
-- 2026-10-26：os-tool-files 完成（D56、D57），四平台 L1 [run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964) 全部成功。Windows 專用的突變與 `-s` 確認留給 lan15。下一批依 PLAN 是 os-trace-writers。
+- 2026-10-26：os-tool-files 完成（D56、D57），四平台 L1 [run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964) 全部成功。Windows 專用的突變與 `-s` 確認留給 lan15。
+- 2026-10-26：os-trace-writers 開始（D58），基準 `ca434952`，本機進行中。
+- 2026-10-26：D59，本計畫的 commit 統一放進 #96。已請消費端把本分支併到 `ca434952`（不含 Red 測試 `a75e4028`），等它回覆發行線上的 commit。
 
 ## 閱讀入口
 
@@ -75,6 +77,9 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-26 | D55：io-native-paths 的定案。<br>UriTests 與 AssetPathResolverTests 的判定改變照 AGENTS §14.4 的表定案（突變與 ultracode 契約審查之後；審查的 F1、F2 修正後，開工前表上的 L4 撤回、回到舊判定）。只有主機的 UNC 照樣對應、由 OS 決定；POSIX 上 `file://host/x` 讀本機的 `/host/x`。<br>io.md Invariant 3 與 Replacement Criteria 3 照草稿定案。<br>`allowAbsolutePath` 的字面站點記為未結 | 使用者對三個問題選：「照此定案」「照草稿定案」「記為未結，之後處理」 |
 | 2026-10-26 | D56：os-tool-files 開工前的四個決定。<br>檔位：high，Windows 的 `RenameReplacing` 與 `ResolvedPath` 逐行論證，實作後 1 位 xhigh 唯讀審查；估時 9～13 h（原 6～9 h：多了 `ResolvedPath` 與 engine/io 的原子寫入）。<br>新 API：engine/os 的 `RenameReplacing`（PLAN 原名 ReplaceFile 是 Win32 函式名，os.md 的 Names 不允許）、`RemoveFile`、`SamePathComponent`、`ResolvedPath`（取代 `weakly_canonical`，io.md Replacement Criteria 3 的解析 helper）、`FontDirectories`；NativeFileSystem 開放 `Move`（取代既有）與 `Remove`（只刪檔）。<br>原子寫入做成 engine/io 的 helper，是唯一的實作；工具是第一個消費端，IP-5 之後沿用（輸入與呈現計畫的 HANDOFF 記一筆）。<br>★ 事前宣告（os.md Invariant 9）：Windows 的路徑成分比較改用 `CompareStringOrdinal`（OS 的大寫表；原為受 locale 影響的 `towlower`）；macOS 維持逐位元組比較，記為已知差異；字型改用不分 OS 的候選清單，在 `FontDirectories` 的每個目錄找（系統目錄優先，多找使用者字型目錄），只有現在選中的字型不存在時結果才會不同 | 使用者對四個問題選：「high＋1 位 xhigh 審查」「全部同意」「engine/io，唯一實作」「照建議」 |
 | 2026-10-26 | D57：os-tool-files 的 xhigh 審查發現、事前沒有宣告的行為差異。<br>接受並補宣告（os.md Invariant 9）：POSIX 的 `AbsolutePath("")` 回 `""`（原為目前目錄加 `/`；Windows 原本就是 `""`）；POSIX 讀目錄、FIFO 回 ReadFailed（原為讀成 `""`、FIFO 會卡住；Windows 原本就失敗）；Windows 名稱不合法的路徑在 probe 時就回 ProbeFailed（原為之後回 WriteFailed）；錯誤訊息的文字（原因改放 detail）；字型選擇的邊界情況（Linux 同目錄裡他平台的字型會先選、會做日文合併；Windows 改用 `GetSystemWindowsDirectoryW`，不讀 `WINDIR`）。<br>沒有磁碟代號的磁碟區：`ResolvedPath` 維持回錯誤，不照 MSVC 回 `\\?\GLOBALROOT\...`（Invariant 5），記為已知差異；編輯器在那種情況退回字面比較 | 使用者對兩個問題選：「全部接受並補宣告」「維持回錯誤，記為已知差異」 |
+| 2026-10-26 | D58：os-trace-writers 開工前的四個決定。<br>檔位：high＋1 位 xhigh 審查（使用者選的，不是建議的「只用 high」）。<br>trace.md Invariant 7 改成「exactly GYO::Threads and GYO::Os」、os.md Invariant 2 補上「engine/trace 位在 GYO::Engine 之下，直接經 engine/os 寫檔（開放決策 2）」：同意開工，定案前做突變檢查與獨立審查，再交使用者定案（AGENTS §14.4，比照 D54）。<br>★ 事前宣告（os.md Invariant 9）：Windows 的附加改用只能附加的 handle（對其他附加者原子；原為 CRT 每次寫前 seek 到檔尾）；一批之內在 64 KiB 或批尾分段寫出（位元組不變）；錯誤 detail 的路徑是 UTF-8；Windows 長路徑可寫。<br>Windows 長路徑 trace 案例的 Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問），再推修正 | 使用者對四個問題選：「high＋1 位 xhigh 審查」「同意開工，定案前做突變與審查」「照建議」「先推測試跑一次 L1」 |
+| 2026-10-26 | D59：本計畫的 commit 不另開 PR，統一放進 #96（消費端的發行線）管理。使用者先說「你開一個PR吧。現在掛著一堆的commit」，開了草稿 #97（base 是發行線）後改成這個決定；#97 已關閉。合併照 A1～A3 的做法，由消費端以 `git merge --no-ff` 併進發行線：先到 `ca434952`（os-tool-files 完成），os-trace-writers 的 Red 測試 `a75e4028` 等修正後再併 | 使用者：「那算了，統一給#96管理好了。」 |
+| 2026-10-26 | D60：os-trace-writers 的定案。<br>trace.md Invariant 7（`GYO::Trace` links exactly `GYO::Threads` and `GYO::Os`，Os 為 PRIVATE，連結檢查另驗 Os 不出現在 INTERFACE）與 os.md Invariant 2（engine/trace 在 GYO::Engine 之下，直接經 engine/os 寫檔）照草稿定案；AGENTS §14.4 的 1～5 經獨立核對（1、2、4 點不完整的部分已補檢查或記為未結）。<br>xhigh 審查發現、事前沒有宣告的差異接受並補宣告（trace.md）：非 UTF-8 的 trace 路徑改為 OpenFailed；錯誤 detail 的文字（UTF-8 路徑加 engine/os 原因）；`flushEachLine` 的長行一次寫出 | 使用者對兩個問題選：「照草稿定案」「全部接受並補宣告」 |
 
 ## 消費端的壓力摘要
 
@@ -512,6 +517,24 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 2026-10-26：使用者定為 D57（a～e 接受並補宣告；GLOBALROOT 維持回錯誤，記為已知差異）。下一步：整理成一個 commit、通知消費端、問過使用者後推送並跑四平台 L1。
   - 2026-10-26：WIP 併成 `c8f3e966`，通知消費端。使用者說「推送本分支，手動觸發四平台 L1，驗 os-tool-files」。推送 `c8f3e966`，四平台 L1：[run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。windows-x64 上 gyo_os_tests、engine_tests、編輯器 6 項、`io.unc_*` 都通過。Windows 專用的 `subst`（`DefineDosDeviceW`）與 UNC 的 `ResolvedPath` 案例、以及 symlink 案例，CI 的輸出看不出是實跑還是寫訊息後返回（doctest 的 MESSAGE 只在失敗時印出）；要在 lan15 用 `-s` 跑一次確認。本批完成。
 
+### os-trace-writers
+
+- 2026-10-26：開始。使用者先要求說明檔位、要動的檔案與需要同意的地方（含 trace.md Invariant 7 與 §14.4），回答四個問題後定為 D58。基準是本分支 `ca434952`。
+- 盤點：`TraceSink.cpp:102` 的 `std::ofstream`（文字模式；附加或清空；一批結束時 flush，`flushEachLine` 時每行 flush）；`tests/common/trace/CMakeLists.txt:11` 的連結檢查（exactly GYO::Threads）；Engine allowlist 的 `TraceSink.cpp R4 1`；tt2 突變裡 `tt2-final-batch-unwritten` 的 find 會過期；`os-g1-header` 的 find 是 include 行，不受影響。消費端呼叫者：`LogFile.cpp`（附加、每行一寫）、`MovementTraceWriter.hpp`（清空）。
+- Red 用的測試：TraceSinkTests 加「超過 300 字元的路徑」（目錄在 Win32 的目錄長度限制內，檔名讓路徑超過 300；讀回與刪除經 engine/os）。macOS 上舊實作也通過（沒有 260 的限制），Red 只能在 Windows 看到；先單獨 commit，推送跑 L1。
+- 2026-10-26：推送 Red 用的 `a75e4028`，四平台 L1：[run 40331764169](https://github.com/yojinn-io/GYO-Engine/actions/runs/40331764169)。**Red 如預期**：只有 windows-x64 失敗，而且只有新案例「longer than 300 characters」在開檔時失敗（`TraceSinkTests.cpp(51): REQUIRE( sink.has_value() )`；gyo_trace_tests 以外 95 項中 94 項通過）；macOS、Linux 全部通過。等待期間在本機實作（未推送）。
+- 實作（本機，未提交）：TraceSink 的 `std::ofstream` 換成 `Os::Files::FileWriter`（`LineEndings::Native`，附加或清空），一批的行在 64 KiB 或批尾寫出、`flushEachLine` 每行寫出、寫入失敗後不再寫；錯誤 detail 的路徑改成 UTF-8；`gyo_trace` PRIVATE 連 `GYO::Os`；連結檢查改成 exactly GYO::Threads and GYO::Os；Engine allowlist 刪掉 `TraceSink.cpp R4 1`；trace.md Invariant 7 與 os.md Invariant 2 的新條文（草稿，待定案）。
+- 本機：core 33／33，gyo_trace_tests 12／12；產品組態的相關測試 8／9，`object_fps_pvp.worker` 第一次失敗（「action worker emitted overdue catch-up packets」，`worker_main.cpp:613` 要求 action 封包間隔 ≥30 ms），之後單獨重跑 3／3 通過。依 §14.1 判為環境：那次和另外 8 項測試、產品組態的建置並行（5 分鐘平均負載 9.17），而且 worker 探針不經 TraceSink 與 LogFile。
+- 突變：`tt2-final-batch-unwritten` 重新定位（意圖不變）；`os-g6-stale` 原本指向刪掉的 TraceSink 條目，改指 Waiter 的條目（意圖不變）；新增 tt-x1～tt-x6（連結檢查兩個方向、Windows 換行、附加、Linux 寫入失敗、批尾寫出）。
+- xhigh 審查（1 位，唯讀，約 17 分鐘；在 `git archive` 的副本上實跑）：沒有 blocker、major。Invariant 1～6 守住；POSIX 上新舊位元組逐位元組相同（含 `\r`、`\n`、`\r\n`、空行、NUL）；寫入失敗後的 Good／FlushNow 與舊版相同（以 RLIMIT_FSIZE 實測）。
+  - 已修：trace.md 的圖畫錯邊（看起來像 Os → Time）；Invariant 7 的「privately」原本沒有守衛（`gyo_expect_links` 只比集合），在連結檢查加上「GYO::Os 不得出現在 INTERFACE」；一行很長之後緩衝不再一直占記憶體；長路徑測試的目錄縮短（原本 TEMP 超過約 60 字元時，在 Windows 會超過 248），並且在每條離開路徑都清掉檔案；`OpenSink` 失敗時印出錯誤；trace.md 的守衛列表補上 tt-x*；補 `<atomic>`。
+  - 補的測試：沒有附加時會清空既有檔案；開檔失敗的 detail 以 UTF-8 路徑開頭。新增突變 tt-x7（Os 以 PUBLIC 連結）、tt-x8（清空變附加）、tt-x9（detail 少了路徑）。
+  - 仍未守住（記為缺口）：失敗後不再寫、`flushEachLine` 每行一寫、64 KiB 門檻、Close 結果被忽略；這些在測試裡看不到。
+  - 修正後：core 33／33，gyo_trace_tests 13／13；產品組態的相關測試逐一串行 9／9（含 worker）；突變 tt2 6／6、tt-x 與 os-g6 共 8／8 killed（tt-x3 Windows、tt-x5 Linux 跳過）。
+  - §14.4 的核對：1、2、4 點不完整，3、5 點成立。1、2：檢查只看直接連結，原本 PUBLIC／INTERFACE 的 Os 也會通過，已加檢查補上。4：閉包的末端是 GYO::Base，而 Base 沒有連結檢查，這是新舊判定都有的既有缺口（D50 的假值漏洞也還在）。
+  - 交使用者決定（事前沒有宣告的差異）：Linux 上不是 UTF-8 的 trace 路徑改成 OpenFailed；錯誤 detail 的文字（多了 engine/os 的原因，Windows 是 `/`，非 UTF-8 時 detail 沒有路徑）；`flushEachLine` 遇到長行也只寫一次（原本超過串流緩衝的行會拆成多次）。
+  - 2026-10-26：使用者定為 D60（條文照草稿定案；差異 a～c 接受並補宣告）。下一步：整理成 commit、通知消費端、問過使用者後推送並跑四平台 L1（Windows 的 Green）。
+
 ## 未結事項
 
 - ~~使用者核准 PLAN，回答開放決策 1、14、15，並同意 A1～A3 的 Delta。~~ 2026-10-25 完成（D46）。
@@ -542,4 +565,6 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - io-native-paths 的 Windows 專用突變 os-f9～os-f11 與 Linux 專用的 os-f8 要在對應平台執行（D206 的 lan15；Linux 機器）。
 - 已知差異（D57）：Windows 上沒有磁碟代號的磁碟區（WinFsp、ImDisk 之類），`Os::Files::ResolvedPath` 回錯誤，MSVC 的 `weakly_canonical` 則回 `\\?\GLOBALROOT\...`；編輯器的匯出檢查在那種情況退回字面比較，刻意經 junction 的匯出可能繞過。真的遇到時，再決定是否放寬 os.md Invariant 5 的文字。
 - os-tool-files 的 Windows 專用突變 os-x7～os-x11 要在 Windows 上執行（lan15，D206）；Linux 上 os-x1～os-x5、os-x12 只在 macOS 跑過。lan15 上另外用 `gyo_os_tests -s -tc="*resolve*"` 與 `gyo_ui_editor_core_tests` 確認 `subst`、UNC、symlink 的案例是實跑（不是寫訊息後返回）。
+- 既有缺口（D60 的 §14.4 核對）：`GYO::Base` 沒有設定期的連結檢查，所以 Trace（經 Os、Time）與其他模組的連結閉包的末端沒有守住；`target_link_libraries(gyo_base INTERFACE SDL3)` 也能通過設定。和 D50 的 `gyo_expect_links` 假值漏洞一起處理。
+- os-trace-writers 沒有守住的性質（測試看不到）：失敗後不再寫、`flushEachLine` 每行一寫、64 KiB 門檻、Close 的結果；Windows 專用 tt-x3 與 Linux 專用 tt-x5 待對應平台。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。
