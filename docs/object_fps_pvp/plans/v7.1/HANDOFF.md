@@ -64,7 +64,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   3. 實機驗收（P5-6）：發行包解壓到本機磁碟（不要用網路共用），P＝156 與 P 約 210 各啟動 Client 一次，事故 log 第 2 行的錯誤不再出現。回本會話。
   4. quick-close：`python build/acceptance/object_fps_pvp/close_timing.py --probe <B>/acceptance/object_fps_pvp/gyo_object_fps_pvp_worker_probe.exe --runs 10 --output close-timing-windows.json`，exit 0 才通過，不重跑。回本會話。
   5. 主控台：Match 在主控台裡用 Ctrl+C、Ctrl+Break、關閉視窗結束，log 最後一行 `end version=1 reason=signal exit_code=0`；`ctest -R "^(os\.console_close|io\.unc_localhost|io\.unc_127\.0\.0\.1)$"` 預期 Passed（Windows Terminal 下 console_close 可能 Skipped，改用 conhost）。回 OS 子系統的會話。
-  6. lan15。
+  6. lan15（D208：延期，日期未定）。
 - **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟、完整突變開始。
 
 ## 閱讀入口
@@ -201,6 +201,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D205 | （2026-10-25）OS 統一子系統其餘的批次改成現在就開始，不等 v7.1 發行（取代 D46 的「發行後」）。協調：那個會話的分支從發行線 `claude/pvp-v71-release` 切出（已含 A1～A3、P1～P5、quick-close），PR #96 合併前要改發行線也改到的檔案時先通知本會話；lan15 若需要修正，由本會話在發行線做，再由那邊併入 | 使用者：「我覺得，現在開始  OS 統一子系統的工作比較好。」 |
 | D206 | （2026-10-26）lan15 的 Windows 機器上加做 OS 子系統的主控台實機驗證（Engine D51，PLAN 第 7.7 節的 L3，只記錄）：Match 在主控台裡用 Ctrl+C、Ctrl+Break、關閉主控台視窗三種方式結束，log 最後一行都是 `end version=1 reason=signal exit_code=0`；結束要求後再按一次 Ctrl+C 會直接結束、沒有 end 紀錄（補充）；可以的話跑 `ctest -R "^os\.console_close$"`（Windows Terminal 下可能 Skipped，改用 conhost）與 os-subsystem 目錄的 Windows 專用突變（os-c4、os-c5、os-c6、os-c8、os-c9、os-g18、os-f4、os-f5、os-f9～os-f11、os-g16、os-p5、os-x7～os-x11（os-tool-files，Engine D56／D57） 與 v7.1 的 p1 兩個、p4）；io-native-paths（Engine D54／D55）的探針 `io.unc_localhost`、`io.unc_127.0.0.1` 預期 Passed（連不到 `\\localhost\C$` 時 Skipped）。D207 起都在發行線上；結果回給 OS 子系統的會話 | OS 子系統的會話轉達使用者的決定 D51 |
 | D207 | （2026-10-27）OS 子系統的 7 批（os-guard-wide、os-process-info、os-console-shutdown、os-files-write、io-native-paths、os-tool-files、os-trace-writers；Engine D48～D60）不另開 PR，併進發行線 PR #96：`claude/trusting-joliot-f13b78` 以 `--no-ff` 併入（`32ce9b6d` 到 `ca434952`、`f87b77d0` 到 `d32def55`、`2aebc143` 到 `e5fec6ef`），本機 `ctest` 97／97；每批的四平台 L1：run 40194493434、40205158822、40213916104、40295007179、40324361964、40339587478。lan15 用合併後的發行線跑；D206 的 OS 驗證也改在發行線上做 | OS 子系統的會話轉達：「OS 子系統的 commit 不另開 PR，統一放進 #96」；使用者在本會話：「推送，今晚 lan15 用合併後的發行線跑。」 |
+| D208 | （2026-10-27）lan15 延期，新日期未定；PR #96 的合併仍等 lan15 | 使用者：「lan15 延期，時間對。」 |
 
 ## 規劃紀錄（記錄器）
 
