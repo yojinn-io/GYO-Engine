@@ -78,6 +78,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 20. **D59**：本計畫的 commit 不另開 PR，統一放進 #96（發行線）管理；合併照 A1～A3 的做法由消費端進行。
 21. **D60**：os-trace-writers 的定案。trace.md Invariant 7（exactly GYO::Threads and GYO::Os，Os 為 PRIVATE 並有設定期檢查）與 os.md Invariant 2（engine/trace 直接經 engine/os 寫檔）照草稿定案；審查發現的差異（非 UTF-8 路徑改為 OpenFailed、錯誤 detail 的文字、`flushEachLine` 的長行一次寫出）接受並補宣告。
 22. **D61**：time-threads-invariants 的定案。time.md 與 threads.md 的 Design Invariants（含 Replacement Criteria）照草稿同意；這一批補幾個便宜的守衛（連結檢查的兩個設定期突變、後端名稱的測試、Linux 名稱截斷的檢查），其餘無守衛的項目記為未結。
+23. **D62**（消費端 D208、D209 的連帶）：lan15 延期到本計畫做到 os-net-errors 之前為止。那之前的 4 批（os-path-utf8-sweep、os-wake-record、os-threads-backend、os-wait-backend）先做完，然後在 Windows 機器上一次做完 Windows 專用突變、`-s` 確認、實機驗收與計時的 L2，再跑 lan15；os-net-errors 與 os-close 排在 #96 合併後。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
