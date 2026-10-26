@@ -1,6 +1,6 @@
 # Engine os-tool-files：UI 編輯器的檔案服務與字型目錄改走 engine/io、engine/os
 
-日期：2026-10-26。**本機完成**：xhigh 審查已修正，事後發現的差異由使用者定為 D57；四平台 L1 待推送後執行。
+日期：2026-10-26。**完成**：xhigh 審查已修正，事後發現的差異由使用者定為 D57；四平台 L1 通過（[run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964)）。
 計畫見 [os-tool-files](../architecture/plans/os-subsystem/PLAN.md)（第 7.9 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-tool-files」；開工前的決定是 D56，審查後的決定是 D57。
 
 ## 做了什麼
@@ -34,5 +34,5 @@
 - 已知的缺口：
   - 原子性本身（讀者只會看到舊檔或完整的新檔）靠 `rename` 的語意，測試看不到中間狀態；暫存檔的清理與「失敗時目標不變」有測試。
   - symlink 案例在 Windows 上建不了 symlink 時只寫訊息後返回。
-  - Windows 的實作在本機只能閱讀，審查是推論；要靠四平台 L1 的 windows-x64（含 `subst` 與 UNC 的參照比對）。
+  - Windows 的實作在本機只能閱讀，審查是推論。四平台 L1 的 windows-x64 上 gyo_os_tests、engine_tests、編輯器測試都通過；但 `subst`、UNC、symlink 的案例在環境不支援時只寫訊息後返回，CI 的輸出看不出是否實跑，留給 lan15 用 `-s` 確認。
   - 讀超過 64 MiB 的檔案沒有測試。

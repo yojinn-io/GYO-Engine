@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-26。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-26。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -19,7 +19,7 @@
 - 2026-10-25：使用者說「先不推送，繼續做 os-process-info，做完再和 os-guard-wide 一起跑四平台 L1」。os-process-info 本機完成（本機 commit，未推送）：engine/os 新增 Process，消費端的執行檔路徑、CPU 時間、本地時間改呼叫它。本機 ctest 31／31，產品組態的相關測試 12／12，突變 7／7 killed（Windows 專用 1 個跳過）。下一步：推送並跑四平台 L1（要使用者同意），之後是 os-console-shutdown。
 - 2026-10-25：使用者說「推送本分支，手動觸發四平台 L1，一起驗 os-guard-wide 和 os-process-info」。第一次 run 40192938131 只有 macos-arm64 的 toolchain 列失敗（本批新加的 CPU 測試前提錯，見「os-process-info」），修正 `a9219fa` 後第二次 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。兩批完成。下一批是 os-console-shutdown（xhigh，★ Windows 行為變更）。
 - 2026-10-26：io-native-paths（D54）完成，判定已定案（D55）。四平台 L1 [run 40295007179](https://github.com/yojinn-io/GYO-Engine/actions/runs/40295007179) 全部成功，Windows 的 UNC 探針兩項 Passed。Windows／Linux 專用的突變待對應平台。
-- 2026-10-26：os-tool-files 開始（D56），基準 `2b6afc5`，本機進行中。
+- 2026-10-26：os-tool-files 完成（D56、D57），四平台 L1 [run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964) 全部成功。Windows 專用的突變與 `-s` 確認留給 lan15。下一批依 PLAN 是 os-trace-writers。
 
 ## 閱讀入口
 
@@ -510,6 +510,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 修正後重跑：本機 core 33／33、編輯器 6／6；突變 Engine 端 32／32、工具端 2／2 killed（Windows／Linux 專用的 20 個跳過）。
   - 交使用者決定（事前沒有宣告的差異）：POSIX 的 `AbsolutePath("")`、POSIX 讀目錄與 FIFO、Windows 名稱不合法的路徑、錯誤訊息的文字、字型選擇的邊界情況（Linux）與 WINDIR、沒有磁碟代號的磁碟區（GLOBALROOT）。
   - 2026-10-26：使用者定為 D57（a～e 接受並補宣告；GLOBALROOT 維持回錯誤，記為已知差異）。下一步：整理成一個 commit、通知消費端、問過使用者後推送並跑四平台 L1。
+  - 2026-10-26：WIP 併成 `c8f3e966`，通知消費端。使用者說「推送本分支，手動觸發四平台 L1，驗 os-tool-files」。推送 `c8f3e966`，四平台 L1：[run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。windows-x64 上 gyo_os_tests、engine_tests、編輯器 6 項、`io.unc_*` 都通過。Windows 專用的 `subst`（`DefineDosDeviceW`）與 UNC 的 `ResolvedPath` 案例、以及 symlink 案例，CI 的輸出看不出是實跑還是寫訊息後返回（doctest 的 MESSAGE 只在失敗時印出）；要在 lan15 用 `-s` 跑一次確認。本批完成。
 
 ## 未結事項
 
@@ -540,5 +541,5 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 既有問題（審查的 A6，不在 D54）：`normalizeSeparators=false` 時，catalog 路徑 `..\x` 繞過 Resolver 的包含檢查，在 Windows 上越出根目錄。沒有消費端關掉這個選項。
 - io-native-paths 的 Windows 專用突變 os-f9～os-f11 與 Linux 專用的 os-f8 要在對應平台執行（D206 的 lan15；Linux 機器）。
 - 已知差異（D57）：Windows 上沒有磁碟代號的磁碟區（WinFsp、ImDisk 之類），`Os::Files::ResolvedPath` 回錯誤，MSVC 的 `weakly_canonical` 則回 `\\?\GLOBALROOT\...`；編輯器的匯出檢查在那種情況退回字面比較，刻意經 junction 的匯出可能繞過。真的遇到時，再決定是否放寬 os.md Invariant 5 的文字。
-- os-tool-files 的 Windows 專用突變 os-x7～os-x11 要在 Windows 上執行（lan15，D206）；Linux 上 os-x1～os-x5、os-x12 只在 macOS 跑過。
+- os-tool-files 的 Windows 專用突變 os-x7～os-x11 要在 Windows 上執行（lan15，D206）；Linux 上 os-x1～os-x5、os-x12 只在 macOS 跑過。lan15 上另外用 `gyo_os_tests -s -tc="*resolve*"` 與 `gyo_ui_editor_core_tests` 確認 `subst`、UNC、symlink 的案例是實跑（不是寫訊息後返回）。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。
