@@ -48,6 +48,24 @@ if(NOT written STREQUAL expected)
     message(FATAL_ERROR "trace files ${written}, want ${expected}")
 endif()
 
+# An arena under a folder the Windows ANSI code page cannot name (os-path-utf8-sweep,
+# D63): the Match names it in UTF-8 in its start line, where it used to throw on
+# Windows, and stops as with any 2-spawn arena.
+set(unicode "${OUTPUT}/試合-한")
+file(MAKE_DIRECTORY "${unicode}")
+file(COPY "${ARENA}" DESTINATION "${unicode}")
+get_filename_component(arenaName "${ARENA}" NAME)
+execute_process(COMMAND "${MATCH}" --arena "${unicode}/${arenaName}" --listen "not-an-endpoint"
+    WORKING_DIRECTORY "${OUTPUT}" TIMEOUT 20 ENCODING UTF8
+    RESULT_VARIABLE result OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT "${result}" STREQUAL "1")
+    message(FATAL_ERROR "arena outside the ANSI code page: Match exited with ${result}, want 1\nstdout: ${out}\nstderr: ${err}")
+endif()
+string(FIND "${err}" "試合-한" named)
+if(named EQUAL -1)
+    message(FATAL_ERROR "arena outside the ANSI code page: the start line does not name it\nstderr: ${err}")
+endif()
+
 # Without a movement trace the Match writes no detail file.
 file(MAKE_DIRECTORY "${OUTPUT}/plain")
 execute_process(COMMAND "${MATCH}" --arena "${ARENA}" --listen "not-an-endpoint"

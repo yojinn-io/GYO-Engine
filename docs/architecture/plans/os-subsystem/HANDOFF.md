@@ -20,6 +20,7 @@
 - 2026-10-25：使用者說「推送本分支，手動觸發四平台 L1，一起驗 os-guard-wide 和 os-process-info」。第一次 run 40192938131 只有 macos-arm64 的 toolchain 列失敗（本批新加的 CPU 測試前提錯，見「os-process-info」），修正 `a9219fa` 後第二次 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。兩批完成。下一批是 os-console-shutdown（xhigh，★ Windows 行為變更）。
 - 2026-10-26：io-native-paths（D54）完成，判定已定案（D55）。四平台 L1 [run 40295007179](https://github.com/yojinn-io/GYO-Engine/actions/runs/40295007179) 全部成功，Windows 的 UNC 探針兩項 Passed。Windows／Linux 專用的突變待對應平台。
 - 2026-10-26：os-tool-files 完成（D56、D57），四平台 L1 [run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964) 全部成功。Windows 專用的突變與 `-s` 確認留給 lan15。
+- 2026-10-27：os-path-utf8-sweep 開始（D63），基準 `52e0b17d`，本機進行中。
 - 2026-10-26：os-trace-writers 完成（D58、D60）：Red [run 40331764169](https://github.com/yojinn-io/GYO-Engine/actions/runs/40331764169)（只有 windows-x64 的新案例失敗），Green [run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)（全部成功）。
 - 2026-10-26：D59，本計畫的 commit 統一放進 #96。已請消費端把本分支併到 `ca434952`（不含 Red 測試 `a75e4028`），等它回覆發行線上的 commit。
 - 2026-10-27：使用者說「推送 e5fec6ef 這個紀錄 commit，並告訴消費端可以一起併」。推送 `e5fec6ef`（os-trace-writers 的完成紀錄），請消費端把本分支一次併到 `e5fec6ef`（含 os-guard-wide～os-trace-writers），等它回覆發行線上的 commit。
@@ -84,6 +85,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-26 | D60：os-trace-writers 的定案。<br>trace.md Invariant 7（`GYO::Trace` links exactly `GYO::Threads` and `GYO::Os`，Os 為 PRIVATE，連結檢查另驗 Os 不出現在 INTERFACE）與 os.md Invariant 2（engine/trace 在 GYO::Engine 之下，直接經 engine/os 寫檔）照草稿定案；AGENTS §14.4 的 1～5 經獨立核對（1、2、4 點不完整的部分已補檢查或記為未結）。<br>xhigh 審查發現、事前沒有宣告的差異接受並補宣告（trace.md）：非 UTF-8 的 trace 路徑改為 OpenFailed；錯誤 detail 的文字（UTF-8 路徑加 engine/os 原因）；`flushEachLine` 的長行一次寫出 | 使用者對兩個問題選：「照草稿定案」「全部接受並補宣告」 |
 | 2026-10-27 | D61：time-threads-invariants 的定案。<br>time.md（11 條）與 threads.md（9 條）的 Design Invariants 與 Replacement Criteria 照草稿同意；每條寫明守衛，沒有的寫 No guard。<br>這一批補幾個便宜的守衛：`gyo_time`、`gyo_threads` 連結檢查的設定期突變（ti-x1、ti-x2）、後端名稱的測試（ti-x3）、Linux 15 位元組名稱截斷的檢查（ti-x4，Linux 專用）。其餘無守衛的項目記為未結，在 os-threads-backend、os-wait-backend 開始時再決定 | 使用者先問「繼續？」，選「time-threads-invariants」；對兩個問題選：「照草稿同意」「這批補幾個便宜的」 |
 | 2026-10-27 | D62：排程（消費端 D208、D209 的連帶）。使用者對消費端說「lan15 延期，時間對不上」「我想乾脆吧『OS 統一子系統』的任務跑完一起弄」，消費端指出兩處互等（#96 等 lan15、lan15 等 OS、os-net-errors 等 #96；計時核心的 L2 等 lan15）後說「那就到 os-net-errors 這個任務之前」。在本會話確認範圍：含計時核心，共 4 批（os-path-utf8-sweep、os-wake-record、os-threads-backend、os-wait-backend）。這些做完後，在 Windows 機器上一次做完 Windows 專用突變、`-s` 確認、實機驗收、計時核心的 L2 與 os-wake-record 的 Windows 基準，再跑 lan15；os-net-errors 與 os-close 排在 #96 合併後 | 使用者對「範圍」選「含計時核心，共 4 批」 |
+| 2026-10-27 | D63：os-path-utf8-sweep 開工前的四個決定。<br>檔位：high＋1 位 xhigh 審查（使用者選的；建議是 high 的審查者）。<br>新增 `Os::Files::PathForMessage`：訊息與 log 用的 UTF-8 文字，保留平台的分隔字元（Windows 是 `\`），永不失敗（沒有 UTF-8 形式的單位換成 U+FFFD），不拿來開檔；ASCII 路徑的 log 位元組不變（D48）。<br>範圍：拿掉公開的 `Sdl::PathFromUtf8`，產品改用 `Os::Files::PathFromUtf8`（POSIX 上不是 UTF-8 的參數改為拒絕，與 D50 一致）；`BaseDirectory` 內部照舊保留 SDL 給的位元組，不加 platform/sdl → GYO::Os 的邊；停用中的產品（object_fps、object_fps_v2、object_fps_preview 與它們的驗收程式）只記進 inactive_products.md；主機 shader 工具（engine/render/shaders/pipeline）的 12 處也一起改（使用者選的，建議是記為未結）。<br>Windows 的 Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問）。估時 10～15 h | 使用者對四個問題選：「high＋1 位 xhigh 審查」「新增 PathForMessage」「連 shader 工具一起改」「先推測試跑一次 L1」 |
 
 ## 消費端的壓力摘要
 
@@ -548,6 +550,13 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 使用者同意兩節（D61），並要這一批補幾個便宜的守衛：WaiterTests 加「後端名稱照消費端的 log」；RoleThreadTests 在既有的 `#if` 區塊內加長名稱的檢查（沒有新增 OS 巨集，allowlist 不變）；突變 ti-x1～ti-x3 在本機 killed，ti-x4 是 Linux 專用、跳過。
 - 本機：gyo_time_tests、gyo_threads_tests 通過，守衛通過。
 - 未結（無守衛，D61）：其他 engine/ 模組不用別的時鐘；latch 的狀態權威（只在審查時檢查）；LateWakeStats 不配置記憶體；名稱與優先級在 `Start` 回傳前就套用；不能從角色自己的執行緒 join；停止順序由擁有者決定；body 的義務。
+
+### os-path-utf8-sweep
+
+- 2026-10-27：開始。使用者先要求說明檔位、要動的檔案與需要同意的地方，回答四個問題後定為 D63。基準是本分支 `52e0b17d`（發行線 `b0a6f17f` 之上）。
+- 盤點（`git grep` 的 `.string()` 69 處，加上以窄字串建構 `path` 的地方），依 Windows 上的後果分四類：log／訊息（MSVC 對 ACP 表示不了的字元會丟例外，例如 Match 啟動時的 `arena_file=`）、檔名運算（TracePaths、ingress／shot 的名稱判斷）、把 UTF-8 當 ANSI 建 `path`（編輯器 `ReadOnlyAssetCatalog.cpp:80`、`EditorApp` 的路徑欄位）、交給 C API 的 `.string()`（驗收程式的 `SDL_SaveBMP`、`gui_room.hpp`）。主機 shader 工具是另外設定的 host 專案，不含 engine/os，所以只用標準庫的 UTF-8 轉換（`u8string()`、以 `std::u8string` 建 `path`），不加建置邊。
+- 2026-10-27：使用者去睡，關了 caffeinate，說「做完就休眠吧」。推送要先問使用者，所以本機做到推送的關卡就停：Red 用的測試單獨 commit，之後在本機實作、測試、突變、xhigh 審查，不推送。
+- Red 用的測試（macOS 上舊實作也通過，Red 只會在 Windows 出現）：產品 DiagnosticFileTests「trace names outside the ANSI code page」（`NumberedTracePath`、`MatchShotTracePath`、`MatchIngressTracePath` 與拒絕訊息）；`match_ingress_cli_check.cmake` 加上放在 `試合-한` 資料夾的 arena（Match 的啟動行要以 UTF-8 寫出它，結束碼 1）；EditorCoreTests「root outside the ANSI code page」（掛載後的解析路徑、匯出檢查、在這種資料夾下匯出）；PreviewAssetTests 的 GUI 掛載（`RequestAssetMount` 收到 `試合-한` 根目錄）；ArenaDigestTests 的 arena 開檔訊息與 arena 清單裡的 `試合.json` 項目。寫的時候編輯器案例在 macOS 失敗一次，原因是我寫的 catalog 少了 `font.default`，預設文件先驗證失敗；補上後通過。後兩組是實作時找到的同類站點，在推送前併進同一個 Red commit。
 
 ## 未結事項
 

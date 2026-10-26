@@ -279,6 +279,41 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
         "a wrong-type catalog AssetId blocks export");
 }
 
+// A content root the Windows ANSI code page cannot name (os-path-utf8-sweep,
+// D63): the catalog's resolved paths keep their characters, the export guard
+// still sees the root, and an export under such a folder is written.
+void TestRootOutsideAnsiCodePage(const std::filesystem::path& root) {
+    const std::filesystem::path folder = root / std::filesystem::path(u8"\u8cc7\u7522-\ud55c");
+    const std::filesystem::path assetRoot = folder / "app-assets";
+    const std::filesystem::path catalogPath = assetRoot / "asset_catalog.json";
+    Expect(
+        static_cast<bool>(WriteTextFileAtomically(catalogPath, R"({
+  "version": 1,
+  "assets": [
+    {"id":"font.default","type":"font","path":"fonts/default.ttf"},
+    {"id":"texture.logo","type":"texture","path":"textures/logo.png"}
+  ]
+}
+)")),
+        "catalog fixture is written under a root outside the ANSI code page");
+    ReadOnlyAssetCatalog mounted;
+    Expect(static_cast<bool>(mounted.Mount(catalogPath, assetRoot)),
+        "a catalog mounts under a root outside the ANSI code page");
+    const CatalogAsset* logo = mounted.Find("texture.logo");
+    Expect(logo != nullptr && logo->resolvedPath == assetRoot / "textures" / "logo.png",
+        "a resolved asset path keeps the characters of its root");
+
+    DocumentSession guarded;
+    const auto inside = guarded.Export(assetRoot / "ui" / "menu.json", &mounted);
+    Expect(!inside && inside.error().code == SessionErrorCode::OutputInsideMountedAssetRoot,
+        "the export guard sees a root outside the ANSI code page");
+
+    DocumentSession exporter;
+    const std::filesystem::path output = folder / std::filesystem::path(u8"\u51fa\u529b") / "menu.json";
+    Expect(static_cast<bool>(exporter.Export(output, nullptr)), "an export under such a folder succeeds");
+    Expect(std::filesystem::exists(output), "the export is written under such a folder");
+}
+
 void TestContentHashIsFnv1a(const std::filesystem::path& root) {
     // Pinned before FNV-1a moved to GYO::Base: external-change detection
     // compares stamps, so the content hash must stay the same function.
@@ -298,6 +333,7 @@ int main() {
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);
     TestReadOnlyCatalogAndExportGuard(temporary.path);
+    TestRootOutsideAnsiCodePage(temporary.path);
     TestContentManifestMount(temporary.path);
     TestContentHashIsFnv1a(temporary.path);
     if (failures != 0) {

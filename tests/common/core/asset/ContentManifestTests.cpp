@@ -42,6 +42,21 @@ TEST_CASE("Content manifest rejects malformed schema and root escapes") {
     }
 }
 
+// A catalog name is content.json text, so UTF-8, also outside the Windows ANSI
+// code page (os-path-utf8-sweep, D63): it is joined to the root as UTF-8.
+TEST_CASE("Content manifest loads a catalog named outside the ANSI code page") {
+    ContentFixture fixture;
+    fixture.Write("content.json",
+        "{\"version\":1,\"catalogs\":[\"\xE8\xA8\x98\xE9\x8C\xB2-\xED\x95\x9C.json\"],\"shader_bundles\":[]}");
+    std::ofstream(fixture.root / std::filesystem::path(u8"\u8a18\u9332-\ud55c.json"))
+        << R"({"version":1,"assets":[{"id":"test.asset","type":"text","path":"a.txt"}]})";
+    auto manifest = ContentManifest::Load(fixture.root);
+    REQUIRE(manifest);
+    auto catalog = manifest.value().LoadCatalogs(fixture.root);
+    REQUIRE_MESSAGE(catalog, (catalog ? std::string{} : catalog.error().message + " " + catalog.error().detail));
+    CHECK(catalog.value().Find(Engine::Asset::AssetId::FromString("test.asset")) != nullptr);
+}
+
 TEST_CASE("Content manifest loads only its own catalogs and reports absent content") {
     ContentFixture fixture;
     CHECK_FALSE(ContentManifest::Load(fixture.root));
