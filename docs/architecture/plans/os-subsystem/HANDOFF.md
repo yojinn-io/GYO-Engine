@@ -82,6 +82,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-26 | D58：os-trace-writers 開工前的四個決定。<br>檔位：high＋1 位 xhigh 審查（使用者選的，不是建議的「只用 high」）。<br>trace.md Invariant 7 改成「exactly GYO::Threads and GYO::Os」、os.md Invariant 2 補上「engine/trace 位在 GYO::Engine 之下，直接經 engine/os 寫檔（開放決策 2）」：同意開工，定案前做突變檢查與獨立審查，再交使用者定案（AGENTS §14.4，比照 D54）。<br>★ 事前宣告（os.md Invariant 9）：Windows 的附加改用只能附加的 handle（對其他附加者原子；原為 CRT 每次寫前 seek 到檔尾）；一批之內在 64 KiB 或批尾分段寫出（位元組不變）；錯誤 detail 的路徑是 UTF-8；Windows 長路徑可寫。<br>Windows 長路徑 trace 案例的 Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問），再推修正 | 使用者對四個問題選：「high＋1 位 xhigh 審查」「同意開工，定案前做突變與審查」「照建議」「先推測試跑一次 L1」 |
 | 2026-10-26 | D59：本計畫的 commit 不另開 PR，統一放進 #96（消費端的發行線）管理。使用者先說「你開一個PR吧。現在掛著一堆的commit」，開了草稿 #97（base 是發行線）後改成這個決定；#97 已關閉。合併照 A1～A3 的做法，由消費端以 `git merge --no-ff` 併進發行線：先到 `ca434952`（os-tool-files 完成），os-trace-writers 的 Red 測試 `a75e4028` 等修正後再併 | 使用者：「那算了，統一給#96管理好了。」 |
 | 2026-10-26 | D60：os-trace-writers 的定案。<br>trace.md Invariant 7（`GYO::Trace` links exactly `GYO::Threads` and `GYO::Os`，Os 為 PRIVATE，連結檢查另驗 Os 不出現在 INTERFACE）與 os.md Invariant 2（engine/trace 在 GYO::Engine 之下，直接經 engine/os 寫檔）照草稿定案；AGENTS §14.4 的 1～5 經獨立核對（1、2、4 點不完整的部分已補檢查或記為未結）。<br>xhigh 審查發現、事前沒有宣告的差異接受並補宣告（trace.md）：非 UTF-8 的 trace 路徑改為 OpenFailed；錯誤 detail 的文字（UTF-8 路徑加 engine/os 原因）；`flushEachLine` 的長行一次寫出 | 使用者對兩個問題選：「照草稿定案」「全部接受並補宣告」 |
+| 2026-10-27 | D61：time-threads-invariants 的定案。<br>time.md（11 條）與 threads.md（9 條）的 Design Invariants 與 Replacement Criteria 照草稿同意；每條寫明守衛，沒有的寫 No guard。<br>這一批補幾個便宜的守衛：`gyo_time`、`gyo_threads` 連結檢查的設定期突變（ti-x1、ti-x2）、後端名稱的測試（ti-x3）、Linux 15 位元組名稱截斷的檢查（ti-x4，Linux 專用）。其餘無守衛的項目記為未結，在 os-threads-backend、os-wait-backend 開始時再決定 | 使用者先問「繼續？」，選「time-threads-invariants」；對兩個問題選：「照草稿同意」「這批補幾個便宜的」 |
 
 ## 消費端的壓力摘要
 
@@ -537,6 +538,15 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 交使用者決定（事前沒有宣告的差異）：Linux 上不是 UTF-8 的 trace 路徑改成 OpenFailed；錯誤 detail 的文字（多了 engine/os 的原因，Windows 是 `/`，非 UTF-8 時 detail 沒有路徑）；`flushEachLine` 遇到長行也只寫一次（原本超過串流緩衝的行會拆成多次）。
   - 2026-10-26：使用者定為 D60（條文照草稿定案；差異 a～c 接受並補宣告）。下一步：整理成 commit、通知消費端、問過使用者後推送並跑四平台 L1（Windows 的 Green）。
   - 2026-10-26：本機 WIP 併成 `d32def55`（接在已推送的 Red `a75e4028` 之上，不改寫已推送的歷史），通知消費端。使用者說「推送本分支，手動觸發四平台 L1，驗 os-trace-writers 的 Green」。推送 `d32def55`，四平台 L1：[run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。**Green**：windows-x64 的 gyo_trace_tests 通過（長路徑案例與 CRLF 的位元組比對；95／95），linux-x64 的 gyo_trace_tests 也通過（含 `/dev/full`）。本批完成。
+
+### time-threads-invariants
+
+- 2026-10-27：使用者問「繼續？」，在三個候選裡選了 time-threads-invariants（只改文件，不碰今晚 lan15 要驗的發行線；lan15 之後由消費端延期，D208）。開工前把本機的 2 個紀錄 commit rebase 到發行線之上（推送時是 fast-forward）。
+- 寫成 `docs/architecture/time.md`（11 條）與 `docs/architecture/threads.md`（9 條），內容取自 `Waiter.hpp`、`RoleThread.hpp`、TT-1 的 PLAN 與 D29。寫的過程中，讀 `RoleThread.cpp` 改正了一處：`Normal` 在 macOS、Windows 會明確設定（預設的 QoS 類別／THREAD_PRIORITY_NORMAL），只有 Linux 與其他平台不呼叫 OS。
+- docs/architecture.md 的模組表補上 `GYO::Os` 這一列（本計畫前幾批漏掉的），Trace 的依賴改成「Threads; Os privately」，並加上 time、threads 的契約連結。
+- 使用者同意兩節（D61），並要這一批補幾個便宜的守衛：WaiterTests 加「後端名稱照消費端的 log」；RoleThreadTests 在既有的 `#if` 區塊內加長名稱的檢查（沒有新增 OS 巨集，allowlist 不變）；突變 ti-x1～ti-x3 在本機 killed，ti-x4 是 Linux 專用、跳過。
+- 本機：gyo_time_tests、gyo_threads_tests 通過，守衛通過。
+- 未結（無守衛，D61）：其他 engine/ 模組不用別的時鐘；latch 的狀態權威（只在審查時檢查）；LateWakeStats 不配置記憶體；名稱與優先級在 `Start` 回傳前就套用；不能從角色自己的執行緒 join；停止順序由擁有者決定；body 的義務。
 
 ## 未結事項
 

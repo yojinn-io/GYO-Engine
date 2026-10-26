@@ -77,6 +77,7 @@ Engine 目前沒有處理 OS 差異的 owner：
     - Windows 長路徑案例的 Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問）。
 20. **D59**：本計畫的 commit 不另開 PR，統一放進 #96（發行線）管理；合併照 A1～A3 的做法由消費端進行。
 21. **D60**：os-trace-writers 的定案。trace.md Invariant 7（exactly GYO::Threads and GYO::Os，Os 為 PRIVATE 並有設定期檢查）與 os.md Invariant 2（engine/trace 直接經 engine/os 寫檔）照草稿定案；審查發現的差異（非 UTF-8 路徑改為 OpenFailed、錯誤 detail 的文字、`flushEachLine` 的長行一次寫出）接受並補宣告。
+22. **D61**：time-threads-invariants 的定案。time.md 與 threads.md 的 Design Invariants（含 Replacement Criteria）照草稿同意；這一批補幾個便宜的守衛（連結檢查的兩個設定期突變、後端名稱的測試、Linux 名稱截斷的檢查），其餘無守衛的項目記為未結。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -112,7 +113,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-tool-files | high＋1 位 xhigh 審查（D56、D57） | 完成（2026-10-26；四平台 L1 run 40324361964；[dev_log](../../../dev_logs/2026_10_26_engine_os_tool_files.zh-Hant.md)） | 編輯器的原子存檔、路徑比較、系統字型目錄 |
 | os-trace-writers | high＋1 位 xhigh 審查（D58、D60） | 完成（2026-10-26；Red：run 40331764169；Green：四平台 L1 run 40339587478；[dev_log](../../../dev_logs/2026_10_26_engine_os_trace_writers.zh-Hant.md)） | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high | 未開始 | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |
-| time-threads-invariants | medium | 未開始 | time.md、threads.md 的 Design Invariants |
+| time-threads-invariants | medium（D61） | 完成（2026-10-27；只改文件與測試；[dev_log](../../../dev_logs/2026_10_27_engine_os_time_threads_invariants.zh-Hant.md)） | time.md、threads.md 的 Design Invariants |
 | os-wake-record | medium | 未開始 | 晚醒量測程式合回、四平台基準 |
 | os-threads-backend | high；Start 順序局部 xhigh | 未開始 | RoleThread 的 OS 呼叫搬進 engine/os |
 | os-wait-backend | xhigh；1 位 xhigh 審查（先問） | 未開始 | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |

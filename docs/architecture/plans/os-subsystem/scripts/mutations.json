@@ -1581,6 +1581,49 @@
       "target": "gyo_trace_tests",
       "cases": "*cannot open*",
       "expect": "detail.rfind\\(text.value\\(\\) \\+ \"; NotFound: \", 0\\) == 0 \\) is NOT correct"
+    },
+    {
+      "id": "ti-x1-time-links-more",
+      "what": "gyo_time links another module (time.md Invariant 10, configure-time check)",
+      "file": "engine/time/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base PRIVATE Threads::Threads)",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math PRIVATE Threads::Threads)",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_time links .*expected exactly\\s+GYO::Base;Threads::Threads"
+    },
+    {
+      "id": "ti-x2-threads-links-more",
+      "what": "gyo_threads links another module (threads.md Invariant 9, configure-time check)",
+      "file": "engine/threads/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads)",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math Threads::Threads)",
+      "target": "gyo_threads_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_threads links .*expected exactly\\s+GYO::Time;Threads::Threads"
+    },
+    {
+      "id": "ti-x3-backend-name-changed",
+      "what": "A wait backend name consumers log changes (time.md Invariant 7)",
+      "file": "engine/time/include/engine/time/Waiter.hpp",
+      "find": "    case WaitBackend::Kqueue:                      return \"Kqueue\";",
+      "replace": "    case WaitBackend::Kqueue:                      return \"KQueue\";",
+      "target": "gyo_time_tests",
+      "cases": "*backend names*",
+      "expect": "CHECK\\( std::string_view\\(ToString\\(WaitBackend::Kqueue\\)\\) == \"Kqueue\" \\) is NOT correct"
+    },
+    {
+      "id": "ti-x4-linux-name-not-cut",
+      "what": "A role name longer than 15 bytes is handed to Linux uncut, so it is refused (threads.md Invariant 6)",
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/threads/src/RoleThread.cpp",
+      "find": "    return pthread_setname_np(pthread_self(), name.substr(0, 15).c_str()) == 0;",
+      "replace": "    return pthread_setname_np(pthread_self(), name.c_str()) == 0;",
+      "target": "gyo_threads_tests",
+      "cases": "*reports its name*",
+      "expect": "CHECK\\( named.NameApplied\\(\\) \\) is NOT correct"
     }
   ]
 }
