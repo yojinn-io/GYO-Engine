@@ -25,8 +25,7 @@ primitives here.
 | Component | What it gives | Status |
 |---|---|---|
 | `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
-| Files | Read and write primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later atomic replace and path-component comparison | read: os-files-read; write: os-files-write (landed); replace: os-tool-files (D52) |
-| System | System font directories | os-tool-files |
+| Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`) and the font directories (`FontDirectories`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files (landed) |
 | Process | Executable path, process and thread CPU time, local calendar time (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`) | os-process-info (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the current thread | os-threads-backend |
@@ -86,6 +85,38 @@ Only the components whose batch has landed exist; the others are planned in the 
     the bytes; making line endings a Data Contract is a later decision.
   - `CreateDirectories` makes the directory and its missing parents, as `std::filesystem::create_directories`
     does; an existing directory is fine, and a path or parent that exists as anything else is `InvalidPath`.
+  - `RenameReplacing` renames a file over another in one step (os-tool-files, D56; named so because `ReplaceFile`
+    is a Win32 function): POSIX `rename`; Windows `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` and
+    `MOVEFILE_WRITE_THROUGH`, the flags the editor's atomic save used (Invariant 9). Both paths are on one volume;
+    a missing source is `NotFound`; a directory at the target is an error; on failure the target is unchanged; an
+    error's `path_bytes` is the target's. `RemoveFile` removes a file, never a directory (`InvalidPath` on every
+    platform); a missing file is `NotFound`. Both take long paths as reads do.
+  - `ResolvedPath` is what `std::filesystem::weakly_canonical` gives, in `/` form: `MakeAbsolute`, then links
+    resolved in the longest prefix that exists, the rest appended as written and dot segments removed lexically. A
+    root with nothing existing after it stays as written, as `weakly_canonical` keeps `root_path()`. POSIX finds
+    the prefix with `stat`, as the standard library's existence check does, and resolves it with `realpath`.
+    Windows opens it and asks `GetFinalPathNameByHandleW`, which also gives the prefix its case on disk and the
+    directory a `subst` drive names; its `\\?\` and `\\?\UNC\` forms are removed. The errors that count as a
+    missing component are those of the MSVC library's `__std_is_file_not_found`. Two declared differences from the
+    MSVC library (D57): a volume with no drive letter is an error here, where the library answers with a
+    `\\?\GLOBALROOT\...` path (Invariant 5 keeps namespace forms out of results), and the rest after the prefix
+    has `MakeAbsolute`'s normalization (Windows drops trailing dots and spaces). The guard test compares the result
+    with `weakly_canonical` for the same inputs, including a root-only path, a `subst`-style drive and UNC.
+  - `SamePathComponent` compares two names (D56 ★): on Windows as NTFS does, ignoring case by the OS's uppercase
+    table (`CompareStringOrdinal`), where the editor used the C runtime's `towlower`, whose result for letters
+    outside ASCII depends on the locale; elsewhere byte for byte, macOS included, although `DefaultCaseSensitivePaths`
+    is false there (a declared difference, kept as the editor compared before).
+  - Moving the editor's file service changed, as declared after its review (D57): a relative empty path made
+    absolute is empty on POSIX too (Windows already); reading a directory or a FIFO on POSIX fails (Windows already;
+    a FIFO no longer blocks); a Windows name the OS refuses fails when probed rather than when written; error
+    messages keep their words with the engine cause in the detail.
+  - `FontDirectories` lists the font directories that exist, the system's first, then the user's: Windows `Fonts`
+    in the system Windows directory and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`; macOS `/System/Library/Fonts`,
+    `/Library/Fonts`, `~/Library/Fonts`; other POSIX `/usr/share/fonts`, `/usr/local/share/fonts` and the user's
+    data directory's `fonts`. Which file to use is the caller's (Invariant 7); the editor searches one list of names
+    in each directory, system directories first (D56 ★: it searched only the system directory before, so only a
+    font that is missing there can be found elsewhere now; D57: on Linux a Windows or macOS font in the same
+    directory now comes before Noto, and Windows reads the system Windows directory instead of `WINDIR`).
 - **Process.**
   - `ExecutablePath` is the running image as an absolute UTF-8 path, read from the OS on every call:
     `GetModuleFileNameW` on Windows (a `\\?\` or `\\?\UNC\` prefix is removed, Invariant 5), `/proc/self/exe` on

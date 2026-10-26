@@ -285,9 +285,9 @@ namespace Engine::IO::FS {
         caps.canIterate = false;
         caps.canStat = true;
         caps.canCreateDirectories = true;
-        caps.canRemove = false;
+        caps.canRemove = true;
         caps.canRemoveRecursive = false;
-        caps.canMove = false;
+        caps.canMove = true;
         caps.canCopy = false;
         caps.supportsSymlink = false;
         caps.supportsPermissions = false;
@@ -310,12 +310,24 @@ namespace Engine::IO::FS {
         return {};
     }
 
-    IoResult<void> NativeFileSystem::Remove(const Path::Uri&, const RemoveOptions&) {
-        return Base::Err(Unsupported("Remove"));
+    IoResult<void> NativeFileSystem::Remove(const Path::Uri& uri, const RemoveOptions& opt) {
+        // Files only: a directory, with or without its contents, stays (canRemoveRecursive is false).
+        if (opt.recursive) return Base::Err(Unsupported("Remove with recursive"));
+        auto native = NativePath(uri);
+        if (!native) return Base::Err(std::move(native.error()));
+        auto removed = Os::Files::RemoveFile(native.value());
+        if (!removed) return Base::Err(FromOs(removed.error(), native.value(), IoErrorCode::WriteFailed));
+        return {};
     }
 
-    IoResult<void> NativeFileSystem::Move(const Path::Uri&, const Path::Uri&) {
-        return Base::Err(Unsupported("Move"));
+    IoResult<void> NativeFileSystem::Move(const Path::Uri& from, const Path::Uri& to) {
+        auto source = NativePath(from);
+        if (!source) return Base::Err(std::move(source.error()));
+        auto target = NativePath(to);
+        if (!target) return Base::Err(std::move(target.error()));
+        auto moved = Os::Files::RenameReplacing(source.value(), target.value());
+        if (!moved) return Base::Err(FromOs(moved.error(), target.value(), IoErrorCode::WriteFailed));
+        return {};
     }
 
     IoResult<void> NativeFileSystem::Copy(const Path::Uri&, const Path::Uri&) {

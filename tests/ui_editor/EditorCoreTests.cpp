@@ -228,6 +228,28 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
         !std::filesystem::exists(assetRoot / "ui" / "menu.json"),
         "guarded export writes no app asset");
 
+    // A path that reaches the asset root through a symbolic link is below it
+    // too: links in the existing part of a path are resolved, as
+    // std::filesystem::weakly_canonical did.
+    const std::filesystem::path working = root / "working";
+    std::filesystem::create_directories(working);
+    std::error_code linkError;
+    std::filesystem::create_directory_symlink(assetRoot, working / "assets-link", linkError);
+    if (linkError) {
+        // Windows needs Developer Mode or a privilege to create links.
+        std::cout << "symbolic links unavailable here: " << linkError.message() << '\n';
+    } else {
+        DocumentSession linked;
+        const auto throughLink = linked.Export(working / "assets-link" / "ui" / "linked.json", &mounted);
+        Expect(
+            !throughLink &&
+                throughLink.error().code == SessionErrorCode::OutputInsideMountedAssetRoot,
+            "export rejects a path that reaches the asset root through a symbolic link");
+        Expect(
+            !std::filesystem::exists(assetRoot / "ui" / "linked.json"),
+            "the linked export writes no app asset");
+    }
+
     DocumentSession missing;
     missing.EditDocument()["fonts"]["default"] = "font.missing";
     missing.CommitEdit("use missing font");

@@ -74,14 +74,20 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
   (`res:///a` is `a`).
 - **Mounts stay inside their root.** `MountTable::Resolve` rejects a request with a `..` segment
   (`PathEscapesRoot`), so a mount never names a path outside its root. A UNC root works as any other file root.
-- **The native backend** (`FS::NativeFileSystem`, os-files-read, os-files-write) serves `file://` URIs through
+- **The native backend** (`FS::NativeFileSystem`, os-files-read, os-files-write, os-tool-files) serves `file://` URIs through
   engine/os. `Open` reads, or writes a file it creates when missing: `Write | CreateIfMissing` with `Truncate` or
   `Append`, and `Text` for the platform's line endings (`\r\n` on Windows, as a text-mode C++ stream writes;
   without it the bytes go as given). Its write stream has no position and no buffer (each `Write` reaches the OS,
   `Flush` has nothing left to do), and `Close` reports a failure. Read and write together, overwriting in place
-  and writing an existing file only are `NotSupported`. `Exists`, `Stat`, `CreateDirectories` and
-  `ToNativePathString` work; every other operation is `NotSupported`, and `Capabilities()` sets every field to
-  say exactly that (the defaults of `FileSystemCapabilities` are mostly true).
+  and writing an existing file only are `NotSupported`. `Exists`, `Stat`, `CreateDirectories`, `Move`, `Remove`
+  and `ToNativePathString` work; every other operation is `NotSupported`, and `Capabilities()` sets every field to
+  say exactly that (the defaults of `FileSystemCapabilities` are mostly true). `Move` is one rename on one volume
+  that replaces a file already at the target (`Os::Files::RenameReplacing`); `Remove` removes a file (a directory
+  is `InvalidPath` on every platform), and a recursive request is `NotSupported` (D56).
+  - `Helpers::WriteFileAtomically` is the one atomic write (D56; the editor's save, and IP-5's settings later): the
+    bytes go to `<name>.tmp.<time>.<random>` beside the target, which is closed and then moved over it, so a reader
+    sees the old file or all of the new bytes. When a step fails the temporary file is removed and the target keeps
+    its old file. It works on any `IFileSystem` whose `Move` replaces in one step; the parent directory must exist.
   - `FS::NativeFileUri` gives the file URI of a native UTF-8 path for this backend, making a relative path
     absolute against the current directory first, as the OS would (`Os::Files::MakeAbsolute`). So a relative path
     keeps its dot segments on POSIX, while on Windows `GetFullPathNameW` has already removed them. A current

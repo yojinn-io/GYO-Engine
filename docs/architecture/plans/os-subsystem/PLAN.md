@@ -472,7 +472,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - L1：POSIX 的 symlink 加 `..`；Windows 的 UNC 往返與長路徑（`\\localhost\C$`，CI 做不到就 Skipped）；重寫的 UriTests 不動點測試；既有的 mount、長路徑前綴、`/C:/x` 判定不變。
   - AGENTS §14.4：放寬面與收緊面開工前已得同意；新判定的突變檢查與獨立審查（ultracode）完成後，判定與 Invariant 3 的新條文交使用者定案。
 
-### 7.9 os-tool-files：編輯器的檔案服務與系統字型目錄（high，6～9 h）
+### 7.9 os-tool-files：編輯器的檔案服務與系統字型目錄（D56：high＋1 位 xhigh 審查；9～13 h，原估 6～9 h）
 
 - 白話：把 UI 編輯器的原子存檔、路徑比較與系統字型目錄改用 engine/os，編輯器不再自己判斷 OS。
 - 依賴：os-files-write。
@@ -482,7 +482,9 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - ImGuiSdlRendererHost.cpp:39-111 的系統字型目錄，改由 engine/os 提供 FontDirectories；字型檔名的選擇留在工具。
   - 和延後的 AtomicWriteFile（輸入與呈現計畫 IP-5）協調，只留一份實作。
   - （D52 從 os-files-write 移來）engine/os 的 ReplaceFile（原子取代）、SamePathComponent（路徑成分的比較），NativeFileSystem 開放對應方法。
-- 驗收：L1：工具既有測試不改判定；ReplaceFile 能覆蓋既有檔，失敗時原檔不變。
+  - （D56）ReplaceFile 是 Win32 的函式名（os.md 的 Names），改名為 `RenameReplacing`；另加 `RemoveFile`（清暫存檔）與 `ResolvedPath`（取代 `weakly_canonical`：存在的前段解開 symlink，其餘照原樣；io.md Replacement Criteria 3 的解析 helper）。NativeFileSystem 開放 `Move`（取代已存在的目標）與 `Remove`（只刪檔）。原子寫入做成 engine/io 的 helper，是唯一的實作，IP-5 之後沿用。
+  - （D56 ★ 事前宣告）Windows 的路徑成分比較改用 OS 的序數比較（`CompareStringOrdinal`，原為 CRT 的 `towlower`）；macOS 維持逐位元組比較（已知差異）；字型改用不分 OS 的候選清單，在 `FontDirectories` 的每個目錄找（系統目錄優先，多找使用者目錄）。
+- 驗收：L1：工具既有測試不改判定；RenameReplacing 能覆蓋既有檔，失敗時原檔不變；經 symlink 進入 asset 根目錄的匯出被拒絕。
 
 ### 7.10 os-trace-writers：trace 寫檔（high，3～5 h）
 
@@ -498,7 +500,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 - 依賴：os-files-write、os-tool-files、os-console-shutdown。
 - 做：
   - 移除 platform/sdl 的 PathFromUtf8，呼叫端改用 `Os::Files::PathFromUtf8`。
-  - 用 rg 列出剩下的 `.string()` 與 `path(const char*)`，由審查者逐一對照。對抗式檢查補上的站點包括：`match_main.cpp:67`、`MovementTraceWriter.hpp:81`、`Arena.cpp:150`、`LogFile.cpp:132`、`TraceSink.cpp:104、110`、`EditorApp.cpp:603、722、2096`、`DocumentSession.cpp:233-234`、`build/acceptance` 的 SDL_SaveBMP 呼叫端（VisualProbe.cpp:130、MuzzleProbe.cpp:49、object_fps_v2/main.cpp:81）、`tests/common/ui/UiRendererTests.cpp:133-186`。
+  - 用 rg 列出剩下的 `.string()` 與 `path(const char*)`，由審查者逐一對照。對抗式檢查補上的站點包括：`match_main.cpp:67`、`MovementTraceWriter.hpp:81`、`Arena.cpp:150`、`LogFile.cpp:132`、`TraceSink.cpp:104、110`、`EditorApp.cpp:603、722、2096`（`DocumentSession.cpp:233-234` 已在 os-tool-files 改成 UTF-8，D56）、`build/acceptance` 的 SDL_SaveBMP 呼叫端（VisualProbe.cpp:130、MuzzleProbe.cpp:49、object_fps_v2/main.cpp:81）、`tests/common/ui/UiRendererTests.cpp:133-186`。
   - 同步 inactive_products.md。
 - 驗收：L1：含 ACP 以外字元的根目錄跑 asset 載入、log 與 trace 寫出、編輯器匯出；Windows 上先在舊樹確認 Red。
 

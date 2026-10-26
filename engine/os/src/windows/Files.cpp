@@ -483,6 +483,37 @@ Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
     return {};
 }
 
+Base::Result<void, OsError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
+    if (auto checked = Detail::CheckPath(utf8From); !checked) return Base::Err(std::move(checked.error()));
+    if (auto checked = Detail::CheckPath(utf8To); !checked) return Base::Err(std::move(checked.error()));
+    auto from = OsCallPath(utf8From);
+    if (!from) return Base::Err(std::move(from.error()));
+    auto to = OsCallPath(utf8To);
+    if (!to) return Base::Err(std::move(to.error()));
+    // The flags of the atomic save this primitive replaced (os-subsystem D56; Design Invariant 9).
+    if (!::MoveFileExW(from.value().c_str(), to.value().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot rename the file over its target", utf8To));
+    }
+    return {};
+}
+
+Base::Result<void, OsError> RemoveFile(const std::string_view utf8Path) {
+    if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    auto path = OsCallPath(utf8Path);
+    if (!path) return Base::Err(std::move(path.error()));
+    if (!::DeleteFileW(path.value().c_str())) {
+        const DWORD error = ::GetLastError();
+        if (IsDirectory(path.value())) {
+            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "is a directory, not a file",
+                                         {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)},
+                                         utf8Path.size()));
+        }
+        return Base::Err(FromWin32(error, "cannot remove file", utf8Path));
+    }
+    return {};
+}
+
 Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     auto path = OsCallPath(utf8Path);
@@ -518,6 +549,109 @@ Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path)
     return ToUtf8(full.value(), utf8Path);
 }
 
+namespace {
+
+// The errors that mean a component of the path does not exist (or names a file
+// where a directory is needed), as the MSVC standard library's
+// __std_is_file_not_found reads them (Windows 11 24H2 added the last two):
+// ResolvedPath then tries a shorter prefix.
+bool IsMissingComponent(const DWORD error) noexcept {
+    return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND || error == ERROR_BAD_NETPATH ||
+           error == ERROR_INVALID_NAME || error == ERROR_BAD_PATHNAME || error == ERROR_DIRECTORY ||
+           error == ERROR_NETNAME_DELETED;
+}
+
+// The final path of an open file or directory (links followed, the case on
+// disk), without the \\?\ or \\?\UNC\ form GetFinalPathNameByHandleW gives it.
+Base::Result<std::wstring, OsError> FinalPath(const HANDLE handle, const std::string_view utf8Path) {
+    constexpr DWORD kFlags = FILE_NAME_NORMALIZED | VOLUME_NAME_DOS;
+    DWORD needed = ::GetFinalPathNameByHandleW(handle, nullptr, 0, kFlags);
+    while (true) {
+        if (needed == 0) {
+            const DWORD error = ::GetLastError();
+            return Base::Err(FromWin32(error, "cannot resolve the path", utf8Path));
+        }
+        std::wstring path(needed, L'\0');
+        const DWORD written = ::GetFinalPathNameByHandleW(handle, path.data(), needed, kFlags);
+        if (written == 0) {
+            const DWORD error = ::GetLastError();
+            return Base::Err(FromWin32(error, "cannot resolve the path", utf8Path));
+        }
+        if (written < needed) {
+            path.resize(written);
+            if (path.starts_with(L"\\\\?\\UNC\\")) return std::wstring(L"\\\\") + path.substr(8);
+            if (path.starts_with(L"\\\\?\\")) return path.substr(4);
+            return path;
+        }
+        // The name grew between the two calls; ask again with the new size.
+        needed = written;
+    }
+}
+
+} // namespace
+
+Base::Result<std::string, OsError> ResolvedPath(const std::string_view utf8Path) {
+    auto absolute = MakeAbsolute(utf8Path);
+    if (!absolute) return absolute;
+    const std::string& path = absolute.value();
+    const std::size_t root = RootLength(path);
+    // The longest prefix that opens, dropping one component at a time from the
+    // end: only a missing component shortens it. The root itself is resolved
+    // only when it is the whole path, as weakly_canonical keeps root_path() as
+    // written when nothing after it exists.
+    std::size_t end = path.size();
+    while (true) {
+        auto native = OsCallPath(std::string_view(path).substr(0, end));
+        if (!native) return Base::Err(std::move(native.error()));
+        // Only attributes are read, as the standard library's canonical opens
+        // it. Backup semantics open a directory too; links are followed.
+        const HANDLE handle = ::CreateFileW(native.value().c_str(), FILE_READ_ATTRIBUTES, kShareAll, nullptr,
+                                           OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+        if (handle != INVALID_HANDLE_VALUE) {
+            auto finalPath = FinalPath(handle, utf8Path);
+            ::CloseHandle(handle);
+            if (!finalPath) return Base::Err(std::move(finalPath.error()));
+            auto resolved = ToUtf8(finalPath.value(), utf8Path);
+            if (!resolved) return resolved;
+            auto composed = PathFromUtf8(resolved.value() + path.substr(end));
+            if (!composed) return Base::Err(std::move(composed.error()));
+            return PathToUtf8(composed.value().lexically_normal());
+        }
+        const DWORD error = ::GetLastError();
+        if (!IsMissingComponent(error)) return Base::Err(FromWin32(error, "cannot resolve the path", utf8Path));
+        const std::size_t slash = end == 0 ? std::string::npos : path.rfind('/', end - 1);
+        if (slash == std::string::npos || slash < root) {
+            // Nothing after the root exists: the path as MakeAbsolute gave it.
+            auto lexical = PathFromUtf8(path);
+            if (!lexical) return Base::Err(std::move(lexical.error()));
+            return PathToUtf8(lexical.value().lexically_normal());
+        }
+        end = slash;
+    }
+}
+
+Base::Result<bool, OsError> SamePathComponent(const std::string_view utf8Left, const std::string_view utf8Right) {
+    for (const std::string_view text : {utf8Left, utf8Right}) {
+        if (!Detail::IsValidUtf8(text)) {
+            return Base::Err(
+                Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path component is not valid UTF-8", text.size()));
+        }
+    }
+    // ToWide refuses an empty text; two empty components are the same, an empty and a non-empty one are not.
+    if (utf8Left.empty() || utf8Right.empty()) return utf8Left.empty() && utf8Right.empty();
+    auto left = ToWide(utf8Left);
+    if (!left) return Base::Err(std::move(left.error()));
+    auto right = ToWide(utf8Right);
+    if (!right) return Base::Err(std::move(right.error()));
+    const int compared = ::CompareStringOrdinal(left.value().data(), static_cast<int>(left.value().size()),
+                                                right.value().data(), static_cast<int>(right.value().size()), TRUE);
+    if (compared == 0) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot compare path components", utf8Left));
+    }
+    return compared == CSTR_EQUAL;
+}
+
 bool IsAbsolutePath(const std::string_view utf8Path) noexcept {
     if (utf8Path.size() >= 2 && IsSlash(utf8Path[0]) && IsSlash(utf8Path[1])) return true;
     const bool letter = utf8Path.size() >= 3 && ((utf8Path[0] >= 'A' && utf8Path[0] <= 'Z') ||
@@ -528,6 +662,39 @@ bool IsAbsolutePath(const std::string_view utf8Path) noexcept {
 Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path) {
     // From the native UTF-16 directly: the standard library would throw on an unpaired surrogate.
     return ToUtf8(path.native(), {});
+}
+
+Base::Result<std::vector<std::string>, OsError> FontDirectories() {
+    std::vector<std::wstring> candidates;
+    const UINT needed = ::GetSystemWindowsDirectoryW(nullptr, 0);
+    if (needed == 0) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(FromWin32(error, "cannot read the Windows directory", {}));
+    }
+    std::wstring windows(needed, L'\0');
+    const UINT written = ::GetSystemWindowsDirectoryW(windows.data(), needed);
+    if (written == 0 || written >= needed) {
+        const DWORD error = written == 0 ? ::GetLastError() : ERROR_INSUFFICIENT_BUFFER;
+        return Base::Err(FromWin32(error, "cannot read the Windows directory", {}));
+    }
+    windows.resize(written);
+    if (windows.back() != L'\\') windows.push_back(L'\\');
+    candidates.push_back(windows + L"Fonts");
+    // The user's fonts (Windows 10 1809 and later); left out when the variable is not set.
+    if (const DWORD size = ::GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0); size > 0) {
+        std::wstring local(size, L'\0');
+        const DWORD got = ::GetEnvironmentVariableW(L"LOCALAPPDATA", local.data(), size);
+        if (got > 0 && got < size) {
+            local.resize(got);
+            candidates.push_back(local + L"\\Microsoft\\Windows\\Fonts");
+        }
+    }
+    std::vector<std::string> out;
+    for (const auto& candidate : candidates) {
+        if (!IsDirectory(candidate)) continue;
+        if (auto text = ToUtf8(candidate, {})) out.push_back(std::move(text.value()));
+    }
+    return out;
 }
 
 bool DefaultCaseSensitivePaths() noexcept {

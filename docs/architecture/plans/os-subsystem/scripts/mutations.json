@@ -1203,6 +1203,288 @@
       "target": "engine_tests",
       "cases": "Uri*",
       "expect": "NativePathFromFileUri accepted share"
+    },
+    {
+      "id": "os-x1-posix-rename-skipped",
+      "what": "RenameReplacing reports success without renaming (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (std::rename(from.c_str(), to.c_str()) != 0) {",
+      "replace": "    if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*rename*",
+      "expect": "CHECK\\( ReadBytes\\(to\\) == \"new\" \\) is NOT correct"
+    },
+    {
+      "id": "os-x2-posix-remove-skipped",
+      "what": "RemoveFile reports success without removing (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (::unlink(path.c_str()) != 0) {",
+      "replace": "    if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*remove a file*",
+      "expect": "CHECK_FALSE\\( std::filesystem::exists\\(file\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x3-posix-resolve-lexical",
+      "what": "ResolvedPath only normalizes lexically and follows no link (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    auto absolute = MakeAbsolute(utf8Path);\n    if (!absolute) return absolute;\n    const std::string& path = absolute.value();",
+      "replace": "    auto absolute = MakeAbsolute(utf8Path);\n    if (!absolute) return absolute;\n    if (!absolute.value().empty()) return std::filesystem::path(absolute.value()).lexically_normal().generic_string();\n    const std::string& path = absolute.value();",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "CHECK\\( resolved.value\\(\\) == Utf8\\(std::filesystem::weakly_canonical\\(input\\)\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x4-posix-resolve-stops-early",
+      "what": "ResolvedPath fails on a missing component instead of resolving the existing prefix (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        if ((error != ENOENT && error != ENOTDIR) || end <= 1) {",
+      "replace": "        if (true) {",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "REQUIRE\\( resolved \\) is NOT correct"
+    },
+    {
+      "id": "os-x5-posix-components-always-equal",
+      "what": "SamePathComponent takes any two components for the same (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    return utf8Left == utf8Right;\n}",
+      "replace": "    return true;\n}",
+      "target": "gyo_os_tests",
+      "cases": "*compare path*",
+      "expect": "CHECK_FALSE\\( SamePathComponent\\(\"assets\", \"asset\"\\).value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x6-macos-font-system-dir-missing",
+      "what": "FontDirectories leaves out the macOS system font directory",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    candidates = {\"/System/Library/Fonts\", \"/Library/Fonts\"};",
+      "replace": "    candidates = {\"/Library/Fonts\"};",
+      "target": "gyo_os_tests",
+      "cases": "*font*",
+      "expect": "CHECK\\( directories.value\\(\\).front\\(\\) == \"/System/Library/Fonts\" \\) is NOT correct"
+    },
+    {
+      "id": "os-x7-windows-rename-not-replacing",
+      "what": "RenameReplacing does not replace an existing file (Windows, no MOVEFILE_REPLACE_EXISTING)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (!::MoveFileExW(from.value().c_str(), to.value().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {",
+      "replace": "    if (!::MoveFileExW(from.value().c_str(), to.value().c_str(), MOVEFILE_WRITE_THROUGH)) {",
+      "target": "gyo_os_tests",
+      "cases": "*rename*",
+      "expect": "REQUIRE\\( RenameReplacing\\(Utf8\\(from\\), Utf8\\(to\\)\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x8-windows-final-path-prefix-kept",
+      "what": "ResolvedPath returns the \\\\?\\ form GetFinalPathNameByHandleW gives (Windows)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "            if (path.starts_with(L\"\\\\\\\\?\\\\\")) return path.substr(4);",
+      "replace": "            if (false) return path.substr(4);",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "CHECK\\( resolved.value\\(\\) == Utf8\\(std::filesystem::weakly_canonical\\(input\\)\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x9-windows-compare-case-sensitive",
+      "what": "SamePathComponent compares case on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "right.value().data(), static_cast<int>(right.value().size()), TRUE);",
+      "replace": "right.value().data(), static_cast<int>(right.value().size()), FALSE);",
+      "target": "gyo_os_tests",
+      "cases": "*compare path*",
+      "expect": "CHECK\\( SamePathComponent\\(\"Assets\", \"aSSETS\"\\).value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x10-windows-resolve-stops-early",
+      "what": "ResolvedPath fails on a missing component instead of resolving the existing prefix (Windows)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "        if (!IsMissingComponent(error)) return Base::Err(FromWin32(error, \"cannot resolve the path\", utf8Path));",
+      "replace": "        if (true) return Base::Err(FromWin32(error, \"cannot resolve the path\", utf8Path));",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "REQUIRE\\( resolved \\) is NOT correct"
+    },
+    {
+      "id": "io-x1-move-skipped",
+      "what": "NativeFileSystem::Move reports success without renaming",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        auto moved = Os::Files::RenameReplacing(source.value(), target.value());",
+      "replace": "        auto moved = Base::Result<void, Os::OsError>{};",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( ReadBack\\(tree.Native\\(\"menu.json\"\\)\\) == \"new\" \\) is NOT correct"
+    },
+    {
+      "id": "io-x2-remove-skipped",
+      "what": "NativeFileSystem::Remove reports success without removing",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        auto removed = Os::Files::RemoveFile(native.value());",
+      "replace": "        auto removed = Base::Result<void, Os::OsError>{};",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK_FALSE\\( fs.Exists\\(tree.Uri\\(\"menu.json\"\\)\\).value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "io-x3-remove-recursive-accepted",
+      "what": "NativeFileSystem::Remove takes a recursive request it cannot carry out",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        if (opt.recursive) return Base::Err(Unsupported(\"Remove with recursive\"));\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( fs.Remove\\(tree.Uri\\(\\), recursive\\).error\\(\\).code == IoErrorCode::NotSupported \\) is NOT correct"
+    },
+    {
+      "id": "io-x4-atomic-temporary-left",
+      "what": "WriteFileAtomically leaves its temporary file when the move fails",
+      "file": "engine/io/src/helpers/WriteFileAtomically.cpp",
+      "find": "        auto moved = fs.Move(temporary, uri);\n        if (!moved) {\n            (void)fs.Remove(temporary, {});",
+      "replace": "        auto moved = fs.Move(temporary, uri);\n        if (!moved) {",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( left == std::vector<std::string>\\{\"export.json\", \"taken\"\\} \\) is NOT correct"
+    },
+    {
+      "id": "io-x5-move-not-advertised",
+      "what": "NativeFileSystem keeps saying it cannot move",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        caps.canMove = true;",
+      "replace": "        caps.canMove = false;",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( caps.canMove \\) is NOT correct"
+    },
+    {
+      "id": "ui-x1-export-guard-lexical",
+      "what": "The editor's export guard compares paths lexically and misses a link into the asset root",
+      "file": "tools/ui_editor/src/FileService.cpp",
+      "find": "        if (auto resolved = OsFiles::ResolvedPath(text.value())) {",
+      "replace": "        if (auto resolved = OsFiles::MakeAbsolute(text.value())) {",
+      "target": "gyo_ui_editor_core_tests",
+      "command": [
+        "{exe:gyo_ui_editor_core_tests}"
+      ],
+      "expect": "FAILED: export rejects a path that reaches the asset root through a symbolic link"
+    },
+    {
+      "id": "ui-x2-export-guard-components-unequal",
+      "what": "The editor's export guard takes no two path components for the same",
+      "file": "tools/ui_editor/src/FileService.cpp",
+      "find": "    return same && same.value();",
+      "replace": "    return false;",
+      "target": "gyo_ui_editor_core_tests",
+      "command": [
+        "{exe:gyo_ui_editor_core_tests}"
+      ],
+      "expect": "FAILED: export rejects every path below the mounted app asset root"
+    },
+    {
+      "id": "os-x11-windows-root-opened",
+      "what": "ResolvedPath walks back past the root instead of keeping it as written (Windows)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "        if (slash == std::string::npos || slash < root) {",
+      "replace": "        if (slash == std::string::npos) {",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "os-x12-posix-root-walk-past-root",
+      "what": "ResolvedPath walks back to an empty prefix and fails when only the root exists (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        end = slash == 0 || slash == std::string::npos ? 1 : slash;",
+      "replace": "        end = slash == std::string::npos ? 1 : slash;",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "REQUIRE\\( resolved \\) is NOT correct"
+    },
+    {
+      "id": "os-x13-macos-realpath-without-stat",
+      "what": "ResolvedPath takes realpath's answer for a prefix stat does not find (macOS: a file with a trailing slash)",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        if (::stat(prefix.c_str(), &status) == 0) {",
+      "replace": "        if (char* probe = ::realpath(prefix.c_str(), nullptr); probe != nullptr && (std::free(probe), true)) {",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "CHECK\\( resolved.value\\(\\) == Utf8\\(std::filesystem::weakly_canonical\\(input\\)\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x14-macos-remove-directory-code",
+      "what": "RemoveFile reports a directory with the OS's own code (macOS: AccessDenied) instead of InvalidPath",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        if (::lstat(path.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {",
+      "replace": "        if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*remove a file*",
+      "expect": "CHECK\\( onDirectory.error\\(\\).code == OsErrorCode::InvalidPath \\) is NOT correct"
+    },
+    {
+      "id": "io-x6-atomic-write-direct",
+      "what": "WriteFileAtomically writes the target itself instead of a temporary file",
+      "file": "engine/io/src/helpers/WriteFileAtomically.cpp",
+      "find": "        temporary.path = Path::Path::FromNormalized(uri.path.Str() + TemporarySuffix());",
+      "replace": "        temporary.path = uri.path;",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( temporary != target \\) is NOT correct"
+    },
+    {
+      "id": "io-x7-atomic-failed-write-left",
+      "what": "WriteFileAtomically leaves its temporary file when a write fails",
+      "file": "engine/io/src/helpers/WriteFileAtomically.cpp",
+      "find": "        if (!written || !closed) {\n            (void)fs.Remove(temporary, {});",
+      "replace": "        if (!written || !closed) {",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( failing.removed == std::vector<std::string>\\{failing.opened.front\\(\\)\\} \\) is NOT correct"
     }
   ]
 }

@@ -6,7 +6,6 @@
 #include "engine/base/Assert.hpp"
 
 #include <iterator>
-#include <system_error>
 #include <utility>
 
 namespace Gyo::Tools::UiEditor {
@@ -225,13 +224,11 @@ Result<SessionReport, SessionError> DocumentSession::SaveTo(
             externalError = std::move(modified).error();
         }
     } else {
-        std::error_code existenceError;
-        externalModification = std::filesystem::exists(absolutePath, existenceError);
-        if (existenceError) {
-            externalError = FileError::Make(
-                FileErrorCode::ProbeFailed,
-                "cannot inspect output path '" + absolutePath.string() + "': " + existenceError.message(),
-                absolutePath.string());
+        auto exists = PathExists(absolutePath);
+        if (exists) {
+            externalModification = exists.value();
+        } else {
+            externalError = std::move(exists).error();
         }
     }
     if (!overwriteExternalModification && externalModification) {

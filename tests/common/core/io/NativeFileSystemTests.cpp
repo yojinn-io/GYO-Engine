@@ -1,5 +1,6 @@
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -8,12 +9,14 @@
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/fs/Vfs.hpp"
 #include "engine/io/helpers/ReadAllBytes.hpp"
+#include "engine/io/helpers/WriteFileAtomically.hpp"
 #include "engine/io/path/Uri.hpp"
 
 using namespace Engine::IO;
@@ -223,7 +226,8 @@ TEST_CASE("NativeFileSystem takes only paths absolute on this platform") {
 }
 
 // os-files-write opened writing (a file it creates, emptied or appended to) and
-// CreateDirectories; the rest stays NotSupported and Capabilities() says so.
+// CreateDirectories; os-tool-files opened Move (replacing) and Remove (files,
+// not recursive). The rest stays NotSupported and Capabilities() says so.
 TEST_CASE("NativeFileSystem says what it supports") {
     const TempTree tree;
     tree.Write("e.bin", "x");
@@ -236,8 +240,9 @@ TEST_CASE("NativeFileSystem says what it supports") {
     // Overwriting in place, or writing an existing file only, is not offered.
     CHECK(OpenError(fs, uri, FileOpenMode::Write | FileOpenMode::CreateIfMissing) == IoErrorCode::NotSupported);
     CHECK(OpenError(fs, uri, Stream::OpenWriteBinaryTruncate(false)) == IoErrorCode::NotSupported);
-    CHECK(fs.Remove(uri, {}).error().code == IoErrorCode::NotSupported);
-    CHECK(fs.Move(uri, uri).error().code == IoErrorCode::NotSupported);
+    FS::RemoveOptions recursive;
+    recursive.recursive = true;
+    CHECK(fs.Remove(tree.Uri(), recursive).error().code == IoErrorCode::NotSupported);
     CHECK(fs.Copy(uri, uri).error().code == IoErrorCode::NotSupported);
     CHECK(fs.List(tree.Uri(), {}).error().code == IoErrorCode::NotSupported);
     CHECK(fs.Iterate(tree.Uri(), {}).error().code == IoErrorCode::NotSupported);
@@ -252,9 +257,9 @@ TEST_CASE("NativeFileSystem says what it supports") {
     CHECK(caps.canCreateDirectories);
     CHECK_FALSE(caps.canList);
     CHECK_FALSE(caps.canIterate);
-    CHECK_FALSE(caps.canRemove);
+    CHECK(caps.canRemove);
     CHECK_FALSE(caps.canRemoveRecursive);
-    CHECK_FALSE(caps.canMove);
+    CHECK(caps.canMove);
     CHECK_FALSE(caps.canCopy);
     CHECK_FALSE(caps.supportsWatch);
     CHECK_FALSE(caps.supportsRecursiveWatch);
@@ -321,6 +326,177 @@ TEST_CASE("NativeFileSystem creates directories and keeps the engine/os cause of
     auto onFile = fs.CreateDirectories(tree.Uri("logs/2026/10/client.log"));
     REQUIRE_FALSE(onFile);
     CHECK(onFile.error().code == IoErrorCode::InvalidPath);
+}
+
+TEST_CASE("NativeFileSystem moves a file over another and removes files") {
+    const TempTree tree;
+    tree.Write("menu.json", "old");
+    tree.Write("menu.json.tmp", "new");
+    tree.Write("folder/inner.txt", "inner");
+    FS::NativeFileSystem fs;
+    REQUIRE(fs.Move(tree.Uri("menu.json.tmp"), tree.Uri("menu.json")));
+    CHECK(ReadBack(tree.Native("menu.json")) == "new");
+    CHECK_FALSE(fs.Exists(tree.Uri("menu.json.tmp")).value());
+
+    const auto missing = fs.Move(tree.Uri("absent.tmp"), tree.Uri("menu.json"));
+    REQUIRE_FALSE(missing);
+    CHECK(missing.error().code == IoErrorCode::NotFound);
+    CHECK(missing.error().detail.find("NotFound: ") != std::string::npos);
+    CHECK(ReadBack(tree.Native("menu.json")) == "new");
+
+    REQUIRE(fs.Remove(tree.Uri("menu.json"), {}));
+    CHECK_FALSE(fs.Exists(tree.Uri("menu.json")).value());
+    CHECK(fs.Remove(tree.Uri("menu.json"), {}).error().code == IoErrorCode::NotFound);
+    // A directory stays, with its contents, and is InvalidPath on every platform.
+    const auto folder = fs.Remove(tree.Uri("folder"), {});
+    REQUIRE_FALSE(folder);
+    CHECK(folder.error().code == IoErrorCode::InvalidPath);
+    CHECK(ReadBack(tree.Native("folder/inner.txt")) == "inner");
+}
+
+// The editor's atomic save (os-tool-files, D56): a reader sees the old file or
+// all of the new bytes; nothing is left beside the file.
+TEST_CASE("NativeFileSystem writes a file atomically through a temporary file") {
+    const TempTree tree;
+    FS::NativeFileSystem fs;
+    const auto bytes = [](const std::string& text) {
+        return Engine::Base::ConstSpan<std::byte>(reinterpret_cast<const std::byte*>(text.data()), text.size());
+    };
+    const std::string first = "first\n";
+    const std::string second = "second\r\n";
+    REQUIRE(Helpers::WriteFileAtomically(fs, tree.Uri("export.json"), bytes(first)));
+    CHECK(ReadBack(tree.Native("export.json")) == first);
+    REQUIRE(Helpers::WriteFileAtomically(fs, tree.Uri("export.json"), bytes(second)));
+    CHECK(ReadBack(tree.Native("export.json")) == second);
+    const auto names = [&tree] {
+        std::vector<std::string> out;
+        for (const auto& entry : std::filesystem::directory_iterator(FromUtf8(tree.Native()))) {
+            const std::u8string name = entry.path().filename().u8string();
+            out.emplace_back(name.begin(), name.end());
+        }
+        return out;
+    };
+    CHECK(names() == std::vector<std::string>{"export.json"});
+
+    // A directory in the way: the move fails, the directory is kept and the temporary file removed.
+    tree.Write("taken/inner.txt", "inner");
+    const auto blocked = Helpers::WriteFileAtomically(fs, tree.Uri("taken"), bytes(first));
+    REQUIRE_FALSE(blocked);
+    CHECK(ReadBack(tree.Native("taken/inner.txt")) == "inner");
+    auto left = names();
+    std::sort(left.begin(), left.end());
+    CHECK(left == std::vector<std::string>{"export.json", "taken"});
+
+    // A missing parent directory is not made.
+    const auto noParent = Helpers::WriteFileAtomically(fs, tree.Uri("absent/export.json"), bytes(first));
+    REQUIRE_FALSE(noParent);
+    CHECK(noParent.error().code == IoErrorCode::NotFound);
+}
+
+namespace {
+
+// A write stream whose writes fail, around a real one (which it still closes).
+class FailingWriteStream final : public Stream::IStream {
+public:
+    explicit FailingWriteStream(std::unique_ptr<Stream::IStream> inner) : inner_(std::move(inner)) {}
+    Stream::StreamCaps Caps() const noexcept override { return inner_->Caps(); }
+    bool IsOpen() const noexcept override { return inner_->IsOpen(); }
+    bool IsEof() const noexcept override { return inner_->IsEof(); }
+    Engine::Base::Result<std::size_t, IoError> Read(void* dst, const std::size_t bytes) override {
+        return inner_->Read(dst, bytes);
+    }
+    Engine::Base::Result<std::size_t, IoError> Write(const void*, std::size_t) override {
+        return Engine::Base::Err(IoError::Make(IoErrorCode::WriteFailed, "injected write failure"));
+    }
+    Engine::Base::Result<std::uint64_t, IoError> Tell() const override { return inner_->Tell(); }
+    Engine::Base::Result<std::uint64_t, IoError> Seek(const std::int64_t offset, const Stream::SeekWhence whence) override {
+        return inner_->Seek(offset, whence);
+    }
+    Engine::Base::Result<std::uint64_t, IoError> Size() const override { return inner_->Size(); }
+    Engine::Base::Result<void, IoError> Flush() override { return inner_->Flush(); }
+    Engine::Base::Result<void, IoError> Close() override { return inner_->Close(); }
+
+private:
+    std::unique_ptr<Stream::IStream> inner_;
+};
+
+// The native backend with every call that changes files recorded; writes can be made to fail.
+class RecordingFileSystem final : public FS::IFileSystem {
+public:
+    std::vector<std::string> opened;
+    std::vector<std::pair<std::string, std::string>> moved;
+    std::vector<std::string> removed;
+    bool failWrites = false;
+
+    const char* Name() const noexcept override { return "Recording"; }
+    IoResult<std::unique_ptr<Stream::IStream>> Open(const Path::Uri& uri, const Stream::FileOpenMode mode) override {
+        opened.push_back(uri.path.Str());
+        auto stream = native_.Open(uri, mode);
+        if (!stream || !failWrites) return stream;
+        return std::unique_ptr<Stream::IStream>(std::make_unique<FailingWriteStream>(std::move(stream.value())));
+    }
+    IoResult<bool> Exists(const Path::Uri& uri) override { return native_.Exists(uri); }
+    IoResult<FS::FileInfo> Stat(const Path::Uri& uri) override { return native_.Stat(uri); }
+    IoResult<void> CreateDirectories(const Path::Uri& uri) override { return native_.CreateDirectories(uri); }
+    IoResult<void> Remove(const Path::Uri& uri, const FS::RemoveOptions& opt) override {
+        removed.push_back(uri.path.Str());
+        return native_.Remove(uri, opt);
+    }
+    IoResult<void> Move(const Path::Uri& from, const Path::Uri& to) override {
+        moved.emplace_back(from.path.Str(), to.path.Str());
+        return native_.Move(from, to);
+    }
+    IoResult<void> Copy(const Path::Uri& from, const Path::Uri& to) override { return native_.Copy(from, to); }
+    IoResult<std::vector<FS::DirectoryEntry>> List(const Path::Uri& uri, const FS::ListOptions& opt) override {
+        return native_.List(uri, opt);
+    }
+    IoResult<std::string> ToNativePathString(const Path::Uri& uri) override { return native_.ToNativePathString(uri); }
+    FS::FileSystemCapabilities Capabilities() const noexcept override { return native_.Capabilities(); }
+    IoResult<std::unique_ptr<FS::DirectoryIterator>> Iterate(const Path::Uri& uri, const FS::ListOptions& opt) override {
+        return native_.Iterate(uri, opt);
+    }
+    IoResult<std::unique_ptr<FS::IFileWatcher>> CreateWatcher() override { return native_.CreateWatcher(); }
+
+private:
+    FS::NativeFileSystem native_;
+};
+
+} // namespace
+
+// The steps of the atomic write: the bytes never go to the target itself, only
+// to a temporary file that is moved over it, and a failed write leaves the
+// target as it was and no temporary file.
+TEST_CASE("NativeFileSystem atomic writes go through a temporary file and a move") {
+    const TempTree tree;
+    tree.Write("export.json", "old");
+    const std::string target = tree.Uri("export.json").path.Str();
+    const std::string text = "new";
+    const Engine::Base::ConstSpan<std::byte> bytes(reinterpret_cast<const std::byte*>(text.data()), text.size());
+
+    RecordingFileSystem recording;
+    REQUIRE(Helpers::WriteFileAtomically(recording, tree.Uri("export.json"), bytes));
+    REQUIRE(recording.opened.size() == 1);
+    const std::string temporary = recording.opened.front();
+    CHECK(temporary != target);
+    CHECK(temporary.rfind(target + ".tmp.", 0) == 0);
+    REQUIRE(recording.moved.size() == 1);
+    CHECK(recording.moved.front() == std::pair<std::string, std::string>(temporary, target));
+    CHECK(recording.removed.empty());
+    CHECK(ReadBack(tree.Native("export.json")) == "new");
+
+    RecordingFileSystem failing;
+    failing.failWrites = true;
+    const auto failed = Helpers::WriteFileAtomically(failing, tree.Uri("export.json"), bytes);
+    REQUIRE_FALSE(failed);
+    CHECK(failed.error().code == IoErrorCode::WriteFailed);
+    REQUIRE(failing.opened.size() == 1);
+    CHECK(failing.moved.empty());
+    CHECK(failing.removed == std::vector<std::string>{failing.opened.front()});
+    CHECK(ReadBack(tree.Native("export.json")) == "new");
+    CHECK_FALSE(std::filesystem::exists(FromUtf8(tree.Native()) / "export.json.tmp"));
+    std::size_t entries = 0;
+    for ([[maybe_unused]] const auto& entry : std::filesystem::directory_iterator(FromUtf8(tree.Native()))) ++entries;
+    CHECK(entries == 1);
 }
 
 TEST_CASE("NativeFileSystem takes file URIs only") {

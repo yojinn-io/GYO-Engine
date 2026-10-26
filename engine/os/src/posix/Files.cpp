@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <limits>
 #include <string>
 #include <utility>
@@ -249,6 +252,34 @@ Base::Result<void, OsError> CreateDirectories(const std::string_view utf8Path) {
     return {};
 }
 
+Base::Result<void, OsError> RenameReplacing(const std::string_view utf8From, const std::string_view utf8To) {
+    if (auto checked = Detail::CheckPath(utf8From); !checked) return Base::Err(std::move(checked.error()));
+    if (auto checked = Detail::CheckPath(utf8To); !checked) return Base::Err(std::move(checked.error()));
+    const std::string from(utf8From);
+    const std::string to(utf8To);
+    if (std::rename(from.c_str(), to.c_str()) != 0) {
+        const int error = errno;
+        return Base::Err(FromErrno(error, "cannot rename the file over its target", utf8To));
+    }
+    return {};
+}
+
+Base::Result<void, OsError> RemoveFile(const std::string_view utf8Path) {
+    if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
+    const std::string path(utf8Path);
+    if (::unlink(path.c_str()) != 0) {
+        const int error = errno;
+        // unlink refuses a directory with EPERM (macOS) or EISDIR (Linux): one code for both.
+        struct stat status {};
+        if (::lstat(path.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {
+            return Base::Err(MakeOsError(OsErrorCode::InvalidPath, "is a directory, not a file",
+                                         {NativeErrorDomain::Errno, error}, utf8Path.size()));
+        }
+        return Base::Err(FromErrno(error, "cannot remove file", utf8Path));
+    }
+    return {};
+}
+
 Base::Result<FileStatus, OsError> Stat(const std::string_view utf8Path) {
     if (auto checked = Detail::CheckPath(utf8Path); !checked) return Base::Err(std::move(checked.error()));
     const std::string path(utf8Path);
@@ -294,6 +325,52 @@ Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path)
     return out;
 }
 
+Base::Result<std::string, OsError> ResolvedPath(const std::string_view utf8Path) {
+    auto absolute = MakeAbsolute(utf8Path);
+    if (!absolute) return absolute;
+    const std::string& path = absolute.value();
+    // The longest prefix that exists (stat, as the standard library's existence
+    // check reads it), dropping one component at a time from the end: only a
+    // missing component (or a file used as a directory) shortens it. That
+    // prefix is then resolved by realpath; "/" always exists.
+    std::size_t end = path.size();
+    while (true) {
+        const std::string prefix = path.substr(0, end);
+        struct stat status {};
+        if (::stat(prefix.c_str(), &status) == 0) {
+            char* resolved = ::realpath(prefix.c_str(), nullptr);
+            if (resolved == nullptr) {
+                const int error = errno;
+                return Base::Err(FromErrno(error, "cannot resolve the path", utf8Path));
+            }
+            std::string out(resolved);
+            std::free(resolved);
+            if (!Detail::IsValidUtf8(out)) {
+                return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,
+                                                         "the resolved path is not valid UTF-8", utf8Path.size()));
+            }
+            out.append(path, end, std::string::npos);
+            return std::filesystem::path(out).lexically_normal().generic_string();
+        }
+        const int error = errno;
+        if ((error != ENOENT && error != ENOTDIR) || end <= 1) {
+            return Base::Err(FromErrno(error, "cannot resolve the path", utf8Path));
+        }
+        const std::size_t slash = path.rfind('/', end - 1);
+        end = slash == 0 || slash == std::string::npos ? 1 : slash;
+    }
+}
+
+Base::Result<bool, OsError> SamePathComponent(const std::string_view utf8Left, const std::string_view utf8Right) {
+    for (const std::string_view text : {utf8Left, utf8Right}) {
+        if (!Detail::IsValidUtf8(text)) {
+            return Base::Err(
+                Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path component is not valid UTF-8", text.size()));
+        }
+    }
+    return utf8Left == utf8Right;
+}
+
 bool IsAbsolutePath(const std::string_view utf8Path) noexcept {
     return !utf8Path.empty() && utf8Path.front() == '/';
 }
@@ -304,6 +381,30 @@ Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path)
     std::string out(text.begin(), text.end());
     if (!Detail::IsValidUtf8(out)) {
         return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, "path is not valid UTF-8", out.size()));
+    }
+    return out;
+}
+
+Base::Result<std::vector<std::string>, OsError> FontDirectories() {
+    std::vector<std::string> candidates;
+#if defined(__APPLE__)
+    candidates = {"/System/Library/Fonts", "/Library/Fonts"};
+    if (const char* home = std::getenv("HOME"); home != nullptr && home[0] == '/') {
+        candidates.push_back(std::string(home) + "/Library/Fonts");
+    }
+#else
+    candidates = {"/usr/share/fonts", "/usr/local/share/fonts"};
+    if (const char* data = std::getenv("XDG_DATA_HOME"); data != nullptr && data[0] == '/') {
+        candidates.push_back(std::string(data) + "/fonts");
+    } else if (const char* home = std::getenv("HOME"); home != nullptr && home[0] == '/') {
+        candidates.push_back(std::string(home) + "/.local/share/fonts");
+    }
+#endif
+    std::vector<std::string> out;
+    for (auto& candidate : candidates) {
+        if (!Detail::IsValidUtf8(candidate)) continue;
+        struct stat status {};
+        if (::stat(candidate.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) out.push_back(std::move(candidate));
     }
     return out;
 }

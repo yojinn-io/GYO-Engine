@@ -38,6 +38,7 @@ target_sources(engine
     io/src/helpers/ReadAllText.cpp
     io/src/helpers/WriteAllBytes.cpp
     io/src/helpers/WriteAllText.cpp
+    io/src/helpers/WriteFileAtomically.cpp
     # io/path
     io/src/path/PathUtils.cpp
     io/src/path/Uri.cpp

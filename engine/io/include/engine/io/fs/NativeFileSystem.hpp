@@ -12,8 +12,10 @@ namespace Engine::IO::FS {
     /// - Every OS call goes to engine/os; this class has no OS code.
     /// - A URI names a native path through the file:// mapping (Path::NativePathFromFileUri).
     /// - Open reads, or writes a file it creates when missing (Write | CreateIfMissing with Truncate or
-    ///   Append; Text for the platform's line endings). Exists, Stat, CreateDirectories and
-    ///   ToNativePathString work; every other operation is NotSupported, as Capabilities() says.
+    ///   Append; Text for the platform's line endings). Exists, Stat, CreateDirectories, Move (one rename on
+    ///   one volume that replaces a file already at the target, Os::Files::RenameReplacing), Remove (a file,
+    ///   not recursive) and ToNativePathString work; every other operation is NotSupported, as
+    ///   Capabilities() says.
     /// - An engine/os failure keeps its code name and native detail (Base::CauseDetail).
     class NativeFileSystem final : public IFileSystem {
     public:

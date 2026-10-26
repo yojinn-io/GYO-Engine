@@ -62,6 +62,14 @@ Engine 目前沒有處理 OS 差異的 owner：
     - UriTests 與 AssetPathResolverTests 的判定改變照 AGENTS §14.4 的表定案，包含只有主機的 UNC 照樣對應、由 OS 決定，以及 POSIX 上 `file://host/x` 讀本機的 `/host/x`。
     - io.md 的 Invariant 3 與 Replacement Criteria 3 照草稿定案。
     - `allowAbsolutePath` 的字面站點（點段消去、UNC 的 `//` 收合）記為未結，之後處理。
+17. **D56**：os-tool-files 開工前的四個決定。
+    - 檔位：high；Windows 的 `RenameReplacing` 與 `ResolvedPath` 逐行論證，實作後 1 位 xhigh 唯讀審查。估時 9～13 h。
+    - 新 API：engine/os 的 `RenameReplacing`（原名 ReplaceFile 撞 Win32 名）、`RemoveFile`、`SamePathComponent`、`ResolvedPath`、`FontDirectories`；NativeFileSystem 的 `Move`（取代既有）、`Remove`（只刪檔）。
+    - 原子寫入做成 engine/io 的 helper（唯一實作），工具是第一個消費端，IP-5 之後沿用。
+    - ★ 事前宣告：Windows 的路徑成分比較改用 `CompareStringOrdinal`；macOS 維持區分大小寫（已知差異）；字型改用不分 OS 的候選清單，在每個字型目錄找。
+18. **D57**：os-tool-files 在 xhigh 審查後發現、事前沒有宣告的行為差異。
+    - 接受並補宣告：POSIX 的 `AbsolutePath("")` 回 `""`；POSIX 讀目錄、FIFO 回 ReadFailed；Windows 名稱不合法的路徑在 probe 時就回錯誤；錯誤訊息的文字；字型選擇的邊界情況（Linux 的同目錄他平台字型、日文合併；Windows 不讀 `WINDIR`）。
+    - 沒有磁碟代號的磁碟區，`ResolvedPath` 維持回錯誤（MSVC 回 `\\?\GLOBALROOT\...`），記為已知差異。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -94,7 +102,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-console-shutdown | xhigh（D49：high＋三處論證＋1 位 xhigh 審查） | 完成（2026-10-26；四平台 L1 run 40205158822，關閉主控台在 CI 為 Skipped、留給 lan15；[dev_log](../../../dev_logs/2026_10_25_engine_os_console_shutdown.zh-Hant.md)） | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
 | os-files-write | high＋1 位 xhigh 審查（D52） | 完成（2026-10-26；四平台 L1 run 40213916104；[dev_log](../../../dev_logs/2026_10_26_engine_os_files_write.zh-Hant.md)） | 寫入原語、消費端的 arena 讀取與 trace 寫檔（ReplaceFile 等移到 os-tool-files，D52） |
 | io-native-paths（D54） | high；Uri 規則與 Windows UNC 局部 xhigh；ultracode 契約審查 | 完成（2026-10-26；判定 D55；四平台 L1 run 40295007179；[dev_log](../../../dev_logs/2026_10_26_engine_os_io_native_paths.zh-Hant.md)） | file:// 對齊 OS：`..` 交給 OS、UNC、POSIX 的 `//`、非 UTF-8 目前目錄的契約 |
-| os-tool-files | high | 未開始 | 編輯器的原子存檔、路徑比較、系統字型目錄 |
+| os-tool-files | high＋1 位 xhigh 審查（D56、D57） | 本機完成（2026-10-26；四平台 L1 待推送；[dev_log](../../../dev_logs/2026_10_26_engine_os_tool_files.zh-Hant.md)） | 編輯器的原子存檔、路徑比較、系統字型目錄 |
 | os-trace-writers | high | 未開始 | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high | 未開始 | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |
 | time-threads-invariants | medium | 未開始 | time.md、threads.md 的 Design Invariants |
