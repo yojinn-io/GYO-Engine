@@ -58,6 +58,13 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   - 交給 v8：B6、A4（連同 B10、N-correct-invariant-assert、E3、E5）、N-analyzer-literal-105、E1-2 的剩餘、預熱幀需求、outage-resync 的 P2 兩個已知例外、I-3（防竄改的 session 證明）。
 - **臨時測試（只記錄）**：2026-10-16 的全 Windows LAN 臨時測試（`16216ff`）可以穩定遊玩；見規劃紀錄同日條目與 INVENTORY 的 F7、`N-summary-counter-wrap`、`N-hit-feedback-not-logged`、`N-windows-max-path`。
 - **發行的完整突變（D185）**：完成（2026-10-25T10:01Z～15:17Z）。Engine 133／133（另 5 個 Windows 專用待 D201）；產品 643／654，非 killed 的 11 個：8 個是負載造成（單獨重跑 killed）、2 個期望訊息過時（`ed63c24` 更新）、1 個測試失去檢出力（`csc-r5-uncounted`，worker 的過期窗口檢查被 C17-3 削弱，已修，worker 為檢查的 47 個突變 47／47 killed）。擋發版的條件已解除。dev_log：`docs/dev_logs/2026_10_26_pvp_v71_release_full_mutation.zh-Hant.md`
+- **今晚 Windows 機器的清單（D201、D203、D206、D207；全部在發行線 `claude/pvp-v71-release`，建置目錄記為 `<B>`）**：
+  1. Windows 專用突變：`python docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --build-dir <B> --catalog docs/architecture/plans/os-subsystem/scripts/mutations.json --only p1-no-long-path-form p1-long-path-from-too-high p4-manifest-ansi-path os-f4-windows-acp os-f5-windows-notfound` 加上 OS 子系統列的 os-f9、os-f10、os-f11、os-w2、os-w3、os-w6、os-w8、os-w9、os-w10、os-x7～os-x11、os-g16、os-p5、io-w3、tt-x3、os-c4、os-c5、os-c6、os-c8、os-c9、os-g18（id 照目錄的全名）。p1 兩條與 p4 回本會話，其餘回 OS 子系統的會話。
+  2. 確認案例真的跑了（`-s`）：`gyo_os_tests -s -tc="*resolve*"`（DefineDosDeviceW 的磁碟代號、`\\localhost\C$`）、`gyo_os_tests -s -tc="*symbolic*"`、`engine_tests -s -tc="*symbolic link*"`、`gyo_ui_editor_core_tests`（輸出有「symbolic links unavailable」就是提早返回）。回 OS 子系統的會話。
+  3. 實機驗收（P5-6）：發行包解壓到本機磁碟（不要用網路共用），P＝156 與 P 約 210 各啟動 Client 一次，事故 log 第 2 行的錯誤不再出現。回本會話。
+  4. quick-close：`python build/acceptance/object_fps_pvp/close_timing.py --probe <B>/acceptance/object_fps_pvp/gyo_object_fps_pvp_worker_probe.exe --runs 10 --output close-timing-windows.json`，exit 0 才通過，不重跑。回本會話。
+  5. 主控台：Match 在主控台裡用 Ctrl+C、Ctrl+Break、關閉視窗結束，log 最後一行 `end version=1 reason=signal exit_code=0`；`ctest -R "^(os\.console_close|io\.unc_localhost|io\.unc_127\.0\.0\.1)$"` 預期 Passed（Windows Terminal 下 console_close 可能 Skipped，改用 conhost）。回 OS 子系統的會話。
+  6. lan15。
 - **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟、完整突變開始。
 
 ## 閱讀入口
