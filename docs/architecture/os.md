@@ -25,10 +25,9 @@ primitives here.
 | Component | What it gives | Status |
 |---|---|---|
 | `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
-| Files | Read primitives with UTF-8 paths (`FileReader`, `Stat`, `Exists`, `MakeAbsolute`, `PathToUtf8`/`PathFromUtf8`); later write, create, atomic replace | read: os-files-read (landed); write: os-files-write |
-| System | System font directories | os-tool-files |
-| Process | Executable path, process and thread CPU time, local calendar time | os-process-info |
-| Console | UTF-8 command line, UTF-8 console output, shutdown requests | os-console-shutdown |
+| Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`) and the font directories (`FontDirectories`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files (landed) |
+| Process | Executable path, process and thread CPU time, local calendar time (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`) | os-process-info (landed) |
+| Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the current thread | os-threads-backend |
 | Wait | The wake primitive behind `Time::Waiter` | os-wait-backend |
 | Net (conditional) | Neutral classification of socket error codes | os-net-errors |
@@ -54,13 +53,15 @@ Only the components whose batch has landed exist; the others are planned in the 
     (`GYO_ASSERT`).
   - `MakeAbsolute` resolves against the current directory the platform's own way: `GetFullPathNameW` on Windows
     also removes dot segments and trailing dots and spaces; POSIX joins the current directory as it is. It answers
-    in `/` form and never returns a long-path prefix.
+    in `/` form and never returns a long-path prefix. A relative path under a current directory that has no UTF-8
+    form (POSIX bytes that are not UTF-8) is `InvalidEncoding` (D43, D54): the answer would not be a UTF-8 path.
   - Long paths on Windows (os-subsystem PLAN section 8, P1): `FileReader::Open`, `Stat` and `Exists` read a file whose
     full path (`GetFullPathNameW`) is 248 characters (`MAX_PATH - 12`) or longer by handing the API `\\?\` plus
     that full path. The full path already carries Win32's normalization (dot segments, trailing dots and spaces),
     so turning normalization off with the prefix changes nothing for it; this is the change declared beforehand
-    under Design Invariant 9. A shorter path, a full path not on a drive letter (UNC roots are not supported this
-    round; a device such as `\\.\NUL`) and a path `GetFullPathNameW` refuses go to the API as before. A path the
+    under Design Invariant 9. A UNC full path (`\\server\share\...`) that long goes as `\\?\UNC\` plus the full
+    path after its `\\` (D54, io-native-paths). A shorter path, a full path that is neither on a drive letter nor
+    UNC (a device such as `\\.\NUL`) and a path `GetFullPathNameW` refuses go to the API as before. A path the
     caller already gives in a `\\?\` or `\\.\` form is passed on unchanged (engine/io refuses such paths, io.md
     Invariant 4; engine/os keeps Win32's meaning for them). Errors keep the caller's path length (`path_bytes`), not
     the prefixed form.
@@ -69,6 +70,88 @@ Only the components whose batch has landed exist; the others are planned in the 
   - `PathToUtf8` and `PathFromUtf8` return `InvalidEncoding` for a path with no UTF-8 form (an unpaired surrogate
     on Windows, bytes that are not UTF-8 on POSIX) and for text that is not UTF-8 (D47); they never throw.
   - Write times are 0 when the file system keeps none and saturate outside the range of `std::chrono::nanoseconds`.
+  - `FileWriter` opens a file it creates when missing, either emptied (`WriteMode::Truncate`) or appended to
+    (`WriteMode::Append`, every write at the end, also after another process's writes). Truncate opens as a C++
+    file stream does (POSIX `open` with 0666 less the umask; Windows `GENERIC_WRITE` with `CREATE_ALWAYS`).
+    Append is `O_APPEND` on POSIX, as there; on Windows it is an append-only handle (`FILE_APPEND_DATA`,
+    `OPEN_ALWAYS`), atomic against other appenders, where the C runtime seeks to the end before each write; the
+    batch that moves an appending caller (os-trace-writers) declares that difference. Other processes may read and write
+    the file meanwhile, not delete it (the C runtime's `_SH_DENYNO` on Windows). Nothing is buffered: each `Write`
+    hands all its bytes to the OS, not to the disk. A directory is `InvalidPath`; `Close` reports a failure the
+    destructor cannot. Long paths on Windows go through the same `\\?\` form as reads.
+  - Line endings (D52): `LineEndings::AsWritten` writes the bytes as given; `LineEndings::Native` turns each `\n`
+    into `\r\n` on Windows, whatever precedes it, and writes the bytes unchanged elsewhere, which is what a
+    text-mode C++ stream writes (Invariant 9). Replacement Criterion 5 was met here and put to the user, who kept
+    the bytes; making line endings a Data Contract is a later decision.
+  - `CreateDirectories` makes the directory and its missing parents, as `std::filesystem::create_directories`
+    does; an existing directory is fine, and a path or parent that exists as anything else is `InvalidPath`.
+  - `RenameReplacing` renames a file over another in one step (os-tool-files, D56; named so because `ReplaceFile`
+    is a Win32 function): POSIX `rename`; Windows `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` and
+    `MOVEFILE_WRITE_THROUGH`, the flags the editor's atomic save used (Invariant 9). Both paths are on one volume;
+    a missing source is `NotFound`; a directory at the target is an error; on failure the target is unchanged; an
+    error's `path_bytes` is the target's. `RemoveFile` removes a file, never a directory (`InvalidPath` on every
+    platform); a missing file is `NotFound`. Both take long paths as reads do.
+  - `ResolvedPath` is what `std::filesystem::weakly_canonical` gives, in `/` form: `MakeAbsolute`, then links
+    resolved in the longest prefix that exists, the rest appended as written and dot segments removed lexically. A
+    root with nothing existing after it stays as written, as `weakly_canonical` keeps `root_path()`. POSIX finds
+    the prefix with `stat`, as the standard library's existence check does, and resolves it with `realpath`.
+    Windows opens it and asks `GetFinalPathNameByHandleW`, which also gives the prefix its case on disk and the
+    directory a `subst` drive names; its `\\?\` and `\\?\UNC\` forms are removed. The errors that count as a
+    missing component are those of the MSVC library's `__std_is_file_not_found`. Two declared differences from the
+    MSVC library (D57): a volume with no drive letter is an error here, where the library answers with a
+    `\\?\GLOBALROOT\...` path (Invariant 5 keeps namespace forms out of results), and the rest after the prefix
+    has `MakeAbsolute`'s normalization (Windows drops trailing dots and spaces). The guard test compares the result
+    with `weakly_canonical` for the same inputs, including a root-only path, a `subst`-style drive and UNC.
+  - `SamePathComponent` compares two names (D56 ★): on Windows as NTFS does, ignoring case by the OS's uppercase
+    table (`CompareStringOrdinal`), where the editor used the C runtime's `towlower`, whose result for letters
+    outside ASCII depends on the locale; elsewhere byte for byte, macOS included, although `DefaultCaseSensitivePaths`
+    is false there (a declared difference, kept as the editor compared before).
+  - Moving the editor's file service changed, as declared after its review (D57): a relative empty path made
+    absolute is empty on POSIX too (Windows already); reading a directory or a FIFO on POSIX fails (Windows already;
+    a FIFO no longer blocks); a Windows name the OS refuses fails when probed rather than when written; error
+    messages keep their words with the engine cause in the detail.
+  - `FontDirectories` lists the font directories that exist, the system's first, then the user's: Windows `Fonts`
+    in the system Windows directory and `%LOCALAPPDATA%\Microsoft\Windows\Fonts`; macOS `/System/Library/Fonts`,
+    `/Library/Fonts`, `~/Library/Fonts`; other POSIX `/usr/share/fonts`, `/usr/local/share/fonts` and the user's
+    data directory's `fonts`. Which file to use is the caller's (Invariant 7); the editor searches one list of names
+    in each directory, system directories first (D56 ★: it searched only the system directory before, so only a
+    font that is missing there can be found elsewhere now; D57: on Linux a Windows or macOS font in the same
+    directory now comes before Noto, and Windows reads the system Windows directory instead of `WINDIR`).
+- **Process.**
+  - `ExecutablePath` is the running image as an absolute UTF-8 path, read from the OS on every call:
+    `GetModuleFileNameW` on Windows (a `\\?\` or `\\?\UNC\` prefix is removed, Invariant 5), `/proc/self/exe` on
+    Linux, `_NSGetExecutablePath` with links resolved (`realpath`) on macOS; `Unsupported` elsewhere. It answers in
+    `/` form like every engine/os path. It is not the resource directory of an application: a macOS app bundle
+    keeps those apart, and engine/platform/sdl's `BaseDirectory` stays the authority for SDL's resource base
+    (os-subsystem open decision 8).
+  - `ProcessCpuTime` and `CurrentThreadCpuTime` are user plus kernel time in `std::chrono::nanoseconds`:
+    `GetProcessTimes`/`GetThreadTimes` on Windows (scheduler ticks, about 15.6 ms), `getrusage(RUSAGE_SELF)` and
+    `clock_gettime(CLOCK_THREAD_CPUTIME_ID)` on POSIX. A refused query is `Unsupported` with the native error.
+  - `ToLocalTime` converts the whole seconds of a `system_clock` time point (`to_time_t`) with `localtime_r` or
+    `localtime_s`, in the time zone the C runtime last read; it does not call `tzset`. It returns the calendar
+    fields (month 1–12) and the offset from UTC in seconds, computed from those fields, so a caller printing the
+    offset as a sign (`+` for zero), hours and minutes gets the bytes strftime's `%z` gave on every platform. A time
+    point the platform cannot convert is `Unsupported` with the native error (Windows: after the year 3000).
+  - An OS failure of `ExecutablePath` is `IoFailed` (the native error stays in the detail; no caller branches on
+    the code), a path longer than Windows allows is `TooLarge`, and a path with no UTF-8 form is `InvalidEncoding`.
+- **Console.**
+  - `CommandLineUtf8` gives the process's arguments in UTF-8, the program name first. Windows reads
+    `GetCommandLineW` and splits it with `CommandLineToArgvW` (shell32), whatever the ANSI code page is; its rules
+    for quotes inside quotes can differ from the C runtime's narrow `argv` in corner cases. POSIX hands `argv` on
+    as given, and an argument that is not UTF-8 is `InvalidEncoding` (D50).
+  - `Utf8ConsoleOutput` sets the Windows console's output code page to UTF-8 while it lives and restores the
+    previous one when destroyed; it is not applied without a console. POSIX needs no change and counts as applied.
+    Output redirected to a file or a pipe is bytes either way.
+  - `InstallShutdownRequests` installs the process's handlers once (all or nothing); `RequestedShutdown` reads the
+    first request's reason from any thread. The flag is the one process state engine/os owns (Invariant 8); what a
+    program does on a request is its policy.
+    - POSIX: SIGINT and SIGTERM with `sigaction`, carrying the `sa_flags` `std::signal` sets on the platform's C
+      library (`SA_RESTART`, the handler kept): later signals only repeat the request.
+    - Windows: Ctrl+C, Ctrl+Break and closing the console with `SetConsoleCtrlHandler`. After a request, another
+      Ctrl+C or Ctrl+Break gets the default handling and ends the process at once, as a second Ctrl+C did when
+      the C runtime's SIGINT handling reset itself. On a close the handler waits up to 4 s, since the OS ends the
+      process when it returns (about 5 s after the close); the program's own exit ends the wait sooner. Log off
+      and system shutdown keep the default handling. `TerminateProcess` never reaches a handler.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
@@ -93,23 +176,36 @@ Invariants 1–3 as text, so the result is the same on every platform:
   architecture macros (`_MSC_VER`, `__clang__`, `_M_X64`, `__aarch64__`) are not OS branches.
 - **R3**: a listed OS or CRT-split API (`localtime_r`, `localtime_s`, `std::signal`, `pthread_*`, `kqueue`,
   `GetLastError`, `SetThreadPriority` and others).
-- **R4**: in runtime code (engine outside engine/os and the host shader tool; later apps and tools), fstream,
-  `fopen` and every `std::filesystem` operation that touches the file system. The `path` type and pure path
+- **R4**: in runtime code (engine outside engine/os and the host shader tool, apps and tools), fstream, `fopen`
+  and every `std::filesystem` operation that touches the file system. The `path` type and pure path
   operations are allowed.
 - **R5**: in engine/os, an include of anything but the standard library, OS headers, `engine/base` and
   `engine/os`.
 
 engine/os/src is scanned for R5 only; engine/os/include is scanned for everything. Comments, string literals and
-character literals are ignored; `#include` lines are matched as written. The scan covers engine and tests/common
-today; os-guard-wide extends it to apps, tools, build/acceptance and the product test directories.
+character literals are ignored; `#include` lines are matched as written. The scan covers engine, apps, tools,
+build/acceptance and tests (except tests/common/os, third_party and build/target), and every existing root must
+yield at least one source. The roots name no product, so adding or removing a product changes no guard file.
 
 Existing sites are frozen in ratchet allowlists named `os_boundary_allowlist.txt`. A line is
 `path rule count  # reason`. The count must equal the file's findings for that rule: more fails (a new site), fewer
 fails and asks for the entry to shrink, a missing file fails. The Engine allowlist (`tests/common/os`) covers
 engine/ and tests/common/; any other allowlist covers only files under its own directory, so deleting a product
-deletes its allowlist and no common file changes. A configure-time check keeps `gyo_os` linked to exactly
-`GYO::Base`. The configure-time check that no non-os target gets an OS-identifying compile definition comes with
-os-guard-wide; no such definition exists today.
+deletes its allowlist and no common file changes.
+
+Two configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
+links exactly `GYO::Base` (and, on Windows, `shell32` for `CommandLineToArgvW`, a system library Invariant 3
+allows; D49, D50), and no target or directory under the scanned roots outside engine/os and
+tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
+name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
+so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
+value is not read, since paths may contain any word. `COMPILE_DEFINITIONS`, `INTERFACE_COMPILE_DEFINITIONS` and
+the `-D`/`/D` entries of `COMPILE_OPTIONS` are checked, on targets and directories alike.
+
+`OsHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/os public
+headers, no `windows.h` or winsock guard macro and no `min` or `max` macro is defined. It is recorded before
+doctest is included and fails if a public header is not included by the test. The POSIX side is the text scan of
+engine/os/include, since libc++ and libstdc++ define `_PTHREAD_H` from `<string>`.
 
 Known blind spots, left to review:
 
@@ -119,6 +215,14 @@ Known blind spots, left to review:
 - Third-party APIs that open files by path (ImGui's `AddFontFromFileTTF`, SDL's `SDL_SaveBMP` and
   `SDL_IOFromFile`): the third party absorbs the OS difference, so R4 does not cover them; callers pass UTF-8 paths.
 - Code that brings a namespace into scope (`using namespace std::filesystem`) and calls the operations unqualified.
+- A compile definition whose name identifies no OS but which CMake sets on one OS only (`NOMINMAX` under
+  `if(WIN32)`): it configures a header and is not identification, so it is allowed. `-D` flags in
+  `CMAKE_<LANG>_FLAGS` or inside a generator expression in `COMPILE_OPTIONS`, and third_party's interface
+  definitions (asio's `_WIN32_WINNT` and `WIN32_LEAN_AND_MEAN`), are not checked.
+- Paths taken from narrow `argv` strings in programs that do not use `Os::Console::CommandLineUtf8` (today the
+  acceptance programs): on Windows they are in the ANSI code page, not UTF-8, without any OS call in the caller.
+- R3's bare `signal(` also matches a variable or declaration named `signal`. Such a false positive is listed in the
+  owner's allowlist with its reason; the pattern is not loosened.
 
 ## Out of scope
 
@@ -156,8 +260,10 @@ Known blind spots, left to review:
    before the OS call; they are never returned or written into an error.
 6. **Failures are Runtime Errors.** Functions return `Base::Result<_, OsError>`; the detail keeps the native error
    in the fixed form of the Contracts section. No exception crosses the public boundary or an OS callback (signal
-   handler, console control handler). error-handling.md's "Exception at the platform boundary" extends to
-   engine/os when os-console-shutdown lands (with consent).
+   handler, console control handler). The OS callbacks only write a lock-free atomic (and, on a console close,
+   wait) and are `noexcept`, so engine/os needs none of error-handling.md's "Exception at the platform boundary"
+   rules (no `catch (...)`, no destructor checking global state); that section's scope stays engine/platform/sdl
+   (D49).
 7. **No product knowledge, no policy.** No product or tool name, file name, schema or log field appears in
    engine/os. Which socket errors are transient, what follows a shutdown request and how a time stamp is formatted
    are decided by the caller.

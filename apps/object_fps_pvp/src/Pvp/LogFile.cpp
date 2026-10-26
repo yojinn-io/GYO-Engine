@@ -1,93 +1,72 @@
 #include "RetroFPS/Pvp/LogFile.hpp"
 
+#include "RetroFPS/Pvp/NativeFiles.hpp"
+
 #include "engine/base/Assert.hpp"
 #include "engine/base/Sha256.hpp"
+#include "engine/os/Files.hpp"
 
 #include <atomic>
 #include <chrono>
 #include <cstdio>
-#include <ctime>
 #include <exception>
-#include <fstream>
-#include <iterator>
 #include <mutex>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <streambuf>
 #include <string>
-#include <system_error>
 #include <utility>
-
-#if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#elif defined(__APPLE__)
-#include <mach-o/dyld.h>
-#endif
 
 namespace fps::pvp {
 
-std::string LogTimestamp() {
-    const auto now = std::chrono::system_clock::now();
-    const auto seconds = std::chrono::system_clock::to_time_t(now);
-    const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
-    std::tm local{};
-#if defined(_WIN32)
-    localtime_s(&local, &seconds);
-#else
-    localtime_r(&seconds, &local);
-#endif
-    char wall[32]{};
-    char zone[8]{};
-    std::strftime(wall, sizeof wall, "%Y-%m-%dT%H:%M:%S", &local);
-    std::strftime(zone, sizeof zone, "%z", &local);
-    const auto steady = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+Engine::Os::Process::LocalTime LocalWallClock(const std::chrono::system_clock::time_point time) {
+    if (auto local = Engine::Os::Process::ToLocalTime(time)) return *local;
+    return {.year = 1900, .month = 1, .day = 0, .hour = 0, .minute = 0, .second = 0, .utcOffset = {}};
+}
+
+std::string FormatLogTimestamp(const Engine::Os::Process::LocalTime& local, const int milliseconds,
+                               const long long monotonicNs) {
+    const long long offset = local.utcOffset.count();
+    const long long minutes = (offset < 0 ? -offset : offset) / 60;
     char text[96]{};
-    std::snprintf(text, sizeof text, "%s.%03d%s mono_ns=%lld", wall, static_cast<int>(milliseconds), zone,
-                  static_cast<long long>(steady));
+    std::snprintf(text, sizeof text, "%04d-%02d-%02dT%02d:%02d:%02d.%03d%c%02lld%02lld mono_ns=%lld", local.year,
+                  local.month, local.day, local.hour, local.minute, local.second, milliseconds, offset < 0 ? '-' : '+',
+                  minutes / 60, minutes % 60, monotonicNs);
     return text;
 }
 
-// Platform lookup of the running executable; no window backend involved.
+std::string LogFileName(const std::string_view prefix, const Engine::Os::Process::LocalTime& local) {
+    char stamp[32]{};
+    std::snprintf(stamp, sizeof stamp, "-%04d%02d%02d-%02d%02d%02d.log", local.year, local.month, local.day, local.hour,
+                  local.minute, local.second);
+    return std::string(prefix) + stamp;
+}
+
+std::string LogTimestamp() {
+    const auto now = std::chrono::system_clock::now();
+    const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count() % 1000;
+    const auto local = LocalWallClock(now);
+    const auto steady = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    return FormatLogTimestamp(local, static_cast<int>(milliseconds), static_cast<long long>(steady));
+}
+
+// The running executable, from engine/os; no window backend involved. In the
+// platform's preferred separators, as the native lookup gave it before.
 std::filesystem::path RunningExecutablePath() {
-#if defined(_WIN32)
-    std::wstring buffer(256, L'\0');
-    for (;;) {
-        const DWORD length=GetModuleFileNameW(nullptr,buffer.data(),static_cast<DWORD>(buffer.size()));
-        if(length==0) throw std::system_error(static_cast<int>(GetLastError()),std::system_category(),
-                                             "Cannot locate the executable");
-        if(length<buffer.size()) {
-            buffer.resize(length);
-            return std::filesystem::path(buffer);
-        }
-        if(buffer.size()>=32768) throw std::runtime_error("Executable path is too long");
-        buffer.resize(buffer.size()*2);
-    }
-#elif defined(__linux__)
-    return std::filesystem::read_symlink("/proc/self/exe");
-#elif defined(__APPLE__)
-    std::vector<char> buffer(1024);
-    std::uint32_t size=static_cast<std::uint32_t>(buffer.size());
-    if(_NSGetExecutablePath(buffer.data(),&size)!=0) {
-        buffer.resize(size);
-        if(_NSGetExecutablePath(buffer.data(),&size)!=0)
-            throw std::runtime_error("Cannot locate the executable");
-    }
-    return std::filesystem::canonical(buffer.data());
-#else
-    throw std::runtime_error("Cannot locate the executable on this platform");
-#endif
+    auto utf8 = Engine::Os::Process::ExecutablePath();
+    if (!utf8) throw std::runtime_error("Cannot locate the executable (" + Engine::Base::Describe(utf8.error()) + ")");
+    auto path = Engine::Os::Files::PathFromUtf8(*utf8);
+    if (!path) throw std::runtime_error("Cannot locate the executable (" + Engine::Base::Describe(path.error()) + ")");
+    return std::move(path->make_preferred());
 }
 
 std::string FileSha256(const std::filesystem::path& path) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) return "unavailable";
-    const std::vector<char> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-    return Engine::Base::Sha256(std::as_bytes(std::span(bytes)));
+    NativeReadFailure failure;
+    const auto bytes = ReadNativeFile(path, failure);
+    if (!bytes) return "unavailable";
+    return Engine::Base::Sha256(std::as_bytes(std::span(*bytes)));
 }
 
 // Forwards every character to the stream's own buffer and, per completed line,
@@ -126,7 +105,7 @@ private:
 
 namespace {
 Engine::Trace::TraceSink OpenLogSink(const std::filesystem::path& path, std::size_t capacity) {
-    if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path());
+    if (path.has_parent_path()) CreateNativeDirectories(path.parent_path());
     auto sink = Engine::Trace::TraceSink::Open(
         {.path = path, .append = true, .capacity = capacity, .threadName = "pvp-log", .flushEachLine = true});
     if (!sink) throw std::runtime_error("Cannot open log file: " + path.string() + " (" +

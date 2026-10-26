@@ -2,6 +2,7 @@
 
 #include "gyo/ui_editor/EditorError.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -13,7 +14,8 @@ namespace Gyo::Tools::UiEditor {
 struct FileStamp final {
     bool exists{};
     std::uintmax_t size{};
-    std::filesystem::file_time_type writeTime{};
+    // Since the Unix epoch, as engine/io's native backend reports it; 0 when the file system keeps none.
+    std::chrono::nanoseconds writeTime{};
     std::uint64_t contentHash{};
 
     friend bool operator==(const FileStamp&, const FileStamp&) noexcept = default;
@@ -21,6 +23,9 @@ struct FileStamp final {
 
 [[nodiscard]] Result<std::string, FileError> ReadTextFile(
     const std::filesystem::path& path);
+
+// Whether anything (a file, a directory) exists at the path.
+[[nodiscard]] Result<bool, FileError> PathExists(const std::filesystem::path& path);
 
 // A path that does not exist is a success with exists == false.
 [[nodiscard]] Result<FileStamp, FileError> ProbeFileStamp(

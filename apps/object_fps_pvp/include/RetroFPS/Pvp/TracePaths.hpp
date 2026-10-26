@@ -1,10 +1,11 @@
 #pragma once
 
+#include "RetroFPS/Pvp/NativeFiles.hpp"
+
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 namespace fps::pvp {
@@ -38,8 +39,7 @@ namespace fps::pvp {
     if (path.empty()) return path;
     // A path that cannot be checked counts as free: opening it then fails loudly.
     const auto taken = [](const std::filesystem::path& candidate) {
-        std::error_code error;
-        return std::filesystem::exists(candidate, error);
+        return NativePathExists(candidate).value_or(false);
     };
     for (unsigned number = 1;; ++number) {
         const auto candidate = NumberedTracePath(path, number);

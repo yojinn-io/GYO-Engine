@@ -1,34 +1,12 @@
 #include "engine/asset/hot_reload/AssetWatcher.hpp"
 
+#include "engine/io/fs/NativeFileSystem.hpp"
+
 #include <chrono>
-#include <filesystem>
-#include <system_error>
 
 namespace Engine::Asset::HotReload {
 
-namespace fs = std::filesystem;
-
 static std::uint64_t MsToNs(std::uint64_t ms) noexcept { return ms * 1'000'000ull; }
-
-// file_time_type -> system_clock ns（C++17 best-effort）
-static std::uint64_t FileTimeToSystemNs(const fs::file_time_type& ft) {
-    // file_clock と system_clock の差分で変換する（よくある手法）
-    // The offset is sampled once per process: sampling both clocks on every
-    // call made one unchanged file time convert to values microseconds apart,
-    // which Poll reported as a modification.
-    using namespace std::chrono;
-    static const auto offset = [] {
-        const auto nowFile = fs::file_time_type::clock::now();
-        const auto nowSys  = system_clock::now();
-        return nowSys.time_since_epoch() - duration_cast<system_clock::duration>(nowFile.time_since_epoch());
-    }();
-
-    const auto sysTp = system_clock::time_point(
-        duration_cast<system_clock::duration>(ft.time_since_epoch()) + offset);
-    return static_cast<std::uint64_t>(
-        duration_cast<nanoseconds>(sysTp.time_since_epoch()).count()
-    );
-}
 
 AssetWatcher::AssetWatcher(Options opt) : opt_(opt) {}
 
@@ -172,21 +150,22 @@ std::uint64_t AssetWatcher::NowNs() {
     return static_cast<std::uint64_t>(duration_cast<nanoseconds>(now.time_since_epoch()).count());
 }
 
+// Through engine/io's native file system, which calls engine/os (Design Invariant 2 of
+// docs/architecture/os.md). The write time is the file system's own, in nanoseconds since the Unix
+// epoch: one unchanged file always reads the same value.
 bool AssetWatcher::ProbeFile(const std::string& path, bool& existsOut, std::uint64_t& writeNsOut) {
-    std::error_code ec;
-
-    existsOut = fs::exists(path, ec);
-    if (ec) return false;
-
-    if (!existsOut) {
+    auto uri = IO::FS::NativeFileUri(path);
+    if (!uri) return false;
+    IO::FS::NativeFileSystem files;
+    auto status = files.Stat(uri.value());
+    if (!status) {
+        if (status.error().code != IO::IoErrorCode::NotFound) return false;
+        existsOut = false;
         writeNsOut = 0;
         return true;
     }
-
-    auto ft = fs::last_write_time(path, ec);
-    if (ec) return false;
-
-    writeNsOut = FileTimeToSystemNs(ft);
+    existsOut = true;
+    writeNsOut = static_cast<std::uint64_t>(status.value().mtimeNs);
     return true;
 }
 

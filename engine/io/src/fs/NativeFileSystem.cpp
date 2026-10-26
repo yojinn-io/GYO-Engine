@@ -36,8 +36,7 @@ namespace Engine::IO::FS {
         }
 
         IoError Unsupported(const char* operation) {
-            return IoError::Make(IoErrorCode::NotSupported,
-                                 std::string("NativeFS: ") + operation + " is not supported (read-only backend)");
+            return IoError::Make(IoErrorCode::NotSupported, std::string("NativeFS: ") + operation + " is not supported");
         }
 
         bool WantsWrite(const Stream::FileOpenMode mode) noexcept {
@@ -153,16 +152,99 @@ namespace Engine::IO::FS {
             bool eof_ = false;
         };
 
+        // A write stream over an engine/os file: writes only, no position, no buffering (each Write
+        // reaches the OS, so Flush has nothing left to do).
+        class NativeWriteStream final : public Stream::IStream {
+        public:
+            NativeWriteStream(Os::Files::FileWriter file, std::string nativePath)
+                : file_(std::move(file)), path_(std::move(nativePath)) {}
+
+            Stream::StreamCaps Caps() const noexcept override {
+                return {.readable = false, .writable = true, .seekable = false};
+            }
+            bool IsOpen() const noexcept override { return file_.has_value(); }
+            bool IsEof() const noexcept override { return false; }
+
+            Base::Result<std::size_t, IoError> Read(void*, std::size_t) override {
+                return Base::Err(IoError::Make(IoErrorCode::NotSupported, "NativeFS: a write stream is not readable"));
+            }
+
+            Base::Result<std::size_t, IoError> Write(const void* src, const std::size_t bytes) override {
+                if (!file_) return Base::Err(Closed());
+                auto wrote = file_->Write(std::span(static_cast<const std::byte*>(src), bytes));
+                if (!wrote) return Base::Err(FromOs(wrote.error(), path_, IoErrorCode::WriteFailed));
+                return bytes;
+            }
+
+            Base::Result<std::uint64_t, IoError> Tell() const override { return Base::Err(NotSeekable()); }
+            Base::Result<std::uint64_t, IoError> Seek(std::int64_t, Stream::SeekWhence) override {
+                return Base::Err(NotSeekable());
+            }
+            Base::Result<std::uint64_t, IoError> Size() const override { return Base::Err(NotSeekable()); }
+
+            Base::Result<void, IoError> Flush() override {
+                if (!file_) return Base::Err(Closed());
+                return {};
+            }
+
+            // Reports a failure the destructor could not.
+            Base::Result<void, IoError> Close() override {
+                if (!file_) return {};
+                auto closed = file_->Close();
+                file_.reset();
+                if (!closed) return Base::Err(FromOs(closed.error(), path_, IoErrorCode::WriteFailed));
+                return {};
+            }
+
+        private:
+            IoError Closed() const { return IoError::Make(IoErrorCode::WriteFailed, "NativeFS: the stream is closed", path_); }
+            IoError NotSeekable() const {
+                return IoError::Make(IoErrorCode::NotSupported, "NativeFS: a write stream has no position", path_);
+            }
+
+            std::optional<Os::Files::FileWriter> file_;
+            std::string path_;
+        };
+
+        // Writing creates a missing file and either empties the file or appends to it; any other write
+        // mode (read and write, overwriting in place, an existing file only) is NotSupported.
+        IoResult<std::unique_ptr<Stream::IStream>> OpenForWriting(const std::string& native,
+                                                                  const Stream::FileOpenMode mode) {
+            using Stream::FileOpenMode;
+            const bool append = Stream::Has(mode, FileOpenMode::Append);
+            if (Stream::CanRead(mode) || !Stream::Has(mode, FileOpenMode::CreateIfMissing) ||
+                (!append && !Stream::Has(mode, FileOpenMode::Truncate))) {
+                return Base::Err(Unsupported("this write mode"));
+            }
+            // Text asks for the platform's line endings ("\r\n" on Windows), as a text-mode C++ stream writes.
+            const auto endings = Stream::Has(mode, FileOpenMode::Text) ? Os::Files::LineEndings::Native
+                                                                       : Os::Files::LineEndings::AsWritten;
+            auto file = Os::Files::FileWriter::Open(
+                native, append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate, endings);
+            if (!file) return Base::Err(FromOs(file.error(), native, IoErrorCode::OpenFailed));
+            return std::unique_ptr<Stream::IStream>(std::make_unique<NativeWriteStream>(std::move(file.value()), native));
+        }
+
     } // namespace
+
+    IoResult<Path::Uri> NativeFileUri(const std::string_view utf8Path) {
+        std::string absolute(utf8Path);
+        if (!Os::Files::IsAbsolutePath(absolute)) {
+            auto made = Os::Files::MakeAbsolute(absolute);
+            if (!made) return Base::Err(FromOs(made.error(), absolute, IoErrorCode::InvalidPath));
+            absolute = std::move(made.value());
+        }
+        return Path::FileUriFromNativePath(absolute);
+    }
 
     IoResult<std::unique_ptr<Stream::IStream>> NativeFileSystem::Open(const Path::Uri& uri,
                                                                       const Stream::FileOpenMode mode) {
         if (!Stream::IsValid(mode)) {
             return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "NativeFS: invalid FileOpenMode"));
         }
-        if (WantsWrite(mode)) return Base::Err(Unsupported("opening for writing"));
         auto native = NativePath(uri);
         if (!native) return Base::Err(std::move(native.error()));
+        if (WantsWrite(mode)) return OpenForWriting(native.value(), mode);
         auto file = Os::Files::FileReader::Open(native.value());
         if (!file) return Base::Err(FromOs(file.error(), native.value(), IoErrorCode::OpenFailed));
         return std::unique_ptr<Stream::IStream>(
@@ -198,14 +280,14 @@ namespace Engine::IO::FS {
         // Set every field: most defaults are true, and a VFS must not take this backend for writable.
         FileSystemCapabilities caps;
         caps.canOpenRead = true;
-        caps.canOpenWrite = false;
+        caps.canOpenWrite = true;
         caps.canList = false;
         caps.canIterate = false;
         caps.canStat = true;
-        caps.canCreateDirectories = false;
-        caps.canRemove = false;
+        caps.canCreateDirectories = true;
+        caps.canRemove = true;
         caps.canRemoveRecursive = false;
-        caps.canMove = false;
+        caps.canMove = true;
         caps.canCopy = false;
         caps.supportsSymlink = false;
         caps.supportsPermissions = false;
@@ -220,16 +302,32 @@ namespace Engine::IO::FS {
         return caps;
     }
 
-    IoResult<void> NativeFileSystem::CreateDirectories(const Path::Uri&) {
-        return Base::Err(Unsupported("CreateDirectories"));
+    IoResult<void> NativeFileSystem::CreateDirectories(const Path::Uri& uri) {
+        auto native = NativePath(uri);
+        if (!native) return Base::Err(std::move(native.error()));
+        auto created = Os::Files::CreateDirectories(native.value());
+        if (!created) return Base::Err(FromOs(created.error(), native.value(), IoErrorCode::WriteFailed));
+        return {};
     }
 
-    IoResult<void> NativeFileSystem::Remove(const Path::Uri&, const RemoveOptions&) {
-        return Base::Err(Unsupported("Remove"));
+    IoResult<void> NativeFileSystem::Remove(const Path::Uri& uri, const RemoveOptions& opt) {
+        // Files only: a directory, with or without its contents, stays (canRemoveRecursive is false).
+        if (opt.recursive) return Base::Err(Unsupported("Remove with recursive"));
+        auto native = NativePath(uri);
+        if (!native) return Base::Err(std::move(native.error()));
+        auto removed = Os::Files::RemoveFile(native.value());
+        if (!removed) return Base::Err(FromOs(removed.error(), native.value(), IoErrorCode::WriteFailed));
+        return {};
     }
 
-    IoResult<void> NativeFileSystem::Move(const Path::Uri&, const Path::Uri&) {
-        return Base::Err(Unsupported("Move"));
+    IoResult<void> NativeFileSystem::Move(const Path::Uri& from, const Path::Uri& to) {
+        auto source = NativePath(from);
+        if (!source) return Base::Err(std::move(source.error()));
+        auto target = NativePath(to);
+        if (!target) return Base::Err(std::move(target.error()));
+        auto moved = Os::Files::RenameReplacing(source.value(), target.value());
+        if (!moved) return Base::Err(FromOs(moved.error(), target.value(), IoErrorCode::WriteFailed));
+        return {};
     }
 
     IoResult<void> NativeFileSystem::Copy(const Path::Uri&, const Path::Uri&) {

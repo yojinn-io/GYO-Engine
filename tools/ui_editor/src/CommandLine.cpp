@@ -1,5 +1,7 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 
+#include "engine/os/Files.hpp"
+
 #include <utility>
 
 namespace Gyo::Tools::UiEditor {
@@ -43,7 +45,12 @@ Result<CommandLineOptions, CommandLineError> ParseCommandLine(
             return Engine::Base::Err(Invalid("option requires a path value: " + std::string{argument}));
         }
 
-        const std::filesystem::path value{arguments[++index]};
+        // The arguments are UTF-8 (Os::Console::CommandLineUtf8).
+        auto parsedPath = Engine::Os::Files::PathFromUtf8(arguments[++index]);
+        if (!parsedPath) {
+            return Engine::Base::Err(Invalid("option value is not a UTF-8 path: " + std::string{argument}));
+        }
+        const std::filesystem::path value = std::move(*parsedPath);
         if (argument == "--open") {
             if (options.inputPath.has_value()) {
                 return Engine::Base::Err(Invalid("--open may be specified only once"));

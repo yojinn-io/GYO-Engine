@@ -450,15 +450,29 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 - 白話：擴充寫檔、建目錄、原子取代等原語，讓消費端剩下的直接開檔都改走 engine/io。
 - 依賴：os-files-read、消費端的長路徑修正。
 - 做：
-  - WriteFile（truncate／append）、CreateDirectories、ReplaceFile、SamePathComponent；NativeFileSystem 開放對應方法與 Capabilities。
+  - WriteFile（truncate／append）、CreateDirectories；NativeFileSystem 開放對應方法與 Capabilities。（D52：ReplaceFile、SamePathComponent 移到 os-tool-files。）
   - 改 `Arena.cpp:64、127`、`LogFile.cpp:87、129`、`MatchShotTrace.hpp:286`、`MatchIngressTrace.hpp:255`、`AssetWatcher.cpp:178、186`。
   - 換行：寫出的位元組必須和現在的文字模式 ofstream 相同（Windows 為 CRLF），做法依開放決策 2。
   - 依消費端 D184 重新定位約 29 個消費端突變。
 - 驗收：
-  - L1：既有測試不改判定；Windows 長路徑的 arena 與 log 案例 Red→Green。
+  - L1：既有測試不改判定；Windows 長路徑的 arena 案例 Red→Green。（D52：log 的案例移到 os-trace-writers，因為 log 檔的寫入走 TraceSink。）
   - L3：Windows 深路徑（P 約 235）下寫得出 log、讀得到 arenas.json。
 
-### 7.9 os-tool-files：編輯器的檔案服務與系統字型目錄（high，6～9 h）
+### 7.8b io-native-paths：io 原生路徑契約（D54；high，局部 xhigh，ultracode 契約審查；12～19 h）
+
+- 白話：讓 engine/io 的 file:// 規則對齊作業系統，路徑照 OS 的規則運作，不再有字面規則造成的個別差異。
+- 依賴：os-files-write。
+- 做：
+  - 原生路徑轉成 file:// 時不再依字面消去 `..`；開檔照 OS（POSIX 跟著 symlink；Windows 由 `GetFullPathNameW` 依字面處理）。字面正規化只留給比較與顯示（AssetPathResolver、MountTable 的包含檢查）。修改 io.md Invariant 3 與 D44。
+  - 取消 D46，支援 UNC：原生 `//X/Y`（或 `\\X\Y`）↔ `file://X/Y`，各平台相同；主機為 localhost 的 UNC 寫成 `file:////localhost/...`。Windows 長路徑用 `\\?\UNC\`。
+  - POSIX 以 `//` 開頭的路徑不再當成 UNC 拒絕（經同一個對應，開檔時由 OS 當成 `/`）。
+  - 非 UTF-8 的目前目錄照 D43 維持現狀，寫成明確的契約。
+  - AssetPathResolver 的根目錄照原樣保留，包含檢查照舊。
+- 驗收：
+  - L1：POSIX 的 symlink 加 `..`；Windows 的 UNC 往返與長路徑（`\\localhost\C$`，CI 做不到就 Skipped）；重寫的 UriTests 不動點測試；既有的 mount、長路徑前綴、`/C:/x` 判定不變。
+  - AGENTS §14.4：放寬面與收緊面開工前已得同意；新判定的突變檢查與獨立審查（ultracode）完成後，判定與 Invariant 3 的新條文交使用者定案。
+
+### 7.9 os-tool-files：編輯器的檔案服務與系統字型目錄（D56：high＋1 位 xhigh 審查；9～13 h，原估 6～9 h）
 
 - 白話：把 UI 編輯器的原子存檔、路徑比較與系統字型目錄改用 engine/os，編輯器不再自己判斷 OS。
 - 依賴：os-files-write。
@@ -467,13 +481,17 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - DocumentSession.cpp:229。
   - ImGuiSdlRendererHost.cpp:39-111 的系統字型目錄，改由 engine/os 提供 FontDirectories；字型檔名的選擇留在工具。
   - 和延後的 AtomicWriteFile（輸入與呈現計畫 IP-5）協調，只留一份實作。
-- 驗收：L1：工具既有測試不改判定；ReplaceFile 能覆蓋既有檔，失敗時原檔不變。
+  - （D52 從 os-files-write 移來）engine/os 的 ReplaceFile（原子取代）、SamePathComponent（路徑成分的比較），NativeFileSystem 開放對應方法。
+  - （D56）ReplaceFile 是 Win32 的函式名（os.md 的 Names），改名為 `RenameReplacing`；另加 `RemoveFile`（清暫存檔）與 `ResolvedPath`（取代 `weakly_canonical`：存在的前段解開 symlink，其餘照原樣；io.md Replacement Criteria 3 的解析 helper）。NativeFileSystem 開放 `Move`（取代已存在的目標）與 `Remove`（只刪檔）。原子寫入做成 engine/io 的 helper，是唯一的實作，IP-5 之後沿用。
+  - （D56 ★ 事前宣告）Windows 的路徑成分比較改用 OS 的序數比較（`CompareStringOrdinal`，原為 CRT 的 `towlower`）；macOS 維持逐位元組比較（已知差異）；字型改用不分 OS 的候選清單，在 `FontDirectories` 的每個目錄找（系統目錄優先，多找使用者目錄）。
+- 驗收：L1：工具既有測試不改判定；RenameReplacing 能覆蓋既有檔，失敗時原檔不變；經 symlink 進入 asset 根目錄的匯出被拒絕。
 
 ### 7.10 os-trace-writers：trace 寫檔（high，3～5 h）
 
 - 白話：讓 trace 寫檔也走 engine/os，寫出的位元組（含 Windows 的 CRLF）、喚醒與順序都不變。
 - 依賴：os-files-write；依開放決策 2。
 - 做：改 `TraceSink.cpp:102`；修訂 trace.md Invariant 7 與 `tests/common/trace/CMakeLists.txt:11`，依 §14.4 先寫 1～5 點並取得同意；更新 tt2-* 突變。
+- （D52 從 os-files-write 移來）驗收加上：Windows 長路徑的 log 案例 Red→Green（log 檔經 TraceSink 寫）。
 - 驗收：L1：TraceSinkTests 不改判定；Windows 長路徑 trace 案例 Red→Green；tt2 突變照舊被殺。
 
 ### 7.11 os-path-utf8-sweep：剩下的窄字串路徑（high，8～12 h）
@@ -482,7 +500,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 - 依賴：os-files-write、os-tool-files、os-console-shutdown。
 - 做：
   - 移除 platform/sdl 的 PathFromUtf8，呼叫端改用 `Os::Files::PathFromUtf8`。
-  - 用 rg 列出剩下的 `.string()` 與 `path(const char*)`，由審查者逐一對照。對抗式檢查補上的站點包括：`match_main.cpp:67`、`MovementTraceWriter.hpp:81`、`Arena.cpp:150`、`LogFile.cpp:132`、`TraceSink.cpp:104、110`、`EditorApp.cpp:603、722、2096`、`DocumentSession.cpp:233-234`、`build/acceptance` 的 SDL_SaveBMP 呼叫端（VisualProbe.cpp:130、MuzzleProbe.cpp:49、object_fps_v2/main.cpp:81）、`tests/common/ui/UiRendererTests.cpp:133-186`。
+  - 用 rg 列出剩下的 `.string()` 與 `path(const char*)`，由審查者逐一對照。對抗式檢查補上的站點包括：`match_main.cpp:67`、`MovementTraceWriter.hpp:81`、`Arena.cpp:150`、`LogFile.cpp:132`、`TraceSink.cpp:104、110`、`EditorApp.cpp:603、722、2096`（`DocumentSession.cpp:233-234` 已在 os-tool-files 改成 UTF-8，D56）、`build/acceptance` 的 SDL_SaveBMP 呼叫端（VisualProbe.cpp:130、MuzzleProbe.cpp:49、object_fps_v2/main.cpp:81）、`tests/common/ui/UiRendererTests.cpp:133-186`。
   - 同步 inactive_products.md。
 - 驗收：L1：含 ACP 以外字元的根目錄跑 asset 載入、log 與 trace 寫出、編輯器匯出；Windows 上先在舊樹確認 Red。
 
@@ -648,15 +666,15 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
 
 ## 11. 開放決策
 
-1、14、15 已在核准時決定（D46）；其餘在對應批次開始前回答。
+1、14、15 已在核准時決定（D46）；1 由 D48 改成「現在開始」；2、6、7、8～12 由 D48 決定（7 採 (b)，其餘照建議）；4 照 (a) 維持；13 在 os-wait-backend 開始前回答。
 
-1. **剩餘部件與消費端發行的先後**。**已決定（D46）：(a)。**
+1. **剩餘部件與消費端發行的先後**。**已決定（D46）：(a)。之後由 D48 改成：其餘批次現在開始，不等發行。**
    - (a) A1～A3 在發行前完成，其他全部排在發行之後，順序是 os-guard-wide → os-process-info → os-console-shutdown → os-files-write → os-tool-files → os-trace-writers → os-path-utf8-sweep，計時的兩批最後；time-threads-invariants 與 os-wake-record 不改程式，可以並行。
    - (b) os-process-info 也排進發行前。
    - 取捨：(a) 符合「先完成穩定版本再重構」，hotfix 範圍最小；代價是發行期間產品仍有 OS 分支，但守衛會凍結它們，不會再增加。(b) 產品的 OS 分支提早消失，但多改和日誌契約有關的程式。
    - 證據：D45；`LogFile.cpp:22-84`；`NetworkStatistics.cpp:11-80`。
    - 建議：(a)。
-2. **trace 與產品的寫檔怎麼接到檔案抽象**。
+2. **trace 與產品的寫檔怎麼接到檔案抽象**。**已決定（D48）：照建議。**
    - (a) GYO::Trace 直接 PRIVATE 連 GYO::Os，呼叫寫入原語；trace.md Invariant 7 改成「exactly GYO::Threads and GYO::Os」。
    - (b) 把 engine/io 拆成獨立 target GYO::IO，Trace 經 IFileSystem 寫檔。
    - (c) Trace 不接，維持 ofstream。
@@ -671,35 +689,35 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
    - 取捨：(a) 改動為零，但檔案來源的抽象仍有兩份，pak 或 memory 會被要求實作兩次。(b) 去掉重複，呼叫端只改型別名。(c) 抽象最少，但 IFileSystem 的介面很大，所有 asset 測試的 fake 都要改寫。
    - 建議：先 (a)。等第二個非原生來源出現時，再在 (b) 與 (c) 之間決定；觸發條件寫進 io.md 的 Replacement Criteria。
 5. （刪除）Wait 與 Threads 是否永久例外：D41 已定「Waiter、RoleThread 改呼叫 engine/os」，所以只剩順序。L2 不通過時，依 §14.1 先回報、revert，再由使用者決定下一步。
-6. **WaitBackend 列舉放在哪裡**。
+6. **WaitBackend 列舉放在哪裡**。**已決定（D48）：照建議。**
    - (a) 留在 Time 的公開介面，engine/os 另有 WaitMechanism，Waiter 做 1:1 映射。
    - (b) 移到 engine/os。
    - 取捨：(a) 日誌字串契約仍由 Time 擁有，產品不必改，只是多一個映射。(b) 只有一份定義，但 OS 機制名稱直接變成公開契約。
    - 建議：(a)。
-7. **socket 錯誤分類要不要搬**。
+7. **socket 錯誤分類要不要搬**。**已決定（D48）：(b)，只搬分類（等價），排在消費端發行線 PR 合併後。**
    - (a) 先不搬，等 Windows 實機確認 WSAECONNRESET 真的出現。
    - (b) 搬分類，政策留在消費端。
    - (c) 搬分類，並加上 Windows 的 SIO_UDP_CONNRESET。
    - 取捨：(c) 要碰 socket handle，觸發 Replacement Criteria 1。
    - 建議：(a)；看到實機證據後，再在 (b) 與 (c) 之間決定。
-8. **「執行檔在哪裡」以誰為權威**。
+8. **「執行檔在哪裡」以誰為權威**。**已決定（D48）：照建議。**
    - (a) 兩個不同的事實各自為權威：Os::Process 給執行檔映像的路徑，PlatformSDL::BaseDirectory 給 SDL 的資源基準目錄（macOS app bundle 時是 Resources），文件寫明兩者的差異。
    - (b) BaseDirectory 改成呼叫 engine/os：會改變 macOS app bundle 的語意。
    - 建議：(a)。
-9. **Windows 上哪些主控台事件算結束要求**。
+9. **Windows 上哪些主控台事件算結束要求**。**已決定（D48）：照建議。**
    - (a) CTRL_C、CTRL_BREAK、CTRL_CLOSE 都算；CTRL_CLOSE 時，收尾的上限低於 OS 的約 5 秒。
    - (b) 只算 CTRL_C 與 CTRL_BREAK。
    - 建議：(a)。收尾上限在 os-console-shutdown 開始時寫定。
-10. **系統字型目錄的時點**。D41 已定工具不再判斷 OS，只剩時點。
+10. **系統字型目錄的時點**。D41 已定工具不再判斷 OS，只剩時點。**已決定（D48）：照建議。**
     - (a) 在 os-tool-files 搬。
     - (b) 延到 os-close 之前。
     - 建議：(a)。
-11. **engine/os 內部依 OS 選擇程式碼的方式**。
+11. **engine/os 內部依 OS 選擇程式碼的方式**。**已決定（D48）：照建議。**
     - (a) 每個 OS 一個翻譯單元，由 CMake 依 OS 選檔。
     - (b) 同一檔內用 #if。
     - (c) 新部件用 (a)；Wait 與 Thread 的搬移批先用 (b)，diff 最小，方便審查與 L2 對照，穩定後再評估。
     - 建議：(c)。
-12. **shader pipeline 主機工具**（獨立的 CMake project GyoShaderTools）。
+12. **shader pipeline 主機工具**（獨立的 CMake project GyoShaderTools）。**已決定（D48）：照建議。**
     - (a) 守衛只套用 R1～R3，凍結即可，不連 GYO::Os。
     - (b) 把 engine/os 一起編入。
     - (c) 完全排除。

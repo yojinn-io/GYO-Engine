@@ -3,7 +3,9 @@
 #include "AssertTestSupport.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "RetroFPS/Pvp/NativeFiles.hpp"
 #include "RetroFPS/Pvp/TracePaths.hpp"
+#include "RetroFPS/Pvp/MatchIngressTrace.hpp"
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 
 #include <chrono>
@@ -33,6 +35,11 @@ std::filesystem::path DiagnosticPath(const std::string& name) {
 // and after the move onto the trace sink.
 std::string ReadFile(const std::filesystem::path& path) {
     std::ifstream input(path);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+std::string ReadBinary(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
@@ -137,6 +144,31 @@ TEST_CASE("PvP log file lines keep their timestamp format and order, appended") 
     }
 }
 
+// The bytes of the timestamp and the default file name for given local fields.
+// That the fields and the offset equal what localtime and strftime's %z gave
+// before is checked per platform by the OS layer's tests (tests/common/os).
+TEST_CASE("PvP log timestamps and file names keep their bytes for given local time fields") {
+    using namespace std::chrono_literals;
+    using Engine::Os::Process::LocalTime;
+    const auto at = [](int year, int month, int day, int hour, int minute, int second, std::chrono::seconds offset) {
+        return LocalTime{year, month, day, hour, minute, second, offset};
+    };
+    CHECK(FormatLogTimestamp(at(2026, 10, 16, 10, 40, 11, 9h), 7, 42) == "2026-10-16T10:40:11.007+0900 mono_ns=42");
+    CHECK(FormatLogTimestamp(at(2026, 1, 15, 8, 30, 0, -(3h + 30min)), 999, 0) ==
+          "2026-01-15T08:30:00.999-0330 mono_ns=0");
+    CHECK(FormatLogTimestamp(at(2026, 1, 15, 17, 30, 59, 5h + 30min), 0, 9'000'000'000'000) ==
+          "2026-01-15T17:30:59.000+0530 mono_ns=9000000000000");
+    CHECK(FormatLogTimestamp(at(2026, 1, 15, 12, 0, 0, 0s), 0, 1) == "2026-01-15T12:00:00.000+0000 mono_ns=1");
+    // An offset with seconds prints its whole minutes, as %z does.
+    CHECK(FormatLogTimestamp(at(1890, 1, 1, 0, 0, 0, 9h + 18min + 59s), 0, 1) == "1890-01-01T00:00:00.000+0918 mono_ns=1");
+    // The fallback fields print what a zero-initialized std::tm printed.
+    CHECK(FormatLogTimestamp(at(1900, 1, 0, 0, 0, 0, 0s), 0, 0) == "1900-01-00T00:00:00.000+0000 mono_ns=0");
+    CHECK(LogFileName("client", at(2026, 10, 16, 10, 40, 11, 9h)) == "client-20261016-104011.log");
+    CHECK(LogFileName("client", at(2026, 1, 5, 8, 3, 9, 0s)) == "client-20260105-080309.log");
+    // The current time converts, so no fallback appears in a log.
+    CHECK(LocalWallClock(std::chrono::system_clock::now()).year >= 2026);
+}
+
 TEST_CASE("PvP movement trace counts an event a producer records after Finish") {
     const auto path = DiagnosticPath("movement-late");
     MovementTraceWriter writer(path);
@@ -209,6 +241,79 @@ TEST_CASE("PvP log file writes a failed assertion before the previous handler ru
     }
     CHECK(rethrown);
     CHECK(ReadLines(path).size() == 2);
+}
+
+// os-files-write moved these files from std::ofstream to engine/io: the same
+// lines, with the platform's line endings ("\r\n" on Windows), as the
+// text-mode stream wrote them, and the same failure messages.
+TEST_CASE("PvP shot and ingress trace files keep the bytes the text-mode stream wrote") {
+    const auto shots = DiagnosticPath("shots");
+    {
+        MatchShotTraceFile file(shots);
+        file.Finish({});
+    }
+    const auto ingress = DiagnosticPath("ingress");
+    {
+        MatchIngressTraceFile file(ingress);
+        file.Finish({});
+    }
+    const auto reference = DiagnosticPath("reference");
+    { std::ofstream(reference) << MatchShotTraceEndLine(0, 0, 0) << '\n'; }
+    CHECK(ReadBinary(shots) == ReadBinary(reference));
+    { std::ofstream(reference) << MatchIngressTraceEndLine(0, 0, 0) << '\n'; }
+    CHECK(ReadBinary(ingress) == ReadBinary(reference));
+    const auto absent = DiagnosticPath("absent") / "x.jsonl";
+    CHECK_THROWS_WITH_AS(MatchShotTraceFile{absent}, doctest::Contains("Cannot open shot trace: "), std::runtime_error);
+    CHECK_THROWS_WITH_AS(MatchIngressTraceFile{absent}, doctest::Contains("Cannot open ingress trace: "),
+                         std::runtime_error);
+}
+
+TEST_CASE("PvP native text files buffer past their buffer, flush when destroyed and report a failed write") {
+    // More than the 16 KiB buffer, in pieces, through Close.
+    const auto large = DiagnosticPath("large");
+    std::string expected;
+    {
+        NativeTextFile file(large);
+        REQUIRE(file);
+        for (int line = 0; line < 2000; ++line) {
+            const std::string text = "line " + std::to_string(line) + std::string(20, 'x');
+            file.Stream() << text << '\n';
+            expected += text + '\n';
+        }
+        CHECK(file.Close());
+        CHECK(file); // still good after a good Close, as std::ofstream
+        CHECK_FALSE(file.Close());
+    }
+    CHECK(ReadFile(large) == expected);
+    // Destroyed without Close: what was written reaches the file.
+    const auto unclosed = DiagnosticPath("unclosed");
+    {
+        NativeTextFile file(unclosed);
+        file.Stream() << "kept\n";
+    }
+    CHECK(ReadFile(unclosed) == "kept\n");
+    // A device that refuses every write (Linux): the trace file reports it.
+    if (std::filesystem::exists("/dev/full")) {
+        NativeTextFile full("/dev/full");
+        REQUIRE(full);
+        full.Stream() << "lost\n" << std::flush;
+        CHECK_FALSE(full.Stream());
+        CHECK_FALSE(full);
+        MatchShotTraceFile shots("/dev/full");
+        CHECK_THROWS_WITH_AS(shots.Finish({}), doctest::Contains("Shot trace failed to write"), std::runtime_error);
+    }
+}
+
+TEST_CASE("PvP log directories that cannot be made name the directory and the cause") {
+    const auto file = DiagnosticPath("not-a-directory");
+    { std::ofstream(file) << "x"; }
+    CHECK_THROWS_WITH_AS(CreateNativeDirectories(file / "logs"), doctest::Contains("Cannot create directory: "),
+                         std::runtime_error);
+    try {
+        CreateNativeDirectories(file / "logs");
+    } catch (const std::runtime_error& error) {
+        CHECK(std::string(error.what()).find("(InvalidPath") != std::string::npos);
+    }
 }
 
 // v7.1 trace-no-overwrite (D191): a restart takes the next free name, and the

@@ -39,7 +39,8 @@ target_link_libraries(gyo_ui_editor_core PRIVATE GYO::Math GYO::Os)
 
 add_executable(gyo_ui_editor src/Main.cpp)
 target_compile_features(gyo_ui_editor PRIVATE cxx_std_20)
-target_link_libraries(gyo_ui_editor PRIVATE gyo_ui_editor_core)
+# The UTF-8 command line and console output come from GYO::Os.
+target_link_libraries(gyo_ui_editor PRIVATE gyo_ui_editor_core GYO::Os)
 
 if(GYO_TOOL_VARIANT STREQUAL "gui")
     foreach(_target IN ITEMS

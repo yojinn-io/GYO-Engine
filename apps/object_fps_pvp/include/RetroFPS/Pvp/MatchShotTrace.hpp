@@ -22,12 +22,12 @@
 // (MatchShotTraceFile). Neither fails the Match; an I/O failure does.
 #include "RetroFPS/Pvp/Combat.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Pvp/NativeFiles.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <limits>
 #include <map>
 #include <optional>
@@ -283,19 +283,18 @@ private:
 
 class MatchShotTraceFile final {
 public:
-    explicit MatchShotTraceFile(const std::filesystem::path& path) : file_(path), writer_(file_) {
+    explicit MatchShotTraceFile(const std::filesystem::path& path) : file_(path), writer_(file_.Stream()) {
         if (!file_) throw std::runtime_error("Cannot open shot trace: " + path.string());
     }
     void Write(const ShotRecords& drained) { writer_.Write(drained); }
     // Ends the file with trace_end and closes it; throws when a write or the close failed.
     void Finish(const ShotRecords& last) {
         writer_.Finish(last);
-        file_.close();
-        if (file_.fail()) throw std::runtime_error("Shot trace failed to close");
+        if (!file_.Close()) throw std::runtime_error("Shot trace failed to close");
     }
 
 private:
-    std::ofstream file_;
+    NativeTextFile file_;
     MatchShotTraceWriter writer_;
 };
 

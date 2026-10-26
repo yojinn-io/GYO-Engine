@@ -1,7 +1,7 @@
 # OS 子系統：分批計畫與進度
 
 更新：2026-10-25。Owner：Engine（新增 `engine/os`；`engine/io` 新增原生後端與路徑契約；`engine/time`、`engine/threads`、`engine/trace`、`engine/platform/sdl` 之後改呼叫 `engine/os`）。
-**狀態：A1～A3 完成**（2026-10-25，四平台 L1 run 40173730672）；接著由消費端做長路徑修正（P1～P5），本計畫的其餘批次排在消費端發行之後（D46）。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
+**狀態：A1～A3 完成**（2026-10-25，四平台 L1 run 40173730672），消費端的 P1～P5 也完成；D48：其餘批次已開始，os-guard-wide、os-process-info、os-console-shutdown 完成。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
 
 Engine 目前沒有處理 OS 差異的 owner：
 
@@ -37,6 +37,39 @@ Engine 目前沒有處理 OS 差異的 owner：
    - 開放決策 15：A1～A3 併進消費端的發行線 PR（兩個任務，一個 PR）。
    - 同意 A1～A3 的 Delta：新 target `GYO::Os`、os.md 與 io.md 的 Design Invariants 節。
 8. **D47**：`Os::Files::PathToUtf8`／`PathFromUtf8` 回傳 `Base::Result`，不合法的輸入回 InvalidEncoding，不丟例外（修訂 PLAN 第 3.2 節）。
+9. **D48**：其餘批次現在開始，不等消費端發行，取代 D46 的開放決策 1。
+   - 產品呼叫端由架構批次一起改，行為與日誌格式不變。
+   - os-net-errors 只做等價搬移，排在消費端發行線 PR 合併後。
+   - 開放決策 2、6、8～12 照建議。
+   - 計時核心最後做，L2 在 lan15 之後；判定數值事先核准。
+10. **D49**：os-console-shutdown 的四個決定。
+    - 檔位：high，三處逐行論證，實作後 1 位 xhigh 唯讀審查。
+    - error-handling.md 的平台邊界例外不延伸到 engine/os；改寫 os.md Invariant 6 的預告。
+    - 連結守衛允許 Windows 上 `gyo_os` 連 shell32；定案前做突變檢查與獨立審查（AGENTS §14.4），結果交使用者看。
+    - 關閉主控台時最多等 4 秒；主控台的輸出 code page 在正常結束時還原。
+11. **D50**：xhigh 審查後的兩個決定。
+    - POSIX 上不是 UTF-8 的命令列參數照現狀拒絕，記為事前宣告的差異。
+    - shell32 連結守衛定案；`gyo_expect_links` 丟掉假值名字的既有漏洞另開後續。
+12. **D51**：`os.console_close` 逾時又沒收到要求時判為「關閉事件沒送到」（Skipped）；關閉主控台的路徑在 lan15 的 Windows 實機驗證。
+13. **D52**：os-files-write 的四個決定。
+    - 檔位：high，Windows 寫入語意逐行論證，實作後 1 位 xhigh 審查。
+    - 換行：Windows 維持 CRLF（`FileOpenMode::Text`，engine/os 轉換）；換行的 Data Contract 決定延到消費端發行後。
+    - `ReplaceFile`、`SamePathComponent` 移到 os-tool-files；Windows 長路徑 log 的驗收移到 os-trace-writers。
+    - 消費端突變目錄的重新定位由本計畫做，先通知消費端。
+14. **D53**：os-files-write 的路徑差異（產品改走 engine/io 的 file:// 規則後的 5 項）補進事前宣告；程式不改。
+15. **D54**：新開 io-native-paths，讓 file:// 規則對齊 OS（`..` 照原樣交給 OS、支援 UNC、POSIX 的 `//` 不拒絕、非 UTF-8 目前目錄照 D43）；取消 D46、修改 D44 與 io.md Invariant 3。估時 12～19 h；high＋局部 xhigh＋ultracode 契約審查；判定的定案在突變檢查與獨立審查之後。
+16. **D55**：io-native-paths 的定案（突變檢查與 ultracode 契約審查之後）。
+    - UriTests 與 AssetPathResolverTests 的判定改變照 AGENTS §14.4 的表定案，包含只有主機的 UNC 照樣對應、由 OS 決定，以及 POSIX 上 `file://host/x` 讀本機的 `/host/x`。
+    - io.md 的 Invariant 3 與 Replacement Criteria 3 照草稿定案。
+    - `allowAbsolutePath` 的字面站點（點段消去、UNC 的 `//` 收合）記為未結，之後處理。
+17. **D56**：os-tool-files 開工前的四個決定。
+    - 檔位：high；Windows 的 `RenameReplacing` 與 `ResolvedPath` 逐行論證，實作後 1 位 xhigh 唯讀審查。估時 9～13 h。
+    - 新 API：engine/os 的 `RenameReplacing`（原名 ReplaceFile 撞 Win32 名）、`RemoveFile`、`SamePathComponent`、`ResolvedPath`、`FontDirectories`；NativeFileSystem 的 `Move`（取代既有）、`Remove`（只刪檔）。
+    - 原子寫入做成 engine/io 的 helper（唯一實作），工具是第一個消費端，IP-5 之後沿用。
+    - ★ 事前宣告：Windows 的路徑成分比較改用 `CompareStringOrdinal`；macOS 維持區分大小寫（已知差異）；字型改用不分 OS 的候選清單，在每個字型目錄找。
+18. **D57**：os-tool-files 在 xhigh 審查後發現、事前沒有宣告的行為差異。
+    - 接受並補宣告：POSIX 的 `AbsolutePath("")` 回 `""`；POSIX 讀目錄、FIFO 回 ReadFailed；Windows 名稱不合法的路徑在 probe 時就回錯誤；錯誤訊息的文字；字型選擇的邊界情況（Linux 的同目錄他平台字型、日文合併；Windows 不讀 `WINDIR`）。
+    - 沒有磁碟代號的磁碟區，`ResolvedPath` 維持回錯誤（MSVC 回 `\\?\GLOBALROOT\...`），記為已知差異。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -63,12 +96,13 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-skeleton（A1） | high | 完成（2026-10-25；四平台 L1 run 40173730672；[dev_log](../../../dev_logs/2026_10_25_engine_os_skeleton.zh-Hant.md)） | engine/os、GYO::Os、OsError、os.md、守衛（Engine 範圍）、突變 runner 擴充 |
 | io-contracts（A2） | high；字串規則局部 xhigh；契約審查 ultracode（先問） | 完成（2026-10-25；四平台 L1 run 40173730672；[dev_log](../../../dev_logs/2026_10_25_engine_os_io_contracts.zh-Hant.md)） | io.md、UTF-8 路徑、file:// 對應、ParseUri／ToString／MountTable 修正、IoError detail |
 | os-files-read（A3） | high；UTF-8↔UTF-16 與錯誤對應局部 xhigh；公開介面 1 位 xhigh 審查（先問） | 完成（2026-10-25；xhigh 審查已修正，D47；四平台 L1 run 40173730672；[dev_log](../../../dev_logs/2026_10_25_engine_os_files_read.zh-Hant.md)） | engine/os 的唯讀檔案原語、engine/io 的唯讀 NativeFileSystem |
-| （消費端 P1～P5） | 由消費端決定 | 可以開始（A1～A3 完成，2026-10-25） | 長路徑行為、錯誤記錄、asset 接線、UTF-8 呼叫端、驗收（不屬於本計畫） |
-| os-guard-wide（A1b） | medium；規則調整 high | 未開始 | 守衛擴到產品、工具、產品測試、驗收程式 |
-| os-process-info | high | 未開始 | 執行檔路徑、CPU 時間、本地時間 |
-| os-console-shutdown | xhigh | 未開始 | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
-| os-files-write | high | 未開始 | 寫入原語、消費端的 log／arena／trace 寫檔 |
-| os-tool-files | high | 未開始 | 編輯器的原子存檔、路徑比較、系統字型目錄 |
+| （消費端 P1～P5） | 由消費端決定 | 完成（消費端的發行線，2026-10-25） | 長路徑行為、錯誤記錄、asset 接線、UTF-8 呼叫端、驗收（不屬於本計畫） |
+| os-guard-wide（A1b） | medium；規則調整 high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_guard_wide.zh-Hant.md)） | 守衛擴到產品、工具、產品測試、驗收程式 |
+| os-process-info | high | 完成（2026-10-25；四平台 L1 run 40194493434；[dev_log](../../../dev_logs/2026_10_25_engine_os_process_info.zh-Hant.md)） | 執行檔路徑、CPU 時間、本地時間 |
+| os-console-shutdown | xhigh（D49：high＋三處論證＋1 位 xhigh 審查） | 完成（2026-10-26；四平台 L1 run 40205158822，關閉主控台在 CI 為 Skipped、留給 lan15；[dev_log](../../../dev_logs/2026_10_25_engine_os_console_shutdown.zh-Hant.md)） | UTF-8 命令列、主控台輸出、結束要求（★ Windows 行為變更） |
+| os-files-write | high＋1 位 xhigh 審查（D52） | 完成（2026-10-26；四平台 L1 run 40213916104；[dev_log](../../../dev_logs/2026_10_26_engine_os_files_write.zh-Hant.md)） | 寫入原語、消費端的 arena 讀取與 trace 寫檔（ReplaceFile 等移到 os-tool-files，D52） |
+| io-native-paths（D54） | high；Uri 規則與 Windows UNC 局部 xhigh；ultracode 契約審查 | 完成（2026-10-26；判定 D55；四平台 L1 run 40295007179；[dev_log](../../../dev_logs/2026_10_26_engine_os_io_native_paths.zh-Hant.md)） | file:// 對齊 OS：`..` 交給 OS、UNC、POSIX 的 `//`、非 UTF-8 目前目錄的契約 |
+| os-tool-files | high＋1 位 xhigh 審查（D56、D57） | 完成（2026-10-26；四平台 L1 run 40324361964；[dev_log](../../../dev_logs/2026_10_26_engine_os_tool_files.zh-Hant.md)） | 編輯器的原子存檔、路徑比較、系統字型目錄 |
 | os-trace-writers | high | 未開始 | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high | 未開始 | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |
 | time-threads-invariants | medium | 未開始 | time.md、threads.md 的 Design Invariants |
@@ -90,7 +124,7 @@ os-plan-docs ─┬─→ os-skeleton ─┐
 
 - 關鍵路徑（消費端的修正之前）：os-skeleton 與 io-contracts 並行，接 os-files-read，約 20～29 h 工時。
 - 整條線：約 100～150 h。
-- 依 D46：A1～A3 以外都排在消費端發行之後；A1～A3 併進消費端的發行線 PR。
+- 依 D48：其餘批次現在開始（取代 D46 的「發行後」）；A1～A3 已併進消費端的發行線 PR。
 
 ## 尚待回答的開放決策
 

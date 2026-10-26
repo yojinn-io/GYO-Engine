@@ -11,8 +11,11 @@ namespace Engine::IO::FS {
     /// The file:// backend of IFileSystem (docs/architecture/io.md).
     /// - Every OS call goes to engine/os; this class has no OS code.
     /// - A URI names a native path through the file:// mapping (Path::NativePathFromFileUri).
-    /// - Read-only for now: Open accepts read modes only, Exists, Stat and ToNativePathString work, and every
-    ///   other operation is NotSupported, as Capabilities() says.
+    /// - Open reads, or writes a file it creates when missing (Write | CreateIfMissing with Truncate or
+    ///   Append; Text for the platform's line endings). Exists, Stat, CreateDirectories, Move (one rename on
+    ///   one volume that replaces a file already at the target, Os::Files::RenameReplacing), Remove (a file,
+    ///   not recursive) and ToNativePathString work; every other operation is NotSupported, as
+    ///   Capabilities() says.
     /// - An engine/os failure keeps its code name and native detail (Base::CauseDetail).
     class NativeFileSystem final : public IFileSystem {
     public:
@@ -36,5 +39,9 @@ namespace Engine::IO::FS {
                                                              const ListOptions& opt) override;
         IoResult<std::unique_ptr<IFileWatcher>> CreateWatcher() override;
     };
+
+    /// The file URI of a native path in UTF-8, for this backend. A relative path is made absolute against the
+    /// current directory first (Os::Files::MakeAbsolute), as the OS would resolve it.
+    IoResult<Engine::IO::Path::Uri> NativeFileUri(std::string_view utf8Path);
 
 } // namespace Engine::IO::FS
