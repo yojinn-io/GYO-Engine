@@ -70,6 +70,11 @@ Engine 目前沒有處理 OS 差異的 owner：
 18. **D57**：os-tool-files 在 xhigh 審查後發現、事前沒有宣告的行為差異。
     - 接受並補宣告：POSIX 的 `AbsolutePath("")` 回 `""`；POSIX 讀目錄、FIFO 回 ReadFailed；Windows 名稱不合法的路徑在 probe 時就回錯誤；錯誤訊息的文字；字型選擇的邊界情況（Linux 的同目錄他平台字型、日文合併；Windows 不讀 `WINDIR`）。
     - 沒有磁碟代號的磁碟區，`ResolvedPath` 維持回錯誤（MSVC 回 `\\?\GLOBALROOT\...`），記為已知差異。
+19. **D58**：os-trace-writers 開工前的四個決定。
+    - 檔位：high＋1 位 xhigh 審查。
+    - trace.md Invariant 7（「exactly GYO::Threads and GYO::Os」）與 os.md Invariant 2（engine/trace 直接經 engine/os 寫檔）的新條文：同意開工，定案前做突變檢查與獨立審查（AGENTS §14.4）。
+    - ★ 事前宣告：Windows 的附加改成只能附加的 handle；一批之內在 64 KiB 或批尾分段寫出；錯誤 detail 的路徑是 UTF-8；Windows 長路徑可寫。
+    - Windows 長路徑案例的 Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問）。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -103,7 +108,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-files-write | high＋1 位 xhigh 審查（D52） | 完成（2026-10-26；四平台 L1 run 40213916104；[dev_log](../../../dev_logs/2026_10_26_engine_os_files_write.zh-Hant.md)） | 寫入原語、消費端的 arena 讀取與 trace 寫檔（ReplaceFile 等移到 os-tool-files，D52） |
 | io-native-paths（D54） | high；Uri 規則與 Windows UNC 局部 xhigh；ultracode 契約審查 | 完成（2026-10-26；判定 D55；四平台 L1 run 40295007179；[dev_log](../../../dev_logs/2026_10_26_engine_os_io_native_paths.zh-Hant.md)） | file:// 對齊 OS：`..` 交給 OS、UNC、POSIX 的 `//`、非 UTF-8 目前目錄的契約 |
 | os-tool-files | high＋1 位 xhigh 審查（D56、D57） | 完成（2026-10-26；四平台 L1 run 40324361964；[dev_log](../../../dev_logs/2026_10_26_engine_os_tool_files.zh-Hant.md)） | 編輯器的原子存檔、路徑比較、系統字型目錄 |
-| os-trace-writers | high | 未開始 | TraceSink 經 engine/os（開放決策 2） |
+| os-trace-writers | high＋1 位 xhigh 審查（D58） | 進行中（2026-10-26） | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high | 未開始 | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |
 | time-threads-invariants | medium | 未開始 | time.md、threads.md 的 Design Invariants |
 | os-wake-record | medium | 未開始 | 晚醒量測程式合回、四平台基準 |

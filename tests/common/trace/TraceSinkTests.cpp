@@ -2,9 +2,11 @@
 #include <doctest/doctest.h>
 
 #include "engine/base/Log.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/trace/TraceSink.hpp"
 
 #include <atomic>
+#include <cstddef>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -241,6 +243,51 @@ TEST_CASE("Trace appends to an existing file when asked") {
     REQUIRE(lines.size() == 2);
     CHECK(lines[0] == "kept");
     CHECK(lines[1] == "added");
+}
+
+// A trace file whose path is longer than 300 characters, the Windows MAX_PATH
+// incident (os-subsystem P1; this case moved here from os-files-write, D52).
+// The directory stays under Win32's directory limit and the file name takes
+// the path past it, so the test sets it up with the standard library; it reads
+// the file back and removes it through engine/os, which takes long paths on
+// every platform.
+TEST_CASE("Trace writes a file under a path longer than 300 characters") {
+    const auto directory = TempPath("long") / std::string(150, 'd');
+    std::filesystem::create_directories(directory);
+    const auto path = directory / (std::string(150, 'f') + ".jsonl");
+    const auto text = Engine::Os::Files::PathToUtf8(path);
+    REQUIRE(text);
+    REQUIRE(text.value().size() > 300);
+    {
+        auto sink = OpenSink(path);
+        CHECK(sink.Push("first"));
+        static_cast<void>(sink.Close([](const TraceCounts& c) { return EndLine(c); }));
+        CHECK(sink.Good());
+    }
+    {
+        auto sink = OpenSink(path, 16, true);
+        CHECK(sink.Push("second"));
+        static_cast<void>(sink.Close());
+        CHECK(sink.Good());
+    }
+    std::string bytes;
+    {
+        auto file = Engine::Os::Files::FileReader::Open(text.value());
+        REQUIRE_MESSAGE(file, (file ? std::string{} : Engine::Base::Describe(file.error())));
+        std::byte buffer[256];
+        for (;;) {
+            auto got = file.value().Read(buffer);
+            REQUIRE(got);
+            if (got.value() == 0) break;
+            bytes.append(reinterpret_cast<const char*>(buffer), got.value());
+        }
+    }
+    const std::string newline(Newline);
+    CHECK(bytes == "first" + newline + "end written=1 dropped=0" + newline + "second" + newline);
+    CHECK(Engine::Os::Files::RemoveFile(text.value()));
+    std::error_code ignored;
+    std::filesystem::remove(directory, ignored);
+    std::filesystem::remove(directory.parent_path(), ignored);
 }
 
 TEST_CASE("Trace reports a file it cannot open") {

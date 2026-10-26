@@ -1,5 +1,6 @@
 add_executable(gyo_trace_tests TraceSinkTests.cpp)
-target_link_libraries(gyo_trace_tests PRIVATE GYO::Trace gyo_test_support doctest::doctest)
+# The long-path case reads its file back and removes it through GYO::Os.
+target_link_libraries(gyo_trace_tests PRIVATE GYO::Trace GYO::Os gyo_test_support doctest::doctest)
 add_test(NAME gyo_trace_tests COMMAND gyo_trace_tests)
 set_tests_properties(gyo_trace_tests PROPERTIES LABELS "cpu" TIMEOUT 120)
 
