@@ -110,7 +110,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-files-write | high＋1 位 xhigh 審查（D52） | 完成（2026-10-26；四平台 L1 run 40213916104；[dev_log](../../../dev_logs/2026_10_26_engine_os_files_write.zh-Hant.md)） | 寫入原語、消費端的 arena 讀取與 trace 寫檔（ReplaceFile 等移到 os-tool-files，D52） |
 | io-native-paths（D54） | high；Uri 規則與 Windows UNC 局部 xhigh；ultracode 契約審查 | 完成（2026-10-26；判定 D55；四平台 L1 run 40295007179；[dev_log](../../../dev_logs/2026_10_26_engine_os_io_native_paths.zh-Hant.md)） | file:// 對齊 OS：`..` 交給 OS、UNC、POSIX 的 `//`、非 UTF-8 目前目錄的契約 |
 | os-tool-files | high＋1 位 xhigh 審查（D56、D57） | 完成（2026-10-26；四平台 L1 run 40324361964；[dev_log](../../../dev_logs/2026_10_26_engine_os_tool_files.zh-Hant.md)） | 編輯器的原子存檔、路徑比較、系統字型目錄 |
-| os-trace-writers | high＋1 位 xhigh 審查（D58、D60） | 本機完成（2026-10-26；Red：run 40331764169；修正的 L1 待推送；[dev_log](../../../dev_logs/2026_10_26_engine_os_trace_writers.zh-Hant.md)） | TraceSink 經 engine/os（開放決策 2） |
+| os-trace-writers | high＋1 位 xhigh 審查（D58、D60） | 完成（2026-10-26；Red：run 40331764169；Green：四平台 L1 run 40339587478；[dev_log](../../../dev_logs/2026_10_26_engine_os_trace_writers.zh-Hant.md)） | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high | 未開始 | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |
 | time-threads-invariants | medium | 未開始 | time.md、threads.md 的 Design Invariants |
 | os-wake-record | medium | 未開始 | 晚醒量測程式合回、四平台基準 |

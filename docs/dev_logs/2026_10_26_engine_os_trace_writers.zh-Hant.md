@@ -1,6 +1,6 @@
 # Engine os-trace-writers：trace 寫檔改走 engine/os
 
-日期：2026-10-26。**本機完成**：Invariant 7 與 os.md Invariant 2 由使用者定案（D60）；修正的四平台 L1 待推送後執行。
+日期：2026-10-26。**完成**：Invariant 7 與 os.md Invariant 2 由使用者定案（D60）；四平台 L1 通過（[run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)）。
 計畫見 [os-trace-writers](../architecture/plans/os-subsystem/PLAN.md)（第 7.10 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-trace-writers」；開工前的決定是 D58，定案是 D60。
 
 ## 做了什麼
@@ -17,7 +17,7 @@
 ## 驗證與經緯
 
 - Red：先單獨推送新的長路徑測試（`a75e4028`，實作仍是 `ofstream`），跑四平台 L1（[run 40331764169](https://github.com/yojinn-io/GYO-Engine/actions/runs/40331764169)）。如預期，只有 windows-x64 失敗，而且只失敗在新案例的開檔（`REQUIRE( sink.has_value() )`）；macOS、Linux 全部通過（macOS 沒有 260 字元的限制）。
-- Green（本機）：core 33／33，gyo_trace_tests 12／12。
+- Green：本機 core 33／33、gyo_trace_tests 12／12；修正推送後的四平台 L1（[run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)）全部成功，windows-x64 的 gyo_trace_tests 通過（長路徑與 CRLF），linux-x64 也通過（含 `/dev/full`）。
 - 產品組態的相關測試 8／9。`object_fps_pvp.worker` 第一次失敗，原因是 action 封包的間隔不到 30 ms；單獨重跑 3／3 通過。依 §14.1 判為環境：那次與另外 8 項測試和產品建置並行，5 分鐘平均負載 9.17；而且 worker 探針不經 TraceSink。
 - 突變：tt2 6／6 killed（`tt2-final-batch-unwritten` 重新定位）。新增的 tt-x1～tt-x6 在本機能跑的都 killed；Windows、Linux 專用的各 1 個跳過。`os-g6-stale` 原本指向刪掉的 allowlist 條目，改指 Waiter 的條目。
   - tt-x1 第一次的結果是 wrong_failure：CMake 把錯誤訊息折成兩行，`.*` 比不到換行，改用 `\s+` 後 killed。

@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-26。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-26。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -20,7 +20,7 @@
 - 2026-10-25：使用者說「推送本分支，手動觸發四平台 L1，一起驗 os-guard-wide 和 os-process-info」。第一次 run 40192938131 只有 macos-arm64 的 toolchain 列失敗（本批新加的 CPU 測試前提錯，見「os-process-info」），修正 `a9219fa` 後第二次 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。兩批完成。下一批是 os-console-shutdown（xhigh，★ Windows 行為變更）。
 - 2026-10-26：io-native-paths（D54）完成，判定已定案（D55）。四平台 L1 [run 40295007179](https://github.com/yojinn-io/GYO-Engine/actions/runs/40295007179) 全部成功，Windows 的 UNC 探針兩項 Passed。Windows／Linux 專用的突變待對應平台。
 - 2026-10-26：os-tool-files 完成（D56、D57），四平台 L1 [run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964) 全部成功。Windows 專用的突變與 `-s` 確認留給 lan15。
-- 2026-10-26：os-trace-writers 開始（D58），基準 `ca434952`，本機進行中。
+- 2026-10-26：os-trace-writers 完成（D58、D60）：Red [run 40331764169](https://github.com/yojinn-io/GYO-Engine/actions/runs/40331764169)（只有 windows-x64 的新案例失敗），Green [run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)（全部成功）。
 - 2026-10-26：D59，本計畫的 commit 統一放進 #96。已請消費端把本分支併到 `ca434952`（不含 Red 測試 `a75e4028`），等它回覆發行線上的 commit。
 
 ## 閱讀入口
@@ -534,6 +534,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - §14.4 的核對：1、2、4 點不完整，3、5 點成立。1、2：檢查只看直接連結，原本 PUBLIC／INTERFACE 的 Os 也會通過，已加檢查補上。4：閉包的末端是 GYO::Base，而 Base 沒有連結檢查，這是新舊判定都有的既有缺口（D50 的假值漏洞也還在）。
   - 交使用者決定（事前沒有宣告的差異）：Linux 上不是 UTF-8 的 trace 路徑改成 OpenFailed；錯誤 detail 的文字（多了 engine/os 的原因，Windows 是 `/`，非 UTF-8 時 detail 沒有路徑）；`flushEachLine` 遇到長行也只寫一次（原本超過串流緩衝的行會拆成多次）。
   - 2026-10-26：使用者定為 D60（條文照草稿定案；差異 a～c 接受並補宣告）。下一步：整理成 commit、通知消費端、問過使用者後推送並跑四平台 L1（Windows 的 Green）。
+  - 2026-10-26：本機 WIP 併成 `d32def55`（接在已推送的 Red `a75e4028` 之上，不改寫已推送的歷史），通知消費端。使用者說「推送本分支，手動觸發四平台 L1，驗 os-trace-writers 的 Green」。推送 `d32def55`，四平台 L1：[run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。**Green**：windows-x64 的 gyo_trace_tests 通過（長路徑案例與 CRLF 的位元組比對；95／95），linux-x64 的 gyo_trace_tests 也通過（含 `/dev/full`）。本批完成。
 
 ## 未結事項
 
