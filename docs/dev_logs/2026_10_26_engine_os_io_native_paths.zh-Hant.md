@@ -1,6 +1,6 @@
 # Engine io-native-paths：file:// 規則對齊作業系統
 
-日期：2026-10-26。**本機完成**：判定已由使用者定案（D55）；四平台 L1 待推送後執行。
+日期：2026-10-26。**完成**：判定由使用者定案（D55）；四平台 L1 通過（[run 40295007179](https://github.com/yojinn-io/GYO-Engine/actions/runs/40295007179)）。
 計畫見 [io-native-paths](../architecture/plans/os-subsystem/PLAN.md)（第 7.8b 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「io-native-paths」；開工前的決定是 D54，定案是 D55。
 
 ## 做了什麼
@@ -24,7 +24,7 @@
 - 突變：第一輪相關的 35／35 killed，15 個 Windows／Linux 專用的跳過（Windows 的到 lan15 跑，D206）。審查後的修正再跑一次受影響的 32 條：32／32 killed（1 個 Windows 專用的跳過）。
 - 契約審查（ultracode：1 位審查者＋1 位對抗檢查）：兩位都把真實輸入同時餵給舊碼（`git show 31a5849` 編進暫存目錄）與新碼。2 個 major：兩個以上的斜線開頭時，磁碟機外觀的拒絕被繞過（`///C:/x`），以及磁碟機形狀的 UNC 主機讓不動點破掉（`//C:/x` 印成 `file://C:/x`）。修正後加了「產生的各種寫法」性質測試（762 個原生寫法、310 個 URI 寫法）；它在修正途中又抓到同類的 `/C:/../x` 與 `///??/`。其餘的發現（未被測試守住的檢查、`.value()` 讓整個執行檔中止、文件與註解的落差）一併修正；`allowAbsolutePath` 的字面站點與 `normalizeSeparators=false` 的既有缺口記為未結。
 - 產品組態（RelWithDebInfo）：內容相關的產品與編輯器測試通過（engine_tests、object_fps_pvp.cpu／asset_catalog／presentation_cpu、編輯器 3 項、守衛）。
-- 已知的缺口：symlink 案例在建不了 symlink 的 Windows 上、非 UTF-8 目前目錄案例在 macOS 上，都只寫訊息後返回，不是 CTest 看得到的 Skipped；Windows UNC 探針在本機只做了語法檢查，CI 上能不能連到 `\\localhost\C$` 要看 L1。
+- 已知的缺口：symlink 案例在建不了 symlink 的 Windows 上、非 UTF-8 目前目錄案例在 macOS 上，都只寫訊息後返回，不是 CTest 看得到的 Skipped；Windows UNC 探針在本機只做了語法檢查；四平台 L1 的 windows-x64 上 `io.unc_localhost` 與 `io.unc_127.0.0.1` 都是 Passed，所以 CI 連得到 `\\localhost\C$`。這次沒有在 Windows 上重跑舊碼看 Red（舊碼沒有 `\\?\UNC\` 時探針應以「FAIL reads the file」失敗，這點靠 Windows 專用突變 os-f9、os-f10 在 lan15 確認）。
 
 ## 定案（D55）
 

@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-26。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 進行中），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-26。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -18,7 +18,7 @@
 - 2026-10-25：os-guard-wide 本機完成（本機 commit，未推送）。守衛擴到 apps、tools、build/acceptance、tests，產品、工具與驗收程式各有自己的 allowlist；設定期檢查與標頭衛生測試加入。本機 ctest 31／31、守衛通過、相關突變 16／16 killed（Windows 專用 1 個跳過）。四平台 L1 等推送（要使用者同意）。下一批是 os-process-info。
 - 2026-10-25：使用者說「先不推送，繼續做 os-process-info，做完再和 os-guard-wide 一起跑四平台 L1」。os-process-info 本機完成（本機 commit，未推送）：engine/os 新增 Process，消費端的執行檔路徑、CPU 時間、本地時間改呼叫它。本機 ctest 31／31，產品組態的相關測試 12／12，突變 7／7 killed（Windows 專用 1 個跳過）。下一步：推送並跑四平台 L1（要使用者同意），之後是 os-console-shutdown。
 - 2026-10-25：使用者說「推送本分支，手動觸發四平台 L1，一起驗 os-guard-wide 和 os-process-info」。第一次 run 40192938131 只有 macos-arm64 的 toolchain 列失敗（本批新加的 CPU 測試前提錯，見「os-process-info」），修正 `a9219fa` 後第二次 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。兩批完成。下一批是 os-console-shutdown（xhigh，★ Windows 行為變更）。
-- 2026-10-26：io-native-paths（D54）本機完成，判定已定案（D55）。ultracode 契約審查的 2 個 major 已修，本機 core 33／33、產品組態內容測試 8／8、相關突變全部 killed（Windows／Linux 專用的待對應平台）。未推送；推送與四平台 L1 要先問使用者。下一批是 os-tool-files。
+- 2026-10-26：io-native-paths（D54）完成，判定已定案（D55）。四平台 L1 [run 40295007179](https://github.com/yojinn-io/GYO-Engine/actions/runs/40295007179) 全部成功，Windows 的 UNC 探針兩項 Passed。Windows／Linux 專用的突變待對應平台。下一批是 os-tool-files。
 
 ## 閱讀入口
 
@@ -475,6 +475,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
     - 不在本批修的：`allowAbsolutePath` 仍會把 catalog 路徑的 `//` 收合、點段字面消去（F6、A8；沒有產品設它）；`normalizeSeparators=false` 時 `..\x` 繞過包含檢查（A6，既有，不在 D54）。
   - 產品組態的內容相關測試在修正後重跑 8／8；本機 core 33／33；受影響的突變 32／32 killed（io-m5 的 expect 改成新的殺法：命名空間檢查關掉時，`///??/` 收合成 `/??/` 而解析不回來）。
   - 2026-10-26：定案關卡（D55）。使用者對三個問題選：「照此定案」「照草稿定案」「記為未結，之後處理」。下一步：整理成一個 commit、通知消費端、問過使用者後推送並跑四平台 L1。
+  - 2026-10-26：兩個 WIP commit 併成 `88408b2`，通知消費端（結果與 Windows 專用突變、探針）。使用者說「推送本分支，手動觸發四平台 L1，驗 io-native-paths」。推送 `88408b2`，四平台 L1：[run 40295007179](https://github.com/yojinn-io/GYO-Engine/actions/runs/40295007179)。全部成功：四平台的 L1、quick acceptance（toolchain、消費端）、CI validation、CI gate。windows-x64 上 `io.unc_localhost`、`io.unc_127.0.0.1` 都是 Passed（`\\localhost\C$` 連得到，短路徑與超過 300 字元的 UNC 路徑都實跑）；`os.console_close` 照 D51 為 Skipped。linux-x64 的 gyo_os_tests 通過（含非 UTF-8 目前目錄的案例）。本批完成。
 - 下一步（依 PLAN 第 7.8b 節與 D54）：
   1. engine/os：Windows 的 UNC 長路徑改用 `\\?\UNC\`，以 `\\localhost\C$` 測試（CI 做不到就 Skipped）；POSIX `MakeAbsolute` 在目前目錄不是 UTF-8 時回 InvalidEncoding（D43 的明確契約）。
   2. 呼叫端：AssetPathResolver 的根目錄照原樣保留；POSIX 的 symlink 加 `..` 測試（NativeFileSystem）；重新定位相關突變（io-m1、io-m8、io-m10 等）。
