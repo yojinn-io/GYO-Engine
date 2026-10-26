@@ -22,6 +22,7 @@
 - 2026-10-26：os-tool-files 完成（D56、D57），四平台 L1 [run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964) 全部成功。Windows 專用的突變與 `-s` 確認留給 lan15。
 - 2026-10-26：os-trace-writers 完成（D58、D60）：Red [run 40331764169](https://github.com/yojinn-io/GYO-Engine/actions/runs/40331764169)（只有 windows-x64 的新案例失敗），Green [run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)（全部成功）。
 - 2026-10-26：D59，本計畫的 commit 統一放進 #96。已請消費端把本分支併到 `ca434952`（不含 Red 測試 `a75e4028`），等它回覆發行線上的 commit。
+- 2026-10-27：使用者說「推送 e5fec6ef 這個紀錄 commit，並告訴消費端可以一起併」。推送 `e5fec6ef`（os-trace-writers 的完成紀錄），請消費端把本分支一次併到 `e5fec6ef`（含 os-guard-wide～os-trace-writers），等它回覆發行線上的 commit。
 
 ## 閱讀入口
 
