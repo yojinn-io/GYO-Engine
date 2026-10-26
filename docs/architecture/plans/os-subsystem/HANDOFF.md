@@ -23,6 +23,7 @@
 - 2026-10-26：os-trace-writers 完成（D58、D60）：Red [run 40331764169](https://github.com/yojinn-io/GYO-Engine/actions/runs/40331764169)（只有 windows-x64 的新案例失敗），Green [run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)（全部成功）。
 - 2026-10-26：D59，本計畫的 commit 統一放進 #96。已請消費端把本分支併到 `ca434952`（不含 Red 測試 `a75e4028`），等它回覆發行線上的 commit。
 - 2026-10-27：使用者說「推送 e5fec6ef 這個紀錄 commit，並告訴消費端可以一起併」。推送 `e5fec6ef`（os-trace-writers 的完成紀錄），請消費端把本分支一次併到 `e5fec6ef`（含 os-guard-wide～os-trace-writers），等它回覆發行線上的 commit。
+- 2026-10-27：消費端回報（經使用者同意）並已核對：發行線 `claude/pvp-v71-release` 以三次 `--no-ff` 合併，沒有衝突（`32ce9b6d` 到 `ca434952`、`f87b77d0` 到 `d32def55`、`2aebc143` 到 `e5fec6ef`）；消費端 D207 `4a4a0ef7`；消費端本機 ctest 97／97；合併後的 L1 是 run 40348670097（在 `4a4a0ef7` 上派發）。使用者決定今晚的 lan15 用合併後的發行線跑；D206 的主控台、UNC 探針與 Windows 專用突變，以及 `-s` 的實跑確認，改在發行線上做，結果由消費端回給本計畫。
 
 ## 閱讀入口
 
