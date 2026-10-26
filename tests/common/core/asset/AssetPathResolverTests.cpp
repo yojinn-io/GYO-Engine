@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "engine/asset/resolver/AssetPathResolver.hpp"
+#include "PathText.hpp"
 
 namespace fs = std::filesystem;
 using Engine::Asset::Resolver::AssetPathResolver;
@@ -11,12 +12,12 @@ using Engine::Asset::Resolver::AssetPathResolver;
 TEST_CASE("AssetPathResolver: normal join") {
     fs::path root = fs::temp_directory_path() / "asset_test_root";
     AssetPathResolver::Options options;
-    options.assetsRoot = root.string();
+    options.assetsRoot = Engine::Test::Utf8Path(root);
     AssetPathResolver r(options);
 
     auto out = r.Resolve("textures/a.ppm");
     REQUIRE(out); // ここは value() を読むので REQUIRE が安全
-    CHECK(out.value().Str() == (root / "textures/a.ppm").generic_string());
+    CHECK(out.value().Str() == Engine::Test::GenericUtf8Path(root / "textures/a.ppm"));
     CHECK(out.value().Filename() == "a.ppm");
     CHECK(out.value().Extension() == ".ppm");
     CHECK(out.value().IsAbsoluteLike());
@@ -25,7 +26,7 @@ TEST_CASE("AssetPathResolver: normal join") {
 TEST_CASE("AssetPathResolver: reject absolute path") {
     fs::path root = fs::temp_directory_path() / "asset_test_root";
     AssetPathResolver::Options options;
-    options.assetsRoot = root.string();
+    options.assetsRoot = Engine::Test::Utf8Path(root);
     AssetPathResolver r(options);
 
 #ifdef _WIN32
@@ -41,7 +42,7 @@ TEST_CASE("AssetPathResolver: reject absolute path") {
 TEST_CASE("AssetPathResolver: reject escape root") {
     fs::path root = fs::temp_directory_path() / "asset_test_root";
     AssetPathResolver::Options options;
-    options.assetsRoot = root.string();
+    options.assetsRoot = Engine::Test::Utf8Path(root);
     AssetPathResolver r(options);
 
     auto out = r.Resolve("../outside.txt");
@@ -53,14 +54,14 @@ TEST_CASE("AssetPathResolver: reject escape root") {
 TEST_CASE("AssetPathResolver: allow dot segments within root") {
     fs::path root = fs::temp_directory_path() / "asset_test_root";
     AssetPathResolver::Options options;
-    options.assetsRoot = root.string();
+    options.assetsRoot = Engine::Test::Utf8Path(root);
     AssetPathResolver r(options);
 
     auto out = r.Resolve("a/../b.txt");
 
     REQUIRE(out);
     CHECK_FALSE(out.value().HasTraversal());
-    CHECK(out.value().Str() == (root / "b.txt").generic_string());
+    CHECK(out.value().Str() == Engine::Test::GenericUtf8Path(root / "b.txt"));
 }
 
 TEST_CASE("AssetPathResolver: preserve absolute root prefixes") {

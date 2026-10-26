@@ -22,6 +22,16 @@ Base::Result<std::string, AssetError> Utf8Path(const std::filesystem::path& path
     return std::move(text.value());
 }
 
+// A content path is content.json text, so UTF-8; joined as UTF-8, never read in the ANSI code page.
+Base::Result<std::filesystem::path, AssetError> ContentPath(const std::string& path) {
+    auto native = Os::Files::PathFromUtf8(path);
+    if (!native) {
+        return Base::Err(AssetError::Make(AssetErrorCode::InvalidPath, "Content path is not UTF-8",
+                                          Base::CauseDetail(native.error())));
+    }
+    return std::move(native.value());
+}
+
 bool IsRelativeContentPath(const std::string& path) {
     if (path.empty() || path == "." || path.front() == '/' ||
         path.find('\\') != std::string::npos || path.find(':') != std::string::npos ||
@@ -124,7 +134,9 @@ Base::Result<AssetCatalog, AssetError> ContentManifest::LoadCatalogs(
     options.allowSchemes = false;
     Resolver::AssetPathResolver resolver(std::move(options));
     for (const auto& path : catalogs) {
-        auto catalogPath = Utf8Path(assetRoot / path);
+        auto name = ContentPath(path);
+        if (!name) return Base::Err(std::move(name.error()));
+        auto catalogPath = Utf8Path(assetRoot / name.value());
         if (!catalogPath) return Base::Err(std::move(catalogPath.error()));
         auto loaded = catalog.AppendFromFile(catalogPath.value(), parser, resolver);
         if (!loaded) return Base::Err(std::move(loaded.error()));

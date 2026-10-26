@@ -72,7 +72,9 @@ TEST_CASE("every engine/os public header is included by this test") {
     std::string missing;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(include)) {
         if (!entry.is_regular_file()) continue;
-        const auto relative = std::filesystem::relative(entry.path(), include).generic_string();
+        // UTF-8, as the include directives are; generic_string() is the ANSI code page on Windows.
+        const auto text = std::filesystem::relative(entry.path(), include).generic_u8string();
+        const std::string relative(text.begin(), text.end());
         ++headers;
         if (!included.contains(relative)) missing += relative + "\n";
     }

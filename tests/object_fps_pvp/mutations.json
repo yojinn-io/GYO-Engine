@@ -2099,7 +2099,7 @@
       "batch": "v7-flow",
       "what": "an unopenable detail file does not stop the Match",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
-      "find": "        if (!file_) throw std::runtime_error(\"Cannot open ingress trace: \" + path.string());\n",
+      "find": "        if (!file_) throw std::runtime_error(\"Cannot open ingress trace: \" + Engine::Os::Files::PathForMessage(path));\n",
       "replace": "",
       "check": "match_ingress_cli",
       "expect": "unopenable ingress trace: stderr does not match"
@@ -2109,8 +2109,8 @@
       "batch": "v7-flow",
       "what": "the derived name keeps the movement trace name (-commands.jsonl)",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
-      "find": "            ? name.substr(0, name.size() - movementSuffix.size()) + \"-ingress.jsonl\"\n",
-      "replace": "            ? name.substr(0, name.size() - movementSuffix.size()) + \"-commands.jsonl\"\n",
+      "find": "            ? name.substr(0, name.size() - movementSuffix.size()) + u8\"-ingress.jsonl\"\n",
+      "replace": "            ? name.substr(0, name.size() - movementSuffix.size()) + u8\"-commands.jsonl\"\n",
       "check": "cpu",
       "expect": "CHECK\\( derivedName == \"match\\-ingress\\.jsonl\" \\) is NOT correct"
     },
@@ -2119,8 +2119,8 @@
       "batch": "v7-flow",
       "what": "an explicit name ending in commands.jsonl is accepted",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
-      "find": "    if (path.filename().string().ends_with(commands)) {\n",
-      "replace": "    if (path.filename().string().ends_with(commands) && false) {\n",
+      "find": "    if (path.filename().u8string().ends_with(commands)) {\n",
+      "replace": "    if (path.filename().u8string().ends_with(commands) && false) {\n",
       "check": "cpu",
       "expect": "CHECK\\( commandsSuffixRefused \\) is NOT correct"
     },
@@ -6480,7 +6480,7 @@
       "batch": "v71-trace-no-overwrite",
       "what": "The number goes after -commands",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/TracePaths.hpp",
-      "find": "        numbered.replace_filename(name.substr(0, name.size() - commands.size()) + mark + std::string(commands));",
+      "find": "        numbered.replace_filename(name.substr(0, name.size() - commands.size()) + mark + std::u8string(commands));",
       "replace": "        numbered.replace_filename(name + mark);",
       "check": "cpu",
       "expect": "takes the next free numbered name"

@@ -1624,6 +1624,101 @@
       "target": "gyo_threads_tests",
       "cases": "*reports its name*",
       "expect": "CHECK\\( named.NameApplied\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "pu-x1-posix-message-raw-bytes",
+      "what": "PathForMessage copies a byte that starts no UTF-8 sequence instead of writing U+FFFD",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "            out += \"\\xEF\\xBF\\xBD\";",
+      "replace": "            out += bytes[i];",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(std::filesystem::path\\(std::string\\(\"a\\\\xFF\" \"b\"\\)\\)\\) == \"a\\\\xEF\\\\xBF\\\\xBD\" \"b\" \\) is NOT correct"
+    },
+    {
+      "id": "pu-x2-posix-message-three-byte-cut",
+      "what": "PathForMessage takes a three-byte sequence for two bytes, so Japanese and Korean names become U+FFFD",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "lead < 0xF0 ? 3 : 4",
+      "replace": "lead < 0xF0 ? 2 : 4",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(Native\\(named\\)\\) == named \\) is NOT correct"
+    },
+    {
+      "id": "pu-x3-windows-message-refuses-surrogate",
+      "what": "PathForMessage refuses an unpaired surrogate on Windows (an empty message) instead of writing U+FFFD",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    const int bytes = ::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, nullptr, 0, nullptr, nullptr);",
+      "replace": "    const int bytes = ::WideCharToMultiByte(kPathCodePage, WC_ERR_INVALID_CHARS, wide.data(), length, nullptr, 0, nullptr, nullptr);",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(std::filesystem::path\\(std::wstring\\(L\"a\\\\xD800\" L\"b\"\\)\\)\\) == \"a\\\\xEF\\\\xBF\\\\xBD\" \"b\" \\) is NOT correct"
+    },
+    {
+      "id": "pu-x4-windows-message-generic-separators",
+      "what": "PathForMessage rewrites '\\' to '/' on Windows, so messages lose the platform's form",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
+      "replace": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes ||\n        (std::replace(utf8.begin(), utf8.end(), '\\\\', '/'), false)) {",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(std::filesystem::path\\(L\"C:.*\\) is NOT correct"
+    },
+    {
+      "id": "pu-x5-windows-message-ansi",
+      "what": "PathForMessage writes with the ANSI code page on Windows, so names outside it do not come out as UTF-8",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
+      "replace": "    if (::WideCharToMultiByte(CP_ACP, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(Native\\(named\\)\\) == named \\) is NOT correct"
+    },
+    {
+      "id": "pu-x6-windows-editor-resolved-ansi",
+      "what": "The editor reads a catalog's resolved UTF-8 path in the ANSI code page on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "tools/ui_editor/src/ReadOnlyAssetCatalog.cpp",
+      "find": "        auto resolved = Engine::Os::Files::PathFromUtf8(entry->resolvedPath);",
+      "replace": "        auto resolved = std::make_optional(std::filesystem::path{entry->resolvedPath});",
+      "target": "gyo_ui_editor_core_tests",
+      "command": [
+        "{exe:gyo_ui_editor_core_tests}"
+      ],
+      "expect": "FAILED: a resolved asset path keeps the characters of its root"
+    },
+    {
+      "id": "pu-x7-windows-content-catalog-ansi",
+      "what": "content.json's catalog names are joined to the root in the ANSI code page on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/asset/src/ContentManifest.cpp",
+      "find": "        auto catalogPath = Utf8Path(assetRoot / name.value());",
+      "replace": "        auto catalogPath = Utf8Path(assetRoot / path);",
+      "target": "engine_tests",
+      "cases": "*catalog named outside the ANSI code page*",
+      "expect": "REQUIRE\\( catalog \\) is NOT correct"
     }
   ]
 }

@@ -24,6 +24,7 @@
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/NativeFiles.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
+#include "engine/os/Files.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -237,13 +238,13 @@ private:
 // "<x>-commands.jsonl" gives "<x>-shots.jsonl"; any other name gains
 // ".shots.jsonl". Empty without a movement trace.
 [[nodiscard]] inline std::filesystem::path MatchShotTracePath(const std::filesystem::path& movementTrace) {
-    static constexpr std::string_view movementSuffix = "-commands.jsonl";
+    static constexpr std::u8string_view movementSuffix = u8"-commands.jsonl";
     if (movementTrace.empty()) return {};
-    const auto name = movementTrace.filename().string();
+    const auto name = movementTrace.filename().u8string();
     auto path = movementTrace;
     path.replace_filename(name.ends_with(movementSuffix)
-        ? name.substr(0, name.size() - movementSuffix.size()) + "-shots.jsonl"
-        : name + ".shots.jsonl");
+        ? name.substr(0, name.size() - movementSuffix.size()) + u8"-shots.jsonl"
+        : name + u8".shots.jsonl");
     return path;
 }
 
@@ -284,7 +285,7 @@ private:
 class MatchShotTraceFile final {
 public:
     explicit MatchShotTraceFile(const std::filesystem::path& path) : file_(path), writer_(file_.Stream()) {
-        if (!file_) throw std::runtime_error("Cannot open shot trace: " + path.string());
+        if (!file_) throw std::runtime_error("Cannot open shot trace: " + Engine::Os::Files::PathForMessage(path));
     }
     void Write(const ShotRecords& drained) { writer_.Write(drained); }
     // Ends the file with trace_end and closes it; throws when a write or the close failed.

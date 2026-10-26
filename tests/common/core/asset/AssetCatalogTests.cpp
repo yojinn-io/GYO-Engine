@@ -7,6 +7,7 @@
 #include "engine/asset/catalog/CatalogParser.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/asset/AssetId.hpp"
+#include "PathText.hpp"
 
 namespace fs = std::filesystem;
 using Engine::Asset::AssetCatalog;
@@ -16,7 +17,7 @@ using Engine::Asset::Resolver::AssetPathResolver;
 
 static void WriteText(const fs::path& p, const std::string& s) {
     fs::create_directories(p.parent_path());
-    std::ofstream ofs(p.string(), std::ios::binary);
+    std::ofstream ofs(p, std::ios::binary);
     ofs << s;
 }
 
@@ -35,12 +36,12 @@ TEST_CASE("AssetCatalog: build entries with resolvedPath") {
       ]
     })");
     AssetPathResolver::Options options;
-    options.assetsRoot = assetsRoot.string();
+    options.assetsRoot = Engine::Test::Utf8Path(assetsRoot);
     AssetPathResolver resolver(options);
     CatalogParser parser;
     AssetCatalog catalog;
 
-    auto r = catalog.LoadFromFile(catalogPath.string(), parser, resolver);
+    auto r = catalog.LoadFromFile(Engine::Test::Utf8Path(catalogPath), parser, resolver);
     CHECK(r);
 
     const auto* e = catalog.Find(AssetId::FromString("ui.title"));
@@ -66,12 +67,12 @@ TEST_CASE("AssetCatalog: duplicate id should fail") {
     })");
 
     AssetPathResolver::Options options;
-    options.assetsRoot = assetsRoot.string();
+    options.assetsRoot = Engine::Test::Utf8Path(assetsRoot);
     AssetPathResolver resolver(options);
     CatalogParser parser;
     AssetCatalog catalog;
 
-    auto r = catalog.LoadFromFile(catalogPath.string(), parser, resolver);
+    auto r = catalog.LoadFromFile(Engine::Test::Utf8Path(catalogPath), parser, resolver);
     CHECK(!r);
     CHECK(r.error().code == Engine::Asset::AssetErrorCode::InvalidCatalogEntry);
 }
@@ -91,12 +92,12 @@ TEST_CASE("AssetCatalog: a path resolution failure keeps the resolver's code") {
     })");
 
     AssetPathResolver::Options options;
-    options.assetsRoot = assetsRoot.string();
+    options.assetsRoot = Engine::Test::Utf8Path(assetsRoot);
     AssetPathResolver resolver(options);
     CatalogParser parser;
     AssetCatalog catalog;
 
-    const auto r = catalog.LoadFromFile(catalogPath.string(), parser, resolver);
+    const auto r = catalog.LoadFromFile(Engine::Test::Utf8Path(catalogPath), parser, resolver);
     REQUIRE_FALSE(r);
     CHECK(r.error().code == Engine::Asset::AssetErrorCode::PathEscapesRoot);
     CHECK(r.error().detail.rfind("escape", 0) == 0); // the entry id, then the resolver detail
@@ -112,20 +113,20 @@ TEST_CASE("AssetCatalog: independently rooted append is atomic and preserves ent
     WriteText(commonFile, R"({"version":1,"assets":[
         {"id":"common.white","type":"texture","path":"white.png"}]})");
     AssetPathResolver::Options gameOptions;
-    gameOptions.assetsRoot = (tmp / "game").string();
+    gameOptions.assetsRoot = Engine::Test::Utf8Path(tmp / "game");
     AssetPathResolver::Options commonOptions;
-    commonOptions.assetsRoot = (tmp / "common").string();
+    commonOptions.assetsRoot = Engine::Test::Utf8Path(tmp / "common");
     AssetPathResolver gameResolver(gameOptions), commonResolver(commonOptions);
     CatalogParser parser;
     AssetCatalog catalog;
-    REQUIRE(catalog.LoadFromFile(gameFile.string(), parser, gameResolver));
+    REQUIRE(catalog.LoadFromFile(Engine::Test::Utf8Path(gameFile), parser, gameResolver));
     const auto wallId = AssetId::FromString("game.wall");
     const auto* wall = catalog.Find(wallId);
-    REQUIRE(catalog.AppendFromFile(commonFile.string(), parser, commonResolver));
+    REQUIRE(catalog.AppendFromFile(Engine::Test::Utf8Path(commonFile), parser, commonResolver));
     CHECK(catalog.Find(wallId) == wall);
     REQUIRE(catalog.Find(AssetId::FromString("common.white")) != nullptr);
     CHECK(catalog.Find(AssetId::FromString("common.white"))->resolvedPath ==
-          AssetPathResolver::NormalizePath((tmp / "common/white.png").string()));
+          AssetPathResolver::NormalizePath(Engine::Test::Utf8Path(tmp / "common/white.png")));
 
     SUBCASE("late duplicate cannot leave earlier additions behind") {
         WriteText(commonFile, R"({"version":1,"assets":[
@@ -137,7 +138,7 @@ TEST_CASE("AssetCatalog: independently rooted append is atomic and preserves ent
             {"id":"new.texture","type":"texture","path":"new.png"},
             {"id":"escape","type":"texture","path":"../outside.png"}]})");
     }
-    CHECK_FALSE(catalog.AppendFromFile(commonFile.string(), parser, commonResolver));
+    CHECK_FALSE(catalog.AppendFromFile(Engine::Test::Utf8Path(commonFile), parser, commonResolver));
     CHECK(catalog.Entries().size() == 2);
     CHECK(catalog.Find(wallId) == wall);
     CHECK(catalog.Find(AssetId::FromString("new.texture")) == nullptr);

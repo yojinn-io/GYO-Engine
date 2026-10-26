@@ -36,15 +36,24 @@ std::uint32_t UnsignedInteger(const Json& value) {
         throw std::runtime_error("shader metadata requires a 32-bit unsigned integer");
     return value.get<std::uint32_t>();
 }
+// Bundle paths are UTF-8 text both ways: path(std::string) and generic_string()
+// would use the ANSI code page on Windows (os-path-utf8-sweep).
+std::filesystem::path PathFromText(const std::string& value) {
+    return std::filesystem::path(std::u8string(value.begin(), value.end()));
+}
+std::string TextFromPath(const std::filesystem::path& path) {
+    const auto text = path.generic_u8string();
+    return {text.begin(), text.end()};
+}
 std::string RelativePath(std::string value) {
     std::replace(value.begin(), value.end(), '\\', '/');
-    const std::filesystem::path path(value);
+    const auto path = PathFromText(value);
     if (value.empty() || value.find(':') != std::string::npos || path.is_absolute() ||
         path.has_root_name() || path.has_root_directory())
         throw std::runtime_error("artifact path must be relative: " + value);
     for (const auto& part : path)
         if (part == "..") throw std::runtime_error("artifact path escapes bundle: " + value);
-    return path.lexically_normal().generic_string();
+    return TextFromPath(path.lexically_normal());
 }
 ShaderFormat ParseFormat(const std::string& value) {
     if (value == "dxil") return ShaderFormat::DXIL;
@@ -84,7 +93,7 @@ std::shared_ptr<const ShaderArtifact> LoadStage(const Json& stage,
         artifact->resources.storageBuffers || artifact->resources.storageTextures)
         throw std::runtime_error("artifact resource layout does not match " + std::string(interfaceName));
     const auto file = RelativePath(RequiredString(stage, "file"));
-    artifact->code = Read(source, resolver, (manifestDirectory / file).generic_string());
+    artifact->code = Read(source, resolver, TextFromPath(manifestDirectory / PathFromText(file)));
     const auto hash = RequiredString(stage, "sha256");
     if (Base::Sha256(artifact->code) != hash)
         throw std::runtime_error("artifact content hash mismatch: " + file);
@@ -126,7 +135,7 @@ Base::Result<void, RenderError> ShaderLibrary::AppendBundle(
             for (const auto& variant : variants) {
                 const auto format = ParseFormat(RequiredString(variant, "format"));
                 if (target.contains(format)) throw std::runtime_error("duplicate shader format: " + id);
-                const auto directory = std::filesystem::path(path).parent_path();
+                const auto directory = PathFromText(path).parent_path();
                 ShaderProgram loaded{interfaceName,
                     LoadStage(variant.at("vertex"), ShaderStage::Vertex, format, interfaceName, source, resolver, directory),
                     LoadStage(variant.at("fragment"), ShaderStage::Fragment, format, interfaceName, source, resolver, directory)};

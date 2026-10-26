@@ -3,6 +3,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 
 #include "engine/base/Error.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/trace/TraceSink.hpp"
 
 #include <filesystem>
@@ -78,7 +79,7 @@ public:
         if (path.empty()) return;
         auto sink = Engine::Trace::TraceSink::Open(
             {.path = path, .capacity = MovementTrace::Capacity, .threadName = "pvp-movement-trace"});
-        if (!sink) throw std::runtime_error("Cannot open movement trace: " + path.string() + " (" +
+        if (!sink) throw std::runtime_error("Cannot open movement trace: " + Engine::Os::Files::PathForMessage(path) + " (" +
                                             Engine::Base::Describe(sink.error()) + ")");
         file_ = std::make_shared<File>(std::move(*sink));
         SetMovementTrace(file_);

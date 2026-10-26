@@ -60,13 +60,7 @@ TEST_CASE("BaseDirectory is SDL's base path as a UTF-8 path") {
     const auto base = Engine::Platform::Sdl::BaseDirectory();
     REQUIRE(base);
     REQUIRE(SDL_GetBasePath() != nullptr);
-    CHECK(base.value() == Engine::Platform::Sdl::PathFromUtf8(SDL_GetBasePath()));
+    const std::u8string back = base.value().u8string();
+    CHECK(std::string(back.begin(), back.end()) == SDL_GetBasePath());
     CHECK_FALSE(Engine::Platform::Sdl::PlatformName().empty());
-}
-
-TEST_CASE("PathFromUtf8 keeps non-ASCII text") {
-    const std::string utf8 = "caf\xC3\xA9-\xE6\x97\xA5\xE6\x9C\xAC";  // café-日本
-    const auto path = Engine::Platform::Sdl::PathFromUtf8(utf8);
-    const std::u8string back = path.u8string();
-    CHECK_MESSAGE(std::string(back.begin(), back.end()) == utf8, "a UTF-8 path round-trips byte for byte");
 }

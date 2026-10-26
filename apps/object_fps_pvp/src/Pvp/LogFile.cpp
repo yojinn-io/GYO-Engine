@@ -108,7 +108,7 @@ Engine::Trace::TraceSink OpenLogSink(const std::filesystem::path& path, std::siz
     if (path.has_parent_path()) CreateNativeDirectories(path.parent_path());
     auto sink = Engine::Trace::TraceSink::Open(
         {.path = path, .append = true, .capacity = capacity, .threadName = "pvp-log", .flushEachLine = true});
-    if (!sink) throw std::runtime_error("Cannot open log file: " + path.string() + " (" +
+    if (!sink) throw std::runtime_error("Cannot open log file: " + Engine::Os::Files::PathForMessage(path) + " (" +
                                         Engine::Base::Describe(sink.error()) + ")");
     return std::move(*sink);
 }

@@ -1,6 +1,7 @@
 #include "gyo/ui_editor/EditorApp.hpp"
 
 #include "engine/math/scalar/Scalar.hpp"
+#include "engine/os/Files.hpp"
 
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
@@ -21,15 +22,31 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 namespace Gyo::Tools::UiEditor {
 namespace {
 
 using Json = nlohmann::json;
 
+// The path fields hold UTF-8 (ImGui's text), never the ANSI code page, with the
+// separators the path holds. A path with no UTF-8 form leaves the field empty
+// rather than naming another file.
 void CopyPath(std::array<char, 1024>& destination, const std::filesystem::path& path) {
-    const std::string value = path.string();
+    std::string value;
+    if (Engine::Os::Files::PathToUtf8(path)) {
+        const std::u8string text = path.u8string();  // cannot throw: the path has a UTF-8 form
+        value.assign(text.begin(), text.end());
+    }
     std::snprintf(destination.data(), destination.size(), "%s", value.c_str());
+}
+
+// A path field read back; nullopt when the text is not UTF-8 (a field cut
+// inside a character, for one).
+[[nodiscard]] std::optional<std::filesystem::path> FieldPath(const char* text) {
+    auto path = Engine::Os::Files::PathFromUtf8(text);
+    if (!path) return std::nullopt;
+    return std::move(*path);
 }
 
 [[nodiscard]] const char* SeverityLabel(const DiagnosticSeverity severity) noexcept {
@@ -583,7 +600,7 @@ void EditorApp::ApplyPendingAssetChanges() {
         pendingCatalogMount_ = false;
         const auto mounted = MountCatalog(pendingCatalogPath_, pendingAssetRoot_);
         if (mounted) {
-            statusMessage_ = "Mounted read-only content: " + catalog_.AssetRoot().string();
+            statusMessage_ = "Mounted read-only content: " + Engine::Os::Files::PathForMessage(catalog_.AssetRoot());
         } else {
             statusMessage_ = "Asset mount failed: " + Engine::Base::Describe(mounted.error());
         }
@@ -599,8 +616,8 @@ void EditorApp::ApplyPendingAssetChanges() {
 }
 
 void EditorApp::RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot) {
-    pendingCatalogPath_ = catalogPath.string();
-    pendingAssetRoot_ = assetRoot.string();
+    pendingCatalogPath_ = std::move(catalogPath);
+    pendingAssetRoot_ = std::move(assetRoot);
     pendingCatalogMount_ = true;
     pendingCatalogUnmount_ = false;
 }
@@ -719,7 +736,7 @@ void EditorApp::DrawMainMenu() {
     ImGui::TextUnformatted(previewMode_ ? "PREVIEW" : "EDIT");
     ImGui::SameLine();
     const std::string title = session_.OutputPath().has_value()
-        ? session_.OutputPath()->filename().string()
+        ? Engine::Os::Files::PathForMessage(session_.OutputPath()->filename())
         : "Untitled UI";
     ImGui::Text("%s%s", title.c_str(), session_.IsDirty() ? " *" : "");
     ImGui::EndMainMenuBar();
@@ -1996,8 +2013,15 @@ void EditorApp::DrawDialogs() {
             if (singleCatalogMode_ && catalogPath_[0] == '\0') {
                 statusMessage_ = "Single catalog mode requires a catalog path";
             } else {
-                RequestAssetMount(singleCatalogMode_ ? catalogPath_.data() : "", assetRoot_.data());
-                ImGui::CloseCurrentPopup();
+                const auto catalog = singleCatalogMode_ ? FieldPath(catalogPath_.data())
+                                                        : std::optional<std::filesystem::path>{std::in_place};
+                const auto root = FieldPath(assetRoot_.data());
+                if (catalog && root) {
+                    RequestAssetMount(*catalog, *root);
+                    ImGui::CloseCurrentPopup();
+                } else {
+                    statusMessage_ = "Asset paths must be UTF-8 text";
+                }
             }
         }
         ImGui::SameLine();
@@ -2093,7 +2117,7 @@ void EditorApp::DrawDialogs() {
         } else {
             const auto source = catalog_.CatalogPath().empty()
                 ? catalog_.AssetRoot() / "content.json" : catalog_.CatalogPath();
-            ImGui::Text("Read-only: %s", source.string().c_str());
+            ImGui::Text("Read-only: %s", Engine::Os::Files::PathForMessage(source).c_str());
             ImGui::BeginChild("assets", {620.0F, 320.0F}, true);
             for (const CatalogAsset& asset : catalog_.Assets()) {
                 const char* expectedType =
@@ -2151,7 +2175,12 @@ void EditorApp::NewDocument() {
 }
 
 void EditorApp::OpenDocument(const std::string& path) {
-    const auto result = session_.Open(path);
+    auto native = Engine::Os::Files::PathFromUtf8(path);
+    if (!native) {
+        statusMessage_ = Engine::Base::Describe(native.error());
+        return;
+    }
+    const auto result = session_.Open(*native);
     diagnostics_ = result ? result->diagnostics : result.error().diagnostics;
     statusMessage_ = result ? "Opened " + path : Engine::Base::Describe(result.error());
     if (result) {
@@ -2177,7 +2206,8 @@ void EditorApp::SaveDocument(const bool overwriteExternal) {
     } else if (result.error().code == SessionErrorCode::MissingOutputPath) {
         showExportDialog_ = true;
     } else if (result.error().code == SessionErrorCode::ExternalModification) {
-        pendingOverwritePath_ = session_.OutputPath()->string();
+        // Saving again takes the session's own output path; the dialog needs no copy of it.
+        pendingOverwritePath_.clear();
         pendingOverwriteIsExport_ = false;
         showOverwriteDialog_ = true;
     } else {
@@ -2188,8 +2218,13 @@ void EditorApp::SaveDocument(const bool overwriteExternal) {
 void EditorApp::ExportDocument(
     const std::string& path,
     const bool overwriteExternal) {
+    auto native = Engine::Os::Files::PathFromUtf8(path);
+    if (!native) {
+        statusMessage_ = Engine::Base::Describe(native.error());
+        return;
+    }
     const auto result = session_.Export(
-        path,
+        *native,
         catalog_.IsMounted() ? &catalog_ : nullptr,
         overwriteExternal);
     diagnostics_ = result ? result->diagnostics : result.error().diagnostics;

@@ -85,14 +85,15 @@ int main(int argc,char** argv) {
         const auto arenaPath=explicitArena ? *explicitArena
             : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"pvp_corners.json";
         std::clog<<"[ObjectFPS/PvP Match] start executable_sha256="<<fps::pvp::FileSha256(fps::pvp::RunningExecutablePath())
-                 <<" arena_file="<<arenaPath.string()<<'\n';
+                 <<" arena_file="<<Engine::Os::Files::PathForMessage(arenaPath)<<'\n';
         std::string error;
         auto arena=fps::pvp::Arena::Load(arenaPath,error);
         if(!arena){std::cerr<<error<<'\n';return 1;}
         std::clog<<"[ObjectFPS/PvP Match] arena id="<<arena->id<<" version="<<arena->version<<" spawns="<<arena->spawns.size()<<'\n';
         if(!movementTrace.empty())
-            std::clog<<"[ObjectFPS/PvP Match] trace files movement="<<movementTrace.string()<<" ingress="<<ingressTracePath.string()
-                     <<" shots="<<fps::pvp::MatchShotTracePath(movementTrace).string()<<'\n';
+            std::clog<<"[ObjectFPS/PvP Match] trace files movement="<<Engine::Os::Files::PathForMessage(movementTrace)
+                     <<" ingress="<<Engine::Os::Files::PathForMessage(ingressTracePath)
+                     <<" shots="<<Engine::Os::Files::PathForMessage(fps::pvp::MatchShotTracePath(movementTrace))<<'\n';
         fps::pvp::MovementTraceWriter trace(movementTrace);
         std::optional<fps::pvp::MatchIngressTraceFile> ingressTrace;
         if(!ingressTracePath.empty()) ingressTrace.emplace(ingressTracePath);

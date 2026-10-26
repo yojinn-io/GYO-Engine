@@ -41,7 +41,9 @@ int main(int argc, char** argv) {
     Asset::Loading::NativeFileAssetSource source;
     Engine::Render::ShaderLibrary shaders;
     for (const auto& bundle : manifest.value().shaderBundles) {
-        auto bundleRoot = Engine::Os::Files::PathToUtf8(assetRoot / bundle.path);
+        auto bundleName = Engine::Os::Files::PathFromUtf8(bundle.path);
+        if (!bundleName) return Fail("shader bundle path is not UTF-8: " + bundle.path);
+        auto bundleRoot = Engine::Os::Files::PathToUtf8(assetRoot / *bundleName);
         if (!bundleRoot) return Fail("shader bundle path has no UTF-8 form: " + bundle.path);
         Asset::Resolver::AssetPathResolver::Options options;
         options.assetsRoot = std::move(bundleRoot.value());

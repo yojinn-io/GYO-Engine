@@ -6,7 +6,9 @@
 
 #include "RetroFPS/Pvp/ClientLog.hpp"
 
+#include "engine/base/Error.hpp"
 #include "engine/base/Log.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlLogBridge.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
@@ -19,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #ifndef GYO_DEFAULT_GPU_DRIVER
 #define GYO_DEFAULT_GPU_DRIVER "auto"
@@ -85,10 +88,16 @@ int GyoMain(int argc, char* argv[]) {
         } else if (argument == "--gateway" && index + 1 < argc) {
             options.gateway = argv[++index];
             gatewayFromArgument = true;
-        } else if (argument == "--movement-trace" && index + 1 < argc) {
-            movementTrace = Engine::Platform::Sdl::PathFromUtf8(argv[++index]);
-        } else if (argument == "--log" && index + 1 < argc) {
-            logPath = Engine::Platform::Sdl::PathFromUtf8(argv[++index]);
+        } else if ((argument == "--movement-trace" || argument == "--log") && index + 1 < argc) {
+            // SDL hands main UTF-8 arguments; text that is not UTF-8 is refused, not guessed.
+            auto path = Engine::Os::Files::PathFromUtf8(argv[++index]);
+            if (!path) {
+                ClientLog(LogLevel::Error, "Invalid path for %s: %s", argv[index - 1],
+                          Engine::Base::Describe(path.error()).c_str());
+                return 2;
+            }
+            if (argument == "--log") logPath = std::move(*path);
+            else movementTrace = std::move(*path);
         } else {
             ClientLog(LogLevel::Error, "Unknown or incomplete option: %s", argv[index]);
             return 2;
@@ -127,12 +136,13 @@ int GyoMain(int argc, char* argv[]) {
         const std::string platform(Engine::Platform::Sdl::PlatformName());
         ClientLog(LogLevel::Info, "PvP client start executable_sha256=%s platform=%s gpu_driver=%s gateway=%s log=%s",
                   executable.c_str(), platform.c_str(), options.gpuDriver.c_str(), options.gateway.c_str(),
-                  log->Path().string().c_str());
+                  Engine::Os::Files::PathForMessage(log->Path()).c_str());
         // log-contract (original batch 10): whether the Gateway address came from --gateway or the default.
         ClientLog(LogLevel::Info, "PvP client gateway source=%s address=%s", gatewayFromArgument ? "argument" : "default",
                   options.gateway.c_str());
         if (!movementTrace.empty())
-            ClientLog(LogLevel::Info, "PvP client trace file movement=%s", movementTrace.string().c_str());
+            ClientLog(LogLevel::Info, "PvP client trace file movement=%s",
+                      Engine::Os::Files::PathForMessage(movementTrace).c_str());
     }
     try {
         fps::pvp::MovementTraceWriter trace(movementTrace);

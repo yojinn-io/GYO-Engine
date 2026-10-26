@@ -816,7 +816,10 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     for (const auto& bundle : manifest.value().shaderBundles) {
         Asset::Resolver::AssetPathResolver::Options options;
         // Engine paths are UTF-8 (docs/architecture/io.md), not path::string()'s ANSI code page.
-        auto bundleRoot = Engine::Os::Files::PathToUtf8(assetRoot / bundle.path);
+        // bundle.path is content.json text, so UTF-8; never joined in the ANSI code page.
+        auto bundleName = Engine::Os::Files::PathFromUtf8(bundle.path);
+        if (!bundleName) { error = "Shader bundle path is not UTF-8: " + Engine::Base::CauseDetail(bundleName.error()); return false; }
+        auto bundleRoot = Engine::Os::Files::PathToUtf8(assetRoot / *bundleName);
         if (!bundleRoot) { error = "Shader bundle path has no UTF-8 form: " + Engine::Base::CauseDetail(bundleRoot.error()); return false; }
         options.assetsRoot = std::move(bundleRoot.value());
         options.allowAbsolutePath = false;

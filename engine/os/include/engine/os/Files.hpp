@@ -163,6 +163,13 @@ private:
 [[nodiscard]] Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path);
 [[nodiscard]] Base::Result<std::filesystem::path, OsError> PathFromUtf8(std::string_view utf8);
 
+// A path as UTF-8 text for messages and logs, in the platform's own form: the
+// separators stay as the path holds them ('\' on Windows when it has them).
+// Never fails and never uses the ANSI code page: what has no UTF-8 form (an
+// unpaired surrogate on Windows, a byte that is not UTF-8 on POSIX) becomes
+// U+FFFD. Not for naming a file again: use PathToUtf8.
+[[nodiscard]] std::string PathForMessage(const std::filesystem::path& path);
+
 // The directories where this platform keeps installed fonts, the system's
 // first, then the user's; only those that exist as directories. Windows: Fonts
 // in the system Windows directory, then %LOCALAPPDATA%\Microsoft\Windows\Fonts.

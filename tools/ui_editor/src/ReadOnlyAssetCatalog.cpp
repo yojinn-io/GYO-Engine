@@ -73,11 +73,14 @@ void ReadOnlyAssetCatalog::Commit(Engine::Asset::AssetCatalog catalog,
         if (entry == nullptr) {
             continue;
         }
+        // The resolver gives UTF-8 built from the UTF-8 root, so it converts back;
+        // never through the ANSI code page.
+        auto resolved = Engine::Os::Files::PathFromUtf8(entry->resolvedPath);
         mounted.push_back({
             entry->id.debugName,
             entry->type.debugName,
             entry->sourcePath,
-            std::filesystem::path{entry->resolvedPath},
+            resolved ? std::move(*resolved) : std::filesystem::path{},
         });
     }
     std::ranges::sort(mounted, {}, &CatalogAsset::id);
