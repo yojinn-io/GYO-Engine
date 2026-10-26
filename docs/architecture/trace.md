@@ -1,13 +1,15 @@
 # GYO trace transport and log facade
 
 Owner: Engine (`engine/trace` → `GYO::Trace`, `engine/base/include/engine/base/Log.hpp`).
-Plan and record: [time-threads-trace](plans/time-threads-trace/README.md), batch TT-2.
+Plan and record: [time-threads-trace](plans/time-threads-trace/README.md), batch TT-2; the file writes moved onto
+engine/os in [os-subsystem](plans/os-subsystem/README.md) batch os-trace-writers (D58).
 
 ## What it is
 
 ```text
 GYO::Base ◄── GYO::Time ◄── GYO::Threads ◄── GYO::Trace
-   (Log.hpp)
+(Log.hpp)
+GYO::Base ◄── GYO::Os ◄──────────────────────── GYO::Trace   (the file; linked privately)
 ```
 
 - **`Engine::Trace::TraceSink`**: one file of pre-serialized lines from any number of producer threads. Producers
@@ -34,6 +36,15 @@ content, schemas, file names, end lines and what a lost line means for it.
   about to end the process.
 - `flushEachLine` makes the writer flush after every line, so each line reaches the file in one write; for files
   other processes may append to as well. The default flushes once per batch.
+- The file is written through `Os::Files::FileWriter` (os-trace-writers, D58) with the platform's line endings
+  (`\r\n` on Windows), the bytes the text-mode C++ stream it replaced wrote. Within one batch the writer hands its
+  bytes to the file at 64 KiB and at the end of the batch, where the stream wrote at its own buffer's size; an
+  appending sink on Windows uses an append-only handle, so each write lands at the end even when another process
+  appends too. Long paths work as for every engine/os path. After a failed write nothing more is written, as a
+  failed stream wrote nothing more. Declared after the review (D60): a path with no UTF-8 form is `OpenFailed`
+  (Linux opened such names before; Engine paths are UTF-8, D43); an open failure's detail is the UTF-8 path, then
+  the engine/os cause (`/` separators on Windows; no path when it has no UTF-8 form); with `flushEachLine` a line
+  longer than the stream's buffer now also reaches the file in one write.
 - `Good()` is false once a write or flush failed; drops do not make it false (the consumer decides what a drop
   means, for example by also requiring `Counts().Dropped() == 0`).
 
@@ -49,13 +60,15 @@ content, schemas, file names, end lines and what a lost line means for it.
    queue.
 6. Engine code never parses, rewrites or knows the meaning of a line: no consumer schema, record kind or file name
    enters `engine/`.
-7. `GYO::Trace` links exactly `GYO::Threads` (checked at configure time by `tests/common/trace/CMakeLists.txt`): no
-   SDL, no `GYO::Engine`.
+7. `GYO::Trace` links exactly `GYO::Threads` and `GYO::Os` (`GYO::Os` privately, for the file; checked at configure
+   time by `tests/common/trace/CMakeLists.txt`): no SDL, no `GYO::Engine`. `GYO::Os` itself links only `GYO::Base`
+   (and OS system libraries), so the closure stays free of both (os-subsystem open decision 2, D58).
 8. The log facade never changes control flow and never throws; replacing the handler is safe at any time from any
    thread.
 
 Guard tests: `tests/common/trace/TraceSinkTests.cpp` and the `tt2-*` mutants in
-[mutations.json](plans/time-threads-trace/scripts/mutations.json).
+[mutations.json](plans/time-threads-trace/scripts/mutations.json); the file writes and Invariant 7's link check also
+have the `tt-x*` mutants in the [os-subsystem catalog](plans/os-subsystem/scripts/mutations.json).
 
 ### Replacement Criteria
 

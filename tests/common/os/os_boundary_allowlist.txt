@@ -2,9 +2,6 @@
 # Format: path rule count  # reason and the batch that removes it (docs/architecture/plans/os-subsystem).
 # Only shrinks: a batch that moves a site deletes or lowers its entry in the same change.
 
-# Native file access, moved behind engine/io and engine/os.
-engine/trace/src/TraceSink.cpp R4 1  # trace writes through engine/os (os-trace-writers)
-
 # Thread naming and priority backends (os-threads-backend).
 engine/threads/src/RoleThread.cpp R1 7  # pthread, QoS, Windows and Linux headers
 engine/threads/src/RoleThread.cpp R2 9  # per-OS branches

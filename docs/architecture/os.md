@@ -75,7 +75,7 @@ Only the components whose batch has landed exist; the others are planned in the 
     file stream does (POSIX `open` with 0666 less the umask; Windows `GENERIC_WRITE` with `CREATE_ALWAYS`).
     Append is `O_APPEND` on POSIX, as there; on Windows it is an append-only handle (`FILE_APPEND_DATA`,
     `OPEN_ALWAYS`), atomic against other appenders, where the C runtime seeks to the end before each write; the
-    batch that moves an appending caller (os-trace-writers) declares that difference. Other processes may read and write
+    batch that moved an appending caller (os-trace-writers, D58) declared that difference. Other processes may read and write
     the file meanwhile, not delete it (the C runtime's `_SH_DENYNO` on Windows). Nothing is buffered: each `Write`
     hands all its bytes to the OS, not to the disk. A directory is `InvalidPath`; `Close` reports a failure the
     destructor cannot. Long paths on Windows go through the same `\\?\` form as reads.
@@ -245,7 +245,8 @@ Known blind spots, left to review:
    shader tool, engine/io included), apps and tools uses no fstream, `fopen` or `_wfopen` and no
    `std::filesystem` operation that touches the file system; only the `path` type and pure path operations. Files
    go through engine/io's abstraction, whose native backend calls engine/os; process facts come from engine/os
-   directly. Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
+   directly. engine/trace, which sits below `GYO::Engine` and so below engine/io, writes its files through engine/os
+   directly (os-subsystem open decision 2, D58). Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
    controls.
 3. **engine/os is the lowest layer for OS differences** (R5 and the link check). `GYO::Os` links only `GYO::Base`
    and OS system libraries (`Threads::Threads` once the condition-variable wait backend moves in). engine/os
