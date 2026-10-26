@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-26。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-27。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 本機完成、未推送），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -21,6 +21,8 @@
 - 2026-10-26：io-native-paths（D54）完成，判定已定案（D55）。四平台 L1 [run 40295007179](https://github.com/yojinn-io/GYO-Engine/actions/runs/40295007179) 全部成功，Windows 的 UNC 探針兩項 Passed。Windows／Linux 專用的突變待對應平台。
 - 2026-10-26：os-tool-files 完成（D56、D57），四平台 L1 [run 40324361964](https://github.com/yojinn-io/GYO-Engine/actions/runs/40324361964) 全部成功。Windows 專用的突變與 `-s` 確認留給 lan15。
 - 2026-10-27：os-path-utf8-sweep 開始（D63），基準 `52e0b17d`，本機進行中。
+- 2026-10-27：使用者說「推送 Red commit f86f8e00（含之前未推送的紀錄 commit），手動觸發四平台 L1，預期只有 windows-x64 失敗」。推送 `f86f8e00`；Red 的 L1 [run 40431320545](https://github.com/yojinn-io/GYO-Engine/actions/runs/40431320545) 如預期只有 windows-x64 失敗，失敗的都是新的 Red 案例。下一步：推送修正 `95339b80` 與紀錄 commit，跑 Green 的 L1（要使用者同意）。
+- 2026-10-27：os-path-utf8-sweep 本機完成，停在推送的關卡。Red 測試 `f86f8e00`、修正 `95339b80`、紀錄 commit（本批的文件），都沒有推送。下一步要使用者同意：先推 Red 跑四平台 L1（預期只有 windows-x64 失敗），再推修正跑 L1，之後請消費端合併。細節見「os-path-utf8-sweep」。消費端回覆：發行線沒有未提交或未推送的改動（`origin/claude/pvp-v71-release` 是 `5733ccca`），本批改到的產品檔它都沒有在改，不需要對齊；推送後的合併請求照之前的方式處理。
 - 2026-10-26：os-trace-writers 完成（D58、D60）：Red [run 40331764169](https://github.com/yojinn-io/GYO-Engine/actions/runs/40331764169)（只有 windows-x64 的新案例失敗），Green [run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)（全部成功）。
 - 2026-10-26：D59，本計畫的 commit 統一放進 #96。已請消費端把本分支併到 `ca434952`（不含 Red 測試 `a75e4028`），等它回覆發行線上的 commit。
 - 2026-10-27：使用者說「推送 e5fec6ef 這個紀錄 commit，並告訴消費端可以一起併」。推送 `e5fec6ef`（os-trace-writers 的完成紀錄），請消費端把本分支一次併到 `e5fec6ef`（含 os-guard-wide～os-trace-writers），等它回覆發行線上的 commit。
@@ -557,8 +559,61 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 盤點（`git grep` 的 `.string()` 69 處，加上以窄字串建構 `path` 的地方），依 Windows 上的後果分四類：log／訊息（MSVC 對 ACP 表示不了的字元會丟例外，例如 Match 啟動時的 `arena_file=`）、檔名運算（TracePaths、ingress／shot 的名稱判斷）、把 UTF-8 當 ANSI 建 `path`（編輯器 `ReadOnlyAssetCatalog.cpp:80`、`EditorApp` 的路徑欄位）、交給 C API 的 `.string()`（驗收程式的 `SDL_SaveBMP`、`gui_room.hpp`）。主機 shader 工具是另外設定的 host 專案，不含 engine/os，所以只用標準庫的 UTF-8 轉換（`u8string()`、以 `std::u8string` 建 `path`），不加建置邊。
 - 2026-10-27：使用者去睡，關了 caffeinate，說「做完就休眠吧」。推送要先問使用者，所以本機做到推送的關卡就停：Red 用的測試單獨 commit，之後在本機實作、測試、突變、xhigh 審查，不推送。
 - Red 用的測試（macOS 上舊實作也通過，Red 只會在 Windows 出現）：產品 DiagnosticFileTests「trace names outside the ANSI code page」（`NumberedTracePath`、`MatchShotTracePath`、`MatchIngressTracePath` 與拒絕訊息）；`match_ingress_cli_check.cmake` 加上放在 `試合-한` 資料夾的 arena（Match 的啟動行要以 UTF-8 寫出它，結束碼 1）；EditorCoreTests「root outside the ANSI code page」（掛載後的解析路徑、匯出檢查、在這種資料夾下匯出）；PreviewAssetTests 的 GUI 掛載（`RequestAssetMount` 收到 `試合-한` 根目錄）；ArenaDigestTests 的 arena 開檔訊息與 arena 清單裡的 `試合.json` 項目。寫的時候編輯器案例在 macOS 失敗一次，原因是我寫的 catalog 少了 `font.default`，預設文件先驗證失敗；補上後通過。後兩組是實作時找到的同類站點，在推送前併進同一個 Red commit。
+- 實作（本機，`95339b80`）：
+  - engine/os 新增 `PathForMessage`。
+  - 產品、編輯器、驗收程式、ShaderLibrary、主機 shader 工具、共通測試的轉換改成 UTF-8；拿掉公開的 `Sdl::PathFromUtf8`。
+  - 最後的 grep 找到盤點漏掉的 `generic_string()`：ShaderLibrary 與 shader 工具的一共 8 處。
+  - shader 工具：除了 D63 的 12 處 `.string()`，同一個檔案裡的 `generic_string()`，以及從 JSON 與 include 文字建 `path` 的地方，也一起改成 UTF-8。這是 D63 範圍內的同類站點。
+  - 編輯器的路徑欄位保留路徑原本的分隔字元，Windows 上的顯示不變。
+- xhigh 審查（1 位，讀固定的 commit）：
+  - major 2 個，都是 `->string()`，`.string()` 的 grep 抓不到，Windows 上會讓程式終止：
+    - 編輯器存檔遇到外部修改時的覆寫確認（`EditorApp.cpp`）。
+    - `--validate` 的 `valid:` 行（`Main.cpp`）。
+    - 都已修。
+  - minor：
+    - content.json 的 catalog 名稱與 shader bundle 名稱以窄字串接到根目錄（`ContentManifest.cpp`、`PvpApplication.cpp`、驗收的 `content_main.cpp`）。已改成 UTF-8。
+    - 路徑欄位不是 UTF-8 時，會靜默改掛整個根目錄。已改成不掛載，並把錯誤顯示在狀態列。
+    - Windows 專用突變的 find 跨多行，CRLF 的 checkout 上會 stale。已改成單行。
+    - os.md 沒有 PathForMessage。已補到 Contracts。
+  - 補了 Red 案例：content.json 的非 ACP catalog 名稱（ContentManifestTests）、編輯器 `--validate` 在 `試合-한` 資料夾（EditorCliTests.cmake）、GUI 的輸出路徑欄位（PreviewAssetTests）。都併進同一個 Red commit。
+  - 審查確認五組 Red 測試在 POSIX 的舊實作通過、在 windows-x64 的舊實作失敗、在新實作通過。
+  - 沒有違反 io.md、platform-sdl.md 的 Design Invariants。os.md Invariant 5、7 與 PathForMessage 的關係交使用者決定（見未結事項）。
+- Red 的 L1（[run 40431320545](https://github.com/yojinn-io/GYO-Engine/actions/runs/40431320545)，`f86f8e00`）：如預期，只有 windows-x64 失敗（L1 與 toolchain 的快速驗收；CI validation 與 CI gate 跟著失敗）；macos-arm64、macos-x64、linux-x64 全部通過。windows-x64 失敗的 6 項都是新的 Red 案例：
+  - engine_tests：只有 ContentManifest 的新案例失敗，catalog 名稱被讀成 `è¨˜éŒ²-í•œ.json`，所以 NotFound。
+  - object_fps_pvp.cpu：只有 3 個案例失敗。trace 名稱的案例丟出 MSVC 的「No mapping for the Unicode character…」；arena 開檔訊息的兩個新 CHECK；arena 清單的 `試合.json`。
+  - match_ingress_cli：啟動行的 `arena_file=` 變成例外訊息。
+  - gyo_ui_editor.core：只有「a resolved asset path keeps the characters of its root」。
+  - gyo_ui_editor.content_cli：`--validate` 以 0xc0000409（未捕捉的例外）結束。
+  - gyo_ui_editor.preview：0xc0000409。前兩個測試函式沒有印出 FAILED，所以停在最後的新函式〔推論：輸出看不出是哪一行〕。
+- 本機驗證（macOS arm64，修正後）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
+- 突變：
+  - 新增 pu-x1～pu-x7，本機能跑的 pu-x1、pu-x2 killed；Windows 專用的 pu-x3～pu-x7 留給 Windows 機器（D62）。
+  - 相關的既有突變（find 在改動範圍，或殺它的測試被改）：
+    - engine/os 目錄 9／9 加 1／1（os-g17）。
+    - 輸入與呈現 8／8 加 4／4。第一次跑時沒有設 `SDL_VIDEODRIVER=dummy`，基準就先失敗了，屬於環境問題；照那份計畫的紀錄補上後重跑。
+    - 產品 13／13。
+  - 產品有 4 條突變的 find 移到新的程式行。
+  - 產品在 Windows 上的行為，不另寫突變：產品的 runner 不支援平台限定，檢出力以 Red 的 L1 為證據。
 
 ## 未結事項
+
+- os-path-utf8-sweep 留下的（2026-10-27）：
+  - 交使用者決定：os.md Invariant 5 寫「Invalid UTF-8 is InvalidEncoding」，Invariant 7 寫「no policy」。`PathForMessage` 會換成 U+FFFD，顯示的形式也由它決定（D63 同意的設計）。條文要不要寫明這個例外？改條文要使用者同意。
+  - 交使用者確認，事後宣告的差異：
+    - shader 工具：不是 UTF-8 的 HLSL include 名稱現在會以錯誤結束（結束碼 1）。工具沒有開 UTF-8 主控台，非 ASCII 路徑在 Windows 主控台上顯示會變亂碼；depfile 改成 UTF-8。
+    - ShaderLibrary：收到不是 UTF-8 的 manifest 路徑時，Windows 回 InvalidArgument 加 MSVC 的訊息，POSIX 則由 engine/io 回 InvalidEncoding。
+  - 沒有守衛：
+    - ShaderLibrary 的新測試在 code page 1252 上沒有檢出力：1252 的位元組往返不失真，雙位元組的 code page 才會讀錯。
+    - `BaseDirectory` 內部的 UTF-8 轉換：拿掉的 EntryTests 案例原本守它。現在只有 base path 本身含非 ASCII 時，測試才看得到。
+    - 編輯器的 `CopyPath`、`FieldPath`、開檔與匯出對話框，以及 Client 拒絕非 UTF-8 參數：沒有直接的測試。`CopyPath` 只由 PreviewAssetTests 的輸出路徑欄位間接涵蓋。
+  - 範圍外，記錄：
+    - shader 工具與驗收探針的 argv 在 Windows 上仍是 ANSI code page（要用 Windows API）。
+    - 測試裡由巨集組成的路徑（`GYO_SOURCE_DIR`、`PVP_PRODUCT_ARENA_PATH`、`PVP_LOG_FIXTURE_DIR`、`GYO_ASSET_CONTRACT_FIXTURE`）在非 ASCII 的 checkout 上會壞。
+    - 驗收探針的 `options.output = value` 等 argv 轉 path。
+  - Code smell（將來重構時考慮）：
+    - UTF-8 與 path 互轉的本地副本至少 7 份：ShaderLibrary、shader 工具、PathText.hpp、BaseDirectory、FileService、NativeFiles、ContentManifest。
+    - 產品的 `NativeFiles::Display`（'/' 形式）與 `PathForMessage`（原生分隔字元）並存，同一份 Windows log 會出現兩種形式。
+  - Windows 機器上：既有的 Windows 專用突變裡，find 跨多行的（os-c4 等）在 CRLF 的 checkout 上會 stale。用 `core.autocrlf=false` 的 checkout 跑。
 
 - ~~使用者核准 PLAN，回答開放決策 1、14、15，並同意 A1～A3 的 Delta。~~ 2026-10-25 完成（D46）。
 - A1～A3 併進消費端的發行線 PR（D46）。消費端的發行任務 2026-10-25 回覆的做法（暫定，開 PR 時再和使用者確認，消費端 D198）：

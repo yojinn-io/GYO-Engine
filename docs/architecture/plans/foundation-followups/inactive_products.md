@@ -221,3 +221,23 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 
 - 破損：無。`NativeFileSystem` 多了寫入與建目錄（`Capabilities()` 的 canOpenWrite、canCreateDirectories 改成 true）；只用讀取的呼叫端不受影響。未啟用產品沒有直接開檔的站點。
 - 選用：未啟用產品若要寫檔或建目錄，經 engine/io 的 `NativeFileSystem`（`Write | CreateIfMissing` 加 `Truncate` 或 `Append`；要和以前的文字模式 `std::ofstream` 相同的位元組時加 `Text`），原生路徑用 `FS::NativeFileUri` 轉成 URI；不要用 fstream 或 `std::filesystem` 的檔案操作。
+
+### io-native-paths、os-tool-files、os-trace-writers、time-threads-invariants
+
+狀態：完成（2026-10-26～27，四平台 L1 通過，最後一批只有文件），未合併。這四批當時漏記本節，在 os-path-utf8-sweep 補上（2026-10-27，以 `git grep` 確認未啟用產品的用法）。
+
+- 破損：無。未啟用產品沒有使用 `NativeFileSystem`、`WriteFileAtomically`、`TraceSink`、`RoleThread`、`Waiter` 或 file URI 的轉換函式。
+- 行為：`AssetPathResolver` 的根目錄照寫法保留（io-native-paths，D55），不再依字面消去點段。`object_fps`、`object_fps_v2` 的 `ObjectFpsApplication.cpp` 用它，根目錄來自 SDL 的 base path，沒有點段，所以不受影響〔推論，未實跑〕。
+- 選用：要換名、刪檔、原子寫入時，經 engine/io 的 `NativeFileSystem`（`Move`、`Remove`）或 `Helpers::WriteFileAtomically`，不要用 `std::filesystem` 的檔案操作。
+
+### os-path-utf8-sweep 剩下的窄字串路徑
+
+狀態：完成（本機，2026-10-27），未推送。依 D63，本批不改未啟用產品，只記在這裡。
+
+- 破損：公開的 `Engine::Platform::Sdl::PathFromUtf8` 移除了。未啟用產品沒有使用它（2026-10-27 以 `git grep` 確認），所以沒有編譯破損。要把 UTF-8 文字變成路徑時改用 `Engine::Os::Files::PathFromUtf8`（回傳 Result；不是 UTF-8 的文字是 `InvalidEncoding`）。
+- 遷移需求（Windows 上會走 ANSI code page 的站點；ANSI code page 表示不了的字元在 `path::string()` 會丟例外，以窄字串建 `path` 會被讀錯）：
+  - SDL 的 base path（UTF-8）以 `std::filesystem::path(base)` 建路徑：`apps/object_fps/main.cpp:38`、`apps/object_fps_v2/main.cpp:38`、`tools/object_fps_preview/main.cpp:29`、`build/acceptance/object_fps/main.cpp:78`、`build/acceptance/object_fps_v2/main.cpp:276`。改用 platform/sdl 的 `BaseDirectory()`（已經是 UTF-8 的路徑），或 `Os::Files::PathFromUtf8`。
+  - content.json 的 shader bundle 名稱（UTF-8 的 `std::string`）以 `assetRoot / bundle.path` 接到根目錄：`apps/object_fps/src/App/ObjectFpsApplication.cpp:73`、`apps/object_fps_v2/src/App/ObjectFpsApplication.cpp:73`。比照 object_fps_pvp，先 `Os::Files::PathFromUtf8(bundle.path)` 再接。
+  - 交給 SDL 的 `SDL_SaveBMP` 用 `.string()`：`build/acceptance/object_fps/diagnostics/MuzzleProbe.cpp:49`、`build/acceptance/object_fps/diagnostics/VisualProbe.cpp:130`、`build/acceptance/object_fps_v2/main.cpp:81`。SDL 收 UTF-8，改用 `Os::Files::PathToUtf8`。
+  - 產品測試把 `.string()` 當 UTF-8 交給 Engine：`tests/object_fps/App/ObjectFpsPresentationTests.cpp:272`、`tests/object_fps/App/ObjectFpsUiTests.cpp:32`、`tests/object_fps/Model/Mark23ModelTests.cpp:30`。比照共通測試，改用 `tests/common/support/PathText.hpp` 的 `Engine::Test::Utf8Path`。
+- 選用：訊息與 log 裡的路徑用 `Os::Files::PathForMessage`（永不失敗，保留平台的分隔字元）；檔名運算用 `u8string()`，不要用 `string()`。

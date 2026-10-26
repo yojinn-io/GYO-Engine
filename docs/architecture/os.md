@@ -25,7 +25,7 @@ primitives here.
 | Component | What it gives | Status |
 |---|---|---|
 | `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
-| Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`) and the font directories (`FontDirectories`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files (landed) |
+| Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`), message text for a path (`PathForMessage`) and the font directories (`FontDirectories`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files; message text: os-path-utf8-sweep (landed) |
 | Process | Executable path, process and thread CPU time, local calendar time (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`) | os-process-info (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the current thread | os-threads-backend |
@@ -69,6 +69,11 @@ Only the components whose batch has landed exist; the others are planned in the 
     prefix on Windows.
   - `PathToUtf8` and `PathFromUtf8` return `InvalidEncoding` for a path with no UTF-8 form (an unpaired surrogate
     on Windows, bytes that are not UTF-8 on POSIX) and for text that is not UTF-8 (D47); they never throw.
+  - `PathForMessage` gives a path as UTF-8 text for messages and logs (os-path-utf8-sweep, D63). The separators
+    stay as the path holds them (`\` on Windows when it has them), so an ASCII path prints the bytes
+    `path::string()` printed (D48). It never fails, never throws and never uses the ANSI code page: what has no
+    UTF-8 form becomes U+FFFD (an unpaired surrogate on Windows; on POSIX each byte that starts no well-formed
+    sequence). The text is lossy, so it is not for naming a file again: that is `PathToUtf8`.
   - Write times are 0 when the file system keeps none and saturate outside the range of `std::chrono::nanoseconds`.
   - `FileWriter` opens a file it creates when missing, either emptied (`WriteMode::Truncate`) or appended to
     (`WriteMode::Append`, every write at the end, also after another process's writes). Truncate opens as a C++
