@@ -83,6 +83,45 @@ TEST_CASE("NativeFileSystem reads a file named by a file URI") {
     CHECK(AsText(bytes.value()) == "hello world");
 }
 
+// A '..' after a symbolic link reaches the OS as written (docs/architecture/io.md
+// Invariant 3, D54), so the backend opens the file the OS itself opens for the
+// path: on POSIX the one beside the link's target ("through the link"), on
+// Windows the lexical one, as GetFullPathNameW removes the '..' first. A
+// lexical rule in engine/io would read "lexical" on POSIX too.
+TEST_CASE("NativeFileSystem opens a '..' after a symbolic link as the OS does") {
+    const TempTree tree;
+    tree.Write("real/target.txt", "through the link");
+    tree.Write("real/sub/keep.txt", "");
+    tree.Write("target.txt", "lexical");
+    const auto native = [&tree](const std::string& relative) {
+        const std::string text = tree.Native(relative);
+        return std::filesystem::path(std::u8string(text.begin(), text.end()));
+    };
+    std::error_code error;
+    std::filesystem::create_directory_symlink(native("real/sub"), native("link"), error);
+    if (error) {
+        // Windows needs Developer Mode or a privilege to create links (as in tests/common/os/FilesTests.cpp).
+        MESSAGE("symbolic links unavailable here: " << error.message());
+        return;
+    }
+    const std::string path = tree.Native("link/../target.txt");
+    std::ifstream reference(native("link/../target.txt"), std::ios::binary);
+    REQUIRE(reference);
+    const std::string expected{std::istreambuf_iterator<char>(reference), std::istreambuf_iterator<char>()};
+    MESSAGE("the OS reads \"" << expected << "\"");
+
+    auto uri = FS::NativeFileUri(path);
+    REQUIRE(uri);
+    CHECK(uri.value().ToString().find("/link/../target.txt") != std::string::npos);
+    FS::NativeFileSystem fs;
+    const auto bytes = Helpers::ReadAllBytes(fs, uri.value());
+    REQUIRE(bytes);
+    CHECK(AsText(bytes.value()) == expected);
+    const auto status = fs.Stat(uri.value());
+    REQUIRE(status);
+    CHECK(status.value().sizeBytes == expected.size());
+}
+
 TEST_CASE("NativeFileSystem streams are readable and seekable, not writable") {
     const TempTree tree;
     tree.Write("b.bin", "0123456789");

@@ -116,6 +116,14 @@ bool IsDriveAbsolute(const std::wstring_view path) noexcept {
            path[1] == L':' && path[2] == L'\\';
 }
 
+// A UNC path, \\server\share...: two '\' and then a name, not the Win32 file or
+// device namespace form a caller may give (\\?\ or \\.\ at the start, or all of
+// the path as \\? or \\.).
+bool IsUncPath(const std::wstring_view path) noexcept {
+    if (path.size() < 3 || path[0] != L'\\' || path[1] != L'\\' || path[2] == L'\\') return false;
+    return !((path[2] == L'?' || path[2] == L'.') && (path.size() == 3 || path[3] == L'\\'));
+}
+
 // The shortest limit Win32 puts on a full path (CreateDirectoryW: MAX_PATH less
 // room for an 8.3 name). A full path this long or longer takes the long-path form.
 constexpr std::size_t kLongPathFrom = MAX_PATH - 12;
@@ -125,22 +133,24 @@ constexpr std::size_t kLongPathFrom = MAX_PATH - 12;
 // result such as MakeAbsolute's or an error (Design Invariant 5).
 //
 // The long-path form (os-subsystem PLAN section 8, P1): a path whose full path is kLongPathFrom
-// characters or longer goes to the API as \\?\ plus that full path, so Win32
-// does not refuse it for its length. The full path comes from GetFullPathNameW,
-// which already applied Win32's normalization (dot segments, trailing dots and
-// spaces), so the prefix, which turns that normalization off, changes nothing
-// for such a path. A shorter path, a path that already starts with \\ (a
-// caller's \\?\ or \\.\ form, kept as it is) and a full path that is not on
-// a drive (UNC, or a device such as \\.\NUL; UNC roots are not supported,
-// io.md) go to the API exactly as before, as does a path GetFullPathNameW
-// cannot make full.
+// characters or longer goes to the API as \\?\ plus that full path (for UNC,
+// \\?\UNC\ plus the full path after its "\\"), so Win32 does not refuse it for
+// its length. The full path comes from GetFullPathNameW, which already applied
+// Win32's normalization (dot segments, trailing dots and spaces), so the
+// prefix, which turns that normalization off, changes nothing for such a path.
+// A shorter path, any other path that starts with \\ (a caller's namespace
+// form, \\?\ or \\.\, kept as it is) and a full path that is neither on a
+// drive nor UNC (a device such as \\.\NUL) go to the API exactly as before, as
+// does a path GetFullPathNameW cannot make full.
 Base::Result<std::wstring, OsError> OsCallPath(const std::string_view utf8Path) {
     auto wide = ToWide(utf8Path);
     if (!wide) return wide;
-    if (wide.value().starts_with(L"\\\\")) return wide;
+    if (wide.value().starts_with(L"\\\\") && !IsUncPath(wide.value())) return wide;
     // When no full path can be made, the API gets the path as before and reports its own error.
     const auto full = FullWidePath(wide.value(), utf8Path);
-    if (!full || full.value().size() < kLongPathFrom || !IsDriveAbsolute(full.value())) return wide;
+    if (!full || full.value().size() < kLongPathFrom) return wide;
+    if (IsUncPath(full.value())) return std::wstring(L"\\\\?\\UNC\\") + full.value().substr(2);
+    if (!IsDriveAbsolute(full.value())) return wide;
     return std::wstring(L"\\\\?\\") + full.value();
 }
 

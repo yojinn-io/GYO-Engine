@@ -64,24 +64,13 @@ namespace Engine::Asset::Resolver {
                     std::string(catalogPath)));
         }
 
-        // allowEscapeAssetsRoot=true の場合は従来通り元の '..' を結合後に解決する。
-        // 通常は先に正規化し、"a/../b" のような root 内の移動は許可する。
+        // 5) Join under assetsRoot. The root is a native path and stays as written, '\' turned
+        //    into '/' only: its '..' and a leading "//" (UNC) go to the OS, which resolves them
+        //    when the file opens (docs/architecture/io.md Invariant 3). Within the root the
+        //    relative path is the cleaned one, so "a/../b" stays inside; an escape that
+        //    allowEscapeAssetsRoot permits keeps its '..' for the OS as well.
         const std::string& relativeForJoin = escapedRelativeRoot ? p : cleanedRelative;
-        std::string joined = Engine::IO::Path::JoinRootAndRelative(opt_.assetsRoot, relativeForJoin);
-        joined = Engine::IO::Path::NormalizeSlashes(joined, opt_.normalizeSeparators, opt_.squashSlashes);
-
-        // 5) dot segments 解決（assetsRoot の外へ出るか検出）
-        bool escapedAboveRoot = false;
-        std::string cleaned = Engine::IO::Path::RemoveDotSegments(joined, escapedAboveRoot);
-
-        if (escapedAboveRoot && !opt_.allowEscapeAssetsRoot) {
-            return Base::Err(AssetError::Make(
-                    AssetErrorCode::PathEscapesRoot,
-                    "AssetPathResolver: path escapes assetsRoot via '..' which is not allowed",
-                    std::string(catalogPath)));
-        }
-
-        return IO::Path::Path::FromNormalized(std::move(cleaned));
+        return IO::Path::Path::FromNormalized(Engine::IO::Path::JoinRootAndRelative(opt_.assetsRoot, relativeForJoin));
     }
 
 } // namespace Engine::Asset::Resolver

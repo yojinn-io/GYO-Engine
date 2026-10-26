@@ -1,5 +1,7 @@
 #include "doctest/doctest.h"
 #include <filesystem>
+#include <string>
+#include <utility>
 
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 
@@ -122,6 +124,8 @@ TEST_CASE("AssetPathResolver: a file URI is absolute even when schemes are allow
     CHECK(res.value().Str() == "/game/shaders/x.dxil");
 }
 
+// An escape the option permits keeps its '..': the OS resolves it from where
+// the root really is (docs/architecture/io.md Invariant 3, D54).
 TEST_CASE("AssetPathResolver: allow escape root when explicitly enabled") {
     AssetPathResolver::Options options;
     options.assetsRoot = "assets/game";
@@ -131,6 +135,36 @@ TEST_CASE("AssetPathResolver: allow escape root when explicitly enabled") {
     const auto out = r.Resolve("../shared/a.ppm");
 
     REQUIRE(out);
-    CHECK(out.value().Str() == "assets/shared/a.ppm");
-    CHECK_FALSE(out.value().HasTraversal());
+    CHECK(out.value().Str() == "assets/game/../shared/a.ppm");
+    CHECK(out.value().HasTraversal());
+}
+
+// The assets root is a native path: it stays as written, '\' turned into '/',
+// so its '..' and a UNC root's leading "//" reach the OS (D54). The catalog
+// path is still cleaned and checked on its own, so it never leaves the root.
+TEST_CASE("AssetPathResolver: keep the assets root as written") {
+    const std::pair<const char*, const char*> roots[] = {
+        {"/game/bin/../assets", "/game/bin/../assets"},
+        {"../assets", "../assets"},
+        {"./assets", "./assets"},
+        {"//server/share/assets", "//server/share/assets"},
+        {"C:\\game\\..\\assets", "C:/game/../assets"},
+        {"/game//assets/", "/game//assets"},
+    };
+    for (const auto& [root, written] : roots) {
+        CAPTURE(root);
+        AssetPathResolver::Options options;
+        options.assetsRoot = root;
+        AssetPathResolver r(options);
+
+        const auto out = r.Resolve("textures/./nested/../a.ppm");
+        REQUIRE(out);
+        CHECK(out.value().Str() == std::string(written) + "/textures/a.ppm");
+
+        for (const auto* escape : {"../outside.txt", "a/../../outside.txt"}) {
+            const auto refused = r.Resolve(escape);
+            REQUIRE_FALSE(refused);
+            CHECK(refused.error().code == Engine::Asset::AssetErrorCode::PathEscapesRoot);
+        }
+    }
 }

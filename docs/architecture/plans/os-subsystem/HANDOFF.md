@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-25。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 進行中），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-26。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 進行中），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -18,6 +18,7 @@
 - 2026-10-25：os-guard-wide 本機完成（本機 commit，未推送）。守衛擴到 apps、tools、build/acceptance、tests，產品、工具與驗收程式各有自己的 allowlist；設定期檢查與標頭衛生測試加入。本機 ctest 31／31、守衛通過、相關突變 16／16 killed（Windows 專用 1 個跳過）。四平台 L1 等推送（要使用者同意）。下一批是 os-process-info。
 - 2026-10-25：使用者說「先不推送，繼續做 os-process-info，做完再和 os-guard-wide 一起跑四平台 L1」。os-process-info 本機完成（本機 commit，未推送）：engine/os 新增 Process，消費端的執行檔路徑、CPU 時間、本地時間改呼叫它。本機 ctest 31／31，產品組態的相關測試 12／12，突變 7／7 killed（Windows 專用 1 個跳過）。下一步：推送並跑四平台 L1（要使用者同意），之後是 os-console-shutdown。
 - 2026-10-25：使用者說「推送本分支，手動觸發四平台 L1，一起驗 os-guard-wide 和 os-process-info」。第一次 run 40192938131 只有 macos-arm64 的 toolchain 列失敗（本批新加的 CPU 測試前提錯，見「os-process-info」），修正 `a9219fa` 後第二次 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。兩批完成。下一批是 os-console-shutdown（xhigh，★ Windows 行為變更）。
+- 2026-10-26：io-native-paths（D54）本機完成，判定已定案（D55）。ultracode 契約審查的 2 個 major 已修，本機 core 33／33、產品組態內容測試 8／8、相關突變全部 killed（Windows／Linux 專用的待對應平台）。未推送；推送與四平台 L1 要先問使用者。下一批是 os-tool-files。
 
 ## 閱讀入口
 
@@ -70,6 +71,8 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-26 | D52：os-files-write 開工前的四個決定。<br>檔位：high，Windows 寫入語意（截斷／附加、共用模式、換行、長路徑）逐行論證，實作後 1 位 xhigh 唯讀審查。<br>換行（os.md Replacement Criteria 5 觸發，交使用者決定）：Windows 維持 CRLF，呼叫端用 engine/io 既有的 `FileOpenMode::Text`，engine/os 的 Windows 寫入把 `\n` 換成 `\r\n`；把換行當成 Data Contract 的決定延到消費端發行之後。<br>範圍：`ReplaceFile`、`SamePathComponent` 移到 os-tool-files（消費端是編輯器）；「Windows 長路徑的 log」驗收移到 os-trace-writers（log 檔的寫入走 TraceSink）；這批驗 arena 的長路徑讀取。<br>消費端突變目錄裡因本批過期的約 32 條，由本計畫重新定位（只對應到新程式碼，不改意圖；expect 要變時逐條寫理由），動之前先通知消費端，以它最新的目錄為基礎 | 使用者對四個問題選：「high＋1 位 xhigh 審查」「維持 CRLF，由 Text 模式轉換」「照建議移到後面的批次」「這裡做，先通知 v7.1」 |
 | 2026-10-26 | D53：xhigh 審查發現的路徑差異（產品與 AssetWatcher 改走 engine/io 後，依 io.md 的 file:// 規則：POSIX 的 `..` 依字面消去、`//` 開頭被當成 UNC、Windows 的 UNC 拒絕、目前目錄不是 UTF-8 時相對路徑失敗、AssetWatcher 的字串在 Windows 上改以 UTF-8 解讀）補進 os-files-write 的事前宣告差異，程式不改，並告知消費端。之後另開一批「io 原生路徑契約」讓 file:// 規則對齊 OS（D54 起） | 使用者對選項先回答「[No preference]」，之後明確決定：「os-files-write 照「補宣告」收尾：把審查發現的 5 項路徑差異寫進本批的事前宣告（Invariant 9），程式不改。告知 v7.1。合併 ed63c24 後提交。推送前照常先問我。」 |
 | 2026-10-26 | D54：新開一批 io-native-paths（io 原生路徑契約），讓 engine/io 的 file:// 規則對齊 OS。<br>範圍：原生路徑轉成 file:// 時不再依字面消去 `..`（開檔照 OS，字面正規化只用在比較與顯示；改 io.md Invariant 3 與 D44）；取消 D46，支援 UNC（`\\server\share` ↔ `file://server/share`，Windows 長路徑用 `\\?\UNC\`）；POSIX 以 `//` 開頭的路徑不再當成 UNC 拒絕；非 UTF-8 的目前目錄照 D43 維持並寫成契約；測試含 POSIX 的 symlink 加 `..`、Windows 的 UNC 往返與長路徑（`\\localhost\C$`，CI 做不到就 Skipped）、重寫 UriTests 的不動點測試。<br>設計：原生 `//X/Y` 與 `file://X/Y` 的對應在各平台相同（engine/io 不含 OS 程式碼）；主機為 localhost 的 UNC 寫成 `file:////localhost/...`。<br>估時 12～19 h。檔位：high，Uri 字串規則與 Windows UNC 長路徑局部 xhigh，契約審查用 ultracode（1 審查者＋1 對抗檢查），兼做 AGENTS §14.4 的獨立核對。<br>§14.4：開工前列出的放寬面與收緊面已得同意；新判定寫好後跑突變檢查與獨立審查，結果與 Invariant 3 的新條文再交使用者定案 | 使用者：「接著另開一批「io 原生路徑契約」，讓 engine/io 的 file:// 規則對齊作業系統。路徑這個東西早改早好，否則又得面對一堆的個性化定製。」（範圍見左欄）；對三個問題選：「同意開工，定案前做突變與審查」「high＋局部 xhigh＋ultracode 契約審查」「現在推送並跑 L1」 |
+| 2026-10-26 | D55：io-native-paths 的定案。<br>UriTests 與 AssetPathResolverTests 的判定改變照 AGENTS §14.4 的表定案（突變與 ultracode 契約審查之後；審查的 F1、F2 修正後，開工前表上的 L4 撤回、回到舊判定）。只有主機的 UNC 照樣對應、由 OS 決定；POSIX 上 `file://host/x` 讀本機的 `/host/x`。<br>io.md Invariant 3 與 Replacement Criteria 3 照草稿定案。<br>`allowAbsolutePath` 的字面站點記為未結 | 使用者對三個問題選：「照此定案」「照草稿定案」「記為未結，之後處理」 |
+
 ## 消費端的壓力摘要
 
 提出需求的消費端是一個線上遊戲，有繪製畫面的程序、權威模擬的伺服器端程序，以及 Go 的轉送程序。以下是與 Engine 有關的事實；未標「實機」的是靜態分析。
@@ -455,6 +458,23 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - Red：先改寫 UriTests（23 個案例），在舊實作上 5 個案例失敗、31 個斷言失敗，第 13 個案例對錯誤的 Result 呼叫 `.value()` 而中止。
 - Green：`Uri.cpp` 改寫（`CanonicalFilePath`、`FilePathFromRest`、`ToString`、`FileUriFromNativePath`、`NativePathFromFileUri`），UriTests 23／23；本機 core 33／33（資產、NativeFileSystem 的既有測試照過）。
 - 2026-10-26：使用者去睡，關了 caffeinate，說「你跑完就休眠好了」。停在這裡，本機 commit，未推送。
+- 2026-10-26：使用者說「來繼續」。動 PR #96 差異裡的檔案前，再通知消費端一次（列出 6 處；p1 的兩條 find 照原樣保留）。
+  - engine/os：Windows `OsCallPath` 對 UNC 長路徑改用 `\\?\UNC\`（只有呼叫端的 `\\?\`、`\\.\` 照原樣傳）；POSIX `MakeAbsolute` 在目前目錄不是 UTF-8 時回 InvalidEncoding。os.md、Files.hpp 同步。
+  - AssetPathResolver：根目錄照原樣保留（只把 `\` 換成 `/`），目錄內的相對路徑照舊字面清理並檢查不越出根目錄。連帶的判定變化：`allowEscapeAssetsRoot` 的結果保留 `..`（`assets/game/../shared/a.ppm`，原為 `assets/shared/a.ppm`）；根目錄自己的 `..` 越過開頭（`../assets`）不再是 PathEscapesRoot。`allowAbsolutePath` 的字面清理不在 D54 範圍，沒動（沒有產品設它），定案時列為剩下的字面站點。
+  - 測試：NativeFileSystem 的 symlink 加 `..`（以 OS 自己開檔的結果為準，各平台同一判定）、Resolver 的根目錄案例、POSIX 非 UTF-8 目前目錄（macOS 建不出這種目錄，案例明寫後返回；Linux 與 Windows 實跑）、Windows 呼叫端 `\\?\` 長路徑照原樣、UriTests 加手工 Uri 的非正規形式（`///a`、`C:`）。Windows UNC 探針 `gyo_io_unc_probe`（localhost 與 127.0.0.1 兩項，`\\<host>\C$` 不通時回 77＝Skipped）。
+  - Red：新案例在舊實作上 3 個失敗（symlink 讀到 "lexical"、根目錄的 `..` 被消掉、escape 的結果）。Green：本機 core 33／33。
+  - 突變：相關 35／35 killed（15 個 Windows／Linux 專用的跳過，Windows 的留到 lan15，D206）。重新定位 io-m1、m3、m5、m8、m9、m10、m11、os-f7；io-m4、io-m13 只改 expect（被同一個案例殺掉，訊息不同）；新增 io-m12～m16、asset-r1、asset-r2、os-f8（Linux）、os-f9～f11（Windows）。
+  - 本機 WIP commit `c965b01`。接著：ultracode 契約審查（1 審查者＋1 對抗檢查，審查者用 D54 核准的局部 xhigh）與產品組態（wide）的內容相關測試。
+  - 產品組態（RelWithDebInfo）的內容相關測試 8／8 通過（engine_tests、object_fps_pvp.cpu／asset_catalog／presentation_cpu、編輯器 3 項、守衛）。
+  - 契約審查（ultracode，2 位，約 49 分鐘）：審查者 15 項、對抗檢查 8 項；對抗檢查推翻 F9，其餘維持。兩位都用舊碼（`git show 31a5849`）與新碼實跑真實輸入，輸出在本機 scratchpad（git 忽略）。
+    - 2 個 major（F1、F2）：兩個以上的斜線開頭時，「看起來像磁碟機的 POSIX 路徑」的拒絕被繞過（`///C:/x`），磁碟機形狀的 UNC 主機（`//C:/x`）印出的正規形式 `file://C:/x` 解析不回來（不動點破掉）。
+    - 修正：磁碟機外觀的檢查移到斜線收合之後，照「原樣」與「去掉點段後」兩種形式檢查（字面檢查只用來拒絕）；命名空間前綴的檢查也移到收合之後；UNC 主機含 `?` 或 `:` 一律拒絕（各種寫法一致，也解決 A4 的 `//??/` 不一致）。結果 `file:///./C:/x` 回到舊判定（InvalidPath），開工前表上的 L4 消失；`/C:/../x` 從「接受為 `/x`」變成拒絕（新的收緊面）。
+    - 測試：UriTests 加「產生的各種寫法」性質測試（762 個原生寫法、310 個 URI 寫法，都要往返並保持不動點）；它在修正途中又抓到 `/C:/../x` 與 `///??/` 兩個同類缺陷，一併修正。補 F7 的未守住檢查（手工 Uri 的主機驗證、authority 的反斜線）、F12（`.value()` 前先 REQUIRE，回歸不再讓整個執行檔中止）、F13（symlink 用 UTF-8 路徑建）、F14（`IsUncPath` 的 `\\?`、`\\.`）。
+    - 文件：io.md 的 F3、F8、F10、F15、A1、A2、A5；Uri.hpp 的註解（F11、A7）。
+    - §14.4 表的更正：T2 錯（舊碼本來就拒絕 `///a`、`C:`，判定不變）；漏列的面：錯誤碼的改變（NotSupported→InvalidPath）、Resolver 的 catalog file URI（原本在根目錄下當相對路徑，現在拒絕）、loose parser 給 file scheme、根目錄不再 squash、POSIX 上 `file://host/x` 讀本機檔、靠字面規則才讀得到的路徑現在失敗（A1）。
+    - 不在本批修的：`allowAbsolutePath` 仍會把 catalog 路徑的 `//` 收合、點段字面消去（F6、A8；沒有產品設它）；`normalizeSeparators=false` 時 `..\x` 繞過包含檢查（A6，既有，不在 D54）。
+  - 產品組態的內容相關測試在修正後重跑 8／8；本機 core 33／33；受影響的突變 32／32 killed（io-m5 的 expect 改成新的殺法：命名空間檢查關掉時，`///??/` 收合成 `/??/` 而解析不回來）。
+  - 2026-10-26：定案關卡（D55）。使用者對三個問題選：「照此定案」「照草稿定案」「記為未結，之後處理」。下一步：整理成一個 commit、通知消費端、問過使用者後推送並跑四平台 L1。
 - 下一步（依 PLAN 第 7.8b 節與 D54）：
   1. engine/os：Windows 的 UNC 長路徑改用 `\\?\UNC\`，以 `\\localhost\C$` 測試（CI 做不到就 Skipped）；POSIX `MakeAbsolute` 在目前目錄不是 UTF-8 時回 InvalidEncoding（D43 的明確契約）。
   2. 呼叫端：AssetPathResolver 的根目錄照原樣保留；POSIX 的 symlink 加 `..` 測試（NativeFileSystem）；重新定位相關突變（io-m1、io-m8、io-m10 等）。
@@ -493,4 +513,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - 後續（D50）：`tests/common/time/CMakeLists.txt` 的 `gyo_expect_links` 以 `if(entry AND …)` 過濾，會把名字是 CMake 假值的連結項目（N、NO、OFF、FALSE、IGNORE、0、*-NOTFOUND）丟掉，例如 `shell32 OFF` 也會通過。修正只會收緊，依 AGENTS §14.4 由 time-threads-trace 的 owner 修並事後報告。
 - ~~os-console-shutdown 的四平台 L1~~ 2026-10-26 [run 40205158822](https://github.com/yojinn-io/GYO-Engine/actions/runs/40205158822) 全部成功（`os.console_close` Skipped）。
 - lan15 的 Windows 實機（D51）：用 Ctrl+C、Ctrl+Break、關閉主控台視窗結束 Match，log 最後一行都是 end 紀錄（PLAN 第 7.7 節的 L3）；在實機上跑 `os.console_close`（應為 Passed）與 Windows 專用突變 os-c4、os-c5、os-c6、os-c8、os-c9、os-g18（以及 os-f4、os-f5、os-g16、os-p5）。Windows 11 的預設終端是 Windows Terminal 時，`os.console_close` 可能也是 Skipped，那就用傳統主控台（conhost）視窗跑。~~windows-x64 上的 `%z` 比對~~ 2026-10-25 run 40192938131 通過，已通知消費端的發行任務。~~CPU 測試修正後重跑 L1~~ 2026-10-25 [run 40194493434](https://github.com/yojinn-io/GYO-Engine/actions/runs/40194493434) 全部成功。
+- 後續（D55）：AssetPathResolver 的 `allowAbsolutePath` 仍把 catalog 絕對路徑的點段依字面消去，並把 UNC 的開頭 `//` 收合成 `/`（Windows 上會變成目前磁碟機的根目錄）。沒有產品設它；有消費端需要，或做到 asset 解析的批次時，改成照原樣保留（測試「allow absolute paths」的期待值要依 AGENTS §14.4 改）。
+- 既有問題（審查的 A6，不在 D54）：`normalizeSeparators=false` 時，catalog 路徑 `..\x` 繞過 Resolver 的包含檢查，在 Windows 上越出根目錄。沒有消費端關掉這個選項。
+- io-native-paths 的 Windows 專用突變 os-f9～os-f11 與 Linux 專用的 os-f8 要在對應平台執行（D206 的 lan15；Linux 機器）。
 - R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

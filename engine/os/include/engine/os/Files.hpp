@@ -116,7 +116,8 @@ private:
 // The path resolved against the current directory the platform's own way, in
 // '/' form. On Windows GetFullPathNameW also removes dot segments and trailing
 // dots and spaces; on POSIX the current directory is joined as it is and an
-// absolute path comes back unchanged.
+// absolute path comes back unchanged. A relative path under a current directory
+// with no UTF-8 form (bytes that are not UTF-8 on POSIX) is InvalidEncoding.
 [[nodiscard]] Base::Result<std::string, OsError> MakeAbsolute(std::string_view utf8Path);
 
 // Whether the path is absolute on this platform: "/x" on POSIX; "C:/x",

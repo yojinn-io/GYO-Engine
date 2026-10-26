@@ -54,13 +54,15 @@ Only the components whose batch has landed exist; the others are planned in the 
     (`GYO_ASSERT`).
   - `MakeAbsolute` resolves against the current directory the platform's own way: `GetFullPathNameW` on Windows
     also removes dot segments and trailing dots and spaces; POSIX joins the current directory as it is. It answers
-    in `/` form and never returns a long-path prefix.
+    in `/` form and never returns a long-path prefix. A relative path under a current directory that has no UTF-8
+    form (POSIX bytes that are not UTF-8) is `InvalidEncoding` (D43, D54): the answer would not be a UTF-8 path.
   - Long paths on Windows (os-subsystem PLAN section 8, P1): `FileReader::Open`, `Stat` and `Exists` read a file whose
     full path (`GetFullPathNameW`) is 248 characters (`MAX_PATH - 12`) or longer by handing the API `\\?\` plus
     that full path. The full path already carries Win32's normalization (dot segments, trailing dots and spaces),
     so turning normalization off with the prefix changes nothing for it; this is the change declared beforehand
-    under Design Invariant 9. A shorter path, a full path not on a drive letter (UNC roots are not supported this
-    round; a device such as `\\.\NUL`) and a path `GetFullPathNameW` refuses go to the API as before. A path the
+    under Design Invariant 9. A UNC full path (`\\server\share\...`) that long goes as `\\?\UNC\` plus the full
+    path after its `\\` (D54, io-native-paths). A shorter path, a full path that is neither on a drive letter nor
+    UNC (a device such as `\\.\NUL`) and a path `GetFullPathNameW` refuses go to the API as before. A path the
     caller already gives in a `\\?\` or `\\.\` form is passed on unchanged (engine/io refuses such paths, io.md
     Invariant 4; engine/os keeps Win32's meaning for them). Errors keep the caller's path length (`path_bytes`), not
     the prefixed form.

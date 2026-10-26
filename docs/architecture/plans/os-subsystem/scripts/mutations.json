@@ -156,8 +156,8 @@
       "id": "io-m1-root",
       "what": "A file URI path loses its leading '/' (the pre-io-contracts behaviour)",
       "file": "engine/io/src/path/Uri.cpp",
-      "find": "        return NormalizeFilePath(native);\n",
-      "replace": "        return NormalizeFilePath(native.substr(1));\n",
+      "find": "        return CanonicalFilePath(std::string(native));\n",
+      "replace": "        return CanonicalFilePath(std::string(native.substr(1)));\n",
       "target": "engine_tests",
       "cases": "Uri:*",
       "expect": "ParseUri failed for file:///Users/x"
@@ -176,7 +176,7 @@
       "id": "io-m3-to-string",
       "what": "ToString prints a drive path in the old file://C:/ form",
       "file": "engine/io/src/path/Uri.cpp",
-      "find": "            if (path.Empty() || path.Str().front() != '/') out += \"/\";\n",
+      "find": "            if (text.empty() || text.front() != '/') out += \"/\";\n",
       "replace": "",
       "target": "engine_tests",
       "cases": "Uri:*",
@@ -190,17 +190,17 @@
       "replace": "authority.empty() || authority == \"localhost\"",
       "target": "engine_tests",
       "cases": "Uri:*",
-      "expect": "ParseUri failed for file://LOCALHOST/C:/x"
+      "expect": "CHECK\\( FilePath\\(\"file://LOCALHOST/C:/x\"\\) == \"C:/x\" \\) is NOT correct"
     },
     {
       "id": "io-m5-long-prefix",
-      "what": "A long-path prefix is accepted into an engine/io path",
+      "what": "A long-path or NT prefix is accepted into an engine/io path when it appears only after extra leading slashes collapse (///??/)",
       "file": "engine/io/src/path/Uri.cpp",
-      "find": "        if (HasNamespacePrefix(path)) {\n",
-      "replace": "        if (false) {\n",
+      "find": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
+      "replace": "        if (false) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
       "target": "engine_tests",
       "cases": "Uri:*",
-      "expect": "CHECK\\( NativeError\\(\"\\\\\\\\\\\\\\\\\\?\\\\\\\\C:\\\\\\\\x\"\\) == IoErrorCode::InvalidPath \\) is NOT correct"
+      "expect": "the URI text file:///\\?\\?/ does not parse"
     },
     {
       "id": "io-m6-loose-fallback",
@@ -224,29 +224,29 @@
     },
     {
       "id": "io-m8-four-slash-unc",
-      "what": "file:////server/share is taken for a local path",
+      "what": "After an empty authority, a path of three or more slashes is taken for a local path (file://///host)",
       "file": "engine/io/src/path/Uri.cpp",
-      "find": "        // \"file:////server/share\" is the other spelling of a UNC URI.\n        if (path.starts_with(\"//\")) {",
-      "replace": "        // \"file:////server/share\" is the other spelling of a UNC URI.\n        if (false) {",
+      "find": "        if (path.starts_with(\"//\")) return CanonicalFilePath(",
+      "replace": "        if (false) return CanonicalFilePath(",
       "target": "engine_tests",
       "cases": "Uri:*",
-      "expect": "ParseUri accepted file:////server/share/x"
+      "expect": "CHECK\\( FilePath\\(\"file://///a\"\\) == \"//a\" \\) is NOT correct"
     },
     {
       "id": "io-m9-hand-made",
-      "what": "NativePathFromFileUri accepts a path that does not normalize to itself",
+      "what": "NativePathFromFileUri accepts a hand-built path that is not the mapping's canonical form",
       "file": "engine/io/src/path/Uri.cpp",
-      "find": "        if (normalized.value() != uri.path.Str()) {",
+      "find": "        if (canonical.value() != native) {",
       "replace": "        if (false) {",
       "target": "engine_tests",
       "cases": "Uri:*",
-      "expect": "NativePathFromFileUri accepted /a/\\.\\./b"
+      "expect": "NativePathFromFileUri accepted (///a|C:)"
     },
     {
       "id": "io-m10-posix-drive",
       "what": "A POSIX path whose first segment looks like a drive gets a file URI",
       "file": "engine/io/src/path/Uri.cpp",
-      "find": "        if (root == \"/\" && StartsWithDrive(std::string_view(out).substr(1))) {",
+      "find": "        if (NamesDriveUnderRoot(path)) {",
       "replace": "        if (false) {",
       "target": "engine_tests",
       "cases": "Uri:*",
@@ -256,7 +256,7 @@
       "id": "io-m11-drive-relative",
       "what": "The drive-relative native forms C: and \\x are taken for absolute paths",
       "file": "engine/io/src/path/Uri.cpp",
-      "find": "        if (utf8AbsolutePath.starts_with('\\\\') || (path.size() == 2 && IsDriveLetter(path))) {",
+      "find": "        if ((utf8AbsolutePath.starts_with('\\\\') && !(path.size() >= 2 && path[1] == '/')) ||\n            (path.size() == 2 && IsDriveLetter(path))) {",
       "replace": "        if (false) {",
       "target": "engine_tests",
       "cases": "Uri:*",
@@ -388,8 +388,8 @@
         "linux"
       ],
       "file": "engine/os/src/posix/Files.cpp",
-      "find": "    if (!Detail::IsValidUtf8(out)) {",
-      "replace": "    if (false) {",
+      "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
+      "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
       "target": "gyo_os_tests",
       "cases": "*no UTF-8 form*",
       "expect": "REQUIRE_FALSE\\( text \\) is NOT correct"
@@ -1025,6 +1025,184 @@
       "target": "gyo_os_tests",
       "cases": "*create directories*",
       "expect": "create directories"
+    },
+    {
+      "id": "io-m12-unc-uri-refused",
+      "what": "A file URI with a host is refused again (the D46 behaviour)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (!IsLocalAuthority(authority)) return CanonicalFilePath(\"//\" + std::string(authority) + path);",
+      "replace": "        if (!IsLocalAuthority(authority)) return Base::Err(IoError::Make(IoErrorCode::NotSupported, \"UNC file URIs are not supported\", std::string(rest)));",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "ParseUri failed for file://server/share/x"
+    },
+    {
+      "id": "io-m13-native-unc-refused",
+      "what": "A native //host path is refused again (the D46 behaviour; on POSIX a '//' path)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            if (host.empty()) {\n",
+      "replace": "            if (true) {\n",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "ParseUri failed for file://server/share/x"
+    },
+    {
+      "id": "io-m14-dots-removed",
+      "what": "A local file path loses its dot segments by a lexical rule (the pre-D54 behaviour)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            return path;\n        }\n        if (StartsWithDrive(path)) {",
+      "replace": "            bool escaped = false;\n            return RemoveDotSegments(path, escaped);\n        }\n        if (StartsWithDrive(path)) {",
+      "target": "engine_tests",
+      "cases": "Uri*,NativeFileSystem*",
+      "expect": "CHECK\\( FilePath\\(\"file:///a/\\./b/\\.\\./c\"\\) == \"/a/\\./b/\\.\\./c\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m15-localhost-unc-spelling",
+      "what": "A UNC path on a host named localhost prints as file://localhost/..., which names the local machine",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "                return (IsLocalAuthority(host) ? \"file://\" : \"file:\") + text;",
+      "replace": "                return \"file:\" + text;",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "Printed\\(\"file:////localhost/C\\$/x\"\\) == \"file:////localhost/C\\$/x\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m16-three-slash-root",
+      "what": "Three or more leading slashes are kept instead of naming the root",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "NativeUri\\(\"///a\"\\)\\.path\\.Str\\(\\) == \"/a\" \\) is NOT correct"
+    },
+    {
+      "id": "asset-r1-root-cleaned",
+      "what": "AssetPathResolver removes the dot segments of its root by a lexical rule (the pre-D54 behaviour)",
+      "file": "engine/asset/src/AssetPathResolver.cpp",
+      "find": "        return IO::Path::Path::FromNormalized(Engine::IO::Path::JoinRootAndRelative(opt_.assetsRoot, relativeForJoin));",
+      "replace": "        bool joinedEscaped = false;\n        return IO::Path::Path::FromNormalized(Engine::IO::Path::RemoveDotSegments(Engine::IO::Path::NormalizeSlashes(Engine::IO::Path::JoinRootAndRelative(opt_.assetsRoot, relativeForJoin)), joinedEscaped));",
+      "target": "engine_tests",
+      "cases": "AssetPathResolver*",
+      "expect": "CHECK\\( out\\.value\\(\\)\\.Str\\(\\) == std::string\\(written\\) \\+ \"/textures/a\\.ppm\" \\) is NOT correct"
+    },
+    {
+      "id": "asset-r2-escape-unchecked",
+      "what": "AssetPathResolver lets a catalog path leave its root through '..'",
+      "file": "engine/asset/src/AssetPathResolver.cpp",
+      "find": "        if (escapedRelativeRoot && !opt_.allowEscapeAssetsRoot) {",
+      "replace": "        if (false) {",
+      "target": "engine_tests",
+      "cases": "AssetPathResolver*",
+      "expect": "REQUIRE_FALSE\\( refused \\) is NOT correct"
+    },
+    {
+      "id": "os-f8-posix-cwd-not-utf8",
+      "what": "MakeAbsolute joins a current directory that is not UTF-8 (POSIX; macOS keeps names in UTF-8, so Linux only)",
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
+      "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
+      "target": "gyo_os_tests",
+      "cases": "*current directory with no UTF-8*",
+      "expect": "REQUIRE_FALSE\\( \\*relative \\) is NOT correct"
+    },
+    {
+      "id": "os-f9-windows-unc-long-path",
+      "what": "A long UNC path goes to the API without the \\\\?\\UNC\\ form",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (IsUncPath(full.value())) return std::wstring(L\"\\\\\\\\?\\\\UNC\\\\\") + full.value().substr(2);\n",
+      "replace": "",
+      "target": "gyo_io_unc_probe",
+      "command": [
+        "{exe:gyo_io_unc_probe}",
+        "localhost"
+      ],
+      "expect": "FAIL reads the file"
+    },
+    {
+      "id": "os-f10-windows-unc-passthrough",
+      "what": "A UNC path is passed to the API as given, whatever its length (the pre-D54 behaviour)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (wide.value().starts_with(L\"\\\\\\\\\") && !IsUncPath(wide.value())) return wide;",
+      "replace": "    if (wide.value().starts_with(L\"\\\\\\\\\")) return wide;",
+      "target": "gyo_io_unc_probe",
+      "command": [
+        "{exe:gyo_io_unc_probe}",
+        "localhost"
+      ],
+      "expect": "FAIL reads the file"
+    },
+    {
+      "id": "os-f11-windows-namespace-as-unc",
+      "what": "A caller's \\\\?\\ form is taken for UNC and rewritten",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    return !((path[2] == L'?' || path[2] == L'.') && (path.size() == 3 || path[3] == L'\\\\'));",
+      "replace": "    return true;",
+      "target": "gyo_os_tests",
+      "cases": "*longer than 300 characters*",
+      "expect": "cannot open a \\d+-byte path"
+    },
+    {
+      "id": "io-m17-unc-host-unchecked",
+      "what": "A UNC host with '?' or ':' (a drive, the NT prefix, a port) is accepted, so its canonical form does not parse back",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        return host.find_first_of(\"?:\") != std::string_view::npos;",
+      "replace": "        return false;",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "ParseUri accepted file:////C:/x"
+    },
+    {
+      "id": "io-m18-drive-after-dots",
+      "what": "The drive-lookalike check looks only at the path as written, so file:///./C:/x names a drive-looking path",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        return LooksLikeDriveUnderRoot(path) || LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
+      "replace": "        return LooksLikeDriveUnderRoot(path);",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "ParseUri accepted file:///\\./C:/x"
+    },
+    {
+      "id": "io-m19-drive-as-written",
+      "what": "The drive-lookalike check looks only at the path without dot segments, so /C:/../x gets a URI that names the drive path",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        return LooksLikeDriveUnderRoot(path) || LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
+      "replace": "        return LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "CHECK\\( reparsed\\.value\\(\\)\\.path == uri\\.value\\(\\)\\.path \\) is NOT correct"
+    },
+    {
+      "id": "io-m20-namespace-before-collapse",
+      "what": "The namespace check runs before extra leading slashes collapse, so ///??/ becomes the NT prefix /??/",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n",
+      "replace": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "no native path back for ///\\?\\?/"
+    },
+    {
+      "id": "io-m21-hand-built-host-unchecked",
+      "what": "NativePathFromFileUri takes any hand-set host, so a relative path or a drive becomes a UNC path",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            if (IsDriveLetter(uri.authority) || uri.authority.find_first_of(\"/\\\\\") != std::string::npos ||\n                (!native.empty() && native.front() != '/')) {",
+      "replace": "            if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "NativePathFromFileUri accepted share"
     }
   ]
 }

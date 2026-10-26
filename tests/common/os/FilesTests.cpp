@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <optional>
 #include <regex>
 #include <string>
 #include <utility>
@@ -290,6 +291,43 @@ TEST_CASE("Os files make a relative path absolute") {
     CHECK(ReadAll(opened.value()) == "abc");
 }
 
+// A relative path under a current directory with no UTF-8 form has no UTF-8
+// absolute form either (D43, D54): InvalidEncoding, while an absolute path is
+// unaffected.
+TEST_CASE("Os files refuse to make a path absolute under a current directory with no UTF-8 form") {
+    const TempDirectory temp("gyo-os-files");
+#if defined(_WIN32)
+    const auto odd = temp.Path() / std::filesystem::path(std::wstring(L"a\xD800" L"b"));
+#else
+    const auto odd = temp.Path() / std::filesystem::path(std::string("a\xFF" "b"));
+#endif
+    std::error_code error;
+    std::filesystem::create_directory(odd, error);
+#if defined(__APPLE__)
+    // APFS and HFS+ keep names in UTF-8, so no such directory can exist here.
+    CHECK(error);
+    if (error) return;
+#else
+    REQUIRE_FALSE(error);
+#endif
+    struct RestoreCurrentPath final {
+        std::filesystem::path previous = std::filesystem::current_path();
+        ~RestoreCurrentPath() { std::filesystem::current_path(previous); }
+    };
+    std::optional<Engine::Base::Result<std::string, OsError>> relative;
+    std::optional<Engine::Base::Result<std::string, OsError>> absolute;
+    {
+        const RestoreCurrentPath restore;
+        std::filesystem::current_path(odd);
+        relative = MakeAbsolute("x.bin");
+        absolute = MakeAbsolute(Utf8(temp.Path() / "x.bin"));
+    }
+    REQUIRE_FALSE(*relative);
+    CHECK(relative->error().code == OsErrorCode::InvalidEncoding);
+    CHECK(relative->error().detail.find("path_bytes=5") != std::string::npos);
+    CHECK(*absolute);
+}
+
 TEST_CASE("Os files tell absolute paths per platform") {
     CHECK_FALSE(IsAbsolutePath(""));
     CHECK_FALSE(IsAbsolutePath("a/b"));
@@ -382,6 +420,8 @@ TEST_CASE("Os files read an existing file under a path longer than 300 character
 #if defined(_WIN32)
     forms.push_back(path);
     std::replace(forms.back().begin(), forms.back().end(), '/', '\\');
+    // A caller's own long-path form is passed on unchanged.
+    forms.push_back("\\\\?\\" + forms.back());
 #endif
     for (const auto& form : forms) {
         CAPTURE(form);

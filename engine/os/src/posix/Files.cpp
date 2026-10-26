@@ -284,6 +284,11 @@ Base::Result<std::string, OsError> MakeAbsolute(const std::string_view utf8Path)
         buffer.resize(buffer.size() * 2);
     }
     std::string out(buffer.data());
+    // The current directory is bytes; a result that is not UTF-8 would not be a UTF-8 path (D43).
+    if (!Detail::IsValidUtf8(out)) {
+        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,
+                                                 "the current directory is not valid UTF-8", utf8Path.size()));
+    }
     if (out.empty() || out.back() != '/') out.push_back('/');
     out.append(utf8Path);
     return out;

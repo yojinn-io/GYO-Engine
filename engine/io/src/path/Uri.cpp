@@ -52,40 +52,65 @@ namespace Engine::IO::Path {
                s == "//.";
     }
 
+    // "/X:..." with a drive as its first segment: as a native POSIX path it has no file URI, since its URI
+    // would name the drive path.
+    static bool LooksLikeDriveUnderRoot(std::string_view path) noexcept {
+        return path.size() >= 3 && path[0] == '/' && path[1] != '/' && StartsWithDrive(path.substr(1));
+    }
+
+    // The same as written ("/C:/x", "/C:/../x") or once dot segments are removed ("/./C:/x", "/a/../C:/x").
+    // A lexical check that only refuses: the path itself stays as written.
+    static bool NamesDriveUnderRoot(std::string_view path) {
+        bool escaped = false;
+        return LooksLikeDriveUnderRoot(path) || LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));
+    }
+
+    // A UNC host no Windows server has: '?' or ':' would read as a namespace prefix (the host "??" is the NT
+    // prefix written with two slashes), a drive ("//C:/x" would print as file://C:/x) or a port.
+    static bool IsRefusedUncHost(std::string_view host) noexcept {
+        return host.find_first_of("?:") != std::string_view::npos;
+    }
+
     // A native absolute path in '/' form, as the mapping keeps it: segments as written (dot segments,
     // repeated and trailing slashes reach the OS, which applies its own rules; io-native-paths, D54).
     // "/..." is a local path, "X:/..." a drive path ("X:" is its root "X:/"), "//host..." a UNC path;
     // three or more leading slashes are the root "/", as POSIX reads them. A NUL, a namespace prefix,
-    // a UNC path with no host and a relative path are refused.
+    // a UNC path with no host or a refused host, a local path that looks like a drive path and a
+    // relative path are refused.
     static Base::Result<std::string, IoError> CanonicalFilePath(std::string path) {
         if (path.find('\0') != std::string::npos) {
             return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "file path contains a NUL byte"));
         }
+        const std::size_t slashes = path.find_first_not_of('/') == std::string::npos ? path.size()
+                                                                                     : path.find_first_not_of('/');
+        if (slashes >= 3) path = "/" + path.substr(slashes);
         if (HasNamespacePrefix(path)) {
             return Base::Err(IoError::Make(IoErrorCode::InvalidPath,
                                            "long-path and device prefixes never appear in engine/io paths", path));
         }
-        const std::size_t slashes = path.find_first_not_of('/') == std::string::npos ? path.size()
-                                                                                     : path.find_first_not_of('/');
-        if (slashes >= 3) return "/" + path.substr(slashes);
         if (slashes == 2) {
-            if (path.size() == 2) {
+            const std::string_view host = std::string_view(path).substr(2, path.find('/', 2) - 2);
+            if (host.empty()) {
                 return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "UNC path has no host", path));
+            }
+            if (IsRefusedUncHost(host)) {
+                return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "UNC host has a '?' or ':'", path));
             }
             return path;
         }
-        if (slashes == 1) return path;
+        if (slashes >= 1) {
+            if (NamesDriveUnderRoot(path)) {
+                return Base::Err(IoError::Make(IoErrorCode::InvalidPath,
+                                               "a POSIX path whose first segment looks like a drive has no file URI",
+                                               path));
+            }
+            return path;
+        }
         if (StartsWithDrive(path)) {
             if (path.size() == 2) path.push_back('/');
             return path;
         }
         return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "file path is not absolute", path));
-    }
-
-    // "/X:..." with a drive as its first segment: as a native POSIX path it has no file URI, since its URI
-    // would name the drive path.
-    static bool LooksLikeDriveUnderRoot(std::string_view path) noexcept {
-        return path.size() >= 3 && path[0] == '/' && path[1] != '/' && StartsWithDrive(path.substr(1));
     }
 
     // The native path of a file URI from what follows "file://". An empty or localhost authority is the
@@ -332,11 +357,6 @@ namespace Engine::IO::Path {
             return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "path is relative to the current drive",
                                            std::string(utf8AbsolutePath)));
         }
-        if (LooksLikeDriveUnderRoot(path)) {
-            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,
-                                           "a POSIX path whose first segment looks like a drive has no file URI",
-                                           std::string(utf8AbsolutePath)));
-        }
         auto canonical = CanonicalFilePath(path);
         if (!canonical) return Base::Err(std::move(canonical.error()));
         Uri uri;
@@ -364,7 +384,7 @@ namespace Engine::IO::Path {
             native = "//" + uri.authority + native;
         }
         // Built by hand, a Uri may hold any text: only the mapping's canonical form names a path.
-        if (native.find('\\') != std::string::npos || LooksLikeDriveUnderRoot(native)) {
+        if (native.find('\\') != std::string::npos) {
             return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "file URI path is not in canonical form",
                                            native));
         }
