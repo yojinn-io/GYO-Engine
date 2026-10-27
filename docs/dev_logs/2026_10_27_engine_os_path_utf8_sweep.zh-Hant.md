@@ -1,6 +1,6 @@
 # Engine os-path-utf8-sweep：剩下的窄字串路徑改 UTF-8
 
-日期：2026-10-27。**本機完成**：Red 測試 `f86f8e00` 已推送，Red 的 L1 如預期（[run 40431320545](https://github.com/yojinn-io/GYO-Engine/actions/runs/40431320545)）；修正 `95339b80` 還在本機，Green 的 L1 要等使用者同意推送。
+日期：2026-10-27。**完成**：Red 的 L1 如預期（[run 40431320545](https://github.com/yojinn-io/GYO-Engine/actions/runs/40431320545)，`f86f8e00`）；Green 的 L1 （[run 40433158383](https://github.com/yojinn-io/GYO-Engine/actions/runs/40433158383)，`bfea4f6b`）全部成功；windows-x64 上 Red 那次失敗的 6 項（engine_tests、object_fps_pvp.cpu、match_ingress_cli、gyo_ui_editor.core、content_cli、preview）都通過，ctest 95／95。
 計畫見 [os-path-utf8-sweep](../architecture/plans/os-subsystem/PLAN.md)（第 7.11 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-path-utf8-sweep」；開工前的決定是 D63。
 
 ## 做了什麼
