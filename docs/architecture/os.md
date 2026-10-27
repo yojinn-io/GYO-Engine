@@ -361,7 +361,7 @@ Known blind spots, left to review:
    in the fixed form of the Contracts section. A request that only reports whether the platform applied it returns
    `bool` instead (the thread name and priority, `Utf8ConsoleOutput::Applied()`): not being applied is a result,
    not a failure (Invariant 10; D70). `WakeSignal::Block` keeps the exception specification it had in `Time::Waiter`
-   (Invariant 9; D71): in the condition-variable fallback the standard library's `std::system_error` from the mutex
+   (Invariant 9; D71, D72): in the condition-variable fallback the standard library's `std::system_error` from the mutex
    or the wait passes through; the kqueue and Windows backends throw nothing. Apart from it, no exception crosses
    the public boundary or an OS callback (signal
    handler, console control handler). The OS callbacks only write a lock-free atomic (and, on a console close,

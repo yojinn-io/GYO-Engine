@@ -43,7 +43,7 @@
 - 2026-10-27：os-wait-backend 開始（D71），本機進行中，基準 `4ffc7c65`。細節見「os-wait-backend」。
 - 2026-10-27：os-wait-backend 本機完成（`756073aa`）：macOS Intel 的 L2 通過（12／12），xhigh 審查（Fable 5.1）的發現已修。下一步要使用者決定：推送並跑四平台 L1；條文定案。Windows 與 Linux 的 L2、ow-x1、ow-x5、ow-x6、ow-x10 留給實機。
 - 2026-10-27：推送並跑四平台 L1（run 40510515336）：只有 toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時，這個測試不經過本批的程式碼；新測試在四平台都通過。停在使用者的決定（重跑、交給 owner，或重新檢視前提）。
-- 2026-10-27：重跑後 L1 第 2 次全部通過；逾時交給 v7.1 會話與對應的任務卡。os-wait-backend 完成本機與 L1，剩下實機（見「下一次實機的清單」）與條文定案（使用者）。
+- 2026-10-27：重跑後 L1 第 2 次全部通過；逾時交給 v7.1 會話與對應的任務卡。os-wait-backend 完成本機與 L1，條文已定案（D72）；剩下實機（見「下一次實機的清單」）。
 
 ## 閱讀入口
 
@@ -114,6 +114,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D69：os-threads-backend 開工前的決定。<br>檔位：high＋1 位 xhigh 審查（使用者選的；建議是 high 加 Start 順序局部 xhigh）。<br>連結（§14.4，Design Invariant 的變更）：照草案。gyo_threads 以 PRIVATE 連結 GYO::Os，並加「不得公開」的檢查（threads.md Invariant 9）；gyo_os 在 POSIX 上以 PRIVATE 連結 Threads::Threads（os.md Invariant 3）。兩條條文與守衛期望值一起改，定案前做突變。<br>Windows 非 ASCII 名稱的缺陷（逐 byte 擴寬）：這批修，宣告 ★，改用 engine/os 的 UTF-8→UTF-16 轉換，加讀回測試。<br>L2（事前宣告、只記錄，附撤回條件）：A＝搬動前、B＝搬動後，消費端每個 role started 行的 name_applied、priority_applied、wait_backend 必須逐字相同，任一項不同就撤回整批。macOS Intel 現在在本機做；Windows 與 Linux 在下一次實機用 A、B 兩個 commit 補，不擋 os-wait-backend | 使用者：「開始 os-threads-backend。先說明檔位、要動的檔案，以及需要我同意的地方。」之後對四個問題選：「high＋1 位 xhigh 審查」「照草案」「這批修，宣告 ★」「本機先做，實機那次補」 |
 | 2026-10-27 | D70：os-threads-backend 的定案。threads.md Invariant 9（GYO::Threads 連結 exactly GYO::Time、Threads::Threads，以及 PRIVATE 的 GYO::Os）與 os.md Invariant 3（GYO::Os 在 Windows 以外連結 Threads::Threads）照草稿定案；os.md Invariant 6 寫明例外：只回報平台是否套用的請求回傳 bool（執行緒的名稱與優先度、`Utf8ConsoleOutput::Applied()`），沒有套用是結果、不是失敗（Invariant 10） | 使用者：「threads.md Invariant 9 與 os.md Invariant 3 照草稿定案；os.md Invariant 6 寫明「回報是否套用的請求回傳 bool」這個例外。」 |
 | 2026-10-27 | D71：os-wait-backend 開工前的決定（全部照建議）。<br>檔位：xhigh＋1 位 xhigh 審查（腳本、L2 執行與文件降到 medium）。<br>開放決策 13 採 (a)，先校準：看 B 之前，先用同一個 A 程式交錯跑 A/A 4 對，再跑拿掉 `NOTE_CRITICAL` 的退化版 1 對。A/A 通過 (a)、退化版不通過時，(a) 原文凍結，不再回來問；任一項不符就停下，帶資料與修正後的數值回報。B 不通過時不重跑，先回報（§14.1），撤回方式是 revert。「各對中位數」定為：A 的 4 次取中位數、B 的 4 次取中位數，再比較。量測期間不在本機建置。<br>對抗式檢查（只用既有證據，同一台 Intel）：來源每個情境只量過一次；CLI 的 P50 跨日差 0.052 ms，超過 +0.02 ms；P99 是 1800 個樣本裡第 18 大的值，主機尖峰會讓它跳到毫秒級；搬移可能造成的退化是毫秒級，(b) 的窄邊界不會多抓到；「零早醒」由 Waiter 的迴圈保證，只是再確認。<br>條文（同意開工，定案前做突變與審查者的驗證，同 D66）：time.md Invariant 10（`GYO::Time` 連結 exactly `GYO::Base` 與 PRIVATE 的 `GYO::Os`，拿掉 `Threads::Threads`，Os 不得公開；§14.4 有放寬面）；time.md Invariant 8 改成現在式並加 cv 突變為守衛；os.md Invariant 6 的例外（`Block` 在 cv 後備可讓標準函式庫的 `std::system_error` 穿過，與搬移前的 Waiter 相同）；★ `Waiter::Create` 失敗時 detail 改成 engine/os 的固定格式 `errno=<n>`／`win32=<n>`，message 不變。<br>平台：macOS Intel 現在做；Windows x64（沒有視窗與有視窗）與 Linux x64（沒有視窗）在下一次實機用 A、B 兩個 commit 做；macOS arm64 沒有實機（D11⑩），標未驗證。Windows 的 L2 通過前，不通知消費端合併這一批。cv 後備的新突變只在 Linux 跑得到，留給實機 | 使用者：「開始 os-wait-backend。先說明檔位、要動的檔案，以及需要我同意的地方（含開放決策 13 的 L2 判定數值）。」之後對四個問題選：「xhigh＋1 位 xhigh 審查」「(a)＋先校準」「同意開工，定案前驗證」「本機先做，Windows 過了才合併」 |
+| 2026-10-27 | D72：os-wait-backend 的定案。time.md Invariant 8（latch 由 engine/os 經每次 `Block` 的參照讀取，cv 後備在 mutex 內讀，不保存副本；守衛是競爭測試加 ow-x1，ow-x1 還沒在 Linux 跑）、Invariant 10（`GYO::Time` 連結 exactly `GYO::Base` 與 PRIVATE 的 `GYO::Os`，拿掉 `Threads::Threads`，Os 不得公開；§14.4 的放寬面經突變 ti-x1、ow-x2 與審查者確認）、os.md Invariant 6 的例外（`WakeSignal::Block` 在 cv 後備讓標準函式庫的 `std::system_error` 穿過，與搬移前的 Waiter 相同）、★ 錯誤細節（`Waiter::Create` 失敗時 detail 是 `IoFailed: errno=<n>`／`IoFailed: win32=<n>`，message 不變），都照草稿定案 | 使用者：「time.md Invariant 8／10、os.md Invariant 6 的例外、★ 錯誤細節（IoFailed: errno=<n>／win32=<n>），都照草稿定案。」 |
 
 ## 消費端的壓力摘要
 
@@ -731,6 +732,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 重跑（`gh run rerun --failed`）是同一個 run 的第 2 次：toolchain / linux-x64 成功（47／47，`platform_sdl_concurrency` 5.27 s；core 34／34），CI validation 與 CI gate 成功。第 1 次的逾時保留在 attempt 1。
   - **os-wait-backend 的四平台 L1：第 2 次通過**；第 1 次的失敗歸因於 `platform_sdl_concurrency`（不經過本批的程式碼），記錄不覆寫。
   - 更正：重跑中途用 API 查到 job 還在跑、run 卻已標成成功，一度以為 CI gate 在必要的 job 結束前就判了成功；之後的時間戳記顯示順序正確（toolchain 14:06:35、CI validation 14:06:43、CI gate 14:06:54），是 API 回了還沒更新的狀態。CI 沒有問題。
+- 2026-10-27：定案（D72）：time.md Invariant 8、10，os.md Invariant 6 的例外，★ 錯誤細節，都照草稿。
 
 ### os-threads-backend
 

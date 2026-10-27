@@ -9,7 +9,7 @@
   - 新增 `WakeSignal.hpp`：`Create()`、`Signal()`、`Block(latch, timeout)`、`Mechanism()`，以及和 Time 的 `WaitBackend` 一一對應的 `WaitMechanism`。
   - 實作從 `Waiter.cpp` 逐行搬到 `engine/os/src/wait/WakeSignal.cpp`。依開放決策 11 (c)，一個檔案以 `#if` 分平台：macOS 的 kqueue、Windows 的 event 加 waitable timer（含兩層退回）、其他平台的 condition_variable。
   - cv 後備由 `Block` 的參數拿到 Time 的 latch 參照，在 mutex 內讀，不保存副本（os.md Invariant 8）。
-  - `Block` 保留不是 noexcept 的例外規格：cv 後備可讓標準函式庫的 `std::system_error` 穿過，和搬移前的 Waiter 相同（os.md Invariant 6 的例外，草稿）。
+  - `Block` 保留不是 noexcept 的例外規格：cv 後備可讓標準函式庫的 `std::system_error` 穿過，和搬移前的 Waiter 相同（os.md Invariant 6 的例外，D72 定案）。
   - ★（D71）：`Waiter::Create` 失敗時，detail 改成 engine/os 的固定格式 `IoFailed: errno=<n>`／`IoFailed: win32=<n>`，message 不變。
 - engine/time：
   - `Waiter` 只留 latch、單一等待者、deadline 迴圈、醒後重讀時間基準與 LateSince；OS 標頭與 `#if` 都拿掉。
@@ -46,9 +46,10 @@
 - 四平台 L1（[run 40510515336](https://github.com/yojinn-io/GYO-Engine/actions/runs/40510515336)，`908308b3`）：失敗一個 job。toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時（60 s）；其餘全部成功，四平台的 `gyo_os_tests`、`gyo_time_tests`、連結檢查、邊界守衛都通過。逾時的案例不經過本批的程式碼，同一個 commit 的 L1 / linux-x64 以 2.29 s 通過；這個測試有時序相關失敗的紀錄（消費端 K11、D186）。歸類未能完全切分，記錄不覆寫。
 - 重跑（同一個 run 的第 2 次）：toolchain / linux-x64 成功，`platform_sdl_concurrency` 5.27 s 通過，CI gate 成功。**四平台 L1 第 2 次通過**。逾時的調查（兩種方法都沒在 macOS 重現）交給 v7.1 會話與對應的任務卡；細節在 HANDOFF。
 
+- D72：time.md Invariant 8、10，os.md Invariant 6 的例外，★ 錯誤細節，都照草稿定案。
+
 ## 已知缺口
 
 - Windows 與 Linux 的 L2 還沒做；Windows 的 L2 通過前，不通知消費端合併這一批（D71）。
 - ow-x1（cv 後備在 mutex 外讀 latch）只在 Linux 編得到，還沒在 Linux 跑；macOS 上強制 cv 的探索性檢查殺得到它。
 - 逾時換算的進位方式與 ★ 的 detail 格式沒有測試，只靠審查。
-- 條文（time.md Invariant 8、10，os.md Invariant 6 的例外）等使用者定案。
