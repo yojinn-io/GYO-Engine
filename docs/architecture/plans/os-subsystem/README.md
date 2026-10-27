@@ -121,7 +121,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-trace-writers | high＋1 位 xhigh 審查（D58、D60） | 完成（2026-10-26；Red：run 40331764169；Green：四平台 L1 run 40339587478；[dev_log](../../../dev_logs/2026_10_26_engine_os_trace_writers.zh-Hant.md)） | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high＋1 位 xhigh 審查（D63） | 完成（2026-10-27；Red：run 40431320545；Green：四平台 L1 run 40433158383；[dev_log](../../../dev_logs/2026_10_27_engine_os_path_utf8_sweep.zh-Hant.md)） | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |
 | time-threads-invariants | medium（D61） | 完成（2026-10-27；只改文件與測試；[dev_log](../../../dev_logs/2026_10_27_engine_os_time_threads_invariants.zh-Hant.md)） | time.md、threads.md 的 Design Invariants |
-| os-wake-record | medium；notify→wake 用 high（D68） | 本機完成（2026-10-27；macOS Intel 基準已記錄；Windows、Linux 待實機；[dev_log](../../../dev_logs/2026_10_27_engine_os_wake_record.zh-Hant.md)） | 晚醒量測程式合回、四平台基準 |
+| os-wake-record | medium；notify→wake 用 high（D68） | 完成（2026-10-27；四平台 L1 run 40463273387；macOS Intel 基準已記錄；Windows、Linux 待實機；[dev_log](../../../dev_logs/2026_10_27_engine_os_wake_record.zh-Hant.md)） | 晚醒量測程式合回、四平台基準 |
 | os-threads-backend | high；Start 順序局部 xhigh | 未開始 | RoleThread 的 OS 呼叫搬進 engine/os |
 | os-wait-backend | xhigh；1 位 xhigh 審查（先問） | 未開始 | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
 | os-net-errors | high | 條件式 | socket 錯誤碼的中立分類（開放決策 7） |

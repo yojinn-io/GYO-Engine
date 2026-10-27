@@ -20,6 +20,7 @@
 ## 驗證與經緯
 
 - 1 秒的試跑：五個項目都有樣本，notify→wake 沒有跳過的週期。
+- 四平台 L1（[run 40463273387](https://github.com/yojinn-io/GYO-Engine/actions/runs/40463273387)，`c9087d0c`）全部成功；`gyo_time_wake_record` 與 `gyo_time_wake_record_window` 在 linux-x64、macos-arm64、macos-x64、windows-x64 都有連結出來。
 - 更正：試跑的 `meta.txt` 顯示本機是 macOS Intel（x86_64，i9-9980HK）。
   - 開工前我把本機說成 macOS arm64，os-path-utf8-sweep 與 os-utf8-codepage 的本機驗證紀錄也寫成 macOS arm64。repo 一直記著「實機只有 macOS Intel」（D11⑩）。
   - 那些紀錄已更正（HANDOFF 三處、兩份 dev_log）。這次本機量的是計畫裡的「macOS Intel 實機」；macOS arm64 不量。

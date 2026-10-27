@@ -664,6 +664,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
     - 和 TT-1 L2（2026-10-09，同一台機器）同一量級：當時 Waiter 的 P99，沒有視窗 0.10 ms、有視窗 0.133 ms。
     - notify→wake 在 macOS 上 Waiter 與 condition_variable 沒有差別。
   - 其他平台：Windows（沒有視窗、有視窗）與 Linux 在下一次實機用本批的 commit 補；macOS arm64 沒有實機（D11⑩）。
+- 2026-10-27：使用者說「推送 f6997194 與 c9087d0c（含 05b8ad13）到本分支，手動觸發四平台 L1，確認量測程式在各平台都編得過」。四平台 L1（[run 40463273387](https://github.com/yojinn-io/GYO-Engine/actions/runs/40463273387)，`c9087d0c`）全部成功；`gyo_time_wake_record` 與 `gyo_time_wake_record_window` 在 linux-x64、macos-arm64、macos-x64、windows-x64 都有連結出來。
 - 2026-10-27：已告知 v7.1 會話：Windows 沒有視窗的那組數據，會在下一次 Windows 機器量並交給它的 F5／F7；Match 層的數據仍由它在 lan15 量。也順帶告知它的 windows-long-path dev_log 同樣寫成 macOS arm64。
 
 ### os-utf8-codepage
