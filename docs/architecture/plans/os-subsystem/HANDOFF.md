@@ -43,6 +43,7 @@
 - 2026-10-27：os-wait-backend 開始（D71），本機進行中，基準 `4ffc7c65`。細節見「os-wait-backend」。
 - 2026-10-27：os-wait-backend 本機完成（`756073aa`）：macOS Intel 的 L2 通過（12／12），xhigh 審查（Fable 5.1）的發現已修。下一步要使用者決定：推送並跑四平台 L1；條文定案。Windows 與 Linux 的 L2、ow-x1、ow-x5、ow-x6、ow-x10 留給實機。
 - 2026-10-27：推送並跑四平台 L1（run 40510515336）：只有 toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時，這個測試不經過本批的程式碼；新測試在四平台都通過。停在使用者的決定（重跑、交給 owner，或重新檢視前提）。
+- 2026-10-27：重跑後 L1 第 2 次全部通過；逾時交給 v7.1 會話與對應的任務卡。os-wait-backend 完成本機與 L1，剩下實機（見「下一次實機的清單」）與條文定案（使用者）。
 
 ## 閱讀入口
 
@@ -725,6 +726,11 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
     - B：鎖的爭用。SDL 呼叫事件監看的回呼時持有監看清單的鎖，日誌橋拿 SDL 的日誌鎖，推送端與寫日誌的執行緒都在迴圈裡反覆拿同一把鎖。macOS 上 24 個忙碌程序塞滿 16 個邏輯 CPU：事件監看 1.8→4.3～6.4 s、並行日誌 7 ms→約 2 s、兩個執行緒 10→23 ms，沒有卡住。macOS 的 mutex 是公平交接，Linux（glibc）不是，所以結果不能直接套用。
   - 本批的關係：三個案例都不經過 Waiter、`WakeSignal`、RoleThread（可信度高）；同一個 commit 在 L1 / linux-x64 以 2.29 s 通過。
   - 要改變判斷需要：Linux 上的重現，或讓逾時說得出是哪個案例的觀測手段（例如每個案例一個 CTest，或印出目前案例的看門狗）。這個測試屬於 engine/platform/sdl（input-and-present 計畫；消費端 K11 的 owner 是 v7.1 會話），不在本批範圍。
+- 2026-10-27：使用者說「把查到的交給 v7.1 會話（K11 的 owner），建議它把三個案例拆成各自的 CTest 或加看門狗；這邊重跑失敗的 job，兩次都記錄」。
+  - 已傳給「[Task]v7.1 規劃與盤點（事故fix）」：現象、與本批無關的證據、兩個候選機制與原始碼位置、macOS 的探索數據、建議。之後使用者確認是 `platform_sdl_concurrency` 本身的問題，交給對應的任務卡處理。
+  - 重跑（`gh run rerun --failed`）是同一個 run 的第 2 次：toolchain / linux-x64 成功（47／47，`platform_sdl_concurrency` 5.27 s；core 34／34），CI validation 與 CI gate 成功。第 1 次的逾時保留在 attempt 1。
+  - **os-wait-backend 的四平台 L1：第 2 次通過**；第 1 次的失敗歸因於 `platform_sdl_concurrency`（不經過本批的程式碼），記錄不覆寫。
+  - 更正：重跑中途用 API 查到 job 還在跑、run 卻已標成成功，一度以為 CI gate 在必要的 job 結束前就判了成功；之後的時間戳記顯示順序正確（toolchain 14:06:35、CI validation 14:06:43、CI gate 14:06:54），是 API 回了還沒更新的狀態。CI 沒有問題。
 
 ### os-threads-backend
 
@@ -857,6 +863,31 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - pu-x15、pu-x16 從 repo 根目錄跑 `cmake -P` 時，失敗的案例會把合成的樹留在根目錄。改成以 `-DWORK_ROOT=build/target` 放到忽略的目錄，留下的目錄已刪。
 - 2026-10-27：使用者說「推送 30d30f37 與 a9c9dc85 到本分支，手動觸發四平台 L1，驗 os-utf8-codepage 的 Green」。Green 的 L1（[run 40456874710](https://github.com/yojinn-io/GYO-Engine/actions/runs/40456874710)，`a9c9dc85`）全部成功。windows-x64 的 ctest 96／96：gyo_os_tests 通過（`GetACP()` 是 65001，合併後的 manifest 有 activeCodePage），`cmake.ProcessCodePage` 在 MSVC 下通過（嵌入方式是 `.manifest`），產品與編輯器的執行檔也都帶著 manifest 建置、測試通過。 os-utf8-codepage 完成。Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字照草稿定案（D67）。還沒請消費端合併。
 
+## 下一次實機的清單（Windows／Linux）
+
+D62：計時核心之前的 4 批做完後，在實機上一次補齊。2026-10-27 整理；項目來自各批的紀錄，完成時在各批的紀錄裡補結果，並從這裡刪掉。
+
+- 共通：
+  - LF 的 checkout（`core.autocrlf=false`）：find 跨多行的突變在 CRLF 上會 stale。
+  - 三份建置，各自放在自己的 worktree 或目錄：
+    - A_threads＝`5733d361`（os-threads-backend 之前，產品組態）。
+    - A_wait＝`4ffc7c65`（os-wait-backend 之前；Waiter 與 os-wake-record 的 `f6997194` 相同）。
+    - B＝本分支最後的 commit（產品組態）。
+  - 量測程式先從建置樹複製出來再跑（以副本為準）。Windows 的視窗程式要連同 `SDL3.dll` 一起複製；Linux 以建置樹的絕對 rpath 載入 SDL，建置樹要留著。
+  - 量測期間這台機器不建置。
+- Windows（MSVC，`ci-windows`）：
+  - 突變（os 目錄，`--only`）：pu-x3、pu-x4、pu-x9、pu-x10、pu-x12、th-x3、th-x5、ow-x5、ow-x6、ow-x10。os-w10、os-g18 等開放決策 24；os-c4 等開放決策 26。
+  - os-wait-backend 的 L2（凍結的 (a)，D71）：`python tests/common/time/wake_compare.py --a <A_wait 的副本> --b <B 的副本> --output <證據目錄> --pairs 4 --modes cli window`。不通過時不重跑，先回報；撤回方式是 revert。這是消費端合併這一批的前提（D71）。
+  - os-wake-record 的基準（只記錄，D68）：`python tests/common/time/wake_baseline.py --build-dir <A_wait 的建置樹> --output <證據目錄>`（沒有視窗與有視窗）。沒有視窗的那組交給 v7.1 的 F5／F7。
+  - os-threads-backend 的 L2（D69，只記錄、附撤回條件）：A_threads 與 B 各跑 ctest 的 `object_fps_pvp.worker`、`.ipc`、`.close_timing`、`.cpu`，比對每個 `role started` 行的 `wait_backend`、`name_applied`、`priority_applied`，必須逐字相同。
+  - MinGW（`test` preset，只記錄）：`.rc` 嵌入是否勝過預設 manifest；repo 路徑含非 ASCII 時 windres 是否找得到 manifest；目標的 compile definitions 經過 windres 是否有問題；OEM code page 是否也變成 65001。
+- Linux（x64）：
+  - 突變：os-f8、tt-x5、ti-x4、th-x6、ow-x1。ow-x1 殺不到時，依 PLAN 7.15 補測試（macOS 上強制 cv 的探索性檢查殺得到）。
+  - os-wait-backend 的 L2：同上，`--modes cli`；deadline 與 notify 都判（審查 m3，在任何 B 之前寫定）。
+  - os-wake-record 的基準：`--modes cli`。
+  - os-threads-backend 的 L2：同上。
+- 範圍的限界（PR #98 之後的宣告要寫進去）：macOS arm64 沒有實機；Windows 不初始化 SDL 的程序的計時精度，在這次之前從未量過。
+
 ## 未結事項
 
 - os-utf8-codepage 留下的（2026-10-27）：
@@ -923,4 +954,4 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - os-tool-files 的 Windows 專用突變 os-x7～os-x11 要在 Windows 上執行（lan15，D206）；Linux 上 os-x1～os-x5、os-x12 只在 macOS 跑過。lan15 上另外用 `gyo_os_tests -s -tc="*resolve*"` 與 `gyo_ui_editor_core_tests` 確認 `subst`、UNC、symlink 的案例是實跑（不是寫訊息後返回）。
 - 既有缺口（D60 的 §14.4 核對）：`GYO::Base` 沒有設定期的連結檢查，所以 Trace（經 Os、Time）與其他模組的連結閉包的末端沒有守住；`target_link_libraries(gyo_base INTERFACE SDL3)` 也能通過設定。和 D50 的 `gyo_expect_links` 假值漏洞一起處理。
 - os-trace-writers 沒有守住的性質（測試看不到）：失敗後不再寫、`flushEachLine` 每行一寫、64 KiB 門檻、Close 的結果；Windows 專用 tt-x3 與 Linux 專用 tt-x5 待對應平台。
-- R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。
+- R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。2026-10-27 os-wait-backend 又遇到一次（`Waiter.cpp` 的成員初始化 `signal(…)`），以改名迴避，沒有加 allowlist；這是第 2 次。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。

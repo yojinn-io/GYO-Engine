@@ -126,7 +126,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | time-threads-invariants | medium（D61） | 完成（2026-10-27；只改文件與測試；[dev_log](../../../dev_logs/2026_10_27_engine_os_time_threads_invariants.zh-Hant.md)） | time.md、threads.md 的 Design Invariants |
 | os-wake-record | medium；notify→wake 用 high（D68） | 完成（2026-10-27；四平台 L1 run 40463273387；macOS Intel 基準已記錄；Windows、Linux 待實機；[dev_log](../../../dev_logs/2026_10_27_engine_os_wake_record.zh-Hant.md)） | 晚醒量測程式合回、四平台基準 |
 | os-threads-backend | high＋1 位 xhigh 審查（D69） | 完成（2026-10-27；四平台 L1 run 40484797877；macOS Intel 的 L2 逐字相同；xhigh 審查已修正；Windows、Linux 的 L2 待實機；[dev_log](../../../dev_logs/2026_10_27_engine_os_threads_backend.zh-Hant.md)） | RoleThread 的 OS 呼叫搬進 engine/os |
-| os-wait-backend | xhigh＋1 位 xhigh 審查（D71） | 本機完成（2026-10-27；macOS Intel 的 L2 通過 12／12；xhigh 審查已修正；四平台 L1 等推送；Windows、Linux 的 L2 待實機；[dev_log](../../../dev_logs/2026_10_27_engine_os_wait_backend.zh-Hant.md)） | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
+| os-wait-backend | xhigh＋1 位 xhigh 審查（D71） | 完成本機與 L1（2026-10-27；macOS Intel 的 L2 通過 12／12；xhigh 審查已修正；四平台 L1 run 40510515336 第 2 次通過；Windows、Linux 的 L2 待實機；條文待定案；[dev_log](../../../dev_logs/2026_10_27_engine_os_wait_backend.zh-Hant.md)） | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
 | os-net-errors | high | 條件式 | socket 錯誤碼的中立分類（開放決策 7） |
 | os-close | medium | 未開始 | allowlist 清空、文件同步、完整突變 |
 | os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 完成（2026-10-27；Red：run 40450140816；xhigh 審查已修正；Green：四平台 L1 run 40456874710；[dev_log](../../../dev_logs/2026_10_27_engine_os_utf8_codepage.zh-Hant.md)） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |

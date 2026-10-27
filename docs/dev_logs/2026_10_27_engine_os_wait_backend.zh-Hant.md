@@ -1,6 +1,6 @@
 # Engine os-wait-backend：Waiter 的等待原語搬進 engine/os
 
-日期：2026-10-27。**本機完成**（`756073aa`）：macOS Intel 的 L2 通過（事前凍結的 12 項全部通過），xhigh 審查的發現已修。四平台 L1 等推送；Windows 與 Linux 的 L2 等下一次實機。
+日期：2026-10-27。**完成本機與 L1**（`756073aa`）：macOS Intel 的 L2 通過（事前凍結的 12 項全部通過），xhigh 審查的發現已修，四平台 L1（run 40510515336）第 2 次通過（第 1 次是不相關測試的逾時，見下）。Windows 與 Linux 的 L2 等下一次實機。
 計畫見 [os-wait-backend](../architecture/plans/os-subsystem/PLAN.md)（第 3.8、7.15 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-wait-backend」；開工前的決定是 D71。
 
 ## 做了什麼
@@ -44,6 +44,7 @@
   - 證據在主 checkout 的 `build/target/_build/test/logs/os-wait-l2-20261027-macos-intel/`（`programs/`、`calibration-AA/`、`detection-AD/`、`AB/`）。
 
 - 四平台 L1（[run 40510515336](https://github.com/yojinn-io/GYO-Engine/actions/runs/40510515336)，`908308b3`）：失敗一個 job。toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時（60 s）；其餘全部成功，四平台的 `gyo_os_tests`、`gyo_time_tests`、連結檢查、邊界守衛都通過。逾時的案例不經過本批的程式碼，同一個 commit 的 L1 / linux-x64 以 2.29 s 通過；這個測試有時序相關失敗的紀錄（消費端 K11、D186）。歸類未能完全切分，記錄不覆寫。
+- 重跑（同一個 run 的第 2 次）：toolchain / linux-x64 成功，`platform_sdl_concurrency` 5.27 s 通過，CI gate 成功。**四平台 L1 第 2 次通過**。逾時的調查（兩種方法都沒在 macOS 重現）交給 v7.1 會話與對應的任務卡；細節在 HANDOFF。
 
 ## 已知缺口
 
