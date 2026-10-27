@@ -82,6 +82,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 24. **D63**：os-path-utf8-sweep 開工前的四個決定。檔位 high＋1 位 xhigh 審查；新增 `Os::Files::PathForMessage`（訊息與 log 用的 UTF-8，保留平台的分隔字元，永不失敗）；拿掉公開的 `Sdl::PathFromUtf8`（`BaseDirectory` 內部照舊），停用中的產品只記進 inactive_products.md，主機 shader 工具的 12 處也一起改；Windows 的 Red 先推測試跑一次 L1。估時 10～15 h。
 25. **D64**：Windows 程序自己把 ANSI code page 定為 UTF-8（manifest 的 `activeCodePage`），不由執行環境決定；engine/os 的寬字元 API 維持主線，manifest 是第二道防線。使用者的話：「程序不應該由環境參數來決定。」細化成批次草案 os-utf8-codepage（PLAN 第 3.10、7.18、9.2 節），條文與做法的開放決策 16～23 未決；D211 之下目前只改計畫。
 26. **D65**：開放決策 16 採 (b)，os-utf8-codepage 排在計時的三批之前（改變 D62 的順序）。
+27. **D66**：os-utf8-codepage 開工前的決定，全部照建議。檔位 high＋1 位 xhigh 審查；開放決策 17～24 照建議（根目錄走訪自動套用並提供查詢 API、owner 是 engine/os、等價突變退場、不加 longPathAware、最低 Windows 10 1903、MinGW 路徑也寫、兩個測試缺漏併進）；Invariant 11 用草稿；§14.4 的判定變更與 ★ 事前宣告同意開工，定案前做突變與審查；Red 先推測試跑一次 L1。估時 8～12 h。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -123,7 +124,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-wait-backend | xhigh；1 位 xhigh 審查（先問） | 未開始 | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
 | os-net-errors | high | 條件式 | socket 錯誤碼的中立分類（開放決策 7） |
 | os-close | medium | 未開始 | allowlist 清空、文件同步、完整突變 |
-| os-utf8-codepage（D64、D65） | high＋1 位 xhigh 審查（先問） | 開工前的說明（順序：計時三批之前，D65） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
+| os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 進行中（2026-10-27） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
 
 ```text
 os-plan-docs ─┬─→ os-skeleton ─┐
