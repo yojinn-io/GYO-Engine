@@ -180,6 +180,19 @@ TEST_CASE("Os process executable path names this test executable, as the old loo
     CHECK(*again == *path);
 }
 
+TEST_CASE("Os process reports its ANSI code page where the platform has one") {
+    const auto page = Process::AnsiCodePage();
+#if defined(_WIN32)
+    // The manifest every executable of the repository embeds (Design Invariant 11).
+    REQUIRE_MESSAGE(page, (page ? std::string{} : Engine::Base::Describe(page.error())));
+    CHECK(*page == 65001u);
+    CHECK(*page == ::GetACP());
+#else
+    REQUIRE_FALSE(page);
+    CHECK(page.error().code == OsErrorCode::Unsupported);
+#endif
+}
+
 TEST_CASE("Os process CPU times never decrease and the calling thread's grows with work") {
     const auto process = Process::ProcessCpuTime();
     const auto thread = Process::CurrentThreadCpuTime();

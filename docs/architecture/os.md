@@ -29,7 +29,8 @@ primitives here.
 |---|---|---|
 | `OsError` | The layer's error; the detail keeps the native error code | os-skeleton (landed) |
 | Files | File primitives with UTF-8 paths (`FileReader`, `FileWriter`, `CreateDirectories`, `RenameReplacing`, `RemoveFile`, `Stat`, `Exists`, `MakeAbsolute`, `ResolvedPath`, `SamePathComponent`, `PathToUtf8`/`PathFromUtf8`), message text for a path (`PathForMessage`) and the font directories (`FontDirectories`) | read: os-files-read; write: os-files-write; rename, resolve, compare, fonts: os-tool-files; message text: os-path-utf8-sweep (landed) |
-| Process | Executable path, process and thread CPU time, local calendar time (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`) | os-process-info (landed) |
+| Process | Executable path, process and thread CPU time, local calendar time, the process ANSI code page (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`, `AnsiCodePage`) | os-process-info; code page: os-utf8-codepage (landed) |
+| Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the current thread | os-threads-backend |
 | Wait | The wake primitive behind `Time::Waiter` | os-wait-backend |
@@ -125,7 +126,41 @@ Only the components whose batch has landed exist; the others are planned in the 
     in each directory, system directories first (D56 ★: it searched only the system directory before, so only a
     font that is missing there can be found elsewhere now; D57: on Linux a Windows or macOS font in the same
     directory now comes before Noto, and Windows reads the system Windows directory instead of `WINDIR`).
+- **Process code page** (os-utf8-codepage, D64–D66).
+  - `engine/os/cmake/utf8-codepage.manifest` declares `<activeCodePage>UTF-8</activeCodePage>` and nothing else.
+    `engine/os/cmake/GyoProcessCodePage.cmake` embeds it in one executable. With MSVC, clang-cl and Clang on the
+    MSVC ABI it is a `.manifest` source, which the linker merges into the manifest it embeds as resource 1 (the
+    linker's own is `requestedExecutionLevel asInvoker`). With MinGW it is the `RT_MANIFEST` resource 1 of a
+    generated `.rc`, with an explicit language and a dependency on the manifest file; whether it wins over
+    MinGW-w64's default manifest is to be verified on a MinGW machine (open decision 23). The way is decided when
+    the module is included, in the scope that enabled the compilers.
+  - The build layer (`build/cmake/GyoCodePage.cmake`, included by `GyoBuild.cmake`) chooses the executables. It
+    records each directory it adds (engine, every app and tool, their tests and acceptance programs,
+    tests/common) by its binary directory, since a standalone tool wrapper reuses the tool's source directory, and
+    once every target exists applies the manifest to every executable target there and below whose source
+    directory is under engine, apps, tools, build/acceptance or tests. It marks each with `GYO_PROCESS_CODE_PAGE`
+    on every platform. No product is named: a new, cloned or removed product needs no common change. A target
+    that must run without it sets `GYO_PROCESS_CODE_PAGE_EXEMPT` to the reason (there is none today). Third-party
+    programs that FetchContent adds (protoc) are outside the roots and keep their own manifests; Go services are
+    not CMake executables. The separately configured host shader tool includes the engine/os module and applies it
+    itself.
+  - Windows 10 1903 and later honour the declaration; earlier versions ignore it and the process takes the system
+    setting, which engine/os does not depend on (Invariant 5). Whether Proton and Wine honour it is not verified
+    (open decision 20); `longPathAware` is not declared (open decision 21), since it takes effect only where the
+    machine's registry enables it.
+  - ★ (declared before the batch, D66): third-party and CRT narrow text becomes UTF-8 in our processes, for
+    example `std::system_category().message()` (`FormatMessageA`) and MSVC's `path::string()`, which no longer
+    throws for characters outside the old code page (it still throws for an unpaired surrogate); narrow `argv`
+    (the host shader tool, the acceptance probes) arrives as UTF-8.
+  - ★ (found in the batch's review, accepted in D67): the OEM code page most likely becomes 65001 too (not verified on Windows).
+    The console's code page does not change, so a program that does not enable `Utf8ConsoleOutput` (the host
+    shader tool, tests, probes) and prints non-ASCII narrow text to a console set to 950 or 932 now shows it as
+    UTF-8 bytes where it showed it in the old code page.
 - **Process.**
+  - `AnsiCodePage` is `GetACP()` on Windows: 65001 (UTF-8) in every executable of the repository (Invariant 11),
+    the system's setting in an executable built elsewhere or on Windows before 10 1903. It is for diagnostics, such
+    as a start line; engine/os never converts through it. `Unsupported` on POSIX, which has no ANSI code page
+    (narrow text is bytes).
   - `ExecutablePath` is the running image as an absolute UTF-8 path, read from the OS on every call:
     `GetModuleFileNameW` on Windows (a `\\?\` or `\\?\UNC\` prefix is removed, Invariant 5), `/proc/self/exe` on
     Linux, `_NSGetExecutablePath` with links resolved (`realpath`) on macOS; `Unsupported` elsewhere. It answers in
@@ -189,8 +224,13 @@ Invariants 1–3 as text, so the result is the same on every platform:
   operations are allowed.
 - **R5**: in engine/os, an include of anything but the standard library, OS headers, `engine/base` and
   `engine/os`.
+- **R6**: in engine/os, an ANSI code page constant (`CP_ACP`, `CP_THREAD_ACP`, `CP_OEMCP`, `CP_MACCP`) or an ANSI
+  Win32 entry point (a name ending in a capital `A` after a lower-case letter or digit, called unqualified or with
+  `::`: `CreateFileA(`, `GetModuleFileNameA(`). Invariants 5 and 11: engine/os converts with `CP_UTF8` through the
+  wide entry points and does not rely on the process code page. `gyo_os` is compiled with `UNICODE`, so a Win32
+  name without its suffix resolves to the wide entry point.
 
-engine/os/src is scanned for R5 only; engine/os/include is scanned for everything. Comments, string literals and
+engine/os/src is scanned for R5 and R6 only; engine/os/include is scanned for everything. Comments, string literals and
 character literals are ignored; `#include` lines are matched as written. The scan covers engine, apps, tools,
 build/acceptance and tests (except tests/common/os, third_party and build/target), and every existing root must
 yield at least one source. The roots name no product, so adding or removing a product changes no guard file.
@@ -201,14 +241,20 @@ fails and asks for the entry to shrink, a missing file fails. The Engine allowli
 engine/ and tests/common/; any other allowlist covers only files under its own directory, so deleting a product
 deletes its allowlist and no common file changes.
 
-Two configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
+Three configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
 links exactly `GYO::Base` (and, on Windows, `shell32` for `CommandLineToArgvW`, a system library Invariant 3
 allows; D49, D50), and no target or directory under the scanned roots outside engine/os and
 tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
 name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
 so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
 value is not read, since paths may contain any word. `COMPILE_DEFINITIONS`, `INTERFACE_COMPILE_DEFINITIONS` and
-the `-D`/`/D` entries of `COMPILE_OPTIONS` are checked, on targets and directories alike.
+the `-D`/`/D` entries of `COMPILE_OPTIONS` are checked, on targets and directories alike. The third
+(`tests/common/os/ProcessCodePageCheck.cmake`) checks Invariant 11: every executable target under the scanned roots
+carries the `GYO_PROCESS_CODE_PAGE` mark the build layer sets, or an exemption with its reason, which is listed. It
+is written apart from the walk that applies the manifest, walks from the top directory by source path as well as
+from the recorded directories, and runs on every platform, so a target the walk misses fails anywhere.
+`cmake.ProcessCodePage` runs the build layer and the check on a synthetic tree: a plain build, a standalone tool
+wrapper, a directory the build layer did not record (refused) and an exemption (listed).
 
 `OsHeaderHygieneTests` (CTest `os.header_hygiene`) checks Invariant 4 on Windows: after the engine/os public
 headers, no `windows.h` or winsock guard macro and no `min` or `max` macro is defined. It is recorded before
@@ -228,7 +274,15 @@ Known blind spots, left to review:
   `CMAKE_<LANG>_FLAGS` or inside a generator expression in `COMPILE_OPTIONS`, and third_party's interface
   definitions (asio's `_WIN32_WINNT` and `WIN32_LEAN_AND_MEAN`), are not checked.
 - Paths taken from narrow `argv` strings in programs that do not use `Os::Console::CommandLineUtf8` (today the
-  acceptance programs): on Windows they are in the ANSI code page, not UTF-8, without any OS call in the caller.
+  acceptance programs and the host shader tool): on Windows 10 1903 and later they are UTF-8 through the manifest
+  (Invariant 11); on earlier Windows they are in the system's ANSI code page.
+- R6 reads names, not values: a code page given as a number (`MultiByteToWideChar(0, ...)`, 0 being `CP_ACP`), a
+  conversion through the value `GetACP()` returns, or an ANSI entry point reached through a macro or a function
+  pointer is not seen; nor are names that start in lower case (`lstrlenA`) or are all capitals
+  (`MAKEINTRESOURCEA`). A call written `p-> NameA(` (a space after the arrow) is a false positive.
+- Invariant 11 is checked on the build graph and in one executable (`gyo_os_tests`), not in every built file: the
+  host shader tool's call is not checked, an exemption is only listed, and the configure-time check exists only
+  when `BUILD_TESTING` is on.
 - R3's bare `signal(` also matches a variable or declaration named `signal`. Such a false positive is listed in the
   owner's allowlist with its reason; the pattern is not loosened.
 
@@ -288,6 +342,16 @@ Known blind spots, left to review:
     counts as applied (for example the Normal priority, which `RoleThread` reports as applied today). A request
     that needs an OS call the layer does not make reports not-applied or `Unsupported`; it never reports success
     silently. When OSes cannot do the same thing, the difference is written in the type or the documentation.
+11. **Windows processes run with UTF-8 as their ANSI code page** (os-utf8-codepage, D64–D66). Every Windows
+    executable that CMake builds from this repository's own C/C++ sources (products, tools, tests, probes, the host
+    shader tool) embeds the manifest that declares `activeCodePage` UTF-8, so `GetACP()` is 65001 in the process
+    whatever the system
+    setting (Windows 10 1903 and later). It is the second line: engine/os still converts with `CP_UTF8` and calls
+    only wide APIs (Invariant 5), so its behaviour does not depend on the manifest. Guards: the configure-time check
+    that every executable target carries the manifest or a reasoned exemption; `gyo_os_tests` reads its own manifest
+    resource and checks `GetACP()` ("Os files run with UTF-8 as the process ANSI code page"); the source guard
+    refuses the ANSI code page constants and ANSI Win32 entry points in engine/os (R6); `cmake.ProcessCodePage`.
+    Mutants pu-x8 to pu-x11, pu-x14 to pu-x16, os-f4, os-c6 and pu-x5.
 
 ### Replacement Criteria
 
@@ -310,3 +374,7 @@ Known blind spots, left to review:
 7. One capability on one OS needs branches across two or more engine/os files, the per-OS files are mostly
    duplicates, or a platform whose process and file model differs from both POSIX and Win32 is added: propose a
    backend interface with a selection table.
+8. (os-utf8-codepage, D67) A product or tool needs manifest settings of its own (DPI awareness, the
+   UAC level, `longPathAware`) or a code page other than UTF-8: stop editing engine/os's manifest for it; decide how
+   an owner declares manifest parts and how they merge (MSVC merges `.manifest` sources, a `.rc` holds one
+   resource), or move the manifest out of engine/os.

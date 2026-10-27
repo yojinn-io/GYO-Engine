@@ -319,6 +319,15 @@ TEST_CASE("Os files list the font directories that exist, system first") {
     const UINT length = ::GetSystemWindowsDirectoryW(windows, MAX_PATH + 1);
     REQUIRE(length > 0);
     expected.push_back(Utf8(std::filesystem::path(std::wstring(windows, length)) / "Fonts"));
+    // Then the user's, as the contract lists them (the D201 run had user fonts installed).
+    if (const DWORD size = ::GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0); size > 0) {
+        std::wstring local(size, L'\0');
+        const DWORD got = ::GetEnvironmentVariableW(L"LOCALAPPDATA", local.data(), size);
+        if (got > 0 && got < size) {
+            local.resize(got);
+            expected.push_back(Utf8(std::filesystem::path(local) / "Microsoft" / "Windows" / "Fonts"));
+        }
+    }
     REQUIRE_FALSE(directories.value().empty());
     CHECK(directories.value().front() == expected.front());
 #elif defined(__APPLE__)

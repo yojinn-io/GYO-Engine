@@ -379,11 +379,23 @@ TEST_CASE("Os files case sensitivity default per platform") {
 }
 
 #if defined(_WIN32)
-// The non-ACP path case above only detects an ANSI conversion when the
-// process code page is not UTF-8; record which one the runner has.
-TEST_CASE("Os files record the process ANSI code page") {
+// Every Windows executable of the repository declares UTF-8 as its ANSI code
+// page in its manifest (os.md Invariant 11, os-utf8-codepage, D64): the
+// process does not take the system's setting.
+TEST_CASE("Os files run with UTF-8 as the process ANSI code page") {
     MESSAGE("GetACP() = " << ::GetACP());
-    CHECK(::GetACP() != CP_UTF8);
+    CHECK(::GetACP() == CP_UTF8);
+    // The declaration itself, which this checks on a machine whose system code
+    // page is UTF-8 too. A linker may merge it with its own manifest and prefix
+    // the element, so only the element's name and value are matched.
+    const HRSRC resource = ::FindResourceW(nullptr, MAKEINTRESOURCEW(1), MAKEINTRESOURCEW(24));
+    REQUIRE_MESSAGE(resource != nullptr, "the executable has no manifest resource");
+    const HGLOBAL loaded = ::LoadResource(nullptr, resource);
+    REQUIRE(loaded != nullptr);
+    const auto* bytes = static_cast<const char*>(::LockResource(loaded));
+    REQUIRE(bytes != nullptr);
+    const std::string manifest(bytes, ::SizeofResource(nullptr, resource));
+    CHECK_MESSAGE(std::regex_search(manifest, std::regex("activeCodePage[^>]*>\\s*UTF-8\\s*<")), manifest);
 }
 #endif
 

@@ -17,6 +17,10 @@ if(WIN32)
     # CommandLineToArgvW (Console): a Windows system library, as Design
     # Invariant 3 allows (D49).
     target_link_libraries(gyo_os PRIVATE shell32)
+    # A Win32 name without its W or A suffix resolves to the wide entry point,
+    # so the ANSI one is never reached by accident (Design Invariants 5 and 11;
+    # R6 sees only names that end in A).
+    target_compile_definitions(gyo_os PRIVATE UNICODE _UNICODE)
 else()
     target_sources(gyo_os PRIVATE src/posix/Console.cpp src/posix/Files.cpp src/posix/Process.cpp)
 endif()

@@ -302,16 +302,17 @@
     },
     {
       "id": "os-f4-windows-acp",
-      "what": "Windows converts paths with the ANSI code page instead of UTF-8 (both directions)",
-      "platforms": [
-        "win32"
-      ],
+      "what": "engine/os converts paths with the ANSI code page instead of UTF-8 (R6; os-utf8-codepage moved this from a Windows test to the guard, D66)",
       "file": "engine/os/src/windows/Files.cpp",
       "find": "constexpr UINT kPathCodePage = CP_UTF8;",
       "replace": "constexpr UINT kPathCodePage = CP_ACP;",
-      "target": "gyo_os_tests",
-      "cases": "*ANSI code page*",
-      "expect": "PathToUtf8 failed|cannot open"
+      "expect": "engine/os/src/windows/Files\\.cpp:\\d+: R6 CP_ACP",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ]
     },
     {
       "id": "os-f5-windows-notfound",
@@ -757,23 +758,17 @@
     },
     {
       "id": "os-c6-ansi-arguments",
-      "what": "Windows converts the command line with the ANSI code page instead of UTF-8",
-      "platforms": [
-        "win32"
-      ],
+      "what": "Windows converts the command line with the ANSI code page instead of UTF-8 (R6; os-utf8-codepage moved this from the console probe to the guard, D66)",
       "file": "engine/os/src/windows/Wide.cpp",
       "find": "const int bytes = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,",
       "replace": "const int bytes = ::WideCharToMultiByte(CP_ACP, 0,",
-      "target": "gyo_os_console_probe",
       "command": [
         "{python}",
-        "tests/common/os/console_check.py",
-        "--probe",
-        "{exe:gyo_os_console_probe}",
-        "--check",
-        "arguments"
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
       ],
-      "expect": "arguments came back as|probe exited"
+      "expect": "engine/os/src/windows/Wide\\.cpp:\\d+: R6 CP_ACP"
     },
     {
       "id": "os-g18-windows-extra-link",
@@ -1681,44 +1676,144 @@
     },
     {
       "id": "pu-x5-windows-message-ansi",
-      "what": "PathForMessage writes with the ANSI code page on Windows, so names outside it do not come out as UTF-8",
-      "platforms": [
-        "win32"
-      ],
+      "what": "PathForMessage writes with the ANSI code page on Windows (R6; os-utf8-codepage moved this from a Windows test to the guard, D66)",
       "file": "engine/os/src/windows/Files.cpp",
       "find": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
       "replace": "    if (::WideCharToMultiByte(CP_ACP, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
-      "target": "gyo_os_tests",
-      "cases": "*print a path for a message*",
-      "expect": "CHECK\\( PathForMessage\\(Native\\(named\\)\\) == named \\) is NOT correct"
-    },
-    {
-      "id": "pu-x6-windows-editor-resolved-ansi",
-      "what": "The editor reads a catalog's resolved UTF-8 path in the ANSI code page on Windows",
-      "platforms": [
-        "win32"
-      ],
-      "file": "tools/ui_editor/src/ReadOnlyAssetCatalog.cpp",
-      "find": "        auto resolved = Engine::Os::Files::PathFromUtf8(entry->resolvedPath);",
-      "replace": "        auto resolved = std::make_optional(std::filesystem::path{entry->resolvedPath});",
-      "target": "gyo_ui_editor_core_tests",
+      "expect": "engine/os/src/windows/Files\\.cpp:\\d+: R6 CP_ACP",
       "command": [
-        "{exe:gyo_ui_editor_core_tests}"
-      ],
-      "expect": "FAILED: a resolved asset path keeps the characters of its root"
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ]
     },
     {
-      "id": "pu-x7-windows-content-catalog-ansi",
-      "what": "content.json's catalog names are joined to the root in the ANSI code page on Windows",
+      "id": "pu-x8-code-page-walk-skips-tests",
+      "what": "The build layer stops applying the UTF-8 code page manifest under tests (Design Invariant 11, configure-time check)",
+      "file": "build/cmake/GyoCodePage.cmake",
+      "find": "    foreach(root IN ITEMS engine apps tools build/acceptance tests)",
+      "replace": "    foreach(root IN ITEMS engine apps tools build/acceptance)",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "Process code page guard:"
+    },
+    {
+      "id": "pu-x9-windows-manifest-legacy",
+      "what": "The manifest declares the legacy (system) code page instead of UTF-8 (Design Invariant 11)",
       "platforms": [
         "win32"
       ],
-      "file": "engine/asset/src/ContentManifest.cpp",
-      "find": "        auto catalogPath = Utf8Path(assetRoot / name.value());",
-      "replace": "        auto catalogPath = Utf8Path(assetRoot / path);",
-      "target": "engine_tests",
-      "cases": "*catalog named outside the ANSI code page*",
-      "expect": "REQUIRE\\( catalog \\) is NOT correct"
+      "file": "engine/os/cmake/utf8-codepage.manifest",
+      "find": ">UTF-8</activeCodePage>",
+      "replace": ">Legacy</activeCodePage>",
+      "target": "gyo_os_tests",
+      "cases": "*process ANSI code page*",
+      "expect": "regex_search\\(manifest"
+    },
+    {
+      "id": "pu-x10-windows-tests-without-manifest",
+      "what": "The OS tests run without the UTF-8 code page manifest (an exemption; Design Invariant 11)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "tests/common/os/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)\nset_property(TARGET gyo_os_tests PROPERTY GYO_PROCESS_CODE_PAGE_EXEMPT \"mutant\")\n",
+      "target": "gyo_os_tests",
+      "cases": "*process ANSI code page*",
+      "expect": "regex_search\\(manifest|no manifest resource"
+    },
+    {
+      "id": "pu-x11-guard-misses-ansi-code-page",
+      "what": "The guard stops refusing the ANSI code page constants in engine/os (R6)",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "    re.compile(r\"\\bCP_(?:ACP|THREAD_ACP|OEMCP|MACCP)\\b\"),\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_ansi_code_page_in_engine_os_is_reported"
+    },
+    {
+      "id": "pu-x12-windows-code-page-query-fixed",
+      "what": "The code page query reports a fixed legacy code page on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Process.cpp",
+      "find": "    return static_cast<std::uint32_t>(::GetACP());",
+      "replace": "    return 1252u;",
+      "target": "gyo_os_tests",
+      "cases": "*reports its ANSI code page*",
+      "expect": "CHECK\\( \\*page == 65001u \\) is NOT correct"
+    },
+    {
+      "id": "pu-x13-posix-code-page-query-invented",
+      "what": "The code page query invents a code page on POSIX instead of Unsupported",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Process.cpp",
+      "find": "    return Base::Err(OsError::Make(OsErrorCode::Unsupported, \"this platform has no ANSI code page\"));",
+      "replace": "    return 65001u;",
+      "target": "gyo_os_tests",
+      "cases": "*reports its ANSI code page*",
+      "expect": "REQUIRE_FALSE\\( page \\) is NOT correct"
+    },
+    {
+      "id": "pu-x14-guard-misses-global-ansi-call",
+      "what": "The guard stops seeing an ANSI entry point called through the global :: (R6)",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "(?<![\\w.>:])(?:::)?[A-Z][A-Za-z0-9]*[a-z0-9]A",
+      "replace": "(?<![\\w.>:])[A-Z][A-Za-z0-9]*[a-z0-9]A",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_ansi_entry_point_in_engine_os_is_reported"
+    },
+    {
+      "id": "pu-x15-code-page-walk-by-source-only",
+      "what": "The build layer walks directories by source path only, so a standalone tool wrapper's tool gets no manifest (Design Invariant 11)",
+      "file": "build/cmake/GyoCodePage.cmake",
+      "find": "    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n    foreach(directory IN LISTS directories)\n",
+      "replace": "    foreach(directory IN ITEMS \"${CMAKE_SOURCE_DIR}\")\n",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "wrapper: configuration failed"
+    },
+    {
+      "id": "pu-x16-code-page-check-misses-nothing",
+      "what": "The configure-time check never reports an executable without the manifest (Design Invariant 11)",
+      "file": "tests/common/os/ProcessCodePageCheck.cmake",
+      "find": "                set_property(GLOBAL APPEND PROPERTY GYO_OS_CODE_PAGE_MISSING \"${target} (${relative})\")\n",
+      "replace": "",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "unrecorded: configuration unexpectedly succeeded"
     }
   ]
 }

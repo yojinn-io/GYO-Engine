@@ -213,6 +213,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
     - MSVC：把 `.manifest` 加進目標的原始檔，由連結器合併嵌入。
     - MinGW：用 `.rc` 把它放進 `RT_MANIFEST`（資源 ID 1）。MinGW-w64 預設會連入自己的 manifest，兩者可能衝突，要在批次中先確認（開放決策 23）。
   - 根目錄的建置層在設定期結束時走過每個 EXECUTABLE 目標（engine、apps、tools、build/acceptance、tests），在 Windows 上套用這個函式；在每個平台都標上標記屬性，供設定期檢查使用。
+    - 實作（os-utf8-codepage 的 xhigh 審查之後）：走訪放在 `build/cmake/GyoCodePage.cmake`。建置層依 binary dir 記錄它加入的目錄，因為獨立工具入口會重用工具的 source dir。
   - 另外設定的 host 專案（shader 工具，GyoShaderTools）沒有被根目錄走過，要自己呼叫同一個函式。
 - 產品宣告什麼：預設不必宣告任何事，新增或複製產品都不改公共層（AGENTS §7、§9）。不能帶 manifest 的執行檔（目前沒有）以目標屬性宣告例外並寫理由，例外由設定期檢查列出。
 - 抓到沒有 manifest 的執行檔：
@@ -835,48 +836,48 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
     - 取捨：(a) 符合慣例與「功能線為單位、PR 盡量少」，代價是發行線 PR 延誤時 engine/os 也跟著延後。(b) engine/os 先進 master，但合併時沒有任何正式程式碼使用它。
     - 建議：(a)。
 
-16. **os-utf8-codepage 的順序**（D64；D211 的限制下，目前只寫計畫）。
+16. **os-utf8-codepage 的順序**（D64）。**已決定（D65）：(b)。**
     - (a) 排在計時的三批（os-wake-record、os-threads-backend、os-wait-backend）之後，和 os-net-errors、os-close 一起排在 #96 合併後。
     - (b) 排在計時的三批之前，下一次 Windows 機器的驗證就能在任何機器判定。
     - (c) 和計時的三批並行（互不依賴，檔案不重疊）。
     - 取捨：(a) 不打斷 D62 的排程，但下一次 Windows 機器（計時的 L2、os-wake-record 的 Windows 基準）若 ACP＝65001，ACP 類的突變仍無法判定。(b) 讓 Windows 的驗證不挑機器，代價是計時三批延後約 1～1.5 天。(c) 最快，但兩批同時改 tests/common/os 的 CMake，要協調。
     - 建議：(b)。D62 的 Windows 機器驗證正是它要解決的問題，而且它不碰計時程式碼。
-17. **manifest 怎麼套到每個執行檔**。
+17. **manifest 怎麼套到每個執行檔**。**已決定（D66）：(a)，並提供查詢 API。**
     - (a) 根目錄在設定期走過所有 EXECUTABLE 目標，自動套用並在每個平台標記；設定期檢查列出沒有標記、也沒有寫理由的目標。
     - (b) engine/os 提供函式；`gyo_app_add_executable` 自動呼叫，其他直接 `add_executable` 的地方（測試、探針、工具）各自呼叫；設定期檢查抓漏掉的。
     - 取捨：(a) 新增產品、測試、探針都不用寫任何東西，但「設定期修改別人的目標」是 repo 裡新的做法（目前的走訪都只讀）。(b) 每個目標看得到自己帶 manifest，但約 60 個 `add_executable` 要逐一加一行，新增的人也要記得，漏了由檢查擋下。
     - 附帶：engine/os 要不要提供「目前程序的 code page」查詢，讓產品在啟動行記錄 `acp=`。建議提供，記不記錄由產品決定。
     - 建議：(a)。
-18. **manifest 檔與嵌入函式放在哪裡**。
+18. **manifest 檔與嵌入函式放在哪裡**。**已決定（D66）：(a)。**
     - (a) engine/os（例如 `engine/os/cmake/` 與 `engine/os/windows/`），由 owner 擁有契約與實作。
     - (b) 建置層的共用目錄（`build/cmake/`），engine/os 只寫契約。
     - 取捨：(a) 契約和實作在同一個 owner，移除 engine/os 時一起消失；但 engine/os 第一次有 CMake 模組給別人 include。(b) 和其他建置 helper 放在一起，但契約和實作分屬兩個 owner。
     - 建議：(a)。
-19. **在 manifest 之下變成等價突變的處理**（pu-x6、pu-x7，以及消費端的 p4）。
+19. **在 manifest 之下變成等價突變的處理**（pu-x6、pu-x7，以及消費端的 p4）。**已決定（D66）：(a)；p4 交 v7.1 會話。**
     - (a) 退場：在目錄裡標為「manifest 之下等價」並移出常規執行；它們守的性質（窄字元轉換在我們的程序裡是 UTF-8）改由 manifest 的檢查負責。
     - (b) 保留，改成「建一個刻意不帶 manifest 的測試程式，在系統 ACP 不是 65001 的機器上跑」。
     - (c) 加守衛 R7：engine、apps、tools 不用 `path::string()`、`generic_string()` 與窄字元建構 `path`，以只縮不增的 allowlist 管理。
     - 取捨：(a) 最簡單，但沒有 manifest 的程序（1903 以前、外部程式連結 Engine）的窄字元問題不再有突變守住。(b) 仍然挑機器，違反 D64 的原則。(c) 任何 OS 都能判定，但 `.string()` 的文字比對會誤報（例如非 path 的型別），要調規則。
     - 突變的判定改變要依 §14.4 由使用者核准。
     - 建議：(a)；若之後要支援沒有 manifest 的程序，再評估 (c)。
-20. **Proton／Wine 是否支援 `activeCodePage`**（未確認）。
+20. **Proton／Wine 是否支援 `activeCodePage`**（未確認）。**已決定（D66）：照建議。**
     - 若不支援，Proton 下程序的 ACP 是 Wine 的設定。engine/os 仍然正確（寬字元 API），第三方的窄字元行為會不同。
     - 建議：在 build-baseline 的 Tier 2（Windows 包跑在 Proton 上）的驗收裡確認；在那之前，Invariant 11 的條文寫明「Windows 10 1903 以後」，不宣稱涵蓋 Wine。
-21. **`longPathAware` 要不要一起加**。
+21. **`longPathAware` 要不要一起加**。**已決定（D66）：(a)。**
     - (a) 不加：長路徑維持 engine/os 的 `\\?\` 加寬字元 API。
     - (b) 一起加：第三方（SDL 的檔案 IO、ImGui 的字型）在長路徑上也可能成功。
     - 取捨：`longPathAware` 只在登錄值 LongPathsEnabled 為 1 的機器才生效。也就是說，它讓行為取決於環境設定，和 D64 的原則相反。(a) 的長路徑行為在每台機器都相同。
     - 建議：(a)。
-22. **Windows 10 1903 以前的版本**。
+22. **Windows 10 1903 以前的版本**。**已決定（D66）：(a)。**
     - 那些版本忽略 `activeCodePage`，程序的 ACP 是系統設定。engine/os 仍然正確；第三方與 argv 會照舊依系統設定。
     - (a) 文件寫明最低版本是 Windows 10 1903（2019 年），不另做處理；產品可在啟動行記錄 `acp=` 來診斷。
     - (b) 啟動時檢查，ACP 不是 65001 就拒絕啟動。
     - 取捨：(b) 確保一致，但在支援期外的舊系統上，原本能用的程序會變成無法啟動。
     - 建議：(a)。
-23. **MinGW 的嵌入**：依 build-baseline 的支援矩陣決定 MinGW 是否保留（未定）。
+23. **MinGW 的嵌入**：依 build-baseline 的支援矩陣決定 MinGW 是否保留（未定）。**已決定（D66）：兩條路徑都寫，CI 驗 MSVC，MinGW 在下一次 Windows 機器確認。**
     - 若保留：os-utf8-codepage 要先在 MinGW 上確認 `.rc` 嵌入的 manifest 和 MinGW-w64 的預設 manifest 不衝突（推論可能衝突），結果決定嵌入方式。
     - 若不保留：只做 MSVC，文件寫「MinGW 不保證」。
-24. **D201 找到的測試缺漏（只改測試）放在哪一批**。
+24. **D201 找到的測試缺漏（只改測試）放在哪一批**。**已決定（D66）：(a)。**
     - 缺漏：
       - os-w10：`*create directories*` 沒有 UNC 根目錄的案例（`FileWriterTests.cpp:227`、`249`）。從程式碼推論，任何 Windows 機器上 os-w10 都會存活。補一個 `\\localhost\C$` 底下的案例（和 `FileChangeTests.cpp` 的 UNC 案例同一種前提）。
       - FontDirectories：os.md 的契約有列 `%LOCALAPPDATA%\Microsoft\Windows\Fonts`，但測試在 Windows 上的預期清單（`FileChangeTests.cpp:318-323`）只有系統的 Fonts。在有使用者字型的機器上，這個測試必然失敗（D201 的 MSVC 建置），所以 os-g18 的基準線也不通過。這是測試的錯，修法是把使用者的字型目錄加進預期清單。

@@ -246,6 +246,28 @@ TEST_CASE("Os files create directories with their missing parents") {
     CHECK(empty.error().code == OsErrorCode::InvalidPath);
 }
 
+#if defined(_WIN32)
+// Under a UNC share the root is the server and the share, and the walk starts
+// after it, as after a drive (os-utf8-codepage; the D201 run found no case
+// here). Through the administrative share of the temporary directory's drive,
+// when this machine reaches it (as FileChangeTests.cpp's UNC case).
+TEST_CASE("Os files create directories under a UNC share") {
+    TempDirectory dir("gyo-os-mkdirs-unc");
+    const std::string local = Utf8(std::filesystem::absolute(dir.Path()));
+    REQUIRE(local.size() > 3);
+    const std::string share = "//localhost/" + local.substr(0, 1) + "$";
+    std::error_code error;
+    if (!std::filesystem::is_directory(std::filesystem::path(std::u8string(share.begin(), share.end())) / "", error)) {
+        MESSAGE(share << " is not reachable here");
+        return;
+    }
+    const std::string nested = share + local.substr(2) + "/a/b";
+    const auto created = CreateDirectories(nested);
+    REQUIRE_MESSAGE(created, (created ? std::string{} : Engine::Base::Describe(created.error())));
+    CHECK(std::filesystem::is_directory(dir.Path() / "a" / "b"));
+}
+#endif
+
 TEST_CASE("Os files write and create directories under a path longer than 300 characters") {
     TempDirectory dir("gyo-os-write-long");
     const auto top = dir.Path() / "segment-of-a-deep-release-folder";
