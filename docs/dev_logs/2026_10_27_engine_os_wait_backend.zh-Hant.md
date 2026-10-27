@@ -43,6 +43,8 @@
   - B 通過，12 項全部通過。B 與 A 的中位數：CLI deadline P99 0.152／0.149 ms、視窗 0.132／0.133 ms；notify P99 CLI 0.075／0.071 ms、視窗 0.061／0.059 ms。早醒 0；後端都是 Kqueue。
   - 證據在主 checkout 的 `build/target/_build/test/logs/os-wait-l2-20261027-macos-intel/`（`programs/`、`calibration-AA/`、`detection-AD/`、`AB/`）。
 
+- 四平台 L1（[run 40510515336](https://github.com/yojinn-io/GYO-Engine/actions/runs/40510515336)，`908308b3`）：失敗一個 job。toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時（60 s）；其餘全部成功，四平台的 `gyo_os_tests`、`gyo_time_tests`、連結檢查、邊界守衛都通過。逾時的案例不經過本批的程式碼，同一個 commit 的 L1 / linux-x64 以 2.29 s 通過；這個測試有時序相關失敗的紀錄（消費端 K11、D186）。歸類未能完全切分，記錄不覆寫。
+
 ## 已知缺口
 
 - Windows 與 Linux 的 L2 還沒做；Windows 的 L2 通過前，不通知消費端合併這一批（D71）。

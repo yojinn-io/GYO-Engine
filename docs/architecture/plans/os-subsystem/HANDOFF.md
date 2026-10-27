@@ -42,6 +42,7 @@
 - 2026-10-27：消費端回報（經使用者同意）並已核對：發行線 `claude/pvp-v71-release` 以三次 `--no-ff` 合併，沒有衝突（`32ce9b6d` 到 `ca434952`、`f87b77d0` 到 `d32def55`、`2aebc143` 到 `e5fec6ef`）；消費端 D207 `4a4a0ef7`；消費端本機 ctest 97／97；合併後的 L1 是 run 40348670097（在 `4a4a0ef7` 上派發）。使用者決定今晚的 lan15 用合併後的發行線跑；D206 的主控台、UNC 探針與 Windows 專用突變，以及 `-s` 的實跑確認，改在發行線上做，結果由消費端回給本計畫。
 - 2026-10-27：os-wait-backend 開始（D71），本機進行中，基準 `4ffc7c65`。細節見「os-wait-backend」。
 - 2026-10-27：os-wait-backend 本機完成（`756073aa`）：macOS Intel 的 L2 通過（12／12），xhigh 審查（Fable 5.1）的發現已修。下一步要使用者決定：推送並跑四平台 L1；條文定案。Windows 與 Linux 的 L2、ow-x1、ow-x5、ow-x6、ow-x10 留給實機。
+- 2026-10-27：推送並跑四平台 L1（run 40510515336）：只有 toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時，這個測試不經過本批的程式碼；新測試在四平台都通過。停在使用者的決定（重跑、交給 owner，或重新檢視前提）。
 
 ## 閱讀入口
 
@@ -706,6 +707,14 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
     早醒 0（B 的最小晚醒 0.011 ms）；A、B 的後端都是 Kqueue。
   - 證據：主 checkout 的 `build/target/_build/test/logs/os-wait-l2-20261027-macos-intel/AB/`（`verdict.json`、`meta.txt`、每次的 JSON 與 sleeper）、`AB.log`。
   - Windows（CLI 與視窗）與 Linux（CLI）在下一次實機，用同一支腳本與 A＝`4ffc7c65`、B＝本批最後的 commit；Windows 的 L2 通過前，不通知消費端合併（D71）。
+- 2026-10-27：使用者說「推送本分支的 8 個 commit（29cbd9b2～908308b3），手動觸發四平台 L1，驗 os-wait-backend」。推送（`e5a26431..908308b3`，快轉），L1 是 [run 40510515336](https://github.com/yojinn-io/GYO-Engine/actions/runs/40510515336)（`908308b3`）：**失敗**，只有一個 job。
+  - 失敗：Quick acceptance / toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時（60 s）。CI validation 與 CI gate 跟著失敗。
+  - 其他都成功：L1 的 windows-x64、linux-x64、macos-arm64、macos-x64，以及其餘 Quick acceptance。四平台的 `gyo_os_tests`（WakeSignalTests）、`gyo_time_tests`、連結檢查、邊界守衛都通過；同一個失敗的 job 裡 `gyo_os_tests` 也通過（0.35 s）。
+  - 歸類（§14.1，未能完全切分）：證據指向測試本身加環境，不是本批的實作。
+    - 逾時的三個案例（LogBridge 的並行日誌、兩個執行緒，EventWatch 的解構等待回呼）都不經過 Waiter、`WakeSignal`、RoleThread；engine/platform/sdl 也不用它們。檔內唯一用到 Waiter 的案例不在這個過濾裡。
+    - 同一個 commit 的 L1 / linux-x64 跑同一個測試，2.29 s 通過。
+    - 這個測試有時序相關失敗的紀錄（消費端 K11、D186：windows-x64 的 `pushedBy == 0`、macos-arm64 的 `overlappedRounds == 0`），修正批 event-watch-overlap 加了有界的等待，但最壞情況是 200 輪 ×（最多 2 s＋200 ms），超過 60 s 的逾時；失敗的 job 以平行方式跑 CTest。這次的症狀（逾時）是新的。
+  - 失敗不覆寫；要不要重跑、要不要交給事件監看的 owner，由使用者決定。
 
 ### os-threads-backend
 
