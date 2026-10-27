@@ -86,6 +86,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 28. **D67**：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔）照草稿定案。
 29. **D68**：os-wake-record 開工前的決定，全部照建議。檔位 medium（notify→wake 用 high）；L2 只記錄、沿用 TT-1 的定義並新增 notify→wake；macOS arm64 現在量，其他三個平台在下一次實機用本批的 commit 補，不擋後兩批；Windows 沒有視窗的晚醒數據交給 v7.1 的 F5／F7。
 30. **D69**：os-threads-backend 開工前的決定。檔位 high＋1 位 xhigh 審查；連結守衛照草案（gyo_threads 以 PRIVATE 連 GYO::Os 並禁止公開，gyo_os 在 POSIX 上 PRIVATE 連 Threads::Threads；threads.md Invariant 9 與 os.md Invariant 3 一起改）；Windows 非 ASCII 名稱的缺陷這批修（★）；L2 本機先做 macOS Intel，Windows 與 Linux 在實機那次補，不擋 os-wait-backend。
+31. **D70**：os-threads-backend 的定案。threads.md Invariant 9 與 os.md Invariant 3 照草稿；os.md Invariant 6 寫明「只回報是否套用的請求回傳 bool」的例外。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 

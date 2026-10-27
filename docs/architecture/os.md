@@ -336,7 +336,9 @@ Known blind spots, left to review:
    for the wide APIs; the ANSI code page APIs are never used. Long-path forms are made only inside engine/os just
    before the OS call; they are never returned or written into an error.
 6. **Failures are Runtime Errors.** Functions return `Base::Result<_, OsError>`; the detail keeps the native error
-   in the fixed form of the Contracts section. No exception crosses the public boundary or an OS callback (signal
+   in the fixed form of the Contracts section. A request that only reports whether the platform applied it returns
+   `bool` instead (the thread name and priority, `Utf8ConsoleOutput::Applied()`): not being applied is a result,
+   not a failure (Invariant 10; D70). No exception crosses the public boundary or an OS callback (signal
    handler, console control handler). The OS callbacks only write a lock-free atomic (and, on a console close,
    wait) and are `noexcept`, so engine/os needs none of error-handling.md's "Exception at the platform boundary"
    rules (no `catch (...)`, no destructor checking global state); that section's scope stays engine/platform/sdl

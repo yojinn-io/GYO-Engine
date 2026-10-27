@@ -55,6 +55,8 @@
   - 連結檢查的期望值多了 GYO::Os（threads）與 Threads::Threads（os）。這兩個檢查都只收緊，新加的「不得公開」也一樣。
   - `RoleThreadTests` 的判定沒有改。
 
+- D70：threads.md Invariant 9 與 os.md Invariant 3 照草稿定案；os.md Invariant 6 寫明「只回報是否套用的請求回傳 bool」的例外。
+
 ## 已知缺口
 
 - Windows 與 Linux 的 L2 還沒做。Windows 的非 ASCII 名稱讀回沒有先跑 Red，要等這次的 L1 與實機。

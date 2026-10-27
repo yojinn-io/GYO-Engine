@@ -108,6 +108,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D67：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8（產品或工具需要自己的 manifest 設定或 UTF-8 以外的 code page 時，停止修改 engine/os 的 manifest，先決定宣告與合併的方式）、審查後補的 ★（OEM code page 大概也變成 65001；沒開 `Utf8ConsoleOutput` 的程式在 950／932 主控台印非 ASCII 的窄字元會變成 UTF-8 的位元組）、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔，Go 服務不算），都照草稿定案 | 使用者：「Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字，都照草稿定案。」 |
 | 2026-10-27 | D68：os-wake-record 開工前的決定（全部照建議）。<br>檔位：medium，notify→wake 的量法用 high。<br>L2 的事前宣告（只記錄，沿用 TT-1 L2）：60 Hz 的絕對期限，Waiter、condition_variable、`sleep_until` 各 30 秒；新增 notify→wake（Waiter、condition_variable 各 30 秒）；沒有視窗與有視窗兩種情境；每段前後各 5 秒 sleeper；`meta.txt` 記錄程式雜湊、OS、CPU、負載。不設門檻；「Waiter 的 P99 低於 condition_variable」只當觀察。<br>平台：macOS arm64 現在在本機量；Windows（沒有視窗與有視窗）、Linux、macOS Intel 在下一次實機時用本批的 commit 量，不擋 os-threads-backend 與 os-wait-backend；Linux 用哪台機器到時再定。<br>和消費端協調：Windows 沒有視窗的那組晚醒數據交給 v7.1 的 F5／F7 參考，Match 層的數據仍由它在 lan15 量 | 使用者：「開始 os-wake-record。先說明檔位、要動的檔案，以及需要我同意的地方。」之後對四個問題選：「medium，notify→wake 用 high」「照草案」「本機先量，實機那次補」「協調」 |
 | 2026-10-27 | D69：os-threads-backend 開工前的決定。<br>檔位：high＋1 位 xhigh 審查（使用者選的；建議是 high 加 Start 順序局部 xhigh）。<br>連結（§14.4，Design Invariant 的變更）：照草案。gyo_threads 以 PRIVATE 連結 GYO::Os，並加「不得公開」的檢查（threads.md Invariant 9）；gyo_os 在 POSIX 上以 PRIVATE 連結 Threads::Threads（os.md Invariant 3）。兩條條文與守衛期望值一起改，定案前做突變。<br>Windows 非 ASCII 名稱的缺陷（逐 byte 擴寬）：這批修，宣告 ★，改用 engine/os 的 UTF-8→UTF-16 轉換，加讀回測試。<br>L2（事前宣告、只記錄，附撤回條件）：A＝搬動前、B＝搬動後，消費端每個 role started 行的 name_applied、priority_applied、wait_backend 必須逐字相同，任一項不同就撤回整批。macOS Intel 現在在本機做；Windows 與 Linux 在下一次實機用 A、B 兩個 commit 補，不擋 os-wait-backend | 使用者：「開始 os-threads-backend。先說明檔位、要動的檔案，以及需要我同意的地方。」之後對四個問題選：「high＋1 位 xhigh 審查」「照草案」「這批修，宣告 ★」「本機先做，實機那次補」 |
+| 2026-10-27 | D70：os-threads-backend 的定案。threads.md Invariant 9（GYO::Threads 連結 exactly GYO::Time、Threads::Threads，以及 PRIVATE 的 GYO::Os）與 os.md Invariant 3（GYO::Os 在 Windows 以外連結 Threads::Threads）照草稿定案；os.md Invariant 6 寫明例外：只回報平台是否套用的請求回傳 bool（執行緒的名稱與優先度、`Utf8ConsoleOutput::Applied()`），沒有套用是結果、不是失敗（Invariant 10） | 使用者：「threads.md Invariant 9 與 os.md Invariant 3 照草稿定案；os.md Invariant 6 寫明「回報是否套用的請求回傳 bool」這個例外。」 |
 
 ## 消費端的壓力摘要
 
@@ -684,9 +685,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - Windows 的 th-x3、th-x5 與 Linux 的 th-x6、ti-x4，留給實機。
 - 本機（macOS Intel x86_64）：core 34／34；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3；邊界守衛通過。
 - 2026-10-27：使用者說「推送 2ec5905d 與 e5a26431（含 5733d361）到本分支，手動觸發四平台 L1，驗 os-threads-backend」。四平台 L1（[run 40484797877](https://github.com/yojinn-io/GYO-Engine/actions/runs/40484797877)，`e5a26431`）全部成功：windows-x64 96／96、linux-x64 92／92、macos-arm64 92／92，gyo_os_tests（讀回測試，含 Windows 的非 ASCII 名稱與 thread priority、Linux 的 nice 與 15 bytes）、gyo_threads_tests、邊界守衛、連結檢查都通過；加上 `UNICODE` 的 engine/os 在 Windows 編譯通過。 Windows 的非 ASCII 名稱讀回在這次第一次實跑，就是通過的（沒有先跑 Red）。
-- 要使用者決定（定案時）：
-  - threads.md Invariant 9 與 os.md Invariant 3 的新條文（D69 同意草案、定案前做突變，突變已完成）。
-  - os.md Invariant 6 是否寫明「回報是否套用的請求回傳 bool」這個例外（Thread、`Utf8ConsoleOutput::Applied()`）。
+- 2026-10-27：定案（D70）：threads.md Invariant 9 與 os.md Invariant 3 照草稿；os.md Invariant 6 寫明「只回報是否套用的請求回傳 bool」的例外。
 
 ### os-wake-record
 
