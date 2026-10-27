@@ -36,6 +36,23 @@ GYO::Base ◄── GYO::Time ◄── GYO::Threads, GYO::Engine and products
 - `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive. A moved-from Waiter ignores
   `Notify` (it is `noexcept` and cannot assert); waiting on it is a Programmer Error (`GYO_ASSERT`).
 
+## Baselines
+
+Wake precision is recorded, never a pass condition. `tests/common/time/WakeRecord.cpp` builds
+`gyo_time_wake_record` (no window) and `gyo_time_wake_record_window` (an Engine SDL window pumped between waits);
+neither is a CTest. Each waits on 60 Hz absolute deadlines with the Waiter, a condition variable and `sleep_until`
+for 30 s, and measures notify to wake for the Waiter and a condition variable. `tests/common/time/wake_baseline.py`
+runs the declared procedure (os-subsystem D68): a 5 s sleeper before and after each mode, and `meta.txt` with the
+commit, the program hashes, the OS, the CPU and the load. Evidence lives under `build/target/_build/test/logs/` of
+the main checkout.
+
+| Platform | Recorded | Waiter deadline P50 / P99, no window; window | Evidence |
+|---|---|---|---|
+| macOS Intel x86_64 (Kqueue) | 2026-10-27, `f6997194` | 0.077 / 0.145 ms; 0.077 / 0.134 ms | `os-wake-baseline-20261027-macos-intel` |
+| macOS Intel x86_64 (Kqueue), TT-1 L2 | 2026-10-09, `a8f9535` | 0.025 / 0.10 ms; 0.077 / 0.133 ms (idle host) | `tt1-l2-20261009-idle` |
+| Windows x64, Linux x64 | not yet: on the next machine session, with the os-wake-record commit | | |
+| macOS arm64 | not run: no machine (CI runs L1 only) | | |
+
 ## Design Invariants
 
 1. **One time base.** Engine code measures elapsed time, waits and stamps events on `Time::MonotonicClock`, which is

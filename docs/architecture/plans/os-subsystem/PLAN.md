@@ -556,6 +556,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - 從本機分支 `claude/tt1-l2-wake-record`（`a8f9535`）合入 `tests/common/time/WakeRecord.cpp`；衝突時照 TT-1 L2 的定義重建。
   - 補 notify→wake 段落。
   - 量基準：macOS arm64、macOS Intel 實機、Windows x64 的 CLI 與視窗、Linux x64。其中 Windows 上不初始化 SDL 的程序是第一次量。
+    - 2026-10-27（D68）：本機是 macOS Intel，已量。macOS arm64 沒有實機（D11⑩），不量。Windows 與 Linux 在下一次實機用本批的 commit 量。程序寫成 `tests/common/time/wake_baseline.py`。
   - 和消費端規劃中的同類量測協調，只做一次。
 - 驗收：L2（事前宣告並核准、只記錄）同 TT-1 L2。證據放 `build/target/_build/test/logs/os-wake-baseline-<日期>/`。
 

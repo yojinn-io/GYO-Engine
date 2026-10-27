@@ -249,3 +249,10 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 - 破損：無。建置層會自動替 engine、apps、tools、build/acceptance、tests 底下的每個執行檔嵌入 manifest，未啟用產品重新啟用時不必改 CMake。
 - 行為：在 Windows 10 1903 以後，這些產品的程序 ANSI code page 是 UTF-8。窄字元的路徑（例如 os-path-utf8-sweep 記下的 `std::filesystem::path(base)`、`SDL_SaveBMP(..., path.string().c_str())`）在這些程序裡也會是 UTF-8，不再丟例外。上一節的遷移需求仍然建議照做：它們在 1903 以前的 Windows、或沒有 manifest 的程序裡仍然會壞。
 - 選用：真的不能帶 manifest 的執行檔，以目標屬性 `GYO_PROCESS_CODE_PAGE_EXEMPT` 寫理由。
+
+### os-wake-record 晚醒量測程式
+
+狀態：本機完成（2026-10-27，D68）。
+
+- 破損：無。只新增 tests/common/time 的兩個量測執行檔（不是 CTest）與一個 Python 腳本，Engine 與產品的程式都沒有改。
+- 選用：無。

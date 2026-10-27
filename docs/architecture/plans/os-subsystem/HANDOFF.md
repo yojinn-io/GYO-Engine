@@ -650,6 +650,21 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 照 `a8f9535f` 合入，沒有衝突。
   - 新增 notify→wake：通知方在 Notify 前蓋時間戳；等待方取用後，通知方才發下一次，所以時間戳不會在讀取前被覆蓋。上一次還沒被取用的週期會跳過並計數。Waiter 用 `Wait()`（沒有期限，Invariant 6），condition_variable 用帶條件的 `wait`。
   - 宣告的程序寫成 `tests/common/time/wake_baseline.py`：每種情境前後各 5 秒 sleeper，`meta.txt` 記錄 commit、程式雜湊、OS、CPU、開始與結束的負載。之後的實機照同一個腳本跑。
+- 2026-10-27：macOS Intel 的基準（照 D68 的宣告，只記錄）。程式是 `f6997194`。
+  - 證據在主 checkout 的 `build/target/_build/test/logs/os-wake-baseline-20261027-macos-intel/`：`meta.txt`、`cli.json`、`window.json`、sleeper、log。`files.sha256` 的 SHA-256 是 `a3066291…`。
+  - 主機：開始時負載 2.06，結束時 1.82（16 個邏輯處理器）。sleeper（Python 的 60 Hz sleep）的 P99：沒有視窗那段之前 4.2 ms、之後 7.9 ms；有視窗那段之前 8.0 ms、之後 7.9 ms。
+  - 沒有視窗（Kqueue）：
+    - 期限等待：Waiter P50 0.077、P99 0.145 ms（1799 次中 2 次超過 4 ms，最大 26 ms）；condition_variable P50 3.28、P99 4.17 ms；`sleep_until` P50 3.33、P99 7.61 ms。
+    - notify→wake：Waiter P50 0.049、P99 0.068 ms；condition_variable P50 0.052、P99 0.067 ms；兩者都沒有跳過的週期。
+  - 有視窗：
+    - 期限等待：Waiter P50 0.077、P99 0.134、最大 0.163 ms；condition_variable P99 2.11 ms；`sleep_until` P99 2.07 ms。
+    - notify→wake：Waiter P50 0.048、P99 0.069 ms；condition_variable P50 0.052、P99 0.070 ms。
+  - 觀察（不判定）：
+    - 「Waiter 的 P99 低於 condition_variable」在兩種情境都成立。
+    - 和 TT-1 L2（2026-10-09，同一台機器）同一量級：當時 Waiter 的 P99，沒有視窗 0.10 ms、有視窗 0.133 ms。
+    - notify→wake 在 macOS 上 Waiter 與 condition_variable 沒有差別。
+  - 其他平台：Windows（沒有視窗、有視窗）與 Linux 在下一次實機用本批的 commit 補；macOS arm64 沒有實機（D11⑩）。
+- 2026-10-27：已告知 v7.1 會話：Windows 沒有視窗的那組數據，會在下一次 Windows 機器量並交給它的 F5／F7；Match 層的數據仍由它在 lan15 量。也順帶告知它的 windows-long-path dev_log 同樣寫成 macOS arm64。
 
 ### os-utf8-codepage
 
