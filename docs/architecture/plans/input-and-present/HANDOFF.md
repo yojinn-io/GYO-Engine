@@ -409,6 +409,12 @@
   - 原因歸類：測試自身，和 #561 同類（缺少等執行緒開始的握手）。橋沒有遺失行。
   - 本機注入 50 ms 延遲 3／3 Red；加握手後 20／20 Green；判定只收緊。
   - 詳見 [dev_log](../../../dev_logs/2026_10_24_engine_ip3_log_bridge_handshake.zh-Hant.md)。
+- 2026-10-27：`platform_sdl_concurrency` 在別的分支的 Quick acceptance / toolchain / linux-x64 逾時 60 s（run 40510515336），同 commit 的 L1 / linux-x64 通過。
+  - 使用者決定先把候選 A（佇列被灌滿時 `PumpEvents` 不結束）當成 Engine 可能的缺陷重現。
+  - flood-repro（Linux 容器，事前宣告核准）：試驗 1 的 40 次、試驗 2 的 60 次都沒有卡住，收支一致。依 §14.3 停在觀測。
+  - concurrency-watchdog：測試程式內的看門狗（不改判定、不改時限）。J1～J4 通過；J2 第 1 次在容器的一組不成立（注入點設計錯誤），照記，改注入點後重跑通過。
+  - **範圍的限界**（後續相關批次的事前宣告要寫）：容器排程與 CI 不同；容器沒有 evdev／udev 裝置；沒有照 CI 的順序跑前面的測試。
+  - 原因未查明。詳見 [dev_log](../../../dev_logs/2026_10_27_engine_sdl_concurrency_watchdog.zh-Hant.md)。
 - 2026-10-21：Architecture Delta：規劃本身只改文件。草案的 Delta 見 PLAN 的 IP-3 節（七點）與 IP-4 補充。
 
 ## 消費端回報（文字摘要，D12）
