@@ -2,7 +2,7 @@
 
 日期：2026-10-25。分支 `claude/pvp-v71-release`（PR #96）。
 
-**狀態：macOS 驗收通過；Windows 驗收由使用者與 windows-long-path 的實機驗收一起跑（D201）**。計畫與決定見 [quick-close.md](../object_fps_pvp/plans/v7.1/quick-close.md)（D202、D203）。
+**狀態：完成（macOS 與 Windows 的驗收都通過）**。計畫與決定見 [quick-close.md](../object_fps_pvp/plans/v7.1/quick-close.md)（D202、D203）。
 
 ## 做了什麼
 
@@ -24,6 +24,4 @@
 
 - 本機輸出（git 忽略，會話的 scratchpad）：Red `qc-red.json`、驗收 1 `qc-macos-accept.json`、驗收 2 `qc-macos-accept-d203.json`。重跑：`python3 build/acceptance/object_fps_pvp/close_timing.py --probe build/target/_build/test/acceptance/object_fps_pvp/gyo_object_fps_pvp_worker_probe --runs 10`。
 
-## 還沒做
-
-- Windows 的 10 次（指令在 quick-close.md 的 D203 一節）。
+- **Windows 驗收（D203 的判定，各 10 次；2026-10-27，使用者的 Windows 11 機器，MinGW 15.2 建置）**：只跑一次，exit 0，通過。responding 最大 28.4 ms、down 最大 319.6 ms、stalled 最大 345.5 ms。記錄在 [D201 的 Windows 清單](2026_10_27_pvp_v71_d201_windows.zh-Hant.md)第 4 項。

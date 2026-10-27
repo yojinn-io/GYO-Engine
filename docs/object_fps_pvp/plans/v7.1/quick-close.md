@@ -41,3 +41,7 @@
 - 突變：`qc-closing-uses-request-timeout`（關閉時改用 2 秒的逾時）、`qc-closing-timeout-too-long`（逾時改成 1500 ms）都被這個 CTest 殺死（2／2）。
 - **macOS 驗收（D203 的判定，各 10 次）**：通過。responding 最大 1.2 ms、down 最大 1.6 ms、stalled 301.5～302.6 ms。
 - **Windows（使用者，與 D201 一起）**：在發行線的建置目錄執行 `python build/acceptance/object_fps_pvp/close_timing.py --probe <建置目錄>/acceptance/object_fps_pvp/gyo_object_fps_pvp_worker_probe.exe --runs 10 --output close-timing-windows.json`，exit 0 才算通過；不通過時先回報，不重跑。
+
+## Windows 驗收（2026-10-27）
+
+通過：只跑一次，各 10 次全部符合。responding 最大 28.4 ms、down 最大 319.6 ms、stalled 最大 345.5 ms（Windows 11，MinGW 15.2 建置）。見 dev_log `2026_10_27_pvp_v71_d201_windows`。

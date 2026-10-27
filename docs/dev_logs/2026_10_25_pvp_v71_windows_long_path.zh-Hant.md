@@ -2,7 +2,7 @@
 
 日期：2026-10-25。分支 `claude/pvp-v71-release`（從 PR #95 的 `a0e6668` 切出，再 `--no-ff` 併進 OS 子系統的 `claude/trusting-joliot-f13b78`，D199）。
 
-**狀態：程式與自動驗收完成；Windows 專用突變與實機驗收（P5-6）併進 lan15-windows（D201，2026-10-26）**。計畫與宣告見 [windows-long-path.md](../object_fps_pvp/plans/v7.1/windows-long-path.md) 的「P1～P5 的實作（D199）」一節；架構（A1～A3：`engine/os`、`engine/io` 的契約與唯讀原生後端）由 OS 子系統任務做，見 [os-subsystem PLAN](../architecture/plans/os-subsystem/PLAN.md) 第 8 節。使用者經該會話轉達：「讓v7.1會話開始P1～P5的任務」。
+**狀態：完成（2026-10-27：實機驗收 P5-6 通過，Windows 專用突變見「Windows 機器的結果」）**。計畫與宣告見 [windows-long-path.md](../object_fps_pvp/plans/v7.1/windows-long-path.md) 的「P1～P5 的實作（D199）」一節；架構（A1～A3：`engine/os`、`engine/io` 的契約與唯讀原生後端）由 OS 子系統任務做，見 [os-subsystem PLAN](../architecture/plans/os-subsystem/PLAN.md) 第 8 節。使用者經該會話轉達：「讓v7.1會話開始P1～P5的任務」。
 
 ## 做了什麼
 
@@ -36,3 +36,11 @@
 - Windows 專用的突變（P1 兩個、P4 一個、os-f4、os-f5）要在 Windows 機器上跑；建議排在 lan15-windows 用 Windows 機器時一起跑（OS 子系統會話的建議），發行時的完整突變（D185）若在 Windows 上跑也會涵蓋。
 - OS 子系統會話審查了 engine/os 與 engine/io 的改動（`d56a8fc..432142c`），只指出 Engine 擁有的檔案裡出現消費端的版本名（os.md Invariant 7、AGENTS §7）；`1c16f8d` 改成 os-subsystem PLAN 的交接代號或行為描述（4 處，含審查沒列到的 `NativeFileAssetSourceTests.cpp`）。
 - 下一個失敗點：產品自己開的 `arenas.json`（約 P≥219）、log 與 trace（約 P≥229），屬於發行後的 os-files-write、os-trace-writers。
+
+## Windows 機器的結果（2026-10-27，D201、D211）
+
+使用者在 Windows 11 機器上跑（發行線 `3b612cf` 的程式碼；MinGW 15.2 與 MSVC 19.51 兩套建置）。完整紀錄：[D201 的 Windows 清單](2026_10_27_pvp_v71_d201_windows.zh-Hant.md)。
+
+- **P5-6 實機**：通過。本機 MinGW 建置的包複製到 `D:`（本機磁碟），P＝156（最長檔案路徑 272）與 P＝210（最長 326）都啟動成功，開 shader 的錯誤不再出現，`graphics ready driver=direct3d12`。用的是本機 MinGW 包，不是 CI 的 MSVC 發行包；讀檔的程式路徑相同。
+- **突變**：`p1-no-long-path-form`、`p1-long-path-from-too-high` 在 MSVC 建置上 killed。在 MinGW 上，兩者的基準線都因為 libstdc++ 的 `remove_all` 在長路徑上卡住而逾時，所以沒跑；這是 MinGW 的問題，MSVC 上沒有出現。`p4-manifest-ansi-path` survived：這台的 ACP＝65001，ANSI 就是 UTF-8，突變後行為不變，所以是環境因素，不是測試失去檢出力。它之後的處理（程序以 manifest 固定 UTF-8 時會變成等價突變）是 OS 子系統的開放決策 19，等使用者決定。
+- 附帶觀察（不擋發行）：MinGW 包裡沒有 MinGW runtime 的 DLL，在只有系統 PATH 的機器上 Client 起不來（`0xC0000135`）。發行用的是 CI 的 MSVC 包，不受影響。這件事記在 Engine 的建置基線提案。
