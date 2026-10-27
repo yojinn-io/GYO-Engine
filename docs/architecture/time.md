@@ -92,9 +92,10 @@ any B result is seen (os-subsystem open decision 13, D71).
    `WaitMechanism` in the same order; mutants `ti-x3-backend-name-changed`, `ow-x7-backend-mapping-shifted`.
 8. **The latch is Time's state** (AGENTS.md §3, State Authority): no other component keeps a copy of it or decides on
    it. engine/os's wake primitive reads it through the reference each `Block` takes, under the condition variable's
-   mutex in the fallback backend, and keeps no copy (os.md Invariant 8; os-wait-backend, D71). Guard: mutant
-   `ow-x1-cv-latch-outside-mutex` (Linux), killed by `tests/common/os/WakeSignalTests.cpp` "loses no signal sent
-   while the waiter checks its latch"; that engine/os keeps no copy is checked in review.
+   mutex in the fallback backend, and keeps no copy (os.md Invariant 8; os-wait-backend, D71). Guard:
+   `tests/common/os/WakeSignalTests.cpp` "loses no signal sent while the waiter checks its latch", against mutant
+   `ow-x1-cv-latch-outside-mutex` (Linux only, not run there yet); that engine/os keeps no copy is checked in
+   review.
 9. **Use after move is refused**: waiting on a moved-from Waiter is a Programmer Error, and `Notify` on it does
    nothing. Guard: "rejects use after move and ignores notifications on a moved-from waiter".
 10. **`GYO::Time` links exactly `GYO::Base` and, privately, `GYO::Os`** (checked at configure time by

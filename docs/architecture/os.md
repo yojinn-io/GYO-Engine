@@ -219,7 +219,8 @@ Only the components whose batch has landed exist; the others are planned in the 
     which cannot fail. A primitive the OS refuses is `IoFailed` with the native error. engine/time reports it as
     `WaitPrimitiveUnavailable` with the same message and `IoFailed: errno=<n>` or `IoFailed: win32=<n>` as its
     detail (error-handling.md rule 5). ★ (D71): the detail used to be the `strerror` text or `GetLastError=<n>`.
-  - `Signal` (any thread) wakes the block in progress, or the next one if none is. The caller sets its latch first.
+  - `Signal` (any thread) wakes the block in progress. A signal sent before the block ends it at once: kqueue and the
+    Windows event keep it pending themselves, the fallback through the caller's latch, which the caller sets first.
   - `Block(latch, timeout)` (the single waiting thread) arms the relative timeout, if any, and returns when
     signalled, when the timeout has passed, or spuriously; the caller re-checks its latch and its time base. macOS
     arms a one-shot `EVFILT_TIMER` in nanoseconds with `NOTE_CRITICAL` (no timer-coalescing leeway) in the `kevent`
@@ -373,9 +374,10 @@ Known blind spots, left to review:
 8. **State authority** (AGENTS.md §3). engine/os owns only its own OS resources and the shutdown-request flag.
    Queries (executable path, CPU time, file status) read the OS every time; nothing is cached to decide on. The
    Waiter's latch belongs to Time: engine/os reads it through the reference each `Block` takes, under the condition
-   variable's mutex in the fallback backend, and keeps no copy (D71). Guard: mutant `ow-x1-cv-latch-outside-mutex`
-   (Linux), killed by `tests/common/os/WakeSignalTests.cpp` "loses no signal sent while the waiter checks its
-   latch"; that engine/os keeps no copy is checked in review.
+   variable's mutex in the fallback backend, and keeps no copy (D71). Guard: `tests/common/os/WakeSignalTests.cpp`
+   "loses no signal sent while the waiter checks its latch", against mutant `ow-x1-cv-latch-outside-mutex`, which
+   compiles on Linux only and has not run there yet (a macOS build forced onto the fallback killed it, D71); that
+   engine/os keeps no copy is checked in review.
 9. **Moving a site does not change observable behaviour.** File bytes (CRLF on Windows, append semantics),
    `WaitBackend` strings, name truncation, priority mapping, timeout conversion (100 ns rounding and the
    millisecond fallback on Windows, `NOTE_NSECONDS` on kqueue) and exception specifications stay as they are. The

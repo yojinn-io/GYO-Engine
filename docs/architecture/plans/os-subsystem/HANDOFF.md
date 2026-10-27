@@ -673,6 +673,24 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - engine/time：`Waiter.cpp` 只留 latch、單一等待者、deadline 迴圈與 LateSince；`gyo_time` 改成 PUBLIC Base、PRIVATE Os。
   - 守衛：連結檢查、allowlist（刪 Waiter.cpp 三條，WaiterTests 改標永久）、突變重新定位（tt1-notify-dropped、tt1-no-recheck、ti-x1、os-g6-stale；其餘四個 tt1 的 find 不變）與新增 ow-x1～ow-x8。
   - 文件草稿：os.md（Wait 的合約、Invariant 6 的例外、Invariant 8 的守衛）、time.md（Ownership、Invariant 7、8、10）、docs/architecture.md。定案前做突變與審查者的驗證（D71）。
+- w2～w4 的建置與驗證（量測結束後）：
+  - 邊界守衛第一次失敗：R3 把 Waiter 成員的初始化 `signal(…)` 當成 CRT 的 `signal` 呼叫（誤報）。成員改名 `primitive`，規則不動，tt1-notify-dropped 與 tt1-no-recheck 的 find 跟著改。
+  - 本機（macOS Intel）：core 34／34；產品組態 98／98；`object_fps_pvp.ipc`、`.worker`、`.close_timing` 逐一串行 3／3。
+  - 突變：tt1-* 7／7 killed（4 個 find 不變、2 個重新定位、tt1-stop-without-notify）；os 目錄 11／11 killed（ow-x2～x4、ow-x7、ow-x8、ti-x1～x3、th-x1、os-g6、os-g8）；Linux 的 ow-x1、Windows 的 ow-x5、ow-x6 留給實機。
+  - 實作 `4041cf42`、文件草稿 `7e6592d1`。
+- w5-review（1 位，D71；依 PR #98 的規則，引擎用 Fable 5.1、檔位 xhigh、唯讀；prompt 在啟動前貼在主會話；使用者說「照建議，繼續」）：沒有 blocker。
+  - major 2 個，都已修：
+    - M1：ow-x7 在 Windows 殺不掉（Windows 的檢查接受兩種計時器，平移一格剛好落在另一種）。改成平移兩格，四個平台都會落到錯的後端；本機 killed。
+    - M2：競爭測試的掃描放在 signaller 端，對 ow-x1 的檢出力可能不足。探索性檢查（scratchpad，不算宣告的試行）：把 `WakeSignal.cpp` 強制編成 cv 後備，在 macOS 的 pthread 上跑。舊測試：正確版 3 次 0 遺失；ow-x1 3 次都失敗，但 20000 輪只遺失 1～2 次，勉強。把掃描移到 waiter 端、signaller 先自旋再讓出：正確版 3 次 0 遺失；ow-x1 在 705～2689 輪內就遺失 3 次，命中率約十倍。改用後者。Linux（futex）上的結果仍要實機確認。
+  - minor：
+    - m1：文件把 ow-x1「已殺死」寫成既成事實。改成「只在 Linux 編得到、還沒在那裡跑」。
+    - m2：「這批沒有建置證據」不成立：審查者讀的是主 checkout 的建置樹（10 月 4 日）；本 worktree 的建置樹有 `WakeSignal.cpp.o` 與當天的測試紀錄。
+    - m3：Linux 的判定範圍在 (a) 的文字有歧義。在任何 Windows、Linux 的 B 結果之前寫定：每個平台都判 deadline 與 notify（與看結果前提交的 `beb14cf7` 腳本相同）；Linux 用 `--modes cli`，Windows 用 `--modes cli window`。
+    - m4：補兩個便宜的測試缺口：moved-from 的案例改成在搬入端真的 Block 再由另一執行緒喚醒；逾時案例加下界（三次中最長的一次至少 10 ms，合約允許虛假喚醒，所以不要求每次），並加突變 ow-x9（macOS，本機 killed）、ow-x10（Windows）。逾時換算的進位方式與 ★ 的 detail 格式沒有測試，只靠審查（已知缺口）。
+  - note：
+    - 搬移逐行等價、三個後端沒有新的 lost wakeup、突變的 find 都唯一、拿掉 `Threads::Threads` 在 Linux 沒有影響（經 gyo_os 以 link-only 取得）：審查者獨立確認。
+    - Signal 的說明「或下一次」對 cv 後備只在呼叫端先設 latch 時成立：標頭與 os.md 改寫成明確的前提。
+    - 設計備忘：cv 後備若自己在 mutex 內持有 pending 旗標，就不必讀 Time 的 latch，三個後端介面一致，Invariant 8 也不必寫跨邊界的例外。PLAN 3.8 核准的是現在的做法；有壓力時再評估，這批不動。
 
 ### os-threads-backend
 

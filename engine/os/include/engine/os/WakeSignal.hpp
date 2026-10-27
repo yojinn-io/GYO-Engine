@@ -37,8 +37,10 @@ public:
     WakeSignal& operator=(const WakeSignal&) = delete;
     ~WakeSignal();
 
-    // Any thread. Wakes the block in progress, or the next one if none is.
-    // The caller sets its latch before signalling. Must not race the signal's
+    // Any thread. Wakes the block in progress. A signal sent before the block
+    // ends it at once: kqueue and the Windows event keep it pending
+    // themselves, the condition-variable fallback through the caller's latch,
+    // which the caller sets before signalling. Must not race the signal's
     // destruction; on a moved-from signal it does nothing.
     void Signal() noexcept;
 

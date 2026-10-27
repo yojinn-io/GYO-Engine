@@ -1979,10 +1979,10 @@
     },
     {
       "id": "ow-x7-backend-mapping-shifted",
-      "what": "The Waiter reports the next backend instead of the engine/os mechanism (time.md Invariant 7)",
+      "what": "The Waiter reports another backend than the engine/os mechanism (time.md Invariant 7); shifted by two so the Windows check, which accepts either timer, fails too",
       "file": "engine/time/src/Waiter.cpp",
       "find": "    return static_cast<WaitBackend>(mechanism);",
-      "replace": "    return static_cast<WaitBackend>((static_cast<int>(mechanism) + 1) % 4);",
+      "replace": "    return static_cast<WaitBackend>((static_cast<int>(mechanism) + 2) % 4);",
       "target": "gyo_time_tests",
       "cases": "*uses the platform backend*",
       "expect": "waiter\\.Backend\\(\\) == WaitBackend::\\w+.*is NOT correct"
@@ -1999,6 +1999,32 @@
       "target": "gyo_os_tests",
       "cases": "*reports the platform mechanism*",
       "expect": "CHECK\\( signal.Mechanism\\(\\) == WaitMechanism::Kqueue \\) is NOT correct"
+    },
+    {
+      "id": "ow-x9-kqueue-timeout-armed-for-nothing",
+      "what": "The kqueue Block arms its timer for 1 ns whatever the timeout, so every block ends at once (the Waiter would spin)",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/wait/WakeSignal.cpp",
+      "find": "            const auto nanoseconds = std::max<std::int64_t>(1, timeout->count());",
+      "replace": "            const auto nanoseconds = std::int64_t{1};",
+      "target": "gyo_os_tests",
+      "cases": "*by its relative timeout*",
+      "expect": "no block with a 20 ms timeout waited for it"
+    },
+    {
+      "id": "ow-x10-windows-timeout-armed-for-nothing",
+      "what": "The Windows Block sets its timer for 100 ns whatever the timeout, so every block ends at once (the Waiter would spin)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/wait/WakeSignal.cpp",
+      "find": "        const auto hundreds = std::max<long long>(1, (timeout->count() + 99) / 100);",
+      "replace": "        const auto hundreds = 1LL;",
+      "target": "gyo_os_tests",
+      "cases": "*by its relative timeout*",
+      "expect": "no block with a 20 ms timeout waited for it"
     }
   ]
 }
