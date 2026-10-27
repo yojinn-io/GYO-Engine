@@ -472,19 +472,6 @@
       "expect": "REQUIRE\\( direct \\) is NOT correct"
     },
     {
-      "id": "p4-manifest-ansi-path",
-      "what": "ContentManifest turns its paths into text with path::string() (the ANSI code page on Windows) again (P4)",
-      "platforms": [
-        "win32"
-      ],
-      "file": "engine/asset/src/ContentManifest.cpp",
-      "find": "    auto text = Os::Files::PathToUtf8(path);\n",
-      "replace": "    auto text = Base::Result<std::string, Os::OsError>(path.string());\n",
-      "target": "engine_tests",
-      "cases": "*outside the ANSI code page*",
-      "expect": "outside the ANSI code page"
-    },
-    {
       "id": "os-g11-roots-skip-products",
       "what": "The guard stops scanning apps, so a new product site goes unseen (Invariant 1, os-guard-wide)",
       "file": "tests/common/os/os_boundary_guard.py",

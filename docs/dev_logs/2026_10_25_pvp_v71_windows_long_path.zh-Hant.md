@@ -44,3 +44,11 @@
 - **P5-6 實機**：通過。本機 MinGW 建置的包複製到 `D:`（本機磁碟），P＝156（最長檔案路徑 272）與 P＝210（最長 326）都啟動成功，開 shader 的錯誤不再出現，`graphics ready driver=direct3d12`。用的是本機 MinGW 包，不是 CI 的 MSVC 發行包；讀檔的程式路徑相同。
 - **突變**：`p1-no-long-path-form`、`p1-long-path-from-too-high` 在 MSVC 建置上 killed。在 MinGW 上，兩者的基準線都因為 libstdc++ 的 `remove_all` 在長路徑上卡住而逾時，所以沒跑；這是 MinGW 的問題，MSVC 上沒有出現。`p4-manifest-ansi-path` survived：這台的 ACP＝65001，ANSI 就是 UTF-8，突變後行為不變，所以是環境因素，不是測試失去檢出力。它之後的處理（程序以 manifest 固定 UTF-8 時會變成等價突變）是 OS 子系統的開放決策 19，等使用者決定。
 - 附帶觀察（不擋發行）：MinGW 包裡沒有 MinGW runtime 的 DLL，在只有系統 PATH 的機器上 Client 起不來（`0xC0000135`）。發行用的是 CI 的 MSVC 包，不受影響。這件事記在 Engine 的建置基線提案。
+
+## p4 退場（D212，2026-10-27）
+
+OS 子系統的 os-utf8-codepage（Engine D64～D67）讓所有 Windows 執行檔以 manifest 把 ANSI code page 固定成 UTF-8。之後 `path::string()` 在我們的程序裡也是 UTF-8，`p4-manifest-ansi-path`（`ContentManifest.cpp` 的 `PathToUtf8` 換回 `path.string()`）在任何帶 manifest 的 Windows 上行為不變，是等價突變。照 D185「等價突變移出目錄並寫明理由」，與同類的 pu-x6、pu-x7（Engine D66）一樣退場，從 `docs/architecture/plans/os-subsystem/scripts/mutations.json` 刪除。
+
+- 原本守的性質：catalog 與 resolver 根目錄的路徑以 UTF-8 交給 Engine，不經系統 code page。
+- 之後由什麼守：manifest 的設定期檢查（每個 Windows 執行檔都帶 `activeCodePage=UTF-8`），以及 `gyo_os_tests` 檢查程序的 ACP 是 65001 的結構檢查（OS 子系統的 R6）。P5 宣告第 4 項的測試（ANSI code page 外的根目錄載入 `ContentManifest`）照常保留，在 manifest 下它驗的是「讀得到」，不再能區分轉換方式。
+- 決定：使用者把 p4 交給本會話（「p4 的處理一併交給它」，經 OS 子系統的會話轉達），本會話選退場；另兩個選項（改寫成任何機器都判定得了的形式、只在刻意不帶 manifest 的程式上跑）都要新增只為這條突變存在的程式或測試，不採用。

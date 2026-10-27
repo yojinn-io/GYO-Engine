@@ -43,7 +43,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **發行線（PR [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)，draft）**：windows-long-path 完成（P5-6 實機 2026-10-27 通過；p1 兩條在 MSVC killed；p4 因 ACP＝65001 存活，等 OS 子系統的開放決策 19）；quick-close 完成（Windows 10 次通過）。剩下：OS 子系統的 3 批（D211 之後開始）、lan15（D208 延期）、PR #96 合併。
+- **發行線（PR [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)，draft）**：windows-long-path 完成（P5-6 實機 2026-10-27 通過；p1 兩條在 MSVC killed；p4 在 manifest 下成為等價突變而退場，D212）；quick-close 完成（Windows 10 次通過）。剩下：OS 子系統的 3 批（D211 之後開始）、lan15（D208 延期）、PR #96 合併。
 - **發行線的 quick-close**：D202 選 q1、門檻核准；D203 加 stalled ≤1 s 判定與 CTest `object_fps_pvp.close_timing`；macOS 驗收通過，Windows 與 D201 一起跑（指令在 [quick-close.md](quick-close.md)）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
 - INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
@@ -206,6 +206,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D209 | （2026-10-27）Windows 機器的清單（第 1～5 項）與 lan15，等 OS 統一子系統做到 os-net-errors 之前的批次全部完成後一起做。使用者在 OS 子系統的會話確認（Engine D62）：「之前」含計時核心，剩 4 批：os-path-utf8-sweep、os-wake-record、os-threads-backend、os-wait-backend（time-threads-invariants 已完成）。那次 Windows 機器上另加計時核心的 L2 與 os-wake-record 的 Windows 基準。排在 PR #96 合併後的只有 os-net-errors 與 os-close | 使用者：「我想乾脆吧「OS 統一子系統」的任務跑完一起弄。」之後：「那就到 os-net-errors 這個任務之前。」範圍經 OS 子系統的會話向使用者確認（Engine D62） |
 | D210 | （2026-10-27）OS 子系統的 os-path-utf8-sweep（Engine D63）與 time-threads-invariants 併進發行線：`16377127`（`--no-ff` 到 `69e39a26`），本機 `ctest` 97／97；Red run 40431320545（只有 windows-x64 的新案例失敗）、Green run 40433158383（`bfea4f6b`，四平台成功）。產品端：Client 的 `--movement-trace`、`--log` 改走 `Os::Files::PathFromUtf8`（不是 UTF-8 的參數以結束碼 2 拒絕）；產品突變 4 條重新定位 | 使用者在 OS 子系統的會話：「推送 69e39a26，並告訴消費端可以把本分支併到 69e39a26（os-path-utf8-sweep 與 time-threads-invariants）。」（經該會話轉達） |
 | D211 | （2026-10-27）先在 Windows 機器上跑 Windows 專用的測試（發行線 `3b612cf2`，LF checkout），完成之後才讓 OS 子系統開始剩下的 os-wake-record、os-threads-backend、os-wait-backend；期間發行線不再併入新的批次 | 使用者：「先等等，我讓windows跑完專用的測試，完成之後直接讓 OS子系統開始」 |
+| D212 | （2026-10-27）OS 子系統的 os-utf8-codepage（Engine D64～D67：所有 Windows 執行檔以 manifest 固定 ANSI code page 為 UTF-8）併進發行線：`7e92069d`（`--no-ff` 到 `3e9e9cf3`）；Red run 40450140816（只有 windows-x64 的新案例失敗）、Green run 40456874710（四平台成功）。`p4-manifest-ansi-path` 在 manifest 下成為等價突變，照 D185 退場（從 os-subsystem 的目錄刪除；理由寫在 windows-long-path 的 dev_log）。啟動行記錄 `acp=` 屬於日誌契約，這次不加 | 使用者在 OS 子系統的會話：「推送 3e9e9cf3，並告訴消費端可以把本分支併到 3e9e9cf3（os-utf8-codepage）。p4 的處理一併交給它。」（經該會話轉達） |
 
 ## 規劃紀錄（記錄器）
 
