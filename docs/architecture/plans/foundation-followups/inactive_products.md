@@ -256,3 +256,11 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 
 - 破損：無。只新增 tests/common/time 的兩個量測執行檔（不是 CTest）與一個 Python 腳本，Engine 與產品的程式都沒有改。
 - 選用：無。
+
+### os-threads-backend 執行緒命名與優先度
+
+狀態：本機完成（2026-10-27，D69）。
+
+- 破損：無。`RoleThread` 的公開介面不變；`GYO::Threads` 多了 PRIVATE 依賴 `GYO::Os`，連結它的產品不用改 CMake。
+- 行為：Windows 的角色名稱改成 UTF-8 轉 UTF-16（以前逐 byte 擴寬）。ASCII 名稱結果相同。
+- 選用：要替自己建立的執行緒命名或設優先度時，用 `Engine::Os::Thread::SetCurrentName`／`SetCurrentPriority`，不要直接呼叫 pthread 或 Win32。

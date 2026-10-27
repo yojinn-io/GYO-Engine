@@ -14,6 +14,7 @@ every tool reaches the operating system through neutral APIs, so none of them br
 ```text
 products / tools ──┬──→ engine/asset ──→ engine/io ──→ engine/os ──→ engine/base
                    ├──→ engine/trace ──→ engine/threads ──→ engine/time ──→ engine/os
+                   │                     engine/threads ──→ engine/os (thread name and priority)
                    ├──→ engine/platform/sdl ──→ engine/os, SDL
                    └──→ engine/os (process facts, console)
 ```
@@ -32,7 +33,7 @@ primitives here.
 | Process | Executable path, process and thread CPU time, local calendar time, the process ANSI code page (`ExecutablePath`, `ProcessCpuTime`, `CurrentThreadCpuTime`, `ToLocalTime`, `AnsiCodePage`) | os-process-info; code page: os-utf8-codepage (landed) |
 | Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
-| Thread | Thread name and priority hint for the current thread | os-threads-backend |
+| Thread | Thread name and priority hint for the calling thread (`SetCurrentName`, `SetCurrentPriority`) | os-threads-backend (landed) |
 | Wait | The wake primitive behind `Time::Waiter` | os-wait-backend |
 | Net (conditional) | Neutral classification of socket error codes | os-net-errors |
 
@@ -195,6 +196,18 @@ Only the components whose batch has landed exist; the others are planned in the 
       the C runtime's SIGINT handling reset itself. On a close the handler waits up to 4 s, since the OS ends the
       process when it returns (about 5 s after the close); the program's own exit ends the wait sooner. Log off
       and system shutdown keep the default handling. `TerminateProcess` never reaches a handler.
+- **Thread** (os-threads-backend, D69). The calls engine/threads' `RoleThread` makes on a new role's thread before its
+  body runs, moved from it line by line; what a role is and its lifetime stay with engine/threads. One source with
+  per-OS branches (`engine/os/src/thread/Thread.cpp`, os-subsystem open decision 11 (c)). Each answers whether
+  the platform took the request and is never an error (Invariant 10).
+  - `SetCurrentName` names the calling thread with a UTF-8 name: `pthread_setname_np` on macOS; on Linux with the
+    first 15 bytes (the platform's limit); on Windows `SetThreadDescription` (Windows 10 1607 and later, looked up
+    at run time) with the name converted to UTF-16. ★ (D69): Windows used to widen each byte, which garbled a
+    name beyond ASCII; a name that is not UTF-8 is now not applied. Other platforms have no call, so `false`.
+  - `SetCurrentPriority` applies a hint: macOS QoS classes (Background as utility, Normal as default, Interactive
+    as user-interactive), Windows thread priorities (below normal, normal, above normal), Linux only Background as
+    nice 10, which fails if the process already runs nicer. Normal on Linux and other platforms makes no call and
+    counts as applied; Interactive on Linux needs privileges and is not tried.
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
@@ -242,8 +255,8 @@ engine/ and tests/common/; any other allowlist covers only files under its own d
 deletes its allowlist and no common file changes.
 
 Three configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
-links exactly `GYO::Base` (and, on Windows, `shell32` for `CommandLineToArgvW`, a system library Invariant 3
-allows; D49, D50), and no target or directory under the scanned roots outside engine/os and
+links exactly `GYO::Base` and system libraries Invariant 3 allows: on Windows `shell32` for `CommandLineToArgvW`
+(D49, D50), elsewhere `Threads::Threads` for `pthread_setname_np` (D69); and no target or directory under the scanned roots outside engine/os and
 tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
 name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
 so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
@@ -311,7 +324,8 @@ Known blind spots, left to review:
    directly (os-subsystem open decision 2, D58). Tests and build/acceptance are not bound by R4: they only write temporary paths the developer
    controls.
 3. **engine/os is the lowest layer for OS differences** (R5 and the link check). `GYO::Os` links only `GYO::Base`
-   and OS system libraries (`Threads::Threads` once the condition-variable wait backend moves in). engine/os
+   and OS system libraries (`shell32` on Windows; `Threads::Threads` elsewhere, since the thread naming moved in,
+   os-threads-backend, D69). engine/os
    includes only engine/base, the standard library and OS headers. Its API has no type of a module above it: no
    `Uri`, `IFileSystem` or `IStream`.
 4. **Public headers do not leak the OS.** engine/os/include includes only the standard library and engine/base. A

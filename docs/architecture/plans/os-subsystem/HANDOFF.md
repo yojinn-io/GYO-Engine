@@ -107,6 +107,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D66：os-utf8-codepage 開工前的決定（全部照建議）。<br>檔位：high＋1 位 xhigh 審查。<br>開放決策 17 採 (a)：根目錄在設定期走過 engine、apps、tools、build/acceptance、tests 的執行檔自動套用（FetchContent 的第三方工具不在範圍），並提供程序 code page 的查詢 API。18 採 (a)：manifest 與嵌入函式放在 engine/os。23：MSVC 與 MinGW 兩條路徑都寫，CI 驗 MSVC，MinGW 留給下一次 Windows 機器。<br>19 採 (a)：pu-x6、pu-x7 退場（p4 交 v7.1 會話）。20：Invariant 11 限定 Windows 10 1903 以後，不宣稱涵蓋 Wine。21：不加 longPathAware。22：文件寫最低版本，不拒絕啟動。24 採 (a)：兩個測試缺漏併進這一批。Invariant 11 用草稿。<br>§14.4 的判定變更（ACP 測試、FontDirectories 的預期清單、os-f4／os-c6／pu-x5 改由 R6 判定、pu-x6／pu-x7 退場）與 ★ 事前宣告（第三方與 CRT 的窄字元行為、窄字元 argv 改成 UTF-8、os-path-utf8-sweep 的 Red 測試在 manifest 下不再抓得到窄字元轉換）：同意開工，定案前做突變與審查。Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問）。估時 8～12 h，另加 Windows 實機約 1～2 h | 使用者對四個問題選：「high＋1 位 xhigh 審查」「照建議」「照建議」「同意開工，定案前做突變與審查」 |
 | 2026-10-27 | D67：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8（產品或工具需要自己的 manifest 設定或 UTF-8 以外的 code page 時，停止修改 engine/os 的 manifest，先決定宣告與合併的方式）、審查後補的 ★（OEM code page 大概也變成 65001；沒開 `Utf8ConsoleOutput` 的程式在 950／932 主控台印非 ASCII 的窄字元會變成 UTF-8 的位元組）、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔，Go 服務不算），都照草稿定案 | 使用者：「Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字，都照草稿定案。」 |
 | 2026-10-27 | D68：os-wake-record 開工前的決定（全部照建議）。<br>檔位：medium，notify→wake 的量法用 high。<br>L2 的事前宣告（只記錄，沿用 TT-1 L2）：60 Hz 的絕對期限，Waiter、condition_variable、`sleep_until` 各 30 秒；新增 notify→wake（Waiter、condition_variable 各 30 秒）；沒有視窗與有視窗兩種情境；每段前後各 5 秒 sleeper；`meta.txt` 記錄程式雜湊、OS、CPU、負載。不設門檻；「Waiter 的 P99 低於 condition_variable」只當觀察。<br>平台：macOS arm64 現在在本機量；Windows（沒有視窗與有視窗）、Linux、macOS Intel 在下一次實機時用本批的 commit 量，不擋 os-threads-backend 與 os-wait-backend；Linux 用哪台機器到時再定。<br>和消費端協調：Windows 沒有視窗的那組晚醒數據交給 v7.1 的 F5／F7 參考，Match 層的數據仍由它在 lan15 量 | 使用者：「開始 os-wake-record。先說明檔位、要動的檔案，以及需要我同意的地方。」之後對四個問題選：「medium，notify→wake 用 high」「照草案」「本機先量，實機那次補」「協調」 |
+| 2026-10-27 | D69：os-threads-backend 開工前的決定。<br>檔位：high＋1 位 xhigh 審查（使用者選的；建議是 high 加 Start 順序局部 xhigh）。<br>連結（§14.4，Design Invariant 的變更）：照草案。gyo_threads 以 PRIVATE 連結 GYO::Os，並加「不得公開」的檢查（threads.md Invariant 9）；gyo_os 在 POSIX 上以 PRIVATE 連結 Threads::Threads（os.md Invariant 3）。兩條條文與守衛期望值一起改，定案前做突變。<br>Windows 非 ASCII 名稱的缺陷（逐 byte 擴寬）：這批修，宣告 ★，改用 engine/os 的 UTF-8→UTF-16 轉換，加讀回測試。<br>L2（事前宣告、只記錄，附撤回條件）：A＝搬動前、B＝搬動後，消費端每個 role started 行的 name_applied、priority_applied、wait_backend 必須逐字相同，任一項不同就撤回整批。macOS Intel 現在在本機做；Windows 與 Linux 在下一次實機用 A、B 兩個 commit 補，不擋 os-wait-backend | 使用者：「開始 os-threads-backend。先說明檔位、要動的檔案，以及需要我同意的地方。」之後對四個問題選：「high＋1 位 xhigh 審查」「照草案」「這批修，宣告 ★」「本機先做，實機那次補」 |
 
 ## 消費端的壓力摘要
 
@@ -639,6 +640,52 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 結束要求後再按一次 Ctrl+C：直接結束，符合設計；但 log 是 0 B（開放決策 25）。
   - Ctrl+Break 與 `os.console_close` 的重跑，使用者決定不補。
 - 由此得到的方向：D64（程序自己決定 UTF-8），讓 ACP 類的判定不再挑機器（PLAN 第 7.18 節）。
+
+### os-threads-backend
+
+- 2026-10-27：開始（D69）。基準（A）是本分支 `5733d361`，程式與 `c9087d0c` 相同。
+- L2 的 A（macOS Intel，搬動前）：
+  - 用消費端自己的測試程序啟動它的角色：ctest 的 `object_fps_pvp.worker`、`.ipc`、`.close_timing`、`.cpu`。
+  - 涵蓋四種角色：`gyo-match-sim`、`gyo-match-ipc`、`gyo-client-net`，以及用戶端模擬角色（測試裡名為 `gyo-test-sim`，和 GUI Client 的模擬角色走同一段程式）。
+  - 每一行都是 `wait_backend=Kqueue name_applied=1 priority_applied=1`。
+  - 證據在主 checkout 的 `build/target/_build/test/logs/os-threads-l2-20261027-macos-intel/`（`A-meta.txt`、`A-roles.txt`、兩份 ctest 輸出）。
+- 實作（本機 `ca9e6558`；審查後的修正併進同一個 commit，成為 `2ec5905d`）：
+  - engine/os：
+    - `Thread.hpp` 提供 `SetCurrentName`、`SetCurrentPriority`、`PriorityHint`。
+    - 實作從 `RoleThread.cpp` 逐行搬到 `engine/os/src/thread/Thread.cpp`，依開放決策 11 (c) 一個檔案、以 `#if` 分平台。
+    - Windows 的名稱改用新的 `Detail::Utf8ToWide`（D69 ★）。
+    - POSIX 上 `gyo_os` 以 PRIVATE 連結 `Threads::Threads`。
+  - engine/threads：`RoleThread` 只呼叫 engine/os，OS 標頭與 `#if` 都拿掉；`gyo_threads` 以 PRIVATE 連結 `GYO::Os`；優先度以 `static_cast` 轉成提示，三個值用 `static_assert` 對齊。
+  - 守衛：Engine 的 allowlist 刪掉 `RoleThread.cpp` 的 R1、R2、R3 三條和空的節標題；`RoleThreadTests.cpp R2 4` 改標為永久條目並寫理由。
+  - 連結檢查：
+    - `gyo_threads` 是 exactly GYO::Time、Threads::Threads、GYO::Os，且 GYO::Os 不得公開。
+    - `gyo_os` 在 POSIX 上是 exactly GYO::Base、Threads::Threads。
+  - 讀回測試 `tests/common/os/ThreadTests.cpp`：
+    - 用 OS 的查詢讀回名稱與 QoS／thread priority／nice；名稱含 Windows 非 ASCII、Linux 的 15 bytes。
+    - 另有一個案例經 `RoleThread` 在角色自己的執行緒上讀回優先度，守 threads.md Invariant 5 的對應。
+  - 新的公開標頭加進 `OsHeaderHygieneTests`：第一次全測時 `os.header_hygiene` 失敗，原因是我漏了它。
+- L2 的 B（macOS Intel，搬動後）：四種角色的 `role started` 行和 A 逐字相同；審查修正之後重抓（B2）也逐字相同。證據同一個目錄（`B-*`、`B2-*`、`diff.txt`）。
+- xhigh 審查（1 位，讀 `ca9e6558`；在 scratchpad 用 CMake 4.4.3 重現換行、匯出樹跑守衛）：
+  - major 2 個，都已修：
+    - ThreadTests 的寬字串字面值直接寫中日韓文字，`gyo_os_tests` 沒有 `/utf-8`，MSVC 會用 ACP 讀原始碼，windows-x64 的 L1 會失敗，也會讓 Windows 上整份突變目錄的基準線失敗。改成 `\x` 跳脫（`L"gyo-\x57F7…"`），th-x3 的 expect 跟著改。
+    - 既有突變 os-g8-link 的 expect 用字面空白，比不到 CMake 換行後的訊息（POSIX 的期望值變長後換行）。改成 `\s+`；Windows 上從 D49 起就已經是這樣。
+  - minor 3 個，都已修：
+    - RoleThread 的優先度對應沒有守衛。改成 `static_cast` 加 `static_assert`，並加經 RoleThread 讀回的案例與 th-x8。
+    - 在 `std::thread` 裡用 REQUIRE，失敗時會讓程序終止且訊息遺失。改成在工作執行緒上只讀值、回主執行緒再斷言。
+    - allowlist 的歸屬註記過期。
+  - note：
+    - 範圍外的列舉值行為：改用 cast 後與舊碼相同。
+    - macOS 多一次字串複製：可忽略。
+    - `Utf8ToWide` 和 Files.cpp 的 `ToWide` 近似重複：記為 code smell。
+    - os.md Invariant 6 寫「Functions return `Base::Result`」，新 API 回 bool：交使用者決定是否寫明例外。
+    - 分層圖與 docs/architecture.md 的依賴欄：已同步。
+- 突變（macOS 能跑的）：
+  - ti-x1、ti-x2、th-x1、th-x2、th-x4、th-x7、th-x8、os-g6、os-g8 killed；tt1-stop-without-notify、tt2-role-backend-fixed killed。
+  - Windows 的 th-x3、th-x5 與 Linux 的 th-x6、ti-x4，留給實機。
+- 本機（macOS Intel x86_64）：core 34／34；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3；邊界守衛通過。
+- 要使用者決定（定案時）：
+  - threads.md Invariant 9 與 os.md Invariant 3 的新條文（D69 同意草案、定案前做突變，突變已完成）。
+  - os.md Invariant 6 是否寫明「回報是否套用的請求回傳 bool」這個例外（Thread、`Utf8ConsoleOutput::Applied()`）。
 
 ### os-wake-record
 
