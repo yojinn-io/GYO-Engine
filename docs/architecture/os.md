@@ -152,7 +152,7 @@ Only the components whose batch has landed exist; the others are planned in the 
     example `std::system_category().message()` (`FormatMessageA`) and MSVC's `path::string()`, which no longer
     throws for characters outside the old code page (it still throws for an unpaired surrogate); narrow `argv`
     (the host shader tool, the acceptance probes) arrives as UTF-8.
-  - ★ (found in the batch's review): the OEM code page most likely becomes 65001 too (not verified on Windows).
+  - ★ (found in the batch's review, accepted in D67): the OEM code page most likely becomes 65001 too (not verified on Windows).
     The console's code page does not change, so a program that does not enable `Utf8ConsoleOutput` (the host
     shader tool, tests, probes) and prints non-ASCII narrow text to a console set to 950 or 932 now shows it as
     UTF-8 bytes where it showed it in the old code page.
@@ -374,7 +374,7 @@ Known blind spots, left to review:
 7. One capability on one OS needs branches across two or more engine/os files, the per-OS files are mostly
    duplicates, or a platform whose process and file model differs from both POSIX and Win32 is added: propose a
    backend interface with a selection table.
-8. (os-utf8-codepage, draft to be agreed) A product or tool needs manifest settings of its own (DPI awareness, the
+8. (os-utf8-codepage, D67) A product or tool needs manifest settings of its own (DPI awareness, the
    UAC level, `longPathAware`) or a code page other than UTF-8: stop editing engine/os's manifest for it; decide how
    an owner declares manifest parts and how they merge (MSVC merges `.manifest` sources, a `.rc` holds one
    resource), or move the manifest out of engine/os.

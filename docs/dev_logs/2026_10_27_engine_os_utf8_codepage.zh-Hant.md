@@ -28,7 +28,7 @@
   - `FileChangeTests` 的 Windows 字型預期清單補上使用者的字型目錄。
 - 文件：
   - os.md 的 Components、Contracts、Guard 與盲點、Invariant 11（D66 同意的草稿，範圍依審查改成「CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔」）。
-  - Replacement Criterion 8 的草稿，要使用者同意。
+  - Replacement Criterion 8（D67 定案）。
   - inactive_products.md。
 
 ## 驗證與經緯
@@ -54,6 +54,7 @@
   - 相關的既有突變 20／20 killed。
   - Windows 專用的 pu-x9、pu-x10、pu-x12，以及 os-w10、os-g18，留給 Windows 機器。
   - pu-x6、pu-x7 依 D66 退場。
+- D67：Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字照草稿定案。
 - 判定的變更（AGENTS §14.4，D66 同意開工、定案前核對）：
 
   | 判定 | 守的性質 | 放寬面 | 收緊面 | 放寬的部分由誰守 |

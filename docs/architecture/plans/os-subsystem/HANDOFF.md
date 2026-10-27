@@ -103,6 +103,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D64：Windows 程序自己把 ANSI code page 定為 UTF-8（application manifest 的 `activeCodePage`），不由執行環境決定。engine/os 一律走寬字元 API 的做法維持主線，manifest 是第二道防線。決定的是方向；細化成批次草案 os-utf8-codepage（PLAN 第 3.10、7.18、9.2 節），Invariant 11 的條文、套用方式與突變的重新設計等開放決策 16～23 都還沒決定。D211 之下目前只改計畫文件 | 使用者在 build-baseline 提案（`docs/architecture/plans/build-baseline/README.md`「文字編碼」一節）：「就用這個方式來處理。程序不應該由環境參數來決定。」2026-10-27 的交接要求本會話細化成計畫 |
 | 2026-10-27 | D65：開放決策 16 採 (b)：os-utf8-codepage 排在 os-wake-record、os-threads-backend、os-wait-backend 之前（改變 D62 的順序；D211 的「Windows 測試完成後讓 OS 子系統開始」由這一批開始）。開工前先說明檔位、要動的檔案與需要同意的地方 | 使用者：「開放決策 16 採 (b)：os-utf8-codepage 排在 os-wake-record、os-threads-backend、os-wait-backend 之前。先說明檔位、要動的檔案，以及需要我同意的地方（開放決策 17～24、Invariant 11、§14.4）。」 |
 | 2026-10-27 | D66：os-utf8-codepage 開工前的決定（全部照建議）。<br>檔位：high＋1 位 xhigh 審查。<br>開放決策 17 採 (a)：根目錄在設定期走過 engine、apps、tools、build/acceptance、tests 的執行檔自動套用（FetchContent 的第三方工具不在範圍），並提供程序 code page 的查詢 API。18 採 (a)：manifest 與嵌入函式放在 engine/os。23：MSVC 與 MinGW 兩條路徑都寫，CI 驗 MSVC，MinGW 留給下一次 Windows 機器。<br>19 採 (a)：pu-x6、pu-x7 退場（p4 交 v7.1 會話）。20：Invariant 11 限定 Windows 10 1903 以後，不宣稱涵蓋 Wine。21：不加 longPathAware。22：文件寫最低版本，不拒絕啟動。24 採 (a)：兩個測試缺漏併進這一批。Invariant 11 用草稿。<br>§14.4 的判定變更（ACP 測試、FontDirectories 的預期清單、os-f4／os-c6／pu-x5 改由 R6 判定、pu-x6／pu-x7 退場）與 ★ 事前宣告（第三方與 CRT 的窄字元行為、窄字元 argv 改成 UTF-8、os-path-utf8-sweep 的 Red 測試在 manifest 下不再抓得到窄字元轉換）：同意開工，定案前做突變與審查。Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問）。估時 8～12 h，另加 Windows 實機約 1～2 h | 使用者對四個問題選：「high＋1 位 xhigh 審查」「照建議」「照建議」「同意開工，定案前做突變與審查」 |
+| 2026-10-27 | D67：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8（產品或工具需要自己的 manifest 設定或 UTF-8 以外的 code page 時，停止修改 engine/os 的 manifest，先決定宣告與合併的方式）、審查後補的 ★（OEM code page 大概也變成 65001；沒開 `Utf8ConsoleOutput` 的程式在 950／932 主控台印非 ASCII 的窄字元會變成 UTF-8 的位元組）、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔，Go 服務不算），都照草稿定案 | 使用者：「Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字，都照草稿定案。」 |
 
 ## 消費端的壓力摘要
 
@@ -693,7 +694,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - core 34／34（含 `cmake.ProcessCodePage`）；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
   - 突變：pu-x8（移到建置層）、pu-x15、pu-x16 killed。
   - pu-x15、pu-x16 從 repo 根目錄跑 `cmake -P` 時，失敗的案例會把合成的樹留在根目錄。改成以 `-DWORK_ROOT=build/target` 放到忽略的目錄，留下的目錄已刪。
-- 2026-10-27：使用者說「推送 30d30f37 與 a9c9dc85 到本分支，手動觸發四平台 L1，驗 os-utf8-codepage 的 Green」。Green 的 L1（[run 40456874710](https://github.com/yojinn-io/GYO-Engine/actions/runs/40456874710)，`a9c9dc85`）全部成功。windows-x64 的 ctest 96／96：gyo_os_tests 通過（`GetACP()` 是 65001，合併後的 manifest 有 activeCodePage），`cmake.ProcessCodePage` 在 MSVC 下通過（嵌入方式是 `.manifest`），產品與編輯器的執行檔也都帶著 manifest 建置、測試通過。 os-utf8-codepage 完成。等使用者決定：Replacement Criterion 8 的草稿、審查後補的 ★、Invariant 11 的範圍文字；以及何時請消費端合併。
+- 2026-10-27：使用者說「推送 30d30f37 與 a9c9dc85 到本分支，手動觸發四平台 L1，驗 os-utf8-codepage 的 Green」。Green 的 L1（[run 40456874710](https://github.com/yojinn-io/GYO-Engine/actions/runs/40456874710)，`a9c9dc85`）全部成功。windows-x64 的 ctest 96／96：gyo_os_tests 通過（`GetACP()` 是 65001，合併後的 manifest 有 activeCodePage），`cmake.ProcessCodePage` 在 MSVC 下通過（嵌入方式是 `.manifest`），產品與編輯器的執行檔也都帶著 manifest 建置、測試通過。 os-utf8-codepage 完成。Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字照草稿定案（D67）。還沒請消費端合併。
 
 ## 未結事項
 

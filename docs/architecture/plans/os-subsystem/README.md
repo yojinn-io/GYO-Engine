@@ -83,6 +83,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 25. **D64**：Windows 程序自己把 ANSI code page 定為 UTF-8（manifest 的 `activeCodePage`），不由執行環境決定；engine/os 的寬字元 API 維持主線，manifest 是第二道防線。使用者的話：「程序不應該由環境參數來決定。」細化成批次草案 os-utf8-codepage（PLAN 第 3.10、7.18、9.2 節），條文與做法的開放決策 16～23 未決；D211 之下目前只改計畫。
 26. **D65**：開放決策 16 採 (b)，os-utf8-codepage 排在計時的三批之前（改變 D62 的順序）。
 27. **D66**：os-utf8-codepage 開工前的決定，全部照建議。檔位 high＋1 位 xhigh 審查；開放決策 17～24 照建議（根目錄走訪自動套用並提供查詢 API、owner 是 engine/os、等價突變退場、不加 longPathAware、最低 Windows 10 1903、MinGW 路徑也寫、兩個測試缺漏併進）；Invariant 11 用草稿；§14.4 的判定變更與 ★ 事前宣告同意開工，定案前做突變與審查；Red 先推測試跑一次 L1。估時 8～12 h。
+28. **D67**：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔）照草稿定案。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
