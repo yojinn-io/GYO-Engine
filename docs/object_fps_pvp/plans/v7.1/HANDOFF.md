@@ -205,6 +205,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D208 | （2026-10-27）lan15 延期（時間對不上），新日期未定；PR #96 的合併仍等 lan15 | 使用者：「lan15 延期，時間對不上。」（分兩則送出） |
 | D209 | （2026-10-27）Windows 機器的清單（第 1～5 項）與 lan15，等 OS 統一子系統做到 os-net-errors 之前的批次全部完成後一起做。使用者在 OS 子系統的會話確認（Engine D62）：「之前」含計時核心，剩 4 批：os-path-utf8-sweep、os-wake-record、os-threads-backend、os-wait-backend（time-threads-invariants 已完成）。那次 Windows 機器上另加計時核心的 L2 與 os-wake-record 的 Windows 基準。排在 PR #96 合併後的只有 os-net-errors 與 os-close | 使用者：「我想乾脆吧「OS 統一子系統」的任務跑完一起弄。」之後：「那就到 os-net-errors 這個任務之前。」範圍經 OS 子系統的會話向使用者確認（Engine D62） |
 | D210 | （2026-10-27）OS 子系統的 os-path-utf8-sweep（Engine D63）與 time-threads-invariants 併進發行線：`16377127`（`--no-ff` 到 `69e39a26`），本機 `ctest` 97／97；Red run 40431320545（只有 windows-x64 的新案例失敗）、Green run 40433158383（`bfea4f6b`，四平台成功）。產品端：Client 的 `--movement-trace`、`--log` 改走 `Os::Files::PathFromUtf8`（不是 UTF-8 的參數以結束碼 2 拒絕）；產品突變 4 條重新定位 | 使用者在 OS 子系統的會話：「推送 69e39a26，並告訴消費端可以把本分支併到 69e39a26（os-path-utf8-sweep 與 time-threads-invariants）。」（經該會話轉達） |
+| D211 | （2026-10-27）先在 Windows 機器上跑 Windows 專用的測試（發行線 `3b612cf2`，LF checkout），完成之後才讓 OS 子系統開始剩下的 os-wake-record、os-threads-backend、os-wait-backend；期間發行線不再併入新的批次 | 使用者：「先等等，我讓windows跑完專用的測試，完成之後直接讓 OS子系統開始」 |
 
 ## 規劃紀錄（記錄器）
 
