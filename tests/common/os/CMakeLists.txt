@@ -1,8 +1,9 @@
 # Tests of the OS layer (docs/architecture/os.md). This is the one common test
 # directory allowed to assert per OS; the boundary guard does not scan it.
 add_executable(gyo_os_tests OsErrorTests.cpp FilesTests.cpp FileWriterTests.cpp FileChangeTests.cpp
-    ProcessTests.cpp ConsoleTests.cpp)
-target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)
+    ProcessTests.cpp ConsoleTests.cpp ThreadTests.cpp)
+# GYO::Threads: ThreadTests reads a role's priority back on the role's thread.
+target_link_libraries(gyo_os_tests PRIVATE GYO::Os GYO::Threads gyo_test_support doctest::doctest)
 add_test(NAME gyo_os_tests COMMAND gyo_os_tests)
 set_tests_properties(gyo_os_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 
@@ -44,8 +45,9 @@ foreach(check IN LISTS gyo_os_console_checks)
 endforeach()
 
 # The OS layer is the lowest layer above GYO::Base: its links, private and
-# interface alike, are exactly GYO::Base and, on Windows, shell32 for
-# CommandLineToArgvW (an OS system library, Design Invariant 3; D49).
+# interface alike, are exactly GYO::Base and OS system libraries (Design
+# Invariant 3): on Windows shell32 for CommandLineToArgvW (D49), elsewhere the
+# thread library for pthread_setname_np (D69).
 # gyo_expect_links is defined with the time tests, which configure first.
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too.
@@ -53,7 +55,7 @@ function(gyo_expect_os_links)
     if(WIN32)
         gyo_expect_links(gyo_os GYO::Base shell32)
     else()
-        gyo_expect_links(gyo_os GYO::Base)
+        gyo_expect_links(gyo_os GYO::Base Threads::Threads)
     endif()
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_os_links)

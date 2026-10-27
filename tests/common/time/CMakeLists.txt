@@ -41,6 +41,13 @@ function(gyo_expect_links target)
 endfunction()
 function(gyo_expect_time_and_thread_links)
     gyo_expect_links(gyo_time GYO::Base Threads::Threads)
-    gyo_expect_links(gyo_threads GYO::Time Threads::Threads)
+    # The role threads name and prioritize themselves through engine/os
+    # (os-threads-backend, D69), privately: what links GYO::Threads gets no
+    # engine/os headers from it.
+    gyo_expect_links(gyo_threads GYO::Time Threads::Threads GYO::Os)
+    get_target_property(interface gyo_threads INTERFACE_LINK_LIBRARIES)
+    if("GYO::Os" IN_LIST interface)
+        message(FATAL_ERROR "gyo_threads exposes GYO::Os to its users; link it PRIVATE")
+    endif()
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_time_and_thread_links)

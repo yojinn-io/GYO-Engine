@@ -2,11 +2,6 @@
 # Format: path rule count  # reason and the batch that removes it (docs/architecture/plans/os-subsystem).
 # Only shrinks: a batch that moves a site deletes or lowers its entry in the same change.
 
-# Thread naming and priority backends (os-threads-backend).
-engine/threads/src/RoleThread.cpp R1 7  # pthread, QoS, Windows and Linux headers
-engine/threads/src/RoleThread.cpp R2 9  # per-OS branches
-engine/threads/src/RoleThread.cpp R3 5  # pthread naming and QoS, SetThreadPriority
-
 # Wait primitive backends (os-wait-backend).
 engine/time/src/Waiter.cpp R1 3  # kqueue and Windows headers
 engine/time/src/Waiter.cpp R2 6  # per-OS branches
@@ -15,7 +10,7 @@ engine/time/src/Waiter.cpp R3 10  # kqueue, kevent, GetLastError
 # Common tests that expect per-OS results; they move to tests/common/os with the batch that moves the site,
 # or stay as permanent entries with the reason written here.
 tests/common/time/WaiterTests.cpp R2 2  # expected backend per OS (os-wait-backend)
-tests/common/threads/RoleThreadTests.cpp R2 4  # expected name and priority per OS (os-threads-backend)
+tests/common/threads/RoleThreadTests.cpp R2 4  # permanent: what a role reports applied per OS; os-threads-backend kept its judgments (PLAN 7.14) and reads the OS back in tests/common/os/ThreadTests.cpp
 tests/common/trace/TraceSinkTests.cpp R2 2  # CRLF on Windows and /dev/full on Linux (permanent unless moved)
 tests/common/core/asset/AssetPathResolverTests.cpp R2 1  # an absolute path per OS (os-close)
 tests/common/platform_sdl/EntryTests.cpp R1 1  # sys/wait.h to read a child's exit status (permanent)
