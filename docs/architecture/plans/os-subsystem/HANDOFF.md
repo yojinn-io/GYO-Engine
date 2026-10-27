@@ -647,6 +647,32 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 ### os-wait-backend
 
 - 2026-10-27：開始（D71）。基準（A）是本分支 `4ffc7c65`。順序：w1-calibrate（比對腳本、A/A 校準與檢出力檢查，看 B 之前）→ w2-move → w3-tests → w4-guards → w5-review → w6-l2 → w7-docs。
+- w1-calibrate：
+  - 比對腳本 `tests/common/time/wake_compare.py`（`beb14cf7`）：A、B 兩組程式依 A B A B … 交錯跑，判定照開放決策 13 (a)，每側取中位數；sleeper 與負荷沿用 `wake_baseline.py`。量測程式 `WakeRecord.cpp` 不改，A、B 只差 Waiter。
+  - 0.5 秒、1 對的冒煙試跑（探索用，不算宣告的試行，§14.1）：腳本可用；樣本只有 30 個，視窗的 P50 有一項超過 +0.02 ms。
+  - 程式副本（主 checkout 的 `build/target/_build/test/logs/os-wait-l2-20261027-macos-intel/programs/`）：
+    - A：`4ffc7c65` 的 wide 建置。`gyo_time_wake_record` 5bf9744c…、`_window` 4d7f870c…。
+    - D（退化版）：同一份原始碼只拿掉 `NOTE_CRITICAL`。b17f5862…、76ae711e…。
+    - 還原後重建的程式與 A 的位元組不同（macOS 每次連結都換 UUID），所以以副本為準。視窗程式以絕對 rpath 載入建置樹的 SDL，A、B 共用同一份。
+  - 宣告的試行（背景執行，量測期間本機不建置）：A/A 4 對（`calibration-AA/`），之後 A 對 D 1 對（`detection-AD/`）。
+  - 收支：一致。A/A 計畫 16 次、跑完 16 次、無效 0 次；A 對 D 計畫 4 次、跑完 4 次、無效 0 次。每次 Waiter 的 deadline 樣本 1791～1800 個：晚醒時不補跑錯過的週期（`WakeRecord.cpp` 的設計），所以 30 秒內的週期數變少，不是丟棄。notify 每次 1800 個，略過的週期 0。
+  - A/A（4 對）：12 項全部通過。最接近界限的是 CLI notify P50：A 0.048、B 0.050，界限 0.068 ms。deadline P99：CLI A 0.151、B 0.150（界限 0.238）；視窗 A 0.128、B 0.130（界限 0.211）。單次的 CLI deadline P50 在 0.066～0.095 ms 之間（差距超過 +0.02 ms），但 4 次的中位數兩側只差 0.0001 ms：取中位數讓 P50 的界限可用。
+  - A 對 D（1 對）：deadline 四項都不通過。CLI P99 8.12 ms、P50 3.04 ms；視窗 P99 2.14 ms、P50 2.08 ms（界限約 0.23、0.10 ms）。notify 四項通過：退化只動計時器，這次檢出力檢查不涵蓋 notify→wake 的退化。
+  - 主機：sleeper 的 P99 在 4.2 ms 與 8 ms 兩種狀態之間切換（Python sleep 的合併），cv 的 P99 也一樣；Waiter 不受影響。CLI 有兩次各 8、10 個超過 1 ms 的尖峰，沒有推動 P99。
+  - 依 D71 的事前條件（A/A 通過 (a)、退化版不通過），開放決策 13 (a) 原文凍結，不再回來問。B 照同一支腳本、同一份 A 副本、4 對交錯跑；不通過時不重跑，先回報。
+- 2026-10-27：圖書管理員通知規則更新（PR #98，AGENTS.md §14 開頭與 agents/effort-gearbox.md）。之後通知已合併（master `52775743`）；合併後的兩份檔案與我讀過的 PR 內容逐字相同。本分支沒有併入 master：本分支會流進消費端的發行線（#96），要不要同步由使用者決定；規則直接從 master 讀。本批照新版做：
+  - 校準與 L2 的回報以收支行開頭（計畫的次數、跑完的次數、無效的次數，每次的樣本數與略過的週期）。
+  - xhigh 審查開始前，先說明由哪個 agent、用哪個引擎與檔位、為什麼，並在主會話貼出 prompt；對抗審查盡量用與提案者不同的引擎。
+  - L2 宣告的「範圍的限界」：
+    - macOS arm64：沒有實機（D11⑩），不量。
+    - Windows 與 Linux：在下一次實機量；在那之前只有 macOS Intel 的結果。
+    - Windows 不初始化 SDL 的程序的計時精度，從未量過（time-threads-trace HANDOFF 的未結事項）；Windows 的 CLI 情境是第一次量。
+    - cv 後備的 ow-x1 只在 Linux 跑得到。
+- w2～w4（在量測期間只寫、不建置）：
+  - engine/os：`WakeSignal.hpp`、`src/wait/WakeSignal.cpp`；與舊碼逐行對照，差異只有參數型別、latch 參照與 ★ 的錯誤格式。
+  - engine/time：`Waiter.cpp` 只留 latch、單一等待者、deadline 迴圈與 LateSince；`gyo_time` 改成 PUBLIC Base、PRIVATE Os。
+  - 守衛：連結檢查、allowlist（刪 Waiter.cpp 三條，WaiterTests 改標永久）、突變重新定位（tt1-notify-dropped、tt1-no-recheck、ti-x1、os-g6-stale；其餘四個 tt1 的 find 不變）與新增 ow-x1～ow-x8。
+  - 文件草稿：os.md（Wait 的合約、Invariant 6 的例外、Invariant 8 的守衛）、time.md（Ownership、Invariant 7、8、10）、docs/architecture.md。定案前做突變與審查者的驗證（D71）。
 
 ### os-threads-backend
 
