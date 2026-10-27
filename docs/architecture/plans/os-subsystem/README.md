@@ -84,6 +84,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 26. **D65**：開放決策 16 採 (b)，os-utf8-codepage 排在計時的三批之前（改變 D62 的順序）。
 27. **D66**：os-utf8-codepage 開工前的決定，全部照建議。檔位 high＋1 位 xhigh 審查；開放決策 17～24 照建議（根目錄走訪自動套用並提供查詢 API、owner 是 engine/os、等價突變退場、不加 longPathAware、最低 Windows 10 1903、MinGW 路徑也寫、兩個測試缺漏併進）；Invariant 11 用草稿；§14.4 的判定變更與 ★ 事前宣告同意開工，定案前做突變與審查；Red 先推測試跑一次 L1。估時 8～12 h。
 28. **D67**：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔）照草稿定案。
+29. **D68**：os-wake-record 開工前的決定，全部照建議。檔位 medium（notify→wake 用 high）；L2 只記錄、沿用 TT-1 的定義並新增 notify→wake；macOS arm64 現在量，其他三個平台在下一次實機用本批的 commit 補，不擋後兩批；Windows 沒有視窗的晚醒數據交給 v7.1 的 F5／F7。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -120,7 +121,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-trace-writers | high＋1 位 xhigh 審查（D58、D60） | 完成（2026-10-26；Red：run 40331764169；Green：四平台 L1 run 40339587478；[dev_log](../../../dev_logs/2026_10_26_engine_os_trace_writers.zh-Hant.md)） | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high＋1 位 xhigh 審查（D63） | 完成（2026-10-27；Red：run 40431320545；Green：四平台 L1 run 40433158383；[dev_log](../../../dev_logs/2026_10_27_engine_os_path_utf8_sweep.zh-Hant.md)） | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |
 | time-threads-invariants | medium（D61） | 完成（2026-10-27；只改文件與測試；[dev_log](../../../dev_logs/2026_10_27_engine_os_time_threads_invariants.zh-Hant.md)） | time.md、threads.md 的 Design Invariants |
-| os-wake-record | medium | 未開始 | 晚醒量測程式合回、四平台基準 |
+| os-wake-record | medium；notify→wake 用 high（D68） | 進行中（2026-10-27） | 晚醒量測程式合回、四平台基準 |
 | os-threads-backend | high；Start 順序局部 xhigh | 未開始 | RoleThread 的 OS 呼叫搬進 engine/os |
 | os-wait-backend | xhigh；1 位 xhigh 審查（先問） | 未開始 | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
 | os-net-errors | high | 條件式 | socket 錯誤碼的中立分類（開放決策 7） |

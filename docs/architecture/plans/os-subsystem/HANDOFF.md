@@ -106,6 +106,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D65：開放決策 16 採 (b)：os-utf8-codepage 排在 os-wake-record、os-threads-backend、os-wait-backend 之前（改變 D62 的順序；D211 的「Windows 測試完成後讓 OS 子系統開始」由這一批開始）。開工前先說明檔位、要動的檔案與需要同意的地方 | 使用者：「開放決策 16 採 (b)：os-utf8-codepage 排在 os-wake-record、os-threads-backend、os-wait-backend 之前。先說明檔位、要動的檔案，以及需要我同意的地方（開放決策 17～24、Invariant 11、§14.4）。」 |
 | 2026-10-27 | D66：os-utf8-codepage 開工前的決定（全部照建議）。<br>檔位：high＋1 位 xhigh 審查。<br>開放決策 17 採 (a)：根目錄在設定期走過 engine、apps、tools、build/acceptance、tests 的執行檔自動套用（FetchContent 的第三方工具不在範圍），並提供程序 code page 的查詢 API。18 採 (a)：manifest 與嵌入函式放在 engine/os。23：MSVC 與 MinGW 兩條路徑都寫，CI 驗 MSVC，MinGW 留給下一次 Windows 機器。<br>19 採 (a)：pu-x6、pu-x7 退場（p4 交 v7.1 會話）。20：Invariant 11 限定 Windows 10 1903 以後，不宣稱涵蓋 Wine。21：不加 longPathAware。22：文件寫最低版本，不拒絕啟動。24 採 (a)：兩個測試缺漏併進這一批。Invariant 11 用草稿。<br>§14.4 的判定變更（ACP 測試、FontDirectories 的預期清單、os-f4／os-c6／pu-x5 改由 R6 判定、pu-x6／pu-x7 退場）與 ★ 事前宣告（第三方與 CRT 的窄字元行為、窄字元 argv 改成 UTF-8、os-path-utf8-sweep 的 Red 測試在 manifest 下不再抓得到窄字元轉換）：同意開工，定案前做突變與審查。Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問）。估時 8～12 h，另加 Windows 實機約 1～2 h | 使用者對四個問題選：「high＋1 位 xhigh 審查」「照建議」「照建議」「同意開工，定案前做突變與審查」 |
 | 2026-10-27 | D67：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8（產品或工具需要自己的 manifest 設定或 UTF-8 以外的 code page 時，停止修改 engine/os 的 manifest，先決定宣告與合併的方式）、審查後補的 ★（OEM code page 大概也變成 65001；沒開 `Utf8ConsoleOutput` 的程式在 950／932 主控台印非 ASCII 的窄字元會變成 UTF-8 的位元組）、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔，Go 服務不算），都照草稿定案 | 使用者：「Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字，都照草稿定案。」 |
+| 2026-10-27 | D68：os-wake-record 開工前的決定（全部照建議）。<br>檔位：medium，notify→wake 的量法用 high。<br>L2 的事前宣告（只記錄，沿用 TT-1 L2）：60 Hz 的絕對期限，Waiter、condition_variable、`sleep_until` 各 30 秒；新增 notify→wake（Waiter、condition_variable 各 30 秒）；沒有視窗與有視窗兩種情境；每段前後各 5 秒 sleeper；`meta.txt` 記錄程式雜湊、OS、CPU、負載。不設門檻；「Waiter 的 P99 低於 condition_variable」只當觀察。<br>平台：macOS arm64 現在在本機量；Windows（沒有視窗與有視窗）、Linux、macOS Intel 在下一次實機時用本批的 commit 量，不擋 os-threads-backend 與 os-wait-backend；Linux 用哪台機器到時再定。<br>和消費端協調：Windows 沒有視窗的那組晚醒數據交給 v7.1 的 F5／F7 參考，Match 層的數據仍由它在 lan15 量 | 使用者：「開始 os-wake-record。先說明檔位、要動的檔案，以及需要我同意的地方。」之後對四個問題選：「medium，notify→wake 用 high」「照草案」「本機先量，實機那次補」「協調」 |
 
 ## 消費端的壓力摘要
 
@@ -603,7 +604,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - gyo_ui_editor.core：只有「a resolved asset path keeps the characters of its root」。
   - gyo_ui_editor.content_cli：`--validate` 以 0xc0000409（未捕捉的例外）結束。
   - gyo_ui_editor.preview：0xc0000409。前兩個測試函式沒有印出 FAILED，所以停在最後的新函式〔推論：輸出看不出是哪一行〕。
-- 本機驗證（macOS arm64，修正後）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
+- 本機驗證（macOS Intel x86_64，修正後）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
 - 突變：
   - 新增 pu-x1～pu-x7，本機能跑的 pu-x1、pu-x2 killed；Windows 專用的 pu-x3～pu-x7 留給 Windows 機器（D62）。
   - 相關的既有突變（find 在改動範圍，或殺它的測試被改）：
@@ -639,6 +640,17 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - Ctrl+Break 與 `os.console_close` 的重跑，使用者決定不補。
 - 由此得到的方向：D64（程序自己決定 UTF-8），讓 ACP 類的判定不再挑機器（PLAN 第 7.18 節）。
 
+### os-wake-record
+
+- 2026-10-27：開始（D68）。基準是本分支 `05b8ad13`（發行線 `0f090aa1` 之上）。量測程式從本機分支 `claude/tt1-l2-wake-record`（`a8f9535f`）合入。
+- 2026-10-27：更正。試跑時 `meta.txt` 顯示本機是 macOS Intel（x86_64，i9-9980HK），不是我說明時寫的 macOS arm64。repo 一直記著「實機只有 macOS Intel」（D11⑩）。
+  - D68 的「本機先量」因此量的是 PLAN 第 7.13 節的 macOS Intel 實機。macOS arm64 沒有實機，照 D11⑩ 標「未執行」（CI 的 macos-arm64 只跑 L1）。
+  - 同時更正 os-path-utf8-sweep 與 os-utf8-codepage 的本機驗證紀錄（HANDOFF 三處、兩份 dev_log）：寫成 macOS arm64 的都是這台 macOS Intel。
+- 量測程式：
+  - 照 `a8f9535f` 合入，沒有衝突。
+  - 新增 notify→wake：通知方在 Notify 前蓋時間戳；等待方取用後，通知方才發下一次，所以時間戳不會在讀取前被覆蓋。上一次還沒被取用的週期會跳過並計數。Waiter 用 `Wait()`（沒有期限，Invariant 6），condition_variable 用帶條件的 `wait`。
+  - 宣告的程序寫成 `tests/common/time/wake_baseline.py`：每種情境前後各 5 秒 sleeper，`meta.txt` 記錄 commit、程式雜湊、OS、CPU、開始與結束的負載。之後的實機照同一個腳本跑。
+
 ### os-utf8-codepage
 
 - 2026-10-27：開始（D64～D66）。基準是發行線 `e739f00f` 之上的本機 commit。照 D66，先寫只含新測試的 Red commit，推送前先問。
@@ -661,7 +673,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - Windows 專用的 pu-x9、pu-x10、pu-x12，以及 os-w10、os-g18，留給 Windows 機器。
   - 相關的既有突變 20／20 killed（守衛、Process、建目錄、字型）。
   - pu-x6、pu-x7 依 D66 退場。
-- 本機（macOS arm64）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
+- 本機（macOS Intel x86_64）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
 - 文件：os.md 的 Components、Contracts（Process code page、AnsiCodePage）、Guard（R6、第三個設定期檢查、R6 的盲點）、Invariant 11（D66 同意的草稿）。
 - 要使用者同意（定案時）：Replacement Criterion 8 的草稿。這一批替 engine/os 加了 manifest 的職責；AGENTS §3 要求新的大職責先寫替換條件。
 - xhigh 審查（1 位，讀固定的 commit；在 scratchpad 用 CMake 4.4.3 做最小重現）：
@@ -692,7 +704,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
     - pu-x10 的例外只會被列出、執行期在任何 Windows 都失敗。
     - AnsiCodePage 符合 Invariant 4、8、10。
     - 兩個補測的前提正確。
-- 審查後的驗證（macOS arm64）：
+- 審查後的驗證（macOS Intel x86_64）：
   - core 34／34（含 `cmake.ProcessCodePage`）；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
   - 突變：pu-x8（移到建置層）、pu-x15、pu-x16 killed。
   - pu-x15、pu-x16 從 repo 根目錄跑 `cmake -P` 時，失敗的案例會把合成的樹留在根目錄。改成以 `-DWORK_ROOT=build/target` 放到忽略的目錄，留下的目錄已刪。
