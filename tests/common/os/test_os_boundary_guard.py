@@ -134,6 +134,33 @@ class Rules(GuardTree):
         self.write("engine/os/src/posix/Up.cpp", '#include "../../../io/include/engine/io/IoError.hpp"\n')
         self.assertReported("engine/os/src/posix/Up.cpp:1: R5 ../../../io/include/engine/io/IoError.hpp")
 
+    def test_ansi_code_page_in_engine_os_is_reported(self):
+        for constant in ("CP_ACP", "CP_THREAD_ACP", "CP_OEMCP", "CP_MACCP"):
+            with self.subTest(constant=constant):
+                self.write("engine/os/src/windows/Files.cpp", f"unsigned Page() {{ return {constant}; }}\n")
+                self.assertReported(f"engine/os/src/windows/Files.cpp:1: R6 {constant}")
+
+    def test_ansi_entry_point_in_engine_os_is_reported(self):
+        self.write("engine/os/src/windows/Process.cpp", "void Path() { GetModuleFileNameA(nullptr, buffer, 260); }\n")
+        self.assertReported("engine/os/src/windows/Process.cpp:1: R6 GetModuleFileNameA")
+        self.write("engine/os/include/engine/os/Files.hpp", "inline void Open() { CreateFileA(name); }\n")
+        self.assertReported("engine/os/include/engine/os/Files.hpp:1: R6 CreateFileA")
+        # engine/os calls Win32 through the global "::".
+        self.write("engine/os/src/windows/Wide.cpp", "void Get() { ::GetEnvironmentVariableA(name, out, 8); }\n")
+        self.assertReported("engine/os/src/windows/Wide.cpp:1: R6 GetEnvironmentVariableA")
+
+    def test_utf8_conversion_and_wide_entry_points_in_engine_os_are_allowed(self):
+        self.write("engine/os/src/windows/Files.cpp",
+                   "int Convert() { return WideCharToMultiByte(CP_UTF8, 0, w, n, nullptr, 0, nullptr, nullptr); }\n"
+                   "void Open() { CreateFileW(name); obj.SetDataA(1); Ns::MakeA(2); }\n"
+                   "// CP_ACP and CreateFileA in a comment\n"
+                   "const char* text = \"CP_ACP CreateFileA(\";\n")
+        self.assertClean()
+
+    def test_ansi_names_outside_engine_os_are_left_to_r3(self):
+        self.write("tools/editor/src/Strings.cpp", "unsigned Page() { return CP_ACP; }\n")
+        self.assertClean()
+
     def test_an_empty_root_fails(self):
         (self.root / "engine/base/src/Base.cpp").unlink()
         (self.root / "engine/base/src").mkdir(exist_ok=True)

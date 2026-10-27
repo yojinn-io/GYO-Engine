@@ -88,6 +88,10 @@ Base::Result<std::chrono::nanoseconds, OsError> CurrentThreadCpuTime() {
     return FromFileTime(kernel) + FromFileTime(user);
 }
 
+Base::Result<std::uint32_t, OsError> AnsiCodePage() {
+    return static_cast<std::uint32_t>(::GetACP());
+}
+
 Base::Result<LocalTime, OsError> ToLocalTime(const std::chrono::system_clock::time_point time) {
     const std::time_t seconds = std::chrono::system_clock::to_time_t(time);
     std::tm local{};

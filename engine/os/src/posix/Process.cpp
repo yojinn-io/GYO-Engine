@@ -95,6 +95,10 @@ Base::Result<std::chrono::nanoseconds, OsError> CurrentThreadCpuTime() {
     return std::chrono::seconds{time.tv_sec} + std::chrono::nanoseconds{time.tv_nsec};
 }
 
+Base::Result<std::uint32_t, OsError> AnsiCodePage() {
+    return Base::Err(OsError::Make(OsErrorCode::Unsupported, "this platform has no ANSI code page"));
+}
+
 Base::Result<LocalTime, OsError> ToLocalTime(const std::chrono::system_clock::time_point time) {
     const std::time_t seconds = std::chrono::system_clock::to_time_t(time);
     std::tm local{};

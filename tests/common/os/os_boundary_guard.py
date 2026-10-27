@@ -3,7 +3,8 @@
 Outside engine/os/src, C/C++ sources include no OS header (R1), branch on no OS macro in a preprocessor
 condition (R2) and call no listed OS or CRT-split API (R3). Runtime code outside engine/os opens no native file
 directly (R4: fstream, fopen, std::filesystem operations that touch the file system). engine/os itself includes
-no other Engine module, SDL, asio or other library (R5).
+no other Engine module, SDL, asio or other library (R5), and converts text with CP_UTF8 through the wide Win32 entry
+points only: no ANSI code page constant and no ANSI ("...A(") entry point (R6, Design Invariants 5 and 11).
 
 Existing sites are frozen in ratchet allowlists named os_boundary_allowlist.txt, one per owner directory. Each
 line is "path rule count # reason": the file must exist and its finding count for that rule must equal count, so
@@ -34,7 +35,7 @@ R4_EXCLUDED = ("engine/os/", "engine/render/shaders/pipeline/")
 ENGINE_ALLOWLIST_DIRECTORY = "tests/common/os"
 ENGINE_ALLOWLIST_SCOPE = ("engine/", "tests/common/")
 ALLOWLIST_NAME = "os_boundary_allowlist.txt"
-RULES = ("R1", "R2", "R3", "R4", "R5")
+RULES = ("R1", "R2", "R3", "R4", "R5", "R6")
 
 OS_HEADERS = (
     # Windows SDK and CRT
@@ -87,6 +88,14 @@ R4_PATTERNS = (
 # engine/os may include the standard library, OS headers, engine/base and its own headers only.
 R5_ALLOWED_QUOTED = re.compile(r"^(?:engine/base/|engine/os/)")
 R5_FORBIDDEN_ANGLED = re.compile(r"^(?:engine/|SDL3?/|asio|nlohmann/|doctest/|imgui|httplib|ufbx)")
+# engine/os converts with CP_UTF8 and calls the wide Win32 entry points: the process ANSI code page is UTF-8 only
+# where the manifest says so (Invariant 11), so engine/os never depends on it. An ANSI entry point is a Win32-style
+# name ending in a capital A after a lower-case letter or digit (CreateFileA, GetModuleFileNameA), called unqualified
+# or through the global "::" as engine/os calls Win32; a member (x.NameA) or a namespace's name (Ns::NameA) is not.
+R6_PATTERNS = (
+    re.compile(r"\bCP_(?:ACP|THREAD_ACP|OEMCP|MACCP)\b"),
+    re.compile(r"(?<![\w.>:])(?:::)?[A-Z][A-Za-z0-9]*[a-z0-9]A\s*\("),
+)
 
 
 def strip_comments_and_strings(text):
@@ -143,9 +152,14 @@ def file_findings(relative, text):
                     R5_FORBIDDEN_ANGLED.match(header) and not R5_ALLOWED_QUOTED.match(header))
             if forbidden:
                 yield number, "R5", header
+    code = strip_comments_and_strings(text).splitlines()
+    if in_os:
+        for number, line in enumerate(code, 1):
+            for pattern in R6_PATTERNS:
+                for match in pattern.finditer(line):
+                    yield number, "R6", match.group(0).lstrip(":").rstrip("( ")
     if os_source:
         return
-    code = strip_comments_and_strings(text).splitlines()
     for number, line in enumerate(code, 1):
         conditional = CONDITIONAL.match(line)
         if conditional:

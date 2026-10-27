@@ -18,6 +18,11 @@ endforeach()
 include(cmake/Dependencies.cmake)
 
 add_executable(gyo_shader_tool src/main.cpp)
+# Every Windows executable of the repository declares UTF-8 as its ANSI code
+# page (docs/architecture/os.md Invariant 11). This project is configured apart
+# from the root, whose build layer applies it to the others.
+include("${CMAKE_CURRENT_LIST_DIR}/../../../os/cmake/GyoProcessCodePage.cmake")
+gyo_os_process_code_page(gyo_shader_tool)
 target_include_directories(gyo_shader_tool PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/../../../base/include")
 target_link_libraries(gyo_shader_tool PRIVATE

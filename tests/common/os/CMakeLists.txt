@@ -133,3 +133,9 @@ function(gyo_expect_no_os_definitions)
     gyo_os_walk_definitions("${CMAKE_SOURCE_DIR}")
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_no_os_definitions)
+
+# Design Invariant 11: every executable target under the scanned roots carries
+# the UTF-8 code page manifest, checked once the project is configured (the
+# check is a module so cmake.ProcessCodePage can run it on synthetic trees).
+include("${CMAKE_CURRENT_SOURCE_DIR}/ProcessCodePageCheck.cmake")
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_process_code_pages)
