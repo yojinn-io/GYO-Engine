@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-27。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 本機完成、未推送），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-27。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -26,6 +26,12 @@
 - 2026-10-27：使用者說「推送 69e39a26，並告訴消費端可以把本分支併到 69e39a26（os-path-utf8-sweep 與 time-threads-invariants）」。推送 `69e39a26`，以 merge-tree 確認併進發行線 `5733ccca` 沒有衝突，已請消費端以 `--no-ff` 合併（範圍 8 個 commit），等它回覆發行線上的 merge commit。
 - 2026-10-27：消費端回報並已核對：發行線以 `--no-ff` 合併到 `69e39a26`，merge commit 是 `16377127`（父 `5733ccca`、`69e39a26`；程式與 `69e39a26` 相同，發行線多的只有它自己的 HANDOFF），沒有衝突；之後的 `3b612cf2` 是消費端 D210（只改文件，Windows 清單補上 pu-x3～pu-x7 與 LF 的條件）。消費端本機 ctest 97／97。
 - 2026-10-27：消費端轉達使用者的決定（消費端 D211）。使用者原話：「先等等，我讓windows跑完專用的測試，完成之後直接讓 OS子系統開始」。Windows 機器在發行線（LF 的 checkout）上跑：本計畫的 34 條突變、`-s` 確認、主控台與 UNC 探針。結果出來之前，不開始 os-wake-record、os-threads-backend、os-wait-backend，也不推送新批次。
+- 2026-10-27：Windows 機器的驗證完成（消費端的 D201 清單第 1～5 項，MinGW 15.2 與 MSVC 19.51 兩套建置，dev_log `docs/dev_logs/2026_10_27_pvp_v71_d201_windows.zh-Hant.md`）。使用者說「windows的測試完成了，commit到了#96 上。同步一下」，並貼上交接：本會話要回報其餘突變、第 2、5 項，並只改計畫文件（D211）：
+  - 把本分支同步到發行線 `d3081182`（本機的紀錄 commit 重新放在它之上，推送時是快轉）。
+  - 結果記在「D201 的 Windows 驗證」一節。
+  - 把「文字編碼：程序自己決定 UTF-8」細化成 D64 與批次草案 os-utf8-codepage（PLAN 第 3.10、7.18、9.2 節，Invariant 11 草案，開放決策 16～23）。
+  - D201 找到的測試缺漏與觀察列為開放決策 24～26，MinGW 的觀測記在未結事項。
+  - 完成後推送到發行線，向使用者回報摘要與開放決策。
 - 2026-10-27：os-path-utf8-sweep 本機完成，停在推送的關卡。Red 測試 `f86f8e00`、修正 `95339b80`、紀錄 commit（本批的文件），都沒有推送。下一步要使用者同意：先推 Red 跑四平台 L1（預期只有 windows-x64 失敗），再推修正跑 L1，之後請消費端合併。細節見「os-path-utf8-sweep」。消費端回覆：發行線沒有未提交或未推送的改動（`origin/claude/pvp-v71-release` 是 `5733ccca`），本批改到的產品檔它都沒有在改，不需要對齊；推送後的合併請求照之前的方式處理。
 - 2026-10-26：os-trace-writers 完成（D58、D60）：Red [run 40331764169](https://github.com/yojinn-io/GYO-Engine/actions/runs/40331764169)（只有 windows-x64 的新案例失敗），Green [run 40339587478](https://github.com/yojinn-io/GYO-Engine/actions/runs/40339587478)（全部成功）。
 - 2026-10-26：D59，本計畫的 commit 統一放進 #96。已請消費端把本分支併到 `ca434952`（不含 Red 測試 `a75e4028`），等它回覆發行線上的 commit。
@@ -61,6 +67,7 @@
 | os-wait-backend | 等待原語的 OS 後端搬進 engine/os，ABAB L2 |
 | os-net-errors | socket 錯誤碼的中立分類（條件式） |
 | os-close | 收尾：allowlist 清空、文件同步、完整突變 |
+| os-utf8-codepage | （提案，D64）每個 Windows 執行檔以 manifest 把程序的 code page 定為 UTF-8 |
 
 ## 決策紀錄
 
@@ -92,6 +99,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D61：time-threads-invariants 的定案。<br>time.md（11 條）與 threads.md（9 條）的 Design Invariants 與 Replacement Criteria 照草稿同意；每條寫明守衛，沒有的寫 No guard。<br>這一批補幾個便宜的守衛：`gyo_time`、`gyo_threads` 連結檢查的設定期突變（ti-x1、ti-x2）、後端名稱的測試（ti-x3）、Linux 15 位元組名稱截斷的檢查（ti-x4，Linux 專用）。其餘無守衛的項目記為未結，在 os-threads-backend、os-wait-backend 開始時再決定 | 使用者先問「繼續？」，選「time-threads-invariants」；對兩個問題選：「照草稿同意」「這批補幾個便宜的」 |
 | 2026-10-27 | D62：排程（消費端 D208、D209 的連帶）。使用者對消費端說「lan15 延期，時間對不上」「我想乾脆吧『OS 統一子系統』的任務跑完一起弄」，消費端指出兩處互等（#96 等 lan15、lan15 等 OS、os-net-errors 等 #96；計時核心的 L2 等 lan15）後說「那就到 os-net-errors 這個任務之前」。在本會話確認範圍：含計時核心，共 4 批（os-path-utf8-sweep、os-wake-record、os-threads-backend、os-wait-backend）。這些做完後，在 Windows 機器上一次做完 Windows 專用突變、`-s` 確認、實機驗收、計時核心的 L2 與 os-wake-record 的 Windows 基準，再跑 lan15；os-net-errors 與 os-close 排在 #96 合併後 | 使用者對「範圍」選「含計時核心，共 4 批」 |
 | 2026-10-27 | D63：os-path-utf8-sweep 開工前的四個決定。<br>檔位：high＋1 位 xhigh 審查（使用者選的；建議是 high 的審查者）。<br>新增 `Os::Files::PathForMessage`：訊息與 log 用的 UTF-8 文字，保留平台的分隔字元（Windows 是 `\`），永不失敗（沒有 UTF-8 形式的單位換成 U+FFFD），不拿來開檔；ASCII 路徑的 log 位元組不變（D48）。<br>範圍：拿掉公開的 `Sdl::PathFromUtf8`，產品改用 `Os::Files::PathFromUtf8`（POSIX 上不是 UTF-8 的參數改為拒絕，與 D50 一致）；`BaseDirectory` 內部照舊保留 SDL 給的位元組，不加 platform/sdl → GYO::Os 的邊；停用中的產品（object_fps、object_fps_v2、object_fps_preview 與它們的驗收程式）只記進 inactive_products.md；主機 shader 工具（engine/render/shaders/pipeline）的 12 處也一起改（使用者選的，建議是記為未結）。<br>Windows 的 Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問）。估時 10～15 h | 使用者對四個問題選：「high＋1 位 xhigh 審查」「新增 PathForMessage」「連 shader 工具一起改」「先推測試跑一次 L1」 |
+| 2026-10-27 | D64：Windows 程序自己把 ANSI code page 定為 UTF-8（application manifest 的 `activeCodePage`），不由執行環境決定。engine/os 一律走寬字元 API 的做法維持主線，manifest 是第二道防線。決定的是方向；細化成批次草案 os-utf8-codepage（PLAN 第 3.10、7.18、9.2 節），Invariant 11 的條文、套用方式與突變的重新設計等開放決策 16～23 都還沒決定。D211 之下目前只改計畫文件 | 使用者在 build-baseline 提案（`docs/architecture/plans/build-baseline/README.md`「文字編碼」一節）：「就用這個方式來處理。程序不應該由環境參數來決定。」2026-10-27 的交接要求本會話細化成計畫 |
 
 ## 消費端的壓力摘要
 
@@ -599,7 +607,45 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 產品有 4 條突變的 find 移到新的程式行。
   - 產品在 Windows 上的行為，不另寫突變：產品的 runner 不支援平台限定，檢出力以 Red 的 L1 為證據。
 
+### D201 的 Windows 驗證（OS 子系統的部分）
+
+- 2026-10-27，消費端的會話在 Windows 機器上跑（發行線 `3b612cf`，LF checkout），完整紀錄在 dev_log `docs/dev_logs/2026_10_27_pvp_v71_d201_windows.zh-Hant.md`。p1 兩條、p4 與第 3、4 項由 v7.1 會話記錄。
+- 機器條件：系統 ACP＝65001、有使用者安裝的字型、沒開開發人員模式、預設終端機是 Windows Terminal。先用 MinGW 15.2（`test` preset）跑，基準線在 MinGW 上不通過的 10 條，改用 MSVC 19.51（`ci-windows`）補跑。
+- 本會話的 31 條（34 條扣掉 p1 兩條與 p4）：
+  - killed 23：
+    - MinGW 16 條：os-f5、os-g16、os-p5、os-c5、os-c8、os-c9、os-w2、os-w3、os-w6、io-w3、os-w8、os-w9、os-x9、tt-x3、pu-x3、pu-x4。
+    - MSVC 7 條：os-f9、os-f10、os-f11、os-x7、os-x8、os-x10、os-x11。
+  - survived 5：
+    - os-c6、pu-x5、pu-x6、pu-x7：系統 ACP＝65001，「換成 ANSI」和原本相同，這台無法判定。不是測試失去檢出力。
+    - os-w10：`*create directories*` 沒有 UNC 根目錄的案例，從程式碼推論，任何 Windows 都會存活（開放決策 24）。
+  - 未跑 3：
+    - os-f4：ACP＝65001，基準線的 `CHECK(::GetACP() != CP_UTF8)` 失敗。
+    - os-g18：同上，再加 FontDirectories 測試的缺漏（開放決策 24）。
+    - os-c4：主控台被委派給 Windows Terminal（推測，開放決策 26）。
+- 第 2 項（`-s`）：
+  - MSVC 下 `*resolve*` 5/5 通過，磁碟代號與 `\\localhost\C$` 的案例都有實跑。
+  - symlink 的案例全部提早返回：MSVC 是缺權限（沒開開發人員模式），MinGW 是 libstdc++ 不支援。
+  - MinGW 下 `*resolve*` 有 3 個失敗，原因是 libstdc++ 的語意（見未結事項）。
+- 第 5 項：
+  - io.unc 兩條在 MSVC 下 Passed；在 MinGW 下逾時（清理的 `remove_all` 卡住）。
+  - conhost 實機：Ctrl+C 與關閉視窗都 OK，log 最後一行是 end 紀錄。
+  - 結束要求後再按一次 Ctrl+C：直接結束，符合設計；但 log 是 0 B（開放決策 25）。
+  - Ctrl+Break 與 `os.console_close` 的重跑，使用者決定不補。
+- 由此得到的方向：D64（程序自己決定 UTF-8），讓 ACP 類的判定不再挑機器（PLAN 第 7.18 節）。
+
 ## 未結事項
+
+- D201 之後仍未判定的 Windows 專用突變（2026-10-27）：
+  - os-f4、os-c6、pu-x5～pu-x7：需要非 UTF-8 ACP 的機器，或照 os-utf8-codepage 重新設計（開放決策 19）。
+  - os-w10、os-g18：等開放決策 24 補完測試。
+  - os-c4：等開放決策 26。
+- MinGW 的觀測（D201，只記錄；MinGW 的支援等級由 build-baseline 的支援矩陣決定，還沒定案，在那之前不拿這些當修改支援範圍的理由）：
+  - `engine/os/src/windows/Files.cpp:617` 的 `ResolvedPath` 用 `lexically_normal()`。libstdc++ 不把 `//server` 當 UNC 的 root-name，所以 `//localhost/C$/...` 會變成 `/localhost/C$/...`。MSVC 沒有這個問題。
+  - 測試清理用的 `std::filesystem::remove_all`，遇到超過 260 字元的 `\\?\` 路徑在 MinGW 上會卡死（`FilesTests.cpp:462`、`UncProbe.cpp:175`）。
+  - MinGW 不支援 symlink（`create_directory_symlink` 回 "Function not implemented"）。
+  - `cmake --install` 的包沒有附 MinGW runtime 的 DLL。
+  - `test` 與 `ci-windows` 兩個 preset 共用 `build/target/<product>/bin` 輸出根目錄。
+  - build-baseline 提案的建議（若保留 MinGW）：Windows 後端不用 `std::filesystem` 的路徑語意，一律走原生 API，測試的 setup 與清理也一樣。
 
 - os-path-utf8-sweep 留下的（2026-10-27）：
   - 交使用者決定：os.md Invariant 5 寫「Invalid UTF-8 is InvalidEncoding」，Invariant 7 寫「no policy」。`PathForMessage` 會換成 U+FFFD，顯示的形式也由它決定（D63 同意的設計）。條文要不要寫明這個例外？改條文要使用者同意。

@@ -47,6 +47,7 @@
   - 「UTF-8 換成 ANSI」類的突變（os-f4、p4、os-c6、pu-x5～x7）重新設計，例如加上「拿掉 manifest 會被抓到」的突變。2026-10-27 在系統 ACP＝65001 的機器上，這 6 條無法判定（os-f4 基準線失敗、其餘 5 條必然存活）。
 - **未確認**：Proton／Wine 是否支援 `activeCodePage`；manifest 與 `longPathAware` 是否一起加（長路徑目前靠 `\\?\` 加寬字元 API，與登錄值 LongPathsEnabled 無關）。
 - **歸屬**：實作屬於 OS 子系統（Runtime 契約與測試判定的變更，Architecture Delta）；本節只記錄方向。
+- **細化**（2026-10-27，OS 子系統的會話）：OS 子系統的決策 D64 與批次草案 os-utf8-codepage，見 [os-subsystem PLAN](../os-subsystem/PLAN.md) 第 3.10 節（責任與檢查）、第 5 節的 Invariant 11 草案、第 7.18 節（批次）、第 9.2 節（Architecture Delta）、第 11 節的開放決策 16～23。
 
 ## 觀測到的證據（2026-10-27，MinGW 15.2、ACP＝65001）
 

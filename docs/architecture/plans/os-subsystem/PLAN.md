@@ -201,6 +201,26 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 - 「哪些分類算暫時性」是消費端的政策（`ClientConnection.hpp:89-91`），留在消費端。
 - 這段原始碼本來就沒有 OS 巨集，守衛偵測不到。要不要做，見開放決策 7。
 
+### 3.10 程序的 code page（os-utf8-codepage，提案，D64）
+
+- 來源：使用者在 build-baseline 提案的「文字編碼」一節決定（D64）：「就用這個方式來處理。程序不應該由環境參數來決定。」
+- 責任：Windows 上，repo 建出的每個執行檔都以 application manifest 宣告 `<activeCodePage>UTF-8</activeCodePage>`，程序內的 ANSI code page（ACP）固定為 65001，不論系統設定（Windows 10 1903 起）。
+- 兩道防線：
+  - 主線不變：engine/os 一律走寬字元 API、明寫 `CP_UTF8`（os.md Invariant 5），行為不依賴 manifest。
+  - manifest 是第二道：第三方函式庫、CRT 與漏網的窄字元呼叫（例如 shader 工具與驗收探針的 argv，os-path-utf8-sweep 的未結事項）也變成 UTF-8。
+- Engine 提供什麼（建議，開放決策 17、18）：
+  - manifest 檔與嵌入它的 CMake 函式，owner 是 engine/os（它擁有「程序的 code page」這個執行期契約）。
+    - MSVC：把 `.manifest` 加進目標的原始檔，由連結器合併嵌入。
+    - MinGW：用 `.rc` 把它放進 `RT_MANIFEST`（資源 ID 1）。MinGW-w64 預設會連入自己的 manifest，兩者可能衝突，要在批次中先確認（開放決策 23）。
+  - 根目錄的建置層在設定期結束時走過每個 EXECUTABLE 目標（engine、apps、tools、build/acceptance、tests），在 Windows 上套用這個函式；在每個平台都標上標記屬性，供設定期檢查使用。
+  - 另外設定的 host 專案（shader 工具，GyoShaderTools）沒有被根目錄走過，要自己呼叫同一個函式。
+- 產品宣告什麼：預設不必宣告任何事，新增或複製產品都不改公共層（AGENTS §7、§9）。不能帶 manifest 的執行檔（目前沒有）以目標屬性宣告例外並寫理由，例外由設定期檢查列出。
+- 抓到沒有 manifest 的執行檔：
+  - 設定期檢查（每個平台都跑）：每個 EXECUTABLE 目標都有標記，或有寫理由的例外。走訪的程式被改壞時，在任何 OS 都抓得到。
+  - 執行期的結構檢查（Windows）：`gyo_os_tests` 讀自己模組的 `RT_MANIFEST`，確認宣告了 `activeCodePage` UTF-8，並確認 `GetACP()` 是 65001。結構那一半不受系統 ACP 影響，任何 Windows 機器都能判定。
+  - 產品執行檔要不要在啟動行記錄 `acp=`，是產品的決定（日誌契約），本計畫只提供查詢（開放決策 17 的附帶）。
+- 不做：longPathAware（開放決策 21）、改主控台的 code page（主控台輸出照舊由 `Utf8ConsoleOutput` 負責）。
+
 ## 4. 邊界
 
 - **engine/io**：
@@ -231,6 +251,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - CMake 的 WIN32／APPLE／UNIX、MSVC 旗標、CI workflow、Python 驗收腳本、`engine/config` 的平台欄都在 os.md 列為範圍外。
   - 例外：非 os 的 target 不可從 CMake 依 OS 定義識別用的巨集（例如 `$<$<PLATFORM_ID:Windows>:GYO_WIN>`），否則可以繞過 R2。由設定期守衛檢查。
   - repo 沒有 Windows application manifest（longPathAware、activeCodePage=UTF-8）。LongPathsEnabled 是使用者機器的登錄值，消費端控制不了，所以長路徑只能靠 engine/os 的 `\\?\` 加寬字元 API。
+  - 2026-10-27 起的提案（D64，os-utf8-codepage）：只加 activeCodePage=UTF-8，不加 longPathAware（第 3.10 節、開放決策 21）。
 
 ## 5. Design Invariants 與 Replacement Criteria（草案）
 
@@ -280,6 +301,19 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
     - 不需要 OS 呼叫就能滿足的要求，視為已套用。例如 Normal 優先度：現行 `RoleThread.cpp:74、78` 直接回傳 true。
     - 需要 OS 呼叫卻沒有做時，回報未套用或 Unsupported，不可以無聲回報成功。
     - 各 OS 做不到同一行為時，差異寫在型別或文件裡。
+11. **（提案，os-utf8-codepage，D64；寫進 os.md 前要使用者同意）Windows 程序的 ANSI code page 是 UTF-8。** os.md 的英文草稿：
+
+    > **Windows processes run with UTF-8 as their ANSI code page.** Every Windows executable built from this
+    > repository (products, tools, tests, probes, the host shader tool) embeds the manifest that declares
+    > `activeCodePage` UTF-8, so `GetACP()` is 65001 in the process whatever the system setting (Windows 10 1903
+    > and later). It is the second line: engine/os still converts with `CP_UTF8` and calls only wide APIs
+    > (Invariant 5), so its behaviour does not depend on the manifest. Guards: the configure-time check that every
+    > executable target carries the manifest or a reasoned exemption; `gyo_os_tests` reads its own manifest
+    > resource and checks `GetACP()`; the source guard refuses `CP_ACP`, `CP_THREAD_ACP`, `CP_OEMCP` and the ANSI
+    > (`A`) Win32 entry points in engine/os (R6).
+
+    - 和 Invariant 5 的關係：Invariant 5 的條文不變；它管 engine/os 自己，這一條管程序。
+    - 和 Invariant 9 的關係：manifest 會改變第三方與 CRT 的窄字元行為，要在批次開始時當成 ★ 事前宣告（見第 7.18 節）。
 
 ### Replacement Criteria
 
@@ -570,6 +604,33 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - 評估移除非 os target 的 NOMINMAX。
 - 驗收：L1 全量；tests 以外沒有 allowlist 條目；背景完整跑一次相關突變。
 
+### 7.18 os-utf8-codepage：程序自己把 code page 定為 UTF-8（提案，D64；high＋1 位 xhigh 審查（先問）；8～12 h，另加 Windows 實機約 1～2 h）
+
+- 白話：讓每個 Windows 執行檔都在 manifest 裡宣告 UTF-8，程序的行為不再隨玩家機器的系統設定改變；Windows 的驗證也不再挑機器。
+- 狀態：計畫草案，未核准（D211：目前只改計畫文件）。順序見開放決策 16。
+- 依賴：os-path-utf8-sweep（已完成）。和計時的三批互不依賴。
+- 做（照第 3.10 節）：
+  - engine/os：manifest 檔、嵌入函式（MSVC 用 `.manifest`；MinGW 用 `.rc`，依開放決策 23）、查詢程序 code page 的 API（若開放決策 17 的附帶採用）。
+  - 根目錄：設定期走過所有 EXECUTABLE 目標套用 manifest，並在每個平台檢查標記；shader 工具的 host 專案自己呼叫同一個函式。
+  - 守衛 R6（os_boundary_guard）：engine/os 不用 `CP_ACP`、`CP_THREAD_ACP`、`CP_OEMCP`，也不呼叫 ANSI（`A` 結尾）的 Win32 入口。守衛在每個 OS 都跑。
+  - 測試（判定的變更依 AGENTS §14.4，開始時交使用者核准）：
+    - `FilesTests.cpp` 的「Os files record the process ANSI code page」：從 `CHECK(::GetACP() != CP_UTF8)` 改成 `CHECK(::GetACP() == CP_UTF8)`，並加上讀自己 `RT_MANIFEST` 的結構檢查。
+    - 原本的 `!= CP_UTF8` 是為了證明「非 ACP 路徑」的測試有檢出力；採用 manifest 後，那類檢出力改由 R6 與 manifest 的檢查負責。
+  - 突變（重新設計，見開放決策 19）：
+    - os-f4、os-c6、pu-x5（engine/os 裡把 `CP_UTF8` 換成 `CP_ACP`）：改由 R6 抓，任何 OS 都能判定。
+    - 新增：走訪漏掉某個執行檔（設定期檢查，任何 OS）、manifest 拿掉 activeCodePage（結構檢查，Windows）、`gyo_os_tests` 不帶 manifest（Windows）。
+    - pu-x6、pu-x7（engine 與工具裡的窄字元轉換）與消費端的 p4：在 manifest 之下，這些突變在我們的程序裡行為不變（等價突變），見開放決策 19。p4 屬於消費端的目錄，交給 v7.1 會話。
+  - ★ 事前宣告（Invariant 9）：
+    - 第三方與 CRT 的窄字元行為改成 UTF-8：例如 `std::system_category().message()` 經 `FormatMessageA` 的文字、MSVC 的 `path::string()` 不再丟例外。
+    - 窄字元的 argv 變成 UTF-8：shader 工具與驗收探針的 argv，原本是 os-path-utf8-sweep 的未結事項。
+    - os-path-utf8-sweep 的 Red 測試在 manifest 之下不再能抓到窄字元轉換（`path::string()` 也是 UTF-8）；它們留作沒有 manifest 的程序（Windows 1903 以前、外部的程式連結 Engine）的回歸測試。
+  - 文件：os.md 的 Components、Contracts 與 Invariant 11（要同意）；build-baseline 的「文字編碼」一節指回這裡；inactive_products.md。
+- 驗收：
+  - Red（windows-x64 L1）：新的 ACP 與結構檢查在沒有 manifest 的舊樹失敗（CI 的 ACP 是 1252）。先推只含新測試的 commit。
+  - Green：四平台 L1；設定期檢查與 R6 在每個平台通過。
+  - 突變：新增的與重新設計的突變；R6 與設定期檢查的突變在本機（macOS）就能跑，結構檢查的突變在 Windows 機器上跑。
+  - Windows 實機（系統 ACP＝65001 的機器也可以）：所有執行檔的結構檢查通過；若保留 MinGW，確認 `.rc` 的嵌入沒有和預設 manifest 衝突。
+
 ### 估時合計
 
 - 關鍵路徑（消費端的長路徑修正之前）：os-skeleton 與 io-contracts 並行，接 os-files-read，約 20～29 h 工時。
@@ -650,6 +711,39 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
 - error-handling.md 平台邊界節的延伸。
 - platform-sdl 公開 API 移除 PathFromUtf8。
 
+### 9.2 os-utf8-codepage 的 Delta（提案，D64）
+
+1. **Feature**：
+   - 使用者的決定（D64）：「程序不應該由環境參數來決定。」玩家機器的系統 ACP 多半是 950、932 等，「Beta：使用 Unicode UTF-8」預設關閉。Client 與工具在任何系統設定下都要有相同行為，非 ASCII 資料夾在第三方程式碼裡也要能用。
+   - Windows 的驗證要在任何 Windows 機器上都能判定：2026-10-27 的 D201 機器 ACP＝65001，6 條突變無法判定，ACP 的基準線測試失敗（dev_log `2026_10_27_pvp_v71_d201_windows`）。
+2. **現在的問題**：
+   - 程序的 ACP 由系統設定決定，是環境參數。
+   - engine/os 本身不受影響（寬字元 API）。但第三方、CRT 與窄字元的 argv 會隨它改變：shader 工具與驗收探針的 argv（os-path-utf8-sweep 的未結事項），以及 `system_category` 訊息的位元組。
+   - 測試的檢出力也隨機器改變：「UTF-8 換成 ANSI」類的突變在 ACP＝65001 的機器上必然存活。
+3. **改變的 Architecture Boundary**：
+   - 新的執行期契約「Windows 程序的 ACP 是 UTF-8」，owner 是 engine/os（Invariant 11 草案）。
+   - 建置層負責把它交給每個執行檔，並在設定期檢查。
+   - 守衛新增 R6；測試與突變的判定改變（§14.4）。
+   - 沒有新的 Data Contract：檔案與網路的格式本來就是 UTF-8。
+4. **影響的 Module、Product、Tool**：
+   - Engine：engine/os（manifest、嵌入函式、可選的查詢 API）；根目錄 CMakeLists.txt（走訪與檢查）；tests/common/os（ACP 測試、結構檢查、R6）；engine/render/shaders/pipeline 的 host 專案（呼叫嵌入函式）。
+   - 所有 Windows 執行檔：產品、工具、測試、探針都會帶 manifest，原始碼不改。
+   - 消費端：p4 突變（v7.1 會話）；啟動行要不要記錄 `acp=` 由產品決定。
+   - 文件：os.md、build-baseline 的「文字編碼」一節、inactive_products.md。
+5. **Dependency Direction**：
+   - 沒有新的連結邊。根目錄的建置層引用 engine/os 的 CMake 模組（檔案的 include，不是 target 的依賴）。host 專案同樣只 include 這個模組。
+   - 產品與工具不依賴任何新東西，不產生循環。
+6. **Ownership**：
+   - engine/os 擁有「程序的 code page」契約與 manifest 的內容。
+   - 建置層擁有「套用到哪些目標」的走訪與檢查（建置層本來就可以依 OS 分支，os.md Invariant 1）。
+   - 產品只在需要例外時，以目標屬性宣告並寫理由。
+   - 狀態的權威：程序的 ACP 是 OS 的狀態，engine/os 只讀不快取（Invariant 8）。
+7. **為什麼不能更小**：
+   - 只在產品的主程式加 manifest：測試、探針與工具仍隨系統設定改變，驗證仍然挑機器。而且每個新產品都要記得加，漏了也沒有東西會抓到。
+   - 只靠寬字元 API（現狀）：engine/os 已經做到，但管不到第三方與 CRT，也解決不了 argv。
+   - 只把突變改成「需要非 UTF-8 的機器」：仍然依賴環境，違反 D64 的原則。
+   - 範圍已壓小：不加 longPathAware、不改主控台的 code page，工具鏈的支援範圍交給 build-baseline。
+
 ## 10. 風險
 
 - **消費端時程**：A1～A3 是 P1 的前提，A1～A3 延誤就會拖住 hotfix。緩解：A2 與 A1 並行；產品的 allowlist 移到發行後；開放決策 1、14、15 在核准時答覆。
@@ -666,7 +760,7 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
 
 ## 11. 開放決策
 
-1、14、15 已在核准時決定（D46）；1 由 D48 改成「現在開始」；2、6、7、8～12 由 D48 決定（7 採 (b)，其餘照建議）；4 照 (a) 維持；13 在 os-wait-backend 開始前回答。
+1、14、15 已在核准時決定（D46）；1 由 D48 改成「現在開始」；2、6、7、8～12 由 D48 決定（7 採 (b)，其餘照建議）；4 照 (a) 維持；13 在 os-wait-backend 開始前回答。16～26 是 2026-10-27 D201 的 Windows 驗證之後加的（D64 與 D201 的發現），都還沒決定。
 
 1. **剩餘部件與消費端發行的先後**。**已決定（D46）：(a)。之後由 D48 改成：其餘批次現在開始，不等發行。**
    - (a) A1～A3 在發行前完成，其他全部排在發行之後，順序是 os-guard-wide → os-process-info → os-console-shutdown → os-files-write → os-tool-files → os-trace-writers → os-path-utf8-sweep，計時的兩批最後；time-threads-invariants 與 os-wake-record 不改程式，可以並行。
@@ -741,6 +835,67 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
     - 取捨：(a) 符合慣例與「功能線為單位、PR 盡量少」，代價是發行線 PR 延誤時 engine/os 也跟著延後。(b) engine/os 先進 master，但合併時沒有任何正式程式碼使用它。
     - 建議：(a)。
 
+16. **os-utf8-codepage 的順序**（D64；D211 的限制下，目前只寫計畫）。
+    - (a) 排在計時的三批（os-wake-record、os-threads-backend、os-wait-backend）之後，和 os-net-errors、os-close 一起排在 #96 合併後。
+    - (b) 排在計時的三批之前，下一次 Windows 機器的驗證就能在任何機器判定。
+    - (c) 和計時的三批並行（互不依賴，檔案不重疊）。
+    - 取捨：(a) 不打斷 D62 的排程，但下一次 Windows 機器（計時的 L2、os-wake-record 的 Windows 基準）若 ACP＝65001，ACP 類的突變仍無法判定。(b) 讓 Windows 的驗證不挑機器，代價是計時三批延後約 1～1.5 天。(c) 最快，但兩批同時改 tests/common/os 的 CMake，要協調。
+    - 建議：(b)。D62 的 Windows 機器驗證正是它要解決的問題，而且它不碰計時程式碼。
+17. **manifest 怎麼套到每個執行檔**。
+    - (a) 根目錄在設定期走過所有 EXECUTABLE 目標，自動套用並在每個平台標記；設定期檢查列出沒有標記、也沒有寫理由的目標。
+    - (b) engine/os 提供函式；`gyo_app_add_executable` 自動呼叫，其他直接 `add_executable` 的地方（測試、探針、工具）各自呼叫；設定期檢查抓漏掉的。
+    - 取捨：(a) 新增產品、測試、探針都不用寫任何東西，但「設定期修改別人的目標」是 repo 裡新的做法（目前的走訪都只讀）。(b) 每個目標看得到自己帶 manifest，但約 60 個 `add_executable` 要逐一加一行，新增的人也要記得，漏了由檢查擋下。
+    - 附帶：engine/os 要不要提供「目前程序的 code page」查詢，讓產品在啟動行記錄 `acp=`。建議提供，記不記錄由產品決定。
+    - 建議：(a)。
+18. **manifest 檔與嵌入函式放在哪裡**。
+    - (a) engine/os（例如 `engine/os/cmake/` 與 `engine/os/windows/`），由 owner 擁有契約與實作。
+    - (b) 建置層的共用目錄（`build/cmake/`），engine/os 只寫契約。
+    - 取捨：(a) 契約和實作在同一個 owner，移除 engine/os 時一起消失；但 engine/os 第一次有 CMake 模組給別人 include。(b) 和其他建置 helper 放在一起，但契約和實作分屬兩個 owner。
+    - 建議：(a)。
+19. **在 manifest 之下變成等價突變的處理**（pu-x6、pu-x7，以及消費端的 p4）。
+    - (a) 退場：在目錄裡標為「manifest 之下等價」並移出常規執行；它們守的性質（窄字元轉換在我們的程序裡是 UTF-8）改由 manifest 的檢查負責。
+    - (b) 保留，改成「建一個刻意不帶 manifest 的測試程式，在系統 ACP 不是 65001 的機器上跑」。
+    - (c) 加守衛 R7：engine、apps、tools 不用 `path::string()`、`generic_string()` 與窄字元建構 `path`，以只縮不增的 allowlist 管理。
+    - 取捨：(a) 最簡單，但沒有 manifest 的程序（1903 以前、外部程式連結 Engine）的窄字元問題不再有突變守住。(b) 仍然挑機器，違反 D64 的原則。(c) 任何 OS 都能判定，但 `.string()` 的文字比對會誤報（例如非 path 的型別），要調規則。
+    - 突變的判定改變要依 §14.4 由使用者核准。
+    - 建議：(a)；若之後要支援沒有 manifest 的程序，再評估 (c)。
+20. **Proton／Wine 是否支援 `activeCodePage`**（未確認）。
+    - 若不支援，Proton 下程序的 ACP 是 Wine 的設定。engine/os 仍然正確（寬字元 API），第三方的窄字元行為會不同。
+    - 建議：在 build-baseline 的 Tier 2（Windows 包跑在 Proton 上）的驗收裡確認；在那之前，Invariant 11 的條文寫明「Windows 10 1903 以後」，不宣稱涵蓋 Wine。
+21. **`longPathAware` 要不要一起加**。
+    - (a) 不加：長路徑維持 engine/os 的 `\\?\` 加寬字元 API。
+    - (b) 一起加：第三方（SDL 的檔案 IO、ImGui 的字型）在長路徑上也可能成功。
+    - 取捨：`longPathAware` 只在登錄值 LongPathsEnabled 為 1 的機器才生效。也就是說，它讓行為取決於環境設定，和 D64 的原則相反。(a) 的長路徑行為在每台機器都相同。
+    - 建議：(a)。
+22. **Windows 10 1903 以前的版本**。
+    - 那些版本忽略 `activeCodePage`，程序的 ACP 是系統設定。engine/os 仍然正確；第三方與 argv 會照舊依系統設定。
+    - (a) 文件寫明最低版本是 Windows 10 1903（2019 年），不另做處理；產品可在啟動行記錄 `acp=` 來診斷。
+    - (b) 啟動時檢查，ACP 不是 65001 就拒絕啟動。
+    - 取捨：(b) 確保一致，但在支援期外的舊系統上，原本能用的程序會變成無法啟動。
+    - 建議：(a)。
+23. **MinGW 的嵌入**：依 build-baseline 的支援矩陣決定 MinGW 是否保留（未定）。
+    - 若保留：os-utf8-codepage 要先在 MinGW 上確認 `.rc` 嵌入的 manifest 和 MinGW-w64 的預設 manifest 不衝突（推論可能衝突），結果決定嵌入方式。
+    - 若不保留：只做 MSVC，文件寫「MinGW 不保證」。
+24. **D201 找到的測試缺漏（只改測試）放在哪一批**。
+    - 缺漏：
+      - os-w10：`*create directories*` 沒有 UNC 根目錄的案例（`FileWriterTests.cpp:227`、`249`）。從程式碼推論，任何 Windows 機器上 os-w10 都會存活。補一個 `\\localhost\C$` 底下的案例（和 `FileChangeTests.cpp` 的 UNC 案例同一種前提）。
+      - FontDirectories：os.md 的契約有列 `%LOCALAPPDATA%\Microsoft\Windows\Fonts`，但測試在 Windows 上的預期清單（`FileChangeTests.cpp:318-323`）只有系統的 Fonts。在有使用者字型的機器上，這個測試必然失敗（D201 的 MSVC 建置），所以 os-g18 的基準線也不通過。這是測試的錯，修法是把使用者的字型目錄加進預期清單。
+    - (a) 併進 os-utf8-codepage（它本來就要改 gyo_os_tests）。
+    - (b) 單獨一個只改測試的小批。
+    - (c) 留到 os-close。
+    - §14.4：FontDirectories 的修正有放寬面（以前在有使用者字型的機器上失敗，修正後通過），守的性質（列出的目錄都是文件寫的、順序正確）仍由同一個迴圈守住，要使用者核准。os-w10 的案例只收緊。
+    - 建議：(a)；若 os-utf8-codepage 排在後面，就 (b)。
+25. **強制結束時 Match 的 log 是 0 B**（D201 第 5 項，Windows 的 MinGW 建置，conhost）。
+    - 觀察：在結束要求後再按一次 Ctrl+C，程序直接結束（符合設計），但 log 連啟動行都沒有。
+    - 2026-10-27 在 macOS 上的對照：Match 啟動後 0.3 秒內 log 已有啟動行，`kill -9` 之後內容仍在。所以 0 B 不像是預期行為。
+    - 可能的原因（都未確認）：MinGW 特有的問題；Windows 上 append 的 handle 與程序被終止的互動；第二次 Ctrl+C 在啟動行寫出之前就到了。
+    - 建議：依 AGENTS §14.3，先在 Windows（MSVC 與 MinGW 各一）重現，再判斷。重現不了，就加觀測手段後停下回報。這不是本計畫現有批次的範圍，判定後再決定歸屬（Trace 或產品）。
+26. **`os.console_close` 在預設終端機是 Windows Terminal 時一直 Skipped**（推測：`CREATE_NEW_CONSOLE` 被委派給 Windows Terminal）。
+    - (a) `console_check.py` 改成明確經 `conhost.exe` 啟動探針，讓測試在任何 Windows 11 機器上都會實跑。
+    - (b) 維持 Skipped，文件寫明條件。
+    - 取捨：(a) 和 D64「不由環境決定」的原則一致，但要先確認 `conhost.exe` 的啟動方式在 CI 的 runner 上可用。(b) 不必改，但 D201 這類機器上永遠看不到結果。
+    - 建議：(a)，排在 os-close 或 os-utf8-codepage。
+
 ## 12. 尚未確認之處（推論清單）
 
 以下都沒在 Windows 上實際跑過，各批開始時先在 windows-x64 確認 Red：
@@ -753,3 +908,6 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
 - UCRT 的 `%z` 輸出。
 - `RoleThread.cpp:53` 對非 ASCII 名稱擴寬錯誤。
 - Explorer 內建解壓會跳過長路徑的檔案。
+- （os-utf8-codepage）Ninja 加 MSVC 時，CMake 會把 `.manifest` 原始檔合併進連結器產生的 manifest。
+- （os-utf8-codepage）MinGW-w64 預設連入的 manifest 和自己的 `RT_MANIFEST` 會衝突。
+- （os-utf8-codepage）Proton／Wine 照 `activeCodePage` 設定程序的 ACP。

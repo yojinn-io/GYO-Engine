@@ -80,6 +80,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 22. **D61**：time-threads-invariants 的定案。time.md 與 threads.md 的 Design Invariants（含 Replacement Criteria）照草稿同意；這一批補幾個便宜的守衛（連結檢查的兩個設定期突變、後端名稱的測試、Linux 名稱截斷的檢查），其餘無守衛的項目記為未結。
 23. **D62**（消費端 D208、D209 的連帶）：lan15 延期到本計畫做到 os-net-errors 之前為止。那之前的 4 批（os-path-utf8-sweep、os-wake-record、os-threads-backend、os-wait-backend）先做完，然後在 Windows 機器上一次做完 Windows 專用突變、`-s` 確認、實機驗收與計時的 L2，再跑 lan15；os-net-errors 與 os-close 排在 #96 合併後。
 24. **D63**：os-path-utf8-sweep 開工前的四個決定。檔位 high＋1 位 xhigh 審查；新增 `Os::Files::PathForMessage`（訊息與 log 用的 UTF-8，保留平台的分隔字元，永不失敗）；拿掉公開的 `Sdl::PathFromUtf8`（`BaseDirectory` 內部照舊），停用中的產品只記進 inactive_products.md，主機 shader 工具的 12 處也一起改；Windows 的 Red 先推測試跑一次 L1。估時 10～15 h。
+25. **D64**：Windows 程序自己把 ANSI code page 定為 UTF-8（manifest 的 `activeCodePage`），不由執行環境決定；engine/os 的寬字元 API 維持主線，manifest 是第二道防線。使用者的話：「程序不應該由環境參數來決定。」細化成批次草案 os-utf8-codepage（PLAN 第 3.10、7.18、9.2 節），條文與做法的開放決策 16～23 未決；D211 之下目前只改計畫。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -121,6 +122,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-wait-backend | xhigh；1 位 xhigh 審查（先問） | 未開始 | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
 | os-net-errors | high | 條件式 | socket 錯誤碼的中立分類（開放決策 7） |
 | os-close | medium | 未開始 | allowlist 清空、文件同步、完整突變 |
+| os-utf8-codepage（提案，D64） | high＋1 位 xhigh 審查（先問） | 計畫草案，未核准（順序見開放決策 16） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
 
 ```text
 os-plan-docs ─┬─→ os-skeleton ─┐
@@ -138,7 +140,7 @@ os-plan-docs ─┬─→ os-skeleton ─┐
 
 ## 尚待回答的開放決策
 
-PLAN 第 11 節的 1、14、15 已由 D46 決定。其餘（2、4、6～13）在對應批次開始前回答。
+PLAN 第 11 節的 1、14、15 已由 D46 決定。其餘（2、4、6～13）在對應批次開始前回答。16～26（2026-10-27 加入）：os-utf8-codepage 的順序、套用方式、owner、等價突變、Proton／Wine、longPathAware、1903 以前的 Windows、MinGW 的嵌入，以及 D201 找到的測試缺漏、強制結束時的 0 B log、`os.console_close` 在 Windows Terminal 下的 Skipped。
 
 ## 執行規則
 
