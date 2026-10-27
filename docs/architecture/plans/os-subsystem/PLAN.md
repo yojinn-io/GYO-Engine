@@ -835,7 +835,7 @@ P1～P5 完成後的下一個失敗點：產品自己開的 arenas.json（約 P�
     - 取捨：(a) 符合慣例與「功能線為單位、PR 盡量少」，代價是發行線 PR 延誤時 engine/os 也跟著延後。(b) engine/os 先進 master，但合併時沒有任何正式程式碼使用它。
     - 建議：(a)。
 
-16. **os-utf8-codepage 的順序**（D64；D211 的限制下，目前只寫計畫）。
+16. **os-utf8-codepage 的順序**（D64）。**已決定（D65）：(b)。**
     - (a) 排在計時的三批（os-wake-record、os-threads-backend、os-wait-backend）之後，和 os-net-errors、os-close 一起排在 #96 合併後。
     - (b) 排在計時的三批之前，下一次 Windows 機器的驗證就能在任何機器判定。
     - (c) 和計時的三批並行（互不依賴，檔案不重疊）。
