@@ -66,6 +66,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   5. 主控台：Match 在主控台裡用 Ctrl+C、Ctrl+Break、關閉視窗結束，log 最後一行 `end version=1 reason=signal exit_code=0`；`ctest -R "^(os\.console_close|io\.unc_localhost|io\.unc_127\.0\.0\.1)$"` 預期 Passed（Windows Terminal 下 console_close 可能 Skipped，改用 conhost）。回 OS 子系統的會話。
   6. lan15（D208：延期，日期未定）。
   （D209：第 1～6 項等 OS 統一子系統做到 os-net-errors 之前全部完成後一起做；那時另加計時核心的 L2 與 os-wake-record 的 Windows 基準。）
+- **後續宣告要寫的「範圍的限界」（AGENTS.md §14 冒頭，PR #98 起）**：lan15 與之後的宣告，要列出已記錄為量不到或判定不了的經路，直到記錄解消：Windows 的 symlink 案例（MinGW 與沒有開發人員模式的 MSVC 都提早返回）；`os.console_close`（CI 與使用者的機器都 Skipped）與 Ctrl+Break（使用者的鍵盤沒有 Break 鍵）；quick-close 量的是產品的網路層，不是整個 Client 程序（D202）；`close_timing` 不在 CI 跑（D204）；ACP 非 UTF-8 時的行為在 manifest 之下不再測得到（D212）。
 - **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟、完整突變開始。
 
 ## 閱讀入口
