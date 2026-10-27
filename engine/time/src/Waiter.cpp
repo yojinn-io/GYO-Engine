@@ -1,33 +1,14 @@
 #include "engine/time/Waiter.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/os/WakeSignal.hpp"
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <optional>
 #include <string>
-
-#if defined(__APPLE__)
-#include <cerrno>
-#include <cstring>
-#include <sys/event.h>
-#include <unistd.h>
-#elif defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
-#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
-#endif
-#else
-#include <condition_variable>
-#include <mutex>
-#endif
+#include <utility>
 
 namespace Engine::Time {
 namespace {
@@ -44,117 +25,43 @@ Duration LateSince(const TimePoint deadline, const TimePoint now) noexcept {
 
 } // namespace
 
+// The platform wake primitive is engine/os's (os-wait-backend, D71); what a wake
+// means stays here: the latch, the single waiter, the deadline loop and the
+// re-check of the time base after every platform wake.
 struct Waiter::Impl final {
-    // The latch: set by Notify, consumed by the waiting thread.
+    explicit Impl(Os::WakeSignal wakeSignal) noexcept : primitive(std::move(wakeSignal)) {}
+
+    // The latch: set by Notify, consumed by the waiting thread. It is Time's
+    // state; engine/os reads it through the reference Block takes and keeps no
+    // copy (time.md Invariant 8).
     std::atomic<bool> notified{false};
     // Guards the single-waiter contract.
     std::atomic<bool> waiting{false};
-    WaitBackend backend{WaitBackend::ConditionVariable};
-
-#if defined(__APPLE__)
-    static constexpr uintptr_t UserIdent = 1;
-    static constexpr uintptr_t TimerIdent = 2;
-    int queue{-1};
-
-    ~Impl() {
-        if (queue >= 0) close(queue);
-    }
-    void Signal() noexcept {
-        struct kevent change {};
-        EV_SET(&change, UserIdent, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
-        static_cast<void>(kevent(queue, &change, 1, nullptr, 0, nullptr));
-    }
-    // One kevent call arms the one-shot timer (if any) and waits for it or the
-    // user event. A timer left armed by an earlier notified wait only causes a
-    // spurious wake, which the caller absorbs.
-    void Block(const std::optional<Duration> timeout) noexcept {
-        struct kevent change {};
-        int changes = 0;
-        if (timeout) {
-            const auto nanoseconds = std::max<std::int64_t>(1,
-                std::chrono::duration_cast<std::chrono::nanoseconds>(*timeout).count());
-            EV_SET(&change, TimerIdent, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_NSECONDS | NOTE_CRITICAL,
-                static_cast<intptr_t>(nanoseconds), nullptr);
-            changes = 1;
-        }
-        struct kevent event {};
-        static_cast<void>(kevent(queue, &change, changes, &event, 1, nullptr));
-    }
-#elif defined(_WIN32)
-    HANDLE event{nullptr};
-    HANDLE timer{nullptr};
-
-    ~Impl() {
-        if (timer) CloseHandle(timer);
-        if (event) CloseHandle(event);
-    }
-    void Signal() noexcept { static_cast<void>(SetEvent(event)); }
-    void Block(const std::optional<Duration> timeout) noexcept {
-        if (!timeout) {
-            static_cast<void>(WaitForSingleObject(event, INFINITE));
-            return;
-        }
-        // Relative due time in 100 ns units, rounded up; negative means relative.
-        const auto hundreds = std::max<long long>(1,
-            (std::chrono::duration_cast<std::chrono::nanoseconds>(*timeout).count() + 99) / 100);
-        LARGE_INTEGER due{};
-        due.QuadPart = -hundreds;
-        if (!SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
-            const auto milliseconds = static_cast<DWORD>(std::max<long long>(1, (hundreds + 9999) / 10000));
-            static_cast<void>(WaitForSingleObject(event, milliseconds));
-            return;
-        }
-        const HANDLE handles[2] = {event, timer};
-        static_cast<void>(WaitForMultipleObjects(2, handles, FALSE, INFINITE));
-    }
-#else
-    std::mutex mutex;
-    std::condition_variable condition;
-
-    void Signal() noexcept {
-        { const std::lock_guard lock(mutex); }
-        condition.notify_one();
-    }
-    void Block(const std::optional<Duration> timeout) {
-        std::unique_lock lock(mutex);
-        if (notified.load(std::memory_order_acquire)) return;
-        if (timeout) static_cast<void>(condition.wait_for(lock, *timeout));
-        else condition.wait(lock);
-    }
-#endif
+    Os::WakeSignal primitive;
 };
 
+namespace {
+
+// The engine/os mechanism as this Waiter's backend: the same values in the same
+// order, so the names consumers log stay (Invariant 7).
+WaitBackend ToBackend(const Os::WaitMechanism mechanism) noexcept {
+    static_assert(static_cast<int>(Os::WaitMechanism::Kqueue) == static_cast<int>(WaitBackend::Kqueue));
+    static_assert(static_cast<int>(Os::WaitMechanism::HighResolutionWaitableTimer) ==
+                  static_cast<int>(WaitBackend::HighResolutionWaitableTimer));
+    static_assert(static_cast<int>(Os::WaitMechanism::WaitableTimer) == static_cast<int>(WaitBackend::WaitableTimer));
+    static_assert(static_cast<int>(Os::WaitMechanism::ConditionVariable) ==
+                  static_cast<int>(WaitBackend::ConditionVariable));
+    return static_cast<WaitBackend>(mechanism);
+}
+
+} // namespace
+
 Base::Result<Waiter, TimeError> Waiter::Create() {
-    auto impl = std::make_unique<Impl>();
-#if defined(__APPLE__)
-    impl->backend = WaitBackend::Kqueue;
-    impl->queue = kqueue();
-    if (impl->queue < 0)
-        return Base::Err(TimeError::Make(TimeErrorCode::WaitPrimitiveUnavailable, "kqueue() failed",
-            std::string(std::strerror(errno))));
-    struct kevent change {};
-    EV_SET(&change, Impl::UserIdent, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);
-    if (kevent(impl->queue, &change, 1, nullptr, 0, nullptr) < 0)
-        return Base::Err(TimeError::Make(TimeErrorCode::WaitPrimitiveUnavailable,
-            "kevent(EVFILT_USER) registration failed", std::string(std::strerror(errno))));
-#elif defined(_WIN32)
-    impl->event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    if (!impl->event)
-        return Base::Err(TimeError::Make(TimeErrorCode::WaitPrimitiveUnavailable, "CreateEventW failed",
-            "GetLastError=" + std::to_string(GetLastError())));
-    impl->timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-    impl->backend = WaitBackend::HighResolutionWaitableTimer;
-    if (!impl->timer) {
-        impl->timer = CreateWaitableTimerExW(nullptr, nullptr, 0, TIMER_ALL_ACCESS);
-        impl->backend = WaitBackend::WaitableTimer;
-    }
-    if (!impl->timer)
-        return Base::Err(TimeError::Make(TimeErrorCode::WaitPrimitiveUnavailable, "CreateWaitableTimerExW failed",
-            "GetLastError=" + std::to_string(GetLastError())));
-#else
-    impl->backend = WaitBackend::ConditionVariable;
-#endif
-    return Waiter(std::move(impl));
+    auto primitive = Os::WakeSignal::Create();
+    if (!primitive)
+        return Base::Err(TimeError::Make(TimeErrorCode::WaitPrimitiveUnavailable, primitive.error().message,
+            Base::CauseDetail(primitive.error())));
+    return Waiter(std::make_unique<Impl>(std::move(primitive).value()));
 }
 
 Waiter::Waiter(std::unique_ptr<Impl> impl) noexcept : impl_(std::move(impl)) {}
@@ -165,7 +72,7 @@ Waiter::~Waiter() = default;
 void Waiter::Notify() noexcept {
     if (!impl_) return;
     impl_->notified.store(true, std::memory_order_release);
-    impl_->Signal();
+    impl_->primitive.Signal();
 }
 
 Wake Waiter::WaitUntil(const TimePoint deadline) {
@@ -185,8 +92,8 @@ Wake Waiter::WaitUntil(const TimePoint deadline) {
         if (bounded && now >= deadline) return {WakeReason::Deadline, deadline, now, LateSince(deadline, now)};
         if (impl_->notified.exchange(false, std::memory_order_acq_rel))
             return {WakeReason::Notified, deadline, Now(), Duration::zero()};
-        if (bounded) impl_->Block(std::min<Duration>(deadline - now, MaximumBlock));
-        else impl_->Block(std::nullopt);
+        if (bounded) impl_->primitive.Block(impl_->notified, std::min<Duration>(deadline - now, MaximumBlock));
+        else impl_->primitive.Block(impl_->notified, std::nullopt);
     }
 }
 
@@ -194,7 +101,7 @@ Wake Waiter::Wait() { return WaitUntil(TimePoint::max()); }
 
 WaitBackend Waiter::Backend() const {
     GYO_ASSERT(impl_ != nullptr);
-    return impl_->backend;
+    return ToBackend(impl_->primitive.Mechanism());
 }
 
 } // namespace Engine::Time

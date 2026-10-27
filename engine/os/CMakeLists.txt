@@ -5,14 +5,16 @@
 # Sources that do not depend on the OS live in src/common; one source per OS
 # family lives under src/<os> and is selected here (the build layer may branch
 # on the OS). The thread naming and priority calls moved from engine/threads
-# keep one source with per-OS branches under src/thread, so the move reads
-# against the old code (os-subsystem open decision 11 (c)).
+# and the wake primitive moved from engine/time keep one source each with
+# per-OS branches under src/thread and src/wait, so the moves read against the
+# old code (os-subsystem open decision 11 (c)).
 add_library(gyo_os STATIC
     src/common/Calendar.cpp
     src/common/OsError.cpp
     src/common/Paths.cpp
     src/common/Shutdown.cpp
     src/thread/Thread.cpp
+    src/wait/WakeSignal.cpp
 )
 if(WIN32)
     target_sources(gyo_os PRIVATE
@@ -36,8 +38,9 @@ target_include_directories(gyo_os PUBLIC
 target_compile_features(gyo_os PUBLIC cxx_std_20)
 target_link_libraries(gyo_os PUBLIC GYO::Base)
 if(NOT WIN32)
-    # pthread_setname_np (Thread): the system's thread library, as Design
-    # Invariant 3 allows (D69).
+    # pthread_setname_np (Thread) and the condition-variable fallback of the
+    # wake primitive (Wait): the system's thread library, as Design Invariant 3
+    # allows (D69, D71).
     find_package(Threads REQUIRED)
     target_link_libraries(gyo_os PRIVATE Threads::Threads)
 endif()

@@ -1,7 +1,7 @@
 # Tests of the OS layer (docs/architecture/os.md). This is the one common test
 # directory allowed to assert per OS; the boundary guard does not scan it.
 add_executable(gyo_os_tests OsErrorTests.cpp FilesTests.cpp FileWriterTests.cpp FileChangeTests.cpp
-    ProcessTests.cpp ConsoleTests.cpp ThreadTests.cpp)
+    ProcessTests.cpp ConsoleTests.cpp ThreadTests.cpp WakeSignalTests.cpp)
 # GYO::Threads: ThreadTests reads a role's priority back on the role's thread.
 target_link_libraries(gyo_os_tests PRIVATE GYO::Os GYO::Threads gyo_test_support doctest::doctest)
 add_test(NAME gyo_os_tests COMMAND gyo_os_tests)

@@ -76,15 +76,15 @@
       "id": "os-g6-stale",
       "what": "An allowlist entry stays larger after a site moved",
       "file": "tests/common/os/os_boundary_allowlist.txt",
-      "find": "engine/time/src/Waiter.cpp R1 3 ",
-      "replace": "engine/time/src/Waiter.cpp R1 4 ",
+      "find": "tests/common/trace/TraceSinkTests.cpp R2 2 ",
+      "replace": "tests/common/trace/TraceSinkTests.cpp R2 3 ",
       "command": [
         "{python}",
         "tests/common/os/os_boundary_guard.py",
         "--root",
         "."
       ],
-      "expect": "Waiter\\.cpp R1 has 3 findings, allowlisted 4; shrink the allowlist"
+      "expect": "TraceSinkTests\\.cpp R2 has 2 findings, allowlisted 3; shrink the allowlist"
     },
     {
       "id": "os-g7-public-header",
@@ -1568,11 +1568,11 @@
       "id": "ti-x1-time-links-more",
       "what": "gyo_time links another module (time.md Invariant 10, configure-time check)",
       "file": "engine/time/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base PRIVATE Threads::Threads)",
-      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math PRIVATE Threads::Threads)",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math PRIVATE GYO::Os)",
       "target": "gyo_time_tests",
       "expect_build_failure": true,
-      "expect": "gyo_time links .*expected exactly\\s+GYO::Base;Threads::Threads"
+      "expect": "gyo_time links .*expected exactly\\s+GYO::Base;GYO::Os"
     },
     {
       "id": "ti-x2-threads-links-more",
@@ -1900,6 +1900,105 @@
       "target": "gyo_os_tests",
       "cases": "*a role's priority*",
       "expect": "CHECK\\( read.actual == read.expected \\) is NOT correct"
+    },
+    {
+      "id": "ow-x1-cv-latch-outside-mutex",
+      "what": "The condition-variable fallback reads the latch before taking its mutex, so a signal between the read and the wait is lost (os.md Invariant 8, time.md Invariant 8)",
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/os/src/wait/WakeSignal.cpp",
+      "find": "        std::unique_lock lock(mutex);\n        if (latch.load(std::memory_order_acquire)) return;\n",
+      "replace": "        if (latch.load(std::memory_order_acquire)) return;\n        std::unique_lock lock(mutex);\n",
+      "target": "gyo_os_tests",
+      "cases": "*loses no signal*",
+      "timeout": 600,
+      "expect": "a signal sent while the waiter checked its latch was lost"
+    },
+    {
+      "id": "ow-x2-time-os-public",
+      "what": "gyo_time links GYO::Os publicly, so its users get engine/os headers (time.md Invariant 10, configure-time check)",
+      "file": "engine/time/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Os)",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_time exposes GYO::Os to its users"
+    },
+    {
+      "id": "ow-x3-kqueue-signal-dropped",
+      "what": "The kqueue Signal registers the user event without triggering it",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/wait/WakeSignal.cpp",
+      "find": "        EV_SET(&change, UserIdent, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);",
+      "replace": "        EV_SET(&change, UserIdent, EVFILT_USER, 0, 0, 0, nullptr);",
+      "target": "gyo_os_tests",
+      "cases": "*keeps a signal sent before the block*",
+      "expect": "a signal sent before the block did not end it"
+    },
+    {
+      "id": "ow-x4-kqueue-timer-not-armed",
+      "what": "The kqueue Block never arms its one-shot timer, so a timeout does not end it",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/wait/WakeSignal.cpp",
+      "find": "            changes = 1;\n",
+      "replace": "            changes = 0;\n",
+      "target": "gyo_os_tests",
+      "cases": "*by its relative timeout*",
+      "expect": "a block with a 20 ms timeout did not end by it"
+    },
+    {
+      "id": "ow-x5-windows-timer-not-armed",
+      "what": "The Windows Block waits on the event only, so the armed timer does not end it",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/wait/WakeSignal.cpp",
+      "find": "        static_cast<void>(WaitForMultipleObjects(2, handles, FALSE, INFINITE));",
+      "replace": "        static_cast<void>(WaitForMultipleObjects(1, handles, FALSE, INFINITE));",
+      "target": "gyo_os_tests",
+      "cases": "*by its relative timeout*",
+      "expect": "a block with a 20 ms timeout did not end by it"
+    },
+    {
+      "id": "ow-x6-windows-signal-dropped",
+      "what": "The Windows Signal does not set the event",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/wait/WakeSignal.cpp",
+      "find": "    void Signal() noexcept { static_cast<void>(SetEvent(event)); }",
+      "replace": "    void Signal() noexcept {}",
+      "target": "gyo_os_tests",
+      "cases": "*keeps a signal sent before the block*",
+      "expect": "a signal sent before the block did not end it"
+    },
+    {
+      "id": "ow-x7-backend-mapping-shifted",
+      "what": "The Waiter reports the next backend instead of the engine/os mechanism (time.md Invariant 7)",
+      "file": "engine/time/src/Waiter.cpp",
+      "find": "    return static_cast<WaitBackend>(mechanism);",
+      "replace": "    return static_cast<WaitBackend>((static_cast<int>(mechanism) + 1) % 4);",
+      "target": "gyo_time_tests",
+      "cases": "*uses the platform backend*",
+      "expect": "waiter\\.Backend\\(\\) == WaitBackend::\\w+.*is NOT correct"
+    },
+    {
+      "id": "ow-x8-kqueue-mechanism-misreported",
+      "what": "The kqueue signal reports the condition-variable mechanism",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/wait/WakeSignal.cpp",
+      "find": "    impl->mechanism = WaitMechanism::Kqueue;",
+      "replace": "    impl->mechanism = WaitMechanism::ConditionVariable;",
+      "target": "gyo_os_tests",
+      "cases": "*reports the platform mechanism*",
+      "expect": "CHECK\\( signal.Mechanism\\(\\) == WaitMechanism::Kqueue \\) is NOT correct"
     }
   ]
 }
