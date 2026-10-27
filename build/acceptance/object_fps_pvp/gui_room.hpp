@@ -39,7 +39,9 @@ public:
         if (!WithBots()) return std::nullopt;
         if (!parked_) parked_ = std::filesystem::exists(output_ / BotsParkedFile);
         if (state.phase == fps::pvp::ConnectionPhase::Playing && state.playerId && state.playerId != published_) {
-            const auto temporary = PublishedPath(role_).string() + ".tmp";
+            // Appended to the path, not to path::string() (the ANSI code page on Windows).
+            auto temporary = PublishedPath(role_);
+            temporary += ".tmp";
             {
                 std::ofstream file(temporary);
                 file << state.playerId << '\n';

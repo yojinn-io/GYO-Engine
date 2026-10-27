@@ -5,6 +5,7 @@
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
 #include "engine/os/Console.hpp"
+#include "engine/os/Files.hpp"
 
 #include <iostream>
 #include <string>
@@ -65,7 +66,7 @@ int Validate(const Gyo::Tools::UiEditor::CommandLineOptions& options) {
     if (HasErrors(diagnostics)) {
         return 4;
     }
-    std::cout << "valid: " << options.inputPath->string() << '\n';
+    std::cout << "valid: " << Engine::Os::Files::PathForMessage(*options.inputPath) << '\n';
     return 0;
 }
 

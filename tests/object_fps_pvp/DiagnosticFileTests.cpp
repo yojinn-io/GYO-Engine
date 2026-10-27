@@ -316,6 +316,26 @@ TEST_CASE("PvP log directories that cannot be made name the directory and the ca
     }
 }
 
+// Trace names with characters the Windows ANSI code page cannot hold keep them
+// (os-path-utf8-sweep, D63): the names are worked on in UTF-8, where MSVC's
+// path::string() threw for them.
+TEST_CASE("PvP trace names outside the ANSI code page keep their characters") {
+    const std::filesystem::path movement(u8"\u8a18\u9332/\u8a66\u5408-commands.jsonl");
+    CHECK(NumberedTracePath(movement, 2) == std::filesystem::path(u8"\u8a18\u9332/\u8a66\u5408.2-commands.jsonl"));
+    CHECK(NumberedTracePath(std::filesystem::path(u8"\u8a18\u9332/\uad81\uc801.jsonl"), 3) ==
+          std::filesystem::path(u8"\u8a18\u9332/\uad81\uc801.3.jsonl"));
+    CHECK(MatchShotTracePath(movement) == std::filesystem::path(u8"\u8a18\u9332/\u8a66\u5408-shots.jsonl"));
+    std::string error;
+    CHECK(MatchIngressTracePath(movement, {}, error) == std::filesystem::path(u8"\u8a18\u9332/\u8a66\u5408-ingress.jsonl"));
+    CHECK(error.empty());
+    // A refused name is named in UTF-8 in the message.
+    const std::filesystem::path refused(u8"\u8a18\u9332/\u60aa-commands.jsonl");
+    CHECK(MatchIngressTracePath(movement, refused, error).empty());
+    const std::u8string refusedText = refused.u8string();
+    CHECK(error == "The ingress trace name must not end in commands.jsonl: " +
+                       std::string(refusedText.begin(), refusedText.end()));
+}
+
 // v7.1 trace-no-overwrite (D191): a restart takes the next free name, and the
 // files named after a movement trace must be free too.
 TEST_CASE("PvP a restarted trace takes the next free numbered name") {

@@ -56,7 +56,8 @@ std::string StripComments(const std::string& text) {
 }
 
 bool IsPublicHeader(const std::filesystem::path& path) {
-    const auto extension = path.extension().string();
+    // Compared as paths: path::string() throws on Windows for a name outside the ANSI code page.
+    const auto extension = path.extension();
     if (extension != ".hpp" && extension != ".h" && extension != ".inl") return false;
     bool underInclude = false;
     for (const auto& part : path) {
@@ -91,10 +92,11 @@ TEST_CASE("Engine public headers outside the native layer name no SDL symbol") {
         content << file.rdbuf();
         std::istringstream lines(StripComments(content.str()));
         std::string line;
+        const auto name = relative.generic_u8string();  // UTF-8, not the ANSI code page
         for (int number = 1; std::getline(lines, line); ++number) {
             if (std::smatch match; std::regex_search(line, match, symbol))
-                leaks.push_back("engine/" + relative.generic_string() + ":" + std::to_string(number) + " " +
-                                match.str());
+                leaks.push_back("engine/" + std::string(name.begin(), name.end()) + ":" + std::to_string(number) +
+                                " " + match.str());
         }
     }
     CHECK(scanned > 0);

@@ -197,10 +197,36 @@ void TestSharedContentAndQueuedMounts() {
     editor.ApplyPendingAssetChanges();
     Expect(!assets.IsMounted(), "cancelled frame supports the same deferred unmount");
 }
+
+// The GUI keeps paths with characters outside the Windows ANSI code page
+// (os-path-utf8-sweep, D63): the output path fills its field and a queued mount
+// keeps its root, neither through path::string(), which threw for them.
+void TestMountRootOutsideAnsiCodePage() {
+    Fixture fixture;
+    const auto root = fixture.root / std::filesystem::path(u8"\u8a66\u5408-\ud55c");
+    std::filesystem::create_directories(root);
+    Expect(static_cast<bool>(WriteTextFileAtomically(root / "content.json",
+        R"({"version":1,"catalogs":["catalog.json"],"shader_bundles":[]})")), "write content outside the code page");
+    Expect(static_cast<bool>(WriteTextFileAtomically(root / "catalog.json",
+        R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write catalog outside the code page");
+    Expect(static_cast<bool>(WriteTextFileAtomically(root / "font.bin", "test-font")), "write font outside the code page");
+    AssetPreviewContext assets;
+    assets.Initialize(*fixture.renderer, std::make_unique<BitmapRasterizer>());
+    CommandLineOptions options;
+    options.outputPath = root / "menu.json";
+    EditorApp editor(options, assets);
+    Expect(static_cast<bool>(editor.Initialize()), "GUI starts with an output path outside the code page");
+    editor.RequestAssetMount({}, root);
+    editor.ApplyPendingAssetChanges();
+    Expect(assets.IsMounted(), "GUI mounts a root outside the ANSI code page");
+    editor.RequestAssetUnmount();
+    editor.ApplyPendingAssetChanges();
+}
 } // namespace
 
 int main() {
     TestQueuedTexturesAndFrameEviction();
     TestSharedContentAndQueuedMounts();
+    TestMountRootOutsideAnsiCodePage();
     return failures == 0 ? 0 : 1;
 }

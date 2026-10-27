@@ -22,6 +22,7 @@
 #include "engine/asset/catalog/CatalogParser.hpp"
 
 #include "AssertTestSupport.hpp"
+#include "PathText.hpp"
 
 
 using namespace Engine::Asset;
@@ -79,11 +80,11 @@ TEST_CASE("AssetManager: sync load -> cache hit") {
     }
 
     Resolver::AssetPathResolver::Options resolverOptions;
-    resolverOptions.assetsRoot = (tmp / "assets").string();
+    resolverOptions.assetsRoot = Engine::Test::Utf8Path(tmp / "assets");
     Resolver::AssetPathResolver resolver(resolverOptions);
     Catalog::CatalogParser parser;
     AssetCatalog catalog;
-    auto catalogResult = catalog.LoadFromFile(catalogPath.string(), parser, resolver);
+    auto catalogResult = catalog.LoadFromFile(Engine::Test::Utf8Path(catalogPath), parser, resolver);
     REQUIRE(catalogResult);
 
     // --- pipeline 組み立て（実装に合わせて調整） ---
@@ -148,11 +149,11 @@ TEST_CASE("AssetManager: stale handle release balances its pre-reload reference"
     }
 
     Resolver::AssetPathResolver::Options resolverOptions;
-    resolverOptions.assetsRoot = (tmp / "assets").string();
+    resolverOptions.assetsRoot = Engine::Test::Utf8Path(tmp / "assets");
     Resolver::AssetPathResolver resolver(resolverOptions);
     Catalog::CatalogParser parser;
     AssetCatalog catalog;
-    REQUIRE(catalog.LoadFromFile(catalogPath.string(), parser, resolver));
+    REQUIRE(catalog.LoadFromFile(Engine::Test::Utf8Path(catalogPath), parser, resolver));
 
     Loading::LoaderRegistry registry;
     registry.Register(std::make_unique<Loaders::TextLoader>());
@@ -286,14 +287,14 @@ struct ManagerFixture {
         }
         Catalog::CatalogParser parser;
         Resolver::AssetPathResolver::Options options;
-        options.assetsRoot = root.generic_string();
+        options.assetsRoot = Engine::Test::GenericUtf8Path(root);
         Resolver::AssetPathResolver resolver(options);
-        REQUIRE(catalog.LoadFromFile((root / "catalog.json").string(), parser, resolver));
+        REQUIRE(catalog.LoadFromFile(Engine::Test::Utf8Path(root / "catalog.json"), parser, resolver));
         registry.Register(std::make_unique<Loaders::TextLoader>());
         source.Put(Path(), BytesOf("old"));
     }
     ~ManagerFixture() { std::error_code error; fs::remove_all(root, error); }
-    std::string Path() const { return (root / "text.txt").generic_string(); }
+    std::string Path() const { return Engine::Test::GenericUtf8Path(root / "text.txt"); }
     AssetHandle Initial() {
         auto result = manager.Load(id, AssetRequest::Default());
         REQUIRE(result);

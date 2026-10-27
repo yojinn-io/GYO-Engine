@@ -664,6 +664,21 @@ Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path)
     return ToUtf8(path.native(), {});
 }
 
+std::string PathForMessage(const std::filesystem::path& path) {
+    // Without WC_ERR_INVALID_CHARS an unpaired surrogate becomes U+FFFD instead of an error. No path
+    // reaches INT_MAX units (the long form stops at 32767); a longer one is cut there.
+    const std::wstring& wide = path.native();
+    if (wide.empty()) return {};
+    const int length = static_cast<int>(std::min<std::size_t>(wide.size(), INT_MAX));
+    const int bytes = ::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, nullptr, 0, nullptr, nullptr);
+    if (bytes <= 0) return {};
+    std::string utf8(static_cast<std::size_t>(bytes), '\0');
+    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {
+        return {};
+    }
+    return utf8;
+}
+
 Base::Result<std::vector<std::string>, OsError> FontDirectories() {
     std::vector<std::wstring> candidates;
     const UINT needed = ::GetSystemWindowsDirectoryW(nullptr, 0);

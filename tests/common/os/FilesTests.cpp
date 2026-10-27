@@ -351,6 +351,25 @@ TEST_CASE("Os files convert std::filesystem paths to UTF-8 and back") {
     CHECK(path.filename() == Native("\xC3\xA9.txt"));
 }
 
+TEST_CASE("Os files print a path for a message in UTF-8 and never fail") {
+    CHECK(PathForMessage({}).empty());
+    CHECK(PathForMessage(Native("logs/run.txt")) == "logs/run.txt");
+    // Characters outside the ANSI code page (Japanese, Korean) keep their UTF-8 form.
+    const std::string named = "\xE8\xA8\x98\xE9\x8C\xB2/\xED\x95\x9C.jsonl";
+    CHECK(PathForMessage(Native(named)) == named);
+#if defined(_WIN32)
+    // The platform's own form: the separators stay as the path holds them.
+    CHECK(PathForMessage(std::filesystem::path(L"C:\\logs\\run.txt")) == "C:\\logs\\run.txt");
+    CHECK(PathForMessage(std::filesystem::path(std::wstring(L"a\xD800" L"b"))) == "a\xEF\xBF\xBD" "b");
+#else
+    // Each byte that starts no UTF-8 sequence is one U+FFFD; what follows it is kept.
+    CHECK(PathForMessage(std::filesystem::path(std::string("a\xFF" "b"))) == "a\xEF\xBF\xBD" "b");
+    CHECK(PathForMessage(std::filesystem::path(std::string("x\xE8\xA8"))) == "x\xEF\xBF\xBD\xEF\xBF\xBD");
+    CHECK(PathForMessage(std::filesystem::path(std::string("\xC0\xAF/\xED\x95\x9C"))) ==
+          "\xEF\xBF\xBD\xEF\xBF\xBD/\xED\x95\x9C");
+#endif
+}
+
 TEST_CASE("Os files case sensitivity default per platform") {
 #if defined(_WIN32) || defined(__APPLE__)
     CHECK_FALSE(DefaultCaseSensitivePaths());

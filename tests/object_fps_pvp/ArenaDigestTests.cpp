@@ -319,6 +319,12 @@ TEST_CASE("An arena keeps its open and size messages") {
     CHECK(error.find("Arena content exceeds 256 KiB") == std::string::npos);
     CHECK_FALSE(LoadInstalledArenas(directory / "missing-list.json", error));
     CHECK(error.find("Cannot open arena list: ") != std::string::npos);
+    // A name outside the Windows ANSI code page is named in UTF-8 (os-path-utf8-sweep, D63).
+    const std::filesystem::path unnamed(u8"\u8a66\u5408-\ud55c.json");
+    CHECK_FALSE(Arena::Load(directory / unnamed, error));
+    const auto unnamedText = unnamed.u8string();
+    CHECK(error.find("Cannot open arena: ") != std::string::npos);
+    CHECK(error.find(std::string(unnamedText.begin(), unnamedText.end())) != std::string::npos);
     std::filesystem::remove_all(directory);
 }
 
@@ -340,6 +346,9 @@ TEST_CASE("An arena list rejects other versions, paths, repeats and a different 
         return loaded.has_value();
     };
     CHECK(load(R"({"version": 1, "arenas": ["a.json", "b.json"]})"));
+    // An entry is JSON text, so UTF-8, also outside the Windows ANSI code page (os-path-utf8-sweep, D63).
+    std::filesystem::copy_file(ProductAssets() / "pvp_arena.json", directory / std::filesystem::path(u8"\u8a66\u5408.json"));
+    CHECK(load("{\"version\": 1, \"arenas\": [\"\xE8\xA9\xA6\xE5\x90\x88.json\", \"b.json\"]}"));
     CHECK_FALSE(load(R"({"version": 2, "arenas": ["a.json"]})"));
     CHECK_FALSE(load(R"({"version": 1, "arenas": []})"));
     CHECK_FALSE(load(R"({"version": 1, "arenas": ["../a.json"]})"));

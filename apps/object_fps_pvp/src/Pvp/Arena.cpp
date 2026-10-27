@@ -5,6 +5,8 @@
 #include "engine/math/geometry/Aabb.hpp"
 #include "engine/base/Fnv1a.hpp"
 #include "engine/math/linear/Vec3.hpp"
+#include "engine/base/Error.hpp"
+#include "engine/os/Files.hpp"
 
 #include <nlohmann/json.hpp>
 #include <bit>
@@ -64,7 +66,7 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
         NativeReadFailure failure;
         const auto bytes = ReadNativeFile(path, failure, 256 * 1024);
         if (!bytes && failure.tooLarge) throw std::runtime_error("Arena content exceeds 256 KiB");
-        if (!bytes) throw std::runtime_error("Cannot open arena: " + path.string());
+        if (!bytes) throw std::runtime_error("Cannot open arena: " + Engine::Os::Files::PathForMessage(path));
         const auto json = nlohmann::json::parse(bytes->begin(), bytes->end());
         if (!json.at("version").is_number_integer() || json.at("version").get<std::int64_t>() != 1)
             throw std::runtime_error("Unsupported arena version");
@@ -125,7 +127,7 @@ std::optional<std::vector<Arena>> LoadInstalledArenas(const std::filesystem::pat
     try {
         NativeReadFailure failure;
         const auto bytes = ReadNativeFile(list, failure);
-        if (!bytes) throw std::runtime_error("Cannot open arena list: " + list.string());
+        if (!bytes) throw std::runtime_error("Cannot open arena list: " + Engine::Os::Files::PathForMessage(list));
         const auto json = nlohmann::json::parse(bytes->begin(), bytes->end());
         if (!json.at("version").is_number_integer() || json.at("version").get<std::int64_t>() != 1)
             throw std::runtime_error("Unsupported arena list version");
@@ -137,7 +139,10 @@ std::optional<std::vector<Arena>> LoadInstalledArenas(const std::filesystem::pat
             const auto file = name.get<std::string>();
             if (file.empty() || file.find_first_of("/\\:") != std::string::npos || file == "." || file == "..")
                 throw std::runtime_error("Arena list entries are plain file names: " + file);
-            auto arena = Arena::Load(list.parent_path() / file, error);
+            // The name is JSON text, so UTF-8; never read in the ANSI code page.
+            auto name8 = Engine::Os::Files::PathFromUtf8(file);
+            if (!name8) throw std::runtime_error("Arena list entry " + file + ": " + Engine::Base::Describe(name8.error()));
+            auto arena = Arena::Load(list.parent_path() / *name8, error);
             if (!arena) throw std::runtime_error(error);
             for (const auto& other : arenas)
                 if (other.id == arena->id) throw std::runtime_error("Arena installed twice: " + arena->id);
@@ -147,7 +152,7 @@ std::optional<std::vector<Arena>> LoadInstalledArenas(const std::filesystem::pat
         }
         return arenas;
     } catch (const std::exception& exception) {
-        error = "arena list " + list.string() + ": " + exception.what();
+        error = "arena list " + Engine::Os::Files::PathForMessage(list) + ": " + exception.what();
         return std::nullopt;
     }
 }

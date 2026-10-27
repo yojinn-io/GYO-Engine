@@ -49,6 +49,7 @@ private:
     void DrawStatusBar();
 
     void NewDocument();
+    // path is UTF-8 text, as the path fields hold it.
     void OpenDocument(const std::string& path);
     void SaveDocument(bool overwriteExternal = false);
     void ExportDocument(const std::string& path, bool overwriteExternal = false);
@@ -66,8 +67,8 @@ private:
     std::string selectedNode_;
     std::string statusMessage_;
     std::string pendingOverwritePath_;
-    std::string pendingCatalogPath_;
-    std::string pendingAssetRoot_;
+    std::filesystem::path pendingCatalogPath_;
+    std::filesystem::path pendingAssetRoot_;
     bool pendingOverwriteIsExport_{};
     bool pendingCatalogMount_{};
     bool pendingCatalogUnmount_{};

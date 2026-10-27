@@ -385,6 +385,26 @@ Base::Result<std::string, OsError> PathToUtf8(const std::filesystem::path& path)
     return out;
 }
 
+std::string PathForMessage(const std::filesystem::path& path) {
+    // Each well-formed sequence is copied; each byte that starts none becomes U+FFFD.
+    const std::string& bytes = path.native();
+    std::string out;
+    out.reserve(bytes.size());
+    std::size_t i = 0;
+    while (i < bytes.size()) {
+        const auto lead = static_cast<unsigned char>(bytes[i]);
+        const std::size_t length = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
+        if (i + length <= bytes.size() && Detail::IsValidUtf8(std::string_view(bytes).substr(i, length))) {
+            out.append(bytes, i, length);
+            i += length;
+        } else {
+            out += "\xEF\xBF\xBD";
+            ++i;
+        }
+    }
+    return out;
+}
+
 Base::Result<std::vector<std::string>, OsError> FontDirectories() {
     std::vector<std::string> candidates;
 #if defined(__APPLE__)
