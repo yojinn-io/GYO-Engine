@@ -2,6 +2,9 @@
 
 Owner: Engine (`engine/os` → `GYO::Os`).
 Plan and record: [os-subsystem](plans/os-subsystem/README.md), batch os-skeleton onwards (D40–D46).
+Proposed direction (not yet in this contract): [build-baseline](plans/build-baseline/README.md) — platform and toolchain
+tiers, and Windows processes fixing their code page to UTF-8 through the manifest's `activeCodePage` (decided
+2026-10-27, not implemented).
 
 ## What it is
 
