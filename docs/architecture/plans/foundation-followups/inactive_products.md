@@ -241,3 +241,11 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
   - 交給 SDL 的 `SDL_SaveBMP` 用 `.string()`：`build/acceptance/object_fps/diagnostics/MuzzleProbe.cpp:49`、`build/acceptance/object_fps/diagnostics/VisualProbe.cpp:130`、`build/acceptance/object_fps_v2/main.cpp:81`。SDL 收 UTF-8，改用 `Os::Files::PathToUtf8`。
   - 產品測試把 `.string()` 當 UTF-8 交給 Engine：`tests/object_fps/App/ObjectFpsPresentationTests.cpp:272`、`tests/object_fps/App/ObjectFpsUiTests.cpp:32`、`tests/object_fps/Model/Mark23ModelTests.cpp:30`。比照共通測試，改用 `tests/common/support/PathText.hpp` 的 `Engine::Test::Utf8Path`。
 - 選用：訊息與 log 裡的路徑用 `Os::Files::PathForMessage`（永不失敗，保留平台的分隔字元）；檔名運算用 `u8string()`，不要用 `string()`。
+
+### os-utf8-codepage 程序的 code page 定為 UTF-8
+
+狀態：本機實作中（2026-10-27，D64～D66）。
+
+- 破損：無。建置層會自動替 engine、apps、tools、build/acceptance、tests 底下的每個執行檔嵌入 manifest，未啟用產品重新啟用時不必改 CMake。
+- 行為：在 Windows 10 1903 以後，這些產品的程序 ANSI code page 是 UTF-8。窄字元的路徑（例如 os-path-utf8-sweep 記下的 `std::filesystem::path(base)`、`SDL_SaveBMP(..., path.string().c_str())`）在這些程序裡也會是 UTF-8，不再丟例外。上一節的遷移需求仍然建議照做：它們在 1903 以前的 Windows、或沒有 manifest 的程序裡仍然會壞。
+- 選用：真的不能帶 manifest 的執行檔，以目標屬性 `GYO_PROCESS_CODE_PAGE_EXEMPT` 寫理由。

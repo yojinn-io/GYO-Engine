@@ -213,6 +213,7 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
     - MSVC：把 `.manifest` 加進目標的原始檔，由連結器合併嵌入。
     - MinGW：用 `.rc` 把它放進 `RT_MANIFEST`（資源 ID 1）。MinGW-w64 預設會連入自己的 manifest，兩者可能衝突，要在批次中先確認（開放決策 23）。
   - 根目錄的建置層在設定期結束時走過每個 EXECUTABLE 目標（engine、apps、tools、build/acceptance、tests），在 Windows 上套用這個函式；在每個平台都標上標記屬性，供設定期檢查使用。
+    - 實作（os-utf8-codepage 的 xhigh 審查之後）：走訪放在 `build/cmake/GyoCodePage.cmake`。建置層依 binary dir 記錄它加入的目錄，因為獨立工具入口會重用工具的 source dir。
   - 另外設定的 host 專案（shader 工具，GyoShaderTools）沒有被根目錄走過，要自己呼叫同一個函式。
 - 產品宣告什麼：預設不必宣告任何事，新增或複製產品都不改公共層（AGENTS §7、§9）。不能帶 manifest 的執行檔（目前沒有）以目標屬性宣告例外並寫理由，例外由設定期檢查列出。
 - 抓到沒有 manifest 的執行檔：

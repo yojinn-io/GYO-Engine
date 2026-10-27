@@ -639,9 +639,66 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 
 - 2026-10-27：開始（D64～D66）。基準是發行線 `e739f00f` 之上的本機 commit。照 D66，先寫只含新測試的 Red commit，推送前先問。
 - Red 用的測試：`FilesTests.cpp` 的 ACP 測試改成「Os files run with UTF-8 as the process ANSI code page」。它檢查 `GetACP()` 是 65001，並讀自己的 `RT_MANIFEST`（ID 1）確認宣告了 `activeCodePage` UTF-8。只在 Windows 編譯。舊的建置沒有這個宣告：CI 的 runner ACP 是 1252，兩個檢查都會失敗；系統 ACP＝65001 的機器上，結構檢查仍會失敗。macOS、Linux 不受影響。
+- 2026-10-27：使用者同意推送 Red（`8a677bb9`）並跑 L1：[run 40450140816](https://github.com/yojinn-io/GYO-Engine/actions/runs/40450140816)。結果如預期：只有 windows-x64 失敗（L1 與 toolchain 的快速驗收；CI validation 與 CI gate 跟著失敗），三個 POSIX 平台全部通過。
+  - 失敗的只有 gyo_os_tests 的新案例：`GetACP()` 是 1252；manifest 的結構檢查也失敗。
+  - 印出的 manifest 是 MSVC 連結器預設嵌入的那份：只有 `requestedExecutionLevel level="asInvoker"`，沒有 activeCodePage。資源 1 本來就存在，所以 Green 時要確認合併後的內容。
+- 實作（本機 `daba5099`；審查後的修正併進同一個 commit，成為 `30d30f37`）：
+  - engine/os：manifest 與嵌入函式放在 `engine/os/cmake/`；`Process::AnsiCodePage()` 在 Windows 回 `GetACP()`，在 POSIX 回 Unsupported。
+  - 建置層：`GyoBuild.cmake` 在設定期最後走過 engine、apps、tools、build/acceptance、tests 的執行檔，套用 manifest 並標記。shader 工具的 host 專案自己呼叫同一個函式。
+  - 檢查：設定期檢查和套用的走訪分開寫，在每個平台都跑。把 tests 從套用範圍拿掉的突變，在 macOS 上就讓設定失敗（列出所有測試執行檔）。
+  - 守衛 R6，以及它的自我測試：
+    - 起初的 lookbehind 把 `::CreateFileA(` 也排除了，而 engine/os 正是用 `::` 呼叫 Win32 的。寫 os.md 時發現，改成允許全域的 `::`、仍排除成員與命名空間的名稱，並加了案例與突變 pu-x14。
+    - 現況的 engine/os 沒有任何 R6 的發現。
+  - D201 的缺漏（開放決策 24）：
+    - FileWriterTests 加「create directories under a UNC share」，os-w10 在可達 UNC 的 Windows 上有檢出力。
+    - FileChangeTests 的 Windows 字型預期清單補上使用者的字型目錄。
+- 突變：
+  - 新增與改線的、本機能跑的 9 條 killed：os-f4、os-c6、pu-x5（改由 R6）、pu-x8、pu-x11、pu-x13、pu-x14，以及複跑的 pu-x11、os-g9、os-g11。
+  - Windows 專用的 pu-x9、pu-x10、pu-x12，以及 os-w10、os-g18，留給 Windows 機器。
+  - 相關的既有突變 20／20 killed（守衛、Process、建目錄、字型）。
+  - pu-x6、pu-x7 依 D66 退場。
+- 本機（macOS arm64）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
+- 文件：os.md 的 Components、Contracts（Process code page、AnsiCodePage）、Guard（R6、第三個設定期檢查、R6 的盲點）、Invariant 11（D66 同意的草稿）。
+- 要使用者同意（定案時）：Replacement Criterion 8 的草稿。這一批替 engine/os 加了 manifest 的職責；AGENTS §3 要求新的大職責先寫替換條件。
+- xhigh 審查（1 位，讀固定的 commit；在 scratchpad 用 CMake 4.4.3 做最小重現）：
+  - major 1：從獨立入口 `cmake -S tools/ui_editor` 建置時，Invariant 11 不成立，兩個走訪都看不到。已修。
+    - wrapper 的頂層和 root 加入的 `tools/ui_editor` 是同一個 source dir，依 source 路徑查目錄只會找到 wrapper 的頂層（沒有 target），工具的執行檔因此沒有 manifest。
+    - deferred 呼叫在 wrapper 頂層的 scope 執行，那裡沒有語言，`MSVC` 未定義，MSVC 建置會走錯成 `.rc` 分支。
+    - 修法：建置層依 binary dir 記錄它加入的每個目錄，再從這些目錄走訪；嵌入方式改在 include 時（啟用編譯器的 scope）決定，存成 GLOBAL property。檢查另外也從頂層依 source 路徑走一次。
+    - 新增 `cmake.ProcessCodePage`：在合成的樹上跑 plain、wrapper、沒有記錄的目錄（拒絕）、例外（列出）。把走訪改回只依 source 路徑時，wrapper 案例失敗（pu-x15）。
+  - major 2：R6 的 lookbehind 把 `::` 也排除了，而 engine/os 都用 `::` 呼叫 Win32。審查開始前我已發現並修正；另照建議給 gyo_os 加上 `UNICODE`，不帶後綴的名稱一律解析到寬字元版本。
+  - minor，已修：
+    - pu-x12 可能是等價突變（OEM code page 很可能也變成 65001），改成回傳固定的 1252。
+    - 走訪的 owner：PLAN 9.2 寫的是建置層，實作卻放在 engine/os。已移到 `build/cmake/GyoCodePage.cmake`，engine/os 只留嵌入一個執行檔的函式。
+    - MinGW 的增量建置不追蹤 manifest：加 `OBJECT_DEPENDS`。
+    - MinGW 的預設 manifest：`.rc` 明寫語言（binutils 會丟掉語言 0 的預設 manifest；未在 MinGW 上驗證）。
+    - 設定期檢查沒有自我測試：由 `cmake.ProcessCodePage` 的 unrecorded 案例負責（pu-x16）。
+  - minor，記為缺口（見未結事項）：
+    - p4 仍在本計畫的目錄，manifest 下會存活，交 v7.1 會話決定。
+    - 沒有對每個建出的執行檔做 PE 層的檢查：host 工具的呼叫沒被檢查、例外只列出、設定期檢查只在 `BUILD_TESTING` 開啟時存在。
+  - note，已寫進 os.md：
+    - Invariant 11 的範圍改成「CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔」（Go 服務不算）。
+    - 補上 ★：OEM code page 大概也變；沒開 `Utf8ConsoleOutput` 的程式在 950／932 主控台上印非 ASCII 的窄字元會變亂碼；`path::string()` 遇到落單的 surrogate 仍會丟例外。
+    - R6 的其他盲點與誤報。
+  - 確認的：
+    - MSVC＋Ninja（ci-windows）會嵌入並生效，改 manifest 會重新連結。
+    - manifest 的 XML 與 Red 測試的 regex 正確。
+    - DEFER 的順序正確；`_deps` 不在範圍內。
+    - 沒有產品名，也沒有新的連結邊。
+    - pu-x10 的例外只會被列出、執行期在任何 Windows 都失敗。
+    - AnsiCodePage 符合 Invariant 4、8、10。
+    - 兩個補測的前提正確。
+- 審查後的驗證（macOS arm64）：
+  - core 34／34（含 `cmake.ProcessCodePage`）；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
+  - 突變：pu-x8（移到建置層）、pu-x15、pu-x16 killed。
+  - pu-x15、pu-x16 從 repo 根目錄跑 `cmake -P` 時，失敗的案例會把合成的樹留在根目錄。改成以 `-DWORK_ROOT=build/target` 放到忽略的目錄，留下的目錄已刪。
 
 ## 未結事項
 
+- os-utf8-codepage 留下的（2026-10-27）：
+  - p4-manifest-ansi-path 仍在本計畫的突變目錄，在 manifest 之下會存活（Windows 上完整跑一次時 runner 以 1 結束）。D66 交給 v7.1 會話：退場或改寫。
+  - 沒有對每個建出的執行檔做 PE 層的檢查（Windows 上以 `LoadLibraryExW`＋`FindResourceW` 讀每個執行檔的 manifest）：host 工具的呼叫、產品目標的例外、`BUILD_TESTING` 關閉的組態，目前只靠審查。可排在 os-close。
+  - Windows 機器上要確認：MinGW 的 `.rc` 嵌入是否勝過預設 manifest；repo 路徑含非 ASCII 時 windres 是否找得到 manifest；目標的 compile definitions 經過 windres 是否有問題；OEM code page 是否也變成 65001。
 - D201 之後仍未判定的 Windows 專用突變（2026-10-27）：
   - os-f4、os-c6、pu-x5～pu-x7：需要非 UTF-8 ACP 的機器，或照 os-utf8-codepage 重新設計（開放決策 19）。
   - os-w10、os-g18：等開放決策 24 補完測試。
