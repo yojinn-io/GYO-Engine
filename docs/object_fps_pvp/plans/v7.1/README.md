@@ -173,7 +173,7 @@ PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四
 
 ## Engine 建置基線（提案）
 
-- [建置基線：平台與工具鏈的支援範圍](../../../architecture/plans/build-baseline/README.md)（Owner：Engine，2026-10-27）。在 Windows 機器上跑 D201 清單時，本機 MinGW 15.2 建置與 ACP＝65001 暴露了 MSVC CI 看不到的差異：長路徑 `remove_all` 卡死、UNC 路徑的正規化錯誤、symlink 不可用、包沒有附 runtime。使用者提出「以 Windows 為基準、Linux 靠 Proton」，該文件是支援矩陣的草案，之後成為 GYO 建置基線的規則；未決定、未實作。
+- [建置基線：平台與工具鏈的支援範圍](../../../architecture/plans/build-baseline/README.md)（Owner：Engine，2026-10-27）。在 Windows 機器上跑 D201 清單時，本機 MinGW 15.2 建置與 ACP＝65001 暴露了 MSVC CI 看不到的差異：長路徑 `remove_all` 卡死、UNC 路徑的正規化錯誤、symlink 不可用、包沒有附 runtime。使用者提出「以 Windows 為基準、Linux 靠 Proton」，該文件是支援矩陣的草案，之後成為 GYO 建置基線的規則。已決定的只有文字編碼：程序以 manifest 自己決定 UTF-8，不由系統 ACP 決定（使用者 2026-10-27）；其餘未決定，全部未實作。
 
 ## 開發紀錄
 

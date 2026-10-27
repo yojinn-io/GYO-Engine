@@ -1,7 +1,7 @@
 # 建置基線：平台與工具鏈的支援範圍（提案）
 
 更新：2026-10-27。Owner：Engine（平台支援範圍、CI 結構、`engine/os` Windows 後端的實作規則）。
-**狀態：提案，未決定、未實作。** 細化與基線的確立交給之後的規劃會話（使用者 2026-10-27）。決定之後會改動支援範圍、CI 與 `engine/os` 的責任，屬於 Architecture Delta（AGENTS.md §3）。
+**狀態：提案，未實作。** 已決定的只有「文字編碼：程序自己決定 UTF-8」一節；其餘未決定。 細化與基線的確立交給之後的規劃會話（使用者 2026-10-27）。決定之後會改動支援範圍、CI 與 `engine/os` 的責任，屬於 Architecture Delta（AGENTS.md §3）。
 
 ## 來源
 
@@ -33,8 +33,20 @@
 | 2 | Windows 包跑在 Proton 上 | 定期或發版前驗證 |
 | 2 或放棄 | Windows／MinGW、macOS 原生 | 要嘛進 CI，要嘛文件寫「不保證」 |
 
-- ACP＝65001（Windows「Beta：使用 Unicode UTF-8」）是玩家環境，建議納入驗證。
 - 若保留 MinGW，建議的規則：**Windows 後端不用 `std::filesystem` 的路徑語意，一律走原生 API**；測試的 setup 與清理也一樣。
+
+## 文字編碼：程序自己決定 UTF-8（使用者決定，2026-10-27）
+
+使用者：「就用這個方式來處理。程序不應該由環境參數來決定。」
+
+- **原則**：程序的行為不由執行環境的設定決定。Windows 系統的 ANSI code page（ACP）是玩家機器上的設定（多數是 950、932 等，「Beta：使用 Unicode UTF-8」預設關閉），引擎與產品的行為不能隨它改變。
+- **做法**：Windows 的執行檔以 application manifest 宣告 `<activeCodePage>UTF-8</activeCodePage>`（Windows 10 1903 起），程序內的 ACP 固定為 65001，不論系統設定。
+- **與現有做法的關係**：`engine/os` 一律走寬字元 API 的做法維持為主線（不依賴 Windows 版本與 manifest 是否嵌入）；manifest 是第二道防線，讓第三方函式庫與漏網的窄字元呼叫也是 UTF-8。目前 repo 沒有 Windows application manifest（[os-subsystem PLAN](../os-subsystem/PLAN.md) 第 233 行）。
+- **對驗證的影響**：ACP 不再是測試環境的前提，任何 Windows 機器都能判定。
+  - 記錄 ANSI code page 的測試（現在斷言 `GetACP() != 65001`）改成斷言程序的 ACP 是 65001；
+  - 「UTF-8 換成 ANSI」類的突變（os-f4、p4、os-c6、pu-x5～x7）重新設計，例如加上「拿掉 manifest 會被抓到」的突變。2026-10-27 在系統 ACP＝65001 的機器上，這 6 條無法判定（os-f4 基準線失敗、其餘 5 條必然存活）。
+- **未確認**：Proton／Wine 是否支援 `activeCodePage`；manifest 與 `longPathAware` 是否一起加（長路徑目前靠 `\\?\` 加寬字元 API，與登錄值 LongPathsEnabled 無關）。
+- **歸屬**：實作屬於 OS 子系統（Runtime 契約與測試判定的變更，Architecture Delta）；本節只記錄方向。
 
 ## 觀測到的證據（2026-10-27，MinGW 15.2、ACP＝65001）
 
