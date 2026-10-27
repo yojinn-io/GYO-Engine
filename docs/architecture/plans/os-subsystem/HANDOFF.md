@@ -26,6 +26,7 @@
 - 2026-10-27：使用者說「推送 69e39a26，並告訴消費端可以把本分支併到 69e39a26（os-path-utf8-sweep 與 time-threads-invariants）」。推送 `69e39a26`，以 merge-tree 確認併進發行線 `5733ccca` 沒有衝突，已請消費端以 `--no-ff` 合併（範圍 8 個 commit），等它回覆發行線上的 merge commit。
 - 2026-10-27：消費端回報並已核對：發行線以 `--no-ff` 合併到 `69e39a26`，merge commit 是 `16377127`（父 `5733ccca`、`69e39a26`；程式與 `69e39a26` 相同，發行線多的只有它自己的 HANDOFF），沒有衝突；之後的 `3b612cf2` 是消費端 D210（只改文件，Windows 清單補上 pu-x3～pu-x7 與 LF 的條件）。消費端本機 ctest 97／97。
 - 2026-10-27：消費端轉達使用者的決定（消費端 D211）。使用者原話：「先等等，我讓windows跑完專用的測試，完成之後直接讓 OS子系統開始」。Windows 機器在發行線（LF 的 checkout）上跑：本計畫的 34 條突變、`-s` 確認、主控台與 UNC 探針。結果出來之前，不開始 os-wake-record、os-threads-backend、os-wait-backend，也不推送新批次。
+- 2026-10-27：os-utf8-codepage 完成（D64～D66）。Red：run 40450140816；Green：[run 40456874710](https://github.com/yojinn-io/GYO-Engine/actions/runs/40456874710)，四平台成功。細節見「os-utf8-codepage」。
 - 2026-10-27：Windows 機器的驗證完成（消費端的 D201 清單第 1～5 項，MinGW 15.2 與 MSVC 19.51 兩套建置，dev_log `docs/dev_logs/2026_10_27_pvp_v71_d201_windows.zh-Hant.md`）。使用者說「windows的測試完成了，commit到了#96 上。同步一下」，並貼上交接：本會話要回報其餘突變、第 2、5 項，並只改計畫文件（D211）：
   - 把本分支同步到發行線 `d3081182`（本機的紀錄 commit 重新放在它之上，推送時是快轉）。
   - 結果記在「D201 的 Windows 驗證」一節。
@@ -692,6 +693,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - core 34／34（含 `cmake.ProcessCodePage`）；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
   - 突變：pu-x8（移到建置層）、pu-x15、pu-x16 killed。
   - pu-x15、pu-x16 從 repo 根目錄跑 `cmake -P` 時，失敗的案例會把合成的樹留在根目錄。改成以 `-DWORK_ROOT=build/target` 放到忽略的目錄，留下的目錄已刪。
+- 2026-10-27：使用者說「推送 30d30f37 與 a9c9dc85 到本分支，手動觸發四平台 L1，驗 os-utf8-codepage 的 Green」。Green 的 L1（[run 40456874710](https://github.com/yojinn-io/GYO-Engine/actions/runs/40456874710)，`a9c9dc85`）全部成功。windows-x64 的 ctest 96／96：gyo_os_tests 通過（`GetACP()` 是 65001，合併後的 manifest 有 activeCodePage），`cmake.ProcessCodePage` 在 MSVC 下通過（嵌入方式是 `.manifest`），產品與編輯器的執行檔也都帶著 manifest 建置、測試通過。 os-utf8-codepage 完成。等使用者決定：Replacement Criterion 8 的草稿、審查後補的 ★、Invariant 11 的範圍文字；以及何時請消費端合併。
 
 ## 未結事項
 

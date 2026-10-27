@@ -1,6 +1,6 @@
 # Engine os-utf8-codepage：Windows 程序自己把 code page 定為 UTF-8
 
-日期：2026-10-27。**本機完成**：Red 的 L1 如預期（[run 40450140816](https://github.com/yojinn-io/GYO-Engine/actions/runs/40450140816)，`8a677bb9`）；修正與紀錄還在本機，Green 的 L1 要等使用者同意推送。
+日期：2026-10-27。**完成**：Red 的 L1 如預期（[run 40450140816](https://github.com/yojinn-io/GYO-Engine/actions/runs/40450140816)，`8a677bb9`）；Green 的 L1 （[run 40456874710](https://github.com/yojinn-io/GYO-Engine/actions/runs/40456874710)，`a9c9dc85`）全部成功。windows-x64 的 ctest 96／96：gyo_os_tests 通過（`GetACP()` 是 65001，合併後的 manifest 有 activeCodePage），`cmake.ProcessCodePage` 在 MSVC 下通過（嵌入方式是 `.manifest`），產品與編輯器的執行檔也都帶著 manifest 建置、測試通過。
 計畫見 [os-utf8-codepage](../architecture/plans/os-subsystem/PLAN.md)（第 3.10、7.18、9.2 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-utf8-codepage」；決定是 D64（方向）、D65（排在計時三批之前）、D66（開工前的決定）。
 
 ## 為什麼

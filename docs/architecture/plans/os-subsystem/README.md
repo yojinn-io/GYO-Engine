@@ -124,7 +124,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-wait-backend | xhigh；1 位 xhigh 審查（先問） | 未開始 | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
 | os-net-errors | high | 條件式 | socket 錯誤碼的中立分類（開放決策 7） |
 | os-close | medium | 未開始 | allowlist 清空、文件同步、完整突變 |
-| os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 本機完成（2026-10-27；Red：run 40450140816；xhigh 審查已修正；Green 待推送；[dev_log](../../../dev_logs/2026_10_27_engine_os_utf8_codepage.zh-Hant.md)） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
+| os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 完成（2026-10-27；Red：run 40450140816；xhigh 審查已修正；Green：四平台 L1 run 40456874710；[dev_log](../../../dev_logs/2026_10_27_engine_os_utf8_codepage.zh-Hant.md)） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
 
 ```text
 os-plan-docs ─┬─→ os-skeleton ─┐
