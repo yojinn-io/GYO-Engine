@@ -45,6 +45,13 @@
 - 2026-10-27：推送並跑四平台 L1（run 40510515336）：只有 toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時，這個測試不經過本批的程式碼；新測試在四平台都通過。停在使用者的決定（重跑、交給 owner，或重新檢視前提）。
 - 2026-10-27：重跑後 L1 第 2 次全部通過；逾時交給 v7.1 會話與對應的任務卡。os-wait-backend 完成本機與 L1，條文已定案（D72）；剩下實機（見「下一次實機的清單」）。
 - 2026-10-28：v7.1 會話通知發行線已併入 master `5d688aaf`（PR #98 的規則文件、PR #99 的 `platform_sdl_concurrency` 看門狗，程式只改 `tests/common/platform_sdl`），merge commit `c9c4b62f`，之後 `43957159` 只改文件。使用者說「把發行線併進本分支，跑本機 ctest，推送前先問我」。以 `--no-ff` 併到 `43957159`（`024df561`），沒有衝突；本機 core 34／34、產品組態 98／98（`platform_sdl_concurrency` 2.48 s，看門狗已編入）。下一次實機若再逾時，先看看門狗在 stderr 留下的案例與位置。之後請消費端合併本分支前，先 pull 發行線（v7.1 會話的要求）。
+- 2026-10-28：D73。OS 子系統不等 lan15 與 #96 做完；Windows 的自動項目交給 Windows 機器上的 Claude。
+  - 分支 `claude/os-windows-run`：本分支 `c54ef8b5` 加上這次的計畫文件；程式和 `c54ef8b5` 相同。
+  - [windows-run.md](windows-run.md) 第 1 次：W0～W8（準備、B 的 ctest、os-wait-backend 的 L2、os-wake-record 的基準、os-threads-backend 的 L2、UDP 錯誤量測、突變 12 條、MinGW）。
+  - 量測腳本 `scripts/udp_error_probe.py`：macOS Intel 試跑，未連線的 socket 送到關閉的埠後收不到錯誤，已連線的收到 `ECONNREFUSED`。
+  - 結果回來後由本會話合併，移進各批的紀錄；W3 通過後才通知消費端合併 os-wait-backend（D71）。
+  - 還沒通知 v7.1 會話：消費端 D209 的「lan15 那次另加計時核心的 L2 與 os-wake-record 的 Windows 基準」因此改變；os-net-errors 動 `ClientConnection.cpp` 前照消費端 D205 通知。
+  - 開工前要重新核對的前提：PLAN 第 7.16 節寫的「改呼叫點與文字守衛 `test_diagnostic_isolation.py:107`」在消費端 K9（D200）之後已過時。兩個呼叫點已經改成 `SocketErrorActionFor`，守衛數的是那個呼叫；搬移可能只改 `TransientSocketError` 的內容。
 
 ## 閱讀入口
 
@@ -76,6 +83,7 @@
 | os-net-errors | socket 錯誤碼的中立分類（條件式） |
 | os-close | 收尾：allowlist 清空、文件同步、完整突變 |
 | os-utf8-codepage | （提案，D64）每個 Windows 執行檔以 manifest 把程序的 code page 定為 UTF-8 |
+| os-windows-run | Windows 機器上的 Claude 跑不需要人操作的實機項目（D73，分兩次） |
 
 ## 決策紀錄
 
@@ -116,6 +124,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D70：os-threads-backend 的定案。threads.md Invariant 9（GYO::Threads 連結 exactly GYO::Time、Threads::Threads，以及 PRIVATE 的 GYO::Os）與 os.md Invariant 3（GYO::Os 在 Windows 以外連結 Threads::Threads）照草稿定案；os.md Invariant 6 寫明例外：只回報平台是否套用的請求回傳 bool（執行緒的名稱與優先度、`Utf8ConsoleOutput::Applied()`），沒有套用是結果、不是失敗（Invariant 10） | 使用者：「threads.md Invariant 9 與 os.md Invariant 3 照草稿定案；os.md Invariant 6 寫明「回報是否套用的請求回傳 bool」這個例外。」 |
 | 2026-10-27 | D71：os-wait-backend 開工前的決定（全部照建議）。<br>檔位：xhigh＋1 位 xhigh 審查（腳本、L2 執行與文件降到 medium）。<br>開放決策 13 採 (a)，先校準：看 B 之前，先用同一個 A 程式交錯跑 A/A 4 對，再跑拿掉 `NOTE_CRITICAL` 的退化版 1 對。A/A 通過 (a)、退化版不通過時，(a) 原文凍結，不再回來問；任一項不符就停下，帶資料與修正後的數值回報。B 不通過時不重跑，先回報（§14.1），撤回方式是 revert。「各對中位數」定為：A 的 4 次取中位數、B 的 4 次取中位數，再比較。量測期間不在本機建置。<br>對抗式檢查（只用既有證據，同一台 Intel）：來源每個情境只量過一次；CLI 的 P50 跨日差 0.052 ms，超過 +0.02 ms；P99 是 1800 個樣本裡第 18 大的值，主機尖峰會讓它跳到毫秒級；搬移可能造成的退化是毫秒級，(b) 的窄邊界不會多抓到；「零早醒」由 Waiter 的迴圈保證，只是再確認。<br>條文（同意開工，定案前做突變與審查者的驗證，同 D66）：time.md Invariant 10（`GYO::Time` 連結 exactly `GYO::Base` 與 PRIVATE 的 `GYO::Os`，拿掉 `Threads::Threads`，Os 不得公開；§14.4 有放寬面）；time.md Invariant 8 改成現在式並加 cv 突變為守衛；os.md Invariant 6 的例外（`Block` 在 cv 後備可讓標準函式庫的 `std::system_error` 穿過，與搬移前的 Waiter 相同）；★ `Waiter::Create` 失敗時 detail 改成 engine/os 的固定格式 `errno=<n>`／`win32=<n>`，message 不變。<br>平台：macOS Intel 現在做；Windows x64（沒有視窗與有視窗）與 Linux x64（沒有視窗）在下一次實機用 A、B 兩個 commit 做；macOS arm64 沒有實機（D11⑩），標未驗證。Windows 的 L2 通過前，不通知消費端合併這一批。cv 後備的新突變只在 Linux 跑得到，留給實機 | 使用者：「開始 os-wait-backend。先說明檔位、要動的檔案，以及需要我同意的地方（含開放決策 13 的 L2 判定數值）。」之後對四個問題選：「xhigh＋1 位 xhigh 審查」「(a)＋先校準」「同意開工，定案前驗證」「本機先做，Windows 過了才合併」 |
 | 2026-10-27 | D72：os-wait-backend 的定案。time.md Invariant 8（latch 由 engine/os 經每次 `Block` 的參照讀取，cv 後備在 mutex 內讀，不保存副本；守衛是競爭測試加 ow-x1，ow-x1 還沒在 Linux 跑）、Invariant 10（`GYO::Time` 連結 exactly `GYO::Base` 與 PRIVATE 的 `GYO::Os`，拿掉 `Threads::Threads`，Os 不得公開；§14.4 的放寬面經突變 ti-x1、ow-x2 與審查者確認）、os.md Invariant 6 的例外（`WakeSignal::Block` 在 cv 後備讓標準函式庫的 `std::system_error` 穿過，與搬移前的 Waiter 相同）、★ 錯誤細節（`Waiter::Create` 失敗時 detail 是 `IoFailed: errno=<n>`／`IoFailed: win32=<n>`，message 不變），都照草稿定案 | 使用者：「time.md Invariant 8／10、os.md Invariant 6 的例外、★ 錯誤細節（IoFailed: errno=<n>／win32=<n>），都照草稿定案。」 |
+| 2026-10-28 | D73：OS 子系統不等 lan15 與 #96 做完（改變 D62 的最後一句「os-net-errors 與 os-close 排在 #96 合併後」）。<br>Windows 實機上不需要人操作的項目，由 Windows 機器上的 Claude 在分支 `claude/os-windows-run` 照 [windows-run.md](windows-run.md) 跑，分兩次：第 1 次是計時核心三批與 os-utf8-codepage 留下的 Windows 項目，加上 os-net-errors 開工前的 UDP 錯誤量測（`scripts/udp_error_probe.py`）；第 2 次在 os-net-errors、os-close 完成後。<br>os-net-errors、os-close 排在 lan15 之前；os-net-errors 的對照基準是消費端現有的 `TransientSocketError`。<br>需要人操作的項目（Ctrl+Break、conhost 的手動操作、P5-6、lan15 與它的 L3）不在範圍。<br>分兩次、Windows 端只寫 windows-run.md 的結果與 dev_log，是本會話的安排 | 使用者：「我相識讓windows跑完，不用依賴人的case，這樣就可以把 OS子系統 完結掉。os-net-error 也有可以參考的對象。也可以從windows量測。」之後：「你先弄完，我睡覺去了，明天早上起來處理windows的問題。你寫好計劃，開好分支就推到github上。」 |
 
 ## 消費端的壓力摘要
 
@@ -869,6 +878,8 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 ## 下一次實機的清單（Windows／Linux）
 
 D62：計時核心之前的 4 批做完後，在實機上一次補齊。2026-10-27 整理；項目來自各批的紀錄，完成時在各批的紀錄裡補結果，並從這裡刪掉。
+
+2026-10-28（D73）：Windows 的部分改照 [windows-run.md](windows-run.md) 由 Windows 端執行（os-w10、os-g18 的測試缺漏已由 os-utf8-codepage 補上，一起跑；os-c4 仍等開放決策 26）。結果合併後從這裡刪掉。Linux 的部分不變。
 
 - 共通：
   - LF 的 checkout（`core.autocrlf=false`）：find 跨多行的突變在 CRLF 上會 stale。

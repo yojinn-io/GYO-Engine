@@ -89,6 +89,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 31. **D70**：os-threads-backend 的定案。threads.md Invariant 9 與 os.md Invariant 3 照草稿；os.md Invariant 6 寫明「只回報是否套用的請求回傳 bool」的例外。
 32. **D71**：os-wait-backend 開工前的決定，全部照建議。檔位 xhigh＋1 位 xhigh 審查；開放決策 13 採 (a)，看 B 之前先做 A/A 校準與檢出力檢查，兩項都符合才凍結原文；time.md Invariant 8／10、os.md Invariant 6 的例外與 ★ 錯誤細節照草稿開工，定案前驗證；macOS Intel 現在做，Windows 與 Linux 在實機那次做，Windows 的 L2 通過前不通知消費端合併。
 33. **D72**：os-wait-backend 的定案。time.md Invariant 8、10，os.md Invariant 6 的例外（cv 後備的 `Block` 讓 `std::system_error` 穿過），★ 錯誤細節（`IoFailed: errno=<n>`／`IoFailed: win32=<n>`），都照草稿。
+34. **D73**：OS 子系統不等 lan15 與 #96 做完（改變 D62 的最後一句）。Windows 實機上不需要人操作的項目，由 Windows 機器上的 Claude 在分支 `claude/os-windows-run` 照 [windows-run.md](windows-run.md) 跑，分兩次：第 1 次是現有批次留下的項目與 os-net-errors 的 UDP 錯誤量測，第 2 次在 os-net-errors、os-close 完成後。os-net-errors、os-close 排在 lan15 之前。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -128,9 +129,10 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-wake-record | medium；notify→wake 用 high（D68） | 完成（2026-10-27；四平台 L1 run 40463273387；macOS Intel 基準已記錄；Windows、Linux 待實機；[dev_log](../../../dev_logs/2026_10_27_engine_os_wake_record.zh-Hant.md)） | 晚醒量測程式合回、四平台基準 |
 | os-threads-backend | high＋1 位 xhigh 審查（D69） | 完成（2026-10-27；四平台 L1 run 40484797877；macOS Intel 的 L2 逐字相同；xhigh 審查已修正；Windows、Linux 的 L2 待實機；[dev_log](../../../dev_logs/2026_10_27_engine_os_threads_backend.zh-Hant.md)） | RoleThread 的 OS 呼叫搬進 engine/os |
 | os-wait-backend | xhigh＋1 位 xhigh 審查（D71） | 完成本機與 L1（2026-10-27；macOS Intel 的 L2 通過 12／12；xhigh 審查已修正；四平台 L1 run 40510515336 第 2 次通過；Windows、Linux 的 L2 待實機；條文已定案（D72）；[dev_log](../../../dev_logs/2026_10_27_engine_os_wait_backend.zh-Hant.md)） | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
-| os-net-errors | high | 條件式 | socket 錯誤碼的中立分類（開放決策 7） |
-| os-close | medium | 未開始 | allowlist 清空、文件同步、完整突變 |
+| os-net-errors | high | 未開始（D73：排在 lan15 之前；開工前看 windows-run 的 W6） | socket 錯誤碼的中立分類（開放決策 7） |
+| os-close | medium | 未開始（D73：排在 lan15 之前） | allowlist 清空、文件同步、完整突變 |
 | os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 完成（2026-10-27；Red：run 40450140816；xhigh 審查已修正；Green：四平台 L1 run 40456874710；[dev_log](../../../dev_logs/2026_10_27_engine_os_utf8_codepage.zh-Hant.md)） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
+| os-windows-run（D73） | Windows 端照文件執行（建議 medium） | 第 1 次等 Windows 端執行（[windows-run.md](windows-run.md)，分支 `claude/os-windows-run`） | Windows 實機上不需要人操作的項目；第 2 次在 os-net-errors、os-close 之後 |
 
 ```text
 os-plan-docs ─┬─→ os-skeleton ─┐
