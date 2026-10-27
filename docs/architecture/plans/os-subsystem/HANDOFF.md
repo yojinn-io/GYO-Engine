@@ -44,6 +44,7 @@
 - 2026-10-27：os-wait-backend 本機完成（`756073aa`）：macOS Intel 的 L2 通過（12／12），xhigh 審查（Fable 5.1）的發現已修。下一步要使用者決定：推送並跑四平台 L1；條文定案。Windows 與 Linux 的 L2、ow-x1、ow-x5、ow-x6、ow-x10 留給實機。
 - 2026-10-27：推送並跑四平台 L1（run 40510515336）：只有 toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時，這個測試不經過本批的程式碼；新測試在四平台都通過。停在使用者的決定（重跑、交給 owner，或重新檢視前提）。
 - 2026-10-27：重跑後 L1 第 2 次全部通過；逾時交給 v7.1 會話與對應的任務卡。os-wait-backend 完成本機與 L1，條文已定案（D72）；剩下實機（見「下一次實機的清單」）。
+- 2026-10-28：v7.1 會話通知發行線已併入 master `5d688aaf`（PR #98 的規則文件、PR #99 的 `platform_sdl_concurrency` 看門狗，程式只改 `tests/common/platform_sdl`），merge commit `c9c4b62f`，之後 `43957159` 只改文件。使用者說「把發行線併進本分支，跑本機 ctest，推送前先問我」。以 `--no-ff` 併到 `43957159`（`024df561`），沒有衝突；本機 core 34／34、產品組態 98／98（`platform_sdl_concurrency` 2.48 s，看門狗已編入）。下一次實機若再逾時，先看看門狗在 stderr 留下的案例與位置。之後請消費端合併本分支前，先 pull 發行線（v7.1 會話的要求）。
 
 ## 閱讀入口
 
