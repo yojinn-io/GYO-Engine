@@ -66,6 +66,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   5. 主控台：Match 在主控台裡用 Ctrl+C、Ctrl+Break、關閉視窗結束，log 最後一行 `end version=1 reason=signal exit_code=0`；`ctest -R "^(os\.console_close|io\.unc_localhost|io\.unc_127\.0\.0\.1)$"` 預期 Passed（Windows Terminal 下 console_close 可能 Skipped，改用 conhost）。回 OS 子系統的會話。
   6. lan15（D208：延期，日期未定）。
   （D209：第 1～6 項等 OS 統一子系統做到 os-net-errors 之前全部完成後一起做；那時另加計時核心的 L2 與 os-wake-record 的 Windows 基準。）
+- **後續宣告要寫的「範圍的限界」（AGENTS.md §14 冒頭，PR #98 起）**：lan15 與之後的宣告，要列出已記錄為量不到或判定不了的經路，直到記錄解消：Windows 的 symlink 案例（MinGW 與沒有開發人員模式的 MSVC 都提早返回）；`os.console_close`（CI 與使用者的機器都 Skipped）與 Ctrl+Break（使用者的鍵盤沒有 Break 鍵）；quick-close 量的是產品的網路層，不是整個 Client 程序（D202）；`close_timing` 不在 CI 跑（D204）；ACP 非 UTF-8 時的行為在 manifest 之下不再測得到（D212）。
 - **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟、完整突變開始。
 
 ## 閱讀入口
@@ -207,6 +208,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D210 | （2026-10-27）OS 子系統的 os-path-utf8-sweep（Engine D63）與 time-threads-invariants 併進發行線：`16377127`（`--no-ff` 到 `69e39a26`），本機 `ctest` 97／97；Red run 40431320545（只有 windows-x64 的新案例失敗）、Green run 40433158383（`bfea4f6b`，四平台成功）。產品端：Client 的 `--movement-trace`、`--log` 改走 `Os::Files::PathFromUtf8`（不是 UTF-8 的參數以結束碼 2 拒絕）；產品突變 4 條重新定位 | 使用者在 OS 子系統的會話：「推送 69e39a26，並告訴消費端可以把本分支併到 69e39a26（os-path-utf8-sweep 與 time-threads-invariants）。」（經該會話轉達） |
 | D211 | （2026-10-27）先在 Windows 機器上跑 Windows 專用的測試（發行線 `3b612cf2`，LF checkout），完成之後才讓 OS 子系統開始剩下的 os-wake-record、os-threads-backend、os-wait-backend；期間發行線不再併入新的批次 | 使用者：「先等等，我讓windows跑完專用的測試，完成之後直接讓 OS子系統開始」 |
 | D212 | （2026-10-27）OS 子系統的 os-utf8-codepage（Engine D64～D67：所有 Windows 執行檔以 manifest 固定 ANSI code page 為 UTF-8）併進發行線：`7e92069d`（`--no-ff` 到 `3e9e9cf3`）；Red run 40450140816（只有 windows-x64 的新案例失敗）、Green run 40456874710（四平台成功）。`p4-manifest-ansi-path` 在 manifest 下成為等價突變，照 D185 退場（從 os-subsystem 的目錄刪除；理由寫在 windows-long-path 的 dev_log）。啟動行記錄 `acp=` 屬於日誌契約，這次不加 | 使用者在 OS 子系統的會話：「推送 3e9e9cf3，並告訴消費端可以把本分支併到 3e9e9cf3（os-utf8-codepage）。p4 的處理一併交給它。」（經該會話轉達） |
+| D213 | （2026-10-27）Engine 的 `platform_sdl_concurrency` 在 linux-x64 第一次逾時（run 40510515336，OS 子系統的分支，本機重現不了；OS 子系統的會話交給本會話，因為本會話是 K11 的 owner）。使用者選「重新檢視前提」：把候選 A（`PumpEvents` 在佇列被另一個執行緒持續灌滿時，一輪 poll 的 sentinel 放不進去而不會結束）當成 Engine 可能的缺陷，先排一批去重現。之後使用者把它轉給曾修過同組測試的會話「Fix flaky SdlLogBridge concurrency test on Windows」（PR #91），本會話不再處理。拆成三個 CTest 的 patch 沒有提交，留在本會話的 scratchpad 供參考 | 使用者：「重新檢視前提：把候選 A（PumpEvents 在佇列被持續灌滿時不會結束）當成 Engine 可能的缺陷，先排一批去重現它。」之後：「我發現這個問題這個 platform_sdl_concurrency 相關問題在windows下也有過問題。還開過任務卡，你把這個問題轉過去。」 |
+| D214 | （2026-10-28）master（`5d688aaf`：PR #98 的規則文件、PR #99 的 `platform_sdl_concurrency` 看門狗）併進發行線：`c9c4b62f`，無衝突，本機 `ctest` 98／98。PR #99 只改 `tests/common/platform_sdl`（不改判定、時限與 Engine 程式），逾時時 stderr 留下卡住的案例、最後標記與輪次；候選 A 在 Linux 容器沒有重現（原因未查明，不是修正）。範圍的限界：容器排程與 CI 不同、容器沒有 evdev／udev 裝置、沒有照 CI 順序跑前面的測試 | 「Fix flaky SdlLogBridge concurrency test on Windows」會話轉達：何時把 master 同步進 #96 由本會話決定（使用者指示） |
 
 ## 規劃紀錄（記錄器）
 

@@ -16,7 +16,7 @@
 
 - **Red**：只加測試的 `80b7208`，run 40176646387。windows-x64 的 `gyo_os_tests`（L1 與 toolchain 兩列）只有「read an existing file under a path longer than 300 characters」失敗：`cannot open a 402-byte path: win32=3; path_bytes=402`，和事故 log 的錯誤碼相同。其他平台通過。
 - **Green**：`89af354`，run 40177623030，四平台全部成功。windows-x64 的 `gyo_os_tests` 通過（含 402 位元組的讀取）；產品檢查 `content_deep_path` 在 windows-x64：`{"prefix_length": 200, "dxil_files": 4, "longest_dxil_path": 318, "probe_exit": 0}`，probe 讀了 1 個 bundle、2 個 program、24 個資產。P5-1～5 的宣告全部成立。
-- 本機（macOS arm64）：`ctest` 93／93 通過；`content_deep_path.py` 在 P＝200 與 P＝146 通過（macOS 只有 metallib，所以沒有 `.dxil` 可數）；藏起一個 shader artifact 時 probe 以 exit 1 失敗，訊息帶 `errno=2; path_bytes=319`。
+- 本機（macOS Intel，x86_64）：`ctest` 93／93 通過；`content_deep_path.py` 在 P＝200 與 P＝146 通過（macOS 只有 metallib，所以沒有 `.dxil` 可數）；藏起一個 shader artifact 時 probe 以 exit 1 失敗，訊息帶 `errno=2; path_bytes=319`。
 - **突變**（D184：新的、find 在改動範圍的）：
   - 新增 5 個到 `docs/architecture/plans/os-subsystem/scripts/mutations.json`：`p2-asset-detail-drops-cause`、`p3-relative-path-not-absolute` 本機 killed；`p1-no-long-path-form`、`p1-long-path-from-too-high`、`p4-manifest-ansi-path` 只能在 Windows 跑，未執行。Red 的 run 就是 `p1-no-long-path-form` 的內容（未修正的樹），已在 windows-x64 失敗。
   - 既有、find 在改動檔案上的：`os-g2-macro`、`os-g10-filesystem-op`、`16-observed-falls-back`、`sdl-g1-product-sdl-call` 都 killed。`os-f4-windows-acp`、`os-f5-windows-notfound` 只能在 Windows 跑。
