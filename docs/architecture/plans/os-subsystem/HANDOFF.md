@@ -713,8 +713,18 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - 歸類（§14.1，未能完全切分）：證據指向測試本身加環境，不是本批的實作。
     - 逾時的三個案例（LogBridge 的並行日誌、兩個執行緒，EventWatch 的解構等待回呼）都不經過 Waiter、`WakeSignal`、RoleThread；engine/platform/sdl 也不用它們。檔內唯一用到 Waiter 的案例不在這個過濾裡。
     - 同一個 commit 的 L1 / linux-x64 跑同一個測試，2.29 s 通過。
-    - 這個測試有時序相關失敗的紀錄（消費端 K11、D186：windows-x64 的 `pushedBy == 0`、macos-arm64 的 `overlappedRounds == 0`），修正批 event-watch-overlap 加了有界的等待，但最壞情況是 200 輪 ×（最多 2 s＋200 ms），超過 60 s 的逾時；失敗的 job 以平行方式跑 CTest。這次的症狀（逾時）是新的。
+    - 這個測試有時序相關失敗的紀錄（消費端 K11、D186：windows-x64 的 `pushedBy == 0`、macos-arm64 的 `overlappedRounds == 0`），修正批 event-watch-overlap 加了有界的等待，但最壞情況是 200 輪 ×（最多 2 s＋200 ms），超過 60 s 的逾時。這次的症狀（逾時）是新的。
   - 失敗不覆寫；要不要重跑、要不要交給事件監看的 owner，由使用者決定。
+- 2026-10-27：使用者說「先查」。查證約 1 小時（估 1 小時），只查不修；兩種方法都沒重現，依 AGENTS §14 開頭停下回報。
+  - 更正：失敗的 job 是逐一跑 CTest（測試 preset 沒有平行），上面「以平行方式跑」是錯的。
+  - 環境：失敗的 job 與通過的 L1 / linux-x64 用同一個 runner 映像（ubuntu-24.04，20261021.618）、同一個編譯器（g++-14）、同一種 preset。
+  - 歷史：cross-platform 最近 120 次 run 的失敗裡，沒有其他一次是這個測試；它以前的失敗是斷言（K11），逾時是第一次。
+  - 逾時前沒有 doctest 的輸出，所以不知道三個案例中哪一個卡住。
+  - 讀原始碼得到的兩個候選機制（都沒重現）：
+    - A：事件監看的案例。Engine 的 `PumpEvents` 是 `while (SDL_PollEvent(...))`；SDL 用佇列尾端的標記事件結束一輪，佇列滿（65535）時標記放不進去。測試的推送端不停送事件，主執行緒每 20 輪才取一次，取的時候佇列已滿；標記一直放不進去的話，這一輪就不會結束。macOS 的小程式（scratchpad）：佇列滿、推送端被拒約 300 萬次、每次 poll 另加 0～20 µs，這一輪都在 65535～65682 個事件後結束（標記在約 150 次嘗試內放進去），沒有重現。
+    - B：鎖的爭用。SDL 呼叫事件監看的回呼時持有監看清單的鎖，日誌橋拿 SDL 的日誌鎖，推送端與寫日誌的執行緒都在迴圈裡反覆拿同一把鎖。macOS 上 24 個忙碌程序塞滿 16 個邏輯 CPU：事件監看 1.8→4.3～6.4 s、並行日誌 7 ms→約 2 s、兩個執行緒 10→23 ms，沒有卡住。macOS 的 mutex 是公平交接，Linux（glibc）不是，所以結果不能直接套用。
+  - 本批的關係：三個案例都不經過 Waiter、`WakeSignal`、RoleThread（可信度高）；同一個 commit 在 L1 / linux-x64 以 2.29 s 通過。
+  - 要改變判斷需要：Linux 上的重現，或讓逾時說得出是哪個案例的觀測手段（例如每個案例一個 CTest，或印出目前案例的看門狗）。這個測試屬於 engine/platform/sdl（input-and-present 計畫；消費端 K11 的 owner 是 v7.1 會話），不在本批範圍。
 
 ### os-threads-backend
 
