@@ -683,6 +683,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - ti-x1、ti-x2、th-x1、th-x2、th-x4、th-x7、th-x8、os-g6、os-g8 killed；tt1-stop-without-notify、tt2-role-backend-fixed killed。
   - Windows 的 th-x3、th-x5 與 Linux 的 th-x6、ti-x4，留給實機。
 - 本機（macOS Intel x86_64）：core 34／34；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3；邊界守衛通過。
+- 2026-10-27：使用者說「推送 2ec5905d 與 e5a26431（含 5733d361）到本分支，手動觸發四平台 L1，驗 os-threads-backend」。四平台 L1（[run 40484797877](https://github.com/yojinn-io/GYO-Engine/actions/runs/40484797877)，`e5a26431`）全部成功：windows-x64 96／96、linux-x64 92／92、macos-arm64 92／92，gyo_os_tests（讀回測試，含 Windows 的非 ASCII 名稱與 thread priority、Linux 的 nice 與 15 bytes）、gyo_threads_tests、邊界守衛、連結檢查都通過；加上 `UNICODE` 的 engine/os 在 Windows 編譯通過。 Windows 的非 ASCII 名稱讀回在這次第一次實跑，就是通過的（沒有先跑 Red）。
 - 要使用者決定（定案時）：
   - threads.md Invariant 9 與 os.md Invariant 3 的新條文（D69 同意草案、定案前做突變，突變已完成）。
   - os.md Invariant 6 是否寫明「回報是否套用的請求回傳 bool」這個例外（Thread、`Utf8ConsoleOutput::Applied()`）。

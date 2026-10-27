@@ -1,6 +1,6 @@
 # Engine os-threads-backend：執行緒命名與優先度的 OS 呼叫搬進 engine/os
 
-日期：2026-10-27。**本機完成**：程式與文件都在本機；macOS Intel 的 L2 逐字相同；Windows 與 Linux 的 L2 要等下一次實機用 A、B 兩個 commit 補。推送要等使用者同意。
+日期：2026-10-27。**完成**：四平台 L1（[run 40484797877](https://github.com/yojinn-io/GYO-Engine/actions/runs/40484797877)，`e5a26431`）全部成功：windows-x64 96／96、linux-x64 92／92、macos-arm64 92／92，gyo_os_tests（讀回測試，含 Windows 的非 ASCII 名稱與 thread priority、Linux 的 nice 與 15 bytes）、gyo_threads_tests、邊界守衛、連結檢查都通過；加上 `UNICODE` 的 engine/os 在 Windows 編譯通過。 macOS Intel 的 L2 逐字相同；Windows 與 Linux 的 L2 要等下一次實機用 A、B 兩個 commit 補。
 計畫見 [os-threads-backend](../architecture/plans/os-subsystem/PLAN.md)（第 3.7、7.14 節）；紀錄見 [交接](../architecture/plans/os-subsystem/HANDOFF.md)的「os-threads-backend」；開工前的決定是 D69。
 
 ## 做了什麼
