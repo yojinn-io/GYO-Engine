@@ -3,6 +3,7 @@
 #include <doctest/doctest.h>
 
 #include "AssertTestSupport.hpp"
+#include "ConcurrencyWatchdog.hpp"
 #include "engine/base/Log.hpp"
 #include "engine/platform/sdl/SdlLogBridge.hpp"
 
@@ -152,11 +153,13 @@ TEST_CASE("SdlLogBridge keeps every line under concurrent logging") {
     std::atomic<int> started{0};  // threads that have logged at least one line
     std::vector<int> pushedBy(Threads), engineBy(Threads), previousBy(Threads);
     std::vector<std::thread> loggers;
+    Engine::Test::Watchdog::NameCounters("lines logged", "unused");
     for (int thread = 0; thread < Threads; ++thread) {
         loggers.emplace_back([&, thread] {
             int pushed = 0;
             while (!stop.load()) {
                 SDL_Log("line");
+                Engine::Test::Watchdog::firstCount.fetch_add(1, std::memory_order_relaxed);
                 if (++pushed == 1) started.fetch_add(1);
             }
             pushedBy[thread] = pushed;
@@ -167,15 +170,20 @@ TEST_CASE("SdlLogBridge keeps every line under concurrent logging") {
     // Start the rounds only once every thread is logging (thread starts can take
     // longer than all the rounds; seen on windows-x64, run 40052105536). A CHECK,
     // not a REQUIRE, so the threads are still stopped and joined on failure.
+    Engine::Test::Watchdog::Mark("waiting for the loggers");
     const auto waitUntil = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (started.load() < Threads && std::chrono::steady_clock::now() < waitUntil) std::this_thread::yield();
     CHECK_MESSAGE(started.load() == Threads, "every thread logs before the rounds start");
     for (int round = 0; round < Rounds; ++round) {
+        Engine::Test::Watchdog::Mark("making a bridge", round);
         const SdlLogBridge bridge(SdlLogBridgeOptions{.keepSdlOutput = false});
         std::this_thread::yield();
+        Engine::Test::Watchdog::Mark("destroying the bridge", round);
     }
+    Engine::Test::Watchdog::Mark("joining the loggers");
     stop = true;
     for (auto& logger : loggers) logger.join();
+    Engine::Test::Watchdog::Mark("checking");
     for (int thread = 0; thread < Threads; ++thread) {
         CHECK(pushedBy[thread] > 0);
         CHECK_MESSAGE(engineBy[thread] + previousBy[thread] == pushedBy[thread],
@@ -188,8 +196,14 @@ TEST_CASE("SdlLogBridge leaves SDL's previous output after bridges made on two t
     constexpr int Iterations = 2000;
     std::atomic<bool> stop{false};
     std::vector<std::thread> loggers;
+    Engine::Test::Watchdog::NameCounters("lines logged", "bridges made");
     for (int thread = 0; thread < 4; ++thread)
-        loggers.emplace_back([&] { while (!stop.load()) SDL_Log("line"); });
+        loggers.emplace_back([&] {
+            while (!stop.load()) {
+                SDL_Log("line");
+                Engine::Test::Watchdog::firstCount.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
     {
         // A bridge made while another one exists fails a GYO_ASSERT (one at a
         // time); the makers retry, so each starts as soon as the other ends.
@@ -199,6 +213,7 @@ TEST_CASE("SdlLogBridge leaves SDL's previous output after bridges made on two t
                 try {
                     const SdlLogBridge bridge(SdlLogBridgeOptions{.keepSdlOutput = false});
                     ++made;
+                    Engine::Test::Watchdog::secondCount.fetch_add(1, std::memory_order_relaxed);
                 } catch (const Engine::Base::AssertionFailure&) {
                     std::this_thread::yield();
                 }
@@ -206,11 +221,14 @@ TEST_CASE("SdlLogBridge leaves SDL's previous output after bridges made on two t
         };
         std::thread first(maker);
         std::thread second(maker);
+        Engine::Test::Watchdog::Mark("joining the makers");
         first.join();
         second.join();
     }
+    Engine::Test::Watchdog::Mark("joining the loggers");
     stop = true;
     for (auto& logger : loggers) logger.join();
+    Engine::Test::Watchdog::Mark("checking");
     SDL_LogOutputFunction current{};
     void* data{};
     SDL_GetLogOutputFunction(&current, &data);

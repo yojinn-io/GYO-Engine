@@ -1,6 +1,7 @@
 // IP-4 ip4b: event watches and capture files (ip4-declaration.md section 2).
 #include <doctest/doctest.h>
 
+#include "ConcurrencyWatchdog.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp"
 #include "engine/time/Waiter.hpp"
@@ -260,17 +261,20 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
     const SDL_WindowID window = WindowOf(*platform);
     std::atomic<bool> stop{false};
     std::atomic<bool> pushing{false};
+    Engine::Test::Watchdog::NameCounters("pushes", "pushes refused");
     std::thread pusher([&] {
         while (!stop.load()) {
             SDL_Event event{};
             event.type = SDL_EVENT_MOUSE_MOTION;
             event.motion.windowID = window;
-            SDL_PushEvent(&event);
+            Engine::Test::Watchdog::firstCount.fetch_add(1, std::memory_order_relaxed);
+            if (!SDL_PushEvent(&event)) Engine::Test::Watchdog::secondCount.fetch_add(1, std::memory_order_relaxed);
             pushing = true;
         }
     });
     // Start only once the other thread is pushing (its start can take longer
     // than all the rounds; seen on windows-x64, L1 #561).
+    Engine::Test::Watchdog::Mark("waiting for the pusher");
     const auto waitUntil = std::chrono::steady_clock::now() + 5s;
     while (!pushing.load() && std::chrono::steady_clock::now() < waitUntil) std::this_thread::yield();
     REQUIRE(pushing.load());
@@ -280,6 +284,7 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
     // its removal is called: mutant m-order crashes here).
     for (int round = 0; round < 200; ++round) {
         {
+            Engine::Test::Watchdog::Mark("free round: adding a watch", round);
             const EventWatch watch = platform->AddEventWatch(
                 [](void* context, const ObservedEvent&) noexcept {
                     auto* state = static_cast<Flight*>(context);
@@ -291,8 +296,10 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
                 },
                 &flight);
             std::this_thread::yield();
+            Engine::Test::Watchdog::Mark("free round: destroying the watch", round);
         }
         if (flight.inFlight.load()) finishedInFlight = true;
+        Engine::Test::Watchdog::Mark("free round: pumping", round);
         if (round % 20 == 0) static_cast<void>(platform->PumpEvents());
     }
     // Every destruction starts while a callback runs: the callback holds until
@@ -305,6 +312,7 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
     for (int round = 0; round < Rounds; ++round) {
         flight.destroying = false;
         {
+            Engine::Test::Watchdog::Mark("handshake round: adding a watch", round);
             const EventWatch watch = platform->AddEventWatch(
                 [](void* context, const ObservedEvent&) noexcept {
                     auto* state = static_cast<Flight*>(context);
@@ -322,22 +330,28 @@ TEST_CASE("Destroying an event watch waits for a callback on another thread") {
                     state->inFlight = false;
                 },
                 &flight);
+            Engine::Test::Watchdog::Mark("handshake round: waiting for a callback", round);
             const auto runningBy = std::chrono::steady_clock::now() + 2s;
             while (!flight.inFlight.load() && std::chrono::steady_clock::now() < runningBy) std::this_thread::yield();
             const bool running = flight.inFlight.load();
             if (running) ++overlappedRounds;
             flight.destroying = true;
             if (!running) break;  // a fault: stop rather than wait 2 s per round
+            Engine::Test::Watchdog::Mark("handshake round: destroying the watch", round);
         }
         if (flight.inFlight.load()) {
             finishedInFlight = true;
             break;  // a fault: a surviving watch would hold later rounds' callbacks
         }
+        Engine::Test::Watchdog::Mark("handshake round: pumping", round);
         if (round % 20 == 0) static_cast<void>(platform->PumpEvents());
     }
+    Engine::Test::Watchdog::Mark("joining the pusher");
     stop = true;
     pusher.join();
+    Engine::Test::Watchdog::Mark("final pump");
     static_cast<void>(platform->PumpEvents());
+    Engine::Test::Watchdog::Mark("checking");
     CHECK_MESSAGE(!finishedInFlight, "no callback runs after its watch's destruction returned");
     CHECK_MESSAGE(overlappedRounds == Rounds, "every destruction started while a callback ran");
 }
