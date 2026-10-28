@@ -1,6 +1,6 @@
 # Engine os-closeout：OS 子系統盤點與收口
 
-日期：2026-10-28。**本機完成**：os-freeze-wait（從 OS 分支撤出 os-wait-backend）與 os-closeout-docs（計畫文件改成收口後的狀態，寫下今後的規則）；os-handoff-v71（和消費端的會話對齊）也完成。四平台 L1 等推送；os-land-master 等消費端發行後。
+日期：2026-10-28。**本機完成**：os-freeze-wait（從 OS 分支撤出 os-wait-backend）與 os-closeout-docs（計畫文件改成收口後的狀態，寫下今後的規則）；os-handoff-v71（和消費端的會話對齊）也完成。四平台 L1 通過（run 40646224836）。os-land-master 等消費端發行後。
 計畫與理由見 [收口提案](../architecture/plans/os-subsystem/closeout.md)；決定是 D78（[交接](../architecture/plans/os-subsystem/HANDOFF.md)的決策紀錄）。
 
 ## 為什麼做
@@ -59,7 +59,8 @@
   - 涵蓋：tt1-waiter-early、tt1-notify-dropped、tt1-latch-cleared-on-entry、tt1-latch-never-consumed、tt1-no-recheck、tt1-latch-before-deadline（Waiter.cpp 回到搬移前）、os-g6-stale（allowlist）、ti-x1-time-links-more（`GYO::Time` 的連結檢查）、ti-x3-backend-name-changed（後端名稱）。
   - runner 跑完後程式碼檔案都已還原。
   - 撤回後的 `engine/time` 和發行線（`origin/claude/pvp-v71-release`）逐位元組相同（`git diff --stat` 沒有列出）。本分支和發行線在 engine 與 tests/common 的程式差異，只剩留下的 os-threads-backend 與 os-wake-record。
-- 四平台 L1：推送後派發（推送前先問使用者）。
+- 推送：使用者說「推送：把 claude/os-closeout 以 fast-forward 推到 origin/claude/trusting-joliot-f13b78，然後派發四平台 L1。」以 fast-forward 推送（`468d2b9c..a65fe59f`）。
+- 四平台 L1：[run 40646224836](https://github.com/yojinn-io/GYO-Engine/actions/runs/40646224836)（`a65fe59f`，手動派發）。`L1 /` 開頭的四個 job（windows-x64、macos-arm64、macos-x64、linux-x64）都是 success，Quick acceptance 與 CI gate 也是 success。
 - 盤點的更正：
   - 提案原本寫 os-console-shutdown 的主控台 L3「未做」。實際上消費端在 10-27 的 D201，已在 conhost 實機做了 Ctrl+C 與關閉視窗，都通過。
   - 原因是盤點時沒有讀消費端的 D201 dev_log。使用者問「你在做規劃時有考慮v7.1會話的需求嗎？」，回頭對照消費端的 HANDOFF 時才發現，已在 closeout.md 與 HANDOFF 的 D78 更正。

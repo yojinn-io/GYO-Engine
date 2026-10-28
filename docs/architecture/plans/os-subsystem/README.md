@@ -148,7 +148,7 @@ engine/asset → io；engine/threads、trace → os（engine/time 不連 os，D7
 | os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 完成（2026-10-27；Red：run 40450140816；xhigh 審查已修正；Green：四平台 L1 run 40456874710；[dev_log](../../../dev_logs/2026_10_27_engine_os_utf8_codepage.zh-Hant.md)） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
 | os-windows-run（D73） | Windows 端照文件執行（建議 medium） | 第 1 次結案（W0～W7；W3 不通過、W5 通過、W7 12／12 killed；[dev_log](../../../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)）；續跑、W8 與第 2 次取消（D78） | Windows 實機上不需要人操作的項目 |
 | os-linux-run（D75） | medium；判讀照事前宣告 | 取消（D78；沒有任何結果） | Linux 的 L2、基準與專用突變（Docker） |
-| os-closeout（D78） | os-freeze-wait high；其餘 medium | 進行中：os-freeze-wait、os-closeout-docs 完成本機（2026-10-28；[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）；os-handoff-v71 完成（消費端 D219）；四平台 L1 與 os-land-master 待做 | [收口提案](closeout.md)：凍結 os-wait-backend、文件改成收口後的狀態、今後的規則 |
+| os-closeout（D78） | os-freeze-wait high；其餘 medium | 完成（2026-10-28；四平台 L1 run 40646224836；[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）；os-handoff-v71 完成（消費端 D219）；os-land-master 待消費端發行後 | [收口提案](closeout.md)：凍結 os-wait-backend、文件改成收口後的狀態、今後的規則 |
 
 ```text
 os-plan-docs ─┬─→ os-skeleton ─┐

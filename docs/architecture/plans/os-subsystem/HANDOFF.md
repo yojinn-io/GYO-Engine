@@ -79,7 +79,8 @@
     - Q5：K9／W6 的握手期 WSAECONNRESET 列進 lan15 的 L3 觀察，不改程式；「OS 的 ★ 批次未經功能驗收」會加進 lan15 宣告的範圍限界。
   - 消費端在 `claude/os-windows-run` 推了 `035ff14b`（消費端 D220）：windows-run.md 寫明照 D78 只跑 worker-10x，結果寫在發行線的 `worker-windows-timing.md`。和 D78 一致；本分支在收口文件之後併入。之後那條分支若再有 commit，os-land-master 前再併一次。
   - 本機驗證：core 34／34、test preset 92／92、相關突變 9／9 killed（dev_log）。
-  - 下一步：問使用者推送本分支並派發四平台 L1；消費端發行後 os-land-master。
+  - 推送（使用者同意，fast-forward `468d2b9c..a65fe59f`），四平台 L1 [run 40646224836](https://github.com/yojinn-io/GYO-Engine/actions/runs/40646224836) 全部成功。os-freeze-wait、os-closeout-docs、os-handoff-v71 完成。
+  - 下一步：消費端發行後 os-land-master。
 
 ## 閱讀入口
 
