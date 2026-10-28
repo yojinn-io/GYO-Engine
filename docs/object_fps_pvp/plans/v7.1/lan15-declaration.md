@@ -97,3 +97,24 @@
 - 同機的延遲門檻（產生到 Actual 50／66.7 ms、首次送出 22 ms）在 LAN 上不適用：跨機器的 trace 不是同一個時鐘。
 - 真實互聯網（WAN）不在範圍。
 - 樣本：一次場次，人數 2～3 人（待定）。
+
+## 對抗式檢查的結果（2026-10-29，xhigh-reviewer 1 人，讀 `e5443624`）
+
+blocker 2、major 11、minor 14。主會話抽查了 B1（`action_delivery.go:240-242`、`edge-actions-passthrough-l2.md:95`）、M1（`IpcHost.cpp:713`、`server.go:763`、`:938`）、M5（`LogFile.cpp:151`）的證據，都成立。第 2 版照下面處理；標「待決」的三項由使用者決定。
+
+| 代號 | 發現（摘要） | 第 2 版的處理 |
+|---|---|---|
+| B1 | J5 的 `link_action_min_interval_ms ≥33.3` 在 pv7 不成立（link 不再節拍，Wi-Fi 叢集會壓到 33.3 以下） | J5 只判 `results_min_interval_ms`；`link_action_min_interval_ms` 只記錄（來源 `edge-actions-passthrough-l2.md:95`）；刪掉「和網路無關」 |
+| B2 | S1 的起訖在 Client 的 log 上取不出來；以第一行 interrupted 為終點會誤判通過 | S1 結束後空 60 s 才開始 S2；終點＝使用者記錄的時刻減 30 s，不從中斷行推導；各機器的時鐘偏移用成對事件估計（Client 的 `PvP connection phase=playing` 對 Gateway 的 `player active`），容許 ≤1 s，超過記確認不了；窗口指 Gateway 的窗口，只算完全落在範圍內的 |
+| M1 | 「逐出」的取法錯（應讀 `player evicted`／`evicted player=`） | J3 拆成四條：evicted 0、非 `client_request` 的 leave 0、`player expired` 0、`code=protocol_version` 與 `runtime disconnected` 0 |
+| M2 | 沒判「連續 15 分鐘、全員在場」 | 加 J0：S1 ≥900 s、範圍內 Match 沒有 join／leave、各 Client 的 `players=` 等於宣告人數 |
+| M3 | 沒有射擊、裁決、擊殺、重生的判定 | **待決 3** |
+| M4 | R2 沒查 Gateway 的 session 到期（K10 量不到的經路，lan15 是唯一實測處） | R2 加：`player expired … reason=session_timeout`，早於任何 `player left`；Match 對應的 `leave … reason=session_timeout` |
+| M5 | 收支沒算 log 的計數丟棄；E／F 分類矛盾 | 收支加 `dropped_lines`、正常結束行、`trace_end` 的 dropped／suppressed、玩家 id 與 Client log 對應；證據不全一律記確認不了（E）；E 不算通過發行條件 |
+| M6 | 判定工具沒有凍結、沒有鑑別力檢查 | 開跑前鎖定 `lan15_judge.py` 與 `ingress_evidence.py` 的 sha256；用合成紀錄做竄改檢查（每條判定至少 1 份） |
+| M7 | 對 Mac 斷線＝主機斷線，影響全員 | **待決 1** |
+| M8 | 「隔 15 秒」沒有來源，會在正確的產品上觸發逐出 | 間隔 ≥45 s（3 個 10 s 品質窗口＋餘裕，`MatchRuntimeHost.cpp:700-722`）；R1 加「沒有 `player evicted`」 |
+| M9 | 實體斷線的長度不受控，2 s 可能變成 5 s 以上 | **待決 2** |
+| M10 | J5 漏了「不得空判」 | 每位在 S1 有裁決的玩家，至少 1 個有值的窗口 |
+| M11 | log 追加寫入＋不重跑，容易無法挽回 | 新建資料夾；每份 log 恰好 1 行啟動；trace 依啟動行的實際檔名讀；最後一位玩家加入前的環境故障可重啟（換新資料夾），之後不准 |
+| m1～m14 | 來源描述、行的字面、`rate_limited` 是累計、T_max 其實量得到、`transient_socket_errors` 只有整個 session 的總數、S7 的錯誤字串、Q1 的新身分、Q2 未定、J2 是整個場次、多開 Client 要各自 `--log`、S5 範圍矛盾 | 全部照建議改：J1／J2 移出 S1、改為「整個場次」；R2 判 T_max＝（failed − interrupted 的 mono 差）＋gap_ms，落在 [5000, 5100]；S6 改看握手期的 `connection failed reason=`，「直接超過 T_max」分支列入限界；S7 改成列出確切的錯誤字串並要求啟動到 Lobby 的行存在；Q1 加新 id ≠ 舊 id、其他 Client 的 `players=` 先減 1 再回復；Q2 等人數定了再寫 |
