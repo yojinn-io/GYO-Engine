@@ -21,7 +21,7 @@ set(worker "gyo_${GYO_CURRENT_APP}_worker_probe")
 add_executable(${worker} worker_main.cpp)
 target_compile_features(${worker} PRIVATE cxx_std_20)
 target_link_libraries(${worker} PRIVATE ${network} asio::asio httplib::httplib
-    nlohmann_json::nlohmann_json "gyo_${GYO_CURRENT_APP}_client_v7")
+    nlohmann_json::nlohmann_json GYO::Time "gyo_${GYO_CURRENT_APP}_client_v7")
 gyo_register_acceptance_probe(OWNER "${GYO_CURRENT_APP}" ROLE worker TARGET ${worker})
 set(quad "gyo_${GYO_CURRENT_APP}_quad_probe")
 add_executable(${quad} quad_main.cpp)

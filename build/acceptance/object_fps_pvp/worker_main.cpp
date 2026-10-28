@@ -5,6 +5,7 @@
 #include "client_v7.pb.h"
 #include "acceptance_protocol.hpp"
 #include "acceptance_capacity.hpp"
+#include "engine/time/Waiter.hpp"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -75,6 +76,12 @@ public:
         server=std::thread([this]{http.listen_after_bind();});
     }
     ~MockGateway(){StopHttp();}
+    // About 100 us between pumps, on the Engine's Waiter: std::this_thread::sleep_for
+    // sleeps a whole system tick (about 15.6 ms) in a Windows process without SDL,
+    // which made the mock's arrival times 15.6 ms coarse (v7.1 D216, D221).
+    void Pause() {
+        static_cast<void>(pause.WaitUntil(Engine::Time::Now()+std::chrono::microseconds(100)));
+    }
     // The Gateway's HTTP side goes away; a held /leave is let go first.
     void StopHttp() {
         {std::scoped_lock lock(stallMutex);released=true;}
@@ -138,7 +145,7 @@ public:
         while(true) {
             Pump();if(condition())return;
             Require(Clock::now()<deadline,"mock worker wait timed out at worker_main.cpp:"+std::to_string(where.line()));
-            std::this_thread::sleep_for(100us);
+            Pause();
         }
     }
     void UntilTime(Clock::time_point deadline,std::source_location where=std::source_location::current()) {
@@ -212,6 +219,7 @@ public:
     std::atomic<std::uint64_t> leaves{};
     std::atomic<bool> leaveStalls{};
 private:
+    Engine::Time::Waiter pause=Engine::Time::Waiter::Create().value();
     std::mutex stallMutex;
     std::condition_variable stallReleased;
     bool released{};
@@ -299,7 +307,7 @@ OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool e
     // A window that stopped being sent is not kept either: wait a bounded time.
     const auto resumedAt=Clock::now();
     for(const auto deadline=resumedAt+500ms;gateway.attempts.back().at<=resumedAt && Clock::now()<deadline;) {
-        gateway.Pump();std::this_thread::sleep_for(100us);
+        gateway.Pump();gateway.Pause();
     }
     if(gateway.attempts.back().at<=resumedAt)return outcome;
     const auto& resent=gateway.attempts.back().input;

@@ -82,3 +82,21 @@
   - 第 6 次的 `restart_ms` 是 1.7309，是 10 次中唯一低於門檻的值。
 
 **證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-10x-20261028/`，內含 `build.log`、`build-exit.txt`、`msvc-version.txt`、`run1.log`～`run10.log`、`runs.txt`。`runs.txt` 裡的 `exit=` 欄是 Windows 端記錄指令的錯誤（取到的是 `date` 的結束碼，不是 ctest 的），不要用；每次的通過與否以 `run<n>.log` 的 ctest 摘要為準（10 份都是 `0% tests passed, 1 tests failed out of 1`）。
+
+## 第 3 步的判讀與停止（2026-10-28，v7.1 會話）
+
+收支：一致。照字面套用，分類是「不是 tick」。但宣告的三個分類不互斥（第 1、2、4 次各有一個值在 ±2 ms 內、一個不在），這是寫宣告時的疏失；結果照字面記錄，不改寫。值的形狀（restart 約 1 個 tick、間隔約 2 個 tick、一律偏多 0.5～2.6 ms）指向 mock 的 `sleep_for(100us)` 在沒有 SDL 的 Windows 程序裡睡滿約 15.6 ms，但這個讀法會改變判定基準，所以依 AGENTS.md §14 開頭停下。使用者選「重新檢視前提」，看過取捨後決定：「先做B，還有問題做C」（D221）。
+
+## B：mock 改用 Engine 的 Waiter，再在 Windows 跑 10 次（D221）
+
+- **改法**：worker 探針的 mock 在兩處輪詢之間的 `std::this_thread::sleep_for(100us)` 改成 Engine 的 `Time::Waiter::WaitUntil(Now()+100us)`（`MockGateway::Pause`）。Waiter 在 Windows 用高解析度的 waitable timer，不受程序的計時器解析度影響（W4：沒有 SDL 時 P50 0.617 ms）。門檻、斷言、Client 的程式都不改。
+- **macOS（Intel）本機**：改後連跑 5 次通過，`restart_ms` 0.12～0.13、`completed_window_gap_ms` 0.25～0.30（改前 0.15～0.20、0.34～0.41）。
+- **Windows 的事前宣告（草案，等使用者核准）**：
+  - 建置：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`），發行線含 B 的 commit。
+  - 跑法：`ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行 10 次，不重跑、不中途改，期間不做其他吃重的工作。每次記錄通過或失敗、`restart_ms`、`completed_window_gap_ms`、失敗訊息。
+  - 收支：每一次都要有通過或失敗的結果與兩個值；沒有值的計入「確認不了」。
+  - 判定（互斥，依序取第一個成立的）：
+    1. 「確認不了」：有任何一次沒有兩個值，或建置失敗。
+    2. 「測試的原因」：10 次全部通過。結論：先前的失敗來自 mock 的時間戳粒度；產品在這條路徑上沒有觀察到問題。
+    3. 「還有問題，做 C」：其他情況（至少一次失敗）。結論：原因不只 mock，進入 C（在 Client 端記錄實際送出的時刻）。
+  - 範圍的限界：只有一台 Windows 機器；worker 探針沒有 SDL（和出貨的 Client 不同）；只看 worker 這一項。
