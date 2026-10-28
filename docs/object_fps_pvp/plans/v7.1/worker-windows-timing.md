@@ -213,3 +213,28 @@
 - **意義**：A 的檢出也是靠相位碰巧（這次 A 也存活了 2 次；D225 的 A 是 20／20）。這項檢查的 40 ms 判定本身沒有問題，問題在於 SubmitShot 的時刻沒有避開 Client 的 Hello。B 沒有改產品，只是讓這個弱點浮上來。
 - **旁註（沒有處理）**：同一段的 ACK 檢查（「an advanced ACK waited for an unrelated wake」）註解寫「next Hello, up to a second away」，但 `HelloInterval` 是 250 ms。這項檢查可能也有同樣的相位問題，沒有量。
 - 證據：本機 `scratchpad/v708/obs/`（git 忽略，會話的 scratchpad）的 `results.txt`、`logs/`（每次的完整輸出）、`run.sh`、`worker_A_obs.cpp`、`worker_B_obs.cpp`。發行線的探針保留這行時間線（只輸出到 stderr，不影響判定）。
+
+## v7-08 檢查的時機修正與突變確認（D227，事前宣告草案，待核准）
+
+使用者：「修檢查的時機：等 mock 收到 Hello 後再隔約 100 ms 才 SubmitShot；先寫好突變確認的事前宣告給我核准。」核准前不跑任何量測（只建置過）；核准後內容不改，跑完不放寬。
+
+- **修正（只改 `build/acceptance/object_fps_pvp/worker_main.cpp`，產品不改）**：v7-08 的檢查原本在閒置 50 ms 後立刻 SubmitShot。改成閒置 50 ms 後，等 mock 收到下一個 Hello，從那個 Hello 的到達時刻起再等 100 ms 才 SubmitShot。前一次 Hello 在 100 ms 前，下一次大約在 150 ms 後，兩邊都離 40 ms 的判定很遠。40 ms 的判定與失敗訊息都不改。
+- **判定的變更（AGENTS.md §14.4）**：
+  1. 守的性質：可送出的 action 在 SubmitAction 時就送出（D36），不等無關的喚醒。
+  2. 放寬的面：預期沒有。判定的式子不變，只改 SubmitShot 的時刻。舊判定殺死的突變（`v7-08-submit-no-wake`），新判定也必須殺死（下面第 1、2 項）。
+  3. 收緊的面：SubmitShot 不再碰上 Client 的 Hello，突變不會因相位碰巧而存活。
+  4. （確認沒有放寬面之後不適用）
+  5. 證據：本節的結果，以及 D226 的時間線。
+- **確認的項目與判定**（本機 macOS Intel，串行；每次保存完整輸出；每次前記錄 load average）：
+  1. **發行線版本（B＋C＋觀測＋本修正）的突變 20 次**：`v7-08-submit-no-wake` 的突變版探針直接執行 20 次。killed＝結束碼非 0 且輸出含「an eligible action waited for an unrelated wake」；survived＝結束碼 0；其他＝其餘情況。**通過＝20／20 killed**。
+  2. **A 的探針（`e400f896`＋觀測＋本修正）的突變 10 次**：確認檢出不再依賴 mock 的等待方式。分類同上，**通過＝10／10 killed**。
+  3. **沒有突變的發行線版本 10 次**：worker 探針直接執行。**通過＝10／10 結束碼 0**（修正沒有讓正常的 action 判成失敗）。
+  4. **D184 的 worker 突變**：被 worker 檢查殺死的 47 個突變（C 與本修正都改了 `worker_main.cpp`），用產品的突變 runner 跑一次。**通過＝47／47 killed**。wrong_failure 與 survived 依 D185 分類：wrong_failure 只單獨重跑 1 次，killed 就記為環境；survived 不重跑，直接列為不通過。
+- **整體**：1～4 全部通過，才算「修正有效」。任何一項不通過，就不再重跑、不修改，停下來回報（附時間線與輸出）。
+- **之後（依結果，再交使用者決定）**：通過的話，推送 C、觀測、本修正與文件，接著請你核准 C 的 Windows 重新宣告（另一份，還沒核准）。
+- **範圍的限界**：
+  - 只在 macOS（Intel）；Windows 上的 v7-08 不在這次的範圍。
+  - D226 有 2 次是 mock 看不到的計時器喚醒，來源沒有找出來。這次的修正沒有處理它；如果它讓突變存活，第 1、2 項會不通過。
+  - 同一段的 ACK 檢查（「an advanced ACK waited for an unrelated wake」）可能有同樣的相位問題，不在這次的範圍，沒有量。
+  - 同一台 Mac 上其他會話的活動控制不了，照實記錄。
+- **估計時間**：第 1～3 項約 20 分鐘，第 4 項約 70 分鐘。

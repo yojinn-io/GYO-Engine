@@ -748,6 +748,17 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     // Idle first: the last ACK-only batch's deadline passes, so the new action is
     // eligible at once and nothing but SubmitAction's wake-up is pending.
     gateway.UntilTime(Clock::now()+50ms);
+    // Away from the Client's own Hello (every 250 ms, v7.1 D226): its pass, or
+    // the pass of the mock's reply, would carry the action out without
+    // SubmitAction's wake-up. Submit about 100 ms after a Hello arrives, so the
+    // Hellos on both sides are more than 40 ms away.
+    const auto hellos=[&]{return std::count_if(gateway.packets.begin(),gateway.packets.end(),
+        [](const auto& packet){return packet.type==wire::Type::Hello;});};
+    const auto hellosBefore=hellos();
+    gateway.Until([&]{return hellos()>hellosBefore;});
+    const auto helloAt=std::find_if(gateway.packets.rbegin(),gateway.packets.rend(),
+        [](const auto& packet){return packet.type==wire::Type::Hello;})->at;
+    gateway.UntilTime(helloAt+100ms);
     const auto submittedAt=Clock::now();
     const auto resumed=connection.SubmitShot(connection.State().snapshot->tick,0,0);
     Require(resumed && *resumed==33,"retirement or failed submission skipped an allocated ID");
