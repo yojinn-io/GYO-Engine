@@ -15,3 +15,12 @@
 4. **os-utf8-codepage**：每個 Windows 執行檔都把程序的文字編碼（ANSI code page）固定為 UTF-8，不再隨玩家機器的系統語系改變。例如系統錯誤訊息的文字編碼可能和之前不同。
    - Windows 10 1903 起生效；更舊的 Windows 會忽略這項設定，回到系統語系。
    - 已知：MinGW 建置的 manifest 嵌入沒有在 Windows 上確認（CI 只驗 MSVC）。發行包是 CI 的 MSVC 建置。
+
+## 已知限界：Windows 上的 worker 驗收（D231）
+
+worker 驗收（`object_fps_pvp.worker`，Client 網路執行緒的 mock 測試）在 Windows 上不通過，這次不算發行條件。量測與判讀見 [worker-windows-timing.md](worker-windows-timing.md)。
+
+- 出貨的 Client 會開 Engine 的 SDL 視窗。在這個條件下，未確認窗口的重送約 57 次／秒，射擊等 action 在送出要求後約 1 ms 內送出（Windows 實機，D229、D230）。
+- 沒有 SDL 的程序裡（例如 worker 探針本身），Client 的重送只有約 43～53 次／秒：Windows 預設的計時器刻度約 15.6 ms，Client 的 60 Hz 重送依賴 SDL 提高計時器解析度（D228）。
+- 驗收裡另外兩個失敗看起來在測試端：mock 遇到 WSAECONNRESET 會讓驗收中止（約 5%），以及 token 等待的檢查用 mock 輪詢的約 1 ms 刻度量、超過上限 0.03～0.16 ms（約四成）。這兩點排在 v7.1 之後處理。
+- worker 驗收不在 CI 跑（任何平台），macOS 本機每次都通過。

@@ -43,7 +43,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **發行線（PR [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)，draft）**：windows-long-path 完成（P5-6 實機 2026-10-27 通過；p1 兩條在 MSVC killed；p4 在 manifest 下成為等價突變而退場，D212）；quick-close 完成（Windows 10 次通過）。剩下：worker 的 Windows 失敗（D216、D217；worker-10x 由使用者在 Windows 上跑，D220）；B（mock 改用 Waiter）削弱了 `v7-08-submit-no-wake` 的檢出（D225 判定 2），機制是 SubmitShot 與 Client 的 250 ms Hello 的相位（D226）；檢查改成避開 Hello，突變確認全部通過（D227）。已推送（`0d6916a8`）；C 的 Windows 重新宣告（worker-windows-timing.md 的 C 一節）已核准（D228）；Windows 結果（`0edcdded`）判定 3「產品的節奏」：10 次都只送 43 次，間隔 16.7～30.3 ms，符合沒有 SDL 時 asio 計時器的 15.6 ms tick。依 §14 開頭停下，處理方式等使用者決定（worker-windows-timing.md 的「C 的判讀與停止」）；接著量出貨條件（D229，視窗版探針）。Windows 結果（`65f4a47d`）判定 4「其他」（P7 失敗在重送之前、沒有對照的節奏行），不能接著跑 lan15。觀察：W 的重送都是 57，P 是 43～53；新失敗 W5、W7「a token wait outlived four commands」（原因未判定），P7 的 WSAECONNRESET 推論在 mock 端。依 §14 開頭停下（worker-windows-timing.md 的「出貨條件下的重送：判讀與停止」）；接著觀測 token 等待（D230）。Windows 結果（`55804621`）判定 5「其他」（W11 的 WSAECONNRESET）；token 失敗 8／19 次，超過量 0.03～0.16 ms，看起來是 mock 輪詢的約 1 ms 刻度。測量方式已換 4 次，依 §14 開頭停下，等使用者決定 worker 在 Windows 上的處理與 lan15（worker-windows-timing.md 的「token 等待的觀測：判讀與停止」）。lan15 的宣告還沒寫、lan15（D208 延期；D219 起不再等 OS）、四平台 L1（run 40644602172）、PR #96 合併。發行線不再併入 OS 批次（D218、D219）。
+- **發行線（PR [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)，draft）**：windows-long-path 完成（P5-6 實機 2026-10-27 通過；p1 兩條在 MSVC killed；p4 在 manifest 下成為等價突變而退場，D212）；quick-close 完成（Windows 10 次通過）。剩下：worker 的 Windows 失敗（D216、D217；worker-10x 由使用者在 Windows 上跑，D220）；B（mock 改用 Waiter）削弱了 `v7-08-submit-no-wake` 的檢出（D225 判定 2），機制是 SubmitShot 與 Client 的 250 ms Hello 的相位（D226）；檢查改成避開 Hello，突變確認全部通過（D227）。已推送（`0d6916a8`）；C 的 Windows 重新宣告（worker-windows-timing.md 的 C 一節）已核准（D228）；Windows 結果（`0edcdded`）判定 3「產品的節奏」：10 次都只送 43 次，間隔 16.7～30.3 ms，符合沒有 SDL 時 asio 計時器的 15.6 ms tick。依 §14 開頭停下，處理方式等使用者決定（worker-windows-timing.md 的「C 的判讀與停止」）；接著量出貨條件（D229，視窗版探針）。Windows 結果（`65f4a47d`）判定 4「其他」（P7 失敗在重送之前、沒有對照的節奏行），不能接著跑 lan15。觀察：W 的重送都是 57，P 是 43～53；新失敗 W5、W7「a token wait outlived four commands」（原因未判定），P7 的 WSAECONNRESET 推論在 mock 端。依 §14 開頭停下（worker-windows-timing.md 的「出貨條件下的重送：判讀與停止」）；接著觀測 token 等待（D230）。Windows 結果（`55804621`）判定 5「其他」（W11 的 WSAECONNRESET）；token 失敗 8／19 次，超過量 0.03～0.16 ms，看起來是 mock 輪詢的約 1 ms 刻度。測量方式已換 4 次，依 §14 開頭停下。D231：Windows 的 worker 驗收不算發行條件，記為已知限界；mock 的兩個問題排在 v7.1 之後（未結事項）。下一步：規劃 lan15、lan15（D208 延期；D219 起不再等 OS）、四平台 L1（run 40644602172）、PR #96 合併。發行線不再併入 OS 批次（D218、D219）。
 - **發行線的 quick-close**：D202 選 q1、門檻核准；D203 加 stalled ≤1 s 判定與 CTest `object_fps_pvp.close_timing`；macOS 驗收通過，Windows 與 D201 一起跑（指令在 [quick-close.md](quick-close.md)）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
 - INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
@@ -66,7 +66,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
   5. 主控台：Match 在主控台裡用 Ctrl+C、Ctrl+Break、關閉視窗結束，log 最後一行 `end version=1 reason=signal exit_code=0`；`ctest -R "^(os\.console_close|io\.unc_localhost|io\.unc_127\.0\.0\.1)$"` 預期 Passed（Windows Terminal 下 console_close 可能 Skipped，改用 conhost）。回 OS 子系統的會話。
   6. lan15（D208：延期，日期未定）。
   （D209、D215：lan15 等 OS 統一子系統全部完成後做，包括 os-net-errors、os-close；計時 L2 與基準改在 `claude/os-windows-run` 跑。）
-- **後續宣告要寫的「範圍的限界」（AGENTS.md §14 冒頭，PR #98 起）**：lan15 與之後的宣告，要列出已記錄為量不到或判定不了的經路，直到記錄解消：Windows 的 symlink 案例（MinGW 與沒有開發人員模式的 MSVC 都提早返回）；`os.console_close`（CI 與使用者的機器都 Skipped）與 Ctrl+Break（使用者的鍵盤沒有 Break 鍵）；quick-close 量的是產品的網路層，不是整個 Client 程序（D202）；`close_timing` 不在 CI 跑（D204）；ACP 非 UTF-8 時的行為在 manifest 之下不再測得到（D212）。
+- **後續宣告要寫的「範圍的限界」（AGENTS.md §14 冒頭，PR #98 起）**：lan15 與之後的宣告，要列出已記錄為量不到或判定不了的經路，直到記錄解消：Windows 的 symlink 案例（MinGW 與沒有開發人員模式的 MSVC 都提早返回）；`os.console_close`（CI 與使用者的機器都 Skipped）與 Ctrl+Break（使用者的鍵盤沒有 Break 鍵）；quick-close 量的是產品的網路層，不是整個 Client 程序（D202）；`close_timing` 不在 CI 跑（D204）；ACP 非 UTF-8 時的行為在 manifest 之下不再測得到（D212）。D231 起加上：Windows 上 worker 驗收不算發行條件——沒有 SDL 的程序裡 Client 的重送約 43～53 Hz（D228、D229）；mock 的 `Pump` 遇到 WSAECONNRESET 會讓驗收中止，約 5%（D229、D230）；「a token wait outlived four commands」以 mock 輪詢的約 1 ms 刻度量，開著 SDL 視窗時約四成失敗、超過量 0.03～0.16 ms（D230）；D226 的 2 次計時器喚醒來源不明；ACK 檢查的相位問題沒有量；D227 只在 macOS 用突變確認過。
 - **最後更新**：2026-10-25，PR #95 合併、發行線 PR #96 開啟、完整突變開始。
 
 ## 閱讀入口
@@ -226,6 +226,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D228 | （2026-10-28）核准 C 的 Windows 重新宣告：發行線含 `0d6916a8`，MSVC 建置，worker 串行 10 次、保存完整輸出；判定互斥（確認不了／全部通過／產品的節奏／觀測側／其他） | 使用者：「核准 worker-windows-timing.md 中 C 的 Windows 重新宣告，記錄後推送，我在 Windows 上跑。」 |
 | D229 | （2026-10-28）D228 的判讀之後，先量出貨條件：worker 探針加一個開著 Engine SDL 視窗的版本（`1c0f892d`），在 Windows 上和沒有視窗的版本交錯各跑 10 次。判定互斥（確認不了／出貨條件下是 60 Hz／出貨條件下也不是 60 Hz／其他）；判定 2 且視窗版 10 次都通過，才跑 lan15 | 使用者：「先量出貨條件…先寫事前宣告給我核准。」「做 A：今晚做好開著 SDL 視窗的 worker 探針，寫好它和 lan15 的事前宣告；明天 Windows 先跑探針，通過才跑 lan15。」「這個今晚就跑完。」「核准 D229 的事前宣告，寫進文件後推送，我今晚在 Windows 上跑。」 |
 | D230 | （2026-10-29）D229 的判讀之後，觀測 token 等待：worker 探針在 token 的兩項檢查印出每步的等待、間隔、上限與超過量（`bff5bf36`，只加觀測），Windows 上視窗版串行 20 次。判定互斥（確認不了／全部通過／超過在 1 ms 以內／超過多於 1 ms／其他）；lan15 不自動接著跑，D229 的失敗保留 | 使用者：「先觀測 token 等待：在 token 的兩項檢查失敗時印出每步的等待與間隔，只加觀測；寫好事前宣告給我核准，再在 Windows 重跑視窗版。」「核准 D230 的事前宣告，寫進文件後推送，我在 Windows 上跑。」 |
+| D231 | （2026-10-29）Windows 上的 worker 驗收（`object_fps_pvp.worker` 與視窗版）不算 v7.1 的發行條件，記為已知限界（D229 的 lan15 條件「通過才跑」由此取代）。限界寫進發行說明與 lan15 的宣告。mock 的兩個問題（WSAECONNRESET 讓驗收中止；token 等待以 mock 輪詢的約 1 ms 刻度量）另開後續任務，排在 v7.1 之後。接著規劃 lan15 | 使用者：「選 1：記為已知限界，Windows 的 worker 驗收不算 v7.1 的發行條件；限界寫進發行說明與 lan15 的宣告，mock 的兩個問題另開後續任務，接著規劃 lan15。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -739,6 +740,11 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - 2026-10-22（更正）：PR #85 是 draft，推送觸發的 run 只做範圍判斷，L1 job 跳過。#553（ip3d）、#554（ip3e）、#558（ip4a）、#560（ip4b）都沒有真的跑 L1，之前記為「成功」不實；真正跑過四平台的只有手動觸發的 #548（ip3b）、#550（ip3c）。已手動觸發 #561（`b3f6386`），補 ip3d～ip4b。
 
 ## 未結事項
+
+- **（D231，排在 v7.1 之後）worker 探針的 mock 在 Windows 上的兩個問題**：後續任務，v7.1 合併後開。
+  - mock 的 `Pump` 在 `receive_from` 收到 WSAECONNRESET 時丟例外，讓整個驗收中止（Windows 上 40 次中 2 次，都在重送檢查之前；觸發的步驟還沒找出）。照 §14.3：先找出觸發的步驟並加觀測，能重現再修。
+  - 「a token wait outlived four commands」量的是 mock 輪詢到的時刻（Windows 上約 1 ms 刻度），1.75 ms 的上限在 Windows 上約四成失敗。改用 Client 端的送出時刻量，或改門檻（§14.4 的放寬，要突變檢查、獨立審查與使用者核准）。
+  - 證據與脈絡：[worker-windows-timing.md](worker-windows-timing.md) 的 D229、D230 各節。
 
 - **（已處理，2026-10-23）v7.1 README 的「開發紀錄」清單**：PR #88（`c31887f`）合併後，記錄器分支同步 master，並在 README 加上「開發紀錄」一節。sdl-isolation 那一項標為「進行中，隨 PR #85」，該分支合併後改成連結。
 

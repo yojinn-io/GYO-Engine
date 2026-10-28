@@ -591,3 +591,11 @@ W11 的 log 共 23 行，除了失敗訊息與「window open」都是 `[ObjectFP
   - Windows 上 worker 驗收裡的毫秒級判定，量的是 mock 輪詢到的時刻，刻度約 1 ms；「a token wait outlived four commands」的 1.75 ms 上限在 Windows（開著 SDL 視窗）上約四成失敗，超過量 0.03～0.16 ms。
   - mock 的 `Pump` 遇到 WSAECONNRESET 會讓整個驗收中止，Windows 上約 5%（40 次中 2 次），觸發的步驟還沒找出來。
   - 沒有 SDL 的 Windows 程序裡，Client 的重送約 43～53 Hz（D228、D229）。
+
+## 決定（D231，2026-10-29）
+
+使用者：「選 1：記為已知限界，Windows 的 worker 驗收不算 v7.1 的發行條件；限界寫進發行說明與 lan15 的宣告，mock 的兩個問題另開後續任務，接著規劃 lan15。」
+
+- Windows 上的 worker 驗收不算 v7.1 的發行條件，上面各節的「範圍的限界」照記錄保留，寫進發行說明與 lan15 的宣告。D229 的「通過才跑 lan15」由此取代。
+- mock 的兩個問題（WSAECONNRESET、token 等待的量測刻度）排在 v7.1 之後，見 HANDOFF 的未結事項。
+- 本文件的調查到此結束。
