@@ -435,3 +435,50 @@
   - 「a token wait outlived four commands」在 Windows（開著 SDL 視窗）上 10 次失敗 2 次，原因未判定；失敗時沒有印出等待的值。
   - mock 的 `Pump` 遇到 WSAECONNRESET 會讓整個 worker 驗收中止（讀程式碼的推論）。
   - D228 已記的：沒有 SDL 的 Windows 程序裡，Client 的重送約 43～53 Hz。
+
+## token 等待的觀測（D230，事前宣告 2026-10-29 核准）
+
+使用者：「先觀測 token 等待：在 token 的兩項檢查失敗時印出每步的等待與間隔，只加觀測；寫好事前宣告給我核准，再在 Windows 重跑視窗版。」核准：「核准 D230 的事前宣告，寫進文件後推送，我在 Windows 上跑。」以下內容核准後不改，跑完不放寬（AGENTS.md §14.1）。
+
+- **起因**：D229 的視窗版 W5、W7 失敗在「a token wait outlived four commands」，失敗時沒有值，分不出是產品的等待在 Windows 上比較長，還是門檻對 Windows 太緊。
+- **觀測（`bff5bf36`，只改 `worker_main.cpp`，判定與門檻都不改）**：
+  - token 的兩項檢查（「the waiting sends did not drain the token debt」與「a token wait outlived four commands」）失敗時，訊息括號裡附上一行值。
+  - 同一行在每次執行時也印到 stderr：「worker token waits: …」，通過的那幾次也看得到。這是使用者所說「失敗時印出」之外多加的，目的是能和通過的執行比較。
+  - 值的內容：
+    - `waits_ms`：排空的 8 步，每一步的等待。
+    - `intervals_ms`：相鄰兩次發佈的間隔。
+    - `drained_ms`：第 1～3 步各排空了多少（目標是四分之一步，4.17 ms，容許 ±1.00 ms）。
+    - `drain_excess_ms`：排空那項檢查最差的一步超過容許的量。
+    - `settled_limits_ms`：第 4～7 步各自的上限（1.75 ms，加上這次發佈晚到的部分）。
+    - `settled_excess_ms`：「outlived」那項檢查最差的一步超過上限的量。
+    - 正值表示那項檢查失敗，負值表示還有餘裕。
+  - macOS（Intel）本機試跑各 1 次（不算判定）：兩支都通過，`drain_excess_ms=-0.92`，`settled_excess_ms` 為 -1.60 與 -1.61。
+- **突變（D184）**：改動後，worker 檢查的 47 個突變在本機重跑（2026-10-28，macOS Intel，load average 2.0～3.0）：47／47 killed，沒有重跑。證據：本機 `scratchpad/v708/d230/`（`worker47.json`、`worker47.log`）。
+- **建置**：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`）。發行線 `claude/pvp-v71-release`，必須含 `bff5bf36`。記錄建置的 commit 與 MSVC 版本；`git ls-files --eol` 沒有 `w/crlf`、工作樹乾淨。
+- **跑法**：
+  - 在有桌面的登入工作階段裡，直接執行 `gyo_object_fps_pvp_worker_window_probe.exe`（不經 ctest），串行 20 次。這次不跑沒有視窗的版本。
+  - 視窗出現後不碰它（同 D229）。期間不做其他吃重的工作。
+  - 不重跑、中途不改任何東西。每次的完整輸出各存一個檔。
+- **每次記錄**：結束碼；有沒有「Engine SDL window open」；「worker token waits」那一行全文；「worker resend rhythm」的四個值；失敗時完整的失敗訊息（用訊息辨認，不用行號）；有「v7-08 wake timeline」時照抄。
+- **收支**：20 次都要有結束碼與「window open」。跑到 token 那段的每一次都要有「worker token waits」那一行。
+- **判定**（互斥，依序取第一個成立的）：
+  1. 「確認不了」：建置失敗、沒有含 `bff5bf36`、有任何一次沒有結束碼或沒有「window open」，或有任何一次失敗在 token 的兩項檢查之一、卻沒有那一行值。
+  2. 「全部通過」：20 次結束碼都是 0。
+  3. 「超過在 1 ms 以內」：至少一次失敗；所有失敗都在 token 的兩項檢查；每一次失敗，失敗那項的超過量（`drain_excess_ms` 或 `settled_excess_ms`）都在 0～1.00 ms 之間。
+  4. 「超過多於 1 ms」：至少一次失敗；所有失敗都在 token 的兩項檢查；至少有一次，失敗那項的超過量大於 1.00 ms。
+  5. 「其他」：以上都不成立（例如有失敗在別的斷言、像 D229 的 P7 那樣的 WSAECONNRESET，或第三項 token 檢查「the third new command did not wait for a token」）。照實記錄，交使用者判斷。
+- **1 ms 的來源**：開著 SDL 視窗時，程序的計時器解析度約 1 ms（W4：有 SDL 時 `sleep_until` 的 P50 約 1.08 ms）。超過量在一個計時器刻度以內，和「門檻是在 macOS 上定的（v7 第 09a 批），對 1 ms 的計時器太緊」的讀法相容；超過一個刻度以上，這個讀法解釋不了，比較指向產品在 Windows 上的等待。兩種都只是讀法，判定本身只分類超過量。
+- **之後（依結果，再交使用者決定）**：lan15 不會自動接著跑。D229 的 2 次失敗照 §14.1 保留，不被這次的結果覆蓋；能不能跑 lan15 由使用者看完結果決定。
+  - 2：20 次都沒有重現，失敗率很低或和那次的環境有關。
+  - 3：比較像門檻對 Windows 太緊。要不要改門檻，是 §14.4 的放寬，要另外經使用者核准（含突變檢查與獨立審查）。
+  - 4：比較像產品在 Windows 上的等待，要另外排查。
+  - 1、5：交使用者。
+- **範圍的限界**：
+  - 只有一台 Windows 機器；只看 worker 的視窗版。
+  - 視窗版只在開頭處理事件 1 秒（同 D229）。
+  - mock 的 `Pump` 遇到 WSAECONNRESET 會讓整個驗收中止（D229 P7，讀程式碼的推論）；這種情況會落在「其他」。
+  - 沒有 SDL 的 Windows 程序裡，Client 的重送約 43～53 Hz（D228、D229）。
+  - D226 有 2 次是 mock 看不到的計時器喚醒，來源沒有找出來。
+  - ACK 檢查的相位問題沒有量；D227 只在 macOS 用突變確認過。
+  - 視窗版本身沒有用突變確認過檢出力。
+  - Client 的送出時刻是 `Send` 開始時的 steady_clock；token 等待量的是 mock 收到的時刻減去發佈的時刻（包含 loopback 的傳遞）。
