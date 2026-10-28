@@ -212,6 +212,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D214 | （2026-10-28）master（`5d688aaf`：PR #98 的規則文件、PR #99 的 `platform_sdl_concurrency` 看門狗）併進發行線：`c9c4b62f`，無衝突，本機 `ctest` 98／98。PR #99 只改 `tests/common/platform_sdl`（不改判定、時限與 Engine 程式），逾時時 stderr 留下卡住的案例、最後標記與輪次；候選 A 在 Linux 容器沒有重現（原因未查明，不是修正）。範圍的限界：容器排程與 CI 不同、容器沒有 evdev／udev 裝置、沒有照 CI 順序跑前面的測試 | 「Fix flaky SdlLogBridge concurrency test on Windows」會話轉達：何時把 master 同步進 #96 由本會話決定（使用者指示） |
 | D215 | （2026-10-28）OS 子系統的 D73：Windows 的計時 L2 與 os-wake-record 的基準改在分支 `claude/os-windows-run` 由 Windows 機器上的 Claude 跑（不需要人操作的項目），不再加在 lan15；os-net-errors、os-close 改排在 lan15 之前（取代 D209 中「排在 PR #96 合併後」與「那次 Windows 機器上另加計時 L2 與基準」）。os-net-errors 會動 `ClientConnection.cpp` 的 `TransientSocketError`（K9 的 `SocketErrorActionFor` 呼叫它），開工前那個會話會再通知。lan15 與它的 L3 仍屬本會話 | 使用者在 OS 子系統的會話：「我相識讓windows跑完，不用依賴人的case，這樣就可以把 OS子系統 完結掉。os-net-error 也有可以參考的對象。也可以從windows量測。」（經該會話轉達） |
 | D216 | （2026-10-28）`object_fps_pvp.worker` 在 Windows MSVC 上失敗（os-windows-run 第 1 次，「new window waited behind a fully acknowledged window's deadline」），交給本會話。加了觀測（失敗訊息印出 `restart_ms` 與 `completed_window_gap_ms`），Windows 上 10 次的量測宣告是草案，等使用者核准：[worker-windows-timing.md](worker-windows-timing.md)。OS 子系統的 W3 不通過（D74），os-wait-backend 暫不併入，lan15 跟著延後 | 「對接 OS 子系統的 Windows 實機結果」會話轉達：使用者已決定把 worker 交給本會話 |
+| D217 | （2026-10-28）核准 worker-windows-timing.md 第 3 步的事前宣告（MSVC，發行線含 `d7e0af31`，串行 10 次，只記錄並分類），交給 OS 子系統 Windows 續跑的 worker-10x（windows-run.md「第 1 次續跑」，W5 之後、W7 之前） | 使用者：「核准 worker-windows-timing.md 的事前宣告，寫進文件，交給 Windows 續跑的 worker-10x。」 |
 
 ## 規劃紀錄（記錄器）
 

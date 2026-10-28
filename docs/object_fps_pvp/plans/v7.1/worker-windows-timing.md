@@ -1,4 +1,4 @@
-# worker-windows-timing：worker 驗收在 Windows MSVC 上的時間判定失敗（D216，草案，等使用者核准）
+# worker-windows-timing：worker 驗收在 Windows MSVC 上的時間判定失敗（D216；第 3 步的事前宣告 2026-10-28 核准，D217）
 
 ## 現象
 
@@ -34,7 +34,9 @@
 - **讀法（本會話，未驗證）**：worker 探針沒有 SDL，mock 的 `Pump` 之間是 `sleep_for(100us)`，照第 1 步的數據在這台 Windows 上約 15.6 ms，所以 mock 蓋的時間戳本身就有約 15.6 ms 的粒度，量不到 10 ms 以下。這指向候選 1（測試），但候選 3（Client 的 asio 計時器在沒有 SDL 的程序裡）還沒排除。
 - 附帶（給 D179 的 `TransientSocketError`）：W6 在 Windows loopback 量到，未連線的 UDP socket 送到關閉的埠後，每個被拒的 datagram 各報一次 WSAECONNRESET（10054），之後 socket 仍可收送。用的是 Python 的 socket，asio 對應到哪個錯誤沒有量。
 
-## 步驟 3 的事前宣告（草案）
+## 步驟 3 的事前宣告（2026-10-28 核准，D217）
+
+使用者 2026-10-28：「核准 worker-windows-timing.md 的事前宣告，寫進文件，交給 Windows 續跑的 worker-10x。」以下內容在核准後不改；跑完之後不放寬（AGENTS.md §14.1）。
 
 - **建置**：Windows 機器、MSVC（`cmake --preset ci-windows`），發行線 `claude/pvp-v71-release` 含觀測的 commit。
 - **跑法**：`ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行跑 10 次，不重跑、不中途改。每次記錄：通過或失敗、`restart_ms`、`completed_window_gap_ms`（通過時取 stdout 的 JSON，失敗時取訊息），以及失敗時的其他訊息。
