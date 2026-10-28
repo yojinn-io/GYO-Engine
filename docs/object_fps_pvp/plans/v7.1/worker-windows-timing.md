@@ -214,9 +214,9 @@
 - **旁註（沒有處理）**：同一段的 ACK 檢查（「an advanced ACK waited for an unrelated wake」）註解寫「next Hello, up to a second away」，但 `HelloInterval` 是 250 ms。這項檢查可能也有同樣的相位問題，沒有量。
 - 證據：本機 `scratchpad/v708/obs/`（git 忽略，會話的 scratchpad）的 `results.txt`、`logs/`（每次的完整輸出）、`run.sh`、`worker_A_obs.cpp`、`worker_B_obs.cpp`。發行線的探針保留這行時間線（只輸出到 stderr，不影響判定）。
 
-## v7-08 檢查的時機修正與突變確認（D227，事前宣告草案，待核准）
+## v7-08 檢查的時機修正與突變確認（D227，事前宣告 2026-10-28 核准）
 
-使用者：「修檢查的時機：等 mock 收到 Hello 後再隔約 100 ms 才 SubmitShot；先寫好突變確認的事前宣告給我核准。」核准前不跑任何量測（只建置過）；核准後內容不改，跑完不放寬。
+使用者：「修檢查的時機：等 mock 收到 Hello 後再隔約 100 ms 才 SubmitShot；先寫好突變確認的事前宣告給我核准。」核准：「核准 worker-windows-timing.md 中 D227 的事前宣告，開始跑。」核准前沒有跑任何量測（只建置過）；以下內容核准後不改，跑完不放寬。
 
 - **修正（只改 `build/acceptance/object_fps_pvp/worker_main.cpp`，產品不改）**：v7-08 的檢查原本在閒置 50 ms 後立刻 SubmitShot。改成閒置 50 ms 後，等 mock 收到下一個 Hello，從那個 Hello 的到達時刻起再等 100 ms 才 SubmitShot。前一次 Hello 在 100 ms 前，下一次大約在 150 ms 後，兩邊都離 40 ms 的判定很遠。40 ms 的判定與失敗訊息都不改。
 - **判定的變更（AGENTS.md §14.4）**：
