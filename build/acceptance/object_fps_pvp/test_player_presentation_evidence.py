@@ -6,7 +6,7 @@ from player_presentation_evidence import validate_samples
 
 def sample(index, distance, phase, *, holding=False, backward=False):
     return {'frame_id':index,'remote':{'player_id':1,'position':[0,0,distance],
-        'character':{'player_id':1,'ready':True,'prepared_instances':1,'body_meshes':4,'hair_meshes':1,
+        'character':{'player_id':1,'ready':True,'prepared_instances':1,'body_meshes':4,'hair_meshes':1,'declared_accessories':1,
         'weapon_meshes':1,'upper_body_mask_count':20,'foot_anchor':[0,-1,0],
         'weapon_world_position':[0,1,distance],'scale':.9,'cycle_distance':3.0,'jog_weight':.4,'phase_cycles':phase%1,
         'unwrapped_phase_cycles':phase,'signed_distance':distance,'total_distance':abs(distance),
@@ -51,6 +51,23 @@ class PlayerEvidenceTests(unittest.TestCase):
         value=sample(0,0,0)
         value['remote']['character']['weapon_meshes']=0
         self.assertTrue(validate_samples([value])['errors'])
+
+    def test_character_without_declared_accessories_passes_without_accessory_meshes(self):
+        value=sample(0,0,0)
+        value['remote']['character'].update(declared_accessories=0,hair_meshes=0)
+        self.assertEqual(validate_samples([value])['errors'],[])
+
+    def test_declared_accessory_must_be_submitted(self):
+        value=sample(0,0,0)
+        value['remote']['character'].update(declared_accessories=2,hair_meshes=1)
+        result=validate_samples([value])
+        self.assertTrue(any('declared accessories' in error for error in result['errors']))
+
+    def test_undeclared_accessory_meshes_are_rejected(self):
+        value=sample(0,0,0)
+        value['remote']['character'].update(declared_accessories=0,hair_meshes=1)
+        result=validate_samples([value])
+        self.assertTrue(any('declared accessories' in error for error in result['errors']))
 
     def test_discontinuity_cannot_count_as_walked_distance(self):
         value=sample(1,5,0)

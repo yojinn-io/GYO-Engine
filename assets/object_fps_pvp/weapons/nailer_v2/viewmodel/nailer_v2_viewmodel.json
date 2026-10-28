@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "model_asset_id": "object_fps_pvp.model.nailer_v2",
+  "materials": {
+    "LowPoly_Skin": "object_fps_pvp.texture.nailer_v2.skin",
+    "LowPoly_Glove": "object_fps_pvp.texture.nailer_v2.glove",
+    "LowPoly_Skin_Shadow": "object_fps_pvp.texture.nailer_v2.skin_shadow",
+    "Nailer1_Material": "object_fps_pvp.texture.nailer_v2.gun"
+  },
+  "animation_set_asset_id": "object_fps_pvp.animset.nailer_v2.viewmodel",
+  "anchor_node": "main_j",
+  "muzzle": {
+    "node": "main_j",
+    "local_position_meters": [0.001603444, 13.567352295, -20.221311927]
+  },
+  "sampler": "linear_wrap",
+  "offset_meters": [0.173333, -0.226667, 0.733333],
+  "rotation_degrees": [8.2115, 180.0, 0.0],
+  "scale": 1.0,
+  "vertical_fov_degrees": 55.0,
+  "near_clip": 0.01,
+  "far_clip": 5.0
+}

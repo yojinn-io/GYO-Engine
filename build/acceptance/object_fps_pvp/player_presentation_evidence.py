@@ -22,8 +22,11 @@ def validate_samples(samples):
         position = remote["position"]
         if c["player_id"] != identity or not c["ready"] or c["prepared_instances"] < 1:
             errors.append("Character identity/readiness does not match successful remote submission")
-        if min(c["body_meshes"], c["hair_meshes"], c["weapon_meshes"], c["upper_body_mask_count"]) <= 0:
-            errors.append("Successful remote pose lacks body, buns, hand weapon or upper-body mask")
+        if min(c["body_meshes"], c["weapon_meshes"], c["upper_body_mask_count"]) <= 0:
+            errors.append("Successful remote pose lacks body, hand weapon or upper-body mask")
+        declared = c["declared_accessories"]
+        if (c["hair_meshes"] < declared) if declared > 0 else c["hair_meshes"] != 0:
+            errors.append("Successful remote pose accessory meshes do not match the declared accessories")
         numbers = position + c["foot_anchor"] + c["weapon_world_position"] + [
             c[name] for name in ("scale", "cycle_distance", "jog_weight", "phase_cycles", "unwrapped_phase_cycles",
                                 "signed_distance", "total_distance", "distance_delta", "speed", "playback_rate")]
