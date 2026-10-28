@@ -351,3 +351,71 @@
   - 同一段的 ACK 檢查（「an advanced ACK waited for an unrelated wake」）可能有和 v7-08 相同的相位問題，沒有量。
   - v7-08 的時機修正（D227）只在 macOS 用突變確認過。
   - 這支 window 探針沒有用突變確認過檢出力：判定看的是重送次數，不是新的斷言；worker 檢查的 47 個突變是在沒有視窗的探針上跑的（D184）。
+
+## 出貨條件下的重送：Windows 結果（2026-10-28，Windows 機器，D229 的宣告）
+
+收支：一致（20 次都有結束碼；W 的 10 次都有「worker probe: Engine SDL window open」）。另外，P7 沒有「worker resend rhythm」那一行（失敗在重送之前，見表），收支的條件不含節奏行，在判定裡處理。
+
+- **判定（照宣告的互斥順序，取第一個成立的）：4.「其他」**。
+  - 1「確認不了」不成立：建置成功、含 `1c0f892d`、20 次都有結束碼、W 的 10 次都有 window open。
+  - 2「出貨條件下是 60 Hz」不成立：W 的 10 次都有節奏行，`client_sends` 都是 57（在 55～65）；但 P 的 10 次**不是都有節奏行**（P7 沒有），所以 P 那一半不成立。有節奏行的 9 次 P，`client_sends` 是 43～53，都不在 55～65。
+  - 3「出貨條件下也不是 60 Hz」不成立：W 的 `client_sends` 都在 55～65。
+  - 4 成立。照實記錄，交使用者判斷。
+- **能不能接著跑 lan15：不能**。條件是判定 2，而且 W 的 10 次結束碼都是 0；這次是判定 4，W 也有 2 次結束碼 1（W5、W7）。今晚本來就不跑 lan15。
+- **建置**：
+  - 發行線 `8d32fb670cac01c5e92b5c0153e9ef585687f0e0`，主 checkout。`git merge-base --is-ancestor 1c0f892d HEAD` 成立；`git ls-files --eol` 沒有 `w/crlf`，工作樹乾淨。
+  - 在 VS Community 2026 的 vcvars64 環境裡：`cmake --preset ci-windows` exit 0、`cmake --build build/target/_build/ci-windows` exit 0（增量 31 步，23:03～23:04）。MSVC 19.51.36260。vcvars64 照舊印了 `'vswhere.exe' is not recognized …`（cl 有找到）。
+  - 執行檔（單一組態，不在 `Release/`）：`build/target/_build/ci-windows/acceptance/object_fps_pvp/` 的 `gyo_object_fps_pvp_worker_window_probe.exe`（SHA-256 `8b2181d2…78b6f`）、`gyo_object_fps_pvp_worker_probe.exe`（`a3060810…a62f9`），旁邊有 `SDL3.dll`（`38a1f37a…80eaec3`）。
+- **機器**：Windows 11 Pro 10.0.26300，Intel Core i7-8750H（6 核 12 執行緒，筆電），16 GB；接著 AC（`PowerOnline=True`），電源計畫「平衡」（`381b4222-…`）。和第 3 步、B、C 是同一台。
+- **跑法**：
+  - 在登入的桌面工作階段裡，從 Claude Code 的 shell 直接執行兩個執行檔（不經 ctest）。沒有參數，工作目錄是執行檔所在的資料夾（和 ctest 對 worker 的設定相同）。
+  - W、P 交錯，各 10 次，共 20 次，串行（23:04:27～23:11:41）。沒有重跑，中途沒有改任何東西，期間沒有其他吃重的工作。視窗出現後沒有碰它。
+  - 每次外面包了 `timeout 300`（防止卡住；宣告沒有寫），20 次都沒有碰到（每次 11～26 秒）。
+  - stdout 與 stderr 合併存成一個檔。
+
+| 次序 | 探針 | 結束碼 | window open | `mock_resends` | `mock_gap_ms`（最小/中位/最大） | `client_sends` | `client_gap_ms`（最小/中位/最大） | 失敗訊息 |
+|---|---|---|---|---|---|---|---|---|
+| 1 | W1 | 0 | 有 | 57 | 16.77/17.14/29.17 | 57 | 16.77/17.17/29.16 | — |
+| 2 | P1 | 1 | — | 45 | 16.85/17.56/30.28 | 45 | 16.85/17.41/30.31 | 重送（a） |
+| 3 | W2 | 0 | 有 | 57 | 16.69/17.25/29.32 | 57 | 16.81/17.24/29.32 | — |
+| 4 | P2 | 1 | — | 44 | 16.69/17.65/30.28 | 44 | 16.80/17.46/30.15 | 重送（a） |
+| 5 | W3 | 0 | 有 | 57 | 16.61/17.16/28.60 | 57 | 16.80/17.18/28.59 | — |
+| 6 | P3 | 1 | — | 46 | 16.85/17.62/30.23 | 46 | 16.90/17.52/29.91 | 重送（a） |
+| 7 | W4 | 0 | 有 | 57 | 16.53/17.21/28.56 | 57 | 16.81/17.23/28.85 | — |
+| 8 | P4 | 1 | — | 45 | 16.81/17.46/30.30 | 45 | 16.86/17.38/30.14 | 重送（a） |
+| 9 | W5 | **1** | 有 | 57 | 16.49/17.22/28.42 | 57 | 16.78/17.20/28.43 | **（b）** |
+| 10 | P5 | 1 | — | 53 | 16.63/17.25/31.93 | 53 | 16.76/17.20/31.90 | 重送（a） |
+| 11 | W6 | 0 | 有 | 57 | 16.76/17.24/30.04 | 57 | 16.80/17.28/29.81 | — |
+| 12 | P6 | 1 | — | 53 | 16.37/17.24/33.69 | 53 | 16.73/17.18/34.10 | 重送（a） |
+| 13 | W7 | **1** | 有 | 57 | 16.80/17.27/29.10 | 57 | 16.79/17.31/29.46 | **（b）** |
+| 14 | P7 | 1 | — | **沒有** | **沒有** | **沒有** | **沒有** | **（c）** |
+| 15 | W8 | 0 | 有 | 57 | 16.80/17.25/29.97 | 57 | 16.79/17.26/29.70 | — |
+| 16 | P8 | 1 | — | 52 | 16.76/17.25/33.34 | 52 | 16.76/17.21/33.66 | 重送（a） |
+| 17 | W9 | 0 | 有 | 57 | 16.70/17.18/29.09 | 57 | 16.75/17.18/29.08 | — |
+| 18 | P9 | 1 | — | 43 | 16.85/21.30/30.19 | 43 | 16.84/21.51/30.37 | 重送（a） |
+| 19 | W10 | 0 | 有 | 57 | 16.81/17.24/29.33 | 57 | 16.81/17.23/29.36 | — |
+| 20 | P10 | 1 | — | 43 | 16.81/19.53/30.24 | 43 | 16.77/19.37/30.17 | 重送（a） |
+
+失敗訊息（照抄）：
+
+- （a）`worker acceptance: unacknowledged window was not resent at approximately 60 Hz (mock_resends=… mock_gap_ms=… client_sends=… client_gap_ms=…)`，括號裡的值和同一次的節奏行相同（見表）。
+- （b）W5、W7：`worker acceptance: a token wait outlived four commands`。這兩次的節奏行都有、`client_sends` 都是 57；失敗在重送檢查之後。
+- （c）P7：`worker acceptance: 既存の接続はリモート ホストに強制的に切断されました。`（OS 的錯誤訊息，日文 UI；意思是「現有的連線被遠端主機強制關閉」）。只跑了 11 秒，沒有節奏行，失敗在重送檢查之前。log 全部 15 行，除了這一句都是 `[ObjectFPS/PvP]` 的行。
+
+「v7-08 wake timeline」（只有通過的 8 次 W 跑到 v7-08）：
+
+| 次 | 照抄 |
+|---|---|
+| W1 | `v7-08 wake timeline: action_ms=0.96 events=in:Actions@0.95` |
+| W2 | `v7-08 wake timeline: action_ms=0.96 events=in:Actions@0.95` |
+| W3 | `v7-08 wake timeline: action_ms=0.97 events=in:Actions@0.96` |
+| W4 | `v7-08 wake timeline: action_ms=0.97 events=in:Actions@0.97` |
+| W6 | `v7-08 wake timeline: action_ms=0.97 events=in:Actions@0.96` |
+| W8 | `v7-08 wake timeline: action_ms=0.97 events=in:Actions@0.97` |
+| W9 | `v7-08 wake timeline: action_ms=0.61 events=in:Actions@0.60` |
+| W10 | `v7-08 wake timeline: action_ms=0.66 events=in:Actions@0.65` |
+
+- 通過的 8 次 W 都在最後印出 `"passed":true` 的 JSON（全文在各自的 log）。
+- **判讀交給 v7.1 會話**（Windows 端不做）。宣告、門檻、測試、產品程式都沒有改。
+
+**證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-D229-20261028/`，內含 `build.log`、`build-exit.txt`（建置的結束碼）、`commit.txt`、`build-commit.txt`、`msvc-version.txt`、`machine.txt`、`hashes.txt`、`W1.log`～`W10.log`、`P1.log`～`P10.log`、`runs.txt`（`exit=` 是探針的結束碼）。
