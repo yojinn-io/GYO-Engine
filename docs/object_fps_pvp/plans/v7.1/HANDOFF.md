@@ -43,7 +43,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **發行線（PR [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)，draft）**：windows-long-path 完成（P5-6 實機 2026-10-27 通過；p1 兩條在 MSVC killed；p4 在 manifest 下成為等價突變而退場，D212）；quick-close 完成（Windows 10 次通過）。剩下：worker 的 Windows 失敗（D216、D217，worker-10x 沒有執行者）、lan15（D208 延期；D219 起不再等 OS）、四平台 L1（run 40644602172）、PR #96 合併。發行線不再併入 OS 批次（D218、D219）。
+- **發行線（PR [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)，draft）**：windows-long-path 完成（P5-6 實機 2026-10-27 通過；p1 兩條在 MSVC killed；p4 在 manifest 下成為等價突變而退場，D212）；quick-close 完成（Windows 10 次通過）。剩下：worker 的 Windows 失敗（D216、D217；worker-10x 由使用者在 Windows 上跑，D220）、lan15（D208 延期；D219 起不再等 OS）、四平台 L1（run 40644602172）、PR #96 合併。發行線不再併入 OS 批次（D218、D219）。
 - **發行線的 quick-close**：D202 選 q1、門檻核准；D203 加 stalled ≤1 s 判定與 CTest `object_fps_pvp.close_timing`；macOS 驗收通過，Windows 與 D201 一起跑（指令在 [quick-close.md](quick-close.md)）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
 - INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
@@ -215,6 +215,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D217 | （2026-10-28）核准 worker-windows-timing.md 第 3 步的事前宣告（MSVC，發行線含 `d7e0af31`，串行 10 次，只記錄並分類），交給 OS 子系統 Windows 續跑的 worker-10x（windows-run.md「第 1 次續跑」，W5 之後、W7 之前） | 使用者：「核准 worker-windows-timing.md 的事前宣告，寫進文件，交給 Windows 續跑的 worker-10x。」 |
 | D218 | （2026-10-28）OS 子系統依原意「OS 相容層」重新定界（核心是支撐遊戲跑起來，不是 QA 或多系統相容）：「對接 OS 子系統的 Windows 實機結果」已封存、「規劃 Engine 的 OS 統一子系統」停止；新任務卡「盤點 OS 子系統並收口到支撐遊戲運行」盤點後提出收口方案，核准前不動發行線。在那之前發行線不再併入新的 OS 批次，也不為 OS 安排實機量測。D209、D215 中「lan15 等 OS 子系統全部完成」的前提跟著失效，lan15 的排程待定。worker-10x（D217）原本排在 OS 的 Windows 續跑裡，現在沒有執行者 | 使用者的決定，架構健檢會話轉達 |
 | D219 | （2026-10-28）OS 子系統的收口提案核准（Engine D78）。對 v7.1：發行線不再併入 OS 批次；os-wake-record、os-threads-backend 在 v7.1 發行後由 OS 分支直接以 PR 併 master；os-wait-backend 凍結並撤出 OS 分支；os-net-errors 不開始、os-close 取消。已在發行線的 OS 10 批全部留下，其中 4 批是沒有功能支撐的行為變更（★：os-console-shutdown、io-native-paths、os-tool-files、os-utf8-codepage），標為「已出貨、未經功能驗收」。D209、D215 的「lan15 等 OS 全部完成」不再成立；D206 的主控台檢查已在 D201 做過。發行線自 `4a4a0ef7` 起沒有四平台 L1，派發 run 40644602172（`d7ecf047`）。產品線索（只供判讀）：W4（Windows 沒有視窗的程序，60 Hz 晚醒 P50：condition_variable 5.28 ms、sleep_until 15.63 ms、Waiter 0.617 ms）給 F5／F7；W6（Windows 上未連線的 UDP socket 被拒後收到 WSAECONNRESET，socket 仍可用）給 K9：握手期這個錯誤會讓加入失敗（`SocketErrorActionFor` 在遊玩前判 Fail），列進 lan15 的 L3 觀察 | 「盤點 OS 子系統並收口到支撐遊戲運行」會話轉達使用者的核准（Engine D78，決定 1～4 都選 (a)） |
+| D220 | （2026-10-28）worker-10x（D217 的宣告）由使用者在 Windows 機器上開 Claude Code，照 worker-windows-timing.md 跑；結果寫進該文件的「第 3 步的結果」一節並推送到發行線。lan15 的日期之後再定 | 使用者：「worker-10x 由我在 Windows 機器上開 Claude Code 照 worker-windows-timing.md 跑；lan15 的日期之後再定。」 |
 
 ## 規劃紀錄（記錄器）
 
