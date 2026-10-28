@@ -3,6 +3,8 @@
 建立：2026-10-28。決定：D73、D74、D76（[交接](HANDOFF.md)的決策紀錄）。分支：`claude/os-windows-run`。
 **狀態：第 1 次結案（D78）。** W0～W7 跑完：W3 不通過（紀錄保留），W5 通過，W7 12／12 killed，W4、W6 只記錄。「第 1 次續跑」、W8 與第 2 次取消（D78：os-wait-backend 凍結、os-net-errors 與 os-close 不做）。結果見 [dev_log](../../../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)。
 
+> **2026-10-28 更新（v7.1 會話，D220；OS 收口 Engine D78）：現在只跑 worker-10x 這一項。** OS 子系統已依 D78 收口，本文件其餘的 OS 項目（W 系列、W8、第 2 次）都不再跑。worker-10x 的宣告已核准（v7.1 D217，發行線 `docs/object_fps_pvp/plans/v7.1/worker-windows-timing.md`），請直接跳到下面的「worker-10x」一節照做。結果寫進發行線那份文件的「## 第 3 步的結果」一節（在宣告之後新增，第一行寫收支），commit 訊息用日語，推送前先 `git pull`；不要改宣告、門檻或測試。本分支不必再推結果。
+
 ## 這份文件是什麼
 
 - OS 子系統還沒在 Windows 實機上做的項目，凡是不需要人操作的，都由 Windows 機器上的 Claude 照這份文件跑。
@@ -255,7 +257,7 @@ python -c "import ctypes; v=[ctypes.c_ulong() for _ in range(3)]; s=ctypes.windl
   - `meta.txt` 的開始與結束。
 - 解讀（撤回，或另行宣告）不在 Windows 端做，交給使用者與 OS 子系統的會話。
 
-### worker-10x：v7.1 D216 的 worker 10 次量測（約 30 min；宣告有核准才跑）
+### worker-10x：v7.1 D216 的 worker 10 次量測（約 30 min；宣告已核准，v7.1 D217，2026-10-28；D220 起只跑這一項）
 
 - 這是 v7.1 會話的量測，不是 OS 子系統的。這邊只負責在同一台機器上執行。
 - 跑之前先確認條件：
@@ -267,7 +269,7 @@ python -c "import ctypes; v=[ctypes.c_ulong() for _ in range(3)]; s=ctypes.windl
   - 在 vcvars64 環境裡執行 `cmake --preset ci-windows`，再執行 `cmake --build build/target/_build/ci-windows`。worker 是 C++ 的 CTest，不經過 Python。
   - 建置完才開始 10 次。10 次期間不建置、不跑其他吃重的工作。
 - worker 失敗不停下，那正是要觀察的現象。建置失敗時記錄 log、不跑，繼續 W8。
-- 每次的通過或失敗、`restart_ms`、`completed_window_gap_ms`、失敗訊息，都寫進續跑的 dev_log。判讀由 v7.1 會話做。
+- 每次的通過或失敗、`restart_ms`、`completed_window_gap_ms`、失敗訊息，寫進發行線 `worker-windows-timing.md` 的「## 第 3 步的結果」（D220；不再寫續跑的 dev_log）。判讀由 v7.1 會話做。
 
 ### W8（照第 1 次的指令）
 
