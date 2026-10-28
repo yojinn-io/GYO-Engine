@@ -804,7 +804,10 @@ int main(int argc,char** argv) {
         const auto firstNewSend=gateway.attempts.back().at;
         const auto restartMs=std::chrono::duration<double,std::milli>(firstNewSend-restartedAt).count();
         const auto completedWindowGapMs=std::chrono::duration<double,std::milli>(firstNewSend-lastOldSend).count();
-        Require(restartMs<10 && completedWindowGapMs<14,"new window waited behind a fully acknowledged window's deadline");
+        // The values go into the message (observation only, v7.1 D216): the first
+        // Windows failure did not say how far over the limits it was.
+        Require(restartMs<10 && completedWindowGapMs<14,"new window waited behind a fully acknowledged window's deadline"
+            " (restart_ms="+std::to_string(restartMs)+" completed_window_gap_ms="+std::to_string(completedWindowGapMs)+")");
 
         // A partial acknowledgement leaves the unchanged window on its 60 Hz
         // resend deadline. A command never sent goes at the next poll while the
