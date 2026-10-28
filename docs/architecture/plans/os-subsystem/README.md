@@ -91,6 +91,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 33. **D72**：os-wait-backend 的定案。time.md Invariant 8、10，os.md Invariant 6 的例外（cv 後備的 `Block` 讓 `std::system_error` 穿過），★ 錯誤細節（`IoFailed: errno=<n>`／`IoFailed: win32=<n>`），都照草稿。
 34. **D73**：OS 子系統不等 lan15 與 #96 做完（改變 D62 的最後一句）。Windows 實機上不需要人操作的項目，由 Windows 機器上的 Claude 在分支 `claude/os-windows-run` 照 [windows-run.md](windows-run.md) 跑，分兩次：第 1 次是現有批次留下的項目與 os-net-errors 的 UDP 錯誤量測，第 2 次在 os-net-errors、os-close 完成後。os-net-errors、os-close 排在 lan15 之前。
 35. **D75**：OS 子系統的 Linux 項目由本會話在這台 Mac 的 Docker（LinuxKit 虛擬機）跑，照 [linux-run.md](linux-run.md)。os-wait-backend 的 Linux L2 先跑 A/A，A/A 照 (a) 通過才用 (a) 判 A/B；計時量測在虛擬機裡，限界照實寫。（D74 由「對接 OS 子系統的 Windows 實機結果」會話記在交接。）
+36. **D77**：linux-run 拿掉在 Docker 裡跑 B 完整 ctest 的那一步（和 CI 的 linux-x64 L1 重複；實機只做 CI 做不到或不好觀測的事），步驟代號改成 X0～X6。CI 的 linux-x64 L1 不受影響。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
