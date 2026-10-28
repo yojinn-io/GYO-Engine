@@ -152,7 +152,7 @@
 
 - **改法（只加觀測，門檻與產品程式都不改）**：worker 探針在重送的那 1 秒裝上 Client 既有的 movement trace（`SetMovementTrace` 與記憶體內的 `MovementTrace`），收集 Client 每次送出的 `Sent` 事件（每次送出取一個 `startedNs`）。重送檢查（`resends` 在 55～65）失敗時，訊息附上 `mock_resends=N mock_gap_ms=最小/中位/最大 client_sends=N client_gap_ms=最小/中位/最大`。Client 的送出時刻來自產品本來就有的 trace，沒有新增產品的入口。
 - **macOS（Intel）本機**：把門檻暫時改成必定失敗，確認訊息是 `mock_resends=59 mock_gap_ms=16.60/16.73/29.18 client_sends=59 client_gap_ms=16.70/16.72/29.19`，之後改回；正常跑通過。
-- **Windows 的事前宣告（草案，等使用者核准；2026-10-28 依 D226、D227 更新）**：
+- **Windows 的事前宣告（2026-10-28 核准，D228；依 D226、D227 更新後核准）**：使用者：「核准 worker-windows-timing.md 中 C 的 Windows 重新宣告，記錄後推送，我在 Windows 上跑。」以下內容核准後不改，跑完不放寬（AGENTS.md §14.1）。
   - 建置：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`）。發行線 `claude/pvp-v71-release`，必須含 `0d6916a8`（C、D226 的觀測、D227 的修正都在其中）。記錄建置的 commit 與 MSVC 版本；`git ls-files --eol` 沒有 `w/crlf`、工作樹乾淨。
   - 跑法：`ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行 10 次，不重跑、不中途改，期間不做其他吃重的工作。每次的輸出完整保存（D225 漏存 log 的教訓）。
   - 每次記錄：
