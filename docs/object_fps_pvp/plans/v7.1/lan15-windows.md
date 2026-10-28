@@ -1,6 +1,6 @@
 # lan15-windows：Windows LAN 場次（規劃草案）
 
-更新：2026-10-29。Owner：`object_fps_pvp`。**狀態：規劃草案，等使用者決定（見「要決定的事」）。** 使用者：「選 1：…接著規劃 lan15。」（D231）
+更新：2026-10-29。Owner：`object_fps_pvp`。**狀態：規劃中。第 2～6 項已決定（D232），第 1 項（日期與人數）等使用者。** 使用者：「選 1：…接著規劃 lan15。」（D231）
 
 ## 目的（Feature → Contract → Architecture）
 
@@ -65,3 +65,14 @@ lan15-windows
 4. **S1 的判定範圍**：哪些項目要有門檻（例如 session 完整、D44 的 epoch 重設、轉送與死信的計數、斷線之外的 `transient_socket_errors`），哪些只記錄。門檻在 lan15-declare 定，來源做對抗式檢查。
 5. **F5、N-tt1-l2-wake-record**：after-re-evaluate 說規劃 lan15 時一起決定。W4 已經有 Windows 上 Waiter 的晚醒數據（沒有 SDL 時 P50 0.617 ms），建議 F5 維持「不加自旋」並以 W4 結案，N-tt1-l2-wake-record 不在這次量。
 6. **lan15-declare 的對抗式檢查**：1 位審查者，查門檻的來源（D45）。建議用 xhigh-reviewer（xhigh，比主會話高，要使用者同意），或繼承主會話的設定。
+
+## 決定（D232，2026-10-29）
+
+使用者：「2～6 照建議（Mac 主持、L1 產物、F5 以 W4 結案、審查者用 xhigh-reviewer）；第 1 項的日期與人數我另外說。」
+
+- 2：Match＋Gateway 放 Mac。S4（F7，Windows Match 的 Tick 精度）這次量不到，照實記為「未量」，列入範圍的限界。
+- 3：測試包用最新發行線的四平台 L1 產物（PR #96 合併前派發的那次）。
+- 4：S1 的判定範圍在 lan15-declare 和門檻一起定。
+- 5：F5 以 W4 結案（維持不加自旋）；N-tt1-l2-wake-record 這次不量。
+- 6：lan15-declare 的對抗式檢查用 xhigh-reviewer（1 人，xhigh，高於主會話，使用者同意）。
+- 1：日期與人數，使用者另外說。
