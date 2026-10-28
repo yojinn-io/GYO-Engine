@@ -226,6 +226,37 @@ python docs/architecture/plans/os-subsystem/scripts/udp_error_probe.py --output 
 
 證據：`udp/udp-errors.json`、`udp/stdout.log`。
 
+## W7：Windows 專用突變（12 條）
+
+在 B 的 checkout、vcvars64 環境裡，每條單獨跑一次（13:54～13:57）：
+
+```
+python docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --build-dir build/target/_build/ci-windows --catalog docs/architecture/plans/os-subsystem/scripts/mutations.json --only <id>
+```
+
+- 跑之前確認：12 個 id 都在目錄裡各出現一次；`\\localhost\C$` 可連（os-w10 用）；工作樹乾淨（W4～W6 的 dev_log 先在本機 commit 成 `94c209d`，只有文件）。
+- **12/12 killed，每條 exit 0。** runner 只在預期的檢查失敗、且輸出符合目錄的 `expect` 時才算 killed。建置是增量的（每條只重建突變的檔案），所以每條 5～40 秒。
+- 跑完 `git status --short` 是空的（`mutations/git-status-after.txt`）。
+
+| id | 結果 | 時間 |
+|---|---|---|
+| pu-x3-windows-message-refuses-surrogate | killed | 40 s |
+| pu-x4-windows-message-generic-separators | killed | 13 s |
+| pu-x9-windows-manifest-legacy | killed | 5 s |
+| pu-x10-windows-tests-without-manifest | killed | 29 s |
+| pu-x12-windows-code-page-query-fixed | killed | 13 s |
+| os-w10-windows-root-created | killed | 12 s |
+| os-g18-windows-extra-link | killed | 16 s |
+| th-x3-windows-name-byte-widened | killed | 7 s |
+| th-x5-windows-interactive-highest | killed | 8 s |
+| ow-x5-windows-timer-not-armed | killed | 14 s |
+| ow-x6-windows-signal-dropped | killed | 15 s |
+| ow-x10-windows-timeout-armed-for-nothing | killed | 11 s |
+
+- D201 存活的 os-w10（缺 UNC 案例）、基準線不通過的 os-g18（ACP＋字型目錄），在 os-utf8-codepage 補案例之後，這台都 killed。
+
+證據：`mutations/<id>.log`、`mutations/summary.txt`、`mutations/git-status-after.txt`。
+
 ## 留在這台機器上的東西
 
 - worktree：`..\gyo-a-wait`、`..\gyo-a-threads`、`..\gyo-b-mingw`（各含 MSVC 建置樹；`gyo-b-mingw` 還沒建置）。之後接著跑 W4～W8 時可以直接用，沒有刪。
