@@ -228,6 +228,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D230 | （2026-10-29）D229 的判讀之後，觀測 token 等待：worker 探針在 token 的兩項檢查印出每步的等待、間隔、上限與超過量（`bff5bf36`，只加觀測），Windows 上視窗版串行 20 次。判定互斥（確認不了／全部通過／超過在 1 ms 以內／超過多於 1 ms／其他）；lan15 不自動接著跑，D229 的失敗保留 | 使用者：「先觀測 token 等待：在 token 的兩項檢查失敗時印出每步的等待與間隔，只加觀測；寫好事前宣告給我核准，再在 Windows 重跑視窗版。」「核准 D230 的事前宣告，寫進文件後推送，我在 Windows 上跑。」 |
 | D231 | （2026-10-29）Windows 上的 worker 驗收（`object_fps_pvp.worker` 與視窗版）不算 v7.1 的發行條件，記為已知限界（D229 的 lan15 條件「通過才跑」由此取代）。限界寫進發行說明與 lan15 的宣告。mock 的兩個問題（WSAECONNRESET 讓驗收中止；token 等待以 mock 輪詢的約 1 ms 刻度量）另開後續任務，排在 v7.1 之後。接著規劃 lan15 | 使用者：「選 1：記為已知限界，Windows 的 worker 驗收不算 v7.1 的發行條件；限界寫進發行說明與 lan15 的宣告，mock 的兩個問題另開後續任務，接著規劃 lan15。」 |
 | D232 | （2026-10-29）lan15 的規劃：Match＋Gateway 放 Mac（F7 這次不量，記為未量）；測試包用最新發行線的四平台 L1 產物；S1 的判定範圍在 lan15-declare 定；F5 以 W4 結案（不加自旋），N-tt1-l2-wake-record 不量；對抗式檢查用 xhigh-reviewer（1 人）。日期與人數另定 | 使用者：「2～6 照建議（Mac 主持、L1 產物、F5 以 W4 結案、審查者用 xhigh-reviewer）；第 1 項的日期與人數我另外說。」 |
+| D233 | （2026-10-29）K10 從 lan15 的工具準備移出（取代 D181 的「K10 在 lan15-windows 的工具準備修」）：LAN 場次是真人在玩，不經 `run_case`。改排到 v7.1 之後，和 D231 的 mock 兩個問題放在一起。lan15-declare 開始 | 使用者：「開始 lan15-declare；K10 改排到 v7.1 之後，和 mock 的兩個問題放在一起。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -742,7 +743,8 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 
 ## 未結事項
 
-- **（D231，排在 v7.1 之後）worker 探針的 mock 在 Windows 上的兩個問題**：後續任務，v7.1 合併後開。
+- **（D231、D233，排在 v7.1 之後）驗收工具的三個問題**：後續任務，v7.1 合併後開。
+  - K10（D233 從 lan15 移來）：凍結的 `run_case` 在 probe 失敗後立刻關服務，L2 看不到 Gateway 端的 session 到期。
   - mock 的 `Pump` 在 `receive_from` 收到 WSAECONNRESET 時丟例外，讓整個驗收中止（Windows 上 40 次中 2 次，都在重送檢查之前；觸發的步驟還沒找出）。照 §14.3：先找出觸發的步驟並加觀測，能重現再修。
   - 「a token wait outlived four commands」量的是 mock 輪詢到的時刻（Windows 上約 1 ms 刻度），1.75 ms 的上限在 Windows 上約四成失敗。改用 Client 端的送出時刻量，或改門檻（§14.4 的放寬，要突變檢查、獨立審查與使用者核准）。
   - 證據與脈絡：[worker-windows-timing.md](worker-windows-timing.md) 的 D229、D230 各節。
