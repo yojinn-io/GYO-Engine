@@ -60,6 +60,8 @@
     - W1 的環境問題修正後重跑；W4～W8 續跑（windows-run.md 的「第 1 次續跑」）。
     - `object_fps_pvp.worker` 的失敗交給 v7.1 會話。
   - 由「對接 OS 子系統的 Windows 實機結果」會話整理與記錄；修改前已告知本會話。
+- 2026-10-28：D75。Linux 項目改在這台 Mac 的 Docker 跑，事前宣告寫在 [linux-run.md](linux-run.md)（L0～L6），先提交再開始。
+  - D75 的編號已告知「對接 OS 子系統的 Windows 實機結果」會話，請它之後從 D76 起。
 
 ## 閱讀入口
 
@@ -92,6 +94,7 @@
 | os-close | 收尾：allowlist 清空、文件同步、完整突變 |
 | os-utf8-codepage | （提案，D64）每個 Windows 執行檔以 manifest 把程序的 code page 定為 UTF-8 |
 | os-windows-run | Windows 機器上的 Claude 跑不需要人操作的實機項目（D73，分兩次） |
+| os-linux-run | 本會話在這台 Mac 的 Docker 跑 Linux 項目（D75） |
 
 ## 決策紀錄
 
@@ -134,6 +137,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D72：os-wait-backend 的定案。time.md Invariant 8（latch 由 engine/os 經每次 `Block` 的參照讀取，cv 後備在 mutex 內讀，不保存副本；守衛是競爭測試加 ow-x1，ow-x1 還沒在 Linux 跑）、Invariant 10（`GYO::Time` 連結 exactly `GYO::Base` 與 PRIVATE 的 `GYO::Os`，拿掉 `Threads::Threads`，Os 不得公開；§14.4 的放寬面經突變 ti-x1、ow-x2 與審查者確認）、os.md Invariant 6 的例外（`WakeSignal::Block` 在 cv 後備讓標準函式庫的 `std::system_error` 穿過，與搬移前的 Waiter 相同）、★ 錯誤細節（`Waiter::Create` 失敗時 detail 是 `IoFailed: errno=<n>`／`IoFailed: win32=<n>`，message 不變），都照草稿定案 | 使用者：「time.md Invariant 8／10、os.md Invariant 6 的例外、★ 錯誤細節（IoFailed: errno=<n>／win32=<n>），都照草稿定案。」 |
 | 2026-10-28 | D73：OS 子系統不等 lan15 與 #96 做完（改變 D62 的最後一句「os-net-errors 與 os-close 排在 #96 合併後」）。<br>Windows 實機上不需要人操作的項目，由 Windows 機器上的 Claude 在分支 `claude/os-windows-run` 照 [windows-run.md](windows-run.md) 跑，分兩次：第 1 次是計時核心三批與 os-utf8-codepage 留下的 Windows 項目，加上 os-net-errors 開工前的 UDP 錯誤量測（`scripts/udp_error_probe.py`）；第 2 次在 os-net-errors、os-close 完成後。<br>os-net-errors、os-close 排在 lan15 之前；os-net-errors 的對照基準是消費端現有的 `TransientSocketError`。<br>需要人操作的項目（Ctrl+Break、conhost 的手動操作、P5-6、lan15 與它的 L3）不在範圍。<br>分兩次、Windows 端只寫 windows-run.md 的結果與 dev_log，是本會話的安排 | 使用者：「我相識讓windows跑完，不用依賴人的case，這樣就可以把 OS子系統 完結掉。os-net-error 也有可以參考的對象。也可以從windows量測。」之後：「你先弄完，我睡覺去了，明天早上起來處理windows的問題。你寫好計劃，開好分支就推到github上。」 |
 | 2026-10-28 | D74：os-windows-run 第 1 次的 W3（os-wait-backend 的 Windows L2）不通過之後的處理。<br>W3：window deadline P50 是 A 0.4658、B 0.4890、上限 0.4858 ms，其餘 11 項通過。不通過保留，不重跑，判定不放寬（D71、§14.1）。<br>分析（「對接 OS 子系統的 Windows 實機結果」會話）：Windows 的 `Block` 在 `4ffc7c65` 與 B 之間逐行相同，差別只有一層跨程式庫呼叫與一次間接存取。+0.02 ms 的 P50 邊界只在 macOS Intel 校準過：在 macOS 約是 P50（0.077 ms）的 26%，在 Windows 的 window 情境（0.466 ms）只有 4.3%。window P50 逐對的差是 +0.025、+0.035、+0.027、−0.015 ms。只有 window 情境載入 `SDL3.dll`，兩份 DLL 的雜湊沒有記錄。<br>選項：(A) 撤回（revert，D71）；(B) Windows 的 A/A 診斷（探索，只記錄）；(C) 重新檢視前提，Windows 另行事前宣告判定（由 Windows 的 A/A 與退化版推導，新判定在看到新 A/B 之前核准；有放寬面，照 §14.4 寫 1～5，並做檢出力檢查與另一位審查者的驗證）。使用者選 (B)，看完 A/A 再在 (A) 與 (C) 之間決定。在那之前不通知消費端合併 os-wait-backend（D71 不變）。<br>W1 的失敗歸類（§14.1）：28 項 Python 驗收與 2 項 cmake 測試是環境（embedded Python、在 vcvars64 外面執行）。`os.console_ctrl_c` 推測是環境（執行環境停用 Ctrl+C 的旗標會傳給子孫行程；CI 通過），由 W1-ctrlc 診斷。`object_fps_pvp.worker` 未切開，交給 v7.1 會話（候選：mock 以 `sleep_for(100us)` 輪詢，在沒有 SDL 的 Windows 程序可能被捨入到系統 tick；CI 的 windows 不跑 network 標籤）；切開的第 1、2 步（從 W3 證據讀 Sleep 粒度、W5 另記 A_threads 與 B 的 worker 結果）放進續跑。<br>環境修正：Windows 機器安裝一般的 CPython 3.13，B 以 `-DPython3_EXECUTABLE` 重新 configure；W1 改在 vcvars64 環境裡重跑（W1b）。<br>W4～W8 不等 W3 的結論續跑：它們和 W3 獨立；ow-x5、ow-x6、ow-x10 只在保留 os-wait-backend 時有意義。<br>續跑稱為「第 1 次續跑」，寫在 windows-run.md；「第 2 次」仍指 os-net-errors、os-close 之後那次 | 使用者：「W3 選 B：Windows 先跑 A/A 診斷（含兩份 SDL3.dll 的雜湊），結果只記錄；看完再在撤回與另行宣告之間決定。其他三項照你的建議。」（其他三項：裝一般的 Python 並在 vcvars64 裡重跑 W1、worker 交給 v7.1 會話、W4～W8 續跑） |
+| 2026-10-28 | D75：OS 子系統的 Linux 項目由本會話在這台 Mac 的 Docker（LinuxKit 虛擬機）跑，照 [linux-run.md](linux-run.md)。<br>os-wait-backend 的 Linux L2（cli）先跑 A/A：A/A 照 (a) 全部通過，才用 (a) 判 A/B；A/A 不通過，A/B 只記錄並回報。<br>映像照 CI 的 Linux 套件清單另建（`scripts/linux-run.Dockerfile`）。<br>同意下載映像與套件；跑的期間用 `caffeinate -i`；ow-x1 存活時停下回報，這次不補測試。<br>計時量測在虛擬機裡，限界寫進宣告與結果 | 使用者先說「這個我可以提供docker容器。還是說WSL2的效果更好？」「本機就有Docker」，之後對三個問題選：「先 A/A，過了才判 A/B」「照 CI 的清單另建」「寫完 linux-run.md 就開始」 |
 
 ## 消費端的壓力摘要
 
@@ -904,7 +908,7 @@ D62：計時核心之前的 4 批做完後，在實機上一次補齊。2026-10-
   - os-wake-record 的基準（只記錄，D68）：`python tests/common/time/wake_baseline.py --build-dir <A_wait 的建置樹> --output <證據目錄>`（沒有視窗與有視窗）。沒有視窗的那組交給 v7.1 的 F5／F7。
   - os-threads-backend 的 L2（D69，只記錄、附撤回條件）：A_threads 與 B 各跑 ctest 的 `object_fps_pvp.worker`、`.ipc`、`.close_timing`、`.cpu`，比對每個 `role started` 行的 `wait_backend`、`name_applied`、`priority_applied`，必須逐字相同。
   - MinGW（`test` preset，只記錄）：`.rc` 嵌入是否勝過預設 manifest；repo 路徑含非 ASCII 時 windres 是否找得到 manifest；目標的 compile definitions 經過 windres 是否有問題；OEM code page 是否也變成 65001。
-- Linux（x64）：
+- Linux（x64）：2026-10-28（D75）改照 [linux-run.md](linux-run.md) 在這台 Mac 的 Docker 跑；結果合併後從這裡刪掉。
   - 突變：os-f8、tt-x5、ti-x4、th-x6、ow-x1。ow-x1 殺不到時，依 PLAN 7.15 補測試（macOS 上強制 cv 的探索性檢查殺得到）。
   - os-wait-backend 的 L2：同上，`--modes cli`；deadline 與 notify 都判（審查 m3，在任何 B 之前寫定）。
   - os-wake-record 的基準：`--modes cli`。

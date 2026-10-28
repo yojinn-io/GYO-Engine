@@ -90,6 +90,7 @@ Engine 目前沒有處理 OS 差異的 owner：
 32. **D71**：os-wait-backend 開工前的決定，全部照建議。檔位 xhigh＋1 位 xhigh 審查；開放決策 13 採 (a)，看 B 之前先做 A/A 校準與檢出力檢查，兩項都符合才凍結原文；time.md Invariant 8／10、os.md Invariant 6 的例外與 ★ 錯誤細節照草稿開工，定案前驗證；macOS Intel 現在做，Windows 與 Linux 在實機那次做，Windows 的 L2 通過前不通知消費端合併。
 33. **D72**：os-wait-backend 的定案。time.md Invariant 8、10，os.md Invariant 6 的例外（cv 後備的 `Block` 讓 `std::system_error` 穿過），★ 錯誤細節（`IoFailed: errno=<n>`／`IoFailed: win32=<n>`），都照草稿。
 34. **D73**：OS 子系統不等 lan15 與 #96 做完（改變 D62 的最後一句）。Windows 實機上不需要人操作的項目，由 Windows 機器上的 Claude 在分支 `claude/os-windows-run` 照 [windows-run.md](windows-run.md) 跑，分兩次：第 1 次是現有批次留下的項目與 os-net-errors 的 UDP 錯誤量測，第 2 次在 os-net-errors、os-close 完成後。os-net-errors、os-close 排在 lan15 之前。
+35. **D75**：OS 子系統的 Linux 項目由本會話在這台 Mac 的 Docker（LinuxKit 虛擬機）跑，照 [linux-run.md](linux-run.md)。os-wait-backend 的 Linux L2 先跑 A/A，A/A 照 (a) 通過才用 (a) 判 A/B；計時量測在虛擬機裡，限界照實寫。（D74 由「對接 OS 子系統的 Windows 實機結果」會話記在交接。）
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -133,6 +134,7 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-close | medium | 未開始（D73：排在 lan15 之前） | allowlist 清空、文件同步、完整突變 |
 | os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 完成（2026-10-27；Red：run 40450140816；xhigh 審查已修正；Green：四平台 L1 run 40456874710；[dev_log](../../../dev_logs/2026_10_27_engine_os_utf8_codepage.zh-Hant.md)） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
 | os-windows-run（D73） | Windows 端照文件執行（建議 medium） | 第 1 次等 Windows 端執行（[windows-run.md](windows-run.md)，分支 `claude/os-windows-run`） | Windows 實機上不需要人操作的項目；第 2 次在 os-net-errors、os-close 之後 |
+| os-linux-run（D75） | medium；判讀照事前宣告 | 事前宣告完成，執行中（[linux-run.md](linux-run.md)） | Linux 的 L2、基準與專用突變（Docker） |
 
 ```text
 os-plan-docs ─┬─→ os-skeleton ─┐
