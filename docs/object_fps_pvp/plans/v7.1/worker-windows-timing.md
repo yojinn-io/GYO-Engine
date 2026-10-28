@@ -296,3 +296,18 @@
 - **判讀交給 v7.1 會話**（Windows 端不做）。宣告、門檻、測試、產品程式都沒有改。
 
 **證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-C-20261028/`，內含 `build.log`、`build-exit.txt`（建置的結束碼）、`commit.txt`、`build-commit.txt`、`msvc-version.txt`、`machine.txt`、`run1.log`～`run10.log`、`runs.txt`（`ctest_exit=` 是 ctest 的結束碼）。
+
+## C 的判讀與停止（2026-10-28，v7.1 會話）
+
+收支：一致（Windows 的紀錄：10 次都有結果，每次四個值都有）。判定照宣告是 3「產品的節奏」，我核對過表格，判定成立。依 AGENTS.md §14 開頭停下：原因的說明會改變計畫的前提（D216 原本假設是測試的問題，現在是產品的計時器），所以不修改，交給使用者決定。
+
+- **觀測側沒有問題**：10 次的 `mock_resends` 和 `client_sends` 都是 43，兩邊的間隔也幾乎相同（差 0.3 ms 以內）。mock 收到的就是 Client 送出的，Client 在 1 秒內只送了 43 次。
+- **間隔的分布符合 15.6 ms 的 tick**（讀程式碼與表格推得，沒有另外量）：
+  - Client 的網路執行緒等下一次重送（每 16.67 ms）時，先用 asio 計時器等到期限前 2 ms（`ClientConnection.cpp` 的 `CoarseWakeLead`），最後 2 ms 才交給 Waiter。
+  - 在沒有 SDL 的 Windows 程序裡，asio 計時器的 14.67 ms 等待會被進位到下一個約 15.6 ms 的 tick，實際醒來落在 14.67～30.3 ms 之間。醒得比 16.67 ms 早，Waiter 會等到 16.67 ms；醒得比它晚，就直接送。
+  - 所以間隔應落在 16.67～30.3 ms 之間。表格的最小值 16.27～16.96 ms、最大值 29.49～30.30 ms，和這個範圍一致；平均約 23 ms，1 秒約 43 次。
+- **出貨的 Client 會不會這樣（推論，沒有量）**：出貨的 Client 在同一個程序裡初始化 SDL。W4 量到有 SDL 時 `sleep_until` 的 P50 約 1.08 ms，表示 SDL 把程序的計時器解析度提高了。repo 裡沒有自己設定計時器解析度的程式，靠的是 SDL 的預設。如果這個推論成立，出貨的 Client 在 Windows 上照 60 Hz 重送；沒有 SDL 的程序（例如這個探針）則不會。
+- **還沒量的**：有 SDL 時，worker 的這條路徑實際的重送次數。
+- **範圍的限界**（之後的宣告照抄，直到解消）：
+  - Client 網路執行緒的 60 Hz 重送，在 Windows 上依賴程序的計時器解析度（靠 SDL 提高）。沒有 SDL 的程序只有約 43 Hz。
+  - `object_fps_pvp.worker` 在 Windows 上停在重送檢查，之後的檢查（包括 v7-08 的 `CheckActions`）在 Windows 上都沒有跑到。
