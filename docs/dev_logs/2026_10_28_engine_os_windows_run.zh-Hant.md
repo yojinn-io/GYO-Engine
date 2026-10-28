@@ -149,7 +149,82 @@ python <scratchpad>/run_script.py tests/common/time/wake_compare.py --a <證據�
 
 ## W4～W8
 
-未跑：W3 不通過，照規則停下回報使用者；使用者決定第 1 次停在這裡。
+W3 不通過後先停下；使用者之後決定把 W4～W8 跑完（2026-10-28）。W3 的判定不因此改變。
+
+## W4：os-wake-record 的 Windows 基準（只記錄）
+
+```
+python tests/common/time/wake_baseline.py --build-dir D:/code/Source/gyo-a-wait/build/target/_build/ci-windows --output <證據目錄>/wake-baseline
+```
+
+13:44～13:50，**exit 0**。程式是 A_wait 的建置（雜湊和 W2 的 A 相同）；`meta.txt` 的 source commit 是腳本所在的 B checkout（`4bc999e`，只差文件）。兩組的 Waiter 後端都是 `HighResolutionWaitableTimer`。
+
+60 Hz 絕對期限的晚醒（ms；各 30 秒）：
+
+| 情境 | 原語 | 樣本 | P50 | P99 | 最大 | >1 ms | >4 ms |
+|---|---|---|---|---|---|---|---|
+| cli | Waiter | 1800 | 0.617 | 1.000 | 1.068 | 19 | 0 |
+| cli | condition_variable | 1797 | 5.280 | 15.939 | 16.965 | 1774 | 1590 |
+| cli | sleep_until | 1782 | 15.630 | 16.655 | 16.893 | 1608 | 1504 |
+| window | Waiter | 1800 | 0.450 | 0.928 | 1.231 | 7 | 0 |
+| window | condition_variable | 1800 | 0.945 | 1.949 | 2.380 | 801 | 0 |
+| window | sleep_until | 1800 | 1.077 | 2.074 | 2.738 | 1024 | 0 |
+
+notify→wake（ms）：
+
+| 情境 | 原語 | 樣本 | P50 | P99 | 最大 | 跳過的週期 |
+|---|---|---|---|---|---|---|
+| cli | Waiter | 1799 | 0.0193 | 0.0925 | 0.3252 | 0 |
+| cli | condition_variable | 1740 | 0.0200 | 0.0796 | 0.1997 | 60 |
+| window | Waiter | 1800 | 0.0173 | 0.0526 | 0.1261 | 0 |
+| window | condition_variable | 1800 | 0.0184 | 0.0527 | 0.0885 | 0 |
+
+sleeper（ms）：cli 前 P50 0.641／P99 1.053／最大 5.73，cli 後 0.481／0.934／0.966；window 前 0.580／0.961／1.516，window 後 0.368／0.904／0.987。
+
+觀察（只記錄）：沒有視窗時，condition_variable 與 `sleep_until` 的晚醒以 15.6 ms 左右（系統預設計時器解析度）為主；有視窗時降到 1～2 ms（推測是 SDL 提高了計時器解析度，未確認）。Waiter 兩組都在 1 ms 左右。沒有視窗那組照 D68 由 OS 子系統的會話交給 v7.1 的 F5／F7。
+
+證據：`wake-baseline/`（`cli.json`、`window.json`、`sleeper-*.json`、`meta.txt`、`*.log`）。
+
+## W5：os-threads-backend 的 L2
+
+A_threads（`5733d361`）與 B 的建置樹，各跑兩次 ctest（串行，`-V`）。13:50～13:54。
+
+| 側 | `worker|ipc|close_timing` | `cpu` |
+|---|---|---|
+| A | exit 8（`worker` 失敗） | exit 0 |
+| B | exit 8（`worker` 失敗） | exit 0 |
+
+**判定：通過。** `A-roles.txt` 與 `B-roles.txt` 逐字相同（`cmp` 一致），四種角色：
+
+```
+role started version=1 role=gyo-client-net wait_backend=HighResolutionWaitableTimer name_applied=1 priority_applied=1
+role started version=1 role=gyo-match-ipc wait_backend=HighResolutionWaitableTimer name_applied=1 priority_applied=1
+role started version=1 role=gyo-match-sim wait_backend=HighResolutionWaitableTimer name_applied=1 priority_applied=1
+role started version=1 role=gyo-test-sim wait_backend=HighResolutionWaitableTimer name_applied=1 priority_applied=1
+```
+
+`object_fps_pvp.worker`：A_threads 與 B 都以同一句失敗（`worker acceptance: new window waited behind a fully acknowledged window's deadline`）；W1 的 B 也是同一句。**A_threads 是 os-threads-backend 與 os-wait-backend 之前的程式**，所以這個失敗不是這兩批造成的。是實作還是這台的時序，仍未切開（交 v7.1／OS 子系統的會話）。
+
+證據：`threads/`（`A-ctest-network.log`、`A-ctest-cpu.log`、B 同理、`A-roles.txt`、`B-roles.txt`、`exit.txt`）。
+
+## W6：os-net-errors 的 UDP 錯誤量測（只記錄）
+
+```
+python docs/architecture/plans/os-subsystem/scripts/udp_error_probe.py --output <證據目錄>/udp/udp-errors.json
+```
+
+13:54，**exit 0**。Python 3.13.3 的 socket 模組，loopback，關閉的埠 53566，等待 1 秒。
+
+| 情境 | 結果 |
+|---|---|
+| unconnected（未連線，`sendto` 到關閉的埠後 `recvfrom`） | 送出成功；接收得到 **`WSAECONNRESET`（10054，`ConnectionResetError`）** |
+| usable-after（出錯之後同一個 socket 和 echo 往返） | 送出、echo 收到、echo 回送、收到 4 bytes，**正常** |
+| repeated（連送 3 個再收） | 前 3 次接收各得到一次 `WSAECONNRESET`，第 4 次 1 秒內沒有東西：**每個被拒絕的 datagram 各報一次** |
+| connected（已連線的對照） | 接收得到 `WSAECONNRESET`；之後再送成功 |
+
+對照 macOS Intel（文件記載）：未連線時收不到任何東西，已連線時是 `ECONNREFUSED`。Windows 在**未連線**時也會報錯，這是兩者的差別。asio 對應到哪個 `asio::error` 不在這裡量。
+
+證據：`udp/udp-errors.json`、`udp/stdout.log`。
 
 ## 留在這台機器上的東西
 
