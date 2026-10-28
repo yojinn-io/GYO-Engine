@@ -43,7 +43,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 - v7.1 已完成批次的補寫由圖書管理員會話負責，規則也由它寫進 AGENTS.md。
 - sdl-isolation（PR #85）的 dev_log 由本會話撰寫，隨 PR #85 提交：`docs/dev_logs/2026_10_23_pvp_v71_sdl_isolation.zh-Hant.md`（`9e36d0b`）。L2 完成時補上第 7 節的結果。
 
-- **發行線（PR [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)，draft）**：windows-long-path 完成（P5-6 實機 2026-10-27 通過；p1 兩條在 MSVC killed；p4 在 manifest 下成為等價突變而退場，D212）；quick-close 完成（Windows 10 次通過）。剩下：worker 的 Windows 失敗（D216、D217；worker-10x 由使用者在 Windows 上跑，D220）、lan15（D208 延期；D219 起不再等 OS）、四平台 L1（run 40644602172）、PR #96 合併。發行線不再併入 OS 批次（D218、D219）。
+- **發行線（PR [#96](https://github.com/yojinn-io/GYO-Engine/pull/96)，draft）**：windows-long-path 完成（P5-6 實機 2026-10-27 通過；p1 兩條在 MSVC killed；p4 在 manifest 下成為等價突變而退場，D212）；quick-close 完成（Windows 10 次通過）。剩下：worker 的 Windows 失敗（D216、D217；worker-10x 由使用者在 Windows 上跑，D220）；B（mock 改用 Waiter）削弱了 `v7-08-submit-no-wake` 的檢出（D225 判定 2），B 的修法等使用者決定，C（`2e15d99b`）不推送、lan15（D208 延期；D219 起不再等 OS）、四平台 L1（run 40644602172）、PR #96 合併。發行線不再併入 OS 批次（D218、D219）。
 - **發行線的 quick-close**：D202 選 q1、門檻核准；D203 加 stalled ≤1 s 判定與 CTest `object_fps_pvp.close_timing`；macOS 驗收通過，Windows 與 D201 一起跑（指令在 [quick-close.md](quick-close.md)）。發行線一開始要在本機背景跑完整突變目錄（D185，4～6 h），這次沒有啟動：caffeinate 關著，Mac 可能中途睡眠。
 - INVENTORY 的 G2（「時鐘到網路路徑」系列紀錄）照 D159 先不做，不在待決之列。
 - **之後要做**：`lan15-windows`（含 outage-resync 的 L3，D179）延到本線全部、`client-silent-checks`、`rebind-on-new-port` 完成之後（D181；原定 2026-10-26 前後）。已知問題 K1～K10 的去處見 D181。v7.1 全部完成後發一次 release（使用者 2026-10-24；v7 的 `object_fps_pvp-v1.2.0` 已取消，D91 說下一次發行在 v7.1 之後）。 發行線一開始就在本機背景跑完整突變目錄（D185）。
@@ -220,7 +220,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D222 | （2026-10-28）核准 B 的 Windows 事前宣告（MSVC，發行線含 `f29001e0`，串行 10 次；判定互斥：確認不了／測試的原因（10 次全過）／還有問題做 C）。B 的突變 46／47 killed，`sb-c3-welcome-unparsed` 重跑 2 次 killed（環境）。使用者在 Windows 上跑，結果寫進 worker-windows-timing.md | 使用者：「核准 worker-windows-timing.md 中 B 的 Windows 事前宣告，突變跑完後推送，我在 Windows 上跑。」 |
 | D223 | （2026-10-28）B 的 Windows 10 次：收支不一致，判定照字面是「確認不了」（10 次都在 `:847` 失敗，值沒有印出；宣告沒有預想這種情況）。照程式順序，10 次都通過了原本失敗的 `:817`；新的失敗是 Client 1 秒內的重送次數不在 55～65，指向沒有 SDL 的程序裡產品的計時器（候選 3），未判定。等使用者決定 | Windows 端推送的結果（`be6cc896`） |
 | D224 | （2026-10-28）做 C：worker 的重送檢查失敗時印出 mock 與 Client（產品既有的 movement trace）的送出次數與間隔，門檻與產品程式不改；Windows 上 10 次的重新宣告（判定互斥：確認不了／全部通過／產品的節奏／觀測側／其他）是草案，等使用者核准 | 使用者：「做 C：先在重送檢查的訊息印出重送次數與間隔，並在 Client 端記錄實際送出的時刻，重新宣告後在 Windows 再跑。」 |
-| D225 | （2026-10-28）C 的突變裡 `v7-08-submit-no-wake` 存活，可能是 B 削弱了檢出（先停下，C 不推送）。核准事前宣告：A（B 之前，`e400f896`）與 B（`f29001e0`）的 worker 探針交錯各跑 20 次 v7-08，判定互斥（確認不了／B 削弱：kA≥18 且 kB≤14／沒有差別：差 ≤3／判定不了） | 使用者：「先量清楚：事前宣告次數與判定，在 B 之前與 B 之後各跑 v7-08 的突變，比較殺死率，再決定。」之後：「核准 worker-windows-timing.md 中 v7-08 比較的事前宣告（D225），開始跑。」 |
+| D225 | （2026-10-28）C 的突變裡 `v7-08-submit-no-wake` 存活，可能是 B 削弱了檢出（先停下，C 不推送）。核准事前宣告：A（B 之前，`e400f896`）與 B（`f29001e0`）的 worker 探針交錯各跑 20 次 v7-08，判定互斥（確認不了／B 削弱：kA≥18 且 kB≤14／沒有差別：差 ≤3／判定不了） | 使用者：「先量清楚：事前宣告次數與判定，在 B 之前與 B 之後各跑 v7-08 的突變，比較殺死率，再決定。」之後：「核准 worker-windows-timing.md 中 v7-08 比較的事前宣告（D225），開始跑。」結果（2026-10-28）：A killed 20／20，B killed 5／20（survived 14、wrong_failure 1），判定「B 削弱了檢出」 |
 
 ## 規劃紀錄（記錄器）
 

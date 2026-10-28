@@ -184,3 +184,15 @@
   4. 「判定不了」：以上都不成立。
 - **之後的處理（依判定，再交使用者決定）**：2 → B 的改法要修（例如這個檢查期間的 mock 輪詢方式，或讓檢查不依賴偶然的喚醒），C 跟著重做突變；3 → 這條突變的檢出本來就不穩，另外記錄，C 照常；1、4 → 交使用者。
 - **範圍的限界**：只在 macOS（Intel）；同一台 Mac 上其他會話的活動不受控；20 次只能分辨相當大的差別。
+
+### 結果（2026-10-28，本機 macOS Intel）
+
+收支：40 次全部有結果。A 20 次：killed 20；B 20 次：killed 5、survived 14、其他 1（第 1 輪的 wrong_failure）。
+
+- **判定：「B 削弱了檢出」**（判定 2：kA＝20 ≥ 18 且 kB＝5 ≤ 14；判定 1 不成立：「其他」A 0 次、B 1 次）。
+- 每輪（ABAB 交錯）：A 每輪都 killed。B 在第 2、3、13、15、20 輪 killed，第 1 輪 wrong_failure，其他 14 輪 survived。存活沒有集中在某一段時間。
+- load average（1 分鐘）在 1.68～3.52 之間；A 與 B 的範圍重疊（A 1.75～3.52，B 1.68～2.55），load 高的輪次 A 也全部 killed。負載不能解釋這個差別。
+- B 的 wrong_failure 的失敗訊息沒有留下：跑法只記錄 runner 的結果行，沒有存 log。這是跑法的缺口，記錄下來，不補跑。
+- 證據：本機 `scratchpad/v708/results.txt`（git 忽略，會話的 scratchpad）、`scratchpad/v708/run.sh`。跑完後兩個檔已還原到發行線的版本（`git status` 乾淨）。
+- 機制還沒有確認。檢查（`worker_main.cpp` 的「an eligible action waited for an unrelated wake」）只要求 SubmitShot 後 40 ms 內 mock 收到這個 action。拿掉喚醒後仍能在 40 ms 內送出，表示有別的事件喚醒了網路執行緒。B 讓 mock 的輪詢方式改變，可能改變了 mock 回應 Client 的時機，產生了這樣的「無關的喚醒」。這只是假設，沒有量。
+- 依宣告的「之後的處理」：B 的改法要修，C 跟著重做突變。修法交使用者決定。
