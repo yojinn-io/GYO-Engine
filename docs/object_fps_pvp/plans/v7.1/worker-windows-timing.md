@@ -78,7 +78,7 @@
 - 「判定不了」（全部通過，或失敗不足 2 次）：不成立（失敗 10 次）。
 - 套用時看到的事（不是判定，判讀交給 v7.1 會話）：
   - 這三類的文字沒有互斥。第 1、2、4 次各有一個值落在 ±2 ms 內（`restart_ms`），另一個不在（`completed_window_gap_ms`）。上面是照字面套用的結果。
-  - 不在 ±2 ms 內的 4 個值都偏大，超出的部分是 +2.4～+2.7 ms，都落在 +3 ms 以內。
+  - 不在 ±2 ms 內的 4 個值，離最近倍數的差都是正的（+2.367～+2.654 ms）。
   - 第 6 次的 `restart_ms` 是 1.7309，是 10 次中唯一低於門檻的值。
 
 **證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-10x-20261028/`，內含 `build.log`、`build-exit.txt`、`msvc-version.txt`、`run1.log`～`run10.log`、`runs.txt`。`runs.txt` 裡的 `exit=` 欄是 Windows 端記錄指令的錯誤（取到的是 `date` 的結束碼，不是 ctest 的），不要用；每次的通過與否以 `run<n>.log` 的 ctest 摘要為準（10 份都是 `0% tests passed, 1 tests failed out of 1`）。
