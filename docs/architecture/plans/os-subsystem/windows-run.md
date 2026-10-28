@@ -1,7 +1,7 @@
 # OS 子系統：Windows 自動項目的執行（os-windows-run）
 
 建立：2026-10-28。決定：D73、D74、D76（[交接](HANDOFF.md)的決策紀錄）。分支：`claude/os-windows-run`。
-**狀態：第 1 次停在 W3（不通過，紀錄保留）；「第 1 次續跑」等 Windows 端執行（D74、D76）。**
+**狀態：第 1 次結案（D78）。** W0～W7 跑完：W3 不通過（紀錄保留），W5 通過，W7 12／12 killed，W4、W6 只記錄。「第 1 次續跑」、W8 與第 2 次取消（D78：os-wait-backend 凍結、os-net-errors 與 os-close 不做）。結果見 [dev_log](../../../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)。
 
 ## 這份文件是什麼
 

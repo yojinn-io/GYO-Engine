@@ -34,10 +34,11 @@ primitives here.
 | Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the calling thread (`SetCurrentName`, `SetCurrentPriority`) | os-threads-backend (landed) |
-| Wait | The wake primitive behind `Time::Waiter` | os-wait-backend |
-| Net (conditional) | Neutral classification of socket error codes | os-net-errors |
+| Wait | The wake primitive behind `Time::Waiter` | os-wait-backend: frozen (its Windows timing L2 failed; withdrawn, D78). The wait backends stay in engine/time's `Waiter.cpp`, an allowlisted site |
+| Net (conditional) | Neutral classification of socket error codes | os-net-errors: not started (no observed pressure, D78); the classification stays with the product |
 
-Only the components whose batch has landed exist; the others are planned in the os-subsystem plan.
+Only the components whose batch has landed exist. A frozen or not-started component comes back only with observed
+pressure or a Feature that needs it (Replacement Criterion 9).
 
 ## Contracts
 
@@ -394,3 +395,9 @@ Known blind spots, left to review:
    UAC level, `longPathAware`) or a code page other than UTF-8: stop editing engine/os's manifest for it; decide how
    an owner declares manifest parts and how they merge (MSVC merges `.manifest` sources, a `.rc` holds one
    resource), or move the manifest out of engine/os.
+9. (os-closeout, D78) engine/os stays the only place for OS differences, and grows only with observed pressure
+   (AGENTS.md §2: observed pressure, not predicted pressure). A batch that moves a site into engine/os is accepted
+   by CI L1 and the guards alone. If it needs a real-machine L2 or L3, a ★ declaration or a changed test verdict
+   (AGENTS.md §14.4) to be accepted, it is not a pure move: stop, keep the move behaviour-preserving, and hand the
+   behaviour change to the product version whose Feature needs it. A component or batch that no observed pressure
+   and no Feature needs is not started; OS code outside engine/os moves in only when pressure is observed there.

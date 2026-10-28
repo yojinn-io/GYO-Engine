@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-27。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-28。**狀態：收口（D78）。** 長路徑那一片（A1～A3）與已併入消費端發行線的 10 批留下；只在本分支的 os-wake-record、os-threads-backend 留下，等消費端發行後併 master（os-land-master）；os-wait-backend 凍結並從本分支撤出（os-freeze-wait）；os-net-errors 不開始、os-close 取消；os-windows-run 第 1 次結案，續跑、第 2 次與 os-linux-run 取消。盤點與理由見 [closeout.md](closeout.md)。以下為 2026-10-27 之前的狀態行，保留作紀錄：**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -63,6 +63,23 @@
 - 2026-10-28：D75。Linux 項目改在這台 Mac 的 Docker 跑，事前宣告寫在 [linux-run.md](linux-run.md)，先提交（`5edc5b23`）再開始。
   - D77：X0（建置）進行中、還沒有任何結果時修訂：拿掉在 Docker 裡跑 B 完整 ctest 的那一步（和 CI 的 linux-x64 L1 重複），步驟代號改成 X0～X6。
   - D75、D77 的編號已告知「對接 OS 子系統的 Windows 實機結果」會話（D76 是它記的）。
+- 2026-10-28：D218（消費端）：使用者依原意「OS 相容層」重新定界；「規劃 Engine 的 OS 統一子系統」會話停止，「對接 OS 子系統的 Windows 實機結果」會話封存。新任務卡「盤點 OS 子系統並收口到支撐遊戲運行」做盤點與收口（[closeout.md](closeout.md)）。
+  - 盤點時更正的前提：os-windows-run 第 1 次的 W4～W7 已跑完（`844e92b1`、`7306a142`）；Linux 的 Docker 量測已不在執行（容器 `gyo-linux-run` 不存在），沒有任何結果；消費端發行線的整合樹自 `4a4a0ef7`（run 40348670097）起沒有四平台 L1。
+- 2026-10-28：D78，使用者核准收口提案（決定 1～4 都選 (a)，不做對抗式檢查）。
+  - 本分支併入 `claude/os-windows-run`（`3ab8f09c`），在決策紀錄裡 D75、D76、D77 依編號並列。
+  - os-freeze-wait：os-wait-backend 撤出。程式、測試、突變目錄與條文從 `4ffc7c65` 逐檔取回；`WakeSignal.hpp`、`WakeSignal.cpp`、`WakeSignalTests.cpp`、`wake_compare.py` 刪除（要用時從 `4041cf42`、`756073aa`、`beb14cf7` 取回）。`docs/architecture.md` 的 GYO::Os 一列保留 os-threads-backend 的「thread names and priority hints」。突變目錄少了 ow-x1～ow-x10。
+  - os-closeout-docs：README、PLAN、windows-run.md、linux-run.md 標上收口後的狀態；os.md 的部件表標 Wait 凍結、Net 不開始，加 Replacement Criterion 9（今後的規則）；time.md 開頭改寫成「os-wait-backend 凍結」。dev_log 是 `2026_10_28_engine_os_closeout`。
+  - 盤點更正（執行中發現）：os-console-shutdown 的主控台實機檢查已在 10-27 的 D201 做過（conhost 的 Ctrl+C、關閉視窗通過），closeout.md 原本寫成「L3 未做」，已更正。
+  - os-handoff-v71 提前、改成雙向（使用者：「先把 os-handoff-v71 提前，改成雙向：訊息內容先給我看，等 v7.1 回覆後再問我推送。」）。2026-10-28 送出：發行線不再併 OS 批次（消費端現況的「OS 子系統的 3 批」可拿掉）、lan15 的前提（D209、D215）解除、worker-10x 沒有執行者、整合樹自 `4a4a0ef7` 起沒有四平台 L1、W4 與 W6 的產品線索，以及 5 個問題（發行前還要 OS 做什麼、worker-10x 由誰跑、4 批 ★ 對發行的顧慮、PR #96 前的 L1、其他影響）。
+  - 消費端回覆（消費端 D219，發行線 `6b448c16`）：
+    - Q1：發行前不需要 OS 這邊做任何事。
+    - Q2：worker-10x 屬於消費端的產品測試，由消費端向使用者安排，OS 這邊不做。
+    - Q3：4 批 ★ 會寫進 PR #96 的說明與發行說明，標成「已出貨、未經功能驗收」，由消費端向使用者提出。本會話回覆了每批一句的行為摘要，含已知限界：再按一次 Ctrl+C 的 0 B log、UNC 啟動未經實機驗證、os-tool-files 只影響編輯器、1903 以前的 Windows 與 MinGW。
+    - Q4：PR #96 合併前的四平台 L1 由消費端派發（run 40644602172，`d7ecf047`），合併前會在最新的 commit 上再確認。
+    - Q5：K9／W6 的握手期 WSAECONNRESET 列進 lan15 的 L3 觀察，不改程式；「OS 的 ★ 批次未經功能驗收」會加進 lan15 宣告的範圍限界。
+  - 消費端在 `claude/os-windows-run` 推了 `035ff14b`（消費端 D220）：windows-run.md 寫明照 D78 只跑 worker-10x，結果寫在發行線的 `worker-windows-timing.md`。和 D78 一致；本分支在收口文件之後併入。之後那條分支若再有 commit，os-land-master 前再併一次。
+  - 本機驗證：core 34／34、test preset 92／92、相關突變 9／9 killed（dev_log）。
+  - 下一步：問使用者推送本分支並派發四平台 L1；消費端發行後 os-land-master。
 
 ## 閱讀入口
 
@@ -96,6 +113,11 @@
 | os-utf8-codepage | （提案，D64）每個 Windows 執行檔以 manifest 把程序的 code page 定為 UTF-8 |
 | os-windows-run | Windows 機器上的 Claude 跑不需要人操作的實機項目（D73，分兩次） |
 | os-linux-run | 本會話在這台 Mac 的 Docker 跑 Linux 項目（D75） |
+| os-closeout | 盤點並收口到「支撐遊戲運行」（D78，[closeout.md](closeout.md)） |
+| os-freeze-wait | 從本分支撤出 os-wait-backend，回到 os-threads-backend 定案時（`4ffc7c65`）的狀態 |
+| os-closeout-docs | 把計畫文件改成收口後的狀態，寫下今後的規則 |
+| os-handoff-v71 | 把收口的結果與產品線索通知消費端的會話 |
+| os-land-master | 消費端發行後，本分支以一條 PR 併 master（os-wake-record、os-threads-backend、收口文件） |
 
 ## 決策紀錄
 
@@ -141,6 +163,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-28 | D75：OS 子系統的 Linux 項目由本會話在這台 Mac 的 Docker（LinuxKit 虛擬機）跑，照 [linux-run.md](linux-run.md)。<br>os-wait-backend 的 Linux L2（cli）先跑 A/A：A/A 照 (a) 全部通過，才用 (a) 判 A/B；A/A 不通過，A/B 只記錄並回報。<br>映像照 CI 的 Linux 套件清單另建（`scripts/linux-run.Dockerfile`）。<br>同意下載映像與套件；跑的期間用 `caffeinate -i`；ow-x1 存活時停下回報，這次不補測試。<br>計時量測在虛擬機裡，限界寫進宣告與結果 | 使用者先說「這個我可以提供docker容器。還是說WSL2的效果更好？」「本機就有Docker」，之後對三個問題選：「先 A/A，過了才判 A/B」「照 CI 的清單另建」「寫完 linux-run.md 就開始」 |
 | 2026-10-28 | D76：「實機只做 CI 做不到的事」套用到 os-windows-run 的「第 1 次續跑」。<br>windows-run.md 的續跑表，每一項都寫出 CI 做不到的理由。<br>說不出理由的拿掉，取代 D74 的「裝一般的 Python、W1 在 vcvars64 裡重跑」：<br>- W1b（重跑完整 ctest）：重複 CI 的 windows-x64 L1。<br>- W1-ctrlc：`os.console_ctrl_c` 標 cpu，CI 每次都通過。<br>- W0b（裝 Python、B 重新 configure）：只是為了 W1b。剩下的腳本照第 1 次的方式，用啟動器跑。<br>第 1 次 W1 的結果只當參考：30 項環境類失敗（embedded Python、`rc` 不在 PATH）不是產品或 Engine 的缺陷；`os.console_ctrl_c` 的失敗記為會話的執行環境所致。<br>`object_fps_pvp.worker` 在任何平台的 CI 都不跑（test preset 只跑 `cpu\|shader`，D204），沒有 CI 紀錄可對照。所以 worker-10x 留在實機清單；要不要改由 CI 跑，由 v7.1 會話與使用者決定。<br>續跑剩 6 項：W3-samples、W3-dll、host-state、W3-aa、worker-10x（有核准才跑）、W8（還沒跑時）。W4～W7 已在第 1 次跑完（`844e92b1`、`7306a142`）。<br>由「對接 OS 子系統的 Windows 實機結果」會話整理與記錄；修改前已告知本會話 | 使用者的原則（2026-10-28，經架構健檢會話轉達）：「Windows 與 Linux 實機只處理 CI 無法處理或不好觀測的任務，驗收的主要標準是 CI。」 |
 | 2026-10-28 | D77：linux-run 拿掉「在 Docker 裡跑 B 的完整 ctest」那一步：和 CI 的 linux-x64 L1 重複（原則：實機只做 CI 做不到或不好觀測的事，驗收以 CI 為主）。CI 的 linux-x64 L1 照常跑，不受影響。步驟代號由 L0～L6 改成 X0～X6，避免和驗收層級 L1／L2／L3 混淆。修訂時只有 X0（建置）在跑，還沒有任何結果 | 使用者先說「拿掉 linux-run 的 L1，理由是與 CI 的 linux-x64 L1 重複；在 linux-run.md 與 HANDOFF 記下。」中途問「等等，是未來Linux 不跑L1了？」，說明那是步驟代號後：「拿掉 linux-run 裡重複 CI 的完整 ctest 那一步，步驟代號改成 X0～X6；在 linux-run.md 與 HANDOFF 記下。」原則本身由「對接 OS 子系統的 Windows 實機結果」會話轉達（來源是架構健檢會話；Windows 端的套用是 D76） |
+| 2026-10-28 | D78：OS 子系統收口（[closeout.md](closeout.md)）。<br>決定 1 (a)：已在消費端發行線、沒有功能支撐的 ★ 4 批（os-console-shutdown、io-native-paths、os-tool-files、os-utf8-codepage）全部留下，標成「已出貨、未經功能驗收」，本線不再為它們安排 L2／L3。<br>決定 2 (a)：os-wait-backend 凍結，從本分支撤出（回到 `4ffc7c65` 的程式與條文：time.md Invariant 8、10 與 os.md Invariant 6 的例外撤回，取代 D72；D74 的 (B) 與續跑的 W3-* 取消）。<br>決定 3 (a)：os-wake-record、os-threads-backend 留在本分支，消費端發行後以一條 PR 併 master，驗收用 CI 加守衛；os-threads-backend 的 Linux L2（D69）與 Linux、arm64 的晚醒基準取消。<br>決定 4 (a)：今後的規則寫進本計畫 README 的「執行規則」與 os.md 的 Replacement Criterion 9。<br>連帶：os-net-errors 不開始、os-close 取消（改成 os-closeout），os-windows-run 的第 2 次與 os-linux-run 取消；掛在已併入批次上、還沒做的 L3（os-process-info、os-files-write）從本線撤掉；os-console-shutdown 的主控台檢查（D51、D206）已在 10-27 的 D201 做過（conhost 的 Ctrl+C、關閉視窗通過）。不做對抗式檢查 | 使用者：「核准：決定 1 選 (a)、決定 2 選 (a)、決定 3 選 (a)、決定 4 選 (a)，不做對抗式檢查。開始 os-freeze-wait 與 os-closeout-docs，推送前先問我。」 |
 
 ## 消費端的壓力摘要
 
@@ -759,6 +782,8 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - **os-wait-backend 的四平台 L1：第 2 次通過**；第 1 次的失敗歸因於 `platform_sdl_concurrency`（不經過本批的程式碼），記錄不覆寫。
   - 更正：重跑中途用 API 查到 job 還在跑、run 卻已標成成功，一度以為 CI gate 在必要的 job 結束前就判了成功；之後的時間戳記顯示順序正確（toolchain 14:06:35、CI validation 14:06:43、CI gate 14:06:54），是 API 回了還沒更新的狀態。CI 沒有問題。
 - 2026-10-27：定案（D72）：time.md Invariant 8、10，os.md Invariant 6 的例外，★ 錯誤細節，都照草稿。
+- 2026-10-28：Windows 的 L2（os-windows-run 的 W3）不通過：window deadline P50 超出上限 0.0032 ms，其餘 11 項通過（D74）。
+- 2026-10-28：**凍結，從本分支撤出（D78，os-freeze-wait）。** 沒有功能支撐，D218 之下也不排實機量測。撿回時從 `4041cf42`、`756073aa`（程式）與 `7e6592d1`、`6316d657`（條文）開始，並在 Windows 另行宣告判定（[closeout.md](closeout.md) 的 M-wait-win）。
 
 ### os-threads-backend
 
@@ -893,6 +918,8 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 
 ## 下一次實機的清單（Windows／Linux）
 
+**2026-10-28（D78）：取消。** os-windows-run 第 1 次的結果已合併；續跑、第 2 次與 os-linux-run 都不排。以下只當紀錄保留，項目不再追蹤。
+
 D62：計時核心之前的 4 批做完後，在實機上一次補齊。2026-10-27 整理；項目來自各批的紀錄，完成時在各批的紀錄裡補結果，並從這裡刪掉。
 
 2026-10-28（D73）：Windows 的部分改照 [windows-run.md](windows-run.md) 由 Windows 端執行（os-w10、os-g18 的測試缺漏已由 os-utf8-codepage 補上，一起跑；os-c4 仍等開放決策 26）。結果合併後從這裡刪掉。Linux 的部分不變。
@@ -919,6 +946,12 @@ D62：計時核心之前的 4 批做完後，在實機上一次補齊。2026-10-
 - 範圍的限界（PR #98 之後的宣告要寫進去）：macOS arm64 沒有實機；Windows 不初始化 SDL 的程序的計時精度，在這次之前從未量過。
 
 ## 未結事項
+
+- 收口（D78）之後：
+  - 推送本分支並派發四平台 L1（os-freeze-wait 的驗收）。
+  - os-handoff-v71：通知消費端的會話（[closeout.md](closeout.md) 第 6 節的五點）。
+  - os-land-master：消費端發行後，本分支以一條 PR 併 master；PR 前在背景完整跑一次相關突變（消費端 D184 的作法）。名稱有 L1 的讀回測試；優先度要不要補讀回測試，在那條 PR 決定。
+  - 以下各項裡，等實機、lan15 或 Windows／Linux 專用突變的條目，D78 之後本線不再排；需要時由有功能的產品版本另排。
 
 - os-utf8-codepage 留下的（2026-10-27）：
   - ~~p4-manifest-ansi-path 仍在本計畫的突變目錄，在 manifest 之下會存活。~~ 2026-10-27 消費端選擇退場（消費端 D212，`0f090aa1`）。
