@@ -190,6 +190,8 @@ public:
     std::vector<Attempt> attempts;
     std::vector<ActionAttempt> actionAttempts;
     std::vector<PacketAttempt> packets;
+    // Observation only (v7.1 D226): every datagram this mock sent, for the wake timeline.
+    std::vector<PacketAttempt> sent;
     // The join route answers every join with this status and body until Accept().
     void Refuse(int status,Json body){std::scoped_lock lock(refusalMutex);refusal.emplace(status,std::move(body));}
     void Accept(){std::scoped_lock lock(refusalMutex);refusal.reset();}
@@ -224,7 +226,10 @@ private:
     std::mutex stallMutex;
     std::condition_variable stallReleased;
     bool released{};
-    void Send(wire::Type type,const std::string& payload){const auto bytes=wire::Encode({type,1,++sequence,payload});socket.send_to(asio::buffer(bytes),peer);}
+    void Send(wire::Type type,const std::string& payload) {
+        const auto bytes=wire::Encode({type,1,++sequence,payload});socket.send_to(asio::buffer(bytes),peer);
+        sent.push_back({Clock::now(),type,bytes.size(),sequence});
+    }
     asio::io_context io;
     udp::socket socket;
     udp::endpoint peer;
@@ -235,6 +240,23 @@ private:
     std::mutex refusalMutex;
     std::optional<std::pair<int,Json>> refusal;
 };
+// Observation only (v7.1 D226): the mock's datagrams from 20 ms before SubmitShot
+// to the action's arrival, in ms relative to SubmitShot ("in" = Client to mock).
+std::string WakeTimeline(const MockGateway& gateway,Clock::time_point submittedAt,Clock::time_point actionAt) {
+    static constexpr std::array<const char*,8> Names{"?","Hello","Welcome","Input","Snapshot","Error","Actions","ActionResults"};
+    const auto name=[](wire::Type type){const auto n=static_cast<std::size_t>(type);return n<Names.size()?Names[n]:"?";};
+    const auto ms=[&](Clock::time_point at){std::ostringstream out;out.setf(std::ios::fixed);out.precision(2);
+        out<<std::chrono::duration<double,std::milli>(at-submittedAt).count();return out.str();};
+    std::vector<std::pair<Clock::time_point,std::string>> events;
+    for(const auto& packet:gateway.packets)
+        if(packet.at>=submittedAt-20ms && packet.at<=actionAt)events.emplace_back(packet.at,std::string("in:")+name(packet.type));
+    for(const auto& packet:gateway.sent)
+        if(packet.at>=submittedAt-20ms && packet.at<=actionAt)events.emplace_back(packet.at,std::string("out:")+name(packet.type));
+    std::sort(events.begin(),events.end(),[](const auto& a,const auto& b){return a.first<b.first;});
+    std::string line="v7-08 wake timeline: action_ms="+ms(actionAt)+" events=";
+    for(const auto& [at,label]:events)line+=label+"@"+ms(at)+" ";
+    return line;
+}
 // The rhythm of the resend second, for its failure message (v7.1 D224):
 // "mock_resends=N mock_gap_ms=min/median/max client_sends=N client_gap_ms=min/median/max".
 std::string ResendRhythm(const std::vector<Clock::time_point>& mock,const std::vector<std::int64_t>& clientNs) {
@@ -732,6 +754,7 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     gateway.Until([&]{return !gateway.actionAttempts.back().actions.shots().empty() && gateway.actionAttempts.back().actions.shots(0).action_id()==33;});
     // D36: a lone action leaves at SubmitAction once eligible (at most one
     // ActionSendRate interval after the previous batch), not at a later wake.
+    std::cerr<<WakeTimeline(gateway,submittedAt,gateway.actionAttempts.back().at)<<'\n';
     Require(gateway.actionAttempts.back().at-submittedAt<40ms,"an eligible action waited for an unrelated wake");
     gateway.Results({33},32);gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
     Require(connection.Drain().decisions.size()==1,"new action failed after clearing loss");

@@ -196,3 +196,20 @@
 - 證據：本機 `scratchpad/v708/results.txt`（git 忽略，會話的 scratchpad）、`scratchpad/v708/run.sh`。跑完後兩個檔已還原到發行線的版本（`git status` 乾淨）。
 - 機制還沒有確認。檢查（`worker_main.cpp` 的「an eligible action waited for an unrelated wake」）只要求 SubmitShot 後 40 ms 內 mock 收到這個 action。拿掉喚醒後仍能在 40 ms 內送出，表示有別的事件喚醒了網路執行緒。B 讓 mock 的輪詢方式改變，可能改變了 mock 回應 Client 的時機，產生了這樣的「無關的喚醒」。這只是假設，沒有量。
 - 依宣告的「之後的處理」：B 的改法要修，C 跟著重做突變。修法交使用者決定。
+
+## v7-08 的喚醒機制（D226，觀測，2026-10-28）
+
+使用者：「先量機制：在 B 的版本記錄 SubmitShot 前後是什麼喚醒了網路執行緒，只加觀測，不修。」這是探索用的觀測，不是受入判定，沒有事前宣告門檻。
+
+收支：50 次全部有結果，每次都印出了時間線。A 突變 20 次（killed 18、survived 2），B 突變 20 次（killed 6、survived 14），A、B 原版各 5 次（全部通過）。
+
+- **觀測方法**：只改 worker 探針。mock 記錄自己送出的每個封包（`sent`），並在 v7-08 的檢查前印一行時間線：SubmitShot 前 20 ms 到 action 到達之間，mock 收到（in）與送出（out）的封包，時刻以 SubmitShot 為 0（ms）。產品程式不改。A（`e400f896`）與 B（`f29001e0`）的探針加上相同的觀測，各建原版與突變版（`v7-08-submit-no-wake` 的替換），四個執行檔交錯跑。
+- **結果（每次突變的時間線）**：
+  - 被殺的 24 次：Hello 在 SubmitShot **之前** 0.2～3.1 ms 到達，mock 立刻回 Welcome 與 Snapshot。之後網路執行緒沒有其他喚醒，action 要等到下一次 Hello（約 245～249 ms 後）才送出。
+  - 存活的 16 次：14 次是 Hello 在 SubmitShot **之後** 0.2～2.0 ms 到達（Client 送 Hello 的那一輪把 action 一起送出），或 Hello 在 0 ms 附近、而 mock 的回覆在 SubmitShot 之後才到（A 第 10 次，回覆喚醒的那一輪送出 action）；2 次（B 第 5、9 次）在 action 之前 mock 沒有收發任何封包，action 在 0.27 ms 與 1.06 ms 送出，是 mock 看不到的喚醒（計時器）。
+  - 原版：action 在 0.12～1.15 ms 送出（SubmitShot 自己的喚醒）。
+- **機制**：「無關的喚醒」是 Client 自己每 250 ms 的 Hello（`ClientConnection.cpp` 的 `HelloInterval`），包括送 Hello 的那一輪，以及 mock 回覆抵達時的那一輪。這一步的測試流程讓 SubmitShot 落在某次 Hello 的前後約 3 ms 之內（50 次中 48 次）。突變能不能被殺，取決於 SubmitShot 在那次 Hello 之前還是之後，差距不到 1 ms。
+- **A 與 B 的差別**：A 的 Hello 大多落在 SubmitShot 之前（突變 20 次中 18 次），B 大多落在之後。B 讓測試流程的時間線和 Client 的 Hello 計時器之間的相位錯開了大約 1～2 ms。相位為什麼會錯開，沒有量；我的假設是 mock 的等待方式改變了每次 `UntilTime` 超過期限的量。
+- **意義**：A 的檢出也是靠相位碰巧（這次 A 也存活了 2 次；D225 的 A 是 20／20）。這項檢查的 40 ms 判定本身沒有問題，問題在於 SubmitShot 的時刻沒有避開 Client 的 Hello。B 沒有改產品，只是讓這個弱點浮上來。
+- **旁註（沒有處理）**：同一段的 ACK 檢查（「an advanced ACK waited for an unrelated wake」）註解寫「next Hello, up to a second away」，但 `HelloInterval` 是 250 ms。這項檢查可能也有同樣的相位問題，沒有量。
+- 證據：本機 `scratchpad/v708/obs/`（git 忽略，會話的 scratchpad）的 `results.txt`、`logs/`（每次的完整輸出）、`run.sh`、`worker_A_obs.cpp`、`worker_B_obs.cpp`。發行線的探針保留這行時間線（只輸出到 stderr，不影響判定）。
