@@ -91,7 +91,8 @@
 
 - **改法**：worker 探針的 mock 在兩處輪詢之間的 `std::this_thread::sleep_for(100us)` 改成 Engine 的 `Time::Waiter::WaitUntil(Now()+100us)`（`MockGateway::Pause`）。Waiter 在 Windows 用高解析度的 waitable timer，不受程序的計時器解析度影響（W4：沒有 SDL 時 P50 0.617 ms）。門檻、斷言、Client 的程式都不改。
 - **macOS（Intel）本機**：改後連跑 5 次通過，`restart_ms` 0.12～0.13、`completed_window_gap_ms` 0.25～0.30（改前 0.15～0.20、0.34～0.41）。
-- **Windows 的事前宣告（草案，等使用者核准）**：
+- **突變（D184：殺它的測試檔被改動，worker 為檢查的 47 個）**：46／47 killed；`sb-c3-welcome-unparsed` 第一次是 wrong_failure（worker 失敗在「unacknowledged window was not resent at approximately 60 Hz」），單獨重跑 2 次都 killed，歸為環境（同一台 Mac 上另一個會話同時在工作）。
+- **Windows 的事前宣告（2026-10-28 核准，D222）**：使用者：「核准 worker-windows-timing.md 中 B 的 Windows 事前宣告，突變跑完後推送，我在 Windows 上跑。」以下內容核准後不改，跑完不放寬（AGENTS.md §14.1）。
   - 建置：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`），發行線含 B 的 commit。
   - 跑法：`ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行 10 次，不重跑、不中途改，期間不做其他吃重的工作。每次記錄通過或失敗、`restart_ms`、`completed_window_gap_ms`、失敗訊息。
   - 收支：每一次都要有通過或失敗的結果與兩個值；沒有值的計入「確認不了」。
