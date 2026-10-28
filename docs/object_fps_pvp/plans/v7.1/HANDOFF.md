@@ -218,6 +218,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D220 | （2026-10-28）worker-10x（D217 的宣告）由使用者在 Windows 機器上開 Claude Code，照 worker-windows-timing.md 跑；結果寫進該文件的「第 3 步的結果」一節並推送到發行線。lan15 的日期之後再定 | 使用者：「worker-10x 由我在 Windows 機器上開 Claude Code 照 worker-windows-timing.md 跑；lan15 的日期之後再定。」 |
 | D221 | （2026-10-28）worker-10x：收支一致，10 次全失敗，照字面分類是「不是 tick」（宣告的分類不互斥，是寫宣告時的疏失，照字面記錄）。重新檢視前提後，使用者選先做 B：mock 的輪詢改用 Engine 的 Waiter，再在 Windows 跑 10 次（宣告草案在 worker-windows-timing.md，判定互斥）；還有問題就做 C（在 Client 端記錄實際送出的時刻） | 使用者：「重新檢視前提：worker 在 Windows 的時間判定要不要算進 v7.1 的發行條件，整理取捨給我。」看過取捨後：「先做B，還有問題做C」 |
 | D222 | （2026-10-28）核准 B 的 Windows 事前宣告（MSVC，發行線含 `f29001e0`，串行 10 次；判定互斥：確認不了／測試的原因（10 次全過）／還有問題做 C）。B 的突變 46／47 killed，`sb-c3-welcome-unparsed` 重跑 2 次 killed（環境）。使用者在 Windows 上跑，結果寫進 worker-windows-timing.md | 使用者：「核准 worker-windows-timing.md 中 B 的 Windows 事前宣告，突變跑完後推送，我在 Windows 上跑。」 |
+| D223 | （2026-10-28）B 的 Windows 10 次：收支不一致，判定照字面是「確認不了」（10 次都在 `:847` 失敗，值沒有印出；宣告沒有預想這種情況）。照程式順序，10 次都通過了原本失敗的 `:817`；新的失敗是 Client 1 秒內的重送次數不在 55～65，指向沒有 SDL 的程序裡產品的計時器（候選 3），未判定。等使用者決定 | Windows 端推送的結果（`be6cc896`） |
 
 ## 規劃紀錄（記錄器）
 

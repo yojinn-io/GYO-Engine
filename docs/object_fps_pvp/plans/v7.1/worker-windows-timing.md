@@ -136,3 +136,12 @@
 **判讀交給 v7.1 會話**（Windows 端不做）。宣告、門檻、測試、產品程式都沒有改。
 
 **證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-B-20261028/`，內含 `build.log`、`build-exit.txt`、`build-commit.txt`、`msvc-version.txt`、`run1.log`～`run10.log`、`runs.txt`（這次的 `ctest_exit=` 是 ctest 的結束碼）、`attempt1-wrong-dir/`。
+
+## B 的判讀與停止（2026-10-28，v7.1 會話）
+
+收支：不一致（依宣告，判定是「確認不了」）。照 AGENTS.md §14 開頭，不定結論，等使用者決定。
+
+- 宣告的判定照字面是「確認不了」：10 次都沒有兩個值。原因是值只在 `:817` 失敗的訊息與最後的 JSON 裡印出，而 10 次都在更後面的 `:847` 失敗。宣告沒有預想到「通過 `:817`、失敗在後面的斷言」這種情況，這是寫宣告時的缺漏。
+- 照程式的順序（`Require` 失敗就結束），10 次都已通過 `:817`（`restartMs<10 && completedWindowGapMs<14`）。這表示第 3 步的失敗在 mock 改用 Waiter 後不再出現，和「mock 的時間戳粒度」的讀法一致（讀程式碼，未另外驗證）。
+- 新的失敗是 `:847`：Client 在 1 秒內重送未確認窗口的次數不在 55～65（60 Hz）。這一項在 Windows 上之前從來沒有跑到過。重送的節奏由 Client 的網路執行緒決定：遠的期限用 asio 計時器，最後 2 ms 才交給 Waiter。在沒有 SDL 的 Windows 程序裡，asio 計時器可能受約 15.6 ms 的 tick 影響（W4：沒有 SDL 時 `condition_variable` P50 5.28 ms、`sleep_until` 15.63 ms），這指向候選 3（產品的計時器），但重送次數沒有印出，還不能判斷。
+- 出貨的 Client 會初始化 SDL（W4：有 SDL 時 `sleep_until` P50 約 1.08 ms），這個失敗是在沒有 SDL 的探針裡量到的。
