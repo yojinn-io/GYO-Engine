@@ -145,3 +145,22 @@
 - 照程式的順序（`Require` 失敗就結束），10 次都已通過 `:817`（`restartMs<10 && completedWindowGapMs<14`）。這表示第 3 步的失敗在 mock 改用 Waiter 後不再出現，和「mock 的時間戳粒度」的讀法一致（讀程式碼，未另外驗證）。
 - 新的失敗是 `:847`：Client 在 1 秒內重送未確認窗口的次數不在 55～65（60 Hz）。這一項在 Windows 上之前從來沒有跑到過。重送的節奏由 Client 的網路執行緒決定：遠的期限用 asio 計時器，最後 2 ms 才交給 Waiter。在沒有 SDL 的 Windows 程序裡，asio 計時器可能受約 15.6 ms 的 tick 影響（W4：沒有 SDL 時 `condition_variable` P50 5.28 ms、`sleep_until` 15.63 ms），這指向候選 3（產品的計時器），但重送次數沒有印出，還不能判斷。
 - 出貨的 Client 會初始化 SDL（W4：有 SDL 時 `sleep_until` P50 約 1.08 ms），這個失敗是在沒有 SDL 的探針裡量到的。
+
+## C：印出重送的節奏，並用 Client 自己的送出時刻對照（D224）
+
+使用者：「做 C：先在重送檢查的訊息印出重送次數與間隔，並在 Client 端記錄實際送出的時刻，重新宣告後在 Windows 再跑。」
+
+- **改法（只加觀測，門檻與產品程式都不改）**：worker 探針在重送的那 1 秒裝上 Client 既有的 movement trace（`SetMovementTrace` 與記憶體內的 `MovementTrace`），收集 Client 每次送出的 `Sent` 事件（每次送出取一個 `startedNs`）。重送檢查（`resends` 在 55～65）失敗時，訊息附上 `mock_resends=N mock_gap_ms=最小/中位/最大 client_sends=N client_gap_ms=最小/中位/最大`。Client 的送出時刻來自產品本來就有的 trace，沒有新增產品的入口。
+- **macOS（Intel）本機**：把門檻暫時改成必定失敗，確認訊息是 `mock_resends=59 mock_gap_ms=16.60/16.73/29.18 client_sends=59 client_gap_ms=16.70/16.72/29.19`，之後改回；正常跑通過。
+- **Windows 的事前宣告（草案，等使用者核准）**：
+  - 建置：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`），發行線含 C 的 commit；`git ls-files --eol` 沒有 `w/crlf`。
+  - 跑法：`ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行 10 次，不重跑、不中途改，期間不做其他吃重的工作。
+  - 每次記錄：ctest 摘要的通過或失敗、完整的失敗訊息；重送檢查失敗時，那四個值。
+  - 收支：每一次都要有 ctest 的結果。重送檢查失敗的那幾次，四個值都要有。
+  - 判定（互斥，依序取第一個成立的）：
+    1. 「確認不了」：建置失敗，或有任何一次沒有 ctest 的結果，或重送檢查失敗卻沒有四個值。
+    2. 「全部通過」：10 次都通過。
+    3. 「產品的節奏」：至少一次失敗在重送檢查，而且在所有失敗在重送檢查的次數裡，`client_sends` 都不在 55～65。結論：沒有 SDL 的 Windows 程序裡，Client 自己的重送節奏就不是 60 Hz（產品的計時器）。
+    4. 「觀測側」：至少一次失敗在重送檢查，而且在所有失敗在重送檢查的次數裡，`client_sends` 都在 55～65（只有 `mock_resends` 超出）。結論：Client 照 60 Hz 送，問題在 mock 或傳輸。
+    5. 「其他」：以上都不成立（例如有失敗在別的斷言，或 3、4 混在一起）。照實記錄，交使用者判斷。
+  - 範圍的限界：只有一台 Windows 機器；worker 探針沒有 SDL（和出貨的 Client 不同）；Client 的送出時刻是 `Send` 開始時的 steady_clock，不是網卡實際送出的時刻；只看 worker 這一項。

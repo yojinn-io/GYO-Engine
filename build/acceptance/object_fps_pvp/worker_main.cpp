@@ -1,6 +1,7 @@
 // Product-owned socket acceptance for ClientConnection's real background worker.
 // The mock is external to production: HTTP joins and current-wire UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "client_v7.pb.h"
 #include "acceptance_protocol.hpp"
@@ -234,6 +235,22 @@ private:
     std::mutex refusalMutex;
     std::optional<std::pair<int,Json>> refusal;
 };
+// The rhythm of the resend second, for its failure message (v7.1 D224):
+// "mock_resends=N mock_gap_ms=min/median/max client_sends=N client_gap_ms=min/median/max".
+std::string ResendRhythm(const std::vector<Clock::time_point>& mock,const std::vector<std::int64_t>& clientNs) {
+    const auto gaps=[](std::vector<double> ms) {
+        if(ms.empty())return std::string("-");
+        std::sort(ms.begin(),ms.end());
+        std::ostringstream out;out.setf(std::ios::fixed);out.precision(2);
+        out<<ms.front()<<'/'<<ms[ms.size()/2]<<'/'<<ms.back();
+        return out.str();
+    };
+    std::vector<double> mockGaps,clientGaps;
+    for(std::size_t i=1;i<mock.size();++i)mockGaps.push_back(std::chrono::duration<double,std::milli>(mock[i]-mock[i-1]).count());
+    for(std::size_t i=1;i<clientNs.size();++i)clientGaps.push_back(static_cast<double>(clientNs[i]-clientNs[i-1])/1e6);
+    return "mock_resends="+std::to_string(mock.size())+" mock_gap_ms="+gaps(mockGaps)+
+        " client_sends="+std::to_string(clientNs.size())+" client_gap_ms="+gaps(clientGaps);
+}
 PlayerInput Input(std::uint64_t first,std::uint64_t last) {
     PlayerInput result;result.playerId=1;
     for(auto sequence=first;sequence<=last;++sequence)result.commands.push_back({sequence,1,0,0,0});
@@ -840,11 +857,24 @@ int main(int argc,char** argv) {
         Require(fresh.commands(fresh.commands_size()-1).sequence()==5,"the new command was not sent next");
         const auto freshMs=std::chrono::duration<double,std::milli>(gateway.attempts.back().at-resentAt).count();
         Require(freshMs<10,"a new command waited behind the resend deadline");
+        // Observation (v7.1 D224, C): the Client's own send times come from its
+        // movement trace (the Sent events of each send), so a failure tells the
+        // Client's resend rhythm apart from what the mock saw.
+        const auto clientSends=std::make_shared<MovementTrace>();
+        SetMovementTrace(clientSends);
         connection.SendInput(Input(4,6));
         const auto resendBegin=gateway.attempts.size();
         gateway.UntilTime(Clock::now()+1s);
+        SetMovementTrace({});
         const auto resends=gateway.attempts.size()-resendBegin;
-        Require(resends>=55 && resends<=65,"unacknowledged window was not resent at approximately 60 Hz");
+        std::vector<Clock::time_point> mockTimes;
+        for(auto index=resendBegin;index<gateway.attempts.size();++index)mockTimes.push_back(gateway.attempts[index].at);
+        std::vector<std::int64_t> clientNs;
+        for(const auto& event:clientSends->Drain())
+            if(event.kind==MovementTraceKind::Sent && (clientNs.empty() || clientNs.back()!=event.startedNs))
+                clientNs.push_back(event.startedNs);
+        Require(resends>=55 && resends<=65,"unacknowledged window was not resent at approximately 60 Hz ("+
+            ResendRhythm(mockTimes,clientNs)+")");
         for(auto index=resendBegin+1;index<gateway.attempts.size();++index)
             Require(gateway.attempts[index].at-gateway.attempts[index-1].at>=14ms,"worker emitted a resend catch-up burst");
 
