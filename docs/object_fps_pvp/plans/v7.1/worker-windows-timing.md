@@ -317,6 +317,7 @@
 使用者：「做 A：今晚做好開著 SDL 視窗的 worker 探針，寫好它和 lan15 的事前宣告；明天 Windows 先跑探針，通過才跑 lan15。」之後：「這個今晚就跑完。」核准：「核准 D229 的事前宣告，寫進文件後推送，我今晚在 Windows 上跑。」以下內容核准後不改，跑完不放寬（AGENTS.md §14.1）。
 
 - **突變（D184）**：探針的變更（`1c0f892d`）之後，worker 檢查的 47 個突變在本機重跑中；推送時還沒跑完，結果記在下面。判定的程式沒有改。
+  - 結果（2026-10-28，本機 macOS Intel，load average 1.8～2.0）：46／47 killed。`sb-c3-early-results` 是 wrong_failure（worker 失敗在「action worker emitted overdue catch-up packets」）；單獨重跑 1 次 killed。這個失敗訊息在 D185 的完整突變裡也出現過一次（當時 load 很高）。這次 load 不高，原因沒有切開（實作、測試本身或環境），照實記錄；在沒有突變的 worker 上沒有觀察到。證據：本機 `scratchpad/v708/d229/`（`worker47.json`、`worker47.log`、`rerun-sb-c3.json`）。
 
 - **目的**：D228 量到沒有 SDL 的 Windows 程序裡，Client 1 秒只重送 43 次。出貨的 Client 會開 Engine 的 SDL 視窗，而 SDL 會提高程序的計時器解析度。這次在「開著 SDL 視窗」的條件下量重送次數，判斷 43 次是不是出貨版的缺陷。
 - **探針（`1c0f892d`）**：
