@@ -573,3 +573,21 @@ W11 的 log 共 23 行，除了失敗訊息與「window open」都是 `[ObjectFP
 - **判讀交給 v7.1 會話**（Windows 端不做）。宣告、門檻、測試、產品程式都沒有改。
 
 **證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-D230-20261029/`，內含 `build.log`、`build-exit.txt`（建置的結束碼）、`commit.txt`、`build-commit.txt`、`msvc-version.txt`、`machine.txt`、`hashes.txt`、`W1.log`～`W20.log`、`runs.txt`（`exit=` 是探針的結束碼）。
+
+## token 等待的觀測：判讀與停止（2026-10-29，v7.1 會話）
+
+收支：一致（Windows 的紀錄：20 次都有結束碼與 window open；跑到 token 那段的 19 次都有值）。判定照宣告是 5「其他」，我核對過表格，判定成立：W11 失敗在 WSAECONNRESET，不在 token 的兩項檢查。
+
+依 AGENTS.md §14 開頭停下：同一個問題（worker 在 Windows 上的時間判定）從 D216 起，已經換了 4 次測量方式（第 3 步、B、C、D229／D230），每次都停在新的地方，判定沒有一次落在預期的類別。不再加新的測量，交給使用者決定。
+
+- **token 的失敗（只是觀察，不是判定）**：
+  - 19 次中 8 次失敗，全部是「a token wait outlived four commands」，`settled_excess_ms` 只有 0.03～0.16 ms。另外兩項 token 檢查 0 次失敗。
+  - 排空之後（第 4～7 步）的等待集中在約 0.6、0.97、1.92 ms 這幾個值，看起來是以約 1 ms 為單位的刻度。macOS 上同樣的等待約 0.13 ms。
+  - 這裡的等待是「mock 收到的時刻減去發佈的時刻」。mock 每次輪詢之間用 Waiter 等 100 µs，而 Windows 上 Waiter 的最小等待約 0.6 ms（W4：沒有 SDL 時 P50 0.617 ms）。所以 mock 自己的輪詢就可能讓收到的時刻晚 1～2 個刻度。失敗都是某一步落在約 1.92 ms（兩個刻度），超過 1.75 ms 的上限。
+  - 讀法（沒有另外驗證）：超過量遠小於 1 ms，和「量測的刻度（mock 的輪詢與 Windows 的計時器）比門檻粗」相容，不像是產品的 token 規則在 Windows 上算錯。排空那項（每步排空四分之一步、容許 ±1 ms）在 19 次都通過。
+- **WSAECONNRESET**：Windows 上 40 次中出現 2 次（D229 的 P7、這次的 W11），都在重送檢查之前，讓整個驗收中止。推論在 mock 端（D229 的判讀），還沒有找出是哪一步觸發的。
+- **其他已經回答的**：開著 SDL 視窗時，重送每次都是 57（D229 的 10 次、這次的 19 次）；v7-08 在 Windows 上跑到的 19 次都通過，action 在 0.58～0.99 ms 內送出。
+- **範圍的限界**（之後的宣告照抄，直到解消）：
+  - Windows 上 worker 驗收裡的毫秒級判定，量的是 mock 輪詢到的時刻，刻度約 1 ms；「a token wait outlived four commands」的 1.75 ms 上限在 Windows（開著 SDL 視窗）上約四成失敗，超過量 0.03～0.16 ms。
+  - mock 的 `Pump` 遇到 WSAECONNRESET 會讓整個驗收中止，Windows 上約 5%（40 次中 2 次），觸發的步驟還沒找出來。
+  - 沒有 SDL 的 Windows 程序裡，Client 的重送約 43～53 Hz（D228、D229）。
