@@ -419,3 +419,19 @@
 - **判讀交給 v7.1 會話**（Windows 端不做）。宣告、門檻、測試、產品程式都沒有改。
 
 **證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-D229-20261028/`，內含 `build.log`、`build-exit.txt`（建置的結束碼）、`commit.txt`、`build-commit.txt`、`msvc-version.txt`、`machine.txt`、`hashes.txt`、`W1.log`～`W10.log`、`P1.log`～`P10.log`、`runs.txt`（`exit=` 是探針的結束碼）。
+
+## 出貨條件下的重送：判讀與停止（2026-10-28，v7.1 會話）
+
+收支：一致（Windows 的紀錄：20 次都有結束碼，W 的 10 次都有 window open）。判定照宣告是 4「其他」，我核對過表格，判定成立；「能不能接著跑 lan15」照宣告是「不能」。依 AGENTS.md §14 開頭停下，不修改，交給使用者決定。
+
+- **判定為什麼是 4**：P7 失敗在重送檢查之前，沒有節奏行，判定 2 的對照條件（P 的 10 次都有節奏行）不成立。宣告沒有預想到「P 失敗在重送之前」這種情況，這是寫宣告時的缺漏。照字面記錄，不重新解釋判定。
+- **重送次數本身（只是觀察，不是判定）**：W 的 10 次 `client_sends` 都是 57，間隔中位 17.1～17.3 ms。有節奏行的 9 次 P 是 43～53，都不在 55～65。開著 SDL 視窗時，重送進了 55～65。
+- **W5、W7 的新失敗**：「a token wait outlived four commands」。這項檢查在重送檢查之後，之前在 Windows 從來沒有跑到過（第 3 步、B、C 都停在更早的地方）。
+  - 它要求排空 token 之後，送出的等待不超過 1.75 ms（`settledWaitMs`），再加上這次發佈比預定晚的部分。
+  - 失敗時沒有印出等待的值，所以分不出是產品的等待在 Windows 上比較長，還是門檻對 Windows 太緊。原因還沒判定。
+- **P7 的新失敗**：「既存の接続はリモート ホストに強制的に切断されました」（WSAECONNRESET）。讀程式碼（沒有另外驗證）：這句是 mock 的 `Pump` 在 `receive_from` 收到錯誤時丟出的例外（`worker_main.cpp` 的 `if(error)throw std::runtime_error(error.message())`）。Windows 的 UDP socket 在送出的封包收到 ICMP port unreachable 後，下一次接收會回報 WSAECONNRESET。所以這比較像 mock（測試端）在 Windows 上的問題，不是產品。沒有 SDL 的探針在 Windows 上，到目前約 30 次跑到這一段以後，這是第一次出現。
+- **v7-08**：跑到的 8 次 W 都通過，action 在 SubmitShot 後 0.60～0.97 ms 送出。D227 的修正在 Windows 上沒有讓正常的 action 判成失敗。
+- **範圍的限界**（之後的宣告照抄，直到解消）：
+  - 「a token wait outlived four commands」在 Windows（開著 SDL 視窗）上 10 次失敗 2 次，原因未判定；失敗時沒有印出等待的值。
+  - mock 的 `Pump` 遇到 WSAECONNRESET 會讓整個 worker 驗收中止（讀程式碼的推論）。
+  - D228 已記的：沒有 SDL 的 Windows 程序裡，Client 的重送約 43～53 Hz。
