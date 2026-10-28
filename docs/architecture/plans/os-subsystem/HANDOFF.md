@@ -50,7 +50,7 @@
   - [windows-run.md](windows-run.md) 第 1 次：W0～W8（準備、B 的 ctest、os-wait-backend 的 L2、os-wake-record 的基準、os-threads-backend 的 L2、UDP 錯誤量測、突變 12 條、MinGW）。
   - 量測腳本 `scripts/udp_error_probe.py`：macOS Intel 試跑，未連線的 socket 送到關閉的埠後收不到錯誤，已連線的收到 `ECONNREFUSED`。
   - 結果回來後由本會話合併，移進各批的紀錄；W3 通過後才通知消費端合併 os-wait-backend（D71）。
-  - 還沒通知 v7.1 會話：消費端 D209 的「lan15 那次另加計時核心的 L2 與 os-wake-record 的 Windows 基準」因此改變；os-net-errors 動 `ClientConnection.cpp` 前照消費端 D205 通知。
+  - 已通知 v7.1 會話（使用者說「把 D73 通知 v7.1 會話：Windows 的計時 L2 與基準改由 claude/os-windows-run 跑，不再加在 lan15；os-net-errors、os-close 排在 lan15 之前，動 ClientConnection.cpp 前會再通知。」）：消費端 D209 的「lan15 那次另加計時核心的 L2 與 os-wake-record 的 Windows 基準」不再需要；os-net-errors 動 `ClientConnection.cpp` 前照消費端 D205 再通知一次。訊息已送達，對方沒有回覆。
   - 開工前要重新核對的前提：PLAN 第 7.16 節寫的「改呼叫點與文字守衛 `test_diagnostic_isolation.py:107`」在消費端 K9（D200）之後已過時。兩個呼叫點已經改成 `SocketErrorActionFor`，守衛數的是那個呼叫；搬移可能只改 `TransientSocketError` 的內容。
 
 ## 閱讀入口
