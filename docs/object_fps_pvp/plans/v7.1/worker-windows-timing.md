@@ -101,3 +101,38 @@
     2. 「測試的原因」：10 次全部通過。結論：先前的失敗來自 mock 的時間戳粒度；產品在這條路徑上沒有觀察到問題。
     3. 「還有問題，做 C」：其他情況（至少一次失敗）。結論：原因不只 mock，進入 C（在 Client 端記錄實際送出的時刻）。
   - 範圍的限界：只有一台 Windows 機器；worker 探針沒有 SDL（和出貨的 Client 不同）；只看 worker 這一項。
+
+## B 的 Windows 結果（2026-10-28，Windows 機器，D222 的宣告）
+
+收支：不一致（10 次都有結果，都是失敗；但 10 次都**沒有** `restart_ms` 與 `completed_window_gap_ms` 兩個值，依宣告計入「確認不了」）。
+
+- **判定（照宣告的互斥順序，取第一個成立的）：1.「確認不了」**。理由：10 次都沒有兩個值（宣告：「有任何一次沒有兩個值」）。2、3 沒有往下套用。
+- **建置**：發行線 `8966293ca0408e7804b19d4df3135df221fe2d21`（含 `f29001e0`），主 checkout，`git ls-files --eol` 沒有 `w/crlf`、工作樹乾淨。在 VS Community 2026 的 vcvars64 環境裡執行 `cmake --preset ci-windows`（exit 0）與 `cmake --build build/target/_build/ci-windows`（exit 0，增量 93 步，含 `worker_main.cpp`；17:04～17:09）。MSVC 19.51.36260。
+  - 先前有一次建置跑錯目錄（Windows 端的腳本錯誤，在 `..\gyo-v71` 的 `e400f89`、不含 B）。configure 中途停掉，沒有拿來跑測試；log 保留在證據目錄的 `attempt1-wrong-dir/`。
+- **機器**：和第 3 步同一台（Windows 11 Pro 10.0.26300，i7-8750H，16 GB），接著 AC（`PowerOnline=True`），電源計畫「平衡」。
+- **跑法**：照宣告的指令 `ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行 10 次（17:09:33～17:12:46），沒有重跑，中途沒有改任何東西，期間沒有其他吃重的工作。
+
+| 次 | 結果（ctest 摘要） | ctest exit | 耗時 s | `restart_ms` | `completed_window_gap_ms` | 失敗訊息 |
+|---|---|---|---|---|---|---|
+| 1 | 失敗 | 8 | 19.25 | 沒有 | 沒有 | `unacknowledged window was not resent at approximately 60 Hz` |
+| 2 | 失敗 | 8 | 18.98 | 沒有 | 沒有 | 同上 |
+| 3 | 失敗 | 8 | 18.96 | 沒有 | 沒有 | 同上 |
+| 4 | 失敗 | 8 | 19.00 | 沒有 | 沒有 | 同上 |
+| 5 | 失敗 | 8 | 19.01 | 沒有 | 沒有 | 同上 |
+| 6 | 失敗 | 8 | 19.00 | 沒有 | 沒有 | 同上 |
+| 7 | 失敗 | 8 | 19.02 | 沒有 | 沒有 | 同上 |
+| 8 | 失敗 | 8 | 19.01 | 沒有 | 沒有 | 同上 |
+| 9 | 失敗 | 8 | 18.97 | 沒有 | 沒有 | 同上 |
+| 10 | 失敗 | 8 | 18.97 | 沒有 | 沒有 | 同上 |
+
+除了這一句與 ctest 的摘要，`[ObjectFPS/PvP]` 以外沒有其他訊息。
+
+**為什麼沒有值（讀程式碼，未另外驗證）**：
+
+- 這次失敗的斷言是 `worker_main.cpp:847`（`resends>=55 && resends<=65`，1 秒內未確認窗口的重送次數），不是第 3 步失敗的 `:817`。
+- 在同一個流程裡，`:817`（`restartMs<10 && completedWindowGapMs<14`）、`:835`、`:840`、`:842` 都在 `:847` 之前，而且 `Require` 失敗就會結束。所以 10 次都已經通過 `:817`，只是兩個值只在 `:817` 失敗的訊息與最後的 JSON（`:1140`）裡印出，這次沒有輸出的地方。
+- `:847` 的重送次數本身也沒有印出。
+
+**判讀交給 v7.1 會話**（Windows 端不做）。宣告、門檻、測試、產品程式都沒有改。
+
+**證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-B-20261028/`，內含 `build.log`、`build-exit.txt`、`build-commit.txt`、`msvc-version.txt`、`run1.log`～`run10.log`、`runs.txt`（這次的 `ctest_exit=` 是 ctest 的結束碼）、`attempt1-wrong-dir/`。
