@@ -34,7 +34,7 @@ primitives here.
 | Process code page | The manifest that makes every Windows executable of the repository run with UTF-8 as its ANSI code page, and the CMake module that embeds it in one executable (`engine/os/cmake`); the build layer chooses the executables (`build/cmake/GyoCodePage.cmake`) | os-utf8-codepage (landed) |
 | Console | UTF-8 command line, UTF-8 console output, shutdown requests (`CommandLineUtf8`, `Utf8ConsoleOutput`, `InstallShutdownRequests`, `RequestedShutdown`) | os-console-shutdown (landed) |
 | Thread | Thread name and priority hint for the calling thread (`SetCurrentName`, `SetCurrentPriority`) | os-threads-backend (landed) |
-| Wait | The wake primitive behind `Time::Waiter` (`WakeSignal`: `Create`, `Signal`, `Block`, `Mechanism`) | os-wait-backend (landed) |
+| Wait | The wake primitive behind `Time::Waiter` | os-wait-backend |
 | Net (conditional) | Neutral classification of socket error codes | os-net-errors |
 
 Only the components whose batch has landed exist; the others are planned in the os-subsystem plan.
@@ -208,27 +208,6 @@ Only the components whose batch has landed exist; the others are planned in the 
     as user-interactive), Windows thread priorities (below normal, normal, above normal), Linux only Background as
     nice 10, which fails if the process already runs nicer. Normal on Linux and other platforms makes no call and
     counts as applied; Interactive on Linux needs privileges and is not tried.
-- **Wait** (os-wait-backend, D71). The wake primitive engine/time's `Waiter` blocks on, moved from it line by line;
-  what a wake means stays with engine/time (time.md): the latch, the single waiter, deadlines, the re-check of the
-  time base after every wake and the backend names. One source with per-OS branches
-  (`engine/os/src/wait/WakeSignal.cpp`, os-subsystem open decision 11 (c)).
-  - `WakeSignal::Create` makes the primitive and reports its `WaitMechanism`, which engine/time maps value for value
-    to its `WaitBackend`: on macOS a kqueue with an `EVFILT_USER` event (`Kqueue`); on Windows an auto-reset event
-    and a high-resolution waitable timer (`HighResolutionWaitableTimer`), or a plain one when the high-resolution
-    timer is not available (`WaitableTimer`); elsewhere a mutex and a condition variable (`ConditionVariable`),
-    which cannot fail. A primitive the OS refuses is `IoFailed` with the native error. engine/time reports it as
-    `WaitPrimitiveUnavailable` with the same message and `IoFailed: errno=<n>` or `IoFailed: win32=<n>` as its
-    detail (error-handling.md rule 5). ★ (D71): the detail used to be the `strerror` text or `GetLastError=<n>`.
-  - `Signal` (any thread) wakes the block in progress. A signal sent before the block ends it at once: kqueue and the
-    Windows event keep it pending themselves, the fallback through the caller's latch, which the caller sets first.
-  - `Block(latch, timeout)` (the single waiting thread) arms the relative timeout, if any, and returns when
-    signalled, when the timeout has passed, or spuriously; the caller re-checks its latch and its time base. macOS
-    arms a one-shot `EVFILT_TIMER` in nanoseconds with `NOTE_CRITICAL` (no timer-coalescing leeway) in the `kevent`
-    call that waits. Windows sets the waitable timer in 100 ns units, rounded up, and waits for the event or the
-    timer; when the timer cannot be set it waits for the event with a timeout in milliseconds, rounded up. The
-    fallback reads the latch under its mutex before it waits (Invariant 8); kqueue and the Windows event keep a
-    signal pending by themselves and do not read it. `Block` is not `noexcept` (Invariant 6).
-  - A moved-from `WakeSignal` ignores `Signal`; `Block` and `Mechanism` on it are Programmer Errors (`GYO_ASSERT`).
 - **Paths and text.** UTF-8 in `std::string_view`, UTF-8 out in `std::string`. Invalid UTF-8 is `InvalidEncoding`.
   On Windows the layer converts to UTF-16 and calls the wide APIs. Long-path forms (`\\?\`, `\\?\UNC\`) are made
   inside the layer just before the OS call; they are never returned or written into an error.
@@ -277,8 +256,7 @@ deletes its allowlist and no common file changes.
 
 Three configure-time checks run once the whole project is configured (`tests/common/os/CMakeLists.txt`): `gyo_os`
 links exactly `GYO::Base` and system libraries Invariant 3 allows: on Windows `shell32` for `CommandLineToArgvW`
-(D49, D50), elsewhere `Threads::Threads` for `pthread_setname_np` and the wake primitive's condition-variable fallback (D69,
-D71); and no target or directory under the scanned roots outside engine/os and
+(D49, D50), elsewhere `Threads::Threads` for `pthread_setname_np` (D69); and no target or directory under the scanned roots outside engine/os and
 tests/common/os has an OS-identifying compile definition (Invariant 1). A definition is OS-identifying when its
 name contains an OS word (`WIN32`, `WINDOWS`, `APPLE`, `DARWIN`, `LINUX`, `POSIX`, `UNIX`, `ANDROID` and others,
 so `GYO_WINDOWS` and `WIN32_LEAN_AND_MEAN` are refused) or when it is conditioned on `$<PLATFORM_ID:...>`. The
@@ -360,10 +338,7 @@ Known blind spots, left to review:
 6. **Failures are Runtime Errors.** Functions return `Base::Result<_, OsError>`; the detail keeps the native error
    in the fixed form of the Contracts section. A request that only reports whether the platform applied it returns
    `bool` instead (the thread name and priority, `Utf8ConsoleOutput::Applied()`): not being applied is a result,
-   not a failure (Invariant 10; D70). `WakeSignal::Block` keeps the exception specification it had in `Time::Waiter`
-   (Invariant 9; D71, D72): in the condition-variable fallback the standard library's `std::system_error` from the mutex
-   or the wait passes through; the kqueue and Windows backends throw nothing. Apart from it, no exception crosses
-   the public boundary or an OS callback (signal
+   not a failure (Invariant 10; D70). No exception crosses the public boundary or an OS callback (signal
    handler, console control handler). The OS callbacks only write a lock-free atomic (and, on a console close,
    wait) and are `noexcept`, so engine/os needs none of error-handling.md's "Exception at the platform boundary"
    rules (no `catch (...)`, no destructor checking global state); that section's scope stays engine/platform/sdl
@@ -373,11 +348,8 @@ Known blind spots, left to review:
    are decided by the caller.
 8. **State authority** (AGENTS.md §3). engine/os owns only its own OS resources and the shutdown-request flag.
    Queries (executable path, CPU time, file status) read the OS every time; nothing is cached to decide on. The
-   Waiter's latch belongs to Time: engine/os reads it through the reference each `Block` takes, under the condition
-   variable's mutex in the fallback backend, and keeps no copy (D71). Guard: `tests/common/os/WakeSignalTests.cpp`
-   "loses no signal sent while the waiter checks its latch", against mutant `ow-x1-cv-latch-outside-mutex`, which
-   compiles on Linux only and has not run there yet (a macOS build forced onto the fallback killed it, D71); that
-   engine/os keeps no copy is checked in review.
+   Waiter's latch belongs to Time: engine/os reads it through a reference, under the condition variable's mutex in
+   the fallback backend, and keeps no copy.
 9. **Moving a site does not change observable behaviour.** File bytes (CRLF on Windows, append semantics),
    `WaitBackend` strings, name truncation, priority mapping, timeout conversion (100 ns rounding and the
    millisecond fallback on Windows, `NOTE_NSECONDS` on kqueue) and exception specifications stay as they are. The

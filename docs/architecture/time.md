@@ -2,14 +2,14 @@
 
 Owner: Engine (`engine/time` → `GYO::Time`).
 Plan and record: [time-threads-trace](plans/time-threads-trace/README.md), batch TT-1 (D29); this document was written
-in [os-subsystem](plans/os-subsystem/README.md) batch time-threads-invariants; the wait backends moved into engine/os
-in batch os-wait-backend (D71).
+in [os-subsystem](plans/os-subsystem/README.md) batch time-threads-invariants. The batch that would have moved the
+wait backends into engine/os (os-wait-backend) is frozen: its Windows timing L2 failed and it was withdrawn (D78), so
+the backends stay in `Waiter.cpp`.
 
 ## What it is
 
 ```text
 GYO::Base ◄── GYO::Time ◄── GYO::Threads, GYO::Engine and products
-GYO::Os   ◄──┘ (privately: the wake primitive)
 ```
 
 - **The time base** (`Time::MonotonicClock`, `Now`, `NowNs`): every Engine module measures elapsed time, waits and
@@ -20,10 +20,6 @@ GYO::Os   ◄──┘ (privately: the wake primitive)
   this base.
 - **`Time::Waiter`**: one thread waits until a deadline or until another thread notifies, whichever comes first.
 - **`Time::LateWakeStats`**: a fixed-bin histogram of how late deadline wakes were, with max and count.
-
-Ownership: Time owns what a wake means: the latch, the single waiter, the deadline loop and the re-check after every
-wake, how late a wake was, and the backend names consumers log. engine/os owns the platform primitive the Waiter
-blocks on (`Os::WakeSignal`, os-wait-backend, D71).
 
 ## Contracts
 
@@ -38,8 +34,7 @@ blocks on (`Os::WakeSignal`, os-wait-backend, D71).
   the timer-coalescing leeway std and SDL sleeps get, and `EVFILT_USER` for notifications);
   `HighResolutionWaitableTimer` on Windows, or `WaitableTimer` when the high-resolution timer is not available;
   `ConditionVariable` elsewhere. The names are part of the consumer's log lines (`wait_backend=`).
-- `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive, with engine/os's message and
-  `IoFailed: errno=<n>` or `IoFailed: win32=<n>` as the detail (★ D71; os.md, Wait). A moved-from Waiter ignores
+- `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive. A moved-from Waiter ignores
   `Notify` (it is `noexcept` and cannot assert); waiting on it is a Programmer Error (`GYO_ASSERT`).
 
 ## Baselines
@@ -51,10 +46,6 @@ for 30 s, and measures notify to wake for the Waiter and a condition variable. `
 runs the declared procedure (os-subsystem D68): a 5 s sleeper before and after each mode, and `meta.txt` with the
 commit, the program hashes, the OS, the CPU and the load. Evidence lives under `build/target/_build/test/logs/` of
 the main checkout.
-
-A change to the Waiter's backends is compared before and after with `tests/common/time/wake_compare.py`: copies of
-both programs from before (A) and after (B) run in the order A B A B …, and B is judged by the rule declared before
-any B result is seen (os-subsystem open decision 13, D71).
 
 | Platform | Recorded | Waiter deadline P50 / P99, no window; window | Evidence |
 |---|---|---|---|
@@ -88,20 +79,14 @@ any B result is seen (os-subsystem open decision 13, D71).
 7. **The backend is reported, and its names stay.** `Backend()` answers which mechanism this Waiter uses, on every
    platform (the Windows fallback included); the `ToString` names do not change, since consumer logs carry them
    (os.md Invariant 9). Guards: "Time Waiter uses the platform backend" for the selection, "Time Waiter backend
-   names stay as consumers log them" for the names; the `static_assert`s in `Waiter.cpp` keep engine/os's
-   `WaitMechanism` in the same order; mutants `ti-x3-backend-name-changed`, `ow-x7-backend-mapping-shifted`.
+   names stay as consumers log them" for the names; mutant `ti-x3-backend-name-changed`.
 8. **The latch is Time's state** (AGENTS.md §3, State Authority): no other component keeps a copy of it or decides on
-   it. engine/os's wake primitive reads it through the reference each `Block` takes, under the condition variable's
-   mutex in the fallback backend, and keeps no copy (os.md Invariant 8; os-wait-backend, D71). Guard:
-   `tests/common/os/WakeSignalTests.cpp` "loses no signal sent while the waiter checks its latch", against mutant
-   `ow-x1-cv-latch-outside-mutex` (Linux only, not run there yet); that engine/os keeps no copy is checked in
-   review.
+   it. When the backends move into engine/os, engine/os reads the latch through a reference and keeps no copy (os.md
+   Invariant 8). No guard; it is checked in review.
 9. **Use after move is refused**: waiting on a moved-from Waiter is a Programmer Error, and `Notify` on it does
    nothing. Guard: "rejects use after move and ignores notifications on a moved-from waiter".
-10. **`GYO::Time` links exactly `GYO::Base` and, privately, `GYO::Os`** (checked at configure time by
-    `tests/common/time/CMakeLists.txt`, which also refuses `GYO::Os` in its interface): no SDL, no `GYO::Engine`,
-    and what links `GYO::Time` gets no engine/os headers from it (os-wait-backend, D71; `Threads::Threads` left
-    with the condition-variable fallback). Guards: mutants `ti-x1-time-links-more`, `ow-x2-time-os-public`.
+10. **`GYO::Time` links exactly `GYO::Base` and `Threads::Threads`** (checked at configure time by
+    `tests/common/time/CMakeLists.txt`): no SDL, no `GYO::Engine`. Guard: mutant `ti-x1-time-links-more`.
 11. **`LateWakeStats` has fixed bins, allocates nothing and runs no thread.** Guard: "Time LateWakeStats bins late
     wakes and bounds quantiles" for the bins and quantiles. No guard for the allocation.
 
