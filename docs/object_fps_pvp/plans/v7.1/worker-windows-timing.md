@@ -152,18 +152,27 @@
 
 - **改法（只加觀測，門檻與產品程式都不改）**：worker 探針在重送的那 1 秒裝上 Client 既有的 movement trace（`SetMovementTrace` 與記憶體內的 `MovementTrace`），收集 Client 每次送出的 `Sent` 事件（每次送出取一個 `startedNs`）。重送檢查（`resends` 在 55～65）失敗時，訊息附上 `mock_resends=N mock_gap_ms=最小/中位/最大 client_sends=N client_gap_ms=最小/中位/最大`。Client 的送出時刻來自產品本來就有的 trace，沒有新增產品的入口。
 - **macOS（Intel）本機**：把門檻暫時改成必定失敗，確認訊息是 `mock_resends=59 mock_gap_ms=16.60/16.73/29.18 client_sends=59 client_gap_ms=16.70/16.72/29.19`，之後改回；正常跑通過。
-- **Windows 的事前宣告（草案，等使用者核准）**：
-  - 建置：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`），發行線含 C 的 commit；`git ls-files --eol` 沒有 `w/crlf`。
-  - 跑法：`ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行 10 次，不重跑、不中途改，期間不做其他吃重的工作。
-  - 每次記錄：ctest 摘要的通過或失敗、完整的失敗訊息；重送檢查失敗時，那四個值。
+- **Windows 的事前宣告（草案，等使用者核准；2026-10-28 依 D226、D227 更新）**：
+  - 建置：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`）。發行線 `claude/pvp-v71-release`，必須含 `0d6916a8`（C、D226 的觀測、D227 的修正都在其中）。記錄建置的 commit 與 MSVC 版本；`git ls-files --eol` 沒有 `w/crlf`、工作樹乾淨。
+  - 跑法：`ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行 10 次，不重跑、不中途改，期間不做其他吃重的工作。每次的輸出完整保存（D225 漏存 log 的教訓）。
+  - 每次記錄：
+    - ctest 摘要的通過或失敗、完整的失敗訊息（失敗的斷言以訊息辨認，不用行號）。
+    - 重送檢查（「unacknowledged window was not resent at approximately 60 Hz」）失敗時，括號裡的四個值：`mock_resends`、`mock_gap_ms`、`client_sends`、`client_gap_ms`。
+    - 輸出裡有「v7-08 wake timeline」這一行時，照抄（D226 的觀測；只在流程跑到 v7-08 的檢查時才有）。
   - 收支：每一次都要有 ctest 的結果。重送檢查失敗的那幾次，四個值都要有。
   - 判定（互斥，依序取第一個成立的）：
-    1. 「確認不了」：建置失敗，或有任何一次沒有 ctest 的結果，或重送檢查失敗卻沒有四個值。
+    1. 「確認不了」：建置失敗、沒有含 `0d6916a8`，或有任何一次沒有 ctest 的結果，或重送檢查失敗卻沒有四個值。
     2. 「全部通過」：10 次都通過。
     3. 「產品的節奏」：至少一次失敗在重送檢查，而且在所有失敗在重送檢查的次數裡，`client_sends` 都不在 55～65。結論：沒有 SDL 的 Windows 程序裡，Client 自己的重送節奏就不是 60 Hz（產品的計時器）。
     4. 「觀測側」：至少一次失敗在重送檢查，而且在所有失敗在重送檢查的次數裡，`client_sends` 都在 55～65（只有 `mock_resends` 超出）。結論：Client 照 60 Hz 送，問題在 mock 或傳輸。
-    5. 「其他」：以上都不成立（例如有失敗在別的斷言，或 3、4 混在一起）。照實記錄，交使用者判斷。
-  - 範圍的限界：只有一台 Windows 機器；worker 探針沒有 SDL（和出貨的 Client 不同）；Client 的送出時刻是 `Send` 開始時的 steady_clock，不是網卡實際送出的時刻；只看 worker 這一項。
+    5. 「其他」：以上都不成立（例如有失敗在別的斷言，包括 v7-08 的檢查，或 3、4 混在一起）。照實記錄，交使用者判斷。
+  - 流程的順序（讀程式碼）：重送檢查在 `main` 裡，v7-08 的檢查在之後的 `CheckActions`。重送檢查失敗的那幾次，v7-08 不會跑到，也就沒有時間線。
+  - 範圍的限界：
+    - 只有一台 Windows 機器；worker 探針沒有 SDL（和出貨的 Client 不同）；只看 worker 這一項。
+    - Client 的送出時刻是 `Send` 開始時的 steady_clock，不是網卡實際送出的時刻。
+    - D226 有 2 次是 mock 看不到的計時器喚醒，來源沒有找出來。
+    - 同一段的 ACK 檢查（「an advanced ACK waited for an unrelated wake」）可能有和 v7-08 相同的相位問題，沒有量。
+    - v7-08 的時機修正（D227）只在 macOS 用突變確認過；Windows 上的突變不在這次的範圍。
 
 ## v7-08 檢出力的比較（D225，事前宣告 2026-10-28 核准）
 
