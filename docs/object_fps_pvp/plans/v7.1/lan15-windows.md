@@ -18,6 +18,7 @@
 | S4 | F7：Windows 上的 Match Tick 與 IPC 精度（只記錄） | 只記錄 | INVENTORY F7（目前只有 16 個窗口的數據） |
 | S5 | 兩機的時鐘偏移與漂移（時間回聲，≥15 分鐘，只記錄） | 只記錄 | v7 D73；STABLE_BASELINE「平台」 |
 | S6 | 握手期的 WSAECONNRESET（K9／W6）：觀察 | 只記錄 | D219 Q5 |
+| S7 | 新的人物模型（Player_V19，分支 `claude/pvp-player-v19`）：Windows 與 macOS 上的外觀（動畫、法線、頭髮）與載入。模型是使用者自己做的 | L3（使用者觀察）＋log 核對（沒有載入錯誤） | D234 |
 | T1 | ~~K10~~：移到 v7.1 之後（D233：LAN 場次不經 `run_case`） | — | D181、D233 |
 
 ## 範圍的限界（AGENTS.md §14 開頭；照 HANDOFF「後續宣告要寫的範圍的限界」照抄，直到解消）
@@ -77,3 +78,11 @@ lan15-windows
 - 6：lan15-declare 的對抗式檢查用 xhigh-reviewer（1 人，xhigh，高於主會話，使用者同意）。
 - 1：日期與人數，使用者另外說。
 - D233：K10 移到 v7.1 之後；lan15-tools 只剩 LAN 場次 log 的判定入口。lan15-declare 開始。
+
+## 新模型併入 v7.1（D234，2026-10-29）
+
+使用者：「不不不，連帶lan15測試一起。這是的模型是自己做的，我怕有問題。」
+
+- 換模型的會話在使用者更新並確認後 commit（含新的 FBX），GUI 驗收的頭髮判定先由使用者決定，回報分支的最新 commit。
+- 主會話把 `claude/pvp-player-v19` 以 `--no-ff` 合併進發行線，本機跑測試，再派發四平台 L1；lan15 的測試包用這次 L1 的產物。
+- lan15 的範圍加 S7。
