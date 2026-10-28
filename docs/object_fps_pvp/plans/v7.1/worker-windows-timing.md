@@ -482,3 +482,94 @@
   - ACK 檢查的相位問題沒有量；D227 只在 macOS 用突變確認過。
   - 視窗版本身沒有用突變確認過檢出力。
   - Client 的送出時刻是 `Send` 開始時的 steady_clock；token 等待量的是 mock 收到的時刻減去發佈的時刻（包含 loopback 的傳遞）。
+
+## token 等待的觀測：Windows 結果（2026-10-29，Windows 機器，D230 的宣告）
+
+收支：一致（20 次都有結束碼與「worker probe: Engine SDL window open」；跑到 token 那段的 19 次都有「worker token waits」那一行。W11 在 token 那段之前就失敗了，沒有這一行）。
+
+- **判定（照宣告的互斥順序，取第一個成立的）：5.「其他」**。
+  - 1「確認不了」不成立：建置成功、含 `bff5bf36`、20 次都有結束碼與 window open；失敗在 token 檢查的 8 次都有那一行值。
+  - 2「全部通過」不成立：9 次結束碼是 1。
+  - 3「超過在 1 ms 以內」與 4「超過多於 1 ms」都不成立：兩者都要求「所有失敗都在 token 的兩項檢查」，但 W11 失敗在 `既存の接続はリモート ホストに強制的に切断されました。`（宣告舉例的 WSAECONNRESET，同 D229 的 P7）。
+  - 5 成立。照實記錄，交使用者判斷。
+  - 照實附記（不是判定）：失敗在 token 檢查的 8 次都是「a token wait outlived four commands」，`settled_excess_ms` 是 0.03～0.16 ms；「the waiting sends did not drain the token debt」與「the third new command did not wait for a token」0 次。
+- 不跑 lan15。
+- **建置**：
+  - 發行線 `ff252bd2e66b0a7afe861967a917ef217450809b`，主 checkout。`git merge-base --is-ancestor bff5bf36 HEAD` 成立；`git ls-files --eol` 沒有 `w/crlf`，工作樹乾淨。
+  - 在 VS Community 2026 的 vcvars64 環境裡：`cmake --preset ci-windows` exit 0、`cmake --build build/target/_build/ci-windows` exit 0（增量 31 步，含 `worker_main.cpp`；2026-10-29 00:04～00:05）。MSVC 19.51.36260。vcvars64 照舊印了 `'vswhere.exe' is not recognized …`（cl 有找到）。
+  - `build/target/_build/ci-windows/acceptance/object_fps_pvp/gyo_object_fps_pvp_worker_window_probe.exe` SHA-256 `eecc847f77d51c2baa68ea6037a072fb72da366ee3e266fe541298fcb2b39101`；旁邊的 `SDL3.dll` `38a1f37a793669689f90561bfec239cf9dc40342c13e5e25eea90b6ac80eaec3`（和 D229 相同）。
+- **機器**：Windows 11 Pro 10.0.26300，Intel Core i7-8750H（6 核 12 執行緒，筆電），16 GB；接著 AC（`PowerOnline=True`），電源計畫「平衡」（`381b4222-…`）。和 D229 是同一台。
+- **跑法**：
+  - 在登入的桌面工作階段裡，從 Claude Code 的 shell 直接執行視窗探針（不經 ctest），沒有參數，工作目錄是執行檔所在的資料夾。串行 20 次（00:05:05～00:13:10）。沒有重跑，中途沒有改任何東西，期間沒有其他吃重的工作。視窗出現後沒有碰它。
+  - 每次外面包了 `timeout 300`（防止卡住）。20 次都沒有碰到（每次 19～26 秒）。
+  - stdout 與 stderr 合併存成一個檔。
+- 20 次的「worker resend rhythm」：`client_sends` 與 `mock_resends` 都是 57（W11 沒有這一行），全文在各自的 log。
+- 通過的 11 次（W2、W4、W9、W10、W13、W14、W16～W20）都在最後印出 `"passed":true` 的 JSON。
+
+| 次序 | 執行 | 結束碼 | window open | `drain_excess_ms` | `settled_excess_ms` | `client_sends` | 失敗訊息 |
+|---|---|---|---|---|---|---|---|
+| 1 | W1 | 1 | 有 | -0.52 | 0.09 | 57 | `a token wait outlived four commands`（括號內同下方的 token 行） |
+| 2 | W2 | 0 | 有 | -0.76 | -1.07 | 57 | —（通過） |
+| 3 | W3 | 1 | 有 | -0.37 | 0.03 | 57 | `a token wait outlived four commands`（括號內同下方的 token 行） |
+| 4 | W4 | 0 | 有 | -0.35 | -0.47 | 57 | —（通過） |
+| 5 | W5 | 1 | 有 | -0.23 | 0.06 | 57 | `a token wait outlived four commands`（括號內同下方的 token 行） |
+| 6 | W6 | 1 | 有 | -0.22 | 0.09 | 57 | `a token wait outlived four commands`（括號內同下方的 token 行） |
+| 7 | W7 | 1 | 有 | -0.67 | 0.13 | 57 | `a token wait outlived four commands`（括號內同下方的 token 行） |
+| 8 | W8 | 1 | 有 | -0.35 | 0.11 | 57 | `a token wait outlived four commands`（括號內同下方的 token 行） |
+| 9 | W9 | 0 | 有 | -0.03 | -0.79 | 57 | —（通過） |
+| 10 | W10 | 0 | 有 | -0.84 | -0.50 | 57 | —（通過） |
+| 11 | W11 | 1 | 有 | 沒有 | 沒有 | 沒有 | `既存の接続はリモート ホストに強制的に切断されました。` |
+| 12 | W12 | 1 | 有 | -0.31 | 0.16 | 57 | `a token wait outlived four commands`（括號內同下方的 token 行） |
+| 13 | W13 | 0 | 有 | -0.62 | -0.09 | 57 | —（通過） |
+| 14 | W14 | 0 | 有 | -0.16 | -0.76 | 57 | —（通過） |
+| 15 | W15 | 1 | 有 | -0.74 | 0.10 | 57 | `a token wait outlived four commands`（括號內同下方的 token 行） |
+| 16 | W16 | 0 | 有 | -0.73 | -0.99 | 57 | —（通過） |
+| 17 | W17 | 0 | 有 | -0.83 | -0.36 | 57 | —（通過） |
+| 18 | W18 | 0 | 有 | -0.35 | -0.79 | 57 | —（通過） |
+| 19 | W19 | 0 | 有 | -0.30 | -1.03 | 57 | —（通過） |
+| 20 | W20 | 0 | 有 | -0.60 | -0.29 | 57 | —（通過） |
+
+W11 的 log 共 23 行，除了失敗訊息與「window open」都是 `[ObjectFPS/PvP]` 的行；沒有節奏行，也沒有 token 行（失敗在重送檢查之前）。
+
+**20 次的「worker token waits」全文**：
+
+- W1：`worker token waits: waits_ms=16.69/12.15/7.29/3.15/2.02/1.92/0.98/0.68 intervals_ms=16.70/16.88/16.89/16.41/16.59/16.80/17.01 drained_ms=4.50/4.65/3.92 drain_excess_ms=-0.52 settled_limits_ms=2.01/1.83/1.75/1.75 settled_excess_ms=0.09`
+- W2：`worker token waits: waits_ms=16.31/12.08/7.59/3.60/1.14/0.63/0.61/0.60 intervals_ms=16.97/16.91/16.61/16.20/16.83/16.61/16.75 drained_ms=3.93/4.24/4.04 drain_excess_ms=-0.76 settled_limits_ms=2.22/1.75/1.81/1.75 settled_excess_ms=-1.07`
+- W3：`worker token waits: waits_ms=16.44/10.88/7.30/2.90/0.99/0.97/1.83/1.94 intervals_ms=17.44/16.53/16.64/16.86/16.62/16.12/16.50 drained_ms=4.79/3.71/4.43 drain_excess_ms=-0.37 settled_limits_ms=1.75/1.79/2.29/1.91 settled_excess_ms=0.03`
+- W4：`worker token waits: waits_ms=16.56/10.98/7.12/2.42/1.45/1.40/0.70/0.82 intervals_ms=17.51/16.65/16.55/16.35/16.55/17.36/16.02 drained_ms=4.73/3.87/4.82 drain_excess_ms=-0.35 settled_limits_ms=2.07/1.87/1.75/2.40 settled_excess_ms=-0.47`
+- W5：`worker token waits: waits_ms=16.18/11.41/7.11/3.76/0.97/1.92/1.93/0.97 intervals_ms=17.14/16.61/16.61/17.21/15.98/16.55/17.48 drained_ms=4.30/4.36/3.40 drain_excess_ms=-0.23 settled_limits_ms=1.75/2.43/1.87/1.75 settled_excess_ms=0.06`
+- W6：`worker token waits: waits_ms=16.73/11.71/6.97/2.68/0.96/0.98/0.97/1.94 intervals_ms=16.73/17.20/16.54/16.92/16.59/16.50/16.57 drained_ms=4.95/4.20/4.41 drain_excess_ms=-0.22 settled_limits_ms=1.75/1.82/1.91/1.84 settled_excess_ms=0.09`
+- W7：`worker token waits: waits_ms=15.81/11.69/6.51/2.78/1.92/0.97/1.67/0.61 intervals_ms=16.77/17.36/16.45/16.62/16.72/16.11/17.18 drained_ms=4.02/4.49/3.94 drain_excess_ms=-0.67 settled_limits_ms=1.79/1.75/2.31/1.75 settled_excess_ms=0.13`
+- W8：`worker token waits: waits_ms=16.54/12.20/8.18/3.88/0.95/1.91/1.89/1.84 intervals_ms=17.50/15.98/16.72/17.23/16.07/16.64/16.56 drained_ms=3.52/4.71/4.25 drain_excess_ms=-0.35 settled_limits_ms=1.75/2.35/1.78/1.86 settled_excess_ms=0.11`
+- W9：`worker token waits: waits_ms=15.89/12.52/7.15/3.58/0.57/0.96/0.97/0.96 intervals_ms=16.84/16.97/16.39/16.72/17.14/16.58/16.60 drained_ms=3.20/5.07/3.85 drain_excess_ms=-0.03 settled_limits_ms=1.75/1.75/1.84/1.82 settled_excess_ms=-0.79`
+- W10：`worker token waits: waits_ms=16.46/11.68/7.82/3.63/1.31/0.62/1.23/1.26 intervals_ms=17.12/16.48/16.78/16.45/16.86/16.41/16.66 drained_ms=4.33/4.04/4.08 drain_excess_ms=-0.84 settled_limits_ms=1.97/1.75/2.01/1.76 settled_excess_ms=-0.50`
+- W11：沒有（失敗在 token 那段之前）
+- W12：`worker token waits: waits_ms=16.65/12.05/7.06/2.75/1.99/0.71/1.96/1.85 intervals_ms=16.67/16.80/17.32/16.59/16.80/16.47/16.03 drained_ms=4.61/4.85/3.66 drain_excess_ms=-0.31 settled_limits_ms=1.83/1.75/1.95/2.39 settled_excess_ms=0.16`
+- W13：`worker token waits: waits_ms=15.96/11.61/7.30/3.67/1.92/0.97/0.97/0.96 intervals_ms=16.91/16.89/16.51/16.41/17.37/16.63/16.43 drained_ms=4.11/4.09/3.79 drain_excess_ms=-0.62 settled_limits_ms=2.01/1.75/1.79/1.99 settled_excess_ms=-0.09`
+- W14：`worker token waits: waits_ms=16.52/11.51/6.96/3.65/0.98/0.98/0.99/0.99 intervals_ms=17.46/16.22/16.59/17.15/16.39/16.56/16.95 drained_ms=4.22/5.00/3.38 drain_excess_ms=-0.16 settled_limits_ms=1.75/2.02/1.85/1.75 settled_excess_ms=-0.76`
+- W15：`worker token waits: waits_ms=17.07/12.73/8.47/3.77/0.97/1.92/1.91/0.96 intervals_ms=17.08/16.50/17.17/16.82/16.46/16.60/16.75 drained_ms=3.93/4.43/4.20 drain_excess_ms=-0.74 settled_limits_ms=1.75/1.96/1.81/1.75 settled_excess_ms=0.10`
+- W16：`worker token waits: waits_ms=16.35/11.94/7.68/4.01/0.66/0.62/0.62/0.76 intervals_ms=16.97/16.67/16.45/17.10/16.42/16.47/16.97 drained_ms=4.11/4.26/3.89 drain_excess_ms=-0.73 settled_limits_ms=1.75/2.00/1.94/1.75 settled_excess_ms=-0.99`
+- W17：`worker token waits: waits_ms=16.26/11.72/7.62/2.84/1.67/0.50/1.81/0.94 intervals_ms=17.22/16.46/17.11/16.33/16.72/16.25/16.80 drained_ms=3.99/4.30/4.34 drain_excess_ms=-0.83 settled_limits_ms=2.08/1.75/2.17/1.75 settled_excess_ms=-0.36`
+- W18：`worker token waits: waits_ms=16.92/12.61/7.26/4.21/0.96/0.97/0.96/0.98 intervals_ms=16.93/17.20/16.07/16.99/16.42/16.97/16.39 drained_ms=4.05/4.82/3.64 drain_excess_ms=-0.35 settled_limits_ms=1.75/2.00/1.75/2.03 settled_excess_ms=-0.79`
+- W19：`worker token waits: waits_ms=16.25/11.15/8.03/3.24/0.65/0.74/0.66/0.72 intervals_ms=17.22/16.27/16.60/16.97/16.63/16.76/17.11 drained_ms=4.54/3.52/4.86 drain_excess_ms=-0.30 settled_limits_ms=1.75/1.79/1.75/1.75 settled_excess_ms=-1.03`
+- W20：`worker token waits: waits_ms=16.54/11.38/7.56/3.27/0.98/1.94/0.96/0.59 intervals_ms=17.26/16.39/16.89/16.93/16.19/16.76/17.15 drained_ms=4.57/4.10/4.07 drain_excess_ms=-0.60 settled_limits_ms=1.75/2.23/1.75/1.75 settled_excess_ms=-0.29`
+
+**「v7-08 wake timeline」**（只有通過的 11 次跑到 v7-08）：
+
+| 次 | 照抄 |
+|---|---|
+| W2 | `v7-08 wake timeline: action_ms=0.75 events=in:Actions@0.74` |
+| W4 | `v7-08 wake timeline: action_ms=0.98 events=in:Actions@0.97` |
+| W9 | `v7-08 wake timeline: action_ms=0.97 events=in:Actions@0.97` |
+| W10 | `v7-08 wake timeline: action_ms=0.67 events=in:Actions@0.66` |
+| W13 | `v7-08 wake timeline: action_ms=0.98 events=in:Actions@0.97` |
+| W14 | `v7-08 wake timeline: action_ms=0.99 events=in:Actions@0.98` |
+| W16 | `v7-08 wake timeline: action_ms=0.99 events=in:Actions@0.98` |
+| W17 | `v7-08 wake timeline: action_ms=0.58 events=in:Actions@0.58` |
+| W18 | `v7-08 wake timeline: action_ms=0.98 events=in:Actions@0.98` |
+| W19 | `v7-08 wake timeline: action_ms=0.76 events=in:Actions@0.76` |
+| W20 | `v7-08 wake timeline: action_ms=0.99 events=in:Actions@0.98` |
+
+- **判讀交給 v7.1 會話**（Windows 端不做）。宣告、門檻、測試、產品程式都沒有改。
+
+**證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-D230-20261029/`，內含 `build.log`、`build-exit.txt`（建置的結束碼）、`commit.txt`、`build-commit.txt`、`msvc-version.txt`、`machine.txt`、`hashes.txt`、`W1.log`～`W20.log`、`runs.txt`（`exit=` 是探針的結束碼）。
