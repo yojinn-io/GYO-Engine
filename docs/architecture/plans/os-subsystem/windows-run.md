@@ -177,7 +177,7 @@ python docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --bui
 
 ## 結果（Windows 端填）
 
-### 第 1 次（2026-10-28，停在 W3）
+### 第 1 次（2026-10-28，停在 W3；使用者決定停在這裡）
 
 細節：[dev_log](../../../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)。
 

@@ -2,7 +2,9 @@
 
 日期：2026-10-28。分支 `claude/os-windows-run`。計畫見 [windows-run.md](../architecture/plans/os-subsystem/windows-run.md)。
 
-**狀態：停在 W3（不通過），等使用者決定。** W0～W2 完成，W1 有失敗（使用者決定 W5 也照跑），W3 不通過（`window deadline p50`，不重跑），W4～W8 未跑。
+**狀態：停在 W3（不通過）；使用者決定第 1 次停在這裡（2026-10-28）。** W0～W2 完成，W1 有失敗（使用者決定 W5 也照跑），W3 不通過（`window deadline p50`，不重跑），W4～W8 未跑。
+
+收支：確認できない（W3 是比較兩側分布的計測，不是送收的計數；腳本照計畫各側跑完 4 對 × 2 情境，16 個結果檔與 16 個 sleeper 檔都在，沒有缺漏）。受け入れ判定（D71）的結果是不通過，照規則不重跑。
 
 - 規則：只跑、只記錄；不改程式碼、測試、突變目錄、腳本與 CMake。判定與門檻照事前宣告（D68、D69、D71），不放寬。
 - 證據目錄（不進 repo）：B 的 checkout 裡的 `build/target/_build/test/logs/os-windows-run-20261028/`。
@@ -30,7 +32,16 @@
 
 這台唯一的 Python 是 embedded 版（`D:\code\Runtime\python-3.13.3-embed-amd64`，3.13.3；`py --list` 沒有其他版本）。它的 `python313._pth` 讓腳本所在目錄不在 `sys.path`（`sys.flags.safe_path` 是 True），PYTHONPATH 也被忽略。所以 `wake_compare.py` 的 `import wake_baseline` 失敗（`ModuleNotFoundError`）。
 
-處理（使用者同意）：repo 的腳本改用會話 scratchpad 的啟動器執行。啟動器先把腳本所在目錄加進 `sys.path`，再以 `runpy.run_path(..., run_name="__main__")` 執行原腳本，參數照文件。腳本本身不改；量測程式由腳本直接以 `subprocess` 啟動，不經過啟動器。
+處理（使用者同意）：repo 的腳本改用會話 scratchpad 的啟動器執行。啟動器先把腳本所在目錄加進 `sys.path`，再以 `runpy.run_path(..., run_name="__main__")` 執行原腳本，參數照文件。腳本本身不改；量測程式由腳本直接以 `subprocess` 啟動，不經過啟動器。啟動器全文（重現用）：
+
+```python
+import runpy, sys
+from pathlib import Path
+script = Path(sys.argv[1]).resolve()
+sys.path.insert(0, str(script.parent))
+sys.argv = [str(script)] + sys.argv[2:]
+runpy.run_path(str(script), run_name="__main__")
+```
 
 ## W0：準備
 
@@ -138,4 +149,17 @@ python <scratchpad>/run_script.py tests/common/time/wake_compare.py --a <證據�
 
 ## W4～W8
 
-未跑：W3 不通過，照規則停下回報使用者。
+未跑：W3 不通過，照規則停下回報使用者；使用者決定第 1 次停在這裡。
+
+## 留在這台機器上的東西
+
+- worktree：`..\gyo-a-wait`、`..\gyo-a-threads`、`..\gyo-b-mingw`（各含 MSVC 建置樹；`gyo-b-mingw` 還沒建置）。之後接著跑 W4～W8 時可以直接用，沒有刪。
+- 證據目錄：B 的 checkout 的 `build/target/_build/test/logs/os-windows-run-20261028/`。
+- `%TEMP%` 的殘留：沒有檢查。
+
+## 經驗（給下一次 Windows 執行）
+
+- 這台的 `python` 是 embedded 版：會讓同目錄 import 的腳本失敗（W3 的 `wake_compare.py`、W1 的 28 項驗收）。下次先裝一般版 Python，或照上面的啟動器跑。
+- ctest 也要在 vcvars64 環境裡跑，否則 `cmake.ProcessCodePage`、`cmake.ProjectComposition` 找不到 `rc`。
+- 會話的執行環境沒有主控台：`os.console_ctrl_c` timeout、`os.console_close` Skipped。
+- W3 的 +0.02 ms（P50）邊界，在這台 Windows 上比同側 4 次的極差還小；Windows 上沒有 A/A 校準的資料。
