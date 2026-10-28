@@ -311,3 +311,42 @@
 - **範圍的限界**（之後的宣告照抄，直到解消）：
   - Client 網路執行緒的 60 Hz 重送，在 Windows 上依賴程序的計時器解析度（靠 SDL 提高）。沒有 SDL 的程序只有約 43 Hz。
   - `object_fps_pvp.worker` 在 Windows 上停在重送檢查，之後的檢查（包括 v7-08 的 `CheckActions`）在 Windows 上都沒有跑到。
+
+## 出貨條件下的重送（D229，事前宣告 2026-10-28 核准）
+
+使用者：「做 A：今晚做好開著 SDL 視窗的 worker 探針，寫好它和 lan15 的事前宣告；明天 Windows 先跑探針，通過才跑 lan15。」之後：「這個今晚就跑完。」核准：「核准 D229 的事前宣告，寫進文件後推送，我今晚在 Windows 上跑。」以下內容核准後不改，跑完不放寬（AGENTS.md §14.1）。
+
+- **突變（D184）**：探針的變更（`1c0f892d`）之後，worker 檢查的 47 個突變在本機重跑中；推送時還沒跑完，結果記在下面。判定的程式沒有改。
+
+- **目的**：D228 量到沒有 SDL 的 Windows 程序裡，Client 1 秒只重送 43 次。出貨的 Client 會開 Engine 的 SDL 視窗，而 SDL 會提高程序的計時器解析度。這次在「開著 SDL 視窗」的條件下量重送次數，判斷 43 次是不是出貨版的缺陷。
+- **探針（`1c0f892d`）**：
+  - `gyo_object_fps_pvp_worker_window_probe`：和 worker 探針是同一份 `worker_main.cpp`，另外定義 `GYO_WORKER_PROBE_WINDOW`、連結 `GYO::PlatformSDL`。開頭用 `SdlPlatform::Create` 開一個 640×360 的視窗（和 Client、W4 的 window 組相同的初始化路徑），處理事件 1 秒讓視窗出現，印出「worker probe: Engine SDL window open」，之後不再處理事件，照常跑完整個 worker 驗收。
+  - 兩支探針都在重送的那 1 秒結束後，每次印出「worker resend rhythm: …」（四個值），不再只在失敗時印。判定與門檻都不改。
+  - 不是 CTest，也不是驗收的角色，只在這份宣告下手動執行。
+  - macOS（Intel）本機試跑各 1 次（不算判定）：兩支都通過，`client_sends=59`。
+- **建置**：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`）。發行線 `claude/pvp-v71-release`，必須含 `1c0f892d`。記錄建置的 commit 與 MSVC 版本；`git ls-files --eol` 沒有 `w/crlf`、工作樹乾淨。
+- **跑法**：
+  - 在有桌面的登入工作階段裡（視窗需要顯示器），直接執行兩個執行檔（不經 ctest），交錯 W、P、W、P…（W＝window 探針，P＝沒有視窗的探針），各 10 次，共 20 次，串行。
+  - 執行檔在 `build/target/_build/ci-windows/acceptance/object_fps_pvp/` 之下（多組態時在 `Release/` 裡）。window 探針旁邊要有 SDL 的 DLL（建置會複製）。
+  - 視窗出現後不要點它、不要移動或縮小；Windows 顯示「沒有回應」也照樣不碰。期間不做其他吃重的工作。
+  - 不重跑、中途不改任何東西。每次的完整輸出各存一個檔。
+- **每次記錄**：結束碼；有沒有「Engine SDL window open」（只限 W）；「worker resend rhythm」那一行的四個值；失敗時完整的失敗訊息（用訊息辨認，不用行號）；有「v7-08 wake timeline」時照抄。
+- **收支**：20 次都要有結束碼。W 的 10 次都要有「window open」那一行。
+- **判定**（互斥，依序取第一個成立的；只看 W，P 是對照）：
+  1. 「確認不了」：建置失敗、沒有含 `1c0f892d`、有任何一次沒有結束碼，或 W 有任何一次沒有「window open」那一行。
+  2. 「出貨條件下是 60 Hz」：W 的 10 次都有節奏行，`client_sends` 都在 55～65；而且 P 的 10 次都有節奏行，`client_sends` 都不在 55～65（對照重現了 D228）。
+  3. 「出貨條件下也不是 60 Hz」：W 的 10 次都有節奏行，`client_sends` 都不在 55～65。
+  4. 「其他」：以上都不成立（例如 W 有失敗在重送之前的斷言而沒有節奏行、W 混雜、P 沒有重現 D228）。照實記錄，交使用者判斷。
+- **明天能不能接著跑 lan15**（使用者：「通過才跑 lan15」）：判定 2，而且 W 的 10 次結束碼都是 0（worker 驗收在出貨條件下整個通過，包括之前在 Windows 沒有跑到的後半段與 v7-08）。其他情況都不跑 lan15，停下回報。
+- **之後（依結果，再交使用者決定）**：
+  - 2 且 W 全部通過：43 次只發生在沒有 SDL 的程序，出貨版不受影響；記為已知限界（Client 的 60 Hz 在 Windows 上依賴 SDL 提高的計時器解析度），接著跑 lan15。沒有 SDL 的 worker 探針在 Windows 上的處理，另外交使用者決定。
+  - 3：出貨版的缺陷。v7.1 要修，修法另外交使用者決定（D229 之前整理的兩個方向：Engine OS 層設定計時器解析度，與 D78 衝突；或 `ClientConnection` 改用高解析度的計時執行緒）。
+  - 1、4：交使用者。
+- **範圍的限界**：
+  - 只有一台 Windows 機器；只看 worker 這一項。
+  - window 探針只在開頭處理事件 1 秒，之後不處理；出貨的 Client 每幀都處理。這次只檢驗「SDL 對計時器解析度的影響」，不檢驗事件處理與畫面更新的負載。
+  - Client 的送出時刻是 `Send` 開始時的 steady_clock，不是網卡實際送出的時刻。
+  - D226 有 2 次是 mock 看不到的計時器喚醒，來源沒有找出來。
+  - 同一段的 ACK 檢查（「an advanced ACK waited for an unrelated wake」）可能有和 v7-08 相同的相位問題，沒有量。
+  - v7-08 的時機修正（D227）只在 macOS 用突變確認過。
+  - 這支 window 探針沒有用突變確認過檢出力：判定看的是重送次數，不是新的斷言；worker 檢查的 47 個突變是在沒有視窗的探針上跑的（D184）。
