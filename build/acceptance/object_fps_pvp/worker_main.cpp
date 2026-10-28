@@ -1020,14 +1020,35 @@ int main(int argc,char** argv) {
             gateway.UntilTime(drainStart+std::chrono::nanoseconds(k*1'000'000'000/InputSendRate));
             drainWaits.push_back(publishWait(80+k));
         }
+        // Observation only (v7.1 D230): every step's wait and interval, the
+        // drain and settled limits the checks below compare, and how far the
+        // worst comparison of each went past its limit (positive = failed).
+        std::string tokenWaits;
+        {
+            const auto join=[](const std::vector<double>& values){std::ostringstream out;out.setf(std::ios::fixed);out.precision(2);
+                for(std::size_t n=0;n<values.size();++n)out<<(n?"/":"")<<values[n];return out.str();};
+            std::vector<double> drained,settledLimits;
+            double drainExcess=-std::numeric_limits<double>::infinity(),settledExcess=drainExcess;
+            for(std::size_t k=1;k<=3;++k) {
+                drained.push_back(drainWaits[k-1]-drainWaits[k]-(drainIntervals[k-1]-stepMs));
+                drainExcess=std::max(drainExcess,std::abs(drained.back()-stepMs/4)-drainToleranceMs);
+            }
+            for(std::size_t k=4;k<drainWaits.size();++k) {
+                settledLimits.push_back(settledWaitMs+std::max(0.0,stepMs-drainIntervals[k-1]));
+                settledExcess=std::max(settledExcess,drainWaits[k]-settledLimits.back());
+            }
+            tokenWaits="waits_ms="+join(drainWaits)+" intervals_ms="+join(drainIntervals)+" drained_ms="+join(drained)+
+                " drain_excess_ms="+join({drainExcess})+" settled_limits_ms="+join(settledLimits)+" settled_excess_ms="+join({settledExcess});
+        }
+        std::cerr<<"worker token waits: "<<tokenWaits<<'\n';
         Require(drainWaits[0]>=12,"the third new command did not wait for a token");
         for(std::size_t k=1;k<=3;++k) {
             // Each step's wait falls by a quarter step, plus any lateness of this publication.
             const double drained=drainWaits[k-1]-drainWaits[k]-(drainIntervals[k-1]-stepMs);
-            Require(std::abs(drained-stepMs/4)<=drainToleranceMs,"the waiting sends did not drain the token debt");
+            Require(std::abs(drained-stepMs/4)<=drainToleranceMs,"the waiting sends did not drain the token debt ("+tokenWaits+")");
         }
         for(std::size_t k=4;k<drainWaits.size();++k)
-            Require(drainWaits[k]<=settledWaitMs+std::max(0.0,stepMs-drainIntervals[k-1]),"a token wait outlived four commands");
+            Require(drainWaits[k]<=settledWaitMs+std::max(0.0,stepMs-drainIntervals[k-1]),"a token wait outlived four commands ("+tokenWaits+")");
         // Publishes a window and returns when its newest command was sent.
         const auto sendWindow=[&](PlayerInput input){
             const auto last=input.commands.back().sequence;
