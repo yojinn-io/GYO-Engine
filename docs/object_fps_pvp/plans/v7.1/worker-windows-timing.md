@@ -261,3 +261,38 @@
 - §14.4 的確認：舊判定殺死的突變（`v7-08-submit-no-wake`），新判定在 A、B 兩種探針上都殺死；worker 的其他 46 個突變也都被殺。沒有發現放寬的面。
 - D226 的 2 次計時器喚醒，這 30 次突變中沒有出現。來源仍然沒有找出來，範圍的限界不變。
 - 證據：本機 `scratchpad/v708/d227/`（git 忽略，會話的 scratchpad）的 `results.txt`、`logs/`、`run.sh`、`worker_A_fix.cpp`、`worker47.json`、`worker47.log`、`worker47.load`。
+
+## C 的 Windows 結果（2026-10-28，Windows 機器，D228 的宣告）
+
+收支：一致（10 次都有 ctest 的結果；10 次都失敗在重送檢查，每次四個值都有）。
+
+- **判定（照宣告的互斥順序，取第一個成立的）：3.「產品的節奏」**。
+  - 1「確認不了」不成立：建置成功、含 `0d6916a8`、10 次都有 ctest 的結果、重送檢查失敗的 10 次四個值都有。
+  - 2「全部通過」不成立：10 次都失敗。
+  - 3 成立：10 次都失敗在重送檢查，這 10 次的 `client_sends` 都是 43，不在 55～65。
+- **建置**：
+  - 發行線 `021026858802e2fdab877e75b24c9ab34cd8feda`，主 checkout。`git merge-base --is-ancestor 0d6916a8 HEAD` 成立；`git ls-files --eol` 沒有 `w/crlf`，工作樹乾淨。
+  - 在 VS Community 2026 的 vcvars64 環境裡：`cmake --preset ci-windows` exit 0、`cmake --build build/target/_build/ci-windows` exit 0（增量 31 步，含 `worker_main.cpp`；22:09～22:11）。MSVC 19.51.36260。
+  - vcvars64 印了一行 `'vswhere.exe' is not recognized as an internal or external command`，但 `cl` 有找到，configure 與 build 都成功（只記錄）。
+- **機器**：Windows 11 Pro 10.0.26300，Intel Core i7-8750H（6 核 12 執行緒，筆電），16 GB；接著 AC（`PowerOnline=True`），電源計畫「平衡」（`381b4222-…`）。和第 3 步、B 是同一台。
+- **跑法**：照宣告的指令 `ctest --test-dir build/target/_build/ci-windows -C Release -R "^object_fps_pvp\.worker$" --output-on-failure`，串行 10 次（22:13:11～22:16:27），沒有重跑，中途沒有改任何東西，期間沒有其他吃重的工作。
+
+| 次 | 結果（ctest 摘要） | ctest exit | 耗時 s | `mock_resends` | `mock_gap_ms`（最小/中位/最大） | `client_sends` | `client_gap_ms`（最小/中位/最大） |
+|---|---|---|---|---|---|---|---|
+| 1 | 失敗 | 8 | 19.09 | 43 | 16.74/28.32/29.67 | 43 | 16.80/28.48/29.66 |
+| 2 | 失敗 | 8 | 18.81 | 43 | 16.80/27.85/29.92 | 43 | 16.78/27.85/29.66 |
+| 3 | 失敗 | 8 | 18.88 | 43 | 16.72/28.35/29.55 | 43 | 16.74/28.38/29.49 |
+| 4 | 失敗 | 8 | 18.87 | 43 | 16.76/28.60/29.67 | 43 | 16.80/28.62/29.67 |
+| 5 | 失敗 | 8 | 18.91 | 43 | 16.75/28.69/29.72 | 43 | 16.77/28.71/29.74 |
+| 6 | 失敗 | 8 | 18.89 | 43 | 16.79/27.14/30.01 | 43 | 16.80/27.23/29.97 |
+| 7 | 失敗 | 8 | 18.95 | 43 | 16.27/27.36/29.94 | 43 | 16.96/27.39/29.73 |
+| 8 | 失敗 | 8 | 18.95 | 43 | 16.57/28.13/29.99 | 43 | 16.77/28.52/29.97 |
+| 9 | 失敗 | 8 | 18.94 | 43 | 16.79/27.22/30.08 | 43 | 16.82/27.21/30.02 |
+| 10 | 失敗 | 8 | 18.94 | 43 | 16.71/27.24/30.30 | 43 | 16.92/27.68/30.13 |
+
+- 失敗訊息（10 次相同，括號裡的值見上表）：`worker acceptance: unacknowledged window was not resent at approximately 60 Hz (mock_resends=… mock_gap_ms=… client_sends=… client_gap_ms=…)`。
+- 除了這一句與 ctest 的摘要，`[ObjectFPS/PvP]` 以外沒有其他訊息。
+- 「v7-08 wake timeline」：10 次都沒有出現（宣告：重送檢查失敗的那幾次，v7-08 不會跑到）。
+- **判讀交給 v7.1 會話**（Windows 端不做）。宣告、門檻、測試、產品程式都沒有改。
+
+**證據**（留在 Windows 機器上，不在 repo）：主 checkout 的 `build/target/_build/test/logs/worker-C-20261028/`，內含 `build.log`、`build-exit.txt`（建置的結束碼）、`commit.txt`、`build-commit.txt`、`msvc-version.txt`、`machine.txt`、`run1.log`～`run10.log`、`runs.txt`（`ctest_exit=` 是 ctest 的結束碼）。
