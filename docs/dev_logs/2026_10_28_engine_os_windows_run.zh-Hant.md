@@ -2,7 +2,7 @@
 
 日期：2026-10-28。分支 `claude/os-windows-run`。計畫見 [windows-run.md](../architecture/plans/os-subsystem/windows-run.md)。
 
-**狀態：進行中（中途報告）。** W0～W2 完成，W1 有失敗（使用者決定 W5 也照跑），W3 量測中，W4～W8 未跑。
+**狀態：停在 W3（不通過），等使用者決定。** W0～W2 完成，W1 有失敗（使用者決定 W5 也照跑），W3 不通過（`window deadline p50`，不重跑），W4～W8 未跑。
 
 - 規則：只跑、只記錄；不改程式碼、測試、突變目錄、腳本與 CMake。判定與門檻照事前宣告（D68、D69、D71），不放寬。
 - 證據目錄（不進 repo）：B 的 checkout 裡的 `build/target/_build/test/logs/os-windows-run-20261028/`。
@@ -10,7 +10,7 @@
 
 ## 收支（中途）
 
-計畫 9 項（W0～W8）：跑完 3 項（W0、W1、W2），進行中 1 項（W3），未跑 5 項（W4～W8，排在 W3 之後）。
+計畫 9 項（W0～W8）：跑完 4 項（W0、W1、W2、W3），其中 W3 不通過；未跑 5 項（W4～W8：W3 不通過，照規則停下）。
 
 ## 環境
 
@@ -83,8 +83,59 @@ MSVC 建置（vcvars64 環境裡，`cmake --preset ci-windows`、`cmake --build 
 
 ## W3：os-wait-backend 的 L2
 
-12:39 開始，量測中。結果出來後補在這裡。
+```
+python <scratchpad>/run_script.py tests/common/time/wake_compare.py --a <證據目錄>/programs/A --b <證據目錄>/programs/B --output <證據目錄>/wait-AB --pairs 4 --modes cli window --a-label "A_wait 4ffc7c65" --b-label "B 1b97f5d"
+```
+
+12:39～13:21（約 42 分）。**exit 1：不通過。** 12 項中 11 項通過，`window deadline p50` 不通過。照規則（D71）**不重跑**，停下回報使用者。撤回（revert）與要不要另跑 A/A 診斷，由 OS 子系統的會話與使用者決定。
+
+量測期間：12:41 在這台 commit 並推送了中途報告（`9c0318e`，只有文件，git 操作數秒；這時在 pair1 的 A-cli 中）；沒有建置，也沒有其他吃重的工作。`meta.txt` 的腳本來源 commit 是 `1b97f5d`（開始時）。Windows 上沒有 load average（`meta.txt`：`unavailable on this platform`），主機忙碌的程度只能看 sleeper。
+
+腳本印出的 12 項（中位數＝各側 4 次的中位數，ms）：
+
+| 檢查 | A | B | 上限 | 結果 |
+|---|---|---|---|---|
+| cli deadline p99 | 1.0025 | 0.9939 | 1.3031 | pass |
+| cli deadline p50 | 0.6277 | 0.6216 | 0.6477 | pass |
+| cli notify p99 | 0.0766 | 0.0764 | 0.1457 | pass |
+| cli notify p50 | 0.0192 | 0.0204 | 0.0392 | pass |
+| cli deadline never early | — | min 0.0291 | ≥0 | pass |
+| cli same backend | HighResolutionWaitableTimer | 同左 | — | pass |
+| window deadline p99 | 0.9085 | 0.9261 | 1.1856 | pass |
+| **window deadline p50** | **0.4658** | **0.4890** | **0.4858** | **FAIL**（超出 0.0032） |
+| window notify p99 | 0.0595 | 0.0571 | 0.1243 | pass |
+| window notify p50 | 0.0173 | 0.0175 | 0.0373 | pass |
+| window deadline never early | — | min 0.0214 | ≥0 | pass |
+| window same backend | HighResolutionWaitableTimer | 同左 | — | pass |
+
+每次的值（Waiter；deadline 的 P50／P99／min／max，notify 的 P50／P99，sleeper 的 P99；ms）：
+
+| 情境 | 側 | 對 | deadline P50 | P99 | min | max | notify P50 | P99 | sleeper P99 |
+|---|---|---|---|---|---|---|---|---|---|
+| cli | A | 1 | 0.6725 | 1.1004 | 0.0294 | 1.687 | 0.0191 | 0.0839 | 1.051 |
+| cli | A | 2 | 0.6983 | 1.0430 | 0.0515 | 1.097 | 0.0192 | 0.0763 | 1.088 |
+| cli | A | 3 | 0.5830 | 0.9413 | 0.0273 | 1.441 | 0.0187 | 0.0769 | 1.000 |
+| cli | A | 4 | 0.5662 | 0.9620 | 0.0424 | 1.124 | 0.0220 | 0.0756 | 0.993 |
+| cli | B | 1 | 0.6638 | 0.9862 | 0.0513 | 1.056 | 0.0190 | 0.0750 | 0.958 |
+| cli | B | 2 | 0.6383 | 0.9911 | 0.0419 | 6.644 | 0.0184 | 0.0778 | 1.052 |
+| cli | B | 3 | 0.5890 | 0.9966 | 0.0291 | 1.026 | 0.0222 | 0.0732 | 1.024 |
+| cli | B | 4 | 0.6048 | 1.0310 | 0.0515 | 1.545 | 0.0218 | 0.0788 | 1.073 |
+| window | A | 1 | 0.4628 | 0.9013 | 0.0318 | 1.211 | 0.0203 | 0.0684 | 1.048 |
+| window | A | 2 | 0.4555 | 0.9223 | 0.0173 | 1.102 | 0.0172 | 0.0523 | 0.982 |
+| window | A | 3 | 0.4688 | 0.9157 | 0.0280 | 1.180 | 0.0168 | 0.0644 | 1.056 |
+| window | A | 4 | 0.4857 | 0.8999 | 0.0340 | 1.000 | 0.0174 | 0.0545 | 0.968 |
+| window | B | 1 | 0.4873 | 0.9397 | 0.0596 | 1.127 | 0.0176 | 0.0528 | 0.966 |
+| window | B | 2 | 0.4908 | 0.9267 | 0.0214 | 1.048 | 0.0171 | 0.0707 | 1.042 |
+| window | B | 3 | 0.4962 | 0.9073 | 0.0236 | 0.995 | 0.0175 | 0.0602 | 1.002 |
+| window | B | 4 | 0.4703 | 0.9255 | 0.0267 | 1.121 | 0.0174 | 0.0541 | 0.988 |
+觀察（只記錄，不是判定，也不據此放寬）：
+- 兩側每次都回報 `HighResolutionWaitableTimer`。
+- window 的 deadline P50：A 的 4 次在 0.4555～0.4857（極差 0.030），B 的 4 次在 0.4703～0.4962（極差 0.026）。兩側的範圍重疊；同一側 4 次的極差大於邊界 +0.02 ms。cli 的 deadline P50，A 的極差是 0.132。
+- sleeper P99 在 0.958～1.088，兩側沒有明顯差別。
+- 這次沒有跑 A/A 校準；D71 的校準是在 macOS Intel 上做的，Windows 上沒有 A/A 的資料。
+
+證據：`wait-AB/verdict.json`、`wait-AB/meta.txt`、各次的 `pair<n>-<A|B>-<cli|window>[-sleeper].json`、`w3-stdout.log`。
 
 ## W4～W8
 
-未跑（排在 W3 之後）。
+未跑：W3 不通過，照規則停下回報使用者。

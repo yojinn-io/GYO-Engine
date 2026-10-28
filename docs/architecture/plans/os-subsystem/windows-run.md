@@ -177,11 +177,11 @@ python docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --bui
 
 ## 結果（Windows 端填）
 
-### 第 1 次（2026-10-28，進行中；中途報告）
+### 第 1 次（2026-10-28，停在 W3）
 
 細節：[dev_log](../../../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)。
 
-- 收支（中途）：計畫 9 項，跑完 3 項（W0、W1、W2），進行中 1 項（W3），未跑 5 項（W4～W8，排在 W3 之後）。W1 有失敗，使用者決定 W5 也照跑（2026-10-28）。
+- 收支：計畫 9 項，跑完 4 項（W0～W3），其中 W3 不通過；未跑 5 項（W4～W8：W3 不通過，照規則停下）。W1 有失敗，使用者決定 W5 也照跑（2026-10-28）。
 - 環境：Windows 11 Pro 10.0.26300，i7-8750H（6C/12T），16 GB，ACP＝OEMCP＝65001（登錄檔），開發人員模式關閉，預設終端機未設定，電源計畫「平衡」。B＝`1b97f5d61a9883a1fa063110b4e290dfb1410c96`。MSVC 19.51.36260（VS Community 2026），CMake 4.0.1，MinGW-Builds GCC 15.2.0。
 - 和文件不同的地方：這台唯一的 Python 是 embedded 版，`._pth` 讓腳本所在目錄不在 `sys.path`（PYTHONPATH 也被忽略）。repo 的腳本改用會話 scratchpad 的啟動器執行（先把腳本目錄加進 `sys.path`，再以 `runpy` 當 `__main__` 執行，參數照文件）。腳本不改（使用者同意）。
 - W0：三份 MSVC 建置的 configure 與 build 都是 exit 0（10:50～11:32）。四份 checkout 都沒有 `w/crlf`。
@@ -192,7 +192,8 @@ python docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --bui
   - **`object_fps_pvp.worker`**：`new window waited behind a fully acknowledged window's deadline`。斷言失敗，原因（實作或時序）未切開；沒有重跑。W5 會用到這一項。
   - Skipped：`os.console_close`（預期）、`object_fps_pvp.ingress_cross`。
 - W2：A、B 的量測程式與 `SDL3.dll` 已複製到證據目錄的 `programs/`（雜湊見 dev_log）。
-- W3：進行中。
+- W3：**exit 1，不通過**（12:39～13:21）。12 項中 11 項通過；`window deadline p50`：A 0.4658、B 0.4890、上限 0.4858 ms（超出 0.0032）。兩側後端都是 `HighResolutionWaitableTimer`；B 沒有早醒（min 0.0291／0.0214 ms）。照規則不重跑，停下回報。撤回與 A/A 診斷由 OS 子系統的會話與使用者決定。觀察（只記錄）：window deadline P50 的同側 4 次極差，A 0.030、B 0.026，大於 +0.02 ms 的邊界；Windows 上沒有 A/A 校準的資料。
+- W4～W8：未跑。
 
 格式：
 
