@@ -7,6 +7,9 @@
 #include "acceptance_protocol.hpp"
 #include "acceptance_capacity.hpp"
 #include "engine/time/Waiter.hpp"
+#ifdef GYO_WORKER_PROBE_WINDOW
+#include "engine/platform/sdl/SdlPlatform.hpp"
+#endif
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -802,6 +805,18 @@ int main(int argc,char** argv) {
         try{return RunClose(argv[2]);}
         catch(const std::exception& error){std::cerr<<"worker close: "<<error.what()<<'\n';return 1;}
     }
+#ifdef GYO_WORKER_PROBE_WINDOW
+    // The shipped Client runs with an Engine SDL window, and SDL raises a Windows
+    // process's timer resolution (v7.1 D228, D229). Open one the same way as the
+    // wake record's window build, let it appear, then leave it unpumped.
+    auto platform=Engine::Platform::Sdl::SdlPlatform::Create({"GYO worker probe",640,360,false});
+    if(!platform){std::cerr<<"worker acceptance: cannot open the Engine SDL window\n";return 1;}
+    for(const auto until=Clock::now()+1s;Clock::now()<until;) {
+        static_cast<void>(platform.value()->PumpEvents());
+        std::this_thread::sleep_for(10ms);
+    }
+    std::cerr<<"worker probe: Engine SDL window open\n";
+#endif
     ClogCapture capture(std::clog.rdbuf());
     struct Restore{std::streambuf* previous;~Restore(){std::clog.rdbuf(previous);}} restore{std::clog.rdbuf(&capture)};
     try {
@@ -907,8 +922,10 @@ int main(int argc,char** argv) {
         for(const auto& event:clientSends->Drain())
             if(event.kind==MovementTraceKind::Sent && (clientNs.empty() || clientNs.back()!=event.startedNs))
                 clientNs.push_back(event.startedNs);
-        Require(resends>=55 && resends<=65,"unacknowledged window was not resent at approximately 60 Hz ("+
-            ResendRhythm(mockTimes,clientNs)+")");
+        // Observation only (v7.1 D229): the rhythm on every run, not just on failure.
+        const auto rhythm=ResendRhythm(mockTimes,clientNs);
+        std::cerr<<"worker resend rhythm: "<<rhythm<<'\n';
+        Require(resends>=55 && resends<=65,"unacknowledged window was not resent at approximately 60 Hz ("+rhythm+")");
         for(auto index=resendBegin+1;index<gateway.attempts.size();++index)
             Require(gateway.attempts[index].at-gateway.attempts[index-1].at>=14ms,"worker emitted a resend catch-up burst");
 
