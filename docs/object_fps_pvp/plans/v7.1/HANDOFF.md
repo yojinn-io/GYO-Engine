@@ -213,6 +213,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D215 | （2026-10-28）OS 子系統的 D73：Windows 的計時 L2 與 os-wake-record 的基準改在分支 `claude/os-windows-run` 由 Windows 機器上的 Claude 跑（不需要人操作的項目），不再加在 lan15；os-net-errors、os-close 改排在 lan15 之前（取代 D209 中「排在 PR #96 合併後」與「那次 Windows 機器上另加計時 L2 與基準」）。os-net-errors 會動 `ClientConnection.cpp` 的 `TransientSocketError`（K9 的 `SocketErrorActionFor` 呼叫它），開工前那個會話會再通知。lan15 與它的 L3 仍屬本會話 | 使用者在 OS 子系統的會話：「我相識讓windows跑完，不用依賴人的case，這樣就可以把 OS子系統 完結掉。os-net-error 也有可以參考的對象。也可以從windows量測。」（經該會話轉達） |
 | D216 | （2026-10-28）`object_fps_pvp.worker` 在 Windows MSVC 上失敗（os-windows-run 第 1 次，「new window waited behind a fully acknowledged window's deadline」），交給本會話。加了觀測（失敗訊息印出 `restart_ms` 與 `completed_window_gap_ms`），Windows 上 10 次的量測宣告是草案，等使用者核准：[worker-windows-timing.md](worker-windows-timing.md)。OS 子系統的 W3 不通過（D74），os-wait-backend 暫不併入，lan15 跟著延後 | 「對接 OS 子系統的 Windows 實機結果」會話轉達：使用者已決定把 worker 交給本會話 |
 | D217 | （2026-10-28）核准 worker-windows-timing.md 第 3 步的事前宣告（MSVC，發行線含 `d7e0af31`，串行 10 次，只記錄並分類），交給 OS 子系統 Windows 續跑的 worker-10x（windows-run.md「第 1 次續跑」，W5 之後、W7 之前） | 使用者：「核准 worker-windows-timing.md 的事前宣告，寫進文件，交給 Windows 續跑的 worker-10x。」 |
+| D218 | （2026-10-28）OS 子系統依原意「OS 相容層」重新定界（核心是支撐遊戲跑起來，不是 QA 或多系統相容）：「對接 OS 子系統的 Windows 實機結果」已封存、「規劃 Engine 的 OS 統一子系統」停止；新任務卡「盤點 OS 子系統並收口到支撐遊戲運行」盤點後提出收口方案，核准前不動發行線。在那之前發行線不再併入新的 OS 批次，也不為 OS 安排實機量測。D209、D215 中「lan15 等 OS 子系統全部完成」的前提跟著失效，lan15 的排程待定。worker-10x（D217）原本排在 OS 的 Windows 續跑裡，現在沒有執行者 | 使用者的決定，架構健檢會話轉達 |
 
 ## 規劃紀錄（記錄器）
 
