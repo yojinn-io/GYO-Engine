@@ -1,7 +1,7 @@
 # OS 子系統：Windows 自動項目的執行（os-windows-run）
 
-建立：2026-10-28。決定：D73、D74（[交接](HANDOFF.md)的決策紀錄）。分支：`claude/os-windows-run`。
-**狀態：第 1 次停在 W3（不通過，紀錄保留）；「第 1 次續跑」等 Windows 端執行（D74）。**
+建立：2026-10-28。決定：D73、D74、D76（[交接](HANDOFF.md)的決策紀錄）。分支：`claude/os-windows-run`。
+**狀態：第 1 次停在 W3（不通過，紀錄保留）；「第 1 次續跑」等 Windows 端執行（D74、D76）。**
 
 ## 這份文件是什麼
 
@@ -175,53 +175,45 @@ python docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --bui
 
 約 4～6 h，大部分是建置、量測與突變的等待時間。超過 9 h（1.5 倍）時停下回報。
 
-## 第 1 次續跑（D74）
+## 第 1 次續跑（D74、D76）
 
 第 1 次停在 W3（不通過）。使用者的決定（D74）：
 
 - W3 的不通過保留，不重跑，判定不放寬。
 - 在 Windows 跑一次 A/A 診斷：同一份 A 程式放在兩側，結果只記錄。同時記錄兩份 `SDL3.dll` 的雜湊。
 - 看完診斷之後，由使用者在「撤回 os-wait-backend」與「Windows 另行事前宣告判定」之間決定。這不在 Windows 端決定。
-- W1 的環境問題照下面的步驟修正後重跑。`object_fps_pvp.worker` 的失敗交給 v7.1 會話；這邊只做切開原因的前兩步。
-- W4～W8 不等 W3 的結論，照第 1 次的指令跑。
+- `object_fps_pvp.worker` 的失敗交給 v7.1 會話（v7.1 D216）。
 
-「規則」一節照舊適用：只跑、只記錄；不改程式碼、測試、突變目錄、腳本與 CMake。只有下面 W0b 的安裝與重新 configure 例外（使用者同意，D74）。
+2026-10-28 14:20 更新：W4～W7 已經照第 1 次的指令跑完（dev_log 的 W4～W7，`844e92b1`、`7306a142`），續跑不再跑這四項。W4 與 W5 也已經回答了 worker 切開的第 1、2 步：沒有 SDL 時 cli 的 `sleep_until` P50 是 15.63 ms；A_threads 上的 worker 也同樣失敗。
+
+2026-10-28 D76：使用者的原則是「Windows 與 Linux 實機只處理 CI 無法處理或不好觀測的任務，驗收的主要標準是 CI」。下表每一項都寫出 CI 做不到的理由，說不出理由的移出：
+
+- 拿掉 W1b（重跑 B 的完整 ctest）：它重複了 CI 的 windows-x64 L1。第 1 次 W1 的結果只當參考；其中 30 項環境類失敗（embedded Python、`rc` 不在 PATH）不是產品或 Engine 的缺陷。
+- 拿掉 W1-ctrlc（`os.console_ctrl_c` 的診斷）：這一項標 cpu，CI 每次都跑而且通過。第 1 次的失敗記為會話的執行環境所致，不診斷。
+- 拿掉 W0b（裝一般的 Python、B 重新 configure）：它只是為了 W1b。剩下的腳本照第 1 次的方式，用 scratchpad 的啟動器跑；W3-aa 用和 W3 相同的方式，條件也比較一致。D74 的「裝 Python」因此不做。
+
+「規則」一節照舊適用：只跑、只記錄；不改程式碼、測試、突變目錄、腳本與 CMake。worker-10x 另建發行線是例外（D74）。
 
 ### 範圍與順序
 
-| 代號 | 白話 | 判定 |
-|---|---|---|
-| W0b | 準備：裝一般的 Python，B 重新 configure | — |
-| W3-samples | 補記 W3 每次的樣本數與略過的週期（讀現有證據） | 只記錄 |
-| W3-dll | 兩份 `SDL3.dll` 的雜湊（讀現有副本） | 只記錄 |
-| worker-tick | 從 W3 的證據讀沒有 SDL 的程序的 Sleep 粒度（worker 切開的第 1 步） | 只記錄 |
-| W1b | B 的完整 ctest 第二次（vcvars64 裡、一般的 Python） | 見下 |
-| W1-ctrlc | `os.console_ctrl_c` 的診斷：重新啟用 Ctrl+C 後只跑這一項 | 只記錄 |
-| W3-aa | Windows 的 A/A 診斷（同一份 A 程式當兩側） | 只記錄（D74） |
-| W4 | os-wake-record 的 Windows 基準 | 只記錄（D68） |
-| W6 | os-net-errors 的 UDP 錯誤量測 | 只記錄（D73） |
-| W5 | os-threads-backend 的 L2；另記 worker 每次的結果（worker 切開的第 2 步） | `role started` 行逐字相同（D69） |
-| W7 | Windows 專用突變 12 條 | killed／survived／未跑 |
-| W8 | MinGW 的確認 | 只記錄（D66） |
+| 代號 | 白話 | 判定 | 為什麼 CI 做不到 |
+|---|---|---|---|
+| W3-samples | 補記 W3 每次的樣本數與略過的週期（讀現有證據） | 只記錄 | W3 的證據只在這台機器上；補完實機量測的收支 |
+| W3-dll | 兩份 `SDL3.dll` 的雜湊（讀現有副本） | 只記錄 | 同上，是 W3 的診斷 |
+| host-state | 量測時段開始與結束時的電源與系統計時器解析度 | 只記錄 | W3-aa 的條件紀錄；CI 的 runner 是共用的虛擬機，沒有這台的條件 |
+| W3-aa | Windows 的 A/A 診斷（同一份 A 程式當兩側） | 只記錄（D74） | 晚醒是亞毫秒級的時序，CI 的共用 runner 量不準；W3 的判定本來就定在實機上（D71） |
+| worker-10x | v7.1 D216 的 worker 10 次量測（另建發行線）；**宣告有核准才跑** | 照 v7.1 的宣告，只記錄 | CI 在任何平台都不跑 network 標籤的測試（`CMakePresets.json` 的 test preset 只跑 `cpu\|shader`，D204），所以沒有 worker 的 CI 紀錄。要不要改成由 CI 跑，由 v7.1 會話與使用者決定 |
+| W8 | MinGW 的確認（第 1 次還沒跑完時才跑） | 只記錄（D66） | CI 沒有 MinGW 的 job（D66：CI 只驗 MSVC） |
 
 - 照表的順序執行。
-- W3-aa、W4、W6 是量測：期間不建置、不跑其他吃重的工作，也不 commit、不推送。第 1 次在 W3 的 pair1 中途推送過一次，這次避開。
-- 會建置的 W7、W8 排在所有量測之後。
+- host-state、W3-aa、host-state（結束）是量測時段：期間不建置、不跑其他吃重的工作，也不 commit、不推送。第 1 次在 W3 的 pair1 中途推送過一次，這次避開。
+- 量測時段接著電源（AC），不改電源計畫。
+- 會建置的 worker-10x、W8 排在量測之後。
 - 證據目錄沿用第 1 次的 `build/target/_build/test/logs/os-windows-run-20261028/`，檔名見各項。
 - 第 1 次留下的 worktree（`..\gyo-a-wait`、`..\gyo-a-threads`、`..\gyo-b-mingw`）與建置樹直接沿用，不重新建立，也不重新建置（dev_log 的「留在這台機器上的東西」）。開始前確認每份的 HEAD 仍是 W0 表裡的 commit、工作樹乾淨。
-- 下面的 `<python>` 指 W0b 裝好的直譯器。scratchpad 的啟動器不再需要。
+- 下面的 `<run>` 指第 1 次的啟動器 `python <scratchpad>/run_script.py`（全文在 dev_log 的「和文件不同的地方：Python」）。`python -c` 不經過啟動器。
 
-### W0b：準備（約 30 min）
-
-- 裝一般的 CPython 3.13（python.org 的 64 位元 Windows 安裝程式，「Install for current user」，不需要管理員）。使用者同意安裝（D74）。下載與安裝前，照 Windows 端自己的規則再向使用者確認。原本的 embedded Python 不動。
-- 記錄：版本（`<python> --version`）、完整路徑、`py --list` 的輸出。
-- 在 B 的 checkout、vcvars64 環境裡：
-  - `cmake --preset ci-windows -DPython3_EXECUTABLE=<python 的完整路徑>`
-  - 確認 `build/target/_build/ci-windows/CMakeCache.txt` 的 `Python3_EXECUTABLE` 已經換成新的直譯器。
-  - 只重新 configure，不建置。量測程式以 W2 的副本為準，不受影響。
-- A_wait、A_threads、B_mingw 不重新 configure：W4、W5、W8 在第 1 次的結果裡沒有遇到 import 的問題。
-
-### W3-samples、W3-dll、worker-tick：讀現有證據（約 15 min；不跑程式）
+### W3-samples、W3-dll：讀現有證據（約 10 min；不跑程式）
 
 - W3-samples：
   - 從 `wait-AB/pair<n>-<A|B>-<cli|window>.json` 的 Waiter 兩列，記錄每次的：
@@ -231,89 +223,72 @@ python docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --bui
 - W3-dll：
   - 對 `programs/A/SDL3.dll`、`programs/B/SDL3.dll` 記錄 SHA-256、檔案大小、檔案版本（PowerShell 的 `(Get-Item <檔案>).VersionInfo.FileVersion`）。
   - 為什麼：W3 只有 window 情境不通過，而只有 window 程式載入 `SDL3.dll`。兩份 DLL 各自從自己的建置樹複製，第 1 次只記了 `.exe` 的雜湊。
-- worker-tick：
-  - 從同一批 JSON，記錄每次的 `condition_variable` 與 `sleep_until` 的 deadline P50、P99、max，以及 `condition_variable` 的 notify P50、P99，cli 與 window 分開。
-  - 為什麼：`object_fps_pvp.worker` 的斷言要求重啟在 10 ms 內（`build/acceptance/object_fps_pvp/worker_main.cpp:807`）。但 mock 的輪詢靠 `sleep_for(100us)`（同檔 `:141`），探針也沒有初始化 SDL。
-  - 若 cli 是毫秒級、window 是亞毫秒級，就表示這台機器上沒有 SDL 的程序，Sleep 類的等待會被捨入到系統 tick。這是推測，用這一項確認或否定。
 
-### W1b：B 的完整 ctest 第二次（約 15～20 min）
+### host-state：電源與系統計時器解析度（開始與結束各約 1 min；只記錄）
 
-- 和 W0 一樣，在 vcvars64 環境裡執行（第 1 次的 `rc` 失敗是因為不在這個環境裡），輸出存成 `w1b-ctest.log`：
+- 在 W3-aa 開始前與結束後各記錄一次，輸出存成 `host-state-start.txt`、`host-state-end.txt`：
+  - 電源：PowerShell 的 `(Get-CimInstance -Namespace root/wmi -ClassName BatteryStatus).PowerOnline`（True＝接著 AC；查不到就寫「沒有電池資訊」），以及 `powercfg /getactivescheme`。
+  - 系統計時器解析度（三個值，單位 100 ns，照印出的順序記錄）：
 
 ```
-ctest --test-dir build/target/_build/ci-windows --output-on-failure
+python -c "import ctypes; v=[ctypes.c_ulong() for _ in range(3)]; s=ctypes.windll.ntdll.NtQueryTimerResolution(*map(ctypes.byref, v)); print('status', s, 'values (100 ns)', [x.value for x in v])"
 ```
 
-- 第 1 次文件裡列為預期、但沒有確認的三項，用 `-s` 補確認。`gyo_os_tests` 在 `build/target/_build/ci-windows` 底下，輸出存成 `w1b-os-s.log`：
-  - `gyo_os_tests -s -tc="*create directories*"`：UNC 底下建目錄的案例有實跑。
-  - `gyo_os_tests -s -tc="*font directories*"`：使用者字型目錄的案例。
-  - `gyo_os_tests -s -tc="*symbolic*"`：沒開開發人員模式時提早返回（D201）。
-- 判定：
-  - 第 1 次的 32 項失敗是另一筆紀錄，這次不覆寫。
-  - 可以繼續的情況：`object_fps_pvp.worker` 失敗（交給 v7.1 會話）、`os.console_ctrl_c` 失敗（由 W1-ctrlc 診斷）、`os.console_close` 與 `object_fps_pvp.ingress_cross` Skipped（預期；後者在 Windows 上回 77，見 `tests/object_fps_pvp/CMakeLists.txt:221`）。
-  - 停下回報的情況：第 1 次歸因於環境的 30 項（28 項 Python 驗收、`cmake.ProcessCodePage`、`cmake.ProjectComposition`）還有任何一項失敗；或出現第 1 次沒有的失敗。
-
-### W1-ctrlc：`os.console_ctrl_c` 的診斷（約 2 min；只記錄）
-
-- 推測（未確認）：
-  - 探針送出了 Ctrl+C，因為沒有回 exit 5。但它自己的處理常式沒有收到。
-  - 這一項標 cpu，CI 的 windows-x64 L1 每次都跑而且通過。
-  - 可能是會話的執行環境以「停用 Ctrl+C」的方式啟動行程，這個旗標會一路傳給 ctest、Python 與探針。
-- 在 B 的 checkout，用一個先重新啟用 Ctrl+C、再啟動 ctest 的包裝，只跑這一項（`-V`），輸出存成 `w1-ctrlc.log`：
-
-```
-<python> -c "import ctypes, subprocess, sys; print('enable', ctypes.windll.kernel32.SetConsoleCtrlHandler(None, False)); sys.exit(subprocess.call(['ctest', '--test-dir', 'build/target/_build/ci-windows', '-V', '-R', '^os[.]console_ctrl_c$']))"
-```
-
-- 記錄 `enable` 後面的回傳值與 exit。通過時，在結果裡寫「環境（Ctrl+C 停用的旗標）」；仍然失敗時，寫「推測不成立」。不另外重跑，也不停下。
-- 要不要請使用者在自己的終端機再跑一次，由使用者決定。
+- 第 1 次 W3 時的電源狀態若不知道，就寫「不知道」，不推測。
+- 為什麼：這台是筆電（i7-8750H），電源與計時器解析度都會影響晚醒的分布。A/A 要能和 W3 對照，就要知道兩次的條件是否相同。
 
 ### W3-aa：Windows 的 A/A 診斷（約 45 min；只記錄，D74）
 
 - 在 B 的 checkout 執行。A 與 B 都給 W2 的同一份 A 副本：
 
 ```
-<python> tests/common/time/wake_compare.py --a <證據目錄>/programs/A --b <證據目錄>/programs/A --output <證據目錄>/wait-AA --pairs 4 --modes cli window --a-label "A_wait 4ffc7c65" --b-label "A_wait 4ffc7c65 (A/A diagnostic)"
+<run> tests/common/time/wake_compare.py --a <證據目錄>/programs/A --b <證據目錄>/programs/A --output <證據目錄>/wait-AA --pairs 4 --modes cli window --a-label "A_wait 4ffc7c65" --b-label "A_wait 4ffc7c65 (A/A diagnostic)"
 ```
 
 - 這是探索，不是驗收判定：
   - 不覆寫 W3 的不通過，不放寬已宣告的判定。
   - 腳本印出的 pass／FAIL 與 exit，只當成「同一份程式兩側的差距」的紀錄。
-  - exit 1 或 2 都不重跑，也不停下，記錄後繼續 W4。
+  - exit 1 或 2 都不重跑，也不停下，記錄後繼續。
 - 記錄（和第 1 次的 W3 同一個格式）：
   - 腳本最後印出的 12 項。
   - 每次的 deadline、notify 的 P50／P99／min／max、sleeper 的 P99、樣本數與略過的週期。
   - `meta.txt` 的開始與結束。
 - 解讀（撤回，或另行宣告）不在 Windows 端做，交給使用者與 OS 子系統的會話。
 
-### W4、W6（照第 1 次的指令）
+### worker-10x：v7.1 D216 的 worker 10 次量測（約 30 min；宣告有核准才跑）
 
-- W4、W6 的指令與記錄照上面第 1 次的各節，`python` 換成 `<python>`。
-- W4 用 A_wait 的建置樹，和 W3 的結論無關。
+- 這是 v7.1 會話的量測，不是 OS 子系統的。這邊只負責在同一台機器上執行。
+- 跑之前先確認條件：
+  - `git fetch` 之後，讀發行線 `origin/claude/pvp-v71-release` 的 `docs/object_fps_pvp/plans/v7.1/worker-windows-timing.md`。
+  - 只有在那份文件記錄了使用者核准時才跑（標題不再是「草案，等使用者核准」，並寫明核准的日期與原話）。
+  - 沒有核准就不跑，記「未跑（宣告未核准）」，直接進 W8。
+- 跑法照那份文件核准時的版本：建置、指令、次數、收支與分類都照它，這邊不另改，也不加判定。這邊只補機器上的做法：
+  - 用發行線的 commit（必須含 `d7e0af31`）另開一份 worktree，例如 `git worktree add ..\gyo-v71 <commit>`。記下完整 SHA，確認 `git ls-files --eol` 沒有 `w/crlf`。
+  - 在 vcvars64 環境裡執行 `cmake --preset ci-windows`，再執行 `cmake --build build/target/_build/ci-windows`。worker 是 C++ 的 CTest，不經過 Python。
+  - 建置完才開始 10 次。10 次期間不建置、不跑其他吃重的工作。
+- worker 失敗不停下，那正是要觀察的現象。建置失敗時記錄 log、不跑，繼續 W8。
+- 每次的通過或失敗、`restart_ms`、`completed_window_gap_ms`、失敗訊息，都寫進續跑的 dev_log。判讀由 v7.1 會話做。
 
-### W5（照第 1 次的指令，另加 worker 的紀錄）
+### W8（照第 1 次的指令）
 
-- 指令與判定照上面的 W5（`role started` 行逐字相同，D69；不相同就停下回報）。
-- 另外，對 A_threads 與 B 各兩次的 ctest 輸出，記錄每次 `object_fps_pvp.worker` 是通過或失敗、失敗訊息與耗時。
-  - 這是 worker 切開的第 2 步：A_threads 也失敗的話，就和 OS 子系統的計時批次無關。
-  - 這一項不影響 W5 的判定。
-
-### W7、W8（照第 1 次的指令）
-
-- W7：照上面的 W7，在 vcvars64 環境裡、每條單獨跑，`python` 換成 `<python>`。12 條的檢查都是 `gyo_os_tests`（第 1 次的 W1 通過）。ow-x5、ow-x6、ow-x10 改的是 `WakeSignal.cpp`；使用者決定照跑，結果只在保留 os-wait-backend 時有意義。
-- W8：照上面的 W8。
+- 第 1 次已經跑完 W8 的話，續跑不再跑。
+- 還沒跑的話，照上面的 W8 跑。
 
 ### 續跑的時間
 
-- 約 4～5 h：準備與讀證據約 45 min，W1b 約 20 min，量測約 1 h，W5 約 15 min，W7 約 1～2 h，W8 約 1 h。
-- 超過 7.5 h（1.5 倍）時停下回報。
+- 約 2.5 h：讀證據約 10 min，量測約 50 min，worker-10x 約 30 min（有核准時），W8 約 1 h（第 1 次還沒跑時）。
+- 超過 3.75 h（1.5 倍）時停下回報。
 
 ### 續跑的回報
 
 - 第一行是收支：
-  - 續跑計畫 12 項（上表）、跑完幾項、未跑幾項（原因）；W7 的 killed、survived、未跑各幾條。
+  - 續跑計畫 6 項（上表）、跑完幾項、未跑幾項（原因）。
   - W3-samples 補的樣本層級收支（一致／不一致／確認不了）。
 - 寫進 repo 的只有兩處：本文件「結果」一節的「第 1 次續跑」、新的 dev_log `docs/dev_logs/<日期>_engine_os_windows_run_resume.zh-Hant.md`。
+- 原始數值要以表格寫進 dev_log，不只寫摘要。對接的會話只能從 GitHub 讀結果，沒辦法直接問 Windows 端。至少要有：
+  - W3-samples、W3-dll、host-state 的值。
+  - W3-aa 的 12 項與每次的值（和第 1 次 W3 的表格同一個格式）。
+  - worker-10x 每次的值（有跑時）。
 - commit 用日語，推送前先問使用者，只推 `claude/os-windows-run`。
 
 ## 結果（Windows 端填）
@@ -336,7 +311,7 @@ ctest --test-dir build/target/_build/ci-windows --output-on-failure
 - W3：**exit 1，不通過**（12:39～13:21）。12 項中 11 項通過；`window deadline p50`：A 0.4658、B 0.4890、上限 0.4858 ms（超出 0.0032）。兩側後端都是 `HighResolutionWaitableTimer`；B 沒有早醒（min 0.0291／0.0214 ms）。照規則不重跑，停下回報。撤回與 A/A 診斷由 OS 子系統的會話與使用者決定。觀察（只記錄）：window deadline P50 的同側 4 次極差，A 0.030、B 0.026，大於 +0.02 ms 的邊界；Windows 上沒有 A/A 校準的資料。
 - W4～W8：未跑。
 
-### 第 1 次續跑（D74）
+### 第 1 次續跑（D74、D76）
 
 （Windows 端填，格式同下。）
 
