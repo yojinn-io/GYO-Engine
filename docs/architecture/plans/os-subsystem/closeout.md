@@ -2,7 +2,7 @@
 
 日期：2026-10-28。任務卡「盤點 OS 子系統並收口到支撐遊戲運行」。
 **狀態：核准（D78）。** 使用者：「核准：決定 1 選 (a)、決定 2 選 (a)、決定 3 選 (a)、決定 4 選 (a)，不做對抗式檢查。開始 os-freeze-wait 與 os-closeout-docs，推送前先問我。」
-os-freeze-wait 與 os-closeout-docs 已在本分支完成，並做了本機驗證（[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）。os-handoff-v71 提前改成雙向，已完成（消費端 D219：發行前不需要 OS 這邊做任何事）。推送後四平台 L1 通過（run 40646224836）。os-land-master 在消費端發行（PR #96）後開工（2026-10-29，[dev_log](../../../dev_logs/2026_10_29_engine_os_land_master.zh-Hant.md)）。
+os-freeze-wait 與 os-closeout-docs 已在本分支完成，並做了本機驗證（[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）。os-handoff-v71 提前改成雙向，已完成（消費端 D219：發行前不需要 OS 這邊做任何事）。推送後四平台 L1 通過（run 40646224836）。os-land-master 在消費端發行（PR #96）後開工，以 PR #104 併 master（2026-10-29，四平台 L1 run 40832108929，[dev_log](../../../dev_logs/2026_10_29_engine_os_land_master.zh-Hant.md)）。
 以下第 0～8 節是核准前的提案原文。盤點時只讀：沒有改任何分支、沒有推送、沒有啟動量測；撤回的代價用 `git merge-tree` 在物件庫裡試算，沒有動任何 ref。
 
 核心：讓 Engine 支撐遊戲跑起來（v7.1 發行，接著 v8 的玩法）。驗收以 CI 為主，實機只做 CI 做不到的事。

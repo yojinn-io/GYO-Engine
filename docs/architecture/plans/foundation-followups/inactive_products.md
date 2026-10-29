@@ -252,14 +252,14 @@ OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成
 
 ### os-wake-record 晚醒量測程式
 
-狀態：本機完成（2026-10-27，D68）。後續：四平台 L1 通過（run 40463273387）；2026-10-29 隨 os-land-master 併 master（D78）。
+狀態：本機完成（2026-10-27，D68）。後續：四平台 L1 通過（run 40463273387）；2026-10-29 隨 os-land-master 的 PR #104 併 master（D78）。
 
 - 破損：無。只新增 tests/common/time 的兩個量測執行檔（不是 CTest）與一個 Python 腳本，Engine 與產品的程式都沒有改。
 - 選用：無。
 
 ### os-threads-backend 執行緒命名與優先度
 
-狀態：本機完成（2026-10-27，D69）。後續：四平台 L1 通過（run 40484797877）；2026-10-29 隨 os-land-master 併 master（D78）。
+狀態：本機完成（2026-10-27，D69）。後續：四平台 L1 通過（run 40484797877）；2026-10-29 隨 os-land-master 的 PR #104 併 master（D78）。
 
 - 破損：無。`RoleThread` 的公開介面不變；`GYO::Threads` 多了 PRIVATE 依賴 `GYO::Os`，連結它的產品不用改 CMake。
 - 行為：Windows 的角色名稱改成 UTF-8 轉 UTF-16（以前逐 byte 擴寬）。ASCII 名稱結果相同。

@@ -1,6 +1,6 @@
 # Engine os-land-master：OS 分支併 master
 
-日期：2026-10-29。**本機完成**：把消費端發行後的 master 併入 OS 分支，並做本機驗證與相關突變。推送、PR、四平台 L1 與合併待使用者同意。
+日期：2026-10-29。**完成到 PR**：把消費端發行後的 master 併入 OS 分支，做本機驗證與相關突變，推送並開 PR #104；PR 的四平台 L1 通過（[run 40832108929](https://github.com/yojinn-io/GYO-Engine/actions/runs/40832108929)）。合併待使用者同意。
 這是收口（D78，決定 3 (a)）的最後一步；計畫與理由見 [收口提案](../architecture/plans/os-subsystem/closeout.md)，前一步見 [os-closeout 的 dev_log](2026_10_28_engine_os_closeout.zh-Hant.md)。
 
 ## 為什麼做
@@ -41,7 +41,11 @@
   - time-threads-trace 目錄：tt1-stop-without-notify、tt2-role-backend-fixed 都是 killed。
   - 跳過：os-g18-windows-extra-link、pu-x10-windows-tests-without-manifest、th-x3-windows-name-byte-widened、th-x5-windows-interactive-highest（Windows），ti-x4-linux-name-not-cut、th-x6-linux-background-nice（Linux）。D78 之後本線不再為它們排實機。
   - runner 跑完後，`git status` 只列出文件，程式碼檔案都已還原。
-- 範圍的限界：併入後的樹還沒有四平台 L1；Windows 與 Linux 專用的 6 條突變沒有在對應的平台跑。
+- 推送：使用者說「推送：把 claude/os-closeout（2dd850ad）以 fast-forward 推到 origin/claude/trusting-joliot-f13b78，照草稿開非 draft 的 PR 到 master，讓 L1 跑。合併前再問我。」
+  - 推送前 fetch：master 前進到 `19d8fd27`（PR #102，只改 v7.1 的 HANDOFF 與 STABLE_BASELINE），和本 PR 沒有重疊的檔案，所以沒有再併。
+  - fast-forward 推送 `a9f6b6c5..2dd850ad`，開 PR #104（非 draft），並開 Auto-fix 監看。
+- PR #104 的四平台 L1：[run 40832108929](https://github.com/yojinn-io/GYO-Engine/actions/runs/40832108929)（`2dd850ad`，pull_request）。`L1 /` 開頭的四個 job（windows-x64、macos-arm64、macos-x64、linux-x64）都是 success，CI gate 也是 success。Quick acceptance 在 PR 上不跑（`build/ci/common/ci_scope.py` 的 pull-request 範圍），併進 master 後由 push 事件跑。
+- 範圍的限界：Windows 與 Linux 專用的 6 條突變沒有在對應的平台跑。
 
 ## 證據
 

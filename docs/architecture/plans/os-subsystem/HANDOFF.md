@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-29。**狀態：收口（D78）。** 長路徑那一片（A1～A3）與已併入消費端發行線的 10 批留下（隨 PR #96 併 master）；只在本分支的 os-wake-record、os-threads-backend 留下，消費端發行後以 os-land-master 的一條 PR 併 master；os-wait-backend 凍結並從本分支撤出（os-freeze-wait）；os-net-errors 不開始、os-close 取消；os-windows-run 第 1 次結案，續跑、第 2 次與 os-linux-run 取消。盤點與理由見 [closeout.md](closeout.md)。以下為 2026-10-27 之前的狀態行，保留作紀錄：**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-29。**狀態：收口（D78）。** 長路徑那一片（A1～A3）與已併入消費端發行線的 10 批留下（隨 PR #96 併 master）；只在本分支的 os-wake-record、os-threads-backend 留下，消費端發行後以 os-land-master 的 PR #104 併 master；os-wait-backend 凍結並從本分支撤出（os-freeze-wait）；os-net-errors 不開始、os-close 取消；os-windows-run 第 1 次結案，續跑、第 2 次與 os-linux-run 取消。盤點與理由見 [closeout.md](closeout.md)。以下為 2026-10-27 之前的狀態行，保留作紀錄：**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -90,7 +90,9 @@
   - 盤點更正：closeout.md 寫「優先度要不要補讀回測試，由那條 PR 決定」，其實 `tests/common/os/ThreadTests.cpp` 已有優先度的讀回測試（macOS 讀 QoS、Windows 讀 thread priority、Linux 讀 nice），run 40484797877 的四平台都通過，不必補。
   - inactive_products.md 第 5 節：已隨 PR #96 進 master 的 10 批，與隨本 PR 進 master 的 2 批，狀態後面補上「後續」。
   - time.md 的 Baselines：補上 Windows 的基準（W4），Linux 標成取消（D78）。
-  - 下一步：使用者同意後推送、開 PR、四平台 L1、合併。
+  - 使用者說「推送：把 claude/os-closeout（2dd850ad）以 fast-forward 推到 origin/claude/trusting-joliot-f13b78，照草稿開非 draft 的 PR 到 master，讓 L1 跑。合併前再問我。」推送前 fetch，master 前進到 `19d8fd27`（PR #102，只改 v7.1 的兩份文件，和本 PR 沒有重疊），所以沒有再併。fast-forward 推送 `a9f6b6c5..2dd850ad`，開 PR #104。
+  - PR #104 的四平台 L1（[run 40832108929](https://github.com/yojinn-io/GYO-Engine/actions/runs/40832108929)，`2dd850ad`）：`L1 /` 開頭的四個 job 都是 success，CI gate 也是 success。Quick acceptance 在 PR 上不跑（`ci_scope.py` 的 pull-request 範圍），併進 master 後跑。
+  - 下一步：合併前問使用者（使用者：「合併前再問我。」）。
 
 ## 閱讀入口
 
@@ -961,7 +963,7 @@ D62：計時核心之前的 4 批做完後，在實機上一次補齊。2026-10-
 - 收口（D78）之後：
   - ~~推送本分支並派發四平台 L1（os-freeze-wait 的驗收）。~~ 2026-10-28 完成（run 40646224836）。
   - ~~os-handoff-v71：通知消費端的會話（[closeout.md](closeout.md) 第 6 節的五點）。~~ 2026-10-28 完成（消費端 D219）。
-  - os-land-master：消費端發行後，本分支以一條 PR 併 master；PR 前在背景完整跑一次相關突變（消費端 D184 的作法）。名稱有 L1 的讀回測試；優先度要不要補讀回測試，在那條 PR 決定。2026-10-29：master 已併入、相關突變 12／12 killed；優先度的讀回測試已存在，不必補（見現況）。剩推送、PR、L1 與合併。
+  - os-land-master：消費端發行後，本分支以一條 PR 併 master；PR 前在背景完整跑一次相關突變（消費端 D184 的作法）。名稱有 L1 的讀回測試；優先度要不要補讀回測試，在那條 PR 決定。2026-10-29：master 已併入、相關突變 12／12 killed；優先度的讀回測試已存在，不必補（見現況）。PR #104 的四平台 L1 通過（run 40832108929），剩合併。
   - 以下各項裡，等實機、lan15 或 Windows／Linux 專用突變的條目，D78 之後本線不再排；需要時由有功能的產品版本另排。
 
 - os-utf8-codepage 留下的（2026-10-27）：
