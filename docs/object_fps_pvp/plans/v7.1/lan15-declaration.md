@@ -196,6 +196,8 @@ Windows 有 2 台，都用 CI 套件 `gyo-package-object_fps_pvp-windows-x64`，
 
 **證據**：Mac 的 `~/gyo-lan15/session-20261029/`；Windows 的 `~/Downloads/20261029_KLYU_logs.zip`、`~/Downloads/logs-LUO.zip`；探索性核對的輸出在會話的 scratchpad `lan15-20261029/`。
 
+**S7（新模型的外觀，使用者事後的判定）**：有問題。使用者：「有問題，但是我想應該不是Engine的問題，而是模型的，我回去處理。」記為 S7 不通過；具體的問題與修正由使用者在模型端處理，修好後的模型要在下一次場次再看一次。兩台的 log 沒有 `missing player animation`、`missing or ambiguous player bone`。
+
 **使用者回報的「網路太慢被踢掉」的提示**：對得上 LUO 在 11:02:00～11:02:16 的 3 次 `connection failed … reason=Gateway connection timed out`（player 1～3）。這不是對戰中被逐出：
 - 那 3 次都在加入後 5 s 失敗，`received_datagrams=0`，UDP 一個都沒收到。Gateway 同時記到 3 次 `join reserved` → `player expired … reason=session_timeout`。
 - 原因：第 1 次的 Gateway 公告的是 `192.168.107.189`。這是 `start-gateway.sh` 以 `ipconfig getifaddr en0` 自動選的位址，但場次的 LAN 是 `192.168.50.x`（Mac 在 LAN 上是 `192.168.50.64`），Client 把 UDP 送到了錯的位址。
