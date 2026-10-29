@@ -1,4 +1,4 @@
-# lan15-windows 的事前宣告（第 2.2 版，2026-10-29 核准；第 2.3 版改構成，待核准）
+# lan15-windows 的事前宣告（第 2.3 版，2026-10-29 核准）
 
 更新：2026-10-29。Owner：`object_fps_pvp`。規劃：[lan15-windows.md](lan15-windows.md)（D232～D234）。
 第 1 版（`e5443624`）經對抗式檢查（本文件最後一節）改成本版；使用者對三項待決選了建議（M7：Mac 的斷線列為限界；M9：實體斷線＋ping 量長度；M3：判計數一致、比例只記錄）。
@@ -13,7 +13,7 @@
 
 ## 1. 構成、前提與順序
 
-- **構成**：~~Mac（Intel）跑 Match＋Gateway，也當 1 位玩家；Windows Client N_w 台。~~（2.3，待核准）Mac（Intel）只跑 Match＋Gateway，不當玩家；Client 只在 Windows 上，N 台（N＝2 或 3，`n_w`＝`n`）。使用者：「記得，給我打包好的gateway、match、client。這次match和gateway是mac上的，而client則是windows上的。」確認 Mac 是否當玩家時：「不當。」同一個區域網路。地圖 `pvp_corners_v1`。
+- **構成**：~~Mac（Intel）跑 Match＋Gateway，也當 1 位玩家；Windows Client N_w 台。~~（2.3，D239 核准：使用者：「核准 lan15 宣告 2.3（Mac 只跑 Match＋Gateway、不當玩家，Client 只在 Windows，N 台）。」）Mac（Intel）只跑 Match＋Gateway，不當玩家；Client 只在 Windows 上，N 台（N＝2 或 3，`n_w`＝`n`）。使用者：「記得，給我打包好的gateway、match、client。這次match和gateway是mac上的，而client則是windows上的。」確認 Mac 是否當玩家時：「不當。」同一個區域網路。地圖 `pvp_corners_v1`。
 - **程式**：最新發行線（含換模型的合併，D234）的四平台 L1 產物（D232）。Windows 用 windows-x64 套件，Mac 用 macos-x64 套件。各套件 `build_metadata.json` 的 `source_revision` 相同，而且每個啟動行的 `executable_sha256` 等於該套件的清單。
 - **（2.2，D238 核准）Gateway 與 quad probe**：發行包沒有 macOS 版的 Gateway，quad probe 也不在發行包裡。兩者在 Mac 上從同一個工作樹建置（產品原始碼與 L1 的 commit `646b808f` 相同，`git diff 646b808f -- apps services engine` 為空），SHA-256 記在 `marks.txt` 的註解，以啟動行的 `executable_sha256` 核對。上一條「每個啟動行的 sha256 等於該套件的清單」只適用於套件內的 Match 與 Client。
 - **場次資料夾**：Mac 上新建一個空資料夾放 Match 與 Gateway 的 log 與 trace；每台 Client 用新解壓的套件（`logs/` 是空的）。Mac 的 Client 用自己的 `--log` 與 `--movement-trace` 檔名。
