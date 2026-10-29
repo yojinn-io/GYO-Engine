@@ -1,10 +1,15 @@
 // Product-owned socket acceptance for ClientConnection's real background worker.
 // The mock is external to production: HTTP joins and current-wire UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "client_v7.pb.h"
 #include "acceptance_protocol.hpp"
 #include "acceptance_capacity.hpp"
+#include "engine/time/Waiter.hpp"
+#ifdef GYO_WORKER_PROBE_WINDOW
+#include "engine/platform/sdl/SdlPlatform.hpp"
+#endif
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -75,6 +80,12 @@ public:
         server=std::thread([this]{http.listen_after_bind();});
     }
     ~MockGateway(){StopHttp();}
+    // About 100 us between pumps, on the Engine's Waiter: std::this_thread::sleep_for
+    // sleeps a whole system tick (about 15.6 ms) in a Windows process without SDL,
+    // which made the mock's arrival times 15.6 ms coarse (v7.1 D216, D221).
+    void Pause() {
+        static_cast<void>(pause.WaitUntil(Engine::Time::Now()+std::chrono::microseconds(100)));
+    }
     // The Gateway's HTTP side goes away; a held /leave is let go first.
     void StopHttp() {
         {std::scoped_lock lock(stallMutex);released=true;}
@@ -138,7 +149,7 @@ public:
         while(true) {
             Pump();if(condition())return;
             Require(Clock::now()<deadline,"mock worker wait timed out at worker_main.cpp:"+std::to_string(where.line()));
-            std::this_thread::sleep_for(100us);
+            Pause();
         }
     }
     void UntilTime(Clock::time_point deadline,std::source_location where=std::source_location::current()) {
@@ -182,6 +193,8 @@ public:
     std::vector<Attempt> attempts;
     std::vector<ActionAttempt> actionAttempts;
     std::vector<PacketAttempt> packets;
+    // Observation only (v7.1 D226): every datagram this mock sent, for the wake timeline.
+    std::vector<PacketAttempt> sent;
     // The join route answers every join with this status and body until Accept().
     void Refuse(int status,Json body){std::scoped_lock lock(refusalMutex);refusal.emplace(status,std::move(body));}
     void Accept(){std::scoped_lock lock(refusalMutex);refusal.reset();}
@@ -212,10 +225,14 @@ public:
     std::atomic<std::uint64_t> leaves{};
     std::atomic<bool> leaveStalls{};
 private:
+    Engine::Time::Waiter pause=Engine::Time::Waiter::Create().value();
     std::mutex stallMutex;
     std::condition_variable stallReleased;
     bool released{};
-    void Send(wire::Type type,const std::string& payload){const auto bytes=wire::Encode({type,1,++sequence,payload});socket.send_to(asio::buffer(bytes),peer);}
+    void Send(wire::Type type,const std::string& payload) {
+        const auto bytes=wire::Encode({type,1,++sequence,payload});socket.send_to(asio::buffer(bytes),peer);
+        sent.push_back({Clock::now(),type,bytes.size(),sequence});
+    }
     asio::io_context io;
     udp::socket socket;
     udp::endpoint peer;
@@ -226,6 +243,39 @@ private:
     std::mutex refusalMutex;
     std::optional<std::pair<int,Json>> refusal;
 };
+// Observation only (v7.1 D226): the mock's datagrams from 20 ms before SubmitShot
+// to the action's arrival, in ms relative to SubmitShot ("in" = Client to mock).
+std::string WakeTimeline(const MockGateway& gateway,Clock::time_point submittedAt,Clock::time_point actionAt) {
+    static constexpr std::array<const char*,8> Names{"?","Hello","Welcome","Input","Snapshot","Error","Actions","ActionResults"};
+    const auto name=[](wire::Type type){const auto n=static_cast<std::size_t>(type);return n<Names.size()?Names[n]:"?";};
+    const auto ms=[&](Clock::time_point at){std::ostringstream out;out.setf(std::ios::fixed);out.precision(2);
+        out<<std::chrono::duration<double,std::milli>(at-submittedAt).count();return out.str();};
+    std::vector<std::pair<Clock::time_point,std::string>> events;
+    for(const auto& packet:gateway.packets)
+        if(packet.at>=submittedAt-20ms && packet.at<=actionAt)events.emplace_back(packet.at,std::string("in:")+name(packet.type));
+    for(const auto& packet:gateway.sent)
+        if(packet.at>=submittedAt-20ms && packet.at<=actionAt)events.emplace_back(packet.at,std::string("out:")+name(packet.type));
+    std::sort(events.begin(),events.end(),[](const auto& a,const auto& b){return a.first<b.first;});
+    std::string line="v7-08 wake timeline: action_ms="+ms(actionAt)+" events=";
+    for(const auto& [at,label]:events)line+=label+"@"+ms(at)+" ";
+    return line;
+}
+// The rhythm of the resend second, for its failure message (v7.1 D224):
+// "mock_resends=N mock_gap_ms=min/median/max client_sends=N client_gap_ms=min/median/max".
+std::string ResendRhythm(const std::vector<Clock::time_point>& mock,const std::vector<std::int64_t>& clientNs) {
+    const auto gaps=[](std::vector<double> ms) {
+        if(ms.empty())return std::string("-");
+        std::sort(ms.begin(),ms.end());
+        std::ostringstream out;out.setf(std::ios::fixed);out.precision(2);
+        out<<ms.front()<<'/'<<ms[ms.size()/2]<<'/'<<ms.back();
+        return out.str();
+    };
+    std::vector<double> mockGaps,clientGaps;
+    for(std::size_t i=1;i<mock.size();++i)mockGaps.push_back(std::chrono::duration<double,std::milli>(mock[i]-mock[i-1]).count());
+    for(std::size_t i=1;i<clientNs.size();++i)clientGaps.push_back(static_cast<double>(clientNs[i]-clientNs[i-1])/1e6);
+    return "mock_resends="+std::to_string(mock.size())+" mock_gap_ms="+gaps(mockGaps)+
+        " client_sends="+std::to_string(clientNs.size())+" client_gap_ms="+gaps(clientGaps);
+}
 PlayerInput Input(std::uint64_t first,std::uint64_t last) {
     PlayerInput result;result.playerId=1;
     for(auto sequence=first;sequence<=last;++sequence)result.commands.push_back({sequence,1,0,0,0});
@@ -299,7 +349,7 @@ OutageOutcome RunOutage(MockGateway& gateway,ClientConnection& connection,bool e
     // A window that stopped being sent is not kept either: wait a bounded time.
     const auto resumedAt=Clock::now();
     for(const auto deadline=resumedAt+500ms;gateway.attempts.back().at<=resumedAt && Clock::now()<deadline;) {
-        gateway.Pump();std::this_thread::sleep_for(100us);
+        gateway.Pump();gateway.Pause();
     }
     if(gateway.attempts.back().at<=resumedAt)return outcome;
     const auto& resent=gateway.attempts.back().input;
@@ -701,12 +751,24 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     // Idle first: the last ACK-only batch's deadline passes, so the new action is
     // eligible at once and nothing but SubmitAction's wake-up is pending.
     gateway.UntilTime(Clock::now()+50ms);
+    // Away from the Client's own Hello (every 250 ms, v7.1 D226): its pass, or
+    // the pass of the mock's reply, would carry the action out without
+    // SubmitAction's wake-up. Submit about 100 ms after a Hello arrives, so the
+    // Hellos on both sides are more than 40 ms away.
+    const auto hellos=[&]{return std::count_if(gateway.packets.begin(),gateway.packets.end(),
+        [](const auto& packet){return packet.type==wire::Type::Hello;});};
+    const auto hellosBefore=hellos();
+    gateway.Until([&]{return hellos()>hellosBefore;});
+    const auto helloAt=std::find_if(gateway.packets.rbegin(),gateway.packets.rend(),
+        [](const auto& packet){return packet.type==wire::Type::Hello;})->at;
+    gateway.UntilTime(helloAt+100ms);
     const auto submittedAt=Clock::now();
     const auto resumed=connection.SubmitShot(connection.State().snapshot->tick,0,0);
     Require(resumed && *resumed==33,"retirement or failed submission skipped an allocated ID");
     gateway.Until([&]{return !gateway.actionAttempts.back().actions.shots().empty() && gateway.actionAttempts.back().actions.shots(0).action_id()==33;});
     // D36: a lone action leaves at SubmitAction once eligible (at most one
     // ActionSendRate interval after the previous batch), not at a later wake.
+    std::cerr<<WakeTimeline(gateway,submittedAt,gateway.actionAttempts.back().at)<<'\n';
     Require(gateway.actionAttempts.back().at-submittedAt<40ms,"an eligible action waited for an unrelated wake");
     gateway.Results({33},32);gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
     Require(connection.Drain().decisions.size()==1,"new action failed after clearing loss");
@@ -743,6 +805,18 @@ int main(int argc,char** argv) {
         try{return RunClose(argv[2]);}
         catch(const std::exception& error){std::cerr<<"worker close: "<<error.what()<<'\n';return 1;}
     }
+#ifdef GYO_WORKER_PROBE_WINDOW
+    // The shipped Client runs with an Engine SDL window, and SDL raises a Windows
+    // process's timer resolution (v7.1 D228, D229). Open one the same way as the
+    // wake record's window build, let it appear, then leave it unpumped.
+    auto platform=Engine::Platform::Sdl::SdlPlatform::Create({"GYO worker probe",640,360,false});
+    if(!platform){std::cerr<<"worker acceptance: cannot open the Engine SDL window\n";return 1;}
+    for(const auto until=Clock::now()+1s;Clock::now()<until;) {
+        static_cast<void>(platform.value()->PumpEvents());
+        std::this_thread::sleep_for(10ms);
+    }
+    std::cerr<<"worker probe: Engine SDL window open\n";
+#endif
     ClogCapture capture(std::clog.rdbuf());
     struct Restore{std::streambuf* previous;~Restore(){std::clog.rdbuf(previous);}} restore{std::clog.rdbuf(&capture)};
     try {
@@ -804,7 +878,10 @@ int main(int argc,char** argv) {
         const auto firstNewSend=gateway.attempts.back().at;
         const auto restartMs=std::chrono::duration<double,std::milli>(firstNewSend-restartedAt).count();
         const auto completedWindowGapMs=std::chrono::duration<double,std::milli>(firstNewSend-lastOldSend).count();
-        Require(restartMs<10 && completedWindowGapMs<14,"new window waited behind a fully acknowledged window's deadline");
+        // The values go into the message (observation only, v7.1 D216): the first
+        // Windows failure did not say how far over the limits it was.
+        Require(restartMs<10 && completedWindowGapMs<14,"new window waited behind a fully acknowledged window's deadline"
+            " (restart_ms="+std::to_string(restartMs)+" completed_window_gap_ms="+std::to_string(completedWindowGapMs)+")");
 
         // A partial acknowledgement leaves the unchanged window on its 60 Hz
         // resend deadline. A command never sent goes at the next poll while the
@@ -829,11 +906,26 @@ int main(int argc,char** argv) {
         Require(fresh.commands(fresh.commands_size()-1).sequence()==5,"the new command was not sent next");
         const auto freshMs=std::chrono::duration<double,std::milli>(gateway.attempts.back().at-resentAt).count();
         Require(freshMs<10,"a new command waited behind the resend deadline");
+        // Observation (v7.1 D224, C): the Client's own send times come from its
+        // movement trace (the Sent events of each send), so a failure tells the
+        // Client's resend rhythm apart from what the mock saw.
+        const auto clientSends=std::make_shared<MovementTrace>();
+        SetMovementTrace(clientSends);
         connection.SendInput(Input(4,6));
         const auto resendBegin=gateway.attempts.size();
         gateway.UntilTime(Clock::now()+1s);
+        SetMovementTrace({});
         const auto resends=gateway.attempts.size()-resendBegin;
-        Require(resends>=55 && resends<=65,"unacknowledged window was not resent at approximately 60 Hz");
+        std::vector<Clock::time_point> mockTimes;
+        for(auto index=resendBegin;index<gateway.attempts.size();++index)mockTimes.push_back(gateway.attempts[index].at);
+        std::vector<std::int64_t> clientNs;
+        for(const auto& event:clientSends->Drain())
+            if(event.kind==MovementTraceKind::Sent && (clientNs.empty() || clientNs.back()!=event.startedNs))
+                clientNs.push_back(event.startedNs);
+        // Observation only (v7.1 D229): the rhythm on every run, not just on failure.
+        const auto rhythm=ResendRhythm(mockTimes,clientNs);
+        std::cerr<<"worker resend rhythm: "<<rhythm<<'\n';
+        Require(resends>=55 && resends<=65,"unacknowledged window was not resent at approximately 60 Hz ("+rhythm+")");
         for(auto index=resendBegin+1;index<gateway.attempts.size();++index)
             Require(gateway.attempts[index].at-gateway.attempts[index-1].at>=14ms,"worker emitted a resend catch-up burst");
 
@@ -928,14 +1020,35 @@ int main(int argc,char** argv) {
             gateway.UntilTime(drainStart+std::chrono::nanoseconds(k*1'000'000'000/InputSendRate));
             drainWaits.push_back(publishWait(80+k));
         }
+        // Observation only (v7.1 D230): every step's wait and interval, the
+        // drain and settled limits the checks below compare, and how far the
+        // worst comparison of each went past its limit (positive = failed).
+        std::string tokenWaits;
+        {
+            const auto join=[](const std::vector<double>& values){std::ostringstream out;out.setf(std::ios::fixed);out.precision(2);
+                for(std::size_t n=0;n<values.size();++n)out<<(n?"/":"")<<values[n];return out.str();};
+            std::vector<double> drained,settledLimits;
+            double drainExcess=-std::numeric_limits<double>::infinity(),settledExcess=drainExcess;
+            for(std::size_t k=1;k<=3;++k) {
+                drained.push_back(drainWaits[k-1]-drainWaits[k]-(drainIntervals[k-1]-stepMs));
+                drainExcess=std::max(drainExcess,std::abs(drained.back()-stepMs/4)-drainToleranceMs);
+            }
+            for(std::size_t k=4;k<drainWaits.size();++k) {
+                settledLimits.push_back(settledWaitMs+std::max(0.0,stepMs-drainIntervals[k-1]));
+                settledExcess=std::max(settledExcess,drainWaits[k]-settledLimits.back());
+            }
+            tokenWaits="waits_ms="+join(drainWaits)+" intervals_ms="+join(drainIntervals)+" drained_ms="+join(drained)+
+                " drain_excess_ms="+join({drainExcess})+" settled_limits_ms="+join(settledLimits)+" settled_excess_ms="+join({settledExcess});
+        }
+        std::cerr<<"worker token waits: "<<tokenWaits<<'\n';
         Require(drainWaits[0]>=12,"the third new command did not wait for a token");
         for(std::size_t k=1;k<=3;++k) {
             // Each step's wait falls by a quarter step, plus any lateness of this publication.
             const double drained=drainWaits[k-1]-drainWaits[k]-(drainIntervals[k-1]-stepMs);
-            Require(std::abs(drained-stepMs/4)<=drainToleranceMs,"the waiting sends did not drain the token debt");
+            Require(std::abs(drained-stepMs/4)<=drainToleranceMs,"the waiting sends did not drain the token debt ("+tokenWaits+")");
         }
         for(std::size_t k=4;k<drainWaits.size();++k)
-            Require(drainWaits[k]<=settledWaitMs+std::max(0.0,stepMs-drainIntervals[k-1]),"a token wait outlived four commands");
+            Require(drainWaits[k]<=settledWaitMs+std::max(0.0,stepMs-drainIntervals[k-1]),"a token wait outlived four commands ("+tokenWaits+")");
         // Publishes a window and returns when its newest command was sent.
         const auto sendWindow=[&](PlayerInput input){
             const auto last=input.commands.back().sequence;

@@ -726,6 +726,7 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             observation.resetReason = state.resetReason;
             observation.bodySubmittedMeshes = definition.character->model->meshes.size();
             observation.weaponSubmittedMeshes = definition.weapon->model->meshes.size();
+            observation.declaredAccessories = definition.character->accessories.size();
             for (const auto& accessory : definition.character->accessories)
                 observation.hairSubmittedMeshes += accessory.presentation->model->meshes.size();
             observation.upperBodyMaskCount = static_cast<std::size_t>(std::count(

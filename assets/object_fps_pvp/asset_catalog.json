@@ -12,17 +12,17 @@
 
     { "id": "object_fps_pvp.font.ui", "type": "font", "path": "fonts/BIZUDPGothic-Regular.ttf" },
 
-    { "id": "object_fps_pvp.weapon.mark23", "type": "text", "path": "weapons/mark23/viewmodel/mark23_viewmodel.json" },
-    { "id": "object_fps_pvp.model.mark23", "type": "model", "path": "weapons/mark23/viewmodel/Mark23.fbx" },
-    { "id": "object_fps_pvp.texture.mark23.hand", "type": "texture", "path": "weapons/mark23/viewmodel/textures/Hand_D.png" },
-    { "id": "object_fps_pvp.texture.mark23.glove", "type": "texture", "path": "weapons/mark23/viewmodel/textures/Glove_D.png" },
-    { "id": "object_fps_pvp.texture.mark23.gun", "type": "texture", "path": "weapons/mark23/viewmodel/textures/Mark23_D.png" },
-    { "id": "object_fps_pvp.animset.mark23.viewmodel", "type": "text", "path": "weapons/mark23/viewmodel/viewmodel.animset.json" },
+    { "id": "object_fps_pvp.weapon.nailer_v2", "type": "text", "path": "weapons/nailer_v2/viewmodel/nailer_v2_viewmodel.json" },
+    { "id": "object_fps_pvp.model.nailer_v2", "type": "model", "path": "weapons/nailer_v2/viewmodel/Nailer1_FPS.fbx" },
+    { "id": "object_fps_pvp.texture.nailer_v2.skin", "type": "texture", "path": "weapons/nailer_v2/viewmodel/textures/LowPoly_Skin.png" },
+    { "id": "object_fps_pvp.texture.nailer_v2.glove", "type": "texture", "path": "weapons/nailer_v2/viewmodel/textures/LowPoly_Glove.png" },
+    { "id": "object_fps_pvp.texture.nailer_v2.skin_shadow", "type": "texture", "path": "weapons/nailer_v2/viewmodel/textures/LowPoly_Skin_Shadow.png" },
+    { "id": "object_fps_pvp.texture.nailer_v2.gun", "type": "texture", "path": "weapons/nailer_v2/viewmodel/textures/Nailer1_D.png" },
+    { "id": "object_fps_pvp.animset.nailer_v2.viewmodel", "type": "text", "path": "weapons/nailer_v2/viewmodel/viewmodel.animset.json" },
 
-    { "id": "object_fps_pvp.model.character.superhero_female", "type": "model", "path": "characters/superhero_female/Superhero_Female_FullBody.fbx" },
-    { "id": "object_fps_pvp.texture.character.female.eyes", "type": "texture", "path": "characters/superhero_female/textures/T_Eye_Brown.png" },
+    { "id": "object_fps_pvp.model.character.player_v20", "type": "model", "path": "characters/player/Player_V20.fbx" },
+
     { "id": "object_fps_pvp.texture.character.female.hair", "type": "texture", "path": "characters/superhero_female/textures/T_Hair_2_BaseColor.png" },
-    { "id": "object_fps_pvp.texture.character.female.body", "type": "texture", "path": "characters/superhero_female/textures/T_Superhero_Female_Dark_BaseColor.png" },
 
     { "id": "object_fps_pvp.hair.buns", "type": "text", "path": "characters/hairstyles/buns/character.json" },
     { "id": "object_fps_pvp.model.hair.buns", "type": "model", "path": "characters/hairstyles/buns/Hair_Buns.fbx" },

@@ -914,7 +914,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     impl_->floor = floor.value();
     impl_->weapon = std::make_unique<fps::WeaponViewModel>();
     if (!impl_->weapon->Initialize(*impl_->device, impl_->assets,
-        Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.mark23"), error)) return false;
+        Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error)) return false;
     impl_->players = std::make_unique<PlayerPresentation>();
     // The current two-player product needs one remote slot. Preallocate it so
     // joining/rejoining never creates a skinned GPU instance in a live frame.

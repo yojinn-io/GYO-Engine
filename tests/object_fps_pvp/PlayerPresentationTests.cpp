@@ -109,6 +109,23 @@ const PlayerPresentationDefinition& ProductionDefinition() {
     return *definition;
 }
 
+// The production character has no accessory; the owner's hair accessory is
+// attached here so accessory binding and placement keep production geometry.
+const PlayerPresentationDefinition& AccessoryDefinition() {
+    static PresentationAssets fixture;
+    static const auto definition = [&] {
+        fixture.Override("object_fps_pvp.player.character", [](auto& json) {
+            json["accessories"] = nlohmann::json::array({
+                {{"character_asset_id", "object_fps_pvp.hair.buns"}, {"node", "Head"}, {"source_node", "Head"}}});
+        });
+        std::string error;
+        auto loaded = LoadPlayerPresentationDefinition(fixture.assets, 1.8F, error);
+        if (!loaded) throw std::runtime_error(error);
+        return loaded;
+    }();
+    return *definition;
+}
+
 // Samples come from an authority moving at the 3 m/s reference speed.
 PlayerPresentationFrame Frame(double seconds, double delta, float x = 0, float z = 0) {
     return {.playerId = 1, .movementEpoch = 1, .position = {x, 0, z}, .yaw = 0,
@@ -166,7 +183,7 @@ TEST_CASE("PvP player content resolves owner-local character clips materials and
     REQUIRE(definition.character->animationSet);
     const auto& character = *definition.character;
     const auto& model = *character.model;
-    CHECK(character.modelAssetId.debugName == "object_fps_pvp.model.character.superhero_female");
+    CHECK(character.modelAssetId.debugName == "object_fps_pvp.model.character.player_v20");
     REQUIRE(definition.idleClip < model.clips.size());
     REQUIRE(definition.jogClip < model.clips.size());
     CHECK(model.clips[definition.idleClip].name == "Armature|Pistol_Idle_Loop");
@@ -179,16 +196,16 @@ TEST_CASE("PvP player content resolves owner-local character clips materials and
         CHECK(clip.modelAssetId == character.modelAssetId);
     }
     REQUIRE(character.materials.size() == model.materials.size());
-    REQUIRE(character.materials.size() == 3);
-    for (const auto& material : character.materials) {
-        REQUIRE(material.textureAssetId);
-        CHECK(material.textureAssetId->debugName.starts_with("object_fps_pvp.texture.character.female."));
-    }
-    REQUIRE(character.accessories.size() == 1);
-    const auto& hair = character.accessories.front();
+    // Player_V20 keeps its 15 imported colour materials without overrides.
+    REQUIRE(character.materials.size() == 15);
+    for (const auto& material : character.materials) CHECK_FALSE(material.textureAssetId);
+    CHECK(character.accessories.empty());
+    const auto& accessories = AccessoryDefinition().character->accessories;
+    REQUIRE(accessories.size() == 1);
+    const auto& hair = accessories.front();
     REQUIRE(hair.presentation);
     CHECK(hair.presentation->modelAssetId.debugName == "object_fps_pvp.model.hair.buns");
-    CHECK(model.nodes.at(hair.targetNode).name == "Head");
+    CHECK(AccessoryDefinition().character->model->nodes.at(hair.targetNode).name == "Head");
     CHECK(hair.presentation->model->nodes.at(hair.sourceNode).name == "Head");
     REQUIRE(definition.weapon);
     CHECK(definition.weapon->modelAssetId.debugName == "object_fps_pvp.model.weapon.ultimate_pistol_1.world");
@@ -430,10 +447,14 @@ TEST_CASE("PvP player pose retains jogging legs and aiming upper body with consi
     for (std::size_t node = 0; node < combined.weapon.globalTransforms.size(); ++node)
         CheckMatrix(combined.weapon.globalTransforms[node],
             Multiply(mount, definition.weaponReferencePose.globalTransforms[node]));
-    REQUIRE(combined.accessories.size() == definition.character->accessories.size());
-    const auto& hair = definition.character->accessories.front();
-    CheckMatrix(combined.accessories.front().globalTransforms.at(hair.sourceNode),
-        Multiply(combined.body.globalTransforms.at(hair.targetNode), ToMatrix(hair.placement)));
+    CHECK(combined.accessories.empty());
+    const auto& accessorized = AccessoryDefinition();
+    PlayerPresentationPose withHair;
+    REQUIRE_MESSAGE(SamplePlayerPresentationPose(accessorized, state, withHair, error), error);
+    REQUIRE(withHair.accessories.size() == 1);
+    const auto& hair = accessorized.character->accessories.front();
+    CheckMatrix(withHair.accessories.front().globalTransforms.at(hair.sourceNode),
+        Multiply(withHair.body.globalTransforms.at(hair.targetNode), ToMatrix(hair.placement)));
 }
 
 TEST_CASE("PvP jogging phase follows actual distance at 30 60 and 144 FPS in every planar direction") {
@@ -963,48 +984,67 @@ TEST_CASE("characterization: production weapon muzzle keeps its load-time value 
     PresentationAssets fixture;
     std::string error;
     const auto definition = fps::LoadWeaponPresentationDefinition(
-        fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.mark23"), error);
+        fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error);
     REQUIRE_MESSAGE(definition, error);
     const auto muzzlePoint = [&](const Pose& pose) {
         return Engine::Math::TransformPoint(
             pose.globalTransforms[definition->muzzleNodeIndex], definition->muzzleLocalPosition);
     };
+    // 32 u M (PresentationMathCharacterizationTests.cpp) with M < 2 m here.
+    constexpr float bound = 32.0F * 0x1p-24F * 2.0F;
+    const auto differenceOf = [](const Engine::Math::Vec3& a, const Engine::Math::Vec3& b) {
+        return (std::max)({std::abs(a.x - b.x), std::abs(a.y - b.y), std::abs(a.z - b.z)});
+    };
+    // Matrix elements are exact only for a pure yaw at unit scale, so only that
+    // placement must match bit for bit. The authored placement's yaw-only
+    // projection keeps that check on the production model and poses.
+    const auto& authored = definition->placement;
+    const bool authoredExact = authored.rotationRadians.x == 0 && authored.rotationRadians.z == 0 &&
+        authored.scale.x == 1 && authored.scale.y == 1 && authored.scale.z == 1;
+    const Engine::Render::Transform3D yawOnly{authored.translation, {0, authored.rotationRadians.y, 0}, {1, 1, 1}};
     Pose pose;
     REQUIRE(static_cast<bool>(SamplePose(*definition->model, definition->clips[1], 0, PlaybackMode::Clamp, pose)));
     const auto legacyShot = PresentationLegacy::MuzzleViewCameraPosition(
-        muzzlePoint(pose), definition->idleAnchor, definition->placement);
+        muzzlePoint(pose), definition->idleAnchor, authored);
     const auto& shot = definition->shotGeometry.muzzleViewCameraPosition;
-    CHECK(shot.x == legacyShot.x);
-    CHECK(shot.y == legacyShot.y);
-    CHECK(shot.z == legacyShot.z);
+    if (authoredExact) {
+        CHECK(shot.x == legacyShot.x);
+        CHECK(shot.y == legacyShot.y);
+        CHECK(shot.z == legacyShot.z);
+    }
+    CHECK(differenceOf(shot, legacyShot) <= bound);
 
     // The viewmodel adds the shot recoil to the placement's X rotation.
     float maximumError = 0;
     std::size_t samples = 0;
     std::size_t recoilFreeDiffering = 0;
+    std::size_t yawOnlyDiffering = 0;
     for (const auto clip : definition->clips) {
         const double duration = definition->model->clips[clip].durationSeconds;
         for (double time = 0; time <= duration; time += 1.0 / 30.0) {
             REQUIRE(static_cast<bool>(SamplePose(*definition->model, clip, time, PlaybackMode::Clamp, pose)));
             const auto point = muzzlePoint(pose);
             for (const float recoil : {0.0F, 0.005F, 0.02F, 0.04F}) {
-                auto placement = definition->placement;
+                auto placement = authored;
                 placement.rotationRadians.x += recoil;
                 const auto legacy = PresentationLegacy::MuzzleViewCameraPosition(point, definition->idleAnchor, placement);
                 const auto current = fps::EvaluateWeaponMuzzleViewCameraPosition(*definition, pose, placement);
-                const float difference = (std::max)({std::abs(legacy.x - current.x), std::abs(legacy.y - current.y),
-                                                     std::abs(legacy.z - current.z)});
+                const float difference = differenceOf(legacy, current);
                 if (recoil == 0.0F && difference != 0.0F) ++recoilFreeDiffering;
                 maximumError = (std::max)(maximumError, difference);
                 CHECK(current.z > definition->camera.nearClip);
                 ++samples;
             }
+            const auto legacy = PresentationLegacy::MuzzleViewCameraPosition(point, definition->idleAnchor, yawOnly);
+            const auto current = fps::EvaluateWeaponMuzzleViewCameraPosition(*definition, pose, yawOnly);
+            if (differenceOf(legacy, current) != 0.0F) ++yawOnlyDiffering;
         }
     }
-    MESSAGE("production muzzle: max |delta| " << maximumError << " m over " << samples << " samples");
-    CHECK(recoilFreeDiffering == 0);
-    // 32 u M (PresentationMathCharacterizationTests.cpp) with M < 2 m here.
-    CHECK(maximumError <= 32.0F * 0x1p-24F * 2.0F);
+    MESSAGE("production muzzle: max |delta| " << maximumError << " m over " << samples << " samples, "
+        << recoilFreeDiffering << " recoil-free differ, authored placement exact=" << authoredExact);
+    if (authoredExact) CHECK(recoilFreeDiffering == 0);
+    CHECK(yawOnlyDiffering == 0);
+    CHECK(maximumError <= bound);
 }
 
 TEST_CASE("PvP player weapon mount rejects degenerate and overflowing rotations") {

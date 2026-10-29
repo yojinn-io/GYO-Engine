@@ -21,8 +21,20 @@ set(worker "gyo_${GYO_CURRENT_APP}_worker_probe")
 add_executable(${worker} worker_main.cpp)
 target_compile_features(${worker} PRIVATE cxx_std_20)
 target_link_libraries(${worker} PRIVATE ${network} asio::asio httplib::httplib
-    nlohmann_json::nlohmann_json "gyo_${GYO_CURRENT_APP}_client_v7")
+    nlohmann_json::nlohmann_json GYO::Time "gyo_${GYO_CURRENT_APP}_client_v7")
 gyo_register_acceptance_probe(OWNER "${GYO_CURRENT_APP}" ROLE worker TARGET ${worker})
+# The same probe with an Engine SDL window open, as the shipped Client runs
+# (v7.1 D229): SDL raises a Windows process's timer resolution. Run by hand
+# under a declaration; not a CTest and not an acceptance role.
+if(TARGET GYO::PlatformSDL)
+    set(worker_window "gyo_${GYO_CURRENT_APP}_worker_window_probe")
+    add_executable(${worker_window} worker_main.cpp)
+    target_compile_features(${worker_window} PRIVATE cxx_std_20)
+    target_compile_definitions(${worker_window} PRIVATE GYO_WORKER_PROBE_WINDOW)
+    target_link_libraries(${worker_window} PRIVATE ${network} asio::asio httplib::httplib
+        nlohmann_json::nlohmann_json GYO::Time GYO::PlatformSDL "gyo_${GYO_CURRENT_APP}_client_v7")
+    gyo_copy_runtime_dlls(${worker_window})
+endif()
 set(quad "gyo_${GYO_CURRENT_APP}_quad_probe")
 add_executable(${quad} quad_main.cpp)
 target_compile_features(${quad} PRIVATE cxx_std_20)
