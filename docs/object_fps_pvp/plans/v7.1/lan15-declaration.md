@@ -117,7 +117,10 @@ S1 只記錄（不判定）：
   - `ingress_evidence.py`（`pvp-v71-ingress-3`）：`567198d660985d862e01b49b481a57c0393bf4511267fec1b6787de831008302`
   - 鑑別力的測試 `tests/object_fps_pvp/test_lan15_judge.py`：`1a42ca509d98e3f4efa0b2c0c95f15bba2f12aa9d21a10b298d1b8df8eb45590`（CTest `object_fps_pvp.lan15_judge`，cpu 標籤）
   - 結果（2026-10-29，本機）：照宣告程序的合成場次判通過；25 份竄改（J0 ×2、J3 ×3、J4、J5 ×2、J1 ×2、J2 ×2、K1、K2、R1、R2 ×2、試行長度、Q1 ×3、Q2 ×2、S7、收支 ×2）全部判出失敗或確認不了（照宣告的分類）。判定工具的 7 個突變（J5 門檻、T_max 上限、J3 少了逐出、K1 少了 pending、收支少了 dropped_lines、Q1 少了人數的變化、Q2 少了房間內玩家的檢查）都被這組測試殺死。
-  - J2 的等式本身由 `ingress_evidence.py` 自己的測試守；這裡只測 J2 怎麼讀它的結果。用合成的紀錄做竄改檢查：每條判定至少 1 份應該失敗的紀錄（例如 S1 多一行 interrupted、少一行 resumed、多一行 evicted、`drop_rate_limited` 1、results 間隔 33.2、`dropped_lines` 1、T_max 5500、K2 少一筆 none），全部要判出失敗；沒有改動的合成紀錄要判通過。
+  - J2 的等式本身由 `ingress_evidence.py` 自己的測試守；這裡只測 J2 怎麼讀它的結果。
+  - **（2.2，待核准）工具的修正**：lan15-kit 寫手冊時發現，Windows PowerShell 5.1 的 `Tee-Object` 把 `ping.txt` 寫成 UTF-16，上面鎖定的工具以 UTF-8 讀，S2 的每次試行都會變成確認不了。修正：依 BOM 判斷 UTF-16，否則以 UTF-8 讀。判定的條文不變。新增 1 個測試（UTF-16 的 `ping.txt`，3 個 R 項都通過）；把讀法改回只讀 UTF-8，這個測試失敗。核准後鎖定的 sha256 改成：
+    - `lan15_judge.py`：`10f7ddc80d584f577e0df4ae5d11858d4f3047eb2205ac256f108b45366f1218`
+    - `test_lan15_judge.py`：`ac548dbab48399bc64dce2f5f9e0b6d11704fd58118503246160f01f818dcc2e`（27 個測試）用合成的紀錄做竄改檢查：每條判定至少 1 份應該失敗的紀錄（例如 S1 多一行 interrupted、少一行 resumed、多一行 evicted、`drop_rate_limited` 1、results 間隔 33.2、`dropped_lines` 1、T_max 5500、K2 少一筆 none），全部要判出失敗；沒有改動的合成紀錄要判通過。
 
 ## 8. 範圍的限界（照 HANDOFF「後續宣告要寫的範圍的限界」，直到解消）
 

@@ -405,8 +405,11 @@ def check_k2(s):
 def ping_outage(path, around):
     """The ping outage (seconds) overlapping [around - 5 s, around + 15 s] on the same machine's clock."""
     if not path.exists(): return None
+    data = path.read_bytes()
+    # Windows PowerShell 5.1's Tee-Object writes UTF-16 with a BOM; PowerShell 7 writes UTF-8.
+    text = data.decode("utf-16") if data[:2] in (b"\xff\xfe", b"\xfe\xff") else data.decode("utf-8-sig", errors="replace")
     samples = []
-    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for raw in text.splitlines():
         parts = raw.strip().split()
         if len(parts) != 2: continue
         try: samples.append((dt.datetime.fromisoformat(parts[0]), parts[1] == "True"))

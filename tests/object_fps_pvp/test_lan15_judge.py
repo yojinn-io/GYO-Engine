@@ -236,6 +236,14 @@ class Lan15JudgeTest(unittest.TestCase):
     def test_r2_gateway_never_expires(self):
         self.assertCheck(self.run_session(lambda w: self.replace(w, "mac/gateway.log", "player expired player=1 reason=session_timeout", "player kept player=1")), "R", "failed")
 
+    def test_ping_written_by_windows_powershell(self):
+        root = self.directory / "s"
+        session().write(root)
+        ping = root / "clients/win1/ping.txt"
+        ping.write_bytes(ping.read_text(encoding="utf-8").encode("utf-16"))
+        report = lan15_judge.judge(root)
+        self.assertEqual([r["status"] for r in report["R"]], ["passed"] * 3)
+
     def test_trial_too_long_is_undetermined(self):
         def tamper(w):
             w.files["clients/win1/ping.txt"] = [(k, t.replace("True", "False")) if "T20:16:4" in t or "T20:16:5" in t else (k, t)
