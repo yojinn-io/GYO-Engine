@@ -1,7 +1,7 @@
 # PvP v8 分批計畫
 
 更新：2026-10-29（`v8-plan-sync`：範圍、順序、分批、檔位與引擎，D243～D246）；初版 2026-10-07。Owner：`object_fps_pvp`。
-**狀態：規劃完成，實作未開始。** 下一批是 ① 的 `au1-plan` 或 `pv8-design`（兩條線可並行，先後由使用者決定）。記錄器是 [HANDOFF](HANDOFF.md)。
+**狀態：`pv8-design` 第 1 版草案完成，等使用者決定（[pv8-design](pv8-design.md)）。**記錄器是 [HANDOFF](HANDOFF.md)。
 
 版本號：v8＝遊戲版本，pvN＝網路協議版本（見 [v6 交接](../v6/HANDOFF.md) D20）。v7.1 停在 pv7；**pv8 在 v8**（D246）。
 與前面版本的分工：[v7](../v7/README.md) 交付執行緒、時間、網路；[v7.1](../v7.1/README.md) 交付 pv7 與事故善後（v1.2.0 已發行，D242）；v8 補完一個基礎 FPS 的功能與工具。

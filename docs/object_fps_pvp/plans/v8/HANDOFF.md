@@ -1,6 +1,6 @@
 # PvP v8 交接
 
-更新：2026-10-29。Owner：`object_fps_pvp`。**狀態：`v8-plan-sync` 完成，實作未開始。**
+更新：2026-10-29。Owner：`object_fps_pvp`。**狀態：`pv8-design` 第 1 版草案完成，等你決定 D-1～D-8（[pv8-design](pv8-design.md)）。**
 本文件是 v8 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。
 
 ## 代號對照
@@ -23,9 +23,11 @@
 
 ## 現況（每次停下來時更新）
 
-- **完成**：`v8-plan-sync`（分支 `claude/pvp-v8-plan-sync`）。
-- **下一批**：① 的 `au1-plan` 或 `pv8-design`。兩條 PR 線可以並行，先後由使用者決定。
+- **進行中**：`pv8-design`（D247）。第 1 版草案：[pv8-design.md](pv8-design.md)。停在核准關卡：D-1～D-8 決定後，實測型別最大（`proto.Size`），再寫 `protocol-v8.zh-Hant.md` 定稿（估 2～3 h）。分支 `claude/pvp-v8-pv8-line`，從 `v8-plan-sync` 的 commit 接續，本計畫的文件隨 pv8-line 的 PR 合併。
+- **完成**：`v8-plan-sync`。
+- **之後**：`au1-plan`（audio-line，可並行）。
 - **等你決定**：
+  - `pv8-design` 的 D-1～D-8（見 pv8-design.md 文末）。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `product-sfx` 前：音效資產的來源（v7 D38）。
   - `hit-rules` 前：部位倍率。`ads` 前：ADS 是否影響命中。
@@ -45,11 +47,14 @@
 | D244 | （2026-10-29）順序：① 基礎功能（audio、蹲下、部位 hitbox）→ ② 體驗優化（ADS、衝刺）→ ③ 手感時序（v7.1 交過來的）→ ④ 工具（UI editor、Voxel Map Editor、Assets Editor） | 「優先基礎功能（audio，蹲下，部位hitbox ），在來遊戲體驗優化（ADS、衝刺），再來手感時序（v7.1 交過來）、最後工具（UI editor，Voxel Map Editor、Assets Editor）」 |
 | D245 | （2026-10-29）對局規則、出生分散與保護、暫停選單、畫面設定、預熱幀、角色外觀排在工具之後（⑤）。①② 完成才像基礎 FPS，③ 是優化，④ 是 Engine 的穩定 | 「這些排在工具後面。」「第一第二完畢了，才比較像一個基礎fps，第三，是優化，第四才是Engine 穩定。」 |
 | D246 | （2026-10-29）pv8 照建議：蹲下、衝刺、ADS 的欄位在 `pv8-design` 一次設計，隨蹲下的 PR 合併，衝刺與 ADS 先填預設值。對局規則不進 pv8，到 ⑤ 再升協議。計畫的檔位旁加上引擎（模型），照變速箱規則的「エンジン（モデル）」節 | 「照建議開，記得檔位上加個agent模型（opus啥）。變速箱規則升級了。」 |
+| D247 | （2026-10-29）v8 開始：第一批 `pv8-design`，照編制跑 ultracode：2 位唯讀偵察（Sonnet 5.5，medium）、3 個獨立方案（Opus 5.5）、1 位審查（Opus 5.5）、1 次對抗式檢查（Sonnet 5.5），共 7 個 agent | 「可以開始了v8進程」；選「pv8-design (Recommended)」「照編制跑 (Recommended)」 |
 
 ## 規劃紀錄（記錄器）
 
 - 2026-10-29：`v8-plan-sync` 開始（檔位 medium，引擎 Opus 5.5，估 2 h）。分支 `claude/pvp-v8-plan-sync`（從 origin/master `62fd7ebf`）。規劃前在主會話盤點 origin/master 的程式碼：`MovementCommand` 只有前後、左右、視角、跳；`CombatRules` 只有一把武器的參數；`HitPart` 已有 Body／Head；沒有計分、對局狀態、音效；Esc 呼叫 `connection.Leave()`；工具只有 `ui_editor` 與綁在已停用 `object_fps` 的 `object_fps_preview`。
 - 2026-10-29：`v8-plan-sync` 完成。README 改寫為分批計畫（五組、各批檔位與引擎、估時、PR 線、不在 v8 的項目）；2026-10-22 版的候選與規劃輸入保留在 README 後半。沒有另建 INVENTORY：候選的去處寫在 README 的樹與「不在 v8 的項目」。dev_log：`docs/dev_logs/2026_10_29_pvp_v8_plan_sync.zh-Hant.md`。
+- 2026-10-29：`pv8-design` 開始（D247）。主會話先做少量偵察：`client_v7.proto` 的 `MovementCommand`（6 欄）、`PlayerState`（至 19）、`WorldSnapshot`、`CombatState`；`protocol-v7.zh-Hant.md` §0 的原則（一次 wire 變更、每個欄位寫出它支撐的功能）。workflow 的 agent 只讀不寫，產出由主會話整理成 `pv8-design.md` 與 `protocol-v8.zh-Hant.md` 草案，停在核准關卡。
+- 2026-10-29：`pv8-design` 的 workflow（run `wf_f6c34055-22e`）完成，7／7 個 agent 回傳，約 16 分。評分：最小加法 26、風險優先 24、功能優先 19；以最小加法為基底合成。對抗式檢查：must 4、should 8、note 4。主會話核對 must 3：`ResetMovementEpoch` 清空 `lastActualCommand`（`PvpMatch.cpp:433`），對抗方的推論不成立，但由此找到反方向的缺口（epoch 輪替後替補會把蹲著的玩家拉起來），補進草案。agent 的原始輸出留在會話的工作檔，不放進 repo（同 IP-3／IP-4 的做法）。所有大小都是手算，沒有建置或執行測試。
 
 ## 未結事項
 
