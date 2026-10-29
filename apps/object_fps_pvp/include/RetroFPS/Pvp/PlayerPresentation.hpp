@@ -140,6 +140,7 @@ struct PlayerPresentationObservation final {
     Engine::Math::Vec3 footAnchor{};
     Engine::Math::Vec3 weaponWorldPosition{};
     std::size_t bodySubmittedMeshes{}, hairSubmittedMeshes{}, weaponSubmittedMeshes{};
+    std::size_t declaredAccessories{};
     std::size_t upperBodyMaskCount{}, preparedInstances{};
     std::string resetReason;
     std::uint64_t lifeGeneration{1};
