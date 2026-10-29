@@ -28,7 +28,8 @@ worker 驗收（`object_fps_pvp.worker`，Client 網路執行緒的 mock 測試�
 ## 新的人物模型與第一人稱武器
 
 - 人物換成 Player_V19，第一人稱武器換成 nailer_v2（取代 PvP 的 Mark23）。
-- 已知問題（D240）：Windows 的 LAN 場次中看到模型的外觀有問題，判斷在模型本身（不是 Engine），修正後另發版本。
+- 已知問題（D240）：Windows 的 LAN 場次中看到模型的外觀有問題，判斷在模型本身（不是 Engine）。
+- **v1.2.0 的人物模型是修正後的 Player_V20**（D241、D242）：帶 V19 的那份 v1.2.0 草稿沒有發布，已刪除。已知（不在本版處理）：HUD 的武器名仍是 `MARK23`，第三人稱拿的仍是舊手槍。
 
 ## 已知限界：Windows LAN 場次（lan15，D240）
 

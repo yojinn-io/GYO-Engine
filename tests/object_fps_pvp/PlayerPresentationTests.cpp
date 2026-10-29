@@ -183,7 +183,7 @@ TEST_CASE("PvP player content resolves owner-local character clips materials and
     REQUIRE(definition.character->animationSet);
     const auto& character = *definition.character;
     const auto& model = *character.model;
-    CHECK(character.modelAssetId.debugName == "object_fps_pvp.model.character.player_v19");
+    CHECK(character.modelAssetId.debugName == "object_fps_pvp.model.character.player_v20");
     REQUIRE(definition.idleClip < model.clips.size());
     REQUIRE(definition.jogClip < model.clips.size());
     CHECK(model.clips[definition.idleClip].name == "Armature|Pistol_Idle_Loop");
@@ -196,7 +196,7 @@ TEST_CASE("PvP player content resolves owner-local character clips materials and
         CHECK(clip.modelAssetId == character.modelAssetId);
     }
     REQUIRE(character.materials.size() == model.materials.size());
-    // Player_V19 keeps its 15 imported colour materials without overrides.
+    // Player_V20 keeps its 15 imported colour materials without overrides.
     REQUIRE(character.materials.size() == 15);
     for (const auto& material : character.materials) CHECK_FALSE(material.textureAssetId);
     CHECK(character.accessories.empty());

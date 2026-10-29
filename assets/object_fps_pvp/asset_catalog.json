@@ -20,7 +20,7 @@
     { "id": "object_fps_pvp.texture.nailer_v2.gun", "type": "texture", "path": "weapons/nailer_v2/viewmodel/textures/Nailer1_D.png" },
     { "id": "object_fps_pvp.animset.nailer_v2.viewmodel", "type": "text", "path": "weapons/nailer_v2/viewmodel/viewmodel.animset.json" },
 
-    { "id": "object_fps_pvp.model.character.player_v19", "type": "model", "path": "characters/player/Player_V19.fbx" },
+    { "id": "object_fps_pvp.model.character.player_v20", "type": "model", "path": "characters/player/Player_V20.fbx" },
 
     { "id": "object_fps_pvp.texture.character.female.hair", "type": "texture", "path": "characters/superhero_female/textures/T_Hair_2_BaseColor.png" },
 
