@@ -615,6 +615,13 @@ std::vector<Eviction> MatchRuntimeHost::TakeEvictions() {
     return result;
 }
 
+std::vector<QualityWindowFailure> MatchRuntimeHost::TakeQualityWindowFailures() {
+    std::lock_guard lock(mutex_);
+    std::vector<QualityWindowFailure> result;
+    result.swap(qualityFailures_);
+    return result;
+}
+
 void MatchRuntimeHost::RemovePlayerState(PlayerId playerId, std::uint64_t resolvedThrough) {
     shotShadow_.Remove(playerId);
     if (const auto pending = pendingInputs_.find(playerId); pending != pendingInputs_.end()) {
@@ -711,8 +718,12 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
                 const auto resets = quality->resets - track.windowStart.resets;
                 const auto permille = resolved ? static_cast<std::uint32_t>(substituted * 1000 / resolved) : 0U;
                 const bool late = referenceAgeMillis > ConnectionQualityMaximumReferenceAgeMillis;
-                const bool failed = late || permille > ConnectionQualityMaximumSubstitutedPermille || resets > 0;
+                const bool substitutedTooMany = permille > ConnectionQualityMaximumSubstitutedPermille;
+                const bool failed = late || substitutedTooMany || resets > 0;
                 track.failures = failed ? track.failures + 1 : 0;
+                if (failed)
+                    qualityFailures_.push_back({playerId, tick, track.failures, referenceAgeMillis, permille, resets,
+                        late, substitutedTooMany, resets > 0, resolved, substituted, ages.size()});
                 if (track.failures >= ConnectionQualityFailedWindows) {
                     evictions_.push_back({playerId, late ? EvictionReason::HighLatency : EvictionReason::UnstableInput,
                         referenceAgeMillis, permille,
@@ -782,6 +793,7 @@ void MatchRuntimeHost::ClearState() {
     slack_.clear();
     quality_.clear();
     evictions_.clear();
+    qualityFailures_.clear();
     publishedReferences_.clear();
     results_.clear();
     snapshot_.reset();

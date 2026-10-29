@@ -1,7 +1,8 @@
 # Engine role threads: one named, long-lived thread per role with a
 # cooperative stop through the role's Time::Waiter and a per-platform priority
 # hint. No thread pool, scheduler or work queue; loops, handoffs and stop order
-# belong to the consumer. Depends on GYO::Time and the operating system only.
+# belong to the consumer. Depends on GYO::Time, and privately on GYO::Os for
+# the thread name and priority calls (os-threads-backend, D69).
 add_library(gyo_threads STATIC
     src/RoleThread.cpp
 )
@@ -13,4 +14,4 @@ target_include_directories(gyo_threads PUBLIC
 
 find_package(Threads REQUIRED)
 target_compile_features(gyo_threads PUBLIC cxx_std_20)
-target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads)
+target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads PRIVATE GYO::Os)

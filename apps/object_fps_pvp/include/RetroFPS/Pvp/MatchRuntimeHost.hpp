@@ -46,6 +46,24 @@ struct Eviction final {
     std::uint32_t movementResets{};
 };
 
+// Diagnostics only: a judged connection-quality window that failed, with its
+// measurements and which conditions held. movementResets counts Starvation,
+// Backlog and Resync epoch resets only (MovementQuality::resets).
+struct QualityWindowFailure final {
+    PlayerId playerId{};
+    std::uint64_t tick{}; // the authority tick that closed the window
+    std::uint32_t failures{}; // failed windows in a row, this one included
+    std::uint32_t referenceAgeMillis{};
+    std::uint32_t substitutedPermille{};
+    std::uint64_t movementResets{};
+    bool referenceAgeFailed{};
+    bool substitutedFailed{};
+    bool movementResetsFailed{};
+    std::uint64_t resolvedCommands{};
+    std::uint64_t substitutedCommands{};
+    std::uint64_t referenceAgeSamples{};
+};
+
 // Product scheduler/host. Network I/O only exchanges values through bounded
 // ingress/results and one replaceable snapshot; it never drives world ticks.
 // The host owns its simulation role: a GYO::Threads role thread that steps at
@@ -94,6 +112,9 @@ public:
     [[nodiscard]] std::vector<ControlResult> TakeControlResults();
     // Players already removed from the match; the I/O layer tells the Gateway.
     [[nodiscard]] std::vector<Eviction> TakeEvictions();
+    // Diagnostics only, since the previous call: every failed window, in the
+    // order judged, a window that evicts included. A reset clears them.
+    [[nodiscard]] std::vector<QualityWindowFailure> TakeQualityWindowFailures();
     // Diagnostics only, since the previous call (or the start): how the
     // simulation role's waits for the next tick ended, how many published
     // snapshots were replaced before the I/O layer took them, and how long
@@ -227,6 +248,7 @@ private:
     std::map<PlayerId, SlackTrack> slack_;
     std::map<PlayerId, QualityTrack> quality_;
     std::vector<Eviction> evictions_;
+    std::vector<QualityWindowFailure> qualityFailures_;
     std::deque<PublishedReference> publishedReferences_;
     std::vector<ControlResult> results_;
     std::optional<WorldSnapshot> snapshot_;

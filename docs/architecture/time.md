@@ -2,8 +2,9 @@
 
 Owner: Engine (`engine/time` → `GYO::Time`).
 Plan and record: [time-threads-trace](plans/time-threads-trace/README.md), batch TT-1 (D29); this document was written
-in [os-subsystem](plans/os-subsystem/README.md) batch time-threads-invariants, before the wait backends move into
-engine/os (os-wait-backend).
+in [os-subsystem](plans/os-subsystem/README.md) batch time-threads-invariants. The batch that would have moved the
+wait backends into engine/os (os-wait-backend) is frozen: its Windows timing L2 failed and it was withdrawn (D78), so
+the backends stay in `Waiter.cpp`.
 
 ## What it is
 
@@ -35,6 +36,24 @@ GYO::Base ◄── GYO::Time ◄── GYO::Threads, GYO::Engine and products
   `ConditionVariable` elsewhere. The names are part of the consumer's log lines (`wait_backend=`).
 - `Create()` fails with `WaitPrimitiveUnavailable` when the OS refuses the primitive. A moved-from Waiter ignores
   `Notify` (it is `noexcept` and cannot assert); waiting on it is a Programmer Error (`GYO_ASSERT`).
+
+## Baselines
+
+Wake precision is recorded, never a pass condition. `tests/common/time/WakeRecord.cpp` builds
+`gyo_time_wake_record` (no window) and `gyo_time_wake_record_window` (an Engine SDL window pumped between waits);
+neither is a CTest. Each waits on 60 Hz absolute deadlines with the Waiter, a condition variable and `sleep_until`
+for 30 s, and measures notify to wake for the Waiter and a condition variable. `tests/common/time/wake_baseline.py`
+runs the declared procedure (os-subsystem D68): a 5 s sleeper before and after each mode, and `meta.txt` with the
+commit, the program hashes, the OS, the CPU and the load. Evidence lives under `build/target/_build/test/logs/` of
+the main checkout.
+
+| Platform | Recorded | Waiter deadline P50 / P99, no window; window | Evidence |
+|---|---|---|---|
+| macOS Intel x86_64 (Kqueue) | 2026-10-27, `f6997194` | 0.077 / 0.145 ms; 0.077 / 0.134 ms | `os-wake-baseline-20261027-macos-intel` |
+| macOS Intel x86_64 (Kqueue), TT-1 L2 | 2026-10-09, `a8f9535` | 0.025 / 0.10 ms; 0.077 / 0.133 ms (idle host) | `tt1-l2-20261009-idle` |
+| Windows x64 (HighResolutionWaitableTimer), os-windows-run W4 | 2026-10-28, programs built from `4ffc7c65` (this Waiter) | 0.617 / 1.000 ms; 0.450 / 0.928 ms | `wake-baseline/` on the Windows machine ([record](../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)) |
+| Linux x64 | cancelled (os-subsystem D78) | | |
+| macOS arm64 | not run: no machine (CI runs L1 only) | | |
 
 ## Design Invariants
 

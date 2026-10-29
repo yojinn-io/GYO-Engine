@@ -20,4 +20,7 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
+// The Match log line of a failed connection-quality window (log-contract,
+// A grade), without the "[ObjectFPS/PvP Match] " prefix.
+[[nodiscard]] std::string QualityWindowFailedLine(const QualityWindowFailure& failure);
 }
