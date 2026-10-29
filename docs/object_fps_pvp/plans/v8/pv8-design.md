@@ -57,7 +57,7 @@ ADS 已取消（D251）：第 1、2 版的 `aim_held`、`aiming`、`aim_speed_sc
 2. 解析姿態（D-3，D251）：**alive 時**看 `crouch_held`，地面與空中都可以切換（空中蹲：可以）。例外：本步要跳（alive、`jump_requested`、本步開始時 grounded）時，不論 `crouch_held`，目標姿態是站姿（蹲著跳：直接轉為跳躍）。站變蹲時腳的位置不動；蹲變站要在**目前位置**以站立膠囊做 `CanPlaceCharacterBody`，不通過就維持蹲姿。禁止靠 `MoveCharacterBody` 的初始穿透推出來站起。
 3. 解析 `sprinting`（② 之前恆為 false）。
 4. 依姿態算水平位移（套用倍率；蹲姿用 `crouch_speed_scale`）→ 依姿態做 supported → 跳躍：條件是 alive、`jump_requested`、grounded，且第 2 步成功站起或原本就站著。蹲著按跳、但頭上被擋站不起來時，不跳，維持蹲姿 → 重力 → 依姿態做 `MoveCharacterBody`（掃掠會擋住站姿走進低處）→ 重算 grounded。
-- 蹲跳：按住蹲鍵再按跳，起跳那一步轉為站姿起跳；下一步已在空中，`crouch_held` 仍按著，就在空中蹲下。空中蹲下時腳的位置不動、頭往下縮，所以不會比站著跳更高，只是身體變矮（D251 的「體型變矮」）。若要「空中蹲下時腳往上收、跳得過更高的障礙」，要另外決定。
+- 蹲跳：按住蹲鍵再按跳，起跳那一步轉為站姿起跳；下一步已在空中，`crouch_held` 仍按著，就在空中蹲下。空中蹲下時腳的位置不動、頭往下縮，所以不會比站著跳更高，只是碰撞膠囊變矮。若要「空中蹲下時腳往上收、跳得過更高的障礙」，要另外決定。
 - 5 個膠囊呼叫點（supported、`MoveCharacterBody`、`InterpolateLocalPresentation`、`ShotQuery` 的眼高、受擊膠囊）都用同一個「依姿態取高度」的函式。站立分支直接回傳 `arena.bodyHeight`，保持既有的浮點運算順序。
 - 死亡：`crouched` 不變（屍體維持死亡時的姿態），`sprinting` 設為 false。
 - 重生（`PvpMatch.cpp:264-286`）：明文設 `crouched`＝false、`sprinting`＝false。出生點的選擇用站立高度。
@@ -70,6 +70,10 @@ ADS 已取消（D251）：第 1、2 版的 `aim_held`、`aiming`、`aim_speed_sc
   - 命令過期、操控者不符或 controls=false 時：蹲保留上一次的意圖，衝刺歸 false。
   - 新狀態不放在預測器的成員變數（不學 `pendingJump_`）：命令側隨 pending 重播，狀態側隨 snapshot 整份取代。
   - 眼高與遠端蹲姿的過渡只在呈現層做時間平滑，不進判定；手感由 L3 確認。
+- 呈現（D252）：「體型變矮」就是蹲姿，**不改變原有模型**。
+  - 遠端與第三人稱用現有角色的蹲姿動畫：`UAL1_Standard.fbx` 已有 `Crouch_Idle_Loop`、`Crouch_Fwd_Loop`（接進 `animations.animset.json` 與 `PlayerPresentation` 的下半身動作）。
+  - 模型的縮放照舊用站立的 `bodyHeight`，不用 `crouch_body_height`：蹲姿高度只用在碰撞、支撐、受擊膠囊與眼高，不得拿去縮放模型。加測試：蹲下前後模型的縮放相同（突變：縮放改用蹲姿高度，測試必須失敗）。
+  - 不新增模型、不改模型檔。
 
 ### 版本與遷移
 
