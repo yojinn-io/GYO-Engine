@@ -757,19 +757,15 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 
 ## 未結事項
 
-<<<<<<< HEAD
-- **（排在 v7.1 之後）Match 的連線品質窗口失敗時沒有寫出原因**：lan15 第 1 次，KLYU 在 11:06:31 有 1 個窗口失敗（玩家看到「CONNECTION POOR … or you will be removed」），從 log 推算的替代約 35‰、只有重生的重設，三個條件都對不上。另記：LAN 上一次短暫延遲就出現「會被移除」的警告，是照設計，但玩家感受不好。
-  - 2026-10-29 檢測已補（分支 `claude/pvp-quality-window-log-831143`，dev_log `docs/dev_logs/2026_10_29_pvp_v71_quality_window_log.zh-Hant.md`）：Match 每個判定失敗的窗口寫一行 `quality window failed version=1`（A 級，[log-contract](../../log-contract.zh-Hant.md) 1.1），帶連續失敗數、三個值、各條件是否成立、替代的分母與分子、參考年齡的樣本數。判定與 UI 不變。
-  - 還沒做：等之後的場次出現這一行，再評估要不要改判定或 UI。lan15 那一次的成因仍然判定不了（當時沒有這一行）。
-=======
 - **（只記錄，2026-10-29）macos-x64 的 L1 上 `GYO_ASSERT(submitted)` 被觸發**：PR #101 的 L1 第 1 次（run 40820397432），`object_fps_pvp.cpu` 的「PvP phase tracking removes the start lottery at every frame rate without losing Actual commands」（`MovementRecoveryTests.cpp:542`）中，`MatchRuntimeHost.cpp:425` 的 `GYO_ASSERT(submitted)` 失敗、程序中止。
   - 這是 D183 的不變量：已通過 ingress 檢查的輸入交給 Match 不該被拒。
   - PR #101 只換模型資產與測試的模型 id，沒有動 Match；同樣的程式在 `646b808f`、`2150e32c` 的 macos-x64 L1 都通過；只重跑失敗的 job 後通過。
   - 照使用者的原則（macos-x64／Rosetta 的偶發只記錄，不提追查方案）不追查。但這次是不變量的 assert，不是逾時；原因沒有切開（實作、測試或 Rosetta 下的時序）。之後在其他平台再出現時，就不能當偶發處理。
   - 證據：L1 的 `l1-diagnostics-macos-x64` artifact 的 `Testing/Temporary/LastTest.log`（第 1265 行起）。
 
-- **（排在 v7.1 之後）Match 的連線品質窗口失敗時沒有寫出原因**：lan15 第 1 次，KLYU 在 11:06:31 有 1 個窗口失敗（玩家看到「CONNECTION POOR … or you will be removed」），從 log 推算的替代約 35‰、只有重生的重設，三個條件都對不上。先補檢測（失敗時寫出參考年齡、替代比例、重設次數）。另記：LAN 上一次短暫延遲就出現「會被移除」的警告，是照設計，但玩家感受不好。
->>>>>>> 19d8fd27eb2d655f9cf59f985905a5e4e0825e13
+- **（排在 v7.1 之後）Match 的連線品質窗口失敗時沒有寫出原因**：lan15 第 1 次，KLYU 在 11:06:31 有 1 個窗口失敗（玩家看到「CONNECTION POOR … or you will be removed」），從 log 推算的替代約 35‰、只有重生的重設，三個條件都對不上。另記：LAN 上一次短暫延遲就出現「會被移除」的警告，是照設計，但玩家感受不好。
+  - 2026-10-29 檢測已補（分支 `claude/pvp-quality-window-log-831143`，dev_log `docs/dev_logs/2026_10_29_pvp_v71_quality_window_log.zh-Hant.md`）：Match 每個判定失敗的窗口寫一行 `quality window failed version=1`（A 級，[log-contract](../../log-contract.zh-Hant.md) 1.1），帶連續失敗數、三個值、各條件是否成立、替代的分母與分子、參考年齡的樣本數。判定與 UI 不變。
+  - 還沒做：等之後的場次出現這一行，再評估要不要改判定或 UI。lan15 那一次的成因仍然判定不了（當時沒有這一行）。
 - **（D231、D233，排在 v7.1 之後）驗收工具的三個問題**：後續任務，v7.1 合併後開。
   - K10（D233 從 lan15 移來）：凍結的 `run_case` 在 probe 失敗後立刻關服務，L2 看不到 Gateway 端的 session 到期。
   - mock 的 `Pump` 在 `receive_from` 收到 WSAECONNRESET 時丟例外，讓整個驗收中止（Windows 上 40 次中 2 次，都在重送檢查之前；觸發的步驟還沒找出）。照 §14.3：先找出觸發的步驟並加觀測，能重現再修。
