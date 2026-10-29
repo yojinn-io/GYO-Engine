@@ -161,3 +161,39 @@ blocker 2、major 11、minor 14。主會話抽查了 B1（`action_delivery.go:24
 | M10 | J5 漏了「不得空判」 | 每位在 S1 有裁決的玩家，至少 1 個有值的窗口 |
 | M11 | log 追加寫入＋不重跑，容易無法挽回 | 新建資料夾；每份 log 恰好 1 行啟動；trace 依啟動行的實際檔名讀；最後一位玩家加入前的環境故障可重啟（換新資料夾），之後不准 |
 | m1～m14 | 來源描述、行的字面、`rate_limited` 是累計、T_max 其實量得到、`transient_socket_errors` 只有整個 session 的總數、S7 的錯誤字串、Q1 的新身分、Q2 未定、J2 是整個場次、多開 Client 要各自 `--log`、S5 範圍矛盾 | 全部照建議改：J1／J2 移出 S1、改為「整個場次」；R2 判 T_max＝（failed − interrupted 的 mono 差）＋gap_ms，落在 [5000, 5100]；S6 改看握手期的 `connection failed reason=`，「直接超過 T_max」分支列入限界；S7 改成列出確切的錯誤字串並要求啟動到 Lobby 的行存在；Q1 加新 id ≠ 舊 id、其他 Client 的 `players=` 先減 1 再回復；Q2 等人數定了再寫 |
+
+## 第 1 次場次的結果（2026-10-29，離線的現場）
+
+收支：確認不了。宣告的程序大部分沒有照做，或做不到：
+
+- `marks.txt` 沒有寫。
+- 同一個資料夾裡 Match 與 Gateway 各啟動了 2 次。第 1 次的 Gateway 公告的是 `192.168.107.189`：11:01:55～11:02:16 有 3 次 join reserved，都在 5 s 後以 `session_timeout` 到期，UDP 沒有到達。第 2 次公告的是 `192.168.50.64`。第 2 次啟動在最後一位玩家加入之前，宣告允許重來，但要換新的資料夾。
+- S2 的 ping 沒有執行，也沒有做斷線。
+- S3 的 Q1 沒有做。Q2 的 quad probe 當場失敗（`--fifth needs a full room this probe created`）：宣告寫的命令違反 probe 自己的限制，`--fifth` 要 `--create true` 而且補滿 4 人，`--passive` 也不能配 `--fifth`（`quad_main.cpp:62-63`）。這是主會話的錯：交出命令前沒有實際跑過。
+- S7 的觀察沒有記錄。
+
+依 §14.1，這次記錄為「確認不了」，不當作通過，也不被之後的場次覆蓋。
+
+**判定**：照宣告，收支不齊，各項記確認不了。另外，S1 的長度只有約 6 分鐘（11:04:11 最後一位加入，11:10:11 第一位離開），就算收支齊了，J0（≥900 s）也不成立。
+
+**構成**：Mac 跑 Match＋Gateway。Match 是本機建置：現場離線，CI 的 macos-x64 包沒有事先下載，改用同一份產品原始碼的本機建置，`executable_sha256` 開頭 `1d1a60dc`。這是對宣告第 1 節的偏差，照實記錄。Gateway 開頭 `b11aa6d4`。
+
+Windows 有 2 台，都用 CI 套件 `gyo-package-object_fps_pvp-windows-x64`，`executable_sha256` 開頭 `89c23d40`，兩台相同：
+
+- LUO：player 1，11:02:45 加入。
+- KLYU：player 2，11:04:11 加入。
+
+**探索性的觀察（不是判定，只用第 2 段的紀錄）**：
+- `ingress_evidence.py` 對第 2 段（Match log 第 541 行起、Gateway log 第 331 行起、`match.2-ingress.jsonl`）的整體狀態是 `passed`；其中 I1、I1a 是 undetermined。
+- 動作的計數，Client 與 Match 的 `match.2-shots.jsonl` 完全一致（`trace_end` 的 dropped 是 0）：
+  - player 1：accepted 149、rejected 10，原因都是 `magazine_full`；
+  - player 2：accepted 186、rejected 1，原因是 `dead`。
+- 兩台都沒有 `connection interrupted`；`transient_socket_errors` 是 0；`max_gap_ms` 最大 141。
+- KLYU 出現過一次 `failed_windows=1 of 3`（11:06:31），10 秒後恢復。
+- Snapshot 年齡 P50 是 8.1／8.7 ms，最大 55.2／86.9 ms。
+- FPS：LUO 最低 58，KLYU 最低 164。
+- LUO 第一次連線時遇到 Gateway 的 HTTP 逾時與讀取失敗（11:01:07～11:01:47）。當時是第 1 次的 Gateway。
+
+**證據**：Mac 的 `~/gyo-lan15/session-20261029/`；Windows 的 `~/Downloads/20261029_KLYU_logs.zip`、`~/Downloads/logs-LUO.zip`；探索性核對的輸出在會話的 scratchpad `lan15-20261029/`。
+
+**教訓**：每台機器一支腳本，包辦啟動、ping、收 log，交出前在本機實際跑過一次；程式事先完整放好，不假設現場有網路。
