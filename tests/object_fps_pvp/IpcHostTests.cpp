@@ -1488,3 +1488,21 @@ TEST_CASE("PvP IPC carries the hitbox fields and E, S and the view tick") {
     CHECK(record->viewTickQ16 == 3);
     CHECK_FALSE(record->viewValid); // a reload's view tick is 0
 }
+
+// log-contract (A grade, keys-v1.tsv): the line of a failed connection-quality
+// window, each field from its own member.
+TEST_CASE("PvP IPC writes a failed connection-quality window as its log line") {
+    const QualityWindowFailure failure{.playerId = 5, .tick = 1201, .failures = 2, .referenceAgeMillis = 171,
+        .substitutedPermille = 35, .movementResets = 4, .referenceAgeFailed = true, .substitutedFailed = false,
+        .movementResetsFailed = true, .resolvedCommands = 600, .substitutedCommands = 21, .referenceAgeSamples = 598};
+    CHECK(QualityWindowFailedLine(failure) ==
+          "quality window failed version=1 player=5 consecutive_failures=2 reference_age_ms=171 "
+          "substituted_permille=35 movement_resets=4 reference_age_failed=1 substituted_failed=0 "
+          "movement_resets_failed=1 tick=1201 resolved_commands=600 substituted_commands=21 reference_age_samples=598");
+    auto other = failure;
+    other.referenceAgeFailed = false;
+    other.substitutedFailed = true;
+    other.movementResetsFailed = false;
+    CHECK(QualityWindowFailedLine(other).find(" reference_age_failed=0 substituted_failed=1 movement_resets_failed=0 ") !=
+          std::string::npos);
+}

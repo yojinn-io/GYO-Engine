@@ -12,3 +12,4 @@ phrase	[ObjectFPS/PvP] connection interrupted
 phrase	[ObjectFPS/PvP] connection resumed
 phrase	[ObjectFPS/PvP] connection summary
 phrase	session rebound
+phrase	[ObjectFPS/PvP Match] quality window failed

@@ -4849,8 +4849,8 @@
       "batch": "v71-log-contract",
       "what": "The Match evicted line loses reference_age_ms",
       "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
-      "find": "\" reference_age_ms=\"",
-      "replace": "\" age_ms=\"",
+      "find": "std::to_string(eviction.playerId)+\" reference_age_ms=\"",
+      "replace": "std::to_string(eviction.playerId)+\" age_ms=\"",
       "check": "log_contract",
       "expect": "match_evicted: v1 keys"
     },
@@ -6734,6 +6734,46 @@
       "replace": "",
       "check": "cpu",
       "expect": "PvP native text files buffer past their buffer"
+    },
+    {
+      "id": "qwl-failure-not-recorded",
+      "batch": "v71-quality-window-log",
+      "what": "A failed connection-quality window leaves no record for the log",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "                if (failed)\n                    qualityFailures_.push_back(",
+      "replace": "                if (false)\n                    qualityFailures_.push_back(",
+      "check": "cpu",
+      "expect": "PvP host records which conditions failed a connection-quality window"
+    },
+    {
+      "id": "qwl-conditions-swapped",
+      "batch": "v71-quality-window-log",
+      "what": "The record names the reference-age condition as the substitution one and back",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "                        late, substitutedTooMany, resets > 0,",
+      "replace": "                        substitutedTooMany, late, resets > 0,",
+      "check": "cpu",
+      "expect": "PvP host records which conditions failed a connection-quality window"
+    },
+    {
+      "id": "qwl-line-wrong-field",
+      "batch": "v71-quality-window-log",
+      "what": "The log line writes the reference age as substituted_permille",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "\" substituted_permille=\"+std::to_string(failure.substitutedPermille)",
+      "replace": "\" substituted_permille=\"+std::to_string(failure.referenceAgeMillis)",
+      "check": "ipc",
+      "expect": "PvP IPC writes a failed connection-quality window as its log line"
+    },
+    {
+      "id": "qwl-pin-renames-key",
+      "batch": "v71-quality-window-log",
+      "what": "The quality window failed line renames movement_resets_failed",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "\" movement_resets_failed=\"",
+      "replace": "\" resets_failed=\"",
+      "check": "log_contract",
+      "expect": "match_quality_window_failed: v1 keys"
     }
   ]
 }

@@ -705,6 +705,8 @@ struct IpcHost::Impl {
                 session.controls.push_back(wire::Frame(message.SerializeAsString())); session.joins.erase(found);
                 if(session.controls.size()>64) {Close("pending controls over 64");return;}
             }
+            // A failed window's line goes before the eviction it may cause.
+            for(const auto& failure:host.TakeQualityWindowFailures()) MatchEventLog::Line(QualityWindowFailedLine(failure));
             for(const auto& eviction:host.TakeEvictions()) {
                 // The Match already removed the player; the Gateway clears its
                 // reservation like a Leave and tells the Client why.
@@ -904,4 +906,14 @@ void IpcHost::Stop() {
 }
 std::uint64_t IpcHost::Iterations() const noexcept{return impl_->iterations.load(std::memory_order_relaxed);}
 IpcLaneStatistics IpcHost::TakeLaneStatistics(){std::scoped_lock lock(impl_->laneMutex);return std::exchange(impl_->lanes,{});}
+std::string QualityWindowFailedLine(const QualityWindowFailure& failure){
+    return "quality window failed version=1 player="+std::to_string(failure.playerId)+" consecutive_failures="+
+        std::to_string(failure.failures)+" reference_age_ms="+std::to_string(failure.referenceAgeMillis)+
+        " substituted_permille="+std::to_string(failure.substitutedPermille)+" movement_resets="+
+        std::to_string(failure.movementResets)+" reference_age_failed="+(failure.referenceAgeFailed?"1":"0")+
+        " substituted_failed="+(failure.substitutedFailed?"1":"0")+" movement_resets_failed="+
+        (failure.movementResetsFailed?"1":"0")+" tick="+std::to_string(failure.tick)+" resolved_commands="+
+        std::to_string(failure.resolvedCommands)+" substituted_commands="+std::to_string(failure.substitutedCommands)+
+        " reference_age_samples="+std::to_string(failure.referenceAgeSamples);
+}
 }
