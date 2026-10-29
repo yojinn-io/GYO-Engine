@@ -1,6 +1,6 @@
 # PvP v8 交接
 
-更新：2026-10-29。Owner：`object_fps_pvp`。**狀態：`pv8-design` 第 2 版草案，等你決定 D-2、D-5～D-8（[pv8-design](pv8-design.md)）。**
+更新：2026-10-29。Owner：`object_fps_pvp`。**狀態：`pv8-design` 第 3 版草案，等你決定 D-2、D-5～D-8（[pv8-design](pv8-design.md)）。**
 本文件是 v8 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。
 
 ## 代號對照
@@ -15,7 +15,7 @@
 | audio-line（au1-plan、au1、product-sfx） | Engine 音效＋產品音效 | 同上 |
 | pv8-line（pv8-design、crouch） | pv8 契約與蹲下，三角色同一個 PR | 同上 |
 | hitbox-line（hitbox-data、hitbox-rewind、hit-rules） | 部位 hitbox | 同上 |
-| sprint、ads | 衝刺、瞄準 | 同上 |
+| sprint | 衝刺（ads 已取消，D251） | 同上 |
 | analyzer-105、phase-golden、correct-assert、b6-plan、b6、a4 | v7.1 交過來的手感時序（INVENTORY 的 N-analyzer-literal-105、B10、N-correct-invariant-assert、B6、A4） | [v7.1 INVENTORY](../v7.1/INVENTORY.md) |
 | ui-editor-widgets、voxel-map-editor、assets-editor | 工具 | README |
 | match-rules、spawn-layout、pause-menu、display-settings、warmup-hidden、player-look | 流程項目 | README |
@@ -23,14 +23,14 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：`pv8-design`（D247）。第 2 版草案：[pv8-design.md](pv8-design.md)（D-1、D-3、D-4 已定，D250）。停在核准關卡：D-2、D-5～D-8 決定後，實測型別最大（`proto.Size`），再寫 `protocol-v8.zh-Hant.md` 定稿（估 2～3 h）。分支 `claude/pvp-v8-pv8-line`，從 `v8-plan-sync` 的 commit 接續，本計畫的文件隨 pv8-line 的 PR 合併。
+- **進行中**：`pv8-design`（D247）。第 3 版草案：[pv8-design.md](pv8-design.md)（D-3、D-4 已定，D250、D251；ADS 取消，D-1 不再適用）。停在核准關卡：D-2、D-5～D-8 決定後，實測型別最大（`proto.Size`），再寫 `protocol-v8.zh-Hant.md` 定稿（估 2～3 h）。分支 `claude/pvp-v8-pv8-line`，從 `v8-plan-sync` 的 commit 接續，本計畫的文件隨 pv8-line 的 PR 合併。
 - **完成**：`v8-plan-sync`。
 - **之後**：`au1-plan`（audio-line，可並行）。
 - **等你決定**：
-  - `pv8-design` 的 D-2、D-5～D-8（見 pv8-design.md 文末；D-1、D-3、D-4 已決定，D248～D250）。
+  - `pv8-design` 的 D-2、D-5～D-8（見 pv8-design.md 文末；D-3、D-4 已決定，D250、D251；D-1 隨 ADS 取消不再適用）。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `product-sfx` 前：音效資產的來源（v7 D38）。
-  - `hit-rules` 前：部位倍率。`ads` 前：ADS 是否影響命中。
+  - `hit-rules` 前：部位倍率。
 - **發現（不在本產品的範圍，只報告）**：Engine 計畫 [輸入與呈現 HANDOFF](../../../architecture/plans/input-and-present/HANDOFF.md) 開頭寫「IP-3 進行中（ip3b）」，但 IP-3／IP-4 已隨 PR #85 在 2026-10-23 合併（merge commit `054b08f`，見 [v7.1 交接](../v7.1/HANDOFF.md) 2026-10-22～23 的規劃紀錄）。開頭已過時，交給該計畫或圖書管理員更新。
 
 ## 閱讀入口
@@ -51,6 +51,7 @@
 | D248 | （2026-10-29）`pv8-design` 的 D-1、D-3、D-4 照建議：D-1 (a) `aiming` 放 `CombatState`=15，ADS 的移速只看 `aim_held`＋PlayerState，換彈不影響移速；D-3 (a) 空中可以蹲、站起走同一個檢查，蹲著可以跳、跳高不變；D-4 (a) 蹲下參數與倍率放 Arena 內容 v2（② 調倍率會改 arena_digest，已安裝的內容要重新安裝）。D-2、D-5～D-8 還沒決定 | 「嗯這3個照建議就可以了。」（指 D-1、D-3、D-4） |
 | D249 | （2026-10-29）取代 D248 的 D-3、D-4（D-1 維持 (a)）。D-3：起跳後不能蹲，蹲著不能跳。D-4：做參數校準，進地圖時確認。主會話的解讀（待使用者確認）：D-3＝姿態只在 grounded 時切換，空中維持離地時的姿態；蹲著時 `jump_requested` 不生效（不會先站起再跳）。D-4＝沿用 `jump_height`／`gravity` 的先例：蹲下參數與倍率由 Match 經 Ready→Welcome 下發，Client 進地圖時檢查範圍並採用，同一 session 內改變就明確報錯；來源放 Match 端的移動規則資料，不進 arena_digest，調整時 Client 不必重新安裝內容。Welcome／Ready 因此新增欄位 | 「這樣把D-1照建議，D-3 起跳不能蹲，蹲下不能跳。D-4，可以做一個參數校準，在進地圖是確認。」 |
 | D250 | （2026-10-29）確認 D249 的解讀，D-1 (a)、D-3、D-4 定案。D-3：姿態只在著地時切換，空中（含走下平台）維持離地時的姿態；蹲著按跳無效。D-4：蹲下參數與倍率由 Match 在進地圖時經 Ready→Welcome 下發校準，不進 arena_digest（不做 Arena v2）。pv8-design 改寫為第 2 版 | 「D-3、D-4 照你的解讀：姿態只在著地時切換，空中維持離地時的姿態，蹲著按跳無效；蹲下參數與倍率由 Match 在進地圖時下發校準，不進 arena_digest。改寫 pv8-design。」 |
+| D251 | （2026-10-29）取消 ADS（`ads` 批、`aim_held`、`aiming`、`aim_speed_scale` 刪除；② 只剩 `sprint`；pv8-design 的 D-1 不再適用）。蹲跳規則取代 D250 的 D-3：蹲下時移速變慢、體型變矮；空中可以蹲（站起走同一個頭頂檢查）；蹲著按跳直接轉為跳躍（站起並跳）。主會話的補充：頭上被擋站不起來時不跳、維持蹲姿；空中蹲下時腳不動、頭往下縮，不會跳得更高（要腳往上收另外決定）。pv8-design 改寫為第 3 版 | 「OK，我想了一下，取消ADS。蹲跳動作【蹲：蹲下時移速變慢、體型變矮。空中蹲：可以。蹲著跳：直接轉為跳躍】」 |
 
 ## 規劃紀錄（記錄器）
 
