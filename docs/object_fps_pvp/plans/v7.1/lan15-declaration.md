@@ -196,4 +196,10 @@ Windows 有 2 台，都用 CI 套件 `gyo-package-object_fps_pvp-windows-x64`，
 
 **證據**：Mac 的 `~/gyo-lan15/session-20261029/`；Windows 的 `~/Downloads/20261029_KLYU_logs.zip`、`~/Downloads/logs-LUO.zip`；探索性核對的輸出在會話的 scratchpad `lan15-20261029/`。
 
-**教訓**：每台機器一支腳本，包辦啟動、ping、收 log，交出前在本機實際跑過一次；程式事先完整放好，不假設現場有網路。
+**使用者回報的「網路太慢被踢掉」的提示**：對得上 LUO 在 11:02:00～11:02:16 的 3 次 `connection failed … reason=Gateway connection timed out`（player 1～3）。這不是對戰中被逐出：
+- 那 3 次都在加入後 5 s 失敗，`received_datagrams=0`，UDP 一個都沒收到。Gateway 同時記到 3 次 `join reserved` → `player expired … reason=session_timeout`。
+- 原因：第 1 次的 Gateway 公告的是 `192.168.107.189`。這是 `start-gateway.sh` 以 `ipconfig getifaddr en0` 自動選的位址，但場次的 LAN 是 `192.168.50.x`（Mac 在 LAN 上是 `192.168.50.64`），Client 把 UDP 送到了錯的位址。
+- 第 2 次 Gateway 公告 `192.168.50.64` 之後，兩台都正常進入，對戰中沒有任何中斷。
+- 腳本的錯：沒有確認公告的位址和 Client 在同一個網段。
+
+**教訓**：每台機器一支腳本，包辦啟動、ping、收 log，交出前在本機實際跑過一次；程式事先完整放好，不假設現場有網路；Gateway 公告的位址要列出所有網卡、由使用者確認和 Client 同網段，不自動選。
