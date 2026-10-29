@@ -1,6 +1,6 @@
 # pv8-design：pv8 契約的設計（蹲下、衝刺）
 
-更新：2026-10-29（第 3 版：依 D251 取消 ADS、改寫蹲跳規則）；第 2 版（D250）、第 1 版同日。Owner：`object_fps_pvp`。**狀態：草案。D-3、D-4 已決定（HANDOFF D250、D251）；D-1 隨 ADS 取消不再適用（D251）；等使用者決定 D-2、D-5～D-8（文末「等你決定」）。** 決定後實測型別最大，再寫 `protocol-v8.zh-Hant.md` 定稿。
+更新：2026-10-29（第 3 版：依 D251 取消 ADS、改寫蹲跳規則）；第 2 版（D250）、第 1 版同日。Owner：`object_fps_pvp`。**狀態：D-1～D-8 全部處理完（HANDOFF D250～D254）。定稿候選是 [protocol-v8](../../protocol-v8.zh-Hant.md)（2026-10-30，型別最大已實測），等使用者核准。** 本文件之後只作設計紀錄；條文以 protocol-v8 為準。
 上層：[v8 README](README.md)、[HANDOFF](HANDOFF.md)（D246、D247）。前一版契約：[protocol-v7](../../protocol-v7.zh-Hant.md)。
 
 ## 過程
@@ -90,7 +90,7 @@ ADS 已取消（D251）：第 1、2 版的 `aim_held`、`aiming`、`aim_speed_sc
 | 項目 | pv7 | pv8 |
 |---|---|---|
 | 4 人 snapshot，契約最大 | 1073 B | 1101 B（每人 +7 B） |
-| 4 人 snapshot，型別最大（估計） | 約 1151 B（protocol-v7 §8 寫 1155 B，差 4 B 未解釋） | 約 1175～1179 B，剩 21～25 B（取消 ADS 後每人少 2 B） |
+| 4 人 snapshot，型別最大 | 1151 B（實測；protocol-v7 §8 寫 1155 B） | 1175 B（2026-10-30 實測，剩 25 B） |
 | `PlayerInput`（12 個命令） | 約 477 B | 約 525 B |
 | Welcome／Ready | — | 各多約 20 B，遠低於上限 |
 

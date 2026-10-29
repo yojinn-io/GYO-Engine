@@ -1,6 +1,6 @@
 # PvP v8 交接
 
-更新：2026-10-29。Owner：`object_fps_pvp`。**狀態：`pv8-design` 第 3 版草案，等你決定 D-2、D-5～D-8（[pv8-design](pv8-design.md)）。**
+更新：2026-10-29。Owner：`object_fps_pvp`。**狀態：`pv8-design` 完成定稿候選 [protocol-v8](../../protocol-v8.zh-Hant.md)，等你核准；協議壓力調研進行中。**
 本文件是 v8 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。
 
 ## 代號對照
@@ -23,11 +23,12 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：`pv8-design`（D247）。第 3 版草案：[pv8-design.md](pv8-design.md)（D-3、D-4 已定，D250、D251；ADS 取消，D-1 不再適用）。停在核准關卡：D-2、D-5～D-8 決定後，實測型別最大（`proto.Size`），再寫 `protocol-v8.zh-Hant.md` 定稿（估 2～3 h）。分支 `claude/pvp-v8-pv8-line`，從 `v8-plan-sync` 的 commit 接續，本計畫的文件隨 pv8-line 的 PR 合併。
+- **進行中**：`pv8-design`（D247）。D-1～D-8 處理完（D250～D254）；型別最大已實測（4 人 snapshot 1175 B，餘裕 25 B）；定稿候選 [protocol-v8](../../protocol-v8.zh-Hant.md) 寫好，等你核准。分支 `claude/pvp-v8-pv8-line`，本計畫的文件隨 pv8-line 的 PR 合併。
 - **完成**：`v8-plan-sync`。
 - **之後**：`au1-plan`（audio-line，可並行）。
 - **等你決定**：
-  - `pv8-design` 的 D-2、D-5～D-8（見 pv8-design.md 文末；D-3、D-4 已決定，D250、D251；D-1 隨 ADS 取消不再適用）。
+  - 核准 [protocol-v8](../../protocol-v8.zh-Hant.md) 定稿（之後才開始 `crouch`）。
+  - D254 的 D-7 解讀：「遊戲版本與協議版本分開」我理解成 proto 檔名跟協議版本，這次協議升為 pv8，所以改名為 `client_v8`。如果你的意思是協議版本留在 7，要告訴我（wire 改了卻不升版本，舊 Client 會連得上但解不對）。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `product-sfx` 前：音效資產的來源（v7 D38）。
   - `hit-rules` 前：部位倍率。
@@ -62,6 +63,7 @@
 - 2026-10-29：`v8-plan-sync` 完成。README 改寫為分批計畫（五組、各批檔位與引擎、估時、PR 線、不在 v8 的項目）；2026-10-22 版的候選與規劃輸入保留在 README 後半。沒有另建 INVENTORY：候選的去處寫在 README 的樹與「不在 v8 的項目」。dev_log：`docs/dev_logs/2026_10_29_pvp_v8_plan_sync.zh-Hant.md`。
 - 2026-10-29：`pv8-design` 開始（D247）。主會話先做少量偵察：`client_v7.proto` 的 `MovementCommand`（6 欄）、`PlayerState`（至 19）、`WorldSnapshot`、`CombatState`；`protocol-v7.zh-Hant.md` §0 的原則（一次 wire 變更、每個欄位寫出它支撐的功能）。workflow 的 agent 只讀不寫，產出由主會話整理成 `pv8-design.md` 與 `protocol-v8.zh-Hant.md` 草案，停在核准關卡。
 - 2026-10-29：`pv8-design` 的 workflow（run `wf_f6c34055-22e`）完成，7／7 個 agent 回傳，約 16 分。評分：最小加法 26、風險優先 24、功能優先 19；以最小加法為基底合成。對抗式檢查：must 4、should 8、note 4。主會話核對 must 3：`ResetMovementEpoch` 清空 `lastActualCommand`（`PvpMatch.cpp:433`），對抗方的推論不成立，但由此找到反方向的缺口（epoch 輪替後替補會把蹲著的玩家拉起來），補進草案。agent 的原始輸出留在會話的工作檔，不放進 repo（同 IP-3／IP-4 的做法）。所有大小都是手算，沒有建置或執行測試。
+- 2026-10-30：型別最大實測。暫時的 Go 測試（`gateway/adapter/zz_size_probe_test.go`，量完刪除）以 pv7 生成碼量測，pv8 的新欄位以 protowire 附加：pv7 契約最大 1073 B（和既有測試一致）、型別最大 1151 B；pv8 契約最大 1101 B、型別最大 1175 B；PlayerInput 12 命令 477→525 B。protocol-v7 §8 的 1155 B 原定義無法核對（沒有測試）。Gateway 以列舉常數重組 snapshot（`adapter.go:88-106`），wire 上不會有負的 enum。寫 `protocol-v8.zh-Hant.md` 定稿候選。協議壓力調研交給 1 位背景子 agent（general-purpose，引擎與 effort 繼承，只讀、只回傳文字）。
 
 ## 未結事項
 
