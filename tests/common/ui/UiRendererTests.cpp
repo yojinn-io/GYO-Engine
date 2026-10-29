@@ -28,6 +28,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "PathText.hpp"
 
 namespace Engine::Ui::Tests {
 namespace {
@@ -130,10 +131,10 @@ struct FontRendererFixture final {
 
         registry.Register(std::make_unique<Asset::Loaders::FontLoader>());
         Asset::Resolver::AssetPathResolver::Options options;
-        options.assetsRoot = (directory / "assets").string();
+        options.assetsRoot = Engine::Test::Utf8Path(directory / "assets");
         Asset::Resolver::AssetPathResolver resolver(options);
         Asset::Catalog::CatalogParser parser;
-        REQUIRE(catalog.LoadFromFile(catalogPath.string(), parser, resolver));
+        REQUIRE(catalog.LoadFromFile(Engine::Test::Utf8Path(catalogPath), parser, resolver));
     }
 
     ~FontRendererFixture() {
@@ -180,10 +181,10 @@ struct TextureRendererFixture final {
 
         registry.Register(std::make_unique<Asset::Loaders::TextureLoader>());
         Asset::Resolver::AssetPathResolver::Options options;
-        options.assetsRoot = (directory / "assets").string();
+        options.assetsRoot = Engine::Test::Utf8Path(directory / "assets");
         Asset::Resolver::AssetPathResolver resolver(options);
         Asset::Catalog::CatalogParser parser;
-        REQUIRE(catalog.LoadFromFile(catalogPath.string(), parser, resolver));
+        REQUIRE(catalog.LoadFromFile(Engine::Test::Utf8Path(catalogPath), parser, resolver));
     }
 
     ~TextureRendererFixture() {

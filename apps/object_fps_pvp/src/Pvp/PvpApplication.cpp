@@ -39,6 +39,7 @@
 #include "engine/math/geometry/Aabb.hpp"
 #include "engine/math/scalar/Angle.hpp"
 #include "engine/math/scalar/Scalar.hpp"
+#include "engine/os/Files.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -814,7 +815,13 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     impl_->catalog = std::move(catalog).value();
     for (const auto& bundle : manifest.value().shaderBundles) {
         Asset::Resolver::AssetPathResolver::Options options;
-        options.assetsRoot = (assetRoot / bundle.path).string();
+        // Engine paths are UTF-8 (docs/architecture/io.md), not path::string()'s ANSI code page.
+        // bundle.path is content.json text, so UTF-8; never joined in the ANSI code page.
+        auto bundleName = Engine::Os::Files::PathFromUtf8(bundle.path);
+        if (!bundleName) { error = "Shader bundle path is not UTF-8: " + Engine::Base::CauseDetail(bundleName.error()); return false; }
+        auto bundleRoot = Engine::Os::Files::PathToUtf8(assetRoot / *bundleName);
+        if (!bundleRoot) { error = "Shader bundle path has no UTF-8 form: " + Engine::Base::CauseDetail(bundleRoot.error()); return false; }
+        options.assetsRoot = std::move(bundleRoot.value());
         options.allowAbsolutePath = false;
         options.allowEscapeAssetsRoot = false;
         const auto loaded = impl_->shaders.AppendBundle(impl_->source,
@@ -907,7 +914,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     impl_->floor = floor.value();
     impl_->weapon = std::make_unique<fps::WeaponViewModel>();
     if (!impl_->weapon->Initialize(*impl_->device, impl_->assets,
-        Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.mark23"), error)) return false;
+        Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error)) return false;
     impl_->players = std::make_unique<PlayerPresentation>();
     // The current two-player product needs one remote slot. Preallocate it so
     // joining/rejoining never creates a skinned GPU instance in a live frame.

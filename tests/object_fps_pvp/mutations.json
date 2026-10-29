@@ -125,6 +125,12 @@
     },
     "compare_reports": {
       "ctest": "object_fps_pvp.compare_reports"
+    },
+    "close_timing": {
+      "build": [
+        "gyo_object_fps_pvp_worker_probe"
+      ],
+      "ctest": "object_fps_pvp.close_timing"
     }
   },
   "mutants": [
@@ -2093,7 +2099,7 @@
       "batch": "v7-flow",
       "what": "an unopenable detail file does not stop the Match",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
-      "find": "        if (!file_) throw std::runtime_error(\"Cannot open ingress trace: \" + path.string());\n",
+      "find": "        if (!file_) throw std::runtime_error(\"Cannot open ingress trace: \" + Engine::Os::Files::PathForMessage(path));\n",
       "replace": "",
       "check": "match_ingress_cli",
       "expect": "unopenable ingress trace: stderr does not match"
@@ -2103,8 +2109,8 @@
       "batch": "v7-flow",
       "what": "the derived name keeps the movement trace name (-commands.jsonl)",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
-      "find": "            ? name.substr(0, name.size() - movementSuffix.size()) + \"-ingress.jsonl\"\n",
-      "replace": "            ? name.substr(0, name.size() - movementSuffix.size()) + \"-commands.jsonl\"\n",
+      "find": "            ? name.substr(0, name.size() - movementSuffix.size()) + u8\"-ingress.jsonl\"\n",
+      "replace": "            ? name.substr(0, name.size() - movementSuffix.size()) + u8\"-commands.jsonl\"\n",
       "check": "cpu",
       "expect": "CHECK\\( derivedName == \"match\\-ingress\\.jsonl\" \\) is NOT correct"
     },
@@ -2113,8 +2119,8 @@
       "batch": "v7-flow",
       "what": "an explicit name ending in commands.jsonl is accepted",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchIngressTrace.hpp",
-      "find": "    if (path.filename().string().ends_with(commands)) {\n",
-      "replace": "    if (path.filename().string().ends_with(commands) && false) {\n",
+      "find": "    if (path.filename().u8string().ends_with(commands)) {\n",
+      "replace": "    if (path.filename().u8string().ends_with(commands) && false) {\n",
       "check": "cpu",
       "expect": "CHECK\\( commandsSuffixRefused \\) is NOT correct"
     },
@@ -3536,7 +3542,7 @@
       "find": "    if (input.lifeGeneration != life)\n        return input.lifeGeneration < life ? InputAdmission::LifeOld : InputAdmission::LifeFuture;\n",
       "replace": "    static_cast<void>(life);\n",
       "check": "ipc",
-      "expect": "CHECK\\( once\\.(snapshot|decisions) == copied\\.(snapshot|decisions) \\) is NOT correct"
+      "expect": "GYO_ASSERT failed: merged\\.commands\\.empty\\(\\) && merged\\.stagedSequences\\.empty\\(\\)|CHECK\\( once\\.(snapshot|decisions) == copied\\.(snapshot|decisions) \\) is NOT correct"
     },
     {
       "id": "v71ip-input-wait-unrecorded",
@@ -5917,7 +5923,7 @@
       "find": "                    const auto arrival=liveness.Snapshot(arrivedAt);",
       "replace": "                    const auto arrival=liveness.Snapshot(arrivedAt+std::chrono::microseconds(clock.Clock().Echo()?clock.Clock().Echo()->first%500000:0));",
       "check": "worker",
-      "expect": "did not count from the last snapshot|not interrupted at T_int|an extreme time echo changed"
+      "expect": "did not count from the last snapshot|not interrupted at T_int|an extreme time echo changed|an outage did not write its six connection lines"
     },
     {
       "id": "ci-transient-not-transient",
@@ -6474,7 +6480,7 @@
       "batch": "v71-trace-no-overwrite",
       "what": "The number goes after -commands",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/TracePaths.hpp",
-      "find": "        numbered.replace_filename(name.substr(0, name.size() - commands.size()) + mark + std::string(commands));",
+      "find": "        numbered.replace_filename(name.substr(0, name.size() - commands.size()) + mark + std::u8string(commands));",
       "replace": "        numbered.replace_filename(name + mark);",
       "check": "cpu",
       "expect": "takes the next free numbered name"
@@ -6668,6 +6674,66 @@
       "replace": "        if(event==ConnectionLiveness::Event::Interrupted) {",
       "check": "diagnostic_isolation",
       "expect": "test_a_poll_records_interruptions_through_the_shared_rule"
+    },
+    {
+      "id": "qc-closing-uses-request-timeout",
+      "batch": "v71-quick-close",
+      "what": "The closing /leave waits with the 2 s timeouts of the other requests",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        try{DisconnectRemote(true);}",
+      "replace": "        try{DisconnectRemote();}",
+      "check": "close_timing",
+      "expect": "FAILED \\{'mode': 'stalled'"
+    },
+    {
+      "id": "qc-closing-timeout-too-long",
+      "batch": "v71-quick-close",
+      "what": "The closing /leave timeout grows past the declared limit",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "constexpr auto ClosingLeaveTimeout=std::chrono::milliseconds(300);",
+      "replace": "constexpr auto ClosingLeaveTimeout=std::chrono::milliseconds(1500);",
+      "check": "close_timing",
+      "expect": "FAILED \\{'mode': 'stalled'"
+    },
+    {
+      "id": "osfw-arena-size-unchecked",
+      "batch": "os-files-write",
+      "what": "An arena larger than 256 KiB is read",
+      "file": "apps/object_fps_pvp/src/Pvp/NativeFiles.cpp",
+      "find": "    if (status.value().sizeBytes > maxBytes) {",
+      "replace": "    if (false) {",
+      "check": "cpu",
+      "expect": "An arena keeps its open and size messages"
+    },
+    {
+      "id": "osfw-trace-open-failure-ignored",
+      "batch": "os-files-write",
+      "what": "A trace file that did not open counts as open",
+      "file": "apps/object_fps_pvp/src/Pvp/NativeFiles.cpp",
+      "find": "NativeTextFile::operator bool() const noexcept { return buffer_->Good() && static_cast<bool>(stream_); }",
+      "replace": "NativeTextFile::operator bool() const noexcept { return true; }",
+      "check": "cpu",
+      "expect": "keep the bytes the text-mode stream wrote"
+    },
+    {
+      "id": "osfw-buffer-overflow-dropped",
+      "batch": "os-files-write",
+      "what": "A character that fills the trace buffer is dropped",
+      "file": "apps/object_fps_pvp/src/Pvp/NativeFiles.cpp",
+      "find": "            *pptr() = traits_type::to_char_type(character);\n            pbump(1);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP native text files buffer past their buffer"
+    },
+    {
+      "id": "osfw-destructor-no-flush",
+      "batch": "os-files-write",
+      "what": "A trace file destroyed without Close loses its buffer",
+      "file": "apps/object_fps_pvp/src/Pvp/NativeFiles.cpp",
+      "find": "    if (buffer_ && buffer_->Open()) static_cast<void>(buffer_->Close());\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP native text files buffer past their buffer"
     }
   ]
 }

@@ -1,0 +1,6 @@
+# Acceptance-program sites the OS boundary guard reports (docs/architecture/os.md). Owner: object_fps_pvp.
+# Format: path rule count  # reason. Only shrinks.
+
+# Not an OS call: a local std::ofstream named signal matches R3's bare signal( pattern. Kept as an entry instead
+# of loosening the pattern (os-subsystem PLAN section 6); renaming the variable removes it.
+build/acceptance/object_fps_pvp/network_main.cpp R3 1  # false positive: variable named signal

@@ -1,34 +1,60 @@
 #include "gyo/ui_editor/FileService.hpp"
 
 #include "engine/base/Fnv1a.hpp"
+#include "engine/io/fs/NativeFileSystem.hpp"
+#include "engine/io/helpers/FileAllCommon.hpp"
+#include "engine/io/helpers/WriteFileAtomically.hpp"
+#include "engine/os/Files.hpp"
 
-#include <array>
 #include <chrono>
-#include <cwctype>
-#include <fstream>
-#include <random>
-#include <sstream>
-#include <system_error>
+#include <cstddef>
+#include <limits>
+#include <utility>
 
-#if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
-#endif
+// Files go through engine/io's native backend and path queries through engine/os
+// (docs/architecture/os.md, Design Invariant 2); the editor holds no OS code.
 
 namespace Gyo::Tools::UiEditor {
 namespace {
 
+namespace Io = Engine::IO;
+namespace OsFiles = Engine::Os::Files;
+
+// The path in UTF-8 for messages; engine paths are UTF-8, not path::string()'s ANSI code page.
+[[nodiscard]] std::string Text(const std::filesystem::path& path) {
+    auto text = OsFiles::PathToUtf8(path);
+    return text ? std::move(text.value()) : std::string("<path with no UTF-8 form>");
+}
+
+[[nodiscard]] FileError Failure(const FileErrorCode code, std::string message, std::string detail) {
+    return FileError::Make(code, std::move(message), std::move(detail));
+}
+
+// The file URI of a path for the native backend; a relative path is made absolute as the OS would.
+[[nodiscard]] Io::IoResult<Io::Path::Uri> NativeUri(const std::filesystem::path& path) {
+    auto text = OsFiles::PathToUtf8(path);
+    if (!text) {
+        return Engine::Base::Err(Io::IoError::Make(
+            Io::IoErrorCode::InvalidPath, text.error().message, Engine::Base::CauseDetail(text.error())));
+    }
+    return Io::FS::NativeFileUri(text.value());
+}
+
+[[nodiscard]] std::filesystem::path FromUtf8(const std::string& text, const std::filesystem::path& otherwise) {
+    auto path = OsFiles::PathFromUtf8(text);
+    return path ? std::move(path.value()) : otherwise;
+}
+
 [[nodiscard]] std::filesystem::path AbsoluteNormalized(
     const std::filesystem::path& path) {
-    std::error_code error;
     const std::filesystem::path absolute = AbsolutePath(path);
     const std::filesystem::path parent = absolute.parent_path();
-    std::filesystem::path canonicalParent =
-        std::filesystem::weakly_canonical(parent, error);
-    if (error) {
-        canonicalParent = parent.lexically_normal();
+    // Links in the existing part of the parent are resolved, as std::filesystem::weakly_canonical did.
+    std::filesystem::path canonicalParent = parent.lexically_normal();
+    if (auto text = OsFiles::PathToUtf8(parent)) {
+        if (auto resolved = OsFiles::ResolvedPath(text.value())) {
+            canonicalParent = FromUtf8(resolved.value(), canonicalParent);
+        }
     }
     return (canonicalParent / absolute.filename()).lexically_normal();
 }
@@ -36,89 +62,74 @@ namespace {
 [[nodiscard]] bool ComponentEqual(
     const std::filesystem::path& left,
     const std::filesystem::path& right) {
-#if defined(_WIN32)
-    std::wstring leftText = left.native();
-    std::wstring rightText = right.native();
-    for (wchar_t& value : leftText) {
-        value = static_cast<wchar_t>(std::towlower(value));
+    auto leftText = OsFiles::PathToUtf8(left);
+    auto rightText = OsFiles::PathToUtf8(right);
+    if (!leftText || !rightText) {
+        return left == right;
     }
-    for (wchar_t& value : rightText) {
-        value = static_cast<wchar_t>(std::towlower(value));
-    }
-    return leftText == rightText;
-#else
-    return left == right;
-#endif
-}
-
-[[nodiscard]] std::filesystem::path MakeTemporaryPath(
-    const std::filesystem::path& target) {
-    const auto time = static_cast<unsigned long long>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
-    std::random_device random;
-    return target.parent_path() /
-           (target.filename().string() + ".tmp." + std::to_string(time) + "." +
-            std::to_string(random()));
-}
-
-[[nodiscard]] FileError Failure(const FileErrorCode code, std::string message,
-                                const std::filesystem::path& path) {
-    return FileError::Make(code, std::move(message), path.string());
-}
-
-[[nodiscard]] Result<void, FileError> ReplaceFile(
-    const std::filesystem::path& temporary,
-    const std::filesystem::path& target) {
-#if defined(_WIN32)
-    if (!MoveFileExW(
-            temporary.c_str(),
-            target.c_str(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
-            "failed to replace '" + target.string() +
-                "' (Win32 error " + std::to_string(GetLastError()) + ")",
-            target));
-    }
-    return {};
-#else
-    std::error_code error;
-    std::filesystem::rename(temporary, target, error);
-    if (error) {
-        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
-            "failed to replace '" + target.string() + "': " + error.message(), target));
-    }
-    return {};
-#endif
+    auto same = OsFiles::SamePathComponent(leftText.value(), rightText.value());
+    return same && same.value();
 }
 
 } // namespace
 
 Result<std::string, FileError> ReadTextFile(const std::filesystem::path& path) {
-    std::ifstream stream(path, std::ios::binary);
+    auto uri = NativeUri(path);
+    if (!uri) {
+        return Engine::Base::Err(Failure(FileErrorCode::ReadFailed, "cannot open file: " + Text(path),
+                                         Engine::Base::CauseDetail(uri.error())));
+    }
+    Io::FS::NativeFileSystem files;
+    auto stream = Io::Helpers::OpenRead(files, uri.value());
     if (!stream) {
-        return Engine::Base::Err(Failure(FileErrorCode::ReadFailed, "cannot open file: " + path.string(), path));
+        return Engine::Base::Err(Failure(FileErrorCode::ReadFailed, "cannot open file: " + Text(path),
+                                         Engine::Base::CauseDetail(stream.error())));
     }
-    std::ostringstream buffer;
-    buffer << stream.rdbuf();
-    if (stream.bad()) {
-        return Engine::Base::Err(Failure(FileErrorCode::ReadFailed, "failed while reading file: " + path.string(), path));
+    // No size limit: the editor read whole files with a C++ stream before (Design Invariant 9).
+    Io::Helpers::ReadAllOptions whole;
+    whole.maxBytes = (std::numeric_limits<std::size_t>::max)();
+    auto bytes = Io::Helpers::ReadAllFromStream(*stream.value(), whole);
+    if (!bytes) {
+        return Engine::Base::Err(Failure(FileErrorCode::ReadFailed, "failed while reading file: " + Text(path),
+                                         Engine::Base::CauseDetail(bytes.error())));
     }
-    return buffer.str();
+    const auto& data = bytes.value();
+    return std::string(reinterpret_cast<const char*>(data.data()), data.size());
+}
+
+Result<bool, FileError> PathExists(const std::filesystem::path& path) {
+    auto uri = NativeUri(path);
+    if (!uri) {
+        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed, "cannot inspect '" + Text(path) + "'",
+                                         Engine::Base::CauseDetail(uri.error())));
+    }
+    Io::FS::NativeFileSystem files;
+    auto exists = files.Exists(uri.value());
+    if (!exists) {
+        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed, "cannot inspect '" + Text(path) + "'",
+                                         Engine::Base::CauseDetail(exists.error())));
+    }
+    return exists.value();
 }
 
 Result<FileStamp, FileError> ProbeFileStamp(const std::filesystem::path& path) {
-    std::error_code fileError;
-    const bool exists = std::filesystem::exists(path, fileError);
-    if (fileError) {
-        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
-            "cannot inspect '" + path.string() + "': " + fileError.message(), path));
+    auto uri = NativeUri(path);
+    if (!uri) {
+        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed, "cannot inspect '" + Text(path) + "'",
+                                         Engine::Base::CauseDetail(uri.error())));
     }
-    if (!exists) {
-        return FileStamp{};
+    Io::FS::NativeFileSystem files;
+    auto info = files.Stat(uri.value());
+    if (!info) {
+        if (info.error().code == Io::IoErrorCode::NotFound) {
+            return FileStamp{};
+        }
+        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed, "cannot inspect '" + Text(path) + "'",
+                                         Engine::Base::CauseDetail(info.error())));
     }
-    if (!std::filesystem::is_regular_file(path, fileError) || fileError) {
+    if (!info.value().IsFile()) {
         return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
-            "path is not a regular file: " + path.string(), path));
+            "path is not a regular file: " + Text(path), Text(path)));
     }
 
     auto text = ReadTextFile(path);
@@ -127,16 +138,8 @@ Result<FileStamp, FileError> ProbeFileStamp(const std::filesystem::path& path) {
     }
     FileStamp stamp;
     stamp.exists = true;
-    stamp.size = std::filesystem::file_size(path, fileError);
-    if (fileError) {
-        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
-            "cannot inspect size of '" + path.string() + "': " + fileError.message(), path));
-    }
-    stamp.writeTime = std::filesystem::last_write_time(path, fileError);
-    if (fileError) {
-        return Engine::Base::Err(Failure(FileErrorCode::ProbeFailed,
-            "cannot inspect timestamp of '" + path.string() + "': " + fileError.message(), path));
-    }
+    stamp.size = info.value().sizeBytes;
+    stamp.writeTime = std::chrono::nanoseconds(info.value().mtimeNs);
     stamp.contentHash = Engine::Base::Fnv1a64(*text);
     return stamp;
 }
@@ -145,49 +148,45 @@ Result<void, FileError> WriteTextFileAtomically(
     const std::filesystem::path& path,
     const std::string_view text) {
     if (path.empty()) {
-        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed, "output path is empty", path));
+        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed, "output path is empty", {}));
     }
 
-    std::error_code error;
+    Io::FS::NativeFileSystem files;
     const std::filesystem::path parent = path.parent_path();
     if (!parent.empty()) {
-        std::filesystem::create_directories(parent, error);
-        if (error) {
+        auto parentUri = NativeUri(parent);
+        auto created = parentUri ? files.CreateDirectories(parentUri.value())
+                                 : Io::IoResult<void>(Engine::Base::Err(parentUri.error()));
+        if (!created) {
             return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
-                "cannot create output directory '" + parent.string() + "': " + error.message(), path));
+                "cannot create output directory '" + Text(parent) + "'", Engine::Base::CauseDetail(created.error())));
         }
     }
 
-    const std::filesystem::path temporary = MakeTemporaryPath(path);
-    {
-        std::ofstream stream(
-            temporary,
-            std::ios::binary | std::ios::trunc);
-        if (!stream) {
-            return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
-                "cannot create temporary output: " + temporary.string(), path));
-        }
-        stream.write(text.data(), static_cast<std::streamsize>(text.size()));
-        stream.flush();
-        if (!stream) {
-            stream.close();
-            std::filesystem::remove(temporary, error);
-            return Engine::Base::Err(Failure(FileErrorCode::WriteFailed,
-                "failed while writing temporary output: " + temporary.string(), path));
-        }
+    auto uri = NativeUri(path);
+    if (!uri) {
+        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed, "cannot write output '" + Text(path) + "'",
+                                         Engine::Base::CauseDetail(uri.error())));
     }
-
-    auto replaced = ReplaceFile(temporary, path);
-    if (!replaced) {
-        std::filesystem::remove(temporary, error);
+    const Engine::Base::ConstSpan<std::byte> bytes(reinterpret_cast<const std::byte*>(text.data()), text.size());
+    auto written = Io::Helpers::WriteFileAtomically(files, uri.value(), bytes);
+    if (!written) {
+        return Engine::Base::Err(Failure(FileErrorCode::WriteFailed, "cannot write output '" + Text(path) + "'",
+                                         Engine::Base::CauseDetail(written.error())));
     }
-    return replaced;
+    return {};
 }
 
 std::filesystem::path AbsolutePath(const std::filesystem::path& path) {
-    std::error_code error;
-    std::filesystem::path absolute = std::filesystem::absolute(path, error);
-    return (error ? path : absolute).lexically_normal();
+    auto text = OsFiles::PathToUtf8(path);
+    if (!text || text.value().empty()) {
+        return path.lexically_normal();
+    }
+    auto absolute = OsFiles::MakeAbsolute(text.value());
+    if (!absolute) {
+        return path.lexically_normal();
+    }
+    return FromUtf8(absolute.value(), path).lexically_normal();
 }
 
 bool IsPathWithin(

@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/Arena.hpp"
+#include "RetroFPS/Pvp/MatchShotTrace.hpp"
+#include "RetroFPS/Pvp/NativeFiles.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -266,6 +268,66 @@ TEST_CASE("A Client installs the arenas of its list: the training arena first, t
     CHECK((*installed)[1].id == "pvp_corners_v1");
 }
 
+// os-files-write: a release unpacked into a deep folder (P about 235 and
+// more) reads its arena list and arenas on Windows too, where the
+// std::ifstream they replaced stopped at 260 characters. The setup spells the
+// long-path prefix out on Windows; the product code under test does not.
+TEST_CASE("A Client installs its arenas, and a Match writes its traces, in a folder deeper than the Windows path limit") {
+    const auto top = std::filesystem::temp_directory_path() /
+        ("gyo-arena-deep-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    auto deep = top;
+    while (deep.generic_u8string().size() < 300) deep /= "a-deeply-unpacked-release-folder";
+    const auto setup = [](const std::filesystem::path& path) {
+#if defined(_WIN32)
+        return std::filesystem::path(L"\\\\?\\" + std::filesystem::absolute(path).make_preferred().native());
+#else
+        return path;
+#endif
+    };
+    std::filesystem::create_directories(setup(deep));
+    for (const char* name : {"arenas.json", "pvp_arena.json", "pvp_corners.json"})
+        std::filesystem::copy_file(ProductAssets() / name, setup(deep / name));
+    std::string error;
+    const auto installed = LoadInstalledArenas(deep / "arenas.json", error);
+    CHECK_MESSAGE(installed, error);
+    if (installed) CHECK(installed->size() == 2);
+    {
+        MatchShotTraceFile shots(deep / "match-shots.jsonl");
+        shots.Finish({});
+    }
+    NativeReadFailure failure;
+    const auto written = ReadNativeFile(deep / "match-shots.jsonl", failure);
+    REQUIRE_MESSAGE(written, failure.detail);
+    const std::string text(written->begin(), written->end());
+    CHECK(text.starts_with(MatchShotTraceEndLine(0, 0, 0)));
+    std::error_code ignored;
+    std::filesystem::remove_all(setup(top), ignored);
+}
+
+TEST_CASE("An arena keeps its open and size messages") {
+    const auto directory = std::filesystem::temp_directory_path() /
+        ("gyo-arena-messages-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directories(directory);
+    std::string error;
+    CHECK_FALSE(Arena::Load(directory / "missing.json", error));
+    CHECK(error.find("Cannot open arena: ") != std::string::npos);
+    std::ofstream(directory / "large.json", std::ios::binary) << std::string(256 * 1024 + 1, ' ');
+    CHECK_FALSE(Arena::Load(directory / "large.json", error));
+    CHECK(error.find("Arena content exceeds 256 KiB") != std::string::npos);
+    std::ofstream(directory / "edge.json", std::ios::binary) << std::string(256 * 1024, ' ');
+    CHECK_FALSE(Arena::Load(directory / "edge.json", error));
+    CHECK(error.find("Arena content exceeds 256 KiB") == std::string::npos);
+    CHECK_FALSE(LoadInstalledArenas(directory / "missing-list.json", error));
+    CHECK(error.find("Cannot open arena list: ") != std::string::npos);
+    // A name outside the Windows ANSI code page is named in UTF-8 (os-path-utf8-sweep, D63).
+    const std::filesystem::path unnamed(u8"\u8a66\u5408-\ud55c.json");
+    CHECK_FALSE(Arena::Load(directory / unnamed, error));
+    const auto unnamedText = unnamed.u8string();
+    CHECK(error.find("Cannot open arena: ") != std::string::npos);
+    CHECK(error.find(std::string(unnamedText.begin(), unnamedText.end())) != std::string::npos);
+    std::filesystem::remove_all(directory);
+}
+
 TEST_CASE("An arena list rejects other versions, paths, repeats and a different body height") {
     const auto directory = std::filesystem::temp_directory_path() /
         ("gyo-arena-list-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -284,6 +346,9 @@ TEST_CASE("An arena list rejects other versions, paths, repeats and a different 
         return loaded.has_value();
     };
     CHECK(load(R"({"version": 1, "arenas": ["a.json", "b.json"]})"));
+    // An entry is JSON text, so UTF-8, also outside the Windows ANSI code page (os-path-utf8-sweep, D63).
+    std::filesystem::copy_file(ProductAssets() / "pvp_arena.json", directory / std::filesystem::path(u8"\u8a66\u5408.json"));
+    CHECK(load("{\"version\": 1, \"arenas\": [\"\xE8\xA9\xA6\xE5\x90\x88.json\", \"b.json\"]}"));
     CHECK_FALSE(load(R"({"version": 2, "arenas": ["a.json"]})"));
     CHECK_FALSE(load(R"({"version": 1, "arenas": []})"));
     CHECK_FALSE(load(R"({"version": 1, "arenas": ["../a.json"]})"));

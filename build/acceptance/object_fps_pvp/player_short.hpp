@@ -91,6 +91,7 @@ WeaponJson CharacterSample(const fps::pvp::PlayerPresentationObservation& c) {
         {"scale", c.scale}, {"foot_anchor", {c.footAnchor.x, c.footAnchor.y, c.footAnchor.z}},
         {"weapon_world_position", {c.weaponWorldPosition.x, c.weaponWorldPosition.y, c.weaponWorldPosition.z}},
         {"body_meshes", c.bodySubmittedMeshes}, {"hair_meshes", c.hairSubmittedMeshes},
+        {"declared_accessories", c.declaredAccessories},
         {"weapon_meshes", c.weaponSubmittedMeshes}, {"upper_body_mask_count", c.upperBodyMaskCount},
         {"prepared_instances", c.preparedInstances}, {"pose_revision", c.poseRevision}};
 }
@@ -295,8 +296,14 @@ void RunPlayerShort(const Options& options) {
                     const auto& character = remote->character;
                     Require(character.ready && character.playerId == remote->playerId && character.preparedInstances > 0,
                         "Remote character was not prepared before its first successful presentation");
-                    Require(character.bodySubmittedMeshes && character.hairSubmittedMeshes && character.weaponSubmittedMeshes,
-                        "Successful player presentation omitted body, hair or hand weapon meshes");
+                    Require(character.bodySubmittedMeshes && character.weaponSubmittedMeshes,
+                        "Successful player presentation omitted body or hand weapon meshes");
+                    // Accessory meshes follow the character definition: the accessory mesh
+                    // total covers the declared count, and none appear undeclared.
+                    Require(character.declaredAccessories
+                            ? character.hairSubmittedMeshes >= character.declaredAccessories
+                            : character.hairSubmittedMeshes == 0,
+                        "Successful player presentation accessory meshes do not match its declared accessories");
                     sample["remote"] = {{"player_id", remote->playerId},
                         {"position", {remote->renderPosition.x, remote->renderPosition.y, remote->renderPosition.z}},
                         {"yaw", remote->yaw}, {"pitch", remote->pitch}, {"timeline_holding", remote->holding},

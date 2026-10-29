@@ -180,6 +180,10 @@ set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS
 add_test(NAME "${GYO_CURRENT_APP}.log_contract"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_log_contract.py")
 set_tests_properties("${GYO_CURRENT_APP}.log_contract" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
+# The lan15 judge's discrimination check (docs/object_fps_pvp/plans/v7.1/lan15-declaration.md section 7).
+add_test(NAME "${GYO_CURRENT_APP}.lan15_judge"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_lan15_judge.py")
+set_tests_properties("${GYO_CURRENT_APP}.lan15_judge" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.max_players"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_max_players.py")
 set_tests_properties("${GYO_CURRENT_APP}.max_players" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
@@ -336,7 +340,8 @@ set_target_properties(${digest_o0} PROPERTIES CXX_EXTENSIONS OFF)
 target_include_directories(${digest_o0} PRIVATE "${digest_app_root}/include")
 gyo_use_app_config(${digest_o0} "${GYO_CURRENT_APP}")
 target_compile_definitions(${digest_o0} PRIVATE ${digest_arena_definitions})
-target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads GYO::Trace nlohmann_json::nlohmann_json)
+target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads GYO::Trace GYO::Os
+    nlohmann_json::nlohmann_json)
 # Appended after the configuration's flags, so the last optimisation flag wins.
 target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>)
 foreach(target ${digest} ${digest_o0})

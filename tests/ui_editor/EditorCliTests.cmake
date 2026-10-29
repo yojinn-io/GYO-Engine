@@ -25,6 +25,18 @@ check(4 partial_catalog --validate "${WORK}/multi.json" --asset-catalog "${WORK}
 check(0 explicit_catalog --validate "${WORK}/single.json" --asset-catalog "${WORK}/single/fonts.json")
 check(0 explicit_root --validate "${WORK}/single.json" --asset-catalog "${WORK}/single/fonts.json" --asset-root "${WORK}/root")
 check(3 no_fallback --validate "${WORK}/single.json" --asset-root "${WORK}/single")
+# A document and catalog in a folder the Windows ANSI code page cannot name
+# (os-path-utf8-sweep, D63): valid, and the "valid:" line names it in UTF-8.
+set(unnamed "${WORK}/試合-한")
+file(MAKE_DIRECTORY "${unnamed}")
+file(WRITE "${unnamed}/single.json" "${document}")
+file(COPY "${WORK}/root/fonts.json" DESTINATION "${unnamed}")
+execute_process(COMMAND "${EDITOR}" --validate "${unnamed}/single.json" --asset-catalog "${unnamed}/fonts.json"
+    WORKING_DIRECTORY "${WORK}/working" RESULT_VARIABLE actual
+    OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 10 ENCODING UTF8)
+if(NOT actual STREQUAL "0" OR NOT output MATCHES "valid: [^\n]*試合-한")
+    message(FATAL_ERROR "unnamed_folder: expected 0 and the folder in the valid line, got ${actual}\n${output}\n${error}")
+endif()
 file(WRITE "${WORK}/root/content.json" "broken manifest")
 check(3 malformed_manifest --validate "${WORK}/single.json" --asset-root "${WORK}/root")
 check(0 explicit_ignores_manifest --validate "${WORK}/single.json" --asset-root "${WORK}/root" --asset-catalog "${WORK}/root/fonts.json")

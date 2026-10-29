@@ -34,12 +34,13 @@ target_link_libraries(gyo_ui_editor_core
         GYO::Ui
         nlohmann_json::nlohmann_json
 )
-# UndoStack calls Math functions directly.
-target_link_libraries(gyo_ui_editor_core PRIVATE GYO::Math)
+# UndoStack calls Math functions directly; the catalog paths go to UTF-8 through GYO::Os.
+target_link_libraries(gyo_ui_editor_core PRIVATE GYO::Math GYO::Os)
 
 add_executable(gyo_ui_editor src/Main.cpp)
 target_compile_features(gyo_ui_editor PRIVATE cxx_std_20)
-target_link_libraries(gyo_ui_editor PRIVATE gyo_ui_editor_core)
+# The UTF-8 command line and console output come from GYO::Os.
+target_link_libraries(gyo_ui_editor PRIVATE gyo_ui_editor_core GYO::Os)
 
 if(GYO_TOOL_VARIANT STREQUAL "gui")
     foreach(_target IN ITEMS
@@ -67,8 +68,9 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
         GYO::TextBackendSDLTTF
         imgui::core
     )
-    # PreviewAdapter calls Math functions directly (sRGB, Rect).
-    target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math)
+    # PreviewAdapter calls Math functions directly (sRGB, Rect); EditorApp's
+    # path fields go to UTF-8 through GYO::Os.
+    target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math GYO::Os)
     target_sources(gyo_ui_editor PRIVATE src/ImGuiSdlRendererHost.cpp)
     # The ImGui SDL3 backend needs the native window, renderer and events.
     target_link_libraries(gyo_ui_editor PRIVATE

@@ -163,3 +163,89 @@ TT 計畫的批次完成時，由該批更新本節。
 - 連結：只有用到 `GYO::Trace` 的目標需要連結它；`GYO::Engine` 不依賴它。
 - 選用：未啟用產品若要背景寫紀錄檔，使用 `Engine::Trace::TraceSink`，不要自己開執行緒輪詢。
 
+
+## 5. OS（OS 子系統計畫）
+
+OS 子系統計畫（[os-subsystem](../os-subsystem/README.md)）的批次完成時，由該批更新本節。
+
+### os-skeleton 建立 engine/os 與守衛
+
+狀態：完成（2026-10-25，四平台 L1 通過），未合併（併進消費端的發行線 PR，D46）。
+
+- 破損：無。新增 `GYO::Os`（只依賴 Base）與 `OsError`；沒有任何既有介面改變。
+- 守衛：`os.boundary_guard` 這一批只掃 engine 與 tests/common。（os-guard-wide 實跑後更正：未啟用產品沒有任何發現，不需要 allowlist，見下方 os-guard-wide。）
+- 選用：未啟用產品若要處理 OS 差異，等對應部件完成後使用 `engine/os`，不要自己寫 `#if`。
+
+### io-contracts engine/io 的路徑契約
+
+狀態：完成（2026-10-25，四平台 L1 通過），未合併（併進消費端的發行線 PR，D46）。
+
+- 破損：無編譯破損。行為變更：
+  - `AssetPathResolver` 在允許 scheme（預設）時，`file:///x`、`file://localhost/x` 現在是絕對路徑而被拒；過去會被當成 assets 根目錄下的相對路徑。未啟用產品的 shader bundle resolver 也用預設值，但它們的 manifest 沒有 file:// 條目。
+  - `MountTable::Resolve` 拒絕含 `..` 段的請求。
+- 選用：未啟用產品若要把原生絕對路徑交給 engine/io，用 `FileUriFromNativePath`／`NativePathFromFileUri`，不要自己拼 `file://` 字串。
+
+### os-files-read 唯讀檔案原語與原生檔案系統
+
+狀態：完成（2026-10-25，四平台 L1 通過），未合併（併進消費端的發行線 PR，D46）。
+
+- 破損：無。新增 `Engine::Os::Files`（`GYO::Os`）與 `Engine::IO::FS::NativeFileSystem`；`GYO::Engine` 多了 PRIVATE 依賴 `GYO::Os`，未啟用產品不需要改 CMake。
+- 選用：未啟用產品若要讀原生檔案，經 engine/io（`NativeFileSystem` 或掛上它的 `Vfs`），或直接用 `Engine::Os::Files`；路徑一律交 UTF-8（`PathToUtf8`，回傳 Result，D47），不要用 `path::string()`。
+
+### os-guard-wide 守衛擴到產品、工具、產品測試與驗收程式
+
+狀態：完成（2026-10-25，四平台 L1 通過），未合併。
+
+- 破損：無。沒有改任何產品或 Engine 的程式碼。
+- 守衛：`os.boundary_guard` 現在掃 engine、apps、tools、build/acceptance、tests；R4（直接開檔）也套用到 apps 與 tools。`apps/object_fps`、`apps/object_fps_v2`、`tests/object_fps`、`tests/object_fps_v2`、`build/acceptance/object_fps{,_v2}` 實跑都沒有發現，所以沒有 allowlist。重新啟用時若新增 OS 標頭、OS 巨集、列管的 OS API 或直接開檔，會被守衛擋下；真的需要時，在該產品自己的目錄放 `os_boundary_allowlist.txt`，只能列自己目錄下的檔案。
+- 設定期檢查：產品的 target 與目錄不可以有識別 OS 的 compile definition（名稱含 `WIN32`、`APPLE`、`LINUX` 等 OS 字，或以 `$<PLATFORM_ID:...>` 為條件）。未啟用產品現有的 `NOMINMAX` 只設定 Windows 標頭、不識別 OS，可以保留。
+- 選用：無。
+
+### os-process-info 程序事實
+
+狀態：完成（2026-10-25，四平台 L1 通過），未合併。
+
+- 破損：無。新增 `Engine::Os::Process`（`GYO::Os`），沒有改任何既有介面。
+- 選用：未啟用產品若需要執行檔路徑、CPU 時間或本地時間，用 `Engine::Os::Process`（`ExecutablePath`、`ProcessCpuTime`、`CurrentThreadCpuTime`、`ToLocalTime`），不要自己寫 `localtime_s`／`localtime_r` 或各平台的查法；時間戳的格式由產品自己決定。資源目錄仍用 platform/sdl 的 `BaseDirectory`，它和執行檔路徑是不同的事實。
+
+### os-console-shutdown 命令列、主控台輸出、結束要求
+
+狀態：完成（2026-10-26，四平台 L1 通過），未合併。
+
+- 破損：無。新增 `Engine::Os::Console`（`GYO::Os`），沒有改任何既有介面。未啟用產品走 SDL 入口，argv 本來就是 UTF-8。
+- 選用：未啟用產品若有不經 SDL 入口的主控台程式，用 `CommandLineUtf8` 取得 UTF-8 參數、`Utf8ConsoleOutput` 讓 Windows 主控台顯示 UTF-8、`InstallShutdownRequests`／`RequestedShutdown` 接結束要求；不要自己寫 `std::signal` 或 `SetConsoleCtrlHandler`。
+
+### os-files-write 寫入原語
+
+狀態：完成（2026-10-26，四平台 L1 通過），未合併。
+
+- 破損：無。`NativeFileSystem` 多了寫入與建目錄（`Capabilities()` 的 canOpenWrite、canCreateDirectories 改成 true）；只用讀取的呼叫端不受影響。未啟用產品沒有直接開檔的站點。
+- 選用：未啟用產品若要寫檔或建目錄，經 engine/io 的 `NativeFileSystem`（`Write | CreateIfMissing` 加 `Truncate` 或 `Append`；要和以前的文字模式 `std::ofstream` 相同的位元組時加 `Text`），原生路徑用 `FS::NativeFileUri` 轉成 URI；不要用 fstream 或 `std::filesystem` 的檔案操作。
+
+### io-native-paths、os-tool-files、os-trace-writers、time-threads-invariants
+
+狀態：完成（2026-10-26～27，四平台 L1 通過，最後一批只有文件），未合併。這四批當時漏記本節，在 os-path-utf8-sweep 補上（2026-10-27，以 `git grep` 確認未啟用產品的用法）。
+
+- 破損：無。未啟用產品沒有使用 `NativeFileSystem`、`WriteFileAtomically`、`TraceSink`、`RoleThread`、`Waiter` 或 file URI 的轉換函式。
+- 行為：`AssetPathResolver` 的根目錄照寫法保留（io-native-paths，D55），不再依字面消去點段。`object_fps`、`object_fps_v2` 的 `ObjectFpsApplication.cpp` 用它，根目錄來自 SDL 的 base path，沒有點段，所以不受影響〔推論，未實跑〕。
+- 選用：要換名、刪檔、原子寫入時，經 engine/io 的 `NativeFileSystem`（`Move`、`Remove`）或 `Helpers::WriteFileAtomically`，不要用 `std::filesystem` 的檔案操作。
+
+### os-path-utf8-sweep 剩下的窄字串路徑
+
+狀態：完成（本機，2026-10-27），未推送。依 D63，本批不改未啟用產品，只記在這裡。
+
+- 破損：公開的 `Engine::Platform::Sdl::PathFromUtf8` 移除了。未啟用產品沒有使用它（2026-10-27 以 `git grep` 確認），所以沒有編譯破損。要把 UTF-8 文字變成路徑時改用 `Engine::Os::Files::PathFromUtf8`（回傳 Result；不是 UTF-8 的文字是 `InvalidEncoding`）。
+- 遷移需求（Windows 上會走 ANSI code page 的站點；ANSI code page 表示不了的字元在 `path::string()` 會丟例外，以窄字串建 `path` 會被讀錯）：
+  - SDL 的 base path（UTF-8）以 `std::filesystem::path(base)` 建路徑：`apps/object_fps/main.cpp:38`、`apps/object_fps_v2/main.cpp:38`、`tools/object_fps_preview/main.cpp:29`、`build/acceptance/object_fps/main.cpp:78`、`build/acceptance/object_fps_v2/main.cpp:276`。改用 platform/sdl 的 `BaseDirectory()`（已經是 UTF-8 的路徑），或 `Os::Files::PathFromUtf8`。
+  - content.json 的 shader bundle 名稱（UTF-8 的 `std::string`）以 `assetRoot / bundle.path` 接到根目錄：`apps/object_fps/src/App/ObjectFpsApplication.cpp:73`、`apps/object_fps_v2/src/App/ObjectFpsApplication.cpp:73`。比照 object_fps_pvp，先 `Os::Files::PathFromUtf8(bundle.path)` 再接。
+  - 交給 SDL 的 `SDL_SaveBMP` 用 `.string()`：`build/acceptance/object_fps/diagnostics/MuzzleProbe.cpp:49`、`build/acceptance/object_fps/diagnostics/VisualProbe.cpp:130`、`build/acceptance/object_fps_v2/main.cpp:81`。SDL 收 UTF-8，改用 `Os::Files::PathToUtf8`。
+  - 產品測試把 `.string()` 當 UTF-8 交給 Engine：`tests/object_fps/App/ObjectFpsPresentationTests.cpp:272`、`tests/object_fps/App/ObjectFpsUiTests.cpp:32`、`tests/object_fps/Model/Mark23ModelTests.cpp:30`。比照共通測試，改用 `tests/common/support/PathText.hpp` 的 `Engine::Test::Utf8Path`。
+- 選用：訊息與 log 裡的路徑用 `Os::Files::PathForMessage`（永不失敗，保留平台的分隔字元）；檔名運算用 `u8string()`，不要用 `string()`。
+
+### os-utf8-codepage 程序的 code page 定為 UTF-8
+
+狀態：本機實作中（2026-10-27，D64～D66）。
+
+- 破損：無。建置層會自動替 engine、apps、tools、build/acceptance、tests 底下的每個執行檔嵌入 manifest，未啟用產品重新啟用時不必改 CMake。
+- 行為：在 Windows 10 1903 以後，這些產品的程序 ANSI code page 是 UTF-8。窄字元的路徑（例如 os-path-utf8-sweep 記下的 `std::filesystem::path(base)`、`SDL_SaveBMP(..., path.string().c_str())`）在這些程序裡也會是 UTF-8，不再丟例外。上一節的遷移需求仍然建議照做：它們在 1903 以前的 Windows、或沒有 manifest 的程序裡仍然會壞。
+- 選用：真的不能帶 manifest 的執行檔，以目標屬性 `GYO_PROCESS_CODE_PAGE_EXEMPT` 寫理由。

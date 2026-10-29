@@ -136,3 +136,28 @@ OS 子系統的 PLAN 核准（Engine D46；計畫文件 `docs/architecture/plans
   7. **守衛**：`tests/common/os/os_boundary_allowlist.txt` 有 asset 的 3 條（`NativeFileAssetSource.cpp`、`AssetCatalog.cpp`、`ContentManifest.cpp`），P3 的同一變更要刪掉。
   8. 尚未驗證：Windows 專用的 2 個突變（os-f4、os-f5）要在 Windows 機器上跑（CI 不跑突變）；Windows runner 的 `GetACP()` 實際值沒有取得，只確定不是 UTF-8。
 - P1～P5 的開工等使用者指示（發行線要在 PR #95 合併後才切出，D198 的暫定安排）。
+
+## P1～P5 的實作（D199，2026-10-25 開工）
+
+使用者經 OS 子系統的會話轉達：「讓v7.1會話開始P1～P5的任務」。
+
+**分支（D199）**：PR #95 還沒合併（要使用者確認 L1），為了不擋 P1～P5，發行線 `claude/pvp-v71-release` 改從 PR #95 目前的最新提交（`a0e6668`）切出，再用 `git merge --no-ff` 併進 `claude/trusting-joliot-f13b78`（`f3a6770`，沒有衝突）。PR #95 用 `--merge` 合進 master 後，發行線相對 master 的差異就只剩 A1～A3 與 P1～P5，和 D198 的形態相同；PR #95 若在合併前再有提交，發行線再併一次 PR #95 的分支。
+
+**行為變更的事先宣告（os.md Invariant 9 ★，P1 開始時）**：Windows 上 `FileReader::Open`、`Stat`、`Exists` 對完整路徑（`GetFullPathNameW` 的結果）達 248 字元（`MAX_PATH - 12`，Win32 對完整路徑最短的限制，`CreateDirectoryW`）以上的路徑，改成把 `\\?\` 加上那個完整路徑交給 API。`GetFullPathNameW` 已經做過 Win32 的正規化（點區段、結尾的點與空白），所以前綴關掉正規化對它沒有影響。以下照舊：較短的路徑；完整路徑不在磁碟機代號上（UNC 這一輪不支援；`\\.\NUL` 這類裝置）；`GetFullPathNameW` 失敗的路徑；呼叫端自己給的 `\\?\`、`\\.\` 形式（原樣交給 API，engine/io 本來就拒絕這種形式）。錯誤只帶呼叫端路徑的長度，不帶前綴形式。契約寫進 `docs/architecture/os.md` 的 Contracts／Files。
+
+**P5 的驗收宣告（執行前）**：
+1. Engine 單元測試（`tests/common/os/FilesTests.cpp`）：Windows 上 402 位元組、檔案存在的路徑，`FileReader::Open`、`Read`、`Stat`、`Exists` 都成功（`/` 與 `\` 兩種寫法），資料夾的 `Stat` 是 Directory。先在未修正的樹確認 Red，再確認 Green。
+2. 不存在的 300 字元以上路徑：所有平台都是 `NotFound`，detail 含 `path_bytes=<呼叫端長度>`、不含 `?`（判定收緊：原本是只記錄、接受 NotFound 或 InvalidPath）。
+3. windows-x64 L1 的深路徑套件情境（產品的 `content_deep_path` 檢查，四個平台都跑）：發行包複製到 P＝200（P＝到 `bin\` 為止的字元數）的資料夾；Windows 上最長的 `.dxil` 路徑必須超過 260；content probe 照 Client 開視窗前的順序讀 manifest、catalog、所有 shader bundle（每個 artifact 對 sha256）與所有 catalog 資產，exit 0。P＝200 在 shader 的失敗深度（145）與下一個已知失敗點（產品的 `arenas.json`，約 219）之間。
+4. Windows 非 ACP 字元的根目錄（正體中文與日文）下，`ContentManifest::Load`、`LoadCatalogs` 與資產讀取都成功（`ContentManifestTests.cpp`，四平台）。
+5. 守衛 allowlist 中 asset 的 3 條刪除，`os.boundary_guard` 通過；macOS 與 Linux 的既有測試不改判定。
+6. 實機（需要使用者）：Windows 上解壓到 P＝156 與 P 約 210 各啟動 Client 一次，對照事故 log 第 2 行（開 shader 的錯誤不再出現）。
+
+**Red 的證據**：run 40176646387（`claude/pvp-v71-release` 的 `80b7208`，只加測試、未修正），`Quick acceptance / toolchain / windows-x64` 的 `gyo_os_tests`：「read an existing file under a path longer than 300 characters」在 `FilesTests.cpp(390)` 失敗，`cannot open a 402-byte path: win32=3; path_bytes=402`（和事故的錯誤碼相同，3＝ERROR_PATH_NOT_FOUND）。「missing path」的案例在未修正的樹也通過（NotFound win32=3），它守的是 detail 的形式，不是 Red。其他三個平台的同一測試通過（POSIX 沒有 260 的限制）。
+
+## 實機驗收併進 lan15-windows（D201）
+
+使用者：「這個能合到 lan15去吧，明天我先跑 Windows 專用的5個突變，在跑驗收，最後 lan15.」2026-10-26 在 Windows 機器上依序做：
+1. Windows 專用的 5 個突變（`p1-no-long-path-form`、`p1-long-path-from-too-high`、`p4-manifest-ansi-path`、`os-f4-windows-acp`、`os-f5-windows-notfound`）；
+2. P5-6：發行包解壓到 P＝156 與 P 約 210 各啟動 Client 一次，對照事故 log 第 2 行；
+3. lan15-windows。

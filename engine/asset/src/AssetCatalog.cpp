@@ -1,10 +1,8 @@
 #include "engine/asset/AssetCatalog.hpp"
 
-#include <fstream>
-#include <sstream>
-
 #include "engine/asset/AssetType.hpp"
 #include "engine/asset/catalog/CatalogParser.hpp"
+#include "engine/asset/loading/NativeFileAssetSource.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 
 namespace Engine::Asset {
@@ -27,13 +25,13 @@ namespace Engine::Asset {
 
     static Base::Result<std::string, AssetError>
     ReadAllText(std::string_view path) {
-        std::ifstream ifs(std::string(path), std::ios::in | std::ios::binary);
-        if (!ifs) {
-            return Base::Err(AssetError::Make(AssetErrorCode::SourceReadFailed, "AssetCatalog: cannot open catalog file", std::string(path)));
+        Loading::NativeFileAssetSource source;
+        auto bytes = source.ReadAll(path);
+        if (!bytes) {
+            return Base::Err(AssetError::Make(AssetErrorCode::SourceReadFailed, "AssetCatalog: cannot open catalog file", bytes.error().detail));
         }
-        std::ostringstream ss;
-        ss << ifs.rdbuf();
-        return ss.str();
+        const auto& data = bytes.value();
+        return std::string(reinterpret_cast<const char*>(data.data()), data.size());
     }
 
     Base::Result<void, AssetError>

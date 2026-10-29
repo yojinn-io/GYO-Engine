@@ -1,5 +1,7 @@
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 
+#include "engine/os/Process.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
@@ -8,34 +10,21 @@
 #include <sstream>
 #include <utility>
 
-#if defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#else
-#include <sys/resource.h>
-#include <time.h>
-#endif
-
 namespace fps::pvp {
 namespace {
 
-#if defined(_WIN32)
-double Seconds(const FILETIME& time) {
-    ULARGE_INTEGER value{};
-    value.LowPart = time.dwLowDateTime;
-    value.HighPart = time.dwHighDateTime;
-    return static_cast<double>(value.QuadPart) / 1e7; // 100 ns units
+// Seconds of an engine/os CPU time; nullopt when the platform refused the
+// query. Never throws, as before: an allocation failure in the error path is
+// a refused query too.
+std::optional<double> Seconds(Engine::Base::Result<std::chrono::nanoseconds, Engine::Os::OsError> (*query)()) noexcept {
+    try {
+        const auto time = query();
+        if (!time) return std::nullopt;
+        return std::chrono::duration<double>(*time).count();
+    } catch (...) {
+        return std::nullopt;
+    }
 }
-#else
-double Seconds(const timeval& time) {
-    return static_cast<double>(time.tv_sec) + static_cast<double>(time.tv_usec) / 1e6;
-}
-#endif
 
 std::ostringstream LineStream() {
     std::ostringstream line;
@@ -56,27 +45,11 @@ std::int64_t Micros(const Engine::Time::Duration duration) {
 } // namespace
 
 std::optional<double> ProcessCpuSeconds() noexcept {
-#if defined(_WIN32)
-    FILETIME creation{}, exited{}, kernel{}, user{};
-    if (!GetProcessTimes(GetCurrentProcess(), &creation, &exited, &kernel, &user)) return std::nullopt;
-    return Seconds(kernel) + Seconds(user);
-#else
-    rusage usage{};
-    if (getrusage(RUSAGE_SELF, &usage) != 0) return std::nullopt;
-    return Seconds(usage.ru_utime) + Seconds(usage.ru_stime);
-#endif
+    return Seconds(&Engine::Os::Process::ProcessCpuTime);
 }
 
 std::optional<double> CurrentThreadCpuSeconds() noexcept {
-#if defined(_WIN32)
-    FILETIME creation{}, exited{}, kernel{}, user{};
-    if (!GetThreadTimes(GetCurrentThread(), &creation, &exited, &kernel, &user)) return std::nullopt;
-    return Seconds(kernel) + Seconds(user);
-#else
-    timespec time{};
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time) != 0) return std::nullopt;
-    return static_cast<double>(time.tv_sec) + static_cast<double>(time.tv_nsec) / 1e9;
-#endif
+    return Seconds(&Engine::Os::Process::CurrentThreadCpuTime);
 }
 
 void TickWakeStatistics::Record(const Engine::Time::TimePoint planned, const Engine::Time::TimePoint woke,

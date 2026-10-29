@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <string>
 
 using Engine::Asset::ContentManifest;
 
@@ -41,6 +42,21 @@ TEST_CASE("Content manifest rejects malformed schema and root escapes") {
     }
 }
 
+// A catalog name is content.json text, so UTF-8, also outside the Windows ANSI
+// code page (os-path-utf8-sweep, D63): it is joined to the root as UTF-8.
+TEST_CASE("Content manifest loads a catalog named outside the ANSI code page") {
+    ContentFixture fixture;
+    fixture.Write("content.json",
+        "{\"version\":1,\"catalogs\":[\"\xE8\xA8\x98\xE9\x8C\xB2-\xED\x95\x9C.json\"],\"shader_bundles\":[]}");
+    std::ofstream(fixture.root / std::filesystem::path(u8"\u8a18\u9332-\ud55c.json"))
+        << R"({"version":1,"assets":[{"id":"test.asset","type":"text","path":"a.txt"}]})";
+    auto manifest = ContentManifest::Load(fixture.root);
+    REQUIRE(manifest);
+    auto catalog = manifest.value().LoadCatalogs(fixture.root);
+    REQUIRE_MESSAGE(catalog, (catalog ? std::string{} : catalog.error().message + " " + catalog.error().detail));
+    CHECK(catalog.value().Find(Engine::Asset::AssetId::FromString("test.asset")) != nullptr);
+}
+
 TEST_CASE("Content manifest loads only its own catalogs and reports absent content") {
     ContentFixture fixture;
     CHECK_FALSE(ContentManifest::Load(fixture.root));
@@ -70,4 +86,26 @@ TEST_CASE("Runtime content ignores build-only source metadata") {
     REQUIRE(manifest);
     REQUIRE(manifest.value().shaderBundles.size() == 1);
     CHECK(manifest.value().shaderBundles.front().path == "shaders/builtin");
+}
+
+// Engine paths are UTF-8 (docs/architecture/io.md): a root outside the ANSI
+// code page, Traditional Chinese and Japanese here, loads the manifest, the
+// catalogs and the assets they name (os-subsystem P5).
+TEST_CASE("Content manifest loads under a root outside the ANSI code page") {
+    ContentFixture fixture;
+    const auto root = fixture.root / std::filesystem::path(u8"\u8cc7\u6599\u593e-\u65e5\u672c");
+    std::filesystem::create_directories(root);
+    std::ofstream(root / "content.json") << R"({"version":1,"catalogs":["catalog.json"],"shader_bundles":[]})";
+    std::ofstream(root / "catalog.json") << R"({"version":1,"assets":[{"id":"test.asset","type":"text","path":"a.txt"}]})";
+    std::ofstream(root / "a.txt", std::ios::binary) << "UTF-8 root";
+    auto manifest = ContentManifest::Load(root);
+    REQUIRE_MESSAGE(manifest, (manifest ? std::string{} : manifest.error().detail));
+    auto catalog = manifest.value().LoadCatalogs(root);
+    REQUIRE_MESSAGE(catalog, (catalog ? std::string{} : catalog.error().detail));
+    const auto* entry = catalog.value().Find(Engine::Asset::AssetId::FromString("test.asset"));
+    REQUIRE(entry);
+    Engine::Asset::Loading::NativeFileAssetSource source;
+    const auto bytes = source.ReadAll(entry->resolvedPath);
+    REQUIRE_MESSAGE(bytes, (bytes ? std::string{} : bytes.error().detail));
+    CHECK(std::string(reinterpret_cast<const char*>(bytes.value().data()), bytes.value().size()) == "UTF-8 root");
 }

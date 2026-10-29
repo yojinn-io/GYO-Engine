@@ -6,6 +6,7 @@
 #define PVP_PROBE_MOVEMENT_TRACE 1
 #endif
 #include "engine/input/backend/sdl/SdlInputInjection.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/platform/sdl/EntryPoint.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/render/Renderer.hpp"
@@ -1087,7 +1088,7 @@ void Run(const Options& options) {
     report << "escape_returns_to_lobby=true\n" << "escape_clears_prediction=true\n"
            << "escape_refreshes_room_list=true\n";
     std::cout << options.role << ": two network players rendered; captures in "
-              << options.output.string() << '\n';
+              << Engine::Os::Files::PathForMessage(options.output) << '\n';
 }
 } // namespace
 

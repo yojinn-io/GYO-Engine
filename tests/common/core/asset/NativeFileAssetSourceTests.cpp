@@ -4,9 +4,11 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <string>
 
 #include "engine/asset/AssetError.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
+#include "PathText.hpp"
 
 namespace fs = std::filesystem;
 using Engine::Asset::AssetErrorCode;
@@ -29,7 +31,7 @@ TEST_CASE("NativeFileAssetSource reads exact bytes from a resolved path") {
     }
 
     NativeFileAssetSource source;
-    auto result = source.ReadAll(path.string());
+    auto result = source.ReadAll(Engine::Test::Utf8Path(path));
     REQUIRE(result);
     REQUIRE(result.value().size() == expected.size());
     for (std::size_t index = 0; index < expected.size(); ++index) {
@@ -49,8 +51,36 @@ TEST_CASE("NativeFileAssetSource reports invalid and missing paths") {
     const fs::path missing =
         fs::temp_directory_path() / "gyo_missing_native_asset.bin";
     fs::remove(missing);
-    const auto absent = source.ReadAll(missing.string());
+    const auto absent = source.ReadAll(Engine::Test::Utf8Path(missing));
     REQUIRE_FALSE(absent);
     CHECK(absent.error().code == AssetErrorCode::SourceReadFailed);
-    CHECK(absent.error().detail == missing.string());
+    // The detail keeps the cause: the path, the OS error code and the path
+    // length (os-subsystem PLAN section 8, P2).
+    const std::string& detail = absent.error().detail;
+    INFO(detail);
+    CHECK(detail.rfind("NotFound: ", 0) == 0);
+    CHECK(detail.find(Engine::Test::GenericUtf8Path(fs::path(missing))) != std::string::npos);
+    CHECK((detail.find("errno=") != std::string::npos || detail.find("win32=") != std::string::npos));
+    CHECK(detail.find("; path_bytes=") != std::string::npos);
+}
+
+TEST_CASE("NativeFileAssetSource reads a relative path against the current directory") {
+    const fs::path directory =
+        fs::temp_directory_path() / "gyo_native_file_asset_source_relative";
+    fs::remove_all(directory);
+    fs::create_directories(directory / "sub");
+    std::ofstream(directory / "payload.txt", std::ios::binary) << "relative";
+    const fs::path previous = fs::current_path();
+    fs::current_path(directory);
+
+    NativeFileAssetSource source;
+    const auto direct = source.ReadAll("payload.txt");
+    const auto dotted = source.ReadAll("./sub/../payload.txt");
+    fs::current_path(previous);
+    fs::remove_all(directory);
+
+    REQUIRE(direct);
+    CHECK(std::string(reinterpret_cast<const char*>(direct.value().data()), direct.value().size()) == "relative");
+    REQUIRE(dotted);
+    CHECK(dotted.value().size() == direct.value().size());
 }

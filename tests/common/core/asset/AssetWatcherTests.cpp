@@ -6,6 +6,7 @@
 
 #include "engine/asset/hot_reload/AssetWatcher.hpp"
 #include "engine/asset/AssetId.hpp"
+#include "PathText.hpp"
 
 namespace fs = std::filesystem;
 using Engine::Asset::HotReload::AssetWatcher;
@@ -14,7 +15,7 @@ using Engine::Asset::AssetId;
 
 static void WriteFile(const fs::path& p, const std::string& s) {
     fs::create_directories(p.parent_path());
-    std::ofstream ofs(p.string(), std::ios::binary);
+    std::ofstream ofs(p, std::ios::binary);
     ofs << s;
     ofs.flush();
 }
@@ -32,7 +33,7 @@ TEST_CASE("AssetWatcher: modified") {
     AssetWatcher w(opt);
 
     AssetId id = AssetId::FromString("a");
-    w.Watch(id, f.string());
+    w.Watch(id, Engine::Test::Utf8Path(f));
 
     (void)w.Poll(); // 初回は変化なし想定
 
@@ -63,7 +64,7 @@ TEST_CASE("AssetWatcher: removed and keepWatchingMissing=false") {
     AssetWatcher w(opt);
 
     AssetId id = AssetId::FromString("b");
-    w.Watch(id, f.string());
+    w.Watch(id, Engine::Test::Utf8Path(f));
     (void)w.Poll();
 
     fs::remove(f);
@@ -85,7 +86,7 @@ TEST_CASE("AssetWatcher: an unchanged file is never reported") {
     AssetWatcher::Options opt;
     opt.debounceMs = 0;
     AssetWatcher w(opt);
-    w.Watch(AssetId::FromString("c"), f.string());
+    w.Watch(AssetId::FromString("c"), Engine::Test::Utf8Path(f));
 
     // The modification time never changes, so every poll must agree with the
     // snapshot taken by Watch; one spurious Modified fails the test.

@@ -1,7 +1,9 @@
 #pragma once
 
+#include "engine/os/Process.hpp"
 #include "engine/trace/TraceSink.hpp"
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <ostream>
@@ -60,6 +62,16 @@ private:
 
 // The local wall clock and the steady clock, as LogFile writes them.
 [[nodiscard]] std::string LogTimestamp();
+// The local time of a time point. When the platform cannot convert it, the
+// fields a zero-initialized std::tm printed before engine/os (1900-01-00
+// 00:00:00, offset 0); never for the current time.
+[[nodiscard]] Engine::Os::Process::LocalTime LocalWallClock(std::chrono::system_clock::time_point time);
+// The LogFile timestamp of local, its milliseconds and the steady clock:
+// 2026-10-16T10:40:11.007+0900 mono_ns=42 (the offset as strftime's %z).
+[[nodiscard]] std::string FormatLogTimestamp(const Engine::Os::Process::LocalTime& local, int milliseconds,
+                                             long long monotonicNs);
+// <prefix>-YYYYMMDD-HHMMSS.log for local, as a default log file name.
+[[nodiscard]] std::string LogFileName(std::string_view prefix, const Engine::Os::Process::LocalTime& local);
 // The running executable (throws when the platform cannot tell).
 [[nodiscard]] std::filesystem::path RunningExecutablePath();
 // SHA-256 (hex) of a file, such as the running executable; "unavailable" when unreadable.

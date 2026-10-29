@@ -219,13 +219,9 @@ Base::Result<std::filesystem::path, SdlPlatformError> BaseDirectory() {
         return Base::Err(MakeSdlError(SdlPlatformErrorCode::BaseDirectoryUnavailable,
                                       "SdlPlatform: the base directory is unavailable"));
     }
-    return PathFromUtf8(base);
-}
-
-std::filesystem::path PathFromUtf8(const std::string_view utf8) {
+    // SDL gives UTF-8; the bytes become a path as they are (no GYO::Os edge from this layer).
     std::u8string text;
-    text.reserve(utf8.size());
-    for (const char c : utf8) text.push_back(static_cast<char8_t>(c));
+    for (const char* c = base; *c != '\0'; ++c) text.push_back(static_cast<char8_t>(*c));
     return std::filesystem::path(text);
 }
 

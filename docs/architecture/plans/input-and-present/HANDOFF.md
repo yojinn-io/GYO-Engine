@@ -447,4 +447,5 @@
 - IP-1：完整 scancode 的表示方式（延伸 enum 或其他）在介面審查時決定；限制是保留既有名稱與列舉值。
 - IP-1：同一幀上升沿的表示方式（次數或依序的事件清單）在介面審查時決定；限制是既有 `pressed`／`released`／`held` 的語意不變。
 - 遷移清單：本夾不另建，寫入 [foundation-followups/inactive_products.md](../foundation-followups/inactive_products.md) 的「IP」節（該節已存在）。
+- 2026-10-26（OS 子系統計畫 D56）：IP-5 延後的 `engine/io` 原子寫入，由 OS 子系統的 os-tool-files 做成 engine/io 的 helper（唯一的實作；底層是 engine/os 的 `RenameReplacing`），第一個消費端是 UI 編輯器。IP-5 開始時沿用它，不另寫；`UserDataDirectory` 仍屬 IP-5。
 - IP-3～IP-5（2026-10-08 規劃，D28）：範圍見 [README](README.md) 的進度表；詳細的 PLAN 在各批開始時撰寫。**（2026-10-21：IP-3／IP-4 的草案已寫，見 PLAN 文末，等核准。）**補充（2026-10-14，消費端 D76）：IP-3、IP-4 的消費端移到消費端的下一個版本，IP-5 的移到再下一個版本。

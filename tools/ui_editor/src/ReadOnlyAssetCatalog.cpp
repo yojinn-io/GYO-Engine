@@ -4,6 +4,7 @@
 #include "engine/asset/ContentManifest.hpp"
 #include "engine/asset/catalog/CatalogParser.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
+#include "engine/os/Files.hpp"
 #include "gyo/ui_editor/FileService.hpp"
 
 #include <algorithm>
@@ -43,7 +44,12 @@ Result<void, CatalogError> ReadOnlyAssetCatalog::Mount(
 
     Engine::Asset::Resolver::AssetPathResolver::Options resolverOptions;
     const auto root = AbsolutePath(assetRoot);
-    resolverOptions.assetsRoot = root.string();
+    // Engine paths are UTF-8 (docs/architecture/io.md), not path::string()'s ANSI code page.
+    auto rootText = Engine::Os::Files::PathToUtf8(root);
+    if (!rootText) return Engine::Base::Err(LoadFailed("asset root has no UTF-8 form", Engine::Base::CauseDetail(rootText.error())));
+    auto catalogText = Engine::Os::Files::PathToUtf8(catalogPath);
+    if (!catalogText) return Engine::Base::Err(LoadFailed("catalog path has no UTF-8 form", Engine::Base::CauseDetail(catalogText.error())));
+    resolverOptions.assetsRoot = std::move(rootText.value());
     resolverOptions.allowAbsolutePath = false;
     resolverOptions.allowEscapeAssetsRoot = false;
     resolverOptions.allowSchemes = false;
@@ -52,7 +58,7 @@ Result<void, CatalogError> ReadOnlyAssetCatalog::Mount(
     Engine::Asset::Catalog::CatalogParser parser;
     Engine::Asset::AssetCatalog catalog;
     const auto loaded =
-        catalog.LoadFromFile(catalogPath.string(), parser, resolver);
+        catalog.LoadFromFile(catalogText.value(), parser, resolver);
     if (!loaded) return Engine::Base::Err(LoadFailed(loaded.error()));
 
     Commit(std::move(catalog), AbsolutePath(catalogPath), root);
@@ -67,11 +73,14 @@ void ReadOnlyAssetCatalog::Commit(Engine::Asset::AssetCatalog catalog,
         if (entry == nullptr) {
             continue;
         }
+        // The resolver gives UTF-8 built from the UTF-8 root, so it converts back;
+        // never through the ANSI code page.
+        auto resolved = Engine::Os::Files::PathFromUtf8(entry->resolvedPath);
         mounted.push_back({
             entry->id.debugName,
             entry->type.debugName,
             entry->sourcePath,
-            std::filesystem::path{entry->resolvedPath},
+            resolved ? std::move(*resolved) : std::filesystem::path{},
         });
     }
     std::ranges::sort(mounted, {}, &CatalogAsset::id);

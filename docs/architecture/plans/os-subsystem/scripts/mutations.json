@@ -1,0 +1,1806 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the os-subsystem plan. A mutant is killed only when its check fails with the expected message. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/os-subsystem/scripts/mutations.json.",
+  "mutants": [
+    {
+      "id": "os-g1-header",
+      "what": "An Engine module outside engine/os includes a POSIX header (R1)",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "#include \"engine/trace/TraceSink.hpp\"\n",
+      "replace": "#include \"engine/trace/TraceSink.hpp\"\n#include <unistd.h>\n",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "engine/trace/src/TraceSink\\.cpp:\\d+: R1 unistd\\.h"
+    },
+    {
+      "id": "os-g2-macro",
+      "what": "An Engine module outside engine/os branches on _WIN32 (R2)",
+      "file": "engine/asset/src/AssetCatalog.cpp",
+      "find": "namespace Engine::Asset {\n",
+      "replace": "#if defined(_WIN32)\n#endif\nnamespace Engine::Asset {\n",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "engine/asset/src/AssetCatalog\\.cpp:\\d+: R2 _WIN32"
+    },
+    {
+      "id": "os-g3-api",
+      "what": "An Engine module outside engine/os calls localtime_r (R3)",
+      "file": "engine/time/src/LateWakeStats.cpp",
+      "find": "namespace Engine::Time {\n",
+      "replace": "namespace Engine::Time {\nvoid LocalTimeProbe(const long* t, void* out) { localtime_r(t, out); }\n",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "engine/time/src/LateWakeStats\\.cpp:\\d+: R3 localtime_r"
+    },
+    {
+      "id": "os-g4-io-opens",
+      "what": "engine/io opens a file itself instead of calling engine/os (R4, D41)",
+      "file": "engine/io/src/fs/Vfs.cpp",
+      "find": "namespace Engine::IO::FS {\n",
+      "replace": "namespace Engine::IO::FS {\nstatic std::ifstream probe;\n",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "engine/io/src/fs/Vfs\\.cpp:\\d+: R4 std::ifstream"
+    },
+    {
+      "id": "os-g5-upward",
+      "what": "engine/os includes a module above it (R5)",
+      "file": "engine/os/src/common/OsError.cpp",
+      "find": "#include \"engine/os/OsError.hpp\"\n",
+      "replace": "#include \"engine/os/OsError.hpp\"\n#include \"engine/io/IoError.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "engine/os/src/common/OsError\\.cpp:\\d+: R5 engine/io/IoError\\.hpp"
+    },
+    {
+      "id": "os-g6-stale",
+      "what": "An allowlist entry stays larger after a site moved",
+      "file": "tests/common/os/os_boundary_allowlist.txt",
+      "find": "engine/time/src/Waiter.cpp R1 3 ",
+      "replace": "engine/time/src/Waiter.cpp R1 4 ",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "Waiter\\.cpp R1 has 3 findings, allowlisted 4; shrink the allowlist"
+    },
+    {
+      "id": "os-g7-public-header",
+      "what": "An engine/os public header includes windows.h (Invariant 4)",
+      "file": "engine/os/include/engine/os/OsError.hpp",
+      "find": "#include \"engine/base/Error.hpp\"\n",
+      "replace": "#include \"engine/base/Error.hpp\"\n#include <windows.h>\n",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "engine/os/include/engine/os/OsError\\.hpp:\\d+: R1 windows\\.h"
+    },
+    {
+      "id": "os-g8-link",
+      "what": "gyo_os links a module above it (Invariant 3, configure-time check)",
+      "file": "engine/os/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_os PUBLIC GYO::Base)",
+      "replace": "target_link_libraries(gyo_os PUBLIC GYO::Base GYO::Time)",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_os links .*expected exactly GYO::Base"
+    },
+    {
+      "id": "os-g9-macro-list",
+      "what": "The guard forgets __linux__ in its macro list",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "\"__linux__\", ",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_linux_branch_is_reported"
+    },
+    {
+      "id": "os-g10-filesystem-op",
+      "what": "Runtime code asks the file system through std::filesystem (R4)",
+      "file": "engine/asset/src/AssetCatalog.cpp",
+      "find": "namespace Engine::Asset {\n",
+      "replace": "namespace Engine::Asset {\nstatic const bool probe = std::filesystem::is_regular_file(\"x\");\n",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "engine/asset/src/AssetCatalog\\.cpp:\\d+: R4 std::filesystem::is_regular_file"
+    },
+    {
+      "id": "os-e1-detail",
+      "what": "The native error detail drops its fixed domain prefix",
+      "file": "engine/os/src/common/OsError.cpp",
+      "find": "? \"win32=\" : \"errno=\"",
+      "replace": "? \"\" : \"errno=\"",
+      "target": "gyo_os_tests",
+      "cases": "*fixed form*",
+      "expect": "CHECK\\( NativeErrorDetail\\(\\{NativeErrorDomain::Win32, 3\\}\\) == \"win32=3\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m1-root",
+      "what": "A file URI path loses its leading '/' (the pre-io-contracts behaviour)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        return CanonicalFilePath(std::string(native));\n",
+      "replace": "        return CanonicalFilePath(std::string(native.substr(1)));\n",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "ParseUri failed for file:///Users/x"
+    },
+    {
+      "id": "io-m2-drive-case",
+      "what": "Only an upper-case drive letter is recognized",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');",
+      "replace": "return (c >= 'A' && c <= 'Z');",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( FilePath\\(\"file:///c:/game\"\\) == \"c:/game\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m3-to-string",
+      "what": "ToString prints a drive path in the old file://C:/ form",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            if (text.empty() || text.front() != '/') out += \"/\";\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( uri.value\\(\\).ToString\\(\\) == text \\) is NOT correct"
+    },
+    {
+      "id": "io-m4-localhost-case",
+      "what": "The localhost authority is matched case-sensitively",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "authority.empty() || ToLower(authority) == \"localhost\"",
+      "replace": "authority.empty() || authority == \"localhost\"",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( FilePath\\(\"file://LOCALHOST/C:/x\"\\) == \"C:/x\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m5-long-prefix",
+      "what": "A long-path or NT prefix is accepted into an engine/io path when it appears only after extra leading slashes collapse (///??/)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
+      "replace": "        if (false) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "the URI text file:///\\?\\?/ does not parse"
+    },
+    {
+      "id": "io-m6-loose-fallback",
+      "what": "The loose parser keeps the file scheme for a file URI that ParseUri rejects",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            // A file URI that ParseUri rejects is no file URI here either: it keeps no scheme, so it\n",
+      "replace": "            u.scheme = UriScheme::File;\n",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( uri.scheme != Path::UriScheme::File \\) is NOT correct"
+    },
+    {
+      "id": "io-m7-mount-escape",
+      "what": "A mount request with a '..' segment resolves outside the mount root",
+      "file": "engine/io/include/engine/io/fs/MountTable.hpp",
+      "find": "            if (Engine::IO::Path::ContainsTraversal(rel)) {",
+      "replace": "            if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "REQUIRE_FALSE\\( resolved \\) is NOT correct"
+    },
+    {
+      "id": "io-m8-four-slash-unc",
+      "what": "After an empty authority, a path of three or more slashes is taken for a local path (file://///host)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (path.starts_with(\"//\")) return CanonicalFilePath(",
+      "replace": "        if (false) return CanonicalFilePath(",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "CHECK\\( FilePath\\(\"file://///a\"\\) == \"//a\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m9-hand-made",
+      "what": "NativePathFromFileUri accepts a hand-built path that is not the mapping's canonical form",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (canonical.value() != native) {",
+      "replace": "        if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "NativePathFromFileUri accepted (///a|C:)"
+    },
+    {
+      "id": "io-m10-posix-drive",
+      "what": "A POSIX path whose first segment looks like a drive gets a file URI",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (NamesDriveUnderRoot(path)) {",
+      "replace": "        if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "FileUriFromNativePath accepted /C:/x"
+    },
+    {
+      "id": "io-m11-drive-relative",
+      "what": "The drive-relative native forms C: and \\x are taken for absolute paths",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if ((utf8AbsolutePath.starts_with('\\\\') && !(path.size() >= 2 && path[1] == '/')) ||\n            (path.size() == 2 && IsDriveLetter(path))) {",
+      "replace": "        if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri:*",
+      "expect": "FileUriFromNativePath accepted (C:|\\\\x)"
+    },
+    {
+      "id": "os-f1-posix-notfound",
+      "what": "A missing file (ENOENT) is no longer NotFound on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    case ENOENT:\n    case ENOTDIR:\n        return OsErrorCode::NotFound;",
+      "replace": "    case ENOTDIR:\n        return OsErrorCode::NotFound;",
+      "target": "gyo_os_tests",
+      "cases": "*NotFound*",
+      "expect": "CHECK\\( file.error\\(\\).code == OsErrorCode::NotFound \\) is NOT correct"
+    },
+    {
+      "id": "os-f2-utf8",
+      "what": "Invalid UTF-8 reaches the OS instead of being refused",
+      "file": "engine/os/src/common/Paths.cpp",
+      "find": "    if (!IsValidUtf8(utf8Path)) {",
+      "replace": "    if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*invalid arguments*",
+      "expect": "CHECK\\( OpenError\\(invalid\\) == OsErrorCode::InvalidEncoding \\) is NOT correct"
+    },
+    {
+      "id": "os-f3-posix-regular",
+      "what": "A directory or FIFO opens as a file on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (!S_ISREG(status.st_mode)) {",
+      "replace": "    if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*regular files only*",
+      "expect": "FileReader::Open accepted"
+    },
+    {
+      "id": "os-f4-windows-acp",
+      "what": "engine/os converts paths with the ANSI code page instead of UTF-8 (R6; os-utf8-codepage moved this from a Windows test to the guard, D66)",
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "constexpr UINT kPathCodePage = CP_UTF8;",
+      "replace": "constexpr UINT kPathCodePage = CP_ACP;",
+      "expect": "engine/os/src/windows/Files\\.cpp:\\d+: R6 CP_ACP",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "id": "os-f5-windows-notfound",
+      "what": "ERROR_FILE_NOT_FOUND is no longer NotFound on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    case ERROR_FILE_NOT_FOUND:\n",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "cases": "*NotFound*",
+      "expect": "CHECK\\( file.error\\(\\).code == OsErrorCode::NotFound \\) is NOT correct"
+    },
+    {
+      "id": "io-n1-caps",
+      "what": "The native backend keeps a default capability (canList = true) instead of setting it",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        caps.canList = false;\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK_FALSE\\( caps.canList \\) is NOT correct"
+    },
+    {
+      "id": "io-n2-write-mode",
+      "what": "The native backend opens a mode it does not support (read and write together)",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "            if (Stream::CanRead(mode) || !Stream::Has(mode, FileOpenMode::CreateIfMissing) ||",
+      "replace": "            if (!Stream::Has(mode, FileOpenMode::CreateIfMissing) ||",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "NativeFileSystem opened mode"
+    },
+    {
+      "id": "io-n3-cause",
+      "what": "An engine/os failure loses its code name and native detail",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "Base::CauseDetail(error, nativePath));",
+      "replace": "std::string(nativePath));",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( opened.error\\(\\).detail.starts_with\\(expectedStart\\) \\) is NOT correct"
+    },
+    {
+      "id": "io-n4-notfound",
+      "what": "An engine/os NotFound becomes OpenFailed, so a VFS overlay stops instead of trying the next mount",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "            case Os::OsErrorCode::NotFound:        return IoErrorCode::NotFound;",
+      "replace": "            case Os::OsErrorCode::NotFound:        return otherwise;",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( opened.error\\(\\).code == IoErrorCode::NotFound \\) is NOT correct"
+    },
+    {
+      "id": "os-f6-posix-moved-from",
+      "what": "A moved-from FileReader is read without the Programmer Error check",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {\n    GYO_ASSERT(impl_ != nullptr);\n",
+      "replace": "Base::Result<std::size_t, OsError> FileReader::Read(const std::span<std::byte> into) {\n",
+      "target": "gyo_os_tests",
+      "cases": "*moved-from*",
+      "expect": "CRASHED|SIGSEGV|GYO_CHECK_ASSERTS"
+    },
+    {
+      "id": "os-f7-posix-path-to-utf8",
+      "what": "PathToUtf8 returns bytes that are not UTF-8 on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
+      "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding, \"path is not valid UTF-8\"",
+      "target": "gyo_os_tests",
+      "cases": "*no UTF-8 form*",
+      "expect": "REQUIRE_FALSE\\( text \\) is NOT correct"
+    },
+    {
+      "id": "os-f8-overlong",
+      "what": "An overlong three-byte UTF-8 form is taken for valid",
+      "file": "engine/os/src/common/Paths.cpp",
+      "find": "(length == 3 && code < 0x800) || ",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "cases": "*invalid arguments*",
+      "expect": "CHECK\\( OpenError\\(invalid\\) == OsErrorCode::InvalidEncoding \\) is NOT correct"
+    },
+    {
+      "id": "io-n5-seek-past-end",
+      "what": "The native read stream seeks past the end, unlike the other read-only streams",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "                    static_cast<std::uint64_t>(base + offset) > size.value()) {",
+      "replace": "                    false) {",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "GYO_ASSERT failed"
+    },
+    {
+      "id": "io-n6-platform-absolute",
+      "what": "The native backend hands a path that is not absolute on this platform to the OS",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "            if (!Os::Files::IsAbsolutePath(native.value())) {",
+      "replace": "            if (false) {",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "\\(posix.error\\(\\).code == IoErrorCode::InvalidPath\\) != \\(drive.error\\(\\).code == IoErrorCode::InvalidPath\\) \\) is NOT correct"
+    },
+    {
+      "id": "p1-no-long-path-form",
+      "what": "OsCallPath hands a long full path to the API without the long-path form (consumer windows-long-path P1)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    return std::wstring(L\"\\\\\\\\?\\\\\") + full.value();",
+      "replace": "    return wide;",
+      "target": "gyo_os_tests",
+      "cases": "*longer than 300*",
+      "expect": "cannot open a"
+    },
+    {
+      "id": "p1-long-path-from-too-high",
+      "what": "The long-path form starts only far above MAX_PATH (P1)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "constexpr std::size_t kLongPathFrom = MAX_PATH - 12;",
+      "replace": "constexpr std::size_t kLongPathFrom = MAX_PATH * 4;",
+      "target": "gyo_os_tests",
+      "cases": "*longer than 300*",
+      "expect": "cannot open a"
+    },
+    {
+      "id": "p2-asset-detail-drops-cause",
+      "what": "NativeFileAssetSource reports only the path, without the OS error code and path length (P2)",
+      "file": "engine/asset/src/NativeFileAssetSource.cpp",
+      "find": "            Base::CauseDetail(cause, causeNamesPath ? std::string_view{} : std::string_view(path))));",
+      "replace": "            path + (causeNamesPath ? cause.message : std::string{})));",
+      "target": "engine_tests",
+      "cases": "*invalid and missing*",
+      "expect": "detail.rfind\\(\"NotFound: \", 0\\) == 0 \\) is NOT correct"
+    },
+    {
+      "id": "p3-relative-path-not-absolute",
+      "what": "NativeFileAssetSource hands a relative path to the file URI mapping (P3)",
+      "file": "engine/asset/src/NativeFileAssetSource.cpp",
+      "find": "    if (!Os::Files::IsAbsolutePath(absolute)) {",
+      "replace": "    if (absolute.empty()) {",
+      "target": "engine_tests",
+      "cases": "*relative path*",
+      "expect": "REQUIRE\\( direct \\) is NOT correct"
+    },
+    {
+      "id": "os-g11-roots-skip-products",
+      "what": "The guard stops scanning apps, so a new product site goes unseen (Invariant 1, os-guard-wide)",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "ROOTS = (\"engine\", \"apps\", \"tools\", \"build/acceptance\", \"tests\")",
+      "replace": "ROOTS = (\"engine\", \"tools\", \"build/acceptance\", \"tests\")",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_unlisted_product_site_is_reported"
+    },
+    {
+      "id": "os-g12-allowlist-scope",
+      "what": "A product allowlist may list files outside its own directory",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "else (directory + \"/\",)",
+      "replace": "else (\"\",)",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_product_allowlist_covers_only_its_own_tree"
+    },
+    {
+      "id": "os-g13-definition-name",
+      "what": "A non-os target gets an OS-identifying compile definition (Invariant 1, configure-time check)",
+      "file": "engine/CMakeLists.txt",
+      "find": "target_compile_features(engine PUBLIC cxx_std_20)\n",
+      "replace": "target_compile_features(engine PUBLIC cxx_std_20)\ntarget_compile_definitions(engine PRIVATE GYO_ENGINE_POSIX=1)\n",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "OS definition guard:\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'GYO_ENGINE_POSIX=1'"
+    },
+    {
+      "id": "os-g14-definition-platform-id",
+      "what": "A directory defines a macro only on one OS through $<PLATFORM_ID> (Invariant 1, configure-time check)",
+      "file": "engine/CMakeLists.txt",
+      "find": "add_subdirectory(base)\n",
+      "replace": "add_compile_definitions($<$<PLATFORM_ID:Windows>:GYO_FAST_PATH>)\nadd_subdirectory(base)\n",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "OS definition guard:\\s+directory\\s+engine\\s+COMPILE_DEFINITIONS\\s+has\\s+'\\$<\\$<PLATFORM_ID:Windows>:GYO_FAST_PATH>'"
+    },
+    {
+      "id": "os-g15-runtime-roots",
+      "what": "R4 stops covering products and tools (Invariant 2)",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "RUNTIME_ROOTS = (\"engine\", \"apps\", \"tools\")",
+      "replace": "RUNTIME_ROOTS = (\"engine\",)",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_direct_file_access_in_products_and_tools_is_reported"
+    },
+    {
+      "id": "os-g16-public-header-windows",
+      "what": "An engine/os public header includes windows.h (Invariant 4, header hygiene)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/include/engine/os/Files.hpp",
+      "find": "#include \"engine/os/OsError.hpp\"\n",
+      "replace": "#include \"engine/os/OsError.hpp\"\n#ifndef NOMINMAX\n#define NOMINMAX\n#endif\n#include <windows.h>\n",
+      "target": "gyo_os_header_tests",
+      "expect": "includes windows\\.h or winsock"
+    },
+    {
+      "id": "os-g17-hygiene-coverage",
+      "what": "The header hygiene test stops including an engine/os public header",
+      "file": "tests/common/os/OsHeaderHygieneTests.cpp",
+      "find": "#include \"engine/os/OsError.hpp\"\n",
+      "replace": "",
+      "target": "gyo_os_header_tests",
+      "expect": "not included by OsHeaderHygieneTests\\.cpp:\\s*engine/os/OsError\\.hpp"
+    },
+    {
+      "id": "os-p1-thread-clock",
+      "what": "The thread CPU time reads the process clock on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Process.cpp",
+      "find": "::clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time)",
+      "replace": "::clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &time)",
+      "target": "gyo_os_tests",
+      "cases": "*belongs to the calling thread only*",
+      "expect": "CHECK\\( \\*fresh < \\*process \\) is NOT correct"
+    },
+    {
+      "id": "os-p2-offset-sign",
+      "what": "The UTC offset is computed with the wrong sign (west for east)",
+      "file": "engine/os/src/common/Calendar.cpp",
+      "find": "std::chrono::seconds{asUtc - static_cast<std::int64_t>(time)}",
+      "replace": "std::chrono::seconds{static_cast<std::int64_t>(time) - asUtc}",
+      "target": "gyo_os_tests",
+      "cases": "*local time*",
+      "expect": "FormatOffset\\(local->utcOffset\\) == Strftime\\(\"%z\", reference\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-p3-month-zero-based",
+      "what": "The month keeps std::tm's zero-based tm_mon",
+      "file": "engine/os/src/common/Calendar.cpp",
+      "find": "            .month = month,\n",
+      "replace": "            .month = local.tm_mon,\n",
+      "target": "gyo_os_tests",
+      "cases": "*local time matches*",
+      "expect": "CHECK\\( local->month == reference.tm_mon \\+ 1 \\) is NOT correct"
+    },
+    {
+      "id": "os-p4-rusage-units",
+      "what": "The process CPU time reads getrusage's microseconds as nanoseconds",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Process.cpp",
+      "find": "std::chrono::seconds{time.tv_sec} + std::chrono::microseconds{time.tv_usec}",
+      "replace": "std::chrono::seconds{time.tv_sec} + std::chrono::nanoseconds{time.tv_usec}",
+      "target": "gyo_os_tests",
+      "cases": "*clocks the old lookups read*",
+      "expect": "CHECK\\( processBefore <= \\*process \\) is NOT correct"
+    },
+    {
+      "id": "os-p5-windows-thread-times",
+      "what": "The thread CPU time reads the process times on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Process.cpp",
+      "find": "::GetThreadTimes(::GetCurrentThread(), &creation, &exited, &kernel, &user)",
+      "replace": "::GetProcessTimes(::GetCurrentProcess(), &creation, &exited, &kernel, &user)",
+      "target": "gyo_os_tests",
+      "cases": "*belongs to the calling thread only*",
+      "expect": "CHECK\\( \\*fresh < \\*process \\) is NOT correct"
+    },
+    {
+      "id": "os-p6-executable-path",
+      "what": "The executable path is taken from the current directory instead of the image",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/posix/Process.cpp",
+      "find": "    const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(buffer.data(), nullptr), &std::free);",
+      "replace": "    const std::unique_ptr<char, decltype(&std::free)> resolved(::realpath(\".\", nullptr), &std::free);",
+      "target": "gyo_os_tests",
+      "cases": "*executable path*",
+      "expect": "stem\\(\\) == \"gyo_os_tests\""
+    },
+    {
+      "id": "os-c1-sigterm",
+      "what": "SIGTERM is no longer a shutdown request on POSIX (the process dies by it)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Console.cpp",
+      "find": "constexpr int signals[] = {SIGINT, SIGTERM};",
+      "replace": "constexpr int signals[] = {SIGINT};",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "sa_flags differ|probe exited -15"
+    },
+    {
+      "id": "os-c2-reset-handler",
+      "what": "The POSIX handler is reset after the first signal, so a second one ends the process",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Console.cpp",
+      "find": "action.sa_flags = SA_RESTART;",
+      "replace": "action.sa_flags = SA_RESTART | SA_RESETHAND;",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "sa_flags differ|a later request must not end it"
+    },
+    {
+      "id": "os-c3-last-wins",
+      "what": "A later shutdown request overwrites the first one's reason",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/common/Shutdown.cpp",
+      "find": "    std::uint8_t none = 0;\n    requested.compare_exchange_strong(none, static_cast<std::uint8_t>(reason), std::memory_order_acq_rel,\n                                      std::memory_order_acquire);\n",
+      "replace": "    requested.store(static_cast<std::uint8_t>(reason), std::memory_order_release);\n",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "the first request wins"
+    },
+    {
+      "id": "os-c4-no-close-branch",
+      "what": "Closing the console is not handled on Windows (the OS ends the process at once)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Console.cpp",
+      "find": "    case CTRL_CLOSE_EVENT:\n        Detail::RecordShutdown(ShutdownReason::ConsoleClose);",
+      "replace": "    case CTRL_CLOSE_EVENT + 100:\n        Detail::RecordShutdown(ShutdownReason::ConsoleClose);",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "close"
+      ],
+      "expect": "expected exit 0 with 'requested reason=console_close'"
+    },
+    {
+      "id": "os-c5-no-break",
+      "what": "Ctrl+Break is not a shutdown request on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Console.cpp",
+      "find": "    case CTRL_C_EVENT:\n    case CTRL_BREAK_EVENT:\n",
+      "replace": "    case CTRL_C_EVENT:\n",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "break once: expected exit 0"
+    },
+    {
+      "id": "os-c6-ansi-arguments",
+      "what": "Windows converts the command line with the ANSI code page instead of UTF-8 (R6; os-utf8-codepage moved this from the console probe to the guard, D66)",
+      "file": "engine/os/src/windows/Wide.cpp",
+      "find": "const int bytes = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,",
+      "replace": "const int bytes = ::WideCharToMultiByte(CP_ACP, 0,",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "engine/os/src/windows/Wide\\.cpp:\\d+: R6 CP_ACP"
+    },
+    {
+      "id": "os-g18-windows-extra-link",
+      "what": "gyo_os links a Windows library beyond shell32 (Invariant 3, configure-time check)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_os PRIVATE shell32)",
+      "replace": "target_link_libraries(gyo_os PRIVATE shell32 ws2_32)",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_os links .*expected exactly GYO::Base;shell32"
+    },
+    {
+      "id": "os-c7-no-restart",
+      "what": "The POSIX handlers lose SA_RESTART, unlike std::signal (Design Invariant 9)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Console.cpp",
+      "find": "action.sa_flags = SA_RESTART;",
+      "replace": "action.sa_flags = 0;",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "shutdown"
+      ],
+      "expect": "sa_flags differ"
+    },
+    {
+      "id": "os-c8-no-ctrl-c",
+      "what": "Ctrl+C is not a shutdown request on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Console.cpp",
+      "find": "    case CTRL_C_EVENT:\n    case CTRL_BREAK_EVENT:\n",
+      "replace": "    case CTRL_BREAK_EVENT:\n",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "ctrl-c"
+      ],
+      "expect": "interrupt once: expected exit 0"
+    },
+    {
+      "id": "os-c9-second-press-handled",
+      "what": "A second Ctrl+C no longer ends the process on Windows (the way out of a hung shutdown)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Console.cpp",
+      "find": "        if (RequestedShutdown()) return FALSE;\n",
+      "replace": "",
+      "target": "gyo_os_console_probe",
+      "command": [
+        "{python}",
+        "tests/common/os/console_check.py",
+        "--probe",
+        "{exe:gyo_os_console_probe}",
+        "--check",
+        "ctrl-c"
+      ],
+      "expect": "interrupt twice: the second request must end the process"
+    },
+    {
+      "id": "os-w1-append-truncates",
+      "what": "Append empties the file on POSIX",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "(mode == WriteMode::Append ? O_APPEND : O_TRUNC)",
+      "replace": "(O_TRUNC)",
+      "target": "gyo_os_tests",
+      "cases": "*append to a file*",
+      "expect": "append to a file, creating it when missing"
+    },
+    {
+      "id": "os-w2-windows-append-truncates",
+      "what": "Append empties the file on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "const DWORD creation = mode == WriteMode::Append ? OPEN_ALWAYS : CREATE_ALWAYS;",
+      "replace": "const DWORD creation = CREATE_ALWAYS;",
+      "target": "gyo_os_tests",
+      "cases": "*append to a file*",
+      "expect": "append to a file, creating it when missing"
+    },
+    {
+      "id": "os-w3-windows-endings-ignored",
+      "what": "Native line endings write the bytes as given on Windows (no \\r\\n)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (impl_->endings == LineEndings::AsWritten) return WriteAll(impl_->handle, bytes.data(), bytes.size(), impl_->path);",
+      "replace": "    if (impl_->endings != LineEndings::Native || true) return WriteAll(impl_->handle, bytes.data(), bytes.size(), impl_->path);",
+      "target": "gyo_os_tests",
+      "cases": "*same bytes as a C++ file stream*",
+      "expect": "same bytes as a C\\+\\+ file stream"
+    },
+    {
+      "id": "os-w4-mkdir-leaf-only",
+      "what": "CreateDirectories makes only the last directory",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        if (end != path.size() && path[end] != '/') continue;",
+      "replace": "        if (end != path.size()) continue;",
+      "target": "gyo_os_tests",
+      "cases": "*create directories*",
+      "expect": "create directories with their missing parents"
+    },
+    {
+      "id": "os-w5-mkdir-file-accepted",
+      "what": "CreateDirectories takes an existing file for a directory",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "            if (::stat(prefix.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) continue;",
+      "replace": "            continue;",
+      "target": "gyo_os_tests",
+      "cases": "*create directories*",
+      "expect": "create directories with their missing parents"
+    },
+    {
+      "id": "os-w6-windows-no-share",
+      "what": "A Windows writer shares its file with no reader",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE;",
+      "replace": "constexpr DWORD kShareWriter = 0;",
+      "target": "gyo_os_tests",
+      "cases": "*let a reader open*",
+      "expect": "let a reader open a file a writer holds"
+    },
+    {
+      "id": "io-w1-create-directories-dropped",
+      "what": "NativeFileSystem::CreateDirectories reports success without creating",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        auto created = Os::Files::CreateDirectories(native.value());",
+      "replace": "        auto created = Base::Result<void, Os::OsError>{};",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "creates directories and keeps the engine/os cause"
+    },
+    {
+      "id": "io-w2-write-mode-loose",
+      "what": "NativeFileSystem opens a write that neither truncates nor appends",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "(!append && !Stream::Has(mode, FileOpenMode::Truncate))",
+      "replace": "false",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "says what it supports"
+    },
+    {
+      "id": "io-w3-windows-text-ignored",
+      "what": "NativeFileSystem ignores FileOpenMode::Text on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "const auto endings = Stream::Has(mode, FileOpenMode::Text) ? Os::Files::LineEndings::Native",
+      "replace": "const auto endings = false ? Os::Files::LineEndings::Native",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "the platform's line endings"
+    },
+    {
+      "id": "io-w4-watcher-missing-is-error",
+      "what": "AssetWatcher takes a missing file for a probe failure",
+      "file": "engine/asset/src/AssetWatcher.cpp",
+      "find": "        if (status.error().code != IO::IoErrorCode::NotFound) return false;",
+      "replace": "        return false;",
+      "target": "engine_tests",
+      "cases": "AssetWatcher*",
+      "expect": "AssetWatcher: removed"
+    },
+    {
+      "id": "os-w7-append-without-o-append",
+      "what": "Append opens without O_APPEND on POSIX (writes land at the start)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "(mode == WriteMode::Append ? O_APPEND : O_TRUNC)",
+      "replace": "(mode == WriteMode::Append ? 0 : O_TRUNC)",
+      "target": "gyo_os_tests",
+      "cases": "*append*",
+      "expect": "append"
+    },
+    {
+      "id": "os-w8-windows-append-not-append-only",
+      "what": "Append opens a plain write handle on Windows (writes land at the start)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "mode == WriteMode::Append ? (FILE_APPEND_DATA | SYNCHRONIZE) : GENERIC_WRITE",
+      "replace": "GENERIC_WRITE",
+      "target": "gyo_os_tests",
+      "cases": "*append*",
+      "expect": "append"
+    },
+    {
+      "id": "os-w9-windows-share-delete",
+      "what": "A Windows writer lets others delete the file it holds",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE;",
+      "replace": "constexpr DWORD kShareWriter = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;",
+      "target": "gyo_os_tests",
+      "cases": "*let a reader open*",
+      "expect": "let a reader open a file a writer holds"
+    },
+    {
+      "id": "os-w10-windows-root-created",
+      "what": "Windows CreateDirectories starts at the first character instead of after the root",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    for (std::size_t end = RootLength(utf8Path) + 1; end <= utf8Path.size(); ++end) {",
+      "replace": "    for (std::size_t end = 1; end <= utf8Path.size(); ++end) {",
+      "target": "gyo_os_tests",
+      "cases": "*create directories*",
+      "expect": "create directories"
+    },
+    {
+      "id": "io-m12-unc-uri-refused",
+      "what": "A file URI with a host is refused again (the D46 behaviour)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (!IsLocalAuthority(authority)) return CanonicalFilePath(\"//\" + std::string(authority) + path);",
+      "replace": "        if (!IsLocalAuthority(authority)) return Base::Err(IoError::Make(IoErrorCode::NotSupported, \"UNC file URIs are not supported\", std::string(rest)));",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "ParseUri failed for file://server/share/x"
+    },
+    {
+      "id": "io-m13-native-unc-refused",
+      "what": "A native //host path is refused again (the D46 behaviour; on POSIX a '//' path)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            if (host.empty()) {\n",
+      "replace": "            if (true) {\n",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "ParseUri failed for file://server/share/x"
+    },
+    {
+      "id": "io-m14-dots-removed",
+      "what": "A local file path loses its dot segments by a lexical rule (the pre-D54 behaviour)",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            return path;\n        }\n        if (StartsWithDrive(path)) {",
+      "replace": "            bool escaped = false;\n            return RemoveDotSegments(path, escaped);\n        }\n        if (StartsWithDrive(path)) {",
+      "target": "engine_tests",
+      "cases": "Uri*,NativeFileSystem*",
+      "expect": "CHECK\\( FilePath\\(\"file:///a/\\./b/\\.\\./c\"\\) == \"/a/\\./b/\\.\\./c\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m15-localhost-unc-spelling",
+      "what": "A UNC path on a host named localhost prints as file://localhost/..., which names the local machine",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "                return (IsLocalAuthority(host) ? \"file://\" : \"file:\") + text;",
+      "replace": "                return \"file:\" + text;",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "Printed\\(\"file:////localhost/C\\$/x\"\\) == \"file:////localhost/C\\$/x\" \\) is NOT correct"
+    },
+    {
+      "id": "io-m16-three-slash-root",
+      "what": "Three or more leading slashes are kept instead of naming the root",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "NativeUri\\(\"///a\"\\)\\.path\\.Str\\(\\) == \"/a\" \\) is NOT correct"
+    },
+    {
+      "id": "asset-r1-root-cleaned",
+      "what": "AssetPathResolver removes the dot segments of its root by a lexical rule (the pre-D54 behaviour)",
+      "file": "engine/asset/src/AssetPathResolver.cpp",
+      "find": "        return IO::Path::Path::FromNormalized(Engine::IO::Path::JoinRootAndRelative(opt_.assetsRoot, relativeForJoin));",
+      "replace": "        bool joinedEscaped = false;\n        return IO::Path::Path::FromNormalized(Engine::IO::Path::RemoveDotSegments(Engine::IO::Path::NormalizeSlashes(Engine::IO::Path::JoinRootAndRelative(opt_.assetsRoot, relativeForJoin)), joinedEscaped));",
+      "target": "engine_tests",
+      "cases": "AssetPathResolver*",
+      "expect": "CHECK\\( out\\.value\\(\\)\\.Str\\(\\) == std::string\\(written\\) \\+ \"/textures/a\\.ppm\" \\) is NOT correct"
+    },
+    {
+      "id": "asset-r2-escape-unchecked",
+      "what": "AssetPathResolver lets a catalog path leave its root through '..'",
+      "file": "engine/asset/src/AssetPathResolver.cpp",
+      "find": "        if (escapedRelativeRoot && !opt_.allowEscapeAssetsRoot) {",
+      "replace": "        if (false) {",
+      "target": "engine_tests",
+      "cases": "AssetPathResolver*",
+      "expect": "REQUIRE_FALSE\\( refused \\) is NOT correct"
+    },
+    {
+      "id": "os-f8-posix-cwd-not-utf8",
+      "what": "MakeAbsolute joins a current directory that is not UTF-8 (POSIX; macOS keeps names in UTF-8, so Linux only)",
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (!Detail::IsValidUtf8(out)) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
+      "replace": "    if (false) {\n        return Base::Err(Detail::RefusedArgument(OsErrorCode::InvalidEncoding,\n                                                 \"the current directory is not valid UTF-8\"",
+      "target": "gyo_os_tests",
+      "cases": "*current directory with no UTF-8*",
+      "expect": "REQUIRE_FALSE\\( \\*relative \\) is NOT correct"
+    },
+    {
+      "id": "os-f9-windows-unc-long-path",
+      "what": "A long UNC path goes to the API without the \\\\?\\UNC\\ form",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (IsUncPath(full.value())) return std::wstring(L\"\\\\\\\\?\\\\UNC\\\\\") + full.value().substr(2);\n",
+      "replace": "",
+      "target": "gyo_io_unc_probe",
+      "command": [
+        "{exe:gyo_io_unc_probe}",
+        "localhost"
+      ],
+      "expect": "FAIL reads the file"
+    },
+    {
+      "id": "os-f10-windows-unc-passthrough",
+      "what": "A UNC path is passed to the API as given, whatever its length (the pre-D54 behaviour)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (wide.value().starts_with(L\"\\\\\\\\\") && !IsUncPath(wide.value())) return wide;",
+      "replace": "    if (wide.value().starts_with(L\"\\\\\\\\\")) return wide;",
+      "target": "gyo_io_unc_probe",
+      "command": [
+        "{exe:gyo_io_unc_probe}",
+        "localhost"
+      ],
+      "expect": "FAIL reads the file"
+    },
+    {
+      "id": "os-f11-windows-namespace-as-unc",
+      "what": "A caller's \\\\?\\ form is taken for UNC and rewritten",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    return !((path[2] == L'?' || path[2] == L'.') && (path.size() == 3 || path[3] == L'\\\\'));",
+      "replace": "    return true;",
+      "target": "gyo_os_tests",
+      "cases": "*longer than 300 characters*",
+      "expect": "cannot open a \\d+-byte path"
+    },
+    {
+      "id": "io-m17-unc-host-unchecked",
+      "what": "A UNC host with '?' or ':' (a drive, the NT prefix, a port) is accepted, so its canonical form does not parse back",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        return host.find_first_of(\"?:\") != std::string_view::npos;",
+      "replace": "        return false;",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "ParseUri accepted file:////C:/x"
+    },
+    {
+      "id": "io-m18-drive-after-dots",
+      "what": "The drive-lookalike check looks only at the path as written, so file:///./C:/x names a drive-looking path",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        return LooksLikeDriveUnderRoot(path) || LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
+      "replace": "        return LooksLikeDriveUnderRoot(path);",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "ParseUri accepted file:///\\./C:/x"
+    },
+    {
+      "id": "io-m19-drive-as-written",
+      "what": "The drive-lookalike check looks only at the path without dot segments, so /C:/../x gets a URI that names the drive path",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        return LooksLikeDriveUnderRoot(path) || LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
+      "replace": "        return LooksLikeDriveUnderRoot(RemoveDotSegments(path, escaped));",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "CHECK\\( reparsed\\.value\\(\\)\\.path == uri\\.value\\(\\)\\.path \\) is NOT correct"
+    },
+    {
+      "id": "io-m20-namespace-before-collapse",
+      "what": "The namespace check runs before extra leading slashes collapse, so ///??/ becomes the NT prefix /??/",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n",
+      "replace": "        if (HasNamespacePrefix(path)) {\n            return Base::Err(IoError::Make(IoErrorCode::InvalidPath,\n                                           \"long-path and device prefixes never appear in engine/io paths\", path));\n        }\n        if (slashes >= 3) path = \"/\" + path.substr(slashes);\n",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "no native path back for ///\\?\\?/"
+    },
+    {
+      "id": "io-m21-hand-built-host-unchecked",
+      "what": "NativePathFromFileUri takes any hand-set host, so a relative path or a drive becomes a UNC path",
+      "file": "engine/io/src/path/Uri.cpp",
+      "find": "            if (IsDriveLetter(uri.authority) || uri.authority.find_first_of(\"/\\\\\") != std::string::npos ||\n                (!native.empty() && native.front() != '/')) {",
+      "replace": "            if (false) {",
+      "target": "engine_tests",
+      "cases": "Uri*",
+      "expect": "NativePathFromFileUri accepted share"
+    },
+    {
+      "id": "os-x1-posix-rename-skipped",
+      "what": "RenameReplacing reports success without renaming (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (std::rename(from.c_str(), to.c_str()) != 0) {",
+      "replace": "    if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*rename*",
+      "expect": "CHECK\\( ReadBytes\\(to\\) == \"new\" \\) is NOT correct"
+    },
+    {
+      "id": "os-x2-posix-remove-skipped",
+      "what": "RemoveFile reports success without removing (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    if (::unlink(path.c_str()) != 0) {",
+      "replace": "    if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*remove a file*",
+      "expect": "CHECK_FALSE\\( std::filesystem::exists\\(file\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x3-posix-resolve-lexical",
+      "what": "ResolvedPath only normalizes lexically and follows no link (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    auto absolute = MakeAbsolute(utf8Path);\n    if (!absolute) return absolute;\n    const std::string& path = absolute.value();",
+      "replace": "    auto absolute = MakeAbsolute(utf8Path);\n    if (!absolute) return absolute;\n    if (!absolute.value().empty()) return std::filesystem::path(absolute.value()).lexically_normal().generic_string();\n    const std::string& path = absolute.value();",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "CHECK\\( resolved.value\\(\\) == Utf8\\(std::filesystem::weakly_canonical\\(input\\)\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x4-posix-resolve-stops-early",
+      "what": "ResolvedPath fails on a missing component instead of resolving the existing prefix (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        if ((error != ENOENT && error != ENOTDIR) || end <= 1) {",
+      "replace": "        if (true) {",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "REQUIRE\\( resolved \\) is NOT correct"
+    },
+    {
+      "id": "os-x5-posix-components-always-equal",
+      "what": "SamePathComponent takes any two components for the same (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    return utf8Left == utf8Right;\n}",
+      "replace": "    return true;\n}",
+      "target": "gyo_os_tests",
+      "cases": "*compare path*",
+      "expect": "CHECK_FALSE\\( SamePathComponent\\(\"assets\", \"asset\"\\).value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x6-macos-font-system-dir-missing",
+      "what": "FontDirectories leaves out the macOS system font directory",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "    candidates = {\"/System/Library/Fonts\", \"/Library/Fonts\"};",
+      "replace": "    candidates = {\"/Library/Fonts\"};",
+      "target": "gyo_os_tests",
+      "cases": "*font*",
+      "expect": "CHECK\\( directories.value\\(\\).front\\(\\) == \"/System/Library/Fonts\" \\) is NOT correct"
+    },
+    {
+      "id": "os-x7-windows-rename-not-replacing",
+      "what": "RenameReplacing does not replace an existing file (Windows, no MOVEFILE_REPLACE_EXISTING)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (!::MoveFileExW(from.value().c_str(), to.value().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {",
+      "replace": "    if (!::MoveFileExW(from.value().c_str(), to.value().c_str(), MOVEFILE_WRITE_THROUGH)) {",
+      "target": "gyo_os_tests",
+      "cases": "*rename*",
+      "expect": "REQUIRE\\( RenameReplacing\\(Utf8\\(from\\), Utf8\\(to\\)\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x8-windows-final-path-prefix-kept",
+      "what": "ResolvedPath returns the \\\\?\\ form GetFinalPathNameByHandleW gives (Windows)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "            if (path.starts_with(L\"\\\\\\\\?\\\\\")) return path.substr(4);",
+      "replace": "            if (false) return path.substr(4);",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "CHECK\\( resolved.value\\(\\) == Utf8\\(std::filesystem::weakly_canonical\\(input\\)\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x9-windows-compare-case-sensitive",
+      "what": "SamePathComponent compares case on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "right.value().data(), static_cast<int>(right.value().size()), TRUE);",
+      "replace": "right.value().data(), static_cast<int>(right.value().size()), FALSE);",
+      "target": "gyo_os_tests",
+      "cases": "*compare path*",
+      "expect": "CHECK\\( SamePathComponent\\(\"Assets\", \"aSSETS\"\\).value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x10-windows-resolve-stops-early",
+      "what": "ResolvedPath fails on a missing component instead of resolving the existing prefix (Windows)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "        if (!IsMissingComponent(error)) return Base::Err(FromWin32(error, \"cannot resolve the path\", utf8Path));",
+      "replace": "        if (true) return Base::Err(FromWin32(error, \"cannot resolve the path\", utf8Path));",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "REQUIRE\\( resolved \\) is NOT correct"
+    },
+    {
+      "id": "io-x1-move-skipped",
+      "what": "NativeFileSystem::Move reports success without renaming",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        auto moved = Os::Files::RenameReplacing(source.value(), target.value());",
+      "replace": "        auto moved = Base::Result<void, Os::OsError>{};",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( ReadBack\\(tree.Native\\(\"menu.json\"\\)\\) == \"new\" \\) is NOT correct"
+    },
+    {
+      "id": "io-x2-remove-skipped",
+      "what": "NativeFileSystem::Remove reports success without removing",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        auto removed = Os::Files::RemoveFile(native.value());",
+      "replace": "        auto removed = Base::Result<void, Os::OsError>{};",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK_FALSE\\( fs.Exists\\(tree.Uri\\(\"menu.json\"\\)\\).value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "io-x3-remove-recursive-accepted",
+      "what": "NativeFileSystem::Remove takes a recursive request it cannot carry out",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        if (opt.recursive) return Base::Err(Unsupported(\"Remove with recursive\"));\n",
+      "replace": "",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( fs.Remove\\(tree.Uri\\(\\), recursive\\).error\\(\\).code == IoErrorCode::NotSupported \\) is NOT correct"
+    },
+    {
+      "id": "io-x4-atomic-temporary-left",
+      "what": "WriteFileAtomically leaves its temporary file when the move fails",
+      "file": "engine/io/src/helpers/WriteFileAtomically.cpp",
+      "find": "        auto moved = fs.Move(temporary, uri);\n        if (!moved) {\n            (void)fs.Remove(temporary, {});",
+      "replace": "        auto moved = fs.Move(temporary, uri);\n        if (!moved) {",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( left == std::vector<std::string>\\{\"export.json\", \"taken\"\\} \\) is NOT correct"
+    },
+    {
+      "id": "io-x5-move-not-advertised",
+      "what": "NativeFileSystem keeps saying it cannot move",
+      "file": "engine/io/src/fs/NativeFileSystem.cpp",
+      "find": "        caps.canMove = true;",
+      "replace": "        caps.canMove = false;",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( caps.canMove \\) is NOT correct"
+    },
+    {
+      "id": "ui-x1-export-guard-lexical",
+      "what": "The editor's export guard compares paths lexically and misses a link into the asset root",
+      "file": "tools/ui_editor/src/FileService.cpp",
+      "find": "        if (auto resolved = OsFiles::ResolvedPath(text.value())) {",
+      "replace": "        if (auto resolved = OsFiles::MakeAbsolute(text.value())) {",
+      "target": "gyo_ui_editor_core_tests",
+      "command": [
+        "{exe:gyo_ui_editor_core_tests}"
+      ],
+      "expect": "FAILED: export rejects a path that reaches the asset root through a symbolic link"
+    },
+    {
+      "id": "ui-x2-export-guard-components-unequal",
+      "what": "The editor's export guard takes no two path components for the same",
+      "file": "tools/ui_editor/src/FileService.cpp",
+      "find": "    return same && same.value();",
+      "replace": "    return false;",
+      "target": "gyo_ui_editor_core_tests",
+      "command": [
+        "{exe:gyo_ui_editor_core_tests}"
+      ],
+      "expect": "FAILED: export rejects every path below the mounted app asset root"
+    },
+    {
+      "id": "os-x11-windows-root-opened",
+      "what": "ResolvedPath walks back past the root instead of keeping it as written (Windows)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "        if (slash == std::string::npos || slash < root) {",
+      "replace": "        if (slash == std::string::npos) {",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "os-x12-posix-root-walk-past-root",
+      "what": "ResolvedPath walks back to an empty prefix and fails when only the root exists (POSIX)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        end = slash == 0 || slash == std::string::npos ? 1 : slash;",
+      "replace": "        end = slash == std::string::npos ? 1 : slash;",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "REQUIRE\\( resolved \\) is NOT correct"
+    },
+    {
+      "id": "os-x13-macos-realpath-without-stat",
+      "what": "ResolvedPath takes realpath's answer for a prefix stat does not find (macOS: a file with a trailing slash)",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        if (::stat(prefix.c_str(), &status) == 0) {",
+      "replace": "        if (char* probe = ::realpath(prefix.c_str(), nullptr); probe != nullptr && (std::free(probe), true)) {",
+      "target": "gyo_os_tests",
+      "cases": "*resolve*",
+      "expect": "CHECK\\( resolved.value\\(\\) == Utf8\\(std::filesystem::weakly_canonical\\(input\\)\\) \\) is NOT correct"
+    },
+    {
+      "id": "os-x14-macos-remove-directory-code",
+      "what": "RemoveFile reports a directory with the OS's own code (macOS: AccessDenied) instead of InvalidPath",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "        if (::lstat(path.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {",
+      "replace": "        if (false) {",
+      "target": "gyo_os_tests",
+      "cases": "*remove a file*",
+      "expect": "CHECK\\( onDirectory.error\\(\\).code == OsErrorCode::InvalidPath \\) is NOT correct"
+    },
+    {
+      "id": "io-x6-atomic-write-direct",
+      "what": "WriteFileAtomically writes the target itself instead of a temporary file",
+      "file": "engine/io/src/helpers/WriteFileAtomically.cpp",
+      "find": "        temporary.path = Path::Path::FromNormalized(uri.path.Str() + TemporarySuffix());",
+      "replace": "        temporary.path = uri.path;",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( temporary != target \\) is NOT correct"
+    },
+    {
+      "id": "io-x7-atomic-failed-write-left",
+      "what": "WriteFileAtomically leaves its temporary file when a write fails",
+      "file": "engine/io/src/helpers/WriteFileAtomically.cpp",
+      "find": "        if (!written || !closed) {\n            (void)fs.Remove(temporary, {});",
+      "replace": "        if (!written || !closed) {",
+      "target": "engine_tests",
+      "cases": "NativeFileSystem*",
+      "expect": "CHECK\\( failing.removed == std::vector<std::string>\\{failing.opened.front\\(\\)\\} \\) is NOT correct"
+    },
+    {
+      "id": "tt-x1-trace-links-engine",
+      "what": "gyo_trace links GYO::Engine (trace.md Invariant 7, configure-time check)",
+      "file": "engine/trace/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os GYO::Engine)",
+      "target": "gyo_trace_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_trace links GYO::Engine;GYO::Os;GYO::Threads; expected exactly\\s+GYO::Os;GYO::Threads"
+    },
+    {
+      "id": "tt-x2-trace-without-os",
+      "what": "gyo_trace no longer links GYO::Os, so it could not write through engine/os (trace.md Invariant 7, configure-time check)",
+      "file": "engine/trace/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads)",
+      "target": "gyo_trace_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_trace links GYO::Threads; expected exactly GYO::Os;GYO::Threads"
+    },
+    {
+      "id": "tt-x3-windows-trace-as-written",
+      "what": "The trace file keeps '\\n' on Windows instead of the text-mode \"\\r\\n\"",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "        Os::Files::LineEndings::Native);",
+      "replace": "        Os::Files::LineEndings::AsWritten);",
+      "target": "gyo_trace_tests",
+      "cases": "*longer than 300*",
+      "expect": "CHECK\\( bytes == \"first\" \\+ newline"
+    },
+    {
+      "id": "tt-x4-trace-append-truncates",
+      "what": "An appending trace sink empties the file",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "options.append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate",
+      "replace": "Os::Files::WriteMode::Truncate",
+      "target": "gyo_trace_tests",
+      "cases": "*appends*",
+      "expect": "REQUIRE\\( lines.size\\(\\) == 2 \\) is NOT correct"
+    },
+    {
+      "id": "tt-x5-linux-trace-write-failure-ignored",
+      "what": "A failed write leaves the sink good (Linux: /dev/full)",
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "            if (!file->Write(bytes)) failed.store(true, std::memory_order_release);",
+      "replace": "            static_cast<void>(file->Write(bytes));",
+      "target": "gyo_trace_tests",
+      "cases": "*failed write*",
+      "expect": "CHECK_FALSE\\( sink.Good\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "tt-x6-trace-batch-end-unwritten",
+      "what": "The end of a batch stays in the writer's buffer, so FlushNow returns before the file has it",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "            }\n            WritePending();\n",
+      "replace": "            }\n",
+      "target": "gyo_trace_tests",
+      "cases": "*FlushNow returns*",
+      "expect": "CHECK\\( size == busy.size\\(\\) \\+ Newline.size\\(\\) \\+ marker.size\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "tt-x7-trace-os-public",
+      "what": "gyo_trace links GYO::Os publicly, so its users get engine/os headers (trace.md Invariant 7, configure-time check)",
+      "file": "engine/trace/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_trace PUBLIC GYO::Threads PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_trace PUBLIC GYO::Threads GYO::Os)",
+      "target": "gyo_trace_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_trace exposes GYO::Os to its users; link it PRIVATE"
+    },
+    {
+      "id": "tt-x8-trace-truncate-appends",
+      "what": "A sink that should replace the file appends to it",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "options.append ? Os::Files::WriteMode::Append : Os::Files::WriteMode::Truncate",
+      "replace": "Os::Files::WriteMode::Append",
+      "target": "gyo_trace_tests",
+      "cases": "*replaces an existing file*",
+      "expect": "REQUIRE\\( lines.size\\(\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "tt-x9-trace-detail-without-path",
+      "what": "The open failure's detail loses the path",
+      "file": "engine/trace/src/TraceSink.cpp",
+      "find": "                                          Base::CauseDetail(file.error(), path.value())));",
+      "replace": "                                          Base::CauseDetail(file.error())));",
+      "target": "gyo_trace_tests",
+      "cases": "*cannot open*",
+      "expect": "detail.rfind\\(text.value\\(\\) \\+ \"; NotFound: \", 0\\) == 0 \\) is NOT correct"
+    },
+    {
+      "id": "ti-x1-time-links-more",
+      "what": "gyo_time links another module (time.md Invariant 10, configure-time check)",
+      "file": "engine/time/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_time PUBLIC GYO::Base PRIVATE Threads::Threads)",
+      "replace": "target_link_libraries(gyo_time PUBLIC GYO::Base GYO::Math PRIVATE Threads::Threads)",
+      "target": "gyo_time_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_time links .*expected exactly\\s+GYO::Base;Threads::Threads"
+    },
+    {
+      "id": "ti-x2-threads-links-more",
+      "what": "gyo_threads links another module (threads.md Invariant 9, configure-time check)",
+      "file": "engine/threads/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads)",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math Threads::Threads)",
+      "target": "gyo_threads_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_threads links .*expected exactly\\s+GYO::Time;Threads::Threads"
+    },
+    {
+      "id": "ti-x3-backend-name-changed",
+      "what": "A wait backend name consumers log changes (time.md Invariant 7)",
+      "file": "engine/time/include/engine/time/Waiter.hpp",
+      "find": "    case WaitBackend::Kqueue:                      return \"Kqueue\";",
+      "replace": "    case WaitBackend::Kqueue:                      return \"KQueue\";",
+      "target": "gyo_time_tests",
+      "cases": "*backend names*",
+      "expect": "CHECK\\( std::string_view\\(ToString\\(WaitBackend::Kqueue\\)\\) == \"Kqueue\" \\) is NOT correct"
+    },
+    {
+      "id": "ti-x4-linux-name-not-cut",
+      "what": "A role name longer than 15 bytes is handed to Linux uncut, so it is refused (threads.md Invariant 6)",
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/threads/src/RoleThread.cpp",
+      "find": "    return pthread_setname_np(pthread_self(), name.substr(0, 15).c_str()) == 0;",
+      "replace": "    return pthread_setname_np(pthread_self(), name.c_str()) == 0;",
+      "target": "gyo_threads_tests",
+      "cases": "*reports its name*",
+      "expect": "CHECK\\( named.NameApplied\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "pu-x1-posix-message-raw-bytes",
+      "what": "PathForMessage copies a byte that starts no UTF-8 sequence instead of writing U+FFFD",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "            out += \"\\xEF\\xBF\\xBD\";",
+      "replace": "            out += bytes[i];",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(std::filesystem::path\\(std::string\\(\"a\\\\xFF\" \"b\"\\)\\)\\) == \"a\\\\xEF\\\\xBF\\\\xBD\" \"b\" \\) is NOT correct"
+    },
+    {
+      "id": "pu-x2-posix-message-three-byte-cut",
+      "what": "PathForMessage takes a three-byte sequence for two bytes, so Japanese and Korean names become U+FFFD",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Files.cpp",
+      "find": "lead < 0xF0 ? 3 : 4",
+      "replace": "lead < 0xF0 ? 2 : 4",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(Native\\(named\\)\\) == named \\) is NOT correct"
+    },
+    {
+      "id": "pu-x3-windows-message-refuses-surrogate",
+      "what": "PathForMessage refuses an unpaired surrogate on Windows (an empty message) instead of writing U+FFFD",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    const int bytes = ::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, nullptr, 0, nullptr, nullptr);",
+      "replace": "    const int bytes = ::WideCharToMultiByte(kPathCodePage, WC_ERR_INVALID_CHARS, wide.data(), length, nullptr, 0, nullptr, nullptr);",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(std::filesystem::path\\(std::wstring\\(L\"a\\\\xD800\" L\"b\"\\)\\)\\) == \"a\\\\xEF\\\\xBF\\\\xBD\" \"b\" \\) is NOT correct"
+    },
+    {
+      "id": "pu-x4-windows-message-generic-separators",
+      "what": "PathForMessage rewrites '\\' to '/' on Windows, so messages lose the platform's form",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
+      "replace": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes ||\n        (std::replace(utf8.begin(), utf8.end(), '\\\\', '/'), false)) {",
+      "target": "gyo_os_tests",
+      "cases": "*print a path for a message*",
+      "expect": "CHECK\\( PathForMessage\\(std::filesystem::path\\(L\"C:.*\\) is NOT correct"
+    },
+    {
+      "id": "pu-x5-windows-message-ansi",
+      "what": "PathForMessage writes with the ANSI code page on Windows (R6; os-utf8-codepage moved this from a Windows test to the guard, D66)",
+      "file": "engine/os/src/windows/Files.cpp",
+      "find": "    if (::WideCharToMultiByte(kPathCodePage, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
+      "replace": "    if (::WideCharToMultiByte(CP_ACP, 0, wide.data(), length, utf8.data(), bytes, nullptr, nullptr) != bytes) {",
+      "expect": "engine/os/src/windows/Files\\.cpp:\\d+: R6 CP_ACP",
+      "command": [
+        "{python}",
+        "tests/common/os/os_boundary_guard.py",
+        "--root",
+        "."
+      ]
+    },
+    {
+      "id": "pu-x8-code-page-walk-skips-tests",
+      "what": "The build layer stops applying the UTF-8 code page manifest under tests (Design Invariant 11, configure-time check)",
+      "file": "build/cmake/GyoCodePage.cmake",
+      "find": "    foreach(root IN ITEMS engine apps tools build/acceptance tests)",
+      "replace": "    foreach(root IN ITEMS engine apps tools build/acceptance)",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "Process code page guard:"
+    },
+    {
+      "id": "pu-x9-windows-manifest-legacy",
+      "what": "The manifest declares the legacy (system) code page instead of UTF-8 (Design Invariant 11)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/cmake/utf8-codepage.manifest",
+      "find": ">UTF-8</activeCodePage>",
+      "replace": ">Legacy</activeCodePage>",
+      "target": "gyo_os_tests",
+      "cases": "*process ANSI code page*",
+      "expect": "regex_search\\(manifest"
+    },
+    {
+      "id": "pu-x10-windows-tests-without-manifest",
+      "what": "The OS tests run without the UTF-8 code page manifest (an exemption; Design Invariant 11)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "tests/common/os/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)\nset_property(TARGET gyo_os_tests PROPERTY GYO_PROCESS_CODE_PAGE_EXEMPT \"mutant\")\n",
+      "target": "gyo_os_tests",
+      "cases": "*process ANSI code page*",
+      "expect": "regex_search\\(manifest|no manifest resource"
+    },
+    {
+      "id": "pu-x11-guard-misses-ansi-code-page",
+      "what": "The guard stops refusing the ANSI code page constants in engine/os (R6)",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "    re.compile(r\"\\bCP_(?:ACP|THREAD_ACP|OEMCP|MACCP)\\b\"),\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_ansi_code_page_in_engine_os_is_reported"
+    },
+    {
+      "id": "pu-x12-windows-code-page-query-fixed",
+      "what": "The code page query reports a fixed legacy code page on Windows",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/windows/Process.cpp",
+      "find": "    return static_cast<std::uint32_t>(::GetACP());",
+      "replace": "    return 1252u;",
+      "target": "gyo_os_tests",
+      "cases": "*reports its ANSI code page*",
+      "expect": "CHECK\\( \\*page == 65001u \\) is NOT correct"
+    },
+    {
+      "id": "pu-x13-posix-code-page-query-invented",
+      "what": "The code page query invents a code page on POSIX instead of Unsupported",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/src/posix/Process.cpp",
+      "find": "    return Base::Err(OsError::Make(OsErrorCode::Unsupported, \"this platform has no ANSI code page\"));",
+      "replace": "    return 65001u;",
+      "target": "gyo_os_tests",
+      "cases": "*reports its ANSI code page*",
+      "expect": "REQUIRE_FALSE\\( page \\) is NOT correct"
+    },
+    {
+      "id": "pu-x14-guard-misses-global-ansi-call",
+      "what": "The guard stops seeing an ANSI entry point called through the global :: (R6)",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "(?<![\\w.>:])(?:::)?[A-Z][A-Za-z0-9]*[a-z0-9]A",
+      "replace": "(?<![\\w.>:])[A-Z][A-Za-z0-9]*[a-z0-9]A",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "FAIL: test_ansi_entry_point_in_engine_os_is_reported"
+    },
+    {
+      "id": "pu-x15-code-page-walk-by-source-only",
+      "what": "The build layer walks directories by source path only, so a standalone tool wrapper's tool gets no manifest (Design Invariant 11)",
+      "file": "build/cmake/GyoCodePage.cmake",
+      "find": "    get_property(directories GLOBAL PROPERTY GYO_CODE_PAGE_DIRECTORIES)\n    foreach(directory IN LISTS directories)\n",
+      "replace": "    foreach(directory IN ITEMS \"${CMAKE_SOURCE_DIR}\")\n",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "wrapper: configuration failed"
+    },
+    {
+      "id": "pu-x16-code-page-check-misses-nothing",
+      "what": "The configure-time check never reports an executable without the manifest (Design Invariant 11)",
+      "file": "tests/common/os/ProcessCodePageCheck.cmake",
+      "find": "                set_property(GLOBAL APPEND PROPERTY GYO_OS_CODE_PAGE_MISSING \"${target} (${relative})\")\n",
+      "replace": "",
+      "command": [
+        "cmake",
+        "-DWORK_ROOT=build/target",
+        "-P",
+        "tests/common/cmake/ProcessCodePageTests.cmake"
+      ],
+      "expect": "unrecorded: configuration unexpectedly succeeded"
+    }
+  ]
+}

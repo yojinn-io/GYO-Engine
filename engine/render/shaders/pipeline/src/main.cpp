@@ -30,6 +30,17 @@ constexpr const char* kAbi = "gyo.raster.v1";
 
 [[noreturn]] void Fail(const std::string& message) { throw std::runtime_error(message); }
 void Check(bool condition, const std::string& message) { if (!condition) Fail(message); }
+// Paths and UTF-8 text, both ways: on Windows path::string() and path(std::string)
+// use the ANSI code page (os-path-utf8-sweep). This host tool does not link engine/os.
+std::string Utf8(const fs::path& path) {
+    const auto text = path.u8string();
+    return {text.begin(), text.end()};
+}
+std::string GenericUtf8(const fs::path& path) {
+    const auto text = path.generic_u8string();
+    return {text.begin(), text.end()};
+}
+fs::path FromUtf8(const std::string& text) { return fs::path(std::u8string(text.begin(), text.end())); }
 std::string Hash(std::span<const std::uint8_t> bytes) {
     return Engine::Base::Sha256(std::as_bytes(bytes));
 }
@@ -38,13 +49,13 @@ std::string Hash(const std::string& text) {
 }
 Bytes Read(const fs::path& path) {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
-    Check(static_cast<bool>(stream), "cannot read " + path.string());
+    Check(static_cast<bool>(stream), "cannot read " + Utf8(path));
     const auto size = stream.tellg();
-    Check(size >= 0 && size <= 64 * 1024 * 1024, "input is too large: " + path.string());
+    Check(size >= 0 && size <= 64 * 1024 * 1024, "input is too large: " + Utf8(path));
     Bytes bytes(static_cast<std::size_t>(size));
     stream.seekg(0);
     stream.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    Check(static_cast<bool>(stream), "incomplete read: " + path.string());
+    Check(static_cast<bool>(stream), "incomplete read: " + Utf8(path));
     return bytes;
 }
 std::string Text(const fs::path& path) {
@@ -56,18 +67,19 @@ void Write(const fs::path& path, std::span<const std::uint8_t> bytes) {
     std::ofstream stream(path, std::ios::binary | std::ios::trunc);
     stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     stream.close();
-    Check(static_cast<bool>(stream), "cannot write " + path.string());
+    Check(static_cast<bool>(stream), "cannot write " + Utf8(path));
 }
 void Write(const fs::path& path, const std::string& text) {
     Write(path, std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()));
 }
 void AtomicWrite(const fs::path& path, const std::string& text) {
     const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
-    const fs::path temp = path.string() + ".tmp-" + std::to_string(nonce);
+    auto temp = path;
+    temp += ".tmp-" + std::to_string(nonce);
     Write(temp, text);
-    if (!SDL_RenamePath(temp.string().c_str(), path.string().c_str())) {
+    if (!SDL_RenamePath(Utf8(temp).c_str(), Utf8(path).c_str())) {
         fs::remove(temp);
-        Fail("cannot publish " + path.string() + ": " + SDL_GetError());
+        Fail("cannot publish " + Utf8(path) + ": " + SDL_GetError());
     }
 }
 void Run(const std::vector<std::string>& arguments) {
@@ -309,7 +321,7 @@ StageData Compile(const fs::path& sourcePath, const fs::path& includeDirectory,
                   const std::string& entrypoint = "main") {
     Check(std::regex_match(entrypoint, std::regex("[A-Za-z_][A-Za-z0-9_]*")), "invalid shader entrypoint");
     const auto source = Text(sourcePath);
-    const auto includes = includeDirectory.string();
+    const auto includes = Utf8(includeDirectory);
     // This private adapter owns SDL_GPU's resource spaces. Shared engine/game
     // HLSL uses logical ABI names and never selects a native graphics API.
     std::array<std::pair<std::string, std::string>, 7> locations{{
@@ -329,7 +341,7 @@ StageData Compile(const fs::path& sourcePath, const fs::path& includeDirectory,
     std::size_t size{};
     void* memory = SDL_ShaderCross_CompileSPIRVFromHLSL(&info, &size);
     StageData stage;
-    stage.spirv = CopyCompilerOutput(memory, size, sourcePath.string());
+    stage.spirv = CopyCompilerOutput(memory, size, Utf8(sourcePath));
     stage.stage = shaderStage;
     stage.entrypoint = entrypoint;
     stage.reflection = ReflectAndValidate(stage, interfaceName);
@@ -342,10 +354,10 @@ void CollectInputs(const fs::path& source, const fs::path& includeDirectory, std
     const auto text = Text(canonical);
     static const std::regex includePattern(R"inc(^\s*#\s*include\s*[\"<]([^\">]+)[\">])inc", std::regex::multiline);
     for (auto it = std::sregex_iterator(text.begin(), text.end(), includePattern); it != std::sregex_iterator(); ++it) {
-        const fs::path name = (*it)[1].str();
+        const fs::path name = FromUtf8((*it)[1].str());
         fs::path include = canonical.parent_path() / name;
         if (!fs::exists(include)) include = includeDirectory / name;
-        Check(fs::exists(include), "missing shader include: " + name.string());
+        Check(fs::exists(include), "missing shader include: " + Utf8(name));
         CollectInputs(include, includeDirectory, inputs);
     }
 }
@@ -378,13 +390,16 @@ Json Artifact(const StageData& stage, const std::string& format, const Options& 
         entry = metalEntry;
         const auto key = Hash(msl + options.deploymentTarget);
         const auto base = options.output / "intermediate" / key;
-        const fs::path source = base.string() + ".metal";
-        const fs::path air = base.string() + ".air";
-        const fs::path library = base.string() + ".metallib";
+        auto source = base;
+        source += ".metal";
+        auto air = base;
+        air += ".air";
+        auto library = base;
+        library += ".metallib";
         Write(source, msl);
         Run({options.xcrun, "--sdk", "macosx", "metal", "-std=macos-metal2.0",
-             "-mmacosx-version-min=" + options.deploymentTarget, "-c", source.string(), "-o", air.string()});
-        Run({options.xcrun, "--sdk", "macosx", "metallib", air.string(), "-o", library.string()});
+             "-mmacosx-version-min=" + options.deploymentTarget, "-c", Utf8(source), "-o", Utf8(air)});
+        Run({options.xcrun, "--sdk", "macosx", "metallib", Utf8(air), "-o", Utf8(library)});
         code = Read(library);
         Check(!code.empty(), "Metal produced an empty library");
     } else {
@@ -396,13 +411,13 @@ Json Artifact(const StageData& stage, const std::string& format, const Options& 
     // Objects are immutable and content-addressed; only the final manifest
     // replacement publishes the new bundle. Old bundles stay valid on failure.
     if (!fs::exists(destination) || Hash(Read(destination)) != hash) Write(destination, code);
-    return {{"file", relative.generic_string()}, {"entrypoint", entry},
+    return {{"file", GenericUtf8(relative)}, {"entrypoint", entry},
             {"samplers", stage.samplers}, {"uniform_sizes", stage.uniformSizes},
             {"sha256", hash}, {"reflection", stage.reflection}};
 }
 std::string EscapeDepfile(const fs::path& path) {
     std::string result;
-    for (char ch : path.generic_string()) {
+    for (char ch : GenericUtf8(path)) {
         if (ch == ' ' || ch == '#' || ch == ':' || ch == '\\') result += '\\';
         if (ch == '$') result += '$';
         result += ch;
@@ -417,7 +432,7 @@ void Build(const Options& options) {
     Check(spec.at("version") == 1 && spec.at("programs").is_array() && !spec.at("programs").empty(),
           "shader spec must contain version 1 and programs");
     const auto specRoot = fs::absolute(options.spec).parent_path();
-    const auto includeDirectory = fs::weakly_canonical(specRoot / spec.at("include_directory").get<std::string>());
+    const auto includeDirectory = fs::weakly_canonical(specRoot / FromUtf8(spec.at("include_directory").get<std::string>()));
     Json programs = Json::array();
     std::set<fs::path> inputs{fs::canonical(options.spec)};
     std::set<std::string> ids;
@@ -427,8 +442,8 @@ void Build(const Options& options) {
               id.find("..") == std::string::npos && id.find('\\') == std::string::npos && ids.insert(id).second,
               "invalid or duplicate shader program id: " + id);
         const auto interfaceName = program.at("interface").get<std::string>();
-        const auto vertexPath = fs::weakly_canonical(specRoot / program.at("vertex").get<std::string>());
-        const auto fragmentPath = fs::weakly_canonical(specRoot / program.at("fragment").get<std::string>());
+        const auto vertexPath = fs::weakly_canonical(specRoot / FromUtf8(program.at("vertex").get<std::string>()));
+        const auto fragmentPath = fs::weakly_canonical(specRoot / FromUtf8(program.at("fragment").get<std::string>()));
         CollectInputs(vertexPath, includeDirectory, inputs);
         CollectInputs(fragmentPath, includeDirectory, inputs);
         const auto vertex = Compile(vertexPath, includeDirectory, interfaceName, SDL_SHADERCROSS_SHADERSTAGE_VERTEX,
@@ -446,7 +461,7 @@ void Build(const Options& options) {
         programs.push_back({{"id", id}, {"interface", interfaceName}, {"variants", variants}});
     }
     Json sources = Json::object();
-    for (const auto& input : inputs) sources[fs::relative(input, specRoot).generic_string()] = Hash(Read(input));
+    for (const auto& input : inputs) sources[GenericUtf8(fs::relative(input, specRoot))] = Hash(Read(input));
     Json toolchain{{"shadercross", GYO_SHADERCROSS_REVISION}, {"spirv_cross", GYO_SPIRVCROSS_REVISION},
                    {"dxc", GYO_DXC_REVISION}, {"profile", "gyo.raster.v1"}, {"sources", sources},
                    {"source_hash", Hash(sources.dump())}, {"msl_version", "2.0"},
@@ -463,7 +478,7 @@ void Build(const Options& options) {
         AtomicWrite(options.depfile, dependencies + "\n");
     }
     AtomicWrite(options.output / "manifest.json", manifest.dump(2) + "\n");
-    std::cout << "shader bundle: " << options.output.string() << " (" << programs.size() << " programs)\n";
+    std::cout << "shader bundle: " << Utf8(options.output) << " (" << programs.size() << " programs)\n";
 }
 
 void SelfTest(const fs::path& root, const fs::path& output) {
@@ -477,7 +492,7 @@ void SelfTest(const fs::path& root, const fs::path& output) {
     for (const auto& program : manifest.at("programs")) for (const auto& variant : program.at("variants")) {
         for (const auto* stage : {"vertex", "fragment"}) {
             const auto& artifact = variant.at(stage);
-            Check(Hash(Read(valid.output / artifact.at("file").get<std::string>())) == artifact.at("sha256").get<std::string>(), "artifact hash");
+            Check(Hash(Read(valid.output / FromUtf8(artifact.at("file").get<std::string>()))) == artifact.at("sha256").get<std::string>(), "artifact hash");
         }
     }
     const auto unlit = Compile(root / "engine/render/shaders/builtin/unlit.vert.hlsl", root / "engine/render/shaders/common",
@@ -496,19 +511,19 @@ void SelfTest(const fs::path& root, const fs::path& output) {
     Build(custom);
 
     auto namedSpec = Json::parse(Text(valid.spec));
-    namedSpec["include_directory"] = fs::absolute(root / "engine/render/shaders/common").generic_string();
+    namedSpec["include_directory"] = GenericUtf8(fs::absolute(root / "engine/render/shaders/common"));
     namedSpec["programs"].erase(namedSpec["programs"].begin() + 1, namedSpec["programs"].end());
     namedSpec["programs"][0]["id"] = "game/named_entries";
     for (const auto* kind : {"vertex", "fragment"}) {
         auto& program = namedSpec["programs"][0];
-        auto code = Text(root / "engine/render/shaders/builtin" / program.at(kind).get<std::string>());
+        auto code = Text(root / "engine/render/shaders/builtin" / FromUtf8(program.at(kind).get<std::string>()));
         const std::string entrypoint = std::string{"GyoNamed"} + (std::string{kind} == "vertex" ? "Vertex" : "Fragment");
         const auto name = code.find("main(");
         Check(name != std::string::npos, "named entrypoint fixture requires main");
         code.replace(name, 4, entrypoint);
         const auto path = output / (std::string{kind} + "-named.hlsl");
         Write(path, code);
-        program[kind] = fs::absolute(path).generic_string();
+        program[kind] = GenericUtf8(fs::absolute(path));
         program[std::string{kind} + "_entrypoint"] = entrypoint;
     }
     const auto namedPath = output / "named.json";
@@ -533,10 +548,10 @@ void SelfTest(const fs::path& root, const fs::path& output) {
         const auto fixture = output / (name + ".frag.hlsl");
         Write(fixture, code);
         auto spec = Json::parse(Text(valid.spec));
-        spec["include_directory"] = fs::absolute(root / "engine/render/shaders/common").generic_string();
+        spec["include_directory"] = GenericUtf8(fs::absolute(root / "engine/render/shaders/common"));
         spec["programs"] = Json::array({{{"id", "game/bad_test"}, {"interface", "unlit"},
-            {"vertex", fs::absolute(root / "engine/render/shaders/builtin/unlit.vert.hlsl").generic_string()},
-            {"fragment", fs::absolute(fixture).generic_string()}}});
+            {"vertex", GenericUtf8(fs::absolute(root / "engine/render/shaders/builtin/unlit.vert.hlsl"))},
+            {"fragment", GenericUtf8(fs::absolute(fixture))}}});
         const auto specPath = output / (name + ".json");
         Write(specPath, spec.dump());
         auto invalid = valid;

@@ -117,4 +117,26 @@ TEST_CASE("ShaderLibrary rejects incompatible metadata, corruption, and path esc
     CHECK(library.ProgramIds().empty());
     CHECK(library.CompleteFormats() == 0);
 }
+
+// Bundle paths are UTF-8 text and reach the source byte for byte
+// (os-path-utf8-sweep): on Windows they would otherwise pass through the ANSI
+// code page, which loses these characters where the code page is double-byte.
+TEST_CASE("ShaderLibrary reads bundle paths outside the ANSI code page as UTF-8") {
+    Fixture fixture;
+    const std::string directory = "\xE8\xA8\x98\xE9\x8C\xB2";  // 記録
+    const std::string objects = "\xEA\xB6\x81";                // 궁
+    auto& variant = fixture.manifest["programs"][0]["variants"][0];
+    variant["vertex"]["file"] = objects + "/vertex.bin";
+    variant["fragment"]["file"] = objects + "/fragment.bin";
+    MemorySource source;
+    source.files["bundle/" + directory + "/" + objects + "/vertex.bin"] = fixture.source.files["bundle/vertex.bin"];
+    source.files["bundle/" + directory + "/" + objects + "/fragment.bin"] = fixture.source.files["bundle/fragment.bin"];
+    source.files["bundle/" + directory + "/manifest.json"] = ToBytes(fixture.manifest.dump());
+    ShaderLibrary library;
+    const auto appended = library.AppendBundle(source, fixture.resolver, directory + "/manifest.json");
+    REQUIRE_MESSAGE(appended, (appended ? std::string{} : appended.error().message + " " + appended.error().detail));
+    auto program = library.FindProgram("builtin/unlit", ShaderFormat::SPIRV);
+    REQUIRE(program);
+    CHECK(program.value().vertex->code == ToBytes("test vertex bytes"));
+}
 } // namespace

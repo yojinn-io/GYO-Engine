@@ -65,6 +65,16 @@ void TestCommandLine() {
     const auto explicitRoot = ParseCommandLine(both);
     Expect(explicitRoot && explicitRoot->assetRoot == "assets" &&
         explicitRoot->catalogPath == "elsewhere/catalog.json", "explicit catalog overrides manifest selection");
+
+    // The arguments are UTF-8 on every platform (Os::Console::CommandLineUtf8):
+    // a path outside any ANSI code page keeps its characters.
+    constexpr std::string_view utf8[]{"--open", "\xE6\x97\xA5\xE6\x9C\xAC/\xED\x95\x9C.json"};
+    const auto unicode = ParseCommandLine(utf8);
+    Expect(unicode && unicode->inputPath &&
+        unicode->inputPath->generic_u8string() == u8"\u65E5\u672C/\uD55C.json",
+        "a UTF-8 path argument keeps its characters");
+    constexpr std::string_view notUtf8[]{"--open", "\xFF.json"};
+    Expect(!ParseCommandLine(notUtf8), "a path argument that is not UTF-8 is refused");
 }
 
 void TestContentManifestMount(const std::filesystem::path& root) {
@@ -218,6 +228,28 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
         !std::filesystem::exists(assetRoot / "ui" / "menu.json"),
         "guarded export writes no app asset");
 
+    // A path that reaches the asset root through a symbolic link is below it
+    // too: links in the existing part of a path are resolved, as
+    // std::filesystem::weakly_canonical did.
+    const std::filesystem::path working = root / "working";
+    std::filesystem::create_directories(working);
+    std::error_code linkError;
+    std::filesystem::create_directory_symlink(assetRoot, working / "assets-link", linkError);
+    if (linkError) {
+        // Windows needs Developer Mode or a privilege to create links.
+        std::cout << "symbolic links unavailable here: " << linkError.message() << '\n';
+    } else {
+        DocumentSession linked;
+        const auto throughLink = linked.Export(working / "assets-link" / "ui" / "linked.json", &mounted);
+        Expect(
+            !throughLink &&
+                throughLink.error().code == SessionErrorCode::OutputInsideMountedAssetRoot,
+            "export rejects a path that reaches the asset root through a symbolic link");
+        Expect(
+            !std::filesystem::exists(assetRoot / "ui" / "linked.json"),
+            "the linked export writes no app asset");
+    }
+
     DocumentSession missing;
     missing.EditDocument()["fonts"]["default"] = "font.missing";
     missing.CommitEdit("use missing font");
@@ -247,6 +279,41 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
         "a wrong-type catalog AssetId blocks export");
 }
 
+// A content root the Windows ANSI code page cannot name (os-path-utf8-sweep,
+// D63): the catalog's resolved paths keep their characters, the export guard
+// still sees the root, and an export under such a folder is written.
+void TestRootOutsideAnsiCodePage(const std::filesystem::path& root) {
+    const std::filesystem::path folder = root / std::filesystem::path(u8"\u8cc7\u7522-\ud55c");
+    const std::filesystem::path assetRoot = folder / "app-assets";
+    const std::filesystem::path catalogPath = assetRoot / "asset_catalog.json";
+    Expect(
+        static_cast<bool>(WriteTextFileAtomically(catalogPath, R"({
+  "version": 1,
+  "assets": [
+    {"id":"font.default","type":"font","path":"fonts/default.ttf"},
+    {"id":"texture.logo","type":"texture","path":"textures/logo.png"}
+  ]
+}
+)")),
+        "catalog fixture is written under a root outside the ANSI code page");
+    ReadOnlyAssetCatalog mounted;
+    Expect(static_cast<bool>(mounted.Mount(catalogPath, assetRoot)),
+        "a catalog mounts under a root outside the ANSI code page");
+    const CatalogAsset* logo = mounted.Find("texture.logo");
+    Expect(logo != nullptr && logo->resolvedPath == assetRoot / "textures" / "logo.png",
+        "a resolved asset path keeps the characters of its root");
+
+    DocumentSession guarded;
+    const auto inside = guarded.Export(assetRoot / "ui" / "menu.json", &mounted);
+    Expect(!inside && inside.error().code == SessionErrorCode::OutputInsideMountedAssetRoot,
+        "the export guard sees a root outside the ANSI code page");
+
+    DocumentSession exporter;
+    const std::filesystem::path output = folder / std::filesystem::path(u8"\u51fa\u529b") / "menu.json";
+    Expect(static_cast<bool>(exporter.Export(output, nullptr)), "an export under such a folder succeeds");
+    Expect(std::filesystem::exists(output), "the export is written under such a folder");
+}
+
 void TestContentHashIsFnv1a(const std::filesystem::path& root) {
     // Pinned before FNV-1a moved to GYO::Base: external-change detection
     // compares stamps, so the content hash must stay the same function.
@@ -266,6 +333,7 @@ int main() {
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);
     TestReadOnlyCatalogAndExportGuard(temporary.path);
+    TestRootOutsideAnsiCodePage(temporary.path);
     TestContentManifestMount(temporary.path);
     TestContentHashIsFnv1a(temporary.path);
     if (failures != 0) {

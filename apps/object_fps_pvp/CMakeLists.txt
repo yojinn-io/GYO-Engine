@@ -25,7 +25,7 @@ foreach(contract client_v7 runtime_v7)
 endforeach()
 
 gyo_app_add_library(match_domain OUT_TARGET domain SOURCES ${PVP_DOMAIN_SOURCES}
-    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision GYO::Time GYO::Trace
+    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::Collision GYO::Time GYO::Trace GYO::Os
     PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
 gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHost.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Threads)
@@ -45,7 +45,7 @@ gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplicatio
         src/Pvp/PlayerPresentation.cpp src/App/CharacterPresentationDefinition.cpp
         src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
     PUBLIC_LIBRARIES ${domain} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
-    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer nlohmann_json::nlohmann_json
+    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer GYO::Os nlohmann_json::nlohmann_json
     PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}
     COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)

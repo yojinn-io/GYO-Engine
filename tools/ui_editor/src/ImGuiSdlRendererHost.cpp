@@ -4,12 +4,12 @@
 #include "gyo/ui_editor/EditorApp.hpp"
 
 #include <array>
-#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <SDL3/SDL.h>
 
@@ -17,6 +17,9 @@
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_sdlrenderer3.h>
 
+#include "engine/base/Error.hpp"
+#include "engine/io/fs/NativeFileSystem.hpp"
+#include "engine/os/Files.hpp"
 #include "engine/runtime/RuntimeLoop.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/render/backend/sdl/SdlRenderer.hpp"
@@ -36,88 +39,74 @@ using Engine::Runtime::RuntimeControl;
 
 constexpr float kEditorChromeFontSize = 16.0F;
 
-#if defined(_WIN32)
-[[nodiscard]] std::filesystem::path FirstExistingFont(
-    const std::filesystem::path& directory,
-    const std::span<const std::string_view> fileNames) {
-    for (const std::string_view fileName : fileNames) {
-        const std::filesystem::path candidate = directory / fileName;
-        std::error_code error;
-        if (std::filesystem::is_regular_file(candidate, error) && !error) {
-            return candidate;
-        }
-    }
-    return {};
-}
-#else
+// The font files the editor chrome may use, by priority, relative to a font
+// directory from engine/os. One list serves every platform: each file exists
+// only where its platform installs it (Windows, macOS, then Linux names;
+// os-subsystem D56).
+constexpr std::array kPrimaryFontNames{
+    std::string_view{"msjh.ttc"},
+    std::string_view{"msyh.ttc"},
+    std::string_view{"simsun.ttc"},
+    std::string_view{"PingFang.ttc"},
+    std::string_view{"STHeiti Medium.ttc"},
+    std::string_view{"opentype/noto/NotoSansCJK-Regular.ttc"},
+    std::string_view{"truetype/noto/NotoSansCJK-Regular.ttc"},
+    std::string_view{"truetype/wqy/wqy-zenhei.ttc"},
+};
+constexpr std::array kJapaneseFontNames{
+    std::string_view{"YuGothM.ttc"},
+    std::string_view{"meiryo.ttc"},
+    std::string_view{"msgothic.ttc"},
+    std::string_view{"ヒラギノ角ゴシック W3.ttc"},
+    std::string_view{"ヒラギノ丸ゴ ProN W4.ttc"},
+};
 
-[[nodiscard]] std::filesystem::path FirstExistingFont(
-    const std::span<const std::string_view> paths) {
-    for (const std::string_view path : paths) {
-        const std::filesystem::path candidate{path};
-        std::error_code error;
-        if (std::filesystem::is_regular_file(candidate, error) && !error) {
-            return candidate;
+// The first name that is a regular file, trying every name in a directory
+// before the next directory (system directories come first). UTF-8, as ImGui
+// opens it.
+[[nodiscard]] std::string FirstExistingFont(
+    const std::span<const std::string> directories,
+    const std::span<const std::string_view> fileNames) {
+    Engine::IO::FS::NativeFileSystem files;
+    for (const std::string& directory : directories) {
+        for (const std::string_view fileName : fileNames) {
+            std::string candidate = directory + "/" + std::string(fileName);
+            const auto uri = Engine::IO::FS::NativeFileUri(candidate);
+            if (!uri) {
+                continue;
+            }
+            const auto info = files.Stat(uri.value());
+            if (info && info.value().IsFile()) {
+                return candidate;
+            }
         }
     }
     return {};
 }
-#endif
 
 // Editor chrome is operating-system UI, not game content. It therefore uses a
 // system CJK font and never reaches into an app asset root. Canvas text preview
 // remains driven by the document's FontAsset through AssetPreviewContext.
 void ConfigureEditorChromeFont(ImGuiIO& io) {
-    std::filesystem::path primary;
-    std::filesystem::path japaneseFallback;
-
-#if defined(_WIN32)
-    std::filesystem::path fontsDirectory{"C:\\Windows\\Fonts"};
-    if (const char* windowsDirectory = SDL_getenv("WINDIR");
-        windowsDirectory != nullptr && windowsDirectory[0] != '\0') {
-        fontsDirectory = std::filesystem::path{windowsDirectory} / "Fonts";
+    std::vector<std::string> directories;
+    if (auto found = Engine::Os::Files::FontDirectories()) {
+        directories = std::move(found.value());
+    } else {
+        SDL_LogWarn(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "GYO UI Editor cannot list the font directories: %s",
+            Engine::Base::Describe(found.error()).c_str());
     }
-    constexpr std::array primaryNames{
-        std::string_view{"msjh.ttc"},
-        std::string_view{"msyh.ttc"},
-        std::string_view{"simsun.ttc"},
-    };
-    constexpr std::array japaneseNames{
-        std::string_view{"YuGothM.ttc"},
-        std::string_view{"meiryo.ttc"},
-        std::string_view{"msgothic.ttc"},
-    };
-    primary = FirstExistingFont(fontsDirectory, primaryNames);
-    japaneseFallback = FirstExistingFont(fontsDirectory, japaneseNames);
-#elif defined(__APPLE__)
-    constexpr std::array primaryNames{
-        std::string_view{"/System/Library/Fonts/PingFang.ttc"},
-        std::string_view{"/System/Library/Fonts/STHeiti Medium.ttc"},
-    };
-    constexpr std::array japaneseNames{
-        std::string_view{"/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc"},
-        std::string_view{"/System/Library/Fonts/ヒラギノ丸ゴ ProN W4.ttc"},
-    };
-    primary = FirstExistingFont(primaryNames);
-    japaneseFallback = FirstExistingFont(japaneseNames);
-#else
-    constexpr std::array primaryNames{
-        std::string_view{"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"},
-        std::string_view{"/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"},
-        std::string_view{"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"},
-        std::string_view{"/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"},
-    };
-    primary = FirstExistingFont(primaryNames);
-#endif
+    const std::string primary = FirstExistingFont(directories, kPrimaryFontNames);
+    const std::string japaneseFallback = FirstExistingFont(directories, kJapaneseFontNames);
 
     ImFont* editorFont = nullptr;
     if (!primary.empty()) {
-        const std::string nativePath = primary.string();
         editorFont = io.Fonts->AddFontFromFileTTF(
-            nativePath.c_str(), kEditorChromeFontSize);
+            primary.c_str(), kEditorChromeFontSize);
         if (editorFont != nullptr) {
             io.FontDefault = editorFont;
-            SDL_Log("GYO UI Editor chrome font: %s", nativePath.c_str());
+            SDL_Log("GYO UI Editor chrome font: %s", primary.c_str());
         }
     }
 
@@ -125,12 +114,11 @@ void ConfigureEditorChromeFont(ImGuiIO& io) {
         japaneseFallback != primary) {
         ImFontConfig merge;
         merge.MergeMode = true;
-        const std::string nativePath = japaneseFallback.string();
         if (io.Fonts->AddFontFromFileTTF(
-                nativePath.c_str(), kEditorChromeFontSize, &merge) != nullptr) {
+                japaneseFallback.c_str(), kEditorChromeFontSize, &merge) != nullptr) {
             SDL_Log(
                 "GYO UI Editor Japanese font fallback: %s",
-                nativePath.c_str());
+                japaneseFallback.c_str());
         }
     }
 

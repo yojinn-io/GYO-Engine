@@ -15,12 +15,13 @@
 // an I/O failure does (the caller checks Good()).
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/MatchIngressLedger.hpp"
+#include "RetroFPS/Pvp/NativeFiles.hpp"
+#include "engine/os/Files.hpp"
 
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <map>
 #include <optional>
 #include <ostream>
@@ -183,26 +184,26 @@ inline std::string MatchIngressHead(std::string_view kind) {
 [[nodiscard]] inline std::filesystem::path MatchIngressTracePath(const std::filesystem::path& movementTrace,
                                                                  const std::filesystem::path& ingressTrace,
                                                                  std::string& error) {
-    static constexpr std::string_view commands = "commands.jsonl";
-    static constexpr std::string_view movementSuffix = "-commands.jsonl";
+    static constexpr std::u8string_view commands = u8"commands.jsonl";
+    static constexpr std::u8string_view movementSuffix = u8"-commands.jsonl";
     if (movementTrace.empty()) {
         if (!ingressTrace.empty()) error = "--ingress-trace needs --movement-trace";
         return {};
     }
     auto path = ingressTrace;
     if (path.empty()) {
-        const auto name = movementTrace.filename().string();
+        const auto name = movementTrace.filename().u8string();
         path = movementTrace;
         path.replace_filename(name.ends_with(movementSuffix)
-            ? name.substr(0, name.size() - movementSuffix.size()) + "-ingress.jsonl"
-            : name + ".ingress.jsonl");
+            ? name.substr(0, name.size() - movementSuffix.size()) + u8"-ingress.jsonl"
+            : name + u8".ingress.jsonl");
     }
-    if (path.filename().string().ends_with(commands)) {
-        error = "The ingress trace name must not end in commands.jsonl: " + path.string();
+    if (path.filename().u8string().ends_with(commands)) {
+        error = "The ingress trace name must not end in commands.jsonl: " + Engine::Os::Files::PathForMessage(path);
         return {};
     }
     if (path.lexically_normal() == movementTrace.lexically_normal()) {
-        error = "The ingress trace must not be the movement trace: " + path.string();
+        error = "The ingress trace must not be the movement trace: " + Engine::Os::Files::PathForMessage(path);
         return {};
     }
     return path;
@@ -252,18 +253,17 @@ private:
 // The Match's file: opening and writing fail loudly (the Match then exits 1).
 class MatchIngressTraceFile final {
 public:
-    explicit MatchIngressTraceFile(const std::filesystem::path& path) : file_(path), writer_(file_) {
-        if (!file_) throw std::runtime_error("Cannot open ingress trace: " + path.string());
+    explicit MatchIngressTraceFile(const std::filesystem::path& path) : file_(path), writer_(file_.Stream()) {
+        if (!file_) throw std::runtime_error("Cannot open ingress trace: " + Engine::Os::Files::PathForMessage(path));
     }
     void Write(const IngressRecords& drained) { writer_.Write(drained); }
     void Finish(const IngressRecords& last) {
         writer_.Finish(last);
-        file_.close();
-        if (!file_) throw std::runtime_error("Ingress trace failed to close");
+        if (!file_.Close()) throw std::runtime_error("Ingress trace failed to close");
     }
 
 private:
-    std::ofstream file_;
+    NativeTextFile file_;
     MatchIngressTraceWriter writer_;
 };
 

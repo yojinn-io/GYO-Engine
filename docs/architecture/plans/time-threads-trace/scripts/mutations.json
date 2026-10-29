@@ -99,8 +99,8 @@
       "id": "tt2-final-batch-unwritten",
       "what": "The take after the stop is counted but never written, so the end line comes too early",
       "file": "engine/trace/src/TraceSink.cpp",
-      "find": "                file << line << '\\n';\n",
-      "replace": "                if (!stopping) file << line << '\\n';\n",
+      "find": "                pending += line;\n                pending += '\\n';\n",
+      "replace": "                if (!stopping) {\n                    pending += line;\n                    pending += '\\n';\n                }\n",
       "target": "gyo_trace_tests",
       "cases": "*busy writer*",
       "expect": "REQUIRE\\( tail.size\\(\\) == 6 \\) is NOT correct"

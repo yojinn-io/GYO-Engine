@@ -90,6 +90,16 @@ TEST_CASE("Threads a role reports its name and whether the platform applied it a
         CHECK(role.Name() == "gyo-test-priority");
 #if defined(__APPLE__) || defined(__linux__)
         CHECK(role.NameApplied());
+        // A name longer than Linux's 15 bytes is still applied there (cut to 15) and reported in full
+        // (docs/architecture/threads.md, Design Invariant 6).
+        if (priority == ThreadPriority::Normal) {
+            const std::string longName = "gyo-test-a-name-longer-than-fifteen-bytes";
+            auto named = StartRole({longName}, [](RoleContext& context) {
+                while (!context.StopRequested()) static_cast<void>(context.Wait());
+            });
+            CHECK(named.Name() == longName);
+            CHECK(named.NameApplied());
+        }
 #endif
         if (priority == ThreadPriority::Normal) CHECK(role.PriorityApplied());
 #if defined(__APPLE__) || defined(_WIN32)

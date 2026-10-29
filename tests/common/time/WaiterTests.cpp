@@ -8,6 +8,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -25,6 +26,15 @@ Waiter MakeWaiter() {
 
 // Timing assertions are structural (never early, notified before a far
 // deadline); how late a wake is depends on the host and is only measured.
+
+// Consumer logs carry these names (wait_backend=...), so they are a contract
+// (docs/architecture/time.md, Design Invariant 7).
+TEST_CASE("Time Waiter backend names stay as consumers log them") {
+    CHECK(std::string_view(ToString(WaitBackend::Kqueue)) == "Kqueue");
+    CHECK(std::string_view(ToString(WaitBackend::HighResolutionWaitableTimer)) == "HighResolutionWaitableTimer");
+    CHECK(std::string_view(ToString(WaitBackend::WaitableTimer)) == "WaitableTimer");
+    CHECK(std::string_view(ToString(WaitBackend::ConditionVariable)) == "ConditionVariable");
+}
 
 TEST_CASE("Time Waiter uses the platform backend") {
     const auto waiter = MakeWaiter();
