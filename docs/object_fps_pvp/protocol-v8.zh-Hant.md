@@ -1,6 +1,6 @@
 # PvP Protocol v8：蹲下、衝刺與移動參數的校準
 
-更新：2026-10-30（定稿候選）。**狀態：定稿候選，等使用者核准；生效時點是 v8 的 `crouch`（pv8-line 的 PR 合併時）。** 由 v8 的 `pv8-design` 產出（[設計紀錄](plans/v8/pv8-design.md)，[v8 交接](plans/v8/HANDOFF.md) D246～D254）。
+更新：2026-10-30（定稿）。**狀態：定稿（使用者 2026-10-30 核准；決策編號待定，見 v8 HANDOFF「等你決定」）。生效時點是 v8 的 `crouch`（pv8-line 的 PR 合併時）。** 由 v8 的 `pv8-design` 產出（[設計紀錄](plans/v8/pv8-design.md)，[v8 交接](plans/v8/HANDOFF.md) D246～D254）。
 本文件的 vN 指網路協議版本 pvN；遊戲版本與協議版本分開編號（D254）。pv8 取代 [protocol-v7](protocol-v7.zh-Hant.md)：pv7 中沒有在此改寫的條款，pv8 原樣沿用；改寫的條款標明原出處。程式行號以 `62fd7ebf` 為準。
 
 ## 0. 原則

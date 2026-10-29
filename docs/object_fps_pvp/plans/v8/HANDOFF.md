@@ -27,9 +27,10 @@
 - **完成**：`v8-plan-sync`。
 - **之後**：`au1-plan`（audio-line，可並行）。
 - **等你決定**：
+  - **決策編號撞號**：本文件的 D243～D254 和 v7.1 HANDOFF 的 D243～D245（worker-wake-phase，PR #105，2026-10-30 合進 master）同號、意思不同。處理方式（改前綴 `V8-D`、跳號、或只加註）等你決定；決定前，新的決定先不編號。
+  - [多通道評估](multi-channel-evaluation.md) 的 M-1～M-3。
+  - **已核准、待編號**：protocol-v8 定稿；D254 的 D-7 解讀正確（檔名跟協議版本，這次升為 pv8）。使用者：「核准 protocol-v8 定稿，D-7 的解讀正確（檔名跟協議版本，這次升為 pv8）。接著開始 crouch。」
   - 讀 [協議壓力調研](protocol-pressure-survey.md)（只是規劃輸入，沒有要你決定的事；第 6 節列了它會影響的決定）。
-  - 核准 [protocol-v8](../../protocol-v8.zh-Hant.md) 定稿（之後才開始 `crouch`）。
-  - D254 的 D-7 解讀：「遊戲版本與協議版本分開」我理解成 proto 檔名跟協議版本，這次協議升為 pv8，所以改名為 `client_v8`。如果你的意思是協議版本留在 7，要告訴我（wire 改了卻不升版本，舊 Client 會連得上但解不對）。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `product-sfx` 前：音效資產的來源（v7 D38）。
   - `hit-rules` 前：部位倍率。
@@ -66,6 +67,7 @@
 - 2026-10-29：`pv8-design` 的 workflow（run `wf_f6c34055-22e`）完成，7／7 個 agent 回傳，約 16 分。評分：最小加法 26、風險優先 24、功能優先 19；以最小加法為基底合成。對抗式檢查：must 4、should 8、note 4。主會話核對 must 3：`ResetMovementEpoch` 清空 `lastActualCommand`（`PvpMatch.cpp:433`），對抗方的推論不成立，但由此找到反方向的缺口（epoch 輪替後替補會把蹲著的玩家拉起來），補進草案。agent 的原始輸出留在會話的工作檔，不放進 repo（同 IP-3／IP-4 的做法）。所有大小都是手算，沒有建置或執行測試。
 - 2026-10-30：型別最大實測。暫時的 Go 測試（`gateway/adapter/zz_size_probe_test.go`，量完刪除）以 pv7 生成碼量測，pv8 的新欄位以 protowire 附加：pv7 契約最大 1073 B（和既有測試一致）、型別最大 1151 B；pv8 契約最大 1101 B、型別最大 1175 B；PlayerInput 12 命令 477→525 B。protocol-v7 §8 的 1155 B 原定義無法核對（沒有測試）。Gateway 以列舉常數重組 snapshot（`adapter.go:88-106`），wire 上不會有負的 enum。寫 `protocol-v8.zh-Hant.md` 定稿候選。協議壓力調研交給 1 位背景子 agent（general-purpose，引擎與 effort 繼承，只讀、只回傳文字）。
 - 2026-10-30：協議壓力調研完成，寫成 [protocol-pressure-survey.md](protocol-pressure-survey.md)。子 agent 約 4.5 分、32 次工具呼叫。主會話換上實測數字，補第 5 節（和現有元件的對照）與第 6 節（會影響的決定）；其他遊戲的敘述沒有逐一打開來源核對，已在報告中標明。分支沒有推送。
+- 2026-10-30：使用者核准 protocol-v8 定稿、D-7 解讀正確，指示開始 crouch。開工前把 origin/master（PR #102～#105）合進本分支（`b648df1a`，無衝突），發現 v7.1 HANDOFF 也用了 D243～D245，撞號，停下問使用者。使用者另要求評估多通道：實測接近實際值的 4 人 snapshot 約 406 B（1 小時）／439 B（24 小時），帳面的 1101／1175 B 來自 uint64 上限；寫成 [multi-channel-evaluation.md](multi-channel-evaluation.md)。暫時的測試量完刪除。crouch 尚未開始。
 
 ## 未結事項
 
