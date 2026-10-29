@@ -24,3 +24,25 @@ worker 驗收（`object_fps_pvp.worker`，Client 網路執行緒的 mock 測試�
 - 沒有 SDL 的程序裡（例如 worker 探針本身），Client 的重送只有約 43～53 次／秒：Windows 預設的計時器刻度約 15.6 ms，Client 的 60 Hz 重送依賴 SDL 提高計時器解析度（D228）。
 - 驗收裡另外兩個失敗看起來在測試端：mock 遇到 WSAECONNRESET 會讓驗收中止（約 5%），以及 token 等待的檢查用 mock 輪詢的約 1 ms 刻度量、超過上限 0.03～0.16 ms（約四成）。這兩點排在 v7.1 之後處理。
 - worker 驗收不在 CI 跑（任何平台），macOS 本機每次都通過。
+
+## 新的人物模型與第一人稱武器
+
+- 人物換成 Player_V19，第一人稱武器換成 nailer_v2（取代 PvP 的 Mark23）。
+- 已知問題（D240）：Windows 的 LAN 場次中看到模型的外觀有問題，判斷在模型本身（不是 Engine），修正後另發版本。
+
+## 已知限界：Windows LAN 場次（lan15，D240）
+
+完整 pv7 在 Windows 實機和真人一起跑的場次做了一次（2026-10-29，Mac 主持，2 台 Windows），但沒有照事前宣告完成，記為「確認不了」。詳見 [lan15-declaration.md](lan15-declaration.md) 最後一節。
+
+- 做到的：2 台 Windows 對戰約 6 分鐘。觀察結果：
+  - Gateway 與 Match 的命令守恆通過；
+  - 兩台的射擊與換彈計數和 Match 的裁決完全一致；
+  - 沒有中斷。
+  - 有 1 次「CONNECTION POOR」警告，10 秒後恢復，沒有被移除。
+- 沒有驗證的：
+  - 15 分鐘以上的連續對戰；
+  - Windows 上的斷線恢復（拔線 2 秒／7 秒）；
+  - 關閉視窗後重新加入；
+  - 房間已滿（第 5 人）；
+  - Windows 主持 Match 的 Tick 精度。
+- 連線品質窗口判失敗時沒有寫出原因（觀測的缺口，之後補）。

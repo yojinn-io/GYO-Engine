@@ -235,6 +235,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D237 | （2026-10-29）核准 lan15 宣告第 2.1 版補上的部分：人數 2～3（S1 前寫進 marks.txt）、Q2 用 quad probe 補人、marks.txt 與判定資料夾的形狀、結束前停 3 秒、判定工具的 sha256 鎖定。lan15-kit 開始 | 使用者：「核准 lan15 宣告第 2.1 版補上的部分（人數、Q2 的 quad probe、marks.txt 與資料夾、結束前停 3 秒、判定工具的鎖定），接著做 lan15-kit。」 |
 | D238 | （2026-10-29）核准 lan15 宣告 2.2：判定工具依 BOM 讀 UTF-16 的 `ping.txt`（判定條文不變；新 sha256 `10f7ddc8…`，測試 27 個）；Gateway 與 quad probe 在 Mac 上從同一份原始碼建置，SHA-256 記在 marks.txt 核對 | 使用者：「核准 lan15 宣告 2.2（ping.txt 的 UTF-16 修正與新的 sha256、Gateway 與 quad probe 的版本核對）。」 |
 | D239 | （2026-10-29）核准 lan15 宣告 2.3：Mac 只跑 Match＋Gateway、不當玩家；Client 只在 Windows，N 台（N＝2 或 3，n_w＝n）；S7 只看 Windows | 使用者：「核准 lan15 宣告 2.3（Mac 只跑 Match＋Gateway、不當玩家，Client 只在 Windows，N 台）。」 |
+| D240 | （2026-10-29）先發版：不排 lan15 第 2 次場次；lan15 第 1 次的結果（確認不了、S1 約 6 分鐘、S2／S3 沒做、S7 新模型有問題）記為已知限界，寫進發行說明。帶著新模型（Player_V19＋nailer_v2）發版；模型的問題由使用者處理，修正版另發。版本號 `object_fps_pvp` v1.2.0 | 使用者：「不了，先發版。」之後對兩個問題選：「帶著新模型發版」「v1.2.0 (Recommended)」 |
 
 ## 規劃紀錄（記錄器）
 

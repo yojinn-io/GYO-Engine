@@ -205,4 +205,5 @@ PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四
 - [quick-close：關閉 Client 不再卡在 /leave](../../../dev_logs/2026_10_25_pvp_v71_quick_close.zh-Hant.md)（發行線；Windows 驗收 2026-10-27 通過，見下面的 Windows 清單）
 - [發行線的全量突變目錄（D185，第一次）](../../../dev_logs/2026_10_26_pvp_v71_release_full_mutation.zh-Hant.md)
 - [Windows 機器的清單 第 1～5 項（D201）：Windows 專用突變、`-s` 確認、長路徑實機、quick-close、主控台](../../../dev_logs/2026_10_27_pvp_v71_d201_windows.zh-Hant.md)（MinGW 與 MSVC 兩套建置；非 killed 的原因逐條列出）
+- [Windows 上的 worker 驗收（D216～D231）與 lan15-windows（D232～D240）](../../../dev_logs/2026_10_29_pvp_v71_worker_windows_and_lan15.zh-Hant.md)（未通過的部分記為已知限界，D231、D240）
 
