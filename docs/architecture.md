@@ -58,9 +58,9 @@ This refactor stops at the maturity each existing workflow supports. Runtime ass
 |---|---|---|
 | `GYO::Base` | failure handling: `GYO_ASSERT` for Programmer Errors, `Result`/`Error` for Runtime Errors ([contract](architecture/error-handling.md)); the log facade (`Log.hpp`, one replaceable handler); other domain-free helpers | C++ standard library only |
 | `GYO::Math` | vectors, matrices, quaternions, geometric primitives and queries, coordinate conventions ([contract](architecture/math.md)) | Base |
-| `GYO::Os` | the OS differences behind neutral APIs: files with UTF-8 paths (reads, writes, rename, resolve, compare), process facts, the console and shutdown requests ([contract](architecture/os.md)) | Base; OS system libraries |
+| `GYO::Os` | the OS differences behind neutral APIs: files with UTF-8 paths (reads, writes, rename, resolve, compare), process facts, the console and shutdown requests, thread names and priority hints ([contract](architecture/os.md)) | Base; OS system libraries |
 | `GYO::Time` | the engine time base (`MonotonicClock`), the deadline-or-notify `Waiter` and `LateWakeStats` ([contract](architecture/time.md)) | Base; the operating system (kqueue, Win32 waitable timers, or a condition variable) |
-| `GYO::Threads` | named role threads with a cooperative stop through the role's `Waiter` and a priority hint; no pool or scheduler ([contract](architecture/threads.md)) | Time; the operating system |
+| `GYO::Threads` | named role threads with a cooperative stop through the role's `Waiter` and a priority hint; no pool or scheduler ([contract](architecture/threads.md)) | Time; Os privately, for the thread name and priority |
 | `GYO::Trace` | one file of pre-serialized lines from many producer threads: a bounded queue that drops and counts when full, written and flushed by one role thread woken only by notification ([contract](architecture/trace.md)) | Threads; Os privately, for the file |
 | `GYO::Net` | the GYOP 24-byte datagram header codec and size limits; message kinds, payloads and protocol versions belong to products | Base |
 | `GYO::Engine` | IO, runtime lifecycle, CPU asset identity/cache/loading | Base, Math, Time; C++ library; JSON parser privately |

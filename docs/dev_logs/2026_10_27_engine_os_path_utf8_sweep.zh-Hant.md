@@ -61,7 +61,7 @@
   - gyo_ui_editor.core：只有「a resolved asset path keeps the characters of its root」。
   - gyo_ui_editor.content_cli：`--validate` 以 0xc0000409（未捕捉的例外）結束。
   - gyo_ui_editor.preview：0xc0000409。前兩個測試函式沒有印出 FAILED，所以停在最後的新函式〔推論：輸出看不出是哪一行〕。
-- 本機（macOS arm64，修正後）：core 33／33；產品組態 95／95；`object_fps_pvp.worker` 與 `close_timing` 另外逐一串行 2／2；host-tools 的 shader 測試 3／3。
+- 本機（macOS Intel x86_64，修正後）：core 33／33；產品組態 95／95；`object_fps_pvp.worker` 與 `close_timing` 另外逐一串行 2／2；host-tools 的 shader 測試 3／3。
 - 突變（新增）：
   - pu-x1、pu-x2 killed（POSIX）。
   - pu-x3～pu-x7 只在 Windows 跑，留給 Windows 機器（D62）。我在 macOS 上確認了 pu-x6、pu-x7 的取代能編譯。

@@ -48,7 +48,7 @@
     - p4 仍在本計畫的目錄；沒有 PE 層的檢查。這 2 個記為缺口。
   - note：Invariant 11 的範圍、★ 的補充、R6 的盲點，都寫進 os.md。
   - 修正後，把走訪改回只依 source 路徑時，`cmake.ProcessCodePage` 的 wrapper 案例會失敗（pu-x15）；這證明新的測試守得住 major 1。
-- 本機（macOS arm64，修正後）：core 34／34；產品組態 96／96；`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
+- 本機（macOS Intel x86_64，修正後）：core 34／34；產品組態 96／96；`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
 - 突變：
   - 新增與改線的、本機能跑的都 killed：os-f4、os-c6、pu-x5（改由 R6 判定）、pu-x8、pu-x11、pu-x13～pu-x16。
   - 相關的既有突變 20／20 killed。

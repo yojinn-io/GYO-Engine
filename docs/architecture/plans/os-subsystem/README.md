@@ -1,7 +1,14 @@
 # OS 子系統：分批計畫與進度
 
-更新：2026-10-25。Owner：Engine（新增 `engine/os`；`engine/io` 新增原生後端與路徑契約；`engine/time`、`engine/threads`、`engine/trace`、`engine/platform/sdl` 之後改呼叫 `engine/os`）。
-**狀態：A1～A3 完成**（2026-10-25，四平台 L1 run 40173730672），消費端的 P1～P5 也完成；D48：其餘批次已開始，os-guard-wide、os-process-info、os-console-shutdown 完成。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
+更新：2026-10-29。Owner：Engine（新增 `engine/os`；`engine/io` 新增原生後端與路徑契約；`engine/time`、`engine/threads`、`engine/trace`、`engine/platform/sdl` 之後改呼叫 `engine/os`）。
+**狀態：收口（D78，2026-10-28）。** OS 層保留，作為 OS 差異唯一的落點；之後只在觀測到壓力時擴大。盤點與理由見 [收口提案](closeout.md)。
+
+- 留下：長路徑那一片（A1～A3，加上消費端的 P1～P5），以及已併入消費端發行線的另外 10 批。其中沒有功能支撐的行為變更 4 批（os-console-shutdown、io-native-paths、os-tool-files、os-utf8-codepage）標成「已出貨、未經功能驗收」，本線不再為它們安排實機驗收。
+- 留在本分支、消費端發行後併 master：os-wake-record（晚醒量測程式）、os-threads-backend（執行緒命名與優先度搬進 engine/os）。消費端已發行（PR #96），2026-10-29 以 os-land-master 的 PR #104 併 master。
+- 凍結：os-wait-backend（等待原語搬進 engine/os）。Windows 的計時 L2 不通過，已從本分支撤出。
+- 不開始或取消：os-net-errors、os-close、os-windows-run 的續跑與第 2 次、os-linux-run。
+
+本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-25 建立。
 
 Engine 目前沒有處理 OS 差異的 owner：
 
@@ -84,6 +91,19 @@ Engine 目前沒有處理 OS 差異的 owner：
 26. **D65**：開放決策 16 採 (b)，os-utf8-codepage 排在計時的三批之前（改變 D62 的順序）。
 27. **D66**：os-utf8-codepage 開工前的決定，全部照建議。檔位 high＋1 位 xhigh 審查；開放決策 17～24 照建議（根目錄走訪自動套用並提供查詢 API、owner 是 engine/os、等價突變退場、不加 longPathAware、最低 Windows 10 1903、MinGW 路徑也寫、兩個測試缺漏併進）；Invariant 11 用草稿；§14.4 的判定變更與 ★ 事前宣告同意開工，定案前做突變與審查；Red 先推測試跑一次 L1。估時 8～12 h。
 28. **D67**：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔）照草稿定案。
+29. **D68**：os-wake-record 開工前的決定，全部照建議。檔位 medium（notify→wake 用 high）；L2 只記錄、沿用 TT-1 的定義並新增 notify→wake；macOS arm64 現在量，其他三個平台在下一次實機用本批的 commit 補，不擋後兩批；Windows 沒有視窗的晚醒數據交給 v7.1 的 F5／F7。
+30. **D69**：os-threads-backend 開工前的決定。檔位 high＋1 位 xhigh 審查；連結守衛照草案（gyo_threads 以 PRIVATE 連 GYO::Os 並禁止公開，gyo_os 在 POSIX 上 PRIVATE 連 Threads::Threads；threads.md Invariant 9 與 os.md Invariant 3 一起改）；Windows 非 ASCII 名稱的缺陷這批修（★）；L2 本機先做 macOS Intel，Windows 與 Linux 在實機那次補，不擋 os-wait-backend。
+31. **D70**：os-threads-backend 的定案。threads.md Invariant 9 與 os.md Invariant 3 照草稿；os.md Invariant 6 寫明「只回報是否套用的請求回傳 bool」的例外。
+32. **D71**：os-wait-backend 開工前的決定，全部照建議。檔位 xhigh＋1 位 xhigh 審查；開放決策 13 採 (a)，看 B 之前先做 A/A 校準與檢出力檢查，兩項都符合才凍結原文；time.md Invariant 8／10、os.md Invariant 6 的例外與 ★ 錯誤細節照草稿開工，定案前驗證；macOS Intel 現在做，Windows 與 Linux 在實機那次做，Windows 的 L2 通過前不通知消費端合併。
+33. **D72**：os-wait-backend 的定案。time.md Invariant 8、10，os.md Invariant 6 的例外（cv 後備的 `Block` 讓 `std::system_error` 穿過），★ 錯誤細節（`IoFailed: errno=<n>`／`IoFailed: win32=<n>`），都照草稿。
+34. **D73**：OS 子系統不等 lan15 與 #96 做完（改變 D62 的最後一句）。Windows 實機上不需要人操作的項目，由 Windows 機器上的 Claude 在分支 `claude/os-windows-run` 照 [windows-run.md](windows-run.md) 跑，分兩次：第 1 次是現有批次留下的項目與 os-net-errors 的 UDP 錯誤量測，第 2 次在 os-net-errors、os-close 完成後。os-net-errors、os-close 排在 lan15 之前。
+35. **D75**：OS 子系統的 Linux 項目由本會話在這台 Mac 的 Docker（LinuxKit 虛擬機）跑，照 [linux-run.md](linux-run.md)。os-wait-backend 的 Linux L2 先跑 A/A，A/A 照 (a) 通過才用 (a) 判 A/B；計時量測在虛擬機裡，限界照實寫。（D74 由「對接 OS 子系統的 Windows 實機結果」會話記在交接。）
+36. **D77**：linux-run 拿掉在 Docker 裡跑 B 完整 ctest 的那一步（和 CI 的 linux-x64 L1 重複；實機只做 CI 做不到或不好觀測的事），步驟代號改成 X0～X6。CI 的 linux-x64 L1 不受影響。
+37. **D78**：收口（[closeout.md](closeout.md)），四個決定都照建議。
+    - 已在消費端發行線、沒有功能支撐的 ★ 4 批留下，標成「已出貨、未經功能驗收」。
+    - os-wait-backend 凍結並從本分支撤出（程式與條文回到 `4ffc7c65`，取代 D72）。
+    - os-wake-record、os-threads-backend 在消費端發行後以一條 PR 併 master，驗收用 CI 加守衛（Linux 的 L2 與基準取消）。
+    - 今後的規則寫進本文件的「執行規則」與 os.md 的 Replacement Criterion 9。
 
 ## 架構樹（目標狀態，詳見 PLAN 第 2 節）
 
@@ -96,10 +116,10 @@ engine/os  ［新，GYO::Os：OS 差異的唯一 owner］
 ├── Process                    os-process-info
 ├── Console（命令列、輸出、結束要求）  os-console-shutdown
 ├── Thread                     os-threads-backend
-├── Wait                       os-wait-backend
-└── Net（條件式）              os-net-errors
+├── Wait                       os-wait-backend（凍結，D78；等待原語留在 engine/time 的 Waiter.cpp）
+└── Net（條件式）              os-net-errors（不開始，D78；分類留在產品）
 engine/io（中立抽象＋NativeFileSystem 後端，不含 OS 程式碼）   io-contracts、os-files-read
-engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl 不動（PathFromUtf8 移到 os）
+engine/asset → io；engine/threads、trace → os（engine/time 不連 os，D78）；engine/platform/sdl 不動（PathFromUtf8 移到 os）
 ```
 
 ## 進度
@@ -120,12 +140,15 @@ engine/asset → io；engine/time、threads、trace → os；engine/platform/sdl
 | os-trace-writers | high＋1 位 xhigh 審查（D58、D60） | 完成（2026-10-26；Red：run 40331764169；Green：四平台 L1 run 40339587478；[dev_log](../../../dev_logs/2026_10_26_engine_os_trace_writers.zh-Hant.md)） | TraceSink 經 engine/os（開放決策 2） |
 | os-path-utf8-sweep | high＋1 位 xhigh 審查（D63） | 完成（2026-10-27；Red：run 40431320545；Green：四平台 L1 run 40433158383；[dev_log](../../../dev_logs/2026_10_27_engine_os_path_utf8_sweep.zh-Hant.md)） | 剩下的窄字串路徑、PathFromUtf8 移到 engine/os |
 | time-threads-invariants | medium（D61） | 完成（2026-10-27；只改文件與測試；[dev_log](../../../dev_logs/2026_10_27_engine_os_time_threads_invariants.zh-Hant.md)） | time.md、threads.md 的 Design Invariants |
-| os-wake-record | medium | 未開始 | 晚醒量測程式合回、四平台基準 |
-| os-threads-backend | high；Start 順序局部 xhigh | 未開始 | RoleThread 的 OS 呼叫搬進 engine/os |
-| os-wait-backend | xhigh；1 位 xhigh 審查（先問） | 未開始 | Waiter 的 OS 後端搬進 engine/os，ABAB L2 |
-| os-net-errors | high | 條件式 | socket 錯誤碼的中立分類（開放決策 7） |
-| os-close | medium | 未開始 | allowlist 清空、文件同步、完整突變 |
+| os-wake-record | medium；notify→wake 用 high（D68） | 完成，留在本分支（2026-10-27；四平台 L1 run 40463273387；macOS Intel 與 Windows（W4）的基準已記錄；Linux 與 arm64 的基準取消，D78；[dev_log](../../../dev_logs/2026_10_27_engine_os_wake_record.zh-Hant.md)） | 晚醒量測程式合回、基準；消費端發行後隨 os-land-master 併 master |
+| os-threads-backend | high＋1 位 xhigh 審查（D69） | 完成，留在本分支（2026-10-27；四平台 L1 run 40484797877；L2 在 macOS Intel 與 Windows（W5）逐字相同；Linux 的 L2 取消，D78；xhigh 審查已修正；[dev_log](../../../dev_logs/2026_10_27_engine_os_threads_backend.zh-Hant.md)） | RoleThread 的 OS 呼叫搬進 engine/os；消費端發行後隨 os-land-master 併 master |
+| os-wait-backend | xhigh＋1 位 xhigh 審查（D71） | **凍結，已撤出（D78）**。本機與 L1 曾完成（macOS Intel 的 L2 通過 12／12；四平台 L1 run 40510515336 第 2 次通過），Windows 的 L2（os-windows-run 的 W3）不通過（D74）；[dev_log](../../../dev_logs/2026_10_27_engine_os_wait_backend.zh-Hant.md) | Waiter 的 OS 後端搬進 engine/os（撿回時從 `4041cf42`、`756073aa` 開始，Windows 另行宣告判定） |
+| os-net-errors | high | 不開始（D78：沒有觀測到壓力；W6 的 UDP 量測交給消費端） | socket 錯誤碼的中立分類（開放決策 7） |
+| os-close | medium | 取消（D78，改成 os-closeout） | allowlist 清空、文件同步、完整突變 |
 | os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 完成（2026-10-27；Red：run 40450140816；xhigh 審查已修正；Green：四平台 L1 run 40456874710；[dev_log](../../../dev_logs/2026_10_27_engine_os_utf8_codepage.zh-Hant.md)） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
+| os-windows-run（D73） | Windows 端照文件執行（建議 medium） | 第 1 次結案（W0～W7；W3 不通過、W5 通過、W7 12／12 killed；[dev_log](../../../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)）；續跑、W8 與第 2 次取消（D78） | Windows 實機上不需要人操作的項目 |
+| os-linux-run（D75） | medium；判讀照事前宣告 | 取消（D78；沒有任何結果） | Linux 的 L2、基準與專用突變（Docker） |
+| os-closeout（D78） | os-freeze-wait high；其餘 medium | 完成（2026-10-28；四平台 L1 run 40646224836；[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）；os-handoff-v71 完成（消費端 D219）；os-land-master：PR #104（2026-10-29；併入 master `62fd7ebf`、相關突變 12／12 killed、四平台 L1 run 40832108929；[dev_log](../../../dev_logs/2026_10_29_engine_os_land_master.zh-Hant.md)） | [收口提案](closeout.md)：凍結 os-wait-backend、文件改成收口後的狀態、今後的規則 |
 
 ```text
 os-plan-docs ─┬─→ os-skeleton ─┐
@@ -133,12 +156,12 @@ os-plan-docs ─┬─→ os-skeleton ─┐
               │                                                         ├─→ os-trace-writers           │
               │   os-skeleton ─→ os-guard-wide ─→ os-process-info ─→ os-console-shutdown ──────────────┴─→ os-path-utf8-sweep
               ├─→ time-threads-invariants ─┐
-              └─→ os-wake-record ──────────┴─→ os-threads-backend ─→ os-wait-backend
-                                                                     （全部完成）─→ os-close
+              └─→ os-wake-record ──────────┴─→ os-threads-backend ─→ os-wait-backend（凍結）
+                                                         os-closeout（D78）─→［消費端發行］─→ os-land-master
 ```
 
 - 關鍵路徑（消費端的修正之前）：os-skeleton 與 io-contracts 並行，接 os-files-read，約 20～29 h 工時。
-- 整條線：約 100～150 h。
+- 整條線：約 100～150 h（D78 收口時停在這裡，剩下的不再估）。
 - 依 D48：其餘批次現在開始（取代 D46 的「發行後」）；A1～A3 已併進消費端的發行線 PR。
 
 ## 尚待回答的開放決策
@@ -146,6 +169,19 @@ os-plan-docs ─┬─→ os-skeleton ─┐
 PLAN 第 11 節的 1、14、15 已由 D46 決定。其餘（2、4、6～13）在對應批次開始前回答。16～26（2026-10-27 加入）：os-utf8-codepage 的順序、套用方式、owner、等價突變、Proton／Wine、longPathAware、1903 以前的 Windows、MinGW 的嵌入，以及 D201 找到的測試缺漏、強制結束時的 0 B log、`os.console_close` 在 Windows Terminal 下的 Skipped。
 
 ## 執行規則
+
+今後的規則（D78，使用者 2026-10-28；第 1 點經架構健檢會話轉達）：
+
+1. OS 層保留，作為 OS 差異唯一的落點。之後需要 OS 支撐時，直接落到這一層；沒有觀測到壓力就不擴大（AGENTS.md §2「observed pressure, not predicted pressure」）。層以外的 OS 程式碼是之後要搬進來的對象，有壓力時才搬。
+2. OS 層的工作分兩類：
+   - 搬移：行為不變，放在 OS 層的線，用 CI 加守衛驗收（allowlist 縮小、連結守衛、新舊等價的測試），不做實機 L2／L3，也不做 ★ 事前宣告。
+   - 行為變更：寫出支撐的 Feature，由產品版本排程與驗收，不放進 OS 層的線。程式碼的位置仍在 OS 層（位置由架構定，寫行為屬於修正）。
+3. 一批若需要實機 L2、★ 事前宣告，或要改既有測試的判定（AGENTS.md §14.4），就不是純搬移，要拆出去。搬移途中發現需要 ★，停下回報，不在同一批做（os.md Replacement Criterion 9）。
+4. CI 量不準的搬移（例如計時）：用 L1 的結構測試加守衛就收；精度只在有產品壓力時，由產品版本另排量測。
+5. OS 層的批次不併進產品的發行線，除非那個版本的功能需要它（例如長路徑需要 A1～A3）；其餘照 OS 層的線直接走 master。
+6. 實機只做 CI 做不到的事（D76）：實機項目要寫出「為什麼 CI 做不到」和「結果會改變哪個決定」，兩者都寫不出來就不排。
+
+以下是 D78 之前的規則，和上面衝突時以上面為準：
 
 - 每次只執行使用者指定的批次；commit 與 PR 用日語。
 - 每批開始、里程碑、停止時，更新本表、[HANDOFF](HANDOFF.md) 與 dev_log（`docs/dev_logs/YYYY_MM_DD_engine_os_<批次>.zh-Hant.md`），然後停止。

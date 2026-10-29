@@ -243,22 +243,42 @@ private:
     std::mutex refusalMutex;
     std::optional<std::pair<int,Json>> refusal;
 };
-// Observation only (v7.1 D226): the mock's datagrams from 20 ms before SubmitShot
-// to the action's arrival, in ms relative to SubmitShot ("in" = Client to mock).
-std::string WakeTimeline(const MockGateway& gateway,Clock::time_point submittedAt,Clock::time_point actionAt) {
+// Observation only (v7.1 D226, D243): the mock's datagrams from 20 ms before the
+// wake under test (SubmitShot, or Drain for the ACK) to until, in ms relative to
+// it ("in" = Client to mock), and how long before it the last Hello arrived.
+std::string WakeTimeline(const MockGateway& gateway,std::string_view title,Clock::time_point submittedAt,
+                         Clock::time_point actionAt,Clock::time_point until) {
     static constexpr std::array<const char*,8> Names{"?","Hello","Welcome","Input","Snapshot","Error","Actions","ActionResults"};
     const auto name=[](wire::Type type){const auto n=static_cast<std::size_t>(type);return n<Names.size()?Names[n]:"?";};
-    const auto ms=[&](Clock::time_point at){std::ostringstream out;out.setf(std::ios::fixed);out.precision(2);
-        out<<std::chrono::duration<double,std::milli>(at-submittedAt).count();return out.str();};
+    const auto millis=[](Clock::duration span){std::ostringstream out;out.setf(std::ios::fixed);out.precision(2);
+        out<<std::chrono::duration<double,std::milli>(span).count();return out.str();};
+    const auto ms=[&](Clock::time_point at){return millis(at-submittedAt);};
     std::vector<std::pair<Clock::time_point,std::string>> events;
     for(const auto& packet:gateway.packets)
-        if(packet.at>=submittedAt-20ms && packet.at<=actionAt)events.emplace_back(packet.at,std::string("in:")+name(packet.type));
+        if(packet.at>=submittedAt-20ms && packet.at<=until)events.emplace_back(packet.at,std::string("in:")+name(packet.type));
     for(const auto& packet:gateway.sent)
-        if(packet.at>=submittedAt-20ms && packet.at<=actionAt)events.emplace_back(packet.at,std::string("out:")+name(packet.type));
+        if(packet.at>=submittedAt-20ms && packet.at<=until)events.emplace_back(packet.at,std::string("out:")+name(packet.type));
     std::sort(events.begin(),events.end(),[](const auto& a,const auto& b){return a.first<b.first;});
-    std::string line="v7-08 wake timeline: action_ms="+ms(actionAt)+" events=";
+    const auto prior=std::find_if(gateway.packets.rbegin(),gateway.packets.rend(),
+        [&](const auto& packet){return packet.type==wire::Type::Hello && packet.at<submittedAt;});
+    const auto priorHello=prior==gateway.packets.rend()?std::string("-"):millis(submittedAt-prior->at);
+    std::string line=std::string(title)+": action_ms="+ms(actionAt)+" prior_hello_ms="+priorHello+" events=";
     for(const auto& [at,label]:events)line+=label+"@"+ms(at)+" ";
     return line;
+}
+// Away from the Client's own Hello (every 250 ms, v7.1 D226, D243): the pass
+// that sends it, the timer's pass 2 ms before it (CoarseWakeLead) and the pass
+// of the mock's reply all carry out what is due, so a check that a post wakes
+// the worker must not meet them. Returns about 100 ms after the next Hello
+// arrives, so the Hellos on both sides are more than 40 ms away.
+void AwayFromHello(MockGateway& gateway,std::source_location where=std::source_location::current()) {
+    const auto hellos=[&]{return std::count_if(gateway.packets.begin(),gateway.packets.end(),
+        [](const auto& packet){return packet.type==wire::Type::Hello;});};
+    const auto hellosBefore=hellos();
+    gateway.Until([&]{return hellos()>hellosBefore;},3000ms,where);
+    const auto helloAt=std::find_if(gateway.packets.rbegin(),gateway.packets.rend(),
+        [](const auto& packet){return packet.type==wire::Type::Hello;})->at;
+    gateway.UntilTime(helloAt+100ms,where);
 }
 // The rhythm of the resend second, for its failure message (v7.1 D224):
 // "mock_resends=N mock_gap_ms=min/median/max client_sends=N client_gap_ms=min/median/max".
@@ -728,8 +748,9 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     const auto repeatAt=Clock::now();
     gateway.Results({1});
     // Let the deadline armed while ID 1 was pending pass, so only the ACK's own
-    // wake-up (or the next Hello, up to a second away) can send the ACK.
+    // wake-up (or the next Hello, which AwayFromHello keeps away) can send the ACK.
     gateway.UntilTime(Clock::now()+50ms);
+    AwayFromHello(gateway);
     const auto drainedAt=Clock::now();
     const auto last=connection.Drain();
     Require(last.decisions.size()==1 && last.decisions[0].actionId==1 &&
@@ -740,6 +761,8 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     // Drop two ACK-only transmissions: no authority retirement is returned.
     gateway.Until([&]{return gateway.actionAttempts.size()>=ackStart+3;});
     // The ACK advanced by Drain wakes the worker (v7 batch 08), not its next Hello.
+    std::cerr<<WakeTimeline(gateway,"v7-08 ack timeline",drainedAt,gateway.actionAttempts[ackStart].at,
+        gateway.actionAttempts[ackStart].at+5ms)<<'\n';
     Require(gateway.actionAttempts[ackStart].at-drainedAt<40ms,"an advanced ACK waited for an unrelated wake");
     for(std::size_t n=ackStart;n<gateway.actionAttempts.size();++n)
         Require(gateway.actionAttempts[n].actions.shots().empty() && gateway.actionAttempts[n].actions.acknowledged_through()==32,
@@ -751,24 +774,17 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     // Idle first: the last ACK-only batch's deadline passes, so the new action is
     // eligible at once and nothing but SubmitAction's wake-up is pending.
     gateway.UntilTime(Clock::now()+50ms);
-    // Away from the Client's own Hello (every 250 ms, v7.1 D226): its pass, or
-    // the pass of the mock's reply, would carry the action out without
-    // SubmitAction's wake-up. Submit about 100 ms after a Hello arrives, so the
-    // Hellos on both sides are more than 40 ms away.
-    const auto hellos=[&]{return std::count_if(gateway.packets.begin(),gateway.packets.end(),
-        [](const auto& packet){return packet.type==wire::Type::Hello;});};
-    const auto hellosBefore=hellos();
-    gateway.Until([&]{return hellos()>hellosBefore;});
-    const auto helloAt=std::find_if(gateway.packets.rbegin(),gateway.packets.rend(),
-        [](const auto& packet){return packet.type==wire::Type::Hello;})->at;
-    gateway.UntilTime(helloAt+100ms);
+    // Then away from the Client's own Hello, so only SubmitAction's wake-up can
+    // carry the action out.
+    AwayFromHello(gateway);
     const auto submittedAt=Clock::now();
     const auto resumed=connection.SubmitShot(connection.State().snapshot->tick,0,0);
     Require(resumed && *resumed==33,"retirement or failed submission skipped an allocated ID");
     gateway.Until([&]{return !gateway.actionAttempts.back().actions.shots().empty() && gateway.actionAttempts.back().actions.shots(0).action_id()==33;});
     // D36: a lone action leaves at SubmitAction once eligible (at most one
     // ActionSendRate interval after the previous batch), not at a later wake.
-    std::cerr<<WakeTimeline(gateway,submittedAt,gateway.actionAttempts.back().at)<<'\n';
+    std::cerr<<WakeTimeline(gateway,"v7-08 wake timeline",submittedAt,gateway.actionAttempts.back().at,
+        gateway.actionAttempts.back().at)<<'\n';
     Require(gateway.actionAttempts.back().at-submittedAt<40ms,"an eligible action waited for an unrelated wake");
     gateway.Results({33},32);gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
     Require(connection.Drain().decisions.size()==1,"new action failed after clearing loss");

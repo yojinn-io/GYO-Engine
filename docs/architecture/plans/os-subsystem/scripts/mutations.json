@@ -108,7 +108,7 @@
       "replace": "target_link_libraries(gyo_os PUBLIC GYO::Base GYO::Time)",
       "target": "gyo_os_tests",
       "expect_build_failure": true,
-      "expect": "gyo_os links .*expected exactly GYO::Base"
+      "expect": "gyo_os links .*expected\\s+exactly\\s+GYO::Base"
     },
     {
       "id": "os-g9-macro-list",
@@ -1578,11 +1578,11 @@
       "id": "ti-x2-threads-links-more",
       "what": "gyo_threads links another module (threads.md Invariant 9, configure-time check)",
       "file": "engine/threads/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads)",
-      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math Threads::Threads)",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time GYO::Math Threads::Threads PRIVATE GYO::Os)",
       "target": "gyo_threads_tests",
       "expect_build_failure": true,
-      "expect": "gyo_threads links .*expected exactly\\s+GYO::Time;Threads::Threads"
+      "expect": "gyo_threads links .*expected\\s+exactly\\s+GYO::Os;GYO::Time;Threads::Threads"
     },
     {
       "id": "ti-x3-backend-name-changed",
@@ -1600,7 +1600,7 @@
       "platforms": [
         "linux"
       ],
-      "file": "engine/threads/src/RoleThread.cpp",
+      "file": "engine/os/src/thread/Thread.cpp",
       "find": "    return pthread_setname_np(pthread_self(), name.substr(0, 15).c_str()) == 0;",
       "replace": "    return pthread_setname_np(pthread_self(), name.c_str()) == 0;",
       "target": "gyo_threads_tests",
@@ -1705,8 +1705,8 @@
         "win32"
       ],
       "file": "tests/common/os/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)\n",
-      "replace": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os gyo_test_support doctest::doctest)\nset_property(TARGET gyo_os_tests PROPERTY GYO_PROCESS_CODE_PAGE_EXEMPT \"mutant\")\n",
+      "find": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os GYO::Threads gyo_test_support doctest::doctest)\n",
+      "replace": "target_link_libraries(gyo_os_tests PRIVATE GYO::Os GYO::Threads gyo_test_support doctest::doctest)\nset_property(TARGET gyo_os_tests PROPERTY GYO_PROCESS_CODE_PAGE_EXEMPT \"mutant\")\n",
       "target": "gyo_os_tests",
       "cases": "*process ANSI code page*",
       "expect": "regex_search\\(manifest|no manifest resource"
@@ -1801,6 +1801,105 @@
         "tests/common/cmake/ProcessCodePageTests.cmake"
       ],
       "expect": "unrecorded: configuration unexpectedly succeeded"
+    },
+    {
+      "id": "th-x1-threads-os-public",
+      "what": "gyo_threads links GYO::Os publicly, so its users get engine/os headers (threads.md Invariant 9, configure-time check)",
+      "file": "engine/threads/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads PRIVATE GYO::Os)",
+      "replace": "target_link_libraries(gyo_threads PUBLIC GYO::Time Threads::Threads GYO::Os)",
+      "target": "gyo_threads_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_threads exposes GYO::Os to its users"
+    },
+    {
+      "id": "th-x2-os-without-thread-library",
+      "what": "gyo_os drops the thread library it names threads with (os.md Invariant 3, configure-time check)",
+      "platforms": [
+        "darwin",
+        "linux"
+      ],
+      "file": "engine/os/CMakeLists.txt",
+      "find": "    target_link_libraries(gyo_os PRIVATE Threads::Threads)\n",
+      "replace": "",
+      "target": "gyo_os_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_os links .*expected\\s+exactly\\s+GYO::Base;Threads::Threads"
+    },
+    {
+      "id": "th-x3-windows-name-byte-widened",
+      "what": "Windows widens each byte of the name again instead of converting UTF-8 (D69 ★)",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/thread/Thread.cpp",
+      "find": "    return SUCCEEDED(describe(::GetCurrentThread(), wide.value().c_str()));",
+      "replace": "    return SUCCEEDED(describe(::GetCurrentThread(), std::wstring(name.begin(), name.end()).c_str()));",
+      "target": "gyo_os_tests",
+      "cases": "*names the calling thread*",
+      "expect": "CHECK\\( afterBeyond == L\"gyo-\\\\x57F7"
+    },
+    {
+      "id": "th-x4-macos-background-class",
+      "what": "macOS maps the Background hint to another QoS class",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/thread/Thread.cpp",
+      "find": "        hint == PriorityHint::Background ? QOS_CLASS_UTILITY : QOS_CLASS_DEFAULT;",
+      "replace": "        hint == PriorityHint::Background ? QOS_CLASS_BACKGROUND : QOS_CLASS_DEFAULT;",
+      "target": "gyo_os_tests",
+      "cases": "*priority hints*",
+      "expect": "CHECK\\( read.actual == read.expected \\) is NOT correct"
+    },
+    {
+      "id": "th-x5-windows-interactive-highest",
+      "what": "Windows maps the Interactive hint to another thread priority",
+      "platforms": [
+        "win32"
+      ],
+      "file": "engine/os/src/thread/Thread.cpp",
+      "find": "    const int value = hint == PriorityHint::Interactive ? THREAD_PRIORITY_ABOVE_NORMAL :",
+      "replace": "    const int value = hint == PriorityHint::Interactive ? THREAD_PRIORITY_HIGHEST :",
+      "target": "gyo_os_tests",
+      "cases": "*priority hints*",
+      "expect": "CHECK\\( read.actual == read.expected \\) is NOT correct"
+    },
+    {
+      "id": "th-x6-linux-background-nice",
+      "what": "Linux applies the Background hint with another nice value",
+      "platforms": [
+        "linux"
+      ],
+      "file": "engine/os/src/thread/Thread.cpp",
+      "find": "    return setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 10) == 0;",
+      "replace": "    return setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 5) == 0;",
+      "target": "gyo_os_tests",
+      "cases": "*priority hints*",
+      "expect": "CHECK\\( read.actual == read.expected \\) is NOT correct"
+    },
+    {
+      "id": "th-x7-macos-name-claimed",
+      "what": "macOS reports the name applied without naming the thread",
+      "platforms": [
+        "darwin"
+      ],
+      "file": "engine/os/src/thread/Thread.cpp",
+      "find": "    return pthread_setname_np(name.c_str()) == 0;",
+      "replace": "    return true;",
+      "target": "gyo_os_tests",
+      "cases": "*names the calling thread*",
+      "expect": "CHECK\\( after == \"gyo-os-thread\" \\) is NOT correct"
+    },
+    {
+      "id": "th-x8-role-priority-lost",
+      "what": "RoleThread hands every role's priority to engine/os as Background (threads.md Invariant 5)",
+      "file": "engine/threads/src/RoleThread.cpp",
+      "find": "    return static_cast<Os::Thread::PriorityHint>(priority);",
+      "replace": "    return priority == ThreadPriority::Normal ? Os::Thread::PriorityHint::Normal : Os::Thread::PriorityHint::Background;",
+      "target": "gyo_os_tests",
+      "cases": "*a role's priority*",
+      "expect": "CHECK\\( read.actual == read.expected \\) is NOT correct"
     }
   ]
 }
