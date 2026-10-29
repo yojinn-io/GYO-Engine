@@ -15,6 +15,7 @@
 
 - **構成**：Mac（Intel）跑 Match＋Gateway，也當 1 位玩家；Windows Client N_w 台。同一個區域網路。地圖 `pvp_corners_v1`。
 - **程式**：最新發行線（含換模型的合併，D234）的四平台 L1 產物（D232）。Windows 用 windows-x64 套件，Mac 用 macos-x64 套件。各套件 `build_metadata.json` 的 `source_revision` 相同，而且每個啟動行的 `executable_sha256` 等於該套件的清單。
+- **（2.2，待核准）Gateway 與 quad probe**：發行包沒有 macOS 版的 Gateway，quad probe 也不在發行包裡。兩者在 Mac 上從同一個工作樹建置（產品原始碼與 L1 的 commit `646b808f` 相同，`git diff 646b808f -- apps services engine` 為空），SHA-256 記在 `marks.txt` 的註解，以啟動行的 `executable_sha256` 核對。上一條「每個啟動行的 sha256 等於該套件的清單」只適用於套件內的 Match 與 Client。
 - **場次資料夾**：Mac 上新建一個空資料夾放 Match 與 Gateway 的 log 與 trace；每台 Client 用新解壓的套件（`logs/` 是空的）。Mac 的 Client 用自己的 `--log` 與 `--movement-trace` 檔名。
 - **（2.1）判定用的資料夾**：場次結束後整理成 `lan15_judge.py` 讀的形狀：`marks.txt`；`mac/`（match.log、gateway.log、`match*-ingress.jsonl`、`match*-shots.jsonl`、`match*-commands.jsonl`）；`clients/<名稱>/`（那台機器所有 Client 程序的 `.log`；Windows 另有 `ping.txt`；Mac 的 Client 也放一個資料夾）；`quad/`（Q2 的 quad probe 的輸出與 log）。
 - **（2.1）`marks.txt` 的格式**（一行一個 `key=value`；時刻用 ISO 格式，到秒）：`n=`、`n_w=`、`s1_end=`（Mac 的時刻）；每次 S2 試行一行 `trial=<Windows 名稱>,<2s|7s>,<那台 Windows 的時刻>`；`q1=<Windows 名稱>`；`q2_start=`、`q2_end=`（Mac 的時刻）。
