@@ -2,7 +2,7 @@
 
 更新：2026-10-29。Owner：`object_fps_pvp`。規則：[lan15-declaration.md](lan15-declaration.md)（第 2.1 版，D236、D237）。這份手冊只寫怎麼做；判定以宣告為準，兩者不一致時以宣告為準。比照 [v7 的手冊](../v7/LAN_TEST.md)。
 
-構成：Mac（Intel）跑 Match＋Gateway，也當 1 位玩家；Windows Client 1～2 台。人數 N 是 2 或 3（Windows 台數 N_w＝N−1），當天看情況，**S1 開始前決定，之後不改**。地圖 `pvp_corners_v1`。
+構成：Mac（Intel）只跑 Match＋Gateway，**不當玩家**；Client 只在 Windows 上，N 台。人數 N 是 2 或 3（`n_w` 與 `n` 相同），當天看情況，**S1 開始前決定，之後不改**。地圖 `pvp_corners_v1`。
 
 ## 0. 這次要做的事（順序固定）
 
@@ -49,7 +49,7 @@
 在 Mac 上開一個**新的空資料夾**，例如：
 
 ```bash
-mkdir -p ~/gyo-lan15/session-20261029/mac ~/gyo-lan15/session-20261029/clients/mac ~/gyo-lan15/session-20261029/quad
+mkdir -p ~/gyo-lan15/session-20261029/mac ~/gyo-lan15/session-20261029/clients ~/gyo-lan15/session-20261029/quad
 ```
 
 以下用 `SESSION` 代表這個資料夾。在 `SESSION/marks.txt` 一行寫一項（時刻用 `2026-10-29T20:15:00` 的格式，到秒）。範本：
@@ -57,15 +57,17 @@ mkdir -p ~/gyo-lan15/session-20261029/mac ~/gyo-lan15/session-20261029/clients/m
 ```text
 # gateway sha256=...  quad probe sha256=...
 n=3
-n_w=2
+n_w=3
 s1_end=2026-10-29T20:31:00
 trial=win1,2s,2026-10-29T20:32:10
 trial=win1,7s,2026-10-29T20:33:05
 trial=win2,2s,2026-10-29T20:34:20
 trial=win2,7s,2026-10-29T20:35:15
+trial=win3,2s,2026-10-29T20:36:30
+trial=win3,7s,2026-10-29T20:37:25
 q1=win1
-q2_start=2026-10-29T20:38:00
-q2_end=2026-10-29T20:38:40
+q2_start=2026-10-29T20:40:00
+q2_end=2026-10-29T20:40:40
 ```
 
 - `n`、`n_w` 在 S1 開始前寫，之後不改。
@@ -89,12 +91,6 @@ Mac 終端機 2（Gateway；把 `MAC_IP` 換成實際的位址）：
 ```
 
 - 啟動行的 `advertise` 必須是 `MAC_IP`，不能是 `127.0.0.1`。
-
-Mac 終端機 3（Mac 當玩家；也用 `MAC_IP`，不要用 127.0.0.1）：
-
-```bash
-cd ~/gyo-lan15/pkg/gyo-object_fps_pvp/bin && ./gyo_object_fps_pvp --gateway MAC_IP:8080 --log SESSION/clients/mac/client-mac.log --movement-trace SESSION/clients/mac/client-commands.jsonl
-```
 
 Windows（每台，在解壓出來的 `gyo-object_fps_pvp\bin` 裡）：
 
@@ -155,7 +151,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 把檔案整理成判定工具讀的形狀（宣告第 1 節）：
 
 - `SESSION/mac/`：`match.log`、`gateway.log`、`match-commands.jsonl`、`match-ingress.jsonl`、`match-shots.jsonl`（Match 若自動改名成 `match.2-*.jsonl`，照實際檔名放；正常情況只有一組）。
-- `SESSION/clients/<名稱>/`：那台 Windows 的 `bin\logs\` 裡所有 `client-*.log`、`client-commands*.jsonl`，加上 `ping.txt`。Mac 的 Client 已經寫在 `clients/mac/`。
+- `SESSION/clients/<名稱>/`：那台 Windows 的 `bin\logs\` 裡所有 `client-*.log`、`client-commands*.jsonl`，加上 `ping.txt`。
 - `SESSION/quad/`：已經在第 7 節寫好。
 - `SESSION/marks.txt`、`SESSION/notes.txt`。
 

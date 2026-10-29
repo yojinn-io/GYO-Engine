@@ -1,4 +1,4 @@
-# lan15-windows 的事前宣告（第 2.2 版，2026-10-29 核准）
+# lan15-windows 的事前宣告（第 2.2 版，2026-10-29 核准；第 2.3 版改構成，待核准）
 
 更新：2026-10-29。Owner：`object_fps_pvp`。規劃：[lan15-windows.md](lan15-windows.md)（D232～D234）。
 第 1 版（`e5443624`）經對抗式檢查（本文件最後一節）改成本版；使用者對三項待決選了建議（M7：Mac 的斷線列為限界；M9：實體斷線＋ping 量長度；M3：判計數一致、比例只記錄）。
@@ -13,7 +13,7 @@
 
 ## 1. 構成、前提與順序
 
-- **構成**：Mac（Intel）跑 Match＋Gateway，也當 1 位玩家；Windows Client N_w 台。同一個區域網路。地圖 `pvp_corners_v1`。
+- **構成**：~~Mac（Intel）跑 Match＋Gateway，也當 1 位玩家；Windows Client N_w 台。~~（2.3，待核准）Mac（Intel）只跑 Match＋Gateway，不當玩家；Client 只在 Windows 上，N 台（N＝2 或 3，`n_w`＝`n`）。使用者：「記得，給我打包好的gateway、match、client。這次match和gateway是mac上的，而client則是windows上的。」確認 Mac 是否當玩家時：「不當。」同一個區域網路。地圖 `pvp_corners_v1`。
 - **程式**：最新發行線（含換模型的合併，D234）的四平台 L1 產物（D232）。Windows 用 windows-x64 套件，Mac 用 macos-x64 套件。各套件 `build_metadata.json` 的 `source_revision` 相同，而且每個啟動行的 `executable_sha256` 等於該套件的清單。
 - **（2.2，D238 核准）Gateway 與 quad probe**：發行包沒有 macOS 版的 Gateway，quad probe 也不在發行包裡。兩者在 Mac 上從同一個工作樹建置（產品原始碼與 L1 的 commit `646b808f` 相同，`git diff 646b808f -- apps services engine` 為空），SHA-256 記在 `marks.txt` 的註解，以啟動行的 `executable_sha256` 核對。上一條「每個啟動行的 sha256 等於該套件的清單」只適用於套件內的 Match 與 Client。
 - **場次資料夾**：Mac 上新建一個空資料夾放 Match 與 Gateway 的 log 與 trace；每台 Client 用新解壓的套件（`logs/` 是空的）。Mac 的 Client 用自己的 `--log` 與 `--movement-trace` 檔名。
@@ -95,7 +95,7 @@ S1 只記錄（不判定）：
 
 - **S5（只記錄）**：每位玩家在 S1 範圍內的 clock sync 行，偏移與漂移（首尾差，µs／分鐘）。
 - **S6（只記錄）**：握手期（`join` 到第一個 Welcome）的 `connection failed reason=` 的種類與次數（握手期的暫時性錯誤直接走 Failure、不計數，`ClientConnection.cpp:916-919`）。
-- **S7（L3，使用者判定＋log 核對）**：新的人物模型（D234）在 Windows 與 Mac 上看起來正常（動畫、法線、頭髮、沒有缺面或閃爍），由使用者判定。log 核對：每台 Client 都有進入 Lobby 的 `PvP connection phase=` 行；沒有 `missing player animation`、`missing or ambiguous player bone` 這兩種錯誤（換模型分支 `PlayerPresentation.cpp:33`、`:94`、`:100`；合併後依實際的字串再核對一次，字串不同時以合併後的程式為準，在核准前更新本條）。
+- **S7（L3，使用者判定＋log 核對）**：新的人物模型（D234）在 Windows 上看起來正常（2.3：Mac 不當玩家，不看 Mac）（動畫、法線、頭髮、沒有缺面或閃爍），由使用者判定。log 核對：每台 Client 都有進入 Lobby 的 `PvP connection phase=` 行；沒有 `missing player animation`、`missing or ambiguous player bone` 這兩種錯誤（換模型分支 `PlayerPresentation.cpp:33`、`:94`、`:100`；合併後依實際的字串再核對一次，字串不同時以合併後的程式為準，在核准前更新本條）。
 
 ## 7. 收支與整體判定
 
@@ -133,8 +133,8 @@ S1 只記錄（不判定）：
 - OS 的 ★ 4 批已出貨、未經功能驗收（D219）。
 - Windows 上 worker 驗收不算發行條件（D231）：沒有 SDL 的程序裡 Client 的重送約 43～53 Hz；mock 遇到 WSAECONNRESET 會讓驗收中止（約 5%）；「a token wait outlived four commands」以 mock 輪詢的約 1 ms 刻度量；D226 的 2 次計時器喚醒來源不明；ACK 檢查的相位問題沒有量；D227 只在 macOS 用突變確認過。
 - S4（Windows Match 的 Tick 精度，F7）未量：Match 在 Mac（D232）。
-- macOS Client 的斷線恢復沒有做：Mac 是主機，斷線等於全員斷線（M7）。
-- Mac 同時當主機與玩家，對 J3、J5 是 v6 之外的新條件（`LAN_TEST.md:112`）。
+- macOS Client 沒有測：Mac 不當玩家（2.3）；Mac 是主機，斷線等於全員斷線（M7）。
+- ~~Mac 同時當主機與玩家，對 J3、J5 是 v6 之外的新條件。~~（2.3：Mac 不當玩家，這條不再適用；構成和 v6 的 LAN 相同：Mac 主持、Client 都是 Windows）
 - 同機的延遲門檻（產生到 Actual 50／66.7 ms、首次送出 22 ms）在 LAN 不適用：跨機器的 trace 不是同一個時鐘。
 - 擊殺、重生位置與命中回饋沒有機械判定：Match 的紀錄沒有這些欄位，只靠使用者觀察。
 - K9 的「直接超過 T_max」分支（D200）這次只有在 S2 碰巧發生時才看得到，沒有刻意的試行。
