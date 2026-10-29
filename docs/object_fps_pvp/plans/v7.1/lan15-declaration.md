@@ -198,7 +198,13 @@ Windows 有 2 台，都用 CI 套件 `gyo-package-object_fps_pvp-windows-x64`，
 
 **S7（新模型的外觀，使用者事後的判定）**：有問題。使用者：「有問題，但是我想應該不是Engine的問題，而是模型的，我回去處理。」記為 S7 不通過；具體的問題與修正由使用者在模型端處理，修好後的模型要在下一次場次再看一次。兩台的 log 沒有 `missing player animation`、`missing or ambiguous player bone`。
 
-**使用者回報的「網路太慢被踢掉」的提示**：對得上 LUO 在 11:02:00～11:02:16 的 3 次 `connection failed … reason=Gateway connection timed out`（player 1～3）。這不是對戰中被逐出：
+**使用者回報的「網路太慢被踢掉」的提示（更正：是 KLYU，不是 LUO）**：使用者：「不是LUO，是另一個。」
+- KLYU 在 11:06:31 收到 `PvP connection quality failed_windows=1 of 3`，畫面顯示「CONNECTION POOR - improve within 20s or you will be removed」（`PvpApplication.cpp:1152-1160`）。11:06:41 恢復成 0，沒有被逐出（Gateway 與 Match 都沒有 evicted）。
+- 那段時間 Match 對 player 2（KLYU）的 ingress 統計：`late_first_commands=21`、`late_copy_commands=99`、`accepted_new_commands=579`（`received_inputs=601`）。player 1 同時段都是 0。KLYU 的 Snapshot 年齡從約 6 ms 升到 31～38 ms。推論：KLYU 那台的網路短暫延遲。
+- 為什麼那個窗口判失敗，從 log 確認不了。品質判定的條件是：中位參考年齡 >160 ms、替代 >50‰、窗口內有重設（`MatchRuntimeHost.cpp:700-722`）。Match 判定失敗時不寫 log。以 ingress 統計推算，替代約 35‰；那段時間 player 2 的重設只有 `life_respawn`。三個條件都對不上，這是觀測的缺口（只記錄，排在 v7.1 之後：品質窗口失敗時寫出原因）。
+- 另外，下面 LUO 的 3 次逾時也是使用者會看到的提示，原因如下：
+
+對得上 LUO 在 11:02:00～11:02:16 的 3 次 `connection failed … reason=Gateway connection timed out`（player 1～3）。這不是對戰中被逐出：
 - 那 3 次都在加入後 5 s 失敗，`received_datagrams=0`，UDP 一個都沒收到。Gateway 同時記到 3 次 `join reserved` → `player expired … reason=session_timeout`。
 - 原因：第 1 次的 Gateway 公告的是 `192.168.107.189`。這是 `start-gateway.sh` 以 `ipconfig getifaddr en0` 自動選的位址，但場次的 LAN 是 `192.168.50.x`（Mac 在 LAN 上是 `192.168.50.64`），Client 把 UDP 送到了錯的位址。
 - 第 2 次 Gateway 公告 `192.168.50.64` 之後，兩台都正常進入，對戰中沒有任何中斷。
