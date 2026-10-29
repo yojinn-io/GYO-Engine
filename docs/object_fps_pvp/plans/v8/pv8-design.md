@@ -1,6 +1,6 @@
 # pv8-design：pv8 契約的設計（蹲下、衝刺、ADS）
 
-更新：2026-10-29（第 1 版草案）。Owner：`object_fps_pvp`。**狀態：草案，等使用者決定 D-1～D-8（文末「等你決定」）。** 決定後實測型別最大，再寫 `protocol-v8.zh-Hant.md` 定稿。
+更新：2026-10-29（第 1 版草案）。Owner：`object_fps_pvp`。**狀態：草案。D-1、D-3、D-4 已決定（照建議，HANDOFF D248）；等使用者決定 D-2、D-5～D-8（文末「等你決定」）。** 決定後實測型別最大，再寫 `protocol-v8.zh-Hant.md` 定稿。
 上層：[v8 README](README.md)、[HANDOFF](HANDOFF.md)（D246、D247）。前一版契約：[protocol-v7](../../protocol-v7.zh-Hant.md)。
 
 ## 過程
@@ -127,10 +127,10 @@
 
 | # | 問題 | 選項 | 建議 |
 |---|---|---|---|
-| D-1 | `aiming` 放在哪裡、ADS 的移速怎麼推導 | (a) `CombatState`=15，移速只看 `aim_held`＋PlayerState，換彈不影響移速；(b) `PlayerState`=22，型別最大再多約 4 B；(c) 同 (a)，但移速也看換彈，要把換彈狀態放進 PlayerState | (a)：最省預算，預測一致。如果 ② 一定要「換彈時不能 ADS 移動」，改選 (b)，而且要在定稿前決定 |
+| D-1（**已決定：(a)，D248**） | `aiming` 放在哪裡、ADS 的移速怎麼推導 | (a) `CombatState`=15，移速只看 `aim_held`＋PlayerState，換彈不影響移速；(b) `PlayerState`=22，型別最大再多約 4 B；(c) 同 (a)，但移速也看換彈，要把換彈狀態放進 PlayerState | (a)：最省預算，預測一致。如果 ② 一定要「換彈時不能 ADS 移動」，改選 (b)，而且要在定稿前決定 |
 | D-2 | 型別最大實測超過 1200 B 時 | (a) `sprinting` 移出 wire，遠端靠速度推，② 不做跨步規則；(b) 重新定義 protocol §8 的型別最大；(c) 接受較小的餘裕 | 先實測；超過時選 (a)，不改 §8 |
-| D-3 | 空中能不能蹲下或站起；蹲著能不能跳 | (a) 空中可以蹲、站起走同一個檢查；蹲著可以跳，跳高不變；(b) 空中不能切換姿態；(c) 蹲著不能跳 | (a)：規則最少，和地面一致。手感在 L3 看 |
-| D-4 | 蹲下參數與倍率放在哪裡 | (a) Arena 內容 v2（②調倍率會改 arena_digest，已安裝的內容要重新安裝）；(b) 產品常數（改值要重新建置，混版靠三角色同一個 PR）；(c) Ready/Welcome 下發 | (a)：和 bodyHeight 同一個 owner，兩端一致有 digest 保證。倍率比較常調的話選 (b) |
+| D-3（**已決定：(a)，D248**） | 空中能不能蹲下或站起；蹲著能不能跳 | (a) 空中可以蹲、站起走同一個檢查；蹲著可以跳，跳高不變；(b) 空中不能切換姿態；(c) 蹲著不能跳 | (a)：規則最少，和地面一致。手感在 L3 看 |
+| D-4（**已決定：(a)，D248**） | 蹲下參數與倍率放在哪裡 | (a) Arena 內容 v2（②調倍率會改 arena_digest，已安裝的內容要重新安裝）；(b) 產品常數（改值要重新建置，混版靠三角色同一個 PR）；(c) Ready/Welcome 下發 | (a)：和 bodyHeight 同一個 owner，兩端一致有 digest 保證。倍率比較常調的話選 (b) |
 | D-5 | 要不要在 Ready/Welcome 加 `movement_rules_revision`（偵測 ① 和 ② 混版） | (a) 不加；(b) 加，Welcome 多 2～6 B | (a)：它支撐的是部署安全，不是玩家功能 |
 | D-6 | 衝刺要不要有體力 | (a) 不要；(b) 要，就得在定稿前加進 PlayerState | (a) |
 | D-7 | proto 要不要改名成 v8 | (a) `proto-rename-v8` 單獨一個 commit；(b) 保留 v7 檔名 | (a)：照先例，約 1 h，可逐位元驗證 |
