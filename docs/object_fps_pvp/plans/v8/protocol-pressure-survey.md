@@ -1,6 +1,6 @@
 # 協議壓力調研：哪些遊戲行為會佔用協議
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**性質：規劃輸入，不是設計決定。** 起因：使用者觀察到「現在壓力來到了協議層」，要一份調研報告（[HANDOFF](HANDOFF.md) D254），參考主流射擊遊戲、鬥陣特工風格的戰鬥系統，以及塔科夫類的地圖、背包、裝備、簡單武器（沒有改裝）。
+更新：2026-10-30。Owner：`object_fps_pvp`。**性質：規劃輸入，不是設計決定。** 起因：使用者觀察到「現在壓力來到了協議層」，要一份調研報告（[HANDOFF](HANDOFF.md) pv8-design-remaining-picks），參考主流射擊遊戲、鬥陣特工風格的戰鬥系統，以及塔科夫類的地圖、背包、裝備、簡單武器（沒有改裝）。
 
 ## 這份報告怎麼來的
 
@@ -78,7 +78,7 @@
 
 - 128 tick，每幀 7.8125 ms。扣掉 10% 留給 OS，目標每幀 2.34 ms、每個核心跑 3 場以上。來源：[Riot〈VALORANT's 128-Tick Servers〉](https://www.riotgames.com/en/news/valorants-128-tick-servers)、[technology.riotgames.com/node/112](https://technology.riotgames.com/node/112)。
 - 同一篇提到：把輪詢式的同步變數改成狀態變化時推送的 RPC，很多情況改善 100～10,000 倍。例子是送一個帶傷害值的命中事件，而不是同步 HP。
-- 同一篇也提到：伺服器保留玩家位置與動畫狀態的歷史，用來回溯驗證命中。這和本產品 v8 的 hitbox-rewind（Match 端的權威姿勢歷史）是同一類需求。
+- 同一篇也提到：伺服器保留玩家位置與動畫狀態的歷史，用來回溯驗證命中。這和本產品 v8 的 v8-product-hitbox-rewind（Match 端的權威姿勢歷史）是同一類需求。
 - Fog of War（[Riot 文章](https://www.riotgames.com/en/news/demolishing-wallhacks-valorants-fog-war)、[tech blog node/108](https://technology.riotgames.com/node/108)）：
   - 伺服器對每個玩家判斷每個網路實體是否「相關」，不相關就停止送更新。
   - 最後採用預先計算的 PVS 格子可見表，取代射線檢測。判定是樂觀的：兩個格子只要有任何部分互相看得到，就算看得到。
@@ -264,7 +264,7 @@
 |---|---|---|
 | 可靠的動作通道（有序號、ACK、重送、去重） | 有 | 射擊與換彈的動作通道（30 Hz），Match 在 ACK 前重送結果（v7.1 `edge-results-resend`）。v8 README「網路協議升級」一項已經把它當成可靠通道的樣板 |
 | 規則在進地圖時下發 | 有 | `CombatRules`、`jump_height`／`gravity`，pv8 加上蹲下與衝刺參數（protocol-v8 §3） |
-| 伺服器端的歷史回溯 | 部分 | A1 的命令步判定；hitbox-rewind（v8 ①）要在 Match 保存姿勢歷史，和 Valorant 的做法同類 |
+| 伺服器端的歷史回溯 | 部分 | A1 的命令步判定；v8-product-hitbox-rewind（v8 ①）要在 Match 保存姿勢歷史，和 Valorant 的做法同類 |
 | 輸入的時間精度 | 有 | `view_tick_q16`、A1 的 (E,S)；和 CS2 的 sub-tick 同一類問題，不增加 snapshot 大小 |
 | 高頻狀態的差分 | 沒有 | 每 Tick 全量 |
 | 量化 | 沒有 | 位置、角度是 float |
@@ -282,9 +282,9 @@
 
 | 決定 | 什麼時候 | 這份報告提供什麼 |
 |---|---|---|
-| 塔科夫類的玩法需求（D243：v8 只寫需求） | 使用者撰寫需求時 | 第 1 節的分類可以當成需求的清單：每類要寫數量、可見範圍、更新頻率 |
+| 塔科夫類的玩法需求（v8-product-scope：v8 只寫需求） | 使用者撰寫需求時 | 第 1 節的分類可以當成需求的清單：每類要寫數量、可見範圍、更新頻率 |
 | 鬥陣特工風格要不要做、做到多少 | 尚未排定 | 第 4 節的粗估：每人固定欄位一加就會超過現有的餘裕 |
-| 下一次協議升級的範圍（⑤ 的對局規則會再升一次，D246） | v8 ⑤ 開始前 | 計分、回合是低頻資料，可以借這次升級先引入「可靠事件串流」或「低頻狀態」，不必放進每 Tick 的 snapshot（推論，是否這樣做由使用者決定） |
+| 下一次協議升級的範圍（⑤ 的對局規則會再升一次，pv8-scope-crouch-sprint） | v8 ⑤ 開始前 | 計分、回合是低頻資料，可以借這次升級先引入「可靠事件串流」或「低頻狀態」，不必放進每 Tick 的 snapshot（推論，是否這樣做由使用者決定） |
 | 差分與基準的狀態放在哪裡 | 協議升級時 | 第 5 節：這些技術都需要每個 Client 一份的狀態，和 Gateway 無狀態的約束直接相關 |
 | pv8 之後還能不能在 PlayerState／CombatState 加欄位 | 每次要加欄位時 | 型別最大只剩 25 B（protocol-v8 §6） |
 

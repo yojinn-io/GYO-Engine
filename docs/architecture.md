@@ -52,6 +52,15 @@ Every workflow progresses through **manual operation → script → tool → pla
 
 This refactor stops at the maturity each existing workflow supports. Runtime assembly automates prepared-file copying and validation; it does not create an asset-authoring platform. The UI editor remains a separate design product that edits/exports data. It never embeds its own implementation into a game. JSON/CSV move project choices into explicit, editable data; each fact still has one owner: registries select games and tools, project metadata selects capabilities, and asset metadata selects content.
 
+### Plan records and identifiers
+
+Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF with a decision log, and batches leave dev_logs in `docs/dev_logs/`. Two identifier schemes exist; read an identifier by the scheme of the record it appears in.
+
+- **Until 2026-10-29: running numbers.** Decisions were `D1`, `D2`, … continuing across product versions (v6 → v7 → v7.1). Inventory and batch codes were short codes such as `B6`, `A4`, `E3`, `F7`. A `Dnnn` in a dev_log, commit message or HANDOFF means the decision of that record's own plan folder: a v7.1 dev_log's `D243` is v7.1 HANDOFF's `D243`. The same number can mean different things in different folders: v7.1 HANDOFF's `D243`～`D245` (worker-wake-phase) are unrelated to v8's former `D243`～`D254`.
+- **From 2026-10-30 (v8 onward): `<version>-<area>-<topic>`**, like a commit message scope, in ASCII lowercase with hyphens, so the identifier says what the item is about. Areas: `v8-product-…` (product tasks and decisions), `v8-engine-…`, `v8-tool-…`, `v8-docs-…`, and `pv8-<topic>-…` for the network protocol (for example `pv8-action-…`, `pv8-item-…`). Batches and decisions use the same scheme.
+- v8 started with running numbers; its `D243`～`D254` were renamed (for example `D243` → `v8-product-scope`). The mapping table is in the v8 HANDOFF's 代號對照. Older plan folders keep their running numbers.
+- dev_logs and commit messages are historical records and are not rewritten to the new identifiers; resolve an old number through the mapping table of its plan folder.
+
 ## Runtime boundaries
 
 | Owner | Responsibility | Dependencies |
