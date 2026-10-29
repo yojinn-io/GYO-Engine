@@ -27,7 +27,7 @@
 - **完成**：`v8-plan-sync`。
 - **之後**：`au1-plan`（audio-line，可並行）。
 - **等你決定**：
-  - `pv8-design` 的 D-2、D-5～D-8（見 pv8-design.md 文末；D-1、D-3、D-4 已決定，D248）。
+  - `pv8-design` 的 D-2、D-5～D-8（見 pv8-design.md 文末；D-1 已決定（D248）；D-3、D-4 由 D249 改寫，解讀待確認）。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `product-sfx` 前：音效資產的來源（v7 D38）。
   - `hit-rules` 前：部位倍率。`ads` 前：ADS 是否影響命中。
@@ -49,6 +49,7 @@
 | D246 | （2026-10-29）pv8 照建議：蹲下、衝刺、ADS 的欄位在 `pv8-design` 一次設計，隨蹲下的 PR 合併，衝刺與 ADS 先填預設值。對局規則不進 pv8，到 ⑤ 再升協議。計畫的檔位旁加上引擎（模型），照變速箱規則的「エンジン（モデル）」節 | 「照建議開，記得檔位上加個agent模型（opus啥）。變速箱規則升級了。」 |
 | D247 | （2026-10-29）v8 開始：第一批 `pv8-design`，照編制跑 ultracode：2 位唯讀偵察（Sonnet 5.5，medium）、3 個獨立方案（Opus 5.5）、1 位審查（Opus 5.5）、1 次對抗式檢查（Sonnet 5.5），共 7 個 agent | 「可以開始了v8進程」；選「pv8-design (Recommended)」「照編制跑 (Recommended)」 |
 | D248 | （2026-10-29）`pv8-design` 的 D-1、D-3、D-4 照建議：D-1 (a) `aiming` 放 `CombatState`=15，ADS 的移速只看 `aim_held`＋PlayerState，換彈不影響移速；D-3 (a) 空中可以蹲、站起走同一個檢查，蹲著可以跳、跳高不變；D-4 (a) 蹲下參數與倍率放 Arena 內容 v2（② 調倍率會改 arena_digest，已安裝的內容要重新安裝）。D-2、D-5～D-8 還沒決定 | 「嗯這3個照建議就可以了。」（指 D-1、D-3、D-4） |
+| D249 | （2026-10-29）取代 D248 的 D-3、D-4（D-1 維持 (a)）。D-3：起跳後不能蹲，蹲著不能跳。D-4：做參數校準，進地圖時確認。主會話的解讀（待使用者確認）：D-3＝姿態只在 grounded 時切換，空中維持離地時的姿態；蹲著時 `jump_requested` 不生效（不會先站起再跳）。D-4＝沿用 `jump_height`／`gravity` 的先例：蹲下參數與倍率由 Match 經 Ready→Welcome 下發，Client 進地圖時檢查範圍並採用，同一 session 內改變就明確報錯；來源放 Match 端的移動規則資料，不進 arena_digest，調整時 Client 不必重新安裝內容。Welcome／Ready 因此新增欄位 | 「這樣把D-1照建議，D-3 起跳不能蹲，蹲下不能跳。D-4，可以做一個參數校準，在進地圖是確認。」 |
 
 ## 規劃紀錄（記錄器）
 
