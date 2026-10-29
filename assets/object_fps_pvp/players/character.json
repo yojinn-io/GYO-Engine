@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "model_asset_id": "object_fps_pvp.model.character.player_v19",
+  "model_asset_id": "object_fps_pvp.model.character.player_v20",
   "animation_set_asset_id": "object_fps_pvp.player.animations",
   "animation_binding": {
     "mode": "compatible_reference_pose",

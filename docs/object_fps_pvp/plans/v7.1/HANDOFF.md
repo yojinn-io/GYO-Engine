@@ -236,6 +236,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
 | D238 | （2026-10-29）核准 lan15 宣告 2.2：判定工具依 BOM 讀 UTF-16 的 `ping.txt`（判定條文不變；新 sha256 `10f7ddc8…`，測試 27 個）；Gateway 與 quad probe 在 Mac 上從同一份原始碼建置，SHA-256 記在 marks.txt 核對 | 使用者：「核准 lan15 宣告 2.2（ping.txt 的 UTF-16 修正與新的 sha256、Gateway 與 quad probe 的版本核對）。」 |
 | D239 | （2026-10-29）核准 lan15 宣告 2.3：Mac 只跑 Match＋Gateway、不當玩家；Client 只在 Windows，N 台（N＝2 或 3，n_w＝n）；S7 只看 Windows | 使用者：「核准 lan15 宣告 2.3（Mac 只跑 Match＋Gateway、不當玩家，Client 只在 Windows，N 台）。」 |
 | D240 | （2026-10-29）先發版：不排 lan15 第 2 次場次；lan15 第 1 次的結果（確認不了、S1 約 6 分鐘、S2／S3 沒做、S7 新模型有問題）記為已知限界，寫進發行說明。帶著新模型（Player_V19＋nailer_v2）發版；模型的問題由使用者處理，修正版另發。版本號 `object_fps_pvp` v1.2.0 | 使用者：「不了，先發版。」之後對兩個問題選：「帶著新模型發版」「v1.2.0 (Recommended)」 |
+| D241 | （2026-10-29）v1.2.0 的草稿 release（tag 在 `dd6e6b2b`，含有問題的 Player_V19）不發布。使用者修好模型（Player_V20，本機 2 個 Client＋bot 看過「OK了」），從 master 開 `claude/pvp-v71-player-v20` 把 V19 換成 V20（catalog、模型 id、測試、文件），L1 通過就合併並建 v1.2.1 的草稿，Publish 由使用者按。HUD 的 `MARK23` 與第三人稱的舊手槍這次不動。L4 證據 issue #100 依使用者「那個issue 可以關了」關閉 | 使用者：「走 A：v1.2.0 不發布，從 master 開修正分支把 V19 換成 V20（catalog、測試、文件），L1 通過就合併並建 v1.2.1 草稿，Publish 我自己按。HUD 的 MARK23 與第三人稱的槍這次先不動。」 |
 
 ## 規劃紀錄（記錄器）
 
