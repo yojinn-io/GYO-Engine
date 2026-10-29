@@ -1,10 +1,10 @@
 # OS 子系統：分批計畫與進度
 
-更新：2026-10-28。Owner：Engine（新增 `engine/os`；`engine/io` 新增原生後端與路徑契約；`engine/time`、`engine/threads`、`engine/trace`、`engine/platform/sdl` 之後改呼叫 `engine/os`）。
+更新：2026-10-29。Owner：Engine（新增 `engine/os`；`engine/io` 新增原生後端與路徑契約；`engine/time`、`engine/threads`、`engine/trace`、`engine/platform/sdl` 之後改呼叫 `engine/os`）。
 **狀態：收口（D78，2026-10-28）。** OS 層保留，作為 OS 差異唯一的落點；之後只在觀測到壓力時擴大。盤點與理由見 [收口提案](closeout.md)。
 
 - 留下：長路徑那一片（A1～A3，加上消費端的 P1～P5），以及已併入消費端發行線的另外 10 批。其中沒有功能支撐的行為變更 4 批（os-console-shutdown、io-native-paths、os-tool-files、os-utf8-codepage）標成「已出貨、未經功能驗收」，本線不再為它們安排實機驗收。
-- 留在本分支、消費端發行後併 master：os-wake-record（晚醒量測程式）、os-threads-backend（執行緒命名與優先度搬進 engine/os）。
+- 留在本分支、消費端發行後併 master：os-wake-record（晚醒量測程式）、os-threads-backend（執行緒命名與優先度搬進 engine/os）。消費端已發行（PR #96），2026-10-29 以 os-land-master 的一條 PR 併 master。
 - 凍結：os-wait-backend（等待原語搬進 engine/os）。Windows 的計時 L2 不通過，已從本分支撤出。
 - 不開始或取消：os-net-errors、os-close、os-windows-run 的續跑與第 2 次、os-linux-run。
 
@@ -148,7 +148,7 @@ engine/asset → io；engine/threads、trace → os（engine/time 不連 os，D7
 | os-utf8-codepage（D64～D66） | high＋1 位 xhigh 審查（D66） | 完成（2026-10-27；Red：run 40450140816；xhigh 審查已修正；Green：四平台 L1 run 40456874710；[dev_log](../../../dev_logs/2026_10_27_engine_os_utf8_codepage.zh-Hant.md)） | 每個 Windows 執行檔以 manifest 把 code page 定為 UTF-8；R6 守衛；ACP 測試與突變重新設計 |
 | os-windows-run（D73） | Windows 端照文件執行（建議 medium） | 第 1 次結案（W0～W7；W3 不通過、W5 通過、W7 12／12 killed；[dev_log](../../../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)）；續跑、W8 與第 2 次取消（D78） | Windows 實機上不需要人操作的項目 |
 | os-linux-run（D75） | medium；判讀照事前宣告 | 取消（D78；沒有任何結果） | Linux 的 L2、基準與專用突變（Docker） |
-| os-closeout（D78） | os-freeze-wait high；其餘 medium | 完成（2026-10-28；四平台 L1 run 40646224836；[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）；os-handoff-v71 完成（消費端 D219）；os-land-master 待消費端發行後 | [收口提案](closeout.md)：凍結 os-wait-backend、文件改成收口後的狀態、今後的規則 |
+| os-closeout（D78） | os-freeze-wait high；其餘 medium | 完成（2026-10-28；四平台 L1 run 40646224836；[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）；os-handoff-v71 完成（消費端 D219）；os-land-master 進行中（2026-10-29 併入 master `62fd7ebf`、相關突變 12／12 killed；[dev_log](../../../dev_logs/2026_10_29_engine_os_land_master.zh-Hant.md)） | [收口提案](closeout.md)：凍結 os-wait-backend、文件改成收口後的狀態、今後的規則 |
 
 ```text
 os-plan-docs ─┬─→ os-skeleton ─┐

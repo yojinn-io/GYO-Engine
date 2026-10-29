@@ -2,7 +2,7 @@
 
 日期：2026-10-28。任務卡「盤點 OS 子系統並收口到支撐遊戲運行」。
 **狀態：核准（D78）。** 使用者：「核准：決定 1 選 (a)、決定 2 選 (a)、決定 3 選 (a)、決定 4 選 (a)，不做對抗式檢查。開始 os-freeze-wait 與 os-closeout-docs，推送前先問我。」
-os-freeze-wait 與 os-closeout-docs 已在本分支完成，並做了本機驗證（[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）。os-handoff-v71 提前改成雙向，已完成（消費端 D219：發行前不需要 OS 這邊做任何事）。推送後四平台 L1 通過（run 40646224836）。os-land-master 待消費端發行後。
+os-freeze-wait 與 os-closeout-docs 已在本分支完成，並做了本機驗證（[dev_log](../../../dev_logs/2026_10_28_engine_os_closeout.zh-Hant.md)）。os-handoff-v71 提前改成雙向，已完成（消費端 D219：發行前不需要 OS 這邊做任何事）。推送後四平台 L1 通過（run 40646224836）。os-land-master 在消費端發行（PR #96）後開工（2026-10-29，[dev_log](../../../dev_logs/2026_10_29_engine_os_land_master.zh-Hant.md)）。
 以下第 0～8 節是核准前的提案原文。盤點時只讀：沒有改任何分支、沒有推送、沒有啟動量測；撤回的代價用 `git merge-tree` 在物件庫裡試算，沒有動任何 ref。
 
 核心：讓 Engine 支撐遊戲跑起來（v7.1 發行，接著 v8 的玩法）。驗收以 CI 為主，實機只做 CI 做不到的事。
@@ -135,7 +135,7 @@ OS 子系統（D40～D77）
 | 項目 | 會改變什麼決定 | 工時（agent） | 機器 | 你要花的時間 | CI 做得到嗎 |
 |---|---|---|---|---|---|
 | M-wait-win：os-wait-backend 在 Windows 另行宣告判定（D74 的 C：Windows A/A → 新判定 → 新 A/B），Linux 在 Docker 補 | 撿不撿回 os-wait-backend | 6～10 h（含 §14.4 的 1～5、檢出力檢查、另一位審查者） | Windows 約 3 h；Docker 約 2.5 h（虛擬機，限界要照寫） | 約 1～1.5 h（核准宣告、§14.4、開 Windows 會話） | 做不到：亞毫秒的晚醒，共用 runner 量不準；L1 也規定不設時間上界 |
-| M-threads-linux：os-threads-backend 的 Linux L2（X5） | 幾乎不會（L1 與另外兩個平台的 L2 都通過） | 約 1 h | Docker 約 1.5～2 h（多半是建置） | 0 | 部分：L1 跑 RoleThreadTests 與名稱讀回測試；A／B 兩次建置的逐字比較做不到（CI 一次只建一個 commit）。優先度有沒有讀回測試，我沒有逐行確認 |
+| M-threads-linux：os-threads-backend 的 Linux L2（X5） | 幾乎不會（L1 與另外兩個平台的 L2 都通過） | 約 1 h | Docker 約 1.5～2 h（多半是建置） | 0 | 部分：L1 跑 RoleThreadTests 與名稱讀回測試；A／B 兩次建置的逐字比較做不到（CI 一次只建一個 commit）。~~優先度有沒有讀回測試，我沒有逐行確認~~（更正，os-land-master 時）有：`tests/common/os/ThreadTests.cpp` 的「applies the priority hints as the platform reads them back」與經 RoleThread 讀回的案例，Linux 讀 nice，run 40484797877 的 linux-x64 通過 |
 | M-wake-base：晚醒基準的 Linux、macOS arm64 | 不會（只記錄） | 約 0.5 h | Docker 約 1.5 h（含建置） | 0 | 做不到 |
 | ~~M-console-l3：Windows 主控台用 Ctrl+C、Ctrl+Break、關閉視窗結束 Match~~ | （更正，D78 執行時）10-27 的 D201 已在 conhost 實機做了 Ctrl+C 與關閉視窗，都通過；Ctrl+Break 與 `os.console_close` 使用者決定不補。不需要再量 | — | — | — | 做不到：CI 沒有主控台 |
 | M-mingw：W8 的 MinGW 確認（manifest 以 `.rc` 嵌入） | 只有 v7.1 會用 MinGW 建置發行時才會 | 約 0.5 h | Windows 約 1 h | 0 | 做不到：CI 沒有 MinGW 的 job（D66） |
@@ -189,7 +189,7 @@ OS 子系統（D40～D77）
   - D69 事前宣告了 Linux 的 L2。不跑就等於改了事前宣告的驗收，但還沒看過 Linux 的結果，所以不違反 §14.1。
 - **選項**：
   - **(a) v7.1 發行後，OS 分支以一條 PR 併 master（建議）**。驗收照新規則用 CI 加守衛，取消 Linux 的 L2（X5）。
-    - 守住的性質是：Linux 上的命名與優先度呼叫和搬移前相同。名稱有 L1 的讀回測試守著；優先度要不要補一個讀回測試，由那條 PR 決定。
+    - 守住的性質是：Linux 上的命名與優先度呼叫和搬移前相同。名稱有 L1 的讀回測試守著；優先度要不要補一個讀回測試，由那條 PR 決定。（更正，os-land-master 時：優先度也已有 L1 的讀回測試，見上方 M-threads-linux 一列，不必補。）
   - **(b) 現在就併進發行線**：和 D218 衝突，也不支撐 v7.1，不建議。
   - **(c) 也凍結，留在 OS 分支**，等有壓力再併。代價為 0，但無害的搬移會一直放著，分支和 master 的差距會越來越大。
 - **證據**：W5 的 `A-roles.txt`、`B-roles.txt`（Windows 機器的證據目錄）；run 40484797877。

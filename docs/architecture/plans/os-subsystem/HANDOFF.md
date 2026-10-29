@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-28。**狀態：收口（D78）。** 長路徑那一片（A1～A3）與已併入消費端發行線的 10 批留下；只在本分支的 os-wake-record、os-threads-backend 留下，等消費端發行後併 master（os-land-master）；os-wait-backend 凍結並從本分支撤出（os-freeze-wait）；os-net-errors 不開始、os-close 取消；os-windows-run 第 1 次結案，續跑、第 2 次與 os-linux-run 取消。盤點與理由見 [closeout.md](closeout.md)。以下為 2026-10-27 之前的狀態行，保留作紀錄：**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-29。**狀態：收口（D78）。** 長路徑那一片（A1～A3）與已併入消費端發行線的 10 批留下（隨 PR #96 併 master）；只在本分支的 os-wake-record、os-threads-backend 留下，消費端發行後以 os-land-master 的一條 PR 併 master；os-wait-backend 凍結並從本分支撤出（os-freeze-wait）；os-net-errors 不開始、os-close 取消；os-windows-run 第 1 次結案，續跑、第 2 次與 os-linux-run 取消。盤點與理由見 [closeout.md](closeout.md)。以下為 2026-10-27 之前的狀態行，保留作紀錄：**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -81,6 +81,15 @@
   - 本機驗證：core 34／34、test preset 92／92、相關突變 9／9 killed（dev_log）。
   - 推送（使用者同意，fast-forward `468d2b9c..a65fe59f`），四平台 L1 [run 40646224836](https://github.com/yojinn-io/GYO-Engine/actions/runs/40646224836) 全部成功。os-freeze-wait、os-closeout-docs、os-handoff-v71 完成。
   - 下一步：消費端發行後 os-land-master。
+- 2026-10-29：os-land-master 開工。消費端的會話轉達使用者在發行會話的原話「這個可以開工了。」PR #96（`dd6e6b2b`）與 #101 已合併，master 是 `62fd7ebf`；`claude/os-windows-run` 沒有新 commit（仍是 `035ff14b`）。
+  - 本分支併入 master（`87bad504`）：兩邊改動的檔案沒有重疊，沒有衝突。master 那邊沒改 engine 與 tests/common，所以這兩處和併入前逐位元組相同。和 master 的差異是 35 個檔案：os-wake-record、os-threads-backend 與收口文件。
+  - 本機驗證（macOS Intel）：
+    - core 34／34。
+    - test preset 第一次 92／93：`object_fps_pvp.presentation_evidence` 在 60 秒逾時。判斷為環境（主機負載，load average 約 45、16 核），不是實作：它是純 Python 的分析測試，檔案和 master 相同；10-28 用 19.97 秒通過；直接執行 42／42 通過（負載下 82 秒）；負載降到約 11 後以 CTest 重跑通過（20.66 秒）。測試的判定沒有改。
+    - 相關突變（D184：本 PR 改動檔案上的既有突變 18 條）：12／12 killed，Windows／Linux 專用的 6 條跳過（os-g18、ti-x4、pu-x10、th-x3、th-x5、th-x6）。
+  - 盤點更正：closeout.md 寫「優先度要不要補讀回測試，由那條 PR 決定」，其實 `tests/common/os/ThreadTests.cpp` 已有優先度的讀回測試（macOS 讀 QoS、Windows 讀 thread priority、Linux 讀 nice），run 40484797877 的四平台都通過，不必補。
+  - inactive_products.md 第 5 節：已隨 PR #96 進 master 的 10 批，與隨本 PR 進 master 的 2 批，狀態後面補上「後續」。
+  - 下一步：使用者同意後推送、開 PR、四平台 L1、合併。
 
 ## 閱讀入口
 
@@ -949,9 +958,9 @@ D62：計時核心之前的 4 批做完後，在實機上一次補齊。2026-10-
 ## 未結事項
 
 - 收口（D78）之後：
-  - 推送本分支並派發四平台 L1（os-freeze-wait 的驗收）。
-  - os-handoff-v71：通知消費端的會話（[closeout.md](closeout.md) 第 6 節的五點）。
-  - os-land-master：消費端發行後，本分支以一條 PR 併 master；PR 前在背景完整跑一次相關突變（消費端 D184 的作法）。名稱有 L1 的讀回測試；優先度要不要補讀回測試，在那條 PR 決定。
+  - ~~推送本分支並派發四平台 L1（os-freeze-wait 的驗收）。~~ 2026-10-28 完成（run 40646224836）。
+  - ~~os-handoff-v71：通知消費端的會話（[closeout.md](closeout.md) 第 6 節的五點）。~~ 2026-10-28 完成（消費端 D219）。
+  - os-land-master：消費端發行後，本分支以一條 PR 併 master；PR 前在背景完整跑一次相關突變（消費端 D184 的作法）。名稱有 L1 的讀回測試；優先度要不要補讀回測試，在那條 PR 決定。2026-10-29：master 已併入、相關突變 12／12 killed；優先度的讀回測試已存在，不必補（見現況）。剩推送、PR、L1 與合併。
   - 以下各項裡，等實機、lan15 或 Windows／Linux 專用突變的條目，D78 之後本線不再排；需要時由有功能的產品版本另排。
 
 - os-utf8-codepage 留下的（2026-10-27）：
