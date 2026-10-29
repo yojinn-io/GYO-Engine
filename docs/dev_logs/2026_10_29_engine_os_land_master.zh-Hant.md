@@ -20,6 +20,7 @@
 - 文件同步：
   - HANDOFF 的現況與未結事項，README 與 closeout.md 的狀態。
   - inactive_products.md 第 5 節：已隨 PR #96 進 master 的 10 批，以及隨本 PR 進 master 的 2 批，在狀態後面補上「後續」。
+  - time.md 的 Baselines：補上 Windows 的基準（os-windows-run 的 W4，程式由 `4ffc7c65` 建置，Waiter 和現在相同；值取自 [Windows 實機的 dev_log](2026_10_28_engine_os_windows_run.zh-Hant.md)）；Linux 標成取消（D78）。原本兩者都寫「等下一次實機」。
 - 盤點更正：closeout.md 寫「優先度要不要補讀回測試，由那條 PR 決定」。其實 `tests/common/os/ThreadTests.cpp` 已有優先度的讀回測試（macOS 讀 QoS、Windows 讀 thread priority、Linux 讀 nice），也有經 `RoleThread` 讀回的案例；run 40484797877 的四平台都通過，所以不必補。原因是盤點時沒有逐行確認（closeout.md 第 3 節原文也寫了「我沒有逐行確認」）。
 
 ## 驗證與經緯

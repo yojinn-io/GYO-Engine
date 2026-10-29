@@ -51,7 +51,8 @@ the main checkout.
 |---|---|---|---|
 | macOS Intel x86_64 (Kqueue) | 2026-10-27, `f6997194` | 0.077 / 0.145 ms; 0.077 / 0.134 ms | `os-wake-baseline-20261027-macos-intel` |
 | macOS Intel x86_64 (Kqueue), TT-1 L2 | 2026-10-09, `a8f9535` | 0.025 / 0.10 ms; 0.077 / 0.133 ms (idle host) | `tt1-l2-20261009-idle` |
-| Windows x64, Linux x64 | not yet: on the next machine session, with the os-wake-record commit | | |
+| Windows x64 (HighResolutionWaitableTimer), os-windows-run W4 | 2026-10-28, programs built from `4ffc7c65` (this Waiter) | 0.617 / 1.000 ms; 0.450 / 0.928 ms | `wake-baseline/` on the Windows machine ([record](../dev_logs/2026_10_28_engine_os_windows_run.zh-Hant.md)) |
+| Linux x64 | cancelled (os-subsystem D78) | | |
 | macOS arm64 | not run: no machine (CI runs L1 only) | | |
 
 ## Design Invariants

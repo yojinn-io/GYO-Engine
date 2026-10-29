@@ -89,6 +89,7 @@
     - 相關突變（D184：本 PR 改動檔案上的既有突變 18 條）：12／12 killed，Windows／Linux 專用的 6 條跳過（os-g18、ti-x4、pu-x10、th-x3、th-x5、th-x6）。
   - 盤點更正：closeout.md 寫「優先度要不要補讀回測試，由那條 PR 決定」，其實 `tests/common/os/ThreadTests.cpp` 已有優先度的讀回測試（macOS 讀 QoS、Windows 讀 thread priority、Linux 讀 nice），run 40484797877 的四平台都通過，不必補。
   - inactive_products.md 第 5 節：已隨 PR #96 進 master 的 10 批，與隨本 PR 進 master 的 2 批，狀態後面補上「後續」。
+  - time.md 的 Baselines：補上 Windows 的基準（W4），Linux 標成取消（D78）。
   - 下一步：使用者同意後推送、開 PR、四平台 L1、合併。
 
 ## 閱讀入口
