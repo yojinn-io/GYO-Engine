@@ -1,11 +1,120 @@
-# PvP v8 玩法優化（未開始）
+# PvP v8 分批計畫
 
-更新：2026-10-22（整理：把被後續決定推翻的內容改寫成現行結論；更新歷程見 git 紀錄）。Owner：`object_fps_pvp`。**v8 尚未開始**：使用者 2026-10-07 開立，專門處理遊戲玩法的調整。本文件只收集候選與規劃輸入，還沒有分批、契約或檔位。
+更新：2026-10-29（`v8-plan-sync`：範圍、順序、分批、檔位與引擎，D243～D246）；初版 2026-10-07。Owner：`object_fps_pvp`。
+**狀態：規劃完成，實作未開始。** 下一批是 ① 的 `au1-plan` 或 `pv8-design`（兩條線可並行，先後由使用者決定）。記錄器是 [HANDOFF](HANDOFF.md)。
 
-版本號：v8＝遊戲版本，pvN＝網路協議版本（見 [v6 交接](../v6/HANDOFF.md) D20）。
-與前面版本的分工：[v7](../v7/README.md) 交付執行緒、時間、網路（[v7 交接](../v7/HANDOFF.md) D76 縮小範圍）；[v7.1](../v7.1/README.md) 交付 pv7 與事故善後；v8 處理玩法本身，以及 v7 移來的畫面設定 UI（D41）、解析度與 FPS 選擇、音效（D76）。
+版本號：v8＝遊戲版本，pvN＝網路協議版本（見 [v6 交接](../v6/HANDOFF.md) D20）。v7.1 停在 pv7；**pv8 在 v8**（D246）。
+與前面版本的分工：[v7](../v7/README.md) 交付執行緒、時間、網路；[v7.1](../v7.1/README.md) 交付 pv7 與事故善後（v1.2.0 已發行，D242）；v8 補完一個基礎 FPS 的功能與工具。
 
-## 範圍
+## 定位
+
+- **v8 的核心是補完遊戲功能與工具**（D243）。2026-10-29 盤點 origin/master 的程式碼：移動只有走與跳；只有一把武器；沒有音效（Engine 沒有 Audio 模組）；沒有計分與對局結束（無止盡的死鬥）；Esc 直接離開對局；地圖是手寫 JSON，沒有地圖與資產的編輯器。
+- **順序**（D244、D245）：① 基礎功能 → ② 體驗優化 → ③ 手感時序（v7.1 交過來的）→ ④ 工具 → ⑤ 流程項目。①② 完成才像一個基礎 FPS；③ 是優化；④ 是 Engine 的穩定；⑤ 排在工具之後。
+- **塔科夫方向不在 v8**（D243）：v8 只收集它的玩法需求（下面「網路協議升級」一項），多通道、interest management 等協議升級之後另開。
+- **pv8 是一次 wire 變更**（D246，沿用 v7.1 的做法 (a)）：蹲下、衝刺、ADS 的欄位在 `pv8-design` 一次定完，隨蹲下的 PR 合併；衝刺與 ADS 先填預設值，② 只填行為。⑤ 的對局規則（計分、勝負）**不**進 pv8（AGENTS §2：契約要說出它支撐的功能，⑤ 還太遠），到 ⑤ 時再升一次協議。
+- **推導順序**照 AGENTS §2「Feature → Contract → Architecture」。不以玩法為理由在 Engine 加入產品專用的知識（AGENTS §6）。
+
+## 樹狀總覽
+
+格式：「檔位｜引擎｜簡述」。引擎照 [變速箱規則](../../../../agents/effort-gearbox.md)「エンジン（モデル）」：主會話的引擎與檔位由使用者決定，下面寫的是建議；子 agent 的引擎由 Claude 設定，開始前說明。「Opus 5.5」＝目前主會話的引擎；「Sonnet 5.5」用在唯讀偵察與對抗式檢查（對抗式檢查盡量用和提案者不同的引擎）。估時是第一版，誤差可能到 ±50%，每批開始前重估。
+
+```
+v8-plan
+├── v8-plan-sync ✓                 「medium｜Opus 5.5｜寫本計畫、HANDOFF，記錄 D243～D246」
+│
+├── ① 基礎功能
+│   ├── audio-line                 「PR 線：Engine 音效＋產品音效」
+│   │   ├── au1-plan               「high｜Opus 5.5｜建 Engine 計畫夾、定 GYO::Audio 的介面與 Design Invariants」
+│   │   ├── au1                    「high（排程局部 xhigh）｜Opus 5.5｜中立混音器、時間戳排程、SDL 後端」
+│   │   └── product-sfx            「high｜Opus 5.5｜射擊、命中、受擊、換彈、腳步；資產來源先定」
+│   ├── pv8-line                   「PR 線：pv8 契約＋蹲下，三角色同一個 PR」
+│   │   ├── pv8-design             「ultracode｜案 3×Opus 5.5、審 1×Opus 5.5、對抗 1×Sonnet 5.5｜蹲下、衝刺、ADS 的欄位一次定完」
+│   │   └── crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告」
+│   └── hitbox-line                「PR 線：部位 hitbox（pv7 已有欄位）」
+│       ├── hitbox-data            「high｜Opus 5.5｜骨骼→部位形狀的 Data Contract，先手寫 JSON」
+│       ├── hitbox-rewind          「high（回溯局部 xhigh）｜Opus 5.5｜Match 的權威姿勢歷史、射擊照開槍時刻回溯」
+│       └── hit-rules              「medium｜Opus 5.5｜部位倍率（數值由使用者決定）」
+│
+├── ② 體驗優化                     「pv8 欄位已在 ① 合併，這裡只填行為」
+│   ├── sprint                     「high｜Opus 5.5｜衝刺；改變權威結果，事前宣告」
+│   └── ads                        「high｜Opus 5.5｜FOV、viewmodel、靈敏度、遠端姿勢」
+│
+├── ③ 手感時序                     「v7.1 交過來；基準在 pv8 合併後重新取得」
+│   ├── analyzer-105               「medium｜Opus 5.5｜門檻 105 與視窗 30 改共用常數＋核對測試」
+│   ├── phase-golden               「high｜Opus 5.5｜B10：相位追蹤的 golden」
+│   ├── correct-assert             「medium｜Opus 5.5｜決定 Correct() 的前提是否改成 assert」
+│   ├── b6-plan                    「ultracode｜案 3×Opus 5.5、審 1×Opus 5.5、對抗 1×Sonnet 5.5｜撤回多加的領先」
+│   ├── b6                         「xhigh｜Opus 5.5｜B6 實作」
+│   └── a4                         「ultracode 規劃＋xhigh｜Opus 5.5｜延遲位移；需要 WAN 資料」
+│
+├── ④ 工具                         「各自開工時規劃，現在不估」
+│   ├── ui-editor-widgets          「high｜Opus 5.5｜按鈕與輸入框元件化，連同大廳；輸入法組字」
+│   ├── voxel-map-editor           「ultracode 規劃｜同上｜Editor → Data Contract → Application」
+│   └── assets-editor              「ultracode 規劃｜同上｜hitbox 形狀等；接手 ① 手寫的 JSON」
+│
+└── ⑤ 流程項目                     「排在工具之後」
+    ├── match-rules                「ultracode（契約）＋high｜Opus 5.5｜計分、計分板、擊殺訊息、勝負、結算回大廳；再升一次協議」
+    ├── spawn-layout               「high｜Opus 5.5｜出生分散與出生保護；事前宣告＋digest」
+    ├── pause-menu                 「high｜Opus 5.5｜Esc 開選單，不直接離開」
+    ├── display-settings           「high｜Opus 5.5｜IP-5＋解析度、視窗模式、FPS 上限、settings.json（D41、D76）」
+    ├── warmup-hidden              「high｜Opus 5.5｜預熱幀不讓玩家看到」
+    └── player-look                「medium｜Opus 5.5｜角色顏色與名牌、屍體手上的槍」
+```
+
+## 各批明細
+
+| 代號 | 檔位｜引擎 | 估時 | 內容 | 依賴與注意 |
+|---|---|---|---|---|
+| `au1-plan` | high｜Opus 5.5 | 3～5 h | 依 v7 D28 在開始時建立 Engine 計畫夾；中立混音器與時間戳排程的介面、owner、Design Invariants 與 Replacement Criteria（AGENTS §3） | 依賴 TT-1（v7 完成）與 IP-3（PR #85 完成，2026-10-23）。`engine/asset` 已有 `SoundLoader` |
+| `au1` | high（排程局部 xhigh）｜Opus 5.5 | 12～18 h | `GYO::Audio`＋SDL 後端 | 局部 xhigh 用 `xhigh-reviewer`（引擎繼承） |
+| `product-sfx` | high｜Opus 5.5 | 8～12 h | 在事件真正發生的地方以 Engine 時間戳觸發：射擊、命中確認、受擊、換彈、遠端射擊、腳步 | 音效資產的來源（v7 D38）開工前決定。L2：`SDL_AUDIO_DRIVER=disk` 30 FPS 連射，起音間隔對應射擊 Tick |
+| `pv8-design` | ultracode｜案 3×Opus 5.5、審 1×Opus 5.5、對抗 1×Sonnet 5.5 | 6～10 h | 姿態（蹲下）、衝刺、ADS 的 wire 欄位與語意一次定完，產出 `protocol-v8.zh-Hant.md` 草案 | 只放 ①② 的功能（D246）。版本不符要明確報錯（同 pv7 的 version-errors） |
+| `crouch` | high（預測重播局部 xhigh）｜Opus 5.5 | 16～24 h | 碰撞高度（站起時頭上有牆不能站）、視角高度、遠端動畫；pv8 欄位實作並合併 | 改變權威結果：事前宣告，同機兩樹 digest 比對；三角色同一個 PR |
+| `hitbox-data` | high｜Opus 5.5 | 6～10 h | 骨骼對應的形狀與部位標記（通用格式）＋部位語意（產品資料），先手寫 JSON | 通用格式的 owner 在規劃時定（v8 候選表「PvP 骨骼 hitbox」）；④ 的 Assets Editor 之後接手 |
+| `hitbox-rewind` | high（回溯局部 xhigh）｜Opus 5.5 | 20～30 h | Match 保存權威姿勢歷史，照射手開槍時看到的遠端時刻回溯；填 pv7 已預留的欄位（v7.1 D87、D89） | 蹲下之後做：蹲下會改變姿勢 |
+| `hit-rules` | medium｜Opus 5.5 | 2～4 h | 部位倍率 | 倍率由使用者決定 |
+| `sprint` | high｜Opus 5.5 | 8～12 h | 衝刺速度與限制 | 改變權威結果：事前宣告 |
+| `ads` | high｜Opus 5.5 | 10～14 h | FOV、viewmodel、靈敏度、遠端姿勢 | ADS 是否影響命中（擴散）開工前決定 |
+| `analyzer-105`、`phase-golden`、`correct-assert`、`b6-plan`、`b6`、`a4` | 見樹 | 3～4、6～10、1～2、4～6、16～24 h；A4 開工時估 | 下面「v7.1 交過來的項目」 | pv8 改了移動與預測的路徑，B6 與 A4 的基準在 pv8 合併後重新取得 |
+| ④ 三項 | 見樹 | 開工時估 | `ui-editor-widgets`（v8 候選表「大廳 UI 的元件化」）、`voxel-map-editor`（未決事項 b）、`assets-editor` | 工具照 AGENTS §5「手動 → Script → Tool」、§8 Data Contract |
+| `match-rules` | ultracode（契約）＋high｜Opus 5.5 | 32～48 h | 對局狀態、計分、計分板、擊殺訊息、結束與勝負、結算回大廳 | 要再升一次協議（D246） |
+| `spawn-layout` | high｜Opus 5.5 | 10～16 h | v8 候選表「正式的 4 人地圖」 | 改變 2 人的出生位置與驗收幾何 |
+| `pause-menu` | high｜Opus 5.5 | 6～10 h | Esc 開選單 | 和 `display-settings` 的選單共用 |
+| `display-settings` | high｜Opus 5.5 | 22～32 h | 下面「已決定的項目」的前兩項（D41、D76），含 Engine IP-5 | Engine 計畫 [輸入與呈現](../../../architecture/plans/input-and-present/README.md) |
+| `warmup-hidden` | high｜Opus 5.5 | 6～10 h | v8 候選表「預熱幀不得讓玩家看到」 | 驗收可沿用 `black_map_watch.py` |
+| `player-look` | medium｜Opus 5.5 | 6～9 h | 角色顏色與名牌、屍體手上的槍 | 只改呈現 |
+
+合計（④ 與 A4 除外）約 205～310 h：① 73～113、② 18～26、③ 30～46、⑤ 82～125。
+
+## PR 線
+
+PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR。
+
+- ①：`audio-line`、`pv8-line`、`hitbox-line` 三條。`audio-line` 不碰 wire，可以和 `pv8-line` 並行；`hitbox-line` 排在 `pv8-line` 之後。
+- ②：`sprint` 與 `ads` 一條。③：一條（`b6`、`a4` 若太大再分）。④：每個工具一條。⑤：`match-rules` 一條，其餘依開工時的分組。
+
+## 不在 v8 的項目
+
+| 項目 | 去處 | 理由 |
+|---|---|---|
+| 塔科夫的協議升級（多通道、interest management、差分） | v8 之後另開 | D243：v8 只寫需求 |
+| 多武器與射速 | 未排定 | 武器 id 要改 wire，不在 pv8（D246） |
+| 受擊方向對多位攻擊者 | 未排定 | 要改 wire，不在 pv8 |
+| 建房時在 Client 選地圖 | 未排定 | 要改 wire 與 Match／Gateway，不在 pv8 |
+| 單機劇情＋聯機選項 | 未排定 | 規模大，可能另立計畫 |
+| 驗收工具的三個問題、品質窗口失敗原因、睡眠後重連、I-3 與 outage-resync P2 的兩個例外 | 等使用者決定（HANDOFF「等你決定」） | 不屬於玩法 |
+
+## 開發紀錄
+
+| 批次 | dev_log |
+|---|---|
+| `v8-plan-sync` | [2026-10-29](../../../dev_logs/2026_10_29_pvp_v8_plan_sync.zh-Hant.md) |
+
+---
+
+以下是 2026-10-22 版的規劃輸入，內容不變；其中的候選已在上面分到各批或「不在 v8 的項目」。
+
+## 範圍（2026-10-22 版）
 
 - 做：規則、地圖、出生、回合、命中與傷害、角色辨識等直接影響遊玩的調整。
 - 不做：v7 負責的架構與平台工作；不以玩法為理由在 Engine 加入產品專用的知識（AGENTS §6）。
