@@ -1,8 +1,8 @@
-# lan15-windows 的事前宣告（第 2 版，2026-10-29 核准；人數與 Q2 待補）
+# lan15-windows 的事前宣告（第 2 版，2026-10-29 核准；第 2.1 版補上人數、Q2 與工具，待核准）
 
 更新：2026-10-29。Owner：`object_fps_pvp`。規劃：[lan15-windows.md](lan15-windows.md)（D232～D234）。
 第 1 版（`e5443624`）經對抗式檢查（本文件最後一節）改成本版；使用者對三項待決選了建議（M7：Mac 的斷線列為限界；M9：實體斷線＋ping 量長度；M3：判計數一致、比例只記錄）。
-核准（D236）：使用者：「核准 lan15 宣告第 2 版（人數與 Q2 的補人方法定了再補、只核准那幾處），開始 lan15-tools。」人數（N、N_w）與第 5 節 Q2 的補人方法補上時，只核准那幾處；其餘內容核准後不改，跑完不放寬（AGENTS.md §14.1）。人數與日期等使用者（lan15-windows.md 第 1 項）。本版以「Windows Client N_w 台（1～2）＋Mac Client 1 台，共 N 人」寫；人數定了填入 N、N_w，並寫好第 4 節 Q2 的補人方法，改版要重新核准。
+核准（D236）：使用者：「核准 lan15 宣告第 2 版（人數與 Q2 的補人方法定了再補、只核准那幾處），開始 lan15-tools。」人數（N、N_w）與第 5 節 Q2 的補人方法補上時，只核准那幾處；其餘內容核准後不改，跑完不放寬（AGENTS.md §14.1）。人數與日期等使用者（lan15-windows.md 第 1 項）。第 2.1 版（待核准，只核准標「2.1」的地方）：人數是 2～3 人，看當天情況（使用者：「人數2～3人，得看情況。」）。N（2 或 3）與 N_w（N−1）在 S1 開始前寫進 `marks.txt`，之後不改。
 
 ## 0. 依據的事實
 
@@ -16,13 +16,15 @@
 - **構成**：Mac（Intel）跑 Match＋Gateway，也當 1 位玩家；Windows Client N_w 台。同一個區域網路。地圖 `pvp_corners_v1`。
 - **程式**：最新發行線（含換模型的合併，D234）的四平台 L1 產物（D232）。Windows 用 windows-x64 套件，Mac 用 macos-x64 套件。各套件 `build_metadata.json` 的 `source_revision` 相同，而且每個啟動行的 `executable_sha256` 等於該套件的清單。
 - **場次資料夾**：Mac 上新建一個空資料夾放 Match 與 Gateway 的 log 與 trace；每台 Client 用新解壓的套件（`logs/` 是空的）。Mac 的 Client 用自己的 `--log` 與 `--movement-trace` 檔名。
+- **（2.1）判定用的資料夾**：場次結束後整理成 `lan15_judge.py` 讀的形狀：`marks.txt`；`mac/`（match.log、gateway.log、`match*-ingress.jsonl`、`match*-shots.jsonl`、`match*-commands.jsonl`）；`clients/<名稱>/`（那台機器所有 Client 程序的 `.log`；Windows 另有 `ping.txt`；Mac 的 Client 也放一個資料夾）；`quad/`（Q2 的 quad probe 的輸出與 log）。
+- **（2.1）`marks.txt` 的格式**（一行一個 `key=value`；時刻用 ISO 格式，到秒）：`n=`、`n_w=`、`s1_end=`（Mac 的時刻）；每次 S2 試行一行 `trial=<Windows 名稱>,<2s|7s>,<那台 Windows 的時刻>`；`q1=<Windows 名稱>`；`q2_start=`、`q2_end=`（Mac 的時刻）。
 - **啟動的規則**：每份 log 恰好 1 行啟動（Match、Gateway、每個 Client 程序各自的 log）。最後一位玩家 `join player=N accepted` 之前遇到環境故障（例如防火牆擋 UDP）可以重啟，但要換新的資料夾重來；之後不准重啟任何程式。trace 依啟動行記錄的實際檔名讀（D191 的編號名）。
 - **時鐘偏移**：每台 Client 用成對事件估計它對 Mac 的牆鐘偏移：Client 的 `PvP connection phase=playing player=N` 對 Gateway 的 `player active player=N`。只用在第 2 節的 S1 範圍；估計的誤差容許 ≤1 s，超過時那台 Client 的 J3 記確認不了。
 - **順序**（一個場次，依序；使用者在每一步開始與結束時，記下 Mac 上的時刻到 `marks.txt`，精確到秒）：
   1. **S1**：全員加入後連續對戰至少 15 分鐘，不做刻意的干擾。S1 結束時記下時刻 `s1_end`，之後**空 60 s 不做任何事**（照常遊戲）。
   2. **S2**：只對 Windows 做（M7）。每台 Windows 依序：2 s → 等 ≥45 s → 7 s（回 Lobby 後重新加入）→ 等 ≥45 s → 下一台。
   3. **S3**：Q1（關閉視窗後重新加入）→ 等 ≥45 s → Q2（room_full）。
-  4. **結束**：每個 Client 按 Esc 離開並關閉視窗 → Gateway Ctrl+C → Match Ctrl+C。
+  4. **結束**：（2.1）每位玩家先停止射擊與換彈至少 3 秒（讓最後的裁決到達、最後一個 1 秒的摘要窗口寫出），再按 Esc 離開並關閉視窗 → Gateway Ctrl+C → Match Ctrl+C。
   - S7（新模型的外觀）在整個場次中觀察。S5、S6 從整個場次的 log 取。
 - **≥45 s 的來源**：Match 的連線品質以 10 s 為一個窗口，連續 3 個窗口失敗就逐出（`MatchRuntimeHost.cpp:700-722`、`Movement.hpp:109-112`）。一次斷線最多讓 2 個窗口失敗，所以兩次斷線之間至少要有 1 個完整的乾淨窗口（最壞 20 s）；45 s 是 3 個窗口加餘裕。
 - **不重跑**：S1 只做一次。中途有人的 Wi-Fi 掉線之類的事，也照實記錄成 S1 的結果，由使用者判斷要不要另排一次（§14.1）。
@@ -86,7 +88,7 @@ S1 只記錄（不判定）：
 | 代號 | 判定 | 通過條件 | 來源 |
 |---|---|---|---|
 | Q1 | 關閉視窗後重新加入 | 一位 Windows 玩家直接關閉視窗（不按 Esc），再啟動 Client 加入。Gateway 有舊 id 的 `player left` 或 `player expired`；Match 有舊 id 的 `leave`；之後 Match 有新的 `join player=M accepted`，M ≠ 舊 id；其他每台 Client 的 `PvP summary` 的 `players=` 先變成 N−1，再回到 N，期間沒有 `connection interrupted` 或 `connection failed` | v7 L3-4（`v7/STABLE_BASELINE.md:140`）；v6 `MANUAL_ACCEPTANCE.md:100`（重新加入是新身分，沒有舊玩家殘留） |
-| Q2 | 房間已滿 | （補人的方法等人數定了再寫）房間有 4 位玩家（Gateway 的預約也算，`server.go:344`）時，第 5 個加入被拒：Gateway 有 `join refused … code=room_full`；那個 Client 的 log 有 `connection failed … reason=room_full`，留在 Lobby；房間內的 4 位玩家沒有 `connection interrupted` 或 `connection failed` | `server.go:344-345`（`MaxPlayers`＝4）；protocol-v7（409 `room_full`）；v6 `MANUAL_ACCEPTANCE.md:104` |
+| Q2 | 房間已滿 | （2.1）補人：Mac 上用同一個 commit 在本機建置的 quad probe 補到 4 人，再試第 5 個：`gyo_object_fps_pvp_quad_probe --gateway MAC_IP:8080 --arena <pvp_corners.json> --create false --clients <4−N> --expect-players 4 --fifth true --passive true --duration 20 --output quad/out`，輸出與 log 存進 `quad/`。工具讀 `quad/` 的 JSON 的 `fifth`（`error` 是 `room_full`、`joined` 是 false）。房間有 4 位玩家（Gateway 的預約也算，`server.go:344`）時，第 5 個加入被拒：Gateway 有 `join refused … code=room_full`；那個 Client 的 log 有 `connection failed … reason=room_full`，留在 Lobby；房間內的 4 位玩家沒有 `connection interrupted` 或 `connection failed` | `server.go:344-345`（`MaxPlayers`＝4）；protocol-v7（409 `room_full`）；v6 `MANUAL_ACCEPTANCE.md:104` |
 
 ## 6. S5、S6、S7
 
@@ -110,7 +112,12 @@ S1 只記錄（不判定）：
   - S7：使用者判定通過，且 log 核對通過。
   - 有任何一項不通過，不重跑、不修改，照實記錄並停下，交使用者決定（§14 開頭）。
 - **v7.1 的發行條件**：上面全部通過。S4 未量（D232），S5、S6 只記錄。
-- **判定工具**：開跑前鎖定 `lan15_judge.py` 與 `ingress_evidence.py` 的 sha256，寫進本節。用合成的紀錄做竄改檢查：每條判定至少 1 份應該失敗的紀錄（例如 S1 多一行 interrupted、少一行 resumed、多一行 evicted、`drop_rate_limited` 1、results 間隔 33.2、`dropped_lines` 1、T_max 5500、K2 少一筆 none），全部要判出失敗；沒有改動的合成紀錄要判通過。
+- **判定工具**（2.1）：`build/acceptance/object_fps_pvp/lan15_judge.py`（`judge_id` `pvp-v71-lan15-1`）。鎖定的 sha256：
+  - `lan15_judge.py`：`67c9e4d91dd949a2d29f7a4db16b8e8889f49b124b88376b3098b11655ff8751`
+  - `ingress_evidence.py`（`pvp-v71-ingress-3`）：`567198d660985d862e01b49b481a57c0393bf4511267fec1b6787de831008302`
+  - 鑑別力的測試 `tests/object_fps_pvp/test_lan15_judge.py`：`1a42ca509d98e3f4efa0b2c0c95f15bba2f12aa9d21a10b298d1b8df8eb45590`（CTest `object_fps_pvp.lan15_judge`，cpu 標籤）
+  - 結果（2026-10-29，本機）：照宣告程序的合成場次判通過；25 份竄改（J0 ×2、J3 ×3、J4、J5 ×2、J1 ×2、J2 ×2、K1、K2、R1、R2 ×2、試行長度、Q1 ×3、Q2 ×2、S7、收支 ×2）全部判出失敗或確認不了（照宣告的分類）。判定工具的 7 個突變（J5 門檻、T_max 上限、J3 少了逐出、K1 少了 pending、收支少了 dropped_lines、Q1 少了人數的變化、Q2 少了房間內玩家的檢查）都被這組測試殺死。
+  - J2 的等式本身由 `ingress_evidence.py` 自己的測試守；這裡只測 J2 怎麼讀它的結果。用合成的紀錄做竄改檢查：每條判定至少 1 份應該失敗的紀錄（例如 S1 多一行 interrupted、少一行 resumed、多一行 evicted、`drop_rate_limited` 1、results 間隔 33.2、`dropped_lines` 1、T_max 5500、K2 少一筆 none），全部要判出失敗；沒有改動的合成紀錄要判通過。
 
 ## 8. 範圍的限界（照 HANDOFF「後續宣告要寫的範圍的限界」，直到解消）
 
