@@ -2,6 +2,8 @@
 
 > **狀態：升格完成（2026-10-21）。** master `5ee499a`（PR #82 合併）的 CI #541 全部通過，v7.1 成為穩定基線（D157）。v7.1 沒有專門的整體驗收批；驗收由兩條 PR 線（pv7-line：PR #78；after-pv7：PR #82）各批的 L1、L2、L3 構成，最後一次整體回歸是 `d44-regression-pv7`。
 
+> **發布（2026-10-29）：** `object_fps_pvp` v1.2.0（[release](https://github.com/yojinn-io/GYO-Engine/releases/tag/object_fps_pvp-v1.2.0)，master `62fd7ebf`）。本基線之後加入的內容：OS 子系統 10 批（其中 4 批已出貨、未經功能驗收，D219）、windows-long-path、quick-close、worker 探針的修正、人物模型 Player_V20 與一人稱 nailer_v2。發布時的已知限界見 [release-notes-draft.md](release-notes-draft.md)：Windows LAN 場次（lan15）只跑過一次且確認不了；Windows 上 worker 驗收不算發行條件；HUD 仍顯示 `MARK23`、第三人稱仍是舊手槍。下面的內容是 2026-10-21 升格時的紀錄，原樣保留。
+
 撰寫日期：2026-10-21。Owner：`object_fps_pvp`。
 範圍為 **macOS 26.7.1、Intel x86_64（i9-9980HK）、SDL 視訊驅動 cocoa、Metal、同機三角色**（L1、L2、L3 都在這台）。Windows 只有 2026-10-16 的一次臨時 LAN 測試（pv7 完成之前的樹），Linux、macOS arm64 只有 CI 的 L1（見「平台」）。
 v7.1 **不標「缺陷版」**：沒有任何發現推翻設計前提。已知限制都有範圍與歸屬（v8 或「re-evaluate 之後」）。
