@@ -1,30 +1,13 @@
 #include "engine/threads/RoleThread.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/os/Thread.hpp"
 
 #include <atomic>
 #include <exception>
 #include <future>
 #include <system_error>
 #include <utility>
-
-#if defined(__APPLE__)
-#include <pthread.h>
-#include <sys/qos.h>
-#elif defined(_WIN32)
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#elif defined(__linux__)
-#include <pthread.h>
-#include <sys/resource.h>
-#include <sys/syscall.h>
-#include <unistd.h>
-#endif
 
 namespace Engine::Threads {
 
@@ -40,43 +23,13 @@ struct RoleContext::State final {
 
 namespace {
 
-// Both run on the new thread before the body.
-bool ApplyName(const std::string& name) noexcept {
-#if defined(__APPLE__)
-    return pthread_setname_np(name.c_str()) == 0;
-#elif defined(_WIN32)
-    // SetThreadDescription exists from Windows 10 1607; look it up instead of linking it.
-    using Describe = HRESULT(WINAPI*)(HANDLE, PCWSTR);
-    const auto module = GetModuleHandleW(L"kernel32.dll");
-    const auto describe = module ? reinterpret_cast<Describe>(GetProcAddress(module, "SetThreadDescription")) : nullptr;
-    if (!describe) return false;
-    const std::wstring wide(name.begin(), name.end());
-    return SUCCEEDED(describe(GetCurrentThread(), wide.c_str()));
-#elif defined(__linux__)
-    return pthread_setname_np(pthread_self(), name.substr(0, 15).c_str()) == 0;
-#else
-    static_cast<void>(name);
-    return false;
-#endif
-}
-
-bool ApplyPriority(const ThreadPriority priority) noexcept {
-#if defined(__APPLE__)
-    const qos_class_t qos = priority == ThreadPriority::Interactive ? QOS_CLASS_USER_INTERACTIVE :
-        priority == ThreadPriority::Background ? QOS_CLASS_UTILITY : QOS_CLASS_DEFAULT;
-    return pthread_set_qos_class_self_np(qos, 0) == 0;
-#elif defined(_WIN32)
-    const int value = priority == ThreadPriority::Interactive ? THREAD_PRIORITY_ABOVE_NORMAL :
-        priority == ThreadPriority::Background ? THREAD_PRIORITY_BELOW_NORMAL : THREAD_PRIORITY_NORMAL;
-    return SetThreadPriority(GetCurrentThread(), value) != 0;
-#elif defined(__linux__)
-    // Raising a thread's priority needs privileges; only lowering is attempted.
-    if (priority == ThreadPriority::Normal) return true;
-    if (priority == ThreadPriority::Interactive) return false;
-    return setpriority(PRIO_PROCESS, static_cast<id_t>(syscall(SYS_gettid)), 10) == 0;
-#else
-    return priority == ThreadPriority::Normal;
-#endif
+// The role's priority as engine/os's hint: the same three levels, value for
+// value, so a cast carries any value through as the old per-OS code read it.
+static_assert(static_cast<int>(ThreadPriority::Background) == static_cast<int>(Os::Thread::PriorityHint::Background));
+static_assert(static_cast<int>(ThreadPriority::Normal) == static_cast<int>(Os::Thread::PriorityHint::Normal));
+static_assert(static_cast<int>(ThreadPriority::Interactive) == static_cast<int>(Os::Thread::PriorityHint::Interactive));
+Os::Thread::PriorityHint Hint(const ThreadPriority priority) noexcept {
+    return static_cast<Os::Thread::PriorityHint>(priority);
 }
 
 } // namespace
@@ -98,8 +51,8 @@ Base::Result<RoleThread, ThreadError> RoleThread::Start(RoleThreadOptions option
     std::thread thread;
     try {
         thread = std::thread([state = state.get(), body = std::move(body), started = std::move(started)]() mutable {
-            state->nameApplied = ApplyName(state->options.name);
-            state->priorityApplied = ApplyPriority(state->options.priority);
+            state->nameApplied = Os::Thread::SetCurrentName(state->options.name);
+            state->priorityApplied = Os::Thread::SetCurrentPriority(Hint(state->options.priority));
             started.set_value();
             RoleContext context(*state);
             body(context);

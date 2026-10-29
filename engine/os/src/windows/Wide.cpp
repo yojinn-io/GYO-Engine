@@ -38,4 +38,25 @@ Base::Result<std::string, OsError> WideToUtf8(const std::wstring_view wide) {
     return utf8;
 }
 
+Base::Result<std::wstring, OsError> Utf8ToWide(const std::string_view utf8) {
+    if (utf8.empty()) return std::wstring{};
+    if (utf8.size() > static_cast<std::size_t>(INT_MAX)) {
+        return Base::Err(RefusedArgument(OsErrorCode::TooLarge, "text is too long", utf8.size()));
+    }
+    const int bytes = static_cast<int>(utf8.size());
+    const int length = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, nullptr, 0);
+    if (length <= 0) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(MakeOsError(OsErrorCode::InvalidEncoding, "text is not UTF-8",
+                                     {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)}));
+    }
+    std::wstring wide(static_cast<std::size_t>(length), L'\0');
+    if (::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.data(), bytes, wide.data(), length) != length) {
+        const DWORD error = ::GetLastError();
+        return Base::Err(MakeOsError(OsErrorCode::InvalidEncoding, "text is not UTF-8",
+                                     {NativeErrorDomain::Win32, static_cast<std::int64_t>(error)}));
+    }
+    return wide;
+}
+
 } // namespace Engine::Os::Detail

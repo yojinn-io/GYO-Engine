@@ -1,6 +1,6 @@
 # OS 子系統：批次計畫
 
-更新：2026-10-25。**狀態：第 1 版已核准**（D46）；開放決策 1、14、15 已決定。
+更新：2026-10-28。**狀態：收口（D78）。** 本計畫在這裡停止擴大；各批的去留與今後的規則見 [收口提案](closeout.md) 與 [README](README.md)。以下是第 1 版（D46 核准）與之後的修訂，保留作紀錄；第 7.13～7.17 節開頭標了 D78 的去留。
 file:line 以 master `23fab75` 為準，每批開始時重新核對。本文件依 D12 匿名：只寫「提出需求的消費端」（以下稱消費端），程式路徑與證據路徑當作資料保留。
 
 ## 1. 目標與範圍
@@ -550,16 +550,21 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 
 ### 7.13 os-wake-record：計時量測基準（medium，3～5 h，另加各平台實機約 2 h）
 
+- **D78**：完成，留在本分支；消費端發行後隨 os-land-master 併 master。macOS Intel 與 Windows（os-windows-run 的 W4）的基準已記錄；Linux 與 macOS arm64 的基準取消。
+
 - 白話：把晚醒量測程式合回 master，並在四種平台重新量一次基準，給計時搬動做前後對照。
 - 依賴：os-plan-docs。可以並行。
 - 做：
   - 從本機分支 `claude/tt1-l2-wake-record`（`a8f9535`）合入 `tests/common/time/WakeRecord.cpp`；衝突時照 TT-1 L2 的定義重建。
   - 補 notify→wake 段落。
   - 量基準：macOS arm64、macOS Intel 實機、Windows x64 的 CLI 與視窗、Linux x64。其中 Windows 上不初始化 SDL 的程序是第一次量。
+    - 2026-10-27（D68）：本機是 macOS Intel，已量。macOS arm64 沒有實機（D11⑩），不量。Windows 與 Linux 在下一次實機用本批的 commit 量。程序寫成 `tests/common/time/wake_baseline.py`。
   - 和消費端規劃中的同類量測協調，只做一次。
 - 驗收：L2（事前宣告並核准、只記錄）同 TT-1 L2。證據放 `build/target/_build/test/logs/os-wake-baseline-<日期>/`。
 
 ### 7.14 os-threads-backend：執行緒命名與優先度（high；Start 順序局部 xhigh；4～6 h，另加 L2 約 2～3 h）
+
+- **D78**：完成，留在本分支；消費端發行後隨 os-land-master 併 master，驗收用 CI 加守衛。L2 在 macOS Intel 與 Windows（W5）逐字相同；Linux 的 L2 取消。
 
 - 白話：把執行緒命名與優先度的作業系統呼叫搬進 engine/os；RoleThread 的介面與啟動順序不變，每個平台的結果和搬動前相同。
 - 依賴：os-skeleton、time-threads-invariants、os-wake-record。
@@ -571,6 +576,8 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
   - L2（事前宣告、只記錄，附撤回條件）：A＝搬動前的 master，B＝搬動後。各平台啟動消費端，每個 role started 行的 name_applied、priority_applied、wait_backend 在 A 和 B 必須逐字相同；任一項不同就撤回整批。
 
 ### 7.15 os-wait-backend：等待原語（xhigh；整批由 1 位 xhigh 審查 agent 檢查，開始時徵求同意；8～12 h，另加 L2 約 4～6 h）
+
+- **D78**：凍結，已從本分支撤出（程式與條文回到 `4ffc7c65`）。Windows 的 L2（W3）不通過（D74），也沒有功能支撐。撿回時從 `4041cf42`、`756073aa` 開始，並在 Windows 另行宣告判定。
 
 - 白話：最後才把等待原語的作業系統後端搬進 engine/os；Waiter 的語意與公開介面不改，並用事先宣告的交錯前後對照證明計時沒有變差。
 - 依賴：os-threads-backend。
@@ -586,6 +593,8 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 
 ### 7.16 os-net-errors：socket 錯誤分類（high，3～5 h，條件式）
 
+- **D78**：不開始（沒有觀測到壓力）。socket 錯誤分類留在產品；os-windows-run 的 W6 量測交給消費端。
+
 - 白話：（依開放決策 7）把 socket 錯誤碼的分類搬進 engine/os，消費端只保留「哪些算暫時性」的政策，分類結果和現在完全相同。
 - 依賴：os-skeleton。
 - 做：
@@ -595,6 +604,8 @@ engine/os 不依賴 engine/io、Time、Threads、Trace、SDL、asio、GYO::Engin
 - 驗收：L1：等價表測試對所有 std::errc 與 asio::error 值，舊實作與新的「分類加政策」逐一相同；Windows 的 Red 要先在 windows-x64 跑出來。
 
 ### 7.17 os-close：收尾（medium，3～5 h）
+
+- **D78**：取消，改成 os-closeout（[closeout.md](closeout.md)）。完整突變改在 os-land-master 的 PR 前跑一次。
 
 - 白話：收尾，包括確認 tests 以外的例外清單已清空、同步所有文件，並在合併前完整跑一次相關突變。
 - 依賴：全部。

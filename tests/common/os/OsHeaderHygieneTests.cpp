@@ -12,6 +12,7 @@
 #include "engine/os/Files.hpp"
 #include "engine/os/OsError.hpp"
 #include "engine/os/Process.hpp"
+#include "engine/os/Thread.hpp"
 
 #if defined(_WINDOWS_) || defined(_INC_WINDOWS) || defined(_WINSOCKAPI_) || defined(_WINSOCK2API_)
 constexpr bool kWindowsHeaderReached = true;

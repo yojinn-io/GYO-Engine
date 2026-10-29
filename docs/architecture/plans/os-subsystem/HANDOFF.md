@@ -1,6 +1,6 @@
 # OS 子系統：交接
 
-更新：2026-10-27。**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
+更新：2026-10-29。**狀態：收口（D78）。** 長路徑那一片（A1～A3）與已併入消費端發行線的 10 批留下（隨 PR #96 併 master）；只在本分支的 os-wake-record、os-threads-backend 留下，消費端發行後以 os-land-master 的 PR #104 併 master；os-wait-backend 凍結並從本分支撤出（os-freeze-wait）；os-net-errors 不開始、os-close 取消；os-windows-run 第 1 次結案，續跑、第 2 次與 os-linux-run 取消。盤點與理由見 [closeout.md](closeout.md)。以下為 2026-10-27 之前的狀態行，保留作紀錄：**狀態：A1～A3 完成**；D48：其餘批次已開始（os-guard-wide、os-process-info、os-console-shutdown 完成；os-files-write 完成（L1 run 40213916104）；io-native-paths 完成（L1 run 40295007179）；os-tool-files 完成（L1 run 40324361964）；os-trace-writers 完成（L1 run 40339587478）；time-threads-invariants 完成；os-path-utf8-sweep 完成（L1 run 40433158383）；os-utf8-codepage 是提案（D64）），本分支建立在消費端的發行線之上。2026-10-25 由架構任務在規劃批次中建立。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。依 D12 匿名。
 
 ## 現況
@@ -26,6 +26,8 @@
 - 2026-10-27：使用者說「推送 69e39a26，並告訴消費端可以把本分支併到 69e39a26（os-path-utf8-sweep 與 time-threads-invariants）」。推送 `69e39a26`，以 merge-tree 確認併進發行線 `5733ccca` 沒有衝突，已請消費端以 `--no-ff` 合併（範圍 8 個 commit），等它回覆發行線上的 merge commit。
 - 2026-10-27：消費端回報並已核對：發行線以 `--no-ff` 合併到 `69e39a26`，merge commit 是 `16377127`（父 `5733ccca`、`69e39a26`；程式與 `69e39a26` 相同，發行線多的只有它自己的 HANDOFF），沒有衝突；之後的 `3b612cf2` 是消費端 D210（只改文件，Windows 清單補上 pu-x3～pu-x7 與 LF 的條件）。消費端本機 ctest 97／97。
 - 2026-10-27：消費端轉達使用者的決定（消費端 D211）。使用者原話：「先等等，我讓windows跑完專用的測試，完成之後直接讓 OS子系統開始」。Windows 機器在發行線（LF 的 checkout）上跑：本計畫的 34 條突變、`-s` 確認、主控台與 UNC 探針。結果出來之前，不開始 os-wake-record、os-threads-backend、os-wait-backend，也不推送新批次。
+- 2026-10-27：使用者說「推送 3e9e9cf3，並告訴消費端可以把本分支併到 3e9e9cf3（os-utf8-codepage）。p4 的處理一併交給它」。推送 `3e9e9cf3`；以 merge-tree 確認併進發行線 `2fd01dd2` 沒有衝突。已請消費端以 `--no-ff` 合併（範圍 6 個 commit），並把 p4-manifest-ansi-path 的處理交給它（退場、改寫或只在不帶 manifest 的程式上跑）。下一次 Windows 機器要跑的突變與 MinGW 的確認項目也一併告知。
+- 2026-10-27：消費端回報並已核對：發行線以 `--no-ff` 合併到 `3e9e9cf3`，merge commit 是 `7e92069d`（父 `2fd01dd2`、`3e9e9cf3`；程式與 `3e9e9cf3` 相同），沒有衝突；消費端本機 ctest 98／98。p4 選擇退場（消費端 D212）：`0f090aa1` 從本計畫的突變目錄刪掉 `p4-manifest-ansi-path`，只動這一條。啟動行不加 `acp=`（日誌契約，這次不做）。本分支的本機紀錄已重新放在 `0f090aa1` 之上。
 - 2026-10-27：os-utf8-codepage 完成（D64～D66）。Red：run 40450140816；Green：[run 40456874710](https://github.com/yojinn-io/GYO-Engine/actions/runs/40456874710)，四平台成功。細節見「os-utf8-codepage」。
 - 2026-10-27：Windows 機器的驗證完成（消費端的 D201 清單第 1～5 項，MinGW 15.2 與 MSVC 19.51 兩套建置，dev_log `docs/dev_logs/2026_10_27_pvp_v71_d201_windows.zh-Hant.md`）。使用者說「windows的測試完成了，commit到了#96 上。同步一下」，並貼上交接：本會話要回報其餘突變、第 2、5 項，並只改計畫文件（D211）：
   - 把本分支同步到發行線 `d3081182`（本機的紀錄 commit 重新放在它之上，推送時是快轉）。
@@ -38,6 +40,59 @@
 - 2026-10-26：D59，本計畫的 commit 統一放進 #96。已請消費端把本分支併到 `ca434952`（不含 Red 測試 `a75e4028`），等它回覆發行線上的 commit。
 - 2026-10-27：使用者說「推送 e5fec6ef 這個紀錄 commit，並告訴消費端可以一起併」。推送 `e5fec6ef`（os-trace-writers 的完成紀錄），請消費端把本分支一次併到 `e5fec6ef`（含 os-guard-wide～os-trace-writers），等它回覆發行線上的 commit。
 - 2026-10-27：消費端回報（經使用者同意）並已核對：發行線 `claude/pvp-v71-release` 以三次 `--no-ff` 合併，沒有衝突（`32ce9b6d` 到 `ca434952`、`f87b77d0` 到 `d32def55`、`2aebc143` 到 `e5fec6ef`）；消費端 D207 `4a4a0ef7`；消費端本機 ctest 97／97；合併後的 L1 是 run 40348670097（在 `4a4a0ef7` 上派發）。使用者決定今晚的 lan15 用合併後的發行線跑；D206 的主控台、UNC 探針與 Windows 專用突變，以及 `-s` 的實跑確認，改在發行線上做，結果由消費端回給本計畫。
+- 2026-10-27：os-wait-backend 開始（D71），本機進行中，基準 `4ffc7c65`。細節見「os-wait-backend」。
+- 2026-10-27：os-wait-backend 本機完成（`756073aa`）：macOS Intel 的 L2 通過（12／12），xhigh 審查（Fable 5.1）的發現已修。下一步要使用者決定：推送並跑四平台 L1；條文定案。Windows 與 Linux 的 L2、ow-x1、ow-x5、ow-x6、ow-x10 留給實機。
+- 2026-10-27：推送並跑四平台 L1（run 40510515336）：只有 toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時，這個測試不經過本批的程式碼；新測試在四平台都通過。停在使用者的決定（重跑、交給 owner，或重新檢視前提）。
+- 2026-10-27：重跑後 L1 第 2 次全部通過；逾時交給 v7.1 會話與對應的任務卡。os-wait-backend 完成本機與 L1，條文已定案（D72）；剩下實機（見「下一次實機的清單」）。
+- 2026-10-28：v7.1 會話通知發行線已併入 master `5d688aaf`（PR #98 的規則文件、PR #99 的 `platform_sdl_concurrency` 看門狗，程式只改 `tests/common/platform_sdl`），merge commit `c9c4b62f`，之後 `43957159` 只改文件。使用者說「把發行線併進本分支，跑本機 ctest，推送前先問我」。以 `--no-ff` 併到 `43957159`（`024df561`），沒有衝突；本機 core 34／34、產品組態 98／98（`platform_sdl_concurrency` 2.48 s，看門狗已編入）。下一次實機若再逾時，先看看門狗在 stderr 留下的案例與位置。之後請消費端合併本分支前，先 pull 發行線（v7.1 會話的要求）。
+- 2026-10-28：D73。OS 子系統不等 lan15 與 #96 做完；Windows 的自動項目交給 Windows 機器上的 Claude。
+  - 分支 `claude/os-windows-run`：本分支 `c54ef8b5` 加上這次的計畫文件；程式和 `c54ef8b5` 相同。
+  - [windows-run.md](windows-run.md) 第 1 次：W0～W8（準備、B 的 ctest、os-wait-backend 的 L2、os-wake-record 的基準、os-threads-backend 的 L2、UDP 錯誤量測、突變 12 條、MinGW）。
+  - 量測腳本 `scripts/udp_error_probe.py`：macOS Intel 試跑，未連線的 socket 送到關閉的埠後收不到錯誤，已連線的收到 `ECONNREFUSED`。
+  - 結果回來後由本會話合併，移進各批的紀錄；W3 通過後才通知消費端合併 os-wait-backend（D71）。
+  - 已通知 v7.1 會話（使用者說「把 D73 通知 v7.1 會話：Windows 的計時 L2 與基準改由 claude/os-windows-run 跑，不再加在 lan15；os-net-errors、os-close 排在 lan15 之前，動 ClientConnection.cpp 前會再通知。」）：消費端 D209 的「lan15 那次另加計時核心的 L2 與 os-wake-record 的 Windows 基準」不再需要；os-net-errors 動 `ClientConnection.cpp` 前照消費端 D205 再通知一次。訊息已送達，對方沒有回覆。
+  - 開工前要重新核對的前提：PLAN 第 7.16 節寫的「改呼叫點與文字守衛 `test_diagnostic_isolation.py:107`」在消費端 K9（D200）之後已過時。兩個呼叫點已經改成 `SocketErrorActionFor`，守衛數的是那個呼叫；搬移可能只改 `TransientSocketError` 的內容。
+- 2026-10-28：os-windows-run 第 1 次停在 W3（os-wait-backend 的 Windows L2）。
+  - W3 不通過：window deadline P50 超出上限 0.0032 ms，其餘 11 項通過。W4～W8 未跑。
+  - 結果在 `claude/os-windows-run` 的 windows-run.md 與 dev_log `2026_10_28_engine_os_windows_run`。
+  - D74：
+    - 先在 Windows 跑 A/A 診斷（只記錄），看完再由使用者決定撤回或另行宣告。
+    - W1 的環境問題修正後重跑；W4～W8 續跑（windows-run.md 的「第 1 次續跑」）。
+    - `object_fps_pvp.worker` 的失敗交給 v7.1 會話。
+  - 由「對接 OS 子系統的 Windows 實機結果」會話整理與記錄；修改前已告知本會話。
+- 2026-10-28：D75。Linux 項目改在這台 Mac 的 Docker 跑，事前宣告寫在 [linux-run.md](linux-run.md)，先提交（`5edc5b23`）再開始。
+  - D77：X0（建置）進行中、還沒有任何結果時修訂：拿掉在 Docker 裡跑 B 完整 ctest 的那一步（和 CI 的 linux-x64 L1 重複），步驟代號改成 X0～X6。
+  - D75、D77 的編號已告知「對接 OS 子系統的 Windows 實機結果」會話（D76 是它記的）。
+- 2026-10-28：D218（消費端）：使用者依原意「OS 相容層」重新定界；「規劃 Engine 的 OS 統一子系統」會話停止，「對接 OS 子系統的 Windows 實機結果」會話封存。新任務卡「盤點 OS 子系統並收口到支撐遊戲運行」做盤點與收口（[closeout.md](closeout.md)）。
+  - 盤點時更正的前提：os-windows-run 第 1 次的 W4～W7 已跑完（`844e92b1`、`7306a142`）；Linux 的 Docker 量測已不在執行（容器 `gyo-linux-run` 不存在），沒有任何結果；消費端發行線的整合樹自 `4a4a0ef7`（run 40348670097）起沒有四平台 L1。
+- 2026-10-28：D78，使用者核准收口提案（決定 1～4 都選 (a)，不做對抗式檢查）。
+  - 本分支併入 `claude/os-windows-run`（`3ab8f09c`），在決策紀錄裡 D75、D76、D77 依編號並列。
+  - os-freeze-wait：os-wait-backend 撤出。程式、測試、突變目錄與條文從 `4ffc7c65` 逐檔取回；`WakeSignal.hpp`、`WakeSignal.cpp`、`WakeSignalTests.cpp`、`wake_compare.py` 刪除（要用時從 `4041cf42`、`756073aa`、`beb14cf7` 取回）。`docs/architecture.md` 的 GYO::Os 一列保留 os-threads-backend 的「thread names and priority hints」。突變目錄少了 ow-x1～ow-x10。
+  - os-closeout-docs：README、PLAN、windows-run.md、linux-run.md 標上收口後的狀態；os.md 的部件表標 Wait 凍結、Net 不開始，加 Replacement Criterion 9（今後的規則）；time.md 開頭改寫成「os-wait-backend 凍結」。dev_log 是 `2026_10_28_engine_os_closeout`。
+  - 盤點更正（執行中發現）：os-console-shutdown 的主控台實機檢查已在 10-27 的 D201 做過（conhost 的 Ctrl+C、關閉視窗通過），closeout.md 原本寫成「L3 未做」，已更正。
+  - os-handoff-v71 提前、改成雙向（使用者：「先把 os-handoff-v71 提前，改成雙向：訊息內容先給我看，等 v7.1 回覆後再問我推送。」）。2026-10-28 送出：發行線不再併 OS 批次（消費端現況的「OS 子系統的 3 批」可拿掉）、lan15 的前提（D209、D215）解除、worker-10x 沒有執行者、整合樹自 `4a4a0ef7` 起沒有四平台 L1、W4 與 W6 的產品線索，以及 5 個問題（發行前還要 OS 做什麼、worker-10x 由誰跑、4 批 ★ 對發行的顧慮、PR #96 前的 L1、其他影響）。
+  - 消費端回覆（消費端 D219，發行線 `6b448c16`）：
+    - Q1：發行前不需要 OS 這邊做任何事。
+    - Q2：worker-10x 屬於消費端的產品測試，由消費端向使用者安排，OS 這邊不做。
+    - Q3：4 批 ★ 會寫進 PR #96 的說明與發行說明，標成「已出貨、未經功能驗收」，由消費端向使用者提出。本會話回覆了每批一句的行為摘要，含已知限界：再按一次 Ctrl+C 的 0 B log、UNC 啟動未經實機驗證、os-tool-files 只影響編輯器、1903 以前的 Windows 與 MinGW。
+    - Q4：PR #96 合併前的四平台 L1 由消費端派發（run 40644602172，`d7ecf047`），合併前會在最新的 commit 上再確認。
+    - Q5：K9／W6 的握手期 WSAECONNRESET 列進 lan15 的 L3 觀察，不改程式；「OS 的 ★ 批次未經功能驗收」會加進 lan15 宣告的範圍限界。
+  - 消費端在 `claude/os-windows-run` 推了 `035ff14b`（消費端 D220）：windows-run.md 寫明照 D78 只跑 worker-10x，結果寫在發行線的 `worker-windows-timing.md`。和 D78 一致；本分支在收口文件之後併入。之後那條分支若再有 commit，os-land-master 前再併一次。
+  - 本機驗證：core 34／34、test preset 92／92、相關突變 9／9 killed（dev_log）。
+  - 推送（使用者同意，fast-forward `468d2b9c..a65fe59f`），四平台 L1 [run 40646224836](https://github.com/yojinn-io/GYO-Engine/actions/runs/40646224836) 全部成功。os-freeze-wait、os-closeout-docs、os-handoff-v71 完成。
+  - 下一步：消費端發行後 os-land-master。
+- 2026-10-29：os-land-master 開工。消費端的會話轉達使用者在發行會話的原話「這個可以開工了。」PR #96（`dd6e6b2b`）與 #101 已合併，master 是 `62fd7ebf`；`claude/os-windows-run` 沒有新 commit（仍是 `035ff14b`）。
+  - 本分支併入 master（`87bad504`）：兩邊改動的檔案沒有重疊，沒有衝突。master 那邊沒改 engine 與 tests/common，所以這兩處和併入前逐位元組相同。和 master 的差異是 35 個檔案：os-wake-record、os-threads-backend 與收口文件。
+  - 本機驗證（macOS Intel）：
+    - core 34／34。
+    - test preset 第一次 92／93：`object_fps_pvp.presentation_evidence` 在 60 秒逾時。判斷為環境（主機負載，load average 約 45、16 核），不是實作：它是純 Python 的分析測試，檔案和 master 相同；10-28 用 19.97 秒通過；直接執行 42／42 通過（負載下 82 秒）；負載降到約 11 後以 CTest 重跑通過（20.66 秒）。測試的判定沒有改。
+    - 相關突變（D184：本 PR 改動檔案上的既有突變 18 條）：12／12 killed，Windows／Linux 專用的 6 條跳過（os-g18、ti-x4、pu-x10、th-x3、th-x5、th-x6）。
+  - 盤點更正：closeout.md 寫「優先度要不要補讀回測試，由那條 PR 決定」，其實 `tests/common/os/ThreadTests.cpp` 已有優先度的讀回測試（macOS 讀 QoS、Windows 讀 thread priority、Linux 讀 nice），run 40484797877 的四平台都通過，不必補。
+  - inactive_products.md 第 5 節：已隨 PR #96 進 master 的 10 批，與隨本 PR 進 master 的 2 批，狀態後面補上「後續」。
+  - time.md 的 Baselines：補上 Windows 的基準（W4），Linux 標成取消（D78）。
+  - 使用者說「推送：把 claude/os-closeout（2dd850ad）以 fast-forward 推到 origin/claude/trusting-joliot-f13b78，照草稿開非 draft 的 PR 到 master，讓 L1 跑。合併前再問我。」推送前 fetch，master 前進到 `19d8fd27`（PR #102，只改 v7.1 的兩份文件，和本 PR 沒有重疊），所以沒有再併。fast-forward 推送 `a9f6b6c5..2dd850ad`，開 PR #104。
+  - PR #104 的四平台 L1（[run 40832108929](https://github.com/yojinn-io/GYO-Engine/actions/runs/40832108929)，`2dd850ad`）：`L1 /` 開頭的四個 job 都是 success，CI gate 也是 success。Quick acceptance 在 PR 上不跑（`ci_scope.py` 的 pull-request 範圍），併進 master 後跑。
+  - 下一步：合併前問使用者（使用者：「合併前再問我。」）。
 
 ## 閱讀入口
 
@@ -69,6 +124,13 @@
 | os-net-errors | socket 錯誤碼的中立分類（條件式） |
 | os-close | 收尾：allowlist 清空、文件同步、完整突變 |
 | os-utf8-codepage | （提案，D64）每個 Windows 執行檔以 manifest 把程序的 code page 定為 UTF-8 |
+| os-windows-run | Windows 機器上的 Claude 跑不需要人操作的實機項目（D73，分兩次） |
+| os-linux-run | 本會話在這台 Mac 的 Docker 跑 Linux 項目（D75） |
+| os-closeout | 盤點並收口到「支撐遊戲運行」（D78，[closeout.md](closeout.md)） |
+| os-freeze-wait | 從本分支撤出 os-wait-backend，回到 os-threads-backend 定案時（`4ffc7c65`）的狀態 |
+| os-closeout-docs | 把計畫文件改成收口後的狀態，寫下今後的規則 |
+| os-handoff-v71 | 把收口的結果與產品線索通知消費端的會話 |
+| os-land-master | 消費端發行後，本分支以一條 PR 併 master（os-wake-record、os-threads-backend、收口文件） |
 
 ## 決策紀錄
 
@@ -104,6 +166,17 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 | 2026-10-27 | D65：開放決策 16 採 (b)：os-utf8-codepage 排在 os-wake-record、os-threads-backend、os-wait-backend 之前（改變 D62 的順序；D211 的「Windows 測試完成後讓 OS 子系統開始」由這一批開始）。開工前先說明檔位、要動的檔案與需要同意的地方 | 使用者：「開放決策 16 採 (b)：os-utf8-codepage 排在 os-wake-record、os-threads-backend、os-wait-backend 之前。先說明檔位、要動的檔案，以及需要我同意的地方（開放決策 17～24、Invariant 11、§14.4）。」 |
 | 2026-10-27 | D66：os-utf8-codepage 開工前的決定（全部照建議）。<br>檔位：high＋1 位 xhigh 審查。<br>開放決策 17 採 (a)：根目錄在設定期走過 engine、apps、tools、build/acceptance、tests 的執行檔自動套用（FetchContent 的第三方工具不在範圍），並提供程序 code page 的查詢 API。18 採 (a)：manifest 與嵌入函式放在 engine/os。23：MSVC 與 MinGW 兩條路徑都寫，CI 驗 MSVC，MinGW 留給下一次 Windows 機器。<br>19 採 (a)：pu-x6、pu-x7 退場（p4 交 v7.1 會話）。20：Invariant 11 限定 Windows 10 1903 以後，不宣稱涵蓋 Wine。21：不加 longPathAware。22：文件寫最低版本，不拒絕啟動。24 採 (a)：兩個測試缺漏併進這一批。Invariant 11 用草稿。<br>§14.4 的判定變更（ACP 測試、FontDirectories 的預期清單、os-f4／os-c6／pu-x5 改由 R6 判定、pu-x6／pu-x7 退場）與 ★ 事前宣告（第三方與 CRT 的窄字元行為、窄字元 argv 改成 UTF-8、os-path-utf8-sweep 的 Red 測試在 manifest 下不再抓得到窄字元轉換）：同意開工，定案前做突變與審查。Red：先推只含新測試的 commit 跑一次 L1（推送前照常先問）。估時 8～12 h，另加 Windows 實機約 1～2 h | 使用者對四個問題選：「high＋1 位 xhigh 審查」「照建議」「照建議」「同意開工，定案前做突變與審查」 |
 | 2026-10-27 | D67：os-utf8-codepage 的定案。os.md 的 Replacement Criterion 8（產品或工具需要自己的 manifest 設定或 UTF-8 以外的 code page 時，停止修改 engine/os 的 manifest，先決定宣告與合併的方式）、審查後補的 ★（OEM code page 大概也變成 65001；沒開 `Utf8ConsoleOutput` 的程式在 950／932 主控台印非 ASCII 的窄字元會變成 UTF-8 的位元組）、Invariant 11 的範圍文字（CMake 從 repo 自己的 C/C++ 原始碼建出的執行檔，Go 服務不算），都照草稿定案 | 使用者：「Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字，都照草稿定案。」 |
+| 2026-10-27 | D68：os-wake-record 開工前的決定（全部照建議）。<br>檔位：medium，notify→wake 的量法用 high。<br>L2 的事前宣告（只記錄，沿用 TT-1 L2）：60 Hz 的絕對期限，Waiter、condition_variable、`sleep_until` 各 30 秒；新增 notify→wake（Waiter、condition_variable 各 30 秒）；沒有視窗與有視窗兩種情境；每段前後各 5 秒 sleeper；`meta.txt` 記錄程式雜湊、OS、CPU、負載。不設門檻；「Waiter 的 P99 低於 condition_variable」只當觀察。<br>平台：macOS arm64 現在在本機量；Windows（沒有視窗與有視窗）、Linux、macOS Intel 在下一次實機時用本批的 commit 量，不擋 os-threads-backend 與 os-wait-backend；Linux 用哪台機器到時再定。<br>和消費端協調：Windows 沒有視窗的那組晚醒數據交給 v7.1 的 F5／F7 參考，Match 層的數據仍由它在 lan15 量 | 使用者：「開始 os-wake-record。先說明檔位、要動的檔案，以及需要我同意的地方。」之後對四個問題選：「medium，notify→wake 用 high」「照草案」「本機先量，實機那次補」「協調」 |
+| 2026-10-27 | D69：os-threads-backend 開工前的決定。<br>檔位：high＋1 位 xhigh 審查（使用者選的；建議是 high 加 Start 順序局部 xhigh）。<br>連結（§14.4，Design Invariant 的變更）：照草案。gyo_threads 以 PRIVATE 連結 GYO::Os，並加「不得公開」的檢查（threads.md Invariant 9）；gyo_os 在 POSIX 上以 PRIVATE 連結 Threads::Threads（os.md Invariant 3）。兩條條文與守衛期望值一起改，定案前做突變。<br>Windows 非 ASCII 名稱的缺陷（逐 byte 擴寬）：這批修，宣告 ★，改用 engine/os 的 UTF-8→UTF-16 轉換，加讀回測試。<br>L2（事前宣告、只記錄，附撤回條件）：A＝搬動前、B＝搬動後，消費端每個 role started 行的 name_applied、priority_applied、wait_backend 必須逐字相同，任一項不同就撤回整批。macOS Intel 現在在本機做；Windows 與 Linux 在下一次實機用 A、B 兩個 commit 補，不擋 os-wait-backend | 使用者：「開始 os-threads-backend。先說明檔位、要動的檔案，以及需要我同意的地方。」之後對四個問題選：「high＋1 位 xhigh 審查」「照草案」「這批修，宣告 ★」「本機先做，實機那次補」 |
+| 2026-10-27 | D70：os-threads-backend 的定案。threads.md Invariant 9（GYO::Threads 連結 exactly GYO::Time、Threads::Threads，以及 PRIVATE 的 GYO::Os）與 os.md Invariant 3（GYO::Os 在 Windows 以外連結 Threads::Threads）照草稿定案；os.md Invariant 6 寫明例外：只回報平台是否套用的請求回傳 bool（執行緒的名稱與優先度、`Utf8ConsoleOutput::Applied()`），沒有套用是結果、不是失敗（Invariant 10） | 使用者：「threads.md Invariant 9 與 os.md Invariant 3 照草稿定案；os.md Invariant 6 寫明「回報是否套用的請求回傳 bool」這個例外。」 |
+| 2026-10-27 | D71：os-wait-backend 開工前的決定（全部照建議）。<br>檔位：xhigh＋1 位 xhigh 審查（腳本、L2 執行與文件降到 medium）。<br>開放決策 13 採 (a)，先校準：看 B 之前，先用同一個 A 程式交錯跑 A/A 4 對，再跑拿掉 `NOTE_CRITICAL` 的退化版 1 對。A/A 通過 (a)、退化版不通過時，(a) 原文凍結，不再回來問；任一項不符就停下，帶資料與修正後的數值回報。B 不通過時不重跑，先回報（§14.1），撤回方式是 revert。「各對中位數」定為：A 的 4 次取中位數、B 的 4 次取中位數，再比較。量測期間不在本機建置。<br>對抗式檢查（只用既有證據，同一台 Intel）：來源每個情境只量過一次；CLI 的 P50 跨日差 0.052 ms，超過 +0.02 ms；P99 是 1800 個樣本裡第 18 大的值，主機尖峰會讓它跳到毫秒級；搬移可能造成的退化是毫秒級，(b) 的窄邊界不會多抓到；「零早醒」由 Waiter 的迴圈保證，只是再確認。<br>條文（同意開工，定案前做突變與審查者的驗證，同 D66）：time.md Invariant 10（`GYO::Time` 連結 exactly `GYO::Base` 與 PRIVATE 的 `GYO::Os`，拿掉 `Threads::Threads`，Os 不得公開；§14.4 有放寬面）；time.md Invariant 8 改成現在式並加 cv 突變為守衛；os.md Invariant 6 的例外（`Block` 在 cv 後備可讓標準函式庫的 `std::system_error` 穿過，與搬移前的 Waiter 相同）；★ `Waiter::Create` 失敗時 detail 改成 engine/os 的固定格式 `errno=<n>`／`win32=<n>`，message 不變。<br>平台：macOS Intel 現在做；Windows x64（沒有視窗與有視窗）與 Linux x64（沒有視窗）在下一次實機用 A、B 兩個 commit 做；macOS arm64 沒有實機（D11⑩），標未驗證。Windows 的 L2 通過前，不通知消費端合併這一批。cv 後備的新突變只在 Linux 跑得到，留給實機 | 使用者：「開始 os-wait-backend。先說明檔位、要動的檔案，以及需要我同意的地方（含開放決策 13 的 L2 判定數值）。」之後對四個問題選：「xhigh＋1 位 xhigh 審查」「(a)＋先校準」「同意開工，定案前驗證」「本機先做，Windows 過了才合併」 |
+| 2026-10-27 | D72：os-wait-backend 的定案。time.md Invariant 8（latch 由 engine/os 經每次 `Block` 的參照讀取，cv 後備在 mutex 內讀，不保存副本；守衛是競爭測試加 ow-x1，ow-x1 還沒在 Linux 跑）、Invariant 10（`GYO::Time` 連結 exactly `GYO::Base` 與 PRIVATE 的 `GYO::Os`，拿掉 `Threads::Threads`，Os 不得公開；§14.4 的放寬面經突變 ti-x1、ow-x2 與審查者確認）、os.md Invariant 6 的例外（`WakeSignal::Block` 在 cv 後備讓標準函式庫的 `std::system_error` 穿過，與搬移前的 Waiter 相同）、★ 錯誤細節（`Waiter::Create` 失敗時 detail 是 `IoFailed: errno=<n>`／`IoFailed: win32=<n>`，message 不變），都照草稿定案 | 使用者：「time.md Invariant 8／10、os.md Invariant 6 的例外、★ 錯誤細節（IoFailed: errno=<n>／win32=<n>），都照草稿定案。」 |
+| 2026-10-28 | D73：OS 子系統不等 lan15 與 #96 做完（改變 D62 的最後一句「os-net-errors 與 os-close 排在 #96 合併後」）。<br>Windows 實機上不需要人操作的項目，由 Windows 機器上的 Claude 在分支 `claude/os-windows-run` 照 [windows-run.md](windows-run.md) 跑，分兩次：第 1 次是計時核心三批與 os-utf8-codepage 留下的 Windows 項目，加上 os-net-errors 開工前的 UDP 錯誤量測（`scripts/udp_error_probe.py`）；第 2 次在 os-net-errors、os-close 完成後。<br>os-net-errors、os-close 排在 lan15 之前；os-net-errors 的對照基準是消費端現有的 `TransientSocketError`。<br>需要人操作的項目（Ctrl+Break、conhost 的手動操作、P5-6、lan15 與它的 L3）不在範圍。<br>分兩次、Windows 端只寫 windows-run.md 的結果與 dev_log，是本會話的安排 | 使用者：「我相識讓windows跑完，不用依賴人的case，這樣就可以把 OS子系統 完結掉。os-net-error 也有可以參考的對象。也可以從windows量測。」之後：「你先弄完，我睡覺去了，明天早上起來處理windows的問題。你寫好計劃，開好分支就推到github上。」 |
+| 2026-10-28 | D74：os-windows-run 第 1 次的 W3（os-wait-backend 的 Windows L2）不通過之後的處理。<br>W3：window deadline P50 是 A 0.4658、B 0.4890、上限 0.4858 ms，其餘 11 項通過。不通過保留，不重跑，判定不放寬（D71、§14.1）。<br>分析（「對接 OS 子系統的 Windows 實機結果」會話）：Windows 的 `Block` 在 `4ffc7c65` 與 B 之間逐行相同，差別只有一層跨程式庫呼叫與一次間接存取。+0.02 ms 的 P50 邊界只在 macOS Intel 校準過：在 macOS 約是 P50（0.077 ms）的 26%，在 Windows 的 window 情境（0.466 ms）只有 4.3%。window P50 逐對的差是 +0.025、+0.035、+0.027、−0.015 ms。只有 window 情境載入 `SDL3.dll`，兩份 DLL 的雜湊沒有記錄。<br>選項：(A) 撤回（revert，D71）；(B) Windows 的 A/A 診斷（探索，只記錄）；(C) 重新檢視前提，Windows 另行事前宣告判定（由 Windows 的 A/A 與退化版推導，新判定在看到新 A/B 之前核准；有放寬面，照 §14.4 寫 1～5，並做檢出力檢查與另一位審查者的驗證）。使用者選 (B)，看完 A/A 再在 (A) 與 (C) 之間決定。在那之前不通知消費端合併 os-wait-backend（D71 不變）。<br>W1 的失敗歸類（§14.1）：28 項 Python 驗收與 2 項 cmake 測試是環境（embedded Python、在 vcvars64 外面執行）。`os.console_ctrl_c` 推測是環境（執行環境停用 Ctrl+C 的旗標會傳給子孫行程；CI 通過），由 W1-ctrlc 診斷。`object_fps_pvp.worker` 未切開，交給 v7.1 會話（候選：mock 以 `sleep_for(100us)` 輪詢，在沒有 SDL 的 Windows 程序可能被捨入到系統 tick；CI 的 windows 不跑 network 標籤）；切開的第 1、2 步（從 W3 證據讀 Sleep 粒度、W5 另記 A_threads 與 B 的 worker 結果）放進續跑。<br>環境修正：Windows 機器安裝一般的 CPython 3.13，B 以 `-DPython3_EXECUTABLE` 重新 configure；W1 改在 vcvars64 環境裡重跑（W1b）。<br>W4～W8 不等 W3 的結論續跑：它們和 W3 獨立；ow-x5、ow-x6、ow-x10 只在保留 os-wait-backend 時有意義。<br>續跑稱為「第 1 次續跑」，寫在 windows-run.md；「第 2 次」仍指 os-net-errors、os-close 之後那次 | 使用者：「W3 選 B：Windows 先跑 A/A 診斷（含兩份 SDL3.dll 的雜湊），結果只記錄；看完再在撤回與另行宣告之間決定。其他三項照你的建議。」（其他三項：裝一般的 Python 並在 vcvars64 裡重跑 W1、worker 交給 v7.1 會話、W4～W8 續跑） |
+| 2026-10-28 | D75：OS 子系統的 Linux 項目由本會話在這台 Mac 的 Docker（LinuxKit 虛擬機）跑，照 [linux-run.md](linux-run.md)。<br>os-wait-backend 的 Linux L2（cli）先跑 A/A：A/A 照 (a) 全部通過，才用 (a) 判 A/B；A/A 不通過，A/B 只記錄並回報。<br>映像照 CI 的 Linux 套件清單另建（`scripts/linux-run.Dockerfile`）。<br>同意下載映像與套件；跑的期間用 `caffeinate -i`；ow-x1 存活時停下回報，這次不補測試。<br>計時量測在虛擬機裡，限界寫進宣告與結果 | 使用者先說「這個我可以提供docker容器。還是說WSL2的效果更好？」「本機就有Docker」，之後對三個問題選：「先 A/A，過了才判 A/B」「照 CI 的清單另建」「寫完 linux-run.md 就開始」 |
+| 2026-10-28 | D76：「實機只做 CI 做不到的事」套用到 os-windows-run 的「第 1 次續跑」。<br>windows-run.md 的續跑表，每一項都寫出 CI 做不到的理由。<br>說不出理由的拿掉，取代 D74 的「裝一般的 Python、W1 在 vcvars64 裡重跑」：<br>- W1b（重跑完整 ctest）：重複 CI 的 windows-x64 L1。<br>- W1-ctrlc：`os.console_ctrl_c` 標 cpu，CI 每次都通過。<br>- W0b（裝 Python、B 重新 configure）：只是為了 W1b。剩下的腳本照第 1 次的方式，用啟動器跑。<br>第 1 次 W1 的結果只當參考：30 項環境類失敗（embedded Python、`rc` 不在 PATH）不是產品或 Engine 的缺陷；`os.console_ctrl_c` 的失敗記為會話的執行環境所致。<br>`object_fps_pvp.worker` 在任何平台的 CI 都不跑（test preset 只跑 `cpu\|shader`，D204），沒有 CI 紀錄可對照。所以 worker-10x 留在實機清單；要不要改由 CI 跑，由 v7.1 會話與使用者決定。<br>續跑剩 6 項：W3-samples、W3-dll、host-state、W3-aa、worker-10x（有核准才跑）、W8（還沒跑時）。W4～W7 已在第 1 次跑完（`844e92b1`、`7306a142`）。<br>由「對接 OS 子系統的 Windows 實機結果」會話整理與記錄；修改前已告知本會話 | 使用者的原則（2026-10-28，經架構健檢會話轉達）：「Windows 與 Linux 實機只處理 CI 無法處理或不好觀測的任務，驗收的主要標準是 CI。」 |
+| 2026-10-28 | D77：linux-run 拿掉「在 Docker 裡跑 B 的完整 ctest」那一步：和 CI 的 linux-x64 L1 重複（原則：實機只做 CI 做不到或不好觀測的事，驗收以 CI 為主）。CI 的 linux-x64 L1 照常跑，不受影響。步驟代號由 L0～L6 改成 X0～X6，避免和驗收層級 L1／L2／L3 混淆。修訂時只有 X0（建置）在跑，還沒有任何結果 | 使用者先說「拿掉 linux-run 的 L1，理由是與 CI 的 linux-x64 L1 重複；在 linux-run.md 與 HANDOFF 記下。」中途問「等等，是未來Linux 不跑L1了？」，說明那是步驟代號後：「拿掉 linux-run 裡重複 CI 的完整 ctest 那一步，步驟代號改成 X0～X6；在 linux-run.md 與 HANDOFF 記下。」原則本身由「對接 OS 子系統的 Windows 實機結果」會話轉達（來源是架構健檢會話；Windows 端的套用是 D76） |
+| 2026-10-28 | D78：OS 子系統收口（[closeout.md](closeout.md)）。<br>決定 1 (a)：已在消費端發行線、沒有功能支撐的 ★ 4 批（os-console-shutdown、io-native-paths、os-tool-files、os-utf8-codepage）全部留下，標成「已出貨、未經功能驗收」，本線不再為它們安排 L2／L3。<br>決定 2 (a)：os-wait-backend 凍結，從本分支撤出（回到 `4ffc7c65` 的程式與條文：time.md Invariant 8、10 與 os.md Invariant 6 的例外撤回，取代 D72；D74 的 (B) 與續跑的 W3-* 取消）。<br>決定 3 (a)：os-wake-record、os-threads-backend 留在本分支，消費端發行後以一條 PR 併 master，驗收用 CI 加守衛；os-threads-backend 的 Linux L2（D69）與 Linux、arm64 的晚醒基準取消。<br>決定 4 (a)：今後的規則寫進本計畫 README 的「執行規則」與 os.md 的 Replacement Criterion 9。<br>連帶：os-net-errors 不開始、os-close 取消（改成 os-closeout），os-windows-run 的第 2 次與 os-linux-run 取消；掛在已併入批次上、還沒做的 L3（os-process-info、os-files-write）從本線撤掉；os-console-shutdown 的主控台檢查（D51、D206）已在 10-27 的 D201 做過（conhost 的 Ctrl+C、關閉視窗通過）。不做對抗式檢查 | 使用者：「核准：決定 1 選 (a)、決定 2 選 (a)、決定 3 選 (a)、決定 4 選 (a)，不做對抗式檢查。開始 os-freeze-wait 與 os-closeout-docs，推送前先問我。」 |
 
 ## 消費端的壓力摘要
 
@@ -601,7 +674,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - gyo_ui_editor.core：只有「a resolved asset path keeps the characters of its root」。
   - gyo_ui_editor.content_cli：`--validate` 以 0xc0000409（未捕捉的例外）結束。
   - gyo_ui_editor.preview：0xc0000409。前兩個測試函式沒有印出 FAILED，所以停在最後的新函式〔推論：輸出看不出是哪一行〕。
-- 本機驗證（macOS arm64，修正後）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
+- 本機驗證（macOS Intel x86_64，修正後）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
 - 突變：
   - 新增 pu-x1～pu-x7，本機能跑的 pu-x1、pu-x2 killed；Windows 專用的 pu-x3～pu-x7 留給 Windows 機器（D62）。
   - 相關的既有突變（find 在改動範圍，或殺它的測試被改）：
@@ -637,6 +710,166 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - Ctrl+Break 與 `os.console_close` 的重跑，使用者決定不補。
 - 由此得到的方向：D64（程序自己決定 UTF-8），讓 ACP 類的判定不再挑機器（PLAN 第 7.18 節）。
 
+### os-wait-backend
+
+- 2026-10-27：開始（D71）。基準（A）是本分支 `4ffc7c65`。順序：w1-calibrate（比對腳本、A/A 校準與檢出力檢查，看 B 之前）→ w2-move → w3-tests → w4-guards → w5-review → w6-l2 → w7-docs。
+- w1-calibrate：
+  - 比對腳本 `tests/common/time/wake_compare.py`（`beb14cf7`）：A、B 兩組程式依 A B A B … 交錯跑，判定照開放決策 13 (a)，每側取中位數；sleeper 與負荷沿用 `wake_baseline.py`。量測程式 `WakeRecord.cpp` 不改，A、B 只差 Waiter。
+  - 0.5 秒、1 對的冒煙試跑（探索用，不算宣告的試行，§14.1）：腳本可用；樣本只有 30 個，視窗的 P50 有一項超過 +0.02 ms。
+  - 程式副本（主 checkout 的 `build/target/_build/test/logs/os-wait-l2-20261027-macos-intel/programs/`）：
+    - A：`4ffc7c65` 的 wide 建置。`gyo_time_wake_record` 5bf9744c…、`_window` 4d7f870c…。
+    - D（退化版）：同一份原始碼只拿掉 `NOTE_CRITICAL`。b17f5862…、76ae711e…。
+    - 還原後重建的程式與 A 的位元組不同（macOS 每次連結都換 UUID），所以以副本為準。視窗程式以絕對 rpath 載入建置樹的 SDL，A、B 共用同一份。
+  - 宣告的試行（背景執行，量測期間本機不建置）：A/A 4 對（`calibration-AA/`），之後 A 對 D 1 對（`detection-AD/`）。
+  - 收支：一致。A/A 計畫 16 次、跑完 16 次、無效 0 次；A 對 D 計畫 4 次、跑完 4 次、無效 0 次。每次 Waiter 的 deadline 樣本 1791～1800 個：晚醒時不補跑錯過的週期（`WakeRecord.cpp` 的設計），所以 30 秒內的週期數變少，不是丟棄。notify 每次 1800 個，略過的週期 0。
+  - A/A（4 對）：12 項全部通過。最接近界限的是 CLI notify P50：A 0.048、B 0.050，界限 0.068 ms。deadline P99：CLI A 0.151、B 0.150（界限 0.238）；視窗 A 0.128、B 0.130（界限 0.211）。單次的 CLI deadline P50 在 0.066～0.095 ms 之間（差距超過 +0.02 ms），但 4 次的中位數兩側只差 0.0001 ms：取中位數讓 P50 的界限可用。
+  - A 對 D（1 對）：deadline 四項都不通過。CLI P99 8.12 ms、P50 3.04 ms；視窗 P99 2.14 ms、P50 2.08 ms（界限約 0.23、0.10 ms）。notify 四項通過：退化只動計時器，這次檢出力檢查不涵蓋 notify→wake 的退化。
+  - 主機：sleeper 的 P99 在 4.2 ms 與 8 ms 兩種狀態之間切換（Python sleep 的合併），cv 的 P99 也一樣；Waiter 不受影響。CLI 有兩次各 8、10 個超過 1 ms 的尖峰，沒有推動 P99。
+  - 依 D71 的事前條件（A/A 通過 (a)、退化版不通過），開放決策 13 (a) 原文凍結，不再回來問。B 照同一支腳本、同一份 A 副本、4 對交錯跑；不通過時不重跑，先回報。
+- 2026-10-27：圖書管理員通知規則更新（PR #98，AGENTS.md §14 開頭與 agents/effort-gearbox.md）。之後通知已合併（master `52775743`）；合併後的兩份檔案與我讀過的 PR 內容逐字相同。本分支沒有併入 master：本分支會流進消費端的發行線（#96），要不要同步由使用者決定；規則直接從 master 讀。本批照新版做：
+  - 校準與 L2 的回報以收支行開頭（計畫的次數、跑完的次數、無效的次數，每次的樣本數與略過的週期）。
+  - xhigh 審查開始前，先說明由哪個 agent、用哪個引擎與檔位、為什麼，並在主會話貼出 prompt；對抗審查盡量用與提案者不同的引擎。
+  - L2 宣告的「範圍的限界」：
+    - macOS arm64：沒有實機（D11⑩），不量。
+    - Windows 與 Linux：在下一次實機量；在那之前只有 macOS Intel 的結果。
+    - Windows 不初始化 SDL 的程序的計時精度，從未量過（time-threads-trace HANDOFF 的未結事項）；Windows 的 CLI 情境是第一次量。
+    - cv 後備的 ow-x1 只在 Linux 跑得到。
+- w2～w4（在量測期間只寫、不建置）：
+  - engine/os：`WakeSignal.hpp`、`src/wait/WakeSignal.cpp`；與舊碼逐行對照，差異只有參數型別、latch 參照與 ★ 的錯誤格式。
+  - engine/time：`Waiter.cpp` 只留 latch、單一等待者、deadline 迴圈與 LateSince；`gyo_time` 改成 PUBLIC Base、PRIVATE Os。
+  - 守衛：連結檢查、allowlist（刪 Waiter.cpp 三條，WaiterTests 改標永久）、突變重新定位（tt1-notify-dropped、tt1-no-recheck、ti-x1、os-g6-stale；其餘四個 tt1 的 find 不變）與新增 ow-x1～ow-x8。
+  - 文件草稿：os.md（Wait 的合約、Invariant 6 的例外、Invariant 8 的守衛）、time.md（Ownership、Invariant 7、8、10）、docs/architecture.md。定案前做突變與審查者的驗證（D71）。
+- w2～w4 的建置與驗證（量測結束後）：
+  - 邊界守衛第一次失敗：R3 把 Waiter 成員的初始化 `signal(…)` 當成 CRT 的 `signal` 呼叫（誤報）。成員改名 `primitive`，規則不動，tt1-notify-dropped 與 tt1-no-recheck 的 find 跟著改。
+  - 本機（macOS Intel）：core 34／34；產品組態 98／98；`object_fps_pvp.ipc`、`.worker`、`.close_timing` 逐一串行 3／3。
+  - 突變：tt1-* 7／7 killed（4 個 find 不變、2 個重新定位、tt1-stop-without-notify）；os 目錄 11／11 killed（ow-x2～x4、ow-x7、ow-x8、ti-x1～x3、th-x1、os-g6、os-g8）；Linux 的 ow-x1、Windows 的 ow-x5、ow-x6 留給實機。
+  - 實作 `4041cf42`、文件草稿 `7e6592d1`。
+- w5-review（1 位，D71；依 PR #98 的規則，引擎用 Fable 5.1、檔位 xhigh、唯讀；prompt 在啟動前貼在主會話；使用者說「照建議，繼續」）：沒有 blocker。
+  - major 2 個，都已修：
+    - M1：ow-x7 在 Windows 殺不掉（Windows 的檢查接受兩種計時器，平移一格剛好落在另一種）。改成平移兩格，四個平台都會落到錯的後端；本機 killed。
+    - M2：競爭測試的掃描放在 signaller 端，對 ow-x1 的檢出力可能不足。探索性檢查（scratchpad，不算宣告的試行）：把 `WakeSignal.cpp` 強制編成 cv 後備，在 macOS 的 pthread 上跑。舊測試：正確版 3 次 0 遺失；ow-x1 3 次都失敗，但 20000 輪只遺失 1～2 次，勉強。把掃描移到 waiter 端、signaller 先自旋再讓出：正確版 3 次 0 遺失；ow-x1 在 705～2689 輪內就遺失 3 次，命中率約十倍。改用後者。Linux（futex）上的結果仍要實機確認。
+  - minor：
+    - m1：文件把 ow-x1「已殺死」寫成既成事實。改成「只在 Linux 編得到、還沒在那裡跑」。
+    - m2：「這批沒有建置證據」不成立：審查者讀的是主 checkout 的建置樹（10 月 4 日）；本 worktree 的建置樹有 `WakeSignal.cpp.o` 與當天的測試紀錄。
+    - m3：Linux 的判定範圍在 (a) 的文字有歧義。在任何 Windows、Linux 的 B 結果之前寫定：每個平台都判 deadline 與 notify（與看結果前提交的 `beb14cf7` 腳本相同）；Linux 用 `--modes cli`，Windows 用 `--modes cli window`。
+    - m4：補兩個便宜的測試缺口：moved-from 的案例改成在搬入端真的 Block 再由另一執行緒喚醒；逾時案例加下界（三次中最長的一次至少 10 ms，合約允許虛假喚醒，所以不要求每次），並加突變 ow-x9（macOS，本機 killed）、ow-x10（Windows）。逾時換算的進位方式與 ★ 的 detail 格式沒有測試，只靠審查（已知缺口）。
+  - note：
+    - 搬移逐行等價、三個後端沒有新的 lost wakeup、突變的 find 都唯一、拿掉 `Threads::Threads` 在 Linux 沒有影響（經 gyo_os 以 link-only 取得）：審查者獨立確認。
+    - Signal 的說明「或下一次」對 cv 後備只在呼叫端先設 latch 時成立：標頭與 os.md 改寫成明確的前提。
+    - 設計備忘：cv 後備若自己在 mutex 內持有 pending 旗標，就不必讀 Time 的 latch，三個後端介面一致，Invariant 8 也不必寫跨邊界的例外。PLAN 3.8 核准的是現在的做法；有壓力時再評估，這批不動。
+- w6-l2（macOS Intel，照凍結的 (a)，A＝`4ffc7c65` 的副本、B＝`756073aa` 的 wide 建置副本 e0c7f8c3…／cc117998…；B 的程式含 `Engine::Os::WakeSignal`，A 的沒有）：
+  - 收支：一致。計畫 16 次、跑完 16 次、無效 0 次。deadline 樣本每次 1796～1800 個（晚醒時不補跑錯過的週期）。notify 每次「收到＋略過」＝1800；略過的 4 個週期都在 pair3-B-cli，同一次有 10 個超過 1 ms 的主機尖峰（A/A 時只用 A 程式的 pair2-A-cli、pair4-B-cli 也有 8、10 個同類尖峰）。
+  - 結果：**B 通過**，12 項全部通過。
+
+    | 情境 | A 中位數 | B 中位數 | 界限 |
+    |---|---|---|---|
+    | CLI deadline P99／P50 | 0.149／0.078 | 0.152／0.077 | 0.236／0.098 |
+    | CLI notify P99／P50 | 0.071／0.048 | 0.075／0.048 | 0.139／0.068 |
+    | 視窗 deadline P99／P50 | 0.133／0.077 | 0.132／0.077 | 0.216／0.097 |
+    | 視窗 notify P99／P50 | 0.059／0.048 | 0.061／0.050 | 0.123／0.068 |
+
+    早醒 0（B 的最小晚醒 0.011 ms）；A、B 的後端都是 Kqueue。
+  - 證據：主 checkout 的 `build/target/_build/test/logs/os-wait-l2-20261027-macos-intel/AB/`（`verdict.json`、`meta.txt`、每次的 JSON 與 sleeper）、`AB.log`。
+  - Windows（CLI 與視窗）與 Linux（CLI）在下一次實機，用同一支腳本與 A＝`4ffc7c65`、B＝本批最後的 commit；Windows 的 L2 通過前，不通知消費端合併（D71）。
+- 2026-10-27：使用者說「推送本分支的 8 個 commit（29cbd9b2～908308b3），手動觸發四平台 L1，驗 os-wait-backend」。推送（`e5a26431..908308b3`，快轉），L1 是 [run 40510515336](https://github.com/yojinn-io/GYO-Engine/actions/runs/40510515336)（`908308b3`）：**失敗**，只有一個 job。
+  - 失敗：Quick acceptance / toolchain / linux-x64 的 `platform_sdl_concurrency` 逾時（60 s）。CI validation 與 CI gate 跟著失敗。
+  - 其他都成功：L1 的 windows-x64、linux-x64、macos-arm64、macos-x64，以及其餘 Quick acceptance。四平台的 `gyo_os_tests`（WakeSignalTests）、`gyo_time_tests`、連結檢查、邊界守衛都通過；同一個失敗的 job 裡 `gyo_os_tests` 也通過（0.35 s）。
+  - 歸類（§14.1，未能完全切分）：證據指向測試本身加環境，不是本批的實作。
+    - 逾時的三個案例（LogBridge 的並行日誌、兩個執行緒，EventWatch 的解構等待回呼）都不經過 Waiter、`WakeSignal`、RoleThread；engine/platform/sdl 也不用它們。檔內唯一用到 Waiter 的案例不在這個過濾裡。
+    - 同一個 commit 的 L1 / linux-x64 跑同一個測試，2.29 s 通過。
+    - 這個測試有時序相關失敗的紀錄（消費端 K11、D186：windows-x64 的 `pushedBy == 0`、macos-arm64 的 `overlappedRounds == 0`），修正批 event-watch-overlap 加了有界的等待，但最壞情況是 200 輪 ×（最多 2 s＋200 ms），超過 60 s 的逾時。這次的症狀（逾時）是新的。
+  - 失敗不覆寫；要不要重跑、要不要交給事件監看的 owner，由使用者決定。
+- 2026-10-27：使用者說「先查」。查證約 1 小時（估 1 小時），只查不修；兩種方法都沒重現，依 AGENTS §14 開頭停下回報。
+  - 更正：失敗的 job 是逐一跑 CTest（測試 preset 沒有平行），上面「以平行方式跑」是錯的。
+  - 環境：失敗的 job 與通過的 L1 / linux-x64 用同一個 runner 映像（ubuntu-24.04，20261021.618）、同一個編譯器（g++-14）、同一種 preset。
+  - 歷史：cross-platform 最近 120 次 run 的失敗裡，沒有其他一次是這個測試；它以前的失敗是斷言（K11），逾時是第一次。
+  - 逾時前沒有 doctest 的輸出，所以不知道三個案例中哪一個卡住。
+  - 讀原始碼得到的兩個候選機制（都沒重現）：
+    - A：事件監看的案例。Engine 的 `PumpEvents` 是 `while (SDL_PollEvent(...))`；SDL 用佇列尾端的標記事件結束一輪，佇列滿（65535）時標記放不進去。測試的推送端不停送事件，主執行緒每 20 輪才取一次，取的時候佇列已滿；標記一直放不進去的話，這一輪就不會結束。macOS 的小程式（scratchpad）：佇列滿、推送端被拒約 300 萬次、每次 poll 另加 0～20 µs，這一輪都在 65535～65682 個事件後結束（標記在約 150 次嘗試內放進去），沒有重現。
+    - B：鎖的爭用。SDL 呼叫事件監看的回呼時持有監看清單的鎖，日誌橋拿 SDL 的日誌鎖，推送端與寫日誌的執行緒都在迴圈裡反覆拿同一把鎖。macOS 上 24 個忙碌程序塞滿 16 個邏輯 CPU：事件監看 1.8→4.3～6.4 s、並行日誌 7 ms→約 2 s、兩個執行緒 10→23 ms，沒有卡住。macOS 的 mutex 是公平交接，Linux（glibc）不是，所以結果不能直接套用。
+  - 本批的關係：三個案例都不經過 Waiter、`WakeSignal`、RoleThread（可信度高）；同一個 commit 在 L1 / linux-x64 以 2.29 s 通過。
+  - 要改變判斷需要：Linux 上的重現，或讓逾時說得出是哪個案例的觀測手段（例如每個案例一個 CTest，或印出目前案例的看門狗）。這個測試屬於 engine/platform/sdl（input-and-present 計畫；消費端 K11 的 owner 是 v7.1 會話），不在本批範圍。
+- 2026-10-27：使用者說「把查到的交給 v7.1 會話（K11 的 owner），建議它把三個案例拆成各自的 CTest 或加看門狗；這邊重跑失敗的 job，兩次都記錄」。
+  - 已傳給「[Task]v7.1 規劃與盤點（事故fix）」：現象、與本批無關的證據、兩個候選機制與原始碼位置、macOS 的探索數據、建議。之後使用者確認是 `platform_sdl_concurrency` 本身的問題，交給對應的任務卡處理。
+  - 重跑（`gh run rerun --failed`）是同一個 run 的第 2 次：toolchain / linux-x64 成功（47／47，`platform_sdl_concurrency` 5.27 s；core 34／34），CI validation 與 CI gate 成功。第 1 次的逾時保留在 attempt 1。
+  - **os-wait-backend 的四平台 L1：第 2 次通過**；第 1 次的失敗歸因於 `platform_sdl_concurrency`（不經過本批的程式碼），記錄不覆寫。
+  - 更正：重跑中途用 API 查到 job 還在跑、run 卻已標成成功，一度以為 CI gate 在必要的 job 結束前就判了成功；之後的時間戳記顯示順序正確（toolchain 14:06:35、CI validation 14:06:43、CI gate 14:06:54），是 API 回了還沒更新的狀態。CI 沒有問題。
+- 2026-10-27：定案（D72）：time.md Invariant 8、10，os.md Invariant 6 的例外，★ 錯誤細節，都照草稿。
+- 2026-10-28：Windows 的 L2（os-windows-run 的 W3）不通過：window deadline P50 超出上限 0.0032 ms，其餘 11 項通過（D74）。
+- 2026-10-28：**凍結，從本分支撤出（D78，os-freeze-wait）。** 沒有功能支撐，D218 之下也不排實機量測。撿回時從 `4041cf42`、`756073aa`（程式）與 `7e6592d1`、`6316d657`（條文）開始，並在 Windows 另行宣告判定（[closeout.md](closeout.md) 的 M-wait-win）。
+
+### os-threads-backend
+
+- 2026-10-27：開始（D69）。基準（A）是本分支 `5733d361`，程式與 `c9087d0c` 相同。
+- L2 的 A（macOS Intel，搬動前）：
+  - 用消費端自己的測試程序啟動它的角色：ctest 的 `object_fps_pvp.worker`、`.ipc`、`.close_timing`、`.cpu`。
+  - 涵蓋四種角色：`gyo-match-sim`、`gyo-match-ipc`、`gyo-client-net`，以及用戶端模擬角色（測試裡名為 `gyo-test-sim`，和 GUI Client 的模擬角色走同一段程式）。
+  - 每一行都是 `wait_backend=Kqueue name_applied=1 priority_applied=1`。
+  - 證據在主 checkout 的 `build/target/_build/test/logs/os-threads-l2-20261027-macos-intel/`（`A-meta.txt`、`A-roles.txt`、兩份 ctest 輸出）。
+- 實作（本機 `ca9e6558`；審查後的修正併進同一個 commit，成為 `2ec5905d`）：
+  - engine/os：
+    - `Thread.hpp` 提供 `SetCurrentName`、`SetCurrentPriority`、`PriorityHint`。
+    - 實作從 `RoleThread.cpp` 逐行搬到 `engine/os/src/thread/Thread.cpp`，依開放決策 11 (c) 一個檔案、以 `#if` 分平台。
+    - Windows 的名稱改用新的 `Detail::Utf8ToWide`（D69 ★）。
+    - POSIX 上 `gyo_os` 以 PRIVATE 連結 `Threads::Threads`。
+  - engine/threads：`RoleThread` 只呼叫 engine/os，OS 標頭與 `#if` 都拿掉；`gyo_threads` 以 PRIVATE 連結 `GYO::Os`；優先度以 `static_cast` 轉成提示，三個值用 `static_assert` 對齊。
+  - 守衛：Engine 的 allowlist 刪掉 `RoleThread.cpp` 的 R1、R2、R3 三條和空的節標題；`RoleThreadTests.cpp R2 4` 改標為永久條目並寫理由。
+  - 連結檢查：
+    - `gyo_threads` 是 exactly GYO::Time、Threads::Threads、GYO::Os，且 GYO::Os 不得公開。
+    - `gyo_os` 在 POSIX 上是 exactly GYO::Base、Threads::Threads。
+  - 讀回測試 `tests/common/os/ThreadTests.cpp`：
+    - 用 OS 的查詢讀回名稱與 QoS／thread priority／nice；名稱含 Windows 非 ASCII、Linux 的 15 bytes。
+    - 另有一個案例經 `RoleThread` 在角色自己的執行緒上讀回優先度，守 threads.md Invariant 5 的對應。
+  - 新的公開標頭加進 `OsHeaderHygieneTests`：第一次全測時 `os.header_hygiene` 失敗，原因是我漏了它。
+- L2 的 B（macOS Intel，搬動後）：四種角色的 `role started` 行和 A 逐字相同；審查修正之後重抓（B2）也逐字相同。證據同一個目錄（`B-*`、`B2-*`、`diff.txt`）。
+- xhigh 審查（1 位，讀 `ca9e6558`；在 scratchpad 用 CMake 4.4.3 重現換行、匯出樹跑守衛）：
+  - major 2 個，都已修：
+    - ThreadTests 的寬字串字面值直接寫中日韓文字，`gyo_os_tests` 沒有 `/utf-8`，MSVC 會用 ACP 讀原始碼，windows-x64 的 L1 會失敗，也會讓 Windows 上整份突變目錄的基準線失敗。改成 `\x` 跳脫（`L"gyo-\x57F7…"`），th-x3 的 expect 跟著改。
+    - 既有突變 os-g8-link 的 expect 用字面空白，比不到 CMake 換行後的訊息（POSIX 的期望值變長後換行）。改成 `\s+`；Windows 上從 D49 起就已經是這樣。
+  - minor 3 個，都已修：
+    - RoleThread 的優先度對應沒有守衛。改成 `static_cast` 加 `static_assert`，並加經 RoleThread 讀回的案例與 th-x8。
+    - 在 `std::thread` 裡用 REQUIRE，失敗時會讓程序終止且訊息遺失。改成在工作執行緒上只讀值、回主執行緒再斷言。
+    - allowlist 的歸屬註記過期。
+  - note：
+    - 範圍外的列舉值行為：改用 cast 後與舊碼相同。
+    - macOS 多一次字串複製：可忽略。
+    - `Utf8ToWide` 和 Files.cpp 的 `ToWide` 近似重複：記為 code smell。
+    - os.md Invariant 6 寫「Functions return `Base::Result`」，新 API 回 bool：交使用者決定是否寫明例外。
+    - 分層圖與 docs/architecture.md 的依賴欄：已同步。
+- 突變（macOS 能跑的）：
+  - ti-x1、ti-x2、th-x1、th-x2、th-x4、th-x7、th-x8、os-g6、os-g8 killed；tt1-stop-without-notify、tt2-role-backend-fixed killed。
+  - Windows 的 th-x3、th-x5 與 Linux 的 th-x6、ti-x4，留給實機。
+- 本機（macOS Intel x86_64）：core 34／34；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3；邊界守衛通過。
+- 2026-10-27：使用者說「推送 2ec5905d 與 e5a26431（含 5733d361）到本分支，手動觸發四平台 L1，驗 os-threads-backend」。四平台 L1（[run 40484797877](https://github.com/yojinn-io/GYO-Engine/actions/runs/40484797877)，`e5a26431`）全部成功：windows-x64 96／96、linux-x64 92／92、macos-arm64 92／92，gyo_os_tests（讀回測試，含 Windows 的非 ASCII 名稱與 thread priority、Linux 的 nice 與 15 bytes）、gyo_threads_tests、邊界守衛、連結檢查都通過；加上 `UNICODE` 的 engine/os 在 Windows 編譯通過。 Windows 的非 ASCII 名稱讀回在這次第一次實跑，就是通過的（沒有先跑 Red）。
+- 2026-10-27：定案（D70）：threads.md Invariant 9 與 os.md Invariant 3 照草稿；os.md Invariant 6 寫明「只回報是否套用的請求回傳 bool」的例外。
+
+### os-wake-record
+
+- 2026-10-27：開始（D68）。基準是本分支 `05b8ad13`（發行線 `0f090aa1` 之上）。量測程式從本機分支 `claude/tt1-l2-wake-record`（`a8f9535f`）合入。
+- 2026-10-27：更正。試跑時 `meta.txt` 顯示本機是 macOS Intel（x86_64，i9-9980HK），不是我說明時寫的 macOS arm64。repo 一直記著「實機只有 macOS Intel」（D11⑩）。
+  - D68 的「本機先量」因此量的是 PLAN 第 7.13 節的 macOS Intel 實機。macOS arm64 沒有實機，照 D11⑩ 標「未執行」（CI 的 macos-arm64 只跑 L1）。
+  - 同時更正 os-path-utf8-sweep 與 os-utf8-codepage 的本機驗證紀錄（HANDOFF 三處、兩份 dev_log）：寫成 macOS arm64 的都是這台 macOS Intel。
+- 量測程式：
+  - 照 `a8f9535f` 合入，沒有衝突。
+  - 新增 notify→wake：通知方在 Notify 前蓋時間戳；等待方取用後，通知方才發下一次，所以時間戳不會在讀取前被覆蓋。上一次還沒被取用的週期會跳過並計數。Waiter 用 `Wait()`（沒有期限，Invariant 6），condition_variable 用帶條件的 `wait`。
+  - 宣告的程序寫成 `tests/common/time/wake_baseline.py`：每種情境前後各 5 秒 sleeper，`meta.txt` 記錄 commit、程式雜湊、OS、CPU、開始與結束的負載。之後的實機照同一個腳本跑。
+- 2026-10-27：macOS Intel 的基準（照 D68 的宣告，只記錄）。程式是 `f6997194`。
+  - 證據在主 checkout 的 `build/target/_build/test/logs/os-wake-baseline-20261027-macos-intel/`：`meta.txt`、`cli.json`、`window.json`、sleeper、log。`files.sha256` 的 SHA-256 是 `a3066291…`。
+  - 主機：開始時負載 2.06，結束時 1.82（16 個邏輯處理器）。sleeper（Python 的 60 Hz sleep）的 P99：沒有視窗那段之前 4.2 ms、之後 7.9 ms；有視窗那段之前 8.0 ms、之後 7.9 ms。
+  - 沒有視窗（Kqueue）：
+    - 期限等待：Waiter P50 0.077、P99 0.145 ms（1799 次中 2 次超過 4 ms，最大 26 ms）；condition_variable P50 3.28、P99 4.17 ms；`sleep_until` P50 3.33、P99 7.61 ms。
+    - notify→wake：Waiter P50 0.049、P99 0.068 ms；condition_variable P50 0.052、P99 0.067 ms；兩者都沒有跳過的週期。
+  - 有視窗：
+    - 期限等待：Waiter P50 0.077、P99 0.134、最大 0.163 ms；condition_variable P99 2.11 ms；`sleep_until` P99 2.07 ms。
+    - notify→wake：Waiter P50 0.048、P99 0.069 ms；condition_variable P50 0.052、P99 0.070 ms。
+  - 觀察（不判定）：
+    - 「Waiter 的 P99 低於 condition_variable」在兩種情境都成立。
+    - 和 TT-1 L2（2026-10-09，同一台機器）同一量級：當時 Waiter 的 P99，沒有視窗 0.10 ms、有視窗 0.133 ms。
+    - notify→wake 在 macOS 上 Waiter 與 condition_variable 沒有差別。
+  - 其他平台：Windows（沒有視窗、有視窗）與 Linux 在下一次實機用本批的 commit 補；macOS arm64 沒有實機（D11⑩）。
+- 2026-10-27：使用者說「推送 f6997194 與 c9087d0c（含 05b8ad13）到本分支，手動觸發四平台 L1，確認量測程式在各平台都編得過」。四平台 L1（[run 40463273387](https://github.com/yojinn-io/GYO-Engine/actions/runs/40463273387)，`c9087d0c`）全部成功；`gyo_time_wake_record` 與 `gyo_time_wake_record_window` 在 linux-x64、macos-arm64、macos-x64、windows-x64 都有連結出來。
+- 2026-10-27：已告知 v7.1 會話：Windows 沒有視窗的那組數據，會在下一次 Windows 機器量並交給它的 F5／F7；Match 層的數據仍由它在 lan15 量。也順帶告知它的 windows-long-path dev_log 同樣寫成 macOS arm64。
+
 ### os-utf8-codepage
 
 - 2026-10-27：開始（D64～D66）。基準是發行線 `e739f00f` 之上的本機 commit。照 D66，先寫只含新測試的 Red commit，推送前先問。
@@ -659,7 +892,7 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
   - Windows 專用的 pu-x9、pu-x10、pu-x12，以及 os-w10、os-g18，留給 Windows 機器。
   - 相關的既有突變 20／20 killed（守衛、Process、建目錄、字型）。
   - pu-x6、pu-x7 依 D66 退場。
-- 本機（macOS arm64）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
+- 本機（macOS Intel x86_64）：core 33／33；產品組態 95／95，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
 - 文件：os.md 的 Components、Contracts（Process code page、AnsiCodePage）、Guard（R6、第三個設定期檢查、R6 的盲點）、Invariant 11（D66 同意的草稿）。
 - 要使用者同意（定案時）：Replacement Criterion 8 的草稿。這一批替 engine/os 加了 manifest 的職責；AGENTS §3 要求新的大職責先寫替換條件。
 - xhigh 審查（1 位，讀固定的 commit；在 scratchpad 用 CMake 4.4.3 做最小重現）：
@@ -690,16 +923,51 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
     - pu-x10 的例外只會被列出、執行期在任何 Windows 都失敗。
     - AnsiCodePage 符合 Invariant 4、8、10。
     - 兩個補測的前提正確。
-- 審查後的驗證（macOS arm64）：
+- 審查後的驗證（macOS Intel x86_64）：
   - core 34／34（含 `cmake.ProcessCodePage`）；產品組態 96／96，`worker` 與 `close_timing` 逐一串行 2／2；host-tools 3／3。
   - 突變：pu-x8（移到建置層）、pu-x15、pu-x16 killed。
   - pu-x15、pu-x16 從 repo 根目錄跑 `cmake -P` 時，失敗的案例會把合成的樹留在根目錄。改成以 `-DWORK_ROOT=build/target` 放到忽略的目錄，留下的目錄已刪。
 - 2026-10-27：使用者說「推送 30d30f37 與 a9c9dc85 到本分支，手動觸發四平台 L1，驗 os-utf8-codepage 的 Green」。Green 的 L1（[run 40456874710](https://github.com/yojinn-io/GYO-Engine/actions/runs/40456874710)，`a9c9dc85`）全部成功。windows-x64 的 ctest 96／96：gyo_os_tests 通過（`GetACP()` 是 65001，合併後的 manifest 有 activeCodePage），`cmake.ProcessCodePage` 在 MSVC 下通過（嵌入方式是 `.manifest`），產品與編輯器的執行檔也都帶著 manifest 建置、測試通過。 os-utf8-codepage 完成。Replacement Criterion 8、審查後補的 ★、Invariant 11 的範圍文字照草稿定案（D67）。還沒請消費端合併。
 
+## 下一次實機的清單（Windows／Linux）
+
+**2026-10-28（D78）：取消。** os-windows-run 第 1 次的結果已合併；續跑、第 2 次與 os-linux-run 都不排。以下只當紀錄保留，項目不再追蹤。
+
+D62：計時核心之前的 4 批做完後，在實機上一次補齊。2026-10-27 整理；項目來自各批的紀錄，完成時在各批的紀錄裡補結果，並從這裡刪掉。
+
+2026-10-28（D73）：Windows 的部分改照 [windows-run.md](windows-run.md) 由 Windows 端執行（os-w10、os-g18 的測試缺漏已由 os-utf8-codepage 補上，一起跑；os-c4 仍等開放決策 26）。結果合併後從這裡刪掉。Linux 的部分不變。
+
+- 共通：
+  - LF 的 checkout（`core.autocrlf=false`）：find 跨多行的突變在 CRLF 上會 stale。
+  - 三份建置，各自放在自己的 worktree 或目錄：
+    - A_threads＝`5733d361`（os-threads-backend 之前，產品組態）。
+    - A_wait＝`4ffc7c65`（os-wait-backend 之前；Waiter 與 os-wake-record 的 `f6997194` 相同）。
+    - B＝本分支最後的 commit（產品組態）。
+  - 量測程式先從建置樹複製出來再跑（以副本為準）。Windows 的視窗程式要連同 `SDL3.dll` 一起複製；Linux 以建置樹的絕對 rpath 載入 SDL，建置樹要留著。
+  - 量測期間這台機器不建置。
+- Windows（MSVC，`ci-windows`）：
+  - 突變（os 目錄，`--only`）：pu-x3、pu-x4、pu-x9、pu-x10、pu-x12、th-x3、th-x5、ow-x5、ow-x6、ow-x10。os-w10、os-g18 等開放決策 24；os-c4 等開放決策 26。
+  - os-wait-backend 的 L2（凍結的 (a)，D71）：`python tests/common/time/wake_compare.py --a <A_wait 的副本> --b <B 的副本> --output <證據目錄> --pairs 4 --modes cli window`。不通過時不重跑，先回報；撤回方式是 revert。這是消費端合併這一批的前提（D71）。
+  - os-wake-record 的基準（只記錄，D68）：`python tests/common/time/wake_baseline.py --build-dir <A_wait 的建置樹> --output <證據目錄>`（沒有視窗與有視窗）。沒有視窗的那組交給 v7.1 的 F5／F7。
+  - os-threads-backend 的 L2（D69，只記錄、附撤回條件）：A_threads 與 B 各跑 ctest 的 `object_fps_pvp.worker`、`.ipc`、`.close_timing`、`.cpu`，比對每個 `role started` 行的 `wait_backend`、`name_applied`、`priority_applied`，必須逐字相同。
+  - MinGW（`test` preset，只記錄）：`.rc` 嵌入是否勝過預設 manifest；repo 路徑含非 ASCII 時 windres 是否找得到 manifest；目標的 compile definitions 經過 windres 是否有問題；OEM code page 是否也變成 65001。
+- Linux（x64）：2026-10-28（D75）改照 [linux-run.md](linux-run.md) 在這台 Mac 的 Docker 跑；結果合併後從這裡刪掉。
+  - 突變：os-f8、tt-x5、ti-x4、th-x6、ow-x1。ow-x1 殺不到時，依 PLAN 7.15 補測試（macOS 上強制 cv 的探索性檢查殺得到）。
+  - os-wait-backend 的 L2：同上，`--modes cli`；deadline 與 notify 都判（審查 m3，在任何 B 之前寫定）。
+  - os-wake-record 的基準：`--modes cli`。
+  - os-threads-backend 的 L2：同上。
+- 範圍的限界（PR #98 之後的宣告要寫進去）：macOS arm64 沒有實機；Windows 不初始化 SDL 的程序的計時精度，在這次之前從未量過。
+
 ## 未結事項
 
+- 收口（D78）之後：
+  - ~~推送本分支並派發四平台 L1（os-freeze-wait 的驗收）。~~ 2026-10-28 完成（run 40646224836）。
+  - ~~os-handoff-v71：通知消費端的會話（[closeout.md](closeout.md) 第 6 節的五點）。~~ 2026-10-28 完成（消費端 D219）。
+  - os-land-master：消費端發行後，本分支以一條 PR 併 master；PR 前在背景完整跑一次相關突變（消費端 D184 的作法）。名稱有 L1 的讀回測試；優先度要不要補讀回測試，在那條 PR 決定。2026-10-29：master 已併入、相關突變 12／12 killed；優先度的讀回測試已存在，不必補（見現況）。PR #104 的四平台 L1 通過（run 40832108929），剩合併。
+  - 以下各項裡，等實機、lan15 或 Windows／Linux 專用突變的條目，D78 之後本線不再排；需要時由有功能的產品版本另排。
+
 - os-utf8-codepage 留下的（2026-10-27）：
-  - p4-manifest-ansi-path 仍在本計畫的突變目錄，在 manifest 之下會存活（Windows 上完整跑一次時 runner 以 1 結束）。D66 交給 v7.1 會話：退場或改寫。
+  - ~~p4-manifest-ansi-path 仍在本計畫的突變目錄，在 manifest 之下會存活。~~ 2026-10-27 消費端選擇退場（消費端 D212，`0f090aa1`）。
   - 沒有對每個建出的執行檔做 PE 層的檢查（Windows 上以 `LoadLibraryExW`＋`FindResourceW` 讀每個執行檔的 manifest）：host 工具的呼叫、產品目標的例外、`BUILD_TESTING` 關閉的組態，目前只靠審查。可排在 os-close。
   - Windows 機器上要確認：MinGW 的 `.rc` 嵌入是否勝過預設 manifest；repo 路徑含非 ASCII 時 windres 是否找得到 manifest；目標的 compile definitions 經過 windres 是否有問題；OEM code page 是否也變成 65001。
 - D201 之後仍未判定的 Windows 專用突變（2026-10-27）：
@@ -762,4 +1030,4 @@ Engine 側的決策號，在本計畫建立前最大是 D39（time-threads-trace
 - os-tool-files 的 Windows 專用突變 os-x7～os-x11 要在 Windows 上執行（lan15，D206）；Linux 上 os-x1～os-x5、os-x12 只在 macOS 跑過。lan15 上另外用 `gyo_os_tests -s -tc="*resolve*"` 與 `gyo_ui_editor_core_tests` 確認 `subst`、UNC、symlink 的案例是實跑（不是寫訊息後返回）。
 - 既有缺口（D60 的 §14.4 核對）：`GYO::Base` 沒有設定期的連結檢查，所以 Trace（經 Os、Time）與其他模組的連結閉包的末端沒有守住；`target_link_libraries(gyo_base INTERFACE SDL3)` 也能通過設定。和 D50 的 `gyo_expect_links` 假值漏洞一起處理。
 - os-trace-writers 沒有守住的性質（測試看不到）：失敗後不再寫、`flushEachLine` 每行一寫、64 KiB 門檻、Close 的結果；Windows 專用 tt-x3 與 Linux 專用 tt-x5 待對應平台。
-- R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。
+- R3 的裸 `signal(` 會抓到名為 `signal` 的變數或宣告。目前只有 1 個誤報，列在驗收程式的 allowlist。2026-10-27 os-wait-backend 又遇到一次（`Waiter.cpp` 的成員初始化 `signal(…)`），以改名迴避，沒有加 allowlist；這是第 2 次。若要縮小樣式（例如排除宣告），是守衛判定的變更，依 AGENTS §14.4 先交使用者決定。誤報反覆出現時，照 os.md 的 Replacement Criteria 6 重寫規則。
