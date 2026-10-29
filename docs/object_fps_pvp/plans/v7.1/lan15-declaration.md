@@ -121,7 +121,8 @@ S1 只記錄（不判定）：
   - J2 的等式本身由 `ingress_evidence.py` 自己的測試守；這裡只測 J2 怎麼讀它的結果。
   - **（2.2，D238 核准）工具的修正**：lan15-kit 寫手冊時發現，Windows PowerShell 5.1 的 `Tee-Object` 把 `ping.txt` 寫成 UTF-16，上面鎖定的工具以 UTF-8 讀，S2 的每次試行都會變成確認不了。修正：依 BOM 判斷 UTF-16，否則以 UTF-8 讀。判定的條文不變。新增 1 個測試（UTF-16 的 `ping.txt`，3 個 R 項都通過）；把讀法改回只讀 UTF-8，這個測試失敗。現在鎖定的 sha256（取代上面兩個舊值；`ingress_evidence.py` 不變）：
     - `lan15_judge.py`：`10f7ddc80d584f577e0df4ae5d11858d4f3047eb2205ac256f108b45366f1218`
-    - `test_lan15_judge.py`：`ac548dbab48399bc64dce2f5f9e0b6d11704fd58118503246160f01f818dcc2e`（27 個測試）用合成的紀錄做竄改檢查：每條判定至少 1 份應該失敗的紀錄（例如 S1 多一行 interrupted、少一行 resumed、多一行 evicted、`drop_rate_limited` 1、results 間隔 33.2、`dropped_lines` 1、T_max 5500、K2 少一筆 none），全部要判出失敗；沒有改動的合成紀錄要判通過。
+    - `test_lan15_judge.py`：`ac548dbab48399bc64dce2f5f9e0b6d11704fd58118503246160f01f818dcc2e`（27 個測試）
+- 用合成的紀錄做竄改檢查：每條判定至少 1 份應該失敗的紀錄（例如 S1 多一行 interrupted、少一行 resumed、多一行 evicted、`drop_rate_limited` 1、results 間隔 33.2、`dropped_lines` 1、T_max 5500、K2 少一筆 none），全部要判出失敗；沒有改動的合成紀錄要判通過。
 
 ## 8. 範圍的限界（照 HANDOFF「後續宣告要寫的範圍的限界」，直到解消）
 
