@@ -1,6 +1,6 @@
 # PvP 日誌 Data Contract v1
 
-更新：2026-10-20（v7.1 `log-contract`，D142）。Owner：`object_fps_pvp`。**狀態：生效。**
+更新：2026-10-20（v7.1 `log-contract`，D142）；2026-10-29 加 Match quality window failed。Owner：`object_fps_pvp`。**狀態：生效。**
 本文件取代 [protocol-v7](protocol-v7.zh-Hant.md) §1「日誌只加鍵」。計畫與決策見 [v7.1 log-contract](plans/v7.1/log-contract.md)。
 
 日誌與紀錄檔是 Client、Match、Gateway 和驗收工具（凍結的分析器、各 L2 的判定工具）之間的 Data Contract（AGENTS.md §8）。本契約規定哪些行受保護、怎麼改、怎麼驗證。Engine 不認識任何產品的行族（[trace](../architecture/trace.md) Design Invariant 6）；本契約整份在產品內，刪除產品時不必改公共層。
@@ -38,6 +38,7 @@
 | Client phase summary | `ClientSimulationRole.cpp` `PhaseSummaryLine`（模擬 role：連線換代或換玩家時、role 停止時各一行，只在那一代有本機玩家時寫） | `[ObjectFPS/PvP] phase summary version=1 ` | 1 | `ClientSimulationRoleTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-23 新增，`drop-counters`：`phase_samples_unmatched`＝命令已離開 64 格命令環的 slack 樣本，第 5 節的死信） |
 | Client connection interrupted／resumed／summary | `ClientConnection.cpp` `ConnectionInterruptedLine`、`ConnectionResumedLine`、`ConnectionSummaryLine`（網路 worker：進入中斷時、恢復時各一行，連線的傳輸關閉時一行摘要） | `[ObjectFPS/PvP] connection interrupted version=1 `、`[ObjectFPS/PvP] connection resumed version=1 `、`[ObjectFPS/PvP] connection summary version=1 ` | 1 | `ConnectionLivenessTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-24 新增，`client-interrupted`：`gap_ms`＝距上一份有效 snapshot 的整毫秒；`max_gap_ms`＝兩份有效 snapshot 的最長間隔；`transient_socket_errors`＝只計數的暫時性 socket 錯誤） |
 | Gateway session rebound | `server.go`（`receivePacket` 的 Hello，每次改綁一行） | `session rebound version=1 ` | 1 | `rebind_test.go`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-24 新增，`identity-rebind`：`old_port`、`new_port`＝改綁前後的來源埠，`silent_ms`＝原 endpoint 最後驗證之後的整毫秒；不記 token 與完整位址） |
+| Match quality window failed | `IpcHost.cpp` `QualityWindowFailedLine`（`MatchRuntimeHost` 判定失敗的每個連線品質窗口一筆，IpcHost 取出後寫出；逐出那個窗口也寫，寫在 `evicted player=` 之前） | `[ObjectFPS/PvP Match] quality window failed version=1 ` | 1 | `IpcHostTests.cpp`（逐字）＋`keys-v1.tsv` | 目前沒有工具（2026-10-29 新增，lan15 之後補的檢測：失敗時寫出是哪個條件成立。`consecutive_failures`＝連續失敗的窗口數，含這一個；`movement_resets` 只計 Starvation、Backlog、Resync 三種 epoch 重設，不含重生與 exhaustion；`reference_age_failed`、`substituted_failed`、`movement_resets_failed`＝判定時三個條件各自的結果（0／1）；`tick`＝關閉窗口的權威 Tick；`resolved_commands`、`substituted_commands`＝替代比例的分母與分子；`reference_age_samples`＝窗口內參考年齡的樣本數，0 時 `reference_age_ms` 寫 0） |
 | clock sync（三端） | 本體 `ClockSync.hpp` `ClockWindowLine`、`clock_sync.go` `line()` | Match `[ObjectFPS/PvP Match] clock sync window_ms=`；Gateway runtime `clock sync window_ms=`；Gateway 每位 Client `client clock sync player=`；Client `[ObjectFPS/PvP] clock sync player=` | 隱含 1 | `fixtures/log_v1/clock-sync.tsv`（C++ 與 Go 讀同一份） | 目前沒有工具（2026-10-20 升 A 級：三端的對時是之後分析的輸入） |
 
 ### 1.2 A 級：JSONL 紀錄檔

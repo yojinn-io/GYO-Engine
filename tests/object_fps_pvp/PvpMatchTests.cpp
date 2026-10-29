@@ -633,6 +633,7 @@ TEST_CASE("PvP host evicts a player after three failed connection-quality window
     std::map<std::uint64_t, std::uint32_t> failuresAt;
     std::optional<std::uint64_t> evictedAt;
     std::vector<fps::pvp::Eviction> evictions;
+    std::vector<fps::pvp::QualityWindowFailure> failed;
     // Both players deliver every command in time. Player 6 reports the latest
     // snapshot; player 5 one twelve ticks (200 ms) old, as with a high ping.
     const auto windowTicks = fps::pvp::ConnectionQualityWindowTicks;
@@ -651,6 +652,7 @@ TEST_CASE("PvP host evicts a player after three failed connection-quality window
             evictions.push_back(eviction);
             evictedAt = latestTick + 1;
         }
+        for (const auto& failure : host.TakeQualityWindowFailures()) failed.push_back(failure);
         const auto snapshot = host.TakeSnapshot();
         REQUIRE(snapshot);
         latestTick = snapshot->tick;
@@ -675,6 +677,93 @@ TEST_CASE("PvP host evicts a player after three failed connection-quality window
     REQUIRE(evictedAt);
     CHECK(*evictedAt == 4 * windowTicks);
     CHECK_FALSE(host.SubmitInput(Window(5, next[5], next[5])));
+    // Each failed window is recorded, the evicting one included; player 6 has none.
+    REQUIRE(failed.size() == 3);
+    for (std::uint32_t index = 0; index < failed.size(); ++index) {
+        const auto& failure = failed[index];
+        CHECK(failure.playerId == 5);
+        CHECK(failure.failures == index + 1);
+        CHECK(failure.tick == (index + 2) * windowTicks);
+        CHECK(failure.referenceAgeMillis >= 199);
+        CHECK(failure.referenceAgeMillis <= 201);
+        CHECK(failure.substitutedPermille == 0);
+        CHECK(failure.movementResets == 0);
+        CHECK(failure.referenceAgeFailed);
+        CHECK_FALSE(failure.substitutedFailed);
+        CHECK_FALSE(failure.movementResetsFailed);
+        CHECK(failure.resolvedCommands == windowTicks);
+        CHECK(failure.substitutedCommands == 0);
+        CHECK(failure.referenceAgeSamples == windowTicks);
+    }
+    CHECK(failed.back().referenceAgeMillis == evictions[0].referenceAgeMillis);
+}
+
+TEST_CASE("PvP host records which conditions failed a connection-quality window") {
+    using namespace fps::pvp;
+    std::chrono::steady_clock::time_point now{};
+    MatchRuntimeHost host(TestArena(), [&] { return now; });
+    REQUIRE(host.QueueJoin(1, 5));
+    REQUIRE(host.Advance(1.0 / 60).steps == 1);
+    auto snapshot = host.TakeSnapshot();
+    REQUIRE(snapshot);
+    const auto windowTicks = ConnectionQualityWindowTicks;
+    // A Client that follows the snapshot's epoch and sends its next command
+    // each tick. Window 2 (after the unjudged first) sends five commands ahead
+    // once, which the Backlog fuse resets without substituting a step; window
+    // 3 is clean; window 4 keeps a lead of two commands but loses every tenth
+    // one, so a tenth of the steps are substituted while the lead keeps the
+    // Starvation fuse off.
+    std::uint64_t epoch{1}, next{1};
+    std::vector<QualityWindowFailure> failed;
+    for (std::uint64_t tick = 2; tick <= 4 * windowTicks + 10; ++tick) {
+        const auto& self = snapshot->players.front();
+        if (self.movementEpoch != epoch) { epoch = self.movementEpoch; next = self.lastResolvedCommand + 1; }
+        const bool lossy = tick > 3 * windowTicks && tick <= 4 * windowTicks;
+        if (lossy && tick % 10 == 0) {
+            ++next; // lost on the way
+        } else {
+            const auto lead = tick == windowTicks + 100 ? 5 : tick == 3 * windowTicks + 1 ? 2 : 0;
+            const auto last = next + lead;
+            auto input = Window(5, next, last);
+            input.movementEpoch = epoch;
+            input.observedAuthorityTick = snapshot->tick;
+            REQUIRE(host.SubmitInput(input));
+            next = last + 1;
+        }
+        now += std::chrono::nanoseconds(16'666'667);
+        REQUIRE(host.Advance(1.0 / 60).steps == 1);
+        for (const auto& failure : host.TakeQualityWindowFailures()) failed.push_back(failure);
+        snapshot = host.TakeSnapshot();
+        REQUIRE(snapshot);
+        REQUIRE(snapshot->tick == tick);
+    }
+    REQUIRE(failed.size() == 2);
+    const auto& backlog = failed[0];
+    CHECK(backlog.playerId == 5);
+    CHECK(backlog.tick == 2 * windowTicks);
+    CHECK(backlog.failures == 1);
+    CHECK(backlog.movementResets == 1);
+    CHECK(backlog.substitutedCommands == 0);
+    CHECK(backlog.substitutedPermille == 0);
+    CHECK(backlog.referenceAgeMillis < ConnectionQualityMaximumReferenceAgeMillis);
+    CHECK_FALSE(backlog.referenceAgeFailed);
+    CHECK_FALSE(backlog.substitutedFailed);
+    CHECK(backlog.movementResetsFailed);
+    // Window 3 passed, so window 4 starts a new run of failures.
+    const auto& lossy = failed[1];
+    CHECK(lossy.playerId == 5);
+    CHECK(lossy.tick == 4 * windowTicks);
+    CHECK(lossy.failures == 1);
+    CHECK(lossy.movementResets == 0);
+    CHECK(lossy.resolvedCommands == windowTicks);
+    // The loss at the window's last tick is due two ticks later, in window 5.
+    CHECK(lossy.substitutedCommands == windowTicks / 10 - 1);
+    CHECK(lossy.substitutedPermille == 98);
+    CHECK(lossy.referenceAgeMillis < ConnectionQualityMaximumReferenceAgeMillis);
+    CHECK_FALSE(lossy.referenceAgeFailed);
+    CHECK(lossy.substitutedFailed);
+    CHECK_FALSE(lossy.movementResetsFailed);
+    CHECK(lossy.referenceAgeSamples > 0);
 }
 
 TEST_CASE("PvP host bounds merged ingress and checks commands already queued in authority") {
