@@ -20,6 +20,11 @@
 - 2026-10-30：`v8-engine-audio-record` 停止：30 秒紀錄的收支一致（299／299），真實裝置 299 個全部準時；但 disk 驅動在 macOS 上比 Engine 時鐘慢約 7% 而且會漂移，速率修正後的間隔誤差最大 10.9 ms，分不出 Tick 格點和幀格點（121／198）。PLAN「每塊 480 就能準確計時」的前提不成立（AGENTS §14：原因改變計畫的前提）。dev_log：[2026_10_30_engine_audio_record](../../../dev_logs/2026_10_30_engine_audio_record.zh-Hant.md)。
 - 2026-10-30：使用者選「A：記錄錨點」。做法：`SdlAudioOutputConfig::anchorLogCapacity`（0＝不記錄）；回呼在渲染前把 `(anchor, 該塊第一個 frame)` 寫進預先配置的 SPSC 環，滿了丟棄並計數；讀取端 `TakeAnchors` 只有一個執行緒。分析時以「送出之後的第一個錨點」（及下一個，因送出與回呼可能同時）重建 `F0 + floor((at−T0)×48000+½) + delay`，和檔案裡的起音逐一比對。
 - 2026-10-30：`v8-engine-audio-record` 完成：錨點紀錄（`anchorLogCapacity`、`TakeAnchors`）與 L1；30 秒 L2（只記錄）299／299 起音落在重建的 frame、Engine 時間的間隔誤差最大 0.019 ms、奇數 Tick 198／198；真實裝置 299 個全部準時。給消費端：L2 的判定用錨點重建，不要用 disk 驅動的檔案時間軸（macOS 上慢約 7% 且漂移）。
+- 2026-10-30：使用者說「繼續」，進入消費端的 `v8-product-sfx` 的事前準備（未動產品程式）。
+  - 使用者的決定：①本機射擊以按下事件的 `InputEvent::timestamp` 為時間戳；②遠端射擊、命中、受擊以 SnapshotTimeline 把事件 Tick 換成顯示時間；③腳步依距離觸發，加上落地聲。
+  - 資產：使用者提供 4 個音效（射擊、受擊、換彈、腳步），原檔是 44.1 kHz、32 位元。使用者原話：「這個你先轉好，需求加到 assets editor 中。」以 `scripts/convert_wav.py` 轉成 48 kHz PCM16（窗化 sinc、固定種子的三角抖動，可重現；1 kHz 正弦驗證頻率、振幅、長度），原檔放 `assets/object_fps_pvp/audio/source/`（不登錄 catalog、不打包），說明在 `assets/object_fps_pvp/audio/README.md`（授權待使用者補上）。
+  - 需求已傳給工具線會話（`docs/tools/plans/v8/` 的 owner），記進 `v8-tool-assets-editor`。
+  - 待決：命中確認與遠端射擊要用哪個音效（使用者只提供 4 個）。
 - 分支：`claude/v8-engine-audio-95a496`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
