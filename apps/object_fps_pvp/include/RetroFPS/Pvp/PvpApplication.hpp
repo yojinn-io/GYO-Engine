@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/Pvp/PvpSound.hpp"
 #include "engine/render/RenderDeviceTypes.hpp"
 #include "engine/runtime/IRuntimeClient.hpp"
 #include "engine/time/MonotonicClock.hpp"
@@ -118,6 +119,10 @@ public:
     [[nodiscard]] Engine::Runtime::RuntimeControl Render(const Engine::Runtime::FrameContext& frame) override;
 
     void SetGatewayAddress(std::string address);
+    // Diagnostics only (acceptance probes): before InitializeContent, keep the
+    // sound output's anchors and played cues for TakeSoundDiagnostics.
+    void EnableSoundDiagnostics(std::uint32_t anchorLogCapacity);
+    [[nodiscard]] SoundDiagnostics TakeSoundDiagnostics();
     // Diagnostics only (acceptance probes in rooms with more remotes): which
     // remote RemoteMovement and PresentedMovement describe. Presentation and
     // simulation are unchanged.
