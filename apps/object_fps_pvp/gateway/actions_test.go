@@ -227,7 +227,7 @@ func TestCompletedBlockedWriteReanchorsTheResultDeadline(t *testing.T) {
 	if len(packets) != 1 {
 		t.Fatal("first result")
 	}
-	s.actionWritten(packets[0].actionPlayer, release)
+	s.actionWritten(packets[0].actionPlayer, release, 0)
 	// Results keep a strict interval from the completed write: the next frame
 	// (the Match resends until the ACK) waits for it.
 	if s.receiveActionResults(&runtime.ActionResults{PlayerId: 7, Decisions: []*runtime.ShotDecision{decision(1)}}) != nil {

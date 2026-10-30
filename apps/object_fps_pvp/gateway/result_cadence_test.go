@@ -70,7 +70,7 @@ func (r *resultLoop) pass(writeDelay time.Duration) []*client.ActionResults {
 	var out []*client.ActionResults
 	for _, packet := range packets {
 		r.now = r.now.Add(writeDelay)
-		r.s.actionWritten(packet.actionPlayer, r.now)
+		r.s.actionWritten(packet.actionPlayer, r.now, 0)
 		r.written = append(r.written, r.now)
 		h, payload, err := framing.DecodeDatagram(packet.packet)
 		var results client.ActionResults

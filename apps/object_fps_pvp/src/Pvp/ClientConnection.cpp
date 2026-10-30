@@ -192,6 +192,7 @@ struct ClientConnection::Impl {
     std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
     // Diagnostics only (log-contract): the worker's own window counts, reset only by ReportStatistics.
     std::uint64_t receivedDatagrams{},foreignSenderDatagrams{},undecodableDatagrams{},staleDatagrams{},sendBlocked{},windowSnapshotOverflows{},windowSimulationOverflows{};
+    std::uint64_t staleSnapshotDatagrams{},staleResultsDatagrams{}; // of staleDatagrams (pv8-obs-bytes)
     // The datagrams of this session that decode but change nothing (v7.1
     // silent-branch-asserts, D180): every drop below is counted.
     std::uint64_t unparsedDatagrams{},earlyDatagrams{},invalidSnapshotDatagrams{},ignoredSnapshotDatagrams{},unexpectedKindDatagrams{};
@@ -540,7 +541,12 @@ struct ClientConnection::Impl {
                 else ++undecodableDatagrams;
                 continue;
             }
-            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence))) {++staleDatagrams;continue;}
+            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence))) {
+                ++staleDatagrams;
+                if(packet->type==wire::Type::Snapshot)++staleSnapshotDatagrams;
+                else if(packet->type==wire::Type::ActionResults)++staleResultsDatagrams;
+                continue;
+            }
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}
                 if(message.has_clock()) { // diagnostics only, before and apart from every check
@@ -876,10 +882,12 @@ struct ClientConnection::Impl {
             .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows,
             .unparsedDatagrams=unparsedDatagrams,.earlyDatagrams=earlyDatagrams,.invalidSnapshotDatagrams=invalidSnapshotDatagrams,
             .ignoredSnapshotDatagrams=ignoredSnapshotDatagrams,.unexpectedKindDatagrams=unexpectedKindDatagrams,
-            .staleInputWindows=staleWindows})<<'\n';
+            .staleInputWindows=staleWindows,.staleSnapshotDatagrams=staleSnapshotDatagrams,
+            .staleResultsDatagrams=staleResultsDatagrams})<<'\n';
         ClogLine()<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
         receivedDatagrams=foreignSenderDatagrams=undecodableDatagrams=staleDatagrams=sendBlocked=0;
+        staleSnapshotDatagrams=staleResultsDatagrams=0;
         unparsedDatagrams=earlyDatagrams=invalidSnapshotDatagrams=ignoredSnapshotDatagrams=unexpectedKindDatagrams=0;
         windowSnapshotOverflows=windowSimulationOverflows=0;
     }

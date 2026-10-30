@@ -247,11 +247,12 @@ func (l *runtimeLink) actionWritten(playerID uint64, now time.Time) {
 		stats.record(now)
 	}
 }
-func (s *Server) actionWritten(playerID uint64, now time.Time) {
+func (s *Server) actionWritten(playerID uint64, now time.Time, bytes int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p := s.players[playerID]; p != nil {
 		p.results.nextSend = now.Add(actionSendInterval)
 		p.sent.results.record(now)
+		p.sent.resultBytes.record(bytes)
 	}
 }

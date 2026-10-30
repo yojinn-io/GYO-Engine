@@ -803,7 +803,7 @@ func (s *Server) sendUDP(ctx context.Context) {
 		packets, deadline, pending := s.actionPackets(time.Now())
 		for _, packet := range packets {
 			s.writeUDP(packet)
-			s.actionWritten(packet.actionPlayer, time.Now())
+			s.actionWritten(packet.actionPlayer, time.Now(), len(packet.packet))
 		}
 		if len(packets) > 0 {
 			// The writes re-anchored their players' deadlines.
@@ -839,7 +839,7 @@ func (s *Server) sendUDP(ctx context.Context) {
 				frame, packet = s.snapshotForPeer(players[i:], frame)
 				s.writeUDP(packet)
 				if packet.peer.IsValid() {
-					s.snapshotWritten(playerID, time.Now())
+					s.snapshotWritten(playerID, time.Now(), len(packet.packet))
 				}
 			}
 		}
@@ -1013,7 +1013,8 @@ func (s *Server) logStatisticsWindow(now time.Time, window time.Duration) {
 		if !ok {
 			link = noIntervals
 		}
-		log.Print(sendStatisticsLine(id, window, p.sent.results.take(), p.sent.snapshots.take(), link))
+		log.Print(sendStatisticsLine(id, window, p.sent.results.take(), p.sent.snapshots.take(), link,
+			p.sent.resultBytes.take(), p.sent.snapshotBytes.take()))
 		if line, ok := ingress[id]; ok {
 			log.Print(line)
 		}
