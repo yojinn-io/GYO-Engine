@@ -172,6 +172,10 @@ set_tests_properties("${GYO_CURRENT_APP}.protocol_version" PROPERTIES LABELS "cp
 add_test(NAME "${GYO_CURRENT_APP}.drop_reasons"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_drop_reasons.py")
 set_tests_properties("${GYO_CURRENT_APP}.drop_reasons" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# pv8-seq-ceiling: each wire counter exhaustion site decides with WireCounter.hpp (protocol-v8 section 2a).
+add_test(NAME "${GYO_CURRENT_APP}.wire_counter_sites"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_wire_counter_sites.py")
+set_tests_properties("${GYO_CURRENT_APP}.wire_counter_sites" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.diagnostic_isolation"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_diagnostic_isolation.py")
 set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)

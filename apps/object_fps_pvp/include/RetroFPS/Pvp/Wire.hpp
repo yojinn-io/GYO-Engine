@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "RetroFPS/Pvp/WireCounter.hpp"
 #include "engine/net/GyopDatagram.hpp"
 
 namespace fps::pvp::wire {

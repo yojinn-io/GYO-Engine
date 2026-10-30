@@ -1,5 +1,6 @@
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
+#include "RetroFPS/Pvp/WireCounter.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/linear/Vec3d.hpp"
@@ -17,9 +18,9 @@
 namespace fps::pvp {
 namespace {
 std::uint64_t FutureTick(std::uint64_t tick, std::uint64_t duration) {
-    if (tick > (std::numeric_limits<std::uint64_t>::max)() - duration)
-        throw std::overflow_error("Authority deadline exhausted");
-    return tick + duration;
+    const auto deadline = WireCounterAdd(tick, duration);
+    if (!deadline) throw std::overflow_error("Authority deadline exhausted");
+    return *deadline;
 }
 }
 PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& stance)
@@ -148,7 +149,7 @@ ActionAdmission PvpMatch::CanSubmitActions(const ActionBatch& batch,
 ActionAdmission PvpMatch::SubmitActions(const ActionBatch& batch) {
     const auto admission = CanSubmitActions(batch);
     if (admission != ActionAdmission::Accepted) return admission;
-    if (tick_ == (std::numeric_limits<std::uint64_t>::max)())
+    if (WireCounterExhausted(tick_))
         throw std::overflow_error("Authority tick exhausted");
     auto& player = players_.at(batch.playerId);
     for (const auto& shot : batch.shots) {
@@ -267,9 +268,9 @@ void PvpMatch::ResolveLifeBoundaries() {
             if (tick_ < player.state.respawnTick) continue;
             const auto* spawn = FindSpawn(id);
             if (!spawn) continue; // Keep the due deadline and retry next tick.
-            if (player.state.lifeGeneration == (std::numeric_limits<std::uint64_t>::max)())
+            if (WireCounterExhausted(player.state.lifeGeneration))
                 throw std::overflow_error("Life generation exhausted");
-            if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())
+            if (WireCounterExhausted(player.state.movementEpoch))
                 throw std::overflow_error("Movement epoch exhausted");
             ++player.state.lifeGeneration;
             player.state.lifeState = LifeState::Alive;
@@ -419,7 +420,7 @@ void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
 std::uint32_t PvpMatch::ContiguousPending(const Participant& player) noexcept {
     auto sequence = player.state.lastResolvedCommand;
     std::uint32_t count{};
-    while (sequence < (std::numeric_limits<std::uint64_t>::max)() &&
+    while (!WireCounterExhausted(sequence) &&
            player.commands.contains(sequence + 1)) {
         ++sequence;
         ++count;
@@ -428,7 +429,7 @@ std::uint32_t PvpMatch::ContiguousPending(const Participant& player) noexcept {
 }
 
 void PvpMatch::ResetMovementEpoch(Participant& player, MovementResetReason reason) {
-    if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())
+    if (WireCounterExhausted(player.state.movementEpoch))
         throw std::overflow_error("Movement epoch exhausted");
     const auto cancelled = player.commands.size();
     ++player.state.movementEpoch;
@@ -455,7 +456,7 @@ void PvpMatch::ResetMovementEpoch(Participant& player, MovementResetReason reaso
 }
 
 void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenceAge& referenceAge) {
-    if (tick_ == (std::numeric_limits<std::uint64_t>::max)() ||
+    if (WireCounterExhausted(tick_) ||
         tick.tickId == 0 || tick.tickId != tick_ + 1 || !std::isfinite(tick.deltaSeconds) || tick.deltaSeconds <= 0 ||
         std::abs(tick.deltaSeconds - MovementTickSeconds) > 1.0e-12)
         throw std::invalid_argument("Invalid match tick");
@@ -474,7 +475,7 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
             if (!player.commands.contains(1)) continue;
             player.started = true;
         }
-        if (player.state.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)()) {
+        if (WireCounterExhausted(player.state.lastResolvedCommand)) {
             ResetMovementEpoch(player, MovementResetReason::SequenceExhausted);
             continue;
         }

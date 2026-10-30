@@ -131,6 +131,9 @@
         "gyo_object_fps_pvp_worker_probe"
       ],
       "ctest": "object_fps_pvp.close_timing"
+    },
+    "wire_counter_sites": {
+      "ctest": "object_fps_pvp.wire_counter_sites"
     }
   },
   "mutants": [
@@ -6774,6 +6777,166 @@
       "replace": "\" resets_failed=\"",
       "check": "log_contract",
       "expect": "match_quality_window_failed: v1 keys"
+    },
+    {
+      "id": "pv8sc-deadline-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "FutureTick goes back to the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    const auto deadline = WireCounterAdd(tick, duration);\n    if (!deadline) throw std::overflow_error(\"Authority deadline exhausted\");\n    return *deadline;",
+      "replace": "    if (tick > (std::numeric_limits<std::uint64_t>::max)() - duration)\n        throw std::overflow_error(\"Authority deadline exhausted\");\n    return tick + duration;",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-submit-tick-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "SubmitActions checks the tick against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (WireCounterExhausted(tick_))\n        throw std::overflow_error(\"Authority tick exhausted\");",
+      "replace": "    if (tick_ == (std::numeric_limits<std::uint64_t>::max)())\n        throw std::overflow_error(\"Authority tick exhausted\");",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-respawn-life-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Respawn checks the life against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "if (WireCounterExhausted(player.state.lifeGeneration))",
+      "replace": "if (player.state.lifeGeneration == (std::numeric_limits<std::uint64_t>::max)())",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-respawn-epoch-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Respawn checks the epoch against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            if (WireCounterExhausted(player.state.movementEpoch))\n                throw",
+      "replace": "            if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())\n                throw",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-contiguous-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "ContiguousPending counts up to the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "while (!WireCounterExhausted(sequence) &&",
+      "replace": "while (sequence < (std::numeric_limits<std::uint64_t>::max)() &&",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-reset-epoch-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "ResetMovementEpoch checks the epoch against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (WireCounterExhausted(player.state.movementEpoch))\n        throw std::overflow_error(\"Movement epoch exhausted\");\n    const auto cancelled",
+      "replace": "    if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())\n        throw std::overflow_error(\"Movement epoch exhausted\");\n    const auto cancelled",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-tick-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Tick checks the tick against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (WireCounterExhausted(tick_) ||\n",
+      "replace": "    if (tick_ == (std::numeric_limits<std::uint64_t>::max)() ||\n",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-sequence-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "SequenceExhausted resets at the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "if (WireCounterExhausted(player.state.lastResolvedCommand)) {",
+      "replace": "if (player.state.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)()) {",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-seed-lead-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "SeedLead leads past the maximum",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "!WireCounterExhausted(current_.lastResolvedCommand); ++index)",
+      "replace": "current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)(); ++index)",
+      "check": "cpu",
+      "expect": "PvP\\ prediction\\ stops\\ generating\\ commands\\ at\\ the\\ wire\\ counter\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-advance-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Advance generates commands past the maximum",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "            !WireCounterExhausted(current_.lastResolvedCommand)) {",
+      "replace": "            current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)()) {",
+      "check": "cpu",
+      "expect": "PvP\\ prediction\\ stops\\ generating\\ commands\\ at\\ the\\ wire\\ counter\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-frozen-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "The prediction does not freeze at the maximum",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        WireCounterExhausted(current_.lastResolvedCommand);",
+      "replace": "        current_.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)();",
+      "check": "cpu",
+      "expect": "PvP\\ prediction\\ stops\\ generating\\ commands\\ at\\ the\\ wire\\ counter\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-action-id-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Action ids end at the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "if(WireCounterExhausted(impl_->actionTransport.allocatedThrough)) {",
+      "replace": "if(impl_->actionTransport.allocatedThrough==std::numeric_limits<ActionId>::max()) {",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-player-id-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Gateway player ids end at the uint64 limit",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "if s.nextPlayer >= math.MaxUint32 {",
+      "replace": "if s.nextPlayer == math.MaxUint64 {",
+      "check": "go",
+      "expect": "TestPlayerIDsEndAtTheWireCounterMaximum"
+    },
+    {
+      "id": "pv8sc-exhausted-off-by-one",
+      "batch": "pv8-seq-ceiling",
+      "what": "WireCounterExhausted lets the maximum itself pass",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/WireCounter.hpp",
+      "find": "return value >= WireCounterMax;",
+      "replace": "return value > WireCounterMax;",
+      "check": "cpu",
+      "expect": "PvP\\ wire\\ counters\\ end\\ at\\ the\\ uint32\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-add-no-range",
+      "batch": "pv8-seq-ceiling",
+      "what": "WireCounterAdd accepts a value already past the maximum",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/WireCounter.hpp",
+      "find": "if (value > WireCounterMax || amount > WireCounterMax - value)",
+      "replace": "if (amount > WireCounterMax - value)",
+      "check": "cpu",
+      "expect": "PvP\\ wire\\ counters\\ end\\ at\\ the\\ uint32\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-add-wraps",
+      "batch": "pv8-seq-ceiling",
+      "what": "WireCounterAdd lets the unsigned sum wrap",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/WireCounter.hpp",
+      "find": "if (value > WireCounterMax || amount > WireCounterMax - value)",
+      "replace": "if (value > WireCounterMax || value + amount > WireCounterMax)",
+      "check": "cpu",
+      "expect": "PvP\\ wire\\ counters\\ end\\ at\\ the\\ uint32\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
     }
   ]
 }

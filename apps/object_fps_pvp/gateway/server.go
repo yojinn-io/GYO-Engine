@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/netip"
@@ -355,7 +356,7 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 			return nil, http.StatusInternalServerError, "session_creation_failed"
 		}
 	}
-	if s.nextPlayer == ^uint64(0) {
+	if s.nextPlayer >= math.MaxUint32 { // protocol-v8 §2a: player ids end at the uint32 maximum
 		return nil, http.StatusServiceUnavailable, "player_ids_exhausted"
 	}
 	s.nextPlayer++

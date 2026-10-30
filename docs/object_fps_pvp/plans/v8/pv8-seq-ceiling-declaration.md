@@ -1,6 +1,6 @@
 # pv8-seq-ceiling 的事前宣告
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：草稿，等你核准（含下面「等你決定」的 2 項）。** 契約：[protocol-v8](../../protocol-v8.zh-Hant.md) §2a「用盡的位置」（已定稿，`pv8-final-approve-round2`）。檔位 high｜Opus 5.5，估時 4～6 h（超過 9 h 停下回報）。
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：已核准（`pv8-seq-ceiling-declaration-approve`，2026-10-30）：test-seam (a)、table-fix (a)。完成：K1 0 差分、K2 16／16、K3 100／100；既有測試 never-wrap 的判定變更另經核准（`pv8-seq-ceiling-wrap-test-approve`），見 [dev_log](../../../dev_logs/2026_10_30_pvp_v8_seq_ceiling.zh-Hant.md)。宣告中「目前沒有任何用盡邊界的測試」是錯的。** 契約：[protocol-v8](../../protocol-v8.zh-Hant.md) §2a「用盡的位置」（已定稿，`pv8-final-approve-round2`）。檔位 high｜Opus 5.5，估時 4～6 h（超過 9 h 停下回報）。
 
 ## 範圍
 

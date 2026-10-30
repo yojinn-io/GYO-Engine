@@ -1,9 +1,11 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/Wire.hpp"
+#include "RetroFPS/Pvp/WireCounter.hpp"
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -110,4 +112,20 @@ TEST_CASE("PvP datagram encoding refuses payloads beyond the 1200-byte datagram"
     wire::Packet packet = Sample(3);
     packet.payload.assign(wire::MaxDatagram - wire::HeaderSize + 1, 'p');
     CHECK_THROWS_AS(wire::Encode(packet), std::length_error);
+}
+
+TEST_CASE("PvP wire counters end at the uint32 maximum (protocol-v8 section 2a)") {
+    using fps::pvp::WireCounterAdd, fps::pvp::WireCounterExhausted, fps::pvp::WireCounterMax;
+    static_assert(WireCounterMax == 0xFFFF'FFFFULL);
+    CHECK_FALSE(WireCounterExhausted(0));
+    CHECK_FALSE(WireCounterExhausted(WireCounterMax - 1));
+    CHECK(WireCounterExhausted(WireCounterMax));
+    CHECK(WireCounterExhausted(WireCounterMax + 1));
+    CHECK(WireCounterAdd(WireCounterMax - 5, 5) == WireCounterMax);
+    CHECK_FALSE(WireCounterAdd(WireCounterMax - 5, 6));
+    CHECK(WireCounterAdd(7, 0) == 7U);
+    CHECK_FALSE(WireCounterAdd(WireCounterMax + 1, 0));
+    // A duration beyond the maximum must not wrap the unsigned difference.
+    CHECK_FALSE(WireCounterAdd(0, WireCounterMax + 1));
+    CHECK_FALSE(WireCounterAdd(1, (std::numeric_limits<std::uint64_t>::max)()));
 }

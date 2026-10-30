@@ -1016,7 +1016,7 @@ std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint
        (kind!=ActionKind::Shot && kind!=ActionKind::Reload) ||
        !ValidMovementCommand({1,0,0,yaw,pitch}) || (kind==ActionKind::Reload && (yaw!=0 || pitch!=0)) ||
        impl_->actions.size()>=MaxActionWindow)return {};
-    if(impl_->actionTransport.allocatedThrough==std::numeric_limits<ActionId>::max()) {
+    if(WireCounterExhausted(impl_->actionTransport.allocatedThrough)) {
         impl_->state.error="Action IDs exhausted; leave and rejoin the Match";return {};
     }
     const auto id=impl_->actionTransport.allocatedThrough+1;

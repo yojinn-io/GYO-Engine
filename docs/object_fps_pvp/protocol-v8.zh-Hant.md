@@ -95,7 +95,9 @@
 | `PvpMatch.cpp:19-23` `FutureTick` | 相加超過 uint64 上限 | 相加超過 `WireCounterMax`（`respawn_tick`、`reload_end_tick` 等由它算出） | 拋例外 |
 | `PvpMatch.cpp:151-152` | `tick_` 等於 uint64 上限 | 等於 `WireCounterMax` | `Authority tick exhausted` |
 | `PvpMatch.cpp:270-273` | life、epoch 等於 uint64 上限 | 等於 `WireCounterMax` | `overflow_error` |
+| `PvpMatch.cpp:422` `ContiguousPending`（`pv8-seq-ceiling` 補列） | 迴圈上限 `sequence < u64max` | 達到 `WireCounterMax` 就停 | 計數停在上限 |
 | `PvpMatch.cpp:431-432` | epoch 等於 uint64 上限 | 等於 `WireCounterMax` | `overflow_error` |
+| `PvpMatch.cpp:458` `Tick`（`pv8-seq-ceiling` 補列） | `tick_` 等於 uint64 上限 | 達到 `WireCounterMax` | `Invalid match tick` |
 | `PvpMatch.cpp:477-478` | `lastResolvedCommand` 等於 uint64 上限 | 等於 `WireCounterMax` | `SequenceExhausted` 重設 |
 | `LocalPlayerPrediction.cpp` 的命令序號、epoch、life 的增量處 | uint64 上限 | `WireCounterMax` | 凍結（`pv8-seq-ceiling` 開工時逐處列出） |
 | `ClientConnection.cpp:1011` | `numeric_limits<ActionId>::max()`（`ActionId` 是 uint64） | `WireCounterMax` | `Action IDs exhausted` |

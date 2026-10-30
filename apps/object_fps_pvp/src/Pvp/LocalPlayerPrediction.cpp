@@ -1,5 +1,6 @@
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
+#include "RetroFPS/Pvp/WireCounter.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/scalar/Scalar.hpp"
@@ -77,7 +78,7 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     pending_.clear();
     current_ = previous_ = authority;
     for (std::size_t index = 0; index < InitialCommandLead &&
-         current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)(); ++index) {
+         !WireCounterExhausted(current_.lastResolvedCommand); ++index) {
         // The neutral lead keeps the authoritative stance: the Match executes
         // it, and a standing lead would stand a crouched body up (protocol-v8 §5).
         MovementCommand command{current_.lastResolvedCommand + 1, 0, 0, authority.yaw, authority.pitch,
@@ -388,7 +389,7 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
     const auto advance = ticks_.Advance(advanceSeconds, [&](const Engine::Runtime::TickContext&) {
         previous_ = current_;
         if (pending_.size() < MaxPendingCommands &&
-            current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)()) {
+            !WireCounterExhausted(current_.lastResolvedCommand)) {
             MovementCommand command{current_.lastResolvedCommand + 1, forward, right, yaw, pitch, pendingJump_, crouchHeld};
             pendingJump_ = false;
             current_ = StepMovement(arena_, stance_, current_, command);
@@ -494,7 +495,7 @@ void LocalPlayerPrediction::UpdatePresentation() {
     observation_.interpolationAlpha = alpha_;
     observation_.pendingCommands = pending_.size();
     observation_.frozen = pending_.size() == MaxPendingCommands ||
-        current_.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)();
+        WireCounterExhausted(current_.lastResolvedCommand);
 }
 
 std::optional<ShotGateView> LocalPlayerPrediction::ShotGate() const noexcept {

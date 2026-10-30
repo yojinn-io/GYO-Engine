@@ -42,8 +42,8 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；下一批是 `pv8-seq-ceiling`：[事前宣告](pv8-seq-ceiling-declaration.md) 草稿已寫好，等你核准（含 `pv8-seq-ceiling-test-seam`、`pv8-seq-ceiling-table-fix` 兩項）。順序照 [protocol-v8](../../protocol-v8.zh-Hant.md) §8：`pv8-rename` → `pv8-seq-ceiling` → `pv8-seq-narrow`，以及 `v8-product-crouch` 的 wire 接入。
-- **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
+- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。下一批是 `pv8-seq-narrow`。
+- **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
   - audio-line（會話 `v8-audio-line`）：`v8-engine-audio-plan` 完成（`6ad0d8de`，分支在該會話的 worktree，未推送），6 項決定已在該會話核准；`v8-engine-audio-core` 等你指定。
@@ -90,6 +90,9 @@
 | `pv8-next-contract-and-obs` | （2026-10-30）先做 `pv8-contract-round2`（把第 2 輪寫進 protocol-v8）與 `pv8-obs-bytes`（實際位元組與超車比例的觀測），之後再接 pv8-line 的 A 層 | 「先做 pv8-contract-round2（把第 2 輪寫進 protocol-v8）和 pv8-obs-bytes（實際位元組與超車比例的觀測），之後再接 pv8-line 的 A 層。」 |
 | `pv8-obs-bytes-delta-approve` | （2026-10-30）同意 `pv8-obs-bytes` 的 Architecture Delta：Gateway 新增診斷狀態 `sizeStats`，歸在 `classDiagnostic`（只寫進日誌、不參與判定） | 「都同意」（對「同意 obs-bytes 的 Delta 並核准 protocol-v8 定稿嗎？」） |
 | `pv8-final-approve-round2` | （2026-10-30）核准 [protocol-v8](../../protocol-v8.zh-Hant.md) 定稿：第 1 輪（蹲下、衝刺、參數校準）＋第 2 輪 A 層（縮窄、刪 `match_id`、預留號碼）；附錄 B／C 是設計，不是 pv8 條文。接著開始 pv8-line 的 A 層（`pv8-rename` 起） | 「都同意」 |
+| `pv8-seq-ceiling-declaration-approve` | （2026-10-30）核准 [pv8-seq-ceiling 的事前宣告](pv8-seq-ceiling-declaration.md) K1～K3；`pv8-seq-ceiling-test-seam` (a) 判定抽成純函式、測函式邊界，各處用突變確認呼叫；`pv8-seq-ceiling-table-fix` (a) 在 protocol-v8 §2a 的表補上 `ContiguousPending` 與 `Tick` 兩處 | 「照建議核准」 |
+| `pv8-seq-ceiling-wrap-test-a` | （2026-10-30）既有測試 `PvP sequence and epoch boundaries never wrap into an old command namespace` 照 (a) 處理：邊界改成 `WireCounterMax`，加「超過上限即用盡」的情境；先做突變與另一位審查者的核對，再把 §14.4 的 1～5 交給使用者核准 | 「照 (a) 改測試」 |
+| `pv8-seq-ceiling-wrap-test-approve` | （2026-10-30）核准既有測試 never-wrap 的判定變更（§14.4 的 1～5：放寬面是不再要求 u32 上限到 u64 上限之間照常前進；收緊面是 u32 上限處停、超過上限即用盡；審查者 5 點成立） | 「核准並 commit」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -110,6 +113,7 @@
 
 - 2026-10-30：`pv8-contract-round2` 完成（`044584fd`），對抗式檢查 1 次（Sonnet 5.5）的 must 2 個、should 若干已納入；`MatchStatus` 的號碼衝突由主會話更正。`pv8-obs-bytes` 完成（`a7455eb9`）：Gateway 的資料包大小分布、Client 依種類拆開的 stale 計數；`test` preset 93／93 通過；相關突變 3／3 killed。dev_log 兩份。實際數字待下一次 L2／LAN 場次。
 - 2026-10-30：`pv8-rename` 完成。重產只差名稱；CTest 99／99；兩樹 digest（base `33127ad6`）scale 1、3 都是 38 個情境 0 差分；相關突變 0 個。計畫的引擎是 Sonnet 5.5，實際由主會話直接做（機械式替換）。
+- 2026-10-30：`pv8-seq-ceiling` 完成。K1 38 個情境 × scale 1、3 0 差分；K3 第 1 次因既有測試釘著 uint64 邊界而停止（宣告前提錯誤），照 (a) 改測試並經 §14.4 核准；突變 16／16；CTest 100／100。
 
 ## 未結事項
 
