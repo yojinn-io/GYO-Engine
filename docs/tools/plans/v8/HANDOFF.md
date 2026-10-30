@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **完成，未合併**：`v8-tool-ui-editor-gizmo-fix`（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)，分支 `claude/v8-tool-ui-editor-gizmo`）。使用者在 GUI 上試過錨點與 pivot 的把手。
-- **完成，未推送**：`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）。下一批 `v8-tool-ui-editor-panels`。
+- **完成，未推送**：`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）。下一批 `v8-tool-ui-editor-element-schema`。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -72,3 +72,4 @@
 - 2026-10-30：開 [PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)，Auto-fix 開啟。使用者問 UI 還要加什麼；建議兩類（遊戲畫面要的：`text_field`、背景、頁面切換、設定元件；編輯器缺的：複製貼上、方向鍵微調、對齊參考線、多選）與順序。使用者：「照你建議做吧。」記成 `v8-tool-ui-order`，README 加 `v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` 與兩個候選批。
 - 2026-10-30：`v8-tool-ui-invariants` 開始（檔位 medium，引擎 Opus 5.5，估 2～3 h）。起草 `GYO::Ui` 與 ui_editor 的 Design Invariants＋Replacement Criteria，給使用者看。新發現：`GizmoMath` 為了反算 `position`／`size_delta`，又寫了一份 `gyo.ui` 的版面公式（引擎的 `ResolveDesignRect` 在 `UiRuntime.cpp` 的匿名命名空間，不公開）；草稿用守衛測試讓兩份保持一致。
 - 2026-10-30：使用者同意 Design Invariants 草稿。寫進 ui_toolchain.md，加三個守衛。整個建置目錄重建後，Ui、ui_editor、OS 守衛共 14 個測試通過；突變與植入違規的檢查見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_invariants.zh-Hant.md)。
+- 2026-10-30：`v8-tool-ui-editor-panels` 完成（檔位 medium，估 3～5 h，實際約 0.5 h）。`EditorApp.cpp` 拆成 5 個檔加一個共用的內部標頭；類別與標頭不變。逐行比對沒有遺漏，14/14 測試通過。

@@ -22,6 +22,7 @@
 
 - `EditorApp.cpp` 約 2,300 行：選單、Hierarchy、Canvas、Inspector、對話框、檔案操作、資產掛載、JSON 樹的工具函式都在這裡。`DrawInspector` 一個函式約 790 行（`EditorApp.cpp:1187-1977`）；`ImGui::` 呼叫 365 處。
 - 影響：改一個面板就要讀整個檔；邏輯藏在 ImGui 的一幀裡，測不到。
+- 處理（2026-10-30，`v8-tool-ui-editor-panels`）：拆成各面板的檔與一個共用的內部標頭，純搬移（[dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_editor_panels.zh-Hant.md)）。「邏輯藏在 ImGui 的一幀裡」沒有處理：`DrawInspector` 仍約 790 行，由 `v8-tool-ui-editor-element-schema` 處理。
 
 ### S-2　元素的 schema 知識在 editor 裡又寫了一份
 

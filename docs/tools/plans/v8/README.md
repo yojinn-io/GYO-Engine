@@ -45,7 +45,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── v8-tool-ui-editor-file-browser       「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
 │   ├── v8-tool-ui-editor-gizmo-math ✓       「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試（行為不變）」
 │   ├── v8-tool-ui-editor-gizmo-fix ✓        「high｜Opus 5.5｜修拖動與縮放、加位置／大小把手（Unity 式）」
-│   ├── v8-tool-ui-editor-panels             「medium｜Opus 5.5｜面板拆檔，EditorApp 只協調」
+│   ├── v8-tool-ui-editor-panels ✓           「medium｜Opus 5.5｜面板拆檔，EditorApp 只協調」
 │   ├── v8-tool-ui-editor-element-schema     「high｜Opus 5.5｜元素的欄位與 Inspector 集中一處（加 text_field 前）」
 │   ├── v8-tool-ui-editor-clipboard          「high｜Opus 5.5｜元素的複製、貼上、就地複製（Ctrl+C／V／D）」
 │   ├── v8-tool-ui-editor-nudge              「medium｜Opus 5.5｜方向鍵微調；縮放時 Alt 從中心、Shift 等比例」
@@ -157,3 +157,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-gizmo-math` | [2026_10_30_tool_v8_ui_editor_gizmo_math](../../../dev_logs/2026_10_30_tool_v8_ui_editor_gizmo_math.zh-Hant.md) |
 | `v8-tool-ui-editor-gizmo-fix` | [2026_10_30_tool_v8_ui_editor_gizmo_fix](../../../dev_logs/2026_10_30_tool_v8_ui_editor_gizmo_fix.zh-Hant.md) |
 | `v8-tool-ui-invariants` | [2026_10_30_tool_v8_ui_invariants](../../../dev_logs/2026_10_30_tool_v8_ui_invariants.zh-Hant.md) |
+| `v8-tool-ui-editor-panels` | [2026_10_30_tool_v8_ui_editor_panels](../../../dev_logs/2026_10_30_tool_v8_ui_editor_panels.zh-Hant.md) |
