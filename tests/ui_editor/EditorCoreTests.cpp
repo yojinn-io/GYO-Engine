@@ -350,95 +350,166 @@ void TestPathDialogInbox() {
     Expect(inbox.Take().empty(), "a taken result is not returned again");
 }
 
-// Canvas gizmo rule without ImGui. The parent is a 1280x720 canvas at the
-// screen origin; a drag starts on a handle and moves the mouse by delta.
-GizmoFrame CanvasFrame(const Engine::Math::Vec2 anchorMin, const Engine::Math::Vec2 anchorMax,
-    const Engine::Math::Rect element, const Engine::Math::Vec2 pivot) {
-    return {{0.0F, 0.0F, 1280.0F, 720.0F}, element, anchorMin, anchorMax, pivot};
+// Canvas gizmo rule without ImGui. The parent is a 1280x720 design canvas at
+// the screen origin, drawn at designScale screen pixels per design pixel.
+using Engine::Math::Rect;
+using Engine::Math::Vec2;
+
+constexpr Vec2 kParentDesignSize{1280.0F, 720.0F};
+
+// The element's rectangle in design pixels from the parent's corner, by the
+// gyo.ui v1 layout rule.
+Rect DesignRect(const GizmoRect& rect) {
+    const Vec2 size{kParentDesignSize.x * (rect.anchorMax.x - rect.anchorMin.x) + rect.sizeDelta.x,
+        kParentDesignSize.y * (rect.anchorMax.y - rect.anchorMin.y) + rect.sizeDelta.y};
+    const Vec2 reference{
+        kParentDesignSize.x * (rect.anchorMin.x + (rect.anchorMax.x - rect.anchorMin.x) * rect.pivot.x),
+        kParentDesignSize.y * (rect.anchorMin.y + (rect.anchorMax.y - rect.anchorMin.y) * rect.pivot.y)};
+    return {reference.x + rect.position.x - rect.pivot.x * size.x,
+        reference.y + rect.position.y - rect.pivot.y * size.y, size.x, size.y};
 }
 
-Engine::Math::Vec2 DragFromHandle(const GizmoField field, const GizmoFrame& frame,
-    const Engine::Math::Vec2 delta, const GizmoSnap snap = {}) {
-    const GizmoPoints points = ComputeGizmoPoints(frame);
-    const Engine::Math::Vec2 handle = field == GizmoField::AnchorMin ? points.anchorMinHandle
-        : field == GizmoField::AnchorMax ? points.anchorMaxHandle : points.pivotHandle;
-    return DragGizmoHandle(field, frame, handle + delta, snap);
+GizmoFrame MakeFrame(const GizmoRect& rect, const float scale = 1.0F) {
+    const Rect element = DesignRect(rect);
+    return {{0.0F, 0.0F, kParentDesignSize.x * scale, kParentDesignSize.y * scale},
+        {element.x * scale, element.y * scale, element.width * scale, element.height * scale}, rect, scale};
 }
 
-bool Near(const Engine::Math::Vec2 value, const float x, const float y) {
+// Point anchors at the canvas centre; the element is 520,324 240x72.
+const GizmoRect kCentered{{0.5F, 0.5F}, {0.5F, 0.5F}, {0.5F, 0.5F}, {0.0F, 0.0F}, {240.0F, 72.0F}};
+// The lobby buttons: point anchors at the top-left corner; 220,238 840x48.
+const GizmoRect kLobby{{0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, {220.0F, 238.0F}, {840.0F, 48.0F}};
+// Stretched anchors with a 20 px margin; 20,20 1240x680.
+const GizmoRect kStretch{{0.0F, 0.0F}, {1.0F, 1.0F}, {0.5F, 0.5F}, {0.0F, 0.0F}, {-40.0F, -40.0F}};
+
+GizmoRect Drag(const GizmoHandle handle, const GizmoFrame& frame, const Vec2 delta, const GizmoSnap snap = {}) {
+    constexpr Vec2 grab{100.0F, 100.0F};
+    return DragGizmo(handle, frame, grab, grab + delta, snap);
+}
+
+bool Near(const Vec2 value, const float x, const float y) {
     return std::abs(value.x - x) < 1e-5F && std::abs(value.y - y) < 1e-5F;
 }
 
-void TestGizmoHandlesAndHit() {
-    // The lobby buttons: both anchors at the parent's top-left corner.
-    const GizmoFrame lobby = CanvasFrame({0.0F, 0.0F}, {0.0F, 0.0F}, {220.0F, 238.0F, 840.0F, 48.0F}, {0.0F, 0.0F});
+bool Near(const Rect value, const Rect expected) {
+    return std::abs(value.x - expected.x) < 1e-3F && std::abs(value.y - expected.y) < 1e-3F &&
+        std::abs(value.width - expected.width) < 1e-3F && std::abs(value.height - expected.height) < 1e-3F;
+}
+
+bool SameAnchors(const GizmoRect& left, const GizmoRect& right) {
+    return Near(left.anchorMin, right.anchorMin.x, right.anchorMin.y) &&
+        Near(left.anchorMax, right.anchorMax.x, right.anchorMax.y) &&
+        Near(left.pivot, right.pivot.x, right.pivot.y);
+}
+
+void TestGizmoHit() {
+    const GizmoFrame lobby = MakeFrame(kLobby);
     const GizmoPoints points = ComputeGizmoPoints(lobby);
     Expect(Near(points.anchorMinHandle, -9.0F, -9.0F) && Near(points.anchorMaxHandle, 9.0F, -9.0F),
         "point anchors put both anchor handles beside the parent corner, not the element");
     Expect(Near(points.pivotHandle, 220.0F, 247.0F), "the pivot handle sits below the pivot");
-    Expect(HitGizmoHandle(points, {9.0F, -9.0F}) == GizmoField::AnchorMax, "a click on a handle grabs it");
-    Expect(HitGizmoHandle(points, {0.0F, -9.0F}) == GizmoField::AnchorMax,
+    Expect(HitGizmoHandle(lobby, {9.0F, -9.0F}, false) == GizmoHandle::AnchorMax, "a click on a handle grabs it");
+    Expect(HitGizmoHandle(lobby, {0.0F, -9.0F}, false) == GizmoHandle::AnchorMax,
         "a tie between the anchor handles goes to anchor max");
-    Expect(!HitGizmoHandle(points, {9.0F, 2.0F}).has_value(), "beyond the 10 px radius nothing is grabbed");
+    Expect(HitGizmoHandle(lobby, {220.0F, 238.0F}, true) == GizmoHandle::TopLeft,
+        "a corner nearer than the pivot handle is grabbed");
+    Expect(HitGizmoHandle(lobby, {1060.0F, 286.0F}, true) == GizmoHandle::BottomRight, "the far corner is grabbed");
+    Expect(HitGizmoHandle(lobby, {600.0F, 240.0F}, true) == GizmoHandle::Top, "near the top edge grabs it");
+    Expect(HitGizmoHandle(lobby, {600.0F, 284.0F}, true) == GizmoHandle::Bottom, "near the bottom edge grabs it");
+    Expect(HitGizmoHandle(lobby, {1058.0F, 262.0F}, true) == GizmoHandle::Right, "near the right edge grabs it");
+    Expect(HitGizmoHandle(lobby, {222.0F, 270.0F}, true) == GizmoHandle::Left, "near the left edge grabs it");
+    Expect(HitGizmoHandle(lobby, {600.0F, 262.0F}, true) == GizmoHandle::Move,
+        "inside the element on top grabs the body");
+    Expect(!HitGizmoHandle(lobby, {600.0F, 262.0F}, false).has_value(),
+        "inside the element under a child grabs nothing, so the child can be selected");
+    Expect(!HitGizmoHandle(lobby, {600.0F, 400.0F}, true).has_value(), "away from the element grabs nothing");
 }
 
-// Characterizes the reported drag defect (ui-editor-review.md S-5): with equal
-// anchors each anchor handle moves in only one direction per axis, and the
-// [0, 1] range stops anchors at the canvas edge. These assertions describe the
-// current rule; a fix changes them under AGENTS.md section 14.4.
-void TestGizmoDragCurrentRule() {
-    const GizmoFrame centered = CanvasFrame({0.5F, 0.5F}, {0.5F, 0.5F}, {520.0F, 324.0F, 240.0F, 72.0F}, {0.5F, 0.5F});
-    Expect(Near(DragFromHandle(GizmoField::AnchorMin, centered, {0.0F, -50.0F}), 0.5F, 0.5F - 50.0F / 720.0F),
-        "anchor min moves up");
-    Expect(Near(DragFromHandle(GizmoField::AnchorMin, centered, {0.0F, 50.0F}), 0.5F, 0.5F),
-        "anchor min cannot move down past equal anchor max");
-    Expect(Near(DragFromHandle(GizmoField::AnchorMin, centered, {-50.0F, 0.0F}), 0.5F - 50.0F / 1280.0F, 0.5F),
-        "anchor min moves left");
-    Expect(Near(DragFromHandle(GizmoField::AnchorMin, centered, {50.0F, 0.0F}), 0.5F, 0.5F),
-        "anchor min cannot move right past equal anchor max");
-    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {0.0F, -50.0F}), 0.5F, 0.5F),
-        "anchor max cannot move up past equal anchor min (the reported defect)");
-    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {0.0F, 50.0F}), 0.5F, 0.5F + 50.0F / 720.0F),
-        "anchor max moves down");
-    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {-50.0F, 0.0F}), 0.5F, 0.5F),
-        "anchor max cannot move left past equal anchor min");
-    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {50.0F, 0.0F}), 0.5F + 50.0F / 1280.0F, 0.5F),
-        "anchor max moves right");
+// The reported defect (ui-editor-review.md S-5): with equal anchors each
+// anchor handle moved in only one direction per axis.
+void TestGizmoAnchorDrag() {
+    const GizmoFrame centered = MakeFrame(kCentered);
+    const Rect centeredRect{520.0F, 324.0F, 240.0F, 72.0F};
+    GizmoRect dragged = Drag(GizmoHandle::AnchorMax, centered, {0.0F, -50.0F});
+    Expect(Near(dragged.anchorMax, 0.5F, 0.5F - 50.0F / 720.0F) && Near(dragged.anchorMin, 0.5F, 0.5F - 50.0F / 720.0F),
+        "equal anchors move up together from anchor max");
+    Expect(Near(DesignRect(dragged), centeredRect), "moving the anchors keeps the element's rectangle");
+    dragged = Drag(GizmoHandle::AnchorMin, centered, {0.0F, 50.0F});
+    Expect(Near(dragged.anchorMin, 0.5F, 0.5F + 50.0F / 720.0F) && Near(dragged.anchorMax, 0.5F, 0.5F + 50.0F / 720.0F),
+        "equal anchors move down together from anchor min");
+    Expect(Near(DesignRect(dragged), centeredRect), "moving the anchors down keeps the rectangle");
+    dragged = Drag(GizmoHandle::AnchorMax, centered, {50.0F, 50.0F});
+    Expect(Near(dragged.anchorMin, 0.5F, 0.5F) && Near(dragged.anchorMax, 0.5F + 50.0F / 1280.0F, 0.5F + 50.0F / 720.0F),
+        "dragging anchor max away from anchor min splits them");
+    Expect(Near(DesignRect(dragged), centeredRect), "splitting the anchors keeps the rectangle");
 
-    const GizmoFrame lobby = CanvasFrame({0.0F, 0.0F}, {0.0F, 0.0F}, {220.0F, 238.0F, 840.0F, 48.0F}, {0.0F, 0.0F});
-    for (const Engine::Math::Vec2 delta : {Engine::Math::Vec2{0.0F, -50.0F}, Engine::Math::Vec2{0.0F, 50.0F},
-             Engine::Math::Vec2{-50.0F, 0.0F}, Engine::Math::Vec2{50.0F, 0.0F}}) {
-        Expect(Near(DragFromHandle(GizmoField::AnchorMin, lobby, delta), 0.0F, 0.0F),
-            "anchor min at the corner with equal anchor max cannot move at all");
-    }
-    Expect(Near(DragFromHandle(GizmoField::AnchorMax, lobby, {0.0F, -50.0F}), 0.0F, 0.0F),
-        "anchor max at the top edge cannot move up");
-    Expect(Near(DragFromHandle(GizmoField::AnchorMax, lobby, {50.0F, 50.0F}), 50.0F / 1280.0F, 50.0F / 720.0F),
-        "anchor max moves right and down from the corner");
+    const GizmoFrame lobby = MakeFrame(kLobby);
+    dragged = Drag(GizmoHandle::AnchorMin, lobby, {50.0F, 50.0F});
+    Expect(Near(dragged.anchorMin, 50.0F / 1280.0F, 50.0F / 720.0F) && Near(dragged.anchorMax, 50.0F / 1280.0F, 50.0F / 720.0F),
+        "anchor min at the corner pushes anchor max along");
+    Expect(Near(dragged.position, 170.0F, 188.0F) && Near(DesignRect(dragged), {220.0F, 238.0F, 840.0F, 48.0F}),
+        "position compensates the anchor move");
+    dragged = Drag(GizmoHandle::AnchorMax, lobby, {0.0F, -50.0F});
+    Expect(Near(dragged.anchorMax, 0.0F, 0.0F) && Near(dragged.position, 220.0F, 238.0F),
+        "anchors stay inside the parent");
+    Expect(Near(Drag(GizmoHandle::AnchorMax, centered, {1000.0F, 0.0F}).anchorMax, 1.0F, 0.5F),
+        "anchor max stops at the parent's right edge");
 }
 
-void TestGizmoDragSnapAndPivot() {
-    const GizmoFrame centered = CanvasFrame({0.5F, 0.5F}, {0.5F, 0.5F}, {520.0F, 324.0F, 240.0F, 72.0F}, {0.5F, 0.5F});
-    // 640 + 13 = 653 px snaps to 656 on an 8 px grid at scale 1.
-    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {13.0F, 0.0F}, {true, 8.0F, 1.0F}), 656.0F / 1280.0F, 0.5F),
-        "snap rounds the anchor to the grid in screen pixels");
-    // At scale 2 the grid is 16 screen px: x 653 snaps to 656 (41 * 16), and
-    // y 360 (22.5 cells) rounds to 368, so an untouched axis can move too.
-    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {13.0F, 0.0F}, {true, 8.0F, 2.0F}), 656.0F / 1280.0F, 368.0F / 720.0F),
-        "snap scales the grid by the design scale");
-    Expect(Near(DragFromHandle(GizmoField::Pivot, centered, {-60.0F, -18.0F}), 0.25F, 0.25F),
-        "pivot moves relative to the element's own bounds");
-    Expect(Near(DragFromHandle(GizmoField::Pivot, centered, {500.0F, 0.0F}), 1.0F, 0.5F),
-        "pivot stays inside the element");
+void TestGizmoMoveAndResize() {
+    const GizmoFrame lobby = MakeFrame(kLobby);
+    GizmoRect dragged = Drag(GizmoHandle::Move, lobby, {13.0F, -7.0F});
+    Expect(Near(dragged.position, 233.0F, 231.0F) && Near(dragged.sizeDelta, 840.0F, 48.0F) && SameAnchors(dragged, kLobby),
+        "the body moves position only");
+
+    const GizmoFrame centered = MakeFrame(kCentered);
+    dragged = Drag(GizmoHandle::Right, centered, {30.0F, 5.0F});
+    Expect(Near(DesignRect(dragged), {520.0F, 324.0F, 270.0F, 72.0F}) && SameAnchors(dragged, kCentered),
+        "the right edge resizes and the left edge stays");
+    Expect(Near(DesignRect(Drag(GizmoHandle::Left, centered, {300.0F, 0.0F})), {760.0F, 324.0F, 0.0F, 72.0F}),
+        "the left edge stops at the right edge");
+    Expect(Near(DesignRect(Drag(GizmoHandle::TopLeft, centered, {-10.0F, -20.0F})), {510.0F, 304.0F, 250.0F, 92.0F}),
+        "a corner moves both of its edges");
+    Expect(Near(DesignRect(Drag(GizmoHandle::Bottom, centered, {40.0F, 8.0F})), {520.0F, 324.0F, 240.0F, 80.0F}),
+        "an edge ignores the other axis");
+
+    dragged = Drag(GizmoHandle::Right, MakeFrame(kStretch), {-40.0F, 0.0F});
+    Expect(Near(DesignRect(dragged), {20.0F, 20.0F, 1200.0F, 680.0F}) && Near(dragged.sizeDelta, -80.0F, -40.0F),
+        "stretched anchors stay and size_delta takes the change");
+    Expect(Near(DesignRect(Drag(GizmoHandle::Move, MakeFrame(kLobby, 2.0F), {20.0F, 0.0F})), {230.0F, 238.0F, 840.0F, 48.0F}),
+        "screen pixels become design pixels at the design scale");
+}
+
+void TestGizmoSnapAndPivot() {
+    const GizmoSnap grid{true, 8.0F};
+    // 220 + 13 = 233 snaps to 232; the top edge (238, off the grid) did not move.
+    Expect(Near(Drag(GizmoHandle::Move, MakeFrame(kLobby), {13.0F, 0.0F}, grid).position, 232.0F, 238.0F),
+        "snap rounds only the moved axis of the body");
+    // At scale 2, 13 screen px is 6.5 design px: 226.5 snaps to 224.
+    Expect(Near(Drag(GizmoHandle::Move, MakeFrame(kLobby, 2.0F), {13.0F, 0.0F}, grid).position, 224.0F, 238.0F),
+        "snap uses the grid in design pixels");
+    const GizmoFrame centered = MakeFrame(kCentered);
+    Expect(Near(DesignRect(Drag(GizmoHandle::Right, centered, {13.0F, 0.0F}, grid)), {520.0F, 324.0F, 256.0F, 72.0F}),
+        "snap rounds the moved edge: 773 to 776");
+    GizmoRect dragged = Drag(GizmoHandle::AnchorMax, centered, {13.0F, 0.0F}, grid);
+    Expect(Near(dragged.anchorMax, 656.0F / 1280.0F, 0.5F) && Near(dragged.anchorMin, 0.5F, 0.5F),
+        "snap rounds the anchor to the grid: 653 to 656");
+
+    dragged = Drag(GizmoHandle::Pivot, centered, {-60.0F, -18.0F});
+    Expect(Near(dragged.pivot, 0.25F, 0.25F), "pivot moves relative to the element's own bounds");
+    Expect(Near(dragged.position, -60.0F, -18.0F) && Near(DesignRect(dragged), {520.0F, 324.0F, 240.0F, 72.0F}),
+        "moving the pivot keeps the rectangle");
+    Expect(Near(Drag(GizmoHandle::Pivot, centered, {500.0F, 0.0F}).pivot, 1.0F, 0.5F), "pivot stays inside the element");
 }
 
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
     TestPathDialogInbox();
-    TestGizmoHandlesAndHit();
-    TestGizmoDragCurrentRule();
-    TestGizmoDragSnapAndPivot();
+    TestGizmoHit();
+    TestGizmoAnchorDrag();
+    TestGizmoMoveAndResize();
+    TestGizmoSnapAndPivot();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);

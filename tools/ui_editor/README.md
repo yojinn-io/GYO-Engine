@@ -27,6 +27,8 @@ gyo_ui_editor --validate exports/menu.ui.json --asset-catalog assets/game/asset_
 
 In the GUI, **File > Open Asset Folder...** picks an asset root in the operating system's folder dialog and mounts it with its `content.json`; Open, Export and the mount dialog's fields also offer the system dialogs, with typed paths as the fallback. A mounted catalog is read-only. Export writes exactly one canonical JSON file atomically and refuses destinations inside the mounted asset root. Authors copy the chosen document into `assets/<game>/`, register it in that game's catalog, and build. The build's asset assembly deploys the prepared content automatically; the editor never edits catalogs or publishes assets.
 
+On the canvas the selected element shows Unity-style handles: drag its body to change `position`, its edges and corners to resize it (`size_delta` and `position`; the anchors stay), and the anchor and pivot handles to change those values while the element's rectangle stays where it is. Equal anchors move together when one is dragged toward the other's side and split when it is dragged away. With **Snap** on, only the coordinates a drag moves are rounded to the grid.
+
 The editor owns authoring sessions, selection, undo, diagnostics and transient preview resources. Layout, clipping, draw order, hit testing, bindings and typed actions come from `GYO::Ui`. Future map/design editors remain sibling tools depending on public engine APIs.
 
 Editor chrome uses an installed CJK font; canvas text deliberately uses the document's catalogued `FontAsset`. Chrome fonts are not serialized or added to the game asset catalog.

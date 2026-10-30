@@ -90,6 +90,22 @@ Json* FindNode(Json& node, const std::string_view id) {
     return nullptr;
 }
 
+// The undo label for a canvas gizmo drag.
+const char* GizmoLabel(const GizmoHandle handle) {
+    switch (handle) {
+    case GizmoHandle::AnchorMin:
+        return "anchor_min";
+    case GizmoHandle::AnchorMax:
+        return "anchor_max";
+    case GizmoHandle::Pivot:
+        return "pivot";
+    case GizmoHandle::Move:
+        return "move";
+    default:
+        return "resize";
+    }
+}
+
 Json* FindSelectedNode(Json& document, const std::string_view id) {
     if (id.empty() || !document.contains("canvases") ||
         !document["canvases"].is_array()) {
@@ -1149,19 +1165,19 @@ void EditorApp::DrawCanvas() {
     }
     if (result.gizmoEdit.has_value()) {
         const PreviewAdapter::FrameOutput::GizmoEdit& edit = *result.gizmoEdit;
-        const char* key = edit.field == PreviewAdapter::FrameOutput::GizmoField::AnchorMin
-            ? "anchor_min"
-            : edit.field == PreviewAdapter::FrameOutput::GizmoField::AnchorMax
-                ? "anchor_max"
-                : "pivot";
         if (edit.began) {
-            session_.BeginEdit(std::string{"Drag "} + key + " gizmo");
+            session_.BeginEdit(std::string{"Drag "} + GizmoLabel(edit.handle) + " gizmo");
             gizmoTransactionActive_ = true;
         }
         if (Json* edited = FindSelectedNode(
                 session_.EditDocument(), selectedNode_);
             edited != nullptr) {
-            (*edited)["rect"][key] = {edit.x, edit.y};
+            Json& rect = (*edited)["rect"];
+            rect["anchor_min"] = {edit.rect.anchorMin.x, edit.rect.anchorMin.y};
+            rect["anchor_max"] = {edit.rect.anchorMax.x, edit.rect.anchorMax.y};
+            rect["pivot"] = {edit.rect.pivot.x, edit.rect.pivot.y};
+            rect["position"] = {edit.rect.position.x, edit.rect.position.y};
+            rect["size_delta"] = {edit.rect.sizeDelta.x, edit.rect.sizeDelta.y};
             session_.UpdateEdit();
             RefreshDiagnostics();
         }

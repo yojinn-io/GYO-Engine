@@ -12,7 +12,7 @@
 | 資料安全 | 好 | canonical JSON、原子替換、外部修改偵測（`DocumentSession::HasExternalModification`）、拒絕輸出到掛載的資產根、快照式 undo 與拖動的交易合併（`UndoStack`） |
 | 測試 | 中 | core 與預覽資源的生命週期有測試（`tests/ui_editor`）；但 `EditorApp` 的操作與 gizmo 的數學只能在 ImGui 的一幀裡跑，沒有測試 |
 | 內部結構 | 要整理 | 見下面 S-1～S-4 |
-| 操作 | 不足 | 只能拖錨點與 pivot，不能直接拖位置與大小（S-5） |
+| 操作 | 已補 | 原本只能拖錨點與 pivot（S-5）；`v8-tool-ui-editor-gizmo-fix` 加了本體與邊角的把手 |
 
 一句話：**外面的邊界畫得很乾淨，裡面的責任太集中。** 不需要重寫；在加 `text_field` 之前，先把會被它碰到的部分整理好。
 
@@ -39,7 +39,7 @@
 - `PreviewAdapter.cpp:236`：`sourceDocument.dump()` 每幀一次，再和上一份字串比對。
 - 影響：選單文件小，現在不是問題；優先度低，只記錄。
 
-### S-5　拖動與縮放（使用者回報的 bug；**已重現**）
+### S-5　拖動與縮放（使用者回報的 bug；**已修**，`v8-tool-ui-editor-gizmo-fix`）
 
 - 使用者（2026-10-30）：拖藍色方塊，「只能左右，往上拖動無效」。
 - 現況：gizmo 只有三個把手：`anchor_min`（深藍方塊）、`anchor_max`（淺藍方塊）、`pivot`（橘色圓點）（`PreviewAdapter.hpp` 的 `GizmoField`）。**沒有拖位置（`position`）或大小（`size_delta`）的把手**；點元素本身只會選取（`EditorApp.cpp:1147`）。
@@ -58,6 +58,7 @@
   3. 就算動了，拖錨點也只改錨點，不補償 `size_delta` 與 `position`（`EditorApp.cpp:1161-1166`），所以元素的大小會在原本的 `size_delta` 之外再加上錨點的距離。
 - 判斷：程式照它寫的規則在動，不是算錯；問題是**把手的設計和使用者想做的事不一致**：使用者想移動、縮放元素，但手上只有「錨點」這種調整版面關係的把手。
 - 下一步：先定「拖動應該怎樣」（HANDOFF `v8-tool-ui-editor-gizmo-bug`），再照 AGENTS §14.3 把上表的情形寫成會失敗的測試，然後修。
+- 處理（2026-10-30，`v8-tool-ui-editor-gizmo-fix`）：使用者選 (a) Unity 式。加了本體（移動）與四邊四角（縮放）的把手；拖錨點時被拖的錨點推著另一個走（相等時一起動，往反方向拖就分開）；拖錨點與 pivot 時補償 `position`、`size_delta`，元素的矩形不動；Snap 只對齊這次拖動的座標。上表的情形先在舊規則下寫成失敗的測試，再修到通過（[dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_editor_gizmo_fix.zh-Hant.md)）。
 
 ## 建議的整理順序（每項都對應一個要做的 Feature）
 

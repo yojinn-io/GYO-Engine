@@ -1,6 +1,6 @@
 # v8 工具線交接
 
-更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`），等你核准；沒有實作，沒有推送。**
+更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107) 已合併；`v8-tool-ui-editor-gizmo-fix` 完成，在分支 `claude/v8-tool-ui-editor-gizmo`。**
 本文件是工具線的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。v8 產品計畫的同步由產品會話做，本線不改 `docs/object_fps_pvp/plans/v8/`。
 
 ## 代號對照
@@ -15,7 +15,8 @@
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
-- **進行中**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（分支 `claude/v8-tool-ui-editor`）等 CI 與 review。
+- **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
+- **完成，未合併**：`v8-tool-ui-editor-gizmo-fix`（分支 `claude/v8-tool-ui-editor-gizmo`）。實際拖動只在測試裡驗證，GUI 上還沒有人手動拖過。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - `GYO::Ui` 與 ui_editor 沒有 `Design Invariants` 節（[ui_toolchain.md](../../../ui_toolchain.md)、[tool_projects.md](../../../tool_projects.md)）。本線加元件前要補（`v8-tool-ui-invariants`）。
@@ -34,7 +35,6 @@
 | `v8-tool-ui-edit-policy-owner` | 文字編輯政策放哪 | 通用的部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`（Architecture Delta：Ui 的責任變大）／全部留在產品，Ui 只畫（輸入框就不算元件）。字元過濾：(i) `text_field` 宣告 `max_length`，過濾由產品在提交時檢查／(ii) 資料裡宣告允許的字元集合（簡單、封閉，但開始往設定語言走，AGENTS §9）／(iii) 產品在執行時提供過濾函式 | 通用部分在 Ui；過濾用 (iii)：規則留在產品，資料不帶產品語意 | Ui 的 Design Invariants 怎麼寫 |
 | `v8-tool-ui-invariants` | 在 ui_toolchain.md 新增 `Design Invariants` 節 | AGENTS §3：節的新增要使用者同意 | 同意後在 `v8-tool-ui-invariants` 寫，內容另給你看 | 能不能開始加元件 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
-| `v8-tool-ui-editor-gizmo-bug` | 拖動應該怎樣（**已重現**：[審查](ui-editor-review.md) S-5 的表） | 原因：兩個錨點相等時，`anchor_min ≤ anchor_max` 的限制讓每個把手每個軸只能往一個方向動；錨點夾在 0～1；也沒有移動與縮放元素的把手。(a) 照 Unity 的 RectTransform：拖元素本體＝改 `position`；邊與角的把手＝改 `size_delta`（和 `position`）、錨點不動；錨點把手另外保留，兩個錨點相等時一起移動，拖錨點時補償 `position`、`size_delta` 讓元素的矩形不動／(b) 最小：只修錨點把手（相等時一起動、交叉時交換），不加移動與縮放把手／(c) 只加移動與縮放把手，錨點維持現狀 | (a)：使用者要的是移動與縮放元素，(b) 解決不了 | 修法與測試的判定 |
 | `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-editor-structure` | 審查的整理項目要不要排 | [審查](ui-editor-review.md)：邊界與資料安全好，內部責任太集中（`EditorApp.cpp` 約 2,300 行、元素 schema 在 editor 又寫一份）。建議在加 `text_field` 前做 `v8-tool-ui-editor-gizmo-math`、`v8-tool-ui-editor-element-schema`、`v8-tool-ui-editor-panels`，不重寫 | 照審查的順序排 | ui-widgets-line 的批次 |
 | `v8-tool-ime-input-delta` | 組字事件由誰做 | Engine 的 Input（計畫夾 input-and-present；只加不改，不變式 1）在工具線做／交給 Engine 的會話做 | 工具線做，記到 input-and-present 的 HANDOFF；先等 `v8-tool-ui-ime-observe` 的結果 | 有沒有 Engine 批 |
@@ -45,6 +45,7 @@
 |---|---|---|
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
+| `v8-tool-ui-editor-gizmo-bug` | （2026-10-30）拖動照 (a) Unity 的 RectTransform：本體＝移動 `position`；邊與角＝縮放（`size_delta`、`position`），錨點不動；拖錨點與 pivot 時補償 `position`、`size_delta`，元素的矩形不動。「相等時一起移動」的實作細節由 Claude 定為：被拖的錨點推著另一個走，所以往對方那側拖時一起動、往反方向拖時分開（否則相等的錨點在 gizmo 上永遠分不開）。Snap 只對齊這次拖動的座標 | 「(a) Unity 式」 |
 | `v8-tool-scope-ui-first` | （2026-10-30）先處理 `v8-tool-ui-editor-widgets`。voxel 與 assets 沒有暫停，等使用者逐個給方案再討論；第一版 Claude 自己寫的地圖建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端）撤下。取代同日的 `v8-tool-scope-ui-only`（Claude 誤解成「暫停」） | 「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」→「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」 |
 
 ## 紀錄
@@ -63,3 +64,6 @@
 - 2026-10-30：使用者描述現象：拖藍色方塊「只能左右，往上拖動無效」。用暫時的程式驅動真正的 `PreviewAdapter::Draw`，四個方向各拖 50 px，重現並寫進審查 S-5（程式留在會話的 scratchpad，沒有進 repo）。
 - 2026-10-30：使用者要求把審查的 S-1～S-3 重構掉，先做 S-3。`v8-tool-ui-editor-gizmo-math` 完成：gizmo 數學抽成 `GizmoMath`，行為不變（重現程式前後輸出相同、9/9 測試、8 個突變全部被抓到）。新發現：開 Snap 時沒拖的軸也可能被對齊。拖動 bug 的修法仍等你決定。使用者問 commit 去哪了：都在本機分支 `claude/v8-tool-line-3a892c`，照主會話的交代沒有推送、沒有開 PR。
 - 2026-10-30：使用者要求推送並開 PR，並選擇「只放工具線」。從 origin/master（`d9905dec`）開新分支 `claude/v8-tool-ui-editor`，cherry-pick 工具線的 11 個 commit（無衝突；程式與已測的分支逐位元相同，9/9 測試再跑一次通過），推送並開 [PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)。主會話的 v8 文件（`claude/pvp-v8-pv8-line` 上 18 個未推送的 commit）不在這個 PR；README 指向 `protocol-v8.zh-Hant.md` 的連結要等那邊合併才有效。舊分支 `claude/v8-tool-line-3a892c` 留在本機，不再使用。
+- 2026-10-30：使用者確認 CI 後要求合併，[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107) 以 merge commit 合併（`2d78b753`）。
+- 2026-10-30：使用者選拖動的修法 (a) Unity 式（`v8-tool-ui-editor-gizmo-bug`）。`v8-tool-ui-editor-gizmo-fix` 開始（檔位 high，引擎 Opus 5.5，估 3 h），分支 `claude/v8-tool-ui-editor-gizmo`（切自 master `2d78b753`）。
+- 2026-10-30：`v8-tool-ui-editor-gizmo-fix` 完成，實際約 1 h。先在舊規則下跑新測試：23 項失敗（Red，含「錨點相等時往上拖無效」），換成新規則後全過；9/9 測試通過；8 個突變全部被抓到。GUI 上的手動拖動還沒做。
