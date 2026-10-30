@@ -80,6 +80,10 @@ std::int64_t OnsetOf(const std::int64_t offsetNs, const Duration delay) {
 
 } // namespace
 
+TEST_CASE("Audio Mixer delays every start by 60 ms by default") {
+    CHECK(MixerConfig{}.scheduleDelay == std::chrono::duration_cast<Duration>(60ms));
+}
+
 TEST_CASE("Audio Mixer rejects a configuration outside its limits") {
     const auto expectInvalid = [](const MixerConfig& config) {
         auto mixer = Mixer::Create(config, ClipBank{});
@@ -144,6 +148,7 @@ TEST_CASE("Audio Mixer gives each submitter its own queue") {
     MixerConfig config;
     config.maxSubmitters = 3;
     config.queueCapacity = 1;
+    config.scheduleDelay = Duration::zero();
     auto mixer = Mixer::Create(config, std::move(bank));
     REQUIRE(mixer.has_value());
     std::vector<Submitter> submitters;
@@ -324,6 +329,7 @@ TEST_CASE("Audio Mixer balances and plays every request from concurrent producer
     config.maxSubmitters = kProducers;
     config.queueCapacity = 64;
     config.maxVoices = 1024; // above kProducers * queueCapacity
+    config.scheduleDelay = Duration::zero(); // every request starts in the block that takes it
     auto created = Mixer::Create(config, std::move(bank));
     REQUIRE(created.has_value());
     Mixer mixer = std::move(created).value();

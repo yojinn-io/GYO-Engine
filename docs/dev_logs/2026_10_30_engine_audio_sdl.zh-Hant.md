@@ -39,5 +39,5 @@
 
   - 256 時最長間隔仍約 10.9 ms：CoreAudio 這台的回呼節拍下限約 10 ms。
   - Windows 未量（沒有機器在手邊）；程式已就緒。
-- **`scheduleDelay` 的預設值**：依上表提出選項（見 HANDOFF「等使用者決定」的 `v8-engine-audio-delay-default`），本批不改預設。
+- **`scheduleDelay` 的預設值**：依上表提出選項（HANDOFF 的 `v8-engine-audio-delay-default`）。使用者原話：「預設 60 ms」。`MixerConfig::scheduleDelay` 預設改為 60 ms；`ScheduleTests.cpp` 加一案守住預設值，兩個依賴預設 0 的案例改為明寫 0。core 35／35，test 組態的 audio 相關 5／5。
 - 時間：估 3～5 h，實際約 2 h。

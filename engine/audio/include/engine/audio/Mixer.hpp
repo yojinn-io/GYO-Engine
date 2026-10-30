@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 
@@ -21,9 +22,12 @@ struct MixerConfig final {
     std::uint32_t maxSubmitters = 4;   // 1 to 64, all allocated at creation
     std::uint32_t queueCapacity = 256; // per submitter, 1 to 65536
     // Added to every mapped start, so a request sent a little after its time still
-    // starts on time. 0 to 1 s. Its default is proposed after the output backend
-    // has measured real block sizes (v8-engine-audio-delay).
-    Time::Duration scheduleDelay{};
+    // starts on time; it is also the least latency of a sound played "now". 0 to
+    // 1 s. The default covers a consumer at 30 FPS (a request up to 33 ms late)
+    // with SDL's default device block on macOS (callbacks up to 21.5 ms apart);
+    // a consumer with a higher frame rate or smaller blocks may lower it
+    // (v8-engine-audio-delay-default).
+    Time::Duration scheduleDelay = std::chrono::duration_cast<Time::Duration>(std::chrono::milliseconds(60));
 };
 
 // One sound, played once. The consumer turns direction and distance into gains.
