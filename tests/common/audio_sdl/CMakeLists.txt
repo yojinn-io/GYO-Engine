@@ -10,13 +10,16 @@ gyo_copy_runtime_dlls(gyo_audio_sdl_tests)
 add_test(NAME audio_sdl.dummy COMMAND gyo_audio_sdl_tests "-tc=*dummy driver*")
 set_tests_properties(audio_sdl.dummy PROPERTIES ENVIRONMENT "SDL_AUDIO_DRIVER=dummy" LABELS "cpu" TIMEOUT 60)
 
-# The disk driver writes what the device would play to a file; a timescale of 0
-# writes as fast as it can. The format hints pin the device to the mixer's format
-# so the file holds the mixer's samples unconverted.
+# The disk driver writes what the device would play to a file. A timescale of 0.1
+# waits 1 ms per 480-frame block: fast enough for the test, but bounded, so a
+# stalled test thread (a CI scheduling pause) cannot fill the 4096-anchor log
+# before it drains it (with 0 it rendered about 170 blocks per ms and failed on
+# macOS arm64 CI). The format hints pin the device to the mixer's format so the
+# file holds the mixer's samples unconverted.
 set(gyo_audio_disk_file "${CMAKE_CURRENT_BINARY_DIR}/audio_sdl_disk.raw")
 add_test(NAME audio_sdl.disk COMMAND gyo_audio_sdl_tests "-tc=*disk driver*")
 set_tests_properties(audio_sdl.disk PROPERTIES
-    ENVIRONMENT "SDL_AUDIO_DRIVER=disk;SDL_AUDIO_DISK_TIMESCALE=0;SDL_AUDIO_DISK_OUTPUT_FILE=${gyo_audio_disk_file};SDL_AUDIO_FORMAT=S16;SDL_AUDIO_FREQUENCY=48000;SDL_AUDIO_CHANNELS=2;SDL_AUDIO_DEVICE_SAMPLE_FRAMES=480"
+    ENVIRONMENT "SDL_AUDIO_DRIVER=disk;SDL_AUDIO_DISK_TIMESCALE=0.1;SDL_AUDIO_DISK_OUTPUT_FILE=${gyo_audio_disk_file};SDL_AUDIO_FORMAT=S16;SDL_AUDIO_FREQUENCY=48000;SDL_AUDIO_CHANNELS=2;SDL_AUDIO_DEVICE_SAMPLE_FRAMES=480"
     LABELS "cpu" TIMEOUT 60)
 
 add_test(NAME audio_sdl.unavailable COMMAND gyo_audio_sdl_tests "-tc=*unavailable*")

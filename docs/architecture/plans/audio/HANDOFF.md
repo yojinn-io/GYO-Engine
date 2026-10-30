@@ -26,7 +26,8 @@
   - 需求已傳給工具線會話（`docs/tools/plans/v8/` 的 owner），記進 `v8-tool-assets-editor`。
   - 待決：命中確認與遠端射擊要用哪個音效（使用者只提供 4 個）。
 - 2026-10-30：使用者說「開PR推送」。併入 origin/master 後本機 test 102／102、core 37／37，推送並開 PR（Engine 四批與消費端的音效批同一個 PR）。
-- 分支：`claude/v8-engine-audio-95a496`（切自消費端的 v8 計畫分支，未推送）。
+- 2026-10-30：`audio_sdl.disk` 在 macOS arm64 CI 偶發失敗（錨點記錄在 `TIMESCALE=0` 下被不等待的 disk 驅動填滿）：測試環境改為 `TIMESCALE=0.1` 並加入 100 ms 停頓的回歸測試；dev_log：[2026_10_30_engine_audio_disk_flake](../../../dev_logs/2026_10_30_engine_audio_disk_flake.zh-Hant.md)。
+- 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
 
