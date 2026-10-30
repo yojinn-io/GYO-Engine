@@ -34,12 +34,16 @@
 | `v8-tool-ui-edit-policy-owner` | 文字編輯政策放哪 | 通用的部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`（Architecture Delta：Ui 的責任變大）／全部留在產品，Ui 只畫（輸入框就不算元件）。字元過濾：(i) `text_field` 宣告 `max_length`，過濾由產品在提交時檢查／(ii) 資料裡宣告允許的字元集合（簡單、封閉，但開始往設定語言走，AGENTS §9）／(iii) 產品在執行時提供過濾函式 | 通用部分在 Ui；過濾用 (iii)：規則留在產品，資料不帶產品語意 | Ui 的 Design Invariants 怎麼寫 |
 | `v8-tool-ui-invariants` | 在 ui_toolchain.md 新增 `Design Invariants` 節 | AGENTS §3：節的新增要使用者同意 | 同意後在 `v8-tool-ui-invariants` 寫，內容另給你看 | 能不能開始加元件 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
+| `v8-tool-ui-editor-gizmo-bug` | 「拖動組件（擴大縮小有bug）」的實際現象 | 從程式推論（[審查](ui-editor-review.md) S-5）：gizmo 只能拖錨點與 pivot，沒有位置與大小的把手；拖錨點時不補償 `size_delta`、`position`，元素會跳；點錨點的元素（大廳的按鈕）兩個把手都在父層左上角。**未重現**。照 AGENTS §14.3，先知道現象、寫成會失敗的測試再修（`v8-tool-ui-editor-gizmo-math`） | 先請你描述：拖哪個把手、元素怎麼變 | 修法與測試 |
+| `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
+| `v8-tool-ui-editor-structure` | 審查的整理項目要不要排 | [審查](ui-editor-review.md)：邊界與資料安全好，內部責任太集中（`EditorApp.cpp` 約 2,300 行、元素 schema 在 editor 又寫一份）。建議在加 `text_field` 前做 `v8-tool-ui-editor-gizmo-math`、`v8-tool-ui-editor-element-schema`、`v8-tool-ui-editor-panels`，不重寫 | 照審查的順序排 | ui-widgets-line 的批次 |
 | `v8-tool-ime-input-delta` | 組字事件由誰做 | Engine 的 Input（計畫夾 input-and-present；只加不改，不變式 1）在工具線做／交給 Engine 的會話做 | 工具線做，記到 input-and-present 的 HANDOFF；先等 `v8-tool-ui-ime-observe` 的結果 | 有沒有 Engine 批 |
 
 ## 決定紀錄
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
 | `v8-tool-scope-ui-first` | （2026-10-30）先處理 `v8-tool-ui-editor-widgets`。voxel 與 assets 沒有暫停，等使用者逐個給方案再討論；第一版 Claude 自己寫的地圖建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端）撤下。取代同日的 `v8-tool-scope-ui-only`（Claude 誤解成「暫停」） | 「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」→「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」 |
 
@@ -55,3 +59,4 @@
 - 2026-10-30：使用者問 Godot 怎麼做。子 agent（web-fetch）讀了 Godot 4.7 stable 的 FileDialog、EditorFileDialog、EditorSettings、DisplayServer、DirAccess 文件，結果補進 `v8-tool-ui-editor-mount-ux`。DisplayServer 與 EditorSettings 的部分文字來自摘要，不是逐字；編輯器設定的預設值文件沒寫。
 - 2026-10-30：`v8-tool-ui-editor-file-browser` 開始（檔位 high，引擎 Opus 5.5，估 3～5 h）。使用者選了 SDL3 的系統選擇窗（`v8-tool-ui-editor-mount-ux`）。
 - 2026-10-30：`v8-tool-ui-editor-file-browser` 完成。macOS 上 9 個相關測試通過，手動突變 3 個全部被抓到。Windows、Linux 的實際選擇窗未看過（L3 待排）。
+- 2026-10-30：使用者補充：UI Editor 只管選單不管 HUD（`v8-tool-ui-editor-scope-menus`）；拖動與縮放有 bug；main menu 要背景圖或動畫；要求評價與結構審查。審查寫成 [ui-editor-review.md](ui-editor-review.md)（只審查，沒改程式）。拖動的 bug 只從程式推論機制，未重現。

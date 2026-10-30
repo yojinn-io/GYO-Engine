@@ -43,12 +43,19 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── v8-engine-input-composition          「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
 │   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
 │   ├── v8-tool-ui-editor-file-browser       「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
+│   ├── v8-tool-ui-editor-gizmo-math         「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試，修拖動與縮放，加位置／大小把手」
+│   ├── v8-tool-ui-editor-element-schema     「high｜Opus 5.5｜元素的欄位與 Inspector 集中一處（加 text_field 前）」
+│   ├── v8-tool-ui-editor-panels             「medium｜Opus 5.5｜面板拆檔，EditorApp 只協調」
 │   ├── v8-tool-ui-editor-text-field         「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
 │   ├── v8-tool-ui-button-style（待決）       「medium｜Opus 5.5｜按鈕外觀的共用樣式；看 v8-tool-ui-widget-scope」
 │   └── v8-product-lobby-text-field          「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
 │
 └── （待討論）v8-tool-voxel-map-editor、v8-tool-assets-editor   「待討論：等使用者逐個給方案（v8-tool-scope-ui-first）」
 ```
+
+## 範圍
+
+UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope-menus`）。現況的評價與結構問題見 [ui-editor-review.md](ui-editor-review.md)。
 
 ## 順序與依賴
 
