@@ -46,7 +46,7 @@
   - `v8-product-crouch` 的不碰 wire 部分（`v8-product-crouch-nowire-first`）。
   - `pv8-design` 第 2 輪（`pv8-design-round2-ultracode`）：腳本與 prompt 已擬好，等你看過再啟動。需求用典型值（`pv8-req-typical-values`）。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1 輪（蹲下與衝刺，定稿後重開）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)（M-1～M-3 由 `pv8-scope-reopen` 取代）。
-- **之後**：`v8-engine-audio-plan`（audio-line，不碰 wire，可並行）。
+- **最優先**：`audio-line`（`v8-engine-audio-first`），還沒開始；在哪裡做等你決定。
 - **等你決定**：
   - 看 `pv8-design` 第 2 輪的 prompt，同意後啟動。
   - `v8-product-crouch` 的事前宣告（站立路徑 0 差分）。
@@ -83,6 +83,7 @@
 | `pv8-req-typical-values` | （2026-10-30）[pv8 需求問卷](pv8-requirements.md) 先用典型值，之後可以逐題改 | 「需求問卷先用典型值。」 |
 | `v8-product-crouch-nowire-first` | （2026-10-30）`v8-product-crouch` 先做不碰 wire 的部分（C++ 的姿態、碰撞高度、站起判定、替補、SeedLead、重生、呈現）；proto、版本值、Ready／Welcome 的參數等新的 pv8 定稿再接 | 「crouch 不碰 wire 的部分先做」 |
 | `pv8-design-round2-ultracode` | （2026-10-30）新範圍的 pv8 設計照編制跑 ultracode，啟動前給使用者看 prompt | 「新的 pv8 設計照編制跑 ultracode，啟動前給我看 prompt。」 |
+| `v8-engine-audio-first` | （2026-10-30）audio 最優先：`audio-line`（`v8-engine-audio-plan` → `v8-engine-audio` → `v8-product-sfx`）排在 crouch 與 pv8 第 2 輪之前。在哪裡做（本會話先暫停 crouch，或另開會話並行）等使用者決定 | 「對了，audio排在哪裡？這個是最優先的。」 |
 
 ## 規劃紀錄（記錄器）
 
