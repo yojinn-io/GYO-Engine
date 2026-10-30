@@ -61,3 +61,4 @@
 - 2026-10-30：`v8-tool-ui-editor-file-browser` 完成。macOS 上 9 個相關測試通過，手動突變 3 個全部被抓到。Windows、Linux 的實際選擇窗未看過（L3 待排）。
 - 2026-10-30：使用者補充：UI Editor 只管選單不管 HUD（`v8-tool-ui-editor-scope-menus`）；拖動與縮放有 bug；main menu 要背景圖或動畫；要求評價與結構審查。審查寫成 [ui-editor-review.md](ui-editor-review.md)（只審查，沒改程式）。拖動的 bug 只從程式推論機制，未重現。
 - 2026-10-30：使用者描述現象：拖藍色方塊「只能左右，往上拖動無效」。用暫時的程式驅動真正的 `PreviewAdapter::Draw`，四個方向各拖 50 px，重現並寫進審查 S-5（程式留在會話的 scratchpad，沒有進 repo）。
+- 2026-10-30：使用者要求把審查的 S-1～S-3 重構掉，先做 S-3。`v8-tool-ui-editor-gizmo-math` 完成：gizmo 數學抽成 `GizmoMath`，行為不變（重現程式前後輸出相同、9/9 測試、8 個突變全部被抓到）。新發現：開 Snap 時沒拖的軸也可能被對齊。拖動 bug 的修法仍等你決定。使用者問 commit 去哪了：都在本機分支 `claude/v8-tool-line-3a892c`，照主會話的交代沒有推送、沒有開 PR。

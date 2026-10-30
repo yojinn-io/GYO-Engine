@@ -19,6 +19,7 @@ add_library(gyo_ui_editor_core STATIC
     src/CommandLine.cpp
     src/DocumentSession.cpp
     src/FileService.cpp
+    src/GizmoMath.cpp
     src/PathDialog.cpp
     src/ReadOnlyAssetCatalog.cpp
     src/UiDocumentBridge.cpp

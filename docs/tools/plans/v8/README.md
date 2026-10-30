@@ -43,7 +43,8 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── v8-engine-input-composition          「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
 │   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
 │   ├── v8-tool-ui-editor-file-browser       「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
-│   ├── v8-tool-ui-editor-gizmo-math         「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試，修拖動與縮放，加位置／大小把手」
+│   ├── v8-tool-ui-editor-gizmo-math ✓       「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試（行為不變）」
+│   ├── v8-tool-ui-editor-gizmo-fix          「high｜Opus 5.5｜修拖動與縮放、加位置／大小把手；做法看 v8-tool-ui-editor-gizmo-bug」
 │   ├── v8-tool-ui-editor-element-schema     「high｜Opus 5.5｜元素的欄位與 Inspector 集中一處（加 text_field 前）」
 │   ├── v8-tool-ui-editor-panels             「medium｜Opus 5.5｜面板拆檔，EditorApp 只協調」
 │   ├── v8-tool-ui-editor-text-field         「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
@@ -140,3 +141,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 |---|---|
 | `v8-tool-plan` | [2026_10_30_tool_v8_plan](../../../dev_logs/2026_10_30_tool_v8_plan.zh-Hant.md) |
 | `v8-tool-ui-editor-file-browser` | [2026_10_30_tool_v8_ui_editor_file_browser](../../../dev_logs/2026_10_30_tool_v8_ui_editor_file_browser.zh-Hant.md) |
+| `v8-tool-ui-editor-gizmo-math` | [2026_10_30_tool_v8_ui_editor_gizmo_math](../../../dev_logs/2026_10_30_tool_v8_ui_editor_gizmo_math.zh-Hant.md) |

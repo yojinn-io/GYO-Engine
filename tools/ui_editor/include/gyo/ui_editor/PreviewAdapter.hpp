@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/ui/UiTypes.hpp"
+#include "gyo/ui_editor/GizmoMath.hpp"
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -48,11 +49,7 @@ public:
         };
         std::vector<Action> actions;
 
-        enum class GizmoField {
-            AnchorMin,
-            AnchorMax,
-            Pivot,
-        };
+        using GizmoField = UiEditor::GizmoField;
         struct GizmoEdit final {
             GizmoField field{GizmoField::Pivot};
             float x{};

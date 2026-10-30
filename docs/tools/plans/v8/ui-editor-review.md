@@ -29,7 +29,7 @@
 - 影響：加 `text_field`（`v8-tool-ui-text-field`）要改很多分散的地方，漏改一處 editor 和 codec 就不一致。這是加元件前最大的壓力。
 - 判斷：這是 AGENTS §2 說的「同一個 Special Case 出現在多處」。
 
-### S-3　`PreviewAdapter::Draw` 同時做預覽與編輯操作
+### S-3　`PreviewAdapter::Draw` 同時做預覽與編輯操作（2026-10-30 已處理：`v8-tool-ui-editor-gizmo-math`）
 
 - 一個約 340 行的函式（`PreviewAdapter.cpp:220-560`）裡有：解析、啟用 canvas、組輸入、繪製、gizmo 的命中判定與拖動數學。gizmo 的數學直接讀 ImGui 的滑鼠狀態，不能單獨測。
 - 影響：拖動的 bug（S-5）沒辦法先寫成失敗的測試（AGENTS §14.3 第 2 步）。

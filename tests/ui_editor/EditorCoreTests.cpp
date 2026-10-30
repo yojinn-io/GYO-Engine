@@ -1,11 +1,13 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
 #include "gyo/ui_editor/FileService.hpp"
+#include "gyo/ui_editor/GizmoMath.hpp"
 #include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -348,10 +350,95 @@ void TestPathDialogInbox() {
     Expect(inbox.Take().empty(), "a taken result is not returned again");
 }
 
+// Canvas gizmo rule without ImGui. The parent is a 1280x720 canvas at the
+// screen origin; a drag starts on a handle and moves the mouse by delta.
+GizmoFrame CanvasFrame(const Engine::Math::Vec2 anchorMin, const Engine::Math::Vec2 anchorMax,
+    const Engine::Math::Rect element, const Engine::Math::Vec2 pivot) {
+    return {{0.0F, 0.0F, 1280.0F, 720.0F}, element, anchorMin, anchorMax, pivot};
+}
+
+Engine::Math::Vec2 DragFromHandle(const GizmoField field, const GizmoFrame& frame,
+    const Engine::Math::Vec2 delta, const GizmoSnap snap = {}) {
+    const GizmoPoints points = ComputeGizmoPoints(frame);
+    const Engine::Math::Vec2 handle = field == GizmoField::AnchorMin ? points.anchorMinHandle
+        : field == GizmoField::AnchorMax ? points.anchorMaxHandle : points.pivotHandle;
+    return DragGizmoHandle(field, frame, handle + delta, snap);
+}
+
+bool Near(const Engine::Math::Vec2 value, const float x, const float y) {
+    return std::abs(value.x - x) < 1e-5F && std::abs(value.y - y) < 1e-5F;
+}
+
+void TestGizmoHandlesAndHit() {
+    // The lobby buttons: both anchors at the parent's top-left corner.
+    const GizmoFrame lobby = CanvasFrame({0.0F, 0.0F}, {0.0F, 0.0F}, {220.0F, 238.0F, 840.0F, 48.0F}, {0.0F, 0.0F});
+    const GizmoPoints points = ComputeGizmoPoints(lobby);
+    Expect(Near(points.anchorMinHandle, -9.0F, -9.0F) && Near(points.anchorMaxHandle, 9.0F, -9.0F),
+        "point anchors put both anchor handles beside the parent corner, not the element");
+    Expect(Near(points.pivotHandle, 220.0F, 247.0F), "the pivot handle sits below the pivot");
+    Expect(HitGizmoHandle(points, {9.0F, -9.0F}) == GizmoField::AnchorMax, "a click on a handle grabs it");
+    Expect(HitGizmoHandle(points, {0.0F, -9.0F}) == GizmoField::AnchorMax,
+        "a tie between the anchor handles goes to anchor max");
+    Expect(!HitGizmoHandle(points, {9.0F, 2.0F}).has_value(), "beyond the 10 px radius nothing is grabbed");
+}
+
+// Characterizes the reported drag defect (ui-editor-review.md S-5): with equal
+// anchors each anchor handle moves in only one direction per axis, and the
+// [0, 1] range stops anchors at the canvas edge. These assertions describe the
+// current rule; a fix changes them under AGENTS.md section 14.4.
+void TestGizmoDragCurrentRule() {
+    const GizmoFrame centered = CanvasFrame({0.5F, 0.5F}, {0.5F, 0.5F}, {520.0F, 324.0F, 240.0F, 72.0F}, {0.5F, 0.5F});
+    Expect(Near(DragFromHandle(GizmoField::AnchorMin, centered, {0.0F, -50.0F}), 0.5F, 0.5F - 50.0F / 720.0F),
+        "anchor min moves up");
+    Expect(Near(DragFromHandle(GizmoField::AnchorMin, centered, {0.0F, 50.0F}), 0.5F, 0.5F),
+        "anchor min cannot move down past equal anchor max");
+    Expect(Near(DragFromHandle(GizmoField::AnchorMin, centered, {-50.0F, 0.0F}), 0.5F - 50.0F / 1280.0F, 0.5F),
+        "anchor min moves left");
+    Expect(Near(DragFromHandle(GizmoField::AnchorMin, centered, {50.0F, 0.0F}), 0.5F, 0.5F),
+        "anchor min cannot move right past equal anchor max");
+    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {0.0F, -50.0F}), 0.5F, 0.5F),
+        "anchor max cannot move up past equal anchor min (the reported defect)");
+    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {0.0F, 50.0F}), 0.5F, 0.5F + 50.0F / 720.0F),
+        "anchor max moves down");
+    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {-50.0F, 0.0F}), 0.5F, 0.5F),
+        "anchor max cannot move left past equal anchor min");
+    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {50.0F, 0.0F}), 0.5F + 50.0F / 1280.0F, 0.5F),
+        "anchor max moves right");
+
+    const GizmoFrame lobby = CanvasFrame({0.0F, 0.0F}, {0.0F, 0.0F}, {220.0F, 238.0F, 840.0F, 48.0F}, {0.0F, 0.0F});
+    for (const Engine::Math::Vec2 delta : {Engine::Math::Vec2{0.0F, -50.0F}, Engine::Math::Vec2{0.0F, 50.0F},
+             Engine::Math::Vec2{-50.0F, 0.0F}, Engine::Math::Vec2{50.0F, 0.0F}}) {
+        Expect(Near(DragFromHandle(GizmoField::AnchorMin, lobby, delta), 0.0F, 0.0F),
+            "anchor min at the corner with equal anchor max cannot move at all");
+    }
+    Expect(Near(DragFromHandle(GizmoField::AnchorMax, lobby, {0.0F, -50.0F}), 0.0F, 0.0F),
+        "anchor max at the top edge cannot move up");
+    Expect(Near(DragFromHandle(GizmoField::AnchorMax, lobby, {50.0F, 50.0F}), 50.0F / 1280.0F, 50.0F / 720.0F),
+        "anchor max moves right and down from the corner");
+}
+
+void TestGizmoDragSnapAndPivot() {
+    const GizmoFrame centered = CanvasFrame({0.5F, 0.5F}, {0.5F, 0.5F}, {520.0F, 324.0F, 240.0F, 72.0F}, {0.5F, 0.5F});
+    // 640 + 13 = 653 px snaps to 656 on an 8 px grid at scale 1.
+    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {13.0F, 0.0F}, {true, 8.0F, 1.0F}), 656.0F / 1280.0F, 0.5F),
+        "snap rounds the anchor to the grid in screen pixels");
+    // At scale 2 the grid is 16 screen px: x 653 snaps to 656 (41 * 16), and
+    // y 360 (22.5 cells) rounds to 368, so an untouched axis can move too.
+    Expect(Near(DragFromHandle(GizmoField::AnchorMax, centered, {13.0F, 0.0F}, {true, 8.0F, 2.0F}), 656.0F / 1280.0F, 368.0F / 720.0F),
+        "snap scales the grid by the design scale");
+    Expect(Near(DragFromHandle(GizmoField::Pivot, centered, {-60.0F, -18.0F}), 0.25F, 0.25F),
+        "pivot moves relative to the element's own bounds");
+    Expect(Near(DragFromHandle(GizmoField::Pivot, centered, {500.0F, 0.0F}), 1.0F, 0.5F),
+        "pivot stays inside the element");
+}
+
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
     TestPathDialogInbox();
+    TestGizmoHandlesAndHit();
+    TestGizmoDragCurrentRule();
+    TestGizmoDragSnapAndPivot();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);
