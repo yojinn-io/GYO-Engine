@@ -59,6 +59,12 @@ struct GizmoSnap final {
     float gridSize{}; // design pixels
 };
 
+// Held keys that change an edge or corner drag (Unity's rect tool).
+struct GizmoModifiers final {
+    bool fromCenter{}; // Alt: the opposite side moves the other way, around the centre
+    bool keepAspect{}; // Shift on a corner: both axes scale by the same factor
+};
+
 [[nodiscard]] GizmoPoints ComputeGizmoPoints(const GizmoFrame& frame) noexcept;
 
 // The handle under mouse. Point handles (anchors, pivot, corners) come first
@@ -78,8 +84,9 @@ struct GizmoSnap final {
 //   move together toward each other's side and split the other way.
 // - Snap rounds only the coordinates that the drag moved: element edges to
 //   the grid in design pixels from the parent's corner, anchors likewise,
-//   and the pivot to the grid in the element's own pixels.
+//   and the pivot to the grid in the element's own pixels. On an edge or
+//   corner, snap applies to the dragged side before the modifiers.
 [[nodiscard]] GizmoRect DragGizmo(GizmoHandle handle, const GizmoFrame& start, Engine::Math::Vec2 grab,
-    Engine::Math::Vec2 mouse, const GizmoSnap& snap) noexcept;
+    Engine::Math::Vec2 mouse, const GizmoSnap& snap, const GizmoModifiers& modifiers = {}) noexcept;
 
 } // namespace Gyo::Tools::UiEditor

@@ -524,7 +524,7 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
                 result.gizmoEdit = FrameOutput::GizmoEdit{
                     handle,
                     DragGizmo(handle, impl_->gizmoStart, impl_->gizmoGrab, {mouse.x, mouse.y},
-                        {snapToGrid, gridSize}),
+                        {snapToGrid, gridSize}, {ImGui::GetIO().KeyAlt, ImGui::GetIO().KeyShift}),
                     began,
                     finished,
                 };

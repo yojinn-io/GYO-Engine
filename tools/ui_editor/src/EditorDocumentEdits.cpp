@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace Gyo::Tools::UiEditor::Detail {
@@ -94,6 +96,69 @@ void RenameReferences(
     } else if (value.is_array()) {
         for (Json& item : value) RenameReferences(item, oldId, newId, keys);
     }
+}
+
+namespace {
+
+[[nodiscard]] std::string UniqueNodeCopyId(
+    std::unordered_set<std::string>& used,
+    const std::string_view original) {
+    for (std::size_t suffix = 1U;; ++suffix) {
+        std::string candidate{original};
+        candidate += "_copy_" + std::to_string(suffix);
+        if (used.emplace(candidate).second) return candidate;
+    }
+}
+
+} // namespace
+
+void CollectAllNodeIds(const Json& value, std::unordered_set<std::string>& ids) {
+    if (value.is_object()) {
+        if (value.contains("type") && value.contains("id") &&
+            value["id"].is_string()) {
+            ids.emplace(value["id"].get<std::string>());
+        }
+        for (const char* collection : {"children", "template"}) {
+            if (value.contains(collection) && value[collection].is_array()) {
+                for (const Json& child : value[collection]) {
+                    CollectAllNodeIds(child, ids);
+                }
+            }
+        }
+    } else if (value.is_array()) {
+        for (const Json& item : value) CollectAllNodeIds(item, ids);
+    }
+}
+
+void RegenerateNodeIds(
+    Json& node,
+    std::unordered_set<std::string>& used,
+    std::unordered_map<std::string, std::string>& remap) {
+    if (!node.is_object()) return;
+    if (node.contains("type") && node.contains("id") && node["id"].is_string()) {
+        const std::string oldId = node["id"].get<std::string>();
+        const std::string newId = UniqueNodeCopyId(used, oldId);
+        remap.emplace(oldId, newId);
+        node["id"] = newId;
+    }
+    for (const char* collection : {"children", "template"}) {
+        if (node.contains(collection) && node[collection].is_array()) {
+            for (Json& child : node[collection]) {
+                RegenerateNodeIds(child, used, remap);
+            }
+        }
+    }
+}
+
+Json* FindParentChildren(Json& children, const std::string_view id) {
+    if (!children.is_array()) return nullptr;
+    for (Json& child : children) {
+        if (child.value("id", std::string{}) == id) return &children;
+        if (child.contains("children")) {
+            if (Json* found = FindParentChildren(child["children"], id)) return found;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace Gyo::Tools::UiEditor::Detail

@@ -9,7 +9,10 @@
 #include "gyo/ui_editor/PreviewAdapter.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 
+#include <nlohmann/json.hpp>
+
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -52,6 +55,13 @@ private:
     void DrawBottomPanel();
     void DrawDialogs();
     void DrawStatusBar();
+    // Element clipboard (Edit menu, Ctrl+C / Ctrl+V / Ctrl+D).
+    void CopySelectedElement();
+    void PasteClipboardElement();
+    void DuplicateSelectedElement();
+    // Arrow keys move the selected element by one design pixel (Shift: ten)
+    // while the canvas has focus.
+    void NudgeSelectedElement(bool canvasFocused);
 
     // Shows the host's dialog for purpose, or sets manualPrompt when there is none.
     void RequestPath(PathDialogPurpose purpose, const std::array<char, 1024>& field, bool& manualPrompt);
@@ -83,6 +93,9 @@ private:
     bool singleCatalogMode_{};
     bool previewMode_{};
     bool gizmoTransactionActive_{};
+    bool nudgeTransactionActive_{};
+    // The copied element subtree; kept across documents opened in this run.
+    std::optional<nlohmann::json> clipboard_;
     bool showGrid_{true};
     bool snapToGrid_{true};
     float canvasZoom_{1.0F};

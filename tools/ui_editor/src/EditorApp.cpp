@@ -1,6 +1,7 @@
 #include "gyo/ui_editor/EditorApp.hpp"
 
 #include "EditorDocumentEdits.hpp"
+#include "gyo/ui_editor/ElementClipboard.hpp"
 
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/os/Files.hpp"
@@ -34,6 +35,7 @@ namespace {
 using Detail::Json;
 using Detail::CopyPath;
 using Detail::FieldPath;
+using Detail::FindSelectedNode;
 
 [[nodiscard]] const char* SeverityLabel(const DiagnosticSeverity severity) noexcept {
     switch (severity) {
@@ -198,6 +200,12 @@ void EditorApp::Draw() {
             if (session_.Undo()) RefreshDiagnostics();
         } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
             if (session_.Redo()) RefreshDiagnostics();
+        } else if (ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+            CopySelectedElement();
+        } else if (ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+            PasteClipboardElement();
+        } else if (ImGui::IsKeyPressed(ImGuiKey_D, false)) {
+            DuplicateSelectedElement();
         }
     }
     DrawMainMenu();
@@ -288,6 +296,16 @@ void EditorApp::DrawMainMenu() {
             static_cast<void>(session_.Redo());
             RefreshDiagnostics();
         }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Copy Element", "Ctrl+C", false, !selectedNode_.empty())) {
+            CopySelectedElement();
+        }
+        if (ImGui::MenuItem("Paste Element", "Ctrl+V", false, clipboard_.has_value())) {
+            PasteClipboardElement();
+        }
+        if (ImGui::MenuItem("Duplicate Element", "Ctrl+D", false, !selectedNode_.empty())) {
+            DuplicateSelectedElement();
+        }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("View")) {
@@ -360,6 +378,65 @@ void EditorApp::DrawStatusBar() {
     ImGui::SameLine();
     ImGui::Text("| %s", session_.IsDirty() ? "Unsaved" : "Saved");
     ImGui::End();
+}
+
+void EditorApp::CopySelectedElement() {
+    if (auto copied = CopyElement(session_.Document(), selectedNode_)) {
+        clipboard_ = std::move(*copied);
+        statusMessage_ = "Copied " + selectedNode_;
+    }
+}
+
+void EditorApp::PasteClipboardElement() {
+    if (!clipboard_.has_value()) return;
+    if (auto pasted = PasteElement(session_.EditDocument(), selectedCanvas_, selectedNode_, *clipboard_)) {
+        selectedNode_ = std::move(*pasted);
+        session_.CommitEdit("Paste element");
+        RefreshDiagnostics();
+    }
+}
+
+void EditorApp::DuplicateSelectedElement() {
+    auto copied = CopyElement(session_.Document(), selectedNode_);
+    if (!copied) return;
+    if (auto pasted = PasteElement(session_.EditDocument(), selectedCanvas_, selectedNode_, std::move(*copied))) {
+        selectedNode_ = std::move(*pasted);
+        session_.CommitEdit("Duplicate element");
+        RefreshDiagnostics();
+    }
+}
+
+void EditorApp::NudgeSelectedElement(const bool canvasFocused) {
+    const ImGuiIO& io = ImGui::GetIO();
+    const bool held = ImGui::IsKeyDown(ImGuiKey_LeftArrow) || ImGui::IsKeyDown(ImGuiKey_RightArrow) ||
+        ImGui::IsKeyDown(ImGuiKey_UpArrow) || ImGui::IsKeyDown(ImGuiKey_DownArrow);
+    if (nudgeTransactionActive_ && !held) {
+        // One undo step per continuous press, however long the key repeats.
+        session_.EndEdit();
+        nudgeTransactionActive_ = false;
+    }
+    if (!canvasFocused || selectedNode_.empty() || io.WantTextInput || io.KeyCtrl || gizmoTransactionActive_) {
+        return;
+    }
+    const float step = io.KeyShift ? 10.0F : 1.0F;
+    float x = 0.0F;
+    float y = 0.0F;
+    if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) x -= step;
+    if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) x += step;
+    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) y -= step;
+    if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) y += step;
+    if (x == 0.0F && y == 0.0F) return;
+    if (!nudgeTransactionActive_) {
+        session_.BeginEdit("Nudge element");
+        nudgeTransactionActive_ = true;
+    }
+    if (Json* node = FindSelectedNode(session_.EditDocument(), selectedNode_);
+        node != nullptr && node->contains("rect") && (*node)["rect"].contains("position")) {
+        Json& position = (*node)["rect"]["position"];
+        position = {position[0].get<float>() + x, position[1].get<float>() + y};
+        session_.UpdateEdit();
+        RefreshDiagnostics();
+    }
 }
 
 void EditorApp::NewDocument() {
