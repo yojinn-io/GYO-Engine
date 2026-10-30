@@ -67,3 +67,4 @@
 - 2026-10-30：使用者確認 CI 後要求合併，[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107) 以 merge commit 合併（`2d78b753`）。
 - 2026-10-30：使用者選拖動的修法 (a) Unity 式（`v8-tool-ui-editor-gizmo-bug`）。`v8-tool-ui-editor-gizmo-fix` 開始（檔位 high，引擎 Opus 5.5，估 3 h），分支 `claude/v8-tool-ui-editor-gizmo`（切自 master `2d78b753`）。
 - 2026-10-30：`v8-tool-ui-editor-gizmo-fix` 完成，實際約 1 h。先在舊規則下跑新測試：23 項失敗（Red，含「錨點相等時往上拖無效」），換成新規則後全過；9/9 測試通過；8 個突變全部被抓到。GUI 上的手動拖動還沒做。
+- 2026-10-30：使用者用新版試拖，問錨點與 pivot 的把手有什麼用。查證：`gyo.ui` v1 的根節點固定是設計尺寸（`UiRuntime.cpp:721`），整張畫布等比例縮放、留黑邊（`FitDesignCanvas`，`UiRuntime.cpp:603`），所以每個父層的大小在任何螢幕上都不變，錨點與 pivot 只改變 `position`／`size_delta` 的寫法，不改畫面。提了三個選項：隱藏把手、維持現狀、讓根節點跟著螢幕比例走（契約 v2）。使用者：「先保持這樣。」把手維持現狀，不另開待決。
