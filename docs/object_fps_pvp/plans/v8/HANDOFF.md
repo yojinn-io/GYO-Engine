@@ -97,7 +97,7 @@
 | `v8-product-crouch-wire-declaration-approve` | （2026-10-30）核准 [v8-product-crouch wire 接入的事前宣告](v8-product-crouch-wire-declaration.md) W1～W8、U1～U2；`v8-product-crouch-key` (a) 按住 Left Ctrl；`v8-product-crouch-rules-file` (a) `assets/object_fps_pvp/movement_rules.json`＋`--movement-rules`；`v8-product-crouch-scenarios` (a) 對照表＋只加新路徑的情境；`v8-product-crouch-run-quad-mixed` (a) 保留，只改註解 | 「照建議核准」 |
 | `v8-product-hit-rules-v2-values` | （2026-10-30）部位倍率照 object_fps_v2 的實作（`assets/object_fps_v2/characters/enemies/*.enemy.json` 的 `hurt_regions`）：頭 2.0；軀幹與骨盆 1.0；上臂、前臂、大腿、小腿（左右共 8）0.75；11 段沿骨骼的膠囊 | 「部位倍率的數值，參考object_fps_v2裡面有完整的實現。」 |
 | `v8-product-hit-rules-limb-wire` | （2026-10-30）四肢一層要上 wire：加 `HitPart` 的新值（例如 `HIT_PART_LIMB`）。pv8 合併後的 wire 變更，使用者同意；版本處理（pv8 的延續或升 pv9）在 hitbox-line 的事前宣告決定 | 「改，我說過會有hitbox的。」 |
-| `v8-product-hit-rules-permille` | （2026-10-30）傷害用千分位計算，不取整。主會話的理解（待事前宣告確認）：血量與傷害以千分之一點為單位（100 HP＝100000），倍率是千分位整數（2000、1000、750），25 × 0.75＝18750 整除；畫面顯示時除以 1000。這改變 `maximum_hp`、`shot_damage`、`hp` 等欄位的單位語意，算 Data Contract 變更 | 「用千分位算。」 |
+| `v8-product-hit-rules-permille` | （2026-10-30）傷害用千分位計算，不取整。血量與傷害以千分之一點為單位（2026-10-30 使用者確認：「對」）（100 HP＝100000），倍率是千分位整數（2000、1000、750），25 × 0.75＝18750 整除；畫面顯示時除以 1000。這改變 `maximum_hp`、`shot_damage`、`hp` 等欄位的單位語意，算 Data Contract 變更 | 「用千分位算。」 |
 
 ## 規劃紀錄（記錄器）
 
