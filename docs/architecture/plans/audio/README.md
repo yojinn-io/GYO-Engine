@@ -1,7 +1,7 @@
 # 音效（GYO::Audio）：分批計畫與進度
 
 更新：2026-10-30。Owner：Engine（新增 `engine/audio` → `GYO::Audio`、`engine/audio/backend/sdl` → `GYO::AudioBackendSDL`）。
-**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准）；`v8-engine-audio-core`、`-schedule`、`-sdl` 完成（2026-10-30，本機 L1）；record 未開始；`scheduleDelay` 預設 60 ms（使用者決定）。**本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-30 由提出需求的消費端在它的規劃批次中建立（消費端 v7 D28：audio 計畫夾在音效批開始時建立）。
+**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准）；`v8-engine-audio-core`、`-schedule`、`-sdl` 完成（2026-10-30，本機 L1）；record 停在決策點（`v8-engine-audio-l2-premise`）；`scheduleDelay` 預設 60 ms（使用者決定）。**本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-30 由提出需求的消費端在它的規劃批次中建立（消費端 v7 D28：audio 計畫夾在音效批開始時建立）。
 
 Engine 目前沒有音效輸出：
 
@@ -42,7 +42,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 | `v8-engine-audio-core` | high｜繼承 | 3～4 h | 完成（2026-10-30；本機 core 35／35、突變 9／9；[dev_log](../../../dev_logs/2026_10_30_engine_audio_core.zh-Hant.md)） | 片段庫、聲部混音、離線 `Render`、統計與收支；`docs/architecture/audio.md`（契約與 Design Invariants） |
 | `v8-engine-audio-schedule` | high；時間換算、遲到、SPSC 局部 xhigh（`xhigh-reviewer`，引擎繼承） | 4～5 h | 未開始 | 提交端（有界 SPSC）、時間戳 → 樣本位置、遲到的規則 |
 | `v8-engine-audio-sdl` | high｜繼承 | 3～5 h | 完成（2026-10-30；test 97／97、突變 5／5；[dev_log](../../../dev_logs/2026_10_30_engine_audio_sdl.zh-Hant.md)） | `GYO::AudioBackendSDL`：SDL 音效串流的回呼、AUDIO 子系統計數、G1～G3 擴充、`dummy`／`disk` 驅動的 L1 |
-| `v8-engine-audio-record` | medium（執行與紀錄）；分析程式 high｜繼承 | 2～4 h | 未開始 | Engine 自己的 L2（`disk` 驅動、只記錄）、相關突變、dev_log |
+| `v8-engine-audio-record` | medium（執行與紀錄）；分析程式 high｜繼承 | 2～4 h | 停在決策點（2026-10-30：紀錄完成，disk 驅動計時的前提不成立；[dev_log](../../../dev_logs/2026_10_30_engine_audio_record.zh-Hant.md)） | Engine 自己的 L2（`disk` 驅動、只記錄）、相關突變、dev_log |
 
 `v8-engine-audio` 合計 12～18 h（與消費端計畫的估時相同）。檔位與引擎的說明見 [PLAN](PLAN.md)「分批」。
 

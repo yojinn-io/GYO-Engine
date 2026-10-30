@@ -28,3 +28,10 @@ add_executable(gyo_audio_block_record BlockRecord.cpp)
 target_link_libraries(gyo_audio_block_record PRIVATE GYO::AudioBackendSDL)
 target_compile_features(gyo_audio_block_record PRIVATE cxx_std_20)
 gyo_copy_runtime_dlls(gyo_audio_block_record)
+
+# Not a CTest: the Engine L2 of v8-engine-audio-record (record only), run by
+# onset_record.py, which sets SDL's driver through the environment.
+add_executable(gyo_audio_onset_record OnsetRecord.cpp)
+target_link_libraries(gyo_audio_onset_record PRIVATE GYO::AudioBackendSDL)
+target_compile_features(gyo_audio_onset_record PRIVATE cxx_std_20)
+gyo_copy_runtime_dlls(gyo_audio_onset_record)
