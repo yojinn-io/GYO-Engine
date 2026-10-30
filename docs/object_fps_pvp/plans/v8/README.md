@@ -36,7 +36,7 @@ v8-plan
 │   └── hitbox-line                「PR 線：部位 hitbox（pv7 已有欄位）」
 │       ├── v8-product-hitbox-data            「high｜Opus 5.5｜骨骼→部位形狀的 Data Contract，先手寫 JSON」
 │       ├── v8-product-hitbox-rewind          「high（回溯局部 xhigh）｜Opus 5.5｜Match 的權威姿勢歷史、射擊照開槍時刻回溯」
-│       └── v8-product-hit-rules              「medium｜Opus 5.5｜部位倍率（數值由使用者決定）」
+│       └── v8-product-hit-rules              「medium｜Opus 5.5｜部位倍率：照 v2 三層（頭 2.0、軀幹 1.0、四肢 0.75），千分位計算，加 HIT_PART_LIMB」
 │
 ├── ② 體驗優化                     「pv8 欄位已在 ① 合併，這裡只填行為」
 │   └── v8-product-sprint                     「high｜Opus 5.5｜衝刺；改變權威結果，事前宣告」
@@ -74,7 +74,7 @@ v8-plan
 | `v8-product-crouch` | high（預測重播局部 xhigh）｜Opus 5.5 | 16～24 h | 碰撞高度（站起時頭上有牆不能站）、視角高度、遠端動畫；pv8 欄位實作並合併 | 改變權威結果：事前宣告，同機兩樹 digest 比對；三角色同一個 PR |
 | `v8-product-hitbox-data` | high｜Opus 5.5 | 6～10 h | 骨骼對應的形狀與部位標記（通用格式）＋部位語意（產品資料），先手寫 JSON | 通用格式的 owner 在規劃時定（v8 候選表「PvP 骨骼 hitbox」）；④ 的 Assets Editor 之後接手 |
 | `v8-product-hitbox-rewind` | high（回溯局部 xhigh）｜Opus 5.5 | 20～30 h | Match 保存權威姿勢歷史，照射手開槍時看到的遠端時刻回溯；填 pv7 已預留的欄位（v7.1 D87、D89） | 蹲下之後做：蹲下會改變姿勢 |
-| `v8-product-hit-rules` | medium｜Opus 5.5 | 2～4 h | 部位倍率 | 倍率由使用者決定 |
+| `v8-product-hit-rules` | medium｜Opus 5.5 | 2～4 h | 部位倍率 | 數值照 object_fps_v2（`v8-product-hit-rules-v2-values`）；加 `HIT_PART_LIMB`（`v8-product-hit-rules-limb-wire`）；千分位計算（`v8-product-hit-rules-permille`）。版本處理（pv8 延續或升 pv9）在 hitbox-line 的事前宣告決定 |
 | `v8-product-sprint` | high｜Opus 5.5 | 8～12 h | 衝刺速度與限制 | 改變權威結果：事前宣告 |
 | `v8-product-analyzer-105`、`v8-product-phase-golden`、`v8-product-correct-assert`、`v8-product-lead-withdraw-plan`、`v8-product-lead-withdraw`、`v8-product-input-delay` | 見樹 | 3～4、6～10、1～2、4～6、16～24 h；A4 開工時估 | 下面「v7.1 交過來的項目」 | pv8 改了移動與預測的路徑，B6 與 A4 的基準在 pv8 合併後重新取得 |
 | ④ 三項 | 見樹 | 開工時估 | `v8-tool-ui-editor-widgets`（v8 候選表「大廳 UI 的元件化」）、`v8-tool-voxel-map-editor`（未決事項 b）、`v8-tool-assets-editor` | 工具照 AGENTS §5「手動 → Script → Tool」、§8 Data Contract |

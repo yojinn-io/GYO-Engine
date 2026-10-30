@@ -51,7 +51,6 @@
 - **等你決定**：
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `v8-product-sfx` 前：音效資產的來源（v7 D38）。
-  - `v8-product-hit-rules` 前：部位倍率。
 - **發現（不在本產品的範圍，只報告）**：Engine 計畫 [輸入與呈現 HANDOFF](../../../architecture/plans/input-and-present/HANDOFF.md) 開頭寫「IP-3 進行中（ip3b）」，但 IP-3／IP-4 已隨 PR #85 在 2026-10-23 合併（merge commit `054b08f`，見 [v7.1 交接](../v7.1/HANDOFF.md) 2026-10-22～23 的規劃紀錄）。開頭已過時，交給該計畫或圖書管理員更新。
 
 ## 閱讀入口
@@ -96,6 +95,9 @@
 | `pv8-seq-narrow-declaration-approve` | （2026-10-30）核准 [pv8-seq-narrow 的事前宣告](pv8-seq-narrow-declaration.md) N1～N6；`pv8-seq-narrow-test-changes` (a) T1～T5 照表改，實作後突變與另一位審查者核對，再交 1～5 核准後 commit；`pv8-seq-narrow-merged-streams` (a) `GatewayDropReport.merged_streams` 保留 u64 並補進 §2a 的保留清單 | 「照建議核准」 |
 | `pv8-seq-narrow-test-changes-approve` | （2026-10-30）核准 pv8-seq-narrow 的 T1～T5 判定變更（§14.4 的 1～5；放寬面只有 T1、T3、T4 不再檢查 u32 上限以上的值，由 protoreflect 守衛與 `wire::Counter` 的 Assert 守住），並接受 N4 編碼 Assert 改用 `wire::Counter` 的單元測試加掃描守衛 | 「核准並 commit」 |
 | `v8-product-crouch-wire-declaration-approve` | （2026-10-30）核准 [v8-product-crouch wire 接入的事前宣告](v8-product-crouch-wire-declaration.md) W1～W8、U1～U2；`v8-product-crouch-key` (a) 按住 Left Ctrl；`v8-product-crouch-rules-file` (a) `assets/object_fps_pvp/movement_rules.json`＋`--movement-rules`；`v8-product-crouch-scenarios` (a) 對照表＋只加新路徑的情境；`v8-product-crouch-run-quad-mixed` (a) 保留，只改註解 | 「照建議核准」 |
+| `v8-product-hit-rules-v2-values` | （2026-10-30）部位倍率照 object_fps_v2 的實作（`assets/object_fps_v2/characters/enemies/*.enemy.json` 的 `hurt_regions`）：頭 2.0；軀幹與骨盆 1.0；上臂、前臂、大腿、小腿（左右共 8）0.75；11 段沿骨骼的膠囊 | 「部位倍率的數值，參考object_fps_v2裡面有完整的實現。」 |
+| `v8-product-hit-rules-limb-wire` | （2026-10-30）四肢一層要上 wire：加 `HitPart` 的新值（例如 `HIT_PART_LIMB`）。pv8 合併後的 wire 變更，使用者同意；版本處理（pv8 的延續或升 pv9）在 hitbox-line 的事前宣告決定 | 「改，我說過會有hitbox的。」 |
+| `v8-product-hit-rules-permille` | （2026-10-30）傷害用千分位計算，不取整。主會話的理解（待事前宣告確認）：血量與傷害以千分之一點為單位（100 HP＝100000），倍率是千分位整數（2000、1000、750），25 × 0.75＝18750 整除；畫面顯示時除以 1000。這改變 `maximum_hp`、`shot_damage`、`hp` 等欄位的單位語意，算 Data Contract 變更 | 「用千分位算。」 |
 
 ## 規劃紀錄（記錄器）
 
