@@ -161,6 +161,12 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
     3. 原檔放在資產根目錄**以外**（位置由 assets editor 的規劃決定，例如另一個來源目錄，或不進 repo）；轉好的檔才放進資產根目錄並登錄在 catalog（type `sound`）。理由：產品的內容契約要求資產根目錄下每個檔都登錄在 catalog（`tests/object_fps_pvp/test_asset_catalog.py` 的 `test_every_asset_file_is_in_the_catalog`）。2026-10-30 更正：原本寫「放在 `<asset>/audio/source/`」，音效線照做後這個測試失敗，已移出。
     4. 記錄來源與授權（現在寫在音效線的 dev_log `docs/dev_logs/2026_10_30_pvp_v8_product_sfx.zh-Hant.md`，授權待使用者補）。
     - 現況：AGENTS §5 的 Script 階段，由 `docs/architecture/plans/audio/scripts/convert_wav.py` 手動轉換。腳本、產物與上面的 dev_log 在音效線的分支 `claude/v8-engine-audio-95a496`，尚未推送，之後隨音效的 PR 線合併；合併前本文件裡這些路徑還不存在。
+  - 已收到的需求：**動畫與音效的同步**（`v8-tool-assets-anim-events`，2026-10-30）。使用者在音效會話說：「有一些違和感，這個聲音和動畫的管理是資料化的吧，是的話，就給Assets Editor來處理。」由音效線（`v8-engine-audio-plan`）轉來，這裡只記需求，不排實作。
+    1. 在動畫片段上標記事件時刻（例如「插入彈倉」在第幾秒、哪一隻腳著地），可以在 Assets Editor 裡預覽與調整。
+    2. 音效提示可以掛在這些標記上：執行時動畫到達該時刻就發聲（時刻換成 Engine 時間，交給 `GYO::Audio` 的時間戳排程）。
+    3. 格式是 Data Contract（版本與驗證規則），Runtime 不依賴 Editor；owner 與格式位置由 assets editor 的規劃決定（和 `v8-product-hitbox-data` 一樣要對齊格式的 owner）。
+    4. 完成後移除產品裡的過渡規則 `ReloadSoundOffsetSeconds`（`apps/object_fps_pvp/src/Pvp/SoundCues.cpp`）。
+    - 現況：已資料化的是每種音效提示的片段、音量、空間化與步距（`assets/object_fps_pvp/audio/sfx.json`）；聲音對到動畫哪一刻沒有資料化。換彈最後一聲和插彈倉動畫對不上，目前在 C++ 用「聲音結尾對齊換彈結束」修正，使用者聽了仍覺得違和。動畫片段（例如 `nailer_v2_viewmodel.json`、角色的 animset）沒有事件時刻的標記。上面提到的 `sfx.json`、`SoundCues.cpp` 在音效線的分支 `claude/v8-engine-audio-95a496`，尚未推送。
 - 2026-10-30 第一版裡兩個工具的建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端等）已撤下，見 commit `54dac0c3`。
 
 ## 驗收的共同規則

@@ -87,3 +87,4 @@
 - 2026-10-30：使用者同意 `v8-tool-ui-ime-observe` 的事前宣告。
 - 2026-10-30：音效線更正 `v8-tool-assets-audio-import` 第 3 點：原檔不能放在資產根目錄下（產品的 catalog 測試要求根目錄下每個檔都登錄），改成放在資產根目錄以外；第 4 點的記錄位置改為音效線的 dev_log。README 已更新。
 - 2026-10-30：使用者：「合併 #109、另開 PR」。PR #109 以 merge commit 合併（`5cfa149c`）。剩下的 4 個 commit（text_field 的決定、ime-observe、同意、音效需求更正）rebase 到 master，分支 `claude/v8-tool-ui-ime-observe`，另開 PR。
+- 2026-10-30：音效線轉來第二項 assets editor 需求：動畫事件時刻與音效同步資料化（`v8-tool-assets-anim-events`），使用者原話「這個聲音和動畫的管理是資料化的吧，是的話，就給Assets Editor來處理。」記到 README；只記需求。
