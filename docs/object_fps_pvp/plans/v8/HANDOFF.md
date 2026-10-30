@@ -1,6 +1,6 @@
 # PvP v8 交接
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：pv8 重開（`pv8-scope-reopen`），先寫需求問卷；`v8-product-crouch` 尚未開始。**
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`v8-product-crouch`（不碰 wire 的部分）進行中；`pv8-design` 第 2 輪的 prompt 等你看。**
 本文件是 v8 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。
 
 ## 代號對照
@@ -42,13 +42,14 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：pv8 重開（`pv8-scope-reopen`）。protocol-v8 退回草稿；蹲下與衝刺的欄位保留，成為新設計的一部分。下一步是需求問卷 [pv8-requirements](pv8-requirements.md)，等你填。
+- **進行中**：
+  - `v8-product-crouch` 的不碰 wire 部分（`v8-product-crouch-nowire-first`）。
+  - `pv8-design` 第 2 輪（`pv8-design-round2-ultracode`）：腳本與 prompt 已擬好，等你看過再啟動。需求用典型值（`pv8-req-typical-values`）。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1 輪（蹲下與衝刺，定稿後重開）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)（M-1～M-3 由 `pv8-scope-reopen` 取代）。
 - **之後**：`v8-engine-audio-plan`（audio-line，不碰 wire，可並行）。
 - **等你決定**：
-  - 填 [pv8 需求問卷](pv8-requirements.md)（或回「先用典型值」）。
-  - `v8-product-crouch` 要不要先做不碰 wire 的部分（姿態、碰撞、站起判定、替補、動畫），wire 等新的 pv8 定稿再接。
-  - 新的 pv8 設計用 ultracode（3 個方案 Opus 5.5、1 位審查 Opus 5.5、1 次對抗式檢查 Sonnet 5.5，估 10～16 h），啟動前給你看 prompt。
+  - 看 `pv8-design` 第 2 輪的 prompt，同意後啟動。
+  - `v8-product-crouch` 的事前宣告（站立路徑 0 差分）。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `v8-product-sfx` 前：音效資產的來源（v7 D38）。
   - `v8-product-hit-rules` 前：部位倍率。
@@ -79,6 +80,9 @@
 | `pv8-design-final-approve` | （2026-10-30）核准 protocol-v8 定稿；`pv8-design-remaining-picks` 的 D-7 解讀正確：檔名跟協議版本，這次升為 pv8。之後被 `pv8-scope-reopen` 重開 | 「核准 protocol-v8 定稿，D-7 的解讀正確（檔名跟協議版本，這次升為 pv8）。接著開始 crouch。」 |
 | `pv8-scope-reopen` | （2026-10-30）重開 pv8，一起評估這些協議壓力點：流水號（協議的序號欄位）、多通道、action 分離、撿物品、背包、Boss 血量廣播、技能釋放、任務、房間規則。取代 `v8-product-scope` 的「塔科夫方向的協議升級不在 v8」與 `pv8-scope-crouch-sprint` 的「pv8 只放 ①② 的欄位」；protocol-v8 退回草稿。依 AGENTS §2，先寫需求再定契約 | 「流水號、多通道、action分離、檢物品、背包、boss血量廣播、技能釋放、這些都是壓力點，請放到pv8裡面一起評估。任務、房間規則。一起評估」；「重開 pv8」 |
 | `v8-docs-id-scheme` | （2026-10-30）批次與決策的代號改成「版本-領域-主題」：`v8-product-…`、`v8-docs-…`、`pv8-action-…`、`pv8-item-…` 等。舊流水號 D243～D254 照對照表換掉（解決和 v7.1 的撞號）。規則寫進 docs/architecture.md，舊的 dev_log 不改寫 | 「任務撞號的問題用版本號，v8-product-xxx：這個是產品任務，v8-docs-xxx：這個是文檔任務，其實就合git commit message 有些類似。pv8-action-xxx、pv8-item-xxx 同理，這是處理協議的。從編號我就能看出目前是什麼問題。（這樣比之前f8，d9 還要白話文翻譯才能看得懂）」；「這個號碼變更寫到架構文檔中。否則以前的dev_logs 會亂」 |
+| `pv8-req-typical-values` | （2026-10-30）[pv8 需求問卷](pv8-requirements.md) 先用典型值，之後可以逐題改 | 「需求問卷先用典型值。」 |
+| `v8-product-crouch-nowire-first` | （2026-10-30）`v8-product-crouch` 先做不碰 wire 的部分（C++ 的姿態、碰撞高度、站起判定、替補、SeedLead、重生、呈現）；proto、版本值、Ready／Welcome 的參數等新的 pv8 定稿再接 | 「crouch 不碰 wire 的部分先做」 |
+| `pv8-design-round2-ultracode` | （2026-10-30）新範圍的 pv8 設計照編制跑 ultracode，啟動前給使用者看 prompt | 「新的 pv8 設計照編制跑 ultracode，啟動前給我看 prompt。」 |
 
 ## 規劃紀錄（記錄器）
 

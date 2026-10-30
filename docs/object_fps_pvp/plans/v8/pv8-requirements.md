@@ -1,6 +1,6 @@
 # pv8 需求問卷：協議壓力點的玩法需求
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：等使用者填寫。** 起因：`pv8-scope-reopen`（[HANDOFF](HANDOFF.md)）。
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：先用典型值（`pv8-req-typical-values`）；之後可以逐題改。** 起因：`pv8-scope-reopen`（[HANDOFF](HANDOFF.md)）。
 
 ## 怎麼填
 
