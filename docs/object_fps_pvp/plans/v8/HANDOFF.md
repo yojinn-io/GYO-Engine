@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。`pv8-seq-narrow` 完成（T1～T5 的判定變更已核准，`pv8-seq-narrow-test-changes-approve`）。下一批是 `v8-product-crouch` 的 wire 接入（版本值 7→8）：完成（[事前宣告](v8-product-crouch-wire-declaration.md)，`v8-product-crouch-wire-declaration-approve`）。**pv8-line 的 A 層全部完成，版本值 8。** PR [#110](https://github.com/yojinn-io/GYO-Engine/pull/110) 已開（合併 master `e31dfdf4` 後本機 CTest 104／104），四平台 L1 全部通過（run `41046572657`：linux-x64、macos-arm64、macos-x64、windows-x64），可合併；之後是遠端與手感的實機確認、`v8-product-hitbox-*`、② 的衝刺。
+- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。`pv8-seq-narrow` 完成（T1～T5 的判定變更已核准，`pv8-seq-narrow-test-changes-approve`）。下一批是 `v8-product-crouch` 的 wire 接入（版本值 7→8）：完成（[事前宣告](v8-product-crouch-wire-declaration.md)，`v8-product-crouch-wire-declaration-approve`）。**pv8-line 的 A 層全部完成，版本值 8。** PR [#110](https://github.com/yojinn-io/GYO-Engine/pull/110) 已開已合併（2026-10-30，merge commit `6b22d82c`；L1 四平台通過）；之後是遠端與手感的實機確認、`v8-product-hitbox-*`、② 的衝刺。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
@@ -121,6 +121,8 @@
 - 2026-10-30：`v8-product-crouch` 的 wire 接入完成，pv8-line 的 A 層做完。W1 38 個情境 0 差分；W2 衝刺的 digest 相同；實測 748／822／698／450 B；突變 23／23；CTest 100／100。突變工具的前置檢查 worker 失敗 1 次未切分，之後 10 次重複都通過。
 - 2026-10-30：合併 origin/master（`e31dfdf4`，tool-line 的 #107、#108），本機建置與 CTest 104／104 通過；推送 `claude/pvp-v8-pv8-line` 並開 PR #110。
 - 2026-10-30：PR #110 的 L1 四平台全部通過（run `41046572657`），狀態 CLEAN。
+- 2026-10-30：PR #110 合併（`6b22d82c`），pv8-line 收尾。
+- 2026-10-30：CONNECTION POOR 的調查（audio-line 開的 connection-poor 會話）：成因是 Match 停頓超過約 100 ms → Backlog 重設 → 品質窗口判失敗；和音效無關，master 上重現。使用者決定不改、交給 B6；README 的 B6 列與 network-architecture §7 的「P2 的第二個例外」補上品質窗口。
 
 ## 未結事項
 
