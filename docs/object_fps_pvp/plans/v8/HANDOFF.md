@@ -1,6 +1,6 @@
 # PvP v8 交接
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`v8-product-crouch` 不碰 wire 的部分：J1～J4 通過，commit 1 `fd950ea3`、commit 2 `347fa9ba`；相關突變 54／54 killed；dev_log 已寫。pv8 第 2 輪的 6 項已決定（`pv8-round2-picks`）。**
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`pv8-contract-round2`（`044584fd`）與 `pv8-obs-bytes`（`a7455eb9`）完成；等你同意 obs-bytes 的 Architecture Delta 並核准 protocol-v8 定稿，之後接 pv8-line 的 A 層。**
 本文件是 v8 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。
 
 ## 代號對照
@@ -51,6 +51,8 @@
   - audio-line（會話 `v8-audio-line`）：`v8-engine-audio-plan` 完成（`6ad0d8de`，分支在該會話的 worktree，未推送），6 項決定已在該會話核准；`v8-engine-audio-core` 等你指定。
   - 工具線（會話 `v8-tool-line`）：`v8-tool-plan` 完成（`54dac0c3`，計畫在 `docs/tools/plans/v8/`，未推送）；它的 HANDOFF 列了 18 項等你決定。
 - **等你決定**：
+  - 核准 [protocol-v8](../../protocol-v8.zh-Hant.md) 定稿（第 1 輪＋第 2 輪 A 層，附錄 B／C 是設計）。
+  - 同意 `pv8-obs-bytes` 的 Architecture Delta：Gateway 新增診斷狀態 `sizeStats`（`classDiagnostic`，只記錄、不參與判定）。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `v8-product-sfx` 前：音效資產的來源（v7 D38）。
   - `v8-product-hit-rules` 前：部位倍率。
@@ -89,6 +91,7 @@
 | `v8-tool-line-session` | （2026-10-30）另開一條並行的工具線（④），先做規劃 `v8-tool-plan` | 「在給我一個並行的工具線。」 |
 | `v8-product-crouch-declaration-approve` | （2026-10-30）核准 [v8-product-crouch 的事前宣告](v8-product-crouch-declaration.md) J1～J4，接受「先實作、用突變證明 Red」的偏差；跑 J1 | 「核准 v8-product-crouch 的事前宣告（接受用突變證明 Red），跑 J1。」 |
 | `pv8-round2-picks` | （2026-10-30）[pv8-round2](pv8-round2.md) 的 6 項全部照建議：`pv8-version-split` (a) A 層現在合併、B 層在 ⑤ 時升 pv9；`pv8-req-v8-scope` (a) v8 只做 ⑤ 的對局規則，其他只留形狀；`pv8-seq-cpp-types` (b) C++ 維持 u64，用 `WireCounterMax` 加編碼 Assert；`pv8-reserve-numbers` (a) 預留 B／C 的號碼；`pv8-obs-bytes-now` (a) 現在做觀測；`pv8-hello-doc-mismatch` (a) 以程式的 250 ms 為準 | 「pv8 第 2 輪的 6 項全部照建議。」 |
+| `pv8-next-contract-and-obs` | （2026-10-30）先做 `pv8-contract-round2`（把第 2 輪寫進 protocol-v8）與 `pv8-obs-bytes`（實際位元組與超車比例的觀測），之後再接 pv8-line 的 A 層 | 「先做 pv8-contract-round2（把第 2 輪寫進 protocol-v8）和 pv8-obs-bytes（實際位元組與超車比例的觀測），之後再接 pv8-line 的 A 層。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -106,6 +109,8 @@
 - 2026-10-30：J1（`v8-product-crouch-declaration-approve` 之後）。base＝`de1c679b`（`../GYO-Engine-v8-base`），branch＝`fd950ea3`（之後的 commit 只改文件），同一台 Intel Mac，`compare_authority_trees.py` 各跑 1 次：scale 1 與 scale 3 都是「36 scenarios, 0 differing」。宣告寫「約 35 個」，實際 36 個，判定不受影響。J1 通過。
 
 - 2026-10-30：`v8-product-crouch` commit 2（`347fa9ba`）。權威 digest v2：`crouched`、`sprinting` 只在 true 時符號化，站姿情境的位元組與既有 golden 行不變（J2 的做法；格式定義的變更由主會話決定，已向使用者說明）。新增 golden 情境 `move-crouch/contract`、`move-crouch-slab/slab`，以 dump 確認行為（蹲跳、slab 下放開與按跳都無效、走出後站起）。J2：`authority_digest` 第 1 次失敗，原因是只重建了最佳化版，`-O0` 執行檔是舊的（環境，非實作）；全部重建後通過，失敗記錄在此（§14.1）。J4：`test` preset 93 個測試中 `object_fps_pvp.mutation_tool` 失敗，原因是突變 `v71a1-rules-ignored` 的 find 對準舊的 `PvpMatch` 建構子；更新 find／replace（語意相同），單獨跑確認 killed，之後通過。其餘 92 個通過。D184 的相關突變（find 在改動檔案中的 54 個）：54／54 killed。dev_log：`docs/dev_logs/2026_10_30_pvp_v8_crouch_nowire.zh-Hant.md`、`docs/dev_logs/2026_10_30_pvp_v8_pv8_design.zh-Hant.md`。
+
+- 2026-10-30：`pv8-contract-round2` 完成（`044584fd`），對抗式檢查 1 次（Sonnet 5.5）的 must 2 個、should 若干已納入；`MatchStatus` 的號碼衝突由主會話更正。`pv8-obs-bytes` 完成（`a7455eb9`）：Gateway 的資料包大小分布、Client 依種類拆開的 stale 計數；`test` preset 93／93 通過；相關突變 3／3 killed。dev_log 兩份。實際數字待下一次 L2／LAN 場次。
 
 ## 未結事項
 
