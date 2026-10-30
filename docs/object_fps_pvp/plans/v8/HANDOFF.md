@@ -1,6 +1,6 @@
 # PvP v8 交接
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`v8-product-crouch`（不碰 wire 的部分）進行中；`pv8-design` 第 2 輪的 prompt 等你看。**
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`v8-product-crouch` commit 1 完成（`fd950ea3`），J1 等你核准事前宣告；[pv8 第 2 輪](pv8-round2.md) 的合成草案等你決定。**
 本文件是 v8 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。
 
 ## 代號對照
@@ -44,13 +44,13 @@
 
 - **進行中**：
   - `v8-product-crouch` 的不碰 wire 部分（`v8-product-crouch-nowire-first`）。
-  - `pv8-design` 第 2 輪（`pv8-design-round2-ultracode`）：腳本與 prompt 已擬好，等你看過再啟動。需求用典型值（`pv8-req-typical-values`）。
+  - `pv8-design` 第 2 輪（`pv8-design-round2-ultracode`）：合成草案 [pv8-round2](pv8-round2.md)，等你決定。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1 輪（蹲下與衝刺，定稿後重開）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)（M-1～M-3 由 `pv8-scope-reopen` 取代）。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：④ 工具線在會話 `v8-tool-line` 做規劃（`v8-tool-plan`，自己的 worktree，只規劃不實作）。
 - **等你決定**：
-  - 看 `pv8-design` 第 2 輪的 prompt，同意後啟動。
-  - `v8-product-crouch` 的事前宣告（站立路徑 0 差分）。
+  - [pv8-round2](pv8-round2.md) 文末的 6 項（`pv8-version-split` 等）。
+  - 核准 [v8-product-crouch 的事前宣告](v8-product-crouch-declaration.md)（J1：35 個情境 0 差分），並確認「先實作、用突變證明 Red」的偏差。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `v8-product-sfx` 前：音效資產的來源（v7 D38）。
   - `v8-product-hit-rules` 前：部位倍率。
@@ -98,6 +98,8 @@
 - 2026-10-30：協議壓力調研完成，寫成 [protocol-pressure-survey.md](protocol-pressure-survey.md)。子 agent 約 4.5 分、32 次工具呼叫。主會話換上實測數字，補第 5 節（和現有元件的對照）與第 6 節（會影響的決定）；其他遊戲的敘述沒有逐一打開來源核對，已在報告中標明。分支沒有推送。
 - 2026-10-30：使用者核准 protocol-v8 定稿、D-7 解讀正確，指示開始 crouch。開工前把 origin/master（PR #102～#105）合進本分支（`b648df1a`，無衝突），發現 v7.1 HANDOFF 也用了 v8-product-scope、v8-product-order、v8-product-flow-after-tools，撞號，停下問使用者。使用者另要求評估多通道：實測接近實際值的 4 人 snapshot 約 406 B（1 小時）／439 B（24 小時），帳面的 1101／1175 B 來自 uint64 上限；寫成 [multi-channel-evaluation.md](multi-channel-evaluation.md)。暫時的測試量完刪除。crouch 尚未開始。
 - 2026-10-30：決策與批次的代號改成「版本-領域-主題」（`v8-docs-id-scheme`），v8 的計畫文件全部換掉，對照表在「代號對照」；dev_log 照規則不改寫。pv8 重開（`pv8-scope-reopen`）。
+- 2026-10-30：`v8-product-crouch` 不碰 wire 的部分實作。`StanceRules` 不放進 `Arena`（`ArenaContentDigest` 綁住全部成員），當參數傳給 `StepMovement`／`QueryShot`，舊簽名保留並用預設值。建置成功、`object_fps_pvp.cpu` 通過、新測試 7 個（61 個斷言）通過。突變 9 個：8 個 killed；`reset-substitution-stands` 存活，查明 Match 在新 epoch 的第 1 個命令前不推進該玩家（`PvpMatch.cpp:473-476`），先前「epoch 輪替後替補會把蹲著的玩家拉起來」的判斷錯誤，該規則刪除並更正 pv8-design、protocol-v8 §5 與事前宣告。偏差：事前宣告寫先寫失敗的測試，實際先實作，Red 改用突變證明。commit 1：`fd950ea3`。遠端蹲姿動畫延到 J1 之後。
+- 2026-10-30：pv8 第 2 輪 ultracode 完成（run `wf_0b9d1bf5-4aa`）。結論與分批寫成 [pv8-round2.md](pv8-round2.md)；對抗式檢查 must 4 個，主會話把第 1 個（u32 截斷）降為 should，理由寫在文件。
 
 ## 未結事項
 
