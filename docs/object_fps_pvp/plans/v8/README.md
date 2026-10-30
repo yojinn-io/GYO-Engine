@@ -112,6 +112,8 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | 批次 | dev_log |
 |---|---|
 | `v8-docs-plan-sync` | [2026-10-29](../../../dev_logs/2026_10_29_pvp_v8_plan_sync.zh-Hant.md) |
+| `pv8-design`（第 1、2 輪） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_pv8_design.zh-Hant.md) |
+| `v8-product-crouch`（不碰 wire 的部分） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_crouch_nowire.zh-Hant.md) |
 
 ---
 

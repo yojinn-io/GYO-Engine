@@ -1,6 +1,6 @@
 # PvP v8 交接
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`v8-product-crouch` J1 通過（36 情境 × scale 1、3，0 差分）；接著做 commit 2（digest v2 與蹲下情境）。pv8 第 2 輪的 6 項已決定（`pv8-round2-picks`）。**
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`v8-product-crouch` 不碰 wire 的部分：J1～J4 通過，commit 1 `fd950ea3`、commit 2 `347fa9ba`；相關突變 54／54 killed；dev_log 已寫。pv8 第 2 輪的 6 項已決定（`pv8-round2-picks`）。**
 本文件是 v8 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。
 
 ## 代號對照
@@ -47,7 +47,9 @@
   - `pv8-design` 第 2 輪（`pv8-design-round2-ultracode`）：合成草案 [pv8-round2](pv8-round2.md)，等你決定。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1 輪（蹲下與衝刺，定稿後重開）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)（M-1～M-3 由 `pv8-scope-reopen` 取代）。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
-- **並行**：④ 工具線在會話 `v8-tool-line` 做規劃（`v8-tool-plan`，自己的 worktree，只規劃不實作）。
+- **並行**：
+  - audio-line（會話 `v8-audio-line`）：`v8-engine-audio-plan` 完成（`6ad0d8de`，分支在該會話的 worktree，未推送），6 項決定已在該會話核准；`v8-engine-audio-core` 等你指定。
+  - 工具線（會話 `v8-tool-line`）：`v8-tool-plan` 完成（`54dac0c3`，計畫在 `docs/tools/plans/v8/`，未推送）；它的 HANDOFF 列了 18 項等你決定。
 - **等你決定**：
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `v8-product-sfx` 前：音效資產的來源（v7 D38）。
@@ -102,6 +104,8 @@
 - 2026-10-30：pv8 第 2 輪 ultracode 完成（run `wf_0b9d1bf5-4aa`）。結論與分批寫成 [pv8-round2.md](pv8-round2.md)；對抗式檢查 must 4 個，主會話把第 1 個（u32 截斷）降為 should，理由寫在文件。
 
 - 2026-10-30：J1（`v8-product-crouch-declaration-approve` 之後）。base＝`de1c679b`（`../GYO-Engine-v8-base`），branch＝`fd950ea3`（之後的 commit 只改文件），同一台 Intel Mac，`compare_authority_trees.py` 各跑 1 次：scale 1 與 scale 3 都是「36 scenarios, 0 differing」。宣告寫「約 35 個」，實際 36 個，判定不受影響。J1 通過。
+
+- 2026-10-30：`v8-product-crouch` commit 2（`347fa9ba`）。權威 digest v2：`crouched`、`sprinting` 只在 true 時符號化，站姿情境的位元組與既有 golden 行不變（J2 的做法；格式定義的變更由主會話決定，已向使用者說明）。新增 golden 情境 `move-crouch/contract`、`move-crouch-slab/slab`，以 dump 確認行為（蹲跳、slab 下放開與按跳都無效、走出後站起）。J2：`authority_digest` 第 1 次失敗，原因是只重建了最佳化版，`-O0` 執行檔是舊的（環境，非實作）；全部重建後通過，失敗記錄在此（§14.1）。J4：`test` preset 93 個測試中 `object_fps_pvp.mutation_tool` 失敗，原因是突變 `v71a1-rules-ignored` 的 find 對準舊的 `PvpMatch` 建構子；更新 find／replace（語意相同），單獨跑確認 killed，之後通過。其餘 92 個通過。D184 的相關突變（find 在改動檔案中的 54 個）：54／54 killed。dev_log：`docs/dev_logs/2026_10_30_pvp_v8_crouch_nowire.zh-Hant.md`、`docs/dev_logs/2026_10_30_pvp_v8_pv8_design.zh-Hant.md`。
 
 ## 未結事項
 
