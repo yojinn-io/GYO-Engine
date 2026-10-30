@@ -12,8 +12,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // resultLoop drives sendUDP's result path by hand on a virtual clock: a pass
@@ -39,7 +39,7 @@ func newResultLoop(t *testing.T) *resultLoop {
 }
 
 // The Client's side, through the Gateway's own receive paths.
-func (r *resultLoop) clientBatch(ack uint64, ids ...uint64) {
+func (r *resultLoop) clientBatch(ack uint32, ids ...uint32) {
 	r.t.Helper()
 	b := &client.ActionBatch{AcknowledgedThrough: ack}
 	for _, id := range ids {
@@ -50,7 +50,7 @@ func (r *resultLoop) clientBatch(ack uint64, ids ...uint64) {
 }
 
 // The Match's side: decisions, then a retirement.
-func (r *resultLoop) match(retired uint64, ids ...uint64) {
+func (r *resultLoop) match(retired uint32, ids ...uint32) {
 	r.t.Helper()
 	in := &runtime.ActionResults{PlayerId: 7, RetiredThrough: retired}
 	for _, id := range ids {
@@ -70,7 +70,7 @@ func (r *resultLoop) pass(writeDelay time.Duration) []*client.ActionResults {
 	var out []*client.ActionResults
 	for _, packet := range packets {
 		r.now = r.now.Add(writeDelay)
-		r.s.actionWritten(packet.actionPlayer, r.now)
+		r.s.actionWritten(packet.actionPlayer, r.now, 0)
 		r.written = append(r.written, r.now)
 		h, payload, err := framing.DecodeDatagram(packet.packet)
 		var results client.ActionResults
@@ -169,7 +169,7 @@ func TestResultsNeverBurstUnderRandomEventsAndABlockedWrite(t *testing.T) {
 	rng := rand.New(rand.NewPCG(8, 2))
 	r := newResultLoop(t)
 	start := r.now
-	var requested, decided, acknowledged, retired uint64
+	var requested, decided, acknowledged, retired uint32
 	event := func() {
 		switch rng.IntN(5) {
 		case 0:
@@ -289,7 +289,7 @@ func TestResultDeadlineAgreesWithSelection(t *testing.T) {
 		s.available = rng.IntN(6) != 0
 		clear(s.players)
 		clear(s.sessions)
-		for id := uint64(1); id < uint64(len(sessions)); id++ {
+		for id := uint32(1); id < uint32(len(sessions)); id++ {
 			p := &reservation{playerID: id, phase: phase(rng.IntN(3)), session: sessions[id]}
 			if rng.IntN(5) != 0 {
 				if rng.IntN(3) != 0 {
@@ -301,12 +301,12 @@ func TestResultDeadlineAgreesWithSelection(t *testing.T) {
 			s.sessions[p.session.ID] = p
 		}
 		if rng.IntN(4) == 0 {
-			s.remove(s.players[uint64(1+rng.IntN(len(sessions)-1))]) // A Leave.
+			s.remove(s.players[uint32(1+rng.IntN(len(sessions)-1))]) // A Leave.
 		}
 		s.mu.Unlock()
 		if rng.IntN(4) == 0 {
 			e := envelope()
-			e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: uint64(1 + rng.IntN(len(sessions)-1)), Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY}}
+			e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: uint32(1 + rng.IntN(len(sessions)-1)), Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY}}
 			s.runtimeMessage(e)
 			for len(s.controlOut) > 0 {
 				<-s.controlOut
@@ -475,7 +475,7 @@ func TestSendLoopWakesForNewResultsAndIgnoresSpuriousWakes(t *testing.T) {
 	s, p, c, endpoint, _, _ := resultLoopFixture(t)
 	rng := rand.New(rand.NewPCG(8, 8))
 	seq := uint32(1)
-	clientBatch := func(ack uint64, ids ...uint64) {
+	clientBatch := func(ack uint32, ids ...uint32) {
 		b := &client.ActionBatch{AcknowledgedThrough: ack}
 		for _, id := range ids {
 			b.Shots = append(b.Shots, &client.ShotRequest{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: id, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)})
@@ -484,7 +484,7 @@ func TestSendLoopWakesForNewResultsAndIgnoresSpuriousWakes(t *testing.T) {
 		deliverActions(t, s, p, endpoint, seq, b, time.Now())
 	}
 	slow := 0
-	for id := uint64(1); id <= 16; id++ {
+	for id := uint32(1); id <= 16; id++ {
 		// Idle for more than an interval, at a random phase of the idle timer.
 		time.Sleep(40*time.Millisecond + time.Duration(rng.IntN(34_000))*time.Microsecond)
 		clientBatch(id-1, id)
@@ -550,7 +550,7 @@ func TestSendLoopWakesForNewResultsAndIgnoresSpuriousWakes(t *testing.T) {
 func TestSendLoopSendsADecisionWithinAnIntervalAtItsDeadline(t *testing.T) {
 	s, p, c, endpoint, _, _ := resultLoopFixture(t)
 	seq := uint32(1)
-	clientBatch := func(ack uint64, ids ...uint64) {
+	clientBatch := func(ack uint32, ids ...uint32) {
 		b := &client.ActionBatch{AcknowledgedThrough: ack}
 		for _, id := range ids {
 			b.Shots = append(b.Shots, &client.ShotRequest{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: id, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)})
@@ -558,7 +558,7 @@ func TestSendLoopSendsADecisionWithinAnIntervalAtItsDeadline(t *testing.T) {
 		seq++
 		deliverActions(t, s, p, endpoint, seq, b, time.Now())
 	}
-	arrival := func(id uint64) time.Time {
+	arrival := func(id uint32) time.Time {
 		decided := func(r *client.ActionResults) bool {
 			for _, d := range r.Decisions {
 				if d.ActionId == id {
@@ -579,7 +579,7 @@ func TestSendLoopSendsADecisionWithinAnIntervalAtItsDeadline(t *testing.T) {
 	}
 	previous := arrival(1)
 	slow := 0
-	for id := uint64(1); id <= 16; id++ {
+	for id := uint32(1); id <= 16; id++ {
 		clientBatch(id)
 		time.Sleep(time.Until(previous.Add(20 * time.Millisecond)))
 		clientBatch(id, id+1)
@@ -681,7 +681,7 @@ func TestRuntimeFailureStopsPendingResults(t *testing.T) {
 func TestLinkWritesEachActionBatchOnceWithoutPacing(t *testing.T) {
 	s, f := newTestServer(t)
 	start := time.Now()
-	for id := uint64(1); id <= 3; id++ {
+	for id := uint32(1); id <= 3; id++ {
 		if err := s.link.actions(&runtime.ActionBatch{PlayerId: 7, Shots: []*runtime.ShotRequest{shot(id)}}, dropEvent{}); err != nil {
 			t.Fatal(err)
 		}

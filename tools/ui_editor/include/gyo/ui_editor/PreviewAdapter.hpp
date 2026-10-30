@@ -1,6 +1,7 @@
 #pragma once
 
 #include "engine/ui/UiTypes.hpp"
+#include "gyo/ui_editor/GizmoMath.hpp"
 
 #include <nlohmann/json_fwd.hpp>
 
@@ -48,15 +49,10 @@ public:
         };
         std::vector<Action> actions;
 
-        enum class GizmoField {
-            AnchorMin,
-            AnchorMax,
-            Pivot,
-        };
+        // The selected element's whole rect while a gizmo handle is dragged.
         struct GizmoEdit final {
-            GizmoField field{GizmoField::Pivot};
-            float x{};
-            float y{};
+            GizmoHandle handle{GizmoHandle::Move};
+            GizmoRect rect;
             bool began{};
             bool finished{};
         };

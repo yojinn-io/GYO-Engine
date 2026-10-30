@@ -1,8 +1,12 @@
 # Object FPS PvP contracts
 
-Production Client, Gateway and Runtime use protocol version 7 (pv7) and reject
-every other version. pv7 took effect with the v7.1 `pv7-merge` (PR #78). The
-product-owned [pv7 contract](../../../docs/object_fps_pvp/protocol-v7.zh-Hant.md)
+Production Client, Gateway and Runtime use protocol version 8 (pv8) and reject
+every other version. pv8 takes effect with the v8 pv8-line: the crouch and
+sprint fields, the Match's movement rules in Ready and Welcome, and the counters
+narrowed to uint32. The product-owned
+[pv8 contract](../../../docs/object_fps_pvp/protocol-v8.zh-Hant.md) states what
+pv8 changes; every rule it does not restate stays as written in the
+[pv7 contract](../../../docs/object_fps_pvp/protocol-v7.zh-Hant.md), which
 states what pv7 changes; every rule it does not restate stays as written in the
 [pv6 contract](../../../docs/object_fps_pvp/protocol-v6.zh-Hant.md) and the
 [pv5 contract](../../../docs/object_fps_pvp/protocol-v5.zh-Hant.md) it amends. Together
@@ -12,8 +16,8 @@ implementation and acceptance. The version value has one definition per owner an
 language: C++ `wire::ProtocolVersion`, Go `adapter.ProtocolVersion`, and the
 acceptance expected values; `object_fps_pvp.protocol_version` checks that they agree.
 
-`client_v7.proto` defines remote Client ↔ Gateway payloads.
-`runtime_v7.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
+`client_v8.proto` defines remote Client ↔ Gateway payloads.
+`runtime_v8.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
 These independent schemas import no shared gameplay schema. The product Adapter
 maps generated types; Match receives product C++ values. No shared Engine or
 Gateway codec owns game rules.
@@ -83,13 +87,13 @@ judged at (pv7 contract §6, A1). `ShotRequest.view_tick_q16`, the `HitPart` fie
 fills the others with values equal to the current behaviour until v8 implements
 hitboxes.
 
-Generated Go bindings are checked in under `clientv7/` and `runtimev7/`. Regenerate
+Generated Go bindings are checked in under `clientv8/` and `runtimev8/`. Regenerate
 both with the pinned protoc from the C++ build and `protoc-gen-go` from the product's
 pinned `google.golang.org/protobuf` module, from the product module root:
 
 ```sh
 protoc --proto_path=protocol --go_out=. --go_opt=module=gyo.local/object_fps_pvp \
-  protocol/client_v7.proto protocol/runtime_v7.proto
+  protocol/client_v8.proto protocol/runtime_v8.proto
 ```
 
 C++ generated files belong to the build tree. Do not hand-edit generated bindings

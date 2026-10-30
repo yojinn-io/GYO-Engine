@@ -1,3 +1,4 @@
+#include "RetroFPS/Pvp/MovementRulesFile.hpp"
 #include "RetroFPS/Pvp/ClogLine.hpp"
 #include "RetroFPS/Pvp/IngressStatistics.hpp"
 #include "RetroFPS/Pvp/IpcHost.hpp"
@@ -37,7 +38,7 @@ int main(int argc,char** argv) {
     const auto utf8Console=Engine::Os::Console::Utf8ConsoleOutput::Enable();
     try {
         std::string listen="127.0.0.1:27016";
-        std::optional<std::filesystem::path> explicitArena;
+        std::optional<std::filesystem::path> explicitArena,explicitMovementRules;
         std::filesystem::path movementTrace,ingressTraceOverride,logPath;
         // UTF-8 arguments on every platform (the narrow argv is the ANSI code page on Windows).
         const auto commandLine=Engine::Os::Console::CommandLineUtf8(argc,argv);
@@ -53,12 +54,14 @@ int main(int argc,char** argv) {
             const std::string& argument=arguments[index];
             if(argument=="--help") {
                 std::cout<<"Match runtime: [--arena path (default: the release arena pvp_corners.json)] [--listen 127.0.0.1:27016]\n"
+                           "  [--movement-rules path (default: the release movement_rules.json)]\n"
                            "  [--movement-trace path [--ingress-trace path (default: next to it, -commands.jsonl -> -ingress.jsonl)]]\n"
                            "  (with a movement trace, the shadow records go next to it: -commands.jsonl -> -shots.jsonl)\n"
                            "  [--log path (also append console output, timestamped)]\n";return 0;
             }
             if(index+1>=arguments.size()){std::cerr<<"Missing argument\n";return 2;}
             if(argument=="--arena") explicitArena=pathArgument(arguments[++index]);
+            else if(argument=="--movement-rules") explicitMovementRules=pathArgument(arguments[++index]);
             else if(argument=="--listen") listen=arguments[++index];
             else if(argument=="--movement-trace") movementTrace=pathArgument(arguments[++index]);
             else if(argument=="--ingress-trace") ingressTraceOverride=pathArgument(arguments[++index]);
@@ -90,6 +93,14 @@ int main(int argc,char** argv) {
         auto arena=fps::pvp::Arena::Load(arenaPath,error);
         if(!arena){std::cerr<<error<<'\n';return 1;}
         std::clog<<"[ObjectFPS/PvP Match] arena id="<<arena->id<<" version="<<arena->version<<" spawns="<<arena->spawns.size()<<'\n';
+        // protocol-v8 section 3: the movement rules data; invalid rules stop the Match.
+        const auto rulesPath=explicitMovementRules ? *explicitMovementRules
+            : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"movement_rules.json";
+        const auto stance=fps::pvp::LoadStanceRules(rulesPath,*arena,error);
+        if(!stance){std::cerr<<error<<'\n';return 1;}
+        std::clog<<"[ObjectFPS/PvP Match] movement rules file="<<Engine::Os::Files::PathForMessage(rulesPath)
+                 <<" crouch_body_height="<<stance->crouchBodyHeight<<" crouch_eye_height="<<stance->crouchEyeHeight
+                 <<" crouch_speed_scale="<<stance->crouchSpeedScale<<" sprint_speed_scale="<<stance->sprintSpeedScale<<'\n';
         if(!movementTrace.empty())
             std::clog<<"[ObjectFPS/PvP Match] trace files movement="<<Engine::Os::Files::PathForMessage(movementTrace)
                      <<" ingress="<<Engine::Os::Files::PathForMessage(ingressTracePath)
@@ -99,7 +110,7 @@ int main(int argc,char** argv) {
         if(!ingressTracePath.empty()) ingressTrace.emplace(ingressTracePath);
         std::optional<fps::pvp::MatchShotTraceFile> shotTrace;
         if(const auto path=fps::pvp::MatchShotTracePath(movementTrace);!path.empty()) shotTrace.emplace(path);
-        fps::pvp::MatchRuntimeHost runtime(*arena);
+        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance);
         fps::pvp::IpcHost ipc(runtime,*arena);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}
         if(!ipc.Start(listen,error)){std::cerr<<error<<'\n';return 1;}

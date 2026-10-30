@@ -20,8 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 func TestCreateRoomWaitsForFragmentedJSON(t *testing.T) {
@@ -94,7 +94,7 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 		f.conn = conn
 		f.mu.Unlock()
 		ready := envelope()
-		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
+		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CrouchBodyHeight: 1.2, CrouchEyeHeight: 1, CrouchSpeedScale: .5, SprintSpeedScale: 1, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
 		f.send(ready)
 		for {
 			b, err := framing.ReadFrame(conn)
@@ -199,8 +199,7 @@ func (f *fakeRuntime) quiet(t *testing.T) {
 }
 
 type credentials struct {
-	MatchID   uint64 `json:"match_id"`
-	PlayerID  uint64 `json:"player_id"`
+	PlayerID  uint32 `json:"player_id"`
 	SessionID uint64 `json:"session_id"`
 	Token     string `json:"session_token"`
 	UDPIP     string `json:"udp_ip"`
@@ -232,6 +231,10 @@ func reserve(t *testing.T, s *Server, id string) credentials {
 	status, body := post(t, s, "/rooms/1/join", map[string]any{"request_id": id, "protocol_version": adapter.ClientVersion})
 	if status != http.StatusOK {
 		t.Fatalf("join %d: %s", status, body)
+	}
+	// pv8 §2a: match_id had no reader and left the join reply.
+	if bytes.Contains(body, []byte("match_id")) {
+		t.Fatalf("join reply still carries match_id: %s", body)
 	}
 	var c credentials
 	if err := json.Unmarshal(body, &c); err != nil {
@@ -339,12 +342,17 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	if err := proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome); err != nil || welcome.PlayerId != c.PlayerID || welcome.TickRate != 60 || welcome.ArenaDigest != testArenaDigest {
 		t.Fatalf("welcome %v %v", &welcome, err)
 	}
+	// pv8 §3: the Match's movement rules reach the Client as Ready carried them.
+	if welcome.CrouchBodyHeight != 1.2 || welcome.CrouchEyeHeight != 1 || welcome.CrouchSpeedScale != .5 || welcome.SprintSpeedScale != 1 {
+		t.Fatalf("welcome movement rules %v", &welcome)
+	}
 	sendPacket(t, p, c, 4, adapter.Hello, &client.Hello{SessionToken: c.Token})
 	receivePacket(t, p, adapter.Welcome)
 	f.quiet(t)
-	sendPacket(t, p, c, 5, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1, Yaw: .5}, {Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
+	sendPacket(t, p, c, 5, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1, Yaw: .5}, {Sequence: 2, MoveForward: 1, CrouchHeld: true}, {Sequence: 3, SprintHeld: true}}})
 	in := f.next(t).GetInput()
-	if in == nil || in.PlayerId != c.PlayerID || len(in.Commands) != 3 || in.Commands[0].Sequence != 1 || in.Commands[2].Sequence != 3 {
+	if in == nil || in.PlayerId != c.PlayerID || len(in.Commands) != 3 || in.Commands[0].Sequence != 1 || in.Commands[2].Sequence != 3 ||
+		in.Commands[0].CrouchHeld || !in.Commands[1].CrouchHeld || in.Commands[1].SprintHeld || !in.Commands[2].SprintHeld {
 		t.Fatalf("bad input %v", in)
 	}
 	// Redundant batches remain valid after the mailbox drains, and reach the
@@ -614,6 +622,10 @@ func TestRoomsAndJoinForwardTheArenaDigest(t *testing.T) {
 	if err != nil || len(rooms.Rooms) != 1 || rooms.Rooms[0]["arena_digest"] != json.Number(strconv.FormatUint(testArenaDigest, 10)) {
 		t.Fatalf("room list %v %v", rooms, err)
 	}
+	// pv8 §2a: match_id had no reader and left the room list.
+	if _, found := rooms.Rooms[0]["match_id"]; found {
+		t.Fatalf("room list still carries match_id: %v", rooms)
+	}
 	reserve(t, s, "digest")
 }
 
@@ -795,7 +807,7 @@ func TestResultsOfAPlayerNotActiveAreInertAndItsIdentityNeverReturns(t *testing.
 	s, f := newTestServer(t)
 	post(t, s, "/rooms", map[string]any{})
 	shotBatch := &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}
-	results := func(player uint64) {
+	results := func(player uint32) {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_ActionResults{ActionResults: &runtime.ActionResults{PlayerId: player, Decisions: []*runtime.ShotDecision{decision(1)}}}
 		f.send(e)

@@ -38,10 +38,11 @@ func TestIntervalSummaryUsesNearestRankOverManySamples(t *testing.T) {
 func TestSendStatisticsLineKeepsEveryKey(t *testing.T) {
 	got := sendStatisticsLine(7, 10*time.Second+3*time.Millisecond,
 		intervalWindow{count: 180, summary: "55.1/66.8/70.2/80.0", minimum: "16.9"},
-		intervalWindow{count: 300, summary: "33.3/33.5/34.1/40.0", minimum: "30.2"}, noIntervals)
+		intervalWindow{count: 300, summary: "33.3/33.5/34.1/40.0", minimum: "30.2"}, noIntervals, "120/180/190/203", "-")
 	want := "player send statistics player=7 window_ms=10003 results=180 results_interval_ms=55.1/66.8/70.2/80.0 " +
 		"snapshots=300 snapshot_interval_ms=33.3/33.5/34.1/40.0 link_actions=0 link_action_interval_ms=- " +
-		"results_min_interval_ms=16.9 snapshot_min_interval_ms=30.2 link_action_min_interval_ms=-"
+		"results_min_interval_ms=16.9 snapshot_min_interval_ms=30.2 link_action_min_interval_ms=- " +
+		"results_bytes=120/180/190/203 snapshot_bytes=-"
 	if got != want {
 		t.Fatalf("\n got %s\nwant %s", got, want)
 	}
@@ -55,16 +56,26 @@ func TestSendStatisticsRecordCompletedWritesPerPlayerAndChannel(t *testing.T) {
 	}
 	for i := range 3 {
 		at := now.Add(time.Duration(i) * 33 * time.Millisecond)
-		s.actionWritten(7, at)
-		s.snapshotWritten(7, at)
+		s.actionWritten(7, at, 100+i)
+		s.snapshotWritten(7, at, 400+i)
 		s.link.actionWritten(7, at)
 	}
-	s.snapshotWritten(99, now) // not a player: ignored
+	s.snapshotWritten(99, now, 1) // not a player: ignored
 	if got := p.sent.results.take(); got.count != 3 || got.summary != "33.0/33.0/33.0/33.0" || got.minimum != "33.0" {
 		t.Fatalf("results %+v", got)
 	}
 	if got := p.sent.snapshots.take(); got.count != 3 {
 		t.Fatalf("snapshots %+v", got)
+	}
+	// pv8-obs-bytes: each completed write's datagram size, one window at a time.
+	if got := p.sent.resultBytes.take(); got != "101/102/102/102" {
+		t.Fatalf("result bytes %s", got)
+	}
+	if got := p.sent.snapshotBytes.take(); got != "401/402/402/402" {
+		t.Fatalf("snapshot bytes %s", got)
+	}
+	if got := p.sent.snapshotBytes.take(); got != "-" {
+		t.Fatalf("snapshot bytes after take %s", got)
 	}
 	links := s.link.takeActionStatistics()
 	if got := links[7]; got.count != 3 || len(links) != 1 {

@@ -44,7 +44,7 @@ var stateRoots = []any{
 	Config{}, Server{}, reservation{}, outbound{}, snapshotFrame{}, queuedControl{}, playerIngressLine{},
 	joinRequest{}, runtimeLink{}, queuedMessage{}, linkWrite{}, dataKey{}, resultSlot{}, dropEvent{},
 	dropLedger{}, dropStream{}, clockSync{}, clockPoint{}, clockStamp{}, clockWindow{}, sessionEcho{},
-	intervalStats{}, intervalWindow{}, sendStatistics{}, ingressKey{}, protocolError{},
+	intervalStats{}, intervalWindow{}, sendStatistics{}, sizeStats{}, ingressKey{}, protocolError{},
 }
 
 // fieldClasses: "Type.field" for a field of a named type of this package, and
@@ -129,6 +129,9 @@ var fieldClasses = map[string]string{
 	"intervalWindow.count":    classDiagnostic, "intervalWindow.summary": classDiagnostic,
 	"intervalWindow.minimum": classDiagnostic,
 	"sendStatistics.results": classDiagnostic, "sendStatistics.snapshots": classDiagnostic,
+	// v8 pv8-obs-bytes: datagram sizes of completed writes, logged and never read by a decision.
+	"sendStatistics.resultBytes": classDiagnostic, "sendStatistics.snapshotBytes": classDiagnostic,
+	"sizeStats.sizes": classDiagnostic,
 	"ingressKey.outcome": classTable, "ingressKey.reason": classTable, "ingressKey.kind": classTable,
 	"ingressKey.unit": classTable,
 }

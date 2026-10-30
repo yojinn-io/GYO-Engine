@@ -532,3 +532,31 @@ TEST_CASE("PvP ClientSimulation drops a pending jump while controls are unavaila
     CHECK(std::any_of(jumped->commands.begin(), jumped->commands.end(),
         [before](const MovementCommand& command) { return command.sequence > before && command.jumpRequested; }));
 }
+
+// v8-product-crouch W4: the prediction moves by the Welcome movement rules, not
+// by local constants (protocol-v8 section 3): a slower crouch speed in Welcome
+// predicts a shorter crouched walk.
+TEST_CASE("PvP ClientSimulation predicts with the stance rules Welcome delivered") {
+    const auto walked = [](float crouchSpeedScale) {
+        const auto arena = SeamArena();
+        PvpMatch match(arena);
+        std::string error;
+        REQUIRE(match.Join(1, error));
+        ClientSimulation client(arena);
+        match.Tick({1, MovementTickSeconds});
+        MovementRules rules{arena.jumpHeight, arena.gravity};
+        rules.stance.crouchSpeedScale = crouchSpeedScale;
+        client.Observe(match.Snapshot().players.front(), 1, rules);
+        const PredictionElapsedTime::Clock::time_point origin{};
+        static_cast<void>(client.Frame(origin, {}));
+        const auto start = client.Observation().predictedPosition;
+        ClientInputSample input{1, 0, 0, 0, false, true, true};
+        for (int frame = 1; frame <= 30; ++frame)
+            static_cast<void>(client.Frame(origin + std::chrono::milliseconds(frame * 1000 / 60), input));
+        const auto end = client.Observation().predictedPosition;
+        return std::hypot(end.x - start.x, end.z - start.z);
+    };
+    const double half = walked(0.5F), quarter = walked(0.25F);
+    REQUIRE(half > 0);
+    CHECK(quarter == doctest::Approx(half / 2).epsilon(0.05));
+}

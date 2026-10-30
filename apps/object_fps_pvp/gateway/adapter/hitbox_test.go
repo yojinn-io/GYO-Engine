@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // pv7 §7: a player hit is BODY or HEAD, every other decision UNSPECIFIED; an
@@ -80,14 +80,14 @@ func TestMaximumShotDamageBoundsTheRulesAndTheDamage(t *testing.T) {
 // never validated, and part of comparing a repeated id within a batch.
 func TestShotRequestCarriesEAndSAndTheViewTick(t *testing.T) {
 	shot := &client.ShotRequest{ActionId: 1, LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Yaw: proto.Float32(0),
-		Pitch: proto.Float32(0), MovementEpoch: math.MaxUint64, CommandSequence: 0, ViewTickQ16: math.MaxUint64}
+		Pitch: proto.Float32(0), MovementEpoch: math.MaxUint32, CommandSequence: 0, ViewTickQ16: math.MaxUint64}
 	reload := &client.ShotRequest{ActionId: 2, LifeGeneration: 1, Kind: client.ActionKind_ACTION_RELOAD, ViewTickQ16: 99}
 	payload, _ := proto.Marshal(&client.ActionBatch{Shots: []*client.ShotRequest{shot, reload}})
 	out, err := DecodeActions(payload, 3)
 	if err != nil || len(out.Shots) != 2 {
 		t.Fatalf("decode: %v %v", out, err)
 	}
-	if s := out.Shots[0]; s.MovementEpoch != math.MaxUint64 || s.CommandSequence != 0 || s.ViewTickQ16 != math.MaxUint64 {
+	if s := out.Shots[0]; s.MovementEpoch != math.MaxUint32 || s.CommandSequence != 0 || s.ViewTickQ16 != math.MaxUint64 {
 		t.Fatalf("shot content changed: %v", s)
 	}
 	if out.Shots[1].ViewTickQ16 != 99 {

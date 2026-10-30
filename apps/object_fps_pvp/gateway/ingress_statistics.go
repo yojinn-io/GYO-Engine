@@ -443,7 +443,7 @@ var (
 		ingressOther: playerDropStaleSequenceOtherPackets}
 )
 
-func playerIngressStatisticsLine(player uint64, window time.Duration, final bool, counts *playerIngressCounts) string {
+func playerIngressStatisticsLine(player uint32, window time.Duration, final bool, counts *playerIngressCounts) string {
 	head := fmt.Sprintf("player ingress statistics version=%d player=%d window_ms=%d final=%d",
 		ingressStatisticsVersion, player, window.Milliseconds(), finalFlag(final))
 	return ingressLine(head, playerIngressKeys[:], counts[:])

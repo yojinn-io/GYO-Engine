@@ -13,8 +13,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // actionWire stands in for the runtime connection of a link's writer: it
@@ -22,12 +22,12 @@ import (
 // fails every write while fail is set.
 type actionWire struct {
 	fail    bool
-	written map[uint64]uint64 // player -> action batches written
+	written map[uint32]uint64 // player -> action batches written
 }
 
 func replaceActionWire(t *testing.T) *actionWire {
 	t.Helper()
-	wire := &actionWire{written: map[uint64]uint64{}}
+	wire := &actionWire{written: map[uint32]uint64{}}
 	replaceRuntimeWrite(t, func(_ *framing.TCPConnection, payload []byte, _ time.Duration) error {
 		if wire.fail {
 			return errors.New("injected write failure")
@@ -44,7 +44,7 @@ func replaceActionWire(t *testing.T) *actionWire {
 	return wire
 }
 
-func shotBatch(player, ack uint64, ids ...uint64) *runtime.ActionBatch {
+func shotBatch(player, ack uint32, ids ...uint32) *runtime.ActionBatch {
 	in := &runtime.ActionBatch{PlayerId: player, AcknowledgedThrough: ack}
 	for _, id := range ids {
 		in.Shots = append(in.Shots, shot(id))
@@ -54,7 +54,7 @@ func shotBatch(player, ack uint64, ids ...uint64) *runtime.ActionBatch {
 
 // actionPackets reads one player's action-packet counters from the link:
 // written, overflowed, cleared on close, abandoned.
-func actionPackets(l *runtimeLink, player uint64) (written, overflow, cleared, abandoned uint64) {
+func actionPackets(l *runtimeLink, player uint32) (written, overflow, cleared, abandoned uint64) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if c := l.ingress[player]; c != nil {
@@ -108,14 +108,14 @@ func TestLinkForwardsEachActionBatchAsItCame(t *testing.T) {
 // write. A Leave or an eviction drops none: queued batches still reach the
 // Match in arrival order.
 func TestLinkConservesActionBatchesAcrossEveryExit(t *testing.T) {
-	players := []uint64{1, 2, 3}
+	players := []uint32{1, 2, 3}
 	var exercised [4]int // seeds in which each exit was non-zero
 	for seed := int64(1); seed <= 300; seed++ {
 		t.Run(fmt.Sprint(seed), func(t *testing.T) {
 			r := rand.New(rand.NewSource(seed))
 			wire := replaceActionWire(t)
 			l := dialedLink(t)
-			handed := map[uint64]uint64{}
+			handed := map[uint32]uint64{}
 			var held []linkWrite
 			holding := false
 			for step := 0; step < 200; step++ {
@@ -127,7 +127,7 @@ func TestLinkConservesActionBatchesAcrossEveryExit(t *testing.T) {
 						n = maxQueuedInputs + r.Intn(8)
 					}
 					for range n {
-						if err := l.actions(shotBatch(p, uint64(r.Intn(3)), uint64(1+r.Intn(40))), dropEvent{}); err != nil {
+						if err := l.actions(shotBatch(p, uint32(r.Intn(3)), uint32(1+r.Intn(40))), dropEvent{}); err != nil {
 							t.Fatal(err)
 						}
 						handed[p]++
@@ -230,7 +230,7 @@ func TestActionDropsReachTheWindowAndFinalLines(t *testing.T) {
 	lines := logs.lines(t)
 	checkIngressLines(t, "action drops", lines, s.rateRejectedPackets.Load())
 	type seen struct{ handed, cleared uint64 }
-	got := map[uint64]seen{}
+	got := map[uint32]seen{}
 	for _, line := range lines {
 		if line.player != 0 {
 			g := got[line.player]
@@ -238,7 +238,7 @@ func TestActionDropsReachTheWindowAndFinalLines(t *testing.T) {
 				g.cleared + line.counts[playerDropClearedOnCloseActionsPackets]}
 		}
 	}
-	if want := (map[uint64]seen{7: {1, 1}, 9: {1, 1}}); fmt.Sprint(got) != fmt.Sprint(want) {
+	if want := (map[uint32]seen{7: {1, 1}, 9: {1, 1}}); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("players' (handed, cleared on close) action packets %v, want %v", got, want)
 	}
 }
@@ -250,7 +250,7 @@ func TestActionQueueOverflowReportsTheDroppedBatches(t *testing.T) {
 	s, p, endpoint, now := actionFixture(t)
 	sent := []*client.ActionBatch{{AcknowledgedThrough: 5}, shotsMessage(3, 1, 2)}
 	for k := range maxQueuedActions {
-		sent = append(sent, shotsMessage(uint64(10+k)))
+		sent = append(sent, shotsMessage(uint32(10+k)))
 	}
 	for k, b := range sent {
 		deliverActions(t, s, p, endpoint, uint32(k+2), b, now.Add(time.Duration(k)*10*time.Millisecond))
@@ -314,17 +314,17 @@ func TestRuntimeLinkWritesAnActionAtOnce(t *testing.T) {
 func TestQueueBoundsInputsAndActionsApart(t *testing.T) {
 	l := dialedLink(t)
 	l.drops = newDropLedger()
-	for k := uint64(1); k <= 10; k++ {
+	for k := uint32(1); k <= 10; k++ {
 		if err := l.actions(shotBatch(1, 0, k), dropEvent{}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for k := uint64(1); k <= maxQueuedInputs+3; k++ {
+	for k := uint32(1); k <= maxQueuedInputs+3; k++ {
 		if err := l.input(linkWindow(1, 1, k, k), dropEvent{}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	for k := uint64(11); k <= maxQueuedActions+2; k++ {
+	for k := uint32(11); k <= maxQueuedActions+2; k++ {
 		if err := l.actions(shotBatch(1, 0, k), dropEvent{}); err != nil {
 			t.Fatal(err)
 		}
@@ -334,7 +334,7 @@ func TestQueueBoundsInputsAndActionsApart(t *testing.T) {
 		t.Fatalf("overflowed input windows %d (want 3), action batches %d (want 2)",
 			totals[playerDropIpcQueueOverflowInputPackets], totals[playerDropIpcQueueOverflowActionsPackets])
 	}
-	var inputs, actions []uint64
+	var inputs, actions []uint32
 	for _, e := range l.batch() {
 		if in := e.GetInput(); in != nil {
 			inputs = append(inputs, in.Commands[0].Sequence)
@@ -353,7 +353,7 @@ func TestQueueBoundsInputsAndActionsApart(t *testing.T) {
 func TestPlayerDataKeepsArrivalOrderAcrossKinds(t *testing.T) {
 	l := dialedLink(t)
 	var want []string
-	add := func(player uint64, kind string, n uint64) {
+	add := func(player uint32, kind string, n uint32) {
 		var err error
 		if kind == "input" {
 			err = l.input(linkWindow(player, 1, n, n), dropEvent{})

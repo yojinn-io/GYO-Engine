@@ -1,14 +1,25 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
+#include "gyo/ui_editor/ElementClipboard.hpp"
+#include "gyo/ui_editor/ElementSchema.hpp"
 #include "gyo/ui_editor/FileService.hpp"
+#include "gyo/ui_editor/GizmoMath.hpp"
+#include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
+#include "engine/ui/UiDocumentCodec.hpp"
+#include "engine/ui/UiRuntime.hpp"
+
+#include <nlohmann/json.hpp>
+
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <thread>
 
 namespace {
 
@@ -326,9 +337,462 @@ void TestContentHashIsFnv1a(const std::filesystem::path& root) {
 
 } // namespace
 
+// A dialog result posted from another thread (as SDL may call back) is taken
+// once, in posting order, by the editor's thread.
+void TestPathDialogInbox() {
+    PathDialogInbox inbox;
+    std::thread poster([&inbox] {
+        inbox.Post({.purpose = PathDialogPurpose::OpenDocument,
+                    .outcome = PathDialogOutcome::Chosen,
+                    .path = "a.json"});
+        inbox.Post({.purpose = PathDialogPurpose::AssetFolder,
+                    .outcome = PathDialogOutcome::Cancelled});
+    });
+    poster.join();
+    const auto taken = inbox.Take();
+    Expect(taken.size() == 2, "inbox returns every posted result");
+    Expect(taken.size() == 2 && taken[0].path == "a.json" &&
+               taken[1].purpose == PathDialogPurpose::AssetFolder,
+        "inbox keeps posting order");
+    Expect(inbox.Take().empty(), "a taken result is not returned again");
+}
+
+// Canvas gizmo rule without ImGui. The parent is a 1280x720 design canvas at
+// the screen origin, drawn at designScale screen pixels per design pixel.
+using Engine::Math::Rect;
+using Engine::Math::Vec2;
+
+constexpr Vec2 kParentDesignSize{1280.0F, 720.0F};
+
+// The element's rectangle in design pixels from the parent's corner, by the
+// gyo.ui v1 layout rule.
+Rect DesignRect(const GizmoRect& rect) {
+    const Vec2 size{kParentDesignSize.x * (rect.anchorMax.x - rect.anchorMin.x) + rect.sizeDelta.x,
+        kParentDesignSize.y * (rect.anchorMax.y - rect.anchorMin.y) + rect.sizeDelta.y};
+    const Vec2 reference{
+        kParentDesignSize.x * (rect.anchorMin.x + (rect.anchorMax.x - rect.anchorMin.x) * rect.pivot.x),
+        kParentDesignSize.y * (rect.anchorMin.y + (rect.anchorMax.y - rect.anchorMin.y) * rect.pivot.y)};
+    return {reference.x + rect.position.x - rect.pivot.x * size.x,
+        reference.y + rect.position.y - rect.pivot.y * size.y, size.x, size.y};
+}
+
+GizmoFrame MakeFrame(const GizmoRect& rect, const float scale = 1.0F) {
+    const Rect element = DesignRect(rect);
+    return {{0.0F, 0.0F, kParentDesignSize.x * scale, kParentDesignSize.y * scale},
+        {element.x * scale, element.y * scale, element.width * scale, element.height * scale}, rect, scale};
+}
+
+// Point anchors at the canvas centre; the element is 520,324 240x72.
+const GizmoRect kCentered{{0.5F, 0.5F}, {0.5F, 0.5F}, {0.5F, 0.5F}, {0.0F, 0.0F}, {240.0F, 72.0F}};
+// The lobby buttons: point anchors at the top-left corner; 220,238 840x48.
+const GizmoRect kLobby{{0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, {220.0F, 238.0F}, {840.0F, 48.0F}};
+// Stretched anchors with a 20 px margin; 20,20 1240x680.
+const GizmoRect kStretch{{0.0F, 0.0F}, {1.0F, 1.0F}, {0.5F, 0.5F}, {0.0F, 0.0F}, {-40.0F, -40.0F}};
+
+GizmoRect Drag(const GizmoHandle handle, const GizmoFrame& frame, const Vec2 delta, const GizmoSnap snap = {}) {
+    constexpr Vec2 grab{100.0F, 100.0F};
+    return DragGizmo(handle, frame, grab, grab + delta, snap);
+}
+
+bool Near(const Vec2 value, const float x, const float y) {
+    return std::abs(value.x - x) < 1e-5F && std::abs(value.y - y) < 1e-5F;
+}
+
+bool Near(const Rect value, const Rect expected) {
+    return std::abs(value.x - expected.x) < 1e-3F && std::abs(value.y - expected.y) < 1e-3F &&
+        std::abs(value.width - expected.width) < 1e-3F && std::abs(value.height - expected.height) < 1e-3F;
+}
+
+bool SameAnchors(const GizmoRect& left, const GizmoRect& right) {
+    return Near(left.anchorMin, right.anchorMin.x, right.anchorMin.y) &&
+        Near(left.anchorMax, right.anchorMax.x, right.anchorMax.y) &&
+        Near(left.pivot, right.pivot.x, right.pivot.y);
+}
+
+void TestGizmoHit() {
+    const GizmoFrame lobby = MakeFrame(kLobby);
+    const GizmoPoints points = ComputeGizmoPoints(lobby);
+    Expect(Near(points.anchorMinHandle, -9.0F, -9.0F) && Near(points.anchorMaxHandle, 9.0F, -9.0F),
+        "point anchors put both anchor handles beside the parent corner, not the element");
+    Expect(Near(points.pivotHandle, 220.0F, 247.0F), "the pivot handle sits below the pivot");
+    Expect(HitGizmoHandle(lobby, {9.0F, -9.0F}, false) == GizmoHandle::AnchorMax, "a click on a handle grabs it");
+    Expect(HitGizmoHandle(lobby, {0.0F, -9.0F}, false) == GizmoHandle::AnchorMax,
+        "a tie between the anchor handles goes to anchor max");
+    Expect(HitGizmoHandle(lobby, {220.0F, 238.0F}, true) == GizmoHandle::TopLeft,
+        "a corner nearer than the pivot handle is grabbed");
+    Expect(HitGizmoHandle(lobby, {1060.0F, 286.0F}, true) == GizmoHandle::BottomRight, "the far corner is grabbed");
+    Expect(HitGizmoHandle(lobby, {600.0F, 240.0F}, true) == GizmoHandle::Top, "near the top edge grabs it");
+    Expect(HitGizmoHandle(lobby, {600.0F, 284.0F}, true) == GizmoHandle::Bottom, "near the bottom edge grabs it");
+    Expect(HitGizmoHandle(lobby, {1058.0F, 262.0F}, true) == GizmoHandle::Right, "near the right edge grabs it");
+    Expect(HitGizmoHandle(lobby, {222.0F, 270.0F}, true) == GizmoHandle::Left, "near the left edge grabs it");
+    Expect(HitGizmoHandle(lobby, {600.0F, 262.0F}, true) == GizmoHandle::Move,
+        "inside the element on top grabs the body");
+    Expect(!HitGizmoHandle(lobby, {600.0F, 262.0F}, false).has_value(),
+        "inside the element under a child grabs nothing, so the child can be selected");
+    Expect(!HitGizmoHandle(lobby, {600.0F, 400.0F}, true).has_value(), "away from the element grabs nothing");
+}
+
+// The reported defect (ui-editor-review.md S-5): with equal anchors each
+// anchor handle moved in only one direction per axis.
+void TestGizmoAnchorDrag() {
+    const GizmoFrame centered = MakeFrame(kCentered);
+    const Rect centeredRect{520.0F, 324.0F, 240.0F, 72.0F};
+    GizmoRect dragged = Drag(GizmoHandle::AnchorMax, centered, {0.0F, -50.0F});
+    Expect(Near(dragged.anchorMax, 0.5F, 0.5F - 50.0F / 720.0F) && Near(dragged.anchorMin, 0.5F, 0.5F - 50.0F / 720.0F),
+        "equal anchors move up together from anchor max");
+    Expect(Near(DesignRect(dragged), centeredRect), "moving the anchors keeps the element's rectangle");
+    dragged = Drag(GizmoHandle::AnchorMin, centered, {0.0F, 50.0F});
+    Expect(Near(dragged.anchorMin, 0.5F, 0.5F + 50.0F / 720.0F) && Near(dragged.anchorMax, 0.5F, 0.5F + 50.0F / 720.0F),
+        "equal anchors move down together from anchor min");
+    Expect(Near(DesignRect(dragged), centeredRect), "moving the anchors down keeps the rectangle");
+    dragged = Drag(GizmoHandle::AnchorMax, centered, {50.0F, 50.0F});
+    Expect(Near(dragged.anchorMin, 0.5F, 0.5F) && Near(dragged.anchorMax, 0.5F + 50.0F / 1280.0F, 0.5F + 50.0F / 720.0F),
+        "dragging anchor max away from anchor min splits them");
+    Expect(Near(DesignRect(dragged), centeredRect), "splitting the anchors keeps the rectangle");
+
+    const GizmoFrame lobby = MakeFrame(kLobby);
+    dragged = Drag(GizmoHandle::AnchorMin, lobby, {50.0F, 50.0F});
+    Expect(Near(dragged.anchorMin, 50.0F / 1280.0F, 50.0F / 720.0F) && Near(dragged.anchorMax, 50.0F / 1280.0F, 50.0F / 720.0F),
+        "anchor min at the corner pushes anchor max along");
+    Expect(Near(dragged.position, 170.0F, 188.0F) && Near(DesignRect(dragged), {220.0F, 238.0F, 840.0F, 48.0F}),
+        "position compensates the anchor move");
+    dragged = Drag(GizmoHandle::AnchorMax, lobby, {0.0F, -50.0F});
+    Expect(Near(dragged.anchorMax, 0.0F, 0.0F) && Near(dragged.position, 220.0F, 238.0F),
+        "anchors stay inside the parent");
+    Expect(Near(Drag(GizmoHandle::AnchorMax, centered, {1000.0F, 0.0F}).anchorMax, 1.0F, 0.5F),
+        "anchor max stops at the parent's right edge");
+}
+
+void TestGizmoMoveAndResize() {
+    const GizmoFrame lobby = MakeFrame(kLobby);
+    GizmoRect dragged = Drag(GizmoHandle::Move, lobby, {13.0F, -7.0F});
+    Expect(Near(dragged.position, 233.0F, 231.0F) && Near(dragged.sizeDelta, 840.0F, 48.0F) && SameAnchors(dragged, kLobby),
+        "the body moves position only");
+
+    const GizmoFrame centered = MakeFrame(kCentered);
+    dragged = Drag(GizmoHandle::Right, centered, {30.0F, 5.0F});
+    Expect(Near(DesignRect(dragged), {520.0F, 324.0F, 270.0F, 72.0F}) && SameAnchors(dragged, kCentered),
+        "the right edge resizes and the left edge stays");
+    Expect(Near(DesignRect(Drag(GizmoHandle::Left, centered, {300.0F, 0.0F})), {760.0F, 324.0F, 0.0F, 72.0F}),
+        "the left edge stops at the right edge");
+    Expect(Near(DesignRect(Drag(GizmoHandle::TopLeft, centered, {-10.0F, -20.0F})), {510.0F, 304.0F, 250.0F, 92.0F}),
+        "a corner moves both of its edges");
+    Expect(Near(DesignRect(Drag(GizmoHandle::Bottom, centered, {40.0F, 8.0F})), {520.0F, 324.0F, 240.0F, 80.0F}),
+        "an edge ignores the other axis");
+
+    dragged = Drag(GizmoHandle::Right, MakeFrame(kStretch), {-40.0F, 0.0F});
+    Expect(Near(DesignRect(dragged), {20.0F, 20.0F, 1200.0F, 680.0F}) && Near(dragged.sizeDelta, -80.0F, -40.0F),
+        "stretched anchors stay and size_delta takes the change");
+    Expect(Near(DesignRect(Drag(GizmoHandle::Move, MakeFrame(kLobby, 2.0F), {20.0F, 0.0F})), {230.0F, 238.0F, 840.0F, 48.0F}),
+        "screen pixels become design pixels at the design scale");
+}
+
+void TestGizmoSnapAndPivot() {
+    const GizmoSnap grid{true, 8.0F};
+    // 220 + 13 = 233 snaps to 232; the top edge (238, off the grid) did not move.
+    Expect(Near(Drag(GizmoHandle::Move, MakeFrame(kLobby), {13.0F, 0.0F}, grid).position, 232.0F, 238.0F),
+        "snap rounds only the moved axis of the body");
+    // At scale 2, 13 screen px is 6.5 design px: 226.5 snaps to 224.
+    Expect(Near(Drag(GizmoHandle::Move, MakeFrame(kLobby, 2.0F), {13.0F, 0.0F}, grid).position, 224.0F, 238.0F),
+        "snap uses the grid in design pixels");
+    const GizmoFrame centered = MakeFrame(kCentered);
+    Expect(Near(DesignRect(Drag(GizmoHandle::Right, centered, {13.0F, 0.0F}, grid)), {520.0F, 324.0F, 256.0F, 72.0F}),
+        "snap rounds the moved edge: 773 to 776");
+    GizmoRect dragged = Drag(GizmoHandle::AnchorMax, centered, {13.0F, 0.0F}, grid);
+    Expect(Near(dragged.anchorMax, 656.0F / 1280.0F, 0.5F) && Near(dragged.anchorMin, 0.5F, 0.5F),
+        "snap rounds the anchor to the grid: 653 to 656");
+
+    dragged = Drag(GizmoHandle::Pivot, centered, {-60.0F, -18.0F});
+    Expect(Near(dragged.pivot, 0.25F, 0.25F), "pivot moves relative to the element's own bounds");
+    Expect(Near(dragged.position, -60.0F, -18.0F) && Near(DesignRect(dragged), {520.0F, 324.0F, 240.0F, 72.0F}),
+        "moving the pivot keeps the rectangle");
+    Expect(Near(Drag(GizmoHandle::Pivot, centered, {500.0F, 0.0F}).pivot, 1.0F, 0.5F), "pivot stays inside the element");
+}
+
+void TestGizmoResizeModifiers() {
+    const GizmoFrame centered = MakeFrame(kCentered);
+    constexpr Vec2 grab{100.0F, 100.0F};
+    const auto drag = [&](const GizmoHandle handle, const Vec2 delta, const GizmoModifiers modifiers) {
+        return DesignRect(DragGizmo(handle, centered, grab, grab + delta, {}, modifiers));
+    };
+    constexpr GizmoModifiers center{.fromCenter = true};
+    constexpr GizmoModifiers aspect{.keepAspect = true};
+    constexpr GizmoModifiers both{.fromCenter = true, .keepAspect = true};
+    Expect(Near(drag(GizmoHandle::Right, {30.0F, 0.0F}, center), {490.0F, 324.0F, 300.0F, 72.0F}),
+        "Alt on an edge moves the opposite edge the other way");
+    Expect(Near(drag(GizmoHandle::TopLeft, {-10.0F, -20.0F}, center), {510.0F, 304.0F, 260.0F, 112.0F}),
+        "Alt on a corner resizes around the centre");
+    Expect(Near(drag(GizmoHandle::BottomRight, {60.0F, 5.0F}, aspect), {520.0F, 324.0F, 300.0F, 90.0F}),
+        "Shift on a corner scales both axes by the larger change");
+    Expect(Near(drag(GizmoHandle::TopLeft, {-60.0F, 0.0F}, aspect), {460.0F, 306.0F, 300.0F, 90.0F}),
+        "Shift keeps the opposite corner");
+    Expect(Near(drag(GizmoHandle::Right, {30.0F, 0.0F}, aspect), {520.0F, 324.0F, 270.0F, 72.0F}),
+        "Shift does not change an edge drag");
+    Expect(Near(drag(GizmoHandle::BottomRight, {60.0F, 5.0F}, both), {460.0F, 306.0F, 360.0F, 108.0F}),
+        "Alt and Shift together scale around the centre");
+    Expect(Near(drag(GizmoHandle::Left, {300.0F, 0.0F}, center), {640.0F, 324.0F, 0.0F, 72.0F}),
+        "Alt stops at zero width at the centre");
+}
+
+// ui_editor Design Invariant 4 (docs/ui_toolchain.md): GizmoMath keeps its
+// own copy of the gyo.ui layout rule to solve position and size_delta. Every
+// result is laid out again by the GYO::Ui evaluator, which must put the
+// element where the drag said: unchanged for anchor and pivot drags, moved or
+// resized by the drag otherwise. The expectations use only evaluator output.
+nlohmann::json GuardDocument(const GizmoRect& child) {
+    const auto vec2 = [](const Vec2 value) { return nlohmann::json::array({value.x, value.y}); };
+    const auto rect = [&vec2](const GizmoRect& value) {
+        return nlohmann::json{{"anchor_min", vec2(value.anchorMin)}, {"anchor_max", vec2(value.anchorMax)},
+            {"pivot", vec2(value.pivot)}, {"position", vec2(value.position)}, {"size_delta", vec2(value.sizeDelta)}};
+    };
+    // The parent is not the root, so the parent's own layout is part of the check.
+    const GizmoRect parent{{0.1F, 0.2F}, {0.9F, 0.95F}, {0.3F, 0.6F}, {17.0F, -11.0F}, {-30.0F, -24.0F}};
+    return nlohmann::json{{"schema", "gyo.ui"}, {"version", 1},
+        {"design_canvas", {{"size", {1280.0, 720.0}}, {"scale_mode", "fit"}}},
+        {"fonts", {{"default", "font.default"}}}, {"default_font", "default"},
+        {"colors", {{"transparent", "#00000000"}}}, {"actions", nlohmann::json::array()},
+        {"bindings", nlohmann::json::array()},
+        {"canvases", nlohmann::json::array({{{"id", "main"}, {"backdrop_color", "transparent"},
+            {"focus_order", nlohmann::json::array()},
+            {"children", nlohmann::json::array({{{"type", "container"}, {"id", "parent"}, {"rect", rect(parent)},
+                {"children", nlohmann::json::array({{{"type", "container"}, {"id", "child"},
+                    {"rect", rect(child)}}})}}})}}})}};
+}
+
+std::optional<std::pair<Rect, Rect>> EvaluateGuard(const GizmoRect& child, const float scale) {
+    auto parsed = Engine::Ui::UiDocumentCodec::Parse(GuardDocument(child).dump(), "gizmo-guard");
+    if (!parsed) {
+        return std::nullopt;
+    }
+    Engine::Ui::UiRuntime runtime;
+    if (!runtime.Initialize(std::make_shared<const Engine::Ui::UiDocument>(std::move(parsed).value())) ||
+        !runtime.ActivateCanvas("main")) {
+        return std::nullopt;
+    }
+    auto evaluated = runtime.EvaluateLayout({}, {1280.0F * scale, 720.0F * scale});
+    if (!evaluated) {
+        return std::nullopt;
+    }
+    std::optional<Rect> parent;
+    std::optional<Rect> element;
+    for (const Engine::Ui::UiEvaluatedElement& entry : evaluated.value()) {
+        if (entry.id == "parent") {
+            parent = entry.boundsPixels;
+        } else if (entry.id == "child") {
+            element = entry.boundsPixels;
+        }
+    }
+    if (!parent || !element) {
+        return std::nullopt;
+    }
+    return std::pair{*parent, *element};
+}
+
+bool NearPixels(const Rect value, const Rect expected) {
+    return std::abs(value.x - expected.x) < 1e-2F && std::abs(value.y - expected.y) < 1e-2F &&
+        std::abs(value.width - expected.width) < 1e-2F && std::abs(value.height - expected.height) < 1e-2F;
+}
+
+void TestGizmoAgreesWithUiEvaluator() {
+    const GizmoRect cases[]{
+        {{0.5F, 0.5F}, {0.5F, 0.5F}, {0.5F, 0.5F}, {12.0F, -7.0F}, {240.0F, 72.0F}},
+        {{0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, {220.0F, 238.0F}, {300.0F, 48.0F}},
+        {{0.2F, 0.1F}, {0.7F, 0.8F}, {0.25F, 0.75F}, {-15.0F, 9.0F}, {-40.0F, 22.0F}},
+        {{1.0F, 1.0F}, {1.0F, 1.0F}, {1.0F, 0.0F}, {-30.0F, 40.0F}, {120.0F, 60.0F}},
+    };
+    struct Step final {
+        GizmoHandle handle;
+        Vec2 delta;     // screen pixels
+        Rect change;    // expected change of the element's screen rectangle
+    };
+    for (const float scale : {1.0F, 2.0F}) {
+        const Step steps[]{
+            {GizmoHandle::AnchorMin, {37.0F, -23.0F}, {}},
+            {GizmoHandle::AnchorMax, {-41.0F, 29.0F}, {}},
+            {GizmoHandle::Pivot, {13.0F, -7.0F}, {}},
+            {GizmoHandle::Move, {12.0F, -8.0F}, {12.0F, -8.0F, 0.0F, 0.0F}},
+            {GizmoHandle::Right, {30.0F, 5.0F}, {0.0F, 0.0F, 30.0F, 0.0F}},
+            {GizmoHandle::TopLeft, {-10.0F, -20.0F}, {-10.0F, -20.0F, 10.0F, 20.0F}},
+        };
+        for (const GizmoRect& start : cases) {
+            const auto before = EvaluateGuard(start, scale);
+            Expect(before.has_value(), "the guard document lays out");
+            if (!before) {
+                continue;
+            }
+            const GizmoFrame frame{before->first, before->second, start, scale};
+            for (const Step& step : steps) {
+                const GizmoRect dragged = DragGizmo(step.handle, frame, {0.0F, 0.0F}, step.delta, {});
+                const auto after = EvaluateGuard(dragged, scale);
+                const Rect expected{before->second.x + step.change.x, before->second.y + step.change.y,
+                    before->second.width + step.change.width, before->second.height + step.change.height};
+                Expect(after.has_value() && NearPixels(after->second, expected),
+                    "the GYO::Ui evaluator places a dragged element where the gizmo intended");
+            }
+        }
+    }
+}
+
+// The editor's element table against GYO::Ui, the authoritative schema. The
+// switch has no default and this test target treats an unhandled enumerator
+// as an error, so a new GYO::Ui element fails the build until the table knows
+// it. Every kind's default element must then pass the codec and be laid out
+// with the focus behaviour, action payload and binding type the table claims.
+std::string_view UiTypeName(const Engine::Ui::UiElementType type) {
+    using Engine::Ui::UiElementType;
+    switch (type) {
+    case UiElementType::Container:
+        return "container";
+    case UiElementType::Panel:
+        return "panel";
+    case UiElementType::Image:
+        return "image";
+    case UiElementType::Text:
+        return "text";
+    case UiElementType::Button:
+        return "button";
+    case UiElementType::HorizontalSlider:
+        return "horizontal_slider";
+    case UiElementType::FixedStepList:
+        return "fixed_step_list";
+    }
+    return {};
+}
+
+std::string_view DeclaredValue(const nlohmann::json& declarations, const nlohmann::json& element,
+    const char* reference, const char* field) {
+    if (!element.contains(reference)) {
+        return {};
+    }
+    for (const nlohmann::json& declaration : declarations) {
+        if (declaration.value("id", std::string{}) == element[reference].get<std::string>()) {
+            return declaration[field].get_ref<const std::string&>();
+        }
+    }
+    return "undeclared";
+}
+
+void TestElementKindsMatchUi() {
+    using Engine::Ui::UiElementType;
+    constexpr UiElementType uiTypes[]{UiElementType::Container, UiElementType::Panel, UiElementType::Image,
+        UiElementType::Text, UiElementType::Button, UiElementType::HorizontalSlider, UiElementType::FixedStepList};
+    Expect(ElementKinds().size() == std::size(uiTypes), "the editor has one kind per GYO::Ui element type");
+    for (const UiElementType type : uiTypes) {
+        Expect(FindElementKind(UiTypeName(type)) != nullptr, "every GYO::Ui element type has an editor kind");
+    }
+
+    for (const ElementKind& kind : ElementKinds()) {
+        const std::string label{kind.type};
+        nlohmann::json document = UiDocumentBridge::CreateDefault();
+        const nlohmann::json element = MakeDefaultElement(document, kind);
+        const std::string id = element.value("id", std::string{});
+        nlohmann::json& canvas = document["canvases"][0];
+        if (kind.focusable) {
+            canvas["focus_order"].push_back(id);
+        }
+        canvas["children"].push_back(element);
+
+        auto parsed = Engine::Ui::UiDocumentCodec::Parse(document.dump(), "element-kind");
+        Expect(parsed.has_value(), label + ": the default element passes the GYO::Ui codec");
+        if (!parsed) {
+            continue;
+        }
+        Engine::Ui::UiRuntime runtime;
+        std::optional<Engine::Ui::UiEvaluatedElement> evaluated;
+        if (runtime.Initialize(std::make_shared<const Engine::Ui::UiDocument>(std::move(parsed).value())) &&
+            runtime.ActivateCanvas("main")) {
+            if (auto layout = runtime.EvaluatePreviewLayout({1280.0F, 720.0F})) {
+                for (const Engine::Ui::UiEvaluatedElement& entry : layout.value()) {
+                    if (entry.id == id) {
+                        evaluated = entry;
+                    }
+                }
+            }
+        }
+        Expect(evaluated.has_value() && UiTypeName(evaluated->type) == kind.type,
+            label + ": GYO::Ui lays the element out as the same type");
+        Expect(evaluated.has_value() && evaluated->interactive == kind.focusable,
+            label + ": focusable matches GYO::Ui's interactive elements");
+        Expect(DeclaredValue(document["actions"], element, "action", "payload") == kind.actionPayload,
+            label + ": the action payload matches the declared action");
+        Expect(DeclaredValue(document["bindings"], element, "binding", "type") == kind.bindingType,
+            label + ": the binding type matches the declared binding");
+        for (const ElementColorField& field : kind.colors) {
+            const bool present = element.contains(field.key) &&
+                (field.source ? element[field.key].is_object() : element[field.key].is_string());
+            Expect(present, label + ": the element carries each color field of its kind");
+        }
+        Expect(element.contains("texture_asset") == kind.textureAsset,
+            label + ": textureAsset matches the texture field");
+    }
+}
+
+// Copy and paste of element subtrees. The pasted document must still pass
+// the GYO::Ui codec: ids unique, focus order naming existing focusable
+// elements.
+void TestElementClipboard() {
+    nlohmann::json document = UiDocumentBridge::CreateDefault();
+    nlohmann::json& canvas = document["canvases"][0];
+    nlohmann::json panel = MakeDefaultElement(document, *FindElementKind("panel"));
+    nlohmann::json button = MakeDefaultElement(document, *FindElementKind("button"));
+    const std::string panelId = panel["id"].get<std::string>();
+    const std::string buttonId = button["id"].get<std::string>();
+    panel["children"] = nlohmann::json::array({button});
+    canvas["children"].push_back(panel);
+    canvas["focus_order"].push_back(buttonId);
+    nlohmann::json list = MakeDefaultElement(document, *FindElementKind("fixed_step_list"));
+    const std::string listId = list["id"].get<std::string>();
+    canvas["children"].push_back(list);
+    const auto passesCodec = [](const nlohmann::json& value) {
+        return Engine::Ui::UiDocumentCodec::Parse(value.dump(), "clipboard").has_value();
+    };
+    Expect(passesCodec(document), "the clipboard test document starts valid");
+
+    Expect(!CopyElement(document, "missing").has_value(), "copying an unknown id gives nothing");
+    const auto copied = CopyElement(document, panelId);
+    Expect(copied.has_value() && (*copied)["children"].size() == 1U, "a copy keeps the element's children");
+    if (!copied) {
+        return;
+    }
+
+    const auto first = PasteElement(document, "main", panelId, *copied);
+    Expect(first == panelId + "_copy_1", "the pasted element gets a new id");
+    Expect(canvas["children"].size() == 3U && canvas["children"][1]["id"] == panelId + "_copy_1",
+        "a paste goes right after the selected element");
+    Expect(canvas["children"][1]["children"][0]["id"] == buttonId + "_copy_1", "children get new ids too");
+    Expect(canvas["focus_order"] == nlohmann::json::array({buttonId, buttonId + "_copy_1"}),
+        "a pasted focusable element joins the focus order");
+    Expect(passesCodec(document), "the document stays valid after a paste");
+
+    Expect(PasteElement(document, "main", panelId, *copied) == panelId + "_copy_2",
+        "pasting again picks the next free id");
+    const auto nested = PasteElement(document, "main", buttonId, *CopyElement(document, buttonId));
+    Expect(nested == buttonId + "_copy_3" && canvas["children"][0]["children"].size() == 2U &&
+            canvas["children"][0]["children"][1]["id"] == buttonId + "_copy_3",
+        "pasting after a nested element inserts into its parent");
+    const auto listCopy = PasteElement(document, "main", "", *CopyElement(document, listId));
+    Expect(listCopy.has_value() && canvas["children"].back()["id"] == *listCopy,
+        "with nothing selected the paste goes to the end of the canvas");
+    Expect(canvas["children"].back()["template"][0]["id"] != list["template"][0]["id"],
+        "list templates get new ids");
+    Expect(passesCodec(document), "the document stays valid after every paste");
+    Expect(!PasteElement(document, "missing", "", *copied).has_value(), "a missing canvas takes no paste");
+    Expect(!PasteElement(document, "main", "", nlohmann::json::array()).has_value(),
+        "a value that is not an element is not pasted");
+}
+
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
+    TestPathDialogInbox();
+    TestGizmoHit();
+    TestGizmoAnchorDrag();
+    TestGizmoMoveAndResize();
+    TestGizmoSnapAndPivot();
+    TestGizmoResizeModifiers();
+    TestGizmoAgreesWithUiEvaluator();
+    TestElementKindsMatchUi();
+    TestElementClipboard();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);

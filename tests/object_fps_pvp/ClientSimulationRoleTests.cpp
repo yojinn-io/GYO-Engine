@@ -509,6 +509,35 @@ TEST_CASE("PvP an intent without controls moves nothing, keeps its aim and drops
     CHECK(with >= 100);
 }
 
+// protocol-v8 section 5: without controls the crouch intent is the last one
+// taken (a held key, not a neutral command); it changes only with controls.
+TEST_CASE("PvP an intent without controls keeps the last crouch intent") {
+    MainThread main{Every(1.0 / 60.0), [](double now) {
+        // Crouched with controls, then controls drop while the key reads up,
+        // then controls return with the key up.
+        ClientIntent intent{1, 0, 0.3F, 0.1F, !(now >= 1.5 && now < 2.0), 0, {}};
+        intent.crouch = now < 1.5;
+        return intent;
+    }};
+    const auto run = RunRole(main);
+    std::size_t kept{}, released{};
+    for (const auto& generated : Commands(run)) {
+        CAPTURE(generated.at);
+        if (generated.at > 1.0 && generated.at < 1.5) CHECK(generated.command.crouchHeld);
+        if (generated.at > 1.5 + MovementTickSeconds && generated.at < 2.0) {
+            CHECK(generated.command.crouchHeld);
+            CHECK(generated.command.moveForward == 0.0F);
+            ++kept;
+        } else if (generated.at > 2.0 + MovementTickSeconds) {
+            CHECK_FALSE(generated.command.crouchHeld);
+            ++released;
+        }
+        CHECK_FALSE(generated.command.sprintHeld);
+    }
+    CHECK(kept >= 25);
+    CHECK(released >= 100);
+}
+
 TEST_CASE("PvP a slow publisher's intent stands for three of its intervals") {
     // 12.5 FPS: three intervals are 240 ms, longer than the 150 ms minimum.
     const auto interval = [first = false, second = false](double now, unsigned) mutable {

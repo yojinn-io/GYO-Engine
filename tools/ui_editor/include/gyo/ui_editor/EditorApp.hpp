@@ -5,10 +5,14 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/Diagnostic.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
+#include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/PreviewAdapter.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 
+#include <nlohmann/json.hpp>
+
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,11 +22,15 @@ class AssetPreviewContext;
 
 class EditorApp final {
 public:
-    EditorApp(CommandLineOptions options, AssetPreviewContext& previewAssets);
+    // dialogs may be null: paths are then typed into the editor's own fields.
+    EditorApp(CommandLineOptions options, AssetPreviewContext& previewAssets, PathDialogs* dialogs = nullptr);
 
     [[nodiscard]] Result<void, EditorError> Initialize();
     // Apply queued mount/unmount only before the host opens the next frame.
     void ApplyPendingAssetChanges();
+    // Act on paths chosen in the host's file dialogs; before ApplyPendingAssetChanges,
+    // so a chosen asset folder mounts at the same frame boundary.
+    void ApplyPathDialogResults();
     void RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot);
     void RequestAssetUnmount();
     void Draw();
@@ -47,7 +55,16 @@ private:
     void DrawBottomPanel();
     void DrawDialogs();
     void DrawStatusBar();
+    // Element clipboard (Edit menu, Ctrl+C / Ctrl+V / Ctrl+D).
+    void CopySelectedElement();
+    void PasteClipboardElement();
+    void DuplicateSelectedElement();
+    // Arrow keys move the selected element by one design pixel (Shift: ten)
+    // while the canvas has focus.
+    void NudgeSelectedElement(bool canvasFocused);
 
+    // Shows the host's dialog for purpose, or sets manualPrompt when there is none.
+    void RequestPath(PathDialogPurpose purpose, const std::array<char, 1024>& field, bool& manualPrompt);
     void NewDocument();
     // path is UTF-8 text, as the path fields hold it.
     void OpenDocument(const std::string& path);
@@ -58,6 +75,7 @@ private:
 
     CommandLineOptions options_;
     AssetPreviewContext& previewAssets_;
+    PathDialogs* dialogs_{};
     DocumentSession session_;
     ReadOnlyAssetCatalog catalog_;
     PreviewAdapter preview_;
@@ -75,6 +93,9 @@ private:
     bool singleCatalogMode_{};
     bool previewMode_{};
     bool gizmoTransactionActive_{};
+    bool nudgeTransactionActive_{};
+    // The copied element subtree; kept across documents opened in this run.
+    std::optional<nlohmann::json> clipboard_;
     bool showGrid_{true};
     bool snapToGrid_{true};
     float canvasZoom_{1.0F};
@@ -88,6 +109,8 @@ private:
     bool showOverwriteDialog_{};
     bool showAssetPicker_{};
     bool showRenameDialog_{};
+    // One host dialog at a time; cleared when its result arrives.
+    bool pathDialogOpen_{};
     AssetPickerTarget assetPickerTarget_{AssetPickerTarget::FontAlias};
     RenameTarget renameTarget_{RenameTarget::FontAlias};
     std::string assetPickerFontAlias_{"default"};

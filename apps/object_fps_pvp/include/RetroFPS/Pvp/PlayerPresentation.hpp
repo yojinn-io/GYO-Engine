@@ -40,6 +40,9 @@ struct PlayerPresentationFrame final {
     // The latest damage of this life: its count (zero means none) and time.
     std::uint32_t damageCount{};
     double damageSeconds{};
+    // The authoritative stance (protocol-v8 section 4). It selects the lower
+    // body's crouch clips only; the model keeps its standing scale.
+    bool crouched{};
 };
 
 // Product-owned CPU binding. Loading needs neither a renderer nor Campaign/Enemy.
@@ -50,6 +53,8 @@ struct PlayerPresentationDefinition final {
     // The upper body aims by blending these poses (their first frames) by
     // pitch; the idle, shot and reload clips move relative to their first frame.
     std::size_t aimUpClip{}, aimNeutralClip{}, aimDownClip{}, hitClip{};
+    // The crouched lower body: idle and moving, blended by the move weight.
+    std::size_t crouchIdleClip{}, crouchMoveClip{};
     // Pitch magnitudes at which the up and down poses apply in full: the
     // muzzle elevation of each pose relative to the neutral one.
     double aimUpRadians{}, aimDownRadians{};
@@ -91,6 +96,7 @@ struct PlayerLocomotionState final {
     bool grounded{true};
     PlayerJumpPhase jumpPhase{PlayerJumpPhase::Grounded};
     double jumpPhaseSeconds{}; // presentationSeconds at which jumpPhase began
+    bool crouched{}; // the latest frame's stance
 };
 
 // The speed blend: jog weight from a sampled planar speed, and the distance one

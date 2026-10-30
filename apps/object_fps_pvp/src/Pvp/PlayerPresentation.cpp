@@ -116,6 +116,8 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
         definition->aimNeutralClip = clip("aim_neutral");
         definition->aimDownClip = clip("aim_down");
         definition->hitClip = clip("hit");
+        definition->crouchIdleClip = clip("crouch_idle");
+        definition->crouchMoveClip = clip("crouch_move");
         definition->bodyHeight = bodyHeight;
         definition->referenceSpeed = config.at("reference_speed").get<float>();
         const auto& locomotion = config.at("locomotion");
@@ -335,6 +337,7 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
     }
     state.previousPosition = frame.position;
     state.previousPresentationSeconds = frame.presentationSeconds;
+    state.crouched = frame.crouched;
     return true;
 }
 
@@ -459,6 +462,16 @@ bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition
             upper = nullptr; // Death owns the whole body, weapon hand included.
             break;
         case PlayerLowerAction::Locomotion: {
+            if (state.crouched) {
+                // v8-product-crouch-pose: the crouch clips on the standing model.
+                Pose crouchIdle, crouchMove;
+                Require(Engine::Model::SamplePose(model, definition.crouchIdleClip, state.idleSeconds,
+                    PlaybackMode::Loop, crouchIdle));
+                Require(Engine::Model::SamplePose(model, definition.crouchMoveClip,
+                    state.phaseCycles * model.clips[definition.crouchMoveClip].durationSeconds, PlaybackMode::Loop, crouchMove));
+                Require(Engine::Model::BlendPoses(model, crouchIdle, crouchMove, state.moveWeight, output.body));
+                break;
+            }
             Pose walk, jog, gait;
             Require(Engine::Model::SamplePose(model, definition.walkClip,
                 state.phaseCycles * model.clips[definition.walkClip].durationSeconds, PlaybackMode::Loop, walk));

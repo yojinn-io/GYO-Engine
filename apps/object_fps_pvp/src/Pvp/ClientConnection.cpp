@@ -10,7 +10,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/threads/RoleThread.hpp"
-#include "client_v7.pb.h"
+#include "client_v8.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -31,7 +31,7 @@
 #include <utility>
 
 namespace fps::pvp {
-namespace pb=object_fps_pvp::client::v7;
+namespace pb=object_fps_pvp::client::v8;
 using Json=nlohmann::json;
 using Clock=std::chrono::steady_clock;
 using asio::ip::udp;
@@ -192,6 +192,7 @@ struct ClientConnection::Impl {
     std::uint64_t otherVersionDatagrams{}; // well-formed GYOP of another version, dropped silently
     // Diagnostics only (log-contract): the worker's own window counts, reset only by ReportStatistics.
     std::uint64_t receivedDatagrams{},foreignSenderDatagrams{},undecodableDatagrams{},staleDatagrams{},sendBlocked{},windowSnapshotOverflows{},windowSimulationOverflows{};
+    std::uint64_t staleSnapshotDatagrams{},staleResultsDatagrams{}; // of staleDatagrams (pv8-obs-bytes)
     // The datagrams of this session that decode but change nothing (v7.1
     // silent-branch-asserts, D180): every drop below is counted.
     std::uint64_t unparsedDatagrams{},earlyDatagrams{},invalidSnapshotDatagrams{},ignoredSnapshotDatagrams{},unexpectedKindDatagrams{};
@@ -463,7 +464,7 @@ struct ClientConnection::Impl {
             if(!found->second.decision)found->second.receivedAt=arrivedAt;
             found->second.decision=decision;
         }
-        actionTransport.retiredThrough=Engine::Math::Max(actionTransport.retiredThrough,message.retired_through());
+        actionTransport.retiredThrough=Engine::Math::Max(actionTransport.retiredThrough,ActionId{message.retired_through()});
         while(!actions.empty() && actions.begin()->first<=actionTransport.retiredThrough)actions.erase(actions.begin());
         return true;
     }
@@ -479,17 +480,17 @@ struct ClientConnection::Impl {
                 if(cursor==actions.end())cursor=actions.begin();
                 const auto& [id,entry]=*cursor++;
                 if(entry.decision)continue;
-                auto* shot=message.add_shots();shot->set_action_id(id);
-                shot->set_observed_authority_tick(entry.request.observedAuthorityTick);
+                auto* shot=message.add_shots();shot->set_action_id(wire::Counter(id));
+                shot->set_observed_authority_tick(wire::Counter(entry.request.observedAuthorityTick));
                 shot->set_kind(entry.request.kind==ActionKind::Shot?pb::ACTION_SHOT:pb::ACTION_RELOAD);
-                shot->set_life_generation(entry.request.lifeGeneration);
+                shot->set_life_generation(wire::Counter(entry.request.lifeGeneration));
                 if(entry.request.kind==ActionKind::Shot){shot->set_yaw(entry.request.yaw);shot->set_pitch(entry.request.pitch);}
-                shot->set_movement_epoch(entry.request.movementEpoch);shot->set_command_sequence(entry.request.commandSequence);
+                shot->set_movement_epoch(wire::Counter(entry.request.movementEpoch));shot->set_command_sequence(wire::Counter(entry.request.commandSequence));
                 shot->set_view_tick_q16(entry.request.viewTickQ16);
                 actionSendCursor=id;
             }
             if(message.shots().empty() && actionTransport.acknowledgedThrough<=actionTransport.retiredThrough)return;
-            message.set_acknowledged_through(actionTransport.acknowledgedThrough);
+            message.set_acknowledged_through(wire::Counter(actionTransport.acknowledgedThrough));
         }
         const auto payload=message.SerializeAsString();
         const bool sent=Send(wire::Type::Actions,payload);
@@ -540,7 +541,12 @@ struct ClientConnection::Impl {
                 else ++undecodableDatagrams;
                 continue;
             }
-            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence))) {++staleDatagrams;continue;}
+            if(packet->session!=session || (haveSequence && !wire::Newer(packet->sequence,receivedSequence))) {
+                ++staleDatagrams;
+                if(packet->type==wire::Type::Snapshot)++staleSnapshotDatagrams;
+                else if(packet->type==wire::Type::ActionResults)++staleResultsDatagrams;
+                continue;
+            }
             if(packet->type==wire::Type::Welcome) {
                 pb::Welcome message;if(!message.ParseFromString(packet->payload)){++unparsedDatagrams;continue;}
                 if(message.has_clock()) { // diagnostics only, before and apart from every check
@@ -557,8 +563,16 @@ struct ClientConnection::Impl {
                     throw std::runtime_error("Unsupported Match cadence");
                 const auto rules=ReadRules(message);
                 if(!rules)throw std::runtime_error("Invalid Match combat rules");
+                // pv8 §3: the stance bounds that need no arena; the prediction checks the
+                // arena-relative ones (ValidStanceRules) when it adopts them.
+                const StanceRules stance{message.crouch_body_height(),message.crouch_eye_height(),
+                    message.crouch_speed_scale(),message.sprint_speed_scale()};
+                const auto positive=[](float value){return std::isfinite(value) && value>0;};
                 if(!std::isfinite(message.jump_height()) || message.jump_height()<=0 || message.jump_height()>10 ||
-                   !std::isfinite(message.gravity()) || message.gravity()<=0 || message.gravity()>1000)
+                   !std::isfinite(message.gravity()) || message.gravity()<=0 || message.gravity()>1000 ||
+                   !positive(stance.crouchBodyHeight) || !positive(stance.crouchEyeHeight) ||
+                   stance.crouchEyeHeight>stance.crouchBodyHeight || !positive(stance.crouchSpeedScale) ||
+                   stance.crouchSpeedScale>1 || !positive(stance.sprintSpeedScale) || stance.sprintSpeedScale>3)
                     throw std::runtime_error("Invalid Match movement rules");
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
@@ -566,8 +580,9 @@ struct ClientConnection::Impl {
                 if(state.combatRules && !SameRules(*state.combatRules,*rules))
                     throw std::runtime_error("Match combat rules changed within a session");
                 if(state.movementRules && (state.movementRules->jumpHeight!=message.jump_height() ||
-                    state.movementRules->gravity!=message.gravity()))throw std::runtime_error("Match movement rules changed within a session");
-                state.movementRules=MovementRules{message.jump_height(),message.gravity()};
+                    state.movementRules->gravity!=message.gravity() || !(state.movementRules->stance==stance)))
+                    throw std::runtime_error("Match movement rules changed within a session");
+                state.movementRules=MovementRules{message.jump_height(),message.gravity(),stance};
                 state.combatRules=rules;
                 welcomed=true;liveness.Welcome(arrivedAt);
             } else if(packet->type==wire::Type::Snapshot) {
@@ -607,7 +622,7 @@ struct ClientConnection::Impl {
                         p.life_state()==pb::LIFE_ALIVE?LifeState::Alive:LifeState::Dead,p.life_state_tick(),p.respawn_tick(),
                         p.has_movement_slack_sequence()?std::optional<std::uint64_t>{p.movement_slack_sequence()}:std::nullopt,
                         p.has_movement_slack_us()?std::optional<std::int32_t>{p.movement_slack_us()}:std::nullopt,
-                        p.connection_quality_failures()});
+                        p.connection_quality_failures(),p.crouched(),p.sprinting()});
                     self|=p.player_id()==own;
                 }
                 for(const auto& combat:message.combat()) {
@@ -753,12 +768,13 @@ struct ClientConnection::Impl {
                 }
             }}
         if(input) {
-            pb::PlayerInput message;message.set_movement_epoch(input->movementEpoch);message.set_life_generation(input->lifeGeneration);
-            message.set_observed_authority_tick(input->observedAuthorityTick);
+            pb::PlayerInput message;message.set_movement_epoch(wire::Counter(input->movementEpoch));message.set_life_generation(wire::Counter(input->lifeGeneration));
+            message.set_observed_authority_tick(wire::Counter(input->observedAuthorityTick));
             for(const auto& command:input->commands) {
-                auto* out=message.add_commands();out->set_sequence(command.sequence);
+                auto* out=message.add_commands();out->set_sequence(wire::Counter(command.sequence));
                 out->set_move_forward(command.moveForward);out->set_move_right(command.moveRight);
                 out->set_yaw(command.yaw);out->set_pitch(command.pitch);out->set_jump_requested(command.jumpRequested);
+                out->set_crouch_held(command.crouchHeld);out->set_sprint_held(command.sprintHeld); // pv8 §2
             }
             const auto payload=message.SerializeAsString();
             const auto sendStarted=MovementTraceNowNs();
@@ -876,10 +892,12 @@ struct ClientConnection::Impl {
             .sendBlocked=sendBlocked,.snapshotOverflows=windowSnapshotOverflows,.simulationOverflows=windowSimulationOverflows,
             .unparsedDatagrams=unparsedDatagrams,.earlyDatagrams=earlyDatagrams,.invalidSnapshotDatagrams=invalidSnapshotDatagrams,
             .ignoredSnapshotDatagrams=ignoredSnapshotDatagrams,.unexpectedKindDatagrams=unexpectedKindDatagrams,
-            .staleInputWindows=staleWindows})<<'\n';
+            .staleInputWindows=staleWindows,.staleSnapshotDatagrams=staleSnapshotDatagrams,
+            .staleResultsDatagrams=staleResultsDatagrams})<<'\n';
         ClogLine()<<causes.Line(player,std::chrono::duration<double>(now-statisticsAt).count())<<'\n';
         statisticsAt=now;cpuAt=cpu;wakes=0;otherVersionDatagrams=0;
         receivedDatagrams=foreignSenderDatagrams=undecodableDatagrams=staleDatagrams=sendBlocked=0;
+        staleSnapshotDatagrams=staleResultsDatagrams=0;
         unparsedDatagrams=earlyDatagrams=invalidSnapshotDatagrams=ignoredSnapshotDatagrams=unexpectedKindDatagrams=0;
         windowSnapshotOverflows=windowSimulationOverflows=0;
     }
@@ -1008,7 +1026,7 @@ std::optional<ActionId> ClientConnection::SubmitAction(ActionKind kind,std::uint
        (kind!=ActionKind::Shot && kind!=ActionKind::Reload) ||
        !ValidMovementCommand({1,0,0,yaw,pitch}) || (kind==ActionKind::Reload && (yaw!=0 || pitch!=0)) ||
        impl_->actions.size()>=MaxActionWindow)return {};
-    if(impl_->actionTransport.allocatedThrough==std::numeric_limits<ActionId>::max()) {
+    if(WireCounterExhausted(impl_->actionTransport.allocatedThrough)) {
         impl_->state.error="Action IDs exhausted; leave and rejoin the Match";return {};
     }
     const auto id=impl_->actionTransport.allocatedThrough+1;

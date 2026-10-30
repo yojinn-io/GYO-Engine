@@ -4,6 +4,7 @@
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
+#include "RetroFPS/Pvp/WireCounter.hpp"
 
 #include <algorithm>
 #include <array>
@@ -827,7 +828,8 @@ TEST_CASE("PvP excessive backlog recovers after lost reset snapshots and old epo
 }
 
 TEST_CASE("PvP sequence and epoch boundaries never wrap into an old command namespace") {
-    const auto maximum = (std::numeric_limits<std::uint64_t>::max)();
+    // The command sequence ends at WireCounterMax (protocol-v8 section 2a), not at the uint64 maximum.
+    const auto maximum = WireCounterMax;
     LocalPlayerPrediction client(PredictionArena());
     client.Reconcile({1, {2, 0, 2}, 0, 0, maximum - 1, maximum, 0}, 1);
     REQUIRE(client.PendingInput().commands.size() == 1);
@@ -843,11 +845,23 @@ TEST_CASE("PvP sequence and epoch boundaries never wrap into an old command name
     client.Reconcile({1, {20, 0, 20}, 0, 0, 0, 0, 0}, 3);
     CHECK(client.PendingInput().movementEpoch == maximum);
     CHECK(client.Observation().authorityTick == 2);
+    {   // Beyond the maximum (never on the wire) a sequence is already exhausted:
+        // no lead and no new command, so nothing wraps either.
+        const auto beyond = (std::numeric_limits<std::uint64_t>::max)() - 1;
+        LocalPlayerPrediction past(PredictionArena());
+        past.Reconcile({1, {2, 0, 2}, 0, 0, beyond, 1, 0}, 1);
+        CHECK(past.PendingInput().commands.empty());
+        CHECK(past.Observation().frozen);
+        static_cast<void>(past.Advance(1, 1, 0, 0, 0));
+        CHECK(past.PendingInput().commands.empty());
+        CHECK(past.Observation().latestCommand == beyond);
+    }
+    const auto u64max = (std::numeric_limits<std::uint64_t>::max)();
     PvpMatch match(PredictionArena());
     std::string error;
     REQUIRE(match.Join(1, error));
-    CHECK_FALSE(match.SubmitInput({1, {{maximum, 1, 0, 0, 0}}, 1}));
-    CHECK_FALSE(match.SubmitInput({1, {{1, 1, 0, 0, 0}}, maximum}));
+    CHECK_FALSE(match.SubmitInput({1, {{u64max, 1, 0, 0, 0}}, 1}));
+    CHECK_FALSE(match.SubmitInput({1, {{1, 1, 0, 0, 0}}, u64max}));
     CHECK_FALSE(match.SubmitInput({1, {{1, 1, 0, 0, 0}}, 0}));
     Step(match);
     CHECK(match.Snapshot().players.front().lastResolvedCommand == 0);
@@ -2277,4 +2291,29 @@ TEST_CASE("PvP prediction reports an invalid or older authority state as ignored
     CHECK(client.Reconcile(acknowledged, 31));
     CHECK_FALSE(client.Reconcile(first, 32)); // its acknowledgement went back
     CHECK(client.Observation().lastResolvedCommand == 2);
+}
+
+TEST_CASE("PvP prediction stops generating commands at the wire counter maximum (protocol-v8 section 2a)") {
+    const auto arena = PredictionArena();
+    {   // One below the maximum: the seed lead stops at it and the prediction freezes.
+        LocalPlayerPrediction client(arena);
+        REQUIRE(client.Reconcile({1, {2, 0, 2}, 0, 0, WireCounterMax - 1}, 30));
+        CHECK(client.Observation().pendingCommands == 1);
+        CHECK(client.Observation().latestCommand == WireCounterMax);
+        CHECK(client.Observation().frozen);
+        static_cast<void>(client.Advance(MovementTickSeconds, 1, 0, 0, 0));
+        REQUIRE(client.PendingInput().commands.size() == 1);
+        CHECK(client.PendingInput().commands.back().sequence == WireCounterMax);
+    }
+    {   // Further below: the whole lead and the next step still run, up to the maximum.
+        LocalPlayerPrediction client(arena);
+        REQUIRE(client.Reconcile({1, {2, 0, 2}, 0, 0, WireCounterMax - 1 - InitialCommandLead}, 30));
+        CHECK(client.Observation().pendingCommands == InitialCommandLead);
+        CHECK_FALSE(client.Observation().frozen);
+        for (int frame = 0; frame < 3; ++frame)
+            static_cast<void>(client.Advance(MovementTickSeconds, 1, 0, 0, 0));
+        CHECK(client.Observation().pendingCommands == InitialCommandLead + 1);
+        CHECK(client.Observation().latestCommand == WireCounterMax);
+        CHECK(client.Observation().frozen);
+    }
 }

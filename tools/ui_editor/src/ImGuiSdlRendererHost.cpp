@@ -2,6 +2,7 @@
 
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/EditorApp.hpp"
+#include "SdlPathDialogs.hpp"
 
 #include <array>
 #include <memory>
@@ -148,7 +149,8 @@ public:
         CommandLineOptions options)
         : platform_(platform),
           renderer_(renderer),
-          editor_(std::move(options), previewAssets_) {}
+          dialogs_(Engine::Platform::Sdl::NativeWindow(platform)),
+          editor_(std::move(options), previewAssets_, &dialogs_) {}
 
     ~EditorClient() override {
         if (rendererBackendInitialized_) {
@@ -212,6 +214,7 @@ public:
     }
 
     RuntimeControl Update(const FrameContext&) override {
+        editor_.ApplyPathDialogResults();
         editor_.ApplyPendingAssetChanges();
         previewAssets_.BeginFrame();
         ImGui_ImplSDLRenderer3_NewFrame();
@@ -254,6 +257,7 @@ private:
     SdlPlatform& platform_;
     SdlRenderer& renderer_;
     AssetPreviewContext previewAssets_;
+    SdlPathDialogs dialogs_;
     EditorApp editor_;
     bool contextCreated_{};
     bool platformBackendInitialized_{};

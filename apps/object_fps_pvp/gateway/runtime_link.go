@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // This queue is product-owned: lifecycle requests are never dropped, input
@@ -87,9 +87,9 @@ type runtimeLink struct {
 	queuedData     map[dataKey]int
 	// Per-player I0 counters since the last takeIngress; kept across forget
 	// and close so the commands those discard stay accounted for.
-	ingress map[uint64]*playerIngressCounts
+	ingress map[uint32]*playerIngressCounts
 	// Diagnostics only: intervals between each player's ActionBatch writes.
-	actionStats map[uint64]*intervalStats
+	actionStats map[uint32]*intervalStats
 	// The writer goroutine run started, and a channel closed once it exited:
 	// close() does not wait for it, and a pass it took still counts its
 	// commands written or abandoned (I0) until then.
@@ -216,7 +216,7 @@ type queuedMessage struct {
 	message  *runtime.RuntimeEnvelope
 	input    bool
 	actions  bool // a Client's action batch, as it came
-	player   uint64
+	player   uint32
 	commands uint64
 	event    dropEvent
 }
@@ -234,7 +234,7 @@ const (
 
 // The per-player, per-kind count of queued data messages.
 type dataKey struct {
-	player  uint64
+	player  uint32
 	actions bool
 }
 
@@ -265,28 +265,28 @@ func (l *runtimeLink) control(message *runtime.RuntimeEnvelope) error {
 // what comes after the player left (pv7 §2a). A Leave does it before queuing
 // the control; an eviction sends no Leave (the Match already removed the
 // player), so the Gateway calls it.
-func (l *runtimeLink) forget(player uint64) {
+func (l *runtimeLink) forget(player uint32) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.forgetLocked(player)
 }
 
-func (l *runtimeLink) forgetLocked(player uint64) {
+func (l *runtimeLink) forgetLocked(player uint32) {
 	delete(l.actionStats, player)
 }
 
-func (l *runtimeLink) countLocked(player uint64, counter playerIngressCounter, n uint64) {
+func (l *runtimeLink) countLocked(player uint32, counter playerIngressCounter, n uint64) {
 	l.countEventLocked(player, counter, n, dropEvent{at: time.Now()})
 }
 
 // countEventLocked is countLocked with the identity a reported discard is
 // sampled with.
-func (l *runtimeLink) countEventLocked(player uint64, counter playerIngressCounter, n uint64, e dropEvent) {
+func (l *runtimeLink) countEventLocked(player uint32, counter playerIngressCounter, n uint64, e dropEvent) {
 	if n == 0 {
 		return
 	}
 	if l.ingress == nil {
-		l.ingress = make(map[uint64]*playerIngressCounts)
+		l.ingress = make(map[uint32]*playerIngressCounts)
 	}
 	counts := l.ingress[player]
 	if counts == nil {
@@ -301,7 +301,7 @@ func (l *runtimeLink) countEventLocked(player uint64, counter playerIngressCount
 // takeIngress hands over each player's link counters accumulated since the
 // previous call. I0 holds per player over the sum of all takes: the handed
 // commands equal the written ones plus the counted removals.
-func (l *runtimeLink) takeIngress() map[uint64]*playerIngressCounts {
+func (l *runtimeLink) takeIngress() map[uint32]*playerIngressCounts {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	taken := l.ingress
@@ -384,7 +384,7 @@ const (
 type linkWrite struct {
 	message  *runtime.RuntimeEnvelope
 	lane     inputLane
-	player   uint64
+	player   uint32
 	commands uint64
 	// The carrying Client datagram's receipt (the queue item's), for the
 	// message's gateway_dwell_us when its write starts; zero for a control.

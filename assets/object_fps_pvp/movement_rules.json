@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "crouch_body_height": 1.2,
+  "crouch_eye_height": 1.0,
+  "crouch_speed_scale": 0.5,
+  "sprint_speed_scale": 1.0
+}

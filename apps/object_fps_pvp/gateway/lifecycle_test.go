@@ -6,8 +6,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.T) {
@@ -32,14 +32,14 @@ func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.
 	}
 	// Movement of any life reaches the Match as it came, which judges it
 	// (pv7 §2a); the Gateway keeps no life or epoch of its own.
-	for _, life := range []uint64{1, 3} {
+	for _, life := range []uint32{1, 3} {
 		input := &client.PlayerInput{MovementEpoch: 2, LifeGeneration: life, Commands: []*client.MovementCommand{{Sequence: 1, JumpRequested: true}}}
 		payload, _ := proto.Marshal(input)
 		if err := s.receivePacket(framing.Header{Version: adapter.ClientVersion, Type: adapter.Input, SessionID: p.session.ID, Sequence: uint32(3 + life)}, payload, endpoint, now); err != nil {
 			t.Fatal(err)
 		}
 	}
-	var lives []uint64
+	var lives []uint32
 	for _, message := range s.link.batch() {
 		if in := message.GetInput(); in != nil {
 			lives = append(lives, in.LifeGeneration)

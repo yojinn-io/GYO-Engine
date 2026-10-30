@@ -457,6 +457,49 @@ TEST_CASE("PvP player pose retains jogging legs and aiming upper body with consi
         Multiply(withHair.body.globalTransforms.at(hair.targetNode), ToMatrix(hair.placement)));
 }
 
+// v8-product-crouch: a crouched remote's lower body plays the crouch clips,
+// blended by the move weight, and the upper body still aims. The model keeps
+// its standing scale (v8-product-crouch-pose): the scale is fixed when the
+// definition loads, and no stance reaches it.
+TEST_CASE("PvP crouched remote lower body plays the crouch clips on the standing model") {
+    const auto& definition = ProductionDefinition();
+    const auto& model = *definition.character->model;
+    CHECK(model.clips[definition.crouchIdleClip].name.find("Crouch_Idle_Loop") != std::string::npos);
+    CHECK(model.clips[definition.crouchMoveClip].name.find("Crouch_Fwd_Loop") != std::string::npos);
+    PlayerLocomotionState state;
+    state.initialized = true;
+    state.phaseCycles = 0.33;
+    state.jogWeight = 0.4;
+    state.idleSeconds = 0.23;
+    state.moveWeight = 0.6F;
+    state.crouched = true;
+    Pose crouchIdle, crouchMove, legs, idle, idleStart, aim;
+    REQUIRE(SamplePose(model, definition.crouchIdleClip, state.idleSeconds, PlaybackMode::Loop, crouchIdle));
+    REQUIRE(SamplePose(model, definition.crouchMoveClip,
+        state.phaseCycles * model.clips[definition.crouchMoveClip].durationSeconds, PlaybackMode::Loop, crouchMove));
+    REQUIRE(BlendPoses(model, crouchIdle, crouchMove, state.moveWeight, legs));
+    REQUIRE(SamplePose(model, definition.idleClip, state.idleSeconds, PlaybackMode::Loop, idle));
+    REQUIRE(SamplePose(model, definition.idleClip, 0, PlaybackMode::Clamp, idleStart));
+    REQUIRE(SamplePose(model, definition.aimNeutralClip, 0, PlaybackMode::Clamp, aim));
+    PlayerPresentationPose crouched, standing;
+    std::string error;
+    REQUIRE_MESSAGE(SamplePlayerPresentationPose(definition, state, crouched, error), error);
+    for (std::size_t node = 0; node < model.nodes.size(); ++node) {
+        CAPTURE(model.nodes[node].name);
+        CheckMatrix(ToMatrix(crouched.body.localTransforms[node]), ToMatrix(definition.upperBodyMask[node] ?
+            WithMotion(aim.localTransforms[node], idleStart.localTransforms[node], idle.localTransforms[node]) :
+            legs.localTransforms[node]));
+    }
+    state.crouched = false;
+    REQUIRE_MESSAGE(SamplePlayerPresentationPose(definition, state, standing, error), error);
+    double legDifference{};
+    for (std::size_t node = 0; node < model.nodes.size(); ++node)
+        if (!definition.upperBodyMask[node])
+            legDifference += MatrixDifference(ToMatrix(crouched.body.localTransforms[node]),
+                                              ToMatrix(standing.body.localTransforms[node]));
+    CHECK(legDifference > 0.01);
+}
+
 TEST_CASE("PvP jogging phase follows actual distance at 30 60 and 144 FPS in every planar direction") {
     const auto& definition = ProductionDefinition();
     const double expectedPhase = 3.0 / ReferenceCycle();

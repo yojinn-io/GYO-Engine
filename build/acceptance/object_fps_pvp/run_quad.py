@@ -1,6 +1,6 @@
 """Room-capacity acceptance runner: full rooms, a GUI with bots and mixed-version refusals.
 
-Cases (pv6 contract §1, batch 16; mixed: pv7 contract §1):
+Cases (pv6 contract §1, batch 16; mixed: pv7 contract §1, kept for pv8 against pv7 artifacts):
   clean-60, clean-30  four headless Clients in one room for 16 s; a fifth join is refused.
                       clean-30 is recorded, not judged (D21).
   gui-bots            the GUI participant creates the room and three bots fill it.
@@ -220,7 +220,7 @@ def run_mixed(args, output):
     checks = []
     for name, run in (
             ('older-client', lambda d: refused_client(args, d)),
-            # The older Match closes on this Gateway's version notice with its own (pv6) reason.
+            # The older Match closes on this Gateway's version notice with its own (pv7) reason.
             ('older-match', lambda d: refused_gateway(
                 args, d, match_binary=args.base_match, match_arena=args.base_arena, gateway_binary=args.gateway,
                 name='older-match', gateway_says=f'runtime readiness contract mismatch: protocol version expected '

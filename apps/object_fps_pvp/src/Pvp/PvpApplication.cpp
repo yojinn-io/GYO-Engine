@@ -138,6 +138,7 @@ struct PvpApplication::Impl final {
     std::uint64_t frameViewTickQ16{}, presentedViewTickQ16{};
     std::uint64_t connectionGeneration{}, ingressHistoryDrops{};
     std::optional<RemoteMovementObservation> remoteMovement;
+    float eyeHeight{}; // the displayed eye height; 0 before the first frame
     std::optional<PlayerId> observedRemote;
     std::optional<PresentedMovementObservation> presentedMovement;
     std::uint64_t skippedPresentationFrames{};
@@ -684,7 +685,14 @@ struct PvpApplication::Impl final {
         const auto* self = FindPlayer(*state.snapshot, state.playerId);
         const auto position = LocalPresentationCurrent() || !self ? presented.observation.renderPosition : self->position;
         const auto camera = view.Camera();
-        queue.SetCamera({{position.x, position.y + arena->eyeHeight, position.z},
+        // pv8 section 5: the eye follows the stance, smoothed here only (never a judgment).
+        const bool crouched = LocalPresentationCurrent() || !self ? presented.observation.crouched : self->crouched;
+        const auto stance = state.movementRules ? state.movementRules->stance : DefaultStanceRules;
+        const float eyeTarget = StanceEyeHeight(*arena, stance, crouched);
+        constexpr double EyeSmoothingSeconds = 0.08;
+        eyeHeight = eyeHeight > 0 ? eyeHeight + (eyeTarget - eyeHeight) *
+            static_cast<float>(1.0 - std::exp(-std::max(deltaSeconds, 0.0) / EyeSmoothingSeconds)) : eyeTarget;
+        queue.SetCamera({{position.x, position.y + eyeHeight, position.z},
             {camera.pitch, camera.yaw, camera.roll}, WorldVerticalFovRadians, 0.05F, 150.0F});
         // Simple checker floor gives movement depth cues without campaign assets.
         const float tile = arena->cellSize;
@@ -782,6 +790,7 @@ struct PvpApplication::Impl final {
                 sampled->phaseReanchors == reanchorsBefore;
             characterFrame.holding = sampled && sampled->holding;
             characterFrame.grounded = presented.grounded;
+            characterFrame.crouched = presented.crouched; // pv8 section 4: the stance selects the clips
             characterFrame.verticalVelocity = presented.verticalVelocity;
             characterFrame.lifeStateSeconds = static_cast<double>(presented.lifeStateTick) / AuthorityTickRate;
             // Actions come only from the sampled interval's own combat state, so
@@ -1118,8 +1127,10 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             // A live frame sees no input, so it publishes a neutral intent without
             // controls and the player stops at once; it never advances the prediction.
             if (controls && physical.Get(Key::Space).pressed) ++impl_->jumpPresses;
-            impl_->simulation->PublishIntent({forward, right, impl_->view.Input().yaw, impl_->view.Input().pitch,
-                controls, impl_->jumpPresses, movementSampledAt, IntentOwner(impl_->state)});
+            ClientIntent intent{forward, right, impl_->view.Input().yaw, impl_->view.Input().pitch,
+                controls, impl_->jumpPresses, movementSampledAt, IntentOwner(impl_->state)};
+            intent.crouch = physical.Get(Key::LeftCtrl).held; // v8-product-crouch-key: hold Left Ctrl
+            impl_->simulation->PublishIntent(intent);
             impl_->presented = impl_->simulation->PresentAt(movementSampledAt);
             // Until the role has stepped in this session, it has no local player to show.
             if (impl_->presented.generation != impl_->connectionGeneration) impl_->presented = {};
@@ -1185,7 +1196,7 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
         draws.commands.emplace_back(Engine::Ui::UiQuadDraw{{16,16,680*scale,114*scale},{.015F,.025F,.04F,.88F}});
         AddText(draws, "PLAYERS ONLINE: " + std::to_string(impl_->state.snapshot->players.size()),
             {16+14*scale,16+8*scale,490*scale,25*scale},18*scale);
-        AddText(draws, "WASD move | Space jump | Click shoot | R reload | Tab cursor | Esc leave",
+        AddText(draws, "WASD move | Space jump | Ctrl crouch | Click shoot | R reload | Tab cursor | Esc leave",
             {16+14*scale,16+34*scale,660*scale,22*scale},14*scale);
         AddText(draws, "HP " + std::to_string(impl_->weaponFeedback.hp) + " / " +
             std::to_string(impl_->weaponFeedback.maximumHp) + "    MARK23  " +

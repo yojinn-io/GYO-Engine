@@ -60,34 +60,60 @@ func intervalSummary(intervals []time.Duration) string {
 	return fmt.Sprintf("%.1f/%.1f/%.1f/%.1f", ms(rank(.50)), ms(rank(.90)), ms(rank(.99)), ms(sorted[len(sorted)-1]))
 }
 
+// Diagnostics only (v8 pv8-obs-bytes): the datagram sizes, header included,
+// of one channel's completed writes, summarized once per statisticsInterval.
+type sizeStats struct{ sizes []int }
+
+func (s *sizeStats) record(bytes int) { s.sizes = append(s.sizes, bytes) }
+
+// take ends the window: "p50/p90/p99/max" in bytes (nearest rank), or "-".
+func (s *sizeStats) take() string {
+	defer func() { s.sizes = s.sizes[:0] }()
+	if len(s.sizes) == 0 {
+		return "-"
+	}
+	sorted := slices.Clone(s.sizes)
+	slices.Sort(sorted)
+	rank := func(q float64) int { return sorted[max(int(math.Ceil(q*float64(len(sorted))))-1, 0)] }
+	return fmt.Sprintf("%d/%d/%d/%d", rank(.50), rank(.90), rank(.99), sorted[len(sorted)-1])
+}
+
 // A session's writes to its Client: ActionResults and snapshots.
-type sendStatistics struct{ results, snapshots intervalStats }
+type sendStatistics struct {
+	results, snapshots         intervalStats
+	resultBytes, snapshotBytes sizeStats
+}
 
 // The shortest intervals come last: they were added after the first logs
-// (v7 batch 06), so the earlier keys keep their order.
-func sendStatisticsLine(player uint64, window time.Duration, results, snapshots, linkActions intervalWindow) string {
+// (v7 batch 06), so the earlier keys keep their order. The datagram sizes
+// were added in v8 (pv8-obs-bytes) and come after them.
+func sendStatisticsLine(player uint32, window time.Duration, results, snapshots, linkActions intervalWindow,
+	resultBytes, snapshotBytes string) string {
 	return fmt.Sprintf("player send statistics player=%d window_ms=%d results=%d results_interval_ms=%s "+
 		"snapshots=%d snapshot_interval_ms=%s link_actions=%d link_action_interval_ms=%s "+
-		"results_min_interval_ms=%s snapshot_min_interval_ms=%s link_action_min_interval_ms=%s",
+		"results_min_interval_ms=%s snapshot_min_interval_ms=%s link_action_min_interval_ms=%s "+
+		"results_bytes=%s snapshot_bytes=%s",
 		player, window.Milliseconds(), results.count, results.summary, snapshots.count, snapshots.summary,
-		linkActions.count, linkActions.summary, results.minimum, snapshots.minimum, linkActions.minimum)
+		linkActions.count, linkActions.summary, results.minimum, snapshots.minimum, linkActions.minimum,
+		resultBytes, snapshotBytes)
 }
 
 // The Match side: each player's ActionBatch writes on the runtime link.
-func (l *runtimeLink) takeActionStatistics() map[uint64]intervalWindow {
+func (l *runtimeLink) takeActionStatistics() map[uint32]intervalWindow {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	windows := make(map[uint64]intervalWindow, len(l.actionStats))
+	windows := make(map[uint32]intervalWindow, len(l.actionStats))
 	for player, stats := range l.actionStats {
 		windows[player] = stats.take()
 	}
 	return windows
 }
 
-func (s *Server) snapshotWritten(playerID uint64, now time.Time) {
+func (s *Server) snapshotWritten(playerID uint32, now time.Time, bytes int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p := s.players[playerID]; p != nil {
 		p.sent.snapshots.record(now)
+		p.sent.snapshotBytes.record(bytes)
 	}
 }

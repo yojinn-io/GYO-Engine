@@ -7,14 +7,23 @@
 #include <string>
 #include <vector>
 
+#include "RetroFPS/Pvp/WireCounter.hpp"
+#include "engine/base/Assert.hpp"
 #include "engine/net/GyopDatagram.hpp"
 
 namespace fps::pvp::wire {
 // The GYOP header and its transport checks are the engine's (Engine::Net);
 // the protocol version, the message types and the TCP frame stay here.
-inline constexpr std::uint16_t ProtocolVersion = 7;
+inline constexpr std::uint16_t ProtocolVersion = 8;
 inline constexpr std::size_t HeaderSize = Engine::Net::GyopHeaderSize, MaxDatagram = Engine::Net::GyopMaxDatagram,
     MaxFrame = 65536;
+// A counter's value for a narrowed wire field (protocol-v8 section 2a). The C++
+// domain keeps std::uint64_t; a value past WireCounterMax at an encoding
+// boundary is a Programmer Error, never a silent truncation.
+inline std::uint32_t Counter(std::uint64_t value) {
+    GYO_ASSERT(value <= WireCounterMax);
+    return static_cast<std::uint32_t>(value);
+}
 enum class Type : std::uint16_t { Hello=1, Welcome=2, Input=3, Snapshot=4, Error=5, Actions=6, ActionResults=7 };
 inline std::uint64_t Read(std::span<const std::uint8_t> bytes) {
     std::uint64_t value{};
