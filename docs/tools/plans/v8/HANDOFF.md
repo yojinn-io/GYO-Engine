@@ -1,6 +1,6 @@
 # v8 工具線交接
 
-更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)、[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108) 已合併；小功能（`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`）完成，在分支 `claude/v8-tool-ui-editor-small`。**
+更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。PR #107～#109 已合併；`v8-tool-ui-ime-observe` 進行中（分支 `claude/v8-tool-ui-ime-observe`），等 Windows 場次。**
 本文件是工具線的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。v8 產品計畫的同步由產品會話做，本線不改 `docs/object_fps_pvp/plans/v8/`。
 
 ## 代號對照
@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
-- **完成，開 PR 中**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`（分支 `claude/v8-tool-ui-editor-small`），使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` 進行中：診斷與分析腳本已備好，事前宣告已同意；等 Windows 場次（要含這次改動的客戶端）。
+- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` 進行中：診斷與分析腳本已備好，事前宣告已同意；等 Windows 場次（要含這次改動的客戶端）。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -86,3 +86,4 @@
 - 2026-10-30：使用者：「開始」。`v8-tool-ui-ime-observe` 開始（medium，估 2～4 h＋實機）。加了 `SdlInput::SetTextDiagnostics`（只加不改，frame 不變）與客戶端 `--text-input-trace`；單元測試＋3 個突變全被抓到；Mac 上實際啟動客戶端，確認 `input.text` 進了客戶端 log。Mac 沒有 PowerShell，Windows 端只用一行 `.cmd`（未在 Windows 上執行過），分析腳本在 Mac 上用合成 log 測過。事前宣告寫進 README，等使用者同意。
 - 2026-10-30：使用者同意 `v8-tool-ui-ime-observe` 的事前宣告。
 - 2026-10-30：音效線更正 `v8-tool-assets-audio-import` 第 3 點：原檔不能放在資產根目錄下（產品的 catalog 測試要求根目錄下每個檔都登錄），改成放在資產根目錄以外；第 4 點的記錄位置改為音效線的 dev_log。README 已更新。
+- 2026-10-30：使用者：「合併 #109、另開 PR」。PR #109 以 merge commit 合併（`5cfa149c`）。剩下的 4 個 commit（text_field 的決定、ime-observe、同意、音效需求更正）rebase 到 master，分支 `claude/v8-tool-ui-ime-observe`，另開 PR。
