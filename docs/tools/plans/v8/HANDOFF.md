@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
-- **完成，未推送**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`（分支 `claude/v8-tool-ui-editor-small`）。下一步是 `text_field` 開始前的三個決定（`v8-tool-ui-schema-version`、`v8-tool-ui-edit-policy-owner`、`v8-tool-ui-widget-scope`）。
+- **完成，開 PR 中**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`（分支 `claude/v8-tool-ui-editor-small`），使用者在 macOS 的 GUI 上試過。下一步是 `text_field` 開始前的三個決定（`v8-tool-ui-schema-version`、`v8-tool-ui-edit-policy-owner`、`v8-tool-ui-widget-scope`）。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -80,3 +80,4 @@
 - 2026-10-30：觸發的手動 L1 被取消後，留下 `L1 (dispatch)` failure，使 PR #108 變成 UNSTABLE；重跑後四平台 L1 與 Quick acceptance 全過。使用者要求合併，PR #108 以 merge commit 合併（`e31dfdf4`）。
 - 2026-10-30：使用者：「先做小功能」。`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` 開始（high／medium，估 3～5 h＋2～3 h），分支 `claude/v8-tool-ui-editor-small`（切自 master `e31dfdf4`）。
 - 2026-10-30：兩批完成，實際約 1 h。新測試與 8 個突變全部被抓到；14/14 通過。GUI 上還沒手動操作。
+- 2026-10-30：使用者在 GUI 上試過複製貼上、方向鍵與修飾鍵：「可以了。繼續」。推送並開 PR。

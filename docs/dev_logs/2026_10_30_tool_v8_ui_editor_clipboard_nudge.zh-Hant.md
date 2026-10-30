@@ -2,7 +2,7 @@
 
 日期：2026-10-30。分支 `claude/v8-tool-ui-editor-small`（切自 master `e31dfdf4`）。檔位 high／medium，引擎 Opus 5.5。估 3～5 h＋2～3 h，兩批合計實際約 1 h。
 
-**狀態：** 完成。使用者：「先做小功能」。GUI 上**還沒手動操作過**。
+**狀態：** 完成。使用者：「先做小功能」。使用者在 GUI（macOS）上試過：「可以了。」
 
 相關文件：[工具線 README](../tools/plans/v8/README.md)「順序與依賴」（`v8-tool-ui-order`）、`tools/ui_editor/README.md`。
 
@@ -46,6 +46,6 @@
 
 ## 未做與限制
 
-- GUI 上沒有手動操作。方向鍵、快捷鍵、修飾鍵的接線只經過編譯，鍵盤事件沒有自動測試。
+- 鍵盤事件（方向鍵、快捷鍵、修飾鍵）沒有自動測試；macOS 上由使用者手動確認。Windows、Linux 未看過。
 - 貼上的元素和原本的元素位置相同、疊在一起（Unity 的做法也一樣），要自己移開。
 - 貼到別的文件時，元素參照的 action、binding、顏色如果在那份文件裡沒有宣告，會出現在 Diagnostics，不會自動補上宣告。
