@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
-- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)；後續規劃寫在 README「檢測之後：輸入法的規劃」，等你確認。
+- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認：先做 `v8-product-lobby-fullwidth`，再做 `v8-engine-input-composition`。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -32,7 +32,6 @@
 | `v8-tool-start-timing` | 實作何時開始 | 照 v8-product-order 在 ③ 之後／ui-widgets-line 的檢測（`v8-tool-ui-ime-observe`）先做，其他照順序 | 檢測先做：它不改行為，結果決定輸入法要不要修 | 何時排實機 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
-| `v8-tool-ime-input-delta` | 組字事件由誰做 | Engine 的 Input（計畫夾 input-and-present；只加不改，不變式 1）在工具線做／交給 Engine 的會話做 | 工具線做，記到 input-and-present 的 HANDOFF；先等 `v8-tool-ui-ime-observe` 的結果 | 有沒有 Engine 批 |
 
 ## 決定紀錄
 
@@ -40,6 +39,8 @@
 |---|---|---|
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
+| `v8-tool-ime-input-delta` | （2026-10-30）`v8-engine-input-composition` 由工具線（本會話）做，Architecture Delta 記到 input-and-present 的 HANDOFF | 選「工具線做（建議）」 |
+| `v8-tool-ime-plan` | （2026-10-30）照 README「檢測之後：輸入法的規劃」排兩批；產品批 `v8-product-lobby-fullwidth` 也由本會話做 | 選「照這樣排（建議）」「這個會話做」 |
 | `v8-tool-ui-ime-observe-next` | （2026-10-30）(b)：判定記為不成立；接受這次的 log 當證據，以觀測到的事實規劃 `v8-engine-input-composition`（README「檢測之後：輸入法的規劃」） | 「(b) 接受證據、往下規劃」 |
 | `v8-tool-ui-ime-observe-judgment` | （2026-10-30）照 [README](README.md)「v8-tool-ui-ime-observe 的事前宣告」做 Windows 場次與判定；看了 log 之後不改 | 「同意」 |
 | `v8-tool-ui-schema-version` | （2026-10-30）`text_field` 用 `gyo.ui` `version: 2` 加入；讀取端接受 1 與 2，舊讀取端以版本不支援明確拒絕 v2 | 選「升 version 2（建議）」 |
@@ -92,3 +93,4 @@
 - 2026-10-30：清理：`v8-tool-ui-editor-structure` 已做完卻還在「等你決定」，移到決定紀錄；README 的 `v8-tool-ui-editor-file-browser` 補上 ✓。
 - 2026-10-30：收到 Windows 場次的 log 與回報（日文 IME、無中文 IME、每次的畫面結果未記錄）。收支一致（169 行、34,990 bytes、丟棄 0）。判定不成立，停下回報。觀測到：組字事件 0 筆（SDL 預設由 OS 畫組字）、字在確定時成批送來、平假名模式送全形字元被大廳的 ASCII 過濾丟掉、半形可以。log 與分析輸出存在 `evidence/ime-observe/`。
 - 2026-10-30：使用者選 (b)。規劃 `v8-engine-input-composition`（平台選項 `imeComposition`、`TextEvent::Kind::Composition`、`SetTextInputArea`）與產品批 `v8-product-lobby-fullwidth`，寫進 README，等確認。
+- 2026-10-30：使用者確認規劃；組字事件由工具線做；產品批由本會話做。`v8-product-lobby-fullwidth` 開始（medium，估 1～2 h）。
