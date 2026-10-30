@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "engine/audio/AudioError.hpp"
 #include "engine/audio/Mixer.hpp"
@@ -15,6 +16,18 @@ struct SdlAudioOutputConfig final {
     // Frames per device block; 0 keeps SDL's choice. A hint to SDL: the device
     // may still choose another size (DeviceSampleFrames reports it).
     std::uint32_t deviceSampleFrames = 0;
+    // How many callback anchors the output keeps for TakeAnchors (0: none, the
+    // default). For logs and acceptance only; a full log drops new anchors and
+    // counts them (SdlAudioOutputStats::anchorsDropped).
+    std::uint32_t anchorLogCapacity = 0;
+};
+
+// One callback's anchor: the Engine time it read and the mixer's first frame of
+// the block it rendered. With these, a request's start frame can be recomputed
+// from its timestamp (docs/architecture/audio.md).
+struct OutputAnchor final {
+    Time::TimePoint anchor{};
+    std::uint64_t firstFrame = 0;
 };
 
 // Diagnostics of the output's callbacks, for logs and acceptance only.
@@ -24,6 +37,7 @@ struct SdlAudioOutputStats final {
     std::uint32_t minCallbackFrames = 0;
     std::uint32_t maxCallbackFrames = 0;
     Time::Duration maxCallbackGap{};    // longest time between two callbacks' anchors
+    std::uint64_t anchorsDropped = 0;   // anchors not logged because the log was full
 };
 
 // Plays a mixer on the default playback device. Opening starts SDL's audio
@@ -57,6 +71,10 @@ public:
     // The device's block size in frames, as SDL reports it after opening.
     [[nodiscard]] std::uint32_t DeviceSampleFrames() const;
     [[nodiscard]] SdlAudioOutputStats Stats() const;
+    // Appends the anchors logged since the last call, oldest first, and returns
+    // how many. One thread at a time; the log is a single-producer (the audio
+    // thread), single-consumer ring. Returns 0 when anchorLogCapacity is 0.
+    std::size_t TakeAnchors(std::vector<OutputAnchor>& out);
 
 private:
     struct Impl;

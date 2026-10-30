@@ -1,6 +1,6 @@
 # 音效（GYO::Audio）：交接
 
-更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值定為 60 ms（使用者決定）；`v8-engine-audio-record` 停在決策點（2026-10-30）：量測與紀錄完成，但 disk 驅動計時的前提不成立，等使用者決定 `v8-engine-audio-l2-premise`。**
+更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值定為 60 ms（使用者決定）；`v8-engine-audio-record` 完成（2026-10-30，錨點版 L2：299／299 起音落在重建的 frame）。`v8-engine-audio` 四批全部完成；下一步是消費端的 `v8-product-sfx`（同一條 PR 線）。**
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 Engine 計畫夾的慣例，不點名消費端。
 
 ## 現況
@@ -18,6 +18,8 @@
 - 2026-10-30：使用者決定「預設 60 ms」：`MixerConfig::scheduleDelay` 預設改為 60 ms，加一案守住預設值；依賴預設 0 的兩案改為明寫 0。core 35／35、audio 相關 5／5。
 - 2026-10-30：使用者說「開始 record」，開始 `v8-engine-audio-record`（medium；分析程式 high，估 2～4 h）。L2 只記錄，不是判定，所以不事先宣告門檻（AGENTS §14.1 的宣告留給消費端的判定）。做法：①程式 `gyo_audio_onset_record`（不是 CTest）以 `Time::Waiter` 跑 30 FPS 的幀迴圈，在 60 Hz Tick 格點上以 6、7、5 Tick 循環的間隔產生事件，在事件之後的下一幀才送出，時間戳用事件的 Tick 時間；每幀記下 `(Now, renderedFrames)` 估計裝置速率（不新增 API）。②驅動與 hint 由 Python 腳本以環境變數設定（程式與腳本都不呼叫 SDL）：`disk`、每塊 480、timescale 1；另跑一次預設裝置（只有計數與回呼統計，沒有檔案）。③分析：在檔案裡找起音，和事件逐一對應，報告間隔誤差（對 Δt×48000 與以估計速率修正後兩組）、對 Tick 格點與幀格點的距離、收支。
 - 2026-10-30：`v8-engine-audio-record` 停止：30 秒紀錄的收支一致（299／299），真實裝置 299 個全部準時；但 disk 驅動在 macOS 上比 Engine 時鐘慢約 7% 而且會漂移，速率修正後的間隔誤差最大 10.9 ms，分不出 Tick 格點和幀格點（121／198）。PLAN「每塊 480 就能準確計時」的前提不成立（AGENTS §14：原因改變計畫的前提）。dev_log：[2026_10_30_engine_audio_record](../../../dev_logs/2026_10_30_engine_audio_record.zh-Hant.md)。
+- 2026-10-30：使用者選「A：記錄錨點」。做法：`SdlAudioOutputConfig::anchorLogCapacity`（0＝不記錄）；回呼在渲染前把 `(anchor, 該塊第一個 frame)` 寫進預先配置的 SPSC 環，滿了丟棄並計數；讀取端 `TakeAnchors` 只有一個執行緒。分析時以「送出之後的第一個錨點」（及下一個，因送出與回呼可能同時）重建 `F0 + floor((at−T0)×48000+½) + delay`，和檔案裡的起音逐一比對。
+- 2026-10-30：`v8-engine-audio-record` 完成：錨點紀錄（`anchorLogCapacity`、`TakeAnchors`）與 L1；30 秒 L2（只記錄）299／299 起音落在重建的 frame、Engine 時間的間隔誤差最大 0.019 ms、奇數 Tick 198／198；真實裝置 299 個全部準時。給消費端：L2 的判定用錨點重建，不要用 disk 驅動的檔案時間軸（macOS 上慢約 7% 且漂移）。
 - 分支：`claude/v8-engine-audio-95a496`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -40,7 +42,9 @@
 
 ## 等使用者決定
 
-### `v8-engine-audio-l2-premise`：起音量測的做法（2026-10-30 提出）
+目前沒有。
+
+### `v8-engine-audio-l2-premise`：起音量測的做法（2026-10-30 提出；同日決定 A，見決策紀錄）
 
 - 現象：disk 驅動以每塊之後的 `SDL_Delay(10)` 模擬即時；macOS 上每次晚醒約 0.75 ms，裝置慢約 7%，而且會漂移。混音器以錨點和名目 48000 換算，起點因此偏差 7% ×（事件到錨點的距離＋delay），約 1～4 ms；加上漂移，最大 10.9 ms。
 - 影響：消費端原本要以 disk 驅動判定「起音間隔對應射擊 Tick，而不是 33 ms 的幀格點」，這需要誤差小於約 8 ms，disk 驅動在 macOS 上做不到。
@@ -91,6 +95,7 @@
 | 2026-10-30 | `v8-engine-audio-invariant5-clamp`：xhigh 審查後，Invariant 5 加上「對錨點前後 1 小時內的時間戳；超過的偏移夾在 1 小時」，捨入寫明 floor(x+½)（負數也往 +∞） | 使用者（AskUserQuestion 選「加限定語並寫明捨入（建議）」） |
 | 2026-10-30 | `v8-engine-audio-far-ahead`：太遠未來的請求一取出就算準時並佔住聲部（可能讓混音器飢餓）；先不改行為，記為未結事項，等 sdl 批定 delay 或消費端觀測到時再決定是否加前瞻上限 | 使用者（AskUserQuestion 選「先記錄，等壓力（建議）」） |
 | 2026-10-30 | `v8-engine-audio-delay-default`＝A：`MixerConfig::scheduleDelay` 的預設為 60 ms（30 FPS＋macOS 的 SDL 預設區塊不遲到；消費端可調低）。Windows 的區塊大小未量 | 使用者：「預設 60 ms」 |
+| 2026-10-30 | `v8-engine-audio-l2-premise`＝A：輸出端以有上限的環記錄每次回呼的錨點 `(T0, F0)`（只供紀錄與驗收），起音量測以錨點重建預期的 frame 逐一比對 | 使用者：「A：記錄錨點」 |
 | 2026-10-30 | `v8-engine-audio-gears`：照 PLAN「分批」的檔位與引擎（全部繼承，schedule 局部 xhigh 用 `xhigh-reviewer`），不用 ultracode | 使用者：「audio 計畫的 6 項待決事項都照建議核准」 |
 
 ## 研究事實（2026-10-30）
@@ -125,4 +130,4 @@
 | `v8-engine-audio-core` | 3～4 h | 約 1.5 h | 建置與突變在背景約 20 分鐘 |
 | `v8-engine-audio-schedule` | 4～5 h | 約 2.5 h | 含 xhigh 審查約 18 分鐘、兩次 Invariant 5 的決定 |
 | `v8-engine-audio-sdl` | 3～5 h | 約 2 h | 含完整 test preset 的建置與 CTest |
-| `v8-engine-audio-record` | 2～4 h | 約 1.3 h（停止點） | 量測與 30 秒紀錄；停在 `v8-engine-audio-l2-premise` |
+| `v8-engine-audio-record` | 2～4 h | 約 2.3 h | 第一輪 1.3 h（停在 `v8-engine-audio-l2-premise`）＋錨點 1 h |

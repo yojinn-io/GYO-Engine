@@ -37,8 +37,8 @@ MixerAndClip MakeMixer() {
     return MixerAndClip{std::move(mixer).value(), *clip};
 }
 
-SdlAudioOutput OpenOutput(Mixer&& mixer) {
-    auto output = SdlAudioOutput::Open(std::move(mixer));
+SdlAudioOutput OpenOutput(Mixer&& mixer, const Engine::Audio::Sdl::SdlAudioOutputConfig& config = {}) {
+    auto output = SdlAudioOutput::Open(std::move(mixer), config);
     REQUIRE_MESSAGE(output.has_value(), (output ? std::string() : Describe(output.error())));
     return std::move(output).value();
 }
@@ -74,6 +74,45 @@ TEST_CASE("Audio SDL output on the dummy driver renders the mixer from SDL's cal
     CHECK(stats.maxCallbackFrames >= stats.minCallbackFrames);
 }
 
+TEST_CASE("Audio SDL output on the dummy driver logs each callback's anchor in order") {
+    auto [mixer, clip] = MakeMixer();
+    Engine::Audio::Sdl::SdlAudioOutputConfig config;
+    config.anchorLogCapacity = 4096;
+    SdlAudioOutput output = OpenOutput(std::move(mixer), config);
+    REQUIRE(Advances(output));
+    std::vector<Engine::Audio::Sdl::OutputAnchor> anchors;
+    const std::size_t first = output.TakeAnchors(anchors);
+    REQUIRE(first >= 2);
+    CHECK(anchors.size() == first);
+    CHECK(anchors[0].firstFrame == 0);
+    for (std::size_t i = 1; i < anchors.size(); ++i) {
+        CHECK(anchors[i].anchor >= anchors[i - 1].anchor);
+        CHECK(anchors[i].firstFrame - anchors[i - 1].firstFrame >= output.Stats().minCallbackFrames);
+    }
+    REQUIRE(Advances(output));
+    const std::size_t second = output.TakeAnchors(anchors);
+    REQUIRE(second >= 1);
+    CHECK(anchors[first].firstFrame > anchors[first - 1].firstFrame); // no anchor is handed out twice
+    CHECK(output.Stats().anchorsDropped == 0);
+}
+
+TEST_CASE("Audio SDL output on the dummy driver drops and counts anchors when its log is full") {
+    auto [mixer, clip] = MakeMixer();
+    Engine::Audio::Sdl::SdlAudioOutputConfig config;
+    config.anchorLogCapacity = 2;
+    SdlAudioOutput output = OpenOutput(std::move(mixer), config);
+    REQUIRE(Advances(output));
+    CHECK(output.Stats().anchorsDropped > 0);
+    std::vector<Engine::Audio::Sdl::OutputAnchor> anchors;
+    CHECK(output.TakeAnchors(anchors) == 2);
+    CHECK(anchors[0].firstFrame == 0);
+
+    auto other = MakeMixer();
+    SdlAudioOutput silent = OpenOutput(std::move(other.mixer)); // no log by default
+    REQUIRE(Advances(silent));
+    CHECK(silent.TakeAnchors(anchors) == 0);
+}
+
 TEST_CASE("Audio SDL outputs on the dummy driver share SDL's audio subsystem by reference count") {
     auto first = MakeMixer();
     auto second = MakeMixer();
@@ -98,11 +137,14 @@ TEST_CASE("Audio SDL outputs on the dummy driver share SDL's audio subsystem by 
 TEST_CASE("Audio SDL output on the disk driver writes the mixer's samples where they were scheduled") {
     const char* path = std::getenv("SDL_AUDIO_DISK_OUTPUT_FILE");
     REQUIRE(path != nullptr);
+    std::vector<Engine::Audio::Sdl::OutputAnchor> anchors;
     {
         auto [mixer, clip] = MakeMixer();
         auto submitter = mixer.CreateSubmitter();
         REQUIRE(submitter.has_value());
-        SdlAudioOutput output = OpenOutput(std::move(mixer));
+        Engine::Audio::Sdl::SdlAudioOutputConfig config;
+        config.anchorLogCapacity = 4096;
+        SdlAudioOutput output = OpenOutput(std::move(mixer), config);
         CHECK(output.DriverName() == "disk");
         CHECK(output.DeviceSampleFrames() == 480);
         // A time already passed: the impulse starts at once, counted late.
@@ -112,6 +154,8 @@ TEST_CASE("Audio SDL output on the disk driver writes the mixer's samples where 
         CHECK(stats.submitted == 1);
         CHECK(stats.playedLate == 1);
         CHECK(stats.submitted == stats.playedOnTime + stats.playedLate + stats.droppedQueueFull + stats.droppedNoVoice);
+        static_cast<void>(output.TakeAnchors(anchors));
+        CHECK(output.Stats().anchorsDropped == 0);
     }
     std::ifstream file(path, std::ios::binary);
     REQUIRE(file.good());
@@ -131,7 +175,12 @@ TEST_CASE("Audio SDL output on the disk driver writes the mixer's samples where 
             sounding.push_back(frame);
         }
     }
-    CHECK(sounding.size() == 1);
+    REQUIRE(sounding.size() == 1);
+    // The file's frames are the mixer's frames: a late request starts at the
+    // first frame of the block that took it, which is a logged anchor's frame.
+    bool atAnchor = false;
+    for (const auto& anchor : anchors) atAnchor = atAnchor || anchor.firstFrame == sounding[0];
+    CHECK(atAnchor);
 }
 
 TEST_CASE("Audio SDL output reports an unavailable driver and leaves submitters usable") {

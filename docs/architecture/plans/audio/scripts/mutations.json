@@ -232,7 +232,7 @@
     },
     {
       "id": "au-sdl-quit-twice",
-      "what": "Closing an output releases SDL's audio subsystem twice, stopping the other outputs",
+      "what": "Closing an output releases SDL's audio subsystem twice, stopping the other outputs (an output then outlives the subsystem and may crash on close)",
       "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
       "find": "    if (impl_->subsystem) SDL_QuitSubSystem(SDL_INIT_AUDIO);",
       "replace": "    if (impl_->subsystem) { SDL_QuitSubSystem(SDL_INIT_AUDIO); SDL_QuitSubSystem(SDL_INIT_AUDIO); }",
@@ -246,7 +246,7 @@
         "--output-on-failure"
       ],
       "timeout": 180,
-      "expect": "CHECK\\( Advances\\(a\\) \\) is NOT correct"
+      "expect": "CHECK\\( Advances\\(a\\) \\) is NOT correct|test case CRASHED"
     },
     {
       "id": "au-sdl-error-without-detail",
@@ -299,6 +299,78 @@
         "^audio_sdl\\.unavailable$",
         "--output-on-failure"
       ]
+    },
+    {
+      "id": "au-sdl-anchor-not-logged",
+      "what": "The callback logs no anchor",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames);\n",
+      "replace": "",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "REQUIRE\\( first >= 2 \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-anchor-wrong-frame",
+      "what": "An anchor is logged with the block's frame off by one",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames);",
+      "replace": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames + 1);",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.disk$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( atAnchor \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-anchor-full-uncounted",
+      "what": "An anchor dropped by a full log is not counted",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "            anchorsDropped.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( output.Stats\\(\\).anchorsDropped > 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-anchor-head-not-published",
+      "what": "Taking anchors never frees the log, so the same anchors are handed out again",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "    self.anchorHead.store(head, std::memory_order_release);\n",
+      "replace": "",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( anchors\\[first\\].firstFrame > anchors\\[first - 1\\].firstFrame \\) is NOT correct"
     }
   ]
 }

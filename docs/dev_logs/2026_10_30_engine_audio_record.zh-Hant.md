@@ -1,8 +1,11 @@
 # Engine v8-engine-audio-record：disk 驅動的起音量測（只記錄）
 
-日期：2026-10-30。**停在決策點**：量測程式、分析腳本與 30 秒的紀錄都完成了，但結果推翻 PLAN 的一個前提：「disk 驅動固定每塊 480 樣本就能準確計時」。依 AGENTS §14 停下回報，不自行改做法。計畫見 [audio 計畫](../architecture/plans/audio/README.md)。
+日期：2026-10-30。**完成**（第一輪停在決策點，使用者選 A 後完成）。計畫見 [audio 計畫](../architecture/plans/audio/README.md)。
 
-收支：一致（送出 299、起音 299、計數的丟棄 0；真實裝置送出 299、準時 299）
+收支：一致（第二輪：送出 299、起音 299、計數的丟棄 0、錨點 2843 個且丟棄 0；真實裝置送出 299、準時 299）
+
+- 第一輪：量測程式、分析腳本與 30 秒紀錄完成，但結果推翻 PLAN 的前提「disk 驅動固定每塊 480 樣本就能準確計時」。依 AGENTS §14 停下回報。
+- 使用者選 `v8-engine-audio-l2-premise`＝A（原話：「A：記錄錨點」）。第二輪以錨點重建每個請求的起點：299／299 起音都落在重建的 frame，Engine 時間下的間隔誤差最大 0.019 ms。
 
 ## 為什麼做
 
@@ -47,10 +50,33 @@
 - 這不是混音器的缺陷：L1 已以假錨點逐樣本驗證換算（Invariant 5）；這裡量到的是 disk 驅動的計時方式。
 - 選項見 HANDOFF「等使用者決定」的 `v8-engine-audio-l2-premise`。
 
+## 第二輪：錨點紀錄（`v8-engine-audio-l2-premise`＝A）
+
+- 後端：`SdlAudioOutputConfig::anchorLogCapacity`（預設 0＝不記錄）；回呼在渲染前把 `(anchor, 該塊第一個 frame)` 寫進預先配置的 SPSC 環（滿了丟棄並計數 `anchorsDropped`）；`TakeAnchors` 由一個執行緒取出。只記錄每次回呼的第一段。
+- L1：dummy 驅動 2 案（依序且不重複交出、滿了丟棄並計數、預設不記錄），disk 案加一項：遲到的起音恰好在某個錨點的 frame（檔案的 frame 就是混音器的 frame）。
+- 量測程式每幀取出錨點寫進 anchors.csv。分析以「送出前的最後一個、送出後的第一個、再下一個」三個錨點重建 `first + floor((at−anchor)×48000+½) + delay`（遲到則為 first），起音必須等於其中之一；再以命中的錨點把起音換回 Engine 時間量間隔。
+- **分析的檢出力**：套用突變 `au-sched-round-truncate`（換算改成截斷）跑 8 秒，只有 43／80 命中，其餘差 1 frame；原碼 80／80。
+- 第二輪 30 秒（macOS Intel，負載 3.2；證據：主 checkout 的 `build/target/_build/test/logs/audio-onset-record-20261030-anchors/`）：
+
+| 項目 | disk（480／塊） |
+|---|---|
+| 送出／準時／遲到／丟棄 | 299／299／0／0 |
+| 錨點 | 2843 個，丟棄 0 |
+| 起音落在重建的 frame | 299／299（全部是「送出後的第一個錨點」） |
+| 間隔誤差（Engine 時間，經錨點） | 中位數 −0.0001 ms，P99 0.017 ms，最大 0.019 ms |
+| 奇數 Tick 間隔比幀格點更接近 Tick 值（經錨點） | 198／198 |
+| 參考：速率修正後（不用錨點） | P99 4.0 ms，最大 22.2 ms；128／198 |
+| 回呼最長間隔 | 29.7 ms |
+
+  - 真實裝置（CoreAudio，1024／塊）：送出 299、準時 299、遲到 0，回呼最長間隔 21.7 ms。
+- 本機 CTest：`ctest --preset test` 97／97、`ctest --preset core` 35／35。
+- 經緯：`au-sdl-quit-twice` 在加了新案例後變成 `wrong_failure`。新案例關掉第二個輸出時，子系統被釋放兩次，第一個輸出在子系統關閉後才銷毀，於是崩潰。這是同一缺陷的正當失敗，預期訊息改為「Advances(a) 失敗或崩潰」。
+
 ## 突變的完整一輪
 
 - test 建置：`mutations.json` 全部 26／26 被殺（core 9、schedule 12、sdl 5）。
 - TSan 建置（`TSAN_OPTIONS=ignore_interceptors_accesses=0`）：`mutations-tsan.json` 4／4 被殺。
 - 執行後原始碼已還原（`git status` 的 engine 沒有變更）。
 
-- 時間：估 2～4 h，到停止點約 1.3 h。
+- 第二輪：`au-sdl-anchor-*` 4 個被殺（不記錄、frame 差 1、滿了不計數、取出後不釋放），`au-sdl-not-resumed` 與 `au-sdl-quit-twice` 重跑被殺。
+- 時間：估 2～4 h，實際約 2.3 h（第一輪 1.3 h＋錨點 1 h）。

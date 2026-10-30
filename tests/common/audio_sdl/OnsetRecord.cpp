@@ -8,7 +8,8 @@
 //
 // Usage: gyo_audio_onset_record <seconds> <output directory>
 // Writes events.csv (index,tick,at_ns,sent_ns,accepted), rate.csv
-// (now_ns,rendered_frames, once per frame) and summary.txt (key=value lines).
+// (now_ns,rendered_frames, once per frame), anchors.csv (anchor_ns,first_frame,
+// one per output callback) and summary.txt (key=value lines).
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -64,7 +65,9 @@ int main(int argc, char** argv) {
     if (!clip || !mixer) return 2;
     auto submitter = mixer->CreateSubmitter();
     if (!submitter) return 2;
-    auto output = Sdl::SdlAudioOutput::Open(std::move(mixer).value());
+    Sdl::SdlAudioOutputConfig config;
+    config.anchorLogCapacity = 8192; // drained every frame, far above one frame's callbacks
+    auto output = Sdl::SdlAudioOutput::Open(std::move(mixer).value(), config);
     std::ofstream summary(out / "summary.txt");
     if (!output) {
         summary << "status=unavailable\nerror=" << Engine::Base::Describe(output.error()) << "\n";
@@ -75,8 +78,12 @@ int main(int argc, char** argv) {
 
     std::ofstream events(out / "events.csv");
     std::ofstream rate(out / "rate.csv");
+    std::ofstream anchorFile(out / "anchors.csv");
     events << "index,tick,at_ns,sent_ns,accepted\n";
     rate << "now_ns,rendered_frames\n";
+    anchorFile << "anchor_ns,first_frame\n";
+    std::vector<Sdl::OutputAnchor> anchors;
+    anchors.reserve(8192);
 
     // Start a little ahead so the device is running before the first event.
     const TimePoint origin = Engine::Time::Now() + std::chrono::duration_cast<Duration>(std::chrono::milliseconds(200));
@@ -100,10 +107,16 @@ int main(int argc, char** argv) {
             gap = (gap + 1) % std::size(kGaps);
         }
         rate << Ns(Engine::Time::Now(), origin) << ',' << output->OwnedMixer().Stats().renderedFrames << '\n';
+        anchors.clear();
+        output->TakeAnchors(anchors);
+        for (const auto& anchor : anchors) anchorFile << Ns(anchor.anchor, origin) << ',' << anchor.firstFrame << '\n';
     }
     // Let the last events play out before closing the device.
     static_cast<void>(waiter->WaitUntil(Engine::Time::Now() + std::chrono::duration_cast<Duration>(std::chrono::milliseconds(300))));
 
+    anchors.clear();
+    output->TakeAnchors(anchors);
+    for (const auto& anchor : anchors) anchorFile << Ns(anchor.anchor, origin) << ',' << anchor.firstFrame << '\n';
     const auto stats = output->OwnedMixer().Stats();
     const auto device = output->Stats();
     summary << "status=ok\n"
@@ -122,6 +135,9 @@ int main(int argc, char** argv) {
             << "callbacks=" << device.callbacks << "\n"
             << "callback_frames_min=" << device.minCallbackFrames << "\n"
             << "callback_frames_max=" << device.maxCallbackFrames << "\n"
+            << "anchors_dropped=" << device.anchorsDropped << "\n"
+            << "schedule_delay_ns="
+            << std::chrono::duration_cast<std::chrono::nanoseconds>(MixerConfig{}.scheduleDelay).count() << "\n"
             << "callback_gap_max_ns="
             << std::chrono::duration_cast<std::chrono::nanoseconds>(device.maxCallbackGap).count() << "\n";
     return 0;

@@ -57,8 +57,14 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
   the previous one ended). Opening fails with `DeviceUnavailable` and SDL's message as the detail; submitters keep
   accepting plays, which are never heard. Destroying the output destroys the stream first (no callback runs after
   that) and then releases the subsystem. `DriverName` (diagnostics only), `DeviceSampleFrames` and callback
-  `Stats` (count, frames, smallest and largest callback, longest gap between callback anchors) are for logs and
-  acceptance. `deviceSampleFrames` in the config is a hint to SDL.
+  `Stats` (count, frames, smallest and largest callback, longest gap between callback anchors, anchors dropped) are
+  for logs and acceptance. `deviceSampleFrames` in the config is a hint to SDL.
+- **Anchor log (`anchorLogCapacity`, `TakeAnchors`).** When the capacity is not zero, each callback appends
+  `(anchor, first frame of its block)` to a bounded single-producer, single-consumer ring allocated at opening; a
+  full ring drops the anchor and counts it. One thread takes them, oldest first. With the anchors a request's start
+  frame can be recomputed from its timestamp (`first + floor((at - anchor) × 48000 + 1/2) + delayFrames`, or `first`
+  when late), which is how the Engine L2 checks the output without depending on a device's pacing
+  (v8-engine-audio-l2-premise; `tests/common/audio_sdl/onset_record.py`). Only a callback's first pass is logged.
 - **SDL is never reached from outside the backend.** The backend links SDL3 PRIVATE and offers no `*Native` target;
   consumers and tests use only its neutral header. Tests choose SDL's driver and hints through the environment
   (`SDL_AUDIO_DRIVER`, `SDL_AUDIO_DISK_*`, `SDL_AUDIO_DEVICE_SAMPLE_FRAMES`, format hints), never by calling SDL.

@@ -7,7 +7,13 @@ grid, each sent in the frame after it happened) in two modes:
   device  the default playback device; only the mixer's counters and the callback statistics.
 SDL's driver and hints are set through the environment; nothing here calls SDL.
 
-The disk analysis reports, for consecutive events:
+The disk analysis first rebuilds each request's start frame from the logged callback anchors
+(v8-engine-audio-l2-premise): start = first_frame + floor((at - anchor) * 48000 + 1/2) + delay frames,
+or the block's first frame when that is earlier, for the callback that took the request. That
+callback is the one before, at or after the request was sent (a send and a callback may overlap), so
+three candidates are tried; an onset matches when it equals one of them. Intervals are then measured
+in Engine time through the anchor that took each request, which no disk pacing affects.
+It also reports, for consecutive events:
   - the onset interval minus the timestamp interval, with 48000 frames per second (nominal) and with
     the device's rate estimated from (time, rendered frames) samples (rate-corrected);
   - for intervals of an odd number of ticks (5 or 7: not a multiple of the 33.3 ms frame), whether
@@ -20,6 +26,7 @@ Usage (from the repository root):
 Exit status: 0 when every mode ran, 1 when one could not run, 2 on a usage error.
 """
 import argparse
+import bisect
 import csv
 import hashlib
 import os
@@ -93,12 +100,50 @@ def estimate_rate(rate_rows):
     return num / den
 
 
+def frames_from_ns(ns):
+    # The mixer's rounding: floor(ns * 48000 / 10^9 + 1/2) = floor((ns * 6 + 62500) / 125000).
+    return (ns * 6 + 62500) // 125000
+
+
+def anchored(found, accepted, anchors, delay_frames, lines):
+    """Pairs each onset with the anchor that took its request; returns Engine-time onsets (ns) or None."""
+    times = [a for a, _ in anchors]
+    exact, which, misses, engine_ns = 0, {-1: 0, 0: 0, 1: 0}, [], []
+    for (frame, _), event in zip(found, accepted):
+        at, sent = int(event["at_ns"]), int(event["sent_ns"])
+        k = bisect.bisect_left(times, sent)
+        best = None
+        for step in (0, -1, 1):
+            i = k + step
+            if not 0 <= i < len(anchors):
+                continue
+            anchor_ns, first = anchors[i]
+            start = max(first, first + frames_from_ns(at - anchor_ns) + delay_frames)
+            if start == frame:
+                best = (step, anchor_ns, first)
+                break
+        if best is None:
+            nearest = min((abs(frame - max(f, f + frames_from_ns(at - a) + delay_frames)), j)
+                          for j, (a, f) in enumerate(anchors[max(0, k - 1):k + 2], start=max(0, k - 1)))
+            misses.append(nearest[0])
+            continue
+        exact += 1
+        which[best[0]] += 1
+        engine_ns.append(best[1] + (frame - best[2]) * 1_000_000_000 / RATE)
+    lines.append(f"disk anchored match: {exact}/{len(found)} onsets at their rebuilt start frame "
+                 f"(anchor before send {which[-1]}, at or after {which[0]}, the next {which[1]}); "
+                 f"misses' nearest distance in frames: {sorted(misses)[:20]}")
+    return engine_ns if exact == len(found) else None
+
+
 def analyze_disk(directory, lines):
     summary = read_summary(directory / "summary.txt")
     with open(directory / "events.csv", newline="") as f:
         events = [row for row in csv.DictReader(f)]
     with open(directory / "rate.csv", newline="") as f:
         rate_rows = list(csv.DictReader(f))
+    with open(directory / "anchors.csv", newline="") as f:
+        anchors = [(int(r["anchor_ns"]), int(r["first_frame"])) for r in csv.DictReader(f)]
     raw = (directory / "audio.raw").read_bytes()
     found = onsets(raw)
     accepted = [e for e in events if e["accepted"] == "1"]
@@ -112,6 +157,25 @@ def analyze_disk(directory, lines):
     if len(found) != len(accepted) or len(found) < 3:
         lines.append("disk analysis skipped: onsets and accepted events do not pair up")
         return False
+
+    lines.append(f"disk anchors: {len(anchors)} logged, {summary.get('anchors_dropped', '?')} dropped")
+    delay_frames = frames_from_ns(int(summary.get("schedule_delay_ns", "0")))
+    engine_onsets = anchored(found, accepted, anchors, delay_frames, lines)
+    if engine_onsets is not None:
+        errors, near_tick, odd = [], 0, 0
+        for t0, t1, e0, e1 in zip(engine_onsets, engine_onsets[1:], accepted, accepted[1:]):
+            dt_ms = (int(e1["at_ns"]) - int(e0["at_ns"])) / 1e6
+            onset_ms = (t1 - t0) / 1e6
+            errors.append(onset_ms - dt_ms)
+            ticks = int(e1["tick"]) - int(e0["tick"])
+            if ticks % 2 == 1:
+                odd += 1
+                frame_grid = round(onset_ms / FRAME_MS) * FRAME_MS
+                if abs(onset_ms - ticks * TICK_MS) < abs(onset_ms - frame_grid):
+                    near_tick += 1
+        lines.append(f"disk interval error in Engine time through anchors (ms): {describe(errors)}")
+        lines.append(f"disk odd-tick intervals nearer the tick value than the frame grid, through anchors: "
+                     f"{near_tick}/{odd}")
 
     rate = estimate_rate(rate_rows)
     lines.append(f"disk device rate: {rate:.2f} frames/s against the Engine clock ({(rate / RATE - 1) * 1e6:+.0f} ppm)")

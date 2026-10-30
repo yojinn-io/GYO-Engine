@@ -33,7 +33,8 @@ AudioError Unavailable(const char* message) {
 } // namespace
 
 struct SdlAudioOutput::Impl final {
-    explicit Impl(Mixer&& owned) : mixer(std::move(owned)), buffer(std::size_t{kPassFrames} * kChannels) {}
+    Impl(Mixer&& owned, const std::uint32_t anchorCapacity)
+        : mixer(std::move(owned)), buffer(std::size_t{kPassFrames} * kChannels), anchors(anchorCapacity) {}
 
     Mixer mixer;
     std::vector<std::int16_t> buffer; // allocated once, written only by the callback
@@ -50,6 +51,25 @@ struct SdlAudioOutput::Impl final {
     std::atomic<std::int64_t> maxGapNs{0};
     Time::TimePoint lastAnchor{}; // the callback's own
 
+    // The anchor log: the callback owns tail, TakeAnchors owns head (release on
+    // publish, acquire on read, as in the mixer's submitter rings).
+    std::vector<OutputAnchor> anchors; // allocated once
+    std::atomic<std::uint64_t> anchorTail{0};
+    std::atomic<std::uint64_t> anchorHead{0};
+    std::atomic<std::uint64_t> anchorsDropped{0};
+
+    void LogAnchor(const Time::TimePoint anchor, const std::uint64_t firstFrame) noexcept {
+        const std::uint64_t capacity = anchors.size();
+        if (capacity == 0) return;
+        const std::uint64_t tail = anchorTail.load(std::memory_order_relaxed);
+        if (tail - anchorHead.load(std::memory_order_acquire) >= capacity) {
+            anchorsDropped.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+        anchors[tail % capacity] = OutputAnchor{anchor, firstFrame};
+        anchorTail.store(tail + 1, std::memory_order_release);
+    }
+
     // SDL's audio thread. Reads the Engine time once and renders the frames SDL
     // asks for. Nothing here throws, allocates or locks (SDL's own stream
     // queue may allocate inside SDL_PutAudioStreamData).
@@ -58,6 +78,8 @@ struct SdlAudioOutput::Impl final {
         const Time::TimePoint anchor = Time::Now();
         if (additional <= 0) return;
         const auto wanted = static_cast<std::uint32_t>((additional + kBytesPerFrame - 1) / kBytesPerFrame);
+        // Only this thread renders, so the count read here is this block's first frame.
+        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames);
 
         std::uint32_t done = 0;
         while (done < wanted) {
@@ -86,7 +108,7 @@ struct SdlAudioOutput::Impl final {
 };
 
 Base::Result<SdlAudioOutput, AudioError> SdlAudioOutput::Open(Mixer&& mixer, const SdlAudioOutputConfig& config) {
-    auto impl = std::make_unique<Impl>(std::move(mixer));
+    auto impl = std::make_unique<Impl>(std::move(mixer), config.anchorLogCapacity);
     if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) return Base::Err(Unavailable("SDL audio did not start"));
     impl->subsystem = true;
     SdlAudioOutput output(std::move(impl)); // from here the destructor releases the subsystem
@@ -157,7 +179,21 @@ SdlAudioOutputStats SdlAudioOutput::Stats() const {
         impl_->maxCallbackFrames.load(std::memory_order_relaxed),
         std::chrono::duration_cast<Time::Duration>(
             std::chrono::nanoseconds(impl_->maxGapNs.load(std::memory_order_relaxed))),
+        impl_->anchorsDropped.load(std::memory_order_relaxed),
     };
+}
+
+std::size_t SdlAudioOutput::TakeAnchors(std::vector<OutputAnchor>& out) {
+    GYO_ASSERT(impl_ != nullptr);
+    Impl& self = *impl_;
+    const std::uint64_t capacity = self.anchors.size();
+    if (capacity == 0) return 0;
+    std::uint64_t head = self.anchorHead.load(std::memory_order_relaxed);
+    const std::uint64_t tail = self.anchorTail.load(std::memory_order_acquire);
+    const std::size_t taken = static_cast<std::size_t>(tail - head);
+    for (; head != tail; ++head) out.push_back(self.anchors[head % capacity]);
+    self.anchorHead.store(head, std::memory_order_release);
+    return taken;
 }
 
 } // namespace Engine::Audio::Sdl
