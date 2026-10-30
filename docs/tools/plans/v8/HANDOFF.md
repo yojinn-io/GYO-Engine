@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
-- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` 進行中：診斷與分析腳本已備好，事前宣告已同意；等 Windows 場次（要含這次改動的客戶端）。
+- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。等你決定下一步（`v8-tool-ui-ime-observe-next`）。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -30,6 +30,7 @@
 |---|---|---|---|---|
 | `v8-tool-plan-location` | 計畫文件放哪 | `docs/tools/plans/v8/`（④ 的線計畫；之後你的 voxel 方案也能放這裡；`docs/` 底下，不是新的 Top-level 目錄）／`docs/ui_editor/plans/v8/`（現在只剩 UI Editor，放 owner 的文件夾更直接） | 前者，因為 ④ 之後還有 voxel；UI 的格式與 Design Invariants 仍寫在 [ui_toolchain.md](../../../ui_toolchain.md) | 文件位置；圖書管理員可再調 |
 | `v8-tool-start-timing` | 實作何時開始 | 照 v8-product-order 在 ③ 之後／ui-widgets-line 的檢測（`v8-tool-ui-ime-observe`）先做，其他照順序 | 檢測先做：它不改行為，結果決定輸入法要不要修 | 何時排實機 |
+| `v8-tool-ui-ime-observe-next` | 檢測的判定不成立後怎麼走 | (a) 照宣告重做場次：日文 3 次，每次記 Enter 次數與畫面結果，中文可省略並記為範圍限制（約 10 分鐘＋回報）／(b) 接受這次的 log 當證據，把判定記為「不成立」，直接以觀測到的事實規劃 `v8-engine-input-composition`／(c) 重新看範圍：例如位址欄改成不開輸入法（只收 ASCII），把輸入法的支援留給之後的 `text_field` | (b)：事實 1～3 都有逐行的直接證據，重做補的是畫面結果，不改變要做的事 | `v8-engine-input-composition` 的內容與何時開始 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ime-input-delta` | 組字事件由誰做 | Engine 的 Input（計畫夾 input-and-present；只加不改，不變式 1）在工具線做／交給 Engine 的會話做 | 工具線做，記到 input-and-present 的 HANDOFF；先等 `v8-tool-ui-ime-observe` 的結果 | 有沒有 Engine 批 |
@@ -89,3 +90,4 @@
 - 2026-10-30：使用者：「合併 #109、另開 PR」。PR #109 以 merge commit 合併（`5cfa149c`）。剩下的 4 個 commit（text_field 的決定、ime-observe、同意、音效需求更正）rebase 到 master，分支 `claude/v8-tool-ui-ime-observe`，另開 PR。
 - 2026-10-30：音效線轉來第二項 assets editor 需求：動畫事件時刻與音效同步資料化（`v8-tool-assets-anim-events`），使用者原話「這個聲音和動畫的管理是資料化的吧，是的話，就給Assets Editor來處理。」記到 README；只記需求。
 - 2026-10-30：清理：`v8-tool-ui-editor-structure` 已做完卻還在「等你決定」，移到決定紀錄；README 的 `v8-tool-ui-editor-file-browser` 補上 ✓。
+- 2026-10-30：收到 Windows 場次的 log 與回報（日文 IME、無中文 IME、每次的畫面結果未記錄）。收支一致（169 行、34,990 bytes、丟棄 0）。判定不成立，停下回報。觀測到：組字事件 0 筆（SDL 預設由 OS 畫組字）、字在確定時成批送來、平假名模式送全形字元被大廳的 ASCII 過濾丟掉、半形可以。log 與分析輸出存在 `evidence/ime-observe/`。

@@ -136,7 +136,7 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 
 - **工具**：
   - 客戶端參數 `--text-input-trace` 打開 `SdlInput::SetTextDiagnostics`，log 寫在執行檔旁的 `logs/client-<時間>.log`。
-  - Windows 用 [scripts/ime_observe_windows.cmd](scripts/ime_observe_windows.cmd) 啟動（放在 `gyo_object_fps_pvp.exe` 旁邊，雙擊）。
+  - Windows 用 [scripts/ime_observe_windows.cmd](scripts/ime_observe_windows.cmd) 啟動（放在 `gyo_object_fps_pvp.exe` 旁邊，雙擊；檔內有一行啟動指令與 3 行註解）。
   - 分析用 [scripts/ime_observe_report.py](scripts/ime_observe_report.py)，在 Mac 上跑。
 - **場次**（Windows 11，主戰場；不需要 Gateway 與 Match，只用大廳的位址欄）：
   1. 對照組：輸入法關閉（英數），點位址欄、清空、打「127.0.0.1:8080」、Enter。1 次。
@@ -191,3 +191,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-panels` | [2026_10_30_tool_v8_ui_editor_panels](../../../dev_logs/2026_10_30_tool_v8_ui_editor_panels.zh-Hant.md) |
 | `v8-tool-ui-editor-element-schema` | [2026_10_30_tool_v8_ui_editor_element_schema](../../../dev_logs/2026_10_30_tool_v8_ui_editor_element_schema.zh-Hant.md) |
 | `v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` | [2026_10_30_tool_v8_ui_editor_clipboard_nudge](../../../dev_logs/2026_10_30_tool_v8_ui_editor_clipboard_nudge.zh-Hant.md) |
+| `v8-tool-ui-ime-observe`（停下回報） | [2026_10_30_tool_v8_ui_ime_observe](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md) |
