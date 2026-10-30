@@ -42,8 +42,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── v8-tool-ui-invariants                「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
 │   ├── v8-engine-input-composition          「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
 │   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
-│   ├── v8-engine-os-list-directory（只在選 ImGui 時）「high｜Opus 5.5｜GYO::Os 加列目錄、檔案系統根（Architecture Delta）」
-│   ├── v8-tool-ui-editor-file-browser（討論中）「high｜Opus 5.5｜資料夾／檔案選擇窗，取代手打路徑；ImGui 或系統窗看 v8-tool-ui-editor-mount-ux」
+│   ├── v8-tool-ui-editor-file-browser       「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
 │   ├── v8-tool-ui-editor-text-field         「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
 │   ├── v8-tool-ui-button-style（待決）       「medium｜Opus 5.5｜按鈕外觀的共用樣式；看 v8-tool-ui-widget-scope」
 │   └── v8-product-lobby-text-field          「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
@@ -105,8 +104,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 | `v8-tool-ui-invariants` | medium｜Opus 5.5 | 2～3 h | 在 [ui_toolchain.md](../../../ui_toolchain.md) 寫 `GYO::Ui`、ui_editor 的 `Design Invariants`＋`Replacement Criteria`；能守的寫守衛 Test | 使用者同意節的內容 |
 | `v8-engine-input-composition` | high｜Opus 5.5 | 6～10 h | `TextEvent` 加組字的種類（組字字串、游標位置）；`SetTextInputArea`。只加不改 | CI：既有 IP-1 Test 判定不變；新事件的單元 Test（合成的 SDL 事件）；突變只跑相關的（v7.1 D184） |
 | `v8-tool-ui-text-field` | high（編輯狀態局部 xhigh）｜Opus 5.5 | 10～16 h | `gyo.ui` v2、`text_field` 的 codec／驗證／版面／編輯狀態／繪製 | CI：codec 往返、v1 文件照常載入、編輯狀態的單元 Test（含組字中按 Enter、Backspace、焦點離開）、突變 |
-| `v8-engine-os-list-directory`（只在選 ImGui 時） | high｜Opus 5.5 | 4～6 h | `GYO::Os::Files` 加：列出一層目錄（名稱 UTF-8＋種類）、檔案系統的根（Windows 的磁碟機；其他平台 `/`）。同步、一次一層、不監看 | CI：`tests/common/os` 三平台，含非 ASCII 名稱、不是目錄、權限不足、Windows 長路徑；R1～R5 守衛照常 |
-| `v8-tool-ui-editor-file-browser`（討論中） | high｜Opus 5.5 | 6～10 h（系統窗約 3～5 h） | 做法看 `v8-tool-ui-editor-mount-ux`。ImGui 版：路徑列、上一層、根、資料夾與 `.json` 清單、手打路徑的退路。Mount 改成「選資產資料夾」一步（參考 AssetPack 的「データフォルダを開く」）；Open、Export 也用它。不存狀態 | CI：選擇窗的狀態邏輯（不需視窗）；L3：Windows 與 macOS 各選一次中文路徑 |
+| `v8-tool-ui-editor-file-browser` | high｜Opus 5.5 | 3～5 h | SDL3 的系統選擇窗（`SDL_ShowOpenFolderDialog`、`SDL_ShowOpenFileDialog`、`SDL_ShowSaveFileDialog`）：選單「Open Asset Folder...」一步掛載（參考 AssetPack 的「データフォルダを開く」）；Open、Export、掛載對話框的欄位也用。回呼經執行緒安全的收件匣，在幀之間套用。不存狀態；跳不出窗時退回手打 | CI：收件匣跨執行緒、選資料夾後掛載、取消不掛載；L3：Windows 與 macOS 各選一次中文路徑 |
 | `v8-tool-ui-editor-text-field` | high｜Opus 5.5 | 8～12 h | ui_editor 新增、編輯、預覽 `text_field`；輸出 v2 | CI：`tests/ui_editor` 的往返與 CLI 驗證；L3：使用者用 GUI 擺一個輸入框 |
 | `v8-tool-ui-button-style`（待決） | medium｜Opus 5.5 | 4～6 h | 按鈕外觀的共用樣式（同一組顏色、字級只寫一次） | 看 `v8-tool-ui-widget-scope` |
 | `v8-product-lobby-text-field` | high｜Opus 5.5 | 4～6 h | 大廳的位址欄改成 `text_field`；刪掉 `HandleTextEditing`、`AppendAddress` 的編輯部分，只留字元規則 | CI：大廳的既有 Test；L3：Windows 用輸入法打位址、看得到組字。**產品批**：由產品會話排程 |
@@ -134,3 +132,4 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 | 批 | dev_log |
 |---|---|
 | `v8-tool-plan` | [2026_10_30_tool_v8_plan](../../../dev_logs/2026_10_30_tool_v8_plan.zh-Hant.md) |
+| `v8-tool-ui-editor-file-browser` | [2026_10_30_tool_v8_ui_editor_file_browser](../../../dev_logs/2026_10_30_tool_v8_ui_editor_file_browser.zh-Hant.md) |

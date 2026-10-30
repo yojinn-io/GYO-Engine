@@ -1,6 +1,7 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
 #include "gyo/ui_editor/FileService.hpp"
+#include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
@@ -9,6 +10,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <thread>
 
 namespace {
 
@@ -326,9 +328,30 @@ void TestContentHashIsFnv1a(const std::filesystem::path& root) {
 
 } // namespace
 
+// A dialog result posted from another thread (as SDL may call back) is taken
+// once, in posting order, by the editor's thread.
+void TestPathDialogInbox() {
+    PathDialogInbox inbox;
+    std::thread poster([&inbox] {
+        inbox.Post({.purpose = PathDialogPurpose::OpenDocument,
+                    .outcome = PathDialogOutcome::Chosen,
+                    .path = "a.json"});
+        inbox.Post({.purpose = PathDialogPurpose::AssetFolder,
+                    .outcome = PathDialogOutcome::Cancelled});
+    });
+    poster.join();
+    const auto taken = inbox.Take();
+    Expect(taken.size() == 2, "inbox returns every posted result");
+    Expect(taken.size() == 2 && taken[0].path == "a.json" &&
+               taken[1].purpose == PathDialogPurpose::AssetFolder,
+        "inbox keeps posting order");
+    Expect(inbox.Take().empty(), "a taken result is not returned again");
+}
+
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
+    TestPathDialogInbox();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);

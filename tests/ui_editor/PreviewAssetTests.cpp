@@ -1,6 +1,7 @@
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/EditorApp.hpp"
 #include "gyo/ui_editor/FileService.hpp"
+#include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/text/ITextRasterizer.hpp"
@@ -14,6 +15,9 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 namespace {
 using namespace Gyo::Tools::UiEditor;
@@ -222,11 +226,63 @@ void TestMountRootOutsideAnsiCodePage() {
     editor.RequestAssetUnmount();
     editor.ApplyPendingAssetChanges();
 }
+// A host dialog's answer reaches the editor between frames: a cancelled asset
+// folder changes nothing, a chosen one mounts at the same frame boundary.
+class ScriptedDialogs final : public PathDialogs {
+public:
+    void Show(PathDialogPurpose purpose, std::string_view) override { shown.push_back(purpose); }
+    std::vector<PathDialogResult> TakeResults() override { return std::exchange(results, {}); }
+    std::vector<PathDialogPurpose> shown;
+    std::vector<PathDialogResult> results;
+};
+
+void TestPathDialogChoosesAssetFolder() {
+    Fixture fixture;
+    const auto root = fixture.root / std::filesystem::path(u8"\u8cc7\u7522");
+    std::filesystem::create_directories(root);
+    Expect(static_cast<bool>(WriteTextFileAtomically(root / "content.json",
+        R"({"version":1,"catalogs":["catalog.json"],"shader_bundles":[]})")), "write chosen content");
+    Expect(static_cast<bool>(WriteTextFileAtomically(root / "catalog.json",
+        R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write chosen catalog");
+    Expect(static_cast<bool>(WriteTextFileAtomically(root / "font.bin", "test-font")), "write chosen font");
+    AssetPreviewContext assets;
+    assets.Initialize(*fixture.renderer, std::make_unique<BitmapRasterizer>());
+    ScriptedDialogs dialogs;
+    EditorApp editor(CommandLineOptions{}, assets, &dialogs);
+    Expect(static_cast<bool>(editor.Initialize()), "GUI starts with host dialogs");
+    Expect(dialogs.shown.empty(), "no dialog opens unasked");
+
+    // The cancelled result carries a valid root so that only its outcome
+    // keeps it from mounting.
+    const std::u8string text = root.u8string();
+    dialogs.results.push_back({.purpose = PathDialogPurpose::AssetFolder,
+                               .outcome = PathDialogOutcome::Cancelled,
+                               .path = std::string(text.begin(), text.end())});
+    editor.ApplyPathDialogResults();
+    editor.ApplyPendingAssetChanges();
+    Expect(!assets.IsMounted(), "a cancelled folder dialog mounts nothing");
+
+    dialogs.results.push_back({.purpose = PathDialogPurpose::AssetFolder,
+                               .outcome = PathDialogOutcome::Chosen,
+                               .path = std::string(text.begin(), text.end())});
+    editor.ApplyPathDialogResults();
+    editor.ApplyPendingAssetChanges();
+    Expect(assets.IsMounted(), "a chosen asset folder mounts its content at the frame boundary");
+
+    dialogs.results.push_back({.purpose = PathDialogPurpose::AssetRootField,
+                               .outcome = PathDialogOutcome::Chosen,
+                               .path = "elsewhere"});
+    editor.RequestAssetUnmount();
+    editor.ApplyPathDialogResults();
+    editor.ApplyPendingAssetChanges();
+    Expect(!assets.IsMounted(), "filling the Asset Root field does not mount by itself");
+}
 } // namespace
 
 int main() {
     TestQueuedTexturesAndFrameEviction();
     TestSharedContentAndQueuedMounts();
     TestMountRootOutsideAnsiCodePage();
+    TestPathDialogChoosesAssetFolder();
     return failures == 0 ? 0 : 1;
 }
