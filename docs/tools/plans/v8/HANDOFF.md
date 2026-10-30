@@ -32,7 +32,6 @@
 | `v8-tool-start-timing` | 實作何時開始 | 照 v8-product-order 在 ③ 之後／ui-widgets-line 的檢測（`v8-tool-ui-ime-observe`）先做，其他照順序 | 檢測先做：它不改行為，結果決定輸入法要不要修 | 何時排實機 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
-| `v8-tool-ui-editor-structure` | 審查的整理項目要不要排 | [審查](ui-editor-review.md)：邊界與資料安全好，內部責任太集中（`EditorApp.cpp` 約 2,300 行、元素 schema 在 editor 又寫一份）。建議在加 `text_field` 前做 `v8-tool-ui-editor-gizmo-math`、`v8-tool-ui-editor-element-schema`、`v8-tool-ui-editor-panels`，不重寫 | 照審查的順序排 | ui-widgets-line 的批次 |
 | `v8-tool-ime-input-delta` | 組字事件由誰做 | Engine 的 Input（計畫夾 input-and-present；只加不改，不變式 1）在工具線做／交給 Engine 的會話做 | 工具線做，記到 input-and-present 的 HANDOFF；先等 `v8-tool-ui-ime-observe` 的結果 | 有沒有 Engine 批 |
 
 ## 決定紀錄
@@ -46,6 +45,7 @@
 | `v8-tool-ui-edit-policy-owner` | （2026-10-30）文字編輯的通用部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`；字元過濾留在產品，由產品提供檢查函式。這是 Architecture Delta（Ui 多了文字編輯的責任），開始實作前要改 [ui_toolchain.md](../../../ui_toolchain.md) 的 Design Invariants，內容另給使用者同意 | 選「通用部分放 GYO::Ui（建議）」 |
 | `v8-tool-ui-widget-scope` | （2026-10-30）這次只加 `text_field`；按鈕的共用樣式（`v8-tool-ui-button-style`）等第二個畫面也重複時再排 | 選「只加 text_field（建議）」 |
 | `v8-tool-ui-editor-element-schema` | （2026-10-30）元素表放在 ui_editor（選項 A），用測試和 GYO::Ui 的 codec／evaluator 對齊；Engine 不為工具提供描述。原則：工具經資料與 Engine 交接，Engine 不承擔工具的職能，工具可以隨時修改或更換 | 「A：放 ui_editor」；「我們可以通過資料來與Engine交接。我的理解是這個，Engine不需要承擔tools的職能，這樣以後tools可以隨時修改和更換。」 |
+| `v8-tool-ui-editor-structure` | （2026-10-30）審查的整理項目 S-1～S-3 都做：`v8-tool-ui-editor-gizmo-math`、`v8-tool-ui-editor-panels`、`v8-tool-ui-editor-element-schema`（已合併，PR #107、#108）。S-4 不排 | 「這些問題需要重構掉」 |
 | `v8-tool-ui-invariants` | （2026-10-30）照草稿寫進 [ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」：GYO::Ui 4 條、ui_editor 5 條、Replacement Criteria；守衛 `ui.dependency_guard`、`gyo_ui_editor.dependency_guard`、`TestGizmoAgreesWithUiEvaluator` | 「同意，寫進去」 |
 | `v8-tool-ui-order` | （2026-10-30）UI 的順序：先寫 `v8-tool-ui-invariants`，再整理（`v8-tool-ui-editor-panels` → `v8-tool-ui-editor-element-schema`），再做 `text_field`，編輯器的小功能（複製貼上、方向鍵微調）穿插；對齊參考線、多選等需要時再排。見 [README](README.md)「順序與依賴」 | 「照你建議做吧。」 |
 | `v8-tool-ui-editor-gizmo-bug` | （2026-10-30）拖動照 (a) Unity 的 RectTransform：本體＝移動 `position`；邊與角＝縮放（`size_delta`、`position`），錨點不動；拖錨點與 pivot 時補償 `position`、`size_delta`，元素的矩形不動。「相等時一起移動」的實作細節由 Claude 定為：被拖的錨點推著另一個走，所以往對方那側拖時一起動、往反方向拖時分開（否則相等的錨點在 gizmo 上永遠分不開）。Snap 只對齊這次拖動的座標 | 「(a) Unity 式」 |
@@ -88,3 +88,4 @@
 - 2026-10-30：音效線更正 `v8-tool-assets-audio-import` 第 3 點：原檔不能放在資產根目錄下（產品的 catalog 測試要求根目錄下每個檔都登錄），改成放在資產根目錄以外；第 4 點的記錄位置改為音效線的 dev_log。README 已更新。
 - 2026-10-30：使用者：「合併 #109、另開 PR」。PR #109 以 merge commit 合併（`5cfa149c`）。剩下的 4 個 commit（text_field 的決定、ime-observe、同意、音效需求更正）rebase 到 master，分支 `claude/v8-tool-ui-ime-observe`，另開 PR。
 - 2026-10-30：音效線轉來第二項 assets editor 需求：動畫事件時刻與音效同步資料化（`v8-tool-assets-anim-events`），使用者原話「這個聲音和動畫的管理是資料化的吧，是的話，就給Assets Editor來處理。」記到 README；只記需求。
+- 2026-10-30：清理：`v8-tool-ui-editor-structure` 已做完卻還在「等你決定」，移到決定紀錄；README 的 `v8-tool-ui-editor-file-browser` 補上 ✓。

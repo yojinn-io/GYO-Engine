@@ -42,7 +42,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── v8-tool-ui-invariants ✓              「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
 │   ├── v8-engine-input-composition          「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
 │   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
-│   ├── v8-tool-ui-editor-file-browser       「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
+│   ├── v8-tool-ui-editor-file-browser ✓     「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
 │   ├── v8-tool-ui-editor-gizmo-math ✓       「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試（行為不變）」
 │   ├── v8-tool-ui-editor-gizmo-fix ✓        「high｜Opus 5.5｜修拖動與縮放、加位置／大小把手（Unity 式）」
 │   ├── v8-tool-ui-editor-panels ✓           「medium｜Opus 5.5｜面板拆檔，EditorApp 只協調」
