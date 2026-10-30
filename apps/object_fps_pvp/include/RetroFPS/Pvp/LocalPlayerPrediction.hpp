@@ -54,6 +54,9 @@ struct LocalMovementObservation final {
     // newest local command: it substituted (Held or Neutral) commands that
     // had not arrived.
     std::uint64_t stallReseeds{};
+    // The newest predicted stance (protocol-v8 section 4): the camera's eye
+    // height follows it, smoothed in presentation only.
+    bool crouched{};
 };
 
 // What the display needs to place the local player at any time after the

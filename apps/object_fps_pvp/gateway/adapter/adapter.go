@@ -14,7 +14,7 @@ import (
 
 // ProtocolVersion is the product wire version (pv7). ClientVersion (GYOP
 // header) and RuntimeVersion (IPC envelope) are its typed forms.
-const ProtocolVersion = 7
+const ProtocolVersion = 8
 const ClientVersion uint16 = ProtocolVersion
 const RuntimeVersion uint32 = ProtocolVersion
 const MaxPlayers = 4
@@ -62,7 +62,8 @@ func DecodeInput(payload []byte, playerID uint32) (*runtime.PlayerInput, error) 
 		}
 		previous = command.Sequence
 		out.Commands = append(out.Commands, &runtime.MovementCommand{Sequence: command.Sequence,
-			MoveForward: command.MoveForward, MoveRight: command.MoveRight, Yaw: command.Yaw, Pitch: command.Pitch, JumpRequested: command.JumpRequested})
+			MoveForward: command.MoveForward, MoveRight: command.MoveRight, Yaw: command.Yaw, Pitch: command.Pitch, JumpRequested: command.JumpRequested,
+			CrouchHeld: command.CrouchHeld, SprintHeld: command.SprintHeld})
 	}
 	return out, nil
 }
@@ -70,7 +71,8 @@ func DecodeInput(payload []byte, playerID uint32) (*runtime.PlayerInput, error) 
 // EqualCommand compares the application contract, not protobuf bookkeeping.
 func EqualCommand(a, b *runtime.MovementCommand) bool {
 	return a != nil && b != nil && a.Sequence == b.Sequence && a.MoveForward == b.MoveForward &&
-		a.MoveRight == b.MoveRight && a.Yaw == b.Yaw && a.Pitch == b.Pitch && a.JumpRequested == b.JumpRequested
+		a.MoveRight == b.MoveRight && a.Yaw == b.Yaw && a.Pitch == b.Pitch && a.JumpRequested == b.JumpRequested &&
+		a.CrouchHeld == b.CrouchHeld && a.SprintHeld == b.SprintHeld
 }
 
 func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*client.WorldSnapshot, error) {
@@ -105,7 +107,7 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			VerticalVelocity: p.VerticalVelocity, Grounded: p.Grounded, LifeGeneration: p.LifeGeneration,
 			LifeState: lifeState, LifeStateTick: p.LifeStateTick, RespawnTick: p.RespawnTick,
 			MovementSlackSequence: p.MovementSlackSequence, MovementSlackUs: p.MovementSlackUs,
-			ConnectionQualityFailures: p.ConnectionQualityFailures})
+			ConnectionQualityFailures: p.ConnectionQualityFailures, Crouched: p.Crouched, Sprinting: p.Sprinting})
 	}
 	combatSeen := make(map[uint32]bool, len(in.Combat))
 	for _, state := range in.Combat {
@@ -283,6 +285,7 @@ func ReadyFitsWelcome(r *runtime.Ready) bool {
 	// The largest time echo counts too (pv7 §3): every ClockSample field at its maximum.
 	largest := uint64(math.MaxUint64)
 	clock := &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}
-	welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock}
+	welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock,
+		CrouchBodyHeight: r.CrouchBodyHeight, CrouchEyeHeight: r.CrouchEyeHeight, CrouchSpeedScale: r.CrouchSpeedScale, SprintSpeedScale: r.SprintSpeedScale}
 	return proto.Size(welcome)+framing.HeaderSize <= framing.MaxDatagram
 }

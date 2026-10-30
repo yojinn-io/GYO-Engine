@@ -496,6 +496,7 @@ void LocalPlayerPrediction::UpdatePresentation() {
     observation_.pendingCommands = pending_.size();
     observation_.frozen = pending_.size() == MaxPendingCommands ||
         WireCounterExhausted(current_.lastResolvedCommand);
+    observation_.crouched = current_.crouched;
 }
 
 std::optional<ShotGateView> LocalPlayerPrediction::ShotGate() const noexcept {

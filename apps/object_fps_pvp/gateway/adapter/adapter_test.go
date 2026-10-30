@@ -51,7 +51,7 @@ func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
 	in := &client.PlayerInput{LifeGeneration: math.MaxUint32, MovementEpoch: math.MaxUint32, ObservedAuthorityTick: math.MaxUint32}
 	for i := 0; i < MaxPendingCommands; i++ {
 		in.Commands = append(in.Commands, &client.MovementCommand{Sequence: math.MaxUint32 - MaxPendingCommands + 1 + uint32(i),
-			MoveForward: -1, MoveRight: -1, Yaw: 1e6, Pitch: -float32(math.Pi / 2), JumpRequested: true})
+			MoveForward: -1, MoveRight: -1, Yaw: 1e6, Pitch: -float32(math.Pi / 2), JumpRequested: true, CrouchHeld: true, SprintHeld: true})
 	}
 	bytes, err := proto.Marshal(in)
 	if err != nil {
@@ -59,8 +59,8 @@ func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
 	}
 	t.Logf("maximum movement datagram=%d bytes incl header", len(bytes)+framing.HeaderSize)
 	// Pinned exactly (protocol-v8 section 6): a new or widened field shows.
-	if len(bytes)+framing.HeaderSize != 402 || len(bytes)+framing.HeaderSize > framing.MaxDatagram {
-		t.Fatalf("full window datagram %d bytes, want 402", len(bytes)+framing.HeaderSize)
+	if len(bytes)+framing.HeaderSize != 450 || len(bytes)+framing.HeaderSize > framing.MaxDatagram {
+		t.Fatalf("full window datagram %d bytes, want 450", len(bytes)+framing.HeaderSize)
 	}
 	if _, err := DecodeInput(bytes, 1); err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
 }
 
 func TestSnapshotMappingDoesNotChangeWorldState(t *testing.T) {
-	in := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100}}, Tick: 3, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88}}}
+	in := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100}}, Tick: 3, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88, Crouched: true, Sprinting: true}}}
 	out, err := SnapshotForClient(in, testRules())
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +86,8 @@ func TestSnapshotMappingDoesNotChangeWorldState(t *testing.T) {
 	if err := proto.Unmarshal(b, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Tick != 3 || decoded.Players[0].X != 123 || decoded.Players[0].LastResolvedCommand != 88 {
+	if decoded.Tick != 3 || decoded.Players[0].X != 123 || decoded.Players[0].LastResolvedCommand != 88 ||
+		!decoded.Players[0].Crouched || !decoded.Players[0].Sprinting { // pv8 §2: the stance is copied as it came
 		t.Fatal("state changed")
 	}
 }

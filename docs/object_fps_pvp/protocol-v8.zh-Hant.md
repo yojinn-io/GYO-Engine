@@ -223,6 +223,22 @@ Client 面向的 UDP 訊息（含 24 B 標頭）在契約最大值與型別最�
 - 契約最大與型別最大的定義同上一節（`capacity_test.go` 的 `maximumSnapshot`）。
 - 第 1 輪定的退路（型別最大超過 1200 B 時先把 `sprinting` 移出 wire，`pv8-design-remaining-picks` 的 D-2）在縮窄後不會觸發，保留為規則。
 
+### 蹲下的 wire 接入之後（`v8-product-crouch`，實測，pv8 的最終值）
+
+2026-10-30 以 `proto.Size` 實測。新的 bool 都取 true，Welcome 帶 4 個 float。
+
+| 訊息（含 24 B 標頭） | 縮窄後 | 蹲下接入後（實測） | 釘住的測試 |
+|---|---|---|---|
+| 4 人 Snapshot，契約最大 | 724 B | **748 B**（40＋177N） | `capacity_test.go`、`worker_main.cpp` |
+| 4 人 Snapshot，型別最大 | 798 B | **822 B**（42＋195N），餘裕 378 B | `capacity_test.go` |
+| 4 人 Snapshot，合法的戰鬥值 | 674 B | **698 B** | `network_main.cpp` |
+| PlayerInput，12 個命令 | 402 B | **450 B** | `adapter_test.go` |
+| ActionBatch／ActionResults 8 筆 | 470／398 B | 不變 | `actions_test.go` |
+| 最大的 Welcome | 1200 B | 1200 B（同；4 個 float 算進最壞情況） | `actions_test.go` |
+
+- 每位玩家多 6 B（`crouched`、`sprinting` 的號碼 20、21，各 3 B）；每個命令多 4 B（`crouch_held`、`sprint_held`，各 2 B）。和推論一致。
+- 型別最大 822 B 剛好等於第 2 輪合成時的推論值（`pv8-round2`）。
+
 ## 7. 不在 pv8 的項目
 
 下列項目刻意不上 wire。之後要做，就是需要使用者同意的 wire 變更。B 層的項目在 v8 ⑤ 時以 pv9 上 wire（附錄 B）：

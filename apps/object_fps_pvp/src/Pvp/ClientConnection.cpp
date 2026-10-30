@@ -563,8 +563,16 @@ struct ClientConnection::Impl {
                     throw std::runtime_error("Unsupported Match cadence");
                 const auto rules=ReadRules(message);
                 if(!rules)throw std::runtime_error("Invalid Match combat rules");
+                // pv8 §3: the stance bounds that need no arena; the prediction checks the
+                // arena-relative ones (ValidStanceRules) when it adopts them.
+                const StanceRules stance{message.crouch_body_height(),message.crouch_eye_height(),
+                    message.crouch_speed_scale(),message.sprint_speed_scale()};
+                const auto positive=[](float value){return std::isfinite(value) && value>0;};
                 if(!std::isfinite(message.jump_height()) || message.jump_height()<=0 || message.jump_height()>10 ||
-                   !std::isfinite(message.gravity()) || message.gravity()<=0 || message.gravity()>1000)
+                   !std::isfinite(message.gravity()) || message.gravity()<=0 || message.gravity()>1000 ||
+                   !positive(stance.crouchBodyHeight) || !positive(stance.crouchEyeHeight) ||
+                   stance.crouchEyeHeight>stance.crouchBodyHeight || !positive(stance.crouchSpeedScale) ||
+                   stance.crouchSpeedScale>1 || !positive(stance.sprintSpeedScale) || stance.sprintSpeedScale>3)
                     throw std::runtime_error("Invalid Match movement rules");
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
@@ -572,8 +580,9 @@ struct ClientConnection::Impl {
                 if(state.combatRules && !SameRules(*state.combatRules,*rules))
                     throw std::runtime_error("Match combat rules changed within a session");
                 if(state.movementRules && (state.movementRules->jumpHeight!=message.jump_height() ||
-                    state.movementRules->gravity!=message.gravity()))throw std::runtime_error("Match movement rules changed within a session");
-                state.movementRules=MovementRules{message.jump_height(),message.gravity()};
+                    state.movementRules->gravity!=message.gravity() || !(state.movementRules->stance==stance)))
+                    throw std::runtime_error("Match movement rules changed within a session");
+                state.movementRules=MovementRules{message.jump_height(),message.gravity(),stance};
                 state.combatRules=rules;
                 welcomed=true;liveness.Welcome(arrivedAt);
             } else if(packet->type==wire::Type::Snapshot) {
@@ -613,7 +622,7 @@ struct ClientConnection::Impl {
                         p.life_state()==pb::LIFE_ALIVE?LifeState::Alive:LifeState::Dead,p.life_state_tick(),p.respawn_tick(),
                         p.has_movement_slack_sequence()?std::optional<std::uint64_t>{p.movement_slack_sequence()}:std::nullopt,
                         p.has_movement_slack_us()?std::optional<std::int32_t>{p.movement_slack_us()}:std::nullopt,
-                        p.connection_quality_failures()});
+                        p.connection_quality_failures(),p.crouched(),p.sprinting()});
                     self|=p.player_id()==own;
                 }
                 for(const auto& combat:message.combat()) {
@@ -765,6 +774,7 @@ struct ClientConnection::Impl {
                 auto* out=message.add_commands();out->set_sequence(wire::Counter(command.sequence));
                 out->set_move_forward(command.moveForward);out->set_move_right(command.moveRight);
                 out->set_yaw(command.yaw);out->set_pitch(command.pitch);out->set_jump_requested(command.jumpRequested);
+                out->set_crouch_held(command.crouchHeld);out->set_sprint_held(command.sprintHeld); // pv8 §2
             }
             const auto payload=message.SerializeAsString();
             const auto sendStarted=MovementTraceNowNs();

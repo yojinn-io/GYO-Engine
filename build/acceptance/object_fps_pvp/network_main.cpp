@@ -143,6 +143,7 @@ int main(int argc,char** argv) {
                 player->set_contiguous_pending_commands(MaxFutureCommands);player->set_vertical_velocity(4);player->set_grounded(true);
                 player->set_life_generation(counter);player->set_life_state(pb::LIFE_ALIVE);player->set_life_state_tick(counter);player->set_respawn_tick(counter);
                 player->set_movement_slack_sequence(counter);player->set_movement_slack_us(-1'000'000);player->set_connection_quality_failures(2);
+                player->set_crouched(true);player->set_sprinting(true); // pv8 §2: the stance bools encoded
                 auto* combat=snapshot.add_combat();combat->set_player_id(counter-i);
                 combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(counter);combat->set_life_generation(counter);combat->set_magazine_ammo(PvpCombatRules.magazineCapacity);
                 combat->set_reload_action_id(counter);combat->set_reload_start_tick(counter);combat->set_reload_end_tick(counter);combat->set_last_shot_action_id(counter);combat->set_last_shot_tick(counter);
@@ -154,8 +155,8 @@ int main(int argc,char** argv) {
             Require(actionBytes.size()<=1200 && resultBytes.size()<=1200 && snapshotBytes.size()<=1200,
                 "maximum legal protobuf plus24-byte UDP header exceeds1200 bytes");
             // Legal combat values in a full room (pv6 contract §7, 2026-10-07 revision;
-            // protocol-v8 section 6: the counters narrowed to uint32).
-            Require(snapshotBytes.size()==674,"maximum legal full-room snapshot is not 674 bytes");
+            // protocol-v8 section 6: the counters narrowed to uint32, and the stance bools).
+            Require(snapshotBytes.size()==698,"maximum legal full-room snapshot is not 698 bytes");
             bool oversizedRejected=false;
             try { static_cast<void>(wire::Encode({wire::Type::Input,1,1,std::string(wire::MaxDatagram, 'x')})); }
             catch(const std::length_error&) { oversizedRejected=true; }

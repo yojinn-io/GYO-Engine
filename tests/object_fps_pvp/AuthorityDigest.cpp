@@ -252,6 +252,7 @@ struct Intent final {
     bool jump{};
     bool send{true};
     bool crouch{};
+    bool sprint{}; // pv8: the Match ignores it (protocol-v8 section 2)
 };
 
 // Drives a PvpMatch like a Client would: one command per Tick in the current
@@ -296,7 +297,7 @@ public:
         }
         digest_.Angle(intent.yaw, "movement yaw");
         digest_.Angle(intent.pitch, "movement pitch");
-        PlayerInput input{id, {{driver.next++, intent.forward, intent.right, intent.yaw, intent.pitch, intent.jump, intent.crouch}},
+        PlayerInput input{id, {{driver.next++, intent.forward, intent.right, intent.yaw, intent.pitch, intent.jump, intent.crouch, intent.sprint}},
             state.movementEpoch, state.lifeGeneration, snapshot_.tick};
         static_cast<void>(match_.SubmitInput(input));
     }
@@ -744,6 +745,42 @@ std::vector<Scenario> Scenarios() {
             i.jump = t == 180;
             return i;
         }, 320 * s, d); }});
+    // v8-product-crouch wire (v8-product-crouch-scenarios (a)): the paths the
+    // two scenarios above and CrouchTests.cpp do not reach.
+    list.push_back({"move-crouch-walk-under/slab", true, [](unsigned s, Digest& d) {
+        RunMovement("slab", [](unsigned t) {
+            // Crouched all the way under the slab, standing up only past it.
+            Intent i{0, t < 300 ? 1.0F : 0.0F};
+            i.crouch = t < 260;
+            return i;
+        }, 340 * s, d); }});
+    list.push_back({"move-crouch-jump-hold/contract", true, [](unsigned s, Digest& d) {
+        RunMovement("contract", [](unsigned t) {
+            // Crouch held throughout with a jump press every half second: each
+            // grounded press stands up and jumps, and the body crouches in the air.
+            Intent i{1, 0};
+            i.crouch = t < 240;
+            i.jump = t % 30 == 0;
+            return i;
+        }, 300 * s, d); }});
+    list.push_back({"move-crouch-epoch-reseed/contract", true, [](unsigned s, Digest& d) {
+        RunMovement("contract", [](unsigned t) {
+            // A long silence while crouched: substitution keeps the stance and the
+            // epoch rotation keeps it too; the stance changes only on release.
+            Intent i{1, 0};
+            i.crouch = t < 220;
+            i.send = !(t >= 60 && t < 140);
+            return i;
+        }, 300 * s, d); }});
+    // W2: sprint_held has no behaviour in pv8; this digest equals move-crouch/contract's.
+    list.push_back({"move-crouch-sprint-held/contract", true, [](unsigned s, Digest& d) {
+        RunMovement("contract", [](unsigned t) {
+            Intent i{t < 120 || (t >= 180 && t < 300) ? 1.0F : 0.0F, 0};
+            i.crouch = t < 60 || (t >= 180 && t < 300);
+            i.jump = t == 200 || t == 260;
+            i.sprint = true;
+            return i;
+        }, 360 * s, d); }});
     list.push_back({"move-held-gaps/contract", true, [](unsigned s, Digest& d) {
         RunMovement("contract", [](unsigned t) { Intent i{1, 0}; i.send = !(t >= 40 && t < 55) && !(t >= 100 && t < 140); return i; },
             240 * s, d); }});

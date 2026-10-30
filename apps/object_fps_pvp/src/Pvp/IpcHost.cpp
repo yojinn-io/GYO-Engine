@@ -128,6 +128,7 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
             state->set_movement_slack_sequence(wire::Counter(*p.movementSlackSequence));state->set_movement_slack_us(*p.movementSlackMicros);
         }
         state->set_connection_quality_failures(p.connectionQualityFailures);
+        state->set_crouched(p.crouched);state->set_sprinting(p.sprinting); // pv8 §2
     }
     for(const auto& p:snapshot.combat) {
         auto* state=out->add_combat();state->set_player_id(wire::Counter(p.playerId));
@@ -488,6 +489,9 @@ struct IpcHost::Impl {
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version); r->set_arena_digest(arenaDigest);
         r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
+        const auto& stance=host.Stance(); // pv8 §3: the Match's movement rules data
+        r->set_crouch_body_height(stance.crouchBodyHeight);r->set_crouch_eye_height(stance.crouchEyeHeight);
+        r->set_crouch_speed_scale(stance.crouchSpeedScale);r->set_sprint_speed_scale(stance.sprintSpeedScale);
         r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(MaxPlayers);
         auto* rules=r->mutable_combat_rules();rules->set_maximum_hp(PvpCombatRules.maximumHp);
         rules->set_shot_damage(PvpCombatRules.shotDamage);rules->set_cooldown_ticks(wire::Counter(PvpCombatRules.cooldownTicks));
@@ -614,7 +618,8 @@ struct IpcHost::Impl {
                     p.has_gateway_dwell_us()?std::optional(p.gateway_dwell_us()):std::nullopt);
                 PlayerInput window{p.player_id(),{},p.movement_epoch(),p.life_generation(),p.observed_authority_tick()};
                 for(const auto& command:p.commands())
-                    window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested()});
+                    window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested(),
+                        command.crouch_held(),command.sprint_held()});
                 // The host counts every outcome by reason: an empty or
                 // oversized window as unknown_player (player 0) when the Match
                 // does not hold the player, as resetting during a reset, and

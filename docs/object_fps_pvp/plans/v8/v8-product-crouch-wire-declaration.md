@@ -1,6 +1,6 @@
 # v8-product-crouch 的事前宣告（wire 接入）
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：草稿，等你核准（含下面「等你決定」的 4 項）。** 契約：[protocol-v8](../../protocol-v8.zh-Hant.md) §1～§5、§8（已定稿，`pv8-final-approve-round2`）。不碰 wire 的部分已完成（[事前宣告](v8-product-crouch-declaration.md)、`fd950ea3`、`347fa9ba`）。檔位 high（預測與 wire 轉換局部 xhigh）｜Opus 5.5，估時 8～12 h（`v8-product-crouch` 全體 19～25 h 扣掉已完成的部分；超過 18 h 停下回報）。
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：已核准（`v8-product-crouch-wire-declaration-approve`，2026-10-30）：key (a)、rules-file (a)、scenarios (a)、run-quad-mixed (a)。完成：W1 0 差分、W7 23／23、W8 100／100，見 [dev_log](../../../dev_logs/2026_10_30_pvp_v8_crouch_wire.zh-Hant.md)。** 契約：[protocol-v8](../../protocol-v8.zh-Hant.md) §1～§5、§8（已定稿，`pv8-final-approve-round2`）。不碰 wire 的部分已完成（[事前宣告](v8-product-crouch-declaration.md)、`fd950ea3`、`347fa9ba`）。檔位 high（預測與 wire 轉換局部 xhigh）｜Opus 5.5，估時 8～12 h（`v8-product-crouch` 全體 19～25 h 扣掉已完成的部分；超過 18 h 停下回報）。
 
 ## 範圍
 

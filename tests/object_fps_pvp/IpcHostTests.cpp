@@ -289,6 +289,40 @@ TEST_CASE("PvP IPC greets with Ready and sends a join's result before any snapsh
     CHECK(seen);
 }
 
+// v8-product-crouch W3: Ready carries the Match's movement rules, a held crouch
+// in an input window reaches the Match, and the snapshot reports the stance
+// (sprint_held is carried and ignored, protocol-v8 sections 2-3).
+TEST_CASE("PvP IPC carries the stance rules in Ready, the crouch in and the stance out") {
+    Server server;
+    Gateway gateway(server.address);
+    const auto ready = gateway.Receive();
+    REQUIRE(ready);
+    REQUIRE(ready->has_ready());
+    CHECK(ready->ready().crouch_body_height() == DefaultStanceRules.crouchBodyHeight);
+    CHECK(ready->ready().crouch_eye_height() == DefaultStanceRules.crouchEyeHeight);
+    CHECK(ready->ready().crouch_speed_scale() == DefaultStanceRules.crouchSpeedScale);
+    CHECK(ready->ready().sprint_speed_scale() == DefaultStanceRules.sprintSpeedScale);
+    gateway.Send(Join(7));
+    static_cast<void>(ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); }));
+    auto window = InputWindow(7, 1, 3);
+    for (auto& command : *window.mutable_input()->mutable_commands()) {
+        command.set_crouch_held(true);
+        command.set_sprint_held(true);
+    }
+    gateway.Send(window);
+    const auto crouched = ReceiveFirst(gateway, [](const auto& message) {
+        if (!message.has_snapshot()) return false;
+        for (const auto& player : message.snapshot().players())
+            if (player.player_id() == 7 && player.last_resolved_command() >= 1) return true;
+        return false;
+    });
+    for (const auto& player : crouched.snapshot().players()) {
+        if (player.player_id() != 7) continue;
+        CHECK(player.crouched());
+        CHECK_FALSE(player.sprinting());
+    }
+}
+
 TEST_CASE("PvP IPC resets the Match between connections") {
     Server server;
     {
@@ -1268,10 +1302,10 @@ TEST_CASE("PvP IPC decisions do not depend on clock samples") {
 // The ClockSample envelope's bytes, shared with the Gateway's
 // TestClockSampleBytesMatchTheMatchBinding: both bindings agree.
 TEST_CASE("PvP IPC clock samples have the agreed bytes") {
-    const std::string full("\x08\x07\xa2\x01\x06\x08\x01\x10\x02\x18\x03", 11);
-    const std::string transmitOnly("\x08\x07\xa2\x01\x02\x18\x03", 7);
+    const std::string full("\x08\x08\xa2\x01\x06\x08\x01\x10\x02\x18\x03", 11);
+    const std::string transmitOnly("\x08\x08\xa2\x01\x02\x18\x03", 7);
     Envelope message;
-    message.set_protocol_version(7);
+    message.set_protocol_version(8);
     message.mutable_clock()->set_origin_us(1);
     message.mutable_clock()->set_receive_us(2);
     message.mutable_clock()->set_transmit_us(3);

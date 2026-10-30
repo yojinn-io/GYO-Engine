@@ -113,9 +113,23 @@ inline constexpr std::uint32_t ConnectionQualityMaximumSubstitutedPermille = 50;
 
 enum class LifeState { Alive = 0, Dead = 1 };
 
+// Stance parameters the Match delivers at map entry (protocol-v8 §3). Not
+// arena content: ArenaContentDigest covers Arena only.
+struct StanceRules final {
+    float crouchBodyHeight{1.2F};
+    float crouchEyeHeight{1.0F};
+    float crouchSpeedScale{0.5F};
+    float sprintSpeedScale{1.0F};
+    bool operator==(const StanceRules&) const = default;
+};
+inline constexpr StanceRules DefaultStanceRules{};
+
+// The movement rules a Client adopts from Welcome (protocol-v8 §3): the
+// Match's values, never local ones.
 struct MovementRules final {
     float jumpHeight{};
     float gravity{};
+    StanceRules stance{};
 };
 
 // One immutable fixed-duration movement step; angles are absolute radians.
@@ -167,17 +181,6 @@ struct PlayerState final {
     bool crouched{};
     bool sprinting{};
 };
-
-// Stance parameters the Match delivers at map entry (protocol-v8 §3). Not
-// arena content: ArenaContentDigest covers Arena only.
-struct StanceRules final {
-    float crouchBodyHeight{1.2F};
-    float crouchEyeHeight{1.0F};
-    float crouchSpeedScale{0.5F};
-    float sprintSpeedScale{1.0F};
-    bool operator==(const StanceRules&) const = default;
-};
-inline constexpr StanceRules DefaultStanceRules{};
 
 // protocol-v8 §3 bounds, checked against the arena the rules apply to.
 [[nodiscard]] bool ValidStanceRules(const Arena& arena, const StanceRules& rules) noexcept;

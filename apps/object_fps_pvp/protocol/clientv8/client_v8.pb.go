@@ -427,9 +427,14 @@ type Welcome struct {
 	// Content digest of the served arena (pv6 contract §2), copied from Ready.
 	ArenaDigest uint64 `protobuf:"fixed64,10,opt,name=arena_digest,json=arenaDigest,proto3" json:"arena_digest,omitempty"`
 	// Diagnostics only (pv7 §3): the time echo; the Client never decides on it.
-	Clock         *ClockSample `protobuf:"bytes,11,opt,name=clock,proto3" json:"clock,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Clock *ClockSample `protobuf:"bytes,11,opt,name=clock,proto3" json:"clock,omitempty"`
+	// pv8 §3: copied from Ready; the Client checks and adopts them on entry.
+	CrouchBodyHeight float32 `protobuf:"fixed32,12,opt,name=crouch_body_height,json=crouchBodyHeight,proto3" json:"crouch_body_height,omitempty"`
+	CrouchEyeHeight  float32 `protobuf:"fixed32,13,opt,name=crouch_eye_height,json=crouchEyeHeight,proto3" json:"crouch_eye_height,omitempty"`
+	CrouchSpeedScale float32 `protobuf:"fixed32,14,opt,name=crouch_speed_scale,json=crouchSpeedScale,proto3" json:"crouch_speed_scale,omitempty"`
+	SprintSpeedScale float32 `protobuf:"fixed32,15,opt,name=sprint_speed_scale,json=sprintSpeedScale,proto3" json:"sprint_speed_scale,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Welcome) Reset() {
@@ -532,6 +537,34 @@ func (x *Welcome) GetClock() *ClockSample {
 	return nil
 }
 
+func (x *Welcome) GetCrouchBodyHeight() float32 {
+	if x != nil {
+		return x.CrouchBodyHeight
+	}
+	return 0
+}
+
+func (x *Welcome) GetCrouchEyeHeight() float32 {
+	if x != nil {
+		return x.CrouchEyeHeight
+	}
+	return 0
+}
+
+func (x *Welcome) GetCrouchSpeedScale() float32 {
+	if x != nil {
+		return x.CrouchSpeedScale
+	}
+	return 0
+}
+
+func (x *Welcome) GetSprintSpeedScale() float32 {
+	if x != nil {
+		return x.SprintSpeedScale
+	}
+	return 0
+}
+
 // Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
 // runtime_v8.proto: times are the sender's own monotonic clock in
 // microseconds; a time of the other side is only ever copied back.
@@ -608,6 +641,10 @@ type MovementCommand struct {
 	Yaw           float32                `protobuf:"fixed32,4,opt,name=yaw,proto3" json:"yaw,omitempty"`
 	Pitch         float32                `protobuf:"fixed32,5,opt,name=pitch,proto3" json:"pitch,omitempty"`
 	JumpRequested bool                   `protobuf:"varint,6,opt,name=jump_requested,json=jumpRequested,proto3" json:"jump_requested,omitempty"`
+	// pv8 §2 (v8 ① crouch, ② sprint): held intents, not edges. sprint_held has
+	// no behaviour in pv8: the Client sends false and the Match ignores it.
+	CrouchHeld    bool `protobuf:"varint,7,opt,name=crouch_held,json=crouchHeld,proto3" json:"crouch_held,omitempty"`
+	SprintHeld    bool `protobuf:"varint,8,opt,name=sprint_held,json=sprintHeld,proto3" json:"sprint_held,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -680,6 +717,20 @@ func (x *MovementCommand) GetPitch() float32 {
 func (x *MovementCommand) GetJumpRequested() bool {
 	if x != nil {
 		return x.JumpRequested
+	}
+	return false
+}
+
+func (x *MovementCommand) GetCrouchHeld() bool {
+	if x != nil {
+		return x.CrouchHeld
+	}
+	return false
+}
+
+func (x *MovementCommand) GetSprintHeld() bool {
+	if x != nil {
+		return x.SprintHeld
 	}
 	return false
 }
@@ -784,8 +835,12 @@ type PlayerState struct {
 	// Consecutive failed 10-second connection-quality windows (0-2). At 3 the
 	// Match evicts the player; the HUD warns while this is non-zero.
 	ConnectionQualityFailures uint32 `protobuf:"varint,19,opt,name=connection_quality_failures,json=connectionQualityFailures,proto3" json:"connection_quality_failures,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// pv8 §2, §4: the authoritative stance after last_resolved_command; true is
+	// the crouched capsule. sprinting is false in pv8.
+	Crouched      bool `protobuf:"varint,20,opt,name=crouched,proto3" json:"crouched,omitempty"`
+	Sprinting     bool `protobuf:"varint,21,opt,name=sprinting,proto3" json:"sprinting,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerState) Reset() {
@@ -942,6 +997,20 @@ func (x *PlayerState) GetConnectionQualityFailures() uint32 {
 		return x.ConnectionQualityFailures
 	}
 	return 0
+}
+
+func (x *PlayerState) GetCrouched() bool {
+	if x != nil {
+		return x.Crouched
+	}
+	return false
+}
+
+func (x *PlayerState) GetSprinting() bool {
+	if x != nil {
+		return x.Sprinting
+	}
+	return false
 }
 
 type WorldSnapshot struct {
@@ -1703,7 +1772,7 @@ const file_client_v8_proto_rawDesc = "" +
 	"\x0fclient_v8.proto\x12\x18object_fps_pvp.client.v8\"i\n" +
 	"\x05Hello\x12#\n" +
 	"\rsession_token\x18\x01 \x01(\tR\fsessionToken\x12;\n" +
-	"\x05clock\x18\x02 \x01(\v2%.object_fps_pvp.client.v8.ClockSampleR\x05clock\"\xa3\x03\n" +
+	"\x05clock\x18\x02 \x01(\v2%.object_fps_pvp.client.v8.ClockSampleR\x05clock\"\xd9\x04\n" +
 	"\aWelcome\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x1b\n" +
 	"\ttick_rate\x18\x03 \x01(\rR\btickRate\x12#\n" +
@@ -1716,7 +1785,11 @@ const file_client_v8_proto_rawDesc = "" +
 	"\agravity\x18\t \x01(\x02R\agravity\x12!\n" +
 	"\farena_digest\x18\n" +
 	" \x01(\x06R\varenaDigest\x12;\n" +
-	"\x05clock\x18\v \x01(\v2%.object_fps_pvp.client.v8.ClockSampleR\x05clockJ\x04\b\x02\x10\x03J\x04\b\x10\x10\x14R\bmatch_id\"\x91\x01\n" +
+	"\x05clock\x18\v \x01(\v2%.object_fps_pvp.client.v8.ClockSampleR\x05clock\x12,\n" +
+	"\x12crouch_body_height\x18\f \x01(\x02R\x10crouchBodyHeight\x12*\n" +
+	"\x11crouch_eye_height\x18\r \x01(\x02R\x0fcrouchEyeHeight\x12,\n" +
+	"\x12crouch_speed_scale\x18\x0e \x01(\x02R\x10crouchSpeedScale\x12,\n" +
+	"\x12sprint_speed_scale\x18\x0f \x01(\x02R\x10sprintSpeedScaleJ\x04\b\x02\x10\x03J\x04\b\x10\x10\x14R\bmatch_id\"\x91\x01\n" +
 	"\vClockSample\x12 \n" +
 	"\torigin_us\x18\x01 \x01(\x04H\x00R\boriginUs\x88\x01\x01\x12\"\n" +
 	"\n" +
@@ -1725,7 +1798,7 @@ const file_client_v8_proto_rawDesc = "" +
 	"transmitUsB\f\n" +
 	"\n" +
 	"_origin_usB\r\n" +
-	"\v_receive_us\"\xbe\x01\n" +
+	"\v_receive_us\"\x80\x02\n" +
 	"\x0fMovementCommand\x12\x1a\n" +
 	"\bsequence\x18\x01 \x01(\rR\bsequence\x12!\n" +
 	"\fmove_forward\x18\x02 \x01(\x02R\vmoveForward\x12\x1d\n" +
@@ -1733,12 +1806,16 @@ const file_client_v8_proto_rawDesc = "" +
 	"move_right\x18\x03 \x01(\x02R\tmoveRight\x12\x10\n" +
 	"\x03yaw\x18\x04 \x01(\x02R\x03yaw\x12\x14\n" +
 	"\x05pitch\x18\x05 \x01(\x02R\x05pitch\x12%\n" +
-	"\x0ejump_requested\x18\x06 \x01(\bR\rjumpRequested\"\xdc\x01\n" +
+	"\x0ejump_requested\x18\x06 \x01(\bR\rjumpRequested\x12\x1f\n" +
+	"\vcrouch_held\x18\a \x01(\bR\n" +
+	"crouchHeld\x12\x1f\n" +
+	"\vsprint_held\x18\b \x01(\bR\n" +
+	"sprintHeld\"\xdc\x01\n" +
 	"\vPlayerInput\x12E\n" +
 	"\bcommands\x18\x01 \x03(\v2).object_fps_pvp.client.v8.MovementCommandR\bcommands\x12%\n" +
 	"\x0emovement_epoch\x18\x02 \x01(\rR\rmovementEpoch\x12'\n" +
 	"\x0flife_generation\x18\x03 \x01(\rR\x0elifeGeneration\x126\n" +
-	"\x17observed_authority_tick\x18\x04 \x01(\rR\x15observedAuthorityTick\"\x99\x06\n" +
+	"\x17observed_authority_tick\x18\x04 \x01(\rR\x15observedAuthorityTick\"\xd3\x06\n" +
 	"\vPlayerState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
@@ -1759,7 +1836,9 @@ const file_client_v8_proto_rawDesc = "" +
 	"\frespawn_tick\x18\x0f \x01(\rR\vrespawnTick\x12;\n" +
 	"\x17movement_slack_sequence\x18\x11 \x01(\rH\x00R\x15movementSlackSequence\x88\x01\x01\x12/\n" +
 	"\x11movement_slack_us\x18\x12 \x01(\x11H\x01R\x0fmovementSlackUs\x88\x01\x01\x12>\n" +
-	"\x1bconnection_quality_failures\x18\x13 \x01(\rR\x19connectionQualityFailuresB\x1a\n" +
+	"\x1bconnection_quality_failures\x18\x13 \x01(\rR\x19connectionQualityFailures\x12\x1a\n" +
+	"\bcrouched\x18\x14 \x01(\bR\bcrouched\x12\x1c\n" +
+	"\tsprinting\x18\x15 \x01(\bR\tsprintingB\x1a\n" +
 	"\x18_movement_slack_sequenceB\x14\n" +
 	"\x12_movement_slack_usJ\x04\b\x10\x10\x11J\x04\b\x16\x10\x19R\x13epoch_start_wait_us\"\xab\x02\n" +
 	"\rWorldSnapshot\x12\x12\n" +

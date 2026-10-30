@@ -25,6 +25,7 @@ RETAINED = {
     'object_fps_pvp.arena': 'loaded by path (pvp_arena.json) by the Match and, through arenas.json, by the Client',
     'object_fps_pvp.arena.corners': 'loaded by path (pvp_corners.json) by the Match and, through arenas.json, by the Client',
     'object_fps_pvp.arenas': 'loaded by path (arenas.json): the arenas the Client installs',
+    'object_fps_pvp.movement_rules': 'loaded by path (movement_rules.json) by the Match only (protocol-v8 section 3)',
 }
 
 

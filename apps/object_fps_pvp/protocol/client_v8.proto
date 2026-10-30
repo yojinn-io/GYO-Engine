@@ -25,6 +25,11 @@ message Welcome {
   fixed64 arena_digest = 10;
   // Diagnostics only (pv7 §3): the time echo; the Client never decides on it.
   ClockSample clock = 11;
+  // pv8 §3: copied from Ready; the Client checks and adopts them on entry.
+  float crouch_body_height = 12;
+  float crouch_eye_height = 13;
+  float crouch_speed_scale = 14;
+  float sprint_speed_scale = 15;
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 16 to 19;
 }
@@ -48,6 +53,10 @@ message MovementCommand {
   float yaw = 4;
   float pitch = 5;
   bool jump_requested = 6;
+  // pv8 §2 (v8 ① crouch, ② sprint): held intents, not edges. sprint_held has
+  // no behaviour in pv8: the Client sends false and the Match ignores it.
+  bool crouch_held = 7;
+  bool sprint_held = 8;
 }
 // Entire unacknowledged window, strictly ordered, at most 12 commands.
 message PlayerInput {
@@ -88,6 +97,10 @@ message PlayerState {
   // Consecutive failed 10-second connection-quality windows (0-2). At 3 the
   // Match evicts the player; the HUD warns while this is non-zero.
   uint32 connection_quality_failures = 19;
+  // pv8 §2, §4: the authoritative stance after last_resolved_command; true is
+  // the crouched capsule. sprinting is false in pv8.
+  bool crouched = 20;
+  bool sprinting = 21;
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 22 to 24;
 }

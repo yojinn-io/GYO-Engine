@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。`pv8-seq-narrow` 完成（T1～T5 的判定變更已核准，`pv8-seq-narrow-test-changes-approve`）。下一批是 `v8-product-crouch` 的 wire 接入（版本值 7→8）：[事前宣告](v8-product-crouch-wire-declaration.md) 草稿已寫好，等你核准（含 `v8-product-crouch-key`、`-rules-file`、`-scenarios`、`-run-quad-mixed` 4 項）。
+- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。`pv8-seq-narrow` 完成（T1～T5 的判定變更已核准，`pv8-seq-narrow-test-changes-approve`）。下一批是 `v8-product-crouch` 的 wire 接入（版本值 7→8）：完成（[事前宣告](v8-product-crouch-wire-declaration.md)，`v8-product-crouch-wire-declaration-approve`）。**pv8-line 的 A 層全部完成，版本值 8。** 下一步：推送並開 PR（四平台 L1）；之後是遠端與手感的實機確認、`v8-product-hitbox-*`、② 的衝刺。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
@@ -95,6 +95,7 @@
 | `pv8-seq-ceiling-wrap-test-approve` | （2026-10-30）核准既有測試 never-wrap 的判定變更（§14.4 的 1～5：放寬面是不再要求 u32 上限到 u64 上限之間照常前進；收緊面是 u32 上限處停、超過上限即用盡；審查者 5 點成立） | 「核准並 commit」 |
 | `pv8-seq-narrow-declaration-approve` | （2026-10-30）核准 [pv8-seq-narrow 的事前宣告](pv8-seq-narrow-declaration.md) N1～N6；`pv8-seq-narrow-test-changes` (a) T1～T5 照表改，實作後突變與另一位審查者核對，再交 1～5 核准後 commit；`pv8-seq-narrow-merged-streams` (a) `GatewayDropReport.merged_streams` 保留 u64 並補進 §2a 的保留清單 | 「照建議核准」 |
 | `pv8-seq-narrow-test-changes-approve` | （2026-10-30）核准 pv8-seq-narrow 的 T1～T5 判定變更（§14.4 的 1～5；放寬面只有 T1、T3、T4 不再檢查 u32 上限以上的值，由 protoreflect 守衛與 `wire::Counter` 的 Assert 守住），並接受 N4 編碼 Assert 改用 `wire::Counter` 的單元測試加掃描守衛 | 「核准並 commit」 |
+| `v8-product-crouch-wire-declaration-approve` | （2026-10-30）核准 [v8-product-crouch wire 接入的事前宣告](v8-product-crouch-wire-declaration.md) W1～W8、U1～U2；`v8-product-crouch-key` (a) 按住 Left Ctrl；`v8-product-crouch-rules-file` (a) `assets/object_fps_pvp/movement_rules.json`＋`--movement-rules`；`v8-product-crouch-scenarios` (a) 對照表＋只加新路徑的情境；`v8-product-crouch-run-quad-mixed` (a) 保留，只改註解 | 「照建議核准」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -117,6 +118,7 @@
 - 2026-10-30：`pv8-rename` 完成。重產只差名稱；CTest 99／99；兩樹 digest（base `33127ad6`）scale 1、3 都是 38 個情境 0 差分；相關突變 0 個。計畫的引擎是 Sonnet 5.5，實際由主會話直接做（機械式替換）。
 - 2026-10-30：`pv8-seq-ceiling` 完成。K1 38 個情境 × scale 1、3 0 差分；K3 第 1 次因既有測試釘著 uint64 邊界而停止（宣告前提錯誤），照 (a) 改測試並經 §14.4 核准；突變 16／16；CTest 100／100。
 - 2026-10-30：`pv8-seq-narrow` 完成。84 欄縮窄、刪 `match_id`、預留號碼；N1 0 差分；實測 724／798／674／402／470／398 B；突變 12／12＋proto 手動 3／3；審查者 5 點成立；CTest 100／100。
+- 2026-10-30：`v8-product-crouch` 的 wire 接入完成，pv8-line 的 A 層做完。W1 38 個情境 0 差分；W2 衝刺的 digest 相同；實測 748／822／698／450 B；突變 23／23；CTest 100／100。突變工具的前置檢查 worker 失敗 1 次未切分，之後 10 次重複都通過。
 
 ## 未結事項
 

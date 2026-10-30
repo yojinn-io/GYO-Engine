@@ -252,8 +252,8 @@
       "batch": "09",
       "what": "one version definition disagrees",
       "file": "build/acceptance/object_fps_pvp/acceptance_util.py",
-      "find": "\nPROTOCOL_VERSION = 7\n",
-      "replace": "\nPROTOCOL_VERSION = 6\n",
+      "find": "\nPROTOCOL_VERSION = 8\n",
+      "replace": "\nPROTOCOL_VERSION = 7\n",
       "check": "protocol_version",
       "expect": "acceptance Python"
     },
@@ -552,7 +552,7 @@
       "batch": "v7-02",
       "what": "ClientSimulation never applies the authoritative movement rules",
       "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
-      "find": "    if (rules) prediction_.SetMovementRules(*rules);\n",
+      "find": "        prediction_.SetMovementRules(*rules);\n",
       "replace": "",
       "check": "cpu",
       "expect": "PvP ClientSimulation reproduces the v6 application command path at one snapshot per frame"
@@ -3132,8 +3132,8 @@
       "batch": "v71-time-echo",
       "what": "ReadyFitsWelcome leaves the largest time echo out of the worst-case Welcome",
       "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
-      "find": ", Gravity: r.Gravity, Clock: clock}",
-      "replace": ", Gravity: r.Gravity}\n\t_ = clock",
+      "find": "\tlargest := uint64(math.MaxUint64)\n\tclock := &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}\n",
+      "replace": "\tclock := &client.ClockSample{}\n",
       "check": "go",
       "expect": "maximum admitted Welcome="
     },
@@ -7027,6 +7027,176 @@
       "replace": "MovementEpoch: uint64(e.life), LifeGeneration: uint64(e.life),",
       "check": "go",
       "expect": "FAIL"
+    },
+    {
+      "id": "v8cw-prediction-local-stance",
+      "batch": "v8-product-crouch-wire",
+      "what": "The prediction keeps local stance constants",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "        prediction_.SetStanceRules(rules->stance);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP\\ ClientSimulation\\ predicts\\ with\\ the\\ stance\\ rules\\ Welcome\\ delivered"
+    },
+    {
+      "id": "v8cw-role-crouch-without-controls",
+      "batch": "v8-product-crouch-wire",
+      "what": "The role takes the crouch key without controls",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    if (owned && !stale && intent.controls) crouchHeld_ = intent.crouch;\n",
+      "replace": "    crouchHeld_ = intent.crouch;\n",
+      "check": "cpu",
+      "expect": "PvP\\ an\\ intent\\ without\\ controls\\ keeps\\ the\\ last\\ crouch\\ intent"
+    },
+    {
+      "id": "v8cw-gateway-drops-crouch-held",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Gateway drops crouch_held",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\t\tCrouchHeld: command.CrouchHeld, SprintHeld: command.SprintHeld})",
+      "replace": "\t\t\tSprintHeld: command.SprintHeld})",
+      "check": "go",
+      "expect": "TestHTTPReservationHandshakeInputAndSnapshot"
+    },
+    {
+      "id": "v8cw-gateway-drops-crouched",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Gateway drops crouched",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "ConnectionQualityFailures: p.ConnectionQualityFailures, Crouched: p.Crouched, Sprinting: p.Sprinting})",
+      "replace": "ConnectionQualityFailures: p.ConnectionQualityFailures, Sprinting: p.Sprinting})",
+      "check": "go",
+      "expect": "TestSnapshotMappingDoesNotChangeWorldState"
+    },
+    {
+      "id": "v8cw-gateway-drops-welcome-rule",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Gateway drops a Welcome movement rule",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "CrouchSpeedScale: s.ready.CrouchSpeedScale, SprintSpeedScale:",
+      "replace": "SprintSpeedScale:",
+      "check": "go",
+      "expect": "TestHTTPReservationHandshakeInputAndSnapshot"
+    },
+    {
+      "id": "v8cw-gateway-fit-ignores-rules",
+      "batch": "v8-product-crouch-wire",
+      "what": "ReadyFitsWelcome leaves the movement rules out",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\tCrouchBodyHeight: r.CrouchBodyHeight, CrouchEyeHeight: r.CrouchEyeHeight, CrouchSpeedScale: r.CrouchSpeedScale, SprintSpeedScale: r.SprintSpeedScale}",
+      "replace": "}",
+      "check": "go",
+      "expect": "TestReadyRequiresRulesAndBoundsWorstCaseWelcome"
+    },
+    {
+      "id": "v8cw-ipc-drops-crouch-held",
+      "batch": "v8-product-crouch-wire",
+      "what": "IpcHost drops crouch_held",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                        command.crouch_held(),command.sprint_held()});",
+      "replace": "                        false,command.sprint_held()});",
+      "check": "ipc",
+      "expect": "PvP\\ IPC\\ carries\\ the\\ stance\\ rules\\ in\\ Ready,\\ the\\ crouch\\ in\\ and\\ the\\ stance\\ out"
+    },
+    {
+      "id": "v8cw-ipc-drops-crouched",
+      "batch": "v8-product-crouch-wire",
+      "what": "IpcHost drops crouched",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        state->set_crouched(p.crouched);state->set_sprinting(p.sprinting); // pv8 §2\n",
+      "replace": "        state->set_sprinting(p.sprinting); // pv8 §2\n",
+      "check": "ipc",
+      "expect": "PvP\\ IPC\\ carries\\ the\\ stance\\ rules\\ in\\ Ready,\\ the\\ crouch\\ in\\ and\\ the\\ stance\\ out"
+    },
+    {
+      "id": "v8cw-ipc-ready-drops-rule",
+      "batch": "v8-product-crouch-wire",
+      "what": "Ready drops a movement rule",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "r->set_crouch_speed_scale(stance.crouchSpeedScale);",
+      "replace": "",
+      "check": "ipc",
+      "expect": "PvP\\ IPC\\ carries\\ the\\ stance\\ rules\\ in\\ Ready,\\ the\\ crouch\\ in\\ and\\ the\\ stance\\ out"
+    },
+    {
+      "id": "v8cw-client-drops-crouched",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Client drops crouched",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                        p.connection_quality_failures(),p.crouched(),p.sprinting()});",
+      "replace": "                        p.connection_quality_failures(),false,p.sprinting()});",
+      "check": "worker",
+      "expect": "mock worker wait timed out"
+    },
+    {
+      "id": "v8cw-client-drops-crouch-held",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Client drops crouch_held",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                out->set_crouch_held(command.crouchHeld);out->set_sprint_held(command.sprintHeld); // pv8 §2\n",
+      "replace": "                out->set_sprint_held(command.sprintHeld); // pv8 §2\n",
+      "check": "worker",
+      "expect": "a\\ held\\ crouch\\ did\\ not\\ reach\\ the\\ input\\ window\\ as\\ held"
+    },
+    {
+      "id": "v8cw-client-welcome-unchecked",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Client accepts a crouch speed above 1",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                   stance.crouchSpeedScale>1 || !positive(stance.sprintSpeedScale) || stance.sprintSpeedScale>3)",
+      "replace": "                   !positive(stance.sprintSpeedScale) || stance.sprintSpeedScale>3)",
+      "check": "worker",
+      "expect": "Welcome\\ accepted\\ movement\\ rules\\ out\\ of\\ their\\ bounds"
+    },
+    {
+      "id": "v8cw-client-rules-change-unchecked",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Client accepts changed stance rules within a session",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": " || !(state.movementRules->stance==stance)))",
+      "replace": "))",
+      "check": "worker",
+      "expect": "a\\ session\\ accepted\\ changed\\ movement\\ rules"
+    },
+    {
+      "id": "v8cw-rules-file-unvalidated",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Match takes movement rules outside their bounds",
+      "file": "apps/object_fps_pvp/src/Pvp/MovementRulesFile.cpp",
+      "find": "        if (!ValidStanceRules(arena, rules))\n            throw std::runtime_error(\"Movement rules outside protocol-v8 section 3 for arena \" + arena.id);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP\\ movement\\ rules\\ data\\ loads\\ the\\ release\\ file\\ and\\ refuses\\ every\\ violation"
+    },
+    {
+      "id": "v8cw-rules-file-extra-key",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Match takes a movement rules file with an extra key",
+      "file": "apps/object_fps_pvp/src/Pvp/MovementRulesFile.cpp",
+      "find": "if (!json.is_object() || json.size() != Keys.size())",
+      "replace": "if (!json.is_object() || json.size() < Keys.size())",
+      "check": "cpu",
+      "expect": "PvP\\ movement\\ rules\\ data\\ loads\\ the\\ release\\ file\\ and\\ refuses\\ every\\ violation"
+    },
+    {
+      "id": "v8cw-match-takes-sprint",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Match takes sprint_held",
+      "file": "apps/object_fps_pvp/src/Pvp/Movement.cpp",
+      "find": "    result.sprinting = false; // The sprint behaviour arrives with v8-product-sprint.",
+      "replace": "    result.sprinting = command.sprintHeld;",
+      "check": "cpu",
+      "expect": "PvP\\ sprint_held\\ changes\\ nothing\\ in\\ pv8"
+    },
+    {
+      "id": "v8cw-remote-crouch-clips-unused",
+      "batch": "v8-product-crouch-wire",
+      "what": "A crouched remote plays the standing legs",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "            if (state.crouched) {\n                // v8-product-crouch-pose",
+      "replace": "            if (false) {\n                // v8-product-crouch-pose",
+      "check": "presentation",
+      "expect": "PvP\\ crouched\\ remote\\ lower\\ body\\ plays\\ the\\ crouch\\ clips\\ on\\ the\\ standing\\ model"
     }
   ]
 }

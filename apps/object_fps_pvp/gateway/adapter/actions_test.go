@@ -114,7 +114,9 @@ func TestCombatRulesAndResultsValidation(t *testing.T) {
 }
 
 func TestReadyRequiresRulesAndBoundsWorstCaseWelcome(t *testing.T) {
-	ready := &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, ArenaVersion: math.MaxUint32, ArenaDigest: 1, CombatRules: testRules()}
+	// pv8 §3: the movement rules are part of the worst case.
+	ready := &runtime.Ready{JumpHeight: .6, Gravity: 18, CrouchBodyHeight: 1.2, CrouchEyeHeight: 1, CrouchSpeedScale: .5, SprintSpeedScale: 1,
+		TickRate: 60, SnapshotIntervalTicks: 1, ArenaVersion: math.MaxUint32, ArenaDigest: 1, CombatRules: testRules()}
 	for ReadyFitsWelcome(ready) {
 		ready.ArenaId += "x"
 	}
@@ -128,7 +130,8 @@ func TestReadyRequiresRulesAndBoundsWorstCaseWelcome(t *testing.T) {
 	// The largest time echo (pv7 §3) is part of the worst case.
 	largest := uint64(math.MaxUint64)
 	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint32, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, ArenaDigest: ready.ArenaDigest, CombatRules: RulesForClient(ready.CombatRules),
-		Clock: &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}}
+		Clock:            &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest},
+		CrouchBodyHeight: ready.CrouchBodyHeight, CrouchEyeHeight: ready.CrouchEyeHeight, CrouchSpeedScale: ready.CrouchSpeedScale, SprintSpeedScale: ready.SprintSpeedScale}
 	if proto.Size(welcome)+24 != 1200 {
 		t.Fatalf("maximum admitted Welcome=%d", proto.Size(welcome)+24)
 	}

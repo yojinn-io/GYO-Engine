@@ -1,8 +1,12 @@
 # Object FPS PvP contracts
 
-Production Client, Gateway and Runtime use protocol version 7 (pv7) and reject
-every other version. pv7 took effect with the v7.1 `pv7-merge` (PR #78). The
-product-owned [pv7 contract](../../../docs/object_fps_pvp/protocol-v7.zh-Hant.md)
+Production Client, Gateway and Runtime use protocol version 8 (pv8) and reject
+every other version. pv8 takes effect with the v8 pv8-line: the crouch and
+sprint fields, the Match's movement rules in Ready and Welcome, and the counters
+narrowed to uint32. The product-owned
+[pv8 contract](../../../docs/object_fps_pvp/protocol-v8.zh-Hant.md) states what
+pv8 changes; every rule it does not restate stays as written in the
+[pv7 contract](../../../docs/object_fps_pvp/protocol-v7.zh-Hant.md), which
 states what pv7 changes; every rule it does not restate stays as written in the
 [pv6 contract](../../../docs/object_fps_pvp/protocol-v6.zh-Hant.md) and the
 [pv5 contract](../../../docs/object_fps_pvp/protocol-v5.zh-Hant.md) it amends. Together
@@ -14,8 +18,6 @@ acceptance expected values; `object_fps_pvp.protocol_version` checks that they a
 
 `client_v8.proto` defines remote Client ↔ Gateway payloads.
 `runtime_v8.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
-The files and packages are already named for pv8 (`pv8-rename`); the version value
-stays 7 until the `v8-product-crouch` wire batch changes it to 8.
 These independent schemas import no shared gameplay schema. The product Adapter
 maps generated types; Match receives product C++ values. No shared Engine or
 Gateway codec owns game rules.

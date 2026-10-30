@@ -36,17 +36,17 @@ std::vector<std::uint8_t> Valid() { return wire::Encode(Sample(3)); }
 
 // Pinned on the product's own header code before the GYOP header moved to the
 // engine: every message type must keep these exact bytes. pv6 changed only the
-// version field (bytes 4-5) from 0x0005 to 0x0006, and pv7 from 0x0006 to
-// 0x0007.
+// version field (bytes 4-5) from 0x0005 to 0x0006, pv7 from 0x0006 to
+// 0x0007, and pv8 from 0x0007 to 0x0008.
 TEST_CASE("PvP datagram encoding of every message type is byte-for-byte stable") {
     constexpr std::array<std::string_view, 7> expected{
-        "47594f50000700010102030405060709fffffff1000300000100ff",
-        "47594f5000070002010203040506070afffffff200040000020200ff",
-        "47594f5000070003010203040506070bfffffff30005000003030300ff",
-        "47594f5000070004010203040506070cfffffff4000600000404040400ff",
-        "47594f5000070005010203040506070dfffffff500070000050505050500ff",
-        "47594f5000070006010203040506070efffffff60008000006060606060600ff",
-        "47594f5000070007010203040506070ffffffff7000900000707070707070700ff",
+        "47594f50000800010102030405060709fffffff1000300000100ff",
+        "47594f5000080002010203040506070afffffff200040000020200ff",
+        "47594f5000080003010203040506070bfffffff30005000003030300ff",
+        "47594f5000080004010203040506070cfffffff4000600000404040400ff",
+        "47594f5000080005010203040506070dfffffff500070000050505050500ff",
+        "47594f5000080006010203040506070efffffff60008000006060606060600ff",
+        "47594f5000080007010203040506070ffffffff7000900000707070707070700ff",
     };
     for (std::uint16_t type = 1; type <= 7; ++type) {
         CAPTURE(type);

@@ -94,7 +94,7 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 		f.conn = conn
 		f.mu.Unlock()
 		ready := envelope()
-		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
+		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CrouchBodyHeight: 1.2, CrouchEyeHeight: 1, CrouchSpeedScale: .5, SprintSpeedScale: 1, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
 		f.send(ready)
 		for {
 			b, err := framing.ReadFrame(conn)
@@ -342,12 +342,17 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	if err := proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome); err != nil || welcome.PlayerId != c.PlayerID || welcome.TickRate != 60 || welcome.ArenaDigest != testArenaDigest {
 		t.Fatalf("welcome %v %v", &welcome, err)
 	}
+	// pv8 §3: the Match's movement rules reach the Client as Ready carried them.
+	if welcome.CrouchBodyHeight != 1.2 || welcome.CrouchEyeHeight != 1 || welcome.CrouchSpeedScale != .5 || welcome.SprintSpeedScale != 1 {
+		t.Fatalf("welcome movement rules %v", &welcome)
+	}
 	sendPacket(t, p, c, 4, adapter.Hello, &client.Hello{SessionToken: c.Token})
 	receivePacket(t, p, adapter.Welcome)
 	f.quiet(t)
-	sendPacket(t, p, c, 5, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1, Yaw: .5}, {Sequence: 2, MoveForward: 1}, {Sequence: 3}}})
+	sendPacket(t, p, c, 5, adapter.Input, &client.PlayerInput{LifeGeneration: 1, MovementEpoch: 1, Commands: []*client.MovementCommand{{Sequence: 1, MoveForward: 1, Yaw: .5}, {Sequence: 2, MoveForward: 1, CrouchHeld: true}, {Sequence: 3, SprintHeld: true}}})
 	in := f.next(t).GetInput()
-	if in == nil || in.PlayerId != c.PlayerID || len(in.Commands) != 3 || in.Commands[0].Sequence != 1 || in.Commands[2].Sequence != 3 {
+	if in == nil || in.PlayerId != c.PlayerID || len(in.Commands) != 3 || in.Commands[0].Sequence != 1 || in.Commands[2].Sequence != 3 ||
+		in.Commands[0].CrouchHeld || !in.Commands[1].CrouchHeld || in.Commands[1].SprintHeld || !in.Commands[2].SprintHeld {
 		t.Fatalf("bad input %v", in)
 	}
 	// Redundant batches remain valid after the mailbox drains, and reach the

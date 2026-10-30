@@ -71,7 +71,11 @@ struct QualityWindowFailure final {
 class MatchRuntimeHost final {
 public:
     using ClockNow = std::function<std::chrono::steady_clock::time_point()>;
-    explicit MatchRuntimeHost(Arena arena, ClockNow now = std::chrono::steady_clock::now);
+    // stance: the Match's movement rules data (protocol-v8 section 3).
+    explicit MatchRuntimeHost(Arena arena, ClockNow now = std::chrono::steady_clock::now,
+        const StanceRules& stance = DefaultStanceRules);
+    // The stance rules the Match plays by, sent in Ready; fixed for its life.
+    [[nodiscard]] const StanceRules& Stance() const noexcept { return stance_; }
     MatchRuntimeHost(const MatchRuntimeHost&) = delete;
     MatchRuntimeHost& operator=(const MatchRuntimeHost&) = delete;
     ~MatchRuntimeHost();
@@ -238,6 +242,7 @@ private:
     void JudgeConnectionQuality(WorldSnapshot& state);
 
     mutable std::mutex mutex_;
+    StanceRules stance_;
     PvpMatch match_;
     ClockNow now_;
     Engine::Runtime::FixedTickRuntime ticker_{AuthorityTickRate};

@@ -42,7 +42,8 @@ func maximumSnapshot(n uint32, typeMaximum bool) *client.WorldSnapshot {
 		player := &client.PlayerState{PlayerId: math.MaxUint32 - i, X: math.MaxFloat32, Y: math.MaxFloat32, Z: math.MaxFloat32, Yaw: 3, Pitch: 1.5,
 			LastResolvedCommand: math.MaxUint32, MovementEpoch: math.MaxUint32, ContiguousPendingCommands: MaxFutureCommands, VerticalVelocity: 4, Grounded: true,
 			LifeGeneration: math.MaxUint32, LifeState: client.LifeState_LIFE_ALIVE, LifeStateTick: math.MaxUint32, RespawnTick: math.MaxUint32,
-			MovementSlackSequence: proto.Uint32(math.MaxUint32), MovementSlackUs: proto.Int32(-MaxMovementSlackUs), ConnectionQualityFailures: ConnectionQualityFailedWindows - 1}
+			MovementSlackSequence: proto.Uint32(math.MaxUint32), MovementSlackUs: proto.Int32(-MaxMovementSlackUs), ConnectionQualityFailures: ConnectionQualityFailedWindows - 1,
+			Crouched: true, Sprinting: true}
 		combat := &client.CombatState{PlayerId: math.MaxUint32 - i, Hp: math.MaxUint32, NextAllowedShotTick: math.MaxUint32, LifeGeneration: math.MaxUint32, MagazineAmmo: math.MaxUint32,
 			ReloadActionId: math.MaxUint32, ReloadStartTick: math.MaxUint32, ReloadEndTick: math.MaxUint32, LastShotActionId: math.MaxUint32, LastShotTick: math.MaxUint32,
 			LastDamageTick: math.MaxUint32, DamageCount: math.MaxUint32, LastAttackerId: math.MaxUint32,
@@ -60,14 +61,14 @@ func maximumSnapshot(n uint32, typeMaximum bool) *client.WorldSnapshot {
 // A full room's snapshot at its largest encoding still fits one datagram, and
 // the sizes are pinned exactly so a new or widened field shows (pv6 contract §7
 // 35+255N, pv7 §8 45+257N; pv8 §2a narrowed the counters to uint32, protocol-v8
-// section 6: the contract maximum 40+171N, the type maximum 42+189N). The
+// section 6: the contract maximum 40+177N, the type maximum 42+195N with the stance). The
 // worker probe pins the same message at the same size.
 func TestFullRoomSnapshotDatagramSize(t *testing.T) {
 	for n := uint32(1); n <= MaxPlayers; n++ {
-		if size := proto.Size(maximumSnapshot(n, false)) + framing.HeaderSize; size != 40+171*int(n) || size > framing.MaxDatagram {
+		if size := proto.Size(maximumSnapshot(n, false)) + framing.HeaderSize; size != 40+177*int(n) || size > framing.MaxDatagram {
 			t.Fatalf("%d-player contract maximum snapshot datagram %d bytes", n, size)
 		}
-		if size := proto.Size(maximumSnapshot(n, true)) + framing.HeaderSize; size != 42+189*int(n) || size > framing.MaxDatagram {
+		if size := proto.Size(maximumSnapshot(n, true)) + framing.HeaderSize; size != 42+195*int(n) || size > framing.MaxDatagram {
 			t.Fatalf("%d-player type maximum snapshot datagram %d bytes", n, size)
 		}
 	}

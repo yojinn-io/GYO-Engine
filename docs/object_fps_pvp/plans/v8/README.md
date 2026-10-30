@@ -32,7 +32,7 @@ v8-plan
 │   │   ├── pv8-rename             「low｜Sonnet 5.5｜proto、Go 套件、CMake target 改名為 v8，版本值仍是 7（完成）」
 │   │   ├── pv8-seq-ceiling        「high｜Opus 5.5｜不改 wire：WireCounterMax 取代 uint64 上限檢查（完成）」
 │   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼（完成）」
-│   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告」
+│   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告（完成）」
 │   └── hitbox-line                「PR 線：部位 hitbox（pv7 已有欄位）」
 │       ├── v8-product-hitbox-data            「high｜Opus 5.5｜骨骼→部位形狀的 Data Contract，先手寫 JSON」
 │       ├── v8-product-hitbox-rewind          「high（回溯局部 xhigh）｜Opus 5.5｜Match 的權威姿勢歷史、射擊照開槍時刻回溯」
@@ -122,6 +122,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `pv8-rename` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_pv8_rename.zh-Hant.md) |
 | `pv8-seq-ceiling` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_seq_ceiling.zh-Hant.md) |
 | `pv8-seq-narrow` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_seq_narrow.zh-Hant.md) |
+| `v8-product-crouch`（wire 接入） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_crouch_wire.zh-Hant.md) |
 
 ---
 

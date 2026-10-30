@@ -51,6 +51,10 @@ struct ClientIntent final {
     // Set by ClientSimulationRole::PublishIntent: consecutive publications
     // have consecutive numbers.
     std::uint64_t sequence{};
+    // The crouch key is held (protocol-v8 section 2, a held intent). Taken only
+    // from an owned, fresh intent with controls; otherwise the last one taken
+    // stays (protocol-v8 section 5).
+    bool crouch{};
 };
 
 // Decision D30: the simulation keeps using the latest intent until it is older
@@ -162,6 +166,7 @@ private:
     PlayerId playerId_{};
     std::uint64_t unmatchedPhaseSamples_{};
     std::uint64_t consumedJumps_{};
+    bool crouchHeld_{}; // the last crouch intent taken (protocol-v8 section 5)
     Engine::Time::TimePoint lastIntentAt_{};
     std::uint64_t lastIntentSequence_{};
     std::array<double, ClientIntentRecentIntervals> intervals_{};

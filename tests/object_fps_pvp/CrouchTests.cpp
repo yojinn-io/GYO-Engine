@@ -1,10 +1,14 @@
 #include <doctest/doctest.h>
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
+#include "RetroFPS/Pvp/MovementRulesFile.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/ShotQuery.hpp"
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <string>
 
 // v8-product-crouch (protocol-v8 §4, §5): stance rules shared by prediction,
 // replay and authority, and the Match's substitution of missing commands.
@@ -144,4 +148,80 @@ TEST_CASE("PvP crouch seeds a crouched lead from a crouched authority") {
     const auto input = client.PendingInput();
     REQUIRE_FALSE(input.commands.empty());
     for (const auto& command : input.commands) CHECK(command.crouchHeld);
+}
+
+// W2 (v8-product-crouch wire): sprint_held has no behaviour in pv8. The same
+// commands with and without it leave the Match in the same state, and
+// sprinting stays false.
+TEST_CASE("PvP sprint_held changes nothing in pv8") {
+    const auto run = [](bool sprint) {
+        PvpMatch match(CrouchArena());
+        std::string error;
+        REQUIRE(match.Join(1, error));
+        for (std::uint64_t sequence = 1; sequence <= 90; ++sequence) {
+            auto command = Command(sequence, sequence > 30 && sequence < 60, sequence == 70, 1);
+            command.sprintHeld = sprint;
+            REQUIRE(match.SubmitInput({1, {command}}));
+            match.Tick({match.TickCount() + 1, 1.0 / 60});
+            CHECK_FALSE(match.Snapshot().players.front().sprinting);
+        }
+        return match.Snapshot().players.front();
+    };
+    const auto held = run(true), released = run(false);
+    CHECK(held.position.x == released.position.x);
+    CHECK(held.position.y == released.position.y);
+    CHECK(held.position.z == released.position.z);
+    CHECK(held.verticalVelocity == released.verticalVelocity);
+    CHECK(held.lastResolvedCommand == released.lastResolvedCommand);
+    CHECK(held.crouched == released.crouched);
+}
+
+// W4 (v8-product-crouch wire, protocol-v8 section 3): the Match's movement rules
+// data. The release file loads for the release arenas; every bound, a missing
+// or extra key and another version are refused, never replaced by defaults.
+TEST_CASE("PvP movement rules data loads the release file and refuses every violation") {
+    const auto assets = std::filesystem::path(PVP_PRODUCT_ARENA_PATH).parent_path();
+    std::string error;
+    for (const char* name : {"pvp_arena.json", "pvp_corners.json"}) {
+        const auto arena = Arena::Load(assets / name, error);
+        REQUIRE_MESSAGE(arena, error);
+        const auto rules = LoadStanceRules(assets / "movement_rules.json", *arena, error);
+        REQUIRE_MESSAGE(rules, error);
+        CHECK(*rules == DefaultStanceRules);
+    }
+    const auto arena = CrouchArena();
+    const auto path = std::filesystem::temp_directory_path() / "gyo_pvp_movement_rules_test.json";
+    const auto load = [&](const std::string& text) {
+        { std::ofstream file(path, std::ios::binary | std::ios::trunc); file << text; }
+        return LoadStanceRules(path, arena, error);
+    };
+    const auto rules = [](const std::string& body, const std::string& eye, const std::string& crouch,
+                          const std::string& sprint) {
+        return R"({"version": 1, "crouch_body_height": )" + body + R"(, "crouch_eye_height": )" + eye +
+            R"(, "crouch_speed_scale": )" + crouch + R"(, "sprint_speed_scale": )" + sprint + "}";
+    };
+    const auto valid = load(rules("1.2", "1.0", "0.5", "1.0"));
+    REQUIRE_MESSAGE(valid, error);
+    CHECK(*valid == DefaultStanceRules);
+    for (const auto& text : {
+             rules("1.2", "1.3", "0.5", "1.0"),   // eye above the crouched body
+             rules("1.2", "0", "0.5", "1.0"),     // no eye height
+             rules("1.8", "1.0", "0.5", "1.0"),   // not below the standing body
+             rules("0.4", "0.3", "0.5", "1.0"),   // below two radii
+             rules("1.2", "1.0", "0", "1.0"),     // no crouch speed
+             rules("1.2", "1.0", "1.5", "1.0"),   // faster than standing
+             rules("1.2", "1.0", "0.5", "0"),     // no sprint speed
+             rules("1.2", "1.0", "0.5", "3.5"),   // beyond the sprint bound
+             rules("1e40", "1.0", "0.5", "1.0"),  // not a finite float
+             rules("\"1.2\"", "1.0", "0.5", "1.0"), // not a number
+             std::string(R"({"version": 2, "crouch_body_height": 1.2, "crouch_eye_height": 1.0, "crouch_speed_scale": 0.5, "sprint_speed_scale": 1.0})"),
+             std::string(R"({"version": 1, "crouch_body_height": 1.2, "crouch_eye_height": 1.0, "crouch_speed_scale": 0.5})"),
+             std::string(R"({"version": 1, "crouch_body_height": 1.2, "crouch_eye_height": 1.0, "crouch_speed_scale": 0.5, "sprint_speed_scale": 1.0, "extra": 1})"),
+             std::string("not json")}) {
+        CAPTURE(text);
+        CHECK_FALSE(load(text));
+        CHECK_FALSE(error.empty());
+    }
+    std::filesystem::remove(path);
+    CHECK_FALSE(LoadStanceRules(path, arena, error));
 }
