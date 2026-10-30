@@ -12,12 +12,15 @@ enum class AudioErrorCode : std::uint16_t {
     InvalidClip = 1,
     // A mixer configuration outside its documented limits.
     InvalidConfig = 2,
+    // Every submitter slot of the mixer is taken.
+    TooManySubmitters = 3,
 };
 
 [[nodiscard]] constexpr const char* ToString(const AudioErrorCode code) noexcept {
     switch (code) {
     case AudioErrorCode::InvalidClip:   return "InvalidClip";
     case AudioErrorCode::InvalidConfig: return "InvalidConfig";
+    case AudioErrorCode::TooManySubmitters: return "TooManySubmitters";
     }
     return "Unknown";
 }

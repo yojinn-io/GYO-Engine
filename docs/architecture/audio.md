@@ -4,9 +4,9 @@ Owner: Engine (`engine/audio` → `GYO::Audio`; the SDL output backend `engine/a
 `GYO::AudioBackendSDL` arrives with v8-engine-audio-sdl).
 Plan and record: [audio](plans/audio/README.md), batches v8-engine-audio-core, -schedule, -sdl and -record.
 
-**Status (2026-10-30): v8-engine-audio-core landed.** The clip bank and the sample-domain core (`VoiceMixer`,
-internal to `engine/audio/src`) exist and are tested offline. The public `Mixer` (submitters and the timestamp
-mapping) comes with v8-engine-audio-schedule and the output backend with v8-engine-audio-sdl. Each invariant below
+**Status (2026-10-30): v8-engine-audio-core and v8-engine-audio-schedule landed.** The clip bank, the
+sample-domain core (`VoiceMixer`, internal to `engine/audio/src`) and the public `Mixer` with its submitters and
+timestamp mapping exist and are tested offline. The output backend comes with v8-engine-audio-sdl. Each invariant below
 names the milestone that makes it true and the guard that keeps it true.
 
 ## What it is
@@ -31,14 +31,37 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
   arithmetic makes the output identical on every platform.
 - **Late start.** A play whose start frame is before the next frame to render starts at that frame instead, and is
   counted as late with how many frames late it was (`maxLateFrames`).
+- **Submitters (`Mixer::CreateSubmitter`).** Each is the producer end of one bounded SPSC ring. All rings
+  (`maxSubmitters`, 1 to 64, of `queueCapacity`, 1 to 65536) are allocated when the mixer is created; creating a
+  submitter only hands out the next one (any thread, any time; `TooManySubmitters` when none is left). The first
+  thread that plays through a submitter owns it. A destroyed submitter does not give its ring back, so a consumer
+  creates one per producer thread and keeps it. A full ring drops the request and counts it (`droppedQueueFull`).
+  A submitter shares the mixer's state, so it may outlive the `Mixer`.
+- **Timestamp mapping (`Mixer::Render(block, anchor)`).** The backend reads the Engine time once at the start of each
+  block and passes it as `anchor`. Every queued request starts at
+  `blockStart + floor((at - anchor) × 48000 + 1/2) + delayFrames` frames (halves toward +infinity, also for negative
+  offsets), with `at - anchor` clamped to an hour either way and `delayFrames` the `scheduleDelay` rounded the same
+  way. A request is counted on time or late when the audio thread takes it, so a play counted on time may still be
+  ahead (up to the delay, or up to an hour for a timestamp in the future). `scheduleDelay` (0 to 1 s)
+  lets a request sent shortly after its time still start on time.
 - **Counters.** `accepted` (plays scheduled), `onTime`, `late`, `noVoice`, `maxLateFrames`, `renderedFrames`,
   `clippedSamples`; relaxed atomics, readable from any thread, for display and acceptance only.
 
 ## Contracts
 
-- `Schedule` and `Render` run on one thread (the audio thread once a backend exists). `Stats` and `SetMasterGain`
-  may run on any thread. A gain outside [0, `kMaxGain`] or a clip outside the bank is a Programmer Error
-  (`GYO_ASSERT`), checked before anything is counted.
+- `Mixer::Render` (and inside it `VoiceMixer`'s schedule and render) runs on one thread, the audio thread.
+  `CreateSubmitter`, `Stats` and `SetMasterGain` may run on any thread; each `Submitter` on its owner thread. A gain
+  outside [0, `kMaxGain`], a clip outside the bank, playing from another thread than the owner, and a moved-from
+  `Submitter` are Programmer Errors (the owner check is best effort: a later thread may reuse a joined thread's id) (`GYO_ASSERT` in `Submitter::Play`, on the producer, before anything is
+  counted); the audio thread takes requests without checks (`VoiceMixer::ScheduleChecked`, `noexcept`).
+- `MixerStats`: `submitted == playedOnTime + playedLate + droppedQueueFull + droppedNoVoice` once no request is in
+  flight (every queued request taken, no producer playing); counters are read one by one, so a snapshot taken
+  meanwhile may differ either way and is not subtracted to count requests in flight.
+- Real-time bound: `Render` takes every queued request in one block, and each start looks for a free voice
+  linearly; the worst case is `maxSubmitters × queueCapacity × maxVoices` comparisons in one block. The defaults
+  (4 × 256 × 32) are small; the configured limits (64 × 65536 × 1024) are not real-time.
+- Moving a `Mixer` while its audio thread renders is a data race; the backend stops output first. `maxLateness` is the latest late start, converted from frames.
+- A moved-from `Mixer` renders silence; an odd sample count gets silence in its last sample.
 - `Render` fills a block of any length and advances `renderedFrames` by its frame count. It works in internal
   passes of at most 256 frames over an accumulator allocated at creation.
 - The master gain is read once per internal pass; a change takes effect at the next pass.
@@ -54,21 +77,31 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
    from v8-engine-audio-sdl).
 3. **One time base.** Play requests carry `Time::MonotonicClock` time points. Conversion to sample positions happens
    only inside the mixer, only from the current block's anchor; the backend samples `Now()` once per block; no fixed
-   offset is carried across blocks. From v8-engine-audio-schedule.
+   offset is carried across blocks. From v8-engine-audio-schedule for the mixer (guard "maps a request in a later
+   block from that block's anchor"); the once-per-block read is the backend's, from v8-engine-audio-sdl.
 4. **The mixer is the authority for the playback position.** Only the mixer owns the count of rendered frames;
    consumers and the backend keep no copy of it to decide anything (AGENTS §3, State Authority). Guard: review.
-5. **Spacing is kept under one anchor.** Two requests taken under the same anchor, neither late, start
-   `round(Δ × 48000)` frames apart for timestamps Δ apart. The sample-domain half holds from v8-engine-audio-core
-   (a voice starts exactly at its start frame whatever the block split; guards "starts a clip exactly at its start
-   frame", "starts a clip scheduled in a later block at its frame", "output does not depend on how blocks split it");
-   the mapping half from v8-engine-audio-schedule.
+5. **Each start is its own rounded offset.** Every request taken under an anchor, with a timestamp within an hour of
+   that anchor, starts at its offset from the anchor rounded to the nearest frame as floor(x + 1/2) (halves toward
+   +infinity, also for negative offsets), plus the constant delay; so two such requests, neither late, start a
+   number of frames apart that differs from Δ × 48000 by less than one frame for timestamps Δ apart. Offsets beyond
+   an hour are clamped to an hour. (Revised 2026-10-30 with the user's consent, v8-engine-audio-invariant5: the
+   original "exactly round(Δ × 48000) apart" cannot hold for three or more requests; the hour and the rounding
+   direction were added after the xhigh review, v8-engine-audio-invariant5-clamp.) The sample-domain half holds from
+   v8-engine-audio-core (a voice starts exactly at its start frame whatever the block split; guards "starts a clip
+   exactly at its start frame", "starts a clip scheduled in a later block at its frame", "output does not depend on
+   how blocks split it"); the mapping half from v8-engine-audio-schedule (guards "starts a request at its offset
+   from the block's anchor", "rounds an offset to the nearest frame, halves up", "starts each request at its own
+   rounded offset under one anchor", "maps a request in a later block from that block's anchor").
 6. **The balance adds up.** Every request ends in exactly one of on time, late, dropped because the queue was full,
    dropped because no voice was free; submitted equals their sum. No drop goes uncounted. The voice half
    (`accepted == onTime + late + noVoice`) holds from v8-engine-audio-core (guards "drops a play when every voice is
-   busy", "starts a late play at the next frame"); the queue half from v8-engine-audio-schedule.
+   busy", "starts a late play at the next frame"); the queue half from v8-engine-audio-schedule (guards "drops and
+   counts a request when its queue is full", "balances every request from concurrent producers").
 7. **The audio thread is real-time safe.** `Render` allocates, frees, locks, waits, logs and throws nothing
-   (`noexcept`; every capacity is allocated at creation); clips do not change while output runs. From
-   v8-engine-audio-core for `VoiceMixer::Render`. Guard: review and the `noexcept` signature.
+   (`noexcept`; every capacity is allocated at creation, including every submitter ring); clips do not change while
+   output runs. From v8-engine-audio-core for `VoiceMixer::Render`, from v8-engine-audio-schedule for `Mixer::Render`.
+   Guard: review and the `noexcept` signatures.
 8. **Deterministic.** The same clip bank, request sequence and anchor sequence give a bit-identical output, however
    the output is split into blocks. Guard: "output does not depend on how blocks split it" (block sizes 1 to 2200,
    across the 256-frame pass). From v8-engine-audio-core.

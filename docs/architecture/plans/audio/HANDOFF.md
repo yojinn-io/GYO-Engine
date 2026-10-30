@@ -1,6 +1,6 @@
 # 音效（GYO::Audio）：交接
 
-更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；下一批 `v8-engine-audio-schedule` 等使用者指定。**
+更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；下一批 `v8-engine-audio-sdl` 等使用者指定。**
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 Engine 計畫夾的慣例，不點名消費端。
 
 ## 現況
@@ -10,6 +10,9 @@
 - 2026-10-30：使用者說「開始吧」，開始 `v8-engine-audio-core`（high，估 3～4 h）。做法：樣本域的聲部混音做成模組內部類別 `VoiceMixer`（`engine/audio/src`，以樣本位置排程，不含時間換算與佇列），L1 直接測它；公開的 `Mixer`（提交端與時間戳換算）在 `v8-engine-audio-schedule` 包在它外面。這取代 PLAN 寫的「測試用的直接注入」，不在公開 API 留後門。
 - 2026-10-30：`v8-engine-audio-core` 完成：`GYO::Audio`（`ClipBank`、內部 `VoiceMixer`）、`gyo_audio_tests` 13 案、SoundLoader 的第一批 L1、連結守衛、[audio.md](../../audio.md)（Design Invariants 的正本）；`ctest --preset core` 35／35，突變 9／9 被殺；dev_log：[2026_10_30_engine_audio_core](../../../dev_logs/2026_10_30_engine_audio_core.zh-Hant.md)。四平台 CI 未跑（PR 線一起跑）。
 - 給 schedule 批：`VoiceMixer::Schedule` 含 `GYO_ASSERT`、不是 `noexcept`；PLAN 草案的 `Submitter::Play` 寫成 `noexcept`，要在生產者端驗證就不能 `noexcept`。開始時先定這兩點。
+- 2026-10-30：使用者說「開始 v8-engine-audio-schedule。」開始（high，換算、遲到、SPSC 局部 xhigh，估 4～5 h）。開始時定下：①`Submitter::Play` 不是 `noexcept`，在生產者端以 `GYO_ASSERT` 驗證片段與增益；`Render` 改呼叫 `VoiceMixer` 不檢查的 `noexcept` 版本。②提交端的佇列在建立混音器時全部配置好，`CreateSubmitter` 以 atomic 領取一格，任何時候都可呼叫（不必限制在輸出開啟前）。③提交端與混音器以 `shared_ptr` 共用狀態，混音器先銷毀也安全（音效執行緒不持有參考）。④樣本位置改用有號整數，錨點之前的時間（例如第一個區塊之前的事件）才能判為遲到。
+- 2026-10-30：**Design Invariant 5 的修訂（v8-engine-audio-invariant5，使用者同意）**：原文「同錨點下兩起點的差＝round(Δ×48000)」在三個以上請求時做不到（各自四捨五入，round(a)−round(b) 可和 round(a−b) 差 1）。使用者選「改成誤差小於 1 樣本」：每個起點是時間戳相對錨點的偏移四捨五入到最近的樣本，同錨點下兩起點的差與 Δ×48000 相差不到 1 個樣本。緩的面：原文要求恰好相等的情況現在容許差 1；締的面：明確規定每個起點本身的位置；守衛：逐一檢查起點等於各自偏移的四捨五入。
+- 2026-10-30：`v8-engine-audio-schedule` 完成：公開 `Mixer`、`Submitter`、時間戳換算；`gyo_audio_tests` 32 案；xhigh 審查的確定問題（註解與契約）已修、測試缺口已補；`ctest --preset core` 35／35；dev_log：[2026_10_30_engine_audio_schedule](../../../dev_logs/2026_10_30_engine_audio_schedule.zh-Hant.md)。四平台 CI 未跑。
 - 分支：`claude/v8-engine-audio-95a496`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -57,7 +60,10 @@
 | 2026-10-30 | `v8-engine-audio-delay`＝A：`scheduleDelay` 可設定，預設值在 `v8-engine-audio-sdl` 量完 macOS 與 Windows 的區塊大小後提案 | 同上 |
 | 2026-10-30 | `v8-engine-audio-late`＝A：遲到的請求在區塊開頭立刻播放，計入 `playedLate` 與 `maxLateness`，不丟棄 | 同上 |
 | 2026-10-30 | `v8-engine-audio-l2`＝A：Engine 有自己的 L2（只記錄），固定 `SDL_AUDIO_DEVICE_SAMPLE_FRAMES=480`，以錨點估計速率並報告修正前後的誤差；消費端 L2 的門檻在消費端音效批開始前宣告 | 同上 |
-| 2026-10-30 | `v8-engine-audio-gears`：照 PLAN「分批」的檔位與引擎（全部繼承，schedule 局部 xhigh 用 `xhigh-reviewer`），不用 ultracode | 同上 |
+| 2026-10-30 | `v8-engine-audio-invariant5`：audio.md Design Invariant 5 改為「每個起點＝偏移四捨五入；同錨點兩起點的差與 Δ×48000 相差不到 1 樣本」 | 使用者（AskUserQuestion 選「改成誤差小於 1 樣本（建議）」） |
+| 2026-10-30 | `v8-engine-audio-invariant5-clamp`：xhigh 審查後，Invariant 5 加上「對錨點前後 1 小時內的時間戳；超過的偏移夾在 1 小時」，捨入寫明 floor(x+½)（負數也往 +∞） | 使用者（AskUserQuestion 選「加限定語並寫明捨入（建議）」） |
+| 2026-10-30 | `v8-engine-audio-far-ahead`：太遠未來的請求一取出就算準時並佔住聲部（可能讓混音器飢餓）；先不改行為，記為未結事項，等 sdl 批定 delay 或消費端觀測到時再決定是否加前瞻上限 | 使用者（AskUserQuestion 選「先記錄，等壓力（建議）」） |
+| 2026-10-30 | `v8-engine-audio-gears`：照 PLAN「分批」的檔位與引擎（全部繼承，schedule 局部 xhigh 用 `xhigh-reviewer`），不用 ultracode | 使用者：「audio 計畫的 6 項待決事項都照建議核准」 |
 
 ## 研究事實（2026-10-30）
 
@@ -78,6 +84,9 @@
 
 ## 未結事項
 
+- **太遠未來的請求佔住聲部**（`v8-engine-audio-far-ahead`，2026-10-30 使用者決定先記錄）：請求在取出時就計為準時；時間戳在未來（最多 1 小時，例如 `TimePoint::max()` 或錯誤的時間）時佔住一個聲部到那時。預設 32 個聲部，32 個這種請求就讓混音器只剩 `droppedNoVoice`。若要加前瞻上限，會在收支（Invariant 6）加第 5 種分類。
+- **記憶體順序的守衛只在本機 TSan**：一般建置與 macOS 預設的 TSan 都抓不到環的 release／acquire 放寬；要 `TSAN_OPTIONS=ignore_interceptors_accesses=0`（`scripts/mutations-tsan.json`）。CI 沒有 TSan job。
+
 - 真實裝置上的區塊大小、回呼抖動、裝置切換（拔耳機）時 SDL 的行為：在 `v8-engine-audio-sdl` 只記錄，Windows 在 CI 以外的實機只做 CI 做不到的項目。
 
 ## 時間紀錄
@@ -86,3 +95,4 @@
 |---|---|---|---|
 | `v8-engine-audio-plan` | 3～5 h（開始時重估：3 h，範圍明確、只寫文件） | 約 1.5 h（核准與記錄另約 0.2 h） | 閱讀 v8／v7 計畫、`SoundLoader`、SDL 隔離契約與 SDL 3.4 的音效驅動原始碼 |
 | `v8-engine-audio-core` | 3～4 h | 約 1.5 h | 建置與突變在背景約 20 分鐘 |
+| `v8-engine-audio-schedule` | 4～5 h | 約 2.5 h | 含 xhigh 審查約 18 分鐘、兩次 Invariant 5 的決定 |

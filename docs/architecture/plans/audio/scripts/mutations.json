@@ -91,6 +91,126 @@
       "target": "engine_tests",
       "cases": "*rejects files it cannot represent as PCM16*",
       "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-block-start-ignored",
+      "what": "A request is mapped without the block's start frame",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "blockStart + offset + state.delayFrames",
+      "replace": "offset + state.delayFrames",
+      "target": "gyo_audio_tests",
+      "cases": "*maps a request in a later block*",
+      "expect": "CHECK\\( onsets\\[0\\] == 480 \\+ 24 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-round-truncate",
+      "what": "Offsets are floored instead of rounded",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    return FloorDiv(ns * kFramesPerUnit + kNsPerUnit / 2, kNsPerUnit);",
+      "replace": "    return FloorDiv(ns * kFramesPerUnit, kNsPerUnit);",
+      "target": "gyo_audio_tests",
+      "cases": "*rounds an offset*",
+      "expect": "CHECK\\( OnsetOf\\(10'417, Duration::zero\\(\\)\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-floor-toward-zero",
+      "what": "Negative offsets round toward zero (integer division)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    return (value % divisor != 0 && value < 0) ? quotient - 1 : quotient;",
+      "replace": "    return quotient;",
+      "target": "gyo_audio_tests",
+      "cases": "*rounds an offset*",
+      "expect": "CHECK\\( OnsetOf\\(-10'417, delay\\) == 47 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-round-symmetric",
+      "what": "Halves round away from zero (std::round) instead of toward +infinity",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    return FloorDiv(ns * kFramesPerUnit + kNsPerUnit / 2, kNsPerUnit);",
+      "replace": "    return ns >= 0 ? FloorDiv(ns * kFramesPerUnit + kNsPerUnit / 2, kNsPerUnit)\n                   : -FloorDiv(-ns * kFramesPerUnit + kNsPerUnit / 2, kNsPerUnit);",
+      "target": "gyo_audio_tests",
+      "cases": "*rounds an offset*",
+      "expect": "CHECK\\( OnsetOf\\(-31'250, delay\\) == 47 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-delay-truncated",
+      "what": "The schedule delay is truncated to frames",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        NsToFrames(std::chrono::duration_cast<std::chrono::nanoseconds>(config.scheduleDelay).count());",
+      "replace": "        std::chrono::duration_cast<std::chrono::nanoseconds>(config.scheduleDelay).count() * kFramesPerUnit / kNsPerUnit;",
+      "target": "gyo_audio_tests",
+      "cases": "*rounds the schedule delay*",
+      "expect": "CHECK\\( OnsetOf\\(0, Ns\\(10'417\\)\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-clamp-1s",
+      "what": "Offsets are clamped to a second instead of an hour",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "constexpr std::int64_t kMaxOffsetNs = std::int64_t{3600} * 1'000'000'000;",
+      "replace": "constexpr std::int64_t kMaxOffsetNs = std::int64_t{1} * 1'000'000'000;",
+      "target": "gyo_audio_tests",
+      "cases": "*up to an hour*",
+      "expect": "CHECK\\( rig.mixer.Stats\\(\\).maxLateness == std::chrono::duration_cast<Duration>\\(2s\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-overflow-branch-removed",
+      "what": "The positive overflow of at - anchor is not caught",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (b < 0 && a > std::numeric_limits<std::int64_t>::max() + b) return kMaxOffsetNs;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*negative anchor*",
+      "expect": "CHECK\\( stats.playedOnTime == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-full-off-by-one",
+      "what": "A full ring accepts one more request, overwriting the oldest",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (tail - head >= capacity) {",
+      "replace": "    if (tail - head > capacity) {",
+      "target": "gyo_audio_tests",
+      "cases": "*queue is full*",
+      "expect": "CHECK_FALSE\\( rig.submitter.Play"
+    },
+    {
+      "id": "au-sched-full-uncounted",
+      "what": "A request dropped by a full ring is not counted",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        slot_->droppedQueueFull.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*queue is full*",
+      "expect": "CHECK\\( stats.droppedQueueFull == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-head-not-published",
+      "what": "The audio thread never frees the ring",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        slot.head.store(head, std::memory_order_release);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*wraparound*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-sched-owner-unchecked",
+      "what": "Playing from another thread than the owner is not caught",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        GYO_ASSERT(owner == self);",
+      "replace": "        static_cast<void>(owner);",
+      "target": "gyo_audio_tests",
+      "cases": "*belongs to the first thread*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "au-sched-same-slot",
+      "what": "Every submitter gets the first queue",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "            return Submitter(state_, state_->slots[index].get());",
+      "replace": "            return Submitter(state_, state_->slots[0].get());",
+      "target": "gyo_audio_tests",
+      "cases": "*its own queue*",
+      "expect": "is NOT correct"
     }
   ]
 }

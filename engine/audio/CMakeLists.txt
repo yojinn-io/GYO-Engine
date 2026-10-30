@@ -3,6 +3,7 @@
 # and no asset or product knowledge, so it is tested offline without a device.
 add_library(gyo_audio STATIC
     src/ClipBank.cpp
+    src/Mixer.cpp
     src/VoiceMixer.cpp
 )
 add_library(GYO::Audio ALIAS gyo_audio)

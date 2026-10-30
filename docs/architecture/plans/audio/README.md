@@ -1,7 +1,7 @@
 # 音效（GYO::Audio）：分批計畫與進度
 
 更新：2026-10-30。Owner：Engine（新增 `engine/audio` → `GYO::Audio`、`engine/audio/backend/sdl` → `GYO::AudioBackendSDL`）。
-**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1）；schedule、sdl、record 未開始。**本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-30 由提出需求的消費端在它的規劃批次中建立（消費端 v7 D28：audio 計畫夾在音效批開始時建立）。
+**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准）；`v8-engine-audio-core`、`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1）；sdl、record 未開始。**本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-30 由提出需求的消費端在它的規劃批次中建立（消費端 v7 D28：audio 計畫夾在音效批開始時建立）。
 
 Engine 目前沒有音效輸出：
 

@@ -11,10 +11,11 @@
 
 namespace Engine::Audio::Detail {
 
-// One play whose start is already a sample position of the output.
+// One play whose start is already a sample position of the output. Signed, so
+// a time before the first rendered frame is a position too (and is late).
 struct ScheduledPlay final {
     ClipId clip;
-    std::uint64_t startFrame = 0;
+    std::int64_t startFrame = 0;
     float gainLeft = 1.0f;
     float gainRight = 1.0f;
 };
@@ -54,9 +55,13 @@ public:
     // Errors. A start before the next frame to render is late: the voice starts
     // at that frame instead. Allocates nothing.
     StartOutcome Schedule(const ScheduledPlay& play);
+    // The same without the checks, for the audio thread: the caller has already
+    // checked the clip and the gains (Mixer's Submitter does, on its producer).
+    StartOutcome ScheduleChecked(const ScheduledPlay& play) noexcept;
 
     // Fills the interleaved stereo block and advances renderedFrames by its frame
-    // count. An odd sample count is a Programmer Error checked by the caller.
+    // count. An odd sample count is the caller's error; it cannot be asserted
+    // here (noexcept), so the stray last sample is written as silence.
     // Allocates, locks and waits for nothing.
     void Render(Base::Span<std::int16_t> interleavedOut) noexcept;
 
@@ -64,12 +69,14 @@ public:
     void SetMasterGain(float gain);
     [[nodiscard]] VoiceMixerStats Stats() const noexcept;
     [[nodiscard]] std::uint64_t RenderedFrames() const noexcept;
+    // The audio thread's next frame to render (the same count, without an atomic).
+    [[nodiscard]] std::int64_t NextFrame() const noexcept { return nextFrame_; }
     [[nodiscard]] const ClipBank& Clips() const noexcept { return clips_; }
 
 private:
     struct Voice final {
         bool active = false;
-        std::uint64_t startFrame = 0;
+        std::int64_t startFrame = 0;
         std::uint32_t position = 0; // frames of the clip already mixed
         std::int64_t gainLeftQ16 = 0;
         std::int64_t gainRightQ16 = 0;
@@ -84,9 +91,10 @@ private:
     void RenderChunk(std::int16_t* out, std::uint32_t frames) noexcept;
 
     ClipBank clips_;
+    std::vector<ClipView> views_; // one per clip, indexed by ClipId::value - 1
     std::vector<Voice> voices_;
     std::vector<std::int64_t> accumulator_; // kChunkFrames * kChannels, allocated once
-    std::uint64_t nextFrame_ = 0;           // audio thread's own copy of renderedFrames
+    std::int64_t nextFrame_ = 0;            // audio thread's own copy of renderedFrames
     std::atomic<std::int64_t> masterGainQ16_{1 << 16};
     Counters counters_;
 };
