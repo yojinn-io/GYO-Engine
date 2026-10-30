@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。`pv8-seq-narrow` 完成（T1～T5 的判定變更已核准，`pv8-seq-narrow-test-changes-approve`）。下一批是 `v8-product-crouch` 的 wire 接入（版本值 7→8）：完成（[事前宣告](v8-product-crouch-wire-declaration.md)，`v8-product-crouch-wire-declaration-approve`）。**pv8-line 的 A 層全部完成，版本值 8。** 下一步：推送並開 PR（四平台 L1）；之後是遠端與手感的實機確認、`v8-product-hitbox-*`、② 的衝刺。
+- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。`pv8-seq-narrow` 完成（T1～T5 的判定變更已核准，`pv8-seq-narrow-test-changes-approve`）。下一批是 `v8-product-crouch` 的 wire 接入（版本值 7→8）：完成（[事前宣告](v8-product-crouch-wire-declaration.md)，`v8-product-crouch-wire-declaration-approve`）。**pv8-line 的 A 層全部完成，版本值 8。** PR [#110](https://github.com/yojinn-io/GYO-Engine/pull/110) 已開（合併 master `e31dfdf4` 後本機 CTest 104／104），四平台 L1 進行中；之後是遠端與手感的實機確認、`v8-product-hitbox-*`、② 的衝刺。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
@@ -119,6 +119,7 @@
 - 2026-10-30：`pv8-seq-ceiling` 完成。K1 38 個情境 × scale 1、3 0 差分；K3 第 1 次因既有測試釘著 uint64 邊界而停止（宣告前提錯誤），照 (a) 改測試並經 §14.4 核准；突變 16／16；CTest 100／100。
 - 2026-10-30：`pv8-seq-narrow` 完成。84 欄縮窄、刪 `match_id`、預留號碼；N1 0 差分；實測 724／798／674／402／470／398 B；突變 12／12＋proto 手動 3／3；審查者 5 點成立；CTest 100／100。
 - 2026-10-30：`v8-product-crouch` 的 wire 接入完成，pv8-line 的 A 層做完。W1 38 個情境 0 差分；W2 衝刺的 digest 相同；實測 748／822／698／450 B；突變 23／23；CTest 100／100。突變工具的前置檢查 worker 失敗 1 次未切分，之後 10 次重複都通過。
+- 2026-10-30：合併 origin/master（`e31dfdf4`，tool-line 的 #107、#108），本機建置與 CTest 104／104 通過；推送 `claude/pvp-v8-pv8-line` 並開 PR #110。
 
 ## 未結事項
 
