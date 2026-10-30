@@ -101,3 +101,4 @@
 - 2026-10-30：使用者：「開始」。`v8-tool-ui-text-field` 完成（high，估 10～16 h，實際約 15 分鐘）：gyo.ui v2、`text_field`、`UiTextInput`、`SetTextFilter`、renderer 的游標／底線／選取。14 個突變全被抓到（1 個先存活、補測試後抓到）；測試抓到 1 個實作錯（丟棄後同一幀又開始編輯）已修；改了既有版本測試的判定（§14.4）。xhigh 審查沒開（要你同意）。
 - 2026-10-30：使用者：「大廳改用 text_field」。`v8-product-lobby-text-field` 完成：大廳 v2、位址欄 `text_field`、產品轉換 `TextInput`、`SyncTextInput`、`SetTextFilter(FilterAddressText)`、`imeComposition`；刪掉手寫的編輯。行為變化：編輯中點其他按鈕會丟掉打到一半的位址（Ui 不變式 4），要按 Enter 套用。Mac 上啟動確認 `ime_ui="composition"`。Windows L3 未做。
 - 2026-10-30：Windows L3（package-trial run 41066623724）：A、B1、B2、B3、C、D 全部「是」，符合事前宣告。log 的 `text_editing` 22 行（上次 0 行）。證據在 `evidence/lobby-text-field/`。PR #111 的 L1／macos-arm64 失敗在 `audio_sdl.disk`（音效線的測試，master 上也失敗），已轉給音效線，只重跑失敗的 job。
+- 2026-10-30：PR #111 重跑失敗的 job：`L1 / macos-arm64` 這次通過，四列都通過、CLEAN。第一次的失敗（`audio_sdl.disk`，`SdlAudioOutputTests.cpp:158`，音效線的測試）依 §14.1 留在紀錄裡：原因在音效線（master 上同一行也失敗過），不是本 PR 的實作。
