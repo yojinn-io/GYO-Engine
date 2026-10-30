@@ -80,6 +80,26 @@
   - 現況：片段、音量、空間化、步距是資料（sfx.json）；聲音對到動畫的時刻不是資料。換彈的對齊是 C++ 的過渡規則（`ReloadSoundOffsetSeconds`），動畫片段沒有事件時刻的標記。
   - 處理：需求「在動畫上標記事件時刻、音效掛在標記上、Assets Editor 編輯、格式是 Data Contract」傳給工具線（`v8-tool-assets-editor`）。過渡規則保留到那時。
 
+## 戰鬥短測（2026-10-30，代替單機無法測的遠端聲音）
+
+- 使用者：「主要是那兩個聲音，一台機器無法測試。」→ 以兩個 GUI 探針自動互相射擊：`run_timing.py --gui --combat --short --duration 16 --events 20`（Gateway 以 `go build` 建在 scratchpad）。證據：`build/target/_build/test/logs/sfx-combat-short-20261030/`（本工作樹）。
+
+| | 射擊方（create） | 被射方（join） |
+|---|---|---|
+| 送出／準時／遲到／丟棄 | 38／38／0／0 | 35／35／0／0 |
+| 本機射擊 | 15 | 0 |
+| 遠端射擊 | 0 | 15（和對方的 15 發一致） |
+| 命中確認 | 11 | 0 |
+| 受擊 | 0 | 9 |
+| 換彈 | 1 | 0 |
+| 腳步 | 11 | 11 |
+
+- 受擊 9 對命中 11：被射方觀察到 11 次受擊，9 次 `reason=played`、2 次致命一擊 `reason=dead`。受擊聲沿用 `HitFeedback` 的「死亡時抑制」，所以被打死的那一下沒有受擊聲。是否改成致命一擊也響，交給使用者決定。
+- 驗收結果 `passed: false`，兩個原因都與音效無關：
+  - HUD 不一致 18 筆：`run_timing.py` 用的是凍結的 v6 分析器，這條規則從 v7 第 04 批起意義改變。以 `combat_gui_evidence_v7.py` 重判同一份證據：`passed: true`、`errors: []`。
+  - `invalid_window_disturbed`：視窗受到干擾，是這台機器的環境因素。
+- 本次是探索用的試跑，不是 L2 判定。
+
 ## L2 宣告（草案，等使用者核准；看結果前不改）
 
 - 目的：本機射擊的起音跟著按下的時刻，不落在 30 FPS 的幀格點上。
