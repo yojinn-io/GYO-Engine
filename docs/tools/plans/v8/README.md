@@ -51,7 +51,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── v8-tool-ui-editor-nudge ✓            「medium｜Opus 5.5｜方向鍵微調；縮放時 Alt 從中心、Shift 等比例」
 │   ├── （候選）v8-tool-ui-editor-snap-guides 「high｜Opus 5.5｜拖動時貼齊其他元素的邊與中線；排版覺得累時再排」
 │   ├── （候選）v8-tool-ui-editor-multi-select「high｜Opus 5.5｜多選、對齊、平均分布；同上」
-│   ├── v8-tool-ui-editor-text-field         「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
+│   ├── v8-tool-ui-editor-text-field ✓       「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
 │   ├── （延後）v8-tool-ui-button-style       「medium｜Opus 5.5｜按鈕外觀的共用樣式；第二個畫面也重複時再排（v8-tool-ui-widget-scope）」
 │   └── v8-product-lobby-text-field ✓        「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
 │
@@ -224,3 +224,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-engine-input-composition` | [2026_10_30_engine_v8_input_composition](../../../dev_logs/2026_10_30_engine_v8_input_composition.zh-Hant.md) |
 | `v8-tool-ui-text-field` | [2026_10_30_tool_v8_ui_text_field](../../../dev_logs/2026_10_30_tool_v8_ui_text_field.zh-Hant.md) |
 | `v8-product-lobby-text-field` | [2026_10_30_pvp_v8_lobby_text_field](../../../dev_logs/2026_10_30_pvp_v8_lobby_text_field.zh-Hant.md) |
+| `v8-tool-ui-editor-text-field` | [2026_10_31_tool_v8_ui_editor_text_field](../../../dev_logs/2026_10_31_tool_v8_ui_editor_text_field.zh-Hant.md) |

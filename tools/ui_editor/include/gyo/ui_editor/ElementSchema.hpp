@@ -20,6 +20,19 @@ struct ElementColorField final {
     bool source;       // true: a color source object {"color": name}; false: a color name
 };
 
+// An integer or text field that only this kind has, edited in the Inspector.
+struct ElementIntegerField final {
+    const char* label;
+    const char* key;
+    int minimum;
+    int maximum;
+};
+
+struct ElementStringField final {
+    const char* label;
+    const char* key;
+};
+
 struct ElementKind final {
     std::string_view type;
     bool focusable{};             // takes part in the canvas focus order
@@ -27,6 +40,9 @@ struct ElementKind final {
     std::string_view bindingType;   // type of the binding it reads; empty when it has none
     std::span<const ElementColorField> colors;
     bool textureAsset{};          // references a texture asset
+    bool styledText{};            // has the text style keys without a text source
+    std::span<const ElementIntegerField> integers;
+    std::span<const ElementStringField> strings;
 };
 
 // Every kind, in the order the editor offers them.

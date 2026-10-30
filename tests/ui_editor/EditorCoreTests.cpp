@@ -674,6 +674,32 @@ std::string_view DeclaredValue(const nlohmann::json& declarations, const nlohman
     return "undeclared";
 }
 
+// The Inspector's per-kind fields at their bounds still pass the GYO::Ui codec.
+void TestElementFieldsAtTheirBounds() {
+    for (const ElementKind& kind : ElementKinds()) {
+        for (const ElementIntegerField& field : kind.integers) {
+            for (const int value : {field.minimum, field.maximum}) {
+                nlohmann::json document = UiDocumentBridge::CreateDefault();
+                nlohmann::json element = MakeDefaultElement(document, kind);
+                element[field.key] = value;
+                if (kind.focusable) document["canvases"][0]["focus_order"].push_back(element["id"]);
+                document["canvases"][0]["children"].push_back(element);
+                Expect(Engine::Ui::UiDocumentCodec::Parse(document.dump(), "field-bounds").has_value(),
+                    std::string{kind.type} + ": " + field.key + " at its bound passes the codec");
+            }
+        }
+        for (const ElementStringField& field : kind.strings) {
+            nlohmann::json document = UiDocumentBridge::CreateDefault();
+            nlohmann::json element = MakeDefaultElement(document, kind);
+            element[field.key] = "";
+            if (kind.focusable) document["canvases"][0]["focus_order"].push_back(element["id"]);
+            document["canvases"][0]["children"].push_back(element);
+            Expect(Engine::Ui::UiDocumentCodec::Parse(document.dump(), "field-empty").has_value(),
+                std::string{kind.type} + ": an empty " + field.key + " passes the codec");
+        }
+    }
+}
+
 void TestElementKindsMatchUi() {
     using Engine::Ui::UiElementType;
     constexpr UiElementType uiTypes[]{UiElementType::Container, UiElementType::Panel, UiElementType::Image,
@@ -727,6 +753,17 @@ void TestElementKindsMatchUi() {
         }
         Expect(element.contains("texture_asset") == kind.textureAsset,
             label + ": textureAsset matches the texture field");
+        for (const ElementIntegerField& field : kind.integers) {
+            const bool inRange = element.contains(field.key) && element[field.key].is_number_integer() &&
+                element[field.key].get<int>() >= field.minimum && element[field.key].get<int>() <= field.maximum;
+            Expect(inRange, label + ": the element carries each integer field of its kind, in range");
+        }
+        for (const ElementStringField& field : kind.strings) {
+            Expect(element.contains(field.key) && element[field.key].is_string(),
+                label + ": the element carries each text field of its kind");
+        }
+        Expect(kind.styledText == (!element.contains("text") && element.contains("text_color")),
+            label + ": styledText marks a styled element without a text source");
     }
 }
 
@@ -795,6 +832,7 @@ int main() {
     TestGizmoResizeModifiers();
     TestGizmoAgreesWithUiEvaluator();
     TestElementKindsMatchUi();
+    TestElementFieldsAtTheirBounds();
     TestElementClipboard();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);

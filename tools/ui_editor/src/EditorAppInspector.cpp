@@ -753,20 +753,23 @@ void EditorApp::DrawInspector() {
     editPair("Size Delta", "size_delta", 0.25F, false);
 
     const ElementKind* kind = FindElementKind(node->value("type", std::string{}));
-    if (node->contains("text") && (*node)["text"].is_object() &&
-        (*node)["text"].contains("literal")) {
+    const bool literalText = node->contains("text") && (*node)["text"].is_object() &&
+        (*node)["text"].contains("literal");
+    if (literalText || (kind != nullptr && kind->styledText)) {
         ImGui::SeparatorText("Text style");
-        std::array<char, 512> literal{};
-        std::snprintf(
-            literal.data(), literal.size(), "%s",
-            (*node)["text"].value("literal", std::string{}).c_str());
-        const bool literalChanged =
-            ImGui::InputText("Literal", literal.data(), literal.size());
-        if (literalChanged) {
-            (*node)["text"]["literal"] = literal.data();
-            RefreshDiagnostics();
+        if (literalText) {
+            std::array<char, 512> literal{};
+            std::snprintf(
+                literal.data(), literal.size(), "%s",
+                (*node)["text"].value("literal", std::string{}).c_str());
+            const bool literalChanged =
+                ImGui::InputText("Literal", literal.data(), literal.size());
+            if (literalChanged) {
+                (*node)["text"]["literal"] = literal.data();
+                RefreshDiagnostics();
+            }
+            TrackWidgetEdit(session_, "Edit text literal", literalChanged);
         }
-        TrackWidgetEdit(session_, "Edit text literal", literalChanged);
         float pointSize = node->value("point_size", 24.0F);
         const bool pointSizeChanged = ImGui::DragFloat(
             "Point size", &pointSize, 0.25F, 1.0F, 256.0F);
@@ -788,6 +791,30 @@ void EditorApp::DrawInspector() {
                 }
             }
             ImGui::EndCombo();
+        }
+    }
+
+    // The fields only this kind has (ElementSchema).
+    if (kind != nullptr && (!kind->integers.empty() || !kind->strings.empty())) {
+        ImGui::SeparatorText("Fields");
+        for (const ElementIntegerField& field : kind->integers) {
+            int value = node->value(field.key, field.minimum);
+            const bool changed = ImGui::DragInt(field.label, &value, 0.25F, field.minimum, field.maximum);
+            if (changed) {
+                (*node)[field.key] = std::clamp(value, field.minimum, field.maximum);
+                RefreshDiagnostics();
+            }
+            TrackWidgetEdit(session_, std::string{"Edit "} + field.key, changed);
+        }
+        for (const ElementStringField& field : kind->strings) {
+            std::array<char, 256> text{};
+            std::snprintf(text.data(), text.size(), "%s", node->value(field.key, std::string{}).c_str());
+            const bool changed = ImGui::InputText(field.label, text.data(), text.size());
+            if (changed) {
+                (*node)[field.key] = text.data();
+                RefreshDiagnostics();
+            }
+            TrackWidgetEdit(session_, std::string{"Edit "} + field.key, changed);
         }
     }
 

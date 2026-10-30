@@ -8,6 +8,9 @@
 #include "gyo/ui_editor/GizmoMath.hpp"
 
 #include <imgui.h>
+// PlatformImeData: the only way to ask the platform backend for text input
+// without an ImGui text widget (ImGui 1.92 has no public call for it).
+#include <imgui_internal.h>
 #include <nlohmann/json.hpp>
 
 #include "engine/ui/UiDocumentCodec.hpp"
@@ -222,6 +225,48 @@ void DrawText(
 
 } // namespace
 
+namespace {
+
+// This frame's typed characters and editing keys as Ui text input. ImGui
+// keeps characters and keys apart, so characters come first; the paste and
+// select-all chords follow the platform's (Cmd on macOS).
+std::vector<Engine::Ui::UiTextInput> PreviewTextInput() {
+    using Engine::Ui::UiTextInputKind;
+    std::vector<Engine::Ui::UiTextInput> text;
+    std::string typed;
+    const ImGuiIO& io = ImGui::GetIO();
+    for (int index = 0; index < io.InputQueueCharacters.Size; ++index) {
+        std::uint32_t code = io.InputQueueCharacters[index];
+        if (code >= 0xD800 && code < 0xDC00 && index + 1 < io.InputQueueCharacters.Size) {
+            const std::uint32_t low = io.InputQueueCharacters[index + 1];
+            if (low >= 0xDC00 && low < 0xE000) {
+                code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                ++index;
+            }
+        }
+        char encoded[5]{};
+        ImTextCharToUtf8(encoded, code);
+        typed += encoded;
+    }
+    if (!typed.empty()) text.push_back({UiTextInputKind::Insert, std::move(typed)});
+    const std::pair<ImGuiKey, UiTextInputKind> keys[]{
+        {ImGuiKey_Backspace, UiTextInputKind::Backspace}, {ImGuiKey_Delete, UiTextInputKind::Delete},
+        {ImGuiKey_LeftArrow, UiTextInputKind::MoveLeft},  {ImGuiKey_RightArrow, UiTextInputKind::MoveRight},
+        {ImGuiKey_Home, UiTextInputKind::MoveHome},       {ImGuiKey_End, UiTextInputKind::MoveEnd},
+    };
+    for (const auto& [key, kind] : keys) {
+        if (ImGui::IsKeyPressed(key, true)) text.push_back({kind, {}});
+    }
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) text.push_back({UiTextInputKind::SelectAll, {}});
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) {
+        const char* clipboard = ImGui::GetClipboardText();
+        if (clipboard != nullptr) text.push_back({UiTextInputKind::Insert, clipboard});
+    }
+    return text;
+}
+
+} // namespace
+
 struct PreviewAdapter::Impl final {
     std::string sourceSnapshot;
     std::string activeCanvas;
@@ -302,20 +347,24 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
     input.pointerPrimaryPressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
     input.pointerPrimaryHeld = ImGui::IsMouseDown(ImGuiMouseButton_Left);
     input.pointerPrimaryReleased = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+    // While a text field is being edited, typed characters and editing keys
+    // go to it, and the arrows and Space stop meaning slider and activate.
+    const bool editingText = !impl_->runtime.InteractionState().editingElement.empty();
     if (previewMode && inputEnabled) {
         const ImGuiIO& io = ImGui::GetIO();
         input.focusPreviousPressed = io.KeyShift &&
             ImGui::IsKeyPressed(ImGuiKey_Tab, false);
         input.focusNextPressed = !io.KeyShift &&
             ImGui::IsKeyPressed(ImGuiKey_Tab, false);
-        input.adjustPreviousPressed =
+        input.adjustPreviousPressed = !editingText &&
             ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false);
-        input.adjustNextPressed =
+        input.adjustNextPressed = !editingText &&
             ImGui::IsKeyPressed(ImGuiKey_RightArrow, false);
         input.activatePressed =
             ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
-            ImGui::IsKeyPressed(ImGuiKey_Space, false);
+            (!editingText && ImGui::IsKeyPressed(ImGuiKey_Space, false));
         input.cancelPressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+        if (editingText) input.text = PreviewTextInput();
     }
 
     const Engine::Ui::UiViewport runtimeViewport{viewport.width, viewport.height};
@@ -329,6 +378,17 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
         FrameOutput::Action action;
         action.id = event.action;
         action.sourceElement = event.sourceElement;
+        if (const auto* text = std::get_if<std::string>(&event.payload)) {
+            // A submitted text field keeps its text in the preview, like a
+            // product that accepts it.
+            action.stringPayload = *text;
+            SourceLocation source;
+            if (FindSourceLocation(sourceDocument["canvases"], event.sourceElement, nullptr, source) &&
+                source.element != nullptr && source.element->contains("binding") &&
+                (*source.element)["binding"].is_string()) {
+                impl_->previewBindings[(*source.element)["binding"].get<std::string>()] = *text;
+            }
+        }
         if (const double* number = std::get_if<double>(&event.payload)) {
             action.numberPayload = *number;
             SourceLocation source;
@@ -352,6 +412,20 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
     if (!evaluated) {
         result.error = std::move(evaluated).error();
         return result;
+    }
+    // Asks the platform backend for text input (and puts the input method's
+    // window under the field) while a text field is edited in the preview.
+    const std::string& editingElement = impl_->runtime.InteractionState().editingElement;
+    if (previewMode && inputEnabled && !editingElement.empty()) {
+        for (const Engine::Ui::UiEvaluatedElement& element : evaluated.value()) {
+            if (element.id != editingElement) continue;
+            ImGuiPlatformImeData& ime = ImGui::GetCurrentContext()->PlatformImeData;
+            ime.WantVisible = true;
+            ime.WantTextInput = true;
+            ime.InputPos = {viewport.x + element.boundsPixels.x, viewport.y + element.boundsPixels.y};
+            ime.InputLineHeight = element.boundsPixels.height;
+            ime.ViewportId = ImGui::GetMainViewport()->ID;
+        }
     }
     if (pointerInside) {
         const Engine::Ui::UiEvaluatedElement* hit =

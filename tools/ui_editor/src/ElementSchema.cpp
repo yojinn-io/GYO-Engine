@@ -19,6 +19,12 @@ constexpr ElementColorField kImageColors[]{
 constexpr ElementColorField kTextFieldColors[]{
     {"Placeholder", "placeholder_color", false},
 };
+constexpr ElementIntegerField kTextFieldIntegers[]{
+    {"Max length", "max_length", 1, 1024},
+};
+constexpr ElementStringField kTextFieldStrings[]{
+    {"Placeholder", "placeholder"},
+};
 constexpr ElementColorField kSliderColors[]{
     {"Track", "track_color", false},
     {"Fill", "fill_color", false},
@@ -35,7 +41,7 @@ constexpr ElementKind kKinds[]{
      .colors = kSliderColors},
     {.type = "fixed_step_list", .bindingType = "list<object>"},
     {.type = "text_field", .focusable = true, .actionPayload = "string", .bindingType = "string",
-     .colors = kTextFieldColors},
+     .colors = kTextFieldColors, .styledText = true, .integers = kTextFieldIntegers, .strings = kTextFieldStrings},
 };
 
 [[nodiscard]] bool DocumentContainsNodeId(
