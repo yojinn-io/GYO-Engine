@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package object_fps_pvp.runtime.v7;
-option go_package = "gyo.local/object_fps_pvp/protocol/runtimev7";
+package object_fps_pvp.runtime.v8;
+option go_package = "gyo.local/object_fps_pvp/protocol/runtimev8";
 
 // The local IPC host decodes this into product data. Match never sees protobuf,
 // sessions, endpoints, or wire envelopes.

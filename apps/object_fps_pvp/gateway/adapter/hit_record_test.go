@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // pv6 contract §2, four fields in pv7 §7: the presentation-only hit record of

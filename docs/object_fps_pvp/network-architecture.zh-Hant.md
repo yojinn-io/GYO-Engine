@@ -106,7 +106,7 @@ Client A / Client B (each process; v7 batch 04: three roles)
     snapshot history <= 64 -> Drain() (main) / DrainSimulation() (sim role)
          |
          v
-  HTTP control / UDP Client Protocol pv7 (client_v7.proto)
+  HTTP control / UDP Client Protocol pv7 (client_v8.proto)
          |
          v
   Product Go Gateway (goroutines; apps/object_fps_pvp/gateway) -- stateless edge (pv7 §2a)
@@ -123,7 +123,7 @@ Client A / Client B (each process; v7 batch 04: three roles)
     expire, logStatistics (ingress / drop counts), runDiagnostics, HTTP serve
          |
          v
-  loopback TCP / Runtime Protocol pv7 (runtime_v7.proto)
+  loopback TCP / Runtime Protocol pv7 (runtime_v8.proto)
          |
          v
   Match process (v7 batch 07)
@@ -450,8 +450,8 @@ socket 讀寫與序列化不在世界 Tick 內執行。
 
 ## 3. 兩份獨立 Protocol
 
-來源為產品的 `protocol/client_v7.proto` 與 `protocol/runtime_v7.proto`（Go 套件 `clientv7`／`runtimev7`），彼此不 import。
-目前兩者版本都為 7（pv7，v7.1 `pv7-merge`，PR #78），Client／Gateway／Match 必須一起升級，明確拒絕其他所有版本
+來源為產品的 `protocol/client_v8.proto` 與 `protocol/runtime_v8.proto`（Go 套件 `clientv8`／`runtimev8`），彼此不 import。
+目前兩者版本都為 7（pv7，v7.1 `pv7-merge`，PR #78；檔名與套件已先改為 v8（`pv8-rename`），版本值在 `v8-product-crouch` 的 wire 接入時改為 8），Client／Gateway／Match 必須一起升級，明確拒絕其他所有版本
 （C++ `wire::ProtocolVersion`、Go `adapter.ProtocolVersion`）。Adapter 明確映射兩份生成型別，
 Match 核心只接收普通 C++ domain 值。本節只列結構；送達語意、Gateway 的約束、對時與回聲、丟棄回報的細節見
 [protocol-v7](protocol-v7.zh-Hant.md) §2a～§4。
@@ -745,7 +745,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
 protoc --version  # 必須為 libprotoc 36.2；PATH 指向本次 CMake 建置的 protoc
 protoc --proto_path=apps/object_fps_pvp/protocol `
   --go_out=apps/object_fps_pvp --go_opt=module=gyo.local/object_fps_pvp `
-  apps/object_fps_pvp/protocol/client_v7.proto apps/object_fps_pvp/protocol/runtime_v7.proto
+  apps/object_fps_pvp/protocol/client_v8.proto apps/object_fps_pvp/protocol/runtime_v8.proto
 git diff -- apps/object_fps_pvp/protocol
 ```
 
@@ -1051,7 +1051,7 @@ Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最�
 | 無狀態邊緣的守衛（狀態白名單） | `apps/object_fps_pvp/gateway/state_whitelist_test.go` |
 | Gateway ingress 與丟棄計數；送出間隔統計 | `apps/object_fps_pvp/gateway/ingress_statistics.go`；`send_statistics.go` |
 | 時間基準、Waiter、角色執行緒（Engine，不屬本產品） | `engine/time/include/engine/time/Waiter.hpp`、`engine/threads/include/engine/threads/RoleThread.hpp` |
-| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v7.proto`、`runtime_v7.proto`（規則見 [protocol-v7](protocol-v7.zh-Hant.md)，未改寫的條款沿用 [pv6 契約](protocol-v6.zh-Hant.md) 與 [v5 契約](protocol-v5.zh-Hant.md)；v5 契約第 9 節為 v4 歷史） |
+| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v8.proto`、`runtime_v8.proto`（規則見 [protocol-v7](protocol-v7.zh-Hant.md)，未改寫的條款沿用 [pv6 契約](protocol-v6.zh-Hant.md) 與 [v5 契約](protocol-v5.zh-Hant.md)；v5 契約第 9 節為 v4 歷史） |
 | 日誌格式 | [日誌 Data Contract](log-contract.zh-Hant.md)；`drop_` 鍵的名稱表在 `apps/object_fps_pvp/gateway/ingress_statistics.go` |
 | 產品驗收與證據分析 | `tests/object_fps_pvp/`、`build/acceptance/object_fps_pvp/` |
 

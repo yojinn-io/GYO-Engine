@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // This queue is product-owned: lifecycle requests are never dropped, input

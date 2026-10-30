@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
 )
 
 // identity-rebind (network-architecture §4 "連線中斷與恢復"): the product

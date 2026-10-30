@@ -9,7 +9,7 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 const actionSendInterval = (time.Second + adapter.ActionSendRate - 1) / adapter.ActionSendRate

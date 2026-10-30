@@ -6,8 +6,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.T) {

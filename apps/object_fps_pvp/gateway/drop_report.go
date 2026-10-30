@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // The pv7 GatewayDropReport (contract §4, D49 second stage): the discards the

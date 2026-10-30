@@ -6,8 +6,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // A snapshot with more players than the room holds is a runtime fault (pv6 contract §1).

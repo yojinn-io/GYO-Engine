@@ -42,8 +42,8 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：pv8-line 的 A 層，從 `pv8-rename` 開始（`pv8-final-approve-round2`）。順序照 [protocol-v8](../../protocol-v8.zh-Hant.md) §8：`pv8-rename` → `pv8-seq-ceiling` → `pv8-seq-narrow`，以及 `v8-product-crouch` 的 wire 接入。
-- **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
+- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；下一批是 `pv8-seq-ceiling`（要先寫事前宣告給你核准）。順序照 [protocol-v8](../../protocol-v8.zh-Hant.md) §8：`pv8-rename` → `pv8-seq-ceiling` → `pv8-seq-narrow`，以及 `v8-product-crouch` 的 wire 接入。
+- **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
   - audio-line（會話 `v8-audio-line`）：`v8-engine-audio-plan` 完成（`6ad0d8de`，分支在該會話的 worktree，未推送），6 項決定已在該會話核准；`v8-engine-audio-core` 等你指定。
@@ -109,6 +109,7 @@
 - 2026-10-30：`v8-product-crouch` commit 2（`347fa9ba`）。權威 digest v2：`crouched`、`sprinting` 只在 true 時符號化，站姿情境的位元組與既有 golden 行不變（J2 的做法；格式定義的變更由主會話決定，已向使用者說明）。新增 golden 情境 `move-crouch/contract`、`move-crouch-slab/slab`，以 dump 確認行為（蹲跳、slab 下放開與按跳都無效、走出後站起）。J2：`authority_digest` 第 1 次失敗，原因是只重建了最佳化版，`-O0` 執行檔是舊的（環境，非實作）；全部重建後通過，失敗記錄在此（§14.1）。J4：`test` preset 93 個測試中 `object_fps_pvp.mutation_tool` 失敗，原因是突變 `v71a1-rules-ignored` 的 find 對準舊的 `PvpMatch` 建構子；更新 find／replace（語意相同），單獨跑確認 killed，之後通過。其餘 92 個通過。D184 的相關突變（find 在改動檔案中的 54 個）：54／54 killed。dev_log：`docs/dev_logs/2026_10_30_pvp_v8_crouch_nowire.zh-Hant.md`、`docs/dev_logs/2026_10_30_pvp_v8_pv8_design.zh-Hant.md`。
 
 - 2026-10-30：`pv8-contract-round2` 完成（`044584fd`），對抗式檢查 1 次（Sonnet 5.5）的 must 2 個、should 若干已納入；`MatchStatus` 的號碼衝突由主會話更正。`pv8-obs-bytes` 完成（`a7455eb9`）：Gateway 的資料包大小分布、Client 依種類拆開的 stale 計數；`test` preset 93／93 通過；相關突變 3／3 killed。dev_log 兩份。實際數字待下一次 L2／LAN 場次。
+- 2026-10-30：`pv8-rename` 完成。重產只差名稱；CTest 99／99；兩樹 digest（base `33127ad6`）scale 1、3 都是 38 個情境 0 差分；相關突變 0 個。計畫的引擎是 Sonnet 5.5，實際由主會話直接做（機械式替換）。
 
 ## 未結事項
 

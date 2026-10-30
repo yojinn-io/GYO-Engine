@@ -3,7 +3,7 @@
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
-#include "client_v7.pb.h"
+#include "client_v8.pb.h"
 #include <httplib.h>
 #include <algorithm>
 #include <chrono>
@@ -122,7 +122,7 @@ int main(int argc,char** argv) {
                 auto other=bytes; other[5]=static_cast<std::uint8_t>(version);
                 Require(!wire::Decode(other),"another protocol version accepted");
             }
-            namespace pb=object_fps_pvp::client::v7;
+            namespace pb=object_fps_pvp::client::v8;
             const auto maximum=std::numeric_limits<std::uint64_t>::max();
             pb::ActionBatch actions;actions.set_acknowledged_through(maximum-MaxActionBatch);
             pb::ActionResults results;results.set_retired_through(maximum-MaxActionBatch);

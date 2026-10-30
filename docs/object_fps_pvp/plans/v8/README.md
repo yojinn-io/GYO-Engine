@@ -29,6 +29,9 @@ v8-plan
 │   │   └── v8-product-sfx            「high｜Opus 5.5｜射擊、命中、受擊、換彈、腳步；資產來源先定」
 │   ├── pv8-line                   「PR 線：pv8 契約＋蹲下，三角色同一個 PR」
 │   │   ├── pv8-design             「ultracode｜案 3×Opus 5.5、審 1×Opus 5.5、對抗 1×Sonnet 5.5｜蹲下、衝刺的欄位一次定完（ADS 取消，v8-product-ads-cancel）」
+│   │   ├── pv8-rename             「low｜Sonnet 5.5｜proto、Go 套件、CMake target 改名為 v8，版本值仍是 7（完成）」
+│   │   ├── pv8-seq-ceiling        「high｜Opus 5.5｜不改 wire：WireCounterMax 取代 uint64 上限檢查」
+│   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼」
 │   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告」
 │   └── hitbox-line                「PR 線：部位 hitbox（pv7 已有欄位）」
 │       ├── v8-product-hitbox-data            「high｜Opus 5.5｜骨骼→部位形狀的 Data Contract，先手寫 JSON」
@@ -116,6 +119,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-crouch`（不碰 wire 的部分） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_crouch_nowire.zh-Hant.md) |
 | `pv8-contract-round2` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_contract_round2.zh-Hant.md) |
 | `pv8-obs-bytes` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_obs_bytes.zh-Hant.md) |
+| `pv8-rename` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_pv8_rename.zh-Hant.md) |
 
 ---
 

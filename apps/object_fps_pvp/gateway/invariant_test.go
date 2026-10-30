@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // D180 (silent-branch-asserts): a JoinResult the Gateway cannot carry or did
