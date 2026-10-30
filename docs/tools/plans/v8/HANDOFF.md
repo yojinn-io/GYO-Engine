@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
-- **完成，開 PR 中**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`（分支 `claude/v8-tool-ui-editor-small`），使用者在 macOS 的 GUI 上試過。下一步是 `text_field` 開始前的三個決定（`v8-tool-ui-schema-version`、`v8-tool-ui-edit-policy-owner`、`v8-tool-ui-widget-scope`）。
+- **完成，開 PR 中**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`（分支 `claude/v8-tool-ui-editor-small`），使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；下一步照順序是 `v8-tool-ui-ime-observe`（要 Windows 實機）。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -30,9 +30,6 @@
 |---|---|---|---|---|
 | `v8-tool-plan-location` | 計畫文件放哪 | `docs/tools/plans/v8/`（④ 的線計畫；之後你的 voxel 方案也能放這裡；`docs/` 底下，不是新的 Top-level 目錄）／`docs/ui_editor/plans/v8/`（現在只剩 UI Editor，放 owner 的文件夾更直接） | 前者，因為 ④ 之後還有 voxel；UI 的格式與 Design Invariants 仍寫在 [ui_toolchain.md](../../../ui_toolchain.md) | 文件位置；圖書管理員可再調 |
 | `v8-tool-start-timing` | 實作何時開始 | 照 v8-product-order 在 ③ 之後／ui-widgets-line 的檢測（`v8-tool-ui-ime-observe`）先做，其他照順序 | 檢測先做：它不改行為，結果決定輸入法要不要修 | 何時排實機 |
-| `v8-tool-ui-widget-scope` | 「組件化這些按鈕和輸入框」的範圍 | (a) 只加 `text_field`；按鈕已經是 `gyo.ui` 的 `button`（`pvp_lobby.json`）／(b) 再加按鈕的共用樣式（同一組顏色、字級只寫一次），也是 schema 變更／(c) 可重用的元件範本（prefab），接近 ui_toolchain.md 明說不做的「custom widgets」 | (a)；(b) 等第二個畫面也重複時再做 | `v8-tool-ui-button-style` 要不要排 |
-| `v8-tool-ui-schema-version` | `text_field` 怎麼進 schema | v1 的集合寫明是封閉的。升 `version: 2`（讀取端接受 1、2；舊讀取端明確拒絕 v2）／留在 v1 加元素（舊讀取端以「未知元素」拒絕，但版本號沒告訴人為什麼） | 升 v2 | 契約文件與 codec |
-| `v8-tool-ui-edit-policy-owner` | 文字編輯政策放哪 | 通用的部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`（Architecture Delta：Ui 的責任變大）／全部留在產品，Ui 只畫（輸入框就不算元件）。字元過濾：(i) `text_field` 宣告 `max_length`，過濾由產品在提交時檢查／(ii) 資料裡宣告允許的字元集合（簡單、封閉，但開始往設定語言走，AGENTS §9）／(iii) 產品在執行時提供過濾函式 | 通用部分在 Ui；過濾用 (iii)：規則留在產品，資料不帶產品語意 | Ui 的 Design Invariants 怎麼寫 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-editor-structure` | 審查的整理項目要不要排 | [審查](ui-editor-review.md)：邊界與資料安全好，內部責任太集中（`EditorApp.cpp` 約 2,300 行、元素 schema 在 editor 又寫一份）。建議在加 `text_field` 前做 `v8-tool-ui-editor-gizmo-math`、`v8-tool-ui-editor-element-schema`、`v8-tool-ui-editor-panels`，不重寫 | 照審查的順序排 | ui-widgets-line 的批次 |
@@ -44,6 +41,9 @@
 |---|---|---|
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
+| `v8-tool-ui-schema-version` | （2026-10-30）`text_field` 用 `gyo.ui` `version: 2` 加入；讀取端接受 1 與 2，舊讀取端以版本不支援明確拒絕 v2 | 選「升 version 2（建議）」 |
+| `v8-tool-ui-edit-policy-owner` | （2026-10-30）文字編輯的通用部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`；字元過濾留在產品，由產品提供檢查函式。這是 Architecture Delta（Ui 多了文字編輯的責任），開始實作前要改 [ui_toolchain.md](../../../ui_toolchain.md) 的 Design Invariants，內容另給使用者同意 | 選「通用部分放 GYO::Ui（建議）」 |
+| `v8-tool-ui-widget-scope` | （2026-10-30）這次只加 `text_field`；按鈕的共用樣式（`v8-tool-ui-button-style`）等第二個畫面也重複時再排 | 選「只加 text_field（建議）」 |
 | `v8-tool-ui-editor-element-schema` | （2026-10-30）元素表放在 ui_editor（選項 A），用測試和 GYO::Ui 的 codec／evaluator 對齊；Engine 不為工具提供描述。原則：工具經資料與 Engine 交接，Engine 不承擔工具的職能，工具可以隨時修改或更換 | 「A：放 ui_editor」；「我們可以通過資料來與Engine交接。我的理解是這個，Engine不需要承擔tools的職能，這樣以後tools可以隨時修改和更換。」 |
 | `v8-tool-ui-invariants` | （2026-10-30）照草稿寫進 [ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」：GYO::Ui 4 條、ui_editor 5 條、Replacement Criteria；守衛 `ui.dependency_guard`、`gyo_ui_editor.dependency_guard`、`TestGizmoAgreesWithUiEvaluator` | 「同意，寫進去」 |
 | `v8-tool-ui-order` | （2026-10-30）UI 的順序：先寫 `v8-tool-ui-invariants`，再整理（`v8-tool-ui-editor-panels` → `v8-tool-ui-editor-element-schema`），再做 `text_field`，編輯器的小功能（複製貼上、方向鍵微調）穿插；對齊參考線、多選等需要時再排。見 [README](README.md)「順序與依賴」 | 「照你建議做吧。」 |
@@ -81,3 +81,4 @@
 - 2026-10-30：使用者：「先做小功能」。`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` 開始（high／medium，估 3～5 h＋2～3 h），分支 `claude/v8-tool-ui-editor-small`（切自 master `e31dfdf4`）。
 - 2026-10-30：兩批完成，實際約 1 h。新測試與 8 個突變全部被抓到；14/14 通過。GUI 上還沒手動操作。
 - 2026-10-30：使用者在 GUI 上試過複製貼上、方向鍵與修飾鍵：「可以了。繼續」。推送並開 PR。
+- 2026-10-30：開 [PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)。`text_field` 的三個決定：升 v2、通用編輯放 `GYO::Ui`（過濾留產品）、只加 `text_field`。

@@ -52,7 +52,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── （候選）v8-tool-ui-editor-snap-guides 「high｜Opus 5.5｜拖動時貼齊其他元素的邊與中線；排版覺得累時再排」
 │   ├── （候選）v8-tool-ui-editor-multi-select「high｜Opus 5.5｜多選、對齊、平均分布；同上」
 │   ├── v8-tool-ui-editor-text-field         「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
-│   ├── v8-tool-ui-button-style（待決）       「medium｜Opus 5.5｜按鈕外觀的共用樣式；看 v8-tool-ui-widget-scope」
+│   ├── （延後）v8-tool-ui-button-style       「medium｜Opus 5.5｜按鈕外觀的共用樣式；第二個畫面也重複時再排（v8-tool-ui-widget-scope）」
 │   └── v8-product-lobby-text-field          「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
 │
 └── （待討論）v8-tool-voxel-map-editor、v8-tool-assets-editor   「待討論：等使用者逐個給方案（v8-tool-scope-ui-first）」
