@@ -42,8 +42,10 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
   `blockStart + floor((at - anchor) × 48000 + 1/2) + delayFrames` frames (halves toward +infinity, also for negative
   offsets), with `at - anchor` clamped to an hour either way and `delayFrames` the `scheduleDelay` rounded the same
   way. A request is counted on time or late when the audio thread takes it, so a play counted on time may still be
-  ahead (up to the delay, or up to an hour for a timestamp in the future). `scheduleDelay` (0 to 1 s)
-  lets a request sent shortly after its time still start on time.
+  ahead (up to the delay, or up to an hour for a timestamp in the future). `scheduleDelay` (0 to 1 s,
+  default 60 ms) lets a request sent shortly after its time still start on time; it is also the least latency of a
+  sound played "now". The default covers a consumer at 30 FPS with SDL's default device block on macOS (a request
+  up to 33 ms late, callbacks up to 21.5 ms apart); a consumer may lower it (v8-engine-audio-delay-default).
 - **Counters.** `accepted` (plays scheduled), `onTime`, `late`, `noVoice`, `maxLateFrames`, `renderedFrames`,
   `clippedSamples`; relaxed atomics, readable from any thread, for display and acceptance only.
 
