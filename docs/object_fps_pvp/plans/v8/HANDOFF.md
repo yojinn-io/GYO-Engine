@@ -42,17 +42,13 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：
-  - `v8-product-crouch` 的不碰 wire 部分（`v8-product-crouch-nowire-first`）。
-  - `pv8-design` 第 2 輪（`pv8-design-round2-ultracode`）：合成草案 [pv8-round2](pv8-round2.md)，等你決定。
-- **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1 輪（蹲下與衝刺，定稿後重開）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)（M-1～M-3 由 `pv8-scope-reopen` 取代）。
+- **進行中**：pv8-line 的 A 層，從 `pv8-rename` 開始（`pv8-final-approve-round2`）。順序照 [protocol-v8](../../protocol-v8.zh-Hant.md) §8：`pv8-rename` → `pv8-seq-ceiling` → `pv8-seq-narrow`，以及 `v8-product-crouch` 的 wire 接入。
+- **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
   - audio-line（會話 `v8-audio-line`）：`v8-engine-audio-plan` 完成（`6ad0d8de`，分支在該會話的 worktree，未推送），6 項決定已在該會話核准；`v8-engine-audio-core` 等你指定。
   - 工具線（會話 `v8-tool-line`）：`v8-tool-plan` 完成（`54dac0c3`，計畫在 `docs/tools/plans/v8/`，未推送）；它的 HANDOFF 列了 18 項等你決定。
 - **等你決定**：
-  - 核准 [protocol-v8](../../protocol-v8.zh-Hant.md) 定稿（第 1 輪＋第 2 輪 A 層，附錄 B／C 是設計）。
-  - 同意 `pv8-obs-bytes` 的 Architecture Delta：Gateway 新增診斷狀態 `sizeStats`（`classDiagnostic`，只記錄、不參與判定）。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `v8-product-sfx` 前：音效資產的來源（v7 D38）。
   - `v8-product-hit-rules` 前：部位倍率。
@@ -92,6 +88,8 @@
 | `v8-product-crouch-declaration-approve` | （2026-10-30）核准 [v8-product-crouch 的事前宣告](v8-product-crouch-declaration.md) J1～J4，接受「先實作、用突變證明 Red」的偏差；跑 J1 | 「核准 v8-product-crouch 的事前宣告（接受用突變證明 Red），跑 J1。」 |
 | `pv8-round2-picks` | （2026-10-30）[pv8-round2](pv8-round2.md) 的 6 項全部照建議：`pv8-version-split` (a) A 層現在合併、B 層在 ⑤ 時升 pv9；`pv8-req-v8-scope` (a) v8 只做 ⑤ 的對局規則，其他只留形狀；`pv8-seq-cpp-types` (b) C++ 維持 u64，用 `WireCounterMax` 加編碼 Assert；`pv8-reserve-numbers` (a) 預留 B／C 的號碼；`pv8-obs-bytes-now` (a) 現在做觀測；`pv8-hello-doc-mismatch` (a) 以程式的 250 ms 為準 | 「pv8 第 2 輪的 6 項全部照建議。」 |
 | `pv8-next-contract-and-obs` | （2026-10-30）先做 `pv8-contract-round2`（把第 2 輪寫進 protocol-v8）與 `pv8-obs-bytes`（實際位元組與超車比例的觀測），之後再接 pv8-line 的 A 層 | 「先做 pv8-contract-round2（把第 2 輪寫進 protocol-v8）和 pv8-obs-bytes（實際位元組與超車比例的觀測），之後再接 pv8-line 的 A 層。」 |
+| `pv8-obs-bytes-delta-approve` | （2026-10-30）同意 `pv8-obs-bytes` 的 Architecture Delta：Gateway 新增診斷狀態 `sizeStats`，歸在 `classDiagnostic`（只寫進日誌、不參與判定） | 「都同意」（對「同意 obs-bytes 的 Delta 並核准 protocol-v8 定稿嗎？」） |
+| `pv8-final-approve-round2` | （2026-10-30）核准 [protocol-v8](../../protocol-v8.zh-Hant.md) 定稿：第 1 輪（蹲下、衝刺、參數校準）＋第 2 輪 A 層（縮窄、刪 `match_id`、預留號碼）；附錄 B／C 是設計，不是 pv8 條文。接著開始 pv8-line 的 A 層（`pv8-rename` 起） | 「都同意」 |
 
 ## 規劃紀錄（記錄器）
 

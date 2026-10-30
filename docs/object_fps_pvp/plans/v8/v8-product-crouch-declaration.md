@@ -1,6 +1,6 @@
 # v8-product-crouch 的事前宣告（不碰 wire 的部分）
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：已核准（`v8-product-crouch-declaration-approve`，2026-10-30）。J1 通過：36 個情境 × scale 1、3，0 差分。** 範圍：`v8-product-crouch-nowire-first`（[HANDOFF](HANDOFF.md)）。契約條文：[protocol-v8](../../protocol-v8.zh-Hant.md) §4、§5（草稿，蹲下與衝刺的條文保留）。
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：已核准（`v8-product-crouch-declaration-approve`，2026-10-30）。J1 通過：36 個情境 × scale 1、3，0 差分。** 範圍：`v8-product-crouch-nowire-first`（[HANDOFF](HANDOFF.md)）。契約條文：[protocol-v8](../../protocol-v8.zh-Hant.md) §4、§5（已定稿，`pv8-final-approve-round2`）。
 
 ## 範圍
 

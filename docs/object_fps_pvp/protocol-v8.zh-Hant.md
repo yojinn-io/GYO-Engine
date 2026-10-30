@@ -1,6 +1,6 @@
 # PvP Protocol v8：蹲下、衝刺、移動參數的校準與序號欄位的縮窄
 
-更新：2026-10-30（`pv8-contract-round2`：加入第 2 輪的 A 層與擴充附錄）。**狀態：草稿，等使用者核准定稿。** 第 1 輪（蹲下、衝刺、參數校準）由 `pv8-design` 第 1 輪產出；第 2 輪（序號欄位的縮窄、`match_id` 的刪除、號碼的預留、擴充附錄）由 `pv8-design` 第 2 輪產出（[pv8-round2](plans/v8/pv8-round2.md)，`pv8-round2-picks`）。決策代號見 [v8 交接](plans/v8/HANDOFF.md)。
+更新：2026-10-30（`pv8-contract-round2`：加入第 2 輪的 A 層與擴充附錄）。**狀態：定稿（`pv8-final-approve-round2`，2026-10-30）。附錄 B、C 是設計，不是 pv8 的條文。** 第 1 輪（蹲下、衝刺、參數校準）由 `pv8-design` 第 1 輪產出；第 2 輪（序號欄位的縮窄、`match_id` 的刪除、號碼的預留、擴充附錄）由 `pv8-design` 第 2 輪產出（[pv8-round2](plans/v8/pv8-round2.md)，`pv8-round2-picks`）。決策代號見 [v8 交接](plans/v8/HANDOFF.md)。
 本文件的 vN 指網路協議版本 pvN；遊戲版本與協議版本分開編號（pv8-design-remaining-picks）。pv8 取代 [protocol-v7](protocol-v7.zh-Hant.md)：pv7 中沒有在此改寫的條款，pv8 原樣沿用；改寫的條款標明原出處。程式行號以 `62fd7ebf` 為準。
 
 ## 0. 原則
