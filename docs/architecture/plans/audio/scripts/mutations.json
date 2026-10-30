@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the audio plan, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog. A mutant is killed only when its test run fails with the expected message.",
+  "mutants": [
+    {
+      "id": "au-core-start-shifted",
+      "what": "A voice starts one frame after its start frame",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "static_cast<std::uint32_t>(voice.startFrame - chunkStart) : 0;",
+      "replace": "static_cast<std::uint32_t>(voice.startFrame - chunkStart + 1) : 0;",
+      "target": "gyo_audio_tests",
+      "cases": "*starts a clip exactly at its start frame*",
+      "expect": "CHECK\\( Left\\(out, 5\\) == 1000 \\) is NOT correct"
+    },
+    {
+      "id": "au-core-chunk-edge-lost",
+      "what": "The last frame of every internal pass is skipped, so the output depends on the block split",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "while (at < frames && voice.position < voice.clip.frames)",
+      "replace": "while (at + 1 < frames && voice.position < voice.clip.frames)",
+      "target": "gyo_audio_tests",
+      "cases": "*does not depend on how blocks split it*",
+      "expect": "CHECK\\( RenderInBlocks\\(split, 2200, blocks\\) == reference \\) is NOT correct"
+    },
+    {
+      "id": "au-core-voice-never-freed",
+      "what": "A finished voice stays busy",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "        if (voice.position >= voice.clip.frames) voice.active = false;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*drops a play when every voice is busy*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-core-late-counted-on-time",
+      "what": "A start before the next frame is counted as on time",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "    if (start < nextFrame_) {",
+      "replace": "    if (start < nextFrame_ && false) {",
+      "target": "gyo_audio_tests",
+      "cases": "*starts a late play at the next frame*",
+      "expect": "CHECK\\( mixer.Schedule\\(\\{clip, 4, 1.0f, 1.0f\\}\\) == StartOutcome::Late \\) is NOT correct"
+    },
+    {
+      "id": "au-core-rounding-truncates",
+      "what": "The mix truncates instead of rounding half up",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "(accumulator_[i] * master + kHalf)",
+      "replace": "(accumulator_[i] * master)",
+      "target": "gyo_audio_tests",
+      "cases": "*applies left and right gains with rounding*",
+      "expect": "CHECK\\( Left\\(out, 0\\) == 501 \\) is NOT correct"
+    },
+    {
+      "id": "au-core-clipping-uncounted",
+      "what": "Saturated samples are not counted",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "        if (bounded != value) ++clipped;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*saturates the mix*",
+      "expect": "CHECK\\( mixer.Stats\\(\\).clippedSamples == 4 \\) is NOT correct"
+    },
+    {
+      "id": "au-clip-rate-unchecked",
+      "what": "The clip bank accepts any sample rate",
+      "file": "engine/audio/src/ClipBank.cpp",
+      "find": "    if (sampleRate != kSampleRate) {",
+      "replace": "    if (sampleRate != kSampleRate && false) {",
+      "target": "gyo_audio_tests",
+      "cases": "*rejects clips the mixer cannot play*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-link-engine",
+      "what": "The mixer links the engine library",
+      "file": "engine/audio/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time)",
+      "replace": "target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time PRIVATE GYO::Engine)",
+      "target": "gyo_audio_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_audio links .*expected exactly"
+    },
+    {
+      "id": "au-soundloader-bits-unchecked",
+      "what": "SoundLoader accepts samples other than 16-bit",
+      "file": "engine/asset/src/loaders/SoundLoader.cpp",
+      "find": "        if (bitsPerSample != 16) {",
+      "replace": "        if (bitsPerSample != 16 && false) {",
+      "target": "engine_tests",
+      "cases": "*rejects files it cannot represent as PCM16*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    }
+  ]
+}

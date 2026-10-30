@@ -1,12 +1,15 @@
 # 音效（GYO::Audio）：交接
 
-更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 未開始，等使用者指定。尚未動程式。**
+更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；下一批 `v8-engine-audio-schedule` 等使用者指定。**
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 Engine 計畫夾的慣例，不點名消費端。
 
 ## 現況
 
-- 2026-10-30：`v8-engine-audio-plan` 完成文件（本夾 README、PLAN、HANDOFF），同日使用者核准 6 項待決事項全部照建議（見決策紀錄）；dev_log：[2026_10_30_engine_audio_plan](../../../dev_logs/2026_10_30_engine_audio_plan.zh-Hant.md)。下一步：使用者指定時開始 `v8-engine-audio-core`。
+- 2026-10-30：`v8-engine-audio-plan` 完成文件（本夾 README、PLAN、HANDOFF），同日使用者核准 6 項待決事項全部照建議（見決策紀錄）；dev_log：[2026_10_30_engine_audio_plan](../../../dev_logs/2026_10_30_engine_audio_plan.zh-Hant.md)。
 - `docs/architecture.md` 的 Runtime boundaries 與 Architecture Delta 段落在 `v8-engine-audio-core` 加上（程式出現時才描述）。
+- 2026-10-30：使用者說「開始吧」，開始 `v8-engine-audio-core`（high，估 3～4 h）。做法：樣本域的聲部混音做成模組內部類別 `VoiceMixer`（`engine/audio/src`，以樣本位置排程，不含時間換算與佇列），L1 直接測它；公開的 `Mixer`（提交端與時間戳換算）在 `v8-engine-audio-schedule` 包在它外面。這取代 PLAN 寫的「測試用的直接注入」，不在公開 API 留後門。
+- 2026-10-30：`v8-engine-audio-core` 完成：`GYO::Audio`（`ClipBank`、內部 `VoiceMixer`）、`gyo_audio_tests` 13 案、SoundLoader 的第一批 L1、連結守衛、[audio.md](../../audio.md)（Design Invariants 的正本）；`ctest --preset core` 35／35，突變 9／9 被殺；dev_log：[2026_10_30_engine_audio_core](../../../dev_logs/2026_10_30_engine_audio_core.zh-Hant.md)。四平台 CI 未跑（PR 線一起跑）。
+- 給 schedule 批：`VoiceMixer::Schedule` 含 `GYO_ASSERT`、不是 `noexcept`；PLAN 草案的 `Submitter::Play` 寫成 `noexcept`，要在生產者端驗證就不能 `noexcept`。開始時先定這兩點。
 - 分支：`claude/v8-engine-audio-95a496`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -82,3 +85,4 @@
 | 批次 | 估時 | 實際 | 備註 |
 |---|---|---|---|
 | `v8-engine-audio-plan` | 3～5 h（開始時重估：3 h，範圍明確、只寫文件） | 約 1.5 h（核准與記錄另約 0.2 h） | 閱讀 v8／v7 計畫、`SoundLoader`、SDL 隔離契約與 SDL 3.4 的音效驅動原始碼 |
+| `v8-engine-audio-core` | 3～4 h | 約 1.5 h | 建置與突變在背景約 20 分鐘 |

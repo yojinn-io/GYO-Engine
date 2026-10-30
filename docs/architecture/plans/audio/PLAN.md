@@ -149,6 +149,7 @@ namespace Engine::Audio::Sdl {
 ## Design Invariants
 
 核准後，`v8-engine-audio-core` 把本節搬到 `docs/architecture/audio.md`（標題保持 `Design Invariants`），並為每一條寫上守衛。
+更正（2026-10-30，`v8-engine-audio-core`）：已搬到 [audio.md](../../audio.md)，那裡是正本（含守衛與生效的批次）；本節保留核准時的原文。
 
 1. **中立。** `GYO::Audio` 與後端只知道片段、時間戳、增益與樣本；不知道事件種類、武器、角色或任何產品名稱，也不提供以產品語意命名的 API。
 2. **SDL 只在後端。** `GYO::Audio` 不含 SDL；後端的中立標頭不含 SDL（platform-sdl.md Invariant 1、2，G1～G3）。Engine 不呼叫全域的 `SDL_Init`／`SDL_Quit`；AUDIO 子系統由後端以參考計數擁有（platform-sdl.md Invariant 8）。沒有例外穿過 SDL 的 C 堆疊。
@@ -185,7 +186,7 @@ v8-engine-audio
 
 | 批次 | 檔位｜引擎 | 估時 | 內容 | 完成條件 |
 |---|---|---|---|---|
-| `v8-engine-audio-core` | high｜繼承 | 3～4 h | `engine/audio` 骨架與 CMake；`ClipBank`；聲部（固定上限，滿了丟新請求並計數）；混音（int32 累加、主音量與增益、飽和並計數）；`Render`（此批的請求以測試用的直接注入進入，不經佇列）；`MixerStats`；`audio.md`（契約、Design Invariants、守衛表） | L1：片段驗證、離線渲染逐樣本比對、飽和、聲部滿、收支、決定性；突變 3 個以上被殺 |
+| `v8-engine-audio-core` | high｜繼承 | 3～4 h | `engine/audio` 骨架與 CMake；`ClipBank`；聲部（固定上限，滿了丟新請求並計數）；混音（int32 累加、主音量與增益、飽和並計數）；`Render`（此批的請求以測試用的直接注入進入，不經佇列）；`MixerStats`；（更正：實作時改為模組內部的 `VoiceMixer`，L1 直接測它；累加用 int64、增益用 Q16 定點；公開的 `MixerStats` 隨 schedule 批的 `Mixer` 出現。見 HANDOFF 現況）`audio.md`（契約、Design Invariants、守衛表） | L1：片段驗證、離線渲染逐樣本比對、飽和、聲部滿、收支、決定性；突變 3 個以上被殺 |
 | `v8-engine-audio-schedule` | high；換算、遲到、記憶體順序局部 xhigh（`xhigh-reviewer`，引擎繼承） | 4～5 h | `Submitter`（有界 SPSC、綁定執行緒、滿了計數）；`Render` 開頭取出全部提交端；錨點換算、`scheduleDelay`、遲到規則；`maxLateness` | L1：假錨點序列下的起點位置（跨區塊、區塊邊界、剛好遲到一個樣本）、Invariant 5、併發生產者壓力（多次執行、結構條件不設時間上界）、佇列滿的收支；`xhigh-reviewer` 的審查與修正；突變（換算的四捨五入、錨點沿用、遲到判定、記憶體順序放寬）被殺 |
 | `v8-engine-audio-sdl` | high｜繼承 | 3～5 h | `engine/audio/backend/sdl`；`SDL_OpenAudioDeviceStream`（48 kHz S16 立體聲）與回呼（每次回呼取一次 `Now()`）；AUDIO 子系統的參考計數；開啟失敗回錯；銷毀順序的 `GYO_ASSERT`；G1～G3 擴充 | L1（CI 無頭可跑）：`SDL_AUDIO_DRIVER=dummy` 開關、與 `SdlPlatform` 共存時子系統計數正確、`disk` 驅動加 `SDL_AUDIO_DISK_TIMESCALE=0` 寫出檔案並檢查結構（長度、有聲音的位置與收支）；G3 對新 target 生效 |
 | `v8-engine-audio-record` | medium；分析程式 high｜繼承 | 2～4 h | Engine 自己的 L2 程式與分析腳本（見下）；相關突變的完整一輪；dev_log；README／HANDOFF 收尾 | L2 只記錄（不是判定）；收支一致；dev_log 列入本夾 |
