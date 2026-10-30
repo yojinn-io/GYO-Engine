@@ -28,6 +28,16 @@ add_test(NAME gyo_ui_editor.acceptance_contract
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_acceptance_contract.py")
 set_tests_properties(gyo_ui_editor.acceptance_contract PROPERTIES LABELS "cpu;editor" TIMEOUT 30)
 
+# ui_editor Design Invariant 1 (docs/ui_toolchain.md): no game, GYO::Input or SDL_GPU.
+add_test(NAME gyo_ui_editor.dependency_guard
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ui_editor_dependency_guard.py"
+        --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME gyo_ui_editor.dependency_guard_selftest
+    COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}"
+        -p "test_ui_editor_dependency_guard.py" -v)
+set_tests_properties(gyo_ui_editor.dependency_guard gyo_ui_editor.dependency_guard_selftest
+    PROPERTIES LABELS "cpu;editor" TIMEOUT 60)
+
 if(TARGET gyo_ui_editor_preview)
     add_executable(gyo_ui_editor_preview_tests PreviewAssetTests.cpp)
     target_link_libraries(gyo_ui_editor_preview_tests PRIVATE

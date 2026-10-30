@@ -17,10 +17,9 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **完成，未合併**：`v8-tool-ui-editor-gizmo-fix`（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)，分支 `claude/v8-tool-ui-editor-gizmo`）。使用者在 GUI 上試過錨點與 pivot 的把手。
-- **進行中**：`v8-tool-ui-invariants`：草稿已給使用者看，等同意後寫進 [ui_toolchain.md](../../../ui_toolchain.md)。
+- **完成，未推送**：`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）。下一批 `v8-tool-ui-editor-panels`。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
-  - `GYO::Ui` 與 ui_editor 沒有 `Design Invariants` 節（[ui_toolchain.md](../../../ui_toolchain.md)、[tool_projects.md](../../../tool_projects.md)）。本線加元件前要補（`v8-tool-ui-invariants`）。
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
 
 ## 等你決定
@@ -34,7 +33,6 @@
 | `v8-tool-ui-widget-scope` | 「組件化這些按鈕和輸入框」的範圍 | (a) 只加 `text_field`；按鈕已經是 `gyo.ui` 的 `button`（`pvp_lobby.json`）／(b) 再加按鈕的共用樣式（同一組顏色、字級只寫一次），也是 schema 變更／(c) 可重用的元件範本（prefab），接近 ui_toolchain.md 明說不做的「custom widgets」 | (a)；(b) 等第二個畫面也重複時再做 | `v8-tool-ui-button-style` 要不要排 |
 | `v8-tool-ui-schema-version` | `text_field` 怎麼進 schema | v1 的集合寫明是封閉的。升 `version: 2`（讀取端接受 1、2；舊讀取端明確拒絕 v2）／留在 v1 加元素（舊讀取端以「未知元素」拒絕，但版本號沒告訴人為什麼） | 升 v2 | 契約文件與 codec |
 | `v8-tool-ui-edit-policy-owner` | 文字編輯政策放哪 | 通用的部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`（Architecture Delta：Ui 的責任變大）／全部留在產品，Ui 只畫（輸入框就不算元件）。字元過濾：(i) `text_field` 宣告 `max_length`，過濾由產品在提交時檢查／(ii) 資料裡宣告允許的字元集合（簡單、封閉，但開始往設定語言走，AGENTS §9）／(iii) 產品在執行時提供過濾函式 | 通用部分在 Ui；過濾用 (iii)：規則留在產品，資料不帶產品語意 | Ui 的 Design Invariants 怎麼寫 |
-| `v8-tool-ui-invariants` | 在 ui_toolchain.md 新增 `Design Invariants` 節 | AGENTS §3：節的新增要使用者同意 | 同意後在 `v8-tool-ui-invariants` 寫，內容另給你看 | 能不能開始加元件 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-editor-structure` | 審查的整理項目要不要排 | [審查](ui-editor-review.md)：邊界與資料安全好，內部責任太集中（`EditorApp.cpp` 約 2,300 行、元素 schema 在 editor 又寫一份）。建議在加 `text_field` 前做 `v8-tool-ui-editor-gizmo-math`、`v8-tool-ui-editor-element-schema`、`v8-tool-ui-editor-panels`，不重寫 | 照審查的順序排 | ui-widgets-line 的批次 |
@@ -46,6 +44,7 @@
 |---|---|---|
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
+| `v8-tool-ui-invariants` | （2026-10-30）照草稿寫進 [ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」：GYO::Ui 4 條、ui_editor 5 條、Replacement Criteria；守衛 `ui.dependency_guard`、`gyo_ui_editor.dependency_guard`、`TestGizmoAgreesWithUiEvaluator` | 「同意，寫進去」 |
 | `v8-tool-ui-order` | （2026-10-30）UI 的順序：先寫 `v8-tool-ui-invariants`，再整理（`v8-tool-ui-editor-panels` → `v8-tool-ui-editor-element-schema`），再做 `text_field`，編輯器的小功能（複製貼上、方向鍵微調）穿插；對齊參考線、多選等需要時再排。見 [README](README.md)「順序與依賴」 | 「照你建議做吧。」 |
 | `v8-tool-ui-editor-gizmo-bug` | （2026-10-30）拖動照 (a) Unity 的 RectTransform：本體＝移動 `position`；邊與角＝縮放（`size_delta`、`position`），錨點不動；拖錨點與 pivot 時補償 `position`、`size_delta`，元素的矩形不動。「相等時一起移動」的實作細節由 Claude 定為：被拖的錨點推著另一個走，所以往對方那側拖時一起動、往反方向拖時分開（否則相等的錨點在 gizmo 上永遠分不開）。Snap 只對齊這次拖動的座標 | 「(a) Unity 式」 |
 | `v8-tool-scope-ui-first` | （2026-10-30）先處理 `v8-tool-ui-editor-widgets`。voxel 與 assets 沒有暫停，等使用者逐個給方案再討論；第一版 Claude 自己寫的地圖建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端）撤下。取代同日的 `v8-tool-scope-ui-only`（Claude 誤解成「暫停」） | 「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」→「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」 |
@@ -72,3 +71,4 @@
 - 2026-10-30：使用者用新版試拖，問錨點與 pivot 的把手有什麼用。查證：`gyo.ui` v1 的根節點固定是設計尺寸（`UiRuntime.cpp:721`），整張畫布等比例縮放、留黑邊（`FitDesignCanvas`，`UiRuntime.cpp:603`），所以每個父層的大小在任何螢幕上都不變，錨點與 pivot 只改變 `position`／`size_delta` 的寫法，不改畫面。提了三個選項：隱藏把手、維持現狀、讓根節點跟著螢幕比例走（契約 v2）。使用者：「先保持這樣。」把手維持現狀，不另開待決。
 - 2026-10-30：開 [PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)，Auto-fix 開啟。使用者問 UI 還要加什麼；建議兩類（遊戲畫面要的：`text_field`、背景、頁面切換、設定元件；編輯器缺的：複製貼上、方向鍵微調、對齊參考線、多選）與順序。使用者：「照你建議做吧。」記成 `v8-tool-ui-order`，README 加 `v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` 與兩個候選批。
 - 2026-10-30：`v8-tool-ui-invariants` 開始（檔位 medium，引擎 Opus 5.5，估 2～3 h）。起草 `GYO::Ui` 與 ui_editor 的 Design Invariants＋Replacement Criteria，給使用者看。新發現：`GizmoMath` 為了反算 `position`／`size_delta`，又寫了一份 `gyo.ui` 的版面公式（引擎的 `ResolveDesignRect` 在 `UiRuntime.cpp` 的匿名命名空間，不公開）；草稿用守衛測試讓兩份保持一致。
+- 2026-10-30：使用者同意 Design Invariants 草稿。寫進 ui_toolchain.md，加三個守衛。整個建置目錄重建後，Ui、ui_editor、OS 守衛共 14 個測試通過；突變與植入違規的檢查見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_invariants.zh-Hant.md)。

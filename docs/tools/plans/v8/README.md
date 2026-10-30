@@ -39,7 +39,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │
 ├── ui-widgets-line                          「PR 線：文字輸入框元件＋輸入法組字＋ui_editor」
 │   ├── v8-tool-ui-ime-observe               「medium｜Opus 5.5｜先檢測：把 TEXT_EDITING／TEXT_INPUT 記到 log，Windows 重現「:」卡住」
-│   ├── v8-tool-ui-invariants                「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
+│   ├── v8-tool-ui-invariants ✓              「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
 │   ├── v8-engine-input-composition          「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
 │   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
 │   ├── v8-tool-ui-editor-file-browser       「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
@@ -156,3 +156,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-file-browser` | [2026_10_30_tool_v8_ui_editor_file_browser](../../../dev_logs/2026_10_30_tool_v8_ui_editor_file_browser.zh-Hant.md) |
 | `v8-tool-ui-editor-gizmo-math` | [2026_10_30_tool_v8_ui_editor_gizmo_math](../../../dev_logs/2026_10_30_tool_v8_ui_editor_gizmo_math.zh-Hant.md) |
 | `v8-tool-ui-editor-gizmo-fix` | [2026_10_30_tool_v8_ui_editor_gizmo_fix](../../../dev_logs/2026_10_30_tool_v8_ui_editor_gizmo_fix.zh-Hant.md) |
+| `v8-tool-ui-invariants` | [2026_10_30_tool_v8_ui_invariants](../../../dev_logs/2026_10_30_tool_v8_ui_invariants.zh-Hant.md) |

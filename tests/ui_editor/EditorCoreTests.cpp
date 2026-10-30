@@ -6,6 +6,11 @@
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
+#include "engine/ui/UiDocumentCodec.hpp"
+#include "engine/ui/UiRuntime.hpp"
+
+#include <nlohmann/json.hpp>
+
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -502,6 +507,105 @@ void TestGizmoSnapAndPivot() {
     Expect(Near(Drag(GizmoHandle::Pivot, centered, {500.0F, 0.0F}).pivot, 1.0F, 0.5F), "pivot stays inside the element");
 }
 
+// ui_editor Design Invariant 4 (docs/ui_toolchain.md): GizmoMath keeps its
+// own copy of the gyo.ui layout rule to solve position and size_delta. Every
+// result is laid out again by the GYO::Ui evaluator, which must put the
+// element where the drag said: unchanged for anchor and pivot drags, moved or
+// resized by the drag otherwise. The expectations use only evaluator output.
+nlohmann::json GuardDocument(const GizmoRect& child) {
+    const auto vec2 = [](const Vec2 value) { return nlohmann::json::array({value.x, value.y}); };
+    const auto rect = [&vec2](const GizmoRect& value) {
+        return nlohmann::json{{"anchor_min", vec2(value.anchorMin)}, {"anchor_max", vec2(value.anchorMax)},
+            {"pivot", vec2(value.pivot)}, {"position", vec2(value.position)}, {"size_delta", vec2(value.sizeDelta)}};
+    };
+    // The parent is not the root, so the parent's own layout is part of the check.
+    const GizmoRect parent{{0.1F, 0.2F}, {0.9F, 0.95F}, {0.3F, 0.6F}, {17.0F, -11.0F}, {-30.0F, -24.0F}};
+    return nlohmann::json{{"schema", "gyo.ui"}, {"version", 1},
+        {"design_canvas", {{"size", {1280.0, 720.0}}, {"scale_mode", "fit"}}},
+        {"fonts", {{"default", "font.default"}}}, {"default_font", "default"},
+        {"colors", {{"transparent", "#00000000"}}}, {"actions", nlohmann::json::array()},
+        {"bindings", nlohmann::json::array()},
+        {"canvases", nlohmann::json::array({{{"id", "main"}, {"backdrop_color", "transparent"},
+            {"focus_order", nlohmann::json::array()},
+            {"children", nlohmann::json::array({{{"type", "container"}, {"id", "parent"}, {"rect", rect(parent)},
+                {"children", nlohmann::json::array({{{"type", "container"}, {"id", "child"},
+                    {"rect", rect(child)}}})}}})}}})}};
+}
+
+std::optional<std::pair<Rect, Rect>> EvaluateGuard(const GizmoRect& child, const float scale) {
+    auto parsed = Engine::Ui::UiDocumentCodec::Parse(GuardDocument(child).dump(), "gizmo-guard");
+    if (!parsed) {
+        return std::nullopt;
+    }
+    Engine::Ui::UiRuntime runtime;
+    if (!runtime.Initialize(std::make_shared<const Engine::Ui::UiDocument>(std::move(parsed).value())) ||
+        !runtime.ActivateCanvas("main")) {
+        return std::nullopt;
+    }
+    auto evaluated = runtime.EvaluateLayout({}, {1280.0F * scale, 720.0F * scale});
+    if (!evaluated) {
+        return std::nullopt;
+    }
+    std::optional<Rect> parent;
+    std::optional<Rect> element;
+    for (const Engine::Ui::UiEvaluatedElement& entry : evaluated.value()) {
+        if (entry.id == "parent") {
+            parent = entry.boundsPixels;
+        } else if (entry.id == "child") {
+            element = entry.boundsPixels;
+        }
+    }
+    if (!parent || !element) {
+        return std::nullopt;
+    }
+    return std::pair{*parent, *element};
+}
+
+bool NearPixels(const Rect value, const Rect expected) {
+    return std::abs(value.x - expected.x) < 1e-2F && std::abs(value.y - expected.y) < 1e-2F &&
+        std::abs(value.width - expected.width) < 1e-2F && std::abs(value.height - expected.height) < 1e-2F;
+}
+
+void TestGizmoAgreesWithUiEvaluator() {
+    const GizmoRect cases[]{
+        {{0.5F, 0.5F}, {0.5F, 0.5F}, {0.5F, 0.5F}, {12.0F, -7.0F}, {240.0F, 72.0F}},
+        {{0.0F, 0.0F}, {0.0F, 0.0F}, {0.0F, 0.0F}, {220.0F, 238.0F}, {300.0F, 48.0F}},
+        {{0.2F, 0.1F}, {0.7F, 0.8F}, {0.25F, 0.75F}, {-15.0F, 9.0F}, {-40.0F, 22.0F}},
+        {{1.0F, 1.0F}, {1.0F, 1.0F}, {1.0F, 0.0F}, {-30.0F, 40.0F}, {120.0F, 60.0F}},
+    };
+    struct Step final {
+        GizmoHandle handle;
+        Vec2 delta;     // screen pixels
+        Rect change;    // expected change of the element's screen rectangle
+    };
+    for (const float scale : {1.0F, 2.0F}) {
+        const Step steps[]{
+            {GizmoHandle::AnchorMin, {37.0F, -23.0F}, {}},
+            {GizmoHandle::AnchorMax, {-41.0F, 29.0F}, {}},
+            {GizmoHandle::Pivot, {13.0F, -7.0F}, {}},
+            {GizmoHandle::Move, {12.0F, -8.0F}, {12.0F, -8.0F, 0.0F, 0.0F}},
+            {GizmoHandle::Right, {30.0F, 5.0F}, {0.0F, 0.0F, 30.0F, 0.0F}},
+            {GizmoHandle::TopLeft, {-10.0F, -20.0F}, {-10.0F, -20.0F, 10.0F, 20.0F}},
+        };
+        for (const GizmoRect& start : cases) {
+            const auto before = EvaluateGuard(start, scale);
+            Expect(before.has_value(), "the guard document lays out");
+            if (!before) {
+                continue;
+            }
+            const GizmoFrame frame{before->first, before->second, start, scale};
+            for (const Step& step : steps) {
+                const GizmoRect dragged = DragGizmo(step.handle, frame, {0.0F, 0.0F}, step.delta, {});
+                const auto after = EvaluateGuard(dragged, scale);
+                const Rect expected{before->second.x + step.change.x, before->second.y + step.change.y,
+                    before->second.width + step.change.width, before->second.height + step.change.height};
+                Expect(after.has_value() && NearPixels(after->second, expected),
+                    "the GYO::Ui evaluator places a dragged element where the gizmo intended");
+            }
+        }
+    }
+}
+
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
@@ -510,6 +614,7 @@ int main() {
     TestGizmoAnchorDrag();
     TestGizmoMoveAndResize();
     TestGizmoSnapAndPivot();
+    TestGizmoAgreesWithUiEvaluator();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);
