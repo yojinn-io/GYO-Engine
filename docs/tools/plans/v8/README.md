@@ -136,6 +136,12 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 
 - `v8-tool-voxel-map-editor`：沒有暫停，等使用者逐個給方案再一起討論；本線不先提案。上面「現況盤點」裡 arena、舊格子地圖、ImGui 後端的列只是事實，留給之後的規劃參考。
 - `v8-tool-assets-editor`：同上，等使用者的方案。它也要和 `v8-product-hitbox-data` 定下的格式與 owner 對齊。
+  - 已收到的需求：**音效匯入**（`v8-tool-assets-audio-import`，2026-10-30）。使用者在音效會話說：「這個你先轉好，需求加到 assets editor 中。」由音效線（`v8-engine-audio-plan`）轉來，這裡只記需求，不排實作。
+    1. 匯入任意取樣率與位元深度的 WAV（8／16／24／32 位元整數、32 位元浮點；1 或 2 聲道），轉成 `GYO::Audio` 的片段格式：48 kHz、PCM16、原聲道數。理由：混音器執行中不重新取樣（[audio.md](../../../architecture/audio.md) Design Invariant 9），`SoundLoader` 只讀 16 位元。
+    2. 轉換要可重現：同一輸入得到同樣的位元組。現行腳本用窗化 sinc 重新取樣（Blackman 窗、兩側各 32 個零交越、截止在較低 Nyquist 的 0.95），用固定種子的三角抖動量化成 16 位元，並報告飽和的樣本數。
+    3. 原檔放在 `<asset>/audio/source/`，不登錄在 catalog、不打包；轉好的檔登錄在 catalog（type `sound`）。
+    4. 記錄來源與授權（現在寫在 `assets/object_fps_pvp/audio/README.md`，授權待使用者補）。
+    - 現況：AGENTS §5 的 Script 階段，由 `docs/architecture/plans/audio/scripts/convert_wav.py` 手動轉換。腳本與產物在音效線的分支 `claude/v8-engine-audio-95a496`，尚未推送，之後隨音效的 PR 線合併；合併前本文件裡這兩個路徑還不存在。
 - 2026-10-30 第一版裡兩個工具的建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端等）已撤下，見 commit `54dac0c3`。
 
 ## 驗收的共同規則

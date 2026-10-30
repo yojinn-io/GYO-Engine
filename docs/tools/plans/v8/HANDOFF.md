@@ -76,3 +76,4 @@
 - 2026-10-30：`v8-tool-ui-editor-panels` 完成（檔位 medium，估 3～5 h，實際約 0.5 h）。`EditorApp.cpp` 拆成 5 個檔加一個共用的內部標頭；類別與標頭不變。逐行比對沒有遺漏，14/14 測試通過。
 - 2026-10-30：`v8-tool-ui-editor-element-schema` 完成（檔位 high，估 5～8 h，實際約 1 h）。使用者選 A，並補充「Engine 不承擔工具的職能」。`ElementSchema` 一張表；對齊測試含編譯期的 switch；8 個突變全部被抓到；14/14 通過。
 - 2026-10-30：使用者要求把 4 個 commit 併進 [PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)；推送並更新 PR 的標題與說明（gizmo 修正＋Design Invariants＋S-1、S-2 的整理）。
+- 2026-10-30：音效線（v8 audio-line 會話的 `v8-engine-audio-plan`）轉來一項需求：使用者在那邊說「這個你先轉好，需求加到 assets editor 中。」記到 README 的 `v8-tool-assets-editor`，代號 `v8-tool-assets-audio-import`；只記需求，不排實作。轉換腳本在音效線未推送的分支上。
