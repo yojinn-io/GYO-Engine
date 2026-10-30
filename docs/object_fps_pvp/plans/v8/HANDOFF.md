@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；下一批是 `pv8-seq-ceiling`（要先寫事前宣告給你核准）。順序照 [protocol-v8](../../protocol-v8.zh-Hant.md) §8：`pv8-rename` → `pv8-seq-ceiling` → `pv8-seq-narrow`，以及 `v8-product-crouch` 的 wire 接入。
+- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；下一批是 `pv8-seq-ceiling`：[事前宣告](pv8-seq-ceiling-declaration.md) 草稿已寫好，等你核准（含 `pv8-seq-ceiling-test-seam`、`pv8-seq-ceiling-table-fix` 兩項）。順序照 [protocol-v8](../../protocol-v8.zh-Hant.md) §8：`pv8-rename` → `pv8-seq-ceiling` → `pv8-seq-narrow`，以及 `v8-product-crouch` 的 wire 接入。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
