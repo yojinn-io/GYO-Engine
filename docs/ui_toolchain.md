@@ -44,7 +44,24 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    Readers reject an unknown element or version explicitly; they never skip it.
 4. Ui holds no game state. Which page belongs to a game phase, and every
    binding value, are the product's. Ui holds only state it can rebuild, such
-   as focus and the pressed control.
+   as focus and the pressed control, and, while a text field is being edited,
+   that edit (its text, cursor and selection). A submit only emits the field's
+   action with the edited text; whether it is accepted, and the binding value,
+   stay the product's. Cancelling, losing focus or a change of the binding
+   discards the edit; Ui keeps no copy of an earlier value.
+5. Which characters a text field accepts is the product's. Ui hands committed
+   text (typed or pasted) to a check function the product supplies and keeps
+   only what it returns. Ui knows no product character rule, and a gyo.ui
+   document declares no character set, only limits without product meaning
+   such as `max_length`. Guard: added with `text_field`
+   (v8-tool-ui-text-field).
+6. An input method's composition is shown only. Ui draws it (for example
+   underlined) but never puts it into the edit or a submitted value; only
+   committed text passes the check of invariant 5 into the edit. Guard: added
+   with `text_field` (Enter, losing focus and cancel during a composition).
+7. Text events reach Ui as its own neutral types, converted by the product,
+   like `UiInputFrame` (invariant 2); clipboard text is also handed in by the
+   product, so Ui never reaches the platform. Guard: `ui.dependency_guard`.
 
 ### ui_editor
 
@@ -73,7 +90,11 @@ repair or rebuild the component.
   interaction (typing on the canvas, input-method composition) is beyond ImGui.
 - GYO::Ui: a product needs to branch on an element's internal state, or needs
   scripts to express a menu; or text-editing policy placed in Ui starts to
-  need product-specific rules.
+  need product-specific rules; or a product needs editing beyond the common
+  set (Backspace, Delete, Left/Right, Home/End, select all, paste, Enter to
+  submit, Escape to cancel), such as its own shortcuts, several lines, rich
+  text or completion. Ui does not grow to cover these; the user decides
+  whether text editing is redesigned.
 
 ## JSON v1
 

@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
-- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth`、`v8-engine-input-composition` 完成（Windows 的 L3 都未做）；下一批 `v8-tool-ui-text-field`，開始前要先改 Ui 的 Design Invariants（給你同意）。
+- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth`、`v8-engine-input-composition` 完成（Windows 的 L3 都未做）；Ui 的 Design Invariants 已改（`v8-tool-ui-invariants-text`）；下一批 `v8-tool-ui-text-field`。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -39,6 +39,7 @@
 |---|---|---|
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
+| `v8-tool-ui-invariants-text` | （2026-10-30）[ui_toolchain.md](../../../ui_toolchain.md) 的 GYO::Ui Design Invariants：改第 4 條（編輯中的內容由 Ui 暫時持有，值仍歸產品）、新增 5（字元由產品的檢查函式決定）、6（組字只顯示）、7（文字事件經產品轉成 Ui 的中立型別）；Replacement Criteria 加「超出通用編輯集合就停」。5、6 的守衛隨 `text_field` 加 | 「同意，寫進去」 |
 | `v8-tool-ime-input-delta` | （2026-10-30）`v8-engine-input-composition` 由工具線（本會話）做，Architecture Delta 記到 input-and-present 的 HANDOFF | 選「工具線做（建議）」 |
 | `v8-tool-ime-plan` | （2026-10-30）照 README「檢測之後：輸入法的規劃」排兩批；產品批 `v8-product-lobby-fullwidth` 也由本會話做 | 選「照這樣排（建議）」「這個會話做」 |
 | `v8-tool-ui-ime-observe-next` | （2026-10-30）(b)：判定記為不成立；接受這次的 log 當證據，以觀測到的事實規劃 `v8-engine-input-composition`（README「檢測之後：輸入法的規劃」） | 「(b) 接受證據、往下規劃」 |
@@ -96,3 +97,4 @@
 - 2026-10-30：使用者確認規劃；組字事件由工具線做；產品批由本會話做。`v8-product-lobby-fullwidth` 開始（medium，估 1～2 h）。
 - 2026-10-30：`v8-product-lobby-fullwidth` 完成，實際約 0.5 h。`FilterAddressText`；Red（舊規則下 4 個全形斷言失敗）→ Green；5 個突變全被抓到（1 個先存活、補測試後抓到）；產品 CPU 測試全過。Windows L3 未做。
 - 2026-10-30：使用者：「開始」。`v8-engine-input-composition` 完成（high，估 6～10 h，實際約 1 h）：`imeComposition`、`Kind::Composition`、`SetTextInputArea`；Red→Green；7 個突變全被抓到；改了上一批診斷測試的判定（§14.4，見 dev_log）。Windows L3 要等有畫組字的消費端。
+- 2026-10-30：使用者同意 GYO::Ui Design Invariants 的修改稿，寫進 ui_toolchain.md（`v8-tool-ui-invariants-text`）。
