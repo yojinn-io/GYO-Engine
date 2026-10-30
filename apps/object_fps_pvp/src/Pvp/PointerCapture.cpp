@@ -55,6 +55,8 @@ PointerCaptureResult ApplyPointerCaptureEvents(PointerCaptureState& state,
                     state.inputCaptured = true;
                     state.pointerAcquiredThisFrame = true;
                 } else if (rising && !state.pointerAcquiredThisFrame) {
+                    // The first press of the frame makes the shot; later ones are dropped with it.
+                    if (!state.pendingShotEdge) state.pendingShotPressedAt = event.timestamp;
                     state.pendingShotEdge = true;
                 }
             }

@@ -9,6 +9,11 @@
     { "id": "object_fps_pvp.arenas", "type": "text", "path": "arenas.json" },
     { "id": "object_fps_pvp.ui.pvp_lobby", "type": "text", "path": "ui/pvp_lobby.json" },
     { "id": "object_fps_pvp.ui.hit_feedback", "type": "text", "path": "ui/hit_feedback.json" },
+    { "id": "object_fps_pvp.audio.settings", "type": "text", "path": "audio/sfx.json" },
+    { "id": "object_fps_pvp.audio.gun_shoot", "type": "sound", "path": "audio/gun_shoot.wav" },
+    { "id": "object_fps_pvp.audio.hit_flesh", "type": "sound", "path": "audio/hit_flesh.wav" },
+    { "id": "object_fps_pvp.audio.gun_reload", "type": "sound", "path": "audio/gun_reload.wav" },
+    { "id": "object_fps_pvp.audio.player_footstep", "type": "sound", "path": "audio/player_footstep.wav" },
 
     { "id": "object_fps_pvp.font.ui", "type": "font", "path": "fonts/BIZUDPGothic-Regular.ttf" },
 

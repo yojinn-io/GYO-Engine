@@ -9,6 +9,7 @@
 
 #include "RetroFPS/Pvp/PointerCapture.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <fstream>
 #include <map>
@@ -169,4 +170,22 @@ TEST_CASE("Pointer capture: only a release of a captured pointer is reported as 
     CHECK_FALSE(state.inputCaptured);
     CHECK(result.releases == 2);
     CHECK(result.releasesWhileCaptured == 1);
+}
+
+TEST_CASE("Pointer capture: a shot edge keeps the timestamp of the press that made it") {
+    PointerCaptureState state;
+    state.inputCaptured = true;
+    const auto at = [](int ms) { return std::chrono::steady_clock::time_point{} + std::chrono::milliseconds(ms); };
+    InputEvent press{.kind = InputEventKind::MouseButtonPressed, .button = Engine::Input::MouseButton::Left,
+                     .x = 1, .y = 1, .insideWindow = true};
+    InputEvent release{.kind = InputEventKind::MouseButtonReleased, .button = Engine::Input::MouseButton::Left};
+    press.timestamp = at(10);
+    InputEvent second = press;
+    second.timestamp = at(25);
+    static_cast<void>(ApplyPointerCaptureEvents(state, std::vector{press, release, second}, true));
+    CHECK(state.pendingShotEdge);
+    CHECK(state.pendingShotPressedAt == at(10)); // the first press of the frame makes the shot
+    state.pendingShotEdge = false;
+    static_cast<void>(ApplyPointerCaptureEvents(state, std::vector{release, second}, true));
+    CHECK(state.pendingShotPressedAt == at(25));
 }
