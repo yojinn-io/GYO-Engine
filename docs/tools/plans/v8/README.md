@@ -39,14 +39,18 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │
 ├── ui-widgets-line                          「PR 線：文字輸入框元件＋輸入法組字＋ui_editor」
 │   ├── v8-tool-ui-ime-observe               「medium｜Opus 5.5｜先檢測：把 TEXT_EDITING／TEXT_INPUT 記到 log，Windows 重現「:」卡住」
-│   ├── v8-tool-ui-invariants                「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
+│   ├── v8-tool-ui-invariants ✓              「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
 │   ├── v8-engine-input-composition          「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
 │   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
 │   ├── v8-tool-ui-editor-file-browser       「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
 │   ├── v8-tool-ui-editor-gizmo-math ✓       「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試（行為不變）」
-│   ├── v8-tool-ui-editor-gizmo-fix          「high｜Opus 5.5｜修拖動與縮放、加位置／大小把手；做法看 v8-tool-ui-editor-gizmo-bug」
-│   ├── v8-tool-ui-editor-element-schema     「high｜Opus 5.5｜元素的欄位與 Inspector 集中一處（加 text_field 前）」
-│   ├── v8-tool-ui-editor-panels             「medium｜Opus 5.5｜面板拆檔，EditorApp 只協調」
+│   ├── v8-tool-ui-editor-gizmo-fix ✓        「high｜Opus 5.5｜修拖動與縮放、加位置／大小把手（Unity 式）」
+│   ├── v8-tool-ui-editor-panels ✓           「medium｜Opus 5.5｜面板拆檔，EditorApp 只協調」
+│   ├── v8-tool-ui-editor-element-schema ✓   「high｜Opus 5.5｜元素的欄位與 Inspector 集中一處（加 text_field 前）」
+│   ├── v8-tool-ui-editor-clipboard          「high｜Opus 5.5｜元素的複製、貼上、就地複製（Ctrl+C／V／D）」
+│   ├── v8-tool-ui-editor-nudge              「medium｜Opus 5.5｜方向鍵微調；縮放時 Alt 從中心、Shift 等比例」
+│   ├── （候選）v8-tool-ui-editor-snap-guides 「high｜Opus 5.5｜拖動時貼齊其他元素的邊與中線；排版覺得累時再排」
+│   ├── （候選）v8-tool-ui-editor-multi-select「high｜Opus 5.5｜多選、對齊、平均分布；同上」
 │   ├── v8-tool-ui-editor-text-field         「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
 │   ├── v8-tool-ui-button-style（待決）       「medium｜Opus 5.5｜按鈕外觀的共用樣式；看 v8-tool-ui-widget-scope」
 │   └── v8-product-lobby-text-field          「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
@@ -61,7 +65,12 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 ## 順序與依賴
 
 - 本線只做 ui-widgets-line。它不依賴 ①～③ 的其他 PR 線，也不需要 3D 或 SDL_GPU。
-- 線內的順序：檢測（`v8-tool-ui-ime-observe`）與 Design Invariants（`v8-tool-ui-invariants`）先做；組字事件（`v8-engine-input-composition`）與 `text_field`（`v8-tool-ui-text-field`）之後；ui_editor 與大廳最後。
+- 線內的順序（`v8-tool-ui-order`，2026-10-30 使用者同意）：
+  1. `v8-tool-ui-invariants`：整理與加元件之前先寫約束。
+  2. 整理：`v8-tool-ui-editor-panels`，再 `v8-tool-ui-editor-element-schema`。審查原本把 element-schema 排前面；改成先拆面板，因為拆檔是純搬移，之後元素表的改動只落在 Inspector 的檔裡，diff 比較好審。
+  3. `text_field`：檢測（`v8-tool-ui-ime-observe`，要 Windows 實機）→ 組字事件（`v8-engine-input-composition`）→ `v8-tool-ui-text-field` → `v8-tool-ui-editor-text-field` → 大廳（產品批）。開始前要先定 `v8-tool-ui-schema-version`、`v8-tool-ui-edit-policy-owner`、`v8-tool-ui-widget-scope`。
+  4. 編輯器的小功能（`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`）：不依賴 `text_field`，在 2 之後可以穿插做。
+  5. 對齊參考線、多選：候選，等畫面變多、排版真的覺得累時再排。
 - ui_editor 不依賴其他工具，其他工具也不依賴它（[ui_toolchain.md](../../../ui_toolchain.md) 末段）。
 
 ## 工具 1：`v8-tool-ui-editor-widgets`（ui-widgets-line）
@@ -113,6 +122,10 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-engine-input-composition` | high｜Opus 5.5 | 6～10 h | `TextEvent` 加組字的種類（組字字串、游標位置）；`SetTextInputArea`。只加不改 | CI：既有 IP-1 Test 判定不變；新事件的單元 Test（合成的 SDL 事件）；突變只跑相關的（v7.1 D184） |
 | `v8-tool-ui-text-field` | high（編輯狀態局部 xhigh）｜Opus 5.5 | 10～16 h | `gyo.ui` v2、`text_field` 的 codec／驗證／版面／編輯狀態／繪製 | CI：codec 往返、v1 文件照常載入、編輯狀態的單元 Test（含組字中按 Enter、Backspace、焦點離開）、突變 |
 | `v8-tool-ui-editor-file-browser` | high｜Opus 5.5 | 3～5 h | SDL3 的系統選擇窗（`SDL_ShowOpenFolderDialog`、`SDL_ShowOpenFileDialog`、`SDL_ShowSaveFileDialog`）：選單「Open Asset Folder...」一步掛載（參考 AssetPack 的「データフォルダを開く」）；Open、Export、掛載對話框的欄位也用。回呼經執行緒安全的收件匣，在幀之間套用。不存狀態；跳不出窗時退回手打 | CI：收件匣跨執行緒、選資料夾後掛載、取消不掛載；L3：Windows 與 macOS 各選一次中文路徑 |
+| `v8-tool-ui-editor-panels` | medium｜Opus 5.5 | 3～5 h | Hierarchy、Canvas、Inspector、對話框拆成各自的檔；`EditorApp` 只協調。純搬移，不改行為 | CI：既有測試不變；拆前拆後的行為由既有測試與手動開一次確認 |
+| `v8-tool-ui-editor-element-schema` | high｜Opus 5.5 | 5～8 h | 每種元素的欄位與 Inspector 的編輯控制集中在一張表，取代散落約 15 處的字串比對（審查 S-2） | CI：每種元素的欄位表與 `GYO::Ui` codec 一致的測試；突變 |
+| `v8-tool-ui-editor-clipboard` | high｜Opus 5.5 | 3～5 h | 元素的複製、貼上、就地複製；貼上時 id 自動改成不重複（沿用 canvas 複製的 `UniqueNodeCopyId`） | CI：複製子樹、id 不重複、undo 一步還原 |
+| `v8-tool-ui-editor-nudge` | medium｜Opus 5.5 | 2～3 h | 方向鍵 1 px、Shift 10 px；縮放把手的 Alt（從中心）、Shift（等比例） | CI：`GizmoMath` 的單元測試 |
 | `v8-tool-ui-editor-text-field` | high｜Opus 5.5 | 8～12 h | ui_editor 新增、編輯、預覽 `text_field`；輸出 v2 | CI：`tests/ui_editor` 的往返與 CLI 驗證；L3：使用者用 GUI 擺一個輸入框 |
 | `v8-tool-ui-button-style`（待決） | medium｜Opus 5.5 | 4～6 h | 按鈕外觀的共用樣式（同一組顏色、字級只寫一次） | 看 `v8-tool-ui-widget-scope` |
 | `v8-product-lobby-text-field` | high｜Opus 5.5 | 4～6 h | 大廳的位址欄改成 `text_field`；刪掉 `HandleTextEditing`、`AppendAddress` 的編輯部分，只留字元規則 | CI：大廳的既有 Test；L3：Windows 用輸入法打位址、看得到組字。**產品批**：由產品會話排程 |
@@ -123,6 +136,12 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 
 - `v8-tool-voxel-map-editor`：沒有暫停，等使用者逐個給方案再一起討論；本線不先提案。上面「現況盤點」裡 arena、舊格子地圖、ImGui 後端的列只是事實，留給之後的規劃參考。
 - `v8-tool-assets-editor`：同上，等使用者的方案。它也要和 `v8-product-hitbox-data` 定下的格式與 owner 對齊。
+  - 已收到的需求：**音效匯入**（`v8-tool-assets-audio-import`，2026-10-30）。使用者在音效會話說：「這個你先轉好，需求加到 assets editor 中。」由音效線（`v8-engine-audio-plan`）轉來，這裡只記需求，不排實作。
+    1. 匯入任意取樣率與位元深度的 WAV（8／16／24／32 位元整數、32 位元浮點；1 或 2 聲道），轉成 `GYO::Audio` 的片段格式：48 kHz、PCM16、原聲道數。理由：混音器執行中不重新取樣（[audio.md](../../../architecture/audio.md) Design Invariant 9），`SoundLoader` 只讀 16 位元。
+    2. 轉換要可重現：同一輸入得到同樣的位元組。現行腳本用窗化 sinc 重新取樣（Blackman 窗、兩側各 32 個零交越、截止在較低 Nyquist 的 0.95），用固定種子的三角抖動量化成 16 位元，並報告飽和的樣本數。
+    3. 原檔放在 `<asset>/audio/source/`，不登錄在 catalog、不打包；轉好的檔登錄在 catalog（type `sound`）。
+    4. 記錄來源與授權（現在寫在 `assets/object_fps_pvp/audio/README.md`，授權待使用者補）。
+    - 現況：AGENTS §5 的 Script 階段，由 `docs/architecture/plans/audio/scripts/convert_wav.py` 手動轉換。腳本與產物在音效線的分支 `claude/v8-engine-audio-95a496`，尚未推送，之後隨音效的 PR 線合併；合併前本文件裡這兩個路徑還不存在。
 - 2026-10-30 第一版裡兩個工具的建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端等）已撤下，見 commit `54dac0c3`。
 
 ## 驗收的共同規則
@@ -142,3 +161,7 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-plan` | [2026_10_30_tool_v8_plan](../../../dev_logs/2026_10_30_tool_v8_plan.zh-Hant.md) |
 | `v8-tool-ui-editor-file-browser` | [2026_10_30_tool_v8_ui_editor_file_browser](../../../dev_logs/2026_10_30_tool_v8_ui_editor_file_browser.zh-Hant.md) |
 | `v8-tool-ui-editor-gizmo-math` | [2026_10_30_tool_v8_ui_editor_gizmo_math](../../../dev_logs/2026_10_30_tool_v8_ui_editor_gizmo_math.zh-Hant.md) |
+| `v8-tool-ui-editor-gizmo-fix` | [2026_10_30_tool_v8_ui_editor_gizmo_fix](../../../dev_logs/2026_10_30_tool_v8_ui_editor_gizmo_fix.zh-Hant.md) |
+| `v8-tool-ui-invariants` | [2026_10_30_tool_v8_ui_invariants](../../../dev_logs/2026_10_30_tool_v8_ui_invariants.zh-Hant.md) |
+| `v8-tool-ui-editor-panels` | [2026_10_30_tool_v8_ui_editor_panels](../../../dev_logs/2026_10_30_tool_v8_ui_editor_panels.zh-Hant.md) |
+| `v8-tool-ui-editor-element-schema` | [2026_10_30_tool_v8_ui_editor_element_schema](../../../dev_logs/2026_10_30_tool_v8_ui_editor_element_schema.zh-Hant.md) |

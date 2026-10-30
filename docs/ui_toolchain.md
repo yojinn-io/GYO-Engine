@@ -26,6 +26,55 @@ Ordinary game builds have testing, package acceptance and design tools disabled.
 
 Tests live under `tests/ui_editor` and common engine validation under `tests/common`. The standalone editor entry forwards to the root build graph. See [project management](architecture.md#build-project-management).
 
+## Design Invariants
+
+A change against any item below is an Architecture Delta that needs the user's
+agreement, however small (AGENTS.md section 3). So is changing this section.
+
+### GYO::Ui
+
+1. Ui does not know what an action means. It emits only opaque, typed actions
+   the document declares; the game decides their meaning, legality and effects,
+   and owns wording, hierarchy and binding values.
+2. Ui does not depend on `GYO::Input`. Products convert input into Ui's own
+   neutral types (`UiInputFrame`); a future text field follows the same rule.
+   Guard: `ui.dependency_guard` (`tests/common/ui/ui_dependency_guard.py`).
+3. The element set is closed. Adding or removing an element, or changing the
+   layout rule, is a contract change with a new version and documentation.
+   Readers reject an unknown element or version explicitly; they never skip it.
+4. Ui holds no game state. Which page belongs to a game phase, and every
+   binding value, are the product's. Ui holds only state it can rebuild, such
+   as focus and the pressed control.
+
+### ui_editor
+
+1. The editor links no game, no `GYO::Input` and no SDL_GPU. Guard:
+   `gyo_ui_editor.dependency_guard` (`tests/ui_editor/ui_editor_dependency_guard.py`),
+   a positive list of includes and targets.
+2. Documents enter and leave only through `UiDocumentBridge` and the `GYO::Ui`
+   codec: canonical JSON written by atomic replace, no side files (`.meta`,
+   autosave, `imgui.ini`) and no native path in the output.
+3. A mounted asset catalog is read-only; nothing is written inside its root.
+4. Canvas rectangles, clipping, draw order and hit testing come from the
+   `GYO::Ui` evaluator. The editor may keep its own copy of the layout rule
+   only to solve values backwards (the gizmo's `position` and `size_delta`);
+   the evaluator must then place every solved element where the gizmo
+   intended. Guard: `TestGizmoAgreesWithUiEvaluator` in `gyo_ui_editor.core`.
+5. The preview records actions and never executes them.
+
+### Replacement Criteria
+
+Meeting one of these stops further repair: propose to the user whether to
+repair or rebuild the component.
+
+- ui_editor: after `v8-tool-ui-editor-element-schema`, adding an element still
+  needs edits in more than one panel or file; the preview needs layout or hit
+  testing that the `GYO::Ui` evaluator does not provide; or a required
+  interaction (typing on the canvas, input-method composition) is beyond ImGui.
+- GYO::Ui: a product needs to branch on an element's internal state, or needs
+  scripts to express a menu; or text-editing policy placed in Ui starts to
+  need product-specific rules.
+
 ## JSON v1
 
 A document has `schema: "gyo.ui"`, `version: 1`, one reference canvas, font

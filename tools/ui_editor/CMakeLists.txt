@@ -18,6 +18,7 @@ include("${GYO_REPOSITORY_ROOT}/build/cmake/GyoRuntimeDeployment.cmake")
 add_library(gyo_ui_editor_core STATIC
     src/CommandLine.cpp
     src/DocumentSession.cpp
+    src/ElementSchema.cpp
     src/FileService.cpp
     src/GizmoMath.cpp
     src/PathDialog.cpp
@@ -61,6 +62,11 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
     add_library(gyo_ui_editor_preview STATIC
         src/AssetPreviewContext.cpp
         src/EditorApp.cpp
+        src/EditorAppCanvas.cpp
+        src/EditorAppDialogs.cpp
+        src/EditorAppHierarchy.cpp
+        src/EditorAppInspector.cpp
+        src/EditorDocumentEdits.cpp
         src/PreviewAdapter.cpp
     )
     target_link_libraries(gyo_ui_editor_preview PUBLIC

@@ -89,6 +89,27 @@ struct SourceLocation final {
     return false;
 }
 
+[[nodiscard]] ImGuiMouseCursor CursorFor(const GizmoHandle handle) noexcept {
+    switch (handle) {
+    case GizmoHandle::Move:
+        return ImGuiMouseCursor_ResizeAll;
+    case GizmoHandle::Left:
+    case GizmoHandle::Right:
+        return ImGuiMouseCursor_ResizeEW;
+    case GizmoHandle::Top:
+    case GizmoHandle::Bottom:
+        return ImGuiMouseCursor_ResizeNS;
+    case GizmoHandle::TopLeft:
+    case GizmoHandle::BottomRight:
+        return ImGuiMouseCursor_ResizeNWSE;
+    case GizmoHandle::TopRight:
+    case GizmoHandle::BottomLeft:
+        return ImGuiMouseCursor_ResizeNESW;
+    default:
+        return ImGuiMouseCursor_Hand;
+    }
+}
+
 [[nodiscard]] ImVec2 ToImVec2(const Engine::Math::Vec2 value) noexcept {
     return {value.x, value.y};
 }
@@ -207,8 +228,12 @@ struct PreviewAdapter::Impl final {
     std::shared_ptr<const Engine::Ui::UiDocument> document;
     Engine::Ui::UiBindingTable previewBindings;
     Engine::Ui::UiRuntime runtime;
-    std::optional<GizmoField> activeGizmo;
+    std::optional<GizmoHandle> activeGizmo;
     std::string activeGizmoNode;
+    // The selected element and mouse when the drag began; the drag is
+    // measured from these, not from the document it keeps editing.
+    GizmoFrame gizmoStart;
+    Engine::Math::Vec2 gizmoGrab;
 };
 
 PreviewAdapter::PreviewAdapter() : impl_(std::make_unique<Impl>()) {}
@@ -414,15 +439,17 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
 
         if (parentBounds.width > 0.0F && parentBounds.height > 0.0F &&
             rect.contains("anchor_min") && rect.contains("anchor_max") &&
-            rect.contains("pivot")) {
+            rect.contains("pivot") && rect.contains("position") && rect.contains("size_delta")) {
             GizmoFrame frame;
             frame.parentBounds = {viewport.x + parentBounds.x, viewport.y + parentBounds.y,
                 parentBounds.width, parentBounds.height};
             frame.elementBounds = {minimum.x, minimum.y,
                 selected->boundsPixels.width, selected->boundsPixels.height};
-            frame.anchorMin = {rect["anchor_min"][0].get<float>(), rect["anchor_min"][1].get<float>()};
-            frame.anchorMax = {rect["anchor_max"][0].get<float>(), rect["anchor_max"][1].get<float>()};
-            frame.pivot = {rect["pivot"][0].get<float>(), rect["pivot"][1].get<float>()};
+            const auto vec2 = [&rect](const char* key) {
+                return Engine::Math::Vec2{rect[key][0].get<float>(), rect[key][1].get<float>()};
+            };
+            frame.rect = {vec2("anchor_min"), vec2("anchor_max"), vec2("pivot"), vec2("position"), vec2("size_delta")};
+            frame.designScale = designScale;
             const GizmoPoints points = ComputeGizmoPoints(frame);
             const ImVec2 anchorMinLogical = ToImVec2(points.anchorMinLogical);
             const ImVec2 anchorMaxLogical = ToImVec2(points.anchorMaxLogical);
@@ -460,32 +487,44 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
                 IM_COL32(112, 236, 255, 255));
             drawList.AddCircleFilled(
                 pivotHandle, 5.5F, IM_COL32(255, 192, 64, 255));
+            for (const ImVec2 corner : {minimum, ImVec2{maximum.x, minimum.y}, ImVec2{minimum.x, maximum.y}, maximum}) {
+                drawList.AddRectFilled({corner.x - 3.5F, corner.y - 3.5F}, {corner.x + 3.5F, corner.y + 3.5F},
+                    IM_COL32(255, 255, 255, 255));
+                drawList.AddRect({corner.x - 3.5F, corner.y - 3.5F}, {corner.x + 3.5F, corner.y + 3.5F},
+                    IM_COL32(255, 192, 64, 255));
+            }
 
             if (impl_->activeGizmoNode != selectedNodeId &&
                 !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
                 impl_->activeGizmo.reset();
                 impl_->activeGizmoNode.clear();
             }
+            const bool bodyOnTop = result.hoveredNodeId == selectedNodeId;
+            const std::optional<GizmoHandle> hovered = !previewMode && inputEnabled
+                ? HitGizmoHandle(frame, {mouse.x, mouse.y}, bodyOnTop)
+                : std::nullopt;
             bool began = false;
-            if (!previewMode && inputEnabled && !impl_->activeGizmo.has_value() &&
+            if (hovered.has_value() && !impl_->activeGizmo.has_value() &&
                 ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                if (const auto hit = HitGizmoHandle(points, {mouse.x, mouse.y})) {
-                    impl_->activeGizmo = *hit;
-                    impl_->activeGizmoNode = std::string{selectedNodeId};
-                    began = true;
-                }
+                impl_->activeGizmo = *hovered;
+                impl_->activeGizmoNode = std::string{selectedNodeId};
+                impl_->gizmoStart = frame;
+                impl_->gizmoGrab = {mouse.x, mouse.y};
+                began = true;
+            }
+            const std::optional<GizmoHandle> shown = impl_->activeGizmo.has_value() ? impl_->activeGizmo : hovered;
+            if (shown.has_value()) {
+                ImGui::SetMouseCursor(CursorFor(*shown));
             }
             if (impl_->activeGizmo.has_value() &&
                 impl_->activeGizmoNode == selectedNodeId) {
-                const GizmoField field = *impl_->activeGizmo;
-                const Engine::Math::Vec2 value = DragGizmoHandle(
-                    field, frame, {mouse.x, mouse.y}, {snapToGrid, gridSize, designScale});
+                const GizmoHandle handle = *impl_->activeGizmo;
                 const bool finished =
                     ImGui::IsMouseReleased(ImGuiMouseButton_Left);
                 result.gizmoEdit = FrameOutput::GizmoEdit{
-                    field,
-                    value.x,
-                    value.y,
+                    handle,
+                    DragGizmo(handle, impl_->gizmoStart, impl_->gizmoGrab, {mouse.x, mouse.y},
+                        {snapToGrid, gridSize}),
                     began,
                     finished,
                 };
