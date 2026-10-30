@@ -1,12 +1,12 @@
 # GYO audio mixer
 
 Owner: Engine (`engine/audio` → `GYO::Audio`; the SDL output backend `engine/audio/backend/sdl` →
-`GYO::AudioBackendSDL` arrives with v8-engine-audio-sdl).
+`GYO::AudioBackendSDL`, built when a product declares the `SDL_AUDIO` component).
 Plan and record: [audio](plans/audio/README.md), batches v8-engine-audio-core, -schedule, -sdl and -record.
 
-**Status (2026-10-30): v8-engine-audio-core and v8-engine-audio-schedule landed.** The clip bank, the
-sample-domain core (`VoiceMixer`, internal to `engine/audio/src`) and the public `Mixer` with its submitters and
-timestamp mapping exist and are tested offline. The output backend comes with v8-engine-audio-sdl. Each invariant below
+**Status (2026-10-30): v8-engine-audio-core, -schedule and -sdl landed.** The clip bank, the sample-domain core
+(`VoiceMixer`, internal to `engine/audio/src`), the public `Mixer` with its submitters and timestamp mapping, and
+the SDL output backend exist. The mixer is tested offline; the backend on SDL's `dummy` and `disk` drivers. Each invariant below
 names the milestone that makes it true and the guard that keeps it true.
 
 ## What it is
@@ -47,6 +47,20 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 - **Counters.** `accepted` (plays scheduled), `onTime`, `late`, `noVoice`, `maxLateFrames`, `renderedFrames`,
   `clippedSamples`; relaxed atomics, readable from any thread, for display and acceptance only.
 
+- **SDL output (`Sdl::SdlAudioOutput`).** `Open(Mixer&&, config)` takes the mixer's ownership, starts SDL's AUDIO
+  subsystem (reference-counted; Engine never calls the global `SDL_Init`/`SDL_Quit`) and opens an SDL audio stream
+  of 48 kHz stereo PCM16 on the default playback device; SDL converts to the device's format and follows
+  default-device changes. On SDL's audio thread the stream's callback reads `Time::Now()` once and renders the
+  frames SDL asks for with it as the anchor (a request above 4096 frames is rendered in passes, each anchored where
+  the previous one ended). Opening fails with `DeviceUnavailable` and SDL's message as the detail; submitters keep
+  accepting plays, which are never heard. Destroying the output destroys the stream first (no callback runs after
+  that) and then releases the subsystem. `DriverName` (diagnostics only), `DeviceSampleFrames` and callback
+  `Stats` (count, frames, smallest and largest callback, longest gap between callback anchors) are for logs and
+  acceptance. `deviceSampleFrames` in the config is a hint to SDL.
+- **SDL is never reached from outside the backend.** The backend links SDL3 PRIVATE and offers no `*Native` target;
+  consumers and tests use only its neutral header. Tests choose SDL's driver and hints through the environment
+  (`SDL_AUDIO_DRIVER`, `SDL_AUDIO_DISK_*`, `SDL_AUDIO_DEVICE_SAMPLE_FRAMES`, format hints), never by calling SDL.
+
 ## Contracts
 
 - `Mixer::Render` (and inside it `VoiceMixer`'s schedule and render) runs on one thread, the audio thread.
@@ -73,12 +87,16 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 2. **SDL only in the backend.** `GYO::Audio` contains no SDL: its links are exactly `GYO::Base` and `GYO::Time`
    (configure-time check `gyo_expect_audio_links`, `tests/common/audio/CMakeLists.txt`; from v8-engine-audio-core).
    The backend follows [platform-sdl.md](platform-sdl.md) Invariants 1, 2 and 8: neutral headers without SDL, SDL3
-   linked PRIVATE, the AUDIO subsystem reference-counted by its owner, no exception across SDL's C stack (G1–G3;
-   from v8-engine-audio-sdl).
+   linked PRIVATE with no `*Native` target, the AUDIO subsystem reference-counted by its owner, no exception across
+   SDL's C stack (the callback and `Mixer::Render` are `noexcept`). Guards from v8-engine-audio-sdl: G1
+   (`GYO_HYGIENE_SDL_AUDIO` in `tests/common/platform_sdl/HeaderHygieneTests.cpp`), G2 (the scan covers the new
+   include directory), G3 (`gyo_audio_sdl` in `gyo_expect_private_sdl_backends`); "outputs on the dummy driver share
+   SDL's audio subsystem by reference count".
 3. **One time base.** Play requests carry `Time::MonotonicClock` time points. Conversion to sample positions happens
    only inside the mixer, only from the current block's anchor; the backend samples `Now()` once per block; no fixed
    offset is carried across blocks. From v8-engine-audio-schedule for the mixer (guard "maps a request in a later
-   block from that block's anchor"); the once-per-block read is the backend's, from v8-engine-audio-sdl.
+   block from that block's anchor"); the once-per-callback read is the backend's, from v8-engine-audio-sdl (review;
+   the `disk` driver test checks a past request lands late at once).
 4. **The mixer is the authority for the playback position.** Only the mixer owns the count of rendered frames;
    consumers and the backend keep no copy of it to decide anything (AGENTS §3, State Authority). Guard: review.
 5. **Each start is its own rounded offset.** Every request taken under an anchor, with a timestamp within an hour of

@@ -1,7 +1,9 @@
 # GYO SDL platform backend
 
 Owner: Engine (`engine/platform/sdl` → `GYO::PlatformSDL`, `engine/input/backend/sdl` → `GYO::InputBackendSDL`,
-`engine/render/backend/sdl` → `GYO::RenderBackendSDL`, `engine/render/backend/sdl_gpu` → `GYO::RenderBackendSDLGPU`).
+`engine/render/backend/sdl` → `GYO::RenderBackendSDL`, `engine/render/backend/sdl_gpu` → `GYO::RenderBackendSDLGPU`;
+`engine/audio/backend/sdl` → `GYO::AudioBackendSDL` follows the same rules without a `*Native` target, see
+[audio.md](audio.md)).
 Plan and record: [input-and-present](plans/input-and-present/README.md), batches IP-3 and IP-4.
 
 **Status (2026-10-21): approved design (input-and-present D31), being implemented.** Milestones ip3b and ip3c have

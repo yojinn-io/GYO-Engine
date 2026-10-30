@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the audio plan, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog. A mutant is killed only when its test run fails with the expected message.",
+  "description": "Declared mutants of the audio plan, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog. A mutant is killed only when its test run fails with the expected message. The au-sdl-* mutants need the test preset (SDL_AUDIO built) and ctest on PATH; run them with --build-dir build/target/_build/test --only au-sdl-...",
   "mutants": [
     {
       "id": "au-core-start-shifted",
@@ -211,6 +211,94 @@
       "target": "gyo_audio_tests",
       "cases": "*its own queue*",
       "expect": "is NOT correct"
+    },
+    {
+      "id": "au-sdl-not-resumed",
+      "what": "The device stream stays paused after opening",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "    if (!SDL_ResumeAudioStreamDevice(self.stream)) return Base::Err(Unavailable(\"the playback device did not start\"));\n",
+      "replace": "",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( Advances\\(output\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-quit-twice",
+      "what": "Closing an output releases SDL's audio subsystem twice, stopping the other outputs",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "    if (impl_->subsystem) SDL_QuitSubSystem(SDL_INIT_AUDIO);",
+      "replace": "    if (impl_->subsystem) { SDL_QuitSubSystem(SDL_INIT_AUDIO); SDL_QuitSubSystem(SDL_INIT_AUDIO); }",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( Advances\\(a\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-error-without-detail",
+      "what": "An unavailable device is reported without SDL's message",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "    return AudioError::Make(AudioErrorCode::DeviceUnavailable, message, detail != nullptr ? detail : \"\");",
+      "replace": "    static_cast<void>(detail);\n    return AudioError::Make(AudioErrorCode::DeviceUnavailable, message, \"\");",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.unavailable$",
+        "--output-on-failure"
+      ],
+      "expect": "CHECK_FALSE\\( output.error\\(\\).detail.empty\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-header-includes-sdl",
+      "what": "The backend's public header includes SDL (G1)",
+      "file": "engine/audio/backend/sdl/include/engine/audio/backend/sdl/SdlAudioOutput.hpp",
+      "find": "#include <cstdint>\n",
+      "replace": "#include <SDL3/SDL_audio.h>\n#include <cstdint>\n",
+      "target": "platform_sdl_header_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^platform_sdl_header_tests$",
+        "--output-on-failure"
+      ],
+      "expect": "a non-native SDL backend header includes SDL"
+    },
+    {
+      "id": "au-sdl-public-sdl",
+      "what": "The backend passes SDL3 on to its users (G3)",
+      "file": "engine/audio/backend/sdl/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio_sdl PUBLIC GYO::Audio PRIVATE SDL3::SDL3)",
+      "replace": "target_link_libraries(gyo_audio_sdl PUBLIC GYO::Audio SDL3::SDL3)",
+      "target": "gyo_audio_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_audio_sdl passes SDL3",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.unavailable$",
+        "--output-on-failure"
+      ]
     }
   ]
 }

@@ -14,6 +14,8 @@ enum class AudioErrorCode : std::uint16_t {
     InvalidConfig = 2,
     // Every submitter slot of the mixer is taken.
     TooManySubmitters = 3,
+    // The output backend could not start audio or open the playback device.
+    DeviceUnavailable = 4,
 };
 
 [[nodiscard]] constexpr const char* ToString(const AudioErrorCode code) noexcept {
@@ -21,6 +23,7 @@ enum class AudioErrorCode : std::uint16_t {
     case AudioErrorCode::InvalidClip:   return "InvalidClip";
     case AudioErrorCode::InvalidConfig: return "InvalidConfig";
     case AudioErrorCode::TooManySubmitters: return "TooManySubmitters";
+    case AudioErrorCode::DeviceUnavailable: return "DeviceUnavailable";
     }
     return "Unknown";
 }

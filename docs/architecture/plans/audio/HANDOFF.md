@@ -1,6 +1,6 @@
 # 音效（GYO::Audio）：交接
 
-更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；下一批 `v8-engine-audio-sdl` 等使用者指定。**
+更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值等使用者決定（`v8-engine-audio-delay-default`）。**
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 Engine 計畫夾的慣例，不點名消費端。
 
 ## 現況
@@ -13,6 +13,8 @@
 - 2026-10-30：使用者說「開始 v8-engine-audio-schedule。」開始（high，換算、遲到、SPSC 局部 xhigh，估 4～5 h）。開始時定下：①`Submitter::Play` 不是 `noexcept`，在生產者端以 `GYO_ASSERT` 驗證片段與增益；`Render` 改呼叫 `VoiceMixer` 不檢查的 `noexcept` 版本。②提交端的佇列在建立混音器時全部配置好，`CreateSubmitter` 以 atomic 領取一格，任何時候都可呼叫（不必限制在輸出開啟前）。③提交端與混音器以 `shared_ptr` 共用狀態，混音器先銷毀也安全（音效執行緒不持有參考）。④樣本位置改用有號整數，錨點之前的時間（例如第一個區塊之前的事件）才能判為遲到。
 - 2026-10-30：**Design Invariant 5 的修訂（v8-engine-audio-invariant5，使用者同意）**：原文「同錨點下兩起點的差＝round(Δ×48000)」在三個以上請求時做不到（各自四捨五入，round(a)−round(b) 可和 round(a−b) 差 1）。使用者選「改成誤差小於 1 樣本」：每個起點是時間戳相對錨點的偏移四捨五入到最近的樣本，同錨點下兩起點的差與 Δ×48000 相差不到 1 個樣本。緩的面：原文要求恰好相等的情況現在容許差 1；締的面：明確規定每個起點本身的位置；守衛：逐一檢查起點等於各自偏移的四捨五入。
 - 2026-10-30：`v8-engine-audio-schedule` 完成：公開 `Mixer`、`Submitter`、時間戳換算；`gyo_audio_tests` 32 案；xhigh 審查的確定問題（註解與契約）已修、測試缺口已補；`ctest --preset core` 35／35；dev_log：[2026_10_30_engine_audio_schedule](../../../dev_logs/2026_10_30_engine_audio_schedule.zh-Hant.md)。四平台 CI 未跑。
+- 2026-10-30：使用者說「開始 sdl」，開始 `v8-engine-audio-sdl`（high，估 3～5 h）。途中使用者補充：「保持原則，sdl時不會直接被外部調用的。」做法：①後端不提供 `*Native` target，SDL 只在 `engine/audio/backend/sdl/src` 內；L1 也不 include SDL、不呼叫 SDL（驅動以 CTest 的環境變數選擇，子系統計數以行為檢查）。②照既有的 component 機制新增 `SDL_AUDIO`（產品在 project.json 宣告才建置與連結；不隱含 `SDL_PLATFORM`），full 測試設定檔加入它。③`SdlAudioOutput::Open` 接收 `Mixer` 的所有權（取代 PLAN「Mixer 必須比輸出活得久，以 GYO_ASSERT 檢查」：所有權讓順序不會錯，也不必在解構子 assert）；提交端與混音器共用狀態，開啟失敗時仍可送出（無聲）。
+- 2026-10-30：`v8-engine-audio-sdl` 完成：`GYO::AudioBackendSDL`、component `SDL_AUDIO`、G1～G3 擴充、`audio_sdl.*` 3 個 CTest、量測程式；`ctest --preset test` 97／97、core 35／35；macOS 的區塊大小已量（dev_log 的表），Windows 未量；dev_log：[2026_10_30_engine_audio_sdl](../../../dev_logs/2026_10_30_engine_audio_sdl.zh-Hant.md)。
 - 分支：`claude/v8-engine-audio-95a496`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -35,7 +37,17 @@
 
 ## 等使用者決定
 
-目前沒有。下表是 2026-10-30 核准前的原文（每項附機制、取捨、證據位置；第一個選項是建議），保留作為決策的依據；結果見決策紀錄。
+### `v8-engine-audio-delay-default`：`scheduleDelay` 的預設值（2026-10-30 提出）
+
+- 機制：請求的時間戳是事件發生的時刻。消費端最晚在下一幀才送出（30 FPS 時最多 33.3 ms），音效執行緒最晚在下一次回呼才取出（macOS 預設區塊最多 21.5 ms，每塊 480 時 10.9 ms）。要準時，`scheduleDelay` 至少是兩者之和；不夠時聲音貼在區塊開頭播放，連射間隔就被打亂（計入 `playedLate`）。
+- 取捨：`scheduleDelay` 也是本機射擊聽到聲音的延遲下限。
+- 數據（macOS Intel、CoreAudio）：30 FPS＋預設區塊 ≈ 55 ms；30 FPS＋480 ≈ 44 ms；60 FPS＋預設 ≈ 38 ms；60 FPS＋480 ≈ 28 ms。Windows 未量。
+- 選項：**A（建議）預設 60 ms**：30 FPS 與 SDL 預設區塊下不遲到；消費端可依自己的幀率與區塊調低。B：預設維持 0，要求消費端一定要設定：忘了設定時每個聲音都遲到（只表現在計數）。C：等 Windows 量完、或等 `v8-engine-audio-record` 的 L2 再定。
+- 證據：[sdl 的 dev_log](../../../dev_logs/2026_10_30_engine_audio_sdl.zh-Hant.md) 的表；`tests/common/audio_sdl/BlockRecord.cpp`。
+
+### 已決定（2026-10-30 核准前的原文）
+
+下表是 2026-10-30 核准前的原文（每項附機制、取捨、證據位置；第一個選項是建議），保留作為決策的依據；結果見決策紀錄。
 
 | 代號 | 問題 | 選項與取捨 | 證據 |
 |---|---|---|---|
@@ -96,3 +108,4 @@
 | `v8-engine-audio-plan` | 3～5 h（開始時重估：3 h，範圍明確、只寫文件） | 約 1.5 h（核准與記錄另約 0.2 h） | 閱讀 v8／v7 計畫、`SoundLoader`、SDL 隔離契約與 SDL 3.4 的音效驅動原始碼 |
 | `v8-engine-audio-core` | 3～4 h | 約 1.5 h | 建置與突變在背景約 20 分鐘 |
 | `v8-engine-audio-schedule` | 4～5 h | 約 2.5 h | 含 xhigh 審查約 18 分鐘、兩次 Invariant 5 的決定 |
+| `v8-engine-audio-sdl` | 3～5 h | 約 2 h | 含完整 test preset 的建置與 CTest |

@@ -14,3 +14,8 @@ target_include_directories(gyo_audio PUBLIC
 
 target_compile_features(gyo_audio PUBLIC cxx_std_20)
 target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time)
+
+# The SDL output backend, built when a product declares the SDL_AUDIO component.
+if(GYO_ENABLE_SDL_AUDIO)
+    add_subdirectory(backend/sdl)
+endif()
