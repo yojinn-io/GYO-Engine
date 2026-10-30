@@ -113,7 +113,12 @@ Explicit `--asset-catalog <file>` selects a single catalog as a partial view.
 Its root defaults to the catalog's parent; an explicit `--asset-root` overrides
 that directory. This mode does not load or merge `content.json`, even when one
 exists. The GUI's **Mount Read-Only Content** dialog offers the same root and
-single-catalog modes. Use a complete root when a document references assets
+single-catalog modes. **Open Asset Folder...** mounts a complete root chosen in
+the operating system's folder dialog (SDL3); Open, Export and the mount fields
+also use the system dialogs. The dialog only returns a path: the editor reads
+and writes through the same engine file layer, and remembers no path between
+runs. Where the platform cannot show a dialog (for example Linux without a
+desktop portal or zenity), the editor falls back to typing the path. Use a complete root when a document references assets
 from multiple catalogs.
 
 The editor writes one canonical UTF-8 JSON file (two-space indentation, LF,

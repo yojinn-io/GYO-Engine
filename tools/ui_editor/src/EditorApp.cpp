@@ -560,9 +560,11 @@ void DrawHierarchyNode(
 
 EditorApp::EditorApp(
     CommandLineOptions options,
-    AssetPreviewContext& previewAssets)
+    AssetPreviewContext& previewAssets,
+    PathDialogs* dialogs)
     : options_(std::move(options)),
-      previewAssets_(previewAssets) {}
+      previewAssets_(previewAssets),
+      dialogs_(dialogs) {}
 
 Result<void, EditorError> EditorApp::Initialize() {
     singleCatalogMode_ = options_.catalogPath.has_value();
@@ -615,6 +617,59 @@ void EditorApp::ApplyPendingAssetChanges() {
     }
 }
 
+void EditorApp::ApplyPathDialogResults() {
+    if (dialogs_ == nullptr) return;
+    for (const PathDialogResult& result : dialogs_->TakeResults()) {
+        pathDialogOpen_ = false;
+        if (result.outcome == PathDialogOutcome::Cancelled) continue;
+        if (result.outcome == PathDialogOutcome::Failed) {
+            statusMessage_ = "The file dialog is unavailable (" + result.error + "); type the path instead";
+            if (result.purpose == PathDialogPurpose::OpenDocument) showOpenDialog_ = true;
+            if (result.purpose == PathDialogPurpose::ExportDocument) showExportDialog_ = true;
+            if (result.purpose == PathDialogPurpose::AssetFolder) showCatalogDialog_ = true;
+            continue;
+        }
+        const auto path = FieldPath(result.path.c_str());
+        if (!path) {
+            statusMessage_ = "The chosen path is not UTF-8 text";
+            continue;
+        }
+        switch (result.purpose) {
+        case PathDialogPurpose::OpenDocument:
+            CopyPath(openPath_, *path);
+            OpenDocument(result.path);
+            break;
+        case PathDialogPurpose::ExportDocument:
+            CopyPath(exportPath_, *path);
+            ExportDocument(result.path);
+            break;
+        case PathDialogPurpose::AssetFolder:
+            // A whole root with its content.json, as the mount dialog's default mode.
+            singleCatalogMode_ = false;
+            CopyPath(assetRoot_, *path);
+            RequestAssetMount({}, *path);
+            break;
+        case PathDialogPurpose::AssetRootField:
+            CopyPath(assetRoot_, *path);
+            break;
+        case PathDialogPurpose::CatalogField:
+            CopyPath(catalogPath_, *path);
+            break;
+        }
+    }
+}
+
+void EditorApp::RequestPath(
+    const PathDialogPurpose purpose, const std::array<char, 1024>& field, bool& manualPrompt) {
+    if (dialogs_ == nullptr) {
+        manualPrompt = true;
+        return;
+    }
+    if (pathDialogOpen_) return;
+    pathDialogOpen_ = true;
+    dialogs_->Show(purpose, field.data());
+}
+
 void EditorApp::RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot) {
     pendingCatalogPath_ = std::move(catalogPath);
     pendingAssetRoot_ = std::move(assetRoot);
@@ -631,11 +686,11 @@ void EditorApp::Draw() {
     const ImGuiIO& io = ImGui::GetIO();
     if (io.KeyCtrl && !io.WantTextInput) {
         if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
-            showExportDialog_ = true;
+            RequestPath(PathDialogPurpose::ExportDocument, exportPath_, showExportDialog_);
         } else if (ImGui::IsKeyPressed(ImGuiKey_S, false)) {
             SaveDocument();
         } else if (ImGui::IsKeyPressed(ImGuiKey_O, false)) {
-            showOpenDialog_ = true;
+            RequestPath(PathDialogPurpose::OpenDocument, openPath_, showOpenDialog_);
         } else if (ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
             if (session_.Undo()) RefreshDiagnostics();
         } else if (ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
@@ -694,16 +749,21 @@ void EditorApp::DrawMainMenu() {
         if (ImGui::MenuItem("New")) {
             NewDocument();
         }
-        if (ImGui::MenuItem("Open JSON...", "Ctrl+O")) {
-            showOpenDialog_ = true;
+        if (ImGui::MenuItem("Open JSON...", "Ctrl+O", false, !pathDialogOpen_)) {
+            RequestPath(PathDialogPurpose::OpenDocument, openPath_, showOpenDialog_);
         }
         if (ImGui::MenuItem("Save JSON", "Ctrl+S")) {
             SaveDocument();
         }
-        if (ImGui::MenuItem("Export As...", "Ctrl+Shift+S")) {
-            showExportDialog_ = true;
+        if (ImGui::MenuItem("Export As...", "Ctrl+Shift+S", false, !pathDialogOpen_)) {
+            RequestPath(PathDialogPurpose::ExportDocument, exportPath_, showExportDialog_);
         }
         ImGui::Separator();
+        if (dialogs_ != nullptr &&
+            ImGui::MenuItem("Open Asset Folder...", nullptr, false, !pathDialogOpen_)) {
+            pathDialogOpen_ = true;
+            dialogs_->Show(PathDialogPurpose::AssetFolder, assetRoot_.data());
+        }
         if (ImGui::MenuItem("Mount Read-Only Content...")) {
             showCatalogDialog_ = true;
         }
@@ -2003,12 +2063,26 @@ void EditorApp::DrawDialogs() {
     if (ImGui::BeginPopupModal(
             "Mount Read-Only Content", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Checkbox("Single catalog (partial content)", &singleCatalogMode_);
+        // Browse fills a field from the host's dialog; the field stays editable.
+        const auto browse = [this](const char* id, const PathDialogPurpose purpose,
+                                const std::array<char, 1024>& field) {
+            if (dialogs_ == nullptr) return;
+            ImGui::SameLine();
+            ImGui::BeginDisabled(pathDialogOpen_);
+            if (ImGui::Button(id)) {
+                pathDialogOpen_ = true;
+                dialogs_->Show(purpose, field.data());
+            }
+            ImGui::EndDisabled();
+        };
         if (singleCatalogMode_) {
             ImGui::InputText("Catalog", catalogPath_.data(), catalogPath_.size());
+            browse("Browse...##catalog", PathDialogPurpose::CatalogField, catalogPath_);
         } else {
             ImGui::TextUnformatted("Load content.json and all declared catalogs from Asset Root.");
         }
         ImGui::InputText("Asset Root", assetRoot_.data(), assetRoot_.size());
+        browse("Browse...##root", PathDialogPurpose::AssetRootField, assetRoot_);
         if (ImGui::Button("Mount")) {
             if (singleCatalogMode_ && catalogPath_[0] == '\0') {
                 statusMessage_ = "Single catalog mode requires a catalog path";
@@ -2204,7 +2278,7 @@ void EditorApp::SaveDocument(const bool overwriteExternal) {
     if (result) {
         statusMessage_ = "Saved canonical UI JSON";
     } else if (result.error().code == SessionErrorCode::MissingOutputPath) {
-        showExportDialog_ = true;
+        RequestPath(PathDialogPurpose::ExportDocument, exportPath_, showExportDialog_);
     } else if (result.error().code == SessionErrorCode::ExternalModification) {
         // Saving again takes the session's own output path; the dialog needs no copy of it.
         pendingOverwritePath_.clear();

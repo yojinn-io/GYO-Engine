@@ -19,6 +19,8 @@ add_library(gyo_ui_editor_core STATIC
     src/CommandLine.cpp
     src/DocumentSession.cpp
     src/FileService.cpp
+    src/GizmoMath.cpp
+    src/PathDialog.cpp
     src/ReadOnlyAssetCatalog.cpp
     src/UiDocumentBridge.cpp
     src/UndoStack.cpp
@@ -71,7 +73,7 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
     # PreviewAdapter calls Math functions directly (sRGB, Rect); EditorApp's
     # path fields go to UTF-8 through GYO::Os.
     target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math GYO::Os)
-    target_sources(gyo_ui_editor PRIVATE src/ImGuiSdlRendererHost.cpp)
+    target_sources(gyo_ui_editor PRIVATE src/ImGuiSdlRendererHost.cpp src/SdlPathDialogs.cpp)
     # The ImGui SDL3 backend needs the native window, renderer and events.
     target_link_libraries(gyo_ui_editor PRIVATE
         gyo_ui_editor_preview

@@ -25,7 +25,7 @@ gyo_ui_editor --open working/menu.ui.json --output exports/menu.ui.json --asset-
 gyo_ui_editor --validate exports/menu.ui.json --asset-catalog assets/game/asset_catalog.json --asset-root assets/game
 ```
 
-A mounted catalog is read-only. Export writes exactly one canonical JSON file atomically and refuses destinations inside the mounted asset root. Authors copy the chosen document into `assets/<game>/`, register it in that game's catalog, and build. The build's asset assembly deploys the prepared content automatically; the editor never edits catalogs or publishes assets.
+In the GUI, **File > Open Asset Folder...** picks an asset root in the operating system's folder dialog and mounts it with its `content.json`; Open, Export and the mount dialog's fields also offer the system dialogs, with typed paths as the fallback. A mounted catalog is read-only. Export writes exactly one canonical JSON file atomically and refuses destinations inside the mounted asset root. Authors copy the chosen document into `assets/<game>/`, register it in that game's catalog, and build. The build's asset assembly deploys the prepared content automatically; the editor never edits catalogs or publishes assets.
 
 The editor owns authoring sessions, selection, undo, diagnostics and transient preview resources. Layout, clipping, draw order, hit testing, bindings and typed actions come from `GYO::Ui`. Future map/design editors remain sibling tools depending on public engine APIs.
 

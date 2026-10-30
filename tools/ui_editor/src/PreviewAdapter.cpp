@@ -5,6 +5,7 @@
 #include "engine/math/scalar/Scalar.hpp"
 
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
+#include "gyo/ui_editor/GizmoMath.hpp"
 
 #include <imgui.h>
 #include <nlohmann/json.hpp>
@@ -88,10 +89,8 @@ struct SourceLocation final {
     return false;
 }
 
-[[nodiscard]] float DistanceSquared(const ImVec2 left, const ImVec2 right) noexcept {
-    const float x = left.x - right.x;
-    const float y = left.y - right.y;
-    return x * x + y * y;
+[[nodiscard]] ImVec2 ToImVec2(const Engine::Math::Vec2 value) noexcept {
+    return {value.x, value.y};
 }
 
 class ClipScope final {
@@ -208,7 +207,7 @@ struct PreviewAdapter::Impl final {
     std::shared_ptr<const Engine::Ui::UiDocument> document;
     Engine::Ui::UiBindingTable previewBindings;
     Engine::Ui::UiRuntime runtime;
-    std::optional<FrameOutput::GizmoField> activeGizmo;
+    std::optional<GizmoField> activeGizmo;
     std::string activeGizmoNode;
 };
 
@@ -416,43 +415,21 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
         if (parentBounds.width > 0.0F && parentBounds.height > 0.0F &&
             rect.contains("anchor_min") && rect.contains("anchor_max") &&
             rect.contains("pivot")) {
-            const float anchorMinX = rect["anchor_min"][0].get<float>();
-            const float anchorMinY = rect["anchor_min"][1].get<float>();
-            const float anchorMaxX = rect["anchor_max"][0].get<float>();
-            const float anchorMaxY = rect["anchor_max"][1].get<float>();
-            const float pivotX = rect["pivot"][0].get<float>();
-            const float pivotY = rect["pivot"][1].get<float>();
-            const ImVec2 parentMinimum{
-                viewport.x + parentBounds.x,
-                viewport.y + parentBounds.y,
-            };
-            const ImVec2 anchorMinLogical{
-                parentMinimum.x + anchorMinX * parentBounds.width,
-                parentMinimum.y + anchorMinY * parentBounds.height,
-            };
-            const ImVec2 anchorMaxLogical{
-                parentMinimum.x + anchorMaxX * parentBounds.width,
-                parentMinimum.y + anchorMaxY * parentBounds.height,
-            };
-            const ImVec2 pivotLogical{
-                minimum.x + pivotX * selected->boundsPixels.width,
-                minimum.y + pivotY * selected->boundsPixels.height,
-            };
-            const ImVec2 anchorMinOffset{-9.0F, -9.0F};
-            const ImVec2 anchorMaxOffset{9.0F, -9.0F};
-            const ImVec2 pivotOffset{0.0F, 9.0F};
-            const ImVec2 anchorMinHandle{
-                anchorMinLogical.x + anchorMinOffset.x,
-                anchorMinLogical.y + anchorMinOffset.y,
-            };
-            const ImVec2 anchorMaxHandle{
-                anchorMaxLogical.x + anchorMaxOffset.x,
-                anchorMaxLogical.y + anchorMaxOffset.y,
-            };
-            const ImVec2 pivotHandle{
-                pivotLogical.x + pivotOffset.x,
-                pivotLogical.y + pivotOffset.y,
-            };
+            GizmoFrame frame;
+            frame.parentBounds = {viewport.x + parentBounds.x, viewport.y + parentBounds.y,
+                parentBounds.width, parentBounds.height};
+            frame.elementBounds = {minimum.x, minimum.y,
+                selected->boundsPixels.width, selected->boundsPixels.height};
+            frame.anchorMin = {rect["anchor_min"][0].get<float>(), rect["anchor_min"][1].get<float>()};
+            frame.anchorMax = {rect["anchor_max"][0].get<float>(), rect["anchor_max"][1].get<float>()};
+            frame.pivot = {rect["pivot"][0].get<float>(), rect["pivot"][1].get<float>()};
+            const GizmoPoints points = ComputeGizmoPoints(frame);
+            const ImVec2 anchorMinLogical = ToImVec2(points.anchorMinLogical);
+            const ImVec2 anchorMaxLogical = ToImVec2(points.anchorMaxLogical);
+            const ImVec2 pivotLogical = ToImVec2(points.pivotLogical);
+            const ImVec2 anchorMinHandle = ToImVec2(points.anchorMinHandle);
+            const ImVec2 anchorMaxHandle = ToImVec2(points.anchorMaxHandle);
+            const ImVec2 pivotHandle = ToImVec2(points.pivotHandle);
             const ImVec2 anchorCenter{
                 (anchorMinLogical.x + anchorMaxLogical.x) * 0.5F,
                 (anchorMinLogical.y + anchorMaxLogical.y) * 0.5F,
@@ -492,59 +469,23 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
             bool began = false;
             if (!previewMode && inputEnabled && !impl_->activeGizmo.has_value() &&
                 ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                constexpr float hitRadiusSquared = 10.0F * 10.0F;
-                float best = hitRadiusSquared;
-                for (const auto& [field, handle] : {
-                         std::pair{FrameOutput::GizmoField::AnchorMin, anchorMinHandle},
-                         std::pair{FrameOutput::GizmoField::AnchorMax, anchorMaxHandle},
-                         std::pair{FrameOutput::GizmoField::Pivot, pivotHandle}}) {
-                    const float distance = DistanceSquared(mouse, handle);
-                    if (distance <= best) {
-                        best = distance;
-                        impl_->activeGizmo = field;
-                        impl_->activeGizmoNode = std::string{selectedNodeId};
-                        began = true;
-                    }
+                if (const auto hit = HitGizmoHandle(points, {mouse.x, mouse.y})) {
+                    impl_->activeGizmo = *hit;
+                    impl_->activeGizmoNode = std::string{selectedNodeId};
+                    began = true;
                 }
             }
             if (impl_->activeGizmo.has_value() &&
                 impl_->activeGizmoNode == selectedNodeId) {
-                const FrameOutput::GizmoField field = *impl_->activeGizmo;
-                const ImVec2 offset = field == FrameOutput::GizmoField::AnchorMin
-                    ? anchorMinOffset
-                    : field == FrameOutput::GizmoField::AnchorMax
-                        ? anchorMaxOffset
-                        : pivotOffset;
-                const bool pivotField = field == FrameOutput::GizmoField::Pivot;
-                const ImVec2 basis = pivotField ? minimum : parentMinimum;
-                const float width = Engine::Math::Max(0.001F, pivotField
-                    ? selected->boundsPixels.width
-                    : parentBounds.width);
-                const float height = Engine::Math::Max(0.001F, pivotField
-                    ? selected->boundsPixels.height
-                    : parentBounds.height);
-                float x = (mouse.x - offset.x - basis.x) / width;
-                float y = (mouse.y - offset.y - basis.y) / height;
-                if (snapToGrid && gridSize > 0.0F) {
-                    const float snapPixels = gridSize * designScale;
-                    x = std::round(x * width / snapPixels) * snapPixels / width;
-                    y = std::round(y * height / snapPixels) * snapPixels / height;
-                }
-                x = Engine::Math::Clamp(x, 0.0F, 1.0F);
-                y = Engine::Math::Clamp(y, 0.0F, 1.0F);
-                if (field == FrameOutput::GizmoField::AnchorMin) {
-                    x = Engine::Math::Min(x, anchorMaxX);
-                    y = Engine::Math::Min(y, anchorMaxY);
-                } else if (field == FrameOutput::GizmoField::AnchorMax) {
-                    x = Engine::Math::Max(x, anchorMinX);
-                    y = Engine::Math::Max(y, anchorMinY);
-                }
+                const GizmoField field = *impl_->activeGizmo;
+                const Engine::Math::Vec2 value = DragGizmoHandle(
+                    field, frame, {mouse.x, mouse.y}, {snapToGrid, gridSize, designScale});
                 const bool finished =
                     ImGui::IsMouseReleased(ImGuiMouseButton_Left);
                 result.gizmoEdit = FrameOutput::GizmoEdit{
                     field,
-                    x,
-                    y,
+                    value.x,
+                    value.y,
                     began,
                     finished,
                 };
