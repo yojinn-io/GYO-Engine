@@ -85,3 +85,4 @@
 - 2026-10-30：開 [PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)。`text_field` 的三個決定：升 v2、通用編輯放 `GYO::Ui`（過濾留產品）、只加 `text_field`。
 - 2026-10-30：使用者：「開始」。`v8-tool-ui-ime-observe` 開始（medium，估 2～4 h＋實機）。加了 `SdlInput::SetTextDiagnostics`（只加不改，frame 不變）與客戶端 `--text-input-trace`；單元測試＋3 個突變全被抓到；Mac 上實際啟動客戶端，確認 `input.text` 進了客戶端 log。Mac 沒有 PowerShell，Windows 端只用一行 `.cmd`（未在 Windows 上執行過），分析腳本在 Mac 上用合成 log 測過。事前宣告寫進 README，等使用者同意。
 - 2026-10-30：使用者同意 `v8-tool-ui-ime-observe` 的事前宣告。
+- 2026-10-30：音效線更正 `v8-tool-assets-audio-import` 第 3 點：原檔不能放在資產根目錄下（產品的 catalog 測試要求根目錄下每個檔都登錄），改成放在資產根目錄以外；第 4 點的記錄位置改為音效線的 dev_log。README 已更新。
