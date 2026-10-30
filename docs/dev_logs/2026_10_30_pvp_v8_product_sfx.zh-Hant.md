@@ -1,6 +1,6 @@
-# v8-product-sfx：PvP 的音效（進行中）
+# v8-product-sfx：PvP 的音效
 
-日期：2026-10-30。**進行中**：音效已接上，L1 完成；停在 L2 宣告，等使用者核准。Engine 部分見 [audio 計畫](../architecture/plans/audio/README.md)。v8 計畫（`docs/object_fps_pvp/plans/v8/`）由產品會話同步，本批不改。
+日期：2026-10-30。**完成到 PR**：音效已接上，L1、突變、使用者試聽與戰鬥短測完成；產品 L2 沒有執行（宣告草案未核准）。Engine 部分見 [audio 計畫](../architecture/plans/audio/README.md)。v8 計畫（`docs/object_fps_pvp/plans/v8/`）由產品會話同步，本批不改。
 
 ## 為什麼做
 
@@ -101,6 +101,12 @@
 - 本次是探索用的試跑，不是 L2 判定。
 - 使用者：「致命一擊也響」。受擊聲改為新的受擊與致命一擊都響、新的一條命的第一個狀態不響（`HitTakenSounds`）；閃紅維持死亡時抑制。加 1 案、2 個突變（2／2 被殺）。
   - 經緯：修改後 `object_fps_pvp.cpu` 在 CTest 的 60 秒上限逾時。直接執行 340 案全過、耗時 61.7 s（user 46 s），當時負載 21（另一個會話的建置佔滿 CPU，前幾名都是 clang）。切分為環境因素；之前完整 CTest 那一輪它在上限內通過。突變的基準在同樣負載下通過。
+
+## 合併 master 與 PR
+
+- 使用者：「開PR推送」「我出去吃些東西，把這個audio-line 給完成了吧。」
+- 併入 origin/master（含蹲下 `v8-product-crouch`）：`tests/object_fps_pvp/CMakeLists.txt`（兩邊各加一個測試檔）與 `mutations.json`（兩邊各在末尾加項目）衝突，兩邊都保留（master 706 項＋本批 11 項）。
+- 合併後本機：`ctest --preset test` 102／102、`ctest --preset core` 37／37；本批與 Engine 的突變 find 字串都還在。
 
 ## L2 宣告（草案，等使用者核准；看結果前不改）
 

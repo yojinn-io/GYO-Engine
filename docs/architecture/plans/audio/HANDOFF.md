@@ -25,6 +25,7 @@
   - 資產：使用者提供 4 個音效（射擊、受擊、換彈、腳步），原檔是 44.1 kHz、32 位元。使用者原話：「這個你先轉好，需求加到 assets editor 中。」以 `scripts/convert_wav.py` 轉成 48 kHz PCM16（窗化 sinc、固定種子的三角抖動，可重現；1 kHz 正弦驗證頻率、振幅、長度），原檔放 `assets/object_fps_pvp/audio/source/`（不登錄 catalog、不打包），說明在 `assets/object_fps_pvp/audio/README.md`（授權待使用者補上）。更正（同日）：產品的內容契約要求資產根目錄下每個檔案都在 catalog，`audio/source/` 與 README 讓 `object_fps_pvp.asset_catalog` 失敗，已移出 repo；來源與轉換記在產品批的 dev_log（`2026_10_30_pvp_v8_product_sfx`）。
   - 需求已傳給工具線會話（`docs/tools/plans/v8/` 的 owner），記進 `v8-tool-assets-editor`。
   - 待決：命中確認與遠端射擊要用哪個音效（使用者只提供 4 個）。
+- 2026-10-30：使用者說「開PR推送」。併入 origin/master 後本機 test 102／102、core 37／37，推送並開 PR（Engine 四批與消費端的音效批同一個 PR）。
 - 分支：`claude/v8-engine-audio-95a496`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
