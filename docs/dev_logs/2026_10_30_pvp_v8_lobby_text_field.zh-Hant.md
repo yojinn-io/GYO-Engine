@@ -2,7 +2,7 @@
 
 日期：2026-10-30。分支 `claude/v8-tool-ui-ime-observe`。檔位 high，引擎 Opus 5.5。估 4～6 h。由工具線會話做（使用者：「大廳改用 text_field」）。
 
-**狀態：** 完成（建置、測試、Mac 上啟動）。Windows 實機（L3：日文輸入法的組字顯示、候選窗位置、全形轉半形）**還沒做**。
+**狀態：** 完成。Windows 實機（L3）的事前宣告判定**全部通過**（見「Windows 實機驗收」）。
 
 相關文件：[ui_toolchain.md](../ui_toolchain.md)「JSON v2」、[text_field 的 dev_log](2026_10_30_tool_v8_ui_text_field.zh-Hant.md)、[組字事件的 dev_log](2026_10_30_engine_v8_input_composition.zh-Hant.md)、[全形轉半形的 dev_log](2026_10_30_pvp_v8_lobby_fullwidth.zh-Hant.md)。
 
@@ -38,7 +38,18 @@
 - 測試：`ctest -R "object_fps_pvp|gyo_ui|^ui\.|input|platform_sdl" -LE "gpu|gui|l3"` 67/67、`ctest -L cpu` 97/97 通過（macOS x86_64）。
 - 沒有自動測試會實際打字到大廳（要 GPU 與真的鍵盤）。轉換函式 `TextInput` 是產品內的成員函式，沒有單元測試；L3 用 `--text-input-trace` 的 log 與畫面確認。
 
+## Windows 實機驗收（L3）
+
+- 套件：package-trial run 41066623724（commit `9e8e04a7`），`gyo-package-object_fps_pvp-windows-x64`，由 Windows 會話下載並核對 checksum。
+- 事前宣告的判定（寫在交給 Windows 的 prompt 與對話裡，看結果之前定下）：A、B3、C 都要「是」，D 位址要保持原狀；B1 若「否」就用 log 判斷原因；B2 只記錄。
+- 使用者的結果：A 是、B1 是、B2 是（候選窗在位址欄旁邊）、B3 是、C 是、D 是。**全部通過**。
+- 收支：一致。input.text 63 行、22,781 bytes、SHA-256 前 16 碼 `e689644c95512900`、檔尾沒有 `dropped_lines`。存在 `docs/tools/plans/v8/evidence/lobby-text-field/`。
+- log 對照：
+  - `diagnostics on ime_ui="composition"`：平台選項生效。
+  - `text_editing` 22 行，而且 `taken=1`：組字確實送到遊戲。上一次的檢測裡是 0 行。
+  - 日文輸入法依序送來 `１２７．０．０．１：８０８０` 的組字，確定時送出全形的一串（`text_input`），之後按 Return 送出。畫面上的結果是半形，表示 `FilterAddressText` 把全形轉成了半形。
+- 範圍外：log 有幾次 `PvP slow event processing`（最長 27.6 s、`live_frames=1655`），是事件處理中的長時間停頓（看起來像視窗的 modal loop），不在這次驗收範圍。
+
 ## 未做
 
-- Windows L3：日文輸入法打「127.0.0.1:8080」時，組字要顯示在欄內、候選窗要在欄位旁邊、結果要是半形；另外確認 Enter 送出、Esc 取消。
-- 候選窗的位置只交了欄位的矩形，游標的 x 位移傳 0（輸入法會以欄位左側為準）。
+- 候選窗的位置只交了欄位的矩形，游標的 x 位移傳 0；這次實測候選窗出現在欄位旁邊，夠用。
