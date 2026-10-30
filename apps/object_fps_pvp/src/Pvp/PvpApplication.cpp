@@ -396,7 +396,7 @@ struct PvpApplication::Impl final {
                 if (combat.lastAttackerId != 0 && other.playerId == combat.lastAttackerId) attacker = other.position;
             const auto hit = hitFeedback.Observe(combat, self->lifeState, self->position, attacker,
                 std::chrono::duration<double>(Clock::now().time_since_epoch()).count());
-            if (hit.outcome == HitFeedbackOutcome::Played) {
+            if (HitTakenSounds(hit.outcome)) {
                 const auto& cue = sound.Settings().cues[static_cast<std::size_t>(SoundCue::HitTaken)];
                 sound.Play(SoundCue::HitTaken, timeline.DisplayTime(combat.lastDamageTick).value_or(Clock::now()),
                     attacker ? SpatialGains(self->position, view.Input().yaw, *attacker, cue.volume, sound.Settings())

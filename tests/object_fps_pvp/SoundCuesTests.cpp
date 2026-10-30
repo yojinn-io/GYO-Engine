@@ -166,3 +166,10 @@ TEST_CASE("PvP reload sound ends with the reload and never starts before it") {
     CHECK(ReloadSoundOffsetSeconds(0.5, 0.958) == doctest::Approx(0)); // a clip longer than the reload starts with it
     CHECK(ReloadSoundOffsetSeconds(std::nan(""), 1) == doctest::Approx(0));
 }
+
+TEST_CASE("PvP hit taken sounds for a new hit and the killing one, never for a new life's first state") {
+    CHECK(HitTakenSounds(HitFeedbackOutcome::Played));
+    CHECK(HitTakenSounds(HitFeedbackOutcome::SuppressedDead)); // the killing blow sounds, though it does not flash
+    CHECK_FALSE(HitTakenSounds(HitFeedbackOutcome::SuppressedNewLife));
+    CHECK_FALSE(HitTakenSounds(HitFeedbackOutcome::None));
+}

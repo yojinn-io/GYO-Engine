@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RetroFPS/Pvp/Combat.hpp"
+#include "RetroFPS/Pvp/HitFeedback.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "engine/math/linear/Vec3.hpp"
@@ -52,6 +53,13 @@ struct StereoGains final {
 // HitFeedback), and the settings' distance falloff.
 [[nodiscard]] StereoGains SpatialGains(Engine::Math::Vec3 listener, float listenerYaw, Engine::Math::Vec3 source,
                                        float volume, const SoundSettings& settings) noexcept;
+
+// Whether a hit the local player took sounds: a new hit does, also the one
+// that kills (unlike the flash, which death suppresses); the first state of a
+// life (a join or a respawn carrying old hits) never does.
+[[nodiscard]] constexpr bool HitTakenSounds(const HitFeedbackOutcome outcome) noexcept {
+    return outcome == HitFeedbackOutcome::Played || outcome == HitFeedbackOutcome::SuppressedDead;
+}
 
 // When the reload sound starts: so that it ends with the reload (its last
 // click is the magazine going in, which the animation shows at the end), but

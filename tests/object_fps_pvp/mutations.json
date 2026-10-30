@@ -6864,6 +6864,26 @@
       "replace": "    return 0;",
       "check": "cpu",
       "expect": "CHECK\\( ReloadSoundOffsetSeconds\\(1.5, 0.958\\) == doctest::Approx\\(0.542\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-killing-hit-silent",
+      "batch": "v8-product-sfx",
+      "what": "The killing hit plays no hit-taken sound",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SoundCues.hpp",
+      "find": "    return outcome == HitFeedbackOutcome::Played || outcome == HitFeedbackOutcome::SuppressedDead;",
+      "replace": "    return outcome == HitFeedbackOutcome::Played;",
+      "check": "cpu",
+      "expect": "CHECK\\( HitTakenSounds\\(HitFeedbackOutcome::SuppressedDead\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-new-life-hit-sounds",
+      "batch": "v8-product-sfx",
+      "what": "A new life's first state replays its old hits as sound",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SoundCues.hpp",
+      "find": "    return outcome == HitFeedbackOutcome::Played || outcome == HitFeedbackOutcome::SuppressedDead;",
+      "replace": "    return outcome != HitFeedbackOutcome::None;",
+      "check": "cpu",
+      "expect": "CHECK_FALSE\\( HitTakenSounds\\(HitFeedbackOutcome::SuppressedNewLife\\) \\) is NOT correct"
     }
   ]
 }
