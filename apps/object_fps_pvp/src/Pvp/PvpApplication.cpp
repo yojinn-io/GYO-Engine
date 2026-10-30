@@ -158,7 +158,8 @@ struct PvpApplication::Impl final {
     Clock::time_point reloadAnchorAt{};
     double reloadAnchorSeconds{};
     bool pendingReloadEdge{}, lifeBoundaryThisFrame{};
-    bool editing{}, suppressUiEnter{}, inputCaptured{}, windowInteraction{}, initialized{}, quit{};
+    // The platform's text input is on while the lobby's address field is being edited.
+    bool textInputOn{}, inputCaptured{}, windowInteraction{}, initialized{}, quit{};
     bool leftButtonDown{}, pointerAcquiredThisFrame{}, pendingShotEdge{};
     // A live frame runs inside the event pump while the OS holds it (window
     // resize or move). Its input frame is incomplete, so it advances time and
@@ -193,17 +194,26 @@ struct PvpApplication::Impl final {
         return presented.observation.active && self && presented.observation.lifeGeneration == self->lifeGeneration;
     }
 
-    void EditAddress(bool value) {
-        editing = value;
-        // As before, a failure only leaves the field without typed text.
-        static_cast<void>(input->SetTextInput(value));
-    }
+    bool Editing() const { return !ui.InteractionState().editingElement.empty(); }
 
-    void AppendAddress(const char* value) {
-        if (!value) return;
-        for (const char c : FilterAddressText(value)) {
-            if (address.size() >= 128) break;
-            address += c;
+    // Follows the lobby's text field (v8-product-lobby-text-field): the
+    // platform's text input is on while it is edited, and the input method's
+    // candidates appear beside it. As before, a failure only leaves the field
+    // without typed text.
+    void SyncTextInput(bool wanted) {
+        if (wanted == textInputOn) return;
+        textInputOn = wanted;
+        static_cast<void>(input->SetTextInput(wanted));
+        if (!wanted) return;
+        const auto layout = ui.EvaluateLayout(Bindings(), Viewport());
+        if (!layout) return;
+        for (const auto& element : layout.value()) {
+            if (element.id != ui.InteractionState().editingElement) continue;
+            const auto& bounds = element.boundsPixels;
+            static_cast<void>(input->SetTextInputArea(
+                {static_cast<int>(bounds.x), static_cast<int>(bounds.y), static_cast<int>(bounds.width),
+                 static_cast<int>(bounds.height)},
+                0));
         }
     }
 
@@ -238,31 +248,46 @@ struct PvpApplication::Impl final {
         }
     }
 
-    // Lobby address editing: the frame's text in arrival order (presses and
-    // repeats; the editing policy below is this product's).
-    void HandleTextEditing(const std::vector<Engine::Input::TextEvent>& text) {
+    // The frame's text for the field being edited, as Ui's neutral input
+    // (Ui Design Invariant 7): which key means which edit is this product's
+    // mapping; what the edit does is Ui's. Enter and Escape are the UI
+    // frame's activate and cancel.
+    std::vector<Engine::Ui::UiTextInput> TextInput(const std::vector<Engine::Input::TextEvent>& text) const {
         using Engine::Input::Key;
+        using Engine::Input::TextEvent;
+        using Engine::Ui::UiTextInputKind;
+        std::vector<Engine::Ui::UiTextInput> result;
         for (const auto& entry : text) {
-            if (InWorld() || !editing) return;
-            if (entry.kind == Engine::Input::TextEvent::Kind::Text) {
-                AppendAddress(entry.text.c_str());
-                continue;
-            }
-            if (entry.layoutKey == Key::Backspace && !address.empty()) address.pop_back();
-            if (entry.modifiers.ctrl && entry.layoutKey == Key::A) address.clear();
-            if (entry.modifiers.ctrl && entry.layoutKey == Key::V) AppendAddress(platform->ClipboardText().c_str());
-            if (entry.layoutKey == Key::Enter || entry.layoutKey == Key::Escape) {
-                EditAddress(false);
-                suppressUiEnter = true;
+            if (entry.kind == TextEvent::Kind::Text) {
+                result.push_back({UiTextInputKind::Insert, entry.text});
+            } else if (entry.kind == TextEvent::Kind::Composition) {
+                result.push_back({UiTextInputKind::Composition, entry.text, entry.cursor});
+            } else if (entry.modifiers.ctrl && entry.layoutKey == Key::A) {
+                result.push_back({UiTextInputKind::SelectAll});
+            } else if (entry.modifiers.ctrl && entry.layoutKey == Key::V) {
+                result.push_back({UiTextInputKind::Insert, platform->ClipboardText()});
+            } else if (entry.layoutKey == Key::Backspace) {
+                result.push_back({UiTextInputKind::Backspace});
+            } else if (entry.layoutKey == Key::Delete) {
+                result.push_back({UiTextInputKind::Delete});
+            } else if (entry.layoutKey == Key::Left) {
+                result.push_back({UiTextInputKind::MoveLeft});
+            } else if (entry.layoutKey == Key::Right) {
+                result.push_back({UiTextInputKind::MoveRight});
+            } else if (entry.layoutKey == Key::Home) {
+                result.push_back({UiTextInputKind::MoveHome});
+            } else if (entry.layoutKey == Key::End) {
+                result.push_back({UiTextInputKind::MoveEnd});
             }
         }
+        return result;
     }
 
     Engine::Ui::UiBindingTable Bindings() const {
         Engine::Ui::UiBindingTable result;
-        result.emplace("address", address + (editing ? "_" : ""));
-        result.emplace("hint", editing
-            ? "Type host:port. Ctrl+A clears, Ctrl+V pastes, Enter confirms."
+        result.emplace("address", address);
+        result.emplace("hint", Editing()
+            ? "Type host:port. Ctrl+A selects all, Ctrl+V pastes, Enter confirms, Esc cancels."
             : "Click the address to edit. Arrows / Enter also navigate.");
         std::string room = "No room found. Refresh or create one.";
         if (!state.rooms.empty()) {
@@ -281,9 +306,12 @@ struct PvpApplication::Impl final {
         return result;
     }
 
-    void Execute(const std::string& action) {
-        if (action == "pvp.edit_address") { EditAddress(!editing); return; }
-        EditAddress(false);
+    void Execute(const Engine::Ui::UiActionEvent& event) {
+        const std::string& action = event.action;
+        if (action == "pvp.submit_address") {
+            if (const auto* submitted = std::get_if<std::string>(&event.payload)) address = *submitted;
+            return;
+        }
         localStatus.clear();
         if (action == "pvp.leave") { connection.Leave(); return; }
         if (action == "pvp.quit") { connection.Leave(); quit = true; return; }
@@ -865,6 +893,8 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     if (!ready) { error = ExplainUi(ready.error()); return false; }
     const auto activated = impl_->ui.ActivateCanvas("lobby");
     if (!activated) { error = ExplainUi(activated.error()); return false; }
+    // The address keeps the characters a Gateway address may hold, full-width forms made ASCII.
+    impl_->ui.SetTextFilter([](std::string_view, std::string_view text) { return FilterAddressText(text); });
     const auto feedback = impl_->assets.Load(Asset::AssetId::FromString("object_fps_pvp.ui.hit_feedback"),
         Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
     if (!feedback) { error = Explain(feedback.error()); return false; }
@@ -888,6 +918,8 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     platformOptions.width = options.width;
     platformOptions.height = options.height;
     platformOptions.resizable = true;
+    // The lobby's text field draws the input method's composition itself.
+    platformOptions.imeComposition = true;
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create(platformOptions);
     if (!platform) { error = Explain(platform.error()); return false; }
     impl_->platform = std::move(platform).value();
@@ -949,7 +981,6 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
 Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     if (!impl_->initialized) return impl_->Fail("PvP application is not initialized");
     const auto started = Clock::now();
-    impl_->suppressUiEnter = false;
     impl_->windowInteraction = false;
     impl_->pointerAcquiredThisFrame = false;
     impl_->pendingShotEdge = false;
@@ -963,13 +994,6 @@ Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
         observerMilliseconds += Milliseconds(Clock::now(), observed);
     });
     impl_->input->EndFrame();
-    {
-        // Text editing used to run per event inside the observer; it still
-        // counts as this product's event handling (observer_ms).
-        const auto edited = Clock::now();
-        impl_->HandleTextEditing(impl_->input->Snapshot().text);
-        observerMilliseconds += Milliseconds(Clock::now(), edited);
-    }
     impl_->ApplyInputEvents(focusedAtStart);
     const auto elapsed = Milliseconds(Clock::now(), started);
     // observer_ms is this product's event handling; the rest is SDL's polling,
@@ -995,7 +1019,7 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
     impl_->assets.Update();
     impl_->RefreshState();
     if (impl_->InWorld()) {
-        impl_->EditAddress(false);
+        impl_->SyncTextInput(false);
         if (physical.Get(Key::Escape).pressed) {
             impl_->connection.Leave();
             impl_->RefreshState();
@@ -1027,10 +1051,13 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             impl_->UpdateWeaponFeedback(Clock::now(), !live);
         }
     } else {
+        const bool editing = impl_->Editing();
         Engine::Ui::UiInputFrame uiInput;
-        uiInput.focusPreviousPressed = !impl_->editing && physical.Get(Key::Up).pressed;
-        uiInput.focusNextPressed = !impl_->editing && physical.Get(Key::Down).pressed;
-        uiInput.activatePressed = !impl_->editing && !impl_->suppressUiEnter && physical.Get(Key::Enter).pressed;
+        if (editing) uiInput.text = impl_->TextInput(physical.text);
+        uiInput.focusPreviousPressed = !editing && physical.Get(Key::Up).pressed;
+        uiInput.focusNextPressed = !editing && physical.Get(Key::Down).pressed;
+        uiInput.activatePressed = physical.Get(Key::Enter).pressed;
+        uiInput.cancelPressed = editing && physical.Get(Key::Escape).pressed;
         uiInput.pointerAvailable = physical.windowFocused && !physical.pointer.relativeMode;
         uiInput.pointerPixels = {physical.pointer.x, physical.pointer.y};
         const auto& click = physical.Get(Engine::Input::MouseButton::Left);
@@ -1039,7 +1066,8 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
         uiInput.pointerPrimaryReleased = click.released;
         const auto updated = impl_->ui.Update(uiInput, impl_->Bindings(), impl_->Viewport());
         if (!updated) return impl_->Fail(ExplainUi(updated.error()));
-        for (const auto& event : updated.value()) impl_->Execute(event.action);
+        for (const auto& event : updated.value()) impl_->Execute(event);
+        impl_->SyncTextInput(impl_->Editing());
     }
     const auto mouseStarted = Clock::now();
     if (!live) {

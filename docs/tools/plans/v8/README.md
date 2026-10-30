@@ -53,7 +53,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── （候選）v8-tool-ui-editor-multi-select「high｜Opus 5.5｜多選、對齊、平均分布；同上」
 │   ├── v8-tool-ui-editor-text-field         「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
 │   ├── （延後）v8-tool-ui-button-style       「medium｜Opus 5.5｜按鈕外觀的共用樣式；第二個畫面也重複時再排（v8-tool-ui-widget-scope）」
-│   └── v8-product-lobby-text-field          「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
+│   └── v8-product-lobby-text-field ✓        「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
 │
 └── （待討論）v8-tool-voxel-map-editor、v8-tool-assets-editor   「待討論：等使用者逐個給方案（v8-tool-scope-ui-first）」
 ```
@@ -223,3 +223,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-product-lobby-fullwidth` | [2026_10_30_pvp_v8_lobby_fullwidth](../../../dev_logs/2026_10_30_pvp_v8_lobby_fullwidth.zh-Hant.md) |
 | `v8-engine-input-composition` | [2026_10_30_engine_v8_input_composition](../../../dev_logs/2026_10_30_engine_v8_input_composition.zh-Hant.md) |
 | `v8-tool-ui-text-field` | [2026_10_30_tool_v8_ui_text_field](../../../dev_logs/2026_10_30_tool_v8_ui_text_field.zh-Hant.md) |
+| `v8-product-lobby-text-field` | [2026_10_30_pvp_v8_lobby_text_field](../../../dev_logs/2026_10_30_pvp_v8_lobby_text_field.zh-Hant.md) |
