@@ -73,6 +73,13 @@
   - Match 同一窗口：`quality window failed … movement_resets=1 … movement_resets_failed=1`，Tick 晚醒最多 136 ms（`tick_stalls=1`）。
   - 判斷：Match 端的一次停頓造成一次移動重設，品質窗口以「1 次重設即失敗」判定。Match 的連結沒有音效。沒有在不含音效的版本重現，所以不能斷定完全無關；屬網路／連線品質的範圍，不在本批修，交給使用者決定。
 
+## 第二次試玩（2026-10-30，兩個用戶端）
+
+- player 1 約 1.5 分鐘（`client-20261030-204937.log`）：`submitted=159 on_time=159 late=0 … local_shot=94 reload=25 footstep=40`，連線無中斷（`max_gap_ms=21`），沒有出現 CONNECTION POOR。遠端射擊、受擊、命中仍為 0（沒有互相射擊）。
+- 使用者：「有一些違和感，這個聲音和動畫的管理是資料化的吧，是的話，就給Assets Editor來處理。」
+  - 現況：片段、音量、空間化、步距是資料（sfx.json）；聲音對到動畫的時刻不是資料。換彈的對齊是 C++ 的過渡規則（`ReloadSoundOffsetSeconds`），動畫片段沒有事件時刻的標記。
+  - 處理：需求「在動畫上標記事件時刻、音效掛在標記上、Assets Editor 編輯、格式是 Data Contract」傳給工具線（`v8-tool-assets-editor`）。過渡規則保留到那時。
+
 ## L2 宣告（草案，等使用者核准；看結果前不改）
 
 - 目的：本機射擊的起音跟著按下的時刻，不落在 30 FPS 的幀格點上。
