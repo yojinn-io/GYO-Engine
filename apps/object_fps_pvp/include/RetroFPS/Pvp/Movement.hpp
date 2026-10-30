@@ -126,6 +126,10 @@ struct MovementCommand final {
     float yaw{};
     float pitch{};
     bool jumpRequested{};
+    // Held intents (protocol-v8 §2), not edges. Appended last: callers build
+    // commands with positional brace initialisers.
+    bool crouchHeld{};
+    bool sprintHeld{};
     bool operator==(const MovementCommand&) const = default;
 };
 
@@ -159,10 +163,35 @@ struct PlayerState final {
     std::optional<std::int32_t> movementSlackMicros{};
     // Consecutive failed connection-quality windows; eviction at ConnectionQualityFailedWindows.
     std::uint32_t connectionQualityFailures{};
+    // Authoritative stance after lastResolvedCommand (protocol-v8 §2, §4).
+    bool crouched{};
+    bool sprinting{};
 };
+
+// Stance parameters the Match delivers at map entry (protocol-v8 §3). Not
+// arena content: ArenaContentDigest covers Arena only.
+struct StanceRules final {
+    float crouchBodyHeight{1.2F};
+    float crouchEyeHeight{1.0F};
+    float crouchSpeedScale{0.5F};
+    float sprintSpeedScale{1.0F};
+    bool operator==(const StanceRules&) const = default;
+};
+inline constexpr StanceRules DefaultStanceRules{};
+
+// protocol-v8 §3 bounds, checked against the arena the rules apply to.
+[[nodiscard]] bool ValidStanceRules(const Arena& arena, const StanceRules& rules) noexcept;
+// The one stance height source for collision, support, shots and the camera.
+// Standing returns the arena's own values, so the standing path keeps its
+// floating-point operations.
+[[nodiscard]] float StanceBodyHeight(const Arena& arena, const StanceRules& rules, bool crouched) noexcept;
+[[nodiscard]] float StanceEyeHeight(const Arena& arena, const StanceRules& rules, bool crouched) noexcept;
 
 [[nodiscard]] bool ValidMovementCommand(const MovementCommand& command) noexcept;
 // Shared product policy used by prediction, replay and authority. No clock or I/O.
+[[nodiscard]] PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
+    const PlayerState& state, const MovementCommand& command);
+// DefaultStanceRules; for callers without Match-delivered rules (tests).
 [[nodiscard]] PlayerState StepMovement(
     const Arena& arena, const PlayerState& state, const MovementCommand& command);
 

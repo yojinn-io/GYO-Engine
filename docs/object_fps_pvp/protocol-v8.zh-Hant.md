@@ -84,7 +84,7 @@
 - 替補（改寫 `PvpMatch.cpp:477-496` 的規則）：
   - Held：複製上一個實際命令，`jump_requested` 照舊清除，`crouch_held`、`sprint_held` 保留。
   - Neutral：移動軸與 `sprint_held` 歸零，`crouch_held` 保留。
-  - `ResetMovementEpoch` 清空 `lastActualCommand`（`PvpMatch.cpp:433`）之後、收到第一個實際命令之前，替補的 `crouch_held` 取 `state.crouched`。否則 epoch 輪替後，蹲著的玩家會被替補命令拉起來。
+  - （2026-10-30 更正：先前寫的「epoch 輪替後、第一個實際命令前的替補會把蹲著的玩家拉起來」不成立。Match 在新 epoch 收到第 1 個命令之前不推進該玩家（`PvpMatch.cpp:473-476` 的 `started`），清空的命令不會被拿去替補；突變 `reset-substitution-stands` 存活證實了這點，該規則刪除。）
 - Client：
   - `SeedLead` 的領先命令繼承權威姿態：`crouch_held`＝`authority.crouched`、`sprint_held`＝false（`LocalPlayerPrediction.cpp:74-82` 目前寫死 `{seq,0,0,yaw,pitch}` 並送給 Match）。重生後 `authority.crouched` 是 false，之後的實際命令照當下的按鍵。
   - 命令過期、操控者不符或 controls=false 時：`crouch_held` 保留上一次的意圖，`sprint_held` 為 false。
@@ -138,7 +138,7 @@ Client 面向的 UDP 訊息（含 24 B 標頭）在契約最大值與型別最�
   - pv8 生效到 ② 之前：所有情境的 `sprinting` 恆為 false；`sprint_held` 送 true 與 false 的 digest 相同。② 要放寬時照 AGENTS §14.4。
   - 移動規則資料：每一條驗證規則的違規都拒收；Client 收到違規的 Welcome 參數、或同一 session 內參數改變時報錯；預測用 Welcome 的值。
   - 呈現：蹲下前後模型的縮放相同。
-- 突變（至少）：站立分支也走參數化算式；拿掉 `CanPlaceCharacterBody`；Neutral 也清 `crouch_held`；替補不取 `state.crouched`；SeedLead 不繼承姿態；蹲著時仍然可以跳（站不起來時）；預測改用本機常數；模型縮放改用蹲姿高度；Gateway 刪掉任一個新欄位的複製。
+- 突變（至少）：站立分支也走參數化算式；拿掉 `CanPlaceCharacterBody`；Neutral 也清 `crouch_held`；SeedLead 不繼承姿態；蹲著時仍然可以跳（站不起來時）；預測改用本機常數；模型縮放改用蹲姿高度；Gateway 刪掉任一個新欄位的複製。
 
 ## 附錄：Architecture Delta（pv8-design-remaining-picks，D-8 同意）
 

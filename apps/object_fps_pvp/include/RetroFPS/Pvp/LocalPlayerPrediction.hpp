@@ -65,6 +65,9 @@ struct LocalPresentationState final {
     Engine::Math::Vec3 correction{};
     double correctionSeconds{};
     float alpha{};
+    // The current stance's body height for the display sweep; 0 is the
+    // arena's standing height.
+    float bodyHeight{};
 };
 
 struct LocalRenderSample final {
@@ -89,6 +92,8 @@ public:
 
     void Reset() noexcept;
     void SetMovementRules(MovementRules rules);
+    // Match-delivered stance parameters (protocol-v8 §3); DefaultStanceRules until set.
+    void SetStanceRules(const StanceRules& rules);
     void ClearJumpRequest() noexcept { pendingJump_ = false; }
     // False ignores an invalid state, or one older than the last reconciled
     // (tick, life, epoch or acknowledgement); nothing changes then.
@@ -111,7 +116,7 @@ public:
     // True publishes a changed complete window. The network worker owns its
     // independent 60 Hz retransmission deadlines and never creates commands.
     [[nodiscard]] bool Advance(double frameSeconds, float forward, float right,
-                               float yaw, float pitch, bool jumpRequested = false);
+                               float yaw, float pitch, bool jumpRequested = false, bool crouchHeld = false);
     [[nodiscard]] PlayerInput PendingInput() const;
     // Phase timing for the local shot gate; nullopt before the first snapshot
     // or while no command can be generated.
@@ -145,6 +150,7 @@ private:
     static constexpr std::uint32_t CatchUpSteps = 5;
 
     Arena arena_;
+    StanceRules stance_{DefaultStanceRules};
     Engine::Runtime::FixedTickRuntime ticks_{AuthorityTickRate, CatchUpSteps};
     std::deque<MovementCommand> pending_;
     PlayerState current_{};

@@ -43,6 +43,11 @@ void LocalPlayerPrediction::SetMovementRules(MovementRules rules) {
     arena_.gravity = rules.gravity;
 }
 
+void LocalPlayerPrediction::SetStanceRules(const StanceRules& rules) {
+    if (!ValidStanceRules(arena_, rules)) throw std::invalid_argument("Invalid authoritative stance rules");
+    stance_ = rules;
+}
+
 void LocalPlayerPrediction::Reset() noexcept {
     ticks_.Reset();
     secondsUntilNextStep_ = MovementTickSeconds;
@@ -73,10 +78,13 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
     current_ = previous_ = authority;
     for (std::size_t index = 0; index < InitialCommandLead &&
          current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)(); ++index) {
-        MovementCommand command{current_.lastResolvedCommand + 1, 0, 0, authority.yaw, authority.pitch};
+        // The neutral lead keeps the authoritative stance: the Match executes
+        // it, and a standing lead would stand a crouched body up (protocol-v8 §5).
+        MovementCommand command{current_.lastResolvedCommand + 1, 0, 0, authority.yaw, authority.pitch,
+            false, authority.crouched};
         pending_.push_back(command);
         previous_ = current_;
-        current_ = StepMovement(arena_, current_, command);
+        current_ = StepMovement(arena_, stance_, current_, command);
         TraceMovement({.kind = MovementTraceKind::Generated, .playerId = current_.playerId,
             .epoch = current_.movementEpoch, .sequence = command.sequence, .seededNeutral = true, .lifeGeneration = current_.lifeGeneration});
     }
@@ -276,7 +284,7 @@ bool LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
         } else {
             current_ = previous_ = authority;
             for (const auto& command : pending_) {
-                current_ = StepMovement(arena_, current_, command);
+                current_ = StepMovement(arena_, stance_, current_, command);
                 if (command.sequence <= oldPrevious) previous_ = current_;
             }
             if (authority.lastResolvedCommand > oldPrevious) {
@@ -315,7 +323,7 @@ bool LocalPlayerPrediction::Reconcile(const PlayerState& authority, std::uint64_
 }
 
 bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float right,
-                                    float yaw, float pitch, bool jumpRequested) {
+                                    float yaw, float pitch, bool jumpRequested, bool crouchHeld) {
     if (!observation_.active) return false;
     if (!ValidMovementCommand({1, forward, right, yaw, pitch}) ||
         !std::isfinite(frameSeconds) || frameSeconds < 0)
@@ -381,9 +389,9 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
         previous_ = current_;
         if (pending_.size() < MaxPendingCommands &&
             current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)()) {
-            MovementCommand command{current_.lastResolvedCommand + 1, forward, right, yaw, pitch, pendingJump_};
+            MovementCommand command{current_.lastResolvedCommand + 1, forward, right, yaw, pitch, pendingJump_, crouchHeld};
             pendingJump_ = false;
-            current_ = StepMovement(arena_, current_, command);
+            current_ = StepMovement(arena_, stance_, current_, command);
             pending_.push_back(command);
             TraceMovement({.kind = MovementTraceKind::Generated, .playerId = current_.playerId,
                 .epoch = current_.movementEpoch, .sequence = command.sequence, .lifeGeneration = current_.lifeGeneration});
@@ -446,7 +454,8 @@ LocalRenderSample InterpolateLocalPresentation(const Arena& arena, const LocalPr
     // Sweep from the valid predicted body to the proposed display body. An
     // offset cannot carry the camera through a wall, including around corners.
     auto render = MoveCharacterBody(
-        {position, arena.bodyHeight, arena.radius}, target - position, arena.walls, {}, false);
+        {position, state.bodyHeight > 0 ? state.bodyHeight : arena.bodyHeight, arena.radius},
+        target - position, arena.walls, {}, false);
     render.y = Engine::Math::Max(0.0F, render.y);
     return {render, render - base, alpha};
 }
@@ -464,7 +473,8 @@ double LocalPlayerPrediction::SecondsUntilNextStep() const noexcept {
 }
 
 LocalPresentationState LocalPlayerPrediction::Presentation() const noexcept {
-    return {previous_.position, current_.position, correction_, correctionSeconds_, alpha_};
+    return {previous_.position, current_.position, correction_, correctionSeconds_, alpha_,
+        StanceBodyHeight(arena_, stance_, current_.crouched)};
 }
 
 void LocalPlayerPrediction::UpdatePresentation() {

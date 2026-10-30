@@ -22,13 +22,15 @@ std::uint64_t FutureTick(std::uint64_t tick, std::uint64_t duration) {
     return tick + duration;
 }
 }
-PvpMatch::PvpMatch(Arena arena, const CombatRules& rules) : arena_(std::move(arena)), rules_(rules) {
+PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& stance)
+    : arena_(std::move(arena)), rules_(rules), stance_(stance) {
     std::string error;
     if (!arena_.Validate(error)) throw std::invalid_argument(error);
     if (!ValidShotDamageBounds(rules_.shotDamage, rules_.maximumShotDamage, rules_.maximumHp) ||
         rules_.magazineCapacity == 0 || !std::isfinite(rules_.shotRange) || rules_.shotRange < 0 ||
         rules_.maximumReferenceAge < std::chrono::nanoseconds::zero())
         throw std::invalid_argument("Invalid combat rules");
+    if (!ValidStanceRules(arena_, stance_)) throw std::invalid_argument("Invalid stance rules");
 }
 
 bool PvpMatch::Join(PlayerId playerId, std::string& error) {
@@ -278,6 +280,8 @@ void PvpMatch::ResolveLifeBoundaries() {
             player.state.pitch = 0;
             player.state.verticalVelocity = 0;
             player.state.grounded = true;
+            player.state.crouched = false;
+            player.state.sprinting = false;
             player.combat = CombatState{id};
             player.combat.hp = rules_.maximumHp;
             player.combat.magazineAmmo = rules_.magazineCapacity;
@@ -350,7 +354,7 @@ bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId,
             static_cast<void>(id);
             if (target.state.lifeState == LifeState::Alive) targets.push_back(target.state);
         }
-        const auto hit = QueryShot(arena_, player.state, shot.yaw, shot.pitch, targets, rules_.shotRange);
+        const auto hit = QueryShot(arena_, stance_, player.state, shot.yaw, shot.pitch, targets, rules_.shotRange);
         --player.combat.magazineAmmo;
         player.combat.lastShotActionId = actionId;
         player.combat.lastShotTick = tick_;
@@ -487,6 +491,7 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
             command.jumpRequested = false; // An edge never repeats in held/neutral substitution.
             if (player.missingInputTicks >= InputHoldTicks) {
                 command.moveForward = command.moveRight = 0;
+                command.sprintHeld = false;
                 source = MovementInputSource::Neutral;
             } else {
                 source = MovementInputSource::Held;
@@ -497,7 +502,7 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
         command.sequence = sequence;
         ++player.quality.resolved;
         if (source != MovementInputSource::Actual) ++player.quality.substituted;
-        player.state = StepMovement(arena_, player.state, command);
+        player.state = StepMovement(arena_, stance_, player.state, command);
         const auto pending = ContiguousPending(player);
         player.state.contiguousPendingCommands = pending;
         TraceMovement({.kind = MovementTraceKind::Resolved, .playerId = id,

@@ -9,7 +9,7 @@
 - `MovementCommand` 加 `crouchHeld`、`sprintHeld`；`PlayerState` 加 `crouched`、`sprinting`（都加在 struct 最後）。
 - 新的 `StanceRules`（蹲姿高度、蹲姿眼高、蹲速倍率、衝刺倍率）當參數傳給 `StepMovement`。不放進 `Arena`：`Arena` 是地圖內容，`ArenaContentDigest` 用 structured binding 綁住全部成員，加成員就是 wire 變更（`Arena.cpp:100-104`）。預設值先放產品常數（例如蹲高 1.2、眼高 1.0、蹲速 0.5、衝刺 1.0，開工時核對 arena 的 `bodyHeight`、`radius`）；Match 端的移動規則資料檔與 Ready／Welcome 的下發，在 wire 那一步做。
 - `StepMovement` 的姿態規則（protocol-v8 §4）、依姿態取高度的單一函式、5 個膠囊呼叫點、蹲速。
-- Match：重生重設、死亡凍結、缺命令的替補（Held、Neutral、epoch 重設後取 `state.crouched`）。
+- Match：重生重設、死亡凍結、缺命令的替補（Held、Neutral）。
 - Client 預測：`SeedLead` 繼承權威姿態；`InterpolateLocalPresentation` 依姿態取高度。
 - 呈現：本機相機的眼高依姿態；遠端蹲姿動畫（`Crouch_Idle_Loop`、`Crouch_Fwd_Loop`）的選擇邏輯，模型縮放照舊用站立高度。
 - 權威 digest：`DigestVersion` 2（加 `crouched`、`sprinting`）與蹲下的新情境。
@@ -38,7 +38,7 @@
 | 測試 | 現在的程式應該 | 突變（實作後改壞，測試必須失敗） |
 |---|---|---|
 | `SeedLead` 在蹲姿時的領先命令帶 `crouchHeld`＝true，權威端不會站起 | 失敗（寫死 `{seq,0,0,yaw,pitch}`） | SeedLead 不繼承姿態 |
-| epoch 重設後、第一個實際命令前，替補命令保持蹲姿 | 失敗 | 替補不取 `state.crouched` |
+| ~~epoch 重設後、第一個實際命令前，替補命令保持蹲姿~~（2026-10-30 刪除：前提不成立，Match 在新 epoch 的第 1 個命令前不推進該玩家；突變存活證實。測試改成守住 epoch 輪替時保留姿態） | — | — |
 | Neutral 替補保留 `crouchHeld`、清掉 `sprintHeld` | 失敗 | Neutral 也清 `crouchHeld` |
 | 頭上被擋時放開蹲鍵仍維持蹲姿 | 失敗 | 拿掉 `CanPlaceCharacterBody` |
 | 蹲著按跳：站得起來就站起並跳；被擋就不跳 | 失敗 | 被擋時仍然跳 |

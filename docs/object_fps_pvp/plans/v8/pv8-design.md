@@ -64,7 +64,7 @@ ADS 已取消（v8-product-ads-cancel）：第 1、2 版的 `aim_held`、`aiming
 - epoch 輪替：姿態保留（`PvpMatch.cpp:465` 的註解）。
 - 替補（`PvpMatch.cpp:477-496`）：
   - Held 保留兩個旗標；Neutral 清掉移動軸與 `sprint_held`，保留 `crouch_held`；jump 照舊清除。
-  - **補充（主會話核對）**：`ResetMovementEpoch` 會清空 `lastActualCommand`（`PvpMatch.cpp:433`）。如果直接用清空後的命令替補，epoch 輪替後、第一個實際命令到達前，替補的 `crouch_held` 是 false，蹲著的玩家會被悄悄拉起來。規則：清空之後還沒收到實際命令時，替補的 `crouch_held` 取 `state.crouched`。這一條要先寫成 Red 測試。
+  - **補充（主會話核對）**（2026-10-30 更正：先前寫的「epoch 輪替後、第一個實際命令前的替補會把蹲著的玩家拉起來」不成立。Match 在新 epoch 收到第 1 個命令之前不推進該玩家（`PvpMatch.cpp:473-476` 的 `started`），清空的命令不會被拿去替補；突變 `reset-substitution-stands` 存活證實了這點，該規則刪除。）
 - Client：
   - `SeedLead` 的領先命令要繼承權威姿態：`crouch_held`＝`authority.crouched`，`sprint_held`＝false。目前它寫死 `{seq,0,0,yaw,pitch}` 並送給 Match（`LocalPlayerPrediction.cpp:74-82`），不改的話權威端會站起 2 Tick。重生後 `authority.crouched` 是 false，之後的實際命令照當下的按鍵。
   - 命令過期、操控者不符或 controls=false 時：蹲保留上一次的意圖，衝刺歸 false。
@@ -106,7 +106,7 @@ ADS 已取消（v8-product-ads-cancel）：第 1、2 版的 `aim_held`、`aiming
   - C++：IpcHost、ClientConnection 往返全欄相等。
   - 大小：`capacity_test.go:46` 改成 45＋264×N；`worker_main.cpp:609` 改成 1101；新增型別最大的 `proto.Size` 斷言 ≤1200；新增 12 個命令全為 true 的 `PlayerInput` 最大值測試。
   - ② 之前：所有情境的 `sprinting` 恆為 false，送 true 與送 false 的 digest 相同。② 要放寬這個守衛時，照 AGENTS §14.4 說明。
-- 突變：站立分支也走參數化算式；拿掉 `CanPlaceCharacterBody`；Neutral 也清 `crouch_held`；替補不取 `state.crouched`；SeedLead 不繼承姿態。
+- 突變：站立分支也走參數化算式；拿掉 `CanPlaceCharacterBody`；Neutral 也清 `crouch_held`；SeedLead 不繼承姿態。
 
 ### 不在 pv8
 
@@ -129,7 +129,7 @@ ADS 已取消（v8-product-ads-cancel）：第 1、2 版的 `aim_held`、`aiming
 |---|---|---|---|
 | 1 | must | 死亡時 `StepMovement` 沒有 alive 條件擋姿態；重生區塊沒有重設 `crouched` | 接受：姿態解析只在 alive 時做；死亡時凍結；重生明文重設。加 `crouch-dead-release`、`crouch-respawn` |
 | 2 | must | 重生後 SeedLead 與按住蹲鍵的關係沒有寫 | 接受：寫明重生後繼承 `authority.crouched`（＝false），之後照按鍵 |
-| 3 | must | `lastActualCommand` 可能把上一生命的 `crouch_held` 帶進新 epoch | 不成立：`ResetMovementEpoch` 會清空它（`PvpMatch.cpp:433`）。由此發現反方向的缺口（epoch 輪替後替補會拉起蹲著的玩家），補成「替補取 `state.crouched`」 |
+| 3 | must | `lastActualCommand` 可能把上一生命的 `crouch_held` 帶進新 epoch | 不成立：`ResetMovementEpoch` 會清空它（`PvpMatch.cpp:433`）。由此推論的反方向缺口也不成立（2026-10-30 更正，見上） |
 | 4 | must | 站起判定用移動前還是移動後的位置 | 接受：在目前位置（移動前）判定，之後的掃掠用新姿態的膠囊；加 `crouch-walk-under` |
 | 5 | should | 空中蹲下、蹲著跳沒有規範 | 列為 D-3，v8-product-ads-cancel 決定 |
 | 6 | should | 姿態預測錯誤時，位置修正不會觸發，眼高會跳 | 接受：眼高在呈現層做時間平滑，手感交 L3 |
