@@ -15,9 +15,14 @@ round failing 5 is invalid, and the run stops there.
   4. No local shot starts late.
   5. Validity: at least half of the press timestamps are more than 2 ms from the nearest frame start.
 
-Onsets are found by exact sample values: one voice of gun_shoot.wav at the local shot volume gives
-output samples the mixer's integer arithmetic fixes bit for bit, so its first frames are searched
-for in the disk file.
+Onsets are checked by exact sample values (revised 2026-10-30 after the first run, with the user's
+approval; thresholds unchanged): the mixer's integer arithmetic fixes its output bit for bit, so for
+each local shot, in order, the disk file from the rebuilt start frame must equal the mix of this
+shot's voice and every earlier confirmed local shot voice still playing there, for CHECK_FRAMES
+frames (20 ms; the first version compared 48 single-voice frames, which lie in the clip's quiet
+lead-in). With an overlap, the earlier voices' tails are part of the expected mix instead of hiding
+the onset. Which callback took a request is not logged, so the anchors at, before and after the
+Play call are tried in that order; the offset each onset needed is reported.
 
 Usage (from the repository root):
   python3 build/acceptance/object_fps_pvp/sound_l2.py --match <match> --gateway <gateway>
@@ -42,6 +47,7 @@ from run_network import free_port, wait_for_match_ready
 RATE = 48000
 FRAME_NS = 1e9 / RATE
 PATTERN_FRAMES = 48
+CHECK_FRAMES = 960  # 20 ms: past the quiet lead-in into the attack
 
 
 def frames_from_ns(ns):
@@ -121,7 +127,29 @@ def judge_round(directory, asset_root):
                            'shots_submitted': summary['shots_submitted']}
 
     # 2. Each onset at its rebuilt frame; 4. none late.
-    matched, late, misses, engine_onsets = 0, 0, [], []
+    channels, clip = read_wav_pcm16(asset_root / 'audio' / 'gun_shoot.wav')
+    clip_frames = len(clip) // channels
+    gain = round(volume * 65536)
+
+    def voice(i):
+        """One local shot voice's Q32 contribution at clip frame i (left, right); zero outside the clip."""
+        if not 0 <= i < clip_frames:
+            return 0, 0
+        left = clip[i * channels]
+        right = clip[i * channels + (1 if channels == 2 else 0)]
+        return left * gain * 65536, right * gain * 65536
+
+    def matches(start, earlier):
+        if (start + CHECK_FRAMES) * 4 > len(raw):
+            return False
+        for frame in range(start, start + CHECK_FRAMES):
+            parts = [voice(frame - start)] + [voice(frame - other) for other in earlier]
+            expected = tuple(max(-32768, min(32767, (sum(p[c] for p in parts) + (1 << 31)) >> 32)) for c in (0, 1))
+            if struct.unpack_from('<hh', raw, frame * 4) != expected:
+                return False
+        return True
+
+    matched, late, misses, engine_onsets, confirmed, offsets = 0, 0, [], [], [], {}
     for cue in sorted(cues, key=lambda c: int(c['played_ns'])):
         at, played = int(cue['at_ns']), int(cue['played_ns'])
         k = bisect.bisect_left(anchor_times, played)
@@ -132,17 +160,23 @@ def judge_round(directory, asset_root):
             anchor_ns, first = anchors[i]
             unclamped = first + frames_from_ns(at - anchor_ns) + delay
             start = max(first, unclamped)
-            if start in onset_set:
-                hit = (anchor_ns, first, start, unclamped < first)
+            # Earlier confirmed voices still playing where this one starts.
+            earlier = [other for other in confirmed if other <= start < other + clip_frames + CHECK_FRAMES]
+            if matches(start, earlier):
+                hit = (anchor_ns, first, start, unclamped < first, i - k)
                 break
         if hit is None:
             misses.append(at)
             continue
         matched += 1
+        offsets[hit[4]] = offsets.get(hit[4], 0) + 1
+        confirmed.append(hit[2])
         late += 1 if hit[3] else 0
         engine_onsets.append((at, hit[0] + (hit[2] - hit[1]) * FRAME_NS))
+    result['anchor_offsets'] = {str(key): value for key, value in sorted(offsets.items())}
+    result['overlapped_onsets'] = sum(1 for a, b in zip(confirmed, confirmed[1:]) if b < a + clip_frames)
     result['2_rebuilt_frames'] = {'passed': matched == len(cues) and len(cues) > 0, 'matched': matched,
-                                  'of': len(cues), 'extra_onsets': len(onsets) - matched}
+                                  'of': len(cues), 'single_voice_onsets_found': len(onsets)}
     result['4_local_late'] = {'passed': late == 0 and matched == len(cues), 'late': late}
 
     # 3. Intervals in Engine time against the presses.
