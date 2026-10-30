@@ -149,6 +149,34 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
   - 不論結果，這一批不排修正；修正由 `v8-engine-input-composition`／`v8-tool-ui-text-field` 依結果規劃。
 - **範圍的限制**：只看 Windows 上這兩種輸入法；鍵盤事件之外的原因（例如畫面停頓）不在觀測範圍。
 
+### 檢測之後：輸入法的規劃（`v8-tool-ui-ime-observe-next`＝(b)，2026-10-30）
+
+依據是 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md) 的「觀測到的事實」。判定記為不成立；事實當證據用，不當判定結果。
+
+**Feature（玩家看到什麼）**：在位址欄（之後是 `text_field`）用輸入法打字時，看得到組字中的字（底線）；候選窗出現在輸入框旁邊；全形的英數與標點會變成半形，不會被靜靜丟掉。
+
+**Contract（要約定什麼）**，全部只加不改：
+
+| 項目 | 內容 | owner |
+|---|---|---|
+| 平台選項 | `SdlPlatformOptions::imeComposition`（預設 false）：為 true 時，在初始化 SDL 視訊之前把 `SDL_HINT_IME_IMPLEMENTED_UI` 設成 `composition`。候選窗仍由作業系統畫。預設不變，因為沒有畫組字的程式打開它，玩家反而什麼都看不到 | `GYO::PlatformSDL` |
+| 組字事件 | `TextEvent::Kind::Composition`：`text`（組字中的字，UTF-8；空字串＝組字結束）、`cursor`、`selectionLength`；和文字、按鍵一樣，只在文字輸入開啟時，依到達順序放進 `text` | `GYO::Input` |
+| 輸入區域 | `SdlInput::SetTextInputArea(area, cursor)`：告訴作業系統輸入框的位置，讓候選窗畫在旁邊 | `GYO::Input` |
+| 全形轉半形 | 產品的事（`v8-tool-ui-edit-policy-owner`）：大廳的過濾把全形英數與標點（U+FF01～U+FF5E、「。」）換成半形再檢查 | `object_fps_pvp` |
+
+**Architecture**：
+- Input 的 Design Invariants 1（只加不改）允許新的 `Kind`；不變式 3 的「只在文字輸入開啟時、依到達順序」照樣適用；不變式 4（frame 不帶編輯政策）不受影響：組字是作業系統給的物理事實，不是政策。
+- 平台選項會設定整個 process 的 SDL hint，這是 Platform 的 Architecture Delta，要記到 [input-and-present](../../../architecture/plans/input-and-present/HANDOFF.md)。
+- 依賴方向不變。
+
+**分批**：
+
+| 代號 | 檔位｜引擎 | 估時 | 內容 | 驗收 |
+|---|---|---|---|---|
+| `v8-engine-input-composition` | high｜Opus 5.5 | 6～10 h | 上表的平台選項、組字事件、輸入區域；`input.md`、`platform-sdl.md` 的契約與不變式說明 | CI：IP-1 的判定不變；組字事件的單元測試（合成的 SDL 事件：開始、更新、結束、文字輸入關閉時不收）；相關突變。L3 併在下一批 |
+| `v8-product-lobby-fullwidth` | medium｜Opus 5.5 | 1～2 h | 大廳的過濾先把全形英數與標點換成半形（不依賴上一批，可以先做）。**產品批**，由產品會話或你指定的會話做 | CI：過濾的單元測試（`１２７．０．０．１：８０８０` → `127.0.0.1:8080`）；L3：Windows 日文輸入法打位址 |
+| `v8-tool-ui-text-field` 以後 | （原計畫） | | `text_field` 用組字事件畫底線、設定輸入區域；大廳改用 `text_field` 時，打開 `imeComposition` | 原計畫的驗收；L3 用 `--text-input-trace` 確認 `text_editing` 有送到 |
+
 ## 待討論的兩個工具（`v8-tool-scope-ui-first`）
 
 使用者（2026-10-30）：「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」之後更正：「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」
