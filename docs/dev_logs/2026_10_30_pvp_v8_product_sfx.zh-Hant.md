@@ -168,3 +168,8 @@
 - 180 發都用第一個候選錨點（offset 0）比對成功。重疊的起音共 4 個；若用舊方法，第 1、3 場會判不成立。
 - 上一次（舊方法）第 2 場不成立的結果保留在「L2 執行」一節。
 - 結論：本機射擊的聲音跟著按下的時刻（每發的起點逐樣本落在由按下時間戳換算的位置，間隔誤差小於 1 個樣本），不落在 30 FPS 的幀格點上。
+
+## PR #113 的 CI
+
+- 第一次：四平台 L1 都在 `object_fps_pvp.service_startup` 失敗。`test_service_startup.py` 列出所有啟動 Match 與 Gateway 的 runner（`RUNNERS`），而新增的 `sound_l2.py` 沒有登記。`sound_l2.py` 的結構檢查（先等 Match 就緒再啟動 Gateway）都通過，只差在清單。這是我新增 runner 後沒有在本機跑完整 CTest 漏掉的。
+- 修正：把 `sound_l2.py` 加進 `RUNNERS`。本機 `ctest --preset test` 102／102。
