@@ -25,7 +25,7 @@
 | `assets/object_fps_pvp/audio/gun_reload.wav` | 換彈 | 同上，0.958 s |
 | `assets/object_fps_pvp/audio/player_footstep.wav` | 腳步、落地 | 同上，0.179 s |
 
-- 來源：2026-10-30 使用者提供（主 checkout 的 `assets/object_fps_pvp/audio/`，未追蹤）。授權：未記錄，待使用者補上。
+- 來源：2026-10-30 使用者提供（主 checkout 的 `assets/object_fps_pvp/audio/`，未追蹤）。授權：使用者自製（使用者原話：「那個是我自己混剪的。」）。
 - 以 `docs/architecture/plans/audio/scripts/convert_wav.py <原檔> <輸出>` 轉成 48 kHz PCM16（窗化 sinc、固定種子的三角抖動，可重現），沒有飽和。
 - 原檔不放進 repo：產品的內容契約要求資產根目錄下每個檔案都在 catalog（`tests/object_fps_pvp/test_asset_catalog.py` 的 `test_every_asset_file_is_in_the_catalog`）。第一次我把原檔放在 `audio/source/`、說明放在 `audio/README.md`，這個測試失敗（commit `30b36bdb` 造成的回歸），已移出。原檔該放哪裡交給 assets editor 的規劃。
 - 注意：主 checkout 裡未追蹤的原檔和轉好的檔同名同路徑；合併本分支後在主 checkout 更新前，要先把原檔移走，否則 git 會拒絕覆寫。
