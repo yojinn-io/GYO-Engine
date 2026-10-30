@@ -1,5 +1,6 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
+#include "gyo/ui_editor/ElementSchema.hpp"
 #include "gyo/ui_editor/FileService.hpp"
 #include "gyo/ui_editor/GizmoMath.hpp"
 #include "gyo/ui_editor/PathDialog.hpp"
@@ -606,6 +607,100 @@ void TestGizmoAgreesWithUiEvaluator() {
     }
 }
 
+// The editor's element table against GYO::Ui, the authoritative schema. The
+// switch has no default and this test target treats an unhandled enumerator
+// as an error, so a new GYO::Ui element fails the build until the table knows
+// it. Every kind's default element must then pass the codec and be laid out
+// with the focus behaviour, action payload and binding type the table claims.
+std::string_view UiTypeName(const Engine::Ui::UiElementType type) {
+    using Engine::Ui::UiElementType;
+    switch (type) {
+    case UiElementType::Container:
+        return "container";
+    case UiElementType::Panel:
+        return "panel";
+    case UiElementType::Image:
+        return "image";
+    case UiElementType::Text:
+        return "text";
+    case UiElementType::Button:
+        return "button";
+    case UiElementType::HorizontalSlider:
+        return "horizontal_slider";
+    case UiElementType::FixedStepList:
+        return "fixed_step_list";
+    }
+    return {};
+}
+
+std::string_view DeclaredValue(const nlohmann::json& declarations, const nlohmann::json& element,
+    const char* reference, const char* field) {
+    if (!element.contains(reference)) {
+        return {};
+    }
+    for (const nlohmann::json& declaration : declarations) {
+        if (declaration.value("id", std::string{}) == element[reference].get<std::string>()) {
+            return declaration[field].get_ref<const std::string&>();
+        }
+    }
+    return "undeclared";
+}
+
+void TestElementKindsMatchUi() {
+    using Engine::Ui::UiElementType;
+    constexpr UiElementType uiTypes[]{UiElementType::Container, UiElementType::Panel, UiElementType::Image,
+        UiElementType::Text, UiElementType::Button, UiElementType::HorizontalSlider, UiElementType::FixedStepList};
+    Expect(ElementKinds().size() == std::size(uiTypes), "the editor has one kind per GYO::Ui element type");
+    for (const UiElementType type : uiTypes) {
+        Expect(FindElementKind(UiTypeName(type)) != nullptr, "every GYO::Ui element type has an editor kind");
+    }
+
+    for (const ElementKind& kind : ElementKinds()) {
+        const std::string label{kind.type};
+        nlohmann::json document = UiDocumentBridge::CreateDefault();
+        const nlohmann::json element = MakeDefaultElement(document, kind);
+        const std::string id = element.value("id", std::string{});
+        nlohmann::json& canvas = document["canvases"][0];
+        if (kind.focusable) {
+            canvas["focus_order"].push_back(id);
+        }
+        canvas["children"].push_back(element);
+
+        auto parsed = Engine::Ui::UiDocumentCodec::Parse(document.dump(), "element-kind");
+        Expect(parsed.has_value(), label + ": the default element passes the GYO::Ui codec");
+        if (!parsed) {
+            continue;
+        }
+        Engine::Ui::UiRuntime runtime;
+        std::optional<Engine::Ui::UiEvaluatedElement> evaluated;
+        if (runtime.Initialize(std::make_shared<const Engine::Ui::UiDocument>(std::move(parsed).value())) &&
+            runtime.ActivateCanvas("main")) {
+            if (auto layout = runtime.EvaluatePreviewLayout({1280.0F, 720.0F})) {
+                for (const Engine::Ui::UiEvaluatedElement& entry : layout.value()) {
+                    if (entry.id == id) {
+                        evaluated = entry;
+                    }
+                }
+            }
+        }
+        Expect(evaluated.has_value() && UiTypeName(evaluated->type) == kind.type,
+            label + ": GYO::Ui lays the element out as the same type");
+        Expect(evaluated.has_value() && evaluated->interactive == kind.focusable,
+            label + ": focusable matches GYO::Ui's interactive elements");
+        Expect(DeclaredValue(document["actions"], element, "action", "payload") == kind.actionPayload,
+            label + ": the action payload matches the declared action");
+        Expect(DeclaredValue(document["bindings"], element, "binding", "type") == kind.bindingType,
+            label + ": the binding type matches the declared binding");
+        for (const ElementColorField& field : kind.colors) {
+            const bool present = element.contains(field.key) &&
+                (field.source ? element[field.key].is_object() : element[field.key].is_string());
+            Expect(present, label + ": the element carries each color field of its kind");
+        }
+        Expect(element.contains("texture_asset") == kind.textureAsset,
+            label + ": textureAsset matches the texture field");
+    }
+}
+
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
@@ -615,6 +710,7 @@ int main() {
     TestGizmoMoveAndResize();
     TestGizmoSnapAndPivot();
     TestGizmoAgreesWithUiEvaluator();
+    TestElementKindsMatchUi();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);

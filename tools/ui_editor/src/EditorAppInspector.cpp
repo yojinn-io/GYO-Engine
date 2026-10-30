@@ -1,6 +1,7 @@
 #include "gyo/ui_editor/EditorApp.hpp"
 
 #include "EditorDocumentEdits.hpp"
+#include "gyo/ui_editor/ElementSchema.hpp"
 
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/os/Files.hpp"
@@ -34,7 +35,6 @@ namespace {
 using Detail::Json;
 using Detail::FindSelectedNode;
 using Detail::FindCanvas;
-using Detail::UniqueDeclarationId;
 using Detail::RenameReferences;
 
 [[nodiscard]] std::string UniqueObjectKey(
@@ -104,9 +104,8 @@ void TrackWidgetEdit(
 
 void CollectInteractiveNodeIds(const Json& node, std::vector<std::string>& ids) {
     if (!node.is_object()) return;
-    const std::string type = node.value("type", std::string{});
-    if ((type == "button" || type == "horizontal_slider") &&
-        node.contains("id") && node["id"].is_string()) {
+    const ElementKind* kind = FindElementKind(node.value("type", std::string{}));
+    if (kind != nullptr && kind->focusable && node.contains("id") && node["id"].is_string()) {
         ids.push_back(node["id"].get<std::string>());
     }
     if (node.contains("children") && node["children"].is_array()) {
@@ -753,7 +752,7 @@ void EditorApp::DrawInspector() {
     editPair("Position", "position", 0.25F, false);
     editPair("Size Delta", "size_delta", 0.25F, false);
 
-    const std::string nodeType = node->value("type", std::string{});
+    const ElementKind* kind = FindElementKind(node->value("type", std::string{}));
     if (node->contains("text") && (*node)["text"].is_object() &&
         (*node)["text"].contains("literal")) {
         ImGui::SeparatorText("Text style");
@@ -820,10 +819,12 @@ void EditorApp::DrawInspector() {
             ImGui::TextDisabled("%s: binding-select source", label);
         }
     };
-    if (nodeType == "panel") {
-        colorSourceCombo("Panel", (*node)["color"]);
-    } else if (nodeType == "image") {
-        colorSourceCombo("Image tint", (*node)["tint"]);
+    // A kind's own color sources come before the shared text styles, its plain
+    // color names after the background states.
+    const std::span<const ElementColorField> kindColors =
+        kind != nullptr ? kind->colors : std::span<const ElementColorField>{};
+    for (const ElementColorField& field : kindColors) {
+        if (field.source) colorSourceCombo(field.label, (*node)[field.key]);
     }
     if (node->contains("text_color")) {
         colorSourceCombo("Text", (*node)["text_color"]);
@@ -857,10 +858,8 @@ void EditorApp::DrawInspector() {
         colorCombo("Focused", (*node)["background"]["focused"]);
         colorCombo("Pressed", (*node)["background"]["pressed"]);
     }
-    if (nodeType == "horizontal_slider") {
-        colorCombo("Track", (*node)["track_color"]);
-        colorCombo("Fill", (*node)["fill_color"]);
-        colorCombo("Thumb", (*node)["thumb_color"]);
+    for (const ElementColorField& field : kindColors) {
+        if (!field.source) colorCombo(field.label, (*node)[field.key]);
     }
 
     ImGui::SeparatorText("Typed references");
@@ -869,9 +868,9 @@ void EditorApp::DrawInspector() {
         const std::string current = node->value("action", std::string{});
         if (ImGui::BeginCombo("Action", current.c_str())) {
             for (const Json& action : session_.Document()["actions"]) {
-                const bool needsNumber = nodeType == "horizontal_slider";
-                if (action.value("payload", "none") !=
-                    (needsNumber ? "number" : "none")) {
+                const std::string_view payload =
+                    kind != nullptr && !kind->actionPayload.empty() ? kind->actionPayload : "none";
+                if (action.value("payload", "none") != payload) {
                     continue;
                 }
                 const std::string id = action.value("id", std::string{});
@@ -887,9 +886,8 @@ void EditorApp::DrawInspector() {
     if (node->contains("binding")) {
         const std::string current = node->value("binding", std::string{});
         if (ImGui::BeginCombo("Binding", current.c_str())) {
-            const std::string expected = nodeType == "fixed_step_list"
-                ? "list<object>"
-                : "number";
+            const std::string expected{
+                kind != nullptr && !kind->bindingType.empty() ? kind->bindingType : "number"};
             for (const Json& binding : session_.Document()["bindings"]) {
                 if (binding.value("type", std::string{}) != expected) continue;
                 const std::string id = binding.value("id", std::string{});
@@ -902,7 +900,7 @@ void EditorApp::DrawInspector() {
             ImGui::EndCombo();
         }
     }
-    if (nodeType == "image" && ImGui::Button("Pick Texture AssetId...")) {
+    if (kind != nullptr && kind->textureAsset && ImGui::Button("Pick Texture AssetId...")) {
         assetPickerTarget_ = AssetPickerTarget::ImageTexture;
         showAssetPicker_ = true;
     }

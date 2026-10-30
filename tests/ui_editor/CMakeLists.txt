@@ -1,6 +1,13 @@
 add_executable(gyo_ui_editor_core_tests EditorCoreTests.cpp)
 target_compile_features(gyo_ui_editor_core_tests PRIVATE cxx_std_20)
 target_link_libraries(gyo_ui_editor_core_tests PRIVATE gyo_ui_editor_core)
+# TestElementKindsMatchUi switches over GYO::Ui's element types without a
+# default: a type the editor does not know must stop this build.
+if(MSVC)
+    target_compile_options(gyo_ui_editor_core_tests PRIVATE /we4062)
+else()
+    target_compile_options(gyo_ui_editor_core_tests PRIVATE -Werror=switch)
+endif()
 add_test(NAME gyo_ui_editor.core COMMAND gyo_ui_editor_core_tests)
 set_tests_properties(gyo_ui_editor.core PROPERTIES LABELS "cpu;editor")
 

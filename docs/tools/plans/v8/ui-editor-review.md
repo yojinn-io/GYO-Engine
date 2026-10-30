@@ -29,6 +29,7 @@
 - 編輯直接操作 `nlohmann::json` 與字串鍵。「哪種元素有 action、binding、哪些欄位」散在 `EditorApp.cpp` 約 15 處 `type == "button"`、`"horizontal_slider"` 的比對（例如 `:293`、`:397`、`:420`、`:974`、`:1926`），和 `GYO::Ui` 的 codec 是兩份。
 - 影響：加 `text_field`（`v8-tool-ui-text-field`）要改很多分散的地方，漏改一處 editor 和 codec 就不一致。這是加元件前最大的壓力。
 - 判斷：這是 AGENTS §2 說的「同一個 Special Case 出現在多處」。
+- 處理（2026-10-30，`v8-tool-ui-editor-element-schema`）：元素的知識集中到 `ElementSchema`，Hierarchy 與 Inspector 改用它；對齊測試保證它和 GYO::Ui 一致（[dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_editor_element_schema.zh-Hant.md)）。binding 型別的知識仍在 Inspector。
 
 ### S-3　`PreviewAdapter::Draw` 同時做預覽與編輯操作（2026-10-30 已處理：`v8-tool-ui-editor-gizmo-math`）
 

@@ -18,6 +18,7 @@ include("${GYO_REPOSITORY_ROOT}/build/cmake/GyoRuntimeDeployment.cmake")
 add_library(gyo_ui_editor_core STATIC
     src/CommandLine.cpp
     src/DocumentSession.cpp
+    src/ElementSchema.cpp
     src/FileService.cpp
     src/GizmoMath.cpp
     src/PathDialog.cpp

@@ -75,20 +75,6 @@ Json* FindCanvas(Json& document, const std::string_view id) {
     return nullptr;
 }
 
-[[nodiscard]] std::string UniqueDeclarationId(
-    const Json& declarations,
-    const std::string_view prefix) {
-    for (std::size_t suffix = 1U;; ++suffix) {
-        std::string candidate{prefix};
-        candidate += "." + std::to_string(suffix);
-        const bool exists = std::ranges::any_of(
-            declarations,
-            [&](const Json& item) {
-                return item.value("id", std::string{}) == candidate;
-            });
-        if (!exists) return candidate;
-    }
-}
 
 void RenameReferences(
     Json& value,
