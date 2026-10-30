@@ -16,7 +16,8 @@
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
-- **完成，未合併**：`v8-tool-ui-editor-gizmo-fix`（分支 `claude/v8-tool-ui-editor-gizmo`）。實際拖動只在測試裡驗證，GUI 上還沒有人手動拖過。
+- **完成，未合併**：`v8-tool-ui-editor-gizmo-fix`（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)，分支 `claude/v8-tool-ui-editor-gizmo`）。使用者在 GUI 上試過錨點與 pivot 的把手。
+- **進行中**：`v8-tool-ui-invariants`：草稿已給使用者看，等同意後寫進 [ui_toolchain.md](../../../ui_toolchain.md)。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - `GYO::Ui` 與 ui_editor 沒有 `Design Invariants` 節（[ui_toolchain.md](../../../ui_toolchain.md)、[tool_projects.md](../../../tool_projects.md)）。本線加元件前要補（`v8-tool-ui-invariants`）。
@@ -45,6 +46,7 @@
 |---|---|---|
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
+| `v8-tool-ui-order` | （2026-10-30）UI 的順序：先寫 `v8-tool-ui-invariants`，再整理（`v8-tool-ui-editor-panels` → `v8-tool-ui-editor-element-schema`），再做 `text_field`，編輯器的小功能（複製貼上、方向鍵微調）穿插；對齊參考線、多選等需要時再排。見 [README](README.md)「順序與依賴」 | 「照你建議做吧。」 |
 | `v8-tool-ui-editor-gizmo-bug` | （2026-10-30）拖動照 (a) Unity 的 RectTransform：本體＝移動 `position`；邊與角＝縮放（`size_delta`、`position`），錨點不動；拖錨點與 pivot 時補償 `position`、`size_delta`，元素的矩形不動。「相等時一起移動」的實作細節由 Claude 定為：被拖的錨點推著另一個走，所以往對方那側拖時一起動、往反方向拖時分開（否則相等的錨點在 gizmo 上永遠分不開）。Snap 只對齊這次拖動的座標 | 「(a) Unity 式」 |
 | `v8-tool-scope-ui-first` | （2026-10-30）先處理 `v8-tool-ui-editor-widgets`。voxel 與 assets 沒有暫停，等使用者逐個給方案再討論；第一版 Claude 自己寫的地圖建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端）撤下。取代同日的 `v8-tool-scope-ui-only`（Claude 誤解成「暫停」） | 「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」→「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」 |
 
@@ -68,3 +70,5 @@
 - 2026-10-30：使用者選拖動的修法 (a) Unity 式（`v8-tool-ui-editor-gizmo-bug`）。`v8-tool-ui-editor-gizmo-fix` 開始（檔位 high，引擎 Opus 5.5，估 3 h），分支 `claude/v8-tool-ui-editor-gizmo`（切自 master `2d78b753`）。
 - 2026-10-30：`v8-tool-ui-editor-gizmo-fix` 完成，實際約 1 h。先在舊規則下跑新測試：23 項失敗（Red，含「錨點相等時往上拖無效」），換成新規則後全過；9/9 測試通過；8 個突變全部被抓到。GUI 上的手動拖動還沒做。
 - 2026-10-30：使用者用新版試拖，問錨點與 pivot 的把手有什麼用。查證：`gyo.ui` v1 的根節點固定是設計尺寸（`UiRuntime.cpp:721`），整張畫布等比例縮放、留黑邊（`FitDesignCanvas`，`UiRuntime.cpp:603`），所以每個父層的大小在任何螢幕上都不變，錨點與 pivot 只改變 `position`／`size_delta` 的寫法，不改畫面。提了三個選項：隱藏把手、維持現狀、讓根節點跟著螢幕比例走（契約 v2）。使用者：「先保持這樣。」把手維持現狀，不另開待決。
+- 2026-10-30：開 [PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)，Auto-fix 開啟。使用者問 UI 還要加什麼；建議兩類（遊戲畫面要的：`text_field`、背景、頁面切換、設定元件；編輯器缺的：複製貼上、方向鍵微調、對齊參考線、多選）與順序。使用者：「照你建議做吧。」記成 `v8-tool-ui-order`，README 加 `v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` 與兩個候選批。
+- 2026-10-30：`v8-tool-ui-invariants` 開始（檔位 medium，引擎 Opus 5.5，估 2～3 h）。起草 `GYO::Ui` 與 ui_editor 的 Design Invariants＋Replacement Criteria，給使用者看。新發現：`GizmoMath` 為了反算 `position`／`size_delta`，又寫了一份 `gyo.ui` 的版面公式（引擎的 `ResolveDesignRect` 在 `UiRuntime.cpp` 的匿名命名空間，不公開）；草稿用守衛測試讓兩份保持一致。
