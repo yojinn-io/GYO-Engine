@@ -41,7 +41,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── v8-tool-ui-ime-observe               「medium｜Opus 5.5｜先檢測：把 TEXT_EDITING／TEXT_INPUT 記到 log，Windows 重現「:」卡住」
 │   ├── v8-tool-ui-invariants ✓              「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
 │   ├── v8-engine-input-composition ✓        「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
-│   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
+│   ├── v8-tool-ui-text-field ✓              「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
 │   ├── v8-tool-ui-editor-file-browser ✓     「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
 │   ├── v8-tool-ui-editor-gizmo-math ✓       「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試（行為不變）」
 │   ├── v8-tool-ui-editor-gizmo-fix ✓        「high｜Opus 5.5｜修拖動與縮放、加位置／大小把手（Unity 式）」
@@ -222,3 +222,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-ime-observe`（停下回報） | [2026_10_30_tool_v8_ui_ime_observe](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md) |
 | `v8-product-lobby-fullwidth` | [2026_10_30_pvp_v8_lobby_fullwidth](../../../dev_logs/2026_10_30_pvp_v8_lobby_fullwidth.zh-Hant.md) |
 | `v8-engine-input-composition` | [2026_10_30_engine_v8_input_composition](../../../dev_logs/2026_10_30_engine_v8_input_composition.zh-Hant.md) |
+| `v8-tool-ui-text-field` | [2026_10_30_tool_v8_ui_text_field](../../../dev_logs/2026_10_30_tool_v8_ui_text_field.zh-Hant.md) |

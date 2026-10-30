@@ -35,6 +35,9 @@
 namespace Engine::Ui {
 namespace {
 
+// The height of an empty text field's caret, in point sizes.
+constexpr float kEmptyLineHeight = 1.2F;
+
 [[nodiscard]] UiError RendererError(
     UiErrorCode code,
     std::string message,
@@ -288,6 +291,60 @@ struct UiRenderer::Impl final {
         return &inserted->second;
     }
 
+    // The width of draw's text up to byte offset bytes, measured by
+    // rasterizing that prefix (cached like any other text).
+    [[nodiscard]] UiResult<float> PrefixWidth(const UiTextDraw& draw, const std::size_t bytes) {
+        if (bytes == 0) return 0.0F;
+        UiTextDraw prefix = draw;
+        prefix.utf8 = draw.utf8.substr(0, Math::Min(bytes, draw.utf8.size()));
+        prefix.caret.reset();
+        auto text = ResolveText(prefix);
+        if (!text) return Base::Err(std::move(text).error());
+        return static_cast<float>(text.value()->width);
+    }
+
+    [[nodiscard]] UiResult<void> SubmitQuad(
+        Math::Rect destination, UiColor color, Math::Rect clip, Render::RenderQueue& queue) {
+        Render::SpriteSubmission sprite{};
+        sprite.layer = Render::CompositeLayer::Overlay;
+        sprite.destinationPixels = destination;
+        sprite.material.tint = ConvertColor(color);
+        if (!ClipSprite(sprite, clip)) return {};
+        return SubmitSprite(sprite, queue);
+    }
+
+    // A text field's editing marks over its text: the selection, the
+    // composition's underline and the caret.
+    [[nodiscard]] UiResult<void> SubmitCaret(const UiTextDraw& draw, const UiTextCaret& caret, Math::Vec2 origin,
+                                             float lineHeight, Render::RenderQueue& queue) {
+        if (caret.selectionEnd > caret.selectionBegin) {
+            auto begin = PrefixWidth(draw, caret.selectionBegin);
+            if (!begin) return Base::Err(std::move(begin).error());
+            auto end = PrefixWidth(draw, caret.selectionEnd);
+            if (!end) return Base::Err(std::move(end).error());
+            UiColor shade = caret.color;
+            shade.alpha *= 0.35F;
+            auto submitted = SubmitQuad({origin.x + begin.value(), origin.y, end.value() - begin.value(), lineHeight},
+                                        shade, draw.clipPixels, queue);
+            if (!submitted) return submitted;
+        }
+        const float thickness = Math::Max(1.0F, draw.pointSizePixels * 0.06F);
+        if (caret.compositionEnd > caret.compositionBegin) {
+            auto begin = PrefixWidth(draw, caret.compositionBegin);
+            if (!begin) return Base::Err(std::move(begin).error());
+            auto end = PrefixWidth(draw, caret.compositionEnd);
+            if (!end) return Base::Err(std::move(end).error());
+            auto submitted = SubmitQuad({origin.x + begin.value(), origin.y + lineHeight - thickness,
+                                         end.value() - begin.value(), thickness},
+                                        caret.color, draw.clipPixels, queue);
+            if (!submitted) return submitted;
+        }
+        auto cursor = PrefixWidth(draw, caret.cursor);
+        if (!cursor) return Base::Err(std::move(cursor).error());
+        const float width = Math::Max(1.0F, draw.pointSizePixels * 0.08F);
+        return SubmitQuad({origin.x + cursor.value(), origin.y, width, lineHeight}, caret.color, draw.clipPixels, queue);
+    }
+
     [[nodiscard]] UiResult<TextResource*> ResolveText(const UiTextDraw& draw) {
         auto font = ResolveFont(draw.fontAssetId);
         if (!font) return Base::Err(std::move(font).error());
@@ -403,26 +460,31 @@ UiResult<void> UiRenderer::Submit(
                     sprite.sourceUv = draw.sourceUv;
                     sprite.material.tint = ConvertColor(draw.tint);
                 } else {
-                    if (draw.utf8.empty()) return {};
+                    if (draw.utf8.empty() && !draw.caret) return {};
                     // Layout produces positive finite sizes from validated documents.
                     GYO_ASSERT(std::isfinite(draw.pointSizePixels) && draw.pointSizePixels > 0.0F);
-                    auto text = impl_->ResolveText(draw);
-                    if (!text) return Base::Err(std::move(text).error());
+                    // An empty field being edited still shows its caret, a line high.
+                    Math::Vec2 extent{0.0F, draw.pointSizePixels * kEmptyLineHeight};
+                    Impl::TextResource* text = nullptr;
+                    if (!draw.utf8.empty()) {
+                        auto resolved = impl_->ResolveText(draw);
+                        if (!resolved) return Base::Err(std::move(resolved).error());
+                        text = resolved.value();
+                        extent = {static_cast<float>(text->width), static_cast<float>(text->height)};
+                    }
                     const Math::Vec2 origin = AlignUiText(
-                        draw.boundsPixels,
-                        {static_cast<float>(text.value()->width), static_cast<float>(text.value()->height)},
-                        draw.horizontalAlign,
-                        draw.verticalAlign);
-                    const float x = origin.x;
-                    const float y = origin.y;
-                    sprite.material.texture = text.value()->gpu;
-                    sprite.destinationPixels = {
-                        x,
-                        y,
-                        static_cast<float>(text.value()->width),
-                        static_cast<float>(text.value()->height),
-                    };
-                    sprite.material.tint = ConvertColor(draw.color);
+                        draw.boundsPixels, extent, draw.horizontalAlign, draw.verticalAlign);
+                    if (text != nullptr) {
+                        sprite.material.texture = text->gpu;
+                        sprite.destinationPixels = {origin.x, origin.y, extent.x, extent.y};
+                        sprite.material.tint = ConvertColor(draw.color);
+                        if (ClipSprite(sprite, draw.clipPixels)) {
+                            auto submittedText = impl_->SubmitSprite(sprite, queue);
+                            if (!submittedText) return submittedText;
+                        }
+                    }
+                    if (!draw.caret) return {};
+                    return impl_->SubmitCaret(draw, *draw.caret, origin, extent.y, queue);
                 }
                 if (!ClipSprite(sprite, draw.clipPixels)) {
                     return {};

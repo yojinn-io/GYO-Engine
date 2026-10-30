@@ -13,7 +13,10 @@
 namespace Engine::Ui {
 
 inline constexpr std::string_view kUiSchemaName = "gyo.ui";
-inline constexpr std::uint32_t kUiSchemaVersion = 1;
+// The newest version this reader reads and writes, and the oldest it reads.
+// Version 2 adds text_field and the string action payload.
+inline constexpr std::uint32_t kUiSchemaVersion = 2;
+inline constexpr std::uint32_t kUiSchemaMinimumVersion = 1;
 
 enum class UiScaleMode : std::uint8_t {
     Fit,
@@ -27,6 +30,7 @@ struct UiDesignCanvas final {
 enum class UiActionPayloadType : std::uint8_t {
     None,
     Number,
+    String, // version 2
 };
 
 struct UiActionDeclaration final {
@@ -134,6 +138,7 @@ enum class UiElementType : std::uint8_t {
     Button,
     HorizontalSlider,
     FixedStepList,
+    TextField, // version 2
 };
 
 // Closed v1 element representation. Fields not used by an element kind remain
@@ -173,6 +178,12 @@ struct UiElement final {
     std::size_t maxItems{};
     Math::Vec2 itemStep{};
     std::vector<UiElement> itemTemplate;
+
+    // text_field (also binding, action, background and textStyle); the
+    // length counts code points.
+    std::size_t maxLength{};
+    std::string placeholder;
+    std::string placeholderColor;
 };
 
 struct UiCanvas final {
@@ -185,6 +196,9 @@ struct UiCanvas final {
 };
 
 struct UiDocument final {
+    // Written back as is; a document built in code stays version 1 unless it
+    // needs version 2.
+    std::uint32_t version{kUiSchemaMinimumVersion};
     UiDesignCanvas designCanvas;
     std::map<std::string, std::string, std::less<>> fonts;
     std::string defaultFont;

@@ -541,14 +541,17 @@ TEST_CASE("UiDocumentCodec rejects unsupported schema and version") {
     REQUIRE_FALSE(schemaResult);
     CHECK(schemaResult.error().code == UiErrorCode::UnsupportedSchema);
 
-    std::string version(kDocument);
-    version.replace(
-        version.find("\"version\": 1"),
-        std::string("\"version\": 1").size(),
-        "\"version\": 2");
-    auto versionResult = UiDocumentCodec::Parse(version);
-    REQUIRE_FALSE(versionResult);
-    CHECK(versionResult.error().code == UiErrorCode::UnsupportedVersion);
+    // v8-tool-ui-text-field: version 2 is supported; 0 and 3 are not.
+    for (const char* unsupported : {"\"version\": 0", "\"version\": 3"}) {
+        std::string version(kDocument);
+        version.replace(
+            version.find("\"version\": 1"),
+            std::string("\"version\": 1").size(),
+            unsupported);
+        auto versionResult = UiDocumentCodec::Parse(version);
+        REQUIRE_FALSE(versionResult);
+        CHECK(versionResult.error().code == UiErrorCode::UnsupportedVersion);
+    }
 }
 
 TEST_CASE("UiDocument validation rejects duplicate public ids") {

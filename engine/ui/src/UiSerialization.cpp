@@ -129,13 +129,13 @@ void WriteValueReference(
     case UiElementType::Text: return "text";
     case UiElementType::Button: return "button";
     case UiElementType::HorizontalSlider: return "horizontal_slider";
+    case UiElementType::TextField: return "text_field";
     case UiElementType::FixedStepList: return "fixed_step_list";
     }
     return "container";
 }
 
-void WriteTextVisual(Json& result, const UiElement& element) {
-    result["text"] = TextSourceJson(element.text);
+void WriteTextStyle(Json& result, const UiElement& element) {
     if (!element.textStyle.font.empty()) {
         result["font"] = element.textStyle.font;
     }
@@ -143,6 +143,11 @@ void WriteTextVisual(Json& result, const UiElement& element) {
     result["text_color"] = ColorSourceJson(element.textStyle.color);
     result["horizontal_align"] = HorizontalAlignName(element.textStyle.horizontalAlign);
     result["vertical_align"] = VerticalAlignName(element.textStyle.verticalAlign);
+}
+
+void WriteTextVisual(Json& result, const UiElement& element) {
+    result["text"] = TextSourceJson(element.text);
+    WriteTextStyle(result, element);
 }
 
 [[nodiscard]] Json ButtonColorsJson(const UiButtonColors& colors) {
@@ -197,6 +202,17 @@ void WriteTextVisual(Json& result, const UiElement& element) {
         result["track_color"] = element.trackColor;
         result["fill_color"] = element.fillColor;
         result["thumb_color"] = element.thumbColor;
+        break;
+    case UiElementType::TextField:
+        WriteTextStyle(result, element);
+        result["action"] = element.action;
+        result["background"] = ButtonColorsJson(element.background);
+        result["binding"] = element.binding;
+        result["max_length"] = element.maxLength;
+        if (!element.placeholder.empty()) {
+            result["placeholder"] = element.placeholder;
+            result["placeholder_color"] = element.placeholderColor;
+        }
         break;
     case UiElementType::FixedStepList:
         result["binding"] = element.binding;
@@ -278,7 +294,7 @@ UiResult<std::string> UiDocumentCodec::Serialize(const UiDocument& document) {
     try {
         Json root = Json::object();
         root["schema"] = kUiSchemaName;
-        root["version"] = kUiSchemaVersion;
+        root["version"] = document.version;
 
         Json design = Json::object();
         design["size"] = Float2Json(document.designCanvas.size);
@@ -302,9 +318,9 @@ UiResult<std::string> UiDocumentCodec::Serialize(const UiDocument& document) {
         for (const UiActionDeclaration& action : document.actions) {
             Json encoded = Json::object();
             encoded["id"] = action.id;
-            encoded["payload"] = action.payload == UiActionPayloadType::None
-                ? "none"
-                : "number";
+            encoded["payload"] = action.payload == UiActionPayloadType::None ? "none"
+                : action.payload == UiActionPayloadType::Number             ? "number"
+                                                                            : "string";
             actions.push_back(std::move(encoded));
         }
         root["actions"] = std::move(actions);
