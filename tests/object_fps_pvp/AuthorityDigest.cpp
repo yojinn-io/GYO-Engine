@@ -36,14 +36,16 @@
 namespace {
 using namespace fps::pvp;
 
-constexpr int DigestVersion = 1;
-// Field list of digest version 1, in encoding order. A later version may add
-// fields; comparisons "without new fields" select exactly this list.
+constexpr int DigestVersion = 2;
+// Field list in encoding order. Version 2 (v8-product-crouch) adds the stance
+// fields and encodes each only when true, so a standing scenario's bytes, and
+// its version 1 digest, are unchanged; a crouched record differs by the field.
 constexpr std::string_view DigestFields =
     "match_tick: tick\n"
     "player: playerId position.x position.y position.z yaw pitch lastResolvedCommand movementEpoch "
     "contiguousPendingCommands verticalVelocity grounded lifeGeneration lifeState lifeStateTick respawnTick "
-    "connectionQualityFailures (movementSlack* excluded: host timing observation)\n"
+    "connectionQualityFailures [crouched] [sprinting] (bracketed: v2, only when true; movementSlack* excluded: "
+    "host timing observation)\n"
     "combat: playerId hp nextAllowedShotTick lifeGeneration magazineAmmo reloadActionId reloadStartTick "
     "reloadEndTick lastShotActionId lastShotTick\n"
     "decision: owner actionId resolvedTick accepted rejection hitKind targetId damage kind lifeGeneration "
@@ -151,6 +153,8 @@ void EncodePlayer(Record& r, const PlayerState& p) {
     r.U64("lifeStateTick", p.lifeStateTick);
     r.U64("respawnTick", p.respawnTick);
     r.U64("connectionQualityFailures", p.connectionQualityFailures);
+    if (p.crouched) r.Bool("crouched", true);
+    if (p.sprinting) r.Bool("sprinting", true);
 }
 
 void EncodeCombat(Record& r, const CombatState& c) {
@@ -221,6 +225,14 @@ Arena NamedArena(std::string_view name) {
         arena.spawns = {{{3, 0, 2}, 0}, {{3, 0, 12}, 0}};
         return arena;
     }
+    if (name == "slab") {
+        // A low slab 1.5 above the floor over x in [6, 8]: a crouched body
+        // (1.2) passes under it, a standing one (1.8) does not.
+        auto arena = Boxed("digest_slab", 12, 12);
+        arena.walls.push_back({{6, 1.5F, 0}, {8, 3, 12}});
+        arena.spawns = {{{3, 0, 6}, 0}, {{10, 0, 6}, 0}};
+        return arena;
+    }
     if (name == "corner") {
         auto arena = Boxed("digest_corner", 12, 12);
         arena.walls.push_back({{4, 0, 6}, {10, 3, 7}});
@@ -239,6 +251,7 @@ struct Intent final {
     float forward{}, right{}, yaw{}, pitch{};
     bool jump{};
     bool send{true};
+    bool crouch{};
 };
 
 // Drives a PvpMatch like a Client would: one command per Tick in the current
@@ -283,7 +296,7 @@ public:
         }
         digest_.Angle(intent.yaw, "movement yaw");
         digest_.Angle(intent.pitch, "movement pitch");
-        PlayerInput input{id, {{driver.next++, intent.forward, intent.right, intent.yaw, intent.pitch, intent.jump}},
+        PlayerInput input{id, {{driver.next++, intent.forward, intent.right, intent.yaw, intent.pitch, intent.jump, intent.crouch}},
             state.movementEpoch, state.lifeGeneration, snapshot_.tick};
         static_cast<void>(match_.SubmitInput(input));
     }
@@ -714,6 +727,23 @@ std::vector<Scenario> Scenarios() {
                               static_cast<float>((static_cast<int>(t % 80) - 40)) * 0.01F};
             }, 400 * s, d); }});
     }
+    // v8-product-crouch: hold, release, crouch jumps and a blocked stand-up.
+    list.push_back({"move-crouch/contract", true, [](unsigned s, Digest& d) {
+        RunMovement("contract", [](unsigned t) {
+            Intent i{t < 120 || (t >= 180 && t < 300) ? 1.0F : 0.0F, 0};
+            i.crouch = t < 60 || (t >= 180 && t < 300);
+            i.jump = t == 200 || t == 260;
+            return i;
+        }, 360 * s, d); }});
+    list.push_back({"move-crouch-slab/slab", true, [](unsigned s, Digest& d) {
+        RunMovement("slab", [](unsigned t) {
+            // Crouch under the slab, release and jump under it (both refused),
+            // then walk out crouched and stand up past its edge.
+            Intent i{0, t < 160 || t >= 200 ? 1.0F : 0.0F};
+            i.crouch = t < 160;
+            i.jump = t == 180;
+            return i;
+        }, 320 * s, d); }});
     list.push_back({"move-held-gaps/contract", true, [](unsigned s, Digest& d) {
         RunMovement("contract", [](unsigned t) { Intent i{1, 0}; i.send = !(t >= 40 && t < 55) && !(t >= 100 && t < 140); return i; },
             240 * s, d); }});

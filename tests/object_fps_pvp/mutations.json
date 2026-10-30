@@ -4619,8 +4619,8 @@
       "batch": "v71-a1-shot-step",
       "what": "The Match ignores the rules it is given",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "PvpMatch::PvpMatch(Arena arena, const CombatRules& rules) : arena_(std::move(arena)), rules_(rules) {\n",
-      "replace": "PvpMatch::PvpMatch(Arena arena, const CombatRules& rules) : arena_(std::move(arena)), rules_(PvpCombatRules) {\n",
+      "find": "    : arena_(std::move(arena)), rules_(rules), stance_(stance) {\n",
+      "replace": "    : arena_(std::move(arena)), rules_(PvpCombatRules), stance_(stance) {\n",
       "check": "cpu",
       "expect": "PvP A1"
     },

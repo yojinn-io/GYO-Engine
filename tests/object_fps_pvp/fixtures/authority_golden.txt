@@ -4,6 +4,8 @@
 # v7.1 a1-shot-step (D137) changed combat-magazine/corridor as pre-declared (plans/v7.1/a1-shot-step.md section 3:
 # a shot two ticks inside the cooldown is held to its boundary); the file before it is authority_golden.pv7-checkpoint.txt.
 # combat-step/corridor (A1 command steps) was added by the same batch, checked against its hand-written table.
+# v8-product-crouch (digest version 2) appended move-crouch/contract and move-crouch-slab/slab only: version 2
+# encodes the stance fields only when true, so every existing line kept its version 1 digest.
 move-axial/contract 3da537ff73b2d89579bd419c027dadc27060ce5ac0412029e5095625f192f100
 move-diagonal/contract e02b01251f0711f72b7780c285aa961b5f6fcd128eb930469bc07a633525b80e
 move-jump/contract 33341f025f4f9091de35d5f6f905c1378d41802897c66662d645d2ef376eaf89
@@ -18,6 +20,8 @@ move-diagonal/corner 7eea8ff26ba18d593f102f497bcefffeebdfd8cec4093f3694f6eb9069f
 move-jump/corner 82f1ed281ddcd7216d0e0ac35485a1f869086f449485ecf7e8c638ac41ecb599
 move-wall-slide/contract 9ce784c7baf0984744f562b35072a98808e87ec90414aee0b05839d5ee2211ae
 move-wall-slide/corner 7e0da5d7c37299d751c621b27a3a568d99659c960ca27d6363390b07d869dcdf
+move-crouch/contract dce72c8b0a1524494f75c5c65ddb9eee6e3f171dbe3a9e2ccc2a05601be3720c
+move-crouch-slab/slab b0abfd196d05c51f354f7f71db8f4dd2550ea527b78963055d23449e11e9256b
 move-held-gaps/contract a271616606c47309070a6a62c698bedbc35c2e8e27de77c2f285388f82c690f0
 move-backlog/contract 1c3eb1e5df837126ba05c7721e4902d1a044495c02e46422832246d461190c42
 combat-kill-respawn/corridor 538fcbd07bddef01acd88cee3a74bb965b91b994e4e7e35acab77a6ffb6f7c1e
