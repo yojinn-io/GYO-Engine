@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <stdexcept>
+#include <string_view>
 
 using Engine::Platform::Sdl::SdlPlatform;
 
@@ -44,6 +45,25 @@ void PushWhilePumping(SdlPlatform& platform, SDL_Event event) {
 }
 
 } // namespace
+
+TEST_CASE("SdlPlatform hands the input method composition to the program only when asked") {
+    // v8-engine-input-composition: SDL reads the hint when its video starts.
+    static_cast<void>(SDL_ResetHint(SDL_HINT_IME_IMPLEMENTED_UI));
+    {
+        auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+        REQUIRE(platform);
+        CHECK_MESSAGE(SDL_GetHint(SDL_HINT_IME_IMPLEMENTED_UI) == nullptr,
+                      "by default the operating system keeps drawing the composition");
+    }
+    {
+        auto platform = Engine::Platform::Sdl::SdlPlatform::Create({.imeComposition = true});
+        REQUIRE(platform);
+        const char* hint = SDL_GetHint(SDL_HINT_IME_IMPLEMENTED_UI);
+        CHECK_MESSAGE((hint != nullptr && std::string_view{hint} == "composition"),
+                      "imeComposition asks SDL for the composition before video starts");
+    }
+    static_cast<void>(SDL_ResetHint(SDL_HINT_IME_IMPLEMENTED_UI));
+}
 
 TEST_CASE("SdlPlatform runs the live frame handler for this window's live-resize redraws") {
     auto platform = MakePlatform();

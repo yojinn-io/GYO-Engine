@@ -4,10 +4,13 @@
 #include "engine/input/backend/sdl/SdlInput.hpp"
 #include "engine/input/backend/sdl/SdlInputNative.hpp"
 #include "engine/input/InputActionMap.hpp"
+#include "engine/base/Log.hpp"
 
 #include <array>
 #include <chrono>
+#include <string>
 #include <utility>
+#include <vector>
 
 using namespace Engine::Input;
 
@@ -451,6 +454,133 @@ TEST_CASE("SDL text keys carry the layout key apart from the physical key") {
     CHECK_MESSAGE((text[0].key == Key::Q && text[0].layoutKey == Key::A),
                   "the layout key is the key the layout produces, apart from the position");
     CHECK_MESSAGE(text[1].layoutKey == Key::Enter, "a keycode without a character maps through its scancode");
+}
+
+namespace {
+
+std::vector<std::string> textDiagnosticLines;
+
+void CaptureTextDiagnostics(const Engine::Base::LogMessage& message) noexcept {
+    try {
+        if (message.category == "input.text") textDiagnosticLines.emplace_back(message.text);
+    } catch (...) {
+    }
+}
+
+SDL_Event Composition(const SDL_WindowID window, const char* text, const Sint32 start = 1, const Sint32 length = 0) {
+    SDL_Event event{};
+    event.type = SDL_EVENT_TEXT_EDITING;
+    event.edit.windowID = window;
+    event.edit.text = text;
+    event.edit.start = start;
+    event.edit.length = length;
+    return event;
+}
+
+} // namespace
+
+TEST_CASE("SDL text diagnostics log what arrives and leave the frame unchanged") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    using Engine::Input::Backend::Sdl::HandleNativeEvent;
+    // ':' typed as ASCII, then a full-width colon (U+FF1A) committed by an
+    // input method after its composition.
+    const auto feed = [&](Backend::Sdl::SdlInput& input) {
+        input.BeginFrame();
+        HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_SEMICOLON, SDLK_COLON, true), {});
+        HandleNativeEvent(input, TypedText(window, ":"), {});
+        HandleNativeEvent(input, Composition(window, "\xEF\xBC\x9A"), {});
+        HandleNativeEvent(input, TypedText(window, "\xEF\xBC\x9A"), {});
+    };
+
+    Backend::Sdl::SdlInput quiet(*platform.value());
+    REQUIRE(quiet.SetTextInput(true));
+    textDiagnosticLines.clear();
+    const auto previous = Engine::Base::SetLogHandler(&CaptureTextDiagnostics);
+    feed(quiet);
+    CHECK_MESSAGE(textDiagnosticLines.empty(), "the diagnostics are off by default");
+
+    Backend::Sdl::SdlInput traced(*platform.value());
+    traced.SetTextDiagnostics(true);
+    feed(traced);
+    traced.SetTextDiagnostics(false);
+    REQUIRE(traced.SetTextInput(false));
+    Engine::Base::SetLogHandler(previous);
+
+    const auto& quietText = quiet.Snapshot().text;
+    const auto& tracedText = traced.Snapshot().text;
+    REQUIRE(quietText.size() == tracedText.size());
+    for (std::size_t index = 0; index < quietText.size(); ++index) {
+        CHECK_MESSAGE((quietText[index].kind == tracedText[index].kind && quietText[index].text == tracedText[index].text),
+                      "the diagnostics do not change the frame");
+    }
+    CHECK_MESSAGE(tracedText.size() == 4, "the composition is in the frame once, like any text entry");
+
+    REQUIRE(textDiagnosticLines.size() == 5);
+    CHECK(textDiagnosticLines[0].starts_with("diagnostics on ime_ui="));
+    CHECK(textDiagnosticLines[1].starts_with("text_key "));
+    CHECK_MESSAGE((textDiagnosticLines[2].find("taken=1") != std::string::npos &&
+                   textDiagnosticLines[2].ends_with("text=\":\"")),
+                  "typed ASCII text is logged as is, with whether the frame took it");
+    CHECK_MESSAGE((textDiagnosticLines[3].starts_with("text_editing ") &&
+                   textDiagnosticLines[3].find("start=1 length=0") != std::string::npos &&
+                   textDiagnosticLines[3].ends_with("text=\"\\u{FF1A}\"")),
+                  "a composition is logged with its cursor and a full-width colon is told apart from ':'");
+    CHECK(textDiagnosticLines[4].ends_with("text=\"\\u{FF1A}\""));
+}
+
+// v8-engine-input-composition: what an input method is composing reaches the
+// frame as TextEvent::Kind::Composition, under the same rules as typed text
+// (Input Design Invariants 1 and 3).
+TEST_CASE("SDL compositions join the text only while text input is on, in arrival order") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    using Engine::Input::Backend::Sdl::HandleNativeEvent;
+
+    input.BeginFrame();
+    HandleNativeEvent(input, Composition(window, "\xE3\x81\x8B"), {});
+    CHECK_MESSAGE(input.Snapshot().text.empty(), "nothing is collected while text input is off");
+
+    REQUIRE(input.SetTextInput(true));
+    HandleNativeEvent(input, TypedText(window, "a"), {});
+    HandleNativeEvent(input, Composition(window, "\xE3\x81\x8B", 1, 0), {});
+    HandleNativeEvent(input, Composition(window + 1, "other window"), {});
+    HandleNativeEvent(input, Composition(window, "\xE7\x81\xAB", -1, -1), {});
+    HandleNativeEvent(input, Composition(window, ""), {});
+    HandleNativeEvent(input, TypedText(window, "\xE7\x81\xAB"), {});
+    REQUIRE(input.SetTextInput(false));
+
+    const auto& text = input.Snapshot().text;
+    REQUIRE(text.size() == 5);
+    CHECK(text[0].kind == TextEvent::Kind::Text);
+    CHECK_MESSAGE((text[1].kind == TextEvent::Kind::Composition && text[1].text == "\xE3\x81\x8B" &&
+                   text[1].cursor == 1 && text[1].selectionLength == 0),
+                  "a composition carries its text, cursor and selection");
+    CHECK_MESSAGE((text[2].kind == TextEvent::Kind::Composition && text[2].cursor == -1 &&
+                   text[2].selectionLength == -1),
+                  "-1 stands for a cursor or selection the platform does not report");
+    CHECK_MESSAGE((text[3].kind == TextEvent::Kind::Composition && text[3].text.empty()),
+                  "an empty composition says the composition ended");
+    CHECK_MESSAGE((text[4].kind == TextEvent::Kind::Text && text[4].text == "\xE7\x81\xAB"),
+                  "committed text follows the composition in arrival order");
+}
+
+TEST_CASE("SdlInput hands the text input area to SDL") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    Backend::Sdl::SdlInput input(*platform.value());
+    SDL_Window* window = Engine::Platform::Sdl::NativeWindow(*platform.value());
+    REQUIRE(input.SetTextInput(true));
+    REQUIRE(input.SetTextInputArea({.x = 40, .y = 300, .width = 400, .height = 36}, 72));
+    SDL_Rect area{};
+    int cursor = -1;
+    REQUIRE(SDL_GetTextInputArea(window, &area, &cursor));
+    CHECK_MESSAGE((area.x == 40 && area.y == 300 && area.w == 400 && area.h == 36 && cursor == 72),
+                  "the area and cursor reach SDL, where the input method reads them");
+    REQUIRE(input.SetTextInput(false));
 }
 
 TEST_CASE("SdlPlatform reads the clipboard text") {

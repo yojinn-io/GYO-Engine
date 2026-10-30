@@ -3,6 +3,7 @@ add_executable(gyo_ui_tests
     UiDocumentCodecTests.cpp
     UiRendererTests.cpp
     UiRuntimeTests.cpp
+    UiTextFieldTests.cpp
 )
 
 target_link_libraries(gyo_ui_tests PRIVATE

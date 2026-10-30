@@ -40,9 +40,9 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 ├── ui-widgets-line                          「PR 線：文字輸入框元件＋輸入法組字＋ui_editor」
 │   ├── v8-tool-ui-ime-observe               「medium｜Opus 5.5｜先檢測：把 TEXT_EDITING／TEXT_INPUT 記到 log，Windows 重現「:」卡住」
 │   ├── v8-tool-ui-invariants ✓              「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
-│   ├── v8-engine-input-composition          「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
-│   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
-│   ├── v8-tool-ui-editor-file-browser       「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
+│   ├── v8-engine-input-composition ✓        「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
+│   ├── v8-tool-ui-text-field ✓              「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
+│   ├── v8-tool-ui-editor-file-browser ✓     「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
 │   ├── v8-tool-ui-editor-gizmo-math ✓       「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試（行為不變）」
 │   ├── v8-tool-ui-editor-gizmo-fix ✓        「high｜Opus 5.5｜修拖動與縮放、加位置／大小把手（Unity 式）」
 │   ├── v8-tool-ui-editor-panels ✓           「medium｜Opus 5.5｜面板拆檔，EditorApp 只協調」
@@ -52,8 +52,8 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── （候選）v8-tool-ui-editor-snap-guides 「high｜Opus 5.5｜拖動時貼齊其他元素的邊與中線；排版覺得累時再排」
 │   ├── （候選）v8-tool-ui-editor-multi-select「high｜Opus 5.5｜多選、對齊、平均分布；同上」
 │   ├── v8-tool-ui-editor-text-field         「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
-│   ├── v8-tool-ui-button-style（待決）       「medium｜Opus 5.5｜按鈕外觀的共用樣式；看 v8-tool-ui-widget-scope」
-│   └── v8-product-lobby-text-field          「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
+│   ├── （延後）v8-tool-ui-button-style       「medium｜Opus 5.5｜按鈕外觀的共用樣式；第二個畫面也重複時再排（v8-tool-ui-widget-scope）」
+│   └── v8-product-lobby-text-field ✓        「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
 │
 └── （待討論）v8-tool-voxel-map-editor、v8-tool-assets-editor   「待討論：等使用者逐個給方案（v8-tool-scope-ui-first）」
 ```
@@ -117,9 +117,9 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 
 | 代號 | 檔位｜引擎 | 估時 | 內容 | 驗收 |
 |---|---|---|---|---|
-| `v8-tool-ui-ime-observe` | medium｜Opus 5.5 | 2～4 h＋實機一次 | 診斷用 log（不改行為）：組字事件的開始、內容、確定。附離線場次腳本（記憶「Offline session scripts」） | 實機：重現或記錄「未重現」與證據。重現不了就停下回報（§14.3），不排修正 |
+| `v8-tool-ui-ime-observe` | medium｜Opus 5.5 | 2～4 h＋實機一次 | 診斷用 log（不改行為）：組字事件的開始、內容、確定。附離線場次腳本（記憶「Offline session scripts」） | 實機：重現或記錄「未重現」與證據。重現不了就停下回報（§14.3），不排修正。觀測方法與判定見下面「v8-tool-ui-ime-observe 的事前宣告」 |
 | `v8-tool-ui-invariants` | medium｜Opus 5.5 | 2～3 h | 在 [ui_toolchain.md](../../../ui_toolchain.md) 寫 `GYO::Ui`、ui_editor 的 `Design Invariants`＋`Replacement Criteria`；能守的寫守衛 Test | 使用者同意節的內容 |
-| `v8-engine-input-composition` | high｜Opus 5.5 | 6～10 h | `TextEvent` 加組字的種類（組字字串、游標位置）；`SetTextInputArea`。只加不改 | CI：既有 IP-1 Test 判定不變；新事件的單元 Test（合成的 SDL 事件）；突變只跑相關的（v7.1 D184） |
+| `v8-engine-input-composition` ✓ | high｜Opus 5.5 | 6～10 h | `TextEvent` 加組字的種類（組字字串、游標位置）；`SetTextInputArea`。只加不改 | CI：既有 IP-1 Test 判定不變；新事件的單元 Test（合成的 SDL 事件）；突變只跑相關的（v7.1 D184） |
 | `v8-tool-ui-text-field` | high（編輯狀態局部 xhigh）｜Opus 5.5 | 10～16 h | `gyo.ui` v2、`text_field` 的 codec／驗證／版面／編輯狀態／繪製 | CI：codec 往返、v1 文件照常載入、編輯狀態的單元 Test（含組字中按 Enter、Backspace、焦點離開）、突變 |
 | `v8-tool-ui-editor-file-browser` | high｜Opus 5.5 | 3～5 h | SDL3 的系統選擇窗（`SDL_ShowOpenFolderDialog`、`SDL_ShowOpenFileDialog`、`SDL_ShowSaveFileDialog`）：選單「Open Asset Folder...」一步掛載（參考 AssetPack 的「データフォルダを開く」）；Open、Export、掛載對話框的欄位也用。回呼經執行緒安全的收件匣，在幀之間套用。不存狀態；跳不出窗時退回手打 | CI：收件匣跨執行緒、選資料夾後掛載、取消不掛載；L3：Windows 與 macOS 各選一次中文路徑 |
 | `v8-tool-ui-editor-panels` | medium｜Opus 5.5 | 3～5 h | Hierarchy、Canvas、Inspector、對話框拆成各自的檔；`EditorApp` 只協調。純搬移，不改行為 | CI：既有測試不變；拆前拆後的行為由既有測試與手動開一次確認 |
@@ -130,6 +130,53 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-button-style`（待決） | medium｜Opus 5.5 | 4～6 h | 按鈕外觀的共用樣式（同一組顏色、字級只寫一次） | 看 `v8-tool-ui-widget-scope` |
 | `v8-product-lobby-text-field` | high｜Opus 5.5 | 4～6 h | 大廳的位址欄改成 `text_field`；刪掉 `HandleTextEditing`、`AppendAddress` 的編輯部分，只留字元規則 | CI：大廳的既有 Test；L3：Windows 用輸入法打位址、看得到組字。**產品批**：由產品會話排程 |
 
+### v8-tool-ui-ime-observe 的事前宣告
+
+結果出來之前寫下，要使用者同意（AGENTS §14.1）。看了 log 之後不改。
+
+- **工具**：
+  - 客戶端參數 `--text-input-trace` 打開 `SdlInput::SetTextDiagnostics`，log 寫在執行檔旁的 `logs/client-<時間>.log`。
+  - Windows 用 [scripts/ime_observe_windows.cmd](scripts/ime_observe_windows.cmd) 啟動（放在 `gyo_object_fps_pvp.exe` 旁邊，雙擊；檔內有一行啟動指令與 3 行註解）。
+  - 分析用 [scripts/ime_observe_report.py](scripts/ime_observe_report.py)，在 Mac 上跑。
+- **場次**（Windows 11，主戰場；不需要 Gateway 與 Match，只用大廳的位址欄）：
+  1. 對照組：輸入法關閉（英數），點位址欄、清空、打「127.0.0.1:8080」、Enter。1 次。
+  2. 日文輸入法（Microsoft IME，平假名模式），同樣的操作，3 次。
+  3. 中文輸入法（使用者平常用的那一個；記下名稱），同樣的操作，3 次。
+  - 每次之間點一下別處，讓位址欄結束輸入，每一次會在 log 裡自成一個 trial。
+- **判定**（分析腳本的分類，現在固定）：每個 trial 的冒號歸成 ascii／fullwidth／held／missing 之一，並記下是否「先組字才確定」與中間的按鍵數。
+  - 對照組不是 ascii、或出現了組字：視為觀測工具有問題，停下回報，不判讀其他 trial。
+  - 輸入法的 trial：fullwidth 或 held 或 missing，算「重現了冒號問題」，並以分類說明機制；全部是 ascii，記成「未重現」，附 log。
+  - 不論結果，這一批不排修正；修正由 `v8-engine-input-composition`／`v8-tool-ui-text-field` 依結果規劃。
+- **範圍的限制**：只看 Windows 上這兩種輸入法；鍵盤事件之外的原因（例如畫面停頓）不在觀測範圍。
+
+### 檢測之後：輸入法的規劃（`v8-tool-ui-ime-observe-next`＝(b)，2026-10-30）
+
+依據是 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md) 的「觀測到的事實」。判定記為不成立；事實當證據用，不當判定結果。
+
+**Feature（玩家看到什麼）**：在位址欄（之後是 `text_field`）用輸入法打字時，看得到組字中的字（底線）；候選窗出現在輸入框旁邊；全形的英數與標點會變成半形，不會被靜靜丟掉。
+
+**Contract（要約定什麼）**，全部只加不改：
+
+| 項目 | 內容 | owner |
+|---|---|---|
+| 平台選項 | `SdlPlatformOptions::imeComposition`（預設 false）：為 true 時，在初始化 SDL 視訊之前把 `SDL_HINT_IME_IMPLEMENTED_UI` 設成 `composition`。候選窗仍由作業系統畫。預設不變，因為沒有畫組字的程式打開它，玩家反而什麼都看不到 | `GYO::PlatformSDL` |
+| 組字事件 | `TextEvent::Kind::Composition`：`text`（組字中的字，UTF-8；空字串＝組字結束）、`cursor`、`selectionLength`；和文字、按鍵一樣，只在文字輸入開啟時，依到達順序放進 `text` | `GYO::Input` |
+| 輸入區域 | `SdlInput::SetTextInputArea(area, cursor)`：告訴作業系統輸入框的位置，讓候選窗畫在旁邊 | `GYO::Input` |
+| 全形轉半形 | 產品的事（`v8-tool-ui-edit-policy-owner`）：大廳的過濾把全形英數與標點（U+FF01～U+FF5E、「。」）換成半形再檢查 | `object_fps_pvp` |
+
+**Architecture**：
+- Input 的 Design Invariants 1（只加不改）允許新的 `Kind`；不變式 3 的「只在文字輸入開啟時、依到達順序」照樣適用；不變式 4（frame 不帶編輯政策）不受影響：組字是作業系統給的物理事實，不是政策。
+- 平台選項會設定整個 process 的 SDL hint，這是 Platform 的 Architecture Delta，要記到 [input-and-present](../../../architecture/plans/input-and-present/HANDOFF.md)。
+- 依賴方向不變。
+
+**分批**：
+
+| 代號 | 檔位｜引擎 | 估時 | 內容 | 驗收 |
+|---|---|---|---|---|
+| `v8-engine-input-composition` ✓ | high｜Opus 5.5 | 6～10 h | 上表的平台選項、組字事件、輸入區域；`input.md`、`platform-sdl.md` 的契約與不變式說明 | CI：IP-1 的判定不變；組字事件的單元測試（合成的 SDL 事件：開始、更新、結束、文字輸入關閉時不收）；相關突變。L3 併在下一批 |
+| `v8-product-lobby-fullwidth` ✓ | medium｜Opus 5.5 | 1～2 h | 大廳的過濾先把全形英數與標點換成半形（不依賴上一批，可以先做）。**產品批**，本會話做（`v8-tool-ime-plan`） | CI：過濾的單元測試（`１２７．０．０．１：８０８０` → `127.0.0.1:8080`）；L3：Windows 日文輸入法打位址 |
+| `v8-tool-ui-text-field` 以後 | （原計畫） | | `text_field` 用組字事件畫底線、設定輸入區域；大廳改用 `text_field` 時，打開 `imeComposition` | 原計畫的驗收；L3 用 `--text-input-trace` 確認 `text_editing` 有送到 |
+
 ## 待討論的兩個工具（`v8-tool-scope-ui-first`）
 
 使用者（2026-10-30）：「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」之後更正：「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」
@@ -139,9 +186,15 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
   - 已收到的需求：**音效匯入**（`v8-tool-assets-audio-import`，2026-10-30）。使用者在音效會話說：「這個你先轉好，需求加到 assets editor 中。」由音效線（`v8-engine-audio-plan`）轉來，這裡只記需求，不排實作。
     1. 匯入任意取樣率與位元深度的 WAV（8／16／24／32 位元整數、32 位元浮點；1 或 2 聲道），轉成 `GYO::Audio` 的片段格式：48 kHz、PCM16、原聲道數。理由：混音器執行中不重新取樣（[audio.md](../../../architecture/audio.md) Design Invariant 9），`SoundLoader` 只讀 16 位元。
     2. 轉換要可重現：同一輸入得到同樣的位元組。現行腳本用窗化 sinc 重新取樣（Blackman 窗、兩側各 32 個零交越、截止在較低 Nyquist 的 0.95），用固定種子的三角抖動量化成 16 位元，並報告飽和的樣本數。
-    3. 原檔放在 `<asset>/audio/source/`，不登錄在 catalog、不打包；轉好的檔登錄在 catalog（type `sound`）。
-    4. 記錄來源與授權（現在寫在 `assets/object_fps_pvp/audio/README.md`，授權待使用者補）。
-    - 現況：AGENTS §5 的 Script 階段，由 `docs/architecture/plans/audio/scripts/convert_wav.py` 手動轉換。腳本與產物在音效線的分支 `claude/v8-engine-audio-95a496`，尚未推送，之後隨音效的 PR 線合併；合併前本文件裡這兩個路徑還不存在。
+    3. 原檔放在資產根目錄**以外**（位置由 assets editor 的規劃決定，例如另一個來源目錄，或不進 repo）；轉好的檔才放進資產根目錄並登錄在 catalog（type `sound`）。理由：產品的內容契約要求資產根目錄下每個檔都登錄在 catalog（`tests/object_fps_pvp/test_asset_catalog.py` 的 `test_every_asset_file_is_in_the_catalog`）。2026-10-30 更正：原本寫「放在 `<asset>/audio/source/`」，音效線照做後這個測試失敗，已移出。
+    4. 記錄來源與授權（現在寫在音效線的 dev_log `docs/dev_logs/2026_10_30_pvp_v8_product_sfx.zh-Hant.md`，授權待使用者補）。
+    - 現況：AGENTS §5 的 Script 階段，由 `docs/architecture/plans/audio/scripts/convert_wav.py` 手動轉換。腳本、產物與上面的 dev_log 在音效線的分支 `claude/v8-engine-audio-95a496`，尚未推送，之後隨音效的 PR 線合併；合併前本文件裡這些路徑還不存在。
+  - 已收到的需求：**動畫與音效的同步**（`v8-tool-assets-anim-events`，2026-10-30）。使用者在音效會話說：「有一些違和感，這個聲音和動畫的管理是資料化的吧，是的話，就給Assets Editor來處理。」由音效線（`v8-engine-audio-plan`）轉來，這裡只記需求，不排實作。
+    1. 在動畫片段上標記事件時刻（例如「插入彈倉」在第幾秒、哪一隻腳著地），可以在 Assets Editor 裡預覽與調整。
+    2. 音效提示可以掛在這些標記上：執行時動畫到達該時刻就發聲（時刻換成 Engine 時間，交給 `GYO::Audio` 的時間戳排程）。
+    3. 格式是 Data Contract（版本與驗證規則），Runtime 不依賴 Editor；owner 與格式位置由 assets editor 的規劃決定（和 `v8-product-hitbox-data` 一樣要對齊格式的 owner）。
+    4. 完成後移除產品裡的過渡規則 `ReloadSoundOffsetSeconds`（`apps/object_fps_pvp/src/Pvp/SoundCues.cpp`）。
+    - 現況：已資料化的是每種音效提示的片段、音量、空間化與步距（`assets/object_fps_pvp/audio/sfx.json`）；聲音對到動畫哪一刻沒有資料化。換彈最後一聲和插彈倉動畫對不上，目前在 C++ 用「聲音結尾對齊換彈結束」修正，使用者聽了仍覺得違和。動畫片段（例如 `nailer_v2_viewmodel.json`、角色的 animset）沒有事件時刻的標記。上面提到的 `sfx.json`、`SoundCues.cpp` 在音效線的分支 `claude/v8-engine-audio-95a496`，尚未推送。
 - 2026-10-30 第一版裡兩個工具的建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端等）已撤下，見 commit `54dac0c3`。
 
 ## 驗收的共同規則
@@ -166,3 +219,8 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-panels` | [2026_10_30_tool_v8_ui_editor_panels](../../../dev_logs/2026_10_30_tool_v8_ui_editor_panels.zh-Hant.md) |
 | `v8-tool-ui-editor-element-schema` | [2026_10_30_tool_v8_ui_editor_element_schema](../../../dev_logs/2026_10_30_tool_v8_ui_editor_element_schema.zh-Hant.md) |
 | `v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` | [2026_10_30_tool_v8_ui_editor_clipboard_nudge](../../../dev_logs/2026_10_30_tool_v8_ui_editor_clipboard_nudge.zh-Hant.md) |
+| `v8-tool-ui-ime-observe`（停下回報） | [2026_10_30_tool_v8_ui_ime_observe](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md) |
+| `v8-product-lobby-fullwidth` | [2026_10_30_pvp_v8_lobby_fullwidth](../../../dev_logs/2026_10_30_pvp_v8_lobby_fullwidth.zh-Hant.md) |
+| `v8-engine-input-composition` | [2026_10_30_engine_v8_input_composition](../../../dev_logs/2026_10_30_engine_v8_input_composition.zh-Hant.md) |
+| `v8-tool-ui-text-field` | [2026_10_30_tool_v8_ui_text_field](../../../dev_logs/2026_10_30_tool_v8_ui_text_field.zh-Hant.md) |
+| `v8-product-lobby-text-field` | [2026_10_30_pvp_v8_lobby_text_field](../../../dev_logs/2026_10_30_pvp_v8_lobby_text_field.zh-Hant.md) |

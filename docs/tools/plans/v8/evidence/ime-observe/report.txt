@@ -1,0 +1,7 @@
+diagnostics ime_ui="(default)" events=169
+trial 1: colon=ascii committed='127.0.0.1:8080' compositions=0 composed_first=0 keys_until_commit=None
+trial 2: colon=missing committed='' compositions=0 composed_first=0 keys_until_commit=None
+trial 3: colon=missing committed='127.0．0.1。０．１' compositions=0 composed_first=0 keys_until_commit=None
+trial 4: colon=ascii committed='.0.1：:8080' compositions=0 composed_first=0 keys_until_commit=None
+trial 5: colon=missing committed='' compositions=0 composed_first=0 keys_until_commit=None
+trial 6: colon=missing committed='' compositions=0 composed_first=0 keys_until_commit=None

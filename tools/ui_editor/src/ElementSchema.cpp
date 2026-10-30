@@ -16,6 +16,9 @@ constexpr ElementColorField kPanelColors[]{
 constexpr ElementColorField kImageColors[]{
     {"Image tint", "tint", true},
 };
+constexpr ElementColorField kTextFieldColors[]{
+    {"Placeholder", "placeholder_color", false},
+};
 constexpr ElementColorField kSliderColors[]{
     {"Track", "track_color", false},
     {"Fill", "fill_color", false},
@@ -31,6 +34,8 @@ constexpr ElementKind kKinds[]{
     {.type = "horizontal_slider", .focusable = true, .actionPayload = "number", .bindingType = "number",
      .colors = kSliderColors},
     {.type = "fixed_step_list", .bindingType = "list<object>"},
+    {.type = "text_field", .focusable = true, .actionPayload = "string", .bindingType = "string",
+     .colors = kTextFieldColors},
 };
 
 [[nodiscard]] bool DocumentContainsNodeId(
@@ -189,6 +194,29 @@ Json MakeDefaultElement(Json& document, const ElementKind& kind) {
             {"vertical_align", "center"},
         };
         element["template"] = Json::array({std::move(item)});
+    } else if (type == "text_field") {
+        // text_field and its string action need gyo.ui version 2.
+        if (document.value("version", 1) < 2) document["version"] = 2;
+        Json& actions = document["actions"];
+        Json& bindings = document["bindings"];
+        const std::string action = UniqueDeclarationId(actions, "action.text");
+        const std::string binding = UniqueDeclarationId(bindings, "binding.text");
+        actions.push_back({{"id", action}, {"payload", "string"}});
+        bindings.push_back({{"id", binding}, {"type", "string"}, {"preview", ""}});
+        element["point_size"] = 24.0;
+        element["text_color"] = {{"color", "white"}};
+        element["horizontal_align"] = "left";
+        element["vertical_align"] = "center";
+        element["action"] = action;
+        element["binding"] = binding;
+        element["background"] = {
+            {"normal", "button"},
+            {"focused", "button_focused"},
+            {"pressed", "button_pressed"},
+        };
+        element["max_length"] = 32;
+        element["placeholder"] = "Text";
+        element["placeholder_color"] = "track";
     }
     return element;
 }

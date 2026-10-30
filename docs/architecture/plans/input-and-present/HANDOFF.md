@@ -436,6 +436,13 @@
   - 25 案矩陣在消費端修正一個驗收工具的誤判後全數通過。
   - 驗收工具不需要為了 IP-2 修改。D13 的停止條件（分析器無法處理常見的 `Skipped`）沒有發生。
 
+- 2026-10-30：v8 工具線（`docs/tools/plans/v8/`）做了 Input 的兩項只加不改（使用者決定由工具線做，`v8-tool-ime-input-delta`）。依 D12，這裡只寫摘要，不連結消費端的文件：
+  - `v8-tool-ui-ime-observe`：`SdlInput::SetTextDiagnostics`，診斷用，frame 不變。
+  - `v8-engine-input-composition`：`TextEvent::Kind::Composition`（`cursor`、`selectionLength`）、`SdlInput::SetTextInputArea`、`SdlPlatformOptions::imeComposition`。
+  - 理由：Windows 的日文輸入法在 SDL 預設設定下不送組字，組字中的字遊戲看不到。
+  - Architecture Delta：Platform 多了一個設定整個 process 的 SDL hint 的選項（預設關閉）。Input 的不變式 1（只加不改）與不變式 3（只在文字輸入開啟時、依到達順序）對組字同樣適用。
+  - 守衛：`SDL compositions join the text only while text input is on, in arrival order`、`SdlInput hands the text input area to SDL`、`SdlPlatform hands the input method composition to the program only when asked`。突變 7 個全部被抓到。
+
 ## 未結事項
 
 - IP-2：停頓位置已量測：在 `nextDrawable`（fence 0 ms）。觸發原因未查明（這次不是拖動標題列）；依 D19（2026-10-08 由 D27 修訂）由消費端分執行緒處理，等待與執行緒的機制見 [時間、執行緒與 Trace](../time-threads-trace/README.md)。

@@ -45,6 +45,14 @@ struct SdlPlatformOptions {
     int width{1280};
     int height{720};
     bool resizable{true};
+    // The program draws an input method's composition itself: the input
+    // backend then reports it (TextEvent::Kind::Composition) and the
+    // operating system no longer draws it; candidate lists stay native. Set
+    // before SDL's video starts and process-wide (SDL's
+    // SDL_HINT_IME_IMPLEMENTED_UI); a program that does not draw the
+    // composition leaves it off, or typed text stays invisible until
+    // committed. v8-engine-input-composition.
+    bool imeComposition{false};
 };
 
 struct Rect final {

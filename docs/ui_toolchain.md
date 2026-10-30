@@ -44,7 +44,26 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    Readers reject an unknown element or version explicitly; they never skip it.
 4. Ui holds no game state. Which page belongs to a game phase, and every
    binding value, are the product's. Ui holds only state it can rebuild, such
-   as focus and the pressed control.
+   as focus and the pressed control, and, while a text field is being edited,
+   that edit (its text, cursor and selection). A submit only emits the field's
+   action with the edited text; whether it is accepted, and the binding value,
+   stay the product's. Cancelling, losing focus or a change of the binding
+   discards the edit; Ui keeps no copy of an earlier value. Guard: `A text
+   field discards its edit when the binding changes or the pointer leaves`.
+5. Which characters a text field accepts is the product's. Ui hands committed
+   text (typed or pasted) to a check function the product supplies and keeps
+   only what it returns. Ui knows no product character rule, and a gyo.ui
+   document declares no character set, only limits without product meaning
+   such as `max_length`. Guard: `A text field keeps only what the product's
+   check function returns`.
+6. An input method's composition is shown only. Ui draws it (for example
+   underlined) but never puts it into the edit or a submitted value; only
+   committed text passes the check of invariant 5 into the edit. Guard: `A
+   text field shows a composition but never submits it` (Enter, losing focus
+   and cancel during a composition).
+7. Text events reach Ui as its own neutral types, converted by the product,
+   like `UiInputFrame` (invariant 2); clipboard text is also handed in by the
+   product, so Ui never reaches the platform. Guard: `ui.dependency_guard`.
 
 ### ui_editor
 
@@ -73,7 +92,11 @@ repair or rebuild the component.
   interaction (typing on the canvas, input-method composition) is beyond ImGui.
 - GYO::Ui: a product needs to branch on an element's internal state, or needs
   scripts to express a menu; or text-editing policy placed in Ui starts to
-  need product-specific rules.
+  need product-specific rules; or a product needs editing beyond the common
+  set (Backspace, Delete, Left/Right, Home/End, select all, paste, Enter to
+  submit, Escape to cancel), such as its own shortcuts, several lines, rich
+  text or completion. Ui does not grow to cover these; the user decides
+  whether text editing is redesigned.
 
 ## JSON v1
 
@@ -110,6 +133,44 @@ record shape. Text is limited to literal/value, typed named-placeholder
 compose, boolean/enum select and fixed-list item fields. V1 has
 no scripts, custom widgets, plugin ABI, Flex/Grid, animation, rotation, scroll,
 rich text, shaping or localization framework.
+
+## JSON v2
+
+Version 2 (v8-tool-ui-text-field) adds one element and one payload type; every
+version 1 document reads as before and is written back as version 1. A reader
+accepts versions 1 and 2 and rejects any other explicitly. `text_field` and the
+`string` payload in a version 1 document are version errors.
+
+- Action payload `string`: the action carries text (a text field's submit).
+- `text_field`: `binding` (a `string` binding: the value shown and edited),
+  `action` (`string` payload: emitted on submit with the edited text),
+  `max_length` (code points, at least 1), optional `placeholder` with its
+  `placeholder_color` (shown while the value is empty and the field is not
+  being edited), `background` (`normal`, `focused`, and `pressed` while
+  editing), and the text style keys (`font`, `point_size`, `text_color`,
+  `horizontal_align`, `vertical_align`, centered vertically by default). It is
+  interactive and belongs in `focus_order`; it is forbidden in list templates.
+  One line, no scrolling: the text is clipped to the field, so size the field
+  for `max_length`.
+
+Editing, by `UiRuntime` (Design Invariants 4-7):
+
+- Activate on the focused field, or a press on it, starts editing a copy of the
+  binding value with the cursor at its end. `UiInteractionState::editingElement`
+  names the field while it is edited; the product turns the platform's text
+  input on for it.
+- `UiInputFrame::text` carries the edit, converted by the product:
+  `Insert` (committed or pasted text), `Composition` (shown at the cursor,
+  never edited), `Backspace`, `Delete`, `MoveLeft`, `MoveRight`, `MoveHome`,
+  `MoveEnd`, `SelectAll`. Inserted text passes the product's
+  `UiRuntime::SetTextFilter` (all of it without one), then becomes one line of
+  whole code points and is cut to `max_length`.
+- Activate submits: the field's action with the edited text as its payload.
+  Cancel discards the edit (it is not the canvas cancel action then). Moving
+  the focus, a press elsewhere, or a change of the binding value discards it
+  too; moving the pointer does not.
+- The renderer draws the selection, the composition's underline and the caret
+  at the measured width of the text before them (`UiTextDraw::caret`).
 
 ## Scene display adjustment
 

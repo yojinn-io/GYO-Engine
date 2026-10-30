@@ -1,6 +1,6 @@
 # v8 工具線交接
 
-更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)、[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108) 已合併；小功能（`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`）完成，在分支 `claude/v8-tool-ui-editor-small`。**
+更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。PR #107～#109 已合併；`v8-tool-ui-ime-observe` 進行中（分支 `claude/v8-tool-ui-ime-observe`），等 Windows 場次。**
 本文件是工具線的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。v8 產品計畫的同步由產品會話做，本線不改 `docs/object_fps_pvp/plans/v8/`。
 
 ## 代號對照
@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
-- **完成，開 PR 中**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`（分支 `claude/v8-tool-ui-editor-small`），使用者在 macOS 的 GUI 上試過。下一步是 `text_field` 開始前的三個決定（`v8-tool-ui-schema-version`、`v8-tool-ui-edit-policy-owner`、`v8-tool-ui-widget-scope`）。
+- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth`、`v8-engine-input-composition` 完成（Windows 的 L3 都未做）；Ui 的 Design Invariants 已改（`v8-tool-ui-invariants-text`）；`v8-tool-ui-text-field` 完成（gyo.ui v2）。`v8-product-lobby-text-field` 完成，Windows L3 全部通過（組字顯示、候選窗位置、全形轉半形、Enter／Esc）。之後是 ui_editor 的 `v8-tool-ui-editor-text-field`。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -30,13 +30,8 @@
 |---|---|---|---|---|
 | `v8-tool-plan-location` | 計畫文件放哪 | `docs/tools/plans/v8/`（④ 的線計畫；之後你的 voxel 方案也能放這裡；`docs/` 底下，不是新的 Top-level 目錄）／`docs/ui_editor/plans/v8/`（現在只剩 UI Editor，放 owner 的文件夾更直接） | 前者，因為 ④ 之後還有 voxel；UI 的格式與 Design Invariants 仍寫在 [ui_toolchain.md](../../../ui_toolchain.md) | 文件位置；圖書管理員可再調 |
 | `v8-tool-start-timing` | 實作何時開始 | 照 v8-product-order 在 ③ 之後／ui-widgets-line 的檢測（`v8-tool-ui-ime-observe`）先做，其他照順序 | 檢測先做：它不改行為，結果決定輸入法要不要修 | 何時排實機 |
-| `v8-tool-ui-widget-scope` | 「組件化這些按鈕和輸入框」的範圍 | (a) 只加 `text_field`；按鈕已經是 `gyo.ui` 的 `button`（`pvp_lobby.json`）／(b) 再加按鈕的共用樣式（同一組顏色、字級只寫一次），也是 schema 變更／(c) 可重用的元件範本（prefab），接近 ui_toolchain.md 明說不做的「custom widgets」 | (a)；(b) 等第二個畫面也重複時再做 | `v8-tool-ui-button-style` 要不要排 |
-| `v8-tool-ui-schema-version` | `text_field` 怎麼進 schema | v1 的集合寫明是封閉的。升 `version: 2`（讀取端接受 1、2；舊讀取端明確拒絕 v2）／留在 v1 加元素（舊讀取端以「未知元素」拒絕，但版本號沒告訴人為什麼） | 升 v2 | 契約文件與 codec |
-| `v8-tool-ui-edit-policy-owner` | 文字編輯政策放哪 | 通用的部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`（Architecture Delta：Ui 的責任變大）／全部留在產品，Ui 只畫（輸入框就不算元件）。字元過濾：(i) `text_field` 宣告 `max_length`，過濾由產品在提交時檢查／(ii) 資料裡宣告允許的字元集合（簡單、封閉，但開始往設定語言走，AGENTS §9）／(iii) 產品在執行時提供過濾函式 | 通用部分在 Ui；過濾用 (iii)：規則留在產品，資料不帶產品語意 | Ui 的 Design Invariants 怎麼寫 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
-| `v8-tool-ui-editor-structure` | 審查的整理項目要不要排 | [審查](ui-editor-review.md)：邊界與資料安全好，內部責任太集中（`EditorApp.cpp` 約 2,300 行、元素 schema 在 editor 又寫一份）。建議在加 `text_field` 前做 `v8-tool-ui-editor-gizmo-math`、`v8-tool-ui-editor-element-schema`、`v8-tool-ui-editor-panels`，不重寫 | 照審查的順序排 | ui-widgets-line 的批次 |
-| `v8-tool-ime-input-delta` | 組字事件由誰做 | Engine 的 Input（計畫夾 input-and-present；只加不改，不變式 1）在工具線做／交給 Engine 的會話做 | 工具線做，記到 input-and-present 的 HANDOFF；先等 `v8-tool-ui-ime-observe` 的結果 | 有沒有 Engine 批 |
 
 ## 決定紀錄
 
@@ -44,7 +39,16 @@
 |---|---|---|
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
+| `v8-tool-ui-invariants-text` | （2026-10-30）[ui_toolchain.md](../../../ui_toolchain.md) 的 GYO::Ui Design Invariants：改第 4 條（編輯中的內容由 Ui 暫時持有，值仍歸產品）、新增 5（字元由產品的檢查函式決定）、6（組字只顯示）、7（文字事件經產品轉成 Ui 的中立型別）；Replacement Criteria 加「超出通用編輯集合就停」。5、6 的守衛隨 `text_field` 加 | 「同意，寫進去」 |
+| `v8-tool-ime-input-delta` | （2026-10-30）`v8-engine-input-composition` 由工具線（本會話）做，Architecture Delta 記到 input-and-present 的 HANDOFF | 選「工具線做（建議）」 |
+| `v8-tool-ime-plan` | （2026-10-30）照 README「檢測之後：輸入法的規劃」排兩批；產品批 `v8-product-lobby-fullwidth` 也由本會話做 | 選「照這樣排（建議）」「這個會話做」 |
+| `v8-tool-ui-ime-observe-next` | （2026-10-30）(b)：判定記為不成立；接受這次的 log 當證據，以觀測到的事實規劃 `v8-engine-input-composition`（README「檢測之後：輸入法的規劃」） | 「(b) 接受證據、往下規劃」 |
+| `v8-tool-ui-ime-observe-judgment` | （2026-10-30）照 [README](README.md)「v8-tool-ui-ime-observe 的事前宣告」做 Windows 場次與判定；看了 log 之後不改 | 「同意」 |
+| `v8-tool-ui-schema-version` | （2026-10-30）`text_field` 用 `gyo.ui` `version: 2` 加入；讀取端接受 1 與 2，舊讀取端以版本不支援明確拒絕 v2 | 選「升 version 2（建議）」 |
+| `v8-tool-ui-edit-policy-owner` | （2026-10-30）文字編輯的通用部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`；字元過濾留在產品，由產品提供檢查函式。這是 Architecture Delta（Ui 多了文字編輯的責任），開始實作前要改 [ui_toolchain.md](../../../ui_toolchain.md) 的 Design Invariants，內容另給使用者同意 | 選「通用部分放 GYO::Ui（建議）」 |
+| `v8-tool-ui-widget-scope` | （2026-10-30）這次只加 `text_field`；按鈕的共用樣式（`v8-tool-ui-button-style`）等第二個畫面也重複時再排 | 選「只加 text_field（建議）」 |
 | `v8-tool-ui-editor-element-schema` | （2026-10-30）元素表放在 ui_editor（選項 A），用測試和 GYO::Ui 的 codec／evaluator 對齊；Engine 不為工具提供描述。原則：工具經資料與 Engine 交接，Engine 不承擔工具的職能，工具可以隨時修改或更換 | 「A：放 ui_editor」；「我們可以通過資料來與Engine交接。我的理解是這個，Engine不需要承擔tools的職能，這樣以後tools可以隨時修改和更換。」 |
+| `v8-tool-ui-editor-structure` | （2026-10-30）審查的整理項目 S-1～S-3 都做：`v8-tool-ui-editor-gizmo-math`、`v8-tool-ui-editor-panels`、`v8-tool-ui-editor-element-schema`（已合併，PR #107、#108）。S-4 不排 | 「這些問題需要重構掉」 |
 | `v8-tool-ui-invariants` | （2026-10-30）照草稿寫進 [ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」：GYO::Ui 4 條、ui_editor 5 條、Replacement Criteria；守衛 `ui.dependency_guard`、`gyo_ui_editor.dependency_guard`、`TestGizmoAgreesWithUiEvaluator` | 「同意，寫進去」 |
 | `v8-tool-ui-order` | （2026-10-30）UI 的順序：先寫 `v8-tool-ui-invariants`，再整理（`v8-tool-ui-editor-panels` → `v8-tool-ui-editor-element-schema`），再做 `text_field`，編輯器的小功能（複製貼上、方向鍵微調）穿插；對齊參考線、多選等需要時再排。見 [README](README.md)「順序與依賴」 | 「照你建議做吧。」 |
 | `v8-tool-ui-editor-gizmo-bug` | （2026-10-30）拖動照 (a) Unity 的 RectTransform：本體＝移動 `position`；邊與角＝縮放（`size_delta`、`position`），錨點不動；拖錨點與 pivot 時補償 `position`、`size_delta`，元素的矩形不動。「相等時一起移動」的實作細節由 Claude 定為：被拖的錨點推著另一個走，所以往對方那側拖時一起動、往反方向拖時分開（否則相等的錨點在 gizmo 上永遠分不開）。Snap 只對齊這次拖動的座標 | 「(a) Unity 式」 |
@@ -81,3 +85,20 @@
 - 2026-10-30：使用者：「先做小功能」。`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` 開始（high／medium，估 3～5 h＋2～3 h），分支 `claude/v8-tool-ui-editor-small`（切自 master `e31dfdf4`）。
 - 2026-10-30：兩批完成，實際約 1 h。新測試與 8 個突變全部被抓到；14/14 通過。GUI 上還沒手動操作。
 - 2026-10-30：使用者在 GUI 上試過複製貼上、方向鍵與修飾鍵：「可以了。繼續」。推送並開 PR。
+- 2026-10-30：開 [PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)。`text_field` 的三個決定：升 v2、通用編輯放 `GYO::Ui`（過濾留產品）、只加 `text_field`。
+- 2026-10-30：使用者：「開始」。`v8-tool-ui-ime-observe` 開始（medium，估 2～4 h＋實機）。加了 `SdlInput::SetTextDiagnostics`（只加不改，frame 不變）與客戶端 `--text-input-trace`；單元測試＋3 個突變全被抓到；Mac 上實際啟動客戶端，確認 `input.text` 進了客戶端 log。Mac 沒有 PowerShell，Windows 端只用一行 `.cmd`（未在 Windows 上執行過），分析腳本在 Mac 上用合成 log 測過。事前宣告寫進 README，等使用者同意。
+- 2026-10-30：使用者同意 `v8-tool-ui-ime-observe` 的事前宣告。
+- 2026-10-30：音效線更正 `v8-tool-assets-audio-import` 第 3 點：原檔不能放在資產根目錄下（產品的 catalog 測試要求根目錄下每個檔都登錄），改成放在資產根目錄以外；第 4 點的記錄位置改為音效線的 dev_log。README 已更新。
+- 2026-10-30：使用者：「合併 #109、另開 PR」。PR #109 以 merge commit 合併（`5cfa149c`）。剩下的 4 個 commit（text_field 的決定、ime-observe、同意、音效需求更正）rebase 到 master，分支 `claude/v8-tool-ui-ime-observe`，另開 PR。
+- 2026-10-30：音效線轉來第二項 assets editor 需求：動畫事件時刻與音效同步資料化（`v8-tool-assets-anim-events`），使用者原話「這個聲音和動畫的管理是資料化的吧，是的話，就給Assets Editor來處理。」記到 README；只記需求。
+- 2026-10-30：清理：`v8-tool-ui-editor-structure` 已做完卻還在「等你決定」，移到決定紀錄；README 的 `v8-tool-ui-editor-file-browser` 補上 ✓。
+- 2026-10-30：收到 Windows 場次的 log 與回報（日文 IME、無中文 IME、每次的畫面結果未記錄）。收支一致（169 行、34,990 bytes、丟棄 0）。判定不成立，停下回報。觀測到：組字事件 0 筆（SDL 預設由 OS 畫組字）、字在確定時成批送來、平假名模式送全形字元被大廳的 ASCII 過濾丟掉、半形可以。log 與分析輸出存在 `evidence/ime-observe/`。
+- 2026-10-30：使用者選 (b)。規劃 `v8-engine-input-composition`（平台選項 `imeComposition`、`TextEvent::Kind::Composition`、`SetTextInputArea`）與產品批 `v8-product-lobby-fullwidth`，寫進 README，等確認。
+- 2026-10-30：使用者確認規劃；組字事件由工具線做；產品批由本會話做。`v8-product-lobby-fullwidth` 開始（medium，估 1～2 h）。
+- 2026-10-30：`v8-product-lobby-fullwidth` 完成，實際約 0.5 h。`FilterAddressText`；Red（舊規則下 4 個全形斷言失敗）→ Green；5 個突變全被抓到（1 個先存活、補測試後抓到）；產品 CPU 測試全過。Windows L3 未做。
+- 2026-10-30：使用者：「開始」。`v8-engine-input-composition` 完成（high，估 6～10 h，實際約 1 h）：`imeComposition`、`Kind::Composition`、`SetTextInputArea`；Red→Green；7 個突變全被抓到；改了上一批診斷測試的判定（§14.4，見 dev_log）。Windows L3 要等有畫組字的消費端。
+- 2026-10-30：使用者同意 GYO::Ui Design Invariants 的修改稿，寫進 ui_toolchain.md（`v8-tool-ui-invariants-text`）。
+- 2026-10-30：使用者：「開始」。`v8-tool-ui-text-field` 完成（high，估 10～16 h，實際約 15 分鐘）：gyo.ui v2、`text_field`、`UiTextInput`、`SetTextFilter`、renderer 的游標／底線／選取。14 個突變全被抓到（1 個先存活、補測試後抓到）；測試抓到 1 個實作錯（丟棄後同一幀又開始編輯）已修；改了既有版本測試的判定（§14.4）。xhigh 審查沒開（要你同意）。
+- 2026-10-30：使用者：「大廳改用 text_field」。`v8-product-lobby-text-field` 完成：大廳 v2、位址欄 `text_field`、產品轉換 `TextInput`、`SyncTextInput`、`SetTextFilter(FilterAddressText)`、`imeComposition`；刪掉手寫的編輯。行為變化：編輯中點其他按鈕會丟掉打到一半的位址（Ui 不變式 4），要按 Enter 套用。Mac 上啟動確認 `ime_ui="composition"`。Windows L3 未做。
+- 2026-10-30：Windows L3（package-trial run 41066623724）：A、B1、B2、B3、C、D 全部「是」，符合事前宣告。log 的 `text_editing` 22 行（上次 0 行）。證據在 `evidence/lobby-text-field/`。PR #111 的 L1／macos-arm64 失敗在 `audio_sdl.disk`（音效線的測試，master 上也失敗），已轉給音效線，只重跑失敗的 job。
+- 2026-10-30：PR #111 重跑失敗的 job：`L1 / macos-arm64` 這次通過，四列都通過、CLEAN。第一次的失敗（`audio_sdl.disk`，`SdlAudioOutputTests.cpp:158`，音效線的測試）依 §14.1 留在紀錄裡：原因在音效線（master 上同一行也失敗過），不是本 PR 的實作。

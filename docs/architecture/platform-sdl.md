@@ -54,6 +54,15 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
 
 ## Contracts
 
+### Input method composition (v8-engine-input-composition)
+
+- `SdlPlatformOptions::imeComposition` (default false) sets SDL's `SDL_HINT_IME_IMPLEMENTED_UI` to `composition`
+  before `Create` starts SDL's video. SDL then sends the composition to the program (the input backend reports it as
+  `TextEvent::Kind::Composition`) and the operating system stops drawing it; candidate lists stay native. The hint is
+  process-wide and read when video starts, so it is meant for the first platform of a process; false leaves the hint
+  as it is. A program that turns it on draws the composition itself; otherwise typed text stays invisible until it
+  is committed. Guard: `SdlPlatform hands the input method composition to the program only when asked`.
+
 ### Event timestamps (IP-3, milestone ip3c)
 
 - On entering a pump the platform samples `e0 = Time::Now()`, `s = SDL_GetTicksNS()`, `e1 = Time::Now()` and uses
