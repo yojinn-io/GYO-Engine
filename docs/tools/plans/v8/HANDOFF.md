@@ -17,7 +17,7 @@
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
-- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認：先做 `v8-product-lobby-fullwidth`，再做 `v8-engine-input-composition`。
+- **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth` 完成（Windows 的 L3 未做）；下一批 `v8-engine-input-composition`。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -94,3 +94,4 @@
 - 2026-10-30：收到 Windows 場次的 log 與回報（日文 IME、無中文 IME、每次的畫面結果未記錄）。收支一致（169 行、34,990 bytes、丟棄 0）。判定不成立，停下回報。觀測到：組字事件 0 筆（SDL 預設由 OS 畫組字）、字在確定時成批送來、平假名模式送全形字元被大廳的 ASCII 過濾丟掉、半形可以。log 與分析輸出存在 `evidence/ime-observe/`。
 - 2026-10-30：使用者選 (b)。規劃 `v8-engine-input-composition`（平台選項 `imeComposition`、`TextEvent::Kind::Composition`、`SetTextInputArea`）與產品批 `v8-product-lobby-fullwidth`，寫進 README，等確認。
 - 2026-10-30：使用者確認規劃；組字事件由工具線做；產品批由本會話做。`v8-product-lobby-fullwidth` 開始（medium，估 1～2 h）。
+- 2026-10-30：`v8-product-lobby-fullwidth` 完成，實際約 0.5 h。`FilterAddressText`；Red（舊規則下 4 個全形斷言失敗）→ Green；5 個突變全被抓到（1 個先存活、補測試後抓到）；產品 CPU 測試全過。Windows L3 未做。

@@ -174,7 +174,7 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | 代號 | 檔位｜引擎 | 估時 | 內容 | 驗收 |
 |---|---|---|---|---|
 | `v8-engine-input-composition` | high｜Opus 5.5 | 6～10 h | 上表的平台選項、組字事件、輸入區域；`input.md`、`platform-sdl.md` 的契約與不變式說明 | CI：IP-1 的判定不變；組字事件的單元測試（合成的 SDL 事件：開始、更新、結束、文字輸入關閉時不收）；相關突變。L3 併在下一批 |
-| `v8-product-lobby-fullwidth` | medium｜Opus 5.5 | 1～2 h | 大廳的過濾先把全形英數與標點換成半形（不依賴上一批，可以先做）。**產品批**，由產品會話或你指定的會話做 | CI：過濾的單元測試（`１２７．０．０．１：８０８０` → `127.0.0.1:8080`）；L3：Windows 日文輸入法打位址 |
+| `v8-product-lobby-fullwidth` ✓ | medium｜Opus 5.5 | 1～2 h | 大廳的過濾先把全形英數與標點換成半形（不依賴上一批，可以先做）。**產品批**，本會話做（`v8-tool-ime-plan`） | CI：過濾的單元測試（`１２７．０．０．１：８０８０` → `127.0.0.1:8080`）；L3：Windows 日文輸入法打位址 |
 | `v8-tool-ui-text-field` 以後 | （原計畫） | | `text_field` 用組字事件畫底線、設定輸入區域；大廳改用 `text_field` 時，打開 `imeComposition` | 原計畫的驗收；L3 用 `--text-input-trace` 確認 `text_editing` 有送到 |
 
 ## 待討論的兩個工具（`v8-tool-scope-ui-first`）
@@ -220,3 +220,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-element-schema` | [2026_10_30_tool_v8_ui_editor_element_schema](../../../dev_logs/2026_10_30_tool_v8_ui_editor_element_schema.zh-Hant.md) |
 | `v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` | [2026_10_30_tool_v8_ui_editor_clipboard_nudge](../../../dev_logs/2026_10_30_tool_v8_ui_editor_clipboard_nudge.zh-Hant.md) |
 | `v8-tool-ui-ime-observe`（停下回報） | [2026_10_30_tool_v8_ui_ime_observe](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md) |
+| `v8-product-lobby-fullwidth` | [2026_10_30_pvp_v8_lobby_fullwidth](../../../dev_logs/2026_10_30_pvp_v8_lobby_fullwidth.zh-Hant.md) |

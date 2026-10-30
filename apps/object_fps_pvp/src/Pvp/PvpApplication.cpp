@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/ClientLog.hpp"
 #include "RetroFPS/Pvp/SessionSummary.hpp"
+#include "RetroFPS/Pvp/AddressText.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ShotGate.hpp"
@@ -200,11 +201,9 @@ struct PvpApplication::Impl final {
 
     void AppendAddress(const char* value) {
         if (!value) return;
-        for (; *value != '\0' && address.size() < 128; ++value) {
-            const unsigned char c = static_cast<unsigned char>(*value);
-            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                (c >= '0' && c <= '9') || c == '.' || c == ':' ||
-                c == '-' || c == '[' || c == ']') address += static_cast<char>(c);
+        for (const char c : FilterAddressText(value)) {
+            if (address.size() >= 128) break;
+            address += c;
         }
     }
 
