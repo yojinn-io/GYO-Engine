@@ -376,19 +376,29 @@ void SdlInput::HandleEvent(const Platform::Sdl::PlatformEvent& platformEvent) no
         }
         break;
     }
-    case SDL_EVENT_TEXT_EDITING:
-        // Not part of the frame (yet); seen only by the diagnostics.
+    case SDL_EVENT_TEXT_EDITING: {
+        // The composition, under the rules of typed text (input.md); SDL sends
+        // it only when the program asked to draw it (SdlPlatformOptions).
+        const bool active = SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_));
+        const bool taken = event.edit.windowID == ownWindowId && event.edit.text != nullptr && active;
+        if (taken) {
+            frame_.text.push_back({.kind = TextEvent::Kind::Composition,
+                                   .text = event.edit.text,
+                                   .cursor = event.edit.start,
+                                   .selectionLength = event.edit.length});
+        }
         if (textDiagnostics_) {
             try {
                 LogText("text_editing t=" + std::to_string(event.edit.timestamp) +
                         " own_window=" + std::to_string(event.edit.windowID == ownWindowId) +
-                        " active=" + std::to_string(SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) +
+                        " active=" + std::to_string(active) + " taken=" + std::to_string(taken) +
                         " start=" + std::to_string(event.edit.start) + " length=" + std::to_string(event.edit.length) +
                         " text=" + QuoteText(event.edit.text));
             } catch (...) {
             }
         }
         break;
+    }
     case SDL_EVENT_TEXT_EDITING_CANDIDATES:
         if (textDiagnostics_) {
             try {
@@ -495,6 +505,18 @@ SdlInput::SetTextInput(const bool enabled) {
         return Base::Err(SdlInputError::Make(
             SdlInputErrorCode::TextInputFailed,
             "SdlInput: unable to change text input",
+            SDL_GetError()));
+    }
+    return {};
+}
+
+Base::Result<void, SdlInputError>
+SdlInput::SetTextInputArea(const Platform::Sdl::Rect& area, const int cursor) {
+    const SDL_Rect rect{area.x, area.y, area.width, area.height};
+    if (!SDL_SetTextInputArea(Platform::Sdl::NativeWindow(*platform_), &rect, cursor)) {
+        return Base::Err(SdlInputError::Make(
+            SdlInputErrorCode::TextInputAreaFailed,
+            "SdlInput: unable to set the text input area",
             SDL_GetError()));
     }
     return {};

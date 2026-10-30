@@ -40,7 +40,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 ├── ui-widgets-line                          「PR 線：文字輸入框元件＋輸入法組字＋ui_editor」
 │   ├── v8-tool-ui-ime-observe               「medium｜Opus 5.5｜先檢測：把 TEXT_EDITING／TEXT_INPUT 記到 log，Windows 重現「:」卡住」
 │   ├── v8-tool-ui-invariants ✓              「medium｜Opus 5.5｜加元件之前，寫 GYO::Ui 與 ui_editor 的 Design Invariants＋Replacement Criteria」
-│   ├── v8-engine-input-composition          「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
+│   ├── v8-engine-input-composition ✓        「high｜Opus 5.5｜Input frame 只加不改：組字事件、候選窗位置」
 │   ├── v8-tool-ui-text-field                「high（編輯狀態局部 xhigh）｜Opus 5.5｜gyo.ui v2：text_field 元素、通用編輯狀態、組字顯示」
 │   ├── v8-tool-ui-editor-file-browser ✓     「high｜Opus 5.5｜SDL3 系統選擇窗，取代手打路徑（v8-tool-ui-editor-mount-ux）」
 │   ├── v8-tool-ui-editor-gizmo-math ✓       「high｜Opus 5.5｜gizmo 數學抽成純函式＋測試（行為不變）」
@@ -119,7 +119,7 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 |---|---|---|---|---|
 | `v8-tool-ui-ime-observe` | medium｜Opus 5.5 | 2～4 h＋實機一次 | 診斷用 log（不改行為）：組字事件的開始、內容、確定。附離線場次腳本（記憶「Offline session scripts」） | 實機：重現或記錄「未重現」與證據。重現不了就停下回報（§14.3），不排修正。觀測方法與判定見下面「v8-tool-ui-ime-observe 的事前宣告」 |
 | `v8-tool-ui-invariants` | medium｜Opus 5.5 | 2～3 h | 在 [ui_toolchain.md](../../../ui_toolchain.md) 寫 `GYO::Ui`、ui_editor 的 `Design Invariants`＋`Replacement Criteria`；能守的寫守衛 Test | 使用者同意節的內容 |
-| `v8-engine-input-composition` | high｜Opus 5.5 | 6～10 h | `TextEvent` 加組字的種類（組字字串、游標位置）；`SetTextInputArea`。只加不改 | CI：既有 IP-1 Test 判定不變；新事件的單元 Test（合成的 SDL 事件）；突變只跑相關的（v7.1 D184） |
+| `v8-engine-input-composition` ✓ | high｜Opus 5.5 | 6～10 h | `TextEvent` 加組字的種類（組字字串、游標位置）；`SetTextInputArea`。只加不改 | CI：既有 IP-1 Test 判定不變；新事件的單元 Test（合成的 SDL 事件）；突變只跑相關的（v7.1 D184） |
 | `v8-tool-ui-text-field` | high（編輯狀態局部 xhigh）｜Opus 5.5 | 10～16 h | `gyo.ui` v2、`text_field` 的 codec／驗證／版面／編輯狀態／繪製 | CI：codec 往返、v1 文件照常載入、編輯狀態的單元 Test（含組字中按 Enter、Backspace、焦點離開）、突變 |
 | `v8-tool-ui-editor-file-browser` | high｜Opus 5.5 | 3～5 h | SDL3 的系統選擇窗（`SDL_ShowOpenFolderDialog`、`SDL_ShowOpenFileDialog`、`SDL_ShowSaveFileDialog`）：選單「Open Asset Folder...」一步掛載（參考 AssetPack 的「データフォルダを開く」）；Open、Export、掛載對話框的欄位也用。回呼經執行緒安全的收件匣，在幀之間套用。不存狀態；跳不出窗時退回手打 | CI：收件匣跨執行緒、選資料夾後掛載、取消不掛載；L3：Windows 與 macOS 各選一次中文路徑 |
 | `v8-tool-ui-editor-panels` | medium｜Opus 5.5 | 3～5 h | Hierarchy、Canvas、Inspector、對話框拆成各自的檔；`EditorApp` 只協調。純搬移，不改行為 | CI：既有測試不變；拆前拆後的行為由既有測試與手動開一次確認 |
@@ -173,7 +173,7 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 
 | 代號 | 檔位｜引擎 | 估時 | 內容 | 驗收 |
 |---|---|---|---|---|
-| `v8-engine-input-composition` | high｜Opus 5.5 | 6～10 h | 上表的平台選項、組字事件、輸入區域；`input.md`、`platform-sdl.md` 的契約與不變式說明 | CI：IP-1 的判定不變；組字事件的單元測試（合成的 SDL 事件：開始、更新、結束、文字輸入關閉時不收）；相關突變。L3 併在下一批 |
+| `v8-engine-input-composition` ✓ | high｜Opus 5.5 | 6～10 h | 上表的平台選項、組字事件、輸入區域；`input.md`、`platform-sdl.md` 的契約與不變式說明 | CI：IP-1 的判定不變；組字事件的單元測試（合成的 SDL 事件：開始、更新、結束、文字輸入關閉時不收）；相關突變。L3 併在下一批 |
 | `v8-product-lobby-fullwidth` ✓ | medium｜Opus 5.5 | 1～2 h | 大廳的過濾先把全形英數與標點換成半形（不依賴上一批，可以先做）。**產品批**，本會話做（`v8-tool-ime-plan`） | CI：過濾的單元測試（`１２７．０．０．１：８０８０` → `127.0.0.1:8080`）；L3：Windows 日文輸入法打位址 |
 | `v8-tool-ui-text-field` 以後 | （原計畫） | | `text_field` 用組字事件畫底線、設定輸入區域；大廳改用 `text_field` 時，打開 `imeComposition` | 原計畫的驗收；L3 用 `--text-input-trace` 確認 `text_editing` 有送到 |
 
@@ -221,3 +221,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` | [2026_10_30_tool_v8_ui_editor_clipboard_nudge](../../../dev_logs/2026_10_30_tool_v8_ui_editor_clipboard_nudge.zh-Hant.md) |
 | `v8-tool-ui-ime-observe`（停下回報） | [2026_10_30_tool_v8_ui_ime_observe](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md) |
 | `v8-product-lobby-fullwidth` | [2026_10_30_pvp_v8_lobby_fullwidth](../../../dev_logs/2026_10_30_pvp_v8_lobby_fullwidth.zh-Hant.md) |
+| `v8-engine-input-composition` | [2026_10_30_engine_v8_input_composition](../../../dev_logs/2026_10_30_engine_v8_input_composition.zh-Hant.md) |

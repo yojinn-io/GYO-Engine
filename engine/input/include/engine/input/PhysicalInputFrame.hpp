@@ -125,15 +125,22 @@ struct KeyModifiers final {
 // UTF-8 text; Key records a key press (repeats included, releases never) so a
 // consumer can edit the text. What the keys mean is the consumer's policy.
 struct TextEvent final {
-    enum class Kind : std::uint8_t { Text, Key };
+    // Composition: an input method's text still being composed (the whole
+    // current composition; empty when it ended without text). Committed text
+    // arrives later as Kind::Text.
+    enum class Kind : std::uint8_t { Text, Key, Composition };
     Kind kind{};
-    std::string text;                              // Kind::Text
+    std::string text;                              // Kind::Text, Kind::Composition
     Key key{Key::Count};                           // Kind::Key: physical position
     // Kind::Key: the key the current layout produces at that position
     // (for example A on the position of Q in AZERTY); Count if none.
     Key layoutKey{Key::Count};
     KeyModifiers modifiers{};                      // Kind::Key
     bool repeat{};                                 // Kind::Key: a key repeat
+    // Kind::Composition: the cursor and the selected span inside text, in
+    // code points as the platform reports them; -1 when it reports none.
+    std::int32_t cursor{-1};
+    std::int32_t selectionLength{-1};
 };
 
 struct PhysicalInputFrame final {

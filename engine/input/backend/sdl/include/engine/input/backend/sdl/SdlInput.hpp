@@ -12,6 +12,7 @@ enum class SdlInputErrorCode {
     RelativeMouseModeFailed = 1,
     TextInputFailed,
     InjectionFailed,
+    TextInputAreaFailed,
 };
 
 [[nodiscard]] constexpr const char* ToString(const SdlInputErrorCode code) noexcept {
@@ -19,6 +20,7 @@ enum class SdlInputErrorCode {
     case SdlInputErrorCode::RelativeMouseModeFailed: return "RelativeMouseModeFailed";
     case SdlInputErrorCode::TextInputFailed: return "TextInputFailed";
     case SdlInputErrorCode::InjectionFailed: return "InjectionFailed";
+    case SdlInputErrorCode::TextInputAreaFailed: return "TextInputAreaFailed";
     }
     return "Unknown";
 }
@@ -51,6 +53,12 @@ public:
     // the category "input.text", with whether the frame took it. The frame is
     // the same either way. Off by default.
     void SetTextDiagnostics(bool enabled) noexcept;
+
+    // Where this window's text is being typed (window coordinates), and the
+    // cursor's offset from the area's left edge in pixels, so the input
+    // method shows its candidates beside it. v8-engine-input-composition.
+    [[nodiscard]] Base::Result<void, SdlInputError>
+    SetTextInputArea(const Platform::Sdl::Rect& area, int cursor);
 
     [[nodiscard]] const PhysicalInputFrame& Snapshot() const noexcept;
 
