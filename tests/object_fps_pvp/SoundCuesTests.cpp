@@ -156,4 +156,6 @@ TEST_CASE("PvP timeline display time is the inverse of the presentation cursor")
     CHECK(gap == doctest::Approx(6 * MovementTickSeconds).epsilon(1e-9));
     // A tick before the timeline's base lies in the past, not far ahead.
     CHECK(*timeline.DisplayTime(90) < *timeline.DisplayTime(100));
+    const double old = std::chrono::duration<double>(timeline.DisplayTime(90)->time_since_epoch()).count();
+    CHECK(old == doctest::Approx(1.0 - 9 * MovementTickSeconds).epsilon(1e-9)); // ten ticks before the base, shown one tick late
 }

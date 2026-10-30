@@ -59,6 +59,19 @@
 - 打包：`build/target/object_fps_pvp/bin/assets/object_fps_pvp/audio/` 有 4 個 wav 與 sfx.json。
 - 實際啟動用戶端 5 秒（大廳，沒有對局）：`PvP sound started driver=coreaudio device_frames=1024 schedule_delay_ms=60`，結束時 `PvP sound summary submitted=0 …`，正常退出。對局中的聲音還沒有實機確認（L2／L3）。
 
+- 突變（`tests/object_fps_pvp/mutations.json`，batch `v8-product-sfx`）：8／8 被殺（聲像左右顛倒、無最小增益、遠端第一個狀態重播、空中也算步數、瞬移算步數、顯示時間少了延遲、舊 Tick 以無號數換算、射擊保留最後一次按下）。
+  - 經緯：`sfx-display-time-unsigned` 第一次存活。無號數回繞後的巨大秒數轉成時間點時溢位，結果恰好仍「比較早」，只比較大小抓不到。測試改為檢查確切的值後被殺。
+
 ## L2 宣告（草案，等使用者核准；看結果前不改）
 
-見 HANDOFF 或回報中的宣告；核准後寫進本節並執行。
+- 目的：本機射擊的起音跟著按下的時刻，不落在 30 FPS 的幀格點上。
+- 場次：本機 Gateway＋Match＋GUI 用戶端（既有的 GUI 探針，`--fps 30`）與 bot；`SDL_AUDIO_DRIVER=disk`、每塊 480、timescale 1。
+- 刺激：從另一個執行緒，在不對齊幀的時刻注入左鍵點擊（間隔以 350／410／470 ms 循環，皆大於射擊冷卻），每場 60 次。
+- 需要新增：用戶端的診斷開關（環境變數）讓輸出記錄錨點並寫檔，以及每個本機射擊提示的時刻寫一行日誌。
+- 判定（每場；3 場，不重試，任一場不成立即不成立）：
+  1. 收支：submitted＝準時＋遲到＋丟棄，丟棄為 0；本機射擊提示數＝用戶端記錄送出成功的射擊數。
+  2. 每個本機射擊的起音都落在由錨點重建的 frame（100%）。
+  3. 本機射擊起音在 Engine 時間下的間隔，與按下時間戳的間隔相差小於 1 個 frame（20.8 µs）。
+  4. 本機射擊的遲到為 0。
+  5. 有效性：至少一半的按下時間戳離最近的幀開始超過 2 ms（確認注入不在幀格點上）；不成立則該場無效，停下回報。
+- 估時：3～4 h。
