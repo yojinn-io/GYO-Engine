@@ -126,9 +126,10 @@ ClientSimulationLoop::Step ClientSimulationLoop::Run(const TimePoint now, const 
     const ClientIntentOwner predicted{drain.generation, drain.playerId, simulation_.Observation().lifeGeneration};
     const bool owned = intent.sampledAt != TimePoint{} && intent.owner == predicted;
     const auto [yaw, pitch] = owned ? std::pair{intent.yaw, intent.pitch} : simulation_.PredictedAim();
-    ClientInputSample input{0, 0, yaw, pitch, false, false};
+    if (owned && !stale && intent.controls) crouchHeld_ = intent.crouch;
+    ClientInputSample input{0, 0, yaw, pitch, false, false, crouchHeld_};
     if (owned && !stale && intent.controls)
-        input = {intent.forward, intent.right, yaw, pitch, intent.jumpPresses > consumedJumps_, true};
+        input = {intent.forward, intent.right, yaw, pitch, intent.jumpPresses > consumedJumps_, true, crouchHeld_};
     // A press seen while stale, without controls or for another owner is dropped, not deferred.
     consumedJumps_ = std::max(consumedJumps_, intent.jumpPresses);
 

@@ -3,7 +3,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v7.pb.h"
+#include "client_v8.pb.h"
 #include "acceptance_protocol.hpp"
 #include "acceptance_capacity.hpp"
 #include "engine/time/Waiter.hpp"
@@ -41,7 +41,7 @@ namespace {
 using namespace fps::pvp;
 using Clock=std::chrono::steady_clock;
 using namespace std::chrono_literals;
-namespace pb=object_fps_pvp::client::v7;
+namespace pb=object_fps_pvp::client::v8;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
@@ -106,8 +106,11 @@ public:
                 pb::Hello hello;Require(hello.ParseFromString(packet->payload) && hello.session_token()=="worker-test","invalid Hello");
                 // A snapshot and a results frame before the first Welcome (CheckDroppedDatagrams).
                 if(std::exchange(earlyBeforeWelcome,false)) {Snapshot(ack);SendResults(pb::ActionResults{});}
-                pb::Welcome welcome;welcome.set_player_id(1);welcome.set_match_id(1);welcome.set_tick_rate(60);
+                pb::Welcome welcome;welcome.set_player_id(1);welcome.set_tick_rate(60);
                 welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);welcome.set_arena_digest(welcomeArenaDigest.load());
+                // pv8 §3: the Match's movement rules, as the Gateway copies them from Ready.
+                welcome.set_crouch_body_height(stance.crouchBodyHeight);welcome.set_crouch_eye_height(stance.crouchEyeHeight);
+                welcome.set_crouch_speed_scale(stance.crouchSpeedScale);welcome.set_sprint_speed_scale(stance.sprintSpeedScale);
                 if(includeRules) {
                     auto* rules=welcome.mutable_combat_rules();rules->set_maximum_hp(200);rules->set_shot_damage(37);
                     rules->set_cooldown_ticks(9);rules->set_shot_range(140);rules->set_maximum_reference_age_ms(333);
@@ -128,6 +131,10 @@ public:
                 if(extremeWelcomeClock && hello.has_clock()) {clock->set_receive_us(clock->receive_us()+ExtremeOffsetUs);
                     clock->set_transmit_us(welcomeTransmit+ExtremeOffsetUs);}
                 Send(wire::Type::Welcome,welcome.SerializeAsString());
+                if(changedWelcomeStance) { // the same session's next Welcome with other rules
+                    welcome.set_crouch_speed_scale(*changedWelcomeStance);changedWelcomeStance.reset();
+                    Send(wire::Type::Welcome,welcome.SerializeAsString());
+                }
                 if(snapshotOnHello)Snapshot(ack);
             } else if(packet->type==wire::Type::Input) {
                 pb::PlayerInput input;Require(input.ParseFromString(packet->payload) && input.movement_epoch()>0 && input.movement_epoch()<=epoch &&
@@ -161,6 +168,7 @@ public:
         auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);combat->set_life_generation(1);combat->set_magazine_ammo(7);
         combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2);
         combat->set_last_hit_part(pb::HIT_PART_BODY); // pv7 §7 hit record: all four fields set together
+        player->set_crouched(snapshotCrouched); // pv8 §2
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
     // A snapshot of the given tick; the next Snapshot follows it.
@@ -220,6 +228,11 @@ public:
     static constexpr std::uint64_t ExtremeOffsetUs=std::uint64_t{1}<<52;
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
     bool includeRules{true};
+    // pv8 §3: the Welcome movement rules; a set changedWelcomeStance makes the
+    // next Hello's reply two Welcomes, the second with that crouch speed scale.
+    StanceRules stance{DefaultStanceRules};
+    std::optional<float> changedWelcomeStance;
+    bool snapshotCrouched{}; // pv8 §2: the stance Snapshot reports
     std::uint64_t epoch{1};
     bool autoAck{};
     std::atomic<std::uint64_t> leaves{};
@@ -439,7 +452,7 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
     // this statistics window (this one and CheckHelloCadence's), so the count
     // fails when r5 goes uncounted (D185: csc-r5-uncounted survived with two).
     const auto attemptsBefore=gateway.attempts.size();
-    connection.SendInput(Input(1,1),std::numeric_limits<std::uint64_t>::max());
+    connection.SendInput(Input(1,1),WireCounterMax); // the largest tick on the wire (protocol-v8 section 2a)
     for(const auto [epoch,life]:{std::pair{gateway.epoch+1,std::uint64_t{1}},std::pair{gateway.epoch+2,std::uint64_t{1}},
                                  std::pair{gateway.epoch,std::uint64_t{2}}}) {
         auto replaced=Input(1,1);replaced.movementEpoch=epoch;replaced.lifeGeneration=life;connection.SendInput(std::move(replaced));
@@ -451,6 +464,36 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
     Require(connection.State().phase==ConnectionPhase::Playing && connection.State().error.empty(),
         "a dropped datagram changed the session");
     Require(gateway.attempts.size()==attemptsBefore,"a window for a replaced authority was sent");
+    connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
+}
+// protocol-v8 sections 2-3 (v8-product-crouch W3, W4): the Welcome movement
+// rules are adopted as sent; out of their bounds, or changed within a session,
+// they end the join. A held crouch reaches the Gateway in the input window and
+// the authoritative stance comes back in the snapshot.
+void CheckStance(MockGateway& gateway,ClientConnection& connection,const std::function<bool(const char*)>& refusedWith) {
+    for(const auto edit:{+[](StanceRules& s){s.crouchEyeHeight=s.crouchBodyHeight+.1F;},
+                         +[](StanceRules& s){s.crouchSpeedScale=1.5F;},+[](StanceRules& s){s.sprintSpeedScale=0;},
+                         +[](StanceRules& s){s.crouchBodyHeight=std::numeric_limits<float>::infinity();}}) {
+        edit(gateway.stance);
+        Require(refusedWith("Invalid Match movement rules"),"Welcome accepted movement rules out of their bounds");
+        gateway.stance=DefaultStanceRules;
+    }
+    gateway.changedWelcomeStance=.25F;
+    Require(refusedWith("Match movement rules changed within a session"),"a session accepted changed movement rules");
+    gateway.stance.crouchSpeedScale=.3F; // not the default: the Client takes what Welcome says
+    connection.Join(gateway.address,"1");
+    gateway.Until([&]{return connection.State().phase==ConnectionPhase::Playing;});
+    Require(connection.State().movementRules && connection.State().movementRules->stance==gateway.stance,
+        "the Client did not adopt the Welcome movement rules");
+    const auto attemptsBefore=gateway.attempts.size();
+    auto held=Input(1,2);held.commands.back().crouchHeld=true;connection.SendInput(std::move(held));
+    gateway.Until([&]{return gateway.attempts.size()>attemptsBefore;});
+    const auto& sent=gateway.attempts.back().input;
+    Require(sent.commands_size()==2 && !sent.commands(0).crouch_held() && sent.commands(1).crouch_held() &&
+        !sent.commands(1).sprint_held(),"a held crouch did not reach the input window as held");
+    gateway.snapshotCrouched=true;gateway.Snapshot(2);
+    gateway.Until([&]{const auto s=connection.State();return s.snapshot && s.snapshot->players.at(0).crouched;});
+    gateway.snapshotCrouched=false;gateway.stance=DefaultStanceRules;
     connection.Leave();gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
 }
 // network-architecture §4 (D188): a Hello every 250 ms in every phase: after
@@ -593,40 +636,42 @@ std::size_t CheckMaximumDatagrams() {
         Require(bytes.size()<=wire::MaxDatagram && wire::Decode(bytes).has_value(),"maximum-field v5 datagram exceeded envelope");
         largest=std::max(largest,bytes.size());
     };
-    pb::ActionBatch batch;batch.set_acknowledged_through(max64-MaxActionWindow);
-    pb::ActionResults results;results.set_retired_through(max64-MaxActionWindow);
+    pb::ActionBatch batch;batch.set_acknowledged_through(max32-MaxActionWindow);
+    pb::ActionResults results;results.set_retired_through(max32-MaxActionWindow);
     for(std::size_t n=0;n<MaxActionBatch;++n) {
-        auto* shot=batch.add_shots();shot->set_action_id(max64-n);shot->set_observed_authority_tick(max64);
-        shot->set_yaw(3.0f);shot->set_pitch(1.5f);shot->set_kind(pb::ACTION_SHOT);shot->set_life_generation(max64);
-        shot->set_movement_epoch(max64);shot->set_command_sequence(max64);shot->set_view_tick_q16(max64); // pv7 §6, §7
-        auto* d=results.add_decisions();d->set_action_id(max64-n);d->set_resolved_tick(max64);
-        d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);d->set_target_id(max64);d->set_damage(max32);d->set_kind(pb::ACTION_SHOT);d->set_life_generation(max64);d->set_target_life_generation(max64);
+        auto* shot=batch.add_shots();shot->set_action_id(max32-n);shot->set_observed_authority_tick(max32);
+        shot->set_yaw(3.0f);shot->set_pitch(1.5f);shot->set_kind(pb::ACTION_SHOT);shot->set_life_generation(max32);
+        shot->set_movement_epoch(max32);shot->set_command_sequence(max32);shot->set_view_tick_q16(max64); // pv7 §6, §7; view_tick_q16 stays uint64 (protocol-v8 section 2a)
+        auto* d=results.add_decisions();d->set_action_id(max32-n);d->set_resolved_tick(max32);
+        d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);d->set_target_id(max32);d->set_damage(max32);d->set_kind(pb::ACTION_SHOT);d->set_life_generation(max32);d->set_target_life_generation(max32);
         d->set_hit_part(pb::HIT_PART_HEAD);
     }
     check(wire::Type::Actions,batch);check(wire::Type::ActionResults,results);
-    pb::PlayerInput movement;movement.set_movement_epoch(max64);movement.set_life_generation(max64);movement.set_observed_authority_tick(max64);
+    pb::PlayerInput movement;movement.set_movement_epoch(max32);movement.set_life_generation(max32);movement.set_observed_authority_tick(max32);
     for(std::size_t n=0;n<MaxPendingCommands;++n) {
-        auto* c=movement.add_commands();c->set_sequence(max64-(MaxPendingCommands-1)+n);c->set_move_forward(1);c->set_move_right(1);
-        c->set_yaw(3.0f);c->set_pitch(1.5f);c->set_jump_requested(true);
+        auto* c=movement.add_commands();c->set_sequence(max32-(MaxPendingCommands-1)+n);c->set_move_forward(1);c->set_move_right(1);
+        c->set_yaw(3.0f);c->set_pitch(1.5f);c->set_jump_requested(true);c->set_crouch_held(true);c->set_sprint_held(true);
     }
     check(wire::Type::Input,movement);
-    pb::WorldSnapshot snapshot;snapshot.set_tick(max64);
+    pb::WorldSnapshot snapshot;snapshot.set_tick(max32);
     snapshot.set_match_hold_us(10000000);snapshot.set_gateway_hold_us(10000000); // pv7 §5 holds at their clamp
     for(unsigned n=0;n<AcceptanceMaxPlayers;++n) {
-        auto* p=snapshot.add_players();p->set_player_id(max64-n);
+        auto* p=snapshot.add_players();p->set_player_id(max32-n);
         p->set_x(std::numeric_limits<float>::max());p->set_y(std::numeric_limits<float>::max());p->set_z(std::numeric_limits<float>::max());
-        p->set_yaw(3.0f);p->set_pitch(1.5f);p->set_last_resolved_command(max64);p->set_movement_epoch(max64);p->set_contiguous_pending_commands(MaxFutureCommands);p->set_vertical_velocity(4);p->set_grounded(true);
-        p->set_life_generation(max64);p->set_life_state(pb::LIFE_ALIVE);p->set_life_state_tick(max64);p->set_respawn_tick(max64);
-        p->set_movement_slack_sequence(max64);p->set_movement_slack_us(-MaxMovementSlackMicros);
+        p->set_yaw(3.0f);p->set_pitch(1.5f);p->set_last_resolved_command(max32);p->set_movement_epoch(max32);p->set_contiguous_pending_commands(MaxFutureCommands);p->set_vertical_velocity(4);p->set_grounded(true);
+        p->set_life_generation(max32);p->set_life_state(pb::LIFE_ALIVE);p->set_life_state_tick(max32);p->set_respawn_tick(max32);
+        p->set_movement_slack_sequence(max32);p->set_movement_slack_us(-MaxMovementSlackMicros);
         p->set_connection_quality_failures(ConnectionQualityFailedWindows-1);
-        auto* c=snapshot.add_combat();c->set_player_id(max64-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max64);c->set_life_generation(max64);c->set_magazine_ammo(max32);
-        c->set_reload_action_id(max64);c->set_reload_start_tick(max64);c->set_reload_end_tick(max64);c->set_last_shot_action_id(max64);c->set_last_shot_tick(max64);
-        c->set_last_damage_tick(max64);c->set_damage_count(std::numeric_limits<std::uint32_t>::max());c->set_last_attacker_id(max64);
+        p->set_crouched(true);p->set_sprinting(true); // pv8 §2: every bool at its largest encoding
+        auto* c=snapshot.add_combat();c->set_player_id(max32-n);c->set_hp(max32);c->set_next_allowed_shot_tick(max32);c->set_life_generation(max32);c->set_magazine_ammo(max32);
+        c->set_reload_action_id(max32);c->set_reload_start_tick(max32);c->set_reload_end_tick(max32);c->set_last_shot_action_id(max32);c->set_last_shot_tick(max32);
+        c->set_last_damage_tick(max32);c->set_damage_count(std::numeric_limits<std::uint32_t>::max());c->set_last_attacker_id(max32);
         c->set_last_hit_part(pb::HIT_PART_HEAD);
     }
     check(wire::Type::Snapshot,snapshot);
     // A full room is the largest datagram (pv6 contract §7, 2026-10-07 revision).
-    Require(largest==1073,"maximum-field full-room snapshot is not 1073 bytes"); // pv7 §8
+    // protocol-v8 section 6: the counters narrowed to uint32 and the stance, 40+177N.
+    Require(largest==748,"maximum-field full-room snapshot is not 748 bytes");
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
     // Every older version and the next one are refused.
     for(std::uint64_t version=1;version<=AcceptanceProtocolVersion+1;++version) {
@@ -1208,6 +1253,9 @@ int main(int argc,char** argv) {
         try{connection.SetArenaIdentities({{"a",1,1},{"a",2,2}});}catch(const std::invalid_argument&){duplicateRejected=true;}
         Require(duplicateRejected,"an arena installed twice was accepted");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+
+        // pv8 sections 2-3 on the wire (v8-product-crouch W3, W4).
+        CheckStance(gateway,connection,refusedWith);
 
         // Exercise real receipt overflow, then consume Drain concurrently with
         // worker failure publication. Counts may reset only with generation.

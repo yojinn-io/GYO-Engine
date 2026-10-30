@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 func TestV5ActionKindPresenceAndLifeAreImmutable(t *testing.T) {
@@ -172,10 +172,10 @@ func TestV5MovementSlackAndQualityKeepPresenceAndBounds(t *testing.T) {
 		t.Fatalf("an absent slack sample must stay absent: %v %v", out, err)
 	}
 	for _, sample := range []struct {
-		sequence uint64
+		sequence uint32
 		micros   int32
 	}{{1, 0}, {5, 14781}, {3, -2500}, {5, MaxMovementSlackUs}, {5, -MaxMovementSlackUs}} {
-		in.Players[0].MovementSlackSequence = proto.Uint64(sample.sequence)
+		in.Players[0].MovementSlackSequence = proto.Uint32(sample.sequence)
 		in.Players[0].MovementSlackUs = proto.Int32(sample.micros)
 		in.Players[0].ConnectionQualityFailures = ConnectionQualityFailedWindows - 1
 		out, err = SnapshotForClient(in, testRules())
@@ -190,12 +190,12 @@ func TestV5MovementSlackAndQualityKeepPresenceAndBounds(t *testing.T) {
 		func(p *runtime.PlayerState) { p.MovementSlackSequence = nil },
 		func(p *runtime.PlayerState) { p.MovementSlackUs = proto.Int32(MaxMovementSlackUs + 1) },
 		func(p *runtime.PlayerState) { p.MovementSlackUs = proto.Int32(-MaxMovementSlackUs - 1) },
-		func(p *runtime.PlayerState) { p.MovementSlackSequence = proto.Uint64(0) },
-		func(p *runtime.PlayerState) { p.MovementSlackSequence = proto.Uint64(6) },
+		func(p *runtime.PlayerState) { p.MovementSlackSequence = proto.Uint32(0) },
+		func(p *runtime.PlayerState) { p.MovementSlackSequence = proto.Uint32(6) },
 		func(p *runtime.PlayerState) { p.ConnectionQualityFailures = ConnectionQualityFailedWindows },
 	} {
 		bad := proto.Clone(in).(*runtime.WorldSnapshot)
-		bad.Players[0].MovementSlackSequence = proto.Uint64(5)
+		bad.Players[0].MovementSlackSequence = proto.Uint32(5)
 		bad.Players[0].MovementSlackUs = proto.Int32(100)
 		edit(bad.Players[0])
 		if _, err := SnapshotForClient(bad, testRules()); err == nil {

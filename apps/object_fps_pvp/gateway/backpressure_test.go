@@ -10,17 +10,17 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // Interleave publication between the two actual per-peer selection calls. This
 // exercises the case where the first UDP write was slow, without a production
 // blocking switch or pretending an ordinary loopback UDP socket is saturated.
 func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing.T) {
-	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation),
+	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint32]*reservation),
 		controlOut: make(chan queuedControl, 64), snapshotOut: make(chan snapshotFrame, 1)}
-	for id := uint64(1); id <= 2; id++ {
+	for id := uint32(1); id <= 2; id++ {
 		peer, err := session.New(time.Now())
 		if err != nil {
 			t.Fatal(err)
@@ -31,7 +31,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		}
 		s.players[id] = &reservation{playerID: id, session: peer, phase: active}
 	}
-	decode := func(packet outbound) (framing.Header, uint64) {
+	decode := func(packet outbound) (framing.Header, uint32) {
 		t.Helper()
 		header, payload, err := framing.DecodeDatagram(packet.packet)
 		var snapshot client.WorldSnapshot
@@ -40,7 +40,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		}
 		return header, snapshot.Tick
 	}
-	frame, first := s.snapshotForPeer([]uint64{1, 2}, snapshotFrame{snapshot: &client.WorldSnapshot{Tick: 1}, read: time.Now(), tick: 1})
+	frame, first := s.snapshotForPeer([]uint32{1, 2}, snapshotFrame{snapshot: &client.WorldSnapshot{Tick: 1}, read: time.Now(), tick: 1})
 	firstHeader, firstTick := decode(first)
 	if firstTick != 1 || firstHeader.Sequence != 1 || firstHeader.SessionID != s.players[1].session.ID {
 		t.Fatal("first peer did not receive the initial publication")
@@ -48,12 +48,12 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 	secondPeer := s.players[2]
 	s.sendControl(secondPeer, adapter.Welcome, &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: 2})
 	s.sendControl(secondPeer, adapter.Welcome, &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: 2})
-	for tick := uint64(2); tick <= 3; tick++ {
+	for tick := uint32(2); tick <= 3; tick++ {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
 		s.runtimeMessage(e)
 	}
-	frame, second := s.snapshotForPeer([]uint64{2}, frame)
+	frame, second := s.snapshotForPeer([]uint32{2}, frame)
 	secondHeader, secondTick := decode(second)
 	// pv7 §2a: the two queued Welcomes took no sequence yet; the snapshot
 	// written first takes 1, they take 2 and 3 when written (before pv7 they
@@ -77,12 +77,12 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 		}
 	}
 	delete(s.players, 2)
-	_, removed := s.snapshotForPeer([]uint64{2}, frame)
+	_, removed := s.snapshotForPeer([]uint32{2}, frame)
 	if removed.peer.IsValid() || len(removed.packet) != 0 || secondPeer.outSequence != 3 {
 		t.Fatal("a peer removed after the batch was selected still received a snapshot")
 	}
 	s.available = false
-	_, unavailable := s.snapshotForPeer([]uint64{1}, frame)
+	_, unavailable := s.snapshotForPeer([]uint32{1}, frame)
 	if unavailable.peer.IsValid() || len(unavailable.packet) != 0 {
 		t.Fatal("runtime failure revived a selected snapshot")
 	}
@@ -94,10 +94,10 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 // wakes late changes how fast the steps run, never what they must show.
 func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 	// 15 and 60 publications are the 250 ms and one-second stalls at 60 Hz.
-	for _, blocked := range []uint64{15, 60} {
+	for _, blocked := range []uint32{15, 60} {
 		t.Run(fmt.Sprintf("%d-publications", blocked), func(t *testing.T) {
-			s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint64]*reservation), snapshotOut: make(chan snapshotFrame, 1)}
-			publish := func(first, last uint64) {
+			s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()}, players: make(map[uint32]*reservation), snapshotOut: make(chan snapshotFrame, 1)}
+			publish := func(first, last uint32) {
 				done := make(chan struct{})
 				go func() {
 					defer close(done)
@@ -114,7 +114,7 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 					t.Fatal("blocked consumer stalled snapshot publication")
 				}
 			}
-			receive := func() uint64 {
+			receive := func() uint32 {
 				select {
 				case frame := <-s.snapshotOut:
 					return frame.snapshot.Tick
@@ -125,7 +125,7 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 			}
 			// Consumer withheld: every publication returns and only the newest stays.
 			publish(1, blocked)
-			if len(s.snapshotOut) != 1 || cap(s.snapshotOut) != 1 || s.snapshotReplacements.Load() != blocked-1 {
+			if len(s.snapshotOut) != 1 || cap(s.snapshotOut) != 1 || s.snapshotReplacements.Load() != uint64(blocked-1) {
 				t.Fatal("snapshot lane was not bounded/latest-only")
 			}
 			// Release: the first delivery is the newest, then each publication is current.
@@ -168,7 +168,7 @@ func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 	for _, pause := range []time.Duration{250 * time.Millisecond, time.Second} {
 		t.Run(pause.String(), func(t *testing.T) {
 			link := &runtimeLink{wake: make(chan struct{}, 1)}
-			for player := uint64(1); player <= 2; player++ {
+			for player := uint32(1); player <= 2; player++ {
 				e := envelope()
 				e.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: player}}
 				if err := link.control(e); err != nil {
@@ -176,10 +176,10 @@ func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 				}
 			}
 			deadline := time.Now().Add(pause)
-			var generated uint64
+			var generated uint32
 			for time.Now().Before(deadline) {
 				generated++
-				for player := uint64(1); player <= 2; player++ {
+				for player := uint32(1); player <= 2; player++ {
 					in := &runtime.PlayerInput{LifeGeneration: 1, PlayerId: player, MovementEpoch: 1, Commands: []*runtime.MovementCommand{{Sequence: generated, MoveForward: 1}}}
 					if err := link.input(in, dropEvent{}); err != nil {
 						t.Fatal(err)
@@ -201,7 +201,7 @@ func TestBlockedRuntimeConsumerPreservesBoundedCommandWindows(t *testing.T) {
 			// Each player's newest windows, in order, none omitted or doubled
 			// among them; the older ones overflowed (pv7 §2a).
 			kept := min(generated, maxQueuedInputs)
-			next := map[uint64]uint64{1: generated - kept + 1, 2: generated - kept + 1}
+			next := map[uint32]uint32{1: generated - kept + 1, 2: generated - kept + 1}
 			for _, message := range batch[2:] {
 				in := message.GetInput()
 				if in == nil || len(in.Commands) != 1 || in.Commands[0].Sequence != next[in.PlayerId] {

@@ -61,7 +61,8 @@ class PvpMatch final {
 public:
     // rules defaults to the product policy; tests and future weapon data may
     // pass others (v7.1 D137). Invalid rules throw invalid_argument.
-    explicit PvpMatch(Arena arena, const CombatRules& rules = PvpCombatRules);
+    explicit PvpMatch(Arena arena, const CombatRules& rules = PvpCombatRules,
+                      const StanceRules& stance = DefaultStanceRules);
     [[nodiscard]] bool Join(PlayerId playerId, std::string& error);
     [[nodiscard]] bool Leave(PlayerId playerId);
     [[nodiscard]] bool SubmitInput(const PlayerInput& input);
@@ -90,6 +91,7 @@ public:
     [[nodiscard]] bool ContainsPlayer(PlayerId playerId) const noexcept;
     [[nodiscard]] std::uint64_t TickCount() const noexcept { return tick_; }
     [[nodiscard]] const Arena& GetArena() const noexcept { return arena_; }
+    [[nodiscard]] const StanceRules& Stance() const noexcept { return stance_; }
     [[nodiscard]] static bool ValidInput(const PlayerInput& input) noexcept;
 
 private:
@@ -134,6 +136,7 @@ private:
     void ResolveActions(const ShotReferenceAge& referenceAge);
     Arena arena_;
     CombatRules rules_;
+    StanceRules stance_;
     std::map<PlayerId, Participant> players_;
     std::uint64_t tick_{};
 };

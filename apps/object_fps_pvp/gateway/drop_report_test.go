@@ -13,8 +13,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 func totalsOf(r *runtime.GatewayDropReport) map[runtime.DropReason]uint64 {
@@ -84,7 +84,7 @@ func TestDropLedgerFinalIsSentOnce(t *testing.T) {
 func TestDropLedgerPassesAreBoundedUnderChurn(t *testing.T) {
 	d := newDropLedger()
 	finals, merged := 0, uint64(0)
-	settle := func(id uint64) {
+	settle := func(id uint32) {
 		r := d.report(id, time.Now())
 		switch {
 		case r == nil:
@@ -94,7 +94,7 @@ func TestDropLedgerPassesAreBoundedUnderChurn(t *testing.T) {
 			finals++
 		}
 	}
-	for player := uint64(1); player <= 1000; player++ {
+	for player := uint32(1); player <= 1000; player++ {
 		d.add(player, 1, dropEvent{reason: runtime.DropReason_DROP_INACTIVE_INPUT_PACKETS, at: time.Now()})
 		d.remove(player)
 		if player%10 == 0 { // a timer pass now and then
@@ -121,7 +121,7 @@ func TestDropLedgerPassesAreBoundedUnderChurn(t *testing.T) {
 // The largest report (every reason at its maximum, four maximal samples) fits
 // one IPC frame.
 func TestLargestDropReportFitsAFrame(t *testing.T) {
-	r := &runtime.GatewayDropReport{PlayerId: math.MaxUint64, ReportSequence: math.MaxUint64, Final: true,
+	r := &runtime.GatewayDropReport{PlayerId: math.MaxUint32, ReportSequence: math.MaxUint64, Final: true,
 		SamplesOmitted: math.MaxUint64, MergedStreams: math.MaxUint64}
 	for _, entry := range dropReasons {
 		r.Counts = append(r.Counts, &runtime.DropCount{Reason: entry.reason, Total: math.MaxUint64})
@@ -245,14 +245,14 @@ func TestDownlinkDiscardsAreCounted(t *testing.T) {
 // already written is not counted, each later active player once (31), and the
 // reader-side count (45) does not move.
 func TestReplacedSnapshotIsCountedForThePlayersStillToServe(t *testing.T) {
-	s := &Server{available: true, players: make(map[uint64]*reservation), snapshotOut: make(chan snapshotFrame, 1),
+	s := &Server{available: true, players: make(map[uint32]*reservation), snapshotOut: make(chan snapshotFrame, 1),
 		link: &runtimeLink{drops: newDropLedger()}}
-	for id := uint64(1); id <= 4; id++ {
+	for id := uint32(1); id <= 4; id++ {
 		peer := newActiveSession(t, id)
 		s.players[id] = &reservation{playerID: id, session: peer, phase: active}
 	}
 	frame := snapshotFrame{snapshot: &client.WorldSnapshot{Tick: 5}, read: time.Now(), tick: 5}
-	players := []uint64{1, 2, 3, 4}
+	players := []uint32{1, 2, 3, 4}
 	frame, _ = s.snapshotForPeer(players, frame) // player 1 gets tick 5
 	s.snapshotOut <- snapshotFrame{snapshot: &client.WorldSnapshot{Tick: 6}, read: time.Now(), tick: 6}
 	for i := 1; i < len(players); i++ {
@@ -264,7 +264,7 @@ func TestReplacedSnapshotIsCountedForThePlayersStillToServe(t *testing.T) {
 	if r := s.link.drops.report(1, time.Now()); r != nil {
 		t.Fatalf("player 1 got the replaced snapshot but counted %v", r)
 	}
-	for id := uint64(2); id <= 4; id++ {
+	for id := uint32(2); id <= 4; id++ {
 		r := s.link.drops.report(id, time.Now())
 		if r == nil || totalsOf(r)[runtime.DropReason_DROP_REPLACED_SNAPSHOT_PACKETS] != 1 || r.Samples[0].SnapshotTick != 5 {
 			t.Fatalf("player %d: %v", id, r)
@@ -278,8 +278,8 @@ func TestReplacedSnapshotIsCountedForThePlayersStillToServe(t *testing.T) {
 // The reader replacing an unsent snapshot counts 45 with the replaced tick.
 func TestCoalescedSnapshotIsCountedAtTheReader(t *testing.T) {
 	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CombatRules: testRules()},
-		players: make(map[uint64]*reservation), snapshotOut: make(chan snapshotFrame, 1), link: &runtimeLink{drops: newDropLedger()}}
-	for tick := uint64(1); tick <= 3; tick++ {
+		players: make(map[uint32]*reservation), snapshotOut: make(chan snapshotFrame, 1), link: &runtimeLink{drops: newDropLedger()}}
+	for tick := uint32(1); tick <= 3; tick++ {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
 		s.runtimeMessage(e)
@@ -317,7 +317,7 @@ func TestGracefulCloseSendsEveryFinal(t *testing.T) {
 	}
 	cancel()
 	s.Close()
-	finals := map[uint64]bool{}
+	finals := map[uint32]bool{}
 	for deadline := time.Now().Add(2 * time.Second); len(finals) < 2 && time.Now().Before(deadline); {
 		select {
 		case r := <-f.drops:
@@ -338,7 +338,7 @@ func TestGracefulCloseSendsEveryFinal(t *testing.T) {
 	}
 }
 
-func newActiveSession(t *testing.T, id uint64) *session.Session {
+func newActiveSession(t *testing.T, id uint32) *session.Session {
 	t.Helper()
 	peer, err := session.New(time.Now())
 	if err != nil {
@@ -473,7 +473,7 @@ func TestClosingFinalsTakeReportedAndWaitingStreams(t *testing.T) {
 	}
 	d.add(2, 1, dropEvent{reason: runtime.DropReason_DROP_INACTIVE_INPUT_PACKETS, at: time.Now()})
 	d.remove(2)
-	finals := map[uint64]bool{}
+	finals := map[uint32]bool{}
 	for _, id := range d.due(true) {
 		if r := d.report(id, time.Now()); r != nil && r.Final {
 			finals[id] = true

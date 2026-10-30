@@ -30,7 +30,10 @@ void ClientSimulation::ObserveSample(const WorldSnapshot& snapshot, PlayerId sel
 void ClientSimulation::Observe(const PlayerState& self, std::uint64_t tick, const std::optional<MovementRules>& rules,
                                bool resumed) {
     if (tick <= lastSnapshotTick_) { samples_.clear(); return; }
-    if (rules) prediction_.SetMovementRules(*rules);
+    if (rules) {
+        prediction_.SetMovementRules(*rules);
+        prediction_.SetStanceRules(rules->stance);
+    }
     std::stable_sort(samples_.begin(), samples_.end(), [](const Sample& a, const Sample& b) { return a.tick < b.tick; });
     std::uint64_t taken = lastSnapshotTick_;
     // A state that reseeds starts a new phase: older samples describe the one
@@ -59,7 +62,8 @@ void ClientSimulation::Observe(const PlayerState& self, std::uint64_t tick, cons
 std::optional<PlayerInput> ClientSimulation::Frame(Clock::time_point now, const ClientInputSample& input) {
     const double seconds = elapsed_.Sample(now);
     if (!input.controls) prediction_.ClearJumpRequest();
-    if (!prediction_.Advance(seconds, input.forward, input.right, input.yaw, input.pitch, input.controls && input.jump))
+    if (!prediction_.Advance(seconds, input.forward, input.right, input.yaw, input.pitch, input.controls && input.jump,
+                             input.crouch))
         return std::nullopt;
     return prediction_.PendingInput();
 }

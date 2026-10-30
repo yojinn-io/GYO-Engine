@@ -20,6 +20,8 @@ struct ClientInputSample final {
     bool jump{};
     // False drops any pending jump request and suppresses this frame's jump edge.
     bool controls{true};
+    // The crouch intent (protocol-v8 section 2); kept even without controls.
+    bool crouch{};
 };
 
 // The single client command-generation path shared by the application and the

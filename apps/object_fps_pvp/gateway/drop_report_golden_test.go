@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // dropReasonGolden is one entry of tests/object_fps_pvp/fixtures/drop_reasons.json,

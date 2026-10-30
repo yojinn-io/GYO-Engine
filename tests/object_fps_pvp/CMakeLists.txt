@@ -3,7 +3,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" runtime_host runtime_host)
 gyo_get_app_target("${GYO_CURRENT_APP}" client_simulation client_simulation)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
-    CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
+    CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp CrouchTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
     NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
     DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp)
@@ -31,7 +31,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" ipc ipc)
 set(ipc_tests "gyo_${GYO_CURRENT_APP}_ipc_tests")
 add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp ClockSyncTests.cpp)
 target_compile_features(${ipc_tests} PRIVATE cxx_std_20)
-target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v7" nlohmann_json::nlohmann_json doctest::doctest)
+target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v8" nlohmann_json::nlohmann_json doctest::doctest)
 target_compile_definitions(${ipc_tests} PRIVATE PVP_DROP_REASONS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/drop_reasons.json"
     PVP_LOG_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/log_v1")
 if(WIN32)
@@ -172,6 +172,10 @@ set_tests_properties("${GYO_CURRENT_APP}.protocol_version" PROPERTIES LABELS "cp
 add_test(NAME "${GYO_CURRENT_APP}.drop_reasons"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_drop_reasons.py")
 set_tests_properties("${GYO_CURRENT_APP}.drop_reasons" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# pv8-seq-ceiling: each wire counter exhaustion site decides with WireCounter.hpp (protocol-v8 section 2a).
+add_test(NAME "${GYO_CURRENT_APP}.wire_counter_sites"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_wire_counter_sites.py")
+set_tests_properties("${GYO_CURRENT_APP}.wire_counter_sites" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.diagnostic_isolation"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_diagnostic_isolation.py")
 set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)

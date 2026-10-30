@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package object_fps_pvp.client.v7;
-option go_package = "gyo.local/object_fps_pvp/protocol/clientv7";
+package object_fps_pvp.client.v8;
+option go_package = "gyo.local/object_fps_pvp/protocol/clientv8";
 
-// This remote-client contract is independent of runtime_v7.proto.
+// This remote-client contract is independent of runtime_v8.proto.
 message Hello {
   string session_token = 1;
   // Diagnostics only (pv7 §3): the time echo with the Gateway; read only
@@ -11,8 +11,9 @@ message Hello {
   ClockSample clock = 2;
 }
 message Welcome {
-  uint64 player_id = 1;
-  uint64 match_id = 2;
+  uint32 player_id = 1;
+  reserved 2;
+  reserved "match_id"; // pv8 §2a: no reader; the Gateway wrote 1
   uint32 tick_rate = 3;
   uint32 snapshot_rate = 4;
   string arena_id = 5;
@@ -24,9 +25,16 @@ message Welcome {
   fixed64 arena_digest = 10;
   // Diagnostics only (pv7 §3): the time echo; the Client never decides on it.
   ClockSample clock = 11;
+  // pv8 §3: copied from Ready; the Client checks and adopts them on entry.
+  float crouch_body_height = 12;
+  float crouch_eye_height = 13;
+  float crouch_speed_scale = 14;
+  float sprint_speed_scale = 15;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 16 to 19;
 }
 // Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
-// runtime_v7.proto: times are the sender's own monotonic clock in
+// runtime_v8.proto: times are the sender's own monotonic clock in
 // microseconds; a time of the other side is only ever copied back.
 message ClockSample {
   // The transmit_us of the peer's latest ClockSample this side read, as is;
@@ -39,38 +47,42 @@ message ClockSample {
 }
 // A single immutable 1/60-second movement step. No client time or position.
 message MovementCommand {
-  uint64 sequence = 1;
+  uint32 sequence = 1;
   float move_forward = 2;
   float move_right = 3;
   float yaw = 4;
   float pitch = 5;
   bool jump_requested = 6;
+  // pv8 §2 (v8 ① crouch, ② sprint): held intents, not edges. sprint_held has
+  // no behaviour in pv8: the Client sends false and the Match ignores it.
+  bool crouch_held = 7;
+  bool sprint_held = 8;
 }
 // Entire unacknowledged window, strictly ordered, at most 12 commands.
 message PlayerInput {
   repeated MovementCommand commands = 1;
-  uint64 movement_epoch = 2;
-  uint64 life_generation = 3;
+  uint32 movement_epoch = 2;
+  uint32 life_generation = 3;
   // Tick of the latest snapshot the Client applied when it published this
   // window (0 before any). The Match times connection quality with it.
-  uint64 observed_authority_tick = 4;
+  uint32 observed_authority_tick = 4;
 }
 message PlayerState {
-  uint64 player_id = 1;
+  uint32 player_id = 1;
   float x = 2;
   float y = 3;
   float z = 4;
   float yaw = 5;
   float pitch = 6;
-  uint64 last_resolved_command = 7;
-  uint64 movement_epoch = 8;
+  uint32 last_resolved_command = 7;
+  uint32 movement_epoch = 8;
   uint32 contiguous_pending_commands = 9;
   float vertical_velocity = 10;
   bool grounded = 11;
-  uint64 life_generation = 12;
+  uint32 life_generation = 12;
   LifeState life_state = 13;
-  uint64 life_state_tick = 14;
-  uint64 respawn_tick = 15;
+  uint32 life_state_tick = 14;
+  uint32 respawn_tick = 15;
   reserved 16;
   reserved "epoch_start_wait_us";
   // Host timing observation, never simulation input: the smallest movement
@@ -80,11 +92,17 @@ message PlayerState {
   // (negative). Both or neither; |slack| <= 1,000,000 and
   // 1 <= sequence <= last_resolved_command. Only the Client's phase tracking
   // reads it.
-  optional uint64 movement_slack_sequence = 17;
+  optional uint32 movement_slack_sequence = 17;
   optional sint32 movement_slack_us = 18;
   // Consecutive failed 10-second connection-quality windows (0-2). At 3 the
   // Match evicts the player; the HUD warns while this is non-zero.
   uint32 connection_quality_failures = 19;
+  // pv8 §2, §4: the authoritative stance after last_resolved_command; true is
+  // the crouched capsule. sprinting is false in pv8.
+  bool crouched = 20;
+  bool sprinting = 21;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 22 to 24;
 }
 enum LifeState {
   LIFE_UNSPECIFIED = 0;
@@ -92,7 +110,7 @@ enum LifeState {
   LIFE_DEAD = 2;
 }
 message WorldSnapshot {
-  uint64 tick = 1;
+  uint32 tick = 1;
   repeated PlayerState players = 2;
   repeated CombatState combat = 3;
   // Diagnostics only (pv7 §5, D-4): the Match's hold (Host publication to the
@@ -100,6 +118,8 @@ message WorldSnapshot {
   // Client), each a duration on its own clock, clamped at 10,000,000.
   optional uint32 match_hold_us = 4;
   optional uint32 gateway_hold_us = 5;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 6, 7;
 }
 message Error {
   string code = 1;
@@ -108,15 +128,19 @@ message Error {
 
 message ActionBatch {
   repeated ShotRequest shots = 1;
-  uint64 acknowledged_through = 2;
+  uint32 acknowledged_through = 2;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 3;
 }
 message ActionResults {
-  uint64 retired_through = 1;
+  uint32 retired_through = 1;
   repeated ShotDecision decisions = 2;
   // Diagnostics only (pv7 §5, D-6): as the Match sent them. The Client only
   // records them; it does not change its resending.
   uint64 refused_batches = 3;
   ActionRefusal last_refusal = 4;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 5;
 }
 // Why the Match refused a whole action batch (pv7 §5, D-6): the names of
 // the Match's IngressActionRejection. Diagnostics only (D32).
@@ -135,32 +159,32 @@ enum ActionRefusal {
 message CombatRules {
   uint32 maximum_hp = 1;
   uint32 shot_damage = 2;
-  uint64 cooldown_ticks = 3;
+  uint32 cooldown_ticks = 3;
   float shot_range = 4;
   uint32 maximum_reference_age_ms = 5;
   uint32 magazine_capacity = 6;
-  uint64 reload_ticks = 7;
-  uint64 respawn_ticks = 8;
+  uint32 reload_ticks = 7;
+  uint32 respawn_ticks = 8;
   // The most damage one decision may deal, part multipliers included (pv7
   // §7); shot_damage stays the base (BODY) damage. v7.1: equal to it.
   uint32 maximum_shot_damage = 9;
 }
 message CombatState {
-  uint64 player_id = 1;
+  uint32 player_id = 1;
   uint32 hp = 2;
-  uint64 next_allowed_shot_tick = 3;
-  uint64 life_generation = 4;
+  uint32 next_allowed_shot_tick = 3;
+  uint32 life_generation = 4;
   uint32 magazine_ammo = 5;
-  uint64 reload_action_id = 6;
-  uint64 reload_start_tick = 7;
-  uint64 reload_end_tick = 8;
-  uint64 last_shot_action_id = 9;
-  uint64 last_shot_tick = 10;
+  uint32 reload_action_id = 6;
+  uint32 reload_start_tick = 7;
+  uint32 reload_end_tick = 8;
+  uint32 last_shot_action_id = 9;
+  uint32 last_shot_tick = 10;
   // Presentation-only hit record of the current life (pv6 contract §2): all
   // three are zero before the first hit and reset on respawn.
-  uint64 last_damage_tick = 11;
+  uint32 last_damage_tick = 11;
   uint32 damage_count = 12;
-  uint64 last_attacker_id = 13;
+  uint32 last_attacker_id = 13;
   // The hit record's fourth field (pv7 §7): set with the other three, BODY or
   // HEAD when they are, UNSPECIFIED when they are zero. Presentation only.
   HitPart last_hit_part = 14;
@@ -172,20 +196,22 @@ enum ActionKind {
   ACTION_RELOAD = 2;
 }
 message ShotRequest {
-  uint64 action_id = 1;
-  uint64 observed_authority_tick = 2;
+  uint32 action_id = 1;
+  uint32 observed_authority_tick = 2;
   optional float yaw = 3;
   optional float pitch = 4;
   ActionKind kind = 5;
-  uint64 life_generation = 6;
+  uint32 life_generation = 6;
   // Immutable request content (pv7 §6, §7), part of the request's identity
   // for retransmission: the Client's predicted movement epoch (E) and its
   // newest command of that epoch (S), from one simulation step, and the
   // remote time the shooter saw (the presentation's global cursor, Tick x
   // 65536, floored; 0 without one). v7.1 only records them (D-2).
-  uint64 movement_epoch = 7;
-  uint64 command_sequence = 8;
+  uint32 movement_epoch = 7;
+  uint32 command_sequence = 8;
   uint64 view_tick_q16 = 9;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 10 to 12;
 }
 enum ShotRejection {
   REJECTION_NONE = 0;
@@ -198,24 +224,30 @@ enum ShotRejection {
   REJECTION_RELOADING = 7;
   REJECTION_EMPTY_MAGAZINE = 8;
   REJECTION_MAGAZINE_FULL = 9;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 10 to 17;
 }
 enum ShotHitKind {
   HIT_MISS = 0;
   HIT_WORLD = 1;
   HIT_PLAYER = 2;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 3;
 }
 message ShotDecision {
-  uint64 action_id = 1;
-  uint64 resolved_tick = 2;
+  uint32 action_id = 1;
+  uint32 resolved_tick = 2;
   bool accepted = 3;
   ShotRejection rejection = 4;
   ShotHitKind hit_kind = 5;
-  uint64 target_id = 6;
+  uint32 target_id = 6;
   uint32 damage = 7;
   ActionKind kind = 8;
-  uint64 life_generation = 9;
-  uint64 target_life_generation = 10;
+  uint32 life_generation = 9;
+  uint32 target_life_generation = 10;
   HitPart hit_part = 11;
+  // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
+  reserved 12, 13;
 }
 // Where a shot hit a player (pv7 §7): HIT_PLAYER is BODY or HEAD, every other
 // decision UNSPECIFIED. v7.1's Match produces only BODY; v8 adds HEAD.

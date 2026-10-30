@@ -108,6 +108,9 @@ struct WorkerStatisticsWindow final {
     // for an authority the worker no longer has (another connection
     // generation, or an epoch or life the worker's newest snapshot replaced).
     std::uint64_t staleInputWindows{};
+    // v8 pv8-obs-bytes: of staleDatagrams, the Snapshots and the ActionResults
+    // (how often results lose to a newer transport sequence; pv8-round2 B-1).
+    std::uint64_t staleSnapshotDatagrams{}, staleResultsDatagrams{};
 };
 [[nodiscard]] std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window);
 

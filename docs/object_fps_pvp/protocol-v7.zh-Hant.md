@@ -174,7 +174,7 @@ Client 與 runtime 的兩份 proto 加 adapter 的轉換保留：這就是「每
 
 - `Hello.clock`（2）：origin＝最近收到的 `Welcome.clock.transmit_us`，receive＝Client 讀到那則 Welcome 的時刻，transmit＝序列化這則 Hello 的時刻。Gateway 要等 Hello 通過認證才讀；樣本不合法就忽略並計數，Hello 的 admission、liveness、Join、Welcome 一律照常。
 - `Welcome.clock`（11）：origin＝該 session 最新一則已認證 Hello 的 `clock.transmit_us`，receive＝Gateway 讀到那則 Hello 的時刻，transmit＝編碼這則 Welcome 的時刻。Client 只當診斷用，不影響 `CheckArena`、規則檢查與 welcomed。
-- 不新增封包與 GYOP 種類，沿用 Hello 的節拍（welcomed 之後每 1000 ms）。Welcome 走有損的 control 佇列，遺失只是少樣本。
+- 不新增封包與 GYOP 種類，沿用 Hello 的節拍（2026-10-30 更正：每 250 ms，所有階段都送。原文寫「welcomed 之後每 1000 ms」，v7.1 的 rebind-on-new-port 已改成 250 ms，見 network-architecture §4 與 v7.1 交接 D188、`ClientConnection.cpp:425-429`；v8 HANDOFF 的 `pv8-hello-doc-mismatch`）。Welcome 走有損的 control 佇列，遺失只是少樣本。
 - `ReadyFitsWelcome` 要把 ClockSample 的最大編碼算進去。
 - 驗收 probe 可以不帶 clock。
 

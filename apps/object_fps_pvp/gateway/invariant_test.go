@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // D180 (silent-branch-asserts): a JoinResult the Gateway cannot carry or did
@@ -39,7 +39,7 @@ func waitUnavailable(t *testing.T, s *Server, logs *ingressLog, reason string) {
 	}
 }
 
-func joinResult(player uint64, accepted bool, reason string) *runtime.RuntimeEnvelope {
+func joinResult(player uint32, accepted bool, reason string) *runtime.RuntimeEnvelope {
 	return &runtime.RuntimeEnvelope{Message: &runtime.RuntimeEnvelope_JoinResult{
 		JoinResult: &runtime.JoinResult{PlayerId: player, Accepted: accepted, Reason: reason}}}
 }

@@ -13,12 +13,17 @@ namespace fps::pvp {
 
 ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
     float pitch, std::span<const PlayerState> players, float range) {
+    return QueryShot(arena, DefaultStanceRules, shooter, yaw, pitch, players, range);
+}
+
+ShotHit QueryShot(const Arena& arena, const StanceRules& rules, const PlayerState& shooter, float yaw,
+    float pitch, std::span<const PlayerState> players, float range) {
     if (!ValidMovementCommand({1, 0, 0, yaw, pitch}) ||
         !std::isfinite(range) || range < 0) {
         throw std::invalid_argument("Invalid shot angles or range");
     }
     const Engine::Math::Vec3 origin{
-        shooter.position.x, shooter.position.y + arena.eyeHeight, shooter.position.z};
+        shooter.position.x, shooter.position.y + StanceEyeHeight(arena, rules, shooter.crouched), shooter.position.z};
 
     yaw = Engine::Math::WrapRadians(yaw);
     pitch = Engine::Math::Clamp(pitch, -MovementMaximumPitch, MovementMaximumPitch);
@@ -46,7 +51,8 @@ ShotHit QueryShot(const Arena& arena, const PlayerState& shooter, float yaw,
     }
     for (const auto& player : players) {
         if (player.playerId == shooter.playerId || player.lifeState == LifeState::Dead) continue;
-        const Engine::Collision::VerticalCapsule capsule{player.position, arena.bodyHeight, arena.radius};
+        const Engine::Collision::VerticalCapsule capsule{
+            player.position, StanceBodyHeight(arena, rules, player.crouched), arena.radius};
         const auto distance = Engine::Collision::RaycastCapsule({origin, direction}, range, capsule);
         if (!distance) continue;
         if (*distance < closest.distance || (*distance == closest.distance &&

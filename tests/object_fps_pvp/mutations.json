@@ -131,6 +131,9 @@
         "gyo_object_fps_pvp_worker_probe"
       ],
       "ctest": "object_fps_pvp.close_timing"
+    },
+    "wire_counter_sites": {
+      "ctest": "object_fps_pvp.wire_counter_sites"
     }
   },
   "mutants": [
@@ -249,8 +252,8 @@
       "batch": "09",
       "what": "one version definition disagrees",
       "file": "build/acceptance/object_fps_pvp/acceptance_util.py",
-      "find": "\nPROTOCOL_VERSION = 7\n",
-      "replace": "\nPROTOCOL_VERSION = 6\n",
+      "find": "\nPROTOCOL_VERSION = 8\n",
+      "replace": "\nPROTOCOL_VERSION = 7\n",
       "check": "protocol_version",
       "expect": "acceptance Python"
     },
@@ -549,7 +552,7 @@
       "batch": "v7-02",
       "what": "ClientSimulation never applies the authoritative movement rules",
       "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
-      "find": "    if (rules) prediction_.SetMovementRules(*rules);\n",
+      "find": "        prediction_.SetMovementRules(*rules);\n",
       "replace": "",
       "check": "cpu",
       "expect": "PvP ClientSimulation reproduces the v6 application command path at one snapshot per frame"
@@ -3129,8 +3132,8 @@
       "batch": "v71-time-echo",
       "what": "ReadyFitsWelcome leaves the largest time echo out of the worst-case Welcome",
       "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
-      "find": ", Gravity: r.Gravity, Clock: clock}",
-      "replace": ", Gravity: r.Gravity}\n\t_ = clock",
+      "find": "\tlargest := uint64(math.MaxUint64)\n\tclock := &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}\n",
+      "replace": "\tclock := &client.ClockSample{}\n",
       "check": "go",
       "expect": "maximum admitted Welcome="
     },
@@ -4619,8 +4622,8 @@
       "batch": "v71-a1-shot-step",
       "what": "The Match ignores the rules it is given",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "PvpMatch::PvpMatch(Arena arena, const CombatRules& rules) : arena_(std::move(arena)), rules_(rules) {\n",
-      "replace": "PvpMatch::PvpMatch(Arena arena, const CombatRules& rules) : arena_(std::move(arena)), rules_(PvpCombatRules) {\n",
+      "find": "    : arena_(std::move(arena)), rules_(rules), stance_(stance) {\n",
+      "replace": "    : arena_(std::move(arena)), rules_(PvpCombatRules), stance_(stance) {\n",
       "check": "cpu",
       "expect": "PvP A1"
     },
@@ -6774,6 +6777,426 @@
       "replace": "\" resets_failed=\"",
       "check": "log_contract",
       "expect": "match_quality_window_failed: v1 keys"
+    },
+    {
+      "id": "pv8sc-deadline-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "FutureTick goes back to the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    const auto deadline = WireCounterAdd(tick, duration);\n    if (!deadline) throw std::overflow_error(\"Authority deadline exhausted\");\n    return *deadline;",
+      "replace": "    if (tick > (std::numeric_limits<std::uint64_t>::max)() - duration)\n        throw std::overflow_error(\"Authority deadline exhausted\");\n    return tick + duration;",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-submit-tick-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "SubmitActions checks the tick against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (WireCounterExhausted(tick_))\n        throw std::overflow_error(\"Authority tick exhausted\");",
+      "replace": "    if (tick_ == (std::numeric_limits<std::uint64_t>::max)())\n        throw std::overflow_error(\"Authority tick exhausted\");",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-respawn-life-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Respawn checks the life against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "if (WireCounterExhausted(player.state.lifeGeneration))",
+      "replace": "if (player.state.lifeGeneration == (std::numeric_limits<std::uint64_t>::max)())",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-respawn-epoch-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Respawn checks the epoch against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            if (WireCounterExhausted(player.state.movementEpoch))\n                throw",
+      "replace": "            if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())\n                throw",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-contiguous-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "ContiguousPending counts up to the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "while (!WireCounterExhausted(sequence) &&",
+      "replace": "while (sequence < (std::numeric_limits<std::uint64_t>::max)() &&",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-reset-epoch-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "ResetMovementEpoch checks the epoch against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (WireCounterExhausted(player.state.movementEpoch))\n        throw std::overflow_error(\"Movement epoch exhausted\");\n    const auto cancelled",
+      "replace": "    if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())\n        throw std::overflow_error(\"Movement epoch exhausted\");\n    const auto cancelled",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-tick-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Tick checks the tick against the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (WireCounterExhausted(tick_) ||\n",
+      "replace": "    if (tick_ == (std::numeric_limits<std::uint64_t>::max)() ||\n",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-sequence-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "SequenceExhausted resets at the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "if (WireCounterExhausted(player.state.lastResolvedCommand)) {",
+      "replace": "if (player.state.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)()) {",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-seed-lead-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "SeedLead leads past the maximum",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "!WireCounterExhausted(current_.lastResolvedCommand); ++index)",
+      "replace": "current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)(); ++index)",
+      "check": "cpu",
+      "expect": "PvP\\ prediction\\ stops\\ generating\\ commands\\ at\\ the\\ wire\\ counter\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-advance-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Advance generates commands past the maximum",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "            !WireCounterExhausted(current_.lastResolvedCommand)) {",
+      "replace": "            current_.lastResolvedCommand < (std::numeric_limits<std::uint64_t>::max)()) {",
+      "check": "cpu",
+      "expect": "PvP\\ prediction\\ stops\\ generating\\ commands\\ at\\ the\\ wire\\ counter\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-frozen-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "The prediction does not freeze at the maximum",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "        WireCounterExhausted(current_.lastResolvedCommand);",
+      "replace": "        current_.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)();",
+      "check": "cpu",
+      "expect": "PvP\\ prediction\\ stops\\ generating\\ commands\\ at\\ the\\ wire\\ counter\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-action-id-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Action ids end at the uint64 limit",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "if(WireCounterExhausted(impl_->actionTransport.allocatedThrough)) {",
+      "replace": "if(impl_->actionTransport.allocatedThrough==std::numeric_limits<ActionId>::max()) {",
+      "check": "wire_counter_sites",
+      "expect": "test_each_site_decides_with_the_wire_counter"
+    },
+    {
+      "id": "pv8sc-player-id-u64",
+      "batch": "pv8-seq-ceiling",
+      "what": "Gateway player ids end at the uint64 limit",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "if s.nextPlayer >= math.MaxUint32 {",
+      "replace": "if s.nextPlayer == math.MaxUint64 {",
+      "check": "go",
+      "expect": "TestPlayerIDsEndAtTheWireCounterMaximum"
+    },
+    {
+      "id": "pv8sc-exhausted-off-by-one",
+      "batch": "pv8-seq-ceiling",
+      "what": "WireCounterExhausted lets the maximum itself pass",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/WireCounter.hpp",
+      "find": "return value >= WireCounterMax;",
+      "replace": "return value > WireCounterMax;",
+      "check": "cpu",
+      "expect": "PvP\\ wire\\ counters\\ end\\ at\\ the\\ uint32\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-add-no-range",
+      "batch": "pv8-seq-ceiling",
+      "what": "WireCounterAdd accepts a value already past the maximum",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/WireCounter.hpp",
+      "find": "if (value > WireCounterMax || amount > WireCounterMax - value)",
+      "replace": "if (amount > WireCounterMax - value)",
+      "check": "cpu",
+      "expect": "PvP\\ wire\\ counters\\ end\\ at\\ the\\ uint32\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sc-add-wraps",
+      "batch": "pv8-seq-ceiling",
+      "what": "WireCounterAdd lets the unsigned sum wrap",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/WireCounter.hpp",
+      "find": "if (value > WireCounterMax || amount > WireCounterMax - value)",
+      "replace": "if (value > WireCounterMax || value + amount > WireCounterMax)",
+      "check": "cpu",
+      "expect": "PvP\\ wire\\ counters\\ end\\ at\\ the\\ uint32\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sn-ipc-tick-truncates",
+      "batch": "pv8-seq-narrow",
+      "what": "IpcHost writes the snapshot tick without wire::Counter",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "out->set_tick(wire::Counter(snapshot.tick));",
+      "replace": "out->set_tick(snapshot.tick);",
+      "check": "wire_counter_sites",
+      "expect": "test_each_narrowed_setter_goes_through_wire_counter"
+    },
+    {
+      "id": "pv8sn-client-sequence-truncates",
+      "batch": "pv8-seq-narrow",
+      "what": "ClientConnection writes a command sequence without wire::Counter",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "set_sequence(wire::Counter(command.sequence))",
+      "replace": "set_sequence(command.sequence)",
+      "check": "wire_counter_sites",
+      "expect": "test_each_narrowed_setter_goes_through_wire_counter"
+    },
+    {
+      "id": "pv8sn-counter-no-assert",
+      "batch": "pv8-seq-narrow",
+      "what": "wire::Counter truncates silently",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp",
+      "find": "    GYO_ASSERT(value <= WireCounterMax);\n    return static_cast<std::uint32_t>(value);",
+      "replace": "    return static_cast<std::uint32_t>(value);",
+      "check": "cpu",
+      "expect": "PvP\\ narrowed\\ wire\\ fields\\ assert\\ instead\\ of\\ truncating\\ past\\ the\\ wire\\ counter\\ maximum"
+    },
+    {
+      "id": "pv8sn-counter-off-by-one",
+      "batch": "pv8-seq-narrow",
+      "what": "wire::Counter lets one past the maximum through",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp",
+      "find": "    GYO_ASSERT(value <= WireCounterMax);",
+      "replace": "    GYO_ASSERT(value <= WireCounterMax + 1);",
+      "check": "cpu",
+      "expect": "PvP\\ narrowed\\ wire\\ fields\\ assert\\ instead\\ of\\ truncating\\ past\\ the\\ wire\\ counter\\ maximum"
+    },
+    {
+      "id": "pv8sn-welcome-fit-small-id",
+      "batch": "pv8-seq-narrow",
+      "what": "ReadyFitsWelcome sizes the Welcome with a one-byte player id",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate:",
+      "replace": "welcome := &client.Welcome{PlayerId: 1, TickRate:",
+      "check": "go",
+      "expect": "TestReadyRequiresRulesAndBoundsWorstCaseWelcome"
+    },
+    {
+      "id": "pv8sn-snapshot-drops-respawn-tick",
+      "batch": "pv8-seq-narrow",
+      "what": "The snapshot mapping drops respawn_tick",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "LifeStateTick: p.LifeStateTick, RespawnTick: p.RespawnTick,",
+      "replace": "LifeStateTick: p.LifeStateTick,",
+      "check": "go",
+      "expect": "TestV5SnapshotLifecycleReloadAndJumpValidation"
+    },
+    {
+      "id": "pv8sn-join-reply-match-id",
+      "batch": "pv8-seq-narrow",
+      "what": "The join reply carries match_id again",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "return map[string]any{\"player_id\": p.playerID,",
+      "replace": "return map[string]any{\"match_id\": 1, \"player_id\": p.playerID,",
+      "check": "go",
+      "expect": "join\\ reply\\ still\\ carries\\ match_id"
+    },
+    {
+      "id": "pv8sn-rooms-match-id",
+      "batch": "pv8-seq-narrow",
+      "what": "The room list carries match_id again",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "return map[string]any{\"id\": 1, \"players\":",
+      "replace": "return map[string]any{\"id\": 1, \"match_id\": 1, \"players\":",
+      "check": "go",
+      "expect": "room\\ list\\ still\\ carries\\ match_id"
+    },
+    {
+      "id": "pv8sn-drop-sample-epoch-life",
+      "batch": "pv8-seq-narrow",
+      "what": "A drop sample carries the life as its epoch",
+      "file": "apps/object_fps_pvp/gateway/drop_report.go",
+      "find": "MovementEpoch: uint64(e.epoch), LifeGeneration: uint64(e.life),",
+      "replace": "MovementEpoch: uint64(e.life), LifeGeneration: uint64(e.life),",
+      "check": "go",
+      "expect": "FAIL"
+    },
+    {
+      "id": "v8cw-prediction-local-stance",
+      "batch": "v8-product-crouch-wire",
+      "what": "The prediction keeps local stance constants",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+      "find": "        prediction_.SetStanceRules(rules->stance);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP\\ ClientSimulation\\ predicts\\ with\\ the\\ stance\\ rules\\ Welcome\\ delivered"
+    },
+    {
+      "id": "v8cw-role-crouch-without-controls",
+      "batch": "v8-product-crouch-wire",
+      "what": "The role takes the crouch key without controls",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+      "find": "    if (owned && !stale && intent.controls) crouchHeld_ = intent.crouch;\n",
+      "replace": "    crouchHeld_ = intent.crouch;\n",
+      "check": "cpu",
+      "expect": "PvP\\ an\\ intent\\ without\\ controls\\ keeps\\ the\\ last\\ crouch\\ intent"
+    },
+    {
+      "id": "v8cw-gateway-drops-crouch-held",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Gateway drops crouch_held",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\t\tCrouchHeld: command.CrouchHeld, SprintHeld: command.SprintHeld})",
+      "replace": "\t\t\tSprintHeld: command.SprintHeld})",
+      "check": "go",
+      "expect": "TestHTTPReservationHandshakeInputAndSnapshot"
+    },
+    {
+      "id": "v8cw-gateway-drops-crouched",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Gateway drops crouched",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "ConnectionQualityFailures: p.ConnectionQualityFailures, Crouched: p.Crouched, Sprinting: p.Sprinting})",
+      "replace": "ConnectionQualityFailures: p.ConnectionQualityFailures, Sprinting: p.Sprinting})",
+      "check": "go",
+      "expect": "TestSnapshotMappingDoesNotChangeWorldState"
+    },
+    {
+      "id": "v8cw-gateway-drops-welcome-rule",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Gateway drops a Welcome movement rule",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "CrouchSpeedScale: s.ready.CrouchSpeedScale, SprintSpeedScale:",
+      "replace": "SprintSpeedScale:",
+      "check": "go",
+      "expect": "TestHTTPReservationHandshakeInputAndSnapshot"
+    },
+    {
+      "id": "v8cw-gateway-fit-ignores-rules",
+      "batch": "v8-product-crouch-wire",
+      "what": "ReadyFitsWelcome leaves the movement rules out",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\tCrouchBodyHeight: r.CrouchBodyHeight, CrouchEyeHeight: r.CrouchEyeHeight, CrouchSpeedScale: r.CrouchSpeedScale, SprintSpeedScale: r.SprintSpeedScale}",
+      "replace": "}",
+      "check": "go",
+      "expect": "TestReadyRequiresRulesAndBoundsWorstCaseWelcome"
+    },
+    {
+      "id": "v8cw-ipc-drops-crouch-held",
+      "batch": "v8-product-crouch-wire",
+      "what": "IpcHost drops crouch_held",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "                        command.crouch_held(),command.sprint_held()});",
+      "replace": "                        false,command.sprint_held()});",
+      "check": "ipc",
+      "expect": "PvP\\ IPC\\ carries\\ the\\ stance\\ rules\\ in\\ Ready,\\ the\\ crouch\\ in\\ and\\ the\\ stance\\ out"
+    },
+    {
+      "id": "v8cw-ipc-drops-crouched",
+      "batch": "v8-product-crouch-wire",
+      "what": "IpcHost drops crouched",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        state->set_crouched(p.crouched);state->set_sprinting(p.sprinting); // pv8 §2\n",
+      "replace": "        state->set_sprinting(p.sprinting); // pv8 §2\n",
+      "check": "ipc",
+      "expect": "PvP\\ IPC\\ carries\\ the\\ stance\\ rules\\ in\\ Ready,\\ the\\ crouch\\ in\\ and\\ the\\ stance\\ out"
+    },
+    {
+      "id": "v8cw-ipc-ready-drops-rule",
+      "batch": "v8-product-crouch-wire",
+      "what": "Ready drops a movement rule",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "r->set_crouch_speed_scale(stance.crouchSpeedScale);",
+      "replace": "",
+      "check": "ipc",
+      "expect": "PvP\\ IPC\\ carries\\ the\\ stance\\ rules\\ in\\ Ready,\\ the\\ crouch\\ in\\ and\\ the\\ stance\\ out"
+    },
+    {
+      "id": "v8cw-client-drops-crouched",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Client drops crouched",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                        p.connection_quality_failures(),p.crouched(),p.sprinting()});",
+      "replace": "                        p.connection_quality_failures(),false,p.sprinting()});",
+      "check": "worker",
+      "expect": "mock worker wait timed out"
+    },
+    {
+      "id": "v8cw-client-drops-crouch-held",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Client drops crouch_held",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                out->set_crouch_held(command.crouchHeld);out->set_sprint_held(command.sprintHeld); // pv8 §2\n",
+      "replace": "                out->set_sprint_held(command.sprintHeld); // pv8 §2\n",
+      "check": "worker",
+      "expect": "a\\ held\\ crouch\\ did\\ not\\ reach\\ the\\ input\\ window\\ as\\ held"
+    },
+    {
+      "id": "v8cw-client-welcome-unchecked",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Client accepts a crouch speed above 1",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                   stance.crouchSpeedScale>1 || !positive(stance.sprintSpeedScale) || stance.sprintSpeedScale>3)",
+      "replace": "                   !positive(stance.sprintSpeedScale) || stance.sprintSpeedScale>3)",
+      "check": "worker",
+      "expect": "Welcome\\ accepted\\ movement\\ rules\\ out\\ of\\ their\\ bounds"
+    },
+    {
+      "id": "v8cw-client-rules-change-unchecked",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Client accepts changed stance rules within a session",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": " || !(state.movementRules->stance==stance)))",
+      "replace": "))",
+      "check": "worker",
+      "expect": "a\\ session\\ accepted\\ changed\\ movement\\ rules"
+    },
+    {
+      "id": "v8cw-rules-file-unvalidated",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Match takes movement rules outside their bounds",
+      "file": "apps/object_fps_pvp/src/Pvp/MovementRulesFile.cpp",
+      "find": "        if (!ValidStanceRules(arena, rules))\n            throw std::runtime_error(\"Movement rules outside protocol-v8 section 3 for arena \" + arena.id);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "PvP\\ movement\\ rules\\ data\\ loads\\ the\\ release\\ file\\ and\\ refuses\\ every\\ violation"
+    },
+    {
+      "id": "v8cw-rules-file-extra-key",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Match takes a movement rules file with an extra key",
+      "file": "apps/object_fps_pvp/src/Pvp/MovementRulesFile.cpp",
+      "find": "if (!json.is_object() || json.size() != Keys.size())",
+      "replace": "if (!json.is_object() || json.size() < Keys.size())",
+      "check": "cpu",
+      "expect": "PvP\\ movement\\ rules\\ data\\ loads\\ the\\ release\\ file\\ and\\ refuses\\ every\\ violation"
+    },
+    {
+      "id": "v8cw-match-takes-sprint",
+      "batch": "v8-product-crouch-wire",
+      "what": "The Match takes sprint_held",
+      "file": "apps/object_fps_pvp/src/Pvp/Movement.cpp",
+      "find": "    result.sprinting = false; // The sprint behaviour arrives with v8-product-sprint.",
+      "replace": "    result.sprinting = command.sprintHeld;",
+      "check": "cpu",
+      "expect": "PvP\\ sprint_held\\ changes\\ nothing\\ in\\ pv8"
+    },
+    {
+      "id": "v8cw-remote-crouch-clips-unused",
+      "batch": "v8-product-crouch-wire",
+      "what": "A crouched remote plays the standing legs",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "            if (state.crouched) {\n                // v8-product-crouch-pose",
+      "replace": "            if (false) {\n                // v8-product-crouch-pose",
+      "check": "presentation",
+      "expect": "PvP\\ crouched\\ remote\\ lower\\ body\\ plays\\ the\\ crouch\\ clips\\ on\\ the\\ standing\\ model"
     }
   ]
 }

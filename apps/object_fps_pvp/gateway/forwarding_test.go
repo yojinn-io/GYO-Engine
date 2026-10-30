@@ -13,8 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // batch takes one write pass as if every Write succeeded: tests without a
@@ -31,7 +31,7 @@ func (l *runtimeLink) batch() []*runtime.RuntimeEnvelope {
 	return batch
 }
 
-func moves(first, last uint64) []*client.MovementCommand {
+func moves(first, last uint32) []*client.MovementCommand {
 	var out []*client.MovementCommand
 	for sequence := first; sequence <= last; sequence++ {
 		out = append(out, &client.MovementCommand{Sequence: sequence, MoveForward: 1})
@@ -47,13 +47,13 @@ func sendInputAt(t *testing.T, s *Server, p *reservation, seq uint32, now time.T
 	}
 }
 
-func sendMoves(t *testing.T, s *Server, p *reservation, seq uint32, epoch uint64, commands []*client.MovementCommand) {
+func sendMoves(t *testing.T, s *Server, p *reservation, seq uint32, epoch uint32, commands []*client.MovementCommand) {
 	t.Helper()
 	sendInputAt(t, s, p, seq, time.Now(), &client.PlayerInput{MovementEpoch: epoch, LifeGeneration: 1, Commands: commands})
 }
 
 // sequences takes one write pass and lists the input commands in write order.
-func sequences(l *runtimeLink) (out []uint64) {
+func sequences(l *runtimeLink) (out []uint32) {
 	for _, e := range l.batch() {
 		if in := e.GetInput(); in != nil {
 			for _, command := range in.Commands {
@@ -64,7 +64,7 @@ func sequences(l *runtimeLink) (out []uint64) {
 	return out
 }
 
-func resolve(s *Server, tick, through uint64) {
+func resolve(s *Server, tick, through uint32) {
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick,
 		Players: []*runtime.PlayerState{{PlayerId: 7, MovementEpoch: 1, LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, LastResolvedCommand: through}},
@@ -73,7 +73,7 @@ func resolve(s *Server, tick, through uint64) {
 }
 
 // linkTotals accumulates what takeIngress hands over, per player.
-type linkTotals map[uint64]*playerIngressCounts
+type linkTotals map[uint32]*playerIngressCounts
 
 func (totals linkTotals) take(l *runtimeLink) linkTotals {
 	for player, counts := range l.takeIngress() {
@@ -87,7 +87,7 @@ func (totals linkTotals) take(l *runtimeLink) linkTotals {
 	return totals
 }
 
-func (totals linkTotals) of(player uint64) playerIngressCounts {
+func (totals linkTotals) of(player uint32) playerIngressCounts {
 	if counts := totals[player]; counts != nil {
 		return *counts
 	}
@@ -136,7 +136,7 @@ func dialedLink(t *testing.T) *runtimeLink {
 	return &runtimeLink{conn: conn, wake: make(chan struct{}, 1), done: make(chan struct{})}
 }
 
-func linkWindow(player, epoch, first, last uint64) *runtime.PlayerInput {
+func linkWindow(player, epoch, first, last uint32) *runtime.PlayerInput {
 	in := &runtime.PlayerInput{LifeGeneration: 1, MovementEpoch: epoch, PlayerId: player}
 	for sequence := first; sequence <= last; sequence++ {
 		in.Commands = append(in.Commands, &runtime.MovementCommand{Sequence: sequence, MoveForward: 1})
@@ -239,7 +239,7 @@ func TestRuntimeLinkInputQueueDropsTheOldestWindowAndReportsIt(t *testing.T) {
 	if err := l.input(linkWindow(2, 1, 1, 1), dropEvent{}); err != nil {
 		t.Fatal(err)
 	}
-	for k := uint64(1); k <= maxQueuedInputs+2; k++ {
+	for k := uint32(1); k <= maxQueuedInputs+2; k++ {
 		e := dropEvent{at: start.Add(time.Duration(k) * time.Millisecond), transport: uint32(100 + k), epoch: 1, life: 1, firstCommand: k, lastCommand: k, items: 1}
 		if err := l.input(linkWindow(1, 1, k, k), e); err != nil {
 			t.Fatal(err)
@@ -256,8 +256,8 @@ func TestRuntimeLinkInputQueueDropsTheOldestWindowAndReportsIt(t *testing.T) {
 		t.Fatalf("player 2 lost %d windows to player 1's overflow", got)
 	}
 	got := sequences(l)
-	want := []uint64{1}
-	for k := uint64(3); k <= maxQueuedInputs+2; k++ {
+	want := []uint32{1}
+	for k := uint32(3); k <= maxQueuedInputs+2; k++ {
 		want = append(want, k)
 	}
 	if !slices.Equal(got, want) {
@@ -282,7 +282,7 @@ func TestRuntimeLinkInputQueueDropsTheOldestWindowAndReportsIt(t *testing.T) {
 func TestRuntimeLinkQueuesWindowsBehindABlockedWrite(t *testing.T) {
 	block, entered := make(chan struct{}), make(chan struct{}, 1)
 	var mu sync.Mutex
-	var written []uint64
+	var written []uint32
 	setForTest(t, &runtimeWrite, func(_ *framing.TCPConnection, payload []byte, _ time.Duration) error {
 		var e runtime.RuntimeEnvelope
 		if err := proto.Unmarshal(payload, &e); err != nil {
@@ -311,7 +311,7 @@ func TestRuntimeLinkQueuesWindowsBehindABlockedWrite(t *testing.T) {
 	}
 	<-entered
 	const arrived = maxQueuedInputs + 10
-	for k := uint64(2); k <= arrived+1; k++ {
+	for k := uint32(2); k <= arrived+1; k++ {
 		if err := l.input(linkWindow(1, 1, k, k), dropEvent{}); err != nil {
 			t.Fatal(err)
 		}
@@ -329,8 +329,8 @@ func TestRuntimeLinkQueuesWindowsBehindABlockedWrite(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	want := []uint64{1}
-	for k := uint64(arrived + 1 - maxQueuedInputs + 1); k <= arrived+1; k++ {
+	want := []uint32{1}
+	for k := uint32(arrived + 1 - maxQueuedInputs + 1); k <= arrived+1; k++ {
 		want = append(want, k)
 	}
 	if !slices.Equal(written, want) {
@@ -403,7 +403,7 @@ func TestGatewayForwardsStaleSequenceInputWithoutCommitting(t *testing.T) {
 	// carries a fresh sequence and a new command and must not reach the link.
 	second := now.Add(10 * time.Second)
 	for seq := uint32(10); seq < 130; seq++ {
-		first := uint64(seq) * 3
+		first := uint32(seq) * 3
 		sendInputAt(t, s, p, seq, second, &client.PlayerInput{MovementEpoch: 2, LifeGeneration: 3, Commands: moves(first, first+2)})
 	}
 	// One player's queue holds maxQueuedInputs windows; the older admitted
@@ -520,13 +520,13 @@ func TestRuntimeLinkConservesHandedCommands(t *testing.T) {
 // fails), and a write pass frees the queue for the next 64.
 func TestRuntimeLinkBoundsPendingControlsPerPass(t *testing.T) {
 	l := dialedLink(t)
-	join := func(player uint64) *runtime.RuntimeEnvelope {
+	join := func(player uint32) *runtime.RuntimeEnvelope {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_Join{Join: &runtime.PlayerJoin{PlayerId: player}}
 		return e
 	}
 	for round := 0; round < 2; round++ {
-		for k := uint64(0); k < maxQueuedControls; k++ {
+		for k := uint32(0); k < maxQueuedControls; k++ {
 			if err := l.control(join(k + 1)); err != nil {
 				t.Fatalf("round %d: control %d refused: %v", round, k+1, err)
 			}

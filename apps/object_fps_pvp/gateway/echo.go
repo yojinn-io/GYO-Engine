@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	client "gyo.local/object_fps_pvp/protocol/clientv7"
+	client "gyo.local/object_fps_pvp/protocol/clientv8"
 )
 
 // Diagnostics only (pv7 contract §3, time-echo): the clock sampling with each
@@ -55,7 +55,7 @@ func (s *Server) endEcho(p *reservation, now time.Time) {
 	}
 }
 
-func logClientWindow(player uint64, window clockWindow) {
+func logClientWindow(player uint32, window clockWindow) {
 	log.Printf("client clock sync player=%d %s", player, strings.TrimPrefix(window.line(), "clock sync "))
 }
 

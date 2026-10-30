@@ -4,7 +4,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/threads/RoleThread.hpp"
-#include "runtime_v7.pb.h"
+#include "runtime_v8.pb.h"
 #include "engine/base/Assert.hpp"
 #include <google/protobuf/unknown_field_set.h>
 #include <asio.hpp>
@@ -27,7 +27,7 @@
 #include <utility>
 
 namespace fps::pvp {
-namespace pb = object_fps_pvp::runtime::v7;
+namespace pb = object_fps_pvp::runtime::v8;
 using asio::ip::tcp;
 namespace {
 // Diagnostics only: lifecycle events and a statistics line every ten seconds
@@ -115,28 +115,29 @@ bool WouldBlock(const asio::error_code& error) {
 }
 pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
     pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
-    auto* out=message.mutable_snapshot(); out->set_tick(snapshot.tick);
+    auto* out=message.mutable_snapshot(); out->set_tick(wire::Counter(snapshot.tick));
     for(const auto& p:snapshot.players) {
-        auto* state=out->add_players(); state->set_player_id(p.playerId);
+        auto* state=out->add_players(); state->set_player_id(wire::Counter(p.playerId));
         state->set_x(p.position.x); state->set_y(p.position.y); state->set_z(p.position.z);
-        state->set_yaw(p.yaw); state->set_pitch(p.pitch); state->set_last_resolved_command(p.lastResolvedCommand);
-        state->set_movement_epoch(p.movementEpoch);state->set_contiguous_pending_commands(p.contiguousPendingCommands);
+        state->set_yaw(p.yaw); state->set_pitch(p.pitch); state->set_last_resolved_command(wire::Counter(p.lastResolvedCommand));
+        state->set_movement_epoch(wire::Counter(p.movementEpoch));state->set_contiguous_pending_commands(p.contiguousPendingCommands);
         state->set_vertical_velocity(p.verticalVelocity);state->set_grounded(p.grounded);
-        state->set_life_generation(p.lifeGeneration);state->set_life_state(LifeForWire(p.lifeState));
-        state->set_life_state_tick(p.lifeStateTick);state->set_respawn_tick(p.respawnTick);
+        state->set_life_generation(wire::Counter(p.lifeGeneration));state->set_life_state(LifeForWire(p.lifeState));
+        state->set_life_state_tick(wire::Counter(p.lifeStateTick));state->set_respawn_tick(wire::Counter(p.respawnTick));
         if(p.movementSlackSequence && p.movementSlackMicros) {
-            state->set_movement_slack_sequence(*p.movementSlackSequence);state->set_movement_slack_us(*p.movementSlackMicros);
+            state->set_movement_slack_sequence(wire::Counter(*p.movementSlackSequence));state->set_movement_slack_us(*p.movementSlackMicros);
         }
         state->set_connection_quality_failures(p.connectionQualityFailures);
+        state->set_crouched(p.crouched);state->set_sprinting(p.sprinting); // pv8 §2
     }
     for(const auto& p:snapshot.combat) {
-        auto* state=out->add_combat();state->set_player_id(p.playerId);
-        state->set_hp(p.hp);state->set_next_allowed_shot_tick(p.nextAllowedShotTick);
-        state->set_life_generation(p.lifeGeneration);state->set_magazine_ammo(p.magazineAmmo);
-        state->set_reload_action_id(p.reloadActionId);state->set_reload_start_tick(p.reloadStartTick);
-        state->set_reload_end_tick(p.reloadEndTick);state->set_last_shot_action_id(p.lastShotActionId);
-        state->set_last_shot_tick(p.lastShotTick);state->set_last_damage_tick(p.lastDamageTick);
-        state->set_damage_count(p.damageCount);state->set_last_attacker_id(p.lastAttackerId);
+        auto* state=out->add_combat();state->set_player_id(wire::Counter(p.playerId));
+        state->set_hp(p.hp);state->set_next_allowed_shot_tick(wire::Counter(p.nextAllowedShotTick));
+        state->set_life_generation(wire::Counter(p.lifeGeneration));state->set_magazine_ammo(p.magazineAmmo);
+        state->set_reload_action_id(wire::Counter(p.reloadActionId));state->set_reload_start_tick(wire::Counter(p.reloadStartTick));
+        state->set_reload_end_tick(wire::Counter(p.reloadEndTick));state->set_last_shot_action_id(wire::Counter(p.lastShotActionId));
+        state->set_last_shot_tick(wire::Counter(p.lastShotTick));state->set_last_damage_tick(wire::Counter(p.lastDamageTick));
+        state->set_damage_count(p.damageCount);state->set_last_attacker_id(wire::Counter(p.lastAttackerId));
         state->set_last_hit_part(static_cast<pb::HitPart>(p.lastHitPart));
     }
     return message;
@@ -204,8 +205,8 @@ std::chrono::steady_clock::time_point LaneDue(const ActionLane& lane, std::chron
 // the cursor, wrapping to the lowest of the rest. Written in id order.
 pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane, std::chrono::steady_clock::time_point now) {
     pb::RuntimeEnvelope message;message.set_protocol_version(wire::ProtocolVersion);
-    auto* out=message.mutable_action_results();out->set_player_id(results.playerId);
-    out->set_retired_through(results.retiredThrough);
+    auto* out=message.mutable_action_results();out->set_player_id(wire::Counter(results.playerId));
+    out->set_retired_through(wire::Counter(results.retiredThrough));
     out->set_refused_batches(lane.refused);out->set_last_refusal(lane.lastRefusal);
     lane.lastSend=now;
     lane.sentRetired=results.retiredThrough;
@@ -227,13 +228,13 @@ pb::RuntimeEnvelope ActionMessage(const ActionResults& results, ActionLane& lane
     std::sort(chosen.begin(),chosen.end());
     for(const auto index:chosen) {
         const auto& decision=decisions[index];
-        auto* value=out->add_decisions();value->set_action_id(decision.actionId);
-        value->set_resolved_tick(decision.resolvedTick);value->set_accepted(decision.accepted);
+        auto* value=out->add_decisions();value->set_action_id(wire::Counter(decision.actionId));
+        value->set_resolved_tick(wire::Counter(decision.resolvedTick));value->set_accepted(decision.accepted);
         value->set_rejection(RejectionForWire(decision.rejection));
         value->set_hit_kind(static_cast<pb::ShotHitKind>(decision.hitKind));
-        value->set_target_id(decision.targetId);value->set_damage(decision.damage);
-        value->set_kind(KindForWire(decision.kind));value->set_life_generation(decision.lifeGeneration);
-        value->set_target_life_generation(decision.targetLifeGeneration);
+        value->set_target_id(wire::Counter(decision.targetId));value->set_damage(decision.damage);
+        value->set_kind(KindForWire(decision.kind));value->set_life_generation(wire::Counter(decision.lifeGeneration));
+        value->set_target_life_generation(wire::Counter(decision.targetLifeGeneration));
         value->set_hit_part(static_cast<pb::HitPart>(decision.hitPart));
     }
     return message;
@@ -488,12 +489,15 @@ struct IpcHost::Impl {
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version); r->set_arena_digest(arenaDigest);
         r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
+        const auto& stance=host.Stance(); // pv8 §3: the Match's movement rules data
+        r->set_crouch_body_height(stance.crouchBodyHeight);r->set_crouch_eye_height(stance.crouchEyeHeight);
+        r->set_crouch_speed_scale(stance.crouchSpeedScale);r->set_sprint_speed_scale(stance.sprintSpeedScale);
         r->set_tick_rate(AuthorityTickRate); r->set_snapshot_interval_ticks(SnapshotIntervalTicks); r->set_max_players(MaxPlayers);
         auto* rules=r->mutable_combat_rules();rules->set_maximum_hp(PvpCombatRules.maximumHp);
-        rules->set_shot_damage(PvpCombatRules.shotDamage);rules->set_cooldown_ticks(PvpCombatRules.cooldownTicks);
+        rules->set_shot_damage(PvpCombatRules.shotDamage);rules->set_cooldown_ticks(wire::Counter(PvpCombatRules.cooldownTicks));
         rules->set_shot_range(PvpCombatRules.shotRange);
-        rules->set_magazine_capacity(PvpCombatRules.magazineCapacity);rules->set_reload_ticks(PvpCombatRules.reloadTicks);
-        rules->set_respawn_ticks(PvpCombatRules.respawnTicks);
+        rules->set_magazine_capacity(PvpCombatRules.magazineCapacity);rules->set_reload_ticks(wire::Counter(PvpCombatRules.reloadTicks));
+        rules->set_respawn_ticks(wire::Counter(PvpCombatRules.respawnTicks));
         rules->set_maximum_shot_damage(PvpCombatRules.maximumShotDamage);
         rules->set_maximum_reference_age_ms(static_cast<std::uint32_t>(
             std::chrono::duration_cast<std::chrono::milliseconds>(PvpCombatRules.maximumReferenceAge).count()));
@@ -614,7 +618,8 @@ struct IpcHost::Impl {
                     p.has_gateway_dwell_us()?std::optional(p.gateway_dwell_us()):std::nullopt);
                 PlayerInput window{p.player_id(),{},p.movement_epoch(),p.life_generation(),p.observed_authority_tick()};
                 for(const auto& command:p.commands())
-                    window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested()});
+                    window.commands.push_back({command.sequence(),command.move_forward(),command.move_right(),command.yaw(),command.pitch(),command.jump_requested(),
+                        command.crouch_held(),command.sprint_held()});
                 // The host counts every outcome by reason: an empty or
                 // oversized window as unknown_player (player 0) when the Match
                 // does not hold the player, as resetting during a reset, and
@@ -698,7 +703,7 @@ struct IpcHost::Impl {
                     continue;
                 }
                 pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
-                auto* joined=message.mutable_join_result(); joined->set_player_id(found->second);
+                auto* joined=message.mutable_join_result(); joined->set_player_id(wire::Counter(found->second));
                 joined->set_accepted(result.accepted); joined->set_reason(result.error);
                 MatchEventLog::Line("join player="+std::to_string(found->second)+(result.accepted?" accepted":" rejected reason="+result.error));
                 if(result.accepted && host.GetActionResults(found->second)) session.actionLanes.try_emplace(found->second);
@@ -711,7 +716,7 @@ struct IpcHost::Impl {
                 // The Match already removed the player; the Gateway clears its
                 // reservation like a Leave and tells the Client why.
                 pb::RuntimeEnvelope message; message.set_protocol_version(wire::ProtocolVersion);
-                auto* evicted=message.mutable_evicted();evicted->set_player_id(eviction.playerId);
+                auto* evicted=message.mutable_evicted();evicted->set_player_id(wire::Counter(eviction.playerId));
                 MatchEventLog::Line("evicted player="+std::to_string(eviction.playerId)+" reference_age_ms="+
                     std::to_string(eviction.referenceAgeMillis)+" substituted_permille="+std::to_string(eviction.substitutedPermille)+
                     " movement_resets="+std::to_string(eviction.movementResets));

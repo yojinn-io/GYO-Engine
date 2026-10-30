@@ -4,7 +4,7 @@
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "runtime_v7.pb.h"
+#include "runtime_v8.pb.h"
 
 #include <asio.hpp>
 
@@ -29,7 +29,7 @@ namespace {
 using namespace fps::pvp;
 using namespace std::chrono_literals;
 using asio::ip::tcp;
-namespace pb = object_fps_pvp::runtime::v7;
+namespace pb = object_fps_pvp::runtime::v8;
 // Test bodies sit outside this namespace, where protobuf's own ::pb makes pb ambiguous.
 using Envelope = pb::RuntimeEnvelope;
 using WireDecision = pb::ShotDecision;
@@ -287,6 +287,40 @@ TEST_CASE("PvP IPC greets with Ready and sends a join's result before any snapsh
         seen = SnapshotHas(*message, 7);
     }
     CHECK(seen);
+}
+
+// v8-product-crouch W3: Ready carries the Match's movement rules, a held crouch
+// in an input window reaches the Match, and the snapshot reports the stance
+// (sprint_held is carried and ignored, protocol-v8 sections 2-3).
+TEST_CASE("PvP IPC carries the stance rules in Ready, the crouch in and the stance out") {
+    Server server;
+    Gateway gateway(server.address);
+    const auto ready = gateway.Receive();
+    REQUIRE(ready);
+    REQUIRE(ready->has_ready());
+    CHECK(ready->ready().crouch_body_height() == DefaultStanceRules.crouchBodyHeight);
+    CHECK(ready->ready().crouch_eye_height() == DefaultStanceRules.crouchEyeHeight);
+    CHECK(ready->ready().crouch_speed_scale() == DefaultStanceRules.crouchSpeedScale);
+    CHECK(ready->ready().sprint_speed_scale() == DefaultStanceRules.sprintSpeedScale);
+    gateway.Send(Join(7));
+    static_cast<void>(ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); }));
+    auto window = InputWindow(7, 1, 3);
+    for (auto& command : *window.mutable_input()->mutable_commands()) {
+        command.set_crouch_held(true);
+        command.set_sprint_held(true);
+    }
+    gateway.Send(window);
+    const auto crouched = ReceiveFirst(gateway, [](const auto& message) {
+        if (!message.has_snapshot()) return false;
+        for (const auto& player : message.snapshot().players())
+            if (player.player_id() == 7 && player.last_resolved_command() >= 1) return true;
+        return false;
+    });
+    for (const auto& player : crouched.snapshot().players()) {
+        if (player.player_id() != 7) continue;
+        CHECK(player.crouched());
+        CHECK_FALSE(player.sprinting());
+    }
 }
 
 TEST_CASE("PvP IPC resets the Match between connections") {
@@ -669,7 +703,7 @@ TEST_CASE("PvP IPC answers a refused action batch with one results frame") {
     // The host refuses this one: it acknowledges what was never decided.
     const auto refusals = {malformed, Actions(5, over, 1), Actions(5, {}, 99)};
     // pv7 §5 (D-6): each answer counts the refusal and names its reason.
-    const auto reasons = {object_fps_pvp::runtime::v7::ACTION_REFUSAL_MALFORMED, object_fps_pvp::runtime::v7::ACTION_REFUSAL_OVER_BATCH, object_fps_pvp::runtime::v7::ACTION_REFUSAL_INVALID_BATCH};
+    const auto reasons = {object_fps_pvp::runtime::v8::ACTION_REFUSAL_MALFORMED, object_fps_pvp::runtime::v8::ACTION_REFUSAL_OVER_BATCH, object_fps_pvp::runtime::v8::ACTION_REFUSAL_INVALID_BATCH};
     auto reason = reasons.begin();
     std::uint64_t refusedSoFar = 0;
     for (const auto& refused : refusals) {
@@ -687,7 +721,7 @@ TEST_CASE("PvP IPC answers a refused action batch with one results frame") {
     gateway.Send(Actions(5, {2}, 1));
     const auto accepted = ReceiveFirst(gateway, [](const auto& message) { return Carries(message, 2); });
     CHECK(accepted.action_results().refused_batches() == 3);
-    CHECK(accepted.action_results().last_refusal() == object_fps_pvp::runtime::v7::ACTION_REFUSAL_INVALID_BATCH);
+    CHECK(accepted.action_results().last_refusal() == object_fps_pvp::runtime::v8::ACTION_REFUSAL_INVALID_BATCH);
 }
 
 TEST_CASE("PvP IPC writes a decision before the snapshot of its tick when the lane was idle") {
@@ -840,14 +874,14 @@ TEST_CASE("PvP IPC hands every malformed input and action batch to the host's in
     for (ActionId id = 1; id <= MaxActionBatch + 1; ++id) {
         auto* shot = overBatch.mutable_actions()->add_shots();
         shot->set_action_id(id);
-        shot->set_kind(object_fps_pvp::runtime::v7::ACTION_RELOAD);
+        shot->set_kind(object_fps_pvp::runtime::v8::ACTION_RELOAD);
         shot->set_life_generation(1);
     }
     gateway.Send(overBatch);
     auto noYaw = Actions(5, {}, 0);
     auto* aimless = noYaw.mutable_actions()->add_shots();
     aimless->set_action_id(1);
-    aimless->set_kind(object_fps_pvp::runtime::v7::ACTION_SHOT);
+    aimless->set_kind(object_fps_pvp::runtime::v8::ACTION_SHOT);
     aimless->set_life_generation(1);
     aimless->set_pitch(0);
     gateway.Send(noYaw);
@@ -855,7 +889,7 @@ TEST_CASE("PvP IPC hands every malformed input and action batch to the host's in
     auto conflicting = Actions(5, {}, 0);
     auto* shot = conflicting.mutable_actions()->add_shots();
     shot->set_action_id(1);
-    shot->set_kind(object_fps_pvp::runtime::v7::ACTION_SHOT);
+    shot->set_kind(object_fps_pvp::runtime::v8::ACTION_SHOT);
     shot->set_life_generation(1);
     shot->set_yaw(0.5F);
     shot->set_pitch(0);
@@ -1268,10 +1302,10 @@ TEST_CASE("PvP IPC decisions do not depend on clock samples") {
 // The ClockSample envelope's bytes, shared with the Gateway's
 // TestClockSampleBytesMatchTheMatchBinding: both bindings agree.
 TEST_CASE("PvP IPC clock samples have the agreed bytes") {
-    const std::string full("\x08\x07\xa2\x01\x06\x08\x01\x10\x02\x18\x03", 11);
-    const std::string transmitOnly("\x08\x07\xa2\x01\x02\x18\x03", 7);
+    const std::string full("\x08\x08\xa2\x01\x06\x08\x01\x10\x02\x18\x03", 11);
+    const std::string transmitOnly("\x08\x08\xa2\x01\x02\x18\x03", 7);
     Envelope message;
-    message.set_protocol_version(7);
+    message.set_protocol_version(8);
     message.mutable_clock()->set_origin_us(1);
     message.mutable_clock()->set_receive_us(2);
     message.mutable_clock()->set_transmit_us(3);
@@ -1396,10 +1430,10 @@ TEST_CASE("PvP IPC logs each Leave reason and removes the player for any") {
             return message.has_join_result() && message.join_result().player_id() == player;
         }));
     }
-    const std::vector<std::pair<PlayerId, int>> leaves{{7, object_fps_pvp::runtime::v7::LEAVE_REASON_CLIENT_REQUEST}, {8, 0}, {9, 77}};
+    const std::vector<std::pair<PlayerId, int>> leaves{{7, object_fps_pvp::runtime::v8::LEAVE_REASON_CLIENT_REQUEST}, {8, 0}, {9, 77}};
     for (const auto& [player, reason] : leaves) {
         auto leave = Leave(player);
-        leave.mutable_leave()->set_reason(static_cast<object_fps_pvp::runtime::v7::LeaveReason>(reason));
+        leave.mutable_leave()->set_reason(static_cast<object_fps_pvp::runtime::v8::LeaveReason>(reason));
         gateway.Send(leave);
     }
     CHECK(log.Shows("leave player=7 reason=client_request"));
@@ -1451,7 +1485,7 @@ TEST_CASE("PvP IPC refusal names are the host's rejection names") {
         const auto rejection = static_cast<IngressActionRejection>(index);
         std::string name(IngressName(rejection));
         for (auto& c : name) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        CHECK(object_fps_pvp::runtime::v7::ActionRefusal_Name(static_cast<object_fps_pvp::runtime::v7::ActionRefusal>(index + 1)) == "ACTION_REFUSAL_" + name);
+        CHECK(object_fps_pvp::runtime::v8::ActionRefusal_Name(static_cast<object_fps_pvp::runtime::v8::ActionRefusal>(index + 1)) == "ACTION_REFUSAL_" + name);
     }
 }
 
@@ -1475,7 +1509,7 @@ TEST_CASE("PvP IPC carries the hitbox fields and E, S and the view tick") {
     shot->set_view_tick_q16(3);
     gateway.Send(action);
     const auto decided = ReceiveFirst(gateway, [](const auto& message) { return Carries(message, 1); });
-    CHECK(decided.action_results().decisions(0).hit_part() == object_fps_pvp::runtime::v7::HIT_PART_UNSPECIFIED); // a reload
+    CHECK(decided.action_results().decisions(0).hit_part() == object_fps_pvp::runtime::v8::HIT_PART_UNSPECIFIED); // a reload
     std::optional<ShotShadowRecord> record;
     for (const auto giveUp = Clock::now() + 2s; !record && Clock::now() < giveUp;) {
         for (const auto& r : server.host.DrainShotRecords().records)

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev7"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
 // setForTest overrides a package variable until the test and every cleanup
@@ -359,10 +359,10 @@ func TestClockSampleBytesMatchTheMatchBinding(t *testing.T) {
 		sample *runtime.ClockSample
 		bytes  []byte
 	}{
-		{&runtime.ClockSample{OriginUs: &origin, ReceiveUs: &receive, TransmitUs: 3}, []byte{0x08, 0x07, 0xa2, 0x01, 0x06, 0x08, 0x01, 0x10, 0x02, 0x18, 0x03}},
-		{&runtime.ClockSample{TransmitUs: 3}, []byte{0x08, 0x07, 0xa2, 0x01, 0x02, 0x18, 0x03}},
+		{&runtime.ClockSample{OriginUs: &origin, ReceiveUs: &receive, TransmitUs: 3}, []byte{0x08, 0x08, 0xa2, 0x01, 0x06, 0x08, 0x01, 0x10, 0x02, 0x18, 0x03}},
+		{&runtime.ClockSample{TransmitUs: 3}, []byte{0x08, 0x08, 0xa2, 0x01, 0x02, 0x18, 0x03}},
 	} {
-		got, err := proto.Marshal(&runtime.RuntimeEnvelope{ProtocolVersion: 7, Message: &runtime.RuntimeEnvelope_Clock{Clock: c.sample}})
+		got, err := proto.Marshal(&runtime.RuntimeEnvelope{ProtocolVersion: 8, Message: &runtime.RuntimeEnvelope_Clock{Clock: c.sample}})
 		if err != nil || string(got) != string(c.bytes) {
 			t.Fatalf("% x, want % x (%v)", got, c.bytes, err)
 		}

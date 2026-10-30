@@ -155,6 +155,9 @@ std::string WorkerStatisticsLine(const WorkerStatisticsWindow& window) {
          << " unexpected_kind_datagrams=" << window.unexpectedKindDatagrams;
     // Added in v7.1 client-silent-checks (D183), so it comes last.
     line << " stale_input_windows=" << window.staleInputWindows;
+    // Added in v8 pv8-obs-bytes, so they come last.
+    line << " stale_snapshot_datagrams=" << window.staleSnapshotDatagrams
+         << " stale_results_datagrams=" << window.staleResultsDatagrams;
     return line.str();
 }
 

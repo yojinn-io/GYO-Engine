@@ -1445,3 +1445,29 @@ TEST_CASE("PvP a Resync requested before a respawn boundary merges into the resp
     CHECK(quality->resets == 0);
     CHECK(quality->resyncs == 0);
 }
+
+// v8-product-crouch (protocol-v8 §4): a crouched death respawns standing. Both
+// players crouch first so the level shots from a crouched eye still hit.
+TEST_CASE("PvP a crouched death respawns standing") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    for (const PlayerId id : {PlayerId{1}, PlayerId{2}}) {
+        const auto player = LifePlayer(match, id);
+        REQUIRE(match.SubmitInput({id, {{player.lastResolvedCommand + 1, 0, 0, 0, 0, false, true}},
+            player.movementEpoch, player.lifeGeneration}));
+    }
+    CombatStep(match);
+    REQUIRE(LifePlayer(match, 1).crouched);
+    REQUIRE(LifePlayer(match, 2).crouched);
+    DamageThreeTimes(match);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    REQUIRE(LifePlayer(match, 2).lifeState == LifeState::Dead);
+    CHECK(LifePlayer(match, 2).crouched); // frozen while dead
+    const auto due = LifePlayer(match, 2).respawnTick;
+    while (match.TickCount() < due) CombatStep(match);
+    const auto respawned = LifePlayer(match, 2);
+    REQUIRE(respawned.lifeState == LifeState::Alive);
+    CHECK_FALSE(respawned.crouched);
+}
+

@@ -13,6 +13,8 @@
     "aim_up": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Pistol_Aim_Up" },
     "aim_neutral": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Pistol_Aim_Neutral" },
     "aim_down": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Pistol_Aim_Down" },
-    "hit": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Hit_Chest" }
+    "hit": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Hit_Chest" },
+    "crouch_idle": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Crouch_Idle_Loop" },
+    "crouch_move": { "model_asset_id": "object_fps_pvp.model.animation.ual1_mannequin", "clip": "Armature|Crouch_Fwd_Loop" }
   }
 }
