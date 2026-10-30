@@ -37,6 +37,10 @@ grab or release the pointer) and text editing policy (what Ctrl+A means) belong 
   `key` is the physical position, `layoutKey` the key the current layout produces at that position (`Key::Count` if
   none); text and key entries keep their arrival order inside `text`; `BeginFrame` clears it. No ordering is
   promised between `text` and `events`.
+- `SdlInput::SetTextDiagnostics` (v8-tool-ui-ime-observe): off by default; while on, each text input switch,
+  composition (SDL's TEXT_EDITING and its candidates), typed text and text key is written to `Engine::Base::Log`
+  (category `input.text`) with whether the frame took it. Diagnostics only: the frame is the same either way, and
+  compositions are not part of the frame.
 - Every focus loss, key press and mouse button event the backend receives for this window is an event in `events`,
   even when the state does not change (a focus loss while unfocused, a second non-repeat press); only key repeats are
   dropped. A product's capture policy may rely on it (sdl-isolation J1).

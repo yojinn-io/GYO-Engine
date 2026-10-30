@@ -45,6 +45,13 @@ public:
     [[nodiscard]] Base::Result<void, SdlInputError>
     SetTextInput(bool enabled);
 
+    // Diagnostics only (v8-tool-ui-ime-observe): while on, every text input
+    // switch, composition (TEXT_EDITING and its candidates), typed text and
+    // text key this backend receives is written to Engine::Base::Log under
+    // the category "input.text", with whether the frame took it. The frame is
+    // the same either way. Off by default.
+    void SetTextDiagnostics(bool enabled) noexcept;
+
     [[nodiscard]] const PhysicalInputFrame& Snapshot() const noexcept;
 
 private:
@@ -55,6 +62,7 @@ private:
     Platform::Sdl::SdlPlatform* platform_{};
     PhysicalInputFrame frame_{};
     bool suppressRelativeMotion_{};
+    bool textDiagnostics_{};
 };
 
 } // namespace Engine::Input::Backend::Sdl

@@ -2,10 +2,14 @@
 #include "engine/input/backend/sdl/SdlInputInjection.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp"
 #include "engine/base/Assert.hpp"
+#include "engine/base/Log.hpp"
 
 #include <SDL3/SDL.h>
 
 #include <array>
+#include <cstdint>
+#include <cstdio>
+#include <string>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -226,6 +230,46 @@ void ResetTransient(ButtonState& state) noexcept {
     state.released = false;
 }
 
+// Text for a diagnostic line: printable ASCII as is, every other code point
+// as \u{XXXX}, so a full-width colon (U+FF1A) is told apart from ':'. Bytes
+// that are not UTF-8 appear as \x{XX}.
+std::string QuoteText(const char* text) {
+    std::string out{"\""};
+    if (text == nullptr) return "null";
+    const auto* bytes = reinterpret_cast<const unsigned char*>(text);
+    char buffer[16];
+    for (std::size_t index = 0; bytes[index] != 0;) {
+        const unsigned char lead = bytes[index];
+        std::size_t length = lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2 : (lead >> 4) == 0xE ? 3 : (lead >> 3) == 0x1E ? 4 : 0;
+        std::uint32_t codePoint = length == 1 ? lead : length == 2 ? lead & 0x1F : length == 3 ? lead & 0x0F : lead & 0x07;
+        for (std::size_t next = 1; next < length; ++next) {
+            if ((bytes[index + next] & 0xC0) != 0x80) {
+                length = 0;
+                break;
+            }
+            codePoint = (codePoint << 6) | (bytes[index + next] & 0x3F);
+        }
+        if (length == 0) {
+            std::snprintf(buffer, sizeof(buffer), "\\x{%02X}", lead);
+            out += buffer;
+            ++index;
+            continue;
+        }
+        if (codePoint >= 0x20 && codePoint < 0x7F && codePoint != '"' && codePoint != '\\') {
+            out += static_cast<char>(codePoint);
+        } else {
+            std::snprintf(buffer, sizeof(buffer), "\\u{%04X}", static_cast<unsigned>(codePoint));
+            out += buffer;
+        }
+        index += length;
+    }
+    return out + "\"";
+}
+
+void LogText(const std::string& line) noexcept {
+    Base::Log(Base::LogLevel::Info, "input.text", line);
+}
+
 void ApplyTransition(ButtonState& state, const bool down) noexcept {
     if (down == state.held) {
         return;
@@ -313,17 +357,65 @@ void SdlInput::HandleEvent(const Platform::Sdl::PlatformEvent& platformEvent) no
             frame_.events.push_back({.kind = InputEventKind::WindowRestored});
         }
         break;
-    case SDL_EVENT_TEXT_INPUT:
+    case SDL_EVENT_TEXT_INPUT: {
         // Whether text input is on is read from SDL at arrival (it may be
         // turned on or off by others, such as an editor's UI backend).
-        if (event.text.windowID == ownWindowId && event.text.text != nullptr &&
-            SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {
+        const bool active = SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_));
+        const bool taken = event.text.windowID == ownWindowId && event.text.text != nullptr && active;
+        if (taken) {
             frame_.text.push_back({.kind = TextEvent::Kind::Text, .text = event.text.text});
+        }
+        if (textDiagnostics_) {
+            try {
+                LogText("text_input t=" + std::to_string(event.text.timestamp) +
+                        " own_window=" + std::to_string(event.text.windowID == ownWindowId) +
+                        " active=" + std::to_string(active) + " taken=" + std::to_string(taken) +
+                        " text=" + QuoteText(event.text.text));
+            } catch (...) {
+            }
+        }
+        break;
+    }
+    case SDL_EVENT_TEXT_EDITING:
+        // Not part of the frame (yet); seen only by the diagnostics.
+        if (textDiagnostics_) {
+            try {
+                LogText("text_editing t=" + std::to_string(event.edit.timestamp) +
+                        " own_window=" + std::to_string(event.edit.windowID == ownWindowId) +
+                        " active=" + std::to_string(SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) +
+                        " start=" + std::to_string(event.edit.start) + " length=" + std::to_string(event.edit.length) +
+                        " text=" + QuoteText(event.edit.text));
+            } catch (...) {
+            }
+        }
+        break;
+    case SDL_EVENT_TEXT_EDITING_CANDIDATES:
+        if (textDiagnostics_) {
+            try {
+                LogText("text_candidates t=" + std::to_string(event.edit_candidates.timestamp) +
+                        " own_window=" + std::to_string(event.edit_candidates.windowID == ownWindowId) +
+                        " count=" + std::to_string(event.edit_candidates.num_candidates) +
+                        " selected=" + std::to_string(event.edit_candidates.selected_candidate));
+            } catch (...) {
+            }
         }
         break;
     case SDL_EVENT_KEY_DOWN:
     case SDL_EVENT_KEY_UP:
         // Text keys: presses only, repeats included, while text input is on.
+        if (textDiagnostics_ && event.type == SDL_EVENT_KEY_DOWN &&
+            SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {
+            try {
+                char mod[8];
+                std::snprintf(mod, sizeof(mod), "0x%04X", static_cast<unsigned>(event.key.mod));
+                LogText("text_key t=" + std::to_string(event.key.timestamp) +
+                        " own_window=" + std::to_string(event.key.windowID == ownWindowId) +
+                        " scancode=" + QuoteText(SDL_GetScancodeName(event.key.scancode)) +
+                        " key=" + QuoteText(SDL_GetKeyName(event.key.key)) + " mod=" + mod +
+                        " repeat=" + std::to_string(event.key.repeat));
+            } catch (...) {
+            }
+        }
         if (event.type == SDL_EVENT_KEY_DOWN && event.key.windowID == ownWindowId &&
             SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))) {
             frame_.text.push_back({.kind = TextEvent::Kind::Key,
@@ -391,13 +483,32 @@ void SdlInput::EndFrame() noexcept {
 Base::Result<void, SdlInputError>
 SdlInput::SetTextInput(const bool enabled) {
     SDL_Window* window = Platform::Sdl::NativeWindow(*platform_);
-    if (!(enabled ? SDL_StartTextInput(window) : SDL_StopTextInput(window))) {
+    const bool changed = enabled ? SDL_StartTextInput(window) : SDL_StopTextInput(window);
+    if (textDiagnostics_) {
+        try {
+            LogText("set_text_input enabled=" + std::to_string(enabled) + " ok=" + std::to_string(changed) +
+                    " active=" + std::to_string(SDL_TextInputActive(window)));
+        } catch (...) {
+        }
+    }
+    if (!changed) {
         return Base::Err(SdlInputError::Make(
             SdlInputErrorCode::TextInputFailed,
             "SdlInput: unable to change text input",
             SDL_GetError()));
     }
     return {};
+}
+
+void SdlInput::SetTextDiagnostics(const bool enabled) noexcept {
+    textDiagnostics_ = enabled;
+    if (!enabled) return;
+    try {
+        const char* imeUi = SDL_GetHint(SDL_HINT_IME_IMPLEMENTED_UI);
+        LogText(std::string{"diagnostics on ime_ui="} + QuoteText(imeUi == nullptr ? "(default)" : imeUi) +
+                " active=" + std::to_string(SDL_TextInputActive(Platform::Sdl::NativeWindow(*platform_))));
+    } catch (...) {
+    }
 }
 
 Base::Result<void, SdlInputError>

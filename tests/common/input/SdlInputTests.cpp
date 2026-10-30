@@ -4,10 +4,13 @@
 #include "engine/input/backend/sdl/SdlInput.hpp"
 #include "engine/input/backend/sdl/SdlInputNative.hpp"
 #include "engine/input/InputActionMap.hpp"
+#include "engine/base/Log.hpp"
 
 #include <array>
 #include <chrono>
+#include <string>
 #include <utility>
+#include <vector>
 
 using namespace Engine::Input;
 
@@ -451,6 +454,80 @@ TEST_CASE("SDL text keys carry the layout key apart from the physical key") {
     CHECK_MESSAGE((text[0].key == Key::Q && text[0].layoutKey == Key::A),
                   "the layout key is the key the layout produces, apart from the position");
     CHECK_MESSAGE(text[1].layoutKey == Key::Enter, "a keycode without a character maps through its scancode");
+}
+
+namespace {
+
+std::vector<std::string> textDiagnosticLines;
+
+void CaptureTextDiagnostics(const Engine::Base::LogMessage& message) noexcept {
+    try {
+        if (message.category == "input.text") textDiagnosticLines.emplace_back(message.text);
+    } catch (...) {
+    }
+}
+
+SDL_Event Composition(const SDL_WindowID window, const char* text) {
+    SDL_Event event{};
+    event.type = SDL_EVENT_TEXT_EDITING;
+    event.edit.windowID = window;
+    event.edit.text = text;
+    event.edit.start = 1;
+    event.edit.length = 0;
+    return event;
+}
+
+} // namespace
+
+TEST_CASE("SDL text diagnostics log what arrives and leave the frame unchanged") {
+    auto platform = Engine::Platform::Sdl::SdlPlatform::Create();
+    REQUIRE(platform);
+    const SDL_WindowID window = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(*platform.value()));
+    using Engine::Input::Backend::Sdl::HandleNativeEvent;
+    // ':' typed as ASCII, then a full-width colon (U+FF1A) committed by an
+    // input method after its composition.
+    const auto feed = [&](Backend::Sdl::SdlInput& input) {
+        input.BeginFrame();
+        HandleNativeEvent(input, TextKey(window, SDL_SCANCODE_SEMICOLON, SDLK_COLON, true), {});
+        HandleNativeEvent(input, TypedText(window, ":"), {});
+        HandleNativeEvent(input, Composition(window, "\xEF\xBC\x9A"), {});
+        HandleNativeEvent(input, TypedText(window, "\xEF\xBC\x9A"), {});
+    };
+
+    Backend::Sdl::SdlInput quiet(*platform.value());
+    REQUIRE(quiet.SetTextInput(true));
+    textDiagnosticLines.clear();
+    const auto previous = Engine::Base::SetLogHandler(&CaptureTextDiagnostics);
+    feed(quiet);
+    CHECK_MESSAGE(textDiagnosticLines.empty(), "the diagnostics are off by default");
+
+    Backend::Sdl::SdlInput traced(*platform.value());
+    traced.SetTextDiagnostics(true);
+    feed(traced);
+    traced.SetTextDiagnostics(false);
+    REQUIRE(traced.SetTextInput(false));
+    Engine::Base::SetLogHandler(previous);
+
+    const auto& quietText = quiet.Snapshot().text;
+    const auto& tracedText = traced.Snapshot().text;
+    REQUIRE(quietText.size() == tracedText.size());
+    for (std::size_t index = 0; index < quietText.size(); ++index) {
+        CHECK_MESSAGE((quietText[index].kind == tracedText[index].kind && quietText[index].text == tracedText[index].text),
+                      "the diagnostics do not change the frame");
+    }
+    CHECK_MESSAGE(tracedText.size() == 3, "the composition itself is not in the frame");
+
+    REQUIRE(textDiagnosticLines.size() == 5);
+    CHECK(textDiagnosticLines[0].starts_with("diagnostics on ime_ui="));
+    CHECK(textDiagnosticLines[1].starts_with("text_key "));
+    CHECK_MESSAGE((textDiagnosticLines[2].find("taken=1") != std::string::npos &&
+                   textDiagnosticLines[2].ends_with("text=\":\"")),
+                  "typed ASCII text is logged as is, with whether the frame took it");
+    CHECK_MESSAGE((textDiagnosticLines[3].starts_with("text_editing ") &&
+                   textDiagnosticLines[3].find("start=1 length=0") != std::string::npos &&
+                   textDiagnosticLines[3].ends_with("text=\"\\u{FF1A}\"")),
+                  "a composition is logged with its cursor and a full-width colon is told apart from ':'");
+    CHECK(textDiagnosticLines[4].ends_with("text=\"\\u{FF1A}\""));
 }
 
 TEST_CASE("SdlPlatform reads the clipboard text") {

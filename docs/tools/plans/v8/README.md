@@ -117,7 +117,7 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 
 | 代號 | 檔位｜引擎 | 估時 | 內容 | 驗收 |
 |---|---|---|---|---|
-| `v8-tool-ui-ime-observe` | medium｜Opus 5.5 | 2～4 h＋實機一次 | 診斷用 log（不改行為）：組字事件的開始、內容、確定。附離線場次腳本（記憶「Offline session scripts」） | 實機：重現或記錄「未重現」與證據。重現不了就停下回報（§14.3），不排修正 |
+| `v8-tool-ui-ime-observe` | medium｜Opus 5.5 | 2～4 h＋實機一次 | 診斷用 log（不改行為）：組字事件的開始、內容、確定。附離線場次腳本（記憶「Offline session scripts」） | 實機：重現或記錄「未重現」與證據。重現不了就停下回報（§14.3），不排修正。觀測方法與判定見下面「v8-tool-ui-ime-observe 的事前宣告」 |
 | `v8-tool-ui-invariants` | medium｜Opus 5.5 | 2～3 h | 在 [ui_toolchain.md](../../../ui_toolchain.md) 寫 `GYO::Ui`、ui_editor 的 `Design Invariants`＋`Replacement Criteria`；能守的寫守衛 Test | 使用者同意節的內容 |
 | `v8-engine-input-composition` | high｜Opus 5.5 | 6～10 h | `TextEvent` 加組字的種類（組字字串、游標位置）；`SetTextInputArea`。只加不改 | CI：既有 IP-1 Test 判定不變；新事件的單元 Test（合成的 SDL 事件）；突變只跑相關的（v7.1 D184） |
 | `v8-tool-ui-text-field` | high（編輯狀態局部 xhigh）｜Opus 5.5 | 10～16 h | `gyo.ui` v2、`text_field` 的 codec／驗證／版面／編輯狀態／繪製 | CI：codec 往返、v1 文件照常載入、編輯狀態的單元 Test（含組字中按 Enter、Backspace、焦點離開）、突變 |
@@ -129,6 +129,25 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-text-field` | high｜Opus 5.5 | 8～12 h | ui_editor 新增、編輯、預覽 `text_field`；輸出 v2 | CI：`tests/ui_editor` 的往返與 CLI 驗證；L3：使用者用 GUI 擺一個輸入框 |
 | `v8-tool-ui-button-style`（待決） | medium｜Opus 5.5 | 4～6 h | 按鈕外觀的共用樣式（同一組顏色、字級只寫一次） | 看 `v8-tool-ui-widget-scope` |
 | `v8-product-lobby-text-field` | high｜Opus 5.5 | 4～6 h | 大廳的位址欄改成 `text_field`；刪掉 `HandleTextEditing`、`AppendAddress` 的編輯部分，只留字元規則 | CI：大廳的既有 Test；L3：Windows 用輸入法打位址、看得到組字。**產品批**：由產品會話排程 |
+
+### v8-tool-ui-ime-observe 的事前宣告
+
+結果出來之前寫下，要使用者同意（AGENTS §14.1）。看了 log 之後不改。
+
+- **工具**：
+  - 客戶端參數 `--text-input-trace` 打開 `SdlInput::SetTextDiagnostics`，log 寫在執行檔旁的 `logs/client-<時間>.log`。
+  - Windows 用 [scripts/ime_observe_windows.cmd](scripts/ime_observe_windows.cmd) 啟動（放在 `gyo_object_fps_pvp.exe` 旁邊，雙擊）。
+  - 分析用 [scripts/ime_observe_report.py](scripts/ime_observe_report.py)，在 Mac 上跑。
+- **場次**（Windows 11，主戰場；不需要 Gateway 與 Match，只用大廳的位址欄）：
+  1. 對照組：輸入法關閉（英數），點位址欄、清空、打「127.0.0.1:8080」、Enter。1 次。
+  2. 日文輸入法（Microsoft IME，平假名模式），同樣的操作，3 次。
+  3. 中文輸入法（使用者平常用的那一個；記下名稱），同樣的操作，3 次。
+  - 每次之間點一下別處，讓位址欄結束輸入，每一次會在 log 裡自成一個 trial。
+- **判定**（分析腳本的分類，現在固定）：每個 trial 的冒號歸成 ascii／fullwidth／held／missing 之一，並記下是否「先組字才確定」與中間的按鍵數。
+  - 對照組不是 ascii、或出現了組字：視為觀測工具有問題，停下回報，不判讀其他 trial。
+  - 輸入法的 trial：fullwidth 或 held 或 missing，算「重現了冒號問題」，並以分類說明機制；全部是 ascii，記成「未重現」，附 log。
+  - 不論結果，這一批不排修正；修正由 `v8-engine-input-composition`／`v8-tool-ui-text-field` 依結果規劃。
+- **範圍的限制**：只看 Windows 上這兩種輸入法；鍵盤事件之外的原因（例如畫面停頓）不在觀測範圍。
 
 ## 待討論的兩個工具（`v8-tool-scope-ui-first`）
 

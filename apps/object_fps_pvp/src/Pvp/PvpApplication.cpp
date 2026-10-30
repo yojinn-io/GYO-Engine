@@ -937,6 +937,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     impl_->players->ResetPlayers();
     impl_->ResetWeaponFeedback();
     impl_->input = std::make_unique<Engine::Input::Backend::Sdl::SdlInput>(*impl_->platform);
+    impl_->input->SetTextDiagnostics(options.textInputTrace);
     impl_->width = static_cast<float>(options.width);
     impl_->height = static_cast<float>(options.height);
     impl_->address = options.gateway;

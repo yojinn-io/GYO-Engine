@@ -80,11 +80,14 @@ int GyoMain(int argc, char* argv[]) {
         const std::string_view argument = argv[index];
         if (argument == "--help") {
             ClientLog(LogLevel::Info, "%s [--gpu-driver auto|d3d12|vulkan|metal] [--gateway host:port] [--movement-trace path] "
-                    "[--log path (default: logs/client-<time>.log next to the executable)]", Gyo::AppConfig::DisplayName);
+                    "[--log path (default: logs/client-<time>.log next to the executable)] [--text-input-trace]",
+                    Gyo::AppConfig::DisplayName);
             return 0;
         }
         if (argument == "--gpu-driver" && index + 1 < argc) {
             options.gpuDriver = argv[++index];
+        } else if (argument == "--text-input-trace") {
+            options.textInputTrace = true;
         } else if (argument == "--gateway" && index + 1 < argc) {
             options.gateway = argv[++index];
             gatewayFromArgument = true;

@@ -98,6 +98,9 @@ struct PvpApplicationOptions final {
     int width{1280};
     int height{720};
     bool vsync{true};
+    // --text-input-trace: the input backend logs every text input event
+    // (v8-tool-ui-ime-observe). Diagnostics only; behaviour is the same.
+    bool textInputTrace{};
 };
 
 // Product composition owns input sampling and presentation; its client
