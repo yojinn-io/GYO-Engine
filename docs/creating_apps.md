@@ -38,7 +38,7 @@ gyo_app_add_executable(main MAIN OUT_TARGET app
     COMPONENTS SDL_RENDERER SDL_PLATFORM)
 ```
 
-Larger games can use `gyo_app_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `GYO::Engine`, `GYO::Base`, `GYO::Math`, `GYO::Time`, `GYO::Threads`, `GYO::Net`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
+Larger games can use `gyo_app_add_library` for game-owned source groups and an explicit `sources.cmake`. Use returned target variables rather than hard-coded target names. An SDL renderer component implies SDL platform availability; other optional adapters must be declared in metadata. `SDL_AUDIO` provides `GYO::AudioBackendSDL`, the SDL output of the audio mixer; it needs SDL but no window, so it does not imply the SDL platform. `GYO::Engine`, `GYO::Base`, `GYO::Math`, `GYO::Time`, `GYO::Threads`, `GYO::Audio`, `GYO::Net`, `GYO::Model`, `GYO::Collision`, `GYO::Input`, `GYO::Render`, `GYO::Text` and `GYO::Ui` remain public engine target names.
 
 A game that ships its own Go service keeps a `go.mod` in `apps/<game>/` and declares each service in the game CMake file. The game must be enabled on Linux, and `PLATFORMS` must be a subset of the game's enabled platforms; configuration fails otherwise. Normal native builds never need Go; CI checks the module and cross-builds the declared platforms. Reusable Go mechanisms belong to the engine-owned `services/gyo_gateway` module, not to a game.
 

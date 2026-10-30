@@ -7197,6 +7197,116 @@
       "replace": "            if (false) {\n                // v8-product-crouch-pose",
       "check": "presentation",
       "expect": "PvP\\ crouched\\ remote\\ lower\\ body\\ plays\\ the\\ crouch\\ clips\\ on\\ the\\ standing\\ model"
+    },
+    {
+      "id": "sfx-pan-mirrored",
+      "batch": "v8-product-sfx",
+      "what": "Spatial panning puts a source on the wrong side",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "    if (dx * dx + dz * dz > 1e-6F) pan = std::sin(Engine::Math::WrapRadians(std::atan2(dx, dz) - listenerYaw));",
+      "replace": "    if (dx * dx + dz * dz > 1e-6F) pan = -std::sin(Engine::Math::WrapRadians(std::atan2(dx, dz) - listenerYaw));",
+      "check": "cpu",
+      "expect": "CHECK\\( right.left == doctest::Approx\\(0\\).epsilon\\(1e-6\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-no-minimum-gain",
+      "batch": "v8-product-sfx",
+      "what": "Distance falloff drops below the minimum gain",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "    const float falloff = Engine::Math::Max(settings.minimumGain,",
+      "replace": "    const float falloff = Engine::Math::Max(0.0F,",
+      "check": "cpu",
+      "expect": "CHECK\\( farther.left == doctest::Approx\\(0.1\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-remote-first-state-replays",
+      "batch": "v8-product-sfx",
+      "what": "A remote player's first state replays its old shot",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "        if (!newLife && combat.lastShotActionId != 0 && combat.lastShotActionId != found->second.lastShot) {",
+      "replace": "        if (combat.lastShotActionId != 0 && (newLife || combat.lastShotActionId != found->second.lastShot)) {",
+      "check": "cpu",
+      "expect": "CHECK\\( tracker.Observe\\(Snapshot\\(10, 5\\), 1\\).empty\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-steps-in-air",
+      "batch": "v8-product-sfx",
+      "what": "Footsteps count distance covered in the air",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "    if (!grounded) return Step::None;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "sfx-teleport-steps",
+      "batch": "v8-product-sfx",
+      "what": "A teleport is taken as distance walked",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "    if (!started_ || life_ != lifeGeneration || PlanarDistance(last_, position) > settings.teleportDistance) {",
+      "replace": "    if (!started_ || life_ != lifeGeneration) {",
+      "check": "cpu",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "sfx-display-time-no-delay",
+      "batch": "v8-product-sfx",
+      "what": "Display time leaves out the presentation delay",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SnapshotTimeline.hpp",
+      "find": "        const double seconds = phase_ + DelaySeconds + relative * MovementTickSeconds;",
+      "replace": "        const double seconds = phase_ + relative * MovementTickSeconds;",
+      "check": "cpu",
+      "expect": "CHECK\\( seconds == doctest::Approx\\(1.0 \\+ 21 \\* MovementTickSeconds\\).epsilon\\(1e-9\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-display-time-unsigned",
+      "batch": "v8-product-sfx",
+      "what": "An old tick before the timeline's base maps far ahead",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SnapshotTimeline.hpp",
+      "find": "        const auto relative = static_cast<double>(static_cast<std::int64_t>(tick - baseTick_));",
+      "replace": "        const auto relative = static_cast<double>(tick - baseTick_);",
+      "check": "cpu",
+      "expect": "CHECK\\( old == doctest::Approx\\(1.0 - 9 \\* MovementTickSeconds\\).epsilon\\(1e-9\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-press-time-last",
+      "batch": "v8-product-sfx",
+      "what": "The shot keeps the last press of the frame instead of the first",
+      "file": "apps/object_fps_pvp/src/Pvp/PointerCapture.cpp",
+      "find": "                    if (!state.pendingShotEdge) state.pendingShotPressedAt = event.timestamp;",
+      "replace": "                    state.pendingShotPressedAt = event.timestamp;",
+      "check": "pointer_capture",
+      "expect": "CHECK\\( state.pendingShotPressedAt == at\\(10\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-reload-starts-at-start",
+      "batch": "v8-product-sfx",
+      "what": "The reload sound starts with the reload instead of ending with it",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "    return Engine::Math::Max(0.0, reloadSeconds - clipSeconds);",
+      "replace": "    return 0;",
+      "check": "cpu",
+      "expect": "CHECK\\( ReloadSoundOffsetSeconds\\(1.5, 0.958\\) == doctest::Approx\\(0.542\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-killing-hit-silent",
+      "batch": "v8-product-sfx",
+      "what": "The killing hit plays no hit-taken sound",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SoundCues.hpp",
+      "find": "    return outcome == HitFeedbackOutcome::Played || outcome == HitFeedbackOutcome::SuppressedDead;",
+      "replace": "    return outcome == HitFeedbackOutcome::Played;",
+      "check": "cpu",
+      "expect": "CHECK\\( HitTakenSounds\\(HitFeedbackOutcome::SuppressedDead\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-new-life-hit-sounds",
+      "batch": "v8-product-sfx",
+      "what": "A new life's first state replays its old hits as sound",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SoundCues.hpp",
+      "find": "    return outcome == HitFeedbackOutcome::Played || outcome == HitFeedbackOutcome::SuppressedDead;",
+      "replace": "    return outcome != HitFeedbackOutcome::None;",
+      "check": "cpu",
+      "expect": "CHECK_FALSE\\( HitTakenSounds\\(HitFeedbackOutcome::SuppressedNewLife\\) \\) is NOT correct"
     }
   ]
 }

@@ -12,6 +12,9 @@ add_subdirectory(os)
 add_subdirectory(time)
 add_subdirectory(threads)
 add_subdirectory(trace)
+# The audio mixer sits above the time base; its SDL output backend is separate
+# (docs/architecture/audio.md).
+add_subdirectory(audio)
 
 add_library(engine STATIC)
 add_library(GYO::Engine ALIAS engine)

@@ -47,6 +47,19 @@ public:
         return static_cast<double>(baseTick_) + cursor_;
     }
 
+    // The local time at which Sample's cursor reaches an authority tick, with
+    // the phase as it is now: the inverse of Sample's desired cursor. Sounds of
+    // remote events use it so their spacing follows authority ticks, on the
+    // same timeline as the remote animation (v8-product-sfx). Nullopt before
+    // the first snapshot.
+    [[nodiscard]] std::optional<Clock::time_point> DisplayTime(std::uint64_t tick) const noexcept {
+        if (history_.empty()) return std::nullopt;
+        // Signed: a tick before the timeline's base (an old event) lies in the past.
+        const auto relative = static_cast<double>(static_cast<std::int64_t>(tick - baseTick_));
+        const double seconds = phase_ + DelaySeconds + relative * MovementTickSeconds;
+        return firstReceive_ + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(seconds));
+    }
+
     [[nodiscard]] bool Push(const WorldSnapshot& snapshot, Clock::time_point receivedAt) {
         if (!snapshot.tick || (!history_.empty() && snapshot.tick <= history_.back().snapshot.tick)) return false;
         if (!history_.empty() && receivedAt < history_.back().receivedAt) return false;
