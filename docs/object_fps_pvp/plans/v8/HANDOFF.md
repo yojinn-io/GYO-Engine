@@ -1,6 +1,6 @@
 # PvP v8 交接
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`v8-product-crouch` commit 1 完成（`fd950ea3`），J1 等你核准事前宣告；[pv8 第 2 輪](pv8-round2.md) 的合成草案等你決定。**
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：`v8-product-crouch` J1 通過（36 情境 × scale 1、3，0 差分）；接著做 commit 2（digest v2 與蹲下情境）。pv8 第 2 輪的 6 項已決定（`pv8-round2-picks`）。**
 本文件是 v8 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。
 
 ## 代號對照
@@ -49,8 +49,6 @@
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：④ 工具線在會話 `v8-tool-line` 做規劃（`v8-tool-plan`，自己的 worktree，只規劃不實作）。
 - **等你決定**：
-  - [pv8-round2](pv8-round2.md) 文末的 6 項（`pv8-version-split` 等）。
-  - 核准 [v8-product-crouch 的事前宣告](v8-product-crouch-declaration.md)（J1：35 個情境 0 差分），並確認「先實作、用突變證明 Red」的偏差。
   - 不屬於玩法的 4 項放在 v8，還是另開維護線：驗收工具的三個問題（v7.1 D231、D233）、Match 連線品質窗口失敗時沒有寫出原因（v7.1 未結事項）、睡眠後重連（N-sleep-reconnect）、I-3 與 outage-resync P2 的兩個已知例外。
   - `v8-product-sfx` 前：音效資產的來源（v7 D38）。
   - `v8-product-hit-rules` 前：部位倍率。
@@ -87,6 +85,8 @@
 | `v8-engine-audio-first` | （2026-10-30）audio 最優先：`audio-line`（`v8-engine-audio-plan` → `v8-engine-audio` → `v8-product-sfx`）排在 crouch 與 pv8 第 2 輪之前。在哪裡做（本會話先暫停 crouch，或另開會話並行）等使用者決定 | 「對了，audio排在哪裡？這個是最優先的。」 |
 | `v8-engine-audio-session` | （2026-10-30）audio-line 另開一個會話做（自己的 worktree），從 `v8-engine-audio-plan` 開始；本會話繼續 crouch 與 pv8 第 2 輪的 prompt | 「audio-line 另開一個會話做（自己的 worktree），從 v8-engine-audio-plan 開始；本會話繼續 crouch 與 pv8 第 2 輪的 prompt。」 |
 | `v8-tool-line-session` | （2026-10-30）另開一條並行的工具線（④），先做規劃 `v8-tool-plan` | 「在給我一個並行的工具線。」 |
+| `v8-product-crouch-declaration-approve` | （2026-10-30）核准 [v8-product-crouch 的事前宣告](v8-product-crouch-declaration.md) J1～J4，接受「先實作、用突變證明 Red」的偏差；跑 J1 | 「核准 v8-product-crouch 的事前宣告（接受用突變證明 Red），跑 J1。」 |
+| `pv8-round2-picks` | （2026-10-30）[pv8-round2](pv8-round2.md) 的 6 項全部照建議：`pv8-version-split` (a) A 層現在合併、B 層在 ⑤ 時升 pv9；`pv8-req-v8-scope` (a) v8 只做 ⑤ 的對局規則，其他只留形狀；`pv8-seq-cpp-types` (b) C++ 維持 u64，用 `WireCounterMax` 加編碼 Assert；`pv8-reserve-numbers` (a) 預留 B／C 的號碼；`pv8-obs-bytes-now` (a) 現在做觀測；`pv8-hello-doc-mismatch` (a) 以程式的 250 ms 為準 | 「pv8 第 2 輪的 6 項全部照建議。」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -100,6 +100,8 @@
 - 2026-10-30：決策與批次的代號改成「版本-領域-主題」（`v8-docs-id-scheme`），v8 的計畫文件全部換掉，對照表在「代號對照」；dev_log 照規則不改寫。pv8 重開（`pv8-scope-reopen`）。
 - 2026-10-30：`v8-product-crouch` 不碰 wire 的部分實作。`StanceRules` 不放進 `Arena`（`ArenaContentDigest` 綁住全部成員），當參數傳給 `StepMovement`／`QueryShot`，舊簽名保留並用預設值。建置成功、`object_fps_pvp.cpu` 通過、新測試 7 個（61 個斷言）通過。突變 9 個：8 個 killed；`reset-substitution-stands` 存活，查明 Match 在新 epoch 的第 1 個命令前不推進該玩家（`PvpMatch.cpp:473-476`），先前「epoch 輪替後替補會把蹲著的玩家拉起來」的判斷錯誤，該規則刪除並更正 pv8-design、protocol-v8 §5 與事前宣告。偏差：事前宣告寫先寫失敗的測試，實際先實作，Red 改用突變證明。commit 1：`fd950ea3`。遠端蹲姿動畫延到 J1 之後。
 - 2026-10-30：pv8 第 2 輪 ultracode 完成（run `wf_0b9d1bf5-4aa`）。結論與分批寫成 [pv8-round2.md](pv8-round2.md)；對抗式檢查 must 4 個，主會話把第 1 個（u32 截斷）降為 should，理由寫在文件。
+
+- 2026-10-30：J1（`v8-product-crouch-declaration-approve` 之後）。base＝`de1c679b`（`../GYO-Engine-v8-base`），branch＝`fd950ea3`（之後的 commit 只改文件），同一台 Intel Mac，`compare_authority_trees.py` 各跑 1 次：scale 1 與 scale 3 都是「36 scenarios, 0 differing」。宣告寫「約 35 個」，實際 36 個，判定不受影響。J1 通過。
 
 ## 未結事項
 

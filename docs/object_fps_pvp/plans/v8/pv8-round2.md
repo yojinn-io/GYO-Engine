@@ -1,6 +1,6 @@
 # pv8-design 第 2 輪：協議壓力點的通道設計
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：合成草案，等使用者決定（文末）。** 起因：`pv8-scope-reopen`、`pv8-design-round2-ultracode`（[HANDOFF](HANDOFF.md)）。需求用典型值（[pv8-requirements](pv8-requirements.md)）。
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：6 項已決定（全部照建議，`pv8-round2-picks`）。下一步是 `pv8-contract-round2`、`pv8-obs-bytes`，以及 pv8-line 的 A 層。** 起因：`pv8-scope-reopen`、`pv8-design-round2-ultracode`（[HANDOFF](HANDOFF.md)）。需求用典型值（[pv8-requirements](pv8-requirements.md)）。
 
 ## 過程
 
