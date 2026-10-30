@@ -62,6 +62,17 @@
 - 突變（`tests/object_fps_pvp/mutations.json`，batch `v8-product-sfx`）：8／8 被殺（聲像左右顛倒、無最小增益、遠端第一個狀態重播、空中也算步數、瞬移算步數、顯示時間少了延遲、舊 Tick 以無號數換算、射擊保留最後一次按下）。
   - 經緯：`sfx-display-time-unsigned` 第一次存活。無號數回繞後的巨大秒數轉成時間點時溢位，結果恰好仍「比較早」，只比較大小抓不到。測試改為檢查確切的值後被殺。
 
+## 使用者試玩（L3，2026-10-30）
+
+- 單人一場約 50 秒（用戶端日誌 `client-20261030-203938.log`）：`PvP sound summary submitted=69 on_time=69 late=0 queue_full=0 no_voice=0 … local_shot=29 reload=5 footstep=35 landing=0`。收支一致，沒有遲到。遠端射擊、受擊、命中要兩個玩家，未測。
+- 使用者：「reload 的最後一聲太早了和動畫對不上，聲音先出來，彈倉動畫才插入，大概快了500ms左右。」
+  - 原因：權威端換彈是 90 Tick（1.5 s），片段 0.958 s；聲音從換彈開始播，最後一聲裝填約在 0.9 s，動畫在接近 1.5 s 插入彈倉，差約 0.54 s。
+  - 修正：換彈聲改為結尾對齊換彈結束，開始時刻＝權威開始＋max(0, 換彈長度−片段長度)（`ReloadSoundOffsetSeconds`，加 1 案與 1 個突變）。待使用者再聽一次確認。
+- 使用者：「我發現出現了掉線提示（只有移動，射擊後提示消失）」
+  - 那是「CONNECTION POOR」提示，不是斷線（`interruptions=0`、最長空窗 157 ms）。用戶端 `20:40:13` 收到 `failed_windows=1 of 3`、`20:40:23` 回到 0，提示隨之消失，和射擊無關。
+  - Match 同一窗口：`quality window failed … movement_resets=1 … movement_resets_failed=1`，Tick 晚醒最多 136 ms（`tick_stalls=1`）。
+  - 判斷：Match 端的一次停頓造成一次移動重設，品質窗口以「1 次重設即失敗」判定。Match 的連結沒有音效。沒有在不含音效的版本重現，所以不能斷定完全無關；屬網路／連線品質的範圍，不在本批修，交給使用者決定。
+
 ## L2 宣告（草案，等使用者核准；看結果前不改）
 
 - 目的：本機射擊的起音跟著按下的時刻，不落在 30 FPS 的幀格點上。

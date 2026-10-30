@@ -53,6 +53,11 @@ struct StereoGains final {
 [[nodiscard]] StereoGains SpatialGains(Engine::Math::Vec3 listener, float listenerYaw, Engine::Math::Vec3 source,
                                        float volume, const SoundSettings& settings) noexcept;
 
+// When the reload sound starts: so that it ends with the reload (its last
+// click is the magazine going in, which the animation shows at the end), but
+// never before the reload began. Seconds after the reload's authority start.
+[[nodiscard]] double ReloadSoundOffsetSeconds(double reloadSeconds, double clipSeconds) noexcept;
+
 // New remote shots in snapshots, in arrival order: a shot is a combat state
 // whose last shot action differs from the one seen before in the same life.
 // The first state seen of a player's life never plays (a join or a respawn

@@ -17,6 +17,7 @@ struct PvpSound::Impl final {
     std::optional<Engine::Audio::Submitter> submitter;
     std::optional<Engine::Audio::Sdl::SdlAudioOutput> output;
     std::uint64_t played[SoundCueCount]{};
+    double seconds[SoundCueCount]{};
 };
 
 PvpSound::PvpSound() : impl_(std::make_unique<Impl>()) {}
@@ -31,6 +32,7 @@ bool PvpSound::Initialize(const SoundSettings& settings, const ClipSource& sourc
         for (std::size_t j = 0; j < i; ++j) {
             if (settings.cues[j].clip == settings.cues[i].clip) {
                 impl_->clips[i] = impl_->clips[j];
+                impl_->seconds[i] = impl_->seconds[j];
                 shared = true;
                 break;
             }
@@ -42,6 +44,7 @@ bool PvpSound::Initialize(const SoundSettings& settings, const ClipSource& sourc
             auto id = bank.Add(data.interleaved, data.channels, data.sampleRate);
             if (id) {
                 impl_->clips[i] = *id;
+                impl_->seconds[i] = static_cast<double>(data.interleaved.size() / data.channels) / data.sampleRate;
                 added = true;
             } else {
                 clipError = Engine::Base::Describe(id.error());
@@ -71,6 +74,11 @@ bool PvpSound::Initialize(const SoundSettings& settings, const ClipSource& sourc
               static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
                   Engine::Audio::MixerConfig{}.scheduleDelay).count()));
     return true;
+}
+
+double PvpSound::ClipSeconds(const SoundCue cue) const noexcept {
+    const auto index = static_cast<std::size_t>(cue);
+    return index < SoundCueCount ? impl_->seconds[index] : 0;
 }
 
 void PvpSound::Play(const SoundCue cue, const Engine::Time::TimePoint at, const StereoGains gains) {

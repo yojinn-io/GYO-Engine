@@ -606,9 +606,13 @@ struct PvpApplication::Impl final {
                     static_cast<double>(state.snapshot->tick - weaponFeedback.reloadStartTick) / AuthorityTickRate : 0;
                 weaponAction = fps::WeaponViewModelAction::Reload;
                 ++weaponFeedback.reloadAnimationStarts;
-                // With the animation, at the reload's authority start as far as it has already run.
-                sound.Play(SoundCue::Reload, now - std::chrono::duration_cast<Clock::duration>(
-                        std::chrono::duration<double>(reloadAnchorSeconds)),
+                // Ending with the reload, as the animation does: from the reload's
+                // authority start (as far as it has already run), offset so the
+                // clip's last click lands at the reload's end.
+                const double reloadSeconds = static_cast<double>(weaponFeedback.reloadEndTick -
+                    weaponFeedback.reloadStartTick) / AuthorityTickRate;
+                sound.Play(SoundCue::Reload, now + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(
+                        ReloadSoundOffsetSeconds(reloadSeconds, sound.ClipSeconds(SoundCue::Reload)) - reloadAnchorSeconds)),
                     CentredGains(sound.Settings().cues[static_cast<std::size_t>(SoundCue::Reload)].volume));
                 ++weaponFeedback.animationRevision;
             }

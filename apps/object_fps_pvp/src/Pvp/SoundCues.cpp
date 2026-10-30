@@ -76,6 +76,11 @@ StereoGains SpatialGains(const Engine::Math::Vec3 listener, const float listener
     return {Engine::Math::Min(4.0F, scale * std::cos(angle)), Engine::Math::Min(4.0F, scale * std::sin(angle))};
 }
 
+double ReloadSoundOffsetSeconds(const double reloadSeconds, const double clipSeconds) noexcept {
+    if (!std::isfinite(reloadSeconds) || !std::isfinite(clipSeconds)) return 0;
+    return Engine::Math::Max(0.0, reloadSeconds - clipSeconds);
+}
+
 std::vector<RemoteShotTracker::Shot> RemoteShotTracker::Observe(const WorldSnapshot& snapshot, const PlayerId self) {
     std::vector<Shot> shots;
     for (const auto& combat : snapshot.combat) {

@@ -6854,6 +6854,16 @@
       "replace": "                    state.pendingShotPressedAt = event.timestamp;",
       "check": "pointer_capture",
       "expect": "CHECK\\( state.pendingShotPressedAt == at\\(10\\) \\) is NOT correct"
+    },
+    {
+      "id": "sfx-reload-starts-at-start",
+      "batch": "v8-product-sfx",
+      "what": "The reload sound starts with the reload instead of ending with it",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "    return Engine::Math::Max(0.0, reloadSeconds - clipSeconds);",
+      "replace": "    return 0;",
+      "check": "cpu",
+      "expect": "CHECK\\( ReloadSoundOffsetSeconds\\(1.5, 0.958\\) == doctest::Approx\\(0.542\\) \\) is NOT correct"
     }
   ]
 }

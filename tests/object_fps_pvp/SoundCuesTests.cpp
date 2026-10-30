@@ -159,3 +159,10 @@ TEST_CASE("PvP timeline display time is the inverse of the presentation cursor")
     const double old = std::chrono::duration<double>(timeline.DisplayTime(90)->time_since_epoch()).count();
     CHECK(old == doctest::Approx(1.0 - 9 * MovementTickSeconds).epsilon(1e-9)); // ten ticks before the base, shown one tick late
 }
+
+TEST_CASE("PvP reload sound ends with the reload and never starts before it") {
+    CHECK(ReloadSoundOffsetSeconds(1.5, 0.958) == doctest::Approx(0.542));
+    CHECK(ReloadSoundOffsetSeconds(1.5, 1.5) == doctest::Approx(0));
+    CHECK(ReloadSoundOffsetSeconds(0.5, 0.958) == doctest::Approx(0)); // a clip longer than the reload starts with it
+    CHECK(ReloadSoundOffsetSeconds(std::nan(""), 1) == doctest::Approx(0));
+}
