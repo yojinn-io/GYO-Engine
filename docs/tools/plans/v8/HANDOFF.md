@@ -15,7 +15,7 @@
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
-- **進行中**：無。
+- **進行中**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（分支 `claude/v8-tool-ui-editor`）等 CI 與 review。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - `GYO::Ui` 與 ui_editor 沒有 `Design Invariants` 節（[ui_toolchain.md](../../../ui_toolchain.md)、[tool_projects.md](../../../tool_projects.md)）。本線加元件前要補（`v8-tool-ui-invariants`）。
@@ -62,3 +62,4 @@
 - 2026-10-30：使用者補充：UI Editor 只管選單不管 HUD（`v8-tool-ui-editor-scope-menus`）；拖動與縮放有 bug；main menu 要背景圖或動畫；要求評價與結構審查。審查寫成 [ui-editor-review.md](ui-editor-review.md)（只審查，沒改程式）。拖動的 bug 只從程式推論機制，未重現。
 - 2026-10-30：使用者描述現象：拖藍色方塊「只能左右，往上拖動無效」。用暫時的程式驅動真正的 `PreviewAdapter::Draw`，四個方向各拖 50 px，重現並寫進審查 S-5（程式留在會話的 scratchpad，沒有進 repo）。
 - 2026-10-30：使用者要求把審查的 S-1～S-3 重構掉，先做 S-3。`v8-tool-ui-editor-gizmo-math` 完成：gizmo 數學抽成 `GizmoMath`，行為不變（重現程式前後輸出相同、9/9 測試、8 個突變全部被抓到）。新發現：開 Snap 時沒拖的軸也可能被對齊。拖動 bug 的修法仍等你決定。使用者問 commit 去哪了：都在本機分支 `claude/v8-tool-line-3a892c`，照主會話的交代沒有推送、沒有開 PR。
+- 2026-10-30：使用者要求推送並開 PR，並選擇「只放工具線」。從 origin/master（`d9905dec`）開新分支 `claude/v8-tool-ui-editor`，cherry-pick 工具線的 11 個 commit（無衝突；程式與已測的分支逐位元相同，9/9 測試再跑一次通過），推送並開 [PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)。主會話的 v8 文件（`claude/pvp-v8-pv8-line` 上 18 個未推送的 commit）不在這個 PR；README 指向 `protocol-v8.zh-Hant.md` 的連結要等那邊合併才有效。舊分支 `claude/v8-tool-line-3a892c` 留在本機，不再使用。
