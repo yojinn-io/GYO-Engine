@@ -5,6 +5,7 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/Diagnostic.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
+#include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/PreviewAdapter.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 
@@ -18,11 +19,15 @@ class AssetPreviewContext;
 
 class EditorApp final {
 public:
-    EditorApp(CommandLineOptions options, AssetPreviewContext& previewAssets);
+    // dialogs may be null: paths are then typed into the editor's own fields.
+    EditorApp(CommandLineOptions options, AssetPreviewContext& previewAssets, PathDialogs* dialogs = nullptr);
 
     [[nodiscard]] Result<void, EditorError> Initialize();
     // Apply queued mount/unmount only before the host opens the next frame.
     void ApplyPendingAssetChanges();
+    // Act on paths chosen in the host's file dialogs; before ApplyPendingAssetChanges,
+    // so a chosen asset folder mounts at the same frame boundary.
+    void ApplyPathDialogResults();
     void RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot);
     void RequestAssetUnmount();
     void Draw();
@@ -48,6 +53,8 @@ private:
     void DrawDialogs();
     void DrawStatusBar();
 
+    // Shows the host's dialog for purpose, or sets manualPrompt when there is none.
+    void RequestPath(PathDialogPurpose purpose, const std::array<char, 1024>& field, bool& manualPrompt);
     void NewDocument();
     // path is UTF-8 text, as the path fields hold it.
     void OpenDocument(const std::string& path);
@@ -58,6 +65,7 @@ private:
 
     CommandLineOptions options_;
     AssetPreviewContext& previewAssets_;
+    PathDialogs* dialogs_{};
     DocumentSession session_;
     ReadOnlyAssetCatalog catalog_;
     PreviewAdapter preview_;
@@ -88,6 +96,8 @@ private:
     bool showOverwriteDialog_{};
     bool showAssetPicker_{};
     bool showRenameDialog_{};
+    // One host dialog at a time; cleared when its result arrives.
+    bool pathDialogOpen_{};
     AssetPickerTarget assetPickerTarget_{AssetPickerTarget::FontAlias};
     RenameTarget renameTarget_{RenameTarget::FontAlias};
     std::string assetPickerFontAlias_{"default"};
