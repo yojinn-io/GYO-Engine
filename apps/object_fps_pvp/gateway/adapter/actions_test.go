@@ -10,14 +10,14 @@ import (
 )
 
 func TestActionSchemaIdentityAndMaximumDatagrams(t *testing.T) {
-	batch := &client.ActionBatch{AcknowledgedThrough: math.MaxUint64}
-	results := &runtime.ActionResults{PlayerId: math.MaxUint64, RetiredThrough: math.MaxUint64}
-	rules := &runtime.CombatRules{MagazineCapacity: math.MaxUint32, ReloadTicks: math.MaxUint64, RespawnTicks: math.MaxUint64, MaximumHp: math.MaxUint32, ShotDamage: math.MaxUint32, MaximumShotDamage: math.MaxUint32, CooldownTicks: math.MaxUint64, ShotRange: math.MaxFloat32, MaximumReferenceAgeMs: math.MaxUint32}
+	batch := &client.ActionBatch{AcknowledgedThrough: math.MaxUint32}
+	results := &runtime.ActionResults{PlayerId: math.MaxUint32, RetiredThrough: math.MaxUint32}
+	rules := &runtime.CombatRules{MagazineCapacity: math.MaxUint32, ReloadTicks: math.MaxUint32, RespawnTicks: math.MaxUint32, MaximumHp: math.MaxUint32, ShotDamage: math.MaxUint32, MaximumShotDamage: math.MaxUint32, CooldownTicks: math.MaxUint32, ShotRange: math.MaxFloat32, MaximumReferenceAgeMs: math.MaxUint32}
 	for i := 0; i < MaxActionBatch; i++ {
-		id := uint64(math.MaxUint64) - uint64(i)
-		batch.Shots = append(batch.Shots, &client.ShotRequest{LifeGeneration: math.MaxUint64, Kind: client.ActionKind_ACTION_SHOT, ActionId: id, ObservedAuthorityTick: math.MaxUint64, Yaw: proto.Float32(1e6), Pitch: proto.Float32(-float32(math.Pi / 2)),
-			MovementEpoch: math.MaxUint64, CommandSequence: math.MaxUint64, ViewTickQ16: math.MaxUint64})
-		results.Decisions = append(results.Decisions, &runtime.ShotDecision{LifeGeneration: math.MaxUint64, Kind: runtime.ActionKind_ACTION_SHOT, TargetLifeGeneration: math.MaxUint64, ActionId: id, ResolvedTick: math.MaxUint64, Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: math.MaxUint64, Damage: math.MaxUint32, HitPart: runtime.HitPart_HIT_PART_HEAD})
+		id := uint32(math.MaxUint32) - uint32(i)
+		batch.Shots = append(batch.Shots, &client.ShotRequest{LifeGeneration: math.MaxUint32, Kind: client.ActionKind_ACTION_SHOT, ActionId: id, ObservedAuthorityTick: math.MaxUint32, Yaw: proto.Float32(1e6), Pitch: proto.Float32(-float32(math.Pi / 2)),
+			MovementEpoch: math.MaxUint32, CommandSequence: math.MaxUint32, ViewTickQ16: math.MaxUint64})
+		results.Decisions = append(results.Decisions, &runtime.ShotDecision{LifeGeneration: math.MaxUint32, Kind: runtime.ActionKind_ACTION_SHOT, TargetLifeGeneration: math.MaxUint32, ActionId: id, ResolvedTick: math.MaxUint32, Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: math.MaxUint32, Damage: math.MaxUint32, HitPart: runtime.HitPart_HIT_PART_HEAD})
 	}
 	encoded, _ := proto.Marshal(batch)
 	mapped, err := DecodeActions(encoded, 77)
@@ -28,13 +28,13 @@ func TestActionSchemaIdentityAndMaximumDatagrams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: 60, SnapshotRate: 60, ArenaId: "test_arena", ArenaVersion: math.MaxUint32, CombatRules: RulesForClient(rules)}
-	snapshot := &client.WorldSnapshot{Tick: math.MaxUint64 - 1}
-	for i := uint64(0); i < MaxPlayers; i++ {
-		snapshot.Players = append(snapshot.Players, &client.PlayerState{LifeGeneration: math.MaxUint64, LifeState: client.LifeState_LIFE_ALIVE, LifeStateTick: math.MaxUint64 - 100, VerticalVelocity: math.MaxFloat32, Grounded: true, PlayerId: math.MaxUint64 - i, X: -math.MaxFloat32, Y: -math.MaxFloat32, Z: -math.MaxFloat32, Yaw: 1e6, Pitch: -float32(math.Pi / 2), LastResolvedCommand: math.MaxUint64, MovementEpoch: math.MaxUint64, ContiguousPendingCommands: 32,
-			MovementSlackSequence: proto.Uint64(math.MaxUint64), MovementSlackUs: proto.Int32(-MaxMovementSlackUs),
+	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint32, TickRate: 60, SnapshotRate: 60, ArenaId: "test_arena", ArenaVersion: math.MaxUint32, CombatRules: RulesForClient(rules)}
+	snapshot := &client.WorldSnapshot{Tick: math.MaxUint32 - 1}
+	for i := uint32(0); i < MaxPlayers; i++ {
+		snapshot.Players = append(snapshot.Players, &client.PlayerState{LifeGeneration: math.MaxUint32, LifeState: client.LifeState_LIFE_ALIVE, LifeStateTick: math.MaxUint32 - 100, VerticalVelocity: math.MaxFloat32, Grounded: true, PlayerId: math.MaxUint32 - i, X: -math.MaxFloat32, Y: -math.MaxFloat32, Z: -math.MaxFloat32, Yaw: 1e6, Pitch: -float32(math.Pi / 2), LastResolvedCommand: math.MaxUint32, MovementEpoch: math.MaxUint32, ContiguousPendingCommands: 32,
+			MovementSlackSequence: proto.Uint32(math.MaxUint32), MovementSlackUs: proto.Int32(-MaxMovementSlackUs),
 			ConnectionQualityFailures: ConnectionQualityFailedWindows - 1})
-		snapshot.Combat = append(snapshot.Combat, &client.CombatState{LifeGeneration: math.MaxUint64, MagazineAmmo: math.MaxUint32, PlayerId: math.MaxUint64 - i, Hp: math.MaxUint32, NextAllowedShotTick: math.MaxUint64, ReloadActionId: math.MaxUint64, ReloadStartTick: math.MaxUint64 - 90, ReloadEndTick: math.MaxUint64, LastShotActionId: math.MaxUint64, LastShotTick: math.MaxUint64 - 91, LastDamageTick: math.MaxUint64, DamageCount: math.MaxUint32, LastAttackerId: math.MaxUint64, LastHitPart: client.HitPart_HIT_PART_HEAD})
+		snapshot.Combat = append(snapshot.Combat, &client.CombatState{LifeGeneration: math.MaxUint32, MagazineAmmo: math.MaxUint32, PlayerId: math.MaxUint32 - i, Hp: math.MaxUint32, NextAllowedShotTick: math.MaxUint32, ReloadActionId: math.MaxUint32, ReloadStartTick: math.MaxUint32 - 90, ReloadEndTick: math.MaxUint32, LastShotActionId: math.MaxUint32, LastShotTick: math.MaxUint32 - 91, LastDamageTick: math.MaxUint32, DamageCount: math.MaxUint32, LastAttackerId: math.MaxUint32, LastHitPart: client.HitPart_HIT_PART_HEAD})
 	}
 	for _, message := range []proto.Message{batch, converted, welcome, snapshot} {
 		b, err := proto.Marshal(message)
@@ -46,6 +46,13 @@ func TestActionSchemaIdentityAndMaximumDatagrams(t *testing.T) {
 			t.Fatalf("%T maximum datagram %d: %v", message, len(b)+24, err)
 		}
 		t.Logf("%T maximum datagram=%d bytes incl 24-byte header", message, len(packet))
+	}
+	// The action datagrams are pinned exactly (protocol-v8 section 6): a new or
+	// widened field shows.
+	for message, want := range map[proto.Message]int{batch: 470, converted: 398} {
+		if size := proto.Size(message) + framing.HeaderSize; size != want {
+			t.Fatalf("%T maximum datagram %d bytes, want %d", message, size, want)
+		}
 	}
 	for _, shots := range [][]*client.ShotRequest{{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Yaw: proto.Float32(0), Pitch: proto.Float32(0), ActionId: 0}}, {{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, Yaw: proto.Float32(float32(math.NaN()))}}, {{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Yaw: proto.Float32(0), ActionId: 1, Pitch: proto.Float32(2)}}, {{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Yaw: proto.Float32(0), Pitch: proto.Float32(0), ActionId: 1}, {LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, Yaw: proto.Float32(1)}}, append(batch.Shots, &client.ShotRequest{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Yaw: proto.Float32(0), Pitch: proto.Float32(0), ActionId: 1})} {
 		b, _ := proto.Marshal(&client.ActionBatch{Shots: shots})
@@ -120,7 +127,7 @@ func TestReadyRequiresRulesAndBoundsWorstCaseWelcome(t *testing.T) {
 	}
 	// The largest time echo (pv7 §3) is part of the worst case.
 	largest := uint64(math.MaxUint64)
-	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, ArenaDigest: ready.ArenaDigest, CombatRules: RulesForClient(ready.CombatRules),
+	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint32, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, ArenaDigest: ready.ArenaDigest, CombatRules: RulesForClient(ready.CombatRules),
 		Clock: &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}}
 	if proto.Size(welcome)+24 != 1200 {
 		t.Fatalf("maximum admitted Welcome=%d", proto.Size(welcome)+24)

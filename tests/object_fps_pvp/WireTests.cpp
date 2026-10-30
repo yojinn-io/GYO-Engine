@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include "AssertTestSupport.hpp"
+
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "RetroFPS/Pvp/WireCounter.hpp"
 
@@ -128,4 +130,14 @@ TEST_CASE("PvP wire counters end at the uint32 maximum (protocol-v8 section 2a)"
     // A duration beyond the maximum must not wrap the unsigned difference.
     CHECK_FALSE(WireCounterAdd(0, WireCounterMax + 1));
     CHECK_FALSE(WireCounterAdd(1, (std::numeric_limits<std::uint64_t>::max)()));
+}
+
+TEST_CASE("PvP narrowed wire fields assert instead of truncating past the wire counter maximum") {
+    // protocol-v8 section 2a: the encoding boundary of every narrowed field goes
+    // through wire::Counter (test_wire_counter_sites.py counts the sites).
+    Engine::Test::ScopedAssertionHandler throwing;
+    CHECK(wire::Counter(0) == 0U);
+    CHECK(wire::Counter(fps::pvp::WireCounterMax) == 0xFFFF'FFFFU);
+    CHECK_THROWS_AS(static_cast<void>(wire::Counter(fps::pvp::WireCounterMax + 1)), Engine::Base::AssertionFailure);
+    CHECK_THROWS_AS(static_cast<void>(wire::Counter((std::numeric_limits<std::uint64_t>::max)())), Engine::Base::AssertionFailure);
 }

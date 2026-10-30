@@ -42,7 +42,7 @@ func captureIngressLog(t *testing.T) *ingressLog {
 
 // One parsed ingress line; player 0 is the Gateway line.
 type parsedIngressLine struct {
-	player  uint64
+	player  uint32
 	window  uint64 // window_ms
 	final   bool
 	counts  playerIngressCounts
@@ -72,7 +72,7 @@ func (c *ingressLog) lines(t *testing.T) []parsedIngressLine {
 		}
 		if i := strings.Index(line, "player ingress statistics "); i >= 0 {
 			head, fields := splitIngressLine(t, line[i:], "player ingress statistics", []string{"version", "player", "window_ms", "final"})
-			parsed := parsedIngressLine{player: head["player"], window: head["window_ms"], final: head["final"] == 1}
+			parsed := parsedIngressLine{player: uint32(head["player"]), window: head["window_ms"], final: head["final"] == 1}
 			fillIngressCounts(t, fields, playerIngressKeys[:], parsed.counts[:])
 			out = append(out, parsed)
 		} else if i := strings.Index(line, "gateway ingress statistics "); i >= 0 {
@@ -111,9 +111,9 @@ func (c *ingressLog) waitFinal(t *testing.T, name string) {
 // and the Gateway-wide conservation must hold exactly.
 func checkIngressLines(t *testing.T, name string, lines []parsedIngressLine, rateLimited uint64) ingressTake {
 	t.Helper()
-	total := ingressTake{players: map[uint64]*playerIngressCounts{}}
-	finals := map[uint64]int{}
-	ended := map[uint64]bool{}
+	total := ingressTake{players: map[uint32]*playerIngressCounts{}}
+	finals := map[uint32]int{}
+	ended := map[uint32]bool{}
 	for _, line := range lines {
 		// The final window is the Gateway's final line and the players' final
 		// lines after it.
@@ -245,7 +245,7 @@ type endPathFixture struct {
 	f        *fakeRuntime
 	cancel   func()
 	done     <-chan struct{}
-	player   uint64
+	player   uint32
 	session  uint64
 	endpoint netip.AddrPort
 	sequence uint32

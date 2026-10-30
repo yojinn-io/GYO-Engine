@@ -137,7 +137,7 @@ func TestDwellEndsWhenTheMessagesOwnWriteStarts(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-entered
-	for k := uint64(1); k <= 2; k++ {
+	for k := uint32(1); k <= 2; k++ {
 		if err := l.input(linkWindow(1, 1, k, k), dropEvent{at: time.Now(), transport: uint32(k + 1)}); err != nil {
 			t.Fatal(err)
 		}
@@ -153,9 +153,9 @@ func TestDwellEndsWhenTheMessagesOwnWriteStarts(t *testing.T) {
 // Gateway reading the IPC frame to that write; a frame replaced mid-loop is
 // encoded from the newer one's reading.
 func TestEachPlayerGetsItsOwnGatewayHold(t *testing.T) {
-	s := &Server{available: true, players: make(map[uint64]*reservation), snapshotOut: make(chan snapshotFrame, 1),
+	s := &Server{available: true, players: make(map[uint32]*reservation), snapshotOut: make(chan snapshotFrame, 1),
 		link: &runtimeLink{drops: newDropLedger()}}
-	for id := uint64(1); id <= 3; id++ {
+	for id := uint32(1); id <= 3; id++ {
 		s.players[id] = &reservation{playerID: id, session: newActiveSession(t, id), phase: active}
 	}
 	hold := func(packet outbound) time.Duration {
@@ -169,7 +169,7 @@ func TestEachPlayerGetsItsOwnGatewayHold(t *testing.T) {
 	}
 	start := time.Now()
 	frame := snapshotFrame{snapshot: &client.WorldSnapshot{Tick: 5, MatchHoldUs: proto.Uint32(77)}, read: start.Add(-50 * time.Millisecond), tick: 5}
-	players := []uint64{1, 2, 3}
+	players := []uint32{1, 2, 3}
 	frame, first := s.snapshotForPeer(players, frame)
 	time.Sleep(20 * time.Millisecond)
 	frame, second := s.snapshotForPeer(players[1:], frame)

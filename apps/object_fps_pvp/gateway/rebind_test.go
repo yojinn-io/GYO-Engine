@@ -72,7 +72,7 @@ func TestTheClientClockWindowRestartsOnlyWhenAVerifiedDatagramEndsASilence(t *te
 	input := func(from netip.AddrPort, d time.Duration) {
 		t.Helper()
 		sequence++
-		if err := s.receiveDatagram(f.datagram(adapter.Input, sequence, inputMessage(1, moves(uint64(sequence), uint64(sequence)))), from, at(d)); err != nil {
+		if err := s.receiveDatagram(f.datagram(adapter.Input, sequence, inputMessage(1, moves(uint32(sequence), uint32(sequence)))), from, at(d)); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -42,7 +42,7 @@ const (
 
 var ErrInput = errors.New("invalid player input schema or range")
 
-func DecodeInput(payload []byte, playerID uint64) (*runtime.PlayerInput, error) {
+func DecodeInput(payload []byte, playerID uint32) (*runtime.PlayerInput, error) {
 	var in client.PlayerInput
 	if playerID == 0 || len(payload)+framing.HeaderSize > framing.MaxDatagram {
 		return nil, ErrInput
@@ -52,7 +52,7 @@ func DecodeInput(payload []byte, playerID uint64) (*runtime.PlayerInput, error) 
 	}
 	out := &runtime.PlayerInput{PlayerId: playerID, MovementEpoch: in.MovementEpoch, LifeGeneration: in.LifeGeneration,
 		ObservedAuthorityTick: in.ObservedAuthorityTick}
-	var previous uint64
+	var previous uint32
 	for _, command := range in.Commands {
 		if command == nil || command.Sequence <= previous || !finite(command.MoveForward) || !finite(command.MoveRight) ||
 			!finite(command.Yaw) || !finite(command.Pitch) || math.Abs(float64(command.MoveForward)) > 1 ||
@@ -79,7 +79,7 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 	}
 	// match_hold_us is diagnostics only (pv7 §5, D-4): copied as is, never checked (D-5).
 	out := &client.WorldSnapshot{Tick: in.Tick, MatchHoldUs: in.MatchHoldUs}
-	seen := make(map[uint64]*runtime.PlayerState, len(in.Players))
+	seen := make(map[uint32]*runtime.PlayerState, len(in.Players))
 	for _, p := range in.Players {
 		if p == nil || p.PlayerId == 0 || seen[p.PlayerId] != nil || !finite(p.X) || !finite(p.Y) ||
 			!finite(p.Z) || !finite(p.Yaw) || !finite(p.Pitch) || math.Abs(float64(p.Yaw)) > 1e6 ||
@@ -107,7 +107,7 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			MovementSlackSequence: p.MovementSlackSequence, MovementSlackUs: p.MovementSlackUs,
 			ConnectionQualityFailures: p.ConnectionQualityFailures})
 	}
-	combatSeen := make(map[uint64]bool, len(in.Combat))
+	combatSeen := make(map[uint32]bool, len(in.Combat))
 	for _, state := range in.Combat {
 		if state == nil || seen[state.PlayerId] == nil || combatSeen[state.PlayerId] || state.Hp > rules.MaximumHp ||
 			state.LifeGeneration != seen[state.PlayerId].LifeGeneration || state.MagazineAmmo > rules.MagazineCapacity ||
@@ -134,7 +134,7 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 // all zero or all set; a hit lies in the current life state and the snapshot,
 // is not self-inflicted, counts at most one per hit point, and a dead player
 // died of its last hit.
-func validDamageRecord(state *runtime.CombatState, player *runtime.PlayerState, tick uint64, rules *runtime.CombatRules) bool {
+func validDamageRecord(state *runtime.CombatState, player *runtime.PlayerState, tick uint32, rules *runtime.CombatRules) bool {
 	none := state.LastDamageTick == 0
 	if (state.DamageCount == 0) != none || (state.LastAttackerId == 0) != none {
 		return false
@@ -203,13 +203,13 @@ func EqualShot(a, b *runtime.ShotRequest) bool {
 		(a.Pitch == nil) == (b.Pitch == nil) && a.GetYaw() == b.GetYaw() && a.GetPitch() == b.GetPitch() &&
 		a.MovementEpoch == b.MovementEpoch && a.CommandSequence == b.CommandSequence && a.ViewTickQ16 == b.ViewTickQ16
 }
-func DecodeActions(payload []byte, playerID uint64) (*runtime.ActionBatch, error) {
+func DecodeActions(payload []byte, playerID uint32) (*runtime.ActionBatch, error) {
 	var in client.ActionBatch
 	if playerID == 0 || len(payload)+framing.HeaderSize > framing.MaxDatagram || proto.Unmarshal(payload, &in) != nil || len(in.Shots) > MaxActionBatch {
 		return nil, ErrActions
 	}
 	out := &runtime.ActionBatch{PlayerId: playerID, AcknowledgedThrough: in.AcknowledgedThrough}
-	seen := map[uint64]*runtime.ShotRequest{}
+	seen := map[uint32]*runtime.ShotRequest{}
 	for _, shot := range in.Shots {
 		if shot == nil {
 			return nil, ErrActions
@@ -249,7 +249,7 @@ func ResultsForClient(in *runtime.ActionResults, rules *runtime.CombatRules) (*c
 	// unknown reason included (D-5).
 	out := &client.ActionResults{RetiredThrough: in.RetiredThrough, RefusedBatches: in.RefusedBatches,
 		LastRefusal: client.ActionRefusal(in.LastRefusal)}
-	seen := map[uint64]bool{}
+	seen := map[uint32]bool{}
 	for _, d := range in.Decisions {
 		if d == nil || d.ActionId == 0 || d.ResolvedTick == 0 || d.LifeGeneration == 0 || seen[d.ActionId] || d.Rejection < runtime.ShotRejection_REJECTION_NONE || d.Rejection > runtime.ShotRejection_REJECTION_MAGAZINE_FULL || d.HitKind < runtime.ShotHitKind_HIT_MISS || d.HitKind > runtime.ShotHitKind_HIT_PLAYER || d.Damage > rules.MaximumShotDamage ||
 			(d.HitKind == runtime.ShotHitKind_HIT_PLAYER) != playerPart(d.HitPart) ||
@@ -283,6 +283,6 @@ func ReadyFitsWelcome(r *runtime.Ready) bool {
 	// The largest time echo counts too (pv7 §3): every ClockSample field at its maximum.
 	largest := uint64(math.MaxUint64)
 	clock := &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}
-	welcome := &client.Welcome{PlayerId: math.MaxUint64, MatchId: math.MaxUint64, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock}
+	welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock}
 	return proto.Size(welcome)+framing.HeaderSize <= framing.MaxDatagram
 }

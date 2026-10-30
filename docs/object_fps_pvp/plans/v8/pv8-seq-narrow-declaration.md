@@ -1,6 +1,6 @@
 # pv8-seq-narrow 的事前宣告
 
-更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：草稿，等你核准（含下面「等你決定」的 2 項）。** 契約：[protocol-v8](../../protocol-v8.zh-Hant.md) §2a（縮窄、刪除、預留）與 §6（大小）（已定稿，`pv8-final-approve-round2`）。檔位 high（大小釘局部 xhigh）｜Opus 5.5，估時 6～10 h（超過 15 h 停下回報）。
+更新：2026-10-30。Owner：`object_fps_pvp`。**狀態：已核准（`pv8-seq-narrow-declaration-approve`，2026-10-30）：test-changes (a)、merged-streams (a)。完成：N1 0 差分、N5 12／12＋proto 手動 3／3、N6 100／100；T1～T5 已核准（`pv8-seq-narrow-test-changes-approve`），見 [dev_log](../../../dev_logs/2026_10_30_pvp_v8_seq_narrow.zh-Hant.md)。** 契約：[protocol-v8](../../protocol-v8.zh-Hant.md) §2a（縮窄、刪除、預留）與 §6（大小）（已定稿，`pv8-final-approve-round2`）。檔位 high（大小釘局部 xhigh）｜Opus 5.5，估時 6～10 h（超過 15 h 停下回報）。
 
 ## 範圍
 
@@ -34,7 +34,7 @@
   - 12 個命令的 PlayerInput；
   - 8 筆的 ActionBatch 與 ActionResults；
   - 最大的 Welcome。
-- 判定：每一項加 24 B 標頭都 ≤1200 B；數值寫進 protocol-v8 §6，並在 `capacity_test.go`、`worker_main.cpp`、`network_main.cpp`、`actions_test.go`（Welcome 邊界）釘成**完全相等**。四處的數值一致。
+- 判定：每一項加 24 B 標頭都 ≤1200 B；數值寫進 protocol-v8 §6，並在 `capacity_test.go`、`worker_main.cpp`、`network_main.cpp`、`actions_test.go`（Welcome 邊界）釘成**完全相等**。同一個構造在各處的數值一致（`worker_main.cpp` 與 `capacity_test.go` 都是契約最大；`network_main.cpp` 用合法的戰鬥值，數字本來就不同：pv7 是 1073 與 1019；2026-10-30 審查者指出後補註）。
 - 推論值（約 740／822／450 B）只當參考，不是判定。
 
 ### N4：守衛

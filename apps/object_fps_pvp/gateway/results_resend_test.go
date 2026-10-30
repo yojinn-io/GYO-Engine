@@ -15,11 +15,11 @@ import (
 type matchLane struct {
 	sent              bool
 	last              time.Duration
-	sentRetired, next uint64 // next: the cursor (the last cycled id)
+	sentRetired, next uint32 // next: the cursor (the last cycled id)
 	asked             bool
 }
 
-func (m *matchLane) frame(now time.Duration, decided []uint64, retired uint64) ([]uint64, bool) {
+func (m *matchLane) frame(now time.Duration, decided []uint32, retired uint32) ([]uint32, bool) {
 	if len(decided) == 0 && retired <= m.sentRetired && !m.asked || m.sent && now-m.last < actionSendInterval {
 		return nil, false
 	}
@@ -38,7 +38,7 @@ func (m *matchLane) frame(now time.Duration, decided []uint64, retired uint64) (
 }
 
 // sendFrame hands the Gateway one frame of the lane.
-func (r *resultLoop) sendFrame(retired uint64, ids []uint64) {
+func (r *resultLoop) sendFrame(retired uint32, ids []uint32) {
 	r.t.Helper()
 	in := &runtime.ActionResults{PlayerId: 7, RetiredThrough: retired}
 	for _, id := range ids {
@@ -69,7 +69,7 @@ func TestResultSlotReleasesFramesArrivingAtTheIntervalWithoutDrops(t *testing.T)
 			r.pass(0)
 		}
 		r.now = maxTime(r.now, arrival)
-		r.sendFrame(0, []uint64{1})
+		r.sendFrame(0, []uint32{1})
 		frames++
 		if !r.deadline.After(r.now) {
 			r.pass(0)
@@ -94,11 +94,11 @@ func TestResultSlotReleasesFramesArrivingAtTheIntervalWithoutDrops(t *testing.T)
 // Client's contiguous ACK hides which later ids it holds, so one received
 // frame cycles through ids it already has.
 func TestUnacknowledgedDecisionsArriveDespiteEveryOtherDatagramLost(t *testing.T) {
-	for _, n := range []uint64{8, 16, 24, 32} {
+	for _, n := range []uint32{8, 16, 24, 32} {
 		for _, firstLost := range []bool{true, false} {
 			r := newResultLoop(t)
-			var ids []uint64
-			for id := uint64(1); id <= n; id++ {
+			var ids []uint32
+			for id := uint32(1); id <= n; id++ {
 				ids = append(ids, id)
 			}
 			for first := 0; first < len(ids); first += 8 {
@@ -106,8 +106,8 @@ func TestUnacknowledgedDecisionsArriveDespiteEveryOtherDatagramLost(t *testing.T
 			}
 			start := r.now
 			var m matchLane
-			decided, retired := slices.Clone(ids), uint64(0)
-			received := map[uint64]bool{}
+			decided, retired := slices.Clone(ids), uint32(0)
+			received := map[uint32]bool{}
 			datagrams := 0
 			for step := time.Duration(0); step < 2*time.Second && len(received) < int(n); step += time.Millisecond {
 				r.now = start.Add(step)
@@ -129,7 +129,7 @@ func TestUnacknowledgedDecisionsArriveDespiteEveryOtherDatagramLost(t *testing.T
 					for received[retired+1] {
 						retired++
 					}
-					decided = slices.DeleteFunc(decided, func(id uint64) bool { return id <= retired })
+					decided = slices.DeleteFunc(decided, func(id uint32) bool { return id <= retired })
 				}
 			}
 			if limit := 2*int((n+7)/8) + 2; len(received) != int(n) || datagrams > limit {
@@ -149,8 +149,8 @@ func TestALostRetirementReachesTheClientWithinTwoIntervals(t *testing.T) {
 	r.clientBatch(0, 1)
 	start := r.now
 	var m matchLane
-	decided, retired, knownRetired := []uint64{1}, uint64(0), uint64(0)
-	received := map[uint64]bool{}
+	decided, retired, knownRetired := []uint32{1}, uint32(0), uint32(0)
+	received := map[uint32]bool{}
 	var lostAt, gotAt time.Duration
 	lost := false
 	for step := time.Duration(0); step < 2*time.Second && gotAt == 0; step += time.Millisecond {
@@ -167,7 +167,7 @@ func TestALostRetirementReachesTheClientWithinTwoIntervals(t *testing.T) {
 			}
 			if in.AcknowledgedThrough > retired {
 				retired = in.AcknowledgedThrough
-				decided = slices.DeleteFunc(decided, func(id uint64) bool { return id <= retired })
+				decided = slices.DeleteFunc(decided, func(id uint32) bool { return id <= retired })
 			}
 		}
 		if frame, ok := m.frame(step, decided, retired); ok {

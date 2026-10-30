@@ -6937,6 +6937,96 @@
       "replace": "if (value > WireCounterMax || value + amount > WireCounterMax)",
       "check": "cpu",
       "expect": "PvP\\ wire\\ counters\\ end\\ at\\ the\\ uint32\\ maximum\\ \\(protocol\\-v8\\ section\\ 2a\\)"
+    },
+    {
+      "id": "pv8sn-ipc-tick-truncates",
+      "batch": "pv8-seq-narrow",
+      "what": "IpcHost writes the snapshot tick without wire::Counter",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "out->set_tick(wire::Counter(snapshot.tick));",
+      "replace": "out->set_tick(snapshot.tick);",
+      "check": "wire_counter_sites",
+      "expect": "test_each_narrowed_setter_goes_through_wire_counter"
+    },
+    {
+      "id": "pv8sn-client-sequence-truncates",
+      "batch": "pv8-seq-narrow",
+      "what": "ClientConnection writes a command sequence without wire::Counter",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "set_sequence(wire::Counter(command.sequence))",
+      "replace": "set_sequence(command.sequence)",
+      "check": "wire_counter_sites",
+      "expect": "test_each_narrowed_setter_goes_through_wire_counter"
+    },
+    {
+      "id": "pv8sn-counter-no-assert",
+      "batch": "pv8-seq-narrow",
+      "what": "wire::Counter truncates silently",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp",
+      "find": "    GYO_ASSERT(value <= WireCounterMax);\n    return static_cast<std::uint32_t>(value);",
+      "replace": "    return static_cast<std::uint32_t>(value);",
+      "check": "cpu",
+      "expect": "PvP\\ narrowed\\ wire\\ fields\\ assert\\ instead\\ of\\ truncating\\ past\\ the\\ wire\\ counter\\ maximum"
+    },
+    {
+      "id": "pv8sn-counter-off-by-one",
+      "batch": "pv8-seq-narrow",
+      "what": "wire::Counter lets one past the maximum through",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp",
+      "find": "    GYO_ASSERT(value <= WireCounterMax);",
+      "replace": "    GYO_ASSERT(value <= WireCounterMax + 1);",
+      "check": "cpu",
+      "expect": "PvP\\ narrowed\\ wire\\ fields\\ assert\\ instead\\ of\\ truncating\\ past\\ the\\ wire\\ counter\\ maximum"
+    },
+    {
+      "id": "pv8sn-welcome-fit-small-id",
+      "batch": "pv8-seq-narrow",
+      "what": "ReadyFitsWelcome sizes the Welcome with a one-byte player id",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate:",
+      "replace": "welcome := &client.Welcome{PlayerId: 1, TickRate:",
+      "check": "go",
+      "expect": "TestReadyRequiresRulesAndBoundsWorstCaseWelcome"
+    },
+    {
+      "id": "pv8sn-snapshot-drops-respawn-tick",
+      "batch": "pv8-seq-narrow",
+      "what": "The snapshot mapping drops respawn_tick",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "LifeStateTick: p.LifeStateTick, RespawnTick: p.RespawnTick,",
+      "replace": "LifeStateTick: p.LifeStateTick,",
+      "check": "go",
+      "expect": "TestV5SnapshotLifecycleReloadAndJumpValidation"
+    },
+    {
+      "id": "pv8sn-join-reply-match-id",
+      "batch": "pv8-seq-narrow",
+      "what": "The join reply carries match_id again",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "return map[string]any{\"player_id\": p.playerID,",
+      "replace": "return map[string]any{\"match_id\": 1, \"player_id\": p.playerID,",
+      "check": "go",
+      "expect": "join\\ reply\\ still\\ carries\\ match_id"
+    },
+    {
+      "id": "pv8sn-rooms-match-id",
+      "batch": "pv8-seq-narrow",
+      "what": "The room list carries match_id again",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "return map[string]any{\"id\": 1, \"players\":",
+      "replace": "return map[string]any{\"id\": 1, \"match_id\": 1, \"players\":",
+      "check": "go",
+      "expect": "room\\ list\\ still\\ carries\\ match_id"
+    },
+    {
+      "id": "pv8sn-drop-sample-epoch-life",
+      "batch": "pv8-seq-narrow",
+      "what": "A drop sample carries the life as its epoch",
+      "file": "apps/object_fps_pvp/gateway/drop_report.go",
+      "find": "MovementEpoch: uint64(e.epoch), LifeGeneration: uint64(e.life),",
+      "replace": "MovementEpoch: uint64(e.life), LifeGeneration: uint64(e.life),",
+      "check": "go",
+      "expect": "FAIL"
     }
   ]
 }

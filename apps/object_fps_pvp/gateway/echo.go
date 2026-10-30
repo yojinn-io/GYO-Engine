@@ -55,7 +55,7 @@ func (s *Server) endEcho(p *reservation, now time.Time) {
 	}
 }
 
-func logClientWindow(player uint64, window clockWindow) {
+func logClientWindow(player uint32, window clockWindow) {
 	log.Printf("client clock sync player=%d %s", player, strings.TrimPrefix(window.line(), "clock sync "))
 }
 

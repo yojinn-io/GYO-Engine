@@ -13,10 +13,10 @@ import (
 	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
 )
 
-func shot(id uint64) *runtime.ShotRequest {
+func shot(id uint32) *runtime.ShotRequest {
 	return &runtime.ShotRequest{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: id, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}
 }
-func decision(id uint64) *runtime.ShotDecision {
+func decision(id uint32) *runtime.ShotDecision {
 	return &runtime.ShotDecision{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, ActionId: id, ResolvedTick: 10, Accepted: true}
 }
 func actionFixture(t *testing.T) (*Server, *reservation, netip.AddrPort, time.Time) {
@@ -35,7 +35,7 @@ func actionFixture(t *testing.T) (*Server, *reservation, netip.AddrPort, time.Ti
 	// fails the runtime, and that must not panic in a fixture.
 	l := dialedLink(t)
 	l.drops = newDropLedger()
-	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint64]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan queuedControl, 64), snapshotOut: make(chan snapshotFrame, 1), resultWake: make(chan struct{}, 1)}
+	s := &Server{available: true, ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, TickRate: 60, SnapshotIntervalTicks: 1, CombatRules: testRules()}, link: l, players: map[uint32]*reservation{7: p}, sessions: map[uint64]*reservation{peer.ID: p}, controlOut: make(chan queuedControl, 64), snapshotOut: make(chan snapshotFrame, 1), resultWake: make(chan struct{}, 1)}
 	return s, p, endpoint, now
 }
 func deliverActions(t *testing.T, s *Server, p *reservation, endpoint netip.AddrPort, seq uint32, b *client.ActionBatch, now time.Time) {
@@ -69,7 +69,7 @@ func TestGatewayActionAtomicConflictACKTruthAndSessionIdentity(t *testing.T) {
 // three it replaced are counted (34), the Match sends them again.
 func TestResultSlotKeepsTheLatestFrame(t *testing.T) {
 	s, _, _, now := actionFixture(t)
-	for start := uint64(1); start <= 32; start += 8 {
+	for start := uint32(1); start <= 32; start += 8 {
 		r := &runtime.ActionResults{PlayerId: 7}
 		for id := start; id < start+8; id++ {
 			r.Decisions = append(r.Decisions, decision(id))
@@ -260,7 +260,7 @@ func TestEvictionKeepsQueuedActionsAndReplacementsDeliver(t *testing.T) {
 	if kept {
 		t.Fatal("the evicted player's link statistics kept")
 	}
-	for id := uint64(100); id < 100+2*adapter.MaxPlayers; id++ {
+	for id := uint32(100); id < 100+2*adapter.MaxPlayers; id++ {
 		if err := l.actions(&runtime.ActionBatch{PlayerId: id, Shots: []*runtime.ShotRequest{shot(1)}}, dropEvent{}); err != nil {
 			t.Fatalf("replacement %d could not deliver actions: %v", id, err)
 		}

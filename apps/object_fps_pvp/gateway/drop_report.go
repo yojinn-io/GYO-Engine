@@ -105,10 +105,10 @@ type dropEvent struct {
 	reason                    runtime.DropReason
 	at                        time.Time
 	transport                 uint32
-	epoch, life               uint64
-	firstCommand, lastCommand uint64
-	firstAction, lastAction   uint64
-	tick                      uint64
+	epoch, life               uint32
+	firstCommand, lastCommand uint32
+	firstAction, lastAction   uint32
+	tick                      uint32
 	items                     uint32
 }
 
@@ -126,20 +126,20 @@ type dropStream struct {
 // into it from the same entry that updates their 10 s lines.
 type dropLedger struct {
 	mu      sync.Mutex
-	streams map[uint64]*dropStream
-	waiting []uint64 // removed players whose final is due, oldest first
-	ended   map[uint64]bool
+	streams map[uint32]*dropStream
+	waiting []uint32 // removed players whose final is due, oldest first
+	ended   map[uint32]bool
 	merged  uint64
 	closed  bool
 }
 
 func newDropLedger() *dropLedger {
-	return &dropLedger{streams: make(map[uint64]*dropStream), ended: make(map[uint64]bool)}
+	return &dropLedger{streams: make(map[uint32]*dropStream), ended: make(map[uint32]bool)}
 }
 
 // add counts n items of one event. Counting stops for a stream once its final
 // is written, and for every stream after the graceful close.
-func (d *dropLedger) add(player uint64, n uint64, e dropEvent) {
+func (d *dropLedger) add(player uint32, n uint64, e dropEvent) {
 	if d == nil || n == 0 || e.reason == runtime.DropReason_DROP_REASON_UNSPECIFIED {
 		return
 	}
@@ -168,7 +168,7 @@ func (d *dropLedger) add(player uint64, n uint64, e dropEvent) {
 // remove ends a player's stream: one final report, if it ever counted
 // anything; past the waiting room, the stream is merged into the Gateway
 // stream's merged_streams.
-func (d *dropLedger) remove(player uint64) {
+func (d *dropLedger) remove(player uint32) {
 	if d == nil {
 		return
 	}
@@ -203,7 +203,7 @@ func (d *dropLedger) gatewayLocked() *dropStream {
 // then the waiting finals, at most dropStreamsPerPass in all. At the graceful
 // close (closing) every stream with content goes, as a final, and the ledger
 // closes.
-func (d *dropLedger) due(closing bool) []uint64 {
+func (d *dropLedger) due(closing bool) []uint32 {
 	if d == nil {
 		return nil
 	}
@@ -212,7 +212,7 @@ func (d *dropLedger) due(closing bool) []uint64 {
 	if d.closed {
 		return nil
 	}
-	var live []uint64
+	var live []uint32
 	for player, s := range d.streams {
 		if !s.final && (s.dirty || closing) {
 			live = append(live, player)
@@ -236,7 +236,7 @@ func (d *dropLedger) due(closing bool) []uint64 {
 // report builds the stream's next report now, just before it is written, and
 // settles it: the sequence advances, the samples are taken, a final ends the
 // stream. Nil when the stream has nothing to send.
-func (d *dropLedger) report(player uint64, now time.Time) *runtime.GatewayDropReport {
+func (d *dropLedger) report(player uint32, now time.Time) *runtime.GatewayDropReport {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	s := d.streams[player]
@@ -255,9 +255,9 @@ func (d *dropLedger) report(player uint64, now time.Time) *runtime.GatewayDropRe
 	}
 	for _, e := range s.samples {
 		r.Samples = append(r.Samples, &runtime.DropSample{Reason: e.reason, DwellUs: dwellMicros(e.at, now),
-			TransportSequence: e.transport, MovementEpoch: e.epoch, LifeGeneration: e.life,
-			FirstCommandSequence: e.firstCommand, LastCommandSequence: e.lastCommand,
-			FirstActionId: e.firstAction, LastActionId: e.lastAction, SnapshotTick: e.tick, ItemCount: e.items})
+			TransportSequence: e.transport, MovementEpoch: uint64(e.epoch), LifeGeneration: uint64(e.life),
+			FirstCommandSequence: uint64(e.firstCommand), LastCommandSequence: uint64(e.lastCommand),
+			FirstActionId: uint64(e.firstAction), LastActionId: uint64(e.lastAction), SnapshotTick: uint64(e.tick), ItemCount: e.items})
 	}
 	if player == 0 {
 		r.MergedStreams = d.merged
@@ -315,7 +315,7 @@ func (l *runtimeLink) writeDrops(closing bool) error {
 
 // countDrop counts a player counter's discard into the ledger, if the reason
 // is reported.
-func (l *runtimeLink) countDrop(player uint64, counter playerIngressCounter, n uint64, e dropEvent) {
+func (l *runtimeLink) countDrop(player uint32, counter playerIngressCounter, n uint64, e dropEvent) {
 	if l == nil {
 		return
 	}

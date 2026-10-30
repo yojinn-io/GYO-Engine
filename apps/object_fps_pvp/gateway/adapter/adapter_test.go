@@ -48,9 +48,9 @@ func TestInputIdentityMappingAndSchemaValidation(t *testing.T) {
 }
 
 func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
-	in := &client.PlayerInput{LifeGeneration: math.MaxUint64, MovementEpoch: math.MaxUint64, ObservedAuthorityTick: math.MaxUint64}
+	in := &client.PlayerInput{LifeGeneration: math.MaxUint32, MovementEpoch: math.MaxUint32, ObservedAuthorityTick: math.MaxUint32}
 	for i := 0; i < MaxPendingCommands; i++ {
-		in.Commands = append(in.Commands, &client.MovementCommand{Sequence: math.MaxUint64 - MaxPendingCommands + 1 + uint64(i),
+		in.Commands = append(in.Commands, &client.MovementCommand{Sequence: math.MaxUint32 - MaxPendingCommands + 1 + uint32(i),
 			MoveForward: -1, MoveRight: -1, Yaw: 1e6, Pitch: -float32(math.Pi / 2), JumpRequested: true})
 	}
 	bytes, err := proto.Marshal(in)
@@ -58,13 +58,14 @@ func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("maximum movement datagram=%d bytes incl header", len(bytes)+framing.HeaderSize)
-	if len(bytes)+framing.HeaderSize > framing.MaxDatagram {
-		t.Fatal("full window exceeds UDP bound")
+	// Pinned exactly (protocol-v8 section 6): a new or widened field shows.
+	if len(bytes)+framing.HeaderSize != 402 || len(bytes)+framing.HeaderSize > framing.MaxDatagram {
+		t.Fatalf("full window datagram %d bytes, want 402", len(bytes)+framing.HeaderSize)
 	}
 	if _, err := DecodeInput(bytes, 1); err != nil {
 		t.Fatal(err)
 	}
-	in.Commands = append(in.Commands, &client.MovementCommand{Sequence: math.MaxUint64})
+	in.Commands = append(in.Commands, &client.MovementCommand{Sequence: math.MaxUint32})
 	bytes, _ = proto.Marshal(in)
 	if _, err := DecodeInput(bytes, 1); err == nil {
 		t.Fatal("13-command window accepted")

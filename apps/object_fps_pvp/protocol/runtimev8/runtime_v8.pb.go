@@ -714,7 +714,7 @@ func (x *Ready) GetArenaDigest() uint64 {
 
 type PlayerJoin struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId      uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -749,7 +749,7 @@ func (*PlayerJoin) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *PlayerJoin) GetPlayerId() uint64 {
+func (x *PlayerJoin) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -758,7 +758,7 @@ func (x *PlayerJoin) GetPlayerId() uint64 {
 
 type PlayerLeave struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId      uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Reason        LeaveReason            `protobuf:"varint,2,opt,name=reason,proto3,enum=object_fps_pvp.runtime.v8.LeaveReason" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -794,7 +794,7 @@ func (*PlayerLeave) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *PlayerLeave) GetPlayerId() uint64 {
+func (x *PlayerLeave) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -811,7 +811,7 @@ func (x *PlayerLeave) GetReason() LeaveReason {
 // A single immutable 1/60-second movement step. No client time or position.
 type MovementCommand struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sequence      uint64                 `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`
+	Sequence      uint32                 `protobuf:"varint,1,opt,name=sequence,proto3" json:"sequence,omitempty"`
 	MoveForward   float32                `protobuf:"fixed32,2,opt,name=move_forward,json=moveForward,proto3" json:"move_forward,omitempty"`
 	MoveRight     float32                `protobuf:"fixed32,3,opt,name=move_right,json=moveRight,proto3" json:"move_right,omitempty"`
 	Yaw           float32                `protobuf:"fixed32,4,opt,name=yaw,proto3" json:"yaw,omitempty"`
@@ -851,7 +851,7 @@ func (*MovementCommand) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *MovementCommand) GetSequence() uint64 {
+func (x *MovementCommand) GetSequence() uint32 {
 	if x != nil {
 		return x.Sequence
 	}
@@ -898,12 +898,12 @@ func (x *MovementCommand) GetJumpRequested() bool {
 // Gateway; the Match treats repeats as no-ops.
 type PlayerInput struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId       uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Commands       []*MovementCommand     `protobuf:"bytes,2,rep,name=commands,proto3" json:"commands,omitempty"`
-	MovementEpoch  uint64                 `protobuf:"varint,3,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
-	LifeGeneration uint64                 `protobuf:"varint,4,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
+	MovementEpoch  uint32                 `protobuf:"varint,3,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
+	LifeGeneration uint32                 `protobuf:"varint,4,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
 	// Latest snapshot tick the Client applied; merged windows carry the largest.
-	ObservedAuthorityTick uint64 `protobuf:"varint,5,opt,name=observed_authority_tick,json=observedAuthorityTick,proto3" json:"observed_authority_tick,omitempty"`
+	ObservedAuthorityTick uint32 `protobuf:"varint,5,opt,name=observed_authority_tick,json=observedAuthorityTick,proto3" json:"observed_authority_tick,omitempty"`
 	// Diagnostics only (pv7 §2, §5; D32): the carrying Client datagram's pv7 §2
 	// dwell in the Gateway (clamped at 10,000,000) and its GYOP sequence. Never
 	// used for deduplication or ordering.
@@ -943,7 +943,7 @@ func (*PlayerInput) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *PlayerInput) GetPlayerId() uint64 {
+func (x *PlayerInput) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -957,21 +957,21 @@ func (x *PlayerInput) GetCommands() []*MovementCommand {
 	return nil
 }
 
-func (x *PlayerInput) GetMovementEpoch() uint64 {
+func (x *PlayerInput) GetMovementEpoch() uint32 {
 	if x != nil {
 		return x.MovementEpoch
 	}
 	return 0
 }
 
-func (x *PlayerInput) GetLifeGeneration() uint64 {
+func (x *PlayerInput) GetLifeGeneration() uint32 {
 	if x != nil {
 		return x.LifeGeneration
 	}
 	return 0
 }
 
-func (x *PlayerInput) GetObservedAuthorityTick() uint64 {
+func (x *PlayerInput) GetObservedAuthorityTick() uint32 {
 	if x != nil {
 		return x.ObservedAuthorityTick
 	}
@@ -994,7 +994,7 @@ func (x *PlayerInput) GetClientTransportSequence() uint32 {
 
 type JoinResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId      uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Accepted      bool                   `protobuf:"varint,2,opt,name=accepted,proto3" json:"accepted,omitempty"`
 	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1031,7 +1031,7 @@ func (*JoinResult) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *JoinResult) GetPlayerId() uint64 {
+func (x *JoinResult) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -1054,21 +1054,21 @@ func (x *JoinResult) GetReason() string {
 
 type PlayerState struct {
 	state                     protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId                  uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId                  uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	X                         float32                `protobuf:"fixed32,2,opt,name=x,proto3" json:"x,omitempty"`
 	Y                         float32                `protobuf:"fixed32,3,opt,name=y,proto3" json:"y,omitempty"`
 	Z                         float32                `protobuf:"fixed32,4,opt,name=z,proto3" json:"z,omitempty"`
 	Yaw                       float32                `protobuf:"fixed32,5,opt,name=yaw,proto3" json:"yaw,omitempty"`
 	Pitch                     float32                `protobuf:"fixed32,6,opt,name=pitch,proto3" json:"pitch,omitempty"`
-	LastResolvedCommand       uint64                 `protobuf:"varint,7,opt,name=last_resolved_command,json=lastResolvedCommand,proto3" json:"last_resolved_command,omitempty"`
-	MovementEpoch             uint64                 `protobuf:"varint,8,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
+	LastResolvedCommand       uint32                 `protobuf:"varint,7,opt,name=last_resolved_command,json=lastResolvedCommand,proto3" json:"last_resolved_command,omitempty"`
+	MovementEpoch             uint32                 `protobuf:"varint,8,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
 	ContiguousPendingCommands uint32                 `protobuf:"varint,9,opt,name=contiguous_pending_commands,json=contiguousPendingCommands,proto3" json:"contiguous_pending_commands,omitempty"`
 	VerticalVelocity          float32                `protobuf:"fixed32,10,opt,name=vertical_velocity,json=verticalVelocity,proto3" json:"vertical_velocity,omitempty"`
 	Grounded                  bool                   `protobuf:"varint,11,opt,name=grounded,proto3" json:"grounded,omitempty"`
-	LifeGeneration            uint64                 `protobuf:"varint,12,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
+	LifeGeneration            uint32                 `protobuf:"varint,12,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
 	LifeState                 LifeState              `protobuf:"varint,13,opt,name=life_state,json=lifeState,proto3,enum=object_fps_pvp.runtime.v8.LifeState" json:"life_state,omitempty"`
-	LifeStateTick             uint64                 `protobuf:"varint,14,opt,name=life_state_tick,json=lifeStateTick,proto3" json:"life_state_tick,omitempty"`
-	RespawnTick               uint64                 `protobuf:"varint,15,opt,name=respawn_tick,json=respawnTick,proto3" json:"respawn_tick,omitempty"`
+	LifeStateTick             uint32                 `protobuf:"varint,14,opt,name=life_state_tick,json=lifeStateTick,proto3" json:"life_state_tick,omitempty"`
+	RespawnTick               uint32                 `protobuf:"varint,15,opt,name=respawn_tick,json=respawnTick,proto3" json:"respawn_tick,omitempty"`
 	// Host timing observation, never simulation input: the smallest movement
 	// slack since the previous published snapshot and its command sequence.
 	// Slack is the executing tick minus the command's first receipt, or minus
@@ -1076,7 +1076,7 @@ type PlayerState struct {
 	// (negative). Both or neither; |slack| <= 1,000,000 and
 	// 1 <= sequence <= last_resolved_command. Only the Client's phase tracking
 	// reads it.
-	MovementSlackSequence *uint64 `protobuf:"varint,17,opt,name=movement_slack_sequence,json=movementSlackSequence,proto3,oneof" json:"movement_slack_sequence,omitempty"`
+	MovementSlackSequence *uint32 `protobuf:"varint,17,opt,name=movement_slack_sequence,json=movementSlackSequence,proto3,oneof" json:"movement_slack_sequence,omitempty"`
 	MovementSlackUs       *int32  `protobuf:"zigzag32,18,opt,name=movement_slack_us,json=movementSlackUs,proto3,oneof" json:"movement_slack_us,omitempty"`
 	// Consecutive failed 10-second connection-quality windows (0-2). At 3 the
 	// Match evicts the player; the HUD warns while this is non-zero.
@@ -1115,7 +1115,7 @@ func (*PlayerState) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *PlayerState) GetPlayerId() uint64 {
+func (x *PlayerState) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -1157,14 +1157,14 @@ func (x *PlayerState) GetPitch() float32 {
 	return 0
 }
 
-func (x *PlayerState) GetLastResolvedCommand() uint64 {
+func (x *PlayerState) GetLastResolvedCommand() uint32 {
 	if x != nil {
 		return x.LastResolvedCommand
 	}
 	return 0
 }
 
-func (x *PlayerState) GetMovementEpoch() uint64 {
+func (x *PlayerState) GetMovementEpoch() uint32 {
 	if x != nil {
 		return x.MovementEpoch
 	}
@@ -1192,7 +1192,7 @@ func (x *PlayerState) GetGrounded() bool {
 	return false
 }
 
-func (x *PlayerState) GetLifeGeneration() uint64 {
+func (x *PlayerState) GetLifeGeneration() uint32 {
 	if x != nil {
 		return x.LifeGeneration
 	}
@@ -1206,21 +1206,21 @@ func (x *PlayerState) GetLifeState() LifeState {
 	return LifeState_LIFE_UNSPECIFIED
 }
 
-func (x *PlayerState) GetLifeStateTick() uint64 {
+func (x *PlayerState) GetLifeStateTick() uint32 {
 	if x != nil {
 		return x.LifeStateTick
 	}
 	return 0
 }
 
-func (x *PlayerState) GetRespawnTick() uint64 {
+func (x *PlayerState) GetRespawnTick() uint32 {
 	if x != nil {
 		return x.RespawnTick
 	}
 	return 0
 }
 
-func (x *PlayerState) GetMovementSlackSequence() uint64 {
+func (x *PlayerState) GetMovementSlackSequence() uint32 {
 	if x != nil && x.MovementSlackSequence != nil {
 		return *x.MovementSlackSequence
 	}
@@ -1243,7 +1243,7 @@ func (x *PlayerState) GetConnectionQualityFailures() uint32 {
 
 type WorldSnapshot struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
-	Tick    uint64                 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
+	Tick    uint32                 `protobuf:"varint,1,opt,name=tick,proto3" json:"tick,omitempty"`
 	Players []*PlayerState         `protobuf:"bytes,2,rep,name=players,proto3" json:"players,omitempty"`
 	Combat  []*CombatState         `protobuf:"bytes,3,rep,name=combat,proto3" json:"combat,omitempty"`
 	// Diagnostics only (pv7 §5, D-4): from the Host's publication of this tick to
@@ -1284,7 +1284,7 @@ func (*WorldSnapshot) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *WorldSnapshot) GetTick() uint64 {
+func (x *WorldSnapshot) GetTick() uint32 {
 	if x != nil {
 		return x.Tick
 	}
@@ -1314,7 +1314,7 @@ func (x *WorldSnapshot) GetMatchHoldUs() uint32 {
 
 type PlayerEvicted struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId            uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Reason              EvictionReason         `protobuf:"varint,2,opt,name=reason,proto3,enum=object_fps_pvp.runtime.v8.EvictionReason" json:"reason,omitempty"`
 	ReferenceAgeMs      uint32                 `protobuf:"varint,3,opt,name=reference_age_ms,json=referenceAgeMs,proto3" json:"reference_age_ms,omitempty"`
 	SubstitutedPermille uint32                 `protobuf:"varint,4,opt,name=substituted_permille,json=substitutedPermille,proto3" json:"substituted_permille,omitempty"`
@@ -1353,7 +1353,7 @@ func (*PlayerEvicted) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *PlayerEvicted) GetPlayerId() uint64 {
+func (x *PlayerEvicted) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -1390,7 +1390,7 @@ func (x *PlayerEvicted) GetMovementResets() uint32 {
 
 type RuntimeError struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId      uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Code          string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
 	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1427,7 +1427,7 @@ func (*RuntimeError) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *RuntimeError) GetPlayerId() uint64 {
+func (x *RuntimeError) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -1772,9 +1772,9 @@ func (x *ClockSample) GetTransmitUs() uint64 {
 // retirement again (pv7 §2a).
 type ActionBatch struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId            uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Shots               []*ShotRequest         `protobuf:"bytes,2,rep,name=shots,proto3" json:"shots,omitempty"`
-	AcknowledgedThrough uint64                 `protobuf:"varint,3,opt,name=acknowledged_through,json=acknowledgedThrough,proto3" json:"acknowledged_through,omitempty"`
+	AcknowledgedThrough uint32                 `protobuf:"varint,3,opt,name=acknowledged_through,json=acknowledgedThrough,proto3" json:"acknowledged_through,omitempty"`
 	// Diagnostics only, as PlayerInput's 6 and 7.
 	GatewayDwellUs          *uint32 `protobuf:"varint,4,opt,name=gateway_dwell_us,json=gatewayDwellUs,proto3,oneof" json:"gateway_dwell_us,omitempty"`
 	ClientTransportSequence *uint32 `protobuf:"varint,5,opt,name=client_transport_sequence,json=clientTransportSequence,proto3,oneof" json:"client_transport_sequence,omitempty"`
@@ -1812,7 +1812,7 @@ func (*ActionBatch) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *ActionBatch) GetPlayerId() uint64 {
+func (x *ActionBatch) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -1826,7 +1826,7 @@ func (x *ActionBatch) GetShots() []*ShotRequest {
 	return nil
 }
 
-func (x *ActionBatch) GetAcknowledgedThrough() uint64 {
+func (x *ActionBatch) GetAcknowledgedThrough() uint32 {
 	if x != nil {
 		return x.AcknowledgedThrough
 	}
@@ -1851,8 +1851,8 @@ func (x *ActionBatch) GetClientTransportSequence() uint32 {
 // ACK retires each decision; idempotent: a copy changes nothing (pv7 §2a).
 type ActionResults struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	RetiredThrough uint64                 `protobuf:"varint,2,opt,name=retired_through,json=retiredThrough,proto3" json:"retired_through,omitempty"`
+	PlayerId       uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	RetiredThrough uint32                 `protobuf:"varint,2,opt,name=retired_through,json=retiredThrough,proto3" json:"retired_through,omitempty"`
 	Decisions      []*ShotDecision        `protobuf:"bytes,3,rep,name=decisions,proto3" json:"decisions,omitempty"`
 	// Diagnostics only (pv7 §5, D-6): the whole batches the Match refused for
 	// this player since the link was established, and the latest reason.
@@ -1892,14 +1892,14 @@ func (*ActionResults) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *ActionResults) GetPlayerId() uint64 {
+func (x *ActionResults) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
 	return 0
 }
 
-func (x *ActionResults) GetRetiredThrough() uint64 {
+func (x *ActionResults) GetRetiredThrough() uint32 {
 	if x != nil {
 		return x.RetiredThrough
 	}
@@ -1931,12 +1931,12 @@ type CombatRules struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	MaximumHp             uint32                 `protobuf:"varint,1,opt,name=maximum_hp,json=maximumHp,proto3" json:"maximum_hp,omitempty"`
 	ShotDamage            uint32                 `protobuf:"varint,2,opt,name=shot_damage,json=shotDamage,proto3" json:"shot_damage,omitempty"`
-	CooldownTicks         uint64                 `protobuf:"varint,3,opt,name=cooldown_ticks,json=cooldownTicks,proto3" json:"cooldown_ticks,omitempty"`
+	CooldownTicks         uint32                 `protobuf:"varint,3,opt,name=cooldown_ticks,json=cooldownTicks,proto3" json:"cooldown_ticks,omitempty"`
 	ShotRange             float32                `protobuf:"fixed32,4,opt,name=shot_range,json=shotRange,proto3" json:"shot_range,omitempty"`
 	MaximumReferenceAgeMs uint32                 `protobuf:"varint,5,opt,name=maximum_reference_age_ms,json=maximumReferenceAgeMs,proto3" json:"maximum_reference_age_ms,omitempty"`
 	MagazineCapacity      uint32                 `protobuf:"varint,6,opt,name=magazine_capacity,json=magazineCapacity,proto3" json:"magazine_capacity,omitempty"`
-	ReloadTicks           uint64                 `protobuf:"varint,7,opt,name=reload_ticks,json=reloadTicks,proto3" json:"reload_ticks,omitempty"`
-	RespawnTicks          uint64                 `protobuf:"varint,8,opt,name=respawn_ticks,json=respawnTicks,proto3" json:"respawn_ticks,omitempty"`
+	ReloadTicks           uint32                 `protobuf:"varint,7,opt,name=reload_ticks,json=reloadTicks,proto3" json:"reload_ticks,omitempty"`
+	RespawnTicks          uint32                 `protobuf:"varint,8,opt,name=respawn_ticks,json=respawnTicks,proto3" json:"respawn_ticks,omitempty"`
 	// The most damage one decision may deal, part multipliers included (pv7
 	// §7); shot_damage stays the base (BODY) damage. v7.1: equal to it.
 	MaximumShotDamage uint32 `protobuf:"varint,9,opt,name=maximum_shot_damage,json=maximumShotDamage,proto3" json:"maximum_shot_damage,omitempty"`
@@ -1988,7 +1988,7 @@ func (x *CombatRules) GetShotDamage() uint32 {
 	return 0
 }
 
-func (x *CombatRules) GetCooldownTicks() uint64 {
+func (x *CombatRules) GetCooldownTicks() uint32 {
 	if x != nil {
 		return x.CooldownTicks
 	}
@@ -2016,14 +2016,14 @@ func (x *CombatRules) GetMagazineCapacity() uint32 {
 	return 0
 }
 
-func (x *CombatRules) GetReloadTicks() uint64 {
+func (x *CombatRules) GetReloadTicks() uint32 {
 	if x != nil {
 		return x.ReloadTicks
 	}
 	return 0
 }
 
-func (x *CombatRules) GetRespawnTicks() uint64 {
+func (x *CombatRules) GetRespawnTicks() uint32 {
 	if x != nil {
 		return x.RespawnTicks
 	}
@@ -2039,21 +2039,21 @@ func (x *CombatRules) GetMaximumShotDamage() uint32 {
 
 type CombatState struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId            uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerId            uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Hp                  uint32                 `protobuf:"varint,2,opt,name=hp,proto3" json:"hp,omitempty"`
-	NextAllowedShotTick uint64                 `protobuf:"varint,3,opt,name=next_allowed_shot_tick,json=nextAllowedShotTick,proto3" json:"next_allowed_shot_tick,omitempty"`
-	LifeGeneration      uint64                 `protobuf:"varint,4,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
+	NextAllowedShotTick uint32                 `protobuf:"varint,3,opt,name=next_allowed_shot_tick,json=nextAllowedShotTick,proto3" json:"next_allowed_shot_tick,omitempty"`
+	LifeGeneration      uint32                 `protobuf:"varint,4,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
 	MagazineAmmo        uint32                 `protobuf:"varint,5,opt,name=magazine_ammo,json=magazineAmmo,proto3" json:"magazine_ammo,omitempty"`
-	ReloadActionId      uint64                 `protobuf:"varint,6,opt,name=reload_action_id,json=reloadActionId,proto3" json:"reload_action_id,omitempty"`
-	ReloadStartTick     uint64                 `protobuf:"varint,7,opt,name=reload_start_tick,json=reloadStartTick,proto3" json:"reload_start_tick,omitempty"`
-	ReloadEndTick       uint64                 `protobuf:"varint,8,opt,name=reload_end_tick,json=reloadEndTick,proto3" json:"reload_end_tick,omitempty"`
-	LastShotActionId    uint64                 `protobuf:"varint,9,opt,name=last_shot_action_id,json=lastShotActionId,proto3" json:"last_shot_action_id,omitempty"`
-	LastShotTick        uint64                 `protobuf:"varint,10,opt,name=last_shot_tick,json=lastShotTick,proto3" json:"last_shot_tick,omitempty"`
+	ReloadActionId      uint32                 `protobuf:"varint,6,opt,name=reload_action_id,json=reloadActionId,proto3" json:"reload_action_id,omitempty"`
+	ReloadStartTick     uint32                 `protobuf:"varint,7,opt,name=reload_start_tick,json=reloadStartTick,proto3" json:"reload_start_tick,omitempty"`
+	ReloadEndTick       uint32                 `protobuf:"varint,8,opt,name=reload_end_tick,json=reloadEndTick,proto3" json:"reload_end_tick,omitempty"`
+	LastShotActionId    uint32                 `protobuf:"varint,9,opt,name=last_shot_action_id,json=lastShotActionId,proto3" json:"last_shot_action_id,omitempty"`
+	LastShotTick        uint32                 `protobuf:"varint,10,opt,name=last_shot_tick,json=lastShotTick,proto3" json:"last_shot_tick,omitempty"`
 	// Presentation-only hit record of the current life (pv6 contract §2): all
 	// three are zero before the first hit and reset on respawn.
-	LastDamageTick uint64 `protobuf:"varint,11,opt,name=last_damage_tick,json=lastDamageTick,proto3" json:"last_damage_tick,omitempty"`
+	LastDamageTick uint32 `protobuf:"varint,11,opt,name=last_damage_tick,json=lastDamageTick,proto3" json:"last_damage_tick,omitempty"`
 	DamageCount    uint32 `protobuf:"varint,12,opt,name=damage_count,json=damageCount,proto3" json:"damage_count,omitempty"`
-	LastAttackerId uint64 `protobuf:"varint,13,opt,name=last_attacker_id,json=lastAttackerId,proto3" json:"last_attacker_id,omitempty"`
+	LastAttackerId uint32 `protobuf:"varint,13,opt,name=last_attacker_id,json=lastAttackerId,proto3" json:"last_attacker_id,omitempty"`
 	// The hit record's fourth field (pv7 §7): set with the other three, BODY or
 	// HEAD when they are, UNSPECIFIED when they are zero. Presentation only.
 	LastHitPart   HitPart `protobuf:"varint,14,opt,name=last_hit_part,json=lastHitPart,proto3,enum=object_fps_pvp.runtime.v8.HitPart" json:"last_hit_part,omitempty"`
@@ -2091,7 +2091,7 @@ func (*CombatState) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *CombatState) GetPlayerId() uint64 {
+func (x *CombatState) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -2105,14 +2105,14 @@ func (x *CombatState) GetHp() uint32 {
 	return 0
 }
 
-func (x *CombatState) GetNextAllowedShotTick() uint64 {
+func (x *CombatState) GetNextAllowedShotTick() uint32 {
 	if x != nil {
 		return x.NextAllowedShotTick
 	}
 	return 0
 }
 
-func (x *CombatState) GetLifeGeneration() uint64 {
+func (x *CombatState) GetLifeGeneration() uint32 {
 	if x != nil {
 		return x.LifeGeneration
 	}
@@ -2126,42 +2126,42 @@ func (x *CombatState) GetMagazineAmmo() uint32 {
 	return 0
 }
 
-func (x *CombatState) GetReloadActionId() uint64 {
+func (x *CombatState) GetReloadActionId() uint32 {
 	if x != nil {
 		return x.ReloadActionId
 	}
 	return 0
 }
 
-func (x *CombatState) GetReloadStartTick() uint64 {
+func (x *CombatState) GetReloadStartTick() uint32 {
 	if x != nil {
 		return x.ReloadStartTick
 	}
 	return 0
 }
 
-func (x *CombatState) GetReloadEndTick() uint64 {
+func (x *CombatState) GetReloadEndTick() uint32 {
 	if x != nil {
 		return x.ReloadEndTick
 	}
 	return 0
 }
 
-func (x *CombatState) GetLastShotActionId() uint64 {
+func (x *CombatState) GetLastShotActionId() uint32 {
 	if x != nil {
 		return x.LastShotActionId
 	}
 	return 0
 }
 
-func (x *CombatState) GetLastShotTick() uint64 {
+func (x *CombatState) GetLastShotTick() uint32 {
 	if x != nil {
 		return x.LastShotTick
 	}
 	return 0
 }
 
-func (x *CombatState) GetLastDamageTick() uint64 {
+func (x *CombatState) GetLastDamageTick() uint32 {
 	if x != nil {
 		return x.LastDamageTick
 	}
@@ -2175,7 +2175,7 @@ func (x *CombatState) GetDamageCount() uint32 {
 	return 0
 }
 
-func (x *CombatState) GetLastAttackerId() uint64 {
+func (x *CombatState) GetLastAttackerId() uint32 {
 	if x != nil {
 		return x.LastAttackerId
 	}
@@ -2191,19 +2191,19 @@ func (x *CombatState) GetLastHitPart() HitPart {
 
 type ShotRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
-	ActionId              uint64                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
-	ObservedAuthorityTick uint64                 `protobuf:"varint,2,opt,name=observed_authority_tick,json=observedAuthorityTick,proto3" json:"observed_authority_tick,omitempty"`
+	ActionId              uint32                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
+	ObservedAuthorityTick uint32                 `protobuf:"varint,2,opt,name=observed_authority_tick,json=observedAuthorityTick,proto3" json:"observed_authority_tick,omitempty"`
 	Yaw                   *float32               `protobuf:"fixed32,3,opt,name=yaw,proto3,oneof" json:"yaw,omitempty"`
 	Pitch                 *float32               `protobuf:"fixed32,4,opt,name=pitch,proto3,oneof" json:"pitch,omitempty"`
 	Kind                  ActionKind             `protobuf:"varint,5,opt,name=kind,proto3,enum=object_fps_pvp.runtime.v8.ActionKind" json:"kind,omitempty"`
-	LifeGeneration        uint64                 `protobuf:"varint,6,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
+	LifeGeneration        uint32                 `protobuf:"varint,6,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
 	// Immutable request content (pv7 §6, §7), part of the request's identity
 	// for retransmission: the Client's predicted movement epoch (E) and its
 	// newest command of that epoch (S), from one simulation step, and the
 	// remote time the shooter saw (the presentation's global cursor, Tick x
 	// 65536, floored; 0 without one). v7.1 only records them (D-2).
-	MovementEpoch   uint64 `protobuf:"varint,7,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
-	CommandSequence uint64 `protobuf:"varint,8,opt,name=command_sequence,json=commandSequence,proto3" json:"command_sequence,omitempty"`
+	MovementEpoch   uint32 `protobuf:"varint,7,opt,name=movement_epoch,json=movementEpoch,proto3" json:"movement_epoch,omitempty"`
+	CommandSequence uint32 `protobuf:"varint,8,opt,name=command_sequence,json=commandSequence,proto3" json:"command_sequence,omitempty"`
 	ViewTickQ16     uint64 `protobuf:"varint,9,opt,name=view_tick_q16,json=viewTickQ16,proto3" json:"view_tick_q16,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -2239,14 +2239,14 @@ func (*ShotRequest) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *ShotRequest) GetActionId() uint64 {
+func (x *ShotRequest) GetActionId() uint32 {
 	if x != nil {
 		return x.ActionId
 	}
 	return 0
 }
 
-func (x *ShotRequest) GetObservedAuthorityTick() uint64 {
+func (x *ShotRequest) GetObservedAuthorityTick() uint32 {
 	if x != nil {
 		return x.ObservedAuthorityTick
 	}
@@ -2274,21 +2274,21 @@ func (x *ShotRequest) GetKind() ActionKind {
 	return ActionKind_ACTION_UNSPECIFIED
 }
 
-func (x *ShotRequest) GetLifeGeneration() uint64 {
+func (x *ShotRequest) GetLifeGeneration() uint32 {
 	if x != nil {
 		return x.LifeGeneration
 	}
 	return 0
 }
 
-func (x *ShotRequest) GetMovementEpoch() uint64 {
+func (x *ShotRequest) GetMovementEpoch() uint32 {
 	if x != nil {
 		return x.MovementEpoch
 	}
 	return 0
 }
 
-func (x *ShotRequest) GetCommandSequence() uint64 {
+func (x *ShotRequest) GetCommandSequence() uint32 {
 	if x != nil {
 		return x.CommandSequence
 	}
@@ -2304,16 +2304,16 @@ func (x *ShotRequest) GetViewTickQ16() uint64 {
 
 type ShotDecision struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
-	ActionId             uint64                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
-	ResolvedTick         uint64                 `protobuf:"varint,2,opt,name=resolved_tick,json=resolvedTick,proto3" json:"resolved_tick,omitempty"`
+	ActionId             uint32                 `protobuf:"varint,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
+	ResolvedTick         uint32                 `protobuf:"varint,2,opt,name=resolved_tick,json=resolvedTick,proto3" json:"resolved_tick,omitempty"`
 	Accepted             bool                   `protobuf:"varint,3,opt,name=accepted,proto3" json:"accepted,omitempty"`
 	Rejection            ShotRejection          `protobuf:"varint,4,opt,name=rejection,proto3,enum=object_fps_pvp.runtime.v8.ShotRejection" json:"rejection,omitempty"`
 	HitKind              ShotHitKind            `protobuf:"varint,5,opt,name=hit_kind,json=hitKind,proto3,enum=object_fps_pvp.runtime.v8.ShotHitKind" json:"hit_kind,omitempty"`
-	TargetId             uint64                 `protobuf:"varint,6,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	TargetId             uint32                 `protobuf:"varint,6,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
 	Damage               uint32                 `protobuf:"varint,7,opt,name=damage,proto3" json:"damage,omitempty"`
 	Kind                 ActionKind             `protobuf:"varint,8,opt,name=kind,proto3,enum=object_fps_pvp.runtime.v8.ActionKind" json:"kind,omitempty"`
-	LifeGeneration       uint64                 `protobuf:"varint,9,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
-	TargetLifeGeneration uint64                 `protobuf:"varint,10,opt,name=target_life_generation,json=targetLifeGeneration,proto3" json:"target_life_generation,omitempty"`
+	LifeGeneration       uint32                 `protobuf:"varint,9,opt,name=life_generation,json=lifeGeneration,proto3" json:"life_generation,omitempty"`
+	TargetLifeGeneration uint32                 `protobuf:"varint,10,opt,name=target_life_generation,json=targetLifeGeneration,proto3" json:"target_life_generation,omitempty"`
 	HitPart              HitPart                `protobuf:"varint,11,opt,name=hit_part,json=hitPart,proto3,enum=object_fps_pvp.runtime.v8.HitPart" json:"hit_part,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
@@ -2349,14 +2349,14 @@ func (*ShotDecision) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *ShotDecision) GetActionId() uint64 {
+func (x *ShotDecision) GetActionId() uint32 {
 	if x != nil {
 		return x.ActionId
 	}
 	return 0
 }
 
-func (x *ShotDecision) GetResolvedTick() uint64 {
+func (x *ShotDecision) GetResolvedTick() uint32 {
 	if x != nil {
 		return x.ResolvedTick
 	}
@@ -2384,7 +2384,7 @@ func (x *ShotDecision) GetHitKind() ShotHitKind {
 	return ShotHitKind_HIT_MISS
 }
 
-func (x *ShotDecision) GetTargetId() uint64 {
+func (x *ShotDecision) GetTargetId() uint32 {
 	if x != nil {
 		return x.TargetId
 	}
@@ -2405,14 +2405,14 @@ func (x *ShotDecision) GetKind() ActionKind {
 	return ActionKind_ACTION_UNSPECIFIED
 }
 
-func (x *ShotDecision) GetLifeGeneration() uint64 {
+func (x *ShotDecision) GetLifeGeneration() uint32 {
 	if x != nil {
 		return x.LifeGeneration
 	}
 	return 0
 }
 
-func (x *ShotDecision) GetTargetLifeGeneration() uint64 {
+func (x *ShotDecision) GetTargetLifeGeneration() uint32 {
 	if x != nil {
 		return x.TargetLifeGeneration
 	}
@@ -2432,7 +2432,7 @@ func (x *ShotDecision) GetHitPart() HitPart {
 // count. No value of it may reach a decision (D32).
 type GatewayDropReport struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`                   // 0: the Gateway's stream
+	PlayerId       uint32                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`                   // 0: the Gateway's stream
 	ReportSequence uint64                 `protobuf:"varint,2,opt,name=report_sequence,json=reportSequence,proto3" json:"report_sequence,omitempty"` // from 1 per link and stream, assigned when written
 	Final          bool                   `protobuf:"varint,3,opt,name=final,proto3" json:"final,omitempty"`                                         // the stream's last report
 	Counts         []*DropCount           `protobuf:"bytes,4,rep,name=counts,proto3" json:"counts,omitempty"`                                        // every non-zero total, reasons ascending, never going back
@@ -2473,7 +2473,7 @@ func (*GatewayDropReport) Descriptor() ([]byte, []int) {
 	return file_runtime_v8_proto_rawDescGZIP(), []int{18}
 }
 
-func (x *GatewayDropReport) GetPlayerId() uint64 {
+func (x *GatewayDropReport) GetPlayerId() uint32 {
 	if x != nil {
 		return x.PlayerId
 	}
@@ -2702,7 +2702,7 @@ var File_runtime_v8_proto protoreflect.FileDescriptor
 
 const file_runtime_v8_proto_rawDesc = "" +
 	"\n" +
-	"\x10runtime_v8.proto\x12\x19object_fps_pvp.runtime.v8\"\xe6\x02\n" +
+	"\x10runtime_v8.proto\x12\x19object_fps_pvp.runtime.v8\"\xec\x02\n" +
 	"\x05Ready\x12\x19\n" +
 	"\barena_id\x18\x01 \x01(\tR\aarenaId\x12#\n" +
 	"\rarena_version\x18\x02 \x01(\rR\farenaVersion\x12\x1b\n" +
@@ -2714,15 +2714,15 @@ const file_runtime_v8_proto_rawDesc = "" +
 	"\vjump_height\x18\a \x01(\x02R\n" +
 	"jumpHeight\x12\x18\n" +
 	"\agravity\x18\b \x01(\x02R\agravity\x12!\n" +
-	"\farena_digest\x18\t \x01(\x06R\varenaDigest\")\n" +
+	"\farena_digest\x18\t \x01(\x06R\varenaDigestJ\x04\b\x0e\x10\x12\")\n" +
 	"\n" +
 	"PlayerJoin\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"j\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\"j\n" +
 	"\vPlayerLeave\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12>\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12>\n" +
 	"\x06reason\x18\x02 \x01(\x0e2&.object_fps_pvp.runtime.v8.LeaveReasonR\x06reason\"\xbe\x01\n" +
 	"\x0fMovementCommand\x12\x1a\n" +
-	"\bsequence\x18\x01 \x01(\x04R\bsequence\x12!\n" +
+	"\bsequence\x18\x01 \x01(\rR\bsequence\x12!\n" +
 	"\fmove_forward\x18\x02 \x01(\x02R\vmoveForward\x12\x1d\n" +
 	"\n" +
 	"move_right\x18\x03 \x01(\x02R\tmoveRight\x12\x10\n" +
@@ -2730,59 +2730,59 @@ const file_runtime_v8_proto_rawDesc = "" +
 	"\x05pitch\x18\x05 \x01(\x02R\x05pitch\x12%\n" +
 	"\x0ejump_requested\x18\x06 \x01(\bR\rjumpRequested\"\x9d\x03\n" +
 	"\vPlayerInput\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12F\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12F\n" +
 	"\bcommands\x18\x02 \x03(\v2*.object_fps_pvp.runtime.v8.MovementCommandR\bcommands\x12%\n" +
-	"\x0emovement_epoch\x18\x03 \x01(\x04R\rmovementEpoch\x12'\n" +
-	"\x0flife_generation\x18\x04 \x01(\x04R\x0elifeGeneration\x126\n" +
-	"\x17observed_authority_tick\x18\x05 \x01(\x04R\x15observedAuthorityTick\x12-\n" +
+	"\x0emovement_epoch\x18\x03 \x01(\rR\rmovementEpoch\x12'\n" +
+	"\x0flife_generation\x18\x04 \x01(\rR\x0elifeGeneration\x126\n" +
+	"\x17observed_authority_tick\x18\x05 \x01(\rR\x15observedAuthorityTick\x12-\n" +
 	"\x10gateway_dwell_us\x18\x06 \x01(\rH\x00R\x0egatewayDwellUs\x88\x01\x01\x12?\n" +
 	"\x19client_transport_sequence\x18\a \x01(\rH\x01R\x17clientTransportSequence\x88\x01\x01B\x13\n" +
 	"\x11_gateway_dwell_usB\x1c\n" +
 	"\x1a_client_transport_sequence\"]\n" +
 	"\n" +
 	"JoinResult\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x1a\n" +
 	"\baccepted\x18\x02 \x01(\bR\baccepted\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x94\x06\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x9a\x06\n" +
 	"\vPlayerState\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\f\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
 	"\x01y\x18\x03 \x01(\x02R\x01y\x12\f\n" +
 	"\x01z\x18\x04 \x01(\x02R\x01z\x12\x10\n" +
 	"\x03yaw\x18\x05 \x01(\x02R\x03yaw\x12\x14\n" +
 	"\x05pitch\x18\x06 \x01(\x02R\x05pitch\x122\n" +
-	"\x15last_resolved_command\x18\a \x01(\x04R\x13lastResolvedCommand\x12%\n" +
-	"\x0emovement_epoch\x18\b \x01(\x04R\rmovementEpoch\x12>\n" +
+	"\x15last_resolved_command\x18\a \x01(\rR\x13lastResolvedCommand\x12%\n" +
+	"\x0emovement_epoch\x18\b \x01(\rR\rmovementEpoch\x12>\n" +
 	"\x1bcontiguous_pending_commands\x18\t \x01(\rR\x19contiguousPendingCommands\x12+\n" +
 	"\x11vertical_velocity\x18\n" +
 	" \x01(\x02R\x10verticalVelocity\x12\x1a\n" +
 	"\bgrounded\x18\v \x01(\bR\bgrounded\x12'\n" +
-	"\x0flife_generation\x18\f \x01(\x04R\x0elifeGeneration\x12C\n" +
+	"\x0flife_generation\x18\f \x01(\rR\x0elifeGeneration\x12C\n" +
 	"\n" +
 	"life_state\x18\r \x01(\x0e2$.object_fps_pvp.runtime.v8.LifeStateR\tlifeState\x12&\n" +
-	"\x0flife_state_tick\x18\x0e \x01(\x04R\rlifeStateTick\x12!\n" +
-	"\frespawn_tick\x18\x0f \x01(\x04R\vrespawnTick\x12;\n" +
-	"\x17movement_slack_sequence\x18\x11 \x01(\x04H\x00R\x15movementSlackSequence\x88\x01\x01\x12/\n" +
+	"\x0flife_state_tick\x18\x0e \x01(\rR\rlifeStateTick\x12!\n" +
+	"\frespawn_tick\x18\x0f \x01(\rR\vrespawnTick\x12;\n" +
+	"\x17movement_slack_sequence\x18\x11 \x01(\rH\x00R\x15movementSlackSequence\x88\x01\x01\x12/\n" +
 	"\x11movement_slack_us\x18\x12 \x01(\x11H\x01R\x0fmovementSlackUs\x88\x01\x01\x12>\n" +
 	"\x1bconnection_quality_failures\x18\x13 \x01(\rR\x19connectionQualityFailuresB\x1a\n" +
 	"\x18_movement_slack_sequenceB\x14\n" +
-	"\x12_movement_slack_usJ\x04\b\x10\x10\x11R\x13epoch_start_wait_us\"\xe0\x01\n" +
+	"\x12_movement_slack_usJ\x04\b\x10\x10\x11J\x04\b\x16\x10\x19R\x13epoch_start_wait_us\"\xec\x01\n" +
 	"\rWorldSnapshot\x12\x12\n" +
-	"\x04tick\x18\x01 \x01(\x04R\x04tick\x12@\n" +
+	"\x04tick\x18\x01 \x01(\rR\x04tick\x12@\n" +
 	"\aplayers\x18\x02 \x03(\v2&.object_fps_pvp.runtime.v8.PlayerStateR\aplayers\x12>\n" +
 	"\x06combat\x18\x03 \x03(\v2&.object_fps_pvp.runtime.v8.CombatStateR\x06combat\x12'\n" +
 	"\rmatch_hold_us\x18\x04 \x01(\rH\x00R\vmatchHoldUs\x88\x01\x01B\x10\n" +
-	"\x0e_match_hold_us\"\xf5\x01\n" +
+	"\x0e_match_hold_usJ\x04\b\x05\x10\x06J\x04\b\x06\x10\a\"\xf5\x01\n" +
 	"\rPlayerEvicted\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12A\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12A\n" +
 	"\x06reason\x18\x02 \x01(\x0e2).object_fps_pvp.runtime.v8.EvictionReasonR\x06reason\x12(\n" +
 	"\x10reference_age_ms\x18\x03 \x01(\rR\x0ereferenceAgeMs\x121\n" +
 	"\x14substituted_permille\x18\x04 \x01(\rR\x13substitutedPermille\x12'\n" +
 	"\x0fmovement_resets\x18\x05 \x01(\rR\x0emovementResets\"Y\n" +
 	"\fRuntimeError\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\xff\x06\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\x8b\a\n" +
 	"\x0fRuntimeEnvelope\x12)\n" +
 	"\x10protocol_version\x18\x01 \x01(\rR\x0fprotocolVersion\x128\n" +
 	"\x05ready\x18\n" +
@@ -2800,7 +2800,7 @@ const file_runtime_v8_proto_rawDesc = "" +
 	"\x05clock\x18\x14 \x01(\v2&.object_fps_pvp.runtime.v8.ClockSampleH\x00R\x05clock\x12O\n" +
 	"\vdrop_report\x18\x15 \x01(\v2,.object_fps_pvp.runtime.v8.GatewayDropReportH\x00R\n" +
 	"dropReportB\t\n" +
-	"\amessage\"\x91\x01\n" +
+	"\amessageJ\x04\b\x16\x10\x17J\x04\b\x17\x10\x18\"\x91\x01\n" +
 	"\vClockSample\x12 \n" +
 	"\torigin_us\x18\x01 \x01(\x04H\x00R\boriginUs\x88\x01\x01\x12\"\n" +
 	"\n" +
@@ -2809,77 +2809,78 @@ const file_runtime_v8_proto_rawDesc = "" +
 	"transmitUsB\f\n" +
 	"\n" +
 	"_origin_usB\r\n" +
-	"\v_receive_us\"\xbe\x02\n" +
+	"\v_receive_us\"\xc4\x02\n" +
 	"\vActionBatch\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12<\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12<\n" +
 	"\x05shots\x18\x02 \x03(\v2&.object_fps_pvp.runtime.v8.ShotRequestR\x05shots\x121\n" +
-	"\x14acknowledged_through\x18\x03 \x01(\x04R\x13acknowledgedThrough\x12-\n" +
+	"\x14acknowledged_through\x18\x03 \x01(\rR\x13acknowledgedThrough\x12-\n" +
 	"\x10gateway_dwell_us\x18\x04 \x01(\rH\x00R\x0egatewayDwellUs\x88\x01\x01\x12?\n" +
 	"\x19client_transport_sequence\x18\x05 \x01(\rH\x01R\x17clientTransportSequence\x88\x01\x01B\x13\n" +
 	"\x11_gateway_dwell_usB\x1c\n" +
-	"\x1a_client_transport_sequence\"\x92\x02\n" +
+	"\x1a_client_transport_sequenceJ\x04\b\x06\x10\a\"\x98\x02\n" +
 	"\rActionResults\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12'\n" +
-	"\x0fretired_through\x18\x02 \x01(\x04R\x0eretiredThrough\x12E\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12'\n" +
+	"\x0fretired_through\x18\x02 \x01(\rR\x0eretiredThrough\x12E\n" +
 	"\tdecisions\x18\x03 \x03(\v2'.object_fps_pvp.runtime.v8.ShotDecisionR\tdecisions\x12'\n" +
 	"\x0frefused_batches\x18\x04 \x01(\x04R\x0erefusedBatches\x12K\n" +
-	"\flast_refusal\x18\x05 \x01(\x0e2(.object_fps_pvp.runtime.v8.ActionRefusalR\vlastRefusal\"\xf1\x02\n" +
+	"\flast_refusal\x18\x05 \x01(\x0e2(.object_fps_pvp.runtime.v8.ActionRefusalR\vlastRefusalJ\x04\b\x06\x10\a\"\xf1\x02\n" +
 	"\vCombatRules\x12\x1d\n" +
 	"\n" +
 	"maximum_hp\x18\x01 \x01(\rR\tmaximumHp\x12\x1f\n" +
 	"\vshot_damage\x18\x02 \x01(\rR\n" +
 	"shotDamage\x12%\n" +
-	"\x0ecooldown_ticks\x18\x03 \x01(\x04R\rcooldownTicks\x12\x1d\n" +
+	"\x0ecooldown_ticks\x18\x03 \x01(\rR\rcooldownTicks\x12\x1d\n" +
 	"\n" +
 	"shot_range\x18\x04 \x01(\x02R\tshotRange\x127\n" +
 	"\x18maximum_reference_age_ms\x18\x05 \x01(\rR\x15maximumReferenceAgeMs\x12+\n" +
 	"\x11magazine_capacity\x18\x06 \x01(\rR\x10magazineCapacity\x12!\n" +
-	"\freload_ticks\x18\a \x01(\x04R\vreloadTicks\x12#\n" +
-	"\rrespawn_ticks\x18\b \x01(\x04R\frespawnTicks\x12.\n" +
+	"\freload_ticks\x18\a \x01(\rR\vreloadTicks\x12#\n" +
+	"\rrespawn_ticks\x18\b \x01(\rR\frespawnTicks\x12.\n" +
 	"\x13maximum_shot_damage\x18\t \x01(\rR\x11maximumShotDamage\"\xcf\x04\n" +
 	"\vCombatState\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x0e\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12\x0e\n" +
 	"\x02hp\x18\x02 \x01(\rR\x02hp\x123\n" +
-	"\x16next_allowed_shot_tick\x18\x03 \x01(\x04R\x13nextAllowedShotTick\x12'\n" +
-	"\x0flife_generation\x18\x04 \x01(\x04R\x0elifeGeneration\x12#\n" +
+	"\x16next_allowed_shot_tick\x18\x03 \x01(\rR\x13nextAllowedShotTick\x12'\n" +
+	"\x0flife_generation\x18\x04 \x01(\rR\x0elifeGeneration\x12#\n" +
 	"\rmagazine_ammo\x18\x05 \x01(\rR\fmagazineAmmo\x12(\n" +
-	"\x10reload_action_id\x18\x06 \x01(\x04R\x0ereloadActionId\x12*\n" +
-	"\x11reload_start_tick\x18\a \x01(\x04R\x0freloadStartTick\x12&\n" +
-	"\x0freload_end_tick\x18\b \x01(\x04R\rreloadEndTick\x12-\n" +
-	"\x13last_shot_action_id\x18\t \x01(\x04R\x10lastShotActionId\x12$\n" +
+	"\x10reload_action_id\x18\x06 \x01(\rR\x0ereloadActionId\x12*\n" +
+	"\x11reload_start_tick\x18\a \x01(\rR\x0freloadStartTick\x12&\n" +
+	"\x0freload_end_tick\x18\b \x01(\rR\rreloadEndTick\x12-\n" +
+	"\x13last_shot_action_id\x18\t \x01(\rR\x10lastShotActionId\x12$\n" +
 	"\x0elast_shot_tick\x18\n" +
-	" \x01(\x04R\flastShotTick\x12(\n" +
-	"\x10last_damage_tick\x18\v \x01(\x04R\x0elastDamageTick\x12!\n" +
+	" \x01(\rR\flastShotTick\x12(\n" +
+	"\x10last_damage_tick\x18\v \x01(\rR\x0elastDamageTick\x12!\n" +
 	"\fdamage_count\x18\f \x01(\rR\vdamageCount\x12(\n" +
-	"\x10last_attacker_id\x18\r \x01(\x04R\x0elastAttackerId\x12F\n" +
-	"\rlast_hit_part\x18\x0e \x01(\x0e2\".object_fps_pvp.runtime.v8.HitPartR\vlastHitPart\"\x80\x03\n" +
+	"\x10last_attacker_id\x18\r \x01(\rR\x0elastAttackerId\x12F\n" +
+	"\rlast_hit_part\x18\x0e \x01(\x0e2\".object_fps_pvp.runtime.v8.HitPartR\vlastHitPart\"\x86\x03\n" +
 	"\vShotRequest\x12\x1b\n" +
-	"\taction_id\x18\x01 \x01(\x04R\bactionId\x126\n" +
-	"\x17observed_authority_tick\x18\x02 \x01(\x04R\x15observedAuthorityTick\x12\x15\n" +
+	"\taction_id\x18\x01 \x01(\rR\bactionId\x126\n" +
+	"\x17observed_authority_tick\x18\x02 \x01(\rR\x15observedAuthorityTick\x12\x15\n" +
 	"\x03yaw\x18\x03 \x01(\x02H\x00R\x03yaw\x88\x01\x01\x12\x19\n" +
 	"\x05pitch\x18\x04 \x01(\x02H\x01R\x05pitch\x88\x01\x01\x129\n" +
 	"\x04kind\x18\x05 \x01(\x0e2%.object_fps_pvp.runtime.v8.ActionKindR\x04kind\x12'\n" +
-	"\x0flife_generation\x18\x06 \x01(\x04R\x0elifeGeneration\x12%\n" +
-	"\x0emovement_epoch\x18\a \x01(\x04R\rmovementEpoch\x12)\n" +
-	"\x10command_sequence\x18\b \x01(\x04R\x0fcommandSequence\x12\"\n" +
+	"\x0flife_generation\x18\x06 \x01(\rR\x0elifeGeneration\x12%\n" +
+	"\x0emovement_epoch\x18\a \x01(\rR\rmovementEpoch\x12)\n" +
+	"\x10command_sequence\x18\b \x01(\rR\x0fcommandSequence\x12\"\n" +
 	"\rview_tick_q16\x18\t \x01(\x04R\vviewTickQ16B\x06\n" +
 	"\x04_yawB\b\n" +
-	"\x06_pitch\"\x85\x04\n" +
+	"\x06_pitchJ\x04\b\n" +
+	"\x10\r\"\x91\x04\n" +
 	"\fShotDecision\x12\x1b\n" +
-	"\taction_id\x18\x01 \x01(\x04R\bactionId\x12#\n" +
-	"\rresolved_tick\x18\x02 \x01(\x04R\fresolvedTick\x12\x1a\n" +
+	"\taction_id\x18\x01 \x01(\rR\bactionId\x12#\n" +
+	"\rresolved_tick\x18\x02 \x01(\rR\fresolvedTick\x12\x1a\n" +
 	"\baccepted\x18\x03 \x01(\bR\baccepted\x12F\n" +
 	"\trejection\x18\x04 \x01(\x0e2(.object_fps_pvp.runtime.v8.ShotRejectionR\trejection\x12A\n" +
 	"\bhit_kind\x18\x05 \x01(\x0e2&.object_fps_pvp.runtime.v8.ShotHitKindR\ahitKind\x12\x1b\n" +
-	"\ttarget_id\x18\x06 \x01(\x04R\btargetId\x12\x16\n" +
+	"\ttarget_id\x18\x06 \x01(\rR\btargetId\x12\x16\n" +
 	"\x06damage\x18\a \x01(\rR\x06damage\x129\n" +
 	"\x04kind\x18\b \x01(\x0e2%.object_fps_pvp.runtime.v8.ActionKindR\x04kind\x12'\n" +
-	"\x0flife_generation\x18\t \x01(\x04R\x0elifeGeneration\x124\n" +
+	"\x0flife_generation\x18\t \x01(\rR\x0elifeGeneration\x124\n" +
 	"\x16target_life_generation\x18\n" +
-	" \x01(\x04R\x14targetLifeGeneration\x12=\n" +
-	"\bhit_part\x18\v \x01(\x0e2\".object_fps_pvp.runtime.v8.HitPartR\ahitPart\"\xbe\x02\n" +
+	" \x01(\rR\x14targetLifeGeneration\x12=\n" +
+	"\bhit_part\x18\v \x01(\x0e2\".object_fps_pvp.runtime.v8.HitPartR\ahitPartJ\x04\b\f\x10\rJ\x04\b\r\x10\x0e\"\xbe\x02\n" +
 	"\x11GatewayDropReport\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12'\n" +
+	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\x12'\n" +
 	"\x0freport_sequence\x18\x02 \x01(\x04R\x0ereportSequence\x12\x14\n" +
 	"\x05final\x18\x03 \x01(\bR\x05final\x12<\n" +
 	"\x06counts\x18\x04 \x03(\v2$.object_fps_pvp.runtime.v8.DropCountR\x06counts\x12?\n" +
@@ -2913,11 +2914,11 @@ const file_runtime_v8_proto_rawDesc = "" +
 	"\x10LIFE_UNSPECIFIED\x10\x00\x12\x0e\n" +
 	"\n" +
 	"LIFE_ALIVE\x10\x01\x12\r\n" +
-	"\tLIFE_DEAD\x10\x02*b\n" +
+	"\tLIFE_DEAD\x10\x02*h\n" +
 	"\x0eEvictionReason\x12\x18\n" +
 	"\x14EVICTION_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15EVICTION_HIGH_LATENCY\x10\x01\x12\x1b\n" +
-	"\x17EVICTION_UNSTABLE_INPUT\x10\x02*\xa8\x02\n" +
+	"\x17EVICTION_UNSTABLE_INPUT\x10\x02\"\x04\b\x03\x10\x03*\xa8\x02\n" +
 	"\rActionRefusal\x12\x1e\n" +
 	"\x1aACTION_REFUSAL_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19ACTION_REFUSAL_OVER_BATCH\x10\x01\x12\x1c\n" +
@@ -2932,7 +2933,7 @@ const file_runtime_v8_proto_rawDesc = "" +
 	"ActionKind\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vACTION_SHOT\x10\x01\x12\x11\n" +
-	"\rACTION_RELOAD\x10\x02*\x91\x02\n" +
+	"\rACTION_RELOAD\x10\x02*\x97\x02\n" +
 	"\rShotRejection\x12\x12\n" +
 	"\x0eREJECTION_NONE\x10\x00\x12\x1f\n" +
 	"\x1bREJECTION_INVALID_REFERENCE\x10\x01\x12\x15\n" +
@@ -2943,12 +2944,13 @@ const file_runtime_v8_proto_rawDesc = "" +
 	"\x0eREJECTION_DEAD\x10\x06\x12\x17\n" +
 	"\x13REJECTION_RELOADING\x10\a\x12\x1c\n" +
 	"\x18REJECTION_EMPTY_MAGAZINE\x10\b\x12\x1b\n" +
-	"\x17REJECTION_MAGAZINE_FULL\x10\t*:\n" +
+	"\x17REJECTION_MAGAZINE_FULL\x10\t\"\x04\b\n" +
+	"\x10\x11*@\n" +
 	"\vShotHitKind\x12\f\n" +
 	"\bHIT_MISS\x10\x00\x12\r\n" +
 	"\tHIT_WORLD\x10\x01\x12\x0e\n" +
 	"\n" +
-	"HIT_PLAYER\x10\x02*I\n" +
+	"HIT_PLAYER\x10\x02\"\x04\b\x03\x10\x03*I\n" +
 	"\aHitPart\x12\x18\n" +
 	"\x14HIT_PART_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rHIT_PART_BODY\x10\x01\x12\x11\n" +

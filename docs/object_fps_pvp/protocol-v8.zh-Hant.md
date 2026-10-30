@@ -72,7 +72,7 @@
 - `view_tick_q16`：乘上 65536 之後，u32 只到 65,536 tick（約 18 分鐘）；`MatchShotTrace.hpp:84-87` 與突變 `v71hf-view-tick-unbounded` 守住它。
 - `ClockSample` 的 `*_us`（u32 只到 71.6 分鐘）。
 - `arena_digest`（fixed64）。
-- 只增不減的診斷計數：`refused_batches`、`DropCount.total`、`report_sequence`、`samples_omitted`、`DropSample` 的 7 個欄位。
+- 只增不減的診斷計數：`refused_batches`、`DropCount.total`、`report_sequence`、`samples_omitted`、`merged_streams`（`pv8-seq-narrow-merged-streams` 補列）、`DropSample` 的 7 個欄位。
 
 ### 刪除
 
@@ -205,19 +205,22 @@ Client 面向的 UDP 訊息（含 24 B 標頭）在契約最大值與型別最�
 - 要釘住的測試：`capacity_test.go` 改成 45＋264×N（＝1101）；`worker_main.cpp:609` 改成 1101；新增型別最大 1175 的 `proto.Size` 斷言；新增 12 個命令的 PlayerInput 最大值斷言（525）。
 - 上表是第 1 輪（只加蹲下與衝刺）的實測。
 
-### 縮窄之後（§2a，推論，`pv8-seq-narrow` 實測後改寫本節）
+### 縮窄之後（§2a，`pv8-seq-narrow` 實測）
 
-| 訊息 | 第 1 輪實測 | 縮窄後（推論） |
-|---|---|---|
-| 4 人 Snapshot，契約最大 | 1101 B | 約 740 B（PlayerState payload 約 91 B，長度前綴回到 1 B） |
-| 4 人 Snapshot，型別最大 | 1175 B | 約 822 B（每個 u64→u32 欄位省 5 B；長度前綴的變化要實測），餘裕約 378 B |
-| PlayerInput，12 個命令 | 525 B | 約 450 B |
-| ActionBatch 8 筆 | ≤680 B | 約 475 B |
-| ActionResults 8 筆 | 約 603 B | 約 403 B |
-| Welcome | 約 274 B | 約 263 B（刪 `match_id`） |
+2026-10-30 以 `proto.Size` 實測（`pv8-seq-narrow`）。這時 wire 上還沒有第 1 輪的蹲下與衝刺欄位（它們在 `v8-product-crouch` 的 wire 接入時加上，屆時重釘）。uint32 都取 `MaxUint32`。
 
-- 推論的算法：u64 最大值的 varint 是 10 B（加 tag 11 B），u32 最大值是 5 B（加 tag 6 B）。型別最大的 822 B 用「減 8 個長度前綴」推導，對抗式檢查指出這一步沒有證據，所以只當估計。
-- `pv8-seq-narrow` 要用 `proto.Size` 實測，把本節改成實測值並釘成測試（`capacity_test.go`、`worker_main.cpp`、`network_main.cpp`、`actions_test.go` 的 Welcome 邊界，三處數值一致）。
+| 訊息（含 24 B 標頭） | pv7 | 縮窄後（實測） | 推論值（參考） | 釘住的測試 |
+|---|---|---|---|---|
+| 4 人 Snapshot，契約最大 | 1073 B（45＋257N） | **724 B**（40＋171N） | 約 740 B | `capacity_test.go`、`worker_main.cpp` |
+| 4 人 Snapshot，型別最大 | 1151 B | **798 B**（42＋189N），餘裕 402 B | 約 822 B | `capacity_test.go` |
+| 4 人 Snapshot，合法的戰鬥值 | 1019 B | **674 B** | — | `network_main.cpp` |
+| PlayerInput，12 個命令 | 477 B | **402 B** | 約 450 B | `adapter_test.go` |
+| ActionBatch 8 筆 | ≤680 B | **470 B** | 約 475 B | `actions_test.go` |
+| ActionResults 8 筆（`actions_test.go` 的構造） | — | **398 B**；`refused_batches`＝u64 上限、`last_refusal` 取 MaxInt32 時 415 B | 約 403 B | `actions_test.go`（398） |
+| 最大的 Welcome | 1200 B（以 arena id 填到上限） | 1200 B（同；arena id 可多 16 B：`player_id` 少 5 B、`match_id` 少 11 B，推論） | — | `actions_test.go`（＝1200） |
+
+- 每 1 位玩家：PlayerState 87 B、CombatState 80 B（契約最大）；型別最大時 101 B、84 B。長度前綴都是 1 B。
+- 契約最大與型別最大的定義同上一節（`capacity_test.go` 的 `maximumSnapshot`）。
 - 第 1 輪定的退路（型別最大超過 1200 B 時先把 `sprinting` 移出 wire，`pv8-design-remaining-picks` 的 D-2）在縮窄後不會觸發，保留為規則。
 
 ## 7. 不在 pv8 的項目

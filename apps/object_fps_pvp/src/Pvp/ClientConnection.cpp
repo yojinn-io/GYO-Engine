@@ -464,7 +464,7 @@ struct ClientConnection::Impl {
             if(!found->second.decision)found->second.receivedAt=arrivedAt;
             found->second.decision=decision;
         }
-        actionTransport.retiredThrough=Engine::Math::Max(actionTransport.retiredThrough,message.retired_through());
+        actionTransport.retiredThrough=Engine::Math::Max(actionTransport.retiredThrough,ActionId{message.retired_through()});
         while(!actions.empty() && actions.begin()->first<=actionTransport.retiredThrough)actions.erase(actions.begin());
         return true;
     }
@@ -480,17 +480,17 @@ struct ClientConnection::Impl {
                 if(cursor==actions.end())cursor=actions.begin();
                 const auto& [id,entry]=*cursor++;
                 if(entry.decision)continue;
-                auto* shot=message.add_shots();shot->set_action_id(id);
-                shot->set_observed_authority_tick(entry.request.observedAuthorityTick);
+                auto* shot=message.add_shots();shot->set_action_id(wire::Counter(id));
+                shot->set_observed_authority_tick(wire::Counter(entry.request.observedAuthorityTick));
                 shot->set_kind(entry.request.kind==ActionKind::Shot?pb::ACTION_SHOT:pb::ACTION_RELOAD);
-                shot->set_life_generation(entry.request.lifeGeneration);
+                shot->set_life_generation(wire::Counter(entry.request.lifeGeneration));
                 if(entry.request.kind==ActionKind::Shot){shot->set_yaw(entry.request.yaw);shot->set_pitch(entry.request.pitch);}
-                shot->set_movement_epoch(entry.request.movementEpoch);shot->set_command_sequence(entry.request.commandSequence);
+                shot->set_movement_epoch(wire::Counter(entry.request.movementEpoch));shot->set_command_sequence(wire::Counter(entry.request.commandSequence));
                 shot->set_view_tick_q16(entry.request.viewTickQ16);
                 actionSendCursor=id;
             }
             if(message.shots().empty() && actionTransport.acknowledgedThrough<=actionTransport.retiredThrough)return;
-            message.set_acknowledged_through(actionTransport.acknowledgedThrough);
+            message.set_acknowledged_through(wire::Counter(actionTransport.acknowledgedThrough));
         }
         const auto payload=message.SerializeAsString();
         const bool sent=Send(wire::Type::Actions,payload);
@@ -759,10 +759,10 @@ struct ClientConnection::Impl {
                 }
             }}
         if(input) {
-            pb::PlayerInput message;message.set_movement_epoch(input->movementEpoch);message.set_life_generation(input->lifeGeneration);
-            message.set_observed_authority_tick(input->observedAuthorityTick);
+            pb::PlayerInput message;message.set_movement_epoch(wire::Counter(input->movementEpoch));message.set_life_generation(wire::Counter(input->lifeGeneration));
+            message.set_observed_authority_tick(wire::Counter(input->observedAuthorityTick));
             for(const auto& command:input->commands) {
-                auto* out=message.add_commands();out->set_sequence(command.sequence);
+                auto* out=message.add_commands();out->set_sequence(wire::Counter(command.sequence));
                 out->set_move_forward(command.moveForward);out->set_move_right(command.moveRight);
                 out->set_yaw(command.yaw);out->set_pitch(command.pitch);out->set_jump_requested(command.jumpRequested);
             }

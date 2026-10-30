@@ -135,7 +135,7 @@ func TestIngressStatisticsLinesEqualTheGoldenWindows(t *testing.T) {
 		head, fields := splitIngressLine(t, players[i], "player ingress statistics", []string{"version", "player", "window_ms", "final"})
 		var p playerIngressCounts
 		fillIngressCounts(t, fields, playerIngressKeys[:goldenPlayerKeys], p[:goldenPlayerKeys])
-		if got := playerIngressStatisticsLine(head["player"], time.Duration(head["window_ms"])*time.Millisecond,
+		if got := playerIngressStatisticsLine(uint32(head["player"]), time.Duration(head["window_ms"])*time.Millisecond,
 			head["final"] == 1, &p); got != players[i]+appendedZeros(playerIngressKeys[goldenPlayerKeys:]) {
 			t.Fatalf("player window %d\n got %s\nwant %s", i, got, players[i])
 		}

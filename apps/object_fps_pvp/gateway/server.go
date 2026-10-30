@@ -53,7 +53,7 @@ type reservation struct {
 	packetWindow time.Time
 	packetCount  uint64
 	session      *session.Session
-	playerID     uint64
+	playerID     uint32
 	requestID    string
 	phase        phase
 	joinStarted  time.Time
@@ -66,14 +66,14 @@ type reservation struct {
 	echo         sessionEcho // the time echo on Hello and Welcome (echo.go)
 }
 type outbound struct {
-	actionPlayer uint64
+	actionPlayer uint32
 	peer         netip.AddrPort
 	packet       []byte
 	// The discard a failed write is (pv7 §4), and its identity.
-	player      uint64
+	player      uint32
 	writeFailed playerIngressCounter
 	sequence    uint32
-	tick        uint64
+	tick        uint32
 }
 
 // snapshotFrame is a Client snapshot waiting for the send loop, with its tick
@@ -82,7 +82,7 @@ type outbound struct {
 type snapshotFrame struct {
 	snapshot *client.WorldSnapshot
 	read     time.Time
-	tick     uint64
+	tick     uint32
 }
 
 type Server struct {
@@ -92,7 +92,7 @@ type Server struct {
 	created     bool
 	ready       *runtime.Ready
 	link        *runtimeLink
-	players     map[uint64]*reservation
+	players     map[uint32]*reservation
 	sessions    map[uint64]*reservation
 	requests    map[string]*reservation
 	nextPlayer  uint64
@@ -118,12 +118,12 @@ type Server struct {
 	// and each player's datagram outcomes (IG). A player's counters outlive
 	// its reservation (remove, runtimeFailed) until taken, like the link's.
 	ingress       gatewayIngressCounts
-	playerIngress map[uint64]*playerIngressCounts
+	playerIngress map[uint32]*playerIngressCounts
 	// The ingress lines, under mu: where the current window started, the
 	// players that had a line, and whether the final one was written. The
 	// final window is written once (finalOnce), on the first end path.
 	ingressWindowStart time.Time
-	ingressPlayers     map[uint64]struct{}
+	ingressPlayers     map[uint32]struct{}
 	ingressFinal       bool
 	finalOnce          sync.Once
 }
@@ -160,7 +160,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		_ = listener.Close()
 		return nil, err
 	}
-	s := &Server{config: cfg, available: true, ready: ready, link: link, players: make(map[uint64]*reservation),
+	s := &Server{config: cfg, available: true, ready: ready, link: link, players: make(map[uint32]*reservation),
 		sessions: make(map[uint64]*reservation), requests: make(map[string]*reservation),
 		udp: udp, listener: listener, controlOut: make(chan queuedControl, 64), snapshotOut: make(chan snapshotFrame, 1),
 		resultWake: make(chan struct{}, 1), ingressWindowStart: time.Now()}
@@ -258,7 +258,7 @@ func (s *Server) room() map[string]any {
 	if !s.available {
 		status = "unavailable"
 	}
-	return map[string]any{"id": 1, "match_id": 1, "players": len(s.players), "capacity": s.ready.MaxPlayers,
+	return map[string]any{"id": 1, "players": len(s.players), "capacity": s.ready.MaxPlayers,
 		"status": status, "arena_id": s.ready.ArenaId, "arena_version": s.ready.ArenaVersion, "arena_digest": s.ready.ArenaDigest}
 }
 
@@ -360,14 +360,14 @@ func (s *Server) reserveSlot(request joinRequest) (map[string]any, int, string) 
 		return nil, http.StatusServiceUnavailable, "player_ids_exhausted"
 	}
 	s.nextPlayer++
-	player := &reservation{packetWindow: createdAt, session: peer, playerID: s.nextPlayer, requestID: request.RequestID}
+	player := &reservation{packetWindow: createdAt, session: peer, playerID: uint32(s.nextPlayer), requestID: request.RequestID}
 	s.players[player.playerID] = player
 	s.sessions[peer.ID] = player
 	s.requests[request.RequestID] = player
 	return s.reservationData(player), http.StatusOK, ""
 }
 func (s *Server) reservationData(p *reservation) map[string]any {
-	return map[string]any{"match_id": 1, "player_id": p.playerID, "session_id": p.session.ID,
+	return map[string]any{"player_id": p.playerID, "session_id": p.session.ID,
 		"session_token": p.session.Token, "udp_ip": s.config.AdvertiseIP, "udp_port": s.udp.LocalAddr().(*net.UDPAddr).Port,
 		"protocol_version": adapter.ClientVersion, "arena_id": s.ready.ArenaId, "arena_version": s.ready.ArenaVersion, "arena_digest": s.ready.ArenaDigest}
 }
@@ -577,9 +577,9 @@ func (s *Server) countIngress(p *reservation, counter playerIngressCounter, n ui
 
 // countIngressAt counts into the player's 10 s line and, from the same entry,
 // a reported discard into the cumulative ledger (pv7 §4). Under s.mu.
-func (s *Server) countIngressAt(player uint64, counter playerIngressCounter, n uint64, e dropEvent) {
+func (s *Server) countIngressAt(player uint32, counter playerIngressCounter, n uint64, e dropEvent) {
 	if s.playerIngress == nil {
-		s.playerIngress = make(map[uint64]*playerIngressCounts)
+		s.playerIngress = make(map[uint32]*playerIngressCounts)
 	}
 	counts := s.playerIngress[player]
 	if counts == nil {
@@ -603,18 +603,18 @@ func (s *Server) countGatewayLocked(counter gatewayIngressCounter, e dropEvent) 
 // previous call: each player's datagram outcomes, and the Gateway-wide
 // counters. The link's command counters (I0) are taken by its own
 // takeIngress; a player's line adds both (disjoint keys).
-func (s *Server) takeIngress() (map[uint64]*playerIngressCounts, gatewayIngressCounts) {
+func (s *Server) takeIngress() (map[uint32]*playerIngressCounts, gatewayIngressCounts) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.takeIngressLocked()
 }
-func (s *Server) takeIngressLocked() (map[uint64]*playerIngressCounts, gatewayIngressCounts) {
+func (s *Server) takeIngressLocked() (map[uint32]*playerIngressCounts, gatewayIngressCounts) {
 	players, gateway := s.playerIngress, s.ingress
 	s.playerIngress, s.ingress = nil, gatewayIngressCounts{}
 	return players, gateway
 }
 func (s *Server) welcome(p *reservation) {
-	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, MatchId: 1, TickRate: s.ready.TickRate,
+	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, TickRate: s.ready.TickRate,
 		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity,
 		Clock: s.welcomeSample(p, time.Now())})
 }
@@ -826,7 +826,7 @@ func (s *Server) sendUDP(ctx context.Context) {
 			}
 		case frame := <-s.snapshotOut:
 			s.mu.Lock()
-			players := make([]uint64, 0, len(s.players))
+			players := make([]uint32, 0, len(s.players))
 			if s.available {
 				for _, p := range s.players {
 					if p.phase == active {
@@ -849,7 +849,7 @@ func (s *Server) sendUDP(ctx context.Context) {
 
 // snapshotForPeer encodes the frame for the first of the players the loop has
 // still to serve (remaining).
-func (s *Server) snapshotForPeer(remaining []uint64, frame snapshotFrame) (snapshotFrame, outbound) {
+func (s *Server) snapshotForPeer(remaining []uint32, frame snapshotFrame) (snapshotFrame, outbound) {
 	// A previous peer's write may have blocked while a newer publication arrived.
 	// Replace this still-unwritten datagram before assigning its transport sequence.
 	replaced := false
@@ -982,14 +982,14 @@ func (s *Server) logStatisticsWindow(now time.Time, window time.Duration) {
 	links := s.link.takeActionStatistics()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ids := make([]uint64, 0, len(s.players))
+	ids := make([]uint32, 0, len(s.players))
 	for id := range s.players {
 		ids = append(ids, id)
 	}
 	slices.Sort(ids)
 	log.Printf("gateway statistics players=%d rate_accepted_packets=%d rate_limited_packets=%d", len(ids),
 		s.rateAcceptedPackets.Load(), s.rateRejectedPackets.Load())
-	ingress := map[uint64]string{}
+	ingress := map[uint32]string{}
 	var removed []playerIngressLine
 	if !s.ingressFinal {
 		gateway, lines := s.ingressWindowLocked(now, false)
@@ -1027,7 +1027,7 @@ func (s *Server) logStatisticsWindow(now time.Time, window time.Duration) {
 
 // One player's ingress line of a window.
 type playerIngressLine struct {
-	player uint64
+	player uint32
 	line   string
 }
 
@@ -1046,7 +1046,7 @@ func (s *Server) ingressWindowLocked(now time.Time, final bool) (string, []playe
 	s.ingressWindowStart = now
 	players, gateway := s.takeIngressLocked()
 	if players == nil {
-		players = map[uint64]*playerIngressCounts{}
+		players = map[uint32]*playerIngressCounts{}
 	}
 	for id, counts := range s.link.takeIngress() {
 		if players[id] == nil {
@@ -1067,7 +1067,7 @@ func (s *Server) ingressWindowLocked(now time.Time, final bool) (string, []playe
 			}
 		}
 	}
-	ids := make([]uint64, 0, len(players))
+	ids := make([]uint32, 0, len(players))
 	for id := range players {
 		ids = append(ids, id)
 	}
@@ -1080,9 +1080,9 @@ func (s *Server) ingressWindowLocked(now time.Time, final bool) (string, []playe
 	return gatewayIngressStatisticsLine(window, final, &gateway), lines
 }
 
-func (s *Server) noteIngressPlayerLocked(id uint64) {
+func (s *Server) noteIngressPlayerLocked(id uint32) {
 	if s.ingressPlayers == nil {
-		s.ingressPlayers = map[uint64]struct{}{}
+		s.ingressPlayers = map[uint32]struct{}{}
 	}
 	s.ingressPlayers[id] = struct{}{}
 }

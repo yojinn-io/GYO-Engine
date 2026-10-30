@@ -87,7 +87,7 @@ type sendStatistics struct {
 // The shortest intervals come last: they were added after the first logs
 // (v7 batch 06), so the earlier keys keep their order. The datagram sizes
 // were added in v8 (pv8-obs-bytes) and come after them.
-func sendStatisticsLine(player uint64, window time.Duration, results, snapshots, linkActions intervalWindow,
+func sendStatisticsLine(player uint32, window time.Duration, results, snapshots, linkActions intervalWindow,
 	resultBytes, snapshotBytes string) string {
 	return fmt.Sprintf("player send statistics player=%d window_ms=%d results=%d results_interval_ms=%s "+
 		"snapshots=%d snapshot_interval_ms=%s link_actions=%d link_action_interval_ms=%s "+
@@ -99,17 +99,17 @@ func sendStatisticsLine(player uint64, window time.Duration, results, snapshots,
 }
 
 // The Match side: each player's ActionBatch writes on the runtime link.
-func (l *runtimeLink) takeActionStatistics() map[uint64]intervalWindow {
+func (l *runtimeLink) takeActionStatistics() map[uint32]intervalWindow {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	windows := make(map[uint64]intervalWindow, len(l.actionStats))
+	windows := make(map[uint32]intervalWindow, len(l.actionStats))
 	for player, stats := range l.actionStats {
 		windows[player] = stats.take()
 	}
 	return windows
 }
 
-func (s *Server) snapshotWritten(playerID uint64, now time.Time, bytes int) {
+func (s *Server) snapshotWritten(playerID uint32, now time.Time, bytes int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p := s.players[playerID]; p != nil {

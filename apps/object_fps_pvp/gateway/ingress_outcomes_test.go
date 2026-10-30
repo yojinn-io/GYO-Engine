@@ -18,14 +18,14 @@ import (
 // ingressTake is what the Server and its link hand over, per player and
 // Gateway-wide; the two parts of a player's counters have disjoint keys.
 type ingressTake struct {
-	players map[uint64]*playerIngressCounts
+	players map[uint32]*playerIngressCounts
 	gateway gatewayIngressCounts
 }
 
 func takeAllIngress(s *Server) ingressTake {
 	players, gateway := s.takeIngress()
 	if players == nil {
-		players = map[uint64]*playerIngressCounts{}
+		players = map[uint32]*playerIngressCounts{}
 	}
 	for player, counts := range s.link.takeIngress() {
 		if players[player] == nil {
@@ -38,7 +38,7 @@ func takeAllIngress(s *Server) ingressTake {
 
 func (total *ingressTake) add(take ingressTake) {
 	if total.players == nil {
-		total.players = map[uint64]*playerIngressCounts{}
+		total.players = map[uint32]*playerIngressCounts{}
 	}
 	for player, counts := range take.players {
 		if total.players[player] == nil {
@@ -130,11 +130,11 @@ func (f *outcomeFixture) fillRateWindow(t *testing.T) {
 	}
 }
 
-func inputMessage(epoch uint64, commands []*client.MovementCommand) *client.PlayerInput {
+func inputMessage(epoch uint32, commands []*client.MovementCommand) *client.PlayerInput {
 	return &client.PlayerInput{MovementEpoch: epoch, LifeGeneration: 1, Commands: commands}
 }
 
-func shotsMessage(ids ...uint64) *client.ActionBatch {
+func shotsMessage(ids ...uint32) *client.ActionBatch {
 	b := &client.ActionBatch{}
 	for _, id := range ids {
 		b.Shots = append(b.Shots, &client.ShotRequest{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: id, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)})

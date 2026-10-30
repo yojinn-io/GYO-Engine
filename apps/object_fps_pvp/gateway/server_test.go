@@ -199,8 +199,7 @@ func (f *fakeRuntime) quiet(t *testing.T) {
 }
 
 type credentials struct {
-	MatchID   uint64 `json:"match_id"`
-	PlayerID  uint64 `json:"player_id"`
+	PlayerID  uint32 `json:"player_id"`
 	SessionID uint64 `json:"session_id"`
 	Token     string `json:"session_token"`
 	UDPIP     string `json:"udp_ip"`
@@ -232,6 +231,10 @@ func reserve(t *testing.T, s *Server, id string) credentials {
 	status, body := post(t, s, "/rooms/1/join", map[string]any{"request_id": id, "protocol_version": adapter.ClientVersion})
 	if status != http.StatusOK {
 		t.Fatalf("join %d: %s", status, body)
+	}
+	// pv8 §2a: match_id had no reader and left the join reply.
+	if bytes.Contains(body, []byte("match_id")) {
+		t.Fatalf("join reply still carries match_id: %s", body)
 	}
 	var c credentials
 	if err := json.Unmarshal(body, &c); err != nil {
@@ -614,6 +617,10 @@ func TestRoomsAndJoinForwardTheArenaDigest(t *testing.T) {
 	if err != nil || len(rooms.Rooms) != 1 || rooms.Rooms[0]["arena_digest"] != json.Number(strconv.FormatUint(testArenaDigest, 10)) {
 		t.Fatalf("room list %v %v", rooms, err)
 	}
+	// pv8 §2a: match_id had no reader and left the room list.
+	if _, found := rooms.Rooms[0]["match_id"]; found {
+		t.Fatalf("room list still carries match_id: %v", rooms)
+	}
 	reserve(t, s, "digest")
 }
 
@@ -795,7 +802,7 @@ func TestResultsOfAPlayerNotActiveAreInertAndItsIdentityNeverReturns(t *testing.
 	s, f := newTestServer(t)
 	post(t, s, "/rooms", map[string]any{})
 	shotBatch := &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}}
-	results := func(player uint64) {
+	results := func(player uint32) {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_ActionResults{ActionResults: &runtime.ActionResults{PlayerId: player, Decisions: []*runtime.ShotDecision{decision(1)}}}
 		f.send(e)

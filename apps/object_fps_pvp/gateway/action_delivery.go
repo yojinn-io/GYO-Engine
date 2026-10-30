@@ -38,7 +38,7 @@ func (l *runtimeLink) actions(in *runtime.ActionBatch, e dropEvent) error {
 	// The send statistics entry lives from the first batch to forget: a
 	// batch written after the player left records nothing.
 	if l.actionStats == nil {
-		l.actionStats = map[uint64]*intervalStats{}
+		l.actionStats = map[uint32]*intervalStats{}
 	}
 	if l.actionStats[in.PlayerId] == nil {
 		l.actionStats[in.PlayerId] = &intervalStats{}
@@ -240,14 +240,14 @@ func (s *Server) trackAdmission(p *reservation, kind ingressKind, now time.Time,
 // actionWritten records the interval between a player's action batches the
 // link wrote (send statistics only; the link no longer paces them), while
 // the player's entry exists (from its first batch until forget).
-func (l *runtimeLink) actionWritten(playerID uint64, now time.Time) {
+func (l *runtimeLink) actionWritten(playerID uint32, now time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if stats := l.actionStats[playerID]; stats != nil {
 		stats.record(now)
 	}
 }
-func (s *Server) actionWritten(playerID uint64, now time.Time, bytes int) {
+func (s *Server) actionWritten(playerID uint32, now time.Time, bytes int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if p := s.players[playerID]; p != nil {

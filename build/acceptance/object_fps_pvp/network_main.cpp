@@ -124,36 +124,38 @@ int main(int argc,char** argv) {
             }
             namespace pb=object_fps_pvp::client::v8;
             const auto maximum=std::numeric_limits<std::uint64_t>::max();
-            pb::ActionBatch actions;actions.set_acknowledged_through(maximum-MaxActionBatch);
-            pb::ActionResults results;results.set_retired_through(maximum-MaxActionBatch);
+            const auto counter=WireCounterMax; // the narrowed fields (protocol-v8 section 2a)
+            pb::ActionBatch actions;actions.set_acknowledged_through(counter-MaxActionBatch);
+            pb::ActionResults results;results.set_retired_through(counter-MaxActionBatch);
             for(std::size_t i=0;i<MaxActionBatch;++i){
-                auto* shot=actions.add_shots();shot->set_action_id(maximum-MaxActionBatch+1+i);
-                shot->set_observed_authority_tick(maximum);shot->set_yaw(3.14F);shot->set_pitch(MovementMaximumPitch);shot->set_kind(pb::ACTION_SHOT);shot->set_life_generation(maximum);
+                auto* shot=actions.add_shots();shot->set_action_id(counter-MaxActionBatch+1+i);
+                shot->set_observed_authority_tick(counter);shot->set_yaw(3.14F);shot->set_pitch(MovementMaximumPitch);shot->set_kind(pb::ACTION_SHOT);shot->set_life_generation(counter);
                 auto* decision=results.add_decisions();decision->set_action_id(shot->action_id());
-                decision->set_resolved_tick(maximum);decision->set_accepted(true);
-                decision->set_hit_kind(pb::HIT_PLAYER);decision->set_target_id(maximum);
-                decision->set_damage(PvpCombatRules.shotDamage);decision->set_kind(pb::ACTION_SHOT);decision->set_life_generation(maximum);decision->set_target_life_generation(maximum);
+                decision->set_resolved_tick(counter);decision->set_accepted(true);
+                decision->set_hit_kind(pb::HIT_PLAYER);decision->set_target_id(counter);
+                decision->set_damage(PvpCombatRules.shotDamage);decision->set_kind(pb::ACTION_SHOT);decision->set_life_generation(counter);decision->set_target_life_generation(counter);
             }
-            pb::WorldSnapshot snapshot;snapshot.set_tick(maximum);
+            pb::WorldSnapshot snapshot;snapshot.set_tick(counter);
             for(std::size_t i=0;i<AcceptanceMaxPlayers;++i){
-                auto* player=snapshot.add_players();player->set_player_id(maximum-i);
+                auto* player=snapshot.add_players();player->set_player_id(counter-i);
                 player->set_x(1);player->set_y(1);player->set_z(1);player->set_yaw(1);player->set_pitch(1);
-                player->set_last_resolved_command(maximum);player->set_movement_epoch(maximum);
+                player->set_last_resolved_command(counter);player->set_movement_epoch(counter);
                 player->set_contiguous_pending_commands(MaxFutureCommands);player->set_vertical_velocity(4);player->set_grounded(true);
-                player->set_life_generation(maximum);player->set_life_state(pb::LIFE_ALIVE);player->set_life_state_tick(maximum);player->set_respawn_tick(maximum);
-                player->set_movement_slack_sequence(maximum);player->set_movement_slack_us(-1'000'000);player->set_connection_quality_failures(2);
-                auto* combat=snapshot.add_combat();combat->set_player_id(maximum-i);
-                combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(maximum);combat->set_life_generation(maximum);combat->set_magazine_ammo(PvpCombatRules.magazineCapacity);
-                combat->set_reload_action_id(maximum);combat->set_reload_start_tick(maximum);combat->set_reload_end_tick(maximum);combat->set_last_shot_action_id(maximum);combat->set_last_shot_tick(maximum);
-                combat->set_last_damage_tick(maximum);combat->set_damage_count(std::numeric_limits<std::uint32_t>::max());combat->set_last_attacker_id(maximum);
+                player->set_life_generation(counter);player->set_life_state(pb::LIFE_ALIVE);player->set_life_state_tick(counter);player->set_respawn_tick(counter);
+                player->set_movement_slack_sequence(counter);player->set_movement_slack_us(-1'000'000);player->set_connection_quality_failures(2);
+                auto* combat=snapshot.add_combat();combat->set_player_id(counter-i);
+                combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(counter);combat->set_life_generation(counter);combat->set_magazine_ammo(PvpCombatRules.magazineCapacity);
+                combat->set_reload_action_id(counter);combat->set_reload_start_tick(counter);combat->set_reload_end_tick(counter);combat->set_last_shot_action_id(counter);combat->set_last_shot_tick(counter);
+                combat->set_last_damage_tick(counter);combat->set_damage_count(std::numeric_limits<std::uint32_t>::max());combat->set_last_attacker_id(counter);
             }
             const auto actionBytes=wire::Encode({wire::Type::Actions,maximum,0xffffffffu,actions.SerializeAsString()});
             const auto resultBytes=wire::Encode({wire::Type::ActionResults,maximum,0xffffffffu,results.SerializeAsString()});
             const auto snapshotBytes=wire::Encode({wire::Type::Snapshot,maximum,0xffffffffu,snapshot.SerializeAsString()});
             Require(actionBytes.size()<=1200 && resultBytes.size()<=1200 && snapshotBytes.size()<=1200,
                 "maximum legal protobuf plus24-byte UDP header exceeds1200 bytes");
-            // Legal combat values in a full room (pv6 contract §7, 2026-10-07 revision).
-            Require(snapshotBytes.size()==1019,"maximum legal full-room snapshot is not 1019 bytes");
+            // Legal combat values in a full room (pv6 contract §7, 2026-10-07 revision;
+            // protocol-v8 section 6: the counters narrowed to uint32).
+            Require(snapshotBytes.size()==674,"maximum legal full-room snapshot is not 674 bytes");
             bool oversizedRejected=false;
             try { static_cast<void>(wire::Encode({wire::Type::Input,1,1,std::string(wire::MaxDatagram, 'x')})); }
             catch(const std::length_error&) { oversizedRejected=true; }

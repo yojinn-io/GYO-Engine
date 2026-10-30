@@ -457,7 +457,7 @@ Match 核心只接收普通 C++ domain 值。本節只列結構；送達語意�
 [protocol-v7](protocol-v7.zh-Hant.md) §2a～§4。
 
 Client Protocol 包含 Hello、Welcome、PlayerInput、WorldSnapshot、Error、ActionBatch、ActionResults。
-Hello 提交 session token；Welcome 回覆 PlayerId、MatchId、tick/snapshot rate 與
+Hello 提交 session token；Welcome 回覆 PlayerId、tick/snapshot rate 與
 arena identity 及 Match CombatRules。pv7 起 Hello 與 Welcome 各帶一份 `ClockSample`，做 Client↔Gateway 的時間回聲（只供診斷）。PlayerInput 包含 movement_epoch 及 commands，每個命令只有 sequence、移動軸、yaw／pitch，
 沒有 Client 指定時間、位置、傷害或擊殺結果。Snapshot 包含 Authority Tick、完整玩家集合
 與每位玩家的 last_resolved_command、movement_epoch、contiguous_pending_commands，
@@ -510,7 +510,7 @@ Runtime Ready 後 `POST /rooms` 建立房間，重試回傳同一個房間。
 
 | HTTP | 行為 |
 |---|---|
-| `GET /rooms` | 回傳 `rooms` 陣列，含 id、match_id、players、capacity、status、arena identity |
+| `GET /rooms` | 回傳 `rooms` 陣列，含 id、players、capacity、status、arena identity（`match_id` 在 pv8 刪除，protocol-v8 §2a） |
 | `POST /rooms` | 建立／回傳固定房間，Runtime 不可用時 503 |
 | `POST /rooms/1/join` | 以 `request_id`、`protocol_version` 保留名額 |
 | `POST /rooms/1/leave` | 以 `session_id`、`session_token` 驗證離開 |
@@ -521,7 +521,7 @@ Join request 範例：
 {"request_id":"a-client-generated-unique-id","protocol_version":7}
 ```
 
-成功回覆包含 `match_id`、`player_id`、`session_id`、`session_token`、`udp_ip`、
+成功回覆包含 `player_id`、`session_id`、`session_token`、`udp_ip`、
 `udp_port`、`protocol_version`、`arena_id`、`arena_version`。同一有效 request_id
 重試回傳同一 reservation。保留與 joining 名額也計入最多四人限制（`MaxPlayers`＝4）。
 
