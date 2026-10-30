@@ -39,14 +39,25 @@
 - `PreviewAdapter.cpp:236`：`sourceDocument.dump()` 每幀一次，再和上一份字串比對。
 - 影響：選單文件小，現在不是問題；優先度低，只記錄。
 
-### S-5　拖動與縮放（使用者回報的 bug；**未重現**）
+### S-5　拖動與縮放（使用者回報的 bug；**已重現**）
 
-- 現況：gizmo 只有三個把手：`anchor_min`、`anchor_max`、`pivot`（`PreviewAdapter.hpp` 的 `GizmoField`）。**沒有拖位置（`position`）或大小（`size_delta`）的把手**；點元素本身只會選取（`EditorApp.cpp:1147`）。
-- 推論的機制（從程式讀出，沒有實際操作確認）：
-  1. 大小＝`parentSize * (anchorMax - anchorMin) + sizeDelta`（[ui_toolchain.md](../../../ui_toolchain.md)「JSON v1」）。拖錨點時，editor 只改錨點，**不補償** `size_delta` 與 `position`（`EditorApp.cpp:1161-1166` 只寫 `rect[key]`），所以元素會跳。
-  2. 大廳的按鈕都是點錨點（`anchor_min = anchor_max = [0, 0]`，`pvp_lobby.json`）。兩個錨點把手都畫在**父層的左上角**附近，不在元素的邊上；把 `anchor_max` 往右拖 100 px，寬度就在原本的 840 之外再加 100，看起來像「縮放失靈」。
-  3. 錨點被夾在 0～1 之間（`PreviewAdapter.cpp:533-534`），往外拖會卡住。
-- 下一步（照 §14.3）：先請使用者描述實際的現象；把 gizmo 的數學抽成不讀 ImGui 的函式，用大廳按鈕寫一個會失敗的測試，再修。
+- 使用者（2026-10-30）：拖藍色方塊，「只能左右，往上拖動無效」。
+- 現況：gizmo 只有三個把手：`anchor_min`（深藍方塊）、`anchor_max`（淺藍方塊）、`pivot`（橘色圓點）（`PreviewAdapter.hpp` 的 `GizmoField`）。**沒有拖位置（`position`）或大小（`size_delta`）的把手**；點元素本身只會選取（`EditorApp.cpp:1147`）。
+- 重現：用暫時的程式直接驅動真正的 `PreviewAdapter::Draw`（ImGui 的滑鼠事件、1280×720、不開 Snap），從把手往四個方向各拖 50 px，結果如下（程式沒有進 repo）：
+
+  | 元素的錨點 | 把手 | 上 | 下 | 左 | 右 |
+  |---|---|---|---|---|---|
+  | 新增元素的預設 (0.5, 0.5) | `anchor_min` | 動 | **不動** | 動 | **不動** |
+  | 同上 | `anchor_max` | **不動** | 動 | **不動** | 動 |
+  | 大廳的按鈕 (0, 0) | `anchor_min` | **不動** | **不動** | **不動** | **不動** |
+  | 同上 | `anchor_max` | **不動** | 動 | **不動** | 動 |
+
+- 機制（`PreviewAdapter.cpp:533-540`）：
+  1. 拖 `anchor_min` 時新值被限制成 `≤ anchor_max`，拖 `anchor_max` 時限制成 `≥ anchor_min`。新增元素與大廳按鈕的兩個錨點**一開始就相等**，所以每個把手在每個軸上只能往一個方向動：`anchor_max` 往上、往左都被擋住，就是使用者看到的「往上無效」。
+  2. 錨點又被夾在 0～1（`:533-534`）。大廳按鈕的錨點在 (0, 0)，`anchor_min` 四個方向都動不了。
+  3. 就算動了，拖錨點也只改錨點，不補償 `size_delta` 與 `position`（`EditorApp.cpp:1161-1166`），所以元素的大小會在原本的 `size_delta` 之外再加上錨點的距離。
+- 判斷：程式照它寫的規則在動，不是算錯；問題是**把手的設計和使用者想做的事不一致**：使用者想移動、縮放元素，但手上只有「錨點」這種調整版面關係的把手。
+- 下一步：先定「拖動應該怎樣」（HANDOFF `v8-tool-ui-editor-gizmo-bug`），再照 AGENTS §14.3 把上表的情形寫成會失敗的測試，然後修。
 
 ## 建議的整理順序（每項都對應一個要做的 Feature）
 
