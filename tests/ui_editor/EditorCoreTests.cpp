@@ -1,5 +1,6 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
+#include "gyo/ui_editor/ElementClipboard.hpp"
 #include "gyo/ui_editor/ElementSchema.hpp"
 #include "gyo/ui_editor/FileService.hpp"
 #include "gyo/ui_editor/GizmoMath.hpp"
@@ -508,6 +509,31 @@ void TestGizmoSnapAndPivot() {
     Expect(Near(Drag(GizmoHandle::Pivot, centered, {500.0F, 0.0F}).pivot, 1.0F, 0.5F), "pivot stays inside the element");
 }
 
+void TestGizmoResizeModifiers() {
+    const GizmoFrame centered = MakeFrame(kCentered);
+    constexpr Vec2 grab{100.0F, 100.0F};
+    const auto drag = [&](const GizmoHandle handle, const Vec2 delta, const GizmoModifiers modifiers) {
+        return DesignRect(DragGizmo(handle, centered, grab, grab + delta, {}, modifiers));
+    };
+    constexpr GizmoModifiers center{.fromCenter = true};
+    constexpr GizmoModifiers aspect{.keepAspect = true};
+    constexpr GizmoModifiers both{.fromCenter = true, .keepAspect = true};
+    Expect(Near(drag(GizmoHandle::Right, {30.0F, 0.0F}, center), {490.0F, 324.0F, 300.0F, 72.0F}),
+        "Alt on an edge moves the opposite edge the other way");
+    Expect(Near(drag(GizmoHandle::TopLeft, {-10.0F, -20.0F}, center), {510.0F, 304.0F, 260.0F, 112.0F}),
+        "Alt on a corner resizes around the centre");
+    Expect(Near(drag(GizmoHandle::BottomRight, {60.0F, 5.0F}, aspect), {520.0F, 324.0F, 300.0F, 90.0F}),
+        "Shift on a corner scales both axes by the larger change");
+    Expect(Near(drag(GizmoHandle::TopLeft, {-60.0F, 0.0F}, aspect), {460.0F, 306.0F, 300.0F, 90.0F}),
+        "Shift keeps the opposite corner");
+    Expect(Near(drag(GizmoHandle::Right, {30.0F, 0.0F}, aspect), {520.0F, 324.0F, 270.0F, 72.0F}),
+        "Shift does not change an edge drag");
+    Expect(Near(drag(GizmoHandle::BottomRight, {60.0F, 5.0F}, both), {460.0F, 306.0F, 360.0F, 108.0F}),
+        "Alt and Shift together scale around the centre");
+    Expect(Near(drag(GizmoHandle::Left, {300.0F, 0.0F}, center), {640.0F, 324.0F, 0.0F, 72.0F}),
+        "Alt stops at zero width at the centre");
+}
+
 // ui_editor Design Invariant 4 (docs/ui_toolchain.md): GizmoMath keeps its
 // own copy of the gyo.ui layout rule to solve position and size_delta. Every
 // result is laid out again by the GYO::Ui evaluator, which must put the
@@ -701,6 +727,60 @@ void TestElementKindsMatchUi() {
     }
 }
 
+// Copy and paste of element subtrees. The pasted document must still pass
+// the GYO::Ui codec: ids unique, focus order naming existing focusable
+// elements.
+void TestElementClipboard() {
+    nlohmann::json document = UiDocumentBridge::CreateDefault();
+    nlohmann::json& canvas = document["canvases"][0];
+    nlohmann::json panel = MakeDefaultElement(document, *FindElementKind("panel"));
+    nlohmann::json button = MakeDefaultElement(document, *FindElementKind("button"));
+    const std::string panelId = panel["id"].get<std::string>();
+    const std::string buttonId = button["id"].get<std::string>();
+    panel["children"] = nlohmann::json::array({button});
+    canvas["children"].push_back(panel);
+    canvas["focus_order"].push_back(buttonId);
+    nlohmann::json list = MakeDefaultElement(document, *FindElementKind("fixed_step_list"));
+    const std::string listId = list["id"].get<std::string>();
+    canvas["children"].push_back(list);
+    const auto passesCodec = [](const nlohmann::json& value) {
+        return Engine::Ui::UiDocumentCodec::Parse(value.dump(), "clipboard").has_value();
+    };
+    Expect(passesCodec(document), "the clipboard test document starts valid");
+
+    Expect(!CopyElement(document, "missing").has_value(), "copying an unknown id gives nothing");
+    const auto copied = CopyElement(document, panelId);
+    Expect(copied.has_value() && (*copied)["children"].size() == 1U, "a copy keeps the element's children");
+    if (!copied) {
+        return;
+    }
+
+    const auto first = PasteElement(document, "main", panelId, *copied);
+    Expect(first == panelId + "_copy_1", "the pasted element gets a new id");
+    Expect(canvas["children"].size() == 3U && canvas["children"][1]["id"] == panelId + "_copy_1",
+        "a paste goes right after the selected element");
+    Expect(canvas["children"][1]["children"][0]["id"] == buttonId + "_copy_1", "children get new ids too");
+    Expect(canvas["focus_order"] == nlohmann::json::array({buttonId, buttonId + "_copy_1"}),
+        "a pasted focusable element joins the focus order");
+    Expect(passesCodec(document), "the document stays valid after a paste");
+
+    Expect(PasteElement(document, "main", panelId, *copied) == panelId + "_copy_2",
+        "pasting again picks the next free id");
+    const auto nested = PasteElement(document, "main", buttonId, *CopyElement(document, buttonId));
+    Expect(nested == buttonId + "_copy_3" && canvas["children"][0]["children"].size() == 2U &&
+            canvas["children"][0]["children"][1]["id"] == buttonId + "_copy_3",
+        "pasting after a nested element inserts into its parent");
+    const auto listCopy = PasteElement(document, "main", "", *CopyElement(document, listId));
+    Expect(listCopy.has_value() && canvas["children"].back()["id"] == *listCopy,
+        "with nothing selected the paste goes to the end of the canvas");
+    Expect(canvas["children"].back()["template"][0]["id"] != list["template"][0]["id"],
+        "list templates get new ids");
+    Expect(passesCodec(document), "the document stays valid after every paste");
+    Expect(!PasteElement(document, "missing", "", *copied).has_value(), "a missing canvas takes no paste");
+    Expect(!PasteElement(document, "main", "", nlohmann::json::array()).has_value(),
+        "a value that is not an element is not pasted");
+}
+
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
@@ -709,8 +789,10 @@ int main() {
     TestGizmoAnchorDrag();
     TestGizmoMoveAndResize();
     TestGizmoSnapAndPivot();
+    TestGizmoResizeModifiers();
     TestGizmoAgreesWithUiEvaluator();
     TestElementKindsMatchUi();
+    TestElementClipboard();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);
     TestExportAndExternalModification(temporary.path);

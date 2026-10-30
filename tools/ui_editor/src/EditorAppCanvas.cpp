@@ -56,7 +56,10 @@ void EditorApp::DrawCanvas() {
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove |
                                        ImGuiWindowFlags_NoResize |
                                        ImGuiWindowFlags_NoCollapse |
-                                       ImGuiWindowFlags_NoScrollbar;
+                                       ImGuiWindowFlags_NoScrollbar |
+                                       // Arrow keys nudge the selected element
+                                       // here instead of moving keyboard focus.
+                                       ImGuiWindowFlags_NoNavInputs;
     if (!ImGui::Begin("Canvas", nullptr, flags)) {
         ImGui::End();
         return;
@@ -173,6 +176,7 @@ void EditorApp::DrawCanvas() {
             : "  payload:none";
         actionLog_.push_back(std::move(entry));
     }
+    NudgeSelectedElement(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows));
     ImGui::End();
 }
 

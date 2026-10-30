@@ -195,7 +195,7 @@ std::optional<GizmoHandle> HitGizmoHandle(const GizmoFrame& frame, const Vec2 mo
 }
 
 GizmoRect DragGizmo(const GizmoHandle handle, const GizmoFrame& start, const Vec2 grab, const Vec2 mouse,
-    const GizmoSnap& snap) noexcept {
+    const GizmoSnap& snap, const GizmoModifiers& modifiers) noexcept {
     const float scale = Engine::Math::Max(0.001F, start.designScale);
     const Vec2 delta{(mouse.x - grab.x) / scale, (mouse.y - grab.y) / scale};
     const Vec2 parent = ParentDesignSize(start);
@@ -240,6 +240,27 @@ GizmoRect DragGizmo(const GizmoHandle handle, const GizmoFrame& start, const Vec
         DesignRect target = original;
         MoveEdge(target.min.x, target.size.x, edges.x, delta.x, snap);
         MoveEdge(target.min.y, target.size.y, edges.y, delta.y, snap);
+        if (modifiers.keepAspect && edges.x != 0 && edges.y != 0 && original.size.x > 0.0F &&
+            original.size.y > 0.0F) {
+            // The axis that changed more sets one factor for both; the opposite
+            // corner stays.
+            const float scaleX = target.size.x / original.size.x;
+            const float scaleY = target.size.y / original.size.y;
+            const float scale = std::abs(scaleX - 1.0F) >= std::abs(scaleY - 1.0F) ? scaleX : scaleY;
+            target.size = {original.size.x * scale, original.size.y * scale};
+            target.min = {edges.x < 0 ? original.min.x + original.size.x - target.size.x : original.min.x,
+                edges.y < 0 ? original.min.y + original.size.y - target.size.y : original.min.y};
+        }
+        if (modifiers.fromCenter) {
+            // The dragged side's change applies to both sides of the centre.
+            const auto mirror = [](float& min, float& size, const float originalMin, const float originalSize) {
+                const float center = originalMin + originalSize * 0.5F;
+                size = Engine::Math::Max(0.0F, originalSize + 2.0F * (size - originalSize));
+                min = center - size * 0.5F;
+            };
+            if (edges.x != 0) mirror(target.min.x, target.size.x, original.min.x, original.size.x);
+            if (edges.y != 0) mirror(target.min.y, target.size.y, original.min.y, original.size.y);
+        }
         // Same as Solve with the anchors unchanged, written as a change so the
         // untouched axis keeps its exact values.
         const Vec2 minChange = target.min - original.min;

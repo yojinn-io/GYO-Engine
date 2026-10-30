@@ -1,6 +1,6 @@
 # v8 工具線交接
 
-更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107) 已合併；`v8-tool-ui-editor-gizmo-fix` 完成，在分支 `claude/v8-tool-ui-editor-gizmo`。**
+更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)、[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108) 已合併；小功能（`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`）完成，在分支 `claude/v8-tool-ui-editor-small`。**
 本文件是工具線的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。v8 產品計畫的同步由產品會話做，本線不改 `docs/object_fps_pvp/plans/v8/`。
 
 ## 代號對照
@@ -16,8 +16,8 @@
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
-- **完成，未合併**：`v8-tool-ui-editor-gizmo-fix`（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)，分支 `claude/v8-tool-ui-editor-gizmo`）。使用者在 GUI 上試過錨點與 pivot 的把手。
-- **完成，併進 [PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)**：`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成；下一步是 `text_field` 開始前的三個決定，或先做小功能。
+- **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
+- **完成，未推送**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`（分支 `claude/v8-tool-ui-editor-small`）。下一步是 `text_field` 開始前的三個決定（`v8-tool-ui-schema-version`、`v8-tool-ui-edit-policy-owner`、`v8-tool-ui-widget-scope`）。
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
@@ -77,3 +77,6 @@
 - 2026-10-30：`v8-tool-ui-editor-element-schema` 完成（檔位 high，估 5～8 h，實際約 1 h）。使用者選 A，並補充「Engine 不承擔工具的職能」。`ElementSchema` 一張表；對齊測試含編譯期的 switch；8 個突變全部被抓到；14/14 通過。
 - 2026-10-30：使用者要求把 4 個 commit 併進 [PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)；推送並更新 PR 的標題與說明（gizmo 修正＋Design Invariants＋S-1、S-2 的整理）。
 - 2026-10-30：音效線（v8 audio-line 會話的 `v8-engine-audio-plan`）轉來一項需求：使用者在那邊說「這個你先轉好，需求加到 assets editor 中。」記到 README 的 `v8-tool-assets-editor`，代號 `v8-tool-assets-audio-import`；只記需求，不排實作。轉換腳本在音效線未推送的分支上。
+- 2026-10-30：觸發的手動 L1 被取消後，留下 `L1 (dispatch)` failure，使 PR #108 變成 UNSTABLE；重跑後四平台 L1 與 Quick acceptance 全過。使用者要求合併，PR #108 以 merge commit 合併（`e31dfdf4`）。
+- 2026-10-30：使用者：「先做小功能」。`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge` 開始（high／medium，估 3～5 h＋2～3 h），分支 `claude/v8-tool-ui-editor-small`（切自 master `e31dfdf4`）。
+- 2026-10-30：兩批完成，實際約 1 h。新測試與 8 個突變全部被抓到；14/14 通過。GUI 上還沒手動操作。
