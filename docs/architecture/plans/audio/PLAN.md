@@ -1,16 +1,16 @@
 # 音效（GYO::Audio）：批次計畫
 
-更新：2026-10-30。**狀態：草案，等使用者核准。** 標「待決定」的地方對應 [HANDOFF](HANDOFF.md)「等使用者決定」的代號；核准前按「建議」寫。
+更新：2026-10-30。**狀態：已核准（2026-10-30）。** 標「待決定」的地方對應 [HANDOFF](HANDOFF.md) 的代號；6 項全部照建議核准（HANDOFF「決策紀錄」），本文依建議寫成，內容不變。
 
 ## 範圍
 
 ### 做
 
 - **中立混音器**（`GYO::Audio`）：輸出格式固定為 PCM16、48 kHz、立體聲。混音器自己數已輸出的樣本（frame）數，這個計數是「播放進行到哪裡」的唯一權威。
-- **片段庫**：輸出開始前登錄的不可變 PCM16 片段（單聲道或立體聲、48 kHz）。登錄時複製資料；輸出期間不增減（`v8-engine-audio-clip-format`，待決定）。
+- **片段庫**：輸出開始前登錄的不可變 PCM16 片段（單聲道或立體聲、48 kHz）。登錄時複製資料；輸出期間不增減（`v8-engine-audio-clip-format`，2026-10-30 核准）。
 - **一次性的播放請求**：片段、Engine 時間戳、左右兩個增益。請求送出後不能停止或修改。
 - **以 Engine 時間戳排程**：每個輸出區塊開始時，後端給一個錨點（這個區塊的 Engine 時間與已輸出的樣本數）；混音器把請求的時間戳換算成樣本位置，在區塊內精確到樣本開始播放。
-- **提交端**：每個提交端是有界的 SPSC 佇列，綁定一個生產者執行緒；混音器在音效執行緒上取出。佇列滿時丟棄並計數（`v8-engine-audio-producers`，待決定）。
+- **提交端**：每個提交端是有界的 SPSC 佇列，綁定一個生產者執行緒；混音器在音效執行緒上取出。佇列滿時丟棄並計數（`v8-engine-audio-producers`，2026-10-30 核准）。
 - **收支**：每個請求恰好落入「準時播放、遲到播放、佇列滿丟棄、聲部滿丟棄」之一；計數可隨時讀出，四者之和等於送出的數。
 - **主音量**：一個可從任何執行緒設定的全域增益（atomic）。
 - **SDL 後端**（`GYO::AudioBackendSDL`）：以 SDL 3.4 的音效串流（`SDL_OpenAudioDeviceStream`，預設播放裝置）加回呼輸出；以參考計數初始化與結束 AUDIO 子系統；裝置格式的轉換交給 SDL。開不了裝置時回傳 `Result` 錯誤，消費端可選擇無聲繼續。
@@ -130,7 +130,7 @@ namespace Engine::Audio::Sdl {
 
 - 區塊開始時，後端呼叫 `Time::Now()` 一次，連同區塊開始前已輸出的樣本數 `F0` 構成錨點 `(T0, F0)`。只有混音器持有錨點，消費端不持有它的副本。
 - 取出的請求換算為 `start = F0 + round((at − T0) × 48000) + D`，其中 `D` 是 `scheduleDelay` 換成的樣本數（常數）。
-- `start ≥ F0`：在區塊內第 `start − F0` 個樣本（或之後的區塊）開始，記為準時。`start < F0`：在區塊開頭開始，記為遲到，`maxLateness` 更新（`v8-engine-audio-late`，待決定）。
+- `start ≥ F0`：在區塊內第 `start − F0` 個樣本（或之後的區塊）開始，記為準時。`start < F0`：在區塊開頭開始，記為遲到，`maxLateness` 更新（`v8-engine-audio-late`，2026-10-30 核准）。
 - 同一個錨點下取出的兩個請求，時間戳相差 Δ，起點恰好相差 `round(Δ × 48000)` 個樣本；不同錨點之間，誤差是錨點的抖動（回呼何時被叫醒）與裝置時鐘和 Engine 時鐘的速率差在一個區塊內的累積。每個區塊都重新取錨點，不跨區塊沿用固定偏移，所以速率差不累積。
 - 是否需要濾波（以多個錨點擬合直線）要看 L2 量到的抖動；v8 不做，列在 Replacement Criteria 4。
 - 換算、遲到判定、SPSC 的記憶體順序是本計畫最容易「看起來對、其實錯」的部分，局部用 xhigh（`xhigh-reviewer`）。
@@ -146,7 +146,7 @@ namespace Engine::Audio::Sdl {
 - `SoundLoader`（`engine/asset/src/loaders/SoundLoader.cpp`）讀 RIFF/WAVE PCM16、單聲道或立體聲，產出 `SoundAsset{sampleRate, channels, pcm16}`。它不檢查取樣率，也沒有任何測試或使用者。
 - 建議（`v8-engine-audio-clip-format`）：`GYO::Audio` 不依賴 `GYO::Engine`；消費端把 `SoundAsset` 的欄位交給 `ClipBank::Add`，取樣率不是 48 kHz 時由 `Add` 回錯。`SoundLoader` 的測試（格式錯誤、奇數長度、非 PCM）在消費端第一次用它的批次補上，或在 `v8-engine-audio-core` 順手補，由使用者決定（同一代號）。
 
-## Design Invariants（草案）
+## Design Invariants
 
 核准後，`v8-engine-audio-core` 把本節搬到 `docs/architecture/audio.md`（標題保持 `Design Invariants`），並為每一條寫上守衛。
 
@@ -208,7 +208,7 @@ v8-engine-audio
 `disk` 驅動把裝置要的每一塊樣本寫進檔案，檔案的樣本位置就是「實際播放」的位置，因此可以離線量起音。
 
 - **Engine 的 L2（`v8-engine-audio-record`，只記錄）**：一支不開視窗的程式，以 `Time::Waiter` 跑 30 FPS 的「幀」迴圈；在 60 Hz 的 Tick 格點上產生事件（不規則的間隔，例如 6、7、5 Tick），在事件之後的下一幀才送出（模擬幀量化），時間戳用事件的 Tick 時間。片段是起音陡峭的短脈衝。分析腳本在輸出檔裡找起音，和時間戳比較：起音間隔對 Tick 間隔的誤差分布，以及間隔是否落在 16.67 ms 的格點而不是 33.3 ms 的幀格點。程式同時記下每個區塊的錨點 `(T0, F0)`，用來估計 `disk` 裝置相對 Engine 時鐘的速率。
-- **一個必須先處理的事實**：`disk` 驅動以「每塊之後 `SDL_Delay(整數毫秒)`」模擬即時（見 HANDOFF「研究事實」）。SDL 在 48 kHz 的預設是每塊 1024 樣本（21.33 ms），延遲被截成 21 ms，`disk` 裝置因此比真實時間快約 1.6%，加上等待的晚醒（macOS 約 1～2 ms）又變慢。依換算規則，這個速率差會讓檔案裡的起音間隔和時間戳間隔差同樣的比例。對策（`v8-engine-audio-l2`，待決定）：L2 固定 `SDL_AUDIO_DEVICE_SAMPLE_FRAMES=480`（剛好 10 ms，不截斷），並用錨點估計的速率報告修正前後兩組誤差。
+- **一個必須先處理的事實**：`disk` 驅動以「每塊之後 `SDL_Delay(整數毫秒)`」模擬即時（見 HANDOFF「研究事實」）。SDL 在 48 kHz 的預設是每塊 1024 樣本（21.33 ms），延遲被截成 21 ms，`disk` 裝置因此比真實時間快約 1.6%，加上等待的晚醒（macOS 約 1～2 ms）又變慢。依換算規則，這個速率差會讓檔案裡的起音間隔和時間戳間隔差同樣的比例。對策（`v8-engine-audio-l2`，2026-10-30 核准）：L2 固定 `SDL_AUDIO_DEVICE_SAMPLE_FRAMES=480`（剛好 10 ms，不截斷），並用錨點估計的速率報告修正前後兩組誤差。
 - **消費端的 L2**（消費端的音效批）：30 FPS 連射，起音間隔對應射擊 Tick。判定門檻在那一批開始前宣告並由使用者核准；本計畫只提供 Engine 的 L2 結果作為門檻來源之一。
 - 真實裝置無法從檔案量起音；在真實裝置上只記錄錨點、區塊大小與遲到計數（`DriverName()` 寫進紀錄）。
 

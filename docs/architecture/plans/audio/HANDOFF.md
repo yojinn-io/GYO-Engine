@@ -1,12 +1,12 @@
 # 音效（GYO::Audio）：交接
 
-更新：2026-10-30。**狀態：`v8-engine-audio-plan` 文件寫好，等使用者核准；尚未動程式。**
+更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 未開始，等使用者指定。尚未動程式。**
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 Engine 計畫夾的慣例，不點名消費端。
 
 ## 現況
 
-- 2026-10-30：`v8-engine-audio-plan` 完成文件（本夾 README、PLAN、HANDOFF）。下一步：使用者對下面「等使用者決定」逐項決定（或「照建議」），核准後才開始 `v8-engine-audio-core`。
-- 本批的 dev_log 在使用者核准（批次完成）時與核准紀錄同一變更寫入；`docs/architecture.md` 的 Runtime boundaries 與 Architecture Delta 段落在 `v8-engine-audio-core` 加上（程式出現時才描述）。
+- 2026-10-30：`v8-engine-audio-plan` 完成文件（本夾 README、PLAN、HANDOFF），同日使用者核准 6 項待決事項全部照建議（見決策紀錄）；dev_log：[2026_10_30_engine_audio_plan](../../../dev_logs/2026_10_30_engine_audio_plan.zh-Hant.md)。下一步：使用者指定時開始 `v8-engine-audio-core`。
+- `docs/architecture.md` 的 Runtime boundaries 與 Architecture Delta 段落在 `v8-engine-audio-core` 加上（程式出現時才描述）。
 - 分支：`claude/v8-engine-audio-95a496`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -18,7 +18,7 @@
 | `v8-engine-audio-schedule` | 提交佇列與「時間戳 → 樣本位置」 |
 | `v8-engine-audio-sdl` | SDL 輸出後端 |
 | `v8-engine-audio-record` | disk 驅動的量測（只記錄）與收尾 |
-| `v8-engine-audio-producers` 等 | 下表「等使用者決定」的項目 |
+| `v8-engine-audio-producers` 等 | 2026-10-30 核准的 6 項決策（決策紀錄） |
 
 ## 閱讀入口
 
@@ -29,7 +29,7 @@
 
 ## 等使用者決定
 
-每項附機制、取捨、證據位置；第一個選項是建議。
+目前沒有。下表是 2026-10-30 核准前的原文（每項附機制、取捨、證據位置；第一個選項是建議），保留作為決策的依據；結果見決策紀錄。
 
 | 代號 | 問題 | 選項與取捨 | 證據 |
 |---|---|---|---|
@@ -40,7 +40,7 @@
 | `v8-engine-audio-l2` | L2 怎麼處理 `disk` 驅動的計時誤差；Engine 是否有自己的 L2 | **A（建議）**：Engine 有自己的 L2（只記錄），固定 `SDL_AUDIO_DEVICE_SAMPLE_FRAMES=480`（10 ms 整，不截斷），並以記下的錨點估計速率、報告修正前後兩組誤差；消費端的 L2 判定門檻在消費端的音效批開始前宣告。<br>B：只有消費端的 L2：少 2～3 h，但門檻沒有 Engine 端的來源，速率誤差會混在產品的量測裡。<br>這一項是 L2 的「構想」，不是判定；門檻依 AGENTS §14.1 在看結果前另外宣告 | 研究事實 3 |
 | `v8-engine-audio-gears` | 分批、檔位與引擎 | 照 PLAN「分批」：四批都是 high（或 medium），schedule 局部 xhigh 用 `xhigh-reviewer`，引擎全部繼承（Opus 5.5）；沒有高於主對話的項目。是否需要 ultracode：不建議（介面與風險集中在 schedule 一批，xhigh 審查者 1 人已足夠） | `agents/effort-gearbox.md`；消費端計畫的 audio-line 列（已核准「局部 xhigh 用 `xhigh-reviewer`（引擎繼承）」） |
 
-本計畫的範圍（PLAN「不做」）若要調整，例如 v8 就要迴圈或停止聲音，也在核准時一起說；那會改變 Replacement Criteria 2 與介面形狀。
+本計畫的範圍（PLAN「不做」）若要調整，例如 v8 就要迴圈或停止聲音，另提給使用者決定；那會改變 Replacement Criteria 2 與介面形狀。
 
 ## 決策紀錄
 
@@ -49,6 +49,12 @@
 | 2026-10-08 | （繼承）Engine 子系統的分配包含 Audio；每個 Engine 子系統與它的第一個消費端放在同一個 PR | 消費端 v7 D27；時間、執行緒與 Trace 計畫 |
 | 2026-10-08 | （繼承）audio 計畫夾在音效批開始時建立；2026-10-14 改為在消費端 v8 的音效批開始時建立 | 消費端 v7 D28、D76 |
 | 2026-10-30 | （繼承）消費端 v8 把音效排第一優先；Engine 部分分為 plan → 實作兩批，實作局部 xhigh 用 `xhigh-reviewer`（引擎繼承） | 消費端 v8 計畫的 audio-line |
+| 2026-10-30 | `v8-engine-audio-producers`＝A：每個生產者執行緒一個 SPSC 提交端，建立混音器時固定上限（預設 4） | 使用者：「audio 計畫的 6 項待決事項都照建議核准」 |
+| 2026-10-30 | `v8-engine-audio-clip-format`＝A：`ClipBank` 複製 PCM16，非 48 kHz 回錯，`GYO::Audio` 不依賴 `GYO::Engine`；`SoundLoader` 的測試在 `v8-engine-audio-core` 補 | 同上 |
+| 2026-10-30 | `v8-engine-audio-delay`＝A：`scheduleDelay` 可設定，預設值在 `v8-engine-audio-sdl` 量完 macOS 與 Windows 的區塊大小後提案 | 同上 |
+| 2026-10-30 | `v8-engine-audio-late`＝A：遲到的請求在區塊開頭立刻播放，計入 `playedLate` 與 `maxLateness`，不丟棄 | 同上 |
+| 2026-10-30 | `v8-engine-audio-l2`＝A：Engine 有自己的 L2（只記錄），固定 `SDL_AUDIO_DEVICE_SAMPLE_FRAMES=480`，以錨點估計速率並報告修正前後的誤差；消費端 L2 的門檻在消費端音效批開始前宣告 | 同上 |
+| 2026-10-30 | `v8-engine-audio-gears`：照 PLAN「分批」的檔位與引擎（全部繼承，schedule 局部 xhigh 用 `xhigh-reviewer`），不用 ultracode | 同上 |
 
 ## 研究事實（2026-10-30）
 
@@ -70,10 +76,9 @@
 ## 未結事項
 
 - 真實裝置上的區塊大小、回呼抖動、裝置切換（拔耳機）時 SDL 的行為：在 `v8-engine-audio-sdl` 只記錄，Windows 在 CI 以外的實機只做 CI 做不到的項目。
-- 若 `v8-engine-audio-producers` 選 C，`v8-engine-audio-schedule` 的估時改為 6～8 h，總估時重算。
 
 ## 時間紀錄
 
 | 批次 | 估時 | 實際 | 備註 |
 |---|---|---|---|
-| `v8-engine-audio-plan` | 3～5 h（開始時重估：3 h，範圍明確、只寫文件） | 約 1.5 h | 閱讀 v8／v7 計畫、`SoundLoader`、SDL 隔離契約與 SDL 3.4 的音效驅動原始碼 |
+| `v8-engine-audio-plan` | 3～5 h（開始時重估：3 h，範圍明確、只寫文件） | 約 1.5 h（核准與記錄另約 0.2 h） | 閱讀 v8／v7 計畫、`SoundLoader`、SDL 隔離契約與 SDL 3.4 的音效驅動原始碼 |
