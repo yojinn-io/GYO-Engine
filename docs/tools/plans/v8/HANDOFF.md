@@ -33,7 +33,8 @@
 | `v8-tool-ui-schema-version` | `text_field` 怎麼進 schema | v1 的集合寫明是封閉的。升 `version: 2`（讀取端接受 1、2；舊讀取端明確拒絕 v2）／留在 v1 加元素（舊讀取端以「未知元素」拒絕，但版本號沒告訴人為什麼） | 升 v2 | 契約文件與 codec |
 | `v8-tool-ui-edit-policy-owner` | 文字編輯政策放哪 | 通用的部分（游標、刪除、全選、貼上、組字顯示）放 `GYO::Ui`（Architecture Delta：Ui 的責任變大）／全部留在產品，Ui 只畫（輸入框就不算元件）。字元過濾：(i) `text_field` 宣告 `max_length`，過濾由產品在提交時檢查／(ii) 資料裡宣告允許的字元集合（簡單、封閉，但開始往設定語言走，AGENTS §9）／(iii) 產品在執行時提供過濾函式 | 通用部分在 Ui；過濾用 (iii)：規則留在產品，資料不帶產品語意 | Ui 的 Design Invariants 怎麼寫 |
 | `v8-tool-ui-invariants` | 在 ui_toolchain.md 新增 `Design Invariants` 節 | AGENTS §3：節的新增要使用者同意 | 同意後在 `v8-tool-ui-invariants` 寫，內容另給你看 | 能不能開始加元件 |
-| `v8-tool-ui-editor-mount-ux` | ui_editor「Mount Read-Only Content」的載入方式 | 現況：每次啟動都要手打 Asset Root（與 catalog）路徑，或用 `--asset-root` 參數；editor 不寫任何設定檔（`io.IniFilename = nullptr`，ui_toolchain.md「不寫 project file、imgui.ini」）。選項：(a) 加系統的檔案／資料夾選擇窗（SDL3 `SDL_ShowOpenFolderDialog`），不存狀態／(b) 記住最近用過的路徑，存在使用者設定夾（改變「不寫任何檔」的約定）／(c) 開啟文件時從文件位置推測資產根（違反 ui_toolchain.md「不猜 catalog」與 AGENTS §9 不以命名推測） | 先問使用者實際卡在哪裡 | ui_editor 的批 |
+| `v8-engine-os-list-directory` | ImGui 選擇窗要列目錄，但 `GYO::Os` 沒有列目錄的 API，而 os.md Design Invariant 2（R4）禁止工具直接用 `std::filesystem` 碰檔案系統 | (a) `GYO::Os::Files` 加兩個窄的原語：列一層目錄、檔案系統的根。這是 Engine OS 層的 Architecture Delta（OS 已收口，os-closeout D78；需求來自本功能）。os.md Replacement Criteria 4 說「大量列目錄、監看」要停下重畫 os／io 的分工；這裡是同步、一次一層，不在其內，但要你判斷／(b) 用 SDL3 的 `SDL_EnumerateDirectory`（ui_editor 已連 SDL）：不改 Engine，但繞過「檔案存取只經 engine/os」（不變式 2 的精神），也要你同意／(c) 用現成的 ImGui 選擇窗程式庫（ImGuiFileDialog 等）：內部直接用 `std::filesystem`／`dirent`，違反 R3／R4 | (a) | 有沒有 Engine 批 |
+| `v8-tool-ui-editor-file-browser-scope` | ImGui 選擇窗用在哪幾個地方、放哪 | Mount（選資料夾）／再加 Open、Export（選檔案、存檔要能打檔名）。程式放 ui_editor 內（只有一個使用者，AGENTS §1）；voxel、assets 之後也要用時，再以實際的重複提出抽共用 | 三處都用；放 ui_editor 內 | 批的大小 |
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ime-input-delta` | 組字事件由誰做 | Engine 的 Input（計畫夾 input-and-present；只加不改，不變式 1）在工具線做／交給 Engine 的會話做 | 工具線做，記到 input-and-present 的 HANDOFF；先等 `v8-tool-ui-ime-observe` 的結果 | 有沒有 Engine 批 |
 
@@ -41,6 +42,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的載入改用 ImGui 畫的選擇窗（跨平台），不用系統原生的選擇窗，也不記住路徑。參考 [AssetPack](https://github.com/yojinn-io/AssetPack)：一顆「開資料夾」按鈕、從資料夾導出固定的檔案並顯示出來（它的選擇窗本身是 Windows 原生的 `IFileOpenDialog`，`src/platform/WinFileDialog.cpp`，不沿用） | 「這個用ImGUI的，可以兼容跨平台。」「https://github.com/yojinn-io/AssetPack 你可以參考這個專案」 |
 | `v8-tool-scope-ui-first` | （2026-10-30）先處理 `v8-tool-ui-editor-widgets`。voxel 與 assets 沒有暫停，等使用者逐個給方案再討論；第一版 Claude 自己寫的地圖建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端）撤下。取代同日的 `v8-tool-scope-ui-only`（Claude 誤解成「暫停」） | 「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」→「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」 |
 
 ## 紀錄
@@ -50,3 +52,4 @@
 - 2026-10-30：使用者問 pv6 已多處過時，引用它的規定有沒有問題。查證：pv7（`protocol-v7.zh-Hant.md` 第 5 行）與 pv8（`protocol-v8.zh-Hant.md` 第 4 行）都寫「沒有改寫的條款原樣沿用」，兩者都沒改寫 pv6 §2 的 arena digest 條款；pv8 草稿第 54 行明寫蹲下參數「不進 `arena_digest`」；現行程式仍帶 `arena_digest`（`client_v7.proto:24`、`runtime_v7.proto:18`、`IpcHost.cpp:489`）。結論：條文現在仍有效，但第一版只引 pv6、沒有寫出這條沿用鏈，是引用不完整；pv8 重開中，新範圍有可能改它。README 的現況表已補上沿用鏈。
 - 2026-10-30：使用者把範圍縮小為 UI Editor（`v8-tool-scope-ui-only`）。README 撤下 voxel 與 assets 的提案，刪除只為這兩個工具寫的 ultracode prompt 草稿，HANDOFF 撤下相關的待決事項。
 - 2026-10-30：使用者更正：voxel、assets 不是暫停，是要討論，會逐個給方案（`v8-tool-scope-ui-first`）。另問兩件事：ui_editor 載入配置的地方、頁面跳轉的 if／else。讀了 `EditorApp.cpp:566-616`、`:1999-2030`（掛載對話框）、`ObjectFpsUi.cpp:344-500`（v2 的分派與 `CanvasFor`）、`PvpApplication.cpp` 的 `Execute`，記成 `v8-tool-ui-editor-mount-ux`、`v8-tool-ui-navigation`。
+- 2026-10-30：使用者決定載入改用 ImGui 的選擇窗並給了 AssetPack 作參考（`v8-tool-ui-editor-mount-ux`）。讀了 AssetPack 的 README、`src/platform/WinFileDialog.*`、`src/ui/UiProject.cpp:415-470`：可借的是流程（一顆按鈕選資料夾、顯示導出的路徑、未存時先確認），選擇窗本身是 Windows 原生。查到 `GYO::Os::Files` 沒有列目錄（`engine/os/include/engine/os/Files.hpp`），os.md 不變式 2（R4）禁止工具直接用 `std::filesystem`，所以新增待決 `v8-engine-os-list-directory`、`v8-tool-ui-editor-file-browser-scope`，README 加兩批。
