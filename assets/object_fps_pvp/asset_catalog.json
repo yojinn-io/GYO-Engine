@@ -25,6 +25,7 @@
     { "id": "object_fps_pvp.texture.nailer_v2.skin_shadow", "type": "texture", "path": "weapons/nailer_v2/viewmodel/textures/LowPoly_Skin_Shadow.png" },
     { "id": "object_fps_pvp.texture.nailer_v2.gun", "type": "texture", "path": "weapons/nailer_v2/viewmodel/textures/Nailer1_D.png" },
     { "id": "object_fps_pvp.animset.nailer_v2.viewmodel", "type": "text", "path": "weapons/nailer_v2/viewmodel/viewmodel.animset.json" },
+    { "id": "object_fps_pvp.anim_events.nailer_v2.viewmodel", "type": "text", "path": "weapons/nailer_v2/viewmodel/viewmodel.anim_events.json" },
 
     { "id": "object_fps_pvp.model.character.player_v20", "type": "model", "path": "characters/player/Player_V20.fbx" },
 

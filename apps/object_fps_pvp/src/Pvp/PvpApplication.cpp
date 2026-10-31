@@ -634,14 +634,23 @@ struct PvpApplication::Impl final {
                     static_cast<double>(state.snapshot->tick - weaponFeedback.reloadStartTick) / AuthorityTickRate : 0;
                 weaponAction = fps::WeaponViewModelAction::Reload;
                 ++weaponFeedback.reloadAnimationStarts;
-                // Ending with the reload, as the animation does: from the reload's
-                // authority start (as far as it has already run), offset so the
-                // clip's last click lands at the reload's end.
+                // The clip's animation events sound where the stretched clip shows
+                // them: each moment becomes Engine time from the reload's authority
+                // start (as far as it has already run), all scheduled now. A moment
+                // already past plays late, at once. The local weapon sounds centred.
                 const double reloadSeconds = static_cast<double>(weaponFeedback.reloadEndTick -
                     weaponFeedback.reloadStartTick) / AuthorityTickRate;
-                sound.Play(SoundCue::Reload, now + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(
-                        ReloadSoundOffsetSeconds(reloadSeconds, sound.ClipSeconds(SoundCue::Reload)) - reloadAnchorSeconds)),
-                    CentredGains(sound.Settings().cues[static_cast<std::size_t>(SoundCue::Reload)].volume));
+                const double clipSeconds = weapon->GetActionDurationSeconds(fps::WeaponViewModelAction::Reload);
+                for (const auto& event : weapon->GetActionEvents(fps::WeaponViewModelAction::Reload)) {
+                    const auto* eventSound = FindEventSound(sound.Settings(), event.name);
+                    if (!eventSound) continue;
+                    const auto offset = EventSoundOffsetSeconds(event.seconds, clipSeconds, reloadSeconds,
+                                                                eventSound->syncSeconds);
+                    if (!offset) continue;
+                    sound.Play(eventSound->cue, now + std::chrono::duration_cast<Clock::duration>(
+                            std::chrono::duration<double>(*offset - reloadAnchorSeconds)),
+                        CentredGains(sound.Settings().cues[static_cast<std::size_t>(eventSound->cue)].volume));
+                }
                 ++weaponFeedback.animationRevision;
             }
             duration = static_cast<double>(weaponFeedback.reloadEndTick - weaponFeedback.reloadStartTick) / AuthorityTickRate;

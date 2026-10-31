@@ -16,6 +16,8 @@ enum class ModelErrorCode : std::uint8_t {
     InvalidArgument,
     // Two models cannot share an animation under the given bindings.
     IncompatibleAnimation,
+    // A gyo.anim_events document breaks its contract or does not fit the model.
+    InvalidAnimationEvents,
 };
 
 [[nodiscard]] constexpr const char* ToString(const ModelErrorCode code) noexcept {
@@ -23,6 +25,7 @@ enum class ModelErrorCode : std::uint8_t {
     case ModelErrorCode::InvalidModel: return "InvalidModel";
     case ModelErrorCode::InvalidArgument: return "InvalidArgument";
     case ModelErrorCode::IncompatibleAnimation: return "IncompatibleAnimation";
+    case ModelErrorCode::InvalidAnimationEvents: return "InvalidAnimationEvents";
     }
     return "Unknown";
 }

@@ -8,6 +8,7 @@
     "Nailer1_Material": "object_fps_pvp.texture.nailer_v2.gun"
   },
   "animation_set_asset_id": "object_fps_pvp.animset.nailer_v2.viewmodel",
+  "animation_events_asset_id": "object_fps_pvp.anim_events.nailer_v2.viewmodel",
   "anchor_node": "main_j",
   "muzzle": {
     "node": "main_j",

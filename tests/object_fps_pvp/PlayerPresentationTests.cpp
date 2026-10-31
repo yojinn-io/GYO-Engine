@@ -1023,6 +1023,36 @@ TEST_CASE("characterization: production weapon mount rotation normalizes as the 
     CHECK(loaded.w == legacy.w);
 }
 
+TEST_CASE("production weapon binds its reload animation events within the reload clip") {
+    PresentationAssets fixture;
+    std::string error;
+    const auto definition = fps::LoadWeaponPresentationDefinition(
+        fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error);
+    REQUIRE_MESSAGE(definition, error);
+    const auto& reload = definition->events[2]; // Idle, Shoot, Reload, Draw, Hide
+    REQUIRE_FALSE(reload.empty());
+    const double duration = definition->model->clips[definition->clips[2]].durationSeconds;
+    for (const auto& event : reload) CHECK(event.seconds <= duration);
+    CHECK(std::any_of(reload.begin(), reload.end(), [](const auto& event) { return event.name == "magazine_in"; }));
+    CHECK(definition->events[0].empty());
+}
+
+TEST_CASE("weapon presentation rejects animation events of another model or a missing clip") {
+    const auto rejected = [](auto edit) {
+        PresentationAssets fixture;
+        fixture.Override("object_fps_pvp.anim_events.nailer_v2.viewmodel", edit);
+        std::string error;
+        CHECK_FALSE(fps::LoadWeaponPresentationDefinition(
+            fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error));
+        return error;
+    };
+    CHECK(rejected([](nlohmann::json& json) { json["model_asset_id"] = "object_fps_pvp.model.other"; })
+              .find("belong to model") != std::string::npos);
+    CHECK(rejected([](nlohmann::json& json) { json["clips"]["Armature|Reload2"] = json["clips"]["Armature|Reload"]; })
+              .find("InvalidAnimationEvents") != std::string::npos);
+    CHECK(rejected([](nlohmann::json& json) { json["version"] = 2; }).find("InvalidAnimationEvents") != std::string::npos);
+}
+
 TEST_CASE("characterization: production weapon muzzle keeps its load-time value and drifts only under recoil") {
     PresentationAssets fixture;
     std::string error;
