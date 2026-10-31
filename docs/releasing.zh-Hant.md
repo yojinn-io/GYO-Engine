@@ -15,8 +15,8 @@
 | 層級 | 何時執行 | 內容 | 擋住什麼 |
 |---|---|---|---|
 | **L1**（合併閘門） | Ready 的 pull request、推送 master、手動執行 Cross-platform CI | 每個平台一個 job，以 `ci-<os>` preset 建置登錄啟用的遊戲、預設工具、Engine 與測試，並執行 `cpu`／`shader` 標籤的測試。Linux 列另外執行 host shader 測試、以 Lavapipe 執行的通用 GPU 測試、core 基準、Go 的 vet／test／race，以及 Go 服務的交叉編譯。不封裝 | PR 合併（`CI gate`） |
-| **master 完整執行**（L1 + Quick） | 推送 master、手動執行 Cross-platform CI | 在 L1 之外，以 `profile: quick` 對全部產品執行 `build-and-validate.yml`。四個 toolchain 列與遊戲各平台列進行封裝、安裝後 Quick 驗收與壓縮，並上傳 Actions artifacts | Snapshot 發佈（全部 train） |
-| **Release** | **Prepare Release**（手動） | 針對所選 train，以 `profile: release` 建置並驗收四個 toolchain 基準列與該 train 的各列。所有列都執行測試、host shader 測試與 Release checks，Linux 列執行 Go checks | 建立 tag 與 Draft |
+| **master 完整執行**（L1 + Quick） | 推送 master、手動執行 Cross-platform CI | 在 L1 之外，以 `profile: quick` 對全部產品執行 `build-and-validate.yml`。三個 toolchain 列與遊戲各平台列進行封裝、安裝後 Quick 驗收與壓縮，並上傳 Actions artifacts | Snapshot 發佈（全部 train） |
+| **Release** | **Prepare Release**（手動） | 針對所選 train，以 `profile: release` 建置並驗收三個 toolchain 基準列與該 train 的各列。所有列都執行測試、host shader 測試與 Release checks，Linux 列執行 Go checks | 建立 tag 與 Draft |
 | **L4**（實機） | 由人在實機上執行 | 遊戲以 `release_evidence` 宣告的項目（實體 GPU、真實螢幕等）。CI 不執行 | 遊戲 train 的 Prepare Release（沒有證據參照就在建置前失敗），以及發佈者的確認 |
 
 ```text
@@ -38,15 +38,15 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 
 | 產品 | 壓縮檔（各附 `.sha256`） | 平台 | 擁有者 |
 |---|---|---|---|
-| 設計工具鏈（toolchain） | `gyo-toolchain-<platform>.tar.gz`（根目錄 `gyo-toolchain`） | 固定四個：`windows-x64`、`linux-x64`、`macos-arm64`、`macos-x64` | `engine/config/tools.csv` 中 `release` 啟用的工具（目前為 UI Editor 的 GUI 預設模式）及必要 runtime libraries |
-| 遊戲 | `gyo-<game>-<platform>.tar.gz`（根目錄 `gyo-<game>`）；`object_fps_pvp` 含 client（`main`）與 `match` | `projects.csv` 中該遊戲 `enabled` 與平台欄位都啟用者；`macos` 欄同時啟用 `macos-arm64` 與 `macos-x64` | `apps/<game>`、`assets/<game>`、`build/acceptance/<game>`、`projects.csv` 的那一列 |
+| 設計工具鏈（toolchain） | `gyo-toolchain-<platform>.tar.gz`（根目錄 `gyo-toolchain`） | 固定三個：`windows-x64`、`linux-x64`、`macos-arm64` | `engine/config/tools.csv` 中 `release` 啟用的工具（目前為 UI Editor 的 GUI 預設模式）及必要 runtime libraries |
+| 遊戲 | `gyo-<game>-<platform>.tar.gz`（根目錄 `gyo-<game>`）；`object_fps_pvp` 含 client（`main`）與 `match` | `projects.csv` 中該遊戲 `enabled` 與平台欄位都啟用者；`macos` 欄同時啟用 `macos-arm64` 與 `macos-x64`，但只發布 `macos-arm64`（`macos-x64` 只供本機建置，見第 5 節） | `apps/<game>`、`assets/<game>`、`build/acceptance/<game>`、`projects.csv` 的那一列 |
 | 遊戲的 Go 服務 | `gyo-<game>-<role>-<platform>.tar.gz`；`object_fps_pvp` 為 `gyo-object_fps_pvp-gateway-linux-x64.tar.gz` 與 `...-windows-x64.tar.gz` | 只有 `gyo_app_add_go_service(... PLATFORMS ...)` 宣告的平台（gateway 為 Linux 與 Windows） | 該遊戲（`apps/<game>/go.mod`） |
 
 - 目前登錄中啟用的遊戲只有 `object_fps_pvp`（`object_fps`、`object_fps_v2` 為 `enabled=0`）。`tools.csv` 中 `release=true` 的工具只有 `ui_editor`；`object_fps_preview` 依賴遊戲，是本機工具，不進入發佈包。
 - `services/gyo_gateway` 是 Engine 層的 Go module（擁有者 `engine`），提供可重複使用的 HTTP、session 與 framing 機制，不依賴任何遊戲。CMake 在每種配置都記錄它，所以 L1 的 Linux 列與 toolchain 列即使沒有遊戲也會執行 vet／test／race。它不單獨產生壓縮檔。
-- Train 由登錄推導：`tools` train（四平台 toolchain），以及每個啟用遊戲各一條 train（例如 `object_fps_pvp`）。遊戲 train 包含該遊戲的原生套件，以及 Linux 封裝列在 `go-services.json` 記錄的服務壓縮檔。同一個 release 的 client、match 與 gateway 來自同一 commit 與同一版本。`tools`、`toolchain` 不能作為遊戲 id。
+- Train 由登錄推導：`tools` train（三平台 toolchain），以及每個啟用遊戲各一條 train（例如 `object_fps_pvp`）。遊戲 train 包含該遊戲的原生套件，以及 Linux 封裝列在 `go-services.json` 記錄的服務壓縮檔。同一個 release 的 client、match 與 gateway 來自同一 commit 與同一版本。`tools`、`toolchain` 不能作為遊戲 id。
 - 發佈物是可執行產品與必要依賴，不提供 Engine SDK 或 source archive。Toolchain 不帶遊戲 source／assets；遊戲包不帶 CI、tests、acceptance executable、editor 或來源美術。引擎靜態連結進各產品，第三方動態 runtime 按需要部署。
-- 沒有遊戲時（CSV 只有標頭或全部停用）仍可發佈四平台 toolchain。已選中的遊戲缺檔、編譯失敗或必要驗收失敗，會讓該次執行整體失敗。
+- 沒有遊戲時（CSV 只有標頭或全部停用）仍可發佈三平台 toolchain。已選中的遊戲缺檔、編譯失敗或必要驗收失敗，會讓該次執行整體失敗。
 
 ## 3. 觸發與執行內容
 
@@ -56,7 +56,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 | 建立 Draft PR 或推送到 Draft PR | Cross-platform CI、Package trial | `Select CI scope`（CI 政策測試與範圍判定，理由 `draft`）。L1／Quick 略過，`CI gate` 以預期略過通過。Package trial 在沒有標籤時不建置 | `Select CI scope`、`CI gate`、`Select trial packaging`（略過的 job 也會顯示） |
 | 只變更 `docs/` 底下的 PR | 同上 | 理由 `docs-only`。略過 L1，`CI gate` 通過 | 同上 |
 | 已變更程式的 Ready PR，再推送只改 `docs/` 的 commit | 同上 | 理由 `docs-increment`。沿用較早一個 commit 已通過的 L1，略過 L1，`CI gate` 通過；條件見下方。條件不成立時理由為 `pull-request`，照常執行 L1 | 同上 |
-| Ready 的 PR（建立、推送、改為 Ready、重新開啟） | 同上 | 理由 `pull-request`。執行四列 `L1 / <platform>`；不跑 Quick，也不封裝 | `Select CI scope`、`L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`L1 / macos-x64`、`Quick acceptance`（略過）、`CI gate`、`Select trial packaging`（建立／推送／重新開啟時） |
+| Ready 的 PR（建立、推送、改為 Ready、重新開啟） | 同上 | 理由 `pull-request`。執行三列 `L1 / <platform>`；不跑 Quick，也不封裝 | `Select CI scope`、`L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`Quick acceptance`（略過）、`CI gate`、`Select trial packaging`（建立／推送／重新開啟時） |
 | 開啟中的 PR 加上 `package` 標籤 | Package trial | 以 Quick 封裝全部產品並上傳 Actions artifacts；標籤存在期間，每次推送都重新建置 | `Trial packages / ...`（不是必要檢查） |
 | 手動執行 **Package trial** | Package trial | 在所選分支執行相同的 Quick 封裝 | — |
 | 推送 master（合併） | Cross-platform CI | L1 + Quick + `CI gate`；通過後 `Snapshot / <train>` 為每條 train 發佈 snapshot；L1 儲存編譯快取 | `L1 / ...`、`Quick acceptance / ...`、`CI gate`、`Plan snapshot trains`、`Snapshot / tools`、`Snapshot / object_fps_pvp` |
@@ -67,7 +67,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 - 範圍判定（`build/ci/common/ci_scope.py`）在 job 內進行，不使用觸發條件的 path／draft 篩選，因此 `CI gate` 在每個 PR 事件都會回報。
 - `docs-only` 只認以 `docs/` 開頭的路徑。變更根目錄 `README*.md`、`AGENTS.md` 等檔案的 PR 會執行 L1。重新命名會拆開判定，從 `docs/` 以外移入 `docs/` 的檔案也算非文件變更。
 - `docs-increment`：從 PR head 的前一個 commit 沿第一親代往回找，最多 20 個，找到第一個同時滿足下列條件的 commit，就沿用它的 L1。
-  - 四列 `L1 / <platform>` 的最新 check run 都是 GitHub Actions 的 `success`。略過、取消、失敗或尚未完成都不算。
+  - 三列 `L1 / <platform>` 的最新 check run 都是 GitHub Actions 的 `success`。略過、取消、失敗或尚未完成都不算。
   - 從它到 head 的變更只在 `docs/` 底下，判定方式與 `docs-only` 相同。
   - 目前 master 的尖端是它的祖先。master 只會前進，所以它當時測試的合併結果就是它本身；現在的合併結果就是 head，兩者的程式完全相同。
   - master 前進了、中間有程式變更、程式那次推送的 L1 被新推送取消、或讀取 check run 失敗，一律照常執行 L1。最壞情況是多跑一次，不會略過未測試的程式。
@@ -93,25 +93,28 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 | `linux-x64` | `ubuntu-24.04` | `ci-linux`、gcc-14 | 原生 | 以 Xvfb + Mesa Lavapipe（軟體 Vulkan）執行通用 GPU 測試與產品 GPU checks | L1 的 host shader 測試、core 基準、Go vet／test／race 與 Go 服務交叉編譯只在此列 |
 | `windows-x64` | `windows-2025` | `ci-windows`、MSVC（`msvc-vs2026`） | 原生 | 無 | 封裝 jobs 的 toolchain 列也執行 core 基準；Release 另執行獨立複製驗證（`app_copy_integration.py`） |
 | `macos-arm64` | `macos-15`（arm64） | `ci-macos`、Xcode 16.4 的 AppleClang，部署目標 13.3 | 原生 | 無 | 封裝 jobs 的 toolchain 列也執行 core 基準 |
-| `macos-x64` | `macos-15`（在 arm64 host 交叉編譯） | `ci-macos-x64`（`CMAKE_OSX_ARCHITECTURES=x86_64`，部署目標 13.3） | 經 Rosetta 2 轉譯執行 | 無 | 沒有實體 Intel Mac 驗收；runner 無法使用 Rosetta 2 時在建置前失敗；core 基準由 host 列負責 |
+
+- **`macos-x64` 只供本機建置**（2026-10-31 起）：CI 沒有 `macos-x64` 列，Snapshot 與 Release 也不發布它。在 Intel Mac 上仍可用 `ci-macos-x64` preset 建置、封裝與執行安裝驗收（第 10 節），產品的 `checks.json` 與 Go 服務也可以宣告它；但沒有任何 CI 驗證，發布時一律略過。發布平台的清單是 `build/acceptance/common/package_contract.py` 的 `RELEASE_PLATFORMS`，可建置平台是同一檔案的 `PLATFORMS`。
+  - 以前的做法是在 arm64 runner 上交叉編譯、經 Rosetta 2 轉譯執行測試與安裝驗收。拿掉後失去的保證：x86_64 macOS 的建置、CPU 測試與安裝驗收不再由 CI 檢查，Intel Mac 上的問題只能在本機發現。
 
 - CI 沒有實體 GPU 驗收。軟體 Vulkan 與 Windows／macOS hosted runner 的結果不代表實體 GPU 已驗證；遊戲需要的實機確認屬於 L4（第 8 節）。
 - 封裝 jobs 的 macOS 列在使用 shader bundle 的配置中，會確認可以離線編譯 Metal。
 - Go 服務在 Linux 列以 `CGO_ENABLED=0` 交叉編譯到各平台；CI 不執行服務程式本身。
 - Linkage 檢查要求 macOS 套件內的程式與原生函式庫只含目標架構。
-- 每列 Summary 列出建置 host／目標與 CPU 執行方式，壓縮檔的 `build_metadata.json` 也以 `cpu_execution`（`native` 或 `rosetta2`）記錄。Snapshot 與 Draft 的說明會自動列出各壓縮檔的驗證等級（原生或交叉編譯、通過的 checks 數、是否經 Rosetta 2、有無 GPU checks、沒有實體 GPU）。
+- 每列 Summary 列出建置 host／目標與 CPU 執行方式，壓縮檔的 `build_metadata.json` 也以 `cpu_execution`（目前只有 `native`）記錄。Snapshot 與 Draft 的說明會自動列出各壓縮檔的驗證等級（原生或交叉編譯、通過的 checks 數、有無 GPU checks、沒有實體 GPU）。
 
 ## 6. 快取與初次執行
 
-- **編譯快取（sccache v0.18.0）**：`native-setup` 讓所有原生 job 的編譯經過 sccache。快取 key 依平台、toolchain、編譯器版本與 preset 區分，因此 `macos-x64` 的目標物件不會與 arm64 混用。**只有 master 上的 L1 會儲存**（推送 master，或在 master 手動執行）；PR 的 L1、Quick、trial 與 Prepare Release 只讀取最新的種子。
-- **Host 工具**：Shader 編譯器等 host 工具依 runner 平台（host）以 `actions/cache` 儲存。`macos-arm64` 與 `macos-x64` 共用同一份 arm64 原生工具，目標架構不會帶進 host 工具建置。
+- **編譯快取（sccache v0.18.0）**：`native-setup` 讓所有原生 job 的編譯經過 sccache。快取 key 依平台、toolchain、編譯器版本與 preset 區分，因此 `macos-x64` 的目標物件不會與 arm64 混用。儲存的 key 也包含 runner 映像版本（`ImageVersion`）：託管映像是逐步替換的，同一個編譯器版本字串下可能同時存在 SDK 或系統標頭不同的映像，用另一個映像的種子幾乎全部未命中（2026-10-30 的 macOS 命中率 2.8%）。讀取時先找同一映像的最新種子，沒有才退回不分映像的最新種子。**只有 master 上的 L1 會儲存**（推送 master，或在 master 手動執行）；PR 的 L1、Quick、trial 與 Prepare Release 只讀取最新的種子。
+- **Host 工具**：Shader 編譯器等 host 工具依 runner 平台（host）以 `actions/cache` 儲存。目標架構不會帶進 host 工具建置。
+- **測試並行**：L1 與封裝 job 的 ctest 以該列的建置並行數（`CMAKE_BUILD_PARALLEL_LEVEL`，Windows／Linux 為 4、macOS 為 2）同時執行。導入時的壓力測試是每個測試最多 5 次、3 列都沒有失敗（run 41162780271）。會互相干擾的測試要用 `RESOURCE_LOCK` 或 `RUN_SERIAL` 標出，不要讓 CI 改回串行。
 - **Go**：`actions/setup-go` 以各 module 的 `go.mod`／`go.sum` 為 key 快取 module。
 
 初次執行或更新 toolchain 後可預期的情況：
 
 - master 的 L1 尚未完成過，或編譯器／Xcode／preset 改變之後，沒有可用的種子，PR 的 L1 與封裝 jobs 會全部重新編譯。macOS 列平行數為 2，最慢；每個原生 job 上限 120 分鐘。
 - 新 toolchain 的種子要等下一次推送 master 的 L1 儲存後才生效；只反覆執行 PR 不會產生種子。
-- `macos-x64` 列在缺少 Rosetta 2 的 runner 上會嘗試安裝，仍無法使用時在建置前以明確錯誤失敗；runner image 沒有固定的 Xcode 16.4 時同樣失敗。
+- Runner image 沒有固定的 Xcode 16.4 時，macOS 列在建置前以明確錯誤失敗。
 - 只有 workflow 已在預設分支時，GitHub 才會顯示 **Run workflow**（手動執行）。新增 workflow 的 PR 要等合併後才能手動執行；所選來源分支也必須包含相同的 workflow 與支援程式。
 - 儲存庫沒有 `package` 標籤時，先建立一次（第 10.3 節）。
 - 第一個 snapshot 沒有需要刪除的舊 snapshot。
@@ -134,7 +137,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 ## 8. 遊戲 train 的 L4 證據
 
 - 項目由遊戲自己在 `build/acceptance/<game>/checks.json` 的選用欄位 `release_evidence` 宣告。每個項目只有三個欄位：`name`（識別字）、`description`（單行，最多 300 字元）、`platforms`（四平台的子集合），且只套用到該 train 啟用的平台。
-- `object_fps_pvp` 在四個平台宣告 `gui_visible_latency`（在真實螢幕上短測 GUI 可見延遲）與 `physical_gpu_visual`（在實體 GPU 上檢查畫面）。
+- `object_fps_pvp` 在四個平台（含只供本機的 `macos-x64`，發布時略過）宣告 `gui_visible_latency`（在真實螢幕上短測 GUI 可見延遲）與 `physical_gpu_visual`（在實體 GPU 上檢查畫面）。
 - 不設 self-hosted runner，CI 也不執行這些項目。由人在實機上執行，把結果記錄在 issue、PR、discussion 或 artifact，再把參照（單行、最多 500 字元、不以 `-` 開頭）填入 Prepare Release 的 `l4_evidence`。
 - 遊戲宣告了項目而 `l4_evidence` 為空時，Prepare Release 在建置前的第一個 job 就失敗；反過來，沒有項目的 train（例如 `tools`）若填入 `l4_evidence` 也會失敗。Snapshot 不使用 L4 證據。
 - Draft 說明會加入「Real-device evidence (L4)」一節，列出證據參照（網址顯示為自動連結，其他內容顯示為程式碼，不解讀為 Markdown）與各項目的核對清單。CI 只檢查有無參照，證據內容由發佈者確認。
@@ -169,7 +172,7 @@ gh pr create --draft --base master --fill        # Draft PR
    gh pr checks <n> --watch
    ```
 
-   會執行 `L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`L1 / macos-x64` 與 `CI gate`。若改為 Ready 時 head commit 沒有變，新的 `CI gate` 要等 L1 結束才出現，期間仍顯示 Draft 執行的通過結果。**新的 `CI gate` 回報前，不要合併或啟用 auto-merge。**
+   會執行 `L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64` 與 `CI gate`。若改為 Ready 時 head commit 沒有變，新的 `CI gate` 要等 L1 結束才出現，期間仍顯示 Draft 執行的通過結果。**新的 `CI gate` 回報前，不要合併或啟用 auto-merge。**
 3. 之後每次推送都會取消同一 PR 的舊執行並重跑 L1。
 4. 若變更了 `.github/`、`build/ci/`、`build/acceptance/` 或封裝 CMake，合併前也要確認封裝路徑（第 10.3 節，或下列指令）：
 
@@ -272,7 +275,7 @@ Tag 結尾的 7 個字元是 master commit 的 SHA。說明中的「CI verificat
    gh run watch <run-id> --exit-status
    ```
 
-   `gh workflow run` 不會回傳 run ID，run 登錄也需要幾秒，因此請從清單中找出 `displayTitle` 為 `Prepare Release / tools / v2026.10.1 / master` 的 run，把它的 `databaseId` 交給 `gh run watch`，並確認 `headSha` 與步驟 1 的 commit 相同。第一個 job 的 Summary 會列出 train、tag 與來源 commit；接著以 Release profile 建置並驗收四個 toolchain 列，通過後建立 tag `tools-v2026.10.1` 並準備 Draft。
+   `gh workflow run` 不會回傳 run ID，run 登錄也需要幾秒，因此請從清單中找出 `displayTitle` 為 `Prepare Release / tools / v2026.10.1 / master` 的 run，把它的 `databaseId` 交給 `gh run watch`，並確認 `headSha` 與步驟 1 的 commit 相同。第一個 job 的 Summary 會列出 train、tag 與來源 commit；接著以 Release profile 建置並驗收三個 toolchain 列，通過後建立 tag `tools-v2026.10.1` 並準備 Draft。
 
 3. 檢查 Draft：
 
@@ -282,7 +285,7 @@ Tag 結尾的 7 個字元是 master commit 的 SHA。說明中的「CI verificat
    cd review && for f in *.sha256; do shasum -a 256 -c "$f"; done
    ```
 
-   附件為 `gyo-toolchain-{windows-x64,linux-x64,macos-arm64,macos-x64}.tar.gz` 及各自的 `.sha256`，共 8 個檔案。說明包含自動產生的變更紀錄與「CI verification」表。核對 commit、版本、附件與說明。
+   附件為 `gyo-toolchain-{windows-x64,linux-x64,macos-arm64}.tar.gz` 及各自的 `.sha256`，共 6 個檔案。說明包含自動產生的變更紀錄與「CI verification」表。核對 commit、版本、附件與說明。
 
 4. 公開（由人操作）：在 GitHub 的 Draft 頁面按 **Publish release**，或執行：
 
@@ -311,7 +314,7 @@ Tag 結尾的 7 個字元是 master commit 的 SHA。說明中的「CI verificat
 
    省略 `l4_evidence` 時，第一個 job 會因一則以 `Train object_fps_pvp requires real-device (L4) release evidence for: gui_visible_latency, physical_gpu_visual` 開頭的錯誤而失敗（完整訊息前面加上 `Release validation failed: `，後面接著要求把證據記錄在 issue、PR、discussion 或 artifact，並把連結填入 `l4_evidence`），不會開始建置。
 
-4. 四個 toolchain 基準列、四個 `object_fps_pvp` 列（Release profile）與 Linux 列的 gateway 交叉編譯都通過後，建立 tag `object_fps_pvp-v5.0.0` 與 Draft。附件為 4 個 `gyo-object_fps_pvp-<platform>.tar.gz`、`gyo-object_fps_pvp-gateway-linux-x64.tar.gz` 與 `...-windows-x64.tar.gz`，加上各自的 `.sha256`，共 12 個檔案。遊戲的 Draft 不含 toolchain 壓縮檔。
+4. 三個 toolchain 基準列、三個 `object_fps_pvp` 列（Release profile）與 Linux 列的 gateway 交叉編譯都通過後，建立 tag `object_fps_pvp-v5.0.0` 與 Draft。附件為 3 個 `gyo-object_fps_pvp-<platform>.tar.gz`、`gyo-object_fps_pvp-gateway-linux-x64.tar.gz` 與 `...-windows-x64.tar.gz`，加上各自的 `.sha256`，共 10 個檔案。遊戲的 Draft 不含 toolchain 壓縮檔。
 5. 在 Draft 的「Real-device evidence (L4)」一節逐項對照證據後，按 **Publish release**（或執行 `gh release edit object_fps_pvp-v5.0.0 --draft=false`）。
 
 ### 10.7 把新遊戲或新工具加入發佈
@@ -372,10 +375,9 @@ cmake --build --preset ci-macos
 ctest --preset ci-macos              # 標籤 cpu|shader；沒有測試時視為錯誤
 ```
 
-`macos-x64` 列（需要 Rosetta 2）：
+`macos-x64`（只在 Intel Mac 本機；CI 沒有這一列）：
 
 ```sh
-softwareupdate --install-rosetta --agree-to-license   # 尚未安裝時
 cmake --preset ci-macos-x64
 cmake --build --preset ci-macos-x64
 ctest --preset ci-macos-x64
@@ -416,7 +418,7 @@ ctest --test-dir build/target/_build/ci-macos -L go     # 透過 CTest 執行遊
 python3 -m unittest discover -s tests/common/ci -v
 ```
 
-本機通過不代表遠端四個平台的 L1 已通過（規則 6）。
+本機通過不代表遠端三個平台的 L1 已通過（規則 6）。
 
 ## 11. 產品組裝與驗收（細節）
 

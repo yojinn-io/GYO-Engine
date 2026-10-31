@@ -650,9 +650,11 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertNotRegex(tests, r"(?m)^        if:")
         ctest = run_script(tests).splitlines()[0]
         # The ci-<os> test preset owns label selection; L1 adds no filter.
-        self.assertTrue(ctest.startswith("ctest --preset $env:PRESET --output-junit "), ctest)
+        # Tests run in parallel at the row's own level, the only option besides the report.
+        self.assertTrue(ctest.startswith("ctest --preset $env:PRESET --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL "
+                                         "--output-junit "), ctest)
         self.assertEqual(re.findall(r"(?<!\S)(-{1,2}[A-Za-z][A-Za-z-]*)", ctest.split(" 2>&1 ")[0]),
-                         ["--preset", "--output-junit"])
+                         ["--preset", "--parallel", "--output-junit"])
         for marker in ("id: configure", "id: build", "id: tests", "id: shaders", "id: core"):
             with self.subTest(step=marker):
                 assert_native_commands_propagate(self, run_script(step_with(l1, marker)))
@@ -710,7 +712,6 @@ python() { printf '%s\\n' "$@" > python-arguments; }
                 self.assertIn("id: setup", setup)
                 for field in ("platform", "toolchain", "preset", "host"):
                     self.assertIn(f"{field}: ${{{{ matrix.{field} }}}}", setup)
-                self.assertIn("cpu-execution: ${{ matrix.cpu_execution }}", setup)
                 stats = step_with(job, "sccache --stop-server")
                 self.assertIn("if: always() && steps.setup.outcome == 'success'", stats)
         # One owner for hosted toolchain facts: none remain inline in jobs.
@@ -745,22 +746,16 @@ python() { printf '%s\\n' "$@" > python-arguments; }
                 self.assertIn(HOST_TOOLS_DEFINE, run_script(step_with(job, "id: configure")))
                 self.assertNotIn("/host-tools", job.replace("_build/host-tools-${{ matrix.host }}", ""))
 
-    def test_cross_built_rows_verify_their_host_and_translated_execution(self):
+    def test_rows_verify_their_host_and_run_their_target_natively(self):
         xcode = step_with(self.setup, "name: Select the macOS compiler toolchain", 4)
         self.assertIn("HOST_PLATFORM: ${{ inputs.host }}", xcode)
         self.assertIn('if [ "$(uname -m)" != "$host_architecture" ]; then', xcode)
         self.assertNotIn("ci-macos requires", xcode)
-        rosetta = step_with(self.setup, "name: Provide Rosetta 2 for translated CPU execution", 4)
-        self.assertIn("if: inputs.cpu-execution == 'rosetta2'", rosetta)
-        self.assertIn("arch -x86_64 /usr/bin/true", rosetta)
-        self.assertIn("sudo softwareupdate --install-rosetta --agree-to-license", rosetta)
-        self.assertNotRegex(rosetta, r"exit 0|\|\| true|continue-on-error")
-        # A failed install falls through (bash -e) to the explicit translation check and its error.
-        install = rosetta.index("sudo softwareupdate --install-rosetta --agree-to-license || echo")
-        self.assertLess(install, rosetta.index("::error::Rosetta 2 cannot run x86_64 code"))
-        steps = steps_of(self.setup, 4)
-        # Translation is proven before any compile, so a missing Rosetta fails the row early.
-        self.assertLess(steps.index(rosetta), steps.index(step_with(self.setup, "id: toolchain", 4)))
+        # macos-x64 has no CI row, so no row is cross-built or runs translated.
+        self.assertNotIn("macos-x64) host_architecture", xcode)
+        self.assertNotRegex(self.setup, r"(?i)rosetta|cpu-execution|arch -x86_64")
+        for workflow in (self.quick, self.shared):
+            self.assertNotIn("cpu-execution:", workflow)
         native = job_block(self.shared, "native")
         self.assertIn("GYO_CPU_EXECUTION: ${{ matrix.cpu_execution }}", native)
         self.assertIn("--cpu-execution $env:GYO_CPU_EXECUTION", run_script(step_with(native, "id: archive")))
@@ -778,7 +773,14 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertIn("PRESET: ${{ inputs.preset }}", toolchain)
         restore = step_with(self.setup, "uses: actions/cache/restore@", 4)
         self.assertIn("path: ${{ steps.toolchain.outputs.cache-path }}", restore)
-        self.assertIn("restore-keys: ${{ steps.toolchain.outputs.restore-prefix }}", restore)
+        # A seed of the same runner image comes first; the family prefix, which
+        # also matches seeds saved before the image joined the key, is the fallback.
+        self.assertIn("restore-keys: |\n"
+                      "          ${{ steps.toolchain.outputs.restore-image-prefix }}\n"
+                      "          ${{ steps.toolchain.outputs.restore-prefix }}", restore)
+        self.assertIn('$imagePrefix = "${prefix}image-$image-"', toolchain)
+        self.assertIn('"restore-image-prefix=$imagePrefix" >> $env:GITHUB_OUTPUT', toolchain)
+        self.assertIn('"cache-key=$imagePrefix$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_OUTPUT', toolchain)
         self.assertGreater(steps.index(restore), steps.index(toolchain))
         self.assertNotRegex(self.setup, r"SCCACHE_GHA_ENABLED|actions/cache@")
         outputs = top_level_block(self.setup, "outputs")

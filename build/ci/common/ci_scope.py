@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from app_registry import PLATFORMS, ROOT, TOOLCHAINS
+from app_registry import RELEASE_PLATFORMS, ROOT, TOOLCHAINS
 
 
 # A change set touching only these roots cannot affect any native build.
@@ -168,7 +168,7 @@ def select_scope(event_name: str, event, changed_paths, live_draft: bool | None 
 
 def platform_matrix() -> dict:
     """One L1 row per release platform, straight from the toolchain table."""
-    return {"include": [dict(platform=platform, **TOOLCHAINS[platform]) for platform in PLATFORMS]}
+    return {"include": [dict(platform=platform, **TOOLCHAINS[platform]) for platform in RELEASE_PLATFORMS]}
 
 
 def main():
@@ -189,7 +189,7 @@ def main():
         live_draft = None if args.live_draft is None else args.live_draft == "true"
         increment = None
         if args.github_repository:
-            lookup = github_l1_lookup(args.github_repository, PLATFORMS)
+            lookup = github_l1_lookup(args.github_repository, RELEASE_PLATFORMS)
             increment = lambda: verified_increment(args.repository, lookup)  # noqa: E731
         scope = select_scope(args.event_name, event, lambda: merge_changes(args.repository), live_draft, increment)
     except (OSError, json.JSONDecodeError, ScopeError) as error:

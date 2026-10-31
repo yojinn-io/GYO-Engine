@@ -15,8 +15,8 @@
 | 段階 | いつ実行するか | 内容 | 止めるもの |
 |---|---|---|---|
 | **L1**（merge gate） | Ready の pull request、master への push、Cross-platform CI の手動実行 | Platform ごとに 1 job。`ci-<os>` preset で registry 有効ゲーム、既定ツール、Engine、tests を build し、`cpu`／`shader` label の tests を実行します。Linux 行はさらに host shader tests、Lavapipe による共通 GPU tests、core baseline、Go の vet／test／race、Go service の cross build を実行します。封装はしません | PR の merge（`CI gate`） |
-| **master 完全実行**（L1 + Quick） | master への push、Cross-platform CI の手動実行 | L1 に加え、`build-and-validate.yml` を `profile: quick` で全製品に実行します。Toolchain 4 行とゲームの各 platform 行が封装、install 後の Quick 検証、archive 化を行い、Actions artifacts に upload します | Snapshot の公開（全 train） |
-| **Release** | **Prepare Release**（手動） | 選んだ train について、toolchain baseline 4 行とその train の行を `profile: release` で build・検証します。全行で tests、host shader tests、Release checks を実行し、Linux 行で Go checks を実行します | Tag と Draft の作成 |
+| **master 完全実行**（L1 + Quick） | master への push、Cross-platform CI の手動実行 | L1 に加え、`build-and-validate.yml` を `profile: quick` で全製品に実行します。Toolchain 3 行とゲームの各 platform 行が封装、install 後の Quick 検証、archive 化を行い、Actions artifacts に upload します | Snapshot の公開（全 train） |
+| **Release** | **Prepare Release**（手動） | 選んだ train について、toolchain baseline 3 行とその train の行を `profile: release` で build・検証します。全行で tests、host shader tests、Release checks を実行し、Linux 行で Go checks を実行します | Tag と Draft の作成 |
 | **L4**（実機） | 人が実機で実行 | ゲームが `release_evidence` で宣言した項目（実機 GPU、実ディスプレイなど）。CI は実行しません | ゲーム train の Prepare Release（証拠参照がなければ build 前に失敗）と、公開者の確認 |
 
 ```text
@@ -38,15 +38,15 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 
 | 製品 | Archive（各 `.sha256` 付き） | Platform | Owner |
 |---|---|---|---|
-| 設計ツール群（toolchain） | `gyo-toolchain-<platform>.tar.gz`（root `gyo-toolchain`） | `windows-x64`、`linux-x64`、`macos-arm64`、`macos-x64` の 4 つを常に生成 | `engine/config/tools.csv` で `release` が有効なツール（現在は UI Editor の GUI 既定 variant）と必要な runtime libraries |
-| ゲーム | `gyo-<game>-<platform>.tar.gz`（root `gyo-<game>`）。`object_fps_pvp` は client（`main`）と `match` を含む | `projects.csv` でそのゲームの `enabled` と platform 列が有効なもの。`macos` 列は `macos-arm64` と `macos-x64` の両方を有効にします | `apps/<game>`、`assets/<game>`、`build/acceptance/<game>`、`projects.csv` の行 |
+| 設計ツール群（toolchain） | `gyo-toolchain-<platform>.tar.gz`（root `gyo-toolchain`） | `windows-x64`、`linux-x64`、`macos-arm64` の 3 つを常に生成 | `engine/config/tools.csv` で `release` が有効なツール（現在は UI Editor の GUI 既定 variant）と必要な runtime libraries |
+| ゲーム | `gyo-<game>-<platform>.tar.gz`（root `gyo-<game>`）。`object_fps_pvp` は client（`main`）と `match` を含む | `projects.csv` でそのゲームの `enabled` と platform 列が有効なもの。`macos` 列は `macos-arm64` と `macos-x64` の両方を有効にしますが、公開するのは `macos-arm64` だけです（`macos-x64` はローカル build 専用。第 5 節） | `apps/<game>`、`assets/<game>`、`build/acceptance/<game>`、`projects.csv` の行 |
 | ゲームの Go service | `gyo-<game>-<role>-<platform>.tar.gz`。`object_fps_pvp` は `gyo-object_fps_pvp-gateway-linux-x64.tar.gz` と `...-windows-x64.tar.gz` | `gyo_app_add_go_service(... PLATFORMS ...)` で宣言した platform だけ（gateway は Linux と Windows） | そのゲーム（`apps/<game>/go.mod`） |
 
 - 現在の registry で有効なゲームは `object_fps_pvp` だけです（`object_fps`、`object_fps_v2` は `enabled=0`）。`tools.csv` で `release=true` のツールは `ui_editor` だけで、`object_fps_preview` はゲームに依存するローカルツールなので配布しません。
 - `services/gyo_gateway` は Engine 層の Go module（owner `engine`）です。HTTP、session、framing の再利用可能な仕組みを提供し、どのゲームにも依存しません。CMake は全構成でこれを記録するため、L1 の Linux 行と toolchain 行がゲームなしでも vet／test／race を実行します。単独の archive にはしません。
-- Train は registry から導出します。`tools` train（toolchain 4 platform）と、有効なゲームごとに 1 train（例：`object_fps_pvp`）です。ゲーム train にはそのゲームの native package と、Linux 封装行が `go-services.json` に記録した service archive が入ります。同じ release の client、match、gateway は同じ commit と version から作ります。`tools`、`toolchain` はゲーム id として使えません。
+- Train は registry から導出します。`tools` train（toolchain 3 platform）と、有効なゲームごとに 1 train（例：`object_fps_pvp`）です。ゲーム train にはそのゲームの native package と、Linux 封装行が `go-services.json` に記録した service archive が入ります。同じ release の client、match、gateway は同じ commit と version から作ります。`tools`、`toolchain` はゲーム id として使えません。
 - 配布物は実行可能な製品と必要な依存物です。Engine SDK や source archive は作りません。Toolchain にゲームの source／assets は入らず、ゲーム包に CI、tests、acceptance executable、editor、元の美術ソースは入りません。Engine は各製品に静的リンクし、必要な third-party dynamic runtime を配置します。
-- ゲームが 0 件でも（CSV が header だけ、全ゲーム無効でも）toolchain の 4 platform を公開できます。選択されたゲームの欠落、compile 失敗、必須検証の失敗は、その実行全体を失敗させます。
+- ゲームが 0 件でも（CSV が header だけ、全ゲーム無効でも）toolchain の 3 platform を公開できます。選択されたゲームの欠落、compile 失敗、必須検証の失敗は、その実行全体を失敗させます。
 
 ## 3. Trigger と実行内容
 
@@ -56,7 +56,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 | Draft PR の作成・push | Cross-platform CI、Package trial | `Select CI scope`（CI policy tests と範囲判定、理由 `draft`）。L1／Quick は skip、`CI gate` は意図した skip として成功。Package trial は label がなければ build しません | `Select CI scope`、`CI gate`、`Select trial packaging`（skip された job も表示） |
 | `docs/` 配下だけを変える PR | 同上 | 理由 `docs-only`。L1 を skip し、`CI gate` は成功 | 同上 |
 | コードを変えた Ready PR に `docs/` 配下だけを変える commit を push | 同上 | 理由 `docs-increment`。より前の commit で成功した L1 を再利用して L1 を skip し、`CI gate` は成功。条件は下記。満たさない場合は理由 `pull-request` で通常どおり L1 を実行 | 同上 |
-| Ready の PR（作成、push、Ready への変更、reopen） | 同上 | 理由 `pull-request`。`L1 / <platform>` を 4 行実行。Quick と封装はしません | `Select CI scope`、`L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`L1 / macos-x64`、`Quick acceptance`（skip）、`CI gate`、`Select trial packaging`（open／push／reopen 時） |
+| Ready の PR（作成、push、Ready への変更、reopen） | 同上 | 理由 `pull-request`。`L1 / <platform>` を 3 行実行。Quick と封装はしません | `Select CI scope`、`L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`Quick acceptance`（skip）、`CI gate`、`Select trial packaging`（open／push／reopen 時） |
 | Open な PR に `package` label | Package trial | Quick 封装（全製品）を Actions artifacts として upload。Label がある間は push のたびに再 build | `Trial packages / ...`（required ではない） |
 | **Package trial** の手動実行 | Package trial | 選んだ branch で同じ Quick 封装 | — |
 | master への push（merge） | Cross-platform CI | L1 + Quick + `CI gate`。成功すれば `Snapshot / <train>` が train ごとに snapshot を公開。L1 が compiler cache を保存 | `L1 / ...`、`Quick acceptance / ...`、`CI gate`、`Plan snapshot trains`、`Snapshot / tools`、`Snapshot / object_fps_pvp` |
@@ -67,7 +67,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 - 範囲判定（`build/ci/common/ci_scope.py`）は job の中で行い、trigger の path／draft filter は使いません。そのため `CI gate` はすべての PR event で報告されます。
 - `docs-only` の判定対象は `docs/` で始まる path だけです。Root の `README*.md`、`AGENTS.md` などを変えた PR は L1 を実行します。Rename は分割して判定するため、`docs/` の外から `docs/` へ移したファイルも非文書の変更として扱います。
 - `docs-increment`：PR head の 1 つ前の commit から first-parent をたどり（最大 20 個）、次の条件をすべて満たす最初の commit の L1 を再利用します。
-  - 4 行の `L1 / <platform>` の最新 check run がすべて GitHub Actions の `success`。skip、cancel、失敗、未完了は数えません。
+  - 3 行の `L1 / <platform>` の最新 check run がすべて GitHub Actions の `success`。skip、cancel、失敗、未完了は数えません。
   - その commit から head までの変更が `docs/` 配下だけ（判定方法は `docs-only` と同じ）。
   - 現在の master の先端がその commit の祖先。master は前進するだけなので、その commit を検証した時の merge 結果はその commit 自身であり、現在の merge 結果は head です。両者のコードは完全に同じです。
   - master が進んだ、途中にコード変更がある、コードの push の L1 が新しい push で cancel された、check run を読めなかった、のいずれかなら通常どおり L1 を実行します。最悪でも 1 回多く実行するだけで、未検証のコードを skip することはありません。
@@ -93,25 +93,28 @@ Branch protection（または ruleset）で master の required status check に
 | `linux-x64` | `ubuntu-24.04` | `ci-linux`、gcc-14 | native | Xvfb + Mesa Lavapipe（software Vulkan）で共通 GPU tests と製品の GPU checks | L1 の host shader tests、core baseline、Go の vet／test／race、Go service の cross build はこの行だけ |
 | `windows-x64` | `windows-2025` | `ci-windows`、MSVC（`msvc-vs2026`） | native | なし | 封装 jobs の toolchain 行は core baseline も実行し、Release では独立コピー検証（`app_copy_integration.py`）も実行 |
 | `macos-arm64` | `macos-15`（arm64） | `ci-macos`、Xcode 16.4 の AppleClang、deployment target 13.3 | native | なし | 封装 jobs の toolchain 行は core baseline も実行 |
-| `macos-x64` | `macos-15`（arm64 host で cross build） | `ci-macos-x64`（`CMAKE_OSX_ARCHITECTURES=x86_64`、deployment target 13.3） | Rosetta 2 による変換実行 | なし | 実機の Intel Mac による検証なし。Runner で Rosetta 2 が使えなければ build 前に失敗。Core baseline は host 行が担当 |
+
+- **`macos-x64` はローカル build 専用**（2026-10-31 から）：CI に `macos-x64` 行はなく、Snapshot と Release でも公開しません。Intel Mac では引き続き `ci-macos-x64` preset で build、封装、installed acceptance を実行でき（第 10 節）、製品の `checks.json` と Go service も宣言できます。ただし CI の検証はなく、公開時は常に除外します。公開 platform の一覧は `build/acceptance/common/package_contract.py` の `RELEASE_PLATFORMS`、build できる platform は同じファイルの `PLATFORMS` です。
+  - 以前は arm64 runner で cross build し、Rosetta 2 の変換実行で test と installed acceptance を行っていました。外したことで失う保証：x86_64 macOS の build、CPU test、installed acceptance を CI が確認しなくなり、Intel Mac の問題はローカルでしか見つかりません。
 
 - 実物の GPU での検証は CI にありません。Software Vulkan と Windows／macOS hosted runner の結果は、実機 GPU での動作を意味しません。ゲームが必要とする実機確認は L4（8 節）で扱います。
 - 封装 jobs の macOS 行は、shader bundle を使う構成で offline Metal compile が使えることを確認します。
 - Go service は Linux 行で `CGO_ENABLED=0` により各 platform 向けに cross build します。CI は service の実行ファイルを起動しません。
 - Linkage 検査は macOS package 内の実行ファイルと native library が target architecture だけを含むことを要求します。
-- 各行の Summary は build host／target と CPU 実行方式を表示し、archive の `build_metadata.json` も `cpu_execution`（`native` または `rosetta2`）を記録します。Snapshot と Draft の説明には、archive ごとの検証水準（native／cross build、実行した checks の数、Rosetta 2、GPU checks の有無、実機 GPU なし）が自動で入ります。
+- 各行の Summary は build host／target と CPU 実行方式を表示し、archive の `build_metadata.json` も `cpu_execution`（現在は `native` のみ）を記録します。Snapshot と Draft の説明には、archive ごとの検証水準（native／cross build、実行した checks の数、GPU checks の有無、実機 GPU なし）が自動で入ります。
 
 ## 6. Cache と初回の挙動
 
-- **Compiler cache（sccache v0.18.0）**：`native-setup` が全 native job の compile を sccache 経由にします。Cache の key は platform、toolchain、compiler の version、preset ごとに分かれ、`macos-x64` の target object が arm64 と混ざることはありません。**保存するのは master 上の L1 だけ**（master への push、または master での手動実行）です。PR の L1、Quick、trial、Prepare Release は最新の seed を読むだけです。
-- **Host tools**：Shader compiler などの host tools は runner の platform（host）ごとに `actions/cache` で保存します。`macos-arm64` と `macos-x64` は同じ arm64 native tools を共有し、target architecture を host tools の build に持ち込みません。
+- **Compiler cache（sccache v0.18.0）**：`native-setup` が全 native job の compile を sccache 経由にします。Cache の key は platform、toolchain、compiler の version、preset ごとに分かれ、`macos-x64` の target object が arm64 と混ざることはありません。保存する key には runner image の version（`ImageVersion`）も含めます。Hosted image は段階的に切り替わるため、同じ compiler version でも SDK や system header が違う image が同時に使われ、別 image の seed ではほぼ全件が miss になります（2026-10-30 の macOS で命中率 2.8%）。読み取りは同じ image の最新 seed を優先し、なければ image を問わず最新の seed を使います。**保存するのは master 上の L1 だけ**（master への push、または master での手動実行）です。PR の L1、Quick、trial、Prepare Release は最新の seed を読むだけです。
+- **Host tools**：Shader compiler などの host tools は runner の platform（host）ごとに `actions/cache` で保存します。target architecture を host tools の build に持ち込みません。
+- **Test の並列実行**：L1 と封装 job の ctest は、その行の build 並列度（`CMAKE_BUILD_PARALLEL_LEVEL`。Windows／Linux は 4、macOS は 2）で並列に実行します。導入時の stress test（各 test を最大 5 回）は 3 行とも失敗 0 件でした（run 41162780271）。互いに干渉する test は `RESOURCE_LOCK` か `RUN_SERIAL` で示し、CI を直列に戻さないでください。
 - **Go**：`actions/setup-go` が各 module の `go.mod`／`go.sum` を key に module cache を保存します。
 
 初回や toolchain 更新後に予想されること：
 
 - master の L1 が一度も完了していない間、または compiler／Xcode／preset が変わった後は seed がなく、PR の L1 や封装 jobs はすべてを compile し直します。macOS 行は並列数 2 で最も遅くなります。各 native job の上限は 120 分です。
 - 新しい toolchain の seed は、次の master push の L1 が保存して以降に効きます。PR だけを何度実行しても seed は作られません。
-- `macos-x64` 行は Rosetta 2 がない runner では install を試み、使えなければ build 前に明示的なエラーで失敗します。Pinned の Xcode 16.4 が runner image にない場合も同様に失敗します。
+- Pinned の Xcode 16.4 が runner image にない場合、macOS 行は build 前に明示的なエラーで失敗します。
 - **Run workflow**（手動実行）は workflow が既定 branch にある場合だけ表示されます。新しい workflow を追加する PR では、merge 後に初めて手動実行できます。選んだ source branch にも同じ workflow と支援コードが必要です。
 - `package` label がリポジトリになければ、最初に一度作成します（10.3 節）。
 - 最初の snapshot では削除対象の古い snapshot はありません。
@@ -134,7 +137,7 @@ Branch protection（または ruleset）で master の required status check に
 ## 8. ゲーム train の L4 証拠
 
 - 項目はゲーム自身が `build/acceptance/<game>/checks.json` の任意フィールド `release_evidence` で宣言します。各項目は `name`（識別子）、`description`（1 行、300 文字以内）、`platforms`（4 platform の部分集合）の 3 つだけを持ちます。適用されるのはその train で有効な platform だけです。
-- `object_fps_pvp` は `gui_visible_latency`（実ディスプレイでの GUI 可視遅延の短時間測定）と `physical_gpu_visual`（実機 GPU での画面確認）を 4 platform で宣言しています。
+- `object_fps_pvp` は `gui_visible_latency`（実ディスプレイでの GUI 可視遅延の短時間測定）と `physical_gpu_visual`（実機 GPU での画面確認）を 4 platform（ローカル専用の `macos-x64` を含み、公開時は除外）で宣言しています。
 - Self-hosted runner は置かず、CI はこれらを実行しません。人が実機で実行し、結果を issue、PR、discussion、artifact のいずれかに記録して、その参照（1 行、500 文字以内、`-` で始まらない）を Prepare Release の `l4_evidence` に入力します。
 - 項目を宣言したゲームで `l4_evidence` が空なら、Prepare Release は build 前の最初の job で失敗します。逆に、項目のない train（`tools` など）で `l4_evidence` を入力しても失敗します。Snapshot は L4 証拠を使いません。
 - Draft の説明には「Real-device evidence (L4)」節が入り、証拠参照（URL は autolink、それ以外は code span として表示し、Markdown として解釈しない）と各項目のチェックリストが並びます。CI が確かめるのは参照があることだけで、証拠の内容は公開者が確認します。
@@ -169,7 +172,7 @@ gh pr create --draft --base master --fill        # Draft PR
    gh pr checks <n> --watch
    ```
 
-   `L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64`、`L1 / macos-x64` と `CI gate` が実行されます。Head commit を変えずに Ready にした場合、新しい `CI gate` は L1 が終わるまで現れず、その間は Draft 実行の成功が表示されたままです。**新しい `CI gate` が報告されるまで merge や auto-merge の有効化をしないでください。**
+   `L1 / windows-x64`、`L1 / linux-x64`、`L1 / macos-arm64` と `CI gate` が実行されます。Head commit を変えずに Ready にした場合、新しい `CI gate` は L1 が終わるまで現れず、その間は Draft 実行の成功が表示されたままです。**新しい `CI gate` が報告されるまで merge や auto-merge の有効化をしないでください。**
 3. 以後の push は同じ PR の古い実行を取り消して L1 をやり直します。
 4. `.github/`、`build/ci/`、`build/acceptance/`、封装 CMake を変えた場合は、merge 前に封装経路も確認します（10.3 節、または次のコマンド）。
 
@@ -272,7 +275,7 @@ Tag 末尾の 7 文字は master commit の SHA です。説明欄の「CI verif
    gh run watch <run-id> --exit-status
    ```
 
-   `gh workflow run` は run ID を返さず、run の登録にも数秒かかるため、一覧から `displayTitle` が `Prepare Release / tools / v2026.10.1 / master` の run を選び、その `databaseId` を `gh run watch` に渡します。`headSha` が手順 1 の commit と一致することも確認します。最初の job の Summary に train、tag、source commit が表示され、続いて toolchain 4 行を Release profile で build・検証し、成功すれば tag `tools-v2026.10.1` を作って Draft を準備します。
+   `gh workflow run` は run ID を返さず、run の登録にも数秒かかるため、一覧から `displayTitle` が `Prepare Release / tools / v2026.10.1 / master` の run を選び、その `databaseId` を `gh run watch` に渡します。`headSha` が手順 1 の commit と一致することも確認します。最初の job の Summary に train、tag、source commit が表示され、続いて toolchain 3 行を Release profile で build・検証し、成功すれば tag `tools-v2026.10.1` を作って Draft を準備します。
 
 3. Draft を確認します。
 
@@ -282,7 +285,7 @@ Tag 末尾の 7 文字は master commit の SHA です。説明欄の「CI verif
    cd review && for f in *.sha256; do shasum -a 256 -c "$f"; done
    ```
 
-   添付は `gyo-toolchain-{windows-x64,linux-x64,macos-arm64,macos-x64}.tar.gz` とそれぞれの `.sha256` の 8 ファイルです。説明には自動生成の変更履歴と「CI verification」表が入ります。Commit、version、添付、説明を確認します。
+   添付は `gyo-toolchain-{windows-x64,linux-x64,macos-arm64}.tar.gz` とそれぞれの `.sha256` の 6 ファイルです。説明には自動生成の変更履歴と「CI verification」表が入ります。Commit、version、添付、説明を確認します。
 
 4. 公開します（人の操作）。GitHub の Draft 画面で **Publish release** を押すか、次を実行します。
 
@@ -311,7 +314,7 @@ RC として出す場合は `-f version=v2026.10.1-rc.1 -f prerelease=true` と�
 
    `l4_evidence` を省くと、最初の job が `Train object_fps_pvp requires real-device (L4) release evidence for: gui_visible_latency, physical_gpu_visual` で始まるエラー（全体は `Release validation failed: ` が前に付き、issue・PR・discussion・artifact に記録して link を `l4_evidence` に入れるよう指示が続きます）で失敗し、build は始まりません。
 
-4. Toolchain baseline 4 行と `object_fps_pvp` の 4 行（Release profile）、Linux 行の gateway cross build が成功すると、tag `object_fps_pvp-v5.0.0` と Draft が作られます。添付は `gyo-object_fps_pvp-<platform>.tar.gz` 4 つ、`gyo-object_fps_pvp-gateway-linux-x64.tar.gz` と `...-windows-x64.tar.gz`、それぞれの `.sha256` の計 12 ファイルです。Toolchain の archive はゲームの Draft に入りません。
+4. Toolchain baseline 3 行と `object_fps_pvp` の 3 行（Release profile）、Linux 行の gateway cross build が成功すると、tag `object_fps_pvp-v5.0.0` と Draft が作られます。添付は `gyo-object_fps_pvp-<platform>.tar.gz` 3 つ、`gyo-object_fps_pvp-gateway-linux-x64.tar.gz` と `...-windows-x64.tar.gz`、それぞれの `.sha256` の計 10 ファイルです。Toolchain の archive はゲームの Draft に入りません。
 5. Draft の「Real-device evidence (L4)」節で各項目を証拠と照合してから **Publish release** を押します（または `gh release edit object_fps_pvp-v5.0.0 --draft=false`）。
 
 ### 10.7 新しいゲームやツールをリリースに加える
@@ -372,10 +375,9 @@ cmake --build --preset ci-macos
 ctest --preset ci-macos              # label cpu|shader。tests が 0 件ならエラー
 ```
 
-`macos-x64` 行（Rosetta 2 が必要）：
+`macos-x64`（Intel Mac のローカル専用。CI にこの行はありません）：
 
 ```sh
-softwareupdate --install-rosetta --agree-to-license   # 未導入の場合
 cmake --preset ci-macos-x64
 cmake --build --preset ci-macos-x64
 ctest --preset ci-macos-x64
@@ -416,7 +418,7 @@ ctest --test-dir build/target/_build/ci-macos -L go     # ゲームの Go module
 python3 -m unittest discover -s tests/common/ci -v
 ```
 
-本機で通っても、遠隔の 4 platform の L1 が通った証拠にはなりません（規則 6）。
+本機で通っても、遠隔の 3 platform の L1 が通った証拠にはなりません（規則 6）。
 
 ## 11. 製品の組立と検証（詳細）
 

@@ -16,7 +16,7 @@ import tarfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from package_contract import (PLATFORMS, check_identity, manifest_path, required_checks, required_files,
+from package_contract import (PLATFORMS, RELEASE_PLATFORMS, check_identity, manifest_path, required_checks, required_files,
                               validate_product, validate_product_namespace, validate_evidence, validate_manifest,
                               inventory_digest)
 from content_contract import decode_json
@@ -61,7 +61,7 @@ def parse_boolean(value) -> bool:
 
 def archive_name(product: str, platform: str) -> str:
     validate_product(product)
-    if platform not in PLATFORMS:
+    if platform not in RELEASE_PLATFORMS:
         raise ReleaseError(f"Unexpected package platform: {platform}")
     return f"gyo-{product}-{platform}.tar.gz"
 
@@ -237,7 +237,7 @@ def service_archive_name(owner: str, role: str, platform: str) -> str:
     for value, label in ((owner, "owner"), (role, "role")):
         if not isinstance(value, str) or not IDENTIFIER_PATTERN.fullmatch(value):
             raise ReleaseError(f"Invalid service {label}: {value!r}")
-    if platform not in PLATFORMS:
+    if platform not in RELEASE_PLATFORMS:
         raise ReleaseError(f"Unexpected service platform: {platform}")
     return f"gyo-{owner}-{role}-{platform}.tar.gz"
 
@@ -406,7 +406,12 @@ def validate_release_evidence(document, source: str = "acceptance contract") -> 
         if (not isinstance(platforms, list) or not platforms or any(value not in PLATFORMS for value in platforms)
                 or len(platforms) != len(set(platforms))):
             raise ReleaseError(f"{source}: release_evidence {name} needs unique platforms from {list(PLATFORMS)}")
-        items.append(EvidenceItem(name, description, tuple(value for value in PLATFORMS if value in platforms)))
+        # Products declare evidence for every platform they build on; only
+        # release platforms are published, so only they carry evidence.
+        released = tuple(value for value in RELEASE_PLATFORMS if value in platforms)
+        if not released:
+            raise ReleaseError(f"{source}: release_evidence {name} names no release platform from {list(RELEASE_PLATFORMS)}")
+        items.append(EvidenceItem(name, description, released))
     return tuple(items)
 
 
