@@ -1,6 +1,6 @@
 # v8-product-hit-rules-leg-wire 的事前宣告
 
-更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：草稿，等你核准。** 契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §2（定稿，`pv9-final-approve`）。計畫：[hitbox-plan](hitbox-plan.md) 第 8 節。檔位 high｜Opus 5.5（繼承主會話），估時 3～5 h（超過 7.5 h 停下回報）。
+更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hit-rules-leg-wire-declaration-approve`：宣告、V1～V3 的寬鬆面「值 3」與 `v8-product-leg-wire-worker-probe` (a)）。 契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §2（定稿，`pv9-final-approve`）。計畫：[hitbox-plan](hitbox-plan.md) 第 8 節。檔位 high｜Opus 5.5（繼承主會話），估時 3～5 h（超過 7.5 h 停下回報）。
 
 ## 範圍
 
