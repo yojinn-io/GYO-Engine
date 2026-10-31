@@ -220,6 +220,75 @@ v8-product-anim-authority
 
 「性質不再存在」那一類有寬鬆面。A4 開工前，照 §14.4 的 1～5 逐項列出，跑突變，並交給另一位審查者（Sonnet 5.5）核對，之後才請你核准。
 
+## A4 的設計與 §14.4 逐項表（草稿，2026-10-31；等你看過，見最後的「順序」）
+
+### 設計（要點）
+
+- **內插**（domain，Match 回溯共用）：`InterpolatePlayerAnimation(a, b, alpha)`。
+  - 相位：`a + alpha × int32(b − a)`，有號差，跨過 2^32 也正確。
+  - 兩個權重：線性內插。
+  - 跳躍階段與零點：取前一筆 `a`（§4.4）。
+  - 兩筆的命不同時，只用 `a`。
+- **時間軸**：`SnapshotTimeline::Sample` 多帶一份內插後的動畫值。
+- **呈現的 frame**：`PlayerPresentationFrame` 改帶這份值，拿掉 `planarSpeed`。
+- **`AdvancePlayerLocomotion`**：
+  - 相位、`move_weight`、`jog_weight`、跳躍階段與零點，全部取自 frame 的動畫值，不再由位移或速度累積（附錄 A 第 1 條）。
+  - holding 時這些值凍結（第 2 條）。
+  - idle 時鐘＝呈現時間 − `life_state_tick` ÷ 60。
+  - 照舊保留、只當觀測用的：位移的診斷值（`totalDistance`、`signedDistance`、`distanceDelta`、`speed`、`playbackRate`）、重設的偵測與原因、`resetCount`。驗收工具的鍵名與格式（`player_short.hpp`）不變。
+  - 觀測的 `unwrappedPhaseCycles` 改成累加相鄰 frame 之間的有號相位差；重設時從 0 重新起算，和現在一樣。
+- **觀測多一個鍵**：`authority_phase_cycles`，就是這個 frame 用的內插相位。分析器拿它比對 `phase_cycles`。
+
+### 改判定的 TEST_CASE（`PlayerPresentationTests.cpp`）
+
+| # | TEST_CASE | 守的性質 | 去向 | 寬鬆面 | 收緊面 |
+|---|---|---|---|---|---|
+| T1 | `:346` 速度混合 | walk↔jog 權重與一圈距離 | 不改（`PlayerJogWeight`、`PlayerCycleDistance` 照舊在 definition 上；A1 的對齊測試把它們和 Match 的規則綁在一起） | 無 | 無 |
+| T2 | `:381` 相位用權威速度、和 frame rate 無關 | 不同 frame rate、不完整的第一個 frame 都得到同樣的相位 | 改成 E8：30／60／144 FPS 在同一個呈現 Tick，姿勢輸入**完全相同** | **有**：「Client 相位＝距離 ÷ 一圈距離，相對誤差 1e-5」改成「Client 相位＝Match 相位的內插」；Match 相位和距離的關係由 E1 守住，誤差上限是 T ÷ 131072 圈 | 有：不同 frame rate 由「近似」變「完全相同」 |
+| T3 | `:503` 30／60／144 FPS、三個方向 | 相位跟著實際距離 | 距離的診斷值照舊檢查；相位改成「等於內插的權威相位」；方向無關性由 E1 的 jog（0.7 rad）與 strafe 路線守住 | **有**：同 T2 | 同 T2 |
+| T4 | `:526` 停住、撞牆、原地轉身、holding 不會多出步伐 | 沒有位移就沒有相位 | 停住與原地轉身搬到 domain（加上「原地轉身相位不變」的單元測試）；holding 的部分留在 Client（E9） | 無（搬家，判定相同） | 無 |
+| T5 | `:557` 往後走相位倒退、原路走回來相位歸零 | 有號距離 | 搬到 domain：往後走已經有測試；加上「同一條路來回，相位剛好回到原值」（每個 Tick 對稱四捨五入，所以完全相等） | 無 | 無 |
+| T6 | `:573` epoch、不連續、瞬移、過長的 frame 都要重新錨定 | 相位不重播沒看到的移動 | epoch 與瞬移由 Match 的重設守住（E2）。「不連續」和「過長的 frame」是 Client 才有的原因：診斷值照舊重設，但相位改由 snapshot 決定，不再歸零 | **有**：Client 才有的這兩種原因不再讓相位歸零 | 無 |
+| T7 | `:605` 換命與死亡清掉舊的步伐 | 新命不沿用舊命 | 換命由 Match 的重設守住（E2、A2 整合測試）。死亡時改成 Match 凍結、Client 不讀（死亡是全身 clip，§4.4） | **有**：死亡時觀測的相位不再是 0 | 無 |
+| T8 | `:624` 100 ms／108 ms 的呈現間隔要重設 | 長間隔不重播 | 診斷值的重設與原因照舊檢查；「相位歸零」拿掉 | **有**：同 T6 | 無 |
+| T9 | `:638` 不同玩家、重新加入的身分不共用歷史 | 每位玩家各自一份 | 照舊（每位玩家的相位取自自己那一筆 snapshot；觀測的 unwrapped 照舊在換人時從 0 起算） | 無 | 無 |
+| T10 | `:849` 跳躍階段跟著 grounded、在跨度內 | 四個階段與 clip 時間 | 階段的推進搬到 domain（E2 已經涵蓋起跳、下落直接進 Loop、短跳、空中重設）；Client 保留 `ResolvePlayerActions` 由零點算 clip 時間的部分，frame 帶入動畫值 | 無 | 無 |
+
+### 改判定的驗收分析器（`player_presentation_evidence.py`）
+
+| # | 規則 | 去向 | 寬鬆面 | 收緊面 |
+|---|---|---|---|---|
+| P1 | 重設的 frame：位移為 0、有原因；`phase_cycles`、`unwrapped_phase_cycles`、`signed_distance`、`total_distance` 都是 0 | 拿掉 `phase_cycles`（它取自 snapshot），其他照舊 | **有**：`phase_cycles` | 無 |
+| P2 | 相位差＝有號位移 ÷ 一圈距離（誤差 2e-5） | 改成 `phase_cycles == authority_phase_cycles`（完全相等）。原地與 holding 時相位不動、往後走相位倒退，這兩條照舊 | **有**：Client 端的比例關係（改由 Match 端的 E1 守住） | 有：和權威值完全相等 |
+
+### 寬鬆面的 1～5（T2、T3、T6、T7、T8、P1、P2）
+
+1. **守的性質**：畫面上的步伐相位跟著角色實際走的距離，而且不會因為 frame rate、間隔或重設而重播或亂跳。
+2. **寬鬆面**：
+   - Client 不再自己由位移算相位，所以不再檢查「Client 相位＝距離 ÷ 一圈距離」，改為檢查 Client 等於 Match 的內插值；
+   - Client 才有的重設原因（不連續、過長的 frame）與死亡，不再讓相位歸零。
+3. **收緊面**：
+   - 不同 frame rate 由近似變成完全相同（E8）；
+   - Client 的相位必須和權威值完全相等（P2）。
+4. **由誰守住**：
+   - 相位和距離的關係：Match 端的 E1（試行 3 最壞 0.59 倍門檻）與 E2；
+   - 不重播：Match 的重設（換 epoch、瞬移、換命）與 E2；
+   - Client 跟著權威：E8 與 P2；
+   - holding：E9。
+5. **根據**：附錄 A（核准的 Design Invariants）第 1、2 條；protocol-v9 §4.4；hitbox-plan §7 第 3 項的 State Authority 移動。
+
+### 順序（要先請你確認）
+
+宣告原本寫「A4 開工前列出、跑突變、交審查，再請你核准」。可是新判定的突變檢查，需要新判定的測試先寫出來才能跑。所以我提議：
+
+1. 現在：這份設計與表的草稿，請你先看方向。
+2. 在工作樹實作 A4，只寫不 commit。
+3. 對新判定跑突變，交給 Sonnet 5.5 用實際的測試輸入核對上面的 1～5。
+4. 請你核准表與 1～5。
+5. commit。
+
+第 2 步的實作，不會跑 E8～E10 的受入判定。
+
 ## 會改判定的既有測試（A1～A3）
 
 | # | 測試 | 改法 | 寬鬆面 |
