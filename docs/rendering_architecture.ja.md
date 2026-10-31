@@ -11,7 +11,7 @@ CPU はゲームのルールを実行して何を描くかを決め、GPU は頂
 
 ```mermaid
 flowchart LR
-    A[CPU: ゲーム状態] --> B[RenderQueue: 物体とカメラ]
+    A[CPU: ゲーム状態] --> B[RenderQueue: オブジェクトとカメラ]
     B --> C[Renderer: draw と pass の構築]
     C --> D[IRenderDevice: GPU コマンド]
     D --> E[Vertex shader: 頂点の投影]
@@ -63,13 +63,13 @@ flowchart TD
 
 | 要素 | 担当すること | 担当しないこと |
 |---|---|---|
-| Object_FPS | 物体、カメラ、材質の shader ID、武器動作 | SDL_GPU コマンド、shader 形式の選択 |
-| `ModelRenderer` | モデル／材質の共有、実例ごとの CPU スキニング、動的 mesh の更新と解放 | アニメーション時計、骨格の命中領域、ゲーム状態 |
-| `RenderQueue`／`MaterialDesc` | 中立な形状、材質、描画要求 | Native handle、ファイルのコンパイル |
-| `ShaderLibrary` | bundle の原子的な追加、manifest の検証、不変 shader bytes の保持 | GPU pipeline やテクスチャの生成 |
-| `Renderer` | カメラと行列、世界／武器／後処理／HUD の順序、pipeline 選択と画面リソース | ドライバーの詳細、ゲームの命中判定 |
+| Object_FPS | オブジェクト、カメラ、マテリアルの shader ID、武器動作 | SDL_GPU コマンド、shader 形式の選択 |
+| `ModelRenderer` | モデル／マテリアルの共有、インスタンスごとの CPU スキニング、動的 mesh の更新と解放 | アニメーションクロック、骨格のヒットボックス、ゲーム状態 |
+| `RenderQueue`／`MaterialDesc` | バックエンド非依存の形状、マテリアル、描画要求 | Native handle、ファイルのコンパイル |
+| `ShaderLibrary` | bundle のアトミックな追加、manifest の検証、不変 shader bytes の保持 | GPU pipeline やテクスチャの生成 |
+| `Renderer` | カメラと行列、ワールド／武器／ポストプロセス／HUD の順序、pipeline 選択と画面リソース | ドライバーの詳細、ゲームの当たり判定 |
 | `IRenderDevice` | GPU リソース、pipeline、frame の取得／送信、読み戻し契約 | 銃やシーン固有の方針 |
-| SDL_GPU adapter | 中立な契約を SDL_GPU 操作と同期へ変換 | ゲームの pass 構築、HLSL ソースの埋め込み |
+| SDL_GPU adapter | バックエンド非依存の契約を SDL_GPU 操作と同期へ変換 | ゲームの pass 構築、HLSL ソースの埋め込み |
 
 これは交換可能な C++ API の境界です。コンパイラーをまたぐ動的プラグイン ABI は保証しません。`ShaderLibrary` の CPU データは共有できますが、GPU handle、pipeline、実行中リソースは device ごとに管理します。
 
@@ -85,17 +85,17 @@ flowchart TD
 | 通常の vertex uniform | `worldViewProjection`：64 bytes、vertex ステージの論理 uniform スロット 0 |
 | 通常の fragment リソース | テクスチャと sampler が各 1 個、fragment ステージの論理スロット 0 |
 | 通常の fragment uniform | tint、UV scale/offset、alpha パラメーター：float4 が 3 個、48 bytes、fragment の論理 uniform スロット 0 |
-| シーン後処理 uniform | exposure と gamma を float4 に格納、16 bytes、fragment の論理 uniform スロット 0 |
+| シーンのポストプロセス uniform | exposure と gamma を float4 に格納、16 bytes、fragment の論理 uniform スロット 0 |
 | 色 | 線形 RGB で計算し、色テクスチャを sRGB デコード。最後に sRGB render target が表示用変換 |
 
 `engine/render/shaders/common/RasterAbi.hlsli` に共通 HLSL 宣言を置きます。コンパイルツールはリフレクションで対応インターフェースのリソース数と uniform サイズを検証し、契約と形式の情報を manifest に記録します。バージョン不一致、欠けたプログラム、不完全な形式、ID 重複、不正パスは明示的に失敗し、別の shader に置き換えて隠しません。
 
 共通宣言は論理リソースマクロを使い、公開 ABI に SDL の register／descriptor 規則を固定しません。ツールの SDL_GPU profile が、vertex uniform を `b0/space1`、fragment texture／sampler を `t0/space2`／`s0/space2`、fragment uniform を `b0/space3` に割り当て、SPIR-V／Metal への対応も処理します。Device adapter を交換するときの物理バインドはツールと adapter の責務です。
 
-今回対応するインターフェースは `unlit` と `scene_post` です。カスタム shader は既存データ契約の範囲で色計算を変更できます。頂点属性、追加 texture、新しい意味の uniform を増やす場合は、中立インターフェース、反射検証、Renderer の値設定も拡張します。
+今回対応するインターフェースは `unlit` と `scene_post` です。カスタム shader は既存データ契約の範囲で色計算を変更できます。頂点属性、追加 texture、新しい意味の uniform を増やす場合は、バックエンド非依存のインターフェース、リフレクション検証、Renderer の値設定も拡張します。
 
 <a id="r05"></a>
-## 5. 内蔵 shader とゲーム shader の所有権
+## 5. 組み込み shader とゲーム shader の所有権
 
 | Shader ID | 所有者 | 用途 |
 |---|---|---|
@@ -103,9 +103,9 @@ flowchart TD
 | `builtin/scene_post` | GYO Render | シーンの exposure と gamma |
 | `game/test/channel_swap` | tests/common | 同じ `unlit` 契約を使うカスタム shader の検証用サンプル |
 
-内蔵ソースは `engine/render/shaders/builtin/`、共通検証サンプルは `tests/common/shader_pipeline/fixtures/` に置きます。それぞれ `bundle.json` ビルド仕様と独立した runtime bundle を持ちます。共通 GPU テストが内蔵 shader の赤とカスタム shader の青の画素を比較します。検証用サンプルをゲームに配布せず、ゲーム起動時にも要求しません。ゲームの shader ID を増やしても、GYO バックエンドにゲーム名やファイルパスを埋め込む必要はありません。
+組み込みソースは `engine/render/shaders/builtin/`、共通検証サンプルは `tests/common/shader_pipeline/fixtures/` に置きます。それぞれ `bundle.json` ビルド仕様と独立した runtime bundle を持ちます。共通 GPU テストが組み込み shader の赤とカスタム shader の青の画素を比較します。検証用サンプルをゲームに配布せず、ゲーム起動時にも要求しません。ゲームの shader ID を増やしても、GYO バックエンドにゲーム名やファイルパスを埋め込む必要はありません。
 
-`MaterialDesc` は shader ID でプログラムを指定し、texture、tint、sampler を渡します。Shader ID は C++ 関数ポインターではなく、shader がゲーム状態を変更する権限も持ちません。データ設定で選べるのはエンジンが対応済みの能力です。
+`MaterialDesc` は shader ID でプログラムを指定し、texture、tint、sampler を渡します。Shader ID は C++ 関数ポインターではなく、shader がゲーム状態を変更する権限も持ちません。データ設定で選べるのはエンジンが対応済みの機能です。
 
 例えば `tests/common/shader_pipeline/fixtures/bundle.json` では各ステージのエントリーポイントを明示します。省略時は `main` です。
 
@@ -124,16 +124,16 @@ flowchart TD
 }
 ```
 
-HLSL の入口名と成果物の入口名は必ずしも同じではありません。例えば MSL 変換時に変更される場合があります。ツールは実際の成果物の入口を runtime manifest に記録し、Renderer/device はその値を使います。
+HLSL のエントリーポイント名と成果物のエントリーポイント名は必ずしも同じではありません。例えば MSL 変換時に変更される場合があります。ツールは実際の成果物のエントリーポイントを runtime manifest に記録し、Renderer/device はその値を使います。
 
-ゲームの `assets/<name>/content.json` が catalog と shader bundles を宣言し、共通 CMake hook が資産組立とオフラインコンパイルを自動実行します。出力は `build/target/<name>/bin/assets/<name>/` の下に集約し、Object_FPS は現在 `shaders/builtin` のみを含みます。実際にカスタム shader を使うゲームだけが追加 bundle を宣言します。Runtime はこの一つの資産 root だけを読み、配布 manifest に build-only source パスを残さず、checkout への fallback もしません。コピー時は内部 shader ID と ABI を保持します。[ゲーム作成](creating_apps.md)を参照してください。
+ゲームの `assets/<name>/content.json` が catalog と shader bundles を宣言し、共通 CMake hook がアセットの組み立てとオフラインコンパイルを自動実行します。出力は `build/target/<name>/bin/assets/<name>/` の下に集約し、Object_FPS は現在 `shaders/builtin` のみを含みます。実際にカスタム shader を使うゲームだけが追加 bundle を宣言します。Runtime はこの一つのアセット root だけを読み、配布 manifest に build-only source パスを残さず、checkout への fallback もしません。コピー時は内部 shader ID と ABI を保持します。[ゲーム作成](creating_apps.md)を参照してください。
 
 <a id="r06"></a>
 ## 6. フレームとリソースのライフサイクル
 
 ```text
 World meshes + Scene sprites
-        ↓ シーンの色を保持、世界カメラ、深度 attachment なし
+        ↓ シーンの色を保持、ワールドカメラ、深度 attachment なし
 WorldOverlay meshes（要求がなければ省略）
         ↓ シーンの色を保持して深度をクリア
 ViewModel meshes
@@ -143,26 +143,26 @@ Scene post process
 Overlay / HUD → Present
 ```
 
-世界と武器は別のカメラを使います。武器 pass で深度をクリアしても、手と銃の間の遮蔽は保たれます。`Renderer` が `PreparedFrame` を構築し、device は明示された pass、attachment、draw を実行します。
+ワールドと武器は別のカメラを使います。武器 pass で深度をクリアしても、手と銃の間の遮蔽は保たれます。`Renderer` が `PreparedFrame` を構築し、device は明示された pass、attachment、draw を実行します。
 
-`MeshLayer::WorldOverlay` は世界座標の透視診断レイヤーで、深度テストも書き込みも行いません。
+`MeshLayer::WorldOverlay` はワールド座標の透過表示の診断レイヤーで、深度テストも書き込みも行いません。
 `MakeWireBox`／`MakeWireCapsule` は細い三角形 mesh を生成し、既存 shader と triangle-list を使います。
 入力は形状の数値だけで、Render は Collision に依存しません。表示の制御と色の意味は呼び出し側が所有します。
-世界 overlay の要求がなければ、既存 pass の流れは変わりません。
+ワールド overlay の要求がなければ、既存 pass の流れは変わりません。
 
 `GYO::ModelRenderer` は `Model + Render` に依存する独立 library です。
-呼び出し側が確定済み Pose を渡し、別のアニメーション時計は進めません。
-モデルと材質は共有でき、動的頂点と mesh handle は実例ごとに管理します。
+呼び出し側が確定済み Pose を渡し、別のアニメーションクロックは進めません。
+モデルとマテリアルは共有でき、動的頂点と mesh handle はインスタンスごとに管理します。
 製品がこれらの機能をどう利用するかは、各製品のアーキテクチャとデータ契約の文書に記録します。
 
 最小化中の `AcquireFrame` は frame なしを返せます。取得できた token は `SubmitFrame` または `AbandonFrame` で一度だけ消費します。送信時の CPU データは呼び出し中に消費し、GPU がまだ使うリソースの保護はバックエンドが担当します。画面サイズ変更時は render target を再生成し、終了時は Renderer の device リソースを解放してから device を破棄します。SDL_GPU バックエンドの swapchain 取得は引き続きブロッキングです。取得に 50 ms 以上かかった場合は、fence 待ちと drawable 待ちの時間を分けた診断ログを Engine のログ facade（`Engine::Base::Log`、カテゴリ `SDL_GPU`、本文 `slow swapchain acquire …`）で 1 行出力します。
 
-アニメーションは固定サイズの頂点内容を更新し、mesh handle と index topology を維持します。診断の読み戻しは明示要求時だけ GPU を待ち、通常の表示ではこの同期を行いません。Scene capture は WorldOverlay と武器を含みますが、exposure／gamma／画面 Overlay／HUD より前のシーンであり、最終スクリーンショットではありません。
+アニメーションは固定サイズの頂点データを更新し、mesh handle と index topology を維持します。診断の読み戻しは明示要求時だけ GPU を待ち、通常の表示ではこの同期を行いません。Scene capture は WorldOverlay と武器を含みますが、exposure／gamma／画面 Overlay／HUD より前のシーンであり、最終スクリーンショットではありません。
 
 <a id="r07"></a>
 ## 7. ビルドの選択
 
-`engine/config/projects.csv` の enabled と OS 列がゲーム集合を決めます。`GYO_APPS=AUTO` は全選択ゲーム、空文字はゲームなし、明示リストは CSV に従う部分集合です。各製品の `project.json` から optional components を収集して、一つの engine graph を組み立てます。ゲーム CMake に discovery pass や資産ルールは置きません。
+`engine/config/projects.csv` の enabled と OS 列がゲーム集合を決めます。`GYO_APPS=AUTO` は全選択ゲーム、空文字はゲームなし、明示リストは CSV に従う部分集合です。各製品の `project.json` から optional components を収集して、一つの engine graph を組み立てます。ゲーム CMake に discovery pass やアセットルールは置きません。
 
 | 設定 | 値と用途 |
 |---|---|
@@ -181,23 +181,23 @@ cmake --build --preset core
 ctest --preset core
 ```
 
-Cache は `build/target/_build/<preset>`、実行可能なゲームは `build/target/<game>/bin` です。古い cache を移動・上書きしません。利用者が runtime 資産と catalog を準備した後は、本機と CI の build が同じ資産組立／shader compile を自動実行します。
+Cache は `build/target/_build/<preset>`、実行可能なゲームは `build/target/<game>/bin` です。古い cache を移動・上書きしません。利用者が runtime アセットと catalog を準備した後は、ローカルと CI の build が同じアセットの組み立て／shader compile を自動実行します。
 
 <a id="r08"></a>
 ## 8. 製品と配置
 
-エンジンはゲームとツールに静的リンクします。各ゲームは `bin/assets/<game>` に内蔵 shader を含めて全資産を持ち、別の `assets/common` や包外 shader に依存しません。必要な native runtime libraries は共通製品配置で扱います。
+エンジンはゲームとツールに静的リンクします。各ゲームは `bin/assets/<game>` に組み込み shader を含めて全アセットを持ち、別の `assets/common` やパッケージ外の shader に依存しません。必要な native runtime libraries は共通製品配置で扱います。
 
 Product manifest は `share/gyo/products/<product>/manifest.json` で、product/kind、executables、必要ファイル、検査を記録します。ゲーム archive は `gyo-<game>-<platform>.tar.gz`、toolchain は `gyo-toolchain-<platform>.tar.gz` です。それぞれ対応する一つの root directory を持ちます。ゲームが宣言した Go service は別に `gyo-<game>-<role>-<platform>.tar.gz` となります。archive の一覧は[公開手順](releasing.ja.md)の第 2 節を参照してください。ゲーム包には UI editor、CI scripts、tests、diagnostic executable を含めません。
 
-`build/acceptance/<game>` が独立 acceptance executable を作り、`build/acceptance/common` と project 固有 adapter が製品外部から検証します。検証用の一時コピーに probe を配置し、同じ実行ファイル相対の資産を読ませることはありますが、正式 archive には含めません。
+`build/acceptance/<game>` が独立 acceptance executable を作り、`build/acceptance/common` と project 固有 adapter が製品外部から検証します。検証用の一時コピーに probe を配置し、同じ実行ファイル相対のアセットを読ませることはありますが、正式 archive には含めません。
 
 <a id="r09"></a>
 ## 9. Engine 統合と検証
 
 対応する各 platform は engine と `tools.csv` が選んだ release ツール（現在は UI Editor GUI）の toolchain を生成し、`projects.csv` が選んだゲームを追加します。共通 GPU baseline と各製品の宣言済み GPU checks は別々に実行します。ゲームがなくても toolchain があるため Prepare Release は成功できます。必須のツール、ゲーム、検証、platform の失敗、取消、skip は Draft 準備を阻止します。Engine SDK や source archive は生成しません。[ツール登録ガイド](tool_projects.md)も参照してください。
 
-Quick と Release は同じ製品／資産組立を使用し、外側の契約が製品検証範囲を決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画を検証し、ゲーム job は契約に宣言された GPU checks を別に実行します。これは software Vulkan の証拠であり、物理 GPU 検証ではありません。Windows/macOS hosted の結果も実機試験の代わりにはなりません。Trigger、検証水準 L1–L4、platform（macos-x64 を含む）、試用パッケージ、master snapshot、release train は[公開手順](releasing.ja.md)の第 3、5、7 節に従います。
+Quick と Release は同じ製品／アセットの組み立てを使用し、外側の契約が製品検証範囲を決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画を検証し、ゲーム job は契約に宣言された GPU checks を別に実行します。これは software Vulkan の証拠であり、物理 GPU 検証ではありません。Windows/macOS hosted の結果も実機試験の代わりにはなりません。Trigger、検証水準 L1–L4、platform（macos-x64 を含む）、試用パッケージ、master snapshot、release train は[公開手順](releasing.ja.md)の第 3、5、7 節に従います。
 
 Object_FPS の startup/headless/GPU probe は独立した `gyo_<game>_acceptance` が所有し、ゲーム `main` へ注入しません。ゲーム本体は通常操作と `--gpu-driver` を持ち、診断、capture、対話的 viewmodel preview は外側の tests／design tool が所有します。[Object_FPS 検証](object_fps/acceptance.ja.md)と[公開手順](releasing.ja.md)を参照してください。
 
@@ -212,8 +212,8 @@ Object_FPS の startup/headless/GPU probe は独立した `gyo_<game>_acceptance
 
 | 検証 | 状態 |
 |---|---|
-| Windows のゲーム／optional adapter なし core 構成 | CTest 6/6 合格。実際の CMake プラットフォーム方針と中立 render テストを含む |
-| Windows ネイティブ shader host ツール | CLion profile の CTest 3/3 合格。反射、不正 shader 拒否、増分依存、再ビルド、子ツールチェーンの引き継ぎを含む |
+| Windows のゲーム／optional adapter なし core 構成 | CTest 6/6 合格。実際の CMake プラットフォーム方針とバックエンド非依存の render テストを含む |
+| Windows ネイティブ shader host ツール | CLion profile の CTest 3/3 合格。リフレクション、不正 shader 拒否、インクリメンタルな依存関係、再ビルド、子ツールチェーンの引き継ぎを含む |
 | 主ビルドからの host shader ツール自動構築 | 成功 |
 | Windows 全体の RelWithDebInfo ビルドと CPU/headless | ビルド成功、CTest 12/12 合格。headless は 1,169 assertions を含む |
 | Windows RelWithDebInfo の engine GPU 数値 smoke | D3D12 と Vulkan の明示指定で両方 exit 0。実際の構成は `direct3d12`＋DXIL、`vulkan`＋SPIR-V |
@@ -237,7 +237,7 @@ Object_FPS の startup/headless/GPU probe は独立した `gyo_<game>_acceptance
 
 既存の Windows Mark-23／ジャンプ検証を、新レンダリング設計の検証結果として流用しません。今回のビルドログ、Actions summary、実機出力を合格の証拠とします。
 
-初回 hosted の記録は [Actions run 35079389797](https://github.com/yojinn-io/GYO-Engine/actions/runs/35079389797) です。この実行は修正前の commit を使っています。古い job の再実行も同じ版を使うため、修正を commit／push し、新しい commit で検証を開始します。
+初回 hosted の記録は [Actions run 35079389797](https://github.com/yojinn-io/GYO-Engine/actions/runs/35079389797) です。この実行は修正前の commit を使っています。古い job の再実行も同じバージョンを使うため、修正を commit／push し、新しい commit で検証を開始します。
 
 後続は [Actions run 35093916457](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457) です。Windows と [macOS job](https://github.com/yojinn-io/GYO-Engine/actions/runs/35093916457/job/104786488372) は成功し、macOS は Metallib、全テスト、配布検証を含みます。Linux ログはオフライン SDL の console-build 設定不足を示しました。どちらも新 quick／Release フローを導入する前の履歴であり、macOS の物理 GPU は未検証です。
 
@@ -262,7 +262,7 @@ Windows のプラットフォーム変数修正は、ローカルで MSVC を初
 - `build/ci-release-smoke-tests.log`、`build/ci-release-smoke-tests.xml`：新 Windows 実行ファイルの 4/4 CPU 回帰。新しいインストール済み package は `build/ci-release-stage/`。
 - `build/ci-release-gpu/vulkan/summary.json`、`build/ci-release-gpu/d3d12-quick/summary.json`：新 package のローカル Vulkan 8件と D3D12 1件の描画検証。Linux Lavapipe の合格証拠ではありません。
 
-今回の範囲は共通 HLSL、オフライン shader bundle、中立な Renderer/device 境界、3 プラットフォームのビルド手順です。Compute shader、GPU skinning、PBR、任意の material graph、shader hot reload、完全な RenderGraph、device-loss 自動復旧、バイナリープラグイン ABI は含みません。
+今回の範囲は共通 HLSL、オフライン shader bundle、バックエンド非依存の Renderer/device 境界、3 プラットフォームのビルド手順です。Compute shader、GPU skinning、PBR、任意の material graph、shader hot reload、完全な RenderGraph、device-loss 自動復旧、バイナリープラグイン ABI は含みません。
 
 - [SDL_GPU device と shader 形式](https://wiki.libsdl.org/SDL3/SDL_CreateGPUDevice)
 - [SDL_GPU shader リソースのバインド規則](https://wiki.libsdl.org/SDL3/SDL_CreateGPUShader)
