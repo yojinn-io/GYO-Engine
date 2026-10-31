@@ -268,7 +268,7 @@
       "find": "            if (actions.aimWeight != 0) {\n",
       "replace": "            if (false) {\n",
       "check": "presentation",
-      "expect": "a positive pitch points the pistol down"
+      "expect": "a positive pitch points the weapon down"
     },
     {
       "id": "11-pitch-reversed",
@@ -278,7 +278,7 @@
       "find": "actions.aimWeight < 0 ? definition.aimUpClip :",
       "replace": "actions.aimWeight > 0 ? definition.aimUpClip :",
       "check": "presentation",
-      "expect": "a positive pitch points the pistol down"
+      "expect": "a positive pitch points the weapon down"
     },
     {
       "id": "11-pitch-unclamped",

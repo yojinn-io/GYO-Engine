@@ -38,6 +38,14 @@
   - 只為確認，把 `expect` 暫時改成「weapon」再跑：2／2 killed（改名後的測試抓得到這 2 個突變）。這個修改沒有提交，已還原；要不要修由使用者決定（AGENTS §14、§11）。
 - 證據：主 checkout 的 `build/evidence/asset-layout-20261031/`（`mutations-buns-fixture.json`、`mutations-pitch-expect-check.json`，git 不追蹤）。
 
+## 追加：修正 2 個過時的突變 expect（使用者核准）
+
+- 使用者決定在 PR #125 一起修：「在 #125 一起修」。
+- `mutations.json` 的 `11-pitch-ignored`、`11-pitch-reversed`：`expect` 從「a positive pitch points the pistol down」改成「a positive pitch points the weapon down」，對上 PR #120 改名後的 TEST CASE（`PlayerPresentationTests.cpp` 的「PvP remote upper body follows the pitch: a positive pitch points the weapon down」）。
+- 理由：舊的 `expect` 不出現在任何測試裡，這 2 個突變不可能 killed，檢出力的證明因此失效。新的 `expect` 一樣只對上這一個 TEST CASE，沒有變寬（不是只寫「失敗」之類的泛用訊息）。突變本身（`find`／`replace`）不變。
+- 重跑：2／2 killed。證據：`build/evidence/asset-layout-20261031/mutations-pitch-expect-fix.json`（主 checkout，git 不追蹤）。
+- after-pv8 分支的測試名稱還是 pistol（在 PR #120 之前切出），已通知 v8 規劃會話：合併 master 後測試名稱會是 weapon，和這裡的 `expect` 一致。
+
 ## 範圍的限制
 
 - 停用的 `object_fps`、`object_fps_v2` 各自的 buns 與頭髮貼圖不動（凍結）。

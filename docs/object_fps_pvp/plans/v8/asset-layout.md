@@ -87,7 +87,9 @@ asset-layout
 - 2026-10-31：PR [#125](https://github.com/yojinn-io/GYO-Engine/pull/125) 開啟（doc＋guard）。已通知 v8 規劃會話（mutations.json 的位置、README 連結行、player-folder 的順序）與工具線（落點由 PvP 守衛檢查、`assets.md` 的例子會過時、音效原檔在 `30b36bdb`）。`v8-product-asset-player-folder` 開始。
 - 2026-11-01：`v8-product-asset-player-folder` 完成：3 個定義檔搬進 `characters/player/`，catalog 只改 path，刪 4 筆例外；presentation 測試通過，突變 `11-limit-uncalibrated` 1／1 killed。after-pv8 合併後要重跑它的 Match 測試。
 - 2026-11-01：`v8-engine-assets-common-retire` 完成：刪除 `assets/common`（沒有引用；同一個 PNG 已在停用產品各自的 catalog 裡）。
-- 2026-11-01：`v8-product-asset-buns-fixture` 完成：buns 與頭髮貼圖搬到 `tests/object_fps_pvp/fixtures/hair_buns/`，測試以 `AppendFromFile` 附加 fixture 的 catalog；刪 4 筆例外（剩 5 筆）。重跑 presentation 的 12 個突變：10 killed、2 wrong_failure。後者是 PR #120 把測試名稱的 pistol 改成 weapon、突變的 `expect` 沒跟著改造成的，不是本批；修不修交使用者決定。
+- 2026-11-01：`v8-product-asset-buns-fixture` 完成：buns 與頭髮貼圖搬到 `tests/object_fps_pvp/fixtures/hair_buns/`，測試以 `AppendFromFile` 附加 fixture 的 catalog；刪 4 筆例外（剩 5 筆）。重跑 presentation 的 12 個突變：10 killed、2 wrong_failure。後者是 PR #120 把測試名稱的 pistol 改成 weapon、突變的 `expect` 沒跟著改造成的，不是本批；修不修交使用者決定（後來決定在 #125 修，見下）。
+- 2026-11-01：v8 規劃會話照標準把 hitbox 放在 `characters/player/hitbox.json`（after-pv8 分支 `b6639c5b`，id `object_fps_pvp.player.hitbox`，以 `character_asset_id` 引用人物定義），該分支的 presentation_cpu、asset_catalog、mutation_tool 通過（它的回報）。
+- 2026-11-01：使用者決定在 #125 修那 2 個過時的突變 expect（「在 #125 一起修」）：pistol → weapon，重跑 2／2 killed。已通知 v8 規劃會話。
 
 ## dev_log
 
