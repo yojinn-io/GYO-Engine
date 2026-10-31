@@ -778,7 +778,14 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertIn("PRESET: ${{ inputs.preset }}", toolchain)
         restore = step_with(self.setup, "uses: actions/cache/restore@", 4)
         self.assertIn("path: ${{ steps.toolchain.outputs.cache-path }}", restore)
-        self.assertIn("restore-keys: ${{ steps.toolchain.outputs.restore-prefix }}", restore)
+        # A seed of the same runner image comes first; the family prefix, which
+        # also matches seeds saved before the image joined the key, is the fallback.
+        self.assertIn("restore-keys: |\n"
+                      "          ${{ steps.toolchain.outputs.restore-image-prefix }}\n"
+                      "          ${{ steps.toolchain.outputs.restore-prefix }}", restore)
+        self.assertIn('$imagePrefix = "${prefix}image-$image-"', toolchain)
+        self.assertIn('"restore-image-prefix=$imagePrefix" >> $env:GITHUB_OUTPUT', toolchain)
+        self.assertIn('"cache-key=$imagePrefix$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_OUTPUT', toolchain)
         self.assertGreater(steps.index(restore), steps.index(toolchain))
         self.assertNotRegex(self.setup, r"SCCACHE_GHA_ENABLED|actions/cache@")
         outputs = top_level_block(self.setup, "outputs")

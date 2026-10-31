@@ -103,7 +103,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 
 ## 6. 快取與初次執行
 
-- **編譯快取（sccache v0.18.0）**：`native-setup` 讓所有原生 job 的編譯經過 sccache。快取 key 依平台、toolchain、編譯器版本與 preset 區分，因此 `macos-x64` 的目標物件不會與 arm64 混用。**只有 master 上的 L1 會儲存**（推送 master，或在 master 手動執行）；PR 的 L1、Quick、trial 與 Prepare Release 只讀取最新的種子。
+- **編譯快取（sccache v0.18.0）**：`native-setup` 讓所有原生 job 的編譯經過 sccache。快取 key 依平台、toolchain、編譯器版本與 preset 區分，因此 `macos-x64` 的目標物件不會與 arm64 混用。儲存的 key 也包含 runner 映像版本（`ImageVersion`）：託管映像是逐步替換的，同一個編譯器版本字串下可能同時存在 SDK 或系統標頭不同的映像，用另一個映像的種子幾乎全部未命中（2026-10-30 的 macOS 命中率 2.8%）。讀取時先找同一映像的最新種子，沒有才退回不分映像的最新種子。**只有 master 上的 L1 會儲存**（推送 master，或在 master 手動執行）；PR 的 L1、Quick、trial 與 Prepare Release 只讀取最新的種子。
 - **Host 工具**：Shader 編譯器等 host 工具依 runner 平台（host）以 `actions/cache` 儲存。`macos-arm64` 與 `macos-x64` 共用同一份 arm64 原生工具，目標架構不會帶進 host 工具建置。
 - **Go**：`actions/setup-go` 以各 module 的 `go.mod`／`go.sum` 為 key 快取 module。
 

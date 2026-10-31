@@ -158,10 +158,19 @@ runs:
         if (-not $compiler) { throw 'Unable to identify the compiler for the cache keys.' }
         $cachePath = Join-Path $env:RUNNER_TEMP 'gyo-sccache'
         $prefix = "$env:CACHE_FAMILY-$compiler-$env:PRESET-"
+        # Hosted images roll out gradually, so one run can mix image versions.
+        # Their SDK and system headers can differ under the same compiler
+        # version string, which turns a seed from the other image into almost
+        # all misses; a seed from the same image is preferred, any seed of the
+        # family is the fallback. The image never decides a check result.
+        $image = if ($env:ImageVersion) { $env:ImageVersion -replace '[^a-zA-Z0-9.-]', '_' } else { 'unknown' }
+        $imagePrefix = "${prefix}image-$image-"
         "compiler=$compiler" >> $env:GITHUB_OUTPUT
         "cache-path=$cachePath" >> $env:GITHUB_OUTPUT
+        "restore-image-prefix=$imagePrefix" >> $env:GITHUB_OUTPUT
         "restore-prefix=$prefix" >> $env:GITHUB_OUTPUT
-        "cache-key=$prefix$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_OUTPUT
+        "cache-key=$imagePrefix$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_OUTPUT
+        "Runner image $image; compiler cache seeds of this image are restored first." | Write-Output
         # CMake reads these launcher variables on every first configure, so
         # they also reach FetchContent subprojects and the host-tools
         # ExternalProject. The bare name keeps restored CMakeCaches portable.
@@ -176,10 +185,14 @@ runs:
         "CMAKE_OBJCXX_COMPILER_LAUNCHER=sccache" >> $env:GITHUB_ENV
 
     # Only the default-branch L1 job saves; every other job reads the newest
-    # seed for the same platform, toolchain, compiler and preset.
+    # seed for the same platform, toolchain, compiler and preset, from the
+    # same runner image when one exists. The family prefix also matches seeds
+    # saved before the image was part of the key.
     - name: Restore the compiler cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.toolchain.outputs.cache-path }}
         key: ${{ steps.toolchain.outputs.cache-key }}
-        restore-keys: ${{ steps.toolchain.outputs.restore-prefix }}
+        restore-keys: |
+          ${{ steps.toolchain.outputs.restore-image-prefix }}
+          ${{ steps.toolchain.outputs.restore-prefix }}

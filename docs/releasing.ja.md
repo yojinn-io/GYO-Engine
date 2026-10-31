@@ -103,7 +103,7 @@ Branch protection（または ruleset）で master の required status check に
 
 ## 6. Cache と初回の挙動
 
-- **Compiler cache（sccache v0.18.0）**：`native-setup` が全 native job の compile を sccache 経由にします。Cache の key は platform、toolchain、compiler の version、preset ごとに分かれ、`macos-x64` の target object が arm64 と混ざることはありません。**保存するのは master 上の L1 だけ**（master への push、または master での手動実行）です。PR の L1、Quick、trial、Prepare Release は最新の seed を読むだけです。
+- **Compiler cache（sccache v0.18.0）**：`native-setup` が全 native job の compile を sccache 経由にします。Cache の key は platform、toolchain、compiler の version、preset ごとに分かれ、`macos-x64` の target object が arm64 と混ざることはありません。保存する key には runner image の version（`ImageVersion`）も含めます。Hosted image は段階的に切り替わるため、同じ compiler version でも SDK や system header が違う image が同時に使われ、別 image の seed ではほぼ全件が miss になります（2026-10-30 の macOS で命中率 2.8%）。読み取りは同じ image の最新 seed を優先し、なければ image を問わず最新の seed を使います。**保存するのは master 上の L1 だけ**（master への push、または master での手動実行）です。PR の L1、Quick、trial、Prepare Release は最新の seed を読むだけです。
 - **Host tools**：Shader compiler などの host tools は runner の platform（host）ごとに `actions/cache` で保存します。`macos-arm64` と `macos-x64` は同じ arm64 native tools を共有し、target architecture を host tools の build に持ち込みません。
 - **Go**：`actions/setup-go` が各 module の `go.mod`／`go.sum` を key に module cache を保存します。
 
