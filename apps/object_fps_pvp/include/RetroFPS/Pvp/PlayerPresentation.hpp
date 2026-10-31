@@ -5,6 +5,7 @@
 #include "engine/render/RenderTypes.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <span>
@@ -80,6 +81,13 @@ struct PlayerPresentationDefinition final {
 [[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>
 LoadPlayerPresentationDefinition(Engine::Asset::AssetManager& assets, float bodyHeight,
                                  std::string& error);
+// The Match's definition (v8-product-hitbox-data D2): the same body, clips and
+// calibration with no texture, accessory or weapon; it composes the body pose
+// only (SamplePlayerBodyPose), the one the Client presents.
+[[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>
+LoadPlayerPoseDefinition(Engine::Asset::AssetManager& assets, float bodyHeight, std::string& error);
+[[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>
+LoadPlayerPoseDefinition(const std::filesystem::path& contentRoot, float bodyHeight, std::string& error);
 
 // Jump presentation follows the sampled grounded state. Only a rising liftoff
 // plays Start; leaving the ground while falling goes straight to the Loop.
@@ -139,6 +147,11 @@ struct PlayerPresentationPose final {
     std::vector<Engine::Model::Pose> accessories;
 };
 
+// The composed body skeleton alone: the judged pose. SamplePlayerPresentationPose
+// composes the same body and adds the weapon and accessories.
+[[nodiscard]] bool SamplePlayerBodyPose(const PlayerPresentationDefinition& definition,
+    const PlayerLocomotionState& state, const PlayerActionPose& actions, Engine::Model::Pose& body,
+    std::string& error);
 [[nodiscard]] bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
     const PlayerLocomotionState& state, PlayerPresentationPose& output, std::string& error);
 [[nodiscard]] bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,

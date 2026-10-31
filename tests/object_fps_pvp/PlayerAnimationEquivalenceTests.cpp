@@ -16,6 +16,7 @@
 #include "gyo/AppConfig.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -347,4 +348,112 @@ TEST_CASE("PvP Match animation equals the Client locomotion it replaces within i
     std::sort(worst.lags.begin(), worst.lags.end());
     CHECK(worst.lags == std::vector<std::uint64_t>{37, 43, 262, 271, 277, 307, 337, 367, 382, 391, 412, 457, 457,
                                                    487, 493, 532, 547, 562, 583});
+}
+
+// v8-product-hitbox-data D2 (H4): the Match's body pose (no texture, no
+// weapon, no accessory) is bit for bit the Client's presented body for the
+// same authority inputs: the judged pose is the presented pose.
+namespace {
+const PlayerPresentationDefinition& MatchDefinition() {
+    static ContentAssets fixture{false};
+    static const auto definition = [&] {
+        std::string error;
+        auto loaded = LoadPlayerPoseDefinition(fixture.assets, 1.8F, error);
+        if (!loaded) throw std::runtime_error(error);
+        return loaded;
+    }();
+    return *definition;
+}
+
+std::size_t BodyDifferences(const PlayerLocomotionState& state, const PlayerPresentationFrame& frame) {
+    std::string error;
+    PlayerActionPose actions;
+    REQUIRE_MESSAGE(ResolvePlayerActions(ClientDefinition(), state, frame, actions, error), error);
+    PlayerPresentationPose client;
+    REQUIRE_MESSAGE(SamplePlayerPresentationPose(ClientDefinition(), state, actions, client, error), error);
+    Engine::Model::Pose match;
+    REQUIRE_MESSAGE(SamplePlayerBodyPose(MatchDefinition(), state, actions, match, error), error);
+    REQUIRE(match.globalTransforms.size() == client.body.globalTransforms.size());
+    std::size_t differences = 0;
+    for (std::size_t node = 0; node < match.globalTransforms.size(); ++node)
+        for (std::size_t i = 0; i < match.globalTransforms[node].values.size(); ++i)
+            differences += std::bit_cast<std::uint32_t>(match.globalTransforms[node].values[i]) !=
+                           std::bit_cast<std::uint32_t>(client.body.globalTransforms[node].values[i]);
+    return differences;
+}
+} // namespace
+
+TEST_CASE("PvP Match body pose equals the presented body bit for bit") {
+    REQUIRE_FALSE(MatchDefinition().weapon); // the Match loads no weapon
+    // The body's world placement is the same too: shapes go to the world by
+    // (model - anchor) x scale (hitbox-shapes contract).
+    CHECK(std::bit_cast<std::uint32_t>(MatchDefinition().scale) == std::bit_cast<std::uint32_t>(ClientDefinition().scale));
+    CHECK(std::bit_cast<std::uint32_t>(MatchDefinition().anchor.y) == std::bit_cast<std::uint32_t>(ClientDefinition().anchor.y));
+    CHECK(std::bit_cast<std::uint32_t>(MatchDefinition().anchor.x) == std::bit_cast<std::uint32_t>(ClientDefinition().anchor.x));
+    CHECK(std::bit_cast<std::uint32_t>(MatchDefinition().anchor.z) == std::bit_cast<std::uint32_t>(ClientDefinition().anchor.z));
+    std::size_t poses = 0;
+    for (const auto& route : Routes()) {
+        const std::string name = route.name;
+        CAPTURE(name);
+        const auto& rules = MatchDefinition().animationRules;
+        std::optional<PlayerAnimation> value;
+        std::optional<PlayerState> before;
+        PlayerLocomotionState state;
+        for (std::size_t index = 0; index < route.samples.size(); ++index) {
+            const auto& sample = route.samples[index];
+            const auto tick = static_cast<std::uint64_t>(index + 1);
+            PlayerState now;
+            now.playerId = 1;
+            now.position = sample.position;
+            now.yaw = sample.yaw;
+            now.grounded = sample.grounded;
+            now.verticalVelocity = sample.verticalVelocity;
+            now.crouched = sample.crouched;
+            value = AdvancePlayerAnimation(rules, value, before ? &*before : nullptr, now, tick);
+            before = now;
+            PlayerPresentationFrame frame;
+            frame.playerId = 1;
+            frame.movementEpoch = 1;
+            frame.position = now.position;
+            frame.yaw = now.yaw;
+            frame.presentationSeconds = static_cast<double>(tick) / AuthorityTickRate;
+            frame.deltaSeconds = 1.0 / AuthorityTickRate;
+            frame.grounded = now.grounded;
+            frame.crouched = now.crouched;
+            frame.animation = InterpolatePlayerAnimation(*value, *value, 0);
+            std::string error;
+            REQUIRE_MESSAGE(AdvancePlayerLocomotion(state, frame, ClientDefinition(), error), error);
+            if (tick % 10 != 0) continue;
+            CAPTURE(tick);
+            CHECK(BodyDifferences(state, frame) == 0);
+            ++poses;
+            // The actions and pitches the judged pose includes (pv9-upper-body-in-hitbox (a)).
+            for (const float pitch : {-1.0F, 0.0F, 1.0F}) {
+                auto pitched = frame;
+                pitched.pitch = pitch;
+                CHECK(BodyDifferences(state, pitched) == 0);
+                ++poses;
+            }
+            auto shot = frame;
+            shot.shotActionId = 1;
+            shot.shotSeconds = frame.presentationSeconds - 0.05;
+            CHECK(BodyDifferences(state, shot) == 0);
+            auto reload = frame;
+            reload.reloadActionId = 2;
+            reload.reloadStartSeconds = frame.presentationSeconds - 0.3;
+            reload.reloadEndSeconds = frame.presentationSeconds + 1.2;
+            CHECK(BodyDifferences(state, reload) == 0);
+            auto hit = frame;
+            hit.damageCount = 1;
+            hit.damageSeconds = frame.presentationSeconds - 0.1;
+            CHECK(BodyDifferences(state, hit) == 0);
+            auto dead = frame;
+            dead.dead = true;
+            dead.lifeStateSeconds = frame.presentationSeconds - 0.4;
+            CHECK(BodyDifferences(state, dead) == 0);
+            poses += 4;
+        }
+    }
+    MESSAGE("H4 compared poses: " << poses);
+    CHECK(poses == 12 * 60 * 8);
 }
