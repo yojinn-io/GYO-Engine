@@ -76,7 +76,8 @@ public:
     // synthetic for callers without it.
     explicit MatchRuntimeHost(Arena arena, ClockNow now = std::chrono::steady_clock::now,
         const StanceRules& stance = DefaultStanceRules,
-        const PlayerAnimationRules& animation = SyntheticPlayerAnimationRules);
+        const PlayerAnimationRules& animation = SyntheticPlayerAnimationRules,
+        std::shared_ptr<const PlayerHitModel> hitModel = SyntheticPlayerHitModel());
     // The stance rules the Match plays by, sent in Ready; fixed for its life.
     [[nodiscard]] const StanceRules& Stance() const noexcept { return stance_; }
     MatchRuntimeHost(const MatchRuntimeHost&) = delete;

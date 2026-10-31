@@ -6,9 +6,11 @@
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <numbers>
 #include <set>
 
@@ -1616,4 +1618,195 @@ TEST_CASE("PvP Match refuses to publish an animation the Gateway would refuse") 
     dead.players[0].lifeState = LifeState::Dead;
     dead.animation[0].jumpPhase = JumpPhase::Airborne;
     CHECK(ValidPlayerAnimations(dead.players, dead.animation, dead.tick));
+}
+
+// v8-product-hitbox-shot S2: when the Match places the shapes (J4) and which
+// animation it poses them with (J8).
+namespace {
+// Records every placement and answers with the synthetic model.
+class RecordingHitModel final : public PlayerHitModel {
+public:
+    struct Call final {
+        std::uint64_t tick{};
+        PlayerId player{};
+        PlayerAnimation animation;
+        CombatState combat;
+    };
+    mutable std::vector<Call> calls;
+    void Shapes(const PlayerHitInput& input, std::vector<PlayerWorldHitShape>& output) const override {
+        calls.push_back({input.tick, input.player.playerId, input.animation, input.combat});
+        SyntheticPlayerHitModel()->Shapes(input, output);
+    }
+};
+} // namespace
+
+TEST_CASE("PvP a tick places every living target's shapes once at its first shot") {
+    auto model = std::make_shared<RecordingHitModel>();
+    PvpMatch match(QuadArena(), PvpCombatRules, DefaultStanceRules, SyntheticPlayerAnimationRules, model);
+    JoinFour(match);
+    CombatStep(match);
+    CHECK(model->calls.empty()); // no shot, no placement
+    // Three shots in one tick share one placement of the four players.
+    for (const PlayerId shooter : {1, 3, 4}) Fire(match, shooter, 1);
+    CombatStep(match);
+    REQUIRE(model->calls.size() == 4);
+    for (PlayerId id = 1; id <= 4; ++id) {
+        CAPTURE(id);
+        CHECK(std::count_if(model->calls.begin(), model->calls.end(),
+            [&](const auto& call) { return call.player == id && call.tick == 2; }) == 1);
+    }
+    for (const PlayerId shooter : {1, 3, 4}) CHECK(Decisions(match, shooter).back().hitKind == ShotHitKind::Player);
+    CombatStep(match, 5);
+    CHECK(model->calls.size() == 4);
+    // The next tick's shapes are placed anew: a target that moved away is
+    // missed where it stood.
+    for (unsigned step = 0; step < 20; ++step) {
+        MoveCombatPlayer(match, 2, 1);
+        CombatStep(match);
+    }
+    REQUIRE(std::abs(LifePlayer(match, 2).position.z - 8) > 1);
+    Fire(match, 3, 2);
+    CombatStep(match);
+    CHECK(model->calls.size() == 8);
+    CHECK(Decisions(match, 3).back().hitKind != ShotHitKind::Player);
+    for (unsigned step = 0; step < 20; ++step) {
+        MoveCombatPlayer(match, 2, -1);
+        CombatStep(match);
+    }
+    // A lethal shot inside a tick removes its target from the later shots, not
+    // from the tick's placement.
+    CombatStep(match, 5);
+    // Back within the capsule radius (0.25) of where the shots aim.
+    REQUIRE(std::abs(LifePlayer(match, 2).position.z - 8) < .2F);
+    Fire(match, 1, 2);
+    Fire(match, 3, 3);
+    Fire(match, 4, 2);
+    REQUIRE(CombatPlayer(match, 2).hp == 25000);
+    CombatStep(match);
+    CHECK(model->calls.size() == 12);
+    CHECK(Decisions(match, 1).back().hitKind == ShotHitKind::Player);
+    CHECK(Decisions(match, 3).back().hitKind != ShotHitKind::Player);
+    CHECK(LifePlayer(match, 2).lifeState == LifeState::Dead);
+    // A dead player is not placed.
+    CombatStep(match, 9);
+    Fire(match, 1, 3);
+    CombatStep(match);
+    CHECK(model->calls.size() == 15);
+    CHECK(std::none_of(model->calls.end() - 3, model->calls.end(), [](const auto& call) { return call.player == 2; }));
+}
+
+TEST_CASE("PvP shots are judged with the animation the tick's snapshot carries") {
+    auto model = std::make_shared<RecordingHitModel>();
+    // Small damage keeps the target alive through every volley.
+    auto rules = PvpCombatRules;
+    rules.shotDamage = 1000;
+    rules.maximumShotDamage = 2000;
+    PvpMatch match(QuadArena(), rules, DefaultStanceRules, SyntheticPlayerAnimationRules, model);
+    JoinFour(match);
+    CombatStep(match);
+    std::size_t compared = 0;
+    std::set<JumpPhase> phases;
+    bool crouchedSeen = false;
+    std::size_t transitions = 0;
+    // Staggered shooters place the shapes every few ticks, so the placements
+    // fall inside the six-tick Start and Land phases, on their first ticks too.
+    const std::array<std::pair<PlayerId, unsigned>, 3> shooters{{{1, 0}, {3, 3}, {4, 6}}};
+    std::map<PlayerId, ActionId> next;
+    for (unsigned step = 0; step < 120; ++step) {
+        // Player 2 walks, jumps, lands and crouches while the others shoot.
+        const auto two = LifePlayer(match, 2);
+        const bool jump = step % 40 == 3;
+        const bool crouch = step % 40 >= 20 && step % 40 < 30;
+        const float forward = step % 40 < 15 ? 1.0F : (step % 40 < 30 ? -1.0F : 0.0F);
+        REQUIRE(match.SubmitInput({2, {{two.lastResolvedCommand + 1, forward, step % 7 == 0 ? 1.0F : 0.0F, 0, 0,
+            jump, crouch, false}}, two.movementEpoch, two.lifeGeneration}));
+        for (const auto& [shooter, offset] : shooters)
+            if (step % 10 == offset)
+                REQUIRE(match.SubmitActions({shooter, {{++next[shooter], 1, AtVictim[shooter], 0}}}) ==
+                        ActionAdmission::Accepted);
+        const auto before = model->calls.size();
+        CombatStep(match);
+        const auto snapshot = match.Snapshot();
+        for (auto call = model->calls.begin() + static_cast<std::ptrdiff_t>(before); call != model->calls.end(); ++call) {
+            const auto player = std::find_if(snapshot.players.begin(), snapshot.players.end(),
+                [&](const auto& state) { return state.playerId == call->player; });
+            REQUIRE(player != snapshot.players.end());
+            if (player->lifeState != LifeState::Alive) continue;
+            const auto animation = std::find_if(snapshot.animation.begin(), snapshot.animation.end(),
+                [&](const auto& value) { return value.playerId == call->player; });
+            REQUIRE(animation != snapshot.animation.end());
+            CAPTURE(call->tick);
+            CAPTURE(call->player);
+            CHECK(call->animation == *animation);
+            ++compared;
+            if (call->player == 2) {
+                phases.insert(animation->jumpPhase);
+                crouchedSeen = crouchedSeen || player->crouched;
+                transitions += animation->jumpPhaseTick == call->tick;
+            }
+        }
+    }
+    MESSAGE("J8 compared placements: " << compared);
+    CHECK(compared >= 30);
+    // The moving target was judged on the ground, in the air and crouched.
+    MESSAGE("J8 placements on a jump phase's first tick: " << transitions);
+    CHECK(phases.size() == 4); // Grounded, Start, Airborne and Land
+    CHECK(transitions >= 2);
+    CHECK(crouchedSeen);
+}
+
+TEST_CASE("PvP a tick places its shapes with the combat state from before its actions") {
+    // xhigh review finding 1: an action decided earlier in the tick, such as a
+    // reload ordered before the first shot, must not reach the judged pose,
+    // or the pose would depend on the order of the tick's actions.
+    auto model = std::make_shared<RecordingHitModel>();
+    PvpMatch match(QuadArena(), PvpCombatRules, DefaultStanceRules, SyntheticPlayerAnimationRules, model);
+    JoinFour(match);
+    CombatStep(match);
+    Fire(match, 1, 1); // spends a round, so a reload is accepted
+    CombatStep(match, 11);
+    const auto before = CombatPlayer(match, 1);
+    // (A, PlayerId, ActionId): player 1's reload is decided before player 3's shot.
+    REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    REQUIRE(match.SubmitActions({3, {{1, 1, std::numbers::pi_v<float>, 0}}}) == ActionAdmission::Accepted);
+    const auto calls = model->calls.size();
+    CombatStep(match);
+    const auto tick = match.TickCount();
+    REQUIRE(Decisions(match, 1).back().accepted);
+    REQUIRE(CombatPlayer(match, 1).reloadStartTick == tick);
+    const auto placed = std::find_if(model->calls.begin() + static_cast<std::ptrdiff_t>(calls), model->calls.end(),
+        [&](const auto& call) { return call.player == 1 && call.tick == tick; });
+    REQUIRE(placed != model->calls.end());
+    CHECK(placed->combat == before);
+}
+
+TEST_CASE("PvP the Match writes the hit shape's part into the decision and the hit record") {
+    // A model whose one shape is the stance capsule judged as the given part.
+    class PartModel final : public PlayerHitModel {
+    public:
+        explicit PartModel(HitPart part) : part_(part) {}
+        void Shapes(const PlayerHitInput& input, std::vector<PlayerWorldHitShape>& output) const override {
+            SyntheticPlayerHitModel()->Shapes(input, output);
+            output.back().part = part_;
+        }
+    private:
+        HitPart part_;
+    };
+    for (const auto& [part, damage] : {std::pair{HitPart::Head, 50000U}, std::pair{HitPart::Leg, 18750U},
+                                       std::pair{HitPart::Body, 25000U}}) {
+        CAPTURE(static_cast<int>(part));
+        PvpMatch match(CombatArena(), PvpCombatRules, DefaultStanceRules, SyntheticPlayerAnimationRules,
+                       std::make_shared<PartModel>(part));
+        JoinCombatPlayers(match);
+        CombatStep(match);
+        REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match);
+        const auto decision = Decisions(match).back();
+        CHECK(decision.hitKind == ShotHitKind::Player);
+        CHECK(decision.hitPart == part);
+        CHECK(decision.damage == damage);
+        const auto victim = CombatPlayer(match, 2);
+        CHECK(victim.lastHitPart == part);
+        CHECK(victim.hp == 100000 - damage);
+    }
 }

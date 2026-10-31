@@ -4364,7 +4364,7 @@
       "batch": "v71-hitbox-fields",
       "what": "The Match reports a Head hit",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)\n",
+      "find": "            decision.hitPart = hit.part; // the hit shape's part (v8-product-hitbox-shot)\n",
       "replace": "            decision.hitPart = HitPart::Head;\n",
       "check": "cpu",
       "expect": "hitPart == HitPart::Body"
@@ -4374,7 +4374,7 @@
       "batch": "v71-hitbox-fields",
       "what": "The Match leaves the hit record's part unset",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            target.combat.lastHitPart = HitPart::Body;\n",
+      "find": "            target.combat.lastHitPart = hit.part;\n",
       "replace": "",
       "check": "cpu",
       "expect": "lastHitPart == HitPart::Body"
@@ -4634,8 +4634,8 @@
       "batch": "v71-a1-shot-step",
       "what": "The Match ignores the rules it is given",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    : arena_(std::move(arena)), rules_(rules), stance_(stance), animation_(animation) {\n",
-      "replace": "    : arena_(std::move(arena)), rules_(PvpCombatRules), stance_(stance), animation_(animation) {\n",
+      "find": "    : arena_(std::move(arena)), rules_(rules), stance_(stance), animation_(animation), hitModel_(std::move(hitModel)) {\n",
+      "replace": "    : arena_(std::move(arena)), rules_(PvpCombatRules), stance_(stance), animation_(animation), hitModel_(std::move(hitModel)) {\n",
       "check": "cpu",
       "expect": "PvP A1"
     },
@@ -8340,6 +8340,166 @@
       "replace": "        modelPoint);",
       "check": "presentation",
       "expect": "foot anchor|body points reach the world"
+    },
+    {
+      "id": "s2-judge-ignores-part",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "Every shape is judged Body",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "                part = shape.part;\n",
+      "replace": "                part = HitPart::Body;\n",
+      "check": "cpu",
+      "expect": "nearest shape decides"
+    },
+    {
+      "id": "s2-farthest-shape",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "A target takes its farthest shape on the ray",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "*along < *distance ||",
+      "replace": "*along > *distance ||",
+      "check": "cpu",
+      "expect": "nearest shape decides"
+    },
+    {
+      "id": "s2-tie-reversed",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "At one distance the lower part counts",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "PartRank(shape.part) > PartRank(part)",
+      "replace": "PartRank(shape.part) < PartRank(part)",
+      "check": "cpu",
+      "expect": "higher part"
+    },
+    {
+      "id": "s2-synthetic-head",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The synthetic model judges Head",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "    return {HitPart::Body, Engine::Collision::VerticalCapsule{",
+      "replace": "    return {HitPart::Head, Engine::Collision::VerticalCapsule{",
+      "check": "cpu",
+      "expect": "synthetic model is"
+    },
+    {
+      "id": "s2-previous-animation",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "Shapes are posed with the previous tick's animation",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        const auto animation = AdvancePlayerAnimation(animation_, player.animation, &player.animationState,\n                                                      player.state, tick_);",
+      "replace": "        const auto animation = player.animation;",
+      "check": "cpu",
+      "expect": "judged with the animation"
+    },
+    {
+      "id": "s2-placed-every-shot",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "Shapes are placed again for every shot",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (shapesTick_ == tick_) return shapes_;\n",
+      "replace": "    if (false) return shapes_;\n",
+      "check": "cpu",
+      "expect": "places every living"
+    },
+    {
+      "id": "s2-killed-still-hit",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "A target killed earlier in the tick can still be hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            if (target.state.lifeState == LifeState::Alive) targets.push_back({id, shapes.at(id)});",
+      "replace": "            if (target.state.lifeState == LifeState::Alive || shapes.contains(id)) targets.push_back({id, shapes.at(id)});",
+      "check": "cpu",
+      "expect": "places every living|lethal hit inside a tick"
+    },
+    {
+      "id": "s2-posed-head-as-leg",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model judges the head sphere as Leg",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "                output.push_back({shape.part, Engine::Math::Capsule{centre, centre, shape.radius}});",
+      "replace": "                output.push_back({HitPart::Leg, Engine::Math::Capsule{centre, centre, shape.radius}});",
+      "check": "presentation",
+      "expect": "judge the head, the body and the legs"
+    },
+    {
+      "id": "s2-posed-ignores-yaw",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model does not turn the shapes by the yaw",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "            return PlayerBodyPointToWorld(definition, input.player.position, input.player.yaw,",
+      "replace": "            return PlayerBodyPointToWorld(definition, input.player.position, 0.0F,",
+      "check": "presentation",
+      "expect": "follow the target"
+    },
+    {
+      "id": "s2-posed-capsule-one-bone",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "A posed capsule ends at its from bone",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "world(shape.node, {}), world(shape.nodeTo, {}),",
+      "replace": "world(shape.node, {}), world(shape.node, {}),",
+      "check": "presentation",
+      "expect": "every kind of input"
+    },
+    {
+      "id": "s2-combat-after-actions",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "Shapes are posed with the combat state the tick's earlier actions changed",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "player.state, actionsCombat_.at(id), animation, tick_}",
+      "replace": "player.state, player.combat, animation, tick_}",
+      "check": "cpu",
+      "expect": "combat state from before its actions"
+    },
+    {
+      "id": "s2-stale-shapes",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The previous tick's shapes are kept",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (shapesTick_ == tick_) return shapes_;\n    shapes_.clear();\n",
+      "replace": "    if (shapesTick_ == tick_) return shapes_;\n",
+      "check": "cpu",
+      "expect": "places every living"
+    },
+    {
+      "id": "s2-decision-part-body",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The Match writes Body whatever shape was hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            decision.hitPart = hit.part; // the hit shape's part (v8-product-hitbox-shot)\n",
+      "replace": "            decision.hitPart = HitPart::Body;\n",
+      "check": "cpu",
+      "expect": "hit shape's part into the decision"
+    },
+    {
+      "id": "s2-posed-without-combat",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model ignores the combat state",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "        const auto frame = PlayerFrameFromAuthority(input.player, input.combat,",
+      "replace": "        const auto frame = PlayerFrameFromAuthority(input.player, std::nullopt,",
+      "check": "presentation",
+      "expect": "every kind of input"
+    },
+    {
+      "id": "s2-posed-without-animation",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model ignores the Match animation",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "            InterpolatePlayerAnimation(input.animation, input.animation, 0), static_cast<double>(input.tick));",
+      "replace": "            std::nullopt, static_cast<double>(input.tick));",
+      "check": "presentation",
+      "expect": "every kind of input|judge the head"
+    },
+    {
+      "id": "s2-posed-tick-zero",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model poses at tick 0",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "            InterpolatePlayerAnimation(input.animation, input.animation, 0), static_cast<double>(input.tick));",
+      "replace": "            InterpolatePlayerAnimation(input.animation, input.animation, 0), 0.0);",
+      "check": "presentation",
+      "expect": "every kind of input"
     }
   ]
 }

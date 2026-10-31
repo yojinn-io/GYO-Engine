@@ -2,10 +2,12 @@
 
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
 #include "RetroFPS/Pvp/Combat.hpp"
+#include "RetroFPS/Pvp/PlayerHitModel.hpp"
 #include "engine/math/linear/Vec3.hpp"
 
 #include <cstddef>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -14,6 +16,7 @@
 namespace Engine::Asset { class AssetManager; }
 
 namespace fps::pvp {
+struct PlayerPresentationDefinition;
 
 // One hit shape of the player hitbox Data Contract (docs/object_fps_pvp/
 // hitbox-shapes.zh-Hant.md): a sphere carried by a bone, or a capsule between
@@ -48,5 +51,16 @@ struct PlayerHitbox final {
 // The Match's path: the product hitbox with its character's model, no texture.
 [[nodiscard]] std::optional<PlayerHitbox> LoadPlayerHitbox(Engine::Asset::AssetManager& assets, std::string& error);
 [[nodiscard]] std::optional<PlayerHitbox> LoadPlayerHitbox(const std::filesystem::path& contentRoot, std::string& error);
+
+// The product's hit model (v8-product-hitbox-shot): the body the Client
+// presents for the same authority values at the tick (PlayerFrameFromAuthority,
+// AdvancePlayerLocomotion from a fresh state, ResolvePlayerActions,
+// SamplePlayerBodyPose), the shapes placed on its bones and taken to the world
+// as the renderer draws the body (PlayerBodyPointToWorld). The hitbox must be
+// read against the definition's character (both from one content root): the
+// shapes keep bone indices only, so this checks that they are inside the
+// skeleton, not that the skeleton is the one they were read against.
+[[nodiscard]] std::shared_ptr<const PlayerHitModel> MakePosedPlayerHitModel(
+    std::shared_ptr<const PlayerPresentationDefinition> definition, PlayerHitbox hitbox);
 
 } // namespace fps::pvp
