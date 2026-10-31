@@ -1,0 +1,26 @@
+{
+ "source": "cross-platform.yml workflow_dispatch run 41176350626 (commit on claude/pvp-v8-after-pv8), l1-diagnostics-*/tests.xml",
+ "note": "macos-x64 row printed platform=Darwin-arm64: CMAKE_SYSTEM_PROCESSOR is the host's in the macOS cross build (label fixed afterwards); its artifact is l1-diagnostics-macos-x64.",
+ "platforms": {
+  "linux-x64": [
+   "anim bottlenecks memory: b2_rss_delta_mb=93 baseline_mb=11",
+   "anim bottlenecks: platform=Linux-x86_64 complete=1 selfcheck=1 repeat_equal=1 b1_worst=aim-1 b1_p99_us=36.98 b1_12x_ms=0.4437 b2_load_max_s=0.2255 h_load=3f93c68b8a0df264/515805 h_pose=1706233a6ca5866/29568",
+   "anim bottlenecks p99_us: aim-1=36.98 aim0=30.75 aim1=36.24 crouch0=25.22 crouch10=25.44 crouch5=25.95 death_25=10.6 death_75=7.361 hit_25=34.44 hit_75=36.75 jump0_25=18.3 jump0_75=17.76 jump1_25=17.7 jump1_75=17.65 jump2_25=18.09 jump2_75=17.72 move0_hold=31.5 move0_shoot=36.13 move10_hold=31.06 move10_shoot=33.94 move5_hold=31.49 move5_shoot=34.3 reload_25=35.05 reload_75=34.01"
+  ],
+  "macos-arm64": [
+   "anim bottlenecks memory: b2_rss_delta_mb=118 baseline_mb=8",
+   "anim bottlenecks: platform=Darwin-arm64 complete=1 selfcheck=1 repeat_equal=1 b1_worst=reload_25 b1_p99_us=325.6 b1_12x_ms=3.908 b2_load_max_s=0.2378 h_load=3f93c68b8a0df264/515805 h_pose=1706233a6ca5866/29568",
+   "anim bottlenecks p99_us: aim-1=81.21 aim0=100.6 aim1=268.5 crouch0=149.4 crouch10=148.2 crouch5=117.5 death_25=42.21 death_75=13.96 hit_25=123.9 hit_75=191.9 jump0_25=41.71 jump0_75=23.62 jump1_25=24.42 jump1_75=22.42 jump2_25=26.79 jump2_75=29.42 move0_hold=129.3 move0_shoot=182.2 move10_hold=302.6 move10_shoot=189 move5_hold=192.2 move5_shoot=228.5 reload_25=325.6 reload_75=196.8"
+  ],
+  "macos-x64": [
+   "anim bottlenecks memory: b2_rss_delta_mb=119 baseline_mb=6",
+   "anim bottlenecks: platform=Darwin-arm64 complete=1 selfcheck=1 repeat_equal=1 b1_worst=reload_25 b1_p99_us=310.2 b1_12x_ms=3.722 b2_load_max_s=0.659 h_load=3f93c68b8a0df264/515805 h_pose=dc7544253139d07e/29568",
+   "anim bottlenecks p99_us: aim-1=140.3 aim0=204.5 aim1=187.3 crouch0=130.5 crouch10=132.9 crouch5=110.8 death_25=45.58 death_75=43.96 hit_25=194.1 hit_75=156.2 jump0_25=88.62 jump0_75=120.2 jump1_25=98.33 jump1_75=91 jump2_25=86.12 jump2_75=93.29 move0_hold=211.4 move0_shoot=161.3 move10_hold=138.5 move10_shoot=154.4 move5_hold=146.5 move5_shoot=162.7 reload_25=310.2 reload_75=187.8"
+  ],
+  "windows-x64": [
+   "anim bottlenecks memory: b2_rss_delta_mb=n/a baseline_mb=n/a",
+   "anim bottlenecks: platform=Windows-AMD64 complete=1 selfcheck=1 repeat_equal=1 b1_worst=move0_shoot b1_p99_us=157.4 b1_12x_ms=1.889 b2_load_max_s=0.3708 h_load=3f93c68b8a0df264/515805 h_pose=c17a2b4cf216c436/29568",
+   "anim bottlenecks p99_us: aim-1=120.4 aim0=102.4 aim1=131 crouch0=76.5 crouch10=96.9 crouch5=81.2 death_25=49.1 death_75=45.1 hit_25=97.5 hit_75=107.1 jump0_25=51.4 jump0_75=50.9 jump1_25=64.1 jump1_75=55.4 jump2_25=53.9 jump2_75=61.5 move0_hold=99.8 move0_shoot=157.4 move10_hold=107.5 move10_shoot=109.8 move5_hold=99.3 move5_shoot=106.9 reload_25=112.5 reload_75=108.9"
+  ]
+ }
+}

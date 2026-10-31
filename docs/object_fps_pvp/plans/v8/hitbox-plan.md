@@ -86,6 +86,8 @@
 | B4 | wire 大小 | 步伐相位等要放進 PlayerState | 每人多幾 byte；4 人 Snapshot 的型別最大現在 822 B，餘裕 378 B |
 | B5 | Client 與 Match 的姿勢一致度 | Client 改播 Match 給的狀態，但兩個 snapshot 之間仍是 Client 自己內插 | 同一時刻 Client 畫面的骨骼與 Match 的骨骼差多少（用現有的 survey 工具改成比對兩邊） |
 
+**B1～B3 的結果**（2026-10-31，[dev_log](../../../dev_logs/2026_10_31_pvp_v8_anim_bottlenecks.zh-Hant.md)）：linux-x64 上 12 次取樣 0.44 ms（門檻 1.67 ms）、載入 0.23 s、記憶體增量 93 MB → 不加省成本的工作、Match 直接讀 FBX。四平台各自可重現，但取樣結果平台間不逐位元一致（載入轉換一致）→ `v8-product-hitbox-golden-policy` 照建議。
+
 ## 6. 為什麼換掉第 1 版
 
 第 1 版（B-flat）是主會話自己設計的「Match 不跑動畫」方案，沒有先參考成熟方案。三輪 survey 量的都是它自己的缺陷：固定姿勢時跑步的小腿偏差 0.93 m；三部位加查表後，頭仍在起跳時偏 0.25 m（[survey 的 dev_log](../../../dev_logs/2026_10_31_pvp_v8_hitbox_survey.zh-Hant.md)）。這些數字說明了成熟遊戲為什麼讓伺服器跑動畫。survey 工具保留，用在 R4 的半徑與 B5 的比對。
@@ -156,5 +158,5 @@ rewind-line（部位判定線合併後）
 |---|---|---|
 | `v8-product-hitbox-valorant-base` | 以 Valorant 為基底（本文件第 3、4 節） | 已選（2026-10-31） |
 | `v8-product-anim-state-on-wire` | Match 決定的動畫狀態要不要上 snapshot | 要（已核准）。查證後：「CS 把動畫週期送給 Client」查不到出處，這點改成我們自己的推論——Client 若自己推步伐相位，漏收 snapshot 或停頓時會和 Match 漂開（survey 量到跑步時腿差 0.9 m 的原因） |
-| `v8-product-hitbox-golden-policy` | 含命中且目標有動畫的情境，跨平台 golden 怎麼處理 | 先量 B3；不一致就只做同平台兩樹比對，跨平台 golden 只留不含動畫命中的情境 |
+| `v8-product-hitbox-golden-policy` | 含命中且目標有動畫的情境，跨平台 golden 怎麼處理 | 先量 B3；不一致就只做同平台兩樹比對，跨平台 golden 只留不含動畫命中的情境。**B3 已量：不一致（windows-x64、macos-x64 與其他平台不同），照此規則** |
 | `v8-product-anim-bottlenecks-first` | 先做瓶頸量測，再寫契約 | 先量（B1～B3），結果交你看過再進 declare |
