@@ -98,6 +98,7 @@
 | `v8-product-hit-rules-v2-values` | （2026-10-30）部位倍率照 object_fps_v2 的實作（`assets/object_fps_v2/characters/enemies/*.enemy.json` 的 `hurt_regions`）：頭 2.0；軀幹與骨盆 1.0；上臂、前臂、大腿、小腿（左右共 8）0.75；11 段沿骨骼的膠囊 | 「部位倍率的數值，參考object_fps_v2裡面有完整的實現。」 |
 | `v8-product-hit-rules-limb-wire` | （2026-10-30）四肢一層要上 wire：加 `HitPart` 的新值（例如 `HIT_PART_LIMB`）。pv8 合併後的 wire 變更，使用者同意；版本處理（pv8 的延續或升 pv9）在 hitbox-line 的事前宣告決定 | 「改，我說過會有hitbox的。」 |
 | `v8-product-hit-rules-permille` | （2026-10-30）傷害用千分位計算，不取整。血量與傷害以千分之一點為單位（2026-10-30 使用者確認：「對」）（100 HP＝100000），倍率是千分位整數（2000、1000、750），25 × 0.75＝18750 整除；畫面顯示時除以 1000。這改變 `maximum_hp`、`shot_damage`、`hp` 等欄位的單位語意，算 Data Contract 變更 | 「用千分位算。」 |
+| `v8-product-hitbox-plan-ultracode` | （2026-10-31）hitbox-line 先開規劃批 `v8-product-hitbox-plan`，用 ultracode（偵察 2×Sonnet 5.5、案 3×Opus 5.5、審 1×Opus 5.5、對抗 1×Sonnet 5.5）。起因：Match 沒有模型與動畫，誰來算骨骼姿勢是架構問題（做法 (A) 取樣完整動畫／(B) 固定姿勢的骨骼膠囊／(C) 部位層級的簡化形狀） | 「用 ultracode」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -125,6 +126,7 @@
 - 2026-10-30：PR #110 的 L1 四平台全部通過（run `41046572657`），狀態 CLEAN。
 - 2026-10-30：PR #110 合併（`6b22d82c`），pv8-line 收尾。
 - 2026-10-30：CONNECTION POOR 的調查（audio-line 開的 connection-poor 會話）：成因是 Match 停頓超過約 100 ms → Backlog 重設 → 品質窗口判失敗；和音效無關，master 上重現。使用者決定不改、交給 B6；README 的 B6 列與 network-architecture §7 的「P2 的第二個例外」補上品質窗口。調查報告：[dev_log](../../../dev_logs/2026_10_30_pvp_v8_connection_poor.zh-Hant.md)（2026-10-31 從會話筆記搬進 repo；原始 log 只在本機、不保存）。
+- 2026-10-31：同步 master `d8cca12a`（#111、#112、#113）。`v8-product-hitbox-plan` 開始：ultracode run `wf_c70a45ea-cdc`。
 
 ## 未結事項
 
