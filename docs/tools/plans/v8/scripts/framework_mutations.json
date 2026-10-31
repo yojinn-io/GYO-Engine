@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-tool-framework-shell, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message.",
+  "mutants": [
+    {
+      "id": "fw-catalog-taken-path",
+      "what": "A path registered under another id is accepted",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "} else if (entry[\"path\"] == registration.path) {",
+      "replace": "} else if (false) {",
+      "target": "gyo_framework_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-catalog-other-type",
+      "what": "An id registered with another type is overwritten with the caller's type",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "if (entry[\"type\"].get_ref<const std::string&>() != registration.type) {",
+      "replace": "if (false) {",
+      "target": "gyo_framework_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-path-dot-dot",
+      "what": "A '..' segment is accepted in an asset path",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
+      "replace": "if (segment.empty() || segment == \".\") return false;",
+      "target": "gyo_framework_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-catalog-indentation-lost",
+      "what": "A new entry does not follow the last entry's indentation",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "text.insert(end, \",\\n\" + Indentation(text, begin) + entry);",
+      "replace": "text.insert(end, \",\\n\" + entry);",
+      "target": "gyo_framework_tests",
+      "cases": "*appends one line*",
+      "expect": "CHECK\\( update->text =="
+    },
+    {
+      "id": "fw-catalog-type-ignored",
+      "what": "The new entry's type is always sound, not the caller's",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "Json(registration.type).dump()",
+      "replace": "std::string(\"\\\"sound\\\"\")",
+      "target": "gyo_framework_tests",
+      "cases": "*type is the caller's*",
+      "expect": "REQUIRE\\( update.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-catalog-empty-type",
+      "what": "An empty asset type is not refused as a registration",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "    if (registration.type.empty()) {",
+      "replace": "    if (false) {",
+      "target": "gyo_framework_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "\"game.audio.new\", \"\", \"x.wav\"\\}\\) == CatalogErrorCode::InvalidRegistration \\) is NOT correct"
+    },
+    {
+      "id": "fw-inbox-order",
+      "what": "The inbox hands answers over in reverse order",
+      "file": "framework/src/PathDialog.cpp",
+      "find": "answers_.push_back(std::move(answer));",
+      "replace": "answers_.insert(answers_.begin(), std::move(answer));",
+      "target": "gyo_framework_tests",
+      "cases": "*path dialog inbox*",
+      "expect": "CHECK\\( taken\\[0\\].tag == 3 \\) is NOT correct"
+    },
+    {
+      "id": "fw-inbox-take-keeps",
+      "what": "A taken answer stays in the inbox",
+      "file": "framework/src/PathDialog.cpp",
+      "find": "return std::exchange(answers_, {});",
+      "replace": "return answers_;",
+      "target": "gyo_framework_tests",
+      "cases": "*path dialog inbox*",
+      "expect": "CHECK\\( inbox.Take\\(\\).empty\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-guard-input-target",
+      "what": "The framework's CMake names GYO::Input",
+      "file": "framework/CMakeLists.txt",
+      "find": "# The catalog mount names engine/asset types; paths go to UTF-8 through GYO::Os.",
+      "replace": "# The catalog mount names engine/asset types; paths go to UTF-8 through GYO::Os and GYO::Input.",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "names GYO::Input"
+    },
+    {
+      "id": "fw-guard-tool-header",
+      "what": "The framework includes a tool's header",
+      "file": "framework/src/ImGuiSdlHost.cpp",
+      "find": "#include \"gyo/framework/ImGuiSdlHost.hpp\"\n",
+      "replace": "#include \"gyo/framework/ImGuiSdlHost.hpp\"\n#include \"gyo/some_tool/Thing.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "includes gyo/some_tool/Thing.hpp"
+    },
+    {
+      "id": "fw-guard-tool-name",
+      "what": "The framework's code names a registered tool",
+      "file": "framework/src/FileService.cpp",
+      "find": "the framework holds no OS code.",
+      "replace": "the framework holds no OS code, unlike audio_editor.",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "names audio_editor"
+    },
+    {
+      "id": "fw-guard-executable",
+      "what": "The framework adds an executable, as a tool would",
+      "file": "framework/CMakeLists.txt",
+      "find": "unset(_gyo_framework_targets)\n",
+      "replace": "unset(_gyo_framework_targets)\nadd_executable(gyo_framework_main src/PathDialog.cpp)\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "calls add_executable"
+    },
+    {
+      "id": "ui-guard-native-target",
+      "what": "ui_editor names the native SDL platform again instead of going through the framework's host",
+      "file": "tools/ui_editor/CMakeLists.txt",
+      "find": "        GYO::ToolFrameworkGui\n    )\n",
+      "replace": "        GYO::ToolFrameworkGui\n        GYO::PlatformSDLNative\n    )\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "names GYO::PlatformSDLNative"
+    },
+    {
+      "id": "ae-guard-json-target",
+      "what": "The audio editor names nlohmann_json again instead of writing the catalog through the framework",
+      "file": "tools/audio_editor/CMakeLists.txt",
+      "find": "PRIVATE GYO::Audio GYO::Os GYO::ToolFramework",
+      "replace": "PRIVATE GYO::Audio GYO::Os GYO::ToolFramework nlohmann_json::nlohmann_json",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "names nlohmann_json::nlohmann_json"
+    }
+  ]
+}

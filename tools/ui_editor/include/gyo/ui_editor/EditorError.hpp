@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gyo/ui_editor/Diagnostic.hpp"
+#include "gyo/framework/FrameworkError.hpp"
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
@@ -20,24 +21,12 @@ namespace Gyo::Tools::UiEditor {
 template <class T, class E>
 using Result = Engine::Base::Result<T, E>;
 
-// File system access on user paths.
-enum class FileErrorCode : std::uint8_t {
-    ReadFailed = 1,
-    WriteFailed,
-    ProbeFailed,
-};
-
-[[nodiscard]] constexpr const char* ToString(const FileErrorCode code) noexcept {
-    switch (code) {
-    case FileErrorCode::ReadFailed: return "ReadFailed";
-    case FileErrorCode::WriteFailed: return "WriteFailed";
-    case FileErrorCode::ProbeFailed: return "ProbeFailed";
-    }
-    return "Unknown";
-}
-
-using FileError = Engine::Base::Error<FileErrorCode>;
-static_assert(Engine::Base::CodedError<FileError>);
+// File system access on user paths, and mounting a read-only asset catalog or
+// content root: the framework's types.
+using FileErrorCode = Framework::FileErrorCode;
+using FileError = Framework::FileError;
+using CatalogErrorCode = Framework::CatalogErrorCode;
+using CatalogError = Framework::CatalogError;
 
 // Command-line arguments (exit code 2).
 enum class CommandLineErrorCode : std::uint8_t {
@@ -50,18 +39,6 @@ enum class CommandLineErrorCode : std::uint8_t {
 
 using CommandLineError = Engine::Base::Error<CommandLineErrorCode>;
 static_assert(Engine::Base::CodedError<CommandLineError>);
-
-// Mounting a read-only asset catalog or content root.
-enum class CatalogErrorCode : std::uint8_t {
-    LoadFailed = 1,
-};
-
-[[nodiscard]] constexpr const char* ToString(const CatalogErrorCode code) noexcept {
-    return code == CatalogErrorCode::LoadFailed ? "LoadFailed" : "Unknown";
-}
-
-using CatalogError = Engine::Base::Error<CatalogErrorCode>;
-static_assert(Engine::Base::CodedError<CatalogError>);
 
 // The authoring asset preview (text rasterizer, mounted catalog, textures).
 enum class PreviewErrorCode : std::uint8_t {

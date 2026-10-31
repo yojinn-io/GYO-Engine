@@ -2,10 +2,9 @@
 #include "gyo/ui_editor/DocumentSession.hpp"
 #include "gyo/ui_editor/ElementClipboard.hpp"
 #include "gyo/ui_editor/ElementSchema.hpp"
-#include "gyo/ui_editor/FileService.hpp"
+#include "gyo/framework/FileService.hpp"
 #include "gyo/ui_editor/GizmoMath.hpp"
-#include "gyo/ui_editor/PathDialog.hpp"
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
 #include "engine/ui/UiDocumentCodec.hpp"
@@ -19,11 +18,11 @@
 #include <iostream>
 #include <string>
 #include <string_view>
-#include <thread>
 
 namespace {
 
 using namespace Gyo::Tools::UiEditor;
+namespace Framework = Gyo::Tools::Framework;
 
 int failures{};
 
@@ -90,13 +89,13 @@ void TestCommandLine() {
 
 void TestContentManifestMount(const std::filesystem::path& root) {
     const auto assets = root / "manifest-assets";
-    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "content.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(assets / "content.json",
         R"({"version":1,"catalogs":["fonts.json","images.json"],"shader_bundles":[]})")), "write content manifest");
-    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "fonts.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(assets / "fonts.json",
         R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write font catalog");
-    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "images.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(assets / "images.json",
         R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"image.bmp"}]})")), "write image catalog");
-    ReadOnlyAssetCatalog catalog;
+    Framework::ReadOnlyAssetCatalog catalog;
     Expect(static_cast<bool>(catalog.MountRoot(assets)), "mount all manifest catalogs");
     Expect(catalog.IsMounted() && catalog.CatalogPath().empty() && catalog.Assets().size() == 2,
         "root mode exposes the complete content snapshot");
@@ -107,12 +106,12 @@ void TestContentManifestMount(const std::filesystem::path& root) {
             R"({"version":1,"assets":[{"id":"font.default","type":"texture","path":"image.bmp"}]})",
             R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"../escape.bmp"}]})",
             "broken"}) {
-        Expect(static_cast<bool>(WriteTextFileAtomically(assets / "images.json", bad)), "replace candidate catalog");
+        Expect(static_cast<bool>(Framework::WriteTextFileAtomically(assets / "images.json", bad)), "replace candidate catalog");
         Expect(!catalog.MountRoot(assets), "invalid candidate is rejected");
         Expect(catalog.Find("texture.logo") != nullptr && catalog.Find("font.default") != nullptr,
             "failed candidate preserves the previous complete snapshot");
     }
-    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "content.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(assets / "content.json",
         R"({"version":1,"catalogs":["missing.json"],"shader_bundles":[]})")), "declare missing catalog");
     Expect(!catalog.MountRoot(assets), "missing declared catalog does not partially mount");
     Expect(catalog.Assets().size() == 2, "missing file preserves old mount");
@@ -182,7 +181,7 @@ void TestExportAndExternalModification(const std::filesystem::path& root) {
     auto exported = session.Export(output, nullptr);
     Expect(static_cast<bool>(exported), "valid document exports without a catalog");
 
-    const auto text = ReadTextFile(output);
+    const auto text = Framework::ReadTextFile(output);
     Expect(static_cast<bool>(text), "exported JSON can be read");
     if (text) {
         Expect(text->starts_with("{\n  \"schema\": \"gyo.ui\""),
@@ -200,7 +199,7 @@ void TestExportAndExternalModification(const std::filesystem::path& root) {
     session.EditDocument()["design_canvas"]["size"][1] = 900.0;
     session.CommitEdit("resize canvas");
     Expect(
-        static_cast<bool>(WriteTextFileAtomically(output, "externally changed\n")),
+        static_cast<bool>(Framework::WriteTextFileAtomically(output, "externally changed\n")),
         "test can simulate an external edit");
     const auto guarded = session.Save(nullptr);
     Expect(
@@ -220,10 +219,10 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
 }
 )";
     Expect(
-        static_cast<bool>(WriteTextFileAtomically(catalogPath, catalog)),
+        static_cast<bool>(Framework::WriteTextFileAtomically(catalogPath, catalog)),
         "catalog fixture is written");
 
-    ReadOnlyAssetCatalog mounted;
+    Framework::ReadOnlyAssetCatalog mounted;
     Expect(
         static_cast<bool>(mounted.Mount(catalogPath, assetRoot)),
         "asset catalog mounts read-only");
@@ -298,7 +297,7 @@ void TestRootOutsideAnsiCodePage(const std::filesystem::path& root) {
     const std::filesystem::path assetRoot = folder / "app-assets";
     const std::filesystem::path catalogPath = assetRoot / "asset_catalog.json";
     Expect(
-        static_cast<bool>(WriteTextFileAtomically(catalogPath, R"({
+        static_cast<bool>(Framework::WriteTextFileAtomically(catalogPath, R"({
   "version": 1,
   "assets": [
     {"id":"font.default","type":"font","path":"fonts/default.ttf"},
@@ -307,10 +306,10 @@ void TestRootOutsideAnsiCodePage(const std::filesystem::path& root) {
 }
 )")),
         "catalog fixture is written under a root outside the ANSI code page");
-    ReadOnlyAssetCatalog mounted;
+    Framework::ReadOnlyAssetCatalog mounted;
     Expect(static_cast<bool>(mounted.Mount(catalogPath, assetRoot)),
         "a catalog mounts under a root outside the ANSI code page");
-    const CatalogAsset* logo = mounted.Find("texture.logo");
+    const Framework::CatalogAsset* logo = mounted.Find("texture.logo");
     Expect(logo != nullptr && logo->resolvedPath == assetRoot / "textures" / "logo.png",
         "a resolved asset path keeps the characters of its root");
 
@@ -329,33 +328,13 @@ void TestContentHashIsFnv1a(const std::filesystem::path& root) {
     // Pinned before FNV-1a moved to GYO::Base: external-change detection
     // compares stamps, so the content hash must stay the same function.
     const auto path = root / "content-hash.txt";
-    Expect(static_cast<bool>(WriteTextFileAtomically(path, "foobar")), "content hash fixture is written");
-    const auto stamp = ProbeFileStamp(path);
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(path, "foobar")), "content hash fixture is written");
+    const auto stamp = Framework::ProbeFileStamp(path);
     Expect(stamp && stamp.value().contentHash == 0x85944171f73967e8ULL,
         "file content hash is the 64-bit FNV-1a of the text");
 }
 
 } // namespace
-
-// A dialog result posted from another thread (as SDL may call back) is taken
-// once, in posting order, by the editor's thread.
-void TestPathDialogInbox() {
-    PathDialogInbox inbox;
-    std::thread poster([&inbox] {
-        inbox.Post({.purpose = PathDialogPurpose::OpenDocument,
-                    .outcome = PathDialogOutcome::Chosen,
-                    .path = "a.json"});
-        inbox.Post({.purpose = PathDialogPurpose::AssetFolder,
-                    .outcome = PathDialogOutcome::Cancelled});
-    });
-    poster.join();
-    const auto taken = inbox.Take();
-    Expect(taken.size() == 2, "inbox returns every posted result");
-    Expect(taken.size() == 2 && taken[0].path == "a.json" &&
-               taken[1].purpose == PathDialogPurpose::AssetFolder,
-        "inbox keeps posting order");
-    Expect(inbox.Take().empty(), "a taken result is not returned again");
-}
 
 // Canvas gizmo rule without ImGui. The parent is a 1280x720 design canvas at
 // the screen origin, drawn at designScale screen pixels per design pixel.
@@ -849,7 +828,6 @@ void TestElementClipboard() {
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
-    TestPathDialogInbox();
     TestGizmoHit();
     TestGizmoAnchorDrag();
     TestGizmoMoveAndResize();

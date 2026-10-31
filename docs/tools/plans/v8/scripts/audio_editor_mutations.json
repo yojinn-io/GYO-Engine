@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-audio-editor-convert, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/audio_editor_mutations.json --build-dir <a tree with GYO_TOOLS=audio_editor and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message.",
+  "description": "Declared mutants of v8-tool-audio-editor-convert, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/audio_editor_mutations.json --build-dir <a tree with GYO_TOOLS=audio_editor and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The catalog mutants moved with CatalogRegistration to docs/tools/plans/v8/scripts/framework_mutations.json (v8-tool-framework-shell).",
   "mutants": [
     {
       "id": "ae-resample-cutoff",
@@ -113,46 +113,6 @@
       "expect": "CHECK\\( report->frames == 653 \\) is NOT correct"
     },
     {
-      "id": "ae-catalog-taken-path",
-      "what": "A path registered under another id is accepted",
-      "file": "tools/audio_editor/src/CatalogRegistration.cpp",
-      "find": "} else if (entry[\"path\"] == registration.path) {",
-      "replace": "} else if (false) {",
-      "target": "gyo_audio_editor_core_tests",
-      "cases": "*refuses what the content contract*",
-      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "ae-catalog-other-type",
-      "what": "An id registered with another type is overwritten as a sound",
-      "file": "tools/audio_editor/src/CatalogRegistration.cpp",
-      "find": "if (entry[\"type\"].get_ref<const std::string&>() != kSoundType) {",
-      "replace": "if (false) {",
-      "target": "gyo_audio_editor_core_tests",
-      "cases": "*refuses what the content contract*",
-      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "ae-path-dot-dot",
-      "what": "A '..' segment is accepted in an asset path",
-      "file": "tools/audio_editor/src/CatalogRegistration.cpp",
-      "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
-      "replace": "if (segment.empty() || segment == \".\") return false;",
-      "target": "gyo_audio_editor_core_tests",
-      "cases": "*refuses what the content contract*",
-      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "ae-catalog-indentation-lost",
-      "what": "A new entry does not follow the last entry's indentation",
-      "file": "tools/audio_editor/src/CatalogRegistration.cpp",
-      "find": "text.insert(end, \",\\n\" + Indentation(text, begin) + entry);",
-      "replace": "text.insert(end, \",\\n\" + entry);",
-      "target": "gyo_audio_editor_core_tests",
-      "cases": "*appends one line*",
-      "expect": "CHECK\\( update->text =="
-    },
-    {
       "id": "ae-export-overwrites-source",
       "what": "The clip may overwrite its source or the catalog",
       "file": "tools/audio_editor/src/SoundExport.cpp",
@@ -168,7 +128,10 @@
       "file": "tools/audio_editor/CMakeLists.txt",
       "find": "# The clip format comes from GYO::Audio (Design Invariant 2)",
       "replace": "# The clip format comes from GYO::Audio GYO::Input (Design Invariant 2)",
-      "command": ["{python}", "tests/audio_editor/audio_editor_dependency_guard.py"],
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
       "expect": "names GYO::Input"
     }
   ]

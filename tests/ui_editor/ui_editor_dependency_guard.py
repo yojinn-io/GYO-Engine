@@ -20,13 +20,16 @@ INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
 SDL_GPU = re.compile(r"\bSDL_\w*GPU\w*")
 TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*\b")
 
-ALLOWED_INCLUDE_PREFIXES = ("gyo/ui_editor/", "engine/", "nlohmann/", "SDL3/", "backends/imgui_impl_sdl")
+# The window, ImGui's SDL backends and the system dialogs come through the framework layer, whose own guard
+# (tests/framework/framework_dependency_guard.py) keeps the same rule (docs/framework/architecture.md, Design
+# Invariant 2).
+ALLOWED_INCLUDE_PREFIXES = ("gyo/ui_editor/", "gyo/framework/", "engine/", "nlohmann/", "SDL3/")
 FORBIDDEN_INCLUDE_PREFIXES = ("engine/input/",)
 ALLOWED_TARGETS = {
     "GYO::Engine", "GYO::Ui", "GYO::Math", "GYO::Os",
-    "GYO::PlatformSDL", "GYO::PlatformSDLNative", "GYO::RenderBackendSDL", "GYO::RenderBackendSDLNative",
+    "GYO::ToolFramework", "GYO::ToolFrameworkGui",
     "GYO::AssetSdlImage", "GYO::TextBackendSDLTTF",
-    "SDL3::SDL3", "imgui::core", "imgui::sdl3_sdlrenderer3", "nlohmann_json::nlohmann_json",
+    "SDL3::SDL3", "imgui::core", "nlohmann_json::nlohmann_json",
 }
 
 

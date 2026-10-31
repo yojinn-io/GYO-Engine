@@ -1,6 +1,6 @@
 #pragma once
 
-#include "gyo/ui_editor/EditorError.hpp"
+#include "gyo/framework/FrameworkError.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -9,7 +9,7 @@
 #include <string>
 #include <string_view>
 
-namespace Gyo::Tools::UiEditor {
+namespace Gyo::Tools::Framework {
 
 struct FileStamp final {
     bool exists{};
@@ -44,4 +44,4 @@ struct FileStamp final {
     const std::filesystem::path& candidate,
     const std::filesystem::path& root);
 
-} // namespace Gyo::Tools::UiEditor
+} // namespace Gyo::Tools::Framework

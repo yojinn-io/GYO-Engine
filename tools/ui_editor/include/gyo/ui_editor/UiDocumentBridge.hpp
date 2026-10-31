@@ -10,9 +10,9 @@
 #include <string_view>
 #include <vector>
 
-namespace Gyo::Tools::UiEditor {
+namespace Gyo::Tools::Framework { class ReadOnlyAssetCatalog; }
 
-class ReadOnlyAssetCatalog;
+namespace Gyo::Tools::UiEditor {
 
 struct AssetReference final {
     std::string jsonPath;
@@ -44,7 +44,7 @@ public:
 
 [[nodiscard]] std::vector<Diagnostic> ValidateCatalogReferences(
     std::span<const AssetReference> references,
-    const ReadOnlyAssetCatalog* catalog);
+    const Framework::ReadOnlyAssetCatalog* catalog);
 
 [[nodiscard]] bool HasErrors(std::span<const Diagnostic> diagnostics) noexcept;
 
