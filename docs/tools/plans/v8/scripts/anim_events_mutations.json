@@ -130,7 +130,7 @@
       "replace": "target_link_libraries(gyo_model PUBLIC GYO::Engine GYO::Math GYO::Time PRIVATE nlohmann_json::nlohmann_json)",
       "target": "gyo_model_tests",
       "expect_build_failure": true,
-      "expect": "(?s)gyo_model links.*expected exactly"
+      "expect": "(?s)gyo_model links.*expected\\s+exactly"
     }
   ]
 }
