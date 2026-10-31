@@ -126,7 +126,7 @@
       "id": "ae-catalog-other-type",
       "what": "An id registered with another type is overwritten as a sound",
       "file": "tools/audio_editor/src/CatalogRegistration.cpp",
-      "find": "if (entry[\"type\"] != kSoundType) {",
+      "find": "if (entry[\"type\"].get_ref<const std::string&>() != kSoundType) {",
       "replace": "if (false) {",
       "target": "gyo_audio_editor_core_tests",
       "cases": "*refuses what the content contract*",

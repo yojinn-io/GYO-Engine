@@ -17,7 +17,7 @@
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`（你會給方案）。
 - **anim-events-line（另一個會話）**：`v8-tool-assets-anim-events` 完成，[PR #119](https://github.com/yojinn-io/GYO-Engine/pull/119) 已合併進 master（`45019dff`）。契約在 [animation-events.md](../../../architecture/animation-events.md)。下一批 `v8-tool-model-viewer`。
-- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）。audio-tool-line：`v8-tool-audio-editor-convert` 完成（核心程式庫＋CLI，[dev_log](../../../dev_logs/2026_10_31_tool_v8_audio_editor_convert.zh-Hant.md)），[PR #118](https://github.com/yojinn-io/GYO-Engine/pull/118) 等 CI；下一批 `v8-tool-framework-shell`；`-edit` 等音效線的 GYO::Audio 增強。
+- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）。audio-tool-line：`v8-tool-audio-editor-convert` 完成（核心程式庫＋CLI，[dev_log](../../../dev_logs/2026_10_31_tool_v8_audio_editor_convert.zh-Hant.md)），[PR #118](https://github.com/yojinn-io/GYO-Engine/pull/118) 修了 Windows 的編譯錯誤，等 CI；下一批 `v8-tool-framework-shell`；`-edit` 等音效線的 GYO::Audio 增強。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
 - **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth`、`v8-engine-input-composition` 完成（Windows 的 L3 都未做）；Ui 的 Design Invariants 已改（`v8-tool-ui-invariants-text`）；`v8-tool-ui-text-field` 完成（gyo.ui v2）。`v8-product-lobby-text-field` 完成，Windows L3 全部通過（組字顯示、候選窗位置、全形轉半形、Enter／Esc）。ui_editor 的 `v8-tool-ui-editor-text-field` 已合併（[PR #114](https://github.com/yojinn-io/GYO-Engine/pull/114)），使用者在 macOS 的 GUI 上試過。
@@ -128,3 +128,4 @@
 - 2026-10-31：你在 macOS 本機實聽換彈：「It matches」。`v8-tool-assets-anim-events` 完成，推送並開 PR。
 - 2026-10-31：PR #119 的 L1（linux-x64、macos-arm64、windows-x64）全部通過，CI gate 通過，CLEAN。等你決定合併。
 - 2026-10-31：PR #119 合併後，#118 和 master 在本檔與 README 的 dev_log 一覽衝突（兩條線各自加了行）。合入 master，兩邊的記錄都保留，現況改成 #119 已合併。
+- 2026-10-31：你：「CI炸了。」#118 的 L1 windows-x64 編譯失敗：`CatalogRegistration.cpp` 的 json 和 `std::string_view` 比較在 MSVC 上有歧義（C2666）。`9d1e6774` 那次就已失敗，我當時沒有回報。改成先取出字串再比較，突變的 `find` 跟著改，重跑 killed；本機音效工具的測試 4／4 通過。

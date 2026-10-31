@@ -42,6 +42,8 @@
 - `audio` 建置樹（`GYO_APPS=`、`GYO_TOOLS=audio_editor`、`BUILD_TESTING=ON`）的完整 ctest：52／52 通過（含 `cmake.ProjectComposition`、`build.ci` 等工具登錄相關的測試）。
 - 突變：`docs/tools/plans/v8/scripts/audio_editor_mutations.json`，用既有的執行器 `docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog …` 跑，17／17 被抓到（濾波器的截止、窗、取樣點、24 位元的符號、無抖動、抖動過寬、種子被忽略、捨入、飽和不計、取樣率取自原檔、不重新取樣、被占用的路徑、別的型別、`..`、縮排、覆寫原檔、依賴守衛）。
 
+- CI 的 L1：windows-x64 兩次編譯失敗（`9d1e6774` 與合入 master 後的 `9f407514`），linux-x64、macos-arm64 通過。原因：`CatalogRegistration.cpp` 拿 json 直接和 `std::string_view` 比較，MSVC 判為多載歧義（C2666），Clang／GCC 不會。改成先取出字串（`get_ref<const std::string&>()`，`ParseCatalog` 已檢查過是字串）再比較；突變 `ae-catalog-other-type` 的 `find` 跟著改，重跑仍被抓到。第一次失敗當時沒有回報，到使用者說「CI炸了」才處理。
+
 ## 已知的限制與之後
 
 - 工具內部的 catalog 寫入屬於「整合」，`v8-tool-framework-shell` 時搬進 `tools/framework/`（`v8-tool-framework-principle`）。

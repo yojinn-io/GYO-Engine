@@ -167,7 +167,9 @@ Result<CatalogUpdate, AudioEditorError> RegisterSound(const std::string_view cat
     for (std::size_t index = 0; index < assets.size(); ++index) {
         const Json& entry = assets[index];
         if (entry["id"] == registration.id) {
-            if (entry["type"] != kSoundType) {
+            // ParseCatalog checked the field is a string; comparing the json
+            // with a string_view directly is ambiguous on MSVC.
+            if (entry["type"].get_ref<const std::string&>() != kSoundType) {
                 return Engine::Base::Err(RegistrationError("the id is registered with another type",
                                                            registration.id + " is " + entry["type"].get<std::string>()));
             }
