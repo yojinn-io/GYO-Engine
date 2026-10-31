@@ -1,6 +1,6 @@
 # v8-product-hit-rules-permille 的事前宣告
 
-更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：草稿，等你核准。** 契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §1、§3、§6（定稿，`pv9-final-approve`）。計畫：[hitbox-plan](hitbox-plan.md) 第 8、9 節。檔位 high｜Opus 5.5（繼承主會話），估時 10～16 h（超過 24 h 停下回報）。
+更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hit-rules-permille-declaration-approve`，3 項都照建議 (a)）。 契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §1、§3、§6（定稿，`pv9-final-approve`）。計畫：[hitbox-plan](hitbox-plan.md) 第 8、9 節。檔位 high｜Opus 5.5（繼承主會話），估時 10～16 h（超過 24 h 停下回報）。
 
 ## 範圍
 
