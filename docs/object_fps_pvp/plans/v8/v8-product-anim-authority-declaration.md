@@ -1,6 +1,6 @@
 # v8-product-anim-authority 的事前宣告
 
-更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：草稿，等你核准。** 契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §4、§7（定稿，`pv9-final-approve`）。計畫：[hitbox-plan](hitbox-plan.md) 第 7、8 節。估時 21～31 h（超過 45 h 停下回報）。
+更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-anim-authority-declaration-approve`，5 項都照建議 (a)，附錄 A 的文字照草稿）。 契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §4、§7（定稿，`pv9-final-approve`）。計畫：[hitbox-plan](hitbox-plan.md) 第 7、8 節。估時 21～31 h（超過 45 h 停下回報）。
 
 ## 這批做什麼
 
