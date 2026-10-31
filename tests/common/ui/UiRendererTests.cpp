@@ -16,6 +16,7 @@
 #include "engine/render/IRenderDevice.hpp"
 #include "RenderDeviceStub.hpp"
 #include "engine/render/RenderQueue.hpp"
+#include "engine/ui/UiRuntime.hpp"
 #include "engine/text/ITextRasterizer.hpp"
 #include "engine/ui/UiRenderer.hpp"
 
@@ -44,16 +45,19 @@ public:
 class UnusedRasterizer final : public Text::ITextRasterizer {
 public:
     std::size_t callCount{};
+    // When set, a run is 8 pixels per code point wide and 10 high, so text
+    // positions can be computed by hand; otherwise every run is 2x2.
+    bool measure{};
 
     Base::Result<Text::TextBitmap, Text::TextError> Rasterize(
         std::span<const std::byte>,
-        const Text::TextRasterRequest&) override {
+        const Text::TextRasterRequest& request) override {
         ++callCount;
         Text::TextBitmap bitmap;
-        bitmap.width = 2;
-        bitmap.height = 2;
-        bitmap.rowPitch = 8;
-        bitmap.rgba8.resize(16, std::byte{0xFF});
+        bitmap.width = measure ? static_cast<std::uint32_t>(8U * UiCodePointCount(request.utf8)) : 2U;
+        bitmap.height = measure ? 10U : 2U;
+        bitmap.rowPitch = bitmap.width * 4U;
+        bitmap.rgba8.resize(static_cast<std::size_t>(bitmap.rowPitch) * bitmap.height, std::byte{0xFF});
         return std::move(bitmap);
     }
 };
@@ -251,6 +255,48 @@ TEST_CASE("UiRenderer CPU-clips sprites and always submits Overlay") {
     CHECK(sprite.sourceUv.y == doctest::Approx(0.25F));
     CHECK(sprite.sourceUv.width == doctest::Approx(0.5F));
     CHECK(sprite.material.tint.green == doctest::Approx(0.25F));
+}
+
+// v8-tool-ui-text-field: the editing marks sit at the measured width of the
+// text before them (8 px per code point here); left/top aligned at x = 10.
+TEST_CASE("UiRenderer draws a text field's selection, composition underline and caret") {
+    FontRendererFixture fixture;
+    fixture.rasterizer.measure = true;
+    UiRenderer renderer;
+    REQUIRE(renderer.Initialize(fixture.renderDevice, fixture.rasterizer, fixture.assets));
+
+    UiTextDraw draw;
+    draw.boundsPixels = {10.0F, 0.0F, 200.0F, 20.0F};
+    draw.utf8 = "ab\xE6\x97\xA5\xE6\x9C\xAC"; // ab日本: 日本 is being composed
+    draw.fontAssetId = "test.font";
+    draw.pointSizePixels = 20.0F;
+    draw.color = {1.0F, 1.0F, 1.0F, 1.0F};
+    draw.caret = UiTextCaret{5U, 2U, 8U, 0U, 2U, {1.0F, 0.5F, 0.0F, 1.0F}};
+
+    Render::RenderQueue queue;
+    REQUIRE(renderer.Submit({{UiDrawCommand{draw}}}, queue));
+    REQUIRE(queue.Sprites().size() == 4);
+    const auto& sprites = queue.Sprites();
+    CHECK(sprites[0].destinationPixels.x == doctest::Approx(10.0F));
+    CHECK(sprites[0].destinationPixels.width == doctest::Approx(32.0F));
+    CHECK_MESSAGE(sprites[1].destinationPixels.x == doctest::Approx(10.0F), "the selection starts at the text");
+    CHECK(sprites[1].destinationPixels.width == doctest::Approx(16.0F));
+    CHECK(sprites[1].material.tint.alpha < 1.0F);
+    CHECK_MESSAGE(sprites[2].destinationPixels.x == doctest::Approx(26.0F), "the underline starts after ab");
+    CHECK(sprites[2].destinationPixels.width == doctest::Approx(16.0F));
+    CHECK_MESSAGE(sprites[2].destinationPixels.y + sprites[2].destinationPixels.height == doctest::Approx(10.0F),
+                  "the underline sits at the bottom of the line");
+    CHECK_MESSAGE(sprites[3].destinationPixels.x == doctest::Approx(34.0F), "the caret follows ab日");
+    CHECK(sprites[3].destinationPixels.height == doctest::Approx(10.0F));
+
+    queue.Reset();
+    UiTextDraw empty = draw;
+    empty.utf8.clear();
+    empty.caret = UiTextCaret{0U, 0U, 0U, 0U, 0U, {1.0F, 1.0F, 1.0F, 1.0F}};
+    REQUIRE(renderer.Submit({{UiDrawCommand{empty}}}, queue));
+    REQUIRE_MESSAGE(queue.Sprites().size() == 1, "an empty field being edited still shows its caret");
+    CHECK(queue.Sprites()[0].destinationPixels.x == doctest::Approx(10.0F));
+    CHECK(queue.Sprites()[0].destinationPixels.height == doctest::Approx(24.0F));
 }
 
 TEST_CASE("UiRenderer use before initialization is a Programmer Error") {

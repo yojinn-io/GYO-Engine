@@ -1,0 +1,376 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the audio plan, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog. A mutant is killed only when its test run fails with the expected message. The au-sdl-* mutants need the test preset (SDL_AUDIO built) and ctest on PATH; run them with --build-dir build/target/_build/test --only au-sdl-...",
+  "mutants": [
+    {
+      "id": "au-core-start-shifted",
+      "what": "A voice starts one frame after its start frame",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "static_cast<std::uint32_t>(voice.startFrame - chunkStart) : 0;",
+      "replace": "static_cast<std::uint32_t>(voice.startFrame - chunkStart + 1) : 0;",
+      "target": "gyo_audio_tests",
+      "cases": "*starts a clip exactly at its start frame*",
+      "expect": "CHECK\\( Left\\(out, 5\\) == 1000 \\) is NOT correct"
+    },
+    {
+      "id": "au-core-chunk-edge-lost",
+      "what": "The last frame of every internal pass is skipped, so the output depends on the block split",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "while (at < frames && voice.position < voice.clip.frames)",
+      "replace": "while (at + 1 < frames && voice.position < voice.clip.frames)",
+      "target": "gyo_audio_tests",
+      "cases": "*does not depend on how blocks split it*",
+      "expect": "CHECK\\( RenderInBlocks\\(split, 2200, blocks\\) == reference \\) is NOT correct"
+    },
+    {
+      "id": "au-core-voice-never-freed",
+      "what": "A finished voice stays busy",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "        if (voice.position >= voice.clip.frames) voice.active = false;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*drops a play when every voice is busy*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-core-late-counted-on-time",
+      "what": "A start before the next frame is counted as on time",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "    if (start < nextFrame_) {",
+      "replace": "    if (start < nextFrame_ && false) {",
+      "target": "gyo_audio_tests",
+      "cases": "*starts a late play at the next frame*",
+      "expect": "CHECK\\( mixer.Schedule\\(\\{clip, 4, 1.0f, 1.0f\\}\\) == StartOutcome::Late \\) is NOT correct"
+    },
+    {
+      "id": "au-core-rounding-truncates",
+      "what": "The mix truncates instead of rounding half up",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "(accumulator_[i] * master + kHalf)",
+      "replace": "(accumulator_[i] * master)",
+      "target": "gyo_audio_tests",
+      "cases": "*applies left and right gains with rounding*",
+      "expect": "CHECK\\( Left\\(out, 0\\) == 501 \\) is NOT correct"
+    },
+    {
+      "id": "au-core-clipping-uncounted",
+      "what": "Saturated samples are not counted",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "        if (bounded != value) ++clipped;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*saturates the mix*",
+      "expect": "CHECK\\( mixer.Stats\\(\\).clippedSamples == 4 \\) is NOT correct"
+    },
+    {
+      "id": "au-clip-rate-unchecked",
+      "what": "The clip bank accepts any sample rate",
+      "file": "engine/audio/src/ClipBank.cpp",
+      "find": "    if (sampleRate != kSampleRate) {",
+      "replace": "    if (sampleRate != kSampleRate && false) {",
+      "target": "gyo_audio_tests",
+      "cases": "*rejects clips the mixer cannot play*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-link-engine",
+      "what": "The mixer links the engine library",
+      "file": "engine/audio/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time)",
+      "replace": "target_link_libraries(gyo_audio PUBLIC GYO::Base GYO::Time PRIVATE GYO::Engine)",
+      "target": "gyo_audio_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_audio links .*expected exactly"
+    },
+    {
+      "id": "au-soundloader-bits-unchecked",
+      "what": "SoundLoader accepts samples other than 16-bit",
+      "file": "engine/asset/src/loaders/SoundLoader.cpp",
+      "find": "        if (bitsPerSample != 16) {",
+      "replace": "        if (bitsPerSample != 16 && false) {",
+      "target": "engine_tests",
+      "cases": "*rejects files it cannot represent as PCM16*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-block-start-ignored",
+      "what": "A request is mapped without the block's start frame",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "blockStart + offset + state.delayFrames",
+      "replace": "offset + state.delayFrames",
+      "target": "gyo_audio_tests",
+      "cases": "*maps a request in a later block*",
+      "expect": "CHECK\\( onsets\\[0\\] == 480 \\+ 24 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-round-truncate",
+      "what": "Offsets are floored instead of rounded",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    return FloorDiv(ns * kFramesPerUnit + kNsPerUnit / 2, kNsPerUnit);",
+      "replace": "    return FloorDiv(ns * kFramesPerUnit, kNsPerUnit);",
+      "target": "gyo_audio_tests",
+      "cases": "*rounds an offset*",
+      "expect": "CHECK\\( OnsetOf\\(10'417, Duration::zero\\(\\)\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-floor-toward-zero",
+      "what": "Negative offsets round toward zero (integer division)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    return (value % divisor != 0 && value < 0) ? quotient - 1 : quotient;",
+      "replace": "    return quotient;",
+      "target": "gyo_audio_tests",
+      "cases": "*rounds an offset*",
+      "expect": "CHECK\\( OnsetOf\\(-10'417, delay\\) == 47 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-round-symmetric",
+      "what": "Halves round away from zero (std::round) instead of toward +infinity",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    return FloorDiv(ns * kFramesPerUnit + kNsPerUnit / 2, kNsPerUnit);",
+      "replace": "    return ns >= 0 ? FloorDiv(ns * kFramesPerUnit + kNsPerUnit / 2, kNsPerUnit)\n                   : -FloorDiv(-ns * kFramesPerUnit + kNsPerUnit / 2, kNsPerUnit);",
+      "target": "gyo_audio_tests",
+      "cases": "*rounds an offset*",
+      "expect": "CHECK\\( OnsetOf\\(-31'250, delay\\) == 47 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-delay-truncated",
+      "what": "The schedule delay is truncated to frames",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        NsToFrames(std::chrono::duration_cast<std::chrono::nanoseconds>(config.scheduleDelay).count());",
+      "replace": "        std::chrono::duration_cast<std::chrono::nanoseconds>(config.scheduleDelay).count() * kFramesPerUnit / kNsPerUnit;",
+      "target": "gyo_audio_tests",
+      "cases": "*rounds the schedule delay*",
+      "expect": "CHECK\\( OnsetOf\\(0, Ns\\(10'417\\)\\) == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-clamp-1s",
+      "what": "Offsets are clamped to a second instead of an hour",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "constexpr std::int64_t kMaxOffsetNs = std::int64_t{3600} * 1'000'000'000;",
+      "replace": "constexpr std::int64_t kMaxOffsetNs = std::int64_t{1} * 1'000'000'000;",
+      "target": "gyo_audio_tests",
+      "cases": "*up to an hour*",
+      "expect": "CHECK\\( rig.mixer.Stats\\(\\).maxLateness == std::chrono::duration_cast<Duration>\\(2s\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-overflow-branch-removed",
+      "what": "The positive overflow of at - anchor is not caught",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (b < 0 && a > std::numeric_limits<std::int64_t>::max() + b) return kMaxOffsetNs;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*negative anchor*",
+      "expect": "CHECK\\( stats.playedOnTime == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-full-off-by-one",
+      "what": "A full ring accepts one more request, overwriting the oldest",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (tail - head >= capacity) {",
+      "replace": "    if (tail - head > capacity) {",
+      "target": "gyo_audio_tests",
+      "cases": "*queue is full*",
+      "expect": "CHECK_FALSE\\( rig.submitter.Play"
+    },
+    {
+      "id": "au-sched-full-uncounted",
+      "what": "A request dropped by a full ring is not counted",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        slot_->droppedQueueFull.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*queue is full*",
+      "expect": "CHECK\\( stats.droppedQueueFull == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-sched-head-not-published",
+      "what": "The audio thread never frees the ring",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        slot.head.store(head, std::memory_order_release);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*wraparound*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-sched-owner-unchecked",
+      "what": "Playing from another thread than the owner is not caught",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        GYO_ASSERT(owner == self);",
+      "replace": "        static_cast<void>(owner);",
+      "target": "gyo_audio_tests",
+      "cases": "*belongs to the first thread*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "au-sched-same-slot",
+      "what": "Every submitter gets the first queue",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "            return Submitter(state_, state_->slots[index].get());",
+      "replace": "            return Submitter(state_, state_->slots[0].get());",
+      "target": "gyo_audio_tests",
+      "cases": "*its own queue*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-sdl-not-resumed",
+      "what": "The device stream stays paused after opening",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "    if (!SDL_ResumeAudioStreamDevice(self.stream)) return Base::Err(Unavailable(\"the playback device did not start\"));\n",
+      "replace": "",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( Advances\\(output\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-quit-twice",
+      "what": "Closing an output releases SDL's audio subsystem twice, stopping the other outputs (an output then outlives the subsystem and may crash on close)",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "    if (impl_->subsystem) SDL_QuitSubSystem(SDL_INIT_AUDIO);",
+      "replace": "    if (impl_->subsystem) { SDL_QuitSubSystem(SDL_INIT_AUDIO); SDL_QuitSubSystem(SDL_INIT_AUDIO); }",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( Advances\\(a\\) \\) is NOT correct|test case CRASHED"
+    },
+    {
+      "id": "au-sdl-error-without-detail",
+      "what": "An unavailable device is reported without SDL's message",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "    return AudioError::Make(AudioErrorCode::DeviceUnavailable, message, detail != nullptr ? detail : \"\");",
+      "replace": "    static_cast<void>(detail);\n    return AudioError::Make(AudioErrorCode::DeviceUnavailable, message, \"\");",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.unavailable$",
+        "--output-on-failure"
+      ],
+      "expect": "CHECK_FALSE\\( output.error\\(\\).detail.empty\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-header-includes-sdl",
+      "what": "The backend's public header includes SDL (G1)",
+      "file": "engine/audio/backend/sdl/include/engine/audio/backend/sdl/SdlAudioOutput.hpp",
+      "find": "#include <cstdint>\n",
+      "replace": "#include <SDL3/SDL_audio.h>\n#include <cstdint>\n",
+      "target": "platform_sdl_header_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^platform_sdl_header_tests$",
+        "--output-on-failure"
+      ],
+      "expect": "a non-native SDL backend header includes SDL"
+    },
+    {
+      "id": "au-sdl-public-sdl",
+      "what": "The backend passes SDL3 on to its users (G3)",
+      "file": "engine/audio/backend/sdl/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_audio_sdl PUBLIC GYO::Audio PRIVATE SDL3::SDL3)",
+      "replace": "target_link_libraries(gyo_audio_sdl PUBLIC GYO::Audio SDL3::SDL3)",
+      "target": "gyo_audio_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "G3: gyo_audio_sdl passes SDL3",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.unavailable$",
+        "--output-on-failure"
+      ]
+    },
+    {
+      "id": "au-sdl-anchor-not-logged",
+      "what": "The callback logs no anchor",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames);\n",
+      "replace": "",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "REQUIRE\\( first >= 2 \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-anchor-wrong-frame",
+      "what": "An anchor is logged with the block's frame off by one",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames);",
+      "replace": "        self.LogAnchor(anchor, self.mixer.Stats().renderedFrames + 1);",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.disk$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( atAnchor \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-anchor-full-uncounted",
+      "what": "An anchor dropped by a full log is not counted",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "            anchorsDropped.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( output.Stats\\(\\).anchorsDropped > 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-sdl-anchor-head-not-published",
+      "what": "Taking anchors never frees the log, so the same anchors are handed out again",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "    self.anchorHead.store(head, std::memory_order_release);\n",
+      "replace": "",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.dummy$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( anchors\\[first\\].firstFrame > anchors\\[first - 1\\].firstFrame \\) is NOT correct"
+    }
+  ]
+}

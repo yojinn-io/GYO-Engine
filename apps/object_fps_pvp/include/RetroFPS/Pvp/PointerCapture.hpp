@@ -2,6 +2,7 @@
 
 #include "engine/input/PhysicalInputFrame.hpp"
 
+#include <chrono>
 #include <span>
 
 namespace fps::pvp {
@@ -17,6 +18,9 @@ struct PointerCaptureState final {
     // Per frame: the caller clears these before a frame's events.
     bool pointerAcquiredThisFrame{};
     bool windowInteraction{};
+    // The Engine time of the press that made the pending shot edge (its input
+    // event's timestamp); a sound of the shot belongs to this moment.
+    std::chrono::steady_clock::time_point pendingShotPressedAt{};
 };
 
 struct PointerCaptureResult final {

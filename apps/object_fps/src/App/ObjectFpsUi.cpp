@@ -58,6 +58,8 @@ constexpr Engine::Ui::UiColor kBarTrack{0.08F, 0.10F, 0.13F, 0.96F};
         return "none";
     case Engine::Ui::UiActionPayloadType::Number:
         return "number";
+    case Engine::Ui::UiActionPayloadType::String:
+        return "string";
     }
     return "unknown";
 }

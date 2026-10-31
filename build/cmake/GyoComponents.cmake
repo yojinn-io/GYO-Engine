@@ -1,6 +1,6 @@
 include_guard(GLOBAL)
 
-set(GYO_KNOWN_COMPONENTS SDL_PLATFORM SDL_RENDERER SDL_GPU SDL_INPUT SDL_IMAGE SDL_TTF UFBX IMGUI)
+set(GYO_KNOWN_COMPONENTS SDL_PLATFORM SDL_RENDERER SDL_GPU SDL_INPUT SDL_AUDIO SDL_IMAGE SDL_TTF UFBX IMGUI)
 
 function(gyo_validate_components)
     foreach(component IN LISTS ARGN)
@@ -39,7 +39,8 @@ function(gyo_resolve_components)
         list(APPEND components SDL_PLATFORM)
     endif()
     set(GYO_ENABLE_SDL3 OFF)
-    if("SDL_PLATFORM" IN_LIST components OR "SDL_IMAGE" IN_LIST components OR
+    # SDL_AUDIO needs SDL itself but no window, so it does not imply SDL_PLATFORM.
+    if("SDL_PLATFORM" IN_LIST components OR "SDL_AUDIO" IN_LIST components OR "SDL_IMAGE" IN_LIST components OR
        "SDL_TTF" IN_LIST components OR "IMGUI" IN_LIST components)
         set(GYO_ENABLE_SDL3 ON)
     endif()

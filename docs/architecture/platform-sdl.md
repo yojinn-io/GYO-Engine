@@ -1,7 +1,9 @@
 # GYO SDL platform backend
 
 Owner: Engine (`engine/platform/sdl` → `GYO::PlatformSDL`, `engine/input/backend/sdl` → `GYO::InputBackendSDL`,
-`engine/render/backend/sdl` → `GYO::RenderBackendSDL`, `engine/render/backend/sdl_gpu` → `GYO::RenderBackendSDLGPU`).
+`engine/render/backend/sdl` → `GYO::RenderBackendSDL`, `engine/render/backend/sdl_gpu` → `GYO::RenderBackendSDLGPU`;
+`engine/audio/backend/sdl` → `GYO::AudioBackendSDL` follows the same rules without a `*Native` target, see
+[audio.md](audio.md)).
 Plan and record: [input-and-present](plans/input-and-present/README.md), batches IP-3 and IP-4.
 
 **Status (2026-10-21): approved design (input-and-present D31), being implemented.** Milestones ip3b and ip3c have
@@ -51,6 +53,15 @@ The input backend owns collecting input and text into the frame. Window state an
 SDL/the OS. Capture policy, text editing policy and every product rule stay with the consumer.
 
 ## Contracts
+
+### Input method composition (v8-engine-input-composition)
+
+- `SdlPlatformOptions::imeComposition` (default false) sets SDL's `SDL_HINT_IME_IMPLEMENTED_UI` to `composition`
+  before `Create` starts SDL's video. SDL then sends the composition to the program (the input backend reports it as
+  `TextEvent::Kind::Composition`) and the operating system stops drawing it; candidate lists stay native. The hint is
+  process-wide and read when video starts, so it is meant for the first platform of a process; false leaves the hint
+  as it is. A program that turns it on draws the composition itself; otherwise typed text stays invisible until it
+  is committed. Guard: `SdlPlatform hands the input method composition to the program only when asked`.
 
 ### Event timestamps (IP-3, milestone ip3c)
 

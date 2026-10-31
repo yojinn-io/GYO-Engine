@@ -379,6 +379,46 @@ struct CanvasElementState final {
             state.interactive.push_back(element.id);
             break;
         }
+        case UiElementType::TextField: {
+            if (context.document.version < 2) {
+                return Invalid("text_field needs gyo.ui version 2", elementPath + "/type", UiErrorCode::UnsupportedVersion);
+            }
+            if (insideListTemplate) {
+                return Invalid("interactive elements are forbidden in list templates", elementPath);
+            }
+            const auto action = context.actions.find(element.action);
+            if (action == context.actions.end()) {
+                return Invalid("unknown action '" + element.action + "'", elementPath + "/action", UiErrorCode::MissingReference);
+            }
+            if (action->second->payload != UiActionPayloadType::String) {
+                return Invalid("text_field action payload must be string", elementPath + "/action", UiErrorCode::BindingTypeMismatch);
+            }
+            const auto binding = context.bindings.find(element.binding);
+            if (binding == context.bindings.end()) {
+                return Invalid("unknown binding '" + element.binding + "'", elementPath + "/binding", UiErrorCode::MissingReference);
+            }
+            if (binding->second->type != UiBindingType::String) {
+                return Invalid("text_field binding must be string", elementPath + "/binding", UiErrorCode::BindingTypeMismatch);
+            }
+            if (element.maxLength == 0) {
+                return Invalid("text_field requires max_length > 0", elementPath + "/max_length");
+            }
+            auto validation = ValidateTextStyle(element.textStyle, context, elementPath);
+            if (!validation) return validation;
+            for (const auto& [name, color] : std::initializer_list<std::pair<std::string_view, std::string_view>>{
+                     {"background/normal", element.background.normal},
+                     {"background/focused", element.background.focused},
+                     {"background/pressed", element.background.pressed}}) {
+                validation = ValidateNamedColor(color, context, elementPath + "/" + std::string(name));
+                if (!validation) return validation;
+            }
+            if (!element.placeholder.empty() || !element.placeholderColor.empty()) {
+                validation = ValidateNamedColor(element.placeholderColor, context, elementPath + "/placeholder_color");
+                if (!validation) return validation;
+            }
+            state.interactive.push_back(element.id);
+            break;
+        }
         case UiElementType::FixedStepList: {
             if (insideListTemplate) {
                 return Invalid("nested fixed_step_list is forbidden", elementPath);
@@ -425,6 +465,10 @@ struct CanvasElementState final {
 } // namespace
 
 UiResult<void> UiDocumentCodec::Validate(const UiDocument& document) {
+    if (document.version < kUiSchemaMinimumVersion || document.version > kUiSchemaVersion) {
+        return Invalid("unsupported UI schema version " + std::to_string(document.version), "/version",
+                       UiErrorCode::UnsupportedVersion);
+    }
     if (!IsFinite(document.designCanvas.size) ||
         document.designCanvas.size.x <= 0.0F || document.designCanvas.size.y <= 0.0F) {
         return Invalid("design canvas size must be finite and positive", "/design_canvas/size");
@@ -457,6 +501,10 @@ UiResult<void> UiDocumentCodec::Validate(const UiDocument& document) {
         const UiActionDeclaration& action = document.actions[index];
         if (action.id.empty() || !context.actions.emplace(action.id, &action).second) {
             return Invalid("action ids must be non-empty and unique", "/actions/" + std::to_string(index) + "/id");
+        }
+        if (action.payload == UiActionPayloadType::String && document.version < 2) {
+            return Invalid("the string payload needs gyo.ui version 2", "/actions/" + std::to_string(index) + "/payload",
+                           UiErrorCode::UnsupportedVersion);
         }
         declarationIds.emplace(action.id);
     }

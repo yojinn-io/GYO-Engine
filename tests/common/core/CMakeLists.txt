@@ -10,6 +10,7 @@ add_executable(engine_tests
     asset/AssetWatcherTests.cpp
     asset/AssetManagerTests.cpp
     asset/NativeFileAssetSourceTests.cpp
+    asset/SoundLoaderTests.cpp
     runtime/RuntimeLoopTests.cpp
     runtime/FixedTickRuntimeTests.cpp
     runtime/RuntimePortTests.cpp

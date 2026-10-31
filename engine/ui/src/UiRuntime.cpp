@@ -404,6 +404,15 @@ template <class Visit>
     return std::get<double>(*value.value());
 }
 
+[[nodiscard]] UiResult<std::string> FieldValue(
+    const UiDocument& document,
+    const UiBindingTable& bindings,
+    const UiElement& field) {
+    auto value = ResolveBinding(document, bindings, field.binding);
+    if (!value) return Base::Err(std::move(value).error());
+    return std::get<std::string>(*value.value());
+}
+
 [[nodiscard]] UiResult<std::optional<UiActionEvent>> SliderEvent(
     const UiDocument& document,
     const UiBindingTable& bindings,
@@ -438,6 +447,92 @@ template <class Visit>
         slider.minimum + (slider.maximum - slider.minimum) * ratio);
 }
 
+// The text field being edited (Design Invariant 4): the edit lives only
+// until it is submitted, cancelled, unfocused or overtaken by its binding.
+struct TextEdit final {
+    std::string element;
+    std::string text;
+    std::size_t cursor{};          // bytes, at a code point boundary
+    bool selectAll{};
+    std::string composition;       // shown only (Design Invariant 6)
+    std::int32_t compositionCursor{-1};
+    std::string startValue;        // the binding value when editing began
+};
+
+[[nodiscard]] std::size_t SequenceLength(const unsigned char lead) noexcept {
+    return lead < 0x80 ? 1 : (lead >> 5) == 0x6 ? 2 : (lead >> 4) == 0xE ? 3 : (lead >> 3) == 0x1E ? 4 : 0;
+}
+
+// The byte offset of code point index (clamped to the end) in valid UTF-8.
+[[nodiscard]] std::size_t CodePointOffset(std::string_view utf8, std::size_t index) noexcept {
+    std::size_t offset = 0;
+    while (index > 0 && offset < utf8.size()) {
+        offset = UiNextCodePoint(utf8, offset);
+        --index;
+    }
+    return offset;
+}
+
+void ApplyTextInput(TextEdit& edit, const UiTextInput& input, const UiElement& field, const UiTextFilter& filter) {
+    const auto clearSelection = [&edit] {
+        if (!edit.selectAll) return false;
+        edit.text.clear();
+        edit.cursor = 0;
+        edit.selectAll = false;
+        return true;
+    };
+    switch (input.kind) {
+    case UiTextInputKind::Insert: {
+        // The filter's result is cleaned too: Ui keeps one line of whole code points.
+        std::string accepted = UiSingleLineText(filter ? filter(field.id, input.text) : input.text);
+        if (accepted.empty()) break;
+        clearSelection();
+        const std::size_t used = UiCodePointCount(edit.text);
+        const std::size_t room = field.maxLength > used ? field.maxLength - used : 0;
+        accepted.resize(CodePointOffset(accepted, room));
+        edit.text.insert(edit.cursor, accepted);
+        edit.cursor += accepted.size();
+        break;
+    }
+    case UiTextInputKind::Composition:
+        edit.composition = UiSingleLineText(input.text);
+        edit.compositionCursor = input.cursor;
+        break;
+    case UiTextInputKind::Backspace:
+        if (clearSelection() || edit.cursor == 0) break;
+        {
+            const std::size_t previous = UiPreviousCodePoint(edit.text, edit.cursor);
+            edit.text.erase(previous, edit.cursor - previous);
+            edit.cursor = previous;
+        }
+        break;
+    case UiTextInputKind::Delete:
+        if (clearSelection() || edit.cursor >= edit.text.size()) break;
+        edit.text.erase(edit.cursor, UiNextCodePoint(edit.text, edit.cursor) - edit.cursor);
+        break;
+    case UiTextInputKind::MoveLeft:
+        edit.selectAll = false;
+        edit.cursor = UiPreviousCodePoint(edit.text, edit.cursor);
+        break;
+    case UiTextInputKind::MoveRight:
+        edit.selectAll = false;
+        edit.cursor = UiNextCodePoint(edit.text, edit.cursor);
+        break;
+    case UiTextInputKind::MoveHome:
+        edit.selectAll = false;
+        edit.cursor = 0;
+        break;
+    case UiTextInputKind::MoveEnd:
+        edit.selectAll = false;
+        edit.cursor = edit.text.size();
+        break;
+    case UiTextInputKind::SelectAll:
+        edit.selectAll = !edit.text.empty();
+        edit.cursor = edit.text.size();
+        break;
+    }
+}
+
 struct ComposeContext final {
     const UiDocument& document;
     const UiBindingTable& bindings;
@@ -445,6 +540,7 @@ struct ComposeContext final {
     std::string_view pressedElement;
     UiCanvasFit fit;
     UiDrawList& drawList;
+    const TextEdit* edit{};
 };
 
 [[nodiscard]] UiResult<void> AppendText(
@@ -594,11 +690,115 @@ struct ComposeContext final {
     case UiElementType::FixedStepList:
         // The walk composes the list items.
         break;
+    case UiElementType::TextField: {
+        const bool editing = context.edit != nullptr && context.edit->element == element.id;
+        std::string_view colorId = element.background.normal;
+        if (editing || context.pressedElement == element.id) {
+            colorId = element.background.pressed;
+        } else if (context.interaction.focusedElement == element.id) {
+            colorId = element.background.focused;
+        }
+        auto background = NamedColor(context.document, colorId);
+        if (!background) return Base::Err(std::move(background).error());
+        context.drawList.commands.emplace_back(UiQuadDraw{pixels, background.value(), clipPixels});
+
+        auto textColor = EvaluateColor(element.textStyle.color, context.document, context.bindings);
+        if (!textColor) return Base::Err(std::move(textColor).error());
+        UiColor color = textColor.value();
+        std::string shown;
+        std::optional<UiTextCaret> caret;
+        if (editing) {
+            const TextEdit& edit = *context.edit;
+            shown = edit.text;
+            shown.insert(edit.cursor, edit.composition);
+            const std::size_t compositionEnd = edit.cursor + edit.composition.size();
+            const std::size_t cursor = edit.compositionCursor < 0
+                ? compositionEnd
+                : edit.cursor + CodePointOffset(edit.composition, static_cast<std::size_t>(edit.compositionCursor));
+            caret = UiTextCaret{cursor, edit.cursor, compositionEnd, 0, edit.selectAll ? shown.size() : 0, color};
+        } else {
+            auto value = FieldValue(context.document, context.bindings, element);
+            if (!value) return Base::Err(std::move(value).error());
+            shown = std::move(value).value();
+            if (shown.empty() && !element.placeholder.empty()) {
+                shown = element.placeholder;
+                auto placeholderColor = NamedColor(context.document, element.placeholderColor);
+                if (!placeholderColor) return Base::Err(std::move(placeholderColor).error());
+                color = placeholderColor.value();
+            }
+        }
+        const std::string& alias = element.textStyle.font.empty() ? context.document.defaultFont : element.textStyle.font;
+        const auto font = context.document.fonts.find(alias);
+        if (font == context.document.fonts.end()) {
+            return Base::Err(RuntimeError(UiErrorCode::MissingReference, "unknown font alias '" + alias + "'"));
+        }
+        // The text is inset like the slider's label and clipped to the field:
+        // a field does not scroll, so it is sized for its max_length.
+        const float inset = pixels.width * 0.04F;
+        const Math::Rect textBounds{pixels.x + inset, pixels.y, Math::Max(0.0F, pixels.width - inset * 2.0F), pixels.height};
+        const float clipLeft = Math::Max(clipPixels.x, pixels.x);
+        const float clipTop = Math::Max(clipPixels.y, pixels.y);
+        const float clipRight = Math::Min(clipPixels.x + clipPixels.width, pixels.x + pixels.width);
+        const float clipBottom = Math::Min(clipPixels.y + clipPixels.height, pixels.y + pixels.height);
+        const Math::Rect fieldClip{clipLeft, clipTop, Math::Max(0.0F, clipRight - clipLeft), Math::Max(0.0F, clipBottom - clipTop)};
+        context.drawList.commands.emplace_back(UiTextDraw{
+            textBounds,
+            std::move(shown),
+            font->second,
+            element.textStyle.pointSize * context.fit.scale,
+            color,
+            element.textStyle.horizontalAlign,
+            element.textStyle.verticalAlign,
+            fieldClip,
+            caret,
+        });
+        break;
+    }
     }
     return {};
 }
 
 } // namespace
+
+std::size_t UiCodePointCount(const std::string_view utf8) noexcept {
+    std::size_t count = 0;
+    for (std::size_t offset = 0; offset < utf8.size(); offset = UiNextCodePoint(utf8, offset)) ++count;
+    return count;
+}
+
+std::size_t UiPreviousCodePoint(const std::string_view utf8, std::size_t offset) noexcept {
+    offset = Math::Min(offset, utf8.size());
+    if (offset == 0) return 0;
+    --offset;
+    while (offset > 0 && (static_cast<unsigned char>(utf8[offset]) & 0xC0) == 0x80) --offset;
+    return offset;
+}
+
+std::size_t UiNextCodePoint(const std::string_view utf8, std::size_t offset) noexcept {
+    if (offset >= utf8.size()) return utf8.size();
+    ++offset;
+    while (offset < utf8.size() && (static_cast<unsigned char>(utf8[offset]) & 0xC0) == 0x80) ++offset;
+    return offset;
+}
+
+std::string UiSingleLineText(const std::string_view utf8) {
+    std::string result;
+    for (std::size_t index = 0; index < utf8.size();) {
+        const auto lead = static_cast<unsigned char>(utf8[index]);
+        const std::size_t length = SequenceLength(lead);
+        bool whole = length != 0 && index + length <= utf8.size();
+        for (std::size_t next = 1; whole && next < length; ++next) {
+            whole = (static_cast<unsigned char>(utf8[index + next]) & 0xC0) == 0x80;
+        }
+        if (!whole) {
+            ++index;
+            continue;
+        }
+        if (length > 1 || (lead >= 0x20 && lead != 0x7F)) result.append(utf8.substr(index, length));
+        index += length;
+    }
+    return result;
+}
 
 UiCanvasFit FitDesignCanvas(Math::Vec2 designSize, UiViewport viewport) noexcept {
     const float scale = Math::Min(viewport.width / designSize.x, viewport.height / designSize.y);
@@ -655,6 +855,26 @@ struct UiRuntime::Impl final {
     std::string pressedElement;
     bool pointerWasAvailable{};
     Math::Vec2 lastPointerPixels{};
+    std::optional<TextEdit> edit;
+    UiTextFilter textFilter;
+
+    [[nodiscard]] UiResult<void> BeginEdit(const UiElement& field, const UiBindingTable& bindings) {
+        auto value = FieldValue(*document, bindings, field);
+        if (!value) return Base::Err(std::move(value).error());
+        TextEdit started;
+        started.element = field.id;
+        started.text = value.value();
+        started.cursor = started.text.size();
+        started.startValue = std::move(value).value();
+        edit = std::move(started);
+        interaction.editingElement = field.id;
+        return {};
+    }
+
+    void EndEdit() noexcept {
+        edit.reset();
+        interaction.editingElement.clear();
+    }
 
     void TrackPointer(const UiInputFrame& input) noexcept {
         pointerWasAvailable = input.pointerAvailable;
@@ -689,7 +909,8 @@ struct UiRuntime::Impl final {
                 ToPixels(clip, fit),
                 drawOrder++,
                 element.type == UiElementType::Button ||
-                    element.type == UiElementType::HorizontalSlider,
+                    element.type == UiElementType::HorizontalSlider ||
+                    element.type == UiElementType::TextField,
                 position.index,
             });
             return {};
@@ -717,7 +938,8 @@ struct UiRuntime::Impl final {
         const Math::Rect viewportRect{0.0F, 0.0F, viewport.width, viewport.height};
         result.commands.emplace_back(UiQuadDraw{viewportRect, backdrop->second, viewportRect});
         ComposeContext context{
-            *document, bindings, interaction, pressedElement, MakeFit(*document, viewport), result};
+            *document, bindings, interaction, pressedElement, MakeFit(*document, viewport), result,
+            edit ? &*edit : nullptr};
         const Math::Rect root{0.0F, 0.0F, document->designCanvas.size.x, document->designCanvas.size.y};
         auto compose = [&context](const UiElement& element, Math::Rect design, Math::Rect clip,
                                   ListPosition position) {
@@ -741,6 +963,7 @@ UiResult<void> UiRuntime::Initialize(std::shared_ptr<const UiDocument> document)
     impl_->document = std::move(document);
     impl_->canvas = nullptr;
     impl_->interaction = {};
+    impl_->edit.reset();
     impl_->pressedElement.clear();
     impl_->pointerWasAvailable = false;
     impl_->lastPointerPixels = {};
@@ -751,6 +974,7 @@ void UiRuntime::Reset() noexcept {
     impl_->document.reset();
     impl_->canvas = nullptr;
     impl_->interaction = {};
+    impl_->edit.reset();
     impl_->pressedElement.clear();
     impl_->pointerWasAvailable = false;
     impl_->lastPointerPixels = {};
@@ -769,6 +993,7 @@ UiResult<void> UiRuntime::ActivateCanvas(std::string_view canvasId) {
     impl_->canvas = &*found;
     impl_->interaction.activeCanvas = found->id;
     impl_->interaction.capturedElement.clear();
+    impl_->EndEdit();
     impl_->pressedElement.clear();
     impl_->pointerWasAvailable = false;
     impl_->lastPointerPixels = {};
@@ -780,6 +1005,10 @@ UiResult<void> UiRuntime::ActivateCanvas(std::string_view canvasId) {
         impl_->interaction.focusedElement.clear();
     }
     return {};
+}
+
+void UiRuntime::SetTextFilter(UiTextFilter filter) {
+    impl_->textFilter = std::move(filter);
 }
 
 UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
@@ -798,6 +1027,43 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
         (input.pointerPixels.x != impl_->lastPointerPixels.x ||
          input.pointerPixels.y != impl_->lastPointerPixels.y);
 
+    // The text field being edited (Design Invariant 4): a change of its binding
+    // discards the edit; cancel discards it; the text inputs apply in order;
+    // activate submits it as the field's string action.
+    // An activate that arrives with a discarded edit does not start another.
+    bool editDiscarded = false;
+    const UiElement* editing = impl_->edit ? FindElement(impl_->canvas->children, impl_->edit->element) : nullptr;
+    if (impl_->edit && editing == nullptr) {
+        impl_->EndEdit();
+        editDiscarded = true;
+    }
+    if (editing != nullptr) {
+        auto current = FieldValue(*impl_->document, bindings, *editing);
+        if (!current) return Base::Err(std::move(current).error());
+        if (current.value() != impl_->edit->startValue) {
+            impl_->EndEdit();
+            editing = nullptr;
+            editDiscarded = true;
+        }
+    }
+    if (editing != nullptr) {
+        if (input.cancelPressed) {
+            impl_->EndEdit();
+            impl_->TrackPointer(input);
+            return std::move(events);
+        }
+        for (const UiTextInput& text : input.text) {
+            ApplyTextInput(*impl_->edit, text, *editing, impl_->textFilter);
+        }
+        if (input.activatePressed) {
+            impl_->pressedElement = editing->id;
+            events.push_back({editing->action, editing->id, std::move(impl_->edit->text)});
+            impl_->EndEdit();
+            impl_->TrackPointer(input);
+            return std::move(events);
+        }
+    }
+
     if (input.cancelPressed) {
         impl_->interaction.capturedElement.clear();
         if (impl_->canvas->cancelAction) {
@@ -815,8 +1081,13 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
     const UiEvaluatedElement* hit = input.pointerAvailable
         ? HitTestUiLayout(layouts, input.pointerPixels, true)
         : nullptr;
-    if (hit != nullptr && (pointerMoved || input.pointerPrimaryPressed)) {
+    // While a field is being edited only a press moves the focus, so moving
+    // the pointer across the canvas does not end the edit.
+    if (hit != nullptr && (input.pointerPrimaryPressed || (pointerMoved && !impl_->edit))) {
         impl_->interaction.focusedElement = hit->id;
+    }
+    if (input.pointerPrimaryPressed && impl_->edit && (hit == nullptr || hit->id != impl_->edit->element)) {
+        impl_->EndEdit();
     }
 
     bool pointerSliderProcessed = false;
@@ -827,6 +1098,11 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
         impl_->pressedElement = hitElement->id;
         if (hitElement->type == UiElementType::Button) {
             events.push_back({hitElement->action, hitElement->id, std::monostate{}});
+        } else if (hitElement->type == UiElementType::TextField) {
+            if (!impl_->edit) {
+                auto begun = impl_->BeginEdit(*hitElement, bindings);
+                if (!begun) return Base::Err(std::move(begun).error());
+            }
         } else {
             impl_->interaction.capturedElement = hitElement->id;
             auto event = SliderPointerEvent(
@@ -882,6 +1158,9 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
         }
         impl_->interaction.focusedElement = impl_->canvas->focusOrder[index];
     }
+    if (impl_->edit && impl_->interaction.focusedElement != impl_->edit->element) {
+        impl_->EndEdit();
+    }
 
     const UiElement* focused = FindElement(impl_->canvas->children, impl_->interaction.focusedElement);
     if (focused != nullptr && focused->type == UiElementType::HorizontalSlider &&
@@ -899,6 +1178,11 @@ UiResult<std::vector<UiActionEvent>> UiRuntime::Update(
     if (input.activatePressed && focused != nullptr && focused->type == UiElementType::Button) {
         impl_->pressedElement = focused->id;
         events.push_back({focused->action, focused->id, std::monostate{}});
+    }
+    if (input.activatePressed && focused != nullptr && focused->type == UiElementType::TextField && !impl_->edit &&
+        !editDiscarded) {
+        auto begun = impl_->BeginEdit(*focused, bindings);
+        if (!begun) return Base::Err(std::move(begun).error());
     }
     impl_->TrackPointer(input);
     return std::move(events);

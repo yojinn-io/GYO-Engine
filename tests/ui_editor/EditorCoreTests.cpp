@@ -655,6 +655,8 @@ std::string_view UiTypeName(const Engine::Ui::UiElementType type) {
         return "horizontal_slider";
     case UiElementType::FixedStepList:
         return "fixed_step_list";
+    case UiElementType::TextField:
+        return "text_field";
     }
     return {};
 }
@@ -675,7 +677,8 @@ std::string_view DeclaredValue(const nlohmann::json& declarations, const nlohman
 void TestElementKindsMatchUi() {
     using Engine::Ui::UiElementType;
     constexpr UiElementType uiTypes[]{UiElementType::Container, UiElementType::Panel, UiElementType::Image,
-        UiElementType::Text, UiElementType::Button, UiElementType::HorizontalSlider, UiElementType::FixedStepList};
+        UiElementType::Text, UiElementType::Button, UiElementType::HorizontalSlider, UiElementType::FixedStepList,
+        UiElementType::TextField};
     Expect(ElementKinds().size() == std::size(uiTypes), "the editor has one kind per GYO::Ui element type");
     for (const UiElementType type : uiTypes) {
         Expect(FindElementKind(UiTypeName(type)) != nullptr, "every GYO::Ui element type has an editor kind");

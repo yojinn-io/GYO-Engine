@@ -9,6 +9,7 @@ set(PVP_DOMAIN_SOURCES
     src/Pvp/LocalPlayerPrediction.cpp
     src/Pvp/ShotGate.cpp
     src/Pvp/HitFeedback.cpp
+    src/Pvp/SoundCues.cpp
     src/Pvp/LogFile.cpp
     src/Pvp/NativeFiles.cpp
     src/Pvp/NetworkStatistics.cpp

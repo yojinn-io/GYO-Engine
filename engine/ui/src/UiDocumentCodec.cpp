@@ -423,14 +423,13 @@ void RejectUnknownKeys(
     return result;
 }
 
-void ParseTextVisual(
+// The text style keys shared by the text elements (everything but "text").
+void ParseTextStyle(
     const Json& value,
     UiElement& result,
     std::string_view source,
     const std::string& path,
     bool centeredByDefault) {
-    result.text = ParseTextSource(
-        Required(value, "text", source, path), source, path + "/text");
     if (value.contains("font")) {
         result.textStyle.font = ReadString(value["font"], source, path + "/font");
     }
@@ -458,6 +457,17 @@ void ParseTextVisual(
     }
 }
 
+void ParseTextVisual(
+    const Json& value,
+    UiElement& result,
+    std::string_view source,
+    const std::string& path,
+    bool centeredByDefault) {
+    result.text = ParseTextSource(
+        Required(value, "text", source, path), source, path + "/text");
+    ParseTextStyle(value, result, source, path, centeredByDefault);
+}
+
 [[nodiscard]] UiElementType ParseElementType(
     const Json& value,
     std::string_view source,
@@ -470,6 +480,7 @@ void ParseTextVisual(
     if (type == "button") return UiElementType::Button;
     if (type == "horizontal_slider") return UiElementType::HorizontalSlider;
     if (type == "fixed_step_list") return UiElementType::FixedStepList;
+    if (type == "text_field") return UiElementType::TextField;
     Fail(UiErrorCode::ValidationFailed, "unknown element type '" + type + "'", source, path);
 }
 
@@ -551,6 +562,15 @@ UiElement ParseElement(
             source,
             path);
         break;
+    case UiElementType::TextField:
+        RejectUnknownKeys(
+            value,
+            {"type", "id", "rect", "children", "font", "point_size", "text_color",
+             "horizontal_align", "vertical_align", "action", "background", "binding",
+             "max_length", "placeholder", "placeholder_color"},
+            source,
+            path);
+        break;
     }
 
     result.id = ReadString(
@@ -625,6 +645,33 @@ UiElement ParseElement(
             Required(value, "item_step", source, path), source, path + "/item_step");
         result.itemTemplate = ParseElements(
             Required(value, "template", source, path), source, path + "/template");
+        break;
+    }
+    case UiElementType::TextField: {
+        ParseTextStyle(value, result, source, path, false);
+        result.textStyle.verticalAlign = value.contains("vertical_align")
+            ? result.textStyle.verticalAlign
+            : UiVerticalAlign::Center;
+        result.action = ReadString(
+            Required(value, "action", source, path), source, path + "/action");
+        result.background = ParseButtonColors(
+            Required(value, "background", source, path), source, path + "/background");
+        result.binding = ReadString(
+            Required(value, "binding", source, path), source, path + "/binding");
+        const std::int64_t maximumLength = ReadInteger(
+            Required(value, "max_length", source, path), source, path + "/max_length");
+        if (maximumLength < 1) {
+            Fail(UiErrorCode::ValidationFailed, "max_length must be at least 1", source, path + "/max_length");
+        }
+        result.maxLength = static_cast<std::size_t>(maximumLength);
+        if (value.contains("placeholder")) {
+            result.placeholder = ReadString(value["placeholder"], source, path + "/placeholder");
+            result.placeholderColor = ReadString(
+                Required(value, "placeholder_color", source, path), source, path + "/placeholder_color");
+        } else if (value.contains("placeholder_color")) {
+            Fail(UiErrorCode::ValidationFailed, "placeholder_color needs a placeholder", source,
+                 path + "/placeholder_color");
+        }
         break;
     }
     }
@@ -834,7 +881,7 @@ UiElement ParseElement(
     }
     const std::int64_t version = ReadInteger(
         Required(root, "version", source, ""), source, "/version");
-    if (version != kUiSchemaVersion) {
+    if (version < kUiSchemaMinimumVersion || version > kUiSchemaVersion) {
         Fail(
             UiErrorCode::UnsupportedVersion,
             "unsupported UI schema version " + std::to_string(version),
@@ -843,6 +890,7 @@ UiElement ParseElement(
     }
 
     UiDocument result;
+    result.version = static_cast<std::uint32_t>(version);
     const Json& design = Required(root, "design_canvas", source, "");
     RejectUnknownKeys(design, {"size", "scale_mode"}, source, "/design_canvas");
     result.designCanvas.size = ParseFloat2(
@@ -896,6 +944,8 @@ UiElement ParseElement(
             declaration.payload = UiActionPayloadType::None;
         } else if (payload == "number") {
             declaration.payload = UiActionPayloadType::Number;
+        } else if (payload == "string") {
+            declaration.payload = UiActionPayloadType::String;
         } else {
             Fail(UiErrorCode::ValidationFailed, "unknown action payload type", source, path + "/payload");
         }

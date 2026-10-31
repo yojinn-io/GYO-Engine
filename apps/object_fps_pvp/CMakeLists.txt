@@ -41,14 +41,14 @@ gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConn
 gyo_app_add_library(client_simulation OUT_TARGET simulation
         SOURCES src/Pvp/ClientSimulation.cpp src/Pvp/ClientSimulationRole.cpp
     PUBLIC_LIBRARIES ${domain} ${network} GYO::Time GYO::Threads)
-gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp
+gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp
         src/Pvp/PlayerPresentation.cpp src/App/CharacterPresentationDefinition.cpp
         src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
     PUBLIC_LIBRARIES ${domain} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
-    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer GYO::Os nlohmann_json::nlohmann_json
-    PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
+    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer GYO::Os GYO::Audio nlohmann_json::nlohmann_json
+    PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_AUDIO SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}
-    COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_PLATFORM SDL_GPU SDL_TTF)
+    COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_AUDIO SDL_PLATFORM SDL_GPU SDL_TTF)
 target_compile_definitions(${app} PRIVATE GYO_DEFAULT_GPU_DRIVER="${GYO_DEFAULT_GPU_DRIVER}")
 # The entry point (GyoMain in main.cpp; IP-3).
 target_link_libraries(${app} PRIVATE GYO::PlatformSDLMain)

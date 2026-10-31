@@ -102,6 +102,10 @@ SdlPlatform::Create(const SdlPlatformOptions& options) {
             "SdlPlatform: window dimensions must be positive"));
     }
 
+    // SDL reads the hint when its video starts; it is process-wide.
+    if (options.imeComposition) {
+        static_cast<void>(SDL_SetHint(SDL_HINT_IME_IMPLEMENTED_UI, "composition"));
+    }
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         return Base::Err(MakeSdlError(
             SdlPlatformErrorCode::InitializationFailed,

@@ -1,10 +1,13 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/ClientLog.hpp"
 #include "RetroFPS/Pvp/SessionSummary.hpp"
+#include "RetroFPS/Pvp/AddressText.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ShotGate.hpp"
 #include "RetroFPS/Pvp/HitFeedback.hpp"
+#include "RetroFPS/Pvp/PvpSound.hpp"
+#include "RetroFPS/Pvp/SoundCues.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/PointerCapture.hpp"
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
@@ -19,6 +22,7 @@
 #include "engine/asset/core/AssetLifetime.hpp"
 #include "engine/asset/core/AssetStorage.hpp"
 #include "engine/asset/loaders/FontLoader.hpp"
+#include "engine/asset/loaders/SoundLoader.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/sdl_image/SdlImageTextureLoader.hpp"
 #include "engine/asset/loading/AssetPipeline.hpp"
@@ -47,6 +51,7 @@
 #include <cstdio>
 #include <deque>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -146,6 +151,11 @@ struct PvpApplication::Impl final {
     ClientView view;
     LocalHitFeedback hitFeedback;
     HitFeedbackSettings hitSettings;
+    // Sound cues (v8-product-sfx): the output, and what each detector has seen.
+    PvpSound sound;
+    RemoteShotTracker remoteShots;
+    FootstepTracker localSteps;
+    std::unordered_map<PlayerId, FootstepTracker> remoteSteps;
     HitFeedbackSample hitSample;
     PlayerId viewPlayer{}, renderedPlayer{};
     std::uint64_t viewLife{};
@@ -158,8 +168,10 @@ struct PvpApplication::Impl final {
     Clock::time_point reloadAnchorAt{};
     double reloadAnchorSeconds{};
     bool pendingReloadEdge{}, lifeBoundaryThisFrame{};
-    bool editing{}, suppressUiEnter{}, inputCaptured{}, windowInteraction{}, initialized{}, quit{};
+    // The platform's text input is on while the lobby's address field is being edited.
+    bool textInputOn{}, inputCaptured{}, windowInteraction{}, initialized{}, quit{};
     bool leftButtonDown{}, pointerAcquiredThisFrame{}, pendingShotEdge{};
+    Clock::time_point pendingShotPressedAt{};
     // A live frame runs inside the event pump while the OS holds it (window
     // resize or move). Its input frame is incomplete, so it advances time and
     // presents without consuming input.
@@ -168,6 +180,7 @@ struct PvpApplication::Impl final {
     int exitCode{};
 
     ~Impl() {
+        sound.LogSummary();
         connection.Leave();
         players.reset();
         weapon.reset();
@@ -193,19 +206,26 @@ struct PvpApplication::Impl final {
         return presented.observation.active && self && presented.observation.lifeGeneration == self->lifeGeneration;
     }
 
-    void EditAddress(bool value) {
-        editing = value;
-        // As before, a failure only leaves the field without typed text.
-        static_cast<void>(input->SetTextInput(value));
-    }
+    bool Editing() const { return !ui.InteractionState().editingElement.empty(); }
 
-    void AppendAddress(const char* value) {
-        if (!value) return;
-        for (; *value != '\0' && address.size() < 128; ++value) {
-            const unsigned char c = static_cast<unsigned char>(*value);
-            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                (c >= '0' && c <= '9') || c == '.' || c == ':' ||
-                c == '-' || c == '[' || c == ']') address += static_cast<char>(c);
+    // Follows the lobby's text field (v8-product-lobby-text-field): the
+    // platform's text input is on while it is edited, and the input method's
+    // candidates appear beside it. As before, a failure only leaves the field
+    // without typed text.
+    void SyncTextInput(bool wanted) {
+        if (wanted == textInputOn) return;
+        textInputOn = wanted;
+        static_cast<void>(input->SetTextInput(wanted));
+        if (!wanted) return;
+        const auto layout = ui.EvaluateLayout(Bindings(), Viewport());
+        if (!layout) return;
+        for (const auto& element : layout.value()) {
+            if (element.id != ui.InteractionState().editingElement) continue;
+            const auto& bounds = element.boundsPixels;
+            static_cast<void>(input->SetTextInputArea(
+                {static_cast<int>(bounds.x), static_cast<int>(bounds.y), static_cast<int>(bounds.width),
+                 static_cast<int>(bounds.height)},
+                0));
         }
     }
 
@@ -221,8 +241,9 @@ struct PvpApplication::Impl final {
         }
         if (!InWorld()) return;
         PointerCaptureState capture{inputCaptured, leftButtonDown, pendingShotEdge, pendingReloadEdge,
-            pointerAcquiredThisFrame, windowInteraction};
+            pointerAcquiredThisFrame, windowInteraction, pendingShotPressedAt};
         const auto result = ApplyPointerCaptureEvents(capture, events, focusedAtStart);
+        pendingShotPressedAt = capture.pendingShotPressedAt;
         inputCaptured = capture.inputCaptured;
         leftButtonDown = capture.leftButtonDown;
         pendingShotEdge = capture.pendingShotEdge;
@@ -240,31 +261,46 @@ struct PvpApplication::Impl final {
         }
     }
 
-    // Lobby address editing: the frame's text in arrival order (presses and
-    // repeats; the editing policy below is this product's).
-    void HandleTextEditing(const std::vector<Engine::Input::TextEvent>& text) {
+    // The frame's text for the field being edited, as Ui's neutral input
+    // (Ui Design Invariant 7): which key means which edit is this product's
+    // mapping; what the edit does is Ui's. Enter and Escape are the UI
+    // frame's activate and cancel.
+    std::vector<Engine::Ui::UiTextInput> TextInput(const std::vector<Engine::Input::TextEvent>& text) const {
         using Engine::Input::Key;
+        using Engine::Input::TextEvent;
+        using Engine::Ui::UiTextInputKind;
+        std::vector<Engine::Ui::UiTextInput> result;
         for (const auto& entry : text) {
-            if (InWorld() || !editing) return;
-            if (entry.kind == Engine::Input::TextEvent::Kind::Text) {
-                AppendAddress(entry.text.c_str());
-                continue;
-            }
-            if (entry.layoutKey == Key::Backspace && !address.empty()) address.pop_back();
-            if (entry.modifiers.ctrl && entry.layoutKey == Key::A) address.clear();
-            if (entry.modifiers.ctrl && entry.layoutKey == Key::V) AppendAddress(platform->ClipboardText().c_str());
-            if (entry.layoutKey == Key::Enter || entry.layoutKey == Key::Escape) {
-                EditAddress(false);
-                suppressUiEnter = true;
+            if (entry.kind == TextEvent::Kind::Text) {
+                result.push_back({UiTextInputKind::Insert, entry.text});
+            } else if (entry.kind == TextEvent::Kind::Composition) {
+                result.push_back({UiTextInputKind::Composition, entry.text, entry.cursor});
+            } else if (entry.modifiers.ctrl && entry.layoutKey == Key::A) {
+                result.push_back({UiTextInputKind::SelectAll});
+            } else if (entry.modifiers.ctrl && entry.layoutKey == Key::V) {
+                result.push_back({UiTextInputKind::Insert, platform->ClipboardText()});
+            } else if (entry.layoutKey == Key::Backspace) {
+                result.push_back({UiTextInputKind::Backspace});
+            } else if (entry.layoutKey == Key::Delete) {
+                result.push_back({UiTextInputKind::Delete});
+            } else if (entry.layoutKey == Key::Left) {
+                result.push_back({UiTextInputKind::MoveLeft});
+            } else if (entry.layoutKey == Key::Right) {
+                result.push_back({UiTextInputKind::MoveRight});
+            } else if (entry.layoutKey == Key::Home) {
+                result.push_back({UiTextInputKind::MoveHome});
+            } else if (entry.layoutKey == Key::End) {
+                result.push_back({UiTextInputKind::MoveEnd});
             }
         }
+        return result;
     }
 
     Engine::Ui::UiBindingTable Bindings() const {
         Engine::Ui::UiBindingTable result;
-        result.emplace("address", address + (editing ? "_" : ""));
-        result.emplace("hint", editing
-            ? "Type host:port. Ctrl+A clears, Ctrl+V pastes, Enter confirms."
+        result.emplace("address", address);
+        result.emplace("hint", Editing()
+            ? "Type host:port. Ctrl+A selects all, Ctrl+V pastes, Enter confirms, Esc cancels."
             : "Click the address to edit. Arrows / Enter also navigate.");
         std::string room = "No room found. Refresh or create one.";
         if (!state.rooms.empty()) {
@@ -283,9 +319,12 @@ struct PvpApplication::Impl final {
         return result;
     }
 
-    void Execute(const std::string& action) {
-        if (action == "pvp.edit_address") { EditAddress(!editing); return; }
-        EditAddress(false);
+    void Execute(const Engine::Ui::UiActionEvent& event) {
+        const std::string& action = event.action;
+        if (action == "pvp.submit_address") {
+            if (const auto* submitted = std::get_if<std::string>(&event.payload)) address = *submitted;
+            return;
+        }
         localStatus.clear();
         if (action == "pvp.leave") { connection.Leave(); return; }
         if (action == "pvp.quit") { connection.Leave(); quit = true; return; }
@@ -309,6 +348,7 @@ struct PvpApplication::Impl final {
         if (connectionGeneration != received.generation) {
             connectionGeneration = received.generation;
             timeline.Reset();
+            ResetSoundCues();
             frameViewTickQ16 = presentedViewTickQ16 = 0;
             viewPlayer = 0;
             ResetWeaponFeedback();
@@ -321,6 +361,7 @@ struct PvpApplication::Impl final {
         const auto* self = state.snapshot ? FindPlayer(*state.snapshot, state.playerId) : nullptr;
         if (state.phase != ConnectionPhase::Playing || !self) {
             timeline.Reset();
+            ResetSoundCues();
             frameViewTickQ16 = presentedViewTickQ16 = 0;
             remoteMovement.reset();
             viewPlayer = 0;
@@ -334,6 +375,7 @@ struct PvpApplication::Impl final {
         }
         if (viewPlayer != state.playerId) {
             timeline.Reset();
+            ResetSoundCues();
             frameViewTickQ16 = presentedViewTickQ16 = 0;
             view.Reset(self->yaw, self->pitch);
             hitFeedback.Reset();
@@ -382,6 +424,12 @@ struct PvpApplication::Impl final {
                 if (combat.lastAttackerId != 0 && other.playerId == combat.lastAttackerId) attacker = other.position;
             const auto hit = hitFeedback.Observe(combat, self->lifeState, self->position, attacker,
                 std::chrono::duration<double>(Clock::now().time_since_epoch()).count());
+            if (HitTakenSounds(hit.outcome)) {
+                const auto& cue = sound.Settings().cues[static_cast<std::size_t>(SoundCue::HitTaken)];
+                sound.Play(SoundCue::HitTaken, timeline.DisplayTime(combat.lastDamageTick).value_or(Clock::now()),
+                    attacker ? SpatialGains(self->position, view.Input().yaw, *attacker, cue.volume, sound.Settings())
+                             : CentredGains(cue.volume));
+            }
             if (hit.outcome != HitFeedbackOutcome::None) {
                 // log-contract: every hit the presentation saw, and why it did or did not flash.
                 static constexpr const char* reasons[] = {"none", "played", "dead", "new_life"};
@@ -432,6 +480,11 @@ struct PvpApplication::Impl final {
             if (decision.accepted) {
                 if (decision.hitKind == ShotHitKind::Player) {
                     ++weaponFeedback.hitDecisions;
+                    const auto& cue = sound.Settings().cues[static_cast<std::size_t>(SoundCue::HitConfirmed)];
+                    const auto* target = FindPlayer(*state.snapshot, decision.targetId);
+                    sound.Play(SoundCue::HitConfirmed, timeline.DisplayTime(decision.resolvedTick).value_or(now),
+                        target ? SpatialGains(self->position, view.Input().yaw, target->position, cue.volume, sound.Settings())
+                               : CentredGains(cue.volume));
                     hitMarkerUntil = now + std::chrono::milliseconds{180};
                 }
             } else {
@@ -448,10 +501,58 @@ struct PvpApplication::Impl final {
         // The simulation role observes the same snapshots through its own drain.
         // ClientConnection queues only validated snapshots, newer than the
         // applied one, in arrival order; the timeline restarts with it.
+        const auto& remoteCue = sound.Settings().cues[static_cast<std::size_t>(SoundCue::RemoteShot)];
         for (const auto& sample : received.snapshots) {
             const bool pushed = timeline.Push(sample.snapshot, sample.receivedAt);
             GYO_ASSERT(pushed);
+            // Each snapshot in arrival order, so no shot of a batch is lost.
+            for (const auto& shot : remoteShots.Observe(sample.snapshot, state.playerId)) {
+                sound.Play(SoundCue::RemoteShot, timeline.DisplayTime(shot.tick).value_or(sample.receivedAt),
+                    SpatialGains(self->position, view.Input().yaw, shot.position, remoteCue.volume, sound.Settings()));
+            }
         }
+    }
+
+    bool InitializeSound(std::string& error) {
+        namespace Asset = Engine::Asset;
+        const auto loaded = assets.Load(Asset::AssetId::FromString("object_fps_pvp.audio.settings"),
+            Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
+        if (!loaded) { error = Explain(loaded.error()); return false; }
+        const auto text = assets.GetSharedConst<Asset::Loaders::TextAsset>(loaded.value());
+        const auto settings = text ? ParseSoundSettings(text->text, error) : std::nullopt;
+        assets.Release(loaded.value());
+        if (!settings) {
+            if (error.empty()) error = "PvP sound settings asset has no text payload";
+            return false;
+        }
+        const PvpSound::ClipSource source = [this](const std::string& id,
+                const std::function<void(const SoundClipData&)>& use, std::string& clipError) {
+            const auto clip = assets.Load(Asset::AssetId::FromString(id),
+                Asset::AssetRequest::WithTypeHint(Asset::AssetType::FromString("sound")));
+            if (!clip) { clipError = Explain(clip.error()); return false; }
+            const auto data = assets.GetSharedConst<Asset::Loaders::SoundAsset>(clip.value());
+            if (data) use({{data->pcm16.data(), data->pcm16.size()}, data->channels, data->sampleRate});
+            assets.Release(clip.value());
+            if (!data) { clipError = "Sound asset " + id + " has no samples"; return false; }
+            return true;
+        };
+        return sound.Initialize(*settings, source, error);
+    }
+
+    void ObserveLocalFootsteps(const Clock::time_point at) {
+        if (!LocalPresentationCurrent() || !Alive()) { localSteps.Reset(); return; }
+        const auto& observation = presented.observation;
+        const auto step = localSteps.Observe(observation.renderPosition, observation.grounded,
+            observation.lifeGeneration, sound.Settings());
+        if (step == FootstepTracker::Step::None) return;
+        const auto cue = step == FootstepTracker::Step::Landing ? SoundCue::Landing : SoundCue::Footstep;
+        sound.Play(cue, at, CentredGains(sound.Settings().cues[static_cast<std::size_t>(cue)].volume));
+    }
+
+    void ResetSoundCues() {
+        remoteShots.Reset();
+        localSteps.Reset();
+        remoteSteps.clear();
     }
 
     void ResetWeaponFeedback() {
@@ -510,6 +611,10 @@ struct PvpApplication::Impl final {
                     weaponFeedback.lastSubmittedSeconds = std::chrono::duration<double>(now.time_since_epoch()).count();
                     weaponAction = fps::WeaponViewModelAction::Shoot;
                     weaponStartedAt = now;
+                    // The shot sounds at the press that made it, not at this frame.
+                    const auto pressed = pendingShotPressedAt != Clock::time_point{} ? pendingShotPressedAt : now;
+                    sound.Play(SoundCue::LocalShot, pressed,
+                        CentredGains(sound.Settings().cues[static_cast<std::size_t>(SoundCue::LocalShot)].volume));
                     shotGate.Submitted(*id, *gateView, state.combatRules->cooldownTicks);
                 }
             }
@@ -529,6 +634,14 @@ struct PvpApplication::Impl final {
                     static_cast<double>(state.snapshot->tick - weaponFeedback.reloadStartTick) / AuthorityTickRate : 0;
                 weaponAction = fps::WeaponViewModelAction::Reload;
                 ++weaponFeedback.reloadAnimationStarts;
+                // Ending with the reload, as the animation does: from the reload's
+                // authority start (as far as it has already run), offset so the
+                // clip's last click lands at the reload's end.
+                const double reloadSeconds = static_cast<double>(weaponFeedback.reloadEndTick -
+                    weaponFeedback.reloadStartTick) / AuthorityTickRate;
+                sound.Play(SoundCue::Reload, now + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(
+                        ReloadSoundOffsetSeconds(reloadSeconds, sound.ClipSeconds(SoundCue::Reload)) - reloadAnchorSeconds)),
+                    CentredGains(sound.Settings().cues[static_cast<std::size_t>(SoundCue::Reload)].volume));
                 ++weaponFeedback.animationRevision;
             }
             duration = static_cast<double>(weaponFeedback.reloadEndTick - weaponFeedback.reloadStartTick) / AuthorityTickRate;
@@ -675,6 +788,18 @@ struct PvpApplication::Impl final {
                     observation.lowerResolvedCommand = sampled->lowerResolvedCommand;
                     observation.upperResolvedCommand = sampled->upperResolvedCommand;
                 }
+            }
+            if (presented.lifeState == LifeState::Alive) {
+                const auto step = remoteSteps[player.playerId].Observe(position, presented.grounded,
+                    presented.lifeGeneration, sound.Settings());
+                if (step != FootstepTracker::Step::None) {
+                    const auto cue = step == FootstepTracker::Step::Landing ? SoundCue::Landing : SoundCue::Footstep;
+                    sound.Play(cue, presentationTime, SpatialGains(this->presented.observation.renderPosition,
+                        view.Input().yaw, position, sound.Settings().cues[static_cast<std::size_t>(cue)].volume,
+                        sound.Settings()));
+                }
+            } else {
+                remoteSteps.erase(player.playerId);
             }
             PlayerPresentationFrame characterFrame;
             characterFrame.playerId = player.playerId;
@@ -840,6 +965,7 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     if (!impl_->shaders.CompleteFormats()) { error = "Shader bundles have no complete common format"; return false; }
     impl_->loaders.Register(std::make_unique<Asset::Loaders::FontLoader>());
     impl_->loaders.Register(std::make_unique<Asset::Loaders::TextLoader>());
+    impl_->loaders.Register(std::make_unique<Asset::Loaders::SoundLoader>());
     impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
     impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
     auto installed = LoadInstalledArenas(assetRoot / "arenas.json", error);
@@ -875,6 +1001,8 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     if (!ready) { error = ExplainUi(ready.error()); return false; }
     const auto activated = impl_->ui.ActivateCanvas("lobby");
     if (!activated) { error = ExplainUi(activated.error()); return false; }
+    // The address keeps the characters a Gateway address may hold, full-width forms made ASCII.
+    impl_->ui.SetTextFilter([](std::string_view, std::string_view text) { return FilterAddressText(text); });
     const auto feedback = impl_->assets.Load(Asset::AssetId::FromString("object_fps_pvp.ui.hit_feedback"),
         Asset::AssetRequest::WithTypeHint(Asset::AssetType::Text()));
     if (!feedback) { error = Explain(feedback.error()); return false; }
@@ -886,7 +1014,7 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
         return false;
     }
     impl_->hitSettings = *settings;
-    return true;
+    return impl_->InitializeSound(error);
 }
 
 bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, std::string& error) {
@@ -898,6 +1026,8 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     platformOptions.width = options.width;
     platformOptions.height = options.height;
     platformOptions.resizable = true;
+    // The lobby's text field draws the input method's composition itself.
+    platformOptions.imeComposition = true;
     auto platform = Engine::Platform::Sdl::SdlPlatform::Create(platformOptions);
     if (!platform) { error = Explain(platform.error()); return false; }
     impl_->platform = std::move(platform).value();
@@ -946,6 +1076,7 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     impl_->players->ResetPlayers();
     impl_->ResetWeaponFeedback();
     impl_->input = std::make_unique<Engine::Input::Backend::Sdl::SdlInput>(*impl_->platform);
+    impl_->input->SetTextDiagnostics(options.textInputTrace);
     impl_->width = static_cast<float>(options.width);
     impl_->height = static_cast<float>(options.height);
     impl_->address = options.gateway;
@@ -958,7 +1089,6 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
 Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
     if (!impl_->initialized) return impl_->Fail("PvP application is not initialized");
     const auto started = Clock::now();
-    impl_->suppressUiEnter = false;
     impl_->windowInteraction = false;
     impl_->pointerAcquiredThisFrame = false;
     impl_->pendingShotEdge = false;
@@ -972,13 +1102,6 @@ Control PvpApplication::ProcessEvents(const Engine::Runtime::FrameContext&) {
         observerMilliseconds += Milliseconds(Clock::now(), observed);
     });
     impl_->input->EndFrame();
-    {
-        // Text editing used to run per event inside the observer; it still
-        // counts as this product's event handling (observer_ms).
-        const auto edited = Clock::now();
-        impl_->HandleTextEditing(impl_->input->Snapshot().text);
-        observerMilliseconds += Milliseconds(Clock::now(), edited);
-    }
     impl_->ApplyInputEvents(focusedAtStart);
     const auto elapsed = Milliseconds(Clock::now(), started);
     // observer_ms is this product's event handling; the rest is SDL's polling,
@@ -1004,7 +1127,7 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
     impl_->assets.Update();
     impl_->RefreshState();
     if (impl_->InWorld()) {
-        impl_->EditAddress(false);
+        impl_->SyncTextInput(false);
         if (physical.Get(Key::Escape).pressed) {
             impl_->connection.Leave();
             impl_->RefreshState();
@@ -1035,13 +1158,17 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
             impl_->presented = impl_->simulation->PresentAt(movementSampledAt);
             // Until the role has stepped in this session, it has no local player to show.
             if (impl_->presented.generation != impl_->connectionGeneration) impl_->presented = {};
+            impl_->ObserveLocalFootsteps(movementSampledAt);
             impl_->UpdateWeaponFeedback(Clock::now(), !live);
         }
     } else {
+        const bool editing = impl_->Editing();
         Engine::Ui::UiInputFrame uiInput;
-        uiInput.focusPreviousPressed = !impl_->editing && physical.Get(Key::Up).pressed;
-        uiInput.focusNextPressed = !impl_->editing && physical.Get(Key::Down).pressed;
-        uiInput.activatePressed = !impl_->editing && !impl_->suppressUiEnter && physical.Get(Key::Enter).pressed;
+        if (editing) uiInput.text = impl_->TextInput(physical.text);
+        uiInput.focusPreviousPressed = !editing && physical.Get(Key::Up).pressed;
+        uiInput.focusNextPressed = !editing && physical.Get(Key::Down).pressed;
+        uiInput.activatePressed = physical.Get(Key::Enter).pressed;
+        uiInput.cancelPressed = editing && physical.Get(Key::Escape).pressed;
         uiInput.pointerAvailable = physical.windowFocused && !physical.pointer.relativeMode;
         uiInput.pointerPixels = {physical.pointer.x, physical.pointer.y};
         const auto& click = physical.Get(Engine::Input::MouseButton::Left);
@@ -1050,7 +1177,8 @@ Control PvpApplication::Update(const Engine::Runtime::FrameContext& frame) {
         uiInput.pointerPrimaryReleased = click.released;
         const auto updated = impl_->ui.Update(uiInput, impl_->Bindings(), impl_->Viewport());
         if (!updated) return impl_->Fail(ExplainUi(updated.error()));
-        for (const auto& event : updated.value()) impl_->Execute(event.action);
+        for (const auto& event : updated.value()) impl_->Execute(event);
+        impl_->SyncTextInput(impl_->Editing());
     }
     const auto mouseStarted = Clock::now();
     if (!live) {
@@ -1264,6 +1392,10 @@ int PvpApplication::Run() {
     return impl_->exitCode;
 }
 void PvpApplication::SetGatewayAddress(std::string address) { impl_->address = std::move(address); }
+void PvpApplication::EnableSoundDiagnostics(const std::uint32_t anchorLogCapacity) {
+    impl_->sound.EnableDiagnostics(anchorLogCapacity);
+}
+SoundDiagnostics PvpApplication::TakeSoundDiagnostics() { return impl_->sound.TakeDiagnostics(); }
 void PvpApplication::ObserveRemote(std::optional<PlayerId> playerId) { impl_->observedRemote = playerId; }
 
 std::optional<PlayerId> ObservedRemotePlayer(const WorldSnapshot& snapshot, const PlayerId local,

@@ -1,9 +1,11 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -49,6 +51,20 @@ struct UiCanvasFit final {
     Math::Vec2 pointPixels,
     bool interactiveOnly = false) noexcept;
 
+// The product's character rule for a text field (Design Invariant 5): given
+// the field's id and committed text (typed or pasted), it returns the text to
+// keep. Ui adds no rule of its own beyond single-line text and max_length.
+using UiTextFilter = std::function<std::string(std::string_view element, std::string_view text)>;
+
+// Text editing on UTF-8, by code point: the pieces the text field uses, kept
+// apart so they can be tested on their own.
+[[nodiscard]] std::size_t UiCodePointCount(std::string_view utf8) noexcept;
+// The byte offset of the code point before (after) offset; offset itself at the start (end).
+[[nodiscard]] std::size_t UiPreviousCodePoint(std::string_view utf8, std::size_t offset) noexcept;
+[[nodiscard]] std::size_t UiNextCodePoint(std::string_view utf8, std::size_t offset) noexcept;
+// Committed text as one line: whole code points only, without control characters.
+[[nodiscard]] std::string UiSingleLineText(std::string_view utf8);
+
 class UiRuntime final {
 public:
     UiRuntime();
@@ -63,6 +79,9 @@ public:
     void Reset() noexcept;
 
     [[nodiscard]] UiResult<void> ActivateCanvas(std::string_view canvasId);
+
+    // Without a filter every committed character is kept.
+    void SetTextFilter(UiTextFilter filter);
 
     [[nodiscard]] UiResult<std::vector<UiActionEvent>> Update(
         const UiInputFrame& input,

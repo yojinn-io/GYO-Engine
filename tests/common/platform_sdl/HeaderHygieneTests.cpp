@@ -13,6 +13,9 @@
 #include "engine/input/backend/sdl/SdlInput.hpp"
 #include "engine/input/backend/sdl/SdlInputInjection.hpp"
 #endif
+#if defined(GYO_HYGIENE_SDL_AUDIO)
+#include "engine/audio/backend/sdl/SdlAudioOutput.hpp"
+#endif
 #if defined(GYO_HYGIENE_SDL_RENDERER)
 #include "engine/render/backend/sdl/SdlRenderer.hpp"
 #endif

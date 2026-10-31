@@ -37,6 +37,17 @@ grab or release the pointer) and text editing policy (what Ctrl+A means) belong 
   `key` is the physical position, `layoutKey` the key the current layout produces at that position (`Key::Count` if
   none); text and key entries keep their arrival order inside `text`; `BeginFrame` clears it. No ordering is
   promised between `text` and `events`.
+- v8-engine-input-composition, `Kind::Composition`: an input method's composition under the same rules (only while
+  text input is on, this window only, in arrival order inside `text`). `text` holds the whole current composition
+  (empty when it ended without text), `cursor` and `selectionLength` the cursor and selected span in code points as
+  the platform reports them (-1 when it reports none). Committed text still arrives as `Kind::Text`. The SDL backend
+  receives compositions only when the platform was created with `imeComposition` ([platform-sdl.md](platform-sdl.md)).
+  Consumers that only know `Text` and `Key` keep working: a composition entry carries no key (`Key::Count`).
+- `SdlInput::SetTextInputArea(area, cursor)` tells the input method where text is typed (window coordinates, cursor
+  offset in pixels from the area's left edge), so its candidates appear beside the field.
+- `SdlInput::SetTextDiagnostics` (v8-tool-ui-ime-observe): off by default; while on, each text input switch,
+  composition (SDL's TEXT_EDITING and its candidates), typed text and text key is written to `Engine::Base::Log`
+  (category `input.text`) with whether the frame took it. Diagnostics only: the frame is the same either way.
 - Every focus loss, key press and mouse button event the backend receives for this window is an event in `events`,
   even when the state does not change (a focus loss while unfocused, a second non-repeat press); only key repeats are
   dropped. A product's capture policy may rely on it (sdl-isolation J1).

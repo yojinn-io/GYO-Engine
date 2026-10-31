@@ -28,6 +28,7 @@
 #include <map>
 #include <nlohmann/json.hpp>
 #include <mutex>
+#include <thread>
 #include <optional>
 #include <set>
 #include <stdexcept>
@@ -57,6 +58,8 @@ struct Options {
     bool actionCapture{};
     // Rapid-fire record scenario (action_short.hpp RunActionRapid); empty = off.
     std::string actionRapid;
+    // The v8-product-sfx L2 (sound_shots.hpp RunSoundShots).
+    bool soundShots{};
     unsigned events{200};
     double fps{60};
     // The two GUI roles plus passive bots (gui_room.hpp); two is a room of the GUIs alone.
@@ -84,6 +87,7 @@ Options Parse(int argc, char* argv[]) {
         if (argument == "--player-short") { options.playerShort = true; continue; }
         if (argument == "--player-capture") { options.playerCapture = true; continue; }
         if (argument == "--action-short") { options.actionShort = true; continue; }
+        if (argument == "--sound-shots") { options.soundShots = true; continue; }
         if (argument == "--action-capture") { options.actionCapture = true; continue; }
         Require(i + 1 < argc, "Missing value for " + std::string(argument));
         const std::string value = argv[++i];
@@ -107,7 +111,8 @@ Options Parse(int argc, char* argv[]) {
     Require(unsigned(options.latency) + unsigned(options.latencyShort) + unsigned(options.phaseStalls) +
         unsigned(options.nativeWindow) +
         unsigned(options.playerShort) + unsigned(options.playerCapture) +
-        unsigned(options.actionShort) + unsigned(options.actionCapture) + unsigned(!options.actionRapid.empty()) <= 1,
+        unsigned(options.actionShort) + unsigned(options.actionCapture) + unsigned(!options.actionRapid.empty()) +
+        unsigned(options.soundShots) <= 1,
         "Choose one explicit probe mode");
     Require(!options.combat || options.latency || options.latencyShort, "--combat requires an explicit latency mode");
     if (options.latency && !explicitDuration) options.duration = 120;
@@ -117,6 +122,7 @@ Options Parse(int argc, char* argv[]) {
     if ((options.playerShort || options.playerCapture) && !explicitDuration) options.duration = 12;
     if ((options.actionShort || options.actionCapture) && !explicitDuration) options.duration = 18;
     if (!options.actionRapid.empty() && !explicitDuration) options.duration = 45;
+    if (options.soundShots && !explicitDuration) options.duration = 60;
     Require(std::isfinite(options.duration) && options.duration >= (options.latency ? 120 : 2) && options.duration <= 3600,
         "--duration must be 120..3600 seconds for latency, 2..3600 otherwise");
     Require(options.events >= (options.latencyShort ? 20U : 200U) && options.events <= 6000,
@@ -218,6 +224,7 @@ void SleepFor(double seconds) {
 #include "gui_input.hpp"
 #include "player_short.hpp"
 #include "action_short.hpp"
+#include "sound_shots.hpp"
 #include "native_window.hpp"
 #include "combat_latency.hpp"
 #include "start_phase_record.hpp"
@@ -1106,7 +1113,8 @@ int GyoMain(int argc, char* argv[]) {
                   << "--native-window --duration 180 (passive native X11 input/lifecycle observer)\n"
                   << "--action-short --fps 30|60|144 (18 seconds, SDL-injected v5 actions, window interactions and rejoin on any platform)\n"
                   << "--action-capture --fps 60 (the same schedule with first-person and remote GPU captures)\n"
-                  << "--action-rapid interval10..13|edge|pause --fps 30|60|144 (SDL-injected clicks through the local fire gate; record only)\n";
+                  << "--action-rapid interval10..13|edge|pause --fps 30|60|144 (SDL-injected clicks through the local fire gate; record only)\n"
+                  << "--sound-shots --fps 30 (v8-product-sfx L2: off-frame injected shots, sound anchors and cues; run by sound_l2.py)\n";
         return 0;
     }
     try { const auto options = Parse(argc, argv);
@@ -1114,6 +1122,7 @@ int GyoMain(int argc, char* argv[]) {
         else if (options.playerShort || options.playerCapture) RunPlayerShort(options);
         else if (options.actionShort || options.actionCapture) RunActionShort(options);
         else if (!options.actionRapid.empty()) RunActionRapid(options);
+        else if (options.soundShots) RunSoundShots(options);
         else if (options.nativeWindow) RunNativeWindow(options);
         else if (options.phaseStalls) RunPhaseStalls(options);
         else Run(options);

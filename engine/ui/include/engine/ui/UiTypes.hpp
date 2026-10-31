@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -118,7 +120,7 @@ using UiBindingValue =
     std::variant<std::string, std::int64_t, double, bool, UiList>;
 using UiBindingTable = std::unordered_map<std::string, UiBindingValue>;
 
-using UiActionPayload = std::variant<std::monostate, double>;
+using UiActionPayload = std::variant<std::monostate, double, std::string>;
 
 struct UiActionEvent final {
     std::string action;
@@ -126,7 +128,32 @@ struct UiActionEvent final {
     UiActionPayload payload;
 };
 
+// Text editing input for the text field being edited, converted from the
+// platform's text events by the product (Design Invariant 7): which key means
+// what is the product's mapping, what each kind does to the edit is Ui's.
+enum class UiTextInputKind : std::uint8_t {
+    Insert,      // committed text, typed or pasted (text)
+    Composition, // an input method's current composition (text, cursor); shown only
+    Backspace,
+    Delete,
+    MoveLeft,
+    MoveRight,
+    MoveHome,
+    MoveEnd,
+    SelectAll,
+};
+
+struct UiTextInput final {
+    UiTextInputKind kind{UiTextInputKind::Insert};
+    std::string text;
+    // Composition: the cursor inside text in code points; -1 at its end.
+    std::int32_t cursor{-1};
+};
+
 struct UiInputFrame final {
+    // While a text field is being edited, activate submits it and cancel
+    // discards the edit.
+    std::vector<UiTextInput> text;
     bool focusPreviousPressed{};
     bool focusNextPressed{};
     bool adjustPreviousPressed{};
@@ -151,6 +178,17 @@ struct UiQuadDraw final {
     };
 };
 
+// The editing marks of a text field, drawn by the renderer over its text.
+// Offsets are byte offsets into UiTextDraw::utf8 at code point boundaries.
+struct UiTextCaret final {
+    std::size_t cursor{};
+    std::size_t compositionBegin{};
+    std::size_t compositionEnd{};   // equal to compositionBegin: no composition
+    std::size_t selectionBegin{};
+    std::size_t selectionEnd{};     // equal to selectionBegin: no selection
+    UiColor color{};
+};
+
 struct UiTextDraw final {
     Math::Rect boundsPixels{};
     std::string utf8;
@@ -165,6 +203,7 @@ struct UiTextDraw final {
         (std::numeric_limits<float>::max)(),
         (std::numeric_limits<float>::max)(),
     };
+    std::optional<UiTextCaret> caret; // text_field being edited
 };
 
 struct UiImageDraw final {
@@ -190,6 +229,9 @@ struct UiInteractionState final {
     std::string activeCanvas;
     std::string focusedElement;
     std::string capturedElement;
+    // The text field being edited; the product turns the platform's text
+    // input on while it is not empty.
+    std::string editingElement;
 };
 
 [[nodiscard]] UiResult<UiColor> DecodeSrgbHexColor(
