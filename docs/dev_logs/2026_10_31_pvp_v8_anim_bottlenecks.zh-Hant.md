@@ -4,7 +4,7 @@
 
 收支：一致（四平台各 24 個姿勢 × 2000 次＝48000 次取樣、3 次載入、兩個雜湊各 2 次，全部完成；Windows 的記憶體照宣告記 n/a）
 
-**狀態：完成。** 三項都照[事前宣告](../object_fps_pvp/plans/v8/v8-product-anim-bottlenecks-declaration.md)（`v8-product-anim-bottlenecks-declaration-approve`）判定，沒有觸發停止。證據：[anim-bottlenecks-2026-10-31.json](../object_fps_pvp/plans/v8/evidence/anim-bottlenecks-2026-10-31.json)（CI run 41176350626 的四平台摘要）。
+**狀態：完成。** 三項都照[事前宣告](../object_fps_pvp/plans/v8/v8-product-anim-bottlenecks-declaration.md)（`v8-product-anim-bottlenecks-declaration-approve`）判定，沒有觸發停止。證據：`anim-bottlenecks-2026-10-31.json`（使用者的 Intel Mac，主 checkout 的 `build/evidence/v8-anim-bottlenecks/`，git 管理外；判讀用的數字在下面的表）（CI run 41176350626 的四平台摘要）。
 
 ## 做了什麼
 

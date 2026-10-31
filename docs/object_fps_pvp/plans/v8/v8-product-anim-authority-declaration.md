@@ -90,7 +90,7 @@ v8-product-anim-authority
 
 ### E1 的跳躍判定修正（`v8-product-anim-authority-e1-jump`，試行 1 不成立之後；2026-10-31 使用者核准：「核准並重跑」）
 
-試行 1（[證據](evidence/anim-authority-e1-run1.txt)）：跳躍有 19 個 Tick 不同。每一個都是舊 Client 的 double 比較 `t/60 − s/60 ≥ 0.1` 在剛好 6 Tick 時算出 0.0999999999999996，晚一個 Tick 才換階段。試行 1 的失敗留在紀錄裡，不覆寫。
+試行 1（證據：使用者的 Intel Mac，主 checkout 的 `build/evidence/v8-anim-authority/anim-authority-e1-run1.txt`，git 管理外）：跳躍有 19 個 Tick 不同。每一個都是舊 Client 的 double 比較 `t/60 − s/60 ≥ 0.1` 在剛好 6 Tick 時算出 0.0999999999999996，晚一個 Tick 才換階段。試行 1 的失敗留在紀錄裡，不覆寫。
 
 新判定（`JudgeJump`，`PlayerAnimationEquivalenceTests.cpp`）照 AGENTS §14.4 的 1～5 揭露：
 

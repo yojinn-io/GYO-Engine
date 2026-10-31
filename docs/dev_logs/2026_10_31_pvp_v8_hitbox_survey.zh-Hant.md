@@ -4,7 +4,7 @@
 
 **狀態：停在決策點。** 量測完成；Replacement Criteria 的門檻 (1)「四肢最大偏差 > 該段半徑的 2 倍」成立（58 個組合），照 `v8-product-hitbox-replacement-thresholds` 停下，交使用者選做法。B-flat 的後續批次（declare 起）沒有開始。
 
-相關文件：[hitbox-plan](../object_fps_pvp/plans/v8/hitbox-plan.md)（`v8-product-hitbox-plan-approve`）、[v8 HANDOFF](../object_fps_pvp/plans/v8/HANDOFF.md)、報告 [hitbox-survey-2026-10-31.json](../object_fps_pvp/plans/v8/evidence/hitbox-survey-2026-10-31.json)。
+相關文件：[hitbox-plan](../object_fps_pvp/plans/v8/hitbox-plan.md)（`v8-product-hitbox-plan-approve`）、[v8 HANDOFF](../object_fps_pvp/plans/v8/HANDOFF.md)、報告 `hitbox-survey-2026-10-31.json`（使用者的 Intel Mac，主 checkout 的 `build/evidence/v8-hitbox-survey/`，git 管理外）。
 
 ## 做了什麼
 

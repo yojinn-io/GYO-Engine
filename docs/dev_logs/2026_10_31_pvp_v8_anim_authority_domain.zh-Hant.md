@@ -28,12 +28,12 @@
 ## 判定
 
 - **E1：試行 1 不成立 → 判定修正核准 → 試行 2 通過。**
-  - 試行 1（[證據](../object_fps_pvp/plans/v8/evidence/anim-authority-e1-run1.txt)）：相位、`move_weight`、`jog_weight` 都在門檻內，最壞分別是門檻的 0.59、0.67、0.996 倍。跳躍有 19 個 Tick 不同，全部出在階段開始後剛好第 6 個 Tick：舊 Client 的 double 比較 `t/60 − s/60 ≥ 0.1` 算出 0.0999999999999996，所以晚一個 Tick 才換。
+  - 試行 1（證據：使用者的 Intel Mac，主 checkout 的 `build/evidence/v8-anim-authority/anim-authority-e1-run1.txt`）：相位、`move_weight`、`jog_weight` 都在門檻內，最壞分別是門檻的 0.59、0.67、0.996 倍。跳躍有 19 個 Tick 不同，全部出在階段開始後剛好第 6 個 Tick：舊 Client 的 double 比較 `t/60 − s/60 ≥ 0.1` 算出 0.0999999999999996，所以晚一個 Tick 才換。
   - 判定修正 `v8-product-anim-authority-e1-jump`：照 §14.4，核准之前先做了兩件事，之後經使用者核准（「核准並重跑」）。
     - 突變：只跑判定函式的單元測試，4／4 killed。第一輪是 3／4，補上「Match 提早一個 Tick」的情況之後才全部 killed。
     - Sonnet 5.5 審查：1～5 成立，「兩種轉換」的用詞已照它的指正修改。
-  - 試行 2（[證據](../object_fps_pvp/plans/v8/evidence/anim-authority-e1-run2.txt)）：判定為不同的 0 個；容許的延遲 Tick 恰好是試行 1 的 19 個（斷言通過）；三個量的最壞值和試行 1 相同。
-  - 試行 3（[證據](../object_fps_pvp/plans/v8/evidence/anim-authority-e1-run3.txt)）：xhigh 審查之後程式改過，所以用同一個判定再跑一次確認。結果和試行 2 完全相同，36038 個斷言全部通過。
+  - 試行 2（證據：使用者的 Intel Mac，主 checkout 的 `build/evidence/v8-anim-authority/anim-authority-e1-run2.txt`）：判定為不同的 0 個；容許的延遲 Tick 恰好是試行 1 的 19 個（斷言通過）；三個量的最壞值和試行 1 相同。
+  - 試行 3（證據：使用者的 Intel Mac，主 checkout 的 `build/evidence/v8-anim-authority/anim-authority-e1-run3.txt`）：xhigh 審查之後程式改過，所以用同一個判定再跑一次確認。結果和試行 2 完全相同，36038 個斷言全部通過。
 - **E2：通過。**
   - 宣告列的規則各有測試：重設的五種原因、往後走、相位溢位、`move_weight` 的值、`jog_weight` 靜止時保留、跳躍四個階段與零點、死亡凍結、`sprint` 恆為 0、規則載入的拒絕。
   - xhigh 審查之後，再加上找到的缺陷與漏洞的測試（下一節）。
