@@ -395,10 +395,20 @@
       "batch": "v8-asset-layout-guard",
       "what": "Other owners may name catalog paths; only the asset root is searched",
       "file": "tests/object_fps_pvp/test_asset_catalog.py",
-      "find": "needles = ['assets/object_fps_pvp'] + sorted({entry['path'] for entry in entries})",
+      "find": "needles = ['assets/object_fps_pvp'] + (sorted({entry['path'] for entry in entries}) if catalog_paths else [])",
       "replace": "needles = ['assets/object_fps_pvp']",
       "check": "asset_catalog",
       "expect": "FAIL: test_the_owner_check_finds_a_pvp_path_in_another_owner"
+    },
+    {
+      "id": "v8-asset-layout-guard-owner-scan",
+      "batch": "v8-asset-layout-guard",
+      "what": "A top-level common layer (framework/) drops out of the owner scan",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "NOT_COMMON = {'assets', 'docs', 'agents', 'third_party', 'build', 'apps', 'tests'}",
+      "replace": "NOT_COMMON = {'assets', 'docs', 'agents', 'third_party', 'build', 'apps', 'tests', 'framework'}",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_owner_scan_covers_every_common_layer"
     },
     {
       "id": "v8-asset-layout-guard-id-type",

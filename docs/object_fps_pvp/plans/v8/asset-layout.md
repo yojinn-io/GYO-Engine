@@ -1,6 +1,6 @@
 # PvP v8：素材結構標準化（asset-layout）
 
-更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，PR 待開；接著 `v8-product-asset-player-folder`。**
+更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，分支推送為 `claude/v8-asset-layout`；接著 `v8-product-asset-player-folder`。**
 本文件是 asset-layout 線的計畫與記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。標準本身寫在 [PvP 素材標準](../../assets.zh-Hant.md)。
 
 ## 代號對照
@@ -83,6 +83,7 @@ asset-layout
 - 2026-10-31：使用者核准 Design Invariants 與例外政策（`v8-product-asset-invariants-approve`）。人物、nailer 的 8 筆授權尚未提供，維持 unrecorded。
 - 2026-10-31：`v8-product-asset-layout-doc` 完成（文件核對：連結 8 個有效，人工判讀 36 項，9 個測試名稱留待 guard 批）。`v8-product-asset-layout-guard` 開始。
 - 2026-10-31：`v8-product-asset-layout-guard` 完成：檢查 9 個、自我檢查 10 個、初始例外 13 筆；突變 12／12 killed；`used_ids` 改寫成等價的逐詞比對（測試 12.7 秒 → 1.1 秒）。
+- 2026-10-31：推送後合併 master `ebfe3225`（PR #121～#124）。PR #123 新增最上層 `framework/`，DI-6 的掃描改成「最上層除了排除的資料夾以外全部掃」，加一個自我檢查與一個突變（13／13 killed）。
 
 ## dev_log
 

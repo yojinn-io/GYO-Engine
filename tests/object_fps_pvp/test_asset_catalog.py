@@ -65,9 +65,12 @@ ASSET_ID = re.compile(r'object_fps_pvp(?:\.[a-z0-9_]+)+')
 ID_TOKEN = re.compile(r'[\w.]+')
 RULES = {'root-file', 'first-folder', 'folder-type', 'texture-folder', 'own-files', 'snake-case',
          'definition-name', 'case', 'id-syntax', 'id-type', 'product-use'}
-# Other owners, which must not name this product's asset paths.
-OTHER_OWNER_DIRECTORIES = ['engine', 'tools', 'services', '.github', 'build/ci', 'build/cmake']
-OTHER_OWNER_GROUPS = ['apps', 'tests', 'build/acceptance']
+# Other owners must not name this product's asset paths (DI-6). Every top-level
+# folder is a common layer except these: content, documents, vendored sources,
+# build outputs, and the per-product groups scanned on their own.
+NOT_COMMON = {'assets', 'docs', 'agents', 'third_party', 'build', 'apps', 'tests'}
+COMMON_IN_GROUPS = ['tests/common', 'tests/framework', 'build/acceptance/common', 'build/ci', 'build/cmake']
+PRODUCT_GROUPS = ['apps', 'tests', 'build/acceptance']
 OTHER_OWNER_SUFFIXES = CODE_SUFFIXES | {'.c', '.cmake', '.txt', '.json', '.csv', '.yml', '.yaml', '.sh', '.ps1'}
 
 PATH_LOADED_MOVE = 'v8-product-asset-path-loaded-move'
@@ -241,21 +244,34 @@ def source_record_problems(entries, sources):
     return problems
 
 
-def other_owner_texts():
-    roots = [REPOSITORY / name for name in OTHER_OWNER_DIRECTORIES]
-    for group in OTHER_OWNER_GROUPS:
-        roots += [path for path in sorted((REPOSITORY / group).iterdir()) if path.is_dir() and path.name != 'object_fps_pvp']
-    files = [REPOSITORY / 'CMakeLists.txt', REPOSITORY / 'CMakePresets.json', *sorted((REPOSITORY / 'build').glob('*.py'))]
+def owner_texts(roots):
+    files = []
     for root in roots:
-        if root.is_dir():
-            files += [path for path in sorted(root.rglob('*')) if path.is_file() and path.suffix in OTHER_OWNER_SUFFIXES]
-    return [(path.relative_to(REPOSITORY).as_posix(), path.read_text(encoding='utf-8', errors='replace'))
-            for path in files if path.is_file()]
+        candidates = sorted(root.rglob('*')) if root.is_dir() else [root]
+        files += [path for path in candidates if path.is_file() and path.suffix in OTHER_OWNER_SUFFIXES]
+    return [(path.relative_to(REPOSITORY).as_posix(), path.read_text(encoding='utf-8', errors='replace')) for path in files]
 
 
-def asset_path_mentions(texts, entries):
-    """(file, path) for each text naming this product's asset root or one of its catalog paths (DI-6)."""
-    needles = ['assets/object_fps_pvp'] + sorted({entry['path'] for entry in entries})
+def common_layer_texts():
+    roots = [path for path in sorted(REPOSITORY.iterdir())
+             if path.name not in NOT_COMMON and (not path.name.startswith('.') or path.name == '.github')]
+    roots += [REPOSITORY / name for name in COMMON_IN_GROUPS] + sorted((REPOSITORY / 'build').glob('*.py'))
+    return owner_texts(roots)
+
+
+def other_product_texts():
+    common = {REPOSITORY / name for name in COMMON_IN_GROUPS}
+    return owner_texts([path for group in PRODUCT_GROUPS for path in sorted((REPOSITORY / group).iterdir())
+                        if path.is_dir() and path.name != 'object_fps_pvp' and path not in common])
+
+
+def asset_path_mentions(texts, entries, catalog_paths=True):
+    """(file, path) for each text naming this product's asset root or, in a common layer, one of its catalog paths.
+
+    Another product may lay out its own assets the same way, so its relative paths
+    can match ours; only the asset root identifies this product there.
+    """
+    needles = ['assets/object_fps_pvp'] + (sorted({entry['path'] for entry in entries}) if catalog_paths else [])
     return sorted((name, needle) for name, text in texts for needle in needles if needle in text)
 
 
@@ -323,7 +339,9 @@ class AssetLayoutTests(unittest.TestCase):
         self.assertEqual(source_record_problems(catalog(), sources), [])
 
     def test_no_other_owner_names_a_pvp_asset_path(self):
-        self.assertEqual(asset_path_mentions(other_owner_texts(), catalog()), [])
+        entries = catalog()
+        self.assertEqual(asset_path_mentions(common_layer_texts(), entries), [])
+        self.assertEqual(asset_path_mentions(other_product_texts(), entries, catalog_paths=False), [])
 
     def test_every_exception_is_still_needed(self):
         self.assertEqual(stale_exceptions(all_findings(catalog())), [])
@@ -429,6 +447,20 @@ class AssetLayoutSelfTests(unittest.TestCase):
                  ('tools/other.py', 'Load("characters/other/Other.fbx")')]
         self.assertEqual(asset_path_mentions(texts, catalog()), [
             ('engine/Loader.cpp', 'weapons/nailer_v2/world/Nailer2_TPS.fbx'), ('tools/editor.py', 'assets/object_fps_pvp')])
+        products = [('tests/object_fps_v2/Assets.cpp', 'Load("weapons/nailer_v2/world/Nailer2_TPS.fbx");'),
+                    ('apps/object_fps/Root.cpp', 'Mount("assets/object_fps_pvp");')]
+        self.assertEqual(asset_path_mentions(products, catalog(), catalog_paths=False),
+                         [('apps/object_fps/Root.cpp', 'assets/object_fps_pvp')])
+
+    def test_the_owner_scan_covers_every_common_layer(self):
+        # A new top-level folder is scanned without editing this test.
+        scanned = {name.split('/')[0] for name, _ in common_layer_texts()}
+        self.assertTrue({'engine', 'framework', 'tools', 'services'} <= scanned)
+        self.assertFalse({'assets', 'docs', 'apps'} & scanned)
+        names = {name for name, _ in common_layer_texts()}
+        self.assertIn('build/content_contract.py', names)
+        self.assertFalse(any(name.startswith(('tests/object_fps_pvp/', 'build/acceptance/object_fps_pvp/', 'build/target/'))
+                             for name in names | {n for n, _ in other_product_texts()}))
 
 
 if __name__ == '__main__':

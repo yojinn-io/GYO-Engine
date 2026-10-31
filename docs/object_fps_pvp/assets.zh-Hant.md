@@ -132,7 +132,7 @@ assets/object_fps_pvp/
 
 ## 10. 工具與其他程式
 
-- 工具（audio_editor 寫入 catalog；PR #123 的 tools/framework）保持中立。PvP 的標準不寫進工具，落點由 PvP 的守衛在 CI 上檢查。
+- 工具（audio_editor 寫入 catalog）與工具和遊戲共用的 `framework/` 保持中立。PvP 的標準不寫進工具，落點由 PvP 的守衛在 CI 上檢查。
 - 其他 product、Engine、共通層不引用 PvP 的素材路徑。
 
 ## Design Invariants
