@@ -49,10 +49,18 @@
 - **讀**：任意位置的 WAV（系統選擇窗）。
 - **看與聽**：播放、預覽音量、波形、取樣率／聲道／時長／位元深度。
 - **改**：裁剪、增益（會影響輸出；和預覽音量分開）。
-- **寫**：轉成 48 kHz PCM16（和 `convert_wav.py` 逐位元組相同），放進掛載的產品資產根目錄，並在 catalog 加或更新條目（type `sound`）。
+- **寫**：轉成 Engine 公開的片段格式（現在是 48 kHz PCM16；重新取樣和 `convert_wav.py` 演算法等價，見下方事前宣告），放進掛載的產品資產根目錄，並在 catalog 加或更新條目（type `sound`）。
 - **可再編輯**：工具自己的工程檔記錄原檔路徑、裁剪與增益；放在使用者選的位置（不在資產根目錄）。格式由工具自己持有。
 - **不做（現在）**：循環區間（`GYO::Audio` 沒有循環播放，audio.md 的 Replacement Criteria 才提到）、拼接、多軌、串流。
 - 腳本保留：Data Contract 是「48 kHz PCM16 的 WAV＋catalog 條目」，腳本、手工都還能產生（AGENTS §8）。
+
+## `v8-tool-audio-editor-convert` 的事前宣告（§14.1，2026-10-31 使用者選「(2) 演算法等價」）
+
+- **重新取樣**：工具的重新取樣（抖動之前的浮點結果）和 `convert_wav.py` 的 `resample()` 比對。參考向量由腳本對合成的輸入（多種取樣率、位元深度、聲道數）產生並提交；每個樣本的絕對誤差 ≤ 1e-9 才算通過。
+- **抖動與量化**：工具自己的固定種子亂數，不仿造 Python 的。判定：同一輸入、同一平台跑兩次，位元組相同；抖動量在 ±1 LSB 內（以 0.5 LSB 的固定輸入檢查：抖動在 (-1, 1) 內時輸出只能是 0 或 1）；飽和計數和實際被截斷的樣本數相同。另外檢查每個樣本和 `值 × 32767` 的差 < 1.5 LSB（抖動加四捨五入）。
+- **輸出**：用 Engine 的 `SoundLoader` 載入、`ClipBank` 接受（Design Invariant 2）。
+- 和腳本的整檔輸出不比位元組（只差在抖動，1～2 LSB）。四個現有音效的原檔已找不到，不重產。
+- 試行與重試：測試是決定性的，不重試；失敗就停下回報。
 
 ## 實作順序（提案）
 
@@ -60,8 +68,9 @@
 v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿）」
 │
 ├── audio-tool-line                     「PR 線：音效從腳本走到工具」
-│   ├── v8-tool-audio-editor-convert    「high（重新取樣局部 xhigh）｜Opus 5.5｜工具骨架、讀 WAV、轉換（和腳本逐位元組相同）、輸出並登錄 catalog」
-│   └── v8-tool-audio-editor-edit       「high｜Opus 5.5｜播放、波形、資訊、裁剪、增益、工程檔」
+│   ├── v8-tool-audio-editor-convert    「high（重新取樣局部 xhigh）｜Opus 5.5｜核心程式庫＋CLI：讀 WAV、轉換（演算法等價）、輸出並登錄 catalog」
+│   ├── v8-tool-framework-shell         「medium～high｜Opus 5.5｜工具共用層 tools/framework/：從 ui_editor 搬出外殼四塊，行為不變」
+│   └── v8-tool-audio-editor-edit       「high｜Opus 5.5｜GUI：播放、波形、資訊、裁剪、增益、工程檔（等 GYO::Audio 增強）」
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
@@ -73,7 +82,8 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 
 | 代號 | 檔位｜引擎 | 估時 | 完成的樣子 |
 |---|---|---|---|
-| `v8-tool-audio-editor-convert` | high（局部 xhigh）｜Opus 5.5 | 6～10 h | 工具登錄（`tools.csv`、`project.json`、Design Invariants＋Replacement Criteria）；四個音效的輸出和腳本逐位元組相同；catalog 條目正確；突變檢查 |
+| `v8-tool-audio-editor-convert` | high（局部 xhigh）｜Opus 5.5 | 6～10 h | 工具登錄（`tools.csv`、`project.json`）、核心程式庫與 CLI；照上方事前宣告通過；catalog 條目正確；突變檢查 |
+| `v8-tool-framework-shell` | medium～high｜Opus 5.5 | 3～5 h | `tools/framework/` 有 ImGui＋SDL 宿主、系統選擇窗、檔案存取、唯讀 catalog 掛載、catalog 寫入（從音效工具搬入）；ui_editor 改用它、測試全過；Design Invariants＋守衛；`framework` 加進保留名 |
 | `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過 |
 | `v8-tool-assets-anim-events` | high｜Opus 5.5 | 5～8 h | `gyo.anim_events` 的契約與 Design Invariants（Engine 多一個格式，Architecture Delta）、PvP 把事件名稱對到音效、Runtime 排程、移除過渡規則；使用者實聽 |
 | `v8-tool-model-viewer` | high｜Opus 5.5 | 12～20 h | 模型資訊、骨骼動畫預覽、事件時刻的編輯 |
@@ -91,4 +101,9 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-assets-per-product` | （2026-10-31）Asset 以單一產品為單位：catalog 與資產都屬於各產品 | 「assets不是管全局的，他也是針對單個產品的。」 |
 | `v8-tool-assets-anim-events-format` | （2026-10-31）(b)：動畫事件用獨立的通用格式（例如 `gyo.anim_events`：片段 → 時刻＋事件名稱），契約歸 Engine 的動畫 owner，資料放在各產品；產品把事件名稱對到音效。工具只認通用格式 | 「照 (b)」 |
 | `v8-tool-assets-plan` | （2026-10-31）核准本規劃與 Editor 清單（音效工具、模型檢視工具；動畫事件先手工） | 「OK，這樣也行，開始。」 |
+| `v8-tool-audio-editor-acceptance` | （2026-10-31）轉換的驗收用演算法等價（上方事前宣告），不要求和腳本逐位元組相同 | 選「(2) 演算法等價（建議）」 |
+| `v8-tool-audio-editor-invariants` | （2026-10-31）[docs/audio_editor/architecture.md](../../../audio_editor/architecture.md) 的 Design Invariants 1～8＋Replacement Criteria；第 2 條照使用者的意見放寬為「跟著 Engine 公開的格式」 | 「這個可以調整，不要弄太死。如果未來Engine 升級，我這個可以不用變。」「照草稿寫進去」 |
+| `v8-tool-audio-editor-audio-owner` | （2026-10-31）預覽需要的 GYO::Audio 增強（停止、執行中換片段、播放位置）由音效線規劃與實作；需求已轉給音效線會話 | 「這個需要增強GYO::Audio 的功能。」選「音效線做（建議）」 |
+| `v8-tool-framework-scope` | （2026-10-31）建工具共用層 `tools/framework/`（不是工具、不登錄）：只放兩個工具都用的 ImGui＋SDL 宿主、系統選擇窗、檔案存取、唯讀 catalog 掛載；catalog 寫入先留在音效工具。依賴：工具 → framework → Engine。排在 `-edit` 之前 | 「現在是否可以建立framework層？」→「照這個範圍」 |
+| `v8-tool-framework-principle` | （2026-10-31）Engine 保持純粹（不放工具或整合用的功能）；整合工具的部分由 framework 提供。catalog 寫入屬於整合：`-convert` 先寫在音效工具裡的單獨檔案，`v8-tool-framework-shell` 時搬進 framework | 「Engine保持純粹，framework則提供整合工具。」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
