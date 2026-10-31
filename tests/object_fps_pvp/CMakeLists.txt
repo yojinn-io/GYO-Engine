@@ -127,12 +127,14 @@ set_tests_properties("${GYO_CURRENT_APP}.hitbox_survey" PROPERTIES LABELS "cpu;p
 # v8-product-anim-bottlenecks: a report-only measurement of a Match-side pose
 # (sampling time, load, bit hashes for cross-platform comparison). It fails
 # only on a load or self-check failure; RUN_SERIAL keeps the timing free of
-# concurrently running tests.
+# concurrently running tests. The wrapper reads the load's peak memory.
 set(anim_bottlenecks "gyo_${GYO_CURRENT_APP}_anim_bottlenecks")
 add_executable(${anim_bottlenecks} AnimBottlenecks.cpp)
 target_compile_features(${anim_bottlenecks} PRIVATE cxx_std_20)
 target_link_libraries(${anim_bottlenecks} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage GYO::PlatformSDL nlohmann_json::nlohmann_json)
 gyo_use_app_config(${anim_bottlenecks} "${GYO_CURRENT_APP}")
+target_compile_definitions(${anim_bottlenecks} PRIVATE
+    GYO_ANIM_BOTTLENECKS_PLATFORM="${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
 set_target_properties(${anim_bottlenecks} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
 foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
     set_target_properties(${anim_bottlenecks} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")
@@ -145,7 +147,9 @@ if(MSVC)
 endif()
 gyo_copy_runtime_dlls(${anim_bottlenecks})
 add_dependencies(${anim_bottlenecks} ${presentation_content})
-add_test(NAME "${GYO_CURRENT_APP}.anim_bottlenecks" COMMAND ${anim_bottlenecks})
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME "${GYO_CURRENT_APP}.anim_bottlenecks"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/anim_bottlenecks.py" $<TARGET_FILE:${anim_bottlenecks}>)
 set_tests_properties("${GYO_CURRENT_APP}.anim_bottlenecks" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 300
     RUN_SERIAL TRUE ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 

@@ -5,7 +5,8 @@
 // load or its own self-check fails.
 //
 // B1 the sampling time of one full player pose, B2 the load of the player and
-// its transferred clips, B3 bit hashes of the transferred keys (H-load) and of
+// its transferred clips (its peak memory is read around this program by
+// anim_bottlenecks.py, outside C++: os_boundary_guard R3), B3 bit hashes of the transferred keys (H-load) and of
 // the sampled global transforms (H-pose) for comparison across platforms.
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "engine/asset/AssetCatalog.hpp"
@@ -35,10 +36,6 @@
 #include <string>
 #include <vector>
 
-#if !defined(_WIN32)
-#include <sys/resource.h>
-#endif
-
 namespace {
 using namespace fps::pvp;
 using Clock = std::chrono::steady_clock;
@@ -48,40 +45,9 @@ constexpr int TimedIterations = 2000;
 constexpr int LoadRepeats = 3;
 constexpr int WorstCaseSamplesPerTick = 12; // v8-product-anim-bottlenecks-worst-case (a)
 
-const char* Platform() {
-#if defined(_WIN32)
-    const char* os = "windows";
-#elif defined(__APPLE__)
-    const char* os = "macos";
-#elif defined(__linux__)
-    const char* os = "linux";
-#else
-    const char* os = "other";
-#endif
-#if defined(__x86_64__) || defined(_M_X64)
-    static const std::string name = std::string(os) + "-x64";
-#elif defined(__aarch64__) || defined(_M_ARM64)
-    static const std::string name = std::string(os) + "-arm64";
-#else
-    static const std::string name = std::string(os) + "-other";
-#endif
-    return name.c_str();
-}
-
-// Peak resident set in bytes, or -1 where getrusage is unavailable.
-long long PeakResidentBytes() {
-#if defined(_WIN32)
-    return -1;
-#else
-    rusage usage{};
-    if (getrusage(RUSAGE_SELF, &usage) != 0) return -1;
-#if defined(__APPLE__)
-    return static_cast<long long>(usage.ru_maxrss);
-#else
-    return static_cast<long long>(usage.ru_maxrss) * 1024;
-#endif
-#endif
-}
+// The build names the platform (CMAKE_SYSTEM_NAME and processor); the source
+// branches on no OS (os_boundary_guard R2).
+const char* Platform() { return GYO_ANIM_BOTTLENECKS_PLATFORM; }
 
 std::filesystem::path AssetRoot() {
     const auto base = Engine::Platform::Sdl::BaseDirectory();
@@ -279,24 +245,25 @@ bool HashDetectsFlip() {
 int main(int argc, char** argv) {
     try {
         std::string out;
+        std::string mode; // empty, --baseline (catalog only) or --load-only (one full load)
         for (int i = 1; i < argc; ++i) {
             const std::string arg = argv[i];
             if (arg == "--out" && i + 1 < argc) out = argv[++i];
-            else throw std::invalid_argument("usage: [--out report.json]");
+            else if ((arg == "--baseline" || arg == "--load-only") && mode.empty()) mode = arg;
+            else throw std::invalid_argument("usage: [--baseline | --load-only] [--out report.json]");
         }
+        if (mode == "--baseline") { (void)LoadCatalog(); return 0; }
+        if (mode == "--load-only") { (void)Load(); return 0; }
         if (!HashDetectsFlip()) { std::cerr << "anim bottlenecks: self-check failed: bit flip undetected\n"; return 1; }
 
-        // B2 first, so the peak resident set before it holds no model.
-        const long long residentBefore = PeakResidentBytes();
+        // B2
         std::vector<double> loadSeconds;
-        long long residentDelta = -1;
         Loaded loaded;
         for (int i = 0; i < LoadRepeats; ++i) {
             loaded = {};
             const auto start = Clock::now();
             loaded = Load();
             loadSeconds.push_back(std::chrono::duration<double>(Clock::now() - start).count());
-            if (i == 0 && residentBefore >= 0) residentDelta = PeakResidentBytes() - residentBefore;
         }
         const auto& definition = *loaded.definition;
         const auto root = AssetRoot();
@@ -346,8 +313,7 @@ int main(int argc, char** argv) {
         summary << "anim bottlenecks: platform=" << Platform() << " complete=" << complete
                 << " selfcheck=" << coverage << " repeat_equal=" << repeatEqual
                 << " b1_worst=" << worstCase << " b1_p99_us=" << worstP99 << " b1_12x_ms=" << tickMs
-                << " b2_load_max_s=" << loadMax << " b2_rss_delta_mb="
-                << (residentDelta >= 0 ? std::to_string(residentDelta / (1024 * 1024)) : std::string("n/a"))
+                << " b2_load_max_s=" << loadMax
                 << " h_load=" << Hex(load1.Value()) << "/" << load1.Count()
                 << " h_pose=" << Hex(pose1.Value()) << "/" << pose1.Count();
         std::cout << summary.str() << '\n';
@@ -362,7 +328,7 @@ int main(int argc, char** argv) {
             {"b1", {{"warmup", WarmupIterations}, {"iterations", TimedIterations}, {"cases", perCase},
                     {"worst_case", worstCase}, {"worst_p99_us", worstP99},
                     {"samples_per_tick", WorstCaseSamplesPerTick}, {"worst_tick_ms", tickMs}}},
-            {"b2", {{"load_seconds", loadSeconds}, {"peak_resident_delta_bytes", residentDelta},
+            {"b2", {{"load_seconds", loadSeconds},
                     {"animation_fbx_bytes", fileBytes("animations/ual_mannequin/UAL1_Standard.fbx")},
                     {"player_fbx_bytes", fileBytes("characters/player/Player_V20.fbx")},
                     {"used_clip_key_bytes", keyBytes}, {"used_clips", UsedClips(definition).size()}}},
