@@ -173,6 +173,13 @@ float WeaponViewModel::GetActionDurationSeconds(WeaponViewModelAction action) co
     return static_cast<float>(impl_->definition->model->clips[impl_->definition->clips[slot]].durationSeconds);
 }
 
+std::span<const Engine::Model::AnimationEvent> WeaponViewModel::GetActionEvents(
+    WeaponViewModelAction action) const noexcept {
+    const auto slot = ClipSlot(action);
+    if (!impl_ || slot >= impl_->definition->events.size()) return {};
+    return impl_->definition->events[slot];
+}
+
 WeaponViewModelObservation WeaponViewModel::GetObservation() const {
     if (!impl_) return {};
     return {true, impl_->definition->model->meshes.size(),

@@ -10,12 +10,14 @@
 | 代號 | 意思 |
 |---|---|
 | ui-widgets-line | PR 線：文字輸入框元件、輸入法組字、ui_editor |
+| anim-events-line | PR 線：動畫事件從無到手工（`gyo.anim_events`），再到工具（模型檢視） |
 
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`（你會給方案）。
-- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）。audio-tool-line：`v8-tool-audio-editor-convert` 完成（核心程式庫＋CLI，[dev_log](../../../dev_logs/2026_10_31_tool_v8_audio_editor_convert.zh-Hant.md)），PR 等 CI；下一批 `v8-tool-framework-shell`；`-edit` 等音效線的 GYO::Audio 增強。anim-events-line 尚未開始。
+- **anim-events-line（另一個會話）**：`v8-tool-assets-anim-events` 完成，[PR #119](https://github.com/yojinn-io/GYO-Engine/pull/119) 已合併進 master（`45019dff`）。契約在 [animation-events.md](../../../architecture/animation-events.md)。下一批 `v8-tool-model-viewer`。
+- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）。audio-tool-line：`v8-tool-audio-editor-convert` 完成（核心程式庫＋CLI，[dev_log](../../../dev_logs/2026_10_31_tool_v8_audio_editor_convert.zh-Hant.md)），[PR #118](https://github.com/yojinn-io/GYO-Engine/pull/118) 等 CI；下一批 `v8-tool-framework-shell`；`-edit` 等音效線的 GYO::Audio 增強。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
 - **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth`、`v8-engine-input-composition` 完成（Windows 的 L3 都未做）；Ui 的 Design Invariants 已改（`v8-tool-ui-invariants-text`）；`v8-tool-ui-text-field` 完成（gyo.ui v2）。`v8-product-lobby-text-field` 完成，Windows L3 全部通過（組字顯示、候選窗位置、全形轉半形、Enter／Esc）。ui_editor 的 `v8-tool-ui-editor-text-field` 已合併（[PR #114](https://github.com/yojinn-io/GYO-Engine/pull/114)），使用者在 macOS 的 GUI 上試過。
@@ -36,6 +38,8 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-assets-anim-events-owner` | （2026-10-31）`gyo.anim_events` 的契約放在 `GYO::Model`（`engine/model/AnimationEvents.hpp`，文件 [animation-events.md](../../../architecture/animation-events.md)）；catalog 型別沿用 `text`，檔頭 `schema` 欄位；照草稿寫 Design Invariants 5 條與 Replacement Criteria 3 條。Architecture Delta：GYO::Model PRIVATE 連結 nlohmann_json | 「照建議核准」 |
+| `v8-tool-assets-anim-events-align` | （2026-10-31）對齊方式 (ii)：事件標在畫面上的時刻，音效資料用 `sync_seconds` 指出音檔裡的對齊點，動作開始時一次排好 | 「照建議核准」 |
 | `v8-tool-plan-location` | （2026-10-31 補記）照建議：計畫放 `docs/tools/plans/v8/`，UI 的格式與 Design Invariants 仍在 [ui_toolchain.md](../../../ui_toolchain.md)。從 `v8-tool-plan` 起 Claude 照自己的建議放了，使用者沒有另外選過；列出選項後使用者接受現狀 | 「做了就沒事了，我還以為你沒做。」 |
 | `v8-tool-start-timing` | （2026-10-31 補記）實際的做法：檢測 `v8-tool-ui-ime-observe` 先做，之後每一批都由使用者說「開始」才動手（ui-widgets-line 已全部合併，#107～#114），不是等 ③ 之後。使用者沒有另外選過；列出選項後使用者接受現狀 | 「做了就沒事了，我還以為你沒做。」 |
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
@@ -119,3 +123,8 @@
 - 2026-10-31：使用者：「Engine保持純粹，framework則提供整合工具。」記為 `v8-tool-framework-principle`；catalog 寫入屬於整合，`-framework-shell` 時從音效工具搬進 framework。
 - 2026-10-31：`v8-tool-audio-editor-convert` 完成（約 50 分鐘，估 6～10 h）。事前宣告的判定全部通過；完整 ctest 52／52；突變 17／17。事前宣告的抖動文字寫錯（「≤ 1 LSB（抖動加四捨五入）」合計其實可到 1.5），在看結果之前照使用者選項的「±1 LSB 幅度」改成直接檢查抖動本身，並加一條合計 < 1.5（只締め，§14.4）。
 - 2026-10-31：音效線回報（會話訊息，不是使用者原話）：GYO::Audio 控制層重建的計畫已核准，`docs/architecture/plans/audio/CONTROL.md`（分支 `claude/v8-engine-audio-control`，`7fb77575`，未推送），實作未開始。介面：`Submitter::Play` 回傳 `SoundHandle`；`Stop(handle, at)`／`StopAll(at)`；每個提交端的片段槽 `LoadClip`／`UnloadClip`（`MixerConfig::clipSlotsPerSubmitter`，建議 8）；`Mixer::PlayheadOf(handle)` 只供顯示、最多晚一個區塊。工具端要處理：`Stop`／`UnloadClip` 佇列滿回 false 時重試、`LoadClip` 回 `NoClipSlot` 時下一幀重試。音效線說使用者決定 Engine 的 5 批（baseline→stop→clips→playhead→live，約 15～20.5 h）和 `v8-tool-audio-editor-edit` 同一條 PR 線，Engine 先做。哪個分支、哪個會話做 `-edit` 待對齊。
+- 2026-10-31：anim-events-line 由另一個會話開始（`v8-tool-assets-anim-events`，high，Opus 5.5，估 6～8 h）。分支 `claude/nifty-lovelace-dd931a`，切自 `v8-tool-handoff-cleanup`（`assets.md` 還沒進 master）。提出契約位置、格式 v1、Design Invariants 草稿與對齊方式，你核准（「照建議核准」）。
+- 2026-10-31：`v8-tool-assets-anim-events` 的程式、資料、測試完成；突變 Engine 13／13、PvP 8／8（第一次有 7 個沒被殺：doctest 篩選含逗號、刪行造成編譯失敗、訊息印成指標、CMake 折行，修正後全部 killed）。從骨骼的局部變換推出彈倉插到底在 clip 2.35 s，音檔兩組聲音對應插到底與滑套。等你實聽。
+- 2026-10-31：你在 macOS 本機實聽換彈：「It matches」。`v8-tool-assets-anim-events` 完成，推送並開 PR。
+- 2026-10-31：PR #119 的 L1（linux-x64、macos-arm64、windows-x64）全部通過，CI gate 通過，CLEAN。等你決定合併。
+- 2026-10-31：PR #119 合併後，#118 和 master 在本檔與 README 的 dev_log 一覽衝突（兩條線各自加了行）。合入 master，兩邊的記錄都保留，現況改成 #119 已合併。
