@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/WireCounter.hpp"
+#include "engine/base/Assert.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/linear/Vec3d.hpp"
@@ -23,8 +24,9 @@ std::uint64_t FutureTick(std::uint64_t tick, std::uint64_t duration) {
     return *deadline;
 }
 }
-PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& stance)
-    : arena_(std::move(arena)), rules_(rules), stance_(stance) {
+PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& stance,
+                   const PlayerAnimationRules& animation)
+    : arena_(std::move(arena)), rules_(rules), stance_(stance), animation_(animation) {
     std::string error;
     if (!arena_.Validate(error)) throw std::invalid_argument(error);
     if (!ValidShotDamageBounds(rules_.shotDamage, rules_.maximumShotDamage, rules_.maximumHp) ||
@@ -46,6 +48,9 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
         player.combat.playerId = playerId;
         player.combat.hp = rules_.maximumHp;
         player.combat.magazineAmmo = rules_.magazineCapacity;
+        // A joining player's first value: a reset at the current tick.
+        player.animation = AdvancePlayerAnimation(animation_, std::nullopt, nullptr, player.state, tick_);
+        player.animationState = player.state;
         players_.emplace(playerId, player);
         return true;
     }
@@ -539,9 +544,24 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
         }
     }
     ResolveActions(referenceAge);
+    // Every player once a tick, after movement, life boundaries and shots,
+    // so a respawn or a skipped movement tick cannot be missed (A1 review S1).
+    for (auto& [id, player] : players_) {
+        static_cast<void>(id);
+        AdvanceAnimation(player);
+    }
+}
+
+void PvpMatch::AdvanceAnimation(Participant& player) {
+    player.animation = AdvancePlayerAnimation(animation_, player.animation, &player.animationState, player.state, tick_);
+    player.animationState = player.state;
 }
 
 void PvpMatch::Reset() noexcept { players_.clear(); tick_ = 0; }
+
+void RequireValidAnimation(const WorldSnapshot& snapshot) {
+    GYO_ASSERT(ValidPlayerAnimations(snapshot.players, snapshot.animation, snapshot.tick));
+}
 
 WorldSnapshot PvpMatch::Snapshot() const {
     WorldSnapshot result{tick_, {}, {}};
@@ -551,7 +571,9 @@ WorldSnapshot PvpMatch::Snapshot() const {
         state.contiguousPendingCommands = ContiguousPending(participant);
         result.players.push_back(state);
         result.combat.push_back(participant.combat);
+        result.animation.push_back(participant.animation);
     }
+    RequireValidAnimation(result);
     return result;
 }
 

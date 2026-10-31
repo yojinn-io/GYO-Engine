@@ -2,6 +2,7 @@
 
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/Combat.hpp"
+#include "RetroFPS/Pvp/PlayerAnimation.hpp"
 #include "engine/runtime/FixedTickRuntime.hpp"
 
 #include <cstdint>
@@ -19,7 +20,14 @@ struct WorldSnapshot final {
     std::uint64_t tick{};
     std::vector<PlayerState> players;
     std::vector<CombatState> combat;
+    // One per player (protocol-v9 §4.2), the Match's animation authority.
+    std::vector<PlayerAnimation> animation;
 };
+
+// The Match's guard before a snapshot leaves it (pv9-gateway-check-failure (a)):
+// a value the Gateway would refuse fails the whole Gateway, so it is a
+// Programmer Error here (GYO_ASSERT on ValidPlayerAnimations).
+void RequireValidAnimation(const WorldSnapshot& snapshot);
 
 // Cumulative movement resolution counts of one participant, for the host's
 // connection-quality judgement; never gameplay input.
@@ -61,8 +69,11 @@ class PvpMatch final {
 public:
     // rules defaults to the product policy; tests and future weapon data may
     // pass others (v7.1 D137). Invalid rules throw invalid_argument.
+    // animation defaults to synthetic rules for callers without the product
+    // content; the Match passes the rules loaded from it.
     explicit PvpMatch(Arena arena, const CombatRules& rules = PvpCombatRules,
-                      const StanceRules& stance = DefaultStanceRules);
+                      const StanceRules& stance = DefaultStanceRules,
+                      const PlayerAnimationRules& animation = SyntheticPlayerAnimationRules);
     [[nodiscard]] bool Join(PlayerId playerId, std::string& error);
     [[nodiscard]] bool Leave(PlayerId playerId);
     [[nodiscard]] bool SubmitInput(const PlayerInput& input);
@@ -110,6 +121,10 @@ private:
     struct Participant final {
         PlayerState state;
         CombatState combat;
+        // The animation value of the latest tick and the state it was advanced
+        // to: the next tick's `previous` and `before` (protocol-v9 §4.4).
+        PlayerAnimation animation;
+        PlayerState animationState;
         ActionId retiredActionThrough{};
         std::map<ActionId, ActionEntry> actions;
         std::map<std::uint64_t, MovementCommand> commands;
@@ -134,9 +149,11 @@ private:
     [[nodiscard]] const SpawnPoint* FindSpawn(PlayerId playerId) const;
     void Kill(Participant& player);
     void ResolveActions(const ShotReferenceAge& referenceAge);
+    void AdvanceAnimation(Participant& player);
     Arena arena_;
     CombatRules rules_;
     StanceRules stance_;
+    PlayerAnimationRules animation_;
     std::map<PlayerId, Participant> players_;
     std::uint64_t tick_{};
 };

@@ -3,6 +3,7 @@
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
 #include "RetroFPS/Pvp/PlayerAnimation.hpp"
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,6 +20,10 @@ namespace fps::pvp {
 // The Match's path (v8-product-anim-rules-source-texture-free): the player
 // presentation and its character's model and animation set, no texture.
 [[nodiscard]] std::optional<PlayerAnimationRules> LoadPlayerAnimationRules(Engine::Asset::AssetManager& assets,
+                                                                           std::string& error);
+// The same from a staged content root (the Match executable's Assets): its own
+// asset manager with the text and FBX loaders only.
+[[nodiscard]] std::optional<PlayerAnimationRules> LoadPlayerAnimationRules(const std::filesystem::path& contentRoot,
                                                                            std::string& error);
 
 } // namespace fps::pvp

@@ -86,6 +86,29 @@ double PlayerCycleDistance(const PlayerAnimationRules& rules, double jogRatio) n
     return rules.walkCycleDistance + (rules.jogCycleDistance - rules.walkCycleDistance) * jogRatio;
 }
 
+bool ValidPlayerAnimations(std::span<const PlayerState> players, std::span<const PlayerAnimation> animation,
+                           std::uint64_t tick) noexcept {
+    if (players.size() != animation.size()) return false;
+    for (const auto& value : animation) {
+        // One value per player: same id exactly once, in any order.
+        std::size_t owners = 0, copies = 0;
+        const PlayerState* player = nullptr;
+        for (const auto& candidate : players)
+            if (candidate.playerId == value.playerId) { ++owners; player = &candidate; }
+        for (const auto& other : animation) copies += other.playerId == value.playerId;
+        if (owners != 1 || copies != 1 || value.lifeGeneration != player->lifeGeneration) return false;
+        if (value.moveWeightPermille > 1000 || value.jogWeightPermille > 1000 || value.sprintWeightPermille != 0)
+            return false;
+        const auto phase = static_cast<std::uint8_t>(value.jumpPhase);
+        if (phase < static_cast<std::uint8_t>(JumpPhase::Grounded) || phase > static_cast<std::uint8_t>(JumpPhase::Land) ||
+            value.jumpPhaseTick > tick)
+            return false;
+        const bool inAir = value.jumpPhase == JumpPhase::Start || value.jumpPhase == JumpPhase::Airborne;
+        if (player->lifeState == LifeState::Alive && inAir == player->grounded) return false;
+    }
+    return true;
+}
+
 PlayerAnimation AdvancePlayerAnimation(const PlayerAnimationRules& rules,
     const std::optional<PlayerAnimation>& previous, const PlayerState* before, const PlayerState& now,
     std::uint64_t tick) {

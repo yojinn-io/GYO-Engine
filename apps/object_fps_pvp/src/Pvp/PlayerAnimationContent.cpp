@@ -1,7 +1,14 @@
 #include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
 
 #include "../App/AssetDefinitionHelpers.hpp"
+#include "engine/asset/AssetCatalog.hpp"
+#include "engine/asset/AssetManager.hpp"
+#include "engine/asset/ContentManifest.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
+#include "engine/asset/loading/NativeFileAssetSource.hpp"
+#include "engine/model/backend/ufbx/UfbxModelLoader.hpp"
+
+#include <memory>
 
 #include <stdexcept>
 
@@ -61,6 +68,32 @@ std::optional<PlayerAnimationRules> LoadPlayerAnimationRules(Engine::Asset::Asse
         error = "player animation rules: " + std::string(exception.what());
         return std::nullopt;
     }
+}
+
+std::optional<PlayerAnimationRules> LoadPlayerAnimationRules(const std::filesystem::path& contentRoot,
+                                                             std::string& error) {
+    error.clear();
+    const auto manifest = Engine::Asset::ContentManifest::Load(contentRoot);
+    if (!manifest) {
+        error = "player animation rules: " + manifest.error().message + " " + manifest.error().detail;
+        return std::nullopt;
+    }
+    auto catalog = manifest.value().LoadCatalogs(contentRoot);
+    if (!catalog) {
+        error = "player animation rules: " + catalog.error().message + " " + catalog.error().detail;
+        return std::nullopt;
+    }
+    Engine::Asset::AssetCatalog assetsCatalog = std::move(catalog).value();
+    Engine::Asset::Loading::LoaderRegistry loaders;
+    loaders.Register(std::make_unique<Engine::Asset::Loaders::TextLoader>());
+    loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
+    Engine::Asset::Loading::NativeFileAssetSource source;
+    Engine::Asset::Loading::AssetPipeline pipeline{source, loaders};
+    Engine::Asset::Core::AssetStorage storage;
+    Engine::Asset::Core::AssetLifetime lifetime;
+    Engine::Asset::Core::AssetCachePolicy policy{{}};
+    Engine::Asset::AssetManager assets{assetsCatalog, pipeline, storage, lifetime, policy};
+    return LoadPlayerAnimationRules(assets, error);
 }
 
 } // namespace fps::pvp

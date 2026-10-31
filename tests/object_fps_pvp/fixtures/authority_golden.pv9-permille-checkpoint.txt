@@ -1,0 +1,53 @@
+# Golden authority digests (digest version 1; version 3 from v8-product-hit-rules-permille) of the zero-angle subset: every yaw and pitch is exactly
+# zero, so no non-trivial sin/cos is reached and every platform must agree bit for bit. Regenerate only in the
+# one batch allowed to change authority results (v6 batch 10), with the old file kept in that batch's evidence.
+# v7.1 a1-shot-step (D137) changed combat-magazine/corridor as pre-declared (plans/v7.1/a1-shot-step.md section 3:
+# a shot two ticks inside the cooldown is held to its boundary); the file before it is authority_golden.pv7-checkpoint.txt.
+# combat-step/corridor (A1 command steps) was added by the same batch, checked against its hand-written table.
+# v8-product-crouch (digest version 2) appended move-crouch/contract and move-crouch-slab/slab only: version 2
+# encodes the stance fields only when true, so every existing line kept its version 1 digest.
+# The v8-product-crouch wire batch appended move-crouch-walk-under/slab, move-crouch-jump-hold/contract,
+# move-crouch-epoch-reseed/contract and move-crouch-sprint-held/contract; the last must equal
+# move-crouch/contract (sprint_held has no behaviour in pv8).
+# v8-product-hit-rules-permille (digest version 3) regenerated every line: hp and damage count in milli-points
+# and combat/decision records append the hit record and hitPart. The two-tree comparison against c1963051
+# (compare_authority_trees.py --scaled hp,damage=1000 --added ..., scale 1 and 3) found every other field
+# identical and hp/damage exactly x1000 (docs/dev_logs/2026_10_31_pvp_v8_hit_rules_permille.zh-Hant.md);
+# the file before it is authority_golden.pv8-checkpoint.txt.
+move-axial/contract a395d823282cd38db2eb0e04e56c57b6f513ea4bf21218578ba1de2dd5c02853
+move-diagonal/contract 2135868df5b11bfec83f229c334122a972a3a54c7eb641700694952d0400182c
+move-jump/contract ba9a698a7b1d713d53b522fcb97dffa9b9b887be067cfc5d861e8bdf905facd9
+move-axial/pillar a7992d87f76ffa44589f51616b461a4f5f51306f5f823b35b9629988a0ca6c2e
+move-diagonal/pillar a75450ceb66d32a736c5623fc4b855967f457140a24a1445c4ddf45e0420b37b
+move-jump/pillar 05de25bdb8677806dfead968b58c7ecbd326a5f36078f9a7e41e16a25e0a4952
+move-axial/product 3a6a79c5009a9e1265bf0c3ad91232deba910e53f16062e04c9afd01781124eb
+move-diagonal/product d6d48e0b567f05ed67f8fa398a975f7f3ae9d2ba3bcd19f7d1334c4896d4910d
+move-jump/product 9d3b9e4574986c37e76e197e2b8ef7b6955f501eb57538f64df0517f9278b531
+move-axial/corner 6fb308202715f2b83d7b48a1ad60b7af8ab0152cf8d1718e856c113d35ca793b
+move-diagonal/corner 8ffba8ff981c2e3b81ad094d83e32919877a2a05e759fcf345c995edce4f7c88
+move-jump/corner 776ad145d974c3c9c705bc8f7fdad6d4d83ba7f65037eb49ea3fc4d7be16adce
+move-wall-slide/contract 95e20171d463a249b9669abd6b9ed60accb978c5fcf06c1dfc7db252c36f6a69
+move-wall-slide/corner 69d28190502367642d3469cbe12934778d80a6ca884353f11d729d549208b71f
+move-crouch/contract f8701995f91cea207f8d15afbc1c1da50e111aa6e06917506f0d5eb0bf7a1c98
+move-crouch-slab/slab 164c7aa0d1f45f0e067caba7ef053133f2128e3be880d79cecc3a0efa52c9be6
+move-crouch-walk-under/slab 42212fa375fa5a16f34c7825f63b87d7a334fef960357fcfc53f2c4e915aa07f
+move-crouch-jump-hold/contract f5c43ee3f62793a843ff5d739aa36bc2ea386094189bfdce34269e94d6e256e7
+move-crouch-epoch-reseed/contract 2afabd50ed8f7ec2b5ce22f2359c5ffd254e3bdb56485793f07a463502241b1b
+move-crouch-sprint-held/contract f8701995f91cea207f8d15afbc1c1da50e111aa6e06917506f0d5eb0bf7a1c98
+move-held-gaps/contract 811320c06e0cc0cba1f87d8d21300b463511cefff48cadaf0340286bccb645fe
+move-backlog/contract 8f2dc70f81c316235a81f98616d583591fe5a9427d592b33c05d578f1fb5b881
+combat-kill-respawn/corridor 0248f45b414ac3f24640bb7073097b0e36152668d0df5edf5973a384df59c040
+combat-occluded/pillar 141e4a22adac56419088e38dbb10a296b9cccf52c20ef0c8b050712a5c067e8a
+combat-magazine/corridor 060c6fd382433896054191bbab62e5c0ee4254c22d92db6063efbdff8e8611a6
+combat-cross-life/corridor 0d8482fd70c1f7e9e9c9c43ead0cd83ab580db79a468ff11c723cd28468200f1
+combat-step/corridor f8596a4c738a45bebd02d9edf9a3b3af1bf2de8fad3f6d581752a69853133838
+combat-rejoin/corridor 36cf67c8677b85059063f93767e8d328e6da46ef10905a4fea0433db8b97504c
+prediction-rtt0/contract 51e1597a5903d10a4a70780a1c097a6b1f40d9df4837e6c33b666851fdeb2f6a
+prediction-rtt40/contract bf79cd5ded3bde3f45350410dee40c8cfcbda0c58135a62eb3c10b3bef51fb19
+prediction-rtt100/contract 00379ce9934e3e873df42773faddb4e8d90b3f445ee4fd65599010a1b0501bc9
+prediction-impaired-rtt40/contract 37b95ac4aa39f796aa0b5d3c039f6df607126debdf6f3e14b39323ebaa0b696a
+prediction-stall-rtt40/contract 5b1261fd10809a11f624bbeccf5cae316af157ea5ff0fe07ac501d857fdcf6bc
+prediction-fps30-rtt40/contract 39fa15fa7f5de8ac7906f7879aecb8f449dc6135b2334552a775ca1bdec992c6
+prediction-fps144-rtt40/contract b3fea0dbf0af9ba1ea43b0c77162e9f69d9a1f11249aac5f4461f7426a15ba74
+host-play/corridor 54a39ffe126a5e71215260db56444a98128c1dde48f10cc7bcb4e8b7c6aa0afe
+host-poor-connection/corridor 3384473cb6ad9e9873069527dd692fc57d38838f0cd6ac5562eb965e6309962a

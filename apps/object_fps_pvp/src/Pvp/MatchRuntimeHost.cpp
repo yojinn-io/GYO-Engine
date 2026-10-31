@@ -50,8 +50,9 @@ IngressActionRejection Rejection(ActionAdmission admission) {
 }
 }
 
-MatchRuntimeHost::MatchRuntimeHost(Arena arena, ClockNow now, const StanceRules& stance)
-    : stance_(stance), match_(std::move(arena), PvpCombatRules, stance), now_(std::move(now)) {
+MatchRuntimeHost::MatchRuntimeHost(Arena arena, ClockNow now, const StanceRules& stance,
+                                   const PlayerAnimationRules& animation)
+    : stance_(stance), match_(std::move(arena), PvpCombatRules, stance, animation), now_(std::move(now)) {
     if (!now_) throw std::invalid_argument("MatchRuntimeHost needs a monotonic clock");
 }
 

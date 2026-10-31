@@ -137,6 +137,12 @@
     },
     "compare_authority_trees": {
       "ctest": "object_fps_pvp.compare_authority_trees"
+    },
+    "authority_digest": {
+      "build": [
+        "gyo_object_fps_pvp_authority_digest"
+      ],
+      "ctest": "object_fps_pvp.authority_digest"
     }
   },
   "mutants": [
@@ -4625,8 +4631,8 @@
       "batch": "v71-a1-shot-step",
       "what": "The Match ignores the rules it is given",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    : arena_(std::move(arena)), rules_(rules), stance_(stance) {\n",
-      "replace": "    : arena_(std::move(arena)), rules_(PvpCombatRules), stance_(stance) {\n",
+      "find": "    : arena_(std::move(arena)), rules_(rules), stance_(stance), animation_(animation) {\n",
+      "replace": "    : arena_(std::move(arena)), rules_(PvpCombatRules), stance_(stance), animation_(animation) {\n",
       "check": "cpu",
       "expect": "PvP A1"
     },
@@ -7631,6 +7637,76 @@
       "replace": "    rules.jumpStartTicks = WholeTicks(source.jumpLandSeconds, MaxJumpTicks);",
       "check": "cpu",
       "expect": "each span on its own phase"
+    },
+    {
+      "id": "a2-no-advance",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The Match never advances the animation after the join",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    for (auto& [id, player] : players_) {\n        static_cast<void>(id);\n        AdvanceAnimation(player);\n    }\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "gaitPhaseQ16 > 0|GYO_ASSERT failed: ValidPlayerAnimations"
+    },
+    {
+      "id": "a2-join-without-value",
+      "batch": "v8-product-anim-authority-match",
+      "what": "A joining player has no animation value until its first tick",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        player.animation = AdvancePlayerAnimation(animation_, std::nullopt, nullptr, player.state, tick_);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "ValidPlayerAnimations"
+    },
+    {
+      "id": "a2-check-life",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The animation check ignores the life generation",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        if (owners != 1 || copies != 1 || value.lifeGeneration != player->lifeGeneration) return false;",
+      "replace": "        if (owners != 1 || copies != 1) return false;",
+      "check": "cpu",
+      "expect": "refuses to publish an animation"
+    },
+    {
+      "id": "a2-check-duplicate",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The animation check accepts a player twice",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        if (owners != 1 || copies != 1 || value.lifeGeneration != player->lifeGeneration) return false;",
+      "replace": "        if (owners != 1 || value.lifeGeneration != player->lifeGeneration) return false;",
+      "check": "cpu",
+      "expect": "refuses to publish an animation"
+    },
+    {
+      "id": "a2-check-sprint",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The animation check accepts a sprint weight before sprint presentation",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        if (value.moveWeightPermille > 1000 || value.jogWeightPermille > 1000 || value.sprintWeightPermille != 0)",
+      "replace": "        if (value.moveWeightPermille > 1000 || value.jogWeightPermille > 1000)",
+      "check": "cpu",
+      "expect": "refuses to publish an animation"
+    },
+    {
+      "id": "a2-check-grounded",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The animation check skips the grounded cross-check",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        if (player->lifeState == LifeState::Alive && inAir == player->grounded) return false;",
+      "replace": "",
+      "check": "cpu",
+      "expect": "refuses to publish an animation"
+    },
+    {
+      "id": "a2-digest-without-animation",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The authority digest leaves the animation out",
+      "file": "tests/object_fps_pvp/AuthorityDigest.cpp",
+      "find": "    r.U64(\"animations\", snapshot.animation.size());",
+      "replace": "    r.U64(\"animations\", 0);",
+      "check": "authority_digest",
+      "expect": "golden mismatch"
     }
   ]
 }

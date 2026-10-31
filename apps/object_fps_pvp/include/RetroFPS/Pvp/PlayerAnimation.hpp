@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 
 namespace fps::pvp {
@@ -48,6 +49,13 @@ struct PlayerAnimationRules final {
     bool operator==(const PlayerAnimationRules&) const = default;
 };
 
+// Rules for callers without the product content: unit tests and the authority
+// digest, whose results then do not move with the player clips. Never the
+// product's rules: the Match passes LoadPlayerAnimationRules' result.
+inline constexpr PlayerAnimationRules SyntheticPlayerAnimationRules{
+    .walkNativeSpeed = 1.0, .jogNativeSpeed = 6.0, .walkCycleDistance = 1.0, .jogCycleDistance = 4.5,
+    .teleportDistance = 0.3, .transitionTicks = 6, .jumpStartTicks = 6, .jumpLandTicks = 6};
+
 // The one derivation of the rules, shared by the Match and the Client. Every
 // span must be a whole number of ticks (protocol-v9 §4.4).
 [[nodiscard]] std::optional<PlayerAnimationRules> MakePlayerAnimationRules(const PlayerAnimationSource& source,
@@ -59,6 +67,13 @@ struct PlayerAnimationRules final {
 [[nodiscard]] std::uint32_t PlayerJogWeightPermille(const PlayerAnimationRules& rules, double planarSpeed) noexcept;
 // The distance one gait cycle covers at a jog ratio.
 [[nodiscard]] double PlayerCycleDistance(const PlayerAnimationRules& rules, double jogRatio) noexcept;
+
+// The single-message checks of protocol-v9 §4.5, shared by every reader: one
+// value per player, in any order, of the player's life; weights <= 1000 and no sprint
+// weight yet; a valid phase whose zero point is not after the snapshot tick;
+// and, for a living player, Start/Airborne exactly when not grounded.
+[[nodiscard]] bool ValidPlayerAnimations(std::span<const PlayerState> players,
+                                         std::span<const PlayerAnimation> animation, std::uint64_t tick) noexcept;
 
 // One authority tick of one player (protocol-v9 §4.4). `previous` is this
 // state machine's value at the tick before, `before` the player's authority

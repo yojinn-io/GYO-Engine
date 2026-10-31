@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include "AssertTestSupport.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
@@ -1515,3 +1516,104 @@ TEST_CASE("PvP a crouched death respawns standing") {
     CHECK_FALSE(respawned.crouched);
 }
 
+
+// v8-product-anim-authority A2: the Match advances every player's animation
+// once a tick and puts it on the snapshot (protocol-v9 §4.2, §4.4).
+namespace {
+const PlayerAnimation& AnimationOf(const WorldSnapshot& snapshot, PlayerId playerId) {
+    const auto found = std::find_if(snapshot.animation.begin(), snapshot.animation.end(),
+        [=](const auto& value) { return value.playerId == playerId; });
+    REQUIRE(found != snapshot.animation.end());
+    return *found;
+}
+} // namespace
+
+TEST_CASE("PvP Match snapshots carry one animation value per player from the join on") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    auto snapshot = match.Snapshot(); // before any tick
+    REQUIRE(snapshot.animation.size() == 2);
+    CHECK(snapshot.animation[0].playerId == snapshot.players[0].playerId);
+    CHECK(snapshot.animation[1].playerId == snapshot.players[1].playerId);
+    CHECK(AnimationOf(snapshot, 1).jumpPhase == JumpPhase::Grounded);
+    CHECK(ValidPlayerAnimations(snapshot.players, snapshot.animation, snapshot.tick));
+    MoveCombatPlayer(match, 1, 1);
+    CombatStep(match);
+    for (int i = 0; i < 10; ++i) {
+        MoveCombatPlayer(match, 1, 1);
+        CombatStep(match);
+    }
+    snapshot = match.Snapshot();
+    const auto& walking = AnimationOf(snapshot, 1);
+    CHECK(walking.gaitPhaseQ16 > 0);
+    CHECK(walking.moveWeightPermille == 1000);
+    CHECK(AnimationOf(snapshot, 2).gaitPhaseQ16 == 0); // the other player stood still
+    MoveCombatPlayer(match, 1, 0, 0, 0, 0, true);
+    CombatStep(match);
+    snapshot = match.Snapshot();
+    CHECK(AnimationOf(snapshot, 1).jumpPhase == JumpPhase::Start);
+    CHECK(AnimationOf(snapshot, 1).jumpPhaseTick == snapshot.tick);
+}
+
+TEST_CASE("PvP Match animation freezes through death and restarts at the respawn tick") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    REQUIRE(LifePlayer(match, 2).lifeState == LifeState::Dead);
+    const auto frozen = AnimationOf(match.Snapshot(), 2);
+    const auto due = LifePlayer(match, 2).respawnTick;
+    while (match.TickCount() < due - 1) {
+        MoveCombatPlayer(match, 2);
+        CombatStep(match);
+        CHECK(AnimationOf(match.Snapshot(), 2) == frozen);
+    }
+    while (LifePlayer(match, 2).lifeState == LifeState::Dead) {
+        MoveCombatPlayer(match, 2);
+        CombatStep(match);
+    }
+    const auto snapshot = match.Snapshot();
+    const auto& reborn = AnimationOf(snapshot, 2);
+    CHECK(reborn.lifeGeneration == 2);
+    CHECK(reborn.gaitPhaseQ16 == 0);
+    CHECK(reborn.jogWeightPermille == 0); // no step across the death (A1 review C1)
+    CHECK(reborn.jumpPhaseTick == LifePlayer(match, 2).lifeStateTick);
+}
+
+// E4: each §4.5 condition the Match guards before a snapshot leaves it.
+TEST_CASE("PvP Match refuses to publish an animation the Gateway would refuse") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    CombatStep(match, 3);
+    const auto valid = match.Snapshot();
+    REQUIRE(ValidPlayerAnimations(valid.players, valid.animation, valid.tick));
+    const auto refused = [&](auto edit) {
+        auto snapshot = valid;
+        edit(snapshot);
+        CHECK_FALSE(ValidPlayerAnimations(snapshot.players, snapshot.animation, snapshot.tick));
+        GYO_CHECK_ASSERTS(RequireValidAnimation(snapshot));
+    };
+    refused([](auto& s) { s.animation.pop_back(); });                              // a player without a value
+    refused([](auto& s) { s.animation[1].playerId = 7; });                          // an unknown player
+    refused([](auto& s) { s.animation[1].playerId = s.animation[0].playerId; });    // a player twice
+    refused([](auto& s) { s.animation[0].lifeGeneration = 2; });                    // another life
+    refused([](auto& s) { s.animation[0].moveWeightPermille = 1001; });
+    refused([](auto& s) { s.animation[0].jogWeightPermille = 1001; });
+    refused([](auto& s) { s.animation[0].sprintWeightPermille = 1; });              // before sprint presentation
+    refused([](auto& s) { s.animation[0].jumpPhase = JumpPhase::Unspecified; });
+    refused([](auto& s) { s.animation[0].jumpPhase = static_cast<JumpPhase>(5); });
+    refused([](auto& s) { s.animation[0].jumpPhaseTick = s.tick + 1; });
+    refused([](auto& s) { s.animation[0].jumpPhase = JumpPhase::Start; });         // grounded
+    refused([](auto& s) { s.animation[0].jumpPhase = JumpPhase::Airborne; });      // grounded
+    refused([](auto& s) { s.players[0].grounded = false; });                       // Grounded in the air
+    refused([](auto& s) { s.players[0].grounded = false; s.animation[0].jumpPhase = JumpPhase::Land; });
+    // Accepted: another order, and a dead player is not cross-checked.
+    auto swapped = valid;
+    std::swap(swapped.animation[0], swapped.animation[1]);
+    CHECK(ValidPlayerAnimations(swapped.players, swapped.animation, swapped.tick));
+    auto dead = valid;
+    dead.players[0].lifeState = LifeState::Dead;
+    dead.animation[0].jumpPhase = JumpPhase::Airborne;
+    CHECK(ValidPlayerAnimations(dead.players, dead.animation, dead.tick));
+}

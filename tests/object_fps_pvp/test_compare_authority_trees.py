@@ -59,6 +59,21 @@ class ScaledDifferenceTests(unittest.TestCase):
         self.assertEqual(seen['damageCount'], 0)
 
 
+class AddedOnlyTests(unittest.TestCase):
+    def test_added_fields_alone_with_everything_else_identical(self):
+        base = ['#0 kind=snapshot tick=3 combats=0']
+        branch = ['#0 kind=snapshot tick=3 combats=0 animations=1 gaitPhaseQ16=1092']
+        difference, seen = scaled_difference(base, branch, {}, {'animations', 'gaitPhaseQ16'})
+        self.assertIsNone(difference)
+        self.assertEqual(seen, {'animations': 1, 'gaitPhaseQ16': 1})
+
+    def test_added_alone_still_rejects_any_other_change(self):
+        base = ['#0 kind=snapshot tick=3 combats=0']
+        branch = ['#0 kind=snapshot tick=4 combats=0 animations=1']
+        difference, _ = scaled_difference(base, branch, {}, {'animations'})
+        self.assertEqual(difference['field'], 'tick')
+
+
 class ParseScaledTests(unittest.TestCase):
     def test_names_and_factor(self):
         self.assertEqual(parse_scaled('hp,damage=1000'), SCALED)

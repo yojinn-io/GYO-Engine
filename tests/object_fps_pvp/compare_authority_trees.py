@@ -5,10 +5,11 @@ host, a base tree and a branch tree, then pass both binaries here. Every scenari
 is compared record by record. For each differing scenario the first differing record and its first
 differing field are named, from the runners' own --dump output.
 
-A unit change is compared with --scaled and --added (v8-product-hit-rules-permille): every scenario is
-then dumped in both trees and compared field by field. A --scaled field must equal base x factor, an
---added field is ignored but must appear somewhere in the branch dumps, and every other field must be
-identical, record for record. The digests themselves differ in that mode by construction.
+A unit change is compared with --scaled and --added (v8-product-hit-rules-permille), new fields with
+--added alone (v8-product-anim-authority A2): every scenario is then dumped in both trees and compared
+field by field. A --scaled field must equal base x factor, an --added field is ignored but must appear
+somewhere in the branch dumps, and every other field must be identical, record for record. The digests
+themselves differ in that mode by construction.
 
 Exit status: 0 when every scenario matches, 1 when any differs, 2 on a usage or runner error.
 """
@@ -166,13 +167,11 @@ def main():
         scaled = parse_scaled(args.scaled) if args.scaled else {}
     except ValueError as error:
         parser.error(str(error))
-    if added and not scaled:
-        parser.error('--added needs --scaled')
     for runner in (args.base, args.branch):
         if not runner.is_file():
             parser.error(f'Missing runner: {runner}')
     try:
-        if scaled:
+        if scaled or added:
             report = compare_scaled(args.base.resolve(), args.branch.resolve(), args.output.resolve(), args.scale,
                                     scaled, added)
         else:

@@ -48,7 +48,7 @@ gyo_app_add_library(player_content OUT_TARGET content
         SOURCES src/App/CharacterPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
         src/Pvp/PlayerAnimationContent.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Render GYO::Model
-    PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
+    PRIVATE_LIBRARIES GYO::AssetUfbx nlohmann_json::nlohmann_json)
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp
         src/Pvp/PlayerPresentation.cpp
         src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp
@@ -60,7 +60,7 @@ gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${sup
 target_compile_definitions(${app} PRIVATE GYO_DEFAULT_GPU_DRIVER="${GYO_DEFAULT_GPU_DRIVER}")
 # The entry point (GyoMain in main.cpp; IP-3).
 target_link_libraries(${app} PRIVATE GYO::PlatformSDLMain)
-gyo_app_add_executable(match OUT_TARGET match SOURCES match_main.cpp LIBRARIES ${ipc})
+gyo_app_add_executable(match OUT_TARGET match SOURCES match_main.cpp LIBRARIES ${ipc} ${content})
 gyo_install_product_target(TARGET ${match} PRODUCT "${GYO_APP_ID}" KIND app OWNER "${GYO_APP_ID}" ROLE match)
 add_dependencies(${match} "gyo_${GYO_APP_ID}--content")
 

@@ -7,6 +7,7 @@
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
+#include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
 #include "RetroFPS/Pvp/TracePaths.hpp"
 #include "engine/os/Console.hpp"
 #include "engine/os/Files.hpp"
@@ -110,7 +111,14 @@ int main(int argc,char** argv) {
         if(!ingressTracePath.empty()) ingressTrace.emplace(ingressTracePath);
         std::optional<fps::pvp::MatchShotTraceFile> shotTrace;
         if(const auto path=fps::pvp::MatchShotTracePath(movementTrace);!path.empty()) shotTrace.emplace(path);
-        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance);
+        // protocol-v9 §4.4: the animation rules from the player content, no texture
+        // (v8-product-anim-rules-source-texture-free); invalid content stops the Match.
+        const auto animation=fps::pvp::LoadPlayerAnimationRules(
+            fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets,error);
+        if(!animation){std::cerr<<error<<'\n';return 1;}
+        std::clog<<"[ObjectFPS/PvP Match] animation rules walk_cycle="<<animation->walkCycleDistance
+                 <<" jog_cycle="<<animation->jogCycleDistance<<" transition_ticks="<<animation->transitionTicks<<'\n';
+        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation);
         fps::pvp::IpcHost ipc(runtime,*arena);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}
         if(!ipc.Start(listen,error)){std::cerr<<error<<'\n';return 1;}
