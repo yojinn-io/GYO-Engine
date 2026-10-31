@@ -35,8 +35,8 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
-| `v8-tool-plan-location` | （2026-10-31 補記）照建議：計畫放 `docs/tools/plans/v8/`，UI 的格式與 Design Invariants 仍在 [ui_toolchain.md](../../../ui_toolchain.md)。實際上從 `v8-tool-plan` 起就這樣放，只是沒從「等你決定」移走 | 「清掉」（確認已照做） |
-| `v8-tool-start-timing` | （2026-10-31 補記）照建議：檢測 `v8-tool-ui-ime-observe` 先做（PR #109、#111），其他照順序。實際已照做，只是沒從「等你決定」移走 | 「清掉」（確認已照做） |
+| `v8-tool-plan-location` | （2026-10-31 補記）照建議：計畫放 `docs/tools/plans/v8/`，UI 的格式與 Design Invariants 仍在 [ui_toolchain.md](../../../ui_toolchain.md)。從 `v8-tool-plan` 起 Claude 照自己的建議放了，使用者沒有另外選過；列出選項後使用者接受現狀 | 「做了就沒事了，我還以為你沒做。」 |
+| `v8-tool-start-timing` | （2026-10-31 補記）實際的做法：檢測 `v8-tool-ui-ime-observe` 先做，之後每一批都由使用者說「開始」才動手（ui-widgets-line 已全部合併，#107～#114），不是等 ③ 之後。使用者沒有另外選過；列出選項後使用者接受現狀 | 「做了就沒事了，我還以為你沒做。」 |
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
 | `v8-tool-ui-editor-mount-ux` | （2026-10-30）ui_editor 的路徑選擇先用 SDL3 的系統選擇窗（選項 1）：Mount、Open、Export 與掛載對話框的欄位都用；不記住路徑；平台跳不出窗時退回手打。ImGui 自己畫的版本（像 Godot 的預設）之後要時再做，那時才需要 `GYO::Os` 加列目錄（`v8-engine-os-list-directory`，未開） | 「先做1吧，先把功能實現。」 |
 | `v8-tool-ui-invariants-text` | （2026-10-30）[ui_toolchain.md](../../../ui_toolchain.md) 的 GYO::Ui Design Invariants：改第 4 條（編輯中的內容由 Ui 暫時持有，值仍歸產品）、新增 5（字元由產品的檢查函式決定）、6（組字只顯示）、7（文字事件經產品轉成 Ui 的中立型別）；Replacement Criteria 加「超出通用編輯集合就停」。5、6 的守衛隨 `text_field` 加 | 「同意，寫進去」 |
@@ -106,4 +106,4 @@
 - 2026-10-31：使用者：「開始」。`v8-tool-ui-editor-text-field` 完成（high，估 8～12 h，實際約 6 分鐘）：元素表的整數／文字欄位與 `styledText`、Inspector 的「Fields」、預覽中可打字（用 ImGui 的內部 `PlatformImeData` 要求文字輸入，已記在 dev_log，對照 Replacement Criteria 目前未觸發）。7 個突變全被抓到；21/21 通過。GUI 手動操作未做。
 - 2026-10-31：使用者試用時發現：在大廳按「+ Canvas」出現 `unknown backdrop color 'transparent'`。原因是新 canvas／新元素的預設值用到大廳沒宣告的顏色（既有缺陷）。Red（7 項失敗）→ 修正：缺的顏色從編輯器預設調色盤補上宣告 → Green；4 個突變全被抓到。
 - 2026-10-31：使用者：解析度放在編輯器裡、可編輯但預設鎖定，顯示區域畫框表示。做了 Inspector 的「Design size」（預設鎖定，鎖定狀態不存檔）與畫布上的設計畫面框（依文件的 `design_canvas.size`，標示尺寸）。解析度仍屬於各文件。
-- 2026-10-31：使用者：「正常，合併」。PR #114 以 merge commit 合併（`16326f78`）。使用者：「清掉」。「等你決定」裡已照做的 `v8-tool-plan-location`、`v8-tool-start-timing` 移到決定紀錄；README 的 `v8-tool-ui-ime-observe` 補上 ✓。
+- 2026-10-31：使用者：「正常，合併」。PR #114 以 merge commit 合併（`16326f78`）。使用者：「清掉」。「等你決定」裡已照做的 `v8-tool-plan-location`、`v8-tool-start-timing` 移到決定紀錄；README 的 `v8-tool-ui-ime-observe` 補上 ✓。使用者要求列出這兩項的選項；Claude 說明兩項都是自己照建議做的、使用者沒有選過，使用者：「做了就沒事了，我還以為你沒做。」

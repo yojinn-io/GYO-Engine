@@ -5,7 +5,7 @@
 
 ## 定位
 
-- v8 的順序是 ① 基礎功能 → ② 體驗優化 → ③ 手感時序 → ④ 工具 → ⑤ 流程項目（v8-product-order）。使用者稱 ④ 為「Engine 的穩定」。本文件規劃 ④ 的三個工具；先處理 `v8-tool-ui-editor-widgets`，其他兩個等使用者的方案（見「待討論的兩個工具」）；工具線的規劃和 ①～③ 並行（使用者要求），實作時機已定：檢測先做，其他照順序（`v8-tool-start-timing`，見 HANDOFF 決定紀錄）。
+- v8 的順序是 ① 基礎功能 → ② 體驗優化 → ③ 手感時序 → ④ 工具 → ⑤ 流程項目（v8-product-order）。使用者稱 ④ 為「Engine 的穩定」。本文件規劃 ④ 的三個工具；先處理 `v8-tool-ui-editor-widgets`，其他兩個等使用者的方案（見「待討論的兩個工具」）；工具線的規劃和 ①～③ 並行（使用者要求），實作時機：檢測先做，之後每批由使用者說「開始」（`v8-tool-start-timing`，見 HANDOFF 決定紀錄）。
 - 三個工具都照 AGENTS §8：`Editor → Data Contract → Application`。Application 只讀 Data Contract，不連結、不初始化、不知道 Editor。Contract 的資料用手寫、Script、別的工具都能產生。
 - 三個工具都照 AGENTS §5「手動 → Script → Tool」：先把手動的步驟、輸入、輸出、失敗條件寫清楚，再做工具。
 - 工具的登記照 [tool_projects.md](../../../tool_projects.md)：`tools/<id>/`、`project.json`、`engine/config/tools.csv` 的一列、`tests/<id>`、`build/acceptance/<id>/`。新增工具只改這些，不改共通 Build。
