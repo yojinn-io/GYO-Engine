@@ -98,6 +98,9 @@ private:
     std::optional<nlohmann::json> clipboard_;
     bool showGrid_{true};
     bool snapToGrid_{true};
+    // The document's design canvas size is shown locked; unlocking allows
+    // editing it. Editor state only, never saved.
+    bool designSizeLocked_{true};
     float canvasZoom_{1.0F};
     float canvasPanX_{};
     float canvasPanY_{};

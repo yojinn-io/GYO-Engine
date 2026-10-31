@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -463,6 +464,26 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
                 }
             },
             command);
+    }
+
+    // The document's design canvas (its design_canvas.size, fitted into the
+    // viewport): where the screen's edges are, whatever the resolution.
+    if (sourceDocument.contains("design_canvas") && sourceDocument["design_canvas"].contains("size")) {
+        const Json& size = sourceDocument["design_canvas"]["size"];
+        if (size.is_array() && size.size() == 2U && size[0].is_number() && size[1].is_number()) {
+            const float designWidth = size[0].get<float>();
+            const float designHeight = size[1].get<float>();
+            if (designWidth > 0.0F && designHeight > 0.0F) {
+                const Engine::Ui::UiCanvasFit fit =
+                    Engine::Ui::FitDesignCanvas({designWidth, designHeight}, {viewport.width, viewport.height});
+                const ImVec2 frameMin{viewport.x + fit.offset.x, viewport.y + fit.offset.y};
+                const ImVec2 frameMax{frameMin.x + designWidth * fit.scale, frameMin.y + designHeight * fit.scale};
+                drawList.AddRect(frameMin, frameMax, IM_COL32(120, 170, 255, 200), 0.0F, 0, 1.5F);
+                char label[48];
+                std::snprintf(label, sizeof(label), "%d x %d", static_cast<int>(designWidth), static_cast<int>(designHeight));
+                drawList.AddText({frameMin.x + 4.0F, frameMin.y + 2.0F}, IM_COL32(120, 170, 255, 200), label);
+            }
+        }
     }
 
     const auto selected = std::ranges::find_if(
