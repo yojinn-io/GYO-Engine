@@ -154,6 +154,9 @@ TEST_CASE("Audio SDL output on the disk driver writes the mixer's samples where 
         CHECK(stats.submitted == 1);
         CHECK(stats.playedLate == 1);
         CHECK(stats.submitted == stats.playedOnTime + stats.playedLate + stats.droppedQueueFull + stats.droppedNoVoice);
+        // A stalled test thread, as on a busy CI machine, must not fill the anchor log
+        // before it drains it: the driver's pace (timescale 0.1) bounds the callbacks.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         static_cast<void>(output.TakeAnchors(anchors));
         CHECK(output.Stats().anchorsDropped == 0);
     }
