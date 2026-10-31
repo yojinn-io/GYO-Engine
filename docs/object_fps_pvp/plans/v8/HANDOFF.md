@@ -101,6 +101,7 @@
 | `v8-product-hitbox-plan-ultracode` | （2026-10-31）hitbox-line 先開規劃批 `v8-product-hitbox-plan`，用 ultracode（偵察 2×Sonnet 5.5、案 3×Opus 5.5、審 1×Opus 5.5、對抗 1×Sonnet 5.5）。起因：Match 沒有模型與動畫，誰來算骨骼姿勢是架構問題（做法 (A) 取樣完整動畫／(B) 固定姿勢的骨骼膠囊／(C) 部位層級的簡化形狀） | 「用 ultracode」 |
 | `v8-product-hitbox-plan-approve` | （2026-10-31）核准 [hitbox-plan](hitbox-plan.md) 的 13 項全部照建議：`v8-product-hitbox-model` (a) B-flat；`v8-product-hitbox-plan-scope` (b) rewind 拆成另一條 PR 線（部位判定線約 45～70 h、回溯線約 23～35 h，範圍超過原估 1.5 倍經使用者重新核准）；`pv9-hitbox-version` (a) 升 pv9、⑤ 的附錄 B 改名 pv10；`v8-product-hitbox-view-invariant` (a) 改寫 Design Invariants 第 8 列、守衛分兩段核准；`v8-product-hitbox-rewind-r` (a) 由 lag-l2 的分位數決定（上限 15 Tick）；`v8-product-hitbox-rewind-cross-life` (a) 判 Miss；`v8-product-hitbox-view-lag-base` J；`v8-product-hit-rules-multiplier` HitPart 為鍵、CombatRules 常數；`v8-product-hit-rules-damage-count` (a)；`v8-product-hit-rules-hud` ceil；`v8-product-hitbox-format-owner` (a)；`v8-product-hitbox-determinism-premise` (a)；`v8-product-hitbox-shape-bound` (a) | 「照建議核准」 |
 | `v8-product-hitbox-replacement-thresholds` | （2026-10-31，survey 開工前、看結果之前）hitbox 的 Replacement Criteria 門檻：(1) 四肢最大偏差——走、跑、跳、瞄準、射擊、換彈、受擊各 clip 的任一取樣時刻，四肢各段端點（身體座標）離固定姿勢同一端點的距離，大於該段半徑的 2 倍；(2) 輪廓覆蓋率——站姿正面投影上，11 段聯集的面積除以現在單顆膠囊（半徑 0.25、高 1.8）投影的面積，低於 70%。任一成立就停下，交使用者在 A′ 與 A 之間選。這是重選做法的開關，不是 PR 的受入判定 | 「照提案」 |
+| `v8-product-hitbox-revisit-premise` | （2026-10-31）survey 觸發門檻 (1) 之後，先不選 A′ 或 A，重新檢視前提：主會話提出 (c)「只用權威狀態決定的形狀表」（瞄準、動作時刻、跳躍階段查表；步伐造成的偏差 (c1) 接受或 (c2) 移動時用包絡形狀），等使用者選 | 「重新檢視前提」 |
 
 ## 規劃紀錄（記錄器）
 
