@@ -1,6 +1,6 @@
 # 音效（GYO::Audio）：交接
 
-更新：2026-10-31。**2026-10-31：`v8-engine-audio-control-plan` 完成（9 項照建議核准；Invariants 與 RC 寫進 audio.md，標 planned）；下一批 `v8-engine-audio-control-baseline` 等使用者指定（[CONTROL](CONTROL.md)）。** 以下是之前的狀態：**`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值定為 60 ms（使用者決定）；`v8-engine-audio-record` 完成（2026-10-30，錨點版 L2：299／299 起音落在重建的 frame）。`v8-engine-audio` 四批全部完成；下一步是消費端的 `v8-product-sfx`（同一條 PR 線）。**
+更新：2026-10-31。**2026-10-31：`v8-engine-audio-control-plan` 完成（9 項照建議核准；Invariants 與 RC 寫進 audio.md，標 planned）；`v8-engine-audio-control-baseline` 完成；下一批 `v8-engine-audio-control-stop` 等使用者指定（[CONTROL](CONTROL.md)）。** 以下是之前的狀態：**`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值定為 60 ms（使用者決定）；`v8-engine-audio-record` 完成（2026-10-30，錨點版 L2：299／299 起音落在重建的 frame）。`v8-engine-audio` 四批全部完成；下一步是消費端的 `v8-product-sfx`（同一條 PR 線）。**
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 Engine 計畫夾的慣例，不點名消費端。
 
 ## 現況
@@ -30,6 +30,8 @@
 - 2026-10-31：`v8-engine-audio-windows-blocks`（只量測）：Windows 11、i7-8750H、Realtek 內建喇叭（推定為預設裝置）、WASAPI。SDL 預設區塊就是 480，回呼最長間隔最大 11.0 ms → 需要約 44.4 ms，60 ms 足夠；真實裝置兩輪 299／299 準時。disk 驅動有 116～208 ms 的停頓，第一輪 anchored match 297／299（原因未切分；使用者選「A：照現狀記錄」，見決策紀錄 `v8-engine-audio-windows-disk`）。dev_log：[2026_10_31_engine_audio_windows_blocks](../../../dev_logs/2026_10_31_engine_audio_windows_blocks.zh-Hant.md)。
 - 2026-10-31：工具線轉來資產工具 `audio_editor` 預覽的需求：停止已送出的聲音、輸出執行中換片段、讀播放位置。這碰到 audio.md 的 Replacement Criteria 1、2 與 Invariant 7。使用者在「修補現有 Mixer」與「重建控制層」之間選「重建控制層」（保留樣本域與時間換算），並核准以 ultracode 規劃。workflow `v8-engine-audio-control-plan`（run `wf_38a2c8c8-6db`）：3 個提案、1 個審查者、1 個對抗式檢查（blocker 1、major 7、minor 12，全部納入）。計畫：[CONTROL](CONTROL.md)；dev_log：[2026_10_31_engine_audio_control_plan](../../../dev_logs/2026_10_31_engine_audio_control_plan.zh-Hant.md)。分支 `claude/v8-engine-audio-control`（未推送）。核准前不改 audio.md 與程式。
 - 2026-10-31：使用者「Approve as recommended」，9 項全部照建議（決策紀錄）。依 `-plan` 批的範圍：audio.md 寫入核准的 Invariants 3、4、6、7、8、10、11 與 RC 1～8，尚未實作的部分標「planned」並寫明由哪一批成立；PLAN.md 的範圍加註。偏離計畫一處：`docs/architecture.md` 的 Audio 列與段落描述現有程式，移到 `-live` 批再改（CONTROL 的分批表已更新）。
+- 2026-10-31：使用者說「Start baseline」，開始 `v8-engine-audio-control-baseline`（high，估 1～1.5 h）。做法：①特性測試放進 `gyo_audio_tests`（新檔 `CharacterizationTests.cpp`），只用公開 `Mixer`：多個片段、兩個提交端、跨錨點、遲到、佇列滿、聲部滿、飽和、主音量變更，輸出與統計取 FNV-1a 雜湊，在現有程式上錄下（特性測試，不是 Red）。②「不配置」守衛另開執行檔 `gyo_audio_alloc_tests`（替換全域 `operator new`／`delete` 會影響整個執行檔），以 thread_local 旗標只計 `Render` 期間；並以一案示範守衛數得到配置（檢出力）。
+- 2026-10-31：`v8-engine-audio-control-baseline` 完成：特性測試的雜湊 `12184034990701221815`（macOS x86_64 錄製，四平台待 CI）、`gyo_audio_alloc_tests`；core 38／38、突變 2／2（`au-ctl-alloc-in-render` 的第一版因最佳化省略配置而存活，改寫突變後被殺）。之後雜湊不同就停下回報，不重錄。dev_log：[2026_10_31_engine_audio_control_baseline](../../../dev_logs/2026_10_31_engine_audio_control_baseline.zh-Hant.md)。
 - 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -180,3 +182,4 @@
 | `v8-engine-audio-sdl` | 3～5 h | 約 2 h | 含完整 test preset 的建置與 CTest |
 | `v8-engine-audio-record` | 2～4 h | 約 2.3 h | 第一輪 1.3 h（停在 `v8-engine-audio-l2-premise`）＋錨點 1 h |
 | `v8-engine-audio-control-plan` | 2～3 h | 約 2 h | workflow 約 22 分鐘（5 個 agent）＋整理與寫文件 |
+| `v8-engine-audio-control-baseline` | 1～1.5 h | 約 0.7 h | 含 core 建置、CTest 約 1 分鐘、突變 2 次 |

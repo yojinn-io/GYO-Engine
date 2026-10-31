@@ -371,6 +371,26 @@
       ],
       "timeout": 180,
       "expect": "CHECK\\( anchors\\[first\\].firstFrame > anchors\\[first - 1\\].firstFrame \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-golden-gain-rounding",
+      "what": "The mix truncates instead of rounding half up",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "(accumulator_[i] * master + kHalf) >> (2 * kGainShift);",
+      "replace": "(accumulator_[i] * master) >> (2 * kGainShift);",
+      "target": "gyo_audio_tests",
+      "cases": "*recorded one-shot sequence*",
+      "expect": "CHECK\\( hash.value == kRecordedHash \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-alloc-in-render",
+      "what": "Render allocates and frees a block on the audio thread (an explicit ::operator new call, which the compiler may not elide; a dead std::vector is elided under optimization and allocates nothing)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    state.voices.Render(interleavedOut);\n}",
+      "replace": "    void* scratch = ::operator new(16);\n    ::operator delete(scratch);\n    state.voices.Render(interleavedOut);\n}",
+      "target": "gyo_audio_alloc_tests",
+      "cases": "*Render allocates and frees nothing*",
+      "expect": "CHECK\\( counted.allocations == 0 \\) is NOT correct"
     }
   ]
 }
