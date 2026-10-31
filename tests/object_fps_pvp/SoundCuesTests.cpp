@@ -59,7 +59,7 @@ TEST_CASE("PvP sound settings parse the product content and reject bad values") 
     CHECK_FALSE(ParseSoundSettings("{\"version\":2}", error));
     CHECK_FALSE(error.empty());
     const auto product = nlohmann::json::parse(ProductText());
-    const auto rejects = [&error, &product](const char* what, const auto& change) {
+    const auto rejects = [&error, &product](const std::string& what, const auto& change) {
         auto changed = product;
         change(changed);
         CHECK_FALSE_MESSAGE(ParseSoundSettings(changed.dump(), error), what);

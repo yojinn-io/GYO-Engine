@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-assets-anim-events (gyo.anim_events in GYO::Model, docs/architecture/animation-events.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/anim_events_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its test run fails with the expected message. The product mutants of the same batch are in tests/object_fps_pvp/mutations.json (batch v8-tool-assets-anim-events).",
+  "description": "Declared mutants of v8-tool-assets-anim-events (gyo.anim_events in GYO::Model, docs/architecture/animation-events.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/anim_events_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its test run fails with the expected message. The product mutants of the same batch are in tests/object_fps_pvp/mutations.json (batch v8-tool-assets-anim-events). Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
   "mutants": [
     {
       "id": "ae-repeated-key-kept",
@@ -9,7 +9,7 @@
       "find": "            if (!open.back().insert(key).second) Fail(\"repeated key '\" + key + \"'\", \"\");",
       "replace": "            open.back().insert(key);",
       "target": "gyo_model_tests",
-      "cases": "*rejects missing, unknown and repeated fields*",
+      "cases": "*unknown and repeated fields*",
       "expect": "is NOT correct"
     },
     {
@@ -17,9 +17,9 @@
       "what": "An unknown field is ignored",
       "file": "engine/model/src/AnimationEvents.cpp",
       "find": "        if (!keys.contains(item.key())) Fail(\"unknown field '\" + item.key() + \"'\", path);",
-      "replace": "",
+      "replace": "        static_cast<void>(item);",
       "target": "gyo_model_tests",
-      "cases": "*rejects missing, unknown and repeated fields*",
+      "cases": "*unknown and repeated fields*",
       "expect": "is NOT correct"
     },
     {
@@ -39,7 +39,7 @@
       "find": "event.seconds < 0)",
       "replace": "event.seconds < -1)",
       "target": "gyo_model_tests",
-      "cases": "*seconds are finite, not negative*",
+      "cases": "*not negative and non-decreasing in a clip*",
       "expect": "is NOT correct"
     },
     {
@@ -49,7 +49,7 @@
       "find": "            if (event.seconds < previous.seconds) Fail",
       "replace": "            if (false) Fail",
       "target": "gyo_model_tests",
-      "cases": "*seconds are finite, not negative*",
+      "cases": "*not negative and non-decreasing in a clip*",
       "expect": "is NOT correct"
     },
     {
@@ -130,7 +130,7 @@
       "replace": "target_link_libraries(gyo_model PUBLIC GYO::Engine GYO::Math GYO::Time PRIVATE nlohmann_json::nlohmann_json)",
       "target": "gyo_model_tests",
       "expect_build_failure": true,
-      "expect": "gyo_model links .*expected exactly"
+      "expect": "(?s)gyo_model links.*expected exactly"
     }
   ]
 }
