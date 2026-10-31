@@ -48,6 +48,7 @@ FetchContent_Declare(
     SDL3_image
     GIT_REPOSITORY https://github.com/libsdl-org/SDL_image.git
     GIT_TAG        release-3.2.6
+    GIT_SHALLOW    TRUE
     GIT_SUBMODULES ""
     GIT_SUBMODULES_RECURSE FALSE
 )
