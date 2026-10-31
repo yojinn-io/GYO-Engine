@@ -92,8 +92,30 @@ StartOutcome VoiceMixer::ScheduleChecked(const ScheduledPlay& play) noexcept {
         counters_.onTime.fetch_add(1, std::memory_order_relaxed);
     }
     const ClipView& clip = views_[play.clip.value - 1];
-    *free = Voice{true, start, 0, ToQ16(play.gainLeft), ToQ16(play.gainRight), clip};
+    *free = Voice{true, start, std::numeric_limits<std::int64_t>::max(), play.cookie, 0,
+                  ToQ16(play.gainLeft), ToQ16(play.gainRight), clip};
     return outcome;
+}
+
+StopResult VoiceMixer::Stop(const std::uint64_t cookie, const std::uint64_t mask, const std::int64_t stopFrame) noexcept {
+    StopResult result;
+    for (Voice& voice : voices_) {
+        if (!voice.active || (voice.cookie & mask) != (cookie & mask)) continue;
+        ++result.stopped;
+        const bool started = voice.startFrame < nextFrame_;
+        if (!started && stopFrame <= voice.startFrame) {
+            voice.active = false; // stopped before it started: never heard
+            continue;
+        }
+        if (started && stopFrame <= nextFrame_) {
+            // Nothing more is mixed: it stops at this block's first frame.
+            if (stopFrame < nextFrame_) result.late = true;
+            voice.active = false;
+            continue;
+        }
+        voice.stopFrame = std::min(voice.stopFrame, stopFrame); // the earliest stop wins
+    }
+    return result;
 }
 
 void VoiceMixer::Render(const Base::Span<std::int16_t> interleavedOut) noexcept {
@@ -119,7 +141,8 @@ void VoiceMixer::RenderChunk(std::int16_t* const out, const std::uint32_t frames
         // First frame of this chunk the voice contributes to.
         std::uint32_t at = voice.startFrame > chunkStart ? static_cast<std::uint32_t>(voice.startFrame - chunkStart) : 0;
         const std::int16_t* samples = voice.clip.samples.data();
-        while (at < frames && voice.position < voice.clip.frames) {
+        const std::int64_t untilFrame = std::min(voice.stopFrame, chunkEnd);
+        while (chunkStart + at < untilFrame && voice.position < voice.clip.frames) {
             std::int64_t left = 0;
             std::int64_t right = 0;
             if (voice.clip.channels == 1) {
@@ -133,7 +156,7 @@ void VoiceMixer::RenderChunk(std::int16_t* const out, const std::uint32_t frames
             ++at;
             ++voice.position;
         }
-        if (voice.position >= voice.clip.frames) voice.active = false;
+        if (voice.position >= voice.clip.frames || chunkStart + at >= voice.stopFrame) voice.active = false;
     }
 
     const std::int64_t master = masterGainQ16_.load(std::memory_order_relaxed);

@@ -16,8 +16,8 @@
       "id": "au-core-chunk-edge-lost",
       "what": "The last frame of every internal pass is skipped, so the output depends on the block split",
       "file": "engine/audio/src/VoiceMixer.cpp",
-      "find": "while (at < frames && voice.position < voice.clip.frames)",
-      "replace": "while (at + 1 < frames && voice.position < voice.clip.frames)",
+      "find": "while (chunkStart + at < untilFrame && voice.position < voice.clip.frames)",
+      "replace": "while (chunkStart + at + 1 < untilFrame && voice.position < voice.clip.frames)",
       "target": "gyo_audio_tests",
       "cases": "*does not depend on how blocks split it*",
       "expect": "CHECK\\( RenderInBlocks\\(split, 2200, blocks\\) == reference \\) is NOT correct"
@@ -26,8 +26,8 @@
       "id": "au-core-voice-never-freed",
       "what": "A finished voice stays busy",
       "file": "engine/audio/src/VoiceMixer.cpp",
-      "find": "        if (voice.position >= voice.clip.frames) voice.active = false;\n",
-      "replace": "",
+      "find": "        if (voice.position >= voice.clip.frames || chunkStart + at >= voice.stopFrame) voice.active = false;\n",
+      "replace": "        if (chunkStart + at >= voice.stopFrame) voice.active = false;\n",
       "target": "gyo_audio_tests",
       "cases": "*drops a play when every voice is busy*",
       "expect": "is NOT correct"
@@ -166,8 +166,8 @@
       "id": "au-sched-full-off-by-one",
       "what": "A full ring accepts one more request, overwriting the oldest",
       "file": "engine/audio/src/Mixer.cpp",
-      "find": "    if (tail - head >= capacity) {",
-      "replace": "    if (tail - head > capacity) {",
+      "find": "    if (tail - head >= capacity) return false;",
+      "replace": "    if (tail - head > capacity) return false;",
       "target": "gyo_audio_tests",
       "cases": "*queue is full*",
       "expect": "CHECK_FALSE\\( rig.submitter.Play"
@@ -388,6 +388,206 @@
       "file": "engine/audio/src/Mixer.cpp",
       "find": "    state.voices.Render(interleavedOut);\n}",
       "replace": "    void* scratch = ::operator new(16);\n    ::operator delete(scratch);\n    state.voices.Render(interleavedOut);\n}",
+      "target": "gyo_audio_alloc_tests",
+      "cases": "*Render allocates and frees nothing*",
+      "expect": "CHECK\\( counted.allocations == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-off-by-one",
+      "what": "A stop ends one frame late",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(request.at), anchorNs)) + state.delayFrames;",
+      "replace": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(request.at), anchorNs)) + state.delayFrames + 1;",
+      "target": "gyo_audio_tests",
+      "cases": "*stops a sound at the frame its time maps to*",
+      "expect": "CHECK\\( frames.back\\(\\) == 479 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-unmapped",
+      "what": "A stop ignores its timestamp and applies at the block that takes it",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(request.at), anchorNs)) + state.delayFrames;",
+      "replace": "blockStart + state.delayFrames;",
+      "target": "gyo_audio_tests",
+      "cases": "*maps a stop like a play*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-skips-delay",
+      "what": "A stop's frame leaves out the schedule delay",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(request.at), anchorNs)) + state.delayFrames;",
+      "replace": "blockStart + NsToFrames(ClampedOffset(Nanoseconds(request.at), anchorNs));",
+      "target": "gyo_audio_tests",
+      "cases": "*maps a stop like a play*",
+      "expect": "CHECK\\( frames.back\\(\\) == 480 \\+ 96 \\+ 240 - 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-ignores-tag",
+      "what": "A stop stops every voice, not only its sound's",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "(voice.cookie & mask) != (cookie & mask)) continue;",
+      "replace": "false) continue;",
+      "target": "gyo_audio_tests",
+      "cases": "*stale handle*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-ctl-stopall-unscoped",
+      "what": "StopAll stops other submitters' sounds too",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": ": ~Detail::kSequenceMask;",
+      "replace": ": 0;",
+      "target": "gyo_audio_tests",
+      "cases": "*StopAll stops only its own*",
+      "expect": "CHECK\\( out\\[\\(240 - 120\\) \\* 2\\] == 3 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-before-start-ignored",
+      "what": "A sound stopped before its start keeps its voice until its start",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "if (!started && stopFrame <= voice.startFrame) {",
+      "replace": "if (false) {",
+      "target": "gyo_audio_tests",
+      "cases": "*stopped before its start*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-branch-swapped",
+      "what": "A started sound stopped at an earlier time is treated as never started",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "if (!started && stopFrame <= voice.startFrame) {",
+      "replace": "if (stopFrame <= voice.startFrame) {",
+      "target": "gyo_audio_tests",
+      "cases": "*late stop of a started sound*",
+      "expect": "CHECK\\( stats.stopsLate == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-late-stop-uncounted",
+      "what": "A late stop is not counted late",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "            if (stopFrame < nextFrame_) result.late = true;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*late stop of a started sound*",
+      "expect": "CHECK\\( stats.stopsLate == 1 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-voice-not-freed",
+      "what": "A voice that reached its stop frame stays busy",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "        if (voice.position >= voice.clip.frames || chunkStart + at >= voice.stopFrame) voice.active = false;\n",
+      "replace": "        if (voice.position >= voice.clip.frames) voice.active = false;\n",
+      "target": "gyo_audio_tests",
+      "cases": "*stops a sound at the frame its time maps to*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-unmatched-uncounted",
+      "what": "An unmatched stop is not counted",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "                state.stopsUnmatched.fetch_add(1, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*unmatched*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-ctl-handle-reused",
+      "what": "The sequence does not advance, so handles repeat",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    ++slot_->lastSequence;\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*unique handle per queued play*",
+      "expect": "CHECK\\( a != b \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-handle-prefix-overflow",
+      "what": "The handle prefix has 6 bits, so the 64th submitter's prefix overflows",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "constexpr int kSequenceBits = 57;",
+      "replace": "constexpr int kSequenceBits = 58;",
+      "target": "gyo_audio_tests",
+      "cases": "*last of 64 submitters*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-started-boundary",
+      "what": "A voice whose start is the block's first frame counts as started",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "const bool started = voice.startFrame < nextFrame_;",
+      "replace": "const bool started = voice.startFrame <= nextFrame_;",
+      "target": "gyo_audio_tests",
+      "cases": "*late play clamped to the block start*",
+      "expect": "CHECK\\( stats.stopsLate == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-late-stop-boundary",
+      "what": "A stop exactly at the block's first frame counts as late",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "            if (stopFrame < nextFrame_) result.late = true;\n",
+      "replace": "            if (stopFrame <= nextFrame_) result.late = true;\n",
+      "target": "gyo_audio_tests",
+      "cases": "*frees a started sound stopped at the block*",
+      "expect": "CHECK\\( stats.stopsLate == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-latest-wins",
+      "what": "A later stop replaces an earlier one",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "voice.stopFrame = std::min(voice.stopFrame, stopFrame);",
+      "replace": "voice.stopFrame = stopFrame;",
+      "target": "gyo_audio_tests",
+      "cases": "*earliest of several stops*",
+      "expect": "CHECK\\( frames.back\\(\\) == 479 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-free-at-block-end",
+      "what": "A voice whose stop frame ends the block stays busy into the next block",
+      "file": "engine/audio/src/VoiceMixer.cpp",
+      "find": "chunkStart + at >= voice.stopFrame) voice.active = false;",
+      "replace": "chunkStart + at > voice.stopFrame) voice.active = false;",
+      "target": "gyo_audio_tests",
+      "cases": "*stop frame ends the block*",
+      "expect": "CHECK\\( rig.mixer.Stats\\(\\).droppedNoVoice == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stop-owner-unchecked",
+      "what": "Stop does not claim or check the owner thread",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    ClaimOwner();\n    if (!sound.Valid()) return true;",
+      "replace": "    if (!sound.Valid()) return true;",
+      "target": "gyo_audio_tests",
+      "cases": "*stops belong to the thread that owns it*",
+      "expect": "expected GYO_ASSERT to fail: submitter->Stop"
+    },
+    {
+      "id": "au-ctl-stopall-owner-unchecked",
+      "what": "StopAll does not claim or check the owner thread",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    ClaimOwner();\n    return SendStop(Command{CommandKind::StopAll",
+      "replace": "    return SendStop(Command{CommandKind::StopAll",
+      "target": "gyo_audio_tests",
+      "cases": "*stops belong to the thread that owns it*",
+      "expect": "expected GYO_ASSERT to fail: submitter->StopAll"
+    },
+    {
+      "id": "au-ctl-stop-sequence-zero",
+      "what": "A handle with sequence 0 passes as issued",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    GYO_ASSERT(sequence != 0 && sequence <= slot_->lastSequence);",
+      "replace": "    GYO_ASSERT(sequence <= slot_->lastSequence);",
+      "target": "gyo_audio_tests",
+      "cases": "*foreign or never-issued handle*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "au-ctl-alloc-in-stop",
+      "what": "Render allocates while it applies a stop",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "            const Detail::StopResult result = state.voices.Stop(command.handle, mask, stopFrame);",
+      "replace": "            void* scratch = ::operator new(16);\n            ::operator delete(scratch);\n            const Detail::StopResult result = state.voices.Stop(command.handle, mask, stopFrame);",
       "target": "gyo_audio_alloc_tests",
       "cases": "*Render allocates and frees nothing*",
       "expect": "CHECK\\( counted.allocations == 0 \\) is NOT correct"

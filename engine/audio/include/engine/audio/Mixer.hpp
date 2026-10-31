@@ -13,6 +13,7 @@
 namespace Engine::Audio {
 
 namespace Detail {
+struct Command;
 struct MixerState;
 struct SubmitterSlot;
 } // namespace Detail
@@ -38,6 +39,17 @@ struct PlayRequest final {
     float gainRight = 1.0f;
 };
 
+// One play sent through one submitter, never reused for the mixer's life: the
+// submitter's index plus one in the top 7 bits, a sequence of that submitter
+// (from 1, advanced only when a play is queued) below. Zero means the play was
+// not queued because the queue was full.
+struct SoundHandle final {
+    std::uint64_t value = 0;
+    [[nodiscard]] constexpr bool Valid() const noexcept { return value != 0; }
+    constexpr explicit operator bool() const noexcept { return Valid(); }
+    friend constexpr bool operator==(SoundHandle, SoundHandle) = default;
+};
+
 // Counters for display and acceptance; never for decisions. Each request ends
 // in exactly one of playedOnTime, playedLate, droppedQueueFull, droppedNoVoice,
 // decided when the audio thread takes it (a play counted on time may still be
@@ -51,6 +63,16 @@ struct MixerStats final {
     std::uint64_t playedLate = 0;
     std::uint64_t droppedQueueFull = 0;
     std::uint64_t droppedNoVoice = 0;
+    // Stop requests (Stop and StopAll, one each) end in exactly one of matched
+    // (it stopped at least one voice), unmatched (no voice of that sound was
+    // still sounding or scheduled) and droppedQueueFull; stopsSubmitted is their
+    // sum once none is in flight. stopsLate counts the matched requests that
+    // stopped a started voice at a frame already rendered.
+    std::uint64_t stopsSubmitted = 0;
+    std::uint64_t stopsMatched = 0;
+    std::uint64_t stopsUnmatched = 0;
+    std::uint64_t stopsDroppedQueueFull = 0;
+    std::uint64_t stopsLate = 0;
     Time::Duration maxLateness{};     // the latest late start
     std::uint64_t renderedFrames = 0;
     std::uint64_t clippedSamples = 0;
@@ -59,8 +81,8 @@ struct MixerStats final {
 class Mixer;
 
 // The producer end of one bounded single-producer, single-consumer queue. The
-// first thread that plays through it owns it; playing from another thread
-// afterwards is a Programmer Error. It shares the mixer's state, so it may
+// first thread that calls Play, Stop or StopAll owns it; calling them from
+// another thread afterwards is a Programmer Error. It shares the mixer's state, so it may
 // outlive the Mixer (its plays are then never rendered).
 class Submitter final {
 public:
@@ -70,14 +92,31 @@ public:
     Submitter& operator=(const Submitter&) = delete;
     ~Submitter();
 
-    // False when the queue is full; the request is then dropped and counted. A
-    // clip outside the mixer's bank, a gain outside [0, kMaxGain], another
-    // thread than the owner, and a moved-from Submitter are Programmer Errors.
-    bool Play(const PlayRequest& request);
+    // An invalid handle when the queue is full; the request is then dropped and
+    // counted. A clip outside the mixer's bank, a gain outside [0, kMaxGain],
+    // another thread than the owner, and a moved-from Submitter are Programmer
+    // Errors (as for every member below).
+    SoundHandle Play(const PlayRequest& request);
+    // Ends the sound at the frame `at` maps to, by the same rule as a play's
+    // start (delay included), from the anchor of the block that takes the stop.
+    // A sound stopped before it started, at or before its start, stays silent; a
+    // started sound stopped at a frame already rendered stops at the first frame
+    // of that block, counted late. With several stops, the earliest frame wins.
+    // An invalid handle does nothing else and returns true (the call still
+    // claims the submitter for its thread). Another submitter's handle, or one this submitter never returned, is
+    // a Programmer Error. False when the queue is full (counted; the sound keeps
+    // playing).
+    [[nodiscard]] bool Stop(SoundHandle sound, Time::TimePoint at);
+    // The same for every sound this submitter sent before the call; one stop
+    // request in the counters.
+    [[nodiscard]] bool StopAll(Time::TimePoint at);
 
 private:
     friend class Mixer;
     Submitter(std::shared_ptr<Detail::MixerState> state, Detail::SubmitterSlot* slot) noexcept;
+    void ClaimOwner();
+    bool Enqueue(const Detail::Command& command);
+    bool SendStop(const Detail::Command& command);
 
     std::shared_ptr<Detail::MixerState> state_; // keeps the mixer's state alive
     Detail::SubmitterSlot* slot_ = nullptr;     // this submitter's queue inside it
@@ -107,7 +146,8 @@ public:
     [[nodiscard]] MixerStats Stats() const noexcept;
 
     // The audio thread, once per block. anchor is the Engine time read once at
-    // the start of this block. Every queued request is taken and starts at
+    // the start of this block. Every queued request is taken in its queue's
+    // order (a stop after the plays it names) and a play starts at
     //   renderedFrames + floor((at - anchor) * 48000 + 1/2) + delayFrames,
     // with at - anchor clamped to one hour either way and delayFrames the
     // scheduleDelay rounded the same way; or, when that is before this block,

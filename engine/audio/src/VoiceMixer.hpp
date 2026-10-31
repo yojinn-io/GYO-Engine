@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "engine/audio/AudioError.hpp"
@@ -18,9 +19,17 @@ struct ScheduledPlay final {
     std::int64_t startFrame = 0;
     float gainLeft = 1.0f;
     float gainRight = 1.0f;
+    std::uint64_t cookie = 0; // opaque to the voice mixer; Stop matches it
 };
 
 enum class StartOutcome : std::uint8_t { OnTime, Late, NoVoice };
+
+// What one Stop call did: how many voices it stopped, and whether any of them
+// had started and was stopped at a frame already rendered.
+struct StopResult final {
+    std::uint32_t stopped = 0;
+    bool late = false;
+};
 
 struct VoiceMixerStats final {
     std::uint64_t accepted = 0;      // Schedule calls; onTime + late + noVoice
@@ -35,8 +44,8 @@ struct VoiceMixerStats final {
 // The sample-domain core of the mixer: a fixed set of voices, each playing one
 // clip from a start frame, mixed in integer arithmetic so the output depends
 // only on the clips, the scheduled plays and the frames rendered, never on how
-// the output is split into blocks. Schedule and Render run on one thread (the
-// audio thread); Stats and SetMasterGain may run on any thread.
+// the output is split into blocks. Schedule, Stop and Render run on one thread
+// (the audio thread); Stats and SetMasterGain may run on any thread.
 //
 // The renderedFrames counter is the authority for where playback is; nothing
 // outside the mixer keeps a copy of it to decide anything.
@@ -59,6 +68,14 @@ public:
     // checked the clip and the gains (Mixer's Submitter does, on its producer).
     StartOutcome ScheduleChecked(const ScheduledPlay& play) noexcept;
 
+    // The audio thread. Stops every sounding or scheduled voice whose cookie,
+    // masked, equals cookie: a voice that has not started is freed at once when
+    // stopFrame is at or before its start, else it ends at stopFrame; a voice
+    // that has started ends at stopFrame, or is freed at once when stopFrame is
+    // at or before the next frame to render (late when before it). The earliest
+    // stop frame of a voice wins.
+    StopResult Stop(std::uint64_t cookie, std::uint64_t mask, std::int64_t stopFrame) noexcept;
+
     // Fills the interleaved stereo block and advances renderedFrames by its frame
     // count. An odd sample count is the caller's error; it cannot be asserted
     // here (noexcept), so the stray last sample is written as silence.
@@ -77,6 +94,8 @@ private:
     struct Voice final {
         bool active = false;
         std::int64_t startFrame = 0;
+        std::int64_t stopFrame = std::numeric_limits<std::int64_t>::max(); // the first frame not mixed
+        std::uint64_t cookie = 0;
         std::uint32_t position = 0; // frames of the clip already mixed
         std::int64_t gainLeftQ16 = 0;
         std::int64_t gainRightQ16 = 0;

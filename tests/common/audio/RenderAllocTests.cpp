@@ -72,7 +72,7 @@ TEST_CASE("Audio allocation guard counts what the thread allocates and frees") {
 
 TEST_CASE("Audio Mixer Render allocates and frees nothing") {
     ClipBank bank;
-    const std::vector<std::int16_t> samples(600, 20000);
+    const std::vector<std::int16_t> samples(48000, 20000); // 24000 stereo frames, longer than the test
     auto clip = bank.Add(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 2, kSampleRate);
     REQUIRE(clip.has_value());
     MixerConfig config;
@@ -89,19 +89,35 @@ TEST_CASE("Audio Mixer Render allocates and frees nothing") {
         mixer->Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
     };
     // Plays on time, late, beyond the free voices, with saturation; then the
-    // voices end. Every Render path runs while counting is on.
+    // voices are stopped or end. Every Render path runs while counting is on.
+    SoundHandle last;
     for (int i = 0; i < 6; ++i) {
         const auto offset = std::chrono::duration_cast<Duration>(std::chrono::milliseconds(i % 2 == 0 ? -100 : 5));
-        REQUIRE(submitter->Play({*clip, anchor + offset, 1.5f, 1.5f}));
+        last = submitter->Play({*clip, anchor + offset, 1.5f, 1.5f});
+        REQUIRE(last);
     }
+    // After two blocks, stops too: a stop and a late stop-all. Queueing them
+    // allocates nothing either, so they are sent while counting.
+    bool stopsQueued = false;
     const Counted counted = Count([&] {
-        for (int block = 0; block < 8; ++block) render();
+        for (int block = 0; block < 8; ++block) {
+            render();
+            if (block == 1) {
+                stopsQueued = submitter->Stop(last, anchor + std::chrono::duration_cast<Duration>(std::chrono::milliseconds(30)));
+                stopsQueued = submitter->StopAll(anchor - std::chrono::duration_cast<Duration>(std::chrono::milliseconds(100))) &&
+                              stopsQueued;
+            }
+        }
     });
+    CHECK(stopsQueued);
     const MixerStats stats = mixer->Stats();
     CHECK(stats.playedLate > 0);
     CHECK(stats.playedOnTime > 0);
     CHECK(stats.droppedNoVoice > 0);
     CHECK(stats.clippedSamples > 0);
+    CHECK(stats.stopsMatched > 0);
+    CHECK(stats.stopsUnmatched > 0); // the last play had no voice
+    CHECK(stats.stopsLate > 0);
     CHECK(counted.allocations == 0);
     CHECK(counted.frees == 0);
 }
