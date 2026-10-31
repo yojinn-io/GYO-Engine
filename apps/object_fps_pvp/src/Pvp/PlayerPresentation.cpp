@@ -263,9 +263,7 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             // -anchor, then the renderer applies ComposeEulerXYZ(transform).
             const auto mount = Engine::Math::TransformPoint(slot.pose.body.globalTransforms[definition.weaponNode],
                 definition.weaponMount.translation);
-            observation.weaponWorldPosition = Engine::Math::TransformPoint(
-                Engine::Math::ComposeEulerXYZ(transform.translation, transform.rotationRadians, transform.scale),
-                mount - definition.anchor);
+            observation.weaponWorldPosition = PlayerBodyPointToWorld(definition, player.position, player.yaw, mount);
             impl.observations.push_back(std::move(observation));
         }
         return true;

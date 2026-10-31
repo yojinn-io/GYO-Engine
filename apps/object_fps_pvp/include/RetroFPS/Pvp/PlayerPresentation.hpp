@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
+#include "RetroFPS/Pvp/Combat.hpp"
 #include "RetroFPS/Pvp/PlayerAnimation.hpp"
 #include "engine/render/RenderTypes.hpp"
 
@@ -128,6 +129,20 @@ struct PlayerLocomotionState final {
 // gait cycle covers at that weight so the blended feet move at that speed.
 [[nodiscard]] double PlayerJogWeight(const PlayerPresentationDefinition& definition, double planarSpeed);
 [[nodiscard]] double PlayerCycleDistance(const PlayerPresentationDefinition& definition, double jogWeight);
+
+// The authority half of a presentation frame (player-presentation Design
+// Invariants 3): one player's state with its own interval's combat state and
+// Match animation, at a presentation tick. The Client adds deltaSeconds,
+// continuous and holding; the Match's judged pose takes it as is
+// (v8-product-hitbox-frame-sharing (a)).
+[[nodiscard]] PlayerPresentationFrame PlayerFrameFromAuthority(const PlayerState& player,
+    const std::optional<CombatState>& combat, const std::optional<PlayerAnimationSample>& animation,
+    double presentationTick);
+// Where the renderer draws a point of the composed body (model space): the
+// instance offsets it by -anchor, then the renderer applies
+// ComposeEulerXYZ(position, {0, yaw, 0}, scale) (PlayerPresentation::Submit).
+[[nodiscard]] Engine::Math::Vec3 PlayerBodyPointToWorld(const PlayerPresentationDefinition& definition,
+    const Engine::Math::Vec3& position, float yaw, const Engine::Math::Vec3& modelPoint);
 
 [[nodiscard]] bool AdvancePlayerLocomotion(PlayerLocomotionState& state,
     const PlayerPresentationFrame& frame, const PlayerPresentationDefinition& definition,

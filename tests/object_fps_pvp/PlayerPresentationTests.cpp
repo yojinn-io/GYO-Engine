@@ -22,12 +22,15 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <filesystem>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <numbers>
 #include <stdexcept>
 #include <string>
@@ -1507,4 +1510,168 @@ TEST_CASE("Diagnostics observe the chosen remote, else the last remote in snapsh
     alone.players.resize(1);
     alone.players[0].playerId = 1;
     CHECK_FALSE(fps::pvp::ObservedRemotePlayer(alone, 1, std::nullopt));
+}
+
+// v8-product-hitbox-shot S1 (J1): the authority half of a presentation frame,
+// shared by the Client and the Match's judged pose. Each input reaches its own
+// frame field and nothing else.
+namespace {
+std::map<std::string, double> FrameFields(const fps::pvp::PlayerPresentationFrame& f) {
+    std::map<std::string, double> fields{
+        {"playerId", static_cast<double>(f.playerId)}, {"movementEpoch", static_cast<double>(f.movementEpoch)},
+        {"position.x", f.position.x}, {"position.y", f.position.y}, {"position.z", f.position.z},
+        {"yaw", f.yaw}, {"pitch", f.pitch}, {"presentationSeconds", f.presentationSeconds},
+        {"deltaSeconds", f.deltaSeconds}, {"continuous", f.continuous}, {"holding", f.holding},
+        {"lifeGeneration", static_cast<double>(f.lifeGeneration)}, {"dead", f.dead}, {"grounded", f.grounded},
+        {"verticalVelocity", f.verticalVelocity}, {"lifeStateSeconds", f.lifeStateSeconds},
+        {"shotActionId", static_cast<double>(f.shotActionId)}, {"shotSeconds", f.shotSeconds},
+        {"reloadActionId", static_cast<double>(f.reloadActionId)}, {"reloadStartSeconds", f.reloadStartSeconds},
+        {"reloadEndSeconds", f.reloadEndSeconds}, {"damageCount", static_cast<double>(f.damageCount)},
+        {"damageSeconds", f.damageSeconds}, {"crouched", f.crouched}, {"animation", f.animation.has_value()}};
+    if (f.animation) {
+        const auto& a = *f.animation;
+        fields.insert({{"animation.playerId", static_cast<double>(a.playerId)},
+                       {"animation.lifeGeneration", static_cast<double>(a.lifeGeneration)},
+                       {"animation.phase", a.gaitPhaseQ16}, {"animation.move", a.moveWeight},
+                       {"animation.jog", a.jogWeight}, {"animation.jumpPhase", static_cast<double>(a.jumpPhase)},
+                       {"animation.jumpPhaseTick", static_cast<double>(a.jumpPhaseTick)}});
+    }
+    return fields;
+}
+
+std::set<std::string> Changed(const std::map<std::string, double>& a, const std::map<std::string, double>& b) {
+    std::set<std::string> changed;
+    for (const auto& [name, value] : a)
+        if (!b.contains(name) || b.at(name) != value) changed.insert(name);
+    for (const auto& [name, value] : b)
+        if (!a.contains(name)) changed.insert(name);
+    return changed;
+}
+
+struct FrameInputs final {
+    fps::pvp::PlayerState player;
+    std::optional<fps::pvp::CombatState> combat;
+    std::optional<fps::pvp::PlayerAnimationSample> animation;
+    double tick{};
+    [[nodiscard]] fps::pvp::PlayerPresentationFrame Frame() const {
+        return fps::pvp::PlayerFrameFromAuthority(player, combat, animation, tick);
+    }
+};
+
+FrameInputs BaseFrameInputs() {
+    using namespace fps::pvp;
+    FrameInputs in;
+    in.player.playerId = 3;
+    in.player.movementEpoch = 2;
+    in.player.position = {1.5F, 0.25F, -4.0F};
+    in.player.yaw = 0.7F;
+    in.player.pitch = -0.2F;
+    in.player.grounded = true;
+    in.player.verticalVelocity = 0.5F;
+    in.player.lifeGeneration = 4;
+    in.player.lifeState = LifeState::Alive;
+    in.player.lifeStateTick = 300;
+    CombatState combat;
+    combat.playerId = 3;
+    combat.lifeGeneration = 4;
+    combat.lastShotActionId = 11;
+    combat.lastShotTick = 590;
+    combat.damageCount = 2;
+    combat.lastDamageTick = 595;
+    combat.reloadActionId = 12;
+    combat.reloadStartTick = 596;
+    combat.reloadEndTick = 680;
+    in.combat = combat;
+    in.animation = PlayerAnimationSample{3, 4, 12345.5, 0.5, 0.25, JumpPhase::Airborne, 580};
+    in.tick = 600.25;
+    return in;
+}
+} // namespace
+
+TEST_CASE("PvP presentation frame takes each authority field into its own frame field") {
+    using namespace fps::pvp;
+    const auto base = BaseFrameInputs();
+    const auto baseFields = FrameFields(base.Frame());
+    // The values as the Client used to map them inline (PvpApplication).
+    const auto frame = base.Frame();
+    CHECK(frame.presentationSeconds == 600.25 / AuthorityTickRate);
+    CHECK(frame.lifeStateSeconds == 300.0 / AuthorityTickRate);
+    CHECK(frame.shotSeconds == 590.0 / AuthorityTickRate);
+    CHECK(frame.damageSeconds == 595.0 / AuthorityTickRate);
+    CHECK(frame.reloadStartSeconds == 596.0 / AuthorityTickRate);
+    CHECK(frame.reloadEndSeconds == 680.0 / AuthorityTickRate);
+    // Client-only fields stay at their defaults.
+    CHECK(frame.deltaSeconds == 0);
+    CHECK(frame.continuous);
+    CHECK_FALSE(frame.holding);
+    const std::set<std::string> animationFields{"animation", "animation.playerId", "animation.lifeGeneration",
+        "animation.phase", "animation.move", "animation.jog", "animation.jumpPhase", "animation.jumpPhaseTick"};
+    using Edit = std::tuple<const char*, std::function<void(FrameInputs&)>, std::set<std::string>>;
+    const Edit edits[] = {
+        {"player id", [](auto& in) { in.player.playerId = 5; }, {"playerId"}},
+        {"epoch", [](auto& in) { in.player.movementEpoch = 3; }, {"movementEpoch"}},
+        {"position", [](auto& in) { in.player.position.y = 0.75F; }, {"position.y"}},
+        {"yaw", [](auto& in) { in.player.yaw = 1.1F; }, {"yaw"}},
+        {"pitch", [](auto& in) { in.player.pitch = 0.4F; }, {"pitch"}},
+        {"life", [](auto& in) { in.player.lifeGeneration = 5; }, {"lifeGeneration"}},
+        {"dead", [](auto& in) { in.player.lifeState = LifeState::Dead; }, {"dead"}},
+        {"grounded", [](auto& in) { in.player.grounded = false; }, {"grounded"}},
+        {"crouched", [](auto& in) { in.player.crouched = true; }, {"crouched"}},
+        {"vertical velocity", [](auto& in) { in.player.verticalVelocity = -2.0F; }, {"verticalVelocity"}},
+        {"life state tick", [](auto& in) { in.player.lifeStateTick = 310; }, {"lifeStateSeconds"}},
+        {"tick", [](auto& in) { in.tick = 601.5; }, {"presentationSeconds"}},
+        {"animation value", [](auto& in) { in.animation->moveWeight = 0.75; }, {"animation.move"}},
+        {"no animation", [&](auto& in) { in.animation.reset(); }, animationFields},
+        {"shot id", [](auto& in) { in.combat->lastShotActionId = 13; }, {"shotActionId"}},
+        {"shot tick", [](auto& in) { in.combat->lastShotTick = 592; }, {"shotSeconds"}},
+        {"no shot", [](auto& in) { in.combat->lastShotActionId = 0; }, {"shotActionId", "shotSeconds"}},
+        {"damage count", [](auto& in) { in.combat->damageCount = 3; }, {"damageCount"}},
+        {"damage tick", [](auto& in) { in.combat->lastDamageTick = 597; }, {"damageSeconds"}},
+        {"no damage", [](auto& in) { in.combat->damageCount = 0; }, {"damageCount", "damageSeconds"}},
+        {"reload id", [](auto& in) { in.combat->reloadActionId = 14; }, {"reloadActionId"}},
+        {"reload start", [](auto& in) { in.combat->reloadStartTick = 597; }, {"reloadStartSeconds"}},
+        {"reload end", [](auto& in) { in.combat->reloadEndTick = 690; }, {"reloadEndSeconds"}},
+        {"empty reload", [](auto& in) { in.combat->reloadEndTick = in.combat->reloadStartTick; },
+         {"reloadActionId", "reloadStartSeconds", "reloadEndSeconds"}},
+        {"no combat", [](auto& in) { in.combat.reset(); },
+         {"shotActionId", "shotSeconds", "damageCount", "damageSeconds", "reloadActionId", "reloadStartSeconds",
+          "reloadEndSeconds"}},
+        // Fields of the combat state no pose reads.
+        {"hp", [](auto& in) { in.combat->hp = 1; }, {}},
+        {"attacker", [](auto& in) { in.combat->lastAttackerId = 9; }, {}},
+    };
+    for (const auto& [name, edit, expected] : edits) {
+        INFO(std::string(name));
+        auto in = base;
+        edit(in);
+        CHECK(Changed(baseFields, FrameFields(in.Frame())) == expected);
+    }
+}
+
+TEST_CASE("PvP body points reach the world as the renderer draws them") {
+    using namespace fps::pvp;
+    const auto& definition = ProductionDefinition();
+    const Engine::Math::Vec3 position{2.0F, 0.5F, -3.0F};
+    // The foot anchor is the player's position at any yaw.
+    for (const float yaw : {0.0F, 1.3F, -2.6F}) {
+        const auto anchor = PlayerBodyPointToWorld(definition, position, yaw, definition.anchor);
+        CHECK(anchor.x == doctest::Approx(position.x).epsilon(1e-6));
+        CHECK(anchor.y == doctest::Approx(position.y).epsilon(1e-6));
+        CHECK(anchor.z == doctest::Approx(position.z).epsilon(1e-6));
+    }
+    // At yaw 0 a model offset is scaled only; the model's +Z is forward.
+    const Engine::Math::Vec3 offset{0.1F, 0.2F, 0.3F};
+    const auto point = PlayerBodyPointToWorld(definition, position, 0, definition.anchor + offset);
+    CHECK(point.x == doctest::Approx(position.x + offset.x * definition.scale));
+    CHECK(point.y == doctest::Approx(position.y + offset.y * definition.scale));
+    CHECK(point.z == doctest::Approx(position.z + offset.z * definition.scale));
+    // The same formula as the renderer's world matrix, bit for bit.
+    const float scale = definition.scale;
+    const auto renderer = Engine::Math::TransformPoint(
+        Engine::Math::ComposeEulerXYZ(position, {0, 1.3F, 0}, {scale, scale, scale}),
+        definition.anchor + offset - definition.anchor);
+    const auto shared = PlayerBodyPointToWorld(definition, position, 1.3F, definition.anchor + offset);
+    CHECK(std::bit_cast<std::uint32_t>(shared.x) == std::bit_cast<std::uint32_t>(renderer.x));
+    CHECK(std::bit_cast<std::uint32_t>(shared.y) == std::bit_cast<std::uint32_t>(renderer.y));
+    CHECK(std::bit_cast<std::uint32_t>(shared.z) == std::bit_cast<std::uint32_t>(renderer.z));
 }

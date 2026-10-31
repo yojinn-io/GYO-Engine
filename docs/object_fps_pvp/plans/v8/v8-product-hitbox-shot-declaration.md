@@ -1,6 +1,6 @@
 # v8-product-hitbox-shot 的事前宣告
 
-更新：2026-11-01。Owner：`object_fps_pvp`。**狀態：等你決定**（下面「等你決定」的 5 項）。契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §2、§3、§7、§8（定稿）。計畫：[hitbox-plan](hitbox-plan.md) 第 4 節 R1、R4、R5，第 8 節。形狀：[hitbox-shapes](../../hitbox-shapes.zh-Hant.md)。估時 10～14 h（和計畫相同；超過 21 h 停下回報）。
+更新：2026-11-01。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hitbox-shot-declaration-approve`，5 項都照建議 (a)）。契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §2、§3、§7、§8（定稿）。計畫：[hitbox-plan](hitbox-plan.md) 第 4 節 R1、R4、R5，第 8 節。形狀：[hitbox-shapes](../../hitbox-shapes.zh-Hant.md)。估時 10～14 h（和計畫相同；超過 21 h 停下回報）。
 
 ## 這批做什麼
 

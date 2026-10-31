@@ -801,43 +801,15 @@ struct PvpApplication::Impl final {
             } else {
                 remoteSteps.erase(player.playerId);
             }
-            PlayerPresentationFrame characterFrame;
-            characterFrame.playerId = player.playerId;
-            characterFrame.movementEpoch = presented.movementEpoch;
-            characterFrame.lifeGeneration = presented.lifeGeneration;
-            characterFrame.dead = presented.lifeState == LifeState::Dead;
-            characterFrame.position = position;
-            characterFrame.yaw = presented.yaw;
-            characterFrame.pitch = presented.pitch;
-            characterFrame.presentationSeconds = sampled ? sampled->presentationTick / AuthorityTickRate :
-                static_cast<double>(state.snapshot->tick) / AuthorityTickRate;
+            // The authority half is shared with the Match's judged pose
+            // (v8-product-hitbox-frame-sharing); the Client adds its own fields.
+            auto characterFrame = PlayerFrameFromAuthority(presented,
+                sampled ? sampled->combat : std::nullopt, sampled ? sampled->animation : std::nullopt,
+                sampled ? sampled->presentationTick : static_cast<double>(state.snapshot->tick));
             characterFrame.deltaSeconds = deltaSeconds;
-            if (sampled) characterFrame.animation = sampled->animation; // pv9 §4.4: the Match's animation
             characterFrame.continuous = sampled && !characterPresentationSkipped &&
                 sampled->phaseReanchors == reanchorsBefore;
             characterFrame.holding = sampled && sampled->holding;
-            characterFrame.grounded = presented.grounded;
-            characterFrame.crouched = presented.crouched; // pv8 section 4: the stance selects the clips
-            characterFrame.verticalVelocity = presented.verticalVelocity;
-            characterFrame.lifeStateSeconds = static_cast<double>(presented.lifeStateTick) / AuthorityTickRate;
-            // Actions come only from the sampled interval's own combat state, so
-            // newer combat is never paired with an older position or life.
-            if (sampled && sampled->combat) {
-                const auto& combat = *sampled->combat;
-                if (combat.lastShotActionId) {
-                    characterFrame.shotActionId = combat.lastShotActionId;
-                    characterFrame.shotSeconds = static_cast<double>(combat.lastShotTick) / AuthorityTickRate;
-                }
-                if (combat.damageCount) {
-                    characterFrame.damageCount = combat.damageCount;
-                    characterFrame.damageSeconds = static_cast<double>(combat.lastDamageTick) / AuthorityTickRate;
-                }
-                if (combat.reloadActionId && combat.reloadEndTick > combat.reloadStartTick) {
-                    characterFrame.reloadActionId = combat.reloadActionId;
-                    characterFrame.reloadStartSeconds = static_cast<double>(combat.reloadStartTick) / AuthorityTickRate;
-                    characterFrame.reloadEndSeconds = static_cast<double>(combat.reloadEndTick) / AuthorityTickRate;
-                }
-            }
             characterFrames.push_back(characterFrame);
             if (sampled) reanchorsNow = sampled->phaseReanchors;
         }

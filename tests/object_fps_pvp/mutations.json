@@ -8270,6 +8270,76 @@
       "replace": "        if(animationDigest && digest && digest!=*animationDigest)",
       "check": "worker",
       "expect": "Welcome accepted a missing animation digest"
+    },
+    {
+      "id": "s1-frame-drops-shot",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the shot time",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "            frame.shotSeconds = static_cast<double>(combat->lastShotTick) / AuthorityTickRate;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "shot tick"
+    },
+    {
+      "id": "s1-frame-drops-reload-end",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the reload end",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "            frame.reloadEndSeconds = static_cast<double>(combat->reloadEndTick) / AuthorityTickRate;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "reload end"
+    },
+    {
+      "id": "s1-frame-drops-damage",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the damage count",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "            frame.damageCount = combat->damageCount;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "damage count"
+    },
+    {
+      "id": "s1-frame-drops-crouch",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the stance",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "    frame.crouched = player.crouched; // pv8 section 4: the stance selects the clips\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "crouched"
+    },
+    {
+      "id": "s1-frame-drops-life",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the life",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "    frame.lifeGeneration = player.lifeGeneration;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "life"
+    },
+    {
+      "id": "s1-frame-empty-reload",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame keeps a reload whose end is not after its start",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        if (combat->reloadActionId && combat->reloadEndTick > combat->reloadStartTick) {",
+      "replace": "        if (combat->reloadActionId) {",
+      "check": "presentation",
+      "expect": "empty reload"
+    },
+    {
+      "id": "s1-world-without-anchor",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "Body points reach the world without the -anchor offset",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        modelPoint - definition.anchor);",
+      "replace": "        modelPoint);",
+      "check": "presentation",
+      "expect": "foot anchor|body points reach the world"
     }
   ]
 }

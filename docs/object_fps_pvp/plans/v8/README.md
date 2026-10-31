@@ -148,6 +148,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hitbox-data-shapes`（D1） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_data_shapes.zh-Hant.md) |
 | `v8-product-hitbox-data-pose`（D2） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_data_pose.zh-Hant.md) |
 | `v8-product-hitbox-data-digest`（D3） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_data_digest.zh-Hant.md) |
+| `v8-product-hitbox-shot-frame`（S1） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_frame.zh-Hant.md) |
 
 ---
 

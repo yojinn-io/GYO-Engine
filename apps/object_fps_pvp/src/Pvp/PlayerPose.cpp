@@ -246,6 +246,51 @@ PlayerJumpPhase PresentedJumpPhase(JumpPhase phase) {
 }
 } // namespace
 
+PlayerPresentationFrame PlayerFrameFromAuthority(const PlayerState& player,
+    const std::optional<CombatState>& combat, const std::optional<PlayerAnimationSample>& animation,
+    const double presentationTick) {
+    PlayerPresentationFrame frame;
+    frame.playerId = player.playerId;
+    frame.movementEpoch = player.movementEpoch;
+    frame.lifeGeneration = player.lifeGeneration;
+    frame.dead = player.lifeState == LifeState::Dead;
+    frame.position = player.position;
+    frame.yaw = player.yaw;
+    frame.pitch = player.pitch;
+    frame.presentationSeconds = presentationTick / AuthorityTickRate;
+    frame.animation = animation; // pv9 §4.4: the Match's animation
+    frame.grounded = player.grounded;
+    frame.crouched = player.crouched; // pv8 section 4: the stance selects the clips
+    frame.verticalVelocity = player.verticalVelocity;
+    frame.lifeStateSeconds = static_cast<double>(player.lifeStateTick) / AuthorityTickRate;
+    // Actions come only from the sampled interval's own combat state, so
+    // newer combat is never paired with an older position or life.
+    if (combat) {
+        if (combat->lastShotActionId) {
+            frame.shotActionId = combat->lastShotActionId;
+            frame.shotSeconds = static_cast<double>(combat->lastShotTick) / AuthorityTickRate;
+        }
+        if (combat->damageCount) {
+            frame.damageCount = combat->damageCount;
+            frame.damageSeconds = static_cast<double>(combat->lastDamageTick) / AuthorityTickRate;
+        }
+        if (combat->reloadActionId && combat->reloadEndTick > combat->reloadStartTick) {
+            frame.reloadActionId = combat->reloadActionId;
+            frame.reloadStartSeconds = static_cast<double>(combat->reloadStartTick) / AuthorityTickRate;
+            frame.reloadEndSeconds = static_cast<double>(combat->reloadEndTick) / AuthorityTickRate;
+        }
+    }
+    return frame;
+}
+
+Vec3 PlayerBodyPointToWorld(const PlayerPresentationDefinition& definition, const Vec3& position, const float yaw,
+                            const Vec3& modelPoint) {
+    const float scale = definition.scale;
+    return Engine::Math::TransformPoint(
+        Engine::Math::ComposeEulerXYZ(position, Vec3{0, yaw, 0}, Vec3{scale, scale, scale}),
+        modelPoint - definition.anchor);
+}
+
 bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
     const PlayerPresentationDefinition& definition, std::string& error) {
     error.clear();
