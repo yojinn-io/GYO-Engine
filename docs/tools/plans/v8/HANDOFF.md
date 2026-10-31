@@ -1,6 +1,6 @@
 # v8 工具線交接
 
-更新：2026-10-31。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。PR #107～#109、#111 已合併（#111：輸入法檢測、組字事件、gyo.ui v2 的 text_field、大廳改用 text_field，Windows 實機通過）。`v8-tool-ui-editor-text-field` 完成並合併（PR #114）。**
+更新：2026-11-01。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。PR #107～#109、#111 已合併（#111：輸入法檢測、組字事件、gyo.ui v2 的 text_field、大廳改用 text_field，Windows 實機通過）。`v8-tool-ui-editor-text-field` 完成並合併（PR #114）。**
 本文件是工具線的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。v8 產品計畫的同步由產品會話做，本線不改 `docs/object_fps_pvp/plans/v8/`。
 
 ## 代號對照
@@ -11,13 +11,14 @@
 |---|---|
 | ui-widgets-line | PR 線：文字輸入框元件、輸入法組字、ui_editor |
 | anim-events-line | PR 線：動畫事件從無到手工（`gyo.anim_events`），再到工具（模型檢視） |
+| framework-rework-line | PR #123 整改的工具側：T1 `v8-tool-ui-editor-path-dialog-adopt`（等 A1）、T2 `v8-tool-user-files-adopt`（等 A2）、T3 `v8-tool-framework-shell-adopt`（等 A3） |
 
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`（你會給方案）。
 - **anim-events-line（另一個會話）**：`v8-tool-assets-anim-events` 完成，[PR #119](https://github.com/yojinn-io/GYO-Engine/pull/119) 已合併進 master（`45019dff`）。契約在 [animation-events.md](../../../architecture/animation-events.md)。下一批 `v8-tool-model-viewer`。
-- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）。audio-tool-line：`v8-tool-audio-editor-convert` 完成（核心程式庫＋CLI，[dev_log](../../../dev_logs/2026_10_31_tool_v8_audio_editor_convert.zh-Hant.md)），已合併（[PR #118](https://github.com/yojinn-io/GYO-Engine/pull/118)，`3d5fe1a5`）；`v8-tool-framework-shell` 完成（分支 `claude/v8-tool-framework-shell`，[dev_log](../../../dev_logs/2026_10_31_tool_v8_framework_shell.zh-Hant.md)），PR 等 CI 與你在 GUI 上確認 ui_editor 的視窗與選擇窗；`-edit` 等音效線的 GYO::Audio 增強。
+- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）。audio-tool-line：`-convert`（#118）、`-framework-shell`（#123）已合併。PR #123 的整改依 2026-11-01 定案分工（`v8-tool-framework-rework-split`）：framework 與 Engine 的部分是架構整改任務卡的 A1～A4；工具側 T1～T3（framework-rework-line）各等對應的 A 批合併，架構卡會在合併後通知。`v8-tool-audio-editor-edit` 排在 T1～T3 之後：事前宣告已核准，在本機分支 `claude/v8-tool-audio-editor-edit`（切自音效線 `1f271a32` 再合入 master `97b0461d`，只有宣告的提交 `79af7fae`，未推送）；改動前的回歸基準在主 checkout 的 `build/evidence/tool-v8-audio-editor-edit/baseline/`。工程檔用 JSON 要不要把 nlohmann 加回守衛，在 T3 一起決定。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
 - **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth`、`v8-engine-input-composition` 完成（Windows 的 L3 都未做）；Ui 的 Design Invariants 已改（`v8-tool-ui-invariants-text`）；`v8-tool-ui-text-field` 完成（gyo.ui v2）。`v8-product-lobby-text-field` 完成，Windows L3 全部通過（組字顯示、候選窗位置、全形轉半形、Enter／Esc）。ui_editor 的 `v8-tool-ui-editor-text-field` 已合併（[PR #114](https://github.com/yojinn-io/GYO-Engine/pull/114)），使用者在 macOS 的 GUI 上試過。
@@ -135,3 +136,19 @@
 - 2026-10-31：架構會話（會話訊息）指出 owner 名 `framework` 和 v7 README 的 framework 層撞名、`docs/architecture.md` 沒提到它。你：「這個是遊戲和工具共用的。」並選「同一層，現在就搬到頂層」→ `v8-tool-framework-top-level`：`tools/framework/` 搬到頂層 `framework/`，Design Invariants 第 1、2、5 條與開頭、`docs/architecture.md` 跟著改。重新驗證：ctest 63／63、音效工具的樹 55／55、突變 16／16。
 - 2026-10-31：GUI 確認（macOS，搬到頂層之前建的 ui_editor，程式內容相同）：你截圖回報視窗、字型、各面板正常，Diagnostics 有一條「AssetId 'font.default' is unresolved because no catalog is mounted」警告。這是沒掛 catalog 時的既有行為（`UiDocumentBridge.cpp`，自 `ad3c3fdd` 起），這次只改了 include 與型別前綴。你：「了解了，那應該沒問題了，繼續。」開啟、匯出與掛載的 Browse… 選擇窗沒有另外回報。
 - 2026-10-31：PR #123 的 L1（`18f5c726`）三平台通過，CI gate 通過；Windows 上 `gyo_framework.*` 三個測試實際執行並通過（113／113）。等你決定合併。
+- 2026-11-01：asset-layout 線告知（會話訊息）：PvP 的素材落點由 PvP 自己的守衛在 CI 檢查（標準 `docs/object_fps_pvp/assets.zh-Hant.md`，檢查 `tests/object_fps_pvp/test_asset_catalog.py`）；工具把音效寫進 PvP 時要照標準路徑，`tests/object_fps_pvp/asset_sources.json` 要有來源記錄。四個音效的原檔在 commit `30b36bdb` 的 `assets/object_fps_pvp/audio/source/`，本線先前「找不到」的說法是錯的，已在 assets.md 更正（dev_log 是當時紀錄，不改）。assets.md 的 `players/character.json` 例子會在 player-folder 批之後過時，屆時再改。
+- 2026-11-01：架構會話轉來整改分工（取代它 10-31 的所有訊息）；你在 `-edit` 的選擇題上中斷，之後說「開始吧」→ 把 T1～T3 與依賴登進 assets.md（樹、表、決定紀錄 `v8-tool-framework-rework-split`），更正原檔的說法，並整理下方「A3 用：ui_editor 對外殼的需求」。`-edit` 暫停。
+
+## A3 用：ui_editor 對外殼的需求（2026-11-01，讀 `framework/src/ImGuiSdlHost.cpp` 與 `PvpApplication::Run` 整理）
+
+架構整改卡畫外殼介面草圖時，ui_editor 需要這些；括號是現在的出處。
+
+- 建立視窗（標題、大小、可調整）與 renderer；資產預覽要拿得到原生 renderer 來建貼圖（`AssetPreviewContext::Initialize(SDL_Renderer&)`，經 `*Native`，Engine 的貼圖 API 另案）。
+- 每幀的階段：ImGui 幀開始前（套用選擇窗的回覆、待處理的資產變更、預覽的 `BeginFrame`）、ImGui 幀內（`Draw`）、是否結束（`WantsExit`）、每幀結束（`EndFrame`，算繪失敗時也要呼叫）。
+- 順序：client 在 ImGui 之前建立；ImGui 先關，再解構 client；client 在 renderer 與視窗之前解構。
+- ImGui 的設定：鍵盤導覽；不寫 `imgui.ini` 與 log（ui_toolchain Design Invariant 2）；系統的 CJK 字型加日文後備（字型目錄來自 `Engine::Os::Files::FontDirectories`）。
+- 原生事件交給 ImGui 的 SDL 後端（含文字輸入與輸入法，ui_editor 的文字欄位靠它）。
+- 清除顏色、Present；失敗時結束碼 1。
+- 選擇窗要用的視窗（A1 之後由 Engine 平台層處理，外殼要能把平台物件交給工具或 A1 的 API）。
+- 可考慮：PvP 用 `SdlPlatform::SetLiveFrameHandler` 在調整視窗大小時也繼續畫（`PvpApplication.cpp:1383-1395`）；ui_editor 現在沒有，macOS 拖動視窗邊緣時畫面會停住。不是現有需求，列給草圖參考。
+- audio_editor（`-edit`）另外需要：同一個外殼加上 `SdlAudioOutput`（由工具自己開，外殼不管音訊）。
