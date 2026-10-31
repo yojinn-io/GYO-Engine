@@ -33,16 +33,17 @@ v8-plan
 │   │   ├── pv8-seq-ceiling        「high｜Opus 5.5｜不改 wire：WireCounterMax 取代 uint64 上限檢查（完成）」
 │   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼（完成）」
 │   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告（完成）」
-│   ├── hitbox-line                「PR 線：部位判定（hitbox-plan.md，v8-product-hitbox-plan-approve）」
-│   │   ├── v8-product-hitbox-survey          「high｜Opus 5.5｜獨立量測工具：節點、參考幀尺寸、clip 偏差、輪廓覆蓋率」
-│   │   ├── pv9-hitbox-declare                「ultracode｜案 Opus 5.5、對抗 Sonnet 5.5｜protocol-v9 草稿、Design Invariants（第一段）、門檻、§14.4 範本」
+│   ├── hitbox-line                「PR 線：部位判定（hitbox-plan.md 第 2 版，以 Valorant 為基底，待核准）」
+│   │   ├── v8-product-anim-bottlenecks       「high｜Opus 5.5｜Match 端取樣耗時、載入、四平台決定性」
+│   │   ├── pv9-hitbox-declare                「ultracode（先問）｜案 Opus 5.5、對抗 Sonnet 5.5｜protocol-v9 草稿、動畫狀態欄位、形狀契約」
 │   │   ├── pv9-rename                        「low｜Sonnet 5.5｜proto、Go 套件、CMake target 改名為 v9」
-│   │   ├── v8-product-hit-rules-permille     「high｜Opus 5.5｜千分之一點、DigestVersion 3、版本值 9」
-│   │   ├── v8-product-hit-rules-limb-wire    「high｜Opus 5.5｜HIT_PART_LIMB 與白名單」
-│   │   ├── v8-product-hitbox-data            「high｜Opus 5.5｜hitbox.json 契約與嚴格載入器」
-│   │   ├── v8-product-hitbox-shot            「high（平手局部 xhigh）｜Opus 5.5｜逐段判定、倍率傷害」
+│   │   ├── v8-product-hit-rules-permille     「high｜Opus 5.5｜千分之一點、版本值 9」
+│   │   ├── v8-product-hit-rules-leg-wire     「high｜Opus 5.5｜HitPart 加腿」
+│   │   ├── v8-product-anim-authority         「high（狀態機局部 xhigh）｜Opus 5.5｜動畫狀態機移到 domain、Match 推進、上 snapshot」
+│   │   ├── v8-product-hitbox-data            「high｜Opus 5.5｜三部位形狀契約、Match 載入骨架與 clip」
+│   │   ├── v8-product-hitbox-shot            「high（平手局部 xhigh）｜Opus 5.5｜逐部位判定、倍率傷害」
 │   │   ├── v8-product-hit-presentation       「medium｜Opus 5.5｜受擊動畫依部位、驗收工具」
-│   │   └── v8-product-hitbox-acceptance      「medium｜Sonnet 5.5｜L1、突變、L2（收支行）」
+│   │   └── v8-product-hitbox-acceptance      「medium｜Sonnet 5.5｜L1、突變、L2 試玩（收支行）」
 │   └── rewind-line                「PR 線：射擊回溯（部位判定線合併後）」
 │       ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
 │       ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」

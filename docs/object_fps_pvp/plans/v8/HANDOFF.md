@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：hitbox-line。`v8-product-hitbox-survey` 第 3 輪（頭與軀幹查表）**停在決策點**：頭的殘差 0.247 m（起跳）仍超過門檻 0.184 m；其餘在門檻內（跑步 0.176、落地 0.126、瞄準 0.038）。交使用者決定（[dev_log](../../../dev_logs/2026_10_31_pvp_v8_hitbox_survey.zh-Hant.md)）。
+- **進行中**：hitbox-line。[hitbox-plan](hitbox-plan.md) 第 2 版（以 Valorant 為基底：Match 跑動畫、動畫狀態由 Match 決定並上 snapshot、三部位綁骨頭）寫好，等使用者核准。第 1 版 B-flat 與三輪 survey 的門檻不再適用；survey 工具保留（半徑、Client 與 Match 的比對）。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
@@ -106,6 +106,7 @@
 | `v8-product-hitbox-three-part-thresholds` | （2026-10-31，量測之前）三部位的重選門檻：(1) 頭球中心（固定姿勢下相對 Head 骨的位置）在各動作下的最大漂移大於頭球半徑；(2) 腿部包絡（站、蹲各自涵蓋移動時兩腿所有樣本的形狀）在正面投影上的面積，大於實際兩腿掃過面積的 1.5 倍。任一成立就停下重選做法。軀幹的門檻另決（主會話提的「大於該段半徑」是在第一次 survey 已顯示跑步時軀幹 0.200 m、骨盆 0.182 m 之後才提的，照現有數字已成立，違反「看結果之前宣告」，交使用者決定） | 「照提案」 |
 | `v8-product-hitbox-three-part-survey-method` | （2026-10-31，擴充 survey 之前）三部位的量法：(a) 頭球中心＝固定姿勢下頭部頂點重心，換成相對 Head 骨的位置，各動作下用 Head 骨帶著走，量對固定姿勢中心的距離，門檻見 `v8-product-hitbox-three-part-thresholds` (1)；(b) 腿部包絡＝身體座標的軸對齊盒，涵蓋「移動時」（站姿：walk、jog；蹲姿：crouch_move）兩腿四段的所有樣本端點加半徑；實際掃過面積＝同一組樣本的四段在正面投影上的聯集，門檻 (2)；跳躍的腿另列（樣本落在包絡外的比例），只報告；(c) 軀幹與骨盆分「靜止」與「移動中」兩組形狀，移動中的形狀取移動樣本的平均端點；剩下的偏差只報告、不設門檻，寫進 hitbox 文件的已知限制 | 「照建議」 |
 | `v8-product-hitbox-lookup-survey-method` | （2026-10-31，量測之前）頭與軀幹改用權威狀態查表後的殘差量法：(a) 跳躍與動作（jump_start、jump_loop、jump_land、shoot、reload、hit）每個 clip 存 8 個等距時刻的形狀，查表在相鄰兩格之間線性內插，以 survey 的 60 個樣本量殘差；(b) 瞄準存權重 −1、0、+1 三張表、線性內插，以 0.1 為間隔量 −1～+1 的殘差；(c) 移動中（walk、jog、crouch_move）頭與軀幹用移動樣本的平均形狀（不分相位）。門檻維持 `v8-product-hitbox-three-part-thresholds` (1)：頭的殘差 > 頭球半徑 0.184 m 就停下；軀幹只報告 | 「先量查表後的偏差」 |
+| `v8-product-hitbox-valorant-base` | （2026-10-31）hitbox 改照「先抄成熟方案、依需求改裝、碰到瓶頸才量」：以 Valorant 為基底（伺服器跑由權威狀態決定的動畫，hitbox 綁骨頭，Client 照伺服器的動畫狀態播放），取代第 1 版 B-flat（`v8-product-hitbox-model` (a)）。[hitbox-plan](hitbox-plan.md) 第 2 版待核准 | 「不要自己先想方案，先抄，看看別人如何做的……參考成熟解決方案，然後在根據我們自己的需求進行改裝，碰到瓶頸在測量」；「以 Valorant 為基底」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -138,6 +139,7 @@
 - 2026-10-31：`v8-product-hitbox-survey` 完成量測（約 2 h）。量法修正 1 次（手腳頂點排除，半徑變小、門檻只會變嚴）。門檻 (1) 成立，停下交使用者決定做法。
 - 2026-10-31：survey 第 2 輪（三部位）。頭的漂移門檻成立（落地 0.519、起跳 0.383、瞄準 0.29～0.32、跑步 0.252 m），腿部包絡未成立。停下交使用者決定。
 - 2026-10-31：survey 第 3 輪（查表）。頭的殘差只剩起跳 0.247 m 超過門檻（8 格的表內插誤差）；跑步 0.176 m 貼近門檻。停下交使用者決定。
+- 2026-10-31：使用者指出方法跑偏（自己設計再一輪輪量），改照成熟方案：以 Valorant 為基底重寫 hitbox-plan（第 2 版），部位判定線估約 66～102 h（推論）。
 
 ## 未結事項
 
