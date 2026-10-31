@@ -56,16 +56,6 @@
       "license": "unrecorded",
       "record": "commit 6427682c; FBX metadata"
     },
-    "object_fps_pvp.texture.character.female.hair": {
-      "source": "Universal Base Characters Standard pack (same file as object_fps's superhero_female texture copy)",
-      "license": "CC0",
-      "record": "docs/architecture/3d-assets.md (pack inventory and licenses)"
-    },
-    "object_fps_pvp.model.hair.buns": {
-      "source": "Universal Base Characters Standard pack (the FBX names Universal Base Characters/Hairstyles/Hairstyles_Female.blend)",
-      "license": "CC0",
-      "record": "docs/architecture/3d-assets.md (pack licenses); FBX metadata"
-    },
     "object_fps_pvp.model.animation.ual1_mannequin": {
       "source": "Universal Animation Library Standard pack (the FBX names UAL1_Standard.blend)",
       "license": "CC0",

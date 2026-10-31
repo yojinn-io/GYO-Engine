@@ -74,7 +74,6 @@ PRODUCT_GROUPS = ['apps', 'tests', 'build/acceptance']
 OTHER_OWNER_SUFFIXES = CODE_SUFFIXES | {'.c', '.cmake', '.txt', '.json', '.csv', '.yml', '.yaml', '.sh', '.ps1'}
 
 PATH_LOADED_MOVE = 'v8-product-asset-path-loaded-move'
-BUNS_FIXTURE = 'v8-product-asset-buns-fixture'
 # Known departures from the layout, keyed by (rule, catalog path), with the batch
 # that removes each. Adding one loosens the guard and needs the user's approval.
 LAYOUT_EXCEPTIONS = {
@@ -82,10 +81,6 @@ LAYOUT_EXCEPTIONS = {
     ('root-file', 'pvp_arena.json'): PATH_LOADED_MOVE,
     ('root-file', 'pvp_corners.json'): PATH_LOADED_MOVE,
     ('root-file', 'movement_rules.json'): PATH_LOADED_MOVE,
-    ('own-files', 'characters/hairstyles/buns/character.json'): BUNS_FIXTURE,
-    ('product-use', 'characters/hairstyles/buns/character.json'): BUNS_FIXTURE,
-    ('product-use', 'characters/hairstyles/buns/Hair_Buns.fbx'): BUNS_FIXTURE,
-    ('product-use', 'characters/superhero_female/textures/T_Hair_2_BaseColor.png'): BUNS_FIXTURE,
     ('definition-name', 'weapons/nailer_v2/viewmodel/nailer_v2_viewmodel.json'):
         'the next feature batch that edits this definition',
 }
