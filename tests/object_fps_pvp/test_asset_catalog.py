@@ -74,7 +74,6 @@ PRODUCT_GROUPS = ['apps', 'tests', 'build/acceptance']
 OTHER_OWNER_SUFFIXES = CODE_SUFFIXES | {'.c', '.cmake', '.txt', '.json', '.csv', '.yml', '.yaml', '.sh', '.ps1'}
 
 PATH_LOADED_MOVE = 'v8-product-asset-path-loaded-move'
-PLAYER_FOLDER = 'v8-product-asset-player-folder'
 BUNS_FIXTURE = 'v8-product-asset-buns-fixture'
 # Known departures from the layout, keyed by (rule, catalog path), with the batch
 # that removes each. Adding one loosens the guard and needs the user's approval.
@@ -83,10 +82,6 @@ LAYOUT_EXCEPTIONS = {
     ('root-file', 'pvp_arena.json'): PATH_LOADED_MOVE,
     ('root-file', 'pvp_corners.json'): PATH_LOADED_MOVE,
     ('root-file', 'movement_rules.json'): PATH_LOADED_MOVE,
-    ('first-folder', 'players/presentation.json'): PLAYER_FOLDER,
-    ('first-folder', 'players/character.json'): PLAYER_FOLDER,
-    ('first-folder', 'players/animations.animset.json'): PLAYER_FOLDER,
-    ('own-files', 'players/character.json'): PLAYER_FOLDER,
     ('own-files', 'characters/hairstyles/buns/character.json'): BUNS_FIXTURE,
     ('product-use', 'characters/hairstyles/buns/character.json'): BUNS_FIXTURE,
     ('product-use', 'characters/hairstyles/buns/Hair_Buns.fbx'): BUNS_FIXTURE,
@@ -304,7 +299,7 @@ class AssetCatalogTests(unittest.TestCase):
 
     def test_the_check_finds_an_orphan(self):
         # Guard against a check that can never fail.
-        entries = catalog() + [{'id': 'object_fps_pvp.test.orphan', 'path': 'players/presentation.json'}]
+        entries = catalog() + [{'id': 'object_fps_pvp.test.orphan', 'path': 'characters/player/presentation.json'}]
         self.assertNotIn('object_fps_pvp.test.orphan', used_ids(entries, code_text()))
 
     def test_a_reference_is_the_whole_id(self):

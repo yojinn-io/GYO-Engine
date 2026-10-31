@@ -314,7 +314,7 @@
       "id": "11-limit-uncalibrated",
       "batch": "11",
       "what": "The down limit no longer matches the measured down pose",
-      "file": "assets/object_fps_pvp/players/presentation.json",
+      "file": "assets/object_fps_pvp/characters/player/presentation.json",
       "find": "    \"down_pitch_radians\": 1.5236\n",
       "replace": "    \"down_pitch_radians\": 1.3\n",
       "check": "presentation",
