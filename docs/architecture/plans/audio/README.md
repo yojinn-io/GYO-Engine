@@ -11,6 +11,8 @@ Engine 目前沒有音效輸出：
 
 本計畫補上：一個不帶產品知識的混音器，以 Engine 時間戳排程每個聲音的起點（換算成自己的樣本位置），加上 SDL 的輸出後端。要播放什麼、何時觸發、音量與左右聲道的比例，由消費端決定。
 
+2026-10-31 起的控制層重建（工具的預覽需要停止、執行中換片段、播放頭）另見 [控制層重建計畫](CONTROL.md)。
+
 先讀 [批次計畫](PLAN.md)（範圍、公開介面草案、Design Invariants、分批、驗收）和 [交接](HANDOFF.md)（等使用者決定的事、研究事實、壓力摘要）。
 
 ## 來源
@@ -44,6 +46,8 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 | `v8-engine-audio-sdl` | high｜繼承 | 3～5 h | 完成（2026-10-30；test 97／97、突變 5／5；[dev_log](../../../dev_logs/2026_10_30_engine_audio_sdl.zh-Hant.md)） | `GYO::AudioBackendSDL`：SDL 音效串流的回呼、AUDIO 子系統計數、G1～G3 擴充、`dummy`／`disk` 驅動的 L1 |
 | `v8-engine-audio-record` | medium（執行與紀錄）；分析程式 high｜繼承 | 2～4 h | 完成（2026-10-30；錨點版 L2 299／299；[dev_log](../../../dev_logs/2026_10_30_engine_audio_record.zh-Hant.md)） | Engine 自己的 L2（`disk` 驅動、只記錄）、相關突變、dev_log |
 | `v8-engine-audio-windows-blocks` | medium｜繼承 | 1 h | 完成（2026-10-31；Windows 需要約 44.4 ms ≤ 60 ms；[dev_log](../../../dev_logs/2026_10_31_engine_audio_windows_blocks.zh-Hant.md)） | Windows 實機的區塊與回呼間隔量測（只記錄，不改程式） |
+| `v8-engine-audio-control-plan` | high｜繼承（規劃用 ultracode，使用者核准） | 2～3 h | 草稿待核准（2026-10-31；[CONTROL](CONTROL.md)；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_plan.zh-Hant.md)） | 控制層重建的計畫：停止、執行中換片段、播放頭；Invariants 與 RC 的修改案 |
+| `v8-engine-audio-control-baseline`～`-live` | 見 [CONTROL](CONTROL.md)「分批」 | 15～20.5 h | 未開始（等核准） | 5 批實作 |
 
 `v8-engine-audio` 合計 12～18 h（與消費端計畫的估時相同）。檔位與引擎的說明見 [PLAN](PLAN.md)「分批」。
 
