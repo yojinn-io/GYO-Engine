@@ -52,7 +52,7 @@ v8-product-anim-authority
 | 狀態 | 規則 | 舊 Client 對應 |
 |---|---|---|
 | 重設 | 第一次、換人、換命或生死改變、換 epoch（決定 `v8-product-anim-epoch-rule`）、一個 Tick 的水平位移 > 判斷瞬移的距離。重設時：相位 0、`move_weight` 0、`jog_weight` 由這個 Tick 的速度重算、跳躍階段由 `grounded` 決定（GROUNDED 或 AIRBORNE，零點＝這個 Tick） | `:262-288` 的 spawn／player／life／epoch／teleport。`long_frame`、`time`、`discontinuity` 是 Client 呈現才有的，Match 沒有 |
-| 相位 | Δq16＝round(有號的水平位移 ÷ 一圈距離(jog_weight) × 65536)，累加後 mod 2^32。往後走（位移和 yaw 的前方內積 < 0）時取負號 | `:298-301`。backward 的判斷見決定 `v8-product-anim-backward` |
+| 相位 | Δq16＝round(有號的水平位移 ÷ 一圈距離 × 65536)，累加後 mod 2^32；一圈距離用這個 Tick 速度的精確比例，不是量化後的 `jog_weight`（`v8-product-anim-phase-definition` (a)）。往後走（位移和 yaw 的前方內積 < 0）時取負號 | `:298-301`。backward 的判斷見決定 `v8-product-anim-backward` |
 | `jog_weight` | 速度 > 0 時＝floor(1000 × clamp((速度 − walk) ÷ (jog − walk), 0, 1))；速度 0 時保留 | `:303` |
 | `move_weight` | 這個 Tick 有位移就往 1000 走一步，沒有就往 0 走一步。步數 k ∈ [0, transition]，weight＝1000 × k ÷ transition（整數除法） | `:309-312`（holding 是 Client 呈現才有的，Match 沒有） |
 | 跳躍階段 | 照 §4.4：離地且上升→START，零點＝這個 Tick；離地且下落→AIRBORNE，零點＝這個 Tick；著地→LAND；START 滿 6 Tick→AIRBORNE，零點＋6；LAND 滿 6 Tick→GROUNDED，零點＋6 | `:314-330` |

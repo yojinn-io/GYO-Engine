@@ -4,7 +4,7 @@
 
 收支：一致（E1 試行 2：12 條路線 × 600 Tick＝7200 個 Tick 全部比對，判定為不同的 0 個，容許的 Client 浮點延遲 19 個＝事前宣告的 19 個）
 
-**狀態：完成（等你看過這份紀錄與一項文件決定）。** 照[事前宣告](../object_fps_pvp/plans/v8/v8-product-anim-authority-declaration.md)的 A1。途中停了兩次（AGENTS §14），經過見下。
+**狀態：完成。** 文件決定 `v8-product-anim-phase-definition` 選 (a)：protocol-v9 §4.3 與宣告的表改成實作的定義。 照[事前宣告](../object_fps_pvp/plans/v8/v8-product-anim-authority-declaration.md)的 A1。途中停了兩次（AGENTS §14），經過見下。
 
 ## 做了什麼
 

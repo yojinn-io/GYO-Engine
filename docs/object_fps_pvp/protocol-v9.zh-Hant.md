@@ -64,7 +64,7 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 |---|---|---|---|
 | 1 | `player_id` | uint32 | 屬於哪位玩家 |
 | 2 | `life_generation` | uint32 | 屬於哪條命；Client 只把同一條命的動畫和位置配在一起，重生後不沿用舊命的相位 |
-| 3 | `gait_phase_q16` | uint32 | 步伐相位，不取模：floor(累積圈數×65536) mod 2^32；低 16 位是一圈內的位置。walk、jog、crouch_move、sprint 共用。倒退時相位減少，方向隱含在差值裡，`backward` 不上 wire |
+| 3 | `gait_phase_q16` | uint32 | 步伐相位，不取模：每個 Tick 加 Δq16＝round(有號的水平位移 ÷ 一圈距離 × 65536)，一圈距離用這個 Tick 速度的精確 walk↔jog 比例（不是量化後的 `jog_weight`），累加 mod 2^32（`v8-product-anim-phase-definition` (a)，2026-10-31）；低 16 位是一圈內的位置。walk、jog、crouch_move、sprint 共用。倒退時相位減少，方向隱含在差值裡，`backward` 不上 wire |
 | 4 | `move_weight_permille` | uint32 | idle↔步態（蹲姿時 crouch_idle↔crouch_move）的混合權重，[0, 1000] |
 | 5 | `jog_weight_permille` | uint32 | walk↔jog 的速度混合權重，[0, 1000]，由權威水平速度決定 |
 | 6 | `jump_phase` | enum `JumpPhase` | 下半身的跳躍階段 |
