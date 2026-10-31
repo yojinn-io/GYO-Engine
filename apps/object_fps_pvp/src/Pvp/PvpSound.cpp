@@ -18,6 +18,9 @@ struct PvpSound::Impl final {
     std::optional<Engine::Audio::Sdl::SdlAudioOutput> output;
     std::uint64_t played[SoundCueCount]{};
     double seconds[SoundCueCount]{};
+    std::uint32_t anchorLogCapacity{};
+    bool diagnostics{};
+    std::vector<SoundDiagnostics::Cue> cues;
 };
 
 PvpSound::PvpSound() : impl_(std::make_unique<Impl>()) {}
@@ -61,7 +64,9 @@ bool PvpSound::Initialize(const SoundSettings& settings, const ClipSource& sourc
     auto submitter = mixer->CreateSubmitter();
     if (!submitter) { error = Engine::Base::Describe(submitter.error()); return false; }
     impl_->submitter.emplace(std::move(submitter).value());
-    auto output = Engine::Audio::Sdl::SdlAudioOutput::Open(std::move(mixer).value());
+    Engine::Audio::Sdl::SdlAudioOutputConfig outputConfig;
+    outputConfig.anchorLogCapacity = impl_->anchorLogCapacity;
+    auto output = Engine::Audio::Sdl::SdlAudioOutput::Open(std::move(mixer).value(), outputConfig);
     if (!output) {
         // log-contract: the one line saying this Client plays no sound, and why.
         ClientLog(Engine::Base::LogLevel::Warning, "PvP sound unavailable error=\"%s\"",
@@ -86,7 +91,34 @@ void PvpSound::Play(const SoundCue cue, const Engine::Time::TimePoint at, const 
     const auto index = static_cast<std::size_t>(cue);
     if (gains.left <= 0 && gains.right <= 0) return;
     ++impl_->played[index];
+    if (impl_->diagnostics) impl_->cues.push_back({cue, at, Engine::Time::Now()});
     static_cast<void>(impl_->submitter->Play({impl_->clips[index], at, gains.left, gains.right}));
+}
+
+void PvpSound::EnableDiagnostics(const std::uint32_t anchorLogCapacity) {
+    impl_->diagnostics = true;
+    impl_->anchorLogCapacity = anchorLogCapacity;
+}
+
+SoundDiagnostics PvpSound::TakeDiagnostics() {
+    SoundDiagnostics result;
+    result.cues = std::exchange(impl_->cues, {});
+    result.scheduleDelayNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        Engine::Audio::MixerConfig{}.scheduleDelay).count();
+    if (!impl_->output) return result;
+    std::vector<Engine::Audio::Sdl::OutputAnchor> anchors;
+    static_cast<void>(impl_->output->TakeAnchors(anchors));
+    for (const auto& anchor : anchors) result.anchors.push_back({anchor.anchor, anchor.firstFrame});
+    const auto output = impl_->output->Stats();
+    const auto mixer = impl_->output->OwnedMixer().Stats();
+    result.anchorsDropped = output.anchorsDropped;
+    result.submitted = mixer.submitted;
+    result.onTime = mixer.playedOnTime;
+    result.late = mixer.playedLate;
+    result.queueFull = mixer.droppedQueueFull;
+    result.noVoice = mixer.droppedNoVoice;
+    result.driver = impl_->output->DriverName();
+    return result;
 }
 
 void PvpSound::LogSummary() const {

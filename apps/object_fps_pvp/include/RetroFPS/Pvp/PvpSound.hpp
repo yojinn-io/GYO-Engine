@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace fps::pvp {
 
@@ -16,6 +17,27 @@ struct SoundClipData final {
     Engine::Base::ConstSpan<std::int16_t> interleaved;
     std::uint16_t channels{};
     std::uint32_t sampleRate{};
+};
+
+// What acceptance reads of the sound output (diagnostics only; the product's
+// own executable never turns them on): the output callbacks' anchors, every
+// cue played with its time, and the mixer's counters.
+struct SoundDiagnostics final {
+    struct Anchor final {
+        Engine::Time::TimePoint anchor{};
+        std::uint64_t firstFrame{};
+    };
+    struct Cue final {
+        SoundCue cue{};
+        Engine::Time::TimePoint at{};     // the time the cue belongs to
+        Engine::Time::TimePoint played{}; // when Play handed it to the mixer
+    };
+    std::vector<Anchor> anchors;          // taken since the last call
+    std::vector<Cue> cues;                // taken since the last call
+    std::uint64_t anchorsDropped{};
+    std::uint64_t submitted{}, onTime{}, late{}, queueFull{}, noVoice{};
+    std::int64_t scheduleDelayNs{};
+    std::string driver;
 };
 
 // The Client's sound output: the cues' clips in an Engine audio mixer played on
@@ -32,6 +54,10 @@ public:
     PvpSound(const PvpSound&) = delete;
     PvpSound& operator=(const PvpSound&) = delete;
 
+    // Diagnostics for acceptance: call before Initialize; keeps up to this many
+    // callback anchors between two TakeDiagnostics calls, and every cue played.
+    void EnableDiagnostics(std::uint32_t anchorLogCapacity);
+    [[nodiscard]] SoundDiagnostics TakeDiagnostics();
     // Loads every cue's clip through source and opens the output. False only
     // for a content error; a missing device leaves the sound silent.
     [[nodiscard]] bool Initialize(const SoundSettings& settings, const ClipSource& source, std::string& error);

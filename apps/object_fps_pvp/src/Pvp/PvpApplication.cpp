@@ -1392,6 +1392,10 @@ int PvpApplication::Run() {
     return impl_->exitCode;
 }
 void PvpApplication::SetGatewayAddress(std::string address) { impl_->address = std::move(address); }
+void PvpApplication::EnableSoundDiagnostics(const std::uint32_t anchorLogCapacity) {
+    impl_->sound.EnableDiagnostics(anchorLogCapacity);
+}
+SoundDiagnostics PvpApplication::TakeSoundDiagnostics() { return impl_->sound.TakeDiagnostics(); }
 void PvpApplication::ObserveRemote(std::optional<PlayerId> playerId) { impl_->observedRemote = playerId; }
 
 std::optional<PlayerId> ObservedRemotePlayer(const WorldSnapshot& snapshot, const PlayerId local,
