@@ -1,12 +1,12 @@
 # PvP Protocol v9：三部位命中、千分之一點、Match 的權威動畫狀態與回溯
 
-更新：2026-10-31（`pv9-hitbox-declare`）。**狀態：草稿，等使用者決定第 9 節。** 範圍：hitbox-line 與 rewind-line 的 wire 需求一次推完（`pv9-scope-hitbox-and-rewind`）。計畫：[hitbox-plan](plans/v8/hitbox-plan.md) 第 2 版；回溯的設計沿用第 1 版（git `e33d53fc`）。推導：ultracode（三案 Opus 5.5、審查 Opus 5.5、對抗 Sonnet 5.5），紀錄見 [dev_log](../dev_logs/2026_10_31_pvp_v8_pv9_hitbox_declare.zh-Hant.md)。
+更新：2026-10-31（`pv9-hitbox-declare`）。**狀態：定稿（`pv9-final-approve`，2026-10-31）：第 9 節 6 項照建議 (a)。** 範圍：hitbox-line 與 rewind-line 的 wire 需求一次推完（`pv9-scope-hitbox-and-rewind`）。計畫：[hitbox-plan](plans/v8/hitbox-plan.md) 第 2 版；回溯的設計沿用第 1 版（git `e33d53fc`）。推導：ultracode（三案 Opus 5.5、審查 Opus 5.5、對抗 Sonnet 5.5），紀錄見 [dev_log](../dev_logs/2026_10_31_pvp_v8_pv9_hitbox_declare.zh-Hant.md)。
 
 本文件的 vN 指網路協議版本 pvN。pv9 取代 [protocol-v8](protocol-v8.zh-Hant.md)：沒有在此改寫的條款原樣沿用。程式行號以 `57a3aace` 為準。
 
 ## 0. 原則
 
-- **pv9 只合併一次**：版本值 9、`HIT_PART_LEG`、千分之一點、`WorldSnapshot.animation`（以及第 9 節決定要加的欄位）同一次進 master。protocol-v8 §2a 已規定：之後再新增或啟用預留，就是另一次 proto 變更。
+- **pv9 只合併一次**：版本值 9、`HIT_PART_LEG`、千分之一點、`WorldSnapshot.animation`、`animation_digest` 同一次進 master；整條 hitbox-line 一個 PR，做完 `v8-product-hitbox-shot` 才合併（`pv9-single-merge` (a)）。protocol-v8 §2a 已規定：之後再新增或啟用預留，就是另一次 proto 變更。
 - **每一項都有出處**：需要它的程式位置，或 hitbox-plan 第 2 節的成熟方案（附 ✓／△／✗）。推不出來的列在第 9 節，不寫成假設（pv8 假設 pv7 的 `HitPart` 夠用而漏了腿，`pv9-scope-hitbox-and-rewind` 的起因）。
 - **⑤ 的對局規則不在 pv9**：protocol-v8 附錄 B 改名為 pv10，附錄 C 照舊只記形狀。pv8 預留的號碼（protocol-v8 §2a）一個都不挪用。
 - **Gateway 照舊是無狀態的邊緣**：只多逐欄複製與單則訊息內的檢查，沒有新狀態、新 DropReason 或跨訊息的判斷（`state_whitelist_test.go` 不變）。
@@ -64,11 +64,12 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 |---|---|---|---|
 | 1 | `player_id` | uint32 | 屬於哪位玩家 |
 | 2 | `life_generation` | uint32 | 屬於哪條命；Client 只把同一條命的動畫和位置配在一起，重生後不沿用舊命的相位 |
-| 3 | `gait_phase_q16` | uint32 | 步伐相位，不取模：floor(累積圈數×65536) mod 2^32；低 16 位是一圈內的位置。walk、jog、crouch_move（以及第 9 節 (C) 選 (a) 時的 sprint）共用。倒退時相位減少，方向隱含在差值裡，`backward` 不上 wire |
+| 3 | `gait_phase_q16` | uint32 | 步伐相位，不取模：floor(累積圈數×65536) mod 2^32；低 16 位是一圈內的位置。walk、jog、crouch_move、sprint 共用。倒退時相位減少，方向隱含在差值裡，`backward` 不上 wire |
 | 4 | `move_weight_permille` | uint32 | idle↔步態（蹲姿時 crouch_idle↔crouch_move）的混合權重，[0, 1000] |
 | 5 | `jog_weight_permille` | uint32 | walk↔jog 的速度混合權重，[0, 1000]，由權威水平速度決定 |
 | 6 | `jump_phase` | enum `JumpPhase` | 下半身的跳躍階段 |
 | 7 | `jump_phase_tick` | uint32 | 目前階段的 clip 時間零點（Authority Tick），見 4.4 |
+| 8 | `sprint_weight_permille` | uint32 | jog↔sprint（`Sprint_Loop`）的混合權重，[0, 1000]；② 之前恆為 0，Client 與 Gateway 都拒收非 0（`pv9-sprint-animation` (a)）；② 的事前宣告定推進規則（照 4.4 的整數推進） |
 
 新 enum `JumpPhase { JUMP_PHASE_UNSPECIFIED = 0; GROUNDED = 1; START = 2; AIRBORNE = 3; LAND = 4; }`，0 在 wire 上無效（`LifeState` 的先例，`adapter.go:90-103`）。
 
@@ -90,10 +91,17 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 
 - `len(animation) == len(players)`，`player_id` 一一對應、不重複（新的區域 map 屬 `classPerCall`，有 `SnapshotForClient` 的 `seen` 先例）。
 - `life_generation` 等於同一位玩家的 `PlayerState.life_generation`。
-- 兩個權重 ≤ 1000；`jump_phase` ∈ {1, 2, 3, 4}；`jump_phase_tick` ≤ snapshot 的 tick。
+- 三個權重 ≤ 1000；② 之前 `sprint_weight_permille` == 0；`jump_phase` ∈ {1, 2, 3, 4}；`jump_phase_tick` ≤ snapshot 的 tick。
 - 和同一則訊息的 `grounded` 交叉：START／AIRBORNE ⇒ `!grounded`；GROUNDED、LAND ⇒ `grounded`。死亡玩家不檢查這條。
 - 兩端對稱：Gateway 的 `SnapshotForClient`，以及 Client 的 `ClientConnection.cpp` 解碼（`:592`、`:644` 附近），驗收工具的解碼端（`acceptance_protocol.hpp`、`network_main.cpp`、`worker_main.cpp`）也要跟上。
-- **已知的後果**：Gateway 的 `SnapshotForClient` 回錯誤時，`server.go:704-707` 呼叫 `runtimeFailed`，整個 Gateway 對所有玩家失效，不是只丟一份 snapshot。所以 Match 在寫進 snapshot 前要用 Assert 守住同一組條件（Programmer Error，`docs/architecture/error-handling.md`），見第 9 節 (F)。
+- **已知的後果**（`pv9-gateway-check-failure` (a)）：Gateway 的 `SnapshotForClient` 回錯誤時，`server.go:704-707` 呼叫 `runtimeFailed`，整個 Gateway 對所有玩家失效，不是只丟一份 snapshot。所以 Match 在寫進 snapshot 前用 Assert 守住同一組條件（Programmer Error，`docs/architecture/error-handling.md`）；Gateway 的錯誤處理不改。
+
+### 4.6 動畫內容的校準（`pv9-animation-digest` (a)）
+
+- `Ready.animation_digest`＝18、`Welcome.animation_digest`＝20（fixed64；避開 pv8 預留的 Ready 14～17、Welcome 16～19）。
+- 內容：Match 載入的動畫定義的雜湊——判定與呈現用到的 clip 轉換後的 key（B3 的 H-load 的範圍）、各動作的跨度、transition 秒數、native speed 等 `presentation.json` 中影響姿勢的值。確切的位元組順序在 `v8-product-hitbox-data` 的事前宣告定，Match 與 Client 共用同一個函式。0 無效。
+- Gateway：Ready→Welcome 逐欄複製；`ReadyFitsWelcome` 把它算進去。
+- Client：收到 Welcome 時和自己載入的內容比對，不合就明確報錯（例如 `Match animation content differs from this client`），不進入對局。和移動規則的 D-5（不偵測）不同，理由是動畫內容不同時 Client 畫面上的姿勢不是被判定的姿勢。
 
 ## 5. 回溯（rewind-line）
 
@@ -108,16 +116,16 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 | 歷史 | （Match 內部） | 每 Tick 存位置、yaw、pitch、`crouched`、`grounded`、生命資料、CombatState 的動作 tick 與 `PlayerAnimation`；回溯時用 4.4 的內插重建姿勢（hitbox-plan §4 R6） |
 
 - 目標在 τ 活著、到 J 已經死了（同一條命）時：判 Miss，和跨生命同一條規則。
-- **接受的限制**：Client 漏收或 snapshot 被合併（`DROP_COALESCED_SNAPSHOTS`）時，Client 畫面上的兩筆 snapshot 隔了好幾個 Tick，它內插出的姿勢和 Match 在同一 τ 重建的姿勢不同（離散值更新得更晚、內插跨度更長）。Client 漏收目標新生命的前幾筆時，也會看到比 Match 晚的區段起點。這兩點是否要讓 `ShotRequest` 多帶欄位，見第 9 節 (D)。
+- **接受的限制**：Client 漏收或 snapshot 被合併（`DROP_COALESCED_SNAPSHOTS`）時，Client 畫面上的兩筆 snapshot 隔了好幾個 Tick，它內插出的姿勢和 Match 在同一 τ 重建的姿勢不同（離散值更新得更晚、內插跨度更長）。Client 漏收目標新生命的前幾筆時，也會看到比 Match 晚的區段起點。這兩點接受為限制，`ShotRequest` 不加欄位（`pv9-rewind-client-view` (a)）；影子紀錄 v3 量漏收時的落差，量到問題再處理。
 - 影子紀錄 `match-shots.jsonl`（產品內的 Data Contract，不是 wire）升 version 3：`view_lag` 以 J 計算（對齊 pv7 §7 的文字，`MatchShotTrace.hpp:230` 現在用 A），保留 A 的值供比較（`v8-product-hitbox-view-lag-base`）。
 
 ## 6. 大小（推論；`v8-product-hit-rules-leg-wire` 與 `v8-product-anim-authority` 以 `proto.Size` 實測重釘）
 
 | 項目 | pv8 | pv9（推論） |
 |---|---|---|
-| 4 人 Snapshot 型別最大（含 24 B 標頭） | 822 B | 998 B（每人 +44 B：7 欄×6 B＋外層 2 B）；第 9 節 (C) 選 (a) 再 +24 B＝1022 B |
-| 4 人 Snapshot 契約最大 | 748 B | 約 884 B（每人 +34 B） |
-| Welcome | 1200 B（邊界） | CombatRules 約 +6 B；第 9 節 (A) 選 (a) 再約 +10 B，arena id 上限相應縮短 |
+| 4 人 Snapshot 型別最大（含 24 B 標頭） | 822 B | 1022 B（每人 +50 B：8 欄×6 B＋外層 2 B） |
+| 4 人 Snapshot 契約最大 | 748 B | 約 896 B（每人 +37 B；衝刺權重以 ② 之後的 1000 計） |
+| Welcome | 1200 B（邊界） | CombatRules 約 +6 B、`animation_digest` +10 B（fixed64 加 tag，號碼 20 的 tag 是 2 B 時 +11 B）；arena id 上限相應縮短 |
 
 都 ≤ 1200 B。要重釘的地方：`capacity_test.go:68`、`:71`，`worker_main.cpp:674`，`network_main.cpp:159`，`actions_test.go:135`。
 
@@ -127,7 +135,7 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 2. 新增一列：判定姿勢只由 Match 的權威動畫狀態（`WorldSnapshot.animation` 加權威欄位的純函式）與 Match 的形狀資料決定；Client 的呈現照 snapshot 播放，不參與判定。protocol-v7 §7「命中幾何只讀權威狀態；呈現動畫不參與」相應改寫。
 3. State Authority 的移動：步伐相位、兩個權重、跳躍階段與它的零點，從 Client 的 `PlayerLocomotionState` 改成 Match 權威。Client 只保留呈現用的內插與 holding 凍結。
 4. `PlayerPresentation` 目前**沒有** Design Invariants 節，要先新建（含 Replacement Criteria），再寫「遠端的動畫狀態來自 snapshot」。
-5. `Combat.hpp:134-137`「受擊與射擊紀錄 Match 從不讀」：第 9 節 (B) 選 (a) 時改寫。
+5. `Combat.hpp:134-137`「受擊與射擊紀錄 Match 從不讀」改寫：上半身的射擊、換彈、受擊 clip 進判定姿勢，這些紀錄成為判定輸入（`pv9-upper-body-in-hitbox` (a)）。protocol-v7 §2、§7 的相應文字一起改。
 
 ## 8. 不在 pv9 的項目
 
@@ -137,7 +145,7 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 - 動畫狀態進權威 digest 的版本：在 `v8-product-anim-authority` 定。
 - 本機玩家自己的身體是否照 Match 的動畫播：呈現路徑沒有查到（遠端迴圈會跳過本機玩家），不影響 wire；`v8-product-anim-authority` 時確認。
 
-## 9. 等你決定（會不會逼出 pv10 的項目）
+## 9. 決定（`pv9-final-approve`，2026-10-31：全部照建議 (a)）
 
 | # | 問題 | 選項 | 建議 |
 |---|---|---|---|

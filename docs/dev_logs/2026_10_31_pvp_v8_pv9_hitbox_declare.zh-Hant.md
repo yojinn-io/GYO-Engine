@@ -2,7 +2,7 @@
 
 日期：2026-10-31。分支 `claude/pvp-v8-after-pv8`。檔位 ultracode（三案 Opus 5.5、審查 Opus 5.5、對抗 Sonnet 5.5）。估時 7～11 h（原 5～8 h，因 `pv9-scope-hitbox-and-rewind` 加入 rewind-line），workflow 約 19 分鐘＋整理約 1 h。
 
-**狀態：停在決策點。** [protocol-v9](../object_fps_pvp/protocol-v9.zh-Hant.md) 草稿寫好，第 9 節 6 項等使用者決定。
+**狀態：完成。** [protocol-v9](../object_fps_pvp/protocol-v9.zh-Hant.md) 定稿：第 9 節 6 項使用者照建議 (a) 核准（`pv9-final-approve`）。衝刺選 (a) 後，`PlayerAnimation` 是 8 欄，4 人 Snapshot 型別最大推論為 1022 B。
 
 ## 為什麼這樣做
 
