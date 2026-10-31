@@ -107,6 +107,7 @@ Branch protection（または ruleset）で master の required status check に
 
 - **Compiler cache（sccache v0.18.0）**：`native-setup` が全 native job の compile を sccache 経由にします。Cache の key は platform、toolchain、compiler の version、preset ごとに分かれ、`macos-x64` の target object が arm64 と混ざることはありません。保存する key には runner image の version（`ImageVersion`）も含めます。Hosted image は段階的に切り替わるため、同じ compiler version でも SDK や system header が違う image が同時に使われ、別 image の seed ではほぼ全件が miss になります（2026-10-30 の macOS で命中率 2.8%）。読み取りは同じ image の最新 seed を優先し、なければ image を問わず最新の seed を使います。**保存するのは master 上の L1 だけ**（master への push、または master での手動実行）です。PR の L1、Quick、trial、Prepare Release は最新の seed を読むだけです。
 - **Host tools**：Shader compiler などの host tools は runner の platform（host）ごとに `actions/cache` で保存します。target architecture を host tools の build に持ち込みません。
+- **Test の並列実行**：L1 と封装 job の ctest は、その行の build 並列度（`CMAKE_BUILD_PARALLEL_LEVEL`。Windows／Linux は 4、macOS は 2）で並列に実行します。導入時の stress test（各 test を最大 5 回）は 3 行とも失敗 0 件でした（run 41162780271）。互いに干渉する test は `RESOURCE_LOCK` か `RUN_SERIAL` で示し、CI を直列に戻さないでください。
 - **Go**：`actions/setup-go` が各 module の `go.mod`／`go.sum` を key に module cache を保存します。
 
 初回や toolchain 更新後に予想されること：
