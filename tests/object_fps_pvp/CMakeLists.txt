@@ -3,7 +3,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" runtime_host runtime_host)
 gyo_get_app_target("${GYO_CURRENT_APP}" client_simulation client_simulation)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
-    CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp CrouchTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
+    PlayerAnimationTests.cpp CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp CrouchTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp SoundCuesTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
     NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
     DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp AddressTextTests.cpp)
@@ -80,7 +80,8 @@ set(presentation_stage "${PROJECT_BINARY_DIR}/test-products/${GYO_CURRENT_APP}")
 set(presentation_content "gyo_${GYO_CURRENT_APP}_presentation_test_runtime")
 add_custom_target(${presentation_content})
 gyo_stage_app_content(${presentation_content} "${GYO_CURRENT_APP}" "${presentation_stage}")
-add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp)
+add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp
+    PlayerAnimationEquivalenceTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
 target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
     GYO::PlatformSDL nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)

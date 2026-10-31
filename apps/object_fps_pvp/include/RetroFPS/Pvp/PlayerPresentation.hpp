@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
+#include "RetroFPS/Pvp/PlayerAnimation.hpp"
 #include "engine/render/RenderTypes.hpp"
 
 #include <cstdint>
@@ -70,6 +71,8 @@ struct PlayerPresentationDefinition final {
     double shotSeconds{}, jumpStartSeconds{}, jumpLandSeconds{}, hitSeconds{};
     Engine::Model::Transform weaponMount{};
     Engine::Model::Pose weaponReferencePose;
+    // The Match's animation rules from the same content (protocol-v9 §4.4).
+    PlayerAnimationRules animationRules{};
 };
 
 [[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>

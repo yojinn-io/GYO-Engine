@@ -140,6 +140,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `pv9-rename` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_pv9_rename.zh-Hant.md) |
 | `v8-product-hit-rules-permille` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_hit_rules_permille.zh-Hant.md) |
 | `v8-product-hit-rules-leg-wire` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_hit_rules_leg_wire.zh-Hant.md) |
+| `v8-product-anim-authority-domain`（A1） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_authority_domain.zh-Hant.md) |
 
 ---
 

@@ -82,10 +82,12 @@ void BindCompatibleAnimations(const nlohmann::json& config,
 
 } // namespace
 
+// presentation false loads the model and its animation set only: no material
+// texture is decoded and no accessory is loaded (the Match's animation rules).
 static std::shared_ptr<const CharacterPresentationDefinition> LoadCharacterDefinition(
     Engine::Asset::AssetManager& assets,
     const Engine::Asset::AssetId& presentationId,
-    std::string& error, bool allowAccessories) {
+    std::string& error, bool allowAccessories, bool presentation = true) {
     error.clear();
     try {
         using namespace asset_definition_detail;
@@ -113,6 +115,7 @@ static std::shared_ptr<const CharacterPresentationDefinition> LoadCharacterDefin
                 throw std::runtime_error(bindingError);
             }
         }
+        if (!presentation) return definition;
         for (const auto& material : definition->model->materials) {
             MaterialBinding binding;
             binding.baseColorLinear = material.baseColorLinear;
@@ -220,6 +223,12 @@ std::shared_ptr<const CharacterPresentationDefinition> LoadCharacterPresentation
     Engine::Asset::AssetManager& assets, const Engine::Asset::AssetId& presentationId,
     std::string& error) {
     return LoadCharacterDefinition(assets, presentationId, error, true);
+}
+
+std::shared_ptr<const CharacterPresentationDefinition> LoadCharacterAnimationDefinition(
+    Engine::Asset::AssetManager& assets, const Engine::Asset::AssetId& presentationId,
+    std::string& error) {
+    return LoadCharacterDefinition(assets, presentationId, error, true, false);
 }
 
 Engine::Model::Pose BuildCharacterAccessoryPose(

@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 
 #include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
 #include "../App/AssetDefinitionHelpers.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
@@ -146,6 +147,11 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefini
                                   definition->hitSeconds})
             if (!std::isfinite(span) || span <= 0)
                 throw std::runtime_error("player action spans must be finite and positive");
+        const auto animationSource = ReadPlayerAnimationSource(text->text, character, error);
+        if (!animationSource) throw std::runtime_error(error);
+        const auto animationRules = MakePlayerAnimationRules(*animationSource, error);
+        if (!animationRules) throw std::runtime_error(error);
+        definition->animationRules = *animationRules;
 
         Pose reference;
         Require(Engine::Model::MakeDefaultPose(model, reference));

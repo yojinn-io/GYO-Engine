@@ -88,7 +88,7 @@ v8-product-anim-authority
   - Client 呈現才有的三種重設原因。
 - 任何一條超出門檻就停下回報，不改門檻、不重跑。
 
-### E1 的跳躍判定修正（`v8-product-anim-authority-e1-jump`，試行 1 不成立之後；**等你核准**）
+### E1 的跳躍判定修正（`v8-product-anim-authority-e1-jump`，試行 1 不成立之後；2026-10-31 使用者核准：「核准並重跑」）
 
 試行 1（[證據](evidence/anim-authority-e1-run1.txt)）：跳躍有 19 個 Tick 不同。每一個都是舊 Client 的 double 比較 `t/60 − s/60 ≥ 0.1` 在剛好 6 Tick 時算出 0.0999999999999996，晚一個 Tick 才換階段。試行 1 的失敗留在紀錄裡，不覆寫。
 

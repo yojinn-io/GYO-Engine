@@ -1,0 +1,4 @@
+# v8-product-anim-authority A1, E1 trial 3 (2026-10-31, Intel Mac): the same judgement after the xhigh review fixes.
+E1 worst error / bound: phase 0.58602, move 0.666021, jog 0.995889; client float lag ticks 19
+[doctest] assertions: 36038 | 36038 passed | 0 failed |
+[doctest] Status: SUCCESS!

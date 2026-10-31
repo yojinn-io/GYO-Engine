@@ -7461,6 +7461,176 @@
       "replace": "\treturn part != runtime.HitPart_HIT_PART_UNSPECIFIED\n",
       "check": "go",
       "expect": "accepted|part after leg|unknown part"
+    },
+    {
+      "id": "anim-epoch-not-reset",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A new movement epoch keeps the old animation state",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        before->movementEpoch != now.movementEpoch || !std::isfinite(distance))",
+      "replace": "        !std::isfinite(distance))",
+      "check": "cpu",
+      "expect": "resets on a new player, life, epoch or teleport"
+    },
+    {
+      "id": "anim-teleport-walked",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A teleport is walked instead of reset",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (distance > rules.teleportDistance) return Reset(rules, now, planarSpeed, tick);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "resets on a new player, life, epoch or teleport"
+    },
+    {
+      "id": "anim-backward-forward",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Moving backward advances the gait phase",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        const double cycles = (backward ? -distance : distance) /",
+      "replace": "        const double cycles = distance /",
+      "check": "cpu",
+      "expect": "phase decreases backward"
+    },
+    {
+      "id": "anim-move-steps-floor",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "The move weight recovers its step count by flooring",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    std::uint32_t steps = (value.moveWeightPermille * span + 999) / 1000;",
+      "replace": "    std::uint32_t steps = value.moveWeightPermille * span / 1000;",
+      "check": "cpu",
+      "expect": "move weight steps through the transition"
+    },
+    {
+      "id": "anim-jog-reset-still",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A still tick resets the jog weight",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (planarSpeed > 0) value.jogWeightPermille = PlayerJogWeightPermille(rules, planarSpeed);",
+      "replace": "    value.jogWeightPermille = PlayerJogWeightPermille(rules, planarSpeed);",
+      "check": "cpu",
+      "expect": "jog weight follows the speed and holds while still"
+    },
+    {
+      "id": "anim-start-span-late",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Start ends a tick after its span",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (value.jumpPhase == JumpPhase::Start && tick - value.jumpPhaseTick >= rules.jumpStartTicks) {",
+      "replace": "    if (value.jumpPhase == JumpPhase::Start && tick - value.jumpPhaseTick > rules.jumpStartTicks) {",
+      "check": "cpu",
+      "expect": "jump phases start from their clip time zero points"
+    },
+    {
+      "id": "anim-land-span-late",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Land ends a tick after its span",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    } else if (value.jumpPhase == JumpPhase::Land && tick - value.jumpPhaseTick >= rules.jumpLandTicks) {",
+      "replace": "    } else if (value.jumpPhase == JumpPhase::Land && tick - value.jumpPhaseTick > rules.jumpLandTicks) {",
+      "check": "cpu",
+      "expect": "jump phases start from their clip time zero points"
+    },
+    {
+      "id": "anim-death-not-frozen",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Death does not freeze the animation state",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (now.lifeState == LifeState::Dead && samePlayer && previous->lifeGeneration == now.lifeGeneration)\n        return *previous;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "freezes through death"
+    },
+    {
+      "id": "anim-span-not-whole",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A span of a fraction of a tick is accepted",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (!std::isfinite(ticks) || whole < 1 || whole > limit || std::abs(ticks - whole) > 0.000001) return 0;",
+      "replace": "    if (!std::isfinite(ticks) || whole < 1 || whole > limit) return 0;",
+      "check": "cpu",
+      "expect": "whole-tick spans"
+    },
+    {
+      "id": "anim-match-reads-textures",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "The Match animation path loads the full character with textures",
+      "file": "apps/object_fps_pvp/src/App/CharacterPresentationDefinition.cpp",
+      "find": "    return LoadCharacterDefinition(assets, presentationId, error, true, false);",
+      "replace": "    return LoadCharacterDefinition(assets, presentationId, error, true, true);",
+      "check": "presentation",
+      "expect": "load without textures"
+    },
+    {
+      "id": "anim-walk-reads-jog",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "The rule reader takes the jog clip length for walk",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationContent.cpp",
+      "find": "        source.walkClipSeconds = length(\"walk\");",
+      "replace": "        source.walkClipSeconds = length(\"jog\");",
+      "check": "presentation",
+      "expect": "load without textures"
+    },
+    {
+      "id": "anim-reset-carries-speed",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A new life takes the step across the boundary as its speed",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        return Reset(rules, now, 0, tick);",
+      "replace": "        return Reset(rules, now, planarSpeed, tick);",
+      "check": "cpu",
+      "expect": "new life's own speed"
+    },
+    {
+      "id": "anim-transition-unbounded",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A transition longer than 1000 ticks is accepted",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    rules.transitionTicks = WholeTicks(source.transitionSeconds, MaxTransitionTicks);",
+      "replace": "    rules.transitionTicks = WholeTicks(source.transitionSeconds, 0xFFFFFFFFU);",
+      "check": "cpu",
+      "expect": "bound the spans"
+    },
+    {
+      "id": "anim-previous-life-unpaired",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A previous value of another life is advanced",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        before->playerId == now.playerId && previous->lifeGeneration == before->lifeGeneration &&",
+      "replace": "        before->playerId == now.playerId &&",
+      "check": "cpu",
+      "expect": "belongs to another life"
+    },
+    {
+      "id": "anim-zero-ahead-accepted",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A zero point ahead of the tick is advanced",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        previous->jumpPhaseTick <= tick;",
+      "replace": "        true;",
+      "check": "cpu",
+      "expect": "runs behind its zero point"
+    },
+    {
+      "id": "anim-walkoff-starts",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Walking off an edge at zero vertical speed plays Start",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        value.jumpPhase = now.verticalVelocity > 0 ? JumpPhase::Start : JumpPhase::Airborne;",
+      "replace": "        value.jumpPhase = now.verticalVelocity >= 0 ? JumpPhase::Start : JumpPhase::Airborne;",
+      "check": "cpu",
+      "expect": "walking off an edge"
+    },
+    {
+      "id": "anim-spans-swapped",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "The start span is read from the land span",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    rules.jumpStartTicks = WholeTicks(source.jumpStartSeconds, MaxJumpTicks);",
+      "replace": "    rules.jumpStartTicks = WholeTicks(source.jumpLandSeconds, MaxJumpTicks);",
+      "check": "cpu",
+      "expect": "each span on its own phase"
     }
   ]
 }

@@ -41,10 +41,18 @@ gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConn
 gyo_app_add_library(client_simulation OUT_TARGET simulation
         SOURCES src/Pvp/ClientSimulation.cpp src/Pvp/ClientSimulationRole.cpp
     PUBLIC_LIBRARIES ${domain} ${network} GYO::Time GYO::Threads)
+# The CPU player content shared by the Client and the Match: character, animation
+# set and the animation rules, loadable without any texture
+# (v8-product-anim-rules-source-texture-free).
+gyo_app_add_library(player_content OUT_TARGET content
+        SOURCES src/App/CharacterPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
+        src/Pvp/PlayerAnimationContent.cpp
+    PUBLIC_LIBRARIES ${domain} GYO::Render GYO::Model
+    PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp
-        src/Pvp/PlayerPresentation.cpp src/App/CharacterPresentationDefinition.cpp
-        src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
-    PUBLIC_LIBRARIES ${domain} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
+        src/Pvp/PlayerPresentation.cpp
+        src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp
+    PUBLIC_LIBRARIES ${domain} ${content} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
     PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer GYO::Os GYO::Audio nlohmann_json::nlohmann_json
     PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_AUDIO SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}

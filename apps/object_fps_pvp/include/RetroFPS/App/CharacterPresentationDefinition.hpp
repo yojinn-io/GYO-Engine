@@ -48,4 +48,12 @@ LoadCharacterPresentationDefinition(
     const Engine::Asset::AssetId& presentationId,
     std::string& error);
 
+// The model and its animation set only, with no material binding and no
+// accessory: no texture is decoded, so a headless Match can load it.
+[[nodiscard]] std::shared_ptr<const CharacterPresentationDefinition>
+LoadCharacterAnimationDefinition(
+    Engine::Asset::AssetManager& assets,
+    const Engine::Asset::AssetId& presentationId,
+    std::string& error);
+
 } // namespace fps
