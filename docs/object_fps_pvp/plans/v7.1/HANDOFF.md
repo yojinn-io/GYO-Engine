@@ -515,7 +515,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
       - (b) 改 runner 的收尾順序（先停 Gateway、等 Match 讀到 EOF，再停 Match）：要改凍結的 `run_action_short.py`（v7 第 09 批 C2-B 也用它），新雜湊、B 的開發跑次重跑。
       - (c) rapid 不判 I1（rapid 的用途是 Cooldown；I1 由 gameplay 項目判）。
     - 使用者（2026-10-18）：「我不想要改動小，我想要能稍微精確定位問題和處理掉的方案。」→ 不放寬，改成定位並修掉。
-    - 定位（重現實驗，`scratchpad/rp/stoporder`）：用 B 的執行檔起 Match＋Gateway，先停 Match 的 3 次都沒有「ipc closed」與 clock sync final 行（final ingress 行有）；先停 Gateway 並等它結束的 3 次都有 `reason=eof`。和停下的跑次的日誌特徵相同。兩個缺陷：
+    - 定位（重現實驗，`scratchpad/rp/stoporder`）：用 B 的執行檔起 Match＋Gateway，先停 Match 的 3 次都沒有「ipc closed」與 clock sync final 行（final ingress 行有）；先停 Gateway 並等它結束的 3 次都有 `reason=eof`。和停下的跑次的日誌特徵相同。兩個缺陷（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）：
       - Match：`IpcHost::Stop()`（`IpcHost.cpp:721-730`）直接關 socket，繞過自稱「結束 session 的唯一路徑」的 `Close()`（`:395-400`），還開著的 session 不寫最後的 clock 視窗與「ipc closed」。
       - rapid runner：`run_action_short.py:260-268` 一次對所有行程送 SIGTERM（競態）；gameplay runner（`action_probe.py:590-591`）是先停 Gateway、等它結束再停 Match。
     - 提出的處理：Match 的 `Stop()` 經 `Close("stopped")` 結束 session（先寫失敗的 IPC 測試）；rapid runner 改成 GUI → Gateway → Match 的順序；宣告第 4 版只換 A 的 commit 與雜湊（門檻不變）、B 的 rapid 開發跑次與乾跑後換新目錄重跑。
@@ -530,7 +530,7 @@ dev_log 的記錄規則（2026-10-23，使用者的決定，經規劃會話轉�
       - 本次 session：B 的 4 次是 +49.7、+49.8、+16.3、+66.9 ms（排隊數停在 3、3、2、4）；A 的 4 次是 −0.2、+17.0、+16.5、+16.9 ms（都回到 2）。
       - 上一場 L2（它的 A＝本次 B，同一批執行檔）10 次最多 +33.6 ms，都回到 2。
       - 只出現在 player 1（唯一會開槍的玩家；player 2 沒有動作）。本次 session 的主機都在 8 ms 計時器狀態，但上一場也大多是 8 ms，不足以解釋。
-    - 根因（2026-10-18 定位，使用者：「繼續定位根因……定位完提出處理方案再停下」；工具在 `scratchpad/rp/rootcause/`）：
+    - 根因（2026-10-18 定位，使用者：「繼續定位根因……定位完提出處理方案再停下」；工具在 `scratchpad/rp/rootcause/`）（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）：
       - 逐命令時間線（Client 送出 → Match 收進 → 執行）：新 epoch 的第一個輸入 datagram，r4-B 在 Client 送出後 67.5 ms 才被 Match 收進（r4-A 17.1 ms，之後的都約 0.6 ms）；這段時間 relay 照常轉送，Match 沒有拒收，player 2 的輸入也沒到（Match 為它代用命令）。Gateway 的寫出延遲整場最大約 0.2 ms：封包在 Gateway 交給 link 之前就沒了。
       - Gateway 的計數：player 1 有 36 個輸入被 `drop_rate_limited_input_packets` 丟掉（A 33；player 2 是 4／3）。用 relay 的轉送時間重放 `session.go:118-123` 的限速（固定 1 秒窗口、超過 120 就拒；Gateway 停頓期間的封包在恢復時才讀到），**3 個跑次、兩位玩家、每一種封包的預測拒收數都和 Gateway 的計數完全相同**。
       - 因果鏈：Gateway 停頓 1 秒，核心替它緩衝了約 1 秒份的合法封包，恢復時一次讀進同一個窗口；player 1 平時每秒約 91 個（輸入 60＋動作約 30），約 0.4 秒後超過 120，窗口剩下約 0.6 秒的**每一個輸入**都被丟 → Match 讓它挨餓，在恢復後約 0.93～0.98 秒做 starvation 重設 → 新 epoch 的頭幾個輸入也落在同一個窗口被丟，Match 等窗口結束才開始執行 → Client 已多送了 1～4 步，相位修正補不回來，排隊數停在 3～4 → 約 1 秒後 backlog 重設，落在「恢復後 1.5 秒」的寬限之外。B 與 A 的差別只是重設離窗口結束多遠（67 對 17 ms），和樹無關；上一場同一個執行檔沒出事也是時機。
