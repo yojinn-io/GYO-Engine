@@ -9,7 +9,7 @@ def sample(index, distance, phase, *, holding=False, backward=False):
         'character':{'player_id':1,'ready':True,'prepared_instances':1,'body_meshes':4,'hair_meshes':1,'declared_accessories':1,
         'weapon_meshes':1,'upper_body_mask_count':20,'foot_anchor':[0,-1,0],
         'weapon_world_position':[0,1,distance],'scale':.9,'cycle_distance':3.0,'jog_weight':.4,'phase_cycles':phase%1,
-        'unwrapped_phase_cycles':phase,'signed_distance':distance,'total_distance':abs(distance),
+        'unwrapped_phase_cycles':phase,'authority_phase_cycles':phase,'signed_distance':distance,'total_distance':abs(distance),
         'distance_delta':abs(distance),'speed':3,'playback_rate':1,'phase_reset':index==0,
         'reset_count':1,'reset_reason':'new-player' if index==0 else '',
         'holding':holding,'backward':backward}}}
@@ -24,9 +24,16 @@ class PlayerEvidenceTests(unittest.TestCase):
         result=validate_samples([sample(0,0,0),sample(1,0,.1)])
         self.assertTrue(any('Stationary' in error for error in result['errors']))
 
-    def test_wrong_stride_is_rejected(self):
-        result=validate_samples([sample(0,0,0),sample(1,.1,.1)])
-        self.assertTrue(any('proportional' in error for error in result['errors']))
+    def test_phase_other_than_the_match_sample_is_rejected(self):
+        value=sample(1,.1,.1/3)
+        value['remote']['character']['authority_phase_cycles']=.1/3+.01
+        result=validate_samples([sample(0,0,0),value])
+        self.assertTrue(any("Match's sampled phase" in error for error in result['errors']))
+
+    def test_phase_equal_to_the_match_sample_across_a_cycle_passes(self):
+        value=sample(1,.1,.1/3)
+        value['remote']['character']['authority_phase_cycles']=7+.1/3 # the fraction is what is shown
+        self.assertEqual(validate_samples([sample(0,0,0),value])['errors'],[])
 
     def test_hold_cannot_walk_in_place(self):
         result=validate_samples([sample(0,0,0,holding=True),sample(1,0,.1,holding=True)])

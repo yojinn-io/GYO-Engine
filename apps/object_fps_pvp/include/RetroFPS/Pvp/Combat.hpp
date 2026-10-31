@@ -148,10 +148,12 @@ struct CombatState final {
     std::uint64_t reloadEndTick{};
     ActionId lastShotActionId{};
     std::uint64_t lastShotTick{};
-    // Presentation-only hit record of this life (pv6 contract §2, pv7 §7): the
-    // tick of the last hit, hits taken, the last attacker and the part it hit.
-    // All zero before the first hit; a respawn resets them with the rest of the
-    // state. Match never reads them.
+    // Hit record of this life (pv6 contract §2, pv7 §7): the tick of the last
+    // hit, hits taken, the last attacker and the part it hit. All zero before
+    // the first hit; a respawn resets them with the rest of the state. From
+    // pv9 the hit, shot and reload records select the upper body of the judged
+    // pose (pv9-upper-body-in-hitbox (a), protocol-v9 §7): decision inputs the
+    // Match reads from the hitbox batch on, no longer presentation only.
     std::uint64_t lastDamageTick{};
     std::uint32_t damageCount{};
     PlayerId lastAttackerId{};

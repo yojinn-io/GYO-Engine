@@ -220,7 +220,7 @@ v8-product-anim-authority
 
 「性質不再存在」那一類有寬鬆面。A4 開工前，照 §14.4 的 1～5 逐項列出，跑突變，並交給另一位審查者（Sonnet 5.5）核對，之後才請你核准。
 
-## A4 的設計與 §14.4 逐項表（草稿，2026-10-31；等你看過，見最後的「順序」）
+## A4 的設計與 §14.4 逐項表（2026-10-31 核准，`v8-product-anim-authority-a4-approve`：「核准並 commit」）
 
 ### 設計（要點）
 
@@ -246,12 +246,12 @@ v8-product-anim-authority
 | T1 | `:346` 速度混合 | walk↔jog 權重與一圈距離 | 不改（`PlayerJogWeight`、`PlayerCycleDistance` 照舊在 definition 上；A1 的對齊測試把它們和 Match 的規則綁在一起） | 無 | 無 |
 | T2 | `:381` 相位用權威速度、和 frame rate 無關 | 不同 frame rate、不完整的第一個 frame 都得到同樣的相位 | 改成 E8：30／60／144 FPS 在同一個呈現 Tick，姿勢輸入**完全相同** | **有**：「Client 相位＝距離 ÷ 一圈距離，相對誤差 1e-5」改成「Client 相位＝Match 相位的內插」；Match 相位和距離的關係由 E1 守住，誤差上限是 T ÷ 131072 圈 | 有：不同 frame rate 由「近似」變「完全相同」 |
 | T3 | `:503` 30／60／144 FPS、三個方向 | 相位跟著實際距離 | 距離的診斷值照舊檢查；相位改成「等於內插的權威相位」；方向無關性由 E1 的 jog（0.7 rad）與 strafe 路線守住 | **有**：同 T2 | 同 T2 |
-| T4 | `:526` 停住、撞牆、原地轉身、holding 不會多出步伐 | 沒有位移就沒有相位 | 停住與原地轉身搬到 domain（加上「原地轉身相位不變」的單元測試）；holding 的部分留在 Client（E9） | 無（搬家，判定相同） | 無 |
-| T5 | `:557` 往後走相位倒退、原路走回來相位歸零 | 有號距離 | 搬到 domain：往後走已經有測試；加上「同一條路來回，相位剛好回到原值」（每個 Tick 對稱四捨五入，所以完全相等） | 無 | 無 |
-| T6 | `:573` epoch、不連續、瞬移、過長的 frame 都要重新錨定 | 相位不重播沒看到的移動 | epoch 與瞬移由 Match 的重設守住（E2）。「不連續」和「過長的 frame」是 Client 才有的原因：診斷值照舊重設，但相位改由 snapshot 決定，不再歸零 | **有**：Client 才有的這兩種原因不再讓相位歸零 | 無 |
-| T7 | `:605` 換命與死亡清掉舊的步伐 | 新命不沿用舊命 | 換命由 Match 的重設守住（E2、A2 整合測試）。死亡時改成 Match 凍結、Client 不讀（死亡是全身 clip，§4.4） | **有**：死亡時觀測的相位不再是 0 | 無 |
+| T4 | `:526` 停住、撞牆、原地轉身、holding 不會多出步伐 | 沒有位移就沒有相位 | 停住與原地轉身搬到 domain（加上「原地轉身相位不變」的單元測試）；holding 的部分留在 Client（E9）；Client 的距離診斷值（停住時不變、holding 的第一個樣本仍含最後一步、恢復時的距離、`resetCount` 不變）照原樣保留 | 無（搬家，判定相同） | 有：holding 不凍結跳躍階段（xhigh F1 的守衛） |
+| T5 | `:557` 往後走相位倒退、原路走回來相位歸零 | 有號距離 | 往後走：Client 的觀測照舊（距離、`backward`）；相位改為「顯示的就是權威相位」，`unwrapped` 和距離的關係放寬到相對 2e-3。原路來回：Client 的觀測照舊（`totalDistance`＝3、`signedDistance`≈0），顯示的 `unwrapped` 回到 0（1e-9）；domain 加「相位剛好回到原值」 | **有**：往後走的 `unwrapped` 由預設容許差放寬到 2e-3；`playbackRate` 改和自己的 `cycleDistance` 比 | 無 |
+| T6 | `:573` epoch、不連續、瞬移、過長的 frame 都要重新錨定 | 相位不重播沒看到的移動 | epoch 與瞬移由 Match 的重設守住（E2）。「不連續」和「過長的 frame」是 Client 才有的原因：診斷值與觀測的 `unwrapped` 照舊歸零；顯示的相位（`phaseCycles`）與跳躍階段改由 snapshot 決定 | **有**：Client 才有的這兩種原因，不再讓顯示的相位歸零，也不再讓跳躍階段重設；重設後的累加改成檢查「等於權威相位」。舊的「空中重新錨定不會冒出起跳」改由 domain 的「第一次在空中出現就是 Airborne」守住 | 無 |
+| T7 | `:605` 換命與死亡清掉舊的步伐 | 新命不沿用舊命 | 換命由 Match 的重設守住（E2、A2 整合測試）。死亡時 Match 凍結；Client 照樣存下凍結的值，但死亡是全身 clip，步伐的值不進姿勢（§4.4 的「Client 不讀」指的是這個） | **有**：死亡時顯示的相位是凍結值，不是 0（舊測試沒有檢查它；觀測的 `unwrapped` 照舊歸零） | 無 |
 | T8 | `:624` 100 ms／108 ms 的呈現間隔要重設 | 長間隔不重播 | 診斷值的重設與原因照舊檢查；「相位歸零」拿掉 | **有**：同 T6 | 無 |
-| T9 | `:638` 不同玩家、重新加入的身分不共用歷史 | 每位玩家各自一份 | 照舊（每位玩家的相位取自自己那一筆 snapshot；觀測的 unwrapped 照舊在換人時從 0 起算） | 無 | 無 |
+| T9 | `:638` 不同玩家、重新加入的身分不共用歷史 | 每位玩家各自一份 | 互不影響與換人時重設照舊檢查；第二位玩家的 `unwrapped` 由「距離 ÷ 一圈距離」改成「權威相位的差」 | **有**：同 T2、T3（距離的關係改由 E1 守住） | 無 |
 | T10 | `:849` 跳躍階段跟著 grounded、在跨度內 | 四個階段與 clip 時間 | 階段的推進搬到 domain（E2 已經涵蓋起跳、下落直接進 Loop、短跳、空中重設）；Client 保留 `ResolvePlayerActions` 由零點算 clip 時間的部分，frame 帶入動畫值 | 無 | 無 |
 
 ### 改判定的驗收分析器（`player_presentation_evidence.py`）
@@ -259,17 +259,17 @@ v8-product-anim-authority
 | # | 規則 | 去向 | 寬鬆面 | 收緊面 |
 |---|---|---|---|---|
 | P1 | 重設的 frame：位移為 0、有原因；`phase_cycles`、`unwrapped_phase_cycles`、`signed_distance`、`total_distance` 都是 0 | 拿掉 `phase_cycles`（它取自 snapshot），其他照舊 | **有**：`phase_cycles` | 無 |
-| P2 | 相位差＝有號位移 ÷ 一圈距離（誤差 2e-5） | 改成 `phase_cycles == authority_phase_cycles`（完全相等）。原地與 holding 時相位不動、往後走相位倒退，這兩條照舊 | **有**：Client 端的比例關係（改由 Match 端的 E1 守住） | 有：和權威值完全相等 |
+| P2 | 相位差＝有號位移 ÷ 一圈距離（誤差 2e-5） | 改成 `phase_cycles` 等於 `authority_phase_cycles` 的小數部分（誤差 1e-9）。原地與 holding 時相位不動、往後走相位倒退，這兩條照舊 | **有**：Client 端的比例關係（改由 Match 端的 E1 守住）。另外，這兩個值都由同一個取樣值算出，所以 P2 只抓得到 Client 自己的後處理錯誤，抓不到取樣本身錯；取樣由 E8 的時間軸測試守住。實機的驗收鏈上，已經沒有端到端檢查「相位 ∝ 距離」的地方 | 有：和權威值相等（1e-9） |
 
 ### 寬鬆面的 1～5（T2、T3、T6、T7、T8、P1、P2）
 
 1. **守的性質**：畫面上的步伐相位跟著角色實際走的距離，而且不會因為 frame rate、間隔或重設而重播或亂跳。
 2. **寬鬆面**：
-   - Client 不再自己由位移算相位，所以不再檢查「Client 相位＝距離 ÷ 一圈距離」，改為檢查 Client 等於 Match 的內插值；
-   - Client 才有的重設原因（不連續、過長的 frame）與死亡，不再讓相位歸零。
+   - Client 不再自己由位移算相位，所以不再檢查「Client 相位＝距離 ÷ 一圈距離」（T2、T3、T5、T9、P2），改為檢查 Client 等於 Match 的內插值；距離的關係在 Client 端只剩相對 2e-3；
+   - Client 才有的重設原因（不連續、過長的 frame）不再讓顯示的相位與跳躍階段重設（T6、T8、P1）；死亡時顯示的是凍結值（T7）。
 3. **收緊面**：
-   - 不同 frame rate 由近似變成完全相同（E8）；
-   - Client 的相位必須和權威值完全相等（P2）。
+   - 不同 frame rate 由近似變成完全相同（E8；`unwrapped` 是 1e-12）；
+   - Client 的相位必須和權威值相等（P2，1e-9）。
 4. **由誰守住**：
    - 相位和距離的關係：Match 端的 E1（試行 3 最壞 0.59 倍門檻）與 E2；
    - 不重播：Match 的重設（換 epoch、瞬移、換命）與 E2；
@@ -343,7 +343,7 @@ v8-product-anim-authority
 - E1 比的是合成路線，不是實際對局的紀錄。實際對局的觀感，在 `v8-product-hitbox-acceptance` 的 L2 試玩裡看。
 - E3 只在這台 Intel Mac 上比。跨平台靠零角度的 golden 子集與 L1。
 
-## 附錄 A：`player-presentation.zh-Hant.md` 的 Design Invariants（草稿）
+## 附錄 A：`player-presentation.zh-Hant.md` 的 Design Invariants（2026-10-31 核准，`v8-product-anim-presentation-invariants`）
 
 1. 遠端玩家的步伐相位、移動權重、jog 權重、跳躍階段與它的零點，只來自 snapshot 的 `animation`（Match 的權威）。Client 不由位移、速度或呈現的時間累積它們。
 2. Client 對它們只做 protocol-v9 §4.4 的內插（`InterpolatePlayerAnimation`，和 Match 的回溯共用），以及 holding 時的凍結。

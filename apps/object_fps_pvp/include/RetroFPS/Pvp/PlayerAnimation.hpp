@@ -75,6 +75,27 @@ inline constexpr PlayerAnimationRules SyntheticPlayerAnimationRules{
 [[nodiscard]] bool ValidPlayerAnimations(std::span<const PlayerState> players,
                                          std::span<const PlayerAnimation> animation, std::uint64_t tick) noexcept;
 
+// The animation between two authority values of one player (protocol-v9
+// §4.4), shared by the Client's presentation and the Match's rewind: the
+// phase by its signed difference, the weights linearly, the jump phase and
+// its zero point from the earlier value. Values of two lives use the earlier.
+struct PlayerAnimationSample final {
+    PlayerId playerId{};
+    std::uint64_t lifeGeneration{};
+    // The earlier value's q16 plus alpha x the signed difference; may leave
+    // [0, 2^32) by less than 2^31 and is read modulo 2^32.
+    double gaitPhaseQ16{};
+    double moveWeight{}, jogWeight{}; // [0, 1]
+    JumpPhase jumpPhase{JumpPhase::Grounded};
+    std::uint64_t jumpPhaseTick{};
+};
+[[nodiscard]] PlayerAnimationSample InterpolatePlayerAnimation(const PlayerAnimation& a, const PlayerAnimation& b,
+                                                               double alpha) noexcept;
+// The position inside one gait cycle, [0, 1), of a sampled q16 phase.
+[[nodiscard]] double GaitCycleFraction(double gaitPhaseQ16) noexcept;
+// The signed cycles from one sampled phase to the next, the shorter way.
+[[nodiscard]] double GaitCycleDifference(double later, double earlier) noexcept;
+
 // One authority tick of one player (protocol-v9 §4.4). `previous` is this
 // state machine's value at the tick before, `before` the player's authority
 // state then; both are absent for a player seen for the first time.

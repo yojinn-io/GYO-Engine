@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include "PresentationLegacyLocomotion.hpp"
 #include "RetroFPS/Pvp/PlayerAnimation.hpp"
 #include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
@@ -25,7 +26,7 @@
 #include <vector>
 
 // v8-product-anim-authority A1: the Match's integer state machine against the
-// Client's float one it replaces (E1), and the Match's texture-free rules
+// Client's float one it replaced (E1; frozen in PresentationLegacyLocomotion.hpp), and the Match's texture-free rules
 // against the Client's (v8-product-anim-rules-source-texture-free).
 namespace {
 using namespace fps::pvp;
@@ -209,7 +210,7 @@ void Compare(const Route& route, const PlayerPresentationDefinition& definition,
     const std::string name = route.name;
     CAPTURE(name);
     const auto& rules = definition.animationRules;
-    PlayerLocomotionState old;
+    PresentationLegacyLocomotion::LocomotionState old;
     std::optional<PlayerAnimation> value;
     std::optional<PlayerState> before;
     double cycles = 0; // the integer phase, unwrapped by its signed differences
@@ -231,7 +232,7 @@ void Compare(const Route& route, const PlayerPresentationDefinition& definition,
             const double dz = static_cast<double>(now.position.z) - before->position.z;
             planarSpeed = std::sqrt(dx * dx + dz * dz) * AuthorityTickRate;
         }
-        PlayerPresentationFrame frame;
+        PresentationLegacyLocomotion::Frame frame;
         frame.playerId = 1;
         frame.movementEpoch = now.movementEpoch;
         frame.position = now.position;
@@ -243,7 +244,7 @@ void Compare(const Route& route, const PlayerPresentationDefinition& definition,
         frame.verticalVelocity = now.verticalVelocity;
         frame.crouched = now.crouched;
         std::string error;
-        REQUIRE_MESSAGE(AdvancePlayerLocomotion(old, frame, definition, error), error);
+        REQUIRE_MESSAGE(PresentationLegacyLocomotion::AdvanceLocomotion(old, frame, definition, error), error);
         const auto previousPhase = value ? std::optional{value->gaitPhaseQ16} : std::nullopt;
         value = AdvancePlayerAnimation(rules, value, before ? &*before : nullptr, now, tick);
         before = now;

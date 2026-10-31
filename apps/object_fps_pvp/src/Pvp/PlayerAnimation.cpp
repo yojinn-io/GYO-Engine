@@ -86,6 +86,38 @@ double PlayerCycleDistance(const PlayerAnimationRules& rules, double jogRatio) n
     return rules.walkCycleDistance + (rules.jogCycleDistance - rules.walkCycleDistance) * jogRatio;
 }
 
+PlayerAnimationSample InterpolatePlayerAnimation(const PlayerAnimation& a, const PlayerAnimation& b,
+                                                 double alpha) noexcept {
+    const bool sameLife = a.playerId == b.playerId && a.lifeGeneration == b.lifeGeneration;
+    const double t = sameLife ? Engine::Math::Clamp(alpha, 0.0, 1.0) : 0.0;
+    const auto difference = static_cast<std::int32_t>(b.gaitPhaseQ16 - a.gaitPhaseQ16);
+    PlayerAnimationSample sample;
+    sample.playerId = a.playerId;
+    sample.lifeGeneration = a.lifeGeneration;
+    sample.gaitPhaseQ16 = static_cast<double>(a.gaitPhaseQ16) + t * difference;
+    const auto lerp = [&](std::uint32_t from, std::uint32_t to) {
+        return (static_cast<double>(from) + t * (static_cast<double>(to) - static_cast<double>(from))) / 1000.0;
+    };
+    sample.moveWeight = lerp(a.moveWeightPermille, b.moveWeightPermille);
+    sample.jogWeight = lerp(a.jogWeightPermille, b.jogWeightPermille);
+    sample.jumpPhase = a.jumpPhase;
+    sample.jumpPhaseTick = a.jumpPhaseTick;
+    return sample;
+}
+
+double GaitCycleFraction(double gaitPhaseQ16) noexcept {
+    const double cycles = gaitPhaseQ16 / 65536.0;
+    return cycles - std::floor(cycles);
+}
+
+double GaitCycleDifference(double later, double earlier) noexcept {
+    // Modulo 2^32 into [-2^31, 2^31): the shorter way round.
+    double difference = std::fmod(later - earlier, 4294967296.0);
+    if (difference >= 2147483648.0) difference -= 4294967296.0;
+    if (difference < -2147483648.0) difference += 4294967296.0;
+    return difference / 65536.0;
+}
+
 bool ValidPlayerAnimations(std::span<const PlayerState> players, std::span<const PlayerAnimation> animation,
                            std::uint64_t tick) noexcept {
     if (players.size() != animation.size()) return false;

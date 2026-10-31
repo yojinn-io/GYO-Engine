@@ -143,6 +143,9 @@
         "gyo_object_fps_pvp_authority_digest"
       ],
       "ctest": "object_fps_pvp.authority_digest"
+    },
+    "player_presentation_evidence": {
+      "ctest": "object_fps_pvp.player_presentation_evidence"
     }
   },
   "mutants": [
@@ -7827,6 +7830,116 @@
       "replace": "                    snapshot.animation.push_back({a.player_id(),a.life_generation(),0,a.move_weight_permille(),",
       "check": "worker",
       "expect": "mock worker wait timed out"
+    },
+    {
+      "id": "a4-phase-accumulated",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The shown phase is the presentation accumulation, not the authority",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "        state.phaseCycles = GaitCycleFraction(phaseQ16);",
+      "replace": "        state.phaseCycles = state.unwrappedPhaseCycles - std::floor(state.unwrappedPhaseCycles);",
+      "check": "presentation",
+      "expect": "keeps showing the authority phase|life and death boundaries|rendering gaps"
+    },
+    {
+      "id": "a4-hold-not-frozen",
+      "batch": "v8-product-anim-authority-client",
+      "what": "A timeline hold does not freeze the shown values",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "    if (!state.holding) {\n        if (!state.phaseReset)",
+      "replace": "    if (true) {\n        if (!state.phaseReset)",
+      "check": "presentation",
+      "expect": "timeline hold freezes the pose"
+    },
+    {
+      "id": "a4-move-from-distance",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The move weight follows this frame displacement",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "        state.moveWeight = frame.animation ? static_cast<float>(frame.animation->moveWeight) : 0.0F;",
+      "replace": "        state.moveWeight = state.jogging ? 1.0F : 0.0F;",
+      "check": "presentation",
+      "expect": "30 60 and 144 FPS|no phantom footsteps"
+    },
+    {
+      "id": "a4-jump-from-grounded",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The jump phase follows the grounded state, not the authority",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "    state.jumpPhase = frame.animation ? PresentedJumpPhase(frame.animation->jumpPhase) :",
+      "replace": "    state.jumpPhase = false ? PresentedJumpPhase(frame.animation->jumpPhase) :",
+      "check": "presentation",
+      "expect": "jump clips play from the Match"
+    },
+    {
+      "id": "a4-idle-accumulated",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The idle clock restarts on reanchors",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "    state.idleSeconds = Engine::Math::Max(0.0, frame.presentationSeconds - frame.lifeStateSeconds);",
+      "replace": "    state.idleSeconds = state.phaseReset ? 0.0 : state.idleSeconds + elapsed;",
+      "check": "presentation",
+      "expect": "idle clock is presentation time"
+    },
+    {
+      "id": "a4-interpolate-unsigned",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The interpolation takes the unsigned phase difference",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    sample.gaitPhaseQ16 = static_cast<double>(a.gaitPhaseQ16) + t * difference;",
+      "replace": "    sample.gaitPhaseQ16 = static_cast<double>(a.gaitPhaseQ16) + t * (static_cast<double>(b.gaitPhaseQ16) - a.gaitPhaseQ16);",
+      "check": "cpu",
+      "expect": "signed phase, linear weights"
+    },
+    {
+      "id": "a4-interpolate-later-jump",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The interpolation takes the later jump phase",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    sample.jumpPhase = a.jumpPhase;\n    sample.jumpPhaseTick = a.jumpPhaseTick;",
+      "replace": "    sample.jumpPhase = b.jumpPhase;\n    sample.jumpPhaseTick = b.jumpPhaseTick;",
+      "check": "cpu",
+      "expect": "signed phase, linear weights"
+    },
+    {
+      "id": "a4-interpolate-across-lives",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The interpolation blends two lives",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    const double t = sameLife ? Engine::Math::Clamp(alpha, 0.0, 1.0) : 0.0;",
+      "replace": "    const double t = Engine::Math::Clamp(alpha, 0.0, 1.0);",
+      "check": "cpu",
+      "expect": "signed phase, linear weights"
+    },
+    {
+      "id": "a4-timeline-no-animation",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The timeline drops the Match animation",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SnapshotTimeline.hpp",
+      "find": "            animation = InterpolatePlayerAnimation(*from, to ? *to : *from, alpha);",
+      "replace": "",
+      "check": "cpu",
+      "expect": "samples the Match animation"
+    },
+    {
+      "id": "a4-analyzer-phase-unchecked",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The analyzer accepts a phase other than the Match sample",
+      "file": "build/acceptance/object_fps_pvp/player_presentation_evidence.py",
+      "find": "                if abs(c[\"phase_cycles\"] - (c[\"authority_phase_cycles\"] - math.floor(c[\"authority_phase_cycles\"]))) > 1e-9:",
+      "replace": "                if False:",
+      "check": "player_presentation_evidence",
+      "expect": "test_phase_other_than_the_match_sample"
+    },
+    {
+      "id": "a4-hold-freezes-jump",
+      "batch": "v8-product-anim-authority-client",
+      "what": "A timeline hold also freezes the jump phase (xhigh review F1)",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "find": "        state.jogWeight = frame.animation ? frame.animation->jogWeight : 0.0;\n    }\n",
+      "replace": "        state.jogWeight = frame.animation ? frame.animation->jogWeight : 0.0;\n    }\n    if (state.holding) return true;\n",
+      "check": "presentation",
+      "expect": "does not freeze the jump phase"
     }
   ]
 }

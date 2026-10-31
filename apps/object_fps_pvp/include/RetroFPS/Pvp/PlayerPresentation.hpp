@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -22,9 +23,10 @@ struct PlayerPresentationFrame final {
     // Look direction; a positive pitch looks down (the camera and ShotQuery sign).
     float yaw{}, pitch{};
     double presentationSeconds{}, deltaSeconds{};
-    // Planar speed between the two authority snapshots bracketing this sample:
-    // independent of the render rate. Zero means unknown or not moving.
-    double planarSpeed{};
+    // The Match's animation at this sample (protocol-v9 §4.4): the gait phase,
+    // the weights and the jump phase come only from it. Absent before the
+    // first snapshot that carries one: the rest pose.
+    std::optional<PlayerAnimationSample> animation;
     bool continuous{true}, holding{};
     std::uint64_t lifeGeneration{1};
     bool dead{};
@@ -98,8 +100,11 @@ struct PlayerLocomotionState final {
     bool dead{};
     bool grounded{true};
     PlayerJumpPhase jumpPhase{PlayerJumpPhase::Grounded};
-    double jumpPhaseSeconds{}; // presentationSeconds at which jumpPhase began
+    double jumpPhaseSeconds{}; // the phase's clip time zero point (the Match's tick / rate)
     bool crouched{}; // the latest frame's stance
+    // The sampled q16 phase this state follows (protocol-v9 §4.4), and the one
+    // of the previous frame, whose signed difference unwrapPhaseCycles adds.
+    double authorityPhaseQ16{};
 };
 
 // The speed blend: jog weight from a sampled planar speed, and the distance one
@@ -145,6 +150,8 @@ struct PlayerPresentationObservation final {
     std::uint64_t playerId{}, movementEpoch{}, poseRevision{}, resetCount{};
     double phaseCycles{}, unwrappedPhaseCycles{}, signedDistance{}, totalDistance{};
     double distanceDelta{}, cycleDistance{}, jogWeight{}, speed{}, playbackRate{};
+    // The Match's sampled phase this frame used: phaseCycles is its fraction.
+    double authorityPhaseCycles{};
     float moveWeight{}, scale{};
     Engine::Math::Vec3 footAnchor{};
     Engine::Math::Vec3 weaponWorldPosition{};

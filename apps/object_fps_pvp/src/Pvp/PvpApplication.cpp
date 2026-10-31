@@ -812,7 +812,7 @@ struct PvpApplication::Impl final {
             characterFrame.presentationSeconds = sampled ? sampled->presentationTick / AuthorityTickRate :
                 static_cast<double>(state.snapshot->tick) / AuthorityTickRate;
             characterFrame.deltaSeconds = deltaSeconds;
-            characterFrame.planarSpeed = sampled ? sampled->planarSpeed : 0;
+            if (sampled) characterFrame.animation = sampled->animation; // pv9 §4.4: the Match's animation
             characterFrame.continuous = sampled && !characterPresentationSkipped &&
                 sampled->phaseReanchors == reanchorsBefore;
             characterFrame.holding = sampled && sampled->holding;

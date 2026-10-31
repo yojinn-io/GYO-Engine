@@ -379,3 +379,66 @@ TEST_CASE("PvP animation resets when only the life state changes") {
     CHECK(track.value->jumpPhase == JumpPhase::Airborne);
     CHECK(track.value->jumpPhaseTick == 2);
 }
+
+// v8-product-anim-authority A4: properties the Client's presentation tests
+// checked on its own accumulation, now the Match's.
+TEST_CASE("PvP animation turning in place adds no phase") {
+    Track track;
+    track.Step(Player(0));
+    const auto phase = track.Step(Player(1.0F / 60)).gaitPhaseQ16;
+    for (int i = 1; i <= 30; ++i) {
+        auto turning = Player(1.0F / 60);
+        turning.yaw = static_cast<float>(i) / 10;
+        CHECK(track.Step(turning).gaitPhaseQ16 == phase);
+    }
+    CHECK(track.value->moveWeightPermille == 0);
+}
+
+TEST_CASE("PvP animation walking a route back returns the phase exactly") {
+    Track track;
+    track.Step(Player(0));
+    for (int i = 1; i <= 30; ++i) track.Step(Player(static_cast<float>(i) * 0.0625F));
+    for (int i = 29; i >= 0; --i) track.Step(Player(static_cast<float>(i) * 0.0625F));
+    CHECK(track.value->gaitPhaseQ16 == 0);
+}
+
+TEST_CASE("PvP animation landing during Start goes to Land") {
+    Track track;
+    track.Step(Player(0));
+    track.Step(Player(0, false, 2));
+    CHECK(track.Step(Player(0, true)).jumpPhase == JumpPhase::Land);
+    CHECK(track.value->jumpPhaseTick == 3);
+}
+
+TEST_CASE("PvP animation interpolation takes the signed phase, linear weights and the earlier jump phase") {
+    PlayerAnimation a{.playerId = 1, .lifeGeneration = 1, .gaitPhaseQ16 = 0xFFFFFF00U, .moveWeightPermille = 0,
+                      .jogWeightPermille = 1000, .jumpPhase = JumpPhase::Start, .jumpPhaseTick = 4};
+    auto b = a;
+    b.gaitPhaseQ16 = 0x100; // 512 q16 later, across 2^32
+    b.moveWeightPermille = 500;
+    b.jogWeightPermille = 0;
+    b.jumpPhase = JumpPhase::Airborne;
+    b.jumpPhaseTick = 10;
+    const auto half = InterpolatePlayerAnimation(a, b, 0.5);
+    CHECK(half.gaitPhaseQ16 == static_cast<double>(0xFFFFFF00U) + 256);
+    CHECK(GaitCycleFraction(half.gaitPhaseQ16) == doctest::Approx(0.0));
+    CHECK(half.moveWeight == doctest::Approx(0.25));
+    CHECK(half.jogWeight == doctest::Approx(0.5));
+    CHECK(half.jumpPhase == JumpPhase::Start); // the earlier value
+    CHECK(half.jumpPhaseTick == 4);
+    CHECK(GaitCycleDifference(InterpolatePlayerAnimation(a, b, 1).gaitPhaseQ16, a.gaitPhaseQ16) == doctest::Approx(512.0 / 65536));
+    auto other = b;
+    other.lifeGeneration = 2; // another life: the earlier value alone
+    CHECK(InterpolatePlayerAnimation(a, other, 0.5).gaitPhaseQ16 == static_cast<double>(a.gaitPhaseQ16));
+    CHECK(InterpolatePlayerAnimation(a, b, 0).moveWeight == 0);
+}
+
+// xhigh review G2: the signed cycle difference both ways across 2^32.
+TEST_CASE("PvP gait cycle difference takes the shorter way across 2^32") {
+    CHECK(GaitCycleDifference(256.0, 4294967040.0) == doctest::Approx(512.0 / 65536));    // forward across
+    CHECK(GaitCycleDifference(4294967040.0, 256.0) == doctest::Approx(-512.0 / 65536));   // backward across
+    CHECK(GaitCycleDifference(4294967296.0 + 10, 4294967296.0 - 10) == doctest::Approx(20.0 / 65536));
+    CHECK(GaitCycleDifference(-10.0, 10.0) == doctest::Approx(-20.0 / 65536));
+    CHECK(GaitCycleDifference(2147483647.0, 0.0) == doctest::Approx(2147483647.0 / 65536));
+    CHECK(GaitCycleDifference(2147483648.0, 0.0) == doctest::Approx(-2147483648.0 / 65536)); // [-2^31, 2^31)
+}

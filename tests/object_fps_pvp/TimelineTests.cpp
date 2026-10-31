@@ -383,3 +383,39 @@ TEST_CASE("PvP the view tick is the global cursor, not a respawned player's") {
     CHECK(ViewTickQ16(cursor) == static_cast<std::uint64_t>(std::floor(*cursor * 65536.0)));
     CHECK(ViewTickQ16(cursor) < 6 * 65536);
 }
+
+// v8-product-anim-authority A4 (E8, E9): the timeline samples the Match's
+// animation between the bracketing states with the shared interpolation; a
+// missing snapshot is bridged like the position, and another life's value
+// is never paired with this life's state.
+TEST_CASE("PvP remote history samples the Match animation between its bracketing states") {
+    const auto animated = [](std::uint64_t tick, std::uint32_t phase, std::uint64_t life = 1) {
+        auto snapshot = State(tick);
+        for (auto& player : snapshot.players) player.lifeGeneration = life;
+        snapshot.animation = {{.playerId = 1, .lifeGeneration = life, .gaitPhaseQ16 = phase, .moveWeightPermille = 1000,
+                               .jumpPhase = JumpPhase::Grounded},
+                              {.playerId = 2, .lifeGeneration = life, .jumpPhase = JumpPhase::Grounded}};
+        return snapshot;
+    };
+    SnapshotTimeline timeline;
+    REQUIRE(timeline.Push(animated(1, 1000), At(1 * MovementTickSeconds)));
+    REQUIRE(timeline.Push(animated(3, 5000), At(3 * MovementTickSeconds))); // tick 2 was lost
+    const auto pose = Presented(timeline, 1, At(3 * MovementTickSeconds)); // the cursor is one tick behind
+    REQUIRE(pose);
+    REQUIRE(pose->animation);
+    const auto a = animated(1, 1000).animation[0];
+    const auto b = animated(3, 5000).animation[0];
+    const auto expected = InterpolatePlayerAnimation(a, b, pose->alpha);
+    CHECK(pose->lowerTick == 1);
+    CHECK(pose->upperTick == 3);
+    CHECK(pose->animation->gaitPhaseQ16 == expected.gaitPhaseQ16);
+    CHECK(pose->animation->gaitPhaseQ16 == doctest::Approx(1000 + pose->alpha * 4000));
+    SnapshotTimeline reborn;
+    REQUIRE(reborn.Push(animated(1, 1000), At(1 * MovementTickSeconds)));
+    auto next = animated(2, 9000, 2); // a new life: the state and its animation move together
+    REQUIRE(reborn.Push(next, At(2 * MovementTickSeconds)));
+    const auto later = Presented(reborn, 1, At(3 * MovementTickSeconds));
+    REQUIRE(later);
+    REQUIRE(later->animation);
+    CHECK(later->animation->lifeGeneration == later->player.lifeGeneration);
+}

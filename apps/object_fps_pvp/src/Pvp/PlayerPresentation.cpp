@@ -230,6 +230,19 @@ double PlayerCycleDistance(const PlayerPresentationDefinition& definition, const
     return walk + (jog - walk) * jogWeight;
 }
 
+namespace {
+PlayerJumpPhase PresentedJumpPhase(JumpPhase phase) {
+    switch (phase) {
+    case JumpPhase::Start: return PlayerJumpPhase::Start;
+    case JumpPhase::Airborne: return PlayerJumpPhase::Airborne;
+    case JumpPhase::Land: return PlayerJumpPhase::Land;
+    case JumpPhase::Grounded:
+    case JumpPhase::Unspecified: break;
+    }
+    return PlayerJumpPhase::Grounded;
+}
+} // namespace
+
 bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
     const PlayerPresentationDefinition& definition, std::string& error) {
     error.clear();
@@ -242,12 +255,13 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         !std::isfinite(definition.referenceSpeed) || definition.referenceSpeed <= 0 ||
         !std::isfinite(definition.walkNativeSpeed) || definition.walkNativeSpeed <= 0 ||
         !std::isfinite(definition.jogNativeSpeed) || definition.jogNativeSpeed <= definition.walkNativeSpeed ||
-        !std::isfinite(frame.planarSpeed) || frame.planarSpeed < 0 ||
         !std::isfinite(definition.transitionSeconds) || definition.transitionSeconds <= 0 ||
         !std::isfinite(definition.maxFrameDeltaSeconds) || definition.maxFrameDeltaSeconds <= 0 ||
         !std::isfinite(frame.verticalVelocity) || !std::isfinite(frame.lifeStateSeconds) ||
         !std::isfinite(frame.shotSeconds) || !std::isfinite(frame.reloadStartSeconds) ||
         !std::isfinite(frame.reloadEndSeconds) ||
+        (frame.animation && (!std::isfinite(frame.animation->gaitPhaseQ16) ||
+            !std::isfinite(frame.animation->moveWeight) || !std::isfinite(frame.animation->jogWeight))) ||
         !std::isfinite(definition.jumpStartSeconds) || definition.jumpStartSeconds <= 0 ||
         !std::isfinite(definition.jumpLandSeconds) || definition.jumpLandSeconds <= 0) {
         error = "player locomotion requires valid sampled values and calibration";
@@ -260,6 +274,9 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
             return false;
         }
     }
+    // Displacement and resets are observations of this presentation only: the
+    // gait phase, the weights and the jump phase come from the Match's sampled
+    // animation (protocol-v9 §4.4, player-presentation Design Invariants 1-2).
     const double elapsed = frame.presentationSeconds - state.previousPresentationSeconds;
     const Engine::Math::Vec3d planar{static_cast<double>(frame.position.x) - state.previousPosition.x, 0.0,
                                      static_cast<double>(frame.position.z) - state.previousPosition.z};
@@ -275,6 +292,7 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
     else if (elapsed < 0 || (elapsed == 0 && distance > 0.000001)) reset = "time";
     else if (distance > definition.referenceSpeed * definition.maxFrameDeltaSeconds)
         reset = "teleport";
+    const double phaseQ16 = frame.animation ? frame.animation->gaitPhaseQ16 : 0;
     if (!reset.empty()) {
         const auto count = state.resetCount + 1;
         state = {};
@@ -286,12 +304,6 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         state.movementEpoch = frame.movementEpoch;
         state.lifeGeneration = frame.lifeGeneration;
         state.dead = frame.dead;
-        // A reanchor never invents a liftoff or landing it did not observe.
-        state.grounded = frame.grounded;
-        state.jumpPhase = frame.grounded ? PlayerJumpPhase::Grounded : PlayerJumpPhase::Airborne;
-        state.jumpPhaseSeconds = frame.presentationSeconds;
-        state.jogWeight = PlayerJogWeight(definition, frame.planarSpeed);
-        state.cycleDistance = PlayerCycleDistance(definition, state.jogWeight);
     } else {
         state.phaseReset = false;
         state.resetReason.clear();
@@ -305,42 +317,28 @@ bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentat
         const double signedDelta = state.backward ? -state.distanceDelta : state.distanceDelta;
         state.signedDistance += signedDelta;
         state.totalDistance += state.distanceDelta;
-        // The weight follows the authority-sampled speed, never this frame's own
-        // displacement, so equal routes reach equal phases at any render rate.
-        // Without a speed (held or stopped samples) the last blend is kept.
-        if (frame.planarSpeed > 0) state.jogWeight = PlayerJogWeight(definition, frame.planarSpeed);
-        state.cycleDistance = PlayerCycleDistance(definition, state.jogWeight);
-        state.unwrappedPhaseCycles += signedDelta / state.cycleDistance;
-        state.phaseCycles = state.unwrappedPhaseCycles - std::floor(state.unwrappedPhaseCycles);
         state.speed = elapsed > 0 ? state.distanceDelta / elapsed : 0;
-        state.playbackRate = (state.backward ? -state.speed : state.speed) / state.cycleDistance;
-        state.idleSeconds += elapsed;
-        // All pose clocks follow the sampled timeline. A visible hold freezes
-        // its last walking pose instead of blending legs while position stalls.
-        if (!state.holding) {
-            const float weightStep = static_cast<float>(elapsed / definition.transitionSeconds);
-            state.moveWeight = state.jogging ? Engine::Math::Min(1.0F, state.moveWeight + weightStep) :
-                Engine::Math::Max(0.0F, state.moveWeight - weightStep);
-        }
-        const double now = frame.presentationSeconds;
-        if (state.grounded && !frame.grounded) {
-            state.jumpPhase = frame.verticalVelocity > 0 ? PlayerJumpPhase::Start : PlayerJumpPhase::Airborne;
-            state.jumpPhaseSeconds = now;
-        } else if (!state.grounded && frame.grounded) {
-            state.jumpPhase = PlayerJumpPhase::Land;
-            state.jumpPhaseSeconds = now;
-        }
-        // The contract spans end in sampled time; control never waits for them.
-        if (state.jumpPhase == PlayerJumpPhase::Start && now - state.jumpPhaseSeconds >= definition.jumpStartSeconds) {
-            state.jumpPhase = PlayerJumpPhase::Airborne;
-            state.jumpPhaseSeconds += definition.jumpStartSeconds;
-        } else if (state.jumpPhase == PlayerJumpPhase::Land &&
-                   now - state.jumpPhaseSeconds >= definition.jumpLandSeconds) {
-            state.jumpPhase = PlayerJumpPhase::Grounded;
-            state.jumpPhaseSeconds += definition.jumpLandSeconds;
-        }
-        state.grounded = frame.grounded;
     }
+    // A visible hold freezes its last walking pose instead of blending legs
+    // while position stalls; otherwise the authority gait applies as sampled.
+    if (!state.holding) {
+        if (!state.phaseReset) state.unwrappedPhaseCycles += GaitCycleDifference(phaseQ16, state.authorityPhaseQ16);
+        state.authorityPhaseQ16 = phaseQ16;
+        state.phaseCycles = GaitCycleFraction(phaseQ16);
+        state.moveWeight = frame.animation ? static_cast<float>(frame.animation->moveWeight) : 0.0F;
+        state.jogWeight = frame.animation ? frame.animation->jogWeight : 0.0;
+    }
+    // The hold freezes the gait only: a jump in place moves no planar
+    // position, so the jump phase follows the authority even while holding.
+    state.jumpPhase = frame.animation ? PresentedJumpPhase(frame.animation->jumpPhase) :
+        (frame.grounded ? PlayerJumpPhase::Grounded : PlayerJumpPhase::Airborne);
+    state.jumpPhaseSeconds = frame.animation ?
+        static_cast<double>(frame.animation->jumpPhaseTick) / AuthorityTickRate : frame.presentationSeconds;
+    state.cycleDistance = PlayerCycleDistance(definition, state.jogWeight);
+    state.playbackRate = (state.backward ? -state.speed : state.speed) / state.cycleDistance;
+    // The idle clock runs from the life's start (protocol-v9 §4.1).
+    state.idleSeconds = Engine::Math::Max(0.0, frame.presentationSeconds - frame.lifeStateSeconds);
+    state.grounded = frame.grounded;
     state.previousPosition = frame.position;
     state.previousPresentationSeconds = frame.presentationSeconds;
     state.crouched = frame.crouched;
@@ -702,7 +700,10 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             // The prepared initial pose is the level aim pose: any pitch is sampled.
             const bool plain = actions.upper == PlayerUpperAction::Hold &&
                 actions.lower == PlayerLowerAction::Locomotion && actions.aimWeight == 0;
-            if (slot.locomotion.phaseReset && plain) {
+            // A reset still shows the authority phase; only a rest pose with
+            // no gait to show takes the prepared initial pose.
+            if (slot.locomotion.phaseReset && plain && slot.locomotion.moveWeight == 0 &&
+                slot.locomotion.idleSeconds == 0) {
                 if (!slot.idlePrepared) impl.Upload(slot, impl.initialPose);
                 slot.pose = impl.initialPose;
                 slot.idlePrepared = true;
@@ -729,6 +730,7 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             observation.backward = state.backward;
             observation.phaseReset = state.phaseReset;
             observation.phaseCycles = state.phaseCycles;
+            observation.authorityPhaseCycles = state.authorityPhaseQ16 / 65536.0;
             observation.unwrappedPhaseCycles = state.unwrappedPhaseCycles;
             observation.signedDistance = state.signedDistance;
             observation.totalDistance = state.totalDistance;

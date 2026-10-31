@@ -28,6 +28,8 @@ struct SnapshotPresentation final {
     std::uint64_t lowerResolvedCommand{}, upperResolvedCommand{};
     bool missingFutureSnapshot{};
     std::optional<CombatState> combat;
+    // The Match's animation between the bracketing states (protocol-v9 §4.4).
+    std::optional<PlayerAnimationSample> animation;
 };
 
 // Product-local, receive-stamped state history. Input/network frequency never
@@ -144,10 +146,16 @@ public:
         std::optional<CombatState> combat;
         for (const auto& value : history_[before].snapshot.combat)
             if (value.playerId == id && value.lifeGeneration == player.lifeGeneration) combat = value;
+        std::optional<PlayerAnimationSample> animation;
+        const auto* from = FindAnimation(history_[before].snapshot, id, player.lifeGeneration);
+        if (from) {
+            const auto* to = FindAnimation(history_[after].snapshot, id, player.lifeGeneration);
+            animation = InterpolatePlayerAnimation(*from, to ? *to : *from, alpha);
+        }
         return SnapshotPresentation{player, aTick, bTick, static_cast<double>(baseTick_) + playerCursor,
             alpha, planarSpeed, Engine::Math::Max(0.0, Seconds(now, history_.back().receivedAt)), holdSeconds_, totalHoldSeconds_,
             history_.size(), holdCount_, gaps_, evictions_, phaseReanchors_, holding,
-            a.lastResolvedCommand, b.lastResolvedCommand, missingFuture, combat};
+            a.lastResolvedCommand, b.lastResolvedCommand, missingFuture, combat, animation};
     }
     // Commit only after the renderer successfully submits the selected pose.
     // A skipped selection must not create or end a visible hold episode.
@@ -187,6 +195,11 @@ private:
         const auto found = std::find_if(snapshot.players.begin(), snapshot.players.end(),
             [id](const auto& player) { return player.playerId == id; });
         return found == snapshot.players.end() ? nullptr : &*found;
+    }
+    static const PlayerAnimation* FindAnimation(const WorldSnapshot& snapshot, PlayerId id, std::uint64_t life) {
+        const auto found = std::find_if(snapshot.animation.begin(), snapshot.animation.end(),
+            [&](const auto& value) { return value.playerId == id && value.lifeGeneration == life; });
+        return found == snapshot.animation.end() ? nullptr : &*found;
     }
     static bool PoseChanged(const PlayerState& a, const PlayerState& b) {
         constexpr float epsilon = 1e-6F;

@@ -852,6 +852,7 @@ Arena JSON Data Contract 維持不變。v2 測試證據見
 | 控制事件有序，完整狀態可合併 | Join／Leave 不丟失，快照不形成無界 FIFO | 是否誤丟控制，或替換已部分寫出的 TCP frame？ |
 | 連線 generation 與 movementEpoch 分工 | 換連線清整體歷史；單人 epoch 只切該玩家區段 | 是否為一人復原而重置另一人的時間線？ |
 | 觀測與模擬契約分開 | 診斷時間戳不能成為 Client 指定的模擬參數 | 是否以診斷欄位驅動玩法，或把測試注入放入正式遊戲？ |
+| 判定姿勢只來自 Match 的權威動畫狀態（protocol-v9 §7 第 2 項，`v8-product-anim-authority`） | 畫面上的遠端姿勢就是被判定的姿勢；Client 的呈現不參與判定 | 是否讓 Client 自己累積步伐相位或權重，或讓呈現的狀態回流到判定？（[player-presentation](player-presentation.zh-Hant.md) 的 Design Invariants） |
 
 觀測也必須符合因果：Host 可能在 Client 的 send 呼叫返回前就接受命令，因此成功
 send 保存開始／結束區間，不能用晚記錄的單點時間否定真實接收。首次送出延遲用

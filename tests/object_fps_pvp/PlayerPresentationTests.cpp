@@ -27,12 +27,14 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <numbers>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 using namespace fps::pvp;
@@ -129,7 +131,43 @@ const PlayerPresentationDefinition& AccessoryDefinition() {
 // Samples come from an authority moving at the 3 m/s reference speed.
 PlayerPresentationFrame Frame(double seconds, double delta, float x = 0, float z = 0) {
     return {.playerId = 1, .movementEpoch = 1, .position = {x, 0, z}, .yaw = 0,
-        .presentationSeconds = seconds, .deltaSeconds = delta, .planarSpeed = 3};
+        .presentationSeconds = seconds, .deltaSeconds = delta};
+}
+
+// The Match's animation along a route (v8-product-anim-authority A4): one
+// authority value a tick from the production rules, sampled between ticks as
+// the timeline does. The presentation must follow it exactly.
+struct AuthorityRoute final {
+    std::vector<PlayerAnimation> ticks;
+    std::vector<PlayerState> states;
+    AuthorityRoute(const std::function<PlayerState(std::uint64_t)>& at, std::uint64_t last) {
+        std::optional<PlayerAnimation> value;
+        for (std::uint64_t tick = 0; tick <= last; ++tick) {
+            auto state = at(tick);
+            value = AdvancePlayerAnimation(ProductionDefinition().animationRules, value,
+                states.empty() ? nullptr : &states.back(), state, tick);
+            ticks.push_back(*value);
+            states.push_back(state);
+        }
+    }
+    [[nodiscard]] PlayerAnimationSample At(double seconds) const {
+        const double cursor = seconds * AuthorityTickRate;
+        const auto lower = (std::min)(static_cast<std::size_t>(std::floor(cursor + 1e-9)), ticks.size() - 1);
+        const auto upper = (std::min)(lower + 1, ticks.size() - 1);
+        return InterpolatePlayerAnimation(ticks[lower], ticks[upper],
+            upper == lower ? 0 : (std::max)(0.0, cursor - static_cast<double>(lower)));
+    }
+};
+
+// A route at a constant planar velocity of 3 m/s from the origin.
+AuthorityRoute Straight(float xDirection, float zDirection, double seconds) {
+    return AuthorityRoute([=](std::uint64_t tick) {
+        PlayerState state;
+        state.playerId = 1;
+        const double time = static_cast<double>(tick) / AuthorityTickRate;
+        state.position = {static_cast<float>(3 * time * xDirection), 0, static_cast<float>(3 * time * zDirection)};
+        return state;
+    }, static_cast<std::uint64_t>(std::ceil(seconds * AuthorityTickRate)) + 1);
 }
 
 double ReferenceCycle() {
@@ -165,12 +203,17 @@ double MatrixDifference(const Matrix4& left, const Matrix4& right) {
 }
 
 PlayerLocomotionState Travel(int fps, float xDirection, float zDirection, double seconds = 1) {
+    const auto route = Straight(xDirection, zDirection, seconds + 1);
     PlayerLocomotionState state;
-    Advance(state, Frame(0, 0));
+    auto first = Frame(0, 0);
+    first.animation = route.At(0);
+    Advance(state, first);
     for (int step = 1; step <= static_cast<int>(fps * seconds); ++step) {
         const double time = static_cast<double>(step) / fps;
-        Advance(state, Frame(time, 1.0 / fps, static_cast<float>(3 * time * xDirection),
-            static_cast<float>(3 * time * zDirection)));
+        auto frame = Frame(time, 1.0 / fps, static_cast<float>(3 * time * xDirection),
+            static_cast<float>(3 * time * zDirection));
+        frame.animation = route.At(time);
+        Advance(state, frame);
     }
     return state;
 }
@@ -378,30 +421,53 @@ TEST_CASE("PvP speed blend weights walk and jog from the authority speed and kee
     }
 }
 
-TEST_CASE("PvP gait phase uses the authority speed sample so render rate and partial frames cannot change it") {
-    const auto& definition = ProductionDefinition();
-    // The same route, with a first frame that moved only part of a tick and a
-    // held sample without speed: the phase depends only on distance and the
-    // authority speed, never on this frame's own displacement rate.
+TEST_CASE("PvP presentation follows the Match animation identically at 30 60 and 144 FPS") {
+    // E8 (v8-product-anim-authority A4): the same snapshots at the same
+    // presentation tick give the same pose inputs at any render rate; at a
+    // snapshot tick (alpha 0) the phase is the snapshot's own q16.
+    const auto route = Straight(0, 1, 2);
+    std::vector<PlayerLocomotionState> states;
     for (const int fps : {30, 60, 144}) {
         CAPTURE(fps);
         PlayerLocomotionState state;
-        Advance(state, Frame(0, 0));
-        Advance(state, Frame(0.25 / fps, 0.25 / fps, 0, 0.01F));
-        double now = 0.25 / fps, z = 0.01;
-        while (z < 1.5) {
-            now += 1.0 / fps;
-            z = std::min(1.5, z + 3.0 / fps);
-            Advance(state, Frame(now, 1.0 / fps, 0, static_cast<float>(z)));
+        auto first = Frame(0, 0);
+        first.animation = route.At(0);
+        Advance(state, first);
+        for (int step = 1; step <= fps; ++step) {
+            const double time = static_cast<double>(step) / fps;
+            auto frame = Frame(time, 1.0 / fps, 0, static_cast<float>(3 * time));
+            frame.animation = route.At(time);
+            Advance(state, frame);
         }
-        CHECK(state.unwrappedPhaseCycles == doctest::Approx(1.5 / ReferenceCycle()).epsilon(1e-5));
-        const double weight = state.jogWeight;
-        auto held = Frame(now + 1.0 / fps, 1.0 / fps, 0, static_cast<float>(z));
-        held.planarSpeed = 0;
-        held.holding = true;
-        Advance(state, held);
-        CHECK(state.jogWeight == weight); // A held or stopped sample keeps the blend.
+        states.push_back(state);
     }
+    for (const auto& state : states) {
+        CHECK(state.phaseCycles == states.front().phaseCycles);
+        CHECK(state.moveWeight == states.front().moveWeight);
+        CHECK(state.jogWeight == states.front().jogWeight);
+        CHECK(state.jumpPhase == states.front().jumpPhase);
+        CHECK(state.jumpPhaseSeconds == states.front().jumpPhaseSeconds);
+        CHECK(state.unwrappedPhaseCycles == doctest::Approx(states.front().unwrappedPhaseCycles).epsilon(1e-12));
+    }
+    // t = 1 s is tick 60: alpha 0.
+    CHECK(states.front().phaseCycles == GaitCycleFraction(route.ticks[60].gaitPhaseQ16));
+    CHECK(states.front().authorityPhaseQ16 == static_cast<double>(route.ticks[60].gaitPhaseQ16));
+}
+
+// protocol-v9 §4.1: the idle clock runs from the life's start, so epochs,
+// discontinuities and reanchors do not restart it.
+TEST_CASE("PvP idle clock is presentation time since the life began") {
+    PlayerLocomotionState state;
+    auto frame = Frame(3.5, 0);
+    frame.lifeStateSeconds = 2;
+    Advance(state, frame);
+    CHECK(state.idleSeconds == doctest::Approx(1.5));
+    frame.presentationSeconds = 3.5 + 1.0 / 60;
+    frame.deltaSeconds = 1.0 / 60;
+    frame.continuous = false; // a reanchor
+    Advance(state, frame);
+    CHECK(state.phaseReset);
+    CHECK(state.idleSeconds == doctest::Approx(1.5 + 1.0 / 60));
 }
 
 TEST_CASE("PvP player pose retains jogging legs and aiming upper body with consistent attachments") {
@@ -500,9 +566,8 @@ TEST_CASE("PvP crouched remote lower body plays the crouch clips on the standing
     CHECK(legDifference > 0.01);
 }
 
-TEST_CASE("PvP jogging phase follows actual distance at 30 60 and 144 FPS in every planar direction") {
+TEST_CASE("PvP jogging presentation shows the authority phase at 30 60 and 144 FPS in every planar direction") {
     const auto& definition = ProductionDefinition();
-    const double expectedPhase = 3.0 / ReferenceCycle();
     const float diagonal = 1.0F / std::sqrt(2.0F);
     for (const int fps : {30, 60, 144}) {
         CAPTURE(fps);
@@ -511,67 +576,138 @@ TEST_CASE("PvP jogging phase follows actual distance at 30 60 and 144 FPS in eve
             CAPTURE(direction[0]);
             CAPTURE(direction[1]);
             const auto state = Travel(fps, direction[0], direction[1]);
+            // The presentation's own displacement observations are unchanged.
             CHECK(state.totalDistance == doctest::Approx(3).epsilon(1e-5));
             CHECK(state.signedDistance == doctest::Approx(3).epsilon(1e-5));
-            CHECK(state.unwrappedPhaseCycles == doctest::Approx(expectedPhase).epsilon(1e-5));
-            CHECK(state.phaseCycles == doctest::Approx(expectedPhase - std::floor(expectedPhase)).epsilon(1e-5));
-            CHECK(state.playbackRate == doctest::Approx(3.0 / ReferenceCycle()).epsilon(1e-4));
-            CHECK(state.jogWeight == doctest::Approx(PlayerJogWeight(definition, 3)));
-            CHECK(state.moveWeight > 0.99F);
             CHECK_FALSE(state.backward);
+            // The phase and weights are the Match's at t = 1 s (tick 60).
+            const auto authority = Straight(direction[0], direction[1], 2).ticks[60];
+            CHECK(state.phaseCycles == GaitCycleFraction(authority.gaitPhaseQ16));
+            CHECK(state.jogWeight == authority.jogWeightPermille / 1000.0);
+            CHECK(state.moveWeight == static_cast<float>(authority.moveWeightPermille / 1000.0));
+            CHECK(state.moveWeight == 1.0F);
+            // The authority phase itself follows the distance (E1 bounds it).
+            CHECK(state.unwrappedPhaseCycles == doctest::Approx(3.0 / ReferenceCycle()).epsilon(2e-3));
+            CHECK(state.cycleDistance == doctest::Approx(PlayerCycleDistance(definition, state.jogWeight)));
+            CHECK(state.playbackRate == doctest::Approx(3.0 / state.cycleDistance).epsilon(1e-4));
         }
     }
 }
 
-TEST_CASE("PvP stop wall contact turning and timeline hold cannot accumulate phantom footsteps") {
-    auto state = Travel(60, 0, 1, 0.5);
-    const double phase = state.unwrappedPhaseCycles;
-    const double distance = state.totalDistance;
-    for (int step = 1; step <= 30; ++step) {
-        auto frame = Frame(0.5 + step / 60.0, 1.0 / 60, 0, 1.5F);
-        frame.yaw = static_cast<float>(step) / 10;
+TEST_CASE("PvP stop and turning show no phantom footsteps and a timeline hold freezes the pose") {
+    // The Match adds no phase without a step (PlayerAnimationTests); here
+    // the presentation shows that and freezes while the timeline holds (E9).
+    const auto route = AuthorityRoute([](std::uint64_t tick) {
+        PlayerState state;
+        state.playerId = 1;
+        state.position.z = static_cast<float>(3.0 * static_cast<double>((std::min<std::uint64_t>)(tick, 30)) / 60);
+        state.yaw = tick > 30 ? static_cast<float>(tick - 30) / 10 : 0; // turning in place after the stop
+        return state;
+    }, 120);
+    PlayerLocomotionState state;
+    for (int tick = 0; tick <= 60; ++tick) {
+        auto frame = Frame(tick / 60.0, tick ? 1.0 / 60 : 0, 0, route.states[static_cast<std::size_t>(tick)].position.z);
+        frame.yaw = route.states[static_cast<std::size_t>(tick)].yaw;
+        frame.animation = route.At(tick / 60.0);
         Advance(state, frame);
+        // Mid-ramp after the stop the weight is the Match's, not this frame's motion.
+        if (tick == 33) CHECK(state.moveWeight == static_cast<float>(route.ticks[33].moveWeightPermille / 1000.0));
+        if (tick == 33) CHECK(route.ticks[33].moveWeightPermille == 500);
     }
-    CHECK(state.unwrappedPhaseCycles == phase);
-    CHECK(state.totalDistance == distance);
     CHECK(state.distanceDelta == 0);
     CHECK(state.speed == 0);
-    CHECK(state.moveWeight < 0.01F);
+    CHECK(state.totalDistance == doctest::Approx(1.5).epsilon(1e-5)); // no distance while stopped and turning
+    CHECK(state.authorityPhaseQ16 == static_cast<double>(route.ticks[31].gaitPhaseQ16)); // no phase after the stop
+    CHECK(state.moveWeight == 0.0F);
     // The first hold-labelled sample can still contain the final actual step.
-    auto finalStep = Frame(1 + 1.0 / 60, 1.0 / 60, 0, 1.55F);
+    const double distance = state.totalDistance;
+    auto finalStep = Frame(61 / 60.0, 1.0 / 60, 0, state.previousPosition.z + 0.05F);
     finalStep.holding = true;
+    finalStep.animation = route.At(1.0);
     Advance(state, finalStep);
     CHECK(state.totalDistance == doctest::Approx(distance + 0.05).epsilon(1e-5));
-    const auto heldPhase = state.unwrappedPhaseCycles;
-    const auto resets = state.resetCount;
-    for (int step = 0; step < 30; ++step) Advance(state, finalStep);
-    CHECK(state.unwrappedPhaseCycles == heldPhase);
-    CHECK(state.resetCount == resets);
-    CHECK(state.holding);
-    auto resume = Frame(finalStep.presentationSeconds + 1.0 / 60, 1.0 / 60, 0, 1.6F);
-    Advance(state, resume);
-    CHECK(state.totalDistance == doctest::Approx(distance + 0.1).epsilon(1e-5));
     CHECK_FALSE(state.holding);
+    // A held sample freezes the shown values even if the sample moves on.
+    auto held = Frame(62 / 60.0, 1.0 / 60, 0, state.previousPosition.z);
+    held.holding = true;
+    auto moving = route.At(1.0);
+    moving.gaitPhaseQ16 += 5000;
+    moving.moveWeight = 1;
+    held.animation = moving;
+    const auto frozen = state;
+    for (int step = 0; step < 30; ++step) Advance(state, held);
+    CHECK(state.holding);
+    CHECK(state.resetCount == frozen.resetCount);
+    CHECK(state.jogWeight == frozen.jogWeight); // a held sample keeps the blend
+    CHECK(state.phaseCycles == frozen.phaseCycles);
+    CHECK(state.moveWeight == frozen.moveWeight);
+    CHECK(state.unwrappedPhaseCycles == frozen.unwrappedPhaseCycles);
+    auto resume = Frame(held.presentationSeconds + 1.0 / 60, 1.0 / 60, 0, held.position.z + 0.05F);
+    resume.animation = moving;
+    Advance(state, resume);
+    CHECK_FALSE(state.holding);
+    CHECK(state.totalDistance == doctest::Approx(distance + 0.1).epsilon(1e-5));
+    CHECK(state.phaseCycles == GaitCycleFraction(moving.gaitPhaseQ16));
 }
 
-TEST_CASE("PvP backward motion reverses jog phase and returning along the same route cancels signed travel") {
-    const auto& definition = ProductionDefinition();
+// xhigh review F1: a timeline hold freezes the gait only. A jump in place
+// changes no planar position, so the presentation holds, yet the legs must
+// follow the Match's jump phase as before A4.
+TEST_CASE("PvP a timeline hold does not freeze the jump phase") {
+    PlayerLocomotionState state;
+    PlayerAnimation grounded{.playerId = 1, .lifeGeneration = 1, .jumpPhase = JumpPhase::Grounded};
+    auto frame = Frame(1, 0);
+    frame.animation = InterpolatePlayerAnimation(grounded, grounded, 0);
+    Advance(state, frame);
+    auto start = grounded;
+    start.jumpPhase = JumpPhase::Start;
+    start.jumpPhaseTick = 61;
+    auto held = Frame(61.0 / 60, 1.0 / 60);
+    held.holding = true;
+    held.grounded = false;
+    held.animation = InterpolatePlayerAnimation(start, start, 0);
+    Advance(state, held);
+    CHECK(state.holding);
+    CHECK(state.jumpPhase == PlayerJumpPhase::Start);
+    CHECK(state.jumpPhaseSeconds == doctest::Approx(61.0 / 60));
+}
+
+TEST_CASE("PvP backward presentation shows the reversed authority phase") {
+    // The Match reverses the phase moving backward and a route walked back
+    // returns it exactly (PlayerAnimationTests); the presentation shows it.
     const auto backward = Travel(60, 0, -1);
     CHECK(backward.totalDistance == doctest::Approx(3));
     CHECK(backward.signedDistance == doctest::Approx(-3));
-    CHECK(backward.unwrappedPhaseCycles == doctest::Approx(-3.0 / ReferenceCycle()));
-    CHECK(backward.playbackRate == doctest::Approx(-3.0 / ReferenceCycle()).epsilon(1e-4));
     CHECK(backward.backward);
-    auto state = Travel(60, 0, 1, 0.5);
-    for (int step = 1; step <= 30; ++step)
-        Advance(state, Frame(0.5 + step / 60.0, 1.0 / 60, 0, 1.5F - step * 0.05F));
+    CHECK(backward.unwrappedPhaseCycles == doctest::Approx(-3.0 / ReferenceCycle()).epsilon(2e-3));
+    CHECK(backward.playbackRate == doctest::Approx(-3.0 / backward.cycleDistance).epsilon(1e-4));
+    // Out and back along one route: the observations cancel, and so does the
+    // shown authority phase (the Match returns it exactly).
+    const auto route = AuthorityRoute([](std::uint64_t tick) {
+        PlayerState state;
+        state.playerId = 1;
+        const auto out = (std::min<std::uint64_t>)(tick, 30);
+        const auto back = tick > 30 ? tick - 30 : 0;
+        state.position.z = static_cast<float>(0.05 * static_cast<double>(out) - 0.05 * static_cast<double>(back));
+        return state;
+    }, 61);
+    PlayerLocomotionState state;
+    for (int tick = 0; tick <= 60; ++tick) {
+        auto frame = Frame(tick / 60.0, tick ? 1.0 / 60 : 0, 0, route.states[static_cast<std::size_t>(tick)].position.z);
+        frame.animation = route.At(tick / 60.0);
+        Advance(state, frame);
+    }
     CHECK(state.totalDistance == doctest::Approx(3));
     CHECK(state.signedDistance == doctest::Approx(0).epsilon(1e-5).scale(1));
-    CHECK(state.unwrappedPhaseCycles == doctest::Approx(0).epsilon(1e-5).scale(1));
+    CHECK(state.unwrappedPhaseCycles == doctest::Approx(0).epsilon(1e-9).scale(1));
 }
 
-TEST_CASE("PvP epoch discontinuity teleport and long frame reanchor instead of replaying unseen travel") {
+TEST_CASE("PvP presentation reanchors its observations but keeps showing the authority phase") {
+    // Epoch and teleport resets are the Match's (PlayerAnimationTests). The
+    // presentation's own reanchors restart its displacement observations
+    // only; the phase stays the Match's (player-presentation Invariant 1).
     const auto& definition = ProductionDefinition();
+    const auto route = Straight(0, 1, 3);
     for (const std::string_view reason : {"epoch", "discontinuity", "teleport", "long_frame"}) {
         CAPTURE(reason);
         auto state = Travel(60, 0, 1, 0.5);
@@ -585,24 +721,28 @@ TEST_CASE("PvP epoch discontinuity teleport and long frame reanchor instead of r
             frame.presentationSeconds = 0.5 + frame.deltaSeconds;
             frame.position.z = 2.5F;
         }
+        frame.animation = route.At(frame.presentationSeconds);
         Advance(state, frame);
         CHECK(state.phaseReset);
         CHECK(state.resetCount == resets + 1);
         CHECK(state.resetReason == reason);
-        CHECK(state.unwrappedPhaseCycles == 0);
         CHECK(state.distanceDelta == 0);
+        CHECK(state.totalDistance == 0);
+        CHECK(state.unwrappedPhaseCycles == 0);
+        CHECK(state.phaseCycles == GaitCycleFraction(frame.animation->gaitPhaseQ16));
         frame.continuous = true;
         frame.deltaSeconds = 1.0 / 60;
         frame.presentationSeconds += frame.deltaSeconds;
         frame.position.z += 0.05F;
+        frame.animation = route.At(frame.presentationSeconds);
         Advance(state, frame);
         CHECK_FALSE(state.phaseReset);
         CHECK(state.distanceDelta == doctest::Approx(0.05).epsilon(1e-4));
-        CHECK(state.unwrappedPhaseCycles == doctest::Approx(0.05 / ReferenceCycle()).epsilon(1e-4));
+        CHECK(state.phaseCycles == GaitCycleFraction(frame.animation->gaitPhaseQ16));
     }
 }
 
-TEST_CASE("PvP life and death boundaries clear old locomotion even at the same movement epoch") {
+TEST_CASE("PvP life and death boundaries restart the presentation observations") {
     for (bool death : {false, true}) {
         PlayerLocomotionState state;
         Advance(state, Frame(0, 0));
@@ -611,27 +751,35 @@ TEST_CASE("PvP life and death boundaries clear old locomotion even at the same m
         auto frame = Frame(2.0 / 60, 1.0 / 60, 0, .1F);
         frame.lifeGeneration = death ? 1 : 2;
         frame.dead = death;
+        PlayerAnimation value{.playerId = 1, .lifeGeneration = frame.lifeGeneration, .gaitPhaseQ16 = 12345};
+        frame.animation = InterpolatePlayerAnimation(value, value, 0);
         Advance(state, frame);
         CHECK(state.phaseReset);
         CHECK(state.resetReason == "life");
         CHECK(state.totalDistance == 0);
         CHECK(state.unwrappedPhaseCycles == 0);
+        // A new life's phase is the Match's reset; a death shows its frozen value.
+        CHECK(state.phaseCycles == GaitCycleFraction(12345));
         CHECK(state.lifeGeneration == frame.lifeGeneration);
         CHECK(state.dead == frame.dead);
     }
 }
 
-TEST_CASE("PvP 100ms and 108ms rendering gaps reset locomotion at the existing runtime boundary") {
+TEST_CASE("PvP 100ms and 108ms rendering gaps restart the observations at the existing runtime boundary") {
+    const auto route = Straight(0, 1, 3);
     for (const double gap : {0.1, 0.108}) {
         CAPTURE(gap);
         auto state = Travel(60, 0, 1, 0.5);
         const auto resets = state.resetCount;
-        Advance(state, Frame(0.5 + gap, gap, 0, static_cast<float>(1.5 + 3 * gap)));
+        auto frame = Frame(0.5 + gap, gap, 0, static_cast<float>(1.5 + 3 * gap));
+        frame.animation = route.At(frame.presentationSeconds);
+        Advance(state, frame);
         CHECK(state.phaseReset);
         CHECK(state.resetReason == "long_frame");
         CHECK(state.resetCount == resets + 1);
         CHECK(state.distanceDelta == 0);
         CHECK(state.unwrappedPhaseCycles == 0);
+        CHECK(state.phaseCycles == GaitCycleFraction(frame.animation->gaitPhaseQ16));
     }
 }
 
@@ -640,13 +788,18 @@ TEST_CASE("PvP independent players and rejoined identities cannot inherit anothe
     PlayerLocomotionState second;
     auto other = Frame(0, 0, 4, 5);
     other.playerId = 2;
+    PlayerAnimation start{.playerId = 2, .lifeGeneration = 1, .gaitPhaseQ16 = 1000};
+    other.animation = InterpolatePlayerAnimation(start, start, 0);
     Advance(second, other);
     const auto firstPhase = first.unwrappedPhaseCycles;
     other.presentationSeconds = 0.05;
     other.deltaSeconds = 0.05;
     other.position.x += 0.15F;
+    auto later = start;
+    later.gaitPhaseQ16 = 5000;
+    other.animation = InterpolatePlayerAnimation(later, later, 0);
     Advance(second, other);
-    CHECK(second.unwrappedPhaseCycles == doctest::Approx(0.15 / ReferenceCycle()).epsilon(1e-5));
+    CHECK(second.unwrappedPhaseCycles == doctest::Approx(4000.0 / 65536));
     CHECK(first.unwrappedPhaseCycles == firstPhase);
     const auto secondPhase = second.unwrappedPhaseCycles;
     auto rejoin = Frame(0.5 + 1.0 / 60, 1.0 / 60, 9, 9);
@@ -846,66 +999,53 @@ TEST_CASE("PvP actions from before the current life began cannot appear in it") 
     CHECK(Resolve(state, frame).upper == PlayerUpperAction::Reload);
 }
 
-TEST_CASE("PvP jump phases follow the sampled grounded state within their contract spans") {
+TEST_CASE("PvP jump clips play from the Match's phase and zero point within their contract spans") {
+    // The phases themselves are the Match's (PlayerAnimationTests: liftoff,
+    // falling straight into the loop, a hop, a reset in the air); here the
+    // presentation turns the sampled phase and zero point into clip times.
     const auto& definition = ProductionDefinition();
-    SUBCASE("rising liftoff plays Start Loop and Land") {
-        PlayerLocomotionState state;
-        Advance(state, Air(1, true, 0));
-        CHECK(state.jumpPhase == PlayerJumpPhase::Grounded);
-        const double liftoff = 1 + 1.0 / 60;
-        Advance(state, Air(liftoff, false, 4));
-        CHECK(state.jumpPhase == PlayerJumpPhase::Start);
-        auto actions = Resolve(state, Air(liftoff, false, 4));
-        CHECK(actions.lower == PlayerLowerAction::JumpStart);
-        CHECK(actions.lowerClipSeconds == doctest::Approx(0));
-        double now = AdvanceTo(state, liftoff, liftoff + definition.jumpStartSeconds / 2, Air(0, false, 3));
-        actions = Resolve(state, Air(now, false, 3));
-        CHECK(actions.lower == PlayerLowerAction::JumpStart);
-        CHECK(actions.lowerClipSeconds == doctest::Approx(ClipSeconds(definition.jumpStartClip) / 2));
-        now = AdvanceTo(state, now, liftoff + definition.jumpStartSeconds + 0.05, Air(0, false, 1));
-        CHECK(state.jumpPhase == PlayerJumpPhase::Airborne);
-        actions = Resolve(state, Air(now, false, 1));
-        CHECK(actions.lower == PlayerLowerAction::JumpLoop);
-        CHECK(actions.lowerClipSeconds == doctest::Approx(0.05));
-        now = AdvanceTo(state, now, 1.6, Air(0, false, -2));
-        Advance(state, Air(now + 1.0 / 60, true, 0));
-        now += 1.0 / 60;
-        CHECK(state.jumpPhase == PlayerJumpPhase::Land);
-        const double landed = now;
-        now = AdvanceTo(state, now, landed + definition.jumpLandSeconds / 2, Air(0, true, 0));
-        actions = Resolve(state, Air(now, true, 0));
-        CHECK(actions.lower == PlayerLowerAction::JumpLand);
-        CHECK(actions.lowerClipSeconds == doctest::Approx(ClipSeconds(definition.jumpLandClip) / 2));
-        now = AdvanceTo(state, now, landed + definition.jumpLandSeconds + 1.0 / 60, Air(0, true, 0));
-        CHECK(state.jumpPhase == PlayerJumpPhase::Grounded);
-        CHECK(Resolve(state, Air(now, true, 0)).lower == PlayerLowerAction::Locomotion);
-    }
-    SUBCASE("leaving the ground while falling skips Start") {
-        PlayerLocomotionState state;
-        Advance(state, Air(1, true, 0));
-        Advance(state, Air(1 + 1.0 / 60, false, -1));
-        CHECK(state.jumpPhase == PlayerJumpPhase::Airborne);
-    }
-    SUBCASE("a short hop lands during Start") {
-        PlayerLocomotionState state;
-        Advance(state, Air(1, true, 0));
-        Advance(state, Air(1 + 1.0 / 60, false, 2));
-        Advance(state, Air(1 + 2.0 / 60, true, 0));
-        CHECK(state.jumpPhase == PlayerJumpPhase::Land);
-    }
-    SUBCASE("a reanchor in the air never invents a liftoff") {
-        PlayerLocomotionState state;
-        Advance(state, Air(1, true, 0));
-        auto discontinuous = Air(1 + 1.0 / 60, false, 4);
-        discontinuous.continuous = false;
-        Advance(state, discontinuous);
-        CHECK(state.phaseReset);
-        CHECK(state.jumpPhase == PlayerJumpPhase::Airborne);
-        auto spawned = Air(2, false, 4);
-        PlayerLocomotionState fresh;
-        Advance(fresh, spawned);
-        CHECK(fresh.jumpPhase == PlayerJumpPhase::Airborne);
-    }
+    const auto route = AuthorityRoute([](std::uint64_t tick) {
+        PlayerState state;
+        state.playerId = 1;
+        state.grounded = tick < 60 || tick >= 96;
+        state.verticalVelocity = tick >= 60 && tick < 78 ? 4.0F : (tick >= 78 && tick < 96 ? -4.0F : 0.0F);
+        return state;
+    }, 120);
+    PlayerLocomotionState state;
+    const auto at = [&](std::uint64_t tick) {
+        const auto& authority = route.states[static_cast<std::size_t>(tick)];
+        auto frame = Air(static_cast<double>(tick) / 60, authority.grounded, authority.verticalVelocity);
+        frame.deltaSeconds = tick ? 1.0 / 60 : 0;
+        frame.animation = route.At(frame.presentationSeconds);
+        Advance(state, frame);
+        return Resolve(state, frame);
+    };
+    for (std::uint64_t tick = 0; tick < 60; ++tick) static_cast<void>(at(tick));
+    CHECK(state.jumpPhase == PlayerJumpPhase::Grounded);
+    auto actions = at(60);
+    CHECK(state.jumpPhase == PlayerJumpPhase::Start);
+    CHECK(actions.lower == PlayerLowerAction::JumpStart);
+    CHECK(actions.lowerClipSeconds == doctest::Approx(0));
+    for (std::uint64_t tick = 61; tick < 63; ++tick) static_cast<void>(at(tick));
+    actions = at(63); // half the 6-tick span
+    CHECK(actions.lower == PlayerLowerAction::JumpStart);
+    CHECK(actions.lowerClipSeconds == doctest::Approx(ClipSeconds(definition.jumpStartClip) / 2));
+    for (std::uint64_t tick = 64; tick < 69; ++tick) static_cast<void>(at(tick));
+    actions = at(69); // Airborne from tick 66
+    CHECK(state.jumpPhase == PlayerJumpPhase::Airborne);
+    CHECK(actions.lower == PlayerLowerAction::JumpLoop);
+    CHECK(actions.lowerClipSeconds == doctest::Approx(3.0 / 60));
+    for (std::uint64_t tick = 70; tick < 96; ++tick) static_cast<void>(at(tick));
+    actions = at(96);
+    CHECK(state.jumpPhase == PlayerJumpPhase::Land);
+    for (std::uint64_t tick = 97; tick < 99; ++tick) static_cast<void>(at(tick));
+    actions = at(99);
+    CHECK(actions.lower == PlayerLowerAction::JumpLand);
+    CHECK(actions.lowerClipSeconds == doctest::Approx(ClipSeconds(definition.jumpLandClip) / 2));
+    for (std::uint64_t tick = 100; tick < 103; ++tick) static_cast<void>(at(tick));
+    actions = at(103);
+    CHECK(state.jumpPhase == PlayerJumpPhase::Grounded);
+    CHECK(actions.lower == PlayerLowerAction::Locomotion);
 }
 
 TEST_CASE("PvP death plays Death01 once over the whole body and holds its last pose until the new life") {

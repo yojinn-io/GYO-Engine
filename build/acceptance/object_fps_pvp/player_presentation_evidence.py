@@ -1,4 +1,4 @@
-"""Successful two-GUI character submissions and distance-driven phase evidence."""
+"""Successful two-GUI character submissions and the Match-driven phase evidence (protocol-v9 §4.4)."""
 import argparse
 import json
 import math
@@ -29,7 +29,8 @@ def validate_samples(samples):
             errors.append("Successful remote pose accessory meshes do not match the declared accessories")
         numbers = position + c["foot_anchor"] + c["weapon_world_position"] + [
             c[name] for name in ("scale", "cycle_distance", "jog_weight", "phase_cycles", "unwrapped_phase_cycles",
-                                "signed_distance", "total_distance", "distance_delta", "speed", "playback_rate")]
+                                "authority_phase_cycles", "signed_distance", "total_distance", "distance_delta",
+                                "speed", "playback_rate")]
         if (not all(math.isfinite(value) for value in numbers) or c["scale"] <= 0 or
                 c["cycle_distance"] <= 0 or not 0 <= c["jog_weight"] <= 1):
             errors.append("Nonfinite or invalid character geometry/phase")
@@ -43,7 +44,9 @@ def validate_samples(samples):
             resets += 1
             if abs(c["distance_delta"]) > 1e-6 or not c["reset_reason"]:
                 errors.append("Phase reset consumed a discontinuous displacement or omitted its reason")
-            if any(abs(c[name]) > 1e-6 for name in ("phase_cycles", "unwrapped_phase_cycles", "signed_distance", "total_distance")):
+            # The shown phase is the Match's (protocol-v9 §4.4); a reset restarts
+            # only the presentation's own accumulations.
+            if any(abs(c[name]) > 1e-6 for name in ("unwrapped_phase_cycles", "signed_distance", "total_distance")):
                 errors.append("Phase reset retained old phase or accumulated path distance")
         if previous and previous["remote"]["player_id"] == identity:
             old = previous["remote"]["character"]
@@ -51,9 +54,10 @@ def validate_samples(samples):
                 phase_delta = c["unwrapped_phase_cycles"] - old["unwrapped_phase_cycles"]
                 signed_delta = c["signed_distance"] - old["signed_distance"]
                 distance_delta = c["total_distance"] - old["total_distance"]
-                # The gait phase advances by the frame's own blended cycle distance.
-                if abs(phase_delta - signed_delta / c["cycle_distance"]) > 2e-5:
-                    errors.append("Gait phase is not proportional to actual signed displacement")
+                # The gait phase is the Match's sampled phase (protocol-v9 §4.4,
+                # v8-product-anim-authority A4); the Match ties it to distance (E1).
+                if abs(c["phase_cycles"] - (c["authority_phase_cycles"] - math.floor(c["authority_phase_cycles"]))) > 1e-9:
+                    errors.append("Gait phase is not the Match's sampled phase")
                 if distance_delta < -1e-6 or abs(signed_delta) > distance_delta + 2e-5:
                     errors.append("Accumulated locomotion distance is inconsistent")
                 geometric_delta = math.dist(position, previous["remote"]["position"])
@@ -124,7 +128,7 @@ HOLD_MOTION, HOLD_STOP, ESCAPE, RECAPTURE = 15, 16, 17, 19
 def analyze(directory):
     directory = Path(directory)
     result = {"passed": False, "scope": "12-second same-host two-GUI character regression; v4 gameplay, not v5 certification.",
-              "method": "Successful Presented positions and owning character pose/phase. Gait cycles = actual signed distance / the blended walk/jog cycle distance of each frame.",
+              "method": "Successful Presented positions and owning character pose/phase. The shown gait phase is the Match's sampled phase (protocol-v9 §4.4); the Match ties it to signed distance (E1).",
               "direction_limit": "Sideways uses the forward walk/jog approximation; backwards samples it in reverse. No dedicated direction clips or IK.",
               "clients": {}, "errors": [], "invalid": []}
     try:
