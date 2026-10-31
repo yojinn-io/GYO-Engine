@@ -32,7 +32,7 @@
 | 資產 | 現在的階段 | 下一步 | 根據 |
 |---|---|---|---|
 | 音效 | **腳本**：`convert_wav.py`（任意 WAV → 48 kHz PCM16，可重現） | **工具**：音效工具 | `v8-tool-assets-audio-import`；腳本在 `docs/architecture/plans/audio/scripts/` |
-| 動畫事件 | **連手工都沒有**：換彈聲的時刻寫在 C++（`ReloadSoundOffsetSeconds`） | **手工**：通用格式 `gyo.anim_events`＋PvP 手寫資料（已定 (b)） | `v8-tool-assets-anim-events` |
+| 動畫事件 | **手工**（2026-10-31，等實聽）：通用格式 `gyo.anim_events`（[契約](../../../architecture/animation-events.md)）＋PvP 手寫資料；C++ 的過渡規則 `ReloadSoundOffsetSeconds` 已移除 | **工具**：模型檢視（`v8-tool-model-viewer`）在畫面上編輯時刻 | `v8-tool-assets-anim-events`（[dev_log](../../../dev_logs/2026_10_31_tool_v8_assets_anim_events.zh-Hant.md)） |
 | 模型 | **手工**：外部 DCC 製作，手寫 `character.json`、animset | 動畫事件要在畫面上調時刻時，做**工具**：模型檢視 | 3d-assets.md |
 | 碰撞體 | **手工**：產品的 `v8-product-hitbox-data` 先手寫 JSON | 格式 owner 由產品規劃定；之後併進模型檢視 | 產品 v8 README |
 | SpriteSheet、視頻、文字與劇情 | 沒有實際需求 | 待定，出現需求時從手工開始 | 使用者的方向 |

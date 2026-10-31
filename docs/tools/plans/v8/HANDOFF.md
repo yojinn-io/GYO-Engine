@@ -10,11 +10,13 @@
 | 代號 | 意思 |
 |---|---|
 | ui-widgets-line | PR 線：文字輸入框元件、輸入法組字、ui_editor |
+| anim-events-line | PR 線：動畫事件從無到手工（`gyo.anim_events`），再到工具（模型檢視） |
 
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`（你會給方案）。
+- **anim-events-line（另一個會話）**：`v8-tool-assets-anim-events` 的程式、資料、測試與突變完成（[dev_log](../../../dev_logs/2026_10_31_tool_v8_assets_anim_events.zh-Hant.md)）；**等你實聽換彈聲**，聽過才算完成。契約在 [animation-events.md](../../../architecture/animation-events.md)。
 - **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）；audio-tool-line 的 `v8-tool-audio-editor-convert` 開始，先起草音效工具的 Design Invariants 等你核准。anim-events-line 提議另開會話。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
@@ -36,6 +38,8 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-assets-anim-events-owner` | （2026-10-31）`gyo.anim_events` 的契約放在 `GYO::Model`（`engine/model/AnimationEvents.hpp`，文件 [animation-events.md](../../../architecture/animation-events.md)）；catalog 型別沿用 `text`，檔頭 `schema` 欄位；照草稿寫 Design Invariants 5 條與 Replacement Criteria 3 條。Architecture Delta：GYO::Model PRIVATE 連結 nlohmann_json | 「照建議核准」 |
+| `v8-tool-assets-anim-events-align` | （2026-10-31）對齊方式 (ii)：事件標在畫面上的時刻，音效資料用 `sync_seconds` 指出音檔裡的對齊點，動作開始時一次排好 | 「照建議核准」 |
 | `v8-tool-plan-location` | （2026-10-31 補記）照建議：計畫放 `docs/tools/plans/v8/`，UI 的格式與 Design Invariants 仍在 [ui_toolchain.md](../../../ui_toolchain.md)。從 `v8-tool-plan` 起 Claude 照自己的建議放了，使用者沒有另外選過；列出選項後使用者接受現狀 | 「做了就沒事了，我還以為你沒做。」 |
 | `v8-tool-start-timing` | （2026-10-31 補記）實際的做法：檢測 `v8-tool-ui-ime-observe` 先做，之後每一批都由使用者說「開始」才動手（ui-widgets-line 已全部合併，#107～#114），不是等 ③ 之後。使用者沒有另外選過；列出選項後使用者接受現狀 | 「做了就沒事了，我還以為你沒做。」 |
 | `v8-tool-ui-editor-scope-menus` | （2026-10-30）UI Editor 只處理遊戲選單等介面，不管 HUD。HUD（例如 `hit_feedback.json`）由產品自己畫 | 「UI Editor只處理遊戲菜單等界面，而不管HUD。」 |
@@ -112,3 +116,5 @@
 - 2026-10-31：使用者：「照 (b)」。`v8-tool-assets-anim-events-format` 定為通用格式（契約歸 Engine 的動畫 owner，資料在各產品），記在 [assets.md](assets.md) 的決定紀錄。其餘五個待決未定。
 - 2026-10-31：使用者更正：「這個是一條工具鏈而不是一個工具。沒有統一的都去地方和輸出地方。核心是工具加工素材-》assets 登錄，（在遊戲打包是通過assets build 成自定義的二進制包，這個功能可以延後），關鍵是現在的工具。（手工-腳本-工具）這個順序。」草稿重寫：撤下製作設定格式、處理器、Build 階段與四個相關待決；改成各類資產的階段表（音效：腳本 → 工具；動畫事件：無 → 手工；模型：手工 → 之後工具）與兩條 PR 線。
 - 2026-10-31：使用者要求列出要做的 Editor 與內容（音效工具、模型檢視工具；動畫事件先手工），之後：「OK，這樣也行，開始。」規劃核准。`v8-tool-audio-editor-convert` 開始（high，重新取樣局部 xhigh，Opus 5.5，估 6～10 h）；第一步是 Design Invariants（新 Component，AGENTS §3），起草後停下等核准。
+- 2026-10-31：anim-events-line 由另一個會話開始（`v8-tool-assets-anim-events`，high，Opus 5.5，估 6～8 h）。分支 `claude/nifty-lovelace-dd931a`，切自 `v8-tool-handoff-cleanup`（`assets.md` 還沒進 master）。提出契約位置、格式 v1、Design Invariants 草稿與對齊方式，你核准（「照建議核准」）。
+- 2026-10-31：`v8-tool-assets-anim-events` 的程式、資料、測試完成；突變 Engine 13／13、PvP 8／8（第一次有 7 個沒被殺：doctest 篩選含逗號、刪行造成編譯失敗、訊息印成指標、CMake 折行，修正後全部 killed）。從骨骼的局部變換推出彈倉插到底在 clip 2.35 s，音檔兩組聲音對應插到底與滑套。等你實聽。

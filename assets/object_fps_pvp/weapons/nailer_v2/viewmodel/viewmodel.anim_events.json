@@ -4,7 +4,7 @@
   "model_asset_id": "object_fps_pvp.model.nailer_v2",
   "clips": {
     "Armature|Reload": [
-      { "seconds": 1.30, "event": "magazine_in" }
+      { "seconds": 2.35, "event": "magazine_in" }
     ]
   }
 }

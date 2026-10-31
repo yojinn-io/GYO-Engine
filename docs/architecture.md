@@ -77,7 +77,7 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 | `GYO::Engine` | IO, runtime lifecycle, CPU asset identity/cache/loading | Base, Math, Time; C++ library; JSON parser privately |
 | `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule` | Math, Base |
 | `GYO::Input` | physical input (full keyboard scancodes, mouse, modifiers), window interaction events (focus, move, resize, minimize, restore) and action/axis evaluation | Base (private) |
-| `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS) | Engine, Math |
+| `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS); named moments on clips, the `gyo.anim_events` data contract ([contract](architecture/animation-events.md)) | Engine, Math; the JSON parser privately |
 | `GYO::ModelRenderer` | shared model/material GPU resources and independent skinned mesh instances; consumes an already evaluated pose | Model, Render |
 | `GYO::PlatformSDL` | SDL process, window and event ownership | Engine and SDL |
 | `GYO::Text` | encoded-font to owning RGBA bitmap contract | Engine |
@@ -175,6 +175,10 @@ Compatible-skeleton clip transfer takes explicit node bindings and a displacemen
 scale, corrects reference frames and preserves target geometry and skin bindings.
 It validates mapped hierarchy and supported scale constraints; applications own
 node-name selection and the decision to enable cross-source binding.
+It also owns `gyo.anim_events`, the data contract for named moments on a model's
+clips: it parses and binds the files but keeps the names opaque; what an event
+triggers, and when that is in Engine time, belongs to the product
+([animation events](architecture/animation-events.md)).
 `ModelRenderer`, inside `engine/render/model`, depends on Model and Render to
 manage shared model/material resources and independent skinned mesh instances.
 It consumes an evaluated pose without advancing an animation clock. Model and

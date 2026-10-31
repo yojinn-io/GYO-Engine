@@ -225,3 +225,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-text-field` | [2026_10_30_tool_v8_ui_text_field](../../../dev_logs/2026_10_30_tool_v8_ui_text_field.zh-Hant.md) |
 | `v8-product-lobby-text-field` | [2026_10_30_pvp_v8_lobby_text_field](../../../dev_logs/2026_10_30_pvp_v8_lobby_text_field.zh-Hant.md) |
 | `v8-tool-ui-editor-text-field` | [2026_10_31_tool_v8_ui_editor_text_field](../../../dev_logs/2026_10_31_tool_v8_ui_editor_text_field.zh-Hant.md) |
+| `v8-tool-assets-anim-events` | [2026_10_31_tool_v8_assets_anim_events](../../../dev_logs/2026_10_31_tool_v8_assets_anim_events.zh-Hant.md) |
