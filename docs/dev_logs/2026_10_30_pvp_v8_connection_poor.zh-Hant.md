@@ -1,8 +1,8 @@
 <!--
 來源（2026-10-31 搬進 repo）：作者是 audio-line 會話（local_56d3dc93）開的 connection-poor 會話（local_0b06b609）。
 原本的位置：Claude app 的會話筆記資料夾 `~/Library/Application Support/Claude/side-session-notes/local_56d3dc93-c1b7-4466-ab55-43b9abb25f6c/connection-poor-report.zh-Hant.md`，不在 git。
-下面的報告本文照原文搬入，沒有改寫；文中的 `connection-poor-evidence/` 與 scratchpad 路徑指的是原本的位置。
-證據資料夾 `connection-poor-evidence/`（約 54 MB、39 個檔）的原始 log 只在使用者的本機，不進 repo、不保證保存；要不要另外保存由使用者決定。
+下面的報告本文照原文搬入，沒有改寫；文中的 `connection-poor-evidence/` 與 scratchpad 路徑指的是原本的位置，已不是證據的所在。
+**證據的位置（AGENTS §15，2026-10-31 更正）**：使用者的 Intel Mac，主 checkout 的 `build/evidence/connection-poor-20261030/`（git 管理外）：`connection-poor-report.zh-Hant.md`、`runA`／`runB`（注入試行）、`master-gui-20261030-212330`、`audio-branch-logs`（音效分支 20:39／20:49 的原始日誌）與腳本。執行檔沒有保存，可由 origin/master `5cfa149c` 重建。
 三支腳本與判讀用的數字附在文末「附錄」。
 -->
 

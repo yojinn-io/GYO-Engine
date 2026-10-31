@@ -143,7 +143,7 @@
 - 2026-10-30：合併 origin/master（`e31dfdf4`，tool-line 的 #107、#108），本機建置與 CTest 104／104 通過；推送 `claude/pvp-v8-pv8-line` 並開 PR #110。
 - 2026-10-30：PR #110 的 L1 四平台全部通過（run `41046572657`），狀態 CLEAN。
 - 2026-10-30：PR #110 合併（`6b22d82c`），pv8-line 收尾。
-- 2026-10-30：CONNECTION POOR 的調查（audio-line 開的 connection-poor 會話）：成因是 Match 停頓超過約 100 ms → Backlog 重設 → 品質窗口判失敗；和音效無關，master 上重現。使用者決定不改、交給 B6；README 的 B6 列與 network-architecture §7 的「P2 的第二個例外」補上品質窗口。調查報告：[dev_log](../../../dev_logs/2026_10_30_pvp_v8_connection_poor.zh-Hant.md)（2026-10-31 從會話筆記搬進 repo；原始 log 只在本機、不保存）。
+- 2026-10-30：CONNECTION POOR 的調查（audio-line 開的 connection-poor 會話）：成因是 Match 停頓超過約 100 ms → Backlog 重設 → 品質窗口判失敗；和音效無關，master 上重現。使用者決定不改、交給 B6；README 的 B6 列與 network-architecture §7 的「P2 的第二個例外」補上品質窗口。調查報告：[dev_log](../../../dev_logs/2026_10_30_pvp_v8_connection_poor.zh-Hant.md)（2026-10-31 從會話筆記搬進 repo；證據在使用者 Intel Mac 主 checkout 的 `build/evidence/connection-poor-20261030/`，git 管理外，AGENTS §15）。
 - 2026-10-31：同步 master `d8cca12a`（#111、#112、#113）。`v8-product-hitbox-plan` 開始：ultracode run `wf_c70a45ea-cdc`（偵察中途停下，加入使用者轉來的「其他遊戲怎麼處理 hitbox」參考後以 `wf_7b0fc672-291` 重跑）。
 - 2026-10-31：`v8-product-hitbox-plan` 的 ultracode 完成（`wf_7b0fc672-291`，7／7）：評分最小契約 25、決定性 23、還原 v2 14；基底 B-flat（固定姿勢的 11 段骨骼膠囊，Match 不讀模型）。對抗式檢查 must 3、should 9、note 4 全部接受並寫進 [hitbox-plan](hitbox-plan.md)。總估 68～105 h，超過原本的 1.5 倍，13 項等使用者決定。
 - 2026-10-31：`v8-product-hitbox-survey` 完成量測（約 2 h）。量法修正 1 次（手腳頂點排除，半徑變小、門檻只會變嚴）。門檻 (1) 成立，停下交使用者決定做法。
