@@ -67,8 +67,7 @@ jobs:
         shell: pwsh
     env:
       PRESET: ${{ matrix.preset }}
-      # Host tools are keyed by the runner, not the target: rows that share a
-      # host (macOS arm64 and its x86_64 cross build) share one shader tool.
+      # Host tools are keyed by the runner that builds and runs them.
       GYO_HOST_TOOLS: build/target/_build/host-tools-${{ matrix.host }}
       GYO_CPU_EXECUTION: ${{ matrix.cpu_execution }}
       GYO_PRODUCT: ${{ matrix.product }}
@@ -96,7 +95,6 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           preset: ${{ matrix.preset }}
           host: ${{ matrix.host }}
-          cpu-execution: ${{ matrix.cpu_execution }}
 
       - name: Configure the selected product and engine verification
         id: configure
@@ -360,7 +358,7 @@ jobs:
           | Go service archives (Linux cross-builds) | $env:GO_SERVICES_RESULT |
 
           Package checks are declared by the central product acceptance contract. Physical GPU acceptance remains manual.
-          Only Linux runs GPU checks (software Vulkan); macOS rows have no GPU checks, and a rosetta2 row verifies its x86_64 package translated on an arm64 host. The archive records the same execution mode.
+          Only Linux runs GPU checks (software Vulkan); macOS rows have no GPU checks. Every row runs its package natively on its own host, and the archive records that execution mode.
           Quick artifacts cannot substitute for release acceptance.
           "@ >> $env:GITHUB_STEP_SUMMARY
 

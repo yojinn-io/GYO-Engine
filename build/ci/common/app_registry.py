@@ -14,15 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from workspace import TemporaryDirectory
 
-from package_contract import PLATFORMS, validate_product
+from package_contract import PLATFORMS, RELEASE_PLATFORMS, validate_product
 
 
 ROOT = Path(__file__).resolve().parents[3]
 # One row per release platform. host is the package platform of the runner
 # itself: host tools such as the shader compiler run there and share its
-# caches. cpu_execution states how the row runs its target binaries: natively,
-# or translated by Rosetta 2 when an x86_64 macOS target is cross-built on an
-# arm64 runner.
+# caches. cpu_execution states how the row runs its target binaries; every
+# row runs them natively on its own host.
 TOOLCHAINS = {
     "windows-x64": dict(runner="windows-2025", host="windows-x64", preset="ci-windows",
                         toolchain="msvc-vs2026", cc="cl", cxx="cl", parallel=4, cpu_execution="native"),
@@ -31,19 +30,17 @@ TOOLCHAINS = {
     "macos-arm64": dict(runner="macos-15", host="macos-arm64", preset="ci-macos",
                         toolchain="appleclang-xcode16.4", cc="/usr/bin/clang", cxx="/usr/bin/clang++",
                         parallel=2, cpu_execution="native"),
-    "macos-x64": dict(runner="macos-15", host="macos-arm64", preset="ci-macos-x64",
-                      toolchain="appleclang-xcode16.4", cc="/usr/bin/clang", cxx="/usr/bin/clang++",
-                      parallel=2, cpu_execution="rosetta2"),
 }
-CPU_EXECUTION = ("native", "rosetta2")
+CPU_EXECUTION = ("native",)
 # A row executes its target natively exactly when it is built on that platform.
-assert set(TOOLCHAINS) == set(PLATFORMS)
-assert all(row["host"] in PLATFORMS and row["cpu_execution"] in CPU_EXECUTION
+assert set(TOOLCHAINS) == set(RELEASE_PLATFORMS)
+assert all(row["host"] in RELEASE_PLATFORMS and row["cpu_execution"] in CPU_EXECUTION
            and (row["cpu_execution"] == "native") == (row["host"] == platform)
            for platform, row in TOOLCHAINS.items())
 
 
 def export_registry(registry: Path | None = None, *, cmake="cmake") -> list[tuple[str, str]]:
+    """Registry product/platform pairs on release platforms; local-only platforms are dropped."""
     with TemporaryDirectory(prefix="gyo-registry-") as work:
         output = Path(work) / "matrix.json"
         command = [cmake, f"-DGYO_OUTPUT={output}"]
@@ -64,7 +61,7 @@ def export_registry(registry: Path | None = None, *, cmake="cmake") -> list[tupl
         if pair in tuples:
             raise ValueError(f"Duplicate product/platform tuple from registry: {pair}")
         tuples.append(pair)
-    return tuples
+    return [pair for pair in tuples if pair[1] in RELEASE_PLATFORMS]
 
 
 def export_tools(registry: Path | None = None, *, cmake="cmake", repository_root: Path | None = None) -> dict[str, list[str]]:
@@ -94,14 +91,14 @@ def export_tools(registry: Path | None = None, *, cmake="cmake", repository_root
                 or len({tool.split(":", 1)[0] for tool in tools}) != len(tools)):
             raise ValueError("CMake tool registry exporter returned an invalid tool selection")
         selected[platform] = tools
-    if set(selected) != set(PLATFORMS):
+    if not set(RELEASE_PLATFORMS) <= set(selected):
         raise ValueError("CMake tool registry exporter must select tools for every release platform")
-    return selected
+    return {platform: selected[platform] for platform in RELEASE_PLATFORMS}
 
 
 def release_products(registry=None):
     """Fixed toolchain products plus explicitly enabled games; never discover apps."""
-    return [("toolchain", platform) for platform in PLATFORMS] + export_registry(registry)
+    return [("toolchain", platform) for platform in RELEASE_PLATFORMS] + export_registry(registry)
 
 
 def main():
@@ -122,7 +119,7 @@ def main():
         pairs = [pair for pair in pairs if pair[0] == args.product]
     tools = export_tools(args.tool_registry, repository_root=args.repository_root)
     matrix = {"include": [dict(product=product, kind="app", platform=platform, tools=[], **TOOLCHAINS[platform]) for product, platform in pairs]}
-    baseline = {"include": [dict(product="toolchain", kind="toolchain", platform=platform, tools=tools[platform], **TOOLCHAINS[platform]) for platform in PLATFORMS]}
+    baseline = {"include": [dict(product="toolchain", kind="toolchain", platform=platform, tools=tools[platform], **TOOLCHAINS[platform]) for platform in RELEASE_PLATFORMS]}
     if args.output:
         with args.output.open("a", encoding="utf-8") as stream:
             stream.write(f"matrix={json.dumps(matrix, separators=(',', ':'))}\n")

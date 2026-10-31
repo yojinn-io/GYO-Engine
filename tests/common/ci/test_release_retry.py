@@ -15,7 +15,7 @@ from workspace import TemporaryDirectory
 
 from release_pipeline import ApiError, TransientApiError, main, prepare_draft_with_retries
 from release_support import ReleaseError
-from test_release_pipeline import ASSET_COUNT, COMMIT, OTHER_COMMIT, PLATFORMS, FakeApi, packages, EXPECTED_PAIRS
+from test_release_pipeline import ASSET_COUNT, COMMIT, OTHER_COMMIT, RELEASE_PLATFORMS, FakeApi, packages, EXPECTED_PAIRS
 
 
 class ReleaseRetryTests(unittest.TestCase):
@@ -294,7 +294,7 @@ class ReleaseRetryTests(unittest.TestCase):
                 main()
             load.assert_called_once_with(package_directory, COMMIT, EXPECTED_PAIRS,
                                          expected_tool_owners={"windows-x64": {"alpha"}}, profile="release")
-            services.assert_called_once_with(service_directory, COMMIT, "sample_app", tuple(PLATFORMS))
+            services.assert_called_once_with(service_directory, COMMIT, "sample_app", tuple(RELEASE_PLATFORMS))
             recovery.assert_called_once_with(api, tag, COMMIT, False, self.items, expected_pairs=EXPECTED_PAIRS,
                                              expected_services=set(), notes=ANY)
             self.assertEqual(output.read_text(encoding="utf-8").splitlines(), [
