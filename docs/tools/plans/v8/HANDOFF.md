@@ -97,7 +97,7 @@
 - 2026-10-30：使用者：「合併 #109、另開 PR」。PR #109 以 merge commit 合併（`5cfa149c`）。剩下的 4 個 commit（text_field 的決定、ime-observe、同意、音效需求更正）rebase 到 master，分支 `claude/v8-tool-ui-ime-observe`，另開 PR。
 - 2026-10-30：音效線轉來第二項 assets editor 需求：動畫事件時刻與音效同步資料化（`v8-tool-assets-anim-events`），使用者原話「這個聲音和動畫的管理是資料化的吧，是的話，就給Assets Editor來處理。」記到 README；只記需求。
 - 2026-10-30：清理：`v8-tool-ui-editor-structure` 已做完卻還在「等你決定」，移到決定紀錄；README 的 `v8-tool-ui-editor-file-browser` 補上 ✓。
-- 2026-10-30：收到 Windows 場次的 log 與回報（日文 IME、無中文 IME、每次的畫面結果未記錄）。收支一致（169 行、34,990 bytes、丟棄 0）。判定不成立，停下回報。觀測到：組字事件 0 筆（SDL 預設由 OS 畫組字）、字在確定時成批送來、平假名模式送全形字元被大廳的 ASCII 過濾丟掉、半形可以。log 與分析輸出存在 `evidence/ime-observe/`。
+- 2026-10-30：收到 Windows 場次的 log 與回報（日文 IME、無中文 IME、每次的畫面結果未記錄）。收支一致（169 行、34,990 bytes、丟棄 0）。判定不成立，停下回報。觀測到：組字事件 0 筆（SDL 預設由 OS 畫組字）、字在確定時成批送來、平假名模式送全形字元被大廳的 ASCII 過濾丟掉、半形可以。log 與分析輸出存在 `evidence/ime-observe/`。（2026-10-31 補註：log 從沒進過 repo，分析輸出 `report.txt` 也已移出（AGENTS §15）；兩者現在都在主 checkout 的 `build/evidence/tool-v8-ime-observe/`，git 管理外。）
 - 2026-10-30：使用者選 (b)。規劃 `v8-engine-input-composition`（平台選項 `imeComposition`、`TextEvent::Kind::Composition`、`SetTextInputArea`）與產品批 `v8-product-lobby-fullwidth`，寫進 README，等確認。
 - 2026-10-30：使用者確認規劃；組字事件由工具線做；產品批由本會話做。`v8-product-lobby-fullwidth` 開始（medium，估 1～2 h）。
 - 2026-10-30：`v8-product-lobby-fullwidth` 完成，實際約 0.5 h。`FilterAddressText`；Red（舊規則下 4 個全形斷言失敗）→ Green；5 個突變全被抓到（1 個先存活、補測試後抓到）；產品 CPU 測試全過。Windows L3 未做。
