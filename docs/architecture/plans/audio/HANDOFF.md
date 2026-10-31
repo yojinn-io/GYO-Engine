@@ -1,6 +1,6 @@
 # 音效（GYO::Audio）：交接
 
-更新：2026-10-31。**2026-10-31：`v8-engine-audio-control-plan` 完成（9 項照建議核准；Invariants 與 RC 寫進 audio.md，標 planned）；`v8-engine-audio-control-baseline`、`-stop` 完成；下一批 `v8-engine-audio-control-clips` 等使用者指定（[CONTROL](CONTROL.md)）。** 以下是之前的狀態：**`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值定為 60 ms（使用者決定）；`v8-engine-audio-record` 完成（2026-10-30，錨點版 L2：299／299 起音落在重建的 frame）。`v8-engine-audio` 四批全部完成；下一步是消費端的 `v8-product-sfx`（同一條 PR 線）。**
+更新：2026-10-31。**2026-10-31：`v8-engine-audio-control-plan` 完成（9 項照建議核准；Invariants 與 RC 寫進 audio.md，標 planned）；`v8-engine-audio-control-baseline`、`-stop`、`-clips` 完成；下一批 `v8-engine-audio-control-playhead` 等使用者指定（[CONTROL](CONTROL.md)）。** 以下是之前的狀態：**`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值定為 60 ms（使用者決定）；`v8-engine-audio-record` 完成（2026-10-30，錨點版 L2：299／299 起音落在重建的 frame）。`v8-engine-audio` 四批全部完成；下一步是消費端的 `v8-product-sfx`（同一條 PR 線）。**
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 Engine 計畫夾的慣例，不點名消費端。
 
 ## 現況
@@ -34,6 +34,8 @@
 - 2026-10-31：`v8-engine-audio-control-baseline` 完成：特性測試的雜湊 `12184034990701221815`（macOS x86_64 錄製，四平台待 CI）、`gyo_audio_alloc_tests`；core 38／38、突變 2／2（`au-ctl-alloc-in-render` 的第一版因最佳化省略配置而存活，改寫突變後被殺）。之後雜湊不同就停下回報，不重錄。dev_log：[2026_10_31_engine_audio_control_baseline](../../../dev_logs/2026_10_31_engine_audio_control_baseline.zh-Hant.md)。
 - 2026-10-31：使用者說「開始」，開始 `v8-engine-audio-control-stop`（high，換算與佇列順序局部 xhigh 用 `xhigh-reviewer`，估 4～5 h）。做法：①環的元素從 `PlayRequest` 改成內部的 `Command`（播放、停止、全部停止），入列共用一個函式，所以既有的佇列突變仍然唯一；停止的換算是獨立的一行（突變能只打壞停止）。②`VoiceMixer` 只加停止 frame 與不透明的 cookie，以及依 cookie（或前綴）停止的函式；handle 的知識留在 `Mixer`。③先寫一個「停止入列但不生效」的骨架，讓新測試 Red，再實作。
 - 2026-10-31：`v8-engine-audio-control-stop` 完成：`SoundHandle`、`Stop`／`StopAll`、停止的計數與規則（Invariant 10）。core 38／38、突變 40／40（相關的 core、sched、ctl）、TSan 3 次無警告＋4／4。xhigh 審查沒有 blocker；major 2 個（測試缺口）與 minor 全部處置，其中 D3（已開始、在區塊開頭停止的聲部立刻釋放）改了行為但輸出不變。和計畫的差異：結束陣列延到 `-clips`；宣告的 `au-ctl-late-stop-unclamped` 是等價突變，換成 `-uncounted` 與 `-boundary`。test preset 有 3 案在負載 158 下逾時，逐一重跑通過（判為環境）。dev_log：[2026_10_31_engine_audio_control_stop](../../../dev_logs/2026_10_31_engine_audio_control_stop.zh-Hant.md)。
+- 2026-10-31：使用者說「開始 clips」，開始 `v8-engine-audio-control-clips`（high，回收順序局部 xhigh 用 `xhigh-reviewer`，估 4～6 h）。做法：①`ClipId` 改 64 位：bank 片段維持 1～N；執行中的片段把 generation（≥1）放在高 32 位、`(提交端索引+1)<<16 | 槽` 放在低 32 位，所以 bank 的 `Contains` 自然不認它。②樣本域只多一個不透明的租約標記：`ScheduledPlay` 帶片段的 view 與標記，`VoiceMixer` 把結束（含被停止釋放）的聲部的標記寫進建立時配置、容量為 `maxVoices` 的陣列，`Mixer` 在每個停止命令與每次 `Render` 後取出，處理租約與交還（計畫的「結束陣列」在這批做）。③驗證抽成內部的 `ValidateClip`，`ClipBank::Add` 與 `LoadClip` 共用，既有突變 `au-clip-rate-unchecked` 的字串不變。④ASan 另建 `build/target/_build/audio-asan`（只建 audio 目標）。
+- 2026-10-31：`v8-engine-audio-control-clips` 完成：64 位 `ClipId`、每個提交端的片段槽、`LoadClip`／`UnloadClip`、租約與交還（Invariant 7 的生命期規則）。core 38／38、test 109／109、突變 57／57、TSan 3 次無警告＋6／6、ASan 3 次無報告＋1／1（ASan 對「回收不等交還」3／3 報 heap-use-after-free）。xhigh 審查沒有 blocker；major 1 個（多聲部的租約計數沒有守衛）與 minor 全部處置。新設 `build/target/_build/audio-asan`。dev_log：[2026_10_31_engine_audio_control_clips](../../../dev_logs/2026_10_31_engine_audio_control_clips.zh-Hant.md)。
 - 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -186,3 +188,4 @@
 | `v8-engine-audio-control-plan` | 2～3 h | 約 2 h | workflow 約 22 分鐘（5 個 agent）＋整理與寫文件 |
 | `v8-engine-audio-control-baseline` | 1～1.5 h | 約 0.7 h | 含 core 建置、CTest 約 1 分鐘、突變 2 次 |
 | `v8-engine-audio-control-stop` | 4～5 h | 約 2.5 h | 含 xhigh 審查約 13 分鐘、突變 3 輪（背景） |
+| `v8-engine-audio-control-clips` | 4～6 h | 約 3 h | 含 xhigh 審查約 12 分鐘、ASan 建置、突變 3 輪（背景） |

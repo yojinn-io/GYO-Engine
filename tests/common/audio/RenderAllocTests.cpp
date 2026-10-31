@@ -121,3 +121,47 @@ TEST_CASE("Audio Mixer Render allocates and frees nothing") {
     CHECK(counted.allocations == 0);
     CHECK(counted.frees == 0);
 }
+
+TEST_CASE("Audio Mixer Render allocates and frees nothing for clips loaded while output runs") {
+    MixerConfig config;
+    config.maxVoices = 2;
+    config.clipSlotsPerSubmitter = 2;
+    config.scheduleDelay = Duration::zero();
+    auto mixer = Mixer::Create(config, ClipBank{});
+    REQUIRE(mixer.has_value());
+    auto submitter = mixer->CreateSubmitter();
+    REQUIRE(submitter.has_value());
+    const std::vector<std::int16_t> longClip(24000, 300);
+    const std::vector<std::int16_t> shortClip(100, 500);
+    auto a = submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(longClip.data(), longClip.size()), 1, kSampleRate);
+    auto b = submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
+                                 kSampleRate);
+    REQUIRE((a && b));
+
+    const TimePoint anchor = TimePoint{} + std::chrono::duration_cast<Duration>(std::chrono::seconds(5));
+    std::vector<std::int16_t> out(std::size_t{1024} * kChannels);
+    const SoundHandle sound = submitter->Play({*a, anchor});
+    REQUIRE(sound);
+    REQUIRE(submitter->Play({*b, anchor}));
+    // The short voice ends, the long one is stopped, both clips are unloaded
+    // and handed back, all while counting.
+    bool queued = false;
+    const Counted counted = Count([&] {
+        for (int block = 0; block < 6; ++block) {
+            mixer->Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+            if (block == 1) {
+                queued = submitter->Stop(sound, anchor) && submitter->UnloadClip(*a) && submitter->UnloadClip(*b);
+            }
+        }
+    });
+    CHECK(queued);
+    CHECK(mixer->Stats().unloadsTaken == 2);
+    CHECK(counted.allocations == 0);
+    CHECK(counted.frees == 0);
+    // Both slots were handed back: loading frees and allocates on this thread.
+    auto again = submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
+                                     kSampleRate);
+    auto twice = submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(shortClip.data(), shortClip.size()), 1,
+                                     kSampleRate);
+    CHECK((again && twice));
+}

@@ -4,8 +4,8 @@ Owner: Engine (`engine/audio` → `GYO::Audio`; the SDL output backend `engine/a
 `GYO::AudioBackendSDL`, built when a product declares the `SDL_AUDIO` component).
 Plan and record: [audio](plans/audio/README.md), batches v8-engine-audio-core, -schedule, -sdl and -record.
 
-**Status (2026-10-31): v8-engine-audio-core, -schedule, -sdl, -record, -control-baseline and -control-stop
-landed.** The clip bank, the sample-domain core
+**Status (2026-10-31): v8-engine-audio-core, -schedule, -sdl, -record, -control-baseline, -control-stop and
+-control-clips landed.** The clip bank, the sample-domain core
 (`VoiceMixer`, internal to `engine/audio/src`), the public `Mixer` with its submitters and timestamp mapping, and
 the SDL output backend exist. The mixer is tested offline; the backend on SDL's `dummy` and `disk` drivers. Each invariant below
 names the milestone that makes it true and the guard that keeps it true.
@@ -41,9 +41,18 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 - **Submitters (`Mixer::CreateSubmitter`).** Each is the producer end of one bounded SPSC ring. All rings
   (`maxSubmitters`, 1 to 64, of `queueCapacity`, 1 to 65536) are allocated when the mixer is created; creating a
   submitter only hands out the next one (any thread, any time; `TooManySubmitters` when none is left). The first
-  thread that calls `Play`, `Stop` or `StopAll` on a submitter owns it. A destroyed submitter does not give its ring back, so a consumer
+  thread that calls `Play`, `Stop`, `StopAll`, `LoadClip` or `UnloadClip` on a submitter owns it. A destroyed submitter does not give its ring back, so a consumer
   creates one per producer thread and keeps it. A full ring drops the request and counts it (`droppedQueueFull`).
   A submitter shares the mixer's state, so it may outlive the `Mixer`.
+- **Clips loaded while output runs (`Submitter::LoadClip`, `UnloadClip`).** Each submitter has
+  `clipSlotsPerSubmitter` slots (0 to 256, default 0), allocated at creation without samples. `LoadClip` checks a
+  clip like `ClipBank::Add`, copies it into a free slot on the calling thread and returns a `ClipId` above every
+  bank id: the slot's generation in the high 32 bits, the submitter and the slot below. `UnloadClip` queues the
+  release in the same ring, behind every play already sent, and bumps the slot's generation, so the old id is no
+  longer loaded. The audio thread counts the voices reading each slot (its lease); a play dropped for want of a
+  voice takes none. Once it has taken the unload and no voice reads the clip, it resets the lease and hands the
+  slot back; the next `LoadClip` frees the samples on the owner's thread and reuses the slot. Only the submitter
+  that loaded a clip plays or unloads it. A full queue drops the unload and counts it; the clip stays loaded.
 - **Handles and stops (`Submitter::Stop`, `StopAll`).** `Play` returns a `SoundHandle`: the submitter's index plus
   one in the top 7 bits and a sequence of that submitter below, advanced only when a play is queued, so a handle is
   never reused; a play dropped because the queue was full returns the invalid handle 0. Stops go through the same
@@ -51,8 +60,9 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
   A stop's time maps to a frame by the same rule as a start's. A voice that has not started is freed at once when
   the stop frame is at or before its start (never heard); otherwise it ends at the stop frame, or, when it has
   started and that frame is already rendered, at the first frame of the block that takes the stop (counted late).
-  The earliest of several stop frames wins. `StopAll` does the same for every sound its submitter sent before it. The voice mixer only keeps a stop frame and
-  an opaque cookie per voice (the handle); handles are the `Mixer`'s.
+  The earliest of several stop frames wins. `StopAll` does the same for every sound its submitter sent before it. The voice mixer only keeps a stop frame, an
+  opaque cookie (the handle) and an opaque lease mark per voice, and reads a loaded clip through the view the
+  `Mixer` passes; handles and clip slots are the `Mixer`'s.
 - **Timestamp mapping (`Mixer::Render(block, anchor)`).** The backend reads the Engine time once at the start of each
   block and passes it as `anchor`. Every queued request starts at
   `blockStart + floor((at - anchor) × 48000 + 1/2) + delayFrames` frames (halves toward +infinity, also for negative
@@ -89,8 +99,9 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 
 - `Mixer::Render` (and inside it `VoiceMixer`'s schedule and render) runs on one thread, the audio thread.
   `CreateSubmitter`, `Stats` and `SetMasterGain` may run on any thread; each `Submitter` on its owner thread. A gain
-  outside [0, `kMaxGain`], a clip outside the bank, calling `Play`, `Stop` or `StopAll` from another thread than the
-  owner, and a moved-from `Submitter` are Programmer Errors (the owner check is best effort: a later thread may reuse
+  outside [0, `kMaxGain`], a clip neither in the bank nor loaded through that submitter (and not unloaded since),
+  calling a `Submitter` member from another thread than the owner, and a moved-from `Submitter` are Programmer
+  Errors (the owner check is best effort: a later thread may reuse
   a joined thread's id) (`GYO_ASSERT` in the `Submitter` members, on the producer, before anything is counted); the
   audio thread takes requests without checks (`VoiceMixer::ScheduleChecked` and `VoiceMixer::Stop`, `noexcept`).
 - `MixerStats`: `submitted == playedOnTime + playedLate + droppedQueueFull + droppedNoVoice` once no request is in
@@ -102,6 +113,15 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
   With several stops of one voice, the earliest stop frame wins. A started voice stopped at or before the first
   frame of the block that takes the stop is freed at once (nothing more of it is mixed), so a play later in the
   same block can take its voice, and a second stop of it finds nothing (unmatched).
+- Clip slots: the owner thread writes a slot's samples before it queues a play of the clip, so the ring's
+  release and acquire publish them to the audio thread. The ring is FIFO, so when the audio thread takes an
+  unload, every play of the clip has been taken: each holds a voice (counted in the lease) or was dropped, and no
+  later play exists. When the count reaches zero no voice reads the samples; the audio thread then resets its
+  lease and release-stores the hand-back flag after its last read, and the owner frees the samples only after an
+  acquire load sees it. Without `Render` (an output that failed to open) no slot is handed back, and `LoadClip`
+  returns `NoClipSlot` once every slot was used. A destroyed submitter does not give its slots back; their samples
+  are freed with the mixer's state. A slot's generation wraps after 2^32 - 1 unloads (not reached in practice);
+  an id of another mixer that happens to match a loaded slot is not detected (as for bank ids).
 - Real-time bound: `Render` takes every queued request in one block, each start looks for a free voice
   linearly and each stop scans every voice; the worst case is `maxSubmitters × queueCapacity × maxVoices` comparisons in one block. The defaults
   (4 × 256 × 32) are small; the configured limits (64 × 65536 × 1024) are not real-time.
@@ -161,17 +181,20 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
    unloadsSubmitted equals their sum. A stop never changes how its play was counted. The stop half holds from
    v8-engine-audio-control-stop (guards "drops and counts a stop when its queue is full", "counts a stop of a
    finished or dropped play as unmatched", "balances plays and stops from concurrent producers"); the unload half
-   is planned in v8-engine-audio-control-clips.
+   from v8-engine-audio-control-clips (guards "may unload again after its queue was full", and the balance checked
+   after "loads, plays, stops and unloads while another thread renders").
 7. **The audio thread is real-time safe.** `Render` allocates, frees, locks, waits, logs and throws nothing
    (`noexcept`; every capacity is allocated at creation, including every submitter ring, clip slot record and
    playhead entry). A clip's samples never change while a voice or a queued play can read them: bank clips never
-   change; a clip loaded through a submitter (planned, v8-engine-audio-control-clips) is allocated only on that
+   change; a clip loaded through a submitter (from v8-engine-audio-control-clips) is allocated only on that
    submitter's owner thread and freed there, or with the mixer's state after output stops; the audio thread hands
    a slot back, with a release store and after resetting its own lease, only once it has taken the clip's unload
    and no voice reads it. (Revised 2026-10-31 with the user's consent, v8-engine-audio-control-invariants: the
    original "clips do not change while output runs" forbade loading during output; the properties it protected are
-   kept by this lifetime rule. Planned guards for loaded clips: "does not hand back a clip while a voice reads it",
-   "a reused slot is not handed back early", the ASan and TSan stress.) From v8-engine-audio-core for
+   kept by this lifetime rule. Guards for loaded clips: "does not hand back a clip while a voice reads it", "does
+   not hand back a reused slot early", "hands back a stopped clip once its voice ends", "gives a play dropped for
+   want of a voice no lease", "Render allocates and frees nothing for clips loaded while output runs", and
+   "loads, plays, stops and unloads while another thread renders" under ThreadSanitizer and AddressSanitizer.) From v8-engine-audio-core for
    `VoiceMixer::Render`, from v8-engine-audio-schedule for `Mixer::Render`. Guards: review (locks, waits, logs), the
    `noexcept` signatures, and "Render allocates and frees nothing" (`gyo_audio_alloc_tests`, a counting allocator
    on the rendering thread; from v8-engine-audio-control-baseline).
@@ -198,8 +221,8 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
     affects or reports another play. A runtime `ClipId` names one slot in one generation; an unloaded id never plays
     the slot's next clip. The handle half holds from v8-engine-audio-control-stop (guards "never lets a stale handle
     stop a newer sound in the same voice", "returns a unique handle per queued play and none for a dropped one",
-    "gives the last of 64 submitters valid handles"); the clip half is planned in v8-engine-audio-control-clips
-    (guard "a reloaded slot does not answer to the old ClipId").
+    "gives the last of 64 submitters valid handles"); the clip half from v8-engine-audio-control-clips (guards
+    "gives a reloaded slot a new ClipId", "treats misused runtime clips as Programmer Errors").
 
 ### Replacement Criteria
 

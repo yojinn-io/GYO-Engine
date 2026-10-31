@@ -20,6 +20,10 @@ struct ScheduledPlay final {
     float gainLeft = 1.0f;
     float gainRight = 1.0f;
     std::uint64_t cookie = 0; // opaque to the voice mixer; Stop matches it
+    // A clip outside the bank: its samples, which stay valid while the voice
+    // plays, and a nonzero lease mark reported in Ended() when the voice ends.
+    const ClipView* view = nullptr;
+    std::uint64_t lease = 0;
 };
 
 enum class StartOutcome : std::uint8_t { OnTime, Late, NoVoice };
@@ -60,8 +64,8 @@ public:
     VoiceMixer& operator=(const VoiceMixer&) = delete;
     ~VoiceMixer() = default;
 
-    // A clip outside the bank and a gain outside [0, kMaxGain] are Programmer
-    // Errors. A start before the next frame to render is late: the voice starts
+    // A clip outside the bank (without a view) and a gain outside [0, kMaxGain]
+    // are Programmer Errors. A start before the next frame to render is late: the voice starts
     // at that frame instead. Allocates nothing.
     StartOutcome Schedule(const ScheduledPlay& play);
     // The same without the checks, for the audio thread: the caller has already
@@ -75,6 +79,15 @@ public:
     // at or before the next frame to render (late when before it). The earliest
     // stop frame of a voice wins.
     StopResult Stop(std::uint64_t cookie, std::uint64_t mask, std::int64_t stopFrame) noexcept;
+
+    // The audio thread. The lease marks of the voices that ended (reached their
+    // end or stop frame, or were freed by Stop) since ClearEnded, at most
+    // maxVoices of them between two Stop or Render calls: the caller drains them
+    // after each.
+    [[nodiscard]] Base::ConstSpan<std::uint64_t> Ended() const noexcept {
+        return Base::ConstSpan<std::uint64_t>(ended_.data(), endedCount_);
+    }
+    void ClearEnded() noexcept { endedCount_ = 0; }
 
     // Fills the interleaved stereo block and advances renderedFrames by its frame
     // count. An odd sample count is the caller's error; it cannot be asserted
@@ -96,6 +109,7 @@ private:
         std::int64_t startFrame = 0;
         std::int64_t stopFrame = std::numeric_limits<std::int64_t>::max(); // the first frame not mixed
         std::uint64_t cookie = 0;
+        std::uint64_t lease = 0;
         std::uint32_t position = 0; // frames of the clip already mixed
         std::int64_t gainLeftQ16 = 0;
         std::int64_t gainRightQ16 = 0;
@@ -108,11 +122,14 @@ private:
 
     VoiceMixer(std::uint32_t maxVoices, ClipBank&& clips);
     void RenderChunk(std::int16_t* out, std::uint32_t frames) noexcept;
+    void End(Voice& voice) noexcept;
 
     ClipBank clips_;
     std::vector<ClipView> views_; // one per clip, indexed by ClipId::value - 1
     std::vector<Voice> voices_;
     std::vector<std::int64_t> accumulator_; // kChunkFrames * kChannels, allocated once
+    std::vector<std::uint64_t> ended_;      // maxVoices lease marks, allocated once
+    std::size_t endedCount_ = 0;
     std::int64_t nextFrame_ = 0;            // audio thread's own copy of renderedFrames
     std::atomic<std::int64_t> masterGainQ16_{1 << 16};
     Counters counters_;

@@ -49,7 +49,8 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 | `v8-engine-audio-control-plan` | high｜繼承（規劃用 ultracode，使用者核准） | 2～3 h | 完成（2026-10-31 核准 9 項；Invariants 與 RC 寫進 audio.md；[CONTROL](CONTROL.md)；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_plan.zh-Hant.md)） | 控制層重建的計畫：停止、執行中換片段、播放頭；Invariants 與 RC 的修改案 |
 | `v8-engine-audio-control-baseline` | high｜繼承 | 1～1.5 h | 完成（2026-10-31；core 38／38、突變 2／2；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_baseline.zh-Hant.md)） | PvP 形狀的特性測試（雜湊）、`Render` 不配置的守衛 |
 | `v8-engine-audio-control-stop` | high，換算與佇列順序局部 xhigh｜繼承 | 4～5 h | 完成（2026-10-31；core 38／38、突變 40／40＋TSan 4／4、xhigh 審查已處置；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_stop.zh-Hant.md)） | `SoundHandle`、`Stop`／`StopAll`、停止的計數 |
-| `v8-engine-audio-control-clips`～`-live` | 見 [CONTROL](CONTROL.md)「分批」 | 9～13 h | 未開始（等使用者指定） | 3 批實作 |
+| `v8-engine-audio-control-clips` | high，回收順序局部 xhigh｜繼承 | 4～6 h | 完成（2026-10-31；core 38／38、test 109／109、突變 57／57＋TSan 6／6＋ASan 1／1、xhigh 審查已處置；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_clips.zh-Hant.md)） | 執行中的片段槽、`LoadClip`／`UnloadClip`、租約與交還 |
+| `v8-engine-audio-control-playhead`～`-live` | 見 [CONTROL](CONTROL.md)「分批」 | 5～7 h | 未開始（等使用者指定） | 2 批實作 |
 
 `v8-engine-audio` 合計 12～18 h（與消費端計畫的估時相同）。檔位與引擎的說明見 [PLAN](PLAN.md)「分批」。
 

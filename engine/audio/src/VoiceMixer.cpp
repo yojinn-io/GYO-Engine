@@ -40,7 +40,10 @@ Base::Result<VoiceMixer, AudioError> VoiceMixer::Create(const std::uint32_t maxV
 }
 
 VoiceMixer::VoiceMixer(const std::uint32_t maxVoices, ClipBank&& clips)
-    : clips_(std::move(clips)), voices_(maxVoices), accumulator_(std::size_t{kChunkFrames} * kChannels) {
+    : clips_(std::move(clips)),
+      voices_(maxVoices),
+      accumulator_(std::size_t{kChunkFrames} * kChannels),
+      ended_(maxVoices) {
     // ClipBank::View asserts, so the audio thread reads views prepared here.
     views_.reserve(clips_.Count());
     for (std::uint32_t i = 1; i <= clips_.Count(); ++i) views_.push_back(clips_.View(ClipId{i}));
@@ -51,6 +54,8 @@ VoiceMixer::VoiceMixer(VoiceMixer&& other) noexcept
       views_(std::move(other.views_)),
       voices_(std::move(other.voices_)),
       accumulator_(std::move(other.accumulator_)),
+      ended_(std::move(other.ended_)),
+      endedCount_(other.endedCount_),
       nextFrame_(other.nextFrame_),
       masterGainQ16_(other.masterGainQ16_.load(std::memory_order_relaxed)) {
     // ClipView spans point into clip vectors, whose buffers a move keeps.
@@ -67,7 +72,7 @@ VoiceMixer::VoiceMixer(VoiceMixer&& other) noexcept
 }
 
 StartOutcome VoiceMixer::Schedule(const ScheduledPlay& play) {
-    GYO_ASSERT(clips_.Contains(play.clip));
+    GYO_ASSERT(play.view != nullptr || clips_.Contains(play.clip));
     GYO_ASSERT(IsValidGain(play.gainLeft) && IsValidGain(play.gainRight));
     return ScheduleChecked(play);
 }
@@ -91,8 +96,8 @@ StartOutcome VoiceMixer::ScheduleChecked(const ScheduledPlay& play) noexcept {
     } else {
         counters_.onTime.fetch_add(1, std::memory_order_relaxed);
     }
-    const ClipView& clip = views_[play.clip.value - 1];
-    *free = Voice{true, start, std::numeric_limits<std::int64_t>::max(), play.cookie, 0,
+    const ClipView& clip = play.view != nullptr ? *play.view : views_[play.clip.value - 1];
+    *free = Voice{true, start, std::numeric_limits<std::int64_t>::max(), play.cookie, play.lease, 0,
                   ToQ16(play.gainLeft), ToQ16(play.gainRight), clip};
     return outcome;
 }
@@ -104,13 +109,13 @@ StopResult VoiceMixer::Stop(const std::uint64_t cookie, const std::uint64_t mask
         ++result.stopped;
         const bool started = voice.startFrame < nextFrame_;
         if (!started && stopFrame <= voice.startFrame) {
-            voice.active = false; // stopped before it started: never heard
+            End(voice); // stopped before it started: never heard
             continue;
         }
         if (started && stopFrame <= nextFrame_) {
             // Nothing more is mixed: it stops at this block's first frame.
             if (stopFrame < nextFrame_) result.late = true;
-            voice.active = false;
+            End(voice);
             continue;
         }
         voice.stopFrame = std::min(voice.stopFrame, stopFrame); // the earliest stop wins
@@ -156,7 +161,7 @@ void VoiceMixer::RenderChunk(std::int16_t* const out, const std::uint32_t frames
             ++at;
             ++voice.position;
         }
-        if (voice.position >= voice.clip.frames || chunkStart + at >= voice.stopFrame) voice.active = false;
+        if (voice.position >= voice.clip.frames || chunkStart + at >= voice.stopFrame) End(voice);
     }
 
     const std::int64_t master = masterGainQ16_.load(std::memory_order_relaxed);
@@ -174,6 +179,13 @@ void VoiceMixer::RenderChunk(std::int16_t* const out, const std::uint32_t frames
     nextFrame_ = chunkEnd;
     counters_.renderedFrames.store(static_cast<std::uint64_t>(nextFrame_), std::memory_order_relaxed);
     if (clipped != 0) counters_.clippedSamples.fetch_add(clipped, std::memory_order_relaxed);
+}
+
+void VoiceMixer::End(Voice& voice) noexcept {
+    voice.active = false;
+    // At most maxVoices voices end between two drains: no voice starts in
+    // Render, and the caller drains after every Stop.
+    if (voice.lease != 0 && endedCount_ < ended_.size()) ended_[endedCount_++] = voice.lease;
 }
 
 void VoiceMixer::SetMasterGain(const float gain) {
