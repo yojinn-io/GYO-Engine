@@ -502,10 +502,11 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
         const Json& rect = (*source.element)["rect"];
         const ImVec2 minimum = Minimum(selected->boundsPixels, viewport);
         const ImVec2 maximum = Maximum(selected->boundsPixels, viewport);
-        drawList.PushClipRect(
-            {viewport.x, viewport.y},
-            {viewport.x + viewport.width, viewport.y + viewport.height},
-            true);
+        // The selection and its handles are clipped only by the canvas window,
+        // not by the preview: the whole rectangle of an element that reaches
+        // past the design canvas stays visible (its content is still clipped
+        // like in the game).
+        drawList.PushClipRect(drawList.GetClipRectMin(), drawList.GetClipRectMax(), false);
         drawList.AddRect(
             minimum, maximum, IM_COL32(255, 192, 64, 255), 0.0F, 0, 2.0F);
 
