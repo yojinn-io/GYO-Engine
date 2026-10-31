@@ -406,6 +406,102 @@ public:
         return out;
     }
 
+    // 6. Head and body looked up from authoritative state (measured as declared in
+    // v8-product-hitbox-lookup-survey-method): 8-entry clip tables with linear
+    // interpolation, three aim tables, and the moving mean. The residual is the
+    // distance between the animated shape and the looked-up one.
+    nlohmann::json Lookup(const std::map<std::string, Shape>& standing,
+                          const std::map<std::string, Shape>& crouching) const {
+        struct Points final { Vec3 head, torsoA, torsoB, pelvisA, pelvisB; };
+        std::map<bool, Vec3> headLocal;
+        for (const bool crouched : {false, true}) {
+            const auto pose = Pose(Base(crouched), {});
+            const auto inverse = Engine::Math::Inverse(pose.body.globalTransforms.at(Node("Head")));
+            if (!inverse) throw std::runtime_error("Head transform is not invertible");
+            headLocal[crouched] = Engine::Math::TransformPoint(*inverse, Model((crouched ? crouching : standing).at("head").a));
+        }
+        const auto points = [&](const PlayerLocomotionState& state, const PlayerActionPose& actions) {
+            const auto pose = Pose(state, actions);
+            return Points{Body(Engine::Math::TransformPoint(pose.body.globalTransforms.at(Node("Head")), headLocal[state.crouched])),
+                          Joint(pose, "spine_01"), Joint(pose, "spine_03"), Joint(pose, "pelvis"), Joint(pose, "spine_01")};
+        };
+        const auto lerp = [](Vec3 a, Vec3 b, double t) {
+            return Vec3{static_cast<float>(a.x + (b.x - a.x) * t), static_cast<float>(a.y + (b.y - a.y) * t),
+                        static_cast<float>(a.z + (b.z - a.z) * t)};
+        };
+        const auto blend = [&](const Points& a, const Points& b, double t) {
+            return Points{lerp(a.head, b.head, t), lerp(a.torsoA, b.torsoA, t), lerp(a.torsoB, b.torsoB, t),
+                          lerp(a.pelvisA, b.pelvisA, t), lerp(a.pelvisB, b.pelvisB, t)};
+        };
+        struct Residual final { double head{}, torso{}, pelvis{}; };
+        const auto accumulate = [](Residual& r, const Points& actual, const Points& looked) {
+            r.head = std::max(r.head, Span(actual.head, looked.head));
+            r.torso = std::max({r.torso, Span(actual.torsoA, looked.torsoA), Span(actual.torsoB, looked.torsoB)});
+            r.pelvis = std::max({r.pelvis, Span(actual.pelvisA, looked.pelvisA), Span(actual.pelvisB, looked.pelvisB)});
+        };
+        std::map<std::string, Residual> residual;
+        // (a) Clip tables: 8 evenly spaced entries, linear between neighbours.
+        constexpr int Entries = 8, Samples = 60;
+        struct Clip final { std::string name; bool crouched; bool lower; PlayerLowerAction lowerAction; PlayerUpperAction upperAction; std::size_t clip; };
+        std::vector<Clip> clips{
+            {"jump_start", false, true, PlayerLowerAction::JumpStart, {}, definition_.jumpStartClip},
+            {"jump_loop", false, true, PlayerLowerAction::JumpLoop, {}, definition_.jumpLoopClip},
+            {"jump_land", false, true, PlayerLowerAction::JumpLand, {}, definition_.jumpLandClip}};
+        for (const bool crouched : {false, true})
+            for (const auto& [name, upper, clip] : {std::tuple{"shoot", PlayerUpperAction::Shoot, definition_.shootClip},
+                                                    std::tuple{"reload", PlayerUpperAction::Reload, definition_.reloadClip},
+                                                    std::tuple{"hit", PlayerUpperAction::Hit, definition_.hitClip}})
+                clips.push_back({std::string(name) + (crouched ? "_crouched" : ""), crouched, false, {}, upper, clip});
+        for (const auto& clip : clips) {
+            const double duration = model_.clips.at(clip.clip).durationSeconds;
+            const auto at = [&](double seconds) {
+                PlayerActionPose actions;
+                if (clip.lower) { actions.lower = clip.lowerAction; actions.lowerClipSeconds = seconds; }
+                else { actions.upper = clip.upperAction; actions.upperClipSeconds = seconds; }
+                return points(Base(clip.crouched), actions);
+            };
+            std::vector<Points> table;
+            for (int k = 0; k < Entries; ++k) table.push_back(at(duration * k / (Entries - 1)));
+            for (int i = 0; i < Samples; ++i) {
+                const double u = static_cast<double>(i) / Samples * (Entries - 1);
+                const int k = std::min(static_cast<int>(u), Entries - 2);
+                accumulate(residual[clip.name], at(duration * i / Samples), blend(table[k], table[k + 1], u - k));
+            }
+        }
+        // (b) Aim: tables at weights -1, 0 and +1, linear between them.
+        for (const bool crouched : {false, true}) {
+            const auto aim = [&](float weight) { PlayerActionPose actions; actions.aimWeight = weight; return points(Base(crouched), actions); };
+            const auto up = aim(-1), neutral = aim(0), down = aim(1);
+            for (int i = -10; i <= 10; ++i) {
+                const float weight = static_cast<float>(i) / 10;
+                const auto looked = weight < 0 ? blend(neutral, up, -weight) : blend(neutral, down, weight);
+                accumulate(residual[crouched ? "aim_crouched" : "aim"], aim(weight), looked);
+            }
+        }
+        // (c) Moving: one mean shape per stance over its moving samples.
+        for (const bool crouched : {false, true}) {
+            std::vector<Points> moving;
+            for (const auto& variant : Variants())
+                if (variant.crouched == crouched && (variant.name == "walk" || variant.name == "jog" || variant.name == "crouch_move"))
+                    moving.push_back(points(variant.state, variant.actions));
+            Points mean{};
+            for (const auto& p : moving) mean = blend(mean, p, 1.0 / static_cast<double>(&p - moving.data() + 1));
+            for (const auto& variant : Variants())
+                if (variant.crouched == crouched && (variant.name == "walk" || variant.name == "jog" || variant.name == "crouch_move"))
+                    accumulate(residual[variant.name], points(variant.state, variant.actions), mean);
+        }
+        nlohmann::json out = nlohmann::json::object();
+        double headWorst{};
+        for (const auto& [name, r] : residual) {
+            out["residual_m"][name] = {{"head", r.head}, {"torso", r.torso}, {"pelvis", r.pelvis}};
+            headWorst = std::max(headWorst, r.head);
+        }
+        out["head_radius_m"] = standing.at("head").radius;
+        out["head_residual_max_m"] = headWorst;
+        out["clip_table_entries"] = Entries;
+        return out;
+    }
+
 private:
     Vec3 Model(Vec3 body) const {
         const auto s = definition_.scale;
@@ -496,6 +592,7 @@ int main(int argc, char** argv) {
             {"deviation_m", survey.Deviations(standing, crouching)},
             {"coverage_standing_frontal", survey.Coverage(standing)},
             {"three_parts", survey.ThreeParts(standing, crouching)},
+            {"lookup", survey.Lookup(standing, crouching)},
         };
         if (out.empty()) std::cout << report.dump(1) << '\n';
         else std::ofstream(out) << report.dump(1) << '\n';
