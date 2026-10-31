@@ -254,8 +254,8 @@
       "batch": "09",
       "what": "Gateway drops the digest from Welcome",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "ArenaDigest: s.ready.ArenaDigest, CombatRules",
-      "replace": "CombatRules",
+      "find": "ArenaDigest: s.ready.ArenaDigest, AnimationDigest",
+      "replace": "AnimationDigest",
       "check": "go",
       "expect": "welcome "
     },
@@ -2967,7 +2967,7 @@
       "find": "        if(std::string error; !ArenaHostsRoom(content,error)) throw std::runtime_error(error);\n",
       "replace": "",
       "check": "ipc",
-      "expect": "IpcHost\\(host, small\\)"
+      "expect": "IpcHost\\(host, small, IpcAnimationDigest\\)"
     },
     {
       "id": "v71hb-read-past-deadline",
@@ -8110,6 +8110,166 @@
       "replace": "                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip : definition.shootClip;",
       "check": "presentation",
       "expect": "hit reaction"
+    },
+    {
+      "id": "d3-digest-without-transition",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out transition_seconds",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    out.F64(definition.transitionSeconds);\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "transition_seconds"
+    },
+    {
+      "id": "d3-digest-without-upper-root",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out the upper-body root",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    out.Text(model.nodes.at(definition.upperBodyRoot).name);\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "upper_body_root"
+    },
+    {
+      "id": "d3-digest-without-translations",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out the translation keys",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "            for (const auto& key : track.translations) { out.F64(key.timeSeconds); out.Vec3(key.value); }\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "translation value"
+    },
+    {
+      "id": "d3-digest-without-track-node",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out the node of each track",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "            out.Text(model.nodes.at(track.nodeIndex).name);\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "track node"
+    },
+    {
+      "id": "d3-digest-without-order",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest reads idle and walk in a fixed index order, not the definition order",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    for (const std::size_t index : {definition.idleClip, definition.walkClip, definition.jogClip,",
+      "replace": "    for (const std::size_t index : {definition.idleClip < definition.walkClip ? definition.idleClip : definition.walkClip, definition.idleClip < definition.walkClip ? definition.walkClip : definition.idleClip, definition.jogClip,",
+      "check": "presentation",
+      "expect": "clip order"
+    },
+    {
+      "id": "d3-digest-without-parent",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out the parents",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "        out.U32(node.parentIndex ? static_cast<std::uint32_t>(*node.parentIndex) : 0xffffffffU);\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "parent"
+    },
+    {
+      "id": "d3-digest-reads-weapon",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest reads the weapon mount",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    out.F64(definition.aimDownRadians);\n",
+      "replace": "    out.F64(definition.aimDownRadians);\n    out.Vec3(definition.weaponMount.translation);\n",
+      "check": "presentation",
+      "expect": "ignores the weapon"
+    },
+    {
+      "id": "d3-zero-not-one",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "A zero digest stays zero",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    return value ? value : 1;",
+      "replace": "    return value;",
+      "check": "presentation",
+      "expect": "never yields zero"
+    },
+    {
+      "id": "d3-big-endian",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The first eight bytes are read big-endian",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "<< (8 * byte);",
+      "replace": "<< (8 * (7 - byte));",
+      "check": "presentation",
+      "expect": "never yields zero"
+    },
+    {
+      "id": "d3-gateway-no-copy",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The Gateway drops animation_digest from Welcome",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "AnimationDigest: s.ready.AnimationDigest, ",
+      "replace": "",
+      "check": "go",
+      "expect": "welcome "
+    },
+    {
+      "id": "d3-gateway-zero-admitted",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The Gateway admits a Ready without animation_digest",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": " || ready.AnimationDigest == 0",
+      "replace": "",
+      "check": "go",
+      "expect": "admitted"
+    },
+    {
+      "id": "d3-fits-welcome-uncounted",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "ReadyFitsWelcome leaves out animation_digest",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "AnimationDigest: math.MaxUint64, ",
+      "replace": "",
+      "check": "go",
+      "expect": "maximum admitted Welcome=1210"
+    },
+    {
+      "id": "d3-ipc-not-sent",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The IpcHost does not send animation_digest",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        r->set_animation_digest(animationDigest); // pv9 §4.6\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "IpcAnimationDigest"
+    },
+    {
+      "id": "d3-ipc-zero-served",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The IpcHost serves a zero animation digest",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        if(!animationDigest) throw std::runtime_error(\"Animation content digest is zero\");\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "zero animation digest"
+    },
+    {
+      "id": "d3-client-not-compared",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The Client does not compare animation_digest",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                CheckAnimation(message.animation_digest());\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "Welcome accepted different animation content"
+    },
+    {
+      "id": "d3-client-zero-matches",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The Client takes a missing digest as a match",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        if(animationDigest && digest!=*animationDigest)",
+      "replace": "        if(animationDigest && digest && digest!=*animationDigest)",
+      "check": "worker",
+      "expect": "Welcome accepted a missing animation digest"
     }
   ]
 }

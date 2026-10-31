@@ -32,6 +32,8 @@ message Welcome {
   float sprint_speed_scale = 15;
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 16 to 19;
+  // pv9 §4.6: copied from Ready; the Client compares it with its own content on entry.
+  fixed64 animation_digest = 20;
 }
 // Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
 // runtime_v9.proto: times are the sender's own monotonic clock in

@@ -24,6 +24,8 @@ message Ready {
   float sprint_speed_scale = 13;
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 14 to 17;
+  // pv9 §4.6: AnimationContentDigest of the Match's player animation content; 0 means missing.
+  fixed64 animation_digest = 18;
 }
 message PlayerJoin { uint32 player_id = 1; }
 // Why the Gateway sent the Leave (pv7 §5). Diagnostics only: the Match removes

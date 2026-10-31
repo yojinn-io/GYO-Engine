@@ -50,7 +50,7 @@ var (
 		"ActionResults": {"refused_batches"},
 		"ClockSample":   {"origin_us", "receive_us", "transmit_us"},
 		"ShotRequest":   {"view_tick_q16"},
-		"Welcome":       {"arena_digest"},
+		"Welcome":       {"arena_digest", "animation_digest"},
 	}
 	runtimeKept = map[string][]string{
 		"ActionResults":     {"refused_batches"},
@@ -58,7 +58,7 @@ var (
 		"DropCount":         {"total"},
 		"DropSample":        {"movement_epoch", "life_generation", "first_command_sequence", "last_command_sequence", "first_action_id", "last_action_id", "snapshot_tick"},
 		"GatewayDropReport": {"report_sequence", "samples_omitted", "merged_streams"},
-		"Ready":             {"arena_digest"},
+		"Ready":             {"arena_digest", "animation_digest"},
 		"ShotRequest":       {"view_tick_q16"},
 	}
 	// protocol-v8 section 2a, "預留的號碼".
@@ -85,7 +85,7 @@ func checkKinds(t *testing.T, file protoreflect.FileDescriptor, narrowed, kept m
 	for message, fields := range kept {
 		for _, field := range fields {
 			declared[message+"."+field] = protoreflect.Uint64Kind
-			if field == "arena_digest" {
+			if field == "arena_digest" || field == "animation_digest" {
 				declared[message+"."+field] = protoreflect.Fixed64Kind
 			}
 		}

@@ -682,8 +682,10 @@ type Ready struct {
 	CrouchEyeHeight  float32 `protobuf:"fixed32,11,opt,name=crouch_eye_height,json=crouchEyeHeight,proto3" json:"crouch_eye_height,omitempty"`
 	CrouchSpeedScale float32 `protobuf:"fixed32,12,opt,name=crouch_speed_scale,json=crouchSpeedScale,proto3" json:"crouch_speed_scale,omitempty"`
 	SprintSpeedScale float32 `protobuf:"fixed32,13,opt,name=sprint_speed_scale,json=sprintSpeedScale,proto3" json:"sprint_speed_scale,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// pv9 §4.6: AnimationContentDigest of the Match's player animation content; 0 means missing.
+	AnimationDigest uint64 `protobuf:"fixed64,18,opt,name=animation_digest,json=animationDigest,proto3" json:"animation_digest,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Ready) Reset() {
@@ -803,6 +805,13 @@ func (x *Ready) GetCrouchSpeedScale() float32 {
 func (x *Ready) GetSprintSpeedScale() float32 {
 	if x != nil {
 		return x.SprintSpeedScale
+	}
+	return 0
+}
+
+func (x *Ready) GetAnimationDigest() uint64 {
+	if x != nil {
+		return x.AnimationDigest
 	}
 	return 0
 }
@@ -2945,7 +2954,7 @@ var File_runtime_v9_proto protoreflect.FileDescriptor
 
 const file_runtime_v9_proto_rawDesc = "" +
 	"\n" +
-	"\x10runtime_v9.proto\x12\x19object_fps_pvp.runtime.v9\"\xa2\x04\n" +
+	"\x10runtime_v9.proto\x12\x19object_fps_pvp.runtime.v9\"\xcd\x04\n" +
 	"\x05Ready\x12\x19\n" +
 	"\barena_id\x18\x01 \x01(\tR\aarenaId\x12#\n" +
 	"\rarena_version\x18\x02 \x01(\rR\farenaVersion\x12\x1b\n" +
@@ -2962,7 +2971,8 @@ const file_runtime_v9_proto_rawDesc = "" +
 	" \x01(\x02R\x10crouchBodyHeight\x12*\n" +
 	"\x11crouch_eye_height\x18\v \x01(\x02R\x0fcrouchEyeHeight\x12,\n" +
 	"\x12crouch_speed_scale\x18\f \x01(\x02R\x10crouchSpeedScale\x12,\n" +
-	"\x12sprint_speed_scale\x18\r \x01(\x02R\x10sprintSpeedScaleJ\x04\b\x0e\x10\x12\")\n" +
+	"\x12sprint_speed_scale\x18\r \x01(\x02R\x10sprintSpeedScale\x12)\n" +
+	"\x10animation_digest\x18\x12 \x01(\x06R\x0fanimationDigestJ\x04\b\x0e\x10\x12\")\n" +
 	"\n" +
 	"PlayerJoin\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\rR\bplayerId\"j\n" +

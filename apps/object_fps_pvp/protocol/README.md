@@ -97,6 +97,13 @@ and jump phase with its zero point. Adapters and the Client check it alone
 (§4.5: count and ids, life, weights <= 1000, no sprint weight yet, a phase in
 1..4 whose zero point is not after the snapshot, and Start/Airborne exactly when
 a living player is not grounded); the Match guards the same before writing.
+`Ready.animation_digest` (18) and `Welcome.animation_digest` (20), fixed64, carry
+`AnimationContentDigest` of the Match's player animation content (pv9 §4.6): the
+first 8 bytes, little-endian, of a SHA-256 over the presentation values that move
+the pose, the transferred keys of the 15 posed clips and the skeleton; zero means
+missing and a zero hash becomes 1. The Gateway rejects a zero digest at readiness
+and copies it into Welcome; the Client compares it with its own content and fails
+with `Match animation content differs from this client`.
 
 Generated Go bindings are checked in under `clientv9/` and `runtimev9/`. Regenerate
 both with the pinned protoc from the C++ build and `protoc-gen-go` from the product's

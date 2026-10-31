@@ -315,7 +315,8 @@ int main(int argc, char** argv) {
                 << " b1_worst=" << worstCase << " b1_p99_us=" << worstP99 << " b1_12x_ms=" << tickMs
                 << " b2_load_max_s=" << loadMax
                 << " h_load=" << Hex(load1.Value()) << "/" << load1.Count()
-                << " h_pose=" << Hex(pose1.Value()) << "/" << pose1.Count();
+                << " h_pose=" << Hex(pose1.Value()) << "/" << pose1.Count()
+                << " animation_digest=" << Hex(AnimationContentDigest(definition));
         std::cout << summary.str() << '\n';
         std::ostringstream p99s;
         p99s.precision(4);
@@ -334,7 +335,8 @@ int main(int argc, char** argv) {
                     {"used_clip_key_bytes", keyBytes}, {"used_clips", UsedClips(definition).size()}}},
             {"b3", {{"h_load", Hex(load1.Value())}, {"h_load_values", load1.Count()},
                     {"h_pose", Hex(pose1.Value())}, {"h_pose_values", pose1.Count()},
-                    {"h_pose_expected_values", expectedPoseValues}, {"repeat_equal", repeatEqual}}},
+                    {"h_pose_expected_values", expectedPoseValues}, {"repeat_equal", repeatEqual},
+                    {"animation_digest", Hex(AnimationContentDigest(definition))}}},
         };
         if (!out.empty()) std::ofstream(out) << report.dump(1) << '\n';
         if (!coverage) { std::cerr << "anim bottlenecks: self-check failed: hash coverage\n"; return 1; }

@@ -8,7 +8,9 @@ namespace fps::pvp {
 // Wire adapter only. MatchRuntimeHost owns the independent simulation thread.
 class IpcHost final {
 public:
-    IpcHost(MatchRuntimeHost& runtime, const Arena& arena);
+    // animationDigest: AnimationContentDigest of the Match's player content,
+    // sent in Ready (protocol-v9 §4.6); zero is invalid and throws.
+    IpcHost(MatchRuntimeHost& runtime, const Arena& arena, std::uint64_t animationDigest);
     ~IpcHost();
     bool Start(const std::string& listenAddress, std::string& error);
     void Stop();

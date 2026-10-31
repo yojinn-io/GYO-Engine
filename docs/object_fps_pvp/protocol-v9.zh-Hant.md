@@ -133,6 +133,8 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 
 `v8-product-anim-authority` A3 的實測（2026-10-31，`proto.Size`，含 24 B 標頭）：`PlayerAnimation` 每人加在契約最大 34 B（6 欄 uint32 最大或 1000、`jump_phase`＝LAND，衝刺權重照現行規則為 0 不編碼，外層 2 B）、型別最大 50 B（全部欄位取最大，enum 取 MaxInt32）。4 人 Snapshot：契約最大 40+211N＝**884 B**（`capacity_test.go`、`worker_main.cpp`），型別最大 42+245N＝**1022 B**（和推論相同），合法值的 Snapshot（`network_main.cpp`）**842 B**。都 ≤ 1200 B。②（衝刺呈現）之後衝刺權重可達 1000，契約最大每人再加 3 B。
 
+`v8-product-hitbox-data` D3 的實測（2026-11-01，`proto.Size`，含 24 B 標頭）：`Welcome.animation_digest` 是 fixed64，號碼 20 的 tag 是 2 B，所以每則 Welcome 多 **10 B**（推論是 +10～11 B）。Welcome 的最大值仍是 1200 B（邊界），靠 arena id 補滿；arena id 的上限因此由 1052 B 縮成 **1042 B**，`actions_test.go` 的 `TestReadyRequiresRulesAndBoundsWorstCaseWelcome` 釘住這兩個值。`Ready.animation_digest`（號碼 18，tag 也是 2 B）每則 Ready 也多 10 B；Ready 走 IPC 的 TCP 框，沒有 1200 B 的上限，也沒有大小的釘。
+
 ## 7. Design Invariants 的變更（hitbox-plan §7，已核准的 Architecture Delta 的落地）
 
 1. `network-architecture.zh-Hant.md:854`（觀測與模擬契約分開）：`view_tick_q16` 成為有界的判定輸入，只由 `ShotRewind` 單一入口讀；守衛 `test_no_decision_reads_the_view_tick` 改成全掃加白名單。照 AGENTS §14.4 **分兩段核准**（`v8-product-hitbox-view-invariant` (a)）：本批只同意改寫與意圖，守衛在 rewind 批第二次核准。

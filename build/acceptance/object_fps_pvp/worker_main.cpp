@@ -51,6 +51,8 @@ struct ActionAttempt { Clock::time_point at; pb::ActionBatch actions; };
 struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; std::uint32_t sequence{}; };
 // Opaque content digest of the mock arena (pv6 contract §2).
 constexpr std::uint64_t WorkerArenaDigest=0x0123456789abcdefULL;
+// protocol-v9 §4.6: the animation content digest the worker Client poses with.
+constexpr std::uint64_t WorkerAnimationDigest=0xfedcba9876543210ULL;
 class MockGateway {
 public:
     MockGateway():socket(io,udp::endpoint(asio::ip::address_v4::loopback(),0)) {
@@ -108,6 +110,7 @@ public:
                 if(std::exchange(earlyBeforeWelcome,false)) {Snapshot(ack);SendResults(pb::ActionResults{});}
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_tick_rate(60);
                 welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);welcome.set_arena_digest(welcomeArenaDigest.load());
+                welcome.set_animation_digest(welcomeAnimationDigest.load());
                 // pv8 §3: the Match's movement rules, as the Gateway copies them from Ready.
                 welcome.set_crouch_body_height(stance.crouchBodyHeight);welcome.set_crouch_eye_height(stance.crouchEyeHeight);
                 welcome.set_crouch_speed_scale(stance.crouchSpeedScale);welcome.set_sprint_speed_scale(stance.sprintSpeedScale);
@@ -236,6 +239,7 @@ public:
     Clock::time_point snapshotSentAt{}; // when Snapshot last sent one
     static constexpr std::uint64_t ExtremeOffsetUs=std::uint64_t{1}<<52;
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
+    std::atomic<std::uint64_t> welcomeAnimationDigest{WorkerAnimationDigest};
     bool includeRules{true};
     // pv8 §3: the Welcome movement rules; a set changedWelcomeStance makes the
     // next Hello's reply two Welcomes, the second with that crouch speed scale.
@@ -928,6 +932,10 @@ int main(int argc,char** argv) {
         try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+        bool zeroAnimationRejected=false;
+        try{connection.SetAnimationDigest(0);}catch(const std::invalid_argument&){zeroAnimationRejected=true;}
+        Require(zeroAnimationRejected,"zero animation digest accepted");
+        connection.SetAnimationDigest(WorkerAnimationDigest);
         CheckDroppedDatagrams(gateway,connection);
         CheckHelloCadence(gateway,connection);
         // Early too, so a mutant of the outage path fails on the check that guards it:
@@ -1294,6 +1302,20 @@ int main(int argc,char** argv) {
         try{connection.SetArenaIdentities({{"a",1,1},{"a",2,2}});}catch(const std::invalid_argument&){duplicateRejected=true;}
         Require(duplicateRejected,"an arena installed twice was accepted");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+
+        // protocol-v9 §4.6: other or missing animation content is refused on
+        // Welcome; the same content joins (every other join of this worker).
+        gateway.welcomeAnimationDigest=WorkerAnimationDigest^1;
+        Require(refusedWith("Match animation content differs from this client"),"Welcome accepted different animation content");
+        gateway.welcomeAnimationDigest=0;
+        Require(refusedWith("Match animation content differs from this client"),"Welcome accepted a missing animation digest");
+        gateway.welcomeAnimationDigest=WorkerAnimationDigest;
+        connection.Join(gateway.address,"1");
+        gateway.Until([&]{const auto s=connection.State();
+            return (s.phase==ConnectionPhase::Lobby && !s.error.empty()) || s.phase==ConnectionPhase::Playing;});
+        Require(connection.State().phase==ConnectionPhase::Playing,"the same animation content did not join");
+        connection.Leave();
+        gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
 
         // pv8 sections 2-3 on the wire (v8-product-crouch W3, W4).
         CheckStance(gateway,connection,refusedWith);

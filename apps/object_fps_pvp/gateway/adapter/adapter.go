@@ -304,7 +304,8 @@ func EqualDecision(a, b *runtime.ShotDecision) bool {
 
 // Bound the dynamic arena descriptor using the largest legal identity fields,
 // so every Welcome built from an admitted Ready fits the complete UDP envelope.
-// The digest is counted as nonzero: any nonzero fixed64 encodes to 9 bytes.
+// The digests are counted as nonzero: any nonzero fixed64 encodes to 9 bytes
+// (arena_digest) or 10 bytes (animation_digest, a two-byte tag).
 func ReadyFitsWelcome(r *runtime.Ready) bool {
 	if r == nil || r.SnapshotIntervalTicks == 0 || !ValidRules(r.CombatRules) || !ValidMovementRules(r.JumpHeight, r.Gravity) {
 		return false
@@ -312,7 +313,7 @@ func ReadyFitsWelcome(r *runtime.Ready) bool {
 	// The largest time echo counts too (pv7 §3): every ClockSample field at its maximum.
 	largest := uint64(math.MaxUint64)
 	clock := &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}
-	welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock,
+	welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, AnimationDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock,
 		CrouchBodyHeight: r.CrouchBodyHeight, CrouchEyeHeight: r.CrouchEyeHeight, CrouchSpeedScale: r.CrouchSpeedScale, SprintSpeedScale: r.SprintSpeedScale}
 	return proto.Size(welcome)+framing.HeaderSize <= framing.MaxDatagram
 }

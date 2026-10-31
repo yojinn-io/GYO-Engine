@@ -74,7 +74,7 @@ func linkToScriptedRuntime(t *testing.T) (*runtimeLink, *scriptedRuntime) {
 		r := &scriptedRuntime{conn: conn}
 		ready := envelope()
 		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1,
-			ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
+			ArenaDigest: testArenaDigest, AnimationDigest: testAnimationDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
 		b, _ := proto.Marshal(ready)
 		_ = framing.WriteFrame(conn, b)
 		accepted <- r

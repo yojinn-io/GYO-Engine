@@ -615,7 +615,7 @@ func (s *Server) takeIngressLocked() (map[uint32]*playerIngressCounts, gatewayIn
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, TickRate: s.ready.TickRate,
-		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity,
+		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, AnimationDigest: s.ready.AnimationDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity,
 		CrouchBodyHeight: s.ready.CrouchBodyHeight, CrouchEyeHeight: s.ready.CrouchEyeHeight, CrouchSpeedScale: s.ready.CrouchSpeedScale, SprintSpeedScale: s.ready.SprintSpeedScale,
 		Clock: s.welcomeSample(p, time.Now())})
 }

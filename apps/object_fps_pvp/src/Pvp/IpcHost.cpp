@@ -419,6 +419,7 @@ struct IpcHost::Impl {
     MatchRuntimeHost& host;
     Arena arena;
     std::uint64_t arenaDigest{};
+    std::uint64_t animationDigest{};
     asio::io_context io;
     tcp::acceptor listener{io};
     tcp::socket socket{io};
@@ -453,9 +454,11 @@ struct IpcHost::Impl {
     }
     std::optional<Engine::Threads::RoleThread> role;
 
-    Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
+    Impl(MatchRuntimeHost& value,const Arena& content,std::uint64_t animation):host(value),arena(content),
+        arenaDigest(ArenaContentDigest(content)),animationDigest(animation) {
         // Zero is reserved for a missing digest: such an arena cannot be served.
         if(!arenaDigest) throw std::runtime_error("Arena content digest is zero");
+        if(!animationDigest) throw std::runtime_error("Animation content digest is zero");
         if(std::string error; !ArenaHostsRoom(content,error)) throw std::runtime_error(error);
         gate->impl=this;
         host.SetPublishListener([gate=gate] {
@@ -502,6 +505,7 @@ struct IpcHost::Impl {
         if(error) {Close("socket setup: "+error.message());return;}
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version); r->set_arena_digest(arenaDigest);
+        r->set_animation_digest(animationDigest); // pv9 §4.6
         r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
         const auto& stance=host.Stance(); // pv8 §3: the Match's movement rules data
         r->set_crouch_body_height(stance.crouchBodyHeight);r->set_crouch_eye_height(stance.crouchEyeHeight);
@@ -864,7 +868,8 @@ struct IpcHost::Impl {
         Pump();
     }
 };
-IpcHost::IpcHost(MatchRuntimeHost& host,const Arena& arena):impl_(std::make_unique<Impl>(host,arena)){}
+IpcHost::IpcHost(MatchRuntimeHost& host,const Arena& arena,std::uint64_t animationDigest):
+    impl_(std::make_unique<Impl>(host,arena,animationDigest)){}
 IpcHost::~IpcHost(){Stop();}
 bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
     try {

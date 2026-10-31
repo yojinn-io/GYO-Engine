@@ -149,6 +149,7 @@ struct ClientConnection::Impl {
     // The simulation role's own copy of the history and its resume flag (DrainSimulation).
     ClientSimulationHistory simulationHistory;
     std::vector<ArenaIdentity> installedArenas;
+    std::optional<std::uint64_t> animationDigest;
     std::atomic<std::uint64_t> generation{0};
     asio::io_context io;
     udp::socket socket{io};
@@ -303,6 +304,14 @@ struct ClientConnection::Impl {
             throw std::runtime_error("arena_content_mismatch: arena "+id+" content differs (Match "+
                 (digest?Hex64(*digest):std::string("missing"))+", this Client "+Hex64(installed->digest)+")");
         state.arenaId=id;
+    }
+    // protocol-v9 §4.6: another animation content poses the bodies this Client
+    // draws differently from the ones the Match judges. A zero digest differs too.
+    void CheckAnimation(std::uint64_t digest) {
+        std::scoped_lock lock(mutex);
+        if(animationDigest && digest!=*animationDigest)
+            throw std::runtime_error("Match animation content differs from this client (Match "+
+                (digest?Hex64(digest):std::string("missing"))+", this Client "+Hex64(*animationDigest)+")");
     }
     // closing: the Client itself is closing, so the /leave uses the short timeouts.
     void DisconnectRemote(const bool closing=false) {
@@ -559,6 +568,7 @@ struct ClientConnection::Impl {
                 }
                 CheckArena(message.arena_id(),message.arena_version(),
                     message.arena_digest()?std::optional<std::uint64_t>{message.arena_digest()}:std::nullopt);
+                CheckAnimation(message.animation_digest());
                 if(message.tick_rate()!=AuthorityTickRate || message.snapshot_rate()!=AuthorityTickRate/SnapshotIntervalTicks)
                     throw std::runtime_error("Unsupported Match cadence");
                 const auto rules=ReadRules(message);
@@ -965,6 +975,10 @@ void ClientConnection::Join(std::string gateway,std::string room){impl_->Push(Im
 void ClientConnection::Leave(){impl_->Push(Impl::Action::Leave);}
 void ClientConnection::SetArenaIdentity(std::string id,std::uint32_t version,std::uint64_t digest){
     SetArenaIdentities({{std::move(id),version,digest}});
+}
+void ClientConnection::SetAnimationDigest(std::uint64_t digest){
+    if(!digest)throw std::invalid_argument("animation content digest is zero");
+    std::scoped_lock lock(impl_->mutex);impl_->animationDigest=digest;
 }
 void ClientConnection::SetArenaIdentities(std::vector<ArenaIdentity> installed){
     for(std::size_t i=0;i<installed.size();++i) {

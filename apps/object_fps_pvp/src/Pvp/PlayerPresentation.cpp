@@ -67,6 +67,7 @@ struct PlayerPresentation::Impl final {
         bool idlePrepared{true};
     };
     std::shared_ptr<const PlayerPresentationDefinition> definition;
+    std::uint64_t animationDigest{};
     std::shared_ptr<Resource> bodyResource, weaponResource;
     std::vector<std::shared_ptr<Resource>> accessoryResources;
     PlayerPresentationPose initialPose;
@@ -99,6 +100,7 @@ PlayerPresentation::PlayerPresentation() = default;
 PlayerPresentation::~PlayerPresentation() = default;
 void PlayerPresentation::Reset() noexcept { impl_.reset(); }
 bool PlayerPresentation::Ready() const noexcept { return impl_ != nullptr; }
+std::uint64_t PlayerPresentation::AnimationDigest() const noexcept { return impl_ ? impl_->animationDigest : 0; }
 std::size_t PlayerPresentation::Capacity() const noexcept { return impl_ ? impl_->slots.size() : 0; }
 std::span<const PlayerPresentationObservation> PlayerPresentation::Observations() const noexcept {
     return impl_ ? std::span<const PlayerPresentationObservation>(impl_->observations) :
@@ -121,6 +123,7 @@ bool PlayerPresentation::Initialize(Engine::Render::IRenderDevice& device,
         next->definition = LoadPlayerPresentationDefinition(assets, bodyHeight, error);
         if (!next->definition) throw std::runtime_error(error);
         const auto& definition = *next->definition;
+        next->animationDigest = AnimationContentDigest(definition);
         next->bodyResource = CreateResource(device, assets, *definition.character);
         next->weaponResource = CreateResource(device, assets, *definition.weapon);
         for (const auto& accessory : definition.character->accessories)

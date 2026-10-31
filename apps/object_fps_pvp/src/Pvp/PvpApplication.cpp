@@ -1058,6 +1058,8 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     // The current two-player product needs one remote slot. Preallocate it so
     // joining/rejoining never creates a skinned GPU instance in a live frame.
     if (!impl_->players->Initialize(*impl_->device, impl_->assets, impl_->arena->bodyHeight, MaxPlayers - 1, error)) return false;
+    // protocol-v9 §4.6: a Match with other animation content is refused on Welcome.
+    impl_->connection.SetAnimationDigest(impl_->players->AnimationDigest());
     // Prepare the actual viewmodel pass before joining. Model, images and GPU
     // resources are loaded above; rendering Idle also warms the lazy pipelines
     // shared by Draw and Shoot, so the first click performs no asset loading.

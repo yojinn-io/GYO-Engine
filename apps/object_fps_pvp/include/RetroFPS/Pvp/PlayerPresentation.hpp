@@ -88,6 +88,15 @@ LoadPlayerPresentationDefinition(Engine::Asset::AssetManager& assets, float body
 LoadPlayerPoseDefinition(Engine::Asset::AssetManager& assets, float bodyHeight, std::string& error);
 [[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>
 LoadPlayerPoseDefinition(const std::filesystem::path& contentRoot, float bodyHeight, std::string& error);
+// The animation content both ends pose with (protocol-v9 §4.6,
+// v8-product-hitbox-digest-scope (a)): the presentation values that move the
+// pose, the transferred keys of the 15 clips in their fixed order and the
+// skeleton. Never zero: zero is an invalid digest on the wire. The shapes, the
+// weapon and the accessories are outside it.
+[[nodiscard]] std::uint64_t AnimationContentDigest(const PlayerPresentationDefinition& definition);
+// The digest from a SHA-256 in hex: its first 8 bytes read little-endian, with
+// zero (the invalid digest) taken as 1.
+[[nodiscard]] std::uint64_t AnimationDigestFromSha256(const std::string& hex);
 
 // Jump presentation follows the sampled grounded state. Only a rising liftoff
 // plays Start; leaving the ground while falling goes straight to the Loop.
@@ -198,6 +207,8 @@ public:
     [[nodiscard]] bool Ready() const noexcept;
     [[nodiscard]] std::size_t Capacity() const noexcept;
     [[nodiscard]] std::span<const PlayerPresentationObservation> Observations() const noexcept;
+    // AnimationContentDigest of the loaded definition; zero before Initialize.
+    [[nodiscard]] std::uint64_t AnimationDigest() const noexcept;
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

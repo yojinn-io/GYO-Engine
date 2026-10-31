@@ -51,9 +51,11 @@ unsigned short FreePort() {
 
 // The Match and its IPC on a free loopback port, started in production order:
 // the IpcHost registers its publish listener before the host's role starts.
+// An opaque animation digest (protocol-v9 §4.6): the IpcHost only sends it.
+constexpr std::uint64_t IpcAnimationDigest = 0x0123456789abcdefULL;
 struct Server final {
     MatchRuntimeHost host{IpcArena()};
-    IpcHost ipc{host, IpcArena()};
+    IpcHost ipc{host, IpcArena(), IpcAnimationDigest};
     std::string address = "127.0.0.1:" + std::to_string(FreePort());
     Server() {
         std::string error;
@@ -266,6 +268,7 @@ TEST_CASE("PvP IPC greets with Ready and sends a join's result before any snapsh
     REQUIRE(ready->has_ready());
     CHECK(ready->ready().arena_id() == "synthetic_ipc_arena");
     CHECK(ready->ready().arena_digest() != 0);
+    CHECK(ready->ready().animation_digest() == IpcAnimationDigest);
     gateway.Send(Join(7));
     bool joined = false;
     for (int frames = 0; frames < 600 && !joined; ++frames) {
@@ -565,7 +568,12 @@ TEST_CASE("PvP IPC refuses an arena with fewer spawns than the room holds") {
     MatchRuntimeHost host{IpcArena()};
     const auto refusal = "Arena " + small.id + " has " + std::to_string(MaxPlayers - 1) + " spawns; a room of " +
                          std::to_string(MaxPlayers) + " players needs at least that many";
-    CHECK_THROWS_WITH_AS(IpcHost(host, small), refusal.c_str(), std::runtime_error);
+    CHECK_THROWS_WITH_AS(IpcHost(host, small, IpcAnimationDigest), refusal.c_str(), std::runtime_error);
+}
+
+TEST_CASE("PvP IPC refuses a zero animation digest") {
+    MatchRuntimeHost host{IpcArena()};
+    CHECK_THROWS_WITH_AS(IpcHost(host, IpcArena(), 0), "Animation content digest is zero", std::runtime_error);
 }
 
 TEST_CASE("PvP IPC ends a session on a protocol violation and accepts the next Gateway") {
@@ -1117,7 +1125,7 @@ DecisionOutcome RunDecisionScenario(bool clockSamples, bool copies = false, bool
     ClogCapture log;
     auto now = Clock::time_point{} + 1000s;
     MatchRuntimeHost host{IpcArena(), [&now] { return now; }};
-    IpcHost ipc{host, IpcArena()};
+    IpcHost ipc{host, IpcArena(), IpcAnimationDigest};
     const auto address = "127.0.0.1:" + std::to_string(FreePort());
     std::string error;
     REQUIRE(ipc.Start(address, error));

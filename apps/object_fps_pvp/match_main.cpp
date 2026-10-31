@@ -9,6 +9,7 @@
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
 #include "RetroFPS/Pvp/PlayerHitbox.hpp"
+#include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/TracePaths.hpp"
 #include "engine/os/Console.hpp"
 #include "engine/os/Files.hpp"
@@ -124,8 +125,16 @@ int main(int argc,char** argv) {
             fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets,error);
         if(!hitbox){std::cerr<<error<<'\n';return 1;}
         std::clog<<"[ObjectFPS/PvP Match] hitbox shapes="<<hitbox->shapes.size()<<'\n';
+        // protocol-v9 §4.6: the digest of the animation content the Match poses
+        // with, from the pose definition the hit test uses (no texture, no weapon).
+        const auto pose=fps::pvp::LoadPlayerPoseDefinition(
+            fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets,arena->bodyHeight,error);
+        if(!pose){std::cerr<<error<<'\n';return 1;}
+        const auto animationDigest=fps::pvp::AnimationContentDigest(*pose);
+        std::clog<<"[ObjectFPS/PvP Match] animation_digest="<<std::hex<<std::setw(16)<<std::setfill('0')<<animationDigest
+                 <<std::dec<<std::setfill(' ')<<'\n';
         fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation);
-        fps::pvp::IpcHost ipc(runtime,*arena);
+        fps::pvp::IpcHost ipc(runtime,*arena,animationDigest);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}
         if(!ipc.Start(listen,error)){std::cerr<<error<<'\n';return 1;}
         // SIGINT and SIGTERM, and on Windows Ctrl+C, Ctrl+Break and closing the console, end the loop below.
