@@ -140,6 +140,13 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
         state->set_damage_count(p.damageCount);state->set_last_attacker_id(wire::Counter(p.lastAttackerId));
         state->set_last_hit_part(static_cast<pb::HitPart>(p.lastHitPart));
     }
+    for(const auto& a:snapshot.animation) { // pv9 §4.2, §4.3
+        auto* value=out->add_animation();value->set_player_id(wire::Counter(a.playerId));
+        value->set_life_generation(wire::Counter(a.lifeGeneration));value->set_gait_phase_q16(a.gaitPhaseQ16);
+        value->set_move_weight_permille(a.moveWeightPermille);value->set_jog_weight_permille(a.jogWeightPermille);
+        value->set_jump_phase(static_cast<pb::JumpPhase>(a.jumpPhase));value->set_jump_phase_tick(wire::Counter(a.jumpPhaseTick));
+        value->set_sprint_weight_permille(a.sprintWeightPermille);
+    }
     return message;
 }
 // pv7 §2a: a lane resends every unacknowledged decision, at most once per
@@ -177,6 +184,12 @@ struct ActionLane {
 static_assert(static_cast<int>(HitPart::Unspecified)==pb::HIT_PART_UNSPECIFIED && static_cast<int>(HitPart::Body)==pb::HIT_PART_BODY &&
               static_cast<int>(HitPart::Head)==pb::HIT_PART_HEAD && static_cast<int>(HitPart::Leg)==pb::HIT_PART_LEG &&
               pb::HitPart_ARRAYSIZE==4,"HitPart differs from the wire");
+static_assert(static_cast<int>(JumpPhase::Unspecified)==pb::JUMP_PHASE_UNSPECIFIED &&
+              static_cast<int>(JumpPhase::Grounded)==pb::JUMP_PHASE_GROUNDED &&
+              static_cast<int>(JumpPhase::Start)==pb::JUMP_PHASE_START &&
+              static_cast<int>(JumpPhase::Airborne)==pb::JUMP_PHASE_AIRBORNE &&
+              static_cast<int>(JumpPhase::Land)==pb::JUMP_PHASE_LAND && pb::JumpPhase_ARRAYSIZE==5,
+              "JumpPhase differs from the wire");
 // The wire name of each refusal: ActionRefusal is IngressActionRejection + 1,
 // value for value (pv7 §5: the names are the host's).
 constexpr pb::ActionRefusal RefusalForWire(IngressActionRejection reason) {

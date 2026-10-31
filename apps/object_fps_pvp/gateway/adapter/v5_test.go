@@ -57,7 +57,7 @@ func TestV5SnapshotLifecycleReloadAndJumpValidation(t *testing.T) {
 		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 3, LifeGeneration: 2, LifeState: runtime.LifeState_LIFE_ALIVE, LifeStateTick: 10, Y: .4, VerticalVelocity: -2}},
 		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 75000, MagazineAmmo: 4, ReloadActionId: 5, ReloadStartTick: 15, ReloadEndTick: 105, LastShotActionId: 4, LastShotTick: 12}},
 	}
-	out, err := SnapshotForClient(in, testRules())
+	out, err := snapshotForClient(in, testRules())
 	if err != nil || out.Players[0].LifeGeneration != 2 || out.Players[0].Grounded || out.Players[0].VerticalVelocity != -2 ||
 		out.Combat[0].ReloadActionId != 5 || out.Combat[0].ReloadEndTick != 105 || out.Combat[0].LastShotActionId != 4 {
 		t.Fatalf("v5 fields lost: %v %v", out, err)
@@ -82,7 +82,7 @@ func TestV5SnapshotLifecycleReloadAndJumpValidation(t *testing.T) {
 	} {
 		bad := proto.Clone(in).(*runtime.WorldSnapshot)
 		edit(bad)
-		if _, err := SnapshotForClient(bad, testRules()); err == nil {
+		if _, err := snapshotForClient(bad, testRules()); err == nil {
 			t.Fatalf("invalid lifecycle snapshot: %v", bad)
 		}
 	}
@@ -95,11 +95,11 @@ func TestV5SnapshotLifecycleReloadAndJumpValidation(t *testing.T) {
 	// pv6: a dead player died of its last hit.
 	in.Combat[0].LastDamageTick, in.Combat[0].DamageCount, in.Combat[0].LastAttackerId = 10, 4, 2
 	in.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_BODY
-	if out, err := SnapshotForClient(in, testRules()); err != nil || out.Players[0].LifeState != client.LifeState_LIFE_DEAD || out.Players[0].RespawnTick != 200 {
+	if out, err := snapshotForClient(in, testRules()); err != nil || out.Players[0].LifeState != client.LifeState_LIFE_DEAD || out.Players[0].RespawnTick != 200 {
 		t.Fatalf("dead state: %v %v", out, err)
 	}
 	in.Players[0].RespawnTick = in.Players[0].LifeStateTick
-	if _, err := SnapshotForClient(in, testRules()); err == nil {
+	if _, err := snapshotForClient(in, testRules()); err == nil {
 		t.Fatal("invalid respawn schedule")
 	}
 
@@ -167,7 +167,7 @@ func TestV5MovementSlackAndQualityKeepPresenceAndBounds(t *testing.T) {
 		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 2, LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, LastResolvedCommand: 5}},
 		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 1, Hp: 100000, MagazineAmmo: 12}},
 	}
-	out, err := SnapshotForClient(in, testRules())
+	out, err := snapshotForClient(in, testRules())
 	if err != nil || out.Players[0].MovementSlackSequence != nil || out.Players[0].MovementSlackUs != nil || out.Players[0].ConnectionQualityFailures != 0 {
 		t.Fatalf("an absent slack sample must stay absent: %v %v", out, err)
 	}
@@ -178,7 +178,7 @@ func TestV5MovementSlackAndQualityKeepPresenceAndBounds(t *testing.T) {
 		in.Players[0].MovementSlackSequence = proto.Uint32(sample.sequence)
 		in.Players[0].MovementSlackUs = proto.Int32(sample.micros)
 		in.Players[0].ConnectionQualityFailures = ConnectionQualityFailedWindows - 1
-		out, err = SnapshotForClient(in, testRules())
+		out, err = snapshotForClient(in, testRules())
 		if err != nil || out.Players[0].MovementSlackSequence == nil || *out.Players[0].MovementSlackSequence != sample.sequence ||
 			out.Players[0].MovementSlackUs == nil || *out.Players[0].MovementSlackUs != sample.micros ||
 			out.Players[0].ConnectionQualityFailures != ConnectionQualityFailedWindows-1 {
@@ -198,7 +198,7 @@ func TestV5MovementSlackAndQualityKeepPresenceAndBounds(t *testing.T) {
 		bad.Players[0].MovementSlackSequence = proto.Uint32(5)
 		bad.Players[0].MovementSlackUs = proto.Int32(100)
 		edit(bad.Players[0])
-		if _, err := SnapshotForClient(bad, testRules()); err == nil {
+		if _, err := snapshotForClient(bad, testRules()); err == nil {
 			t.Fatalf("invalid slack or quality accepted: %v", bad.Players[0])
 		}
 	}

@@ -74,7 +74,7 @@ func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
 
 func TestSnapshotMappingDoesNotChangeWorldState(t *testing.T) {
 	in := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100000}}, Tick: 3, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88, Crouched: true, Sprinting: true}}}
-	out, err := SnapshotForClient(in, testRules())
+	out, err := snapshotForClient(in, testRules())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,17 +106,17 @@ func TestEpochAndContiguousQueueContract(t *testing.T) {
 	}
 	state := &runtime.PlayerState{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: 1, MovementEpoch: 9, LastResolvedCommand: 2, ContiguousPendingCommands: MaxFutureCommands}
 	snapshot := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 1, Hp: 100000}}, Tick: 8, Players: []*runtime.PlayerState{state}}
-	out, err := SnapshotForClient(snapshot, testRules())
+	out, err := snapshotForClient(snapshot, testRules())
 	if err != nil || out.Players[0].MovementEpoch != 9 || out.Players[0].ContiguousPendingCommands != MaxFutureCommands {
 		t.Fatalf("authority metadata lost: %v %v", out, err)
 	}
 	state.ContiguousPendingCommands++
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("unbounded authority queue accepted")
 	}
 	state.ContiguousPendingCommands = 0
 	state.MovementEpoch = 0
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("epoch-zero authority accepted")
 	}
 }

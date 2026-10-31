@@ -69,6 +69,7 @@ func resolve(s *Server, tick, through uint32) {
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick,
 		Players: []*runtime.PlayerState{{PlayerId: 7, MovementEpoch: 1, LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, LastResolvedCommand: through}},
 		Combat:  []*runtime.CombatState{{PlayerId: 7, LifeGeneration: 1, Hp: 100000, MagazineAmmo: 12}}}}
+	fillAnimation(e.GetSnapshot())
 	s.runtimeMessage(e)
 }
 

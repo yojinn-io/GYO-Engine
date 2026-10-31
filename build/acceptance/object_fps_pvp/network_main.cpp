@@ -148,6 +148,9 @@ int main(int argc,char** argv) {
                 combat->set_hp(PvpCombatRules.maximumHp);combat->set_next_allowed_shot_tick(counter);combat->set_life_generation(counter);combat->set_magazine_ammo(PvpCombatRules.magazineCapacity);
                 combat->set_reload_action_id(counter);combat->set_reload_start_tick(counter);combat->set_reload_end_tick(counter);combat->set_last_shot_action_id(counter);combat->set_last_shot_tick(counter);
                 combat->set_last_damage_tick(counter);combat->set_damage_count(std::numeric_limits<std::uint32_t>::max());combat->set_last_attacker_id(counter);
+                auto* animation=snapshot.add_animation();animation->set_player_id(counter-i);animation->set_life_generation(counter);
+                animation->set_gait_phase_q16(counter);animation->set_move_weight_permille(1000);animation->set_jog_weight_permille(1000);
+                animation->set_jump_phase(pb::JUMP_PHASE_LAND);animation->set_jump_phase_tick(counter); // pv9 §4.3, no sprint weight yet
             }
             const auto actionBytes=wire::Encode({wire::Type::Actions,maximum,0xffffffffu,actions.SerializeAsString()});
             const auto resultBytes=wire::Encode({wire::Type::ActionResults,maximum,0xffffffffu,results.SerializeAsString()});
@@ -156,8 +159,8 @@ int main(int argc,char** argv) {
                 "maximum legal protobuf plus24-byte UDP header exceeds1200 bytes");
             // Legal combat values in a full room (pv6 contract §7, 2026-10-07 revision;
             // protocol-v8 section 6: the counters narrowed to uint32, and the stance bools;
-            // protocol-v9 section 6: hp in milli-points).
-            Require(snapshotBytes.size()==706,("maximum legal full-room snapshot is not 706 bytes ("+
+            // protocol-v9 section 6: hp in milli-points, and the animation, 34 bytes a player).
+            Require(snapshotBytes.size()==842,("maximum legal full-room snapshot is not 842 bytes ("+
                 std::to_string(snapshotBytes.size())+")").c_str());
             bool oversizedRejected=false;
             try { static_cast<void>(wire::Encode({wire::Type::Input,1,1,std::string(wire::MaxDatagram, 'x')})); }

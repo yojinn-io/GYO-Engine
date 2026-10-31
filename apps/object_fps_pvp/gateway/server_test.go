@@ -160,6 +160,7 @@ func (f *fakeRuntime) send(e *runtime.RuntimeEnvelope) {
 			snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: p.PlayerId, Hp: 100000})
 		}
 	}
+	fillAnimation(e.GetSnapshot())
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, _ := proto.Marshal(e)

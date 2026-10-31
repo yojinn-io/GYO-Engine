@@ -169,6 +169,8 @@ public:
         combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2);
         combat->set_last_hit_part(snapshotHitPart); // pv7 §7 hit record: all four fields set together
         player->set_crouched(snapshotCrouched); // pv8 §2
+        auto* animation=snapshot.add_animation();*animation=snapshotAnimation; // pv9 §4.2
+        animation->set_player_id(1);animation->set_life_generation(1);
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
     // A snapshot of the given tick; the next Snapshot follows it.
@@ -181,6 +183,8 @@ public:
         for(unsigned id=1;id<=count;++id) {
             auto* player=snapshot.add_players();player->set_player_id(id);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
             auto* combat=snapshot.add_combat();combat->set_player_id(id);combat->set_hp(100);combat->set_life_generation(1);combat->set_magazine_ammo(7);
+            auto* animation=snapshot.add_animation();animation->set_player_id(id);animation->set_life_generation(1);
+            animation->set_jump_phase(pb::JUMP_PHASE_GROUNDED);
         }
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
@@ -239,6 +243,8 @@ public:
     std::optional<float> changedWelcomeStance;
     bool snapshotCrouched{}; // pv8 §2: the stance Snapshot reports
     pb::HitPart snapshotHitPart{pb::HIT_PART_BODY}; // the part of Snapshot's hit record
+    pb::PlayerAnimation snapshotAnimation=[]{ // Snapshot's animation of player 1 (grounded)
+        pb::PlayerAnimation value;value.set_jump_phase(pb::JUMP_PHASE_GROUNDED);return value;}();
     std::uint64_t epoch{1};
     bool autoAck{};
     std::atomic<std::uint64_t> leaves{};
@@ -452,6 +458,18 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
     pb::WorldSnapshot uneven;uneven.set_tick(playing+50);uneven.add_players()->set_player_id(1);
     gateway.SendRaw(wire::Type::Snapshot,uneven.SerializeAsString());
     gateway.SnapshotAt(playing,0); // not newer than the applied one
+    // pv9 §4.5: neither is applied. A jump phase outside 1..4 that a narrowing
+    // cast would read as Grounded (257 = 256 + 1), valid for this grounded
+    // player, and a sprint weight before sprint presentation.
+    std::uint64_t rejectedTick=playing+35;
+    for(const auto edit:{+[](pb::PlayerAnimation& a){a.set_jump_phase(static_cast<pb::JumpPhase>(257));},
+                         +[](pb::PlayerAnimation& a){a.set_sprint_weight_permille(1);}}) {
+        rejectedTick+=5;
+        edit(gateway.snapshotAnimation);gateway.SnapshotAt(rejectedTick,0);
+        gateway.snapshotAnimation=pb::PlayerAnimation{};gateway.snapshotAnimation.set_jump_phase(pb::JUMP_PHASE_GROUNDED);
+        gateway.UntilTime(Clock::now()+50ms);
+        Require(connection.State().snapshot->tick!=rejectedTick,"an invalid animation snapshot was applied");
+    }
     // Windows for an authority the worker no longer has (D183): one of another
     // connection generation (r1), and three its newest snapshot does not carry
     // (r5: two other epochs, another life). r5 outnumbers every r1 window of
@@ -622,7 +640,7 @@ void RequireDroppedCounts(const std::string& captured) {
     };
     Require(count("unparsed_datagrams")>=3,"unparsed datagrams were not counted");
     Require(count("early_datagrams")>=2,"datagrams before the Welcome were not counted");
-    Require(count("invalid_snapshot_datagrams")>=2,"invalid snapshots were not counted");
+    Require(count("invalid_snapshot_datagrams")>=4,"invalid snapshots were not counted");
     Require(count("ignored_snapshot_datagrams")>=1,"snapshots that were not newer were not counted");
     Require(count("unexpected_kind_datagrams")>=3,"kinds the Gateway does not send were not counted");
     Require(count("stale_input_windows")>=4,"windows for a replaced authority were not counted");
@@ -673,11 +691,14 @@ std::size_t CheckMaximumDatagrams() {
         c->set_reload_action_id(max32);c->set_reload_start_tick(max32);c->set_reload_end_tick(max32);c->set_last_shot_action_id(max32);c->set_last_shot_tick(max32);
         c->set_last_damage_tick(max32);c->set_damage_count(std::numeric_limits<std::uint32_t>::max());c->set_last_attacker_id(max32);
         c->set_last_hit_part(pb::HIT_PART_HEAD);
+        auto* a=snapshot.add_animation();a->set_player_id(max32-n);a->set_life_generation(max32);a->set_gait_phase_q16(max32);
+        a->set_move_weight_permille(1000);a->set_jog_weight_permille(1000);a->set_jump_phase(pb::JUMP_PHASE_LAND);a->set_jump_phase_tick(max32);
     }
     check(wire::Type::Snapshot,snapshot);
     // A full room is the largest datagram (pv6 contract §7, 2026-10-07 revision).
-    // protocol-v8 section 6: the counters narrowed to uint32 and the stance, 40+177N.
-    Require(largest==748,"maximum-field full-room snapshot is not 748 bytes");
+    // protocol-v8 section 6: the counters narrowed to uint32 and the stance, 40+177N;
+    // protocol-v9 section 6: the animation, 40+211N.
+    Require(largest==884,"maximum-field full-room snapshot is not 884 bytes");
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
     // Every older version and the next one are refused.
     for(std::uint64_t version=1;version<=AcceptanceProtocolVersion+1;++version) {
@@ -702,6 +723,14 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     gateway.snapshotHitPart=pb::HIT_PART_LEG;gateway.Snapshot(connection.State().snapshot->players.at(0).lastResolvedCommand);
     gateway.Until([&]{const auto s=connection.State();return s.snapshot && s.snapshot->combat.at(0).lastHitPart==HitPart::Leg;});
     gateway.snapshotHitPart=pb::HIT_PART_BODY;
+    // pv9 §4.3 (E6): a non-zero animation authority reaches the Client as sent.
+    gateway.snapshotAnimation.set_gait_phase_q16(0xFFFF1234U);gateway.snapshotAnimation.set_move_weight_permille(500);
+    gateway.snapshotAnimation.set_jog_weight_permille(250);gateway.snapshotAnimation.set_jump_phase(pb::JUMP_PHASE_LAND);
+    gateway.snapshotAnimation.set_jump_phase_tick(1);
+    gateway.Snapshot(connection.State().snapshot->players.at(0).lastResolvedCommand);
+    gateway.Until([&]{const auto s=connection.State();return s.snapshot && s.snapshot->animation.size()==1 &&
+        s.snapshot->animation[0]==PlayerAnimation{1,1,0xFFFF1234U,500,250,JumpPhase::Land,1,0};});
+    gateway.snapshotAnimation=pb::PlayerAnimation{};gateway.snapshotAnimation.set_jump_phase(pb::JUMP_PHASE_GROUNDED);
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
     std::mutex allocatedMutex;std::vector<ActionId> allocated;
     std::vector<std::thread> producers;

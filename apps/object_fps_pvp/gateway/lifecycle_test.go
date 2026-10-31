@@ -20,6 +20,7 @@ func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.
 		Players: []*runtime.PlayerState{{PlayerId: 7, MovementEpoch: 2, LifeGeneration: 2, LifeState: runtime.LifeState_LIFE_ALIVE, LifeStateTick: 200, Grounded: true}},
 		Combat:  []*runtime.CombatState{{PlayerId: 7, LifeGeneration: 2, Hp: 100000, MagazineAmmo: 12}},
 	}}
+	fillAnimation(e.GetSnapshot())
 	s.runtimeMessage(e)
 	if got := actionMessages(s.link.batch()); len(got) != 1 || len(got[0].Shots) != 1 {
 		t.Fatal("respawn did not isolate movement from the queued actions")

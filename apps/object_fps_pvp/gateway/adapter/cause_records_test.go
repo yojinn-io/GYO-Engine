@@ -13,7 +13,7 @@ import (
 // included, and no value of it invalidates a snapshot (D-5).
 func TestSnapshotCarriesTheMatchHoldAsItCame(t *testing.T) {
 	for _, hold := range []*uint32{nil, proto.Uint32(0), proto.Uint32(1234), proto.Uint32(math.MaxUint32)} {
-		out, err := SnapshotForClient(&runtime.WorldSnapshot{Tick: 7, MatchHoldUs: hold}, nil)
+		out, err := snapshotForClient(&runtime.WorldSnapshot{Tick: 7, MatchHoldUs: hold}, nil)
 		if err != nil {
 			t.Fatalf("hold %v: %v", hold, err)
 		}

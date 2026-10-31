@@ -253,6 +253,7 @@ func TestEvictionKeepsQueuedActionsAndReplacementsDeliver(t *testing.T) {
 	e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: p.playerID,
 		Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY, ReferenceAgeMs: 190}}
 	l.actionWritten(p.playerID, time.Now()) // the link's statistics of the player
+	fillAnimation(e.GetSnapshot())
 	s.runtimeMessage(e)
 	l.mu.Lock()
 	_, kept := l.actionStats[p.playerID]

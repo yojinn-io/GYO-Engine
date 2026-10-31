@@ -323,6 +323,35 @@ TEST_CASE("PvP IPC carries the stance rules in Ready, the crouch in and the stan
     }
 }
 
+// v8-product-anim-authority A3 (E6): the Match's animation authority reaches
+// the runtime wire one per player, with the values the Match holds.
+TEST_CASE("PvP IPC carries the animation authority of every player") {
+    Server server;
+    Gateway gateway(server.address);
+    REQUIRE(gateway.Receive());
+    gateway.Send(Join(7));
+    static_cast<void>(ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); }));
+    auto window = InputWindow(7, 1, 3);
+    for (auto& command : *window.mutable_input()->mutable_commands()) command.set_move_forward(1);
+    gateway.Send(window);
+    const auto walked = ReceiveFirst(gateway, [](const auto& message) {
+        if (!message.has_snapshot()) return false;
+        for (const auto& player : message.snapshot().players())
+            if (player.player_id() == 7 && player.last_resolved_command() >= 3) return true;
+        return false;
+    });
+    const auto& snapshot = walked.snapshot();
+    REQUIRE(snapshot.animation_size() == snapshot.players_size());
+    const auto& value = snapshot.animation(0);
+    CHECK(value.player_id() == 7);
+    CHECK(value.life_generation() == snapshot.players(0).life_generation());
+    CHECK(value.gait_phase_q16() > 0);       // three steps forward
+    CHECK(value.move_weight_permille() == 500); // 3 of 6 transition steps
+    CHECK(value.jump_phase() == object_fps_pvp::runtime::v9::JUMP_PHASE_GROUNDED);
+    CHECK(value.jump_phase_tick() <= snapshot.tick());
+    CHECK(value.sprint_weight_permille() == 0);
+}
+
 TEST_CASE("PvP IPC resets the Match between connections") {
     Server server;
     {

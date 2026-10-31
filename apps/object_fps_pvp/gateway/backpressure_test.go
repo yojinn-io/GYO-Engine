@@ -51,6 +51,7 @@ func TestSnapshotSelectionRefreshesUnwrittenPeerAndRevalidatesSession(t *testing
 	for tick := uint32(2); tick <= 3; tick++ {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
+		fillAnimation(e.GetSnapshot())
 		s.runtimeMessage(e)
 	}
 	frame, second := s.snapshotForPeer([]uint32{2}, frame)
@@ -104,6 +105,7 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 					for tick := first; tick <= last; tick++ {
 						e := envelope()
 						e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
+						fillAnimation(e.GetSnapshot())
 						s.runtimeMessage(e)
 					}
 				}()
@@ -146,6 +148,7 @@ func TestBlockedSnapshotConsumerKeepsLatestAndRecovers(t *testing.T) {
 				for tick := blocked + 31; tick <= last; tick++ {
 					e := envelope()
 					e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
+					fillAnimation(e.GetSnapshot())
 					s.runtimeMessage(e)
 				}
 			}()

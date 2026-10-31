@@ -644,6 +644,14 @@ struct ClientConnection::Impl {
                     if(!ValidDamageRecord(record,player.lifeState==LifeState::Dead,player.lifeStateTick,message.tick(),maximumHp)){valid=false;break;}
                     snapshot.combat.push_back(record);
                 }
+                // pv9 §4.5: the animation authority, checked like the Match guards it.
+                for(const auto& a:message.animation()) {
+                    // The enum's range before the narrowing cast: 258 must not read as Start.
+                    if(a.jump_phase()<pb::JUMP_PHASE_GROUNDED || a.jump_phase()>pb::JUMP_PHASE_LAND){valid=false;break;}
+                    snapshot.animation.push_back({a.player_id(),a.life_generation(),a.gait_phase_q16(),a.move_weight_permille(),
+                        a.jog_weight_permille(),static_cast<JumpPhase>(a.jump_phase()),a.jump_phase_tick(),a.sprint_weight_permille()});
+                }
+                if(valid && !ValidPlayerAnimations(snapshot.players,snapshot.animation,snapshot.tick))valid=false;
                 if(!valid){++invalidSnapshotDatagrams;continue;}
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;

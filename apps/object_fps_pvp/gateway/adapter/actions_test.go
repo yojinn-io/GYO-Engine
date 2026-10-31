@@ -93,21 +93,21 @@ func TestCombatRulesAndResultsValidation(t *testing.T) {
 		}
 	}
 	snapshot := &runtime.WorldSnapshot{Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: 1, MovementEpoch: 1}}}
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("combat missing")
 	}
 	snapshot.Combat = []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 2, Hp: 100000}}
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("combat identity mismatch")
 	}
 	snapshot.Combat[0].PlayerId = 1
 	snapshot.Combat[0].Hp = 100001
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("invalid hp")
 	}
 	snapshot.Combat[0].Hp = 75000
 	snapshot.Combat[0].NextAllowedShotTick = 90
-	out, err := SnapshotForClient(snapshot, testRules())
+	out, err := snapshotForClient(snapshot, testRules())
 	if err != nil || out.Combat[0].Hp != 75000 || out.Combat[0].NextAllowedShotTick != 90 {
 		t.Fatal("combat state mapping")
 	}

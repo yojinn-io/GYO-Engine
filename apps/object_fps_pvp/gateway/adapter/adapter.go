@@ -129,7 +129,34 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			LastDamageTick: state.LastDamageTick, DamageCount: state.DamageCount, LastAttackerId: state.LastAttackerId,
 			LastHitPart: client.HitPart(state.LastHitPart)})
 	}
+	if len(in.Animation) != len(in.Players) {
+		return nil, errors.New("invalid runtime animation count")
+	}
+	animationSeen := make(map[uint32]bool, len(in.Animation))
+	for _, a := range in.Animation {
+		if a == nil || seen[a.PlayerId] == nil || animationSeen[a.PlayerId] || !validAnimation(a, seen[a.PlayerId], in.Tick) {
+			return nil, errors.New("invalid runtime animation")
+		}
+		animationSeen[a.PlayerId] = true
+		out.Animation = append(out.Animation, &client.PlayerAnimation{PlayerId: a.PlayerId, LifeGeneration: a.LifeGeneration,
+			GaitPhaseQ16: a.GaitPhaseQ16, MoveWeightPermille: a.MoveWeightPermille, JogWeightPermille: a.JogWeightPermille,
+			JumpPhase: client.JumpPhase(a.JumpPhase), JumpPhaseTick: a.JumpPhaseTick, SprintWeightPermille: a.SprintWeightPermille})
+	}
 	return out, nil
+}
+
+// validAnimation checks one player's animation authority (pv9 §4.5): the
+// player's life; weights <= 1000 and no sprint weight yet; a valid phase whose
+// zero point is not after the snapshot; and, for a living player, Start or
+// Airborne exactly when not grounded. The Match guards the same conditions.
+func validAnimation(a *runtime.PlayerAnimation, player *runtime.PlayerState, tick uint32) bool {
+	if a.LifeGeneration != player.LifeGeneration || a.MoveWeightPermille > 1000 || a.JogWeightPermille > 1000 ||
+		a.SprintWeightPermille != 0 || a.JumpPhase < runtime.JumpPhase_JUMP_PHASE_GROUNDED ||
+		a.JumpPhase > runtime.JumpPhase_JUMP_PHASE_LAND || a.JumpPhaseTick > tick {
+		return false
+	}
+	inAir := a.JumpPhase == runtime.JumpPhase_JUMP_PHASE_START || a.JumpPhase == runtime.JumpPhase_JUMP_PHASE_AIRBORNE
+	return player.LifeState != runtime.LifeState_LIFE_ALIVE || inAir != player.Grounded
 }
 
 // validDamageRecord checks the presentation-only hit record (pv6 contract §2):

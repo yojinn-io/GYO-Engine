@@ -282,6 +282,7 @@ func TestCoalescedSnapshotIsCountedAtTheReader(t *testing.T) {
 	for tick := uint32(1); tick <= 3; tick++ {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
+		fillAnimation(e.GetSnapshot())
 		s.runtimeMessage(e)
 	}
 	r := s.link.drops.report(0, time.Now())

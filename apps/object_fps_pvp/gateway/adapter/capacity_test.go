@@ -17,11 +17,11 @@ func TestSnapshotAboveCapacityIsInvalid(t *testing.T) {
 		snapshot.Players = append(snapshot.Players, &runtime.PlayerState{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: id, MovementEpoch: 1})
 		snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: id, Hp: 100000})
 	}
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("snapshot above capacity accepted")
 	}
-	snapshot.Players, snapshot.Combat = snapshot.Players[:MaxPlayers], snapshot.Combat[:MaxPlayers]
-	if _, err := SnapshotForClient(snapshot, testRules()); err != nil {
+	snapshot.Players, snapshot.Combat, snapshot.Animation = snapshot.Players[:MaxPlayers], snapshot.Combat[:MaxPlayers], nil
+	if _, err := snapshotForClient(snapshot, testRules()); err != nil {
 		t.Fatalf("snapshot at capacity rejected: %v", err)
 	}
 }
@@ -48,12 +48,18 @@ func maximumSnapshot(n uint32, typeMaximum bool) *client.WorldSnapshot {
 			ReloadActionId: math.MaxUint32, ReloadStartTick: math.MaxUint32, ReloadEndTick: math.MaxUint32, LastShotActionId: math.MaxUint32, LastShotTick: math.MaxUint32,
 			LastDamageTick: math.MaxUint32, DamageCount: math.MaxUint32, LastAttackerId: math.MaxUint32,
 			LastHitPart: client.HitPart_HIT_PART_HEAD}
+		// pv9 §4.3: the animation at its largest admitted value (no sprint weight yet).
+		animation := &client.PlayerAnimation{PlayerId: math.MaxUint32 - i, LifeGeneration: math.MaxUint32, GaitPhaseQ16: math.MaxUint32,
+			MoveWeightPermille: 1000, JogWeightPermille: 1000, JumpPhase: client.JumpPhase_JUMP_PHASE_LAND, JumpPhaseTick: math.MaxUint32}
 		if typeMaximum {
 			player.ContiguousPendingCommands, player.ConnectionQualityFailures = math.MaxUint32, math.MaxUint32
 			player.LifeState, combat.LastHitPart = client.LifeState(math.MaxInt32), client.HitPart(math.MaxInt32)
 			player.MovementSlackUs = proto.Int32(math.MinInt32)
+			animation.MoveWeightPermille, animation.JogWeightPermille, animation.SprintWeightPermille = math.MaxUint32, math.MaxUint32, math.MaxUint32
+			animation.JumpPhase = client.JumpPhase(math.MaxInt32)
 		}
 		snapshot.Players, snapshot.Combat = append(snapshot.Players, player), append(snapshot.Combat, combat)
+		snapshot.Animation = append(snapshot.Animation, animation)
 	}
 	return snapshot
 }
@@ -61,14 +67,15 @@ func maximumSnapshot(n uint32, typeMaximum bool) *client.WorldSnapshot {
 // A full room's snapshot at its largest encoding still fits one datagram, and
 // the sizes are pinned exactly so a new or widened field shows (pv6 contract §7
 // 35+255N, pv7 §8 45+257N; pv8 §2a narrowed the counters to uint32, protocol-v8
-// section 6: the contract maximum 40+177N, the type maximum 42+195N with the stance). The
+// section 6: the contract maximum 40+177N, the type maximum 42+195N with the stance;
+// protocol-v9 section 6: the animation adds 34 and 50 bytes a player). The
 // worker probe pins the same message at the same size.
 func TestFullRoomSnapshotDatagramSize(t *testing.T) {
 	for n := uint32(1); n <= MaxPlayers; n++ {
-		if size := proto.Size(maximumSnapshot(n, false)) + framing.HeaderSize; size != 40+177*int(n) || size > framing.MaxDatagram {
+		if size := proto.Size(maximumSnapshot(n, false)) + framing.HeaderSize; size != 40+211*int(n) || size > framing.MaxDatagram {
 			t.Fatalf("%d-player contract maximum snapshot datagram %d bytes", n, size)
 		}
-		if size := proto.Size(maximumSnapshot(n, true)) + framing.HeaderSize; size != 42+195*int(n) || size > framing.MaxDatagram {
+		if size := proto.Size(maximumSnapshot(n, true)) + framing.HeaderSize; size != 42+245*int(n) || size > framing.MaxDatagram {
 			t.Fatalf("%d-player type maximum snapshot datagram %d bytes", n, size)
 		}
 	}

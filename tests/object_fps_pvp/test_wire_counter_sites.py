@@ -34,8 +34,9 @@ NARROWED_FIELDS = ('acknowledged_through', 'action_id', 'command_sequence', 'coo
                    'life_generation', 'life_state_tick', 'movement_epoch', 'movement_slack_sequence',
                    'next_allowed_shot_tick', 'observed_authority_tick', 'player_id', 'reload_action_id',
                    'reload_end_tick', 'reload_start_tick', 'reload_ticks', 'resolved_tick', 'respawn_tick',
-                   'respawn_ticks', 'retired_through', 'sequence', 'target_id', 'target_life_generation', 'tick')
-ENCODERS = {'src/Pvp/IpcHost.cpp': 30, 'src/Pvp/ClientConnection.cpp': 10}
+                   'respawn_ticks', 'retired_through', 'sequence', 'target_id', 'target_life_generation', 'tick',
+                   'jump_phase_tick')  # pv9 §4.3: PlayerAnimation's player_id, life_generation and jump_phase_tick
+ENCODERS = {'src/Pvp/IpcHost.cpp': 33, 'src/Pvp/ClientConnection.cpp': 10}
 SETTER = re.compile(r'\bset_(%s)\(' % '|'.join(NARROWED_FIELDS))
 
 

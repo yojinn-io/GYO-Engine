@@ -7707,6 +7707,126 @@
       "replace": "    r.U64(\"animations\", 0);",
       "check": "authority_digest",
       "expect": "golden mismatch"
+    },
+    {
+      "id": "a3-gw-count",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a snapshot whose animation count differs",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\tif len(in.Animation) != len(in.Players) {\n\t\treturn nil, errors.New(\"invalid runtime animation count\")\n\t}\n",
+      "replace": "",
+      "check": "go",
+      "expect": "(missing value|no animation) accepted"
+    },
+    {
+      "id": "a3-gw-duplicate",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a player twice",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\tif a == nil || seen[a.PlayerId] == nil || animationSeen[a.PlayerId] || !validAnimation(a, seen[a.PlayerId], in.Tick) {",
+      "replace": "\t\tif a == nil || seen[a.PlayerId] == nil || !validAnimation(a, seen[a.PlayerId], in.Tick) {",
+      "check": "go",
+      "expect": "player twice accepted"
+    },
+    {
+      "id": "a3-gw-life",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway ignores the animation life",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\tif a.LifeGeneration != player.LifeGeneration || a.MoveWeightPermille > 1000 || a.JogWeightPermille > 1000 ||",
+      "replace": "\tif a.MoveWeightPermille > 1000 || a.JogWeightPermille > 1000 ||",
+      "check": "go",
+      "expect": "other life accepted"
+    },
+    {
+      "id": "a3-gw-sprint",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a sprint weight",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\ta.SprintWeightPermille != 0 || a.JumpPhase < runtime.JumpPhase_JUMP_PHASE_GROUNDED ||",
+      "replace": "\t\ta.JumpPhase < runtime.JumpPhase_JUMP_PHASE_GROUNDED ||",
+      "check": "go",
+      "expect": "sprint weight accepted"
+    },
+    {
+      "id": "a3-gw-phase-high",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a phase above Land",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\ta.JumpPhase > runtime.JumpPhase_JUMP_PHASE_LAND || a.JumpPhaseTick > tick {",
+      "replace": "\t\ta.JumpPhaseTick > tick {",
+      "check": "go",
+      "expect": "phase (five|258) accepted"
+    },
+    {
+      "id": "a3-gw-zero-ahead",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a zero point after the snapshot",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\ta.JumpPhase > runtime.JumpPhase_JUMP_PHASE_LAND || a.JumpPhaseTick > tick {",
+      "replace": "\t\ta.JumpPhase > runtime.JumpPhase_JUMP_PHASE_LAND {",
+      "check": "go",
+      "expect": "zero after tick accepted"
+    },
+    {
+      "id": "a3-gw-grounded",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway skips the grounded cross-check",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\treturn player.LifeState != runtime.LifeState_LIFE_ALIVE || inAir != player.Grounded",
+      "replace": "\treturn !inAir || inAir",
+      "check": "go",
+      "expect": "(start grounded|airborne grounded|land in the air|grounded in air) accepted"
+    },
+    {
+      "id": "a3-gw-gait-not-copied",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway drops the gait phase",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\t\tGaitPhaseQ16: a.GaitPhaseQ16, MoveWeightPermille: a.MoveWeightPermille,",
+      "replace": "\t\t\tMoveWeightPermille: a.MoveWeightPermille,",
+      "check": "go",
+      "expect": "not copied as it came"
+    },
+    {
+      "id": "a3-ipc-gait-dropped",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "IpcHost does not encode the gait phase",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "value->set_gait_phase_q16(a.gaitPhaseQ16);",
+      "replace": "",
+      "check": "ipc",
+      "expect": "gait_phase_q16\\(\\) > 0"
+    },
+    {
+      "id": "a3-client-range-unchecked",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Client narrows the jump phase without its range check",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    if(a.jump_phase()<pb::JUMP_PHASE_GROUNDED || a.jump_phase()>pb::JUMP_PHASE_LAND){valid=false;break;}\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "an invalid animation snapshot was applied|invalid snapshots were not counted"
+    },
+    {
+      "id": "a3-client-unchecked",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Client skips the animation checks",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                if(valid && !ValidPlayerAnimations(snapshot.players,snapshot.animation,snapshot.tick))valid=false;\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "an invalid animation snapshot was applied|invalid snapshots were not counted"
+    },
+    {
+      "id": "a3-client-gait-dropped",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Client decodes the gait phase as zero",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    snapshot.animation.push_back({a.player_id(),a.life_generation(),a.gait_phase_q16(),a.move_weight_permille(),",
+      "replace": "                    snapshot.animation.push_back({a.player_id(),a.life_generation(),0,a.move_weight_permille(),",
+      "check": "worker",
+      "expect": "mock worker wait timed out"
     }
   ]
 }

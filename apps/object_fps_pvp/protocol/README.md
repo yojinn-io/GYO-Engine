@@ -91,6 +91,12 @@ judged at (pv7 contract §6, A1). `ShotRequest.view_tick_q16`, the `HitPart` fie
 (pv7 contract §7; LEG from pv9 §2): the Client fills `view_tick_q16` as observed,
 and the Match fills the others with values equal to the current behaviour (BODY
 only) until the hitbox-line judges parts.
+`WorldSnapshot.animation` (pv9 §4) carries one `PlayerAnimation` per player of its
+current life: the Match's authoritative gait phase, move, jog and sprint weights
+and jump phase with its zero point. Adapters and the Client check it alone
+(§4.5: count and ids, life, weights <= 1000, no sprint weight yet, a phase in
+1..4 whose zero point is not after the snapshot, and Start/Airborne exactly when
+a living player is not grounded); the Match guards the same before writing.
 
 Generated Go bindings are checked in under `clientv9/` and `runtimev9/`. Regenerate
 both with the pinned protoc from the C++ build and `protoc-gen-go` from the product's

@@ -36,6 +36,7 @@ type scriptedRuntime struct {
 
 func (r *scriptedRuntime) send(t *testing.T, e *runtime.RuntimeEnvelope) {
 	t.Helper()
+	fillAnimation(e.GetSnapshot())
 	b, err := proto.Marshal(e)
 	if err != nil {
 		t.Fatal(err)
