@@ -41,16 +41,27 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    that uses it leaves the engine and the other products building.
    `framework` is a reserved name for apps and tools. Guard: the framework's
    dependency guard and the registry's reserved names.
-2. Dependencies point one way: game or tool → framework → engine. The
-   framework includes nothing from `apps/` or `tools/`, and the engine never
-   names the framework. It links no game, no `GYO::Input` and no SDL_GPU, so a
-   tool's own Design Invariant 1 (no game, no `GYO::Input`, no SDL_GPU) still
-   holds through it. Guard: the framework's dependency guard, a positive list
-   of includes and targets.
-3. The framework is neutral. Its code names no tool, no product and no
-   document format (UI JSON, sound, and so on): window titles, dialog filters
-   and asset types come from the caller. Guard: the dependency guard fails when
-   framework code names an id registered in `engine/config/tools.csv` or
+2. Dependencies point one way: game or tool → framework → engine. The framework
+   includes nothing from `apps/` or `tools/`, and the engine never names it; it
+   links no game, no `GYO::Input` and no SDL_GPU, so a tool's own Design
+   Invariant 1 (no game, no `GYO::Input`, no SDL_GPU) still holds through it.
+   The core (everything outside `framework/bindings/`) includes no `SDL3/`,
+   `imgui`, `backends/`, `nlohmann/` or Engine `*Native` header, names no
+   `SDL_`, `ImGui` or `nlohmann` symbol, and links no SDL3, imgui,
+   `nlohmann_json` or `GYO::*Native` target and no binding: it reaches SDL only
+   through Engine's neutral targets. A binding is its own target under
+   `framework/bindings/<name>/` with its own positive list, and the core never
+   names it. Only the ImGui binding links `GYO::*Native`, PRIVATE; no framework
+   target names `SDL3::SDL3` or an `SDL_` symbol. Guards: the dependency guard
+   (core rules, one positive list per binding, and an allowlist of existing
+   core sites whose counts must match and only shrink, empty after
+   `v8-framework-invariants`) and the configure-time link check in
+   `tests/framework/CMakeLists.txt`.
+3. The framework is neutral. Its code names no tool, no product and no document
+   format (UI JSON, sound, and so on): window titles and asset types come from
+   the caller. Registration policy is chosen by the caller's options, never by
+   which product calls. Guard: the dependency guard fails when framework code
+   names an id registered in `engine/config/tools.csv` or
    `engine/config/projects.csv`.
 4. The framework writes only what its caller asks for. The host writes no side
    file (`imgui.ini`, ImGui's log). The catalog mount is read-only and has no
@@ -58,11 +69,16 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    leaves every other byte of the text as it was, replaces the file
    atomically and checks the result against catalog v1 of the content
    contract.
-5. Only what two or more products share enters the framework, or the
-   integration between a tool and the asset contract
-   (`v8-tool-framework-principle`). Code that only one product uses stays in
-   that product. The game part enters only on the condition above, not in
-   advance.
+5. The core is the product shell: it puts Engine capabilities together and
+   hands control to the product (a headless and a windowed shell, content
+   mounting, registration policy). It holds no product's UI, document format or
+   rules, and names no concrete UI or data-format library; such a library
+   enters only as a binding. A capability Engine lacks is added to Engine, not
+   to the framework. Otherwise only what two or more products share enters. The
+   game part enters only on the condition above. The windowed shell has one
+   user (ui_editor) when it is added; the user accepted that on 2026-11-01
+   (framework-rework D-8). Replacing ImGui means replacing its binding and the
+   tool's own drawing code; the core shell and Engine stay.
 
 ### Replacement Criteria
 
@@ -71,9 +87,12 @@ repair or rebuild the component.
 
 - To serve a product, the framework has to know what that product means, for
   example a branch on which game or tool is calling.
-- A tool needs a GUI stack other than ImGui on the SDL renderer.
-- Each new tool needs a change to the framework's public interface (adding a
-  shared piece does not count).
+- Each new tool needs a change to the core's public interface (adding a shared
+  piece does not count).
+- The core needs a concrete UI or JSON library to serve a caller.
+- A binding has to know which product calls it.
+- The windowed shell has to create or choose a render device for its client.
+- The framework copies an Engine rule that no shared fixture checks.
 
 ## Using it
 

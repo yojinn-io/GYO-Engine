@@ -15,7 +15,20 @@
 
 ## 現況
 
-- 2026-11-01：v8-framework-rework-plan 完成（使用者核准 PLAN 第 1 版與 D-1～D-9）。下一批 v8-framework-guard-ratchet。
+- 2026-11-01：v8-framework-rework-plan 完成（使用者核准 PLAN 第 1 版與 D-1～D-9，commit `f8878799`）。
+- 2026-11-01：v8-framework-guard-ratchet 完成（使用者核准判定變更與 DI 條文）。下一批 v8-engine-platform-path-dialog。
+
+### v8-framework-guard-ratchet 的事前宣告（2026-11-01，執行前）
+
+- 突變（D184：守衛腳本改了，所以跑全部 fw-guard-* 與新增的；fw-catalog-*、fw-path-dot-dot、fw-inbox-* 的檔案與測試都沒變，不跑）。全部要 killed，stale 為 0：
+  fw-guard-input-target、fw-guard-tool-header、fw-guard-tool-name、fw-guard-executable（舊，判定不放寬的證據）；
+  fw-guard-core-imgui-noslash、fw-guard-core-sdl-forward、fw-guard-core-native-include、fw-guard-core-sdl-call、
+  fw-guard-core-json-link、fw-guard-allowlisted-file-one-more、fw-guard-allowlist-stale、fw-link-closure-sdl（新）。
+  共 12 條。第一次執行 12/12 killed。
+- 2026-11-01 追加宣告（獨立審查後、第二次執行前）：連結檢查補洞並改成點名，加 fw-link-trade、fw-link-genex，共 14 條，全部要 killed、stale 為 0。
+  舊件檔改名為 `framework/Legacy.cmake`（核心 CMakeLists 的 nlohmann 也移進去），fw-guard-allowlisted-file-one-more、fw-guard-core-json-link、fw-link-closure-sdl 的錨點與預期訊息跟著改。
+- 範圍的限界：綁定目錄還不存在，綁定規則只由自我測試涵蓋；綁定的突變在外殼批與 catalog 批補上。
+- 舊自我測試對新守衛：只允許「乾淨的樹」一條失敗，且失敗內容只能是三項收緊。
 - 工具線分支 `claude/v8-tool-audio-editor-edit` 只在本機，停在核准關卡等本計畫。
 
 ## 決策紀錄
@@ -31,6 +44,7 @@
   - D-8：有視窗外殼目前只有 ui_editor 一個使用者，接受，DI 5 註明。
   - D-9：外殼草圖用 ultracode；選擇窗只做 xhigh 審查加別的引擎做一次對抗式檢查。
 - 各批的 Design Invariants 條文與守衛變更仍在該批開工或定案前逐批核准。
+- 2026-11-01，使用者：「核准」。v8-framework-guard-ratchet 的 [判定變更與 DI 條文](guard-ratchet-judgment-change.md)：framework DI 2、DI 3、DI 5、Replacement Criteria 改寫；守衛、例外清單、configure 連結檢查；突變目錄搬到本計畫。
 
 ## 研究事實（2026-11-01 核對，基準 `6e78090b`）
 

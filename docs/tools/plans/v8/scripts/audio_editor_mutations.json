@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-audio-editor-convert, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/audio_editor_mutations.json --build-dir <a tree with GYO_TOOLS=audio_editor and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The catalog mutants moved with CatalogRegistration to docs/tools/plans/v8/scripts/framework_mutations.json (v8-tool-framework-shell).",
+  "description": "Declared mutants of v8-tool-audio-editor-convert, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/audio_editor_mutations.json --build-dir <a tree with GYO_TOOLS=audio_editor and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The catalog mutants moved with CatalogRegistration to docs/tools/plans/v8/scripts/framework_mutations.json (v8-tool-framework-shell), and from there to docs/architecture/plans/framework-rework/scripts/framework_mutations.json (v8-framework-guard-ratchet).",
   "mutants": [
     {
       "id": "ae-resample-cutoff",

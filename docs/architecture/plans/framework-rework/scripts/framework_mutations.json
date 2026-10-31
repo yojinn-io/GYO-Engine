@@ -1,0 +1,248 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the framework (docs/framework/architecture.md), owned by docs/architecture/plans/framework-rework (moved from docs/tools/plans/v8/scripts/framework_mutations.json in v8-framework-guard-ratchet). Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/framework-rework/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its check fails with the expected message. The binding rules (framework/bindings/) get their mutants when the binding directories exist (v8-framework-shell, v8-framework-catalog-structure); until then the guard's self-test covers them.",
+  "mutants": [
+    {
+      "id": "fw-catalog-taken-path",
+      "what": "A path registered under another id is accepted",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "} else if (entry[\"path\"] == registration.path) {",
+      "replace": "} else if (false) {",
+      "target": "gyo_framework_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-catalog-other-type",
+      "what": "An id registered with another type is overwritten with the caller's type",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "if (entry[\"type\"].get_ref<const std::string&>() != registration.type) {",
+      "replace": "if (false) {",
+      "target": "gyo_framework_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-path-dot-dot",
+      "what": "A '..' segment is accepted in an asset path",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
+      "replace": "if (segment.empty() || segment == \".\") return false;",
+      "target": "gyo_framework_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-catalog-indentation-lost",
+      "what": "A new entry does not follow the last entry's indentation",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "text.insert(end, \",\\n\" + Indentation(text, begin) + entry);",
+      "replace": "text.insert(end, \",\\n\" + entry);",
+      "target": "gyo_framework_tests",
+      "cases": "*appends one line*",
+      "expect": "CHECK\\( update->text =="
+    },
+    {
+      "id": "fw-catalog-type-ignored",
+      "what": "The new entry's type is always sound, not the caller's",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "Json(registration.type).dump()",
+      "replace": "std::string(\"\\\"sound\\\"\")",
+      "target": "gyo_framework_tests",
+      "cases": "*type is the caller's*",
+      "expect": "REQUIRE\\( update.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-catalog-empty-type",
+      "what": "An empty asset type is not refused as a registration",
+      "file": "framework/src/CatalogRegistration.cpp",
+      "find": "    if (registration.type.empty()) {",
+      "replace": "    if (false) {",
+      "target": "gyo_framework_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "\"game.audio.new\", \"\", \"x.wav\"\\}\\) == CatalogErrorCode::InvalidRegistration \\) is NOT correct"
+    },
+    {
+      "id": "fw-inbox-order",
+      "what": "The inbox hands answers over in reverse order",
+      "file": "framework/src/PathDialog.cpp",
+      "find": "answers_.push_back(std::move(answer));",
+      "replace": "answers_.insert(answers_.begin(), std::move(answer));",
+      "target": "gyo_framework_tests",
+      "cases": "*path dialog inbox*",
+      "expect": "CHECK\\( taken\\[0\\].tag == 3 \\) is NOT correct"
+    },
+    {
+      "id": "fw-inbox-take-keeps",
+      "what": "A taken answer stays in the inbox",
+      "file": "framework/src/PathDialog.cpp",
+      "find": "return std::exchange(answers_, {});",
+      "replace": "return answers_;",
+      "target": "gyo_framework_tests",
+      "cases": "*path dialog inbox*",
+      "expect": "CHECK\\( inbox.Take\\(\\).empty\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "fw-guard-input-target",
+      "what": "The framework's CMake names GYO::Input",
+      "file": "framework/CMakeLists.txt",
+      "find": "# The catalog mount names engine/asset types; paths go to UTF-8 through GYO::Os.",
+      "replace": "# The catalog mount names engine/asset types; paths go to UTF-8 through GYO::Os and GYO::Input.",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "names GYO::Input"
+    },
+    {
+      "id": "fw-guard-tool-header",
+      "what": "The framework includes a tool's header",
+      "file": "framework/src/ReadOnlyAssetCatalog.cpp",
+      "find": "#include \"gyo/framework/ReadOnlyAssetCatalog.hpp\"\n",
+      "replace": "#include \"gyo/framework/ReadOnlyAssetCatalog.hpp\"\n#include \"gyo/some_tool/Thing.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "includes gyo/some_tool/Thing.hpp"
+    },
+    {
+      "id": "fw-guard-tool-name",
+      "what": "The framework's code names a registered tool",
+      "file": "framework/src/ReadOnlyAssetCatalog.cpp",
+      "find": "#include <algorithm>\n",
+      "replace": "#include <algorithm>\n// Mounts what audio_editor wrote.\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "names audio_editor"
+    },
+    {
+      "id": "fw-guard-executable",
+      "what": "The framework adds an executable, as a tool would",
+      "file": "framework/CMakeLists.txt",
+      "find": "unset(_gyo_framework_targets)\n",
+      "replace": "unset(_gyo_framework_targets)\nadd_executable(gyo_framework_main src/PathDialog.cpp)\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "calls add_executable"
+    },
+    {
+      "id": "fw-guard-core-imgui-noslash",
+      "what": "The core includes ImGui by its bare header name",
+      "file": "framework/src/ReadOnlyAssetCatalog.cpp",
+      "find": "#include <algorithm>\n",
+      "replace": "#include <algorithm>\n#include <imgui.h>\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "framework/src/ReadOnlyAssetCatalog.cpp: includes imgui\\.h"
+    },
+    {
+      "id": "fw-guard-core-sdl-forward",
+      "what": "A core public header forward-declares an SDL type",
+      "file": "framework/include/gyo/framework/ReadOnlyAssetCatalog.hpp",
+      "find": "namespace Gyo::Tools::Framework {\n",
+      "replace": "struct SDL_Window;\nnamespace Gyo::Tools::Framework {\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "ReadOnlyAssetCatalog\\.hpp: uses SDL_Window"
+    },
+    {
+      "id": "fw-guard-core-native-include",
+      "what": "The core includes an Engine *Native header",
+      "file": "framework/src/ReadOnlyAssetCatalog.cpp",
+      "find": "#include <algorithm>\n",
+      "replace": "#include <algorithm>\n#include \"engine/platform/sdl/SdlPlatformNative.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "includes engine/platform/sdl/SdlPlatformNative\\.hpp"
+    },
+    {
+      "id": "fw-guard-core-sdl-call",
+      "what": "Core code calls an SDL function (a core file without allowlist entries)",
+      "file": "framework/src/ReadOnlyAssetCatalog.cpp",
+      "find": "#include <utility>\n",
+      "replace": "#include <utility>\nstatic void Trace() { SDL_Log(\"mount\"); }\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "ReadOnlyAssetCatalog\\.cpp: uses SDL_Log"
+    },
+    {
+      "id": "fw-guard-core-json-link",
+      "what": "The core's own CMake links nlohmann (its only JSON link is in framework/Legacy.cmake)",
+      "file": "framework/CMakeLists.txt",
+      "find": "    PUBLIC GYO::Engine\n",
+      "replace": "    PUBLIC GYO::Engine nlohmann_json::nlohmann_json\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "framework/CMakeLists\\.txt: names nlohmann_json::nlohmann_json"
+    },
+    {
+      "id": "fw-guard-allowlisted-file-one-more",
+      "what": "An allowlisted legacy file gains one more forbidden target",
+      "file": "framework/Legacy.cmake",
+      "find": "            SDL3::SDL3\n",
+      "replace": "            SDL3::SDL3\n            SDL3::SDL3\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "framework/Legacy\\.cmake target has 12 findings, allowlisted 11"
+    },
+    {
+      "id": "fw-guard-allowlist-stale",
+      "what": "An allowlist count above the sites it covers is accepted",
+      "file": "tests/framework/framework_guard_allowlist.txt",
+      "find": "framework/src/ImGuiSdlHost.cpp symbol 39 ",
+      "replace": "framework/src/ImGuiSdlHost.cpp symbol 40 ",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "ImGuiSdlHost\\.cpp symbol has 39 findings, allowlisted 40; shrink the allowlist"
+    },
+    {
+      "id": "fw-link-closure-sdl",
+      "what": "The core links SDL3 through a spelling the source guard cannot read; the configure-time link check stops it",
+      "file": "framework/CMakeLists.txt",
+      "find": "set(_gyo_framework_targets gyo_tool_framework)\n",
+      "replace": "set(_gyo_framework_targets gyo_tool_framework)\nset(_gyo_lib SDL3)\ntarget_link_libraries(gyo_tool_framework PRIVATE ${_gyo_lib}::${_gyo_lib})\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_tool_framework \\(core\\) links 2 forbidden targets"
+    },
+    {
+      "id": "fw-link-trade",
+      "what": "A legacy forbidden link is traded for another one; the count stays, the names do not",
+      "file": "framework/Legacy.cmake",
+      "find": "target_link_libraries(gyo_tool_framework PRIVATE nlohmann_json::nlohmann_json)\n",
+      "replace": "set(_gyo_lib SDL3)\ntarget_link_libraries(gyo_tool_framework PRIVATE ${_gyo_lib}::${_gyo_lib})\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_tool_framework \\(core\\) links 1 forbidden targets \\[SDL3::SDL3\\], allowlisted 1 \\[nlohmann_json::nlohmann_json\\]"
+    },
+    {
+      "id": "fw-link-genex",
+      "what": "The core links SDL3 inside a generator expression",
+      "file": "framework/CMakeLists.txt",
+      "find": "set(_gyo_framework_targets gyo_tool_framework)\n",
+      "replace": "set(_gyo_framework_targets gyo_tool_framework)\nset(_gyo_lib SDL3)\ntarget_link_libraries(gyo_tool_framework PRIVATE \"$<$<CONFIG:Debug>:${_gyo_lib}::${_gyo_lib}>\")\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "links 2 forbidden targets \\[\\$<\\$<CONFIG:Debug>:SDL3::SDL3>"
+    }
+  ]
+}
