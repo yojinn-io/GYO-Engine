@@ -44,6 +44,7 @@
 - 事前宣告的判定（寫在交給 Windows 的 prompt 與對話裡，看結果之前定下）：A、B3、C 都要「是」，D 位址要保持原狀；B1 若「否」就用 log 判斷原因；B2 只記錄。
 - 使用者的結果：A 是、B1 是、B2 是（候選窗在位址欄旁邊）、B3 是、C 是、D 是。**全部通過**。
 - 收支：一致。input.text 63 行、22,781 bytes、SHA-256 前 16 碼 `e689644c95512900`、檔尾沒有 `dropped_lines`。存在 `docs/tools/plans/v8/evidence/lobby-text-field/`。
+  - （後續，2026-10-31）這個 log 沒有進 repo；現在在主 checkout 的 `build/evidence/tool-v8-lobby-text-field/client-20261030-232046.log`（使用者的 Intel Mac，git 管理外，SHA-256 前 16 碼相同）。
 - log 對照：
   - `diagnostics on ime_ui="composition"`：平台選項生效。
   - `text_editing` 22 行，而且 `taken=1`：組字確實送到遊戲。上一次的檢測裡是 0 行。

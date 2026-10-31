@@ -26,7 +26,7 @@
 - log 裡有 6 個文字輸入的區段（trial），不是宣告的 1＋3＋3。其中 2、5、6 只有清除（Backspace）或 Enter，沒有打位址；trial 4 結束時客戶端去連 Gateway（逾時），表示 Enter 被當成送出。
 - 中文輸入法沒做；每次的記錄缺 Enter 次數與畫面結果。
 - 腳本的分類（`evidence/ime-observe/report.txt`）：trial 1 ascii（對照組，沒有組字：工具正常）；trial 3 missing；trial 4 ascii（但在 ASCII `:` 之前先確定了全形 `：`，分類規則只看「有沒有 ASCII」，所以標成 ascii）；2、5、6 missing（沒有打字）。
-  - （後續，2026-10-31）`report.txt` 已移出 repo（AGENTS §15），現在在主 checkout 的 `build/evidence/tool-v8-ime-observe/report.txt`（使用者的 Intel Mac，git 管理外）。全文：
+  - （後續，2026-10-31）`report.txt` 已移出 repo（AGENTS §15）；它和原始 log `client-20261030-210824.log`（34,990 bytes，沒進過 repo）現在都在主 checkout 的 `build/evidence/tool-v8-ime-observe/`（使用者的 Intel Mac，git 管理外）。全文：
 
     ```text
     diagnostics ime_ui="(default)" events=169
