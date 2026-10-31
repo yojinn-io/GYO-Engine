@@ -8,6 +8,7 @@
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
+#include "RetroFPS/Pvp/PlayerHitbox.hpp"
 #include "RetroFPS/Pvp/TracePaths.hpp"
 #include "engine/os/Console.hpp"
 #include "engine/os/Files.hpp"
@@ -118,6 +119,11 @@ int main(int argc,char** argv) {
         if(!animation){std::cerr<<error<<'\n';return 1;}
         std::clog<<"[ObjectFPS/PvP Match] animation rules walk_cycle="<<animation->walkCycleDistance
                  <<" jog_cycle="<<animation->jogCycleDistance<<" transition_ticks="<<animation->transitionTicks<<'\n';
+        // The hit shapes (v8-product-hitbox-data D1); invalid content stops the Match.
+        const auto hitbox=fps::pvp::LoadPlayerHitbox(
+            fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets,error);
+        if(!hitbox){std::cerr<<error<<'\n';return 1;}
+        std::clog<<"[ObjectFPS/PvP Match] hitbox shapes="<<hitbox->shapes.size()<<'\n';
         fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation);
         fps::pvp::IpcHost ipc(runtime,*arena);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}

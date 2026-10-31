@@ -70,18 +70,18 @@ std::optional<PlayerAnimationRules> LoadPlayerAnimationRules(Engine::Asset::Asse
     }
 }
 
-std::optional<PlayerAnimationRules> LoadPlayerAnimationRules(const std::filesystem::path& contentRoot,
-                                                             std::string& error) {
+bool WithContentAssets(const std::filesystem::path& contentRoot,
+    const std::function<bool(Engine::Asset::AssetManager&, std::string&)>& use, std::string& error) {
     error.clear();
     const auto manifest = Engine::Asset::ContentManifest::Load(contentRoot);
     if (!manifest) {
-        error = "player animation rules: " + manifest.error().message + " " + manifest.error().detail;
-        return std::nullopt;
+        error = "player content: " + manifest.error().message + " " + manifest.error().detail;
+        return false;
     }
     auto catalog = manifest.value().LoadCatalogs(contentRoot);
     if (!catalog) {
-        error = "player animation rules: " + catalog.error().message + " " + catalog.error().detail;
-        return std::nullopt;
+        error = "player content: " + catalog.error().message + " " + catalog.error().detail;
+        return false;
     }
     Engine::Asset::AssetCatalog assetsCatalog = std::move(catalog).value();
     Engine::Asset::Loading::LoaderRegistry loaders;
@@ -93,7 +93,18 @@ std::optional<PlayerAnimationRules> LoadPlayerAnimationRules(const std::filesyst
     Engine::Asset::Core::AssetLifetime lifetime;
     Engine::Asset::Core::AssetCachePolicy policy{{}};
     Engine::Asset::AssetManager assets{assetsCatalog, pipeline, storage, lifetime, policy};
-    return LoadPlayerAnimationRules(assets, error);
+    return use(assets, error);
+}
+
+std::optional<PlayerAnimationRules> LoadPlayerAnimationRules(const std::filesystem::path& contentRoot,
+                                                             std::string& error) {
+    std::optional<PlayerAnimationRules> rules;
+    if (!WithContentAssets(contentRoot, [&](Engine::Asset::AssetManager& assets, std::string& failure) {
+            rules = LoadPlayerAnimationRules(assets, failure);
+            return rules.has_value();
+        }, error))
+        return std::nullopt;
+    return rules;
 }
 
 } // namespace fps::pvp

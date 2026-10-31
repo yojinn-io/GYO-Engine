@@ -7940,6 +7940,146 @@
       "replace": "        state.jogWeight = frame.animation ? frame.animation->jogWeight : 0.0;\n    }\n    if (state.holding) return true;\n",
       "check": "presentation",
       "expect": "does not freeze the jump phase"
+    },
+    {
+      "id": "hb-unknown-key-accepted",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts an unknown key",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "        if (!keys.contains(key)) throw std::runtime_error(what + \" has an unknown key '\" + key + \"'\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-missing-key-accepted",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts a missing key",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "        if (!object.contains(key)) throw std::runtime_error(what + \" lacks '\" + key + \"'\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-version-unchecked",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts any version",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "        if (config.at(\"version\") != 1) throw std::runtime_error(\"hitbox version must be 1\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-capsule-one-bone",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts a capsule from a bone to itself",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "                if (shape.node == shape.nodeTo) throw std::runtime_error(\"a capsule needs two bones\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-radius-unbounded",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts any finite radius",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "    if (!std::isfinite(radius) || radius < 0.01F || radius > 0.5F)",
+      "replace": "    if (!std::isfinite(radius))",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-parts-incomplete",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts a hitbox without every part",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "        if (parts.size() != 3) throw std::runtime_error(\"the hitbox needs head, body and leg shapes\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-offset-short",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts an offset of two numbers",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "                if (!offset.is_array() || offset.size() != 3) throw std::runtime_error(\"offset needs three numbers\");",
+      "replace": "                if (!offset.is_array() || offset.size() < 2) throw std::runtime_error(\"offset needs three numbers\");",
+      "check": "presentation",
+      "expect": "refuses every malformed contract|sit on their bones"
+    },
+    {
+      "id": "hb-thigh-on-spine",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "A thigh capsule starts at the spine (H2)",
+      "file": "assets/object_fps_pvp/players/hitbox.json",
+      "find": "{\"part\": \"leg\", \"kind\": \"capsule\", \"from\": \"thigh_l\", \"to\": \"calf_l\", \"radius\": 0.15}",
+      "replace": "{\"part\": \"leg\", \"kind\": \"capsule\", \"from\": \"spine_02\", \"to\": \"calf_l\", \"radius\": 0.15}",
+      "check": "presentation",
+      "expect": "sit on their bones"
+    },
+    {
+      "id": "hb-leg-up-the-body",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "A leg capsule runs up to the chest (H2)",
+      "file": "assets/object_fps_pvp/players/hitbox.json",
+      "find": "{\"part\": \"leg\", \"kind\": \"capsule\", \"from\": \"thigh_r\", \"to\": \"calf_r\", \"radius\": 0.15}",
+      "replace": "{\"part\": \"leg\", \"kind\": \"capsule\", \"from\": \"thigh_r\", \"to\": \"spine_03\", \"radius\": 0.15}",
+      "check": "presentation",
+      "expect": "sit on their bones"
+    },
+    {
+      "id": "hb-head-on-neck",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The head sphere is carried by the neck (H2)",
+      "file": "assets/object_fps_pvp/players/hitbox.json",
+      "find": "\"bone\": \"Head\"",
+      "replace": "\"bone\": \"neck_01\"",
+      "check": "presentation",
+      "expect": "sit on their bones"
+    },
+    {
+      "id": "hb-leg-crossed",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "A left thigh capsule ends at the right knee",
+      "file": "assets/object_fps_pvp/players/hitbox.json",
+      "find": "\"from\": \"thigh_l\", \"to\": \"calf_l\"",
+      "replace": "\"from\": \"thigh_l\", \"to\": \"calf_r\"",
+      "check": "presentation",
+      "expect": "loads the product shapes"
+    },
+    {
+      "id": "hb-thigh-missing",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The left thigh capsule is a second calf",
+      "file": "assets/object_fps_pvp/players/hitbox.json",
+      "find": "\"from\": \"thigh_l\", \"to\": \"calf_l\"",
+      "replace": "\"from\": \"calf_l\", \"to\": \"foot_l\"",
+      "check": "presentation",
+      "expect": "loads the product shapes"
+    },
+    {
+      "id": "hb-knee-skipped",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The left thigh capsule skips the knee",
+      "file": "assets/object_fps_pvp/players/hitbox.json",
+      "find": "\"from\": \"thigh_l\", \"to\": \"calf_l\"",
+      "replace": "\"from\": \"thigh_l\", \"to\": \"foot_l\"",
+      "check": "presentation",
+      "expect": "loads the product shapes"
+    },
+    {
+      "id": "hb-thigh-swapped",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The right thigh capsule starts at the left thigh",
+      "file": "assets/object_fps_pvp/players/hitbox.json",
+      "find": "\"from\": \"thigh_r\", \"to\": \"calf_r\"",
+      "replace": "\"from\": \"thigh_l\", \"to\": \"calf_r\"",
+      "check": "presentation",
+      "expect": "loads the product shapes"
     }
   ]
 }

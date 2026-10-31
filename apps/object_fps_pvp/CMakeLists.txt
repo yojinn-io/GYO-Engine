@@ -46,7 +46,7 @@ gyo_app_add_library(client_simulation OUT_TARGET simulation
 # (v8-product-anim-rules-source-texture-free).
 gyo_app_add_library(player_content OUT_TARGET content
         SOURCES src/App/CharacterPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
-        src/Pvp/PlayerAnimationContent.cpp
+        src/Pvp/PlayerAnimationContent.cpp src/Pvp/PlayerHitbox.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Render GYO::Model
     PRIVATE_LIBRARIES GYO::AssetUfbx nlohmann_json::nlohmann_json)
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp

@@ -85,6 +85,24 @@ v8-product-hitbox-data
 - 在站姿的參考幀上，每個形狀的頂端（y＋半徑）≤ 1.8 m；頭球在頸部以上；腿的形狀在骨盆以下。
 - 這是用 survey 的量法核對形狀放對了骨頭，不是判定的門檻。
 
+### H2 的修正（`v8-product-hitbox-data-h2-legs`，2026-11-01 使用者選 (a)；修正後的 1～5 經使用者核准：「核准並 commit」）
+
+D1 實作後，H2 的「腿的形狀在骨盆以下」不成立：大腿膠囊的上端（`thigh_l`／`thigh_r` 關節 y＝0.9108／0.9107 m）比 `pelvis` 關節（0.8962 m）高 1.5 cm。原因是這條判定把 `pelvis` 關節的原點當成骨盆的高度，而髖關節本來就在那附近。
+
+新判定，照 AGENTS §14.4 揭露 1～5：
+
+1. **守的性質**：腿的形狀綁在腿上，從骨盆往下長，沒有綁到軀幹或手臂上。H2 只守住「沒有綁到軀幹或手臂」與「從骨盆往下」；「綁在正確的那一段腿上」由 H1 的骨頭名稱檢查守住（見第 3、4 點）。
+2. **寬鬆面**：大腿膠囊的上端，不再要求低於 `pelvis` 關節；改成要求它離 `pelvis` 關節不超過骨盆膠囊的半徑（0.179 m）。這一點最多可以高出 `pelvis` 關節 0.179 m。
+3. **收緊面**：
+   - 以 `thigh_` 命名的骨頭為起點時，必須在 `pelvis` 關節附近，舊判定沒有這個要求。不過這只在骨架或姿勢改變、讓大腿關節遠離骨盆時才會抓到；綁錯骨頭（例如起點換成 `calf_l`）會走「非大腿」的分支，不會被這一條抓到（Sonnet 審查）。
+   - 膝與腳（各段的下端、小腿的上端）照舊要低於 `pelvis` 關節。
+   - 審查之後 H1 另外加上：腿的四段骨頭必須依序剛好是 `thigh_l→calf_l`、`calf_l→foot_l`、`thigh_r→calf_r`、`calf_r→foot_r`，骨盆是 `pelvis→spine_01`。這是收緊。
+4. **由誰守住**：
+   - 腿綁到軀幹或手臂：由新判定抓到。突變 `hb-thigh-on-spine`（大腿從 `spine_02` 開始）、`hb-leg-up-the-body`（腿往上接到 `spine_03`）都 killed。
+   - 腿綁錯成另一段腿（左右接反、少了大腿、跳過膝蓋、兩條大腿都從左邊開始）：新判定抓不到，改由 H1 的骨頭名稱檢查抓到，突變 `hb-leg-crossed`、`hb-thigh-missing`、`hb-knee-skipped`、`hb-thigh-swapped` 守住。
+   - 頭的位置由「頭球中心 1.554 m（survey）」守住，突變 `hb-head-on-neck` killed。
+5. **根據**：實測的關節高度（上面）；hitbox-plan R4 的形狀定義；hitbox-survey 的量法。
+
 ## D2：共用的姿勢組合（決定 `v8-product-hitbox-pose-sharing`）
 
 - `ResolvePlayerActions`、`SamplePlayerPresentationPose` 的 CPU 部分（不含 GPU 的上傳與提交），連同 `PlayerPresentationDefinition` 的載入，搬到 `player_content`。Client 與 Match 呼叫同一個函式。

@@ -34,6 +34,7 @@ v8-plan
 │   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼（完成）」
 │   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告（完成）」
 │   ├── hitbox-line                「PR 線：部位判定（hitbox-plan.md 第 2 版，以 Valorant 為基底，待核准）」
+│   ├── 素材結構標準化              「[asset-layout.md](asset-layout.md)（asset-layout 線，PR #125；合併前此連結在本分支不存在）」
 │   │   ├── v8-product-anim-bottlenecks       「high｜Opus 5.5｜Match 端取樣耗時、載入、四平台決定性」（完成：B1、B2 通過，B3 平台間不一致）
 │   │   ├── pv9-hitbox-declare                「ultracode（先問）｜案 Opus 5.5、對抗 Sonnet 5.5｜protocol-v9 草稿、動畫狀態欄位、形狀契約」
 │   │   ├── pv9-rename                        「low｜Sonnet 5.5｜proto、Go 套件、CMake target 改名為 v9」
@@ -144,6 +145,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-anim-authority-match`（A2） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_authority_match.zh-Hant.md) |
 | `v8-product-anim-authority-wire`（A3） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_authority_wire.zh-Hant.md) |
 | `v8-product-anim-authority-client`（A4） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_authority_client.zh-Hant.md) |
+| `v8-product-hitbox-data-shapes`（D1） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_data_shapes.zh-Hant.md) |
 
 ---
 
