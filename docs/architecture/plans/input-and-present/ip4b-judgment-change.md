@@ -160,7 +160,7 @@ m22 只由宣告版本來就有的 future 測試殺掉：過去的事件換算�
 
 **紀錄位置**：
 
-- 本會話的 scratchpad：`ip4b-measure.py`、`ip4b-measure.log`、`mutants-ip4b.log`；
+- 本會話的 scratchpad：`ip4b-measure.py`、`ip4b-measure.log`、`mutants-ip4b.log`；（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
 - 核對者的紀錄：`verify-ip4b/`。
 
 **另外回報（不屬於本判定）**：`platform-sdl.md` DI 3 的守衛清單原本只列 pump 路徑（m1～m4、m-zero）。補上 watch 路徑屬於 Design Invariants 節的變更，已與本判定一起核准（D38）。

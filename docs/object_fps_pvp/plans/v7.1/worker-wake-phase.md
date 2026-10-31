@@ -89,7 +89,7 @@ v7.1 留下的兩個未量的問題（HANDOFF「範圍的限界」：「D226 的
 - 意義：Hello 期限前 2 ms 的那一輪（`Arm()` 的 `CoarseWakeLead`）會送出已可送的 action，而 Hello 要約 2 ms 後才送出。D226 的時間線只印到 action 為止，所以這種喚醒在 mock 看來是「沒有封包的喚醒」。這是產品的設計（v7 第 08 批 `730984ec` 起：asio 計時器提前 2 ms 喚醒，最後一段用 Waiter，避開 macOS 的計時器合併），不是缺陷。D226 的那 2 次歸到這個機制是推論：R-M 沒有重現，但 D226 的 action 時刻（0.27、1.06 ms）與 D226 的 Hello 分布（SubmitShot 前後約 3 ms）都和它相容。
 - D227 的修正（Hello 後 100 ms 才 SubmitShot）離前 2 ms 那一輪（Hello 後約 248 ms）約 148 ms，已經避開。
 
-證據：本機 scratchpad 的 `m/`（git 忽略）：`variants.py`（5 個執行檔的建法）、`run.py`、`bin/`、`m1/`、`m2/`（每次的完整輸出與 `results.txt`）、`analyze2_v1.py`、`analyze2.py`。
+證據：本機 scratchpad 的 `m/`（git 忽略）：`variants.py`（5 個執行檔的建法）、`run.py`、`bin/`、`m1/`、`m2/`（每次的完整輸出與 `results.txt`）、`analyze2_v1.py`、`analyze2.py`。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
 
 ## 決定（D244）與 ACK 檢查的時機修正：事前宣告（2026-10-29 核准）
 
@@ -134,7 +134,7 @@ v7.1 留下的兩個未量的問題（HANDOFF「範圍的限界」：「D226 的
 - 3 次失敗的位置都在 `CheckActions` 之前（`RunOutage`、60 FPS 發佈迴圈）。突變（`v7-08-drain-no-wake`）拿掉的那一行只在 action 的 ACK 前進時執行，第一次是在 `CheckActions` 裡，所以推論這 3 次和突變無關；但只有 FM 出現（FO、FS 各 10 次 0 次），樣本少，不能排除。
 - 今天的其他執行中，`CheckActions` 之前的失敗：量測 1 的 O 第 1 次（「worker emitted a resend catch-up burst」）。三種失敗合計 130 次中 4 次。
 - load average（1 分鐘）：1.14～2.85。
-- 證據：本機 scratchpad 的 `m/`（git 忽略）：`bin2/`（FO、FM、FS）、`m3/`（每次的完整輸出與 `results.txt`）、`worker47.load`、`worker47.log`；crash report 在 `~/Library/Logs/DiagnosticReports/worker_FM-2026-10-29-202503.ips`。
+- 證據：本機 scratchpad 的 `m/`（git 忽略）：`bin2/`（FO、FM、FS）、`m3/`（每次的完整輸出與 `results.txt`）、`worker47.load`、`worker47.log`；crash report 在 `~/Library/Logs/DiagnosticReports/worker_FM-2026-10-29-202503.ips`。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
 
 ## 決定（D245）與重新確認：事前宣告（2026-10-29 核准）
 
@@ -202,7 +202,7 @@ v7.1 留下的兩個未量的問題（HANDOFF「範圍的限界」：「D226 的
      - 沒有 wrong_failure、survived、stale 或建置失敗，所以沒有重跑。
      - 22:26:42～22:58:31 JST，約 32 分鐘。開始時 load average 1.89。
 - D244 的三種失敗（`SendInput` 的 assert、中斷行的 `gap_ms`、resend catch-up burst）這次都沒有再出現。依宣告只記錄，寫進 HANDOFF 的未結事項，不據此推論它們消失了。
-- 證據：本機 scratchpad 的 `m/`（git 忽略）：
+- 證據：本機 scratchpad 的 `m/`（git 忽略；2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）：
   - 執行檔：`bin3/worker_FM`
   - 第 1 項：`m5/`（每次的完整輸出與 `results.txt`）、執行腳本 `run_d245.py`
   - 第 4 項：`m4/`（`run.log`、`report.json`、`load.txt`）、執行腳本 `run_d245_item4.py`
