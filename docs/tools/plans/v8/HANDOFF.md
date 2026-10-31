@@ -11,14 +11,14 @@
 |---|---|
 | ui-widgets-line | PR 線：文字輸入框元件、輸入法組字、ui_editor |
 | anim-events-line | PR 線：動畫事件從無到手工（`gyo.anim_events`），再到工具（模型檢視） |
-| framework-rework-line | PR #123 整改的工具側：T1 `v8-tool-ui-editor-path-dialog-adopt`（等 A1）、T2 `v8-tool-user-files-adopt`（等 A2）、T3 `v8-tool-framework-shell-adopt`（等 A3） |
+| framework-rework-line | PR #123 整改的工具側，全部等架構的 PR A 合併：T1 `v8-tool-ui-editor-path-dialog-adopt` 與 T3a `v8-tool-ui-editor-shell-adopt`（ui_editor，一起做）、T2 `v8-tool-user-files-adopt`、T3b `v8-tool-audio-editor-catalog-adopt`（audio_editor） |
 
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`（你會給方案）。
 - **anim-events-line（另一個會話）**：`v8-tool-assets-anim-events` 完成，[PR #119](https://github.com/yojinn-io/GYO-Engine/pull/119) 已合併進 master（`45019dff`）。契約在 [animation-events.md](../../../architecture/animation-events.md)。下一批 `v8-tool-model-viewer`。
-- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）。audio-tool-line：`-convert`（#118）、`-framework-shell`（#123）已合併。PR #123 的整改依 2026-11-01 定案分工（`v8-tool-framework-rework-split`）：framework 與 Engine 的部分是架構整改任務卡的 A1～A4；工具側 T1～T3（framework-rework-line）各等對應的 A 批合併，架構卡會在合併後通知。`v8-tool-audio-editor-edit` 排在 T1～T3 之後：事前宣告已核准，在本機分支 `claude/v8-tool-audio-editor-edit`（切自音效線 `1f271a32` 再合入 master `97b0461d`，只有宣告的提交 `79af7fae`，未推送）；改動前的回歸基準在主 checkout 的 `build/evidence/tool-v8-audio-editor-edit/baseline/`。工程檔用 JSON 要不要把 nlohmann 加回守衛，在 T3 一起決定。
+- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）。audio-tool-line：`-convert`（#118）、`-framework-shell`（#123）已合併。PR #123 的整改照架構整改計畫（`docs/architecture/plans/framework-rework/`，2026-11-01 核准；本線的重排是 `v8-tool-framework-rework-replan`）：工具側 T1、T3a、T2、T3b（framework-rework-line）都等架構的 PR A 合併，架構會話會在每批合併後通知（合併 commit、改了的公開介面、工具側要改的地方）。`v8-tool-audio-editor-edit` 排在 T3b 之後：事前宣告已核准，在本機分支 `claude/v8-tool-audio-editor-edit`（切自音效線 `1f271a32` 再合入 master `97b0461d`，只有宣告的提交 `79af7fae`，未推送）；改動前的回歸基準在主 checkout 的 `build/evidence/tool-v8-audio-editor-edit/baseline/`。工程檔用 JSON 要不要把 nlohmann 加回守衛，在 T3b 一起決定。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
 - **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth`、`v8-engine-input-composition` 完成（Windows 的 L3 都未做）；Ui 的 Design Invariants 已改（`v8-tool-ui-invariants-text`）；`v8-tool-ui-text-field` 完成（gyo.ui v2）。`v8-product-lobby-text-field` 完成，Windows L3 全部通過（組字顯示、候選窗位置、全形轉半形、Enter／Esc）。ui_editor 的 `v8-tool-ui-editor-text-field` 已合併（[PR #114](https://github.com/yojinn-io/GYO-Engine/pull/114)），使用者在 macOS 的 GUI 上試過。
@@ -138,8 +138,11 @@
 - 2026-10-31：PR #123 的 L1（`18f5c726`）三平台通過，CI gate 通過；Windows 上 `gyo_framework.*` 三個測試實際執行並通過（113／113）。等你決定合併。
 - 2026-11-01：asset-layout 線告知（會話訊息）：PvP 的素材落點由 PvP 自己的守衛在 CI 檢查（標準 `docs/object_fps_pvp/assets.zh-Hant.md`，檢查 `tests/object_fps_pvp/test_asset_catalog.py`）；工具把音效寫進 PvP 時要照標準路徑，`tests/object_fps_pvp/asset_sources.json` 要有來源記錄。四個音效的原檔在 commit `30b36bdb` 的 `assets/object_fps_pvp/audio/source/`，本線先前「找不到」的說法是錯的，已在 assets.md 更正（dev_log 是當時紀錄，不改）。assets.md 的 `players/character.json` 例子會在 player-folder 批之後過時，屆時再改。
 - 2026-11-01：架構會話轉來整改分工（取代它 10-31 的所有訊息）；你在 `-edit` 的選擇題上中斷，之後說「開始吧」→ 把 T1～T3 與依賴登進 assets.md（樹、表、決定紀錄 `v8-tool-framework-rework-split`），更正原檔的說法，並整理下方「A3 用：ui_editor 對外殼的需求」。`-edit` 暫停。
+- 2026-11-01：架構會話通知整改計畫已經你核准（分支 `origin/claude/framework-rework`，`f8878799`，尚未併 master）→ 照它重排工具側（`v8-tool-framework-rework-replan`）：T3 拆成 T3a、T3b；T1～T3b 都等 PR A，T1 和 T3a 一起做；T2 的 audio_editor 是新依賴，要放寬守衛；catalog 改 (a)＋b-lite。
 
 ## A3 用：ui_editor 對外殼的需求（2026-11-01，讀 `framework/src/ImGuiSdlHost.cpp` 與 `PvpApplication::Run` 整理）
+
+A3 現在是架構計畫的 `v8-framework-shell`，草圖在它的 PLAN §2.4（`ImGuiShellContext` 交出 `SdlPlatform&` 與 `SdlRenderer&`，不寫 `imgui.ini`，不加 live frame）。下列保留給 T3a 的事前宣告對照。
 
 架構整改卡畫外殼介面草圖時，ui_editor 需要這些；括號是現在的出處。
 

@@ -73,10 +73,11 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-framework-shell         「medium～high｜Opus 5.5｜工具共用層 tools/framework/：從 ui_editor 搬出外殼四塊，行為不變」（PR #123，已合併）
 │   └── v8-tool-audio-editor-edit       「high｜Opus 5.5｜GUI：播放、波形、資訊、裁剪、增益、工程檔」（排在 framework-rework-line 之後）
 │
-├── framework-rework-line               「PR #123 的整改，工具側（2026-11-01 定案）：每批等對應的架構批合併」
-│   ├── v8-tool-ui-editor-path-dialog-adopt「high｜Opus 5.5｜T1：ui_editor 改呼叫 Engine 的選擇窗（等 A1）」
-│   ├── v8-tool-user-files-adopt          「medium～high｜Opus 5.5｜T2：兩個工具改用 engine/io 的使用者檔案 API（等 A2）」
-│   └── v8-tool-framework-shell-adopt     「high｜Opus 5.5｜T3：ui_editor 接外殼介面與 ImGui 綁定；audio_editor 改用 catalog 結構 API＋JSON 綁定（等 A3）」
+├── framework-rework-line               「PR #123 的整改，工具側（2026-11-01 依架構整改計畫重排）：全部等架構的 PR A 合併」
+│   ├── v8-tool-ui-editor-path-dialog-adopt「high｜Opus 5.5｜T1：ui_editor 改呼叫 Engine 的選擇窗（和 T3a 一起做）」
+│   ├── v8-tool-ui-editor-shell-adopt     「high｜Opus 5.5｜T3a：ui_editor 接新外殼與 ImGui 綁定」
+│   ├── v8-tool-user-files-adopt          「medium～high｜Opus 5.5｜T2：兩個工具改用 engine/io」
+│   └── v8-tool-audio-editor-catalog-adopt「high｜Opus 5.5｜T3b：audio_editor 改用 catalog 結構 API＋JSON 綁定、無視窗外殼」
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
@@ -90,10 +91,11 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 |---|---|---|---|
 | `v8-tool-audio-editor-convert` | high（局部 xhigh）｜Opus 5.5 | 6～10 h | 工具登錄（`tools.csv`、`project.json`）、核心程式庫與 CLI；照上方事前宣告通過；catalog 條目正確；突變檢查 |
 | `v8-tool-framework-shell` | medium～high｜Opus 5.5 | 3～5 h | `tools/framework/` 有 ImGui＋SDL 宿主、系統選擇窗、檔案存取、唯讀 catalog 掛載、catalog 寫入（從音效工具搬入）；ui_editor 改用它、測試全過；Design Invariants＋守衛；`framework` 加進保留名 |
-| `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過。排在 T1～T3 之後；事前宣告已核准（上方），分支 `claude/v8-tool-audio-editor-edit` 只有宣告的提交（本機） |
-| `v8-tool-ui-editor-path-dialog-adopt`（T1） | high｜Opus 5.5 | 2～3 h | 等 A1（`v8-engine-platform-path-dialog`）。ui_editor 改呼叫 Engine 平台層的選擇窗；用途對照（開檔、匯出、選資產根目錄、選 catalog → 請求；tag → 用途）與收件匣留在 ui_editor。守衛連回 `GYO::PlatformSDL`（放寬，§14.4 出示 1～5 並經你核准）；GUI 由你試過 |
-| `v8-tool-user-files-adopt`（T2） | medium～high｜Opus 5.5 | 1～2 h | 等 A2（`v8-engine-io-user-files`）。ui_editor、audio_editor 改用 `engine/io` 的使用者檔案 API；兩個守衛的變更照 §14.4；兩個工具的測試照舊通過 |
-| `v8-tool-framework-shell-adopt`（T3） | high｜Opus 5.5 | 3～5 h | 等 A3（`v8-framework-shell`）。ui_editor 接新的外殼介面與 ImGui 綁定 target（取代 `GYO::ToolFrameworkGui`；資產預覽仍經 `*Native` 取 renderer，Engine 的貼圖 API 另案）；audio_editor 改用 catalog 的結構 API＋JSON 綁定，CLI 的 `convert_taken_path` 結束碼 4 不變；若工程檔自己連 nlohmann，守衛變更照 §14.4 |
+| `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過。排在 T3b 之後（T1～T3b 都合併）；事前宣告已核准（上方），分支 `claude/v8-tool-audio-editor-edit` 只有宣告的提交（本機） |
+| `v8-tool-ui-editor-path-dialog-adopt`（T1） | high｜Opus 5.5 | 和 T3a 合計 5～7 h | 等 PR A 合併（含 `v8-engine-platform-path-dialog`）；和 T3a 一起做，因為舊宿主交不出 `SdlPlatform&`（架構計畫 D-4）。`SdlPathDialogs` 改收 `SdlPlatform&`，只留用途↔tag 對照與每幀套用；`PathDialog.hpp` 不再 include framework；CMake 具名 `GYO::PlatformSDL`；ui_toolchain.md Design Invariant 1 改寫（要你同意）。`pathDialogOpen_`（`EditorApp.cpp`）加「答案不來」時的恢復規則：Engine 新的 Design Invariant 10 只保證最多一個答案。守衛加 `GYO::PlatformSDL`（放寬，§14.4 出示 1～5 並經你核准）。L3 實機（Windows 優先）：選檔、取消、非 ASCII 路徑、對話窗開著時關視窗、答案不來。事前宣告帶入架構批的範圍限界：真實 OS 對話窗的回呼執行緒、Linux portal 的 pump、平台或父視窗銷毀時的行為，CI 都量不到 |
+| `v8-tool-ui-editor-shell-adopt`（T3a） | high｜Opus 5.5 | （見 T1） | 等 PR A 合併（含 `v8-framework-shell`）。GUI 用 `RunImGuiShell`，cli 用 `RunHeadlessShell`（命令列錯誤印 help、回 2）；資產預覽用 `NativeRenderer(context.renderer)`，ui_editor 自己連 `GYO::RenderBackendSDLNative`（platform-sdl Replacement Criteria 2 的新例外，Engine 的貼圖 API 另案）。守衛加 `GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative`，拿掉 `GYO::ToolFrameworkGui`（§14.4）；突變 `ui-guard-native-target` 改寫。GUI 由你試過 |
+| `v8-tool-user-files-adopt`（T2） | medium～high｜Opus 5.5 | 2～3 h | 等 PR A 合併（含 `v8-engine-io-user-files`）。ui_editor 的 `DocumentSession` 改呼叫 engine/io；audio_editor 的讀寫改用 `ReadAllBytes` 與 `WriteFileAtomically`（暫存檔名會變）。`ProbeFileStamp` 與 `ReadAllBytes` 都明確傳 `maxBytes`（預設 64 MB）。`AbsolutePath` 留在 framework 核心（架構計畫 D-2），ui_editor 繼續用那一份。audio_editor 現在完全沒用 `FileService`，改用 engine/io 是新依賴：CMake 具名 `GYO::Engine`，守衛加 `engine/io/` 與 `GYO::Engine`（放寬，§14.4）；ui_editor 的守衛預期不變，開工前確認。兩個工具的測試照舊通過 |
+| `v8-tool-audio-editor-catalog-adopt`（T3b） | high｜Opus 5.5 | 2～3 h | 等 PR A 合併（含 `v8-framework-catalog-structure` 與 `-extra-fields`）。CMake 具名 `GYO::ToolFrameworkJson`；`RegisterAsset` 的參數改 Engine 的 `RawCatalogEntry`，登錄政策用預設值；CLI 的 `convert_taken_path` 仍回 4。Main 改 `RunHeadlessShell`。守衛加 `GYO::ToolFrameworkJson`（§14.4），突變 `ae-guard-json-target` 改寫。audio_editor Design Invariant 3 的「unique ids」改寫成「catalog 內唯一；跨 catalog 與 shader 重疊在載入時由 ContentManifest 判定」（要你同意）。`-edit` 的工程檔用 JSON 要不要把 nlohmann 加回守衛，在這批一起決定 |
 | `v8-tool-assets-anim-events` | high｜Opus 5.5 | 5～8 h | `gyo.anim_events` 的契約與 Design Invariants（Engine 多一個格式，Architecture Delta）、PvP 把事件名稱對到音效、Runtime 排程、移除過渡規則；使用者實聽 |
 | `v8-tool-model-viewer` | high｜Opus 5.5 | 12～20 h | 模型資訊、骨骼動畫預覽、事件時刻的編輯 |
 
@@ -117,4 +119,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-framework-principle` | （2026-10-31）Engine 保持純粹（不放工具或整合用的功能）；整合工具的部分由 framework 提供。catalog 寫入屬於整合：`-convert` 先寫在音效工具裡的單獨檔案，`v8-tool-framework-shell` 時搬進 framework | 「Engine保持純粹，framework則提供整合工具。」 |
 | `v8-tool-framework-top-level` | （2026-10-31）framework 是遊戲與工具共用的同一層，放在頂層 `framework/`（原本是 `tools/framework/`）。依賴：遊戲或工具 → framework → Engine。現在只有工具的部分；遊戲的部分照 [v7 README](../../../object_fps_pvp/plans/v7/README.md) 的啟動條件（第二個遊戲以相同方式組合 Engine）再抽出。起因：架構會話指出 owner 名 `framework` 和 v7 README 定義的 framework 層撞名 | 「這個是遊戲和工具共用的。」；選項「同一層，現在就搬到頂層」 |
 | `v8-tool-framework-rework-split` | （2026-11-01）PR #123 的整改分工：framework 與下沉到 Engine 的部分由架構整改任務卡做（A1 `v8-engine-platform-path-dialog`、A2 `v8-engine-io-user-files`、A3 `v8-framework-shell`、A4 `v8-framework-invariants`）；工具側 T1～T3 由工具線做，各等對應的 A 批合併；先處理已知問題再做功能，`-edit` 排在 T1～T3 之後。catalog 規則的單一來源預設 (a)：規則留在 framework 核心，用 `tests/common/fixtures/asset_contract/cases.json` 對齊，不動 Engine（工具線沒有異議） | 經架構會話轉述：「彈窗的 OS 那一半是視窗系統的能力，和剪貼簿同級，屬 Engine；流程那一半是工具的，留在工具。」「framework在GYO中就是一個通用建置，他可以處理UI的東西，但不是直接嵌入，而是抽象出來。」「framework 可以遊戲和tool的公用層…遊戲就是一個有娛樂效果的工具…只不過方向不同。」；你：「開始吧」（登錄 T1～T3） |
+| `v8-tool-framework-rework-replan` | （2026-11-01）架構整改計畫核准後的工具側重排，取代 `v8-tool-framework-rework-split` 的批次與依賴：架構側改成 7 批（`v8-framework-guard-ratchet`、`v8-engine-platform-path-dialog`、`v8-engine-io-user-files`、`v8-framework-shell`、`v8-framework-catalog-structure`、`v8-framework-catalog-extra-fields` 在 PR A；刪舊件的 `v8-framework-invariants` 在 PR B）。工具側 T3 拆成 T3a（ui_editor）與 T3b（audio_editor），T1～T3b 都等 PR A 合併，T1 和 T3a 一起做；PR A 不動舊件，合併前工具不會壞。PR B 等 T1～T3b 都合併。catalog 規則改 (a)＋b-lite（架構計畫 D-1：Engine 公開 `IsRelativeContentPath` 給 framework 呼叫），取代 `-split` 的 (a)。工具側預計一條 PR。計畫在 `docs/architecture/plans/framework-rework/`（README 決策 D-1～D-9、PLAN 第 2 節各批末尾的「工具側」） | 經架構會話轉述（不是原話）：使用者 2026-11-01 核准該計畫的 PLAN 第 1 版與 D-1～D-9，全部採建議 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
