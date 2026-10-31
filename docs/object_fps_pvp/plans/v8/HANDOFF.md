@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：hitbox-line。`v8-product-hitbox-survey` **停在決策點**：Replacement Criteria 的門檻 (1)（四肢最大偏差 > 該段半徑 2 倍）成立，58 個組合；門檻 (2)（輪廓覆蓋率 < 70%）未成立（0.96）。照 `v8-product-hitbox-replacement-thresholds` 交使用者在 A′ 與 A 之間選（[dev_log](../../../dev_logs/2026_10_31_pvp_v8_hitbox_survey.zh-Hant.md)）。B-flat 的後續批次未開始。
+- **進行中**：hitbox-line。`v8-product-hitbox-survey` 第 2 輪（三部位）**停在決策點**：門檻 (1)（頭球中心的漂移 > 頭球半徑 0.184 m）成立，最大 0.519 m（落地）；門檻 (2)（腿部包絡 / 掃過面積 > 1.5）未成立（站 1.19、蹲 1.40）。交使用者決定（[dev_log](../../../dev_logs/2026_10_31_pvp_v8_hitbox_survey.zh-Hant.md)）。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
@@ -135,6 +135,7 @@
 - 2026-10-31：同步 master `d8cca12a`（#111、#112、#113）。`v8-product-hitbox-plan` 開始：ultracode run `wf_c70a45ea-cdc`（偵察中途停下，加入使用者轉來的「其他遊戲怎麼處理 hitbox」參考後以 `wf_7b0fc672-291` 重跑）。
 - 2026-10-31：`v8-product-hitbox-plan` 的 ultracode 完成（`wf_7b0fc672-291`，7／7）：評分最小契約 25、決定性 23、還原 v2 14；基底 B-flat（固定姿勢的 11 段骨骼膠囊，Match 不讀模型）。對抗式檢查 must 3、should 9、note 4 全部接受並寫進 [hitbox-plan](hitbox-plan.md)。總估 68～105 h，超過原本的 1.5 倍，13 項等使用者決定。
 - 2026-10-31：`v8-product-hitbox-survey` 完成量測（約 2 h）。量法修正 1 次（手腳頂點排除，半徑變小、門檻只會變嚴）。門檻 (1) 成立，停下交使用者決定做法。
+- 2026-10-31：survey 第 2 輪（三部位）。頭的漂移門檻成立（落地 0.519、起跳 0.383、瞄準 0.29～0.32、跑步 0.252 m），腿部包絡未成立。停下交使用者決定。
 
 ## 未結事項
 

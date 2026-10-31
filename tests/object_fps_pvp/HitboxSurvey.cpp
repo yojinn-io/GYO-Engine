@@ -270,7 +270,147 @@ public:
                 {"cell_m", Cell}};
     }
 
+    // 5. Three parts (v8-product-hit-rules-three-parts, measured as declared in
+    // v8-product-hitbox-three-part-survey-method): the head sphere carried by the
+    // Head bone, the legs' moving envelope, and the body's idle and moving shapes.
+    nlohmann::json ThreeParts(const std::map<std::string, Shape>& standing,
+                              const std::map<std::string, Shape>& crouching) const {
+        const auto isMoving = [](const std::string& name) { return name == "walk" || name == "jog" || name == "crouch_move"; };
+        const auto isJump = [](const std::string& name) { return name.rfind("jump_", 0) == 0; };
+        const std::array<const char*, 4> legs{"thigh_l", "calf_l", "thigh_r", "calf_r"};
+        const std::array<const char*, 2> body{"torso", "pelvis"};
+        // The head centre in the Head bone's frame, per stance.
+        std::map<bool, Vec3> headLocal;
+        for (const bool crouched : {false, true}) {
+            const auto& center = (crouched ? crouching : standing).at("head").a;
+            const auto pose = Pose(Base(crouched), {});
+            const auto inverse = Engine::Math::Inverse(pose.body.globalTransforms.at(Node("Head")));
+            if (!inverse) throw std::runtime_error("Head transform is not invertible");
+            headLocal[crouched] = Engine::Math::TransformPoint(*inverse, Model(center));
+        }
+        struct Sample final { std::string name; bool crouched; std::map<std::string, std::pair<Vec3, Vec3>> segments; Vec3 head; };
+        std::vector<Sample> samples;
+        for (const auto& variant : Variants()) {
+            const auto pose = Pose(variant.state, variant.actions);
+            Sample sample{variant.name, variant.crouched, {}, {}};
+            for (const auto& region : Regions)
+                if (std::string(region.start) != region.end)
+                    sample.segments[region.id] = {Joint(pose, region.start), Joint(pose, region.end)};
+            sample.head = Body(Engine::Math::TransformPoint(pose.body.globalTransforms.at(Node("Head")), headLocal[variant.crouched]));
+            samples.push_back(std::move(sample));
+        }
+        nlohmann::json out = nlohmann::json::object();
+        // (a) Head drift per variant.
+        std::map<std::string, double> headDrift;
+        for (const auto& sample : samples) {
+            const auto& fixed = (sample.crouched ? crouching : standing).at("head").a;
+            auto& value = headDrift[sample.name];
+            value = std::max(value, Span(sample.head, fixed));
+        }
+        double headWorst{};
+        for (const auto& [name, value] : headDrift) { out["head_drift_m"][name] = value; headWorst = std::max(headWorst, value); }
+        out["head_radius_m"] = standing.at("head").radius;
+        out["head_drift_max_m"] = headWorst;
+        // (b) Legs: the moving envelope (an axis-aligned box in body coordinates)
+        // against the area the four leg segments actually sweep, frontal projection.
+        constexpr double Cell = 0.0025;
+        for (const bool crouched : {false, true}) {
+            const auto& fixed = crouched ? crouching : standing;
+            Vec3 low{1e9F, 1e9F, 1e9F}, high{-1e9F, -1e9F, -1e9F};
+            std::vector<const Sample*> moving;
+            for (const auto& sample : samples)
+                if (sample.crouched == crouched && isMoving(sample.name)) moving.push_back(&sample);
+            for (const auto* sample : moving)
+                for (const char* leg : legs) {
+                    const auto r = static_cast<float>(fixed.at(leg).radius);
+                    for (const auto& p : {sample->segments.at(leg).first, sample->segments.at(leg).second}) {
+                        low = {std::min(low.x, p.x - r), std::min(low.y, p.y - r), std::min(low.z, p.z - r)};
+                        high = {std::max(high.x, p.x + r), std::max(high.y, p.y + r), std::max(high.z, p.z + r)};
+                    }
+                }
+            std::size_t swept{};
+            for (double x = low.x; x <= high.x; x += Cell)
+                for (double y = low.y; y <= high.y; y += Cell) {
+                    bool in = false;
+                    for (const auto* sample : moving) {
+                        for (const char* leg : legs) {
+                            const auto& [a, b] = sample->segments.at(leg);
+                            const double r = fixed.at(leg).radius;
+                            const double dx = b.x - a.x, dy = b.y - a.y, length2 = dx * dx + dy * dy;
+                            double t = length2 > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / length2 : 0;
+                            t = std::clamp(t, 0.0, 1.0);
+                            const double px = a.x + dx * t - x, py = a.y + dy * t - y;
+                            if (px * px + py * py <= r * r) { in = true; break; }
+                        }
+                        if (in) break;
+                    }
+                    swept += in;
+                }
+            const double envelope = (high.x - low.x) * (high.y - low.y), sweptArea = swept * Cell * Cell;
+            const auto key = crouched ? "legs_crouched" : "legs_standing";
+            out[key] = {{"envelope_min", {low.x, low.y, low.z}}, {"envelope_max", {high.x, high.y, high.z}},
+                {"envelope_frontal_m2", envelope}, {"swept_frontal_m2", sweptArea},
+                {"envelope_over_swept", envelope / sweptArea}, {"moving_samples", moving.size()}};
+            if (!crouched) {
+                // Jumps: how many jump-sample leg endpoints fall outside the standing envelope.
+                std::size_t total{}, outside{};
+                for (const auto& sample : samples) {
+                    if (sample.crouched || !isJump(sample.name)) continue;
+                    for (const char* leg : legs)
+                        for (const auto& p : {sample.segments.at(leg).first, sample.segments.at(leg).second}) {
+                            ++total;
+                            outside += p.x < low.x || p.x > high.x || p.y < low.y || p.y > high.y || p.z < low.z || p.z > high.z;
+                        }
+                }
+                out["jump_leg_endpoints_outside_standing_envelope"] = {{"outside", outside}, {"total", total}};
+            }
+        }
+        // (c) Body: idle shapes (the fixed pose) and moving shapes (the mean of the
+        // moving samples' endpoints); the residual deviation, reported only.
+        for (const bool crouched : {false, true}) {
+            const auto& fixed = crouched ? crouching : standing;
+            std::map<std::string, std::pair<Vec3, Vec3>> mean;
+            std::size_t count{};
+            for (const auto& sample : samples) {
+                if (sample.crouched != crouched || !isMoving(sample.name)) continue;
+                ++count;
+                for (const char* part : body) {
+                    auto& [a, b] = mean[part];
+                    const auto& [sa, sb] = sample.segments.at(part);
+                    a = {a.x + sa.x, a.y + sa.y, a.z + sa.z};
+                    b = {b.x + sb.x, b.y + sb.y, b.z + sb.z};
+                }
+            }
+            for (auto& [part, ends] : mean) {
+                const auto n = static_cast<float>(count);
+                ends.first = {ends.first.x / n, ends.first.y / n, ends.first.z / n};
+                ends.second = {ends.second.x / n, ends.second.y / n, ends.second.z / n};
+                out[crouched ? "body_moving_crouched" : "body_moving_standing"][part] = {
+                    {"a", {ends.first.x, ends.first.y, ends.first.z}}, {"b", {ends.second.x, ends.second.y, ends.second.z}},
+                    {"radius_p95", fixed.at(part).radius}};
+            }
+            std::map<std::string, std::map<std::string, double>> residual;
+            for (const auto& sample : samples) {
+                if (sample.crouched != crouched) continue;
+                for (const char* part : body) {
+                    const auto reference = isMoving(sample.name) ? mean.at(part)
+                        : std::pair{fixed.at(part).a, fixed.at(part).b};
+                    const auto& [a, b] = sample.segments.at(part);
+                    auto& value = residual[sample.name][part];
+                    value = std::max({value, Span(a, reference.first), Span(b, reference.second)});
+                }
+            }
+            for (const auto& [name, parts] : residual)
+                for (const auto& [part, value] : parts) out["body_residual_m"][name][part] = value;
+        }
+        return out;
+    }
+
 private:
+    Vec3 Model(Vec3 body) const {
+        const auto s = definition_.scale;
+        return {body.x / s + definition_.anchor.x, body.y / s + definition_.anchor.y, body.z / s + definition_.anchor.z};
+    }
     int Count(const char* name) const {
         return static_cast<int>(std::count_if(model_.nodes.begin(), model_.nodes.end(),
             [&](const auto& node) { return node.name == name; }));
@@ -355,6 +495,7 @@ int main(int argc, char** argv) {
             {"standing", ShapesJson(standing)}, {"crouched", ShapesJson(crouching)},
             {"deviation_m", survey.Deviations(standing, crouching)},
             {"coverage_standing_frontal", survey.Coverage(standing)},
+            {"three_parts", survey.ThreeParts(standing, crouching)},
         };
         if (out.empty()) std::cout << report.dump(1) << '\n';
         else std::ofstream(out) << report.dump(1) << '\n';
