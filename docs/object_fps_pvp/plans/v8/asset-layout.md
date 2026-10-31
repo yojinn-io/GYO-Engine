@@ -1,6 +1,6 @@
 # PvP v8：素材結構標準化（asset-layout）
 
-更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，PR [#125](https://github.com/yojinn-io/GYO-Engine/pull/125) 已開；延後批以外全部完成（`v8-product-art-source-out` 在主 checkout 操作）；等 L1 通過後合併。**
+更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，PR [#125](https://github.com/yojinn-io/GYO-Engine/pull/125) 已開；延後批以外全部完成（`v8-product-art-source-out` 在主 checkout 操作）；PR #125 的 L1 通過，合併（使用者：「L1 過了就合併」）。剩：8 筆授權待使用者提供、延後批 `v8-product-asset-path-loaded-move`。**
 本文件是 asset-layout 線的計畫與記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。標準本身寫在 [PvP 素材標準](../../assets.zh-Hant.md)。
 
 ## 代號對照
@@ -92,6 +92,7 @@ asset-layout
 - 2026-11-01：v8 規劃會話照標準把 hitbox 放在 `characters/player/hitbox.json`（after-pv8 分支 `b6639c5b`，id `object_fps_pvp.player.hitbox`，以 `character_asset_id` 引用人物定義），該分支的 presentation_cpu、asset_catalog、mutation_tool 通過（它的回報）。
 - 2026-11-01：使用者決定在 #125 修那 2 個過時的突變 expect（「在 #125 一起修」）：pistol → weapon，重跑 2／2 killed。已通知 v8 規劃會話。
 - 2026-11-01：`v8-product-art-source-out` 完成（使用者選 `build/art-source`）：主 checkout 的 6 個未追蹤素材移到 `build/art-source/object_fps_pvp/`，SHA-256 前後相同，`git status` 乾淨。除了原定的 5 個交付檔，也移了 `Player_V20.fbx`：實測未追蹤的同路徑檔即使內容相同，git 也會拒絕更新。
+- 2026-11-01：PR #125 的 L1 在 `72334c70` 通過（run `41216411302`：linux-x64、macos-arm64、windows-x64，CI gate pass）；使用者：「L1 過了就合併」。之後的 docs-only 推送只更新本紀錄。
 
 ## dev_log
 
