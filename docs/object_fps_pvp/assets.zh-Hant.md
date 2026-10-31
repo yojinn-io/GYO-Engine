@@ -119,7 +119,9 @@ assets/object_fps_pvp/
   - `record`：這個事實記在哪裡（文件、commit、檔案本身的 metadata）。
 - pack 的授權（例如 Universal Animation Library、Universal Base Characters 為 CC0）記錄在 [3d-assets.md](../architecture/3d-assets.md)。這裡只指向它，不在兩處維護同一事實。
 - text 項目由作者在 repo 裡寫，來源就是 git 歷史，不用記。
-- 原始檔（DCC 原檔、交付包、原始錄音）不進 repo，放 repo 外的美術儲存：`<儲存位置>/object_fps_pvp/<對象>/<交付版本>/`。儲存位置在 `v8-product-art-source-out` 決定後寫在這裡。
+- 原始檔（DCC 原檔、交付包、原始錄音）不進 repo，放 repo 外的美術儲存：主 checkout 的 `build/art-source/object_fps_pvp/<對象>/<交付版本>/`（git 不追蹤，不上 GitHub）。對象的路徑和本資料夾裡的一致，例如 `weapons/nailer_v2/viewmodel/version02/`。
+  - 這裡的檔大多無法從 repo 重建：清建置輸出時只清 `build/target/`，不要整個清掉 `build/`。說明與清單在該資料夾的 `README.md`。
+  - 交付檔不要留在 `assets/object_fps_pvp/` 裡：未追蹤的檔會讓本機的 `object_fps_pvp.asset_catalog` 失敗；和要拉進來的檔同路徑時，即使內容相同，git 也會拒絕更新。
 
 ## 9. 例外
 

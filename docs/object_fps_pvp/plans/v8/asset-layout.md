@@ -1,6 +1,6 @@
 # PvP v8：素材結構標準化（asset-layout）
 
-更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，PR [#125](https://github.com/yojinn-io/GYO-Engine/pull/125) 已開；`v8-product-asset-player-folder`、`v8-engine-assets-common-retire`、`v8-product-asset-buns-fixture` 完成；剩 `v8-product-art-source-out`（存放位置待定）。**
+更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，PR [#125](https://github.com/yojinn-io/GYO-Engine/pull/125) 已開；延後批以外全部完成（`v8-product-art-source-out` 在主 checkout 操作）；等 L1 通過後合併。**
 本文件是 asset-layout 線的計畫與記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。標準本身寫在 [PvP 素材標準](../../assets.zh-Hant.md)。
 
 ## 代號對照
@@ -35,6 +35,7 @@
 | `asset-sfx-script-home` | 音效等生成腳本放 `apps/object_fps_pvp/<子目錄>/`，腳本裡不寫 AssetId。 |
 | `asset-layout-pr-line` | 從 master 切一條小線，盡量一個 PR；v8 各線動到素材前先同步 master。計畫登記在本文件；v8 README 的連結行由 v8 規劃會話在它的分支加。 |
 | `asset-untracked-intake`（調整） | 第三人稱 nailer 已由 PR #120 放進 `world/`，`v8-product-asset-nailer-world` 取消；4 個原始 WAV 已不在主 checkout。剩 5 個交付檔移到 repo 外（是移，不是刪）。位置待定：原本預設的 `~/gyo-art-source/` 在 home 底下，和「不在 home 放東西」的指示衝突，`v8-product-art-source-out` 前請使用者選。 |
+| `v8-product-art-source-location` | （art-source-out 前）repo 外美術儲存的位置：主 checkout 的 `build/art-source/`（git 不追蹤，附 README）。使用者回覆：「build/art-source」。 |
 | `v8-product-asset-invariants-approve` | （doc 批）核准 [素材標準](../../assets.zh-Hant.md) 的 Design Invariants DI-1～DI-6、Replacement Criteria，以及「例外只能減少」政策：新增例外要核准；刪除已解除的例外事先核准，事後在 dev_log 報告 AGENTS §14.4 的 1～5 項。使用者原話：「照草案核准」。 |
 
 ## 批次
@@ -57,7 +58,7 @@ asset-layout
 | `v8-product-asset-player-folder` | 1～1.5 h | hitbox 資料（hitbox 和模型放在一起） | CI L1；apps、tests、build 裡 `git grep 'players/'` 為 0（含 `mutations.json` 的突變 `11-limit-uncalibrated` 與 catalog 測試的假路徑）；after-pv8 合併後重跑它的 Match 測試 | 完成（after-pv8 合併後重跑） |
 | `v8-product-asset-buns-fixture` | 1.5～2.5 h（開工時重估） | 出貨內容只放產品用到的素材（AGENTS §7） | CI L1；catalog 不再有 buns 的 3 個 id；`PlayerPresentationTests` 用 fixture 通過 | 完成 |
 | `v8-engine-assets-common-retire` | 0.5 h | 沒有（使用者同意的清理） | CI 全量 | 完成（CI 全量待合併） |
-| `v8-product-art-source-out` | 0.25 h | 主 checkout 能跑 ctest | 主 checkout 的 `git status` 沒有未追蹤的素材 | 未開始（位置待定） |
+| `v8-product-art-source-out` | 0.25 h | 主 checkout 能跑 ctest | 主 checkout 的 `git status` 沒有未追蹤的素材 | 完成 |
 | `v8-product-asset-path-loaded-move` | 4～6 h | 地圖增加、voxel 地圖 | arena digest 搬移前後相同；驗收常數先宣告並經核准 | 延後 |
 
 - 順序：doc＋guard 先做（同一 PR），接著 player-folder、buns-fixture、common-retire，每做完一批就刪掉對應的例外（只締）。art-source-out 不進 PR，在主 checkout 操作。
@@ -90,6 +91,7 @@ asset-layout
 - 2026-11-01：`v8-product-asset-buns-fixture` 完成：buns 與頭髮貼圖搬到 `tests/object_fps_pvp/fixtures/hair_buns/`，測試以 `AppendFromFile` 附加 fixture 的 catalog；刪 4 筆例外（剩 5 筆）。重跑 presentation 的 12 個突變：10 killed、2 wrong_failure。後者是 PR #120 把測試名稱的 pistol 改成 weapon、突變的 `expect` 沒跟著改造成的，不是本批；修不修交使用者決定（後來決定在 #125 修，見下）。
 - 2026-11-01：v8 規劃會話照標準把 hitbox 放在 `characters/player/hitbox.json`（after-pv8 分支 `b6639c5b`，id `object_fps_pvp.player.hitbox`，以 `character_asset_id` 引用人物定義），該分支的 presentation_cpu、asset_catalog、mutation_tool 通過（它的回報）。
 - 2026-11-01：使用者決定在 #125 修那 2 個過時的突變 expect（「在 #125 一起修」）：pistol → weapon，重跑 2／2 killed。已通知 v8 規劃會話。
+- 2026-11-01：`v8-product-art-source-out` 完成（使用者選 `build/art-source`）：主 checkout 的 6 個未追蹤素材移到 `build/art-source/object_fps_pvp/`，SHA-256 前後相同，`git status` 乾淨。除了原定的 5 個交付檔，也移了 `Player_V20.fbx`：實測未追蹤的同路徑檔即使內容相同，git 也會拒絕更新。
 
 ## dev_log
 
@@ -98,3 +100,4 @@ asset-layout
 - [2026_10_31_pvp_v8_asset_player_folder](../../../dev_logs/2026_10_31_pvp_v8_asset_player_folder.zh-Hant.md)：`v8-product-asset-player-folder`
 - [2026_10_31_engine_v8_assets_common_retire](../../../dev_logs/2026_10_31_engine_v8_assets_common_retire.zh-Hant.md)：`v8-engine-assets-common-retire`
 - [2026_11_01_pvp_v8_asset_buns_fixture](../../../dev_logs/2026_11_01_pvp_v8_asset_buns_fixture.zh-Hant.md)：`v8-product-asset-buns-fixture`
+- [2026_11_01_pvp_v8_art_source_out](../../../dev_logs/2026_11_01_pvp_v8_art_source_out.zh-Hant.md)：`v8-product-art-source-out`
