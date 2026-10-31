@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：hitbox-line。[hitbox-plan](hitbox-plan.md) 第 2 版（以 Valorant 為基底：Match 跑動畫、動畫狀態由 Match 決定並上 snapshot、三部位綁骨頭）寫好，等使用者核准。第 1 版 B-flat 與三輪 survey 的門檻不再適用；survey 工具保留（半徑、Client 與 Match 的比對）。
+- **進行中**：hitbox-line。[hitbox-plan](hitbox-plan.md) 第 2 版（以 Valorant 為基底：Match 跑動畫、動畫狀態由 Match 決定並上 snapshot、三部位綁骨頭）已核准（`v8-product-hitbox-plan-v2-approve`）。第 2 節轉來的參考資料已逐項查證並標上 ✓／△／✗ 與來源（`813b7615`）：「Valorant 動畫刻意簡單」改成它實際的兩招（每 4 幀算一次＋內插、買裝備階段不算）；「CS 送動畫週期給 Client」查不到出處，`v8-product-anim-state-on-wire` 的理由改成我們自己的量測。下一批 `v8-product-anim-bottlenecks` 的[事前宣告](v8-product-anim-bottlenecks-declaration.md)寫好，等使用者核准。第 1 版 B-flat 與三輪 survey 的門檻不再適用；survey 工具保留（半徑、Client 與 Match 的比對）。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
