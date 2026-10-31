@@ -136,7 +136,7 @@ jobs:
         id: tests
         if: inputs.profile == 'release' || matrix.kind == 'toolchain'
         run: |
-          ctest --preset $env:PRESET --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/tests.log"
+          ctest --preset $env:PRESET --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run host shader reflection and rejection tests

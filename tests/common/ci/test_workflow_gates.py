@@ -650,9 +650,11 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         self.assertNotRegex(tests, r"(?m)^        if:")
         ctest = run_script(tests).splitlines()[0]
         # The ci-<os> test preset owns label selection; L1 adds no filter.
-        self.assertTrue(ctest.startswith("ctest --preset $env:PRESET --output-junit "), ctest)
+        # Tests run in parallel at the row's own level, the only option besides the report.
+        self.assertTrue(ctest.startswith("ctest --preset $env:PRESET --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL "
+                                         "--output-junit "), ctest)
         self.assertEqual(re.findall(r"(?<!\S)(-{1,2}[A-Za-z][A-Za-z-]*)", ctest.split(" 2>&1 ")[0]),
-                         ["--preset", "--output-junit"])
+                         ["--preset", "--parallel", "--output-junit"])
         for marker in ("id: configure", "id: build", "id: tests", "id: shaders", "id: core"):
             with self.subTest(step=marker):
                 assert_native_commands_propagate(self, run_script(step_with(l1, marker)))
