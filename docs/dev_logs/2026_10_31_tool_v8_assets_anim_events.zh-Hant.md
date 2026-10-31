@@ -2,7 +2,7 @@
 
 日期：2026-10-31。分支 `claude/nifty-lovelace-dd931a`（切自 `origin/claude/v8-tool-handoff-cleanup` `3182ac53`，因為規劃文件 `assets.md` 還沒進 master）。檔位 high，引擎 Opus 5.5。估 6～8 h。
 
-**狀態：** 程式、資料、測試與突變完成（macOS）。**使用者實聽未完成**：照任務的完成條件，聽過才算完成。
+**狀態：** 完成。程式、資料、測試與突變（macOS），使用者實聽通過（「It matches」）。
 
 相關文件：[契約 animation-events.md](../architecture/animation-events.md)、[資產工具鏈規劃](../tools/plans/v8/assets.md)、[音效的 dev_log](2026_10_30_pvp_v8_product_sfx.zh-Hant.md)（`ReloadSoundOffsetSeconds` 的由來）。
 
@@ -54,6 +54,12 @@
     - 3 個 wrong_failure：PvP 兩個是 doctest 把 `const char*` 的訊息印成指標（改成 `std::string`）；Engine 一個是 CMake 把錯誤訊息折行（期望改成 `(?s)…expected\s+exactly`）。
     - 修正後重跑這 7 個，全部 killed。
 - 完整 CTest（macOS，test preset，`GYO_APPS=object_fps_pvp`）：100／100 通過。
+
+## 使用者實聽（L3，2026-10-31，macOS）
+
+- 本機 Match＋Gateway（`127.0.0.1`），使用者開用戶端換彈數次。資料是 `magazine_in` 2.35 s、`sync_seconds` 0.33，沒有再調。
+- 使用者：「It matches」。
+- 沒有找到這次用戶端的 log，所以沒有記錄混音器的收支（`PvP sound summary`）。
 
 ## 範圍的限制與沒做的
 

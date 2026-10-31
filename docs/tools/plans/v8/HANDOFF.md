@@ -16,7 +16,7 @@
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
 - **待討論**：`v8-tool-voxel-map-editor`（你會給方案）。
-- **anim-events-line（另一個會話）**：`v8-tool-assets-anim-events` 的程式、資料、測試與突變完成（[dev_log](../../../dev_logs/2026_10_31_tool_v8_assets_anim_events.zh-Hant.md)）；**等你實聽換彈聲**，聽過才算完成。契約在 [animation-events.md](../../../architecture/animation-events.md)。
+- **anim-events-line（另一個會話）**：`v8-tool-assets-anim-events` 的程式、資料、測試與突變完成（[dev_log](../../../dev_logs/2026_10_31_tool_v8_assets_anim_events.zh-Hant.md)）；你實聽通過（「It matches」），開 PR。契約在 [animation-events.md](../../../architecture/animation-events.md)。
 - **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）；audio-tool-line 的 `v8-tool-audio-editor-convert` 開始，先起草音效工具的 Design Invariants 等你核准。anim-events-line 提議另開會話。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
@@ -118,3 +118,4 @@
 - 2026-10-31：使用者要求列出要做的 Editor 與內容（音效工具、模型檢視工具；動畫事件先手工），之後：「OK，這樣也行，開始。」規劃核准。`v8-tool-audio-editor-convert` 開始（high，重新取樣局部 xhigh，Opus 5.5，估 6～10 h）；第一步是 Design Invariants（新 Component，AGENTS §3），起草後停下等核准。
 - 2026-10-31：anim-events-line 由另一個會話開始（`v8-tool-assets-anim-events`，high，Opus 5.5，估 6～8 h）。分支 `claude/nifty-lovelace-dd931a`，切自 `v8-tool-handoff-cleanup`（`assets.md` 還沒進 master）。提出契約位置、格式 v1、Design Invariants 草稿與對齊方式，你核准（「照建議核准」）。
 - 2026-10-31：`v8-tool-assets-anim-events` 的程式、資料、測試完成；突變 Engine 13／13、PvP 8／8（第一次有 7 個沒被殺：doctest 篩選含逗號、刪行造成編譯失敗、訊息印成指標、CMake 折行，修正後全部 killed）。從骨骼的局部變換推出彈倉插到底在 clip 2.35 s，音檔兩組聲音對應插到底與滑套。等你實聽。
+- 2026-10-31：你在 macOS 本機實聽換彈：「It matches」。`v8-tool-assets-anim-events` 完成，推送並開 PR。
