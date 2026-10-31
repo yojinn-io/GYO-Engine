@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。`pv8-seq-narrow` 完成（T1～T5 的判定變更已核准，`pv8-seq-narrow-test-changes-approve`）。下一批是 `v8-product-crouch` 的 wire 接入（版本值 7→8）：完成（[事前宣告](v8-product-crouch-wire-declaration.md)，`v8-product-crouch-wire-declaration-approve`）。**pv8-line 的 A 層全部完成，版本值 8。** PR [#110](https://github.com/yojinn-io/GYO-Engine/pull/110) 已開已合併（2026-10-30，merge commit `6b22d82c`；L1 四平台通過）；之後是遠端與手感的實機確認、`v8-product-hitbox-*`、② 的衝刺。
+- **進行中**：`v8-product-hitbox-survey`（hitbox-line 第一批，2026-10-31 開始，估 3～5 h）。pv8-line 的 A 層（`pv8-final-approve-round2`）。`pv8-rename` 完成；`pv8-seq-ceiling` 完成（既有測試的判定變更已核准，`pv8-seq-ceiling-wrap-test-approve`）。`pv8-seq-narrow` 完成（T1～T5 的判定變更已核准，`pv8-seq-narrow-test-changes-approve`）。下一批是 `v8-product-crouch` 的 wire 接入（版本值 7→8）：完成（[事前宣告](v8-product-crouch-wire-declaration.md)，`v8-product-crouch-wire-declaration-approve`）。**pv8-line 的 A 層全部完成，版本值 8。** PR [#110](https://github.com/yojinn-io/GYO-Engine/pull/110) 已開已合併（2026-10-30，merge commit `6b22d82c`；L1 四平台通過）；之後是遠端與手感的實機確認、`v8-product-hitbox-*`、② 的衝刺。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
@@ -100,6 +100,7 @@
 | `v8-product-hit-rules-permille` | （2026-10-30）傷害用千分位計算，不取整。血量與傷害以千分之一點為單位（2026-10-30 使用者確認：「對」）（100 HP＝100000），倍率是千分位整數（2000、1000、750），25 × 0.75＝18750 整除；畫面顯示時除以 1000。這改變 `maximum_hp`、`shot_damage`、`hp` 等欄位的單位語意，算 Data Contract 變更 | 「用千分位算。」 |
 | `v8-product-hitbox-plan-ultracode` | （2026-10-31）hitbox-line 先開規劃批 `v8-product-hitbox-plan`，用 ultracode（偵察 2×Sonnet 5.5、案 3×Opus 5.5、審 1×Opus 5.5、對抗 1×Sonnet 5.5）。起因：Match 沒有模型與動畫，誰來算骨骼姿勢是架構問題（做法 (A) 取樣完整動畫／(B) 固定姿勢的骨骼膠囊／(C) 部位層級的簡化形狀） | 「用 ultracode」 |
 | `v8-product-hitbox-plan-approve` | （2026-10-31）核准 [hitbox-plan](hitbox-plan.md) 的 13 項全部照建議：`v8-product-hitbox-model` (a) B-flat；`v8-product-hitbox-plan-scope` (b) rewind 拆成另一條 PR 線（部位判定線約 45～70 h、回溯線約 23～35 h，範圍超過原估 1.5 倍經使用者重新核准）；`pv9-hitbox-version` (a) 升 pv9、⑤ 的附錄 B 改名 pv10；`v8-product-hitbox-view-invariant` (a) 改寫 Design Invariants 第 8 列、守衛分兩段核准；`v8-product-hitbox-rewind-r` (a) 由 lag-l2 的分位數決定（上限 15 Tick）；`v8-product-hitbox-rewind-cross-life` (a) 判 Miss；`v8-product-hitbox-view-lag-base` J；`v8-product-hit-rules-multiplier` HitPart 為鍵、CombatRules 常數；`v8-product-hit-rules-damage-count` (a)；`v8-product-hit-rules-hud` ceil；`v8-product-hitbox-format-owner` (a)；`v8-product-hitbox-determinism-premise` (a)；`v8-product-hitbox-shape-bound` (a) | 「照建議核准」 |
+| `v8-product-hitbox-replacement-thresholds` | （2026-10-31，survey 開工前、看結果之前）hitbox 的 Replacement Criteria 門檻：(1) 四肢最大偏差——走、跑、跳、瞄準、射擊、換彈、受擊各 clip 的任一取樣時刻，四肢各段端點（身體座標）離固定姿勢同一端點的距離，大於該段半徑的 2 倍；(2) 輪廓覆蓋率——站姿正面投影上，11 段聯集的面積除以現在單顆膠囊（半徑 0.25、高 1.8）投影的面積，低於 70%。任一成立就停下，交使用者在 A′ 與 A 之間選。這是重選做法的開關，不是 PR 的受入判定 | 「照提案」 |
 
 ## 規劃紀錄（記錄器）
 
