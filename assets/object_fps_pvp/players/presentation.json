@@ -20,10 +20,10 @@
   },
   "upper_body_root": "spine_01",
   "weapon": {
-    "character_asset_id": "object_fps_pvp.weapon.ultimate_pistol_1.world",
+    "character_asset_id": "object_fps_pvp.weapon.nailer_v2.world",
     "node": "hand_r",
-    "translation": [0, 0.025561, -0.010666],
-    "rotation_xyzw": [-0.44686905, -0.54800363, 0.44687049, 0.54800249],
-    "scale": 0.043749
+    "translation": [0, 0.043972, 0.050378],
+    "rotation_xyzw": [-0.00000102, 0.7749934, -0.63196932, 0.00000081],
+    "scale": 0.119435
   }
 }

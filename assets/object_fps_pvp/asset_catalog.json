@@ -34,7 +34,8 @@
     { "id": "object_fps_pvp.model.hair.buns", "type": "model", "path": "characters/hairstyles/buns/Hair_Buns.fbx" },
 
     { "id": "object_fps_pvp.model.animation.ual1_mannequin", "type": "model", "path": "animations/ual_mannequin/UAL1_Standard.fbx" },
-    { "id": "object_fps_pvp.weapon.ultimate_pistol_1.world", "type": "text", "path": "weapons/ultimate_pistol_1/world/character.json" },
-    { "id": "object_fps_pvp.model.weapon.ultimate_pistol_1.world", "type": "model", "path": "weapons/ultimate_pistol_1/world/Pistol_1.fbx" }
+    { "id": "object_fps_pvp.weapon.nailer_v2.world", "type": "text", "path": "weapons/nailer_v2/world/character.json" },
+    { "id": "object_fps_pvp.model.weapon.nailer_v2.world", "type": "model", "path": "weapons/nailer_v2/world/Nailer2_TPS.fbx" },
+    { "id": "object_fps_pvp.texture.weapon.nailer_v2.world", "type": "texture", "path": "weapons/nailer_v2/world/textures/Nailer2_D.png" }
   ]
 }

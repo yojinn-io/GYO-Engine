@@ -208,7 +208,7 @@ TEST_CASE("PvP player content resolves owner-local character clips materials and
     CHECK(AccessoryDefinition().character->model->nodes.at(hair.targetNode).name == "Head");
     CHECK(hair.presentation->model->nodes.at(hair.sourceNode).name == "Head");
     REQUIRE(definition.weapon);
-    CHECK(definition.weapon->modelAssetId.debugName == "object_fps_pvp.model.weapon.ultimate_pistol_1.world");
+    CHECK(definition.weapon->modelAssetId.debugName == "object_fps_pvp.model.weapon.nailer_v2.world");
     CHECK(model.nodes.at(definition.weaponNode).name == "hand_r");
     CHECK(model.nodes.at(definition.upperBodyRoot).name == "spine_01");
     REQUIRE(definition.upperBodyMask.size() == model.nodes.size());
@@ -1118,12 +1118,12 @@ TEST_CASE("PvP player weapon mount rejects degenerate and overflowing rotations"
 }
 
 namespace {
-// Elevation in degrees of the pistol barrel (the weapon model's +X axis) in a
-// composed body pose, relative to the horizontal model plane.
+// Elevation in degrees of the nailer barrel (the weapon model's -Z axis, its
+// nose) in a composed body pose, relative to the horizontal model plane.
 double MuzzleElevation(const PlayerPresentationDefinition& definition, const std::vector<Matrix4>& global) {
     const auto mount = Multiply(global.at(definition.weaponNode), ToMatrix(definition.weaponMount));
     const auto origin = Engine::Math::TransformPoint(mount, Vec3{0, 0, 0});
-    const auto barrel = Engine::Math::TransformPoint(mount, Vec3{1, 0, 0}) - origin;
+    const auto barrel = Engine::Math::TransformPoint(mount, Vec3{0, 0, -1}) - origin;
     const auto length = std::sqrt(barrel.x * barrel.x + barrel.y * barrel.y + barrel.z * barrel.z);
     return std::asin(barrel.y / length) * 180.0 / std::numbers::pi;
 }
@@ -1198,7 +1198,7 @@ TEST_CASE("PvP aim weight clamps the pitch and maps down to positive weights") {
     CHECK_FALSE(error.empty());
 }
 
-TEST_CASE("PvP remote upper body follows the pitch: a positive pitch points the pistol down") {
+TEST_CASE("PvP remote upper body follows the pitch: a positive pitch points the weapon down") {
     // The muzzle follows the look direction within the blend's curvature.
     for (const double degrees : {-80.0, -60.0, -30.0, -10.0, 0.0, 10.0, 30.0, 60.0, 80.0}) {
         CAPTURE(degrees);
@@ -1230,13 +1230,13 @@ TEST_CASE("PvP shots and reloads keep the remote pitch: the clip adds its motion
             const double seconds = fraction * ClipSeconds(clip);
             const auto level = Aimed(0, upper, seconds);
             const auto raised = Aimed(pitch, upper, seconds);
-            // The clip moves the body, and the pitch still raises the pistol by about 40 degrees.
+            // The clip moves the body, and the pitch still raises the weapon by about 40 degrees.
             CHECK(MatrixDifference(level.body.globalTransforms.at(definition.weaponNode),
                                    Aimed(0).body.globalTransforms.at(definition.weaponNode)) > 1e-3);
             const double lift = MuzzleElevation(definition, raised.body.globalTransforms) -
                                  MuzzleElevation(definition, level.body.globalTransforms);
             // A shot keeps the barrel's raise (measured 38.8-39.3 degrees); a reload
-            // turns the pistol toward the body, so its barrel only stays raised.
+            // turns the weapon toward the body, so its barrel only stays raised.
             if (upper == PlayerUpperAction::Shoot) CHECK(std::abs(lift - 40.0) < 3.0);
             else CHECK(lift > 20.0);
             // Exactly the aim pose plus the clip's local motion since its first frame.
