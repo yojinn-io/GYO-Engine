@@ -1,6 +1,6 @@
 #include "gyo/ui_editor/DocumentSession.hpp"
 
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
 #include "engine/base/Assert.hpp"
@@ -32,7 +32,7 @@ void DocumentSession::NewDocument() {
 }
 
 Result<SessionReport, SessionError> DocumentSession::Open(const std::filesystem::path& path) {
-    const auto file = ReadTextFile(path);
+    const auto file = Framework::ReadTextFile(path);
     if (!file) {
         return Engine::Base::Err(IoFailure(file.error()));
     }
@@ -44,13 +44,13 @@ Result<SessionReport, SessionError> DocumentSession::Open(const std::filesystem:
             std::move(parsed.diagnostics)));
     }
 
-    const auto stamp = ProbeFileStamp(path);
+    const auto stamp = Framework::ProbeFileStamp(path);
     if (!stamp) {
         return Engine::Base::Err(IoFailure(stamp.error()));
     }
 
     document_ = std::move(*parsed.document);
-    inputPath_ = AbsolutePath(path);
+    inputPath_ = Framework::AbsolutePath(path);
     outputPath_ = inputPath_;
     observedPath_ = inputPath_;
     observedStamp_ = *stamp;
@@ -76,7 +76,7 @@ const std::optional<std::filesystem::path>& DocumentSession::OutputPath() const 
 
 void DocumentSession::SetOutputPath(std::optional<std::filesystem::path> path) {
     if (path.has_value()) {
-        *path = AbsolutePath(*path);
+        *path = Framework::AbsolutePath(*path);
     }
     outputPath_ = std::move(path);
 }
@@ -130,7 +130,7 @@ bool DocumentSession::Redo() {
 }
 
 std::vector<Diagnostic> DocumentSession::Validate(
-    const ReadOnlyAssetCatalog* catalog) const {
+    const Framework::ReadOnlyAssetCatalog* catalog) const {
     std::vector<Diagnostic> diagnostics = UiDocumentBridge::Validate(document_);
     const std::vector<AssetReference> references =
         UiDocumentBridge::AssetReferences(document_);
@@ -144,7 +144,7 @@ std::vector<Diagnostic> DocumentSession::Validate(
 }
 
 Result<SessionReport, SessionError> DocumentSession::Save(
-    const ReadOnlyAssetCatalog* catalog,
+    const Framework::ReadOnlyAssetCatalog* catalog,
     const bool overwriteExternalModification) {
     if (!outputPath_.has_value()) {
         return Engine::Base::Err(SessionError(
@@ -156,7 +156,7 @@ Result<SessionReport, SessionError> DocumentSession::Save(
 
 Result<SessionReport, SessionError> DocumentSession::Export(
     const std::filesystem::path& path,
-    const ReadOnlyAssetCatalog* catalog,
+    const Framework::ReadOnlyAssetCatalog* catalog,
     const bool overwriteExternalModification) {
     SetOutputPath(path);
     return SaveTo(*outputPath_, catalog, overwriteExternalModification);
@@ -166,10 +166,10 @@ Result<bool, FileError> DocumentSession::HasExternalModification() const {
     if (!outputPath_.has_value() || !observedStamp_.has_value()) {
         return false;
     }
-    if (!observedPath_.has_value() || AbsolutePath(*outputPath_) != *observedPath_) {
+    if (!observedPath_.has_value() || Framework::AbsolutePath(*outputPath_) != *observedPath_) {
         return false;
     }
-    const auto current = ProbeFileStamp(*outputPath_);
+    const auto current = Framework::ProbeFileStamp(*outputPath_);
     if (!current) {
         return Engine::Base::Err(current.error());
     }
@@ -194,7 +194,7 @@ void DocumentSession::ResetHistory(const bool saved) {
 
 Result<SessionReport, SessionError> DocumentSession::SaveTo(
     const std::filesystem::path& path,
-    const ReadOnlyAssetCatalog* catalog,
+    const Framework::ReadOnlyAssetCatalog* catalog,
     const bool overwriteExternalModification) {
     std::vector<Diagnostic> diagnostics = Validate(catalog);
     if (HasErrors(diagnostics)) {
@@ -205,7 +205,7 @@ Result<SessionReport, SessionError> DocumentSession::SaveTo(
     }
 
     if (catalog != nullptr && catalog->IsMounted() &&
-        IsPathWithin(path, catalog->AssetRoot())) {
+        Framework::IsPathWithin(path, catalog->AssetRoot())) {
         return Engine::Base::Err(SessionError(
             SessionErrorCode::OutputInsideMountedAssetRoot,
             "export target is inside the mounted app asset root; export to a "
@@ -213,7 +213,7 @@ Result<SessionReport, SessionError> DocumentSession::SaveTo(
             std::move(diagnostics)));
     }
 
-    const std::filesystem::path absolutePath = AbsolutePath(path);
+    const std::filesystem::path absolutePath = Framework::AbsolutePath(path);
     std::optional<FileError> externalError;
     bool externalModification = false;
     if (observedPath_.has_value() && absolutePath == *observedPath_) {
@@ -224,7 +224,7 @@ Result<SessionReport, SessionError> DocumentSession::SaveTo(
             externalError = std::move(modified).error();
         }
     } else {
-        auto exists = PathExists(absolutePath);
+        auto exists = Framework::PathExists(absolutePath);
         if (exists) {
             externalModification = exists.value();
         } else {
@@ -242,14 +242,14 @@ Result<SessionReport, SessionError> DocumentSession::SaveTo(
     }
 
     const std::string serialized = UiDocumentBridge::SerializeCanonical(document_);
-    const auto written = WriteTextFileAtomically(path, serialized);
+    const auto written = Framework::WriteTextFileAtomically(path, serialized);
     if (!written) {
         return Engine::Base::Err(IoFailure(written.error(), std::move(diagnostics)));
     }
 
     outputPath_ = absolutePath;
     observedPath_ = absolutePath;
-    auto stamp = ProbeFileStamp(*outputPath_);
+    auto stamp = Framework::ProbeFileStamp(*outputPath_);
     if (!stamp) {
         observedStamp_.reset();
         return Engine::Base::Err(IoFailure(stamp.error(), std::move(diagnostics)));

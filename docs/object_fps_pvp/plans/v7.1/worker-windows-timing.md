@@ -202,7 +202,7 @@
 - 每輪（ABAB 交錯）：A 每輪都 killed。B 在第 2、3、13、15、20 輪 killed，第 1 輪 wrong_failure，其他 14 輪 survived。存活沒有集中在某一段時間。
 - load average（1 分鐘）在 1.68～3.52 之間；A 與 B 的範圍重疊（A 1.75～3.52，B 1.68～2.55），load 高的輪次 A 也全部 killed。負載不能解釋這個差別。
 - B 的 wrong_failure 的失敗訊息沒有留下：跑法只記錄 runner 的結果行，沒有存 log。這是跑法的缺口，記錄下來，不補跑。
-- 證據：本機 `scratchpad/v708/results.txt`（git 忽略，會話的 scratchpad）、`scratchpad/v708/run.sh`。跑完後兩個檔已還原到發行線的版本（`git status` 乾淨）。
+- 證據：`build/evidence/v708/results.txt`、`run.sh`（使用者 Mac 的專案資料夾，git 不追蹤、不在 GitHub；說明見同目錄的 `README.md`）。跑完後兩個檔已還原到發行線的版本（`git status` 乾淨）。
 - 機制還沒有確認。檢查（`worker_main.cpp` 的「an eligible action waited for an unrelated wake」）只要求 SubmitShot 後 40 ms 內 mock 收到這個 action。拿掉喚醒後仍能在 40 ms 內送出，表示有別的事件喚醒了網路執行緒。B 讓 mock 的輪詢方式改變，可能改變了 mock 回應 Client 的時機，產生了這樣的「無關的喚醒」。這只是假設，沒有量。
 - 依宣告的「之後的處理」：B 的改法要修，C 跟著重做突變。修法交使用者決定。
 
@@ -221,7 +221,7 @@
 - **A 與 B 的差別**：A 的 Hello 大多落在 SubmitShot 之前（突變 20 次中 18 次），B 大多落在之後。B 讓測試流程的時間線和 Client 的 Hello 計時器之間的相位錯開了大約 1～2 ms。相位為什麼會錯開，沒有量；我的假設是 mock 的等待方式改變了每次 `UntilTime` 超過期限的量。
 - **意義**：A 的檢出也是靠相位碰巧（這次 A 也存活了 2 次；D225 的 A 是 20／20）。這項檢查的 40 ms 判定本身沒有問題，問題在於 SubmitShot 的時刻沒有避開 Client 的 Hello。B 沒有改產品，只是讓這個弱點浮上來。
 - **旁註（沒有處理）**：同一段的 ACK 檢查（「an advanced ACK waited for an unrelated wake」）註解寫「next Hello, up to a second away」，但 `HelloInterval` 是 250 ms。這項檢查可能也有同樣的相位問題，沒有量。
-- 證據：本機 `scratchpad/v708/obs/`（git 忽略，會話的 scratchpad）的 `results.txt`、`logs/`（每次的完整輸出）、`run.sh`、`worker_A_obs.cpp`、`worker_B_obs.cpp`。發行線的探針保留這行時間線（只輸出到 stderr，不影響判定）。
+- 證據：`build/evidence/v708/obs/`（使用者 Mac 的專案資料夾，git 不追蹤、不在 GitHub；說明見同目錄的 `README.md`）的 `results.txt`、`logs/`（每次的完整輸出）、`run.sh`、`worker_A_obs.cpp`、`worker_B_obs.cpp`。發行線的探針保留這行時間線（只輸出到 stderr，不影響判定）。
 
 ## v7-08 檢查的時機修正與突變確認（D227，事前宣告 2026-10-28 核准）
 
@@ -260,7 +260,7 @@
 - load average（1 分鐘）：第 1～3 項在 1.02～3.56 之間；第 4 項開始時 2.33、結束時 2.19。
 - §14.4 的確認：舊判定殺死的突變（`v7-08-submit-no-wake`），新判定在 A、B 兩種探針上都殺死；worker 的其他 46 個突變也都被殺。沒有發現放寬的面。
 - D226 的 2 次計時器喚醒，這 30 次突變中沒有出現。來源仍然沒有找出來，範圍的限界不變。
-- 證據：本機 `scratchpad/v708/d227/`（git 忽略，會話的 scratchpad）的 `results.txt`、`logs/`、`run.sh`、`worker_A_fix.cpp`、`worker47.json`、`worker47.log`、`worker47.load`。
+- 證據：`build/evidence/v708/d227/`（使用者 Mac 的專案資料夾，git 不追蹤、不在 GitHub；說明見同目錄的 `README.md`）的 `results.txt`、`logs/`、`run.sh`、`worker_A_fix.cpp`、`worker47.json`、`worker47.log`、`worker47.load`。
 
 ## C 的 Windows 結果（2026-10-28，Windows 機器，D228 的宣告）
 
@@ -317,7 +317,7 @@
 使用者：「做 A：今晚做好開著 SDL 視窗的 worker 探針，寫好它和 lan15 的事前宣告；明天 Windows 先跑探針，通過才跑 lan15。」之後：「這個今晚就跑完。」核准：「核准 D229 的事前宣告，寫進文件後推送，我今晚在 Windows 上跑。」以下內容核准後不改，跑完不放寬（AGENTS.md §14.1）。
 
 - **突變（D184）**：探針的變更（`1c0f892d`）之後，worker 檢查的 47 個突變在本機重跑中；推送時還沒跑完，結果記在下面。判定的程式沒有改。
-  - 結果（2026-10-28，本機 macOS Intel，load average 1.8～2.0）：46／47 killed。`sb-c3-early-results` 是 wrong_failure（worker 失敗在「action worker emitted overdue catch-up packets」）；單獨重跑 1 次 killed。這個失敗訊息在 D185 的完整突變裡也出現過一次（當時 load 很高）。這次 load 不高，原因沒有切開（實作、測試本身或環境），照實記錄；在沒有突變的 worker 上沒有觀察到。證據：本機 `scratchpad/v708/d229/`（`worker47.json`、`worker47.log`、`rerun-sb-c3.json`）。
+  - 結果（2026-10-28，本機 macOS Intel，load average 1.8～2.0）：46／47 killed。`sb-c3-early-results` 是 wrong_failure（worker 失敗在「action worker emitted overdue catch-up packets」）；單獨重跑 1 次 killed。這個失敗訊息在 D185 的完整突變裡也出現過一次（當時 load 很高）。這次 load 不高，原因沒有切開（實作、測試本身或環境），照實記錄；在沒有突變的 worker 上沒有觀察到。證據：`build/evidence/v708/d229/`（使用者 Mac 的專案資料夾，git 不追蹤，`worker47.json`、`worker47.log`、`rerun-sb-c3.json`）。
 
 - **目的**：D228 量到沒有 SDL 的 Windows 程序裡，Client 1 秒只重送 43 次。出貨的 Client 會開 Engine 的 SDL 視窗，而 SDL 會提高程序的計時器解析度。這次在「開著 SDL 視窗」的條件下量重送次數，判斷 43 次是不是出貨版的缺陷。
 - **探針（`1c0f892d`）**：
@@ -453,7 +453,7 @@
     - `settled_excess_ms`：「outlived」那項檢查最差的一步超過上限的量。
     - 正值表示那項檢查失敗，負值表示還有餘裕。
   - macOS（Intel）本機試跑各 1 次（不算判定）：兩支都通過，`drain_excess_ms=-0.92`，`settled_excess_ms` 為 -1.60 與 -1.61。
-- **突變（D184）**：改動後，worker 檢查的 47 個突變在本機重跑（2026-10-28，macOS Intel，load average 2.0～3.0）：47／47 killed，沒有重跑。證據：本機 `scratchpad/v708/d230/`（`worker47.json`、`worker47.log`）。
+- **突變（D184）**：改動後，worker 檢查的 47 個突變在本機重跑（2026-10-28，macOS Intel，load average 2.0～3.0）：47／47 killed，沒有重跑。證據：`build/evidence/v708/d230/`（使用者 Mac 的專案資料夾，git 不追蹤，`worker47.json`、`worker47.log`）。
 - **建置**：Windows 機器、MSVC（vcvars64 環境，`cmake --preset ci-windows`、`cmake --build build/target/_build/ci-windows`）。發行線 `claude/pvp-v71-release`，必須含 `bff5bf36`。記錄建置的 commit 與 MSVC 版本；`git ls-files --eol` 沒有 `w/crlf`、工作樹乾淨。
 - **跑法**：
   - 在有桌面的登入工作階段裡，直接執行 `gyo_object_fps_pvp_worker_window_probe.exe`（不經 ctest），串行 20 次。這次不跑沒有視窗的版本。

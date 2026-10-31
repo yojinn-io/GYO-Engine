@@ -6,7 +6,7 @@
 
 `apps/object_fps` はゲームコード、metadata、source declarations だけを所有します。単独ゲーム build に tests、CI、packaging、設計ツールは不要です。`tests/object_fps` が unit tests、`build/acceptance/object_fps` が独立 `gyo_object_fps_acceptance` を所有し、製品 executable に診断 source や test macro を注入しません。対話的 viewmodel preview は `tools/object_fps_preview` の `gyo_object_fps_preview` が担当し、ゲームの起動モードではありません。
 
-共通 runner は `build/acceptance/common`、Object_FPS の GPU／内容検証は `build/acceptance/object_fps` にあります。正式 game archive にこれらの Python scripts や probe を含めません。
+共通 runner は `build/acceptance/common`、Object_FPS の GPU／コンテンツ検証は `build/acceptance/object_fps` にあります。正式 game archive にこれらの Python scripts や probe を含めません。
 
 > **現在の状態（2026-10-15）**：`object_fps` は `engine/config/projects.csv` で、`object_fps_preview` は `tools.csv` で無効化されており、Math と Result の統一後は現在の engine API でコンパイルできません。再有効化の前に [Math 移行一覧](../architecture/plans/math-foundation/inactive_products.md)、[Result 移行一覧](../architecture/plans/result-unification/inactive_products.md)、[基盤後続整理の移行一覧](../architecture/plans/foundation-followups/inactive_products.md)に従って移行が必要です。以下のコマンドは移行済みを前提とします。
 
@@ -19,7 +19,7 @@ ctest --preset test
 cmake --install build/target/_build/test --prefix build/target/acceptance-stage/object_fps --component object_fps
 ```
 
-製品は `build/target/object_fps`、probe は `build/target/_build/test/acceptance/object_fps/bin` です。全資産は `bin/assets/object_fps` にまとめ、catalog、data、model、font、`shaders/builtin` を含みます。Build-only shader source 情報は配布 descriptor に残さず、不足時に source tree へ fallback しません。
+製品は `build/target/object_fps`、probe は `build/target/_build/test/acceptance/object_fps/bin` です。全アセットは `bin/assets/object_fps` にまとめ、catalog、data、model、font、`shaders/builtin` を含みます。Build-only shader source 情報は配布 descriptor に残さず、不足時に source tree へ fallback しません。
 
 Product manifest は `share/gyo/products/object_fps/manifest.json` です。外部 runner は identity、executables、checks を読み、元ゲーム名から推測しません。複製では deployment identity が変わっても内部 AssetId／shader ID を保持できます。[ゲーム作成／コピー](../creating_apps.md#manual-copy)も参照してください。
 
@@ -31,13 +31,13 @@ Product manifest は `share/gyo/products/object_fps/manifest.json` です。外�
 python build/acceptance/common/run_package_checks.py --stage build/target/acceptance-stage/object_fps --product object_fps --platform windows-x64 --revision FULL_COMMIT_SHA --profile release --logs build/target/acceptance/object_fps --context build/target/_build/test/packages/object_fps/RelWithDebInfo/acceptance-context.json
 ```
 
-Runner は外部 working directory から検証します。必要な時は隔離コピーの bin に probe を一時配置し、ゲームと同じ資産パスを使用します。異常、timeout、必要証拠の欠落は失敗であり、probe は正式 archive に入りません。
+Runner は外部 working directory から検証します。必要な時は隔離コピーの bin に probe を一時配置し、ゲームと同じアセットパスを使用します。異常、timeout、必要証拠の欠落は失敗であり、probe は正式 archive に入りません。
 
 | 検査 | 範囲 |
 |---|---|
-| Startup／内容ロード | Catalog、campaign、model、compiled shader。GPU 不要 |
+| Startup／コンテンツのロード | Catalog、campaign、model、compiled shader。GPU 不要 |
 | Headless gameplay | Menu、開始、移動／jump、pause、shoot、reload 状態 |
-| Package negative cases | 必須資産／shader を外して明確な失敗を確認。Checkout 読込は禁止 |
+| Package negative cases | 必須アセット／shader を外して明確な失敗を確認。Checkout 読込は禁止 |
 | GPU quick | 宣言された platform の viewmodel 描画／readback |
 | GPU release／manual | World、menu、weapon、reload、複数比率の muzzle 検証 |
 
@@ -49,7 +49,7 @@ Runner は外部 working directory から検証します。必要な時は隔離
 
 Windows／macOS の手動検証には `build/acceptance/object_fps/manual_gpu_smoke.py` を使います。Install 済み製品を独立検証ディレクトリへコピーし、その bin に対応 probe と必要 runtime libraries を配置して、`--package` と `--probe` を渡します。Windows は `--driver d3d12`／`vulkan`、macOS は `metal` です。`--suite quick` は viewmodel、`--suite ci` は viewmodel、world、menu、`--suite full` は7項目、`--output` で報告先を指定します。Probe を正式製品や archive に戻さないでください。
 
-Linux CI の Xvfb／Lavapipe は software Vulkan の検証です。物理 GPU や Windows/macOS hosted の実機画面を証明しません。要求した GPU 能力不足、driver／shader format の不一致、timeout、必要画像の欠落は失敗として扱います。
+Linux CI の Xvfb／Lavapipe は software Vulkan の検証です。物理 GPU や Windows/macOS hosted の実機画面を証明しません。要求した GPU 機能の不足、driver／shader format の不一致、timeout、必要画像の欠落は失敗として扱います。
 
 実機では mouse／keyboard、Space jump、R reload、H holster/draw、手と銃の遮蔽、壁際での射撃、exposure と HUD を確認します。OS、GPU／driver、product revision、要求／実際の renderer を記録し、summary と画像を残します。
 

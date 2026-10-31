@@ -69,11 +69,18 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
 
 1. The editor links no game, no `GYO::Input` and no SDL_GPU. Guard:
    `gyo_ui_editor.dependency_guard` (`tests/ui_editor/ui_editor_dependency_guard.py`),
-   a positive list of includes and targets.
+   a positive list of includes and targets. The window, ImGui's SDL backends
+   and the system dialogs come through the framework layer, whose own
+   guard keeps the same rule ([framework](framework/architecture.md), Design
+   Invariant 2).
 2. Documents enter and leave only through `UiDocumentBridge` and the `GYO::Ui`
    codec: canonical JSON written by atomic replace, no side files (`.meta`,
-   autosave, `imgui.ini`) and no native path in the output.
+   autosave, `imgui.ini`) and no native path in the output. The framework's
+   host keeps ImGui's own side files out ([framework](framework/architecture.md),
+   Design Invariant 4).
 3. A mounted asset catalog is read-only; nothing is written inside its root.
+   The mount is the framework's `ReadOnlyAssetCatalog`, which has no write API
+   ([framework](framework/architecture.md), Design Invariant 4).
 4. Canvas rectangles, clipping, draw order and hit testing come from the
    `GYO::Ui` evaluator. The editor may keep its own copy of the layout rule
    only to solve values backwards (the gizmo's `position` and `size_delta`);

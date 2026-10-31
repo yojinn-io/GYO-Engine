@@ -1,4 +1,4 @@
-#include "gyo/audio_editor/CatalogRegistration.hpp"
+#include "gyo/framework/CatalogRegistration.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -7,19 +7,17 @@
 #include <utility>
 #include <vector>
 
-namespace Gyo::Tools::AudioEditor {
+namespace Gyo::Tools::Framework {
 namespace {
 
 using Json = nlohmann::ordered_json;
 
-constexpr std::string_view kSoundType = "sound";
-
-AudioEditorError CatalogError(std::string message, std::string detail = {}) {
-    return AudioEditorError::Make(AudioEditorErrorCode::InvalidCatalog, std::move(message), std::move(detail));
+CatalogError InvalidCatalog(std::string message, std::string detail = {}) {
+    return CatalogError::Make(CatalogErrorCode::InvalidCatalog, std::move(message), std::move(detail));
 }
 
-AudioEditorError RegistrationError(std::string message, std::string detail = {}) {
-    return AudioEditorError::Make(AudioEditorErrorCode::InvalidRegistration, std::move(message), std::move(detail));
+CatalogError RegistrationError(std::string message, std::string detail = {}) {
+    return CatalogError::Make(CatalogErrorCode::InvalidRegistration, std::move(message), std::move(detail));
 }
 
 bool IsSpace(const char c) noexcept {
@@ -77,9 +75,9 @@ std::optional<AssetsLayout> FindAssets(const std::string_view text) {
     return std::nullopt;
 }
 
-std::string EntryText(const SoundRegistration& registration) {
-    return "{ \"id\": " + Json(registration.id).dump() + ", \"type\": \"sound\", \"path\": " +
-           Json(registration.path).dump() + " }";
+std::string EntryText(const AssetRegistration& registration) {
+    return "{ \"id\": " + Json(registration.id).dump() + ", \"type\": " + Json(registration.type).dump() +
+           ", \"path\": " + Json(registration.path).dump() + " }";
 }
 
 std::size_t LineStart(const std::string_view text, std::size_t at) {
@@ -105,29 +103,29 @@ std::string Indentation(const std::string_view text, const std::size_t begin) {
     return std::string(text.substr(lineStart, begin - lineStart));
 }
 
-Result<Json, AudioEditorError> ParseCatalog(const std::string_view text) {
+Result<Json, CatalogError> ParseCatalog(const std::string_view text) {
     Json catalog = Json::parse(text, nullptr, false);
     if (catalog.is_discarded() || !catalog.is_object()) {
-        return Engine::Base::Err(CatalogError("the catalog is not a JSON object"));
+        return Engine::Base::Err(InvalidCatalog("the catalog is not a JSON object"));
     }
     const auto version = catalog.find("version");
     if (version == catalog.end() || !version->is_number_integer() || *version != 1) {
-        return Engine::Base::Err(CatalogError("expected integer version 1"));
+        return Engine::Base::Err(InvalidCatalog("expected integer version 1"));
     }
     const auto assets = catalog.find("assets");
     if (assets == catalog.end() || !assets->is_array()) {
-        return Engine::Base::Err(CatalogError("expected an assets array"));
+        return Engine::Base::Err(InvalidCatalog("expected an assets array"));
     }
     std::set<std::string> ids;
     for (const Json& entry : *assets) {
         for (const char* field : {"id", "type", "path"}) {
             if (!entry.is_object() || !entry.contains(field) || !entry[field].is_string() ||
                 entry[field].get_ref<const std::string&>().empty()) {
-                return Engine::Base::Err(CatalogError("asset entries require nonempty string id, type and path"));
+                return Engine::Base::Err(InvalidCatalog("asset entries require nonempty string id, type and path"));
             }
         }
         if (!ids.insert(entry["id"].get<std::string>()).second) {
-            return Engine::Base::Err(CatalogError("duplicate asset id", entry["id"].get<std::string>()));
+            return Engine::Base::Err(InvalidCatalog("duplicate asset id", entry["id"].get<std::string>()));
         }
     }
     return catalog;
@@ -150,14 +148,17 @@ bool IsValidAssetPath(const std::string_view path) noexcept {
     }
 }
 
-Result<CatalogUpdate, AudioEditorError> RegisterSound(const std::string_view catalogText,
-                                                      const SoundRegistration& registration) {
+Result<CatalogUpdate, CatalogError> RegisterAsset(const std::string_view catalogText,
+                                                  const AssetRegistration& registration) {
     auto parsed = ParseCatalog(catalogText);
     if (!parsed) {
         return Engine::Base::Err(std::move(parsed).error());
     }
     if (registration.id.empty()) {
         return Engine::Base::Err(RegistrationError("the asset id is empty"));
+    }
+    if (registration.type.empty()) {
+        return Engine::Base::Err(RegistrationError("the asset type is empty", registration.id));
     }
     if (!IsValidAssetPath(registration.path)) {
         return Engine::Base::Err(RegistrationError("not a relative asset path", registration.path));
@@ -167,9 +168,7 @@ Result<CatalogUpdate, AudioEditorError> RegisterSound(const std::string_view cat
     for (std::size_t index = 0; index < assets.size(); ++index) {
         const Json& entry = assets[index];
         if (entry["id"] == registration.id) {
-            // ParseCatalog checked the field is a string; comparing the json
-            // with a string_view directly is ambiguous on MSVC.
-            if (entry["type"].get_ref<const std::string&>() != kSoundType) {
+            if (entry["type"].get_ref<const std::string&>() != registration.type) {
                 return Engine::Base::Err(RegistrationError("the id is registered with another type",
                                                            registration.id + " is " + entry["type"].get<std::string>()));
             }
@@ -182,7 +181,7 @@ Result<CatalogUpdate, AudioEditorError> RegisterSound(const std::string_view cat
 
     const std::optional<AssetsLayout> layout = FindAssets(catalogText);
     if (!layout || layout->elements.size() != assets.size()) {
-        return Engine::Base::Err(CatalogError("the assets array could not be located in the text"));
+        return Engine::Base::Err(InvalidCatalog("the assets array could not be located in the text"));
     }
     CatalogUpdate update;
     const std::string entry = EntryText(registration);
@@ -207,17 +206,17 @@ Result<CatalogUpdate, AudioEditorError> RegisterSound(const std::string_view cat
     // The edit must change exactly that entry: check the result as data.
     auto reparsed = ParseCatalog(text);
     Json expected = *parsed;
-    const Json newEntry = {{"id", registration.id}, {"type", kSoundType}, {"path", registration.path}};
+    const Json newEntry = {{"id", registration.id}, {"type", registration.type}, {"path", registration.path}};
     if (existing) {
         expected["assets"][*existing] = newEntry;
     } else {
         expected["assets"].push_back(newEntry);
     }
     if (!reparsed || *reparsed != expected) {
-        return Engine::Base::Err(CatalogError("editing the catalog text changed more than the entry"));
+        return Engine::Base::Err(InvalidCatalog("editing the catalog text changed more than the entry"));
     }
     update.text = std::move(text);
     return update;
 }
 
-} // namespace Gyo::Tools::AudioEditor
+} // namespace Gyo::Tools::Framework

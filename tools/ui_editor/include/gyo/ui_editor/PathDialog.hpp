@@ -1,7 +1,7 @@
 #pragma once
 
-#include <memory>
-#include <mutex>
+#include "gyo/framework/PathDialog.hpp"
+
 #include <string>
 #include <string_view>
 #include <vector>
@@ -9,7 +9,7 @@
 namespace Gyo::Tools::UiEditor {
 
 // What a chosen path is for. The editor acts on a result by its purpose; the
-// dialog itself only returns a path.
+// framework's dialog only returns a path with the purpose as its tag.
 enum class PathDialogPurpose {
     OpenDocument,    // an existing UI JSON file
     ExportDocument,  // a UI JSON file to write
@@ -18,28 +18,13 @@ enum class PathDialogPurpose {
     CatalogField,    // fills the Catalog field of the mount dialog
 };
 
-enum class PathDialogOutcome {
-    Chosen,
-    Cancelled,
-    Failed,  // the platform could not show a dialog; the user types the path
-};
+using PathDialogOutcome = Framework::PathDialogOutcome;
 
 struct PathDialogResult final {
     PathDialogPurpose purpose{};
     PathDialogOutcome outcome{};
     std::string path;   // UTF-8, set when Chosen
     std::string error;  // set when Failed
-};
-
-// Results delivered from any thread, taken by the editor between frames.
-class PathDialogInbox final {
-public:
-    void Post(PathDialogResult result);
-    [[nodiscard]] std::vector<PathDialogResult> Take();
-
-private:
-    std::mutex mutex_;
-    std::vector<PathDialogResult> results_;
 };
 
 // A host's file dialogs. Show is called on the main thread and returns without

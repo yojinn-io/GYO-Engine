@@ -11,9 +11,9 @@ struct SDL_Renderer;
 struct SDL_Texture;
 namespace Engine::Text { class ITextRasterizer; }
 
-namespace Gyo::Tools::UiEditor {
-class ReadOnlyAssetCatalog;
+namespace Gyo::Tools::Framework { class ReadOnlyAssetCatalog; }
 
+namespace Gyo::Tools::UiEditor {
 struct TextTextureView final {
     SDL_Texture* texture{};
     float width{};
@@ -38,7 +38,7 @@ public:
     void Initialize(SDL_Renderer& renderer,
         std::unique_ptr<Engine::Text::ITextRasterizer> rasterizer);
     // Requires an initialized context, a mounted catalog and no active frame.
-    void Mount(const ReadOnlyAssetCatalog& catalog);
+    void Mount(const Framework::ReadOnlyAssetCatalog& catalog);
     // Requires no active frame.
     void Unmount();
 

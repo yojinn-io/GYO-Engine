@@ -1,8 +1,4 @@
-#include "gyo/ui_editor/EditorGui.hpp"
-
-#include "gyo/ui_editor/AssetPreviewContext.hpp"
-#include "gyo/ui_editor/EditorApp.hpp"
-#include "SdlPathDialogs.hpp"
+#include "gyo/framework/ImGuiSdlHost.hpp"
 
 #include <array>
 #include <memory>
@@ -27,7 +23,7 @@
 #include "engine/platform/sdl/SdlPlatformNative.hpp"
 #include "engine/render/backend/sdl/SdlRendererNative.hpp"
 
-namespace Gyo::Tools::UiEditor {
+namespace Gyo::Tools::Framework {
 namespace {
 
 using Engine::Platform::Sdl::SdlPlatform;
@@ -38,9 +34,9 @@ using Engine::Runtime::FrameContext;
 using Engine::Runtime::IRuntimeClient;
 using Engine::Runtime::RuntimeControl;
 
-constexpr float kEditorChromeFontSize = 16.0F;
+constexpr float kChromeFontSize = 16.0F;
 
-// The font files the editor chrome may use, by priority, relative to a font
+// The font files the tool chrome may use, by priority, relative to a font
 // directory from engine/os. One list serves every platform: each file exists
 // only where its platform installs it (Windows, macOS, then Linux names;
 // os-subsystem D56).
@@ -85,50 +81,53 @@ constexpr std::array kJapaneseFontNames{
     return {};
 }
 
-// Editor chrome is operating-system UI, not game content. It therefore uses a
-// system CJK font and never reaches into an app asset root. Canvas text preview
-// remains driven by the document's FontAsset through AssetPreviewContext.
-void ConfigureEditorChromeFont(ImGuiIO& io) {
+// Tool chrome is operating-system UI, not game content. It therefore uses a
+// system CJK font and never reaches into an app asset root; content a tool
+// previews brings its own fonts.
+void ConfigureChromeFont(ImGuiIO& io, const char* title) {
     std::vector<std::string> directories;
     if (auto found = Engine::Os::Files::FontDirectories()) {
         directories = std::move(found.value());
     } else {
         SDL_LogWarn(
             SDL_LOG_CATEGORY_APPLICATION,
-            "GYO UI Editor cannot list the font directories: %s",
+            "%s cannot list the font directories: %s",
+            title,
             Engine::Base::Describe(found.error()).c_str());
     }
     const std::string primary = FirstExistingFont(directories, kPrimaryFontNames);
     const std::string japaneseFallback = FirstExistingFont(directories, kJapaneseFontNames);
 
-    ImFont* editorFont = nullptr;
+    ImFont* chromeFont = nullptr;
     if (!primary.empty()) {
-        editorFont = io.Fonts->AddFontFromFileTTF(
-            primary.c_str(), kEditorChromeFontSize);
-        if (editorFont != nullptr) {
-            io.FontDefault = editorFont;
-            SDL_Log("GYO UI Editor chrome font: %s", primary.c_str());
+        chromeFont = io.Fonts->AddFontFromFileTTF(
+            primary.c_str(), kChromeFontSize);
+        if (chromeFont != nullptr) {
+            io.FontDefault = chromeFont;
+            SDL_Log("%s chrome font: %s", title, primary.c_str());
         }
     }
 
-    if (editorFont != nullptr && !japaneseFallback.empty() &&
+    if (chromeFont != nullptr && !japaneseFallback.empty() &&
         japaneseFallback != primary) {
         ImFontConfig merge;
         merge.MergeMode = true;
         if (io.Fonts->AddFontFromFileTTF(
-                japaneseFallback.c_str(), kEditorChromeFontSize, &merge) != nullptr) {
+                japaneseFallback.c_str(), kChromeFontSize, &merge) != nullptr) {
             SDL_Log(
-                "GYO UI Editor Japanese font fallback: %s",
+                "%s Japanese font fallback: %s",
+                title,
                 japaneseFallback.c_str());
         }
     }
 
-    if (editorFont == nullptr) {
+    if (chromeFont == nullptr) {
         io.Fonts->AddFontDefault();
         SDL_LogWarn(
             SDL_LOG_CATEGORY_APPLICATION,
-            "No system CJK font was found; Editor chrome will use ImGui's "
-            "Latin-only fallback font");
+            "No system CJK font was found; %s chrome will use ImGui's "
+            "Latin-only fallback font",
+            title);
     }
 }
 
@@ -141,18 +140,21 @@ void LogError(const char* context, const Error& error) {
         Engine::Base::Describe(error).c_str());
 }
 
-class EditorClient final : public IRuntimeClient {
+class HostClient final : public IRuntimeClient {
 public:
-    EditorClient(
+    HostClient(
         SdlPlatform& platform,
         SdlRenderer& renderer,
-        CommandLineOptions options)
+        std::string title)
         : platform_(platform),
           renderer_(renderer),
-          dialogs_(Engine::Platform::Sdl::NativeWindow(platform)),
-          editor_(std::move(options), previewAssets_, &dialogs_) {}
+          title_(std::move(title)),
+          context_{Engine::Platform::Sdl::NativeWindow(platform),
+                   Engine::Render::Backend::Sdl::NativeRenderer(renderer)} {}
 
-    ~EditorClient() override {
+    // ImGui goes down before the client, as members are destroyed after this
+    // body runs.
+    ~HostClient() override {
         if (rendererBackendInitialized_) {
             ImGui_ImplSDLRenderer3_Shutdown();
         }
@@ -164,22 +166,27 @@ public:
         }
     }
 
-    [[nodiscard]] bool Initialize() {
+    [[nodiscard]] bool Initialize(const ImGuiSdlClientFactory& factory) {
+        client_ = factory(context_);
+        if (client_ == nullptr) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s has no client to run", title_.c_str());
+            return false;
+        }
+
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         contextCreated_ = true;
 
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        // The editor's only authored output is the exported UI JSON. ImGui
+        // A tool writes only what it means to (Design Invariant 4). ImGui
         // window state must never create an adjacent sidecar.
         io.IniFilename = nullptr;
         io.LogFilename = nullptr;
-        ConfigureEditorChromeFont(io);
+        ConfigureChromeFont(io, title_.c_str());
         ImGui::StyleColorsDark();
 
-        if (!ImGui_ImplSDL3_InitForSDLRenderer(
-                Engine::Platform::Sdl::NativeWindow(platform_), Engine::Render::Backend::Sdl::NativeRenderer(renderer_))) {
+        if (!ImGui_ImplSDL3_InitForSDLRenderer(context_.window, context_.renderer)) {
             SDL_LogError(
                 SDL_LOG_CATEGORY_APPLICATION,
                 "ImGui SDL3 platform backend initialization failed");
@@ -187,7 +194,7 @@ public:
         }
         platformBackendInitialized_ = true;
 
-        if (!ImGui_ImplSDLRenderer3_Init(Engine::Render::Backend::Sdl::NativeRenderer(renderer_))) {
+        if (!ImGui_ImplSDLRenderer3_Init(context_.renderer)) {
             SDL_LogError(
                 SDL_LOG_CATEGORY_APPLICATION,
                 "ImGui SDLRenderer backend initialization failed");
@@ -195,15 +202,7 @@ public:
         }
         rendererBackendInitialized_ = true;
 
-        if (const auto preview = previewAssets_.Initialize(*Engine::Render::Backend::Sdl::NativeRenderer(renderer_)); !preview) {
-            LogError("Asset preview initialization failed", preview.error());
-            return false;
-        }
-        if (const auto editor = editor_.Initialize(); !editor) {
-            LogError("UI editor initialization failed", editor.error());
-            return false;
-        }
-        return true;
+        return client_->Initialize(context_);
     }
 
     RuntimeControl ProcessEvents(const FrameContext&) override {
@@ -214,16 +213,14 @@ public:
     }
 
     RuntimeControl Update(const FrameContext&) override {
-        editor_.ApplyPathDialogResults();
-        editor_.ApplyPendingAssetChanges();
-        previewAssets_.BeginFrame();
+        client_->BeginFrame();
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-        editor_.Draw();
-        if (editor_.WantsExit()) {
+        client_->Draw();
+        if (client_->WantsExit()) {
             ImGui::EndFrame();
-            previewAssets_.EndFrame();
+            client_->EndFrame();
             return RuntimeControl::Stop;
         }
         return RuntimeControl::Continue;
@@ -233,16 +230,15 @@ public:
         ImGui::Render();
         auto cleared = renderer_.Clear(Color{12, 14, 18, 255});
         if (!cleared) {
-            previewAssets_.EndFrame();
+            client_->EndFrame();
             LogError("clear failed", cleared.error());
             exitCode_ = 1;
             return RuntimeControl::Stop;
         }
 
-        ImGui_ImplSDLRenderer3_RenderDrawData(
-            ImGui::GetDrawData(), Engine::Render::Backend::Sdl::NativeRenderer(renderer_));
+        ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), context_.renderer);
         auto presented = renderer_.Present();
-        previewAssets_.EndFrame();
+        client_->EndFrame();
         if (!presented) {
             LogError("present failed", presented.error());
             exitCode_ = 1;
@@ -256,9 +252,9 @@ public:
 private:
     SdlPlatform& platform_;
     SdlRenderer& renderer_;
-    AssetPreviewContext previewAssets_;
-    SdlPathDialogs dialogs_;
-    EditorApp editor_;
+    std::string title_;
+    ImGuiSdlHostContext context_;
+    std::unique_ptr<ImGuiSdlClient> client_;
     bool contextCreated_{};
     bool platformBackendInitialized_{};
     bool rendererBackendInitialized_{};
@@ -267,12 +263,12 @@ private:
 
 } // namespace
 
-int RunEditorGui(const CommandLineOptions& options) {
+int RunImGuiSdlHost(const ImGuiSdlHostOptions& options, const ImGuiSdlClientFactory& factory) {
     SdlPlatformOptions platformOptions;
-    platformOptions.title = "GYO UI Editor";
-    platformOptions.width = 1600;
-    platformOptions.height = 900;
-    platformOptions.resizable = true;
+    platformOptions.title = options.title;
+    platformOptions.width = options.width;
+    platformOptions.height = options.height;
+    platformOptions.resizable = options.resizable;
 
     auto platformResult = SdlPlatform::Create(platformOptions);
     if (!platformResult) {
@@ -288,13 +284,13 @@ int RunEditorGui(const CommandLineOptions& options) {
     }
     std::unique_ptr<SdlRenderer> renderer = std::move(rendererResult).value();
 
-    EditorClient client(*platform, *renderer, options);
-    if (!client.Initialize()) {
+    HostClient host(*platform, *renderer, options.title);
+    if (!host.Initialize(factory)) {
         return 1;
     }
-    Engine::Runtime::RuntimeLoop loop(client);
+    Engine::Runtime::RuntimeLoop loop(host);
     loop.Run();
-    return client.ExitCode();
+    return host.ExitCode();
 }
 
-} // namespace Gyo::Tools::UiEditor
+} // namespace Gyo::Tools::Framework

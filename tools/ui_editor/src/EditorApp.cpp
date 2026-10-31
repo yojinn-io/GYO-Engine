@@ -515,7 +515,7 @@ void EditorApp::ExportDocument(
 
 Result<void, CatalogError> EditorApp::MountCatalog(const std::filesystem::path& catalogPath,
     const std::filesystem::path& assetRoot) {
-    ReadOnlyAssetCatalog candidate;
+    Framework::ReadOnlyAssetCatalog candidate;
     auto root = assetRoot;
     if (root.empty() && !catalogPath.empty()) {
         root = catalogPath.parent_path();

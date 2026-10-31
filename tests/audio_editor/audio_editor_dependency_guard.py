@@ -20,8 +20,11 @@ INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
 SDL_GPU = re.compile(r"\bSDL_\w*GPU\w*")
 TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*\b")
 
-ALLOWED_INCLUDE_PREFIXES = ("gyo/audio_editor/", "engine/base/", "engine/os/", "engine/audio/", "nlohmann/")
-ALLOWED_TARGETS = {"GYO::Base", "GYO::Audio", "GYO::Os", "nlohmann_json::nlohmann_json"}
+# The catalog entry is written through the framework layer, whose own guard
+# (tests/framework/framework_dependency_guard.py) keeps the same rule (docs/framework/architecture.md, Design
+# Invariant 2).
+ALLOWED_INCLUDE_PREFIXES = ("gyo/audio_editor/", "gyo/framework/", "engine/base/", "engine/os/", "engine/audio/")
+ALLOWED_TARGETS = {"GYO::Base", "GYO::Audio", "GYO::Os", "GYO::ToolFramework"}
 
 
 def scan(root: Path) -> list[str]:
