@@ -88,6 +88,40 @@ v8-product-anim-authority
   - Client 呈現才有的三種重設原因。
 - 任何一條超出門檻就停下回報，不改門檻、不重跑。
 
+### E1 的跳躍判定修正（`v8-product-anim-authority-e1-jump`，試行 1 不成立之後；**等你核准**）
+
+試行 1（[證據](evidence/anim-authority-e1-run1.txt)）：跳躍有 19 個 Tick 不同。每一個都是舊 Client 的 double 比較 `t/60 − s/60 ≥ 0.1` 在剛好 6 Tick 時算出 0.0999999999999996，晚一個 Tick 才換階段。試行 1 的失敗留在紀錄裡，不覆寫。
+
+新判定（`JudgeJump`，`PlayerAnimationEquivalenceTests.cpp`）照 AGENTS §14.4 的 1～5 揭露：
+
+1. **守的性質**：每個 Tick，Match 的跳躍階段與零點都等於舊 Client 的。
+2. **寬鬆面**：只多通過一種情況（Start→Airborne 與 Land→Grounded 兩種轉換各算一次）。條件是以下全部成立：
+   - Client 在 Start（或 Land），Match 已經在 Airborne（或 Grounded）；
+   - Tick＝Client 的零點＋跨度，Match 的零點也＝Client 的零點＋跨度；
+   - Client 自己的 double 比較 `tick/60 − 零點秒數 ≥ 跨度秒數` 不成立。
+
+   每次只容許一個 Tick；下一個 Tick 仍然逐 Tick 比對，要回到完全相同。
+3. **收緊面**：無。
+4. **其他由誰守住**：
+   - 其他 Tick 照舊完全相同。
+   - 新狀態機剛好在 6 Tick 換階段，由 E2 的「PvP animation jump phases start from their clip time zero points」守住。
+   - `JudgeJump` 自己的單元測試，會拒絕這些情況：提早一個 Tick、延後一個 Tick、零點錯、階段的組合錯、浮點比較其實成立。
+5. **根據**：試行 1 的證據；protocol-v9 §4.4（跨度是 Tick 的整數倍，0.1 s＝6 Tick）；`PlayerPresentation.cpp:322-330` 的 double 比較。
+
+核准之前做的檢查：
+- **突變**：只跑 `JudgeJump` 的單元測試，沒有跑 E1，共 4 個，4／4 killed。
+  - 第一輪是 3／4：「不釘住 Tick」的突變存活，因為少了「Match 提早一個 Tick」的情況。補上之後 4／4。
+- **審查**：交給 Sonnet 5.5，只讀，不跑測試。1、3、4、5 成立；2 成立，用詞已照它的指正改成「兩種轉換」。它另外重算了證據：
+  - 19 個 Tick 都是 `t − s = 6`，double 的差是 0.09999999999999998 或 0.09999999999999964；下一個 Tick 都會跟上。
+  - Start 與 Land 的零點都是 `s/60` 本身，累加 `+= 0.1` 只發生在轉換的那一刻，所以不影響比較。
+  - 在 s＝1～1999 的範圍裡，約一半的起點會晚一個 Tick。舊 Client 的這個延遲很常見。
+  - 延後一個 Tick 的錯誤會在下一個 Tick 被抓到，連續兩個 Tick 都落後的情況也過不了。
+
+**重跑的判定（看結果之前宣告）**：用新判定重跑 E1 一次。
+- 相位、兩個權重的門檻不變。
+- 跳躍判定為 `Differs` 的 Tick 數為 0。
+- 判定為 `ClientFloatLag` 的 Tick，必須**恰好是試行 1 的那 19 個 Tick**：37, 43, 262, 271, 277, 307, 337, 367, 382, 391, 412, 457（兩條路線）, 487, 493, 532, 547, 562, 583（同一台機器，同樣的輸入；試行 1 的路線名稱印成指標，所以以 Tick 的多重集合比對）。不多也不少；有差異就停下回報。為此 E1 會在結尾斷言這個集合（審查指出原本只印出、沒有斷言）。
+
 ### E2：狀態機本身
 
 - 每一條規則都有單元測試：
