@@ -56,7 +56,7 @@ asset-layout
 | `v8-product-asset-layout-guard` | 3～4.5 h（含突變；超過 5 h 停） | 同上：新素材的落點在 CI 上自動檢查 | CI L1 的 `object_fps_pvp.asset_catalog`；自我檢查（注入壞資料夾、跨資料夾貼圖、type 不符、只差大小寫、過期的例外，每種都要被抓到）＋少量突變 | 完成 |
 | `v8-product-asset-player-folder` | 1～1.5 h | hitbox 資料（hitbox 和模型放在一起） | CI L1；apps、tests、build 裡 `git grep 'players/'` 為 0（含 `mutations.json` 的突變 `11-limit-uncalibrated` 與 catalog 測試的假路徑）；after-pv8 合併後重跑它的 Match 測試 | 完成（after-pv8 合併後重跑） |
 | `v8-product-asset-buns-fixture` | 1.5～2.5 h（開工時重估） | 出貨內容只放產品用到的素材（AGENTS §7） | CI L1；catalog 不再有 buns 的 3 個 id；`PlayerPresentationTests` 用 fixture 通過 | 未開始 |
-| `v8-engine-assets-common-retire` | 0.5 h | 沒有（使用者同意的清理） | CI 全量 | 未開始 |
+| `v8-engine-assets-common-retire` | 0.5 h | 沒有（使用者同意的清理） | CI 全量 | 完成（CI 全量待合併） |
 | `v8-product-art-source-out` | 0.25 h | 主 checkout 能跑 ctest | 主 checkout 的 `git status` 沒有未追蹤的素材 | 未開始（位置待定） |
 | `v8-product-asset-path-loaded-move` | 4～6 h | 地圖增加、voxel 地圖 | arena digest 搬移前後相同；驗收常數先宣告並經核准 | 延後 |
 
@@ -86,9 +86,11 @@ asset-layout
 - 2026-10-31：推送後合併 master `ebfe3225`（PR #121～#124）。PR #123 新增最上層 `framework/`，DI-6 的掃描改成「最上層除了排除的資料夾以外全部掃」，加一個自我檢查與一個突變（13／13 killed）。
 - 2026-10-31：PR [#125](https://github.com/yojinn-io/GYO-Engine/pull/125) 開啟（doc＋guard）。已通知 v8 規劃會話（mutations.json 的位置、README 連結行、player-folder 的順序）與工具線（落點由 PvP 守衛檢查、`assets.md` 的例子會過時、音效原檔在 `30b36bdb`）。`v8-product-asset-player-folder` 開始。
 - 2026-11-01：`v8-product-asset-player-folder` 完成：3 個定義檔搬進 `characters/player/`，catalog 只改 path，刪 4 筆例外；presentation 測試通過，突變 `11-limit-uncalibrated` 1／1 killed。after-pv8 合併後要重跑它的 Match 測試。
+- 2026-11-01：`v8-engine-assets-common-retire` 完成：刪除 `assets/common`（沒有引用；同一個 PNG 已在停用產品各自的 catalog 裡）。
 
 ## dev_log
 
 - [2026_10_31_pvp_v8_asset_layout_doc](../../../dev_logs/2026_10_31_pvp_v8_asset_layout_doc.zh-Hant.md)：`v8-product-asset-layout-doc`
 - [2026_10_31_pvp_v8_asset_layout_guard](../../../dev_logs/2026_10_31_pvp_v8_asset_layout_guard.zh-Hant.md)：`v8-product-asset-layout-guard`
 - [2026_10_31_pvp_v8_asset_player_folder](../../../dev_logs/2026_10_31_pvp_v8_asset_player_folder.zh-Hant.md)：`v8-product-asset-player-folder`
+- [2026_10_31_engine_v8_assets_common_retire](../../../dev_logs/2026_10_31_engine_v8_assets_common_retire.zh-Hant.md)：`v8-engine-assets-common-retire`
