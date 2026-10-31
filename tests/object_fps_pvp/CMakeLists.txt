@@ -100,6 +100,29 @@ add_dependencies(${presentation_tests} ${presentation_content})
 add_test(NAME "${GYO_CURRENT_APP}.presentation_cpu" COMMAND ${presentation_tests})
 set_tests_properties("${GYO_CURRENT_APP}.presentation_cpu" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 120
     ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+# v8-product-hitbox-survey (plans/v8/hitbox-plan.md): a report-only diagnostic of the
+# production player against the 11 hurt regions, staged with the presentation tests.
+# Its smoke run checks only that every region node is present once.
+set(hitbox_survey "gyo_${GYO_CURRENT_APP}_hitbox_survey")
+add_executable(${hitbox_survey} HitboxSurvey.cpp)
+target_compile_features(${hitbox_survey} PRIVATE cxx_std_20)
+target_link_libraries(${hitbox_survey} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage GYO::PlatformSDL nlohmann_json::nlohmann_json)
+gyo_use_app_config(${hitbox_survey} "${GYO_CURRENT_APP}")
+set_target_properties(${hitbox_survey} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
+foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(${hitbox_survey} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")
+endforeach()
+if(WIN32)
+    target_compile_definitions(${hitbox_survey} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${hitbox_survey} PRIVATE /utf-8)
+endif()
+gyo_copy_runtime_dlls(${hitbox_survey})
+add_dependencies(${hitbox_survey} ${presentation_content})
+add_test(NAME "${GYO_CURRENT_APP}.hitbox_survey" COMMAND ${hitbox_survey} --smoke)
+set_tests_properties("${GYO_CURRENT_APP}.hitbox_survey" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 120
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 
 # The in-world pointer capture policy against its golden (batch 06's oracle,
 # recorded at the policy's own boundary; sdl-isolation J1, v7.1 D168).

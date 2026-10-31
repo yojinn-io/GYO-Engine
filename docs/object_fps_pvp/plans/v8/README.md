@@ -133,6 +133,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `pv8-seq-ceiling` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_seq_ceiling.zh-Hant.md) |
 | `pv8-seq-narrow` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_seq_narrow.zh-Hant.md) |
 | `v8-product-crouch`（wire 接入） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_crouch_wire.zh-Hant.md) |
+| `v8-product-hitbox-survey` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_hitbox_survey.zh-Hant.md) |
 
 ---
 
