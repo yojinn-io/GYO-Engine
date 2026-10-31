@@ -133,8 +133,14 @@ add_executable(${anim_bottlenecks} AnimBottlenecks.cpp)
 target_compile_features(${anim_bottlenecks} PRIVATE cxx_std_20)
 target_link_libraries(${anim_bottlenecks} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage GYO::PlatformSDL nlohmann_json::nlohmann_json)
 gyo_use_app_config(${anim_bottlenecks} "${GYO_CURRENT_APP}")
+# A macOS cross build names its target in CMAKE_OSX_ARCHITECTURES; the
+# processor variable is the host's there.
+set(anim_bottlenecks_processor "${CMAKE_SYSTEM_PROCESSOR}")
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    set(anim_bottlenecks_processor "${CMAKE_OSX_ARCHITECTURES}")
+endif()
 target_compile_definitions(${anim_bottlenecks} PRIVATE
-    GYO_ANIM_BOTTLENECKS_PLATFORM="${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+    GYO_ANIM_BOTTLENECKS_PLATFORM="${CMAKE_SYSTEM_NAME}-${anim_bottlenecks_processor}")
 set_target_properties(${anim_bottlenecks} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
 foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
     set_target_properties(${anim_bottlenecks} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")

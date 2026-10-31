@@ -128,7 +128,9 @@ public:
         return out;
     }
     bool NodesUnique() const {
-        for (const auto& [name, count] : Nodes().items())
+        // Keep the object alive: items() of a temporary dangles inside the loop.
+        const auto nodes = Nodes();
+        for (const auto& [name, count] : nodes.items())
             if (count.get<int>() != 1) return false;
         return true;
     }
