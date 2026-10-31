@@ -1,6 +1,6 @@
 # hitbox-line 規劃（v8-product-hitbox-plan）
 
-更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：草案，等你決定（下面「等你決定」的 13 項）。** 起因：`v8-product-hitbox-plan-ultracode`（[HANDOFF](HANDOFF.md)）。已定的前提：`v8-product-hit-rules-v2-values`、`v8-product-hit-rules-limb-wire`、`v8-product-hit-rules-permille`。
+更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：已核准（`v8-product-hitbox-plan-approve`，2026-10-31）：13 項全部照建議。rewind 拆成另一條 PR 線（`v8-product-hitbox-plan-scope` (b)）。** 起因：`v8-product-hitbox-plan-ultracode`（[HANDOFF](HANDOFF.md)）。已定的前提：`v8-product-hit-rules-v2-values`、`v8-product-hit-rules-limb-wire`、`v8-product-hit-rules-permille`。
 
 ## 過程
 

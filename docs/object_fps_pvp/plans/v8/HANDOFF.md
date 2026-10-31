@@ -99,6 +99,7 @@
 | `v8-product-hit-rules-limb-wire` | （2026-10-30）四肢一層要上 wire：加 `HitPart` 的新值（例如 `HIT_PART_LIMB`）。pv8 合併後的 wire 變更，使用者同意；版本處理（pv8 的延續或升 pv9）在 hitbox-line 的事前宣告決定 | 「改，我說過會有hitbox的。」 |
 | `v8-product-hit-rules-permille` | （2026-10-30）傷害用千分位計算，不取整。血量與傷害以千分之一點為單位（2026-10-30 使用者確認：「對」）（100 HP＝100000），倍率是千分位整數（2000、1000、750），25 × 0.75＝18750 整除；畫面顯示時除以 1000。這改變 `maximum_hp`、`shot_damage`、`hp` 等欄位的單位語意，算 Data Contract 變更 | 「用千分位算。」 |
 | `v8-product-hitbox-plan-ultracode` | （2026-10-31）hitbox-line 先開規劃批 `v8-product-hitbox-plan`，用 ultracode（偵察 2×Sonnet 5.5、案 3×Opus 5.5、審 1×Opus 5.5、對抗 1×Sonnet 5.5）。起因：Match 沒有模型與動畫，誰來算骨骼姿勢是架構問題（做法 (A) 取樣完整動畫／(B) 固定姿勢的骨骼膠囊／(C) 部位層級的簡化形狀） | 「用 ultracode」 |
+| `v8-product-hitbox-plan-approve` | （2026-10-31）核准 [hitbox-plan](hitbox-plan.md) 的 13 項全部照建議：`v8-product-hitbox-model` (a) B-flat；`v8-product-hitbox-plan-scope` (b) rewind 拆成另一條 PR 線（部位判定線約 45～70 h、回溯線約 23～35 h，範圍超過原估 1.5 倍經使用者重新核准）；`pv9-hitbox-version` (a) 升 pv9、⑤ 的附錄 B 改名 pv10；`v8-product-hitbox-view-invariant` (a) 改寫 Design Invariants 第 8 列、守衛分兩段核准；`v8-product-hitbox-rewind-r` (a) 由 lag-l2 的分位數決定（上限 15 Tick）；`v8-product-hitbox-rewind-cross-life` (a) 判 Miss；`v8-product-hitbox-view-lag-base` J；`v8-product-hit-rules-multiplier` HitPart 為鍵、CombatRules 常數；`v8-product-hit-rules-damage-count` (a)；`v8-product-hit-rules-hud` ceil；`v8-product-hitbox-format-owner` (a)；`v8-product-hitbox-determinism-premise` (a)；`v8-product-hitbox-shape-bound` (a) | 「照建議核准」 |
 
 ## 規劃紀錄（記錄器）
 

@@ -33,10 +33,20 @@ v8-plan
 │   │   ├── pv8-seq-ceiling        「high｜Opus 5.5｜不改 wire：WireCounterMax 取代 uint64 上限檢查（完成）」
 │   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼（完成）」
 │   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告（完成）」
-│   └── hitbox-line                「PR 線：部位 hitbox（pv7 已有欄位）；規劃草案見 hitbox-plan.md，等使用者決定」
-│       ├── v8-product-hitbox-data            「high｜Opus 5.5｜骨骼→部位形狀的 Data Contract，先手寫 JSON」
-│       ├── v8-product-hitbox-rewind          「high（回溯局部 xhigh）｜Opus 5.5｜Match 的權威姿勢歷史、射擊照開槍時刻回溯」
-│       └── v8-product-hit-rules              「medium｜Opus 5.5｜部位倍率：照 v2 三層（頭 2.0、軀幹 1.0、四肢 0.75），千分位計算，加 HIT_PART_LIMB」
+│   ├── hitbox-line                「PR 線：部位判定（hitbox-plan.md，v8-product-hitbox-plan-approve）」
+│   │   ├── v8-product-hitbox-survey          「high｜Opus 5.5｜獨立量測工具：節點、參考幀尺寸、clip 偏差、輪廓覆蓋率」
+│   │   ├── pv9-hitbox-declare                「ultracode｜案 Opus 5.5、對抗 Sonnet 5.5｜protocol-v9 草稿、Design Invariants（第一段）、門檻、§14.4 範本」
+│   │   ├── pv9-rename                        「low｜Sonnet 5.5｜proto、Go 套件、CMake target 改名為 v9」
+│   │   ├── v8-product-hit-rules-permille     「high｜Opus 5.5｜千分之一點、DigestVersion 3、版本值 9」
+│   │   ├── v8-product-hit-rules-limb-wire    「high｜Opus 5.5｜HIT_PART_LIMB 與白名單」
+│   │   ├── v8-product-hitbox-data            「high｜Opus 5.5｜hitbox.json 契約與嚴格載入器」
+│   │   ├── v8-product-hitbox-shot            「high（平手局部 xhigh）｜Opus 5.5｜逐段判定、倍率傷害」
+│   │   ├── v8-product-hit-presentation       「medium｜Opus 5.5｜受擊動畫依部位、驗收工具」
+│   │   └── v8-product-hitbox-acceptance      「medium｜Sonnet 5.5｜L1、突變、L2（收支行）」
+│   └── rewind-line                「PR 線：射擊回溯（部位判定線合併後）」
+│       ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
+│       ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
+│       └── v8-product-hitbox-rewind          「high（τ、夾取局部 xhigh）｜Opus 5.5｜姿勢歷史、ShotRewind、守衛第二段核准」
 │
 ├── ② 體驗優化                     「pv8 欄位已在 ① 合併，這裡只填行為」
 │   └── v8-product-sprint                     「high｜Opus 5.5｜衝刺；改變權威結果，事前宣告」
