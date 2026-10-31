@@ -62,7 +62,8 @@
 - 任務的預期是 disk 的 anchored match 全部命中。第一輪 297／299 未達；第二輪 299／299，但有一個間隔誤差 33.3 ms。
 - 兩輪都有 disk 驅動的長停頓（回呼間隔 208 ms、116 ms），與 disk 的遲到同時出現；macOS 的紀錄（[2026_10_30_engine_audio_record](2026_10_30_engine_audio_record.zh-Hant.md)）沒有這種停頓。
 - 原因未切分（AGENTS §14.1）：可能是環境（Windows 上 disk 驅動的 `SDL_Delay` 或寫檔被擋住，例如防毒掃描），也可能是分析器對遲到請求的錨點重建。`events.csv` 沒有逐筆的遲到標記，從現有紀錄分不出未命中的兩個是否就是遲到的兩個。只跑了 2 輪，沒有改量法。
-- 影響：消費端的 L2（`sound_l2.py`）也以 disk 驅動與錨點重建判定，在 Windows 上可能偶發不成立。列為待使用者決定。
+- 影響：消費端的 L2（`sound_l2.py`）也以 disk 驅動與錨點重建判定，在 Windows 上可能偶發不成立。
+- 使用者的決定（`v8-engine-audio-windows-disk`）：「A：照現狀記錄」。Windows 的 disk 結果不當判定，不加診斷、不改量法。
 
 ## 證據
 
