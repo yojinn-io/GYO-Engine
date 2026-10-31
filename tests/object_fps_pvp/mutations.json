@@ -25,6 +25,9 @@
     "protocol_version": {
       "ctest": "object_fps_pvp.protocol_version"
     },
+    "asset_catalog": {
+      "ctest": "object_fps_pvp.asset_catalog"
+    },
     "presentation": {
       "build": [
         "gyo_object_fps_pvp_presentation_tests"
@@ -265,7 +268,7 @@
       "find": "            if (actions.aimWeight != 0) {\n",
       "replace": "            if (false) {\n",
       "check": "presentation",
-      "expect": "a positive pitch points the pistol down"
+      "expect": "a positive pitch points the weapon down"
     },
     {
       "id": "11-pitch-reversed",
@@ -275,7 +278,7 @@
       "find": "actions.aimWeight < 0 ? definition.aimUpClip :",
       "replace": "actions.aimWeight > 0 ? definition.aimUpClip :",
       "check": "presentation",
-      "expect": "a positive pitch points the pistol down"
+      "expect": "a positive pitch points the weapon down"
     },
     {
       "id": "11-pitch-unclamped",
@@ -311,11 +314,141 @@
       "id": "11-limit-uncalibrated",
       "batch": "11",
       "what": "The down limit no longer matches the measured down pose",
-      "file": "assets/object_fps_pvp/players/presentation.json",
+      "file": "assets/object_fps_pvp/characters/player/presentation.json",
       "find": "    \"down_pitch_radians\": 1.5236\n",
       "replace": "    \"down_pitch_radians\": 1.3\n",
       "check": "presentation",
       "expect": "measured muzzle elevations"
+    },
+    {
+      "id": "v8-asset-layout-guard-first-folder",
+      "batch": "v8-asset-layout-guard",
+      "what": "The layout check no longer reports a path under an unknown first folder",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "            found.add(('first-folder', entry['path']))\n",
+      "replace": "            pass\n",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_layout_check_finds_a_root_file_and_an_unknown_folder"
+    },
+    {
+      "id": "v8-asset-layout-guard-own-files",
+      "batch": "v8-asset-layout-guard",
+      "what": "A text entry may reference a model or texture in any folder",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "if target_path.parent not in (folder, folder / 'textures') and target_path.parts[0] not in SHARED_ROOTS:",
+      "replace": "if target_path.parent not in (folder, folder / 'textures', target_path.parent) and target_path.parts[0] not in SHARED_ROOTS:",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_reference_check_finds_a_texture_in_another_folder"
+    },
+    {
+      "id": "v8-asset-layout-guard-case",
+      "batch": "v8-asset-layout-guard",
+      "what": "Paths are compared with their case, so two spellings of one path pass",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "spellings.setdefault(path.lower(), set()).add(path)",
+      "replace": "spellings.setdefault(path, set()).add(path)",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_case_check_finds_paths_differing_only_by_case"
+    },
+    {
+      "id": "v8-asset-layout-guard-product-use",
+      "batch": "v8-asset-layout-guard",
+      "what": "References from tests count as product use, so test-only content ships",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "PRODUCT_ROOTS = [REPOSITORY / 'apps' / 'object_fps_pvp']",
+      "replace": "PRODUCT_ROOTS = CODE_ROOTS",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_every_exception_is_still_needed"
+    },
+    {
+      "id": "v8-asset-layout-guard-exception-dropped",
+      "batch": "v8-asset-layout-guard",
+      "what": "A real departure loses its exception (the check must see the real catalog)",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "    ('root-file', 'movement_rules.json'): PATH_LOADED_MOVE,\n",
+      "replace": "",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_paths_follow_the_layout"
+    },
+    {
+      "id": "v8-asset-layout-guard-source-license",
+      "batch": "v8-asset-layout-guard",
+      "what": "A source record loses its license",
+      "file": "tests/object_fps_pvp/asset_sources.json",
+      "find": "\"license\": \"SIL Open Font License 1.1\",",
+      "replace": "\"license\": \"\",",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_every_file_asset_has_a_source_record"
+    },
+    {
+      "id": "v8-asset-layout-guard-stale-exception",
+      "batch": "v8-asset-layout-guard",
+      "what": "An exception that no departure needs is no longer reported",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "    return sorted(set(exceptions) - set(findings))\n",
+      "replace": "    return []\n",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_exception_check_finds_a_stale_exception"
+    },
+    {
+      "id": "v8-asset-layout-guard-other-owner",
+      "batch": "v8-asset-layout-guard",
+      "what": "Other owners may name catalog paths; only the asset root is searched",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "needles = ['assets/object_fps_pvp'] + (sorted({entry['path'] for entry in entries}) if catalog_paths else [])",
+      "replace": "needles = ['assets/object_fps_pvp']",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_owner_check_finds_a_pvp_path_in_another_owner"
+    },
+    {
+      "id": "v8-asset-layout-guard-owner-scan",
+      "batch": "v8-asset-layout-guard",
+      "what": "A top-level common layer (framework/) drops out of the owner scan",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "NOT_COMMON = {'assets', 'docs', 'agents', 'third_party', 'build', 'apps', 'tests'}",
+      "replace": "NOT_COMMON = {'assets', 'docs', 'agents', 'third_party', 'build', 'apps', 'tests', 'framework'}",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_owner_scan_covers_every_common_layer"
+    },
+    {
+      "id": "v8-asset-layout-guard-id-type",
+      "batch": "v8-asset-layout-guard",
+      "what": "A type no longer has to match its file extension",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "        if PurePosixPath(entry['path']).suffix.lower() != EXTENSIONS.get(entry['type']):\n",
+      "replace": "        if False:\n",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_id_check_finds_bad_syntax_and_a_type_mismatch"
+    },
+    {
+      "id": "v8-asset-layout-guard-snake-case",
+      "batch": "v8-asset-layout-guard",
+      "what": "Folder and authored file names accept upper case and hyphens",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "SNAKE_CASE = re.compile(r'[a-z0-9]+(?:_[a-z0-9]+)*')",
+      "replace": "SNAKE_CASE = re.compile(r'[A-Za-z0-9_-]+')",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_the_naming_check_finds_case_authored_names_and_definition_names"
+    },
+    {
+      "id": "v8-asset-layout-guard-id-substring",
+      "batch": "v8-asset-layout-guard",
+      "what": "Any text containing an id counts as a reference to it",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "    used = set(paths) & set(ID_TOKEN.findall(code))\n",
+      "replace": "    used = {i for i in paths if i in code}\n",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_a_reference_is_the_whole_id"
+    },
+    {
+      "id": "v8-asset-layout-guard-id-token-split",
+      "batch": "v8-asset-layout-guard",
+      "what": "Reference tokens stop at dots, so no id is ever found",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "ID_TOKEN = re.compile(r'[\\w.]+')",
+      "replace": "ID_TOKEN = re.compile(r'\\w+')",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_every_id_is_used_or_retained_with_a_reason"
     },
     {
       "id": "13-shake-into-view",

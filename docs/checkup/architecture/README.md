@@ -68,3 +68,4 @@ Engine 內部也要看兩件事，結果寫進報告的「Engine 這一側的問
 |---|---|---|
 | 2026-10-04 | `c8ee213` | [架構漂移健檢](2026_10_04_architecture.zh-Hant.md) |
 | 2026-10-27 | `37d533d` | [架構漂移健檢](2026_10_27_architecture.zh-Hant.md) |
+| 2026-11-01 | `ebfe3225` | [架構漂移健檢](2026_11_01_architecture.zh-Hant.md) |
