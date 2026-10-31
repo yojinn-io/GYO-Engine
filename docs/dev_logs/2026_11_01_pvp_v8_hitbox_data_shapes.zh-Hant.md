@@ -57,4 +57,4 @@
 ## 範圍的限界
 
 - 形狀的大小是否合適，要等 `v8-product-hitbox-shot` 之後的 L2 試玩才看得出來。
-- 檔案位置：asset-layout 線（PR #125）的新標準預定把它放在 `characters/player/`。目前它和 `players/` 的另外 3 個定義檔放在一起，由那條線的 player-folder 批一起搬；asset id 不變。
+- 檔案位置：commit `c0d3ef1e` 時放在 `players/`。之後照 asset-layout 線（PR #125）的建議，搬到 `characters/player/hitbox.json`（asset id 不變）：PR #125 合併後，守衛會擋下 `players/` 底下的檔案。hitbox.json 是 text，不需要 `asset_sources.json` 的來源紀錄。

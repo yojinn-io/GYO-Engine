@@ -37,7 +37,7 @@ v8-product-hitbox-data
 
 ### 檔案（決定 `v8-product-hitbox-shape-format`）
 
-`assets/object_fps_pvp/players/hitbox.json`，在 asset catalog 登錄為 `object_fps_pvp.player.hitbox`（text）。
+`assets/object_fps_pvp/players/hitbox.json`（2026-11-01 照 asset-layout 線的標準搬到 `characters/player/hitbox.json`，asset id 不變），在 asset catalog 登錄為 `object_fps_pvp.player.hitbox`（text）。
 
 ```json
 {

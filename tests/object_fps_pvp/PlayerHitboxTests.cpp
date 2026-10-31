@@ -68,7 +68,7 @@ const PlayerPresentationDefinition& Definition() {
 }
 
 nlohmann::json ProductJson() {
-    std::ifstream file(ContentRoot() / "players" / "hitbox.json");
+    std::ifstream file(ContentRoot() / "characters" / "player" / "hitbox.json");
     REQUIRE(file);
     return nlohmann::json::parse(file);
 }
