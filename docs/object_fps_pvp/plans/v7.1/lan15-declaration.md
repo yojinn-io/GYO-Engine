@@ -194,7 +194,7 @@ Windows 有 2 台，都用 CI 套件 `gyo-package-object_fps_pvp-windows-x64`，
 - FPS：LUO 最低 58，KLYU 最低 164。
 - LUO 第一次連線時遇到 Gateway 的 HTTP 逾時與讀取失敗（11:01:07～11:01:47）。當時是第 1 次的 Gateway。
 
-**證據**：Mac 的 `~/gyo-lan15/session-20261029/`；Windows 的 `~/Downloads/20261029_KLYU_logs.zip`、`~/Downloads/logs-LUO.zip`；探索性核對的輸出在會話的 scratchpad `lan15-20261029/`。
+**證據**：Mac 的 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/session-20261029/`；Windows 的 `~/Downloads/20261029_KLYU_logs.zip`、`~/Downloads/logs-LUO.zip`；探索性核對的輸出在會話的 scratchpad `lan15-20261029/`。
 
 **S7（新模型的外觀，使用者事後的判定）**：有問題。使用者：「有問題，但是我想應該不是Engine的問題，而是模型的，我回去處理。」記為 S7 不通過；具體的問題與修正由使用者在模型端處理，修好後的模型要在下一次場次再看一次。兩台的 log 沒有 `missing player animation`、`missing or ambiguous player bone`。
 

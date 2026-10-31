@@ -146,7 +146,7 @@ C1、C2 只對同一台 Intel Mac、同機三角色成立。
 | 平台 | 狀態 |
 |---|---|
 | macOS Intel x86_64（Metal、120 Hz） | **實機驗證**：L1、L2、L3（本基線；L3 部分略過） |
-| Windows x64（D3D12） | **未驗證**（D34、D76）。第 15 批移到 v7.1；3 人 LAN 測試改期（D83），測試包 `~/gyo-lan-v7/` 與 [LAN 測試手冊](LAN_TEST.md)保留（Windows Client 用 snapshot `object_fps_pvp-snapshot-20261014-6d3f287` 的 windows-x64 包）。CI 跑 L1 |
+| Windows x64（D3D12） | **未驗證**（D34、D76）。第 15 批移到 v7.1；3 人 LAN 測試改期（D83），測試包 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/` 與 [LAN 測試手冊](LAN_TEST.md)保留（Windows Client 用 snapshot `object_fps_pvp-snapshot-20261014-6d3f287` 的 windows-x64 包）。CI 跑 L1 |
 | Linux x64 | **未驗證**；CI 跑 L1 |
 | macOS arm64 | **未驗證**；CI 跑 L1 |
 | 兩機時鐘漂移 | 不量（D73：需要 pv7 的時間回聲，v7.1） |

@@ -48,4 +48,6 @@
 ## 證據
 
 - worker：Windows 機器的 `build/target/_build/test/logs/worker-*-20261028/`、`worker-D230-20261029/`；本機的會話 scratchpad `v708/`。
+  - （後續，2026-10-31）scratchpad 的 `v708/` 已搬到主 checkout 的 `build/evidence/v708/`（git 不追蹤、不上 GitHub）。
 - lan15：Mac 的 `~/gyo-lan15/session-20261029/`；`~/Downloads/20261029_KLYU_logs.zip`、`~/Downloads/logs-LUO.zip`。
+  - （後續，2026-10-31）`~/gyo-lan15/` 已搬到主 checkout 的 `build/evidence/gyo-lan15/`（git 不追蹤、不上 GitHub）。
