@@ -11,29 +11,38 @@
 - 命中由 Match 權威判定。射擊照射手畫面時刻回溯，放在另一條線（rewind-line）。
 - 4 人對戰。
 
-## 2. 成熟方案怎麼做
+## 2. 成熟方案怎麼做（2026-10-31 查證）
 
-資料是使用者轉來的整理（出自另一個 agent 的知識，沒有逐一查證最新版本）。
+使用者轉來的整理出自另一個 agent 的知識；開工前照使用者的要求逐項查證（`v8-product-hitbox-plan-v2-approve`）。「查證」欄：✓ 有一手或可靠來源；△ 只有二手來源或程式碼鏡像；✗ 查不到出處。
 
-| 遊戲 | 部位 | 伺服器怎麼知道姿勢 | 回溯 |
+| 遊戲 | 轉述 | 查證 | 來源 |
 |---|---|---|---|
-| CS（Source） | 頭、身體、四肢 | 伺服器也跑動畫狀態機，每 tick 算骨骼，hitbox 綁骨頭 | 保存約 1 秒的姿勢歷史 |
-| **Valorant** | **頭、身體、腿** | **伺服器跑完整動畫；動畫刻意簡單、便宜、可預測，追求伺服器與 Client 姿勢一致** | 有 |
-| Overwatch | 頭、身體 | 每個英雄幾個簡單膠囊，形狀刻意比模型大 | 有，偏袒射手 |
-| PUBG、Fortnite | 多部位 | 伺服器動畫降級（降頻、部分骨骼、遠處固定姿勢），因為人多 | 有 |
+| Valorant | 伺服器跑完整動畫判定命中 | ✓ 原文：伺服器要跑「和玩家在 Client 上看到的相同動畫」 | [Riot：VALORANT's 128-Tick Servers](https://www.riotgames.com/en/news/valorants-128-tick-servers)（2020-08） |
+| Valorant | 回溯 | ✓ 歷史緩衝區存「玩家位置與動畫狀態」，收到射擊時回溯再判定；有回溯上限（數值未公開） | 同上；[Riot：Peeking into VALORANT's Netcode](https://www.riotgames.com/en/news/peeking-valorants-netcode)（2020-07） |
+| Valorant | 動畫刻意簡單、便宜 | **✗ 要修正**：原文沒有說動畫做得簡單；省成本的方法是**每 4 幀才算一次動畫、回溯時在存下的動畫之間內插**（動畫成本降 75%），以及**買裝備階段完全不算動畫**（玩家停在 idle，再降 33%） | 128-Tick Servers |
+| Valorant | 追求伺服器與 Client 姿勢一致 | △ 原文只說「跑相同的動畫」；沒有說程式碼是否共用、是否決定性、動畫狀態怎麼同步 | 同上 |
+| Valorant | 頭、身體、腿三層，倍率依武器 | ✗ 兩篇技術文章都沒提部位（屬遊戲內公開的武器數值，沒有查一手來源） | — |
+| Valorant | 其他 | ✓ 伺服器與 Client 都以 128 tick 固定步長模擬；伺服器每幀目標約 2.34 ms，一核心 3 場、每場約 10 人 | 兩篇 |
+| CS（Source） | 伺服器每 tick 算骨骼、hitbox 綁骨頭 | △ 回溯的標準設定是「位置與 hitbox 都回溯」；另一個設定只回溯位置、跳過動畫 | Valve wiki〈Lag compensation〉（原頁 403，只讀到搜尋摘要） |
+| CS（Source） | 保存約 1 秒的姿勢歷史 | △ 預設只回溯玩家，保留 1 秒的「位置與動畫」歷史；歷史紀錄存的是**動畫狀態**（每層的 sequence、cycle、權重），不是骨骼姿勢 | 同上；[Source SDK 2007 `player_lagcompensation.cpp`（社群鏡像）](https://github.com/VSES/SourceEngine2007/blob/43a5c90a5ada1e69ca044595383be67f40b33c61/se2007/game/server/player_lagcompensation.cpp) |
+| CS（Source） | 不同步會被抱怨「打中卻沒算」 | △ TF2 2018 年的更新讓回溯「還原動畫分層的 pose parameters」，使伺服器 hitbox 更接近 Client；CS2 修過「回溯的 hitbox 比畫面上更早」的問題 | [TF2 wiki](https://wiki.teamfortress.com/wiki/Lag_compensation)；[Dot Esports（CS2 更新）](https://dotesports.com/counter-strike/news/counter-strike-2-nov-6-patch-notes-defuse-bug-fixed-lag-compensation-and-bullet-hit-feedback) |
+| CS（Source） | 動畫狀態由伺服器送給 Client | ✗ 這次查到的來源沒有提 | — |
+| Overwatch | 偏袒射手、有回溯 | △ 偏袒射手出自官方開發者影片的報導；回溯上限約 250 ms 出自論壇轉述 GDC 演講，未核對 | [PCGamesN](https://www.pcgamesn.com/overwatch/cute-stickers-and-little-cups-help-explain-the-overwatch-netcode)；[GDC Vault](https://gdcvault.com/play/1024001/-Overwatch-Gameplay-Architecture-and) |
+| Overwatch | 形狀刻意比模型大 | △ 只有玩家社群的測試（頭的判定明顯大於模型），沒有官方說法 | [Dexerto](https://www.dexerto.com/overwatch/overwatch-streamer-reveals-true-hitboxes-for-every-hero-in-the-game-1365648) |
+| PUBG、Fortnite | 伺服器動畫降級 | ✗ 查不到這兩款的說法；Unreal 引擎本身提供伺服器動畫的降頻與預算機制（URO、Animation Budget Allocator），但不能說這兩款怎麼用 | [Epic：Animation Budget Allocator](https://dev.epicgames.com/documentation/en-us/unreal-engine/animation-budget-allocator-in-unreal-engine) |
 
-共同點：伺服器的動畫狀態由**伺服器的權威狀態**決定，不依賴 Client 的呈現狀態；伺服器與 Client 不要求逐位元一致。
+查證後的共同點：**伺服器跑和 Client 相同的動畫來判定命中，歷史存的是動畫狀態（不是骨骼），回溯時重建**（Valorant ✓、CS △）。成本用「降低動畫的計算頻率＋內插」與「不需要時不算」來壓（Valorant ✓）。
 
 ### 他們為什麼這樣做（踩過的坑）
 
 | 做法 | 避開的坑 | 和我們像不像 |
 |---|---|---|
-| 伺服器跑動畫、hitbox 綁骨頭（CS、Valorant） | 用簡化形狀時「畫面上打中了卻沒算」，玩家最不能接受 | 像：我們也是伺服器權威、玩家看得到骨骼動畫 |
-| 動畫狀態只由伺服器的權威狀態決定，再送給 Client（CS 送動畫週期；Valorant 追求兩邊姿勢一致） | 兩邊各自推動畫狀態會漂開，伺服器判的姿勢和畫面不一樣 | 像：我們的步伐相位正是 Client 自己推的（survey 量到跑步時腿差 0.9 m） |
-| 動畫刻意簡單、便宜（Valorant） | 伺服器每 tick 算骨骼的成本，以及兩邊不一致的機會 | 部分像：我們的動畫是現成的 UAL clip，不是為伺服器設計的；成本要量（B1） |
+| 伺服器跑和 Client 相同的動畫、hitbox 綁骨頭（Valorant ✓、CS △） | 用簡化形狀時「畫面上打中了卻沒算」，玩家最不能接受 | 像：我們也是伺服器權威、玩家看得到骨骼動畫 |
+| 動畫狀態只由伺服器的權威狀態決定（Valorant ✓ 跑相同動畫；「送給 Client」這點兩者都查不到出處，是我們的推論） | 兩邊各自推動畫狀態會漂開，伺服器判的姿勢和畫面不一樣 | 像：我們的步伐相位正是 Client 自己推的（survey 量到跑步時腿差 0.9 m） |
+| 降低動畫的計算頻率＋回溯時內插、不需要時不算（Valorant ✓） | 伺服器每 tick 算骨骼的成本 | 像：我們是 60 Hz、4 人，負擔比 Valorant（128 tick、10 人）小很多；成本要量（B1），超過再照抄這兩招 |
 | 不要求伺服器與 Client 逐位元一致（CS、Valorant） | 跨平台浮點不可能逐位元一致 | 像：Client 不做命中判定，只要 Match 自己可重現 |
-| 伺服器動畫降級（PUBG、Fortnite） | 上百人時伺服器算不動 | 不像：我們 4 人，不需要 |
-| 形狀刻意比模型大（Overwatch） | 小目標難打中、網路抖動造成的挫折 | 不一定：先不做，L2 試玩覺得難打中再調 |
+| 伺服器動畫降級（PUBG、Fortnite ✗ 查不到；Unreal 有這類機制） | 上百人時伺服器算不動 | 不像：我們 4 人，不需要 |
+| 形狀刻意比模型大（Overwatch △，只有社群測試） | 小目標難打中、網路抖動造成的挫折 | 不一定：先不做，L2 試玩覺得難打中再調 |
 
 ### 我們能用多少、要改裝多少
 
@@ -59,7 +68,7 @@
 | R3 | Client 播 Match 決定的姿勢 | Client 自己推步伐相位 | 步伐相位（以及其他 Match 推出來的動畫狀態）放進 snapshot，Client 照它播放；Client 只在兩個 snapshot 之間做呈現內插 |
 | R4 | hitbox 綁骨頭 | 一顆站／蹲膠囊（`ShotQuery.cpp:44-46`） | 三部位的形狀綁在骨頭上：頭球綁 `Head`；軀幹 `spine_01→spine_03`、骨盆 `pelvis→spine_01`；腿 `thigh→calf`、`calf→foot` 左右各兩段。半徑先用 survey 量到的值（頭 0.184、軀幹 0.181、骨盆 0.179、大腿 0.14～0.16、小腿 0.10～0.11 m） |
 | R5 | 不要求伺服器與 Client 逐位元一致 | 權威 digest 的零角度子集要求跨平台逐位元一致 | 只要求 Match 自己可重現；含命中且目標有動畫的情境，是否能留在跨平台 golden 由瓶頸量測決定 |
-| R6 | 姿勢歷史與回溯 | 沒有 | 照 CS 保存歷史，在 rewind-line 做 |
+| R6 | 歷史與回溯 | 沒有 | 照 CS 與 Valorant 存**動畫狀態**（不存骨骼），回溯時重建姿勢；在 rewind-line 做 |
 
 不照抄的部分：
 - Valorant 的倍率依武器不同；我們只有一把槍，倍率固定（頭 2000、軀幹 1000、腿 750）。
@@ -71,7 +80,7 @@
 
 | # | 可能的瓶頸 | 為什麼 | 要量什麼 |
 |---|---|---|---|
-| B1 | Match 的 CPU | 每 Tick（60 Hz）取樣 4 人的動畫與混合 | 每 Tick 取樣的時間（Linux Match 為主） |
+| B1 | Match 的 CPU | 每 Tick（60 Hz）取樣 4 人的動畫與混合 | 每 Tick 取樣的時間（Linux Match 為主）。超過預算時照抄 Valorant：降低計算頻率＋內插、只在需要時算（例如只在有射擊的 Tick 算） |
 | B2 | Match 的載入與套件大小 | 動畫 FBX 約 24 MB、玩家模型 0.8 MB | 啟動時的載入時間與記憶體；能不能只帶需要的 clip |
 | B3 | 跨平台的決定性 | 動畫取樣的 Slerp 用到 acos／sin（`Quaternion.hpp:81-103`） | 同一情境在四平台 L1 上 Match 的結果是否逐位元一致；不一致時含命中的情境就只做同平台兩樹比對 |
 | B4 | wire 大小 | 步伐相位等要放進 PlayerState | 每人多幾 byte；4 人 Snapshot 的型別最大現在 822 B，餘裕 378 B |
@@ -146,6 +155,6 @@ rewind-line（部位判定線合併後）
 | # | 問題 | 建議 |
 |---|---|---|
 | `v8-product-hitbox-valorant-base` | 以 Valorant 為基底（本文件第 3、4 節） | 已選（2026-10-31） |
-| `v8-product-anim-state-on-wire` | Match 決定的動畫狀態要不要上 snapshot | 要。照 CS 把動畫週期由伺服器送給 Client 的做法；不上的話 Client 漏收 snapshot 時會自己算偏 |
+| `v8-product-anim-state-on-wire` | Match 決定的動畫狀態要不要上 snapshot | 要（已核准）。查證後：「CS 把動畫週期送給 Client」查不到出處，這點改成我們自己的推論——Client 若自己推步伐相位，漏收 snapshot 或停頓時會和 Match 漂開（survey 量到跑步時腿差 0.9 m 的原因） |
 | `v8-product-hitbox-golden-policy` | 含命中且目標有動畫的情境，跨平台 golden 怎麼處理 | 先量 B3；不一致就只做同平台兩樹比對，跨平台 golden 只留不含動畫命中的情境 |
 | `v8-product-anim-bottlenecks-first` | 先做瓶頸量測，再寫契約 | 先量（B1～B3），結果交你看過再進 declare |
