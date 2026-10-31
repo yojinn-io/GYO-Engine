@@ -55,7 +55,7 @@ func TestV5ActionKindPresenceAndLifeAreImmutable(t *testing.T) {
 func TestV5SnapshotLifecycleReloadAndJumpValidation(t *testing.T) {
 	in := &runtime.WorldSnapshot{Tick: 20,
 		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 3, LifeGeneration: 2, LifeState: runtime.LifeState_LIFE_ALIVE, LifeStateTick: 10, Y: .4, VerticalVelocity: -2}},
-		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 75, MagazineAmmo: 4, ReloadActionId: 5, ReloadStartTick: 15, ReloadEndTick: 105, LastShotActionId: 4, LastShotTick: 12}},
+		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 75000, MagazineAmmo: 4, ReloadActionId: 5, ReloadStartTick: 15, ReloadEndTick: 105, LastShotActionId: 4, LastShotTick: 12}},
 	}
 	out, err := SnapshotForClient(in, testRules())
 	if err != nil || out.Players[0].LifeGeneration != 2 || out.Players[0].Grounded || out.Players[0].VerticalVelocity != -2 ||
@@ -165,7 +165,7 @@ func TestV5ResultEnumsLifeAndAuthoritativeRules(t *testing.T) {
 func TestV5MovementSlackAndQualityKeepPresenceAndBounds(t *testing.T) {
 	in := &runtime.WorldSnapshot{Tick: 8,
 		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 2, LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, LastResolvedCommand: 5}},
-		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 1, Hp: 100, MagazineAmmo: 12}},
+		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 1, Hp: 100000, MagazineAmmo: 12}},
 	}
 	out, err := SnapshotForClient(in, testRules())
 	if err != nil || out.Players[0].MovementSlackSequence != nil || out.Players[0].MovementSlackUs != nil || out.Players[0].ConnectionQualityFailures != 0 {

@@ -15,7 +15,7 @@ func TestSnapshotAboveCapacityIsInvalid(t *testing.T) {
 	snapshot := &runtime.WorldSnapshot{Tick: 10}
 	for id := uint32(1); id <= MaxPlayers+1; id++ {
 		snapshot.Players = append(snapshot.Players, &runtime.PlayerState{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: id, MovementEpoch: 1})
-		snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: id, Hp: 100})
+		snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: id, Hp: 100000})
 	}
 	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("snapshot above capacity accepted")

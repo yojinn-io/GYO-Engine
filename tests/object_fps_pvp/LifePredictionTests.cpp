@@ -127,9 +127,9 @@ TEST_CASE("v5 remote timeline does not mix lives or life-state segments with com
     REQUIRE(selected); CHECK(selected->player.lifeState == LifeState::Dead);
     REQUIRE(selected->combat); CHECK(selected->combat->hp == 0); CHECK(selected->lowerTick == 2);
     p.lifeState = LifeState::Alive; p.lifeGeneration = 2; p.movementEpoch = 2;
-    p.position = {15, 0, 15}; c.lifeGeneration = 2; c.hp = 100;
+    p.position = {15, 0, 15}; c.lifeGeneration = 2; c.hp = 100000;
     REQUIRE(timeline.Push({182, {p}, {c}}, now + std::chrono::seconds(3)));
     selected = timeline.Sample(1, now + std::chrono::seconds(3)); REQUIRE(selected);
     CHECK(selected->player.lifeGeneration == 2); CHECK(selected->player.position.z == 15);
-    REQUIRE(selected->combat); CHECK(selected->combat->lifeGeneration == 2); CHECK(selected->combat->hp == 100);
+    REQUIRE(selected->combat); CHECK(selected->combat->lifeGeneration == 2); CHECK(selected->combat->hp == 100000);
 }

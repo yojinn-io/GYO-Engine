@@ -73,7 +73,7 @@ func TestMaximumCommandWindowFitsDatagram(t *testing.T) {
 }
 
 func TestSnapshotMappingDoesNotChangeWorldState(t *testing.T) {
-	in := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100}}, Tick: 3, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88, Crouched: true, Sprinting: true}}}
+	in := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 7, Hp: 100000}}, Tick: 3, Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, MovementEpoch: 1, PlayerId: 7, X: 123, Y: 2, Z: -10, Yaw: 1, LastResolvedCommand: 88, Crouched: true, Sprinting: true}}}
 	out, err := SnapshotForClient(in, testRules())
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +105,7 @@ func TestEpochAndContiguousQueueContract(t *testing.T) {
 		t.Fatal("epoch zero accepted")
 	}
 	state := &runtime.PlayerState{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: 1, MovementEpoch: 9, LastResolvedCommand: 2, ContiguousPendingCommands: MaxFutureCommands}
-	snapshot := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 1, Hp: 100}}, Tick: 8, Players: []*runtime.PlayerState{state}}
+	snapshot := &runtime.WorldSnapshot{Combat: []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 1, Hp: 100000}}, Tick: 8, Players: []*runtime.PlayerState{state}}
 	out, err := SnapshotForClient(snapshot, testRules())
 	if err != nil || out.Players[0].MovementEpoch != 9 || out.Players[0].ContiguousPendingCommands != MaxFutureCommands {
 		t.Fatalf("authority metadata lost: %v %v", out, err)
@@ -122,5 +122,5 @@ func TestEpochAndContiguousQueueContract(t *testing.T) {
 }
 
 func testRules() *runtime.CombatRules {
-	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, MaximumShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
+	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100000, ShotDamage: 25000, MaximumShotDamage: 25000, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
 }

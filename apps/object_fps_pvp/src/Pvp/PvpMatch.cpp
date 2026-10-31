@@ -28,6 +28,7 @@ PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& sta
     std::string error;
     if (!arena_.Validate(error)) throw std::invalid_argument(error);
     if (!ValidShotDamageBounds(rules_.shotDamage, rules_.maximumShotDamage, rules_.maximumHp) ||
+        !ValidPartDamage(rules_) ||
         rules_.magazineCapacity == 0 || !std::isfinite(rules_.shotRange) || rules_.shotRange < 0 ||
         rules_.maximumReferenceAge < std::chrono::nanoseconds::zero())
         throw std::invalid_argument("Invalid combat rules");
@@ -367,7 +368,7 @@ bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId,
             auto& target = players_.at(hit.targetId);
             decision.targetLifeGeneration = target.state.lifeGeneration;
             decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)
-            decision.damage = Engine::Math::Min(rules_.shotDamage, target.combat.hp);
+            decision.damage = ShotDamage(rules_, decision.hitPart, target.combat.hp);
             target.combat.hp -= decision.damage;
             ++target.combat.damageCount;
             target.combat.lastDamageTick = tick_;

@@ -15,7 +15,7 @@ import (
 func TestResultsCheckTheHitPart(t *testing.T) {
 	hit := func(part runtime.HitPart) *runtime.ShotDecision {
 		return &runtime.ShotDecision{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, ActionId: 1, ResolvedTick: 5,
-			Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: 2, TargetLifeGeneration: 1, Damage: 25, HitPart: part}
+			Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: 2, TargetLifeGeneration: 1, Damage: 25000, HitPart: part}
 	}
 	miss := func(part runtime.HitPart) *runtime.ShotDecision {
 		return &runtime.ShotDecision{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, ActionId: 1, ResolvedTick: 5,
@@ -62,16 +62,16 @@ func TestMaximumShotDamageBoundsTheRulesAndTheDamage(t *testing.T) {
 		}
 	}
 	rules := testRules()
-	rules.MaximumShotDamage = 50
+	rules.MaximumShotDamage = 50000
 	decision := func(damage uint32) *runtime.ActionResults {
 		return &runtime.ActionResults{PlayerId: 1, Decisions: []*runtime.ShotDecision{{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT,
 			ActionId: 1, ResolvedTick: 5, Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: 2, TargetLifeGeneration: 1,
 			Damage: damage, HitPart: runtime.HitPart_HIT_PART_HEAD}}}
 	}
-	if _, err := ResultsForClient(decision(50), rules); err != nil {
+	if _, err := ResultsForClient(decision(50000), rules); err != nil {
 		t.Fatalf("damage at maximum_shot_damage above shot_damage refused: %v", err)
 	}
-	if _, err := ResultsForClient(decision(51), rules); err == nil {
+	if _, err := ResultsForClient(decision(50001), rules); err == nil {
 		t.Fatal("damage above maximum_shot_damage accepted")
 	}
 }

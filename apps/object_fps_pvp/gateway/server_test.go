@@ -157,7 +157,7 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 func (f *fakeRuntime) send(e *runtime.RuntimeEnvelope) {
 	if snapshot := e.GetSnapshot(); snapshot != nil && snapshot.Combat == nil {
 		for _, p := range snapshot.Players {
-			snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: p.PlayerId, Hp: 100})
+			snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: p.PlayerId, Hp: 100000})
 		}
 	}
 	f.mu.Lock()
@@ -725,7 +725,7 @@ func rejectedVersions() []uint32 {
 }
 
 func testRules() *runtime.CombatRules {
-	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, MaximumShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
+	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100000, ShotDamage: 25000, MaximumShotDamage: 25000, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
 }
 
 // Readiness requires the Match's capacity to equal the Gateway's (pv6 contract

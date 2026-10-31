@@ -72,7 +72,7 @@ void DamageThreeTimes(PvpMatch& match) {
     for (ActionId id = 1; id <= 3; ++id) {
         REQUIRE(match.SubmitActions({1, {{id, 1, 0, 0}}}) == ActionAdmission::Accepted);
         CombatStep(match);
-        CHECK(Decisions(match).back().damage == 25);
+        CHECK(Decisions(match).back().damage == 25000);
         CombatStep(match, 9);
     }
 }
@@ -84,20 +84,20 @@ TEST_CASE("PvP shots apply authority damage once and respect the exact cooldown 
     CombatStep(match);
     const ActionBatch first{1, {{1, 1, 0, 0}}};
     REQUIRE(match.SubmitActions(first) == ActionAdmission::Accepted);
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
     CombatStep(match); // The first accepted shot executes at tick 2.
     const auto original = Decisions(match).front();
     CHECK(original.accepted);
     CHECK(original.resolvedTick == 2);
     CHECK(original.hitKind == ShotHitKind::Player);
     CHECK(original.targetId == 2);
-    CHECK(original.damage == 25);
+    CHECK(original.damage == 25000);
     CHECK(original.kind == ActionKind::Shot);
     CHECK(original.lifeGeneration == 1);
     CHECK(original.targetLifeGeneration == 1);
     CHECK(CombatPlayer(match, 1).magazineAmmo == 11);
     CHECK(CombatPlayer(match, 1).nextAllowedShotTick == 12);
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
 
     for (unsigned repeat = 0; repeat < 40; ++repeat)
         REQUIRE(match.SubmitActions(first) == ActionAdmission::Accepted);
@@ -112,12 +112,12 @@ TEST_CASE("PvP shots apply authority damage once and respect the exact cooldown 
     CHECK_FALSE(decisions.back().accepted);
     CHECK(decisions.back().rejection == ShotRejection::Cooldown);
     CHECK(decisions.back().resolvedTick == 9);
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
     CombatStep(match, 2);
     REQUIRE(match.SubmitActions({1, {{3, 1, 0, 0}}}) == ActionAdmission::Accepted);
     CombatStep(match); // Tick 12 is permitted, including after a rejection.
     CHECK(Decisions(match).back().accepted);
-    CHECK(CombatPlayer(match, 2).hp == 50);
+    CHECK(CombatPlayer(match, 2).hp == 50000);
 }
 
 TEST_CASE("PvP reference expiry uses trusted resolution age and rejection consumes no cooldown") {
@@ -130,7 +130,7 @@ TEST_CASE("PvP reference expiry uses trusted resolution age and rejection consum
         const auto decision = Decisions(match).front();
         CHECK(decision.accepted == (age <= 250ms));
         CHECK(decision.rejection == (age <= 250ms ? ShotRejection::None : ShotRejection::Expired));
-        CHECK(CombatPlayer(match, 2).hp == (age <= 250ms ? 75 : 100));
+        CHECK(CombatPlayer(match, 2).hp == (age <= 250ms ? 75000 : 100000));
         if (age > 250ms) {
             CHECK(CombatPlayer(match, 1).nextAllowedShotTick == 0);
             REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
@@ -151,7 +151,7 @@ TEST_CASE("PvP reference expiry uses trusted resolution age and rejection consum
     REQUIRE(match.SubmitActions(request) == ActionAdmission::Accepted);
     CombatStep(match); // A retry with a fresh callback cannot revive a terminal rejection.
     CHECK(Decisions(match).front() == expired);
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
 }
 
 TEST_CASE("PvP unknown zero future and negative-age shot references receive terminal decisions") {
@@ -189,7 +189,7 @@ TEST_CASE("PvP accepted misses consume cooldown and burst requests have stable a
     CHECK(decisions[0].damage == 0);
     CHECK(decisions[1].actionId == 2);
     CHECK(decisions[1].rejection == ShotRejection::Cooldown);
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
 }
 
 TEST_CASE("PvP action conflicts and malformed batches are rejected atomically") {
@@ -219,7 +219,7 @@ TEST_CASE("PvP action conflicts and malformed batches are rejected atomically") 
     CombatStep(match);
     REQUIRE(Decisions(match).size() == 1);
     CHECK(Decisions(match).front().actionId == 1);
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
     CHECK(match.SubmitActions({1, {{1, 1, 0.1F, 0}, {2, 1, 0, 0}}}) == ActionAdmission::Conflict);
     CombatStep(match);
     CHECK(Decisions(match).size() == 1); // Immutable after resolution as well as before it.
@@ -233,7 +233,7 @@ TEST_CASE("PvP action gaps resolve immediately but retirement requires contiguou
     CHECK_FALSE(match.CanAcknowledgeActions(1, 2));
     CHECK_FALSE(match.AcknowledgeActions(1, 2));
     CombatStep(match);
-    CHECK(CombatPlayer(match, 2).hp == 75); // No wait for missing action 1.
+    CHECK(CombatPlayer(match, 2).hp == 75000); // No wait for missing action 1.
     CHECK_FALSE(match.AcknowledgeActions(1, 2));
     REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
     CHECK_FALSE(match.AcknowledgeActions(1, 1)); // Pending is not terminal yet.
@@ -257,7 +257,7 @@ TEST_CASE("PvP action gaps resolve immediately but retirement requires contiguou
     CHECK(match.SubmitActions({1, {{1, 1, 0, 0}, {1, 1, 1, 0}, {3, 1, 0, 0}}}) == ActionAdmission::Conflict);
     CombatStep(match);
     CHECK(Decisions(match).empty()); // Even changed content at/below the retired floor is inert.
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
     CHECK_FALSE(match.GetActionResults(99));
     CHECK_FALSE(match.AcknowledgeActions(99, 0));
 }
@@ -301,7 +301,7 @@ TEST_CASE("PvP staged action admission validates immutable contents without chan
     CHECK(match.CanSubmitActions({1, {{1, 1, 1, 0}, {2, 1, 0, 0}}}, staged) == ActionAdmission::Conflict);
     CombatStep(match);
     CHECK(Decisions(match).empty());
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
 }
 
 TEST_CASE("PvP shots use post-movement authority poses for every participant and absolute request aim") {
@@ -326,7 +326,7 @@ TEST_CASE("PvP shots use post-movement authority poses for every participant and
     CHECK(decision.accepted);
     CHECK(decision.hitKind == ShotHitKind::Player);
     CHECK(decision.targetId == 2);
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
 }
 
 TEST_CASE("PvP movement epoch reset preserves pending actions retained decisions and HP") {
@@ -354,13 +354,13 @@ TEST_CASE("PvP movement epoch reset preserves pending actions retained decisions
     CHECK(CombatPlayer(match, 1).magazineAmmo == 10);
     CHECK(CombatPlayer(match, 1).lifeGeneration == 1);
     CHECK(match.Snapshot().players.front().lifeGeneration == 1);
-    CHECK(CombatPlayer(match, 2).hp == 50);
+    CHECK(CombatPlayer(match, 2).hp == 50000);
     REQUIRE(match.AcknowledgeActions(1, 3));
     CHECK(match.GetActionResults(1)->retiredThrough == 3);
     REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
     CombatStep(match, 20);
     CHECK(Decisions(match).empty());
-    CHECK(CombatPlayer(match, 2).hp == 50);
+    CHECK(CombatPlayer(match, 2).hp == 50000);
 }
 
 TEST_CASE("PvP twelve world or miss shots exhaust ammo before cooldown and reload completes on tick ninety") {
@@ -423,7 +423,7 @@ TEST_CASE("PvP twelve world or miss shots exhaust ammo before cooldown and reloa
     CombatStep(match, 90);
     CHECK(Decisions(match)[13] == acceptedReload);
     CHECK(CombatPlayer(match, 1).magazineAmmo == 11); // A late duplicate cannot refill again.
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
 }
 
 TEST_CASE("PvP reload format and gameplay rejections remain terminal and side effect free") {
@@ -467,10 +467,10 @@ TEST_CASE("PvP lethal action immediately prevents same tick retaliation and corp
     CHECK(dead.lifeGeneration == 1);
     CHECK(CombatPlayer(match, 2).hp == 0);
     CHECK(CombatPlayer(match, 2).magazineAmmo == 12);
-    CHECK(CombatPlayer(match, 1).hp == 100);
+    CHECK(CombatPlayer(match, 1).hp == 100000);
     CHECK(Decisions(match, 2).front().rejection == ShotRejection::Dead);
     const auto lethal = Decisions(match).back();
-    CHECK(lethal.damage == 25);
+    CHECK(lethal.damage == 25000);
     CHECK(lethal.targetLifeGeneration == 1);
     MoveCombatPlayer(match, 2, 1, 1, 1, 0.5F, true);
     REQUIRE(match.SubmitActions({2, {{2, 0, 0, 0, ActionKind::Reload, 1},
@@ -549,7 +549,7 @@ TEST_CASE("PvP respawn resets movement and combat while retaining cross life act
     CHECK(respawned.verticalVelocity == 0);
     const auto combat = CombatPlayer(match, 2);
     CHECK(combat.lifeGeneration == 2);
-    CHECK(combat.hp == 100);
+    CHECK(combat.hp == 100000);
     CHECK(combat.magazineAmmo == 11); // Same-boundary action 5 consumes the new magazine.
     CHECK(combat.lastShotActionId == 5);
     CHECK(combat.lastShotTick == due);
@@ -565,7 +565,7 @@ TEST_CASE("PvP respawn resets movement and combat while retaining cross life act
     CHECK(decisions[4].accepted);
     CHECK(decisions[4].lifeGeneration == 2);
     CHECK(decisions[4].targetLifeGeneration == 1);
-    CHECK(CombatPlayer(match, 1).hp == 75);
+    CHECK(CombatPlayer(match, 1).hp == 75000);
     CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, respawned.movementEpoch, 1}));
     CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, before.movementEpoch, 2}));
     CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, respawned.movementEpoch, 3}));
@@ -637,7 +637,7 @@ TEST_CASE("PvP death cancels an active reload and keeps airborne neutral gravity
     const auto due = dead.respawnTick;
     while (match.TickCount() < due) CombatStep(match);
     CHECK(CombatPlayer(match, 2).magazineAmmo == 12);
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
     CHECK(CombatPlayer(match, 2).nextAllowedShotTick == 0);
     CHECK(CombatPlayer(match, 2).lastShotActionId == 0);
     CHECK(CombatPlayer(match, 2).lastShotTick == 0);
@@ -793,14 +793,14 @@ TEST_CASE("PvP lethal hit records the killer at the death tick and respawn clear
 
 TEST_CASE("PvP hit record decode check accepts only the contract shapes") {
     // pv7 §7: four fields, the hit part being Body or Head when set.
-    CombatState record{.playerId = 1, .hp = 50, .lastDamageTick = 15, .damageCount = 2, .lastAttackerId = 7,
+    CombatState record{.playerId = 1, .hp = 50000, .lastDamageTick = 15, .damageCount = 2, .lastAttackerId = 7,
                        .lastHitPart = HitPart::Body};
-    CHECK(ValidDamageRecord(record, false, 10, 20, 100));
-    CHECK(ValidDamageRecord(CombatState{.playerId = 1}, false, 10, 20, 100));
+    CHECK(ValidDamageRecord(record, false, 10, 20, 100000));
+    CHECK(ValidDamageRecord(CombatState{.playerId = 1}, false, 10, 20, 100000));
     auto bad = [&](auto edit, bool dead = false, std::uint64_t lifeStateTick = 10) {
         auto copy = record;
         edit(copy);
-        return !ValidDamageRecord(copy, dead, lifeStateTick, 20, 100);
+        return !ValidDamageRecord(copy, dead, lifeStateTick, 20, 100000);
     };
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 0; }));
     CHECK(bad([](CombatState& c) { c.damageCount = 0; }));
@@ -812,8 +812,8 @@ TEST_CASE("PvP hit record decode check accepts only the contract shapes") {
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 9; }));
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 21; }));
     CHECK(bad([](CombatState& c) { c.lastAttackerId = 1; }));
-    CHECK(bad([](CombatState& c) { c.damageCount = 101; }));
-    CHECK_FALSE(bad([](CombatState& c) { c.damageCount = 100; }));
+    CHECK(bad([](CombatState& c) { c.damageCount = 100001; }));
+    CHECK_FALSE(bad([](CombatState& c) { c.damageCount = 100000; }));
     CHECK(bad([](CombatState& c) { c = CombatState{.playerId = 1}; }, true, 18));
     CHECK(bad([](CombatState&) {}, true, 18)); // Dead of an older hit.
     CHECK_FALSE(bad([](CombatState& c) { c.lastDamageTick = 18; }, true, 18));
@@ -878,10 +878,10 @@ TEST_CASE("PvP same tick shots from two and three players all hit and the record
             CAPTURE(shooter);
             CHECK(decision.hitKind == ShotHitKind::Player);
             CHECK(decision.targetId == 2);
-            CHECK(decision.damage == 25);
+            CHECK(decision.damage == 25000);
         }
         const auto victim = CombatPlayer(match, 2);
-        CHECK(victim.hp == 100 - 25 * shooters.size());
+        CHECK(victim.hp == 100000 - 25000 * shooters.size());
         CHECK(victim.damageCount == shooters.size());
         // Adjudication order is player id within the tick: the highest id hits last.
         CHECK(victim.lastAttackerId == shooters.back());
@@ -898,7 +898,7 @@ TEST_CASE("PvP a lethal hit inside a tick lets the later shots of that tick pass
     CombatStep(match, 10);
     Fire(match, 1, 2);
     CombatStep(match, 10);
-    REQUIRE(CombatPlayer(match, 2).hp == 50);
+    REQUIRE(CombatPlayer(match, 2).hp == 50000);
     // Player 1 then 3 kill it; player 4's shot of the same tick is no longer at a target.
     Fire(match, 1, 3);
     Fire(match, 3, 1);
@@ -906,7 +906,7 @@ TEST_CASE("PvP a lethal hit inside a tick lets the later shots of that tick pass
     CombatStep(match);
     CHECK(Decisions(match, 1).back().hitKind == ShotHitKind::Player);
     CHECK(Decisions(match, 3).back().hitKind == ShotHitKind::Player);
-    CHECK(Decisions(match, 3).back().damage == 25);
+    CHECK(Decisions(match, 3).back().damage == 25000);
     const auto passed = Decisions(match, 4).back();
     CHECK(passed.accepted);
     CHECK(passed.hitKind != ShotHitKind::Player);
@@ -1008,13 +1008,53 @@ TEST_CASE("PvP hit part and maximum shot damage decode checks") {
         CHECK(ValidDecisionHitPart(kind, 0));
         for (const int part : {1, 2, 3}) CHECK_FALSE(ValidDecisionHitPart(kind, part));
     }
-    CHECK(ValidShotDamageBounds(25, 25, 100));
-    CHECK(ValidShotDamageBounds(25, 100, 100));
-    CHECK_FALSE(ValidShotDamageBounds(25, 24, 100));
-    CHECK_FALSE(ValidShotDamageBounds(25, 101, 100));
-    CHECK_FALSE(ValidShotDamageBounds(0, 25, 100));
+    CHECK(ValidShotDamageBounds(25000, 25000, 100000));
+    CHECK(ValidShotDamageBounds(25000, 100000, 100000));
+    CHECK_FALSE(ValidShotDamageBounds(25000, 24999, 100000));
+    CHECK_FALSE(ValidShotDamageBounds(25000, 100001, 100000));
+    CHECK_FALSE(ValidShotDamageBounds(0, 25000, 100000));
     CHECK(ValidShotDamageBounds(PvpCombatRules.shotDamage, PvpCombatRules.maximumShotDamage, PvpCombatRules.maximumHp));
-    CHECK(PvpCombatRules.maximumShotDamage == PvpCombatRules.shotDamage); // v7.1: no part multiplier
+    // pv9 §3: the most damage is a head hit.
+    CHECK(PvpCombatRules.maximumShotDamage == PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.headPermille));
+}
+
+// v8-product-hit-rules-permille P3: part damage in milli-points.
+TEST_CASE("PvP part damage follows the permille multipliers") {
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Head, 100000) == 50000);
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Body, 100000) == 25000);
+    CHECK(PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.legPermille) == 18750);
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Body, 10000) == 10000); // hp left caps it
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Head, 30000) == 30000);
+    CHECK(ValidPartDamage(PvpCombatRules));
+    CHECK(PartDamage(3000000, 2000) == 6000000); // the product passes 32 bits
+    CHECK(ValidPartDamage(3000000, 2000, 6000000));
+    CHECK_FALSE(ValidPartDamage(25001, 750, 50000)); // 18750.75 does not divide
+    CHECK_FALSE(ValidPartDamage(25000, 0, 50000));   // no damage
+    CHECK(ValidPartDamage(25000, 2000, 50000));
+    CHECK_FALSE(ValidPartDamage(25000, 2001, 50000)); // above maximumShotDamage
+}
+
+TEST_CASE("PvP Match rejects rules whose part damage is invalid") {
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 20001}), std::invalid_argument); // leg 15000.75
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.legPermille = 0}), std::invalid_argument);
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.headPermille = 2001}), std::invalid_argument);
+    CHECK_NOTHROW(PvpMatch(CombatArena(), CombatRules{.shotDamage = 20000}));
+}
+
+// P4: the HUD rounds milli-points up.
+TEST_CASE("PvP HUD shows whole points rounded up") {
+    for (const auto [milli, shown] : {std::pair{0U, 0U}, {1U, 1U}, {999U, 1U}, {1000U, 1U}, {1001U, 2U},
+                                      {100000U, 100U}})
+        CHECK(DisplayPoints(milli) == shown);
+}
+
+// P7: with the least part damage, one life takes at most six hits; the
+// authority digest checks every combat record against the same bound.
+TEST_CASE("PvP one life takes at most six hits") {
+    const auto least = std::min({PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.headPermille),
+                                 PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.bodyPermille),
+                                 PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.legPermille)});
+    CHECK((PvpCombatRules.maximumHp + least - 1) / least == 6);
 }
 
 // pv7 §6: the path A1 would take at A, from E, S and the request's life
@@ -1072,7 +1112,7 @@ TEST_CASE("PvP shadow record lines and the shot trace path") {
 // ---- A1: shots decided at their command step (pv7 §6, v7.1 a1-shot-step) ----
 namespace {
 // Rules where one hit kills: the order of two shots decides who dies.
-constexpr CombatRules OneHitRules{.shotDamage = 100, .maximumShotDamage = 100};
+constexpr CombatRules OneHitRules{.shotDamage = 100000, .maximumShotDamage = 100000, .headPermille = 1000};
 
 // One command per mover per tick, so each mover's cursor L moves one step per tick.
 void StepMovers(PvpMatch& match, unsigned count = 1, std::initializer_list<PlayerId> movers = {1, 2},
@@ -1401,7 +1441,7 @@ TEST_CASE("PvP A1 measures the reference age once at hand-off") {
 
 TEST_CASE("PvP A1 rejects invalid combat rules") {
     CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 0}), std::invalid_argument);
-    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 30}), std::invalid_argument); // > maximum 25
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 50001}), std::invalid_argument); // > maximum 50000
     CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.magazineCapacity = 0}), std::invalid_argument);
     CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotRange = -1}), std::invalid_argument);
     CHECK_NOTHROW(PvpMatch(CombatArena(), OneHitRules));

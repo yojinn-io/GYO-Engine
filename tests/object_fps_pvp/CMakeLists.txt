@@ -253,6 +253,10 @@ set_tests_properties("${GYO_CURRENT_APP}.max_players" PROPERTIES LABELS "cpu;pvp
 add_test(NAME "${GYO_CURRENT_APP}.mutation_tool"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_run_mutations.py")
 set_tests_properties("${GYO_CURRENT_APP}.mutation_tool" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# The scaled two-tree comparison (docs/object_fps_pvp/plans/v8/v8-product-hit-rules-permille-declaration.md P1).
+add_test(NAME "${GYO_CURRENT_APP}.compare_authority_trees"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_compare_authority_trees.py")
+set_tests_properties("${GYO_CURRENT_APP}.compare_authority_trees" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.gameplay_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.gameplay_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)

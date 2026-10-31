@@ -22,7 +22,7 @@ CYCLE = (["hit"] * 4 + ["dead_target_shot"] * 3 + ["idle"] + ["hit"] * 4 +
 SLOT_START, SLOT_PERIOD = .2, .8
 SUBMITTING = {"hit": 0, "dead_target_shot": 0, "reload": 1}  # step -> action kind
 LOCAL_ONLY = {"empty_click", "reloading_click"}
-RULES = {"maximum_hp": 100, "damage_per_hit": 25, "magazine_capacity": 12, "cooldown_ticks": 10,
+RULES = {"maximum_hp": 100000, "damage_per_hit": 25000, "magazine_capacity": 12, "cooldown_ticks": 10,
          "reload_ticks": 90, "respawn_ticks": 180}
 COMBAT_FIELDS = ("hp", "ammo", "reload_action_id", "reload_start_tick", "reload_end_tick", "last_shot_id", "last_shot_tick")
 PLAYER_HIT = 2
@@ -220,7 +220,7 @@ def analyze_combat_gui(directory, life_respawn_resets=None):
             verdicts[f"{step}:{decision['rejection']}:{decision['hit_kind']}"] += 1
             common = decision["accepted"] is True and decision["rejection"] == 0 and decision["action_kind"] == SUBMITTING[step]
             if step == "hit":
-                ok = common and decision["hit_kind"] == PLAYER_HIT and decision["target_id"] == target and damage == 25
+                ok = common and decision["hit_kind"] == PLAYER_HIT and decision["target_id"] == target and damage == 25000
                 hits_by_tick.append((tick, action_id, expected_target_life(entry)))
             elif step == "dead_target_shot":
                 ok = common and decision["hit_kind"] != PLAYER_HIT and decision["target_id"] == 0 and damage == 0

@@ -17,9 +17,10 @@ inline constexpr std::size_t MaxPublishedShotReferences = 64;
 inline constexpr unsigned ActionSendRate = 30;
 
 // Product policy. Wire Ready/Welcome will use this same source in batch 03.
+// HP and damage are in milli-points (pv9 §3): 100 HP is 100000.
 struct CombatRules final {
-    std::uint32_t maximumHp{100};
-    std::uint32_t shotDamage{25};
+    std::uint32_t maximumHp{100000};
+    std::uint32_t shotDamage{25000};
     std::uint64_t cooldownTicks{10};
     float shotRange{100};
     std::chrono::nanoseconds maximumReferenceAge{std::chrono::milliseconds{250}};
@@ -27,10 +28,22 @@ struct CombatRules final {
     std::uint64_t reloadTicks{90};
     std::uint64_t respawnTicks{180};
     // The most damage one decision may deal, part multipliers included (pv7
-    // §7); shotDamage stays the base (Body) damage. v7.1 has no multiplier.
-    std::uint32_t maximumShotDamage{25};
+    // §7, pv9 §3); shotDamage stays the base (Body) damage.
+    std::uint32_t maximumShotDamage{50000};
+    // Part multipliers in permille of shotDamage (pv9 §3). Match carries them
+    // only; the wire carries maximumShotDamage. Leg reaches the wire in pv9's
+    // leg batch.
+    std::uint32_t headPermille{2000};
+    std::uint32_t bodyPermille{1000};
+    std::uint32_t legPermille{750};
 };
 inline constexpr CombatRules PvpCombatRules{};
+
+// Whole points a Client shows for milli-points (pv9 §3): rounded up, so a
+// living player (hp >= 1) never reads 0.
+[[nodiscard]] constexpr std::uint32_t DisplayPoints(std::uint32_t milliPoints) noexcept {
+    return milliPoints / 1000 + (milliPoints % 1000 != 0 ? 1U : 0U);
+}
 
 // A1 (pv7 §6): W, the furthest step a request may claim ahead of the
 // shooter's last resolved command, and the cooldown hold bound. K follows the
@@ -152,6 +165,31 @@ struct CombatState final {
 [[nodiscard]] constexpr bool ValidShotDamageBounds(std::uint32_t shotDamage, std::uint32_t maximumShotDamage,
                                                    std::uint32_t maximumHp) noexcept {
     return shotDamage > 0 && shotDamage <= maximumShotDamage && maximumShotDamage <= maximumHp;
+}
+
+// Damage of one part before the target's hp caps it (pv9 §3): shotDamage x
+// permille / 1000, the product in 64 bits.
+[[nodiscard]] constexpr std::uint64_t PartDamage(std::uint32_t shotDamage, std::uint32_t permille) noexcept {
+    return static_cast<std::uint64_t>(shotDamage) * permille / 1000;
+}
+// Match's rule check of one part: the product divides exactly, and the damage
+// is at least 1 and at most maximumShotDamage.
+[[nodiscard]] constexpr bool ValidPartDamage(std::uint32_t shotDamage, std::uint32_t permille,
+                                             std::uint32_t maximumShotDamage) noexcept {
+    const auto damage = PartDamage(shotDamage, permille);
+    return static_cast<std::uint64_t>(shotDamage) * permille % 1000 == 0 && damage >= 1 && damage <= maximumShotDamage;
+}
+[[nodiscard]] constexpr bool ValidPartDamage(const CombatRules& rules) noexcept {
+    return ValidPartDamage(rules.shotDamage, rules.headPermille, rules.maximumShotDamage) &&
+           ValidPartDamage(rules.shotDamage, rules.bodyPermille, rules.maximumShotDamage) &&
+           ValidPartDamage(rules.shotDamage, rules.legPermille, rules.maximumShotDamage);
+}
+// The damage one hit on a part deals to a target with hp left (pv9 §3). The
+// rules passed ValidPartDamage, so the part damage fits 32 bits.
+[[nodiscard]] constexpr std::uint32_t ShotDamage(const CombatRules& rules, HitPart part, std::uint32_t hp) noexcept {
+    const auto permille = part == HitPart::Head ? rules.headPermille : rules.bodyPermille;
+    const auto damage = PartDamage(rules.shotDamage, permille);
+    return damage < hp ? static_cast<std::uint32_t>(damage) : hp;
 }
 
 // Decode check of the hit record (pv6 contract §2, four fields in pv7 §7):

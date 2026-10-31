@@ -134,6 +134,9 @@
     },
     "wire_counter_sites": {
       "ctest": "object_fps_pvp.wire_counter_sites"
+    },
+    "compare_authority_trees": {
+      "ctest": "object_fps_pvp.compare_authority_trees"
     }
   },
   "mutants": [
@@ -252,8 +255,8 @@
       "batch": "09",
       "what": "one version definition disagrees",
       "file": "build/acceptance/object_fps_pvp/acceptance_util.py",
-      "find": "\nPROTOCOL_VERSION = 8\n",
-      "replace": "\nPROTOCOL_VERSION = 7\n",
+      "find": "\nPROTOCOL_VERSION = 9\n",
+      "replace": "\nPROTOCOL_VERSION = 8\n",
       "check": "protocol_version",
       "expect": "acceptance Python"
     },
@@ -7307,6 +7310,66 @@
       "replace": "    return outcome != HitFeedbackOutcome::None;",
       "check": "cpu",
       "expect": "CHECK_FALSE\\( HitTakenSounds\\(HitFeedbackOutcome::SuppressedNewLife\\) \\) is NOT correct"
+    },
+    {
+      "id": "permille-damage-unscaled",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "Shot damage stays in whole points (25), not milli-points",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    std::uint32_t shotDamage{25000};",
+      "replace": "    std::uint32_t shotDamage{25};",
+      "check": "cpu",
+      "expect": "PvP part damage follows the permille multipliers"
+    },
+    {
+      "id": "permille-product-32-bit",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "The part damage product is taken in 32 bits",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return static_cast<std::uint64_t>(shotDamage) * permille / 1000;",
+      "replace": "    return static_cast<std::uint32_t>(shotDamage * permille) / 1000;",
+      "check": "cpu",
+      "expect": "PvP part damage follows the permille multipliers"
+    },
+    {
+      "id": "permille-divisibility-unchecked",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "Match accepts part damage that does not divide exactly",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return static_cast<std::uint64_t>(shotDamage) * permille % 1000 == 0 && damage >= 1 && damage <= maximumShotDamage;",
+      "replace": "    return damage >= 1 && damage <= maximumShotDamage;",
+      "check": "cpu",
+      "expect": "PvP (part damage follows the permille multipliers|Match rejects rules whose part damage is invalid)"
+    },
+    {
+      "id": "permille-hud-floor",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "The HUD rounds milli-points down, so a living player can read 0",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return milliPoints / 1000 + (milliPoints % 1000 != 0 ? 1U : 0U);",
+      "replace": "    return milliPoints / 1000;",
+      "check": "cpu",
+      "expect": "PvP HUD shows whole points rounded up"
+    },
+    {
+      "id": "permille-version-cpp",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "The product C++ version stays at 8",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp",
+      "find": "inline constexpr std::uint16_t ProtocolVersion = 9;",
+      "replace": "inline constexpr std::uint16_t ProtocolVersion = 8;",
+      "check": "protocol_version",
+      "expect": "product C\\+\\+"
+    },
+    {
+      "id": "permille-compare-any-scale",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "The scaled comparison accepts a scaled field whatever its value",
+      "file": "tests/object_fps_pvp/compare_authority_trees.py",
+      "find": "            expected = str(int(a) * factor) if factor is not None and a.isdigit() else a\n",
+      "replace": "            expected = b if factor is not None else a\n",
+      "check": "compare_authority_trees",
+      "expect": "test_(unscaled_value|off_by_one_scaling)_differs"
     }
   ]
 }

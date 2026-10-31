@@ -1226,8 +1226,8 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             {16+14*scale,16+8*scale,490*scale,25*scale},18*scale);
         AddText(draws, "WASD move | Space jump | Ctrl crouch | Click shoot | R reload | Tab cursor | Esc leave",
             {16+14*scale,16+34*scale,660*scale,22*scale},14*scale);
-        AddText(draws, "HP " + std::to_string(impl_->weaponFeedback.hp) + " / " +
-            std::to_string(impl_->weaponFeedback.maximumHp) + "    MARK23  " +
+        AddText(draws, "HP " + std::to_string(DisplayPoints(impl_->weaponFeedback.hp)) + " / " +
+            std::to_string(DisplayPoints(impl_->weaponFeedback.maximumHp)) + "    MARK23  " +
             std::to_string(impl_->weaponFeedback.magazineAmmo) + " / " +
             std::to_string(impl_->weaponFeedback.magazineCapacity) + "   reserve: unlimited",
             {16+14*scale,16+58*scale,660*scale,22*scale},14*scale, hit.hpHighlighted ?

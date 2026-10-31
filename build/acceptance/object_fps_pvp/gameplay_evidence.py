@@ -14,7 +14,7 @@ def percentile(values, percent):
     return ordered[max(0, math.ceil(len(ordered)*percent/100)-1)] if ordered else math.inf
 
 
-def combat_expected(player, life, tick, decisions, maximum_hp=100, capacity=12, reload_ticks=90):
+def combat_expected(player, life, tick, decisions, maximum_hp=100000, capacity=12, reload_ticks=90):
     """Replay effects by authority tick; reload completes before same-tick actions."""
     damage = [(d['resolved_tick'], d['damage']) for _, d in decisions
               if d['accepted'] and d['target_id'] == player and d['target_life_generation'] == life and d['damage']]
@@ -76,7 +76,7 @@ def fault_expiry_exception(submission, decision, fault, tick_times):
 
 def validate_accepted_actions(decisions, life_starts, *, capacity=12, reload_ticks=90, cooldown_ticks=10):
     """Independent legality replay; a returned accepted flag is never its own proof."""
-    states={identity:dict(hp=100,ammo=capacity,reload_end=0,next_shot=0) for identity in life_starts}
+    states={identity:dict(hp=100000,ammo=capacity,reload_end=0,next_shot=0) for identity in life_starts}
     errors=[]
     for player,d in sorted(decisions,key=lambda item:(item[1]['resolved_tick'],item[0],item[1]['action_id'])):
         if not d['accepted']:continue
@@ -183,8 +183,8 @@ def analyze(output, relay, fault, mode):
         check(d['rejection'] in expected,'Unexpected verdict for '+declared['name']+': '+str(d['rejection']))
         check(d['accepted']==(d['rejection']==0),'Accepted/rejection contradiction')
         check(d['accepted'] or d['damage']==0,'Rejected action damaged a player')
-        check(d['damage'] in (0,25) and (not d['damage'] or d['hit_kind']==2 and d['target_life_generation']>0),'Invalid v5 damage attribution')
-        if declared['target']: check(d['accepted'] and d['damage']==25 and d['target_life_generation']==1,'Predeclared lethal hit did not damage life1 exactly once')
+        check(d['damage'] in (0,25000) and (not d['damage'] or d['hit_kind']==2 and d['target_life_generation']>0),'Invalid v5 damage attribution')
+        if declared['target']: check(d['accepted'] and d['damage']==25000 and d['target_life_generation']==1,'Predeclared lethal hit did not damage life1 exactly once')
         if clean and declared['expected_rejection']==0:
             resolved=ticks.get(d['resolved_tick'])
             check(resolved is not None,'Missing Match tick for legal action')

@@ -14,7 +14,7 @@ import (
 
 // ProtocolVersion is the product wire version (pv7). ClientVersion (GYOP
 // header) and RuntimeVersion (IPC envelope) are its typed forms.
-const ProtocolVersion = 8
+const ProtocolVersion = 9
 const ClientVersion uint16 = ProtocolVersion
 const RuntimeVersion uint32 = ProtocolVersion
 const MaxPlayers = 4

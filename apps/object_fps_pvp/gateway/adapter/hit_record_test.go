@@ -13,7 +13,7 @@ import (
 func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 	in := &runtime.WorldSnapshot{Tick: 20,
 		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 1, LifeGeneration: 2, LifeState: runtime.LifeState_LIFE_ALIVE, LifeStateTick: 10}},
-		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 50, MagazineAmmo: 4, LastDamageTick: 15, DamageCount: 2, LastAttackerId: 7,
+		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 50000, MagazineAmmo: 4, LastDamageTick: 15, DamageCount: 2, LastAttackerId: 7,
 			LastHitPart: runtime.HitPart_HIT_PART_BODY}},
 	}
 	out, err := SnapshotForClient(in, testRules())

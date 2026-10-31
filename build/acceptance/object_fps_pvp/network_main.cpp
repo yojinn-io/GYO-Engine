@@ -155,8 +155,10 @@ int main(int argc,char** argv) {
             Require(actionBytes.size()<=1200 && resultBytes.size()<=1200 && snapshotBytes.size()<=1200,
                 "maximum legal protobuf plus24-byte UDP header exceeds1200 bytes");
             // Legal combat values in a full room (pv6 contract §7, 2026-10-07 revision;
-            // protocol-v8 section 6: the counters narrowed to uint32, and the stance bools).
-            Require(snapshotBytes.size()==698,"maximum legal full-room snapshot is not 698 bytes");
+            // protocol-v8 section 6: the counters narrowed to uint32, and the stance bools;
+            // protocol-v9 section 6: hp in milli-points).
+            Require(snapshotBytes.size()==706,("maximum legal full-room snapshot is not 706 bytes ("+
+                std::to_string(snapshotBytes.size())+")").c_str());
             bool oversizedRejected=false;
             try { static_cast<void>(wire::Encode({wire::Type::Input,1,1,std::string(wire::MaxDatagram, 'x')})); }
             catch(const std::length_error&) { oversizedRejected=true; }

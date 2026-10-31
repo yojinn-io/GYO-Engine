@@ -157,7 +157,7 @@ func TestActionsRealUDPAndTCPResendUntilContiguousClientACK(t *testing.T) {
 	sendPacket(t, p, c, 1, adapter.Hello, &client.Hello{SessionToken: c.Token})
 	accept(t, f, c)
 	var welcome client.Welcome
-	if proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome) != nil || welcome.CombatRules == nil || welcome.CombatRules.ShotDamage != 25 {
+	if proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome) != nil || welcome.CombatRules == nil || welcome.CombatRules.ShotDamage != 25000 {
 		t.Fatal("Match rules not in Welcome")
 	}
 	sendPacket(t, p, c, 2, adapter.Actions, &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}})

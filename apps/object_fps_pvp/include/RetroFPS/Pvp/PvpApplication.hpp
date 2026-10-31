@@ -38,7 +38,7 @@ struct WeaponFeedbackObservation final {
     // The first-person hit feedback of the latest rendered frame (read-only).
     float hitFlashAlpha{};
     bool hitDirectionVisible{};
-    std::uint32_t hp{}, maximumHp{}, lastDamage{};
+    std::uint32_t hp{}, maximumHp{}, lastDamage{}; // milli-points (pv9 §3); the HUD shows DisplayPoints
     ShotRejection lastRejection{ShotRejection::None};
     ShotHitKind lastHitKind{ShotHitKind::Miss};
     float yaw{}, pitch{};

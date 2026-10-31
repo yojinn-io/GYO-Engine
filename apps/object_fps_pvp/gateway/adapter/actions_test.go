@@ -96,19 +96,19 @@ func TestCombatRulesAndResultsValidation(t *testing.T) {
 	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("combat missing")
 	}
-	snapshot.Combat = []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 2, Hp: 100}}
+	snapshot.Combat = []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 2, Hp: 100000}}
 	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("combat identity mismatch")
 	}
 	snapshot.Combat[0].PlayerId = 1
-	snapshot.Combat[0].Hp = 101
+	snapshot.Combat[0].Hp = 100001
 	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("invalid hp")
 	}
-	snapshot.Combat[0].Hp = 75
+	snapshot.Combat[0].Hp = 75000
 	snapshot.Combat[0].NextAllowedShotTick = 90
 	out, err := SnapshotForClient(snapshot, testRules())
-	if err != nil || out.Combat[0].Hp != 75 || out.Combat[0].NextAllowedShotTick != 90 {
+	if err != nil || out.Combat[0].Hp != 75000 || out.Combat[0].NextAllowedShotTick != 90 {
 		t.Fatal("combat state mapping")
 	}
 }
