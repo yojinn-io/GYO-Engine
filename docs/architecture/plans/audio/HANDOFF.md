@@ -27,6 +27,7 @@
   - 待決：命中確認與遠端射擊要用哪個音效（使用者只提供 4 個）。
 - 2026-10-30：使用者說「開PR推送」。併入 origin/master 後本機 test 102／102、core 37／37，推送並開 PR（Engine 四批與消費端的音效批同一個 PR）。
 - 2026-10-30：`audio_sdl.disk` 在 macOS arm64 CI 偶發失敗（錨點記錄在 `TIMESCALE=0` 下被不等待的 disk 驅動填滿）：測試環境改為 `TIMESCALE=0.1` 並加入 100 ms 停頓的回歸測試；dev_log：[2026_10_30_engine_audio_disk_flake](../../../dev_logs/2026_10_30_engine_audio_disk_flake.zh-Hant.md)。
+- 2026-10-31：`v8-engine-audio-windows-blocks`（只量測）：Windows 11、i7-8750H、Realtek 內建喇叭（推定為預設裝置）、WASAPI。SDL 預設區塊就是 480，回呼最長間隔最大 11.0 ms → 需要約 44.4 ms，60 ms 足夠；真實裝置兩輪 299／299 準時。disk 驅動有 116～208 ms 的停頓，第一輪 anchored match 297／299（原因未切分；使用者選「A：照現狀記錄」，見決策紀錄 `v8-engine-audio-windows-disk`）。dev_log：[2026_10_31_engine_audio_windows_blocks](../../../dev_logs/2026_10_31_engine_audio_windows_blocks.zh-Hant.md)。
 - 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -103,6 +104,7 @@
 | 2026-10-30 | `v8-engine-audio-far-ahead`：太遠未來的請求一取出就算準時並佔住聲部（可能讓混音器飢餓）；先不改行為，記為未結事項，等 sdl 批定 delay 或消費端觀測到時再決定是否加前瞻上限 | 使用者（AskUserQuestion 選「先記錄，等壓力（建議）」） |
 | 2026-10-30 | `v8-engine-audio-delay-default`＝A：`MixerConfig::scheduleDelay` 的預設為 60 ms（30 FPS＋macOS 的 SDL 預設區塊不遲到；消費端可調低）。Windows 的區塊大小未量 | 使用者：「預設 60 ms」 |
 | 2026-10-30 | `v8-engine-audio-l2-premise`＝A：輸出端以有上限的環記錄每次回呼的錨點 `(T0, F0)`（只供紀錄與驗收），起音量測以錨點重建預期的 frame 逐一比對 | 使用者：「A：記錄錨點」 |
+| 2026-10-31 | `v8-engine-audio-windows-disk`＝A：Windows 上 disk 驅動有 116～208 ms 的停頓，30 秒紀錄第一輪 297／299 起音落在重建的 frame（第二輪 299／299），原因未切分；照現狀記錄，Windows 的 disk 結果不當判定，不加診斷、不改量法 | 使用者：「A：照現狀記錄」 |
 | 2026-10-30 | `v8-engine-audio-gears`：照 PLAN「分批」的檔位與引擎（全部繼承，schedule 局部 xhigh 用 `xhigh-reviewer`），不用 ultracode | 使用者：「audio 計畫的 6 項待決事項都照建議核准」 |
 
 ## 研究事實（2026-10-30）
