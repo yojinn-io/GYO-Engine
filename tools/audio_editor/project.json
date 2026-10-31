@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "display_name": "GYO Audio Editor",
+  "default_variant": "cli",
+  "requires_apps": {},
+  "variants": {
+    "cli": {
+      "components": [],
+      "packageable": false
+    }
+  }
+}

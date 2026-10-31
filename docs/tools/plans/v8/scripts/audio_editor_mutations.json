@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-tool-audio-editor-convert, run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/audio_editor_mutations.json --build-dir <a tree with GYO_TOOLS=audio_editor and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message.",
+  "mutants": [
+    {
+      "id": "ae-resample-cutoff",
+      "what": "The filter's cutoff moves from 0.95 to 0.94 of the lower Nyquist frequency",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "constexpr double kCutoff = 0.95;",
+      "replace": "constexpr double kCutoff = 0.94;",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*matches convert_wav.py*",
+      "expect": "CHECK\\( worst <= 1e-9 \\) is NOT correct"
+    },
+    {
+      "id": "ae-resample-window",
+      "what": "The Blackman window's second cosine term changes",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "0.08 * std::cos(",
+      "replace": "0.09 * std::cos(",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*matches convert_wav.py*",
+      "expect": "CHECK\\( worst <= 1e-9 \\) is NOT correct"
+    },
+    {
+      "id": "ae-resample-taps",
+      "what": "The first tap of each output sample is skipped",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "std::ceil(x - half)",
+      "replace": "std::ceil(x - half + 1.0)",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*matches convert_wav.py*",
+      "expect": "CHECK\\( worst <= 1e-9 \\) is NOT correct"
+    },
+    {
+      "id": "ae-decode-24-sign",
+      "what": "24-bit samples are read without sign extension",
+      "file": "tools/audio_editor/src/WavFile.cpp",
+      "find": "value & 0x800000u ? value | 0xFF000000u : value",
+      "replace": "value",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*matches convert_wav.py*",
+      "expect": "CHECK\\( worst <= 1e-9 \\) is NOT correct"
+    },
+    {
+      "id": "ae-quantize-no-dither",
+      "what": "Quantizing adds no dither",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "plane[frame] * 32767.0 + (first - Unit(generator))",
+      "replace": "plane[frame] * 32767.0 + 0.0 * (first - Unit(generator))",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*dithers within one step*",
+      "expect": "CHECK\\( nonzero > 0 \\) is NOT correct"
+    },
+    {
+      "id": "ae-quantize-dither-wide",
+      "what": "The dither spans (-1.4, 1.4) steps instead of (-1, 1)",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "plane[frame] * 32767.0 + (first - Unit(generator))",
+      "replace": "plane[frame] * 32767.0 + 1.4 * (first - Unit(generator))",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*dithers within one step*",
+      "expect": "CHECK\\( \\(sample == 0 \\|\\| sample == 1\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-quantize-seed-ignored",
+      "what": "Every output gets the same dither whatever its seed",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "std::mt19937_64 generator(seed);",
+      "replace": "std::mt19937_64 generator(1);",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*dithers within one step*",
+      "expect": "CHECK\\( Quantize\\(silence, 8\\).interleaved != noise.interleaved \\) is NOT correct"
+    },
+    {
+      "id": "ae-quantize-rounding",
+      "what": "Rounding adds one step too many",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "std::floor(dithered + 0.5)",
+      "replace": "std::floor(dithered + 1.5)",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*dithers within one step*",
+      "expect": "CHECK\\( std::abs\\(first.interleaved\\[index\\] - value\\) < 1.5 \\) is NOT correct"
+    },
+    {
+      "id": "ae-quantize-saturation-uncounted",
+      "what": "A clamped sample is not counted",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "                ++result.saturated;\n",
+      "replace": "",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*counts and clamps*",
+      "expect": "CHECK\\( loud.saturated == 3 \\) is NOT correct"
+    },
+    {
+      "id": "ae-clip-rate-from-source",
+      "what": "The clip declares the source's rate instead of the engine's",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "clip.sampleRate = Engine::Audio::kSampleRate;",
+      "replace": "clip.sampleRate = source.sampleRate;",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*loads through SoundLoader and ClipBank*",
+      "expect": "CHECK\\( clip.sampleRate == Engine::Audio::kSampleRate \\) is NOT correct"
+    },
+    {
+      "id": "ae-clip-not-resampled",
+      "what": "The clip keeps the source's frames instead of resampling them",
+      "file": "tools/audio_editor/src/Conversion.cpp",
+      "find": "Resample(plane, source.sampleRate, Engine::Audio::kSampleRate)",
+      "replace": "Resample(plane, source.sampleRate, source.sampleRate)",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*never touches the source*",
+      "expect": "CHECK\\( report->frames == 653 \\) is NOT correct"
+    },
+    {
+      "id": "ae-catalog-taken-path",
+      "what": "A path registered under another id is accepted",
+      "file": "tools/audio_editor/src/CatalogRegistration.cpp",
+      "find": "} else if (entry[\"path\"] == registration.path) {",
+      "replace": "} else if (false) {",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-catalog-other-type",
+      "what": "An id registered with another type is overwritten as a sound",
+      "file": "tools/audio_editor/src/CatalogRegistration.cpp",
+      "find": "if (entry[\"type\"] != kSoundType) {",
+      "replace": "if (false) {",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-path-dot-dot",
+      "what": "A '..' segment is accepted in an asset path",
+      "file": "tools/audio_editor/src/CatalogRegistration.cpp",
+      "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
+      "replace": "if (segment.empty() || segment == \".\") return false;",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*refuses what the content contract*",
+      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-catalog-indentation-lost",
+      "what": "A new entry does not follow the last entry's indentation",
+      "file": "tools/audio_editor/src/CatalogRegistration.cpp",
+      "find": "text.insert(end, \",\\n\" + Indentation(text, begin) + entry);",
+      "replace": "text.insert(end, \",\\n\" + entry);",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*appends one line*",
+      "expect": "CHECK\\( update->text =="
+    },
+    {
+      "id": "ae-export-overwrites-source",
+      "what": "The clip may overwrite its source or the catalog",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "if (*resolved == *output) {",
+      "replace": "if (false) {",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "*refuses to overwrite*",
+      "expect": "REQUIRE_FALSE\\( refused.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-guard-input-target",
+      "what": "The editor's CMake names GYO::Input",
+      "file": "tools/audio_editor/CMakeLists.txt",
+      "find": "# The clip format comes from GYO::Audio (Design Invariant 2)",
+      "replace": "# The clip format comes from GYO::Audio GYO::Input (Design Invariant 2)",
+      "command": ["{python}", "tests/audio_editor/audio_editor_dependency_guard.py"],
+      "expect": "names GYO::Input"
+    }
+  ]
+}
