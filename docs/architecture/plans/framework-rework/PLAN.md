@@ -77,12 +77,12 @@ framework-rework
 介面草圖（中立標頭 `SdlPlatform.hpp`，不得有 `SDL_` 符號，G1／G2 守）：
 
 ```cpp
-enum class PathDialogKind : std::uint8_t { OpenFile = 1, SaveFile, ChooseFolder };
+enum class PathDialogKind : std::uint8_t { OpenFile = 1, SaveFile, OpenFolder };
 struct PathDialogFilter final { std::string name; std::string pattern; };   // "json", "wav;wave", "*"; UTF-8
 struct PathDialogRequest final {
     std::uint64_t tag{};                    // the caller's; handed back unchanged, never read
     PathDialogKind kind{PathDialogKind::OpenFile};
-    std::vector<PathDialogFilter> filters;  // ignored for ChooseFolder
+    std::vector<PathDialogFilter> filters;  // ignored for OpenFolder
     std::string defaultLocation;            // UTF-8; empty: the OS chooses
 };
 enum class PathDialogOutcome : std::uint8_t { Chosen = 1, Cancelled, Failed };

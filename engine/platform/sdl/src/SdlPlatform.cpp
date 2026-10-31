@@ -7,9 +7,14 @@
 #include <stdexcept>
 #include <string>
 #include <exception>
+#include <list>
+#include <memory>
+#include <mutex>
 #include <new>
 #include <optional>
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "engine/base/Assert.hpp"
 #include "engine/base/Log.hpp"
@@ -72,6 +77,91 @@ thread_local std::optional<ClockPair> lastWatchPair;
 // Event watches registered with SDL now (read-only test seam).
 std::atomic<int> registeredWatches{0};
 
+// Answers of path dialogs, shared by the platform and every request SDL still
+// holds: an answer that arrives after the platform is gone lands here and is
+// freed with the last request (Design Invariant 10). Each answer travels as a
+// list node made before SDL has the request, so a callback only splices it in.
+struct PathDialogMailbox final {
+    std::mutex mutex;
+    std::list<PathDialogAnswer> answers;
+};
+
+// One request from the Show call until its last callback. It keeps the filter
+// and location strings SDL points into alive until then.
+struct PendingPathDialog final {
+    std::shared_ptr<PathDialogMailbox> mailbox;
+    PathDialogRequest request;
+    std::vector<SDL_DialogFileFilter> filters;  // points into request.filters
+    // Two nodes: a Failed answer may be followed by one more. SDL 3.4 on
+    // Windows reports Failed when its modern dialog cannot start, then falls
+    // back to the legacy dialog, which answers again with the user's choice
+    // (src/dialog/windows/SDL_windowsdialog.c).
+    std::list<PathDialogAnswer> answers;
+};
+
+// The requests SDL holds, by key; SDL gets the key, not the request. A request
+// leaves on its first answer that is not Failed, or on its second answer; a
+// later callback finds nothing and returns. Never destroyed, so a callback that
+// arrives after the platform, or during static destruction, finds it.
+struct PendingPathDialogs final {
+    std::mutex mutex;
+    std::uintptr_t nextKey{1};
+    std::unordered_map<std::uintptr_t, std::unique_ptr<PendingPathDialog>> requests;
+};
+
+PendingPathDialogs& PendingDialogs() {
+    static auto* const pending = new PendingPathDialogs();
+    return *pending;
+}
+
+// SDL's dialog callback: any thread, maybe before the Show call returns, maybe
+// after the platform is destroyed, maybe twice for one request. It touches no
+// platform state and never asserts (an assertion handler may throw, which would
+// terminate here). Lock order: the registry, then a mailbox.
+void SDLCALL OnPathDialogClosed(void* userdata, const char* const* files, int) noexcept {
+    PendingPathDialogs& registry = PendingDialogs();
+    const std::lock_guard registryLock(registry.mutex);
+    const auto found = registry.requests.find(reinterpret_cast<std::uintptr_t>(userdata));
+    if (found == registry.requests.end()) return;  // answered for good already
+    PendingPathDialog& pending = *found->second;
+    std::list<PathDialogAnswer> node;
+    node.splice(node.end(), pending.answers, pending.answers.begin());
+    PathDialogAnswer& answer = node.front();
+    try {
+        if (files == nullptr) {
+            answer.outcome = PathDialogOutcome::Failed;
+            answer.error = SDL_GetError();
+        } else if (files[0] == nullptr || files[0][0] == '\0') {
+            // zenity reports a cancelled dialog as one empty path.
+            answer.outcome = PathDialogOutcome::Cancelled;
+        } else {
+            answer.outcome = PathDialogOutcome::Chosen;
+            answer.path = files[0];
+        }
+    } catch (const std::bad_alloc&) {
+        // The text could not be kept: still an answer, without it.
+        answer.outcome = PathDialogOutcome::Failed;
+        answer.path.clear();
+        answer.error.clear();
+    }
+    const bool last = answer.outcome != PathDialogOutcome::Failed || pending.answers.empty();
+    {
+        PathDialogMailbox& mailbox = *pending.mailbox;
+        const std::lock_guard mailboxLock(mailbox.mutex);
+        mailbox.answers.splice(mailbox.answers.end(), node);
+    }
+    if (last) registry.requests.erase(found);
+}
+static_assert(noexcept(OnPathDialogClosed(nullptr, nullptr, 0)),
+              "the dialog callback must not let an exception cross SDL's stack (Design Invariant 8)");
+
+void ShowWithSdl(PathDialogCallback callback, void* userdata, SDL_Window* window, PathDialogKind kind,
+                 const SDL_DialogFileFilter* filters, int filterCount, const char* defaultLocation) noexcept {
+    static constexpr SdlDialogFunctions sdl{&SDL_ShowOpenFileDialog, &SDL_ShowSaveFileDialog,
+                                            &SDL_ShowOpenFolderDialog};
+    ShowWithSdlFunctions(sdl, callback, userdata, window, kind, filters, filterCount, defaultLocation);
+}
+
 SdlPlatformError MakeSdlError(
     SdlPlatformErrorCode code,
     std::string message) {
@@ -91,7 +181,16 @@ struct SdlPlatform::Impl final {
     std::exception_ptr liveFrameError;
     bool pumping{};
     bool inLiveFrame{};
+    std::shared_ptr<PathDialogMailbox> pathDialogs = std::make_shared<PathDialogMailbox>();
 };
+
+namespace {
+
+bool IsPathDialogKind(const PathDialogKind kind) noexcept {
+    return kind == PathDialogKind::OpenFile || kind == PathDialogKind::SaveFile || kind == PathDialogKind::OpenFolder;
+}
+
+} // namespace
 
 Base::Result<std::unique_ptr<SdlPlatform>, SdlPlatformError>
 SdlPlatform::Create(const SdlPlatformOptions& options) {
@@ -101,6 +200,9 @@ SdlPlatform::Create(const SdlPlatformOptions& options) {
             SdlPlatformErrorCode::InvalidWindowSize,
             "SdlPlatform: window dimensions must be positive"));
     }
+
+    // Made before the window, so running out of memory leaks no SDL resource.
+    auto impl = std::make_unique<Impl>();
 
     // SDL reads the hint when its video starts; it is process-wide.
     if (options.imeComposition) {
@@ -127,7 +229,6 @@ SdlPlatform::Create(const SdlPlatformOptions& options) {
         return Base::Err(std::move(error));
     }
 
-    auto impl = std::make_unique<Impl>();
     impl->window = window;
     return std::unique_ptr<SdlPlatform>(new SdlPlatform(std::move(impl)));
 }
@@ -244,6 +345,84 @@ int RunEntry(int (*body)(int, char*[]), const int argc, char* argv[]) noexcept {
         Base::Log(Base::LogLevel::Error, "platform", "unhandled exception");
     }
     return 1;
+}
+
+void ShowWithSdlFunctions(const SdlDialogFunctions& functions, PathDialogCallback callback, void* userdata,
+                          SDL_Window* window, PathDialogKind kind, const SDL_DialogFileFilter* filters,
+                          int filterCount, const char* defaultLocation) noexcept {
+    switch (kind) {
+    case PathDialogKind::OpenFile:
+        functions.openFile(callback, userdata, window, filters, filterCount, defaultLocation, false);
+        return;
+    case PathDialogKind::SaveFile:
+        functions.saveFile(callback, userdata, window, filters, filterCount, defaultLocation);
+        return;
+    case PathDialogKind::OpenFolder:
+        functions.openFolder(callback, userdata, window, defaultLocation, false);
+        return;
+    }
+}
+
+void NativeAccess::ShowPathDialog(SdlPlatform& platform, PathDialogRequest request,
+                                  const PathDialogLauncher& launcher) {
+    SdlPlatform::Impl& impl = *platform.impl_;
+    GYO_ASSERT(!impl.pumping && dispatchDepth == 0);
+    GYO_ASSERT(IsPathDialogKind(request.kind));
+    for (const PathDialogFilter& filter : request.filters) GYO_ASSERT(!filter.pattern.empty());
+    auto pending = std::make_unique<PendingPathDialog>();
+    pending->mailbox = impl.pathDialogs;
+    pending->request = std::move(request);
+    pending->answers.push_back(PathDialogAnswer{.tag = pending->request.tag});
+    pending->answers.push_back(PathDialogAnswer{.tag = pending->request.tag});
+    for (const PathDialogFilter& filter : pending->request.filters) {
+        pending->filters.push_back({filter.name.c_str(), filter.pattern.c_str()});
+    }
+    const std::string& location = pending->request.defaultLocation;
+    const char* defaultLocation = location.empty() ? nullptr : location.c_str();
+    const SDL_DialogFileFilter* filters = pending->filters.empty() ? nullptr : pending->filters.data();
+    const int filterCount = static_cast<int>(pending->filters.size());
+    const PathDialogKind kind = pending->request.kind;
+    std::uintptr_t key{};
+    {
+        PendingPathDialogs& registry = PendingDialogs();
+        const std::lock_guard lock(registry.mutex);
+        key = registry.nextKey++;
+        registry.requests.emplace(key, std::move(pending));  // the last step that may throw
+    }
+    // From here SDL has the request until OnPathDialogClosed takes it out, which
+    // may happen before show returns and on another thread: nothing above is
+    // touched again.
+    launcher.show(&OnPathDialogClosed, reinterpret_cast<void*>(key), impl.window, kind, filters, filterCount,
+                  defaultLocation);
+}
+
+void ShowPathDialogWith(SdlPlatform& platform, PathDialogRequest request, const PathDialogLauncher& launcher) {
+    NativeAccess::ShowPathDialog(platform, std::move(request), launcher);
+}
+
+void SdlPlatform::ShowPathDialog(PathDialogRequest request) {
+    NativeAccess::ShowPathDialog(*this, std::move(request), PathDialogLauncher{&ShowWithSdl});
+}
+
+std::vector<PathDialogAnswer> SdlPlatform::TakePathDialogAnswers() {
+    GYO_ASSERT(SDL_IsMainThread());
+    PathDialogMailbox& mailbox = *impl_->pathDialogs;
+    std::list<PathDialogAnswer> arrived;
+    {
+        const std::lock_guard lock(mailbox.mutex);
+        arrived.splice(arrived.end(), mailbox.answers);
+    }
+    std::vector<PathDialogAnswer> answers;
+    try {
+        answers.reserve(arrived.size());
+    } catch (...) {
+        // Out of memory: the answers stay for the next call, in their order.
+        const std::lock_guard lock(mailbox.mutex);
+        mailbox.answers.splice(mailbox.answers.begin(), arrived);
+        throw;
+    }
+    for (PathDialogAnswer& answer : arrived) answers.push_back(std::move(answer));
+    return answers;
 }
 
 std::string SdlPlatform::ClipboardText() const {

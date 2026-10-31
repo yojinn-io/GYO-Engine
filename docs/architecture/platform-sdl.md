@@ -38,7 +38,8 @@ GYO::*Native (INTERFACE): the only targets that carry SDL3 to a user
   cycle forms; the input and render backends link `GYO::PlatformSDLNative` PRIVATE.
 - **Process services** in `GYO::PlatformSDL`: `BaseDirectory()` (SDL's base path semantics, UTF-8 to a `char8_t`
   path; main thread or before other threads start), `PlatformName()` (diagnostics only, never for branching),
-  `ClipboardText()`, the opt-in `SdlLogBridge`, and the entry point.
+  `ClipboardText()`, the system path dialogs (`ShowPathDialog`, `TakePathDialogAnswers`), the opt-in `SdlLogBridge`,
+  and the entry point.
 - **Entry point.** `GYO::PlatformSDLMain` is an OBJECT library that includes `<SDL3/SDL_main.h>`, defines `main`
   and calls the product's `int GyoMain(int argc, char* argv[])`. argv is UTF-8 on every platform. A product links
   it explicitly in its own CMake; the shared app project helper does not change.
@@ -49,6 +50,8 @@ GYO::*Native (INTERFACE): the only targets that carry SDL3 to a user
   GPU render backend.
 
 Ownership: the platform owns the SDL window, the clock pair, the clipboard, the log bridge and the injection flag.
+The path dialogs' mailbox is shared by the platform and the requests SDL still holds; the requests wait in a
+process-wide registry that is never destroyed.
 The input backend owns collecting input and text into the frame. Window state and text input state are owned by
 SDL/the OS. Capture policy, text editing policy and every product rule stay with the consumer.
 
@@ -117,6 +120,22 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
 - Injection uses only SDL's event queue or real window operations. An injected event does not update SDL's internal
   mouse, keyboard or modifier state and produces no text input; motion is accumulated only while focused.
 
+### Path dialogs (v8-engine-platform-path-dialog)
+
+`ShowPathDialog` asks the OS for an open-file, save-file or open-folder dialog over this window and returns without
+waiting for the choice (on Linux the request to the portal itself may wait). The request carries the caller's tag, the
+filters (ignored for a folder; a pattern follows SDL's rule, and an invalid one comes back Failed) and the default
+location; the platform reads none of them for a decision (Design Invariant 9). Answers come later from
+`TakePathDialogAnswers`, on the main thread, with the request's tag: Chosen with the first path (UTF-8), Cancelled
+(also zenity's empty path), or Failed with SDL's error text. SDL may answer on another thread, before `ShowPathDialog`
+returns, or twice: SDL 3.4 on Windows answers Failed when its modern dialog cannot start and then again from the
+legacy dialog, so a Failed answer may be followed by one more. SDL 3.4 cannot cancel a dialog, and on Linux an answer
+may need the program to keep pumping events; a request the OS never answers gets no answer and stays in the registry
+until the process ends. Destroying the platform while a dialog is open is safe for the answers; SDL may still refer to
+the window (not verified on a real OS). Tests replace only the step that hands the request to the OS (native layer);
+CI never opens a real dialog, and runs the real launcher only with SDL's dialog driver hint set to a driver SDL lacks,
+which makes SDL answer Failed at once.
+
 ### Linking (IP-4, milestone ip4c)
 
 - The four backends and `GYO::PlatformSDLMain` link SDL3 PRIVATE: SDL3 may appear in their
@@ -143,7 +162,8 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
    (pump path, from ip3c); m20, m21, m22, m-watch-sdl, m-watch-engine, m-watch-mid, m-watch-first, m-watch-late and
    m-watch-e1 (watch path, from ip4b, D38).
 4. Test injection goes only through SDL's event queue or real window operations; there is no back door that writes
-   a frame. The `injected` flag is owned by the platform. Guards: mutants m14, m15. From ip4a.
+   a frame. The `injected` flag is owned by the platform. Guards: mutants m14, m15. From ip4a. The path dialog
+   launcher seam replaces only the request to the OS; it writes no input frame.
 5. The log bridge is effective only while a consumer holds it; without it SDL's output is unchanged. While it
    exists, the Base log handler does not call SDL's log functions. The bridge does not throw or recurse, restores
    only after checking it is still installed, and is destroyed before `SDL_Quit`. Guards: mutants m10, m11. From
@@ -155,10 +175,22 @@ SDL/the OS. Capture policy, text editing policy and every product rule stay with
    (`GYO_ASSERT`, guard: mutant m-main-thread; SDL tears its watcher list down without its lock, D38). An `EventWatch` never refers to the
    platform and may outlive it. A nested `PumpEvents` samples its own clock pair and restores the outer pump's pair when it returns (guard:
    mutant m-nest); window operations are not called inside an observer or a live frame; watch
-   callbacks do not wait for anything held during a platform call. Checked with `GYO_ASSERT`.
+   callbacks do not wait for anything held during a platform call. Checked with `GYO_ASSERT`. `ShowPathDialog` is an
+   operation.
 8. Engine does not call the global `SDL_Init`/`SDL_Quit`; subsystems are reference-counted by their owners. No
    exception crosses SDL's or the OS's C stack (live frames and the entry point catch and report).
 9. The backend carries no capture policy, no text editing policy and no product knowledge.
+10. A request gets one answer when the OS answers once; a Failed answer may be followed by one more, and no request
+   gets more than two; a request the OS never answers gets none. Answers are handed out only on the main thread by
+   `TakePathDialogAnswers`, in the order they arrived, each once; when it runs out of memory they stay for the next
+   call. SDL gets a key, not the request: requests wait in a process-wide registry that is never destroyed, so a
+   callback after the platform, a repeated one or one during static destruction is safe. The callback is noexcept,
+   never touches the platform and never asserts. Filters and the default location live until the request leaves the
+   registry. The platform keeps no count of open dialogs for any decision and never refuses, merges or deduplicates a
+   request. Guards: `PathDialogTests.cpp` (a fake launcher, fake SDL functions, and the real launcher with SDL's
+   dialog driver hint set); mutants pd-* (`docs/architecture/plans/framework-rework/scripts/`), one of them only on a
+   local AddressSanitizer build. Not guarded in CI: data races (no sanitizer), the out-of-memory paths and real OS
+   dialogs. From v8-engine-platform-path-dialog.
 
 ### Replacement Criteria
 
@@ -171,3 +203,7 @@ Stop patching and let the user decide between patching and rebuilding when any o
 4. Each new event kind or window feature requires re-verifying the timestamp conversion or the log bridge.
 5. Keeping invariant 3 on the pump path requires per-event sampling or sleep detection.
 6. The pump has to leave the main thread and `SdlPlatform` cannot meet SDL's main-thread rules.
+7. Another asynchronous OS answer (a message box, a permission request) is needed: propose one platform answer queue
+   instead of a second mailbox.
+8. Path dialog answers must be ordered against input events: reopen the PlatformEvent decision (criterion 3).
+9. A third workaround for how SDL calls a dialog back is needed: patch or replace SDL's dialog support instead.

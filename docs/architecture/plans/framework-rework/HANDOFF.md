@@ -16,7 +16,25 @@
 ## 現況
 
 - 2026-11-01：v8-framework-rework-plan 完成（使用者核准 PLAN 第 1 版與 D-1～D-9，commit `f8878799`）。
-- 2026-11-01：v8-framework-guard-ratchet 完成（使用者核准判定變更與 DI 條文）。下一批 v8-engine-platform-path-dialog。
+- 2026-11-01：v8-framework-guard-ratchet 完成（使用者核准判定變更與 DI 條文，commit `0a635225`，draft PR #127）。L1：手動觸發的 cross-platform run 41227212440，`L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
+- 2026-11-01：v8-engine-platform-path-dialog 完成（使用者核准）。下一批 v8-engine-io-user-files。
+
+### v8-engine-platform-path-dialog 的事前宣告（2026-11-01，執行前）
+
+- 一般突變（`scripts/platform_path_dialog_mutations.json`），全部要 killed、stale 0：pd-drop-answer、pd-tag-lost、pd-order、pd-take-keeps、pd-cancel-as-failed、pd-assert-observer、pd-kind-map、pd-noexcept（預期建置失敗）、pd-g2-neutral。共 9 條。
+- 相關的既有突變（D184：錨點被這批改到）：input-and-present 的 m6a-g1、m6a-g2，錨點改到 `#include <vector>`，替換內容不變。共 2 條，要 killed。
+- sanitizer 突變（`scripts/platform_path_dialog_mutations-asan.json`，本機 AddressSanitizer 樹）：pd-filter-copy、pd-mailbox-not-shared，共 2 條，要 killed。基準線：ASan 樹上 platform_sdl_tests 的選擇窗案例全過、沒有 ASan 報告。
+- 第一次執行（2026-11-01）：一般 9 條中 8 條 killed；pd-g2-neutral 是 build_failed，原因在突變定義（前置宣告寫在 Engine 的命名空間內，產生新型別遮住 SDL 的型別，Engine 本身編不過，沒走到 G2）。改成全域命名空間的前置宣告（可編譯，是真實的洩漏寫法），判定（G2 的訊息）不變，重跑這一條。m6a-g1、m6a-g2：2/2 killed。
+- sanitizer 突變第一次執行（ASan 樹，基準線 8/8 通過、無 ASan 報告）：0/2 killed，兩條都是 wrong_failure，**宣告的判定不成立**。pd-filter-copy 被一般 CHECK 抓到（過濾器字串內容已錯，ASan 沒報），pd-mailbox-not-shared 是崩潰（鎖已釋放的 mutex，SIGABRT），沒有 ASan 報告。依 §14.1 不改預期重跑，交使用者決定。探索（不算驗收）：兩條在一般建置上各 5 次都被抓到（CHECK 失敗、SIGABRT），macOS 限定。
+- xhigh 審查（2026-11-01）：blocker 1（SDL 3.4 在 Windows 對同一請求回呼兩次，舊碼會 use-after-free 與重複釋放；framework 現有實作同樣有此缺陷）、minor 4、nit 6。處理：待回覆請求改用程序級登記表與編號，第二次回呼找不到就返回；取答案配置失敗時放回；不合法種類與空 pattern 用 GYO_ASSERT；zenity 的空路徑算取消；launcher 型別加 noexcept；取答案只准主執行緒；Impl 先於視窗配置；拿掉觀察不到效果的關閉旗標。測試由 8 條增為 12 條，新增一條用 `SDL_HINT_FILE_DIALOG_DRIVER` 讓真正的 SDL launcher 在 CI 跑。
+- 追加宣告（修正後、重跑前）：一般突變 13 條（原 9 條，pd-drop-answer、pd-take-keeps 錨點隨程式改；新增 pd-double-callback、pd-empty-path-chosen、pd-kind-assert、pd-real-launcher-save），全部要 killed、stale 0；m6a-g1、m6a-g2 重跑。
+- 第三次執行（對抗式檢查修正後）：一般 16/16 killed，m6a 2/2 killed。
+- 第二次執行（xhigh 修正後）：一般 13/13 killed，m6a 2/2 killed。
+- Sonnet 對抗式檢查（2026-11-01）：major 6、minor 9。要使用者決定的：Windows 重複回呼的答案政策（第一次 Failed 之後是否交出第二個答案），以及 sanitizer 突變。其餘照做：真正 launcher 改經 `SdlDialogFunctions` 表（測試用假表檢查每種的參數，`ToSdlFileDialogType` 刪除）；答案政策先實作「Failed 之後最多再一個」（每個請求配兩個節點，回呼全程在登記表的鎖內）；補競爭、不去重、64 位元 tag、多檔取第一、無多餘文字、連續兩次 Failed 的測試（共 15 條，競爭測試連跑 30 次 0 失敗）；noexcept 加 static_assert；Linux 上不重設 hint。
+- 追加宣告（第三次執行前）：一般突變 16 條（刪 pd-kind-map；pd-drop-answer、pd-order、pd-tag-lost、pd-double-callback、pd-real-launcher-save 錨點或預期隨程式改；新增 pd-third-callback、pd-launcher-many、pd-launcher-folder-window、pd-launcher-drop-filters），全部要 killed、stale 0；m6a-g1、m6a-g2 重跑。sanitizer 兩條等使用者決定，不跑。
+- 2026-11-01 使用者核准後的宣告（sanitizer 選項 (1)）：pd-filter-copy 移到一般目錄，預期為 CHECK 失敗（`filters[0].name == "UI layout"`），在一般樹跑；pd-mailbox-not-shared 留在 ASan 目錄，預期為「ASan 的 heap-use-after-free、mutex lock failed 或崩潰」。ASan 樹先用目前的程式重建，基準線（選擇窗 15 條）要全過且沒有 ASan 報告，再跑這一條。兩條都要 killed。
+- 使用者決定後的執行：pd-filter-copy 在一般樹 1/1 killed；ASan 樹以定稿程式重建，基準線 15 條全過、無 ASan 報告；pd-mailbox-not-shared 1/1 killed。第一次 ASan 突變的原始輸出被第二次覆蓋，未保存（結果記在本節）。
+- 範圍的限界（帶到 T1 的事前宣告）：真實 OS 對話窗的回呼執行緒、Linux portal 需要 pump、平台或父視窗銷毀時的行為、真正的 SDL launcher（`ShowWithSdl`）在 CI 都不執行。
 
 ### v8-framework-guard-ratchet 的事前宣告（2026-11-01，執行前）
 
@@ -44,6 +62,7 @@
   - D-8：有視窗外殼目前只有 ui_editor 一個使用者，接受，DI 5 註明。
   - D-9：外殼草圖用 ultracode；選擇窗只做 xhigh 審查加別的引擎做一次對抗式檢查。
 - 各批的 Design Invariants 條文與守衛變更仍在該批開工或定案前逐批核准。
+- 2026-11-01，使用者：「照建議核准」。v8-engine-platform-path-dialog 的 [契約與 DI 條文](path-dialog-judgment-change.md)：Windows 重複回呼採 (a)「Failed 之後最多再一個答案」；sanitizer 突變採 (1)（pd-filter-copy 移一般目錄，pd-mailbox-not-shared 改預期在 ASan 樹重跑）；AD1（選擇窗能力與程序級登記表）；測試縫放 Native 標頭；platform-sdl.md 的契約、DI 10、DI 4／7 補句、Replacement Criteria 7～9。Replacement Criteria 2 的改寫延到外殼批。
 - 2026-11-01，使用者：「核准」。v8-framework-guard-ratchet 的 [判定變更與 DI 條文](guard-ratchet-judgment-change.md)：framework DI 2、DI 3、DI 5、Replacement Criteria 改寫；守衛、例外清單、configure 連結檢查；突變目錄搬到本計畫。
 
 ## 研究事實（2026-11-01 核對，基準 `6e78090b`）

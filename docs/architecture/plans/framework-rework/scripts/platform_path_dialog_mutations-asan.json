@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "description": "The lifetime mutant of v8-engine-platform-path-dialog that needs AddressSanitizer to be caught reliably (CI runs no sanitizer). Killed only on an AddressSanitizer build of platform_sdl_tests (configure with -fsanitize=address), run with SDL_VIDEODRIVER=dummy: the use-after-free shows as an ASan report, or as the freed mutex failing to lock, or as a crash (2026-11-01, framework-rework decision on the sanitizer mutants). Run with run_mutations.py --catalog this file --build-dir <the ASan build>.",
+  "mutants": [
+    {
+      "id": "pd-mailbox-not-shared",
+      "what": "A pending dialog does not share the mailbox, so an answer after the platform is gone writes freed memory",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    pending->mailbox = impl.pathDialogs;",
+      "replace": "    pending->mailbox = std::shared_ptr<PathDialogMailbox>(std::shared_ptr<PathDialogMailbox>(), impl.pathDialogs.get());",
+      "target": "platform_sdl_tests",
+      "cases": "*after the platform is destroyed*",
+      "expect": "AddressSanitizer: heap-use-after-free|mutex lock failed|CRASHED"
+    }
+  ]
+}
