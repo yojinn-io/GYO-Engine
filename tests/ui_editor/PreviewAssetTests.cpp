@@ -2,6 +2,9 @@
 #include "gyo/ui_editor/EditorApp.hpp"
 #include "gyo/ui_editor/FileService.hpp"
 #include "gyo/ui_editor/PathDialog.hpp"
+#include "gyo/ui_editor/ElementSchema.hpp"
+#include "gyo/ui_editor/PreviewAdapter.hpp"
+#include "gyo/ui_editor/UiDocumentBridge.hpp"
 #include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/text/ITextRasterizer.hpp"
@@ -279,10 +282,66 @@ void TestPathDialogChoosesAssetFolder() {
 }
 } // namespace
 
+// v8-tool-ui-editor-text-field: in preview mode a text field is edited with
+// the keyboard through the real ImGui frame, and its submit reaches the
+// action log with its text and updates the preview binding.
+void TestPreviewTextFieldTyping() {
+    Fixture fixture;
+    AssetPreviewContext assets;
+    nlohmann::json document = UiDocumentBridge::CreateDefault();
+    nlohmann::json field = MakeDefaultElement(document, *FindElementKind("text_field"));
+    field["rect"]["size_delta"] = {200.0, 12.0};
+    const std::string id = field["id"].get<std::string>();
+    const std::string binding = field["binding"].get<std::string>();
+    document["canvases"][0]["focus_order"].push_back(id);
+    document["canvases"][0]["children"].push_back(field);
+
+    PreviewAdapter preview;
+    const PreviewAdapter::Viewport viewport{0.0F, 0.0F, 320.0F, 16.0F};
+    const auto frame = [&](const auto& before) {
+        before(ImGui::GetIO());
+        fixture.Begin(assets);
+        auto output = preview.Draw(*ImGui::GetBackgroundDrawList(), document, "main", viewport, {}, nullptr,
+                                   true, true, false, 8.0F);
+        fixture.Present(assets);
+        return output;
+    };
+    const auto key = [](const ImGuiKey pressed, const bool down) {
+        return [pressed, down](ImGuiIO& io) { io.AddKeyEvent(pressed, down); };
+    };
+    const auto none = [](ImGuiIO&) {};
+
+    auto started = frame(key(ImGuiKey_Enter, true));
+    Expect(!started.error.has_value(), "the preview draws a text field");
+    Expect(started.actions.empty(), "Enter on a text field starts editing without an action");
+    frame(key(ImGuiKey_Enter, false));
+    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("ab"); });
+    frame(key(ImGuiKey_Backspace, true));
+    frame(key(ImGuiKey_Backspace, false));
+    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("c"); });
+    auto submitted = frame(key(ImGuiKey_Enter, true));
+    frame(key(ImGuiKey_Enter, false));
+    Expect(submitted.actions.size() == 1 && submitted.actions[0].stringPayload == std::optional<std::string>{"ac"},
+        "typed characters and Backspace edit the field; Enter submits its text");
+    auto after = frame(none);
+    Expect(!after.error.has_value(), "the preview keeps drawing after a submit");
+
+    // The preview binding now holds the submitted text: a new edit starts from it.
+    frame(key(ImGuiKey_Enter, true));
+    frame(key(ImGuiKey_Enter, false));
+    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("d"); });
+    auto again = frame(key(ImGuiKey_Enter, true));
+    frame(key(ImGuiKey_Enter, false));
+    Expect(again.actions.size() == 1 && again.actions[0].stringPayload == std::optional<std::string>{"acd"},
+        "a submit updates the preview binding");
+    static_cast<void>(binding);
+}
+
 int main() {
     TestQueuedTexturesAndFrameEviction();
     TestSharedContentAndQueuedMounts();
     TestMountRootOutsideAnsiCodePage();
     TestPathDialogChoosesAssetFolder();
+    TestPreviewTextFieldTyping();
     return failures == 0 ? 0 : 1;
 }

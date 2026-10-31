@@ -1,6 +1,6 @@
 # v8 工具線交接
 
-更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。PR #107～#109 已合併；`v8-tool-ui-ime-observe` 進行中（分支 `claude/v8-tool-ui-ime-observe`），等 Windows 場次。**
+更新：2026-10-30。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。PR #107～#109、#111 已合併（#111：輸入法檢測、組字事件、gyo.ui v2 的 text_field、大廳改用 text_field，Windows 實機通過）。`v8-tool-ui-editor-text-field` 完成（分支 `claude/v8-tool-ui-editor-text-field`）。**
 本文件是工具線的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。v8 產品計畫的同步由產品會話做，本線不改 `docs/object_fps_pvp/plans/v8/`。
 
 ## 代號對照
@@ -102,3 +102,7 @@
 - 2026-10-30：使用者：「大廳改用 text_field」。`v8-product-lobby-text-field` 完成：大廳 v2、位址欄 `text_field`、產品轉換 `TextInput`、`SyncTextInput`、`SetTextFilter(FilterAddressText)`、`imeComposition`；刪掉手寫的編輯。行為變化：編輯中點其他按鈕會丟掉打到一半的位址（Ui 不變式 4），要按 Enter 套用。Mac 上啟動確認 `ime_ui="composition"`。Windows L3 未做。
 - 2026-10-30：Windows L3（package-trial run 41066623724）：A、B1、B2、B3、C、D 全部「是」，符合事前宣告。log 的 `text_editing` 22 行（上次 0 行）。證據在 `evidence/lobby-text-field/`。PR #111 的 L1／macos-arm64 失敗在 `audio_sdl.disk`（音效線的測試，master 上也失敗），已轉給音效線，只重跑失敗的 job。
 - 2026-10-30：PR #111 重跑失敗的 job：`L1 / macos-arm64` 這次通過，四列都通過、CLEAN。第一次的失敗（`audio_sdl.disk`，`SdlAudioOutputTests.cpp:158`，音效線的測試）依 §14.1 留在紀錄裡：原因在音效線（master 上同一行也失敗過），不是本 PR 的實作。
+- 2026-10-31：PR #111 的 L1／macos-arm64 第二次又失敗在 `audio_sdl.disk`（音效線的測試；原因與修正在音效線的 PR #113：disk 驅動不等待，錨點紀錄溢出）。使用者：「再重跑一次」。只重跑失敗的 job，通過；四列都通過後以 merge commit 合併（`80d14f22`）。三次執行中這個測試失敗 2 次，記錄留著（§14.1）。
+- 2026-10-31：使用者：「開始」。`v8-tool-ui-editor-text-field` 完成（high，估 8～12 h，實際約 6 分鐘）：元素表的整數／文字欄位與 `styledText`、Inspector 的「Fields」、預覽中可打字（用 ImGui 的內部 `PlatformImeData` 要求文字輸入，已記在 dev_log，對照 Replacement Criteria 目前未觸發）。7 個突變全被抓到；21/21 通過。GUI 手動操作未做。
+- 2026-10-31：使用者試用時發現：在大廳按「+ Canvas」出現 `unknown backdrop color 'transparent'`。原因是新 canvas／新元素的預設值用到大廳沒宣告的顏色（既有缺陷）。Red（7 項失敗）→ 修正：缺的顏色從編輯器預設調色盤補上宣告 → Green；4 個突變全被抓到。
+- 2026-10-31：使用者：解析度放在編輯器裡、可編輯但預設鎖定，顯示區域畫框表示。做了 Inspector 的「Design size」（預設鎖定，鎖定狀態不存檔）與畫布上的設計畫面框（依文件的 `design_canvas.size`，標示尺寸）。解析度仍屬於各文件。

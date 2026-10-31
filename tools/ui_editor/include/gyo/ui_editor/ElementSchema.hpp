@@ -20,6 +20,19 @@ struct ElementColorField final {
     bool source;       // true: a color source object {"color": name}; false: a color name
 };
 
+// An integer or text field that only this kind has, edited in the Inspector.
+struct ElementIntegerField final {
+    const char* label;
+    const char* key;
+    int minimum;
+    int maximum;
+};
+
+struct ElementStringField final {
+    const char* label;
+    const char* key;
+};
+
 struct ElementKind final {
     std::string_view type;
     bool focusable{};             // takes part in the canvas focus order
@@ -27,6 +40,9 @@ struct ElementKind final {
     std::string_view bindingType;   // type of the binding it reads; empty when it has none
     std::span<const ElementColorField> colors;
     bool textureAsset{};          // references a texture asset
+    bool styledText{};            // has the text style keys without a text source
+    std::span<const ElementIntegerField> integers;
+    std::span<const ElementStringField> strings;
 };
 
 // Every kind, in the order the editor offers them.
@@ -36,6 +52,9 @@ struct ElementKind final {
 // A new element of kind with its default fields. Declares in document the
 // action and binding it needs, under ids not yet used there.
 [[nodiscard]] nlohmann::json MakeDefaultElement(nlohmann::json& document, const ElementKind& kind);
+
+// A new empty canvas under an unused id, its backdrop declared in document.
+[[nodiscard]] nlohmann::json MakeDefaultCanvas(nlohmann::json& document);
 
 // Whether node or one of its descendants (children and list templates) has id.
 [[nodiscard]] bool ContainsNodeId(const nlohmann::json& node, std::string_view id);

@@ -133,6 +133,23 @@ void EditorApp::DrawInspector() {
         if (ImGui::CollapsingHeader("Document", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Schema: %s", session_.Document().value("schema", "?").c_str());
             ImGui::Text("Version: %d", session_.Document().value("version", 0));
+            // The design resolution belongs to the document (design_canvas.size);
+            // it is locked against accidental edits until unlocked here.
+            Json& designSize = document["design_canvas"]["size"];
+            if (designSize.is_array() && designSize.size() == 2U && designSize[0].is_number() &&
+                designSize[1].is_number()) {
+                int size[2]{static_cast<int>(designSize[0].get<double>()), static_cast<int>(designSize[1].get<double>())};
+                ImGui::BeginDisabled(designSizeLocked_);
+                const bool sizeChanged = ImGui::InputInt2("Design size", size);
+                if (sizeChanged) {
+                    designSize = {std::clamp(size[0], 1, 16384), std::clamp(size[1], 1, 16384)};
+                    RefreshDiagnostics();
+                }
+                TrackWidgetEdit(session_, "Edit design canvas size", sizeChanged);
+                ImGui::EndDisabled();
+                ImGui::SameLine();
+                ImGui::Checkbox("Locked", &designSizeLocked_);
+            }
             Json& fonts = document["fonts"];
             const std::string defaultFont =
                 document.value("default_font", std::string{});
@@ -753,20 +770,23 @@ void EditorApp::DrawInspector() {
     editPair("Size Delta", "size_delta", 0.25F, false);
 
     const ElementKind* kind = FindElementKind(node->value("type", std::string{}));
-    if (node->contains("text") && (*node)["text"].is_object() &&
-        (*node)["text"].contains("literal")) {
+    const bool literalText = node->contains("text") && (*node)["text"].is_object() &&
+        (*node)["text"].contains("literal");
+    if (literalText || (kind != nullptr && kind->styledText)) {
         ImGui::SeparatorText("Text style");
-        std::array<char, 512> literal{};
-        std::snprintf(
-            literal.data(), literal.size(), "%s",
-            (*node)["text"].value("literal", std::string{}).c_str());
-        const bool literalChanged =
-            ImGui::InputText("Literal", literal.data(), literal.size());
-        if (literalChanged) {
-            (*node)["text"]["literal"] = literal.data();
-            RefreshDiagnostics();
+        if (literalText) {
+            std::array<char, 512> literal{};
+            std::snprintf(
+                literal.data(), literal.size(), "%s",
+                (*node)["text"].value("literal", std::string{}).c_str());
+            const bool literalChanged =
+                ImGui::InputText("Literal", literal.data(), literal.size());
+            if (literalChanged) {
+                (*node)["text"]["literal"] = literal.data();
+                RefreshDiagnostics();
+            }
+            TrackWidgetEdit(session_, "Edit text literal", literalChanged);
         }
-        TrackWidgetEdit(session_, "Edit text literal", literalChanged);
         float pointSize = node->value("point_size", 24.0F);
         const bool pointSizeChanged = ImGui::DragFloat(
             "Point size", &pointSize, 0.25F, 1.0F, 256.0F);
@@ -788,6 +808,30 @@ void EditorApp::DrawInspector() {
                 }
             }
             ImGui::EndCombo();
+        }
+    }
+
+    // The fields only this kind has (ElementSchema).
+    if (kind != nullptr && (!kind->integers.empty() || !kind->strings.empty())) {
+        ImGui::SeparatorText("Fields");
+        for (const ElementIntegerField& field : kind->integers) {
+            int value = node->value(field.key, field.minimum);
+            const bool changed = ImGui::DragInt(field.label, &value, 0.25F, field.minimum, field.maximum);
+            if (changed) {
+                (*node)[field.key] = std::clamp(value, field.minimum, field.maximum);
+                RefreshDiagnostics();
+            }
+            TrackWidgetEdit(session_, std::string{"Edit "} + field.key, changed);
+        }
+        for (const ElementStringField& field : kind->strings) {
+            std::array<char, 256> text{};
+            std::snprintf(text.data(), text.size(), "%s", node->value(field.key, std::string{}).c_str());
+            const bool changed = ImGui::InputText(field.label, text.data(), text.size());
+            if (changed) {
+                (*node)[field.key] = text.data();
+                RefreshDiagnostics();
+            }
+            TrackWidgetEdit(session_, std::string{"Edit "} + field.key, changed);
         }
     }
 
