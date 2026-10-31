@@ -1,4 +1,4 @@
-#include "gyo/ui_editor/FileService.hpp"
+#include "gyo/framework/FileService.hpp"
 
 #include "engine/base/Fnv1a.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
@@ -12,9 +12,9 @@
 #include <utility>
 
 // Files go through engine/io's native backend and path queries through engine/os
-// (docs/architecture/os.md, Design Invariant 2); the editor holds no OS code.
+// (docs/architecture/os.md, Design Invariant 2); the framework holds no OS code.
 
-namespace Gyo::Tools::UiEditor {
+namespace Gyo::Tools::Framework {
 namespace {
 
 namespace Io = Engine::IO;
@@ -85,7 +85,7 @@ Result<std::string, FileError> ReadTextFile(const std::filesystem::path& path) {
         return Engine::Base::Err(Failure(FileErrorCode::ReadFailed, "cannot open file: " + Text(path),
                                          Engine::Base::CauseDetail(stream.error())));
     }
-    // No size limit: the editor read whole files with a C++ stream before (Design Invariant 9).
+    // No size limit: whole files were read with a C++ stream before (os.md, Design Invariant 9).
     Io::Helpers::ReadAllOptions whole;
     whole.maxBytes = (std::numeric_limits<std::size_t>::max)();
     auto bytes = Io::Helpers::ReadAllFromStream(*stream.value(), whole);
@@ -210,4 +210,4 @@ bool IsPathWithin(
     return true;
 }
 
-} // namespace Gyo::Tools::UiEditor
+} // namespace Gyo::Tools::Framework

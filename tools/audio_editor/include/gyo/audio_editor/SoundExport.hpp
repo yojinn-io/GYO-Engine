@@ -1,7 +1,6 @@
 #pragma once
 
 #include "gyo/audio_editor/AudioEditorError.hpp"
-#include "gyo/audio_editor/CatalogRegistration.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,6 +8,12 @@
 #include <string>
 
 namespace Gyo::Tools::AudioEditor {
+
+// The sound's entry in the product's catalog; its type is always "sound".
+struct SoundRegistration final {
+    std::string id;   // the catalog id, for example "product.audio.reload"
+    std::string path; // relative to the asset root, '/' separated
+};
 
 // UTF-8 paths, as GYO::Os takes them.
 struct ExportRequest final {

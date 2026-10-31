@@ -21,10 +21,7 @@ add_library(gyo_ui_editor_core STATIC
     src/EditorDocumentEdits.cpp
     src/ElementClipboard.cpp
     src/ElementSchema.cpp
-    src/FileService.cpp
     src/GizmoMath.cpp
-    src/PathDialog.cpp
-    src/ReadOnlyAssetCatalog.cpp
     src/UiDocumentBridge.cpp
     src/UndoStack.cpp
 )
@@ -33,9 +30,12 @@ target_include_directories(gyo_ui_editor_core PUBLIC
     "${GYO_UI_EDITOR_ROOT}/include"
 )
 target_compile_features(gyo_ui_editor_core PUBLIC cxx_std_20)
+# File access, the read-only catalog mount and the dialog types come from the
+# tools' shared layer (docs/framework/architecture.md).
 target_link_libraries(gyo_ui_editor_core
     PUBLIC
         GYO::Engine
+        GYO::ToolFramework
         GYO::Ui
         nlohmann_json::nlohmann_json
 )
@@ -49,12 +49,10 @@ target_link_libraries(gyo_ui_editor PRIVATE gyo_ui_editor_core GYO::Os)
 
 if(GYO_TOOL_VARIANT STREQUAL "gui")
     foreach(_target IN ITEMS
-        GYO::PlatformSDL
-        GYO::RenderBackendSDL
+        GYO::ToolFrameworkGui
         GYO::AssetSdlImage
         GYO::TextBackendSDLTTF
         imgui::core
-        imgui::sdl3_sdlrenderer3
     )
         if(NOT TARGET ${_target})
             message(FATAL_ERROR
@@ -80,13 +78,12 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
     # PreviewAdapter calls Math functions directly (sRGB, Rect); EditorApp's
     # path fields go to UTF-8 through GYO::Os.
     target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math GYO::Os)
-    target_sources(gyo_ui_editor PRIVATE src/ImGuiSdlRendererHost.cpp src/SdlPathDialogs.cpp)
-    # The ImGui SDL3 backend needs the native window, renderer and events.
+    target_sources(gyo_ui_editor PRIVATE src/EditorWindow.cpp src/SdlPathDialogs.cpp)
+    # The window, ImGui's SDL backends and the system dialogs come from the
+    # framework's host.
     target_link_libraries(gyo_ui_editor PRIVATE
         gyo_ui_editor_preview
-        GYO::PlatformSDLNative
-        GYO::RenderBackendSDLNative
-        imgui::sdl3_sdlrenderer3
+        GYO::ToolFrameworkGui
     )
     target_compile_definitions(gyo_ui_editor PRIVATE
         GYO_UI_EDITOR_WITH_GUI=1

@@ -154,7 +154,7 @@ function(_gyo_read_registry csv kind collection columns output)
                 message(FATAL_ERROR
                     "Invalid ${kind} name '${name}' in registry record ${display_record}; expected [a-z][a-z0-9_]*: ${csv}")
             endif()
-            if(name STREQUAL "common" OR name STREQUAL "toolchain")
+            if(name STREQUAL "common" OR name STREQUAL "toolchain" OR name STREQUAL "framework")
                 message(FATAL_ERROR
                     "Reserved ${kind} name '${name}' conflicts with engine support or toolchain ownership: ${csv}")
             endif()

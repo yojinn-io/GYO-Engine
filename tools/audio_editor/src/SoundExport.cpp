@@ -3,6 +3,8 @@
 #include "gyo/audio_editor/Conversion.hpp"
 #include "gyo/audio_editor/WavFile.hpp"
 
+#include "gyo/framework/CatalogRegistration.hpp"
+
 #include "engine/os/Files.hpp"
 
 #include <array>
@@ -20,6 +22,17 @@ template <class E>
 AudioEditorError FileError(const AudioEditorErrorCode code, std::string message, const E& cause,
                            const std::string_view path) {
     return AudioEditorError::Make(code, std::move(message), Engine::Base::CauseDetail(cause, path));
+}
+
+// The catalog type of every clip the editor registers.
+constexpr std::string_view kSoundType = "sound";
+
+// The framework's refusal as the editor's own code (exit status 4 either way).
+AudioEditorError RegistrationFailed(Framework::CatalogError error) {
+    const AudioEditorErrorCode code = error.code == Framework::CatalogErrorCode::InvalidCatalog
+                                          ? AudioEditorErrorCode::InvalidCatalog
+                                          : AudioEditorErrorCode::InvalidRegistration;
+    return AudioEditorError::Make(code, std::move(error.message), std::move(error.detail));
 }
 
 Result<std::vector<std::byte>, AudioEditorError> ReadAll(const std::string& path) {
@@ -74,10 +87,10 @@ std::string Join(std::string root, const std::string_view relative) {
 Result<ExportReport, AudioEditorError> ExportSound(const ExportRequest& request) {
     auto catalogText = ReadAll(request.catalogPath);
     if (!catalogText) return Engine::Base::Err(std::move(catalogText).error());
-    auto update = RegisterSound(
+    auto update = Framework::RegisterAsset(
         std::string_view(reinterpret_cast<const char*>(catalogText->data()), catalogText->size()),
-        request.registration);
-    if (!update) return Engine::Base::Err(std::move(update).error());
+        {request.registration.id, std::string(kSoundType), request.registration.path});
+    if (!update) return Engine::Base::Err(RegistrationFailed(std::move(update).error()));
 
     ExportReport report;
     report.outputPath = Join(request.assetRoot, request.registration.path);

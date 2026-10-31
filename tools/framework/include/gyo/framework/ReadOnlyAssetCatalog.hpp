@@ -1,6 +1,6 @@
 #pragma once
 
-#include "gyo/ui_editor/EditorError.hpp"
+#include "gyo/framework/FrameworkError.hpp"
 
 #include <filesystem>
 #include <optional>
@@ -11,7 +11,7 @@
 
 #include "engine/asset/AssetCatalog.hpp"
 
-namespace Gyo::Tools::UiEditor {
+namespace Gyo::Tools::Framework {
 
 struct CatalogAsset final {
     std::string id;
@@ -20,8 +20,9 @@ struct CatalogAsset final {
     std::filesystem::path resolvedPath;
 };
 
-// Authoring-only, read-only view. There is intentionally no Add/Remove/Save API:
-// publishing the exported UI JSON and registering it remains an app-author step.
+// Authoring-only, read-only view (Design Invariant 4). There is intentionally
+// no Add/Remove/Save API: writing a catalog is CatalogRegistration's, and only
+// a tool whose own Design Invariants allow it calls that.
 class ReadOnlyAssetCatalog final {
 public:
     // A content root (content.json and every catalog it declares).
@@ -49,4 +50,4 @@ private:
     Engine::Asset::AssetCatalog catalog_;
 };
 
-} // namespace Gyo::Tools::UiEditor
+} // namespace Gyo::Tools::Framework

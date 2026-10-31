@@ -7,7 +7,7 @@
 #include "gyo/ui_editor/DocumentSession.hpp"
 #include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/PreviewAdapter.hpp"
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -77,7 +77,7 @@ private:
     AssetPreviewContext& previewAssets_;
     PathDialogs* dialogs_{};
     DocumentSession session_;
-    ReadOnlyAssetCatalog catalog_;
+    Framework::ReadOnlyAssetCatalog catalog_;
     PreviewAdapter preview_;
     std::vector<Diagnostic> diagnostics_;
     std::vector<std::string> actionLog_;

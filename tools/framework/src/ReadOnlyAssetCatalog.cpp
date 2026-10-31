@@ -1,16 +1,16 @@
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/ContentManifest.hpp"
 #include "engine/asset/catalog/CatalogParser.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/os/Files.hpp"
-#include "gyo/ui_editor/FileService.hpp"
+#include "gyo/framework/FileService.hpp"
 
 #include <algorithm>
 #include <utility>
 
-namespace Gyo::Tools::UiEditor {
+namespace Gyo::Tools::Framework {
 namespace {
 
 [[nodiscard]] CatalogError LoadFailed(std::string message, std::string detail = {}) {
@@ -124,4 +124,4 @@ const Engine::Asset::AssetCatalog& ReadOnlyAssetCatalog::ParsedCatalog() const n
     return catalog_;
 }
 
-} // namespace Gyo::Tools::UiEditor
+} // namespace Gyo::Tools::Framework

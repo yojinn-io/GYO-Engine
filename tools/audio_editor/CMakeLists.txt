@@ -13,17 +13,18 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND NOT DEFINED GYO_CURREN
 endif()
 
 add_library(gyo_audio_editor_core STATIC
-    src/CatalogRegistration.cpp
     src/Conversion.cpp
     src/SoundExport.cpp
     src/WavFile.cpp
 )
 target_include_directories(gyo_audio_editor_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(gyo_audio_editor_core PUBLIC cxx_std_20)
-# The clip format comes from GYO::Audio (Design Invariant 2); files go through GYO::Os.
+# The clip format comes from GYO::Audio (Design Invariant 2); files go through
+# GYO::Os; the catalog entry is written by the tools' shared layer
+# (docs/framework/architecture.md).
 target_link_libraries(gyo_audio_editor_core
     PUBLIC GYO::Base
-    PRIVATE GYO::Audio GYO::Os nlohmann_json::nlohmann_json
+    PRIVATE GYO::Audio GYO::Os GYO::ToolFramework
 )
 # Reproducible conversion (Design Invariant 7): no fused multiply-add, so a
 # compiler may not round the filter differently from the plain expression.
