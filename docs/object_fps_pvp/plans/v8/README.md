@@ -138,6 +138,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-anim-bottlenecks` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_bottlenecks.zh-Hant.md) |
 | `pv9-hitbox-declare` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_pv9_hitbox_declare.zh-Hant.md) |
 | `pv9-rename` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_pv9_rename.zh-Hant.md) |
+| `v8-product-hit-rules-permille` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_hit_rules_permille.zh-Hant.md) |
 
 ---
 

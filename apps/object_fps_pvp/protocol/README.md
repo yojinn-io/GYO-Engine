@@ -1,11 +1,15 @@
 # Object FPS PvP contracts
 
-Production Client, Gateway and Runtime use protocol version 8 (pv8) and reject
-every other version. pv8 takes effect with the v8 pv8-line: the crouch and
-sprint fields, the Match's movement rules in Ready and Welcome, and the counters
-narrowed to uint32. The product-owned
-[pv8 contract](../../../docs/object_fps_pvp/protocol-v8.zh-Hant.md) states what
-pv8 changes; every rule it does not restate stays as written in the
+Production Client, Gateway and Runtime use protocol version 9 (pv9) and reject
+every other version. pv9 takes effect with the v8 hitbox-line, merged once: hp
+and damage in milli-points (v8-product-hit-rules-permille) first, then the leg
+part and the Match's animation state in the line's later batches. The
+product-owned [pv9 contract](../../../docs/object_fps_pvp/protocol-v9.zh-Hant.md)
+states what pv9 changes; every rule it does not restate stays as written in the
+[pv8 contract](../../../docs/object_fps_pvp/protocol-v8.zh-Hant.md) (the crouch
+and sprint fields, the Match's movement rules in Ready and Welcome, and the
+counters narrowed to uint32), which states what pv8 changes; every rule it does
+not restate stays as written in the
 [pv7 contract](../../../docs/object_fps_pvp/protocol-v7.zh-Hant.md), which
 states what pv7 changes; every rule it does not restate stays as written in the
 [pv6 contract](../../../docs/object_fps_pvp/protocol-v6.zh-Hant.md) and the
@@ -15,9 +19,6 @@ delivery rules. The [v7.1 plan](../../../docs/object_fps_pvp/plans/v7.1/README.m
 implementation and acceptance. The version value has one definition per owner and
 language: C++ `wire::ProtocolVersion`, Go `adapter.ProtocolVersion`, and the
 acceptance expected values; `object_fps_pvp.protocol_version` checks that they agree.
-
-The files and packages carry v9 ahead of the wire change (pv9-rename); the
-version value stays 8 until the hitbox-line wire change.
 
 `client_v9.proto` defines remote Client ↔ Gateway payloads.
 `runtime_v9.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
@@ -62,8 +63,9 @@ them (field 16, the former `epoch_start_wait_us`, is reserved).
 presentation-only hit record of the current life: all zero before the first hit, written
 by the Match when a legal Shot hits the player, kept while dead and reset on respawn.
 Adapters require all zero or all set, a tick inside the current life state and the
-snapshot, an attacker other than the player, a count no larger than maximum_hp, and a
-dead player whose last hit is its death tick. Nothing in the authority reads them.
+snapshot, an attacker other than the player, a count no larger than maximum_hp
+(a bound only: the Match keeps one life within six hits, pv9 §3), and a dead
+player whose last hit is its death tick. Nothing in the authority reads them.
 `Ready.arena_digest` and `Welcome.arena_digest` (fixed64) carry the Match's arena content
 digest: FNV-1a 64 over the parsed arena in a canonical byte order, zero meaning missing.
 The Gateway rejects a zero digest at readiness and forwards it verbatim into Welcome,

@@ -129,6 +129,8 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 
 都 ≤ 1200 B。要重釘的地方：`capacity_test.go:68`、`:71`，`worker_main.cpp:674`，`network_main.cpp:159`，`actions_test.go:135`。
 
+`v8-product-hit-rules-permille` 的實測（2026-10-31）：型別最大以 MaxUint32 取 hp 與 damage，單位改了也不變；合法值的 4 人 Snapshot（`network_main.cpp:159`，hp＝100000）由 698 B 變成 **706 B**（每人的 hp 由 1 B 的 varint 變成 3 B），已重釘。其餘的釘不受單位影響，原值照舊通過。
+
 ## 7. Design Invariants 的變更（hitbox-plan §7，已核准的 Architecture Delta 的落地）
 
 1. `network-architecture.zh-Hant.md:854`（觀測與模擬契約分開）：`view_tick_q16` 成為有界的判定輸入，只由 `ShotRewind` 單一入口讀；守衛 `test_no_decision_reads_the_view_tick` 改成全掃加白名單。照 AGENTS §14.4 **分兩段核准**（`v8-product-hitbox-view-invariant` (a)）：本批只同意改寫與意圖，守衛在 rewind 批第二次核准。
