@@ -35,3 +35,15 @@ Owner：Engine（`GYO::Audio`）。計畫：[CONTROL](../architecture/plans/audi
   - `audio-control-plan-synthesis.en.md`：綜合計畫原文。
   - `audio-control-plan-attack.zh-Hant.md`：對抗式檢查原文。
 - 需求來源：工具線的 `docs/tools/plans/v8/assets.md`（PR #117 的分支 `claude/v8-tool-handoff-cleanup`）。
+
+## 核准之後（同日）
+
+- 使用者：「Approve as recommended」。9 項全部照建議，記入 HANDOFF 的決策紀錄。
+- [audio.md](../architecture/audio.md) 的改動：
+  - 寫入核准的 Invariants 3、4、6、7、8 與新增的 10、11，以及改寫後的 Replacement Criteria 1～8。
+  - 尚未實作的部分標「planned」，並寫明由哪一批成立。
+  - Status 下加一段，說明哪些是計畫中的文字。
+  - Contracts 與「What it is」仍描述現有程式。
+- PLAN.md：範圍的「做」與「不做」加註移入 CONTROL 的項目。
+- 偏離計畫一處：`docs/architecture.md` 的 Audio 列與段落描述的是現有程式，改到 `-live` 批再更新。CONTROL 的分批表已同步修改。
+- 本批到此結束。實作批 `v8-engine-audio-control-baseline` 等使用者指定。

@@ -1,6 +1,6 @@
 # 音效（GYO::Audio）：控制層重建計畫
 
-更新：2026-10-31。**狀態：草稿，待使用者核准（`v8-engine-audio-control-plan`）。** 待決事項見 [HANDOFF](HANDOFF.md)「等使用者決定」。核准前不改 [audio.md](../../audio.md) 與程式。
+更新：2026-10-31。**狀態：已核准（2026-10-31，9 項全部照建議，見 [HANDOFF](HANDOFF.md) 決策紀錄）。** 核准的 Invariants 與 RC 已寫進 [audio.md](../../audio.md)，標「planned」的部分在對應的批次完成後才成立。實作批等使用者指定才開始。
 
 ## 為什麼要做
 
@@ -276,7 +276,7 @@ v8-engine-audio-control                 「重建控制層：停止、執行中�
 
 | 批次 | 檔位｜引擎 | 估時 | 範圍 | 測試（先 Red） | 突變 | 驗收 |
 |---|---|---|---|---|---|---|
-| `-plan` | high｜繼承 | 2～3 h（本文約 1.5 h；核准後寫 audio.md 約 1 h） | 本文；核准後：audio.md（Invariants、RC、Contracts、即時上限、Status）、PLAN.md 的「做」與「不做」（:11 的「輸出期間不增減」、:13 的「不能停止」、:20 的「執行中載入片段」、:21 的「停止」）、`docs/architecture.md` 的 Audio 列與段落（:74、:294）、README、HANDOFF | 無 | 無 | 使用者核准 Invariants 與 RC 的文字之後才寫程式；dev_log |
+| `-plan` | high｜繼承 | 2～3 h（本文約 1.5 h；核准後寫 audio.md 約 1 h） | 本文；核准後：audio.md 的 Invariants、RC 與 Status（Contracts 與即時上限描述現有程式，隨各實作批更新）、PLAN.md 的「做」與「不做」加註、README、HANDOFF。`docs/architecture.md` 的 Audio 列與段落（:74、:294）描述現有程式，移到 `-live` 批 | 無 | 無 | 使用者核准 Invariants 與 RC 的文字之後才寫程式；dev_log |
 | `-baseline` | high｜繼承 | 1～1.5 h | 新增 `tests/common/audio/CharacterizationTests.cpp`、`RenderAllocGuard.cpp`。先確認 `gyo_audio_tests` 是獨立的執行檔，因為替換全域 `operator new` 會影響整個執行檔 | 「PvP-shaped sequence renders the recorded output」：對多個片段、跨錨點的播放、遲到、佇列滿、聲部滿的輸出取 FNV-1a 雜湊；在 master 上就是 Green（特性測試，不是 Red）。「Render allocates and frees nothing」 | `au-ctl-golden-gain-rounding`、`au-ctl-alloc-in-render` | 兩個突變都被殺。之後任何平台雜湊不同就停下回報（§14），不重錄 |
 | `-stop` | high，局部 xhigh（`xhigh-reviewer`）｜繼承 | 4～5 h | `Mixer.*`、`VoiceMixer.*`（只加 `stopFrame`、cookie、結束陣列）、新增 `StopTests.cpp`、`OnsetRecord.cpp:102`、`mutations.json`（find 字串被改寫的既有突變同批更新並重跑） | 停在換算出的 frame；未開始前停止＝靜音並釋放聲部（`maxVoices=1`）；已開始的聲部遲到停止＝夾到區塊開頭，前段樣本仍在；跨區塊與播放同樣換算；含停止的切法無關（1～2200）；StopAll 只停自己的提交端；已結束或被丟棄的播放算 unmatched；佇列滿的停止有計數；handle 唯一、佇列滿時為 0；`Stop(SoundHandle{})` 無作用；別的提交端的 handle 是 Programmer Error；第 64 個提交端的 handle 有效；過期 handle 不會停到重用聲部上的新聲音；併發收支含停止（TSan）；雜湊不變 | `au-ctl-stop-off-by-one`、`-stop-unmapped`、`-stop-skips-delay`、`-stop-ignores-tag`、`-stopall-unscoped`、`-stop-before-start-ignored`、`-stop-branch-swapped`、`-late-stop-unclamped`、`-stop-voice-not-freed`、`-stop-unmatched-uncounted`、`-handle-reused`、`-handle-prefix-overflow` | core 與 test preset 全綠；相關突變以預期訊息被殺；xhigh 審查的問題已修；dev_log |
 | `-clips` | high，局部 xhigh（`xhigh-reviewer`）｜繼承 | 4～6 h | `ClipBank.*`（64 位 `ClipId`、`ValidateClip`）、`AudioError.hpp`（`NoClipSlot`）、`Mixer.*`（槽、租約、交還）、新增 `ClipSlotTests.cpp`、`mutations.json`、`mutations-tsan.json` | 播放建立後載入的片段；`LoadClip` 拒絕 `ClipBank` 拒絕的；槽用完回 `NoClipSlot`；聲部還在讀時不交還（播一半回 `NoClipSlot`、播完成功）；已入列的播放在卸載後仍完整播出；停止的片段在停止 frame 交還；slots=1 時下一代播完一個聲部後仍不交還（B1）；卸載佇列滿可以重試；卸載後或別的提交端的片段是 Programmer Error；重載的槽不回應舊 `ClipId`；設定範圍檢查；不配置守衛涵蓋載入、播放、停止、卸載與結束路徑；TSan 與 ASan 壓力測試（每一代放不同的常數，輸出只能出現有效的「代 × 增益」；宣告 200 次 × 3 輪，只做結構斷言、不設時間上限） | `au-ctl-clip-handback-ignores-voices`、`-clip-lease-not-decremented`（自然結束、停止、開始前釋放，各一）、`-clip-lease-counts-novoice`、`-clip-unload-flag-not-reset`、`-clip-reuse-without-check`、`-clip-generation-not-bumped`、`-unload-uncounted`、`-unload-marks-on-full`；TSan：`au-ctl-clip-handback-relaxed` | 同 `-stop`，再加 TSan、ASan 的結果；回收的 happens-before 論證寫進 audio.md Contracts |
