@@ -107,6 +107,7 @@
 | `v8-product-hitbox-three-part-survey-method` | （2026-10-31，擴充 survey 之前）三部位的量法：(a) 頭球中心＝固定姿勢下頭部頂點重心，換成相對 Head 骨的位置，各動作下用 Head 骨帶著走，量對固定姿勢中心的距離，門檻見 `v8-product-hitbox-three-part-thresholds` (1)；(b) 腿部包絡＝身體座標的軸對齊盒，涵蓋「移動時」（站姿：walk、jog；蹲姿：crouch_move）兩腿四段的所有樣本端點加半徑；實際掃過面積＝同一組樣本的四段在正面投影上的聯集，門檻 (2)；跳躍的腿另列（樣本落在包絡外的比例），只報告；(c) 軀幹與骨盆分「靜止」與「移動中」兩組形狀，移動中的形狀取移動樣本的平均端點；剩下的偏差只報告、不設門檻，寫進 hitbox 文件的已知限制 | 「照建議」 |
 | `v8-product-hitbox-lookup-survey-method` | （2026-10-31，量測之前）頭與軀幹改用權威狀態查表後的殘差量法：(a) 跳躍與動作（jump_start、jump_loop、jump_land、shoot、reload、hit）每個 clip 存 8 個等距時刻的形狀，查表在相鄰兩格之間線性內插，以 survey 的 60 個樣本量殘差；(b) 瞄準存權重 −1、0、+1 三張表、線性內插，以 0.1 為間隔量 −1～+1 的殘差；(c) 移動中（walk、jog、crouch_move）頭與軀幹用移動樣本的平均形狀（不分相位）。門檻維持 `v8-product-hitbox-three-part-thresholds` (1)：頭的殘差 > 頭球半徑 0.184 m 就停下；軀幹只報告 | 「先量查表後的偏差」 |
 | `v8-product-hitbox-valorant-base` | （2026-10-31）hitbox 改照「先抄成熟方案、依需求改裝、碰到瓶頸才量」：以 Valorant 為基底（伺服器跑由權威狀態決定的動畫，hitbox 綁骨頭，Client 照伺服器的動畫狀態播放），取代第 1 版 B-flat（`v8-product-hitbox-model` (a)）。[hitbox-plan](hitbox-plan.md) 第 2 版待核准 | 「不要自己先想方案，先抄，看看別人如何做的……參考成熟解決方案，然後在根據我們自己的需求進行改裝，碰到瓶頸在測量」；「以 Valorant 為基底」 |
+| `v8-product-hitbox-plan-v2-approve` | （2026-10-31）核准 [hitbox-plan](hitbox-plan.md) 第 2 版，照建議：`v8-product-anim-state-on-wire` 要上 snapshot；`v8-product-hitbox-golden-policy` 先量 B3 再定；`v8-product-anim-bottlenecks-first` 先量 B1～B3。開工前先查證第 2 節轉來的參考資料（CS、Valorant、Overwatch、PUBG／Fortnite），避免資訊誤差 | 「照建議核准，但是你先去調查一下，我轉給你的那些方案。否則信息會出誤差。」 |
 
 ## 規劃紀錄（記錄器）
 

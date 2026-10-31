@@ -1,6 +1,6 @@
 # hitbox-line 規劃（v8-product-hitbox-plan，第 2 版：以 Valorant 為基底）
 
-更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：草案，等你核准。** 第 1 版（B-flat：固定姿勢的 11 段膠囊，`v8-product-hitbox-plan-approve`）被這一版取代，內容在 git 歷史（`e33d53fc`）。取代的理由見「為什麼換掉第 1 版」。
+更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：已核准（`v8-product-hitbox-plan-v2-approve`，2026-10-31），照建議：動畫狀態上 snapshot、golden 策略先量 B3 再定、先做瓶頸量測。開工前先查證第 2 節的參考資料（使用者要求），查證結果可能修正本文件。** 第 1 版（B-flat：固定姿勢的 11 段膠囊，`v8-product-hitbox-plan-approve`）被這一版取代，內容在 git 歷史（`e33d53fc`）。取代的理由見「為什麼換掉第 1 版」。
 
 工作方式：先抄成熟方案，再依我們的需求改裝，碰到瓶頸才量（使用者 2026-10-31 的指示）。
 
