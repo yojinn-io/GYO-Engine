@@ -27,6 +27,7 @@
   - 待決：命中確認與遠端射擊要用哪個音效（使用者只提供 4 個）。
 - 2026-10-30：使用者說「開PR推送」。併入 origin/master 後本機 test 102／102、core 37／37，推送並開 PR（Engine 四批與消費端的音效批同一個 PR）。
 - 2026-10-30：`audio_sdl.disk` 在 macOS arm64 CI 偶發失敗（錨點記錄在 `TIMESCALE=0` 下被不等待的 disk 驅動填滿）：測試環境改為 `TIMESCALE=0.1` 並加入 100 ms 停頓的回歸測試；dev_log：[2026_10_30_engine_audio_disk_flake](../../../dev_logs/2026_10_30_engine_audio_disk_flake.zh-Hant.md)。
+- 2026-10-31：`v8-engine-audio-windows-blocks`（只量測）：Windows 11、i7-8750H、Realtek 內建喇叭（推定為預設裝置）、WASAPI。SDL 預設區塊就是 480，回呼最長間隔最大 11.0 ms → 需要約 44.4 ms，60 ms 足夠；真實裝置兩輪 299／299 準時。disk 驅動有 116～208 ms 的停頓，第一輪 anchored match 297／299（原因未切分，見「等使用者決定」）。dev_log：[2026_10_31_engine_audio_windows_blocks](../../../dev_logs/2026_10_31_engine_audio_windows_blocks.zh-Hant.md)。
 - 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -49,7 +50,7 @@
 
 ## 等使用者決定
 
-目前沒有。
+- `v8-engine-audio-windows-disk`（2026-10-31 提出）：Windows 上 disk 驅動有 116～208 ms 的停頓，30 秒紀錄第一輪只有 297／299 起音落在重建的 frame（第二輪 299／299）。原因（環境或分析器）未切分。消費端的 L2 也用 disk 驅動與錨點重建，在 Windows 上可能偶發不成立。選項：A 照現狀記錄，Windows 的 disk 結果不當判定；B 加診斷（例如逐筆記下遲到）後重跑切分原因；C 重新看計畫的前提（Windows 上的 L2 是否改用別的量法）。
 
 ### `v8-engine-audio-l2-premise`：起音量測的做法（2026-10-30 提出；同日決定 A，見決策紀錄）
 
