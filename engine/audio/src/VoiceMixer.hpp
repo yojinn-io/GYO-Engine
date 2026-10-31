@@ -28,6 +28,14 @@ struct ScheduledPlay final {
 
 enum class StartOutcome : std::uint8_t { OnTime, Late, NoVoice };
 
+// One voice as the audio thread sees it after a Render, for publishing.
+struct VoiceState final {
+    bool active = false;
+    bool started = false;        // it has contributed at least its first frame
+    std::uint64_t cookie = 0;
+    std::uint32_t position = 0;  // clip frames mixed
+};
+
 // What one Stop call did: how many voices it stopped, and whether any of them
 // had started and was stopped at a frame already rendered.
 struct StopResult final {
@@ -101,6 +109,12 @@ public:
     [[nodiscard]] std::uint64_t RenderedFrames() const noexcept;
     // The audio thread's next frame to render (the same count, without an atomic).
     [[nodiscard]] std::int64_t NextFrame() const noexcept { return nextFrame_; }
+    // The audio thread.
+    [[nodiscard]] std::uint32_t VoiceCount() const noexcept { return static_cast<std::uint32_t>(voices_.size()); }
+    [[nodiscard]] VoiceState StateOf(std::uint32_t voice) const noexcept {
+        const Voice& v = voices_[voice];
+        return VoiceState{v.active, v.startFrame < nextFrame_, v.cookie, v.position};
+    }
     [[nodiscard]] const ClipBank& Clips() const noexcept { return clips_; }
 
 private:

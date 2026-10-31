@@ -54,6 +54,18 @@ struct SoundHandle final {
     friend constexpr bool operator==(SoundHandle, SoundHandle) = default;
 };
 
+// Where one sound is, for display only, never for decisions (Design Invariant
+// 4): as of the end of the last Render, so up to one block old, and ahead of
+// what is heard by the output's latency.
+struct Playhead final {
+    // NotPlaying: not taken by the audio thread yet, ended, stopped or dropped.
+    // Scheduled: holds a voice but has not started. Playing: clipFrame frames
+    // of its clip are mixed.
+    enum class Status : std::uint8_t { NotPlaying, Scheduled, Playing };
+    Status status = Status::NotPlaying;
+    std::uint32_t clipFrame = 0;
+};
+
 // Counters for display and acceptance; never for decisions. Each request ends
 // in exactly one of playedOnTime, playedLate, droppedQueueFull, droppedNoVoice,
 // decided when the audio thread takes it (a play counted on time may still be
@@ -156,7 +168,8 @@ public:
     // InvalidConfig for a value outside MixerConfig's documented limits.
     [[nodiscard]] static Base::Result<Mixer, AudioError> Create(const MixerConfig& config, ClipBank&& clips);
 
-    // A moved-from Mixer only renders silence; its other members are Programmer Errors.
+    // A moved-from Mixer renders silence, reports empty Stats and NotPlaying
+    // playheads; its other members are Programmer Errors.
     Mixer(Mixer&&) noexcept;
     Mixer& operator=(Mixer&&) noexcept;
     Mixer(const Mixer&) = delete;
@@ -170,6 +183,10 @@ public:
     // Any thread. A gain outside [0, kMaxGain] is a Programmer Error.
     void SetMasterGain(float gain);
     [[nodiscard]] MixerStats Stats() const noexcept;
+    // Any thread, wait-free, display only. An invalid handle, or any handle on a
+    // moved-from Mixer, is NotPlaying. A handle of another mixer is a Programmer
+    // Error this cannot detect.
+    [[nodiscard]] Playhead PlayheadOf(SoundHandle sound) const noexcept;
 
     // The audio thread, once per block. anchor is the Engine time read once at
     // the start of this block. Every queued request is taken in its queue's

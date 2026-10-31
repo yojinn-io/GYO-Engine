@@ -4,8 +4,8 @@ Owner: Engine (`engine/audio` → `GYO::Audio`; the SDL output backend `engine/a
 `GYO::AudioBackendSDL`, built when a product declares the `SDL_AUDIO` component).
 Plan and record: [audio](plans/audio/README.md), batches v8-engine-audio-core, -schedule, -sdl and -record.
 
-**Status (2026-10-31): v8-engine-audio-core, -schedule, -sdl, -record, -control-baseline, -control-stop and
--control-clips landed.** The clip bank, the sample-domain core
+**Status (2026-10-31): v8-engine-audio-core, -schedule, -sdl, -record, -control-baseline, -control-stop,
+-control-clips and -control-playhead landed.** The clip bank, the sample-domain core
 (`VoiceMixer`, internal to `engine/audio/src`), the public `Mixer` with its submitters and timestamp mapping, and
 the SDL output backend exist. The mixer is tested offline; the backend on SDL's `dummy` and `disk` drivers. Each invariant below
 names the milestone that makes it true and the guard that keeps it true.
@@ -63,6 +63,13 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
   The earliest of several stop frames wins. `StopAll` does the same for every sound its submitter sent before it. The voice mixer only keeps a stop frame, an
   opaque cookie (the handle) and an opaque lease mark per voice, and reads a loaded clip through the view the
   `Mixer` passes; handles and clip slots are the `Mixer`'s.
+- **Playheads (`Mixer::PlayheadOf`).** After each `Render` the audio thread publishes, for every voice, the handle it
+  plays and its position (clip frames mixed, and whether it has started) to a board of atomics allocated at
+  creation; a voice that took another sound is assigned anew (its tag cleared, then its state, then its tag
+  written), a voice that went idle is cleared. Any thread reads a handle's entry wait-free: tag, state, tag again,
+  and reports Scheduled, Playing with the frame, or NotPlaying (not taken yet, ended, stopped, dropped, an invalid
+  handle, a moved-from mixer). The value is at most one block old and ahead of what is heard by the output latency.
+  For display only (Design Invariant 4).
 - **Timestamp mapping (`Mixer::Render(block, anchor)`).** The backend reads the Engine time once at the start of each
   block and passes it as `anchor`. Every queued request starts at
   `blockStart + floor((at - anchor) × 48000 + 1/2) + delayFrames` frames (halves toward +infinity, also for negative
@@ -123,9 +130,11 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
   are freed with the mixer's state. A slot's generation wraps after 2^32 - 1 unloads (not reached in practice);
   an id of another mixer that happens to match a loaded slot is not detected (as for bank ids).
 - Real-time bound: `Render` takes every queued request in one block, each start looks for a free voice
-  linearly and each stop scans every voice; the worst case is `maxSubmitters × queueCapacity × maxVoices` comparisons in one block. The defaults
+  linearly and each stop scans every voice, and the playheads of all voices are published once per block; the
+  worst case is `maxSubmitters × queueCapacity × maxVoices` comparisons in one block. The defaults
   (4 × 256 × 32) are small; the configured limits (64 × 65536 × 1024) are not real-time.
-- Moving a `Mixer` while its audio thread renders is a data race; the backend stops output first. `maxLateness` is the latest late start, converted from frames.
+- Moving a `Mixer` while its audio thread renders, or while another thread calls `PlayheadOf` or `Stats`, is a data
+  race; the backend stops output first. `maxLateness` is the latest late start, converted from frames.
 - A moved-from `Mixer` renders silence; an odd sample count gets silence in its last sample.
 - `Render` fills a block of any length and advances `renderedFrames` by its frame count. It works in internal
   passes of at most 256 frames over an accumulator allocated at creation.
@@ -151,14 +160,21 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
    rule as a start's (offset, rounding, clamp and `scheduleDelay`), from the anchor of the block that takes it
    (from v8-engine-audio-control-stop; guard "maps a stop like a play from the block's anchor").
 4. **The mixer is the authority for the playback position.** Only the mixer owns the count of rendered frames and
-   each sound's position in its clip. It publishes them (`Stats().renderedFrames`, and `Mixer::PlayheadOf`,
-   planned in v8-engine-audio-control-playhead) for display and acceptance only; consumers and the backend keep no
+   each sound's position in its clip. It publishes them (`Stats().renderedFrames`, and `Mixer::PlayheadOf` from
+   v8-engine-audio-control-playhead) for display and acceptance only; consumers and the backend keep no
    copy of them and decide nothing from them (for example, playing the next sound when a playhead stops, or skipping
    a stop because a playhead reports NotPlaying); decisions go through commands, which the mixer resolves (AGENTS §3,
    State Authority). A published position may be up to one block old, is ahead of the audible sound by the output
-   latency, never belongs to another sound, and never changes the output. Guards: review; planned "never reports
-   another play's state for a reused voice" (the interleaving test) and the structure check that the audio thread
-   never reads the playhead board.
+   latency, never belongs to another sound, and never changes the output. Guards: review (consumers; the audio
+   thread writes the playhead board and keeps its own copy of the tags it published);
+   "playhead board never reports another sound's state, in any interleaving" (every interleaving of one read with a
+   voice's reuse, driven through the board's own writer); "output does not depend on someone reading playheads";
+   "reports a sound scheduled, playing, then not playing"; the ThreadSanitizer poll "playheads stay consistent while
+   another thread polls them" (voices reused all along); "audio thread never reads the playhead board"
+   (`gyo_audio_board_readers`, a source check that the board is read only in `Mixer::PlayheadOf`). The board holds
+   only atomics, so weakening any of its memory orders is invisible to ThreadSanitizer and to these tests (they
+   interleave sequentially consistent steps); that half rests on the ordering argument in `PlayheadBoard.hpp` and
+   review.
 5. **Each start is its own rounded offset.** Every request taken under an anchor, with a timestamp within an hour of
    that anchor, starts at its offset from the anchor rounded to the nearest frame as floor(x + 1/2) (halves toward
    +infinity, also for negative offsets), plus the constant delay; so two such requests, neither late, start a

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "ClipValidation.hpp"
+#include "PlayheadBoard.hpp"
 #include "VoiceMixer.hpp"
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/base/Assert.hpp"
@@ -94,7 +95,7 @@ constexpr std::uint64_t LeaseMark(const std::uint64_t submitterPlusOne, const st
 struct MixerState final {
     MixerState(VoiceMixer&& mixer, const std::uint32_t submitters, const std::uint32_t capacity,
                const std::uint32_t clipSlots, const std::int64_t delay)
-        : voices(std::move(mixer)), delayFrames(delay) {
+        : voices(std::move(mixer)), delayFrames(delay), board(voices.VoiceCount()), published(voices.VoiceCount()) {
         slots.reserve(submitters);
         for (std::uint32_t i = 0; i < submitters; ++i) {
             slots.push_back(
@@ -116,6 +117,10 @@ struct MixerState final {
     std::atomic<std::uint64_t> stopsUnmatched{0};
     std::atomic<std::uint64_t> stopsLate{0};
     std::atomic<std::uint64_t> unloadsTaken{0};
+    // Where each voice is, for PlayheadOf. The audio thread writes it and keeps
+    // its own copy of the tags it published, so it never reads the board.
+    PlayheadBoard<> board;
+    std::vector<std::uint64_t> published;
 };
 
 } // namespace Detail
@@ -126,6 +131,7 @@ using Detail::Command;
 using Detail::CommandKind;
 using Detail::MixerState;
 using Detail::IsRuntimeClip;
+using Detail::PlayheadBoard;
 using Detail::SubmitterSlot;
 
 constexpr std::uint32_t kMaxSubmitters = 64;
@@ -172,6 +178,28 @@ void HandBack(Detail::ClipSlot& slot) noexcept {
     slot.voices = 0;
     slot.unloadTaken = false;
     slot.handedBack.store(true, std::memory_order_release);
+}
+
+// The audio thread, after each Render. Publishes every voice's sound and
+// position; a voice that changed sound is assigned anew, an idle one cleared.
+void PublishVoices(MixerState& state) noexcept {
+    for (std::uint32_t i = 0; i < state.voices.VoiceCount(); ++i) {
+        const Detail::VoiceState voice = state.voices.StateOf(i);
+        if (!voice.active) {
+            if (state.published[i] != 0) {
+                state.board.Clear(i);
+                state.published[i] = 0;
+            }
+            continue;
+        }
+        const std::uint64_t position = voice.position | (voice.started ? PlayheadBoard<>::kStarted : 0);
+        if (state.published[i] != voice.cookie) {
+            state.board.Assign(i, voice.cookie, position);
+            state.published[i] = voice.cookie;
+        } else {
+            state.board.Publish(i, position);
+        }
+    }
 }
 
 // The audio thread. Ends the leases of the voices that ended since the last call.
@@ -460,6 +488,16 @@ void Mixer::Render(const Base::Span<std::int16_t> interleavedOut, const Time::Ti
     }
     state.voices.Render(interleavedOut);
     ReleaseEnded(state);
+    PublishVoices(state);
+}
+
+Playhead Mixer::PlayheadOf(const SoundHandle sound) const noexcept {
+    if (!state_ || !sound.Valid()) return Playhead{};
+    std::uint64_t read = 0;
+    if (!state_->board.Read(sound.value, read)) return Playhead{};
+    const bool started = (read & PlayheadBoard<>::kStarted) != 0;
+    return Playhead{started ? Playhead::Status::Playing : Playhead::Status::Scheduled,
+                    static_cast<std::uint32_t>(read & 0xFFFF'FFFFu)};
 }
 
 } // namespace Engine::Audio

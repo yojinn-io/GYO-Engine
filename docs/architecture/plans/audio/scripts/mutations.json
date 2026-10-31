@@ -386,8 +386,8 @@
       "id": "au-ctl-alloc-in-render",
       "what": "Render allocates and frees a block on the audio thread (an explicit ::operator new call, which the compiler may not elide; a dead std::vector is elided under optimization and allocates nothing)",
       "file": "engine/audio/src/Mixer.cpp",
-      "find": "    state.voices.Render(interleavedOut);\n    ReleaseEnded(state);\n}",
-      "replace": "    void* scratch = ::operator new(16);\n    ::operator delete(scratch);\n    state.voices.Render(interleavedOut);\n    ReleaseEnded(state);\n}",
+      "find": "    state.voices.Render(interleavedOut);\n    ReleaseEnded(state);",
+      "replace": "    void* scratch = ::operator new(16);\n    ::operator delete(scratch);\n    state.voices.Render(interleavedOut);\n    ReleaseEnded(state);",
       "target": "gyo_audio_alloc_tests",
       "cases": "*Render allocates and frees nothing*",
       "expect": "CHECK\\( counted.allocations == 0 \\) is NOT correct"
@@ -751,6 +751,144 @@
       "target": "gyo_audio_tests",
       "cases": "*clip calls belong to the thread that owns it*",
       "expect": "expected GYO_ASSERT to fail: owned.submitter.UnloadClip"
+    },
+    {
+      "id": "au-ctl-playhead-tag-before-state",
+      "what": "The board writes a voice's new tag before its new state",
+      "file": "engine/audio/src/PlayheadBoard.hpp",
+      "find": "        entry.state.store(state, std::memory_order_release);\n        Hook::AfterStore();\n        entry.tag.store(tag, std::memory_order_release);",
+      "replace": "        entry.tag.store(tag, std::memory_order_release);\n        Hook::AfterStore();\n        entry.state.store(state, std::memory_order_release);",
+      "target": "gyo_audio_tests",
+      "cases": "*any interleaving*",
+      "expect": "CHECK\\( \\(state == twoInit \\|\\| state == twoState\\) \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-single-tag-read",
+      "what": "The reader does not read the tag again after the state",
+      "file": "engine/audio/src/PlayheadBoard.hpp",
+      "find": "            if (entry.tag.load(std::memory_order_acquire) != tag) return false; // reassigned: the sound ended\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*any interleaving*",
+      "expect": "CHECK\\( state == oneState \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-tag-not-cleared",
+      "what": "Clear leaves the voice's tag",
+      "file": "engine/audio/src/PlayheadBoard.hpp",
+      "find": "        entries_[voice].tag.store(0, std::memory_order_release);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*any interleaving*",
+      "expect": "CHECK_FALSE\\( found \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-assign-no-clear",
+      "what": "Assign writes the new state while the old tag is still there",
+      "file": "engine/audio/src/PlayheadBoard.hpp",
+      "find": "        entry.tag.store(0, std::memory_order_relaxed);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*any interleaving*",
+      "expect": "CHECK_FALSE\\( found \\) is NOT correct|CHECK\\( state == oneState \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-no-validity-check",
+      "what": "An invalid handle matches an idle voice",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (!state_ || !sound.Valid()) return Playhead{};",
+      "replace": "    if (!state_) return Playhead{};",
+      "target": "gyo_audio_tests",
+      "cases": "*invalid handle or a moved-from Mixer*",
+      "expect": "CHECK\\( rig.mixer.PlayheadOf\\(SoundHandle\\{\\}\\).status == Playhead::Status::NotPlaying \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-not-published",
+      "what": "A voice's position is published only when it is assigned",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "            state.board.Publish(i, position);",
+      "replace": "            static_cast<void>(position);",
+      "target": "gyo_audio_tests",
+      "cases": "*reports a sound scheduled*",
+      "expect": "CHECK\\( playing.status == Playhead::Status::Playing \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-not-cleared-on-end",
+      "what": "An ended voice keeps its published sound",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "                state.board.Clear(i);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*stopped sound as not playing*",
+      "expect": "CHECK\\( rig.mixer.PlayheadOf\\(sound\\).status == Playhead::Status::NotPlaying \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-started-boundary",
+      "what": "A voice that starts at the next frame is reported playing",
+      "file": "engine/audio/src/VoiceMixer.hpp",
+      "find": "v.startFrame < nextFrame_, v.cookie",
+      "replace": "v.startFrame <= nextFrame_, v.cookie",
+      "target": "gyo_audio_tests",
+      "cases": "*reports a sound scheduled*",
+      "expect": "CHECK\\( rig.mixer.PlayheadOf\\(sound\\).status == Playhead::Status::Scheduled \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-reuse-not-assigned",
+      "what": "A voice taken by another sound within one block is only published, so its old tag shows the new sound",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        if (state.published[i] != voice.cookie) {",
+      "replace": "        if (state.published[i] == 0) {",
+      "target": "gyo_audio_tests",
+      "cases": "*taken by another sound within one block*",
+      "expect": "CHECK\\( rig.mixer.PlayheadOf\\(a\\).status == Playhead::Status::NotPlaying \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-first-voice-only",
+      "what": "The reader stops at the first voice whose tag does not match",
+      "file": "engine/audio/src/PlayheadBoard.hpp",
+      "find": "            if (entry.tag.load(std::memory_order_acquire) != tag) continue;",
+      "replace": "            if (entry.tag.load(std::memory_order_acquire) != tag) return false;",
+      "target": "gyo_audio_tests",
+      "cases": "*several sounds in its own voice*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-last-voice-skipped",
+      "what": "The last voice is never published",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    for (std::uint32_t i = 0; i < state.voices.VoiceCount(); ++i) {",
+      "replace": "    for (std::uint32_t i = 0; i + 1 < state.voices.VoiceCount(); ++i) {",
+      "target": "gyo_audio_tests",
+      "cases": "*several sounds in its own voice*",
+      "expect": "CHECK\\( rig.mixer.PlayheadOf\\(c\\).clipFrame == 384 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-playhead-started-off-by-one",
+      "what": "A voice counts as started only after its second frame",
+      "file": "engine/audio/src/VoiceMixer.hpp",
+      "find": "v.startFrame < nextFrame_, v.cookie",
+      "replace": "v.startFrame + 1 < nextFrame_, v.cookie",
+      "target": "gyo_audio_tests",
+      "cases": "*only grows*",
+      "expect": "CHECK\\( now.status == Playhead::Status::Playing \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-board-read-in-render",
+      "what": "The audio thread reads the playhead board while publishing",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "void PublishVoices(MixerState& state) noexcept {\n",
+      "replace": "void PublishVoices(MixerState& state) noexcept {\n    std::uint64_t peek = 0;\n    static_cast<void>(state.board.Read(1, peek));\n",
+      "target": "gyo_audio_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/core",
+        "-R",
+        "^gyo_audio_board_readers$",
+        "--output-on-failure"
+      ],
+      "timeout": 120,
+      "expect": "the audio thread must not read the playhead board"
     }
   ]
 }
