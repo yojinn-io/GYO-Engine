@@ -12,8 +12,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // resultLoop drives sendUDP's result path by hand on a virtual clock: a pass

@@ -32,7 +32,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" ipc ipc)
 set(ipc_tests "gyo_${GYO_CURRENT_APP}_ipc_tests")
 add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp ClockSyncTests.cpp)
 target_compile_features(${ipc_tests} PRIVATE cxx_std_20)
-target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v8" nlohmann_json::nlohmann_json doctest::doctest)
+target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v9" nlohmann_json::nlohmann_json doctest::doctest)
 target_compile_definitions(${ipc_tests} PRIVATE PVP_DROP_REASONS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/drop_reasons.json"
     PVP_LOG_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/log_v1")
 if(WIN32)

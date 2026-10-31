@@ -7,8 +7,8 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // The pv8 field types (protocol-v8 section 2a, pv8-seq-narrow-declaration.md):

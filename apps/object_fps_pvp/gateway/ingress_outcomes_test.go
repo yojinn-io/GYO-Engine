@@ -12,7 +12,7 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
 )
 
 // ingressTake is what the Server and its link hand over, per player and

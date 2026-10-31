@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // pv7 §5 (D-4): the Match's hold reaches the Client as it came, its presence

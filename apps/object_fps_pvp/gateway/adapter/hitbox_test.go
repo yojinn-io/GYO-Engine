@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // pv7 §7: a player hit is BODY or HEAD, every other decision UNSPECIFIED; an

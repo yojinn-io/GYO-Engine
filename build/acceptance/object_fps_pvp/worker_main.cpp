@@ -3,7 +3,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v8.pb.h"
+#include "client_v9.pb.h"
 #include "acceptance_protocol.hpp"
 #include "acceptance_capacity.hpp"
 #include "engine/time/Waiter.hpp"
@@ -41,7 +41,7 @@ namespace {
 using namespace fps::pvp;
 using Clock=std::chrono::steady_clock;
 using namespace std::chrono_literals;
-namespace pb=object_fps_pvp::client::v8;
+namespace pb=object_fps_pvp::client::v9;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}

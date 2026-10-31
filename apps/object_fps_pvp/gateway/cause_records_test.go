@@ -14,8 +14,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // capturedLink runs a dialed link whose runtime writes are decoded and kept;

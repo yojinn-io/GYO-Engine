@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package object_fps_pvp.client.v8;
-option go_package = "gyo.local/object_fps_pvp/protocol/clientv8";
+package object_fps_pvp.client.v9;
+option go_package = "gyo.local/object_fps_pvp/protocol/clientv9";
 
-// This remote-client contract is independent of runtime_v8.proto.
+// This remote-client contract is independent of runtime_v9.proto.
 message Hello {
   string session_token = 1;
   // Diagnostics only (pv7 §3): the time echo with the Gateway; read only
@@ -34,7 +34,7 @@ message Welcome {
   reserved 16 to 19;
 }
 // Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
-// runtime_v8.proto: times are the sender's own monotonic clock in
+// runtime_v9.proto: times are the sender's own monotonic clock in
 // microseconds; a time of the other side is only ever copied back.
 message ClockSample {
   // The transmit_us of the peer's latest ClockSample this side read, as is;

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // setForTest overrides a package variable until the test and every cleanup

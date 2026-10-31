@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // pv7 contract §1: a refused join names the Gateway's own version; every
