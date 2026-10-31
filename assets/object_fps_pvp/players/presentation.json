@@ -22,8 +22,8 @@
   "weapon": {
     "character_asset_id": "object_fps_pvp.weapon.nailer_v2.world",
     "node": "hand_r",
-    "translation": [0, 0.043972, 0.050378],
+    "translation": [0, 0.057145, 0.048573],
     "rotation_xyzw": [-0.00000102, 0.7749934, -0.63196932, 0.00000081],
-    "scale": 0.119435
+    "scale": 0.107491
   }
 }
