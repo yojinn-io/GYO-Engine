@@ -1,0 +1,10 @@
+{
+  "schema": "gyo.anim_events",
+  "version": 1,
+  "model_asset_id": "object_fps_pvp.model.nailer_v2",
+  "clips": {
+    "Armature|Reload": [
+      { "seconds": 1.30, "event": "magazine_in" }
+    ]
+  }
+}

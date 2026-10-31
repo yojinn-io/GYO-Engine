@@ -7279,16 +7279,6 @@
       "expect": "CHECK\\( state.pendingShotPressedAt == at\\(10\\) \\) is NOT correct"
     },
     {
-      "id": "sfx-reload-starts-at-start",
-      "batch": "v8-product-sfx",
-      "what": "The reload sound starts with the reload instead of ending with it",
-      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
-      "find": "    return Engine::Math::Max(0.0, reloadSeconds - clipSeconds);",
-      "replace": "    return 0;",
-      "check": "cpu",
-      "expect": "CHECK\\( ReloadSoundOffsetSeconds\\(1.5, 0.958\\) == doctest::Approx\\(0.542\\) \\) is NOT correct"
-    },
-    {
       "id": "sfx-killing-hit-silent",
       "batch": "v8-product-sfx",
       "what": "The killing hit plays no hit-taken sound",
@@ -7307,6 +7297,86 @@
       "replace": "    return outcome != HitFeedbackOutcome::None;",
       "check": "cpu",
       "expect": "CHECK_FALSE\\( HitTakenSounds\\(HitFeedbackOutcome::SuppressedNewLife\\) \\) is NOT correct"
+    },
+    {
+      "id": "anim-events-no-stretch",
+      "batch": "v8-tool-assets-anim-events",
+      "what": "An event sound ignores how the clip is stretched over the action",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "    return eventSeconds * (actionSeconds / clipSeconds) - syncSeconds;",
+      "replace": "    return eventSeconds - syncSeconds;",
+      "check": "cpu",
+      "expect": "CHECK\\( \\*EventSoundOffsetSeconds\\(2, 3, 1.5, 0\\) == doctest::Approx\\(1\\) \\) is NOT correct"
+    },
+    {
+      "id": "anim-events-sync-ignored",
+      "batch": "v8-tool-assets-anim-events",
+      "what": "An event sound starts at the event instead of leading it by its sync point",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "    return eventSeconds * (actionSeconds / clipSeconds) - syncSeconds;",
+      "replace": "    return eventSeconds * (actionSeconds / clipSeconds);",
+      "check": "cpu",
+      "expect": "CHECK\\( \\*EventSoundOffsetSeconds\\(2, 3, 1.5, 0.25\\) == doctest::Approx\\(0.75\\) \\) is NOT correct"
+    },
+    {
+      "id": "anim-events-zero-clip-divides",
+      "batch": "v8-tool-assets-anim-events",
+      "what": "A clip without length still yields an offset",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "!std::isfinite(actionSeconds) || clipSeconds <= 0 || actionSeconds <= 0)",
+      "replace": "!std::isfinite(actionSeconds) || actionSeconds <= 0)",
+      "check": "cpu",
+      "expect": "CHECK_FALSE\\( EventSoundOffsetSeconds\\(1, 0, 1.5, 0\\) \\) is NOT correct"
+    },
+    {
+      "id": "anim-events-sfx-version-1-accepted",
+      "batch": "v8-tool-assets-anim-events",
+      "what": "sfx.json version 1 (without animation events) is still read",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "if (json.at(\"version\").get<int>() != 2)",
+      "replace": "if (json.at(\"version\").get<int>() > 2)",
+      "check": "cpu",
+      "expect": "version 1"
+    },
+    {
+      "id": "anim-events-unknown-cue-accepted",
+      "batch": "v8-tool-assets-anim-events",
+      "what": "An event sound may name a cue that does not exist",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "            if (cue == std::end(CueNames)) throw",
+      "replace": "            if (false) throw",
+      "check": "cpu",
+      "expect": "an unknown cue"
+    },
+    {
+      "id": "anim-events-find-wrong-event",
+      "batch": "v8-tool-assets-anim-events",
+      "what": "Looking up an event sound returns another event's sound",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "        if (sound.event == event) return &sound;",
+      "replace": "        if (sound.event != event) return &sound;",
+      "check": "cpu",
+      "expect": "REQUIRE\\( magazine \\) is NOT correct"
+    },
+    {
+      "id": "anim-events-other-model-accepted",
+      "batch": "v8-tool-assets-anim-events",
+      "what": "A weapon takes animation events written for another model",
+      "file": "apps/object_fps_pvp/src/App/WeaponPresentationDefinition.cpp",
+      "find": "            if (Engine::Asset::AssetId::FromString(events.value().modelAssetId) != modelId) {",
+      "replace": "            if (false) {",
+      "check": "presentation",
+      "expect": "belong to model"
+    },
+    {
+      "id": "anim-events-not-bound",
+      "batch": "v8-tool-assets-anim-events",
+      "what": "A weapon keeps animation events without binding them to its model",
+      "file": "apps/object_fps_pvp/src/App/WeaponPresentationDefinition.cpp",
+      "find": "            if (!bound) throw std::runtime_error(describe(bound.error()));",
+      "replace": "            if (!bound) return definition;",
+      "check": "presentation",
+      "expect": "InvalidAnimationEvents|is NOT correct"
     }
   ]
 }
