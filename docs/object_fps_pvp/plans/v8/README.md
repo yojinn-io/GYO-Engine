@@ -33,7 +33,7 @@ v8-plan
 │   │   ├── pv8-seq-ceiling        「high｜Opus 5.5｜不改 wire：WireCounterMax 取代 uint64 上限檢查（完成）」
 │   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼（完成）」
 │   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告（完成）」
-│   └── hitbox-line                「PR 線：部位 hitbox（pv7 已有欄位）」
+│   └── hitbox-line                「PR 線：部位 hitbox（pv7 已有欄位）；規劃草案見 hitbox-plan.md，等使用者決定」
 │       ├── v8-product-hitbox-data            「high｜Opus 5.5｜骨骼→部位形狀的 Data Contract，先手寫 JSON」
 │       ├── v8-product-hitbox-rewind          「high（回溯局部 xhigh）｜Opus 5.5｜Match 的權威姿勢歷史、射擊照開槍時刻回溯」
 │       └── v8-product-hit-rules              「medium｜Opus 5.5｜部位倍率：照 v2 三層（頭 2.0、軀幹 1.0、四肢 0.75），千分位計算，加 HIT_PART_LIMB」
