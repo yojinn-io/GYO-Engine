@@ -674,6 +674,31 @@ std::string_view DeclaredValue(const nlohmann::json& declarations, const nlohman
     return "undeclared";
 }
 
+// Reported 2026-10-31 (pvp_lobby.json, whose colors are its own): a new
+// element or canvas must not name a color the document does not declare.
+nlohmann::json DocumentWithOwnColors() {
+    nlohmann::json document = UiDocumentBridge::CreateDefault();
+    document["colors"] = {{"panel", "#1D2A3AFF"}, {"text", "#EAF1FAFF"}};
+    document["canvases"][0]["backdrop_color"] = "panel";
+    return document;
+}
+
+void TestDefaultsDeclareTheirColors() {
+    for (const ElementKind& kind : ElementKinds()) {
+        nlohmann::json document = DocumentWithOwnColors();
+        nlohmann::json element = MakeDefaultElement(document, kind);
+        if (kind.focusable) document["canvases"][0]["focus_order"].push_back(element["id"]);
+        document["canvases"][0]["children"].push_back(element);
+        Expect(Engine::Ui::UiDocumentCodec::Parse(document.dump(), "own-colors").has_value(),
+            std::string{kind.type} + ": a new element in a document with its own colors passes the codec");
+        Expect(document["colors"]["panel"] == "#1D2A3AFF", "a declared color keeps its value");
+    }
+    nlohmann::json document = DocumentWithOwnColors();
+    document["canvases"].push_back(MakeDefaultCanvas(document));
+    Expect(Engine::Ui::UiDocumentCodec::Parse(document.dump(), "own-colors").has_value(),
+        "a new canvas in a document with its own colors passes the codec");
+}
+
 // The Inspector's per-kind fields at their bounds still pass the GYO::Ui codec.
 void TestElementFieldsAtTheirBounds() {
     for (const ElementKind& kind : ElementKinds()) {
@@ -833,6 +858,7 @@ int main() {
     TestGizmoAgreesWithUiEvaluator();
     TestElementKindsMatchUi();
     TestElementFieldsAtTheirBounds();
+    TestDefaultsDeclareTheirColors();
     TestElementClipboard();
     TestDefaultAndUndo();
     TestTransactionCoalescingAndSavePoint(temporary.path);

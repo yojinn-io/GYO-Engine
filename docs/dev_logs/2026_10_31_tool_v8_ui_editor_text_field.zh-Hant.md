@@ -41,6 +41,21 @@
   - 元素表 3 個：不設 `styledText`、`max_length` 下限改成 0、文字欄位的鍵打錯。
   - 預覽 4 個：不送打的字、不交出 `text`、不更新預覽的 binding、沒有 Backspace。
 
+## 使用者試用時發現的缺陷（修正）
+
+- 現象（2026-10-31，使用者）：在 `pvp_lobby.json` 按「+ Canvas」，出現 `MissingReference: unknown backdrop color 'transparent'`。
+- 原因：新 canvas 的背景色寫死成 `transparent`，新元素的預設值也用到 `white`、`button_focused`、`button_pressed`、`track`。這些都是編輯器預設文件的顏色名，大廳沒有宣告。所以在大廳裡新增 canvas，或新增大部分種類的元素，都會出錯。這是本批之前就有的缺陷。
+- Red：`TestDefaultsDeclareTheirColors` 用「只宣告 `panel`、`text` 兩種顏色」的文件，新增每種元素與一個 canvas，結果 7 項失敗（`container`、`panel` 沒失敗，因為它們用到的顏色剛好存在）。
+- 修正：
+  - 新元素與新 canvas 用到的顏色名，如果文件沒有宣告，就從編輯器預設文件的調色盤補上；已經宣告的顏色不動。做法和「新增元素時自動宣告 action、binding」一樣。
+  - 「+ Canvas」改用 core 的 `MakeDefaultCanvas`。
+- Green 之後跑突變 4 個，全部被抓到：
+  - 元素不補顏色
+  - canvas 不補背景色
+  - 覆寫已宣告的顏色
+  - 不看清單的 template
+- 行為的變化：在大廳新增元素後，Named colors 會多出補上的顏色（例如 `white`）。
+
 ## 未做
 
 - GUI 上手動操作：Inspector 的欄位、預覽裡打字與輸入法視窗的位置。

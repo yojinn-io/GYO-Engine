@@ -53,6 +53,9 @@ struct ElementKind final {
 // action and binding it needs, under ids not yet used there.
 [[nodiscard]] nlohmann::json MakeDefaultElement(nlohmann::json& document, const ElementKind& kind);
 
+// A new empty canvas under an unused id, its backdrop declared in document.
+[[nodiscard]] nlohmann::json MakeDefaultCanvas(nlohmann::json& document);
+
 // Whether node or one of its descendants (children and list templates) has id.
 [[nodiscard]] bool ContainsNodeId(const nlohmann::json& node, std::string_view id);
 // "<prefix>_<n>" for the first n that names no element in the document.

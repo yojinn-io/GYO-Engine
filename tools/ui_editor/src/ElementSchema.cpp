@@ -1,5 +1,7 @@
 #include "gyo/ui_editor/ElementSchema.hpp"
 
+#include "gyo/ui_editor/UiDocumentBridge.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <string>
@@ -44,6 +46,35 @@ constexpr ElementKind kKinds[]{
      .colors = kTextFieldColors, .styledText = true, .integers = kTextFieldIntegers, .strings = kTextFieldStrings},
 };
 
+// Declares a named color the editor's defaults use, with the default
+// document's value, when document does not declare it yet.
+void DeclareColor(Json& document, const std::string& name) {
+    Json& colors = document["colors"];
+    if (colors.contains(name)) return;
+    static const Json palette = UiDocumentBridge::CreateDefault()["colors"];
+    if (palette.contains(name)) colors[name] = palette[name];
+}
+
+// Every named color element and its list template refer to: color sources
+// ({"color": name}), background states and *_color names.
+void DeclareReferencedColors(Json& document, const Json& element) {
+    for (const auto& [key, value] : element.items()) {
+        if ((key == "color" || key == "tint" || key == "text_color") && value.is_object() &&
+            value.contains("color") && value["color"].is_string()) {
+            DeclareColor(document, value["color"].get<std::string>());
+        } else if (key == "background" && value.is_object()) {
+            for (const auto& [state, name] : value.items()) {
+                static_cast<void>(state);
+                if (name.is_string()) DeclareColor(document, name.get<std::string>());
+            }
+        } else if (key.ends_with("_color") && value.is_string()) {
+            DeclareColor(document, value.get<std::string>());
+        } else if (key == "template" && value.is_array()) {
+            for (const Json& item : value) DeclareReferencedColors(document, item);
+        }
+    }
+}
+
 [[nodiscard]] bool DocumentContainsNodeId(
     const Json& document,
     const std::string_view id) {
@@ -87,6 +118,17 @@ std::span<const ElementKind> ElementKinds() noexcept {
 const ElementKind* FindElementKind(const std::string_view type) noexcept {
     const auto found = std::ranges::find(kKinds, type, &ElementKind::type);
     return found == std::ranges::end(kKinds) ? nullptr : &*found;
+}
+
+Json MakeDefaultCanvas(Json& document) {
+    Json canvas{
+        {"id", UniqueDeclarationId(document["canvases"], "canvas")},
+        {"backdrop_color", "transparent"},
+        {"focus_order", Json::array()},
+        {"children", Json::array()},
+    };
+    DeclareColor(document, "transparent");
+    return canvas;
 }
 
 bool ContainsNodeId(const Json& node, const std::string_view id) {
@@ -224,6 +266,7 @@ Json MakeDefaultElement(Json& document, const ElementKind& kind) {
         element["placeholder"] = "Text";
         element["placeholder_color"] = "track";
     }
+    DeclareReferencedColors(document, element);
     return element;
 }
 } // namespace Gyo::Tools::UiEditor

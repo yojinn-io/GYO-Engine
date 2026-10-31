@@ -166,13 +166,9 @@ void EditorApp::DrawHierarchy() {
         }
         Json& canvases = document["canvases"];
         if (ImGui::Button("+ Canvas")) {
-            const std::string id = UniqueDeclarationId(canvases, "canvas");
-            canvases.push_back({
-                {"id", id},
-                {"backdrop_color", "transparent"},
-                {"focus_order", Json::array()},
-                {"children", Json::array()},
-            });
+            Json canvas = MakeDefaultCanvas(document);
+            const std::string id = canvas["id"].get<std::string>();
+            canvases.push_back(std::move(canvas));
             selectedCanvas_ = id;
             selectedNode_.clear();
             session_.CommitEdit("Add canvas");
