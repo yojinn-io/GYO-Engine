@@ -98,3 +98,4 @@ Owner：Engine（`GYO::Audio`）。計畫：[CONTROL](../architecture/plans/audi
 
 - 本機：`build/target/_build/core`、`build/target/_build/test`、`build/target/_build/audio-tsan`。
 - 突變：`python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --build-dir build/target/_build/core --catalog docs/architecture/plans/audio/scripts/mutations.json --only <id…>`；TSan 用 `--catalog …/mutations-tsan.json --build-dir build/target/_build/audio-tsan`。
+- 證據檔案：主 checkout（`/Users/karasu/Code/Source/GYO-Engine`，Intel Mac）的 `build/evidence/audio-control-20261031/`的 `mut-stop.txt`（審查前的突變）、`mut-stop2.txt`（審查後的突變）。TSan、test preset 的輸出沒有保存（數值記在本文）。

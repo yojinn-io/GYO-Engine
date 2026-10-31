@@ -22,7 +22,7 @@
   - 1 個審查者（繼承），選定基底並綜合其他兩案。
   - 1 個對抗式檢查（`xhigh-reviewer`，xhigh，同引擎）。effort-gearbox 建議用另一個引擎；這次沒有換，原因是避免降低品質。這一點列為待決事項 `v8-engine-audio-control-gears`。
 - 對抗式檢查找到 blocker 1、major 7、minor 12。本文已全部納入（見最後一節「對抗式檢查的處置」）。
-- 原始輸出（英文的綜合計畫、中文的審查結果）放在會話共用筆記夾（repo 外），本文是整理後的正本。
+- 原始輸出（英文的綜合計畫、中文的審查結果、workflow 的 journal）放在主 checkout（`/Users/karasu/Code/Source/GYO-Engine`，Intel Mac）的 `build/evidence/audio-control-20261031/`（git 不追蹤），本文是整理後的正本。
 
 ## 成熟方案的參考
 

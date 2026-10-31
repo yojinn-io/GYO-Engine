@@ -42,3 +42,4 @@ Owner：Engine（`GYO::Audio`）。計畫：[CONTROL](../architecture/plans/audi
 
 - 本機：`build/target/_build/core`、`ctest --test-dir build/target/_build/core`。
 - 突變：`python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --build-dir build/target/_build/core --catalog docs/architecture/plans/audio/scripts/mutations.json --only au-ctl-golden-gain-rounding au-ctl-alloc-in-render`。
+- 證據檔案：這批的 CTest 與突變都在前景執行，輸出沒有保存（數值記在本文）。

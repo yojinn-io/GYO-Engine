@@ -73,3 +73,4 @@ Owner：Engine（`GYO::Audio`）。計畫：[CONTROL](../architecture/plans/audi
 
 - 本機：`build/target/_build/core`、`test`、`audio-tsan`、`audio-asan`。
 - 突變：`run_mutations.py --catalog docs/architecture/plans/audio/scripts/mutations.json`（core）、`mutations-tsan.json`（`audio-tsan`）、`mutations-asan.json`（`audio-asan`）。
+- 證據檔案：主 checkout（`/Users/karasu/Code/Source/GYO-Engine`，Intel Mac）的 `build/evidence/audio-control-20261031/`的 `final-ph.txt`（審查前）、`final-ph2.txt`（審查後的突變、TSan、ASan、core、test preset）。

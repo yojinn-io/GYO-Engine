@@ -50,3 +50,4 @@ macOS x86_64，負載約 3：
 
 - 本機：`build/target/_build/test`（含 `SDL_AUDIO`）、`core`、`audio-tsan`、`audio-asan`。
 - 突變：`run_mutations.py --build-dir build/target/_build/test --catalog docs/architecture/plans/audio/scripts/mutations.json`（完整目錄），以及 `mutations-tsan.json`、`mutations-asan.json`。
+- 證據檔案：主 checkout（`/Users/karasu/Code/Source/GYO-Engine`，Intel Mac）的 `build/evidence/audio-control-20261031/`的 `final-live.txt`（完整突變、TSan、ASan、test preset、core）。

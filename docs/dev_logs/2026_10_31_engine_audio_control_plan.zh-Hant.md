@@ -30,10 +30,10 @@ Owner：Engine（`GYO::Audio`）。計畫：[CONTROL](../architecture/plans/audi
 
 ## 證據
 
-- workflow 的 journal：`~/.claude/projects/-Users-karasu-Code-Source-GYO-Engine--claude-worktrees-pvp-quality-window-log-831143/fbf36c75-c870-46f1-826c-0bb34b7d6f6c/subagents/workflows/wf_38a2c8c8-6db/journal.jsonl`（本機）。
-- 原始輸出（repo 外的會話共用筆記夾）：
-  - `audio-control-plan-synthesis.en.md`：綜合計畫原文。
-  - `audio-control-plan-attack.zh-Hant.md`：對抗式檢查原文。
+- 證據檔案放在主 checkout（`/Users/karasu/Code/Source/GYO-Engine`，Intel Mac）的 `build/evidence/audio-control-20261031/`（git 不追蹤）：
+  - `plan-workflow-journal.jsonl`：workflow `wf_38a2c8c8-6db` 每個 agent 的回傳值。
+  - `audio-control-plan-synthesis.en.md`：綜合計畫的原文。
+  - `audio-control-plan-attack.zh-Hant.md`：對抗式檢查的原文。
 - 需求來源：工具線的 `docs/tools/plans/v8/assets.md`（PR #117 的分支 `claude/v8-tool-handoff-cleanup`）。
 
 ## 核准之後（同日）
