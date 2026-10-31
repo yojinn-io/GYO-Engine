@@ -1,6 +1,6 @@
 # v8-product-hitbox-data 的事前宣告
 
-更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：草稿，等你核准。** 契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §4.6（定稿）。計畫：[hitbox-plan](hitbox-plan.md) 第 4 節 R1、R4，第 8 節。估時 12～16 h（計畫原本估 6～10 h，多出的部分見「為什麼比計畫大」；超過 24 h 停下回報）。
+更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hitbox-data-declaration-approve`，3 項都照建議 (a)）。 契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §4.6（定稿）。計畫：[hitbox-plan](hitbox-plan.md) 第 4 節 R1、R4，第 8 節。估時 12～16 h（計畫原本估 6～10 h，多出的部分見「為什麼比計畫大」；超過 24 h 停下回報）。
 
 ## 這批做什麼
 
