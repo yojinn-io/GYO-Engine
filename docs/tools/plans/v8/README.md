@@ -182,7 +182,7 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 使用者（2026-10-30）：「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」之後更正：「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」
 
 - `v8-tool-voxel-map-editor`：沒有暫停，等使用者逐個給方案再一起討論；本線不先提案。上面「現況盤點」裡 arena、舊格子地圖、ImGui 後端的列只是事實，留給之後的規劃參考。
-- `v8-tool-assets-editor`：同上，等使用者的方案。它也要和 `v8-product-hitbox-data` 定下的格式與 owner 對齊。
+- `v8-tool-assets-editor`：2026-10-31 收到使用者的方向，規劃草稿在 [assets.md](assets.md)（`v8-tool-assets-plan`，等決定）。它也要和 `v8-product-hitbox-data` 定下的格式與 owner 對齊。
   - 已收到的需求：**音效匯入**（`v8-tool-assets-audio-import`，2026-10-30）。使用者在音效會話說：「這個你先轉好，需求加到 assets editor 中。」由音效線（`v8-engine-audio-plan`）轉來，這裡只記需求，不排實作。
     1. 匯入任意取樣率與位元深度的 WAV（8／16／24／32 位元整數、32 位元浮點；1 或 2 聲道），轉成 `GYO::Audio` 的片段格式：48 kHz、PCM16、原聲道數。理由：混音器執行中不重新取樣（[audio.md](../../../architecture/audio.md) Design Invariant 9），`SoundLoader` 只讀 16 位元。
     2. 轉換要可重現：同一輸入得到同樣的位元組。現行腳本用窗化 sinc 重新取樣（Blackman 窗、兩側各 32 個零交越、截止在較低 Nyquist 的 0.95），用固定種子的三角抖動量化成 16 位元，並報告飽和的樣本數。

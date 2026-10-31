@@ -14,7 +14,8 @@
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
-- **待討論**：`v8-tool-voxel-map-editor`、`v8-tool-assets-editor`（你會逐個給方案）。
+- **待討論**：`v8-tool-voxel-map-editor`（你會給方案）。
+- **進行中**：`v8-tool-assets-plan` 已核准（[assets.md](assets.md)）；audio-tool-line 的 `v8-tool-audio-editor-convert` 開始，先起草音效工具的 Design Invariants 等你核准。anim-events-line 提議另開會話。
 - **完成並合併**：[PR #107](https://github.com/yojinn-io/GYO-Engine/pull/107)（`v8-tool-plan`、`v8-tool-ui-editor-file-browser`、審查、`v8-tool-ui-editor-gizmo-math`）。
 - **已合併（[PR #108](https://github.com/yojinn-io/GYO-Engine/pull/108)）**：`v8-tool-ui-editor-gizmo-fix`、`v8-tool-ui-invariants`（[ui_toolchain.md](../../../ui_toolchain.md)「Design Invariants」＋三個守衛）、`v8-tool-ui-editor-panels`（面板拆檔，純搬移）、`v8-tool-ui-editor-element-schema`（元素表）。整理（S-1～S-3）完成。
 - **已合併（[PR #109](https://github.com/yojinn-io/GYO-Engine/pull/109)）**：`v8-tool-ui-editor-clipboard`、`v8-tool-ui-editor-nudge`，使用者在 macOS 的 GUI 上試過。`text_field` 的三個決定已定（見決定紀錄）；`v8-tool-ui-ime-observe` **停下回報**：Windows 場次沒有照事前宣告做，判定不成立；log 顯示了機制（見 [dev_log](../../../dev_logs/2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)）。你選了 (b)，後續規劃已確認。`v8-product-lobby-fullwidth`、`v8-engine-input-composition` 完成（Windows 的 L3 都未做）；Ui 的 Design Invariants 已改（`v8-tool-ui-invariants-text`）；`v8-tool-ui-text-field` 完成（gyo.ui v2）。`v8-product-lobby-text-field` 完成，Windows L3 全部通過（組字顯示、候選窗位置、全形轉半形、Enter／Esc）。ui_editor 的 `v8-tool-ui-editor-text-field` 已合併（[PR #114](https://github.com/yojinn-io/GYO-Engine/pull/114)），使用者在 macOS 的 GUI 上試過。
@@ -107,3 +108,7 @@
 - 2026-10-31：使用者試用時發現：在大廳按「+ Canvas」出現 `unknown backdrop color 'transparent'`。原因是新 canvas／新元素的預設值用到大廳沒宣告的顏色（既有缺陷）。Red（7 項失敗）→ 修正：缺的顏色從編輯器預設調色盤補上宣告 → Green；4 個突變全被抓到。
 - 2026-10-31：使用者：解析度放在編輯器裡、可編輯但預設鎖定，顯示區域畫框表示。做了 Inspector 的「Design size」（預設鎖定，鎖定狀態不存檔）與畫布上的設計畫面框（依文件的 `design_canvas.size`，標示尺寸）。解析度仍屬於各文件。
 - 2026-10-31：使用者：「正常，合併」。PR #114 以 merge commit 合併（`16326f78`）。使用者：「清掉」。「等你決定」裡已照做的 `v8-tool-plan-location`、`v8-tool-start-timing` 移到決定紀錄；README 的 `v8-tool-ui-ime-observe` 補上 ✓。使用者要求列出這兩項的選項；Claude 說明兩項都是自己照建議做的、使用者沒有選過，使用者：「做了就沒事了，我還以為你沒做。」
+- 2026-10-31：使用者給了資產工具鏈的方向（專用工具 → Asset 登錄 → Build／打包 → Runtime；五類工具的範圍與共用規則），要求先對照現有架構提出最小可行的邊界、交接與順序。`v8-tool-assets-plan` 開始（high，Opus 5.5，估 1.5～2 h，實際約 40 分鐘）。盤點了 catalog、內容契約與組裝、shader 的離線處理、音效轉換腳本、Runtime loader、熱重載、工具登錄、Os 的行程 API。觀察到的壓力：音效原檔沒有放處、聲音與動畫對不上。草稿寫在 [assets.md](assets.md)，停下等決定。使用者更正：「assets不是管全局的，他也是針對單個產品的。」草稿原本把三個產品各一份的動畫集解析器當成要收成共用的壓力，已撤下；改寫成以單一產品為單位，新增待決 `v8-tool-assets-anim-events-format`。
+- 2026-10-31：使用者：「照 (b)」。`v8-tool-assets-anim-events-format` 定為通用格式（契約歸 Engine 的動畫 owner，資料在各產品），記在 [assets.md](assets.md) 的決定紀錄。其餘五個待決未定。
+- 2026-10-31：使用者更正：「這個是一條工具鏈而不是一個工具。沒有統一的都去地方和輸出地方。核心是工具加工素材-》assets 登錄，（在遊戲打包是通過assets build 成自定義的二進制包，這個功能可以延後），關鍵是現在的工具。（手工-腳本-工具）這個順序。」草稿重寫：撤下製作設定格式、處理器、Build 階段與四個相關待決；改成各類資產的階段表（音效：腳本 → 工具；動畫事件：無 → 手工；模型：手工 → 之後工具）與兩條 PR 線。
+- 2026-10-31：使用者要求列出要做的 Editor 與內容（音效工具、模型檢視工具；動畫事件先手工），之後：「OK，這樣也行，開始。」規劃核准。`v8-tool-audio-editor-convert` 開始（high，重新取樣局部 xhigh，Opus 5.5，估 6～10 h）；第一步是 Design Invariants（新 Component，AGENTS §3），起草後停下等核准。

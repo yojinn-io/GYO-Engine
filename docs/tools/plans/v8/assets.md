@@ -1,0 +1,94 @@
+# 資產工具鏈的規劃（`v8-tool-assets-plan`，草稿）
+
+狀態：**已核准**（2026-10-31，使用者：「OK，這樣也行，開始。」）。audio-tool-line 由本會話開始；anim-events-line 提議另開會話並行（`v8-tool-assets-line-order`）。
+
+## 方向
+
+使用者在 2026-10-31 給了方向（專用工具 → Asset 登錄 → Build／打包 → Runtime；五類工具的範圍；共用規則），之後更正了兩點：
+
+- 「assets不是管全局的，他也是針對單個產品的。」
+- 「這個是一條工具鏈而不是一個工具。沒有統一的都去地方和輸出地方。核心是工具加工素材-》assets 登錄，（在遊戲打包是通過assets build 成自定義的二進制包，這個功能可以延後），關鍵是現在的工具。（手工-腳本-工具）這個順序。」
+
+所以：
+
+1. **工具鏈，不是一個工具**：每個工具各自決定素材從哪裡讀、自己可再編輯的資料存在哪。沒有統一的來源目錄，也沒有統一的「製作設定」格式。
+2. **工具與 Asset 只有一個交接**：工具加工完，把可以用的資產檔放進產品的資產根目錄，並登錄到該產品的 catalog（現有的 catalog v1：`id`、`type`、`path`）。Asset 以單一產品為單位。
+3. **Asset build 延後**：打包時把資產建成自訂的二進位包（`v8-tool-assets-pack`），現在不做。現在的組裝（`assemble_runtime.py` 複製已登錄的檔案）照舊。
+4. **重點是工具，照「手工 → 腳本 → 工具」**（AGENTS §5）：每類資產先看它現在在哪個階段，只往下一個階段走。
+
+## 現有能力
+
+| 能力 | 現況 | 證據 | 工具怎麼用 |
+|---|---|---|---|
+| 登錄與穩定 ID | catalog v1；ID 是邏輯名稱，和路徑無關；跨 catalog 不能重複 | `engine/asset/include/engine/asset/catalog/`、`build/content_contract.py` | 工具輸出後寫入 catalog 條目，這就是「Asset 登錄」 |
+| 登錄的完整性 | 資產根目錄下每個檔案都要登錄 | `tests/object_fps_pvp/test_asset_catalog.py` `test_every_asset_file_is_in_the_catalog` | 工具的可再編輯資料（原檔、工程檔）不放進資產根目錄，除非也登錄 |
+| 資產間的引用 | 產品的 JSON 用 ID 引用，產品自己的測試檢查 | `assets/object_fps_pvp/players/character.json` | 沿用 |
+| 組裝 | 只複製已登錄的檔案到 `bin/assets/<product>` | `build/assemble_runtime.py` | 不動 |
+| 工具的登錄與外殼 | `tools.csv`＋`project.json`；ui_editor 的 ImGui、SDL3 系統選擇窗、掛載 catalog 與資產根 | `docs/tool_projects.md`、`tools/ui_editor/` | 新工具沿用 |
+| Runtime 載入 | `SoundLoader` 只讀 16 位元 PCM；FBX 由 ufbx 在執行時直接讀 | `engine/asset/src/loaders/`、`engine/model/backend/ufbx/` | 工具輸出 Runtime 能直接讀的格式 |
+
+## 各類資產現在的階段
+
+| 資產 | 現在的階段 | 下一步 | 根據 |
+|---|---|---|---|
+| 音效 | **腳本**：`convert_wav.py`（任意 WAV → 48 kHz PCM16，可重現） | **工具**：音效工具 | `v8-tool-assets-audio-import`；腳本在 `docs/architecture/plans/audio/scripts/` |
+| 動畫事件 | **連手工都沒有**：換彈聲的時刻寫在 C++（`ReloadSoundOffsetSeconds`） | **手工**：通用格式 `gyo.anim_events`＋PvP 手寫資料（已定 (b)） | `v8-tool-assets-anim-events` |
+| 模型 | **手工**：外部 DCC 製作，手寫 `character.json`、animset | 動畫事件要在畫面上調時刻時，做**工具**：模型檢視 | 3d-assets.md |
+| 碰撞體 | **手工**：產品的 `v8-product-hitbox-data` 先手寫 JSON | 格式 owner 由產品規劃定；之後併進模型檢視 | 產品 v8 README |
+| SpriteSheet、視頻、文字與劇情 | 沒有實際需求 | 待定，出現需求時從手工開始 | 使用者的方向 |
+
+觀察到的壓力：
+
+- 音效原檔沒有放處，現在找不到了（主 checkout 的 `audio/` 是空的）；要重轉只能靠記得原檔在哪。音效工具會自己記住原檔路徑，見下方「音效工具」。
+- 主 checkout 有未追蹤的模型原檔（`Player_V20.fbx`、`nailer_v2/source/Nailer1_FPS.fbx` 等），也一樣沒有放處；模型檢視工具做的時候一起看。
+
+## 音效工具（`v8-tool-audio-editor`）
+
+腳本已經確立了轉換的規格，工具接手同一個程序（AGENTS §5）。
+
+- **讀**：任意位置的 WAV（系統選擇窗）。
+- **看與聽**：播放、預覽音量、波形、取樣率／聲道／時長／位元深度。
+- **改**：裁剪、增益（會影響輸出；和預覽音量分開）。
+- **寫**：轉成 48 kHz PCM16（和 `convert_wav.py` 逐位元組相同），放進掛載的產品資產根目錄，並在 catalog 加或更新條目（type `sound`）。
+- **可再編輯**：工具自己的工程檔記錄原檔路徑、裁剪與增益；放在使用者選的位置（不在資產根目錄）。格式由工具自己持有。
+- **不做（現在）**：循環區間（`GYO::Audio` 沒有循環播放，audio.md 的 Replacement Criteria 才提到）、拼接、多軌、串流。
+- 腳本保留：Data Contract 是「48 kHz PCM16 的 WAV＋catalog 條目」，腳本、手工都還能產生（AGENTS §8）。
+
+## 實作順序（提案）
+
+```text
+v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿）」
+│
+├── audio-tool-line                     「PR 線：音效從腳本走到工具」
+│   ├── v8-tool-audio-editor-convert    「high（重新取樣局部 xhigh）｜Opus 5.5｜工具骨架、讀 WAV、轉換（和腳本逐位元組相同）、輸出並登錄 catalog」
+│   └── v8-tool-audio-editor-edit       「high｜Opus 5.5｜播放、波形、資訊、裁剪、增益、工程檔」
+│
+├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
+│   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
+│   └── v8-tool-model-viewer            「high｜Opus 5.5｜工具：模型資訊、骨骼動畫預覽、事件時刻的編輯」
+│
+├── （延後）v8-tool-assets-pack          「Asset build：打包成自訂二進位包」
+└── （待定）SpriteSheet、視頻、文字與劇情 「出現需求時從手工開始」
+```
+
+| 代號 | 檔位｜引擎 | 估時 | 完成的樣子 |
+|---|---|---|---|
+| `v8-tool-audio-editor-convert` | high（局部 xhigh）｜Opus 5.5 | 6～10 h | 工具登錄（`tools.csv`、`project.json`、Design Invariants＋Replacement Criteria）；四個音效的輸出和腳本逐位元組相同；catalog 條目正確；突變檢查 |
+| `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過 |
+| `v8-tool-assets-anim-events` | high｜Opus 5.5 | 5～8 h | `gyo.anim_events` 的契約與 Design Invariants（Engine 多一個格式，Architecture Delta）、PvP 把事件名稱對到音效、Runtime 排程、移除過渡規則；使用者實聽 |
+| `v8-tool-model-viewer` | high｜Opus 5.5 | 12～20 h | 模型資訊、骨骼動畫預覽、事件時刻的編輯 |
+
+## 等你決定
+
+| 代號 | 問題 | 選項與取捨 | 建議 | 會改變 |
+|---|---|---|---|---|
+| `v8-tool-assets-line-order` | 兩條 PR 線的順序 | 兩條線互不依賴（檔案不重疊）。先 audio-tool-line（腳本 → 工具，最接近完成）／先 anim-events-line（使用者聽到的違和感先解決）／兩條並行（各開一個會話） | 並行：一條是工具、一條是契約與產品資料，不搶同一批檔案 | 使用者何時聽到換彈聲的修正 |
+
+## 決定紀錄
+
+| 代號 | 決定 | 使用者原話 |
+|---|---|---|
+| `v8-tool-assets-per-product` | （2026-10-31）Asset 以單一產品為單位：catalog 與資產都屬於各產品 | 「assets不是管全局的，他也是針對單個產品的。」 |
+| `v8-tool-assets-anim-events-format` | （2026-10-31）(b)：動畫事件用獨立的通用格式（例如 `gyo.anim_events`：片段 → 時刻＋事件名稱），契約歸 Engine 的動畫 owner，資料放在各產品；產品把事件名稱對到音效。工具只認通用格式 | 「照 (b)」 |
+| `v8-tool-assets-plan` | （2026-10-31）核准本規劃與 Editor 清單（音效工具、模型檢視工具；動畫事件先手工） | 「OK，這樣也行，開始。」 |
+| `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
