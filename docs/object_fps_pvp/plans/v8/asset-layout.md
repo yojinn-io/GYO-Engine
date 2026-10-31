@@ -1,6 +1,6 @@
 # PvP v8：素材結構標準化（asset-layout）
 
-更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc` 完成；`v8-product-asset-layout-guard` 進行中。**
+更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，PR 待開；接著 `v8-product-asset-player-folder`。**
 本文件是 asset-layout 線的計畫與記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。標準本身寫在 [PvP 素材標準](../../assets.zh-Hant.md)。
 
 ## 代號對照
@@ -53,7 +53,7 @@ asset-layout
 | 代號 | 估時 | 支撐的 Feature | 驗收 | 狀態 |
 |---|---|---|---|---|
 | `v8-product-asset-layout-doc` | 2～3 h | hitbox 資料與之後的 v8 素材需要唯一的落點 | 和 guard 同一個 PR（只改 docs 的推送會跳過 L1）；用腳本核對文件裡的路徑與 id | 完成 |
-| `v8-product-asset-layout-guard` | 3～4.5 h（含突變；超過 5 h 停） | 同上：新素材的落點在 CI 上自動檢查 | CI L1 的 `object_fps_pvp.asset_catalog`；自我檢查（注入壞資料夾、跨資料夾貼圖、type 不符、只差大小寫、過期的例外，每種都要被抓到）＋少量突變 | 進行中 |
+| `v8-product-asset-layout-guard` | 3～4.5 h（含突變；超過 5 h 停） | 同上：新素材的落點在 CI 上自動檢查 | CI L1 的 `object_fps_pvp.asset_catalog`；自我檢查（注入壞資料夾、跨資料夾貼圖、type 不符、只差大小寫、過期的例外，每種都要被抓到）＋少量突變 | 完成 |
 | `v8-product-asset-player-folder` | 1～1.5 h | hitbox 資料（hitbox 和模型放在一起） | CI L1；apps、tests、build 裡 `git grep 'players/'` 為 0（含 `mutations.json` 的突變 `11-limit-uncalibrated` 與 catalog 測試的假路徑）；after-pv8 合併後重跑它的 Match 測試 | 未開始 |
 | `v8-product-asset-buns-fixture` | 1.5～2.5 h（開工時重估） | 出貨內容只放產品用到的素材（AGENTS §7） | CI L1；catalog 不再有 buns 的 3 個 id；`PlayerPresentationTests` 用 fixture 通過 | 未開始 |
 | `v8-engine-assets-common-retire` | 0.5 h | 沒有（使用者同意的清理） | CI 全量 | 未開始 |
@@ -82,7 +82,9 @@ asset-layout
 - 2026-10-31：素材標準、來源記錄（`tests/object_fps_pvp/asset_sources.json`，16 筆，其中 8 筆授權 unrecorded）的草稿寫好，未提交。停在 Design Invariants 條文與「例外只能減少」政策的核准；人物、nailer 的授權向使用者要。
 - 2026-10-31：使用者核准 Design Invariants 與例外政策（`v8-product-asset-invariants-approve`）。人物、nailer 的 8 筆授權尚未提供，維持 unrecorded。
 - 2026-10-31：`v8-product-asset-layout-doc` 完成（文件核對：連結 8 個有效，人工判讀 36 項，9 個測試名稱留待 guard 批）。`v8-product-asset-layout-guard` 開始。
+- 2026-10-31：`v8-product-asset-layout-guard` 完成：檢查 9 個、自我檢查 10 個、初始例外 13 筆；突變 12／12 killed；`used_ids` 改寫成等價的逐詞比對（測試 12.7 秒 → 1.1 秒）。
 
 ## dev_log
 
 - [2026_10_31_pvp_v8_asset_layout_doc](../../../dev_logs/2026_10_31_pvp_v8_asset_layout_doc.zh-Hant.md)：`v8-product-asset-layout-doc`
+- [2026_10_31_pvp_v8_asset_layout_guard](../../../dev_logs/2026_10_31_pvp_v8_asset_layout_guard.zh-Hant.md)：`v8-product-asset-layout-guard`
