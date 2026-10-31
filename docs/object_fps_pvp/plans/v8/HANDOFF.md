@@ -42,7 +42,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **進行中**：hitbox-line。[hitbox-plan](hitbox-plan.md) 第 2 版（以 Valorant 為基底：Match 跑動畫、動畫狀態由 Match 決定並上 snapshot、三部位綁骨頭）已核准（`v8-product-hitbox-plan-v2-approve`）。第 2 節轉來的參考資料已逐項查證並標上 ✓／△／✗ 與來源（`813b7615`）：「Valorant 動畫刻意簡單」改成它實際的兩招（每 4 幀算一次＋內插、買裝備階段不算）；「CS 送動畫週期給 Client」查不到出處，`v8-product-anim-state-on-wire` 的理由改成我們自己的量測。下一批 `v8-product-anim-bottlenecks` 的[事前宣告](v8-product-anim-bottlenecks-declaration.md)寫好，等使用者核准。第 1 版 B-flat 與三輪 survey 的門檻不再適用；survey 工具保留（半徑、Client 與 Match 的比對）。
+- **進行中**：hitbox-line。[hitbox-plan](hitbox-plan.md) 第 2 版（以 Valorant 為基底：Match 跑動畫、動畫狀態由 Match 決定並上 snapshot、三部位綁骨頭）已核准（`v8-product-hitbox-plan-v2-approve`）。第 2 節轉來的參考資料已逐項查證並標上 ✓／△／✗ 與來源（`813b7615`）：「Valorant 動畫刻意簡單」改成它實際的兩招（每 4 幀算一次＋內插、買裝備階段不算）；「CS 送動畫週期給 Client」查不到出處，`v8-product-anim-state-on-wire` 的理由改成我們自己的量測。下一批 `v8-product-anim-bottlenecks` 的[事前宣告](v8-product-anim-bottlenecks-declaration.md)已核准（`v8-product-anim-bottlenecks-declaration-approve`），進行中。第 1 版 B-flat 與三輪 survey 的門檻不再適用；survey 工具保留（半徑、Client 與 Match 的比對）。
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
@@ -108,6 +108,7 @@
 | `v8-product-hitbox-lookup-survey-method` | （2026-10-31，量測之前）頭與軀幹改用權威狀態查表後的殘差量法：(a) 跳躍與動作（jump_start、jump_loop、jump_land、shoot、reload、hit）每個 clip 存 8 個等距時刻的形狀，查表在相鄰兩格之間線性內插，以 survey 的 60 個樣本量殘差；(b) 瞄準存權重 −1、0、+1 三張表、線性內插，以 0.1 為間隔量 −1～+1 的殘差；(c) 移動中（walk、jog、crouch_move）頭與軀幹用移動樣本的平均形狀（不分相位）。門檻維持 `v8-product-hitbox-three-part-thresholds` (1)：頭的殘差 > 頭球半徑 0.184 m 就停下；軀幹只報告 | 「先量查表後的偏差」 |
 | `v8-product-hitbox-valorant-base` | （2026-10-31）hitbox 改照「先抄成熟方案、依需求改裝、碰到瓶頸才量」：以 Valorant 為基底（伺服器跑由權威狀態決定的動畫，hitbox 綁骨頭，Client 照伺服器的動畫狀態播放），取代第 1 版 B-flat（`v8-product-hitbox-model` (a)）。[hitbox-plan](hitbox-plan.md) 第 2 版待核准 | 「不要自己先想方案，先抄，看看別人如何做的……參考成熟解決方案，然後在根據我們自己的需求進行改裝，碰到瓶頸在測量」；「以 Valorant 為基底」 |
 | `v8-product-hitbox-plan-v2-approve` | （2026-10-31）核准 [hitbox-plan](hitbox-plan.md) 第 2 版，照建議：`v8-product-anim-state-on-wire` 要上 snapshot；`v8-product-hitbox-golden-policy` 先量 B3 再定；`v8-product-anim-bottlenecks-first` 先量 B1～B3。開工前先查證第 2 節轉來的參考資料（CS、Valorant、Overwatch、PUBG／Fortnite），避免資訊誤差 | 「照建議核准，但是你先去調查一下，我轉給你的那些方案。否則信息會出誤差。」 |
+| `v8-product-anim-bottlenecks-declaration-approve` | （2026-10-31）核准 [事前宣告](v8-product-anim-bottlenecks-declaration.md)，照建議：`v8-product-anim-bottlenecks-thresholds` (a) B1 12 次取樣 ≤ 1.67 ms、B2 載入 ≤ 2 s 且記憶體增量 ≤ 200 MB；`v8-product-anim-bottlenecks-worst-case` (a) 12 次／Tick；`v8-product-anim-bottlenecks-ci-run` (a) 推送分支後手動 dispatch `cross-platform.yml`，不開 PR | 「照建議核准」 |
 
 ## 規劃紀錄（記錄器）
 

@@ -1,6 +1,6 @@
 # v8-product-anim-bottlenecks 的事前宣告
 
-更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：草稿，等你核准。** 計畫：[hitbox-plan](hitbox-plan.md) 第 5 節的 B1～B3（`v8-product-anim-bottlenecks-first`）。檔位 high｜Opus 5.5（繼承主會話），估時 4～6 h（超過 9 h 停下回報）。
+更新：2026-10-31。Owner：`object_fps_pvp`。**狀態：已核准（`v8-product-anim-bottlenecks-declaration-approve`，2026-10-31）：thresholds (a)、worst-case (a)、ci-run (a)。** 計畫：[hitbox-plan](hitbox-plan.md) 第 5 節的 B1～B3（`v8-product-anim-bottlenecks-first`）。檔位 high｜Opus 5.5（繼承主會話），估時 4～6 h（超過 9 h 停下回報）。
 
 ## 這批要回答什麼
 

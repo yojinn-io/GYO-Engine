@@ -34,7 +34,7 @@ v8-plan
 │   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼（完成）」
 │   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告（完成）」
 │   ├── hitbox-line                「PR 線：部位判定（hitbox-plan.md 第 2 版，以 Valorant 為基底，待核准）」
-│   │   ├── v8-product-anim-bottlenecks       「high｜Opus 5.5｜Match 端取樣耗時、載入、四平台決定性」（[事前宣告](v8-product-anim-bottlenecks-declaration.md)，等核准）
+│   │   ├── v8-product-anim-bottlenecks       「high｜Opus 5.5｜Match 端取樣耗時、載入、四平台決定性」（[事前宣告](v8-product-anim-bottlenecks-declaration.md)，已核准）
 │   │   ├── pv9-hitbox-declare                「ultracode（先問）｜案 Opus 5.5、對抗 Sonnet 5.5｜protocol-v9 草稿、動畫狀態欄位、形狀契約」
 │   │   ├── pv9-rename                        「low｜Sonnet 5.5｜proto、Go 套件、CMake target 改名為 v9」
 │   │   ├── v8-product-hit-rules-permille     「high｜Opus 5.5｜千分之一點、版本值 9」

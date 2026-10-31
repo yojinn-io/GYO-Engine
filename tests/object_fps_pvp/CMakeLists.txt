@@ -124,6 +124,31 @@ add_test(NAME "${GYO_CURRENT_APP}.hitbox_survey" COMMAND ${hitbox_survey} --smok
 set_tests_properties("${GYO_CURRENT_APP}.hitbox_survey" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 120
     ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 
+# v8-product-anim-bottlenecks: a report-only measurement of a Match-side pose
+# (sampling time, load, bit hashes for cross-platform comparison). It fails
+# only on a load or self-check failure; RUN_SERIAL keeps the timing free of
+# concurrently running tests.
+set(anim_bottlenecks "gyo_${GYO_CURRENT_APP}_anim_bottlenecks")
+add_executable(${anim_bottlenecks} AnimBottlenecks.cpp)
+target_compile_features(${anim_bottlenecks} PRIVATE cxx_std_20)
+target_link_libraries(${anim_bottlenecks} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage GYO::PlatformSDL nlohmann_json::nlohmann_json)
+gyo_use_app_config(${anim_bottlenecks} "${GYO_CURRENT_APP}")
+set_target_properties(${anim_bottlenecks} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
+foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(${anim_bottlenecks} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")
+endforeach()
+if(WIN32)
+    target_compile_definitions(${anim_bottlenecks} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${anim_bottlenecks} PRIVATE /utf-8)
+endif()
+gyo_copy_runtime_dlls(${anim_bottlenecks})
+add_dependencies(${anim_bottlenecks} ${presentation_content})
+add_test(NAME "${GYO_CURRENT_APP}.anim_bottlenecks" COMMAND ${anim_bottlenecks})
+set_tests_properties("${GYO_CURRENT_APP}.anim_bottlenecks" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 300
+    RUN_SERIAL TRUE ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+
 # The in-world pointer capture policy against its golden (batch 06's oracle,
 # recorded at the policy's own boundary; sdl-isolation J1, v7.1 D168).
 set(capture_tests "gyo_${GYO_CURRENT_APP}_pointer_capture_tests")
