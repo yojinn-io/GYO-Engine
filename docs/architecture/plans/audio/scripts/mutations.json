@@ -889,6 +889,24 @@
       ],
       "timeout": 120,
       "expect": "the audio thread must not read the playhead board"
+    },
+    {
+      "id": "au-sdl-render-anchor-shifted",
+      "what": "The callback renders with an anchor 1 ms later than the one it logs, so stops land 48 frames early against the log",
+      "file": "engine/audio/backend/sdl/src/SdlAudioOutput.cpp",
+      "find": "                              anchor + FramesToDuration(done));",
+      "replace": "                              anchor + FramesToDuration(done) + std::chrono::milliseconds(1));",
+      "target": "gyo_audio_sdl_tests",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^audio_sdl\\.disk$",
+        "--output-on-failure"
+      ],
+      "timeout": 180,
+      "expect": "CHECK\\( std::find\\(candidates.begin\\(\\), candidates.end\\(\\), end\\) != candidates.end\\(\\) \\) is NOT correct"
     }
   ]
 }

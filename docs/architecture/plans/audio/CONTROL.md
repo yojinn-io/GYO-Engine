@@ -1,6 +1,6 @@
 # 音效（GYO::Audio）：控制層重建計畫
 
-更新：2026-10-31。**狀態：已核准（2026-10-31，9 項全部照建議，見 [HANDOFF](HANDOFF.md) 決策紀錄）。** 核准的 Invariants 與 RC 已寫進 [audio.md](../../audio.md)，標「planned」的部分在對應的批次完成後才成立。實作批等使用者指定才開始。
+更新：2026-10-31。**狀態：完成（2026-10-31）。** 9 項決策全部照建議核准（見 [HANDOFF](HANDOFF.md) 決策紀錄），6 批都已完成，[audio.md](../../audio.md) 的 Invariants 與 RC 都已成立。各批與計畫的差異記在各自的 dev_log 與 HANDOFF「現況」。
 
 ## 為什麼要做
 

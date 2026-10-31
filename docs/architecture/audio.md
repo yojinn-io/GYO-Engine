@@ -5,16 +5,15 @@ Owner: Engine (`engine/audio` → `GYO::Audio`; the SDL output backend `engine/a
 Plan and record: [audio](plans/audio/README.md), batches v8-engine-audio-core, -schedule, -sdl and -record.
 
 **Status (2026-10-31): v8-engine-audio-core, -schedule, -sdl, -record, -control-baseline, -control-stop,
--control-clips and -control-playhead landed.** The clip bank, the sample-domain core
+-control-clips and -control-playhead landed; v8-engine-audio-control-live checked the control layer on SDL's drivers.** The clip bank, the sample-domain core
 (`VoiceMixer`, internal to `engine/audio/src`), the public `Mixer` with its submitters and timestamp mapping, and
 the SDL output backend exist. The mixer is tested offline; the backend on SDL's `dummy` and `disk` drivers. Each invariant below
 names the milestone that makes it true and the guard that keeps it true.
 
-**Planned (approved 2026-10-31, v8-engine-audio-control-invariants): the control layer rebuild**
-([CONTROL](plans/audio/CONTROL.md)): sound handles and stops, clips loaded and unloaded while output runs, and a
-published playhead, for a tool that previews clips. The invariants and criteria below already carry the approved
-wording; each part marked "planned" names the batch that makes it true and is not true until that batch lands. The
-rest of this document describes the code as it is.
+**The control layer rebuild (2026-10-31, v8-engine-audio-control, [CONTROL](plans/audio/CONTROL.md)) landed:**
+sound handles and stops, clips loaded and unloaded while output runs, and a published playhead, for a tool that
+previews clips. The invariants and criteria carry the wording the user approved (v8-engine-audio-control-invariants);
+the batches -control-baseline, -stop, -clips, -playhead and -live made each part true, and each names its guards.
 
 ## What it is
 
@@ -232,7 +231,9 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
     sent earlier through the same submitter; a submitter cannot stop another's sounds. Guards: "stops a sound at the
     frame its time maps to", "stops a voice exactly at its stop frame whatever the block split", "silences a sound
     stopped before its start and frees its voice", "applies a late stop of a started sound at the block's first
-    frame", "StopAll stops only its own submitter's sounds".
+    frame", "StopAll stops only its own submitter's sounds"; through the SDL backend, "plays a clip loaded after
+    opening and stops it at its mapped frame" (`audio_sdl.disk`, the stop frame recomputed from the anchor log; from
+    v8-engine-audio-control-live).
 11. **Handles never alias.** A `SoundHandle` is never reused for the mixer's life; a stop or playhead query never
     affects or reports another play. A runtime `ClipId` names one slot in one generation; an unloaded id never plays
     the slot's next clip. The handle half holds from v8-engine-audio-control-stop (guards "never lets a stale handle
