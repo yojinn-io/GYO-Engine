@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "assets": {
+    "object_fps_pvp.audio.gun_shoot": {
+      "source": "Mixed by the user, delivered 2026-10-30; converted to 48 kHz PCM16 with docs/architecture/plans/audio/scripts/convert_wav.py",
+      "license": "The user's own mix (user statement, 2026-10-30)",
+      "record": "docs/dev_logs/2026_10_30_pvp_v8_product_sfx.zh-Hant.md"
+    },
+    "object_fps_pvp.audio.hit_flesh": {
+      "source": "Mixed by the user, delivered 2026-10-30; converted to 48 kHz PCM16 with docs/architecture/plans/audio/scripts/convert_wav.py",
+      "license": "The user's own mix (user statement, 2026-10-30)",
+      "record": "docs/dev_logs/2026_10_30_pvp_v8_product_sfx.zh-Hant.md"
+    },
+    "object_fps_pvp.audio.gun_reload": {
+      "source": "Mixed by the user, delivered 2026-10-30; converted to 48 kHz PCM16 with docs/architecture/plans/audio/scripts/convert_wav.py",
+      "license": "The user's own mix (user statement, 2026-10-30)",
+      "record": "docs/dev_logs/2026_10_30_pvp_v8_product_sfx.zh-Hant.md"
+    },
+    "object_fps_pvp.audio.player_footstep": {
+      "source": "Mixed by the user, delivered 2026-10-30; converted to 48 kHz PCM16 with docs/architecture/plans/audio/scripts/convert_wav.py",
+      "license": "The user's own mix (user statement, 2026-10-30)",
+      "record": "docs/dev_logs/2026_10_30_pvp_v8_product_sfx.zh-Hant.md"
+    },
+    "object_fps_pvp.font.ui": {
+      "source": "BIZ UDPGothic 1.051, The BIZ UDGothic Project Authors (https://github.com/googlefonts/morisawa-biz-ud-gothic)",
+      "license": "SIL Open Font License 1.1",
+      "record": "The font's own name table (copyright and license fields)"
+    },
+    "object_fps_pvp.model.nailer_v2": {
+      "source": "Delivered by the user 2026-10-29 (Nailer1 first-person delivery)",
+      "license": "unrecorded",
+      "record": "commit f320c304"
+    },
+    "object_fps_pvp.texture.nailer_v2.skin": {
+      "source": "4x4 PNG generated from a single-colour material of the user's Nailer1 delivery",
+      "license": "unrecorded",
+      "record": "commit f320c304"
+    },
+    "object_fps_pvp.texture.nailer_v2.glove": {
+      "source": "4x4 PNG generated from a single-colour material of the user's Nailer1 delivery",
+      "license": "unrecorded",
+      "record": "commit f320c304"
+    },
+    "object_fps_pvp.texture.nailer_v2.skin_shadow": {
+      "source": "4x4 PNG generated from a single-colour material of the user's Nailer1 delivery",
+      "license": "unrecorded",
+      "record": "commit f320c304"
+    },
+    "object_fps_pvp.texture.nailer_v2.gun": {
+      "source": "Converted to PNG from the JPG in the user's Nailer1 delivery",
+      "license": "unrecorded",
+      "record": "commit f320c304"
+    },
+    "object_fps_pvp.model.character.player_v20": {
+      "source": "Made by the user in Blender (the FBX names the user's GYO-PVP project), delivered 2026-10-29",
+      "license": "unrecorded",
+      "record": "commit 6427682c; FBX metadata"
+    },
+    "object_fps_pvp.model.animation.ual1_mannequin": {
+      "source": "Universal Animation Library Standard pack (the FBX names UAL1_Standard.blend)",
+      "license": "CC0",
+      "record": "docs/architecture/3d-assets.md (pack inventory and licenses); FBX metadata"
+    },
+    "object_fps_pvp.model.weapon.nailer_v2.world": {
+      "source": "Made by the user in Blender (the FBX names the user's GYO-PVP project), delivered 2026-10-31",
+      "license": "unrecorded",
+      "record": "commit 2a8e021e; FBX metadata"
+    },
+    "object_fps_pvp.texture.weapon.nailer_v2.world": {
+      "source": "Converted to PNG from the JPG embedded in the user's Nailer2_TPS.fbx",
+      "license": "unrecorded",
+      "record": "commit 2a8e021e"
+    }
+  }
+}

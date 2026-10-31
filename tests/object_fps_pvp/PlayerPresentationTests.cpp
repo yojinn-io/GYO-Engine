@@ -8,9 +8,11 @@
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/ContentManifest.hpp"
+#include "engine/asset/catalog/CatalogParser.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/sdl_image/SdlImageTextureLoader.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
+#include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Quaternion.hpp"
 #include "gyo/AppConfig.hpp"
@@ -48,11 +50,21 @@ Engine::Asset::AssetCatalog LoadCatalog() {
     if (!manifest) throw std::runtime_error(manifest.error().message + " " + manifest.error().detail);
     auto catalog = manifest.value().LoadCatalogs(root);
     if (!catalog) throw std::runtime_error(catalog.error().message + " " + catalog.error().detail);
+    // The hair accessory is test-only content outside the shipped product.
+    Engine::Asset::Catalog::CatalogParser parser;
+    Engine::Asset::Resolver::AssetPathResolver::Options options;
+    options.assetsRoot = PVP_PRESENTATION_FIXTURE_DIR;
+    options.allowSchemes = false;
+    const Engine::Asset::Resolver::AssetPathResolver resolver(std::move(options));
+    const auto fixture = catalog.value().AppendFromFile(
+        std::string(PVP_PRESENTATION_FIXTURE_DIR) + "/asset_catalog.json", parser, resolver);
+    if (!fixture) throw std::runtime_error(fixture.error().message + " " + fixture.error().detail);
     return std::move(catalog).value();
 }
 
 // A malformed definition is isolated to this fixture. All other data comes
-// from the selected owner's assembled product, never from v2 or a source fallback.
+// from the selected owner's assembled product, never from v2 or a source fallback,
+// except the test-only hair accessory appended from the fixture catalog.
 class DefinitionSource final : public Engine::Asset::Loading::IAssetSource {
 public:
     std::unordered_map<std::string, std::string> overrides;

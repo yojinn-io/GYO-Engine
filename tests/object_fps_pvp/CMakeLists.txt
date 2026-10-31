@@ -86,6 +86,9 @@ target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
 target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
     GYO::PlatformSDL nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)
 gyo_use_app_config(${presentation_tests} "${GYO_CURRENT_APP}")
+# Test-only accessory content: appended to the staged product catalog, never shipped.
+target_compile_definitions(${presentation_tests} PRIVATE
+    PVP_PRESENTATION_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hair_buns")
 set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
 foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
     set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")
