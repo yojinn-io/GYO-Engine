@@ -1374,7 +1374,7 @@
     {
       "id": "ui-x1-export-guard-lexical",
       "what": "The editor's export guard compares paths lexically and misses a link into the asset root",
-      "file": "tools/framework/src/FileService.cpp",
+      "file": "framework/src/FileService.cpp",
       "find": "        if (auto resolved = OsFiles::ResolvedPath(text.value())) {",
       "replace": "        if (auto resolved = OsFiles::MakeAbsolute(text.value())) {",
       "target": "gyo_ui_editor_core_tests",
@@ -1386,7 +1386,7 @@
     {
       "id": "ui-x2-export-guard-components-unequal",
       "what": "The editor's export guard takes no two path components for the same",
-      "file": "tools/framework/src/FileService.cpp",
+      "file": "framework/src/FileService.cpp",
       "find": "    return same && same.value();",
       "replace": "    return false;",
       "target": "gyo_ui_editor_core_tests",

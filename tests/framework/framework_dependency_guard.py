@@ -1,10 +1,10 @@
-"""Guard for the tool framework's Design Invariants 1-3 (docs/framework/architecture.md).
+"""Guard for the framework's Design Invariants 1-3 (docs/framework/architecture.md).
 
 The rules read the registries instead of naming any product or tool (AGENTS.md sections 7 and 9):
-- Invariant 1, not a tool: tools/framework has no project.json, its CMake files add no executable and no install
-  target, and engine/config/tools.csv has no row named framework;
-- Invariant 2, one direction: every path include starts with an allowed prefix and none reaches engine/input or a
-  tool's own headers, no source uses an SDL_GPU function or type (SDL_*GPU*), and every namespaced target
+- Invariant 1, not a product: framework/ has no project.json, its CMake files add no executable and no install
+  target, and neither registry has a row named framework;
+- Invariant 2, one direction: every path include starts with an allowed prefix and none reaches engine/input, a
+  game's or a tool's own headers, no source uses an SDL_GPU function or type (SDL_*GPU*), and every namespaced target
   (Name::Name) in the CMake files is an allowed target;
 - Invariant 3, neutral: no file names an id registered in engine/config/tools.csv or engine/config/projects.csv.
 A new dependency fails until it is added here, which is the point: it changes the framework's Design Invariants.
@@ -18,7 +18,7 @@ import re
 import sys
 from pathlib import Path
 
-OWNER = "tools/framework"
+OWNER = "framework"
 REGISTRIES = ("engine/config/tools.csv", "engine/config/projects.csv")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"}
 INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
@@ -59,7 +59,7 @@ def scan(root: Path) -> list[str]:
             continue
         relative = path.relative_to(root).as_posix()
         if path.name == "project.json":
-            findings.append(f"{relative}: a tool's project file")
+            findings.append(f"{relative}: a product's project file")
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         for identifier, pattern in named:

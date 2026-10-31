@@ -1,6 +1,6 @@
-# The shared layer of the design tools (docs/framework/architecture.md). It is
-# not a tool: GyoBuild adds it once, before the selected tools, and only when a
-# tool is selected (Design Invariant 1).
+# The layer games and tools share (docs/framework/architecture.md). It is not a
+# product: GyoBuild adds it once, after the engine, and only while something
+# selected uses it; so far only tools do (Design Invariant 1).
 
 add_library(gyo_tool_framework STATIC
     src/CatalogRegistration.cpp

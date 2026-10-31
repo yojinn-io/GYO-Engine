@@ -31,7 +31,7 @@ target_include_directories(gyo_ui_editor_core PUBLIC
 )
 target_compile_features(gyo_ui_editor_core PUBLIC cxx_std_20)
 # File access, the read-only catalog mount and the dialog types come from the
-# tools' shared layer (docs/framework/architecture.md).
+# framework layer (docs/framework/architecture.md).
 target_link_libraries(gyo_ui_editor_core
     PUBLIC
         GYO::Engine

@@ -20,7 +20,7 @@ INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
 SDL_GPU = re.compile(r"\bSDL_\w*GPU\w*")
 TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*\b")
 
-# The catalog entry is written through the tools' shared layer, whose own guard
+# The catalog entry is written through the framework layer, whose own guard
 # (tests/framework/framework_dependency_guard.py) keeps the same rule (docs/framework/architecture.md, Design
 # Invariant 2).
 ALLOWED_INCLUDE_PREFIXES = ("gyo/audio_editor/", "gyo/framework/", "engine/base/", "engine/os/", "engine/audio/")

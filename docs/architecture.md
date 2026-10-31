@@ -28,6 +28,7 @@ GYO-Engine/
       shaders/pipeline/       offline shader compiler and its host dependencies
     text/                     neutral raster contract and font adapter
     ui/                       JSON UI, layout, actions, render bridge
+  framework/                 the layer games and tools share above the engine; only its tool part exists
   tools/<tool>/              design support; independent or game-specific local tools
   services/gyo_gateway/      reusable Go HTTP, session and transport mechanisms
   tests/
@@ -44,7 +45,7 @@ GYO-Engine/
 
 `build/` contains maintained development support. Only `build/target/` and older local generated output are disposable output; do not delete all of `build/`. Existing local caches are not migrated or committed. Fresh CMake configurations use `build/target/_build/<preset>`.
 
-`apps/` contains game code. It does not carry test runners, package scripts, editor code, vendor source archives or CI definitions. Tests consume game libraries from outside the game. Root `tools/` is reserved for design support such as UI and map editing. Compilation, integration and release orchestration belong to `build/`. Shader compilation is a rendering responsibility and its implementation stays with `engine/render/shaders/pipeline/`.
+`apps/` contains game code. It does not carry test runners, package scripts, editor code, vendor source archives or CI definitions. Tests consume game libraries from outside the game. Root `tools/` is reserved for design support such as UI and map editing. Root `framework/` holds what several products share above the engine: dependencies point game or tool → framework → engine, the engine never names it, and it is built only while a selected product uses it ([framework](framework/architecture.md)). Compilation, integration and release orchestration belong to `build/`. Shader compilation is a rendering responsibility and its implementation stays with `engine/render/shaders/pipeline/`.
 
 ## Workflow evolution
 
@@ -85,11 +86,12 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 | `GYO::Ui` | JSON codec, validation, layout, focus, binding and typed actions; UI geometry uses Math values | Engine, Math |
 | `GYO::UiRenderer` | UI draw list to renderer and text/texture resources | Ui, Render, Text |
 | Game | campaign, movement/combat rules, screen policy and presentation composition | selected public engine APIs |
-| UI editor | authoring session, selection, undo, export and preview | public Engine/Ui/Math APIs and selected adapters |
+| UI editor | authoring session, selection, undo, export and preview | public Engine/Ui/Math APIs, the framework's tool part and selected adapters |
+| Framework, tool part (`GYO::ToolFramework`, `GYO::ToolFrameworkGui`) | what two or more tools use: file access, the read-only catalog mount, writing a catalog entry, the ImGui and SDL renderer host, system path dialogs ([contract](framework/architecture.md)) | Engine, Os; the SDL platform and renderer adapters and ImGui for the window part |
 
 Optional SDL input, SDL_image, SDL_ttf, SDL renderer/SDL_GPU and ufbx adapters remain explicit choices. Backend-neutral core builds do not fetch SDL merely because another application uses it. Public neutral contracts do not expose native SDL/GPU pointers; concrete adapter APIs may expose their own native interoperability surface.
 
-The engine must not include game headers or understand Object_FPS asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. No new umbrella framework, scene hierarchy, ECS, plugin ABI or service locator is introduced by this organization.
+The engine must not include game headers or understand Object_FPS asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. No umbrella framework, scene hierarchy, ECS, plugin ABI or service locator is introduced by this organization. The framework layer ([framework](framework/architecture.md)) is not an umbrella: no product has to go through it, a product that does not use it builds and runs without it, and its game part is extracted only when a second game puts the engine together in the same way.
 
 `RuntimeLoop` calls `ProcessEvents(frame)`, `Update(frame)` and `Render(frame)` in order. A phase returning `RuntimeControl::Stop` ends the loop immediately. `IRuntimePort<Snapshot, Command, Event>` is a typed observation/intent boundary; each game retains ownership of its payloads and legality rules. Borrowed observations remain valid only until the runtime advances.
 

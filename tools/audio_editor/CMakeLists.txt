@@ -20,7 +20,7 @@ add_library(gyo_audio_editor_core STATIC
 target_include_directories(gyo_audio_editor_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(gyo_audio_editor_core PUBLIC cxx_std_20)
 # The clip format comes from GYO::Audio (Design Invariant 2); files go through
-# GYO::Os; the catalog entry is written by the tools' shared layer
+# GYO::Os; the catalog entry is written by the framework layer
 # (docs/framework/architecture.md).
 target_link_libraries(gyo_audio_editor_core
     PUBLIC GYO::Base

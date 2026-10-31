@@ -5,7 +5,7 @@
     {
       "id": "fw-catalog-taken-path",
       "what": "A path registered under another id is accepted",
-      "file": "tools/framework/src/CatalogRegistration.cpp",
+      "file": "framework/src/CatalogRegistration.cpp",
       "find": "} else if (entry[\"path\"] == registration.path) {",
       "replace": "} else if (false) {",
       "target": "gyo_framework_tests",
@@ -15,7 +15,7 @@
     {
       "id": "fw-catalog-other-type",
       "what": "An id registered with another type is overwritten with the caller's type",
-      "file": "tools/framework/src/CatalogRegistration.cpp",
+      "file": "framework/src/CatalogRegistration.cpp",
       "find": "if (entry[\"type\"].get_ref<const std::string&>() != registration.type) {",
       "replace": "if (false) {",
       "target": "gyo_framework_tests",
@@ -25,7 +25,7 @@
     {
       "id": "fw-path-dot-dot",
       "what": "A '..' segment is accepted in an asset path",
-      "file": "tools/framework/src/CatalogRegistration.cpp",
+      "file": "framework/src/CatalogRegistration.cpp",
       "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
       "replace": "if (segment.empty() || segment == \".\") return false;",
       "target": "gyo_framework_tests",
@@ -35,7 +35,7 @@
     {
       "id": "fw-catalog-indentation-lost",
       "what": "A new entry does not follow the last entry's indentation",
-      "file": "tools/framework/src/CatalogRegistration.cpp",
+      "file": "framework/src/CatalogRegistration.cpp",
       "find": "text.insert(end, \",\\n\" + Indentation(text, begin) + entry);",
       "replace": "text.insert(end, \",\\n\" + entry);",
       "target": "gyo_framework_tests",
@@ -45,7 +45,7 @@
     {
       "id": "fw-catalog-type-ignored",
       "what": "The new entry's type is always sound, not the caller's",
-      "file": "tools/framework/src/CatalogRegistration.cpp",
+      "file": "framework/src/CatalogRegistration.cpp",
       "find": "Json(registration.type).dump()",
       "replace": "std::string(\"\\\"sound\\\"\")",
       "target": "gyo_framework_tests",
@@ -55,7 +55,7 @@
     {
       "id": "fw-catalog-empty-type",
       "what": "An empty asset type is not refused as a registration",
-      "file": "tools/framework/src/CatalogRegistration.cpp",
+      "file": "framework/src/CatalogRegistration.cpp",
       "find": "    if (registration.type.empty()) {",
       "replace": "    if (false) {",
       "target": "gyo_framework_tests",
@@ -65,7 +65,7 @@
     {
       "id": "fw-inbox-order",
       "what": "The inbox hands answers over in reverse order",
-      "file": "tools/framework/src/PathDialog.cpp",
+      "file": "framework/src/PathDialog.cpp",
       "find": "answers_.push_back(std::move(answer));",
       "replace": "answers_.insert(answers_.begin(), std::move(answer));",
       "target": "gyo_framework_tests",
@@ -75,7 +75,7 @@
     {
       "id": "fw-inbox-take-keeps",
       "what": "A taken answer stays in the inbox",
-      "file": "tools/framework/src/PathDialog.cpp",
+      "file": "framework/src/PathDialog.cpp",
       "find": "return std::exchange(answers_, {});",
       "replace": "return answers_;",
       "target": "gyo_framework_tests",
@@ -85,7 +85,7 @@
     {
       "id": "fw-guard-input-target",
       "what": "The framework's CMake names GYO::Input",
-      "file": "tools/framework/CMakeLists.txt",
+      "file": "framework/CMakeLists.txt",
       "find": "# The catalog mount names engine/asset types; paths go to UTF-8 through GYO::Os.",
       "replace": "# The catalog mount names engine/asset types; paths go to UTF-8 through GYO::Os and GYO::Input.",
       "command": [
@@ -97,7 +97,7 @@
     {
       "id": "fw-guard-tool-header",
       "what": "The framework includes a tool's header",
-      "file": "tools/framework/src/ImGuiSdlHost.cpp",
+      "file": "framework/src/ImGuiSdlHost.cpp",
       "find": "#include \"gyo/framework/ImGuiSdlHost.hpp\"\n",
       "replace": "#include \"gyo/framework/ImGuiSdlHost.hpp\"\n#include \"gyo/some_tool/Thing.hpp\"\n",
       "command": [
@@ -109,7 +109,7 @@
     {
       "id": "fw-guard-tool-name",
       "what": "The framework's code names a registered tool",
-      "file": "tools/framework/src/FileService.cpp",
+      "file": "framework/src/FileService.cpp",
       "find": "the framework holds no OS code.",
       "replace": "the framework holds no OS code, unlike audio_editor.",
       "command": [
@@ -121,7 +121,7 @@
     {
       "id": "fw-guard-executable",
       "what": "The framework adds an executable, as a tool would",
-      "file": "tools/framework/CMakeLists.txt",
+      "file": "framework/CMakeLists.txt",
       "find": "unset(_gyo_framework_targets)\n",
       "replace": "unset(_gyo_framework_targets)\nadd_executable(gyo_framework_main src/PathDialog.cpp)\n",
       "command": [

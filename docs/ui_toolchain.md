@@ -70,7 +70,7 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
 1. The editor links no game, no `GYO::Input` and no SDL_GPU. Guard:
    `gyo_ui_editor.dependency_guard` (`tests/ui_editor/ui_editor_dependency_guard.py`),
    a positive list of includes and targets. The window, ImGui's SDL backends
-   and the system dialogs come through the tools' shared layer, whose own
+   and the system dialogs come through the framework layer, whose own
    guard keeps the same rule ([framework](framework/architecture.md), Design
    Invariant 2).
 2. Documents enter and leave only through `UiDocumentBridge` and the `GYO::Ui`

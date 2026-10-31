@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-// The tool framework's Runtime Error types (docs/architecture/error-handling.md).
+// The framework's tool part: Runtime Error types (docs/architecture/error-handling.md).
 // Codes exist only for distinctions a caller branches on or a test asserts;
 // the cause from an engine module is kept in detail (Base::CauseDetail).
 // Zero is not a valid code; the numeric values are not a data contract.

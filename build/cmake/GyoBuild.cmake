@@ -50,6 +50,13 @@ add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>"
                     "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/engine")
+# The layer games and tools share sits above the engine. Only tools use it so
+# far, so it is added only when a tool is selected (docs/framework/architecture.md,
+# Design Invariant 1).
+if(GYO_ACTIVE_TOOLS)
+    add_subdirectory("${GYO_REPOSITORY_ROOT}/framework" framework)
+    gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/framework")
+endif()
 foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)
     set(GYO_APP_SOURCE_DIR "${GYO_REPOSITORY_ROOT}/apps/${GYO_CURRENT_APP}")
     set(GYO_APP_BINARY_DIR "${PROJECT_BINARY_DIR}/apps/${GYO_CURRENT_APP}")
@@ -57,12 +64,6 @@ foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)
     gyo_record_code_page_directory("${GYO_APP_BINARY_DIR}")
 endforeach()
 unset(GYO_CURRENT_APP)
-# The tools' shared layer is not a tool; it exists only for the selected tools
-# (docs/framework/architecture.md, Design Invariant 1).
-if(GYO_ACTIVE_TOOLS)
-    add_subdirectory("${GYO_REPOSITORY_ROOT}/tools/framework" "tools/framework")
-    gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/tools/framework")
-endif()
 foreach(GYO_CURRENT_TOOL IN LISTS GYO_ACTIVE_TOOLS)
     get_property(GYO_TOOL_VARIANT GLOBAL PROPERTY GYO_TOOL_${GYO_CURRENT_TOOL}_VARIANT)
     add_subdirectory("${GYO_REPOSITORY_ROOT}/tools/${GYO_CURRENT_TOOL}" "tools/${GYO_CURRENT_TOOL}")

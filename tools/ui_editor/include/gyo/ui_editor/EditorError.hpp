@@ -22,7 +22,7 @@ template <class T, class E>
 using Result = Engine::Base::Result<T, E>;
 
 // File system access on user paths, and mounting a read-only asset catalog or
-// content root: the tool framework's types.
+// content root: the framework's types.
 using FileErrorCode = Framework::FileErrorCode;
 using FileError = Framework::FileError;
 using CatalogErrorCode = Framework::CatalogErrorCode;

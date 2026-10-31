@@ -97,7 +97,7 @@ foreach(index RANGE 0 3)
     equal("${tool}" audio:gui "Release mode")
 endforeach()
 file(WRITE "${work}/empty.csv" "${header}\n")
-# The tools' shared layer is not a tool (docs/framework/architecture.md, Design Invariant 1).
+# The framework layer is not a tool (docs/framework/architecture.md, Design Invariant 1).
 file(WRITE "${work}/framework.csv" "${header}\nframework,,,false,false,false,true,true,true\n")
 fails(reserved_framework "Reserved tool name 'framework'" -DCASE=read "-DCSV=${work}/framework.csv")
 fails(empty_release "No release tools" -DCASE=export "-DCSV=${work}/empty.csv" "-DROOT=${work}")

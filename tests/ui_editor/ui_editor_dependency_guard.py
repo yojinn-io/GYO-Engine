@@ -20,7 +20,7 @@ INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
 SDL_GPU = re.compile(r"\bSDL_\w*GPU\w*")
 TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*\b")
 
-# The window, ImGui's SDL backends and the system dialogs come through the tools' shared layer, whose own guard
+# The window, ImGui's SDL backends and the system dialogs come through the framework layer, whose own guard
 # (tests/framework/framework_dependency_guard.py) keeps the same rule (docs/framework/architecture.md, Design
 # Invariant 2).
 ALLOWED_INCLUDE_PREFIXES = ("gyo/ui_editor/", "gyo/framework/", "engine/", "nlohmann/", "SDL3/")
