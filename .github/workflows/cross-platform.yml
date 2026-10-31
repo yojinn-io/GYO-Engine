@@ -134,6 +134,15 @@ jobs:
           ctest --preset $env:PRESET --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # TEMPORARY (ci-ctest-parallel acceptance, removed before merge): every
+      # test up to five times at the row's parallel level; any failure fails L1.
+      - name: TEMPORARY parallel stress run
+        id: stress
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          ctest --preset $env:PRESET --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --repeat until-fail:5 --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/stress-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/stress-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run host shader reflection and rejection tests
         id: shaders
         if: ${{ !cancelled() && runner.os == 'Linux' && steps.build.outcome == 'success' && steps.configure.outputs.has_shader_tools == 'true' }}
