@@ -13,7 +13,7 @@ import (
 func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 	in := &runtime.WorldSnapshot{Tick: 20,
 		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 1, LifeGeneration: 2, LifeState: runtime.LifeState_LIFE_ALIVE, LifeStateTick: 10}},
-		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 50000, MagazineAmmo: 4, LastDamageTick: 15, DamageCount: 2, LastAttackerId: 7,
+		Combat: []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 50000, MagazineAmmo: 4, LastDamageTick: 15, DamageCount: 2, LastAttackerId: 7,
 			LastHitPart: runtime.HitPart_HIT_PART_BODY}},
 	}
 	out, err := SnapshotForClient(in, testRules())
@@ -33,6 +33,7 @@ func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 		"attacker only zero": func(s *runtime.WorldSnapshot) { s.Combat[0].LastAttackerId = 0 },
 		"part only zero":     func(s *runtime.WorldSnapshot) { s.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_UNSPECIFIED },
 		"unknown part":       func(s *runtime.WorldSnapshot) { s.Combat[0].LastHitPart = 99 },
+		"part after leg":     func(s *runtime.WorldSnapshot) { s.Combat[0].LastHitPart = 4 },
 		"part without a hit": func(s *runtime.WorldSnapshot) {
 			s.Combat[0].LastDamageTick, s.Combat[0].DamageCount, s.Combat[0].LastAttackerId = 0, 0, 0
 		},
@@ -62,6 +63,11 @@ func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 	head.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_HEAD
 	if out, err := SnapshotForClient(head, testRules()); err != nil || out.Combat[0].LastHitPart != client.HitPart_HIT_PART_HEAD {
 		t.Fatalf("head rejected or changed: %v %v", out, err)
+	}
+	leg := proto.Clone(in).(*runtime.WorldSnapshot) // pv9 §2
+	leg.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_LEG
+	if out, err := SnapshotForClient(leg, testRules()); err != nil || out.Combat[0].LastHitPart != client.HitPart_HIT_PART_LEG {
+		t.Fatalf("leg rejected or changed: %v %v", out, err)
 	}
 	limit := proto.Clone(in).(*runtime.WorldSnapshot)
 	limit.Combat[0].DamageCount = testRules().MaximumHp

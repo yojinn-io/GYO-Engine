@@ -167,7 +167,7 @@ public:
         auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
         auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);combat->set_life_generation(1);combat->set_magazine_ammo(7);
         combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2);
-        combat->set_last_hit_part(pb::HIT_PART_BODY); // pv7 §7 hit record: all four fields set together
+        combat->set_last_hit_part(snapshotHitPart); // pv7 §7 hit record: all four fields set together
         player->set_crouched(snapshotCrouched); // pv8 §2
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
@@ -184,11 +184,16 @@ public:
         }
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
-    void Results(const std::vector<ActionId>& ids,ActionId retired=0) {
+    // Cooldown rejections, or with a part player hits on player 2 at that part.
+    void Results(const std::vector<ActionId>& ids,ActionId retired=0,pb::HitPart part=pb::HIT_PART_UNSPECIFIED) {
         pb::ActionResults results;results.set_retired_through(retired);
         for(const auto id:ids) {
             auto* d=results.add_decisions();d->set_action_id(id);d->set_resolved_tick(123);
             d->set_rejection(pb::REJECTION_COOLDOWN);d->set_kind(pb::ACTION_SHOT);d->set_life_generation(1);
+            if(part!=pb::HIT_PART_UNSPECIFIED) {
+                d->set_rejection(pb::REJECTION_NONE);d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);
+                d->set_target_id(2);d->set_damage(37);d->set_target_life_generation(1);d->set_hit_part(part);
+            }
         }
         SendResults(results);
     }
@@ -233,6 +238,7 @@ public:
     StanceRules stance{DefaultStanceRules};
     std::optional<float> changedWelcomeStance;
     bool snapshotCrouched{}; // pv8 §2: the stance Snapshot reports
+    pb::HitPart snapshotHitPart{pb::HIT_PART_BODY}; // the part of Snapshot's hit record
     std::uint64_t epoch{1};
     bool autoAck{};
     std::atomic<std::uint64_t> leaves{};
@@ -692,6 +698,10 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
         connection.State().snapshot->combat.at(0).damageCount==3 && connection.State().snapshot->combat.at(0).lastAttackerId==2 &&
         connection.State().snapshot->combat.at(0).lastHitPart==HitPart::Body,
         "snapshot lost the hit record");
+    // pv9 §2: a leg hit record reaches the Client as Leg.
+    gateway.snapshotHitPart=pb::HIT_PART_LEG;gateway.Snapshot(connection.State().snapshot->players.at(0).lastResolvedCommand);
+    gateway.Until([&]{const auto s=connection.State();return s.snapshot && s.snapshot->combat.at(0).lastHitPart==HitPart::Leg;});
+    gateway.snapshotHitPart=pb::HIT_PART_BODY;
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
     std::mutex allocatedMutex;std::vector<ActionId> allocated;
     std::vector<std::thread> producers;
@@ -787,11 +797,11 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     Require(connection.Drain().decisions.empty(),"duplicate results were delivered twice");
     Require(!connection.SubmitShot(1,0,0),"consumed but unretired results freed the distance window");
     const auto firstResultAt=Clock::now();
-    gateway.Results({1});gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
+    gateway.Results({1},0,pb::HIT_PART_LEG);gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
     // A repeated result does not move the receipt time (v7 batch 08).
     gateway.UntilTime(Clock::now()+10ms);
     const auto repeatAt=Clock::now();
-    gateway.Results({1});
+    gateway.Results({1},0,pb::HIT_PART_LEG);
     // Let the deadline armed while ID 1 was pending pass, so only the ACK's own
     // wake-up (or the next Hello, which AwayFromHello keeps away) can send the ACK.
     gateway.UntilTime(Clock::now()+50ms);
@@ -800,6 +810,8 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     const auto last=connection.Drain();
     Require(last.decisions.size()==1 && last.decisions[0].actionId==1 &&
         last.state.actionTransport.acknowledgedThrough==32,"contiguous consumed results failed to ACK through 32");
+    Require(last.decisions[0].accepted && last.decisions[0].hitPart==HitPart::Leg,
+        "a leg hit decision did not reach the Client as Leg"); // pv9 §2
     Require(last.decisionReceivedAt.size()==1 && last.decisionReceivedAt[0]>=firstResultAt && last.decisionReceivedAt[0]<repeatAt,
         "decision receipt time is not the first arrival");
     const auto ackStart=gateway.actionAttempts.size();

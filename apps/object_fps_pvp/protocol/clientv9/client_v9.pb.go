@@ -308,14 +308,16 @@ func (ShotHitKind) EnumDescriptor() ([]byte, []int) {
 	return file_client_v9_proto_rawDescGZIP(), []int{4}
 }
 
-// Where a shot hit a player (pv7 §7): HIT_PLAYER is BODY or HEAD, every other
-// decision UNSPECIFIED. v7.1's Match produces only BODY; v8 adds HEAD.
+// Where a shot hit a player (pv7 §7, pv9 §2): HIT_PLAYER is BODY, HEAD or LEG,
+// every other decision UNSPECIFIED. BODY is the torso with the pelvis; arms are
+// no part (a ray passes through them).
 type HitPart int32
 
 const (
 	HitPart_HIT_PART_UNSPECIFIED HitPart = 0
 	HitPart_HIT_PART_BODY        HitPart = 1
 	HitPart_HIT_PART_HEAD        HitPart = 2
+	HitPart_HIT_PART_LEG         HitPart = 3
 )
 
 // Enum value maps for HitPart.
@@ -324,11 +326,13 @@ var (
 		0: "HIT_PART_UNSPECIFIED",
 		1: "HIT_PART_BODY",
 		2: "HIT_PART_HEAD",
+		3: "HIT_PART_LEG",
 	}
 	HitPart_value = map[string]int32{
 		"HIT_PART_UNSPECIFIED": 0,
 		"HIT_PART_BODY":        1,
 		"HIT_PART_HEAD":        2,
+		"HIT_PART_LEG":         3,
 	}
 )
 
@@ -1951,11 +1955,12 @@ const file_client_v9_proto_rawDesc = "" +
 	"\bHIT_MISS\x10\x00\x12\r\n" +
 	"\tHIT_WORLD\x10\x01\x12\x0e\n" +
 	"\n" +
-	"HIT_PLAYER\x10\x02\"\x04\b\x03\x10\x03*I\n" +
+	"HIT_PLAYER\x10\x02\"\x04\b\x03\x10\x03*[\n" +
 	"\aHitPart\x12\x18\n" +
 	"\x14HIT_PART_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rHIT_PART_BODY\x10\x01\x12\x11\n" +
-	"\rHIT_PART_HEAD\x10\x02B,Z*gyo.local/object_fps_pvp/protocol/clientv9b\x06proto3"
+	"\rHIT_PART_HEAD\x10\x02\x12\x10\n" +
+	"\fHIT_PART_LEG\x10\x03B,Z*gyo.local/object_fps_pvp/protocol/clientv9b\x06proto3"
 
 var (
 	file_client_v9_proto_rawDescOnce sync.Once

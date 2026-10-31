@@ -4375,7 +4375,7 @@
       "batch": "v71-hitbox-fields",
       "what": "The hit record decode check ignores the part",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
-      "find": "    if ((combat.lastHitPart == HitPart::Unspecified) != none ||\n        (!none && combat.lastHitPart != HitPart::Body && combat.lastHitPart != HitPart::Head)) return false;\n",
+      "find": "    if ((combat.lastHitPart == HitPart::Unspecified) != none ||\n        (!none && !PlayerHitPart(combat.lastHitPart))) return false;\n",
       "replace": "",
       "check": "cpu",
       "expect": "HitPart::Unspecified; \\}"
@@ -7370,6 +7370,97 @@
       "replace": "            expected = b if factor is not None else a\n",
       "check": "compare_authority_trees",
       "expect": "test_(unscaled_value|off_by_one_scaling)_differs"
+    },
+    {
+      "id": "legwire-gateway-drops-leg",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The Gateway does not accept LEG as a player part",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\treturn part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD ||\n\t\tpart == runtime.HitPart_HIT_PART_LEG\n",
+      "replace": "\treturn part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD\n",
+      "check": "go",
+      "expect": "HIT_PART_LEG|leg rejected"
+    },
+    {
+      "id": "legwire-decision-drops-leg",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The decision decode check does not accept Leg",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head) ||\n                            part == static_cast<int>(HitPart::Leg);\n",
+      "replace": "    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head);\n",
+      "check": "cpu",
+      "expect": "ValidDecisionHitPart\\(ShotHitKind::Player, part\\)"
+    },
+    {
+      "id": "legwire-record-drops-leg",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The hit record decode check does not accept Leg",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return part == HitPart::Body || part == HitPart::Head || part == HitPart::Leg;\n",
+      "replace": "    return part == HitPart::Body || part == HitPart::Head;\n",
+      "check": "cpu",
+      "expect": "HitPart::Leg; \\}"
+    },
+    {
+      "id": "legwire-damage-leg-as-body",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "A leg hit deals body damage",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "                        : part == HitPart::Leg  ? rules.legPermille\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "HitPart::Leg, 100000"
+    },
+    {
+      "id": "legwire-enum-off-wire",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The C++ Leg differs from the wire value",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "Head = 2, Leg = 3 };",
+      "replace": "Head = 2, Leg = 4 };",
+      "check": "ipc",
+      "expect": "HitPart differs from the wire",
+      "expect_build_failure": true
+    },
+    {
+      "id": "legwire-client-reads-leg-as-body",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The Client reads a leg part as Body",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "static_cast<HitPart>(combat.last_hit_part())};",
+      "replace": "combat.last_hit_part()==3?HitPart::Body:static_cast<HitPart>(combat.last_hit_part())};",
+      "check": "worker",
+      "expect": "mock worker wait timed out"
+    },
+    {
+      "id": "legwire-decision-accepts-unknown",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "A player hit decision accepts any non-zero part (4, 99)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head) ||\n                            part == static_cast<int>(HitPart::Leg);\n",
+      "replace": "    const bool playerPart = part >= static_cast<int>(HitPart::Body);\n",
+      "check": "cpu",
+      "expect": "ValidDecisionHitPart\\((ShotHitKind::Player|kind), part\\)"
+    },
+    {
+      "id": "legwire-record-accepts-unknown",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The hit record accepts any set part (4, 99)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return part == HitPart::Body || part == HitPart::Head || part == HitPart::Leg;\n",
+      "replace": "    return part != HitPart::Unspecified;\n",
+      "check": "cpu",
+      "expect": "static_cast<HitPart>\\((4|99)\\)"
+    },
+    {
+      "id": "legwire-gateway-accepts-unknown",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The Gateway accepts any set part (4, 99)",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\treturn part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD ||\n\t\tpart == runtime.HitPart_HIT_PART_LEG\n",
+      "replace": "\treturn part != runtime.HitPart_HIT_PART_UNSPECIFIED\n",
+      "check": "go",
+      "expect": "accepted|part after leg|unknown part"
     }
   ]
 }

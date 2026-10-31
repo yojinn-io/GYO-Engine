@@ -806,9 +806,11 @@ TEST_CASE("PvP hit record decode check accepts only the contract shapes") {
     CHECK(bad([](CombatState& c) { c.damageCount = 0; }));
     CHECK(bad([](CombatState& c) { c.lastAttackerId = 0; }));
     CHECK(bad([](CombatState& c) { c.lastHitPart = HitPart::Unspecified; }));
-    CHECK(bad([](CombatState& c) { c.lastHitPart = static_cast<HitPart>(3); }));
+    CHECK(bad([](CombatState& c) { c.lastHitPart = static_cast<HitPart>(4); }));
+    CHECK(bad([](CombatState& c) { c.lastHitPart = static_cast<HitPart>(99); }));
     CHECK(bad([](CombatState& c) { c = CombatState{.playerId = 1, .lastHitPart = HitPart::Body}; }));
     CHECK_FALSE(bad([](CombatState& c) { c.lastHitPart = HitPart::Head; })); // v8's part, accepted already
+    CHECK_FALSE(bad([](CombatState& c) { c.lastHitPart = HitPart::Leg; }));  // pv9 §2
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 9; }));
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 21; }));
     CHECK(bad([](CombatState& c) { c.lastAttackerId = 1; }));
@@ -1002,11 +1004,11 @@ TEST_CASE("PvP shot request equality includes E, S and the view tick") {
 
 // pv7 §7: the part a decision carries, and the three damage bounds.
 TEST_CASE("PvP hit part and maximum shot damage decode checks") {
-    for (const int part : {1, 2}) CHECK(ValidDecisionHitPart(ShotHitKind::Player, part));
-    for (const int part : {0, 3, -1}) CHECK_FALSE(ValidDecisionHitPart(ShotHitKind::Player, part));
+    for (const int part : {1, 2, 3}) CHECK(ValidDecisionHitPart(ShotHitKind::Player, part)); // Leg: pv9 §2
+    for (const int part : {0, 4, 99, -1}) CHECK_FALSE(ValidDecisionHitPart(ShotHitKind::Player, part));
     for (const auto kind : {ShotHitKind::Miss, ShotHitKind::World}) {
         CHECK(ValidDecisionHitPart(kind, 0));
-        for (const int part : {1, 2, 3}) CHECK_FALSE(ValidDecisionHitPart(kind, part));
+        for (const int part : {1, 2, 3, 4, 99}) CHECK_FALSE(ValidDecisionHitPart(kind, part));
     }
     CHECK(ValidShotDamageBounds(25000, 25000, 100000));
     CHECK(ValidShotDamageBounds(25000, 100000, 100000));
@@ -1025,6 +1027,8 @@ TEST_CASE("PvP part damage follows the permille multipliers") {
     CHECK(PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.legPermille) == 18750);
     CHECK(ShotDamage(PvpCombatRules, HitPart::Body, 10000) == 10000); // hp left caps it
     CHECK(ShotDamage(PvpCombatRules, HitPart::Head, 30000) == 30000);
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Leg, 100000) == 18750); // pv9 §2
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Leg, 10000) == 10000);
     CHECK(ValidPartDamage(PvpCombatRules));
     CHECK(PartDamage(3000000, 2000) == 6000000); // the product passes 32 bits
     CHECK(ValidPartDamage(3000000, 2000, 6000000));

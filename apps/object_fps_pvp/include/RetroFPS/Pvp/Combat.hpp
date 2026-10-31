@@ -56,8 +56,12 @@ inline constexpr std::uint64_t MaxShotHoldTicks = 2;
 }
 
 enum class ActionKind { Shot = 0, Reload = 1 };
-// Where a shot hit a player (pv7 §7). v7.1's Match produces only Body.
-enum class HitPart : std::uint8_t { Unspecified = 0, Body = 1, Head = 2 };
+// Where a shot hit a player (pv7 §7, pv9 §2). Match produces only Body until
+// the hitbox batch judges parts.
+enum class HitPart : std::uint8_t { Unspecified = 0, Body = 1, Head = 2, Leg = 3 };
+[[nodiscard]] constexpr bool PlayerHitPart(HitPart part) noexcept {
+    return part == HitPart::Body || part == HitPart::Head || part == HitPart::Leg;
+}
 
 // Historical Shot names also carry reload actions.
 struct ShotRequest final {
@@ -129,7 +133,7 @@ struct ShotDecision final {
     ActionKind kind{ActionKind::Shot};
     std::uint64_t lifeGeneration{1};
     std::uint64_t targetLifeGeneration{};
-    HitPart hitPart{HitPart::Unspecified}; // Body or Head exactly for a player hit
+    HitPart hitPart{HitPart::Unspecified}; // Body, Head or Leg exactly for a player hit
     bool operator==(const ShotDecision&) const = default;
 };
 
@@ -156,10 +160,11 @@ struct CombatState final {
 };
 
 // pv7 §7 decode checks shared by every reader of the wire values: a player
-// hit carries Body or Head (v8's Head accepted already), any other decision
-// Unspecified; and shot damage <= maximum shot damage <= maximum hp.
+// hit carries Body, Head or Leg (pv9 §2), any other decision Unspecified; and
+// shot damage <= maximum shot damage <= maximum hp.
 [[nodiscard]] constexpr bool ValidDecisionHitPart(ShotHitKind kind, int part) noexcept {
-    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head);
+    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head) ||
+                            part == static_cast<int>(HitPart::Leg);
     return kind == ShotHitKind::Player ? playerPart : part == static_cast<int>(HitPart::Unspecified);
 }
 [[nodiscard]] constexpr bool ValidShotDamageBounds(std::uint32_t shotDamage, std::uint32_t maximumShotDamage,
@@ -187,13 +192,15 @@ struct CombatState final {
 // The damage one hit on a part deals to a target with hp left (pv9 §3). The
 // rules passed ValidPartDamage, so the part damage fits 32 bits.
 [[nodiscard]] constexpr std::uint32_t ShotDamage(const CombatRules& rules, HitPart part, std::uint32_t hp) noexcept {
-    const auto permille = part == HitPart::Head ? rules.headPermille : rules.bodyPermille;
+    const auto permille = part == HitPart::Head ? rules.headPermille
+                        : part == HitPart::Leg  ? rules.legPermille
+                                                : rules.bodyPermille;
     const auto damage = PartDamage(rules.shotDamage, permille);
     return damage < hp ? static_cast<std::uint32_t>(damage) : hp;
 }
 
 // Decode check of the hit record (pv6 contract §2, four fields in pv7 §7):
-// all zero or all set, a set part being Body or Head; a hit lies within the
+// all zero or all set, a set part being Body, Head or Leg; a hit lies within the
 // current life state and the snapshot, is not self-inflicted and counts at
 // most one per hit point; a dead player died of its last hit.
 [[nodiscard]] constexpr bool ValidDamageRecord(const CombatState& combat, bool dead, std::uint64_t lifeStateTick,
@@ -201,7 +208,7 @@ struct CombatState final {
     const bool none = combat.lastDamageTick == 0;
     if ((combat.damageCount == 0) != none || (combat.lastAttackerId == 0) != none) return false;
     if ((combat.lastHitPart == HitPart::Unspecified) != none ||
-        (!none && combat.lastHitPart != HitPart::Body && combat.lastHitPart != HitPart::Head)) return false;
+        (!none && !PlayerHitPart(combat.lastHitPart))) return false;
     if (dead && (none || combat.lastDamageTick != lifeStateTick)) return false;
     return none || (lifeStateTick <= combat.lastDamageTick && combat.lastDamageTick <= snapshotTick &&
                     combat.lastAttackerId != combat.playerId && combat.damageCount <= maximumHp);

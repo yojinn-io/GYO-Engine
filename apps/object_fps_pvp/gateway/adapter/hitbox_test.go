@@ -9,9 +9,9 @@ import (
 	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
-// pv7 §7: a player hit is BODY or HEAD, every other decision UNSPECIFIED; an
-// unknown part invalidates the results batch. HEAD passes although v7.1's
-// Match never produces it.
+// pv7 §7, pv9 §2: a player hit is BODY, HEAD or LEG, every other decision
+// UNSPECIFIED; an unknown part invalidates the results batch. HEAD and LEG pass
+// although the Match produces only BODY until the hitbox batch.
 func TestResultsCheckTheHitPart(t *testing.T) {
 	hit := func(part runtime.HitPart) *runtime.ShotDecision {
 		return &runtime.ShotDecision{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, ActionId: 1, ResolvedTick: 5,
@@ -22,19 +22,22 @@ func TestResultsCheckTheHitPart(t *testing.T) {
 			Accepted: true, HitKind: runtime.ShotHitKind_HIT_WORLD, HitPart: part}
 	}
 	for _, good := range []*runtime.ShotDecision{hit(runtime.HitPart_HIT_PART_BODY), hit(runtime.HitPart_HIT_PART_HEAD),
-		miss(runtime.HitPart_HIT_PART_UNSPECIFIED)} {
+		hit(runtime.HitPart_HIT_PART_LEG), miss(runtime.HitPart_HIT_PART_UNSPECIFIED)} {
 		out, err := ResultsForClient(&runtime.ActionResults{PlayerId: 1, Decisions: []*runtime.ShotDecision{good}}, testRules())
 		if err != nil || int32(out.Decisions[0].HitPart) != int32(good.HitPart) {
 			t.Fatalf("%v: %v %v", good, out, err)
 		}
 	}
-	for _, bad := range []*runtime.ShotDecision{hit(runtime.HitPart_HIT_PART_UNSPECIFIED), hit(99),
-		miss(runtime.HitPart_HIT_PART_BODY), miss(runtime.HitPart_HIT_PART_HEAD)} {
+	for _, bad := range []*runtime.ShotDecision{hit(runtime.HitPart_HIT_PART_UNSPECIFIED), hit(4), hit(99),
+		miss(runtime.HitPart_HIT_PART_BODY), miss(runtime.HitPart_HIT_PART_HEAD), miss(runtime.HitPart_HIT_PART_LEG), miss(4), miss(99)} {
 		if _, err := ResultsForClient(&runtime.ActionResults{PlayerId: 1, Decisions: []*runtime.ShotDecision{bad}}, testRules()); err == nil {
 			t.Fatalf("accepted %v", bad)
 		}
 	}
 	if a, b := hit(runtime.HitPart_HIT_PART_BODY), hit(runtime.HitPart_HIT_PART_HEAD); EqualDecision(a, b) || !EqualDecision(a, proto.Clone(a).(*runtime.ShotDecision)) {
+		t.Fatal("EqualDecision does not compare the hit part")
+	}
+	if EqualDecision(hit(runtime.HitPart_HIT_PART_BODY), hit(runtime.HitPart_HIT_PART_LEG)) {
 		t.Fatal("EqualDecision does not compare the hit part")
 	}
 }

@@ -175,7 +175,8 @@ struct ActionLane {
 };
 // The hit part's wire value is the domain's (pv7 §7).
 static_assert(static_cast<int>(HitPart::Unspecified)==pb::HIT_PART_UNSPECIFIED && static_cast<int>(HitPart::Body)==pb::HIT_PART_BODY &&
-              static_cast<int>(HitPart::Head)==pb::HIT_PART_HEAD && pb::HitPart_ARRAYSIZE==3,"HitPart differs from the wire");
+              static_cast<int>(HitPart::Head)==pb::HIT_PART_HEAD && static_cast<int>(HitPart::Leg)==pb::HIT_PART_LEG &&
+              pb::HitPart_ARRAYSIZE==4,"HitPart differs from the wire");
 // The wire name of each refusal: ActionRefusal is IngressActionRejection + 1,
 // value for value (pv7 §5: the names are the host's).
 constexpr pb::ActionRefusal RefusalForWire(IngressActionRejection reason) {

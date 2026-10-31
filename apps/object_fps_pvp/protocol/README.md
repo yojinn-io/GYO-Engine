@@ -88,9 +88,9 @@ are explicitly mapped, since their numeric values differ from the wire enums.
 judged at (pv7 contract §6, A1). `ShotRequest.view_tick_q16`, the `HitPart` fields
 (`ShotDecision.hit_part`, `CombatState.last_hit_part`) and
 `CombatRules.maximum_shot_damage` are the contract support for skeletal hitboxes
-(pv7 contract §7): the Client fills `view_tick_q16` as observed, and the Match
-fills the others with values equal to the current behaviour until v8 implements
-hitboxes.
+(pv7 contract §7; LEG from pv9 §2): the Client fills `view_tick_q16` as observed,
+and the Match fills the others with values equal to the current behaviour (BODY
+only) until the hitbox-line judges parts.
 
 Generated Go bindings are checked in under `clientv9/` and `runtimev9/`. Regenerate
 both with the pinned protoc from the C++ build and `protoc-gen-go` from the product's

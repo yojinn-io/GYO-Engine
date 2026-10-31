@@ -164,10 +164,10 @@ func EvictionNotice(e *runtime.PlayerEvicted) (string, string) {
 
 func finite(v float32) bool { return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0) }
 
-// playerPart: a part a shot can hit a player at (pv7 §7). HEAD is accepted
-// although v7.1's Match produces only BODY, so v8 needs no new check.
+// playerPart: a part a shot can hit a player at (pv7 §7, pv9 §2).
 func playerPart(part runtime.HitPart) bool {
-	return part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD
+	return part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD ||
+		part == runtime.HitPart_HIT_PART_LEG
 }
 
 // Rules originate in Match. The adapter validates their contract, not policy defaults.
