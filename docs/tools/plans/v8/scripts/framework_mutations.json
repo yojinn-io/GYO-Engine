@@ -311,6 +311,33 @@
         "tests/ui_editor/ui_editor_dependency_guard.py"
       ],
       "expect": "PreviewAdapter.cpp: includes imgui_internal.h"
+    },
+    {
+      "id": "ui-editor-keys-ignore-preview",
+      "what": "The editor's shortcuts and nudging wait only for ImGui's own fields, not the preview's",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "    return ImGui::GetIO().WantTextInput || previewEditingText_;",
+      "replace": "    return ImGui::GetIO().WantTextInput;",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: typing belongs to the edited preview field, so editor shortcuts wait"
+    },
+    {
+      "id": "ui-editor-preview-editing-unrecorded",
+      "what": "The editor does not record that the preview's field is being edited",
+      "file": "tools/ui_editor/src/EditorAppCanvas.cpp",
+      "find": "    previewEditingText_ = result.textInput.has_value();\n",
+      "replace": "",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: typing belongs to the edited preview field, so editor shortcuts wait"
+    },
+    {
+      "id": "ui-input-request-without-origin",
+      "what": "The text input request ignores where the preview is drawn",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "replace": "FrameOutput::TextInputRequest{element.boundsPixels.x,",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: the request follows the preview's origin exactly"
     }
   ]
 }

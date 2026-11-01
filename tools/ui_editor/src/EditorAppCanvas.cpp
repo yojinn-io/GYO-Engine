@@ -138,6 +138,7 @@ void EditorApp::DrawCanvas() {
         gridSize_,
         physicalInput_);
     textInputRequest_ = result.textInput;
+    previewEditingText_ = result.textInput.has_value();
     if (result.error) {
         statusMessage_ = "Preview: " + Engine::Base::Describe(*result.error);
     }

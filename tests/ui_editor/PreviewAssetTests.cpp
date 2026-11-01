@@ -472,14 +472,28 @@ void TestPreviewTextFieldThroughFramework() {
     Expect(editing.textInput.has_value() && editing.textInput->x >= viewport.x && editing.textInput->y >= viewport.y &&
                editing.textInput->width > 0.0F && editing.textInput->height > 0.0F,
         "an edited field asks for text input over its rect, in window coordinates");
+    // The same field drawn 100 px right and 50 px down asks exactly that much further.
+    fixture.Begin(assets);
+    const auto moved = preview.Draw(*ImGui::GetBackgroundDrawList(), document, "main",
+                                    {viewport.x + 100.0F, viewport.y + 50.0F, viewport.width, viewport.height}, {},
+                                    &assets, true, true, false, 8.0F, nullptr);
+    fixture.Present(assets);
+    Expect(editing.textInput.has_value() && moved.textInput.has_value() &&
+               moved.textInput->x == editing.textInput->x + 100.0F && moved.textInput->y == editing.textInput->y + 50.0F &&
+               moved.textInput->width == editing.textInput->width,
+        "the request follows the preview's origin exactly");
 
     frame(ImGuiKey_None, false, {Typed("ab")});
+    // The caret moves by Engine's keys; ImGui's arrow, still pressed, does not edit.
+    frame(ImGuiKey_LeftArrow, true, {KeyPress(Key::Left), Typed("X")});
+    frame(ImGuiKey_LeftArrow, false, {KeyPress(Key::Right)});
     drawn.texts.clear();
     frame(ImGuiKey_None, false, {Composing("かな")});
     Expect(std::ranges::any_of(drawn.texts, [](const std::string& text) { return text.find("かな") != std::string::npos; }),
         "the input method's composition is drawn in the field");
     frame(ImGuiKey_None, false, {Composing(""), Typed("仮名")});
-    Expect(submitText() == std::optional<std::string>{"ab仮名"}, "committed text replaces the composition");
+    Expect(submitText() == std::optional<std::string>{"aXb仮名"},
+        "Left moves the caret through Engine's keys and committed text replaces the composition");
 
     // Ctrl is the shortcut where ImGui does not follow macOS conventions.
     io.ConfigMacOSXBehaviors = false;
@@ -487,20 +501,70 @@ void TestPreviewTextFieldThroughFramework() {
     frame(ImGuiKey_Enter, true, {});
     frame(ImGuiKey_Enter, false, {});
     frame(ImGuiKey_None, false, {KeyPress(Key::V, {.gui = true}), KeyPress(Key::V, {.ctrl = true})});
-    Expect(submitText() == std::optional<std::string>{"ab仮名Z"}, "Ctrl+V pastes and Command+V does not");
+    Expect(submitText() == std::optional<std::string>{"aXb仮名Z"}, "Ctrl+V pastes and Command+V does not");
 
     // Command is the shortcut where ImGui follows macOS conventions.
     io.ConfigMacOSXBehaviors = true;
     frame(ImGuiKey_Enter, true, {});
     frame(ImGuiKey_Enter, false, {});
     frame(ImGuiKey_None, false, {KeyPress(Key::A, {.ctrl = true}), Typed("x")});
+    Expect(submitText() == std::optional<std::string>{"aXb仮名Zx"}, "Ctrl+A does not select all where Command is the shortcut");
+    frame(ImGuiKey_Enter, true, {});
+    frame(ImGuiKey_Enter, false, {});
     frame(ImGuiKey_None, false, {KeyPress(Key::A, {.gui = true}), Typed("y")});
-    Expect(submitText() == std::optional<std::string>{"y"}, "Command+A selects all and Ctrl+A does not");
+    Expect(submitText() == std::optional<std::string>{"y"}, "Command+A selects all");
     io.ConfigMacOSXBehaviors = macBehaviors;
 
     auto done = frame(ImGuiKey_None, false, {});
     Expect(!done.textInput.has_value(), "text input is no longer asked for after the submit");
     assets.Unmount();
+}
+
+// While a preview text field is edited, typing belongs to it: the editor's
+// own shortcuts (Cmd/Ctrl+Z, V, S...) and arrow nudging wait, as they do for
+// ImGui's fields (IU-2 regression: the preview no longer sets ImGui's
+// text-input state, so the editor has to know on its own).
+void TestEditorKeysWaitWhilePreviewTextIsEdited() {
+    Fixture fixture;
+    AssetPreviewContext assets;
+    assets.Initialize(*fixture.renderer, std::make_unique<BitmapRasterizer>());
+    nlohmann::json document = UiDocumentBridge::CreateDefault();
+    nlohmann::json field = MakeDefaultElement(document, *FindElementKind("text_field"));
+    field["rect"]["size_delta"] = {200.0, 24.0};
+    document["canvases"][0]["focus_order"].push_back(field["id"]);
+    document["canvases"][0]["children"].push_back(field);
+    const auto path = fixture.root / "editing.ui.json";
+    Expect(WriteFixture(path, UiDocumentBridge::SerializeCanonical(document)), "write the editing document");
+
+    CommandLineOptions options;
+    options.inputPath = path;
+    EditorApp editor(options, assets);
+    Expect(static_cast<bool>(editor.Initialize()), "the editor opens the editing document");
+    editor.SetPreviewMode(true);
+    ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 display = io.DisplaySize;
+    io.DisplaySize = {1600.0F, 900.0F};
+    const auto frame = [&](const ImGuiKey pressed, const bool down) {
+        io.AddMousePosEvent(800.0F, 450.0F); // over the canvas, so the preview takes input
+        if (pressed != ImGuiKey_None) io.AddKeyEvent(pressed, down);
+        Engine::Input::PhysicalInputFrame input;
+        fixture.Begin(assets);
+        editor.SetPhysicalInput(&input);
+        editor.Draw();
+        const bool requested = editor.TakeTextInputRequest().has_value();
+        editor.SetPhysicalInput(nullptr);
+        fixture.Present(assets);
+        return requested;
+    };
+    frame(ImGuiKey_None, false);
+    frame(ImGuiKey_None, false);
+    Expect(!editor.TextInputActive(), "nothing takes typing before a field is edited");
+    frame(ImGuiKey_Enter, true);
+    const bool editing = frame(ImGuiKey_Enter, false);
+    Expect(editing, "Enter starts editing the preview's text field");
+    frame(ImGuiKey_None, false);
+    Expect(editor.TextInputActive(), "typing belongs to the edited preview field, so editor shortcuts wait");
+    io.DisplaySize = display;
 }
 
 int main() {
@@ -511,5 +575,6 @@ int main() {
     TestPathDialogAdapter();
     TestPreviewTextFieldTyping();
     TestPreviewTextFieldThroughFramework();
+    TestEditorKeysWaitWhilePreviewTextIsEdited();
     return failures == 0 ? 0 : 1;
 }

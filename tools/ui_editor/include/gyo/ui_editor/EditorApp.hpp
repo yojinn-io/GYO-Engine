@@ -41,6 +41,11 @@ public:
     // it does; taken once after Draw.
     [[nodiscard]] std::optional<PreviewAdapter::FrameOutput::TextInputRequest> TakeTextInputRequest() noexcept;
     [[nodiscard]] bool WantsExit() const noexcept;
+    // As the View menu's "Preview interaction".
+    void SetPreviewMode(bool preview) noexcept;
+    // Whether typing goes to a text field (ImGui's, or the preview's text
+    // field being edited) and the editor's own key shortcuts and nudging wait.
+    [[nodiscard]] bool TextInputActive() const noexcept;
 
 private:
     enum class AssetPickerTarget {
@@ -87,6 +92,8 @@ private:
     PreviewAdapter preview_;
     const Engine::Input::PhysicalInputFrame* physicalInput_{};
     std::optional<PreviewAdapter::FrameOutput::TextInputRequest> textInputRequest_;
+    // A preview text field was being edited in the last drawn frame.
+    bool previewEditingText_{};
     std::vector<Diagnostic> diagnostics_;
     std::vector<std::string> actionLog_;
     std::string selectedCanvas_{"main"};

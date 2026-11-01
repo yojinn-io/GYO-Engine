@@ -201,10 +201,20 @@ std::optional<PreviewAdapter::FrameOutput::TextInputRequest> EditorApp::TakeText
     return std::exchange(textInputRequest_, std::nullopt);
 }
 
+void EditorApp::SetPreviewMode(const bool preview) noexcept {
+    previewMode_ = preview;
+}
+
+bool EditorApp::TextInputActive() const noexcept {
+    // ImGui knows only its own fields; the preview's field is told by its last
+    // frame, one frame late as ImGui's own flag is.
+    return ImGui::GetIO().WantTextInput || previewEditingText_;
+}
+
 void EditorApp::Draw() {
     textInputRequest_.reset();
     const ImGuiIO& io = ImGui::GetIO();
-    if (io.KeyCtrl && !io.WantTextInput) {
+    if (io.KeyCtrl && !TextInputActive()) {
         if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
             RequestPath(PathDialogPurpose::ExportDocument, exportPath_, showExportDialog_);
         } else if (ImGui::IsKeyPressed(ImGuiKey_S, false)) {
@@ -442,7 +452,7 @@ void EditorApp::NudgeSelectedElement(const bool canvasFocused) {
         session_.EndEdit();
         nudgeTransactionActive_ = false;
     }
-    if (!canvasFocused || selectedNode_.empty() || io.WantTextInput || io.KeyCtrl || gizmoTransactionActive_) {
+    if (!canvasFocused || selectedNode_.empty() || TextInputActive() || io.KeyCtrl || gizmoTransactionActive_) {
         return;
     }
     const float step = io.KeyShift ? 10.0F : 1.0F;
