@@ -137,6 +137,7 @@ D1 實作後，H2 的「腿的形狀在骨盆以下」不成立：大腿膠囊�
    - 每一個數值都寫 IEEE 754 的位元，little-endian。
 3. 姿勢用到的 clip，依 `PlayerPresentationDefinition` 的固定順序：
    - `idle`、`walk`、`jog`、`shoot`、`reload`、`jump_start`、`jump_loop`、`jump_land`、`death`、`aim_up`、`aim_neutral`、`aim_down`、`hit`、`crouch_idle`、`crouch_move`；
+   - （2026-11-01 補記，`v8-product-hit-clip-by-part`）最後多一個 `hit_head`，共 16 個；這個位置是 digest 的列表順序，不是 `PlayerPresentationDefinition` 的欄位順序；
    - 每個 clip 寫入：名稱、長度、轉換後每個 channel 的節點名稱、key 的時間與值。範圍和 B3 的 H-load 相同。
 4. 骨架：每個節點的名稱、父節點、參考姿勢。
 5. 雜湊：`Engine::Base::Sha256`，取前 8 個位元組，little-endian 讀成 uint64。結果剛好是 0 時改成 1，因為 0 在 wire 上表示無效。

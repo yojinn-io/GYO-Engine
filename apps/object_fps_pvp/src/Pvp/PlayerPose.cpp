@@ -96,6 +96,7 @@ std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerDefinition(
         definition->aimNeutralClip = clip("aim_neutral");
         definition->aimDownClip = clip("aim_down");
         definition->hitClip = clip("hit");
+        definition->hitHeadClip = clip("hit_head");
         definition->crouchIdleClip = clip("crouch_idle");
         definition->crouchMoveClip = clip("crouch_move");
         definition->bodyHeight = bodyHeight;
@@ -273,6 +274,7 @@ PlayerPresentationFrame PlayerFrameFromAuthority(const PlayerState& player,
         if (combat->damageCount) {
             frame.damageCount = combat->damageCount;
             frame.damageSeconds = static_cast<double>(combat->lastDamageTick) / AuthorityTickRate;
+            frame.damagePart = combat->lastHitPart;
         }
         if (combat->reloadActionId && combat->reloadEndTick > combat->reloadStartTick) {
             frame.reloadActionId = combat->reloadActionId;
@@ -458,7 +460,9 @@ bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
         if (frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&
             now >= frame.damageSeconds && now < frame.damageSeconds + definition.hitSeconds) {
             output.upper = PlayerUpperAction::Hit;
-            output.upperClipSeconds = scaled(now - frame.damageSeconds, definition.hitSeconds, duration(definition.hitClip));
+            output.headHit = frame.damagePart == HitPart::Head;
+            output.upperClipSeconds = scaled(now - frame.damageSeconds, definition.hitSeconds,
+                duration(output.headHit ? definition.hitHeadClip : definition.hitClip));
         } else if (frame.reloadActionId && frame.reloadEndSeconds > frame.reloadStartSeconds &&
             frame.reloadStartSeconds >= frame.lifeStateSeconds &&
             now >= frame.reloadStartSeconds && now < frame.reloadEndSeconds) {
@@ -566,7 +570,8 @@ void ComposeBody(const PlayerPresentationDefinition& definition, const PlayerLoc
                     actions.upper != PlayerUpperAction::Hit)
                     throw std::runtime_error("player pose has an invalid upper-body action");
                 motionClip = actions.upper == PlayerUpperAction::Shoot ? definition.shootClip :
-                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip : definition.hitClip;
+                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip :
+                    actions.headHit ? definition.hitHeadClip : definition.hitClip;
                 Require(Engine::Model::SamplePose(model, motionClip, actions.upperClipSeconds,
                     PlaybackMode::Clamp, upperAction));
                 motion = &upperAction;

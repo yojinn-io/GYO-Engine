@@ -100,7 +100,7 @@ a living player is not grounded); the Match guards the same before writing.
 `Ready.animation_digest` (18) and `Welcome.animation_digest` (20), fixed64, carry
 `AnimationContentDigest` of the Match's player animation content (pv9 §4.6): the
 first 8 bytes, little-endian, of a SHA-256 over the presentation values that move
-the pose, the transferred keys of the 15 posed clips and the skeleton; zero means
+the pose, the transferred keys of the 16 posed clips (hit_head last, v8-product-hit-clip-by-part) and the skeleton; zero means
 missing and a zero hash becomes 1. The Gateway rejects a zero digest at readiness
 and copies it into Welcome; the Client compares it with its own content and fails
 with `Match animation content differs from this client`.

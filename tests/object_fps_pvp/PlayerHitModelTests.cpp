@@ -284,6 +284,17 @@ TEST_CASE("PvP posed shapes are the Client's pose for every kind of input") {
         t.combat.damageCount = 1;
         t.combat.lastDamageTick = t.tick - 5;
     });
+    // v8-product-hit-clip-by-part G2: the head hit plays its own clip.
+    add("head hit 5 ticks ago", [](Target& t) {
+        t.combat.damageCount = 1;
+        t.combat.lastDamageTick = t.tick - 5;
+        t.combat.lastHitPart = HitPart::Head;
+    });
+    add("leg hit 5 ticks ago", [](Target& t) {
+        t.combat.damageCount = 1;
+        t.combat.lastDamageTick = t.tick - 5;
+        t.combat.lastHitPart = HitPart::Leg;
+    });
     add("reloading", [](Target& t) {
         t.combat.reloadActionId = 4;
         t.combat.reloadStartTick = t.tick - 30;
@@ -323,6 +334,34 @@ TEST_CASE("PvP posed shapes are the Client's pose for every kind of input") {
     }
 }
 
+// v8-product-hit-clip-by-part (a), v8-product-hit-leg-clip (a): the judged
+// shapes follow the hit clip of the part, as the Client draws it.
+TEST_CASE("PvP posed shapes take the head hit clip for a head hit and the chest hit otherwise") {
+    const auto struck = [](HitPart part) {
+        Target target({1, 0, 2}, 0.6F);
+        target.combat.damageCount = 1;
+        target.combat.lastDamageTick = target.tick - 5;
+        target.combat.lastHitPart = part;
+        return target.Shapes();
+    };
+    const auto head = struck(HitPart::Head), body = struck(HitPart::Body), leg = struck(HitPart::Leg);
+    REQUIRE(head.size() == body.size());
+    float moved = 0;
+    for (std::size_t i = 0; i < head.size(); ++i) {
+        moved = std::max(moved, Engine::Math::Length(Volume(head[i]).segmentStart - Volume(body[i]).segmentStart));
+        CAPTURE(i);
+        const auto same = [](Vec3 a, Vec3 b) {
+            return std::bit_cast<std::uint32_t>(a.x) == std::bit_cast<std::uint32_t>(b.x) &&
+                   std::bit_cast<std::uint32_t>(a.y) == std::bit_cast<std::uint32_t>(b.y) &&
+                   std::bit_cast<std::uint32_t>(a.z) == std::bit_cast<std::uint32_t>(b.z);
+        };
+        CHECK(same(Volume(leg[i]).segmentStart, Volume(body[i]).segmentStart));
+        CHECK(same(Volume(leg[i]).segmentEnd, Volume(body[i]).segmentEnd));
+    }
+    MESSAGE("head hit against chest hit: shapes move " << moved << " m");
+    CHECK(moved > 0.001F);
+}
+
 // xhigh review 1 (note): the accepted cost of v8-product-hitbox-tick-pose (a)
 // is an action restarted in the judged tick. The snapshot of that tick shows
 // the action at 0 s; the shapes show the earlier run k ticks in. Measured, no
@@ -351,6 +390,29 @@ TEST_CASE("PvP an action restarted in the judged tick against the run it replace
         t.combat.lastShotActionId = 1;
         t.combat.lastShotTick = tick;
     });
-    MESSAGE("restarted action, worst shape offset over 1..40 ticks (m): hit " << hit << " shot " << shot);
+    // v8-product-hit-clip-by-part (xhigh review): the head hit restarted, and
+    // a head hit replacing a chest hit k ticks in (another clip, not only time).
+    const auto headHit = worst([](Target& t, std::uint64_t tick) {
+        t.combat.damageCount = 1;
+        t.combat.lastDamageTick = tick;
+        t.combat.lastHitPart = HitPart::Head;
+    });
+    float chestToHead = 0;
+    for (std::uint64_t k = 1; k <= 40; ++k) {
+        Target earlier = plain, restarted = plain;
+        earlier.combat.damageCount = 1;
+        earlier.combat.lastDamageTick = plain.tick - k;
+        earlier.combat.lastHitPart = HitPart::Body;
+        restarted.combat.damageCount = 2;
+        restarted.combat.lastDamageTick = plain.tick;
+        restarted.combat.lastHitPart = HitPart::Head;
+        const auto a = earlier.Shapes(), b = restarted.Shapes();
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            chestToHead = std::max(chestToHead, Engine::Math::Length(Volume(a[i]).segmentStart - Volume(b[i]).segmentStart));
+            chestToHead = std::max(chestToHead, Engine::Math::Length(Volume(a[i]).segmentEnd - Volume(b[i]).segmentEnd));
+        }
+    }
+    MESSAGE("restarted action, worst shape offset over 1..40 ticks (m): hit " << hit << " shot " << shot
+            << " head hit " << headHit << " chest then head " << chestToHead);
     CHECK(hit >= 0);
 }

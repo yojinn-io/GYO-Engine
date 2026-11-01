@@ -8236,8 +8236,8 @@
       "batch": "v8-product-hitbox-data-pose",
       "what": "The composed body plays the shot clip for a hit",
       "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
-      "find": "                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip : definition.hitClip;",
-      "replace": "                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip : definition.shootClip;",
+      "find": "                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip :\n                    actions.headHit ? definition.hitHeadClip : definition.hitClip;",
+      "replace": "                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip :\n                    definition.shootClip;",
       "check": "presentation",
       "expect": "hit reaction"
     },
@@ -8720,6 +8720,66 @@
       "replace": "            if (!bound) return definition;",
       "check": "presentation",
       "expect": "InvalidAnimationEvents|is NOT correct"
+    },
+    {
+      "id": "p1-hit-part-ignored",
+      "batch": "v8-product-hit-clip-by-part",
+      "what": "The head hit is never selected",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "            output.headHit = frame.damagePart == HitPart::Head;\n",
+      "replace": "            output.headHit = false;\n",
+      "check": "presentation",
+      "expect": "Hit_Head for a head hit"
+    },
+    {
+      "id": "p1-frame-drops-part",
+      "batch": "v8-product-hit-clip-by-part",
+      "what": "The frame from authority drops the hit part",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "            frame.damagePart = combat->lastHitPart;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "take the head hit clip"
+    },
+    {
+      "id": "p1-compose-chest-only",
+      "batch": "v8-product-hit-clip-by-part",
+      "what": "The composed body plays the chest hit for a head hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "                    actions.headHit ? definition.hitHeadClip : definition.hitClip;",
+      "replace": "                    definition.hitClip;",
+      "check": "presentation",
+      "expect": "Hit_Head for a head hit|take the head hit clip"
+    },
+    {
+      "id": "p1-digest-omits-head-hit",
+      "batch": "v8-product-hit-clip-by-part",
+      "what": "The animation digest leaves out the head hit clip",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "definition.crouchMoveClip,\n             definition.hitHeadClip}) {",
+      "replace": "definition.crouchMoveClip}) {",
+      "check": "presentation",
+      "expect": "head hit key"
+    },
+    {
+      "id": "p1-match-loses-combat",
+      "batch": "v8-product-hit-clip-by-part",
+      "what": "The Match's posed model poses without the target's combat state",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "        const auto frame = PlayerFrameFromAuthority(input.player, input.combat,",
+      "replace": "        const auto frame = PlayerFrameFromAuthority(input.player, CombatState{},",
+      "check": "presentation",
+      "expect": "every kind of input|take the head hit clip"
+    },
+    {
+      "id": "p1-hit-head-fallback",
+      "batch": "v8-product-hit-clip-by-part",
+      "what": "A missing hit_head silently falls back to the chest hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        definition->hitHeadClip = clip(\"hit_head\");\n",
+      "replace": "        definition->hitHeadClip = character.animationSet->clips.contains(\"hit_head\") ? clip(\"hit_head\") : definition->hitClip;\n",
+      "check": "presentation",
+      "expect": "reject missing clips"
     }
   ]
 }
