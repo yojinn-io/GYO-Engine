@@ -1,7 +1,7 @@
-# v8-framework-shell 第 0 關：外殼草圖（待核准）
+# v8-framework-shell 第 0 關：外殼草圖（已核准）
 
 日期：2026-11-01。依 PLAN 第 2.4 節「草圖先交核准」與 D-9（ultracode）。
-**狀態：待使用者核准。** 核准前不寫程式、不改 `docs/framework/architecture.md` 與 `docs/architecture/platform-sdl.md`。
+**狀態：2026-11-01 使用者核准（「照建議核准」）。** D-shell-1～8 全部採第 4 節的建議（D-shell-2 採 (b)，照今天的兩段式）；第 7 節條文在本批實作時寫入。
 
 做法：獨立提案 3（引擎、檔位繼承主會話）、審查合成 1（繼承）、Sonnet 對抗式檢查 1（檔位繼承），全部唯讀。證據：使用者的 Mac，主 checkout `build/evidence/framework-rework/v8-framework-shell/`（`2026_11_01_sketch-workflow-output.json` 各 Agent 的結論、`…-journal.jsonl` 逐 Agent 回傳值、`…-script.js` 腳本）。
 

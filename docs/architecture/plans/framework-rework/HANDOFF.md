@@ -78,6 +78,7 @@
   - D-8：有視窗外殼目前只有 ui_editor 一個使用者，接受，DI 5 註明。
   - D-9：外殼草圖用 ultracode；選擇窗只做 xhigh 審查加別的引擎做一次對抗式檢查。
 - 各批的 Design Invariants 條文與守衛變更仍在該批開工或定案前逐批核准。
+- 2026-11-01，使用者：「照建議核准」。v8-framework-shell 的[外殼草圖](shell-sketch.md)：D-shell-1 外殼採 A（反轉式，外殼擁有 RuntimeLoop）；D-shell-2 採 (b)（ImGui 綁定照今天的兩段式：先工廠、ImGui 建好後 Initialize、ImGui 先關再銷毀產品）；D-shell-3 arguments 含程式名；D-shell-4 綁定目錄以列舉加入；D-shell-5 本批寫入 framework DI 6 與新 Replacement Criterion；D-shell-6 外殼不 catch；D-shell-7 platform-sdl Replacement Criterion 2 照草圖改寫；D-shell-8 最小化節流與 HiDPI 不放進綁定。草圖定稿，通知 pvp v8 owner。
 - 2026-11-01，使用者：「照建議核准」。v8-engine-io-user-files 的[契約、行為變更與條文](io-user-files-judgment-change.md)：路徑包含判定採修正版 (a)（OS 解析、和 framework 舊版不同的 4 個情況由 T2 接手）；framework 的 `IsPathWithin` 不在這批修（T2 合併前 ui_editor 只給 `--asset-catalog` 時仍可匯出到資產根目錄）；AD2（engine/io 新增使用者路徑輔助、engine_tests 連結 `GYO::Os`）；io.md 的「User files」與 Replacement Criteria 3 補句。Design Invariants 不變。
 - 2026-11-01，使用者：「照建議核准」。v8-engine-platform-path-dialog 的 [契約與 DI 條文](path-dialog-judgment-change.md)：Windows 重複回呼採 (a)「Failed 之後最多再一個答案」；sanitizer 突變採 (1)（pd-filter-copy 移一般目錄，pd-mailbox-not-shared 改預期在 ASan 樹重跑）；AD1（選擇窗能力與程序級登記表）；測試縫放 Native 標頭；platform-sdl.md 的契約、DI 10、DI 4／7 補句、Replacement Criteria 7～9。Replacement Criteria 2 的改寫延到外殼批。
 - 2026-11-01，使用者：「核准」。v8-framework-guard-ratchet 的 [判定變更與 DI 條文](guard-ratchet-judgment-change.md)：framework DI 2、DI 3、DI 5、Replacement Criteria 改寫；守衛、例外清單、configure 連結檢查；突變目錄搬到本計畫。
