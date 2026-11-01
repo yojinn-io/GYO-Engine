@@ -2,7 +2,8 @@
 #include "gyo/audio_editor/WavFile.hpp"
 
 #include "engine/os/Console.hpp"
-#include "engine/os/Files.hpp"
+#include "engine/io/fs/NativeFileSystem.hpp"
+#include "engine/io/helpers/ReadAllBytes.hpp"
 
 #include <array>
 #include <cstdio>
@@ -43,22 +44,21 @@ int Usage(const std::string_view message) {
 }
 
 int Info(const std::string& path) {
-    auto reader = Engine::Os::Files::FileReader::Open(path);
-    if (!reader) {
-        std::cerr << "error: cannot open " << path << ": " << Engine::Base::Describe(reader.error()) << '\n';
+    Engine::IO::FS::NativeFileSystem files;
+    auto uri = Engine::IO::FS::NativeFileUri(path);
+    if (!uri) {
+        std::cerr << "error: cannot open " << path << ": " << Engine::Base::Describe(uri.error()) << '\n';
         return 3;
     }
-    std::vector<std::byte> bytes;
-    std::array<std::byte, 64 * 1024> buffer{};
-    while (true) {
-        const auto read = reader->Read(buffer);
-        if (!read) {
-            std::cerr << "error: cannot read " << path << ": " << Engine::Base::Describe(read.error()) << '\n';
-            return 3;
-        }
-        if (*read == 0) break;
-        bytes.insert(bytes.end(), buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(*read));
+    // The same limit as conversion (SoundExport.cpp).
+    Engine::IO::Helpers::ReadAllOptions read;
+    read.maxBytes = 64U * 1024U * 1024U;
+    const auto whole = Engine::IO::Helpers::ReadAllBytes(files, uri.value(), read);
+    if (!whole) {
+        std::cerr << "error: cannot read " << path << ": " << Engine::Base::Describe(whole.error()) << '\n';
+        return 3;
     }
+    const std::vector<std::byte>& bytes = whole.value();
     const auto decoded = DecodeWav(bytes);
     if (!decoded) {
         std::cerr << "error: " << path << ": " << Engine::Base::Describe(decoded.error()) << '\n';

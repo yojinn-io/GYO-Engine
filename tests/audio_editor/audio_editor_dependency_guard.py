@@ -23,8 +23,8 @@ TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*\b")
 # The catalog entry is written through the framework layer, whose own guard
 # (tests/framework/framework_dependency_guard.py) keeps the same rule (docs/framework/architecture.md, Design
 # Invariant 2).
-ALLOWED_INCLUDE_PREFIXES = ("gyo/audio_editor/", "gyo/framework/", "engine/base/", "engine/os/", "engine/audio/")
-ALLOWED_TARGETS = {"GYO::Base", "GYO::Audio", "GYO::Os", "GYO::ToolFramework"}
+ALLOWED_INCLUDE_PREFIXES = ("gyo/audio_editor/", "gyo/framework/", "engine/base/", "engine/os/", "engine/audio/", "engine/io/")
+ALLOWED_TARGETS = {"GYO::Base", "GYO::Audio", "GYO::Engine", "GYO::Os", "GYO::ToolFramework"}
 
 
 def scan(root: Path) -> list[str]:

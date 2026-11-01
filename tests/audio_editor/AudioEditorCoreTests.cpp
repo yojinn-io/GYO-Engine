@@ -192,7 +192,8 @@ TEST_CASE("ExportSound writes the clip and its entry and never touches the sourc
     CHECK(report->frames == 653); // floor(300 * 48000 / 22050), as the script's reference has it
     CHECK(ReadBytes(source) == sourceBytes);
     CHECK(std::filesystem::exists(assets / "audio" / "reload.wav"));
-    CHECK_FALSE(std::filesystem::exists(assets / "audio" / "reload.wav.gyo-tmp"));
+    // No temporary file is left beside the clip, whatever engine/io names it.
+    CHECK(std::distance(std::filesystem::directory_iterator(assets / "audio"), std::filesystem::directory_iterator{}) == 1);
     CHECK(ReadText(assets / "asset_catalog.json").find("\"path\": \"audio/reload.wav\"") != std::string::npos);
 
     // The same request again gives the same bytes (Design Invariant 7) and updates in place.

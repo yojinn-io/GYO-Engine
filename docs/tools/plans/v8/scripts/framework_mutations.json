@@ -90,13 +90,53 @@
       "id": "ae-guard-json-target",
       "what": "The audio editor names nlohmann_json again instead of writing the catalog through the framework",
       "file": "tools/audio_editor/CMakeLists.txt",
-      "find": "PRIVATE GYO::Audio GYO::Os GYO::ToolFramework",
-      "replace": "PRIVATE GYO::Audio GYO::Os GYO::ToolFramework nlohmann_json::nlohmann_json",
+      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework",
+      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework nlohmann_json::nlohmann_json",
       "command": [
         "{python}",
         "tests/audio_editor/audio_editor_dependency_guard.py"
       ],
       "expect": "names nlohmann_json::nlohmann_json"
+    },
+    {
+      "id": "ui-io-within-false",
+      "what": "The export guard never finds a path inside the asset root",
+      "file": "tools/ui_editor/src/DocumentSession.cpp",
+      "find": "    return within.value();\n}",
+      "replace": "    return false;\n}",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: export rejects every path below the mounted app asset root"
+    },
+    {
+      "id": "ui-io-no-parents",
+      "what": "ui_editor's export no longer creates missing folders",
+      "file": "tools/ui_editor/src/DocumentSession.cpp",
+      "find": "bytes, {.createParentDirectories = true})",
+      "replace": "bytes, {.createParentDirectories = false})",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: valid document exports without a catalog"
+    },
+    {
+      "id": "ae-io-no-parents",
+      "what": "The audio editor no longer creates the clip's missing folders",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "{.createParentDirectories = true});",
+      "replace": "{.createParentDirectories = false});",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "ExportSound writes the clip*",
+      "expect": "REQUIRE\\( report.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-guard-io-platform",
+      "what": "The audio editor's CMake names the SDL platform beside engine/io",
+      "file": "tools/audio_editor/CMakeLists.txt",
+      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework",
+      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::PlatformSDL GYO::Os GYO::ToolFramework",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "names GYO::PlatformSDL"
     }
   ]
 }
