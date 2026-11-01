@@ -71,6 +71,7 @@ framework-rework
 | v8-framework-catalog-structure | 2026-11-01 | [catalog 結構](../../../dev_logs/2026_11_01_framework_rework_catalog_structure.zh-Hant.md) |
 | v8-framework-catalog-extra-fields | 2026-11-01 | [保留額外欄位](../../../dev_logs/2026_11_01_framework_rework_catalog_extra_fields.zh-Hant.md) |
 | v8-framework-engine-access | 2026-11-01 | [可用任何 Engine 模組](../../../dev_logs/2026_11_01_framework_rework_engine_access.zh-Hant.md) |
+| v8-framework-invariants | 2026-11-02 | [收尾與整條線總結](../../../dev_logs/2026_11_02_framework_rework_invariants.zh-Hant.md) |
 
 ## 決策（2026-11-01 提出，同日全部照建議核准）
 

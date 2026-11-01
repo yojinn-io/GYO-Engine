@@ -13,11 +13,9 @@ function(gyo_framework_warnings target)
 endfunction()
 
 add_library(gyo_tool_framework STATIC
+    src/AbsolutePath.cpp
     src/CatalogPlan.cpp
-    src/CatalogRegistration.cpp
-    src/FileService.cpp
     src/HeadlessShell.cpp
-    src/PathDialog.cpp
     src/ReadOnlyAssetCatalog.cpp
 )
 add_library(GYO::ToolFramework ALIAS gyo_tool_framework)
@@ -39,15 +37,6 @@ if(TARGET GYO::PlatformSDL)
     target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL)
     list(APPEND _gyo_framework_targets gyo_tool_framework_window)
 endif()
-
-# What the core still links or builds that its Design Invariant 2 forbids: the
-# catalog registration's JSON parser and the old window host and path dialogs,
-# until the JSON binding, the shell, the ImGui binding and Engine's path
-# dialogs replace them (removed in v8-framework-invariants,
-# docs/architecture/plans/framework-rework). Kept in its own file so that this
-# one has no exception; the sites are frozen in
-# tests/framework/framework_guard_allowlist.txt.
-include("${CMAKE_CURRENT_SOURCE_DIR}/Legacy.cmake")
 
 foreach(_target IN LISTS _gyo_framework_targets)
     gyo_framework_warnings(${_target})

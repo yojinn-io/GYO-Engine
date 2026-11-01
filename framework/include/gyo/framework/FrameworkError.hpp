@@ -15,7 +15,9 @@ namespace Gyo::Tools::Framework {
 template <class T, class E>
 using Result = Engine::Base::Result<T, E>;
 
-// File system access on user paths.
+// File system access on user paths. The framework produces none since its file
+// access moved to engine/io (v8-framework-invariants); kept for the tools that
+// report it, until it moves to them.
 enum class FileErrorCode : std::uint8_t {
     ReadFailed = 1,
     WriteFailed,

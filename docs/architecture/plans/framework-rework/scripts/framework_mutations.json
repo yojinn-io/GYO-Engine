@@ -1,87 +1,7 @@
 {
   "version": 1,
-  "description": "Declared mutants of the framework (docs/framework/architecture.md), owned by docs/architecture/plans/framework-rework (moved from docs/tools/plans/v8/scripts/framework_mutations.json in v8-framework-guard-ratchet). Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/framework-rework/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its check fails with the expected message. The binding rules (framework/bindings/) get their mutants when the binding directories exist (v8-framework-shell, v8-framework-catalog-structure); until then the guard's self-test covers them.",
+  "description": "Declared mutants of the framework (docs/framework/architecture.md), owned by docs/architecture/plans/framework-rework (moved from docs/tools/plans/v8/scripts/framework_mutations.json in v8-framework-guard-ratchet). Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/framework-rework/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its check fails with the expected message. Retired in v8-framework-invariants with the code or rule they mutated: fw-catalog-*, fw-path-dot-dot (the old CatalogRegistration; the JSON binding's tests C1–C7 and E1–E4 cover RegisterAsset, with the fw-cat-* and fw-extra-* mutants), fw-inbox-* (PathDialogInbox; Engine's pd-* cover the path dialogs), and the allowlist and SDL_GPU-rule mutants fw-guard-allowlisted-file-one-more, fw-guard-allowlist-stale, fw-guard-gpu-added, fw-guard-gpu-rule-dropped, fw-guard-input-native-allowlistable, fw-link-trade, fw-link-stale-*, fw-link-binding-line-allowed, fw-link-comment-counts, fw-link-duplicate-allowed.",
   "mutants": [
-    {
-      "id": "fw-catalog-taken-path",
-      "what": "A path registered under another id is accepted",
-      "file": "framework/src/CatalogRegistration.cpp",
-      "find": "} else if (entry[\"path\"] == registration.path) {",
-      "replace": "} else if (false) {",
-      "target": "gyo_framework_tests",
-      "cases": "*refuses what the content contract*",
-      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "fw-catalog-other-type",
-      "what": "An id registered with another type is overwritten with the caller's type",
-      "file": "framework/src/CatalogRegistration.cpp",
-      "find": "if (entry[\"type\"].get_ref<const std::string&>() != registration.type) {",
-      "replace": "if (false) {",
-      "target": "gyo_framework_tests",
-      "cases": "*refuses what the content contract*",
-      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "fw-path-dot-dot",
-      "what": "A '..' segment is accepted in an asset path",
-      "file": "framework/src/CatalogRegistration.cpp",
-      "find": "if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
-      "replace": "if (segment.empty() || segment == \".\") return false;",
-      "target": "gyo_framework_tests",
-      "cases": "*refuses what the content contract*",
-      "expect": "REQUIRE_FALSE\\( result.has_value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "fw-catalog-indentation-lost",
-      "what": "A new entry does not follow the last entry's indentation",
-      "file": "framework/src/CatalogRegistration.cpp",
-      "find": "text.insert(end, \",\\n\" + Indentation(text, begin) + entry);",
-      "replace": "text.insert(end, \",\\n\" + entry);",
-      "target": "gyo_framework_tests",
-      "cases": "*appends one line*",
-      "expect": "CHECK\\( update->text =="
-    },
-    {
-      "id": "fw-catalog-type-ignored",
-      "what": "The new entry's type is always sound, not the caller's",
-      "file": "framework/src/CatalogRegistration.cpp",
-      "find": "Json(registration.type).dump()",
-      "replace": "std::string(\"\\\"sound\\\"\")",
-      "target": "gyo_framework_tests",
-      "cases": "*type is the caller's*",
-      "expect": "REQUIRE\\( update.has_value\\(\\) \\) is NOT correct"
-    },
-    {
-      "id": "fw-catalog-empty-type",
-      "what": "An empty asset type is not refused as a registration",
-      "file": "framework/src/CatalogRegistration.cpp",
-      "find": "    if (registration.type.empty()) {",
-      "replace": "    if (false) {",
-      "target": "gyo_framework_tests",
-      "cases": "*refuses what the content contract*",
-      "expect": "\"game.audio.new\", \"\", \"x.wav\"\\}\\) == CatalogErrorCode::InvalidRegistration \\) is NOT correct"
-    },
-    {
-      "id": "fw-inbox-order",
-      "what": "The inbox hands answers over in reverse order",
-      "file": "framework/src/PathDialog.cpp",
-      "find": "answers_.push_back(std::move(answer));",
-      "replace": "answers_.insert(answers_.begin(), std::move(answer));",
-      "target": "gyo_framework_tests",
-      "cases": "*path dialog inbox*",
-      "expect": "CHECK\\( taken\\[0\\].tag == 3 \\) is NOT correct"
-    },
-    {
-      "id": "fw-inbox-take-keeps",
-      "what": "A taken answer stays in the inbox",
-      "file": "framework/src/PathDialog.cpp",
-      "find": "return std::exchange(answers_, {});",
-      "replace": "return answers_;",
-      "target": "gyo_framework_tests",
-      "cases": "*path dialog inbox*",
-      "expect": "CHECK\\( inbox.Take\\(\\).empty\\(\\) \\) is NOT correct"
-    },
     {
       "id": "fw-guard-unlisted-engine-target",
       "what": "The framework's CMake names an Engine target outside its positive list (GYO::Input was the example until v8-framework-engine-access allowed it)",
@@ -168,7 +88,7 @@
     },
     {
       "id": "fw-guard-core-sdl-call",
-      "what": "Core code calls an SDL function (a core file without allowlist entries)",
+      "what": "Core code calls an SDL function",
       "file": "framework/src/ReadOnlyAssetCatalog.cpp",
       "find": "#include <utility>\n",
       "replace": "#include <utility>\nstatic void Trace() { SDL_Log(\"mount\"); }\n",
@@ -180,7 +100,7 @@
     },
     {
       "id": "fw-guard-core-json-link",
-      "what": "The core's own CMake links nlohmann (its only JSON link is in framework/Legacy.cmake)",
+      "what": "The core's own CMake links nlohmann (the core has no JSON link)",
       "file": "framework/CMakeLists.txt",
       "find": "    PUBLIC GYO::Engine\n",
       "replace": "    PUBLIC GYO::Engine nlohmann_json::nlohmann_json\n",
@@ -189,30 +109,6 @@
         "tests/framework/framework_dependency_guard.py"
       ],
       "expect": "framework/CMakeLists\\.txt: names nlohmann_json::nlohmann_json"
-    },
-    {
-      "id": "fw-guard-allowlisted-file-one-more",
-      "what": "An allowlisted legacy file gains one more forbidden target",
-      "file": "framework/Legacy.cmake",
-      "find": "            SDL3::SDL3\n",
-      "replace": "            SDL3::SDL3\n            SDL3::SDL3\n",
-      "command": [
-        "{python}",
-        "tests/framework/framework_dependency_guard.py"
-      ],
-      "expect": "framework/Legacy\\.cmake target has 12 findings, allowlisted 11"
-    },
-    {
-      "id": "fw-guard-allowlist-stale",
-      "what": "An allowlist count above the sites it covers is accepted",
-      "file": "tests/framework/framework_guard_allowlist.txt",
-      "find": "framework/src/ImGuiSdlHost.cpp symbol 39 ",
-      "replace": "framework/src/ImGuiSdlHost.cpp symbol 40 ",
-      "command": [
-        "{python}",
-        "tests/framework/framework_dependency_guard.py"
-      ],
-      "expect": "ImGuiSdlHost\\.cpp symbol has 39 findings, allowlisted 40; shrink the allowlist"
     },
     {
       "id": "fw-guard-binding-input-target",
@@ -225,36 +121,6 @@
         "tests/framework/framework_dependency_guard.py"
       ],
       "expect": "framework/bindings/json/CMakeLists\\.txt: names GYO::Input"
-    },
-    {
-      "id": "fw-guard-gpu-added",
-      "what": "An allowlisted legacy file gains an SDL_GPU use; its symbol count stays as allowlisted, since the symbol rule does not count SDL_GPU names",
-      "file": "framework/src/ImGuiSdlHost.cpp",
-      "find": "const SDL_Event& event = Engine::Platform::Sdl::NativeEvent(view_);",
-      "replace": "const SDL_Event& event = Engine::Platform::Sdl::NativeEvent(view_); SDL_GPUDevice* gpu = nullptr;",
-      "command": [
-        "{python}",
-        "tests/framework/framework_dependency_guard.py"
-      ],
-      "expect": "framework/src/ImGuiSdlHost\\.cpp: uses SDL_GPUDevice"
-    },
-    {
-      "id": "fw-guard-gpu-rule-dropped",
-      "what": "The guard drops its SDL_GPU rule while the allowlist still holds legacy SDL_ sites",
-      "file": "tests/framework/framework_dependency_guard.py",
-      "find": "        hard.extend(f\"{relative}: uses {name}\" for name in gpu)\n",
-      "replace": "        pass\n",
-      "command": [
-        "{python}",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/framework",
-        "-p",
-        "test_framework_dependency_guard.py"
-      ],
-      "expect": "FAIL: test_trading_an_allowlisted_site_for_an_old_refusal_fails"
     },
     {
       "id": "fw-guard-binding-list-widened",
@@ -275,11 +141,11 @@
       "expect": "FAIL: test_input_target_in_a_binding_fails"
     },
     {
-      "id": "fw-guard-input-native-allowlistable",
-      "what": "An input *Native header in the core becomes an allowlistable finding instead of a hard one",
+      "id": "fw-guard-allowlist-returns",
+      "what": "The removed allowlist comes back unnoticed",
       "file": "tests/framework/framework_dependency_guard.py",
-      "find": " or (\n                    owner == \"core\" and include.startswith(INPUT_PREFIX) and NATIVE_HEADER.match(include))",
-      "replace": "",
+      "find": "    if (root / REMOVED_ALLOWLIST).exists():",
+      "replace": "    if False:",
       "command": [
         "{python}",
         "-m",
@@ -290,7 +156,55 @@
         "-p",
         "test_framework_dependency_guard.py"
       ],
-      "expect": "FAIL: test_input_native_header_in_the_core_is_never_allowlisted"
+      "expect": "FAIL: test_the_removed_allowlist_coming_back_fails"
+    },
+    {
+      "id": "fw-guard-core-sdl-gpu",
+      "what": "Core code names an SDL_GPU type (no exception covers it since the allowlist went)",
+      "file": "framework/src/ReadOnlyAssetCatalog.cpp",
+      "find": "#include \"engine/asset/AssetCatalog.hpp\"\n",
+      "replace": "#include \"engine/asset/AssetCatalog.hpp\"\nstruct SDL_GPUDevice* gyoMutantDevice = nullptr;\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "framework/src/ReadOnlyAssetCatalog\\.cpp: uses SDL_GPUDevice"
+    },
+    {
+      "id": "fw-guard-core-input-native",
+      "what": "The core includes Engine's SDL input native header",
+      "file": "framework/src/ReadOnlyAssetCatalog.cpp",
+      "find": "#include \"engine/asset/ContentManifest.hpp\"\n",
+      "replace": "#include \"engine/asset/ContentManifest.hpp\"\n#include \"engine/input/backend/sdl/SdlInputNative.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "includes engine/input/backend/sdl/SdlInputNative\\.hpp"
+    },
+    {
+      "id": "fw-abs-not-normal",
+      "what": "AbsolutePath keeps '.' and '..' segments of an absolute result (POSIX: on Windows Engine's MakeAbsolute already removes dot segments)",
+      "file": "framework/src/AbsolutePath.cpp",
+      "find": "    return (converted ? std::move(converted.value()) : path).lexically_normal();",
+      "replace": "    return converted ? std::move(converted.value()) : path;",
+      "target": "gyo_framework_tests",
+      "expect": "is NOT correct",
+      "cases": "A*",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "fw-abs-relative",
+      "what": "AbsolutePath leaves a relative path relative",
+      "file": "framework/src/AbsolutePath.cpp",
+      "find": "    auto absolute = OsFiles::MakeAbsolute(text.value());\n    if (!absolute) {",
+      "replace": "    auto absolute = OsFiles::MakeAbsolute(text.value());\n    if (true) {",
+      "target": "gyo_framework_tests",
+      "expect": "CHECK\\( result.is_absolute\\(\\) \\) is NOT correct",
+      "cases": "A*"
     },
     {
       "id": "fw-link-closure-sdl",
@@ -300,17 +214,7 @@
       "replace": "set(_gyo_framework_targets gyo_tool_framework)\nset(_gyo_lib SDL3)\ntarget_link_libraries(gyo_tool_framework PRIVATE ${_gyo_lib}::${_gyo_lib})\n",
       "target": "gyo_framework_tests",
       "expect_build_failure": true,
-      "expect": "gyo_tool_framework \\(core\\) links 2 forbidden targets"
-    },
-    {
-      "id": "fw-link-trade",
-      "what": "A legacy forbidden link is traded for another one; the count stays, the names do not",
-      "file": "framework/Legacy.cmake",
-      "find": "target_link_libraries(gyo_tool_framework PRIVATE nlohmann_json::nlohmann_json)\n",
-      "replace": "set(_gyo_lib SDL3)\ntarget_link_libraries(gyo_tool_framework PRIVATE ${_gyo_lib}::${_gyo_lib})\n",
-      "target": "gyo_framework_tests",
-      "expect_build_failure": true,
-      "expect": "gyo_tool_framework \\(core\\) links 1 forbidden targets \\[SDL3::SDL3\\], allowlisted 1 \\[nlohmann_json::nlohmann_json\\]"
+      "expect": "gyo_tool_framework \\(core\\) links 1 forbidden targets \\[SDL3::SDL3\\]"
     },
     {
       "id": "fw-link-genex",
@@ -320,91 +224,7 @@
       "replace": "set(_gyo_framework_targets gyo_tool_framework)\nset(_gyo_lib SDL3)\ntarget_link_libraries(gyo_tool_framework PRIVATE \"$<$<CONFIG:Debug>:${_gyo_lib}::${_gyo_lib}>\")\n",
       "target": "gyo_framework_tests",
       "expect_build_failure": true,
-      "expect": "links 2 forbidden targets \\[\\$<\\$<CONFIG:Debug>:SDL3::SDL3>"
-    },
-    {
-      "id": "fw-link-stale-line-ignored",
-      "what": "A link line whose target the core does not define is not refused",
-      "file": "tests/framework/framework_dependency_guard.py",
-      "find": "                problems.append(f\"{where}: {target} is not a framework target; remove the line\")\n            elif",
-      "replace": "                pass\n            elif",
-      "command": [
-        "{python}",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/framework",
-        "-p",
-        "test_framework_dependency_guard.py"
-      ],
-      "expect": "FAIL: test_a_link_line_for_a_target_the_framework_does_not_define_fails"
-    },
-    {
-      "id": "fw-link-binding-line-allowed",
-      "what": "A link line for a binding's target is accepted",
-      "file": "tests/framework/framework_dependency_guard.py",
-      "find": "            elif owner_of(defined[target])[0] != \"core\":\n                problems.append(f\"{where}: {target} is not in the framework's core; bindings have no exceptions\")\n",
-      "replace": "",
-      "command": [
-        "{python}",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/framework",
-        "-p",
-        "test_framework_dependency_guard.py"
-      ],
-      "expect": "bindings have no exceptions"
-    },
-    {
-      "id": "fw-link-stale-real",
-      "what": "The real allowlist keeps a line for a target the core no longer defines (v8-framework-shell regression: refused in every configuration by the guard, no longer by configure)",
-      "file": "tests/framework/framework_guard_allowlist.txt",
-      "find": "target:gyo_tool_framework_gui link 5",
-      "replace": "target:gyo_tool_framework_gone link 5",
-      "command": [
-        "{python}",
-        "tests/framework/framework_dependency_guard.py"
-      ],
-      "expect": "gyo_tool_framework_gone is not a framework target; remove the line"
-    },
-    {
-      "id": "fw-link-comment-counts",
-      "what": "A commented-out add_library counts as defining the target",
-      "file": "tests/framework/framework_dependency_guard.py",
-      "find": "            text = CMAKE_COMMENT.sub(\"\", path.read_text(encoding=\"utf-8\", errors=\"replace\"))",
-      "replace": "            text = path.read_text(encoding=\"utf-8\", errors=\"replace\")",
-      "command": [
-        "{python}",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/framework",
-        "-p",
-        "test_framework_dependency_guard.py"
-      ],
-      "expect": "FAIL: test_a_link_line_reads_add_library_as_cmake_does"
-    },
-    {
-      "id": "fw-link-duplicate-allowed",
-      "what": "A second link line for the same target is accepted",
-      "file": "tests/framework/framework_dependency_guard.py",
-      "find": "            if target in link_targets:\n                problems.append(f\"{where}: duplicate line for {target}\")\n                continue\n",
-      "replace": "",
-      "command": [
-        "{python}",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests/framework",
-        "-p",
-        "test_framework_dependency_guard.py"
-      ],
-      "expect": "FAIL: test_a_duplicate_link_line_fails"
+      "expect": "links 1 forbidden targets \\[\\$<\\$<CONFIG:Debug>:SDL3::SDL3>\\]"
     }
   ]
 }
