@@ -1,6 +1,6 @@
 # v8-product-hit-presentation 的事前宣告
 
-更新：2026-11-01。Owner：`object_fps_pvp`。**狀態：草稿，等你決定 4 項與模型表**。計畫：[hitbox-plan](hitbox-plan.md) 第 8 節（「受擊動畫依部位、驗收工具依部位推算傷害」）。契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §4.6、§7（`pv9-upper-body-in-hitbox` (a)）。估時 6～10 h（計畫估 3～5 h，見「為什麼比計畫大」；超過 15 h 停下回報）。
+更新：2026-11-01。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hit-presentation-declaration-approve`，4 項照建議 (a)，模型表照表）。計畫：[hitbox-plan](hitbox-plan.md) 第 8 節（「受擊動畫依部位、驗收工具依部位推算傷害」）。契約：[protocol-v9](../../protocol-v9.zh-Hant.md) §4.6、§7（`pv9-upper-body-in-hitbox` (a)）。估時 6～10 h（計畫估 3～5 h，見「為什麼比計畫大」；超過 15 h 停下回報）。
 
 ## 這批做什麼
 
