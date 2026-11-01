@@ -17,9 +17,10 @@ inline constexpr std::size_t MaxPublishedShotReferences = 64;
 inline constexpr unsigned ActionSendRate = 30;
 
 // Product policy. Wire Ready/Welcome will use this same source in batch 03.
+// HP and damage are in milli-points (pv9 §3): 100 HP is 100000.
 struct CombatRules final {
-    std::uint32_t maximumHp{100};
-    std::uint32_t shotDamage{25};
+    std::uint32_t maximumHp{100000};
+    std::uint32_t shotDamage{25000};
     std::uint64_t cooldownTicks{10};
     float shotRange{100};
     std::chrono::nanoseconds maximumReferenceAge{std::chrono::milliseconds{250}};
@@ -27,10 +28,22 @@ struct CombatRules final {
     std::uint64_t reloadTicks{90};
     std::uint64_t respawnTicks{180};
     // The most damage one decision may deal, part multipliers included (pv7
-    // §7); shotDamage stays the base (Body) damage. v7.1 has no multiplier.
-    std::uint32_t maximumShotDamage{25};
+    // §7, pv9 §3); shotDamage stays the base (Body) damage.
+    std::uint32_t maximumShotDamage{50000};
+    // Part multipliers in permille of shotDamage (pv9 §3). Match carries them
+    // only; the wire carries maximumShotDamage. Leg reaches the wire in pv9's
+    // leg batch.
+    std::uint32_t headPermille{2000};
+    std::uint32_t bodyPermille{1000};
+    std::uint32_t legPermille{750};
 };
 inline constexpr CombatRules PvpCombatRules{};
+
+// Whole points a Client shows for milli-points (pv9 §3): rounded up, so a
+// living player (hp >= 1) never reads 0.
+[[nodiscard]] constexpr std::uint32_t DisplayPoints(std::uint32_t milliPoints) noexcept {
+    return milliPoints / 1000 + (milliPoints % 1000 != 0 ? 1U : 0U);
+}
 
 // A1 (pv7 §6): W, the furthest step a request may claim ahead of the
 // shooter's last resolved command, and the cooldown hold bound. K follows the
@@ -43,8 +56,12 @@ inline constexpr std::uint64_t MaxShotHoldTicks = 2;
 }
 
 enum class ActionKind { Shot = 0, Reload = 1 };
-// Where a shot hit a player (pv7 §7). v7.1's Match produces only Body.
-enum class HitPart : std::uint8_t { Unspecified = 0, Body = 1, Head = 2 };
+// Where a shot hit a player (pv7 §7, pv9 §2). Match produces only Body until
+// the hitbox batch judges parts.
+enum class HitPart : std::uint8_t { Unspecified = 0, Body = 1, Head = 2, Leg = 3 };
+[[nodiscard]] constexpr bool PlayerHitPart(HitPart part) noexcept {
+    return part == HitPart::Body || part == HitPart::Head || part == HitPart::Leg;
+}
 
 // Historical Shot names also carry reload actions.
 struct ShotRequest final {
@@ -116,7 +133,7 @@ struct ShotDecision final {
     ActionKind kind{ActionKind::Shot};
     std::uint64_t lifeGeneration{1};
     std::uint64_t targetLifeGeneration{};
-    HitPart hitPart{HitPart::Unspecified}; // Body or Head exactly for a player hit
+    HitPart hitPart{HitPart::Unspecified}; // Body, Head or Leg exactly for a player hit
     bool operator==(const ShotDecision&) const = default;
 };
 
@@ -131,10 +148,12 @@ struct CombatState final {
     std::uint64_t reloadEndTick{};
     ActionId lastShotActionId{};
     std::uint64_t lastShotTick{};
-    // Presentation-only hit record of this life (pv6 contract §2, pv7 §7): the
-    // tick of the last hit, hits taken, the last attacker and the part it hit.
-    // All zero before the first hit; a respawn resets them with the rest of the
-    // state. Match never reads them.
+    // Hit record of this life (pv6 contract §2, pv7 §7): the tick of the last
+    // hit, hits taken, the last attacker and the part it hit. All zero before
+    // the first hit; a respawn resets them with the rest of the state. From
+    // pv9 the hit, shot and reload records select the upper body of the judged
+    // pose (pv9-upper-body-in-hitbox (a), protocol-v9 §7): decision inputs the
+    // Match reads from the hitbox batch on, no longer presentation only.
     std::uint64_t lastDamageTick{};
     std::uint32_t damageCount{};
     PlayerId lastAttackerId{};
@@ -143,10 +162,11 @@ struct CombatState final {
 };
 
 // pv7 §7 decode checks shared by every reader of the wire values: a player
-// hit carries Body or Head (v8's Head accepted already), any other decision
-// Unspecified; and shot damage <= maximum shot damage <= maximum hp.
+// hit carries Body, Head or Leg (pv9 §2), any other decision Unspecified; and
+// shot damage <= maximum shot damage <= maximum hp.
 [[nodiscard]] constexpr bool ValidDecisionHitPart(ShotHitKind kind, int part) noexcept {
-    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head);
+    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head) ||
+                            part == static_cast<int>(HitPart::Leg);
     return kind == ShotHitKind::Player ? playerPart : part == static_cast<int>(HitPart::Unspecified);
 }
 [[nodiscard]] constexpr bool ValidShotDamageBounds(std::uint32_t shotDamage, std::uint32_t maximumShotDamage,
@@ -154,8 +174,35 @@ struct CombatState final {
     return shotDamage > 0 && shotDamage <= maximumShotDamage && maximumShotDamage <= maximumHp;
 }
 
+// Damage of one part before the target's hp caps it (pv9 §3): shotDamage x
+// permille / 1000, the product in 64 bits.
+[[nodiscard]] constexpr std::uint64_t PartDamage(std::uint32_t shotDamage, std::uint32_t permille) noexcept {
+    return static_cast<std::uint64_t>(shotDamage) * permille / 1000;
+}
+// Match's rule check of one part: the product divides exactly, and the damage
+// is at least 1 and at most maximumShotDamage.
+[[nodiscard]] constexpr bool ValidPartDamage(std::uint32_t shotDamage, std::uint32_t permille,
+                                             std::uint32_t maximumShotDamage) noexcept {
+    const auto damage = PartDamage(shotDamage, permille);
+    return static_cast<std::uint64_t>(shotDamage) * permille % 1000 == 0 && damage >= 1 && damage <= maximumShotDamage;
+}
+[[nodiscard]] constexpr bool ValidPartDamage(const CombatRules& rules) noexcept {
+    return ValidPartDamage(rules.shotDamage, rules.headPermille, rules.maximumShotDamage) &&
+           ValidPartDamage(rules.shotDamage, rules.bodyPermille, rules.maximumShotDamage) &&
+           ValidPartDamage(rules.shotDamage, rules.legPermille, rules.maximumShotDamage);
+}
+// The damage one hit on a part deals to a target with hp left (pv9 §3). The
+// rules passed ValidPartDamage, so the part damage fits 32 bits.
+[[nodiscard]] constexpr std::uint32_t ShotDamage(const CombatRules& rules, HitPart part, std::uint32_t hp) noexcept {
+    const auto permille = part == HitPart::Head ? rules.headPermille
+                        : part == HitPart::Leg  ? rules.legPermille
+                                                : rules.bodyPermille;
+    const auto damage = PartDamage(rules.shotDamage, permille);
+    return damage < hp ? static_cast<std::uint32_t>(damage) : hp;
+}
+
 // Decode check of the hit record (pv6 contract §2, four fields in pv7 §7):
-// all zero or all set, a set part being Body or Head; a hit lies within the
+// all zero or all set, a set part being Body, Head or Leg; a hit lies within the
 // current life state and the snapshot, is not self-inflicted and counts at
 // most one per hit point; a dead player died of its last hit.
 [[nodiscard]] constexpr bool ValidDamageRecord(const CombatState& combat, bool dead, std::uint64_t lifeStateTick,
@@ -163,7 +210,7 @@ struct CombatState final {
     const bool none = combat.lastDamageTick == 0;
     if ((combat.damageCount == 0) != none || (combat.lastAttackerId == 0) != none) return false;
     if ((combat.lastHitPart == HitPart::Unspecified) != none ||
-        (!none && combat.lastHitPart != HitPart::Body && combat.lastHitPart != HitPart::Head)) return false;
+        (!none && !PlayerHitPart(combat.lastHitPart))) return false;
     if (dead && (none || combat.lastDamageTick != lifeStateTick)) return false;
     return none || (lifeStateTick <= combat.lastDamageTick && combat.lastDamageTick <= snapshotTick &&
                     combat.lastAttackerId != combat.playerId && combat.damageCount <= maximumHp);

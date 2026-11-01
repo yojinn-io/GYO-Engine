@@ -3,6 +3,7 @@
   "assets": [
     { "id": "object_fps_pvp.player.presentation", "type": "text", "path": "characters/player/presentation.json" },
     { "id": "object_fps_pvp.player.character", "type": "text", "path": "characters/player/character.json" },
+    { "id": "object_fps_pvp.player.hitbox", "type": "text", "path": "characters/player/hitbox.json" },
     { "id": "object_fps_pvp.player.animations", "type": "text", "path": "characters/player/animations.animset.json" },
     { "id": "object_fps_pvp.arena", "type": "text", "path": "pvp_arena.json" },
     { "id": "object_fps_pvp.arena.corners", "type": "text", "path": "pvp_corners.json" },

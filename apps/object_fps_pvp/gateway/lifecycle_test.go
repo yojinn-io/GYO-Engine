@@ -6,8 +6,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.T) {
@@ -18,8 +18,9 @@ func TestV5LifeTransitionCancelsOnlyMovementAndKeepsMixedLifeActions(t *testing.
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: 200,
 		Players: []*runtime.PlayerState{{PlayerId: 7, MovementEpoch: 2, LifeGeneration: 2, LifeState: runtime.LifeState_LIFE_ALIVE, LifeStateTick: 200, Grounded: true}},
-		Combat:  []*runtime.CombatState{{PlayerId: 7, LifeGeneration: 2, Hp: 100, MagazineAmmo: 12}},
+		Combat:  []*runtime.CombatState{{PlayerId: 7, LifeGeneration: 2, Hp: 100000, MagazineAmmo: 12}},
 	}}
+	fillAnimation(e.GetSnapshot())
 	s.runtimeMessage(e)
 	if got := actionMessages(s.link.batch()); len(got) != 1 || len(got[0].Shots) != 1 {
 		t.Fatal("respawn did not isolate movement from the queued actions")

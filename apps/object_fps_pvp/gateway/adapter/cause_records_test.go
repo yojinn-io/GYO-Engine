@@ -5,15 +5,15 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // pv7 §5 (D-4): the Match's hold reaches the Client as it came, its presence
 // included, and no value of it invalidates a snapshot (D-5).
 func TestSnapshotCarriesTheMatchHoldAsItCame(t *testing.T) {
 	for _, hold := range []*uint32{nil, proto.Uint32(0), proto.Uint32(1234), proto.Uint32(math.MaxUint32)} {
-		out, err := SnapshotForClient(&runtime.WorldSnapshot{Tick: 7, MatchHoldUs: hold}, nil)
+		out, err := snapshotForClient(&runtime.WorldSnapshot{Tick: 7, MatchHoldUs: hold}, nil)
 		if err != nil {
 			t.Fatalf("hold %v: %v", hold, err)
 		}

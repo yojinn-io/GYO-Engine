@@ -13,7 +13,7 @@ if(NOT TARGET httplib::httplib)
 endif()
 set(protocol_output "${CMAKE_CURRENT_BINARY_DIR}/protocol")
 file(MAKE_DIRECTORY "${protocol_output}")
-foreach(contract client_v8 runtime_v8)
+foreach(contract client_v9 runtime_v9)
     add_custom_command(OUTPUT "${protocol_output}/${contract}.pb.cc" "${protocol_output}/${contract}.pb.h"
         COMMAND $<TARGET_FILE:protobuf::protoc> "--cpp_out=${protocol_output}"
             "--proto_path=${CMAKE_CURRENT_SOURCE_DIR}/protocol" "${CMAKE_CURRENT_SOURCE_DIR}/protocol/${contract}.proto"
@@ -31,20 +31,28 @@ gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHos
     PUBLIC_LIBRARIES ${domain} GYO::Threads)
 gyo_app_add_library(ipc OUT_TARGET ipc SOURCES src/Pvp/IpcHost.cpp
     PUBLIC_LIBRARIES ${host} GYO::Net GYO::Threads
-    PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v8")
+    PRIVATE_LIBRARIES asio::asio "gyo_${GYO_APP_ID}_runtime_v9")
 gyo_app_add_library(client_network OUT_TARGET network SOURCES src/Pvp/ClientConnection.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Net
-    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json GYO::Threads "gyo_${GYO_APP_ID}_client_v8")
+    PRIVATE_LIBRARIES asio::asio httplib::httplib nlohmann_json::nlohmann_json GYO::Threads "gyo_${GYO_APP_ID}_client_v9")
 # The one client command-generation path, shared by the application and the
 # headless acceptance probes so that measurements exercise product behaviour:
 # the simulation and the role thread that runs it at fixed-step deadlines.
 gyo_app_add_library(client_simulation OUT_TARGET simulation
         SOURCES src/Pvp/ClientSimulation.cpp src/Pvp/ClientSimulationRole.cpp
     PUBLIC_LIBRARIES ${domain} ${network} GYO::Time GYO::Threads)
+# The CPU player content shared by the Client and the Match: character, animation
+# set and the animation rules, loadable without any texture
+# (v8-product-anim-rules-source-texture-free).
+gyo_app_add_library(player_content OUT_TARGET content
+        SOURCES src/App/CharacterPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
+        src/Pvp/PlayerAnimationContent.cpp src/Pvp/PlayerHitbox.cpp src/Pvp/PlayerPose.cpp src/Pvp/PlayerAnimationDigest.cpp src/Pvp/PlayerHitModel.cpp
+    PUBLIC_LIBRARIES ${domain} GYO::Render GYO::Model
+    PRIVATE_LIBRARIES GYO::AssetUfbx nlohmann_json::nlohmann_json)
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp
-        src/Pvp/PlayerPresentation.cpp src/App/CharacterPresentationDefinition.cpp
-        src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
-    PUBLIC_LIBRARIES ${domain} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
+        src/Pvp/PlayerPresentation.cpp
+        src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp
+    PUBLIC_LIBRARIES ${domain} ${content} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
     PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer GYO::Os GYO::Audio nlohmann_json::nlohmann_json
     PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_AUDIO SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}
@@ -52,7 +60,7 @@ gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${sup
 target_compile_definitions(${app} PRIVATE GYO_DEFAULT_GPU_DRIVER="${GYO_DEFAULT_GPU_DRIVER}")
 # The entry point (GyoMain in main.cpp; IP-3).
 target_link_libraries(${app} PRIVATE GYO::PlatformSDLMain)
-gyo_app_add_executable(match OUT_TARGET match SOURCES match_main.cpp LIBRARIES ${ipc})
+gyo_app_add_executable(match OUT_TARGET match SOURCES match_main.cpp LIBRARIES ${ipc} ${content})
 gyo_install_product_target(TARGET ${match} PRODUCT "${GYO_APP_ID}" KIND app OWNER "${GYO_APP_ID}" ROLE match)
 add_dependencies(${match} "gyo_${GYO_APP_ID}--content")
 

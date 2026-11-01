@@ -415,12 +415,12 @@ def run(args):
         hp = []
         for index in range(4):
             value = shoot(hold=.65 if index == 0 else .08)
-            target = wait_state(directory, "join", lambda s: s["weapon"]["hp"] == 75 - index * 25, "Authority HP mismatch")
+            target = wait_state(directory, "join", lambda s: s["weapon"]["hp"] == 75000 - index * 25000, "Authority HP mismatch")
             hp.append(target["weapon"]["hp"])
-            require(value["weapon"]["last_damage"] == 25 and value["weapon"]["last_target"] == target["player_id"], "Native hit/damage attribution mismatch")
+            require(value["weapon"]["last_damage"] == 25000 and value["weapon"]["last_target"] == target["player_id"], "Native hit/damage attribution mismatch")
             record("native-player-hit", shot=index + 1)
             time.sleep(.42)
-        require(hp == [75, 50, 25, 0], "Unexpected HP path")
+        require(hp == [75000, 50000, 25000, 0], "Unexpected HP path")
         result["checks"]["V3_capture_hold_single_fire"] = True
         result["checks"]["V4_native_four_hits_hp"] = hp
         desktop.focus(b)
@@ -443,7 +443,7 @@ def run(args):
         # Lobby begins at Refresh; ordinary arrow navigation chooses Join.
         desktop.tap(b, "Down"); desktop.tap(b, "Down"); desktop.tap(b, "Return")
         target = wait_state(directory, "join", lambda s: s["phase"] == 3 and s["player_id"] != old_id and s["weapon"]["active"], "Native Lobby rejoin failed")
-        require(target["weapon"]["hp"] == 100 and target["weapon"]["submitted"] == 0 and not target["weapon"]["hit_marker"], "Rejoin retained old effects")
+        require(target["weapon"]["hp"] == 100000 and target["weapon"]["submitted"] == 0 and not target["weapon"]["hit_marker"], "Rejoin retained old effects")
         result["checks"]["V6_zero_hp_rejoin_new_identity"] = {"old_id": old_id, "new_id": target["player_id"]}
         record("native-rejoined")
         # Native movement: straight, strafe/diagonal, stop, pure mouse turn.

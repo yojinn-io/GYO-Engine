@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
 )
 
 // Diagnostics only (pv7 contract §3, time-echo): the clock sampling with each

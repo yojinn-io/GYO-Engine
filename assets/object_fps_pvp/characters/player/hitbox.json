@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "character_asset_id": "object_fps_pvp.player.character",
+  "shapes": [
+    {"part": "head", "kind": "sphere", "bone": "Head", "offset": [0.000786, 0.023344, -0.005024], "radius": 0.184},
+    {"part": "body", "kind": "capsule", "from": "spine_01", "to": "spine_03", "radius": 0.181},
+    {"part": "body", "kind": "capsule", "from": "pelvis", "to": "spine_01", "radius": 0.179},
+    {"part": "leg", "kind": "capsule", "from": "thigh_l", "to": "calf_l", "radius": 0.15},
+    {"part": "leg", "kind": "capsule", "from": "calf_l", "to": "foot_l", "radius": 0.105},
+    {"part": "leg", "kind": "capsule", "from": "thigh_r", "to": "calf_r", "radius": 0.15},
+    {"part": "leg", "kind": "capsule", "from": "calf_r", "to": "foot_r", "radius": 0.105}
+  ]
+}

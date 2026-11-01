@@ -84,6 +84,7 @@ WeaponJson CharacterSample(const fps::pvp::PlayerPresentationObservation& c) {
         {"jogging", c.jogging}, {"holding", c.holding}, {"backward", c.backward},
         {"phase_reset", c.phaseReset}, {"reset_count", c.resetCount}, {"reset_reason", c.resetReason},
         {"phase_cycles", c.phaseCycles}, {"unwrapped_phase_cycles", c.unwrappedPhaseCycles},
+        {"authority_phase_cycles", c.authorityPhaseCycles},
         {"signed_distance", c.signedDistance}, {"total_distance", c.totalDistance},
         {"distance_delta", c.distanceDelta}, {"cycle_distance", c.cycleDistance},
         {"jog_weight", c.jogWeight},

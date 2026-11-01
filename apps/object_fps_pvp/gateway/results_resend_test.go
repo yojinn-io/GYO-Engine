@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // matchLane models IpcHost's ActionLane (pv7 §2a): one frame per action

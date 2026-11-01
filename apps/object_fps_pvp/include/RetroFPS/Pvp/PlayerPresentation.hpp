@@ -1,10 +1,14 @@
 #pragma once
 
 #include "RetroFPS/App/CharacterPresentationDefinition.hpp"
+#include "RetroFPS/Pvp/Combat.hpp"
+#include "RetroFPS/Pvp/PlayerAnimation.hpp"
 #include "engine/render/RenderTypes.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -21,9 +25,10 @@ struct PlayerPresentationFrame final {
     // Look direction; a positive pitch looks down (the camera and ShotQuery sign).
     float yaw{}, pitch{};
     double presentationSeconds{}, deltaSeconds{};
-    // Planar speed between the two authority snapshots bracketing this sample:
-    // independent of the render rate. Zero means unknown or not moving.
-    double planarSpeed{};
+    // The Match's animation at this sample (protocol-v9 §4.4): the gait phase,
+    // the weights and the jump phase come only from it. Absent before the
+    // first snapshot that carries one: the rest pose.
+    std::optional<PlayerAnimationSample> animation;
     bool continuous{true}, holding{};
     std::uint64_t lifeGeneration{1};
     bool dead{};
@@ -70,11 +75,29 @@ struct PlayerPresentationDefinition final {
     double shotSeconds{}, jumpStartSeconds{}, jumpLandSeconds{}, hitSeconds{};
     Engine::Model::Transform weaponMount{};
     Engine::Model::Pose weaponReferencePose;
+    // The Match's animation rules from the same content (protocol-v9 §4.4).
+    PlayerAnimationRules animationRules{};
 };
 
 [[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>
 LoadPlayerPresentationDefinition(Engine::Asset::AssetManager& assets, float bodyHeight,
                                  std::string& error);
+// The Match's definition (v8-product-hitbox-data D2): the same body, clips and
+// calibration with no texture, accessory or weapon; it composes the body pose
+// only (SamplePlayerBodyPose), the one the Client presents.
+[[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>
+LoadPlayerPoseDefinition(Engine::Asset::AssetManager& assets, float bodyHeight, std::string& error);
+[[nodiscard]] std::shared_ptr<const PlayerPresentationDefinition>
+LoadPlayerPoseDefinition(const std::filesystem::path& contentRoot, float bodyHeight, std::string& error);
+// The animation content both ends pose with (protocol-v9 §4.6,
+// v8-product-hitbox-digest-scope (a)): the presentation values that move the
+// pose, the transferred keys of the 15 clips in their fixed order and the
+// skeleton. Never zero: zero is an invalid digest on the wire. The shapes, the
+// weapon and the accessories are outside it.
+[[nodiscard]] std::uint64_t AnimationContentDigest(const PlayerPresentationDefinition& definition);
+// The digest from a SHA-256 in hex: its first 8 bytes read little-endian, with
+// zero (the invalid digest) taken as 1.
+[[nodiscard]] std::uint64_t AnimationDigestFromSha256(const std::string& hex);
 
 // Jump presentation follows the sampled grounded state. Only a rising liftoff
 // plays Start; leaving the ground while falling goes straight to the Loop.
@@ -95,14 +118,31 @@ struct PlayerLocomotionState final {
     bool dead{};
     bool grounded{true};
     PlayerJumpPhase jumpPhase{PlayerJumpPhase::Grounded};
-    double jumpPhaseSeconds{}; // presentationSeconds at which jumpPhase began
+    double jumpPhaseSeconds{}; // the phase's clip time zero point (the Match's tick / rate)
     bool crouched{}; // the latest frame's stance
+    // The sampled q16 phase this state follows (protocol-v9 §4.4), and the one
+    // of the previous frame, whose signed difference unwrapPhaseCycles adds.
+    double authorityPhaseQ16{};
 };
 
 // The speed blend: jog weight from a sampled planar speed, and the distance one
 // gait cycle covers at that weight so the blended feet move at that speed.
 [[nodiscard]] double PlayerJogWeight(const PlayerPresentationDefinition& definition, double planarSpeed);
 [[nodiscard]] double PlayerCycleDistance(const PlayerPresentationDefinition& definition, double jogWeight);
+
+// The authority half of a presentation frame (player-presentation Design
+// Invariants 3): one player's state with its own interval's combat state and
+// Match animation, at a presentation tick. The Client adds deltaSeconds,
+// continuous and holding; the Match's judged pose takes it as is
+// (v8-product-hitbox-frame-sharing (a)).
+[[nodiscard]] PlayerPresentationFrame PlayerFrameFromAuthority(const PlayerState& player,
+    const std::optional<CombatState>& combat, const std::optional<PlayerAnimationSample>& animation,
+    double presentationTick);
+// Where the renderer draws a point of the composed body (model space): the
+// instance offsets it by -anchor, then the renderer applies
+// ComposeEulerXYZ(position, {0, yaw, 0}, scale) (PlayerPresentation::Submit).
+[[nodiscard]] Engine::Math::Vec3 PlayerBodyPointToWorld(const PlayerPresentationDefinition& definition,
+    const Engine::Math::Vec3& position, float yaw, const Engine::Math::Vec3& modelPoint);
 
 [[nodiscard]] bool AdvancePlayerLocomotion(PlayerLocomotionState& state,
     const PlayerPresentationFrame& frame, const PlayerPresentationDefinition& definition,
@@ -131,6 +171,11 @@ struct PlayerPresentationPose final {
     std::vector<Engine::Model::Pose> accessories;
 };
 
+// The composed body skeleton alone: the judged pose. SamplePlayerPresentationPose
+// composes the same body and adds the weapon and accessories.
+[[nodiscard]] bool SamplePlayerBodyPose(const PlayerPresentationDefinition& definition,
+    const PlayerLocomotionState& state, const PlayerActionPose& actions, Engine::Model::Pose& body,
+    std::string& error);
 [[nodiscard]] bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
     const PlayerLocomotionState& state, PlayerPresentationPose& output, std::string& error);
 [[nodiscard]] bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
@@ -142,6 +187,8 @@ struct PlayerPresentationObservation final {
     std::uint64_t playerId{}, movementEpoch{}, poseRevision{}, resetCount{};
     double phaseCycles{}, unwrappedPhaseCycles{}, signedDistance{}, totalDistance{};
     double distanceDelta{}, cycleDistance{}, jogWeight{}, speed{}, playbackRate{};
+    // The Match's sampled phase this frame used: phaseCycles is its fraction.
+    double authorityPhaseCycles{};
     float moveWeight{}, scale{};
     Engine::Math::Vec3 footAnchor{};
     Engine::Math::Vec3 weaponWorldPosition{};
@@ -175,6 +222,8 @@ public:
     [[nodiscard]] bool Ready() const noexcept;
     [[nodiscard]] std::size_t Capacity() const noexcept;
     [[nodiscard]] std::span<const PlayerPresentationObservation> Observations() const noexcept;
+    // AnimationContentDigest of the loaded definition; zero before Initialize.
+    [[nodiscard]] std::uint64_t AnimationDigest() const noexcept;
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

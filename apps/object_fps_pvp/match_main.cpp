@@ -7,6 +7,9 @@
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
+#include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
+#include "RetroFPS/Pvp/PlayerHitbox.hpp"
+#include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/TracePaths.hpp"
 #include "engine/os/Console.hpp"
 #include "engine/os/Files.hpp"
@@ -110,8 +113,31 @@ int main(int argc,char** argv) {
         if(!ingressTracePath.empty()) ingressTrace.emplace(ingressTracePath);
         std::optional<fps::pvp::MatchShotTraceFile> shotTrace;
         if(const auto path=fps::pvp::MatchShotTracePath(movementTrace);!path.empty()) shotTrace.emplace(path);
-        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance);
-        fps::pvp::IpcHost ipc(runtime,*arena);
+        // protocol-v9 §4.4: the animation rules from the player content, no texture
+        // (v8-product-anim-rules-source-texture-free); invalid content stops the Match.
+        const auto animation=fps::pvp::LoadPlayerAnimationRules(
+            fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets,error);
+        if(!animation){std::cerr<<error<<'\n';return 1;}
+        std::clog<<"[ObjectFPS/PvP Match] animation rules walk_cycle="<<animation->walkCycleDistance
+                 <<" jog_cycle="<<animation->jogCycleDistance<<" transition_ticks="<<animation->transitionTicks<<'\n';
+        // The hit shapes (v8-product-hitbox-data D1); invalid content stops the Match.
+        const auto hitbox=fps::pvp::LoadPlayerHitbox(
+            fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets,error);
+        if(!hitbox){std::cerr<<error<<'\n';return 1;}
+        std::clog<<"[ObjectFPS/PvP Match] hitbox shapes="<<hitbox->shapes.size()<<'\n';
+        // protocol-v9 §4.6: the digest of the animation content the Match poses
+        // with, from the pose definition the hit test uses (no texture, no weapon).
+        const auto pose=fps::pvp::LoadPlayerPoseDefinition(
+            fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets,arena->bodyHeight,error);
+        if(!pose){std::cerr<<error<<'\n';return 1;}
+        const auto animationDigest=fps::pvp::AnimationContentDigest(*pose);
+        std::clog<<"[ObjectFPS/PvP Match] animation_digest="<<std::hex<<std::setw(16)<<std::setfill('0')<<animationDigest
+                 <<std::dec<<std::setfill(' ')<<'\n';
+        // v8-product-hitbox-shot S3: the Match judges by the shapes on the posed body.
+        const auto hitModel=fps::pvp::MakePosedPlayerHitModel(pose,*hitbox);
+        std::clog<<"[ObjectFPS/PvP Match] hit model=posed shapes="<<hitbox->shapes.size()<<'\n';
+        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation,hitModel);
+        fps::pvp::IpcHost ipc(runtime,*arena,animationDigest);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}
         if(!ipc.Start(listen,error)){std::cerr<<error<<'\n';return 1;}
         // SIGINT and SIGTERM, and on Windows Ctrl+C, Ctrl+Break and closing the console, end the loop below.

@@ -224,11 +224,11 @@ def analyze_soak(output, gateway_counters, *, soak=False):
             unexpected.append({'cycle': declared['cycle'], 'name': declared['name'], 'rejection': d['rejection']})
         check(d['accepted'] == (d['rejection'] == 0), 'Accepted/rejection contradiction')
         check(d['accepted'] or d['damage'] == 0, 'Rejected action damaged a player')
-        check(d['damage'] in (0, 25) and (not d['damage'] or d['hit_kind'] == 2 and d['target_life_generation'] > 0),
+        check(d['damage'] in (0, 25000) and (not d['damage'] or d['hit_kind'] == 2 and d['target_life_generation'] > 0),
               'Invalid v5 damage attribution')
         if declared['target']:
             life = expected_target_life(declared['cycle'], declared['player_index'], lives_per_cycle)
-            check(d['accepted'] and d['damage'] == 25 and d['target_life_generation'] == life,
+            check(d['accepted'] and d['damage'] == 25000 and d['target_life_generation'] == life,
                   'Predeclared lethal hit did not damage the cycle life exactly once')
         if declared['expected_rejection'] == 0:
             legal.append((declared['cycle'], event['time_ns'], d['resolved_tick'], result['time_ns']))

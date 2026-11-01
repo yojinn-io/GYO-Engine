@@ -1,7 +1,7 @@
 syntax = "proto3";
 
-package object_fps_pvp.runtime.v8;
-option go_package = "gyo.local/object_fps_pvp/protocol/runtimev8";
+package object_fps_pvp.runtime.v9;
+option go_package = "gyo.local/object_fps_pvp/protocol/runtimev9";
 
 // The local IPC host decodes this into product data. Match never sees protobuf,
 // sessions, endpoints, or wire envelopes.
@@ -24,6 +24,8 @@ message Ready {
   float sprint_speed_scale = 13;
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 14 to 17;
+  // pv9 §4.6: AnimationContentDigest of the Match's player animation content; 0 means missing.
+  fixed64 animation_digest = 18;
 }
 message PlayerJoin { uint32 player_id = 1; }
 // Why the Gateway sent the Leave (pv7 §5). Diagnostics only: the Match removes
@@ -124,6 +126,30 @@ message WorldSnapshot {
   optional uint32 match_hold_us = 4;
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 5, 6;
+  // pv9 §4.2: one per player, the Match's animation authority.
+  repeated PlayerAnimation animation = 7;
+}
+// The Match's animation authority of one player (protocol-v9 §4.3): one per
+// player, of the player's current life. Checks in §4.5.
+enum JumpPhase {
+  JUMP_PHASE_UNSPECIFIED = 0;
+  JUMP_PHASE_GROUNDED = 1;
+  JUMP_PHASE_START = 2;
+  JUMP_PHASE_AIRBORNE = 3;
+  JUMP_PHASE_LAND = 4;
+}
+message PlayerAnimation {
+  uint32 player_id = 1;
+  uint32 life_generation = 2;
+  // Unwrapped gait cycles x 65536, modulo 2^32; decreases moving backward.
+  uint32 gait_phase_q16 = 3;
+  uint32 move_weight_permille = 4;
+  uint32 jog_weight_permille = 5;
+  JumpPhase jump_phase = 6;
+  // The zero point of the phase's clip time (Authority Tick).
+  uint32 jump_phase_tick = 7;
+  // Always 0 before sprint presentation (pv9-sprint-animation (a)).
+  uint32 sprint_weight_permille = 8;
 }
 // Match-initiated removal for sustained poor connection quality. The Gateway
 // clears the player like a Leave and tells the Client why.
@@ -314,12 +340,14 @@ message ShotDecision {
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 12, 13;
 }
-// Where a shot hit a player (pv7 §7): HIT_PLAYER is BODY or HEAD, every other
-// decision UNSPECIFIED. v7.1's Match produces only BODY; v8 adds HEAD.
+// Where a shot hit a player (pv7 §7, pv9 §2): HIT_PLAYER is BODY, HEAD or LEG,
+// every other decision UNSPECIFIED. BODY is the torso with the pelvis; arms are
+// no part (a ray passes through them).
 enum HitPart {
   HIT_PART_UNSPECIFIED = 0;
   HIT_PART_BODY = 1;
   HIT_PART_HEAD = 2;
+  HIT_PART_LEG = 3;
 }
 
 // Diagnostics only (pv7 contract §4): the discards the Gateway executed, by

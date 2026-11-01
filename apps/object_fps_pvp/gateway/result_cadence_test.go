@@ -12,8 +12,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // resultLoop drives sendUDP's result path by hand on a virtual clock: a pass
@@ -307,6 +307,7 @@ func TestResultDeadlineAgreesWithSelection(t *testing.T) {
 		if rng.IntN(4) == 0 {
 			e := envelope()
 			e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: uint32(1 + rng.IntN(len(sessions)-1)), Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY}}
+			fillAnimation(e.GetSnapshot())
 			s.runtimeMessage(e)
 			for len(s.controlOut) > 0 {
 				<-s.controlOut
@@ -628,6 +629,7 @@ func TestSendLoopStopsResultsOfARemovedPlayerAndEndsOnCancel(t *testing.T) {
 			} else {
 				e := envelope()
 				e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: 7, Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY}}
+				fillAnimation(e.GetSnapshot())
 				s.runtimeMessage(e)
 				receivePacket(t, c, adapter.Failure)
 			}

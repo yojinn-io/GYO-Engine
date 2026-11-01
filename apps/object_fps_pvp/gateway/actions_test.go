@@ -9,8 +9,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 func shot(id uint32) *runtime.ShotRequest {
@@ -157,7 +157,7 @@ func TestActionsRealUDPAndTCPResendUntilContiguousClientACK(t *testing.T) {
 	sendPacket(t, p, c, 1, adapter.Hello, &client.Hello{SessionToken: c.Token})
 	accept(t, f, c)
 	var welcome client.Welcome
-	if proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome) != nil || welcome.CombatRules == nil || welcome.CombatRules.ShotDamage != 25 {
+	if proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome) != nil || welcome.CombatRules == nil || welcome.CombatRules.ShotDamage != 25000 {
 		t.Fatal("Match rules not in Welcome")
 	}
 	sendPacket(t, p, c, 2, adapter.Actions, &client.ActionBatch{Shots: []*client.ShotRequest{{LifeGeneration: 1, Kind: client.ActionKind_ACTION_SHOT, Pitch: proto.Float32(0), ActionId: 1, ObservedAuthorityTick: 1, Yaw: proto.Float32(.25)}}})
@@ -253,6 +253,7 @@ func TestEvictionKeepsQueuedActionsAndReplacementsDeliver(t *testing.T) {
 	e.Message = &runtime.RuntimeEnvelope_Evicted{Evicted: &runtime.PlayerEvicted{PlayerId: p.playerID,
 		Reason: runtime.EvictionReason_EVICTION_HIGH_LATENCY, ReferenceAgeMs: 190}}
 	l.actionWritten(p.playerID, time.Now()) // the link's statistics of the player
+	fillAnimation(e.GetSnapshot())
 	s.runtimeMessage(e)
 	l.mu.Lock()
 	_, kept := l.actionStats[p.playerID]
