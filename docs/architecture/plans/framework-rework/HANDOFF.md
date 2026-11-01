@@ -18,7 +18,7 @@
 - 2026-11-01：v8-framework-rework-plan 完成（使用者核准 PLAN 第 1 版與 D-1～D-9，commit `f8878799`）。
 - 2026-11-01：v8-framework-guard-ratchet 完成（使用者核准判定變更與 DI 條文，commit `0a635225`，draft PR #127）。L1：手動觸發的 cross-platform run 41227212440，`L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
 - 2026-11-01：v8-engine-platform-path-dialog 完成（使用者核准，commit `472225fe`）。L1：run 41231279740 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
-- 2026-11-01：v8-engine-io-user-files 完成（使用者核准[契約、行為變更與條文](io-user-files-judgment-change.md)，io.md 條文已寫入）。估 6～8 h，實際約 4.5 h。L1 結果記在下一行。
+- 2026-11-01：v8-engine-io-user-files 完成（使用者核准[契約、行為變更與條文](io-user-files-judgment-change.md)，io.md 條文已寫入）。估 6～8 h，實際約 4.5 h。commit `2aaa6b52`。L1：run 41266291181 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
 - 下一批：v8-framework-shell（第 0 關外殼草圖，依 D-9 用 ultracode）。
 
 ### v8-engine-io-user-files 的事前宣告（2026-11-01，執行前）
