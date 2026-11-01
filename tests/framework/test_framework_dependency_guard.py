@@ -66,9 +66,18 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         })
         self.assertIn("framework/src/A.cpp: includes engine/input/backend/sdl/SdlInputNative.hpp", findings)
 
-    def test_input_backend_target_fails_in_the_core(self):
-        self.assertEqual(self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::InputBackendSDL)\n"}),
-                         ["framework/CMakeLists.txt: names GYO::InputBackendSDL"])
+    def test_input_targets_in_the_core_pass(self):
+        # Since v8-framework-engine-access the core may use any Engine module (Design Invariant 2); before it, only
+        # the ImGui binding could link the input backend (v8-tool-ui-editor-ime-composition-source).
+        self.assertEqual(self.scan({
+            "framework/src/A.cpp": '#include "engine/input/backend/sdl/SdlInput.hpp"\n',
+            "framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input GYO::InputBackendSDL)\n",
+        }), [])
+
+    def test_input_target_in_a_binding_fails(self):
+        # Each binding keeps its own positive list; the core's additions do not reach it.
+        self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input)\n"}),
+                         ["framework/bindings/json/CMakeLists.txt: names GYO::Input"])
 
     def test_tool_header_fails(self):
         # A tool's header is outside every allowed prefix, without the guard naming the tool.
@@ -84,8 +93,8 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertIn("SDL_CreateGPUDevice", findings[0])
 
     def test_unlisted_target_fails(self):
-        findings = self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input)\n"})
-        self.assertEqual(len(findings), 1)
+        findings = self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::RenderBackendSDLGPU)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: names GYO::RenderBackendSDLGPU"])
 
     def test_registered_tool_name_fails(self):
         findings = self.scan({"framework/src/A.cpp": "// opens what sketch_tool saved\n"})
@@ -225,12 +234,19 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertIn("framework/src/A.cpp: uses SDL_CreateGPUDevice", findings)
 
     def test_trading_an_allowlisted_site_for_an_old_refusal_fails(self):
-        # The count stays 1, but GYO::Input was refused before the ratchet, so it is never covered.
+        # The count stays 1, but GYO::RenderBackendSDLGPU was refused before the ratchet, so it is never covered.
         findings = self.scan({
-            "framework/Old.cmake": "target_link_libraries(a PRIVATE GYO::Input)\n",
+            "framework/Old.cmake": "target_link_libraries(a PRIVATE GYO::RenderBackendSDLGPU)\n",
             self.ALLOWLIST: "framework/Old.cmake target 1\n",
         })
-        self.assertIn("framework/Old.cmake: names GYO::Input", findings)
+        self.assertIn("framework/Old.cmake: names GYO::RenderBackendSDLGPU", findings)
+        # An SDL_GPU use was refused before the ratchet too. Adding one to an allowlisted file leaves its symbol count
+        # as it was (the symbol rule does not count SDL_GPU names), so only the SDL_GPU rule reports it.
+        findings = self.scan({
+            "framework/src/Old.cpp": "void F() { SDL_Log(\"a\"); SDL_CreateGPUDevice(0, false, nullptr); }\n",
+            self.ALLOWLIST: "framework/src/Old.cpp symbol 1\n",
+        })
+        self.assertEqual(findings, ["framework/src/Old.cpp: uses SDL_CreateGPUDevice"])
         findings = self.scan({
             "framework/src/Old.cpp": '#include "gyo/some_tool/Thing.hpp"\n',
             self.ALLOWLIST: "framework/src/Old.cpp include 1\n",

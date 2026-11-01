@@ -54,22 +54,26 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    `framework` is a reserved name for apps and tools. Guard: the framework's
    dependency guard and the registry's reserved names.
 2. Dependencies point one way: game or tool → framework → engine. The framework
-   includes nothing from `apps/` or `tools/`, and the engine never names it; it
-   links no game and no SDL_GPU, so a tool's own Design Invariant 1 (no game,
-   no SDL_GPU) still holds through it. Engine's capabilities are open to the
-   framework as to a game or tool, input included
-   (`v8-tool-ui-editor-ime-composition-source`, 2026-11-01).
+   includes nothing from `apps/` or `tools/`, links no game and names no
+   product, and the engine never names it. It may use any Engine module, input
+   included. It reaches SDL only as a game does: through Engine's SDL backend
+   targets, which keep SDL private, or, where an Engine contract allows it and
+   only inside a binding, an Engine `*Native` target.
    The core (everything outside `framework/bindings/`) includes no `SDL3/`,
    `imgui`, `backends/`, `nlohmann/` or Engine `*Native` header, names no
    `SDL_`, `ImGui` or `nlohmann` symbol, and links no SDL3, imgui,
    `nlohmann_json` or `GYO::*Native` target and no binding: it reaches SDL only
-   through Engine's neutral targets. A binding is its own target under
+   through Engine's SDL backend targets. A binding is its own target under
    `framework/bindings/<name>/` with its own positive list, and the core never
    names it. Only the ImGui binding links `GYO::*Native`, PRIVATE; no framework
    target names `SDL3::SDL3` or an `SDL_` symbol. The ImGui binding reads typed
    text and the input method's composition through Engine's input backend
-   (`GYO::InputBackendSDL`), not from SDL's events. Guards: the dependency guard
-   (core rules, one positive list per binding, and an allowlist of existing
+   (`GYO::InputBackendSDL`), not from SDL's events. Adding an Engine target
+   that is not `*Native` to a positive list follows this item, though the
+   guard change still follows AGENTS.md section 14.4; adding an SDL, `*Native`
+   or third-party target changes this item. Guards: the
+   dependency guard (core rules, one positive list per binding, and an
+   allowlist of existing
    core sites whose counts must match and only shrink, empty after
    `v8-framework-invariants`) and the configure-time link check in
    `tests/framework/CMakeLists.txt`.
@@ -90,9 +94,14 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    mounting, registration policy). It holds no product's UI, document format or
    rules, and names no concrete UI or data-format library; such a library
    enters only as a binding. A capability Engine lacks is added to Engine, not
-   to the framework. Otherwise only what two or more products share enters. The
-   game part enters only on the condition above. The windowed shell has one
-   user (ui_editor) when it is added; the user accepted that on 2026-11-01
+   to the framework. What two or more products use (a game and a tool, or two
+   tools) enters the framework first, even where Engine has the capability:
+   the framework calls Engine and the products call the framework. What one
+   product alone needs, it takes from Engine directly. The game part, a game's
+   own composition (its loop, its scenes), enters only on the condition above;
+   a capability that a game and a tool both call is shared and enters by this
+   rule (user, 2026-11-01). The windowed shell has one user (ui_editor) when
+   it is added; the user accepted that on 2026-11-01
    (framework-rework D-8). Replacing ImGui means replacing its binding and the
    tool's own drawing code; the core shell and Engine stay.
 6. **Shell lifecycle.** RunHeadlessShell hands its body the command line as

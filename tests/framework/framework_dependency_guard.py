@@ -5,8 +5,10 @@ The rules read the registries instead of naming any product or tool (AGENTS.md s
   target, and neither registry has a row named framework;
 - Invariant 2, one direction, core and bindings: everything under framework/bindings/<name>/ is a binding, the rest
   is the core.
-  - Everywhere: no SDL_GPU function or type (SDL_*GPU*) is used. Engine's input is open to the framework as to
-    a game or tool (v8-tool-ui-editor-ime-composition-source); only the ImGui binding lists its SDL backend.
+  - The framework may use any Engine module, input included (v8-tool-ui-editor-ime-composition-source,
+    v8-framework-engine-access): adding an Engine target that is not *Native to a positive list follows
+    Invariant 2 (the guard change itself still follows AGENTS.md section 14.4), adding an SDL, *Native or
+    third-party target changes the Invariant.
   - The core includes only gyo/framework/ and Engine's neutral headers (no *Native.hpp) besides standard and local
     headers, and nothing whose name starts with SDL, imgui or json.hpp; it names no SDL_, ImGui or nlohmann symbol
     in code; its CMake files name only the core's targets.
@@ -22,13 +24,16 @@ fails and a removed one asks for the entry to shrink. Lines with rule "link" ("t
 <name>,<name>...") belong to the configure-time link check in tests/framework/CMakeLists.txt, which checks the lines
 of the targets a configuration builds; here they are checked for form, and their target must be one that a CMake file
 of the core defines (add_library), whatever the configuration, so a stale line fails everywhere. The registries, project files,
-executables, SDL_GPU and anything the guard refused before v8-framework-guard-ratchet (an include
-outside its old prefixes, a target outside its old list and the shell's and bindings' targets) are never
-allowlisted, nor is anything in a binding.
+executables, SDL_GPU functions and types (SDL_*GPU*) and anything the guard refused before
+v8-framework-guard-ratchet (an include outside its old prefixes, a target outside its old list and the names added
+since) are never allowlisted, nor is anything in a binding. SDL_GPU names are reported by their own rule only (the
+symbol rules skip them, so a use added to an allowlisted file would not change its count); once the allowlist is
+empty (v8-framework-invariants) the rule and that skip can go together and the SDL_ symbol rules report them.
 Includes, targets and registered names are read from the raw text (a comment counts); symbols from the code only,
 with include lines removed and comments and literals blanked.
 
-A new dependency fails until it is added here, which is the point: it changes the framework's Design Invariants.
+A new dependency fails until it is added here, which is the point: each edge is recorded, and one that is an SDL,
+*Native or third-party target changes the framework's Design Invariants.
 
 Usage: python3 framework_dependency_guard.py [--root REPOSITORY]
 Exit status 0 when clean; 1 with one line per finding otherwise.
@@ -61,8 +66,9 @@ LIBRARY_BARE_INCLUDE = re.compile(r"^(SDL\.h|SDL_\w*\.h|imgui(_\w+)?\.h|json\.hp
 
 # What the guard allowed before v8-framework-guard-ratchet. Anything outside it stays a hard finding everywhere,
 # so the allowlist's counts can never trade an old site for something the old guard refused. The only names added
-# since are the shell's and the bindings' own targets, and the input backend the ImGui binding reads typed text and
-# the input method's composition from (v8-tool-ui-editor-ime-composition-source).
+# since are the shell's and the bindings' own targets, the input backend the ImGui binding reads typed text and the
+# input method's composition from (v8-tool-ui-editor-ime-composition-source), and Engine's input for the core
+# (v8-framework-engine-access).
 OLD_INCLUDE_PREFIXES = ("gyo/framework/", "engine/", "nlohmann/", "SDL3/", "backends/imgui_impl_sdl")
 OLD_TARGETS = {
     "GYO::ToolFramework", "GYO::ToolFrameworkGui",
@@ -70,7 +76,8 @@ OLD_TARGETS = {
     "GYO::PlatformSDL", "GYO::PlatformSDLNative", "GYO::RenderBackendSDL", "GYO::RenderBackendSDLNative",
     "SDL3::SDL3", "imgui::core", "imgui::sdl3_sdlrenderer3", "nlohmann_json::nlohmann_json",
 }
-NEW_TARGETS = {"GYO::ToolFrameworkWindow", "GYO::ToolFrameworkImGui", "GYO::ToolFrameworkJson", "GYO::InputBackendSDL"}
+NEW_TARGETS = {"GYO::ToolFrameworkWindow", "GYO::ToolFrameworkImGui", "GYO::ToolFrameworkJson", "GYO::InputBackendSDL",
+               "GYO::Input"}
 ALLOWLIST_RULES = ("include", "symbol", "target")
 LINK_RULE = "link"
 
@@ -79,7 +86,8 @@ CORE = {
     "bare_includes": (),
     "native_headers": (),
     "symbols": re.compile(r"\bSDL_\w+|\bImGui\w*|\bnlohmann\b"),
-    "targets": {"GYO::ToolFramework", "GYO::ToolFrameworkWindow", "GYO::Engine", "GYO::Os", "GYO::PlatformSDL"},
+    "targets": {"GYO::ToolFramework", "GYO::ToolFrameworkWindow", "GYO::Engine", "GYO::Os", "GYO::PlatformSDL",
+                "GYO::Input", "GYO::InputBackendSDL"},
 }
 BINDINGS = {
     "imgui": {
