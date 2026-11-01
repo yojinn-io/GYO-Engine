@@ -80,6 +80,8 @@ v8-product-hit-presentation
 
 ### 判定（螢幕上跑，Intel Mac，各一次）
 
+> **2026-11-01 修改（`v8-product-hit-gui-aim-l2`）**：G5、G6 的兩支 runner 都靠 X11（`XOpenDisplay`），只能在 Linux 桌面跑，「Intel Mac」的前提錯了。使用者決定：G5、G6 移到 `v8-product-hitbox-acceptance` 的 Linux L2 場次，跑次腳本在那一批的宣告裡準備，交出前在 Linux 上實際跑過每條命令。P2 的程式在 G5、G6 判定之前留在工作樹，不 commit。Mac 上的探索跑次（`run_timing.py --gui --combat --short`）出現的「displayed HUD HP/ammo/life mismatch」另立一項，先建檢測。
+
 - **G5** `run_gameplay_gui.py` 預設案例通過（`combat_gui_evidence` 的 17 格、hp 照每發 25000）。
 - **G6** `run_native_window.py` 通過（hp 路徑 75000→50000→25000→0）。
 - 只在時間檢查失敗時可重跑一次，兩次都記錄；傷害、生命相關的錯誤不重跑，直接停下回報。
