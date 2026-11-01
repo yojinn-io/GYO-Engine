@@ -3,7 +3,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "client_v8.pb.h"
+#include "client_v9.pb.h"
 #include "acceptance_protocol.hpp"
 #include "acceptance_capacity.hpp"
 #include "engine/time/Waiter.hpp"
@@ -41,7 +41,7 @@ namespace {
 using namespace fps::pvp;
 using Clock=std::chrono::steady_clock;
 using namespace std::chrono_literals;
-namespace pb=object_fps_pvp::client::v8;
+namespace pb=object_fps_pvp::client::v9;
 using asio::ip::udp;
 using Json=nlohmann::json;
 void Require(bool condition,const char* message){if(!condition)throw std::runtime_error(message);}
@@ -51,6 +51,8 @@ struct ActionAttempt { Clock::time_point at; pb::ActionBatch actions; };
 struct PacketAttempt { Clock::time_point at; wire::Type type; std::size_t bytes; std::uint32_t sequence{}; };
 // Opaque content digest of the mock arena (pv6 contract §2).
 constexpr std::uint64_t WorkerArenaDigest=0x0123456789abcdefULL;
+// protocol-v9 §4.6: the animation content digest the worker Client poses with.
+constexpr std::uint64_t WorkerAnimationDigest=0xfedcba9876543210ULL;
 class MockGateway {
 public:
     MockGateway():socket(io,udp::endpoint(asio::ip::address_v4::loopback(),0)) {
@@ -108,6 +110,7 @@ public:
                 if(std::exchange(earlyBeforeWelcome,false)) {Snapshot(ack);SendResults(pb::ActionResults{});}
                 pb::Welcome welcome;welcome.set_player_id(1);welcome.set_tick_rate(60);
                 welcome.set_snapshot_rate(60);welcome.set_jump_height(.6F);welcome.set_gravity(18);welcome.set_arena_id("worker-test");welcome.set_arena_version(1);welcome.set_arena_digest(welcomeArenaDigest.load());
+                welcome.set_animation_digest(welcomeAnimationDigest.load());
                 // pv8 §3: the Match's movement rules, as the Gateway copies them from Ready.
                 welcome.set_crouch_body_height(stance.crouchBodyHeight);welcome.set_crouch_eye_height(stance.crouchEyeHeight);
                 welcome.set_crouch_speed_scale(stance.crouchSpeedScale);welcome.set_sprint_speed_scale(stance.sprintSpeedScale);
@@ -167,8 +170,10 @@ public:
         auto* player=snapshot.add_players();player->set_player_id(1);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
         auto* combat=snapshot.add_combat();combat->set_player_id(1);combat->set_hp(74);combat->set_next_allowed_shot_tick(900);combat->set_life_generation(1);combat->set_magazine_ammo(7);
         combat->set_last_damage_tick(tick);combat->set_damage_count(3);combat->set_last_attacker_id(2);
-        combat->set_last_hit_part(pb::HIT_PART_BODY); // pv7 §7 hit record: all four fields set together
+        combat->set_last_hit_part(snapshotHitPart); // pv7 §7 hit record: all four fields set together
         player->set_crouched(snapshotCrouched); // pv8 §2
+        auto* animation=snapshot.add_animation();*animation=snapshotAnimation; // pv9 §4.2
+        animation->set_player_id(1);animation->set_life_generation(1);
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
     // A snapshot of the given tick; the next Snapshot follows it.
@@ -181,14 +186,21 @@ public:
         for(unsigned id=1;id<=count;++id) {
             auto* player=snapshot.add_players();player->set_player_id(id);player->set_movement_epoch(epoch);player->set_last_resolved_command(ack);player->set_life_generation(1);player->set_life_state(pb::LIFE_ALIVE);player->set_grounded(true);
             auto* combat=snapshot.add_combat();combat->set_player_id(id);combat->set_hp(100);combat->set_life_generation(1);combat->set_magazine_ammo(7);
+            auto* animation=snapshot.add_animation();animation->set_player_id(id);animation->set_life_generation(1);
+            animation->set_jump_phase(pb::JUMP_PHASE_GROUNDED);
         }
         Send(wire::Type::Snapshot,snapshot.SerializeAsString());
     }
-    void Results(const std::vector<ActionId>& ids,ActionId retired=0) {
+    // Cooldown rejections, or with a part player hits on player 2 at that part.
+    void Results(const std::vector<ActionId>& ids,ActionId retired=0,pb::HitPart part=pb::HIT_PART_UNSPECIFIED) {
         pb::ActionResults results;results.set_retired_through(retired);
         for(const auto id:ids) {
             auto* d=results.add_decisions();d->set_action_id(id);d->set_resolved_tick(123);
             d->set_rejection(pb::REJECTION_COOLDOWN);d->set_kind(pb::ACTION_SHOT);d->set_life_generation(1);
+            if(part!=pb::HIT_PART_UNSPECIFIED) {
+                d->set_rejection(pb::REJECTION_NONE);d->set_accepted(true);d->set_hit_kind(pb::HIT_PLAYER);
+                d->set_target_id(2);d->set_damage(37);d->set_target_life_generation(1);d->set_hit_part(part);
+            }
         }
         SendResults(results);
     }
@@ -227,12 +239,16 @@ public:
     Clock::time_point snapshotSentAt{}; // when Snapshot last sent one
     static constexpr std::uint64_t ExtremeOffsetUs=std::uint64_t{1}<<52;
     std::atomic<std::uint64_t> joinArenaDigest{WorkerArenaDigest},welcomeArenaDigest{WorkerArenaDigest};
+    std::atomic<std::uint64_t> welcomeAnimationDigest{WorkerAnimationDigest};
     bool includeRules{true};
     // pv8 §3: the Welcome movement rules; a set changedWelcomeStance makes the
     // next Hello's reply two Welcomes, the second with that crouch speed scale.
     StanceRules stance{DefaultStanceRules};
     std::optional<float> changedWelcomeStance;
     bool snapshotCrouched{}; // pv8 §2: the stance Snapshot reports
+    pb::HitPart snapshotHitPart{pb::HIT_PART_BODY}; // the part of Snapshot's hit record
+    pb::PlayerAnimation snapshotAnimation=[]{ // Snapshot's animation of player 1 (grounded)
+        pb::PlayerAnimation value;value.set_jump_phase(pb::JUMP_PHASE_GROUNDED);return value;}();
     std::uint64_t epoch{1};
     bool autoAck{};
     std::atomic<std::uint64_t> leaves{};
@@ -446,6 +462,18 @@ void CheckDroppedDatagrams(MockGateway& gateway,ClientConnection& connection) {
     pb::WorldSnapshot uneven;uneven.set_tick(playing+50);uneven.add_players()->set_player_id(1);
     gateway.SendRaw(wire::Type::Snapshot,uneven.SerializeAsString());
     gateway.SnapshotAt(playing,0); // not newer than the applied one
+    // pv9 §4.5: neither is applied. A jump phase outside 1..4 that a narrowing
+    // cast would read as Grounded (257 = 256 + 1), valid for this grounded
+    // player, and a sprint weight before sprint presentation.
+    std::uint64_t rejectedTick=playing+35;
+    for(const auto edit:{+[](pb::PlayerAnimation& a){a.set_jump_phase(static_cast<pb::JumpPhase>(257));},
+                         +[](pb::PlayerAnimation& a){a.set_sprint_weight_permille(1);}}) {
+        rejectedTick+=5;
+        edit(gateway.snapshotAnimation);gateway.SnapshotAt(rejectedTick,0);
+        gateway.snapshotAnimation=pb::PlayerAnimation{};gateway.snapshotAnimation.set_jump_phase(pb::JUMP_PHASE_GROUNDED);
+        gateway.UntilTime(Clock::now()+50ms);
+        Require(connection.State().snapshot->tick!=rejectedTick,"an invalid animation snapshot was applied");
+    }
     // Windows for an authority the worker no longer has (D183): one of another
     // connection generation (r1), and three its newest snapshot does not carry
     // (r5: two other epochs, another life). r5 outnumbers every r1 window of
@@ -616,7 +644,7 @@ void RequireDroppedCounts(const std::string& captured) {
     };
     Require(count("unparsed_datagrams")>=3,"unparsed datagrams were not counted");
     Require(count("early_datagrams")>=2,"datagrams before the Welcome were not counted");
-    Require(count("invalid_snapshot_datagrams")>=2,"invalid snapshots were not counted");
+    Require(count("invalid_snapshot_datagrams")>=4,"invalid snapshots were not counted");
     Require(count("ignored_snapshot_datagrams")>=1,"snapshots that were not newer were not counted");
     Require(count("unexpected_kind_datagrams")>=3,"kinds the Gateway does not send were not counted");
     Require(count("stale_input_windows")>=4,"windows for a replaced authority were not counted");
@@ -667,11 +695,14 @@ std::size_t CheckMaximumDatagrams() {
         c->set_reload_action_id(max32);c->set_reload_start_tick(max32);c->set_reload_end_tick(max32);c->set_last_shot_action_id(max32);c->set_last_shot_tick(max32);
         c->set_last_damage_tick(max32);c->set_damage_count(std::numeric_limits<std::uint32_t>::max());c->set_last_attacker_id(max32);
         c->set_last_hit_part(pb::HIT_PART_HEAD);
+        auto* a=snapshot.add_animation();a->set_player_id(max32-n);a->set_life_generation(max32);a->set_gait_phase_q16(max32);
+        a->set_move_weight_permille(1000);a->set_jog_weight_permille(1000);a->set_jump_phase(pb::JUMP_PHASE_LAND);a->set_jump_phase_tick(max32);
     }
     check(wire::Type::Snapshot,snapshot);
     // A full room is the largest datagram (pv6 contract §7, 2026-10-07 revision).
-    // protocol-v8 section 6: the counters narrowed to uint32 and the stance, 40+177N.
-    Require(largest==748,"maximum-field full-room snapshot is not 748 bytes");
+    // protocol-v8 section 6: the counters narrowed to uint32 and the stance, 40+177N;
+    // protocol-v9 section 6: the animation, 40+211N.
+    Require(largest==884,"maximum-field full-room snapshot is not 884 bytes");
     auto legacy=wire::Encode({wire::Type::Actions,1,1,batch.SerializeAsString()});
     // Every older version and the next one are refused.
     for(std::uint64_t version=1;version<=AcceptanceProtocolVersion+1;++version) {
@@ -692,6 +723,18 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
         connection.State().snapshot->combat.at(0).damageCount==3 && connection.State().snapshot->combat.at(0).lastAttackerId==2 &&
         connection.State().snapshot->combat.at(0).lastHitPart==HitPart::Body,
         "snapshot lost the hit record");
+    // pv9 §2: a leg hit record reaches the Client as Leg.
+    gateway.snapshotHitPart=pb::HIT_PART_LEG;gateway.Snapshot(connection.State().snapshot->players.at(0).lastResolvedCommand);
+    gateway.Until([&]{const auto s=connection.State();return s.snapshot && s.snapshot->combat.at(0).lastHitPart==HitPart::Leg;});
+    gateway.snapshotHitPart=pb::HIT_PART_BODY;
+    // pv9 §4.3 (E6): a non-zero animation authority reaches the Client as sent.
+    gateway.snapshotAnimation.set_gait_phase_q16(0xFFFF1234U);gateway.snapshotAnimation.set_move_weight_permille(500);
+    gateway.snapshotAnimation.set_jog_weight_permille(250);gateway.snapshotAnimation.set_jump_phase(pb::JUMP_PHASE_LAND);
+    gateway.snapshotAnimation.set_jump_phase_tick(1);
+    gateway.Snapshot(connection.State().snapshot->players.at(0).lastResolvedCommand);
+    gateway.Until([&]{const auto s=connection.State();return s.snapshot && s.snapshot->animation.size()==1 &&
+        s.snapshot->animation[0]==PlayerAnimation{1,1,0xFFFF1234U,500,250,JumpPhase::Land,1,0};});
+    gateway.snapshotAnimation=pb::PlayerAnimation{};gateway.snapshotAnimation.set_jump_phase(pb::JUMP_PHASE_GROUNDED);
     Require(!connection.SubmitShot(0,std::numeric_limits<float>::infinity(),0),"invalid aim allocated an action");
     std::mutex allocatedMutex;std::vector<ActionId> allocated;
     std::vector<std::thread> producers;
@@ -787,11 +830,11 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     Require(connection.Drain().decisions.empty(),"duplicate results were delivered twice");
     Require(!connection.SubmitShot(1,0,0),"consumed but unretired results freed the distance window");
     const auto firstResultAt=Clock::now();
-    gateway.Results({1});gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
+    gateway.Results({1},0,pb::HIT_PART_LEG);gateway.Until([&]{return connection.State().actionTransport.unconsumed==1;});
     // A repeated result does not move the receipt time (v7 batch 08).
     gateway.UntilTime(Clock::now()+10ms);
     const auto repeatAt=Clock::now();
-    gateway.Results({1});
+    gateway.Results({1},0,pb::HIT_PART_LEG);
     // Let the deadline armed while ID 1 was pending pass, so only the ACK's own
     // wake-up (or the next Hello, which AwayFromHello keeps away) can send the ACK.
     gateway.UntilTime(Clock::now()+50ms);
@@ -800,6 +843,8 @@ Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     const auto last=connection.Drain();
     Require(last.decisions.size()==1 && last.decisions[0].actionId==1 &&
         last.state.actionTransport.acknowledgedThrough==32,"contiguous consumed results failed to ACK through 32");
+    Require(last.decisions[0].accepted && last.decisions[0].hitPart==HitPart::Leg,
+        "a leg hit decision did not reach the Client as Leg"); // pv9 §2
     Require(last.decisionReceivedAt.size()==1 && last.decisionReceivedAt[0]>=firstResultAt && last.decisionReceivedAt[0]<repeatAt,
         "decision receipt time is not the first arrival");
     const auto ackStart=gateway.actionAttempts.size();
@@ -887,6 +932,10 @@ int main(int argc,char** argv) {
         try{connection.SetArenaIdentity("worker-test",1,0);}catch(const std::invalid_argument&){zeroDigestRejected=true;}
         Require(zeroDigestRejected,"zero arena digest accepted as identity");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+        bool zeroAnimationRejected=false;
+        try{connection.SetAnimationDigest(0);}catch(const std::invalid_argument&){zeroAnimationRejected=true;}
+        Require(zeroAnimationRejected,"zero animation digest accepted");
+        connection.SetAnimationDigest(WorkerAnimationDigest);
         CheckDroppedDatagrams(gateway,connection);
         CheckHelloCadence(gateway,connection);
         // Early too, so a mutant of the outage path fails on the check that guards it:
@@ -1253,6 +1302,20 @@ int main(int argc,char** argv) {
         try{connection.SetArenaIdentities({{"a",1,1},{"a",2,2}});}catch(const std::invalid_argument&){duplicateRejected=true;}
         Require(duplicateRejected,"an arena installed twice was accepted");
         connection.SetArenaIdentity("worker-test",1,WorkerArenaDigest);
+
+        // protocol-v9 §4.6: other or missing animation content is refused on
+        // Welcome; the same content joins (every other join of this worker).
+        gateway.welcomeAnimationDigest=WorkerAnimationDigest^1;
+        Require(refusedWith("Match animation content differs from this client"),"Welcome accepted different animation content");
+        gateway.welcomeAnimationDigest=0;
+        Require(refusedWith("Match animation content differs from this client"),"Welcome accepted a missing animation digest");
+        gateway.welcomeAnimationDigest=WorkerAnimationDigest;
+        connection.Join(gateway.address,"1");
+        gateway.Until([&]{const auto s=connection.State();
+            return (s.phase==ConnectionPhase::Lobby && !s.error.empty()) || s.phase==ConnectionPhase::Playing;});
+        Require(connection.State().phase==ConnectionPhase::Playing,"the same animation content did not join");
+        connection.Leave();
+        gateway.Until([&]{return connection.State().phase==ConnectionPhase::Lobby;});
 
         // pv8 sections 2-3 on the wire (v8-product-crouch W3, W4).
         CheckStance(gateway,connection,refusedWith);

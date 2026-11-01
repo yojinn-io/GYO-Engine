@@ -1,11 +1,15 @@
 # Object FPS PvP contracts
 
-Production Client, Gateway and Runtime use protocol version 8 (pv8) and reject
-every other version. pv8 takes effect with the v8 pv8-line: the crouch and
-sprint fields, the Match's movement rules in Ready and Welcome, and the counters
-narrowed to uint32. The product-owned
-[pv8 contract](../../../docs/object_fps_pvp/protocol-v8.zh-Hant.md) states what
-pv8 changes; every rule it does not restate stays as written in the
+Production Client, Gateway and Runtime use protocol version 9 (pv9) and reject
+every other version. pv9 takes effect with the v8 hitbox-line, merged once: hp
+and damage in milli-points (v8-product-hit-rules-permille) first, then the leg
+part and the Match's animation state in the line's later batches. The
+product-owned [pv9 contract](../../../docs/object_fps_pvp/protocol-v9.zh-Hant.md)
+states what pv9 changes; every rule it does not restate stays as written in the
+[pv8 contract](../../../docs/object_fps_pvp/protocol-v8.zh-Hant.md) (the crouch
+and sprint fields, the Match's movement rules in Ready and Welcome, and the
+counters narrowed to uint32), which states what pv8 changes; every rule it does
+not restate stays as written in the
 [pv7 contract](../../../docs/object_fps_pvp/protocol-v7.zh-Hant.md), which
 states what pv7 changes; every rule it does not restate stays as written in the
 [pv6 contract](../../../docs/object_fps_pvp/protocol-v6.zh-Hant.md) and the
@@ -16,8 +20,8 @@ implementation and acceptance. The version value has one definition per owner an
 language: C++ `wire::ProtocolVersion`, Go `adapter.ProtocolVersion`, and the
 acceptance expected values; `object_fps_pvp.protocol_version` checks that they agree.
 
-`client_v8.proto` defines remote Client ↔ Gateway payloads.
-`runtime_v8.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
+`client_v9.proto` defines remote Client ↔ Gateway payloads.
+`runtime_v9.proto` defines local ObjectFPS Adapter ↔ C++ IPC Host payloads.
 These independent schemas import no shared gameplay schema. The product Adapter
 maps generated types; Match receives product C++ values. No shared Engine or
 Gateway codec owns game rules.
@@ -59,8 +63,9 @@ them (field 16, the former `epoch_start_wait_us`, is reserved).
 presentation-only hit record of the current life: all zero before the first hit, written
 by the Match when a legal Shot hits the player, kept while dead and reset on respawn.
 Adapters require all zero or all set, a tick inside the current life state and the
-snapshot, an attacker other than the player, a count no larger than maximum_hp, and a
-dead player whose last hit is its death tick. Nothing in the authority reads them.
+snapshot, an attacker other than the player, a count no larger than maximum_hp
+(a bound only: the Match keeps one life within six hits, pv9 §3), and a dead
+player whose last hit is its death tick. Nothing in the authority reads them.
 `Ready.arena_digest` and `Welcome.arena_digest` (fixed64) carry the Match's arena content
 digest: FNV-1a 64 over the parsed arena in a canonical byte order, zero meaning missing.
 The Gateway rejects a zero digest at readiness and forwards it verbatim into Welcome,
@@ -83,17 +88,30 @@ are explicitly mapped, since their numeric values differ from the wire enums.
 judged at (pv7 contract §6, A1). `ShotRequest.view_tick_q16`, the `HitPart` fields
 (`ShotDecision.hit_part`, `CombatState.last_hit_part`) and
 `CombatRules.maximum_shot_damage` are the contract support for skeletal hitboxes
-(pv7 contract §7): the Client fills `view_tick_q16` as observed, and the Match
-fills the others with values equal to the current behaviour until v8 implements
-hitboxes.
+(pv7 contract §7; LEG from pv9 §2): the Client fills `view_tick_q16` as observed,
+and the Match fills the others with values equal to the current behaviour (BODY
+only) until the hitbox-line judges parts.
+`WorldSnapshot.animation` (pv9 §4) carries one `PlayerAnimation` per player of its
+current life: the Match's authoritative gait phase, move, jog and sprint weights
+and jump phase with its zero point. Adapters and the Client check it alone
+(§4.5: count and ids, life, weights <= 1000, no sprint weight yet, a phase in
+1..4 whose zero point is not after the snapshot, and Start/Airborne exactly when
+a living player is not grounded); the Match guards the same before writing.
+`Ready.animation_digest` (18) and `Welcome.animation_digest` (20), fixed64, carry
+`AnimationContentDigest` of the Match's player animation content (pv9 §4.6): the
+first 8 bytes, little-endian, of a SHA-256 over the presentation values that move
+the pose, the transferred keys of the 15 posed clips and the skeleton; zero means
+missing and a zero hash becomes 1. The Gateway rejects a zero digest at readiness
+and copies it into Welcome; the Client compares it with its own content and fails
+with `Match animation content differs from this client`.
 
-Generated Go bindings are checked in under `clientv8/` and `runtimev8/`. Regenerate
+Generated Go bindings are checked in under `clientv9/` and `runtimev9/`. Regenerate
 both with the pinned protoc from the C++ build and `protoc-gen-go` from the product's
 pinned `google.golang.org/protobuf` module, from the product module root:
 
 ```sh
 protoc --proto_path=protocol --go_out=. --go_opt=module=gyo.local/object_fps_pvp \
-  protocol/client_v8.proto protocol/runtime_v8.proto
+  protocol/client_v9.proto protocol/runtime_v9.proto
 ```
 
 C++ generated files belong to the build tree. Do not hand-edit generated bindings

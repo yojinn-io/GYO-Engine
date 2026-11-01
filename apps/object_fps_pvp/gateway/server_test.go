@@ -20,8 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 func TestCreateRoomWaitsForFragmentedJSON(t *testing.T) {
@@ -94,7 +94,7 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 		f.conn = conn
 		f.mu.Unlock()
 		ready := envelope()
-		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CrouchBodyHeight: 1.2, CrouchEyeHeight: 1, CrouchSpeedScale: .5, SprintSpeedScale: 1, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
+		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, CrouchBodyHeight: 1.2, CrouchEyeHeight: 1, CrouchSpeedScale: .5, SprintSpeedScale: 1, ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, AnimationDigest: testAnimationDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
 		f.send(ready)
 		for {
 			b, err := framing.ReadFrame(conn)
@@ -157,9 +157,10 @@ func startTestServer(t *testing.T) (*Server, *fakeRuntime, context.CancelFunc, <
 func (f *fakeRuntime) send(e *runtime.RuntimeEnvelope) {
 	if snapshot := e.GetSnapshot(); snapshot != nil && snapshot.Combat == nil {
 		for _, p := range snapshot.Players {
-			snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: p.PlayerId, Hp: 100})
+			snapshot.Combat = append(snapshot.Combat, &runtime.CombatState{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: p.PlayerId, Hp: 100000})
 		}
 	}
+	fillAnimation(e.GetSnapshot())
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, _ := proto.Marshal(e)
@@ -211,6 +212,9 @@ type credentials struct {
 
 // testArenaDigest is an opaque nonzero digest; the Gateway only forwards it.
 const testArenaDigest uint64 = 0xfedcba9876543210
+
+// testAnimationDigest is the same for the animation content (pv9 §4.6).
+const testAnimationDigest uint64 = 0x0123456789abcdef
 
 func post(t *testing.T, s *Server, path string, body any) (int, []byte) {
 	t.Helper()
@@ -339,7 +343,8 @@ func TestHTTPReservationHandshakeInputAndSnapshot(t *testing.T) {
 	e.Message = &runtime.RuntimeEnvelope_JoinResult{JoinResult: &runtime.JoinResult{PlayerId: c.PlayerID, Accepted: true}}
 	f.send(e)
 	var welcome client.Welcome
-	if err := proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome); err != nil || welcome.PlayerId != c.PlayerID || welcome.TickRate != 60 || welcome.ArenaDigest != testArenaDigest {
+	if err := proto.Unmarshal(receivePacket(t, p, adapter.Welcome), &welcome); err != nil || welcome.PlayerId != c.PlayerID || welcome.TickRate != 60 || welcome.ArenaDigest != testArenaDigest ||
+		welcome.AnimationDigest != testAnimationDigest {
 		t.Fatalf("welcome %v %v", &welcome, err)
 	}
 	// pv8 §3: the Match's movement rules reach the Client as Ready carried them.
@@ -564,17 +569,19 @@ func TestV1ClientAndAllOldRuntimeVersionsAreRejected(t *testing.T) {
 	accept(t, f, c)
 	receivePacket(t, p, adapter.Welcome)
 
-	// Every other version, and the current one without an arena digest.
+	// Every other version, and the current one without an arena digest or
+	// without an animation digest (pv9 §4.6).
 	type readyCase struct {
-		version uint32
-		digest  uint64
+		version   uint32
+		digest    uint64
+		animation uint64
 	}
-	cases := []readyCase{{adapter.RuntimeVersion, 0}}
+	cases := []readyCase{{adapter.RuntimeVersion, 0, testAnimationDigest}, {adapter.RuntimeVersion, testArenaDigest, 0}}
 	for _, version := range rejectedVersions() {
-		cases = append(cases, readyCase{version, testArenaDigest})
+		cases = append(cases, readyCase{version, testArenaDigest, testAnimationDigest})
 	}
 	for _, c := range cases {
-		version, digest := c.version, c.digest
+		version, digest, animation := c.version, c.digest, c.animation
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatal(err)
@@ -589,13 +596,13 @@ func TestV1ClientAndAllOldRuntimeVersionsAreRejected(t *testing.T) {
 			}
 			defer conn.Close()
 			ready := &runtime.RuntimeEnvelope{ProtocolVersion: version, Message: &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18,
-				ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: digest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}}
+				ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: digest, AnimationDigest: animation, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}}
 			b, _ := proto.Marshal(ready)
 			_ = framing.WriteFrame(conn, b)
 		}()
 		if link, _, err := connectRuntime(context.Background(), listener.Addr().String()); err == nil {
 			link.close()
-			t.Fatalf("runtime v%d with digest %x admitted", version, digest)
+			t.Fatalf("runtime v%d with digest %x admitted (animation digest %x)", version, digest, animation)
 		}
 		<-done
 	}
@@ -725,7 +732,7 @@ func rejectedVersions() []uint32 {
 }
 
 func testRules() *runtime.CombatRules {
-	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100, ShotDamage: 25, MaximumShotDamage: 25, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
+	return &runtime.CombatRules{MagazineCapacity: 12, ReloadTicks: 90, RespawnTicks: 180, MaximumHp: 100000, ShotDamage: 25000, MaximumShotDamage: 25000, CooldownTicks: 10, ShotRange: 100, MaximumReferenceAgeMs: 250}
 }
 
 // Readiness requires the Match's capacity to equal the Gateway's (pv6 contract
@@ -747,7 +754,7 @@ func TestReadinessRequiresTheSameCapacity(t *testing.T) {
 			defer conn.Close()
 			ready := envelope()
 			ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1,
-				ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: capacity, CombatRules: testRules()}}
+				ArenaDigest: testArenaDigest, AnimationDigest: testAnimationDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: capacity, CombatRules: testRules()}}
 			b, _ := proto.Marshal(ready)
 			_ = framing.WriteFrame(conn, b)
 		}()

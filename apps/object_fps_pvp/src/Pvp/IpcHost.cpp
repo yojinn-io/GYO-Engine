@@ -4,7 +4,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "engine/threads/RoleThread.hpp"
-#include "runtime_v8.pb.h"
+#include "runtime_v9.pb.h"
 #include "engine/base/Assert.hpp"
 #include <google/protobuf/unknown_field_set.h>
 #include <asio.hpp>
@@ -27,7 +27,7 @@
 #include <utility>
 
 namespace fps::pvp {
-namespace pb = object_fps_pvp::runtime::v8;
+namespace pb = object_fps_pvp::runtime::v9;
 using asio::ip::tcp;
 namespace {
 // Diagnostics only: lifecycle events and a statistics line every ten seconds
@@ -140,6 +140,13 @@ pb::RuntimeEnvelope SnapshotMessage(const WorldSnapshot& snapshot) {
         state->set_damage_count(p.damageCount);state->set_last_attacker_id(wire::Counter(p.lastAttackerId));
         state->set_last_hit_part(static_cast<pb::HitPart>(p.lastHitPart));
     }
+    for(const auto& a:snapshot.animation) { // pv9 §4.2, §4.3
+        auto* value=out->add_animation();value->set_player_id(wire::Counter(a.playerId));
+        value->set_life_generation(wire::Counter(a.lifeGeneration));value->set_gait_phase_q16(a.gaitPhaseQ16);
+        value->set_move_weight_permille(a.moveWeightPermille);value->set_jog_weight_permille(a.jogWeightPermille);
+        value->set_jump_phase(static_cast<pb::JumpPhase>(a.jumpPhase));value->set_jump_phase_tick(wire::Counter(a.jumpPhaseTick));
+        value->set_sprint_weight_permille(a.sprintWeightPermille);
+    }
     return message;
 }
 // pv7 §2a: a lane resends every unacknowledged decision, at most once per
@@ -175,7 +182,14 @@ struct ActionLane {
 };
 // The hit part's wire value is the domain's (pv7 §7).
 static_assert(static_cast<int>(HitPart::Unspecified)==pb::HIT_PART_UNSPECIFIED && static_cast<int>(HitPart::Body)==pb::HIT_PART_BODY &&
-              static_cast<int>(HitPart::Head)==pb::HIT_PART_HEAD && pb::HitPart_ARRAYSIZE==3,"HitPart differs from the wire");
+              static_cast<int>(HitPart::Head)==pb::HIT_PART_HEAD && static_cast<int>(HitPart::Leg)==pb::HIT_PART_LEG &&
+              pb::HitPart_ARRAYSIZE==4,"HitPart differs from the wire");
+static_assert(static_cast<int>(JumpPhase::Unspecified)==pb::JUMP_PHASE_UNSPECIFIED &&
+              static_cast<int>(JumpPhase::Grounded)==pb::JUMP_PHASE_GROUNDED &&
+              static_cast<int>(JumpPhase::Start)==pb::JUMP_PHASE_START &&
+              static_cast<int>(JumpPhase::Airborne)==pb::JUMP_PHASE_AIRBORNE &&
+              static_cast<int>(JumpPhase::Land)==pb::JUMP_PHASE_LAND && pb::JumpPhase_ARRAYSIZE==5,
+              "JumpPhase differs from the wire");
 // The wire name of each refusal: ActionRefusal is IngressActionRejection + 1,
 // value for value (pv7 §5: the names are the host's).
 constexpr pb::ActionRefusal RefusalForWire(IngressActionRejection reason) {
@@ -405,6 +419,7 @@ struct IpcHost::Impl {
     MatchRuntimeHost& host;
     Arena arena;
     std::uint64_t arenaDigest{};
+    std::uint64_t animationDigest{};
     asio::io_context io;
     tcp::acceptor listener{io};
     tcp::socket socket{io};
@@ -439,9 +454,11 @@ struct IpcHost::Impl {
     }
     std::optional<Engine::Threads::RoleThread> role;
 
-    Impl(MatchRuntimeHost& value,const Arena& content):host(value),arena(content),arenaDigest(ArenaContentDigest(content)) {
+    Impl(MatchRuntimeHost& value,const Arena& content,std::uint64_t animation):host(value),arena(content),
+        arenaDigest(ArenaContentDigest(content)),animationDigest(animation) {
         // Zero is reserved for a missing digest: such an arena cannot be served.
         if(!arenaDigest) throw std::runtime_error("Arena content digest is zero");
+        if(!animationDigest) throw std::runtime_error("Animation content digest is zero");
         if(std::string error; !ArenaHostsRoom(content,error)) throw std::runtime_error(error);
         gate->impl=this;
         host.SetPublishListener([gate=gate] {
@@ -488,6 +505,7 @@ struct IpcHost::Impl {
         if(error) {Close("socket setup: "+error.message());return;}
         pb::RuntimeEnvelope ready; ready.set_protocol_version(wire::ProtocolVersion);
         auto* r=ready.mutable_ready(); r->set_arena_id(arena.id); r->set_arena_version(arena.version); r->set_arena_digest(arenaDigest);
+        r->set_animation_digest(animationDigest); // pv9 §4.6
         r->set_jump_height(arena.jumpHeight);r->set_gravity(arena.gravity);
         const auto& stance=host.Stance(); // pv8 §3: the Match's movement rules data
         r->set_crouch_body_height(stance.crouchBodyHeight);r->set_crouch_eye_height(stance.crouchEyeHeight);
@@ -850,7 +868,8 @@ struct IpcHost::Impl {
         Pump();
     }
 };
-IpcHost::IpcHost(MatchRuntimeHost& host,const Arena& arena):impl_(std::make_unique<Impl>(host,arena)){}
+IpcHost::IpcHost(MatchRuntimeHost& host,const Arena& arena,std::uint64_t animationDigest):
+    impl_(std::make_unique<Impl>(host,arena,animationDigest)){}
 IpcHost::~IpcHost(){Stop();}
 bool IpcHost::Start(const std::string& listenAddress,std::string& error) {
     try {

@@ -391,7 +391,7 @@ HitPart（client 與 runtime 各一份，同號）：`HIT_PART_UNSPECIFIED` 0、
 ### 語意
 
 - `hit_part`：`HIT_PLAYER` ⇔ BODY 或 HEAD；其他情況一律 UNSPECIFIED；未知值＝這個結果批無效（既有路徑）。Gateway 與 Client 的驗證都接受 HEAD；v7.1 的 Match 不產生（產品測試鎖住）。v8 開始產生時，驗證不必改。
-- `last_hit_part`：受擊紀錄的第 4 欄，和 `last_damage_tick`、`damage_count`、`last_attacker_id` 在同一處寫入，重生時一起歸零。protocol-v6 §2 的第 1、4 條擴成四欄：四欄同時為 0 或同時非 0；Dead 時非 0；非 0 時∈{BODY, HEAD}。只供呈現，不進 DigestFields v1。v8 依它選 Hit_Chest 或 Hit_Head（改寫 protocol-v6 §6）。
+- `last_hit_part`：受擊紀錄的第 4 欄，和 `last_damage_tick`、`damage_count`、`last_attacker_id` 在同一處寫入，重生時一起歸零。protocol-v6 §2 的第 1、4 條擴成四欄：四欄同時為 0 或同時非 0；Dead 時非 0；非 0 時∈{BODY, HEAD}。只供呈現，不進 DigestFields v1。v8 依它選 Hit_Chest 或 Hit_Head（改寫 protocol-v6 §6）。（**pv9 起改寫**：受擊、射擊、換彈的紀錄決定判定姿勢的上半身，成為判定的輸入，權威 digest 自 version 3 起納入；見 [protocol-v9](protocol-v9.zh-Hant.md) §7 第 5 項。）
 - `view_tick_q16`：射手看到的遠端時刻＝點擊之前最後一次呈現時，SnapshotTimeline 的**全域插值游標**（`cursor_`＋`baseTick_`），換成 Tick×65536 並 floor；不是逐目標的呈現時刻。沒有呈現任何遠端玩家時填 0。解碼層不驗證（以免改變凍結 `action_probe` 的 `conflicting_kind` 歸屬）；Match 只做紀錄性檢查（Shot：0，或 65536≤v≤observed_authority_tick×65536；Reload：0），不符就視為缺少並計入 `view_tick_invalid`，永遠不因此拒絕動作。v7.1 的 Match 記錄 view_lag＝J−view_tick/65536，作為 v8 回溯窗口的參考。
 - `maximum_shot_damage`：單次裁決的傷害上限，包含 v8 的部位倍率；`shot_damage` 仍是基本（BODY）傷害。驗證：`shot_damage` ≤ `maximum_shot_damage` ≤ `maximum_hp`；`ShotDecision.damage` 的上限改成它。
 - 實作（`hitbox-fields`）：`view_tick_q16` 的全域游標是 `SnapshotTimeline::GlobalCursor()`；Client 在每一幀抽樣遠端玩家後換算（`ViewTickQ16`），該幀確實 Presented 時記下，點擊時用最後一次呈現的值；Reload 一律 0。E、S 取自同一份 `ClientPresented` 的 observation（`ActionContext`）。紀錄性檢查與 view_lag 寫在影子紀錄（§6），不加在 Match 的 ingress 統計行。讀取端共用 `ValidDecisionHitPart`、`ValidShotDamageBounds`（`Combat.hpp`）；HitPart 的 wire 值與 Domain 由 IpcHost 的 `static_assert` 守住。
@@ -401,7 +401,7 @@ HitPart（client 與 runtime 各一份，同號）：`HIT_PART_UNSPECIFIED` 0、
 - 目標姿勢的取用時刻 τ 由 Match 的政策決定，界限是 J−R ≤ τ ≤ J。R 是 Match 的產品常數，不上 wire；換算成時間不得超過 `CombatRules.maximum_reference_age_ms`。v7.1 的 R＝0。
 - Match 可以把每個目標各自夾到該目標目前生命或 epoch 的起點（因為 `view_tick_q16` 是全域游標，目標若在它之後重生，射手畫面上的目標其實停在新區段的起點）。
 - τ 時與 J 時目標的生命不同時，該命中不得傷害目標目前的生命。
-- 射手側的時刻由 A1 的 S 提供，所以 v8 回溯需要的兩個時刻在 pv7 都有了。命中幾何來自 Match 擁有的內容，只讀權威狀態；Renderer 與呈現動畫不參與。
+- 射手側的時刻由 A1 的 S 提供，所以 v8 回溯需要的兩個時刻在 pv7 都有了。命中幾何來自 Match 擁有的內容，只讀權威狀態；Renderer 與呈現動畫不參與。（**pv9 起改寫**：判定姿勢只由 Match 的權威動畫狀態 `WorldSnapshot.animation` 加上權威欄位的純函式與 Match 的形狀資料決定；Client 的呈現照 snapshot 播放，不參與判定。見 [protocol-v9](protocol-v9.zh-Hant.md) §7 第 2 項。）
 - v8 調整 R、hitbox 內容與倍率，屬於 Match 的政策與內容，不是 wire 變更。
 
 ## 8. 大小預算

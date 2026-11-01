@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 
 #include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
 #include "../App/AssetDefinitionHelpers.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/TextureAsset.hpp"
@@ -26,28 +27,9 @@ using Engine::Math::Vec3;
 using Resource = Engine::ModelRenderer::ModelResource;
 using Instance = Engine::ModelRenderer::ModelInstance;
 
-std::size_t Node(const Engine::Model::ModelAsset& model, const std::string& name) {
-    const auto found = model.FindNode(name);
-    if (!found || std::count_if(model.nodes.begin(), model.nodes.end(),
-            [&](const auto& node) { return node.name == name; }) != 1)
-        throw std::runtime_error("missing or ambiguous player bone: " + name);
-    return *found;
-}
-
 template <class E>
 void Require(const Engine::Base::Result<void, E>& result) {
     if (!result) throw std::runtime_error(result.error().message);
-}
-
-// The base pose plus the motion of one clip since its reference frame, in the
-// node's own local space: the base rotation, then the clip's rotation since
-// the reference. Translation adds its offset; the base scale stays.
-Engine::Model::Transform AddMotion(const Engine::Model::Transform& base, const Engine::Model::Transform& reference,
-                                   const Engine::Model::Transform& motion) {
-    using namespace Engine::Math;
-    const auto delta = Multiply(Inverse(NormalizeOrIdentity(reference.rotation)), NormalizeOrIdentity(motion.rotation));
-    return {base.translation + (motion.translation - reference.translation),
-            NormalizeOrIdentity(Multiply(NormalizeOrIdentity(base.rotation), delta)), base.scale};
 }
 
 std::shared_ptr<Resource> CreateResource(Engine::Render::IRenderDevice& device,
@@ -75,481 +57,6 @@ std::shared_ptr<Resource> CreateResource(Engine::Render::IRenderDevice& device,
 }
 } // namespace
 
-std::shared_ptr<const PlayerPresentationDefinition> LoadPlayerPresentationDefinition(
-    Engine::Asset::AssetManager& assets, const float bodyHeight, std::string& error) {
-    error.clear();
-    try {
-        using namespace asset_definition_detail;
-        if (!std::isfinite(bodyHeight) || bodyHeight <= 0)
-            throw std::runtime_error("player body height must be finite and positive");
-        const auto text = LoadShared<Engine::Asset::Loaders::TextAsset>(assets,
-            Engine::Asset::AssetId::FromString("object_fps_pvp.player.presentation"),
-            Engine::Asset::AssetType::Text());
-        const auto config = nlohmann::json::parse(text->text);
-        RequireVersionOne(config);
-        auto definition = std::make_shared<PlayerPresentationDefinition>();
-        definition->character = LoadCharacterPresentationDefinition(assets,
-            ReadAssetId(config.at("character_asset_id")), error);
-        if (!definition->character || !definition->character->animationSet)
-            throw std::runtime_error(error.empty() ? "player requires an animation set" : error);
-        const auto& character = *definition->character;
-        const auto& model = *character.model;
-        const auto clip = [&](const std::string& name) {
-            const auto found = character.animationSet->clips.find(name);
-            if (found == character.animationSet->clips.end())
-                throw std::runtime_error("missing player animation: " + name);
-            const auto index = found->second.clipIndex;
-            if (index >= model.clips.size() || model.clips[index].durationSeconds <= 0)
-                throw std::runtime_error("player animation requires positive duration: " + name);
-            return index;
-        };
-        definition->idleClip = clip("idle");
-        definition->walkClip = clip("walk");
-        definition->jogClip = clip("jog");
-        definition->shootClip = clip("shoot");
-        definition->reloadClip = clip("reload");
-        definition->jumpStartClip = clip("jump_start");
-        definition->jumpLoopClip = clip("jump_loop");
-        definition->jumpLandClip = clip("jump_land");
-        definition->deathClip = clip("death");
-        definition->aimUpClip = clip("aim_up");
-        definition->aimNeutralClip = clip("aim_neutral");
-        definition->aimDownClip = clip("aim_down");
-        definition->hitClip = clip("hit");
-        definition->crouchIdleClip = clip("crouch_idle");
-        definition->crouchMoveClip = clip("crouch_move");
-        definition->bodyHeight = bodyHeight;
-        definition->referenceSpeed = config.at("reference_speed").get<float>();
-        const auto& locomotion = config.at("locomotion");
-        definition->walkNativeSpeed = locomotion.at("walk_native_speed").get<double>();
-        definition->jogNativeSpeed = locomotion.at("jog_native_speed").get<double>();
-        definition->transitionSeconds = config.at("transition_seconds").get<double>();
-        definition->maxFrameDeltaSeconds = config.at("max_frame_delta_seconds").get<double>();
-        if (!std::isfinite(definition->referenceSpeed) || definition->referenceSpeed <= 0 ||
-            !std::isfinite(definition->walkNativeSpeed) || definition->walkNativeSpeed <= 0 ||
-            !std::isfinite(definition->jogNativeSpeed) || definition->jogNativeSpeed <= definition->walkNativeSpeed ||
-            !std::isfinite(definition->transitionSeconds) || definition->transitionSeconds <= 0 ||
-            !std::isfinite(definition->maxFrameDeltaSeconds) || definition->maxFrameDeltaSeconds <= 0)
-            throw std::runtime_error("player locomotion calibration must be finite and positive, with jog faster than walk");
-        const auto& aim = config.at("aim");
-        definition->aimUpRadians = aim.at("up_pitch_radians").get<double>();
-        definition->aimDownRadians = aim.at("down_pitch_radians").get<double>();
-        for (const double limit : {definition->aimUpRadians, definition->aimDownRadians})
-            if (!std::isfinite(limit) || limit <= 0 || limit > MovementMaximumPitch)
-                throw std::runtime_error("player aim pitch limits must be positive and within the maximum pitch");
-        const auto& actions = config.at("actions");
-        definition->shotSeconds = actions.at("shot_seconds").get<double>();
-        definition->jumpStartSeconds = actions.at("jump_start_seconds").get<double>();
-        definition->jumpLandSeconds = actions.at("jump_land_seconds").get<double>();
-        definition->hitSeconds = actions.at("hit_seconds").get<double>();
-        for (const double span : {definition->shotSeconds, definition->jumpStartSeconds, definition->jumpLandSeconds,
-                                  definition->hitSeconds})
-            if (!std::isfinite(span) || span <= 0)
-                throw std::runtime_error("player action spans must be finite and positive");
-
-        Pose reference;
-        Require(Engine::Model::MakeDefaultPose(model, reference));
-        float minimum = std::numeric_limits<float>::max(), maximum = -minimum;
-        std::vector<Engine::Model::SkinnedVertex> vertices;
-        for (std::size_t mesh = 0; mesh < model.meshes.size(); ++mesh) {
-            Require(Engine::Model::SkinMesh(model, mesh, reference, vertices));
-            for (const auto& vertex : vertices) {
-                minimum = Engine::Math::Min(minimum, vertex.position.y);
-                maximum = Engine::Math::Max(maximum, vertex.position.y);
-            }
-        }
-        if (!std::isfinite(maximum - minimum) || maximum - minimum < 0.001F)
-            throw std::runtime_error("player model has no usable reference height");
-        definition->anchor = {0, minimum, 0};
-        definition->scale = bodyHeight / (maximum - minimum);
-        definition->upperBodyRoot = Node(model, config.at("upper_body_root").get<std::string>());
-        definition->upperBodyMask.resize(model.nodes.size());
-        for (std::size_t i = 0; i < model.nodes.size(); ++i) {
-            const auto parent = model.nodes[i].parentIndex;
-            definition->upperBodyMask[i] = i == definition->upperBodyRoot ||
-                (parent && definition->upperBodyMask[*parent]);
-        }
-        if (!definition->upperBodyMask[Node(model, "Head")] ||
-            !definition->upperBodyMask[Node(model, "hand_r")] ||
-            definition->upperBodyMask[Node(model, "pelvis")] ||
-            definition->upperBodyMask[Node(model, "thigh_l")] ||
-            definition->upperBodyMask[Node(model, "thigh_r")])
-            throw std::runtime_error("player upper-body mask must contain head/hand but exclude pelvis/legs");
-
-        const auto& weapon = config.at("weapon");
-        definition->weapon = LoadCharacterPresentationDefinition(assets,
-            ReadAssetId(weapon.at("character_asset_id")), error);
-        if (!definition->weapon) throw std::runtime_error(error);
-        if (definition->weapon->animationSet || !definition->weapon->accessories.empty())
-            throw std::runtime_error("player weapon must be a static attachment");
-        definition->weaponNode = Node(model, weapon.at("node").get<std::string>());
-        if (!definition->upperBodyMask[definition->weaponNode])
-            throw std::runtime_error("player weapon bone must be inside the upper-body mask");
-        const auto& p = weapon.at("translation");
-        const auto& r = weapon.at("rotation_xyzw");
-        if (!p.is_array() || p.size() != 3 || !r.is_array() || r.size() != 4)
-            throw std::runtime_error("player weapon mount requires translation and quaternion");
-        auto& mount = definition->weaponMount;
-        mount.translation = {p[0].get<float>(), p[1].get<float>(), p[2].get<float>()};
-        auto& q = mount.rotation;
-        q = {r[0].get<float>(), r[1].get<float>(), r[2].get<float>(), r[3].get<float>()};
-        const float lengthSquared = Engine::Math::LengthSquared(q);
-        const float scale = weapon.at("scale").get<float>();
-        if (!Engine::Math::IsFinite(mount.translation) ||
-            !std::isfinite(lengthSquared) || lengthSquared < 1e-12F || !std::isfinite(scale) || scale <= 0)
-            throw std::runtime_error("player weapon mount must be finite with positive scale");
-        q = Engine::Math::Normalize(q);
-        mount.scale = {scale, scale, scale};
-        Require(Engine::Model::MakeDefaultPose(*definition->weapon->model,
-            definition->weaponReferencePose));
-        return definition;
-    } catch (const std::exception& exception) {
-        error = "player presentation definition: " + std::string(exception.what());
-        return {};
-    }
-}
-
-double PlayerJogWeight(const PlayerPresentationDefinition& definition, const double planarSpeed) {
-    return Engine::Math::Clamp((planarSpeed - definition.walkNativeSpeed) /
-        (definition.jogNativeSpeed - definition.walkNativeSpeed), 0.0, 1.0);
-}
-
-double PlayerCycleDistance(const PlayerPresentationDefinition& definition, const double jogWeight) {
-    // Each clip covers its native speed times its authored length per cycle.
-    // Both are sampled at one gait phase, so their stance feet blend into a
-    // foot that moves, on average, at the presented speed.
-    const auto& clips = definition.character->model->clips;
-    const double walk = definition.walkNativeSpeed * clips[definition.walkClip].durationSeconds;
-    const double jog = definition.jogNativeSpeed * clips[definition.jogClip].durationSeconds;
-    return walk + (jog - walk) * jogWeight;
-}
-
-bool AdvancePlayerLocomotion(PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
-    const PlayerPresentationDefinition& definition, std::string& error) {
-    error.clear();
-    if (!frame.playerId || !frame.movementEpoch || !Engine::Math::IsFinite(frame.position) ||
-        !std::isfinite(frame.yaw) || !std::isfinite(frame.presentationSeconds) ||
-        !std::isfinite(frame.deltaSeconds) || frame.deltaSeconds < 0 ||
-        !definition.character || !definition.character->model ||
-        definition.jogClip >= definition.character->model->clips.size() ||
-        definition.walkClip >= definition.character->model->clips.size() ||
-        !std::isfinite(definition.referenceSpeed) || definition.referenceSpeed <= 0 ||
-        !std::isfinite(definition.walkNativeSpeed) || definition.walkNativeSpeed <= 0 ||
-        !std::isfinite(definition.jogNativeSpeed) || definition.jogNativeSpeed <= definition.walkNativeSpeed ||
-        !std::isfinite(frame.planarSpeed) || frame.planarSpeed < 0 ||
-        !std::isfinite(definition.transitionSeconds) || definition.transitionSeconds <= 0 ||
-        !std::isfinite(definition.maxFrameDeltaSeconds) || definition.maxFrameDeltaSeconds <= 0 ||
-        !std::isfinite(frame.verticalVelocity) || !std::isfinite(frame.lifeStateSeconds) ||
-        !std::isfinite(frame.shotSeconds) || !std::isfinite(frame.reloadStartSeconds) ||
-        !std::isfinite(frame.reloadEndSeconds) ||
-        !std::isfinite(definition.jumpStartSeconds) || definition.jumpStartSeconds <= 0 ||
-        !std::isfinite(definition.jumpLandSeconds) || definition.jumpLandSeconds <= 0) {
-        error = "player locomotion requires valid sampled values and calibration";
-        return false;
-    }
-    for (const auto clip : {definition.walkClip, definition.jogClip}) {
-        const double duration = definition.character->model->clips[clip].durationSeconds;
-        if (!std::isfinite(duration) || duration <= 0) {
-            error = "player walk and jog durations must be finite and positive";
-            return false;
-        }
-    }
-    const double elapsed = frame.presentationSeconds - state.previousPresentationSeconds;
-    const Engine::Math::Vec3d planar{static_cast<double>(frame.position.x) - state.previousPosition.x, 0.0,
-                                     static_cast<double>(frame.position.z) - state.previousPosition.z};
-    const double distance = Engine::Math::Length(planar);
-    std::string reset;
-    if (!state.initialized) reset = "spawn";
-    else if (frame.playerId != state.playerId) reset = "player";
-    else if (frame.lifeGeneration != state.lifeGeneration || frame.dead != state.dead) reset = "life";
-    else if (frame.movementEpoch != state.movementEpoch) reset = "epoch";
-    else if (!frame.continuous) reset = "discontinuity";
-    else if (frame.deltaSeconds >= definition.maxFrameDeltaSeconds ||
-             elapsed >= definition.maxFrameDeltaSeconds) reset = "long_frame";
-    else if (elapsed < 0 || (elapsed == 0 && distance > 0.000001)) reset = "time";
-    else if (distance > definition.referenceSpeed * definition.maxFrameDeltaSeconds)
-        reset = "teleport";
-    if (!reset.empty()) {
-        const auto count = state.resetCount + 1;
-        state = {};
-        state.initialized = true;
-        state.phaseReset = true;
-        state.resetCount = count;
-        state.resetReason = std::move(reset);
-        state.playerId = frame.playerId;
-        state.movementEpoch = frame.movementEpoch;
-        state.lifeGeneration = frame.lifeGeneration;
-        state.dead = frame.dead;
-        // A reanchor never invents a liftoff or landing it did not observe.
-        state.grounded = frame.grounded;
-        state.jumpPhase = frame.grounded ? PlayerJumpPhase::Grounded : PlayerJumpPhase::Airborne;
-        state.jumpPhaseSeconds = frame.presentationSeconds;
-        state.jogWeight = PlayerJogWeight(definition, frame.planarSpeed);
-        state.cycleDistance = PlayerCycleDistance(definition, state.jogWeight);
-    } else {
-        state.phaseReset = false;
-        state.resetReason.clear();
-        state.distanceDelta = distance > 0.000001 ? distance : 0;
-        state.jogging = state.distanceDelta > 0;
-        state.backward = state.jogging && Engine::Math::Dot(planar,
-            Engine::Math::Vec3d{std::sin(frame.yaw), 0.0, std::cos(frame.yaw)}) < -0.000001;
-        // A timeline can label its final moving sample as holding. Consume its
-        // real displacement, then stop on the subsequent unchanged sample.
-        state.holding = frame.holding && !state.jogging;
-        const double signedDelta = state.backward ? -state.distanceDelta : state.distanceDelta;
-        state.signedDistance += signedDelta;
-        state.totalDistance += state.distanceDelta;
-        // The weight follows the authority-sampled speed, never this frame's own
-        // displacement, so equal routes reach equal phases at any render rate.
-        // Without a speed (held or stopped samples) the last blend is kept.
-        if (frame.planarSpeed > 0) state.jogWeight = PlayerJogWeight(definition, frame.planarSpeed);
-        state.cycleDistance = PlayerCycleDistance(definition, state.jogWeight);
-        state.unwrappedPhaseCycles += signedDelta / state.cycleDistance;
-        state.phaseCycles = state.unwrappedPhaseCycles - std::floor(state.unwrappedPhaseCycles);
-        state.speed = elapsed > 0 ? state.distanceDelta / elapsed : 0;
-        state.playbackRate = (state.backward ? -state.speed : state.speed) / state.cycleDistance;
-        state.idleSeconds += elapsed;
-        // All pose clocks follow the sampled timeline. A visible hold freezes
-        // its last walking pose instead of blending legs while position stalls.
-        if (!state.holding) {
-            const float weightStep = static_cast<float>(elapsed / definition.transitionSeconds);
-            state.moveWeight = state.jogging ? Engine::Math::Min(1.0F, state.moveWeight + weightStep) :
-                Engine::Math::Max(0.0F, state.moveWeight - weightStep);
-        }
-        const double now = frame.presentationSeconds;
-        if (state.grounded && !frame.grounded) {
-            state.jumpPhase = frame.verticalVelocity > 0 ? PlayerJumpPhase::Start : PlayerJumpPhase::Airborne;
-            state.jumpPhaseSeconds = now;
-        } else if (!state.grounded && frame.grounded) {
-            state.jumpPhase = PlayerJumpPhase::Land;
-            state.jumpPhaseSeconds = now;
-        }
-        // The contract spans end in sampled time; control never waits for them.
-        if (state.jumpPhase == PlayerJumpPhase::Start && now - state.jumpPhaseSeconds >= definition.jumpStartSeconds) {
-            state.jumpPhase = PlayerJumpPhase::Airborne;
-            state.jumpPhaseSeconds += definition.jumpStartSeconds;
-        } else if (state.jumpPhase == PlayerJumpPhase::Land &&
-                   now - state.jumpPhaseSeconds >= definition.jumpLandSeconds) {
-            state.jumpPhase = PlayerJumpPhase::Grounded;
-            state.jumpPhaseSeconds += definition.jumpLandSeconds;
-        }
-        state.grounded = frame.grounded;
-    }
-    state.previousPosition = frame.position;
-    state.previousPresentationSeconds = frame.presentationSeconds;
-    state.crouched = frame.crouched;
-    return true;
-}
-
-bool ResolvePlayerActions(const PlayerPresentationDefinition& definition,
-    const PlayerLocomotionState& state, const PlayerPresentationFrame& frame,
-    PlayerActionPose& output, std::string& error) {
-    error.clear();
-    output = {};
-    try {
-        if (!definition.character || !definition.character->model)
-            throw std::runtime_error("player actions require a resolved character");
-        const auto& clips = definition.character->model->clips;
-        const auto duration = [&](const std::size_t clip) {
-            if (clip >= clips.size() || !std::isfinite(clips[clip].durationSeconds) || clips[clip].durationSeconds <= 0)
-                throw std::runtime_error("player action clip requires a positive duration");
-            return clips[clip].durationSeconds;
-        };
-        // Contract spans are shorter than the authored clips: progress through
-        // the span maps onto the whole clip, which is time-scaled to fit.
-        const auto scaled = [](const double elapsed, const double span, const double clip) {
-            return Engine::Math::Clamp(elapsed / span, 0.0, 1.0) * clip;
-        };
-        const double now = frame.presentationSeconds;
-        if (!std::isfinite(now) || !std::isfinite(frame.lifeStateSeconds) || !std::isfinite(frame.shotSeconds) ||
-            !std::isfinite(frame.reloadStartSeconds) || !std::isfinite(frame.reloadEndSeconds) ||
-            !std::isfinite(state.jumpPhaseSeconds) || !std::isfinite(definition.shotSeconds) ||
-            definition.shotSeconds <= 0 || !std::isfinite(definition.jumpStartSeconds) ||
-            definition.jumpStartSeconds <= 0 || !std::isfinite(definition.jumpLandSeconds) ||
-            definition.jumpLandSeconds <= 0 || !std::isfinite(frame.damageSeconds) ||
-            !std::isfinite(definition.hitSeconds) || definition.hitSeconds <= 0)
-            throw std::runtime_error("player actions require finite times and positive spans");
-        if (!std::isfinite(frame.pitch))
-            throw std::runtime_error("player actions require a finite pitch");
-        if (frame.dead) {
-            // Full body; after the clip the last pose holds until the new life.
-            output.lower = PlayerLowerAction::Death;
-            output.lowerClipSeconds = Engine::Math::Clamp(now - frame.lifeStateSeconds, 0.0, duration(definition.deathClip));
-            return true;
-        }
-        // Clamp, then linear between neutral and the pose on that side.
-        output.aimWeight = frame.pitch < 0 ?
-            static_cast<float>(-Engine::Math::Min(1.0, -frame.pitch / definition.aimUpRadians)) :
-            static_cast<float>(Engine::Math::Min(1.0, frame.pitch / definition.aimDownRadians));
-        const double inPhase = Engine::Math::Max(0.0, now - state.jumpPhaseSeconds);
-        switch (state.jumpPhase) {
-        case PlayerJumpPhase::Start:
-            output.lower = PlayerLowerAction::JumpStart;
-            output.lowerClipSeconds = scaled(inPhase, definition.jumpStartSeconds, duration(definition.jumpStartClip));
-            break;
-        case PlayerJumpPhase::Airborne:
-            output.lower = PlayerLowerAction::JumpLoop;
-            static_cast<void>(duration(definition.jumpLoopClip));
-            output.lowerClipSeconds = inPhase;
-            break;
-        case PlayerJumpPhase::Land:
-            output.lower = PlayerLowerAction::JumpLand;
-            output.lowerClipSeconds = scaled(inPhase, definition.jumpLandSeconds, duration(definition.jumpLandClip));
-            break;
-        case PlayerJumpPhase::Grounded:
-            break;
-        }
-        // Only actions of this alive period. The Match restarts combat state
-        // on respawn; a tick before the life began cannot belong to it.
-        // A hit outranks a shot or reload; it is anchored at the latest damage,
-        // so repeated or late snapshots and several hits at once play it once.
-        if (frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&
-            now >= frame.damageSeconds && now < frame.damageSeconds + definition.hitSeconds) {
-            output.upper = PlayerUpperAction::Hit;
-            output.upperClipSeconds = scaled(now - frame.damageSeconds, definition.hitSeconds, duration(definition.hitClip));
-        } else if (frame.reloadActionId && frame.reloadEndSeconds > frame.reloadStartSeconds &&
-            frame.reloadStartSeconds >= frame.lifeStateSeconds &&
-            now >= frame.reloadStartSeconds && now < frame.reloadEndSeconds) {
-            output.upper = PlayerUpperAction::Reload;
-            output.upperClipSeconds = scaled(now - frame.reloadStartSeconds,
-                frame.reloadEndSeconds - frame.reloadStartSeconds, duration(definition.reloadClip));
-            output.reloadActionId = frame.reloadActionId;
-        } else if (frame.shotActionId && frame.shotSeconds >= frame.lifeStateSeconds &&
-                   now >= frame.shotSeconds && now < frame.shotSeconds + definition.shotSeconds) {
-            output.upper = PlayerUpperAction::Shoot;
-            output.upperClipSeconds = scaled(now - frame.shotSeconds, definition.shotSeconds,
-                duration(definition.shootClip));
-            output.shotActionId = frame.shotActionId;
-        }
-        return true;
-    } catch (const std::exception& exception) {
-        output = {};
-        error = "player actions: " + std::string(exception.what());
-        return false;
-    }
-}
-
-bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
-    const PlayerLocomotionState& state, PlayerPresentationPose& output, std::string& error) {
-    return SamplePlayerPresentationPose(definition, state, PlayerActionPose{}, output, error);
-}
-
-bool SamplePlayerPresentationPose(const PlayerPresentationDefinition& definition,
-    const PlayerLocomotionState& state, const PlayerActionPose& actions,
-    PlayerPresentationPose& output, std::string& error) {
-    error.clear();
-    try {
-        if (!definition.character || !definition.character->model || !definition.weapon ||
-            !definition.weapon->model)
-            throw std::runtime_error("player pose requires resolved character and weapon");
-        const auto& model = *definition.character->model;
-        if (definition.upperBodyMask.size() != model.nodes.size() ||
-            definition.weaponNode >= model.nodes.size())
-            throw std::runtime_error("player pose requires a resolved mask and weapon bone");
-        if (!std::isfinite(actions.upperClipSeconds) || !std::isfinite(actions.lowerClipSeconds) ||
-            !std::isfinite(actions.aimWeight) || actions.aimWeight < -1 || actions.aimWeight > 1)
-            throw std::runtime_error("player pose requires finite action clip times and an aim weight in [-1, 1]");
-        using Engine::Model::PlaybackMode;
-        Pose idle;
-        Require(Engine::Model::SamplePose(model, definition.idleClip, state.idleSeconds,
-            PlaybackMode::Loop, idle));
-        Pose upperAction;
-        const Pose* upper = &idle;
-        switch (actions.lower) {
-        case PlayerLowerAction::Death:
-            Require(Engine::Model::SamplePose(model, definition.deathClip, actions.lowerClipSeconds,
-                PlaybackMode::Clamp, output.body));
-            upper = nullptr; // Death owns the whole body, weapon hand included.
-            break;
-        case PlayerLowerAction::Locomotion: {
-            if (state.crouched) {
-                // v8-product-crouch-pose: the crouch clips on the standing model.
-                Pose crouchIdle, crouchMove;
-                Require(Engine::Model::SamplePose(model, definition.crouchIdleClip, state.idleSeconds,
-                    PlaybackMode::Loop, crouchIdle));
-                Require(Engine::Model::SamplePose(model, definition.crouchMoveClip,
-                    state.phaseCycles * model.clips[definition.crouchMoveClip].durationSeconds, PlaybackMode::Loop, crouchMove));
-                Require(Engine::Model::BlendPoses(model, crouchIdle, crouchMove, state.moveWeight, output.body));
-                break;
-            }
-            Pose walk, jog, gait;
-            Require(Engine::Model::SamplePose(model, definition.walkClip,
-                state.phaseCycles * model.clips[definition.walkClip].durationSeconds, PlaybackMode::Loop, walk));
-            Require(Engine::Model::SamplePose(model, definition.jogClip,
-                state.phaseCycles * model.clips[definition.jogClip].durationSeconds, PlaybackMode::Loop, jog));
-            Require(Engine::Model::BlendPoses(model, walk, jog, static_cast<float>(state.jogWeight), gait));
-            Require(Engine::Model::BlendPoses(model, idle, gait, state.moveWeight, output.body));
-            break;
-        }
-        case PlayerLowerAction::JumpStart:
-            Require(Engine::Model::SamplePose(model, definition.jumpStartClip, actions.lowerClipSeconds,
-                PlaybackMode::Clamp, output.body));
-            break;
-        case PlayerLowerAction::JumpLoop:
-            Require(Engine::Model::SamplePose(model, definition.jumpLoopClip, actions.lowerClipSeconds,
-                PlaybackMode::Loop, output.body));
-            break;
-        case PlayerLowerAction::JumpLand:
-            Require(Engine::Model::SamplePose(model, definition.jumpLandClip, actions.lowerClipSeconds,
-                PlaybackMode::Clamp, output.body));
-            break;
-        default:
-            throw std::runtime_error("player pose has an invalid lower-body action");
-        }
-        if (upper) {
-            // The aim pose by pitch is the upper-body base; the idle clip, or
-            // the shot or reload, adds its motion since its own first frame.
-            Pose aim, extreme, reference;
-            Require(Engine::Model::SamplePose(model, definition.aimNeutralClip, 0, PlaybackMode::Clamp, aim));
-            if (actions.aimWeight != 0) {
-                Require(Engine::Model::SamplePose(model, actions.aimWeight < 0 ? definition.aimUpClip :
-                    definition.aimDownClip, 0, PlaybackMode::Clamp, extreme));
-                const Pose neutral = aim;
-                Require(Engine::Model::BlendPoses(model, neutral, extreme, std::abs(actions.aimWeight), aim));
-            }
-            std::size_t motionClip = definition.idleClip;
-            const Pose* motion = &idle;
-            if (actions.upper != PlayerUpperAction::Hold) {
-                if (actions.upper != PlayerUpperAction::Shoot && actions.upper != PlayerUpperAction::Reload &&
-                    actions.upper != PlayerUpperAction::Hit)
-                    throw std::runtime_error("player pose has an invalid upper-body action");
-                motionClip = actions.upper == PlayerUpperAction::Shoot ? definition.shootClip :
-                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip : definition.hitClip;
-                Require(Engine::Model::SamplePose(model, motionClip, actions.upperClipSeconds,
-                    PlaybackMode::Clamp, upperAction));
-                motion = &upperAction;
-            }
-            Require(Engine::Model::SamplePose(model, motionClip, 0, PlaybackMode::Clamp, reference));
-            for (std::size_t i = 0; i < model.nodes.size(); ++i)
-                if (definition.upperBodyMask[i])
-                    aim.localTransforms[i] = AddMotion(aim.localTransforms[i], reference.localTransforms[i],
-                                                       motion->localTransforms[i]);
-            upperAction = std::move(aim);
-            upper = &upperAction;
-        }
-        for (std::size_t i = 0; i < model.nodes.size(); ++i) {
-            if (upper && definition.upperBodyMask[i]) output.body.localTransforms[i] = upper->localTransforms[i];
-            const auto local = Engine::Model::ToMatrix(output.body.localTransforms[i]);
-            const auto parent = model.nodes[i].parentIndex;
-            output.body.globalTransforms[i] = parent ?
-                Engine::Math::Multiply(output.body.globalTransforms[*parent], local) : local;
-        }
-        // The weapon and hair follow the final composed pose.
-        output.weapon = definition.weaponReferencePose;
-        const auto mount = Engine::Math::Multiply(output.body.globalTransforms[definition.weaponNode],
-            Engine::Model::ToMatrix(definition.weaponMount));
-        for (auto& transform : output.weapon.globalTransforms)
-            transform = Engine::Math::Multiply(mount, transform);
-        output.accessories.clear();
-        for (const auto& accessory : definition.character->accessories)
-            output.accessories.push_back(BuildCharacterAccessoryPose(accessory, output.body));
-        return true;
-    } catch (const std::exception& exception) {
-        error = "player pose: " + std::string(exception.what());
-        return false;
-    }
-}
-
 struct PlayerPresentation::Impl final {
     struct Slot final {
         std::uint64_t playerId{}, poseRevision{1};
@@ -560,6 +67,7 @@ struct PlayerPresentation::Impl final {
         bool idlePrepared{true};
     };
     std::shared_ptr<const PlayerPresentationDefinition> definition;
+    std::uint64_t animationDigest{};
     std::shared_ptr<Resource> bodyResource, weaponResource;
     std::vector<std::shared_ptr<Resource>> accessoryResources;
     PlayerPresentationPose initialPose;
@@ -592,6 +100,7 @@ PlayerPresentation::PlayerPresentation() = default;
 PlayerPresentation::~PlayerPresentation() = default;
 void PlayerPresentation::Reset() noexcept { impl_.reset(); }
 bool PlayerPresentation::Ready() const noexcept { return impl_ != nullptr; }
+std::uint64_t PlayerPresentation::AnimationDigest() const noexcept { return impl_ ? impl_->animationDigest : 0; }
 std::size_t PlayerPresentation::Capacity() const noexcept { return impl_ ? impl_->slots.size() : 0; }
 std::span<const PlayerPresentationObservation> PlayerPresentation::Observations() const noexcept {
     return impl_ ? std::span<const PlayerPresentationObservation>(impl_->observations) :
@@ -614,6 +123,7 @@ bool PlayerPresentation::Initialize(Engine::Render::IRenderDevice& device,
         next->definition = LoadPlayerPresentationDefinition(assets, bodyHeight, error);
         if (!next->definition) throw std::runtime_error(error);
         const auto& definition = *next->definition;
+        next->animationDigest = AnimationContentDigest(definition);
         next->bodyResource = CreateResource(device, assets, *definition.character);
         next->weaponResource = CreateResource(device, assets, *definition.weapon);
         for (const auto& accessory : definition.character->accessories)
@@ -696,7 +206,10 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             // The prepared initial pose is the level aim pose: any pitch is sampled.
             const bool plain = actions.upper == PlayerUpperAction::Hold &&
                 actions.lower == PlayerLowerAction::Locomotion && actions.aimWeight == 0;
-            if (slot.locomotion.phaseReset && plain) {
+            // A reset still shows the authority phase; only a rest pose with
+            // no gait to show takes the prepared initial pose.
+            if (slot.locomotion.phaseReset && plain && slot.locomotion.moveWeight == 0 &&
+                slot.locomotion.idleSeconds == 0) {
                 if (!slot.idlePrepared) impl.Upload(slot, impl.initialPose);
                 slot.pose = impl.initialPose;
                 slot.idlePrepared = true;
@@ -723,6 +236,7 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             observation.backward = state.backward;
             observation.phaseReset = state.phaseReset;
             observation.phaseCycles = state.phaseCycles;
+            observation.authorityPhaseCycles = state.authorityPhaseQ16 / 65536.0;
             observation.unwrappedPhaseCycles = state.unwrappedPhaseCycles;
             observation.signedDistance = state.signedDistance;
             observation.totalDistance = state.totalDistance;
@@ -749,9 +263,7 @@ bool PlayerPresentation::Submit(const std::span<const PlayerPresentationFrame> p
             // -anchor, then the renderer applies ComposeEulerXYZ(transform).
             const auto mount = Engine::Math::TransformPoint(slot.pose.body.globalTransforms[definition.weaponNode],
                 definition.weaponMount.translation);
-            observation.weaponWorldPosition = Engine::Math::TransformPoint(
-                Engine::Math::ComposeEulerXYZ(transform.translation, transform.rotationRadians, transform.scale),
-                mount - definition.anchor);
+            observation.weaponWorldPosition = PlayerBodyPointToWorld(definition, player.position, player.yaw, mount);
             impl.observations.push_back(std::move(observation));
         }
         return true;

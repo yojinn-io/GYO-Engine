@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // setForTest overrides a package variable until the test and every cleanup
@@ -36,6 +36,7 @@ type scriptedRuntime struct {
 
 func (r *scriptedRuntime) send(t *testing.T, e *runtime.RuntimeEnvelope) {
 	t.Helper()
+	fillAnimation(e.GetSnapshot())
 	b, err := proto.Marshal(e)
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +74,7 @@ func linkToScriptedRuntime(t *testing.T) (*runtimeLink, *scriptedRuntime) {
 		r := &scriptedRuntime{conn: conn}
 		ready := envelope()
 		ready.Message = &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18, ArenaId: "test_arena", ArenaVersion: 1,
-			ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
+			ArenaDigest: testArenaDigest, AnimationDigest: testAnimationDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: adapter.MaxPlayers, CombatRules: testRules()}}
 		b, _ := proto.Marshal(ready)
 		_ = framing.WriteFrame(conn, b)
 		accepted <- r

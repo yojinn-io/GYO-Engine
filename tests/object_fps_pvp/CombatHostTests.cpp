@@ -129,7 +129,7 @@ TEST_CASE("PvP combat host keeps immutable results across duplicate delivery and
     fixture.Step();
     const auto original = fixture.Decision(1);
     REQUIRE(original.accepted);
-    REQUIRE(original.damage == 25);
+    REQUIRE(original.damage == 25000);
     auto owned = fixture.host.GetActionResults(1);
     owned->decisions.clear();
     CHECK(fixture.host.GetActionResults(1)->decisions.size() == 1);
@@ -139,7 +139,7 @@ TEST_CASE("PvP combat host keeps immutable results across duplicate delivery and
     fixture.Step();
     CHECK(fixture.Decision(1) == original);
     CHECK(fixture.host.GetActionResults(1)->decisions.size() == 1);
-    REQUIRE(fixture.host.TakeSnapshot()->combat.back().hp == 75);
+    REQUIRE(fixture.host.TakeSnapshot()->combat.back().hp == 75000);
     CHECK_FALSE(fixture.host.QueueActionAcknowledgement(1, 2));
     REQUIRE(fixture.host.QueueActionAcknowledgement(1, 1));
     REQUIRE(fixture.host.QueueActionAcknowledgement(1, 1));
@@ -150,7 +150,7 @@ TEST_CASE("PvP combat host keeps immutable results across duplicate delivery and
     REQUIRE(fixture.host.SubmitActions(Shot(1)) == ActionAdmission::Accepted);
     fixture.Step();
     CHECK(fixture.host.GetActionResults(1)->decisions.empty());
-    CHECK(fixture.host.TakeSnapshot()->combat.back().hp == 75);
+    CHECK(fixture.host.TakeSnapshot()->combat.back().hp == 75000);
 }
 
 TEST_CASE("PvP combat host reserves the complete staged window and rejects batches atomically") {

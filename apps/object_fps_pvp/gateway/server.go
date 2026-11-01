@@ -25,8 +25,8 @@ import (
 	"gyo.local/gateway/httpserver"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // sessionTimeout is T_max and connectionInterruptedAfter T_int (v7.1
@@ -615,7 +615,7 @@ func (s *Server) takeIngressLocked() (map[uint32]*playerIngressCounts, gatewayIn
 }
 func (s *Server) welcome(p *reservation) {
 	s.sendControl(p, adapter.Welcome, &client.Welcome{PlayerId: p.playerID, TickRate: s.ready.TickRate,
-		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity,
+		SnapshotRate: s.ready.TickRate / s.ready.SnapshotIntervalTicks, ArenaId: s.ready.ArenaId, ArenaVersion: s.ready.ArenaVersion, ArenaDigest: s.ready.ArenaDigest, AnimationDigest: s.ready.AnimationDigest, CombatRules: adapter.RulesForClient(s.ready.CombatRules), JumpHeight: s.ready.JumpHeight, Gravity: s.ready.Gravity,
 		CrouchBodyHeight: s.ready.CrouchBodyHeight, CrouchEyeHeight: s.ready.CrouchEyeHeight, CrouchSpeedScale: s.ready.CrouchSpeedScale, SprintSpeedScale: s.ready.SprintSpeedScale,
 		Clock: s.welcomeSample(p, time.Now())})
 }

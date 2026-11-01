@@ -71,6 +71,13 @@
       ],
       "ctest": "object_fps_pvp.ingress_cross"
     },
+    "hit_part_cross": {
+      "build": [
+        "gyo_object_fps_pvp-match",
+        "gyo_object_fps_pvp_network_probe"
+      ],
+      "ctest": "object_fps_pvp.hit_part_cross"
+    },
     "action_runner": {
       "ctest": "object_fps_pvp.action_runner"
     },
@@ -137,6 +144,18 @@
     },
     "wire_counter_sites": {
       "ctest": "object_fps_pvp.wire_counter_sites"
+    },
+    "compare_authority_trees": {
+      "ctest": "object_fps_pvp.compare_authority_trees"
+    },
+    "authority_digest": {
+      "build": [
+        "gyo_object_fps_pvp_authority_digest"
+      ],
+      "ctest": "object_fps_pvp.authority_digest"
+    },
+    "player_presentation_evidence": {
+      "ctest": "object_fps_pvp.player_presentation_evidence"
     }
   },
   "mutants": [
@@ -245,8 +264,8 @@
       "batch": "09",
       "what": "Gateway drops the digest from Welcome",
       "file": "apps/object_fps_pvp/gateway/server.go",
-      "find": "ArenaDigest: s.ready.ArenaDigest, CombatRules",
-      "replace": "CombatRules",
+      "find": "ArenaDigest: s.ready.ArenaDigest, AnimationDigest",
+      "replace": "AnimationDigest",
       "check": "go",
       "expect": "welcome "
     },
@@ -255,8 +274,8 @@
       "batch": "09",
       "what": "one version definition disagrees",
       "file": "build/acceptance/object_fps_pvp/acceptance_util.py",
-      "find": "\nPROTOCOL_VERSION = 8\n",
-      "replace": "\nPROTOCOL_VERSION = 7\n",
+      "find": "\nPROTOCOL_VERSION = 9\n",
+      "replace": "\nPROTOCOL_VERSION = 8\n",
       "check": "protocol_version",
       "expect": "acceptance Python"
     },
@@ -264,7 +283,7 @@
       "id": "11-pitch-ignored",
       "batch": "11",
       "what": "The remote upper body ignores the pitch (no aim blend)",
-      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
       "find": "            if (actions.aimWeight != 0) {\n",
       "replace": "            if (false) {\n",
       "check": "presentation",
@@ -274,7 +293,7 @@
       "id": "11-pitch-reversed",
       "batch": "11",
       "what": "Looking up shows the down pose",
-      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
       "find": "actions.aimWeight < 0 ? definition.aimUpClip :",
       "replace": "actions.aimWeight > 0 ? definition.aimUpClip :",
       "check": "presentation",
@@ -284,7 +303,7 @@
       "id": "11-pitch-unclamped",
       "batch": "11",
       "what": "A pitch beyond the down pose is not clamped",
-      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
       "find": "static_cast<float>(Engine::Math::Min(1.0, frame.pitch / definition.aimDownRadians));",
       "replace": "static_cast<float>(frame.pitch / definition.aimDownRadians);",
       "check": "presentation",
@@ -294,7 +313,7 @@
       "id": "11-action-replaces",
       "batch": "11",
       "what": "A shot or reload replaces the upper body and drops the pitch",
-      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
       "find": "                    aim.localTransforms[i] = AddMotion(aim.localTransforms[i], reference.localTransforms[i],\n                                                       motion->localTransforms[i]);\n",
       "replace": "                    aim.localTransforms[i] = motion->localTransforms[i];\n",
       "check": "presentation",
@@ -304,7 +323,7 @@
       "id": "11-dead-aims",
       "batch": "11",
       "what": "Death no longer owns the whole body: the aim pose overrides its upper body",
-      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
       "find": "            upper = nullptr; // Death owns the whole body, weapon hand included.\n",
       "replace": "",
       "check": "presentation",
@@ -504,7 +523,7 @@
       "id": "13-remote-old-life",
       "batch": "13",
       "what": "Damage from before the life began plays in it",
-      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
       "find": "        if (frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&\n",
       "replace": "        if (frame.damageCount &&\n",
       "check": "presentation",
@@ -514,7 +533,7 @@
       "id": "13-remote-below-shot",
       "batch": "13",
       "what": "A shot or reload outranks the hit",
-      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
       "find": "        if (frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&\n            now >= frame.damageSeconds && now < frame.damageSeconds + definition.hitSeconds) {",
       "replace": "        if (!frame.shotActionId && !frame.reloadActionId && frame.damageCount && frame.damageSeconds >= frame.lifeStateSeconds &&\n            now >= frame.damageSeconds && now < frame.damageSeconds + definition.hitSeconds) {",
       "check": "presentation",
@@ -3088,7 +3107,7 @@
       "find": "        if(std::string error; !ArenaHostsRoom(content,error)) throw std::runtime_error(error);\n",
       "replace": "",
       "check": "ipc",
-      "expect": "IpcHost\\(host, small\\)"
+      "expect": "IpcHost\\(host, small, IpcAnimationDigest\\)"
     },
     {
       "id": "v71hb-read-past-deadline",
@@ -4485,7 +4504,7 @@
       "batch": "v71-hitbox-fields",
       "what": "The Match reports a Head hit",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)\n",
+      "find": "            decision.hitPart = hit.part; // the hit shape's part (v8-product-hitbox-shot)\n",
       "replace": "            decision.hitPart = HitPart::Head;\n",
       "check": "cpu",
       "expect": "hitPart == HitPart::Body"
@@ -4495,7 +4514,7 @@
       "batch": "v71-hitbox-fields",
       "what": "The Match leaves the hit record's part unset",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            target.combat.lastHitPart = HitPart::Body;\n",
+      "find": "            target.combat.lastHitPart = hit.part;\n",
       "replace": "",
       "check": "cpu",
       "expect": "lastHitPart == HitPart::Body"
@@ -4505,7 +4524,7 @@
       "batch": "v71-hitbox-fields",
       "what": "The hit record decode check ignores the part",
       "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
-      "find": "    if ((combat.lastHitPart == HitPart::Unspecified) != none ||\n        (!none && combat.lastHitPart != HitPart::Body && combat.lastHitPart != HitPart::Head)) return false;\n",
+      "find": "    if ((combat.lastHitPart == HitPart::Unspecified) != none ||\n        (!none && !PlayerHitPart(combat.lastHitPart))) return false;\n",
       "replace": "",
       "check": "cpu",
       "expect": "HitPart::Unspecified; \\}"
@@ -4755,8 +4774,8 @@
       "batch": "v71-a1-shot-step",
       "what": "The Match ignores the rules it is given",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    : arena_(std::move(arena)), rules_(rules), stance_(stance) {\n",
-      "replace": "    : arena_(std::move(arena)), rules_(PvpCombatRules), stance_(stance) {\n",
+      "find": "    : arena_(std::move(arena)), rules_(rules), stance_(stance), animation_(animation), hitModel_(std::move(hitModel)) {\n",
+      "replace": "    : arena_(std::move(arena)), rules_(PvpCombatRules), stance_(stance), animation_(animation), hitModel_(std::move(hitModel)) {\n",
       "check": "cpu",
       "expect": "PvP A1"
     },
@@ -7325,7 +7344,7 @@
       "id": "v8cw-remote-crouch-clips-unused",
       "batch": "v8-product-crouch-wire",
       "what": "A crouched remote plays the standing legs",
-      "file": "apps/object_fps_pvp/src/Pvp/PlayerPresentation.cpp",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
       "find": "            if (state.crouched) {\n                // v8-product-crouch-pose",
       "replace": "            if (false) {\n                // v8-product-crouch-pose",
       "check": "presentation",
@@ -7430,6 +7449,1197 @@
       "replace": "    return outcome != HitFeedbackOutcome::None;",
       "check": "cpu",
       "expect": "CHECK_FALSE\\( HitTakenSounds\\(HitFeedbackOutcome::SuppressedNewLife\\) \\) is NOT correct"
+    },
+    {
+      "id": "permille-damage-unscaled",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "Shot damage stays in whole points (25), not milli-points",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    std::uint32_t shotDamage{25000};",
+      "replace": "    std::uint32_t shotDamage{25};",
+      "check": "cpu",
+      "expect": "PvP part damage follows the permille multipliers"
+    },
+    {
+      "id": "permille-product-32-bit",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "The part damage product is taken in 32 bits",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return static_cast<std::uint64_t>(shotDamage) * permille / 1000;",
+      "replace": "    return static_cast<std::uint32_t>(shotDamage * permille) / 1000;",
+      "check": "cpu",
+      "expect": "PvP part damage follows the permille multipliers"
+    },
+    {
+      "id": "permille-divisibility-unchecked",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "Match accepts part damage that does not divide exactly",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return static_cast<std::uint64_t>(shotDamage) * permille % 1000 == 0 && damage >= 1 && damage <= maximumShotDamage;",
+      "replace": "    return damage >= 1 && damage <= maximumShotDamage;",
+      "check": "cpu",
+      "expect": "PvP (part damage follows the permille multipliers|Match rejects rules whose part damage is invalid)"
+    },
+    {
+      "id": "permille-hud-floor",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "The HUD rounds milli-points down, so a living player can read 0",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return milliPoints / 1000 + (milliPoints % 1000 != 0 ? 1U : 0U);",
+      "replace": "    return milliPoints / 1000;",
+      "check": "cpu",
+      "expect": "PvP HUD shows whole points rounded up"
+    },
+    {
+      "id": "permille-version-cpp",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "The product C++ version stays at 8",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp",
+      "find": "inline constexpr std::uint16_t ProtocolVersion = 9;",
+      "replace": "inline constexpr std::uint16_t ProtocolVersion = 8;",
+      "check": "protocol_version",
+      "expect": "product C\\+\\+"
+    },
+    {
+      "id": "permille-compare-any-scale",
+      "batch": "v8-product-hit-rules-permille",
+      "what": "The scaled comparison accepts a scaled field whatever its value",
+      "file": "tests/object_fps_pvp/compare_authority_trees.py",
+      "find": "            expected = str(int(a) * factor) if factor is not None and a.isdigit() else a\n",
+      "replace": "            expected = b if factor is not None else a\n",
+      "check": "compare_authority_trees",
+      "expect": "test_(unscaled_value|off_by_one_scaling)_differs"
+    },
+    {
+      "id": "legwire-gateway-drops-leg",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The Gateway does not accept LEG as a player part",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\treturn part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD ||\n\t\tpart == runtime.HitPart_HIT_PART_LEG\n",
+      "replace": "\treturn part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD\n",
+      "check": "go",
+      "expect": "HIT_PART_LEG|leg rejected"
+    },
+    {
+      "id": "legwire-decision-drops-leg",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The decision decode check does not accept Leg",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head) ||\n                            part == static_cast<int>(HitPart::Leg);\n",
+      "replace": "    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head);\n",
+      "check": "cpu",
+      "expect": "ValidDecisionHitPart\\(ShotHitKind::Player, part\\)"
+    },
+    {
+      "id": "legwire-record-drops-leg",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The hit record decode check does not accept Leg",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return part == HitPart::Body || part == HitPart::Head || part == HitPart::Leg;\n",
+      "replace": "    return part == HitPart::Body || part == HitPart::Head;\n",
+      "check": "cpu",
+      "expect": "HitPart::Leg; \\}"
+    },
+    {
+      "id": "legwire-damage-leg-as-body",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "A leg hit deals body damage",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "                        : part == HitPart::Leg  ? rules.legPermille\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "HitPart::Leg, 100000"
+    },
+    {
+      "id": "legwire-enum-off-wire",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The C++ Leg differs from the wire value",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "Head = 2, Leg = 3 };",
+      "replace": "Head = 2, Leg = 4 };",
+      "check": "ipc",
+      "expect": "HitPart differs from the wire",
+      "expect_build_failure": true
+    },
+    {
+      "id": "legwire-client-reads-leg-as-body",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The Client reads a leg part as Body",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "static_cast<HitPart>(combat.last_hit_part())};",
+      "replace": "combat.last_hit_part()==3?HitPart::Body:static_cast<HitPart>(combat.last_hit_part())};",
+      "check": "worker",
+      "expect": "mock worker wait timed out"
+    },
+    {
+      "id": "legwire-decision-accepts-unknown",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "A player hit decision accepts any non-zero part (4, 99)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    const bool playerPart = part == static_cast<int>(HitPart::Body) || part == static_cast<int>(HitPart::Head) ||\n                            part == static_cast<int>(HitPart::Leg);\n",
+      "replace": "    const bool playerPart = part >= static_cast<int>(HitPart::Body);\n",
+      "check": "cpu",
+      "expect": "ValidDecisionHitPart\\((ShotHitKind::Player|kind), part\\)"
+    },
+    {
+      "id": "legwire-record-accepts-unknown",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The hit record accepts any set part (4, 99)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/Combat.hpp",
+      "find": "    return part == HitPart::Body || part == HitPart::Head || part == HitPart::Leg;\n",
+      "replace": "    return part != HitPart::Unspecified;\n",
+      "check": "cpu",
+      "expect": "static_cast<HitPart>\\((4|99)\\)"
+    },
+    {
+      "id": "legwire-gateway-accepts-unknown",
+      "batch": "v8-product-hit-rules-leg-wire",
+      "what": "The Gateway accepts any set part (4, 99)",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\treturn part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD ||\n\t\tpart == runtime.HitPart_HIT_PART_LEG\n",
+      "replace": "\treturn part != runtime.HitPart_HIT_PART_UNSPECIFIED\n",
+      "check": "go",
+      "expect": "accepted|part after leg|unknown part"
+    },
+    {
+      "id": "anim-epoch-not-reset",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A new movement epoch keeps the old animation state",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        before->movementEpoch != now.movementEpoch || !std::isfinite(distance))",
+      "replace": "        !std::isfinite(distance))",
+      "check": "cpu",
+      "expect": "resets on a new player, life, epoch or teleport"
+    },
+    {
+      "id": "anim-teleport-walked",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A teleport is walked instead of reset",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (distance > rules.teleportDistance) return Reset(rules, now, planarSpeed, tick);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "resets on a new player, life, epoch or teleport"
+    },
+    {
+      "id": "anim-backward-forward",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Moving backward advances the gait phase",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        const double cycles = (backward ? -distance : distance) /",
+      "replace": "        const double cycles = distance /",
+      "check": "cpu",
+      "expect": "phase decreases backward"
+    },
+    {
+      "id": "anim-move-steps-floor",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "The move weight recovers its step count by flooring",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    std::uint32_t steps = (value.moveWeightPermille * span + 999) / 1000;",
+      "replace": "    std::uint32_t steps = value.moveWeightPermille * span / 1000;",
+      "check": "cpu",
+      "expect": "move weight steps through the transition"
+    },
+    {
+      "id": "anim-jog-reset-still",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A still tick resets the jog weight",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (planarSpeed > 0) value.jogWeightPermille = PlayerJogWeightPermille(rules, planarSpeed);",
+      "replace": "    value.jogWeightPermille = PlayerJogWeightPermille(rules, planarSpeed);",
+      "check": "cpu",
+      "expect": "jog weight follows the speed and holds while still"
+    },
+    {
+      "id": "anim-start-span-late",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Start ends a tick after its span",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (value.jumpPhase == JumpPhase::Start && tick - value.jumpPhaseTick >= rules.jumpStartTicks) {",
+      "replace": "    if (value.jumpPhase == JumpPhase::Start && tick - value.jumpPhaseTick > rules.jumpStartTicks) {",
+      "check": "cpu",
+      "expect": "jump phases start from their clip time zero points"
+    },
+    {
+      "id": "anim-land-span-late",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Land ends a tick after its span",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    } else if (value.jumpPhase == JumpPhase::Land && tick - value.jumpPhaseTick >= rules.jumpLandTicks) {",
+      "replace": "    } else if (value.jumpPhase == JumpPhase::Land && tick - value.jumpPhaseTick > rules.jumpLandTicks) {",
+      "check": "cpu",
+      "expect": "jump phases start from their clip time zero points"
+    },
+    {
+      "id": "anim-death-not-frozen",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Death does not freeze the animation state",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (now.lifeState == LifeState::Dead && samePlayer && previous->lifeGeneration == now.lifeGeneration)\n        return *previous;\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "freezes through death"
+    },
+    {
+      "id": "anim-span-not-whole",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A span of a fraction of a tick is accepted",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    if (!std::isfinite(ticks) || whole < 1 || whole > limit || std::abs(ticks - whole) > 0.000001) return 0;",
+      "replace": "    if (!std::isfinite(ticks) || whole < 1 || whole > limit) return 0;",
+      "check": "cpu",
+      "expect": "whole-tick spans"
+    },
+    {
+      "id": "anim-match-reads-textures",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "The Match animation path loads the full character with textures",
+      "file": "apps/object_fps_pvp/src/App/CharacterPresentationDefinition.cpp",
+      "find": "    return LoadCharacterDefinition(assets, presentationId, error, true, false);",
+      "replace": "    return LoadCharacterDefinition(assets, presentationId, error, true, true);",
+      "check": "presentation",
+      "expect": "load without textures"
+    },
+    {
+      "id": "anim-walk-reads-jog",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "The rule reader takes the jog clip length for walk",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationContent.cpp",
+      "find": "        source.walkClipSeconds = length(\"walk\");",
+      "replace": "        source.walkClipSeconds = length(\"jog\");",
+      "check": "presentation",
+      "expect": "load without textures"
+    },
+    {
+      "id": "anim-reset-carries-speed",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A new life takes the step across the boundary as its speed",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        return Reset(rules, now, 0, tick);",
+      "replace": "        return Reset(rules, now, planarSpeed, tick);",
+      "check": "cpu",
+      "expect": "new life's own speed"
+    },
+    {
+      "id": "anim-transition-unbounded",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A transition longer than 1000 ticks is accepted",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    rules.transitionTicks = WholeTicks(source.transitionSeconds, MaxTransitionTicks);",
+      "replace": "    rules.transitionTicks = WholeTicks(source.transitionSeconds, 0xFFFFFFFFU);",
+      "check": "cpu",
+      "expect": "bound the spans"
+    },
+    {
+      "id": "anim-previous-life-unpaired",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A previous value of another life is advanced",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        before->playerId == now.playerId && previous->lifeGeneration == before->lifeGeneration &&",
+      "replace": "        before->playerId == now.playerId &&",
+      "check": "cpu",
+      "expect": "belongs to another life"
+    },
+    {
+      "id": "anim-zero-ahead-accepted",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "A zero point ahead of the tick is advanced",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        previous->jumpPhaseTick <= tick;",
+      "replace": "        true;",
+      "check": "cpu",
+      "expect": "runs behind its zero point"
+    },
+    {
+      "id": "anim-walkoff-starts",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "Walking off an edge at zero vertical speed plays Start",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        value.jumpPhase = now.verticalVelocity > 0 ? JumpPhase::Start : JumpPhase::Airborne;",
+      "replace": "        value.jumpPhase = now.verticalVelocity >= 0 ? JumpPhase::Start : JumpPhase::Airborne;",
+      "check": "cpu",
+      "expect": "walking off an edge"
+    },
+    {
+      "id": "anim-spans-swapped",
+      "batch": "v8-product-anim-authority-domain",
+      "what": "The start span is read from the land span",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    rules.jumpStartTicks = WholeTicks(source.jumpStartSeconds, MaxJumpTicks);",
+      "replace": "    rules.jumpStartTicks = WholeTicks(source.jumpLandSeconds, MaxJumpTicks);",
+      "check": "cpu",
+      "expect": "each span on its own phase"
+    },
+    {
+      "id": "a2-no-advance",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The Match never advances the animation after the join",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    for (auto& [id, player] : players_) {\n        static_cast<void>(id);\n        AdvanceAnimation(player);\n    }\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "gaitPhaseQ16 > 0|GYO_ASSERT failed: ValidPlayerAnimations"
+    },
+    {
+      "id": "a2-join-without-value",
+      "batch": "v8-product-anim-authority-match",
+      "what": "A joining player has no animation value until its first tick",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        player.animation = AdvancePlayerAnimation(animation_, std::nullopt, nullptr, player.state, tick_);\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "ValidPlayerAnimations"
+    },
+    {
+      "id": "a2-check-life",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The animation check ignores the life generation",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        if (owners != 1 || copies != 1 || value.lifeGeneration != player->lifeGeneration) return false;",
+      "replace": "        if (owners != 1 || copies != 1) return false;",
+      "check": "cpu",
+      "expect": "refuses to publish an animation"
+    },
+    {
+      "id": "a2-check-duplicate",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The animation check accepts a player twice",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        if (owners != 1 || copies != 1 || value.lifeGeneration != player->lifeGeneration) return false;",
+      "replace": "        if (owners != 1 || value.lifeGeneration != player->lifeGeneration) return false;",
+      "check": "cpu",
+      "expect": "refuses to publish an animation"
+    },
+    {
+      "id": "a2-check-sprint",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The animation check accepts a sprint weight before sprint presentation",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        if (value.moveWeightPermille > 1000 || value.jogWeightPermille > 1000 || value.sprintWeightPermille != 0)",
+      "replace": "        if (value.moveWeightPermille > 1000 || value.jogWeightPermille > 1000)",
+      "check": "cpu",
+      "expect": "refuses to publish an animation"
+    },
+    {
+      "id": "a2-check-grounded",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The animation check skips the grounded cross-check",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "        if (player->lifeState == LifeState::Alive && inAir == player->grounded) return false;",
+      "replace": "",
+      "check": "cpu",
+      "expect": "refuses to publish an animation"
+    },
+    {
+      "id": "a2-digest-without-animation",
+      "batch": "v8-product-anim-authority-match",
+      "what": "The authority digest leaves the animation out",
+      "file": "tests/object_fps_pvp/AuthorityDigest.cpp",
+      "find": "    r.U64(\"animations\", snapshot.animation.size());",
+      "replace": "    r.U64(\"animations\", 0);",
+      "check": "authority_digest",
+      "expect": "golden mismatch"
+    },
+    {
+      "id": "a3-gw-count",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a snapshot whose animation count differs",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\tif len(in.Animation) != len(in.Players) {\n\t\treturn nil, errors.New(\"invalid runtime animation count\")\n\t}\n",
+      "replace": "",
+      "check": "go",
+      "expect": "(missing value|no animation) accepted"
+    },
+    {
+      "id": "a3-gw-duplicate",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a player twice",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\tif a == nil || seen[a.PlayerId] == nil || animationSeen[a.PlayerId] || !validAnimation(a, seen[a.PlayerId], in.Tick) {",
+      "replace": "\t\tif a == nil || seen[a.PlayerId] == nil || !validAnimation(a, seen[a.PlayerId], in.Tick) {",
+      "check": "go",
+      "expect": "player twice accepted"
+    },
+    {
+      "id": "a3-gw-life",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway ignores the animation life",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\tif a.LifeGeneration != player.LifeGeneration || a.MoveWeightPermille > 1000 || a.JogWeightPermille > 1000 ||",
+      "replace": "\tif a.MoveWeightPermille > 1000 || a.JogWeightPermille > 1000 ||",
+      "check": "go",
+      "expect": "other life accepted"
+    },
+    {
+      "id": "a3-gw-sprint",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a sprint weight",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\ta.SprintWeightPermille != 0 || a.JumpPhase < runtime.JumpPhase_JUMP_PHASE_GROUNDED ||",
+      "replace": "\t\ta.JumpPhase < runtime.JumpPhase_JUMP_PHASE_GROUNDED ||",
+      "check": "go",
+      "expect": "sprint weight accepted"
+    },
+    {
+      "id": "a3-gw-phase-high",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a phase above Land",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\ta.JumpPhase > runtime.JumpPhase_JUMP_PHASE_LAND || a.JumpPhaseTick > tick {",
+      "replace": "\t\ta.JumpPhaseTick > tick {",
+      "check": "go",
+      "expect": "phase (five|258) accepted"
+    },
+    {
+      "id": "a3-gw-zero-ahead",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway accepts a zero point after the snapshot",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\ta.JumpPhase > runtime.JumpPhase_JUMP_PHASE_LAND || a.JumpPhaseTick > tick {",
+      "replace": "\t\ta.JumpPhase > runtime.JumpPhase_JUMP_PHASE_LAND {",
+      "check": "go",
+      "expect": "zero after tick accepted"
+    },
+    {
+      "id": "a3-gw-grounded",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway skips the grounded cross-check",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\treturn player.LifeState != runtime.LifeState_LIFE_ALIVE || inAir != player.Grounded",
+      "replace": "\treturn !inAir || inAir",
+      "check": "go",
+      "expect": "(start grounded|airborne grounded|land in the air|grounded in air) accepted"
+    },
+    {
+      "id": "a3-gw-gait-not-copied",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Gateway drops the gait phase",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "\t\t\tGaitPhaseQ16: a.GaitPhaseQ16, MoveWeightPermille: a.MoveWeightPermille,",
+      "replace": "\t\t\tMoveWeightPermille: a.MoveWeightPermille,",
+      "check": "go",
+      "expect": "not copied as it came"
+    },
+    {
+      "id": "a3-ipc-gait-dropped",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "IpcHost does not encode the gait phase",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "value->set_gait_phase_q16(a.gaitPhaseQ16);",
+      "replace": "",
+      "check": "ipc",
+      "expect": "gait_phase_q16\\(\\) > 0"
+    },
+    {
+      "id": "a3-client-range-unchecked",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Client narrows the jump phase without its range check",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    if(a.jump_phase()<pb::JUMP_PHASE_GROUNDED || a.jump_phase()>pb::JUMP_PHASE_LAND){valid=false;break;}\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "an invalid animation snapshot was applied|invalid snapshots were not counted"
+    },
+    {
+      "id": "a3-client-unchecked",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Client skips the animation checks",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                if(valid && !ValidPlayerAnimations(snapshot.players,snapshot.animation,snapshot.tick))valid=false;\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "an invalid animation snapshot was applied|invalid snapshots were not counted"
+    },
+    {
+      "id": "a3-client-gait-dropped",
+      "batch": "v8-product-anim-authority-wire",
+      "what": "The Client decodes the gait phase as zero",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                    snapshot.animation.push_back({a.player_id(),a.life_generation(),a.gait_phase_q16(),a.move_weight_permille(),",
+      "replace": "                    snapshot.animation.push_back({a.player_id(),a.life_generation(),0,a.move_weight_permille(),",
+      "check": "worker",
+      "expect": "mock worker wait timed out"
+    },
+    {
+      "id": "a4-phase-accumulated",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The shown phase is the presentation accumulation, not the authority",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        state.phaseCycles = GaitCycleFraction(phaseQ16);",
+      "replace": "        state.phaseCycles = state.unwrappedPhaseCycles - std::floor(state.unwrappedPhaseCycles);",
+      "check": "presentation",
+      "expect": "keeps showing the authority phase|life and death boundaries|rendering gaps"
+    },
+    {
+      "id": "a4-hold-not-frozen",
+      "batch": "v8-product-anim-authority-client",
+      "what": "A timeline hold does not freeze the shown values",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "    if (!state.holding) {\n        if (!state.phaseReset)",
+      "replace": "    if (true) {\n        if (!state.phaseReset)",
+      "check": "presentation",
+      "expect": "timeline hold freezes the pose"
+    },
+    {
+      "id": "a4-move-from-distance",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The move weight follows this frame displacement",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        state.moveWeight = frame.animation ? static_cast<float>(frame.animation->moveWeight) : 0.0F;",
+      "replace": "        state.moveWeight = state.jogging ? 1.0F : 0.0F;",
+      "check": "presentation",
+      "expect": "30 60 and 144 FPS|no phantom footsteps"
+    },
+    {
+      "id": "a4-jump-from-grounded",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The jump phase follows the grounded state, not the authority",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "    state.jumpPhase = frame.animation ? PresentedJumpPhase(frame.animation->jumpPhase) :",
+      "replace": "    state.jumpPhase = false ? PresentedJumpPhase(frame.animation->jumpPhase) :",
+      "check": "presentation",
+      "expect": "jump clips play from the Match"
+    },
+    {
+      "id": "a4-idle-accumulated",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The idle clock restarts on reanchors",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "    state.idleSeconds = Engine::Math::Max(0.0, frame.presentationSeconds - frame.lifeStateSeconds);",
+      "replace": "    state.idleSeconds = state.phaseReset ? 0.0 : state.idleSeconds + elapsed;",
+      "check": "presentation",
+      "expect": "idle clock is presentation time"
+    },
+    {
+      "id": "a4-interpolate-unsigned",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The interpolation takes the unsigned phase difference",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    sample.gaitPhaseQ16 = static_cast<double>(a.gaitPhaseQ16) + t * difference;",
+      "replace": "    sample.gaitPhaseQ16 = static_cast<double>(a.gaitPhaseQ16) + t * (static_cast<double>(b.gaitPhaseQ16) - a.gaitPhaseQ16);",
+      "check": "cpu",
+      "expect": "signed phase, linear weights"
+    },
+    {
+      "id": "a4-interpolate-later-jump",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The interpolation takes the later jump phase",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    sample.jumpPhase = a.jumpPhase;\n    sample.jumpPhaseTick = a.jumpPhaseTick;",
+      "replace": "    sample.jumpPhase = b.jumpPhase;\n    sample.jumpPhaseTick = b.jumpPhaseTick;",
+      "check": "cpu",
+      "expect": "signed phase, linear weights"
+    },
+    {
+      "id": "a4-interpolate-across-lives",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The interpolation blends two lives",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimation.cpp",
+      "find": "    const double t = sameLife ? Engine::Math::Clamp(alpha, 0.0, 1.0) : 0.0;",
+      "replace": "    const double t = Engine::Math::Clamp(alpha, 0.0, 1.0);",
+      "check": "cpu",
+      "expect": "signed phase, linear weights"
+    },
+    {
+      "id": "a4-timeline-no-animation",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The timeline drops the Match animation",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/SnapshotTimeline.hpp",
+      "find": "            animation = InterpolatePlayerAnimation(*from, to ? *to : *from, alpha);",
+      "replace": "",
+      "check": "cpu",
+      "expect": "samples the Match animation"
+    },
+    {
+      "id": "a4-analyzer-phase-unchecked",
+      "batch": "v8-product-anim-authority-client",
+      "what": "The analyzer accepts a phase other than the Match sample",
+      "file": "build/acceptance/object_fps_pvp/player_presentation_evidence.py",
+      "find": "                if abs(c[\"phase_cycles\"] - (c[\"authority_phase_cycles\"] - math.floor(c[\"authority_phase_cycles\"]))) > 1e-9:",
+      "replace": "                if False:",
+      "check": "player_presentation_evidence",
+      "expect": "test_phase_other_than_the_match_sample"
+    },
+    {
+      "id": "a4-hold-freezes-jump",
+      "batch": "v8-product-anim-authority-client",
+      "what": "A timeline hold also freezes the jump phase (xhigh review F1)",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        state.jogWeight = frame.animation ? frame.animation->jogWeight : 0.0;\n    }\n",
+      "replace": "        state.jogWeight = frame.animation ? frame.animation->jogWeight : 0.0;\n    }\n    if (state.holding) return true;\n",
+      "check": "presentation",
+      "expect": "does not freeze the jump phase"
+    },
+    {
+      "id": "hb-unknown-key-accepted",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts an unknown key",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "        if (!keys.contains(key)) throw std::runtime_error(what + \" has an unknown key '\" + key + \"'\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-missing-key-accepted",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts a missing key",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "        if (!object.contains(key)) throw std::runtime_error(what + \" lacks '\" + key + \"'\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-version-unchecked",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts any version",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "        if (config.at(\"version\") != 1) throw std::runtime_error(\"hitbox version must be 1\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-capsule-one-bone",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts a capsule from a bone to itself",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "                if (shape.node == shape.nodeTo) throw std::runtime_error(\"a capsule needs two bones\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-radius-unbounded",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts any finite radius",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "    if (!std::isfinite(radius) || radius < 0.01F || radius > 0.5F)",
+      "replace": "    if (!std::isfinite(radius))",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-parts-incomplete",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts a hitbox without every part",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "        if (parts.size() != 3) throw std::runtime_error(\"the hitbox needs head, body and leg shapes\");",
+      "replace": "",
+      "check": "presentation",
+      "expect": "refuses every malformed contract"
+    },
+    {
+      "id": "hb-offset-short",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The reader accepts an offset of two numbers",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitbox.cpp",
+      "find": "                if (!offset.is_array() || offset.size() != 3) throw std::runtime_error(\"offset needs three numbers\");",
+      "replace": "                if (!offset.is_array() || offset.size() < 2) throw std::runtime_error(\"offset needs three numbers\");",
+      "check": "presentation",
+      "expect": "refuses every malformed contract|sit on their bones"
+    },
+    {
+      "id": "hb-thigh-on-spine",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "A thigh capsule starts at the spine (H2)",
+      "file": "assets/object_fps_pvp/characters/player/hitbox.json",
+      "find": "{\"part\": \"leg\", \"kind\": \"capsule\", \"from\": \"thigh_l\", \"to\": \"calf_l\", \"radius\": 0.15}",
+      "replace": "{\"part\": \"leg\", \"kind\": \"capsule\", \"from\": \"spine_02\", \"to\": \"calf_l\", \"radius\": 0.15}",
+      "check": "presentation",
+      "expect": "sit on their bones"
+    },
+    {
+      "id": "hb-leg-up-the-body",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "A leg capsule runs up to the chest (H2)",
+      "file": "assets/object_fps_pvp/characters/player/hitbox.json",
+      "find": "{\"part\": \"leg\", \"kind\": \"capsule\", \"from\": \"thigh_r\", \"to\": \"calf_r\", \"radius\": 0.15}",
+      "replace": "{\"part\": \"leg\", \"kind\": \"capsule\", \"from\": \"thigh_r\", \"to\": \"spine_03\", \"radius\": 0.15}",
+      "check": "presentation",
+      "expect": "sit on their bones"
+    },
+    {
+      "id": "hb-head-on-neck",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The head sphere is carried by the neck (H2)",
+      "file": "assets/object_fps_pvp/characters/player/hitbox.json",
+      "find": "\"bone\": \"Head\"",
+      "replace": "\"bone\": \"neck_01\"",
+      "check": "presentation",
+      "expect": "sit on their bones"
+    },
+    {
+      "id": "hb-leg-crossed",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "A left thigh capsule ends at the right knee",
+      "file": "assets/object_fps_pvp/characters/player/hitbox.json",
+      "find": "\"from\": \"thigh_l\", \"to\": \"calf_l\"",
+      "replace": "\"from\": \"thigh_l\", \"to\": \"calf_r\"",
+      "check": "presentation",
+      "expect": "loads the product shapes"
+    },
+    {
+      "id": "hb-thigh-missing",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The left thigh capsule is a second calf",
+      "file": "assets/object_fps_pvp/characters/player/hitbox.json",
+      "find": "\"from\": \"thigh_l\", \"to\": \"calf_l\"",
+      "replace": "\"from\": \"calf_l\", \"to\": \"foot_l\"",
+      "check": "presentation",
+      "expect": "loads the product shapes"
+    },
+    {
+      "id": "hb-knee-skipped",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The left thigh capsule skips the knee",
+      "file": "assets/object_fps_pvp/characters/player/hitbox.json",
+      "find": "\"from\": \"thigh_l\", \"to\": \"calf_l\"",
+      "replace": "\"from\": \"thigh_l\", \"to\": \"foot_l\"",
+      "check": "presentation",
+      "expect": "loads the product shapes"
+    },
+    {
+      "id": "hb-thigh-swapped",
+      "batch": "v8-product-hitbox-data-shapes",
+      "what": "The right thigh capsule starts at the left thigh",
+      "file": "assets/object_fps_pvp/characters/player/hitbox.json",
+      "find": "\"from\": \"thigh_r\", \"to\": \"calf_r\"",
+      "replace": "\"from\": \"thigh_l\", \"to\": \"calf_r\"",
+      "check": "presentation",
+      "expect": "loads the product shapes"
+    },
+    {
+      "id": "d2-match-no-mask",
+      "batch": "v8-product-hitbox-data-pose",
+      "what": "The Match definition stops before its upper-body mask",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        definition->upperBodyRoot = Node(model, config.at(\"upper_body_root\").get<std::string>());",
+      "replace": "        if (!presentation) return definition;\n        definition->upperBodyRoot = Node(model, config.at(\"upper_body_root\").get<std::string>());",
+      "check": "presentation",
+      "expect": "body pose equals the presented body"
+    },
+    {
+      "id": "d2-match-other-scale",
+      "batch": "v8-product-hitbox-data-pose",
+      "what": "The Match definition scales the body differently",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        definition->scale = bodyHeight / (maximum - minimum);",
+      "replace": "        definition->scale = (presentation ? bodyHeight : bodyHeight * 1.01F) / (maximum - minimum);",
+      "check": "presentation",
+      "expect": "body pose equals the presented body"
+    },
+    {
+      "id": "d2-hit-plays-shot",
+      "batch": "v8-product-hitbox-data-pose",
+      "what": "The composed body plays the shot clip for a hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip : definition.hitClip;",
+      "replace": "                    actions.upper == PlayerUpperAction::Reload ? definition.reloadClip : definition.shootClip;",
+      "check": "presentation",
+      "expect": "hit reaction"
+    },
+    {
+      "id": "d3-digest-without-transition",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out transition_seconds",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    out.F64(definition.transitionSeconds);\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "transition_seconds"
+    },
+    {
+      "id": "d3-digest-without-upper-root",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out the upper-body root",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    out.Text(model.nodes.at(definition.upperBodyRoot).name);\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "upper_body_root"
+    },
+    {
+      "id": "d3-digest-without-translations",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out the translation keys",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "            for (const auto& key : track.translations) { out.F64(key.timeSeconds); out.Vec3(key.value); }\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "translation value"
+    },
+    {
+      "id": "d3-digest-without-track-node",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out the node of each track",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "            out.Text(model.nodes.at(track.nodeIndex).name);\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "track node"
+    },
+    {
+      "id": "d3-digest-without-order",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest reads idle and walk in a fixed index order, not the definition order",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    for (const std::size_t index : {definition.idleClip, definition.walkClip, definition.jogClip,",
+      "replace": "    for (const std::size_t index : {definition.idleClip < definition.walkClip ? definition.idleClip : definition.walkClip, definition.idleClip < definition.walkClip ? definition.walkClip : definition.idleClip, definition.jogClip,",
+      "check": "presentation",
+      "expect": "clip order"
+    },
+    {
+      "id": "d3-digest-without-parent",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest leaves out the parents",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "        out.U32(node.parentIndex ? static_cast<std::uint32_t>(*node.parentIndex) : 0xffffffffU);\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "parent"
+    },
+    {
+      "id": "d3-digest-reads-weapon",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The digest reads the weapon mount",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    out.F64(definition.aimDownRadians);\n",
+      "replace": "    out.F64(definition.aimDownRadians);\n    out.Vec3(definition.weaponMount.translation);\n",
+      "check": "presentation",
+      "expect": "ignores the weapon"
+    },
+    {
+      "id": "d3-zero-not-one",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "A zero digest stays zero",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "    return value ? value : 1;",
+      "replace": "    return value;",
+      "check": "presentation",
+      "expect": "never yields zero"
+    },
+    {
+      "id": "d3-big-endian",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The first eight bytes are read big-endian",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerAnimationDigest.cpp",
+      "find": "<< (8 * byte);",
+      "replace": "<< (8 * (7 - byte));",
+      "check": "presentation",
+      "expect": "never yields zero"
+    },
+    {
+      "id": "d3-gateway-no-copy",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The Gateway drops animation_digest from Welcome",
+      "file": "apps/object_fps_pvp/gateway/server.go",
+      "find": "AnimationDigest: s.ready.AnimationDigest, ",
+      "replace": "",
+      "check": "go",
+      "expect": "welcome "
+    },
+    {
+      "id": "d3-gateway-zero-admitted",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The Gateway admits a Ready without animation_digest",
+      "file": "apps/object_fps_pvp/gateway/runtime_link.go",
+      "find": " || ready.AnimationDigest == 0",
+      "replace": "",
+      "check": "go",
+      "expect": "admitted"
+    },
+    {
+      "id": "d3-fits-welcome-uncounted",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "ReadyFitsWelcome leaves out animation_digest",
+      "file": "apps/object_fps_pvp/gateway/adapter/adapter.go",
+      "find": "AnimationDigest: math.MaxUint64, ",
+      "replace": "",
+      "check": "go",
+      "expect": "maximum admitted Welcome=1210"
+    },
+    {
+      "id": "d3-ipc-not-sent",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The IpcHost does not send animation_digest",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        r->set_animation_digest(animationDigest); // pv9 §4.6\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "IpcAnimationDigest"
+    },
+    {
+      "id": "d3-ipc-zero-served",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The IpcHost serves a zero animation digest",
+      "file": "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+      "find": "        if(!animationDigest) throw std::runtime_error(\"Animation content digest is zero\");\n",
+      "replace": "",
+      "check": "ipc",
+      "expect": "zero animation digest"
+    },
+    {
+      "id": "d3-client-not-compared",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The Client does not compare animation_digest",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "                CheckAnimation(message.animation_digest());\n",
+      "replace": "",
+      "check": "worker",
+      "expect": "Welcome accepted different animation content"
+    },
+    {
+      "id": "d3-client-zero-matches",
+      "batch": "v8-product-hitbox-data-digest",
+      "what": "The Client takes a missing digest as a match",
+      "file": "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+      "find": "        if(animationDigest && digest!=*animationDigest)",
+      "replace": "        if(animationDigest && digest && digest!=*animationDigest)",
+      "check": "worker",
+      "expect": "Welcome accepted a missing animation digest"
+    },
+    {
+      "id": "s1-frame-drops-shot",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the shot time",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "            frame.shotSeconds = static_cast<double>(combat->lastShotTick) / AuthorityTickRate;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "shot tick"
+    },
+    {
+      "id": "s1-frame-drops-reload-end",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the reload end",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "            frame.reloadEndSeconds = static_cast<double>(combat->reloadEndTick) / AuthorityTickRate;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "reload end"
+    },
+    {
+      "id": "s1-frame-drops-damage",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the damage count",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "            frame.damageCount = combat->damageCount;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "damage count"
+    },
+    {
+      "id": "s1-frame-drops-crouch",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the stance",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "    frame.crouched = player.crouched; // pv8 section 4: the stance selects the clips\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "crouched"
+    },
+    {
+      "id": "s1-frame-drops-life",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame leaves out the life",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "    frame.lifeGeneration = player.lifeGeneration;\n",
+      "replace": "",
+      "check": "presentation",
+      "expect": "life"
+    },
+    {
+      "id": "s1-frame-empty-reload",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "The frame keeps a reload whose end is not after its start",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        if (combat->reloadActionId && combat->reloadEndTick > combat->reloadStartTick) {",
+      "replace": "        if (combat->reloadActionId) {",
+      "check": "presentation",
+      "expect": "empty reload"
+    },
+    {
+      "id": "s1-world-without-anchor",
+      "batch": "v8-product-hitbox-shot-frame",
+      "what": "Body points reach the world without the -anchor offset",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerPose.cpp",
+      "find": "        modelPoint - definition.anchor);",
+      "replace": "        modelPoint);",
+      "check": "presentation",
+      "expect": "foot anchor|body points reach the world"
+    },
+    {
+      "id": "s2-judge-ignores-part",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "Every shape is judged Body",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "                part = shape.part;\n",
+      "replace": "                part = HitPart::Body;\n",
+      "check": "cpu",
+      "expect": "nearest shape decides"
+    },
+    {
+      "id": "s2-farthest-shape",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "A target takes its farthest shape on the ray",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "*along < *distance ||",
+      "replace": "*along > *distance ||",
+      "check": "cpu",
+      "expect": "nearest shape decides"
+    },
+    {
+      "id": "s2-tie-reversed",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "At one distance the lower part counts",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "PartRank(shape.part) > PartRank(part)",
+      "replace": "PartRank(shape.part) < PartRank(part)",
+      "check": "cpu",
+      "expect": "higher part"
+    },
+    {
+      "id": "s2-synthetic-head",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The synthetic model judges Head",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "    return {HitPart::Body, Engine::Collision::VerticalCapsule{",
+      "replace": "    return {HitPart::Head, Engine::Collision::VerticalCapsule{",
+      "check": "cpu",
+      "expect": "synthetic model is"
+    },
+    {
+      "id": "s2-previous-animation",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "Shapes are posed with the previous tick's animation",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "        const auto animation = AdvancePlayerAnimation(animation_, player.animation, &player.animationState,\n                                                      player.state, tick_);",
+      "replace": "        const auto animation = player.animation;",
+      "check": "cpu",
+      "expect": "judged with the animation"
+    },
+    {
+      "id": "s2-placed-every-shot",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "Shapes are placed again for every shot",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (shapesTick_ == tick_) return shapes_;\n",
+      "replace": "    if (false) return shapes_;\n",
+      "check": "cpu",
+      "expect": "places every living"
+    },
+    {
+      "id": "s2-killed-still-hit",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "A target killed earlier in the tick can still be hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            if (target.state.lifeState == LifeState::Alive) targets.push_back({id, shapes.at(id)});",
+      "replace": "            if (target.state.lifeState == LifeState::Alive || shapes.contains(id)) targets.push_back({id, shapes.at(id)});",
+      "check": "cpu",
+      "expect": "places every living|lethal hit inside a tick"
+    },
+    {
+      "id": "s2-posed-head-as-leg",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model judges the head sphere as Leg",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "                output.push_back({shape.part, Engine::Math::Capsule{centre, centre, shape.radius}});",
+      "replace": "                output.push_back({HitPart::Leg, Engine::Math::Capsule{centre, centre, shape.radius}});",
+      "check": "presentation",
+      "expect": "judge the head, the body and the legs"
+    },
+    {
+      "id": "s2-posed-ignores-yaw",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model does not turn the shapes by the yaw",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "            return PlayerBodyPointToWorld(definition, input.player.position, input.player.yaw,",
+      "replace": "            return PlayerBodyPointToWorld(definition, input.player.position, 0.0F,",
+      "check": "presentation",
+      "expect": "follow the target"
+    },
+    {
+      "id": "s2-posed-capsule-one-bone",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "A posed capsule ends at its from bone",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "world(shape.node, {}), world(shape.nodeTo, {}),",
+      "replace": "world(shape.node, {}), world(shape.node, {}),",
+      "check": "presentation",
+      "expect": "every kind of input"
+    },
+    {
+      "id": "s2-combat-after-actions",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "Shapes are posed with the combat state the tick's earlier actions changed",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "player.state, actionsCombat_.at(id), animation, tick_}",
+      "replace": "player.state, player.combat, animation, tick_}",
+      "check": "cpu",
+      "expect": "combat state from before its actions"
+    },
+    {
+      "id": "s2-stale-shapes",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The previous tick's shapes are kept",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    if (shapesTick_ == tick_) return shapes_;\n    shapes_.clear();\n",
+      "replace": "    if (shapesTick_ == tick_) return shapes_;\n",
+      "check": "cpu",
+      "expect": "places every living"
+    },
+    {
+      "id": "s2-decision-part-body",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The Match writes Body whatever shape was hit",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            decision.hitPart = hit.part; // the hit shape's part (v8-product-hitbox-shot)\n",
+      "replace": "            decision.hitPart = HitPart::Body;\n",
+      "check": "cpu",
+      "expect": "hit shape's part into the decision"
+    },
+    {
+      "id": "s2-posed-without-combat",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model ignores the combat state",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "        const auto frame = PlayerFrameFromAuthority(input.player, input.combat,",
+      "replace": "        const auto frame = PlayerFrameFromAuthority(input.player, std::nullopt,",
+      "check": "presentation",
+      "expect": "every kind of input"
+    },
+    {
+      "id": "s2-posed-without-animation",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model ignores the Match animation",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "            InterpolatePlayerAnimation(input.animation, input.animation, 0), static_cast<double>(input.tick));",
+      "replace": "            std::nullopt, static_cast<double>(input.tick));",
+      "check": "presentation",
+      "expect": "every kind of input|judge the head"
+    },
+    {
+      "id": "s2-posed-tick-zero",
+      "batch": "v8-product-hitbox-shot-judge",
+      "what": "The posed model poses at tick 0",
+      "file": "apps/object_fps_pvp/src/Pvp/PlayerHitModel.cpp",
+      "find": "            InterpolatePlayerAnimation(input.animation, input.animation, 0), static_cast<double>(input.tick));",
+      "replace": "            InterpolatePlayerAnimation(input.animation, input.animation, 0), 0.0);",
+      "check": "presentation",
+      "expect": "every kind of input"
+    },
+    {
+      "id": "s3-match-synthetic-model",
+      "batch": "v8-product-hitbox-shot-wire",
+      "what": "The Match executable keeps the synthetic hit model",
+      "file": "apps/object_fps_pvp/match_main.cpp",
+      "find": "        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation,hitModel);\n",
+      "replace": "        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation);\n",
+      "check": "hit_part_cross",
+      "expect": "Hit-part shot at the head decided accepted=1 kind=2 target=[0-9]+ part=1 damage=25000"
     },
     {
       "id": "anim-events-no-stretch",

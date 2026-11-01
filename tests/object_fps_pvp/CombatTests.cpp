@@ -1,13 +1,16 @@
 #include <doctest/doctest.h>
 
+#include "AssertTestSupport.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <numbers>
 #include <set>
 
@@ -72,7 +75,7 @@ void DamageThreeTimes(PvpMatch& match) {
     for (ActionId id = 1; id <= 3; ++id) {
         REQUIRE(match.SubmitActions({1, {{id, 1, 0, 0}}}) == ActionAdmission::Accepted);
         CombatStep(match);
-        CHECK(Decisions(match).back().damage == 25);
+        CHECK(Decisions(match).back().damage == 25000);
         CombatStep(match, 9);
     }
 }
@@ -84,20 +87,20 @@ TEST_CASE("PvP shots apply authority damage once and respect the exact cooldown 
     CombatStep(match);
     const ActionBatch first{1, {{1, 1, 0, 0}}};
     REQUIRE(match.SubmitActions(first) == ActionAdmission::Accepted);
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
     CombatStep(match); // The first accepted shot executes at tick 2.
     const auto original = Decisions(match).front();
     CHECK(original.accepted);
     CHECK(original.resolvedTick == 2);
     CHECK(original.hitKind == ShotHitKind::Player);
     CHECK(original.targetId == 2);
-    CHECK(original.damage == 25);
+    CHECK(original.damage == 25000);
     CHECK(original.kind == ActionKind::Shot);
     CHECK(original.lifeGeneration == 1);
     CHECK(original.targetLifeGeneration == 1);
     CHECK(CombatPlayer(match, 1).magazineAmmo == 11);
     CHECK(CombatPlayer(match, 1).nextAllowedShotTick == 12);
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
 
     for (unsigned repeat = 0; repeat < 40; ++repeat)
         REQUIRE(match.SubmitActions(first) == ActionAdmission::Accepted);
@@ -112,12 +115,12 @@ TEST_CASE("PvP shots apply authority damage once and respect the exact cooldown 
     CHECK_FALSE(decisions.back().accepted);
     CHECK(decisions.back().rejection == ShotRejection::Cooldown);
     CHECK(decisions.back().resolvedTick == 9);
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
     CombatStep(match, 2);
     REQUIRE(match.SubmitActions({1, {{3, 1, 0, 0}}}) == ActionAdmission::Accepted);
     CombatStep(match); // Tick 12 is permitted, including after a rejection.
     CHECK(Decisions(match).back().accepted);
-    CHECK(CombatPlayer(match, 2).hp == 50);
+    CHECK(CombatPlayer(match, 2).hp == 50000);
 }
 
 TEST_CASE("PvP reference expiry uses trusted resolution age and rejection consumes no cooldown") {
@@ -130,7 +133,7 @@ TEST_CASE("PvP reference expiry uses trusted resolution age and rejection consum
         const auto decision = Decisions(match).front();
         CHECK(decision.accepted == (age <= 250ms));
         CHECK(decision.rejection == (age <= 250ms ? ShotRejection::None : ShotRejection::Expired));
-        CHECK(CombatPlayer(match, 2).hp == (age <= 250ms ? 75 : 100));
+        CHECK(CombatPlayer(match, 2).hp == (age <= 250ms ? 75000 : 100000));
         if (age > 250ms) {
             CHECK(CombatPlayer(match, 1).nextAllowedShotTick == 0);
             REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0}}}) == ActionAdmission::Accepted);
@@ -151,7 +154,7 @@ TEST_CASE("PvP reference expiry uses trusted resolution age and rejection consum
     REQUIRE(match.SubmitActions(request) == ActionAdmission::Accepted);
     CombatStep(match); // A retry with a fresh callback cannot revive a terminal rejection.
     CHECK(Decisions(match).front() == expired);
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
 }
 
 TEST_CASE("PvP unknown zero future and negative-age shot references receive terminal decisions") {
@@ -189,7 +192,7 @@ TEST_CASE("PvP accepted misses consume cooldown and burst requests have stable a
     CHECK(decisions[0].damage == 0);
     CHECK(decisions[1].actionId == 2);
     CHECK(decisions[1].rejection == ShotRejection::Cooldown);
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
 }
 
 TEST_CASE("PvP action conflicts and malformed batches are rejected atomically") {
@@ -219,7 +222,7 @@ TEST_CASE("PvP action conflicts and malformed batches are rejected atomically") 
     CombatStep(match);
     REQUIRE(Decisions(match).size() == 1);
     CHECK(Decisions(match).front().actionId == 1);
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
     CHECK(match.SubmitActions({1, {{1, 1, 0.1F, 0}, {2, 1, 0, 0}}}) == ActionAdmission::Conflict);
     CombatStep(match);
     CHECK(Decisions(match).size() == 1); // Immutable after resolution as well as before it.
@@ -233,7 +236,7 @@ TEST_CASE("PvP action gaps resolve immediately but retirement requires contiguou
     CHECK_FALSE(match.CanAcknowledgeActions(1, 2));
     CHECK_FALSE(match.AcknowledgeActions(1, 2));
     CombatStep(match);
-    CHECK(CombatPlayer(match, 2).hp == 75); // No wait for missing action 1.
+    CHECK(CombatPlayer(match, 2).hp == 75000); // No wait for missing action 1.
     CHECK_FALSE(match.AcknowledgeActions(1, 2));
     REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
     CHECK_FALSE(match.AcknowledgeActions(1, 1)); // Pending is not terminal yet.
@@ -257,7 +260,7 @@ TEST_CASE("PvP action gaps resolve immediately but retirement requires contiguou
     CHECK(match.SubmitActions({1, {{1, 1, 0, 0}, {1, 1, 1, 0}, {3, 1, 0, 0}}}) == ActionAdmission::Conflict);
     CombatStep(match);
     CHECK(Decisions(match).empty()); // Even changed content at/below the retired floor is inert.
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
     CHECK_FALSE(match.GetActionResults(99));
     CHECK_FALSE(match.AcknowledgeActions(99, 0));
 }
@@ -301,7 +304,7 @@ TEST_CASE("PvP staged action admission validates immutable contents without chan
     CHECK(match.CanSubmitActions({1, {{1, 1, 1, 0}, {2, 1, 0, 0}}}, staged) == ActionAdmission::Conflict);
     CombatStep(match);
     CHECK(Decisions(match).empty());
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
 }
 
 TEST_CASE("PvP shots use post-movement authority poses for every participant and absolute request aim") {
@@ -326,7 +329,7 @@ TEST_CASE("PvP shots use post-movement authority poses for every participant and
     CHECK(decision.accepted);
     CHECK(decision.hitKind == ShotHitKind::Player);
     CHECK(decision.targetId == 2);
-    CHECK(CombatPlayer(match, 2).hp == 75);
+    CHECK(CombatPlayer(match, 2).hp == 75000);
 }
 
 TEST_CASE("PvP movement epoch reset preserves pending actions retained decisions and HP") {
@@ -354,13 +357,13 @@ TEST_CASE("PvP movement epoch reset preserves pending actions retained decisions
     CHECK(CombatPlayer(match, 1).magazineAmmo == 10);
     CHECK(CombatPlayer(match, 1).lifeGeneration == 1);
     CHECK(match.Snapshot().players.front().lifeGeneration == 1);
-    CHECK(CombatPlayer(match, 2).hp == 50);
+    CHECK(CombatPlayer(match, 2).hp == 50000);
     REQUIRE(match.AcknowledgeActions(1, 3));
     CHECK(match.GetActionResults(1)->retiredThrough == 3);
     REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
     CombatStep(match, 20);
     CHECK(Decisions(match).empty());
-    CHECK(CombatPlayer(match, 2).hp == 50);
+    CHECK(CombatPlayer(match, 2).hp == 50000);
 }
 
 TEST_CASE("PvP twelve world or miss shots exhaust ammo before cooldown and reload completes on tick ninety") {
@@ -423,7 +426,7 @@ TEST_CASE("PvP twelve world or miss shots exhaust ammo before cooldown and reloa
     CombatStep(match, 90);
     CHECK(Decisions(match)[13] == acceptedReload);
     CHECK(CombatPlayer(match, 1).magazineAmmo == 11); // A late duplicate cannot refill again.
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
 }
 
 TEST_CASE("PvP reload format and gameplay rejections remain terminal and side effect free") {
@@ -467,10 +470,10 @@ TEST_CASE("PvP lethal action immediately prevents same tick retaliation and corp
     CHECK(dead.lifeGeneration == 1);
     CHECK(CombatPlayer(match, 2).hp == 0);
     CHECK(CombatPlayer(match, 2).magazineAmmo == 12);
-    CHECK(CombatPlayer(match, 1).hp == 100);
+    CHECK(CombatPlayer(match, 1).hp == 100000);
     CHECK(Decisions(match, 2).front().rejection == ShotRejection::Dead);
     const auto lethal = Decisions(match).back();
-    CHECK(lethal.damage == 25);
+    CHECK(lethal.damage == 25000);
     CHECK(lethal.targetLifeGeneration == 1);
     MoveCombatPlayer(match, 2, 1, 1, 1, 0.5F, true);
     REQUIRE(match.SubmitActions({2, {{2, 0, 0, 0, ActionKind::Reload, 1},
@@ -549,7 +552,7 @@ TEST_CASE("PvP respawn resets movement and combat while retaining cross life act
     CHECK(respawned.verticalVelocity == 0);
     const auto combat = CombatPlayer(match, 2);
     CHECK(combat.lifeGeneration == 2);
-    CHECK(combat.hp == 100);
+    CHECK(combat.hp == 100000);
     CHECK(combat.magazineAmmo == 11); // Same-boundary action 5 consumes the new magazine.
     CHECK(combat.lastShotActionId == 5);
     CHECK(combat.lastShotTick == due);
@@ -565,7 +568,7 @@ TEST_CASE("PvP respawn resets movement and combat while retaining cross life act
     CHECK(decisions[4].accepted);
     CHECK(decisions[4].lifeGeneration == 2);
     CHECK(decisions[4].targetLifeGeneration == 1);
-    CHECK(CombatPlayer(match, 1).hp == 75);
+    CHECK(CombatPlayer(match, 1).hp == 75000);
     CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, respawned.movementEpoch, 1}));
     CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, before.movementEpoch, 2}));
     CHECK_FALSE(match.SubmitInput({2, {{1, 1, 0, 0, 0}}, respawned.movementEpoch, 3}));
@@ -637,7 +640,7 @@ TEST_CASE("PvP death cancels an active reload and keeps airborne neutral gravity
     const auto due = dead.respawnTick;
     while (match.TickCount() < due) CombatStep(match);
     CHECK(CombatPlayer(match, 2).magazineAmmo == 12);
-    CHECK(CombatPlayer(match, 2).hp == 100);
+    CHECK(CombatPlayer(match, 2).hp == 100000);
     CHECK(CombatPlayer(match, 2).nextAllowedShotTick == 0);
     CHECK(CombatPlayer(match, 2).lastShotActionId == 0);
     CHECK(CombatPlayer(match, 2).lastShotTick == 0);
@@ -793,27 +796,29 @@ TEST_CASE("PvP lethal hit records the killer at the death tick and respawn clear
 
 TEST_CASE("PvP hit record decode check accepts only the contract shapes") {
     // pv7 §7: four fields, the hit part being Body or Head when set.
-    CombatState record{.playerId = 1, .hp = 50, .lastDamageTick = 15, .damageCount = 2, .lastAttackerId = 7,
+    CombatState record{.playerId = 1, .hp = 50000, .lastDamageTick = 15, .damageCount = 2, .lastAttackerId = 7,
                        .lastHitPart = HitPart::Body};
-    CHECK(ValidDamageRecord(record, false, 10, 20, 100));
-    CHECK(ValidDamageRecord(CombatState{.playerId = 1}, false, 10, 20, 100));
+    CHECK(ValidDamageRecord(record, false, 10, 20, 100000));
+    CHECK(ValidDamageRecord(CombatState{.playerId = 1}, false, 10, 20, 100000));
     auto bad = [&](auto edit, bool dead = false, std::uint64_t lifeStateTick = 10) {
         auto copy = record;
         edit(copy);
-        return !ValidDamageRecord(copy, dead, lifeStateTick, 20, 100);
+        return !ValidDamageRecord(copy, dead, lifeStateTick, 20, 100000);
     };
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 0; }));
     CHECK(bad([](CombatState& c) { c.damageCount = 0; }));
     CHECK(bad([](CombatState& c) { c.lastAttackerId = 0; }));
     CHECK(bad([](CombatState& c) { c.lastHitPart = HitPart::Unspecified; }));
-    CHECK(bad([](CombatState& c) { c.lastHitPart = static_cast<HitPart>(3); }));
+    CHECK(bad([](CombatState& c) { c.lastHitPart = static_cast<HitPart>(4); }));
+    CHECK(bad([](CombatState& c) { c.lastHitPart = static_cast<HitPart>(99); }));
     CHECK(bad([](CombatState& c) { c = CombatState{.playerId = 1, .lastHitPart = HitPart::Body}; }));
     CHECK_FALSE(bad([](CombatState& c) { c.lastHitPart = HitPart::Head; })); // v8's part, accepted already
+    CHECK_FALSE(bad([](CombatState& c) { c.lastHitPart = HitPart::Leg; }));  // pv9 §2
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 9; }));
     CHECK(bad([](CombatState& c) { c.lastDamageTick = 21; }));
     CHECK(bad([](CombatState& c) { c.lastAttackerId = 1; }));
-    CHECK(bad([](CombatState& c) { c.damageCount = 101; }));
-    CHECK_FALSE(bad([](CombatState& c) { c.damageCount = 100; }));
+    CHECK(bad([](CombatState& c) { c.damageCount = 100001; }));
+    CHECK_FALSE(bad([](CombatState& c) { c.damageCount = 100000; }));
     CHECK(bad([](CombatState& c) { c = CombatState{.playerId = 1}; }, true, 18));
     CHECK(bad([](CombatState&) {}, true, 18)); // Dead of an older hit.
     CHECK_FALSE(bad([](CombatState& c) { c.lastDamageTick = 18; }, true, 18));
@@ -878,10 +883,10 @@ TEST_CASE("PvP same tick shots from two and three players all hit and the record
             CAPTURE(shooter);
             CHECK(decision.hitKind == ShotHitKind::Player);
             CHECK(decision.targetId == 2);
-            CHECK(decision.damage == 25);
+            CHECK(decision.damage == 25000);
         }
         const auto victim = CombatPlayer(match, 2);
-        CHECK(victim.hp == 100 - 25 * shooters.size());
+        CHECK(victim.hp == 100000 - 25000 * shooters.size());
         CHECK(victim.damageCount == shooters.size());
         // Adjudication order is player id within the tick: the highest id hits last.
         CHECK(victim.lastAttackerId == shooters.back());
@@ -898,7 +903,7 @@ TEST_CASE("PvP a lethal hit inside a tick lets the later shots of that tick pass
     CombatStep(match, 10);
     Fire(match, 1, 2);
     CombatStep(match, 10);
-    REQUIRE(CombatPlayer(match, 2).hp == 50);
+    REQUIRE(CombatPlayer(match, 2).hp == 50000);
     // Player 1 then 3 kill it; player 4's shot of the same tick is no longer at a target.
     Fire(match, 1, 3);
     Fire(match, 3, 1);
@@ -906,7 +911,7 @@ TEST_CASE("PvP a lethal hit inside a tick lets the later shots of that tick pass
     CombatStep(match);
     CHECK(Decisions(match, 1).back().hitKind == ShotHitKind::Player);
     CHECK(Decisions(match, 3).back().hitKind == ShotHitKind::Player);
-    CHECK(Decisions(match, 3).back().damage == 25);
+    CHECK(Decisions(match, 3).back().damage == 25000);
     const auto passed = Decisions(match, 4).back();
     CHECK(passed.accepted);
     CHECK(passed.hitKind != ShotHitKind::Player);
@@ -1002,19 +1007,61 @@ TEST_CASE("PvP shot request equality includes E, S and the view tick") {
 
 // pv7 §7: the part a decision carries, and the three damage bounds.
 TEST_CASE("PvP hit part and maximum shot damage decode checks") {
-    for (const int part : {1, 2}) CHECK(ValidDecisionHitPart(ShotHitKind::Player, part));
-    for (const int part : {0, 3, -1}) CHECK_FALSE(ValidDecisionHitPart(ShotHitKind::Player, part));
+    for (const int part : {1, 2, 3}) CHECK(ValidDecisionHitPart(ShotHitKind::Player, part)); // Leg: pv9 §2
+    for (const int part : {0, 4, 99, -1}) CHECK_FALSE(ValidDecisionHitPart(ShotHitKind::Player, part));
     for (const auto kind : {ShotHitKind::Miss, ShotHitKind::World}) {
         CHECK(ValidDecisionHitPart(kind, 0));
-        for (const int part : {1, 2, 3}) CHECK_FALSE(ValidDecisionHitPart(kind, part));
+        for (const int part : {1, 2, 3, 4, 99}) CHECK_FALSE(ValidDecisionHitPart(kind, part));
     }
-    CHECK(ValidShotDamageBounds(25, 25, 100));
-    CHECK(ValidShotDamageBounds(25, 100, 100));
-    CHECK_FALSE(ValidShotDamageBounds(25, 24, 100));
-    CHECK_FALSE(ValidShotDamageBounds(25, 101, 100));
-    CHECK_FALSE(ValidShotDamageBounds(0, 25, 100));
+    CHECK(ValidShotDamageBounds(25000, 25000, 100000));
+    CHECK(ValidShotDamageBounds(25000, 100000, 100000));
+    CHECK_FALSE(ValidShotDamageBounds(25000, 24999, 100000));
+    CHECK_FALSE(ValidShotDamageBounds(25000, 100001, 100000));
+    CHECK_FALSE(ValidShotDamageBounds(0, 25000, 100000));
     CHECK(ValidShotDamageBounds(PvpCombatRules.shotDamage, PvpCombatRules.maximumShotDamage, PvpCombatRules.maximumHp));
-    CHECK(PvpCombatRules.maximumShotDamage == PvpCombatRules.shotDamage); // v7.1: no part multiplier
+    // pv9 §3: the most damage is a head hit.
+    CHECK(PvpCombatRules.maximumShotDamage == PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.headPermille));
+}
+
+// v8-product-hit-rules-permille P3: part damage in milli-points.
+TEST_CASE("PvP part damage follows the permille multipliers") {
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Head, 100000) == 50000);
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Body, 100000) == 25000);
+    CHECK(PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.legPermille) == 18750);
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Body, 10000) == 10000); // hp left caps it
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Head, 30000) == 30000);
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Leg, 100000) == 18750); // pv9 §2
+    CHECK(ShotDamage(PvpCombatRules, HitPart::Leg, 10000) == 10000);
+    CHECK(ValidPartDamage(PvpCombatRules));
+    CHECK(PartDamage(3000000, 2000) == 6000000); // the product passes 32 bits
+    CHECK(ValidPartDamage(3000000, 2000, 6000000));
+    CHECK_FALSE(ValidPartDamage(25001, 750, 50000)); // 18750.75 does not divide
+    CHECK_FALSE(ValidPartDamage(25000, 0, 50000));   // no damage
+    CHECK(ValidPartDamage(25000, 2000, 50000));
+    CHECK_FALSE(ValidPartDamage(25000, 2001, 50000)); // above maximumShotDamage
+}
+
+TEST_CASE("PvP Match rejects rules whose part damage is invalid") {
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 20001}), std::invalid_argument); // leg 15000.75
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.legPermille = 0}), std::invalid_argument);
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.headPermille = 2001}), std::invalid_argument);
+    CHECK_NOTHROW(PvpMatch(CombatArena(), CombatRules{.shotDamage = 20000}));
+}
+
+// P4: the HUD rounds milli-points up.
+TEST_CASE("PvP HUD shows whole points rounded up") {
+    for (const auto [milli, shown] : {std::pair{0U, 0U}, {1U, 1U}, {999U, 1U}, {1000U, 1U}, {1001U, 2U},
+                                      {100000U, 100U}})
+        CHECK(DisplayPoints(milli) == shown);
+}
+
+// P7: with the least part damage, one life takes at most six hits; the
+// authority digest checks every combat record against the same bound.
+TEST_CASE("PvP one life takes at most six hits") {
+    const auto least = std::min({PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.headPermille),
+                                 PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.bodyPermille),
+                                 PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.legPermille)});
+    CHECK((PvpCombatRules.maximumHp + least - 1) / least == 6);
 }
 
 // pv7 §6: the path A1 would take at A, from E, S and the request's life
@@ -1072,7 +1119,7 @@ TEST_CASE("PvP shadow record lines and the shot trace path") {
 // ---- A1: shots decided at their command step (pv7 §6, v7.1 a1-shot-step) ----
 namespace {
 // Rules where one hit kills: the order of two shots decides who dies.
-constexpr CombatRules OneHitRules{.shotDamage = 100, .maximumShotDamage = 100};
+constexpr CombatRules OneHitRules{.shotDamage = 100000, .maximumShotDamage = 100000, .headPermille = 1000};
 
 // One command per mover per tick, so each mover's cursor L moves one step per tick.
 void StepMovers(PvpMatch& match, unsigned count = 1, std::initializer_list<PlayerId> movers = {1, 2},
@@ -1401,7 +1448,7 @@ TEST_CASE("PvP A1 measures the reference age once at hand-off") {
 
 TEST_CASE("PvP A1 rejects invalid combat rules") {
     CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 0}), std::invalid_argument);
-    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 30}), std::invalid_argument); // > maximum 25
+    CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotDamage = 50001}), std::invalid_argument); // > maximum 50000
     CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.magazineCapacity = 0}), std::invalid_argument);
     CHECK_THROWS_AS(PvpMatch(CombatArena(), CombatRules{.shotRange = -1}), std::invalid_argument);
     CHECK_NOTHROW(PvpMatch(CombatArena(), OneHitRules));
@@ -1471,3 +1518,295 @@ TEST_CASE("PvP a crouched death respawns standing") {
     CHECK_FALSE(respawned.crouched);
 }
 
+
+// v8-product-anim-authority A2: the Match advances every player's animation
+// once a tick and puts it on the snapshot (protocol-v9 §4.2, §4.4).
+namespace {
+const PlayerAnimation& AnimationOf(const WorldSnapshot& snapshot, PlayerId playerId) {
+    const auto found = std::find_if(snapshot.animation.begin(), snapshot.animation.end(),
+        [=](const auto& value) { return value.playerId == playerId; });
+    REQUIRE(found != snapshot.animation.end());
+    return *found;
+}
+} // namespace
+
+TEST_CASE("PvP Match snapshots carry one animation value per player from the join on") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    auto snapshot = match.Snapshot(); // before any tick
+    REQUIRE(snapshot.animation.size() == 2);
+    CHECK(snapshot.animation[0].playerId == snapshot.players[0].playerId);
+    CHECK(snapshot.animation[1].playerId == snapshot.players[1].playerId);
+    CHECK(AnimationOf(snapshot, 1).jumpPhase == JumpPhase::Grounded);
+    CHECK(ValidPlayerAnimations(snapshot.players, snapshot.animation, snapshot.tick));
+    MoveCombatPlayer(match, 1, 1);
+    CombatStep(match);
+    for (int i = 0; i < 10; ++i) {
+        MoveCombatPlayer(match, 1, 1);
+        CombatStep(match);
+    }
+    snapshot = match.Snapshot();
+    const auto& walking = AnimationOf(snapshot, 1);
+    CHECK(walking.gaitPhaseQ16 > 0);
+    CHECK(walking.moveWeightPermille == 1000);
+    CHECK(AnimationOf(snapshot, 2).gaitPhaseQ16 == 0); // the other player stood still
+    MoveCombatPlayer(match, 1, 0, 0, 0, 0, true);
+    CombatStep(match);
+    snapshot = match.Snapshot();
+    CHECK(AnimationOf(snapshot, 1).jumpPhase == JumpPhase::Start);
+    CHECK(AnimationOf(snapshot, 1).jumpPhaseTick == snapshot.tick);
+}
+
+TEST_CASE("PvP Match animation freezes through death and restarts at the respawn tick") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    DamageThreeTimes(match);
+    REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0}}}) == ActionAdmission::Accepted);
+    CombatStep(match);
+    REQUIRE(LifePlayer(match, 2).lifeState == LifeState::Dead);
+    const auto frozen = AnimationOf(match.Snapshot(), 2);
+    const auto due = LifePlayer(match, 2).respawnTick;
+    while (match.TickCount() < due - 1) {
+        MoveCombatPlayer(match, 2);
+        CombatStep(match);
+        CHECK(AnimationOf(match.Snapshot(), 2) == frozen);
+    }
+    while (LifePlayer(match, 2).lifeState == LifeState::Dead) {
+        MoveCombatPlayer(match, 2);
+        CombatStep(match);
+    }
+    const auto snapshot = match.Snapshot();
+    const auto& reborn = AnimationOf(snapshot, 2);
+    CHECK(reborn.lifeGeneration == 2);
+    CHECK(reborn.gaitPhaseQ16 == 0);
+    CHECK(reborn.jogWeightPermille == 0); // no step across the death (A1 review C1)
+    CHECK(reborn.jumpPhaseTick == LifePlayer(match, 2).lifeStateTick);
+}
+
+// E4: each §4.5 condition the Match guards before a snapshot leaves it.
+TEST_CASE("PvP Match refuses to publish an animation the Gateway would refuse") {
+    PvpMatch match(CombatArena());
+    JoinCombatPlayers(match);
+    CombatStep(match, 3);
+    const auto valid = match.Snapshot();
+    REQUIRE(ValidPlayerAnimations(valid.players, valid.animation, valid.tick));
+    const auto refused = [&](auto edit) {
+        auto snapshot = valid;
+        edit(snapshot);
+        CHECK_FALSE(ValidPlayerAnimations(snapshot.players, snapshot.animation, snapshot.tick));
+        GYO_CHECK_ASSERTS(RequireValidAnimation(snapshot));
+    };
+    refused([](auto& s) { s.animation.pop_back(); });                              // a player without a value
+    refused([](auto& s) { s.animation[1].playerId = 7; });                          // an unknown player
+    refused([](auto& s) { s.animation[1].playerId = s.animation[0].playerId; });    // a player twice
+    refused([](auto& s) { s.animation[0].lifeGeneration = 2; });                    // another life
+    refused([](auto& s) { s.animation[0].moveWeightPermille = 1001; });
+    refused([](auto& s) { s.animation[0].jogWeightPermille = 1001; });
+    refused([](auto& s) { s.animation[0].sprintWeightPermille = 1; });              // before sprint presentation
+    refused([](auto& s) { s.animation[0].jumpPhase = JumpPhase::Unspecified; });
+    refused([](auto& s) { s.animation[0].jumpPhase = static_cast<JumpPhase>(5); });
+    refused([](auto& s) { s.animation[0].jumpPhaseTick = s.tick + 1; });
+    refused([](auto& s) { s.animation[0].jumpPhase = JumpPhase::Start; });         // grounded
+    refused([](auto& s) { s.animation[0].jumpPhase = JumpPhase::Airborne; });      // grounded
+    refused([](auto& s) { s.players[0].grounded = false; });                       // Grounded in the air
+    refused([](auto& s) { s.players[0].grounded = false; s.animation[0].jumpPhase = JumpPhase::Land; });
+    // Accepted: another order, and a dead player is not cross-checked.
+    auto swapped = valid;
+    std::swap(swapped.animation[0], swapped.animation[1]);
+    CHECK(ValidPlayerAnimations(swapped.players, swapped.animation, swapped.tick));
+    auto dead = valid;
+    dead.players[0].lifeState = LifeState::Dead;
+    dead.animation[0].jumpPhase = JumpPhase::Airborne;
+    CHECK(ValidPlayerAnimations(dead.players, dead.animation, dead.tick));
+}
+
+// v8-product-hitbox-shot S2: when the Match places the shapes (J4) and which
+// animation it poses them with (J8).
+namespace {
+// Records every placement and answers with the synthetic model.
+class RecordingHitModel final : public PlayerHitModel {
+public:
+    struct Call final {
+        std::uint64_t tick{};
+        PlayerId player{};
+        PlayerAnimation animation;
+        CombatState combat;
+    };
+    mutable std::vector<Call> calls;
+    void Shapes(const PlayerHitInput& input, std::vector<PlayerWorldHitShape>& output) const override {
+        calls.push_back({input.tick, input.player.playerId, input.animation, input.combat});
+        SyntheticPlayerHitModel()->Shapes(input, output);
+    }
+};
+} // namespace
+
+TEST_CASE("PvP a tick places every living target's shapes once at its first shot") {
+    auto model = std::make_shared<RecordingHitModel>();
+    PvpMatch match(QuadArena(), PvpCombatRules, DefaultStanceRules, SyntheticPlayerAnimationRules, model);
+    JoinFour(match);
+    CombatStep(match);
+    CHECK(model->calls.empty()); // no shot, no placement
+    // Three shots in one tick share one placement of the four players.
+    for (const PlayerId shooter : {1, 3, 4}) Fire(match, shooter, 1);
+    CombatStep(match);
+    REQUIRE(model->calls.size() == 4);
+    for (PlayerId id = 1; id <= 4; ++id) {
+        CAPTURE(id);
+        CHECK(std::count_if(model->calls.begin(), model->calls.end(),
+            [&](const auto& call) { return call.player == id && call.tick == 2; }) == 1);
+    }
+    for (const PlayerId shooter : {1, 3, 4}) CHECK(Decisions(match, shooter).back().hitKind == ShotHitKind::Player);
+    CombatStep(match, 5);
+    CHECK(model->calls.size() == 4);
+    // The next tick's shapes are placed anew: a target that moved away is
+    // missed where it stood.
+    for (unsigned step = 0; step < 20; ++step) {
+        MoveCombatPlayer(match, 2, 1);
+        CombatStep(match);
+    }
+    REQUIRE(std::abs(LifePlayer(match, 2).position.z - 8) > 1);
+    Fire(match, 3, 2);
+    CombatStep(match);
+    CHECK(model->calls.size() == 8);
+    CHECK(Decisions(match, 3).back().hitKind != ShotHitKind::Player);
+    for (unsigned step = 0; step < 20; ++step) {
+        MoveCombatPlayer(match, 2, -1);
+        CombatStep(match);
+    }
+    // A lethal shot inside a tick removes its target from the later shots, not
+    // from the tick's placement.
+    CombatStep(match, 5);
+    // Back within the capsule radius (0.25) of where the shots aim.
+    REQUIRE(std::abs(LifePlayer(match, 2).position.z - 8) < .2F);
+    Fire(match, 1, 2);
+    Fire(match, 3, 3);
+    Fire(match, 4, 2);
+    REQUIRE(CombatPlayer(match, 2).hp == 25000);
+    CombatStep(match);
+    CHECK(model->calls.size() == 12);
+    CHECK(Decisions(match, 1).back().hitKind == ShotHitKind::Player);
+    CHECK(Decisions(match, 3).back().hitKind != ShotHitKind::Player);
+    CHECK(LifePlayer(match, 2).lifeState == LifeState::Dead);
+    // A dead player is not placed.
+    CombatStep(match, 9);
+    Fire(match, 1, 3);
+    CombatStep(match);
+    CHECK(model->calls.size() == 15);
+    CHECK(std::none_of(model->calls.end() - 3, model->calls.end(), [](const auto& call) { return call.player == 2; }));
+}
+
+TEST_CASE("PvP shots are judged with the animation the tick's snapshot carries") {
+    auto model = std::make_shared<RecordingHitModel>();
+    // Small damage keeps the target alive through every volley.
+    auto rules = PvpCombatRules;
+    rules.shotDamage = 1000;
+    rules.maximumShotDamage = 2000;
+    PvpMatch match(QuadArena(), rules, DefaultStanceRules, SyntheticPlayerAnimationRules, model);
+    JoinFour(match);
+    CombatStep(match);
+    std::size_t compared = 0;
+    std::set<JumpPhase> phases;
+    bool crouchedSeen = false;
+    std::size_t transitions = 0;
+    // Staggered shooters place the shapes every few ticks, so the placements
+    // fall inside the six-tick Start and Land phases, on their first ticks too.
+    const std::array<std::pair<PlayerId, unsigned>, 3> shooters{{{1, 0}, {3, 3}, {4, 6}}};
+    std::map<PlayerId, ActionId> next;
+    for (unsigned step = 0; step < 120; ++step) {
+        // Player 2 walks, jumps, lands and crouches while the others shoot.
+        const auto two = LifePlayer(match, 2);
+        const bool jump = step % 40 == 3;
+        const bool crouch = step % 40 >= 20 && step % 40 < 30;
+        const float forward = step % 40 < 15 ? 1.0F : (step % 40 < 30 ? -1.0F : 0.0F);
+        REQUIRE(match.SubmitInput({2, {{two.lastResolvedCommand + 1, forward, step % 7 == 0 ? 1.0F : 0.0F, 0, 0,
+            jump, crouch, false}}, two.movementEpoch, two.lifeGeneration}));
+        for (const auto& [shooter, offset] : shooters)
+            if (step % 10 == offset)
+                REQUIRE(match.SubmitActions({shooter, {{++next[shooter], 1, AtVictim[shooter], 0}}}) ==
+                        ActionAdmission::Accepted);
+        const auto before = model->calls.size();
+        CombatStep(match);
+        const auto snapshot = match.Snapshot();
+        for (auto call = model->calls.begin() + static_cast<std::ptrdiff_t>(before); call != model->calls.end(); ++call) {
+            const auto player = std::find_if(snapshot.players.begin(), snapshot.players.end(),
+                [&](const auto& state) { return state.playerId == call->player; });
+            REQUIRE(player != snapshot.players.end());
+            if (player->lifeState != LifeState::Alive) continue;
+            const auto animation = std::find_if(snapshot.animation.begin(), snapshot.animation.end(),
+                [&](const auto& value) { return value.playerId == call->player; });
+            REQUIRE(animation != snapshot.animation.end());
+            CAPTURE(call->tick);
+            CAPTURE(call->player);
+            CHECK(call->animation == *animation);
+            ++compared;
+            if (call->player == 2) {
+                phases.insert(animation->jumpPhase);
+                crouchedSeen = crouchedSeen || player->crouched;
+                transitions += animation->jumpPhaseTick == call->tick;
+            }
+        }
+    }
+    MESSAGE("J8 compared placements: " << compared);
+    CHECK(compared >= 30);
+    // The moving target was judged on the ground, in the air and crouched.
+    MESSAGE("J8 placements on a jump phase's first tick: " << transitions);
+    CHECK(phases.size() == 4); // Grounded, Start, Airborne and Land
+    CHECK(transitions >= 2);
+    CHECK(crouchedSeen);
+}
+
+TEST_CASE("PvP a tick places its shapes with the combat state from before its actions") {
+    // xhigh review finding 1: an action decided earlier in the tick, such as a
+    // reload ordered before the first shot, must not reach the judged pose,
+    // or the pose would depend on the order of the tick's actions.
+    auto model = std::make_shared<RecordingHitModel>();
+    PvpMatch match(QuadArena(), PvpCombatRules, DefaultStanceRules, SyntheticPlayerAnimationRules, model);
+    JoinFour(match);
+    CombatStep(match);
+    Fire(match, 1, 1); // spends a round, so a reload is accepted
+    CombatStep(match, 11);
+    const auto before = CombatPlayer(match, 1);
+    // (A, PlayerId, ActionId): player 1's reload is decided before player 3's shot.
+    REQUIRE(match.SubmitActions({1, {{2, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
+    REQUIRE(match.SubmitActions({3, {{1, 1, std::numbers::pi_v<float>, 0}}}) == ActionAdmission::Accepted);
+    const auto calls = model->calls.size();
+    CombatStep(match);
+    const auto tick = match.TickCount();
+    REQUIRE(Decisions(match, 1).back().accepted);
+    REQUIRE(CombatPlayer(match, 1).reloadStartTick == tick);
+    const auto placed = std::find_if(model->calls.begin() + static_cast<std::ptrdiff_t>(calls), model->calls.end(),
+        [&](const auto& call) { return call.player == 1 && call.tick == tick; });
+    REQUIRE(placed != model->calls.end());
+    CHECK(placed->combat == before);
+}
+
+TEST_CASE("PvP the Match writes the hit shape's part into the decision and the hit record") {
+    // A model whose one shape is the stance capsule judged as the given part.
+    class PartModel final : public PlayerHitModel {
+    public:
+        explicit PartModel(HitPart part) : part_(part) {}
+        void Shapes(const PlayerHitInput& input, std::vector<PlayerWorldHitShape>& output) const override {
+            SyntheticPlayerHitModel()->Shapes(input, output);
+            output.back().part = part_;
+        }
+    private:
+        HitPart part_;
+    };
+    for (const auto& [part, damage] : {std::pair{HitPart::Head, 50000U}, std::pair{HitPart::Leg, 18750U},
+                                       std::pair{HitPart::Body, 25000U}}) {
+        CAPTURE(static_cast<int>(part));
+        PvpMatch match(CombatArena(), PvpCombatRules, DefaultStanceRules, SyntheticPlayerAnimationRules,
+                       std::make_shared<PartModel>(part));
+        JoinCombatPlayers(match);
+        CombatStep(match);
+        REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
+        CombatStep(match);
+        const auto decision = Decisions(match).back();
+        CHECK(decision.hitKind == ShotHitKind::Player);
+        CHECK(decision.hitPart == part);
+        CHECK(decision.damage == damage);
+        const auto victim = CombatPlayer(match, 2);
+        CHECK(victim.lastHitPart == part);
+        CHECK(victim.hp == 100000 - damage);
+    }
+}

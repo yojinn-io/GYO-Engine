@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package object_fps_pvp.client.v8;
-option go_package = "gyo.local/object_fps_pvp/protocol/clientv8";
+package object_fps_pvp.client.v9;
+option go_package = "gyo.local/object_fps_pvp/protocol/clientv9";
 
-// This remote-client contract is independent of runtime_v8.proto.
+// This remote-client contract is independent of runtime_v9.proto.
 message Hello {
   string session_token = 1;
   // Diagnostics only (pv7 §3): the time echo with the Gateway; read only
@@ -32,9 +32,11 @@ message Welcome {
   float sprint_speed_scale = 15;
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 16 to 19;
+  // pv9 §4.6: copied from Ready; the Client compares it with its own content on entry.
+  fixed64 animation_digest = 20;
 }
 // Diagnostics only (pv7 contract §2, §3), the same numbers and types as in
-// runtime_v8.proto: times are the sender's own monotonic clock in
+// runtime_v9.proto: times are the sender's own monotonic clock in
 // microseconds; a time of the other side is only ever copied back.
 message ClockSample {
   // The transmit_us of the peer's latest ClockSample this side read, as is;
@@ -120,6 +122,30 @@ message WorldSnapshot {
   optional uint32 gateway_hold_us = 5;
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 6, 7;
+  // pv9 §4.2: one per player, the Match's animation authority.
+  repeated PlayerAnimation animation = 8;
+}
+// The Match's animation authority of one player (protocol-v9 §4.3): one per
+// player, of the player's current life. Checks in §4.5.
+enum JumpPhase {
+  JUMP_PHASE_UNSPECIFIED = 0;
+  JUMP_PHASE_GROUNDED = 1;
+  JUMP_PHASE_START = 2;
+  JUMP_PHASE_AIRBORNE = 3;
+  JUMP_PHASE_LAND = 4;
+}
+message PlayerAnimation {
+  uint32 player_id = 1;
+  uint32 life_generation = 2;
+  // Unwrapped gait cycles x 65536, modulo 2^32; decreases moving backward.
+  uint32 gait_phase_q16 = 3;
+  uint32 move_weight_permille = 4;
+  uint32 jog_weight_permille = 5;
+  JumpPhase jump_phase = 6;
+  // The zero point of the phase's clip time (Authority Tick).
+  uint32 jump_phase_tick = 7;
+  // Always 0 before sprint presentation (pv9-sprint-animation (a)).
+  uint32 sprint_weight_permille = 8;
 }
 message Error {
   string code = 1;
@@ -249,10 +275,12 @@ message ShotDecision {
   // pv8 §2a: reserved for the B and C layers (protocol-v8 appendices); no behaviour.
   reserved 12, 13;
 }
-// Where a shot hit a player (pv7 §7): HIT_PLAYER is BODY or HEAD, every other
-// decision UNSPECIFIED. v7.1's Match produces only BODY; v8 adds HEAD.
+// Where a shot hit a player (pv7 §7, pv9 §2): HIT_PLAYER is BODY, HEAD or LEG,
+// every other decision UNSPECIFIED. BODY is the torso with the pelvis; arms are
+// no part (a ray passes through them).
 enum HitPart {
   HIT_PART_UNSPECIFIED = 0;
   HIT_PART_BODY = 1;
   HIT_PART_HEAD = 2;
+  HIT_PART_LEG = 3;
 }

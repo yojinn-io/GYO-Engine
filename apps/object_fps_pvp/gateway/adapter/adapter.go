@@ -8,13 +8,13 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // ProtocolVersion is the product wire version (pv7). ClientVersion (GYOP
 // header) and RuntimeVersion (IPC envelope) are its typed forms.
-const ProtocolVersion = 8
+const ProtocolVersion = 9
 const ClientVersion uint16 = ProtocolVersion
 const RuntimeVersion uint32 = ProtocolVersion
 const MaxPlayers = 4
@@ -129,7 +129,34 @@ func SnapshotForClient(in *runtime.WorldSnapshot, rules *runtime.CombatRules) (*
 			LastDamageTick: state.LastDamageTick, DamageCount: state.DamageCount, LastAttackerId: state.LastAttackerId,
 			LastHitPart: client.HitPart(state.LastHitPart)})
 	}
+	if len(in.Animation) != len(in.Players) {
+		return nil, errors.New("invalid runtime animation count")
+	}
+	animationSeen := make(map[uint32]bool, len(in.Animation))
+	for _, a := range in.Animation {
+		if a == nil || seen[a.PlayerId] == nil || animationSeen[a.PlayerId] || !validAnimation(a, seen[a.PlayerId], in.Tick) {
+			return nil, errors.New("invalid runtime animation")
+		}
+		animationSeen[a.PlayerId] = true
+		out.Animation = append(out.Animation, &client.PlayerAnimation{PlayerId: a.PlayerId, LifeGeneration: a.LifeGeneration,
+			GaitPhaseQ16: a.GaitPhaseQ16, MoveWeightPermille: a.MoveWeightPermille, JogWeightPermille: a.JogWeightPermille,
+			JumpPhase: client.JumpPhase(a.JumpPhase), JumpPhaseTick: a.JumpPhaseTick, SprintWeightPermille: a.SprintWeightPermille})
+	}
 	return out, nil
+}
+
+// validAnimation checks one player's animation authority (pv9 §4.5): the
+// player's life; weights <= 1000 and no sprint weight yet; a valid phase whose
+// zero point is not after the snapshot; and, for a living player, Start or
+// Airborne exactly when not grounded. The Match guards the same conditions.
+func validAnimation(a *runtime.PlayerAnimation, player *runtime.PlayerState, tick uint32) bool {
+	if a.LifeGeneration != player.LifeGeneration || a.MoveWeightPermille > 1000 || a.JogWeightPermille > 1000 ||
+		a.SprintWeightPermille != 0 || a.JumpPhase < runtime.JumpPhase_JUMP_PHASE_GROUNDED ||
+		a.JumpPhase > runtime.JumpPhase_JUMP_PHASE_LAND || a.JumpPhaseTick > tick {
+		return false
+	}
+	inAir := a.JumpPhase == runtime.JumpPhase_JUMP_PHASE_START || a.JumpPhase == runtime.JumpPhase_JUMP_PHASE_AIRBORNE
+	return player.LifeState != runtime.LifeState_LIFE_ALIVE || inAir != player.Grounded
 }
 
 // validDamageRecord checks the presentation-only hit record (pv6 contract §2):
@@ -164,10 +191,10 @@ func EvictionNotice(e *runtime.PlayerEvicted) (string, string) {
 
 func finite(v float32) bool { return !math.IsNaN(float64(v)) && !math.IsInf(float64(v), 0) }
 
-// playerPart: a part a shot can hit a player at (pv7 §7). HEAD is accepted
-// although v7.1's Match produces only BODY, so v8 needs no new check.
+// playerPart: a part a shot can hit a player at (pv7 §7, pv9 §2).
 func playerPart(part runtime.HitPart) bool {
-	return part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD
+	return part == runtime.HitPart_HIT_PART_BODY || part == runtime.HitPart_HIT_PART_HEAD ||
+		part == runtime.HitPart_HIT_PART_LEG
 }
 
 // Rules originate in Match. The adapter validates their contract, not policy defaults.
@@ -277,7 +304,8 @@ func EqualDecision(a, b *runtime.ShotDecision) bool {
 
 // Bound the dynamic arena descriptor using the largest legal identity fields,
 // so every Welcome built from an admitted Ready fits the complete UDP envelope.
-// The digest is counted as nonzero: any nonzero fixed64 encodes to 9 bytes.
+// The digests are counted as nonzero: any nonzero fixed64 encodes to 9 bytes
+// (arena_digest) or 10 bytes (animation_digest, a two-byte tag).
 func ReadyFitsWelcome(r *runtime.Ready) bool {
 	if r == nil || r.SnapshotIntervalTicks == 0 || !ValidRules(r.CombatRules) || !ValidMovementRules(r.JumpHeight, r.Gravity) {
 		return false
@@ -285,7 +313,7 @@ func ReadyFitsWelcome(r *runtime.Ready) bool {
 	// The largest time echo counts too (pv7 §3): every ClockSample field at its maximum.
 	largest := uint64(math.MaxUint64)
 	clock := &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest}
-	welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock,
+	welcome := &client.Welcome{PlayerId: math.MaxUint32, TickRate: r.TickRate, SnapshotRate: r.TickRate / r.SnapshotIntervalTicks, ArenaId: r.ArenaId, ArenaVersion: r.ArenaVersion, ArenaDigest: math.MaxUint64, AnimationDigest: math.MaxUint64, CombatRules: RulesForClient(r.CombatRules), JumpHeight: r.JumpHeight, Gravity: r.Gravity, Clock: clock,
 		CrouchBodyHeight: r.CrouchBodyHeight, CrouchEyeHeight: r.CrouchEyeHeight, CrouchSpeedScale: r.CrouchSpeedScale, SprintSpeedScale: r.SprintSpeedScale}
 	return proto.Size(welcome)+framing.HeaderSize <= framing.MaxDatagram
 }

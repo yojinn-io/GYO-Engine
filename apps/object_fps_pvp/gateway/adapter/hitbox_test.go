@@ -5,36 +5,39 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
-// pv7 §7: a player hit is BODY or HEAD, every other decision UNSPECIFIED; an
-// unknown part invalidates the results batch. HEAD passes although v7.1's
-// Match never produces it.
+// pv7 §7, pv9 §2: a player hit is BODY, HEAD or LEG, every other decision
+// UNSPECIFIED; an unknown part invalidates the results batch. HEAD and LEG pass
+// although the Match produces only BODY until the hitbox batch.
 func TestResultsCheckTheHitPart(t *testing.T) {
 	hit := func(part runtime.HitPart) *runtime.ShotDecision {
 		return &runtime.ShotDecision{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, ActionId: 1, ResolvedTick: 5,
-			Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: 2, TargetLifeGeneration: 1, Damage: 25, HitPart: part}
+			Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: 2, TargetLifeGeneration: 1, Damage: 25000, HitPart: part}
 	}
 	miss := func(part runtime.HitPart) *runtime.ShotDecision {
 		return &runtime.ShotDecision{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT, ActionId: 1, ResolvedTick: 5,
 			Accepted: true, HitKind: runtime.ShotHitKind_HIT_WORLD, HitPart: part}
 	}
 	for _, good := range []*runtime.ShotDecision{hit(runtime.HitPart_HIT_PART_BODY), hit(runtime.HitPart_HIT_PART_HEAD),
-		miss(runtime.HitPart_HIT_PART_UNSPECIFIED)} {
+		hit(runtime.HitPart_HIT_PART_LEG), miss(runtime.HitPart_HIT_PART_UNSPECIFIED)} {
 		out, err := ResultsForClient(&runtime.ActionResults{PlayerId: 1, Decisions: []*runtime.ShotDecision{good}}, testRules())
 		if err != nil || int32(out.Decisions[0].HitPart) != int32(good.HitPart) {
 			t.Fatalf("%v: %v %v", good, out, err)
 		}
 	}
-	for _, bad := range []*runtime.ShotDecision{hit(runtime.HitPart_HIT_PART_UNSPECIFIED), hit(99),
-		miss(runtime.HitPart_HIT_PART_BODY), miss(runtime.HitPart_HIT_PART_HEAD)} {
+	for _, bad := range []*runtime.ShotDecision{hit(runtime.HitPart_HIT_PART_UNSPECIFIED), hit(4), hit(99),
+		miss(runtime.HitPart_HIT_PART_BODY), miss(runtime.HitPart_HIT_PART_HEAD), miss(runtime.HitPart_HIT_PART_LEG), miss(4), miss(99)} {
 		if _, err := ResultsForClient(&runtime.ActionResults{PlayerId: 1, Decisions: []*runtime.ShotDecision{bad}}, testRules()); err == nil {
 			t.Fatalf("accepted %v", bad)
 		}
 	}
 	if a, b := hit(runtime.HitPart_HIT_PART_BODY), hit(runtime.HitPart_HIT_PART_HEAD); EqualDecision(a, b) || !EqualDecision(a, proto.Clone(a).(*runtime.ShotDecision)) {
+		t.Fatal("EqualDecision does not compare the hit part")
+	}
+	if EqualDecision(hit(runtime.HitPart_HIT_PART_BODY), hit(runtime.HitPart_HIT_PART_LEG)) {
 		t.Fatal("EqualDecision does not compare the hit part")
 	}
 }
@@ -62,16 +65,16 @@ func TestMaximumShotDamageBoundsTheRulesAndTheDamage(t *testing.T) {
 		}
 	}
 	rules := testRules()
-	rules.MaximumShotDamage = 50
+	rules.MaximumShotDamage = 50000
 	decision := func(damage uint32) *runtime.ActionResults {
 		return &runtime.ActionResults{PlayerId: 1, Decisions: []*runtime.ShotDecision{{LifeGeneration: 1, Kind: runtime.ActionKind_ACTION_SHOT,
 			ActionId: 1, ResolvedTick: 5, Accepted: true, HitKind: runtime.ShotHitKind_HIT_PLAYER, TargetId: 2, TargetLifeGeneration: 1,
 			Damage: damage, HitPart: runtime.HitPart_HIT_PART_HEAD}}}
 	}
-	if _, err := ResultsForClient(decision(50), rules); err != nil {
+	if _, err := ResultsForClient(decision(50000), rules); err != nil {
 		t.Fatalf("damage at maximum_shot_damage above shot_damage refused: %v", err)
 	}
-	if _, err := ResultsForClient(decision(51), rules); err == nil {
+	if _, err := ResultsForClient(decision(50001), rules); err == nil {
 		t.Fatal("damage above maximum_shot_damage accepted")
 	}
 }
