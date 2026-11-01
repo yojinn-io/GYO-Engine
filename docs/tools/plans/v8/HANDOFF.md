@@ -40,6 +40,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-ui-editor-ime-di2-handover` | （2026-11-01）PR #132 對 framework DI 2 與守衛的 input 部分留在 PR #132；架構整改卡的 PR B 以它為起點改寫，措辭以 PR B 的全文為準。要通知整改會話（見「現況」） | 「留著，PR B 接手」 |
 | `v8-tool-ui-editor-ime-composition-source` | （2026-11-01）組字顯示放在 framework 的 ImGui 綁定，組字從 Engine 的 input backend（`SdlInput`）讀，不在綁定或 Engine 平台層另外解讀 SDL 事件。原則：Engine 支撐工具與遊戲；framework 可以呼叫 Engine，方向不能反；工具可以用 Engine 的能力，但不直接碰 SDL。framework DI 2 與 ui_editor DI 1 拿掉「不連結 `GYO::Input`」，守衛照 §14.4 改（說明與審查在 dev_log） | 「放綁定，照方案」；「什麼鬼，引擎的職責就是支撐tool 和 Game 的，framework可以調用Engine 但是順序不能犯規來。ui_editor 可以使用Engine的能力，但是不能直接碰SDL，邏輯和 game 一樣」；守衛的變更：「核准」 |
 | `v8-tool-ui-editor-ime-enter-fix` | （2026-11-01）組字中 Enter 漏給程式的缺陷，修在 SDL 的 macOS 後端（方案 (甲)，winit 的規則），用 `third_party/sdl3/patches/` 的修補檔；不在 Engine 平台層或 ImGui 綁定複製組字狀態。選項與參考做法（Godot、winit、GLFW、Dear ImGui、SDL）在 dev_log | 「(甲) 修補 SDL」 |
 | `v8-tool-assets-anim-events-owner` | （2026-10-31）`gyo.anim_events` 的契約放在 `GYO::Model`（`engine/model/AnimationEvents.hpp`，文件 [animation-events.md](../../../architecture/animation-events.md)）；catalog 型別沿用 `text`，檔頭 `schema` 欄位；照草稿寫 Design Invariants 5 條與 Replacement Criteria 3 條。Architecture Delta：GYO::Model PRIVATE 連結 nlohmann_json | 「照建議核准」 |
