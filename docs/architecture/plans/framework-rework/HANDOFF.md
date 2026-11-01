@@ -34,7 +34,8 @@
 - 結果：fw-link-* 8/8（`link_mutations_after_review.txt`）。
 - 全量 CTest 第一次：118/119，`os.boundary_guard` 失敗：H3 用 `_WIN32` 只在 POSIX 編譯，OS 邊界守衛（R2）不允許 tests/framework 用 OS 巨集（`ctest_full.txt`）。我新寫的測試的錯，守衛不改。改成執行時判斷：Engine 的 `CommandLineUtf8` 接受這組 argv 時（Windows 讀程序自己的命令列），H3 直接返回，由 H1 涵蓋。H3 是 fw-shell-argv-raw、fw-shell-failure-code 的殺手，依 D184 宣告：這 2 條重跑要 killed、stale 0（預檢：find 都恰好一次）；全量 CTest 重跑要全過。
 - 結果：2/2（`h3_mutations.txt`）；全量建置成功、CTest 119/119（45.9 s，`-j 6`，`ctest_full_2.txt`；比上一批多 4 條：window_shell、imgui_shell、imgui_shell_no_renderer、shell_headers）。突變合計：外殼 26/26、守衛與連結 19/19（fw-guard-* 11、fw-link-* 8），stale 0。停在連結檢查判定變更的核准關卡（[判定變更](link-check-judgment-change.md)）。外殼批至今約 4.5 h。
-- 2026-11-01：v8-framework-shell 完成（使用者核准判定變更）。回歸修補與外殼批分兩個 commit。估 12～16 h（第 0 關後重估 14～17 h），實際約 5 h。L1 結果記在下一行。
+- 2026-11-01：v8-framework-shell 完成（使用者核准判定變更）。回歸修補與外殼批分兩個 commit。估 12～16 h（第 0 關後重估 14～17 h），實際約 5 h。commit `15639727`（回歸修補）、`ea5df6f6`（外殼）。L1：run 41274514145 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 第一次就都是 success。同一 run 的 `Quick acceptance / object_fps_pvp / windows-x64` 第一次 failure：建置途中複製 MSVC 執行期 DLL（`concrt140.dll`）到 `build/target/object_fps_pvp/bin/` 時「Permission denied」，測試沒有跑到；這一步屬 pvp 的打包，不建 framework、不碰守衛，判定為環境（runner 上的檔案被佔用）。只重跑失敗的 job（attempt 2），全部 success，CI gate success。第一次的失敗保留在這裡（§14.1）。
+- 下一批：v8-framework-catalog-structure（第 0 關：決策 D-1，已核准 (a)＋b-lite）。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
 
 ### v8-framework-shell 的事前宣告（2026-11-01，草圖核准後、寫程式前）
 
