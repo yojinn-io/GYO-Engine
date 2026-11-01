@@ -5,7 +5,8 @@ The rules read the registries instead of naming any product or tool (AGENTS.md s
   target, and neither registry has a row named framework;
 - Invariant 2, one direction, core and bindings: everything under framework/bindings/<name>/ is a binding, the rest
   is the core.
-  - Everywhere: no include reaches engine/input, no SDL_GPU function or type (SDL_*GPU*) is used.
+  - Everywhere: no SDL_GPU function or type (SDL_*GPU*) is used. Engine's input is open to the framework as to
+    a game or tool (v8-tool-ui-editor-ime-composition-source); only the ImGui binding lists its SDL backend.
   - The core includes only gyo/framework/ and Engine's neutral headers (no *Native.hpp) besides standard and local
     headers, and nothing whose name starts with SDL, imgui or json.hpp; it names no SDL_, ImGui or nlohmann symbol
     in code; its CMake files name only the core's targets.
@@ -21,7 +22,7 @@ fails and a removed one asks for the entry to shrink. Lines with rule "link" ("t
 <name>,<name>...") belong to the configure-time link check in tests/framework/CMakeLists.txt, which checks the lines
 of the targets a configuration builds; here they are checked for form, and their target must be one that a CMake file
 of the core defines (add_library), whatever the configuration, so a stale line fails everywhere. The registries, project files,
-executables, engine/input, SDL_GPU and anything the guard refused before v8-framework-guard-ratchet (an include
+executables, SDL_GPU and anything the guard refused before v8-framework-guard-ratchet (an include
 outside its old prefixes, a target outside its old list and the shell's and bindings' targets) are never
 allowlisted, nor is anything in a binding.
 Includes, targets and registered names are read from the raw text (a comment counts); symbols from the code only,
@@ -52,13 +53,16 @@ TOOL_COMMAND = re.compile(r"\b(add_executable|gyo_tool_install_target|gyo_instal
 DEFINED_TARGET = re.compile(r"\badd_library\(\s*([A-Za-z0-9_]+)(?=[\s)])(?!\s+ALIAS\b)", re.IGNORECASE)
 CMAKE_COMMENT = re.compile(r"#[^\n]*")
 NATIVE_HEADER = re.compile(r"^engine/.*(/native/|Native\.hpp$)")
+# Engine's input is open to the framework, its native layer never was: in the core an input native header stays a
+# hard finding that no allowlist line covers, as before v8-tool-ui-editor-ime-composition-source.
+INPUT_PREFIX = "engine/input/"
 # Bare names (no slash) that are SDL's, ImGui's or nlohmann's own headers, not a standard or local one.
 LIBRARY_BARE_INCLUDE = re.compile(r"^(SDL\.h|SDL_\w*\.h|imgui(_\w+)?\.h|json\.hpp)$")
 
-FORBIDDEN_INCLUDE_PREFIXES = ("engine/input/",)
 # What the guard allowed before v8-framework-guard-ratchet. Anything outside it stays a hard finding everywhere,
 # so the allowlist's counts can never trade an old site for something the old guard refused. The only names added
-# since are the shell's and the bindings' own targets.
+# since are the shell's and the bindings' own targets, and the input backend the ImGui binding reads typed text and
+# the input method's composition from (v8-tool-ui-editor-ime-composition-source).
 OLD_INCLUDE_PREFIXES = ("gyo/framework/", "engine/", "nlohmann/", "SDL3/", "backends/imgui_impl_sdl")
 OLD_TARGETS = {
     "GYO::ToolFramework", "GYO::ToolFrameworkGui",
@@ -66,7 +70,7 @@ OLD_TARGETS = {
     "GYO::PlatformSDL", "GYO::PlatformSDLNative", "GYO::RenderBackendSDL", "GYO::RenderBackendSDLNative",
     "SDL3::SDL3", "imgui::core", "imgui::sdl3_sdlrenderer3", "nlohmann_json::nlohmann_json",
 }
-NEW_TARGETS = {"GYO::ToolFrameworkWindow", "GYO::ToolFrameworkImGui", "GYO::ToolFrameworkJson"}
+NEW_TARGETS = {"GYO::ToolFrameworkWindow", "GYO::ToolFrameworkImGui", "GYO::ToolFrameworkJson", "GYO::InputBackendSDL"}
 ALLOWLIST_RULES = ("include", "symbol", "target")
 LINK_RULE = "link"
 
@@ -87,7 +91,7 @@ BINDINGS = {
         "symbols": re.compile(r"\bSDL_\w+|\bnlohmann\b"),
         "targets": {"GYO::ToolFramework", "GYO::ToolFrameworkWindow", "GYO::ToolFrameworkImGui", "GYO::Engine",
                     "GYO::Os", "GYO::PlatformSDL", "GYO::PlatformSDLNative", "GYO::RenderBackendSDL",
-                    "GYO::RenderBackendSDLNative", "imgui::core", "imgui::sdl3_sdlrenderer3"},
+                    "GYO::RenderBackendSDLNative", "GYO::InputBackendSDL", "imgui::core", "imgui::sdl3_sdlrenderer3"},
     },
     "json": {
         "include_prefixes": ("gyo/framework/", "engine/", "nlohmann/"),
@@ -177,8 +181,8 @@ def file_findings(relative: str, path: Path, named) -> tuple[list[str], list[tup
         return hard + [f"{relative}: {owner} has no positive list in the guard"], []
     if path.suffix in SUFFIXES:
         for include in INCLUDE.findall(text):
-            if include.startswith(FORBIDDEN_INCLUDE_PREFIXES) or (
-                    "/" in include and not include.startswith(OLD_INCLUDE_PREFIXES)):
+            if ("/" in include and not include.startswith(OLD_INCLUDE_PREFIXES)) or (
+                    owner == "core" and include.startswith(INPUT_PREFIX) and NATIVE_HEADER.match(include)):
                 hard.append(f"{relative}: includes {include}")
             elif not include_allowed(include, rules):
                 soft.append(("include", f"{relative}: includes {include}"))

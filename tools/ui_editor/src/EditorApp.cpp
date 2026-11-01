@@ -3,6 +3,7 @@
 #include "EditorDocumentEdits.hpp"
 #include "gyo/ui_editor/ElementClipboard.hpp"
 
+#include "engine/base/Log.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/os/Files.hpp"
 
@@ -125,6 +126,11 @@ void EditorApp::ApplyPendingAssetChanges() {
 void EditorApp::ApplyPathDialogResults() {
     if (dialogs_ == nullptr) return;
     for (const PathDialogResult& result : dialogs_->TakeResults()) {
+        if (!result.current) {
+            statusMessage_ = "Ignored the answer of a file dialog the editor no longer waits for";
+            Engine::Base::Log(Engine::Base::LogLevel::Warning, "ui_editor.dialogs", statusMessage_);
+            continue;
+        }
         pathDialogOpen_ = false;
         if (result.outcome == PathDialogOutcome::Cancelled) continue;
         if (result.outcome == PathDialogOutcome::Failed) {
@@ -372,6 +378,18 @@ void EditorApp::DrawStatusBar() {
                                        ImGuiWindowFlags_NoTitleBar |
                                        ImGuiWindowFlags_NoScrollbar;
     ImGui::Begin("Status", nullptr, flags);
+    if (pathDialogOpen_ && dialogs_ != nullptr) {
+        // The OS may never answer (docs/architecture/platform-sdl.md, Design
+        // Invariant 10); this gives the editor's dialogs back.
+        ImGui::TextUnformatted("Waiting for the file dialog");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Stop waiting")) {
+            dialogs_->Abandon();
+            pathDialogOpen_ = false;
+            statusMessage_ = "Stopped waiting for the file dialog; its answer will be ignored";
+        }
+        ImGui::SameLine();
+    }
     ImGui::TextUnformatted(statusMessage_.empty() ? "Ready" : statusMessage_.c_str());
     ImGui::SameLine(ImGui::GetWindowWidth() - 310.0F);
     ImGui::TextUnformatted(catalog_.IsMounted() ? "Catalog: read-only" : "Catalog: none");

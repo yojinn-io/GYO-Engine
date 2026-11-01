@@ -51,8 +51,24 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
                                             "framework/src/A.cpp: includes SDL3/SDL.h",
                                             "framework/src/A.cpp: includes backends/imgui_impl_sdl3.h"])
 
-    def test_input_include_fails(self):
-        self.assertEqual(len(self.scan({"framework/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n'})), 1)
+    def test_input_neutral_include_passes(self):
+        # Engine's input is open to the framework as to a game or tool (v8-tool-ui-editor-ime-composition-source).
+        self.assertEqual(self.scan({"framework/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n'}), [])
+
+    def test_input_native_header_fails_in_the_core(self):
+        self.assertEqual(self.scan({"framework/src/A.cpp": '#include "engine/input/backend/sdl/SdlInputNative.hpp"\n'}),
+                         ["framework/src/A.cpp: includes engine/input/backend/sdl/SdlInputNative.hpp"])
+
+    def test_input_native_header_in_the_core_is_never_allowlisted(self):
+        findings = self.scan({
+            "framework/src/A.cpp": '#include "engine/input/backend/sdl/SdlInputNative.hpp"\n',
+            self.ALLOWLIST: "framework/src/A.cpp include 1\n",
+        })
+        self.assertIn("framework/src/A.cpp: includes engine/input/backend/sdl/SdlInputNative.hpp", findings)
+
+    def test_input_backend_target_fails_in_the_core(self):
+        self.assertEqual(self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::InputBackendSDL)\n"}),
+                         ["framework/CMakeLists.txt: names GYO::InputBackendSDL"])
 
     def test_tool_header_fails(self):
         # A tool's header is outside every allowed prefix, without the guard naming the tool.
@@ -132,6 +148,22 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertEqual(self.scan({"framework/bindings/imgui/CMakeLists.txt": "target_link_libraries(a PRIVATE SDL3::SDL3)\n"}),
                          ["framework/bindings/imgui/CMakeLists.txt: names SDL3::SDL3"])
 
+    def test_imgui_binding_reads_text_through_the_input_backend(self):
+        self.assertEqual(self.scan({
+            "framework/bindings/imgui/src/A.cpp": '#include "engine/input/backend/sdl/SdlInput.hpp"\n',
+            "framework/bindings/imgui/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::InputBackendSDL)\n",
+        }), [])
+
+    def test_imgui_binding_input_native_target_fails(self):
+        self.assertEqual(self.scan({"framework/bindings/imgui/CMakeLists.txt":
+                                    "target_link_libraries(a PRIVATE GYO::InputBackendSDLNative)\n"}),
+                         ["framework/bindings/imgui/CMakeLists.txt: names GYO::InputBackendSDLNative"])
+
+    def test_json_binding_input_backend_fails(self):
+        self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt":
+                                    "target_link_libraries(a PRIVATE GYO::InputBackendSDL)\n"}),
+                         ["framework/bindings/json/CMakeLists.txt: names GYO::InputBackendSDL"])
+
     def test_imgui_binding_other_native_header_fails(self):
         self.assertEqual(self.scan({"framework/bindings/imgui/src/A.cpp": '#include "engine/input/backend/sdl/SdlInputNative.hpp"\n'}),
                          ["framework/bindings/imgui/src/A.cpp: includes engine/input/backend/sdl/SdlInputNative.hpp"])
@@ -187,10 +219,10 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
 
     def test_hard_rules_are_never_allowlisted(self):
         findings = self.scan({
-            "framework/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n',
-            self.ALLOWLIST: "framework/src/A.cpp include 1\n",
+            "framework/src/A.cpp": "auto* device = SDL_CreateGPUDevice(0, false, nullptr);\n",
+            self.ALLOWLIST: "framework/src/A.cpp symbol 1\n",
         })
-        self.assertIn("framework/src/A.cpp: includes engine/input/InputFrame.hpp", findings)
+        self.assertIn("framework/src/A.cpp: uses SDL_CreateGPUDevice", findings)
 
     def test_trading_an_allowlisted_site_for_an_old_refusal_fails(self):
         # The count stays 1, but GYO::Input was refused before the ratchet, so it is never covered.

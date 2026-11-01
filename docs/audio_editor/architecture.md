@@ -13,9 +13,14 @@ Owner: `audio_editor` (`tools/audio_editor/`).
 A change against any item below is an Architecture Delta that needs the user's
 agreement, however small (AGENTS.md section 3). So is changing this section.
 
-1. The editor links no game, no `GYO::Input` and no SDL_GPU. Playback goes only
-   through `GYO::Audio` and its SDL backend. Guard: the editor's dependency
-   guard, a positive list of includes and targets.
+1. The editor links no game and names no other product. It may use any
+   Engine module, as an editor depends on the engine; what a game and a tool,
+   or two tools, both need comes through the framework first, even where
+   Engine has it, and the framework calls Engine. Playback goes through
+   `GYO::Audio` and its SDL backend; the editor itself includes no `SDL3/`
+   header, calls no `SDL_` function and names no SDL or `*Native` target.
+   Guard: the editor's dependency guard, a positive list of targets and
+   include prefixes.
 2. The output follows the format the engine publishes. The sample rate is taken
    from `GYO::Audio` (`kSampleRate`, `engine/audio/include/engine/audio/AudioFormat.hpp`);
    the editor keeps no copy of that number. The sample encoding is whatever the
@@ -26,9 +31,11 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
 3. The editor writes only what it registers: the output file and the catalog
    entry with the same id. It leaves every other entry, every other file and
    product data (such as a product's sound cue table) untouched. The catalog is
-   written by atomic replace and checked against the content contract (unique
-   ids, paths inside the asset root). This differs from ui_editor, whose mounted
-   catalog is read-only.
+   written by atomic replace and checked against the content contract (ids
+   unique within the catalog, paths inside the asset root); duplicates across
+   catalogs and overlaps with shader bundles are decided at load by Engine's
+   `ContentManifest`. This differs from ui_editor, whose mounted catalog is
+   read-only.
 4. Editing is non-destructive. The source file is only read. Edits live in the
    editor's project file, and the output is always regenerated from the source
    and those settings.

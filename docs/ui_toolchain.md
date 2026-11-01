@@ -67,16 +67,28 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
 
 ### ui_editor
 
-1. The editor links no game, no `GYO::Input` and no SDL_GPU. Guard:
-   `gyo_ui_editor.dependency_guard` (`tests/ui_editor/ui_editor_dependency_guard.py`),
-   a positive list of includes and targets. The window, ImGui's SDL backends
-   and the system dialogs come through the framework layer, whose own
-   guard keeps the same rule ([framework](framework/architecture.md), Design
-   Invariant 2).
+1. The editor links no game and names no other product. It may use any
+   Engine module, as an editor depends on the engine; what a game and a tool,
+   or two tools, both need comes through the framework first, even where
+   Engine has it, and the framework calls Engine. It reaches SDL only as a
+   game does: through Engine's SDL backend targets, which keep SDL private,
+   an Engine `*Native` target where an Engine contract allows it, or the
+   framework's bindings. The window and ImGui's SDL backends come through the
+   framework's ImGui binding ([framework](framework/architecture.md), Design
+   Invariant 2); the system dialogs from Engine's SDL platform
+   (`GYO::PlatformSDL`, [platform-sdl](architecture/platform-sdl.md), "Path
+   dialogs"), the editor keeping only which purpose a dialog serves and how
+   its answer is applied. The one native use is the asset preview's
+   renderer (`GYO::RenderBackendSDLNative`, platform-sdl Replacement
+   Criterion 2, until Engine's SDL renderer has a texture API); the editor
+   names no `SDL3::` target. Guard: `gyo_ui_editor.dependency_guard`
+   (`tests/ui_editor/ui_editor_dependency_guard.py`), a positive list of
+   targets and include prefixes; SDL headers, Engine native headers and
+   `SDL_` names appear only in the files that use the native renderer.
 2. Documents enter and leave only through `UiDocumentBridge` and the `GYO::Ui`
    codec: canonical JSON written by atomic replace, no side files (`.meta`,
    autosave, `imgui.ini`) and no native path in the output. The framework's
-   host keeps ImGui's own side files out ([framework](framework/architecture.md),
+   ImGui binding keeps ImGui's own side files out ([framework](framework/architecture.md),
    Design Invariant 4).
 3. A mounted asset catalog is read-only; nothing is written inside its root.
    The mount is the framework's `ReadOnlyAssetCatalog`, which has no write API

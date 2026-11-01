@@ -2,38 +2,47 @@
 
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/EditorApp.hpp"
-#include "SdlPathDialogs.hpp"
+#include "gyo/ui_editor/SdlPathDialogs.hpp"
 
-#include "gyo/framework/ImGuiSdlHost.hpp"
+#include "gyo/framework/imgui/ImGuiShell.hpp"
 
 #include <memory>
+#include <string>
+#include <string_view>
 #include <utility>
 
-#include <SDL3/SDL.h>
-
 #include "engine/base/Error.hpp"
+#include "engine/base/Log.hpp"
+#include "engine/render/backend/sdl/SdlRendererNative.hpp"
 
 namespace Gyo::Tools::UiEditor {
 namespace {
 
-template <Engine::Base::CodedError Error>
-void LogError(const char* context, const Error& error) {
-    SDL_LogError(
-        SDL_LOG_CATEGORY_APPLICATION,
-        "%s: %s",
-        context,
-        Engine::Base::Describe(error).c_str());
+void LogError(const std::string_view text) {
+    Engine::Base::Log(Engine::Base::LogLevel::Error, "ui_editor", text);
 }
 
-// The editor in the framework's window host.
-class EditorClient final : public Framework::ImGuiSdlClient {
+template <Engine::Base::CodedError Error>
+void LogError(const char* context, const Error& error) {
+    LogError(std::string(context) + ": " + Engine::Base::Describe(error));
+}
+
+// The editor in the framework's ImGui shell.
+class EditorClient final : public Framework::ImGuiShellClient {
 public:
-    EditorClient(const Framework::ImGuiSdlHostContext& context, CommandLineOptions options)
-        : dialogs_(context.window),
+    EditorClient(const Framework::ImGuiShellContext& context, CommandLineOptions options)
+        : dialogs_(context.platform),
           editor_(std::move(options), previewAssets_, &dialogs_) {}
 
-    [[nodiscard]] bool Initialize(const Framework::ImGuiSdlHostContext& context) override {
-        if (const auto preview = previewAssets_.Initialize(*context.renderer); !preview) {
+    [[nodiscard]] bool Initialize(const Framework::ImGuiShellContext& context) override {
+        // The preview makes its textures on the native renderer until Engine's
+        // SDL renderer has a texture API (platform-sdl Replacement Criterion 2).
+        auto* const renderer = Engine::Render::Backend::Sdl::NativeRenderer(context.renderer);
+        if (renderer == nullptr) {
+            LogError("Asset preview initialization failed: no renderer");
+            return false;
+        }
+        if (const auto preview = previewAssets_.Initialize(*renderer); !preview) {
             LogError("Asset preview initialization failed", preview.error());
             return false;
         }
@@ -65,12 +74,12 @@ private:
 } // namespace
 
 int RunEditorGui(const CommandLineOptions& options) {
-    Framework::ImGuiSdlHostOptions host;
-    host.title = "GYO UI Editor";
-    host.width = 1600;
-    host.height = 900;
-    host.resizable = true;
-    return Framework::RunImGuiSdlHost(host, [&options](const Framework::ImGuiSdlHostContext& context) {
+    Framework::WindowShellOptions shell;
+    shell.platform.title = "GYO UI Editor";
+    shell.platform.width = 1600;
+    shell.platform.height = 900;
+    shell.platform.resizable = true;
+    return Framework::RunImGuiShell(shell, [&options](const Framework::ImGuiShellContext& context) {
         return std::make_unique<EditorClient>(context, options);
     });
 }

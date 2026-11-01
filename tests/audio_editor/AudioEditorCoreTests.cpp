@@ -192,7 +192,8 @@ TEST_CASE("ExportSound writes the clip and its entry and never touches the sourc
     CHECK(report->frames == 653); // floor(300 * 48000 / 22050), as the script's reference has it
     CHECK(ReadBytes(source) == sourceBytes);
     CHECK(std::filesystem::exists(assets / "audio" / "reload.wav"));
-    CHECK_FALSE(std::filesystem::exists(assets / "audio" / "reload.wav.gyo-tmp"));
+    // No temporary file is left beside the clip, whatever engine/io names it.
+    CHECK(std::distance(std::filesystem::directory_iterator(assets / "audio"), std::filesystem::directory_iterator{}) == 1);
     CHECK(ReadText(assets / "asset_catalog.json").find("\"path\": \"audio/reload.wav\"") != std::string::npos);
 
     // The same request again gives the same bytes (Design Invariant 7) and updates in place.
@@ -201,6 +202,66 @@ TEST_CASE("ExportSound writes the clip and its entry and never touches the sourc
     REQUIRE(second.has_value());
     CHECK_FALSE(second->added);
     CHECK(ReadBytes(assets / "audio" / "reload.wav") == first);
+}
+
+// The content contract keeps an entry's unknown optional fields
+// (cases.json valid-custom-type-and-metadata): re-registering a clip moves its
+// path and leaves them (v8-tool-audio-editor-catalog-adopt).
+TEST_CASE("ExportSound keeps an existing entry's other fields when it moves the clip") {
+    const auto root = TemporaryDirectory("metadata");
+    const auto source = root / "outside" / "shot_raw.wav";
+    std::filesystem::create_directories(source.parent_path());
+    std::filesystem::copy_file(kReference / "mono_44100_pcm16.wav", source);
+    const auto assets = root / "assets";
+    std::filesystem::create_directories(assets);
+    WriteText(assets / "asset_catalog.json", R"({
+  "version": 1,
+  "assets": [
+    { "id": "game.audio.shot", "type": "sound", "path": "audio/shot.wav", "note": "kept" }
+  ]
+}
+)");
+    ExportRequest request{Utf8(source), Utf8(assets), Utf8(assets / "asset_catalog.json"),
+                          {"game.audio.shot", "audio/shot_v2.wav"}};
+    const auto report = ExportSound(request);
+    REQUIRE(report.has_value());
+    CHECK_FALSE(report->added);
+    REQUIRE(report->previousPath.has_value());
+    CHECK(*report->previousPath == "audio/shot.wav");
+    CHECK(ReadText(assets / "asset_catalog.json") == R"({
+  "version": 1,
+  "assets": [
+    { "id": "game.audio.shot", "type": "sound", "path": "audio/shot_v2.wav", "note": "kept" }
+  ]
+}
+)");
+}
+
+// A catalog the content contract refuses is not extended: an existing entry
+// whose path is not a content path (ContentManifest refuses it at load) makes
+// every registration fail, exit status 4 (v8-tool-audio-editor-catalog-adopt).
+TEST_CASE("ExportSound refuses a catalog whose existing entry has no content path") {
+    const auto root = TemporaryDirectory("bad-catalog");
+    const auto source = root / "outside" / "new_raw.wav";
+    std::filesystem::create_directories(source.parent_path());
+    std::filesystem::copy_file(kReference / "mono_44100_pcm16.wav", source);
+    const auto assets = root / "assets";
+    std::filesystem::create_directories(assets);
+    const std::string catalog = R"({
+  "version": 1,
+  "assets": [
+    { "id": "game.audio.old", "type": "sound", "path": "../outside.wav" }
+  ]
+}
+)";
+    WriteText(assets / "asset_catalog.json", catalog);
+    ExportRequest request{Utf8(source), Utf8(assets), Utf8(assets / "asset_catalog.json"),
+                          {"game.audio.new", "audio/new.wav"}};
+    const auto refused = ExportSound(request);
+    REQUIRE_FALSE(refused.has_value());
+    CHECK(refused.error().code == AudioEditorErrorCode::InvalidCatalog);
+    CHECK(ReadText(assets / "asset_catalog.json") == catalog);
+    CHECK_FALSE(std::filesystem::exists(assets / "audio" / "new.wav"));
 }
 
 TEST_CASE("ExportSound refuses to overwrite its source or the catalog, and writes nothing for a bad source") {
