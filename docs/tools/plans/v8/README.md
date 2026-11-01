@@ -228,3 +228,6 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-assets-anim-events` | [2026_10_31_tool_v8_assets_anim_events](../../../dev_logs/2026_10_31_tool_v8_assets_anim_events.zh-Hant.md) |
 | `v8-tool-audio-editor-convert` | [2026_10_31_tool_v8_audio_editor_convert](../../../dev_logs/2026_10_31_tool_v8_audio_editor_convert.zh-Hant.md) |
 | `v8-tool-framework-shell` | [2026_10_31_tool_v8_framework_shell](../../../dev_logs/2026_10_31_tool_v8_framework_shell.zh-Hant.md) |
+| `v8-tool-ui-editor-path-dialog-adopt`＋`v8-tool-ui-editor-shell-adopt` | [2026_11_01_tool_v8_ui_editor_shell_adopt](../../../dev_logs/2026_11_01_tool_v8_ui_editor_shell_adopt.zh-Hant.md) |
+| `v8-tool-user-files-adopt` | [2026_11_01_tool_v8_user_files_adopt](../../../dev_logs/2026_11_01_tool_v8_user_files_adopt.zh-Hant.md) |
+| `v8-tool-audio-editor-catalog-adopt` | [2026_11_01_tool_v8_audio_editor_catalog_adopt](../../../dev_logs/2026_11_01_tool_v8_audio_editor_catalog_adopt.zh-Hant.md) |
