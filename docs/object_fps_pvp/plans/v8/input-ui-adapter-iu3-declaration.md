@@ -95,7 +95,7 @@
 
 - **探測與突變第一次：無效（§14.1，記錄保留在 `probes_run1_invalid/`）**。
   - 原因：探測腳本每條跑完用 `git checkout -- <檔>` 還原。這會還原到 HEAD，而當時我的修改還沒提交，所以 `project.json`、`GyoBuild.cmake`、`GyoComponents.cmake` 的改動被抹掉。第 1 條之後的三條是在錯的原始碼上跑的，其中兩條顯示「SURVIVED」。這是我操作的錯，不是實作或判定的結果。
-  - 處理：照原文重新套用三個檔的修改，做暫存提交 `da28f611`（之後併入正式提交 `06134fd6` 之前的同一批修改，本機已不存在）。之後每條探測都還原到這個提交，並確認工作樹和它沒有差異。判定與預期訊息都不變。
+  - 處理：照原文重新套用三個檔的修改，做暫存提交 `da28f611`（之後與其他修改一起併成這批的正式提交，本機已不存在）。之後每條探測都還原到這個提交，並確認工作樹和它沒有差異。判定與預期訊息都不變。
 - **重跑結果**（`probes_summary.txt`）：removability-undeclared、iu3-build-condition-dropped、iu3-component-unknown、iu3-component-sdl 4/4 出現預期的失敗。還原後重新 configure 2(a) 成功。
 - 審査者（Opus 5.5／high，唯讀）：0 blocker、0 major、2 minor、2 nit。
   - minor 1：GyoBuild 的新條件 L1 抓不到。L1 的 preset 都選了工具，工具已經讓 framework 加入建置。守住它的只有打包 job（遊戲產品不選工具，`build/ci/common/app_registry.py:121`）和這批的手動探測。記進 dev_log 的限界與之後的整理項目。
