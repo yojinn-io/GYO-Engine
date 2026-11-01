@@ -278,7 +278,34 @@ Design Invariants 的改寫（要你同意）：audio_editor DI 3 的「unique i
 4. 緩了以後，性質由這些判定繼續守：
    - `nlohmann_json` 仍不在清單；
    - JSON 綁定自己的守衛只准它具名 nlohmann。
-5. 根據：PLAN §2.5 與 §5。
+5. 根據：PLAN §2.5 與 §5；突變與検証者的結果見下方「T3b 實作後的結果」。
+
+#### T3b 實作後的結果（2026-11-01）
+
+- 提交：`df24d71d`，以及審査後補的測試。本機 macOS 全部工具：ctest 67／67。
+- 件數の突き合わせ：一致。
+  - 宣告 4 條：執行器跑 `ae-guard-json-target`、`ae-guard-io-platform`；手動跑 `ae-catalog-policy`、`ae-catalog-old-api`。
+  - 另重跑 `ae-io-no-parents`，因為 SoundExport 有改。
+  - 執行 5、killed 5、stale 0。
+  - 證據在使用者的 Mac，主 checkout `build/evidence/tool-v8-framework-rework/T3b/`：`mutations.txt` 與 `mutations-manual.txt`。
+  - 手動的原因和 T1＋T3a 相同：只有 CLI 測試抓得到，執行器跑不了。
+- `convert_taken_path` 仍回 4。
+- 更新條目時保留其他欄位：新測試比對整份 catalog 文字；換回舊 API 時，這個測試失敗。
+- 輸出與基準相同：5／5 的 WAV 與 catalog（`T3b/bytes/compare.txt`）。
+- 沒列進事前宣告、變嚴格的行為（審査者指出）：
+  - 方向和 Engine 的 `ContentManifest` 一致：舊的會寫出一個載入時就被拒絕的 catalog。
+  - catalog 裡已有條目的路徑不是內容路徑時，任何登錄都回 4，舊的回 0。不是內容路徑的例子：`../x`、`/x`、`a\\b`、`a//b`、結尾 `/`、`content.json`、含控制字元。
+    - 補了測試「ExportSound refuses a catalog whose existing entry has no content path」；
+    - 用舊 API 跑這個測試會失敗，紀錄附在 `mutations-manual.txt`。
+  - `--path` 含控制字元時回 4，舊的回 0。
+  - 條目裡重複寫了 `type` 或 `path` 鍵時，無法更新，回 4，舊的回 0。這是極端情況。
+- 審査者（Opus／high）：
+  - 其他行為都相同：版本檢查、重複 id、BOM、CRLF、拒絕的先後、結束碼的對應、無視窗外殼的命令列錯誤。
+  - 執行檔不再連 `GYO::Os`，也沒有地方再用到它。
+- 検証者（Fable／high），紀錄在主 checkout `build/evidence/tool-v8-framework-rework/T3b/verifier/run.log`：
+  - 第 1～5 項都成立，沒有沒列出的放寬。
+  - 在編譯層確認：`GYO::ToolFrameworkJson` 以 PRIVATE 連 nlohmann，audio_editor 的編譯命令沒有 nlohmann 的 include 目錄，`#include <nlohmann/json.hpp>` 根本找不到。
+  - 既有的限制，兩版守衛都一樣：沒有斜線的 include（例如 `<json.hpp>`）不受檢；守衛沒有符號規則。
 
 `-edit` 的工程檔要不要讓 audio_editor 自己連 nlohmann：T3b 用不到，改到 `-edit` 開工、設計工程檔時決定。
 
