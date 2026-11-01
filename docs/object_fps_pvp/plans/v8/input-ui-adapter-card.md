@@ -41,6 +41,10 @@ v8-input-ui-adapter（本卡：規劃與對齊）
 | IU-2 | 工具線（v8 tool-line） | 4～6 h | IU-1 | `tools/ui_editor/src/PreviewAdapter.cpp`；ui_editor 守衛禁止 `imgui_internal.h` |
 | IU-3 | 本線 | 3～5 h＋建置的 Delta | IU-1、`v8-input-ui-adapter-pvp-build` | `GyoBuild.cmake` 的加入條件（或產品登錄資料）；`PvpApplication.cpp` 的 `TextInput` 與 `UiInputFrame` |
 
+- **IU-1 的介面（工具線的建議，2026-11-01）**：`SetTextInputArea` 在 `SdlInput`（`GYO::InputBackendSDL`）上，IU-1 又讓 ImGui 綁定持有它的幀。所以由 framework 交出兩樣東西：「設定文字輸入區域」與「取 adapter 的幀」，例如放進 `ImGuiShellContext`，ui_editor 只呼叫 framework。
+  - ui_editor 因此不必自己連 `InputBackendSDL`，也不會另持一份 `SdlInput`，符合「共通功能優先 framework」。
+  - 如果改成 ui_editor 直接連 `InputBackendSDL`，工具守衛要加這個目標（§14.4 的放寬），估時也要加。
+- **IU-2 的守衛**：現在的 ui_editor 守衛會略過不含 `/` 的 include（`tests/ui_editor/ui_editor_dependency_guard.py` 的 `if "/" not in include: continue`），抓不到 `#include "imgui_internal.h"`。IU-2 要加一條具名規則，屬收緊，照 §14.4 事後報告。`PreviewAdapter.cpp` 因為用 SDL_Texture 畫預覽，留在守衛的 `NATIVE_FILES`，IU-2 不影響這點。
 - 順序：IU-1 先做；IU-2 與 IU-3 改的檔案不重疊，可以並行。
 - IU-1 由 framework 整改線決定，要併進 PR B 還是排在它之後（`v8-input-ui-adapter-pr`）。
 - 和其他工作的關係：
