@@ -158,4 +158,4 @@
 
 ## 未結事項
 
-- 無。
+- **候選（未排程，2026-11-01 framework 整改線通知）**：「pvp Client 搬上外殼」。外殼草圖已核准（`claude/framework-rework` `558cba22`，`docs/architecture/plans/framework-rework/shell-sketch.md` 第 2、6 節，PR #127 draft 未合併）。採用前 pvp 側要各自決定：(1) framework 改成產品在登錄資料宣告使用（Architecture Delta）；(2) live frame（`PvpApplication.cpp:1377-1395`）外殼沒有，要嘛外殼加通用選項（另行核准），要嘛放棄即時重繪；(3) pump 前後包夾與計時診斷（`:1098-1121`）逐事件 OnEvent 做不到，要嘛放棄、要嘛外殼加通用掛鉤；(4) 迴圈後的收尾移到 client 解構子，初始化失敗改成工廠回 nullptr；(5) GPU 裝置、平台前的內容載入、`Fail()`→`ExitCode()`、進入點 catch 與 SdlLogBridge、最小化節流現在就能對應。Match 最多用 RunHeadlessShell 取代開場，外殼沒有停止要求。外殼實作合併後若介面變了，該線會再通知。
