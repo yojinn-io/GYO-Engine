@@ -1,6 +1,6 @@
 # The framework layer (docs/framework/architecture.md); added with it, when
 # a tool is selected.
-add_executable(gyo_framework_tests FrameworkCoreTests.cpp)
+add_executable(gyo_framework_tests FrameworkCoreTests.cpp UserFilesParityTests.cpp)
 target_compile_features(gyo_framework_tests PRIVATE cxx_std_20)
 target_link_libraries(gyo_framework_tests PRIVATE GYO::ToolFramework doctest::doctest)
 add_test(NAME gyo_framework.core COMMAND gyo_framework_tests)

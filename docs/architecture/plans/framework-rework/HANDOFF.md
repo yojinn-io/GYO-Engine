@@ -17,7 +17,22 @@
 
 - 2026-11-01：v8-framework-rework-plan 完成（使用者核准 PLAN 第 1 版與 D-1～D-9，commit `f8878799`）。
 - 2026-11-01：v8-framework-guard-ratchet 完成（使用者核准判定變更與 DI 條文，commit `0a635225`，draft PR #127）。L1：手動觸發的 cross-platform run 41227212440，`L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
-- 2026-11-01：v8-engine-platform-path-dialog 完成（使用者核准）。下一批 v8-engine-io-user-files。
+- 2026-11-01：v8-engine-platform-path-dialog 完成（使用者核准，commit `472225fe`）。L1：run 41231279740 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
+- 2026-11-01：v8-engine-io-user-files 完成（使用者核准[契約、行為變更與條文](io-user-files-judgment-change.md)，io.md 條文已寫入）。估 6～8 h，實際約 4.5 h。L1 結果記在下一行。
+- 下一批：v8-framework-shell（第 0 關外殼草圖，依 D-9 用 ultracode）。
+
+### v8-engine-io-user-files 的事前宣告（2026-11-01，執行前）
+
+- 突變（`scripts/io_user_files_mutations.json`）9 條：io-within-any-name、io-within-no-resolve、io-within-case（只在 Windows 跑，macOS 上記為 skipped，不算入）、io-within-dot-dot、io-stamp-missing-is-error、io-stamp-hash、io-stamp-not-file、io-stamp-limit-ignored、io-atomic-no-parents。本機（macOS）要 8/8 killed、stale 0。
+- 新舊對照：framework `IsPathWithin`／`ProbeFileStamp` 與 engine/io 的新函式在同一組情況（包含判定 14 條、符號連結 6 條、戳記 3 條）答案一致。只在本機有符號連結權限時跑連結那 6 條。
+- 第一次執行（2026-11-01）：6/8 killed、1 skipped（Windows 限定）。存活 2 條：io-within-dot-dot（engine 測試沒有「連結後接 `..`」的情況，新舊對照測試裡有）、io-stamp-not-file（macOS 開目錄本來就回 InvalidPath，錯誤碼分辨不出）。處理：補強測試（engine 測試加 `dirlink/../inside`，戳記測試加錯誤訊息檢查），突變的定義與預期不變，重跑。
+- 第二次執行：7/8 killed，io-stamp-not-file 仍存活。原因：engine/os 的 FileReader 在 POSIX 與 Windows 都把非一般檔案擋成 InvalidPath「not a regular file」（`engine/os/src/posix/Files.cpp:117`、`windows/Files.cpp:271,280`），ProbeFileStamp 的明確檢查是多餘的，這是等價突變。處理：刪掉多餘的檢查（依靠 engine/os 的契約），突變目錄移除這一條；測試保留。之後一般突變 7 條、Windows 限定 1 條。
+- 觀察到的舊行為（照實移植，不在這批改）：根目錄以分隔符結尾時，除了根目錄本身，什麼都判成「不在裡面」。**（已被下面的 xhigh 審查推翻，見下。）**
+- xhigh 審查（2026-11-01）：與 framework 版逐步等價，但照實移植把舊缺陷帶進 Engine：F1（新引入）建父目錄選項下磁碟根目錄的檔案寫不進去；F2 根目錄以分隔符結尾（含 ui_editor 預設的 `.`）時什麼都不在裡面，ui_editor 的匯出守衛失效；F3 根目錄是連結或大小寫與磁碟不同時同樣失效；F4 POSIX 上先詞法消去 `..` 再解析連結，與 OS 不一致。minor：F5 契約文字、F6 解析失敗時退回、F7 命名空間前綴、F8 開檔副作用、F9 訊息差異。
+- 處理（§14.3）：以「OS 實際把檔案放在哪裡」（父目錄經 `weakly_canonical`，再接最後的名稱）為獨立的對照，先寫 Red 測試（`red_before_fix.txt`：12 條中 6 條失敗，涵蓋 F1～F4、F7），再實作修正版語意（候選路徑：父目錄交 OS 解析、連結先於 `..`、最後一段照寫；根目錄整條解析；去掉結尾空段；拒絕 `//?/` 前綴），轉 Green（`green_after_fix.txt`：12/12）。F1 修正；F8 補回一般檔案檢查。原「大小寫依 SamePathComponent」那條測試的預期是根據我的理解，改以 OS 對照。新舊對照測試改成以 OS 為準，和 framework 不同的 4 個情況逐條印出（`parity_after_fix.txt`）。修正版語意與 framework 不同，交使用者決定（判定變更文件）。
+- 追加宣告（修正後）：突變 15 條（io-within-case 只在 Windows、io-within-lexical-dot-dot 只在 macOS／Linux），macOS 上 14 條要全部 killed、stale 0。
+- 第四次執行（修正後）：13/14 killed、1 skipped（Windows 限定）、stale 0。存活 io-within-trailing-kept：ResolvedPath 本來就去掉結尾分隔符，所以去結尾空段那一步只在 OS 解析失敗、退回詞法比較時有作用。處理：補一條測試（根目錄的上層去掉執行權限，讓 OS 解析失敗，再給結尾帶分隔符的根目錄），突變的定義與預期不變，重跑這一條 1/1（`mutations_trailing_rerun.txt`）。合計宣告 15・執行 14・killed 14。
+- 一般檔案檢查（F8）不設突變：xhigh 審查指出開具名管道或裝置有副作用，所以補回「先看狀態、不是一般檔案就不開檔」。但 engine/os 的 FileReader 也會擋成同一個錯誤，刪掉這個檢查在測試上分辨不出（第二次執行已證明是等價突變），能分辨的只有「有沒有開檔」，本機沒有可靠的觀測方法。理由寫在這裡，不另設突變。
 
 ### v8-engine-platform-path-dialog 的事前宣告（2026-11-01，執行前）
 
@@ -62,6 +77,7 @@
   - D-8：有視窗外殼目前只有 ui_editor 一個使用者，接受，DI 5 註明。
   - D-9：外殼草圖用 ultracode；選擇窗只做 xhigh 審查加別的引擎做一次對抗式檢查。
 - 各批的 Design Invariants 條文與守衛變更仍在該批開工或定案前逐批核准。
+- 2026-11-01，使用者：「照建議核准」。v8-engine-io-user-files 的[契約、行為變更與條文](io-user-files-judgment-change.md)：路徑包含判定採修正版 (a)（OS 解析、和 framework 舊版不同的 4 個情況由 T2 接手）；framework 的 `IsPathWithin` 不在這批修（T2 合併前 ui_editor 只給 `--asset-catalog` 時仍可匯出到資產根目錄）；AD2（engine/io 新增使用者路徑輔助、engine_tests 連結 `GYO::Os`）；io.md 的「User files」與 Replacement Criteria 3 補句。Design Invariants 不變。
 - 2026-11-01，使用者：「照建議核准」。v8-engine-platform-path-dialog 的 [契約與 DI 條文](path-dialog-judgment-change.md)：Windows 重複回呼採 (a)「Failed 之後最多再一個答案」；sanitizer 突變採 (1)（pd-filter-copy 移一般目錄，pd-mailbox-not-shared 改預期在 ASan 樹重跑）；AD1（選擇窗能力與程序級登記表）；測試縫放 Native 標頭；platform-sdl.md 的契約、DI 10、DI 4／7 補句、Replacement Criteria 7～9。Replacement Criteria 2 的改寫延到外殼批。
 - 2026-11-01，使用者：「核准」。v8-framework-guard-ratchet 的 [判定變更與 DI 條文](guard-ratchet-judgment-change.md)：framework DI 2、DI 3、DI 5、Replacement Criteria 改寫；守衛、例外清單、configure 連結檢查；突變目錄搬到本計畫。
 

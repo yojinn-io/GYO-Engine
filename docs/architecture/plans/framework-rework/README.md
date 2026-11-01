@@ -65,6 +65,7 @@ framework-rework
 | v8-framework-rework-plan | 2026-11-01 | [規劃](../../../dev_logs/2026_11_01_framework_rework_plan.zh-Hant.md) |
 | v8-framework-guard-ratchet | 2026-11-01 | [守衛](../../../dev_logs/2026_11_01_framework_rework_guard_ratchet.zh-Hant.md) |
 | v8-engine-platform-path-dialog | 2026-11-01 | [選擇窗](../../../dev_logs/2026_11_01_framework_rework_path_dialog.zh-Hant.md) |
+| v8-engine-io-user-files | 2026-11-01 | [使用者檔案](../../../dev_logs/2026_11_01_framework_rework_io_user_files.zh-Hant.md) |
 
 ## 決策（2026-11-01 提出，同日全部照建議核准）
 

@@ -39,4 +39,26 @@ namespace Engine::IO::Helpers {
         return {};
     }
 
+    IoResult<void> WriteFileAtomically(FS::IFileSystem& fs, const Path::Uri& uri, Base::ConstSpan<std::byte> data,
+                                       const WriteAtomicallyOptions& options) {
+        if (options.createParentDirectories) {
+            Path::Uri parent = uri;
+            parent.path = uri.path.Parent();
+            // A file right under a volume's root ("/out.json", "C:/out.json") has a parent with no name ("" or
+            // "C:"), which the file mapping does not take; the root exists. Any other parent that exists is left
+            // alone.
+            const std::string& parentText = parent.path.Str();
+            if (parentText.empty() || (parentText.size() == 2 && parentText[1] == ':')) {
+                return WriteFileAtomically(fs, uri, data);
+            }
+            auto exists = fs.Exists(parent);
+            if (!exists) return Base::Err(std::move(exists.error()));
+            if (!exists.value()) {
+                auto created = fs.CreateDirectories(parent);
+                if (!created) return Base::Err(std::move(created.error()));
+            }
+        }
+        return WriteFileAtomically(fs, uri, data);
+    }
+
 } // namespace Engine::IO::Helpers
