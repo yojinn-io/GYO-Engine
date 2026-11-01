@@ -19,7 +19,8 @@
 - 2026-11-01：v8-framework-guard-ratchet 完成（使用者核准判定變更與 DI 條文，commit `0a635225`，draft PR #127）。L1：手動觸發的 cross-platform run 41227212440，`L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
 - 2026-11-01：v8-engine-platform-path-dialog 完成（使用者核准，commit `472225fe`）。L1：run 41231279740 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
 - 2026-11-01：v8-engine-io-user-files 完成（使用者核准[契約、行為變更與條文](io-user-files-judgment-change.md)，io.md 條文已寫入）。估 6～8 h，實際約 4.5 h。commit `2aaa6b52`。L1：run 41266291181 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 都是 success。
-- 下一批：v8-framework-shell（第 0 關外殼草圖，依 D-9 用 ultracode）。
+- 2026-11-01：v8-framework-shell 開工（使用者：「開始外殼批」）。第 0 關：外殼草圖先交核准，依 D-9 用 ultracode（獨立提案 3、審查合成 1、Sonnet 對抗式檢查 1，唯讀，不改程式）。整批估 12～16 h，其中第 0 關估 2～3 h。草圖核准前不寫程式。
+- 2026-11-01：第 0 關草圖完成，停在核准關卡（[外殼草圖](shell-sketch.md)，決策 D-shell-1～8）。workflow 5 個 Agent 全部回傳；審查合成以 A（PLAN 第 2.4 節補完）為骨架；Sonnet 對抗式檢查 0 blocker、2 major、9 minor，處理見草圖第 8 節。和審查者不同的一處：D-shell-2 我建議照今天的兩段式（沒有觀測到的壓力）。第 0 關實際約 1 h。
 
 ### v8-engine-io-user-files 的事前宣告（2026-11-01，執行前）
 
