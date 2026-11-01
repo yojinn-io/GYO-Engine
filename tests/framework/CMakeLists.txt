@@ -20,8 +20,8 @@ endif()
 if(GYO_ENABLE_SDL_PLATFORM AND NOT TARGET GYO::ToolFrameworkWindow)
     message(FATAL_ERROR "framework: the build has Engine's SDL platform but no GYO::ToolFrameworkWindow")
 endif()
-if(GYO_ENABLE_SDL_RENDERER AND GYO_ENABLE_IMGUI AND NOT TARGET GYO::ToolFrameworkImGui)
-    message(FATAL_ERROR "framework: the build has the SDL renderer and ImGui but no GYO::ToolFrameworkImGui")
+if(GYO_ENABLE_SDL_RENDERER AND GYO_ENABLE_SDL_INPUT AND GYO_ENABLE_IMGUI AND NOT TARGET GYO::ToolFrameworkImGui)
+    message(FATAL_ERROR "framework: the build has the SDL renderer, SDL input and ImGui but no GYO::ToolFrameworkImGui")
 endif()
 
 # The windowed shell, on SDL's dummy video driver.

@@ -1,8 +1,9 @@
 # The ImGui binding (docs/framework/architecture.md, Design Invariants 2 and 6):
 # ImGui on Engine's SDL renderer, run by the windowed shell. Built where the
-# build has the windowed shell, the SDL renderer and ImGui's SDL backends.
+# build has the windowed shell, the SDL renderer, Engine's SDL input (typed text
+# and the input method's composition) and ImGui's SDL backends.
 if(NOT TARGET GYO::ToolFrameworkWindow OR NOT TARGET GYO::RenderBackendSDLNative OR
-   NOT TARGET imgui::sdl3_sdlrenderer3)
+   NOT TARGET GYO::InputBackendSDL OR NOT TARGET imgui::sdl3_sdlrenderer3)
     return()
 endif()
 
@@ -17,6 +18,8 @@ target_link_libraries(gyo_tool_framework_imgui
         GYO::RenderBackendSDL
     PRIVATE
         GYO::Os
+        # Typed text and the input method's composition (Design Invariant 2).
+        GYO::InputBackendSDL
         GYO::PlatformSDLNative
         GYO::RenderBackendSDLNative
         imgui::core
