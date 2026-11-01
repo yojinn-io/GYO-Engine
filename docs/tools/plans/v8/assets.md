@@ -213,10 +213,44 @@ Design Invariants 的改寫（要你同意）：
 - ui_editor 的守衛不變：已允許 `engine/` 與 `GYO::Engine`。
 - audio_editor（§14.4，Design Invariants 的守衛，要你核准）：
   1. 守的性質：audio_editor DI 1，即不連遊戲、`GYO::Input`、SDL_GPU；播放只走 `GYO::Audio`。
-  2. 緩的面：include 的 `engine/io/` 與目標 `GYO::Engine` 從失敗變成通過。`GYO::Engine` 連 base、math、time、io、asset，不連 SDL、Input、GPU（`engine/CMakeLists.txt`）。
+  2. 緩的面：include 的 `engine/io/` 與目標 `GYO::Engine` 從失敗變成通過。`GYO::Engine` 含 io、asset 的程式碼，連 base、math、time，不連 SDL、Input、GPU（`engine/CMakeLists.txt`；検証者更正：io 與 asset 不是另外的目標，原本寫「連」）。
   3. 緊的面：無。
   4. 緩了以後，性質由這些判定繼續守：目標仍是正向清單；include 不允許 `engine/input/`、`engine/render/`、`engine/platform/`。
-  5. 根據：PLAN §2.3 與 §5；突變與検証者的結果在請你核准前補上。
+  5. 根據：PLAN §2.3 與 §5；突變與検証者的結果見下方「T2 實作後的結果」。
+
+#### T2 實作後的結果（2026-11-01）
+
+- 提交：`10c55014`。本機 macOS 全部工具：ctest 67／67。
+- 件數の突き合わせ：一致。
+  - 宣告 4 條，另重跑 8 條：find 在改動範圍裡，或殺它的測試被改。
+  - 執行 12、killed 12、stale 0。
+  - 證據在使用者的 Mac，主 checkout `build/evidence/tool-v8-framework-rework/T2/mutations.txt`。
+- §14.3：
+  - 測試「根目錄以分隔符結尾時，匯出到它底下應被拒絕」在舊程式上失敗（`T2/red.txt`），換成 engine/io 後通過（`T2/green.txt`）。
+  - 測試用 `assetRoot / ""` 掛載，和只給 `--asset-catalog` 時根目錄 `.` 的情況等價：兩者經 `AbsolutePath` 都帶結尾的 `/`。
+- audio_editor 的輸出與基準相同：5／5 的 WAV 與 catalog（`T2/bytes/compare.txt`）。
+- 包含判定在 ui_editor 實際改變答案的有 3 種情況，不是事前宣告寫的 4 種：
+  - 實際改變的 3 種：根目錄以分隔符結尾、根目錄是連結、根目錄大小寫不同。
+  - 沒有出現的「連結後面接 `..`」：
+    - 原因：路徑在進入判定前，已被 `AbsolutePath`（D-2）按字面消掉 `..`；
+    - 判定與寫入用的是同一條消過的路徑，所以仍然一致。（審査者指出）
+- 沒列進事前宣告的行為變化（審査者指出，都很少見）：
+  - 輸出檔在編輯器外被換成超過 64 MB 的檔案時，連「覆寫」也會因讀不了戳記而失敗。舊的沒有上限，能覆寫。
+  - 掛載的根目錄若帶 `\\?\` 之類的前綴，每次匯出都會失敗，包括根目錄外的匯出。舊的會判「不在裡面」。
+  - audio_editor 的訊息變了，結束碼不變：
+    - 「cannot open」變成「cannot read」；
+    - 建目錄與寫檔的錯誤都變成「cannot write」；
+    - 沒有測試比對這些字串。
+- os-subsystem 計畫的突變 `ui-x1`、`ui-x2` 改的是 `FileService::IsPathWithin`，ui_editor 不再呼叫它，所以現在存活（0／2，`T2/mutations-os-ui-x.txt`）。
+  - 「經連結到達根目錄」這個性質，由這兩處判定守：
+    - ui_editor 的測試「export rejects a path that reaches the asset root through a symbolic link」；在沒有建連結權限的 Windows 上會略過；
+    - engine/io 的突變 `io-within-no-resolve`。
+  - `ui-io-within-false` 只守「恆回 false」。
+  - 這兩條突變要在 PR B 退役或改錨（交給架構會話）。
+- 審査者（Opus／high）：沒有嚴重問題；戳記的語義、UTF-8 路徑、結束碼都不變。
+- 検証者（Fable／high），紀錄在主 checkout `build/evidence/tool-v8-framework-rework/T2/verifier/run_log.txt`：
+  - 第 1～5 項都成立，沒有沒列出的放寬；
+  - 第 2 項的措辭已照它更正。
 
 ### T3b：audio_editor 改用 catalog 結構 API、JSON 綁定與無視窗外殼（high，2～3 h）
 
