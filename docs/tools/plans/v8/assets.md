@@ -111,7 +111,7 @@
    - 取消；
    - 非 ASCII 路徑；
    - 對話窗開著時關視窗；
-   - 對話窗開著時按 Stop waiting，再在對話窗裡選檔：不套用，Diagnostics 有一行；
+   - 對話窗開著時按 Stop waiting，再在對話窗裡選檔：不套用，Diagnostics 有一行；（實作後提議改成「狀態列與 log 的 `ui_editor.dialogs` 各有一行」，待你同意，見下方「實作後的結果」）
    - 字型與輸入法的文字欄位照舊。
 4. 範圍的限界（從架構批帶來，CI 量不到）：真實 OS 對話窗的回呼執行緒、Linux portal 要 pump、平台或父視窗銷毀時的行為。只靠第 3 項的實機觀察；Linux 沒有桌面機，這次不測。
 5. 突變（全部預期 killed；file 與 find 在實作後、執行前寫進 `docs/tools/plans/v8/scripts/framework_mutations.json`）：
@@ -135,9 +135,42 @@ Design Invariants 的改寫（要你同意）：
 4. 緩了以後，性質由這些判定繼續守：
    - include 仍禁止 `engine/input/`；
    - 目標仍是正向清單，沒有遊戲、Input、GPU；
-   - platform-sdl 的 G3 configure 檢查限制 `*Native` 只能 `$<LINK_ONLY:>` 外傳；
+   - platform-sdl 的 G3 configure 檢查限制 `*Native` 只能 `$<LINK_ONLY:>` 外傳；（検証者更正：G3 只檢查 Engine 的後端，不涵蓋 ui_editor 自己的目標。ui_editor 內部連 `GYO::RenderBackendSDLNative` 時，PUBLIC 或 PRIVATE 都只靠守衛的目標清單和 review 把關）
    - platform-sdl.md 的 RC 2 把例外限定在「ImGui 綁定與 ui_editor 的資產預覽」。
-5. 根據：架構計畫 PLAN §2.4 與 §5、platform-sdl.md RC 2；突變結果與検証者的核對結果，在請你核准前補上。
+5. 根據：架構計畫 PLAN §2.4 與 §5、platform-sdl.md RC 2；突變與検証者的結果見下方「實作後的結果」。
+
+#### T1＋T3a 實作後的結果（2026-11-01）
+
+- 提交：`12147016`（實作）、`6391485f`（突變目錄）、審査後的修正（介面卡改成可測的自由函式並移進預覽程式庫、log 加一行、補 include）。本機 macOS 的 `build/target/_build/framework`（全部工具）：ctest 67／67。
+- 件數の突き合わせ：一致。
+  - 宣告 10 條、執行 10 條、killed 10 條，stale 0：
+    - 實作時宣告 7 條：執行器 6 條，`ui-cli-usage-exit` 手動 1 條；
+    - 審査後再宣告 3 條；
+    - 修正動到 EditorApp，所以重跑 `ui-dialog-stale-applied`。
+  - 證據在使用者的 Mac，主 checkout `build/evidence/tool-v8-framework-rework/T1-T3a/`：`mutations.txt`、`mutation-ui-cli-usage-exit.txt`、`mutations-review-fix.txt`。
+- 和事前宣告不同的地方：
+  - 被丟掉的答案記在狀態列與 log（`ui_editor.dialogs`），不是 Diagnostics。Diagnostics 每次由文件重建，記上去會消失。L3 第 3 項的寫法要你同意後才改。
+  - 「用途對照錯位」改由 `ui-dialog-kind-mapping` 與 `ui-dialog-outcome-mapping` 檢查；另加 `ui-dialog-same-tag`、`ui-dialog-current-mapping`。
+  - 規則測試直接測 `PathDialogRequests`，介面卡另有測試，`ScriptedDialogs` 只測 EditorApp 怎麼處理不是目前請求的答案。
+  - `ui-cli-usage-exit` 的處理：
+    - 執行器跑不了它：執行器只替換整個參數是 `{exe:…}` 的情況，而 `gyo_ui_editor` 輸出到 `build/target/toolchain/bin`；
+    - 所以從突變目錄移除，改成手動跑，期待不變。
+- 沒有測試覆蓋的一處：
+  - `SdlPathDialogs::Abandon` 只轉呼 `PathDialogRequests::Abandon`，自動測試涵蓋不到；
+  - 由 L3 第 3 項確認。
+- 審査者（Opus／high）：
+  - 沒有嚴重的正確性問題：生命週期、Show 的呼叫位置、過時答案、結束碼、CMake 都對。
+  - 指出的介面卡測試與狀態列訊息被蓋掉兩件，已修。
+  - 另一件記給 L3：Failed 之後 Browse 會重新啟用，Windows 改開的舊式對話窗還開著時，使用者可以再開一個。這時舊式的答案會被丟掉；或舊式的答案在手動輸入框開著時套用。這是核准的規則本身的結果。
+- 検証者（Fable／high），執行紀錄在主 checkout `build/evidence/tool-v8-framework-rework/T1-T3a/verifier/run.log`：
+  - 第 1、2、3、5 項成立。
+    - 三個新目標從失敗變成通過，`GYO::ToolFrameworkGui` 從通過變成失敗；
+    - 其他輸入兩版結果相同：Input、`*Native`、GPU、遊戲目標、`engine/input/`、SDL_GPU 符號都失敗；
+    - 沒有沒列出的放寬。
+  - 第 4 項部分成立：G3 不涵蓋 ui_editor，已在上方更正。
+  - 既有的限制（這次沒有放寬）：
+    - 目標的正則只看 `Name::Name`，沒有 `::` 的目標名不受檢；
+    - include 允許整個 `engine/`，所以 `*Native.hpp` 只靠目標清單擋。
 
 ### T2：兩個工具改用 engine/io（medium～high，2～3 h）
 
