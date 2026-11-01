@@ -309,7 +309,7 @@ Design Invariants 的改寫（要你同意）：audio_editor DI 3 的「unique i
 
 `-edit` 的工程檔要不要讓 audio_editor 自己連 nlohmann：T3b 用不到，改到 `-edit` 開工、設計工程檔時決定。
 
-## `v8-tool-editor-engine-access`（T4）的草稿（2026-11-01，待核准）
+## `v8-tool-editor-engine-access`（T4，2026-11-01；已實作，DI 改寫與守衛變更待核准）
 
 起因：架構會話（例行架構掃描）轉述，使用者 2026-11-01 同意改寫 ui_editor 與 audio_editor 的 DI 1。依據：
 - 「no `GYO::Input` and no SDL_GPU」沒有架構理由。
@@ -330,46 +330,71 @@ Design Invariants 的改寫（要你同意）：audio_editor DI 3 的「unique i
 - 実装者 Opus 5.5／high；審査者 Opus 5.5／high；検証者 Fable 5.1／high。
 - 檢驗的做法照前三批：先跑突變，再由検証者實際核對。
 
-### DI 1 的草稿（英文，原文件的語言）
+### 實作（`863f6325` 與審査後的收緊）
 
-ui_editor（`docs/ui_toolchain.md`）：
+- 兩份 DI 1 的定稿是 `docs/ui_toolchain.md` 與 `docs/audio_editor/architecture.md` 的現行文字。共同句和整改卡的 framework DI 2 草稿一致。
+- ui_editor 的 DI 1 另外保留舊文的三句：視窗、ImGui 後端、選擇窗由誰提供；並把守衛的內容寫進去。
+- ui_editor 的程式：
+  - 預覽程式庫改連 `GYO::RenderBackendSDLNative`，不再直接連 `SDL3::SDL3`；
+  - `EditorWindow` 的 log 改走 `Base::Log`。
+- 守衛不掃 `tests/ui_editor`，照現狀，待你決定。預覽測試直接用 SDL 與 ImGui 的 SDL renderer 後端。
 
-> 1. The editor links no game and names no other product. It may use any Engine module, as an editor depends on the engine; what a game and a tool, or two tools, both need comes through the framework first, even where Engine has it, and the framework calls Engine. It reaches SDL only as a game does: through Engine's SDL backend targets, which keep SDL private, an Engine `*Native` target where an Engine contract allows it, or the framework's bindings. The one such use is the asset preview's native renderer (`GYO::RenderBackendSDLNative`, platform-sdl Replacement Criterion 2, until Engine's SDL renderer has a texture API); the editor names no `SDL3::` target. Guard: `gyo_ui_editor.dependency_guard`, a positive list of targets and include prefixes, with `SDL_` calls allowed only in the files that use the native renderer.
+### §14.4（兩支守衛都是 Design Invariants 的守衛，要你核准）
 
-audio_editor（`docs/audio_editor/architecture.md`）：
+ui_editor（`tests/ui_editor/ui_editor_dependency_guard.py`）：
+1. 守的性質：新的 DI 1。
+   - 不連遊戲、不點名其他產品；可用任何 Engine 模組；
+   - SDL 只照遊戲的路徑取得；
+   - 唯一的原生使用是預覽的 renderer。
+2. 緩的面：include `engine/input/` 與目標 `GYO::Input` 從失敗變成通過。
+3. 緊的面：
+   - 目標 `SDL3::SDL3` 失敗；
+   - `SDL3/` include、Engine 原生層標頭（`/native/` 或 `Native.h*`）、任何 `SDL_` 名稱，只准出現在 4 個原生檔案：`AssetPreviewContext.hpp/.cpp`、`PreviewAdapter.cpp`、`EditorWindow.cpp`；
+   - 在這 4 個檔案裡，原生標頭只准 `SdlRendererNative.hpp`，`SDL_` 名稱只准貼圖與 renderer 的 API。
+   - 以前 SDL 標頭與 `SDL_` 名稱到處都能用，只有 `SDL_*GPU*` 會失敗。
+4. 緩了以後，性質由這些判定繼續守：
+   - 遊戲的目標與 include 仍失敗（正向清單）；
+   - `SDL_*GPU*` 在任何檔案都失敗；
+   - `GYO::PlatformSDLNative` 等原生目標不在清單。
+5. 根據與證據：
+   - 架構會話轉述你同意的方向；
+   - 突變：先 9／9，審査後收緊再 8／8，全部 killed；
+   - 証據在主 checkout `build/evidence/tool-v8-framework-rework/T4/mutations.txt` 與 `mutations-review-fix.txt`。
 
-> 1. The editor links no game and names no other product. It may use any Engine module, as an editor depends on the engine; what a game and a tool, or two tools, both need comes through the framework first, even where Engine has it, and the framework calls Engine. Playback goes through `GYO::Audio` and its SDL backend; the editor itself includes no `SDL3/` header, calls no `SDL_` function and names no SDL or `*Native` target. Guard: the editor's dependency guard, a positive list of targets and include prefixes.
+audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
+1. 守的性質：新的 DI 1。
+   - 不連遊戲、不點名其他產品；可用任何 Engine 模組；
+   - 播放經 `GYO::Audio` 與它的 SDL 後端；
+   - 工具自己不碰 SDL。
+2. 緩的面：任何 `engine/` 開頭的 include 與目標 `GYO::Input` 從失敗變成通過。以前只准 base、os、audio、io。
+3. 緊的面：任何 `SDL_` 名稱與 Engine 原生層標頭都失敗。以前只禁 `SDL_*GPU*`。
+4. 緩了以後，性質由這些判定繼續守：
+   - `SDL3/` include、`SDL3::`、`*Native` 目標、遊戲的目標與 include 仍失敗；
+   - 検証者確認：Engine 的公開標頭裡，原生層以外的都不 include SDL，也不帶 SDL 型別；所有 SDL 後端都以 PRIVATE 連 SDL3。
+5. 根據與證據：同上。突變 `ae-guard-input-target` 因為 `GYO::Input` 已被允許，改寫成 `ae-guard-game-target`。
 
-### 守衛的變更（草稿）
+### 審査與檢驗
 
-實作後照 §14.4 補上突變與検証者的結果，再請你核准。
-
-ui_editor：
-- 拿掉 `engine/input/` 禁令；目標清單加 `GYO::Input`。目標仍是正向清單，遊戲目標仍然失敗。
-- 「SDL_GPU 掃描」改成「不直接用 SDL」：
-  - 不得具名 `SDL3::` 目標；
-  - `SDL3/` 的 include 與 `SDL_` 呼叫，只准出現在守衛清單列出的檔案：`AssetPreviewContext.cpp`，以及它的標頭若需要也列入。
-- 這會要求程式跟著改：
-  - `gyo_ui_editor_preview` 改連 `GYO::RenderBackendSDLNative`，它的 INTERFACE 帶 SDL3；
-  - `EditorWindow.cpp` 的 `SDL_LogError` 改用 `Base::Log`；
-  - 守衛也掃 `tests/ui_editor`：測試直接用 SDL 建 renderer，這部分是另列例外，還是不掃測試，要你決定。
-
-audio_editor：
-- include 前綴從 `engine/base/`、`engine/os/`、`engine/audio/`、`engine/io/` 放寬成 `engine/`；目標清單加 `GYO::Input`。
-- 新增：不得 include `SDL3/`、不得有 `SDL_` 符號、不得具名 `SDL3::` 或 `*Native` 目標。
-- 這是嚴格程度的交換：放寬 include 範圍，同時收緊「不直接用 SDL」，原本只禁 SDL_GPU。`-edit` 要的 `SdlAudioOutput` 屬 `GYO::Audio` 的 SDL 後端，不經 `*Native`，需要實作時確認。
+- 検証者（Fable／high），紀錄在主 checkout `build/evidence/tool-v8-framework-rework/T4/verifier/run-log.txt`：
+  - 兩支守衛的第 1～5 項都成立。
+  - 指出沒列出的差異：
+    - `Native.h`（非 `.hpp`）結尾的標頭抓不到。這是理論上的放寬，Engine 現在沒有這種檔；已修，現在連同其他副檔名都會判失敗。
+    - 註解或字串裡的 `SDL_` 也會判失敗。這是誤判的風險，屬於收緊；現有程式裡沒有，所以保留。
+    - audio_editor 的 include 範圍比目標清單寬：目標清單只加了 `GYO::Input`，其他 Engine 目標要用時再加。
+- 審査者（Opus／high）：
+  - 沒有正確性或建置問題。
+  - 原生檔案的例外原本是整個檔案，比 DI 寫的寬；已收緊成只准貼圖與 renderer 的 API，以及 `SdlRendererNative.hpp`。
+  - 草稿和實際提交不一致；本節已改成實際內容。
+  - `/native/` 那個判斷，在現有的 include 寫法下永遠不會成立，原生標頭靠檔名判斷；守住的其實是目標清單。
+  - 守衛只看名稱，用 `auto` 可以繞過，這是既有的限制。
+  - DI 裡「共用功能先進 framework」是靠審查守的規則，沒有守衛。
+  - audio_editor 的 DI 說播放經 SDL 後端，但 `GYO::AudioBackendSDL` 不在目標清單裡（既有），`-edit` 需要時再加。
+- 要通知整改卡：framework 的突變「CMake names GYO::Input」在 framework DI 2 改寫後會存活。
 
 ### 待你決定
 
-1. 上面兩份 DI 1 的草稿。已和整改卡對齊（2026-11-01）：
-   - 「platform targets」改成「SDL backend targets, which keep SDL private」，因為音效與輸入的 SDL 後端不是 platform 目標；
-   - 兩份的共同句一字不差；
-   - 「names no product」改成「names no other product」，因為工具本身就是產品。
-   - framework DI 2／DI 5 的對應句由整改卡在 PR B 開工時交你核准。
+1. 核准兩份 DI 1 的改寫，以及兩支守衛的變更（上面的 1～5）。
 2. ui_editor 守衛是否掃 `tests/ui_editor`。
-3. T4 的位置：
-   - 建議：PR #131 合併後，另開一條小 PR，不延後 #131；
-   - 或：併進 #131。
 
 ## 實作順序（提案）
 
@@ -386,7 +411,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-ui-editor-shell-adopt     「high｜Opus 5.5｜T3a：ui_editor 接新外殼與 ImGui 綁定」
 │   ├── v8-tool-user-files-adopt          「medium～high｜Opus 5.5｜T2：兩個工具改用 engine/io」
 │   ├── v8-tool-audio-editor-catalog-adopt「high｜Opus 5.5｜T3b：audio_editor 改用 catalog 結構 API＋JSON 綁定、無視窗外殼」
-│   └── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（草稿，待核准）
+│   └── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（已實作，待核准）
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
