@@ -69,6 +69,20 @@
 
 順序：T1＋T3a → T2 → T3b，一條 PR。每批結束時寫 dev_log 並更新 HANDOFF。
 
+模型與檔位（照 [領航員規則](../../../../agents/navigator.md)，2026-11-01 #130；三批都要你確認）：
+
+| 批 | 段 | 根據 | 実装者 | 審査者 | 検証者（§14.4） |
+|---|---|---|---|---|---|
+| T1＋T3a | 上段 | 改 Design Invariants（ui_editor DI 1、2）與守衛；接新的公開介面 | Opus 5.5／high（主會話） | Opus 5.5／high | Opus 5.5／high |
+| T2 | 上段 | 改守衛（audio_editor DI 1）；修缺陷（§14.3） | Opus 5.5／high（主會話） | Opus 5.5／high | Opus 5.5／high |
+| T3b | 上段 | 改 Design Invariants（audio_editor DI 3）與守衛 | Opus 5.5／high（主會話） | Opus 5.5／high | Opus 5.5／high |
+
+- 理由：上段不用小模型。検証者照規則跟実装者，是另開的子 agent，只核對 1～5 的記述與突變結果，不改程式。
+- 審査者是另開的子 agent，做 code review。
+- 跑突變是 low 的定型作業，用腳本跑，不開子 agent。
+- 不用 ultracode，也沒有敵対的検査者：三批都照已核准的架構計畫接介面，不新設計。
+- 可選：検証者改用 Fable，盲點和実装者不重疊。比主會話強，要你同意；預設不用。
+
 ### T1＋T3a：ui_editor 改用 Engine 的選擇窗與新外殼（high，5～7 h）
 
 改動：
@@ -124,7 +138,7 @@ Design Invariants 的改寫（要你同意）：
    - 目標仍是正向清單，沒有遊戲、Input、GPU；
    - platform-sdl 的 G3 configure 檢查限制 `*Native` 只能 `$<LINK_ONLY:>` 外傳；
    - platform-sdl.md 的 RC 2 把例外限定在「ImGui 綁定與 ui_editor 的資產預覽」。
-5. 根據：架構計畫 PLAN §2.4 與 §5、platform-sdl.md RC 2；突變結果與別的審查者的核對結果，在請你核准前補上。
+5. 根據：架構計畫 PLAN §2.4 與 §5、platform-sdl.md RC 2；突變結果與検証者的核對結果，在請你核准前補上。
 
 ### T2：兩個工具改用 engine/io（medium～high，2～3 h）
 
@@ -170,7 +184,7 @@ Design Invariants 的改寫（要你同意）：
   2. 緩的面：include 的 `engine/io/` 與目標 `GYO::Engine` 從失敗變成通過。`GYO::Engine` 連 base、math、time、io、asset，不連 SDL、Input、GPU（`engine/CMakeLists.txt`）。
   3. 緊的面：無。
   4. 緩了以後，性質由這些判定繼續守：目標仍是正向清單；include 不允許 `engine/input/`、`engine/render/`、`engine/platform/`。
-  5. 根據：PLAN §2.3 與 §5；突變與審查結果在請你核准前補上。
+  5. 根據：PLAN §2.3 與 §5；突變與検証者的結果在請你核准前補上。
 
 ### T3b：audio_editor 改用 catalog 結構 API、JSON 綁定與無視窗外殼（high，2～3 h）
 
@@ -201,10 +215,6 @@ Design Invariants 的改寫（要你同意）：audio_editor DI 3 的「unique i
 5. 根據：PLAN §2.5 與 §5。
 
 `-edit` 的工程檔要不要讓 audio_editor 自己連 nlohmann：T3b 用不到，改到 `-edit` 開工、設計工程檔時決定。
-
-### §14.4 的別的審查者
-
-依 `agents/effort-gearbox.md`（#129），審查者用 Fable，比主會話的 Opus 強，要先問你。只核對 1～5 的記述與突變結果，不改程式。
 
 ## 實作順序（提案）
 
