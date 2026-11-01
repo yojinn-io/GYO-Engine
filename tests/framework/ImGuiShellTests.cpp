@@ -11,10 +11,14 @@
 
 #include <imgui.h>
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 using namespace Gyo::Tools::Framework;
 
@@ -245,6 +249,120 @@ TEST_CASE("I9: the options reach the platform as given") {
     CHECK(rect.height == 480);
 }
 
+namespace {
+
+// What the foreground list held at the start of each frame (the previous
+// frame's drawing), and where the edited field was.
+struct CompositionRun {
+    std::vector<int> vertices;
+    std::vector<ImVec2> lowest;
+    std::vector<ImVec2> highest;
+    ImVec2 fieldMin{};
+    ImVec2 fieldMax{};
+};
+
+// v8-tool-ui-editor-ime-enter: an InputText is edited from frame 2 on (until
+// stopEditingAt, when it is no longer drawn); each entry of events is pushed
+// at the start of its frame and reaches ImGui before the next frame.
+CompositionRun RunComposition(const std::vector<std::pair<int, std::function<void(SDL_Event&, SDL_WindowID)>>>& events,
+                              const int frames, const int stopEditingAt = 0) {
+    Counts counts;
+    CompositionRun run;
+    std::array<char, 64> buffer{};
+    const int code = RunImGuiShell(SmallWindow(), [&](const ImGuiShellContext& context) {
+        auto client = std::make_unique<Client>(context, counts, frames);
+        client->onBeginFrame = [&](const int frame) {
+            const ImDrawList* foreground = ImGui::GetForegroundDrawList();
+            run.vertices.push_back(foreground->VtxBuffer.Size);
+            ImVec2 low{1.0e9F, 1.0e9F};
+            ImVec2 high{-1.0e9F, -1.0e9F};
+            for (const ImDrawVert& vertex : foreground->VtxBuffer) {
+                low = {std::min(low.x, vertex.pos.x), std::min(low.y, vertex.pos.y)};
+                high = {std::max(high.x, vertex.pos.x), std::max(high.y, vertex.pos.y)};
+            }
+            run.lowest.push_back(low);
+            run.highest.push_back(high);
+            for (const auto& [at, make] : events) {
+                if (at == frame) {
+                    SDL_Event event{};
+                    make(event, OwnWindow(context));
+                    PushInjected(context, event);
+                }
+            }
+        };
+        client->onDraw = [&](const int frame) {
+            if (stopEditingAt != 0 && frame >= stopEditingAt) {
+                return;
+            }
+            ImGui::Begin("ime field");
+            if (frame == 1) {
+                ImGui::SetKeyboardFocusHere();
+            }
+            ImGui::InputText("field", buffer.data(), buffer.size());
+            run.fieldMin = ImGui::GetItemRectMin();
+            run.fieldMax = ImGui::GetItemRectMax();
+            ImGui::End();
+        };
+        return client;
+    });
+    CHECK(code == 0);
+    return run;
+}
+
+void Composing(SDL_Event& event, const SDL_WindowID window) {
+    event.type = SDL_EVENT_TEXT_EDITING;
+    event.edit.windowID = window;
+    event.edit.text = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e"; // 日本語
+    event.edit.start = 0;
+    event.edit.length = 3;
+}
+
+} // namespace
+
+TEST_CASE("I10: the input method's composition is drawn at the edited field until it ends") {
+    const auto committed = [](SDL_Event& event, const SDL_WindowID window) {
+        event.type = SDL_EVENT_TEXT_INPUT;
+        event.text.windowID = window;
+        event.text.text = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e";
+    };
+    const auto ended = [](SDL_Event& event, const SDL_WindowID window) {
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.windowID = window;
+        event.edit.text = "";
+    };
+    const auto focusLost = [](SDL_Event& event, const SDL_WindowID window) {
+        event.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+        event.window.windowID = window;
+    };
+
+    SUBCASE("drawn inside the field, then gone once the text is committed") {
+        const CompositionRun run = RunComposition({{5, &Composing}, {8, committed}}, 11);
+        // run.vertices[i] is what frame i drew (read at the start of frame i + 1).
+        CHECK(run.vertices[4] == 0);
+        REQUIRE(run.vertices[6] > 0);
+        CHECK(run.lowest[6].x >= run.fieldMin.x);
+        CHECK(run.highest[6].x <= run.fieldMax.x);
+        CHECK(run.lowest[6].y >= run.fieldMin.y - 1.0F);
+        CHECK(run.highest[6].y <= run.fieldMax.y + 1.0F);
+        CHECK(run.vertices[9] == 0);
+    }
+    SUBCASE("gone when the composition ends without text") {
+        const CompositionRun run = RunComposition({{5, &Composing}, {8, ended}}, 11);
+        REQUIRE(run.vertices[6] > 0);
+        CHECK(run.vertices[9] == 0);
+    }
+    SUBCASE("gone when the window loses focus") {
+        const CompositionRun run = RunComposition({{5, &Composing}, {8, focusLost}}, 11);
+        REQUIRE(run.vertices[6] > 0);
+        CHECK(run.vertices[9] == 0);
+    }
+    SUBCASE("gone when ImGui stops editing") {
+        const CompositionRun run = RunComposition({{5, &Composing}}, 11, 8);
+        REQUIRE(run.vertices[6] > 0);
+        CHECK(run.vertices[9] == 0);
+    }
+}
+
 // Run only by gyo_framework.imgui_shell_no_renderer, where SDL_RENDER_DRIVER
 // names no driver.
 TEST_CASE("I8: a renderer that cannot start returns 1 without calling the factory" * doctest::skip()) {
@@ -255,4 +373,163 @@ TEST_CASE("I8: a renderer that cannot start returns 1 without calling the factor
     });
     CHECK(code == 1);
     CHECK(factoryCalls == 0);
+}
+
+namespace {
+
+// v8-input-ui-adapter: what the client saw of the window's input and of SDL's
+// text input at each BeginFrame. Index i is read at frame i + 1's BeginFrame:
+// SDL's text input as frame i left it, and frame i + 1's input.
+struct InputRun {
+    std::vector<bool> active;
+    std::vector<SDL_Rect> area;
+    std::vector<std::vector<std::string>> compositions;
+    bool sameInDraw{true};
+    std::size_t seenText{};
+};
+
+// The client asks for text input over clientArea in the frames of clientFrames;
+// an ImGui InputText is edited in the frames of imguiFrames. Each entry of events
+// is pushed at the start of its frame.
+InputRun RunInput(const std::vector<int>& clientFrames, const std::vector<int>& imguiFrames,
+                  const std::vector<std::pair<int, std::function<void(SDL_Event&, SDL_WindowID)>>>& events,
+                  const int frames,
+                  const std::vector<std::pair<int, std::function<void(SDL_Window*)>>>& windowActions = {}) {
+    Counts counts;
+    InputRun run;
+    std::array<char, 64> buffer{};
+    const auto in = [](const std::vector<int>& list, const int frame) {
+        return std::find(list.begin(), list.end(), frame) != list.end();
+    };
+    const int code = RunImGuiShell(SmallWindow(), [&](const ImGuiShellContext& context) {
+        auto client = std::make_unique<Client>(context, counts, frames);
+        client->onBeginFrame = [&, context](const int frame) {
+            SDL_Window* window = Engine::Platform::Sdl::NativeWindow(context.platform);
+            run.active.push_back(SDL_TextInputActive(window));
+            SDL_Rect area{};
+            int cursor = 0;
+            SDL_GetTextInputArea(window, &area, &cursor);
+            run.area.push_back(area);
+            std::vector<std::string> compositions;
+            for (const auto& entry : context.input.Frame().text) {
+                if (entry.kind == Engine::Input::TextEvent::Kind::Composition) {
+                    compositions.push_back(entry.text);
+                }
+            }
+            run.compositions.push_back(std::move(compositions));
+            run.seenText = context.input.Frame().text.size();
+            for (const auto& [at, act] : windowActions) {
+                if (at == frame) {
+                    act(window);
+                }
+            }
+            for (const auto& [at, make] : events) {
+                if (at == frame) {
+                    SDL_Event event{};
+                    make(event, OwnWindow(context));
+                    PushInjected(context, event);
+                }
+            }
+        };
+        client->onDraw = [&, context](const int frame) {
+            if (context.input.Frame().text.size() != run.seenText) {
+                run.sameInDraw = false;
+            }
+            if (in(clientFrames, frame)) {
+                context.input.RequestTextInput({100, 200, 50, 20}, 3);
+            }
+            if (in(imguiFrames, frame)) {
+                ImGui::Begin("input field");
+                if (!in(imguiFrames, frame - 1)) {
+                    ImGui::SetKeyboardFocusHere();
+                }
+                ImGui::InputText("field", buffer.data(), buffer.size());
+                ImGui::End();
+            }
+        };
+        return client;
+    });
+    CHECK(code == 0);
+    return run;
+}
+
+std::vector<int> Frames(const int from, const int to) {
+    std::vector<int> frames;
+    for (int frame = from; frame <= to; ++frame) {
+        frames.push_back(frame);
+    }
+    return frames;
+}
+
+} // namespace
+
+TEST_CASE("I11: the client's request owns text input while it asks, and gets the frame's composition") {
+    SUBCASE("on while asked, over the client's area; off once it stops, with no ImGui field") {
+        const InputRun run = RunInput(Frames(2, 4), {}, {{3, &Composing}}, 7);
+        CHECK_FALSE(run.active[0]);
+        CHECK(run.active[2]);
+        CHECK(run.area[2].x == 100);
+        CHECK(run.area[2].y == 200);
+        CHECK(run.area[2].w == 50);
+        CHECK(run.area[2].h == 20);
+        // Pushed at the start of frame 3, read by the client in frame 4.
+        REQUIRE(run.compositions[3].size() == 1);
+        CHECK(run.compositions[3][0] == "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e");
+        CHECK(run.compositions[4].empty());
+        CHECK(run.sameInDraw);
+        CHECK_FALSE(run.active[5]);
+    }
+    SUBCASE("a client that never asks leaves text input alone") {
+        const InputRun run = RunInput({}, {}, {}, 4);
+        for (const bool active : run.active) {
+            CHECK_FALSE(active);
+        }
+    }
+    SUBCASE("the client wins over an ImGui field in the same frame, and gives it back to the field") {
+        // The field is focused in frame 2 and edited from frame 3 on.
+        const InputRun run = RunInput(Frames(4, 5), Frames(2, 8), {}, 9);
+        CHECK(run.active[3]);
+        CHECK(run.area[3].x != 100);
+        CHECK(run.active[4]);
+        CHECK(run.area[4].x == 100);
+        CHECK(run.area[4].y == 200);
+        // Back to the field ImGui is still editing.
+        CHECK(run.active[6]);
+        CHECK(run.area[6].x == run.area[3].x);
+        CHECK(run.area[6].y == run.area[3].y);
+        CHECK(run.area[6].w == run.area[3].w);
+        CHECK(run.area[6].h == run.area[3].h);
+        CHECK(run.area[3].h > 0);
+    }
+    SUBCASE("moving from an ImGui field to the client's in one frame keeps text input on") {
+        const InputRun run = RunInput(Frames(4, 6), Frames(2, 3), {}, 8);
+        CHECK(run.active[3]);
+        CHECK(run.active[4]);
+        CHECK(run.area[4].x == 100);
+        CHECK(run.active[5]);
+        CHECK_FALSE(run.active[7]);
+    }
+    SUBCASE("an ImGui field that stops while the client asks leaves text input on for the client") {
+        // Both ask in frames 3 and 4; ImGui's backend stops text input when its field goes in frame 5.
+        const InputRun run = RunInput(Frames(3, 6), Frames(2, 4), {}, 8);
+        CHECK(run.active[4]);
+        CHECK(run.area[4].x == 100);
+        CHECK(run.active[5]);
+        CHECK(run.area[5].x == 100);
+        CHECK_FALSE(run.active[7]);
+    }
+    SUBCASE("while both ask, the window losing and regaining keyboard focus leaves the client's area") {
+        // ImGui's backend stops text input when the focus goes and starts it over its own field when the focus
+        // comes back, in its NewFrame, without telling ImGui's platform hook.
+        const auto hide = [](SDL_Window* window) { SDL_HideWindow(window); };
+        const auto show = [](SDL_Window* window) { SDL_ShowWindow(window); };
+        const InputRun run = RunInput(Frames(4, 11), Frames(2, 11), {}, 12, {{6, hide}, {8, show}});
+        CHECK(run.area[5].x == 100);
+        for (const int index : {9, 10, 11}) {
+            CAPTURE(index);
+            CHECK(run.active[index]);
+            CHECK(run.area[index].x == 100);
+            CHECK(run.area[index].y == 200);
+        }
+    }
 }

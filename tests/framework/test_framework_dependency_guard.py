@@ -51,8 +51,52 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
                                             "framework/src/A.cpp: includes SDL3/SDL.h",
                                             "framework/src/A.cpp: includes backends/imgui_impl_sdl3.h"])
 
-    def test_input_include_fails(self):
-        self.assertEqual(len(self.scan({"framework/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n'})), 1)
+    def test_input_neutral_include_passes(self):
+        # Engine's input is open to the framework as to a game or tool (v8-tool-ui-editor-ime-composition-source).
+        self.assertEqual(self.scan({"framework/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n'}), [])
+
+    def test_input_native_header_fails_in_the_core(self):
+        self.assertEqual(self.scan({"framework/src/A.cpp": '#include "engine/input/backend/sdl/SdlInputNative.hpp"\n'}),
+                         ["framework/src/A.cpp: includes engine/input/backend/sdl/SdlInputNative.hpp"])
+
+    def test_input_native_header_and_an_allowlist_line_still_fail(self):
+        # Since v8-framework-invariants there are no exceptions: the removed allowlist coming back is itself a finding.
+        findings = self.scan({
+            "framework/src/A.cpp": '#include "engine/input/backend/sdl/SdlInputNative.hpp"\n',
+            self.ALLOWLIST: "framework/src/A.cpp include 1\n",
+        })
+        self.assertEqual(sorted(findings), sorted([
+            "framework/src/A.cpp: includes engine/input/backend/sdl/SdlInputNative.hpp",
+            f"{self.ALLOWLIST}: the framework has no exceptions; remove the file"]))
+
+    def test_input_targets_in_the_core_pass(self):
+        # Since v8-framework-engine-access the core may use any Engine module (Design Invariant 2); before it, only
+        # the ImGui binding could link the input backend (v8-tool-ui-editor-ime-composition-source).
+        self.assertEqual(self.scan({
+            "framework/src/A.cpp": '#include "engine/input/backend/sdl/SdlInput.hpp"\n',
+            "framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input GYO::InputBackendSDL)\n",
+        }), [])
+
+    def test_input_target_in_a_binding_fails(self):
+        # Each binding keeps its own positive list; the core's additions do not reach it.
+        self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input)\n"}),
+                         ["framework/bindings/json/CMakeLists.txt: names GYO::Input"])
+
+    def test_ui_target_in_the_core_passes(self):
+        # v8-input-ui-adapter: the products' shared text input mapping turns Engine's input entries into Ui's.
+        self.assertEqual(self.scan({
+            "framework/src/A.cpp": '#include "engine/ui/UiTypes.hpp"\n',
+            "framework/CMakeLists.txt": "target_link_libraries(a PUBLIC GYO::Input GYO::Ui)\n",
+        }), [])
+
+    def test_ui_target_in_the_imgui_binding_fails(self):
+        # The binding reaches Ui only through the core; its own list does not take the core's addition.
+        self.assertEqual(self.scan({"framework/bindings/imgui/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Ui)\n"}),
+                         ["framework/bindings/imgui/CMakeLists.txt: names GYO::Ui"])
+
+    def test_ui_target_in_the_json_binding_fails(self):
+        self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Ui)\n"}),
+                         ["framework/bindings/json/CMakeLists.txt: names GYO::Ui"])
 
     def test_tool_header_fails(self):
         # A tool's header is outside every allowed prefix, without the guard naming the tool.
@@ -68,8 +112,8 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertIn("SDL_CreateGPUDevice", findings[0])
 
     def test_unlisted_target_fails(self):
-        findings = self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input)\n"})
-        self.assertEqual(len(findings), 1)
+        findings = self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::RenderBackendSDLGPU)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: names GYO::RenderBackendSDLGPU"])
 
     def test_registered_tool_name_fails(self):
         findings = self.scan({"framework/src/A.cpp": "// opens what sketch_tool saved\n"})
@@ -132,6 +176,22 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertEqual(self.scan({"framework/bindings/imgui/CMakeLists.txt": "target_link_libraries(a PRIVATE SDL3::SDL3)\n"}),
                          ["framework/bindings/imgui/CMakeLists.txt: names SDL3::SDL3"])
 
+    def test_imgui_binding_reads_text_through_the_input_backend(self):
+        self.assertEqual(self.scan({
+            "framework/bindings/imgui/src/A.cpp": '#include "engine/input/backend/sdl/SdlInput.hpp"\n',
+            "framework/bindings/imgui/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::InputBackendSDL)\n",
+        }), [])
+
+    def test_imgui_binding_input_native_target_fails(self):
+        self.assertEqual(self.scan({"framework/bindings/imgui/CMakeLists.txt":
+                                    "target_link_libraries(a PRIVATE GYO::InputBackendSDLNative)\n"}),
+                         ["framework/bindings/imgui/CMakeLists.txt: names GYO::InputBackendSDLNative"])
+
+    def test_json_binding_input_backend_fails(self):
+        self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt":
+                                    "target_link_libraries(a PRIVATE GYO::InputBackendSDL)\n"}),
+                         ["framework/bindings/json/CMakeLists.txt: names GYO::InputBackendSDL"])
+
     def test_imgui_binding_other_native_header_fails(self):
         self.assertEqual(self.scan({"framework/bindings/imgui/src/A.cpp": '#include "engine/input/backend/sdl/SdlInputNative.hpp"\n'}),
                          ["framework/bindings/imgui/src/A.cpp: includes engine/input/backend/sdl/SdlInputNative.hpp"])
@@ -148,112 +208,32 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertEqual(self.scan({"framework/bindings/qt/src/A.cpp": "\n"}),
                          ["framework/bindings/qt/src/A.cpp: binding qt has no positive list in the guard"])
 
-    # The allowlist: a ratchet of existing core sites, in the format of the OS boundary guard.
+    # No exceptions (v8-framework-invariants): the ratchet allowlist was emptied and removed.
 
     ALLOWLIST = "tests/framework/framework_guard_allowlist.txt"
 
-    def test_allowlisted_core_sites_pass(self):
-        self.assertEqual(self.scan({
-            "framework/src/Old.cpp": "#include <SDL3/SDL.h>\nvoid F() { SDL_Log(\"a\"); SDL_Log(\"b\"); }\n",
-            "framework/CMakeLists.txt": "add_library(gyo_tool_framework STATIC a.cpp)\n",
-            self.ALLOWLIST: "# reason\nframework/src/Old.cpp include 1  # old\nframework/src/Old.cpp symbol 2  # old\n"
-                            "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json  # checked by CMake\n",
-        }), [])
+    def test_the_removed_allowlist_coming_back_fails(self):
+        self.assertEqual(self.scan({self.ALLOWLIST: "# reason\n"}),
+                         [f"{self.ALLOWLIST}: the framework has no exceptions; remove the file"])
 
-    def test_one_more_site_in_an_allowlisted_file_fails(self):
+    def test_former_allowlisted_kinds_fail_in_the_core(self):
+        # What the allowlist used to cover: SDL calls, an SDL include and a third-party link in the core.
         findings = self.scan({
-            "framework/src/Old.cpp": "void F() { SDL_Log(\"a\"); SDL_Log(\"b\"); }\n",
-            self.ALLOWLIST: "framework/src/Old.cpp symbol 1\n",
+            "framework/src/Old.cpp": "#include <SDL3/SDL.h>\nvoid F() { SDL_Log(\"a\"); }\n",
+            "framework/Old.cmake": "target_link_libraries(a PRIVATE nlohmann_json::nlohmann_json)\n",
         })
-        self.assertIn(f"{self.ALLOWLIST}:1: framework/src/Old.cpp symbol has 2 findings, allowlisted 1", findings)
+        self.assertEqual(sorted(findings), ["framework/Old.cmake: names nlohmann_json::nlohmann_json",
+                                            "framework/src/Old.cpp: includes SDL3/SDL.h",
+                                            "framework/src/Old.cpp: uses SDL_Log"])
 
-    def test_a_removed_site_asks_to_shrink(self):
-        findings = self.scan({"framework/src/Old.cpp": "\n", self.ALLOWLIST: "framework/src/Old.cpp symbol 1\n"})
-        self.assertEqual(findings, [f"{self.ALLOWLIST}:1: framework/src/Old.cpp symbol has 0 findings, allowlisted 1; "
-                                    "shrink the allowlist"])
-
-    def test_an_entry_for_a_missing_file_fails(self):
-        findings = self.scan({self.ALLOWLIST: "framework/src/Gone.cpp symbol 1\n"})
-        self.assertEqual(findings, [f"{self.ALLOWLIST}:1: framework/src/Gone.cpp does not exist; remove the entry"])
-
-    def test_a_binding_has_no_exceptions(self):
-        findings = self.scan({
-            "framework/bindings/json/src/A.cpp": "#include <imgui.h>\n",
-            self.ALLOWLIST: "framework/bindings/json/src/A.cpp include 1\n",
-        })
-        self.assertIn(f"{self.ALLOWLIST}:1: framework/bindings/json/src/A.cpp is not in the framework's core; "
-                      "bindings have no exceptions", findings)
-        self.assertIn("framework/bindings/json/src/A.cpp: includes imgui.h", findings)
-
-    def test_hard_rules_are_never_allowlisted(self):
-        findings = self.scan({
-            "framework/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n',
-            self.ALLOWLIST: "framework/src/A.cpp include 1\n",
-        })
-        self.assertIn("framework/src/A.cpp: includes engine/input/InputFrame.hpp", findings)
-
-    def test_trading_an_allowlisted_site_for_an_old_refusal_fails(self):
-        # The count stays 1, but GYO::Input was refused before the ratchet, so it is never covered.
-        findings = self.scan({
-            "framework/Old.cmake": "target_link_libraries(a PRIVATE GYO::Input)\n",
-            self.ALLOWLIST: "framework/Old.cmake target 1\n",
-        })
-        self.assertIn("framework/Old.cmake: names GYO::Input", findings)
-        findings = self.scan({
-            "framework/src/Old.cpp": '#include "gyo/some_tool/Thing.hpp"\n',
-            self.ALLOWLIST: "framework/src/Old.cpp include 1\n",
-        })
-        self.assertIn("framework/src/Old.cpp: includes gyo/some_tool/Thing.hpp", findings)
-
-    def test_a_link_line_names_its_targets(self):
-        findings = self.scan({self.ALLOWLIST: "target:gyo_tool_framework link 2 nlohmann_json::nlohmann_json\n"})
-        self.assertEqual(len(findings), 1)
-        self.assertIn("expected 'target:<cmake target> link count name,name...'", findings[0])
-
-    def test_a_link_line_for_a_target_the_framework_does_not_define_fails(self):
-        # A target that only some configurations build is still defined in the source; one that is defined nowhere
-        # is a stale line, whatever the configuration (v8-framework-shell, the audio_editor-only regression).
-        findings = self.scan({
-            "framework/CMakeLists.txt": "add_library(gyo_tool_framework STATIC a.cpp)\n",
-            "framework/Legacy.cmake": "if(GYO_SOME_CONDITION)\n    add_library(gyo_tool_framework_gui STATIC b.cpp)\nendif()\n",
-            self.ALLOWLIST: "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json\n"
-                            "target:gyo_tool_framework_gui link 1 SDL3::SDL3\n"
-                            "target:gyo_tool_framework_gone link 1 SDL3::SDL3\n",
-        })
-        self.assertEqual(findings, [f"{self.ALLOWLIST}:3: gyo_tool_framework_gone is not a framework target; remove the line"])
-
-    def test_a_link_line_reads_add_library_as_cmake_does(self):
-        # CMake commands ignore case and a target may get its sources later; a comment or an ALIAS defines nothing.
-        findings = self.scan({
-            "framework/CMakeLists.txt": "ADD_LIBRARY(gyo_tool_framework STATIC a.cpp)\n"
-                                        "add_library(gyo_tool_framework_gui)\n"
-                                        "# add_library(gyo_tool_framework_commented STATIC b.cpp)\n"
-                                        "add_library(gyo_tool_framework_alias ALIAS gyo_tool_framework)\n",
-            self.ALLOWLIST: "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json\n"
-                            "target:gyo_tool_framework_gui link 1 SDL3::SDL3\n"
-                            "target:gyo_tool_framework_commented link 1 SDL3::SDL3\n"
-                            "target:gyo_tool_framework_alias link 1 SDL3::SDL3\n",
-        })
-        self.assertEqual(findings, [
-            f"{self.ALLOWLIST}:3: gyo_tool_framework_commented is not a framework target; remove the line",
-            f"{self.ALLOWLIST}:4: gyo_tool_framework_alias is not a framework target; remove the line",
-        ])
-
-    def test_a_duplicate_link_line_fails(self):
-        findings = self.scan({
-            "framework/CMakeLists.txt": "add_library(gyo_tool_framework STATIC a.cpp)\n",
-            self.ALLOWLIST: "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json\n"
-                            "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json\n",
-        })
-        self.assertEqual(findings, [f"{self.ALLOWLIST}:2: duplicate line for gyo_tool_framework"])
-
-    def test_a_link_line_for_a_binding_target_fails(self):
-        findings = self.scan({
-            "framework/bindings/imgui/CMakeLists.txt": "add_library(gyo_tool_framework_imgui STATIC a.cpp)\n",
-            self.ALLOWLIST: "target:gyo_tool_framework_imgui link 1 imgui::core\n",
-        })
-        self.assertEqual(findings, [f"{self.ALLOWLIST}:1: gyo_tool_framework_imgui is not in the framework's core; "
-                                    f"bindings have no exceptions"])
+    def test_sdl_gpu_is_an_sdl_symbol_in_code_only(self):
+        # Without the allowlist the SDL_GPU rule went with it: the core's SDL_ symbol rule reports SDL_GPU in code,
+        # as it reports every SDL_ name; a mention in a comment or a string is not code.
+        self.assertEqual(self.scan({"framework/src/A.cpp": "void F() { SDL_GPUDevice* d = nullptr; }\n"}),
+                         ["framework/src/A.cpp: uses SDL_GPUDevice"])
+        self.assertEqual(self.scan({"framework/src/A.cpp": "// not SDL_GPUDevice\nconst char* s = \"SDL_GPU\";\n"}), [])
+        self.assertEqual(self.scan({"framework/bindings/json/src/A.cpp": "void F() { SDL_GPUDevice* d = nullptr; }\n"}),
+                         ["framework/bindings/json/src/A.cpp: uses SDL_GPUDevice"])
 
     def test_local_headers_are_not_library_headers(self):
         self.assertEqual(self.scan({"framework/src/A.cpp": '#include "sdl_utils.h"\n#include "ImGuiHelpers.hpp"\n'
@@ -262,10 +242,6 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
     def test_library_bare_headers_fail_in_the_core(self):
         findings = self.scan({"framework/src/A.cpp": "#include <SDL.h>\n#include <SDL_video.h>\n#include <imgui_internal.h>\n#include <json.hpp>\n"})
         self.assertEqual(len(findings), 4)
-
-    def test_a_malformed_line_fails(self):
-        findings = self.scan({"framework/src/A.cpp": "\n", self.ALLOWLIST: "framework/src/A.cpp symbol\n"})
-        self.assertEqual(findings, [f"{self.ALLOWLIST}:1: expected 'path rule count', got 'framework/src/A.cpp symbol'"])
 
 
 if __name__ == "__main__":

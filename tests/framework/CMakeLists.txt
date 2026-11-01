@@ -1,7 +1,7 @@
 # The framework layer (docs/framework/architecture.md); added with it, when
 # a tool is selected.
-add_executable(gyo_framework_tests CatalogStructureTests.cpp FrameworkCoreTests.cpp HeadlessShellTests.cpp
-                                   UserFilesParityTests.cpp)
+add_executable(gyo_framework_tests AbsolutePathTests.cpp CatalogStructureTests.cpp HeadlessShellTests.cpp
+                                   UiTextInputTests.cpp)
 target_compile_features(gyo_framework_tests PRIVATE cxx_std_20)
 target_link_libraries(gyo_framework_tests PRIVATE GYO::ToolFramework GYO::ToolFrameworkJson GYO::Os
                                                   nlohmann_json::nlohmann_json doctest::doctest)
@@ -20,8 +20,8 @@ endif()
 if(GYO_ENABLE_SDL_PLATFORM AND NOT TARGET GYO::ToolFrameworkWindow)
     message(FATAL_ERROR "framework: the build has Engine's SDL platform but no GYO::ToolFrameworkWindow")
 endif()
-if(GYO_ENABLE_SDL_RENDERER AND GYO_ENABLE_IMGUI AND NOT TARGET GYO::ToolFrameworkImGui)
-    message(FATAL_ERROR "framework: the build has the SDL renderer and ImGui but no GYO::ToolFrameworkImGui")
+if(GYO_ENABLE_SDL_RENDERER AND GYO_ENABLE_SDL_INPUT AND GYO_ENABLE_IMGUI AND NOT TARGET GYO::ToolFrameworkImGui)
+    message(FATAL_ERROR "framework: the build has the SDL renderer, SDL input and ImGui but no GYO::ToolFrameworkImGui")
 endif()
 
 # The windowed shell, on SDL's dummy video driver.
@@ -89,12 +89,8 @@ set_tests_properties(gyo_framework.dependency_guard gyo_framework.dependency_gua
 # included (by the names inside them); an INTERFACE library's own links are its
 # interface. Through another target's interface, a $<LINK_ONLY:> entry (that
 # target's PRIVATE link) is not followed, and neither is a forbidden target.
-# The forbidden names a core target reaches must be exactly those of its line
-# "target:<name> link <count> <name>,<name>..." in framework_guard_allowlist.txt
-# (none means none), so the exceptions only shrink and cannot be traded. A line
-# whose target this configuration does not build is not checked here; the
-# dependency guard checks in every configuration that its target is one the
-# core defines, so a stale line still fails.
+# There are no exceptions: the allowlist of the core's old links emptied and
+# was removed in v8-framework-invariants.
 # Limit: an IMPORTED target that is not GLOBAL and is defined in another
 # directory cannot be followed. Checked once the whole project is configured.
 function(_gyo_framework_forbidden entry real kind out)
@@ -213,25 +209,8 @@ endfunction()
 
 function(gyo_expect_framework_links)
     set(root "${GYO_REPOSITORY_ROOT}/framework")
-    set(allowlist "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/framework_guard_allowlist.txt")
-    file(STRINGS "${allowlist}" lines REGEX "^target:")
     _gyo_framework_targets_in("${root}" targets)
     set(problems "")
-    set(listed "")
-    foreach(line IN LISTS lines)
-        if(NOT line MATCHES "^target:([^ \t]+)[ \t]+link[ \t]+([0-9]+)[ \t]+([^ \t#]+)")
-            list(APPEND problems "framework_guard_allowlist.txt: cannot read '${line}'")
-            continue()
-        endif()
-        set(name "${CMAKE_MATCH_1}")
-        string(REPLACE "," ";" names "${CMAKE_MATCH_3}")
-        list(SORT names)
-        if(name IN_LIST listed)
-            list(APPEND problems "framework_guard_allowlist.txt: duplicate line for ${name}")
-        endif()
-        list(APPEND listed "${name}")
-        set("_allowed_${name}" "${names}")
-    endforeach()
     foreach(target IN LISTS targets)
         _gyo_framework_binding_of(${target} kind)
         if(kind)
@@ -243,18 +222,10 @@ function(gyo_expect_framework_links)
             set(kind "core")
         endif()
         _gyo_framework_link_findings(${target} ${kind} found)
-        set(allowed "")
-        if(DEFINED "_allowed_${target}")
-            set(allowed "${_allowed_${target}}")
-        endif()
-        if(allowed AND NOT kind STREQUAL "core")
-            list(APPEND problems "${target}: a binding has no exceptions; remove its allowlist line")
-        elseif(NOT "${found}" STREQUAL "${allowed}")
+        if(found)
             list(JOIN found "," found_text)
-            list(JOIN allowed "," allowed_text)
             list(LENGTH found count)
-            list(LENGTH allowed allowed_count)
-            list(APPEND problems "${target} (${kind}) links ${count} forbidden targets [${found_text}], allowlisted ${allowed_count} [${allowed_text}]")
+            list(APPEND problems "${target} (${kind}) links ${count} forbidden targets [${found_text}]")
         endif()
     endforeach()
     if(problems)

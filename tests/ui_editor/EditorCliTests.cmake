@@ -41,3 +41,5 @@ file(WRITE "${WORK}/root/content.json" "broken manifest")
 check(3 malformed_manifest --validate "${WORK}/single.json" --asset-root "${WORK}/root")
 check(0 explicit_ignores_manifest --validate "${WORK}/single.json" --asset-root "${WORK}/root" --asset-catalog "${WORK}/root/fonts.json")
 check(2 unknown_option --unknown-option)
+# --help through the framework's headless shell (v8-tool-ui-editor-shell-adopt).
+check(0 help --help)

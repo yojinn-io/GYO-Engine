@@ -112,7 +112,8 @@ private:
     bool showOverwriteDialog_{};
     bool showAssetPicker_{};
     bool showRenameDialog_{};
-    // One host dialog at a time; cleared when its result arrives.
+    // One host dialog at a time; cleared when its current result arrives or
+    // the user stops waiting.
     bool pathDialogOpen_{};
     AssetPickerTarget assetPickerTarget_{AssetPickerTarget::FontAlias};
     RenameTarget renameTarget_{RenameTarget::FontAlias};

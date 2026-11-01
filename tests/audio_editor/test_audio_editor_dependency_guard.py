@@ -25,8 +25,25 @@ class AudioEditorDependencyGuardTests(unittest.TestCase):
             "tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Audio GYO::Os)\n",
         }), [])
 
-    def test_input_include_fails(self):
-        self.assertEqual(len(self.scan({"tools/audio_editor/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n'})), 1)
+    def test_any_engine_module_passes(self):
+        self.assertEqual(self.scan({"tools/audio_editor/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n',
+                                    "tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input)\n"}),
+                         [])
+
+    def test_sdl_use_fails(self):
+        findings = self.scan({"tools/audio_editor/src/A.cpp": '#include <SDL3/SDL.h>\nSDL_OpenAudioDevice(0, nullptr);\n'})
+        self.assertEqual(len(findings), 2)
+        self.assertIn("includes SDL3/SDL.h", findings[0])
+        self.assertIn("uses SDL_OpenAudioDevice", findings[1])
+
+    def test_native_header_fails(self):
+        findings = self.scan({"tools/audio_editor/src/A.cpp": '#include "engine/audio/sdl/native/SdlAudioNative.hpp"\n'
+                                                              '#include "engine/audio/sdl/SdlAudioNative.h"\n'})
+        self.assertEqual(len(findings), 2)
+
+    def test_sdl_target_fails(self):
+        findings = self.scan({"tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE SDL3::SDL3 GYO::PlatformSDLNative)\n"})
+        self.assertEqual(len(findings), 2)
 
     def test_unlisted_include_fails(self):
         # A game's header is outside every allowed prefix, without the guard naming the game.
@@ -38,7 +55,7 @@ class AudioEditorDependencyGuardTests(unittest.TestCase):
         self.assertIn("SDL_CreateGPUDevice", findings[0])
 
     def test_unlisted_target_fails(self):
-        findings = self.scan({"tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input)\n"})
+        findings = self.scan({"tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE SomeGame::World)\n"})
         self.assertEqual(len(findings), 1)
 
 
