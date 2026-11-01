@@ -67,7 +67,9 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
 
 ### ui_editor
 
-1. The editor links no game, no `GYO::Input` and no SDL_GPU. Guard:
+1. The editor links no game and no SDL_GPU. Engine's capabilities are open to
+   it as to a game, input included (`v8-tool-ui-editor-ime-composition-source`,
+   2026-11-01). Guard:
    `gyo_ui_editor.dependency_guard` (`tests/ui_editor/ui_editor_dependency_guard.py`),
    a positive list of includes and targets. The window and ImGui's SDL
    backends come through the framework's ImGui binding, whose own guard keeps

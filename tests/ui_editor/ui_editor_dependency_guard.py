@@ -1,7 +1,7 @@
-"""Guard for ui_editor Design Invariant 1 (docs/ui_toolchain.md): no game, GYO::Input or SDL_GPU.
+"""Guard for ui_editor Design Invariant 1 (docs/ui_toolchain.md): no game and no SDL_GPU.
 
 The rule is a positive list, so no product is named here (AGENTS.md sections 7 and 9):
-- every path include in tools/ui_editor starts with an allowed prefix, and none reaches engine/input;
+- every path include in tools/ui_editor starts with an allowed prefix (Engine's, input included, as for a game);
 - no source uses an SDL_GPU function or type (SDL_*GPU*);
 - every namespaced target (Name::Name) in the tool's CMake files is an allowed target.
 A new dependency fails until it is added here, which is the point: it changes the editor's Design Invariants.
@@ -24,7 +24,6 @@ TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*\b")
 # (tests/framework/framework_dependency_guard.py) keeps the same rule (docs/framework/architecture.md, Design
 # Invariant 2).
 ALLOWED_INCLUDE_PREFIXES = ("gyo/ui_editor/", "gyo/framework/", "engine/", "nlohmann/", "SDL3/")
-FORBIDDEN_INCLUDE_PREFIXES = ("engine/input/",)
 ALLOWED_TARGETS = {
     "GYO::Engine", "GYO::Ui", "GYO::Math", "GYO::Os",
     "GYO::ToolFramework", "GYO::ToolFrameworkImGui",
@@ -45,7 +44,7 @@ def scan(root: Path) -> list[str]:
             for include in INCLUDE.findall(text):
                 if "/" not in include:
                     continue  # standard headers and the tool's own local headers
-                if include.startswith(FORBIDDEN_INCLUDE_PREFIXES) or not include.startswith(ALLOWED_INCLUDE_PREFIXES):
+                if not include.startswith(ALLOWED_INCLUDE_PREFIXES):
                     findings.append(f"{relative}: includes {include}")
             for name in sorted(set(SDL_GPU.findall(text))):
                 findings.append(f"{relative}: uses {name}")

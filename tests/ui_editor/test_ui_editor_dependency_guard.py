@@ -25,8 +25,9 @@ class EditorDependencyGuardTests(unittest.TestCase):
             "tools/ui_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Ui imgui::core SDL3::SDL3)\n",
         }), [])
 
-    def test_input_include_fails(self):
-        self.assertEqual(len(self.scan({"tools/ui_editor/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n'})), 1)
+    def test_input_include_passes(self):
+        # Engine's input is open to the editor as to a game (v8-tool-ui-editor-ime-composition-source).
+        self.assertEqual(self.scan({"tools/ui_editor/src/A.cpp": '#include "engine/input/InputFrame.hpp"\n'}), [])
 
     def test_unlisted_include_fails(self):
         # A game's header is outside every allowed prefix, without the guard naming the game.

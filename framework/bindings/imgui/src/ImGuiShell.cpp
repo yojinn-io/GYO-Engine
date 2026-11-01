@@ -1,6 +1,9 @@
 #include "gyo/framework/imgui/ImGuiShell.hpp"
 
 #include <array>
+#include <cfloat>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
@@ -16,6 +19,8 @@
 #include "engine/base/Assert.hpp"
 #include "engine/base/Error.hpp"
 #include "engine/base/Log.hpp"
+#include "engine/input/PhysicalInputFrame.hpp"
+#include "engine/input/backend/sdl/SdlInput.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/os/Files.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp"
@@ -121,6 +126,113 @@ void ConfigureChromeFont(ImGuiIO& io, const std::string& title) {
     }
 }
 
+// The byte offset of a code point index in UTF-8 text (clamped to its end).
+[[nodiscard]] std::size_t ByteOffset(const std::string_view text, const std::int32_t codePoints) noexcept {
+    std::size_t offset = 0;
+    for (std::int32_t count = 0; offset < text.size() && count < codePoints; ++count) {
+        ++offset;
+        while (offset < text.size() && (static_cast<unsigned char>(text[offset]) & 0xC0U) == 0x80U) {
+            ++offset;
+        }
+    }
+    return offset;
+}
+
+// The input method's composition, drawn at ImGui's text cursor
+// (v8-tool-ui-editor-ime-enter). ImGui's SDL3 backend ignores the composition
+// and ImGui draws none, so where the program has to draw it (macOS always;
+// Windows only when SdlPlatformOptions::imeComposition asks, which the shell
+// leaves off) typed text stayed invisible until it was committed. The text
+// comes from Engine's input backend, the one reading of SDL's text events
+// (Design Invariant 2); the place is the one ImGui reports to the platform.
+// Display only: it follows the events and decides nothing (AGENTS.md
+// section 3).
+class ImeComposition final {
+public:
+    ImeComposition() = default;
+    ImeComposition(const ImeComposition&) = delete;
+    ImeComposition& operator=(const ImeComposition&) = delete;
+
+    // After ImGui's SDL3 backend installed its handler, which it clears again
+    // when it shuts down.
+    void Install() {
+        ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
+        backend_ = platformIo.Platform_SetImeDataFn;
+        platformIo.Platform_ImeUserData = this;
+        platformIo.Platform_SetImeDataFn = &ImeComposition::SetImeData;
+    }
+
+    // One frame of the input backend: the latest composition wins; committed
+    // text, a composition that ended, focus loss or ImGui no longer asking for
+    // the input method clear it.
+    void Take(const Engine::Input::PhysicalInputFrame& frame) {
+        for (const Engine::Input::TextEvent& event : frame.text) {
+            if (event.kind == Engine::Input::TextEvent::Kind::Composition) {
+                text_ = event.text;
+                cursor_ = event.cursor;
+                selectionLength_ = event.selectionLength;
+            } else if (event.kind == Engine::Input::TextEvent::Kind::Text) {
+                text_.clear();
+            }
+        }
+        for (const Engine::Input::InputEvent& event : frame.events) {
+            if (event.kind == Engine::Input::InputEventKind::WindowFocusLost) {
+                text_.clear();
+            }
+        }
+        if (!reported_.WantVisible) {
+            text_.clear();
+        }
+    }
+
+    // On the foreground list, over the field: the text on an opaque ground,
+    // underlined, the selected span thicker, the cursor where it is.
+    void Draw() const {
+        if (text_.empty()) {
+            return;
+        }
+        ImDrawList* list = ImGui::GetForegroundDrawList();
+        ImFont* font = ImGui::GetFont();
+        const float size = reported_.InputLineHeight > 0.0F ? reported_.InputLineHeight : ImGui::GetFontSize();
+        // ImGui reports one pixel left of its cursor (imgui_widgets.cpp).
+        const ImVec2 origin{reported_.InputPos.x + 1.0F, reported_.InputPos.y};
+        const auto widthTo = [&](const std::size_t offset) {
+            return font->CalcTextSizeA(size, FLT_MAX, 0.0F, text_.data(), text_.data() + offset).x;
+        };
+        const float width = widthTo(text_.size());
+        const float bottom = origin.y + size;
+        list->AddRectFilled(origin, {origin.x + width, bottom}, ImGui::GetColorU32(ImGuiCol_PopupBg));
+        list->AddText(font, size, origin, ImGui::GetColorU32(ImGuiCol_Text), text_.data(), text_.data() + text_.size());
+        const ImU32 line = ImGui::GetColorU32(ImGuiCol_Text);
+        list->AddLine({origin.x, bottom - 1.0F}, {origin.x + width, bottom - 1.0F}, line, 1.0F);
+        if (cursor_ >= 0 && selectionLength_ > 0) {
+            const float from = widthTo(ByteOffset(text_, cursor_));
+            const float to = widthTo(ByteOffset(text_, cursor_ + selectionLength_));
+            list->AddLine({origin.x + from, bottom - 1.0F}, {origin.x + to, bottom - 1.0F}, line, 3.0F);
+        } else if (cursor_ >= 0) {
+            const float at = origin.x + widthTo(ByteOffset(text_, cursor_));
+            list->AddLine({at, origin.y}, {at, bottom - 1.0F}, ImGui::GetColorU32(ImGuiCol_InputTextCursor), 1.0F);
+        }
+    }
+
+private:
+    using SetImeDataFn = void (*)(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData*);
+
+    static void SetImeData(ImGuiContext* context, ImGuiViewport* viewport, ImGuiPlatformImeData* data) {
+        auto* self = static_cast<ImeComposition*>(ImGui::GetPlatformIO().Platform_ImeUserData);
+        self->reported_ = *data;
+        if (self->backend_ != nullptr) {
+            self->backend_(context, viewport, data);
+        }
+    }
+
+    SetImeDataFn backend_{};
+    ImGuiPlatformImeData reported_{};
+    std::string text_;
+    std::int32_t cursor_{-1};
+    std::int32_t selectionLength_{-1};
+};
+
 // ImGui's context and its two SDL backends, shut down in reverse when it goes.
 class ImGuiScope final {
 public:
@@ -162,6 +274,7 @@ public:
             return false;
         }
         platformBackend_ = true;
+        composition_.Install();
         if (!ImGui_ImplSDLRenderer3_Init(nativeRenderer)) {
             Log(LogLevel::Error, title, "ImGui's SDL renderer backend could not start");
             return false;
@@ -170,7 +283,11 @@ public:
         return true;
     }
 
+    [[nodiscard]] ImeComposition& Composition() noexcept { return composition_; }
+
 private:
+    // Outlives the context: the members go after the destructor's shutdown.
+    ImeComposition composition_;
     bool context_{};
     bool platformBackend_{};
     bool rendererBackend_{};
@@ -180,7 +297,10 @@ private:
 // reverse: ImGui, then the client, then the renderer.
 class ImGuiWindowClient final : public WindowShellClient {
 public:
-    ImGuiWindowClient(SdlPlatform& platform, std::string title) : platform_(platform), title_(std::move(title)) {}
+    ImGuiWindowClient(SdlPlatform& platform, std::string title)
+        : platform_(platform), title_(std::move(title)), input_(platform) {
+        input_.BeginFrame();
+    }
 
     [[nodiscard]] bool Start(const ImGuiShellClientFactory& factory) {
         auto created = SdlRenderer::Create(platform_);
@@ -202,15 +322,20 @@ public:
     }
 
     void OnEvent(const PlatformEvent& event) override {
+        input_.HandleEvent(event);
         ImGui_ImplSDL3_ProcessEvent(&Engine::Platform::Sdl::NativeEvent(event));
     }
 
     RuntimeControl Update(const FrameContext&) override {
+        input_.EndFrame();
+        imgui_.Composition().Take(input_.Snapshot());
+        input_.BeginFrame();
         client_->BeginFrame();
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         client_->Draw();
+        imgui_.Composition().Draw();
         if (client_->WantsExit()) {
             ImGui::EndFrame();
             client_->EndFrame();
@@ -245,6 +370,8 @@ public:
 private:
     SdlPlatform& platform_;
     std::string title_;
+    // Only its text is read: typed text and the input method's composition.
+    Engine::Input::Backend::Sdl::SdlInput input_;
     std::unique_ptr<SdlRenderer> renderer_;
     std::optional<ImGuiShellContext> context_;
     std::unique_ptr<ImGuiShellClient> client_;

@@ -3,9 +3,10 @@
 日期：2026-11-01。分支 `claude/v8-tool-ui-editor-ime`（切自 `claude/v8-tool-framework-rework`＝PR #131 的 `847062ec`）。
 
 - 檔位與模型：Opus 5.5（主會話，從 PR #131 的會話分出）。
-- 用時：調查約 1 小時（19:20～20:05，包括使用者兩次實機錄 log）；參考做法的調查與修補另約 1 小時。
+- 用時：調查約 1 小時（19:20～20:05，包括使用者兩次實機錄 log）；參考做法的調查與 SDL 修補約 1 小時；組字顯示、Design Invariant 的修改與守衛約 1.5 小時。
+- 審查者（守衛變更）：Sonnet 5.5／檔位繼承，和實作者不同的模型。
 
-**狀態：** 原因已找到，有實機證據（第 4 步的解讀依使用者的觀察更正過）。使用者選了修補 SDL（方案 (甲)），已實作。macOS 的 L3：文字不再丟失，但仍要按兩次 Enter，原因未分清，停下回報（見「L3」）。Windows 的 L3 未做。
+**狀態：** 兩個修正都完成，macOS 的 L3 通過：(1) SDL 修補讓組字中的 Enter 不再漏給程式，文字不再丟失；(2) ImGui 綁定畫出組字，第一次 Enter 選定後看得到帶底線的文字。framework 與 ui_editor 的 Design Invariant 和守衛已改（使用者核准）。Windows 的 L3 未做。
 
 相關文件：[PR #131 的 dev_log](2026_11_01_tool_v8_ui_editor_shell_adopt.zh-Hant.md)「L3」第 6 項。
 
@@ -60,7 +61,7 @@
    - 「偶爾才寫得進」的情況沒有錄到 log，推測是輸入法在 `interpretKeyEvents` 之內就送出了文字（SDL 不送 KEY_DOWN）。
    - 兩次錄 log 都印出 `error messaging the mach port for IMKCFRunLoopWakeUpReliable`。和這個問題的關係不明。
 
-## 另一個發現：組字中介面上看不到字
+## 另一個發現：組字中介面上看不到字（已處理，見「組字顯示」）
 
 - 使用者觀察：用日文輸入法打字時，輸入框裡不顯示組字中的假名；變換成漢字、候選窗出現後才看得到選項。
 - 機制：macOS 上組字文字（marked text）要由程式自己畫。SDL 用 TEXT_EDITING 送給程式，但 ImGui 的 SDL3 後端不處理 TEXT_EDITING，ImGui 本身也不畫組字。
@@ -125,6 +126,57 @@ SDL 上沒找到 macOS 的同類回報；最接近的是 SDL2 時代的 Windows 
   - 第二次 Enter 才確定。
 - 剩下的問題是 ImGui 不畫組字文字：第一次 Enter 後畫面沒有任何變化，使用者分不出輸入法在等確定。遊戲的 text_field（GYO::Ui）會畫組字，所以看得到。組字的顯示另外提方案給使用者。
 
+## 組字顯示（`v8-tool-ui-editor-ime-composition-source`）
+
+修補後文字不再丟失，但使用者說明：日文輸入法本來就要兩次 Enter（第一次選定，介面上已經看得到帶底線的字；第一次 Enter 後還能用上下鍵重新選字；第二次才確定）。ImGui 不畫組字，所以第一次 Enter 後畫面沒有變化。遊戲的 text_field（GYO::Ui）會畫組字。
+
+- 落點：framework 的 ImGui 綁定（使用者選定）。
+- 組字從哪裡讀：Engine 的 input backend（`SdlInput`）已經把 TEXT_EDITING 轉成中立的 `TextEvent::Kind::Composition`，這是唯一一處解讀 SDL 文字事件的地方。framework 的 Design Invariant 2 與 ui_editor 的 Design Invariant 1 原本不准連結 `GYO::Input`；使用者的原則：「引擎的職責就是支撐 tool 和 Game 的，framework 可以調用 Engine 但是順序不能犯規來。ui_editor 可以使用 Engine 的能力，但是不能直接碰 SDL，邏輯和 game 一樣」。`GYO::Input` 只連結 `GYO::Base`，`GYO::InputBackendSDL` 以 PRIVATE 連結 SDL、公開標頭不含 SDL 型別，所以用它不會讓呼叫端直接碰 SDL。我先前提的「綁定多准兩個 `SDL_` 名字」與「Engine 平台層加組字的解讀」都會有第二處解讀，已撤回。
+- 實作（`framework/bindings/imgui/src/ImGuiShell.cpp`）：
+  - 綁定把每個事件也交給一個 `SdlInput`，每幀只讀它的文字：最新的組字為準；確定的文字、組字結束、失焦、ImGui 不再要求輸入法時清掉。
+  - 位置用 ImGui 交給平台的輸入法資料（`Platform_SetImeDataFn`，公開介面；綁定包住 SDL3 後端的處理函式再轉交，後端關閉時會清掉它）。
+  - 在最上層繪製清單，於游標處畫：不透明底色、文字、底線；選定的區段畫粗底線，沒有選定時畫游標。只用來顯示，不參與任何判斷（AGENTS.md §3）。
+  - 限制：ImGui 不能把文字暫時插進輸入框，組字疊在游標後面，會蓋住後面的字。
+  - Windows：ui_editor 沒開 `imeComposition`，SDL 不送組字事件，組字照舊由輸入法自己的視窗顯示。
+- 建置：綁定在建置有 `GYO::InputBackendSDL` 時才建；ui_editor 的 `project.json`（gui）加 `SDL_INPUT` 元件；`tests/framework` 的設定時檢查改成「有 SDL renderer、SDL input、ImGui 卻沒有綁定」才失敗。
+- Design Invariants：framework DI 2 拿掉「不連結 `GYO::Input`」，寫明 Engine 的能力（含 input）對 framework 開放，ImGui 綁定經 input backend 讀文字與組字；ui_editor DI 1 拿掉「不連結 `GYO::Input`」。使用者核准。
+
+### 守衛的變更（AGENTS.md §14.4，使用者核准）
+
+framework 的守衛（`tests/framework/framework_dependency_guard.py`）：
+
+1. 守的性質：framework 不連結遊戲、不用 SDL_GPU，只經 Engine 的中立目標碰 SDL（ImGui 綁定連結 Native 層但不寫 `SDL_` 名字）；舊規則另外完全禁止 Engine 的 input。
+2. 放寬：核心與綁定可以 include `engine/input/` 的中立標頭；ImGui 綁定的 CMake 可以寫 `GYO::InputBackendSDL`；核心的 CMake 寫 `GYO::InputBackendSDL` 仍失敗，但從硬錯變成可列白名單的軟錯（和其他新目標相同；白名單數量要相等、只能變少、`v8-framework-invariants` 後清空）。
+3. 收緊：沒有。
+4. 仍守住的：遊戲標頭與登錄名、SDL_GPU、綁定裡的 `SDL_` 名字、input 的 Native 標頭（核心裡是任何白名單都抵銷不了的硬錯，各綁定裡也失敗）、ImGui 綁定寫 `GYO::InputBackendSDLNative`、JSON 綁定寫 `GYO::InputBackendSDL`、核心寫 `GYO::Input`。
+5. 根據：使用者的原則（上方）。
+
+ui_editor 的守衛（`tests/ui_editor/ui_editor_dependency_guard.py`）：
+
+1. 守的性質：editor 不連結遊戲、不用 SDL_GPU，依存都在正面清單。舊規則另外禁止 include `engine/input/`。
+2. 放寬：`tools/ui_editor` 的原始碼可以 include `engine/input/`。
+3. 收緊：沒有。
+4. 仍守住的：遊戲標頭、SDL_GPU、目標的正面清單（editor 的 CMake 寫 `GYO::Input` 或 `GYO::InputBackendSDL` 仍失敗）。
+5. 根據：同上。
+
+檢驗：
+
+- 守衛自測全部通過；對 repo 的掃描乾淨。
+- 守衛突變 9／9 killed：綁定不准 input backend、核心或 JSON 綁定准它、核心准 input 的 Native 標頭或讓它可列白名單、不查 SDL_GPU、綁定准 `SDL_` 名字、editor 准 `GYO::Input`、editor 恢復舊的禁令。
+- 審查者用新舊兩版守衛跑同一批合成的樹，並做 1500 份隨機樹的差異比對：沒有「以前通過、現在失敗」的情況；所列的每一條都成立。審查者另外找到一處我漏列的放寬：核心 include input 的 Native 標頭，從任何白名單都抵銷不了的硬錯變成可列白名單的軟錯。這不是本意，已改回硬錯，並補了測試與突變（m9）。
+- 已知且接受：ui_editor 的連結封閉經由 ImGui 綁定（PRIVATE、靜態）帶進 `GYO::Input`；editor 的守衛只看原始碼文字，不查連結封閉，DI 1 的文字已允許。
+
+### 回歸測試與突變
+
+- `tests/framework/ImGuiShellTests.cpp` 的 I10：ImGui 的真實幀（SDL 的 dummy 視訊驅動與軟體渲染器），輸入框編輯中時注入組字事件，檢查最上層清單畫了組字、畫在輸入框的範圍內；再分別注入確定文字、空的組字、失焦、輸入框不再繪製（ImGui 結束編輯），檢查組字消失。
+- Red：拿掉繪製時，I10 在 `run.vertices[6] > 0` 失敗。Green：恢復後 I10 的 4 個子情境 24 個斷言全過，其他 ImGui 外殼測試照常通過。
+- 突變 6／6 killed：確定不清、失焦不清、ImGui 停止編輯不清、畫錯位置、沒接位置回呼、沒畫。
+- I10 的標籤是 `editor`，L1 的 CI 只跑 `cpu|shader`，所以只在本機跑。
+
+### L3（macOS，2026-11-01，使用者操作）
+
+- 組字顯示：使用者確認沒問題。log（`macos-ja-composition.log`）：「日本語字幕」選定後確定，確定前沒有 Return 的 KEY_DOWN，確定後的 Return 照常交給 ImGui。
+
 ## 證據
 
 使用者的 Mac，主 checkout 的 `build/evidence/tool-v8-ui-editor-ime/`：
@@ -133,11 +185,13 @@ SDL 上沒找到 macOS 的同類回報；最接近的是 SDL2 時代的 Windows 
 - `macos-ja-hold-enter.log`：新外殼的診斷版，加 `GYO_DIAG_IME_HOLD_ENTER=1`。
 - `diag-hold-enter.diff`：診斷改動。只在工作區用過，已還原，沒有 commit。
 - `imgui-order-probe/`：ImGui 探測程式與輸出。
+- `macos-ja-patched.log`、`macos-ja-composition.log`：修補版與組字顯示版的 L3。
+- `guard-change/`：守衛變更的說明（給審查者的版本）、diff、突變腳本與輸出、審查者的對照腳本。
+- `composition/`：組字顯示的突變腳本、Red／Green 的 ctest log。
 
 ## 範圍的限界
 
 - Windows 的實機沒做（修補不改 Windows 的程式碼，L3 只確認沒有回歸）。
 - 診斷版只錄了一次（3 次組字）。
 - 修補後，組字中除了輸入法以 `doCommandBySelector:` 交回的鍵，其他鍵都不送按下。Enter 以外的鍵（Esc、方向鍵、Tab）在實機上的行為沒有逐一測。
-- 組字中看不到假名（ImGui 不畫組字）不在這次的範圍。
 - 沒有向 SDL 上游回報（對外發佈，要使用者同意）。
