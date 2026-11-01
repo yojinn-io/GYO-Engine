@@ -39,6 +39,22 @@
 - **K4 瞄準點是軀幹**：K1～K3 裡所有命中的決定，部位都是 BODY。這不是新的判定：分析器只接受 25000，已經隱含這一點。
 - 時間檢查以外的失敗，原因落在本宣告以外的程式時，停下回報。
 
+## 試行 1 的結果與重跑的宣告（2026-11-01，結果出來後、重跑之前寫）
+
+試行 1（Intel Mac，證據在主 checkout 的 `build/evidence/v8-real-match-repair/`）：
+
+- K1：**通過**，25／25 一次通過，沒有重跑。
+- K2：**不成立**，記錄保留。只失敗在時間檢查：`Client runtime gap/dropped time is not a matched normal LifeRespawn or session-start seed clamp`、`Clean Match runtime gap/dropped time`。動作 87／87、死亡與重生 2／2 都正確。原因分不出是環境還是實作；同一條 Match 時間檢查在這批改動之前（合成模型的 clean-60）也失敗過一次。
+- K3：**不成立**，記錄保留。主迴圈與 life-cleanup 通過；failure probe 因為 `run_network.py` 沒有把 `--arena` 傳給它而失敗（本批的實作錯誤，已補上這一個參數）。
+
+使用者選「新宣告重跑」。重跑的判定已核准（`v8-product-real-match-rerun-approve`，「都核准」；同時核准 W2 的 §14.4 審查改用 Fable 5.1 重做，PR #129 的規則）。判定（看到結果後不改）：
+
+- **K2′**：`run_gameplay_soak.py` 短模式（預設 2 輪）連續跑 3 次，**3 次都要整體通過**，時間檢查也算。比原本的 K2（1 次通過）嚴格，沒有寬鬆面。
+  - 任一次失敗就停下回報，不再重跑。之後改走「先查時間缺口」：先建檢測，再判斷。
+- **K3′**：套上修正後，`run_network.py` 預設模式跑 1 次，要整體通過。失敗就停下回報。
+- K1 不重跑：試行 1 之後，`gameplay_action.hpp` 與 action probe 都沒有改。
+- 跑次之間不跑其他重負載（建置、CTest），開始前記下 `uptime` 的負載。
+
 ## 會改判定的既有測試
 
 | # | 測試 | 改法 | 寬鬆面 |
@@ -47,14 +63,22 @@
 | W2 | `run_network.py` 隔離啟動的前提 | 依 `v8-product-real-match-isolation` | **有**，見下面的 1～5 |
 | W3 | `gameplay_action.hpp:167` 對目標的 pitch 0 | 依 `v8-product-real-match-aim` 改瞄準；`gameplay_evidence.py` 與 soak 的分析器不動 | 無（只動 probe，判定不變） |
 
-### W2 的 1～5（AGENTS §14.4，選 (a) 時）
+### W2 的 1～5（AGENTS §14.4，(a)，照 Fable 5.1 審查修正後）
 
-1. **守的性質**：部署好的 Match 不依賴產品的 SDL DLL 和 asset catalog，從執行檔所在的位置找到自己的預設 arena。
-2. **寬鬆面**：Match 需要 asset catalog 時，以前會判失敗，以後判通過。
-3. **收緊面**：暫存資料夾只放 Match 自己的內容資料夾，缺任何一個 Match 要讀的檔，仍然失敗；SDL DLL 仍然不放。
-4. **寬鬆面的性質由誰守**：「Match 需要內容」是 protocol-v9 §4.4 核准的設計，不再是要守的性質。內容錯誤時讀者會拒絕（D1、D3 的讀者測試），`match_main.cpp` 載入失敗就以 1 結束。但「部署的 Match 少了內容檔就停止」有沒有執行檔層級的測試，我還沒查到；開工時確認，沒有就在 W2 的突變檢查裡補上。
-5. **根據**：本宣告「事實」第 2 點；證據在 `v8-hitbox-shot-wire-stop/network.out`。
-- 照 §14.4，承認前要做突變檢查（暫存資料夾少一個內容檔要失敗、放進 SDL DLL 的檢查仍在），並由另一位審查者用實際的資料核對 1～5。
+**已承認**（`v8-product-real-match-w2-approve`，2026-11-01，使用者：「承認並 commit」）。
+
+1. **守的性質**：部署好的 Match 只需要它的執行檔和旁邊的 `assets/object_fps_pvp`。它不讀產品 bin 裡這個資料夾以外的東西、不讀工作資料夾、不需要 SDL；預設 arena 從執行檔的位置找。舊的「也不需要 asset catalog」不再是要守的性質（protocol-v9 §4.4）。
+2. **寬鬆面**：Match 需要 asset catalog 或 movement rules 時，以前判失敗，以後判通過。這是有意的：pv8 起讀 `movement_rules.json`，pv9 起經 `ContentManifest`＋catalog 讀玩家內容（`match_main.cpp:118-132`、`PlayerAnimationContent.cpp:76-86`）。
+3. **收緊面**：
+   - 只複製 `assets/object_fps_pvp`，放在暫存資料夾的 `match/` 子資料夾，工作資料夾裡沒有資產；SDL DLL 仍然不放。
+   - 新增執行檔層級的檢查：少了 `movement_rules.json` 的副本必須以 1 結束。這是第一個執行檔層級的「少內容就停止」檢查。
+   - 其他內容檔（catalog 讀的檔）少了也會失敗，只是較晚，在 `wait_for_match_ready` 時失敗；由下面的突變證明。
+4. **寬鬆面的性質由誰守**：「Match 需要內容」是設計，不再守。內容錯誤由 D1、D3 的讀者測試守；少了內容就停止，由 3 的新檢查和突變守。
+5. **根據與證據**：
+   - 「事實」第 2 點；舊的失敗在 `v8-hitbox-shot-wire-stop/network.out`。
+   - 審查：Sonnet 5.5（額外意見）找到兩點，複製整個 `assets`、工作資料夾有資產，已修。Fable 5.1（§14.4 的審查者，PR #129 的規則）逐項核對，結論是相符，只有 1 的措辭與 3 的範圍要修，已照改。
+   - 突變：副本少了 `characters/player/hitbox.json` 時，`run_network.py` 在啟動時失敗（`cannot read file … hitbox.json`），killed；證據在 `v8-real-match-repair/mut-no-hitbox.out`。
+- 審查者也指出：預設 arena 的檢查啟動的是建置位置的執行檔，它證明的是「不用 argv[0]、不用工作資料夾」，不是隔離。這和以前相同，本批沒有改變它。另一個留下的缺口：Match 如果改成少了動畫或形狀時用預設值繼續跑，執行檔層級只有 movement rules 的檢查會發現不了。
 
 ## 突變
 
