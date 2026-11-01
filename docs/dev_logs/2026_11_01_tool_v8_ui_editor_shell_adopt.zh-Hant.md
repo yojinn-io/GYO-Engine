@@ -5,7 +5,7 @@
 - 檔位與模型：実装者 Opus 5.5／high（主會話）、審査者 Opus 5.5／high、検証者 Fable 5.1／high。這批屬上段，因為它改 Design Invariants 與守衛，並接新的公開介面。
 - 估時 5～7 h。從事前宣告核准到結果寫完約 20 分鐘（17:14～17:31，牆上時間），不含兩個子 agent 的等待時間（各約 3 分鐘）。
 
-**狀態：** 程式、測試、突變、審查、檢驗都完成；守衛的放寬已核准。**L3 實機還沒做**，做完後在本檔補上結果。
+**狀態：** 程式、測試、突變、審查、檢驗都完成；守衛的放寬已核准。**L3 實機（macOS）發現疑似回歸，停下調查**（見「L3」）。
 
 相關文件：[事前宣告與結果](../tools/plans/v8/assets.md)「framework-rework-line 的事前宣告」、[架構整改計畫](../architecture/plans/framework-rework/PLAN.md) §2.2 與 §2.4、[platform-sdl.md](../architecture/platform-sdl.md)「Path dialogs」與 Design Invariant 10、[ui_toolchain.md](../ui_toolchain.md) ui_editor 的 Design Invariants。
 
@@ -45,3 +45,13 @@
 - 真實 OS 對話窗的回呼執行緒；
 - Linux portal 要 pump；
 - 平台或父視窗銷毀時的行為。
+
+## L3（macOS，2026-11-01 19:29，使用者操作）
+
+- 第 1～3 項正常：開檔、取消、匯出到非 ASCII 資料夾。
+- 第 4 項：選資產資料夾時，畫面提示字型載入錯誤。錯誤全文待補；畫面上的訊息沒有印到終端機。
+- 第 5 項：沒做，包括對話窗開著時按 Stop waiting、關主視窗。
+- 第 6 項：日文輸入法會出現選字，但不穩定，選字後的文字進不了介面。
+  - 終端機有一行 macOS 輸入法框架的 log：`error messaging the mach port for IMKCFRunLoopWakeUpReliable`。
+- 事件路徑與 ImGui 的設定比對結果：新舊宿主都經 `SdlPlatform::PumpEvents` 把原生事件交給 `ImGui_ImplSDL3_ProcessEvent`；`ImGui_ImplSDL3_InitForSDLRenderer`、`NavEnableKeyboard`、ini 與 log 的設定都相同。
+- 還不知道第 6 項是這次的回歸，還是既有的問題。依 AGENTS.md §14 停下，不修正，先和改動前的版本對照。
