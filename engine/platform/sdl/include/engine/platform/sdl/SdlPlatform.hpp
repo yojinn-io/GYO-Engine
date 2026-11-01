@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Result.hpp"
@@ -151,6 +152,42 @@ private:
     std::unique_ptr<Node> node_;
 };
 
+// System path dialogs (docs/architecture/platform-sdl.md, "Path dialogs").
+// What the request asks for comes from the caller; the platform reads none of
+// it for a decision (Design Invariant 9).
+enum class PathDialogKind : std::uint8_t {
+    OpenFile = 1,
+    SaveFile,
+    OpenFolder,
+};
+
+// A file type the dialog offers: pattern is extensions separated by ';'
+// ("json", "wav;wave") or "*". UTF-8.
+struct PathDialogFilter final {
+    std::string name;
+    std::string pattern;
+};
+
+struct PathDialogRequest final {
+    std::uint64_t tag{};                    // the caller's; handed back unchanged
+    PathDialogKind kind{PathDialogKind::OpenFile};
+    std::vector<PathDialogFilter> filters;  // unused for OpenFolder
+    std::string defaultLocation;            // UTF-8; empty: the OS chooses
+};
+
+enum class PathDialogOutcome : std::uint8_t {
+    Chosen = 1,
+    Cancelled,
+    Failed,  // no dialog could be shown, or the answer could not be kept
+};
+
+struct PathDialogAnswer final {
+    std::uint64_t tag{};
+    PathDialogOutcome outcome{PathDialogOutcome::Failed};
+    std::string path;   // UTF-8, the first chosen path; Chosen only
+    std::string error;  // Failed only; may be empty
+};
+
 class NativeAccess; // defined only by the native layer (SdlPlatformNative.hpp)
 class SdlPlatform;
 
@@ -233,6 +270,22 @@ public:
     // Waits for pending window operations; false when it timed out or the
     // platform cannot tell.
     [[nodiscard]] bool Sync();
+
+    // Asks the OS for a path dialog over this window and returns without
+    // waiting for the choice: an operation (Design Invariant 7). The kind is
+    // one of the three and every filter has a pattern (GYO_ASSERT). Answers
+    // come later from TakePathDialogAnswers with the request's tag: one when
+    // the OS answers once; a Failed answer may be followed by one more (SDL on
+    // Windows falls back to another dialog); none when the OS never answers
+    // (Design Invariant 10). SDL has no way to cancel a dialog, and on Linux an
+    // answer may need the program to keep pumping events. Throws
+    // std::bad_alloc only before the OS has the request.
+    void ShowPathDialog(PathDialogRequest request);
+    // The answers that arrived since the last call, in the order they
+    // arrived, each handed out once. Main thread (GYO_ASSERT). Throws
+    // std::bad_alloc when out of memory; the answers then stay for the next
+    // call.
+    [[nodiscard]] std::vector<PathDialogAnswer> TakePathDialogAnswers();
 
     // Observes this window's events (ObservedEventKind) as they are queued.
     // Main thread; allowed inside an observer, never inside a live frame or a
