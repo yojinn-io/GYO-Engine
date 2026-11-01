@@ -63,6 +63,149 @@
 - 和腳本的整檔輸出不比位元組（只差在抖動，1～2 LSB）。四個現有音效的原檔已找不到，不重產。（更正 2026-11-01：原檔在 commit `30b36bdb`，見上方「觀察到的壓力」。）
 - 試行與重試：測試是決定性的，不重試；失敗就停下回報。
 
+## framework-rework-line 的事前宣告（2026-11-01，草稿，待核准）
+
+前提：架構的 PR A（PR #127，merge `3954f7e7`）已合併；本分支已含它（`9e2002e8`）。新介面依架構會話的通知與 `docs/architecture/platform-sdl.md`「Path dialogs」、`docs/architecture/io.md`「User files」、`framework/include/gyo/framework/`、`framework/bindings/`。舊件在 PR B 前都還在，所以每批可以單獨切換。
+
+順序：T1＋T3a → T2 → T3b，一條 PR。每批結束時寫 dev_log 並更新 HANDOFF。
+
+### T1＋T3a：ui_editor 改用 Engine 的選擇窗與新外殼（high，5～7 h）
+
+改動：
+- `Main.cpp` 改用 `RunHeadlessShell`：命令列錯誤時印 help，回 2。GUI 在 body 裡呼叫 `RunImGuiShell`，`options.platform` 填標題、1600×900、可調整大小。
+- `EditorClient` 改實作 `ImGuiShellClient`；`SdlPathDialogs` 改收 `SdlPlatform&`。
+- 資產預覽用 `NativeRenderer(context.renderer)`；CMake 把 `GYO::ToolFrameworkGui` 換成 `GYO::ToolFrameworkImGui`，另加 `GYO::PlatformSDL`、`GYO::RenderBackendSDLNative`。
+- `PathDialog.hpp` 不再 include framework。
+
+「答案不來」的恢復規則（提案，要你決定）：
+- 每次 Show 給一個請求序號，tag＝序號；用途對照放在 ui_editor 的 adapter，是純函式，有單元測試。
+- 只接受目前請求的答案：
+  - 等待中，畫面顯示「Stop waiting」。按下後放棄這個請求、重新啟用 Browse 與選單；之後才到的答案丟掉，並記一行到 Diagnostics。
+  - Failed 照舊開手動輸入框，但這個請求仍是目前請求。這樣 Windows 新式對話窗失敗後改開舊式時，舊式選的路徑仍會套用。
+  - Chosen 或 Cancelled 結束請求；同一請求之後再來的答案丟掉。
+- 不用逾時：對話窗可以合法地開很久。
+
+判定（都通過才算完成）：
+1. L1 的 ci-windows、ci-linux、ci-macos 三列綠；`gyo_ui_editor.*` 全部通過，含下列新測試（用 `ScriptedDialogs`）：
+   - 放棄後才到的答案被丟掉；
+   - Failed 之後的 Chosen 會套用；
+   - 新請求讓舊答案失效；
+   - 同一請求的第二個答案被丟掉；
+   - 用途↔tag 對照的往返。
+2. `EditorCliTests` 的結束碼不變：命令列錯誤 2、help 0、validate 的 3／4。
+3. L3 實機（你操作；Windows 優先，macOS 也做）：
+   - 開檔、匯出、選資料夾各選一次；
+   - 取消；
+   - 非 ASCII 路徑；
+   - 對話窗開著時關視窗；
+   - 對話窗開著時按 Stop waiting，再在對話窗裡選檔：不套用，Diagnostics 有一行；
+   - 字型與輸入法的文字欄位照舊。
+4. 範圍的限界（從架構批帶來，CI 量不到）：真實 OS 對話窗的回呼執行緒、Linux portal 要 pump、平台或父視窗銷毀時的行為。只靠第 3 項的實機觀察；Linux 沒有桌面機，這次不測。
+5. 突變（全部預期 killed；file 與 find 在實作後、執行前寫進 `docs/tools/plans/v8/scripts/framework_mutations.json`）：
+   - 拿掉序號檢查；
+   - Failed 也放棄請求；
+   - Stop waiting 不清等待；
+   - 用途對照錯位；
+   - 命令列錯誤不回 2；
+   - `ui-guard-native-target` 改寫成 `gyo_ui_editor` 另連 `GYO::PlatformSDLNative`。
+
+Design Invariants 的改寫（要你同意）：
+- `docs/ui_toolchain.md` 的 ui_editor DI 1，改成：視窗與 ImGui 的 SDL 後端來自 framework 的 ImGui 綁定；選擇窗來自 Engine 平台層（`GYO::PlatformSDL`）；資產預覽建貼圖用原生 renderer（`GYO::RenderBackendSDLNative`），這是 platform-sdl Replacement Criteria 2 的例外，到 Engine 有貼圖 API 為止。
+- DI 2 的「framework's host」改成「framework's ImGui binding」。
+
+守衛變更（§14.4，Design Invariants 的守衛，要你核准）：
+1. 守的性質：ui_editor DI 1，即不連遊戲、`GYO::Input`、SDL_GPU，依賴只走正向清單。
+2. 緩的面：
+   - `GYO::PlatformSDL`、`GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative` 從失敗變成通過；
+   - 後者讓 ui_editor 直接拿到 SDL renderer handle。
+3. 緊的面：`GYO::ToolFrameworkGui` 從通過變成失敗。
+4. 緩了以後，性質由這些判定繼續守：
+   - include 仍禁止 `engine/input/`；
+   - 目標仍是正向清單，沒有遊戲、Input、GPU；
+   - platform-sdl 的 G3 configure 檢查限制 `*Native` 只能 `$<LINK_ONLY:>` 外傳；
+   - platform-sdl.md 的 RC 2 把例外限定在「ImGui 綁定與 ui_editor 的資產預覽」。
+5. 根據：架構計畫 PLAN §2.4 與 §5、platform-sdl.md RC 2；突變結果與別的審查者的核對結果，在請你核准前補上。
+
+### T2：兩個工具改用 engine/io（medium～high，2～3 h）
+
+改動：
+- ui_editor 的 `DocumentSession`：
+  - `ReadTextFile` 改成 `ReadAllBytes`，`maxBytes`＝64 MB；
+  - `ProbeFileStamp` 改成 engine/io 的同名函式，同樣 64 MB；
+  - `WriteTextFileAtomically` 改成 `WriteFileAtomically`，`createParentDirectories = true`，舊的也會建父目錄；
+  - `IsPathWithin` 改成 `IsNativePathWithin`；
+  - `PathExists` 改成 `Exists`；
+  - `AbsolutePath` 照舊用 framework 核心的（D-2）。
+- audio_editor：
+  - `SoundExport` 與 `Main` 的 `info` 裡兩份讀檔迴圈，改成 `ReadAllBytes`，`maxBytes`＝64 MB；
+  - `WriteReplacing` 改成 `WriteFileAtomically`，`createParentDirectories = true`，拿掉自己的 `CreateDirectories`；
+  - 暫存檔名會從 `<path>.gyo-tmp` 變成 engine/io 的名稱；
+  - 「輸出不得蓋掉來源或 catalog」的檢查照舊用 `Os::Files::ResolvedPath`。
+
+行為的變化（寫進 dev_log）：
+- 兩個工具讀的檔案上限都變成 64 MB；超過時回讀檔錯誤。原本沒有上限。以 48 kHz 立體聲 WAV 算，64 MB 約 3.9 分鐘（24-bit）或 5.8 分鐘（16-bit）。這是要你確認的一項；要更長的素材時，audio_editor 可以傳更大的上限。
+- ui_editor 的匯出判定有 4 種情況答案改變（`tests/framework/UserFilesParityTests.cpp` 的輸出）：
+  - 根目錄以分隔符結尾；
+  - 根目錄是連結；
+  - 根目錄的大小寫不同；
+  - 連結後面接 `..`。
+
+判定：
+1. L1 三列綠；兩個工具的測試照舊通過。
+2. 缺陷依 §14.3 處理：只給 `--asset-catalog`（根目錄 `.`）時，匯出到資產根目錄應被拒絕。
+   - 先用新測試在舊程式上確認失敗（Red），存紀錄；換成 engine/io 後通過（Green）。
+3. audio_editor 的輸出位元組與基準相同：
+   - 基準：使用者的 Mac，主 checkout `build/evidence/tool-v8-audio-editor-edit/baseline/sha256.txt`，5 個 fixture；
+   - 本批的比對結果存到 `build/evidence/tool-v8-framework-rework/T2/`。
+4. 突變（全部預期 killed）：
+   - ui_editor 的包含判定恆回 false：第 2 項的測試失敗；
+   - ui_editor 不建父目錄：現有的匯出到新子目錄測試失敗，若沒有這個測試就補上；
+   - audio_editor 不建父目錄：CLI 轉換到巢狀路徑失敗；
+   - audio_editor 的 CMake 另連 `GYO::PlatformSDL`：守衛失敗，證明正向清單仍有效。
+
+守衛變更：
+- ui_editor 的守衛不變：已允許 `engine/` 與 `GYO::Engine`。
+- audio_editor（§14.4，Design Invariants 的守衛，要你核准）：
+  1. 守的性質：audio_editor DI 1，即不連遊戲、`GYO::Input`、SDL_GPU；播放只走 `GYO::Audio`。
+  2. 緩的面：include 的 `engine/io/` 與目標 `GYO::Engine` 從失敗變成通過。`GYO::Engine` 連 base、math、time、io、asset，不連 SDL、Input、GPU（`engine/CMakeLists.txt`）。
+  3. 緊的面：無。
+  4. 緩了以後，性質由這些判定繼續守：目標仍是正向清單；include 不允許 `engine/input/`、`engine/render/`、`engine/platform/`。
+  5. 根據：PLAN §2.3 與 §5；突變與審查結果在請你核准前補上。
+
+### T3b：audio_editor 改用 catalog 結構 API、JSON 綁定與無視窗外殼（high，2～3 h）
+
+改動：
+- `SoundExport` 改 include `gyo/framework/json/CatalogText.hpp`，呼叫新的 `RegisterAsset(text, RawCatalogEntry, {})`。
+- 核心 CMake 連 `GYO::ToolFrameworkJson`。
+- `Main` 改用 `RunHeadlessShell`；執行檔自己具名 `GYO::ToolFramework`。
+
+行為的變化：更新既有條目時，保留它的其他欄位與排版（D-6）。舊的會丟掉其他欄位。
+
+判定：
+1. L1 三列綠；`gyo_audio_editor.cli` 的 `convert_taken_path` 仍回 4；其他結束碼不變。
+2. 新測試：重新登錄已有額外欄位的條目時，額外欄位留下。
+3. 輸出位元組與基準相同（同 T2 的第 3 項）。
+4. 突變（全部預期 killed）：
+   - 政策設 `allowSharedPath = true`：`convert_taken_path` 不再回 4；
+   - `ae-guard-json-target` 改寫成 CMake 另連 `nlohmann_json::nlohmann_json`：守衛失敗。
+
+Design Invariants 的改寫（要你同意）：audio_editor DI 3 的「unique ids」改成「catalog 內唯一；跨 catalog 與 shader 重疊在載入時由 ContentManifest 判定」。
+
+守衛變更（§14.4，要你核准）：
+1. 守的性質：DI 1 與 DI 3，即 catalog 只經 framework 寫入，工具不自己解析 JSON。
+2. 緩的面：目標 `GYO::ToolFrameworkJson` 從失敗變成通過。
+3. 緊的面：無。
+4. 緩了以後，性質由這些判定繼續守：
+   - `nlohmann_json` 仍不在清單；
+   - JSON 綁定自己的守衛只准它具名 nlohmann。
+5. 根據：PLAN §2.5 與 §5。
+
+`-edit` 的工程檔要不要讓 audio_editor 自己連 nlohmann：T3b 用不到，改到 `-edit` 開工、設計工程檔時決定。
+
+### §14.4 的別的審查者
+
+依 `agents/effort-gearbox.md`（#129），審查者用 Fable，比主會話的 Opus 強，要先問你。只核對 1～5 的記述與突變結果，不改程式。
+
 ## 實作順序（提案）
 
 ```text
