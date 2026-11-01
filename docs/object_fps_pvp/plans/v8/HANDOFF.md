@@ -127,6 +127,7 @@
 | `v8-product-real-match-w2-approve` | （2026-11-01）承認 W2（`run_network.py` 的隔離啟動）的放寬：Match 需要 catalog 與 movement rules 時改判通過；收緊面為只複製 `assets/object_fps_pvp`、工作資料夾無資產、少了 movement rules 要以 1 結束 | 「承認並 commit」 |
 | `v8-product-hit-presentation-declaration-approve` | （2026-11-01）核准[事前宣告](v8-product-hit-presentation-declaration.md)：`v8-product-hit-clip-by-part` (a) Match 的姿勢模型與 Client 一起依 `lastHitPart` 換受擊 clip（頭 → `hit_head`）；`v8-product-hit-leg-clip` (a) 腿用胸口受擊；`v8-product-hit-gui-aim` (a) GUI 驗收工具瞄軀幹、分析器不動；模型表：P1、P2 皆上段，Opus 5.5，P1 審查 xhigh | 「照建議核准」 |
 | `v8-product-hit-gui-aim-l2` | （2026-11-01）P2 的 G5、G6 只能在 Linux 桌面（X11）跑：移到 `v8-product-hitbox-acceptance` 的 Linux L2，腳本在那一批準備；P2 的程式判定前不 commit；HUD 檢查的失敗另立一項，先建檢測 | 「移到 Linux L2」 |
+| `v8-input-ui-adapter-approve` | （2026-11-01）核准[任務卡](input-ui-adapter-card.md)：`v8-input-ui-adapter-home` (a) adapter 放 framework 核心；`v8-input-ui-adapter-pvp-build` (a) 產品在登錄資料宣告使用 framework、`GyoBuild.cmake` 改成「有工具或有產品宣告」（IU-3 開工前照 §3 提出 Delta）；`v8-input-ui-adapter-pr` (a) 交 framework 整改線決定（PR B 之後另開）；模型表照表 | 「照建議核准」 |
 
 ## 規劃紀錄（記錄器）
 
@@ -163,7 +164,7 @@
 
 ## 未結事項
 
-- **任務卡 `v8-input-ui-adapter`（2026-11-01 開卡，草稿，等 4 項決定）**：[input-ui-adapter-card](input-ui-adapter-card.md)。Input→Ui 轉換兩份、編輯器預覽用 `imgui_internal`、預覽沒有組字，三件事串成 IU-1（framework 整改線）→ IU-2（工具線）、IU-3（本線）。使用者指示由本會話開卡；完成後通知架構會話。
+- **任務卡 `v8-input-ui-adapter`（2026-11-01 開卡，已核准 `v8-input-ui-adapter-approve`；IU-1 先做，由 framework 整改線在 PR B 之後另開 PR）**：[input-ui-adapter-card](input-ui-adapter-card.md)。Input→Ui 轉換兩份、編輯器預覽用 `imgui_internal`、預覽沒有組字，三件事串成 IU-1（framework 整改線）→ IU-2（工具線）、IU-3（本線）。使用者指示由本會話開卡；完成後通知架構會話。
 - **pv9 的回歸（2026-11-01，entity-line 回報、本會話在 master 上確認）**：`MatchRuntimeHost.cpp` 逐出玩家時只刪 snapshot 的 `players` 與 `combat`，沒有刪 `animation`（A2 `4cdb5bad` 加了 animation，逐出路徑沒有跟上）。Gateway 的 `adapter.go` 見到 animation 數 ≠ players 數就 `runtimeFailed`，整個房間斷線。使用者已決定由 entity-line 的缺陷批 `v8-product-evict-animation-orphan` 修（排在 split 前、同一個 entity-line PR）。本線不修。
 - **pv10（⑤）的協議規劃要納入 entity-line 的三件事**（`docs/object_fps_pvp/entity-model.zh-Hant.md` §8，分支 `claude/gifted-khorana-d38ac5`，未推送）：
   1. snapshot 改成「所有有該元件的實體」，每個收件者一份，Match 依 1200 B 預算選實體。pv9 契約最大 40＋211N B，N≥6 就超過。
