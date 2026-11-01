@@ -137,6 +137,72 @@
         "tests/audio_editor/audio_editor_dependency_guard.py"
       ],
       "expect": "names GYO::PlatformSDL"
+    },
+    {
+      "id": "ui-guard-sdl-target",
+      "what": "ui_editor's preview names SDL3 directly instead of Engine's native target",
+      "file": "tools/ui_editor/CMakeLists.txt",
+      "find": "        gyo_ui_editor_core\n        GYO::RenderBackendSDLNative\n",
+      "replace": "        gyo_ui_editor_core\n        GYO::RenderBackendSDLNative\n        SDL3::SDL3\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "names SDL3::SDL3"
+    },
+    {
+      "id": "ui-guard-sdl-outside-native",
+      "what": "An editor file outside the native renderer's files includes SDL",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "#include \"engine/base/Log.hpp\"\n",
+      "replace": "#include \"engine/base/Log.hpp\"\n#include <SDL3/SDL.h>\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "EditorApp.cpp: includes SDL3/SDL.h"
+    },
+    {
+      "id": "ui-guard-native-list-ignored",
+      "what": "The ui_editor guard lets SDL_ names through in every file",
+      "file": "tests/ui_editor/ui_editor_dependency_guard.py",
+      "find": "            if relative not in NATIVE_FILES:\n",
+      "replace": "            if False:\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ui_editor",
+        "-p",
+        "test_ui_editor_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_sdl_outside_the_native_files_fails"
+    },
+    {
+      "id": "ae-guard-sdl-symbol",
+      "what": "The audio editor uses an SDL name of its own",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "constexpr std::string_view kSoundType = \"sound\";",
+      "replace": "constexpr std::string_view kSoundType = \"sound\";\n[[maybe_unused]] constexpr unsigned kOwnSdl = SDL_INIT_AUDIO;",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "uses SDL_INIT_AUDIO"
+    },
+    {
+      "id": "ae-guard-native-include",
+      "what": "The audio editor includes an Engine native-layer header",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "#include \"engine/io/fs/NativeFileSystem.hpp\"\n",
+      "replace": "#include \"engine/io/fs/NativeFileSystem.hpp\"\n#include \"engine/platform/sdl/SdlPlatformNative.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "includes engine/platform/sdl/SdlPlatformNative.hpp"
     }
   ]
 }

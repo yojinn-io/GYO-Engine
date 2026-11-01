@@ -13,9 +13,14 @@ Owner: `audio_editor` (`tools/audio_editor/`).
 A change against any item below is an Architecture Delta that needs the user's
 agreement, however small (AGENTS.md section 3). So is changing this section.
 
-1. The editor links no game, no `GYO::Input` and no SDL_GPU. Playback goes only
-   through `GYO::Audio` and its SDL backend. Guard: the editor's dependency
-   guard, a positive list of includes and targets.
+1. The editor links no game and names no other product. It may use any
+   Engine module, as an editor depends on the engine; what a game and a tool,
+   or two tools, both need comes through the framework first, even where
+   Engine has it, and the framework calls Engine. Playback goes through
+   `GYO::Audio` and its SDL backend; the editor itself includes no `SDL3/`
+   header, calls no `SDL_` function and names no SDL or `*Native` target.
+   Guard: the editor's dependency guard, a positive list of targets and
+   include prefixes.
 2. The output follows the format the engine publishes. The sample rate is taken
    from `GYO::Audio` (`kSampleRate`, `engine/audio/include/engine/audio/AudioFormat.hpp`);
    the editor keeps no copy of that number. The sample encoding is whatever the
