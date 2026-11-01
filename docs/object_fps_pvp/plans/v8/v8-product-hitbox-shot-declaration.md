@@ -128,10 +128,14 @@ pv9 的 PR 在 S3 之後開。
 
 ### J6：真的 Match 依部位判定，wire 帶得到
 
+> **2026-11-01 修改（`v8-product-hitbox-shot-j7-split`）**：行程內的 IPC 測試抓不到「Match 執行檔仍傳合成模型」，J6 改成跨行程：真 Gateway、真 Match 執行檔、network probe 的部位模式，瞄準點由姿勢模型算出。判定照下面兩條，再加上 Client 收到的 decision 也是同一個部位與傷害。
+
 - IPC 測試：`MatchRuntimeHost` 用姿勢模型，瞄頭的一發 → runtime 的 `ShotDecision.hit_part`＝HEAD、傷害 50000、`last_hit_part`＝HEAD；瞄腿 → LEG、18750。
 - 這是 LEG 第一次由真的判定產生，經 IPC 送出。Gateway 與 Client 的往返在 leg-wire 已經測過。
 
 ### J7：CI 的真 Match 驗收照常通過
+
+> **2026-11-01 移出 S3（`v8-product-hitbox-shot-j7-split`）**：`run_network.py` 與 `action_probe.py` 在 S3 之前就失敗（pv8 起 Match 要讀內容、life-cleanup 的傷害單位、分析器不容許死亡），也不在 CTest／CI。J7 與 W1、W2 移到 `v8-product-real-match-acceptance-repair`，另寫宣告。
 
 - `network_main`、`action_main` 等用真的 Match 開槍的驗收，在新的判定下通過。
 - 要改的地方見下表；改法以「瞄準點改成軀幹，保留原本的斷言」為先，因為它們要驗的是生命週期與動作傳送，不是部位。

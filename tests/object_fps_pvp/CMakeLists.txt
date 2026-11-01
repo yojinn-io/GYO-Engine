@@ -301,6 +301,14 @@ add_test(NAME "${GYO_CURRENT_APP}.ingress_cross"
         --output "${CMAKE_CURRENT_BINARY_DIR}/ingress_cross" --go "${GYO_GO_EXECUTABLE}")
 set_tests_properties("${GYO_CURRENT_APP}.ingress_cross" PROPERTIES LABELS "network;go;pvp" TIMEOUT 300
     SKIP_RETURN_CODE 77)
+# v8-product-hitbox-shot J6: a real Gateway, the real Match executable and the network probe; the Match judges
+# the head and the leg on the posed body and the Client receives the parts. Needs Go, like ingress_cross.
+add_test(NAME "${GYO_CURRENT_APP}.hit_part_cross"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/hit_part_cross_check.py"
+        --match $<TARGET_FILE:${match}> --probe $<TARGET_FILE:gyo_${GYO_CURRENT_APP}_network_probe>
+        --arena "${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/pvp_arena.json"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/hit_part_cross" --go "${GYO_GO_EXECUTABLE}")
+set_tests_properties("${GYO_CURRENT_APP}.hit_part_cross" PROPERTIES LABELS "network;go;pvp" TIMEOUT 300)
 # P2-log: the network path's 10-second statistics lines (Gateway, Match, Client worker).
 add_test(NAME "${GYO_CURRENT_APP}.network_statistics"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_network_statistics.py")

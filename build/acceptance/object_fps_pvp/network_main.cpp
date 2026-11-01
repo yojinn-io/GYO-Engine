@@ -1,5 +1,7 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
+#include "RetroFPS/Pvp/PlayerHitbox.hpp"
+#include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
@@ -100,12 +102,14 @@ private:
 };
 int main(int argc,char** argv) {
     try {
-        std::string gateway="127.0.0.1:8080";bool selfTest=false,lifeCleanupOnly=false;
-        std::filesystem::path disconnectReady, arenaPath;
+        std::string gateway="127.0.0.1:8080";bool selfTest=false,lifeCleanupOnly=false,hitPartsOnly=false;
+        std::filesystem::path disconnectReady, arenaPath, contentRoot;
         for(int index=1;index<argc;++index){
             const std::string arg=argv[index];
             if(arg=="--self-test")selfTest=true;
             else if(arg=="--life-cleanup-only")lifeCleanupOnly=true;
+            else if(arg=="--hit-parts-only")hitPartsOnly=true;
+            else if(arg=="--content" && index+1<argc)contentRoot=argv[++index];
             else if(arg=="--gateway" && index+1<argc)gateway=argv[++index];
             else if(arg=="--arena" && index+1<argc)arenaPath=argv[++index];
             else if(arg=="--disconnect-ready" && index+1<argc)disconnectReady=argv[++index];
@@ -182,6 +186,60 @@ int main(int argc,char** argv) {
         const auto idA=a.State().playerId,idB=b.State().playerId;
         Require(a.State().combatRules.has_value() && b.State().combatRules.has_value(),"Welcome lacks authoritative combat rules");
         Require(a.State().snapshot->combat.size()==2 && b.State().snapshot->combat.size()==2,"Snapshot lacks independent combat state");
+        if(hitPartsOnly) {
+            // v8-product-hitbox-shot J6: the real Match judges by part on the posed
+            // body. The aim points come from the same model on the product content,
+            // posed from the target's snapshot; the target stands still at its spawn.
+            Require(!arenaPath.empty() && !contentRoot.empty(),"--hit-parts-only needs --arena and --content");
+            std::string error;
+            const auto arena=Arena::Load(arenaPath,error);
+            if(!arena)throw std::runtime_error(error);
+            const auto hitbox=LoadPlayerHitbox(contentRoot,error);
+            if(!hitbox)throw std::runtime_error(error);
+            const auto pose=LoadPlayerPoseDefinition(contentRoot,arena->bodyHeight,error);
+            if(!pose)throw std::runtime_error(error);
+            const auto model=MakePosedPlayerHitModel(pose,*hitbox);
+            Require(a.State().movementRules.has_value(),"Welcome lacks movement rules");
+            const auto stance=a.State().movementRules->stance;
+            struct Aim{HitPart part;std::uint32_t damage;const char* name;};
+            for(const auto& aim:{Aim{HitPart::Head,50000,"head"},Aim{HitPart::Leg,18750,"leg"}}) {
+                const auto sa=a.State();const auto& snapshot=*sa.snapshot;
+                const auto& self=Player(snapshot,idA);const auto& target=Player(snapshot,idB);
+                const auto combat=std::find_if(snapshot.combat.begin(),snapshot.combat.end(),[&](const auto& c){return c.playerId==idB;});
+                const auto animation=std::find_if(snapshot.animation.begin(),snapshot.animation.end(),[&](const auto& c){return c.playerId==idB;});
+                Require(combat!=snapshot.combat.end() && animation!=snapshot.animation.end(),"Snapshot lacks the target's combat or animation");
+                std::vector<PlayerWorldHitShape> shapes;
+                model->Shapes({*arena,stance,target,*combat,*animation,snapshot.tick},shapes);
+                const auto shape=std::find_if(shapes.begin(),shapes.end(),[&](const auto& s){return s.part==aim.part;});
+                Require(shape!=shapes.end(),"The posed model has no shape of the aimed part");
+                const auto& capsule=std::get<Engine::Math::Capsule>(shape->volume);
+                const auto point=(capsule.segmentStart+capsule.segmentEnd)*0.5F;
+                const Engine::Math::Vec3 eye{self.position.x,self.position.y+StanceEyeHeight(*arena,stance,self.crouched),self.position.z};
+                const auto direction=Engine::Math::Normalize(point-eye);
+                const auto id=a.SubmitShot(snapshot.tick,std::atan2(direction.x,direction.z),-std::asin(direction.y));
+                Require(id.has_value(),"Cannot allocate a hit-part shot");
+                std::optional<ShotDecision> decided;
+                Wait([&]{for(const auto& d:a.Drain().decisions)if(d.actionId==*id)decided=d;return decided.has_value();},"Hit-part shot decision missing");
+                if(!(decided->accepted && decided->hitKind==ShotHitKind::Player && decided->targetId==idB &&
+                     decided->hitPart==aim.part && decided->damage==aim.damage))
+                    throw std::runtime_error(std::string("Hit-part shot at the ")+aim.name+" decided accepted="+std::to_string(decided->accepted)+
+                        " kind="+std::to_string(static_cast<int>(decided->hitKind))+" target="+std::to_string(decided->targetId)+
+                        " part="+std::to_string(static_cast<int>(decided->hitPart))+" damage="+std::to_string(decided->damage));
+                std::cout<<"hit part "<<aim.name<<": part="<<static_cast<int>(decided->hitPart)<<" damage="<<decided->damage<<'\n';
+                Wait([&]{return a.State().snapshot->tick>=decided->resolvedTick+10;},"Authority cooldown did not advance");
+            }
+            // The target's hp as the shooter's snapshot shows it: both hits, nothing else.
+            const auto expectedHp=a.State().combatRules->maximumHp-50000u-18750u;
+            const auto hp=[&]()->std::optional<std::uint32_t>{const auto s=a.State();
+                for(const auto& c:s.snapshot->combat)if(c.playerId==idB)return c.hp;return std::nullopt;};
+            try{Wait([&]{return hp()==expectedHp;},"");}
+            catch(const std::runtime_error&){throw std::runtime_error("The target's hp is "+(hp()?std::to_string(*hp()):std::string("absent"))+
+                ", not "+std::to_string(expectedHp));}
+            a.Leave();b.Leave();
+            Wait([&]{return a.State().phase==ConnectionPhase::Lobby && b.State().phase==ConnectionPhase::Lobby;},"Hit-part final Leave failed");
+            std::cout<<"hit parts passed: the real Match judged the head and the leg of the posed body\n";
+            return 0;
+        }
         if(lifeCleanupOnly || !disconnectReady.empty()) {
             // This branch starts at untouched spawns, so the four-shot line is
             // deterministic. It does not fabricate HP or skip authority time.

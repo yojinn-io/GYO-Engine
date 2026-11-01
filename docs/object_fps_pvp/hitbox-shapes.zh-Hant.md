@@ -1,6 +1,6 @@
 # 玩家的命中形狀（Data Contract，版本 1）
 
-Owner：`object_fps_pvp`。檔案：`assets/object_fps_pvp/characters/player/hitbox.json`（asset-layout 的標準，[assets](assets.zh-Hant.md)；2026-11-01 由 `players/` 搬來）（asset id `object_fps_pvp.player.hitbox`，text）。讀者：`ReadPlayerHitbox`（`player_content`，`PlayerHitbox.hpp`）。Match 啟動時載入，不讀貼圖；Client 不讀。來源：[hitbox-plan](plans/v8/hitbox-plan.md) R4、[事前宣告](plans/v8/v8-product-hitbox-data-declaration.md) D1。
+Owner：`object_fps_pvp`。檔案：`assets/object_fps_pvp/characters/player/hitbox.json`（asset-layout 的標準，[assets](assets.zh-Hant.md)；2026-11-01 由 `players/` 搬來）（asset id `object_fps_pvp.player.hitbox`，text）。讀者：`ReadPlayerHitbox`（`player_content`，`PlayerHitbox.hpp`）。Match 啟動時載入，不讀貼圖；Client 不讀。Match 把形狀放在姿勢模型（`MakePosedPlayerHitModel`）擺出的骨頭上，用它判定射擊打到的部位（[事前宣告](plans/v8/v8-product-hitbox-shot-declaration.md) S2、S3）；`network_main` 的 `--hit-parts-only` 用同一個模型算瞄準點。來源：[hitbox-plan](plans/v8/hitbox-plan.md) R4、[事前宣告](plans/v8/v8-product-hitbox-data-declaration.md) D1。
 
 ## 欄位
 

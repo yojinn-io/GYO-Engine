@@ -133,7 +133,10 @@ int main(int argc,char** argv) {
         const auto animationDigest=fps::pvp::AnimationContentDigest(*pose);
         std::clog<<"[ObjectFPS/PvP Match] animation_digest="<<std::hex<<std::setw(16)<<std::setfill('0')<<animationDigest
                  <<std::dec<<std::setfill(' ')<<'\n';
-        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation);
+        // v8-product-hitbox-shot S3: the Match judges by the shapes on the posed body.
+        const auto hitModel=fps::pvp::MakePosedPlayerHitModel(pose,*hitbox);
+        std::clog<<"[ObjectFPS/PvP Match] hit model=posed shapes="<<hitbox->shapes.size()<<'\n';
+        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation,hitModel);
         fps::pvp::IpcHost ipc(runtime,*arena,animationDigest);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}
         if(!ipc.Start(listen,error)){std::cerr<<error<<'\n';return 1;}

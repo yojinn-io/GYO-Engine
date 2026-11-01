@@ -147,7 +147,7 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 
 - ⑤ 的對局規則、可靠事件串流（pv10，protocol-v8 附錄 B 改名）；附錄 C 的形狀。
 - 部位倍率、R、形狀 JSON、Match 讀的動畫定義、姿勢歷史：Match 的政策或產品內容，不上 wire。
-- 同一 Tick 內多發子彈時的姿勢順序（判定前固定一次，或每發後重算）：不影響 wire，在 `v8-product-hitbox-shot` 的事前宣告定。
+- 同一 Tick 內多發子彈時的姿勢順序：不影響 wire。已定（`v8-product-hitbox-tick-pose` (a)，[事前宣告](plans/v8/v8-product-hitbox-shot-declaration.md)）：每個 Tick 在第一發時放一次形狀，該 Tick 的每一發共用；第一發打死的目標，同一 Tick 不再被打中。
 - 動畫狀態進權威 digest 的版本：在 `v8-product-anim-authority` 定。
 - 本機玩家自己的身體是否照 Match 的動畫播：呈現路徑沒有查到（遠端迴圈會跳過本機玩家），不影響 wire；`v8-product-anim-authority` 時確認。
 

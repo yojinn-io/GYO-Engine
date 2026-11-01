@@ -68,6 +68,13 @@
       ],
       "ctest": "object_fps_pvp.ingress_cross"
     },
+    "hit_part_cross": {
+      "build": [
+        "gyo_object_fps_pvp-match",
+        "gyo_object_fps_pvp_network_probe"
+      ],
+      "ctest": "object_fps_pvp.hit_part_cross"
+    },
     "action_runner": {
       "ctest": "object_fps_pvp.action_runner"
     },
@@ -8500,6 +8507,16 @@
       "replace": "            InterpolatePlayerAnimation(input.animation, input.animation, 0), 0.0);",
       "check": "presentation",
       "expect": "every kind of input"
+    },
+    {
+      "id": "s3-match-synthetic-model",
+      "batch": "v8-product-hitbox-shot-wire",
+      "what": "The Match executable keeps the synthetic hit model",
+      "file": "apps/object_fps_pvp/match_main.cpp",
+      "find": "        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation,hitModel);\n",
+      "replace": "        fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation);\n",
+      "check": "hit_part_cross",
+      "expect": "Hit-part shot at the head decided accepted=1 kind=2 target=[0-9]+ part=1 damage=25000"
     }
   ]
 }
