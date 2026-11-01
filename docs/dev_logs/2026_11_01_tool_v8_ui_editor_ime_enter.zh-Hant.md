@@ -181,6 +181,10 @@ ui_editor 的守衛（`tests/ui_editor/ui_editor_dependency_guard.py`）：
 - 突變 6／6 killed：確定不清、失焦不清、ImGui 停止編輯不清、畫錯位置、沒接位置回呼、沒畫。
 - I10 的標籤是 `editor`，L1 的 CI 只跑 `cpu|shader`，所以只在本機跑。
 
+### L1（PR #132）
+
+- 2026-11-01，合併 T4 之後：L1 的 linux-x64、macos-arm64、windows-x64 都通過（run 41310658961）。Windows 的 CI 從頭抓 SDL 並套上修補，建置成功；本機模擬的 CRLF 情況也因此得到實際印證。
+
 ### L3（macOS，2026-11-01，使用者操作）
 
 - 組字顯示：使用者確認沒問題。log（`macos-ja-composition.log`）：「日本語字幕」選定後確定，確定前沒有 Return 的 KEY_DOWN，確定後的 Return 照常交給 ImGui。
