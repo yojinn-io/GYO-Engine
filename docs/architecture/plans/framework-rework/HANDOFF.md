@@ -43,6 +43,7 @@
 - 2026-11-01：圖書管理員通知 gearbox 規則更新（PR #129，master `8a175c0a`）：敵對式檢查與 §14.4 的別的審查者要用和提案者不同、且不比提案者弱的引擎（提案者 Opus → Fable）；較弱的引擎只能當額外意見。已同步 master（merge `7710250e`），全量建置與 CTest 123/123、兩個守衛通過，推送後 L1 run 41280529299。這條線以 Sonnet 當唯一檢查的有：guard-ratchet 的 §14.4 審查者、path-dialog 的對抗式檢查、外殼草圖的對抗式檢查、連結檢查判定變更的 §14.4 審查者（計畫的對抗式檢查已執行完，不重做）。Fable 比主會話強，依 gearbox 要先問使用者；PR A 合併前是否以 Fable 重做，等使用者決定。
 - 2026-11-01，使用者：「只從現在起套用」。上面四項檢查不重做，PR A 照現狀合併；之後的對抗式檢查與 §14.4 審查者依新規則（提案者 Opus → Fable，先問使用者）。
 - 2026-11-01：PR A（yojinn-io/GYO-Engine#127）合併，merge commit `3954f7e7`（使用者指示由我合併；先前一次自動合併被權限檢查擋下）。已通知工具線（「v8 tool-line：工具線規劃 v8-tool-plan」）：合併 commit、新公開介面、T1～T3b 要改的地方。
+- 2026-11-01：圖書管理員通知規則更新（PR #130，master `d4a79c4a`，取代 #129）：模型的選擇移到 `agents/navigator.md`（ナビゲーターの規則），`agents/effort-gearbox.md` 只管檔位。已同步 master（merge `b23ff90a`；只帶進 agents/ 與 docs/ 的文字，沒有程式變更）。對本線的影響：這份計畫在新規則之前核准，依 navigator.md「この規則より前に承認された計画」，v8-framework-invariants 開工時要先補上上段／下段與根據、実装者／審査者／検証者的「模型／檔位」與理由，經使用者確認後才動手。我的初步判斷（開工時再提）：上段（觸及 Design Invariants：DI 4 定稿、清空例外清單、刪除舊公開介面），実装者不用小模型；§14.4 検証者若要確認「緩める面」的第 4 項不用小模型；對抗式檢查至少一人用和被檢查方不同、且大於 Sonnet 的模型。
 - 下一步：等工具線 T1、T2、T3a、T3b 都合併，再開始 v8-framework-invariants（PR B）。整條線完成後通知架構會話。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
 
 ### v8-framework-catalog-extra-fields 的事前宣告（2026-11-01，執行測試前）
