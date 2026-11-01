@@ -37,8 +37,9 @@ class AudioEditorDependencyGuardTests(unittest.TestCase):
         self.assertIn("uses SDL_OpenAudioDevice", findings[1])
 
     def test_native_header_fails(self):
-        findings = self.scan({"tools/audio_editor/src/A.cpp": '#include "engine/audio/sdl/native/SdlAudioNative.hpp"\n'})
-        self.assertEqual(len(findings), 1)
+        findings = self.scan({"tools/audio_editor/src/A.cpp": '#include "engine/audio/sdl/native/SdlAudioNative.hpp"\n'
+                                                              '#include "engine/audio/sdl/SdlAudioNative.h"\n'})
+        self.assertEqual(len(findings), 2)
 
     def test_sdl_target_fails(self):
         findings = self.scan({"tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE SDL3::SDL3 GYO::PlatformSDLNative)\n"})

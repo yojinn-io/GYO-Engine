@@ -48,6 +48,16 @@ class EditorDependencyGuardTests(unittest.TestCase):
         findings = self.scan({"tools/ui_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE SDL3::SDL3)\n"})
         self.assertEqual(len(findings), 1)
 
+    def test_native_file_uses_only_the_renderer(self):
+        # The exception covers the preview's textures, not SDL at large.
+        findings = self.scan({"tools/ui_editor/src/EditorWindow.cpp":
+                              '#include "engine/platform/sdl/SdlPlatformNative.h"\n'
+                              'SDL_CreateWindow("x", 1, 1, 0);\nSDL_CreateGPUDevice(0, false, nullptr);\n'})
+        self.assertEqual(len(findings), 3)
+        self.assertIn("includes engine/platform/sdl/SdlPlatformNative.h", findings[0])
+        self.assertIn("uses SDL_CreateGPUDevice", findings[1])
+        self.assertIn("uses SDL_CreateWindow", findings[2])
+
     def test_unlisted_include_fails(self):
         # A game's header is outside every allowed prefix, without the guard naming the game.
         self.assertEqual(len(self.scan({"tools/ui_editor/src/A.cpp": '#include "SomeGame/World.hpp"\n'})), 1)

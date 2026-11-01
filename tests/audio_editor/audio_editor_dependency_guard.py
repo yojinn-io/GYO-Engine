@@ -29,8 +29,11 @@ ALLOWED_TARGETS = {"GYO::Base", "GYO::Audio", "GYO::Engine", "GYO::Input", "GYO:
                    "GYO::ToolFrameworkJson"}
 
 
+ENGINE_NATIVE_HEADER = re.compile(r"/native/|Native\.(h|hh|hpp|hxx|inl)$")
+
+
 def is_native_include(include: str) -> bool:
-    return "/native/" in include or include.endswith("Native.hpp")
+    return bool(ENGINE_NATIVE_HEADER.search(include))
 
 
 def scan(root: Path) -> list[str]:

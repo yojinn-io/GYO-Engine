@@ -166,8 +166,8 @@
       "id": "ui-guard-native-list-ignored",
       "what": "The ui_editor guard lets SDL_ names through in every file",
       "file": "tests/ui_editor/ui_editor_dependency_guard.py",
-      "find": "            if relative not in NATIVE_FILES:\n",
-      "replace": "            if False:\n",
+      "find": "                if relative not in NATIVE_FILES or not NATIVE_SDL_NAMES.fullmatch(name):\n",
+      "replace": "                if False:\n",
       "command": [
         "{python}",
         "-m",
@@ -203,6 +203,48 @@
         "tests/audio_editor/audio_editor_dependency_guard.py"
       ],
       "expect": "includes engine/platform/sdl/SdlPlatformNative.hpp"
+    },
+    {
+      "id": "ui-guard-native-api-ignored",
+      "what": "The ui_editor guard lets any SDL_ name through in the native renderer's files",
+      "file": "tests/ui_editor/ui_editor_dependency_guard.py",
+      "find": "                if relative not in NATIVE_FILES or not NATIVE_SDL_NAMES.fullmatch(name):\n",
+      "replace": "                if relative not in NATIVE_FILES:\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ui_editor",
+        "-p",
+        "test_ui_editor_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_native_file_uses_only_the_renderer"
+    },
+    {
+      "id": "ui-guard-native-window-api",
+      "what": "A native renderer file creates an SDL window itself",
+      "file": "tools/ui_editor/src/AssetPreviewContext.cpp",
+      "find": "#include <SDL3/SDL.h>\n",
+      "replace": "#include <SDL3/SDL.h>\n[[maybe_unused]] static auto* const kOwnWindow = &SDL_CreateWindow;\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "AssetPreviewContext.cpp: uses SDL_CreateWindow"
+    },
+    {
+      "id": "ui-guard-native-platform-header",
+      "what": "A native renderer file includes the SDL platform's native header",
+      "file": "tools/ui_editor/src/EditorWindow.cpp",
+      "find": "#include \"engine/render/backend/sdl/SdlRendererNative.hpp\"\n",
+      "replace": "#include \"engine/render/backend/sdl/SdlRendererNative.hpp\"\n#include \"engine/platform/sdl/SdlPlatformNative.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "EditorWindow.cpp: includes engine/platform/sdl/SdlPlatformNative.hpp"
     }
   ]
 }

@@ -32,7 +32,7 @@ public:
     AssetPreviewContext(const AssetPreviewContext&) = delete;
     AssetPreviewContext& operator=(const AssetPreviewContext&) = delete;
 
-    // Creates the SDL_ttf rasterizer; failing to do so is a Runtime Error.
+    // Creates the SDL3_ttf rasterizer; failing to do so is a Runtime Error.
     [[nodiscard]] Result<void, PreviewError> Initialize(SDL_Renderer& renderer);
     // Initializing twice or with a null rasterizer is API misuse (GYO_ASSERT).
     void Initialize(SDL_Renderer& renderer,
