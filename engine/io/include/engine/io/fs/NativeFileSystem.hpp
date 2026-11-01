@@ -44,4 +44,14 @@ namespace Engine::IO::FS {
     /// current directory first (Os::Files::MakeAbsolute), as the OS would resolve it.
     IoResult<Engine::IO::Path::Uri> NativeFileUri(std::string_view utf8Path);
 
+    /// Whether a file written at the native path a person named lands in root, or is root (docs/architecture/
+    /// io.md, "User files"). The candidate's parent is resolved by the OS (Os::Files::MakeAbsolute, then
+    /// Os::Files::ResolvedPath: links before '..') and its last name kept as written, since an atomic save
+    /// renames over that name, a link or not; root is resolved whole. A trailing separator names the directory
+    /// before it. Names are compared with Os::Files::SamePathComponent. A path the OS cannot resolve (no
+    /// permission) is compared with '.' and '..' removed as written. It decides containment only and changes no
+    /// path; it is not a sandbox: a link named inside root counts as inside, wherever it leads. An empty path is
+    /// false; a path that is not UTF-8, or that has a Win32 namespace prefix ("//?/", "//./"), is InvalidPath.
+    IoResult<bool> IsNativePathWithin(std::string_view utf8Candidate, std::string_view utf8Root);
+
 } // namespace Engine::IO::FS

@@ -51,10 +51,41 @@ struct ClockReaders final {
 // Event watches currently registered with SDL by the platform (read-only seam).
 [[nodiscard]] int RegisteredEventWatchesForTesting() noexcept;
 
+// SDL's dialog callback, noexcept on purpose: the platform's callback must not
+// let an exception cross SDL's or the OS's stack (Design Invariant 8), and a
+// callback without noexcept does not convert to this type.
+using PathDialogCallback = void(SDLCALL*)(void* userdata, const char* const* files, int filter) noexcept;
+
+// The one step a test replaces: handing a prepared request to the OS. The real
+// launcher is ShowWithSdlFunctions over SDL's own functions; a test's launcher keeps
+// the arguments and calls callback(userdata, ...) when and on which thread it
+// likes, also twice, as SDL may. It writes no input frame (Design Invariant 4)
+// and cannot throw: by then the request is SDL's.
+struct PathDialogLauncher final {
+    void (*show)(PathDialogCallback callback, void* userdata, SDL_Window* window, PathDialogKind kind,
+                 const SDL_DialogFileFilter* filters, int filterCount, const char* defaultLocation) noexcept;
+};
+// The SDL functions the real launcher calls, one per kind; a test passes fakes
+// to check what each kind hands SDL.
+struct SdlDialogFunctions final {
+    decltype(&SDL_ShowOpenFileDialog) openFile;
+    decltype(&SDL_ShowSaveFileDialog) saveFile;
+    decltype(&SDL_ShowOpenFolderDialog) openFolder;
+};
+// The real launcher over a given table: one call of the kind's function, one
+// file at most, this window, the filters (not for a folder) and the location.
+void ShowWithSdlFunctions(const SdlDialogFunctions& functions, PathDialogCallback callback, void* userdata,
+                          SDL_Window* window, PathDialogKind kind, const SDL_DialogFileFilter* filters,
+                          int filterCount, const char* defaultLocation) noexcept;
+// ShowPathDialog through a given launcher; ShowPathDialog is this with the
+// real one. The same operation rules apply (GYO_ASSERT).
+void ShowPathDialogWith(SdlPlatform& platform, PathDialogRequest request, const PathDialogLauncher& launcher);
+
 class NativeAccess final {
 public:
     [[nodiscard]] static SDL_Window* Window(const SdlPlatform& platform) noexcept;
     [[nodiscard]] static std::optional<ClockPair> PumpPair(const SdlPlatform& platform);
+    static void ShowPathDialog(SdlPlatform& platform, PathDialogRequest request, const PathDialogLauncher& launcher);
 
     [[nodiscard]] static const SDL_Event& Event(const PlatformEvent& event) noexcept {
         return *static_cast<const SDL_Event*>(event.native_);

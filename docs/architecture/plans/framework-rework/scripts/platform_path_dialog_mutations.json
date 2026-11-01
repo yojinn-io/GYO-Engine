@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-engine-platform-path-dialog (docs/architecture/platform-sdl.md, Design Invariant 10). Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/framework-rework/scripts/platform_path_dialog_mutations.json --build-dir <a tree with the SDL platform and BUILD_TESTING=ON>, with SDL_VIDEODRIVER=dummy in the runner's environment. A mutant is killed only when its check fails with the expected message. The lifetime mutants that only a sanitizer sees are in platform_path_dialog_mutations-asan.json.",
+  "mutants": [
+    {
+      "id": "pd-drop-answer",
+      "what": "The callback drops the answer instead of handing it to the mailbox",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        mailbox.answers.splice(mailbox.answers.end(), node);\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "pd-tag-lost",
+      "what": "The answer does not carry the request's tag",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    pending->answers.push_back(PathDialogAnswer{.tag = pending->request.tag});\n    pending->answers.push_back(PathDialogAnswer{.tag = pending->request.tag});",
+      "replace": "    pending->answers.push_back(PathDialogAnswer{});\n    pending->answers.push_back(PathDialogAnswer{});",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "\\.tag == \\d+ \\) is NOT correct"
+    },
+    {
+      "id": "pd-order",
+      "what": "Answers are handed out newest first instead of in arrival order",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "mailbox.answers.splice(mailbox.answers.end(), node);",
+      "replace": "mailbox.answers.splice(mailbox.answers.begin(), node);",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "\\.tag == \\d+ \\) is NOT correct"
+    },
+    {
+      "id": "pd-take-keeps",
+      "what": "TakePathDialogAnswers copies the answers and leaves them for the next call",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "arrived.splice(arrived.end(), mailbox.answers);",
+      "replace": "arrived = mailbox.answers;",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "TakePathDialogAnswers\\(\\)\\.empty\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "pd-cancel-as-failed",
+      "what": "A cancelled dialog is reported as failed",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "            answer.outcome = PathDialogOutcome::Cancelled;",
+      "replace": "            answer.outcome = PathDialogOutcome::Failed;",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "PathDialogOutcome::Cancelled \\) is NOT correct"
+    },
+    {
+      "id": "pd-assert-observer",
+      "what": "Showing a dialog inside an observer is not an asserted operation",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    SdlPlatform::Impl& impl = *platform.impl_;\n    GYO_ASSERT(!impl.pumping && dispatchDepth == 0);\n",
+      "replace": "    SdlPlatform::Impl& impl = *platform.impl_;\n",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "pd-noexcept",
+      "what": "The dialog callback loses noexcept (an exception could cross SDL's stack)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "void SDLCALL OnPathDialogClosed(void* userdata, const char* const* files, int) noexcept {",
+      "replace": "void SDLCALL OnPathDialogClosed(void* userdata, const char* const* files, int) {",
+      "target": "platform_sdl_tests",
+      "expect_build_failure": true,
+      "expect": "PathDialogCallback|invalid conversion|cannot convert|cannot initialize|no viable conversion|no matching"
+    },
+    {
+      "id": "pd-g2-neutral",
+      "what": "The neutral header forward-declares SDL's filter type (G2 must report it)",
+      "file": "engine/platform/sdl/include/engine/platform/sdl/SdlPlatform.hpp",
+      "find": "namespace Engine::Platform::Sdl {\n\n// Zero is not a valid code",
+      "replace": "struct SDL_DialogFileFilter;\n\nnamespace Engine::Platform::Sdl {\n\n// Zero is not a valid code",
+      "target": "platform_sdl_header_tests",
+      "cases": "Engine public headers outside the native layer name no SDL symbol",
+      "expect": "SdlPlatform\\.hpp:\\d+ .*SDL_DialogFileFilter"
+    },
+    {
+      "id": "pd-double-callback",
+      "what": "A Failed answer ends the request, so the legacy dialog's answer on Windows is lost",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    if (last) registry.requests.erase(found);",
+      "replace": "    registry.requests.erase(found);",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "answers\\.size\\(\\) == 5 \\) is NOT correct"
+    },
+    {
+      "id": "pd-empty-path-chosen",
+      "what": "zenity's empty path for a cancelled dialog is reported as chosen",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "files[0] == nullptr || files[0][0] == '\\0'",
+      "replace": "files[0] == nullptr",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "PathDialogOutcome::Cancelled \\) is NOT correct"
+    },
+    {
+      "id": "pd-kind-assert",
+      "what": "A request with no valid kind reaches SDL instead of failing a GYO_ASSERT",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    GYO_ASSERT(IsPathDialogKind(request.kind));\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "pd-real-launcher-save",
+      "what": "The real launcher does not hand a save request to SDL",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        functions.saveFile(callback, userdata, window, filters, filterCount, defaultLocation);\n",
+      "replace": "",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "pd-third-callback",
+      "what": "Two Failed answers do not end the request, so a third callback takes a node that is not there",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    const bool last = answer.outcome != PathDialogOutcome::Failed || pending.answers.empty();",
+      "replace": "    const bool last = answer.outcome != PathDialogOutcome::Failed;",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "CRASHED|is NOT correct"
+    },
+    {
+      "id": "pd-launcher-many",
+      "what": "An open-file dialog lets the user pick several files",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        functions.openFile(callback, userdata, window, filters, filterCount, defaultLocation, false);",
+      "replace": "        functions.openFile(callback, userdata, window, filters, filterCount, defaultLocation, true);",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "lastSdlCall\\.allowMany \\) is NOT correct"
+    },
+    {
+      "id": "pd-launcher-folder-window",
+      "what": "A folder dialog is not given the window",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        functions.openFolder(callback, userdata, window, defaultLocation, false);",
+      "replace": "        functions.openFolder(callback, userdata, nullptr, defaultLocation, false);",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "lastSdlCall\\.window == window \\) is NOT correct"
+    },
+    {
+      "id": "pd-launcher-drop-filters",
+      "what": "An open-file dialog is not given the filters",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "        functions.openFile(callback, userdata, window, filters, filterCount, defaultLocation, false);",
+      "replace": "        functions.openFile(callback, userdata, window, nullptr, 0, defaultLocation, false);",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "lastSdlCall\\.filters == filters \\) is NOT correct"
+    },
+    {
+      "id": "pd-filter-copy",
+      "what": "Filters point into a per-iteration copy that is gone before the callback reads it (an ordinary CHECK sees it: the strings are wrong by then)",
+      "file": "engine/platform/sdl/src/SdlPlatform.cpp",
+      "find": "    for (const PathDialogFilter& filter : pending->request.filters) {",
+      "replace": "    for (const PathDialogFilter filter : pending->request.filters) {",
+      "target": "platform_sdl_tests",
+      "cases": "*path dialog*,*Path dialog*",
+      "expect": "filters\\[0\\]\\.name\\) == \"UI layout\" \\) is NOT correct"
+    }
+  ]
+}
