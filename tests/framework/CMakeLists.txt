@@ -29,7 +29,10 @@ set_tests_properties(gyo_framework.dependency_guard gyo_framework.dependency_gua
 # target's PRIVATE link) is not followed, and neither is a forbidden target.
 # The forbidden names a core target reaches must be exactly those of its line
 # "target:<name> link <count> <name>,<name>..." in framework_guard_allowlist.txt
-# (none means none), so the exceptions only shrink and cannot be traded.
+# (none means none), so the exceptions only shrink and cannot be traded. A line
+# whose target this configuration does not build is not checked here; the
+# dependency guard checks in every configuration that its target is one the
+# core defines, so a stale line still fails.
 # Limit: an IMPORTED target that is not GLOBAL and is defined in another
 # directory cannot be followed. Checked once the whole project is configured.
 function(_gyo_framework_forbidden entry real kind out)
@@ -166,9 +169,6 @@ function(gyo_expect_framework_links)
         endif()
         list(APPEND listed "${name}")
         set("_allowed_${name}" "${names}")
-        if(NOT name IN_LIST targets)
-            list(APPEND problems "framework_guard_allowlist.txt: ${name} is not a framework target; remove the line")
-        endif()
     endforeach()
     foreach(target IN LISTS targets)
         _gyo_framework_binding_of(${target} kind)

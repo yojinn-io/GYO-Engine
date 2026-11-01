@@ -243,6 +243,90 @@
       "target": "gyo_framework_tests",
       "expect_build_failure": true,
       "expect": "links 2 forbidden targets \\[\\$<\\$<CONFIG:Debug>:SDL3::SDL3>"
+    },
+    {
+      "id": "fw-link-stale-line-ignored",
+      "what": "A link line whose target the core does not define is not refused",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "                problems.append(f\"{where}: {target} is not a framework target; remove the line\")\n            elif",
+      "replace": "                pass\n            elif",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_a_link_line_for_a_target_the_framework_does_not_define_fails"
+    },
+    {
+      "id": "fw-link-binding-line-allowed",
+      "what": "A link line for a binding's target is accepted",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "            elif owner_of(defined[target])[0] != \"core\":\n                problems.append(f\"{where}: {target} is not in the framework's core; bindings have no exceptions\")\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "bindings have no exceptions"
+    },
+    {
+      "id": "fw-link-stale-real",
+      "what": "The real allowlist keeps a line for a target the core no longer defines (v8-framework-shell regression: refused in every configuration by the guard, no longer by configure)",
+      "file": "tests/framework/framework_guard_allowlist.txt",
+      "find": "target:gyo_tool_framework_gui link 5",
+      "replace": "target:gyo_tool_framework_gone link 5",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "gyo_tool_framework_gone is not a framework target; remove the line"
+    },
+    {
+      "id": "fw-link-comment-counts",
+      "what": "A commented-out add_library counts as defining the target",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "            text = CMAKE_COMMENT.sub(\"\", path.read_text(encoding=\"utf-8\", errors=\"replace\"))",
+      "replace": "            text = path.read_text(encoding=\"utf-8\", errors=\"replace\")",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_a_link_line_reads_add_library_as_cmake_does"
+    },
+    {
+      "id": "fw-link-duplicate-allowed",
+      "what": "A second link line for the same target is accepted",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "            if target in link_targets:\n                problems.append(f\"{where}: duplicate line for {target}\")\n                continue\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_a_duplicate_link_line_fails"
     }
   ]
 }

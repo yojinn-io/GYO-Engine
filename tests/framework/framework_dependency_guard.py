@@ -18,8 +18,9 @@ Existing core sites are frozen in tests/framework/framework_guard_allowlist.txt,
 tests/common/os/os_boundary_guard.py: each line is "path rule count # reason" for the rules include, symbol and
 target; the file must exist, lie in the core, and its finding count for that rule must equal count, so a new site
 fails and a removed one asks for the entry to shrink. Lines with rule "link" ("target:<cmake target> link <count>
-<name>,<name>...") belong to the configure-time link check in tests/framework/CMakeLists.txt and are only checked
-for form here. The registries, project files,
+<name>,<name>...") belong to the configure-time link check in tests/framework/CMakeLists.txt, which checks the lines
+of the targets a configuration builds; here they are checked for form, and their target must be one that a CMake file
+of the core defines (add_library), whatever the configuration, so a stale line fails everywhere. The registries, project files,
 executables, engine/input, SDL_GPU and anything the guard refused before v8-framework-guard-ratchet (an include
 outside its old prefixes, a target outside its old list and the shell's and bindings' targets) are never
 allowlisted, nor is anything in a binding.
@@ -47,6 +48,9 @@ SDL_GPU = re.compile(r"\bSDL_\w*GPU\w*")
 SYMBOL = re.compile(r"\bSDL_\w+|\bImGui\w*|\bnlohmann\b")
 TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*\b")
 TOOL_COMMAND = re.compile(r"\b(add_executable|gyo_tool_install_target|gyo_install_product_target)\s*\(")
+# add_library(<name> ...) as CMake reads it: any case, sources optional, an ALIAS defines no target of its own.
+DEFINED_TARGET = re.compile(r"\badd_library\(\s*([A-Za-z0-9_]+)(?=[\s)])(?!\s+ALIAS\b)", re.IGNORECASE)
+CMAKE_COMMENT = re.compile(r"#[^\n]*")
 NATIVE_HEADER = re.compile(r"^engine/.*(/native/|Native\.hpp$)")
 # Bare names (no slash) that are SDL's, ImGui's or nlohmann's own headers, not a standard or local one.
 LIBRARY_BARE_INCLUDE = re.compile(r"^(SDL\.h|SDL_\w*\.h|imgui(_\w+)?\.h|json\.hpp)$")
@@ -197,9 +201,27 @@ def file_findings(relative: str, path: Path, named) -> tuple[list[str], list[tup
     return hard, soft
 
 
+def defined_targets(root: Path) -> dict[str, str]:
+    """{target: path of the framework CMake file that defines it with add_library}.
+
+    Textual: comments are skipped, but a definition in a branch that never runs or in a file no add_subdirectory
+    reaches still counts (the configure-time link check covers what a configuration actually builds).
+    """
+    targets = {}
+    for path in sorted((root / OWNER).rglob("*")):
+        if path.is_file() and (path.name == "CMakeLists.txt" or path.suffix == ".cmake"):
+            relative = path.relative_to(root).as_posix()
+            text = CMAKE_COMMENT.sub("", path.read_text(encoding="utf-8", errors="replace"))
+            for name in DEFINED_TARGET.findall(text):
+                targets.setdefault(name, relative)
+    return targets
+
+
 def load_allowlist(root: Path):
     """Returns ({(path, rule): (count, where)}, [problem lines])."""
     entries, problems = {}, []
+    defined = None
+    link_targets = set()
     allowlist = root / ALLOWLIST
     if not allowlist.is_file():
         return entries, problems
@@ -214,7 +236,19 @@ def load_allowlist(root: Path):
             if (len(fields) != 4 or not fields[0].startswith("target:") or not fields[2].isdigit()
                     or int(fields[2]) != len(names) or int(fields[2]) == 0):
                 problems.append(f"{where}: expected 'target:<cmake target> link count name,name...', got '{line}'")
-            continue  # checked at configure time by tests/framework/CMakeLists.txt
+                continue
+            if defined is None:
+                defined = defined_targets(root)
+            target = fields[0][len("target:"):]
+            if target in link_targets:
+                problems.append(f"{where}: duplicate line for {target}")
+                continue
+            link_targets.add(target)
+            if target not in defined:
+                problems.append(f"{where}: {target} is not a framework target; remove the line")
+            elif owner_of(defined[target])[0] != "core":
+                problems.append(f"{where}: {target} is not in the framework's core; bindings have no exceptions")
+            continue  # its names are checked at configure time by tests/framework/CMakeLists.txt
         if len(fields) != 3 or fields[1] not in ALLOWLIST_RULES or not fields[2].isdigit() or int(fields[2]) == 0:
             problems.append(f"{where}: expected 'path rule count', got '{line}'")
             continue

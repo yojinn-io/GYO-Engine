@@ -155,6 +155,7 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
     def test_allowlisted_core_sites_pass(self):
         self.assertEqual(self.scan({
             "framework/src/Old.cpp": "#include <SDL3/SDL.h>\nvoid F() { SDL_Log(\"a\"); SDL_Log(\"b\"); }\n",
+            "framework/CMakeLists.txt": "add_library(gyo_tool_framework STATIC a.cpp)\n",
             self.ALLOWLIST: "# reason\nframework/src/Old.cpp include 1  # old\nframework/src/Old.cpp symbol 2  # old\n"
                             "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json  # checked by CMake\n",
         }), [])
@@ -208,6 +209,51 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         findings = self.scan({self.ALLOWLIST: "target:gyo_tool_framework link 2 nlohmann_json::nlohmann_json\n"})
         self.assertEqual(len(findings), 1)
         self.assertIn("expected 'target:<cmake target> link count name,name...'", findings[0])
+
+    def test_a_link_line_for_a_target_the_framework_does_not_define_fails(self):
+        # A target that only some configurations build is still defined in the source; one that is defined nowhere
+        # is a stale line, whatever the configuration (v8-framework-shell, the audio_editor-only regression).
+        findings = self.scan({
+            "framework/CMakeLists.txt": "add_library(gyo_tool_framework STATIC a.cpp)\n",
+            "framework/Legacy.cmake": "if(GYO_SOME_CONDITION)\n    add_library(gyo_tool_framework_gui STATIC b.cpp)\nendif()\n",
+            self.ALLOWLIST: "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json\n"
+                            "target:gyo_tool_framework_gui link 1 SDL3::SDL3\n"
+                            "target:gyo_tool_framework_gone link 1 SDL3::SDL3\n",
+        })
+        self.assertEqual(findings, [f"{self.ALLOWLIST}:3: gyo_tool_framework_gone is not a framework target; remove the line"])
+
+    def test_a_link_line_reads_add_library_as_cmake_does(self):
+        # CMake commands ignore case and a target may get its sources later; a comment or an ALIAS defines nothing.
+        findings = self.scan({
+            "framework/CMakeLists.txt": "ADD_LIBRARY(gyo_tool_framework STATIC a.cpp)\n"
+                                        "add_library(gyo_tool_framework_gui)\n"
+                                        "# add_library(gyo_tool_framework_commented STATIC b.cpp)\n"
+                                        "add_library(gyo_tool_framework_alias ALIAS gyo_tool_framework)\n",
+            self.ALLOWLIST: "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json\n"
+                            "target:gyo_tool_framework_gui link 1 SDL3::SDL3\n"
+                            "target:gyo_tool_framework_commented link 1 SDL3::SDL3\n"
+                            "target:gyo_tool_framework_alias link 1 SDL3::SDL3\n",
+        })
+        self.assertEqual(findings, [
+            f"{self.ALLOWLIST}:3: gyo_tool_framework_commented is not a framework target; remove the line",
+            f"{self.ALLOWLIST}:4: gyo_tool_framework_alias is not a framework target; remove the line",
+        ])
+
+    def test_a_duplicate_link_line_fails(self):
+        findings = self.scan({
+            "framework/CMakeLists.txt": "add_library(gyo_tool_framework STATIC a.cpp)\n",
+            self.ALLOWLIST: "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json\n"
+                            "target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json\n",
+        })
+        self.assertEqual(findings, [f"{self.ALLOWLIST}:2: duplicate line for gyo_tool_framework"])
+
+    def test_a_link_line_for_a_binding_target_fails(self):
+        findings = self.scan({
+            "framework/bindings/imgui/CMakeLists.txt": "add_library(gyo_tool_framework_imgui STATIC a.cpp)\n",
+            self.ALLOWLIST: "target:gyo_tool_framework_imgui link 1 imgui::core\n",
+        })
+        self.assertEqual(findings, [f"{self.ALLOWLIST}:1: gyo_tool_framework_imgui is not in the framework's core; "
+                                    f"bindings have no exceptions"])
 
     def test_local_headers_are_not_library_headers(self):
         self.assertEqual(self.scan({"framework/src/A.cpp": '#include "sdl_utils.h"\n#include "ImGuiHelpers.hpp"\n'
