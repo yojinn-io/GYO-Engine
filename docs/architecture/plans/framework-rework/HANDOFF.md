@@ -40,7 +40,8 @@
 - 2026-11-01：v8-framework-catalog-extra-fields 開工（使用者：「開始下一批」）。估 2～3 h。
 - 2026-11-01：v8-framework-catalog-extra-fields 完成，實際約 1.5 h。PR A（D-7：規劃到 catalog-structure，含 D-6）的批次全部完成。commit `98231ca2`。L1：run 41278439662 第一次就全部 success（三列、Quick acceptance、CI gate）。
 - 2026-11-01：PR A 合併前的完整突變（D184）在背景執行：本線的 5 個突變目錄（framework、framework_shell、framework_catalog、io_user_files、platform_path_dialog）。ASan 那 1 條要 sanitizer 樹，這次不跑，記為限界。結果：宣告 97、執行 96、killed 96、Windows 限定 1 條 skipped、stale 0（framework 27、framework_shell 26、framework_catalog 12、io_user_files 14、platform_path_dialog 17）。path dialog 目錄第一次我漏設目錄說明要求的 `SDL_VIDEODRIVER=dummy`，基準線就失敗、沒有執行突變；照說明重跑 17/17。證據 `build/evidence/framework-rework/pr-a-full-mutations/`。PR A 等使用者決定是否轉為 ready 並合併；合併後通知工具線。
-- 2026-11-01：圖書管理員通知 gearbox 規則更新（PR #129，master `8a175c0a`）：敵對式檢查與 §14.4 的別的審查者要用和提案者不同、且不比提案者弱的引擎（提案者 Opus → Fable）；較弱的引擎只能當額外意見。已同步 master（merge `7710250e`），全量建置與 CTest 123/123、兩個守衛通過，推送後 L1 run 41280529299。這條線以 Sonnet 當唯一檢查的有：guard-ratchet 的 §14.4 審查者、path-dialog 的對抗式檢查、外殼草圖的對抗式檢查、連結檢查判定變更的 §14.4 審查者（計畫的對抗式檢查已執行完，不重做）。Fable 比主會話強，依 gearbox 要先問使用者；PR A 合併前是否以 Fable 重做，等使用者決定。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
+- 2026-11-01：圖書管理員通知 gearbox 規則更新（PR #129，master `8a175c0a`）：敵對式檢查與 §14.4 的別的審查者要用和提案者不同、且不比提案者弱的引擎（提案者 Opus → Fable）；較弱的引擎只能當額外意見。已同步 master（merge `7710250e`），全量建置與 CTest 123/123、兩個守衛通過，推送後 L1 run 41280529299。這條線以 Sonnet 當唯一檢查的有：guard-ratchet 的 §14.4 審查者、path-dialog 的對抗式檢查、外殼草圖的對抗式檢查、連結檢查判定變更的 §14.4 審查者（計畫的對抗式檢查已執行完，不重做）。Fable 比主會話強，依 gearbox 要先問使用者；PR A 合併前是否以 Fable 重做，等使用者決定。
+- 2026-11-01，使用者：「只從現在起套用」。上面四項檢查不重做，PR A 照現狀合併；之後的對抗式檢查與 §14.4 審查者依新規則（提案者 Opus → Fable，先問使用者）。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
 
 ### v8-framework-catalog-extra-fields 的事前宣告（2026-11-01，執行測試前）
 
