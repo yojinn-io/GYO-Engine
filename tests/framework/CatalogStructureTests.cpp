@@ -10,6 +10,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -81,16 +82,16 @@ TEST_CASE("C2: a new entry follows the last one and every other byte stays") {
                               catalog.substr(last));
 }
 
-TEST_CASE("C3: an existing entry is rewritten alone, with its previous path") {
+TEST_CASE("C3: an existing entry changes only its values, with its previous path") {
     const auto update = RegisterAsset(kCatalog, {"game.audio.shot", "sound", "audio/shot_v2.wav"});
     REQUIRE(update.has_value());
     CHECK_FALSE(update->added);
     REQUIRE(update->previousPath.has_value());
     CHECK(*update->previousPath == "audio/shot.wav");
+    // Only the path value changes; the entry keeps its two-line layout (D-6).
     std::string expected = kCatalog;
-    const std::size_t begin = expected.find("{ \"id\": \"game.audio.shot\"");
-    const std::size_t end = expected.find('}', begin) + 1;
-    expected.replace(begin, end - begin, R"({ "id": "game.audio.shot", "type": "sound", "path": "audio/shot_v2.wav" })");
+    const std::size_t at = expected.find("\"audio/shot.wav\"");
+    expected.replace(at, std::string_view("\"audio/shot.wav\"").size(), "\"audio/shot_v2.wav\"");
     CHECK(update->text == expected);
 
     const auto same = RegisterAsset(kCatalog, {"game.audio.shot", "sound", "audio/shot.wav"});
@@ -144,4 +145,63 @@ TEST_CASE("C7: PlanRegistration places the entry by its id") {
     REQUIRE(add.has_value());
     CHECK(add->added);
     CHECK(add->index == 2);
+}
+
+// D-6 (framework-rework): an update keeps the entry's other fields. The content
+// contract keeps unknown optional metadata (cases.json
+// valid-custom-type-and-metadata), so a rewrite may change only the type and
+// path values.
+TEST_CASE("E1: updating an entry changes only its type and path values") {
+    constexpr const char* catalog = R"({
+  "version": 1,
+  "assets": [
+    { "id": "fixture", "type": "custom.designer-data", "path": "data.txt", "author": "fixture",
+      "meta": { "path": "nested/keep.txt", "type": "keep" } },
+    { "id": "other", "type": "text", "path": "other.txt" }
+  ]
+}
+)";
+    const auto update = RegisterAsset(catalog, {"fixture", "custom.designer-data", "data/v2 \"q\".txt"});
+    REQUIRE(update.has_value());
+    CHECK_FALSE(update->added);
+    CHECK(update->previousPath == std::optional<std::string>("data.txt"));
+    std::string expected = catalog;
+    const std::size_t at = expected.find("\"data.txt\"");
+    expected.replace(at, std::string_view("\"data.txt\"").size(), R"("data/v2 \"q\".txt")");
+    CHECK(update->text == expected);
+}
+
+TEST_CASE("E2: a type change the policy allows keeps the other fields, in any key order") {
+    constexpr const char* catalog =
+        "{\"version\":1,\"assets\":[{\"path\" : \"a.txt\",\"author\":\"x\",\"type\":\"text\",\"id\":\"a\"}]}";
+    const auto update =
+        RegisterAsset(catalog, {"a", "custom.data", "b.txt"}, RegistrationPolicy{.allowTypeChange = true});
+    REQUIRE(update.has_value());
+    CHECK(update->text ==
+          "{\"version\":1,\"assets\":[{\"path\" : \"b.txt\",\"author\":\"x\",\"type\":\"custom.data\",\"id\":\"a\"}]}");
+}
+
+TEST_CASE("E3: the contract's metadata case keeps its metadata through an update") {
+    std::ifstream fixture(GYO_ASSET_CONTRACT_FIXTURE);
+    REQUIRE(fixture.is_open());
+    const auto cases = nlohmann::json::parse(fixture).at("cases");
+    const auto found = std::find_if(cases.begin(), cases.end(), [](const auto& test) {
+        return test.at("name") == "valid-custom-type-and-metadata";
+    });
+    REQUIRE(found != cases.end());
+    const std::string text = found->at("catalogs").at("catalog.json").dump(2);
+    const auto update = RegisterAsset(text, {"fixture", "custom.designer-data", "data2.txt"});
+    REQUIRE(update.has_value());
+    const auto entry = nlohmann::json::parse(update->text).at("assets").at(0);
+    CHECK(entry.at("path") == "data2.txt");
+    CHECK(entry.at("author") == "fixture");
+}
+
+TEST_CASE("E4: a nested member named like type or path before the entry's own is left alone") {
+    constexpr const char* catalog =
+        R"({"version": 1, "assets": [{"meta": {"type": "keep", "path": "keep.txt"}, "id": "a", "type": "text", "path": "a.txt"}]})";
+    const auto update = RegisterAsset(catalog, {"a", "text", "b.txt"});
+    REQUIRE(update.has_value());
+    CHECK(update->text ==
+          R"({"version": 1, "assets": [{"meta": {"type": "keep", "path": "keep.txt"}, "id": "a", "type": "text", "path": "b.txt"}]})");
 }

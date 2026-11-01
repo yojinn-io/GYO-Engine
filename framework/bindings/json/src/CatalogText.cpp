@@ -71,6 +71,46 @@ std::optional<AssetsLayout> FindAssets(const std::string_view text) {
     return std::nullopt;
 }
 
+std::size_t StringEnd(const std::string_view text, std::size_t at) {
+    for (++at; at < text.size() && text[at] != '"'; ++at) {
+        if (text[at] == '\\') ++at;
+    }
+    return at; // the closing quote
+}
+
+// The [begin, end) of the string value of a top-level member of the object
+// text at [objectBegin, objectEnd), which already parsed as JSON; a member of
+// a nested object with the same name does not count.
+std::optional<std::pair<std::size_t, std::size_t>> MemberValue(const std::string_view text, const std::size_t objectBegin,
+                                                               const std::size_t objectEnd, const std::string_view key) {
+    int depth = 0;
+    for (std::size_t at = objectBegin; at < objectEnd; ++at) {
+        const char c = text[at];
+        if (c == '"') {
+            const std::size_t begin = at;
+            at = StringEnd(text, at);
+            if (depth != 1) continue;
+            std::size_t next = at + 1;
+            while (next < objectEnd && IsSpace(text[next])) ++next;
+            if (next >= objectEnd || text[next] != ':') continue; // a value, not a key
+            const Json name = Json::parse(text.substr(begin, at + 1 - begin), nullptr, false);
+            ++next;
+            while (next < objectEnd && IsSpace(text[next])) ++next;
+            if (name.is_string() && name.get_ref<const std::string&>() == key && next < objectEnd && text[next] == '"') {
+                return std::pair{next, StringEnd(text, next) + 1};
+            }
+            at = next - 1; // scan the value as usual
+            continue;
+        }
+        if (c == '{' || c == '[') {
+            ++depth;
+        } else if (c == '}' || c == ']') {
+            --depth;
+        }
+    }
+    return std::nullopt;
+}
+
 std::string EntryText(const CatalogEntry& entry) {
     return "{ \"id\": " + Json(entry.id).dump() + ", \"type\": " + Json(entry.type).dump() +
            ", \"path\": " + Json(entry.path).dump() + " }";
@@ -134,8 +174,20 @@ Result<CatalogUpdate, CatalogError> RegisterAsset(const std::string_view catalog
     const std::string entryText = EntryText(entry);
     std::string text(catalogText);
     if (!plan->added) {
+        // Only the type and path values change; the entry's other fields stay
+        // (the content contract keeps unknown optional metadata, D-6).
         const auto [begin, end] = layout->elements[plan->index];
-        text.replace(begin, end - begin, entryText);
+        const auto type = MemberValue(text, begin, end, "type");
+        const auto path = MemberValue(text, begin, end, "path");
+        if (!type || !path) {
+            return Engine::Base::Err(InvalidCatalog("the entry's type or path could not be located in the text"));
+        }
+        std::vector<std::pair<std::pair<std::size_t, std::size_t>, std::string>> edits{
+            {*type, Json(entry.type).dump()}, {*path, Json(entry.path).dump()}};
+        if (edits[0].first.first < edits[1].first.first) std::swap(edits[0], edits[1]); // the later span first
+        for (const auto& [span, value] : edits) {
+            text.replace(span.first, span.second - span.first, value);
+        }
     } else if (layout->elements.empty()) {
         std::size_t close = layout->arrayOpen + 1;
         while (close < text.size() && IsSpace(text[close])) ++close;
@@ -149,11 +201,12 @@ Result<CatalogUpdate, CatalogError> RegisterAsset(const std::string_view catalog
     // The edit must change exactly that entry: check the result as data.
     Json expected = Json::parse(catalogText, nullptr, false);
     const Json reparsed = Json::parse(text, nullptr, false);
-    const Json newEntry = {{"id", entry.id}, {"type", entry.type}, {"path", entry.path}};
     if (plan->added) {
-        expected["assets"].push_back(newEntry);
+        expected["assets"].push_back(Json{{"id", entry.id}, {"type", entry.type}, {"path", entry.path}});
     } else {
-        expected["assets"][plan->index] = newEntry;
+        Json& updated = expected["assets"][plan->index];
+        updated["type"] = entry.type;
+        updated["path"] = entry.path;
     }
     if (reparsed.is_discarded() || reparsed != expected || !ReadCatalog(text)) {
         return Engine::Base::Err(InvalidCatalog("editing the catalog text changed more than the entry"));

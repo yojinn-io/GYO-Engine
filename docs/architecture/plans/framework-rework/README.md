@@ -68,6 +68,7 @@ framework-rework
 | v8-engine-io-user-files | 2026-11-01 | [使用者檔案](../../../dev_logs/2026_11_01_framework_rework_io_user_files.zh-Hant.md) |
 | v8-framework-shell | 2026-11-01 | [外殼](../../../dev_logs/2026_11_01_framework_rework_shell.zh-Hant.md) |
 | v8-framework-catalog-structure | 2026-11-01 | [catalog 結構](../../../dev_logs/2026_11_01_framework_rework_catalog_structure.zh-Hant.md) |
+| v8-framework-catalog-extra-fields | 2026-11-01 | [保留額外欄位](../../../dev_logs/2026_11_01_framework_rework_catalog_extra_fields.zh-Hant.md) |
 
 ## 決策（2026-11-01 提出，同日全部照建議核准）
 

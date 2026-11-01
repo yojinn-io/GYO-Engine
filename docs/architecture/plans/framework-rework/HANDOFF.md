@@ -37,7 +37,21 @@
 - 2026-11-01：v8-framework-shell 完成（使用者核准判定變更）。回歸修補與外殼批分兩個 commit。估 12～16 h（第 0 關後重估 14～17 h），實際約 5 h。commit `15639727`（回歸修補）、`ea5df6f6`（外殼）。L1：run 41274514145 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 第一次就都是 success。同一 run 的 `Quick acceptance / object_fps_pvp / windows-x64` 第一次 failure：建置途中複製 MSVC 執行期 DLL（`concrt140.dll`）到 `build/target/object_fps_pvp/bin/` 時「Permission denied」，測試沒有跑到；這一步屬 pvp 的打包，不建 framework、不碰守衛，判定為環境（runner 上的檔案被佔用）。只重跑失敗的 job（attempt 2），全部 success，CI gate success。第一次的失敗保留在這裡（§14.1）。
 - 2026-11-01：v8-framework-catalog-structure 開工（使用者：「開始下一批」）。D-1 已核准 (a)＋b-lite。估 8～12 h。
 - 2026-11-01：v8-framework-catalog-structure 完成，實際約 2 h。commit `1bd5df20`。L1：run 41276711562 第一次就全部 success（`L1 / linux-x64`、`windows-x64`、`macos-arm64`、Quick acceptance、CI gate）。PLAN 第 2.5 節寫的「core 列」不在這個 workflow 的 L1 裡；Engine 側沒壞由三列的全量 CTest（含 `AssetContentContractTests`）證明。
-- 下一批：v8-framework-catalog-extra-fields（D-6：更新既有條目時丟掉額外欄位的缺陷，依 §14.3 先 Red 後 Green）。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
+- 2026-11-01：v8-framework-catalog-extra-fields 開工（使用者：「開始下一批」）。估 2～3 h。
+- 2026-11-01：v8-framework-catalog-extra-fields 完成，實際約 1.5 h。PR A（D-7：規劃到 catalog-structure，含 D-6）的批次全部完成。L1 結果記在下一行。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
+
+### v8-framework-catalog-extra-fields 的事前宣告（2026-11-01，執行測試前）
+
+- 缺陷（D-6）：JSON 綁定的 `RegisterAsset` 更新既有條目時，把整個條目文字換成只有 id、type、path 的新物件，其他欄位（例如 `author`）消失。內容契約保留未知的選用欄位（cases.json `valid-custom-type-and-metadata`）。
+- 範圍：只修 JSON 綁定（`framework/bindings/json/src/CatalogText.cpp`）。舊的 `CatalogRegistration` 有同樣的缺陷，但 audio_editor 在 T3b 前還用它，修它會改變工具的行為，不在這批；它在 v8-framework-invariants 刪除，audio_editor 在 T3b 換到新 API 時得到修正。
+- 修法：更新時只改條目最上層的 `type` 與 `path` 兩個值的字串，條目的其他位元組不動；寫完的比對改成「預期的條目＝原條目只換 type 與 path」。
+- Red：新增 E1（含巢狀同名鍵 `meta.path`、要跳脫的字元，整份文字逐位元組比對）、E2（鍵的順序不同、冒號前有空白、政策允許換 type）、E3（cases.json 的 metadata 案例更新後仍保留 `author`）。修正前三條都要失敗，存紀錄。
+- Green：修正後 E1～E3 與既有的 C1～C7 全過；全量 CTest 全過。
+- 突變（`scripts/framework_catalog_mutations.json` 追加，宣告前預檢）：fw-extra-whole-entry（更新時又換掉整個條目）、fw-extra-nested-key（掃描不看深度，改到巢狀的同名鍵）、fw-extra-expected-whole（比對的預期又是整個新條目）。全部要 killed、stale 0。
+- 停止條件：超過 4.5 h，或單一問題累計超過 2 h。
+- 2026-11-01：Red（`red.txt`）：E1～E3 修正前都失敗，E3 直接顯示 `author` 被丟掉。修正後（`green.txt`）E1～E3 通過，但**宣告的判定不成立**：上一批的 C3 失敗（§14.1，先回報、不改）。原因：C3 照抄舊測試，預期更新後整個條目被改寫成一行 `{ "id": …, "type": …, "path": … }`；修正後只換 path 的值，條目原本的兩行排版保留。C3 的預期是舊行為，不是契約。要改 C3 的預期＝既有測試的判定變更（§14.4），等使用者決定。至今約 1 h。
+- 2026-11-01，使用者：「照建議改 C3」。C3 的預期改成「只換 path 的值，條目保留原本的排版」（§14.4：守住的性質＝其他條目的位元組不變、previousPath 正確、條目拿到新值；放寬面＝保留排版只換值的輸出以前算失敗；收緊面＝整個條目被改寫的輸出以前通過；整份文字仍逐位元組比對，額外欄位由 E1～E3 守住）。宣告不變：C1～C7、E1～E3 全過，突變 3 條全 killed，全量 CTest 全過。
+- 結果（`green_after_c3.txt`）：C1～C7、E1～E3 全過。突變執行前補 E4（巢狀的同名成員排在條目自己的成員前面）：E1 的巢狀成員排在後面，拿掉深度判斷的突變會先找到最上層的鍵而殺不到。預檢：3 條的 find 都恰好一次；預期訊息是 doctest 的「is NOT correct」。宣告：3 條全 killed、stale 0；D184 另重跑 fw-cat-edit-other（錨在改動的更新分支附近）。
 
 ### v8-framework-catalog-structure 的事前宣告（2026-11-01，寫程式前）
 

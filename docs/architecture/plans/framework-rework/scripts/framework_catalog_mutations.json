@@ -93,6 +93,36 @@
       "target": "gyo_framework_tests",
       "expect_build_failure": true,
       "expect": "but no\\s+GYO::ToolFrameworkJson"
+    },
+    {
+      "id": "fw-extra-whole-entry",
+      "what": "An update replaces the whole entry again, dropping its other fields",
+      "file": "framework/bindings/json/src/CatalogText.cpp",
+      "find": "        for (const auto& [span, value] : edits) {\n            text.replace(span.first, span.second - span.first, value);\n        }",
+      "replace": "        static_cast<void>(edits);\n        text.replace(begin, end - begin, entryText);",
+      "target": "gyo_framework_tests",
+      "cases": "C*,E*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-extra-nested-key",
+      "what": "The member search ignores depth, so a nested member with the same name is edited",
+      "file": "framework/bindings/json/src/CatalogText.cpp",
+      "find": "            if (depth != 1) continue;\n",
+      "replace": "",
+      "target": "gyo_framework_tests",
+      "cases": "C*,E*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-extra-expected-whole",
+      "what": "The check after the edit expects the whole new entry, dropping the other fields",
+      "file": "framework/bindings/json/src/CatalogText.cpp",
+      "find": "        Json& updated = expected[\"assets\"][plan->index];\n        updated[\"type\"] = entry.type;\n        updated[\"path\"] = entry.path;",
+      "replace": "        expected[\"assets\"][plan->index] = Json{{\"id\", entry.id}, {\"type\", entry.type}, {\"path\", entry.path}};",
+      "target": "gyo_framework_tests",
+      "cases": "C*,E*",
+      "expect": "is NOT correct"
     }
   ]
 }
