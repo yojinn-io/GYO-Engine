@@ -262,7 +262,7 @@
       "find": "ImGui::GetIO().ConfigMacOSXBehaviors ? Framework::TextShortcutModifier::Gui",
       "replace": "false ? Framework::TextShortcutModifier::Gui",
       "target": "gyo_ui_editor_preview_tests",
-      "expect": "FAILED: Command\\+A selects all and Ctrl\\+A does not"
+      "expect": "FAILED: Ctrl\\+A does not select all where Command is the shortcut"
     },
     {
       "id": "ui-input-request-when-idle",
