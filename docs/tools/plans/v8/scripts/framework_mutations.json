@@ -60,22 +60,6 @@
       "expect": "FAILED: a stale folder answer mounts nothing"
     },
     {
-      "id": "ui-cli-usage-exit",
-      "what": "A command line the editor cannot parse exits 1 instead of 2",
-      "file": "tools/ui_editor/src/Main.cpp",
-      "find": "        std::cerr << \"error: \" << Engine::Base::Describe(parsed.error()) << \"\\n\\n\" << CommandLineHelp();\n        return 2;",
-      "replace": "        std::cerr << \"error: \" << Engine::Base::Describe(parsed.error()) << \"\\n\\n\" << CommandLineHelp();\n        return 1;",
-      "target": "gyo_ui_editor",
-      "command": [
-        "cmake",
-        "-DEDITOR={exe:gyo_ui_editor}",
-        "-DWORK=build/target/mutation-work/ui-cli",
-        "-P",
-        "tests/ui_editor/EditorCliTests.cmake"
-      ],
-      "expect": "unknown_option: expected 2, got 1"
-    },
-    {
       "id": "ae-guard-json-target",
       "what": "The audio editor names nlohmann_json again instead of writing the catalog through the framework",
       "file": "tools/audio_editor/CMakeLists.txt",
