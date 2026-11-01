@@ -51,7 +51,8 @@ v8-plan
 │   │   └── v8-product-hitbox-rewind          「high（τ、夾取局部 xhigh）｜Opus 5.5｜姿勢歷史、ShotRewind、守衛第二段核准」
 │   └── entity-line                「PR 線：實體資料模型（架構掃描 2026-11-01 開的卡 `v8-product-entity-model`）；split 排在 rewind 之前，讓姿勢歷史第一個以元件寫」
 │       ├── v8-product-tarkov-requirements ✓  「medium｜下段｜主會話 Fable 5.1｜玩法需求問卷：實體種類與數量、身分、屬性、PvE、PvP／PvE 組合、可見性；數值由使用者定」
-│       ├── v8-product-entity-contract        「ultracode（先問）｜上段｜提案者 3×Opus 5.5 high、統合者 Fable 5.1 high、敵對檢查者 Opus 5.5 xhigh｜單一 EntityId、元件清單、複寫通道、決定性契約與 Design Invariants；pv10 附錄 C 的改寫建議」
+│       ├── v8-product-entity-contract ✓      「ultracode（先問）｜上段｜提案者 3×Opus 5.5 high、統合者 Fable 5.1 high、敵對檢查者 Opus 5.5 xhigh｜單一 EntityId、元件清單、複寫通道、決定性契約與 Design Invariants；pv10 附錄 C 的改寫建議」
+│       ├── v8-product-evict-animation-orphan 「high｜上段（回歸修正）｜實作者主會話 Fable 5.1、檢證者 Opus 5.5｜host 逐出不刪 snapshot 的 animation：先 Red（G3）後 Green；golden 重生有緩める面，照 §14.4 核准」
 │       └── v8-product-match-entity-split     「high（digest、迭代順序局部 xhigh）｜上段｜實作者主會話 Fable 5.1、審查者 Opus 5.5 xhigh、檢證者 Opus 5.5｜Participant 拆成輸入來源與實體元件；不改 wire 與行為；兩樹 digest 0 差分」
 │
 ├── ② 體驗優化                     「pv8 欄位已在 ① 合併，這裡只填行為」
@@ -92,6 +93,7 @@ v8-plan
 | `v8-product-hitbox-rewind` | high（回溯局部 xhigh）｜Opus 5.5 | 20～30 h | Match 保存權威姿勢歷史，照射手開槍時看到的遠端時刻回溯；填 pv7 已預留的欄位（v7.1 D87、D89） | 蹲下之後做：蹲下會改變姿勢 |
 | `v8-product-tarkov-requirements` | medium｜下段（問卷文件，不碰 DI、協議、資料格式）｜實作者主會話 Fable 5.1；沒有審查者與檢證者 | 2～3 h | [實體需求問卷](entity-requirements.md)：實體種類與同時存在的數量、身分、人物屬性、PvE 規模、PvP／PvE 組合、誰看得到什麼；pv8 問卷已問的沿用 | 架構卡 `v8-product-entity-model`（HANDOFF `v8-product-entity-model-start`）。數值由使用者定 |
 | `v8-product-entity-contract` | ultracode（先問）｜上段（Design Invariants、資料格式、Architecture 判斷）｜照 navigator 上段表：提案者 3×Opus 5.5 high、統合者 Fable 5.1 high、敵對檢查者 Opus 5.5 xhigh；偵察不用小模型；文件由主會話 Fable 5.1 寫 | 6～10 h | 四件事：單一 EntityId 空間（含玩家 id 由 Gateway 配的對照）、元件＝現在拆法的推廣（PlayerState／CombatState／PlayerAnimation 與 Match 內按 PlayerId 的 map）、複寫屬性掛在元件上（公開／私人／事件）、決定性契約（迭代順序＝EntityId 升冪、id 進 digest）；pv10 附錄 C 的改寫建議；新文件 `entity-model.zh-Hant.md` 的 Design Invariants 與守衛測試設計 | 先讀 EnTT／flecs 的儲存設計並寫下為何、能用多少、要改裝多少。新增 DI 節是 Architecture Delta，要使用者同意 |
+| `v8-product-evict-animation-orphan` | high｜上段（回歸修正）｜實作者主會話 Fable 5.1；§14.4 檢證者 Opus 5.5 | 3～5 h | host 逐出玩家時只刪 snapshot 的 players 與 combat、沒刪 animation（`MatchRuntimeHost.cpp:756-760`），Gateway 的同長檢查會讓整個 Gateway 失效。照 §14.3：重跑 runner `--dump` 重現 → G3 Red → 加 `EraseEntity(WorldSnapshot&, EntityId)`、發布前 `RequireValidSnapshot` → Green | entity-model 決定 3 (a)：排在 split 之前，同一 PR。只有 host-poor-connection/corridor 一行 golden 改變，是緩める面，1～5 經檢證者核對後要使用者核准才重生 |
 | `v8-product-match-entity-split` | high（digest、迭代順序局部 xhigh）｜上段（Architecture 判斷、DI 守衛測試）｜實作者主會話 Fable 5.1；審查者 `xhigh-reviewer` 指定 Opus 5.5 xhigh（和實作者不同模型）；§14.4 檢證者 Opus 5.5 | 12～18 h | `PvpMatch::Participant` 拆成輸入來源（命令、動作帳本、替補、品質）與實體元件；`shapes_`、`actionsCombat_` 一起歸位；不改 wire、不改行為 | Match 內部 Ownership 重整，照 AGENTS §3 寫七點；驗收＝同機兩樹 `compare_authority_trees.py` 0 差分、golden 不變、digest version 不升。排在 `v8-product-hitbox-rewind` 之前 |
 | `v8-product-hit-rules` | medium｜Opus 5.5 | 2～4 h | 部位倍率 | 數值照 object_fps_v2（`v8-product-hit-rules-v2-values`）；加 `HIT_PART_LIMB`（`v8-product-hit-rules-limb-wire`）；千分位計算（`v8-product-hit-rules-permille`）。版本處理（pv8 延續或升 pv9）在 hitbox-line 的事前宣告決定 |
 | `v8-product-sprint` | high｜Opus 5.5 | 8～12 h | 衝刺速度與限制 | 改變權威結果：事前宣告 |
@@ -160,6 +162,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hitbox-shot-judge`（S2） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_judge.zh-Hant.md) |
 | `v8-product-hitbox-shot-wire`（S3） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_wire.zh-Hant.md) |
 | `v8-product-tarkov-requirements` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_tarkov_requirements.zh-Hant.md) |
+| `v8-product-entity-contract` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_entity_contract.zh-Hant.md) |
 
 ---
 

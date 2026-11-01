@@ -1,6 +1,6 @@
 # PvP Match 的實體資料模型（ECS 資料佈局）
 
-更新：2026-11-01（`v8-product-entity-contract`）。Owner：`object_fps_pvp`。**狀態：草案，等核准。** 本文件的 `Design Invariants` 節是新增的 Architecture Delta（AGENTS §3），條文與 Replacement Criteria 要使用者同意後才生效；「待使用者決定」節的 8 個決定也在同一關卡。
+更新：2026-11-01（`v8-product-entity-contract`）。Owner：`object_fps_pvp`。**狀態：定稿（`v8-product-entity-contract-approve`，2026-11-01）：§12 的 8 個決定全部照建議；`Design Invariants` 節與 Replacement Criteria 作為 Architecture Delta 已核准（AGENTS §3）。** 之後修改條文或門檻都是新的 Architecture Delta。「實作現況」：split 尚未開始，E-2、E-3 的配發器與 E-12 的待辦機制在第一個非玩家批才有程式。
 
 推導：ultracode（偵察 2×Opus 5.5、提案 3×Opus 5.5、統合 Fable 5.1、敵對檢查 Opus 5.5 xhigh），紀錄在 [v8 HANDOFF](plans/v8/HANDOFF.md)，各 agent 的原始輸出存在主 checkout 的 `build/evidence/v8-product-entity-contract/`（git 管理外）。敵對檢查的 must 3、should 12、note 7 全部處置，見本文末「敵對檢查的處置」。程式行號以工作樹 `1c598a83` 為準，定稿前逐一重核。
 
@@ -72,13 +72,13 @@ inline constexpr EntityId NoEntity = 0;  // 現況：Join 拒 0（PvpMatch.cpp:4
 Match 端私有標頭（`apps/object_fps_pvp/src/Pvp/EntityAllocation.hpp`，Client 不可見）：
 
 ```cpp
-inline constexpr EntityId PlayerEntityIdLast = <段界−1>;   // 決定 1
-inline constexpr EntityId MatchEntityIdFirst = <段界>;
-inline constexpr EntityId MatchEntityIdLast  = <決定 1>;    // WireCounterMax 或 2^28−1
+inline constexpr EntityId PlayerEntityIdLast = 0x00FF'FFFF;  // 2^24−1（決定 1 (a)）
+inline constexpr EntityId MatchEntityIdFirst = 0x0100'0000;  // 2^24
+inline constexpr EntityId MatchEntityIdLast  = 0x0FFF'FFFF;  // 2^28−1：契約最大仍是 4 位元組 varint
 ```
 
 - `PlayerId` 現在已是 `using PlayerId = std::uint64_t`（`Movement.hpp:14`），改成別名是純型別變更，所有簽名照常編譯。wire 維持 uint32，編碼邊界照舊用 `wire::Counter` 的 `GYO_ASSERT`（`Wire.hpp:21-24`）。
-- 位寬：uint32 夠（問卷結論：程序累計約 340 萬，餘裕約 1,260 倍；uint16 不夠）。
+- 位寬：uint32 夠（問卷結論：程序累計約 340 萬；uint16 不夠）。段界照決定 1 (a)：玩家段 [1, 2^24−1]（需求 65,535 的 256 倍），Match 段 [2^24, 2^28−1]（約 2.5 億，需求 340 萬的約 74 倍）；Match 段 id 的 varint 在契約最大也是 4 位元組。
 - **用盡的單位是「Match 世代（一條 IPC link）」，不是程序生命期**：`PvpMatch::Reset()` 歸位計數器，IpcHost 每條新連線與關閉都 `RequestReset`（`IpcHost.cpp:478-489`、`:545-553`）。世代 ≤ 程序，餘裕只會更大；條文明寫，免得之後有人把計數器改成跨 link 保留。
 
 ### 2.2 配發對照
@@ -275,7 +275,7 @@ inline constexpr EntityId MatchEntityIdLast  = <決定 1>;    // WireCounterMax 
 
 ### Replacement Criteria
 
-任一條出現就停止修補，向使用者提出「重建或修改」（AGENTS §3）。門檻數字是提案值，待核准（決定 7）。
+任一條出現就停止修補，向使用者提出「重建或修改」（AGENTS §3）。門檻數字已核准（決定 7 (a)）。
 
 - RC-1：同時存在的實體實測超過 4,000（需求的 10 倍），或在 Linux Match 上實測欄維護（insert、erase、lower_bound、合併）每 Tick 的 p95 超過 1 ms（16.7 ms 預算的 6%）→ 換結構（例如分頁或索引），但不得換成會改變順序的結構。
 - RC-2：需要回收 id（一個世代內實際用盡，或需要跨世代保留 id）→ E-3 不成立，引入 generation 位元（照 EnTT `combine`／`next` 或 flecs 的遮罩）。
@@ -377,9 +377,9 @@ inline constexpr EntityId MatchEntityIdLast  = <決定 1>;    // WireCounterMax 
 6. **Ownership**：`PvpMatch` 仍是唯一的玩法權威；新增一項權威：Match 段 EntityId 的配發（第一個非玩家批）。Gateway 繼續擁有玩家段的配發，只是上限常數收窄；不持任何對照表。`Participant` 的欄位依 owner 歸位：元件欄＝實體的權威；ActionLedger、Connection＝輸入來源（Connection 只屬於連線實體）；quality＝診斷；tickShapes_、actionStartCombats_＝可重建的派生暫存。`PlayerState` 內的游標與 host 診斷欄位：owner 分別標為 Connection 與 MatchRuntimeHost，暫存在 Body 型別裡（過渡期）。刪實體的責任收到 `PvpMatch::EraseEntity` 一處；host 對 snapshot 列的刪除收到 `EraseEntity(WorldSnapshot&, id)` 一處。
 7. **為什麼更小的變更解決不了**：只在 `Participant` 加 optional 欄位或 `EntityKind` 分支來容納 AI，每個系統都得 `if (kind == …)`，違反「種類是標籤」，非玩家實體會帶著連線狀態。只加註解不拆欄：E-5 與 E-7 沒有可檢查的落點；孤兒 animation 這類缺陷會再出現。只在 host 補一行刪 animation：修了症狀，但「各刪各的」的結構仍在。不寫 Design Invariants：決定性契約只存在對話裡，跨多個 Agent 與多個版本守不住。另一方面，本批刻意**不做**更大的變更：不拆 PlayerState、不在 split 加種類表、不做通用 EntityColumn 類別或 registry、不改 wire、不在 Engine 加任何東西；pv10 只給方向。
 
-## 12. 待使用者決定
+## 12. 決定記錄（2026-11-01 `v8-product-entity-contract-approve`：8 項全部照建議 (a)）
 
-每項附選項、建議、機制、取捨、證據位置。使用者保留決策點是為了學習。
+原本提給使用者的選項、機制、取捨與證據照原樣保留，作為決定的根據。採用的選項在各項的「建議」。
 
 - **決定 1：EntityId 段界與 Match 段上限。** (a) 玩家段上限 2^24−1，Match 段 [2^24, 2^28−1]：每個非玩家 id 在 wire 上**契約最大也是 4 位元組**（varint 到 2^28−1），Match 段約 2.5 億、需求 340 萬、約 74 倍餘裕；玩家 256 倍。(b) 玩家段上限 2^24−1，Match 段到 UINT32_MAX：典型值 4 位元組，但契約最大 5 位元組，capacity_test 以 MaxUint32 算預算時省不到。(c) 玩家段上限 2^31−1，Match 段從 2^31 起：契約最大 5 位元組。建議 (a)。機制：段界是 Match 端私有標頭的一組常數，Gateway 的 `player_ids_exhausted` 上限與 `player_id_ceiling_test.go` 跟著改，Match 的 Join 在 pv10 加值域檢查，兩邊常數用原始碼核對測試綴住。取捨：(a) 讓容量預算（契約最大）真的省下每個非玩家實體每 Tick 約 3 B（Body、Combat、Animation 各 1 B），20 隻 AI 約 60 B／份；餘裕從 1,250 倍降到 74 倍，仍遠超需求。證據：varint 規則；問卷結論；`capacity_test.go:42-52` 用 MaxUint32−i 當 id；`server.go:359`、`player_id_ceiling_test.go:19-27`。
 - **決定 2：平手時玩家一律先於 AI／Boss，是否接受為有意的判定規則。** (a) 接受：寫進 E-6，改段界＝改判定＝升 digest version。(b) 不接受：要求平手鍵不依賴配發段——但 E-4 禁止以種類分支判定，任何總序都得回到某個 id，所以 (b) 實際上只剩「讓 Match 段與玩家段交錯配發」，會讓 Match 段失去「append 即排序」且 Gateway 上限要和 Match 協調。建議 (a)。取捨：(a) 是免費、可解釋的規則；玩家受益（PvP 優先）符合「AI 只打玩家」的玩法。證據：`PvpMatch.cpp:271-273`、`:411-414`；`ShotQuery.cpp:119-122`；問卷 4-6。
@@ -389,7 +389,7 @@ inline constexpr EntityId MatchEntityIdLast  = <決定 1>;    // WireCounterMax 
 - **決定 5-ii：非玩家實體進同一個 repeated，還是另開欄位。** (a) 「每個元件一個 repeated」推廣到所有有該元件的實體，22／23 永久保留，事件走 B-1（§4.4）。(b) `players`／`combat`／`animation` 照舊只給連線實體，新增 `bodies`、`body_animation`，22／23 給世界實體事件與私人狀態。建議 (a)。取捨：(a) 符合起點 2，但 Client 的 SnapshotTimeline、PlayerPresentation、Gateway 的 ≤4／同長檢查都要重寫，粗估 40～60 h；(b) Client 既有路徑改動最小，但違反「每個元件一個 repeated」，22／23 要另立 Gateway 佇列與 DropReason。證據：`ClientConnection.cpp:601-602`、`:639-664`；`adapter.go:79`、`:132`；`PvpApplication.cpp:1041`。
 - **決定 6：Match 段 id 用盡的機制。** (a) Runtime Error：配發器回 Result，那一次生成被拒並計入診斷（`entity_ids_exhausted`），局照常進行，不回繞。(b) 沿同檔先例拋 `std::overflow_error`，和 life、epoch、tick 用盡一致（`PvpMatch.cpp:276-279`）。建議 (a)。機制：依 error-handling 的 Status 行，產品新程式照 Assert/Result 規則；「程式正確但環境讓它失敗」是 Runtime Error。取捨：(a) 要定義「被拒的生成」對玩法的意義（AI 不出生、投射物只有射擊沒有軌跡 id），G4 要測 Result；(b) 實作最小，但新 site 沿用舊機制。兩者在 74～1,250 倍餘裕下幾乎不會發生，是分類原則的選擇，影響小、可逆。
 - **決定 7：Replacement Criteria 的門檻數值。** (a) 照提案值：RC-1 同時實體 >4,000 或 Linux Match 實測欄維護每 Tick p95 >1 ms；RC-3 種類 >16；RC-4 加一種實體要改 >3 個判定函數；RC-4b 加一個可複寫元件要改 >6 處。(b) 另定數值。建議 (a)。取捨：太鬆讓模型帶病修補、太緊讓正常演進被誤判為置換；提案值取需求的 10 倍與 Tick 預算的 6%，都是未量測的提案。
-- **決定 8：本文件的 Design Invariants 節（E-1～E-12）與 Replacement Criteria 是否核准為 Architecture Delta。** 這是 AGENTS §3 要求的使用者同意。核准後 split 批才能開工；E-12 與 E-4 的「連線 API 查 connections_」是敵對檢查補進來的，請特別看。
+- **決定 8：本文件的 Design Invariants 節（E-1～E-12）與 Replacement Criteria 核准為 Architecture Delta。** 已核准（使用者原話「照建議核准」）；split 批可以開工。E-12 與 E-4 的「連線 API 查 connections_」是敵對檢查補進來的。
 
 ## 13. 風險與未查證
 
