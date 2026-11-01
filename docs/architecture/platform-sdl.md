@@ -148,6 +148,18 @@ which makes SDL answer Failed at once.
 - Engine never calls the global `SDL_Init`/`SDL_Quit`; each subsystem is initialized and quit by its owner with
   SDL's reference counting (`SdlPlatform` owns VIDEO).
 
+### SDL patches (v8-tool-ui-editor-ime-enter)
+
+GYO builds SDL with the patches in `third_party/sdl3/patches/` (owner: this backend). FetchContent applies them in
+name order through `third_party/sdl3/ApplyPatches.cmake`, which skips a patch that is already applied. A source
+given through `FETCHCONTENT_SOURCE_DIR_SDL3` skips the patch step, so configuring fails when the fetched source
+lacks the patches. Each patch fixes a defect in SDL itself, where the state that decides it lives; a patch is not a
+place for GYO behaviour.
+
+| Patch | Defect | Remove when |
+|---|---|---|
+| `gyo-cocoa-ime-composing-keydown` | macOS: while text is composed, SDL sends a key as a key press whenever the input method did not change the composition while handling it. The Japanese input method's first Return only settles the chosen candidate, so the program gets Return mid-composition; Dear ImGui then ends the edit and stops text input, and SDL drops the text committed afterwards. The patch keeps a key pressed during composition from the program unless the input method passes it on as a command (`doCommandBySelector:`), as winit does. The release of a held key is dropped by SDL because the key never went down. Evidence: [dev_log](../dev_logs/2026_11_01_tool_v8_ui_editor_ime_enter.zh-Hant.md) | SDL fixes the defect upstream, or the SDL version moves and the patch no longer applies (then reproduce the defect on the new version before porting the patch) |
+
 ## Design Invariants
 
 1. The non-native public headers of the SDL backends include no SDL header, directly or indirectly, and contain no

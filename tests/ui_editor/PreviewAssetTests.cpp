@@ -1,9 +1,9 @@
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/EditorApp.hpp"
-#include "gyo/framework/FileService.hpp"
 #include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/ElementSchema.hpp"
 #include "gyo/ui_editor/PreviewAdapter.hpp"
+#include "gyo/ui_editor/SdlPathDialogs.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 #include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "engine/base/Assert.hpp"
@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -26,6 +27,16 @@ namespace {
 using namespace Gyo::Tools::UiEditor;
 namespace Framework = Gyo::Tools::Framework;
 int failures{};
+
+// Test fixtures are written with the standard library, so the code under test
+// is not also the code that prepares its files.
+bool WriteFixture(const std::filesystem::path& path, const std::string_view text) {
+    std::error_code error;
+    if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path(), error);
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file.write(text.data(), static_cast<std::streamsize>(text.size()));
+    return static_cast<bool>(file);
+}
 void Expect(bool condition, const char* message) {
     if (!condition) { ++failures; std::cerr << "FAILED: " << message << '\n'; }
 }
@@ -66,8 +77,8 @@ struct Fixture final {
     SDL_Renderer* renderer{};
     Fixture() {
         std::filesystem::create_directories(root);
-        Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "font.bin", "test-font")), "write owned fake font");
-        Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "catalog.json",
+        Expect(static_cast<bool>(WriteFixture(root / "font.bin", "test-font")), "write owned fake font");
+        Expect(static_cast<bool>(WriteFixture(root / "catalog.json",
             R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write catalog");
         surface = SDL_CreateSurface(320, 16, SDL_PIXELFORMAT_RGBA32);
         renderer = SDL_CreateSoftwareRenderer(surface);
@@ -113,7 +124,7 @@ void TestQueuedTexturesAndFrameEviction() {
     assets.Initialize(*fixture.renderer, std::move(rasterizer));
     assets.Mount(catalog);
     // A parsed snapshot must not be read from disk again by the preview.
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "catalog.json", "broken")), "replace source catalog");
+    Expect(static_cast<bool>(WriteFixture(fixture.root / "catalog.json", "broken")), "replace source catalog");
     fixture.Begin(assets);
     for (int index = 0; index < 300; ++index) {
         const auto text = assets.Text("font.default", std::to_string(index), 12);
@@ -150,9 +161,9 @@ void TestQueuedTexturesAndFrameEviction() {
 
 void TestSharedContentAndQueuedMounts() {
     Fixture fixture;
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "content.json",
+    Expect(static_cast<bool>(WriteFixture(fixture.root / "content.json",
         R"({"version":1,"catalogs":["catalog.json","images.json"],"shader_bundles":[]})")), "write multi-catalog content");
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "images.json",
+    Expect(static_cast<bool>(WriteFixture(fixture.root / "images.json",
         R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"image.png"}]})")), "write separate image catalog");
     // The engine deliberately enables PNG only in SDL_image. Keep one complete
     // pixel in this fixture rather than relying on OS codecs or game assets.
@@ -163,7 +174,7 @@ void TestSharedContentAndQueuedMounts() {
         0x0b,0x49,0x44,0x41,0x54,0x78,0xda,0x63,0x64,0xf8,0x0f,0x00,
         0x01,0x05,0x01,0x01,0x27,0x18,0xe3,0x66,0x00,0x00,0x00,0x00,
         0x49,0x45,0x4e,0x44,0xae,0x42,0x60,0x82};
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "image.png",
+    Expect(static_cast<bool>(WriteFixture(fixture.root / "image.png",
         std::string_view{reinterpret_cast<const char*>(png), sizeof(png)})), "write owned PNG fixture");
     AssetPreviewContext assets;
     auto rasterizer = std::make_unique<BitmapRasterizer>();
@@ -189,7 +200,7 @@ void TestSharedContentAndQueuedMounts() {
     editor.RequestAssetMount({}, fixture.root);
     editor.ApplyPendingAssetChanges();
     Expect(assets.IsMounted(), "GUI remount accepts complete content");
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "images.json", "broken")), "invalidate remount candidate");
+    Expect(static_cast<bool>(WriteFixture(fixture.root / "images.json", "broken")), "invalidate remount candidate");
     editor.RequestAssetMount({}, fixture.root);
     editor.ApplyPendingAssetChanges();
     Expect(assets.IsMounted(), "failed GUI remount preserves previous preview");
@@ -213,11 +224,11 @@ void TestMountRootOutsideAnsiCodePage() {
     Fixture fixture;
     const auto root = fixture.root / std::filesystem::path(u8"\u8a66\u5408-\ud55c");
     std::filesystem::create_directories(root);
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "content.json",
+    Expect(static_cast<bool>(WriteFixture(root / "content.json",
         R"({"version":1,"catalogs":["catalog.json"],"shader_bundles":[]})")), "write content outside the code page");
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "catalog.json",
+    Expect(static_cast<bool>(WriteFixture(root / "catalog.json",
         R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write catalog outside the code page");
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "font.bin", "test-font")), "write font outside the code page");
+    Expect(static_cast<bool>(WriteFixture(root / "font.bin", "test-font")), "write font outside the code page");
     AssetPreviewContext assets;
     assets.Initialize(*fixture.renderer, std::make_unique<BitmapRasterizer>());
     CommandLineOptions options;
@@ -236,7 +247,9 @@ class ScriptedDialogs final : public PathDialogs {
 public:
     void Show(PathDialogPurpose purpose, std::string_view) override { shown.push_back(purpose); }
     std::vector<PathDialogResult> TakeResults() override { return std::exchange(results, {}); }
+    void Abandon() override { ++abandoned; }
     std::vector<PathDialogPurpose> shown;
+    int abandoned{};
     std::vector<PathDialogResult> results;
 };
 
@@ -244,11 +257,11 @@ void TestPathDialogChoosesAssetFolder() {
     Fixture fixture;
     const auto root = fixture.root / std::filesystem::path(u8"\u8cc7\u7522");
     std::filesystem::create_directories(root);
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "content.json",
+    Expect(static_cast<bool>(WriteFixture(root / "content.json",
         R"({"version":1,"catalogs":["catalog.json"],"shader_bundles":[]})")), "write chosen content");
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "catalog.json",
+    Expect(static_cast<bool>(WriteFixture(root / "catalog.json",
         R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write chosen catalog");
-    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "font.bin", "test-font")), "write chosen font");
+    Expect(static_cast<bool>(WriteFixture(root / "font.bin", "test-font")), "write chosen font");
     AssetPreviewContext assets;
     assets.Initialize(*fixture.renderer, std::make_unique<BitmapRasterizer>());
     ScriptedDialogs dialogs;
@@ -266,6 +279,16 @@ void TestPathDialogChoosesAssetFolder() {
     editor.ApplyPendingAssetChanges();
     Expect(!assets.IsMounted(), "a cancelled folder dialog mounts nothing");
 
+    // An answer the editor no longer waits for (abandoned or superseded) is
+    // only reported, even when it names a valid root.
+    dialogs.results.push_back({.purpose = PathDialogPurpose::AssetFolder,
+                               .outcome = PathDialogOutcome::Chosen,
+                               .path = std::string(text.begin(), text.end()),
+                               .current = false});
+    editor.ApplyPathDialogResults();
+    editor.ApplyPendingAssetChanges();
+    Expect(!assets.IsMounted(), "a stale folder answer mounts nothing");
+
     dialogs.results.push_back({.purpose = PathDialogPurpose::AssetFolder,
                                .outcome = PathDialogOutcome::Chosen,
                                .path = std::string(text.begin(), text.end())});
@@ -280,6 +303,39 @@ void TestPathDialogChoosesAssetFolder() {
     editor.ApplyPathDialogResults();
     editor.ApplyPendingAssetChanges();
     Expect(!assets.IsMounted(), "filling the Asset Root field does not mount by itself");
+}
+
+// The adapter between the editor's purposes and Engine's dialogs: each
+// purpose asks for its kind and filters, and an answer reaches the editor
+// with its request's purpose only while that request is awaited.
+void TestPathDialogAdapter() {
+    namespace Sdl = Engine::Platform::Sdl;
+    const auto kindOf = [](const PathDialogPurpose purpose) { return PathDialogRequestFor(purpose, "").kind; };
+    Expect(kindOf(PathDialogPurpose::OpenDocument) == Sdl::PathDialogKind::OpenFile, "opening a document opens a file");
+    Expect(kindOf(PathDialogPurpose::ExportDocument) == Sdl::PathDialogKind::SaveFile, "exporting saves a file");
+    Expect(kindOf(PathDialogPurpose::CatalogField) == Sdl::PathDialogKind::OpenFile, "the catalog field opens a file");
+    Expect(kindOf(PathDialogPurpose::AssetFolder) == Sdl::PathDialogKind::OpenFolder, "an asset folder opens a folder");
+    Expect(kindOf(PathDialogPurpose::AssetRootField) == Sdl::PathDialogKind::OpenFolder, "the root field opens a folder");
+    const Sdl::PathDialogRequest open = PathDialogRequestFor(PathDialogPurpose::OpenDocument, "start");
+    Expect(open.defaultLocation == "start" && open.filters.size() == 1 && open.filters[0].pattern == "json",
+        "a document dialog starts at the field's path and offers UI JSON");
+    Expect(PathDialogRequestFor(PathDialogPurpose::AssetFolder, "").filters.empty(), "a folder dialog has no filters");
+
+    PathDialogRequests requests;
+    const std::uint64_t tag = requests.Begin(PathDialogPurpose::ExportDocument);
+    const PathDialogResult failed = PathDialogResultFor(requests,
+        {.tag = tag, .outcome = Sdl::PathDialogOutcome::Failed, .error = "no portal"});
+    Expect(failed.current && failed.purpose == PathDialogPurpose::ExportDocument &&
+            failed.outcome == PathDialogOutcome::Failed && failed.error == "no portal",
+        "a failure reaches the editor with its purpose and error");
+    const PathDialogResult chosen = PathDialogResultFor(requests,
+        {.tag = tag, .outcome = Sdl::PathDialogOutcome::Chosen, .path = "out.json"});
+    Expect(chosen.current && chosen.outcome == PathDialogOutcome::Chosen && chosen.path == "out.json",
+        "the fallback dialog's choice reaches the editor");
+    const PathDialogResult late = PathDialogResultFor(requests,
+        {.tag = tag, .outcome = Sdl::PathDialogOutcome::Cancelled});
+    Expect(!late.current && late.outcome == PathDialogOutcome::Cancelled,
+        "an answer after the request ended is marked as not awaited");
 }
 } // namespace
 
@@ -343,6 +399,7 @@ int main() {
     TestSharedContentAndQueuedMounts();
     TestMountRootOutsideAnsiCodePage();
     TestPathDialogChoosesAssetFolder();
+    TestPathDialogAdapter();
     TestPreviewTextFieldTyping();
     return failures == 0 ? 0 : 1;
 }

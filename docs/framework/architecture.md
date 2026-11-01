@@ -55,8 +55,10 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    dependency guard and the registry's reserved names.
 2. Dependencies point one way: game or tool → framework → engine. The framework
    includes nothing from `apps/` or `tools/`, and the engine never names it; it
-   links no game, no `GYO::Input` and no SDL_GPU, so a tool's own Design
-   Invariant 1 (no game, no `GYO::Input`, no SDL_GPU) still holds through it.
+   links no game and no SDL_GPU, so a tool's own Design Invariant 1 (no game,
+   no SDL_GPU) still holds through it. Engine's capabilities are open to the
+   framework as to a game or tool, input included
+   (`v8-tool-ui-editor-ime-composition-source`, 2026-11-01).
    The core (everything outside `framework/bindings/`) includes no `SDL3/`,
    `imgui`, `backends/`, `nlohmann/` or Engine `*Native` header, names no
    `SDL_`, `ImGui` or `nlohmann` symbol, and links no SDL3, imgui,
@@ -64,7 +66,9 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    through Engine's neutral targets. A binding is its own target under
    `framework/bindings/<name>/` with its own positive list, and the core never
    names it. Only the ImGui binding links `GYO::*Native`, PRIVATE; no framework
-   target names `SDL3::SDL3` or an `SDL_` symbol. Guards: the dependency guard
+   target names `SDL3::SDL3` or an `SDL_` symbol. The ImGui binding reads typed
+   text and the input method's composition through Engine's input backend
+   (`GYO::InputBackendSDL`), not from SDL's events. Guards: the dependency guard
    (core rules, one positive list per binding, and an allowlist of existing
    core sites whose counts must match and only shrink, empty after
    `v8-framework-invariants`) and the configure-time link check in
@@ -125,7 +129,13 @@ repair or rebuild the component.
 
 - A tool links `GYO::ToolFramework` (and `GYO::ToolFrameworkImGui` for an
   ImGui window, or `GYO::ToolFrameworkGui` until it moves) and includes
-  `gyo/framework/…`. The tool's own dependency guard lists them.
+  `gyo/framework/…`. The tool's own dependency guard lists them. An ImGui
+  window needs the components `SDL_RENDERER`, `SDL_INPUT` and `IMGUI` in the
+  tool's `project.json`.
+- The ImGui binding draws the input method's composition at ImGui's text
+  cursor, from Engine's input backend: on macOS the program has to draw it;
+  on Windows the input method keeps drawing it unless the platform options
+  ask otherwise. It covers what follows the cursor, as ImGui cannot insert it.
 - `RunHeadlessShell(argc, argv, body, failure)` is the program's main: it
   hands the body the UTF-8 command line and returns its exit code. A window
   shell may run inside the body.

@@ -11,10 +11,14 @@
 
 #include <imgui.h>
 
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 using namespace Gyo::Tools::Framework;
 
@@ -243,6 +247,120 @@ TEST_CASE("I9: the options reach the platform as given") {
     CHECK(code == 0);
     CHECK(rect.width == 640);
     CHECK(rect.height == 480);
+}
+
+namespace {
+
+// What the foreground list held at the start of each frame (the previous
+// frame's drawing), and where the edited field was.
+struct CompositionRun {
+    std::vector<int> vertices;
+    std::vector<ImVec2> lowest;
+    std::vector<ImVec2> highest;
+    ImVec2 fieldMin{};
+    ImVec2 fieldMax{};
+};
+
+// v8-tool-ui-editor-ime-enter: an InputText is edited from frame 2 on (until
+// stopEditingAt, when it is no longer drawn); each entry of events is pushed
+// at the start of its frame and reaches ImGui before the next frame.
+CompositionRun RunComposition(const std::vector<std::pair<int, std::function<void(SDL_Event&, SDL_WindowID)>>>& events,
+                              const int frames, const int stopEditingAt = 0) {
+    Counts counts;
+    CompositionRun run;
+    std::array<char, 64> buffer{};
+    const int code = RunImGuiShell(SmallWindow(), [&](const ImGuiShellContext& context) {
+        auto client = std::make_unique<Client>(context, counts, frames);
+        client->onBeginFrame = [&](const int frame) {
+            const ImDrawList* foreground = ImGui::GetForegroundDrawList();
+            run.vertices.push_back(foreground->VtxBuffer.Size);
+            ImVec2 low{1.0e9F, 1.0e9F};
+            ImVec2 high{-1.0e9F, -1.0e9F};
+            for (const ImDrawVert& vertex : foreground->VtxBuffer) {
+                low = {std::min(low.x, vertex.pos.x), std::min(low.y, vertex.pos.y)};
+                high = {std::max(high.x, vertex.pos.x), std::max(high.y, vertex.pos.y)};
+            }
+            run.lowest.push_back(low);
+            run.highest.push_back(high);
+            for (const auto& [at, make] : events) {
+                if (at == frame) {
+                    SDL_Event event{};
+                    make(event, OwnWindow(context));
+                    PushInjected(context, event);
+                }
+            }
+        };
+        client->onDraw = [&](const int frame) {
+            if (stopEditingAt != 0 && frame >= stopEditingAt) {
+                return;
+            }
+            ImGui::Begin("ime field");
+            if (frame == 1) {
+                ImGui::SetKeyboardFocusHere();
+            }
+            ImGui::InputText("field", buffer.data(), buffer.size());
+            run.fieldMin = ImGui::GetItemRectMin();
+            run.fieldMax = ImGui::GetItemRectMax();
+            ImGui::End();
+        };
+        return client;
+    });
+    CHECK(code == 0);
+    return run;
+}
+
+void Composing(SDL_Event& event, const SDL_WindowID window) {
+    event.type = SDL_EVENT_TEXT_EDITING;
+    event.edit.windowID = window;
+    event.edit.text = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e"; // 日本語
+    event.edit.start = 0;
+    event.edit.length = 3;
+}
+
+} // namespace
+
+TEST_CASE("I10: the input method's composition is drawn at the edited field until it ends") {
+    const auto committed = [](SDL_Event& event, const SDL_WindowID window) {
+        event.type = SDL_EVENT_TEXT_INPUT;
+        event.text.windowID = window;
+        event.text.text = "\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e";
+    };
+    const auto ended = [](SDL_Event& event, const SDL_WindowID window) {
+        event.type = SDL_EVENT_TEXT_EDITING;
+        event.edit.windowID = window;
+        event.edit.text = "";
+    };
+    const auto focusLost = [](SDL_Event& event, const SDL_WindowID window) {
+        event.type = SDL_EVENT_WINDOW_FOCUS_LOST;
+        event.window.windowID = window;
+    };
+
+    SUBCASE("drawn inside the field, then gone once the text is committed") {
+        const CompositionRun run = RunComposition({{5, &Composing}, {8, committed}}, 11);
+        // run.vertices[i] is what frame i drew (read at the start of frame i + 1).
+        CHECK(run.vertices[4] == 0);
+        REQUIRE(run.vertices[6] > 0);
+        CHECK(run.lowest[6].x >= run.fieldMin.x);
+        CHECK(run.highest[6].x <= run.fieldMax.x);
+        CHECK(run.lowest[6].y >= run.fieldMin.y - 1.0F);
+        CHECK(run.highest[6].y <= run.fieldMax.y + 1.0F);
+        CHECK(run.vertices[9] == 0);
+    }
+    SUBCASE("gone when the composition ends without text") {
+        const CompositionRun run = RunComposition({{5, &Composing}, {8, ended}}, 11);
+        REQUIRE(run.vertices[6] > 0);
+        CHECK(run.vertices[9] == 0);
+    }
+    SUBCASE("gone when the window loses focus") {
+        const CompositionRun run = RunComposition({{5, &Composing}, {8, focusLost}}, 11);
+        REQUIRE(run.vertices[6] > 0);
+        CHECK(run.vertices[9] == 0);
+    }
+    SUBCASE("gone when ImGui stops editing") {
+        const CompositionRun run = RunComposition({{5, &Composing}}, 11, 8);
+        REQUIRE(run.vertices[6] > 0);
+        CHECK(run.vertices[9] == 0);
+    }
 }
 
 // Run only by gyo_framework.imgui_shell_no_renderer, where SDL_RENDER_DRIVER

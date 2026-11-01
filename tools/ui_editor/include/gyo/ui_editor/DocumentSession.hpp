@@ -2,7 +2,7 @@
 
 #include "gyo/ui_editor/Diagnostic.hpp"
 #include "gyo/ui_editor/EditorError.hpp"
-#include "gyo/framework/FileService.hpp"
+#include "engine/io/helpers/UserFiles.hpp"
 #include "gyo/ui_editor/UndoStack.hpp"
 
 #include <nlohmann/json.hpp>
@@ -70,7 +70,7 @@ private:
     std::optional<std::filesystem::path> inputPath_;
     std::optional<std::filesystem::path> outputPath_;
     std::optional<std::filesystem::path> observedPath_;
-    std::optional<Framework::FileStamp> observedStamp_;
+    std::optional<Engine::IO::Helpers::FileStamp> observedStamp_;
 };
 
 } // namespace Gyo::Tools::UiEditor
