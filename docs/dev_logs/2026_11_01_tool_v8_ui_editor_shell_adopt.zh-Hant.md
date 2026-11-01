@@ -49,7 +49,11 @@
 ## L3（macOS，2026-11-01 19:29，使用者操作）
 
 - 第 1～3 項正常：開檔、取消、匯出到非 ASCII 資料夾。
-- 第 4 項：選資產資料夾時，畫面提示字型載入錯誤。錯誤全文待補；畫面上的訊息沒有印到終端機。
+- 第 4 項：掛載主 checkout 的 `assets/object_fps_pvp` 成功。Diagnostics 出現 error「AssetId 'font.default' does not exist in the mounted catalog」（使用者截圖）。
+  - 這不是回歸，是既有的規則（`UiDocumentBridge.cpp:151-165`，這條線沒有改這個檔）：
+    - 沒掛 catalog 時，未解析的 AssetId 記為 warning；10-31 看到的就是這種；
+    - 掛了 catalog 但裡面沒有這個 id 時，記為 error。
+  - 新文件預設的字型別名是 `font.default`，PvP 的 catalog 只有 `object_fps_pvp.font.ui`。
 - 第 5 項：沒做，包括對話窗開著時按 Stop waiting、關主視窗。
 - 第 6 項：日文輸入法會出現選字，但不穩定，選字後的文字進不了介面。
   - 終端機有一行 macOS 輸入法框架的 log：`error messaging the mach port for IMKCFRunLoopWakeUpReliable`。
