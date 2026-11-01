@@ -543,7 +543,9 @@ void TestEditorKeysWaitWhilePreviewTextIsEdited() {
     editor.SetPreviewMode(true);
     ImGuiIO& io = ImGui::GetIO();
     const ImVec2 display = io.DisplaySize;
+    const bool macBehaviors = io.ConfigMacOSXBehaviors;
     io.DisplaySize = {1600.0F, 900.0F};
+    io.ConfigMacOSXBehaviors = false; // so the Ctrl modifier below is io.KeyCtrl on every platform
     ImVec2 mouse{800.0F, 450.0F}; // over the canvas, so the preview takes input
     std::optional<PreviewAdapter::FrameOutput::TextInputRequest> lastRequest;
     const auto frame = [&](const ImGuiKey pressed, const bool down) {
@@ -576,6 +578,7 @@ void TestEditorKeysWaitWhilePreviewTextIsEdited() {
     // Select the field in the editor by clicking it (the canvas then has
     // keyboard focus, as when nudging), and edit it again with Enter.
     if (lastRequest) mouse = {lastRequest->x + lastRequest->width * 0.5F, lastRequest->y + lastRequest->height * 0.5F};
+    frame(ImGuiKey_None, false); // the pointer reaches the field before the button goes down
     if (!click()) {
         frame(ImGuiKey_Enter, true);
         frame(ImGuiKey_Enter, false);
@@ -592,6 +595,7 @@ void TestEditorKeysWaitWhilePreviewTextIsEdited() {
     frame(ImGuiKey_LeftArrow, false);
     Expect(frame(ImGuiKey_None, false), "an arrow while typing moves no element and keeps the edit");
     io.DisplaySize = display;
+    io.ConfigMacOSXBehaviors = macBehaviors;
 }
 
 int main() {
