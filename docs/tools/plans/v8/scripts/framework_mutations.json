@@ -1,18 +1,79 @@
 {
   "version": 1,
-  "description": "Declared mutants of the tools' guards for the framework (v8-tool-framework-shell): ui_editor and audio_editor, owned by the tool line. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The framework's own mutants moved to docs/architecture/plans/framework-rework/scripts/framework_mutations.json (v8-framework-guard-ratchet).",
+  "description": "Declared mutants of the tools' guards for the framework (v8-tool-framework-shell; v8-tool-ui-editor-path-dialog-adopt and -shell-adopt add the dialog and command-line mutants): ui_editor and audio_editor, owned by the tool line. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The framework's own mutants moved to docs/architecture/plans/framework-rework/scripts/framework_mutations.json (v8-framework-guard-ratchet).",
   "mutants": [
     {
       "id": "ui-guard-native-target",
-      "what": "ui_editor names the native SDL platform again instead of going through the framework's host",
+      "what": "ui_editor names the native SDL platform beside the framework's ImGui binding",
       "file": "tools/ui_editor/CMakeLists.txt",
-      "find": "        GYO::ToolFrameworkGui\n    )\n",
-      "replace": "        GYO::ToolFrameworkGui\n        GYO::PlatformSDLNative\n    )\n",
+      "find": "        GYO::RenderBackendSDLNative\n    )\n",
+      "replace": "        GYO::RenderBackendSDLNative\n        GYO::PlatformSDLNative\n    )\n",
       "command": [
         "{python}",
         "tests/ui_editor/ui_editor_dependency_guard.py"
       ],
       "expect": "names GYO::PlatformSDLNative"
+    },
+    {
+      "id": "ui-dialog-stale-accepted",
+      "what": "An answer counts for whatever request is waiting, whatever its tag",
+      "file": "tools/ui_editor/src/PathDialog.cpp",
+      "find": "if (!waiting_.has_value() || tag != lastTag_) return std::nullopt;",
+      "replace": "if (!waiting_.has_value()) return std::nullopt;",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: a newer request makes an older answer stale"
+    },
+    {
+      "id": "ui-dialog-failed-ends",
+      "what": "A Failed answer ends its request, so the fallback dialog's answer is dropped",
+      "file": "tools/ui_editor/src/PathDialog.cpp",
+      "find": "if (outcome != PathDialogOutcome::Failed) waiting_.reset();",
+      "replace": "waiting_.reset();",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: the answer that follows a failure \\(the fallback dialog\\) still applies"
+    },
+    {
+      "id": "ui-dialog-abandon-noop",
+      "what": "Stop waiting keeps the request, so its late answer still applies",
+      "file": "tools/ui_editor/src/PathDialog.cpp",
+      "find": "void PathDialogRequests::Abandon() noexcept {\n    waiting_.reset();\n}",
+      "replace": "void PathDialogRequests::Abandon() noexcept {\n}",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: an answer after Stop waiting is ignored"
+    },
+    {
+      "id": "ui-dialog-same-tag",
+      "what": "Every request gets the same tag",
+      "file": "tools/ui_editor/src/PathDialog.cpp",
+      "find": "    ++lastTag_;\n",
+      "replace": "    lastTag_ = 1;\n",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: every request gets its own tag"
+    },
+    {
+      "id": "ui-dialog-stale-applied",
+      "what": "The editor applies an answer its dialogs marked as no longer awaited",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "        if (!result.current) {\n",
+      "replace": "        if (false) {\n",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: a stale folder answer mounts nothing"
+    },
+    {
+      "id": "ui-cli-usage-exit",
+      "what": "A command line the editor cannot parse exits 1 instead of 2",
+      "file": "tools/ui_editor/src/Main.cpp",
+      "find": "        std::cerr << \"error: \" << Engine::Base::Describe(parsed.error()) << \"\\n\\n\" << CommandLineHelp();\n        return 2;",
+      "replace": "        std::cerr << \"error: \" << Engine::Base::Describe(parsed.error()) << \"\\n\\n\" << CommandLineHelp();\n        return 1;",
+      "target": "gyo_ui_editor",
+      "command": [
+        "cmake",
+        "-DEDITOR={exe:gyo_ui_editor}",
+        "-DWORK=build/target/mutation-work/ui-cli",
+        "-P",
+        "tests/ui_editor/EditorCliTests.cmake"
+      ],
+      "expect": "unknown_option: expected 2, got 1"
     },
     {
       "id": "ae-guard-json-target",

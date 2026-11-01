@@ -236,7 +236,9 @@ class ScriptedDialogs final : public PathDialogs {
 public:
     void Show(PathDialogPurpose purpose, std::string_view) override { shown.push_back(purpose); }
     std::vector<PathDialogResult> TakeResults() override { return std::exchange(results, {}); }
+    void Abandon() override { ++abandoned; }
     std::vector<PathDialogPurpose> shown;
+    int abandoned{};
     std::vector<PathDialogResult> results;
 };
 
@@ -265,6 +267,16 @@ void TestPathDialogChoosesAssetFolder() {
     editor.ApplyPathDialogResults();
     editor.ApplyPendingAssetChanges();
     Expect(!assets.IsMounted(), "a cancelled folder dialog mounts nothing");
+
+    // An answer the editor no longer waits for (abandoned or superseded) is
+    // only reported, even when it names a valid root.
+    dialogs.results.push_back({.purpose = PathDialogPurpose::AssetFolder,
+                               .outcome = PathDialogOutcome::Chosen,
+                               .path = std::string(text.begin(), text.end()),
+                               .current = false});
+    editor.ApplyPathDialogResults();
+    editor.ApplyPendingAssetChanges();
+    Expect(!assets.IsMounted(), "a stale folder answer mounts nothing");
 
     dialogs.results.push_back({.purpose = PathDialogPurpose::AssetFolder,
                                .outcome = PathDialogOutcome::Chosen,

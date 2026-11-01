@@ -27,7 +27,8 @@ ALLOWED_INCLUDE_PREFIXES = ("gyo/ui_editor/", "gyo/framework/", "engine/", "nloh
 FORBIDDEN_INCLUDE_PREFIXES = ("engine/input/",)
 ALLOWED_TARGETS = {
     "GYO::Engine", "GYO::Ui", "GYO::Math", "GYO::Os",
-    "GYO::ToolFramework", "GYO::ToolFrameworkGui",
+    "GYO::ToolFramework", "GYO::ToolFrameworkImGui",
+    "GYO::PlatformSDL", "GYO::RenderBackendSDLNative",
     "GYO::AssetSdlImage", "GYO::TextBackendSDLTTF",
     "SDL3::SDL3", "imgui::core", "nlohmann_json::nlohmann_json",
 }

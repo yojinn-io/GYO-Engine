@@ -4,6 +4,7 @@
 #include "gyo/ui_editor/ElementSchema.hpp"
 #include "gyo/framework/FileService.hpp"
 #include "gyo/ui_editor/GizmoMath.hpp"
+#include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
@@ -825,9 +826,54 @@ void TestElementClipboard() {
         "a value that is not an element is not pasted");
 }
 
+// The OS answers a dialog at most once, maybe never, and on Windows may follow
+// a Failed answer with one more (platform-sdl Design Invariant 10): only the
+// latest request's answers count.
+void TestPathDialogRequests() {
+    using Outcome = PathDialogOutcome;
+    using Purpose = PathDialogPurpose;
+    {
+        PathDialogRequests requests;
+        const std::uint64_t tag = requests.Begin(Purpose::OpenDocument);
+        Expect(requests.Accept(tag, Outcome::Chosen) == Purpose::OpenDocument, "a chosen path answers its request");
+        Expect(!requests.Accept(tag, Outcome::Chosen).has_value(), "a second answer to the same request is ignored");
+    }
+    {
+        PathDialogRequests requests;
+        const std::uint64_t tag = requests.Begin(Purpose::AssetFolder);
+        Expect(requests.Accept(tag, Outcome::Cancelled) == Purpose::AssetFolder, "a cancel answers its request");
+        Expect(!requests.Accept(tag, Outcome::Chosen).has_value(), "nothing counts after a cancel");
+    }
+    {
+        PathDialogRequests requests;
+        const std::uint64_t tag = requests.Begin(Purpose::ExportDocument);
+        Expect(requests.Accept(tag, Outcome::Failed) == Purpose::ExportDocument, "a failure answers its request");
+        Expect(requests.Accept(tag, Outcome::Chosen) == Purpose::ExportDocument,
+            "the answer that follows a failure (the fallback dialog) still applies");
+        Expect(!requests.Accept(tag, Outcome::Chosen).has_value(), "and ends the request");
+    }
+    {
+        PathDialogRequests requests;
+        const std::uint64_t old = requests.Begin(Purpose::OpenDocument);
+        Expect(requests.Accept(old, Outcome::Failed).has_value(), "the first request fails");
+        const std::uint64_t next = requests.Begin(Purpose::CatalogField);
+        Expect(next != old, "every request gets its own tag");
+        Expect(!requests.Accept(old, Outcome::Chosen).has_value(), "a newer request makes an older answer stale");
+        Expect(requests.Accept(next, Outcome::Chosen) == Purpose::CatalogField, "the newer request is answered");
+    }
+    {
+        PathDialogRequests requests;
+        const std::uint64_t tag = requests.Begin(Purpose::AssetRootField);
+        requests.Abandon();
+        Expect(!requests.Accept(tag, Outcome::Chosen).has_value(), "an answer after Stop waiting is ignored");
+        Expect(!requests.Accept(0, Outcome::Chosen).has_value(), "an answer nobody asked for is ignored");
+    }
+}
+
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
+    TestPathDialogRequests();
     TestGizmoHit();
     TestGizmoAnchorDrag();
     TestGizmoMoveAndResize();
