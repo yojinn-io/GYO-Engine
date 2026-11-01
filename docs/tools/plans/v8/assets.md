@@ -309,6 +309,64 @@ Design Invariants 的改寫（要你同意）：audio_editor DI 3 的「unique i
 
 `-edit` 的工程檔要不要讓 audio_editor 自己連 nlohmann：T3b 用不到，改到 `-edit` 開工、設計工程檔時決定。
 
+## `v8-tool-editor-engine-access`（T4）的草稿（2026-11-01，待核准）
+
+起因：架構會話（例行架構掃描）轉述，使用者 2026-11-01 同意改寫 ui_editor 與 audio_editor 的 DI 1。依據：
+- 「no `GYO::Input` and no SDL_GPU」沒有架構理由。
+  - 這條禁令來自 10-30 的 `v8-tool-ui-invariants`，當時只寫了結論、沒寫理由。
+  - 10-31 的 audio_editor DI 1 與 framework DI 2 都是照抄。
+- `GYO::Input` 只連 `GYO::Base`，是中立的 Engine 能力。禁止它和「Editor → Engine」的方向相反。
+- 這條禁令已經造成兩份 Input→Ui 的轉換：PvP 與 ui_editor 的預覽各一份。
+
+使用者的規則（經架構會話轉述的原話）：「Editor 可以連結 framework 和 Engine，但是 framework 是通用層，共通功能優先 framework。如果有觀察到有多處使用，即使 Engine 有也先實作 framework，再調用。」
+
+分工：
+- 兩份工具的 DI 與兩支守衛由本線負責。
+- framework 的 DI 2、它的守衛、Input→Ui 轉換器由 framework 整改卡負責。
+- 三份 DI 的措辭要和整改卡對齊後，才請你核准。
+
+模型與檔位：
+- 段：上段（改 Design Invariants 與守衛）。
+- 実装者 Opus 5.5／high；審査者 Opus 5.5／high；検証者 Fable 5.1／high。
+- 檢驗的做法照前三批：先跑突變，再由検証者實際核對。
+
+### DI 1 的草稿（英文，原文件的語言）
+
+ui_editor（`docs/ui_toolchain.md`）：
+
+> 1. The editor links no game and names no product. It may use any Engine module, as an editor depends on the engine; what a game and a tool, or two tools, both need comes through the framework first, even where Engine has it, and the framework calls Engine. It reaches SDL only as a game does: through Engine's platform targets, an Engine `*Native` target where an Engine contract allows it, or the framework's bindings. The one such use is the asset preview's native renderer (`GYO::RenderBackendSDLNative`, platform-sdl Replacement Criterion 2, until Engine's SDL renderer has a texture API); the editor names no `SDL3::` target. Guard: `gyo_ui_editor.dependency_guard`, a positive list of targets and include prefixes, with `SDL_` calls allowed only in the files that use the native renderer.
+
+audio_editor（`docs/audio_editor/architecture.md`）：
+
+> 1. The editor links no game and names no product. It may use any Engine module, as an editor depends on the engine; what a game and a tool, or two tools, both need comes through the framework first. Playback goes through `GYO::Audio` and its SDL backend; the editor itself includes no `SDL3/` header, calls no `SDL_` function and names no SDL or `*Native` target. Guard: the editor's dependency guard, a positive list of targets and include prefixes.
+
+### 守衛的變更（草稿）
+
+實作後照 §14.4 補上突變與検証者的結果，再請你核准。
+
+ui_editor：
+- 拿掉 `engine/input/` 禁令；目標清單加 `GYO::Input`。目標仍是正向清單，遊戲目標仍然失敗。
+- 「SDL_GPU 掃描」改成「不直接用 SDL」：
+  - 不得具名 `SDL3::` 目標；
+  - `SDL3/` 的 include 與 `SDL_` 呼叫，只准出現在守衛清單列出的檔案：`AssetPreviewContext.cpp`，以及它的標頭若需要也列入。
+- 這會要求程式跟著改：
+  - `gyo_ui_editor_preview` 改連 `GYO::RenderBackendSDLNative`，它的 INTERFACE 帶 SDL3；
+  - `EditorWindow.cpp` 的 `SDL_LogError` 改用 `Base::Log`；
+  - 守衛也掃 `tests/ui_editor`：測試直接用 SDL 建 renderer，這部分是另列例外，還是不掃測試，要你決定。
+
+audio_editor：
+- include 前綴從 `engine/base/`、`engine/os/`、`engine/audio/`、`engine/io/` 放寬成 `engine/`；目標清單加 `GYO::Input`。
+- 新增：不得 include `SDL3/`、不得有 `SDL_` 符號、不得具名 `SDL3::` 或 `*Native` 目標。
+- 這是嚴格程度的交換：放寬 include 範圍，同時收緊「不直接用 SDL」，原本只禁 SDL_GPU。`-edit` 要的 `SdlAudioOutput` 屬 `GYO::Audio` 的 SDL 後端，不經 `*Native`，需要實作時確認。
+
+### 待你決定
+
+1. 上面兩份 DI 1 的草稿（和整改卡對齊後再定稿）。
+2. ui_editor 守衛是否掃 `tests/ui_editor`。
+3. T4 的位置：
+   - 建議：PR #131 合併後，另開一條小 PR，不延後 #131；
+   - 或：併進 #131。
+
 ## 實作順序（提案）
 
 ```text
@@ -323,7 +381,8 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-ui-editor-path-dialog-adopt「high｜Opus 5.5｜T1：ui_editor 改呼叫 Engine 的選擇窗（和 T3a 一起做）」
 │   ├── v8-tool-ui-editor-shell-adopt     「high｜Opus 5.5｜T3a：ui_editor 接新外殼與 ImGui 綁定」
 │   ├── v8-tool-user-files-adopt          「medium～high｜Opus 5.5｜T2：兩個工具改用 engine/io」
-│   └── v8-tool-audio-editor-catalog-adopt「high｜Opus 5.5｜T3b：audio_editor 改用 catalog 結構 API＋JSON 綁定、無視窗外殼」
+│   ├── v8-tool-audio-editor-catalog-adopt「high｜Opus 5.5｜T3b：audio_editor 改用 catalog 結構 API＋JSON 綁定、無視窗外殼」
+│   └── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（草稿，待核准）
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
