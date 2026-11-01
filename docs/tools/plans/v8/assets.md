@@ -369,4 +369,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-framework-rework-predeclare` | （2026-11-01）T1＋T3a、T2、T3b 的事前宣告（本文件「framework-rework-line 的事前宣告」）核准：恢復規則、64 MB 上限、Design Invariants 改寫的方向、各批判定與突變；検証者改用 Fable 5.1／high。三個守衛的放寬仍要在突變與検証者核對後，各自再經你核准（§14.4） | 對「事前宣告和模型表照草稿核准嗎？」選「検証者改用 Fable」 |
 | `v8-tool-ui-editor-guard-approve` | （2026-11-01）核准 ui_editor 守衛的放寬（§14.4：加 `GYO::PlatformSDL`、`GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative`，拿掉 `GYO::ToolFrameworkGui`；第 4 項依検証者更正），並同意 L3 第 3 項改成「狀態列與 log 各有一行」 | 「兩項都核准」 |
 | `v8-tool-audio-editor-guard-approve` | （2026-11-01）核准 audio_editor 守衛的放寬（§14.4：加 include 前綴 `engine/io/` 與目標 `GYO::Engine`，T2） | 「核准」 |
+| `v8-tool-audio-editor-json-guard-approve` | （2026-11-01）核准 audio_editor 守衛的放寬（§14.4：加目標 `GYO::ToolFrameworkJson`，T3b） | 「核准」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
