@@ -1,6 +1,6 @@
 # v8-product-real-match-acceptance-repair 的事前宣告
 
-更新：2026-11-01。Owner：`object_fps_pvp`。**狀態：草稿，等你決定 4 項**。來源：`v8-product-hitbox-shot-j7-split`（J7 移到這一批）。檔位 high｜Opus 5.5。估時 6～9 h（超過 13.5 h 停下回報）。
+更新：2026-11-01。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-real-match-acceptance-repair-declaration-approve`，4 項都照建議 (a)）。來源：`v8-product-hitbox-shot-j7-split`（J7 移到這一批）。檔位 high｜Opus 5.5。估時 6～9 h（超過 13.5 h 停下回報）。
 
 ## 這批做什麼
 

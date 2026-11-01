@@ -43,7 +43,7 @@ v8-plan
 │   │   ├── v8-product-anim-authority         「high（狀態機局部 xhigh）｜Opus 5.5｜動畫狀態機移到 domain、Match 推進、上 snapshot」
 │   │   ├── v8-product-hitbox-data            「high｜Opus 5.5｜三部位形狀契約、Match 載入骨架與 clip」
 │   │   ├── v8-product-hitbox-shot            「high（平手局部 xhigh）｜Opus 5.5｜逐部位判定、倍率傷害」
-│   │   ├── v8-product-real-match-acceptance-repair 「high｜Opus 5.5｜修真 Match 開槍的本機驗收（[宣告](v8-product-real-match-acceptance-repair-declaration.md)，草稿）」
+│   │   ├── v8-product-real-match-acceptance-repair 「high｜Opus 5.5｜修真 Match 開槍的本機驗收（[宣告](v8-product-real-match-acceptance-repair-declaration.md)，已核准）」
 │   │   ├── v8-product-hit-presentation       「medium｜Opus 5.5｜受擊動畫依部位、驗收工具」
 │   │   └── v8-product-hitbox-acceptance      「medium｜Sonnet 5.5｜L1、突變、L2 試玩（收支行）」
 │   └── rewind-line                「PR 線：射擊回溯（部位判定線合併後）」
