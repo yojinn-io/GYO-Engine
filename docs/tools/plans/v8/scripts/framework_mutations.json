@@ -278,7 +278,7 @@
       "what": "The preview never asks for text input over the edited field",
       "file": "tools/ui_editor/src/PreviewAdapter.cpp",
       "find": "            result.textInput = FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
-      "replace": "            static_cast<void>(FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "replace": "            [[maybe_unused]] const auto dropped = FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
       "target": "gyo_ui_editor_preview_tests",
       "expect": "FAILED: an edited field asks for text input"
     },
