@@ -20,6 +20,7 @@
 ことである。
 
 @agents/effort-gearbox.md
+@agents/navigator.md
 
 ---
 
