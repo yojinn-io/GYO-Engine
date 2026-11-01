@@ -53,6 +53,7 @@ framework-rework
 ├── v8-framework-shell               high（草圖先核准）｜產品外殼與 ImGui 綁定
 ├── v8-framework-catalog-structure   high｜catalog 登錄的結構與 JSON 文字分開
 ├── v8-framework-catalog-extra-fields  high｜修更新條目時丟掉額外欄位的缺陷（D-6）
+├── v8-framework-engine-access      high｜framework 可用任何 Engine 模組（拿掉 GYO::Input／SDL_GPU 禁令）、共通功能先放 framework（2026-11-01 從收尾批拆出）
 └── v8-framework-invariants          high｜工具切換後收尾：刪舊件、文件定稿
 ```
 

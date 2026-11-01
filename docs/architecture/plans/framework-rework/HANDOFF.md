@@ -10,6 +10,7 @@
 | v8-engine-io-user-files | 使用者檔案的缺口補進 engine/io |
 | v8-framework-shell | 產品外殼與 ImGui 綁定 |
 | v8-framework-catalog-structure | catalog 登錄的結構與 JSON 文字分開 |
+| v8-framework-engine-access | framework 可用任何 Engine 模組（拿掉 GYO::Input／SDL_GPU 禁令）、共通功能先放 framework |
 | v8-framework-invariants | 工具切換後收尾 |
 | T1～T3b | 工具線（另一個會話）的切換工作，見 README |
 
@@ -48,7 +49,13 @@
 - 2026-11-01：工具線請我對照 T4（v8-tool-editor-engine-access）的工具 DI 1 草稿（分支 `claude/v8-tool-framework-rework` `3c073434`，`docs/tools/plans/v8/assets.md`）。我回覆的 framework 草稿（未核准，PR B 開工時交使用者）：DI 2 改為「framework 不 include `apps/`／`tools/`、不連結遊戲、不點名產品；Engine 模組都可用；SDL 只和遊戲一樣經 Engine 的 SDL 後端目標（SDL 留在後端內部），或 Engine 契約允許時經 `*Native` 目標，而且在 framework 內只在綁定裡」，核心規則其餘不變，刪去「工具的 DI 1 經由 framework 仍成立（no GYO::Input, no SDL_GPU）」那半句；DI 5 把「Otherwise only what two or more products share enters」改為「兩個以上產品（遊戲與工具，或兩個工具）用的先進 framework，即使 Engine 已有；framework 呼叫 Engine，產品呼叫 framework；只有一個產品用的直接用 Engine」。守衛：既有的 `SDL_` 符號掃描已涵蓋 SDL_GPU，拿掉 SDL_GPU 掃描預期沒有放寬面，開工時用突變確認。要使用者決定：DI 5「game part 等第二個遊戲」和新規則的界線（我的提案：遊戲自己的組裝仍等第二個遊戲；遊戲與工具都呼叫的能力，如 Input→Ui 轉換，照共用規則）。請工具線對齊的三處：「Engine's platform targets」改「Engine's SDL backend targets」（音效播放與輸入不是 platform 目標）；audio_editor 的共同句補齊「even where Engine has it, and the framework calls Engine」；工具 DI 的「names no product」改「names no other product」。
 - 2026-11-01：工具線照建議改好三處措辭（`claude/v8-tool-framework-rework` `3c002e3a`），我核對過，兩個工具的 DI 1 草稿與 framework 草稿一致。
 - 2026-11-01，使用者：「照提案」。DI 5 的界線：遊戲自己的組裝（遊戲迴圈、場景等）仍等第二個遊戲以同樣方式組裝時才抽出；遊戲與工具都呼叫的能力（如 Input→Ui 轉換）照「兩處以上使用先放 framework」的規則。PR B 的 DI 5 草稿照此寫；DI 2／DI 5 的條文全文與守衛變更仍在 PR B 開工時交使用者核准。
-- 下一步：等工具線 T1、T2、T3a、T3b 都合併，再開始 v8-framework-invariants（PR B）。整條線完成後通知架構會話。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
+- 2026-11-01，使用者：「你先改了，ui_editor 才能跟進」。DI 2／DI 5 改寫與守衛變更不依賴工具線，從 PR B 拆出，提前成為 v8-framework-engine-access，在 PR B 之前做（PR B 只剩刪舊件、清空例外清單）。上段（Design Invariants 與其守衛）。実装者：主會話 Opus 5.5／high；§14.4 検証者：Fable 5.1／high（比主會話強，啟動前問使用者）。估 3～5 h。守衛的做法：拿掉 `engine/input/` 禁令；核心的正向清單加 `GYO::Input`、`GYO::InputBackendSDL`（綁定的清單不變）；SDL_GPU 的硬規則保留，理由改為「ratchet 前就拒絕的，永不列入例外清單」，例外清單在 PR B 清空後它和一般的 `SDL_` 規則重疊，屆時再拿掉。Input→Ui 轉換不在這批。
+- v8-framework-engine-access：Red＝自測新增 3 條、改 3 條，改守衛前 `test_input_in_the_core_passes` 失敗（42 條中 1 條，`red_selftest.txt`）；Green＝改守衛後 42/42、真實守衛通過（`green_selftest.txt`）。突變目錄：fw-guard-input-target 因 `GYO::Input` 已允許而作廢，換成 fw-guard-unlisted-engine-target（具名清單外的 `GYO::RenderBackendSDLGPU`）；新增 fw-guard-binding-input-target、fw-guard-gpu-trade、fw-guard-gpu-rule-dropped、fw-guard-binding-list-widened。
+- 事前宣告（D184：守衛與自測都改了；預檢：每條 find 恰好一次，預期的正規表示式對照守衛與 unittest 的輸出格式）：fw-guard-* 15 條、fw-link-* 8 條，共 23 條全部要 killed、stale 0。
+- 結果：23/23 killed、stale 0（`mutations.txt`）。test 樹建置成功，framework／boundary／guard 相關 CTest 16/16。探測：暫時讓 `gyo_tool_framework_window` 連 `GYO::Input GYO::InputBackendSDL`，configure 的連結檢查與守衛都通過，已還原。[判定變更](engine-access-judgment-change.md)已寫（放寬面 (a)～(c)、收緊面無）。停在検証者關卡：Fable 5.1／high 比主會話強，啟動前問使用者；核對後交使用者核准條文與守衛，核准前不提交。這批至今約 1.5 h。
+- 2026-11-01，使用者轉告（工具線傳不到這個會話）：yojinn-io/GYO-Engine#132（工具線的 macOS 日文 IME 修正，未合併，base 是 #131 的分支 `claude/v8-tool-framework-rework`）已改了 framework DI 2 與守衛裡和 input 有關的部分；PR B 以那一版為起點改寫，措辭以 PR B 的全文為準。**停止**：本批 v8-framework-engine-access 未提交的改動和 #132 改的是同一批檔案（`docs/framework/architecture.md` DI 2、守衛、自測），要改成以 #132 為起點。差異：(1) #132 只讓 ImGui 綁定連 `GYO::InputBackendSDL`，並以自測 `test_input_backend_target_fails_in_the_core` 擋核心連它，核心的 target 清單也沒有 `GYO::Input`；本批讓核心可連兩者。(2) #132 讓核心 include `engine/input/` 的 Native 標頭維持硬規則（永不列入例外清單）；本批拿掉禁令後它變成可列入例外清單的軟規則，這是我漏列的放寬面，判定變更文件的「收緊／放寬」要依此更正。(3) #132 的 DI 2 仍寫「no SDL_GPU」。本批的改動已存成 `wip_before_pr132.patch`（同一證據資料夾），未提交；検証者未啟動。
+- 2026-11-01，使用者：「等合併後重做」。本批的條文、守衛、自測、突變目錄改動已還原（工作樹回到 PR A 後的狀態），全部存在 `wip_before_pr132.patch` 與 `engine-access-judgment-change.draft.md`（同一證據資料夾）。#131、#132 合併進 master 後同步，再以 #132 的 DI 2 與守衛為起點重做本批：採用 #132 的「核心 include input Native 標頭為硬規則」；核心連 `GYO::Input`／`GYO::InputBackendSDL` 改為對 #132 的明示放寬另行提出；重新宣告突變、重寫判定變更，再問検証者。這批至今約 2 h。
+- 下一步：等 #131、#132 合併後同步 master，重做 v8-framework-engine-access；T1～T3b 都合併後再開始 v8-framework-invariants（PR B）。整條線完成後通知架構會話。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
 
 ### v8-framework-catalog-extra-fields 的事前宣告（2026-11-01，執行測試前）
 
