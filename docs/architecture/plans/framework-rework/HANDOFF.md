@@ -38,7 +38,8 @@
 - 2026-11-01：v8-framework-catalog-structure 開工（使用者：「開始下一批」）。D-1 已核准 (a)＋b-lite。估 8～12 h。
 - 2026-11-01：v8-framework-catalog-structure 完成，實際約 2 h。commit `1bd5df20`。L1：run 41276711562 第一次就全部 success（`L1 / linux-x64`、`windows-x64`、`macos-arm64`、Quick acceptance、CI gate）。PLAN 第 2.5 節寫的「core 列」不在這個 workflow 的 L1 裡；Engine 側沒壞由三列的全量 CTest（含 `AssetContentContractTests`）證明。
 - 2026-11-01：v8-framework-catalog-extra-fields 開工（使用者：「開始下一批」）。估 2～3 h。
-- 2026-11-01：v8-framework-catalog-extra-fields 完成，實際約 1.5 h。PR A（D-7：規劃到 catalog-structure，含 D-6）的批次全部完成。L1 結果記在下一行。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
+- 2026-11-01：v8-framework-catalog-extra-fields 完成，實際約 1.5 h。PR A（D-7：規劃到 catalog-structure，含 D-6）的批次全部完成。commit `98231ca2`。L1：run 41278439662 第一次就全部 success（三列、Quick acceptance、CI gate）。
+- 2026-11-01：PR A 合併前的完整突變（D184）在背景執行：本線的 5 個突變目錄（framework、framework_shell、framework_catalog、io_user_files、platform_path_dialog）。ASan 那 1 條要 sanitizer 樹，這次不跑，記為限界。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
 
 ### v8-framework-catalog-extra-fields 的事前宣告（2026-11-01，執行測試前）
 
