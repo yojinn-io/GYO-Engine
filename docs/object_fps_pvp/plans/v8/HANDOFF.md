@@ -164,7 +164,7 @@
 
 ## 未結事項
 
-- **任務卡 `v8-input-ui-adapter`（2026-11-01 開卡，已核准 `v8-input-ui-adapter-approve`；IU-1 先做，由 framework 整改線在 PR B 之後另開 PR）**：[input-ui-adapter-card](input-ui-adapter-card.md)。Input→Ui 轉換兩份、編輯器預覽用 `imgui_internal`、預覽沒有組字，三件事串成 IU-1（framework 整改線）→ IU-2（工具線）、IU-3（本線）。使用者指示由本會話開卡；完成後通知架構會話。
+- **任務卡 `v8-input-ui-adapter`（2026-11-01 開卡，已核准 `v8-input-ui-adapter-approve`；2026-11-01 更新：使用者決定 IU-1、IU-3 由推動會話「處理 Input→Ui 轉換重複與預覽輸入管線」做（等 PR B 合併），IU-2 由工具線做，組字驗收只做 macOS；本線不再負責 IU-3）**：[input-ui-adapter-card](input-ui-adapter-card.md)。Input→Ui 轉換兩份、編輯器預覽用 `imgui_internal`、預覽沒有組字，三件事串成 IU-1（framework 整改線）→ IU-2（工具線）、IU-3（本線）。使用者指示由本會話開卡；完成後通知架構會話。
 - **pv9 的回歸（2026-11-01，entity-line 回報、本會話在 master 上確認）**：`MatchRuntimeHost.cpp` 逐出玩家時只刪 snapshot 的 `players` 與 `combat`，沒有刪 `animation`（A2 `4cdb5bad` 加了 animation，逐出路徑沒有跟上）。Gateway 的 `adapter.go` 見到 animation 數 ≠ players 數就 `runtimeFailed`，整個房間斷線。使用者已決定由 entity-line 的缺陷批 `v8-product-evict-animation-orphan` 修（排在 split 前、同一個 entity-line PR）。本線不修。
 - **pv10（⑤）的協議規劃要納入 entity-line 的三件事**（`docs/object_fps_pvp/entity-model.zh-Hant.md` §8，分支 `claude/gifted-khorana-d38ac5`，未推送）：
   1. snapshot 改成「所有有該元件的實體」，每個收件者一份，Match 依 1200 B 預算選實體。pv9 契約最大 40＋211N B，N≥6 就超過。

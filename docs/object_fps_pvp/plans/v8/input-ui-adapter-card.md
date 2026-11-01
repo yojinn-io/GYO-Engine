@@ -4,6 +4,16 @@
 
 這張卡只做規劃與對齊。各批由各 owner 的會話執行，不在這裡重複開批。
 
+## 執行分配（2026-11-01 更新）
+
+使用者指出「現在沒人處理」，由 v8 規劃會話開了推動會話「處理 Input→Ui 轉換重複與預覽輸入管線」。推動會話回報，使用者決定的執行分配如下（取代下面「分批與 owner」裡 IU-1、IU-3 的 owner）：
+
+- **IU-1、IU-3 由推動會話做**，IU-2 由工具線做。
+- IU-1 等 framework 整改線的 PR B 合併後開工，因為兩邊改同一批檔案；PR B 已做到 B4，停在 §14.1 的關卡。
+- IU-3 的 Build Graph Delta（§3 的 7 點）由推動會話先起草交使用者；實作等 IU-1 合併。
+- 組字的驗收只做 macOS；Windows 寫成範圍的限界。
+- 之後由推動會話在它的分支更新這張卡，隨 IU-3 的 PR 進 master。
+
 ## 要處理的三件事（使用者給的原文）
 
 1. 同一個轉換寫了兩份。遊戲把 `Input::TextEvent` 轉成 `UiTextInput`（`PvpApplication.cpp:268-289`）；編輯器因為不能用 Input，從 `ImGuiKey` 另外寫一張一樣的表（`PreviewAdapter.cpp:234-256`）。`UiInputFrame` 也是兩份（`PvpApplication.cpp:1149`、`PreviewAdapter.cpp:345`）。這是 AGENTS §2 的「同じ Adapter／Conversion の繰り返し」。
