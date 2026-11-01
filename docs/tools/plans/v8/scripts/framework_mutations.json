@@ -245,6 +245,72 @@
         "tests/ui_editor/ui_editor_dependency_guard.py"
       ],
       "expect": "EditorWindow.cpp: includes engine/platform/sdl/SdlPlatformNative.hpp"
+    },
+    {
+      "id": "ui-input-composition-dropped",
+      "what": "The preview drops the input method's composition before Ui sees it",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "        if (editingText && physicalInput != nullptr) input.text = PreviewTextInput(*physicalInput);",
+      "replace": "        if (editingText && physicalInput != nullptr) {\n            input.text = PreviewTextInput(*physicalInput);\n            std::erase_if(input.text, [](const Engine::Ui::UiTextInput& entry) { return entry.kind == Engine::Ui::UiTextInputKind::Composition; });\n        }",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: the input method's composition is drawn in the field"
+    },
+    {
+      "id": "ui-input-shortcut-always-ctrl",
+      "what": "The preview takes Ctrl for select-all and paste even where ImGui follows macOS",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "ImGui::GetIO().ConfigMacOSXBehaviors ? Framework::TextShortcutModifier::Gui",
+      "replace": "false ? Framework::TextShortcutModifier::Gui",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: Command\\+A selects all and Ctrl\\+A does not"
+    },
+    {
+      "id": "ui-input-request-when-idle",
+      "what": "The preview asks for text input while no field is edited",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "    if (previewMode && inputEnabled && !editingElement.empty()) {\n        for (const Engine::Ui::UiEvaluatedElement& element : evaluated.value()) {",
+      "replace": "    result.textInput = FrameOutput::TextInputRequest{};\n    if (previewMode && inputEnabled && !editingElement.empty()) {\n        for (const Engine::Ui::UiEvaluatedElement& element : evaluated.value()) {",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: no text input is asked for while no field is edited"
+    },
+    {
+      "id": "ui-input-request-missing",
+      "what": "The preview never asks for text input over the edited field",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "            result.textInput = FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "replace": "            static_cast<void>(FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: an edited field asks for text input"
+    },
+    {
+      "id": "ui-guard-imgui-internal-ignored",
+      "what": "The ui_editor guard no longer refuses imgui_internal.h",
+      "file": "tests/ui_editor/ui_editor_dependency_guard.py",
+      "find": "FORBIDDEN_HEADERS = {\"imgui_internal.h\"}",
+      "replace": "FORBIDDEN_HEADERS = set()",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ui_editor",
+        "-p",
+        "test_ui_editor_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_imgui_internal_fails"
+    },
+    {
+      "id": "ui-guard-imgui-internal",
+      "what": "The preview includes ImGui's internals again",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "#include <imgui.h>\n#include <nlohmann/json.hpp>\n",
+      "replace": "#include <imgui.h>\n#include <imgui_internal.h>\n#include <nlohmann/json.hpp>\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "PreviewAdapter.cpp: includes imgui_internal.h"
     }
   ]
 }

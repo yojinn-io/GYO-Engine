@@ -12,6 +12,8 @@
 #include <vector>
 
 struct ImDrawList;
+namespace Engine::Input { struct PhysicalInputFrame; }
+
 namespace Gyo::Tools::UiEditor {
 
 class AssetPreviewContext;
@@ -58,6 +60,19 @@ public:
             bool finished{};
         };
         std::optional<GizmoEdit> gizmoEdit;
+
+        // While a text field is edited in the preview: where the platform
+        // should take text input, in window coordinates (ImGui's), with the
+        // cursor that many pixels from its left edge. The host passes it on
+        // every frame (ImGuiShellInput::RequestTextInput).
+        struct TextInputRequest final {
+            float x{};
+            float y{};
+            float width{};
+            float height{};
+            int cursorPixels{};
+        };
+        std::optional<TextInputRequest> textInput;
     };
 
     [[nodiscard]] FrameOutput Draw(
@@ -70,7 +85,10 @@ public:
         bool previewMode,
         bool inputEnabled,
         bool snapToGrid,
-        float gridSize) const;
+        float gridSize,
+        // This frame's input from Engine, read for a text field's typing and
+        // composition; nullptr: none.
+        const Engine::Input::PhysicalInputFrame* physicalInput = nullptr) const;
 
 private:
     struct Impl;

@@ -193,7 +193,16 @@ void EditorApp::RequestAssetUnmount() {
     pendingCatalogUnmount_ = true;
 }
 
+void EditorApp::SetPhysicalInput(const Engine::Input::PhysicalInputFrame* const input) noexcept {
+    physicalInput_ = input;
+}
+
+std::optional<PreviewAdapter::FrameOutput::TextInputRequest> EditorApp::TakeTextInputRequest() noexcept {
+    return std::exchange(textInputRequest_, std::nullopt);
+}
+
 void EditorApp::Draw() {
+    textInputRequest_.reset();
     const ImGuiIO& io = ImGui::GetIO();
     if (io.KeyCtrl && !io.WantTextInput) {
         if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S, false)) {

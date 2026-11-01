@@ -135,7 +135,9 @@ void EditorApp::DrawCanvas() {
         previewMode_,
         canvasHovered || canvasFocused,
         snapToGrid_,
-        gridSize_);
+        gridSize_,
+        physicalInput_);
+    textInputRequest_ = result.textInput;
     if (result.error) {
         statusMessage_ = "Preview: " + Engine::Base::Describe(*result.error);
     }

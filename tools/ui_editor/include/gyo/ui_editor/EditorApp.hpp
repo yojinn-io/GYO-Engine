@@ -33,7 +33,13 @@ public:
     void ApplyPathDialogResults();
     void RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot);
     void RequestAssetUnmount();
+    // This frame's input from Engine, for the preview's text fields; valid
+    // until the frame ends. nullptr: none.
+    void SetPhysicalInput(const Engine::Input::PhysicalInputFrame* input) noexcept;
     void Draw();
+    // Where the preview's edited text field wants text input this frame, if
+    // it does; taken once after Draw.
+    [[nodiscard]] std::optional<PreviewAdapter::FrameOutput::TextInputRequest> TakeTextInputRequest() noexcept;
     [[nodiscard]] bool WantsExit() const noexcept;
 
 private:
@@ -79,6 +85,8 @@ private:
     DocumentSession session_;
     Framework::ReadOnlyAssetCatalog catalog_;
     PreviewAdapter preview_;
+    const Engine::Input::PhysicalInputFrame* physicalInput_{};
+    std::optional<PreviewAdapter::FrameOutput::TextInputRequest> textInputRequest_;
     std::vector<Diagnostic> diagnostics_;
     std::vector<std::string> actionLog_;
     std::string selectedCanvas_{"main"};
