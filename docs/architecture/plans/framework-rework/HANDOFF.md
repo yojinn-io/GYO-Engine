@@ -36,7 +36,8 @@
 - 結果：2/2（`h3_mutations.txt`）；全量建置成功、CTest 119/119（45.9 s，`-j 6`，`ctest_full_2.txt`；比上一批多 4 條：window_shell、imgui_shell、imgui_shell_no_renderer、shell_headers）。突變合計：外殼 26/26、守衛與連結 19/19（fw-guard-* 11、fw-link-* 8），stale 0。停在連結檢查判定變更的核准關卡（[判定變更](link-check-judgment-change.md)）。外殼批至今約 4.5 h。
 - 2026-11-01：v8-framework-shell 完成（使用者核准判定變更）。回歸修補與外殼批分兩個 commit。估 12～16 h（第 0 關後重估 14～17 h），實際約 5 h。commit `15639727`（回歸修補）、`ea5df6f6`（外殼）。L1：run 41274514145 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 第一次就都是 success。同一 run 的 `Quick acceptance / object_fps_pvp / windows-x64` 第一次 failure：建置途中複製 MSVC 執行期 DLL（`concrt140.dll`）到 `build/target/object_fps_pvp/bin/` 時「Permission denied」，測試沒有跑到；這一步屬 pvp 的打包，不建 framework、不碰守衛，判定為環境（runner 上的檔案被佔用）。只重跑失敗的 job（attempt 2），全部 success，CI gate success。第一次的失敗保留在這裡（§14.1）。
 - 2026-11-01：v8-framework-catalog-structure 開工（使用者：「開始下一批」）。D-1 已核准 (a)＋b-lite。估 8～12 h。
-- 2026-11-01：v8-framework-catalog-structure 完成，實際約 2 h。L1 結果記在下一行。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
+- 2026-11-01：v8-framework-catalog-structure 完成，實際約 2 h。commit `1bd5df20`。L1：run 41276711562 第一次就全部 success（`L1 / linux-x64`、`windows-x64`、`macos-arm64`、Quick acceptance、CI gate）。PLAN 第 2.5 節寫的「core 列」不在這個 workflow 的 L1 裡；Engine 側沒壞由三列的全量 CTest（含 `AssetContentContractTests`）證明。
+- 下一批：v8-framework-catalog-extra-fields（D-6：更新既有條目時丟掉額外欄位的缺陷，依 §14.3 先 Red 後 Green）。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
 
 ### v8-framework-catalog-structure 的事前宣告（2026-11-01，寫程式前）
 
