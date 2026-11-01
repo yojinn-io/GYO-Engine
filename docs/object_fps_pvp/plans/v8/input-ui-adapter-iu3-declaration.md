@@ -1,6 +1,6 @@
 # IU-3 的事前宣告（產品宣告使用 framework，遊戲改用共用轉換）
 
-更新：2026-11-02。**狀態：等使用者核准**。執行：v8-input-ui-adapter 推動會話。底：master `a8a48243`（IU-1，PR #135 合併後）。Build Graph 的 Delta 已同意：[IU-3 Delta](input-ui-adapter-iu3-build-delta.md)，採 (a)。
+更新：2026-11-02。**狀態：完成**（2026-11-02）。執行：v8-input-ui-adapter 推動會話。底：master `a8a48243`（IU-1，PR #135 合併後）。Build Graph 的 Delta 已同意：[IU-3 Delta](input-ui-adapter-iu3-build-delta.md)，採 (a)。
 
 核准前不寫程式。
 
@@ -79,3 +79,27 @@
 - 估 3～4 h：共通建置與組件測試 1 h、遊戲呼叫處 0.5 h、L2 三種組態與探測 1～1.5 h、審查與文件 1 h。
 - 停止條件：超過 6 h，或單一問題累計超過 2 h。
 - 證據放主 checkout 的 `build/evidence/v8-input-ui-adapter/IU-3/`。
+
+## 執行紀錄
+
+- 2026-11-02，使用者：「核准」（含 DI 1 條文）。開工，底是 master `a8a48243`。
+- 實作照宣告。組件測試新案例第一次插在 SDL_GPU 那段連續檢查的中間，弄斷了後面的 GPU 斷言（`expected 'dxil;spirv'`）。移到 IMGUI 案例之後即通過，判定不變。
+- 建置與測試（本機 Mac，證據 `build/evidence/v8-input-ui-adapter/IU-3/`）：
+
+| 組態 | 結果 |
+|---|---|
+| test preset | 建置成功、CTest 123/123 |
+| 2(a) 只選 object_fps_pvp | 建置成功、CTest 108/108；有 `gyo_tool_framework`、沒有 ImGui 綁定；`tests/framework` 的 4 個測試都通過 |
+| 2(b) 不選產品也不選工具 | configure 成功，沒有 framework 的 target |
+| 2(c) 只選 audio_editor | 建置成功、CTest 56/56 |
+
+- **探測與突變第一次：無效（§14.1，記錄保留在 `probes_run1_invalid/`）**。
+  - 原因：探測腳本每條跑完用 `git checkout -- <檔>` 還原。這會還原到 HEAD，而當時我的修改還沒提交，所以 `project.json`、`GyoBuild.cmake`、`GyoComponents.cmake` 的改動被抹掉。第 1 條之後的三條是在錯的原始碼上跑的，其中兩條顯示「SURVIVED」。這是我操作的錯，不是實作或判定的結果。
+  - 處理：照原文重新套用三個檔的修改，做暫存提交 `da28f611`（之後併入正式提交 `06134fd6` 之前的同一批修改，本機已不存在）。之後每條探測都還原到這個提交，並確認工作樹和它沒有差異。判定與預期訊息都不變。
+- **重跑結果**（`probes_summary.txt`）：removability-undeclared、iu3-build-condition-dropped、iu3-component-unknown、iu3-component-sdl 4/4 出現預期的失敗。還原後重新 configure 2(a) 成功。
+- 審査者（Opus 5.5／high，唯讀）：0 blocker、0 major、2 minor、2 nit。
+  - minor 1：GyoBuild 的新條件 L1 抓不到。L1 的 preset 都選了工具，工具已經讓 framework 加入建置。守住它的只有打包 job（遊戲產品不選工具，`build/ci/common/app_registry.py:121`）和這批的手動探測。記進 dev_log 的限界與之後的整理項目。
+  - minor 2：狀態行與收尾文件（卡的進度、dev_log、README）已補上。
+  - nit 1：`PvpApplication.cpp` 的 include 移出 engine 群組，自成一組。
+  - nit 2（既有問題，不是這批新增的）：遊戲可以不宣告 FRAMEWORK，直接在 `PRIVATE_LIBRARIES` 寫 `GYO::ToolFramework`。有別的使用者讓 framework 加入時它照樣能建，那個使用者被移除才壞。這和 SDL 後端 target 是同一類，只記錄。
+- IU-3 完成，[dev_log](../../../dev_logs/2026_11_02_pvp_v8_input_ui_adapter_iu3.zh-Hant.md)。

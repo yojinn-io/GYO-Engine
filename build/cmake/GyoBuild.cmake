@@ -50,10 +50,10 @@ add_compile_options("$<$<COMPILE_LANG_AND_ID:C,MSVC>:/Zc:preprocessor>"
                     "$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/Zc:preprocessor>")
 add_subdirectory("${GYO_REPOSITORY_ROOT}/engine" engine)
 gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/engine")
-# The layer games and tools share sits above the engine. Only tools use it so
-# far, so it is added only when a tool is selected (docs/framework/architecture.md,
-# Design Invariant 1).
-if(GYO_ACTIVE_TOOLS)
+# The layer games and tools share sits above the engine. It is added only while
+# a selected product uses it: any tool, or a game that declares the component
+# FRAMEWORK (docs/framework/architecture.md, Design Invariant 1).
+if(GYO_ACTIVE_TOOLS OR GYO_ENABLE_FRAMEWORK)
     add_subdirectory("${GYO_REPOSITORY_ROOT}/framework" framework)
     gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/framework")
 endif()
@@ -88,7 +88,7 @@ foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)
     endif()
 endforeach()
 unset(GYO_CURRENT_APP)
-if(GYO_ACTIVE_TOOLS AND BUILD_TESTING)
+if((GYO_ACTIVE_TOOLS OR GYO_ENABLE_FRAMEWORK) AND BUILD_TESTING)
     add_subdirectory("${GYO_REPOSITORY_ROOT}/tests/framework" "tests/framework")
     gyo_record_code_page_directory("${CMAKE_CURRENT_BINARY_DIR}/tests/framework")
 endif()

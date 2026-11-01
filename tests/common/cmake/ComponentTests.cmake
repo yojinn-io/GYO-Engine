@@ -89,6 +89,9 @@ gyo_resolve_components(UFBX)
 expect_components(ufbx UFBX OFF)
 gyo_resolve_components(IMGUI)
 expect_components(imgui IMGUI ON)
+# The framework layer needs no SDL of its own (v8-input-ui-adapter IU-3).
+gyo_resolve_components(FRAMEWORK)
+expect_components(framework FRAMEWORK OFF)
 
 gyo_resolve_components(SDL_GPU SDL_INPUT SDL_IMAGE SDL_TTF UFBX)
 expect_components(game "SDL_GPU;SDL_INPUT;SDL_IMAGE;SDL_TTF;UFBX;SDL_PLATFORM" ON)
