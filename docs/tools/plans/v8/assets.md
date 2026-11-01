@@ -111,7 +111,7 @@
    - 取消；
    - 非 ASCII 路徑；
    - 對話窗開著時關視窗；
-   - 對話窗開著時按 Stop waiting，再在對話窗裡選檔：不套用，Diagnostics 有一行；（實作後提議改成「狀態列與 log 的 `ui_editor.dialogs` 各有一行」，待你同意，見下方「實作後的結果」）
+   - 對話窗開著時按 Stop waiting，再在對話窗裡選檔：不套用，狀態列與 log 的 `ui_editor.dialogs` 各有一行（2026-11-01 你同意，原本寫「Diagnostics 有一行」）；
    - 字型與輸入法的文字欄位照舊。
 4. 範圍的限界（從架構批帶來，CI 量不到）：真實 OS 對話窗的回呼執行緒、Linux portal 要 pump、平台或父視窗銷毀時的行為。只靠第 3 項的實機觀察；Linux 沒有桌面機，這次不測。
 5. 突變（全部預期 killed；file 與 find 在實作後、執行前寫進 `docs/tools/plans/v8/scripts/framework_mutations.json`）：
@@ -149,7 +149,7 @@ Design Invariants 的改寫（要你同意）：
     - 修正動到 EditorApp，所以重跑 `ui-dialog-stale-applied`。
   - 證據在使用者的 Mac，主 checkout `build/evidence/tool-v8-framework-rework/T1-T3a/`：`mutations.txt`、`mutation-ui-cli-usage-exit.txt`、`mutations-review-fix.txt`。
 - 和事前宣告不同的地方：
-  - 被丟掉的答案記在狀態列與 log（`ui_editor.dialogs`），不是 Diagnostics。Diagnostics 每次由文件重建，記上去會消失。L3 第 3 項的寫法要你同意後才改。
+  - 被丟掉的答案記在狀態列與 log（`ui_editor.dialogs`），不是 Diagnostics。Diagnostics 每次由文件重建，記上去會消失。L3 第 3 項的寫法已改，經你同意。
   - 「用途對照錯位」改由 `ui-dialog-kind-mapping` 與 `ui-dialog-outcome-mapping` 檢查；另加 `ui-dialog-same-tag`、`ui-dialog-current-mapping`。
   - 規則測試直接測 `PathDialogRequests`，介面卡另有測試，`ScriptedDialogs` 只測 EditorApp 怎麼處理不是目前請求的答案。
   - `ui-cli-usage-exit` 的處理：
@@ -306,4 +306,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-framework-rework-split` | （2026-11-01）PR #123 的整改分工：framework 與下沉到 Engine 的部分由架構整改任務卡做（A1 `v8-engine-platform-path-dialog`、A2 `v8-engine-io-user-files`、A3 `v8-framework-shell`、A4 `v8-framework-invariants`）；工具側 T1～T3 由工具線做，各等對應的 A 批合併；先處理已知問題再做功能，`-edit` 排在 T1～T3 之後。catalog 規則的單一來源預設 (a)：規則留在 framework 核心，用 `tests/common/fixtures/asset_contract/cases.json` 對齊，不動 Engine（工具線沒有異議） | 經架構會話轉述：「彈窗的 OS 那一半是視窗系統的能力，和剪貼簿同級，屬 Engine；流程那一半是工具的，留在工具。」「framework在GYO中就是一個通用建置，他可以處理UI的東西，但不是直接嵌入，而是抽象出來。」「framework 可以遊戲和tool的公用層…遊戲就是一個有娛樂效果的工具…只不過方向不同。」；你：「開始吧」（登錄 T1～T3） |
 | `v8-tool-framework-rework-replan` | （2026-11-01）架構整改計畫核准後的工具側重排，取代 `v8-tool-framework-rework-split` 的批次與依賴：架構側改成 7 批（`v8-framework-guard-ratchet`、`v8-engine-platform-path-dialog`、`v8-engine-io-user-files`、`v8-framework-shell`、`v8-framework-catalog-structure`、`v8-framework-catalog-extra-fields` 在 PR A；刪舊件的 `v8-framework-invariants` 在 PR B）。工具側 T3 拆成 T3a（ui_editor）與 T3b（audio_editor），T1～T3b 都等 PR A 合併，T1 和 T3a 一起做；PR A 不動舊件，合併前工具不會壞。PR B 等 T1～T3b 都合併。catalog 規則改 (a)＋b-lite（架構計畫 D-1：Engine 公開 `IsRelativeContentPath` 給 framework 呼叫），取代 `-split` 的 (a)。工具側預計一條 PR。計畫在 `docs/architecture/plans/framework-rework/`（README 決策 D-1～D-9、PLAN 第 2 節各批末尾的「工具側」） | 經架構會話轉述（不是原話）：使用者 2026-11-01 核准該計畫的 PLAN 第 1 版與 D-1～D-9，全部採建議 |
 | `v8-tool-framework-rework-predeclare` | （2026-11-01）T1＋T3a、T2、T3b 的事前宣告（本文件「framework-rework-line 的事前宣告」）核准：恢復規則、64 MB 上限、Design Invariants 改寫的方向、各批判定與突變；検証者改用 Fable 5.1／high。三個守衛的放寬仍要在突變與検証者核對後，各自再經你核准（§14.4） | 對「事前宣告和模型表照草稿核准嗎？」選「検証者改用 Fable」 |
+| `v8-tool-ui-editor-guard-approve` | （2026-11-01）核准 ui_editor 守衛的放寬（§14.4：加 `GYO::PlatformSDL`、`GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative`，拿掉 `GYO::ToolFrameworkGui`；第 4 項依検証者更正），並同意 L3 第 3 項改成「狀態列與 log 各有一行」 | 「兩項都核准」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
