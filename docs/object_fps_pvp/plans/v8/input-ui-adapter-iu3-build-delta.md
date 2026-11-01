@@ -60,4 +60,4 @@
 
 - 不改 `GYO::ToolFramework` 這個名字（名字裡有 Tool，遊戲也會用）。記為之後的整理項目。
 - 不做「pvp Client 搬上外殼」。
-- 和 PR B 的關係：PR B 改 `framework/CMakeLists.txt` 與 `docs/framework/architecture.md`，所以 DI 1 的改寫與註解要等 PR B 合併後才動。`GyoBuild.cmake` 與 `project.json` 不在 PR B 的範圍（需要再向 framework 整改線確認）。
+- 和 PR B 的關係（framework 整改線 2026-11-01 確認）：PR B 不改 `GyoBuild.cmake`、`GyoComponents.cmake` 與任何 `project.json`。它改 `framework/CMakeLists.txt` 的中段（來源清單、Legacy.cmake），以及 `docs/framework/architecture.md` 的 DI 2 守衛句、DI 4、組成清單、Using it。`framework/CMakeLists.txt` 開頭的註解和 DI 1 的「so far」那句它都沒動，所以 PR B 合併後再改這兩處，不會衝突。
