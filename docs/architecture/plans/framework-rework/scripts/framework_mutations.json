@@ -83,16 +83,16 @@
       "expect": "CHECK\\( inbox.Take\\(\\).empty\\(\\) \\) is NOT correct"
     },
     {
-      "id": "fw-guard-input-target",
-      "what": "The framework's CMake names GYO::Input",
+      "id": "fw-guard-unlisted-engine-target",
+      "what": "The framework's CMake names an Engine target outside its positive list (GYO::Input was the example until v8-framework-engine-access allowed it)",
       "file": "framework/CMakeLists.txt",
       "find": "# command line comes as UTF-8 through GYO::Os.",
-      "replace": "# command line comes as UTF-8 through GYO::Os and GYO::Input.",
+      "replace": "# command line comes as UTF-8 through GYO::Os and GYO::RenderBackendSDLGPU.",
       "command": [
         "{python}",
         "tests/framework/framework_dependency_guard.py"
       ],
-      "expect": "names GYO::Input"
+      "expect": "names GYO::RenderBackendSDLGPU"
     },
     {
       "id": "fw-guard-tool-header",
@@ -213,6 +213,84 @@
         "tests/framework/framework_dependency_guard.py"
       ],
       "expect": "ImGuiSdlHost\\.cpp symbol has 39 findings, allowlisted 40; shrink the allowlist"
+    },
+    {
+      "id": "fw-guard-binding-input-target",
+      "what": "A binding names GYO::Input, which only the core's positive list holds",
+      "file": "framework/bindings/json/CMakeLists.txt",
+      "find": "    PUBLIC GYO::ToolFramework\n    PRIVATE nlohmann_json::nlohmann_json\n",
+      "replace": "    PUBLIC GYO::ToolFramework GYO::Input\n    PRIVATE nlohmann_json::nlohmann_json\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "framework/bindings/json/CMakeLists\\.txt: names GYO::Input"
+    },
+    {
+      "id": "fw-guard-gpu-added",
+      "what": "An allowlisted legacy file gains an SDL_GPU use; its symbol count stays as allowlisted, since the symbol rule does not count SDL_GPU names",
+      "file": "framework/src/ImGuiSdlHost.cpp",
+      "find": "const SDL_Event& event = Engine::Platform::Sdl::NativeEvent(view_);",
+      "replace": "const SDL_Event& event = Engine::Platform::Sdl::NativeEvent(view_); SDL_GPUDevice* gpu = nullptr;",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "framework/src/ImGuiSdlHost\\.cpp: uses SDL_GPUDevice"
+    },
+    {
+      "id": "fw-guard-gpu-rule-dropped",
+      "what": "The guard drops its SDL_GPU rule while the allowlist still holds legacy SDL_ sites",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "        hard.extend(f\"{relative}: uses {name}\" for name in gpu)\n",
+      "replace": "        pass\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_trading_an_allowlisted_site_for_an_old_refusal_fails"
+    },
+    {
+      "id": "fw-guard-binding-list-widened",
+      "what": "A binding's positive list takes GYO::Input along with the core's",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "\"targets\": {\"GYO::ToolFramework\", \"GYO::ToolFrameworkJson\", \"GYO::Engine\", \"GYO::Os\",",
+      "replace": "\"targets\": {\"GYO::ToolFramework\", \"GYO::ToolFrameworkJson\", \"GYO::Engine\", \"GYO::Os\", \"GYO::Input\",",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_input_target_in_a_binding_fails"
+    },
+    {
+      "id": "fw-guard-input-native-allowlistable",
+      "what": "An input *Native header in the core becomes an allowlistable finding instead of a hard one",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": " or (\n                    owner == \"core\" and include.startswith(INPUT_PREFIX) and NATIVE_HEADER.match(include))",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_input_native_header_in_the_core_is_never_allowlisted"
     },
     {
       "id": "fw-link-closure-sdl",
