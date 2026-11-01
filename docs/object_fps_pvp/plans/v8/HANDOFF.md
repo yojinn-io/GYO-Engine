@@ -46,6 +46,7 @@
 - **完成**：`v8-docs-plan-sync`；`pv8-design` 第 1、2 輪；`v8-product-crouch` 的不碰 wire 部分（`fd950ea3`、`347fa9ba`）；`pv8-contract-round2`（`044584fd`）；`pv8-rename`（版本值仍是 7）；`pv8-seq-ceiling`；`pv8-seq-narrow`；`pv8-obs-bytes`（`a7455eb9`，Delta 已同意：`pv8-obs-bytes-delta-approve`）；[協議壓力調研](protocol-pressure-survey.md)；[多通道評估](multi-channel-evaluation.md)。protocol-v8 已定稿。
 - **最優先**：`audio-line`（`v8-engine-audio-first`）在另一個會話 `v8-audio-line` 進行，從 `v8-engine-audio-plan` 開始（自己的 worktree，分支切自 `claude/pvp-v8-pv8-line`）。它的紀錄放在 Engine 的計畫夾，v8 的文件由本會話同步。
 - **並行**：
+  - entity-line（會話 `v8-product-entity-model`，架構掃描 2026-11-01 開的卡；worktree `gifted-khorana-d38ac5`，分支 `claude/gifted-khorana-d38ac5` 切自 master `8a175c0a`）：`v8-product-tarkov-requirements` 開始，[實體需求問卷](entity-requirements.md)草稿寫好，等使用者填答。之後 `v8-product-entity-contract`（ultracode，先問）、`v8-product-match-entity-split`（排在 rewind 之前）。
   - audio-line（會話 `v8-audio-line`）：`v8-engine-audio-plan` 完成（`6ad0d8de`，分支在該會話的 worktree，未推送），6 項決定已在該會話核准；`v8-engine-audio-core` 等你指定。
   - 工具線（會話 `v8-tool-line`）：`v8-tool-plan` 完成（`54dac0c3`，計畫在 `docs/tools/plans/v8/`，未推送）；它的 HANDOFF 列了 18 項等你決定。
 - **等你決定**：
@@ -77,6 +78,7 @@
 | `pv8-design-remaining-picks` | （2026-10-30）`pv8-design` 的其餘決定：D-2 照建議（先實測；超過 1200 B 時把 `sprinting` 移出 wire，不改 §8）；D-5 (a) 不加 `movement_rules_revision`（遊戲還沒上線）；D-6 (a) 衝刺沒有體力；D-7 遊戲版本與協議版本分開、可以不一致。主會話的解讀（待確認）：proto 檔名跟協議版本，這次 wire 改變使協議升為 pv8，和遊戲 v8 同號只是巧合，所以照 (a) 改名為 `client_v8`／`runtime_v8`；D-8 同意 pv8 的 Architecture Delta。另：使用者要求在最後給一份調研報告，主題是哪些遊戲行為會佔用協議（參考主流射擊遊戲、鬥陣特工風格的戰鬥系統、塔科夫的地圖／背包／裝備／簡單武器） | 「D-2照建議，D-5 沒關係，遊戲沒上線。D-6，照建議。D-7，現在遊戲版本和協議版本是分開的v8是遊戲版本，pv7是協議版本，可以不一致。D-8同意。最後我發現，現在壓力來到了協議層，你最後給我一份調研報告，是什麼遊戲行為會佔用這些，參考主流的射擊遊戲，還有一個就是「鬥陣特工」風格的戰鬥系統、「塔科夫」則是地圖、背包、裝備、簡單的武器（沒有改裝）。」 |
 | `pv8-design-final-approve` | （2026-10-30）核准 protocol-v8 定稿；`pv8-design-remaining-picks` 的 D-7 解讀正確：檔名跟協議版本，這次升為 pv8。之後被 `pv8-scope-reopen` 重開 | 「核准 protocol-v8 定稿，D-7 的解讀正確（檔名跟協議版本，這次升為 pv8）。接著開始 crouch。」 |
 | `pv8-scope-reopen` | （2026-10-30）重開 pv8，一起評估這些協議壓力點：流水號（協議的序號欄位）、多通道、action 分離、撿物品、背包、Boss 血量廣播、技能釋放、任務、房間規則。取代 `v8-product-scope` 的「塔科夫方向的協議升級不在 v8」與 `pv8-scope-crouch-sprint` 的「pv8 只放 ①② 的欄位」；protocol-v8 退回草稿。依 AGENTS §2，先寫需求再定契約 | 「流水號、多通道、action分離、檢物品、背包、boss血量廣播、技能釋放、這些都是壓力點，請放到pv8裡面一起評估。任務、房間規則。一起評估」；「重開 pv8」 |
+| `v8-product-entity-model-start` | （2026-11-01）實體資料模型的卡照確認的起點開工：採「ECS 的資料佈局，不採通用 ECS 執行期」（元件＝按 EntityId 排序的型別化陣列，系統＝自由函數，不用 EnTT／flecs 當核心），實體儲存留在產品；四件事（單一 EntityId 空間、元件＝現在拆法的推廣、複寫屬性掛在元件上、決定性契約）照架構會話的建議，contract 批另加「玩家 id 由 Gateway 配」的對照與 `animation`／`shapes_`／`actionsCombat_` 的歸位。Design Invariants 放新文件 `docs/object_fps_pvp/entity-model.zh-Hant.md`（新增 DI 節是 Architecture Delta，條文另行核准）。計畫記在 v8 README 的 `entity-line`，領域用 `product`。contract 批的 ultracode 編制：案 Opus 5.5、審 Fable 5.1、對抗 Fable 5.1（開工前再問）。`match-entity-split` 排在 `v8-product-hitbox-rewind` 之前（和 v8 規劃會話對齊）。估時 20～31 h | 「照這樣開工」 |
 | `v8-docs-id-scheme` | （2026-10-30）批次與決策的代號改成「版本-領域-主題」：`v8-product-…`、`v8-docs-…`、`pv8-action-…`、`pv8-item-…` 等。舊流水號 D243～D254 照對照表換掉（解決和 v7.1 的撞號）。規則寫進 docs/architecture.md，舊的 dev_log 不改寫 | 「任務撞號的問題用版本號，v8-product-xxx：這個是產品任務，v8-docs-xxx：這個是文檔任務，其實就合git commit message 有些類似。pv8-action-xxx、pv8-item-xxx 同理，這是處理協議的。從編號我就能看出目前是什麼問題。（這樣比之前f8，d9 還要白話文翻譯才能看得懂）」；「這個號碼變更寫到架構文檔中。否則以前的dev_logs 會亂」 |
 | `pv8-req-typical-values` | （2026-10-30）[pv8 需求問卷](pv8-requirements.md) 先用典型值，之後可以逐題改 | 「需求問卷先用典型值。」 |
 | `v8-product-crouch-nowire-first` | （2026-10-30）`v8-product-crouch` 先做不碰 wire 的部分（C++ 的姿態、碰撞高度、站起判定、替補、SeedLead、重生、呈現）；proto、版本值、Ready／Welcome 的參數等新的 pv8 定稿再接 | 「crouch 不碰 wire 的部分先做」 |
@@ -155,6 +157,7 @@
 - 2026-10-31：survey 第 2 輪（三部位）。頭的漂移門檻成立（落地 0.519、起跳 0.383、瞄準 0.29～0.32、跑步 0.252 m），腿部包絡未成立。停下交使用者決定。
 - 2026-10-31：survey 第 3 輪（查表）。頭的殘差只剩起跳 0.247 m 超過門檻（8 格的表內插誤差）；跑步 0.176 m 貼近門檻。停下交使用者決定。
 - 2026-10-31：使用者指出方法跑偏（自己設計再一輪輪量），改照成熟方案：以 Valorant 為基底重寫 hitbox-plan（第 2 版），部位判定線估約 66～102 h（推論）。
+- 2026-11-01：entity-line 開始（`v8-product-entity-model-start`）。開工前核對卡片的行號：pv9 已隨 #128 合併，⑤ 的協議改為 pv10（protocol-v9 §0）；`Participant`（`PvpMatch.hpp:116-137`）多了 `animation`、`animationState`，Participant 外另有按 PlayerId 的 `shapes_`（:167）、`actionsCombat_`（:170）；`PlayerId` C++ 為 uint64、wire 為 uint32 且由 Gateway 配發（protocol-v8 §2a）；權威 digest 在 `tests/object_fps_pvp/AuthorityDigest.cpp`（version 4），正式證明是 `compare_authority_trees.py` 的兩樹比對；rewind 尚未開工。`v8-product-tarkov-requirements` 開始（medium，Fable 5.1，估 2～3 h）：問卷照 pv8 問卷格式，已問過的題沿用不重問。
 
 ## 未結事項
 
