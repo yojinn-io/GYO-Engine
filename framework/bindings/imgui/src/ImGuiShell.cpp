@@ -215,6 +215,17 @@ public:
         }
     }
 
+    // What ImGui last told its SDL3 backend.
+    [[nodiscard]] const ImGuiPlatformImeData& Reported() const noexcept { return reported_; }
+
+    // Tells the backend again what ImGui last told it, so that it places text
+    // input for ImGui's field after the client had it.
+    void Report() {
+        if (backend_ != nullptr) {
+            backend_(ImGui::GetCurrentContext(), ImGui::GetMainViewport(), &reported_);
+        }
+    }
+
 private:
     using SetImeDataFn = void (*)(ImGuiContext*, ImGuiViewport*, ImGuiPlatformImeData*);
 
@@ -293,12 +304,80 @@ private:
     bool rendererBackend_{};
 };
 
+// The client's side of the window's input (ImGuiShellInput,
+// v8-input-ui-adapter). Text input has one owner at a time: the client while
+// it asks for it, otherwise ImGui's SDL3 backend for ImGui's own fields. The
+// client's request is applied after ImGui's frame ended, when the backend has
+// done what ImGui asked, so the client's wins within a frame.
+class ShellInput final : public ImGuiShellInput {
+public:
+    ShellInput(Engine::Input::Backend::Sdl::SdlInput& input, const std::string& title) : input_(input), title_(title) {}
+
+    [[nodiscard]] const Engine::Input::PhysicalInputFrame& Frame() const override { return frame_; }
+
+    void RequestTextInput(const Engine::Platform::Sdl::Rect& area, const int cursorPixels) override {
+        requested_ = Request{area, cursorPixels};
+    }
+
+    // Between the backend's EndFrame and its next BeginFrame, which clears it.
+    void Take() {
+        frame_ = input_.Snapshot();
+        requested_.reset();
+    }
+
+    // After ImGui's frame ended. While the client asks, its request is applied
+    // every frame: ImGui's backend also starts, stops and places text input,
+    // in its NewFrame too (on keyboard focus changes) without telling ImGui's
+    // platform hook, so no copy of SDL's state here could say a call is not
+    // needed. Starting text input that is on does nothing in SDL.
+    void Apply(ImeComposition& imgui) {
+        if (requested_) {
+            Check(input_.SetTextInput(true), "turn text input on");
+            Check(input_.SetTextInputArea(requested_->area, requested_->cursorPixels), "set the text input area");
+            owned_ = true;
+            return;
+        }
+        if (!owned_) {
+            return;
+        }
+        owned_ = false;
+        const ImGuiPlatformImeData& reported = imgui.Reported();
+        if (reported.WantVisible || reported.WantTextInput) {
+            // Back to ImGui's field: its backend places text input again.
+            imgui.Report();
+        } else {
+            Check(input_.SetTextInput(false), "turn text input off");
+        }
+    }
+
+private:
+    struct Request {
+        Engine::Platform::Sdl::Rect area;
+        int cursorPixels{};
+    };
+
+    void Check(const Engine::Base::Result<void, Engine::Input::Backend::Sdl::SdlInputError>& result,
+               const char* what) const {
+        if (!result) {
+            Log(LogLevel::Warning, title_, std::string{"could not "} + what + ": " +
+                                               Engine::Base::Describe(result.error()));
+        }
+    }
+
+    Engine::Input::Backend::Sdl::SdlInput& input_;
+    const std::string& title_;
+    Engine::Input::PhysicalInputFrame frame_;
+    std::optional<Request> requested_;
+    // The client asked last frame: text input goes back to ImGui when it stops.
+    bool owned_{};
+};
+
 // The windowed shell's client for an ImGui window. Members are destroyed in
 // reverse: ImGui, then the client, then the renderer.
 class ImGuiWindowClient final : public WindowShellClient {
 public:
     ImGuiWindowClient(SdlPlatform& platform, std::string title)
-        : platform_(platform), title_(std::move(title)), input_(platform) {
+        : platform_(platform), title_(std::move(title)), input_(platform), shellInput_(input_, title_) {
         input_.BeginFrame();
     }
 
@@ -309,7 +388,7 @@ public:
             return false;
         }
         renderer_ = std::move(created).value();
-        context_.emplace(ImGuiShellContext{platform_, *renderer_});
+        context_.emplace(ImGuiShellContext{platform_, *renderer_, shellInput_});
         client_ = factory(*context_);
         if (client_ == nullptr) {
             Log(LogLevel::Error, title_, "there is no client to run");
@@ -328,7 +407,8 @@ public:
 
     RuntimeControl Update(const FrameContext&) override {
         input_.EndFrame();
-        imgui_.Composition().Take(input_.Snapshot());
+        shellInput_.Take();
+        imgui_.Composition().Take(shellInput_.Frame());
         input_.BeginFrame();
         client_->BeginFrame();
         ImGui_ImplSDLRenderer3_NewFrame();
@@ -346,6 +426,7 @@ public:
 
     RuntimeControl Render(const FrameContext&) override {
         ImGui::Render();
+        shellInput_.Apply(imgui_.Composition());
         auto cleared = renderer_->Clear(Color{12, 14, 18, 255});
         if (!cleared) {
             client_->EndFrame();
@@ -370,8 +451,10 @@ public:
 private:
     SdlPlatform& platform_;
     std::string title_;
-    // Only its text is read: typed text and the input method's composition.
+    // The one reading of SDL's input events: ImGui's composition overlay reads
+    // its text, the client the whole frame.
     Engine::Input::Backend::Sdl::SdlInput input_;
+    ShellInput shellInput_;
     std::unique_ptr<SdlRenderer> renderer_;
     std::optional<ImGuiShellContext> context_;
     std::unique_ptr<ImGuiShellClient> client_;

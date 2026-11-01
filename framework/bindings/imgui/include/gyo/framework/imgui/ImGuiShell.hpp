@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 
+#include "engine/input/PhysicalInputFrame.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/render/backend/sdl/SdlRenderer.hpp"
 #include "gyo/framework/WindowShell.hpp"
@@ -13,11 +14,37 @@
 
 namespace Gyo::Tools::Framework {
 
+// The window's input as Engine's SDL input backend reads it: the one reading
+// of SDL's events, which ImGui's composition overlay reads too (Design
+// Invariant 2). ImGui still gets every event; reading the frame takes none
+// from it. Pass the frame's text to ToUiTextInput (gyo/framework/UiTextInput.hpp)
+// to edit a Ui field with the products' shared mapping.
+class ImGuiShellInput {
+public:
+    // This shell frame's input, taken before the client's BeginFrame and the
+    // same until its EndFrame. Each event is in one frame only.
+    [[nodiscard]] virtual const Engine::Input::PhysicalInputFrame& Frame() const = 0;
+    // Asks for text input this frame over area, in window coordinates (not
+    // pixels; Engine's SdlInput::SetTextInputArea), with the cursor
+    // cursorPixels from its left edge. Ask from BeginFrame or Draw (a request
+    // made in EndFrame is dropped), every frame a field of the client's own
+    // is edited. The binding applies it after ImGui's frame, so
+    // the client's request wins over an ImGui text field in that frame; once
+    // the client stops asking, text input goes back to ImGui (and off when no
+    // ImGui field wants it).
+    virtual void RequestTextInput(const Engine::Platform::Sdl::Rect& area, int cursorPixels) = 0;
+
+protected:
+    // The binding owns it; the client only uses it.
+    ~ImGuiShellInput() = default;
+};
+
 // Valid for the client's whole life.
 struct ImGuiShellContext final {
     Engine::Platform::Sdl::SdlPlatform& platform;
     // The binding's own renderer, lent to the client; it outlives the client.
     Engine::Render::Backend::Sdl::SdlRenderer& renderer;
+    ImGuiShellInput& input;
 };
 
 // One window drawn with ImGui. The binding writes no side file (no imgui.ini,

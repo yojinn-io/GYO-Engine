@@ -17,14 +17,16 @@ add_library(gyo_tool_framework STATIC
     src/CatalogPlan.cpp
     src/HeadlessShell.cpp
     src/ReadOnlyAssetCatalog.cpp
+    src/UiTextInput.cpp
 )
 add_library(GYO::ToolFramework ALIAS gyo_tool_framework)
 target_include_directories(gyo_tool_framework PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(gyo_tool_framework PUBLIC cxx_std_20)
 # The catalog mount names engine/asset types; paths go to UTF-8 and the
-# command line comes as UTF-8 through GYO::Os.
+# command line comes as UTF-8 through GYO::Os. The text input mapping turns
+# Engine's input entries into Ui's (v8-input-ui-adapter).
 target_link_libraries(gyo_tool_framework
-    PUBLIC GYO::Engine
+    PUBLIC GYO::Engine GYO::Input GYO::Ui
     PRIVATE GYO::Os
 )
 set(_gyo_framework_targets gyo_tool_framework)

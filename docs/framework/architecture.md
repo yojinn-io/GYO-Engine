@@ -16,8 +16,10 @@ It has two parts. Only the first exists so far:
   - `GYO::ToolFramework`, no SDL: the headless shell (`RunHeadlessShell`),
     the read-only catalog mount (`ReadOnlyAssetCatalog`), the absolute form
     of a path that content mounting and the tools remember (`AbsolutePath`),
-    and registering a catalog entry as structure (`CatalogPlan`: the
-    catalog-level rules and the registration policy). File access on user
+    registering a catalog entry as structure (`CatalogPlan`: the
+    catalog-level rules and the registration policy), and the text input
+    mapping the products share (`ToUiTextInput`: Engine's input entries as
+    Ui's text input; `v8-input-ui-adapter`). File access on user
     paths is Engine's (`engine/io`), and so are the system path dialogs
     (`docs/architecture/platform-sdl.md`).
   - `GYO::ToolFrameworkWindow`, built where Engine's SDL platform is: the
@@ -26,7 +28,8 @@ It has two parts. Only the first exists so far:
   - The ImGui binding `GYO::ToolFrameworkImGui` (`framework/bindings/imgui/`),
     built where the windowed shell, the SDL renderer, Engine's SDL input and
     ImGui's SDL backends are: ImGui on Engine's SDL renderer, run by the
-    windowed shell (`RunImGuiShell`).
+    windowed shell (`RunImGuiShell`), which hands the client the window's
+    input (`ImGuiShellInput`).
   - The JSON binding `GYO::ToolFrameworkJson` (`framework/bindings/json/`),
     built with the core: catalog v1 text (`ReadCatalog`, `RegisterAsset`).
     Whether a text is a catalog v1 is Engine's `CatalogParser`'s to decide.
@@ -136,6 +139,10 @@ repair or rebuild the component.
 - The framework copies an Engine rule that no shared fixture checks.
 - Serving one product needs a callback or flag in a shell that no other
   product uses, or a client has to pump events or run a RuntimeLoop itself.
+  Handing every client of a binding a neutral capability that only the
+  binding may reach under Design Invariant 2, such as the window's input
+  frame and text input (`ImGuiShellInput`, `v8-input-ui-adapter`), does not
+  count, however many products use it so far.
 
 ## Using it
 
@@ -171,6 +178,20 @@ repair or rebuild the component.
   contract for one catalog, with Engine's `IsRelativeContentPath` as the path
   rule; across catalogs and against shader bundles `ContentManifest` decides
   at load. The tool writes the returned text back by atomic replace.
+- `ToUiTextInput(events, clipboard)` turns a frame's text input entries
+  (`PhysicalInputFrame::text`) into Ui's text input for the field being
+  edited: the one mapping of which key means which edit that the products
+  calling the framework share (Ui Design Invariant 7 leaves the mapping to the
+  product; a product that wants another keeps its own). `clipboard` is called
+  for Ctrl+V only.
+- An ImGui client reads the window's input from `context.input`: `Frame()` is
+  the shell frame's `PhysicalInputFrame` (the same snapshot the composition
+  overlay reads, from `BeginFrame` to `EndFrame`; ImGui still gets every
+  event). While a field of the client's own is edited, it calls
+  `RequestTextInput(area, cursorPixels)` every frame, in window coordinates.
+  The binding applies it after ImGui's frame, so within a frame it wins over
+  an ImGui text field; when the client stops asking, text input goes back to
+  the ImGui field, or off when none wants it.
 - `AbsolutePath(path)` gives the absolute, lexically normal form of a path
   through `engine/os` and never throws; a tool remembers paths in that form.
 - System path dialogs are Engine's (`ShowPathDialog` and
