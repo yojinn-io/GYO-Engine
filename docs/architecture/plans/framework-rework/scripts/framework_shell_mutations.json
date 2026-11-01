@@ -196,13 +196,13 @@
     },
     {
       "id": "fw-shell-binding-missing",
-      "what": "The ImGui binding's condition is wrong, so it is not built",
+      "what": "The ImGui binding's condition is wrong, so it is not built. Killed by whichever configure-time check runs first: tests/framework's \"…but no GYO::ToolFrameworkImGui\", or, in a tree with ui_editor (tools are added before tests/framework), ui_editor's own \"requires the GYO::ToolFrameworkImGui target\"; there the framework's check is shadowed and no mutant proves it (limit, v8-framework-invariants).",
       "file": "framework/bindings/imgui/CMakeLists.txt",
       "find": "if(NOT TARGET GYO::ToolFrameworkWindow OR",
       "replace": "if(NOT TARGET GYO::ToolFrameworkWindows OR",
       "target": "gyo_framework_tests",
       "expect_build_failure": true,
-      "expect": "but no\\s+GYO::ToolFrameworkImGui"
+      "expect": "but no\\s+GYO::ToolFrameworkImGui|requires the GYO::ToolFrameworkImGui target"
     },
     {
       "id": "fw-imgui-ini",

@@ -1,6 +1,6 @@
 #include "gyo/ui_editor/DocumentSession.hpp"
 
-#include "gyo/framework/FileService.hpp"
+#include "gyo/framework/AbsolutePath.hpp"
 #include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
