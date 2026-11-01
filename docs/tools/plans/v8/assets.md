@@ -309,7 +309,7 @@ Design Invariants 的改寫（要你同意）：audio_editor DI 3 的「unique i
 
 `-edit` 的工程檔要不要讓 audio_editor 自己連 nlohmann：T3b 用不到，改到 `-edit` 開工、設計工程檔時決定。
 
-## `v8-tool-editor-engine-access`（T4，2026-11-01；已實作，DI 改寫與守衛變更待核准）
+## `v8-tool-editor-engine-access`（T4，2026-11-01；已實作並核准）
 
 起因：架構會話（例行架構掃描）轉述，使用者 2026-11-01 同意改寫 ui_editor 與 audio_editor 的 DI 1。依據：
 - 「no `GYO::Input` and no SDL_GPU」沒有架構理由。
@@ -391,10 +391,10 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
   - audio_editor 的 DI 說播放經 SDL 後端，但 `GYO::AudioBackendSDL` 不在目標清單裡（既有），`-edit` 需要時再加。
 - 要通知整改卡：framework 的突變「CMake names GYO::Input」在 framework DI 2 改寫後會存活。
 
-### 待你決定
+### 決定
 
-1. 核准兩份 DI 1 的改寫，以及兩支守衛的變更（上面的 1～5）。
-2. ui_editor 守衛是否掃 `tests/ui_editor`。
+1. 兩份 DI 1 的改寫與兩支守衛的變更：2026-11-01 核准（`v8-tool-editor-engine-access-approve`）。
+2. ui_editor 守衛是否掃 `tests/ui_editor`：未定，照現狀不掃。
 
 ## 實作順序（提案）
 
@@ -411,7 +411,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-ui-editor-shell-adopt     「high｜Opus 5.5｜T3a：ui_editor 接新外殼與 ImGui 綁定」
 │   ├── v8-tool-user-files-adopt          「medium～high｜Opus 5.5｜T2：兩個工具改用 engine/io」
 │   ├── v8-tool-audio-editor-catalog-adopt「high｜Opus 5.5｜T3b：audio_editor 改用 catalog 結構 API＋JSON 綁定、無視窗外殼」
-│   └── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（已實作，待核准）
+│   └── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（已實作並核准）
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
@@ -458,4 +458,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-ui-editor-guard-approve` | （2026-11-01）核准 ui_editor 守衛的放寬（§14.4：加 `GYO::PlatformSDL`、`GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative`，拿掉 `GYO::ToolFrameworkGui`；第 4 項依検証者更正），並同意 L3 第 3 項改成「狀態列與 log 各有一行」 | 「兩項都核准」 |
 | `v8-tool-audio-editor-guard-approve` | （2026-11-01）核准 audio_editor 守衛的放寬（§14.4：加 include 前綴 `engine/io/` 與目標 `GYO::Engine`，T2） | 「核准」 |
 | `v8-tool-audio-editor-json-guard-approve` | （2026-11-01）核准 audio_editor 守衛的放寬（§14.4：加目標 `GYO::ToolFrameworkJson`，T3b） | 「核准」 |
+| `v8-tool-editor-engine-access-approve` | （2026-11-01）核准 T4：ui_editor 與 audio_editor 的 DI 1 改寫，以及兩支守衛的變更（§14.4 的 1～5 見 T4 一節），並在 L1 通過後合併 PR #131。ui_editor 守衛是否掃 `tests/ui_editor` 未定，照現狀不掃 | 對「核准 T4，並在 L1 通過後合併 #131 嗎？」答「核准並合併」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
