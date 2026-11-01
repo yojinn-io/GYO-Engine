@@ -12,4 +12,14 @@ namespace Engine::IO::Helpers {
     IoResult<void> WriteFileAtomically(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
                                        Engine::Base::ConstSpan<std::byte> data);
 
+    struct WriteAtomicallyOptions final {
+        /// Creates the missing directories above uri first (fs.CreateDirectories); a failure there is returned
+        /// and nothing is written.
+        bool createParentDirectories = false;
+    };
+
+    /// WriteFileAtomically with options.
+    IoResult<void> WriteFileAtomically(Engine::IO::FS::IFileSystem& fs, const Engine::IO::Path::Uri& uri,
+                                       Engine::Base::ConstSpan<std::byte> data, const WriteAtomicallyOptions& options);
+
 } // namespace Engine::IO::Helpers

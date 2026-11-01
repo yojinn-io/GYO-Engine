@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gyo/framework/CatalogPlan.hpp"
 #include "gyo/framework/FrameworkError.hpp"
 
 #include <optional>
@@ -12,12 +13,6 @@ struct AssetRegistration final {
     std::string id;   // the catalog id
     std::string type; // the asset type, chosen by the tool (Design Invariant 3)
     std::string path; // relative to the asset root, '/' separated
-};
-
-struct CatalogUpdate final {
-    std::string text;                        // the whole catalog after the change
-    bool added{};                            // false: the entry with this id was updated
-    std::optional<std::string> previousPath; // an updated entry's old path when it changed
 };
 
 // Whether path is one the content contract accepts for an asset: relative, '/'
