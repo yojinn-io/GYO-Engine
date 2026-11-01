@@ -231,3 +231,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-path-dialog-adopt`＋`v8-tool-ui-editor-shell-adopt` | [2026_11_01_tool_v8_ui_editor_shell_adopt](../../../dev_logs/2026_11_01_tool_v8_ui_editor_shell_adopt.zh-Hant.md) |
 | `v8-tool-user-files-adopt` | [2026_11_01_tool_v8_user_files_adopt](../../../dev_logs/2026_11_01_tool_v8_user_files_adopt.zh-Hant.md) |
 | `v8-tool-audio-editor-catalog-adopt` | [2026_11_01_tool_v8_audio_editor_catalog_adopt](../../../dev_logs/2026_11_01_tool_v8_audio_editor_catalog_adopt.zh-Hant.md) |
+| `v8-tool-ui-editor-ime-enter`（調查，停下回報） | [2026_11_01_tool_v8_ui_editor_ime_enter](../../../dev_logs/2026_11_01_tool_v8_ui_editor_ime_enter.zh-Hant.md) |
