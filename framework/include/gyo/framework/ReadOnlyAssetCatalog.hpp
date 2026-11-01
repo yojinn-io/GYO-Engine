@@ -21,8 +21,8 @@ struct CatalogAsset final {
 };
 
 // Authoring-only, read-only view (Design Invariant 4). There is intentionally
-// no Add/Remove/Save API: writing a catalog is CatalogRegistration's, and only
-// a tool whose own Design Invariants allow it calls that.
+// no Add/Remove/Save API: writing a catalog is the JSON binding's RegisterAsset,
+// and only a tool whose own Design Invariants allow it calls that.
 class ReadOnlyAssetCatalog final {
 public:
     // A content root (content.json and every catalog it declares).

@@ -5,7 +5,7 @@
 #include "engine/asset/catalog/CatalogParser.hpp"
 #include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/os/Files.hpp"
-#include "gyo/framework/FileService.hpp"
+#include "gyo/framework/AbsolutePath.hpp"
 
 #include <algorithm>
 #include <utility>
