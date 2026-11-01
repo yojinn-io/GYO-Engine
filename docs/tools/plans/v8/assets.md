@@ -334,11 +334,11 @@ Design Invariants 的改寫（要你同意）：audio_editor DI 3 的「unique i
 
 ui_editor（`docs/ui_toolchain.md`）：
 
-> 1. The editor links no game and names no product. It may use any Engine module, as an editor depends on the engine; what a game and a tool, or two tools, both need comes through the framework first, even where Engine has it, and the framework calls Engine. It reaches SDL only as a game does: through Engine's platform targets, an Engine `*Native` target where an Engine contract allows it, or the framework's bindings. The one such use is the asset preview's native renderer (`GYO::RenderBackendSDLNative`, platform-sdl Replacement Criterion 2, until Engine's SDL renderer has a texture API); the editor names no `SDL3::` target. Guard: `gyo_ui_editor.dependency_guard`, a positive list of targets and include prefixes, with `SDL_` calls allowed only in the files that use the native renderer.
+> 1. The editor links no game and names no other product. It may use any Engine module, as an editor depends on the engine; what a game and a tool, or two tools, both need comes through the framework first, even where Engine has it, and the framework calls Engine. It reaches SDL only as a game does: through Engine's SDL backend targets, which keep SDL private, an Engine `*Native` target where an Engine contract allows it, or the framework's bindings. The one such use is the asset preview's native renderer (`GYO::RenderBackendSDLNative`, platform-sdl Replacement Criterion 2, until Engine's SDL renderer has a texture API); the editor names no `SDL3::` target. Guard: `gyo_ui_editor.dependency_guard`, a positive list of targets and include prefixes, with `SDL_` calls allowed only in the files that use the native renderer.
 
 audio_editor（`docs/audio_editor/architecture.md`）：
 
-> 1. The editor links no game and names no product. It may use any Engine module, as an editor depends on the engine; what a game and a tool, or two tools, both need comes through the framework first. Playback goes through `GYO::Audio` and its SDL backend; the editor itself includes no `SDL3/` header, calls no `SDL_` function and names no SDL or `*Native` target. Guard: the editor's dependency guard, a positive list of targets and include prefixes.
+> 1. The editor links no game and names no other product. It may use any Engine module, as an editor depends on the engine; what a game and a tool, or two tools, both need comes through the framework first, even where Engine has it, and the framework calls Engine. Playback goes through `GYO::Audio` and its SDL backend; the editor itself includes no `SDL3/` header, calls no `SDL_` function and names no SDL or `*Native` target. Guard: the editor's dependency guard, a positive list of targets and include prefixes.
 
 ### 守衛的變更（草稿）
 
@@ -361,7 +361,11 @@ audio_editor：
 
 ### 待你決定
 
-1. 上面兩份 DI 1 的草稿（和整改卡對齊後再定稿）。
+1. 上面兩份 DI 1 的草稿。已和整改卡對齊（2026-11-01）：
+   - 「platform targets」改成「SDL backend targets, which keep SDL private」，因為音效與輸入的 SDL 後端不是 platform 目標；
+   - 兩份的共同句一字不差；
+   - 「names no product」改成「names no other product」，因為工具本身就是產品。
+   - framework DI 2／DI 5 的對應句由整改卡在 PR B 開工時交你核准。
 2. ui_editor 守衛是否掃 `tests/ui_editor`。
 3. T4 的位置：
    - 建議：PR #131 合併後，另開一條小 PR，不延後 #131；
