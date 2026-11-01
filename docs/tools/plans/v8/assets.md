@@ -396,6 +396,86 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
 1. 兩份 DI 1 的改寫與兩支守衛的變更：2026-11-01 核准（`v8-tool-editor-engine-access-approve`）。
 2. ui_editor 守衛是否掃 `tests/ui_editor`：未定，照現狀不掃。
 
+## `v8-tool-ui-editor-input-adapter`（IU-2）的事前宣告（2026-11-02，待核准）
+
+來源：任務卡 `v8-input-ui-adapter`（已核准 `v8-input-ui-adapter-approve`，卡在 `docs/object_fps_pvp/plans/v8/input-ui-adapter-card.md`）。IU-2 由工具線做。
+
+前提：IU-1 已合併（PR #135，`a8a48243`）。本批從 master `a8a48243` 開分支 `claude/v8-tool-ui-editor-input-adapter`。
+
+用到的新介面：
+- `framework/include/gyo/framework/UiTextInput.hpp` 的 `ToUiTextInput(events, shortcut, clipboard)`；
+- `framework/bindings/imgui/include/gyo/framework/imgui/ImGuiShell.hpp` 的 `ImGuiShellContext::input`：`Frame()` 交出這一幀的 `PhysicalInputFrame`，`RequestTextInput(area, cursorPixels)` 要求文字輸入。
+
+模型與檔位：
+
+| 段 | 根據 | 実装者 | 審査者 | 検証者 |
+|---|---|---|---|---|
+| 上段 | ui_editor DI 1 的守衛變更（收緊） | Opus 5.5／high（主會話） | Opus 5.5／high（子 agent，code review） | 只在出現放寬時開，Opus 5.5／high |
+
+- 守衛只收緊：§14.4 規定只收緊時不必另開検証者，改用突變證明新判定抓得到。
+- 這是 Design Invariants 的守衛，第 1～5 項仍照 §14.4 交你核准。
+
+估時：4～6 h（卡上的推論）。超過 1.5 倍就停下回報。
+
+### 改動
+
+1. **`PreviewAdapter`：文字輸入改用 framework 的轉換器。**
+   - 刪掉從 ImGui 字元佇列與 `ImGuiKey` 表拼文字輸入的那段（`PreviewTextInput`）。
+   - 改成 `ToUiTextInput(frame.text, shortcut, clipboard)`：
+     - `shortcut` 依 `ImGui::GetIO().ConfigMacOSXBehaviors` 選 Gui 或 Ctrl，和現在的預覽一致：macOS 用 Cmd；
+     - `clipboard` 用 `ImGui::GetClipboardText`。
+   - 組字事件（Composition）因此進得了預覽的 text_field。這解決了卡上第 3 點：預覽收不到組字。
+2. **刪掉 `imgui_internal.h` 與 `PlatformImeData` 那段，改由預覽交出「文字輸入請求」。**
+   - 請求的內容是編輯中欄位的視窗座標範圍與游標像素位置，放在 `FrameOutput`。
+   - EditorApp 轉交給 EditorClient，EditorClient 在 `Draw` 裡呼叫 `context.input.RequestTextInput`。
+   - 這樣 `PreviewAdapter` 不必知道 ImGui 綁定，測試可以直接建構 `TextEvent` 交給它（卡上的介面要求 e）。
+3. **輸入幀的傳遞：** EditorClient 在 `BeginFrame` 把 `context.input.Frame()` 交給 EditorApp，EditorApp 再交給 `PreviewAdapter::Draw`。新增一個參數，型別是 `const Engine::Input::PhysicalInputFrame*`，nullptr 表示沒有輸入。
+4. **不改的部分（範圍的限界）：** 預覽的指標、Tab、方向鍵、Enter、Space、Escape 仍從 ImGui 讀。
+   - 卡上 IU-1 只交出文字輸入的轉換器，沒有 `UiInputFrame` 的共用轉換。
+   - 把這些也改走 Engine 的幀，要先有共用的轉換，記為之後的候選。
+5. **守衛（收緊）：** ui_editor 守衛加一條具名規則，任何檔案都不得 include `imgui_internal.h`。
+   - 現在守衛會略過不含 `/` 的 include，所以抓不到它。
+6. **CMake：** `gyo_ui_editor_preview` 用到 `PhysicalInputFrame`（`GYO::Input`）與 `ToUiTextInput`（`GYO::ToolFramework`），兩個都已在守衛的允許清單裡。
+
+### 判定（都通過才算完成）
+
+1. L1 的 ci-windows、ci-linux、ci-macos 三列綠；`gyo_ui_editor.*` 全部通過。
+2. 新測試，用 `TextEvent` 直接建構，不經 SDL：
+   - 打字插入；
+   - 組字時 text_field 顯示組字，確定後變成文字；
+   - shortcut＋A 全選、shortcut＋V 貼上，Gui 與 Ctrl 兩種都測；
+   - Backspace 與方向鍵；
+   - 編輯中才交出文字輸入請求，範圍是欄位的視窗座標；不在編輯時不交出。
+3. 既有測試 `TestPreviewTextFieldTyping` 原本用 ImGui 的鍵盤事件餵輸入，要改成餵 `TextEvent`。
+   - 判定不變：送出的文字、動作紀錄、繫結值都和原本相同；只改輸入的來源。
+   - 依 §14.4 在變更說明寫理由。
+4. 突變（全部預期 killed；file 與 find 在實作後、執行前寫進 `docs/tools/plans/v8/scripts/framework_mutations.json`）：
+   - 丟掉組字事件；
+   - shortcut 固定成 Ctrl；
+   - 不在編輯也交出請求；
+   - 編輯時不交出請求；
+   - 守衛的 `imgui_internal.h` 規則失效：自我測試失敗；
+   - 預覽又 include `imgui_internal.h`：守衛失敗。
+5. L3（macOS 實機，你操作；這次只驗 macOS，你已決定）：
+   - 預覽模式下在 text_field 打英文；
+   - 用日文輸入法組字，預覽裡顯示組字，確定後進入欄位；
+   - Cmd＋A、Cmd＋V；
+   - Inspector 的 ImGui 輸入框照舊能用日文輸入；預覽編輯和 Inspector 編輯切換時，輸入法不會亂跳。
+
+### 範圍的限界
+
+- **Windows 不驗：** Windows 的組字要開 `SdlPlatformOptions::imeComposition`，這次只驗 macOS（你的決定，見卡）。
+- **預覽的其他輸入照舊從 ImGui 讀：** 指標與導覽鍵，見上面第 4 點。
+- **CI 不驗真的輸入法：** CI 只跑 `cpu|shader`，真實輸入法只靠 L3。
+
+### §14.4（守衛只收緊；實作後補結果，交你核准）
+
+1. 守的性質：ui_editor DI 1 與卡上第 2 點「不伸手進 ImGui 內部」。
+2. 緩的面：無。
+3. 緊的面：任何 ui_editor 檔案 include `imgui_internal.h` 都失敗。以前不含 `/` 的 include 一律略過。
+4. 不適用（沒有放寬）。
+5. 根據：任務卡 IU-2；突變結果實作後補上。
+
 ## 實作順序（提案）
 
 ```text
@@ -411,7 +491,8 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-ui-editor-shell-adopt     「high｜Opus 5.5｜T3a：ui_editor 接新外殼與 ImGui 綁定」
 │   ├── v8-tool-user-files-adopt          「medium～high｜Opus 5.5｜T2：兩個工具改用 engine/io」
 │   ├── v8-tool-audio-editor-catalog-adopt「high｜Opus 5.5｜T3b：audio_editor 改用 catalog 結構 API＋JSON 綁定、無視窗外殼」
-│   └── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（已實作並核准）
+│   ├── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（已實作並核准）
+│   └── v8-tool-ui-editor-input-adapter 「high｜Opus 5.5｜IU-2：ui_editor 預覽的文字輸入改用 framework 的轉換器與文字輸入請求」（事前宣告待核准）
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
