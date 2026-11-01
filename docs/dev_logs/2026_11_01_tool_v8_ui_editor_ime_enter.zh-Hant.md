@@ -48,13 +48,16 @@
    - 驗證用的診斷版（`diag-hold-enter.diff`，只在設了環境變數時生效）：組字中不把 Return 的 KEY_DOWN 交給 ImGui。實機 log 是 `macos-ja-hold-enter.log`。
      - 三次組字的第一次 Enter 都被攔下（「今回」、「日本語字幕」、「です」）。
      - 之後都送來了 TEXT_INPUT，那時文字輸入還開著。
-   - 使用者用診斷版的觀察：要按兩次 Enter 才寫進去。第一次選定漢字，第二次才把文字交給介面。
-     - log 對得上：「日本語字幕」與「です」的 TEXT_INPUT 出現在第一次 Enter 之後 1.19 秒與 0.24 秒，中間沒有 KEY_DOWN。第二次 Enter 在當下就交出文字，SDL 清掉了這次按鍵，所以 log 裡看不到。
-     - 「今回」：攔下第一次 Enter 後，使用者接著打「は」，最後與「今回は」一起確定。
-     - 我最初把那 1.19 秒、0.24 秒讀成「輸入法延後交出文字」，這是錯的，已依使用者的觀察更正。
-   - 所以原版的經過是：第一次 Enter 由輸入法處理（選定漢字），但沒有交出文字，SDL 便把它當一般按鍵送出；ImGui 因此結束編輯，關掉文字輸入，組字就成了孤兒。
-   - 「偶爾才寫得進」的情況沒有錄到 log，推測是輸入法在第一次 Enter 就交出了文字（SDL 不送 KEY_DOWN）。
-   - 為什麼要按兩次 Enter，原因不明，可能和 SDL 的 `NSTextInputClient` 實作不完整有關（例如 `attributedSubstringForProposedRange` 回 nil）。在 TextEdit 這類原生程式裡按一次就能確定的話，問題就在 SDL 這邊；這個對照還沒做。
+   - 日文輸入法本來的操作（使用者說明）：打字，空白鍵選字，第一次 Enter 把選好的字放進輸入框，第二次 Enter 才是給程式的確定。
+     - 所以第一次 Enter 應該讓輸入法送出確定文字（`insertText`）。這次沒有在 `interpretKeyEvents` 之內送出，SDL 便把它當一般的 Enter 送出。
+     - log 的時序對得上：組字文字（「です」）在 Enter 之後沒有變化，沒有新的 TEXT_EDITING，SDL 的 pending 一直沒被清掉。
+   - 診斷版裡，TEXT_INPUT 在攔下的 Enter 之後 0.24 秒（「です」）與 1.19 秒（「日本語字幕」）才出現，中間沒有 KEY_DOWN。log 分不出下面兩種情況：
+     - 第一次 Enter 的確定文字晚一點才送到；
+     - 使用者又按了一次 Enter，輸入法在 `interpretKeyEvents` 之內就送出文字，SDL 便清掉這次按鍵。
+   - 不論哪一種，結論與修正都一樣：組字中的 Enter 是輸入法的鍵，不該交給 ImGui。
+   - 「今回」：攔下 Enter 後，使用者接著打「は」，最後與「今回は」一起確定。
+   - 所以原版的經過是：第一次 Enter 的 KEY_DOWN 漏給 ImGui，ImGui 結束編輯並關掉文字輸入，之後才到的確定文字就被丟掉。
+   - 「偶爾才寫得進」的情況沒有錄到 log，推測是輸入法在 `interpretKeyEvents` 之內就送出了文字（SDL 不送 KEY_DOWN）。
    - 兩次錄 log 都印出 `error messaging the mach port for IMKCFRunLoopWakeUpReliable`。和這個問題的關係不明。
 
 ## 另一個發現：組字中介面上看不到字
@@ -75,7 +78,6 @@
 - 組字中（最後一個 TEXT_EDITING 不是空字串），不把 Return 與 KP_Enter 的 KEY_DOWN 交給 ImGui。
 - 收到 TEXT_INPUT、組字結束的 TEXT_EDITING ""，或視窗失焦時，回到非組字狀態。
 - KEY_UP 照常交給 ImGui，按鍵狀態不會卡住。
-- 這樣只能保證文字不丟。要按兩次 Enter 的操作感不會變，原因在輸入法或 SDL。
 - 回歸測試可以照 `imgui-order-probe` 的寫法：用 ImGui 的真實幀依序注入「組字、Enter 按下、文字」，期望文字寫進去，編輯也沒有被結束。
 
 落點有兩個，都屬架構整改線：
@@ -96,6 +98,5 @@
 ## 範圍的限界
 
 - Windows 的實機沒做。
-- 診斷版只錄了一次（3 次組字）；要兩次 Enter 是使用者的觀察。
-- 沒有和原生程式（TextEdit）比對，要按幾次 Enter 才確定。
+- 診斷版只錄了一次（3 次組字）。
 - Esc（取消組字）與其他鍵有沒有同樣的延遲，沒有測。
