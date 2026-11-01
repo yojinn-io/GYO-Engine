@@ -16,6 +16,8 @@ using Engine::Input::Key;
 using Engine::Input::TextEvent;
 using Engine::Ui::UiTextInput;
 using Engine::Ui::UiTextInputKind;
+constexpr auto Ctrl = Gyo::Tools::Framework::TextShortcutModifier::Ctrl;
+constexpr auto Gui = Gyo::Tools::Framework::TextShortcutModifier::Gui;
 
 // The mapping a game kept as its own until v8-input-ui-adapter (master
 // d03c01e2), copied as the reference: the clipboard was the platform's, here it
@@ -76,6 +78,13 @@ TextEvent Pressed(const Key physical, const Key layout, const bool ctrl = false,
 
 TextEvent Pressed(const Key key) { return Pressed(key, key); }
 
+// A key press with Gui (Command on macOS) held.
+TextEvent PressedWithGui(const Key key) {
+    TextEvent event = Pressed(key, key);
+    event.modifiers.gui = true;
+    return event;
+}
+
 void CheckSame(const std::vector<UiTextInput>& actual, const std::vector<UiTextInput>& expected) {
     REQUIRE(actual.size() == expected.size());
     for (std::size_t i = 0; i < actual.size(); ++i) {
@@ -118,7 +127,7 @@ TEST_CASE("U1: a stream of every kind of entry maps as the game mapped it") {
         Pressed(Key::V),
     };
     const std::function<std::string()> clipboard = [] { return std::string{"pasted"}; };
-    const auto actual = Gyo::Tools::Framework::ToUiTextInput(events, clipboard);
+    const auto actual = Gyo::Tools::Framework::ToUiTextInput(events, Ctrl, clipboard);
     CheckSame(actual, GameReference(events, clipboard));
 
     const std::vector<UiTextInput> expected{
@@ -147,7 +156,7 @@ TEST_CASE("U1: a stream of every kind of entry maps as the game mapped it") {
 TEST_CASE("U2: Ctrl+V inserts what the clipboard has, an empty clipboard included") {
     const std::vector<TextEvent> paste{Pressed(Key::V, Key::V, true)};
     int calls = 0;
-    const auto empty = Gyo::Tools::Framework::ToUiTextInput(paste, [&] {
+    const auto empty = Gyo::Tools::Framework::ToUiTextInput(paste, Ctrl, [&] {
         ++calls;
         return std::string{};
     });
@@ -158,7 +167,7 @@ TEST_CASE("U2: Ctrl+V inserts what the clipboard has, an empty clipboard include
 TEST_CASE("U3: the clipboard is read only for Ctrl+V") {
     const std::vector<TextEvent> events{Typed("x"), Pressed(Key::A, Key::A, true), Pressed(Key::V)};
     int calls = 0;
-    const auto actual = Gyo::Tools::Framework::ToUiTextInput(events, [&] {
+    const auto actual = Gyo::Tools::Framework::ToUiTextInput(events, Ctrl, [&] {
         ++calls;
         return std::string{"never"};
     });
@@ -167,12 +176,25 @@ TEST_CASE("U3: the clipboard is read only for Ctrl+V") {
 }
 
 TEST_CASE("U4: no entries give no text input") {
-    CHECK(Gyo::Tools::Framework::ToUiTextInput({}, [] { return std::string{}; }).empty());
+    CHECK(Gyo::Tools::Framework::ToUiTextInput({}, Ctrl, [] { return std::string{}; }).empty());
 }
 
 TEST_CASE("U5: Ctrl+A is the key the layout produces, not the position") {
     const auto clipboard = [] { return std::string{}; };
-    CheckSame(Gyo::Tools::Framework::ToUiTextInput(std::vector<TextEvent>{Pressed(Key::Q, Key::A, true)}, clipboard),
+    CheckSame(Gyo::Tools::Framework::ToUiTextInput(std::vector<TextEvent>{Pressed(Key::Q, Key::A, true)}, Ctrl, clipboard),
               {{UiTextInputKind::SelectAll}});
-    CHECK(Gyo::Tools::Framework::ToUiTextInput(std::vector<TextEvent>{Pressed(Key::A, Key::Q, true)}, clipboard).empty());
+    CHECK(Gyo::Tools::Framework::ToUiTextInput(std::vector<TextEvent>{Pressed(Key::A, Key::Q, true)}, Ctrl, clipboard).empty());
+}
+
+TEST_CASE("U6: the shortcuts take the modifier the product chose, and only it") {
+    const std::vector<TextEvent> events{PressedWithGui(Key::A), PressedWithGui(Key::V), Pressed(Key::A, Key::A, true),
+                                        Pressed(Key::V, Key::V, true)};
+    const auto clipboard = [] { return std::string{"pasted"}; };
+    CheckSame(Gyo::Tools::Framework::ToUiTextInput(events, Gui, clipboard),
+              {{UiTextInputKind::SelectAll}, {UiTextInputKind::Insert, "pasted"}});
+    CheckSame(Gyo::Tools::Framework::ToUiTextInput(events, Ctrl, clipboard),
+              {{UiTextInputKind::SelectAll}, {UiTextInputKind::Insert, "pasted"}});
+    // With Gui chosen, Ctrl+A and Ctrl+V are only keys, and the other way round.
+    CHECK(Gyo::Tools::Framework::ToUiTextInput(std::vector<TextEvent>{Pressed(Key::A, Key::A, true)}, Gui, clipboard).empty());
+    CHECK(Gyo::Tools::Framework::ToUiTextInput(std::vector<TextEvent>{PressedWithGui(Key::V)}, Ctrl, clipboard).empty());
 }

@@ -228,9 +228,9 @@
     },
     {
       "id": "fw-uti-ctrl-dropped",
-      "what": "Ctrl+A selects all without Ctrl held (v8-input-ui-adapter)",
+      "what": "shortcut+A selects all without the shortcut modifier held (v8-input-ui-adapter)",
       "file": "framework/src/UiTextInput.cpp",
-      "find": "} else if (entry.modifiers.ctrl && entry.layoutKey == Key::A) {",
+      "find": "} else if (shortcutHeld && entry.layoutKey == Key::A) {",
       "replace": "} else if (entry.layoutKey == Key::A) {",
       "target": "gyo_framework_tests",
       "expect": "is NOT correct",
@@ -250,8 +250,18 @@
       "id": "fw-uti-layout-key",
       "what": "Ctrl+A is read by the physical position instead of the key the layout produces (AZERTY)",
       "file": "framework/src/UiTextInput.cpp",
-      "find": "} else if (entry.modifiers.ctrl && entry.layoutKey == Key::A) {",
-      "replace": "} else if (entry.modifiers.ctrl && entry.key == Key::A) {",
+      "find": "} else if (shortcutHeld && entry.layoutKey == Key::A) {",
+      "replace": "} else if (shortcutHeld && entry.key == Key::A) {",
+      "target": "gyo_framework_tests",
+      "expect": "is NOT correct",
+      "cases": "U*"
+    },
+    {
+      "id": "fw-uti-shortcut-ignored",
+      "what": "The shortcuts take Ctrl whatever modifier the product chose (macOS Command lost)",
+      "file": "framework/src/UiTextInput.cpp",
+      "find": "        const bool shortcutHeld = shortcut == TextShortcutModifier::Gui ? entry.modifiers.gui : entry.modifiers.ctrl;",
+      "replace": "        const bool shortcutHeld = entry.modifiers.ctrl;\n        static_cast<void>(shortcut);",
       "target": "gyo_framework_tests",
       "expect": "is NOT correct",
       "cases": "U*"

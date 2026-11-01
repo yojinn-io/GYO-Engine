@@ -200,3 +200,16 @@ struct ImGuiShellContext final { ...; ImGuiShellInput& input; };
   - 全量 CTest 在審查修正後 123/123（`ctest_full_after_review.txt`）。
 - 2026-11-02，使用者對 M2 的判斷：「不算，但補條文」。Replacement Criteria 第 7 條加一句：綁定把只有它能依 DI 2 讀取的中立能力（例如視窗的輸入幀與文字輸入）交給所有 client，不算觸發。條文全文交使用者核准。
 - 2026-11-02，使用者：「核准」。守衛的判定變更（核心清單加 `GYO::Ui`）與 Replacement Criteria 第 7 條的補句核准。IU-1 完成，[dev_log](../../../dev_logs/2026_11_02_framework_v8_input_ui_adapter_iu1.zh-Hant.md)。
+- 2026-11-02：PR #135 開出，`7224db3d` 的 CI 通過。framework 整改線審查 framework 的部分：0 blocker、1 major、2 minor、2 nit。
+  - major：`ToUiTextInput` 的 Ctrl+A／Ctrl+V 只看 Ctrl，照抄遊戲。ui_editor 預覽現在照平台走，macOS 上是 Cmd。IU-2 換成共用轉換後，macOS 的 Cmd+V／Cmd+A 會失效。
+    - 使用者決定「呼叫者傳入修飾鍵」：`ToUiTextInput(events, shortcut, clipboard)`，`shortcut` 是 `TextShortcutModifier::Ctrl` 或 `Gui`。
+    - 遊戲傳 Ctrl，行為不變。ui_editor 在 IU-2 依 ImGui 的 `ConfigMacOSXBehaviors` 選。
+    - 核心不必知道平台。
+    - 新增 U6。
+  - minor 1：補跑兩個 L2 組態。
+    - 只選 audio_editor：configure、建置、CTest 56/56 都成功（`l2_audio_only_*.txt`）。
+    - 不選工具：configure 成功，沒有 framework 的 target（`l2_no_tools_configure.txt`）。
+  - minor 2：dev_log 寫明「經核准的預測壓力」。
+  - nit：綁定 CMake 註解重排；Using it 寫明 `area` 與 `cursorPixels` 的單位。
+- 事前宣告（D184：核心的轉換與它的測試改了）：重跑 fw-uti-* 6 條，其中 fw-uti-shortcut-ignored 是新增的，要全部 killed、stale 0。預檢：find 各恰好一次，預期訊息照 doctest 的「is NOT correct」。
+- 結果：fw-uti-* 6/6 killed、stale 0（`mutations_shortcut.txt`）；framework 的測試 7/7；全量 CTest 123/123（`ctest_full_shortcut.txt`）。

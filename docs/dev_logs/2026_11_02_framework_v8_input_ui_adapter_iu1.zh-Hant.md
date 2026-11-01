@@ -15,7 +15,7 @@
 
 ## 做了什麼
 
-- **核心**：新增 `ToUiTextInput(events, clipboard)`（`framework/include/gyo/framework/UiTextInput.hpp`）。
+- **核心**：新增 `ToUiTextInput(events, shortcut, clipboard)`（`framework/include/gyo/framework/UiTextInput.hpp`）。
   - 對照表逐項照搬遊戲那一份（`PvpApplication.cpp:268-289`），只依賴 `GYO::Input` 與 `GYO::Ui`。剪貼簿由呼叫者傳入。
   - 核心改成 PUBLIC 連 `GYO::Input`、`GYO::Ui`。
   - 依使用者的決定（`v8-input-ui-adapter-iu1-frame-scope` (a)）只共用文字轉換。`UiInputFrame` 的其他欄位依 Ui DI 7 是各產品自己的對照。
@@ -32,7 +32,7 @@
 
 ## 驗證與經緯
 
-件數の突き合わせ：一致（宣告的突變：宣告 11・執行 11・killed 11・stale 0）。
+件數の突き合わせ：一致（宣告的突變：宣告 11・執行 11・killed 11・stale 0；審查後重跑 6・killed 6・stale 0）。
 
 - **建置與測試**（macOS arm64，test preset，選了 object_fps_pvp、ui_editor、audio_editor）：
   - 全量建置成功；
@@ -55,12 +55,17 @@
   - 17 個構造輸入對新舊守衛做差分：舊判定失敗、新判定通過的只有「核心具名 `GYO::Ui`」一例。
   - 把連結檢查的函式抽出來實跑：`GYO::Ui` 私下連 nlohmann 時通過；PUBLIC、INTERFACE 連，或核心自己具名 nlohmann，都失敗。
 - 使用者核准守衛的判定變更與第 7 條的補句（「核准」）。
+- **PR #135 的 framework 審查**（framework 整改線）：0 blocker、1 major、2 minor、2 nit。
+  - major：Ctrl+A／Ctrl+V 只看 Ctrl，macOS 上 ui_editor 預覽用的是 Cmd。使用者決定由呼叫者傳入快捷修飾鍵（`TextShortcutModifier`），新增 U6。
+  - 重跑 fw-uti-* 6 條（含新增的 fw-uti-shortcut-ignored）：6/6 killed。全量 CTest 123/123。
+  - minor：補跑 L2。只選 audio_editor：建置與 CTest 56/56；不選工具：configure 成功，沒有 framework 的 target。
+  - 其他 minor 與 nit 都已處理。
 
 證據在主 checkout（本機 Mac）的 `build/evidence/v8-input-ui-adapter/IU-1/`：configure、build、ctest、自測的 red／green、M1 的 red／green、兩份突變結果、検証者的實驗 `verifier/`。
 
 ## 範圍的限界與留下的事
 
-- 核心的轉換在這批還沒有使用者。IU-2（工具線：預覽改用它、刪 `imgui_internal.h` 與 ImGuiKey 表）與 IU-3（推動會話：產品宣告 `FRAMEWORK`、`PvpApplication` 改用它）接上之後，卡的第 1、2 件事才算完成。
+- 核心的轉換在這批還沒有使用者。它進 framework 依據的是經使用者核准的預測壓力（`v8-input-ui-adapter-approve`：遊戲與 ui_editor 預覽兩處各寫了一份），不是已經接上的兩處使用（DI 5），寫法比照 framework-rework 的 D-8。IU-2（工具線：預覽改用它、刪 `imgui_internal.h` 與 ImGuiKey 表）與 IU-3（推動會話：產品宣告 `FRAMEWORK`、`PvpApplication` 改用它）接上之後，卡的第 1、2 件事才算完成。
 - I11 是 `editor` 標籤，L1 不跑。
 - 「client 從未要求時，綁定不呼叫 SetTextInput」只能檢查文字輸入的狀態，觀察不到呼叫本身。
 - Windows 上每幀呼叫 `SetTextInputArea` 的成本沒有查證。組字的驗收只做 macOS（使用者決定）。

@@ -19,7 +19,7 @@
 - 2026-11-01：IU-3 的 Build Graph Delta 已同意（[IU-3 Delta](input-ui-adapter-iu3-build-delta.md)，採 (a)：`components` 加 `FRAMEWORK`）。
 - 2026-11-02：IU-1 完成（[事前宣告與執行紀錄](input-ui-adapter-iu1-declaration.md)、[dev_log](../../../dev_logs/2026_11_02_framework_v8_input_ui_adapter_iu1.zh-Hant.md)）。
   - 使用者決定 `UiInputFrame` 只共用文字轉換（`v8-input-ui-adapter-iu1-frame-scope` (a)）。第 1 件事裡的「`UiInputFrame` 也是兩份」改記為：重複的是文字轉換，已合為一份；其他欄位是各產品自己的對照（Ui DI 7）。
-  - IU-1 的介面：核心 `ToUiTextInput(events, clipboard)`（`gyo/framework/UiTextInput.hpp`）；ImGui 綁定 `ImGuiShellContext::input`（`Frame()`、`RequestTextInput(area, cursorPixels)`，視窗座標，只在 BeginFrame 或 Draw 呼叫）。
+  - IU-1 的介面：核心 `ToUiTextInput(events, shortcut, clipboard)`（`gyo/framework/UiTextInput.hpp`）；ImGui 綁定 `ImGuiShellContext::input`（`Frame()`、`RequestTextInput(area, cursorPixels)`，視窗座標，只在 BeginFrame 或 Draw 呼叫）。
   - IU-1 的 PR 合併後通知工具線開 IU-2，推動會話接著做 IU-3。
 
 ## 要處理的三件事（使用者給的原文）

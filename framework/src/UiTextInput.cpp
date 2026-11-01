@@ -3,19 +3,21 @@
 namespace Gyo::Tools::Framework {
 
 std::vector<Engine::Ui::UiTextInput>
-ToUiTextInput(const std::span<const Engine::Input::TextEvent> events, const std::function<std::string()>& clipboard) {
+ToUiTextInput(const std::span<const Engine::Input::TextEvent> events, const TextShortcutModifier shortcut,
+              const std::function<std::string()>& clipboard) {
     using Engine::Input::Key;
     using Engine::Input::TextEvent;
     using Engine::Ui::UiTextInputKind;
     std::vector<Engine::Ui::UiTextInput> result;
     for (const TextEvent& entry : events) {
+        const bool shortcutHeld = shortcut == TextShortcutModifier::Gui ? entry.modifiers.gui : entry.modifiers.ctrl;
         if (entry.kind == TextEvent::Kind::Text) {
             result.push_back({UiTextInputKind::Insert, entry.text});
         } else if (entry.kind == TextEvent::Kind::Composition) {
             result.push_back({UiTextInputKind::Composition, entry.text, entry.cursor});
-        } else if (entry.modifiers.ctrl && entry.layoutKey == Key::A) {
+        } else if (shortcutHeld && entry.layoutKey == Key::A) {
             result.push_back({UiTextInputKind::SelectAll, {}});
-        } else if (entry.modifiers.ctrl && entry.layoutKey == Key::V) {
+        } else if (shortcutHeld && entry.layoutKey == Key::V) {
             result.push_back({UiTextInputKind::Insert, clipboard ? clipboard() : std::string{}});
         } else if (entry.layoutKey == Key::Backspace) {
             result.push_back({UiTextInputKind::Backspace, {}});

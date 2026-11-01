@@ -178,17 +178,20 @@ repair or rebuild the component.
   contract for one catalog, with Engine's `IsRelativeContentPath` as the path
   rule; across catalogs and against shader bundles `ContentManifest` decides
   at load. The tool writes the returned text back by atomic replace.
-- `ToUiTextInput(events, clipboard)` turns a frame's text input entries
+- `ToUiTextInput(events, shortcut, clipboard)` turns a frame's text input entries
   (`PhysicalInputFrame::text`) into Ui's text input for the field being
   edited: the one mapping of which key means which edit that the products
   calling the framework share (Ui Design Invariant 7 leaves the mapping to the
-  product; a product that wants another keeps its own). `clipboard` is called
-  for Ctrl+V only.
+  product; a product that wants another keeps its own). `shortcut` is the
+  modifier of select-all and paste (`Ctrl`, or `Gui` where the platform's
+  text fields take Command); `clipboard` is called for the paste only.
 - An ImGui client reads the window's input from `context.input`: `Frame()` is
   the shell frame's `PhysicalInputFrame` (the same snapshot the composition
   overlay reads, from `BeginFrame` to `EndFrame`; ImGui still gets every
   event). While a field of the client's own is edited, it calls
-  `RequestTextInput(area, cursorPixels)` every frame, in window coordinates.
+  `RequestTextInput(area, cursorPixels)` every frame: `area` in window
+  coordinates, `cursorPixels` in pixels from its left edge (as Engine's
+  `SdlInput::SetTextInputArea`).
   The binding applies it after ImGui's frame, so within a frame it wins over
   an ImGui text field; when the client stops asking, text input goes back to
   the ImGui field, or off when none wants it.

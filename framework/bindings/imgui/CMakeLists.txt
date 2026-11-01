@@ -11,8 +11,8 @@ add_library(gyo_tool_framework_imgui STATIC src/ImGuiShell.cpp)
 add_library(GYO::ToolFrameworkImGui ALIAS gyo_tool_framework_imgui)
 target_include_directories(gyo_tool_framework_imgui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 # The public header names the windowed shell, the renderer it lends and
-# Engine's input frame (the core links Engine's input publicly); ImGui, its SDL backends
-# and the native layer stay private.
+# Engine's input frame (the core links Engine's input publicly); ImGui, its
+# SDL backends and the native layer stay private.
 target_link_libraries(gyo_tool_framework_imgui
     PUBLIC
         GYO::ToolFrameworkWindow
