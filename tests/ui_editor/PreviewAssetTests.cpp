@@ -544,17 +544,25 @@ void TestEditorKeysWaitWhilePreviewTextIsEdited() {
     ImGuiIO& io = ImGui::GetIO();
     const ImVec2 display = io.DisplaySize;
     io.DisplaySize = {1600.0F, 900.0F};
+    ImVec2 mouse{800.0F, 450.0F}; // over the canvas, so the preview takes input
+    std::optional<PreviewAdapter::FrameOutput::TextInputRequest> lastRequest;
     const auto frame = [&](const ImGuiKey pressed, const bool down) {
-        io.AddMousePosEvent(800.0F, 450.0F); // over the canvas, so the preview takes input
+        io.AddMousePosEvent(mouse.x, mouse.y);
         if (pressed != ImGuiKey_None) io.AddKeyEvent(pressed, down);
         Engine::Input::PhysicalInputFrame input;
         fixture.Begin(assets);
         editor.SetPhysicalInput(&input);
         editor.Draw();
-        const bool requested = editor.TakeTextInputRequest().has_value();
+        lastRequest = editor.TakeTextInputRequest();
         editor.SetPhysicalInput(nullptr);
         fixture.Present(assets);
-        return requested;
+        return lastRequest.has_value();
+    };
+    const auto click = [&] {
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+        frame(ImGuiKey_None, false);
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+        return frame(ImGuiKey_None, false);
     };
     frame(ImGuiKey_None, false);
     frame(ImGuiKey_None, false);
@@ -564,6 +572,25 @@ void TestEditorKeysWaitWhilePreviewTextIsEdited() {
     Expect(editing, "Enter starts editing the preview's text field");
     frame(ImGuiKey_None, false);
     Expect(editor.TextInputActive(), "typing belongs to the edited preview field, so editor shortcuts wait");
+
+    // Select the field in the editor by clicking it (the canvas then has
+    // keyboard focus, as when nudging), and edit it again with Enter.
+    if (lastRequest) mouse = {lastRequest->x + lastRequest->width * 0.5F, lastRequest->y + lastRequest->height * 0.5F};
+    if (!click()) {
+        frame(ImGuiKey_Enter, true);
+        frame(ImGuiKey_Enter, false);
+    }
+    Expect(frame(ImGuiKey_None, false), "the selected field is edited again");
+    // A shortcut chord (duplicate) and an arrow (nudge) while typing would
+    // change the document, which restarts the preview and drops the edit.
+    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    frame(ImGuiKey_D, true);
+    frame(ImGuiKey_D, false);
+    io.AddKeyEvent(ImGuiMod_Ctrl, false);
+    Expect(frame(ImGuiKey_None, false), "a shortcut chord while typing leaves the document and the edit alone");
+    frame(ImGuiKey_LeftArrow, true);
+    frame(ImGuiKey_LeftArrow, false);
+    Expect(frame(ImGuiKey_None, false), "an arrow while typing moves no element and keeps the edit");
     io.DisplaySize = display;
 }
 

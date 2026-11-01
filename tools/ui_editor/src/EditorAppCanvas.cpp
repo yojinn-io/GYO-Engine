@@ -62,6 +62,7 @@ void EditorApp::DrawCanvas() {
                                        ImGuiWindowFlags_NoNavInputs;
     if (!ImGui::Begin("Canvas", nullptr, flags)) {
         ImGui::End();
+        previewEditingText_ = false; // no preview drawn, no field takes typing
         return;
     }
     ImGui::Checkbox("Grid", &showGrid_);

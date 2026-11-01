@@ -338,6 +338,24 @@
       "replace": "FrameOutput::TextInputRequest{element.boundsPixels.x,",
       "target": "gyo_ui_editor_preview_tests",
       "expect": "FAILED: the request follows the preview's origin exactly"
+    },
+    {
+      "id": "ui-editor-shortcuts-ignore-preview",
+      "what": "The editor's shortcut chords go back to ImGui's own text-input flag only",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "    if (io.KeyCtrl && !TextInputActive()) {",
+      "replace": "    if (io.KeyCtrl && !io.WantTextInput) {",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: a shortcut chord while typing leaves the document and the edit alone"
+    },
+    {
+      "id": "ui-editor-nudge-ignores-preview",
+      "what": "Arrow nudging goes back to ImGui's own text-input flag only",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "selectedNode_.empty() || TextInputActive() || io.KeyCtrl",
+      "replace": "selectedNode_.empty() || io.WantTextInput || io.KeyCtrl",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: an arrow while typing moves no element and keeps the edit"
     }
   ]
 }
