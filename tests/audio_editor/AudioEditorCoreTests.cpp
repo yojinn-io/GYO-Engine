@@ -204,6 +204,39 @@ TEST_CASE("ExportSound writes the clip and its entry and never touches the sourc
     CHECK(ReadBytes(assets / "audio" / "reload.wav") == first);
 }
 
+// The content contract keeps an entry's unknown optional fields
+// (cases.json valid-custom-type-and-metadata): re-registering a clip moves its
+// path and leaves them (v8-tool-audio-editor-catalog-adopt).
+TEST_CASE("ExportSound keeps an existing entry's other fields when it moves the clip") {
+    const auto root = TemporaryDirectory("metadata");
+    const auto source = root / "outside" / "shot_raw.wav";
+    std::filesystem::create_directories(source.parent_path());
+    std::filesystem::copy_file(kReference / "mono_44100_pcm16.wav", source);
+    const auto assets = root / "assets";
+    std::filesystem::create_directories(assets);
+    WriteText(assets / "asset_catalog.json", R"({
+  "version": 1,
+  "assets": [
+    { "id": "game.audio.shot", "type": "sound", "path": "audio/shot.wav", "note": "kept" }
+  ]
+}
+)");
+    ExportRequest request{Utf8(source), Utf8(assets), Utf8(assets / "asset_catalog.json"),
+                          {"game.audio.shot", "audio/shot_v2.wav"}};
+    const auto report = ExportSound(request);
+    REQUIRE(report.has_value());
+    CHECK_FALSE(report->added);
+    REQUIRE(report->previousPath.has_value());
+    CHECK(*report->previousPath == "audio/shot.wav");
+    CHECK(ReadText(assets / "asset_catalog.json") == R"({
+  "version": 1,
+  "assets": [
+    { "id": "game.audio.shot", "type": "sound", "path": "audio/shot_v2.wav", "note": "kept" }
+  ]
+}
+)");
+}
+
 TEST_CASE("ExportSound refuses to overwrite its source or the catalog, and writes nothing for a bad source") {
     const auto root = TemporaryDirectory("refuse");
     const auto assets = root / "assets";

@@ -21,11 +21,11 @@ target_include_directories(gyo_audio_editor_core PUBLIC "${CMAKE_CURRENT_SOURCE_
 target_compile_features(gyo_audio_editor_core PUBLIC cxx_std_20)
 # The clip format comes from GYO::Audio (Design Invariant 2); files are read and
 # written through engine/io (GYO::Engine) and path identity comes from GYO::Os;
-# the catalog entry is written by the framework layer
-# (docs/framework/architecture.md).
+# the catalog entry is placed by the framework layer and its text rewritten by
+# the framework's JSON binding (docs/framework/architecture.md).
 target_link_libraries(gyo_audio_editor_core
     PUBLIC GYO::Base
-    PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework
+    PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson
 )
 # Reproducible conversion (Design Invariant 7): no fused multiply-add, so a
 # compiler may not round the filter differently from the plain expression.
@@ -35,8 +35,9 @@ endif()
 
 add_executable(gyo_audio_editor src/Main.cpp)
 target_compile_features(gyo_audio_editor PRIVATE cxx_std_20)
-# info reads the file through engine/io; the UTF-8 console comes from GYO::Os.
-target_link_libraries(gyo_audio_editor PRIVATE gyo_audio_editor_core GYO::Engine GYO::Os)
+# info reads the file through engine/io; the UTF-8 command line and console
+# come from the framework's headless shell.
+target_link_libraries(gyo_audio_editor PRIVATE gyo_audio_editor_core GYO::Engine GYO::ToolFramework)
 
 if(MSVC)
     foreach(_target IN ITEMS gyo_audio_editor_core gyo_audio_editor)

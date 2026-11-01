@@ -26,9 +26,11 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
 3. The editor writes only what it registers: the output file and the catalog
    entry with the same id. It leaves every other entry, every other file and
    product data (such as a product's sound cue table) untouched. The catalog is
-   written by atomic replace and checked against the content contract (unique
-   ids, paths inside the asset root). This differs from ui_editor, whose mounted
-   catalog is read-only.
+   written by atomic replace and checked against the content contract (ids
+   unique within the catalog, paths inside the asset root); duplicates across
+   catalogs and overlaps with shader bundles are decided at load by Engine's
+   `ContentManifest`. This differs from ui_editor, whose mounted catalog is
+   read-only.
 4. Editing is non-destructive. The source file is only read. Edits live in the
    editor's project file, and the output is always regenerated from the source
    and those settings.

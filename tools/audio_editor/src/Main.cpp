@@ -1,7 +1,9 @@
 #include "gyo/audio_editor/SoundExport.hpp"
 #include "gyo/audio_editor/WavFile.hpp"
 
-#include "engine/os/Console.hpp"
+#include "gyo/framework/HeadlessShell.hpp"
+
+#include "engine/base/Error.hpp"
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllBytes.hpp"
 
@@ -10,6 +12,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -78,7 +81,7 @@ int Info(const std::string& path) {
     return 0;
 }
 
-int Convert(const std::vector<std::string>& arguments) {
+int Convert(const std::span<const std::string> arguments) {
     std::optional<std::string> source;
     std::map<std::string, std::string, std::less<>> options{
         {"--asset-root", {}}, {"--asset-catalog", {}}, {"--id", {}}, {"--path", {}}};
@@ -122,17 +125,7 @@ int Convert(const std::vector<std::string>& arguments) {
     return 0;
 }
 
-} // namespace
-
-int main(const int argc, char* argv[]) {
-    // UTF-8 shows as UTF-8 on a Windows console until main returns.
-    const auto utf8Console = Engine::Os::Console::Utf8ConsoleOutput::Enable();
-    // UTF-8 arguments on every platform (the narrow argv is the ANSI code page on Windows).
-    const auto commandLine = Engine::Os::Console::CommandLineUtf8(argc, argv);
-    if (!commandLine) {
-        return Usage(Engine::Base::Describe(commandLine.error()));
-    }
-    const std::vector<std::string>& arguments = *commandLine;
+int Run(const std::span<const std::string> arguments) {
     if (arguments.size() < 2) return Usage("no command");
     const std::string_view command = arguments[1];
     if (command == "--help") {
@@ -145,4 +138,12 @@ int main(const int argc, char* argv[]) {
     }
     if (command == "convert") return Convert(arguments);
     return Usage("unknown command " + std::string(command));
+}
+
+} // namespace
+
+int main(const int argc, char* argv[]) {
+    // The shell turns the command line into UTF-8 (the narrow argv is the
+    // ANSI code page on Windows) and shows UTF-8 console output as UTF-8.
+    return Gyo::Tools::Framework::RunHeadlessShell(argc, argv, Run, Usage);
 }

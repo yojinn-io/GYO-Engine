@@ -88,10 +88,10 @@
     },
     {
       "id": "ae-guard-json-target",
-      "what": "The audio editor names nlohmann_json again instead of writing the catalog through the framework",
+      "what": "The audio editor names nlohmann_json beside the framework's JSON binding",
       "file": "tools/audio_editor/CMakeLists.txt",
-      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework",
-      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework nlohmann_json::nlohmann_json",
+      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
+      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson nlohmann_json::nlohmann_json",
       "command": [
         "{python}",
         "tests/audio_editor/audio_editor_dependency_guard.py"
@@ -130,8 +130,8 @@
       "id": "ae-guard-io-platform",
       "what": "The audio editor's CMake names the SDL platform beside engine/io",
       "file": "tools/audio_editor/CMakeLists.txt",
-      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework",
-      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::PlatformSDL GYO::Os GYO::ToolFramework",
+      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
+      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::PlatformSDL GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
       "command": [
         "{python}",
         "tests/audio_editor/audio_editor_dependency_guard.py"

@@ -3,7 +3,7 @@
 #include "gyo/audio_editor/Conversion.hpp"
 #include "gyo/audio_editor/WavFile.hpp"
 
-#include "gyo/framework/CatalogRegistration.hpp"
+#include "gyo/framework/json/CatalogText.hpp"
 
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllBytes.hpp"
@@ -88,9 +88,10 @@ std::string Join(std::string root, const std::string_view relative) {
 Result<ExportReport, AudioEditorError> ExportSound(const ExportRequest& request) {
     auto catalogText = ReadAll(request.catalogPath);
     if (!catalogText) return Engine::Base::Err(std::move(catalogText).error());
+    // The default policy refuses an id of another type and a path another id has (exit status 4).
     auto update = Framework::RegisterAsset(
         std::string_view(reinterpret_cast<const char*>(catalogText->data()), catalogText->size()),
-        {request.registration.id, std::string(kSoundType), request.registration.path});
+        {.id = request.registration.id, .type = std::string(kSoundType), .path = request.registration.path});
     if (!update) return Engine::Base::Err(RegistrationFailed(std::move(update).error()));
 
     ExportReport report;
