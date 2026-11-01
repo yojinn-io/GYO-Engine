@@ -13,14 +13,22 @@ It has two parts. Only the first exists so far:
 - **The tool part** (this batch, `v8-tool-framework-shell`): what two or more
   tools use, and the integration between a tool and the asset contract.
   Namespace `Gyo::Tools::Framework`, includes `gyo/framework/…`.
-  - `GYO::ToolFramework`, no SDL: file access on user paths (`FileService`),
-    the read-only catalog mount (`ReadOnlyAssetCatalog`), writing one catalog
-    entry (`CatalogRegistration`), and the neutral types of the system path
-    dialogs (`PathDialog`).
-  - `GYO::ToolFrameworkGui`, built only when the SDL platform, the SDL
-    renderer and ImGui's SDL backends are in the build: the ImGui and SDL
-    renderer host (`ImGuiSdlHost`) and the system path dialogs through SDL
-    (`SdlPathDialogs`).
+  - `GYO::ToolFramework`, no SDL: the headless shell (`RunHeadlessShell`),
+    file access on user paths (`FileService`), the read-only catalog mount
+    (`ReadOnlyAssetCatalog`), writing one catalog entry
+    (`CatalogRegistration`), and the neutral types of the system path dialogs
+    (`PathDialog`).
+  - `GYO::ToolFrameworkWindow`, built where Engine's SDL platform is: the
+    windowed shell (`RunWindowShell`), through Engine's neutral platform
+    target only.
+  - The ImGui binding `GYO::ToolFrameworkImGui` (`framework/bindings/imgui/`),
+    built where the windowed shell, the SDL renderer and ImGui's SDL backends
+    are: ImGui on Engine's SDL renderer, run by the windowed shell
+    (`RunImGuiShell`).
+  - `GYO::ToolFrameworkGui`, the old ImGui and SDL renderer host
+    (`ImGuiSdlHost`) and the system path dialogs through SDL
+    (`SdlPathDialogs`), until the tools move to the shells and to Engine's
+    path dialogs (removed in `v8-framework-invariants`).
 - **The game part** (not built): how games are put together on the engine,
   such as the skeleton, the role arrangement, the client prediction loop and
   the authoritative host, as the
@@ -79,6 +87,19 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    user (ui_editor) when it is added; the user accepted that on 2026-11-01
    (framework-rework D-8). Replacing ImGui means replacing its binding and the
    tool's own drawing code; the core shell and Engine stay.
+6. **Shell lifecycle.** RunHeadlessShell hands its body the command line as
+   Engine's CommandLineUtf8 gives it (UTF-8, program name first) and returns
+   the body's or the failure function's value unchanged. RunWindowShell
+   creates the platform before its client and destroys the client before the
+   platform, also while an exception unwinds; it owns the one RuntimeLoop,
+   passes every event of a pump to OnEvent before that pump's Update, returns
+   1 for its own failures and otherwise the client's code, and sets no
+   live-frame handler and no log handler. The ImGui binding's renderer is its
+   own, lent to the product, and lives until the product is destroyed. No
+   shell catches an exception, and shells log only through Base::Log. Guards:
+   the headless, window-shell and ImGui-shell tests, the configure-time check
+   that the shells are built where their Engine targets are, and the
+   fw-shell-* and fw-imgui-* mutants.
 
 ### Replacement Criteria
 
@@ -93,12 +114,29 @@ repair or rebuild the component.
 - A binding has to know which product calls it.
 - The windowed shell has to create or choose a render device for its client.
 - The framework copies an Engine rule that no shared fixture checks.
+- Serving one product needs a callback or flag in a shell that no other
+  product uses, or a client has to pump events or run a RuntimeLoop itself.
 
 ## Using it
 
-- A tool links `GYO::ToolFramework` (and `GYO::ToolFrameworkGui` for a window)
-  and includes `gyo/framework/…`. The tool's own dependency guard lists both.
-- The host runs one client: `RunImGuiSdlHost(options, factory)` creates the
+- A tool links `GYO::ToolFramework` (and `GYO::ToolFrameworkImGui` for an
+  ImGui window, or `GYO::ToolFrameworkGui` until it moves) and includes
+  `gyo/framework/…`. The tool's own dependency guard lists them.
+- `RunHeadlessShell(argc, argv, body, failure)` is the program's main: it
+  hands the body the UTF-8 command line and returns its exit code. A window
+  shell may run inside the body.
+- `RunWindowShell(options, factory)` creates the platform from Engine's
+  `SdlPlatformOptions` as given and runs the factory's client: `OnEvent` for
+  each event (queries only), then `Update` and `Render` each frame, and
+  `ExitCode` once at the end. The client creates its own render device from
+  the platform.
+- `RunImGuiShell(options, factory)` runs an ImGui window on the windowed
+  shell. The factory gets the platform and the binding's renderer before
+  ImGui exists; `Initialize` runs once ImGui is ready; every frame it calls
+  `BeginFrame` (before ImGui's frame), `Draw` (inside it), checks
+  `WantsExit`, renders and calls `EndFrame`. ImGui is shut down before the
+  client is destroyed, and the renderer after it.
+- The old host runs one client: `RunImGuiSdlHost(options, factory)` creates the
   window, the renderer and ImGui, then the factory's client. Every frame it
   calls `BeginFrame` (before ImGui's frame), `Draw` (inside it), checks
   `WantsExit`, renders and calls `EndFrame`.

@@ -1,10 +1,63 @@
 # The framework layer (docs/framework/architecture.md); added with it, when
 # a tool is selected.
-add_executable(gyo_framework_tests FrameworkCoreTests.cpp UserFilesParityTests.cpp)
+add_executable(gyo_framework_tests FrameworkCoreTests.cpp HeadlessShellTests.cpp UserFilesParityTests.cpp)
 target_compile_features(gyo_framework_tests PRIVATE cxx_std_20)
-target_link_libraries(gyo_framework_tests PRIVATE GYO::ToolFramework doctest::doctest)
+target_link_libraries(gyo_framework_tests PRIVATE GYO::ToolFramework GYO::Os doctest::doctest)
 add_test(NAME gyo_framework.core COMMAND gyo_framework_tests)
 set_tests_properties(gyo_framework.core PROPERTIES LABELS "cpu;editor" TIMEOUT 60)
+
+# The shells are built wherever their Engine targets are (Design Invariant 6):
+# a binding or shell that is silently not built would take its tests with it.
+if(GYO_ENABLE_SDL_PLATFORM AND NOT TARGET GYO::ToolFrameworkWindow)
+    message(FATAL_ERROR "framework: the build has Engine's SDL platform but no GYO::ToolFrameworkWindow")
+endif()
+if(GYO_ENABLE_SDL_RENDERER AND GYO_ENABLE_IMGUI AND NOT TARGET GYO::ToolFrameworkImGui)
+    message(FATAL_ERROR "framework: the build has the SDL renderer and ImGui but no GYO::ToolFrameworkImGui")
+endif()
+
+# The windowed shell, on SDL's dummy video driver.
+if(TARGET GYO::ToolFrameworkWindow)
+    add_executable(gyo_framework_window_tests WindowShellTests.cpp)
+    target_compile_features(gyo_framework_window_tests PRIVATE cxx_std_20)
+    target_link_libraries(gyo_framework_window_tests PRIVATE GYO::ToolFrameworkWindow GYO::PlatformSDLNative
+                                                             doctest::doctest)
+    gyo_copy_runtime_dlls(gyo_framework_window_tests)
+    add_test(NAME gyo_framework.window_shell COMMAND gyo_framework_window_tests)
+    set_tests_properties(gyo_framework.window_shell PROPERTIES
+        LABELS "editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy" TIMEOUT 30)
+endif()
+
+# The ImGui binding, on the dummy video driver and the software renderer, in a
+# directory of its own so that a side file would be seen.
+if(TARGET GYO::ToolFrameworkImGui)
+    add_executable(gyo_framework_imgui_tests ImGuiShellTests.cpp)
+    target_compile_features(gyo_framework_imgui_tests PRIVATE cxx_std_20)
+    target_link_libraries(gyo_framework_imgui_tests PRIVATE GYO::ToolFrameworkImGui GYO::PlatformSDLNative
+                                                            GYO::RenderBackendSDLNative imgui::core doctest::doctest)
+    gyo_copy_runtime_dlls(gyo_framework_imgui_tests)
+    set(_gyo_imgui_directory "${CMAKE_CURRENT_BINARY_DIR}/imgui_shell")
+    file(MAKE_DIRECTORY "${_gyo_imgui_directory}")
+    add_test(NAME gyo_framework.imgui_shell COMMAND gyo_framework_imgui_tests
+        WORKING_DIRECTORY "${_gyo_imgui_directory}")
+    set_tests_properties(gyo_framework.imgui_shell PROPERTIES
+        LABELS "editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software" TIMEOUT 60)
+    # A renderer that cannot start: SDL fails when the driver it is told to use
+    # does not exist.
+    add_test(NAME gyo_framework.imgui_shell_no_renderer
+        COMMAND gyo_framework_imgui_tests --no-skip "--test-case=I8:*"
+        WORKING_DIRECTORY "${_gyo_imgui_directory}")
+    set_tests_properties(gyo_framework.imgui_shell_no_renderer PROPERTIES
+        LABELS "editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=gyo-no-such-driver" TIMEOUT 30)
+    unset(_gyo_imgui_directory)
+
+    # The public headers need neither ImGui's nor SDL's include paths.
+    add_executable(gyo_framework_shell_header_tests ShellHeaderTests.cpp)
+    target_compile_features(gyo_framework_shell_header_tests PRIVATE cxx_std_20)
+    target_link_libraries(gyo_framework_shell_header_tests PRIVATE GYO::ToolFrameworkImGui doctest::doctest)
+    gyo_copy_runtime_dlls(gyo_framework_shell_header_tests)
+    add_test(NAME gyo_framework.shell_headers COMMAND gyo_framework_shell_header_tests)
+    set_tests_properties(gyo_framework.shell_headers PROPERTIES LABELS "cpu;editor" TIMEOUT 30)
+endif()
 
 # Design Invariants 1-3: not a product, one dependency direction, neutral.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)

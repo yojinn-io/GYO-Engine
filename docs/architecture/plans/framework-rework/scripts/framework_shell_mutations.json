@@ -1,0 +1,463 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-framework-shell (docs/framework/architecture.md, Design Invariant 6; docs/architecture/plans/framework-rework/shell-sketch.md). Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/framework-rework/scripts/framework_shell_mutations.json --build-dir <a tree with BUILD_TESTING=ON, the SDL renderer and ImGui>. The window and ImGui checks run through run_shell_test.py, which sets SDL's dummy video driver, the software renderer and the working directory as tests/framework/CMakeLists.txt does for CTest. fw-shell-argv-raw is killed by H3 on macOS and Linux and by H1 on Windows. Known limits without a mutant: the console guard of RunHeadlessShell cannot be observed on POSIX; removing Clear or Present is not detected. A mutant is killed only when its check fails with the expected message.",
+  "mutants": [
+    {
+      "id": "fw-shell-argv-raw",
+      "what": "The headless shell passes argv on instead of Engine's UTF-8 command line (macOS and Linux: H3; Windows: H1)",
+      "file": "framework/src/HeadlessShell.cpp",
+      "find": "    const auto commandLine = Engine::Os::Console::CommandLineUtf8(argc, argv);\n    if (!commandLine) {\n        const std::string reason = Engine::Base::Describe(commandLine.error());\n        return failure(reason);\n    }\n    return body(std::span<const std::string>(commandLine.value()));",
+      "replace": "    static_cast<void>(failure);\n    const std::vector<std::string> arguments(argv, argv + argc);\n    return body(std::span<const std::string>(arguments));",
+      "target": "gyo_framework_tests",
+      "cases": "H*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-failure-code",
+      "what": "A command line with no UTF-8 form returns 2 instead of the failure function's value",
+      "file": "framework/src/HeadlessShell.cpp",
+      "find": "        return failure(reason);",
+      "replace": "        static_cast<void>(failure(reason));\n        return 2;",
+      "target": "gyo_framework_tests",
+      "cases": "H*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-body-code",
+      "what": "The headless shell returns 0 instead of the body's value",
+      "file": "framework/src/HeadlessShell.cpp",
+      "find": "    return body(std::span<const std::string>(commandLine.value()));",
+      "replace": "    static_cast<void>(body(std::span<const std::string>(commandLine.value())));\n    return 0;",
+      "target": "gyo_framework_tests",
+      "cases": "H*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-platform-failure",
+      "what": "A platform that cannot start returns 0",
+      "file": "framework/src/WindowShell.cpp",
+      "find": "Engine::Base::Describe(created.error()));\n        return 1;",
+      "replace": "Engine::Base::Describe(created.error()));\n        return 0;",
+      "target": "gyo_framework_window_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--",
+        "{exe:gyo_framework_window_tests}",
+        "-tc=W1*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-factory-null",
+      "what": "A factory without a client returns 0",
+      "file": "framework/src/WindowShell.cpp",
+      "find": "title + \": the client could not start\");\n        return 1;",
+      "replace": "title + \": the client could not start\");\n        return 0;",
+      "target": "gyo_framework_window_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--",
+        "{exe:gyo_framework_window_tests}",
+        "-tc=W2*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-exit-code",
+      "what": "The windowed shell returns 0 instead of the client's code",
+      "file": "framework/src/WindowShell.cpp",
+      "find": "    const int exitCode = client->ExitCode();",
+      "replace": "    const int exitCode = 0;",
+      "target": "gyo_framework_window_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--",
+        "{exe:gyo_framework_window_tests}",
+        "-tc=W3*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-destroy-order",
+      "what": "The platform is destroyed before the client",
+      "file": "framework/src/WindowShell.cpp",
+      "find": "    client.reset();",
+      "replace": "    platform.reset();\n    client.reset();",
+      "target": "gyo_framework_window_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--",
+        "{exe:gyo_framework_window_tests}",
+        "-tc=W7*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-no-observer",
+      "what": "The pump has no observer, so OnEvent is never called",
+      "file": "framework/src/WindowShell.cpp",
+      "find": "return platform_.PumpEvents([this](const PlatformEvent& event) { client_.OnEvent(event); });",
+      "replace": "return platform_.PumpEvents();",
+      "target": "gyo_framework_window_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--",
+        "{exe:gyo_framework_window_tests}",
+        "-tc=W5*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-live-frame",
+      "what": "The shell sets a live-frame handler that runs the loop's pair inside the pump",
+      "file": "framework/src/WindowShell.cpp",
+      "find": "    loop.Run();",
+      "replace": "    platform->SetLiveFrameHandler([&loop] { static_cast<void>(loop.RunLiveFrame()); });\n    loop.Run();\n    platform->SetLiveFrameHandler({});",
+      "target": "gyo_framework_window_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--",
+        "{exe:gyo_framework_window_tests}",
+        "-tc=W9*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-log-handler",
+      "what": "The shell installs a log handler",
+      "file": "framework/src/WindowShell.cpp",
+      "find": "    GYO_ASSERT(factory);\n    const std::string& title",
+      "replace": "    GYO_ASSERT(factory);\n    Engine::Base::SetLogHandler(nullptr);\n    const std::string& title",
+      "target": "gyo_framework_window_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--",
+        "{exe:gyo_framework_window_tests}",
+        "-tc=W10*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-shell-core-render",
+      "what": "The core's windowed shell links a render device",
+      "file": "framework/CMakeLists.txt",
+      "find": "    target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL)",
+      "replace": "    target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL GYO::RenderBackendSDL)",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "names GYO::RenderBackendSDL"
+    },
+    {
+      "id": "fw-shell-core-native",
+      "what": "The core's windowed shell links the platform's native target",
+      "file": "framework/CMakeLists.txt",
+      "find": "    target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL)",
+      "replace": "    target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL GYO::PlatformSDLNative)",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "names GYO::PlatformSDLNative"
+    },
+    {
+      "id": "fw-shell-core-symbol",
+      "what": "The windowed shell's header names an SDL type",
+      "file": "framework/include/gyo/framework/WindowShell.hpp",
+      "find": "struct WindowShellOptions final {",
+      "replace": "struct SDL_Window;\nstruct WindowShellOptions final {",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "uses SDL_Window"
+    },
+    {
+      "id": "fw-shell-binding-missing",
+      "what": "The ImGui binding's condition is wrong, so it is not built",
+      "file": "framework/bindings/imgui/CMakeLists.txt",
+      "find": "if(NOT TARGET GYO::ToolFrameworkWindow OR",
+      "replace": "if(NOT TARGET GYO::ToolFrameworkWindows OR",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "but no\\s+GYO::ToolFrameworkImGui"
+    },
+    {
+      "id": "fw-imgui-ini",
+      "what": "ImGui keeps its default imgui.ini",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "        io.IniFilename = nullptr;\n",
+      "replace": "",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I2*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-log",
+      "what": "ImGui keeps its default log file",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "        io.LogFilename = nullptr;\n",
+      "replace": "",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I2*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-endframe",
+      "what": "The exit path skips the client's EndFrame",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "            ImGui::EndFrame();\n            client_->EndFrame();\n            return RuntimeControl::Stop;",
+      "replace": "            ImGui::EndFrame();\n            return RuntimeControl::Stop;",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I1*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-no-event",
+      "what": "Events do not reach ImGui",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "        ImGui_ImplSDL3_ProcessEvent(&Engine::Platform::Sdl::NativeEvent(event));",
+      "replace": "        static_cast<void>(event);",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I5*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-sdl-symbol",
+      "what": "The binding names an SDL type",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "        auto* const window = Engine::Platform::Sdl::NativeWindow(platform);",
+      "replace": "        SDL_Window* const window = Engine::Platform::Sdl::NativeWindow(platform);",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "uses SDL_Window"
+    },
+    {
+      "id": "fw-imgui-init-false",
+      "what": "A failed Initialize does not end the run",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "        return client_->Initialize(*context_);",
+      "replace": "        static_cast<void>(client_->Initialize(*context_));\n        return true;",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I4*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-initialize-early",
+      "what": "Initialize runs before ImGui exists",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "        if (!imgui_.Start(platform_, *renderer_, title_)) {\n            return false;\n        }\n        return client_->Initialize(*context_);",
+      "replace": "        if (!client_->Initialize(*context_)) {\n            return false;\n        }\n        return imgui_.Start(platform_, *renderer_, title_);",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I4*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-product-order",
+      "what": "The client is destroyed before ImGui is shut down",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "    std::unique_ptr<ImGuiShellClient> client_;\n    ImGuiScope imgui_;",
+      "replace": "    ImGuiScope imgui_;\n    std::unique_ptr<ImGuiShellClient> client_;",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I3*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-renderer-order",
+      "what": "The renderer is destroyed before the client",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "    std::unique_ptr<SdlRenderer> renderer_;\n    std::optional<ImGuiShellContext> context_;\n    std::unique_ptr<ImGuiShellClient> client_;",
+      "replace": "    std::unique_ptr<ImGuiShellClient> client_;\n    std::unique_ptr<SdlRenderer> renderer_;\n    std::optional<ImGuiShellContext> context_;",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I3*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-renderer-fail",
+      "what": "A client that could not start is run anyway, so a renderer that cannot start does not end the run (the run then crashes on the missing renderer)",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "        if (!client->Start(factory)) {\n            return nullptr;\n        }",
+      "replace": "        static_cast<void>(client->Start(factory));",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=gyo-no-such-driver",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "--no-skip",
+        "-tc=I8*"
+      ],
+      "expect": "is NOT correct|CRASHED"
+    },
+    {
+      "id": "fw-imgui-options",
+      "what": "The binding ignores the caller's options",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "    return RunWindowShell(options, [&](SdlPlatform& platform)",
+      "replace": "    return RunWindowShell(WindowShellOptions{}, [&](SdlPlatform& platform)",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I9*"
+      ],
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-imgui-no-render",
+      "what": "ImGui's draw data never reaches the renderer",
+      "file": "framework/bindings/imgui/src/ImGuiShell.cpp",
+      "find": "        ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(),\n                                              Engine::Render::Backend::Sdl::NativeRenderer(*renderer_));\n",
+      "replace": "",
+      "target": "gyo_framework_imgui_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--directory",
+        "imgui_shell",
+        "--",
+        "{exe:gyo_framework_imgui_tests}",
+        "-tc=I6*"
+      ],
+      "expect": "is NOT correct"
+    }
+  ]
+}

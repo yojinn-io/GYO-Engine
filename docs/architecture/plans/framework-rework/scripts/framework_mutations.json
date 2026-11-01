@@ -86,8 +86,8 @@
       "id": "fw-guard-input-target",
       "what": "The framework's CMake names GYO::Input",
       "file": "framework/CMakeLists.txt",
-      "find": "# The catalog mount names engine/asset types; paths go to UTF-8 through GYO::Os.",
-      "replace": "# The catalog mount names engine/asset types; paths go to UTF-8 through GYO::Os and GYO::Input.",
+      "find": "# command line comes as UTF-8 through GYO::Os.",
+      "replace": "# command line comes as UTF-8 through GYO::Os and GYO::Input.",
       "command": [
         "{python}",
         "tests/framework/framework_dependency_guard.py"
