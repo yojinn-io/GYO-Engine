@@ -63,25 +63,24 @@
 - 和腳本的整檔輸出不比位元組（只差在抖動，1～2 LSB）。四個現有音效的原檔已找不到，不重產。（更正 2026-11-01：原檔在 commit `30b36bdb`，見上方「觀察到的壓力」。）
 - 試行與重試：測試是決定性的，不重試；失敗就停下回報。
 
-## framework-rework-line 的事前宣告（2026-11-01，草稿，待核准）
+## framework-rework-line 的事前宣告（2026-11-01 核准）
 
 前提：架構的 PR A（PR #127，merge `3954f7e7`）已合併；本分支已含它（`9e2002e8`）。新介面依架構會話的通知與 `docs/architecture/platform-sdl.md`「Path dialogs」、`docs/architecture/io.md`「User files」、`framework/include/gyo/framework/`、`framework/bindings/`。舊件在 PR B 前都還在，所以每批可以單獨切換。
 
 順序：T1＋T3a → T2 → T3b，一條 PR。每批結束時寫 dev_log 並更新 HANDOFF。
 
-模型與檔位（照 [領航員規則](../../../../agents/navigator.md)，2026-11-01 #130；三批都要你確認）：
+模型與檔位（照 [領航員規則](../../../../agents/navigator.md)，2026-11-01 #130）：
 
 | 批 | 段 | 根據 | 実装者 | 審査者 | 検証者（§14.4） |
 |---|---|---|---|---|---|
-| T1＋T3a | 上段 | 改 Design Invariants（ui_editor DI 1、2）與守衛；接新的公開介面 | Opus 5.5／high（主會話） | Opus 5.5／high | Opus 5.5／high |
-| T2 | 上段 | 改守衛（audio_editor DI 1）；修缺陷（§14.3） | Opus 5.5／high（主會話） | Opus 5.5／high | Opus 5.5／high |
-| T3b | 上段 | 改 Design Invariants（audio_editor DI 3）與守衛 | Opus 5.5／high（主會話） | Opus 5.5／high | Opus 5.5／high |
+| T1＋T3a | 上段 | 改 Design Invariants（ui_editor DI 1、2）與守衛；接新的公開介面 | Opus 5.5／high（主會話） | Opus 5.5／high | Fable 5.1／high |
+| T2 | 上段 | 改守衛（audio_editor DI 1）；修缺陷（§14.3） | Opus 5.5／high（主會話） | Opus 5.5／high | Fable 5.1／high |
+| T3b | 上段 | 改 Design Invariants（audio_editor DI 3）與守衛 | Opus 5.5／high（主會話） | Opus 5.5／high | Fable 5.1／high |
 
-- 理由：上段不用小模型。検証者照規則跟実装者，是另開的子 agent，只核對 1～5 的記述與突變結果，不改程式。
+- 理由：上段不用小模型。検証者用 Fable，盲點和実装者不重疊；比主會話強，經你同意。它是另開的子 agent，只核對 1～5 的記述與突變結果，不改程式。
 - 審査者是另開的子 agent，做 code review。
 - 跑突變是 low 的定型作業，用腳本跑，不開子 agent。
 - 不用 ultracode，也沒有敵対的検査者：三批都照已核准的架構計畫接介面，不新設計。
-- 可選：検証者改用 Fable，盲點和実装者不重疊。比主會話強，要你同意；預設不用。
 
 ### T1＋T3a：ui_editor 改用 Engine 的選擇窗與新外殼（high，5～7 h）
 
@@ -273,4 +272,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-framework-top-level` | （2026-10-31）framework 是遊戲與工具共用的同一層，放在頂層 `framework/`（原本是 `tools/framework/`）。依賴：遊戲或工具 → framework → Engine。現在只有工具的部分；遊戲的部分照 [v7 README](../../../object_fps_pvp/plans/v7/README.md) 的啟動條件（第二個遊戲以相同方式組合 Engine）再抽出。起因：架構會話指出 owner 名 `framework` 和 v7 README 定義的 framework 層撞名 | 「這個是遊戲和工具共用的。」；選項「同一層，現在就搬到頂層」 |
 | `v8-tool-framework-rework-split` | （2026-11-01）PR #123 的整改分工：framework 與下沉到 Engine 的部分由架構整改任務卡做（A1 `v8-engine-platform-path-dialog`、A2 `v8-engine-io-user-files`、A3 `v8-framework-shell`、A4 `v8-framework-invariants`）；工具側 T1～T3 由工具線做，各等對應的 A 批合併；先處理已知問題再做功能，`-edit` 排在 T1～T3 之後。catalog 規則的單一來源預設 (a)：規則留在 framework 核心，用 `tests/common/fixtures/asset_contract/cases.json` 對齊，不動 Engine（工具線沒有異議） | 經架構會話轉述：「彈窗的 OS 那一半是視窗系統的能力，和剪貼簿同級，屬 Engine；流程那一半是工具的，留在工具。」「framework在GYO中就是一個通用建置，他可以處理UI的東西，但不是直接嵌入，而是抽象出來。」「framework 可以遊戲和tool的公用層…遊戲就是一個有娛樂效果的工具…只不過方向不同。」；你：「開始吧」（登錄 T1～T3） |
 | `v8-tool-framework-rework-replan` | （2026-11-01）架構整改計畫核准後的工具側重排，取代 `v8-tool-framework-rework-split` 的批次與依賴：架構側改成 7 批（`v8-framework-guard-ratchet`、`v8-engine-platform-path-dialog`、`v8-engine-io-user-files`、`v8-framework-shell`、`v8-framework-catalog-structure`、`v8-framework-catalog-extra-fields` 在 PR A；刪舊件的 `v8-framework-invariants` 在 PR B）。工具側 T3 拆成 T3a（ui_editor）與 T3b（audio_editor），T1～T3b 都等 PR A 合併，T1 和 T3a 一起做；PR A 不動舊件，合併前工具不會壞。PR B 等 T1～T3b 都合併。catalog 規則改 (a)＋b-lite（架構計畫 D-1：Engine 公開 `IsRelativeContentPath` 給 framework 呼叫），取代 `-split` 的 (a)。工具側預計一條 PR。計畫在 `docs/architecture/plans/framework-rework/`（README 決策 D-1～D-9、PLAN 第 2 節各批末尾的「工具側」） | 經架構會話轉述（不是原話）：使用者 2026-11-01 核准該計畫的 PLAN 第 1 版與 D-1～D-9，全部採建議 |
+| `v8-tool-framework-rework-predeclare` | （2026-11-01）T1＋T3a、T2、T3b 的事前宣告（本文件「framework-rework-line 的事前宣告」）核准：恢復規則、64 MB 上限、Design Invariants 改寫的方向、各批判定與突變；検証者改用 Fable 5.1／high。三個守衛的放寬仍要在突變與検証者核對後，各自再經你核准（§14.4） | 對「事前宣告和模型表照草稿核准嗎？」選「検証者改用 Fable」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
