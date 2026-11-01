@@ -35,6 +35,7 @@
 |---|---|---|---|---|
 | `v8-tool-ui-navigation` | 頁面（canvas）跳轉用 if／else 分派 action 字串 | 現況：`object_fps_v2/src/App/ObjectFpsUi.cpp:463-500` 的 if／else 鏈（使用者留的 `TODO: デザイン、問題がある`）、`CanvasFor` 的 switch；PvP 只有一個 canvas，`PvpApplication.cpp` 的 `Execute` 也是 if／else。選項：(A) 產品內改成表（action id → 處理函式），初始化時雙向檢查文件宣告的 action 都有處理、處理的 action 都有宣告；不改契約／(B) `gyo.ui` 加「純 UI 的頁面切換」（按鈕宣告目標 canvas，Ui 自己切；產品只處理有遊戲效果的 action），ui_editor 預覽能點著走；契約變更，且要劃清「哪一頁」的權威（遊戲階段歸產品、純 UI 子頁歸 Ui，AGENTS §3 狀態的權威）／(C) 資料裡寫完整的畫面狀態機與條件（往設定語言走，AGENTS §9 禁止） | (A) 先做；(B) 在 ⑤ 暫停選單、畫面設定要加頁面時，以實際的頁面數再決定 | 是否改 `gyo.ui` 契約 |
 | `v8-tool-ui-background` | main menu 的背景圖或動畫 | 靜態背景圖：`gyo.ui` v1 已有 `image` 元素（`UiDocument.hpp:150`），錨點 0～1、`size_delta` 0、放在第一個子元素就是全螢幕背景，**不用改契約**。動畫：v1 明寫沒有 animation（ui_toolchain.md「JSON v1」）。(a) 產品在 UI 後面畫動態場景（3D 場景、shader），UI 的底色設透明／(b) `gyo.ui` 加有限的動畫（例如圖片的 UV 捲動、逐格動畫），是契約變更（v2）／(c) 影片：要解碼器，最重 | 靜態圖先做；動畫先決定要哪一種效果 | 是否改 `gyo.ui` 契約 |
+| `v8-tool-ui-editor-ime-composition-source` | ImGui 綁定要畫組字，但讀不到組字事件：framework 的 Design Invariant 2 不准任何 framework 目標寫 `SDL_` 符號（守衛 `\bSDL_\w+`），Engine 的中立 `PlatformEvent` 又不帶文字 | (1) 綁定的守衛只多准 `SDL_EVENT_TEXT_EDITING`、`SDL_EVENT_TEXT_INPUT` 兩個名字，改 DI 2 的文字（綁定本來就連結 Native、把原生事件交給 ImGui），不新增依存邊／(2) Engine 平台層的中立 API 加組字的解讀（`PlatformEvent` 帶文字），但「把文字收進幀」歸 input backend（platform-sdl.md），兩處都會解讀 TEXT_EDITING／(3) 平台層的 Native 標頭加一個解讀組字的輔助函式，所有權問題同 (2) | (1)：改動最小，解讀留在把原生事件交給 ImGui 的同一個地方 | 改 framework 的 DI 2，還是 Engine 的 API |
 
 ## 決定紀錄
 
