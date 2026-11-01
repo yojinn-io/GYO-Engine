@@ -171,9 +171,9 @@ void EditorApp::DrawCanvas() {
     }
     for (const PreviewAdapter::FrameOutput::Action& action : result.actions) {
         std::string entry = action.id + "  source:" + action.sourceElement;
-        entry += action.numberPayload.has_value()
-            ? "  payload:" + std::to_string(*action.numberPayload)
-            : "  payload:none";
+        entry += action.stringPayload.has_value() ? "  payload:\"" + *action.stringPayload + "\""
+            : action.numberPayload.has_value()   ? "  payload:" + std::to_string(*action.numberPayload)
+                                                 : "  payload:none";
         actionLog_.push_back(std::move(entry));
     }
     NudgeSelectedElement(ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows));

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "cues": {
     "local_shot": { "clip": "object_fps_pvp.audio.gun_shoot", "volume": 0.8 },
     "remote_shot": { "clip": "object_fps_pvp.audio.gun_shoot", "volume": 1.0 },
@@ -8,6 +8,9 @@
     "reload": { "clip": "object_fps_pvp.audio.gun_reload", "volume": 0.8 },
     "footstep": { "clip": "object_fps_pvp.audio.player_footstep", "volume": 1.2 },
     "landing": { "clip": "object_fps_pvp.audio.player_footstep", "volume": 1.8 }
+  },
+  "animation_events": {
+    "magazine_in": { "cue": "reload", "sync_seconds": 0.33 }
   },
   "spatial": { "reference_distance": 3.0, "minimum_gain": 0.08 },
   "footsteps": { "stride_distance": 1.5, "teleport_distance": 2.0 }

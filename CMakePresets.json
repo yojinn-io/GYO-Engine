@@ -104,7 +104,7 @@
     },
     {
       "name": "ci-macos-x64",
-      "displayName": "macOS x86_64 target, native on Intel or cross-built on Apple silicon",
+      "displayName": "macOS x86_64 target for local Intel Mac packaging; no CI row verifies it",
       "inherits": "ci-macos",
       "condition": {
         "type": "equals",

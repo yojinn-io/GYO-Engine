@@ -46,6 +46,7 @@ public:
             std::string id;
             std::string sourceElement;
             std::optional<double> numberPayload;
+            std::optional<std::string> stringPayload; // a text field's submit
         };
         std::vector<Action> actions;
 

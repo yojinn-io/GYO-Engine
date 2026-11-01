@@ -7,7 +7,7 @@
 #include "gyo/ui_editor/DocumentSession.hpp"
 #include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/PreviewAdapter.hpp"
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -77,7 +77,7 @@ private:
     AssetPreviewContext& previewAssets_;
     PathDialogs* dialogs_{};
     DocumentSession session_;
-    ReadOnlyAssetCatalog catalog_;
+    Framework::ReadOnlyAssetCatalog catalog_;
     PreviewAdapter preview_;
     std::vector<Diagnostic> diagnostics_;
     std::vector<std::string> actionLog_;
@@ -98,6 +98,9 @@ private:
     std::optional<nlohmann::json> clipboard_;
     bool showGrid_{true};
     bool snapToGrid_{true};
+    // The document's design canvas size is shown locked; unlocking allows
+    // editing it. Editor state only, never saved.
+    bool designSizeLocked_{true};
     float canvasZoom_{1.0F};
     float canvasPanX_{};
     float canvasPanY_{};

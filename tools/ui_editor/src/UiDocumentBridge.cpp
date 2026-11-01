@@ -2,7 +2,7 @@
 
 #include "engine/base/Assert.hpp"
 
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 
 #include "engine/ui/UiDocumentCodec.hpp"
 
@@ -136,7 +136,7 @@ std::vector<AssetReference> UiDocumentBridge::AssetReferences(
 
 std::vector<Diagnostic> ValidateCatalogReferences(
     const std::span<const AssetReference> references,
-    const ReadOnlyAssetCatalog* catalog) {
+    const Framework::ReadOnlyAssetCatalog* catalog) {
     std::vector<Diagnostic> diagnostics;
     for (const AssetReference& reference : references) {
         if (reference.assetId.empty()) {
@@ -156,7 +156,7 @@ std::vector<Diagnostic> ValidateCatalogReferences(
             });
             continue;
         }
-        const CatalogAsset* asset = catalog->Find(reference.assetId);
+        const Framework::CatalogAsset* asset = catalog->Find(reference.assetId);
         if (asset == nullptr) {
             diagnostics.push_back({
                 DiagnosticSeverity::Error,

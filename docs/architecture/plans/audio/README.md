@@ -43,6 +43,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 | `v8-engine-audio-schedule` | high；時間換算、遲到、SPSC 局部 xhigh（`xhigh-reviewer`，引擎繼承） | 4～5 h | 未開始 | 提交端（有界 SPSC）、時間戳 → 樣本位置、遲到的規則 |
 | `v8-engine-audio-sdl` | high｜繼承 | 3～5 h | 完成（2026-10-30；test 97／97、突變 5／5；[dev_log](../../../dev_logs/2026_10_30_engine_audio_sdl.zh-Hant.md)） | `GYO::AudioBackendSDL`：SDL 音效串流的回呼、AUDIO 子系統計數、G1～G3 擴充、`dummy`／`disk` 驅動的 L1 |
 | `v8-engine-audio-record` | medium（執行與紀錄）；分析程式 high｜繼承 | 2～4 h | 完成（2026-10-30；錨點版 L2 299／299；[dev_log](../../../dev_logs/2026_10_30_engine_audio_record.zh-Hant.md)） | Engine 自己的 L2（`disk` 驅動、只記錄）、相關突變、dev_log |
+| `v8-engine-audio-windows-blocks` | medium｜繼承 | 1 h | 完成（2026-10-31；Windows 需要約 44.4 ms ≤ 60 ms；[dev_log](../../../dev_logs/2026_10_31_engine_audio_windows_blocks.zh-Hant.md)） | Windows 實機的區塊與回呼間隔量測（只記錄，不改程式） |
 
 `v8-engine-audio` 合計 12～18 h（與消費端計畫的估時相同）。檔位與引擎的說明見 [PLAN](PLAN.md)「分批」。
 

@@ -1,11 +1,13 @@
 #pragma once
 
 #include "engine/asset/AssetId.hpp"
+#include "engine/model/AnimationEvents.hpp"
 #include "engine/render/RenderTypes.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 
 namespace Engine::Asset { class AssetManager; }
@@ -60,6 +62,10 @@ public:
     // Current sampled pose, in the dedicated viewmodel camera's coordinates.
     [[nodiscard]] Engine::Math::Vec3 GetMuzzleViewCameraPosition() const noexcept;
     [[nodiscard]] float GetActionDurationSeconds(WeaponViewModelAction action) const noexcept;
+    // The action clip's animation events, in the clip's own seconds (empty
+    // before Initialize); the clip lasts GetActionDurationSeconds.
+    [[nodiscard]] std::span<const Engine::Model::AnimationEvent> GetActionEvents(
+        WeaponViewModelAction action) const noexcept;
     // Observes successful pose/GPU preparation and queue submission; reading
     // this cannot advance or restart an animation.
     [[nodiscard]] WeaponViewModelObservation GetObservation() const;

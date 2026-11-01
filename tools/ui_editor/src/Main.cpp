@@ -1,7 +1,7 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
 #include "gyo/ui_editor/EditorGui.hpp"
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
 #include "engine/os/Console.hpp"
@@ -33,13 +33,14 @@ void PrintDiagnostics(const std::vector<Diagnostic>& diagnostics) {
 
 int Validate(const Gyo::Tools::UiEditor::CommandLineOptions& options) {
     using namespace Gyo::Tools::UiEditor;
+    namespace Framework = Gyo::Tools::Framework;
     if (!options.inputPath.has_value()) {
         std::cerr << "error: --validate requires a JSON path\n";
         return 2;
     }
 
-    ReadOnlyAssetCatalog catalog;
-    const ReadOnlyAssetCatalog* catalogPointer = nullptr;
+    Framework::ReadOnlyAssetCatalog catalog;
+    const Framework::ReadOnlyAssetCatalog* catalogPointer = nullptr;
     if (options.assetRoot.has_value()) {
         const auto mounted = options.catalogPath.has_value()
             ? catalog.Mount(*options.catalogPath, *options.assetRoot)

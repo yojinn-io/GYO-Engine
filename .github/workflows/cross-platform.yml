@@ -82,8 +82,7 @@ jobs:
         shell: pwsh
     env:
       PRESET: ${{ matrix.preset }}
-      # Host tools are keyed by the runner, not the target: rows that share a
-      # host (macOS arm64 and its x86_64 cross build) share one shader tool.
+      # Host tools are keyed by the runner that builds and runs them.
       GYO_HOST_TOOLS: build/target/_build/host-tools-${{ matrix.host }}
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
@@ -104,7 +103,6 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           preset: ${{ matrix.preset }}
           host: ${{ matrix.host }}
-          cpu-execution: ${{ matrix.cpu_execution }}
 
       # The ci-<os> preset already selects every registry-enabled game, the
       # default tools, the engine and its tests; no product is named here.
@@ -129,10 +127,11 @@ jobs:
           cmake --build --preset $env:PRESET 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # Tests run as many at a time as the row compiles (its parallel level).
       - name: Run CPU, headless and shader tests
         id: tests
         run: |
-          ctest --preset $env:PRESET --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/tests.log"
+          ctest --preset $env:PRESET --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run host shader reflection and rejection tests
@@ -285,7 +284,7 @@ jobs:
           | Go service cross-builds (Linux) | $env:GO_SERVICES_RESULT |
 
           L1 builds and tests only. Packaging and installed acceptance run on master integration.
-          Only Linux runs GPU tests (software Vulkan); macOS rows have no GPU checks, and a rosetta2 row runs its x86_64 tests translated on an arm64 host.
+          Only Linux runs GPU tests (software Vulkan); macOS rows have no GPU checks. macos-x64 is a local build target only and has no L1 row.
           "@ >> $env:GITHUB_STEP_SUMMARY
 
   quick:

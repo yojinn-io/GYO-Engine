@@ -119,6 +119,26 @@ std::shared_ptr<const WeaponPresentationDefinition> LoadWeaponPresentationDefini
                 definition->clips[slot] = *clip;
             }
         }
+        if (config.contains("animation_events_asset_id")) {
+            const auto eventsId = ReadAssetId(config.at("animation_events_asset_id"));
+            const auto eventsText = LoadShared<Engine::Asset::Loaders::TextAsset>(
+                assets, eventsId, Engine::Asset::AssetType::Text());
+            const auto describe = [&eventsId](const Engine::Model::ModelError& failure) {
+                return "animation events '" + eventsId.debugName + "': " + Engine::Base::Describe(failure);
+            };
+            const auto events = Engine::Model::ParseAnimationEvents(eventsText->text);
+            if (!events) throw std::runtime_error(describe(events.error()));
+            if (Engine::Asset::AssetId::FromString(events.value().modelAssetId) != modelId) {
+                throw std::runtime_error("animation events '" + eventsId.debugName + "' belong to model '" +
+                                         events.value().modelAssetId + "', not '" + modelId.debugName + "'");
+            }
+            const auto bound = Engine::Model::BindAnimationEvents(events.value(), *definition->model);
+            if (!bound) throw std::runtime_error(describe(bound.error()));
+            for (std::size_t slot = 0; slot < kActions.size(); ++slot) {
+                const auto clipEvents = bound.value().ForClip(definition->clips[slot]);
+                definition->events[slot].assign(clipEvents.begin(), clipEvents.end());
+            }
+        }
         const auto anchor = definition->model->FindNode(config.at("anchor_node").get<std::string>());
         if (!anchor) throw std::runtime_error("model is missing the viewmodel anchor node");
         const auto muzzle = definition->model->FindNode(config.at("muzzle").at("node").get<std::string>());

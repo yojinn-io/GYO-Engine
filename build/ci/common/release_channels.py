@@ -31,7 +31,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from release_support import (PLATFORMS, EvidenceItem, ReleaseError, git, load_release_evidence, single_line_text,
+from release_support import (RELEASE_PLATFORMS, EvidenceItem, ReleaseError, git, load_release_evidence, single_line_text,
                              validate_commit, validate_product, parse_boolean)
 from app_registry import export_registry
 from go_checks import TOOLCHAIN_PRODUCT
@@ -76,12 +76,12 @@ def derive_trains(app_pairs) -> dict[str, Train]:
         validate_product(product)
         if product in RESERVED_TRAINS:
             raise ReleaseError(f"Game id '{product}' is reserved for the tools train")
-        if platform not in PLATFORMS or platform in games.get(product, ()):
+        if platform not in RELEASE_PLATFORMS or platform in games.get(product, ()):
             raise ReleaseError(f"Invalid or duplicate registry platform {product}/{platform}")
         games.setdefault(product, []).append(platform)
-    trains = {TOOLS_TRAIN: Train(TOOLS_TRAIN, TOOLCHAIN_PRODUCT, tuple(PLATFORMS))}
+    trains = {TOOLS_TRAIN: Train(TOOLS_TRAIN, TOOLCHAIN_PRODUCT, tuple(RELEASE_PLATFORMS))}
     for game, platforms in games.items():
-        trains[game] = Train(game, game, tuple(platform for platform in PLATFORMS if platform in platforms))
+        trains[game] = Train(game, game, tuple(platform for platform in RELEASE_PLATFORMS if platform in platforms))
     return trains
 
 
@@ -299,7 +299,7 @@ def verification_level(description: dict) -> str:
     if description["kind"] == "service":
         return (f"{built} on {_host(description)} with {description.get('go_version') or 'unrecorded Go'} "
                 f"(CGO disabled); the service binary is not run by CI")
-    execution = {"native": "natively", "rosetta2": "under Rosetta 2 translation"}.get(
+    execution = {"native": "natively"}.get(
         description.get("cpu_execution"), "with unrecorded CPU execution")
     gpu = (f"{description['gpu_checks']} on a software Vulkan device" if description.get("gpu_checks")
            else "no GPU checks")

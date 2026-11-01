@@ -68,7 +68,7 @@ Architecture を変更してよい。
 * 同じ Adapter / Conversion の繰り返し
 * 複数箇所に現れる同一 Special Case
 * Module Boundary を越えた内部知識の漏洩
-* Product の追加・複製・削除に公共層の変更が必要になる
+* Product の追加・複製・削除に共通層の変更が必要になる
 * Editor / Application / Engine の責務が混在する
 * Product 固有 Knowledge が reusable layer に漏れる
 * Product 固有データの存在を共通処理が前提とする
@@ -78,9 +78,9 @@ not predicted pressure.
 
 ### Derivation Order：Feature → Contract → Architecture
 
-任務を計画・分割するときは、次の順序で推導する。
+タスクを計画・分割するときは、次の順序で導き出す。
 三者は排他的な分類ではない。Contract も Architecture の一部であり、
-この順序は推導と優先の標準過程を定めるものである。
+この順序は導出と優先の標準的な手順を定めるものである。
 
 1. **Feature**：何を作るかを先に決める。利用者（プレイヤー）から見える部分。
 2. **Contract**：その Feature のために、Data や Wire で何を約束する必要があるか。
@@ -90,10 +90,10 @@ not predicted pressure.
 
 目的：
 
-* 事故、Contract の変更、Architecture の再構成が衝突したときに、
+* 障害（インシデント）、Contract の変更、Architecture の再構成が衝突したときに、
   三者が同時に止まり Feature が停滞する事態（難産）を防ぐ。
 * 衝突した場合は Feature の方向を保ち、深い層ほど範囲を縮める。
-* Contract と Architecture の作業は、それが支える Feature（次の版の Feature を含む）を明示する。
+* Contract と Architecture の作業は、それが支える Feature（次のバージョンの Feature を含む）を明示する。
   支える Feature を示せない項目は延期する。
 
 ---
@@ -137,17 +137,17 @@ Architecture Delta は禁止事項ではない。
 
 ### Component の設計約束（Design Invariants）
 
-複数の Agent と複数の版にまたがって守るべき設計意図は、
+複数の Agent と複数のバージョンにまたがって守るべき設計意図は、
 思考や会話の中だけに置かず、検査できる約束として文書に書く。
 
 * 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下。Engine は `docs/architecture/` 配下）に
   見出し `Design Invariants` の節として書く。
   見出しは文書の言語にかかわらず、この英語表記のまま変えない（翻訳による意味のずれと探し漏れを防ぐため）。
-* 可能なものは、守衛となる Test も用意する。
+* 可能なものは、ガードとなる Test も用意する。
 * Component を変更する前に、その owner の `Design Invariants` 節を読む。
 * 該当節に反する変更は、変更が小さくても Architecture Delta として扱い、ユーザーの同意を得る。
 * 節そのものの変更・削除も、ユーザーの同意を要する Architecture Delta とする。
-* 一般原則（「Ownership の変更は提出する」）だけでは、
+* 一般原則（「Ownership の変更は報告する」）だけでは、
   個々の変更がその Ownership 変更に当たるかを判断できない。
   判断できる形で書かれた約束だけが、局所的に妥当な修正の積み重ねによる Drift を止められる。
 * 新しい Component を作るとき、または既存の Component に大きな責務を加えるときは、
@@ -269,7 +269,7 @@ Product の追加・複製・削除によって検証する。
 
 * Engine から具体的な Game / Application を参照しない。
 * Engine から具体的な Editor を参照しない。
-* 公共層での具体的な Product 名による分岐の禁止は §9 を参照。
+* 共通層での具体的な Product 名による分岐の禁止は §9 を参照。
 * 暗黙の Product 間依存を作らない。
 * 循環依存を新しく作らない。
 
@@ -315,14 +315,14 @@ Product Boundary の重要な検証方法は、
 * 削除済み Product のために仮設定を残さない。
 * 削除済み Product のために Compatibility Branch を残さない。
 * Engine の初期化や検証のために、特定 Game / Tool の維持を要求しない。
-* 公共処理から参照されている専用コンテンツを「削除済み」と扱わない。
+* 共通処理から参照されている専用コンテンツを「削除済み」と扱わない。
 
-Product の削除に公共層の変更を必要としないことは、
+Product の削除に共通層の変更を必要としないことは、
 Architecture が満たすべき性質である。
-既存の結合を修復するための公共層変更を禁止するものではない。
+既存の結合を修復するための共通層の変更を禁止するものではない。
 
 既存構造がこの性質を満たしておらず、その修復がタスクの範囲に含まれる場合は、
-必要な公共層変更を行い、理由と影響を Architecture Delta として明示する。
+必要な共通層の変更を行い、理由と影響を Architecture Delta として明示する。
 範囲外の問題は報告し、独断で修復範囲を拡大しない。
 
 Build 対象から外すだけでは、完全な削除とはみなさない。
@@ -443,10 +443,10 @@ Contract に基づいて明確な Error にする。
 
 ### MUST NOT
 
-* 公共層で具体的な Game 名によって動作を分岐しない。
-* 公共層で具体的な Tool 名によって動作を分岐しない。
+* 共通層で具体的な Game 名によって動作を分岐しない。
+* 共通層で具体的な Tool 名によって動作を分岐しない。
 * 命名規則だけを利用して Product の意味を推測しない。
-* 新しい Product を追加するために公共層へ Product 専用 Branch を追加しない。
+* 新しい Product を追加するために共通層へ Product 専用 Branch を追加しない。
 * 専用 Branch を Data へ移しただけで、共通コードがその Product の内部事情を理解する構造を残さない。
 * 単一の例外を処理するために、任意条件を記述できる Configuration Language を作らない。
 * 単一の例外を処理するために、不要な Generic Platform を作らない。
@@ -459,7 +459,7 @@ Product Separation を達成したとはみなさない。
 残された専用 Tool が削除された Game へ明示的に依存している場合は、
 その Tool の Selection または Dependency Data を修正する。
 
-公共コードの Special Case によって
+共通コードの Special Case によって
 Dependency の欠落を隠してはならない。
 
 ---
@@ -563,8 +563,8 @@ Product Registration、Runtime Data Contract を変更した後は、
 
 ### Product Removability
 
-* owner を削除するために公共層の修正が必要になっていないか。
-* 公共処理に削除した owner の Content への Reference が残っていないか。
+* owner を削除するために共通層の修正が必要になっていないか。
+* 共通処理に削除した owner の Content への Reference が残っていないか。
 * 依存関係のない他の Product に影響していないか。
 * 削除後に Dummy Target / Empty Directory / Compatibility Branch が残っていないか。
 * 不要になった専用 Support Code が残っていないか。
@@ -573,7 +573,7 @@ Product Registration、Runtime Data Contract を変更した後は、
 ### Product Add / Clone
 
 * Product の追加が Product Content と Registration Data の変更だけで完結するか。
-* Product の複製が公共層の修正を要求しないか。
+* Product の複製が共通層の修正を要求しないか。
 * 新しい Product のために共通コードへ専用 Branch を追加していないか。
 
 ### Editor / Runtime Separation
@@ -615,7 +615,7 @@ Architecture Drift を確認する。
 * 一時的処理が Architecture に昇格している箇所
 * Existing Concept と重複する新しい Abstraction
 * Feature Scope を超えた変更
-* Product-specific Branch が公共層へ追加された箇所
+* Product-specific Branch が共通層へ追加された箇所
 * Editor / Runtime Boundary の破壊
 * Product Removability を阻害する Reference
 * 他の Component が権威を持つ状態の写し、またはそれに基づく判断の追加
@@ -653,7 +653,7 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
 計測を伴うバッチの報告は、結果にかかわらず次の行から始める。
 
 ~~~text
-収支：一致（送った数・届いた数・計数した破棄）／不一致（…）／確認できない（…）
+件数の突き合わせ：一致（送った数・届いた数・計数した破棄）／不一致（…）／確認できない（…）
 ~~~
 
 「不一致」「確認できない」のときは、受け入れ判定を確定せず、ユーザーの判断を待つ。
@@ -675,7 +675,7 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
 
 * Test の根拠は、可能な限り Agent の理解以外から得る（観測された現象、実データの Replay、Contract の規則など）。
 * Agent の理解だけに基づく Test を受け入れの唯一の根拠にする場合は、
-  実装を壊したときにその Test が失敗すること（突然変異検査など）で検出力を示すことが望ましい。
+  実装を壊したときにその Test が失敗すること（ミューテーションテストなど）で検出力を示すことが望ましい。
 
 ### 14.3 Defect の対応
 
@@ -687,7 +687,7 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
 
 * 確率的にしか再現しない場合は、試行回数と判定を宣言し、修正の前後を同じ宣言で比較する。
 * 既知の現象を入れても計測に現れない、または計測が 0 件のときは、測り方を変えて再現させる前に、
-  観測経路が途中で捨てていないか（送った数・届いた数・計数した破棄の収支）を確かめ、ユーザーに報告する。
+  観測経路が途中で捨てていないか（送った数・届いた数・計数した破棄の突き合わせ）を確かめ、ユーザーに報告する。
 * 再現できない（Test として固定できない、必要な試行回数が現実的でない場合を含む）ときは、
   その事実と観測した証拠を記録し、修正の前に観測手段（診断・計数）を追加して、そこで止めて報告する。
   「修正済み」とは報告しない。
@@ -702,7 +702,7 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
   その理由を変更の説明に書く。
 * Test を通すためだけに判定を緩めない。実装の中で Test の入力を識別して分岐しない。
 
-受け入れ判定または Design Invariants の守衛 Test の判定を変えるときは、次を平易な言葉で示す。
+受け入れ判定または Design Invariants のガード Test の判定を変えるときは、次を平易な言葉で示す。
 ユーザーに Test のコードを読ませない。
 
 1. その判定が守っていた性質
@@ -712,13 +712,13 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
 5. 根拠と証拠の場所
 
 * 緩める面がない（締めるだけ、または同等）場合は、Agent が変更し、事後に 1〜5 を報告する。
-  緩める面がないことは、旧判定が失敗とした入力（既存の失敗例と、旧判定が検出した突然変異）を
+  緩める面がないことは、旧判定が失敗とした入力（既存の失敗例と、旧判定が検出したミュータント）を
   新判定もすべて失敗とすることで示す。示せない場合は、緩める面があるものとして扱う。
-  あわせて、新判定の検出力を突然変異検査で示す。
+  あわせて、新判定の検出力をミューテーションテストで示す。
 * 緩める面がある場合は、1〜5 を示してユーザーの承認を得る。
-  承認を求める前に、突然変異検査と、提案した Agent とは別の審査者による検証
+  承認を求める前に、ミューテーションテストと、提案した Agent とは別の審査者による検証
   （1〜5 の記述を実際のデータで確かめる）を行う。
-* Design Invariants の守衛 Test は、緩める面の有無にかかわらず、1〜5 を示してユーザーの承認を得る。
+* Design Invariants のガード Test は、緩める面の有無にかかわらず、1〜5 を示してユーザーの承認を得る。
 * 閾値、試行回数、再試行の規則は §14.1 に従う。
   事前宣言した判定は、この節によっても、結果を見た後に緩めない。
 
@@ -737,6 +737,12 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
 * 計画のバッチを完了したときは、その owner の dev_log（`docs/dev_logs/`、やったこと・検証と経緯・証拠）を
   同じ変更で書き、計画の README の一覧に加える。
   dev_log はそのバッチを行った会話が書く。図書管理員（文書の定期点検を担う会話）は不足を見つけて報告し、補う。
+* 正式な文書（`docs/` の計画、HANDOFF、事前宣言、判定変更、dev_log）は、消える場所
+  （会話の scratchpad、Claude app の side-session-notes、`/tmp`、`/private/tmp` など）を証拠の所在にしない。
+  文書には結論と判定に使った数値を書き、証拠のファイル（log、実行ファイル、データ）は repo に入れず、
+  固定の場所（プロジェクトフォルダ内の git 管理外の `build/evidence/` など。ホームディレクトリは使わない）に保存して、
+  どのマシンのどこにあるかを書く。保存しない場合は、そのことを書く。
+  出所として示すだけで判定に使わない探索の出力は「未保存」と書いてよい。
 
 ### Structural
 
@@ -744,7 +750,7 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
 * 不要な Abstraction が増えていない。
 * Dependency Direction が悪化していない。
 * Ownership が曖昧になっていない。
-* Product-specific Knowledge が公共層へ漏れていない。
+* Product-specific Knowledge が共通層へ漏れていない。
 * Editor / Runtime の Data Contract が壊れていない。
 * Architecture Drift が発生した場合、それが明示されている。
 
@@ -752,7 +758,7 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
 
 変更が Product / Tool / Build / Packaging / Validation に関係する場合：
 
-* Product を削除するために公共層変更が必要になっていない。
+* Product を削除するために共通層の変更が必要になっていない。
 * Product の追加・複製が Registration と Product Content で完結する。
 * Product-specific Test / Validation が owner 選択時だけ有効になる。
 * 共通 Test が特定 Product の存在を前提にしていない。

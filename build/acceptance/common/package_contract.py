@@ -10,7 +10,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from content_contract import decode_json, relative_path, validate_content, catalog_files, shader_files
 
+# Every package platform a build can target and a product may declare checks for.
 PLATFORMS = ("windows-x64", "linux-x64", "macos-arm64", "macos-x64")
+# The platforms CI builds and verifies and release trains publish. macos-x64
+# stays a local build target (Intel Mac development hosts) that no CI row
+# verifies, so it is never packaged for a release.
+RELEASE_PLATFORMS = ("windows-x64", "linux-x64", "macos-arm64")
+assert set(RELEASE_PLATFORMS) <= set(PLATFORMS)
 PROFILES = ("quick", "release")
 
 

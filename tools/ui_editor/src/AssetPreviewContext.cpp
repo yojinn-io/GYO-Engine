@@ -1,5 +1,5 @@
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -174,7 +174,7 @@ void AssetPreviewContext::Initialize(SDL_Renderer& renderer,
     impl_->initialized = true;
 }
 
-void AssetPreviewContext::Mount(const ReadOnlyAssetCatalog& catalog) {
+void AssetPreviewContext::Mount(const Framework::ReadOnlyAssetCatalog& catalog) {
     // Mount needs an initialized context, a mounted catalog and no active frame.
     GYO_ASSERT(impl_->initialized && impl_->renderer != nullptr);
     GYO_ASSERT(!impl_->frameActive && catalog.IsMounted());

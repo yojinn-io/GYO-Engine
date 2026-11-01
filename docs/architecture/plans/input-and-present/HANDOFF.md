@@ -368,7 +368,7 @@
     - 突變目錄 74 個。第一次全跑 73／74：m-depth-watch 的 find 因為插入主執行緒的註解而過時；修正後與 m-main-thread 一起重跑，2／2 殺掉，合計 74／74。
     - `test` preset 80／80。
     - platform／input／capture 測試連跑 10 次，0 失敗。
-    - 紀錄：scratchpad 的 `mutants-ip4b-final.log`。
+    - 紀錄：scratchpad 的 `mutants-ip4b-final.log`。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
   - L1：推送觸發的 #560 只做範圍判斷（draft PR），L1 job 跳過；手動觸發 #561（`b3f6386`），涵蓋 ip3d～ip4b。
   - L1 #561：macos-x64、macos-arm64、linux-x64 成功；windows-x64 失敗，失敗的是 `platform_sdl_concurrency`。
     - 現象：`Destroying an event watch waits for a callback on another thread` 的 `overlappedRounds > 0`，200 輪沒有一次和回呼重疊。這條斷言是 xhigh 審查後加的，用來確認測試確實做到了重疊。

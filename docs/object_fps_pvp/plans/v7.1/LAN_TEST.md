@@ -21,11 +21,11 @@
   - 用記事本打開 `gyo-object_fps_pvp\build_metadata.json`，`source_revision` 要是上面的 commit。
   - 第一次執行時若出現 SmartScreen，按「其他資訊」→「仍要執行」。
 - **Mac**：
-  - Match 與 Client：下載同一次 run 的 `gyo-package-object_fps_pvp-macos-x64`，解壓到 `~/gyo-lan15/pkg/`，同樣核對 `source_revision`。
+  - Match 與 Client：下載同一次 run 的 `gyo-package-object_fps_pvp-macos-x64`，解壓到 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/pkg/`，同樣核對 `source_revision`。
   - Gateway：發行包沒有 macOS 版的 Gateway，在本機從同一個 commit 建置（Gateway 的原始碼在 `646b808f` 之後沒有改過）：
 
     ```bash
-    cd /Users/karasu/Code/Source/GYO-Engine/.claude/worktrees/outage-resync/apps/object_fps_pvp && /usr/local/go/bin/go build -o ~/gyo-lan15/gyo_object_fps_pvp-gateway ./gateway/cmd
+    cd /Users/karasu/Code/Source/GYO-Engine/.claude/worktrees/outage-resync/apps/object_fps_pvp && /usr/local/go/bin/go build -o /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/gyo_object_fps_pvp-gateway ./gateway/cmd
     ```
 
   - quad probe（Q2 用）：本機的建置 `build/target/_build/test/acceptance/object_fps_pvp/gyo_object_fps_pvp_quad_probe`（同一個工作樹，產品原始碼與 `646b808f` 相同）。
@@ -49,7 +49,7 @@
 在 Mac 上開一個**新的空資料夾**，例如：
 
 ```bash
-mkdir -p ~/gyo-lan15/session-20261029/mac ~/gyo-lan15/session-20261029/clients ~/gyo-lan15/session-20261029/quad
+mkdir -p /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/session-20261029/mac /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/session-20261029/clients /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/session-20261029/quad
 ```
 
 以下用 `SESSION` 代表這個資料夾。在 `SESSION/marks.txt` 一行寫一項（時刻用 `2026-10-29T20:15:00` 的格式，到秒）。範本：
@@ -81,13 +81,13 @@ q2_end=2026-10-29T20:40:40
 Mac 終端機 1（Match；出現 `ready` 之後再開終端機 2）：
 
 ```bash
-~/gyo-lan15/pkg/gyo-object_fps_pvp/bin/gyo_object_fps_pvp-match --arena ~/gyo-lan15/pkg/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --listen 127.0.0.1:27016 --log SESSION/mac/match.log --movement-trace SESSION/mac/match-commands.jsonl
+/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/pkg/gyo-object_fps_pvp/bin/gyo_object_fps_pvp-match --arena /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/pkg/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --listen 127.0.0.1:27016 --log SESSION/mac/match.log --movement-trace SESSION/mac/match-commands.jsonl
 ```
 
 Mac 終端機 2（Gateway；把 `MAC_IP` 換成實際的位址）：
 
 ```bash
-~/gyo-lan15/gyo_object_fps_pvp-gateway -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 -advertise-ip MAC_IP -log SESSION/mac/gateway.log
+/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/gyo_object_fps_pvp-gateway -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 -advertise-ip MAC_IP -log SESSION/mac/gateway.log
 ```
 
 - 啟動行的 `advertise` 必須是 `MAC_IP`，不能是 `127.0.0.1`。
@@ -134,7 +134,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 - **Q2（房間已滿）**：在 Mac 上記 `q2_start=`，在 Mac 終端機 4 執行（`<4−N>` 換成 4 減人數：3 人時是 1，2 人時是 2）：
 
   ```bash
-  /Users/karasu/Code/Source/GYO-Engine/.claude/worktrees/outage-resync/build/target/_build/test/acceptance/object_fps_pvp/gyo_object_fps_pvp_quad_probe --gateway MAC_IP:8080 --arena ~/gyo-lan15/pkg/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --create false --clients <4−N> --expect-players 4 --fifth true --passive true --duration 20 --output SESSION/quad/out 2>&1 | tee SESSION/quad/probe.log
+  /Users/karasu/Code/Source/GYO-Engine/.claude/worktrees/outage-resync/build/target/_build/test/acceptance/object_fps_pvp/gyo_object_fps_pvp_quad_probe --gateway MAC_IP:8080 --arena /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/pkg/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --create false --clients <4−N> --expect-players 4 --fifth true --passive true --duration 20 --output SESSION/quad/out 2>&1 | tee SESSION/quad/probe.log
   ```
 
   - 機器人會加入房間補到 4 人，接著試第 5 人，預期被拒（`room_full`）。約 20 秒後機器人自己離開。
@@ -160,7 +160,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 先核對判定工具沒有改過（sha256 要等於宣告第 7 節鎖定的值），再執行：
 
 ```bash
-cd /Users/karasu/Code/Source/GYO-Engine/.claude/worktrees/outage-resync && shasum -a 256 build/acceptance/object_fps_pvp/lan15_judge.py build/acceptance/object_fps_pvp/ingress_evidence.py && python3 -I -B build/acceptance/object_fps_pvp/lan15_judge.py ~/gyo-lan15/session-20261029 --output ~/gyo-lan15/session-20261029/judge.json
+cd /Users/karasu/Code/Source/GYO-Engine/.claude/worktrees/outage-resync && shasum -a 256 build/acceptance/object_fps_pvp/lan15_judge.py build/acceptance/object_fps_pvp/ingress_evidence.py && python3 -I -B build/acceptance/object_fps_pvp/lan15_judge.py /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/session-20261029 --output /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan15/session-20261029/judge.json
 ```
 
 工具判不了的（L3 的觀察、S7 的外觀）以使用者的紀錄判定。

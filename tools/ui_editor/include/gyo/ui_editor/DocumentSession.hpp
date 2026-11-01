@@ -2,7 +2,7 @@
 
 #include "gyo/ui_editor/Diagnostic.hpp"
 #include "gyo/ui_editor/EditorError.hpp"
-#include "gyo/ui_editor/FileService.hpp"
+#include "gyo/framework/FileService.hpp"
 #include "gyo/ui_editor/UndoStack.hpp"
 
 #include <nlohmann/json.hpp>
@@ -14,9 +14,9 @@
 #include <string_view>
 #include <vector>
 
-namespace Gyo::Tools::UiEditor {
+namespace Gyo::Tools::Framework { class ReadOnlyAssetCatalog; }
 
-class ReadOnlyAssetCatalog;
+namespace Gyo::Tools::UiEditor {
 
 class DocumentSession final {
 public:
@@ -45,13 +45,13 @@ public:
     [[nodiscard]] bool Redo();
 
     [[nodiscard]] std::vector<Diagnostic> Validate(
-        const ReadOnlyAssetCatalog* catalog) const;
+        const Framework::ReadOnlyAssetCatalog* catalog) const;
     [[nodiscard]] Result<SessionReport, SessionError> Save(
-        const ReadOnlyAssetCatalog* catalog,
+        const Framework::ReadOnlyAssetCatalog* catalog,
         bool overwriteExternalModification = false);
     [[nodiscard]] Result<SessionReport, SessionError> Export(
         const std::filesystem::path& path,
-        const ReadOnlyAssetCatalog* catalog,
+        const Framework::ReadOnlyAssetCatalog* catalog,
         bool overwriteExternalModification = false);
 
     // Whether the observed output file changed since it was opened or saved.
@@ -62,7 +62,7 @@ private:
     void ResetHistory(bool saved);
     [[nodiscard]] Result<SessionReport, SessionError> SaveTo(
         const std::filesystem::path& path,
-        const ReadOnlyAssetCatalog* catalog,
+        const Framework::ReadOnlyAssetCatalog* catalog,
         bool overwriteExternalModification);
 
     nlohmann::json document_;
@@ -70,7 +70,7 @@ private:
     std::optional<std::filesystem::path> inputPath_;
     std::optional<std::filesystem::path> outputPath_;
     std::optional<std::filesystem::path> observedPath_;
-    std::optional<FileStamp> observedStamp_;
+    std::optional<Framework::FileStamp> observedStamp_;
 };
 
 } // namespace Gyo::Tools::UiEditor

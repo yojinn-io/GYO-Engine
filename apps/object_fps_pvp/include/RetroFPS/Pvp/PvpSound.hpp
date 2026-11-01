@@ -64,8 +64,6 @@ public:
     // Main thread. A cue at the Engine time it belongs to, with its side gains.
     void Play(SoundCue cue, Engine::Time::TimePoint at, StereoGains gains);
     [[nodiscard]] const SoundSettings& Settings() const noexcept { return settings_; }
-    // The length of a cue's clip in seconds (0 before Initialize).
-    [[nodiscard]] double ClipSeconds(SoundCue cue) const noexcept;
     // One log line with the mixer's counters (log-contract: "PvP sound summary").
     void LogSummary() const;
 

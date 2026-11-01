@@ -20,7 +20,7 @@ import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from release_support import (PLATFORMS, Package, ReleaseError, archive_name, checksum_document, describe_item,
+from release_support import (RELEASE_PLATFORMS, Package, ReleaseError, archive_name, checksum_document, describe_item,
                              load_packages, load_services, parse_boolean, service_archive_name, validate_checksum,
                              validate_commit, validate_item, validate_tag_name, validate_expected_pairs)
 from release_channels import (SNAPSHOT_KEEP, Train, derive_trains, latest_other_snapshot, parse_release_tag,
@@ -46,7 +46,7 @@ RETRY_DELAYS = (2, 4, 8)
 # writes). Seconds to wait between rereads of a created tag still missing.
 TAG_VISIBILITY_DELAYS = (1, 2, 4, 8)
 TRANSIENT_HTTP_STATUS = frozenset((500, 502, 503, 504))
-_PLATFORM_ALTERNATIVES = "(?:" + "|".join(re.escape(platform) for platform in PLATFORMS) + ")"
+_PLATFORM_ALTERNATIVES = "(?:" + "|".join(re.escape(platform) for platform in RELEASE_PLATFORMS) + ")"
 MANAGED_PACKAGE_ASSET = re.compile(
     r"gyo-[a-z][a-z0-9_]*-" + _PLATFORM_ALTERNATIVES + r"\.tar\.gz(?:\.sha256)?\Z")
 # gyo-<owner>-<role>-<platform>: disjoint from packages because an owner or a

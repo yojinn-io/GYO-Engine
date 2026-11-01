@@ -10,6 +10,8 @@
 
 Windows 的檢測 log（`docs/tools/plans/v8/evidence/ime-observe/`）顯示：日文輸入法在平假名模式確定的是全形字元（`．` U+FF0E、`。` U+3002、`０` U+FF10、`１` U+FF11、`：` U+FF1A）。大廳的過濾逐 byte 只收 ASCII，這些字被靜靜丟掉，冒號「打不出來」。
 
+（後續，2026-10-31）`docs/tools/plans/v8/evidence/ime-observe/` 已移出 repo（AGENTS §15），現在在主 checkout 的 `build/evidence/tool-v8-ime-observe/report.txt`（使用者的 Intel Mac，git 管理外）；腳本的分類全文抄在 [2026_10_30_tool_v8_ui_ime_observe](2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)「判定為什麼不成立」一節。
+
 ## 做了什麼
 
 - 大廳的過濾從 `PvpApplication.cpp` 的 `AppendAddress` 搬到 `RetroFPS/Pvp/AddressText.hpp` 的 `FilterAddressText`（純函式，可以測試）。`AppendAddress` 改呼叫它，128 字的上限照舊。

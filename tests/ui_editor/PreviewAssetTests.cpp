@@ -1,8 +1,11 @@
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/EditorApp.hpp"
-#include "gyo/ui_editor/FileService.hpp"
+#include "gyo/framework/FileService.hpp"
 #include "gyo/ui_editor/PathDialog.hpp"
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/ui_editor/ElementSchema.hpp"
+#include "gyo/ui_editor/PreviewAdapter.hpp"
+#include "gyo/ui_editor/UiDocumentBridge.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "engine/base/Assert.hpp"
 #include "engine/text/ITextRasterizer.hpp"
 
@@ -21,6 +24,7 @@
 
 namespace {
 using namespace Gyo::Tools::UiEditor;
+namespace Framework = Gyo::Tools::Framework;
 int failures{};
 void Expect(bool condition, const char* message) {
     if (!condition) { ++failures; std::cerr << "FAILED: " << message << '\n'; }
@@ -62,8 +66,8 @@ struct Fixture final {
     SDL_Renderer* renderer{};
     Fixture() {
         std::filesystem::create_directories(root);
-        Expect(static_cast<bool>(WriteTextFileAtomically(root / "font.bin", "test-font")), "write owned fake font");
-        Expect(static_cast<bool>(WriteTextFileAtomically(root / "catalog.json",
+        Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "font.bin", "test-font")), "write owned fake font");
+        Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "catalog.json",
             R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write catalog");
         surface = SDL_CreateSurface(320, 16, SDL_PIXELFORMAT_RGBA32);
         renderer = SDL_CreateSoftwareRenderer(surface);
@@ -101,7 +105,7 @@ struct Fixture final {
 
 void TestQueuedTexturesAndFrameEviction() {
     Fixture fixture;
-    ReadOnlyAssetCatalog catalog;
+    Framework::ReadOnlyAssetCatalog catalog;
     Expect(static_cast<bool>(catalog.Mount(fixture.root / "catalog.json", fixture.root)), "mount fixture");
     auto rasterizer = std::make_unique<BitmapRasterizer>();
     auto* observed = rasterizer.get();
@@ -109,7 +113,7 @@ void TestQueuedTexturesAndFrameEviction() {
     assets.Initialize(*fixture.renderer, std::move(rasterizer));
     assets.Mount(catalog);
     // A parsed snapshot must not be read from disk again by the preview.
-    Expect(static_cast<bool>(WriteTextFileAtomically(fixture.root / "catalog.json", "broken")), "replace source catalog");
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "catalog.json", "broken")), "replace source catalog");
     fixture.Begin(assets);
     for (int index = 0; index < 300; ++index) {
         const auto text = assets.Text("font.default", std::to_string(index), 12);
@@ -146,9 +150,9 @@ void TestQueuedTexturesAndFrameEviction() {
 
 void TestSharedContentAndQueuedMounts() {
     Fixture fixture;
-    Expect(static_cast<bool>(WriteTextFileAtomically(fixture.root / "content.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "content.json",
         R"({"version":1,"catalogs":["catalog.json","images.json"],"shader_bundles":[]})")), "write multi-catalog content");
-    Expect(static_cast<bool>(WriteTextFileAtomically(fixture.root / "images.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "images.json",
         R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"image.png"}]})")), "write separate image catalog");
     // The engine deliberately enables PNG only in SDL_image. Keep one complete
     // pixel in this fixture rather than relying on OS codecs or game assets.
@@ -159,7 +163,7 @@ void TestSharedContentAndQueuedMounts() {
         0x0b,0x49,0x44,0x41,0x54,0x78,0xda,0x63,0x64,0xf8,0x0f,0x00,
         0x01,0x05,0x01,0x01,0x27,0x18,0xe3,0x66,0x00,0x00,0x00,0x00,
         0x49,0x45,0x4e,0x44,0xae,0x42,0x60,0x82};
-    Expect(static_cast<bool>(WriteTextFileAtomically(fixture.root / "image.png",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "image.png",
         std::string_view{reinterpret_cast<const char*>(png), sizeof(png)})), "write owned PNG fixture");
     AssetPreviewContext assets;
     auto rasterizer = std::make_unique<BitmapRasterizer>();
@@ -185,7 +189,7 @@ void TestSharedContentAndQueuedMounts() {
     editor.RequestAssetMount({}, fixture.root);
     editor.ApplyPendingAssetChanges();
     Expect(assets.IsMounted(), "GUI remount accepts complete content");
-    Expect(static_cast<bool>(WriteTextFileAtomically(fixture.root / "images.json", "broken")), "invalidate remount candidate");
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(fixture.root / "images.json", "broken")), "invalidate remount candidate");
     editor.RequestAssetMount({}, fixture.root);
     editor.ApplyPendingAssetChanges();
     Expect(assets.IsMounted(), "failed GUI remount preserves previous preview");
@@ -209,11 +213,11 @@ void TestMountRootOutsideAnsiCodePage() {
     Fixture fixture;
     const auto root = fixture.root / std::filesystem::path(u8"\u8a66\u5408-\ud55c");
     std::filesystem::create_directories(root);
-    Expect(static_cast<bool>(WriteTextFileAtomically(root / "content.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "content.json",
         R"({"version":1,"catalogs":["catalog.json"],"shader_bundles":[]})")), "write content outside the code page");
-    Expect(static_cast<bool>(WriteTextFileAtomically(root / "catalog.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "catalog.json",
         R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write catalog outside the code page");
-    Expect(static_cast<bool>(WriteTextFileAtomically(root / "font.bin", "test-font")), "write font outside the code page");
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "font.bin", "test-font")), "write font outside the code page");
     AssetPreviewContext assets;
     assets.Initialize(*fixture.renderer, std::make_unique<BitmapRasterizer>());
     CommandLineOptions options;
@@ -240,11 +244,11 @@ void TestPathDialogChoosesAssetFolder() {
     Fixture fixture;
     const auto root = fixture.root / std::filesystem::path(u8"\u8cc7\u7522");
     std::filesystem::create_directories(root);
-    Expect(static_cast<bool>(WriteTextFileAtomically(root / "content.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "content.json",
         R"({"version":1,"catalogs":["catalog.json"],"shader_bundles":[]})")), "write chosen content");
-    Expect(static_cast<bool>(WriteTextFileAtomically(root / "catalog.json",
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "catalog.json",
         R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write chosen catalog");
-    Expect(static_cast<bool>(WriteTextFileAtomically(root / "font.bin", "test-font")), "write chosen font");
+    Expect(static_cast<bool>(Framework::WriteTextFileAtomically(root / "font.bin", "test-font")), "write chosen font");
     AssetPreviewContext assets;
     assets.Initialize(*fixture.renderer, std::make_unique<BitmapRasterizer>());
     ScriptedDialogs dialogs;
@@ -279,10 +283,66 @@ void TestPathDialogChoosesAssetFolder() {
 }
 } // namespace
 
+// v8-tool-ui-editor-text-field: in preview mode a text field is edited with
+// the keyboard through the real ImGui frame, and its submit reaches the
+// action log with its text and updates the preview binding.
+void TestPreviewTextFieldTyping() {
+    Fixture fixture;
+    AssetPreviewContext assets;
+    nlohmann::json document = UiDocumentBridge::CreateDefault();
+    nlohmann::json field = MakeDefaultElement(document, *FindElementKind("text_field"));
+    field["rect"]["size_delta"] = {200.0, 12.0};
+    const std::string id = field["id"].get<std::string>();
+    const std::string binding = field["binding"].get<std::string>();
+    document["canvases"][0]["focus_order"].push_back(id);
+    document["canvases"][0]["children"].push_back(field);
+
+    PreviewAdapter preview;
+    const PreviewAdapter::Viewport viewport{0.0F, 0.0F, 320.0F, 16.0F};
+    const auto frame = [&](const auto& before) {
+        before(ImGui::GetIO());
+        fixture.Begin(assets);
+        auto output = preview.Draw(*ImGui::GetBackgroundDrawList(), document, "main", viewport, {}, nullptr,
+                                   true, true, false, 8.0F);
+        fixture.Present(assets);
+        return output;
+    };
+    const auto key = [](const ImGuiKey pressed, const bool down) {
+        return [pressed, down](ImGuiIO& io) { io.AddKeyEvent(pressed, down); };
+    };
+    const auto none = [](ImGuiIO&) {};
+
+    auto started = frame(key(ImGuiKey_Enter, true));
+    Expect(!started.error.has_value(), "the preview draws a text field");
+    Expect(started.actions.empty(), "Enter on a text field starts editing without an action");
+    frame(key(ImGuiKey_Enter, false));
+    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("ab"); });
+    frame(key(ImGuiKey_Backspace, true));
+    frame(key(ImGuiKey_Backspace, false));
+    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("c"); });
+    auto submitted = frame(key(ImGuiKey_Enter, true));
+    frame(key(ImGuiKey_Enter, false));
+    Expect(submitted.actions.size() == 1 && submitted.actions[0].stringPayload == std::optional<std::string>{"ac"},
+        "typed characters and Backspace edit the field; Enter submits its text");
+    auto after = frame(none);
+    Expect(!after.error.has_value(), "the preview keeps drawing after a submit");
+
+    // The preview binding now holds the submitted text: a new edit starts from it.
+    frame(key(ImGuiKey_Enter, true));
+    frame(key(ImGuiKey_Enter, false));
+    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("d"); });
+    auto again = frame(key(ImGuiKey_Enter, true));
+    frame(key(ImGuiKey_Enter, false));
+    Expect(again.actions.size() == 1 && again.actions[0].stringPayload == std::optional<std::string>{"acd"},
+        "a submit updates the preview binding");
+    static_cast<void>(binding);
+}
+
 int main() {
     TestQueuedTexturesAndFrameEviction();
     TestSharedContentAndQueuedMounts();
     TestMountRootOutsideAnsiCodePage();
     TestPathDialogChoosesAssetFolder();
+    TestPreviewTextFieldTyping();
     return failures == 0 ? 0 : 1;
 }

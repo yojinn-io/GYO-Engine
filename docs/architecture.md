@@ -28,6 +28,7 @@ GYO-Engine/
       shaders/pipeline/       offline shader compiler and its host dependencies
     text/                     neutral raster contract and font adapter
     ui/                       JSON UI, layout, actions, render bridge
+  framework/                 the layer games and tools share above the engine; only its tool part exists
   tools/<tool>/              design support; independent or game-specific local tools
   services/gyo_gateway/      reusable Go HTTP, session and transport mechanisms
   tests/
@@ -44,7 +45,7 @@ GYO-Engine/
 
 `build/` contains maintained development support. Only `build/target/` and older local generated output are disposable output; do not delete all of `build/`. Existing local caches are not migrated or committed. Fresh CMake configurations use `build/target/_build/<preset>`.
 
-`apps/` contains game code. It does not carry test runners, package scripts, editor code, vendor source archives or CI definitions. Tests consume game libraries from outside the game. Root `tools/` is reserved for design support such as UI and map editing. Compilation, integration and release orchestration belong to `build/`. Shader compilation is a rendering responsibility and its implementation stays with `engine/render/shaders/pipeline/`.
+`apps/` contains game code. It does not carry test runners, package scripts, editor code, vendor source archives or CI definitions. Tests consume game libraries from outside the game. Root `tools/` is reserved for design support such as UI and map editing. Root `framework/` holds what several products share above the engine: dependencies point game or tool → framework → engine, the engine never names it, and it is built only while a selected product uses it ([framework](framework/architecture.md)). Compilation, integration and release orchestration belong to `build/`. Shader compilation is a rendering responsibility and its implementation stays with `engine/render/shaders/pipeline/`.
 
 ## Workflow evolution
 
@@ -77,7 +78,7 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 | `GYO::Engine` | IO, runtime lifecycle, CPU asset identity/cache/loading | Base, Math, Time; C++ library; JSON parser privately |
 | `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule` | Math, Base |
 | `GYO::Input` | physical input (full keyboard scancodes, mouse, modifiers), window interaction events (focus, move, resize, minimize, restore) and action/axis evaluation | Base (private) |
-| `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS) | Engine, Math |
+| `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS); named moments on clips, the `gyo.anim_events` data contract ([contract](architecture/animation-events.md)) | Engine, Math; the JSON parser privately |
 | `GYO::ModelRenderer` | shared model/material GPU resources and independent skinned mesh instances; consumes an already evaluated pose | Model, Render |
 | `GYO::PlatformSDL` | SDL process, window and event ownership | Engine and SDL |
 | `GYO::Text` | encoded-font to owning RGBA bitmap contract | Engine |
@@ -85,11 +86,12 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 | `GYO::Ui` | JSON codec, validation, layout, focus, binding and typed actions; UI geometry uses Math values | Engine, Math |
 | `GYO::UiRenderer` | UI draw list to renderer and text/texture resources | Ui, Render, Text |
 | Game | campaign, movement/combat rules, screen policy and presentation composition | selected public engine APIs |
-| UI editor | authoring session, selection, undo, export and preview | public Engine/Ui/Math APIs and selected adapters |
+| UI editor | authoring session, selection, undo, export and preview | public Engine/Ui/Math APIs, the framework's tool part and selected adapters |
+| Framework, tool part (`GYO::ToolFramework`, `GYO::ToolFrameworkGui`) | what two or more tools use: file access, the read-only catalog mount, writing a catalog entry, the ImGui and SDL renderer host, system path dialogs ([contract](framework/architecture.md)) | Engine, Os; the SDL platform and renderer adapters and ImGui for the window part |
 
 Optional SDL input, SDL_image, SDL_ttf, SDL renderer/SDL_GPU and ufbx adapters remain explicit choices. Backend-neutral core builds do not fetch SDL merely because another application uses it. Public neutral contracts do not expose native SDL/GPU pointers; concrete adapter APIs may expose their own native interoperability surface.
 
-The engine must not include game headers or understand Object_FPS asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. No new umbrella framework, scene hierarchy, ECS, plugin ABI or service locator is introduced by this organization.
+The engine must not include game headers or understand Object_FPS asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. No umbrella framework, scene hierarchy, ECS, plugin ABI or service locator is introduced by this organization. The framework layer ([framework](framework/architecture.md)) is not an umbrella: no product has to go through it, a product that does not use it builds and runs without it, and its game part is extracted only when a second game puts the engine together in the same way.
 
 `RuntimeLoop` calls `ProcessEvents(frame)`, `Update(frame)` and `Render(frame)` in order. A phase returning `RuntimeControl::Stop` ends the loop immediately. `IRuntimePort<Snapshot, Command, Event>` is a typed observation/intent boundary; each game retains ownership of its payloads and legality rules. Borrowed observations remain valid only until the runtime advances.
 
@@ -175,6 +177,10 @@ Compatible-skeleton clip transfer takes explicit node bindings and a displacemen
 scale, corrects reference frames and preserves target geometry and skin bindings.
 It validates mapped hierarchy and supported scale constraints; applications own
 node-name selection and the decision to enable cross-source binding.
+It also owns `gyo.anim_events`, the data contract for named moments on a model's
+clips: it parses and binds the files but keeps the names opaque; what an event
+triggers, and when that is in Engine time, belongs to the product
+([animation events](architecture/animation-events.md)).
 `ModelRenderer`, inside `engine/render/model`, depends on Model and Render to
 manage shared model/material resources and independent skinned mesh instances.
 It consumes an evaluated pose without advancing an animation clock. Model and

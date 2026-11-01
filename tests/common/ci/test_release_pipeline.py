@@ -24,7 +24,7 @@ for folder in ("build", "build/ci/common", "build/acceptance/common"):
 
 from release_pipeline import (TAG_VISIBILITY_DELAYS, ApiError, GitHubApi, SafeRedirectHandler, TransientApiError,
                               prepare_draft as _prepare_draft, retry_after_seconds, verify_remote_tag)
-from release_support import (PLATFORMS, Package,
+from release_support import (RELEASE_PLATFORMS, Package,
                              ReleaseError, archive_name as _archive_name, checksum_document,
                              load_packages as _load_packages, validate_archive as _validate_archive)
 from release_channels import derive_trains, prepare_event
@@ -38,7 +38,7 @@ OTHER_COMMIT = "b" * 40
 APP = "sample_app"
 ARCHIVE_ROOT = "gyo-" + APP
 METADATA_PATH = ARCHIVE_ROOT + "/build_metadata.json"
-EXPECTED_PAIRS = [(APP, platform) for platform in PLATFORMS]
+EXPECTED_PAIRS = [(APP, platform) for platform in RELEASE_PLATFORMS]
 # One archive and one checksum per expected product/platform pair.
 ASSET_COUNT = 2 * len(EXPECTED_PAIRS)
 
@@ -68,10 +68,10 @@ def manifest(platform="windows-x64", product=APP):
         "checks": [
             {"owner": product, "name": "startup", "command": ["@EXECUTABLE:main@", "--startup"],
              "environment": [], "timeout": 30, "profiles": ["quick", "release"],
-             "platforms": list(PLATFORMS), "gpu": False},
+             "platforms": list(RELEASE_PLATFORMS), "gpu": False},
             {"owner": product, "name": "content", "command": ["@EXECUTABLE:main@", "--validate"],
              "environment": [], "timeout": 30, "profiles": ["release"],
-             "platforms": list(PLATFORMS), "gpu": False},
+             "platforms": list(RELEASE_PLATFORMS), "gpu": False},
             {"owner": product, "name": "render", "command": ["@EXECUTABLE:main@", "--render"],
              "environment": [], "timeout": 30, "profiles": ["quick", "release"],
              "platforms": ["linux-x64"], "gpu": True},
@@ -145,7 +145,7 @@ def package(platform="windows-x64", commit=COMMIT, *, product=APP, extra=(), ext
 
 
 def packages(**kwargs):
-    return [package(platform, **kwargs) for platform in PLATFORMS]
+    return [package(platform, **kwargs) for platform in RELEASE_PLATFORMS]
 
 
 class FakeGit:
@@ -341,16 +341,16 @@ class PackageTests(unittest.TestCase):
 
     def test_complete_matrix_loads(self):
         self.write_packages()
-        self.assertEqual(len(load_packages(self.work, COMMIT)), len(PLATFORMS))
+        self.assertEqual(len(load_packages(self.work, COMMIT)), len(RELEASE_PLATFORMS))
 
     def test_metadata_only_archives_fail_for_every_platform(self):
-        for platform in PLATFORMS:
+        for platform in RELEASE_PLATFORMS:
             item = package(platform, omit=tuple(package_contents(platform)))
             with self.subTest(platform=platform), self.assertRaisesRegex(ReleaseError, "Missing required"):
                 validate_archive(item.name, item.data, platform, COMMIT)
 
     def test_each_required_file_must_exist_and_be_nonempty(self):
-        for platform in PLATFORMS:
+        for platform in RELEASE_PLATFORMS:
             for path in package_contents(platform):
                 for option, message in (("omit", "Missing required"), ("empty", "nonempty and regular")):
                     item = package(platform, **{option: (path,)})
@@ -358,7 +358,7 @@ class PackageTests(unittest.TestCase):
                         validate_archive(item.name, item.data, platform, COMMIT)
 
     def test_required_file_cannot_be_a_directory_or_link(self):
-        for platform in PLATFORMS:
+        for platform in RELEASE_PLATFORMS:
             for path in package_contents(platform):
                 for kind in (tarfile.DIRTYPE, tarfile.SYMTYPE, tarfile.LNKTYPE):
                     member = tarfile.TarInfo(f"{ARCHIVE_ROOT}/{path}")
@@ -369,7 +369,7 @@ class PackageTests(unittest.TestCase):
                         validate_archive(item.name, item.data, platform, COMMIT)
 
     def test_unix_executable_requires_owner_execute_mode(self):
-        for platform in ("linux-x64", "macos-arm64", "macos-x64"):
+        for platform in ("linux-x64", "macos-arm64"):
             for mode in (0o644, 0o001, 0o010):
                 item = package(platform, executable_mode=mode)
                 with self.subTest(platform=platform, mode=mode), self.assertRaisesRegex(ReleaseError, "execute permission"):

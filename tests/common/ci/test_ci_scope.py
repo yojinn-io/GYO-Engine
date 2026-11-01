@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
     sys.path.insert(0, str(ROOT / folder))
 from workspace import TemporaryDirectory
-from app_registry import PLATFORMS, TOOLCHAINS
+from app_registry import RELEASE_PLATFORMS, TOOLCHAINS
 import ci_scope
 from ci_scope import Scope, ScopeError, select_scope
 
@@ -108,29 +108,29 @@ class ScopePolicyTests(unittest.TestCase):
         def listing(runs):
             return {"total_count": len(runs), "check_runs": runs}
 
-        passed = [run(platform) for platform in PLATFORMS]
-        self.assertTrue(ci_scope.l1_rows_passed(listing(passed + [run("extra", conclusion="failure")]), PLATFORMS))
-        for index, platform in enumerate(PLATFORMS):
+        passed = [run(platform) for platform in RELEASE_PLATFORMS]
+        self.assertTrue(ci_scope.l1_rows_passed(listing(passed + [run("extra", conclusion="failure")]), RELEASE_PLATFORMS))
+        for index, platform in enumerate(RELEASE_PLATFORMS):
             with self.subTest(platform=platform):
-                self.assertFalse(ci_scope.l1_rows_passed(listing(passed[:index] + passed[index + 1:]), PLATFORMS))
+                self.assertFalse(ci_scope.l1_rows_passed(listing(passed[:index] + passed[index + 1:]), RELEASE_PLATFORMS))
                 for status, conclusion in (("completed", "failure"), ("completed", "cancelled"), ("completed", "skipped"),
                                            ("completed", "neutral"), ("in_progress", None), ("queued", None)):
                     changed = passed[:index] + [run(platform, status, conclusion)] + passed[index + 1:]
-                    self.assertFalse(ci_scope.l1_rows_passed(listing(changed), PLATFORMS), (status, conclusion))
+                    self.assertFalse(ci_scope.l1_rows_passed(listing(changed), RELEASE_PLATFORMS), (status, conclusion))
                 # A same-named row from another app never verifies a commit.
                 spoofed = passed[:index] + [run(platform, app="other-app")] + passed[index + 1:]
-                self.assertFalse(ci_scope.l1_rows_passed(listing(spoofed), PLATFORMS))
+                self.assertFalse(ci_scope.l1_rows_passed(listing(spoofed), RELEASE_PLATFORMS))
                 # Every row of a name must have passed.
                 twice = passed + [run(platform, conclusion="failure")]
-                self.assertFalse(ci_scope.l1_rows_passed(listing(twice), PLATFORMS))
+                self.assertFalse(ci_scope.l1_rows_passed(listing(twice), RELEASE_PLATFORMS))
         for malformed in ({"total_count": len(passed) + 1, "check_runs": passed}, {"check_runs": passed},
                           {"total_count": 0}, [], None):
             with self.subTest(malformed=malformed), self.assertRaises(ScopeError):
-                ci_scope.l1_rows_passed(malformed, PLATFORMS)
+                ci_scope.l1_rows_passed(malformed, RELEASE_PLATFORMS)
 
     def test_failed_check_run_lookup_raises_and_runs_l1(self):
         # Any executable that rejects the gh arguments stands in for a failed API call.
-        lookup = ci_scope.github_l1_lookup("owner/repository", PLATFORMS, gh=sys.executable)
+        lookup = ci_scope.github_l1_lookup("owner/repository", RELEASE_PLATFORMS, gh=sys.executable)
         with self.assertRaises(ScopeError):
             lookup("0" * 40)
         scope = select_scope("pull_request", pull_request(False), lambda: ["engine/a.cpp"], False,
@@ -151,13 +151,13 @@ class ScopePolicyTests(unittest.TestCase):
 
     def test_platform_rows_come_only_from_the_toolchain_table(self):
         rows = ci_scope.platform_matrix()["include"]
-        self.assertEqual([row["platform"] for row in rows], list(PLATFORMS))
+        self.assertEqual([row["platform"] for row in rows], list(RELEASE_PLATFORMS))
         for row in rows:
             with self.subTest(platform=row["platform"]):
                 self.assertEqual(row, dict(platform=row["platform"], **TOOLCHAINS[row["platform"]]))
                 self.assertFalse({"product", "kind", "tools"} & set(row))
 
-    def test_cross_built_rows_share_their_host_but_not_their_target_caches(self):
+    def test_rows_build_natively_on_their_own_host_with_their_own_caches(self):
         # Each row owns its preset, so its build tree and compiler cache family
         # (keyed by platform and preset) never mix target architectures.
         self.assertEqual(len({row["preset"] for row in TOOLCHAINS.values()}), len(TOOLCHAINS))
@@ -169,8 +169,10 @@ class ScopePolicyTests(unittest.TestCase):
                 self.assertEqual(host["host"], row["host"])
                 self.assertEqual((host["runner"], host["toolchain"]), (row["runner"], row["toolchain"]))
                 self.assertEqual(row["cpu_execution"] == "native", row["host"] == platform)
-        self.assertEqual((TOOLCHAINS["macos-x64"]["host"], TOOLCHAINS["macos-x64"]["cpu_execution"]),
-                         ("macos-arm64", "rosetta2"))
+        # macos-x64 is a local build target only: no CI row, no cross build.
+        self.assertNotIn("macos-x64", TOOLCHAINS)
+        self.assertEqual({(platform, row["host"], row["cpu_execution"]) for platform, row in TOOLCHAINS.items()},
+                         {(platform, platform, "native") for platform in TOOLCHAINS})
 
 
 class GitRepositoryCase(unittest.TestCase):

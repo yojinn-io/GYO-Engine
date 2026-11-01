@@ -8,9 +8,11 @@
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/ContentManifest.hpp"
+#include "engine/asset/catalog/CatalogParser.hpp"
 #include "engine/asset/loaders/TextLoader.hpp"
 #include "engine/asset/loaders/sdl_image/SdlImageTextureLoader.hpp"
 #include "engine/asset/loading/NativeFileAssetSource.hpp"
+#include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Quaternion.hpp"
 #include "gyo/AppConfig.hpp"
@@ -53,11 +55,21 @@ Engine::Asset::AssetCatalog LoadCatalog() {
     if (!manifest) throw std::runtime_error(manifest.error().message + " " + manifest.error().detail);
     auto catalog = manifest.value().LoadCatalogs(root);
     if (!catalog) throw std::runtime_error(catalog.error().message + " " + catalog.error().detail);
+    // The hair accessory is test-only content outside the shipped product.
+    Engine::Asset::Catalog::CatalogParser parser;
+    Engine::Asset::Resolver::AssetPathResolver::Options options;
+    options.assetsRoot = PVP_PRESENTATION_FIXTURE_DIR;
+    options.allowSchemes = false;
+    const Engine::Asset::Resolver::AssetPathResolver resolver(std::move(options));
+    const auto fixture = catalog.value().AppendFromFile(
+        std::string(PVP_PRESENTATION_FIXTURE_DIR) + "/asset_catalog.json", parser, resolver);
+    if (!fixture) throw std::runtime_error(fixture.error().message + " " + fixture.error().detail);
     return std::move(catalog).value();
 }
 
 // A malformed definition is isolated to this fixture. All other data comes
-// from the selected owner's assembled product, never from v2 or a source fallback.
+// from the selected owner's assembled product, never from v2 or a source fallback,
+// except the test-only hair accessory appended from the fixture catalog.
 class DefinitionSource final : public Engine::Asset::Loading::IAssetSource {
 public:
     std::unordered_map<std::string, std::string> overrides;
@@ -254,7 +266,7 @@ TEST_CASE("PvP player content resolves owner-local character clips materials and
     CHECK(AccessoryDefinition().character->model->nodes.at(hair.targetNode).name == "Head");
     CHECK(hair.presentation->model->nodes.at(hair.sourceNode).name == "Head");
     REQUIRE(definition.weapon);
-    CHECK(definition.weapon->modelAssetId.debugName == "object_fps_pvp.model.weapon.ultimate_pistol_1.world");
+    CHECK(definition.weapon->modelAssetId.debugName == "object_fps_pvp.model.weapon.nailer_v2.world");
     CHECK(model.nodes.at(definition.weaponNode).name == "hand_r");
     CHECK(model.nodes.at(definition.upperBodyRoot).name == "spine_01");
     REQUIRE(definition.upperBodyMask.size() == model.nodes.size());
@@ -1166,6 +1178,36 @@ TEST_CASE("characterization: production weapon mount rotation normalizes as the 
     CHECK(loaded.w == legacy.w);
 }
 
+TEST_CASE("production weapon binds its reload animation events within the reload clip") {
+    PresentationAssets fixture;
+    std::string error;
+    const auto definition = fps::LoadWeaponPresentationDefinition(
+        fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error);
+    REQUIRE_MESSAGE(definition, error);
+    const auto& reload = definition->events[2]; // Idle, Shoot, Reload, Draw, Hide
+    REQUIRE_FALSE(reload.empty());
+    const double duration = definition->model->clips[definition->clips[2]].durationSeconds;
+    for (const auto& event : reload) CHECK(event.seconds <= duration);
+    CHECK(std::any_of(reload.begin(), reload.end(), [](const auto& event) { return event.name == "magazine_in"; }));
+    CHECK(definition->events[0].empty());
+}
+
+TEST_CASE("weapon presentation rejects animation events of another model or a missing clip") {
+    const auto rejected = [](auto edit) {
+        PresentationAssets fixture;
+        fixture.Override("object_fps_pvp.anim_events.nailer_v2.viewmodel", edit);
+        std::string error;
+        CHECK_FALSE(fps::LoadWeaponPresentationDefinition(
+            fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error));
+        return error;
+    };
+    CHECK(rejected([](nlohmann::json& json) { json["model_asset_id"] = "object_fps_pvp.model.other"; })
+              .find("belong to model") != std::string::npos);
+    CHECK(rejected([](nlohmann::json& json) { json["clips"]["Armature|Reload2"] = json["clips"]["Armature|Reload"]; })
+              .find("InvalidAnimationEvents") != std::string::npos);
+    CHECK(rejected([](nlohmann::json& json) { json["version"] = 2; }).find("InvalidAnimationEvents") != std::string::npos);
+}
+
 TEST_CASE("characterization: production weapon muzzle keeps its load-time value and drifts only under recoil") {
     PresentationAssets fixture;
     std::string error;
@@ -1261,12 +1303,12 @@ TEST_CASE("PvP player weapon mount rejects degenerate and overflowing rotations"
 }
 
 namespace {
-// Elevation in degrees of the pistol barrel (the weapon model's +X axis) in a
-// composed body pose, relative to the horizontal model plane.
+// Elevation in degrees of the nailer barrel (the weapon model's -Z axis, its
+// nose) in a composed body pose, relative to the horizontal model plane.
 double MuzzleElevation(const PlayerPresentationDefinition& definition, const std::vector<Matrix4>& global) {
     const auto mount = Multiply(global.at(definition.weaponNode), ToMatrix(definition.weaponMount));
     const auto origin = Engine::Math::TransformPoint(mount, Vec3{0, 0, 0});
-    const auto barrel = Engine::Math::TransformPoint(mount, Vec3{1, 0, 0}) - origin;
+    const auto barrel = Engine::Math::TransformPoint(mount, Vec3{0, 0, -1}) - origin;
     const auto length = std::sqrt(barrel.x * barrel.x + barrel.y * barrel.y + barrel.z * barrel.z);
     return std::asin(barrel.y / length) * 180.0 / std::numbers::pi;
 }
@@ -1341,7 +1383,7 @@ TEST_CASE("PvP aim weight clamps the pitch and maps down to positive weights") {
     CHECK_FALSE(error.empty());
 }
 
-TEST_CASE("PvP remote upper body follows the pitch: a positive pitch points the pistol down") {
+TEST_CASE("PvP remote upper body follows the pitch: a positive pitch points the weapon down") {
     // The muzzle follows the look direction within the blend's curvature.
     for (const double degrees : {-80.0, -60.0, -30.0, -10.0, 0.0, 10.0, 30.0, 60.0, 80.0}) {
         CAPTURE(degrees);
@@ -1373,13 +1415,13 @@ TEST_CASE("PvP shots and reloads keep the remote pitch: the clip adds its motion
             const double seconds = fraction * ClipSeconds(clip);
             const auto level = Aimed(0, upper, seconds);
             const auto raised = Aimed(pitch, upper, seconds);
-            // The clip moves the body, and the pitch still raises the pistol by about 40 degrees.
+            // The clip moves the body, and the pitch still raises the weapon by about 40 degrees.
             CHECK(MatrixDifference(level.body.globalTransforms.at(definition.weaponNode),
                                    Aimed(0).body.globalTransforms.at(definition.weaponNode)) > 1e-3);
             const double lift = MuzzleElevation(definition, raised.body.globalTransforms) -
                                  MuzzleElevation(definition, level.body.globalTransforms);
             // A shot keeps the barrel's raise (measured 38.8-39.3 degrees); a reload
-            // turns the pistol toward the body, so its barrel only stays raised.
+            // turns the weapon toward the body, so its barrel only stays raised.
             if (upper == PlayerUpperAction::Shoot) CHECK(std::abs(lift - 40.0) < 3.0);
             else CHECK(lift > 20.0);
             // Exactly the aim pose plus the clip's local motion since its first frame.

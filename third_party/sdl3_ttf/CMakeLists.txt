@@ -22,6 +22,7 @@ FetchContent_Declare(
     SDL3_ttf
     GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
     GIT_TAG        release-3.2.2
+    GIT_SHALLOW    TRUE
     # Only FreeType is enabled above. Avoid cloning disabled shaping/SVG
     # dependencies into the build tree (or, on a failed retry, the source tree).
     GIT_SUBMODULES external/freetype

@@ -14,7 +14,7 @@ from workspace import TemporaryDirectory
 from archive_package import package_metadata
 from test_release_pipeline import APP, COMMIT, evidence, manifest, package_contents, package
 from app_registry import release_products
-from release_support import validate_archive, PLATFORMS, ReleaseError
+from release_support import validate_archive, RELEASE_PLATFORMS, ReleaseError
 from package_contract import installed_required_files
 from package_contract import manifest_path
 
@@ -86,17 +86,16 @@ class ArchiveMetadataTests(unittest.TestCase):
     def test_execution_mode_is_recorded_and_restricted(self):
         self.assertEqual(self.metadata()["cpu_execution"], "native")
         self.report.write_text(json.dumps(evidence(self.contract)), encoding="utf-8")
-        translated = package_metadata(COMMIT, self.contract, self.report, cpu_execution="rosetta2")
-        self.assertEqual(translated["cpu_execution"], "rosetta2")
-        for mode in ("", "qemu", None):
+        # Every CI row runs its target natively; Rosetta 2 translation is no longer a mode.
+        for mode in ("", "qemu", "rosetta2", None):
             with self.subTest(mode=mode), self.assertRaises(ValueError):
                 package_metadata(COMMIT, self.contract, cpu_execution=mode)
 
     def test_archive_identity_is_the_recorded_target_not_the_archiving_host(self):
-        # A cross-built package keeps its target identity on any host; the
-        # build host is provenance only.
+        # A package keeps its target identity on any archiving host; the build
+        # host is provenance only.
         root = Path(self.workspace.name)
-        for platform in PLATFORMS:
+        for platform in RELEASE_PLATFORMS:
             with self.subTest(platform=platform):
                 stage = root / f"stage-{platform}"
                 for name, data in package_contents(platform).items():
@@ -105,12 +104,12 @@ class ArchiveMetadataTests(unittest.TestCase):
                     path.write_bytes(data)
                 output = root / f"gyo-{APP}-{platform}.tar.gz"
                 result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/archive_package.py"),
-                    "--stage", str(stage), "--product", APP, "--revision", COMMIT, "--cpu-execution", "rosetta2",
+                    "--stage", str(stage), "--product", APP, "--revision", COMMIT, "--cpu-execution", "native",
                     "--output", str(output)], capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 metadata = json.loads((stage / "build_metadata.json").read_text(encoding="utf-8"))
-                self.assertEqual((metadata["platform"], metadata["cpu_execution"]), (platform, "rosetta2"))
-                mismatch = next(other for other in PLATFORMS if other != platform)
+                self.assertEqual((metadata["platform"], metadata["cpu_execution"]), (platform, "native"))
+                mismatch = next(other for other in RELEASE_PLATFORMS if other != platform)
                 result = subprocess.run([sys.executable, str(ROOT / "build/ci/common/archive_package.py"),
                     "--stage", str(stage), "--product", APP, "--revision", COMMIT, "--platform", mismatch,
                     "--output", str(root / "mismatch.tar.gz")], capture_output=True, text=True, timeout=30)
@@ -120,8 +119,8 @@ class ArchiveMetadataTests(unittest.TestCase):
     def test_toolchain_archives_are_valid_without_any_game(self):
         registry = Path(self.workspace.name) / "empty.csv"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n")
-        self.assertEqual(set(release_products(registry)), {("toolchain", platform) for platform in PLATFORMS})
-        for platform in PLATFORMS:
+        self.assertEqual(set(release_products(registry)), {("toolchain", platform) for platform in RELEASE_PLATFORMS})
+        for platform in RELEASE_PLATFORMS:
             built = package(platform, product="toolchain")
             validate_archive(built.name, built.data, "toolchain", platform, COMMIT)
 

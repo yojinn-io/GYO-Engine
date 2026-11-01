@@ -60,14 +60,14 @@
   - policy 突變 p02～p30（29 個）全部被新判定殺掉。其中 p24 在舊判定下存活，現在由 T2 殺掉。
   - p01（失焦時不設 `focused=false`）是等價突變，不列入：失焦一定釋放，之後的事件在同一幀內不會讓結果不同。
   - 守衛的 g1～g4 都以預期訊息失敗。g2 是 configure 時的連結守衛，產品的突變工具為此加了 `expect_build_failure`，工具的單元測試補了一個案例。
-  - 紀錄：scratchpad 的 `mutants-sdl-j1.log`、`mutants-sdl-j1.json`。
-- **舊判定的突變**：唯讀調查時在 scratch 量測（腳本 `scratchpad/mut/run.py`）。PointerCapture.cpp 的 30 個突變殺 28 個：p01 是等價突變，p24 存活。SdlInput 的 s01～s04、s06 由舊判定殺掉，s05 存活。
+  - 紀錄：scratchpad 的 `mutants-sdl-j1.log`、`mutants-sdl-j1.json`。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
+- **舊判定的突變**：唯讀調查時在 scratch 量測（腳本 `scratchpad/mut/run.py`）。PointerCapture.cpp 的 30 個突變殺 28 個：p01 是等價突變，p24 存活。SdlInput 的 s01～s04、s06 由舊判定殺掉，s05 存活。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
 - **突變（L5、L3 處理後重跑）**：產品 34／34（加 v-p31）；Engine `m-inside-stale`、`m-focus-gain-state` 2／2；v-p33（等價）在新判定下通過。紀錄：scratchpad 的 `mutants-sdl-j1-full.log`。
 - **獨立核對**（另一位審查者，2026-10-23）：
   - 自寫錄製程式，以 oracle 的狀態（而非政策的）作期待值，並由 oracle 獨立計數 `releasesWhileCaptured`；結果與 fixture 的資料列逐位元組相同。
   - 每幀清除、T2 的處理與產品、舊 harness 等價。
   - 第 1、3 點成立；第 2、4、5 點部分成立。指出的 L5、v-s07～s10、p24 的產品層等價、過時的宣告文字，都已在本版處理或列為待決。
-  - 紀錄：scratchpad 的 `verify-j1/`。
+  - 紀錄：scratchpad 的 `verify-j1/`。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
 
 ## 決定（D169）
 

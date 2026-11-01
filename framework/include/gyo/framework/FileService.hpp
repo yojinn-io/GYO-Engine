@@ -1,0 +1,47 @@
+#pragma once
+
+#include "gyo/framework/FrameworkError.hpp"
+
+#include <chrono>
+#include <cstdint>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <string_view>
+
+namespace Gyo::Tools::Framework {
+
+struct FileStamp final {
+    bool exists{};
+    std::uintmax_t size{};
+    // Since the Unix epoch, as engine/io's native backend reports it; 0 when the file system keeps none.
+    std::chrono::nanoseconds writeTime{};
+    std::uint64_t contentHash{};
+
+    friend bool operator==(const FileStamp&, const FileStamp&) noexcept = default;
+};
+
+[[nodiscard]] Result<std::string, FileError> ReadTextFile(
+    const std::filesystem::path& path);
+
+// Whether anything (a file, a directory) exists at the path.
+[[nodiscard]] Result<bool, FileError> PathExists(const std::filesystem::path& path);
+
+// A path that does not exist is a success with exists == false.
+[[nodiscard]] Result<FileStamp, FileError> ProbeFileStamp(
+    const std::filesystem::path& path);
+
+[[nodiscard]] Result<void, FileError> WriteTextFileAtomically(
+    const std::filesystem::path& path,
+    std::string_view text);
+
+// The absolute, lexically normal form of path. Unlike std::filesystem::absolute
+// it never throws: if the current directory is unavailable the path is kept as
+// given, and the file operation that follows reports the failure.
+[[nodiscard]] std::filesystem::path AbsolutePath(const std::filesystem::path& path);
+
+[[nodiscard]] bool IsPathWithin(
+    const std::filesystem::path& candidate,
+    const std::filesystem::path& root);
+
+} // namespace Gyo::Tools::Framework

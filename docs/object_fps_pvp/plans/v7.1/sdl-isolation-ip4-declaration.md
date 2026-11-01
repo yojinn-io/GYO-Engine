@@ -9,7 +9,7 @@
   - probe 的 SDL 使用；
   - L2 門檻的來源；
   - pointer capture 的凍結 oracle。
-  - 掃描腳本與結果放在本會話的 scratchpad（`scan.py`、`hits.txt`、`mut/`）。
+  - 掃描腳本與結果放在本會話的 scratchpad（`scan.py`、`hits.txt`、`mut/`）。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
 - 編號說明：`sdl-isolation.md` 第 5 節的「U5、U6 的判定變更」沿用規劃草案的編號。
   - 草案的 U5 是「合成的 MOVED 改成真正移動視窗」，本文件記為 **J2**。
   - 草案的 U6 是「pointer capture 的凍結 oracle 改 golden」，本文件記為 **J1**。
@@ -128,7 +128,7 @@ S2 的做法是「各樹用自己的 probe」，所以下面這些差異都列�
    - L4：檔頭規則加上保留舊檔。重新錄製只在事前宣告的政策變更時才做。
 5. **根據與證據**：
    - 子 agent 的突變結果：`PointerCapture.cpp` 30 個中殺 28 個。存活的是 p01（等價突變）與 p24（缺口，T2 處理）。`SdlInput` 的 s01～s06 結果如上。
-   - 腳本：scratchpad 的 `mut/run.py`、`mut/mutants.json`。
+   - 腳本：scratchpad 的 `mut/run.py`、`mut/mutants.json`。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
    - 決定的由來：IP 的 U6（`PLAN.md:706`）、M7（IP HANDOFF）。
    - 本批把 p02～p30（p01 除外）登記到 `tests/object_fps_pvp/mutations.json`（`pointer_capture` check）；s06 登記在 Engine 的目錄（`m-inside-stale`）。實作後的完整 §14.4 見 [sdl-isolation-j1-judgment-change.md](sdl-isolation-j1-judgment-change.md)。
 

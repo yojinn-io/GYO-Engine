@@ -89,11 +89,19 @@ class GoRecordTests(unittest.TestCase):
             ("invalid platforms", {"go_services": [dict(service, platforms=[])]}),
             ("invalid platforms", {"go_services": [dict(service, platforms=["linux-x64", "linux-x64"])]}),
             ("invalid platforms", {"go_services": [dict(service, platforms=["linux-arm64"])]}),
+            ("no release platform", {"go_services": [dict(service, platforms=["macos-x64"])]}),
             ("Duplicate Go service", {"go_services": [service, service]}),
             ("Invalid Go service record", {"go_services": [dict(service, extra=True)]}),
         ):
             with self.subTest(label=label, changes=changes), self.assertRaisesRegex(GoCheckError, label):
                 self.load(**changes)
+
+    def test_local_only_service_platforms_are_never_cross_built(self):
+        # macos-x64 is a local build target; CI archives services only for release platforms.
+        service = {"owner": "alpha", "role": "relay", "module": "apps/alpha", "package": "./cmd/relay",
+                   "platforms": ["macos-x64", "linux-x64", "macos-arm64"]}
+        _, services = self.load(go_services=[service])
+        self.assertEqual(services[0].platforms, ("linux-x64", "macos-arm64"))
 
     def test_rows_select_engine_layer_or_their_own_product(self):
         modules, services = self.load()

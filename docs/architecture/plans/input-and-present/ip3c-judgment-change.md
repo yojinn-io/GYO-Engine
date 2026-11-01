@@ -52,5 +52,5 @@ pump 交出的事件時間等於事件被 push 的 Engine 時間；容許的誤�
 
 - Linux 兩時鐘的來源：`build/target/_build/test/_deps/sdl3-src/src/timer/unix/SDL_systimer.c:54-59`；Engine：`engine/time/include/engine/time/MonotonicClock.hpp`；契約的 Known limits：`docs/architecture/platform-sdl.md`。
 - Apple 的 24 MHz 與 ns 換算：`SDL_systimer.c:121-133`、`SDL_timer.c:600-602`、`:624-636`；push 時由 SDL 補時間：`SDL_events.c:1802-1803`。
-- 本機 Intel 200 次的量測、xhigh 審查的模擬 `sim.py`、核對者的 `verify/simlinux.py`、`verify/explore*.py`：都在本會話的 scratchpad（暫存，不在 repo）。核准後，數據摘要寫進 IP 的 HANDOFF。
-- 突變：`docs/architecture/plans/input-and-present/scripts/mutations.json`（22 個）；執行紀錄 `scratchpad/mutants-v3.log`。
+- 本機 Intel 200 次的量測、xhigh 審查的模擬 `sim.py`、核對者的 `verify/simlinux.py`、`verify/explore*.py`：都在本會話的 scratchpad（暫存，不在 repo）。核准後，數據摘要寫進 IP 的 HANDOFF。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
+- 突變：`docs/architecture/plans/input-and-present/scripts/mutations.json`（22 個）；執行紀錄 `scratchpad/mutants-v3.log`。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）

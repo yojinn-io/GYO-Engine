@@ -25,7 +25,7 @@ from release_channels import (EVIDENCE_REFERENCE_LIMIT, SNAPSHOT_KEEP, TOOLS_TRA
                               latest_other_snapshot, select_expired_snapshots, select_orphan_snapshot_tags, select_trial, snapshot_tag,
                               train_matrix, verification_level)
 from release_pipeline import ApiError, prepare_draft, publish_snapshot
-from release_support import (PLATFORMS, EvidenceItem, ReleaseError, checksum_document, describe_item,
+from release_support import (RELEASE_PLATFORMS, EvidenceItem, ReleaseError, checksum_document, describe_item,
                              load_packages, load_release_evidence, load_services, validate_release_evidence,
                              validate_service_archive)
 from test_release_pipeline import (APP, COMMIT, OTHER_COMMIT, FakeApi, FakeGit, evidence, manifest, package)
@@ -34,7 +34,7 @@ from test_release_pipeline import (APP, COMMIT, OTHER_COMMIT, FakeApi, FakeGit, 
 SECOND = "second_app"
 ROLE = "relay"
 # A game on every platform with a service on two of them, and a game without Linux.
-REGISTRY_PAIRS = [(APP, platform) for platform in PLATFORMS] + [(SECOND, "windows-x64"), (SECOND, "macos-arm64")]
+REGISTRY_PAIRS = [(APP, platform) for platform in RELEASE_PLATFORMS] + [(SECOND, "windows-x64"), (SECOND, "macos-arm64")]
 SERVICE_PLATFORMS = ("linux-x64", "windows-x64")
 # 2026-10-02T12:00:00Z
 COMMITTED_AT = 1790942400
@@ -74,8 +74,8 @@ class TrainDerivationTests(unittest.TestCase):
     def test_trains_are_the_tools_train_and_one_train_per_enabled_game(self):
         trains = derive_trains(REGISTRY_PAIRS)
         self.assertEqual(list(trains), [TOOLS_TRAIN, APP, SECOND])
-        self.assertEqual(trains[TOOLS_TRAIN].pairs, [("toolchain", platform) for platform in PLATFORMS])
-        self.assertEqual(trains[APP].pairs, [(APP, platform) for platform in PLATFORMS])
+        self.assertEqual(trains[TOOLS_TRAIN].pairs, [("toolchain", platform) for platform in RELEASE_PLATFORMS])
+        self.assertEqual(trains[APP].pairs, [(APP, platform) for platform in RELEASE_PLATFORMS])
         # Platforms follow the release platform order, not registry order.
         self.assertEqual(trains[SECOND].platforms, ("windows-x64", "macos-arm64"))
         self.assertEqual(derive_trains([]), {TOOLS_TRAIN: trains[TOOLS_TRAIN]})
@@ -367,12 +367,12 @@ class TrainArchiveTests(unittest.TestCase):
             f"gyo-{APP}-{ROLE}-linux-x64.tar.gz", f"gyo-{APP}-{ROLE}-windows-x64.tar.gz"])
         self.assertTrue(all(item.role == ROLE and item.product == APP for item in services))
         # The client/match packages and the services come from the same commit.
-        packages = [package(platform) for platform in PLATFORMS]
+        packages = [package(platform) for platform in RELEASE_PLATFORMS]
         api = FakeApi(release=False, commit=None)
         with contextlib.redirect_stdout(io.StringIO()):
             prepare_draft(api, f"{APP}-v5.0.0", COMMIT, False, packages + services,
                           expected_pairs=self.train.pairs, expected_services=expected, notes="Notes")
-        self.assertEqual(len(api.assets), 2 * (len(PLATFORMS) + len(SERVICE_PLATFORMS)))
+        self.assertEqual(len(api.assets), 2 * (len(RELEASE_PLATFORMS) + len(SERVICE_PLATFORMS)))
         self.assertEqual(api.release["body"], "Notes")
         self.assertTrue(api.release["generate_release_notes"])
         for missing in (services[:1], []):
@@ -477,7 +477,7 @@ class ManagedAssetTests(unittest.TestCase):
     def test_package_and_service_asset_names_never_overlap(self):
         from release_pipeline import MANAGED_PACKAGE_ASSET, MANAGED_SERVICE_ASSET
         from release_support import archive_name, service_archive_name
-        for platform in PLATFORMS:
+        for platform in RELEASE_PLATFORMS:
             for name in (archive_name(APP, platform), archive_name("toolchain", platform)):
                 for asset in (name, name + ".sha256"):
                     self.assertTrue(MANAGED_PACKAGE_ASSET.fullmatch(asset))
@@ -499,11 +499,13 @@ class ManagedAssetTests(unittest.TestCase):
 
 class NotesTests(unittest.TestCase):
     def test_verification_levels_come_from_recorded_build_facts(self):
-        cross = {"archive": "a", "kind": "package", "platform": "macos-x64", "build_os": "macOS-15.5-arm64-arm-64bit",
-                 "build_architecture": "arm64", "cpu_execution": "rosetta2", "profile": "quick", "checks": 3,
+        cross = {"archive": "a", "kind": "package", "platform": "macos-arm64", "build_os": "macOS-15.5-x86_64-i386-64bit",
+                 "build_architecture": "x86_64", "cpu_execution": "native", "profile": "quick", "checks": 3,
                  "gpu_checks": 0}
-        self.assertEqual(verification_level(cross), "cross-built on macOS arm64; 3 installed quick checks passed "
-                         "under Rosetta 2 translation; no GPU checks; no physical GPU")
+        self.assertEqual(verification_level(cross), "cross-built on macOS x86_64; 3 installed quick checks passed "
+                         "natively; no GPU checks; no physical GPU")
+        # Rosetta 2 translation is no CI execution mode any more; an archive claiming it is not trusted.
+        self.assertIn("unrecorded CPU execution", verification_level({**cross, "cpu_execution": "rosetta2"}))
         linux = {**cross, "platform": "linux-x64", "build_os": "Linux-6.8.0-x86_64-with-glibc2.39",
                  "build_architecture": "x86_64", "cpu_execution": "native", "gpu_checks": 1}
         self.assertEqual(verification_level(linux), "built on Linux x86_64; 3 installed quick checks passed natively; "
@@ -518,7 +520,7 @@ class NotesTests(unittest.TestCase):
 
     def test_release_notes_list_every_archive(self):
         train = derive_trains(REGISTRY_PAIRS)[APP]
-        items = [quick_package(platform) for platform in PLATFORMS]
+        items = [quick_package(platform) for platform in RELEASE_PLATFORMS]
         descriptions = [describe_item(item, "quick") for item in items]
         self.assertEqual({item["gpu_checks"] for item in descriptions if item["platform"] == "linux-x64"}, {1})
         self.assertEqual({item["checks"] for item in descriptions if item["platform"] == "windows-x64"}, {2})
@@ -543,7 +545,7 @@ def write_contract(root: Path, owner: str, release_evidence=None, *, raw=None) -
 
 
 def evidence_entry(name="visible_latency", platforms=None, description="Timed GUI latency run on a real display"):
-    return {"name": name, "description": description, "platforms": list(PLATFORMS) if platforms is None else platforms}
+    return {"name": name, "description": description, "platforms": list(RELEASE_PLATFORMS) if platforms is None else platforms}
 
 
 class ReleaseEvidenceTests(unittest.TestCase):
@@ -565,10 +567,20 @@ class ReleaseEvidenceTests(unittest.TestCase):
 
     def test_schema_accepts_declared_items_in_platform_order_and_no_section(self):
         document = {"version": 1, "checks": [], "release_evidence": [
-            evidence_entry(), evidence_entry("gpu_visual", ["macos-x64", "linux-x64"], "Physical GPU visual check")]}
+            evidence_entry(), evidence_entry("gpu_visual", ["macos-arm64", "linux-x64"], "Physical GPU visual check")]}
         self.assertEqual(validate_release_evidence(document), (
-            EvidenceItem("visible_latency", "Timed GUI latency run on a real display", tuple(PLATFORMS)),
-            EvidenceItem("gpu_visual", "Physical GPU visual check", ("linux-x64", "macos-x64"))))
+            EvidenceItem("visible_latency", "Timed GUI latency run on a real display", tuple(RELEASE_PLATFORMS)),
+            EvidenceItem("gpu_visual", "Physical GPU visual check", ("linux-x64", "macos-arm64"))))
+
+    def test_local_only_platforms_carry_no_release_evidence(self):
+        # Products declare evidence for every platform they build on; macos-x64
+        # is never published, so it is dropped, and an item naming only it fails.
+        mixed = {"release_evidence": [evidence_entry(platforms=["macos-x64", "linux-x64"])]}
+        self.assertEqual(validate_release_evidence(mixed)[0].platforms, ("linux-x64",))
+        with self.assertRaisesRegex(ReleaseError, "names no release platform"):
+            validate_release_evidence({"release_evidence": [evidence_entry(platforms=["macos-x64"])]})
+        with self.assertRaisesRegex(ReleaseError, "needs unique platforms"):
+            validate_release_evidence({"release_evidence": [evidence_entry(platforms=["macos-universal"])]})
         self.assertEqual(validate_release_evidence({"version": 1, "checks": []}), ())
         self.assertEqual(validate_release_evidence({"release_evidence": []}), ())
 
@@ -651,15 +663,15 @@ class ReleaseEvidenceTests(unittest.TestCase):
 
     def test_formal_notes_carry_a_checklist_and_snapshots_never_do(self):
         train = self.trains[APP]
-        descriptions = [describe_item(quick_package(platform), "quick") for platform in PLATFORMS]
-        items = (EvidenceItem("visible_latency", "Timed GUI latency run", ("linux-x64", "macos-x64")),
+        descriptions = [describe_item(quick_package(platform), "quick") for platform in RELEASE_PLATFORMS]
+        items = (EvidenceItem("visible_latency", "Timed GUI latency run", ("linux-x64", "macos-arm64")),
                  EvidenceItem("gpu_visual", "Physical GPU visual check", ("windows-x64",)))
         notes = render_notes(train=train, commit=COMMIT, profile="release", descriptions=descriptions,
                              snapshot=False, evidence=items, evidence_reference="https://example.test/issues/42")
         self.assertIn("### Real-device evidence (L4)", notes)
         self.assertIn("Evidence: <https://example.test/issues/42>\n", notes)
         self.assertIn("the publisher confirms every item", notes)
-        self.assertIn("- [ ] `visible_latency` (linux-x64, macos-x64): Timed GUI latency run\n", notes)
+        self.assertIn("- [ ] `visible_latency` (linux-x64, macos-arm64): Timed GUI latency run\n", notes)
         self.assertIn("- [ ] `gpu_visual` (windows-x64): Physical GPU visual check\n", notes)
         self.assertLess(notes.index("### CI verification"), notes.index("### Real-device evidence (L4)"))
         plain = render_notes(train=train, commit=COMMIT, profile="release", descriptions=descriptions, snapshot=False)

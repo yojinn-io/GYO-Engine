@@ -2,15 +2,14 @@
 
 #include "gyo/ui_editor/PathDialog.hpp"
 
-#include <memory>
+#include "gyo/framework/SdlPathDialogs.hpp"
 
 struct SDL_Window;
 
 namespace Gyo::Tools::UiEditor {
 
-// The operating system's file dialogs through SDL3. SDL may call back on
-// another thread, so results go through a shared inbox that outlives this
-// object until every pending dialog has answered.
+// The editor's dialogs on the framework's SDL dialogs: each purpose becomes a
+// request of the matching kind and filters, with the purpose as its tag.
 class SdlPathDialogs final : public PathDialogs {
 public:
     explicit SdlPathDialogs(SDL_Window* window);
@@ -19,8 +18,7 @@ public:
     [[nodiscard]] std::vector<PathDialogResult> TakeResults() override;
 
 private:
-    SDL_Window* window_;
-    std::shared_ptr<PathDialogInbox> inbox_;
+    Framework::SdlPathDialogs dialogs_;
 };
 
 } // namespace Gyo::Tools::UiEditor

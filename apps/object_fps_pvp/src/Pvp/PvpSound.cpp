@@ -59,6 +59,12 @@ bool PvpSound::Initialize(const SoundSettings& settings, const ClipSource& sourc
             return false;
         }
     }
+    for (const auto& sound : settings.eventSounds) {
+        if (sound.syncSeconds > impl_->seconds[static_cast<std::size_t>(sound.cue)]) {
+            error = "Sound settings: animation event '" + sound.event + "' syncs beyond the end of its cue's clip";
+            return false;
+        }
+    }
     auto mixer = Engine::Audio::Mixer::Create(Engine::Audio::MixerConfig{}, std::move(bank));
     if (!mixer) { error = Engine::Base::Describe(mixer.error()); return false; }
     auto submitter = mixer->CreateSubmitter();
@@ -79,11 +85,6 @@ bool PvpSound::Initialize(const SoundSettings& settings, const ClipSource& sourc
               static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
                   Engine::Audio::MixerConfig{}.scheduleDelay).count()));
     return true;
-}
-
-double PvpSound::ClipSeconds(const SoundCue cue) const noexcept {
-    const auto index = static_cast<std::size_t>(cue);
-    return index < SoundCueCount ? impl_->seconds[index] : 0;
 }
 
 void PvpSound::Play(const SoundCue cue, const Engine::Time::TimePoint at, const StereoGains gains) {

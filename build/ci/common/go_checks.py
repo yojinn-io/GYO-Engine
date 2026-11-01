@@ -30,7 +30,7 @@ import tarfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "acceptance/common"))
 
-from package_contract import PLATFORMS, validate_product
+from package_contract import PLATFORMS, RELEASE_PLATFORMS, validate_product
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -135,7 +135,12 @@ def load_record(build_info: Path, repository: Path = ROOT) -> tuple[list[Module]
         if (not isinstance(platforms, list) or not platforms or len(set(platforms)) != len(platforms)
                 or any(platform not in GO_TARGETS for platform in platforms)):
             raise GoCheckError(f"Go service {owner}/{role} declares invalid platforms: {platforms!r}")
-        service = Service(owner, role, entry["module"], package, tuple(platforms))
+        # A service may declare a local-only build platform; CI cross-builds
+        # and archives it only for the release platforms.
+        released = tuple(platform for platform in platforms if platform in RELEASE_PLATFORMS)
+        if not released:
+            raise GoCheckError(f"Go service {owner}/{role} declares no release platform: {platforms!r}")
+        service = Service(owner, role, entry["module"], package, released)
         if any((existing.owner, existing.role) == (owner, role) for existing in services):
             raise GoCheckError(f"Duplicate Go service record: {owner}/{role}")
         services.append(service)
