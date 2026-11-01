@@ -19,7 +19,7 @@
 - **上面三件事目前沒有 owner。**
 - framework DI 2 已寫下約束「ImGui 綁定經 `GYO::InputBackendSDL` 讀文字與組字，不從 SDL 事件讀」，**尚未實作**。framework 整改卡把它標成「另問使用者」；它的 PR B 尚未開工。
 - **兩個會改變做法的事實**：
-  - **framework 只在選了工具時才加入建置**：`build/cmake/GyoBuild.cmake:52-58`，framework DI 1。所以遊戲要改用 framework 的 adapter，必須先讓產品能宣告「我用 framework」。這是 Build Graph 的 Architecture Delta，和 framework 外殼草圖第 6 節給「pvp Client 搬上外殼」列的第 1 項相同。
+  - **framework 只在選了工具時才加入建置**：`build/cmake/GyoBuild.cmake:53-59`，framework DI 1。所以遊戲要改用 framework 的 adapter，必須先讓產品能宣告「我用 framework」。這是 Build Graph 的 Architecture Delta，和 framework 外殼草圖第 6 節給「pvp Client 搬上外殼」列的第 1 項相同。
   - **Ui 的 Design Invariant 7**：`UiTypes.hpp:132-133` 寫「哪個鍵代表哪種編輯，是產品的對照；每種編輯怎麼改文字，是 Ui 的」。把對照搬進 framework，要確認它仍然符合 DI 7：對照不進 Ui，由產品選擇是否用 framework 的那份。
 
 ## 使用者的規則（原話）
@@ -86,6 +86,7 @@ v8-input-ui-adapter（本卡：規劃與對齊）
 ### `v8-input-ui-adapter-pr`：IU-1 放哪個 PR
 
 - (a) 交給 framework 整改線決定：併進 PR B，或排在它之後（建議）。理由：那條線最清楚 PR B 的範圍。
+  - framework 整改線的回覆（2026-11-01）：建議 IU-1 **排在 PR B 之後、另開 PR**，不併入。理由：PR B（`v8-framework-invariants`）只刪舊件、拿掉守衛的例外清單、文件定稿，混入新功能會讓 §14.4 的判定變更和行為變更攪在一起。PR B 和 Input→Ui 沒有衝突。核心清單加 `GYO::Ui` 仍是守衛變更，照 §14.4 交使用者核准。
 - (b) 本卡指定獨立的 PR。
 
 ### 模型表
