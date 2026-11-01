@@ -35,7 +35,7 @@ add_test(NAME gyo_ui_editor.acceptance_contract
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_acceptance_contract.py")
 set_tests_properties(gyo_ui_editor.acceptance_contract PROPERTIES LABELS "cpu;editor" TIMEOUT 30)
 
-# ui_editor Design Invariant 1 (docs/ui_toolchain.md): no game and no SDL_GPU.
+# ui_editor Design Invariant 1 (docs/ui_toolchain.md): no game, and SDL only as a game reaches it.
 add_test(NAME gyo_ui_editor.dependency_guard
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ui_editor_dependency_guard.py"
         --root "${GYO_REPOSITORY_ROOT}")

@@ -15,7 +15,7 @@ add_test(NAME gyo_audio_editor.cli
         -P "${CMAKE_CURRENT_SOURCE_DIR}/AudioEditorCliTests.cmake")
 set_tests_properties(gyo_audio_editor.cli PROPERTIES LABELS "cpu;editor" TIMEOUT 60)
 
-# audio_editor Design Invariant 1 (docs/audio_editor/architecture.md): no game, GYO::Input or SDL_GPU.
+# audio_editor Design Invariant 1 (docs/audio_editor/architecture.md): no game, and no SDL of its own.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(NAME gyo_audio_editor.dependency_guard
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/audio_editor_dependency_guard.py"

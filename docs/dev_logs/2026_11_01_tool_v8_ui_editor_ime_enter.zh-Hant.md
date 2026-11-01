@@ -139,7 +139,7 @@ SDL 上沒找到 macOS 的同類回報；最接近的是 SDL2 時代的 Windows 
   - 限制：ImGui 不能把文字暫時插進輸入框，組字疊在游標後面，會蓋住後面的字。
   - Windows：ui_editor 沒開 `imeComposition`，SDL 不送組字事件，組字照舊由輸入法自己的視窗顯示。
 - 建置：綁定在建置有 `GYO::InputBackendSDL` 時才建；ui_editor 的 `project.json`（gui）加 `SDL_INPUT` 元件；`tests/framework` 的設定時檢查改成「有 SDL renderer、SDL input、ImGui 卻沒有綁定」才失敗。
-- Design Invariants：framework DI 2 拿掉「不連結 `GYO::Input`」，寫明 Engine 的能力（含 input）對 framework 開放，ImGui 綁定經 input backend 讀文字與組字；ui_editor DI 1 拿掉「不連結 `GYO::Input`」。使用者核准。
+- Design Invariants：framework DI 2 拿掉「不連結 `GYO::Input`」，寫明 Engine 的能力（含 input）對 framework 開放，ImGui 綁定經 input backend 讀文字與組字；ui_editor DI 1 拿掉「不連結 `GYO::Input`」。使用者核准。ui_editor 的部分後來由 PR #131 的 T4 取代（見「和 PR #131 的 T4 合併」）。
 
 ### 守衛的變更（AGENTS.md §14.4，使用者核准）
 
@@ -165,6 +165,13 @@ ui_editor 的守衛（`tests/ui_editor/ui_editor_dependency_guard.py`）：
 - 守衛突變 9／9 killed：綁定不准 input backend、核心或 JSON 綁定准它、核心准 input 的 Native 標頭或讓它可列白名單、不查 SDL_GPU、綁定准 `SDL_` 名字、editor 准 `GYO::Input`、editor 恢復舊的禁令。
 - 審查者用新舊兩版守衛跑同一批合成的樹，並做 1500 份隨機樹的差異比對：沒有「以前通過、現在失敗」的情況；所列的每一條都成立。審查者另外找到一處我漏列的放寬：核心 include input 的 Native 標頭，從任何白名單都抵銷不了的硬錯變成可列白名單的軟錯。這不是本意，已改回硬錯，並補了測試與突變（m9）。
 - 已知且接受：ui_editor 的連結封閉經由 ImGui 綁定（PRIVATE、靜態）帶進 `GYO::Input`；editor 的守衛只看原始碼文字，不查連結封閉，DI 1 的文字已允許。
+
+### 和 PR #131 的 T4 合併（2026-11-01）
+
+- PR #132 的 base（`claude/v8-tool-framework-rework`）之後加入了 T4：ui_editor 與 audio_editor 的 Design Invariant 1 改寫成「可以用 Engine 的任何模組，SDL 只走和遊戲相同的路徑」，ui_editor 的守衛也一起改寫，允許 `GYO::Input`。
+- 合併時，`docs/ui_toolchain.md` 和 ui_editor 的守衛、自測、`tests/ui_editor/CMakeLists.txt` 有衝突，一律採用 T4 的版本。上面「ui_editor 的守衛」那段變更，以及突變 m7、m8（針對那個版本），因此不再適用。
+- framework 的 DI 2 與守衛 T4 沒有改，保留本批的修改。
+- 合併後：三支守衛（framework、ui_editor、audio_editor）的自測與 repo 掃描都通過；framework 與 ui_editor 的 ctest 19／19 通過。
 
 ### 回歸測試與突變
 

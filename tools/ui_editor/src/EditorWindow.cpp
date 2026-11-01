@@ -7,23 +7,24 @@
 #include "gyo/framework/imgui/ImGuiShell.hpp"
 
 #include <memory>
+#include <string>
+#include <string_view>
 #include <utility>
 
-#include <SDL3/SDL.h>
-
 #include "engine/base/Error.hpp"
+#include "engine/base/Log.hpp"
 #include "engine/render/backend/sdl/SdlRendererNative.hpp"
 
 namespace Gyo::Tools::UiEditor {
 namespace {
 
+void LogError(const std::string_view text) {
+    Engine::Base::Log(Engine::Base::LogLevel::Error, "ui_editor", text);
+}
+
 template <Engine::Base::CodedError Error>
 void LogError(const char* context, const Error& error) {
-    SDL_LogError(
-        SDL_LOG_CATEGORY_APPLICATION,
-        "%s: %s",
-        context,
-        Engine::Base::Describe(error).c_str());
+    LogError(std::string(context) + ": " + Engine::Base::Describe(error));
 }
 
 // The editor in the framework's ImGui shell.
@@ -36,9 +37,9 @@ public:
     [[nodiscard]] bool Initialize(const Framework::ImGuiShellContext& context) override {
         // The preview makes its textures on the native renderer until Engine's
         // SDL renderer has a texture API (platform-sdl Replacement Criterion 2).
-        SDL_Renderer* const renderer = Engine::Render::Backend::Sdl::NativeRenderer(context.renderer);
+        auto* const renderer = Engine::Render::Backend::Sdl::NativeRenderer(context.renderer);
         if (renderer == nullptr) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Asset preview initialization failed: no renderer");
+            LogError("Asset preview initialization failed: no renderer");
             return false;
         }
         if (const auto preview = previewAssets_.Initialize(*renderer); !preview) {

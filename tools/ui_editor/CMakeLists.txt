@@ -73,9 +73,11 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
         src/PreviewAdapter.cpp
         src/SdlPathDialogs.cpp
     )
+    # The preview makes its textures on the native SDL renderer; SDL comes
+    # through Engine's native target (platform-sdl, Replacement Criterion 2).
     target_link_libraries(gyo_ui_editor_preview PUBLIC
         gyo_ui_editor_core
-        SDL3::SDL3
+        GYO::RenderBackendSDLNative
         GYO::AssetSdlImage
         GYO::TextBackendSDLTTF
         imgui::core
