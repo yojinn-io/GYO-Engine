@@ -5,7 +5,7 @@
 - 檔位與模型：実装者 Opus 5.5／high（主會話）、審査者 Opus 5.5／high、検証者 Fable 5.1／high。這批屬上段，因為它改 Design Invariants 與守衛，並接新的公開介面。
 - 估時 5～7 h。從事前宣告核准到結果寫完約 20 分鐘（17:14～17:31，牆上時間），不含兩個子 agent 的等待時間（各約 3 分鐘）。
 
-**狀態：** 程式、測試、突變、審查、檢驗都完成；守衛的放寬已核准。**L3 實機（macOS）發現疑似回歸，停下調查**（見「L3」）。
+**狀態：** 程式、測試、突變、審查、檢驗都完成；守衛的放寬已核准。L3（macOS）：疑似的回歸經和改動前的版本對照，確認不是這次造成的；第 5 項與 Windows 的 L3 沒做（見「L3」）。
 
 相關文件：[事前宣告與結果](../tools/plans/v8/assets.md)「framework-rework-line 的事前宣告」、[架構整改計畫](../architecture/plans/framework-rework/PLAN.md) §2.2 與 §2.4、[platform-sdl.md](../architecture/platform-sdl.md)「Path dialogs」與 Design Invariant 10、[ui_toolchain.md](../ui_toolchain.md) ui_editor 的 Design Invariants。
 
@@ -58,4 +58,14 @@
 - 第 6 項：日文輸入法會出現選字，但不穩定，選字後的文字進不了介面。
   - 終端機有一行 macOS 輸入法框架的 log：`error messaging the mach port for IMKCFRunLoopWakeUpReliable`。
 - 事件路徑與 ImGui 的設定比對結果：新舊宿主都經 `SdlPlatform::PumpEvents` 把原生事件交給 `ImGui_ImplSDL3_ProcessEvent`；`ImGui_ImplSDL3_InitForSDLRenderer`、`NavEnableKeyboard`、ini 與 log 的設定都相同。
-- 還不知道第 6 項是這次的回歸，還是既有的問題。依 AGENTS.md §14 停下，不修正，先和改動前的版本對照。
+- 依 AGENTS.md §14 停下，不修正，先和改動前的版本對照。
+  - 改動前的版本：master `3954f7e7`，ui_editor 還用舊宿主。建在會話暫存區，對照後刪除，沒有保存。
+  - 使用者在新舊兩版各試了中文與日文輸入法，兩版結果相同：在 Inspector 的輸入框改 button 文字時，中文輸入法進得去，日文輸入法選字後偶爾才進得去。
+  - 舊版也印出同一行 `IMKCFRunLoopWakeUpReliable`。
+- 結論：第 6 項不是這次的回歸，是 ui_editor 既有的問題，另外處理。
+  - 推測原因：日文輸入法用 Enter 確定變換，ImGui 的輸入框先收到 Enter 而結束編輯，之後到的確定文字就丟了；中文多用空白鍵或數字鍵選字。
+  - 這個推測沒有驗證。
+- 範圍的限界：
+  - 第 5 項沒做（對話窗開著時按 Stop waiting、關主視窗）；
+  - Windows 的 L3 沒做；
+  - `SdlPathDialogs::Abandon` 因此只有程式審查，沒有實機確認。
