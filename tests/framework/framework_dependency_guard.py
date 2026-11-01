@@ -55,7 +55,7 @@ CORE = {
     "native_headers": (),
     "symbols": re.compile(r"\bSDL_\w+|\bImGui\w*|\bnlohmann\b"),
     "targets": {"GYO::ToolFramework", "GYO::ToolFrameworkWindow", "GYO::Engine", "GYO::Os", "GYO::PlatformSDL",
-                "GYO::Input", "GYO::InputBackendSDL"},
+                "GYO::Input", "GYO::InputBackendSDL", "GYO::Ui"},
 }
 BINDINGS = {
     "imgui": {

@@ -82,6 +82,22 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input)\n"}),
                          ["framework/bindings/json/CMakeLists.txt: names GYO::Input"])
 
+    def test_ui_target_in_the_core_passes(self):
+        # v8-input-ui-adapter: the products' shared text input mapping turns Engine's input entries into Ui's.
+        self.assertEqual(self.scan({
+            "framework/src/A.cpp": '#include "engine/ui/UiTypes.hpp"\n',
+            "framework/CMakeLists.txt": "target_link_libraries(a PUBLIC GYO::Input GYO::Ui)\n",
+        }), [])
+
+    def test_ui_target_in_the_imgui_binding_fails(self):
+        # The binding reaches Ui only through the core; its own list does not take the core's addition.
+        self.assertEqual(self.scan({"framework/bindings/imgui/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Ui)\n"}),
+                         ["framework/bindings/imgui/CMakeLists.txt: names GYO::Ui"])
+
+    def test_ui_target_in_the_json_binding_fails(self):
+        self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Ui)\n"}),
+                         ["framework/bindings/json/CMakeLists.txt: names GYO::Ui"])
+
     def test_tool_header_fails(self):
         # A tool's header is outside every allowed prefix, without the guard naming the tool.
         self.assertEqual(len(self.scan({"framework/src/A.cpp": '#include "gyo/some_tool/Thing.hpp"\n'})), 1)

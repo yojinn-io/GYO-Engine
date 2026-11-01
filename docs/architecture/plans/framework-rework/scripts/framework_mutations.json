@@ -225,6 +225,96 @@
       "target": "gyo_framework_tests",
       "expect_build_failure": true,
       "expect": "links 1 forbidden targets \\[\\$<\\$<CONFIG:Debug>:SDL3::SDL3>\\]"
+    },
+    {
+      "id": "fw-uti-ctrl-dropped",
+      "what": "shortcut+A selects all without the shortcut modifier held (v8-input-ui-adapter)",
+      "file": "framework/src/UiTextInput.cpp",
+      "find": "} else if (shortcutHeld && entry.layoutKey == Key::A) {",
+      "replace": "} else if (entry.layoutKey == Key::A) {",
+      "target": "gyo_framework_tests",
+      "expect": "is NOT correct",
+      "cases": "U*"
+    },
+    {
+      "id": "fw-uti-composition-cursor",
+      "what": "A composition loses its cursor",
+      "file": "framework/src/UiTextInput.cpp",
+      "find": "result.push_back({UiTextInputKind::Composition, entry.text, entry.cursor});",
+      "replace": "result.push_back({UiTextInputKind::Composition, entry.text, -1});",
+      "target": "gyo_framework_tests",
+      "expect": "is NOT correct",
+      "cases": "U*"
+    },
+    {
+      "id": "fw-uti-layout-key",
+      "what": "Ctrl+A is read by the physical position instead of the key the layout produces (AZERTY)",
+      "file": "framework/src/UiTextInput.cpp",
+      "find": "} else if (shortcutHeld && entry.layoutKey == Key::A) {",
+      "replace": "} else if (shortcutHeld && entry.key == Key::A) {",
+      "target": "gyo_framework_tests",
+      "expect": "is NOT correct",
+      "cases": "U*"
+    },
+    {
+      "id": "fw-uti-shortcut-ignored",
+      "what": "The shortcuts take Ctrl whatever modifier the product chose (macOS Command lost)",
+      "file": "framework/src/UiTextInput.cpp",
+      "find": "        const bool shortcutHeld = shortcut == TextShortcutModifier::Gui ? entry.modifiers.gui : entry.modifiers.ctrl;",
+      "replace": "        const bool shortcutHeld = entry.modifiers.ctrl;\n        static_cast<void>(shortcut);",
+      "target": "gyo_framework_tests",
+      "expect": "is NOT correct",
+      "cases": "U*"
+    },
+    {
+      "id": "fw-uti-clipboard-ignored",
+      "what": "Ctrl+V inserts nothing instead of the clipboard",
+      "file": "framework/src/UiTextInput.cpp",
+      "find": "result.push_back({UiTextInputKind::Insert, clipboard ? clipboard() : std::string{}});",
+      "replace": "result.push_back({UiTextInputKind::Insert, std::string{}});",
+      "target": "gyo_framework_tests",
+      "expect": "is NOT correct",
+      "cases": "U*"
+    },
+    {
+      "id": "fw-uti-row-dropped",
+      "what": "Home no longer moves to the start",
+      "file": "framework/src/UiTextInput.cpp",
+      "find": "        } else if (entry.layoutKey == Key::Home) {\n            result.push_back({UiTextInputKind::MoveHome, {}});\n",
+      "replace": "",
+      "target": "gyo_framework_tests",
+      "expect": "is NOT correct",
+      "cases": "U*"
+    },
+    {
+      "id": "fw-guard-core-ui-dropped",
+      "what": "The core's positive list loses GYO::Ui, which the core links for the text input mapping",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "\"GYO::Input\", \"GYO::InputBackendSDL\", \"GYO::Ui\"},",
+      "replace": "\"GYO::Input\", \"GYO::InputBackendSDL\"},",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "framework/CMakeLists\\.txt: names GYO::Ui"
+    },
+    {
+      "id": "fw-guard-binding-ui-allowed",
+      "what": "The ImGui binding's positive list takes GYO::Ui, which only the core's holds",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "\"GYO::RenderBackendSDLNative\", \"GYO::InputBackendSDL\", \"imgui::core\"",
+      "replace": "\"GYO::RenderBackendSDLNative\", \"GYO::InputBackendSDL\", \"GYO::Ui\", \"imgui::core\"",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_ui_target_in_the_imgui_binding_fails"
     }
   ]
 }
