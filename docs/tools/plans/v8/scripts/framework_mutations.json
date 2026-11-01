@@ -60,6 +60,33 @@
       "expect": "FAILED: a stale folder answer mounts nothing"
     },
     {
+      "id": "ui-dialog-current-mapping",
+      "what": "The adapter marks every answer as awaited",
+      "file": "tools/ui_editor/src/SdlPathDialogs.cpp",
+      "find": "            .current = purpose.has_value()};",
+      "replace": "            .current = true};",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: an answer after the request ended is marked as not awaited"
+    },
+    {
+      "id": "ui-dialog-kind-mapping",
+      "what": "Exporting asks for an open-file dialog",
+      "file": "tools/ui_editor/src/SdlPathDialogs.cpp",
+      "find": "        request.kind = Sdl::PathDialogKind::SaveFile;",
+      "replace": "        request.kind = Sdl::PathDialogKind::OpenFile;",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: exporting saves a file"
+    },
+    {
+      "id": "ui-dialog-outcome-mapping",
+      "what": "A chosen path reaches the editor as a cancel",
+      "file": "tools/ui_editor/src/SdlPathDialogs.cpp",
+      "find": "        return PathDialogOutcome::Chosen;",
+      "replace": "        return PathDialogOutcome::Cancelled;",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: the fallback dialog's choice reaches the editor"
+    },
+    {
       "id": "ae-guard-json-target",
       "what": "The audio editor names nlohmann_json again instead of writing the catalog through the framework",
       "file": "tools/audio_editor/CMakeLists.txt",

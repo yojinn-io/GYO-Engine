@@ -4,6 +4,7 @@
 #include "gyo/ui_editor/PathDialog.hpp"
 #include "gyo/ui_editor/ElementSchema.hpp"
 #include "gyo/ui_editor/PreviewAdapter.hpp"
+#include "gyo/ui_editor/SdlPathDialogs.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 #include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "engine/base/Assert.hpp"
@@ -293,6 +294,39 @@ void TestPathDialogChoosesAssetFolder() {
     editor.ApplyPendingAssetChanges();
     Expect(!assets.IsMounted(), "filling the Asset Root field does not mount by itself");
 }
+
+// The adapter between the editor's purposes and Engine's dialogs: each
+// purpose asks for its kind and filters, and an answer reaches the editor
+// with its request's purpose only while that request is awaited.
+void TestPathDialogAdapter() {
+    namespace Sdl = Engine::Platform::Sdl;
+    const auto kindOf = [](const PathDialogPurpose purpose) { return PathDialogRequestFor(purpose, "").kind; };
+    Expect(kindOf(PathDialogPurpose::OpenDocument) == Sdl::PathDialogKind::OpenFile, "opening a document opens a file");
+    Expect(kindOf(PathDialogPurpose::ExportDocument) == Sdl::PathDialogKind::SaveFile, "exporting saves a file");
+    Expect(kindOf(PathDialogPurpose::CatalogField) == Sdl::PathDialogKind::OpenFile, "the catalog field opens a file");
+    Expect(kindOf(PathDialogPurpose::AssetFolder) == Sdl::PathDialogKind::OpenFolder, "an asset folder opens a folder");
+    Expect(kindOf(PathDialogPurpose::AssetRootField) == Sdl::PathDialogKind::OpenFolder, "the root field opens a folder");
+    const Sdl::PathDialogRequest open = PathDialogRequestFor(PathDialogPurpose::OpenDocument, "start");
+    Expect(open.defaultLocation == "start" && open.filters.size() == 1 && open.filters[0].pattern == "json",
+        "a document dialog starts at the field's path and offers UI JSON");
+    Expect(PathDialogRequestFor(PathDialogPurpose::AssetFolder, "").filters.empty(), "a folder dialog has no filters");
+
+    PathDialogRequests requests;
+    const std::uint64_t tag = requests.Begin(PathDialogPurpose::ExportDocument);
+    const PathDialogResult failed = PathDialogResultFor(requests,
+        {.tag = tag, .outcome = Sdl::PathDialogOutcome::Failed, .error = "no portal"});
+    Expect(failed.current && failed.purpose == PathDialogPurpose::ExportDocument &&
+            failed.outcome == PathDialogOutcome::Failed && failed.error == "no portal",
+        "a failure reaches the editor with its purpose and error");
+    const PathDialogResult chosen = PathDialogResultFor(requests,
+        {.tag = tag, .outcome = Sdl::PathDialogOutcome::Chosen, .path = "out.json"});
+    Expect(chosen.current && chosen.outcome == PathDialogOutcome::Chosen && chosen.path == "out.json",
+        "the fallback dialog's choice reaches the editor");
+    const PathDialogResult late = PathDialogResultFor(requests,
+        {.tag = tag, .outcome = Sdl::PathDialogOutcome::Cancelled});
+    Expect(!late.current && late.outcome == PathDialogOutcome::Cancelled,
+        "an answer after the request ended is marked as not awaited");
+}
 } // namespace
 
 // v8-tool-ui-editor-text-field: in preview mode a text field is edited with
@@ -355,6 +389,7 @@ int main() {
     TestSharedContentAndQueuedMounts();
     TestMountRootOutsideAnsiCodePage();
     TestPathDialogChoosesAssetFolder();
+    TestPathDialogAdapter();
     TestPreviewTextFieldTyping();
     return failures == 0 ? 0 : 1;
 }

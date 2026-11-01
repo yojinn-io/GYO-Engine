@@ -1,6 +1,4 @@
-#include "SdlPathDialogs.hpp"
-
-#include "engine/platform/sdl/SdlPlatform.hpp"
+#include "gyo/ui_editor/SdlPathDialogs.hpp"
 
 #include <string>
 #include <utility>
@@ -10,7 +8,21 @@ namespace {
 
 namespace Sdl = Engine::Platform::Sdl;
 
-Sdl::PathDialogRequest RequestFor(const PathDialogPurpose purpose, const std::string_view defaultLocation) {
+PathDialogOutcome OutcomeOf(const Sdl::PathDialogOutcome outcome) noexcept {
+    switch (outcome) {
+    case Sdl::PathDialogOutcome::Chosen:
+        return PathDialogOutcome::Chosen;
+    case Sdl::PathDialogOutcome::Cancelled:
+        return PathDialogOutcome::Cancelled;
+    case Sdl::PathDialogOutcome::Failed:
+        break;
+    }
+    return PathDialogOutcome::Failed;
+}
+
+} // namespace
+
+Sdl::PathDialogRequest PathDialogRequestFor(const PathDialogPurpose purpose, const std::string_view defaultLocation) {
     Sdl::PathDialogRequest request;
     request.defaultLocation = std::string(defaultLocation);
     switch (purpose) {
@@ -34,25 +46,21 @@ Sdl::PathDialogRequest RequestFor(const PathDialogPurpose purpose, const std::st
     return request;
 }
 
-PathDialogOutcome OutcomeOf(const Sdl::PathDialogOutcome outcome) noexcept {
-    switch (outcome) {
-    case Sdl::PathDialogOutcome::Chosen:
-        return PathDialogOutcome::Chosen;
-    case Sdl::PathDialogOutcome::Cancelled:
-        return PathDialogOutcome::Cancelled;
-    case Sdl::PathDialogOutcome::Failed:
-        break;
-    }
-    return PathDialogOutcome::Failed;
+PathDialogResult PathDialogResultFor(PathDialogRequests& requests, Sdl::PathDialogAnswer answer) {
+    const PathDialogOutcome outcome = OutcomeOf(answer.outcome);
+    const auto purpose = requests.Accept(answer.tag, outcome);
+    return {.purpose = purpose.value_or(PathDialogPurpose::OpenDocument),
+            .outcome = outcome,
+            .path = std::move(answer.path),
+            .error = std::move(answer.error),
+            .current = purpose.has_value()};
 }
-
-} // namespace
 
 SdlPathDialogs::SdlPathDialogs(Sdl::SdlPlatform& platform)
     : platform_(platform) {}
 
 void SdlPathDialogs::Show(const PathDialogPurpose purpose, const std::string_view defaultLocation) {
-    Sdl::PathDialogRequest request = RequestFor(purpose, defaultLocation);
+    Sdl::PathDialogRequest request = PathDialogRequestFor(purpose, defaultLocation);
     request.tag = requests_.Begin(purpose);
     platform_.ShowPathDialog(std::move(request));
 }
@@ -60,13 +68,7 @@ void SdlPathDialogs::Show(const PathDialogPurpose purpose, const std::string_vie
 std::vector<PathDialogResult> SdlPathDialogs::TakeResults() {
     std::vector<PathDialogResult> results;
     for (Sdl::PathDialogAnswer& answer : platform_.TakePathDialogAnswers()) {
-        const PathDialogOutcome outcome = OutcomeOf(answer.outcome);
-        const auto purpose = requests_.Accept(answer.tag, outcome);
-        results.push_back({.purpose = purpose.value_or(PathDialogPurpose::OpenDocument),
-                           .outcome = outcome,
-                           .path = std::move(answer.path),
-                           .error = std::move(answer.error),
-                           .current = purpose.has_value()});
+        results.push_back(PathDialogResultFor(requests_, std::move(answer)));
     }
     return results;
 }

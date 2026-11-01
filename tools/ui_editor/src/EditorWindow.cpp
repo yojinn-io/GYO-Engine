@@ -2,7 +2,7 @@
 
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/EditorApp.hpp"
-#include "SdlPathDialogs.hpp"
+#include "gyo/ui_editor/SdlPathDialogs.hpp"
 
 #include "gyo/framework/imgui/ImGuiShell.hpp"
 

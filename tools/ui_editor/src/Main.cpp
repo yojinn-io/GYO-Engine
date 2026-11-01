@@ -5,6 +5,7 @@
 #include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
+#include "engine/base/Error.hpp"
 #include "engine/os/Files.hpp"
 
 #include <iostream>

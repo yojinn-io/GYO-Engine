@@ -71,6 +71,7 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
         src/EditorAppHierarchy.cpp
         src/EditorAppInspector.cpp
         src/PreviewAdapter.cpp
+        src/SdlPathDialogs.cpp
     )
     target_link_libraries(gyo_ui_editor_preview PUBLIC
         gyo_ui_editor_core
@@ -78,11 +79,13 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
         GYO::AssetSdlImage
         GYO::TextBackendSDLTTF
         imgui::core
+        # The editor's dialogs on Engine's platform dialogs (SdlPathDialogs.hpp names its types).
+        GYO::PlatformSDL
     )
     # PreviewAdapter calls Math functions directly (sRGB, Rect); EditorApp's
     # path fields go to UTF-8 through GYO::Os.
     target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math GYO::Os)
-    target_sources(gyo_ui_editor PRIVATE src/EditorWindow.cpp src/SdlPathDialogs.cpp)
+    target_sources(gyo_ui_editor PRIVATE src/EditorWindow.cpp)
     # The window and ImGui's SDL backends come from the framework's ImGui
     # binding, the system dialogs from Engine's platform. The preview makes
     # its textures on the native renderer until Engine's SDL renderer has a
