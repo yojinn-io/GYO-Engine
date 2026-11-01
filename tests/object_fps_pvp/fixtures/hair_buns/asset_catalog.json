@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "assets": [
+    { "id": "object_fps_pvp.hair.buns", "type": "text", "path": "character.json" },
+    { "id": "object_fps_pvp.model.hair.buns", "type": "model", "path": "Hair_Buns.fbx" },
+    { "id": "object_fps_pvp.texture.character.female.hair", "type": "texture", "path": "textures/T_Hair_2_BaseColor.png" }
+  ]
+}

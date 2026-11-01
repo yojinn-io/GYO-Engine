@@ -3,6 +3,7 @@
 set(PVP_DOMAIN_SOURCES
     src/Pvp/Arena.cpp
     src/Pvp/PvpMatch.cpp
+    src/Pvp/PlayerAnimation.cpp
     src/Pvp/ShotQuery.cpp
     src/Pvp/Movement.cpp
     src/Pvp/MovementRulesFile.cpp

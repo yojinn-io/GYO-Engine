@@ -13,8 +13,8 @@ import (
 	"gyo.local/gateway/framing"
 	"gyo.local/gateway/session"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 func totalsOf(r *runtime.GatewayDropReport) map[runtime.DropReason]uint64 {
@@ -282,6 +282,7 @@ func TestCoalescedSnapshotIsCountedAtTheReader(t *testing.T) {
 	for tick := uint32(1); tick <= 3; tick++ {
 		e := envelope()
 		e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick}}
+		fillAnimation(e.GetSnapshot())
 		s.runtimeMessage(e)
 	}
 	r := s.link.drops.report(0, time.Now())

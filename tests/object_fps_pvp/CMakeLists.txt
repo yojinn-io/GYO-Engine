@@ -3,7 +3,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" runtime_host runtime_host)
 gyo_get_app_target("${GYO_CURRENT_APP}" client_simulation client_simulation)
 set(tests "gyo_${GYO_CURRENT_APP}_tests")
 add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp PredictionElapsedTimeTests.cpp TimelineTests.cpp MovementRecoveryTests.cpp
-    CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp CrouchTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
+    PlayerAnimationTests.cpp CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp CrouchTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp SoundCuesTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
     NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
     DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp AddressTextTests.cpp)
@@ -33,7 +33,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" ipc ipc)
 set(ipc_tests "gyo_${GYO_CURRENT_APP}_ipc_tests")
 add_executable(${ipc_tests} TestMain.cpp IpcHostTests.cpp ClockSyncTests.cpp)
 target_compile_features(${ipc_tests} PRIVATE cxx_std_20)
-target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v8" nlohmann_json::nlohmann_json doctest::doctest)
+target_link_libraries(${ipc_tests} PRIVATE ${ipc} asio::asio "gyo_${GYO_CURRENT_APP}_runtime_v9" nlohmann_json::nlohmann_json doctest::doctest)
 target_compile_definitions(${ipc_tests} PRIVATE PVP_DROP_REASONS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/drop_reasons.json"
     PVP_LOG_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/log_v1")
 if(WIN32)
@@ -81,11 +81,16 @@ set(presentation_stage "${PROJECT_BINARY_DIR}/test-products/${GYO_CURRENT_APP}")
 set(presentation_content "gyo_${GYO_CURRENT_APP}_presentation_test_runtime")
 add_custom_target(${presentation_content})
 gyo_stage_app_content(${presentation_content} "${GYO_CURRENT_APP}" "${presentation_stage}")
-add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp)
+add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp
+    PlayerAnimationEquivalenceTests.cpp PlayerHitboxTests.cpp PlayerAnimationDigestTests.cpp
+    PlayerHitModelTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
 target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
     GYO::PlatformSDL nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)
 gyo_use_app_config(${presentation_tests} "${GYO_CURRENT_APP}")
+# Test-only accessory content: appended to the staged product catalog, never shipped.
+target_compile_definitions(${presentation_tests} PRIVATE
+    PVP_PRESENTATION_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hair_buns")
 set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
 foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
     set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")
@@ -101,6 +106,64 @@ add_dependencies(${presentation_tests} ${presentation_content})
 add_test(NAME "${GYO_CURRENT_APP}.presentation_cpu" COMMAND ${presentation_tests})
 set_tests_properties("${GYO_CURRENT_APP}.presentation_cpu" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 120
     ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+# v8-product-hitbox-survey (plans/v8/hitbox-plan.md): a report-only diagnostic of the
+# production player against the 11 hurt regions, staged with the presentation tests.
+# Its smoke run checks only that every region node is present once.
+set(hitbox_survey "gyo_${GYO_CURRENT_APP}_hitbox_survey")
+add_executable(${hitbox_survey} HitboxSurvey.cpp)
+target_compile_features(${hitbox_survey} PRIVATE cxx_std_20)
+target_link_libraries(${hitbox_survey} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage GYO::PlatformSDL nlohmann_json::nlohmann_json)
+gyo_use_app_config(${hitbox_survey} "${GYO_CURRENT_APP}")
+set_target_properties(${hitbox_survey} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
+foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(${hitbox_survey} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")
+endforeach()
+if(WIN32)
+    target_compile_definitions(${hitbox_survey} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${hitbox_survey} PRIVATE /utf-8)
+endif()
+gyo_copy_runtime_dlls(${hitbox_survey})
+add_dependencies(${hitbox_survey} ${presentation_content})
+add_test(NAME "${GYO_CURRENT_APP}.hitbox_survey" COMMAND ${hitbox_survey} --smoke)
+set_tests_properties("${GYO_CURRENT_APP}.hitbox_survey" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 120
+    ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+
+# v8-product-anim-bottlenecks: a report-only measurement of a Match-side pose
+# (sampling time, load, bit hashes for cross-platform comparison). It fails
+# only on a load or self-check failure; RUN_SERIAL keeps the timing free of
+# concurrently running tests. The wrapper reads the load's peak memory.
+set(anim_bottlenecks "gyo_${GYO_CURRENT_APP}_anim_bottlenecks")
+add_executable(${anim_bottlenecks} AnimBottlenecks.cpp)
+target_compile_features(${anim_bottlenecks} PRIVATE cxx_std_20)
+target_link_libraries(${anim_bottlenecks} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage GYO::PlatformSDL nlohmann_json::nlohmann_json)
+gyo_use_app_config(${anim_bottlenecks} "${GYO_CURRENT_APP}")
+# A macOS cross build names its target in CMAKE_OSX_ARCHITECTURES; the
+# processor variable is the host's there.
+set(anim_bottlenecks_processor "${CMAKE_SYSTEM_PROCESSOR}")
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    set(anim_bottlenecks_processor "${CMAKE_OSX_ARCHITECTURES}")
+endif()
+target_compile_definitions(${anim_bottlenecks} PRIVATE
+    GYO_ANIM_BOTTLENECKS_PLATFORM="${CMAKE_SYSTEM_NAME}-${anim_bottlenecks_processor}")
+set_target_properties(${anim_bottlenecks} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
+foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_target_properties(${anim_bottlenecks} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")
+endforeach()
+if(WIN32)
+    target_compile_definitions(${anim_bottlenecks} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${anim_bottlenecks} PRIVATE /utf-8)
+endif()
+gyo_copy_runtime_dlls(${anim_bottlenecks})
+add_dependencies(${anim_bottlenecks} ${presentation_content})
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_test(NAME "${GYO_CURRENT_APP}.anim_bottlenecks"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/anim_bottlenecks.py" $<TARGET_FILE:${anim_bottlenecks}>)
+set_tests_properties("${GYO_CURRENT_APP}.anim_bottlenecks" PROPERTIES LABELS "cpu;pvp;presentation" TIMEOUT 300
+    RUN_SERIAL TRUE ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 
 # The in-world pointer capture policy against its golden (batch 06's oracle,
 # recorded at the policy's own boundary; sdl-isolation J1, v7.1 D168).
@@ -196,6 +259,10 @@ set_tests_properties("${GYO_CURRENT_APP}.max_players" PROPERTIES LABELS "cpu;pvp
 add_test(NAME "${GYO_CURRENT_APP}.mutation_tool"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_run_mutations.py")
 set_tests_properties("${GYO_CURRENT_APP}.mutation_tool" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# The scaled two-tree comparison (docs/object_fps_pvp/plans/v8/v8-product-hit-rules-permille-declaration.md P1).
+add_test(NAME "${GYO_CURRENT_APP}.compare_authority_trees"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_compare_authority_trees.py")
+set_tests_properties("${GYO_CURRENT_APP}.compare_authority_trees" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.gameplay_evidence"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_gameplay_evidence.py")
 set_tests_properties("${GYO_CURRENT_APP}.gameplay_evidence" PROPERTIES LABELS "cpu;pvp;acceptance" TIMEOUT 10)
@@ -238,6 +305,14 @@ add_test(NAME "${GYO_CURRENT_APP}.ingress_cross"
         --output "${CMAKE_CURRENT_BINARY_DIR}/ingress_cross" --go "${GYO_GO_EXECUTABLE}")
 set_tests_properties("${GYO_CURRENT_APP}.ingress_cross" PROPERTIES LABELS "network;go;pvp" TIMEOUT 300
     SKIP_RETURN_CODE 77)
+# v8-product-hitbox-shot J6: a real Gateway, the real Match executable and the network probe; the Match judges
+# the head and the leg on the posed body and the Client receives the parts. Needs Go, like ingress_cross.
+add_test(NAME "${GYO_CURRENT_APP}.hit_part_cross"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/hit_part_cross_check.py"
+        --match $<TARGET_FILE:${match}> --probe $<TARGET_FILE:gyo_${GYO_CURRENT_APP}_network_probe>
+        --arena "${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/pvp_arena.json"
+        --output "${CMAKE_CURRENT_BINARY_DIR}/hit_part_cross" --go "${GYO_GO_EXECUTABLE}")
+set_tests_properties("${GYO_CURRENT_APP}.hit_part_cross" PROPERTIES LABELS "network;go;pvp" TIMEOUT 300)
 # P2-log: the network path's 10-second statistics lines (Gateway, Match, Client worker).
 add_test(NAME "${GYO_CURRENT_APP}.network_statistics"
     COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp/test_network_statistics.py")

@@ -7,7 +7,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
 )
 
 func welcomeOf(t *testing.T, payload []byte) *client.Welcome {

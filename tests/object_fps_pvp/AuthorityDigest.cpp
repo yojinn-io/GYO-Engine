@@ -36,10 +36,16 @@
 namespace {
 using namespace fps::pvp;
 
-constexpr int DigestVersion = 2;
+constexpr int DigestVersion = 4;
 // Field list in encoding order. Version 2 (v8-product-crouch) adds the stance
 // fields and encodes each only when true, so a standing scenario's bytes, and
 // its version 1 digest, are unchanged; a crouched record differs by the field.
+// Version 3 (v8-product-hit-rules-permille) counts hp and damage in
+// milli-points and appends the hit record to combat and hitPart to decision:
+// the hit record is an input of the judged pose from pv9 on. Version 4
+// (v8-product-anim-authority A2) appends each player's animation authority to
+// the snapshot record, from the synthetic rules (results do not move with the
+// player clips).
 constexpr std::string_view DigestFields =
     "match_tick: tick\n"
     "player: playerId position.x position.y position.z yaw pitch lastResolvedCommand movementEpoch "
@@ -47,9 +53,12 @@ constexpr std::string_view DigestFields =
     "connectionQualityFailures [crouched] [sprinting] (bracketed: v2, only when true; movementSlack* excluded: "
     "host timing observation)\n"
     "combat: playerId hp nextAllowedShotTick lifeGeneration magazineAmmo reloadActionId reloadStartTick "
-    "reloadEndTick lastShotActionId lastShotTick\n"
+    "reloadEndTick lastShotActionId lastShotTick lastDamageTick damageCount lastAttackerId lastHitPart "
+    "(hp in milli-points; hit record: v3)\n"
     "decision: owner actionId resolvedTick accepted rejection hitKind targetId damage kind lifeGeneration "
-    "targetLifeGeneration\n"
+    "targetLifeGeneration hitPart (damage in milli-points; hitPart: v3)\n"
+    "animation (v4, appended to the tick record): animations, then per player animPlayer animLife gaitPhaseQ16 "
+    "moveWeight jogWeight jumpPhase jumpPhaseTick sprintWeight\n"
     "quality: playerId resolved substituted resets\n"
     "prediction: predictedPosition.xyz renderPosition.xyz correctionOffset.xyz lastResolvedCommand latestCommand "
     "authorityTick pendingCommands active frozen movementEpoch serverPendingCommands previousCommand "
@@ -157,7 +166,15 @@ void EncodePlayer(Record& r, const PlayerState& p) {
     if (p.sprinting) r.Bool("sprinting", true);
 }
 
+// v8-product-hit-rules-permille P7: hits one life can take, at the least
+// part damage (Leg).
+constexpr std::uint64_t MaxHitsPerLife =
+    (PvpCombatRules.maximumHp + PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.legPermille) - 1) /
+    PartDamage(PvpCombatRules.shotDamage, PvpCombatRules.legPermille);
+static_assert(MaxHitsPerLife == 6);
+
 void EncodeCombat(Record& r, const CombatState& c) {
+    Require(c.damageCount <= MaxHitsPerLife, "combat record took more hits than one life allows");
     r.U64("combat", c.playerId);
     r.U64("hp", c.hp);
     r.U64("nextAllowedShotTick", c.nextAllowedShotTick);
@@ -168,6 +185,10 @@ void EncodeCombat(Record& r, const CombatState& c) {
     r.U64("reloadEndTick", c.reloadEndTick);
     r.U64("lastShotActionId", c.lastShotActionId);
     r.U64("lastShotTick", c.lastShotTick);
+    r.U64("lastDamageTick", c.lastDamageTick);
+    r.U64("damageCount", c.damageCount);
+    r.U64("lastAttackerId", c.lastAttackerId);
+    r.U64("lastHitPart", static_cast<std::uint64_t>(c.lastHitPart));
 }
 
 void EncodeDecision(Record& r, PlayerId owner, const ShotDecision& d) {
@@ -182,6 +203,7 @@ void EncodeDecision(Record& r, PlayerId owner, const ShotDecision& d) {
     r.U64("actionKind", static_cast<std::uint64_t>(d.kind));
     r.U64("decisionLife", d.lifeGeneration);
     r.U64("targetLife", d.targetLifeGeneration);
+    r.U64("hitPart", static_cast<std::uint64_t>(d.hitPart));
 }
 
 void EncodeSnapshot(Record& r, const WorldSnapshot& snapshot) {
@@ -190,6 +212,17 @@ void EncodeSnapshot(Record& r, const WorldSnapshot& snapshot) {
     for (const auto& player : snapshot.players) EncodePlayer(r, player);
     r.U64("combats", snapshot.combat.size());
     for (const auto& combat : snapshot.combat) EncodeCombat(r, combat);
+    r.U64("animations", snapshot.animation.size());
+    for (const auto& value : snapshot.animation) {
+        r.U64("animPlayer", value.playerId);
+        r.U64("animLife", value.lifeGeneration);
+        r.U64("gaitPhaseQ16", value.gaitPhaseQ16);
+        r.U64("moveWeight", value.moveWeightPermille);
+        r.U64("jogWeight", value.jogWeightPermille);
+        r.U64("jumpPhase", static_cast<std::uint64_t>(value.jumpPhase));
+        r.U64("jumpPhaseTick", value.jumpPhaseTick);
+        r.U64("sprintWeight", value.sprintWeightPermille);
+    }
 }
 
 // Arenas -------------------------------------------------------------------

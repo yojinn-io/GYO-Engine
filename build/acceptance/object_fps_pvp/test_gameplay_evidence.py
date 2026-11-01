@@ -17,9 +17,9 @@ def action(identity,tick,kind=0,life=1,damage=0,target=0,target_life=0,accepted=
 
 class GameplayEvidenceTests(unittest.TestCase):
     def test_damage_scoped_by_target_life(self):
-        ds=[(1,action(1,5,damage=25,target=2,target_life=1)),(1,action(2,205,damage=25,target=2,target_life=2))]
-        self.assertEqual(combat_expected(2,1,300,ds)['hp'],75)
-        self.assertEqual(combat_expected(2,2,300,ds)['hp'],75)
+        ds=[(1,action(1,5,damage=25000,target=2,target_life=1)),(1,action(2,205,damage=25000,target=2,target_life=2))]
+        self.assertEqual(combat_expected(2,1,300,ds)['hp'],75000)
+        self.assertEqual(combat_expected(2,2,300,ds)['hp'],75000)
 
     def test_reload_completes_at_ninety_before_shot(self):
         ds=[(1,action(1,1)),(1,action(2,2,kind=1)),(1,action(3,92))]
@@ -29,7 +29,7 @@ class GameplayEvidenceTests(unittest.TestCase):
         self.assertEqual(combat_expected(1,1,92,ds)['reload_end_tick'],0)
 
     def test_death_cancels_reload(self):
-        ds=[(2,action(1,1)),(2,action(2,2,kind=1))]+[(1,action(i+1,20+i,damage=25,target=2,target_life=1)) for i in range(4)]
+        ds=[(2,action(1,1)),(2,action(2,2,kind=1))]+[(1,action(i+1,20+i,damage=25000,target=2,target_life=1)) for i in range(4)]
         state=combat_expected(2,1,100,ds)
         self.assertEqual((state['hp'],state['ammo'],state['reload_end_tick']),(0,11,0))
         self.assertEqual(combat_expected(2,2,300,ds)['ammo'],12)
@@ -40,8 +40,8 @@ class GameplayEvidenceTests(unittest.TestCase):
         self.assertEqual(combat_expected(1,1,100,ds)['last_shot_id'],0)
 
     def test_predeath_delayed_result_stays_old_life(self):
-        ds=[(1,action(1,20,damage=25,target=2,target_life=1))]
-        self.assertEqual(combat_expected(2,2,250,ds)['hp'],100)
+        ds=[(1,action(1,20,damage=25000,target=2,target_life=1))]
+        self.assertEqual(combat_expected(2,2,250,ds)['hp'],100000)
         self.assertEqual(combat_expected(1,2,250,ds)['ammo'],12)
 
     def test_wire_rejection_mapping_is_not_enum_cast(self):

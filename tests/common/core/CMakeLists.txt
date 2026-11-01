@@ -18,11 +18,14 @@ add_executable(engine_tests
     io/NativeFileSystemTests.cpp
     io/StreamReaderTests.cpp
     io/UriTests.cpp
+    io/UserFilesTests.cpp
     io/VfsTests.cpp
 )
 
 target_link_libraries(engine_tests PRIVATE
     GYO::Engine
+    # io/UserFilesTests.cpp checks engine/io against engine/os's own path rules.
+    GYO::Os
     gyo_test_support
     doctest::doctest
     nlohmann_json::nlohmann_json

@@ -13,8 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // batch takes one write pass as if every Write succeeded: tests without a
@@ -68,7 +68,8 @@ func resolve(s *Server, tick, through uint32) {
 	e := envelope()
 	e.Message = &runtime.RuntimeEnvelope_Snapshot{Snapshot: &runtime.WorldSnapshot{Tick: tick,
 		Players: []*runtime.PlayerState{{PlayerId: 7, MovementEpoch: 1, LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, LastResolvedCommand: through}},
-		Combat:  []*runtime.CombatState{{PlayerId: 7, LifeGeneration: 1, Hp: 100, MagazineAmmo: 12}}}}
+		Combat:  []*runtime.CombatState{{PlayerId: 7, LifeGeneration: 1, Hp: 100000, MagazineAmmo: 12}}}}
+	fillAnimation(e.GetSnapshot())
 	s.runtimeMessage(e)
 }
 

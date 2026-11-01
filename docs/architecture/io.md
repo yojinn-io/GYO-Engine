@@ -87,7 +87,8 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
   - `Helpers::WriteFileAtomically` is the one atomic write (D56; the editor's save, and IP-5's settings later): the
     bytes go to `<name>.tmp.<time>.<random>` beside the target, which is closed and then moved over it, so a reader
     sees the old file or all of the new bytes. When a step fails the temporary file is removed and the target keeps
-    its old file. It works on any `IFileSystem` whose `Move` replaces in one step; the parent directory must exist.
+    its old file. It works on any `IFileSystem` whose `Move` replaces in one step; the parent directory must exist
+    unless the caller asks for it to be created (User files, below).
   - `FS::NativeFileUri` gives the file URI of a native UTF-8 path for this backend, making a relative path
     absolute against the current directory first, as the OS would (`Os::Files::MakeAbsolute`). So a relative path
     keeps its dot segments on POSIX, while on Windows `GetFullPathNameW` has already removed them. A current
@@ -102,6 +103,18 @@ engine/asset ──→ engine/io (IFileSystem, Vfs, Uri) ──→ engine/os (Fi
 - **Errors.** Failures are `IoError`. When a backend converts an engine/os failure, it chooses the `IoErrorCode`,
   keeps the inner message, and records the cause with `Base::CauseDetail(osError, outerDetail)`, for example
   `C:/x/y.dxil; NotFound: win32=3; path_bytes=271`. The native error code is never dropped.
+- **User files** (v8-engine-io-user-files). Helpers for native paths a person names, in UTF-8, through
+  `IFileSystem`; the asset and mount paths do not use them. `Helpers::ProbeFileStamp` reports a missing file as
+  `exists == false`, refuses anything that is not a regular file from its status before opening it (InvalidPath),
+  and reads the file whole for its hash, up to the caller's `ReadAllOptions::maxBytes`.
+  `Helpers::WriteFileAtomically` with `createParentDirectories` creates the missing directories above the file
+  first; a file right under a volume's root needs none. `FS::IsNativePathWithin` decides whether a file written at
+  a native path lands in a root: the candidate's parent is resolved by the OS (`Os::Files::MakeAbsolute`, then
+  `Os::Files::ResolvedPath`, links before '..') and its last name kept as written, since an atomic save renames
+  over that name; the root is resolved whole; a trailing separator names the directory before it; names are
+  compared with `Os::Files::SamePathComponent`; a path the OS cannot resolve is compared with '.' and '..' removed
+  as written. It changes no path and is not a sandbox: a link named inside the root counts as inside. A namespace
+  prefix is InvalidPath, as in the file mapping.
 
 Behaviour that changed with this contract (io-contracts):
 
@@ -159,6 +172,6 @@ Behaviour that changed with io-native-paths (D54):
    links): add a resolving helper over engine/os beside the mapping instead of normalizing inside it. One site still
    normalizes a native path lexically: the asset resolver's `allowAbsolutePath` removes the dot segments of an
    absolute catalog path and collapses a UNC path's leading `//` (no product sets it; os-subsystem HANDOFF, open
-   items, D55).
+   items, D55). `FS::IsNativePathWithin` is such a resolving helper; it only decides containment and changes no path.
 4. A scheme other than `file://` needs RFC 3986 rules the logical-path `Uri` does not have: split the URI type
    instead of growing this one.

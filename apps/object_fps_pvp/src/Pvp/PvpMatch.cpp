@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/WireCounter.hpp"
+#include "engine/base/Assert.hpp"
 #include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/linear/Vec3d.hpp"
@@ -23,11 +24,14 @@ std::uint64_t FutureTick(std::uint64_t tick, std::uint64_t duration) {
     return *deadline;
 }
 }
-PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& stance)
-    : arena_(std::move(arena)), rules_(rules), stance_(stance) {
+PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& stance,
+                   const PlayerAnimationRules& animation, std::shared_ptr<const PlayerHitModel> hitModel)
+    : arena_(std::move(arena)), rules_(rules), stance_(stance), animation_(animation), hitModel_(std::move(hitModel)) {
+    if (!hitModel_) throw std::invalid_argument("PvpMatch needs a hit model");
     std::string error;
     if (!arena_.Validate(error)) throw std::invalid_argument(error);
     if (!ValidShotDamageBounds(rules_.shotDamage, rules_.maximumShotDamage, rules_.maximumHp) ||
+        !ValidPartDamage(rules_) ||
         rules_.magazineCapacity == 0 || !std::isfinite(rules_.shotRange) || rules_.shotRange < 0 ||
         rules_.maximumReferenceAge < std::chrono::nanoseconds::zero())
         throw std::invalid_argument("Invalid combat rules");
@@ -45,6 +49,9 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
         player.combat.playerId = playerId;
         player.combat.hp = rules_.maximumHp;
         player.combat.magazineAmmo = rules_.magazineCapacity;
+        // A joining player's first value: a reset at the current tick.
+        player.animation = AdvancePlayerAnimation(animation_, std::nullopt, nullptr, player.state, tick_);
+        player.animationState = player.state;
         players_.emplace(playerId, player);
         return true;
     }
@@ -349,12 +356,12 @@ bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId,
     } else {
         const auto nextAllowedShotTick = FutureTick(tick_, rules_.cooldownTicks);
         // Build this view for each action: a preceding lethal hit has
-        // already removed its target from the live hit population.
-        std::vector<PlayerState> targets;
-        for (const auto& [id, target] : players_) {
-            static_cast<void>(id);
-            if (target.state.lifeState == LifeState::Alive) targets.push_back(target.state);
-        }
+        // already removed its target from the live hit population. The
+        // shapes are this tick's, placed once (v8-product-hitbox-tick-pose (a)).
+        const auto& shapes = TickShapes();
+        std::vector<ShotTarget> targets;
+        for (const auto& [id, target] : players_)
+            if (target.state.lifeState == LifeState::Alive) targets.push_back({id, shapes.at(id)});
         const auto hit = QueryShot(arena_, stance_, player.state, shot.yaw, shot.pitch, targets, rules_.shotRange);
         --player.combat.magazineAmmo;
         player.combat.lastShotActionId = actionId;
@@ -366,13 +373,13 @@ bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId,
         if (hit.kind == ShotHitKind::Player) {
             auto& target = players_.at(hit.targetId);
             decision.targetLifeGeneration = target.state.lifeGeneration;
-            decision.hitPart = HitPart::Body; // v7.1: no hitbox yet (pv7 §7)
-            decision.damage = Engine::Math::Min(rules_.shotDamage, target.combat.hp);
+            decision.hitPart = hit.part; // the hit shape's part (v8-product-hitbox-shot)
+            decision.damage = ShotDamage(rules_, decision.hitPart, target.combat.hp);
             target.combat.hp -= decision.damage;
             ++target.combat.damageCount;
             target.combat.lastDamageTick = tick_;
             target.combat.lastAttackerId = playerId;
-            target.combat.lastHitPart = HitPart::Body;
+            target.combat.lastHitPart = hit.part;
             if (target.combat.hp == 0) Kill(target);
         }
     }
@@ -381,6 +388,8 @@ bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId,
 }
 
 void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
+    actionsCombat_.clear();
+    for (const auto& [id, player] : players_) actionsCombat_.emplace(id, player.combat);
     std::vector<std::tuple<std::uint64_t, PlayerId, ActionId>> order;
     std::map<PlayerId, std::vector<ActionId>> ascending;
     for (auto& [playerId, player] : players_) {
@@ -538,9 +547,47 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
         }
     }
     ResolveActions(referenceAge);
+    // Every player once a tick, after movement, life boundaries and shots,
+    // so a respawn or a skipped movement tick cannot be missed (A1 review S1).
+    for (auto& [id, player] : players_) {
+        static_cast<void>(id);
+        AdvanceAnimation(player);
+    }
 }
 
-void PvpMatch::Reset() noexcept { players_.clear(); tick_ = 0; }
+void PvpMatch::AdvanceAnimation(Participant& player) {
+    player.animation = AdvancePlayerAnimation(animation_, player.animation, &player.animationState, player.state, tick_);
+    player.animationState = player.state;
+}
+
+const std::map<PlayerId, std::vector<PlayerWorldHitShape>>& PvpMatch::TickShapes() {
+    if (shapesTick_ == tick_) return shapes_;
+    shapes_.clear();
+    for (const auto& [id, player] : players_) {
+        if (player.state.lifeState != LifeState::Alive) continue;
+        // The animation of this tick before the tick ends advances it: the
+        // same pure step on the same values, not written back. It reads
+        // movement and life only, so for a target still alive at the end of
+        // the tick it equals the value the snapshot of this tick carries.
+        const auto animation = AdvancePlayerAnimation(animation_, player.animation, &player.animationState,
+                                                      player.state, tick_);
+        hitModel_->Shapes({arena_, stance_, player.state, actionsCombat_.at(id), animation, tick_}, shapes_[id]);
+    }
+    shapesTick_ = tick_;
+    return shapes_;
+}
+
+void PvpMatch::Reset() noexcept {
+    players_.clear();
+    tick_ = 0;
+    shapesTick_ = 0;
+    shapes_.clear();
+    actionsCombat_.clear();
+}
+
+void RequireValidAnimation(const WorldSnapshot& snapshot) {
+    GYO_ASSERT(ValidPlayerAnimations(snapshot.players, snapshot.animation, snapshot.tick));
+}
 
 WorldSnapshot PvpMatch::Snapshot() const {
     WorldSnapshot result{tick_, {}, {}};
@@ -550,7 +597,9 @@ WorldSnapshot PvpMatch::Snapshot() const {
         state.contiguousPendingCommands = ContiguousPending(participant);
         result.players.push_back(state);
         result.combat.push_back(participant.combat);
+        result.animation.push_back(participant.animation);
     }
+    RequireValidAnimation(result);
     return result;
 }
 

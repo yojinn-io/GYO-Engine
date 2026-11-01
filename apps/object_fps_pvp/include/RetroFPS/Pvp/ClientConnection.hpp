@@ -125,6 +125,10 @@ public:
     // version, then compares its content; none installed is an identity
     // mismatch. Ids repeat or a zero digest throws.
     void SetArenaIdentities(std::vector<ArenaIdentity> installed);
+    // AnimationContentDigest of the animation content this Client poses with
+    // (protocol-v9 §4.6): a Welcome with another digest fails the join. Unset,
+    // nothing is compared. Zero is invalid and throws.
+    void SetAnimationDigest(std::uint64_t digest);
     // Repeated submissions contain the entire immutable unacknowledged window.
     // The worker coalesces complete windows; it never keeps only their last step.
     void SendInput(PlayerInput input);

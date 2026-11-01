@@ -3,8 +3,8 @@ package adapter
 import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 	"math"
 	"testing"
 )
@@ -93,22 +93,22 @@ func TestCombatRulesAndResultsValidation(t *testing.T) {
 		}
 	}
 	snapshot := &runtime.WorldSnapshot{Players: []*runtime.PlayerState{{LifeGeneration: 1, LifeState: runtime.LifeState_LIFE_ALIVE, Grounded: true, PlayerId: 1, MovementEpoch: 1}}}
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("combat missing")
 	}
-	snapshot.Combat = []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 2, Hp: 100}}
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	snapshot.Combat = []*runtime.CombatState{{LifeGeneration: 1, MagazineAmmo: 12, PlayerId: 2, Hp: 100000}}
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("combat identity mismatch")
 	}
 	snapshot.Combat[0].PlayerId = 1
-	snapshot.Combat[0].Hp = 101
-	if _, err := SnapshotForClient(snapshot, testRules()); err == nil {
+	snapshot.Combat[0].Hp = 100001
+	if _, err := snapshotForClient(snapshot, testRules()); err == nil {
 		t.Fatal("invalid hp")
 	}
-	snapshot.Combat[0].Hp = 75
+	snapshot.Combat[0].Hp = 75000
 	snapshot.Combat[0].NextAllowedShotTick = 90
-	out, err := SnapshotForClient(snapshot, testRules())
-	if err != nil || out.Combat[0].Hp != 75 || out.Combat[0].NextAllowedShotTick != 90 {
+	out, err := snapshotForClient(snapshot, testRules())
+	if err != nil || out.Combat[0].Hp != 75000 || out.Combat[0].NextAllowedShotTick != 90 {
 		t.Fatal("combat state mapping")
 	}
 }
@@ -116,7 +116,7 @@ func TestCombatRulesAndResultsValidation(t *testing.T) {
 func TestReadyRequiresRulesAndBoundsWorstCaseWelcome(t *testing.T) {
 	// pv8 §3: the movement rules are part of the worst case.
 	ready := &runtime.Ready{JumpHeight: .6, Gravity: 18, CrouchBodyHeight: 1.2, CrouchEyeHeight: 1, CrouchSpeedScale: .5, SprintSpeedScale: 1,
-		TickRate: 60, SnapshotIntervalTicks: 1, ArenaVersion: math.MaxUint32, ArenaDigest: 1, CombatRules: testRules()}
+		TickRate: 60, SnapshotIntervalTicks: 1, ArenaVersion: math.MaxUint32, ArenaDigest: 1, AnimationDigest: 1, CombatRules: testRules()}
 	for ReadyFitsWelcome(ready) {
 		ready.ArenaId += "x"
 	}
@@ -129,11 +129,15 @@ func TestReadyRequiresRulesAndBoundsWorstCaseWelcome(t *testing.T) {
 	}
 	// The largest time echo (pv7 §3) is part of the worst case.
 	largest := uint64(math.MaxUint64)
-	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint32, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, ArenaDigest: ready.ArenaDigest, CombatRules: RulesForClient(ready.CombatRules),
+	welcome := &client.Welcome{JumpHeight: .6, Gravity: 18, PlayerId: math.MaxUint32, TickRate: 60, SnapshotRate: 60, ArenaId: ready.ArenaId, ArenaVersion: ready.ArenaVersion, ArenaDigest: ready.ArenaDigest, AnimationDigest: ready.AnimationDigest, CombatRules: RulesForClient(ready.CombatRules),
 		Clock:            &client.ClockSample{OriginUs: &largest, ReceiveUs: &largest, TransmitUs: largest},
 		CrouchBodyHeight: ready.CrouchBodyHeight, CrouchEyeHeight: ready.CrouchEyeHeight, CrouchSpeedScale: ready.CrouchSpeedScale, SprintSpeedScale: ready.SprintSpeedScale}
 	if proto.Size(welcome)+24 != 1200 {
 		t.Fatalf("maximum admitted Welcome=%d", proto.Size(welcome)+24)
+	}
+	// pv9 §6: animation_digest (10 B) shortens the largest arena id from 1052 to 1042 bytes.
+	if len(ready.ArenaId) != 1042 {
+		t.Fatalf("boundary arena id length=%d", len(ready.ArenaId))
 	}
 	ready.CombatRules = nil
 	if ReadyFitsWelcome(ready) {

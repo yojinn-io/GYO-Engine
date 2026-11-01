@@ -1,0 +1,20 @@
+# Core sites the framework dependency guard reports (docs/framework/architecture.md, Design Invariant 2).
+# Owner: framework. Format: path rule count  # reason. Only shrinks: a batch that removes a site lowers or
+# deletes its entry in the same change; raising a count or adding a line changes a Design Invariant's guard
+# and needs the user's approval (AGENTS.md section 14.4). Empty after v8-framework-invariants
+# (docs/architecture/plans/framework-rework).
+# Rules: include, symbol, target are checked by framework_dependency_guard.py; link ("target:<cmake target> link
+# <count> <name>,<name>...", the forbidden names its link check finds, named so that one cannot be traded for
+# another) by the configure-time check in tests/framework/CMakeLists.txt.
+
+framework/Legacy.cmake target 11                             # the catalog registration's JSON link and the old window host; removed in v8-framework-invariants
+framework/include/gyo/framework/ImGuiSdlHost.hpp symbol 14   # the old window host or path dialogs; replaced by the shell, the ImGui binding and Engine path dialogs, removed in v8-framework-invariants
+framework/include/gyo/framework/SdlPathDialogs.hpp symbol 3  # the old window host or path dialogs; replaced by the shell, the ImGui binding and Engine path dialogs, removed in v8-framework-invariants
+framework/src/CatalogRegistration.cpp include 1              # the catalog registration parses JSON in the core; moves to the JSON binding (v8-framework-catalog-structure), removed in v8-framework-invariants
+framework/src/CatalogRegistration.cpp symbol 1               # the catalog registration parses JSON in the core; moves to the JSON binding (v8-framework-catalog-structure), removed in v8-framework-invariants
+framework/src/ImGuiSdlHost.cpp include 6                     # the old window host or path dialogs; replaced by the shell, the ImGui binding and Engine path dialogs, removed in v8-framework-invariants
+framework/src/ImGuiSdlHost.cpp symbol 39                     # the old window host or path dialogs; replaced by the shell, the ImGui binding and Engine path dialogs, removed in v8-framework-invariants
+framework/src/SdlPathDialogs.cpp include 1                   # the old window host or path dialogs; replaced by the shell, the ImGui binding and Engine path dialogs, removed in v8-framework-invariants
+framework/src/SdlPathDialogs.cpp symbol 7                    # the old window host or path dialogs; replaced by the shell, the ImGui binding and Engine path dialogs, removed in v8-framework-invariants
+target:gyo_tool_framework link 1 nlohmann_json::nlohmann_json  # the catalog registration's JSON parser; moves to the JSON binding (v8-framework-catalog-structure)
+target:gyo_tool_framework_gui link 5 SDL3::SDL3,GYO::PlatformSDLNative,GYO::RenderBackendSDLNative,imgui::core,imgui::sdl3_sdlrenderer3  # the old window host; removed in v8-framework-invariants

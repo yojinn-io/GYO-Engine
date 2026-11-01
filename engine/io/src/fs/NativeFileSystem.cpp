@@ -1,6 +1,7 @@
 #include "engine/io/fs/NativeFileSystem.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <optional>
 #include <span>
@@ -226,6 +227,87 @@ namespace Engine::IO::FS {
         }
 
     } // namespace
+
+    namespace {
+
+        // "a/b/" names the directory "a/b": its empty last name goes; a volume's root ("/", "C:/") stays.
+        std::filesystem::path WithoutTrailingSeparator(std::filesystem::path path) {
+            if (!path.has_filename() && path.has_relative_path()) path = path.parent_path();
+            return path;
+        }
+
+        // Absolute as the OS makes it (Os::Files::MakeAbsolute), nothing removed lexically; as given when the
+        // OS cannot.
+        std::filesystem::path Absolute(const std::filesystem::path& given) {
+            if (auto text = Os::Files::PathToUtf8(given); text && !text.value().empty()) {
+                if (auto made = Os::Files::MakeAbsolute(text.value())) {
+                    if (auto path = Os::Files::PathFromUtf8(made.value())) return std::move(path.value());
+                }
+            }
+            return given;
+        }
+
+        // Links in the existing part followed by the OS before its '..' (Os::Files::ResolvedPath); removed
+        // lexically when the OS cannot resolve the path.
+        std::filesystem::path Resolved(const std::filesystem::path& absolute) {
+            if (auto text = Os::Files::PathToUtf8(absolute)) {
+                if (auto resolved = Os::Files::ResolvedPath(text.value())) {
+                    if (auto path = Os::Files::PathFromUtf8(resolved.value())) return std::move(path.value());
+                }
+            }
+            return absolute.lexically_normal();
+        }
+
+        // Where a file written at the path lands: the parent as the OS resolves it, then the last name as
+        // written (an atomic save renames over the name, a link or not).
+        std::filesystem::path CandidatePath(const std::filesystem::path& given) {
+            const std::filesystem::path absolute = WithoutTrailingSeparator(Absolute(given));
+            const std::filesystem::path name = absolute.filename();
+            if (name == "." || name == "..") return WithoutTrailingSeparator(Resolved(absolute));
+            return WithoutTrailingSeparator((Resolved(absolute.parent_path()) / name).lexically_normal());
+        }
+
+        // The directory the root is on disk: resolved whole, the last name too.
+        std::filesystem::path RootPath(const std::filesystem::path& given) {
+            return WithoutTrailingSeparator(Resolved(WithoutTrailingSeparator(Absolute(given))));
+        }
+
+        bool SameComponent(const std::filesystem::path& left, const std::filesystem::path& right) {
+            auto leftText = Os::Files::PathToUtf8(left);
+            auto rightText = Os::Files::PathToUtf8(right);
+            if (!leftText || !rightText) return false;
+            auto same = Os::Files::SamePathComponent(leftText.value(), rightText.value());
+            return same && same.value();
+        }
+
+        // The Win32 namespace prefixes the file mapping refuses too (Path::FileUriFromNativePath).
+        bool HasNamespacePrefix(const std::string_view utf8) noexcept {
+            return utf8.starts_with("//?/") || utf8.starts_with("//./") || utf8.starts_with("\\\\?\\") ||
+                   utf8.starts_with("\\\\.\\");
+        }
+
+    } // namespace
+
+    IoResult<bool> IsNativePathWithin(const std::string_view utf8Candidate, const std::string_view utf8Root) {
+        if (utf8Candidate.empty() || utf8Root.empty()) return false;
+        for (const std::string_view text : {utf8Candidate, utf8Root}) {
+            if (HasNamespacePrefix(text)) {
+                return Base::Err(IoError::Make(IoErrorCode::InvalidPath, "NativeFS: a namespace prefix is not a path",
+                                               std::string(text)));
+            }
+        }
+        auto candidatePath = Os::Files::PathFromUtf8(utf8Candidate);
+        if (!candidatePath) return Base::Err(FromOs(candidatePath.error(), {}, IoErrorCode::InvalidPath));
+        auto rootPath = Os::Files::PathFromUtf8(utf8Root);
+        if (!rootPath) return Base::Err(FromOs(rootPath.error(), {}, IoErrorCode::InvalidPath));
+        const std::filesystem::path candidate = CandidatePath(candidatePath.value());
+        const std::filesystem::path root = RootPath(rootPath.value());
+        auto candidatePart = candidate.begin();
+        for (auto rootPart = root.begin(); rootPart != root.end(); ++rootPart, ++candidatePart) {
+            if (candidatePart == candidate.end() || !SameComponent(*candidatePart, *rootPart)) return false;
+        }
+        return true;
+    }
 
     IoResult<Path::Uri> NativeFileUri(const std::string_view utf8Path) {
         std::string absolute(utf8Path);
