@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-framework-catalog-structure (docs/framework/architecture.md, Design Invariants 2 and 4; framework-rework D-1). Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/framework-rework/scripts/framework_catalog_mutations.json --build-dir <a tree with BUILD_TESTING=ON and a tool selected>. Known limit without a mutant: the full-text comparison after the rewrite cannot be killed while the rewrite is correct (the old code had the same). A mutant is killed only when its check fails with the expected message.",
+  "mutants": [
+    {
+      "id": "fw-cat-control",
+      "what": "Engine's content path rule accepts a control character",
+      "file": "engine/asset/src/ContentManifest.cpp",
+      "find": " ||\n        std::any_of(path.begin(), path.end(), [](unsigned char value) { return value < 32; })) return false;",
+      "replace": ") return false;",
+      "target": "gyo_framework_tests",
+      "cases": "C*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-cat-descriptor",
+      "what": "A catalog entry may name content.json",
+      "file": "framework/src/CatalogPlan.cpp",
+      "find": "    return Engine::Asset::IsRelativeContentPath(path) && path != \"content.json\";",
+      "replace": "    return Engine::Asset::IsRelativeContentPath(path);",
+      "target": "gyo_framework_tests",
+      "cases": "C*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-cat-duplicate-id",
+      "what": "Duplicate ids in one catalog are accepted",
+      "file": "framework/src/CatalogPlan.cpp",
+      "find": "        if (!ids.insert(entry.id).second) {\n            return Engine::Base::Err(InvalidCatalog(\"duplicate asset id\", entry.id));\n        }\n",
+      "replace": "",
+      "target": "gyo_framework_tests",
+      "cases": "C*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-cat-no-parser",
+      "what": "A text Engine's CatalogParser refuses is read as an empty catalog",
+      "file": "framework/bindings/json/src/CatalogText.cpp",
+      "find": "        return Engine::Base::Err(InvalidCatalog(\"not a catalog v1\", entries.error().message));",
+      "replace": "        return std::vector<CatalogEntry>{};",
+      "target": "gyo_framework_tests",
+      "cases": "C*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-cat-edit-other",
+      "what": "Updating an entry rewrites the first entry instead",
+      "file": "framework/bindings/json/src/CatalogText.cpp",
+      "find": "        const auto [begin, end] = layout->elements[plan->index];",
+      "replace": "        const auto [begin, end] = layout->elements.front();",
+      "target": "gyo_framework_tests",
+      "cases": "C*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-cat-policy-type",
+      "what": "The policy's allowTypeChange is ignored: another type is always allowed",
+      "file": "framework/src/CatalogPlan.cpp",
+      "find": "            if (existing.type != entry.type && !policy.allowTypeChange) {",
+      "replace": "            if (existing.type != entry.type && false) {",
+      "target": "gyo_framework_tests",
+      "cases": "C*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-cat-policy-path",
+      "what": "The policy's allowSharedPath is ignored: a taken path is always allowed",
+      "file": "framework/src/CatalogPlan.cpp",
+      "find": "        } else if (existing.path == entry.path && !policy.allowSharedPath) {",
+      "replace": "        } else if (existing.path == entry.path && false) {",
+      "target": "gyo_framework_tests",
+      "cases": "C*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "fw-cat-core-json",
+      "what": "The core's catalog header includes the JSON library",
+      "file": "framework/include/gyo/framework/CatalogPlan.hpp",
+      "find": "#include \"engine/asset/catalog/CatalogParser.hpp\"\n",
+      "replace": "#include \"engine/asset/catalog/CatalogParser.hpp\"\n#include <nlohmann/json.hpp>\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "CatalogPlan\\.hpp: includes nlohmann/json\\.hpp"
+    },
+    {
+      "id": "fw-cat-json-missing",
+      "what": "The JSON binding is not built",
+      "file": "framework/bindings/json/CMakeLists.txt",
+      "find": "add_library(gyo_tool_framework_json STATIC src/CatalogText.cpp)",
+      "replace": "return()\nadd_library(gyo_tool_framework_json STATIC src/CatalogText.cpp)",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "but no\\s+GYO::ToolFrameworkJson"
+    }
+  ]
+}

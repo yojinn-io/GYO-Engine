@@ -15,9 +15,10 @@ It has two parts. Only the first exists so far:
   Namespace `Gyo::Tools::Framework`, includes `gyo/framework/…`.
   - `GYO::ToolFramework`, no SDL: the headless shell (`RunHeadlessShell`),
     file access on user paths (`FileService`), the read-only catalog mount
-    (`ReadOnlyAssetCatalog`), writing one catalog entry
-    (`CatalogRegistration`), and the neutral types of the system path dialogs
-    (`PathDialog`).
+    (`ReadOnlyAssetCatalog`), registering a catalog entry as structure
+    (`CatalogPlan`: the catalog-level rules and the registration policy), the
+    old text registration (`CatalogRegistration`, until the tools move), and
+    the neutral types of the system path dialogs (`PathDialog`).
   - `GYO::ToolFrameworkWindow`, built where Engine's SDL platform is: the
     windowed shell (`RunWindowShell`), through Engine's neutral platform
     target only.
@@ -25,6 +26,9 @@ It has two parts. Only the first exists so far:
     built where the windowed shell, the SDL renderer and ImGui's SDL backends
     are: ImGui on Engine's SDL renderer, run by the windowed shell
     (`RunImGuiShell`).
+  - The JSON binding `GYO::ToolFrameworkJson` (`framework/bindings/json/`),
+    built with the core: catalog v1 text (`ReadCatalog`, `RegisterAsset`).
+    Whether a text is a catalog v1 is Engine's `CatalogParser`'s to decide.
   - `GYO::ToolFrameworkGui`, the old ImGui and SDL renderer host
     (`ImGuiSdlHost`) and the system path dialogs through SDL
     (`SdlPathDialogs`), until the tools move to the shells and to Engine's
@@ -140,6 +144,15 @@ repair or rebuild the component.
   window, the renderer and ImGui, then the factory's client. Every frame it
   calls `BeginFrame` (before ImGui's frame), `Draw` (inside it), checks
   `WantsExit`, renders and calls `EndFrame`.
+- A tool registers a catalog entry with the JSON binding's
+  `RegisterAsset(text, entry, policy)`: the entry is Engine's
+  `RawCatalogEntry` (id, type, path); the policy says whether the id may get
+  another type and whether the path may already belong to another id (both
+  refused by default; neither is a rule of the content contract). The core's
+  `CheckCatalogEntries` holds the catalog-level rules of the content
+  contract for one catalog, with Engine's `IsRelativeContentPath` as the path
+  rule; across catalogs and against shader bundles `ContentManifest` decides
+  at load. The tool writes the returned text back by atomic replace.
 - A path dialog request carries a kind (open a file, save a file, open a
   folder), the filters, a default location and an opaque tag. The answer comes
   back later with the same tag; the tool maps the tag to its own purpose.

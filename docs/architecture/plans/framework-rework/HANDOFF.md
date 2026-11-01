@@ -35,7 +35,24 @@
 - 全量 CTest 第一次：118/119，`os.boundary_guard` 失敗：H3 用 `_WIN32` 只在 POSIX 編譯，OS 邊界守衛（R2）不允許 tests/framework 用 OS 巨集（`ctest_full.txt`）。我新寫的測試的錯，守衛不改。改成執行時判斷：Engine 的 `CommandLineUtf8` 接受這組 argv 時（Windows 讀程序自己的命令列），H3 直接返回，由 H1 涵蓋。H3 是 fw-shell-argv-raw、fw-shell-failure-code 的殺手，依 D184 宣告：這 2 條重跑要 killed、stale 0（預檢：find 都恰好一次）；全量 CTest 重跑要全過。
 - 結果：2/2（`h3_mutations.txt`）；全量建置成功、CTest 119/119（45.9 s，`-j 6`，`ctest_full_2.txt`；比上一批多 4 條：window_shell、imgui_shell、imgui_shell_no_renderer、shell_headers）。突變合計：外殼 26/26、守衛與連結 19/19（fw-guard-* 11、fw-link-* 8），stale 0。停在連結檢查判定變更的核准關卡（[判定變更](link-check-judgment-change.md)）。外殼批至今約 4.5 h。
 - 2026-11-01：v8-framework-shell 完成（使用者核准判定變更）。回歸修補與外殼批分兩個 commit。估 12～16 h（第 0 關後重估 14～17 h），實際約 5 h。commit `15639727`（回歸修補）、`ea5df6f6`（外殼）。L1：run 41274514145 的 `L1 / linux-x64`、`windows-x64`、`macos-arm64` 第一次就都是 success。同一 run 的 `Quick acceptance / object_fps_pvp / windows-x64` 第一次 failure：建置途中複製 MSVC 執行期 DLL（`concrt140.dll`）到 `build/target/object_fps_pvp/bin/` 時「Permission denied」，測試沒有跑到；這一步屬 pvp 的打包，不建 framework、不碰守衛，判定為環境（runner 上的檔案被佔用）。只重跑失敗的 job（attempt 2），全部 success，CI gate success。第一次的失敗保留在這裡（§14.1）。
-- 下一批：v8-framework-catalog-structure（第 0 關：決策 D-1，已核准 (a)＋b-lite）。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
+- 2026-11-01：v8-framework-catalog-structure 開工（使用者：「開始下一批」）。D-1 已核准 (a)＋b-lite。估 8～12 h。
+- 2026-11-01：v8-framework-catalog-structure 完成，實際約 2 h。L1 結果記在下一行。外殼的公開介面在 PR A 合併後通知工具線（T3a：ui_editor 改用 RunHeadlessShell／RunImGuiShell；T3b：audio_editor 改用 RunHeadlessShell，執行檔自己具名 GYO::ToolFramework）。
+
+### v8-framework-catalog-structure 的事前宣告（2026-11-01，寫程式前）
+
+- 介面（PLAN 第 2.5 節＋D-1）：
+  - Engine（AD4，b-lite）：`Engine::Asset::IsRelativeContentPath(std::string_view)` 從 `ContentManifest.cpp` 的匿名命名空間移到 `ContentManifest.hpp` 公開，行為不變。
+  - 核心（不帶 nlohmann，新標頭 `gyo/framework/CatalogPlan.hpp`）：條目型別用 Engine 的 `RawCatalogEntry`；`RegistrationPolicy { allowTypeChange, allowSharedPath }`（預設都拒絕）；`CheckCatalogEntries`（單一 catalog 內 id 唯一、路徑合 `IsRelativeContentPath` 且不是 content.json）；`PlanRegistration`（新增或更新、previousPath）。`CatalogUpdate` 從舊的 `CatalogRegistration.hpp` 移到這個標頭，舊標頭改為 include 它（定義不變，舊 API 行為不變）。
+  - JSON 綁定 `GYO::ToolFrameworkJson`（`framework/bindings/json/`，隨核心建，自己 PRIVATE 連 nlohmann）：`ReadCatalog(text)`（v1 合法性交給 Engine 的 `CatalogParser::Parse`，再做 `CheckCatalogEntries`）、`RegisterAsset(text, entry, policy)`（保留位元組的改寫從舊碼複製；寫完重新解析並比對全文）。
+  - 舊的 `CatalogRegistration`、它的測試與突變都不動。已知缺陷（更新條目時丟掉額外欄位）照現行行為搬，下一批修（D-6）。
+- cases.json 對齊：以 `ContentManifest::Parse` 分類，只取「content 合法、只列 1 個 catalog、沒有 shader bundle」的案例。實作前重算：適用 34 條（合法 4、不合法 30）、排除 20 條；測試斷言這兩個件數，適用的每條 `ReadCatalog` 的結果要和 `valid` 一致。
+- Red：先讓 `CheckCatalogEntries` 用舊 framework 規則（`IsValidAssetPath` 的複製）跑對齊測試，`asset-path-control` 要失敗（存紀錄）；換成 Engine 的 `IsRelativeContentPath` 後全過。
+- 驗收：L1 三列綠；cases.json 子集 34 條全一致；新 API 對 `convert_taken_path` 情境（路徑已屬另一個 id）以預設政策拒絕；`gyo_audio_editor.cli` 照常通過（含 `convert_taken_path` 回 4）；`AssetContentContractTests` 照常通過；例外清單零新增行；configure 時確認 JSON 綁定有建。
+- 突變（`scripts/framework_catalog_mutations.json`，宣告前預檢：find 恰好一次、預期訊息對實際輸出成立）：拿掉控制字元檢查（Engine）、拿掉 content.json 檢查、拿掉重複 id 檢查、不經 CatalogParser 判斷 version、改寫時動到其他條目、政策 allowTypeChange 被忽略、政策 allowSharedPath 被忽略、核心 include nlohmann（守衛）、JSON 綁定沒建（configure 失敗）。全部要 killed、stale 0。
+- 範圍的限界：寫完後的全文比對在正確的改寫下殺不到（舊碼相同），不設突變；跨 catalog 重複與 shader 重疊不在這批（載入時由 ContentManifest 判定）。
+- 停止條件：超過 18 h，或單一問題累計超過 2 h。
+- 2026-11-01，突變執行前：Red（`red_old_path_rule.txt`：核心先用舊 framework 的路徑規則，C1 只有 `asset-path-control` 不一致、C6 的含換行路徑沒被擋；適用 34、排除 20、合法 4 與宣告相同）→ 換成 Engine 的 `IsRelativeContentPath` 後 Green（`green_engine_path_rule.txt`，C1～C7 全過）。突變目錄 9 條定稿（`scripts/framework_catalog_mutations.json`），預檢：find 都恰好一次；守衛那條的預期對守衛的實際輸出格式成立；JSON 綁定沒建那條的預期對 CMake 折行與不折行都成立。全部要 killed、stale 0。
+- 結果：9/9 killed、stale 0（`mutations.txt`）。D184：所有突變目錄預檢都沒有 stale；錨在這批改過的兩個 CMakeLists 的既有突變，錨點都不在改動的行。殺 fw-shell-binding-missing 的存在檢查前面多了 JSON 綁定的檢查，宣告重跑這一條，要 killed。
 
 ### v8-framework-shell 的事前宣告（2026-11-01，草圖核准後、寫程式前）
 

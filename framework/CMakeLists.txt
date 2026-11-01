@@ -13,6 +13,7 @@ function(gyo_framework_warnings target)
 endfunction()
 
 add_library(gyo_tool_framework STATIC
+    src/CatalogPlan.cpp
     src/CatalogRegistration.cpp
     src/FileService.cpp
     src/HeadlessShell.cpp

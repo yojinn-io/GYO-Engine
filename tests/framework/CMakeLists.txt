@@ -1,10 +1,19 @@
 # The framework layer (docs/framework/architecture.md); added with it, when
 # a tool is selected.
-add_executable(gyo_framework_tests FrameworkCoreTests.cpp HeadlessShellTests.cpp UserFilesParityTests.cpp)
+add_executable(gyo_framework_tests CatalogStructureTests.cpp FrameworkCoreTests.cpp HeadlessShellTests.cpp
+                                   UserFilesParityTests.cpp)
 target_compile_features(gyo_framework_tests PRIVATE cxx_std_20)
-target_link_libraries(gyo_framework_tests PRIVATE GYO::ToolFramework GYO::Os doctest::doctest)
+target_link_libraries(gyo_framework_tests PRIVATE GYO::ToolFramework GYO::ToolFrameworkJson GYO::Os
+                                                  nlohmann_json::nlohmann_json doctest::doctest)
+target_compile_definitions(gyo_framework_tests PRIVATE
+    GYO_ASSET_CONTRACT_FIXTURE="${GYO_REPOSITORY_ROOT}/tests/common/fixtures/asset_contract/cases.json")
 add_test(NAME gyo_framework.core COMMAND gyo_framework_tests)
 set_tests_properties(gyo_framework.core PROPERTIES LABELS "cpu;editor" TIMEOUT 60)
+
+# The JSON binding is built with the core (Design Invariant 2).
+if(NOT TARGET GYO::ToolFrameworkJson)
+    message(FATAL_ERROR "framework: the core is built but no GYO::ToolFrameworkJson")
+endif()
 
 # The shells are built wherever their Engine targets are (Design Invariant 6):
 # a binding or shell that is silently not built would take its tests with it.

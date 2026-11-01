@@ -32,23 +32,6 @@ Base::Result<std::filesystem::path, AssetError> ContentPath(const std::string& p
     return std::move(native.value());
 }
 
-bool IsRelativeContentPath(const std::string& path) {
-    if (path.empty() || path == "." || path.front() == '/' ||
-        path.find('\\') != std::string::npos || path.find(':') != std::string::npos ||
-        std::any_of(path.begin(), path.end(), [](unsigned char value) { return value < 32; })) return false;
-    // Validate the serialized contract independently of host filesystem rules.
-    // Empty segments also reject trailing and repeated separators.
-    std::size_t start = 0;
-    while (true) {
-        const auto end = path.find('/', start);
-        const auto part = std::string_view(path).substr(start,
-            end == std::string::npos ? std::string::npos : end - start);
-        if (part.empty() || part == ".." || part == ".") return false;
-        if (end == std::string::npos) return true;
-        start = end + 1;
-    }
-}
-
 bool IsBundleName(const std::string& name) {
     if (name.empty() || name.front() < 'a' || name.front() > 'z') return false;
     return std::all_of(name.begin(), name.end(), [](unsigned char value) {
@@ -66,6 +49,22 @@ AssetError Invalid(const std::string_view source, const std::string& field) {
 }
 
 } // namespace
+
+bool IsRelativeContentPath(const std::string_view path) noexcept {
+    if (path.empty() || path == "." || path.front() == '/' ||
+        path.find('\\') != std::string_view::npos || path.find(':') != std::string_view::npos ||
+        std::any_of(path.begin(), path.end(), [](unsigned char value) { return value < 32; })) return false;
+    // Validate the serialized contract independently of host filesystem rules.
+    // Empty segments also reject trailing and repeated separators.
+    std::size_t start = 0;
+    while (true) {
+        const auto end = path.find('/', start);
+        const auto part = path.substr(start, end == std::string_view::npos ? std::string_view::npos : end - start);
+        if (part.empty() || part == ".." || part == ".") return false;
+        if (end == std::string_view::npos) return true;
+        start = end + 1;
+    }
+}
 
 Base::Result<ContentManifest, AssetError> ContentManifest::Parse(
     const std::string_view text, const std::string_view sourceName) {
