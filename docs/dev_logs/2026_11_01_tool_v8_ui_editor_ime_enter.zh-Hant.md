@@ -171,6 +171,7 @@ ui_editor 的守衛（`tests/ui_editor/ui_editor_dependency_guard.py`）：
 - PR #132 的 base（`claude/v8-tool-framework-rework`）之後加入了 T4：ui_editor 與 audio_editor 的 Design Invariant 1 改寫成「可以用 Engine 的任何模組，SDL 只走和遊戲相同的路徑」，ui_editor 的守衛也一起改寫，允許 `GYO::Input`。
 - 合併時，`docs/ui_toolchain.md` 和 ui_editor 的守衛、自測、`tests/ui_editor/CMakeLists.txt` 有衝突，一律採用 T4 的版本。上面「ui_editor 的守衛」那段變更，以及突變 m7、m8（針對那個版本），因此不再適用。
 - framework 的 DI 2 與守衛 T4 沒有改，保留本批的修改。
+- 合併後才發現：framework 的 DI 2 與守衛的改寫，由架構整改卡排在 PR B（草稿已和 T4 對齊，使用者「照提案」，條文全文待 PR B 開工時核准）。本批先改了其中與 input 有關的部分（使用者核准），已在工具線的 HANDOFF 記下要通知整改會話；措辭以 PR B 的全文為準。
 - 合併後：三支守衛（framework、ui_editor、audio_editor）的自測與 repo 掃描都通過；framework 與 ui_editor 的 ctest 19／19 通過。
 
 ### 回歸測試與突變
