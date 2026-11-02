@@ -1,6 +1,7 @@
 # The layer games and tools share (docs/framework/architecture.md). It is not a
 # product: GyoBuild adds it once, after the engine, and only while something
-# selected uses it; so far only tools do (Design Invariant 1).
+# selected uses it: a tool, or a game that declares the component FRAMEWORK
+# (Design Invariant 1).
 
 # The warnings every framework target builds with, the bindings' included.
 function(gyo_framework_warnings target)

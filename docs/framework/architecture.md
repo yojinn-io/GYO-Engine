@@ -49,8 +49,10 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
 1. The framework is not a product. It has no row in `engine/config/tools.csv`
    or `engine/config/projects.csv`, no `project.json`, no executable and no
    install or package target. It is built only while a selected product uses
-   it (so far: when at least one tool is selected), so removing every product
-   that uses it leaves the engine and the other products building.
+   it: while a tool is selected, or while a selected game declares the
+   component `FRAMEWORK` in its `project.json` (which links
+   `GYO::ToolFramework`), so removing every product that uses it leaves the
+   engine and the other products building.
    `framework` is a reserved name for apps and tools. Guard: the framework's
    dependency guard and the registry's reserved names.
 2. Dependencies point one way: game or tool → framework → engine. The framework
@@ -146,6 +148,9 @@ repair or rebuild the component.
 
 ## Using it
 
+- A game declares the component `FRAMEWORK` in its `project.json` and
+  links it with `PRIVATE_COMPONENTS FRAMEWORK` (`GYO::ToolFramework`); that
+  is what adds the framework to a build without tools.
 - A tool links `GYO::ToolFramework` (and `GYO::ToolFrameworkImGui` for an
   ImGui window) and includes
   `gyo/framework/…`. The tool's own dependency guard lists them. An ImGui

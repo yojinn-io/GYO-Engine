@@ -7,6 +7,7 @@
     "SDL_AUDIO",
     "SDL_IMAGE",
     "SDL_TTF",
-    "UFBX"
+    "UFBX",
+    "FRAMEWORK"
   ]
 }

@@ -130,6 +130,7 @@ function(gyo_app_link_components target visibility)
     set(SDL_TTF GYO::TextBackendSDLTTF)
     set(UFBX GYO::AssetUfbx)
     set(IMGUI imgui::sdl3_sdlrenderer3)
+    set(FRAMEWORK GYO::ToolFramework)
     foreach(component IN LISTS ARGN)
         # SDL platform is also an implicit dependency of its renderer/input APIs.
         set(available "${declared}")
