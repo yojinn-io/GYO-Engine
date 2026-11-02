@@ -44,6 +44,11 @@ class EditorDependencyGuardTests(unittest.TestCase):
         findings = self.scan({"tools/ui_editor/src/A.cpp": '#include "engine/platform/sdl/SdlPlatformNative.hpp"\n'})
         self.assertEqual(len(findings), 1)
 
+    def test_imgui_internal_fails(self):
+        findings = self.scan({"tools/ui_editor/src/A.cpp": '#include <imgui_internal.h>\n',
+                              "tools/ui_editor/src/PreviewAdapter.cpp": '#include "imgui_internal.h"\n'})
+        self.assertEqual(len(findings), 2)
+
     def test_sdl_target_fails(self):
         findings = self.scan({"tools/ui_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE SDL3::SDL3)\n"})
         self.assertEqual(len(findings), 1)

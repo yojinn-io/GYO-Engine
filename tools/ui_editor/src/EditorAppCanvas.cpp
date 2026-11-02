@@ -62,6 +62,7 @@ void EditorApp::DrawCanvas() {
                                        ImGuiWindowFlags_NoNavInputs;
     if (!ImGui::Begin("Canvas", nullptr, flags)) {
         ImGui::End();
+        previewEditingText_ = false; // no preview drawn, no field takes typing
         return;
     }
     ImGui::Checkbox("Grid", &showGrid_);
@@ -135,7 +136,10 @@ void EditorApp::DrawCanvas() {
         previewMode_,
         canvasHovered || canvasFocused,
         snapToGrid_,
-        gridSize_);
+        gridSize_,
+        physicalInput_);
+    textInputRequest_ = result.textInput;
+    previewEditingText_ = result.textInput.has_value();
     if (result.error) {
         statusMessage_ = "Preview: " + Engine::Base::Describe(*result.error);
     }

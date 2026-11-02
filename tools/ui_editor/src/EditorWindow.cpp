@@ -35,6 +35,7 @@ public:
           editor_(std::move(options), previewAssets_, &dialogs_) {}
 
     [[nodiscard]] bool Initialize(const Framework::ImGuiShellContext& context) override {
+        input_ = &context.input;
         // The preview makes its textures on the native renderer until Engine's
         // SDL renderer has a texture API (platform-sdl Replacement Criterion 2).
         auto* const renderer = Engine::Render::Backend::Sdl::NativeRenderer(context.renderer);
@@ -57,15 +58,29 @@ public:
         editor_.ApplyPathDialogResults();
         editor_.ApplyPendingAssetChanges();
         previewAssets_.BeginFrame();
+        editor_.SetPhysicalInput(&input_->Frame());
     }
 
-    void Draw() override { editor_.Draw(); }
+    void Draw() override {
+        editor_.Draw();
+        // The preview's text field takes text input over its own rect
+        // (v8-input-ui-adapter); otherwise ImGui's fields keep it.
+        if (const auto request = editor_.TakeTextInputRequest()) {
+            input_->RequestTextInput({static_cast<int>(request->x), static_cast<int>(request->y),
+                                      static_cast<int>(request->width), static_cast<int>(request->height)},
+                                     request->cursorPixels);
+        }
+    }
 
     [[nodiscard]] bool WantsExit() const override { return editor_.WantsExit(); }
 
-    void EndFrame() override { previewAssets_.EndFrame(); }
+    void EndFrame() override {
+        editor_.SetPhysicalInput(nullptr);
+        previewAssets_.EndFrame();
+    }
 
 private:
+    Framework::ImGuiShellInput* input_{};
     AssetPreviewContext previewAssets_;
     SdlPathDialogs dialogs_;
     EditorApp editor_;

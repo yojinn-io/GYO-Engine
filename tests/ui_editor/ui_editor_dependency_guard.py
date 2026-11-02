@@ -5,6 +5,7 @@ The rule is a positive list, so no product is named here (AGENTS.md sections 7 a
 - an SDL3/ header, an Engine native-layer header and any SDL_ symbol appear only in the files that use the
   asset preview's native renderer (NATIVE_FILES); there, the only native header is the SDL renderer's and the
   only SDL_ names are the texture and renderer ones (NATIVE_SDL_NAMES); no file uses an SDL_GPU name;
+- no file includes imgui_internal.h: the editor uses ImGui's public API only (v8-input-ui-adapter);
 - every namespaced target (Name::Name) in the tool's CMake files is an allowed target; SDL3:: is not one.
 A new dependency fails until it is added here, which is the point: it changes the editor's Design Invariants.
 
@@ -34,6 +35,8 @@ ALLOWED_TARGETS = {
     "GYO::AssetSdlImage", "GYO::TextBackendSDLTTF",
     "imgui::core", "nlohmann_json::nlohmann_json",
 }
+# ImGui's internals: text input goes through the framework (ImGuiShellInput), not ImGui's private state.
+FORBIDDEN_HEADERS = {"imgui_internal.h"}
 # The asset preview makes its textures on the native SDL renderer (docs/architecture/platform-sdl.md,
 # Replacement Criterion 2); only these files touch SDL or Engine's native layer.
 NATIVE_FILES = {
@@ -63,6 +66,9 @@ def scan(root: Path) -> list[str]:
         text = path.read_text(encoding="utf-8", errors="replace")
         if path.suffix in SUFFIXES:
             for include in INCLUDE.findall(text):
+                if include.rsplit("/", 1)[-1] in FORBIDDEN_HEADERS:
+                    findings.append(f"{relative}: includes {include}")
+                    continue
                 if "/" not in include:
                     continue  # standard headers and the tool's own local headers
                 native = is_native_include(include)

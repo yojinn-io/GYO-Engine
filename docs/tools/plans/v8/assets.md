@@ -396,6 +396,114 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
 1. 兩份 DI 1 的改寫與兩支守衛的變更：2026-11-01 核准（`v8-tool-editor-engine-access-approve`）。
 2. ui_editor 守衛是否掃 `tests/ui_editor`：未定，照現狀不掃。
 
+## `v8-tool-ui-editor-input-adapter`（IU-2）的事前宣告（2026-11-02 核准）
+
+來源：任務卡 `v8-input-ui-adapter`（已核准 `v8-input-ui-adapter-approve`，卡在 `docs/object_fps_pvp/plans/v8/input-ui-adapter-card.md`）。IU-2 由工具線做。
+
+前提：IU-1 已合併（PR #135，`a8a48243`）。本批從 master `a8a48243` 開分支 `claude/v8-tool-ui-editor-input-adapter`。
+
+用到的新介面：
+- `framework/include/gyo/framework/UiTextInput.hpp` 的 `ToUiTextInput(events, shortcut, clipboard)`；
+- `framework/bindings/imgui/include/gyo/framework/imgui/ImGuiShell.hpp` 的 `ImGuiShellContext::input`：`Frame()` 交出這一幀的 `PhysicalInputFrame`，`RequestTextInput(area, cursorPixels)` 要求文字輸入。
+
+模型與檔位：
+
+| 段 | 根據 | 実装者 | 審査者 | 検証者 |
+|---|---|---|---|---|
+| 上段 | ui_editor DI 1 的守衛變更（收緊） | Opus 5.5／high（主會話） | Opus 5.5／high（子 agent，code review） | 只在出現放寬時開，Opus 5.5／high |
+
+- 守衛只收緊：§14.4 規定只收緊時不必另開検証者，改用突變證明新判定抓得到。
+- 這是 Design Invariants 的守衛，第 1～5 項仍照 §14.4 交你核准。
+
+估時：4～6 h（卡上的推論）。超過 1.5 倍就停下回報。
+
+### 改動
+
+1. **`PreviewAdapter`：文字輸入改用 framework 的轉換器。**
+   - 刪掉從 ImGui 字元佇列與 `ImGuiKey` 表拼文字輸入的那段（`PreviewTextInput`）。
+   - 改成 `ToUiTextInput(frame.text, shortcut, clipboard)`：
+     - `shortcut` 依 `ImGui::GetIO().ConfigMacOSXBehaviors` 選 Gui 或 Ctrl，和現在的預覽一致：macOS 用 Cmd；
+     - `clipboard` 用 `ImGui::GetClipboardText`。
+   - 組字事件（Composition）因此進得了預覽的 text_field。這解決了卡上第 3 點：預覽收不到組字。
+2. **刪掉 `imgui_internal.h` 與 `PlatformImeData` 那段，改由預覽交出「文字輸入請求」。**
+   - 請求的內容是編輯中欄位的視窗座標範圍與游標像素位置，放在 `FrameOutput`。
+   - EditorApp 轉交給 EditorClient，EditorClient 在 `Draw` 裡呼叫 `context.input.RequestTextInput`。
+   - 這樣 `PreviewAdapter` 不必知道 ImGui 綁定，測試可以直接建構 `TextEvent` 交給它（卡上的介面要求 e）。
+3. **輸入幀的傳遞：** EditorClient 在 `BeginFrame` 把 `context.input.Frame()` 交給 EditorApp，EditorApp 再交給 `PreviewAdapter::Draw`。新增一個參數，型別是 `const Engine::Input::PhysicalInputFrame*`，nullptr 表示沒有輸入。
+4. **不改的部分（範圍的限界）：** 預覽的指標、Tab、方向鍵、Enter、Space、Escape 仍從 ImGui 讀。
+   - 卡上 IU-1 只交出文字輸入的轉換器，沒有 `UiInputFrame` 的共用轉換。
+   - 把這些也改走 Engine 的幀，要先有共用的轉換，記為之後的候選。
+5. **守衛（收緊）：** ui_editor 守衛加一條具名規則，任何檔案都不得 include `imgui_internal.h`。
+   - 現在守衛會略過不含 `/` 的 include，所以抓不到它。
+6. **CMake：** `gyo_ui_editor_preview` 用到 `PhysicalInputFrame`（`GYO::Input`）與 `ToUiTextInput`（`GYO::ToolFramework`），兩個都已在守衛的允許清單裡。
+
+### 判定（都通過才算完成）
+
+1. L1 的 ci-windows、ci-linux、ci-macos 三列綠；`gyo_ui_editor.*` 全部通過。
+2. 新測試，用 `TextEvent` 直接建構，不經 SDL：
+   - 打字插入；
+   - 組字時 text_field 顯示組字，確定後變成文字；
+   - shortcut＋A 全選、shortcut＋V 貼上，Gui 與 Ctrl 兩種都測；
+   - Backspace 與方向鍵；
+   - 編輯中才交出文字輸入請求，範圍是欄位的視窗座標；不在編輯時不交出。
+3. 既有測試 `TestPreviewTextFieldTyping` 原本用 ImGui 的鍵盤事件餵輸入，要改成餵 `TextEvent`。
+   - 判定不變：送出的文字、動作紀錄、繫結值都和原本相同；只改輸入的來源。
+   - 依 §14.4 在變更說明寫理由。
+4. 突變（全部預期 killed；file 與 find 在實作後、執行前寫進 `docs/tools/plans/v8/scripts/framework_mutations.json`）：
+   - 丟掉組字事件；
+   - shortcut 固定成 Ctrl；
+   - 不在編輯也交出請求；
+   - 編輯時不交出請求；
+   - 守衛的 `imgui_internal.h` 規則失效：自我測試失敗；
+   - 預覽又 include `imgui_internal.h`：守衛失敗。
+5. L3（macOS 實機，你操作；這次只驗 macOS，你已決定）：
+   - 預覽模式下在 text_field 打英文；
+   - 用日文輸入法組字，預覽裡顯示組字，確定後進入欄位；
+   - Cmd＋A、Cmd＋V；
+   - Inspector 的 ImGui 輸入框照舊能用日文輸入；預覽編輯和 Inspector 編輯切換時，輸入法不會亂跳。
+
+### 範圍的限界
+
+- **Windows 不驗：** Windows 的組字要開 `SdlPlatformOptions::imeComposition`，這次只驗 macOS（你的決定，見卡）。
+- **預覽的其他輸入照舊從 ImGui 讀：** 指標與導覽鍵，見上面第 4 點。
+- **CI 不驗真的輸入法：** CI 只跑 `cpu|shader`，真實輸入法只靠 L3。
+
+### §14.4（守衛只收緊；實作後補結果，交你核准）
+
+1. 守的性質：ui_editor DI 1 與卡上第 2 點「不伸手進 ImGui 內部」。
+2. 緩的面：無。
+3. 緊的面：任何 ui_editor 檔案 include `imgui_internal.h` 都失敗。以前不含 `/` 的 include 一律略過。
+4. 不適用（沒有放寬）。
+5. 根據：任務卡 IU-2；突變結果實作後補上。
+
+### IU-2 實作後的結果（2026-11-02）
+
+- 提交：`945f27ed`（實作）、`e1d2dcce`（回歸修正），之後是測試補強。本機 macOS 全部工具：ctest 67／67，守衛通過。
+- 件數の突き合わせ：一致。
+  - 宣告 11 條，全部 killed；最後一輪 13／13 killed，stale 0。
+  - 經過見 dev_log：兩次是突變或期待寫錯；一次是測試的寫法讓按鍵和選取沒有真的發生，補強後 killed。
+  - 證據在使用者的 Mac，主 checkout `build/evidence/tool-v8-ui-editor-input-adapter/`。
+- 回歸（第一次審查找到，依 §14 停下，你選「(a) 在工具內修」）：
+  - 現象：預覽欄位編輯中，編輯器的快捷鍵和方向鍵微移會一起觸發。
+  - 修正：`TextInputActive()` 合起 ImGui 自己的欄位與預覽欄位兩種情況，用它暫停快捷鍵與微移。
+  - §14.3：先 Red（`red.txt`）後 Green（`green.txt`）；回歸測試在第二次審查後改成檢查實際效果。
+- 和事前宣告不同的地方：
+  - 新增公開函式 `EditorApp::SetPreviewMode`（作用等同 View 選單的 Preview interaction）與 `TextInputActive`。前者供回歸測試使用，後者是修正本身。
+  - L3 加一項：預覽欄位編輯中按 Cmd＋Z、Cmd＋D 或方向鍵，文件不會被改動。
+- 範圍的限界多一項：`cursorPixels` 一直是 0，輸入法的候選窗不會隨游標移動，和舊程式相同。
+
+§14.4（ui_editor 守衛，只收緊；這是 Design Invariants 的守衛；2026-11-02 核准，`v8-tool-ui-editor-input-guard-approve`）：
+1. 守的性質：ui_editor DI 1 與卡上第 2 點「不伸手進 ImGui 內部」。
+2. 緩的面：無。
+3. 緊的面：任何 ui_editor 檔案 include `imgui_internal.h` 都失敗，不管有沒有路徑。以前不含 `/` 的 include 一律略過。
+4. 不適用（沒有放寬）。沒有放寬的證明：舊守衛判失敗的輸入，新守衛照樣判失敗，因為只多了一條規則、其餘沒動，自我測試也全部通過。
+5. 根據：
+   - 任務卡 IU-2；
+   - 突變 `ui-guard-imgui-internal`：預覽又 include 時，守衛失敗；
+   - 突變 `ui-guard-imgui-internal-ignored`：規則失效時，自我測試失敗；
+   - 兩條都 killed（`mutations.txt`）。
+   - 已知漏洞：`imstb_*.h` 和巨集形式的 include 不受檢；風險低，因為要碰 ImGui 的私有狀態需要 `imgui_internal.h`。
+
 ## 實作順序（提案）
 
 ```text
@@ -411,7 +519,8 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-ui-editor-shell-adopt     「high｜Opus 5.5｜T3a：ui_editor 接新外殼與 ImGui 綁定」
 │   ├── v8-tool-user-files-adopt          「medium～high｜Opus 5.5｜T2：兩個工具改用 engine/io」
 │   ├── v8-tool-audio-editor-catalog-adopt「high｜Opus 5.5｜T3b：audio_editor 改用 catalog 結構 API＋JSON 綁定、無視窗外殼」
-│   └── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（已實作並核准）
+│   ├── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（已實作並核准）
+│   └── v8-tool-ui-editor-input-adapter 「high｜Opus 5.5｜IU-2：ui_editor 預覽的文字輸入改用 framework 的轉換器與文字輸入請求」（已實作，守衛收緊已核准，L3 macOS 通過）
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
@@ -459,4 +568,6 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-audio-editor-guard-approve` | （2026-11-01）核准 audio_editor 守衛的放寬（§14.4：加 include 前綴 `engine/io/` 與目標 `GYO::Engine`，T2） | 「核准」 |
 | `v8-tool-audio-editor-json-guard-approve` | （2026-11-01）核准 audio_editor 守衛的放寬（§14.4：加目標 `GYO::ToolFrameworkJson`，T3b） | 「核准」 |
 | `v8-tool-editor-engine-access-approve` | （2026-11-01）核准 T4：ui_editor 與 audio_editor 的 DI 1 改寫，以及兩支守衛的變更（§14.4 的 1～5 見 T4 一節），並在 L1 通過後合併 PR #131。ui_editor 守衛是否掃 `tests/ui_editor` 未定，照現狀不掃 | 對「核准 T4，並在 L1 通過後合併 #131 嗎？」答「核准並合併」 |
+| `v8-tool-ui-editor-input-adapter-predeclare` | （2026-11-02）IU-2 的事前宣告（本文件「`v8-tool-ui-editor-input-adapter`（IU-2）的事前宣告」）核准：改動、判定、突變、L3 與範圍的限界、模型表 | 對「IU-2 的事前宣告照草稿核准嗎？」答「照草稿核准」 |
+| `v8-tool-ui-editor-input-guard-approve` | （2026-11-02）核准 IU-2 的 ui_editor 守衛收緊：任何檔案都不得 include `imgui_internal.h`（§14.4 的 1～5 見 IU-2 實作後的結果） | 對「守衛的收緊（不得 include imgui_internal.h）核准嗎？」答「核准」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |

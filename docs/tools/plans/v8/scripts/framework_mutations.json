@@ -245,6 +245,117 @@
         "tests/ui_editor/ui_editor_dependency_guard.py"
       ],
       "expect": "EditorWindow.cpp: includes engine/platform/sdl/SdlPlatformNative.hpp"
+    },
+    {
+      "id": "ui-input-composition-dropped",
+      "what": "The preview drops the input method's composition before Ui sees it",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "        if (editingText && physicalInput != nullptr) input.text = PreviewTextInput(*physicalInput);",
+      "replace": "        if (editingText && physicalInput != nullptr) {\n            input.text = PreviewTextInput(*physicalInput);\n            std::erase_if(input.text, [](const Engine::Ui::UiTextInput& entry) { return entry.kind == Engine::Ui::UiTextInputKind::Composition; });\n        }",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: the input method's composition is drawn in the field"
+    },
+    {
+      "id": "ui-input-shortcut-always-ctrl",
+      "what": "The preview takes Ctrl for select-all and paste even where ImGui follows macOS",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "ImGui::GetIO().ConfigMacOSXBehaviors ? Framework::TextShortcutModifier::Gui",
+      "replace": "false ? Framework::TextShortcutModifier::Gui",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: Ctrl\\+A does not select all where Command is the shortcut"
+    },
+    {
+      "id": "ui-input-request-when-idle",
+      "what": "The preview asks for text input while no field is edited",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "    if (previewMode && inputEnabled && !editingElement.empty()) {\n        for (const Engine::Ui::UiEvaluatedElement& element : evaluated.value()) {",
+      "replace": "    result.textInput = FrameOutput::TextInputRequest{};\n    if (previewMode && inputEnabled && !editingElement.empty()) {\n        for (const Engine::Ui::UiEvaluatedElement& element : evaluated.value()) {",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: no text input is asked for while no field is edited"
+    },
+    {
+      "id": "ui-input-request-missing",
+      "what": "The preview never asks for text input over the edited field",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "            result.textInput = FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "replace": "            [[maybe_unused]] const auto dropped = FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: an edited field asks for text input"
+    },
+    {
+      "id": "ui-guard-imgui-internal-ignored",
+      "what": "The ui_editor guard no longer refuses imgui_internal.h",
+      "file": "tests/ui_editor/ui_editor_dependency_guard.py",
+      "find": "FORBIDDEN_HEADERS = {\"imgui_internal.h\"}",
+      "replace": "FORBIDDEN_HEADERS = set()",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ui_editor",
+        "-p",
+        "test_ui_editor_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_imgui_internal_fails"
+    },
+    {
+      "id": "ui-guard-imgui-internal",
+      "what": "The preview includes ImGui's internals again",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "#include <imgui.h>\n#include <nlohmann/json.hpp>\n",
+      "replace": "#include <imgui.h>\n#include <imgui_internal.h>\n#include <nlohmann/json.hpp>\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "PreviewAdapter.cpp: includes imgui_internal.h"
+    },
+    {
+      "id": "ui-editor-keys-ignore-preview",
+      "what": "The editor's shortcuts and nudging wait only for ImGui's own fields, not the preview's",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "    return ImGui::GetIO().WantTextInput || previewEditingText_;",
+      "replace": "    return ImGui::GetIO().WantTextInput;",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: typing belongs to the edited preview field, so editor shortcuts wait"
+    },
+    {
+      "id": "ui-editor-preview-editing-unrecorded",
+      "what": "The editor does not record that the preview's field is being edited",
+      "file": "tools/ui_editor/src/EditorAppCanvas.cpp",
+      "find": "    previewEditingText_ = result.textInput.has_value();\n",
+      "replace": "",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: typing belongs to the edited preview field, so editor shortcuts wait"
+    },
+    {
+      "id": "ui-input-request-without-origin",
+      "what": "The text input request ignores where the preview is drawn",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "replace": "FrameOutput::TextInputRequest{element.boundsPixels.x,",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: the request follows the preview's origin exactly"
+    },
+    {
+      "id": "ui-editor-shortcuts-ignore-preview",
+      "what": "The editor's shortcut chords go back to ImGui's own text-input flag only",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "    if (io.KeyCtrl && !TextInputActive()) {",
+      "replace": "    if (io.KeyCtrl && !io.WantTextInput) {",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: a shortcut chord while typing leaves the document and the edit alone"
+    },
+    {
+      "id": "ui-editor-nudge-ignores-preview",
+      "what": "Arrow nudging goes back to ImGui's own text-input flag only",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "selectedNode_.empty() || TextInputActive() || io.KeyCtrl",
+      "replace": "selectedNode_.empty() || io.WantTextInput || io.KeyCtrl",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: an arrow while typing moves no element and keeps the edit"
     }
   ]
 }
