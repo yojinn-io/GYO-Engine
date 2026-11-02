@@ -7,6 +7,7 @@
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 #include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "engine/base/Assert.hpp"
+#include "engine/input/PhysicalInputFrame.hpp"
 #include "engine/text/ITextRasterizer.hpp"
 
 #include <SDL3/SDL.h>
@@ -14,6 +15,8 @@
 #include <backends/imgui_impl_sdlrenderer3.h>
 
 #include <chrono>
+#include <optional>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -55,6 +58,29 @@ bool Asserts(Call&& call) {
     }
     Engine::Base::SetAssertionHandler(previous);
     return asserted;
+}
+
+// Records the text the preview asks to draw.
+class RecordingRasterizer final : public Engine::Text::ITextRasterizer {
+public:
+    std::vector<std::string> texts;
+    Engine::Base::Result<Engine::Text::TextBitmap, Engine::Text::TextError> Rasterize(
+        std::span<const std::byte>, const Engine::Text::TextRasterRequest& request) override {
+        texts.emplace_back(request.utf8);
+        Engine::Text::TextBitmap bitmap{4, 4, 16, std::vector<std::byte>(64, std::byte{255})};
+        return std::move(bitmap);
+    }
+};
+
+// Engine's text input entries for the preview (v8-input-ui-adapter).
+Engine::Input::TextEvent Typed(std::string text) {
+    return {.kind = Engine::Input::TextEvent::Kind::Text, .text = std::move(text)};
+}
+Engine::Input::TextEvent Composing(std::string text) {
+    return {.kind = Engine::Input::TextEvent::Kind::Composition, .text = std::move(text)};
+}
+Engine::Input::TextEvent KeyPress(const Engine::Input::Key key, const Engine::Input::KeyModifiers modifiers = {}) {
+    return {.kind = Engine::Input::TextEvent::Kind::Key, .key = key, .layoutKey = key, .modifiers = modifiers};
 }
 
 class BitmapRasterizer final : public Engine::Text::ITextRasterizer {
@@ -355,11 +381,15 @@ void TestPreviewTextFieldTyping() {
 
     PreviewAdapter preview;
     const PreviewAdapter::Viewport viewport{0.0F, 0.0F, 320.0F, 16.0F};
-    const auto frame = [&](const auto& before) {
+    // Enter, which starts and submits an edit, still comes from ImGui; typing
+    // comes from Engine's input frame through the framework's mapping.
+    const auto frame = [&](const auto& before, std::vector<Engine::Input::TextEvent> text = {}) {
         before(ImGui::GetIO());
+        Engine::Input::PhysicalInputFrame input;
+        input.text = std::move(text);
         fixture.Begin(assets);
         auto output = preview.Draw(*ImGui::GetBackgroundDrawList(), document, "main", viewport, {}, nullptr,
-                                   true, true, false, 8.0F);
+                                   true, true, false, 8.0F, &input);
         fixture.Present(assets);
         return output;
     };
@@ -372,10 +402,9 @@ void TestPreviewTextFieldTyping() {
     Expect(!started.error.has_value(), "the preview draws a text field");
     Expect(started.actions.empty(), "Enter on a text field starts editing without an action");
     frame(key(ImGuiKey_Enter, false));
-    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("ab"); });
-    frame(key(ImGuiKey_Backspace, true));
-    frame(key(ImGuiKey_Backspace, false));
-    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("c"); });
+    frame(none, {Typed("ab")});
+    frame(none, {KeyPress(Engine::Input::Key::Backspace)});
+    frame(none, {Typed("c")});
     auto submitted = frame(key(ImGuiKey_Enter, true));
     frame(key(ImGuiKey_Enter, false));
     Expect(submitted.actions.size() == 1 && submitted.actions[0].stringPayload == std::optional<std::string>{"ac"},
@@ -386,12 +415,187 @@ void TestPreviewTextFieldTyping() {
     // The preview binding now holds the submitted text: a new edit starts from it.
     frame(key(ImGuiKey_Enter, true));
     frame(key(ImGuiKey_Enter, false));
-    frame([](ImGuiIO& io) { io.AddInputCharactersUTF8("d"); });
+    frame(none, {Typed("d")});
     auto again = frame(key(ImGuiKey_Enter, true));
     frame(key(ImGuiKey_Enter, false));
     Expect(again.actions.size() == 1 && again.actions[0].stringPayload == std::optional<std::string>{"acd"},
         "a submit updates the preview binding");
     static_cast<void>(binding);
+}
+
+// The preview edits a text field from Engine's input frame through the
+// framework's mapping (v8-input-ui-adapter): the input method's composition
+// is drawn, the select-all and paste shortcut follows ImGui's macOS setting,
+// and the host is asked for text input only while a field is edited.
+void TestPreviewTextFieldThroughFramework() {
+    using Engine::Input::Key;
+    Fixture fixture;
+    AssetPreviewContext assets;
+    auto rasterizer = std::make_unique<RecordingRasterizer>();
+    RecordingRasterizer& drawn = *rasterizer;
+    assets.Initialize(*fixture.renderer, std::move(rasterizer));
+    Framework::ReadOnlyAssetCatalog catalog;
+    Expect(static_cast<bool>(catalog.Mount(fixture.root / "catalog.json", fixture.root)), "mount the text fixture");
+    assets.Mount(catalog);
+
+    nlohmann::json document = UiDocumentBridge::CreateDefault();
+    nlohmann::json field = MakeDefaultElement(document, *FindElementKind("text_field"));
+    field["rect"]["size_delta"] = {200.0, 12.0};
+    const std::string id = field["id"].get<std::string>();
+    document["canvases"][0]["focus_order"].push_back(id);
+    document["canvases"][0]["children"].push_back(field);
+
+    PreviewAdapter preview;
+    const PreviewAdapter::Viewport viewport{10.0F, 2.0F, 300.0F, 12.0F};
+    ImGuiIO& io = ImGui::GetIO();
+    const bool macBehaviors = io.ConfigMacOSXBehaviors;
+    const auto frame = [&](const ImGuiKey pressed, const bool down, std::vector<Engine::Input::TextEvent> text) {
+        if (pressed != ImGuiKey_None) io.AddKeyEvent(pressed, down);
+        Engine::Input::PhysicalInputFrame input;
+        input.text = std::move(text);
+        fixture.Begin(assets);
+        auto output = preview.Draw(*ImGui::GetBackgroundDrawList(), document, "main", viewport, {}, &assets,
+                                   true, true, false, 8.0F, &input);
+        fixture.Present(assets);
+        return output;
+    };
+    const auto submitText = [&] {
+        auto output = frame(ImGuiKey_Enter, true, {});
+        frame(ImGuiKey_Enter, false, {});
+        return output.actions.size() == 1 ? output.actions[0].stringPayload : std::nullopt;
+    };
+
+    auto idle = frame(ImGuiKey_None, false, {});
+    Expect(!idle.textInput.has_value(), "no text input is asked for while no field is edited");
+    frame(ImGuiKey_Enter, true, {});
+    auto editing = frame(ImGuiKey_Enter, false, {});
+    Expect(editing.textInput.has_value() && editing.textInput->x >= viewport.x && editing.textInput->y >= viewport.y &&
+               editing.textInput->width > 0.0F && editing.textInput->height > 0.0F,
+        "an edited field asks for text input over its rect, in window coordinates");
+    // The same field drawn 100 px right and 50 px down asks exactly that much further.
+    fixture.Begin(assets);
+    const auto moved = preview.Draw(*ImGui::GetBackgroundDrawList(), document, "main",
+                                    {viewport.x + 100.0F, viewport.y + 50.0F, viewport.width, viewport.height}, {},
+                                    &assets, true, true, false, 8.0F, nullptr);
+    fixture.Present(assets);
+    Expect(editing.textInput.has_value() && moved.textInput.has_value() &&
+               moved.textInput->x == editing.textInput->x + 100.0F && moved.textInput->y == editing.textInput->y + 50.0F &&
+               moved.textInput->width == editing.textInput->width,
+        "the request follows the preview's origin exactly");
+
+    frame(ImGuiKey_None, false, {Typed("ab")});
+    // The caret moves by Engine's keys; ImGui's arrow, still pressed, does not edit.
+    frame(ImGuiKey_LeftArrow, true, {KeyPress(Key::Left), Typed("X")});
+    frame(ImGuiKey_LeftArrow, false, {KeyPress(Key::Right)});
+    drawn.texts.clear();
+    frame(ImGuiKey_None, false, {Composing("かな")});
+    Expect(std::ranges::any_of(drawn.texts, [](const std::string& text) { return text.find("かな") != std::string::npos; }),
+        "the input method's composition is drawn in the field");
+    frame(ImGuiKey_None, false, {Composing(""), Typed("仮名")});
+    Expect(submitText() == std::optional<std::string>{"aXb仮名"},
+        "Left moves the caret through Engine's keys and committed text replaces the composition");
+
+    // Ctrl is the shortcut where ImGui does not follow macOS conventions.
+    io.ConfigMacOSXBehaviors = false;
+    ImGui::SetClipboardText("Z");
+    frame(ImGuiKey_Enter, true, {});
+    frame(ImGuiKey_Enter, false, {});
+    frame(ImGuiKey_None, false, {KeyPress(Key::V, {.gui = true}), KeyPress(Key::V, {.ctrl = true})});
+    Expect(submitText() == std::optional<std::string>{"aXb仮名Z"}, "Ctrl+V pastes and Command+V does not");
+
+    // Command is the shortcut where ImGui follows macOS conventions.
+    io.ConfigMacOSXBehaviors = true;
+    frame(ImGuiKey_Enter, true, {});
+    frame(ImGuiKey_Enter, false, {});
+    frame(ImGuiKey_None, false, {KeyPress(Key::A, {.ctrl = true}), Typed("x")});
+    Expect(submitText() == std::optional<std::string>{"aXb仮名Zx"}, "Ctrl+A does not select all where Command is the shortcut");
+    frame(ImGuiKey_Enter, true, {});
+    frame(ImGuiKey_Enter, false, {});
+    frame(ImGuiKey_None, false, {KeyPress(Key::A, {.gui = true}), Typed("y")});
+    Expect(submitText() == std::optional<std::string>{"y"}, "Command+A selects all");
+    io.ConfigMacOSXBehaviors = macBehaviors;
+
+    auto done = frame(ImGuiKey_None, false, {});
+    Expect(!done.textInput.has_value(), "text input is no longer asked for after the submit");
+    assets.Unmount();
+}
+
+// While a preview text field is edited, typing belongs to it: the editor's
+// own shortcuts (Cmd/Ctrl+Z, V, S...) and arrow nudging wait, as they do for
+// ImGui's fields (IU-2 regression: the preview no longer sets ImGui's
+// text-input state, so the editor has to know on its own).
+void TestEditorKeysWaitWhilePreviewTextIsEdited() {
+    Fixture fixture;
+    AssetPreviewContext assets;
+    assets.Initialize(*fixture.renderer, std::make_unique<BitmapRasterizer>());
+    nlohmann::json document = UiDocumentBridge::CreateDefault();
+    nlohmann::json field = MakeDefaultElement(document, *FindElementKind("text_field"));
+    field["rect"]["size_delta"] = {200.0, 24.0};
+    document["canvases"][0]["focus_order"].push_back(field["id"]);
+    document["canvases"][0]["children"].push_back(field);
+    const auto path = fixture.root / "editing.ui.json";
+    Expect(WriteFixture(path, UiDocumentBridge::SerializeCanonical(document)), "write the editing document");
+
+    CommandLineOptions options;
+    options.inputPath = path;
+    EditorApp editor(options, assets);
+    Expect(static_cast<bool>(editor.Initialize()), "the editor opens the editing document");
+    editor.SetPreviewMode(true);
+    ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 display = io.DisplaySize;
+    const bool macBehaviors = io.ConfigMacOSXBehaviors;
+    io.DisplaySize = {1600.0F, 900.0F};
+    io.ConfigMacOSXBehaviors = false; // so the Ctrl modifier below is io.KeyCtrl on every platform
+    ImVec2 mouse{800.0F, 450.0F}; // over the canvas, so the preview takes input
+    std::optional<PreviewAdapter::FrameOutput::TextInputRequest> lastRequest;
+    const auto frame = [&](const ImGuiKey pressed, const bool down) {
+        io.AddMousePosEvent(mouse.x, mouse.y);
+        if (pressed != ImGuiKey_None) io.AddKeyEvent(pressed, down);
+        Engine::Input::PhysicalInputFrame input;
+        fixture.Begin(assets);
+        editor.SetPhysicalInput(&input);
+        editor.Draw();
+        lastRequest = editor.TakeTextInputRequest();
+        editor.SetPhysicalInput(nullptr);
+        fixture.Present(assets);
+        return lastRequest.has_value();
+    };
+    const auto click = [&] {
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+        frame(ImGuiKey_None, false);
+        io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+        return frame(ImGuiKey_None, false);
+    };
+    frame(ImGuiKey_None, false);
+    frame(ImGuiKey_None, false);
+    Expect(!editor.TextInputActive(), "nothing takes typing before a field is edited");
+    frame(ImGuiKey_Enter, true);
+    const bool editing = frame(ImGuiKey_Enter, false);
+    Expect(editing, "Enter starts editing the preview's text field");
+    frame(ImGuiKey_None, false);
+    Expect(editor.TextInputActive(), "typing belongs to the edited preview field, so editor shortcuts wait");
+
+    // Select the field in the editor by clicking it (the canvas then has
+    // keyboard focus, as when nudging), and edit it again with Enter.
+    if (lastRequest) mouse = {lastRequest->x + lastRequest->width * 0.5F, lastRequest->y + lastRequest->height * 0.5F};
+    frame(ImGuiKey_None, false); // the pointer reaches the field before the button goes down
+    if (!click()) {
+        frame(ImGuiKey_Enter, true);
+        frame(ImGuiKey_Enter, false);
+    }
+    Expect(frame(ImGuiKey_None, false), "the selected field is edited again");
+    // A shortcut chord (duplicate) and an arrow (nudge) while typing would
+    // change the document, which restarts the preview and drops the edit.
+    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    frame(ImGuiKey_D, true);
+    frame(ImGuiKey_D, false);
+    io.AddKeyEvent(ImGuiMod_Ctrl, false);
+    Expect(frame(ImGuiKey_None, false), "a shortcut chord while typing leaves the document and the edit alone");
+    frame(ImGuiKey_LeftArrow, true);
+    frame(ImGuiKey_LeftArrow, false);
+    Expect(frame(ImGuiKey_None, false), "an arrow while typing moves no element and keeps the edit");
+    io.DisplaySize = display;
+    io.ConfigMacOSXBehaviors = macBehaviors;
 }
 
 int main() {
@@ -401,5 +605,7 @@ int main() {
     TestPathDialogChoosesAssetFolder();
     TestPathDialogAdapter();
     TestPreviewTextFieldTyping();
+    TestPreviewTextFieldThroughFramework();
+    TestEditorKeysWaitWhilePreviewTextIsEdited();
     return failures == 0 ? 0 : 1;
 }

@@ -1,6 +1,8 @@
 include_guard(GLOBAL)
 
-set(GYO_KNOWN_COMPONENTS SDL_PLATFORM SDL_RENDERER SDL_GPU SDL_INPUT SDL_AUDIO SDL_IMAGE SDL_TTF UFBX IMGUI)
+# FRAMEWORK is the layer games and tools share (docs/framework/architecture.md,
+# Design Invariant 1); it needs no SDL of its own.
+set(GYO_KNOWN_COMPONENTS SDL_PLATFORM SDL_RENDERER SDL_GPU SDL_INPUT SDL_AUDIO SDL_IMAGE SDL_TTF UFBX IMGUI FRAMEWORK)
 
 function(gyo_validate_components)
     foreach(component IN LISTS ARGN)

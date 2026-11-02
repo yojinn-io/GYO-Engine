@@ -45,6 +45,8 @@
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/os/Files.hpp"
 
+#include "gyo/framework/UiTextInput.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -262,38 +264,13 @@ struct PvpApplication::Impl final {
     }
 
     // The frame's text for the field being edited, as Ui's neutral input
-    // (Ui Design Invariant 7): which key means which edit is this product's
-    // mapping; what the edit does is Ui's. Enter and Escape are the UI
-    // frame's activate and cancel.
+    // (Ui Design Invariant 7): which key means which edit is the product's
+    // mapping; this game takes the framework's (v8-input-ui-adapter), with
+    // Ctrl for select-all and paste; what the edit does is Ui's. Enter and
+    // Escape are the UI frame's activate and cancel.
     std::vector<Engine::Ui::UiTextInput> TextInput(const std::vector<Engine::Input::TextEvent>& text) const {
-        using Engine::Input::Key;
-        using Engine::Input::TextEvent;
-        using Engine::Ui::UiTextInputKind;
-        std::vector<Engine::Ui::UiTextInput> result;
-        for (const auto& entry : text) {
-            if (entry.kind == TextEvent::Kind::Text) {
-                result.push_back({UiTextInputKind::Insert, entry.text});
-            } else if (entry.kind == TextEvent::Kind::Composition) {
-                result.push_back({UiTextInputKind::Composition, entry.text, entry.cursor});
-            } else if (entry.modifiers.ctrl && entry.layoutKey == Key::A) {
-                result.push_back({UiTextInputKind::SelectAll});
-            } else if (entry.modifiers.ctrl && entry.layoutKey == Key::V) {
-                result.push_back({UiTextInputKind::Insert, platform->ClipboardText()});
-            } else if (entry.layoutKey == Key::Backspace) {
-                result.push_back({UiTextInputKind::Backspace});
-            } else if (entry.layoutKey == Key::Delete) {
-                result.push_back({UiTextInputKind::Delete});
-            } else if (entry.layoutKey == Key::Left) {
-                result.push_back({UiTextInputKind::MoveLeft});
-            } else if (entry.layoutKey == Key::Right) {
-                result.push_back({UiTextInputKind::MoveRight});
-            } else if (entry.layoutKey == Key::Home) {
-                result.push_back({UiTextInputKind::MoveHome});
-            } else if (entry.layoutKey == Key::End) {
-                result.push_back({UiTextInputKind::MoveEnd});
-            }
-        }
-        return result;
+        return Gyo::Tools::Framework::ToUiTextInput(text, Gyo::Tools::Framework::TextShortcutModifier::Ctrl,
+                                                   [this] { return platform->ClipboardText(); });
     }
 
     Engine::Ui::UiBindingTable Bindings() const {

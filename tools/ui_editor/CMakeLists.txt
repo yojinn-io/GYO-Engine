@@ -84,9 +84,10 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
         # The editor's dialogs on Engine's platform dialogs (SdlPathDialogs.hpp names its types).
         GYO::PlatformSDL
     )
-    # PreviewAdapter calls Math functions directly (sRGB, Rect); EditorApp's
-    # path fields go to UTF-8 through GYO::Os.
-    target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math GYO::Os)
+    # PreviewAdapter calls Math functions directly (sRGB, Rect) and reads
+    # Engine's input frame for text fields (GYO::Input); EditorApp's path
+    # fields go to UTF-8 through GYO::Os.
+    target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math GYO::Input GYO::Os)
     target_sources(gyo_ui_editor PRIVATE src/EditorWindow.cpp)
     # The window and ImGui's SDL backends come from the framework's ImGui
     # binding, the system dialogs from Engine's platform. The preview makes
