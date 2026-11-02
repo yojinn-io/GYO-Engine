@@ -9,8 +9,8 @@
 
 **狀態：**
 - 程式、測試、突變、兩次審查都完成。
-- 守衛的收緊（§14.4）待使用者核准。
-- L3（macOS）還沒做。
+- 守衛的收緊（§14.4）已核准。
+- L3（macOS）全部通過。
 
 相關文件：
 - [任務卡](../object_fps_pvp/plans/v8/input-ui-adapter-card.md)；
@@ -85,3 +85,14 @@
 - **其他輸入照舊從 ImGui 讀：** 預覽的指標、Tab、方向鍵（調整用）、Enter、Space、Escape。要改這些，要先有共用的 `UiInputFrame` 轉換。
 - **候選窗不跟著游標：** `cursorPixels` 一直是 0，和舊程式相同，所以輸入法的候選窗不會隨游標或組字移動。
 - **CI 不驗真的輸入法：** CI 只跑 `cpu|shader`，真實輸入法只靠 L3。
+
+## L3（macOS，2026-11-02 11:00 前後，使用者操作）
+
+全部通過（使用者回報「すべて問題ないです」）：
+1. 預覽模式下在 text_field 打英文。
+2. 日文輸入法：組字顯示在預覽的欄位裡，確定後進入欄位。
+3. Cmd＋A、Cmd＋V。
+4. 編輯中按 Cmd＋Z、Cmd＋D 或方向鍵，文件不會被改動，編輯也不會中斷。
+5. Inspector 的 ImGui 輸入框照舊能用日文輸入；預覽與 Inspector 之間切換時，輸入法不會亂跳。
+
+終端機出現的 `IMKCFRunLoopWakeUpReliable` 是 macOS 輸入法框架的 log，舊版也會出現，和這批無關。
