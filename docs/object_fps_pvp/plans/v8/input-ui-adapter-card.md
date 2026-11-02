@@ -22,6 +22,10 @@
   - IU-1 的介面：核心 `ToUiTextInput(events, shortcut, clipboard)`（`gyo/framework/UiTextInput.hpp`）；ImGui 綁定 `ImGuiShellContext::input`（`Frame()`、`RequestTextInput(area, cursorPixels)`，視窗座標，只在 BeginFrame 或 Draw 呼叫）。
   - IU-1 的 PR 合併後通知工具線開 IU-2，推動會話接著做 IU-3。
 - 2026-11-02：IU-1 合併（PR #135，`a8a48243`）。工具線開了 IU-2 的 PR #136，等使用者核准守衛收緊、做 macOS L3、合併。
+- 2026-11-02：IU-2 合併（PR #136，`4e765390`，工具線，[dev_log](../../../dev_logs/2026_11_02_tool_v8_ui_editor_input_adapter.zh-Hant.md)）。
+  - 預覽改用 `ToUiTextInput`，刪掉 `imgui_internal.h` 與 ImGuiKey 表；ui_editor 守衛加「不得 include `imgui_internal.h`」（收緊，使用者核准）。
+  - 使用者在 macOS 做了 L3，五項都通過：預覽打英文；日文組字的顯示與確定；Cmd+A／Cmd+V；編輯中按 Cmd+Z／Cmd+D 與方向鍵不會改到文件；Inspector 照舊。
+  - 限界：只驗 macOS；預覽的指標與導覽鍵仍從 ImGui 讀，共用的 `UiInputFrame` 轉換是之後的候選；`cursorPixels` 一直是 0。
 - 2026-11-02：IU-3 完成（[事前宣告與執行紀錄](input-ui-adapter-iu3-declaration.md)、[dev_log](../../../dev_logs/2026_11_02_pvp_v8_input_ui_adapter_iu3.zh-Hant.md)）。
   - 遊戲在 `project.json` 宣告組件 `FRAMEWORK`，共通建置只在有工具或有產品宣告時加入 framework（framework DI 1 條文已改）。
   - `PvpApplication` 改用 `ToUiTextInput`，傳 Ctrl，行為不變。
