@@ -152,6 +152,7 @@
 - 2026-11-02：PR B（#134，`d03c01e2`）合併，framework 整改線完成；ui_editor 的 include 改 `gyo/framework/AbsolutePath.hpp`（在 PR B 裡改，我檢視過）。任務卡 `v8-input-ui-adapter` 核准，IU-2 歸工具線；IU-1（PR #135，`a8a48243`）合併後，從 master 開 `claude/v8-tool-ui-editor-input-adapter`，寫 IU-2 `v8-tool-ui-editor-input-adapter` 的事前宣告（assets.md），停在核准關卡。
 - 2026-11-02：IU-2 照核准的事前宣告實作（`945f27ed`），本機 ctest 67／67，突變 6／6＋受影響 11／11 killed（`ui-input-request-missing` 的替換第一次編不過、沒測到，改成能編的寫法後 killed；證據在主 checkout `build/evidence/tool-v8-ui-editor-input-adapter/`）。**停下（§14，回歸）**：審査者指出，預覽 text_field 編輯中 `io.WantTextInput` 不再為 true（舊程式經 `PlatformImeData.WantTextInput` 讓 ImGui 下一幀設它），所以 `EditorApp.cpp:207` 的 Cmd／Ctrl 快捷鍵（貼上元素、復原、重做、複製、儲存）與 `:445` 的方向鍵微移，會在打字時一起觸發，改動文件後預覽重建、編輯中的內容消失。已讀程式確認機制，沒有修、沒有提交修正；等你決定做法。其他指出：判定 2 的方向鍵沒有測；Ctrl+A 在 Gui 模式不選取的那半沒釘住；請求範圍只驗下限。
 - 2026-11-02：你選 (a)，在工具內修回歸：`TextInputActive()`（ImGui 的欄位或預覽欄位）暫停快捷鍵與微移；§14.3 先 Red 後 Green。第二次審查指出回歸測試只驗判斷函式，已改成驗實際效果（編輯中 Ctrl＋D、方向鍵不改文件、不中斷編輯），並加呼叫處的兩條突變；第一次兩條都存活，原因是測試裡 macOS 的 Ctrl／Cmd 對調與點擊順序，修正測試後 killed。最後一輪突變 13／13，ctest 67／67。dev_log 寫好、開 PR；停在關卡：守衛收緊的核准（§14.4）、macOS 的 L3、合併。你說完成後休眠，所以做到這裡就停。
+- 2026-11-02：你核准 IU-2 的守衛收緊（`v8-tool-ui-editor-input-guard-approve`）。PR #136 的 L1 在 `bd88770a`（含全部程式修正）三平台綠。剩 macOS 的 L3 與合併。
 ## A3 用：ui_editor 對外殼的需求（2026-11-01，讀 `framework/src/ImGuiSdlHost.cpp` 與 `PvpApplication::Run` 整理）
 
 A3 現在是架構計畫的 `v8-framework-shell`，草圖在它的 PLAN §2.4（`ImGuiShellContext` 交出 `SdlPlatform&` 與 `SdlRenderer&`，不寫 `imgui.ini`，不加 live frame）。下列保留給 T3a 的事前宣告對照。

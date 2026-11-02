@@ -492,7 +492,7 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
   - L3 加一項：預覽欄位編輯中按 Cmd＋Z、Cmd＋D 或方向鍵，文件不會被改動。
 - 範圍的限界多一項：`cursorPixels` 一直是 0，輸入法的候選窗不會隨游標移動，和舊程式相同。
 
-§14.4（ui_editor 守衛，只收緊；這是 Design Invariants 的守衛，要你核准）：
+§14.4（ui_editor 守衛，只收緊；這是 Design Invariants 的守衛；2026-11-02 核准，`v8-tool-ui-editor-input-guard-approve`）：
 1. 守的性質：ui_editor DI 1 與卡上第 2 點「不伸手進 ImGui 內部」。
 2. 緩的面：無。
 3. 緊的面：任何 ui_editor 檔案 include `imgui_internal.h` 都失敗，不管有沒有路徑。以前不含 `/` 的 include 一律略過。
@@ -520,7 +520,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-user-files-adopt          「medium～high｜Opus 5.5｜T2：兩個工具改用 engine/io」
 │   ├── v8-tool-audio-editor-catalog-adopt「high｜Opus 5.5｜T3b：audio_editor 改用 catalog 結構 API＋JSON 綁定、無視窗外殼」
 │   ├── v8-tool-editor-engine-access    「high｜Opus 5.5｜T4：兩個工具的 DI 1 改成『可用任何 Engine 模組、SDL 只經 Engine 或 framework』，守衛跟著改」（已實作並核准）
-│   └── v8-tool-ui-editor-input-adapter 「high｜Opus 5.5｜IU-2：ui_editor 預覽的文字輸入改用 framework 的轉換器與文字輸入請求」（已實作；守衛收緊與 L3 待你）
+│   └── v8-tool-ui-editor-input-adapter 「high｜Opus 5.5｜IU-2：ui_editor 預覽的文字輸入改用 framework 的轉換器與文字輸入請求」（已實作，守衛收緊已核准；L3 待做）
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
@@ -569,4 +569,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-audio-editor-json-guard-approve` | （2026-11-01）核准 audio_editor 守衛的放寬（§14.4：加目標 `GYO::ToolFrameworkJson`，T3b） | 「核准」 |
 | `v8-tool-editor-engine-access-approve` | （2026-11-01）核准 T4：ui_editor 與 audio_editor 的 DI 1 改寫，以及兩支守衛的變更（§14.4 的 1～5 見 T4 一節），並在 L1 通過後合併 PR #131。ui_editor 守衛是否掃 `tests/ui_editor` 未定，照現狀不掃 | 對「核准 T4，並在 L1 通過後合併 #131 嗎？」答「核准並合併」 |
 | `v8-tool-ui-editor-input-adapter-predeclare` | （2026-11-02）IU-2 的事前宣告（本文件「`v8-tool-ui-editor-input-adapter`（IU-2）的事前宣告」）核准：改動、判定、突變、L3 與範圍的限界、模型表 | 對「IU-2 的事前宣告照草稿核准嗎？」答「照草稿核准」 |
+| `v8-tool-ui-editor-input-guard-approve` | （2026-11-02）核准 IU-2 的 ui_editor 守衛收緊：任何檔案都不得 include `imgui_internal.h`（§14.4 的 1～5 見 IU-2 實作後的結果） | 對「守衛的收緊（不得 include imgui_internal.h）核准嗎？」答「核准」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
