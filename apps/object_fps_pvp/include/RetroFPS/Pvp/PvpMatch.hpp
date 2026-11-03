@@ -75,6 +75,9 @@ struct ActionTiming final {
     bool held{};
 };
 
+// Test seam: reads the Match's private columns (entity-model G2).
+struct PvpMatchTestAccess;
+
 class PvpMatch final {
 public:
     // rules defaults to the product policy; tests and future weapon data may
@@ -131,16 +134,13 @@ private:
         std::uint64_t holdUntil{};
         bool held{};
     };
-    // The entity components of one player (entity-model §3.2): body, combat
-    // and animation. The input source and the diagnostics live in their own
-    // columns below (v8-product-match-entity-split S2).
-    struct Participant final {
-        PlayerState state;
-        CombatState combat;
-        // The animation value of the latest tick and the state it was advanced
-        // to: the next tick's `previous` and `before` (protocol-v9 §4.4).
-        PlayerAnimation animation;
-        PlayerState animationState;
+    // The animation component of one entity: the value of the latest tick and
+    // the state it was advanced to, the next tick's `previous` and `before`
+    // (protocol-v9 §4.4). `before` never leaves the Match.
+    struct AnimationTrack final {
+        EntityId id{};
+        PlayerAnimation value;
+        PlayerState before;
     };
     // The action ledger of one shooter: an input source every shooter has,
     // connected or not (entity-model §3.2). ACK and retirement are the
@@ -170,13 +170,17 @@ private:
     [[nodiscard]] static std::uint32_t ContiguousPending(const PlayerState& state, const Connection& connection) noexcept;
     [[nodiscard]] bool ActionDue(const PlayerState& state, const ActionEntry& entry) const noexcept;
     // Decides one due action now, or starts its cooldown hold (returns false).
-    [[nodiscard]] bool Decide(PlayerId playerId, Participant& player, ActionId actionId, ActionEntry& entry);
+    [[nodiscard]] bool Decide(PlayerId playerId, PlayerState& state, CombatState& combat, ActionId actionId,
+                              ActionEntry& entry);
     void ResetMovementEpoch(PlayerState& state, Connection& connection, MovementResetReason reason);
     void ResolveLifeBoundaries();
     [[nodiscard]] const SpawnPoint* FindSpawn(PlayerId playerId) const;
-    void Kill(Participant& player);
+    void Kill(PlayerState& state, CombatState& combat);
     void ResolveActions(const ShotReferenceAge& referenceAge);
-    void AdvanceAnimation(Participant& player);
+    void AdvanceAnimation(AnimationTrack& track, const PlayerState& state);
+    // The one way an entity leaves the Match: every column, input source and
+    // tick cache at once (entity-model E-7). Returns whether it was present.
+    bool EraseEntity(EntityId entityId);
     // The living players' hit shapes of this tick, placed once on its first
     // shot (v8-product-hitbox-tick-pose (a)).
     [[nodiscard]] const std::map<PlayerId, std::vector<PlayerWorldHitShape>>& TickShapes();
@@ -190,11 +194,16 @@ private:
     // Every player's combat state as this tick's actions began: the shapes
     // are posed with it, so no action of the tick reaches the judged pose.
     std::map<PlayerId, CombatState> actionsCombat_;
-    std::map<PlayerId, Participant> players_;
-    // Columns in ascending EntityId order (entity-model E-5); every player of
-    // players_ has one row in each, inserted by Join and erased by Leave.
+    // Entity components, one column each in ascending EntityId order
+    // (entity-model §3.2, E-5). Every entity has all three; rows are inserted
+    // by Join and erased by EraseEntity only, so the columns stay aligned.
+    std::vector<PlayerState> bodies_;
+    std::vector<CombatState> combats_;
+    std::vector<AnimationTrack> animations_;
+    // Input sources, ascending EntityId: one row per connected entity.
     std::vector<ActionLedger> actionLedgers_;
     std::vector<Connection> connections_;
+    friend struct PvpMatchTestAccess;
     std::uint64_t tick_{};
 };
 

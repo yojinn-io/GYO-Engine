@@ -41,18 +41,19 @@ PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& sta
 bool PvpMatch::Join(PlayerId playerId, std::string& error) {
     error.clear();
     if (playerId == 0) { error = "invalid_player"; return false; }
-    if (players_.contains(playerId)) return true;
-    if (players_.size() >= MaxPlayers) { error = "match_full"; return false; }
+    if (FindEntity(connections_, playerId)) return true;
+    if (bodies_.size() >= MaxPlayers) { error = "match_full"; return false; }
     if (const auto* spawn = FindSpawn(playerId)) {
-        Participant player;
-        player.state = {playerId, spawn->position, Engine::Math::WrapRadians(spawn->yaw), 0, 0};
-        player.combat.playerId = playerId;
-        player.combat.hp = rules_.maximumHp;
-        player.combat.magazineAmmo = rules_.magazineCapacity;
+        PlayerState state{playerId, spawn->position, Engine::Math::WrapRadians(spawn->yaw), 0, 0};
+        CombatState combat;
+        combat.playerId = playerId;
+        combat.hp = rules_.maximumHp;
+        combat.magazineAmmo = rules_.magazineCapacity;
         // A joining player's first value: a reset at the current tick.
-        player.animation = AdvancePlayerAnimation(animation_, std::nullopt, nullptr, player.state, tick_);
-        player.animationState = player.state;
-        players_.emplace(playerId, player);
+        AnimationTrack track{playerId, AdvancePlayerAnimation(animation_, std::nullopt, nullptr, state, tick_), state};
+        InsertEntity(bodies_, state);
+        InsertEntity(combats_, combat);
+        InsertEntity(animations_, std::move(track));
         InsertEntity(actionLedgers_, ActionLedger{playerId});
         InsertEntity(connections_, Connection{playerId});
         return true;
@@ -62,11 +63,23 @@ bool PvpMatch::Join(PlayerId playerId, std::string& error) {
 }
 
 bool PvpMatch::Leave(PlayerId playerId) {
-    const bool present = players_.erase(playerId) != 0;
-    const bool ledger = EraseEntity(actionLedgers_, playerId);
-    const bool connection = EraseEntity(connections_, playerId);
-    GYO_ASSERT(present == ledger && present == connection);
-    return present;
+    // Only a connected entity can leave; a connected entity has every column.
+    if (!FindEntity(connections_, playerId)) return false;
+    return EraseEntity(playerId);
+}
+
+bool PvpMatch::EraseEntity(EntityId entityId) {
+    const bool body = ::fps::pvp::EraseEntity(bodies_, entityId);
+    const bool combat = ::fps::pvp::EraseEntity(combats_, entityId);
+    const bool animation = ::fps::pvp::EraseEntity(animations_, entityId);
+    GYO_ASSERT(body == combat && body == animation);
+    // Input sources only a connected entity has: absent is fine.
+    static_cast<void>(::fps::pvp::EraseEntity(actionLedgers_, entityId));
+    static_cast<void>(::fps::pvp::EraseEntity(connections_, entityId));
+    // Tick caches are rebuilt each tick, but never let one outlive its entity.
+    shapes_.erase(entityId);
+    actionsCombat_.erase(entityId);
+    return body;
 }
 
 bool PvpMatch::ValidInput(const PlayerInput& input) noexcept {
@@ -85,14 +98,14 @@ InputAdmission PvpMatch::AdmitInput(const PlayerInput& input) const noexcept {
     const auto* connection = FindEntity(connections_, input.playerId);
     if (!connection) return InputAdmission::UnknownPlayer;
     if (!ValidInput(input)) return InputAdmission::Malformed;
-    const auto& participant = players_.at(input.playerId);
-    const auto epoch = participant.state.movementEpoch;
+    const auto& state = *FindEntity(bodies_, input.playerId);
+    const auto epoch = state.movementEpoch;
     if (input.movementEpoch != epoch)
         return input.movementEpoch < epoch ? InputAdmission::EpochOld : InputAdmission::EpochFuture;
-    const auto life = participant.state.lifeGeneration;
+    const auto life = state.lifeGeneration;
     if (input.lifeGeneration != life)
         return input.lifeGeneration < life ? InputAdmission::LifeOld : InputAdmission::LifeFuture;
-    const auto cursor = participant.state.lastResolvedCommand;
+    const auto cursor = state.lastResolvedCommand;
     for (const auto& command : input.commands) {
         if (command.sequence <= cursor) continue; // An irrevocably resolved step.
         if (command.sequence - cursor > MaxFutureCommands) return InputAdmission::BeyondWindow;
@@ -108,10 +121,10 @@ bool PvpMatch::CanSubmitInput(const PlayerInput& input) const noexcept {
 
 bool PvpMatch::SubmitInput(const PlayerInput& input) {
     if (!CanSubmitInput(input)) return false;
-    const auto& participant = players_.at(input.playerId);
+    const auto& state = *FindEntity(bodies_, input.playerId);
     auto& connection = *FindEntity(connections_, input.playerId);
     for (const auto& command : input.commands) {
-        if (command.sequence > participant.state.lastResolvedCommand)
+        if (command.sequence > state.lastResolvedCommand)
             connection.commands.try_emplace(command.sequence, command);
     }
     return true;
@@ -258,56 +271,60 @@ const SpawnPoint* SelectSpawn(const Arena& arena, const std::span<const Engine::
 
 const SpawnPoint* PvpMatch::FindSpawn(PlayerId playerId) const {
     std::vector<Engine::Math::Vec3> living;
-    for (const auto& [id, player] : players_) {
-        if (id == playerId || player.state.lifeState == LifeState::Dead) continue;
-        living.push_back(player.state.position);
+    for (const auto& state : bodies_) {
+        if (state.playerId == playerId || state.lifeState == LifeState::Dead) continue;
+        living.push_back(state.position);
     }
     return SelectSpawn(arena_, living);
 }
 
-void PvpMatch::Kill(Participant& player) {
-    player.state.respawnTick = FutureTick(tick_, rules_.respawnTicks);
-    player.state.lifeState = LifeState::Dead;
-    player.state.lifeStateTick = tick_;
-    player.combat.reloadActionId = 0;
-    player.combat.reloadStartTick = 0;
-    player.combat.reloadEndTick = 0;
+void PvpMatch::Kill(PlayerState& state, CombatState& combat) {
+    state.respawnTick = FutureTick(tick_, rules_.respawnTicks);
+    state.lifeState = LifeState::Dead;
+    state.lifeStateTick = tick_;
+    combat.reloadActionId = 0;
+    combat.reloadStartTick = 0;
+    combat.reloadEndTick = 0;
 }
 
 void PvpMatch::ResolveLifeBoundaries() {
-    // std::map order makes concurrent respawns deterministic: later players
-    // see the live capsule placed by every earlier successful respawn.
-    for (auto& [id, player] : players_) {
-        if (player.state.lifeState == LifeState::Dead) {
-            if (tick_ < player.state.respawnTick) continue;
+    // Ascending EntityId makes concurrent respawns deterministic: later
+    // entities see the live capsule placed by every earlier successful respawn.
+    for (std::size_t i = 0; i < bodies_.size(); ++i) {
+        auto& state = bodies_[i];
+        auto& combat = combats_[i];
+        GYO_ASSERT(combat.playerId == state.playerId);
+        const auto id = state.playerId;
+        if (state.lifeState == LifeState::Dead) {
+            if (tick_ < state.respawnTick) continue;
             const auto* spawn = FindSpawn(id);
             if (!spawn) continue; // Keep the due deadline and retry next tick.
-            if (WireCounterExhausted(player.state.lifeGeneration))
+            if (WireCounterExhausted(state.lifeGeneration))
                 throw std::overflow_error("Life generation exhausted");
-            if (WireCounterExhausted(player.state.movementEpoch))
+            if (WireCounterExhausted(state.movementEpoch))
                 throw std::overflow_error("Movement epoch exhausted");
-            ++player.state.lifeGeneration;
-            player.state.lifeState = LifeState::Alive;
-            player.state.lifeStateTick = tick_;
-            player.state.respawnTick = 0;
-            player.state.position = spawn->position;
-            player.state.yaw = Engine::Math::WrapRadians(spawn->yaw);
-            player.state.pitch = 0;
-            player.state.verticalVelocity = 0;
-            player.state.grounded = true;
-            player.state.crouched = false;
-            player.state.sprinting = false;
-            player.combat = CombatState{id};
-            player.combat.hp = rules_.maximumHp;
-            player.combat.magazineAmmo = rules_.magazineCapacity;
-            player.combat.lifeGeneration = player.state.lifeGeneration;
+            ++state.lifeGeneration;
+            state.lifeState = LifeState::Alive;
+            state.lifeStateTick = tick_;
+            state.respawnTick = 0;
+            state.position = spawn->position;
+            state.yaw = Engine::Math::WrapRadians(spawn->yaw);
+            state.pitch = 0;
+            state.verticalVelocity = 0;
+            state.grounded = true;
+            state.crouched = false;
+            state.sprinting = false;
+            combat = CombatState{id};
+            combat.hp = rules_.maximumHp;
+            combat.magazineAmmo = rules_.magazineCapacity;
+            combat.lifeGeneration = state.lifeGeneration;
             // Movement resets never clear the session's action ledger or ACK floor.
-            ResetMovementEpoch(player.state, *FindEntity(connections_, id), MovementResetReason::LifeRespawn);
-        } else if (player.combat.reloadActionId != 0 && tick_ >= player.combat.reloadEndTick) {
-            player.combat.magazineAmmo = rules_.magazineCapacity;
-            player.combat.reloadActionId = 0;
-            player.combat.reloadStartTick = 0;
-            player.combat.reloadEndTick = 0;
+            ResetMovementEpoch(state, *FindEntity(connections_, id), MovementResetReason::LifeRespawn);
+        } else if (combat.reloadActionId != 0 && tick_ >= combat.reloadEndTick) {
+            combat.magazineAmmo = rules_.magazineCapacity;
+            combat.reloadActionId = 0;
+            combat.reloadStartTick = 0;
+            combat.reloadEndTick = 0;
         }
     }
 }
@@ -322,41 +339,42 @@ bool PvpMatch::ActionDue(const PlayerState& state, const ActionEntry& entry) con
         tick_ - entry.acceptedTick >= MaxShotStepLead);
 }
 
-bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId, ActionEntry& entry) {
+bool PvpMatch::Decide(PlayerId playerId, PlayerState& state, CombatState& combat, ActionId actionId,
+                      ActionEntry& entry) {
     const auto& shot = entry.request;
     ShotDecision decision{actionId, tick_};
     decision.kind = shot.kind;
     decision.lifeGeneration = shot.lifeGeneration;
     const auto& age = entry.referenceAge;
-    if (shot.lifeGeneration != player.state.lifeGeneration) {
-        decision.rejection = shot.lifeGeneration < player.state.lifeGeneration ?
+    if (shot.lifeGeneration != state.lifeGeneration) {
+        decision.rejection = shot.lifeGeneration < state.lifeGeneration ?
             ShotRejection::StaleLife : ShotRejection::InvalidLife;
-    } else if (player.state.lifeState == LifeState::Dead) {
+    } else if (state.lifeState == LifeState::Dead) {
         decision.rejection = ShotRejection::Dead;
     } else if (!age || *age < std::chrono::nanoseconds::zero()) {
         decision.rejection = ShotRejection::InvalidReference;
     } else if (*age > rules_.maximumReferenceAge) {
         decision.rejection = ShotRejection::Expired;
-    } else if (player.combat.reloadActionId != 0) {
+    } else if (combat.reloadActionId != 0) {
         decision.rejection = ShotRejection::Reloading;
     } else if (shot.kind == ActionKind::Reload) {
-        if (player.combat.magazineAmmo == rules_.magazineCapacity) {
+        if (combat.magazineAmmo == rules_.magazineCapacity) {
             decision.rejection = ShotRejection::MagazineFull;
         } else {
             const auto endTick = FutureTick(tick_, rules_.reloadTicks);
-            player.combat.reloadActionId = actionId;
-            player.combat.reloadStartTick = tick_;
-            player.combat.reloadEndTick = endTick;
+            combat.reloadActionId = actionId;
+            combat.reloadStartTick = tick_;
+            combat.reloadEndTick = endTick;
             decision.accepted = true;
         }
-    } else if (player.combat.magazineAmmo == 0) {
+    } else if (combat.magazineAmmo == 0) {
         decision.rejection = ShotRejection::EmptyMagazine;
-    } else if (tick_ < player.combat.nextAllowedShotTick) {
+    } else if (tick_ < combat.nextAllowedShotTick) {
         // Only the cooldown is missing: hold once, up to K ticks, then judge
         // everything again (pv7 §6, D-3; K = min(K_max, cooldown), D136).
-        if (!entry.held && player.combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {
+        if (!entry.held && combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {
             entry.held = true;
-            entry.holdUntil = player.combat.nextAllowedShotTick;
+            entry.holdUntil = combat.nextAllowedShotTick;
             return false;
         }
         decision.rejection = ShotRejection::Cooldown;
@@ -367,27 +385,28 @@ bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId,
         // shapes are this tick's, placed once (v8-product-hitbox-tick-pose (a)).
         const auto& shapes = TickShapes();
         std::vector<ShotTarget> targets;
-        for (const auto& [id, target] : players_)
-            if (target.state.lifeState == LifeState::Alive) targets.push_back({id, shapes.at(id)});
-        const auto hit = QueryShot(arena_, stance_, player.state, shot.yaw, shot.pitch, targets, rules_.shotRange);
-        --player.combat.magazineAmmo;
-        player.combat.lastShotActionId = actionId;
-        player.combat.lastShotTick = tick_;
-        player.combat.nextAllowedShotTick = nextAllowedShotTick;
+        for (const auto& body : bodies_) // ascending EntityId: the tie-break order
+            if (body.lifeState == LifeState::Alive) targets.push_back({body.playerId, shapes.at(body.playerId)});
+        const auto hit = QueryShot(arena_, stance_, state, shot.yaw, shot.pitch, targets, rules_.shotRange);
+        --combat.magazineAmmo;
+        combat.lastShotActionId = actionId;
+        combat.lastShotTick = tick_;
+        combat.nextAllowedShotTick = nextAllowedShotTick;
         decision.accepted = true;
         decision.hitKind = hit.kind;
         decision.targetId = hit.targetId;
         if (hit.kind == ShotHitKind::Player) {
-            auto& target = players_.at(hit.targetId);
-            decision.targetLifeGeneration = target.state.lifeGeneration;
+            auto& targetState = *FindEntity(bodies_, hit.targetId);
+            auto& targetCombat = *FindEntity(combats_, hit.targetId);
+            decision.targetLifeGeneration = targetState.lifeGeneration;
             decision.hitPart = hit.part; // the hit shape's part (v8-product-hitbox-shot)
-            decision.damage = ShotDamage(rules_, decision.hitPart, target.combat.hp);
-            target.combat.hp -= decision.damage;
-            ++target.combat.damageCount;
-            target.combat.lastDamageTick = tick_;
-            target.combat.lastAttackerId = playerId;
-            target.combat.lastHitPart = hit.part;
-            if (target.combat.hp == 0) Kill(target);
+            decision.damage = ShotDamage(rules_, decision.hitPart, targetCombat.hp);
+            targetCombat.hp -= decision.damage;
+            ++targetCombat.damageCount;
+            targetCombat.lastDamageTick = tick_;
+            targetCombat.lastAttackerId = playerId;
+            targetCombat.lastHitPart = hit.part;
+            if (targetCombat.hp == 0) Kill(targetState, targetCombat);
         }
     }
     entry.decision = decision;
@@ -396,12 +415,12 @@ bool PvpMatch::Decide(PlayerId playerId, Participant& player, ActionId actionId,
 
 void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
     actionsCombat_.clear();
-    for (const auto& [id, player] : players_) actionsCombat_.emplace(id, player.combat);
+    for (const auto& combat : combats_) actionsCombat_.emplace(combat.playerId, combat);
     std::vector<std::tuple<std::uint64_t, PlayerId, ActionId>> order;
     std::map<PlayerId, std::vector<ActionId>> ascending;
-    for (auto& ledger : actionLedgers_) { // ascending EntityId, like players_
+    for (auto& ledger : actionLedgers_) { // ascending EntityId
         const auto playerId = ledger.id;
-        const auto& player = players_.at(playerId);
+        const auto& state = *FindEntity(bodies_, playerId);
         for (auto& [actionId, entry] : ledger.actions) {
             if (entry.decision) continue;
             if (!entry.referenceMeasured) {
@@ -412,7 +431,7 @@ void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
                 entry.referenceAge = referenceAge && shot.observedAuthorityTick != 0 &&
                     shot.observedAuthorityTick < tick_ ? referenceAge(shot.observedAuthorityTick) : std::nullopt;
             }
-            if (entry.dueTick == 0 && ActionDue(player.state, entry)) entry.dueTick = tick_;
+            if (entry.dueTick == 0 && ActionDue(state, entry)) entry.dueTick = tick_;
             order.emplace_back(entry.acceptedTick, playerId, actionId);
             ascending[playerId].push_back(actionId); // std::map: ascending already
         }
@@ -428,10 +447,11 @@ void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
         static_cast<void>(slot);
         const auto actionId = ascending.at(playerId)[next[playerId]++];
         if (waiting.contains(playerId)) continue;
-        auto& player = players_.at(playerId);
+        auto& state = *FindEntity(bodies_, playerId);
+        auto& combat = *FindEntity(combats_, playerId);
         auto& entry = FindEntity(actionLedgers_, playerId)->actions.at(actionId);
         const bool ready = entry.dueTick != 0 && tick_ >= entry.holdUntil;
-        if (!ready || !Decide(playerId, player, actionId, entry)) waiting.insert(playerId);
+        if (!ready || !Decide(playerId, state, combat, actionId, entry)) waiting.insert(playerId);
     }
 }
 
@@ -480,24 +500,25 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
         throw std::invalid_argument("Invalid match tick");
     tick_ = tick.tickId;
     ResolveLifeBoundaries();
-    for (auto& [id, player] : players_) {
+    for (auto& state : bodies_) {
+        const auto id = state.playerId;
         auto& connection = *FindEntity(connections_, id);
         if (connection.lastMovementResetTick == tick_) continue; // Successful respawn reset boundary.
         if (connection.movementResetScheduled) {
             // The decision belongs to the previous completed tick. Rotation
             // preserves the world clock and pose, but performs no movement.
-            ResetMovementEpoch(player.state, connection, connection.movementResetReason);
+            ResetMovementEpoch(state, connection, connection.movementResetReason);
             continue;
         }
         if (!connection.started) {
             if (!connection.commands.contains(1)) continue;
             connection.started = true;
         }
-        if (WireCounterExhausted(player.state.lastResolvedCommand)) {
-            ResetMovementEpoch(player.state, connection, MovementResetReason::SequenceExhausted);
+        if (WireCounterExhausted(state.lastResolvedCommand)) {
+            ResetMovementEpoch(state, connection, MovementResetReason::SequenceExhausted);
             continue;
         }
-        const auto sequence = player.state.lastResolvedCommand + 1;
+        const auto sequence = state.lastResolvedCommand + 1;
         auto command = connection.lastActualCommand;
         auto source = MovementInputSource::Actual;
         const auto actual = connection.commands.find(sequence);
@@ -521,13 +542,13 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
         command.sequence = sequence;
         ++connection.quality.resolved;
         if (source != MovementInputSource::Actual) ++connection.quality.substituted;
-        player.state = StepMovement(arena_, stance_, player.state, command);
-        const auto pending = ContiguousPending(player.state, connection);
-        player.state.contiguousPendingCommands = pending;
+        state = StepMovement(arena_, stance_, state, command);
+        const auto pending = ContiguousPending(state, connection);
+        state.contiguousPendingCommands = pending;
         TraceMovement({.kind = MovementTraceKind::Resolved, .playerId = id,
-            .epoch = player.state.movementEpoch, .sequence = sequence, .authorityTick = tick_,
+            .epoch = state.movementEpoch, .sequence = sequence, .authorityTick = tick_,
             .source = source, .queued = pending, .count = connection.missingInputTicks,
-            .lifeGeneration = player.state.lifeGeneration});
+            .lifeGeneration = state.lifeGeneration});
         connection.backlogSamples.push_back(pending);
         connection.backlogSum += pending;
         connection.fallbackSamples.push_back(source != MovementInputSource::Actual);
@@ -558,36 +579,41 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
     ResolveActions(referenceAge);
     // Every player once a tick, after movement, life boundaries and shots,
     // so a respawn or a skipped movement tick cannot be missed (A1 review S1).
-    for (auto& [id, player] : players_) {
-        static_cast<void>(id);
-        AdvanceAnimation(player);
+    for (std::size_t i = 0; i < animations_.size(); ++i) {
+        GYO_ASSERT(animations_[i].id == bodies_[i].playerId);
+        AdvanceAnimation(animations_[i], bodies_[i]);
     }
 }
 
-void PvpMatch::AdvanceAnimation(Participant& player) {
-    player.animation = AdvancePlayerAnimation(animation_, player.animation, &player.animationState, player.state, tick_);
-    player.animationState = player.state;
+void PvpMatch::AdvanceAnimation(AnimationTrack& track, const PlayerState& state) {
+    track.value = AdvancePlayerAnimation(animation_, track.value, &track.before, state, tick_);
+    track.before = state;
 }
 
 const std::map<PlayerId, std::vector<PlayerWorldHitShape>>& PvpMatch::TickShapes() {
     if (shapesTick_ == tick_) return shapes_;
     shapes_.clear();
-    for (const auto& [id, player] : players_) {
-        if (player.state.lifeState != LifeState::Alive) continue;
+    for (std::size_t i = 0; i < bodies_.size(); ++i) {
+        const auto& state = bodies_[i];
+        const auto& track = animations_[i];
+        GYO_ASSERT(track.id == state.playerId);
+        if (state.lifeState != LifeState::Alive) continue;
         // The animation of this tick before the tick ends advances it: the
         // same pure step on the same values, not written back. It reads
         // movement and life only, so for a target still alive at the end of
         // the tick it equals the value the snapshot of this tick carries.
-        const auto animation = AdvancePlayerAnimation(animation_, player.animation, &player.animationState,
-                                                      player.state, tick_);
-        hitModel_->Shapes({arena_, stance_, player.state, actionsCombat_.at(id), animation, tick_}, shapes_[id]);
+        const auto animation = AdvancePlayerAnimation(animation_, track.value, &track.before, state, tick_);
+        hitModel_->Shapes({arena_, stance_, state, actionsCombat_.at(state.playerId), animation, tick_},
+                          shapes_[state.playerId]);
     }
     shapesTick_ = tick_;
     return shapes_;
 }
 
 void PvpMatch::Reset() noexcept {
-    players_.clear();
+    bodies_.clear();
+    combats_.clear();
+    animations_.clear();
     actionLedgers_.clear();
     connections_.clear();
     tick_ = 0;
@@ -617,17 +643,18 @@ bool EraseEntity(WorldSnapshot& snapshot, PlayerId entityId) {
 
 WorldSnapshot PvpMatch::Snapshot() const {
     WorldSnapshot result{tick_, {}, {}};
-    for (const auto& [id, participant] : players_) {
-        auto state = participant.state;
-        state.contiguousPendingCommands = ContiguousPending(participant.state, *FindEntity(connections_, id));
+    for (std::size_t i = 0; i < bodies_.size(); ++i) {
+        auto state = bodies_[i];
+        GYO_ASSERT(combats_[i].playerId == state.playerId && animations_[i].id == state.playerId);
+        state.contiguousPendingCommands = ContiguousPending(state, *FindEntity(connections_, state.playerId));
         result.players.push_back(state);
-        result.combat.push_back(participant.combat);
-        result.animation.push_back(participant.animation);
+        result.combat.push_back(combats_[i]);
+        result.animation.push_back(animations_[i].value);
     }
     RequireValidAnimation(result);
     return result;
 }
 
-bool PvpMatch::ContainsPlayer(PlayerId playerId) const noexcept { return players_.contains(playerId); }
+bool PvpMatch::ContainsPlayer(PlayerId playerId) const noexcept { return FindEntity(connections_, playerId) != nullptr; }
 
 } // namespace fps::pvp

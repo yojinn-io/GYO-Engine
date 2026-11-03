@@ -175,6 +175,7 @@
 - 2026-11-03：`v8-product-match-entity-split` 的[事前宣告](v8-product-match-entity-split-declaration.md)寫好（base `edbd827f`、S0～S7、G1／G2／G7、M1～M5、驗收 8 項、估 14～20 h），等使用者同意後開 S0。scratchpad 的 base 工作樹已移除。
 - 2026-11-03：使用者同意（`v8-product-match-entity-split-declaration-approve`）。S0 開始：base 樹（`edbd827f`，scratchpad `base_split`）建兩個 runner；證據目錄 `build/evidence/v8-product-match-entity-split/`。估 14～20 h 從此起算。
 - 2026-11-03：S0 完成（base runner `--list` 42 情境、37 golden）。S1 完成（`78778d00`：EntityId.hpp、EntityColumns.hpp、4 個單元測試 22 斷言；compare 未跑）。S2 完成：`Participant` 只留 state／combat／animation／animationState，`ActionLedger`、`Connection` 兩欄（升冪 vector），連線與帳本相關的公開 API 查對應的欄；產品測試 13,693,626 斷言通過、`authority_digest` 通過、兩樹比對 scale 1「42 scenarios, 0 differing」（`build/evidence/v8-product-match-entity-split/s2_*`）。
+- 2026-11-03：S3 完成：`players_` map 拆成 `bodies_`、`combats_`、`animations_`（`AnimationTrack{id, value, before}`）三欄；`PvpMatch::EraseEntity` 成為唯一刪除入口（Leave 經它）；`ContainsPlayer` 等連線 API 查 `connections_`；`Decide`、`Kill`、`AdvanceAnimation` 改簽名；守衛 G1（降冪 Join 3,2,1、Leave 後 Rejoin）、G2（friend `PvpMatchTestAccess::ColumnIds`，開一槍填滿快取後 Leave，各欄與快取都不含該 id）通過 410 斷言；產品測試 13,694,036 斷言、`authority_digest`、兩樹比對 scale 1 0 差分（`s3_*`）。
 
 ## 未結事項
 
