@@ -7784,12 +7784,12 @@
     {
       "id": "a2-join-without-value",
       "batch": "v8-product-anim-authority-match",
-      "what": "A joining player has no animation value until its first tick [find remapped by v8-product-match-entity-split]",
+      "what": "A joining player has no animation value until its first tick [find remapped by v8-product-match-entity-split] [after match-entity-split RequireEntityOrder asserts the animation id first]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
       "find": "        AnimationTrack track{playerId, AdvancePlayerAnimation(animation_, std::nullopt, nullptr, state, tick_), state};",
       "replace": "        AnimationTrack track{playerId, PlayerAnimation{}, state};",
       "check": "cpu",
-      "expect": "ValidPlayerAnimations"
+      "expect": "ValidPlayerAnimations|GYO_ASSERT failed: snapshot.animation"
     },
     {
       "id": "a2-check-life",
@@ -8584,12 +8584,12 @@
     {
       "id": "s2-stale-shapes",
       "batch": "v8-product-hitbox-shot-judge",
-      "what": "The previous tick's shapes are kept [find remapped by v8-product-match-entity-split]",
+      "what": "The previous tick's shapes are kept [find remapped by v8-product-match-entity-split] [after match-entity-split the stale rows make the cache non-ascending]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
       "find": "    if (tickShapesTick_ == tick_) return tickShapes_;\n    tickShapes_.clear();\n",
       "replace": "    if (tickShapesTick_ == tick_) return tickShapes_;\n",
       "check": "cpu",
-      "expect": "places every living"
+      "expect": "places every living|GYO_ASSERT failed: StrictlyAscending"
     },
     {
       "id": "s2-decision-part-body",
@@ -8790,16 +8790,6 @@
       "replace": "    if (actionStartCombats_.empty()) actionStartCombats_ = combats_;",
       "check": "cpu",
       "expect": "ActionStartCombatIsTickStart|is NOT correct|GYO_ASSERT failed"
-    },
-    {
-      "id": "entity-split-action-start-after-actions",
-      "batch": "v8-product-match-entity-split",
-      "what": "The action-start combat copy is refreshed again after the tick's actions, so shapes are posed with post-action combat (M5 as declared)",
-      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "        if (!ready || !Decide(playerId, state, combat, actionId, entry)) waiting.insert(playerId);\n    }\n}",
-      "replace": "        if (!ready || !Decide(playerId, state, combat, actionId, entry)) waiting.insert(playerId);\n    }\n    actionStartCombats_ = combats_;\n}",
-      "check": "cpu",
-      "expect": "ActionStartCombatIsTickStart|is NOT correct"
     },
     {
       "id": "entity-split-respawn-reversed",

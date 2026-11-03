@@ -634,6 +634,8 @@ const std::vector<PvpMatch::EntityShapes>& PvpMatch::TickShapes() {
         auto& placed = tickShapes_.emplace_back(EntityShapes{state.playerId, {}});
         hitModel_->Shapes({arena_, stance_, state, *actionStart, animation, tick_}, placed.shapes);
     }
+    // A cache is a column too (entity-model E-8): rebuilt whole, ascending, no stale rows.
+    GYO_ASSERT(StrictlyAscending(std::span<const EntityShapes>(tickShapes_)));
     tickShapesTick_ = tick_;
     return tickShapes_;
 }
