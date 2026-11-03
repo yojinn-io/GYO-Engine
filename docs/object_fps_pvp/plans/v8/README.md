@@ -45,7 +45,7 @@ v8-plan
 │   │   ├── v8-product-hitbox-shot            「high（平手局部 xhigh）｜Opus 5.5｜逐部位判定、倍率傷害」
 │   │   ├── v8-product-real-match-acceptance-repair 「high｜Opus 5.5｜修真 Match 開槍的本機驗收（[宣告](v8-product-real-match-acceptance-repair-declaration.md)，已核准）」
 │   │   ├── v8-product-hit-presentation       「上段｜Opus 5.5／high｜受擊動畫依部位、GUI 驗收工具瞄軀幹（[宣告](v8-product-hit-presentation-declaration.md)，已核准）」
-│   │   └── v8-product-hitbox-acceptance      「medium｜Sonnet 5.5｜L1、突變、L2 試玩（收支行）」
+│   │   └── v8-product-hitbox-acceptance      「上段｜Opus 5.5／medium～high｜PR 與 L1（H6′）、B5、L2 kit、L2（G5／G6、試玩）（[宣告](v8-product-hitbox-acceptance-declaration.md)，草稿）」
 │   └── rewind-line                「PR 線：射擊回溯（部位判定線合併後）」
 │       ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
 │       ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
