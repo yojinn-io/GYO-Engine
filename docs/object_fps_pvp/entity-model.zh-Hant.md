@@ -153,13 +153,13 @@ inline constexpr EntityId MatchEntityIdLast  = 0x0FFF'FFFF;  // 2^28−1：契�
 
 ### 3.3 Participant 的拆法（split）
 
-`PvpMatch.hpp` 的 `Participant` 與 `std::map<PlayerId, Participant> players_` 換成上表前五欄。用到 `Participant&` 的私有函式改簽名、算式不改：`Decide(EntityId, PlayerState&, CombatState&, ActionLedger&, …)`、`ResetMovementEpoch(PlayerState&, Connection&, reason)`、`Kill(PlayerState&, CombatState&)`、`AdvanceAnimation(AnimationTrack&, const PlayerState&)`、`ContiguousPending(const PlayerState&, const Connection&)`、`ActionDue(const PlayerState&, const ActionEntry&)`。公開介面簽名不變。
+`PvpMatch.hpp` 的 `Participant` 與 `std::map<PlayerId, Participant> players_` 換成上表前五欄。用到 `Participant&` 的私有函式改簽名、算式不改：`Decide(EntityId, PlayerState&, CombatState&, ActionId, ActionEntry&)`、`ResetMovementEpoch(PlayerState&, Connection&, reason)`、`Kill(PlayerState&, CombatState&)`、`AdvanceAnimation(AnimationTrack&, const PlayerState&)`、`ContiguousPending(const PlayerState&, const Connection&)`、`ActionDue(const PlayerState&, const ActionEntry&)`。公開介面簽名不變。
 
 `players_` 的 16 處使用：
 
 - 迭代（`std::map` 升冪 → 欄的索引順序，逐位元同序）：`FindSpawn`、`ResolveLifeBoundaries`、Tick 移動迴圈、`Decide` 建 targets（改走 `bodies_` 與 `tickShapes_` 合併，**保留現在 `shapes.at(id)` 的不變式 Assert**）、`ResolveActions`、`AdvanceAnimation` 迴圈、`TickShapes`、`Snapshot`。
 - 查找（`at`／`find`／`contains` → `FindEntity`）：Join、Leave、AdmitInput、SubmitInput、CanSubmitActions、SubmitActions、CanAcknowledgeActions、AcknowledgeActions、GetActionResults、GetMovementQuality、RequestMovementResync、GetActionTiming、Decide 的目標、ResolveActions 的射手、ContainsPlayer。
-- **連線相關的公開 API 一律查 `connections_`**（有 Connection 元件才算玩家）：ContainsPlayer、AdmitInput、SubmitInput、Leave、Submit／AcknowledgeActions、GetActionResults、GetMovementQuality、RequestMovementResync、GetActionTiming。`bodies_` 只給判定用。否則 AI 批之後 `Leave(aiId)` 會經玩家路徑刪掉 AI、`AdmitInput` 會接受 AI 的輸入（PlayerId 只是別名，型別擋不住）。AI 批加測試：對 AI 的 id 呼叫這些 API，全部回 Unknown 或 false。
+- **連線相關的公開 API 一律查 `connections_`**（有 Connection 元件才算玩家）：ContainsPlayer、AdmitInput、SubmitInput、Leave、Submit／AcknowledgeActions、GetActionResults、GetMovementQuality、RequestMovementResync、GetActionTiming；`Join` 的人數上限也算 `connections_`。`bodies_` 只給判定用。查到連線後取其他欄的列用帶 GYO_ASSERT 的 `Row()`，不直接解參照（noexcept 的 `AdmitInput` 查不到回 UnknownPlayer）。否則 AI 批之後 `Leave(aiId)` 會經玩家路徑刪掉 AI、`AdmitInput` 會接受 AI 的輸入（PlayerId 只是別名，型別擋不住）。AI 批加測試：對 AI 的 id 呼叫這些 API，全部回 Unknown 或 false。
 - Join → `InsertEntity` 到五欄；Leave → `PvpMatch::EraseEntity(EntityId)`。
 
 **唯一的刪除入口** `void PvpMatch::EraseEntity(EntityId)`：從所有欄（元件、輸入來源）、所有 Tick 內快取、將來的 PoseHistory 同時刪；沒有任何容器在它之後還持有該 id 的列。`Leave` 呼叫它並照舊回傳「原本有沒有」。
@@ -173,7 +173,7 @@ inline constexpr EntityId MatchEntityIdLast  = 0x0FFF'FFFF;  // 2^28−1：契�
 
 ### 3.5 Snapshot 的形狀
 
-- split 期間 C++ `WorldSnapshot{tick, players, combat, animation}` 一欄都不改。`Snapshot()` 依 `bodies_` 的順序，對每個 id 以 `FindEntity` 取 `combats_`、`animations_`、`connections_`（算 contiguousPendingCommands）組成三個同序同長的 vector；順序與內容和現在逐位元相同。
+- split 期間 C++ `WorldSnapshot{tick, players, combat, animation}` 一欄都不改。`Snapshot()` 依 `bodies_` 的順序走；三個元件欄恰等長且同序（Join／`EraseEntity` 同時進出），所以 `combats_`、`animations_` 以同索引讀並 GYO_ASSERT id 相同（實作選擇，xhigh 審查 should-4：迴圈前先 Assert 三欄等長）；`connections_`（算 contiguousPendingCommands）以 `FindEntity` 取。順序與內容和現在逐位元相同。
 - 新增 `RequireEntityOrder(snapshot)`（GYO_ASSERT：三個 vector 的 id 序列嚴格升冪且相同），和 `RequireValidAnimation` 放在一起。
 - 新增自由函數 `EraseEntity(WorldSnapshot&, EntityId)`，一次刪掉所有欄的那一列；host 的逐出改用它（`MatchRuntimeHost.cpp:759-760` 現在只刪兩個）——在缺陷批做（§9.0）。發布前加 `RequireValidSnapshot`。
 - 契約規則：**快照永遠是「一個元件一個 repeated」，每個 repeated 依 EntityId 升冪，含所有有該元件的實體**；不出現每種類一個訊息。C++ `WorldSnapshot` 每多一個可複寫元件就多一個 vector（例如 `bossPhases`，id 集合是 `players` 的子集，仍升冪）。
@@ -301,6 +301,7 @@ inline constexpr EntityId MatchEntityIdLast  = 0x0FFF'FFFF;  // 2^28−1：契�
 | G9 `PoseHistoryMatchesSnapshots` | rewind 批 | 每 Tick 後 `poseHistories_` 最新一格的每個欄位等於該 Tick Snapshot 的對應 body、combat 動作 tick 與 animation | 歷史在 `AdvanceAnimation` 之前寫入 |
 | G10 `AgentRngReproducible` | AI 批 | 同一 seed 跑兩次 digest 相同；換 seed 後 brain 紀錄不同；AI 開槍的情境不經 host 的 reference age 回呼 | `rngState` 用 `std::random_device` 或時鐘；AI 走 reference age |
 | G11 既有 `authority_digest` | 持續 | E-9 的守衛（`tests/object_fps_pvp/CMakeLists.txt:395-444`）；加新種類的批不得改 golden 檔 | — |
+| G13 `ActionStartCombatIsTickStart` | split（M5 存活後加，`v8-product-match-entity-split-m5-g13`） | 記錄型假命中模型斷言 `Shapes()` 收到的 combat 是 Tick 開頭的值（第一槍的紀錄，不是預設也不是第二槍的結果）。digest runner 的合成命中模型不讀 combat，所以 action-start 的正確性只能在 cpu 測試守 | M5b `actionStartCombats_` 只複製一次；`TickShapes` 改讀即時 `combats_`（既有 `s2-combat-after-actions`） |
 | G12 `NoColumnMutationInsideTick` | 第一個非玩家批 | `InsertEntity`／`EraseEntity` 的 `GYO_ASSERT(!inTick_)`；待辦在固定階段套用 | 在 `ResolveActions` 內直接 Insert／Erase |
 
 ## 8. pv10 附錄 C 的改寫建議
