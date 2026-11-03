@@ -8740,6 +8740,56 @@
       "replace": "        std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });\n        std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });",
       "check": "cpu",
       "expect": "PublicationComponentsAgree|is NOT correct"
+    },
+    {
+      "id": "entity-split-insert-appends",
+      "batch": "v8-product-match-entity-split",
+      "what": "InsertEntity appends instead of inserting at the ordered position (M1)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
+      "find": "    return *column.insert(position, std::move(value));",
+      "replace": "    static_cast<void>(position);\n    column.push_back(std::move(value));\n    return column.back();",
+      "check": "cpu",
+      "expect": "is NOT correct|GYO_ASSERT failed"
+    },
+    {
+      "id": "entity-split-erase-swap-and-pop",
+      "batch": "v8-product-match-entity-split",
+      "what": "EraseEntity moves the last element into the hole (M2)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
+      "find": "    column.erase(position);\n    return true;",
+      "replace": "    *position = std::move(column.back());\n    column.pop_back();\n    return true;",
+      "check": "cpu",
+      "expect": "is NOT correct|GYO_ASSERT failed"
+    },
+    {
+      "id": "entity-split-erase-skips-animations",
+      "batch": "v8-product-match-entity-split",
+      "what": "PvpMatch::EraseEntity leaves the animation row behind (M3)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    const bool animation = ::fps::pvp::EraseEntity(animations_, entityId);",
+      "replace": "    const bool animation = body;",
+      "check": "cpu",
+      "expect": "is NOT correct|GYO_ASSERT failed"
+    },
+    {
+      "id": "entity-split-snapshot-reversed",
+      "batch": "v8-product-match-entity-split",
+      "what": "Snapshot walks the columns from the last entity to the first (M4)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    for (std::size_t i = 0; i < bodies_.size(); ++i) {\n        auto state = bodies_[i];",
+      "replace": "    for (std::size_t j = bodies_.size(); j-- > 0;) {\n        const auto i = j;\n        auto state = bodies_[i];",
+      "check": "cpu",
+      "expect": "is NOT correct|GYO_ASSERT failed"
+    },
+    {
+      "id": "entity-split-action-start-stale",
+      "batch": "v8-product-match-entity-split",
+      "what": "The action-start combat copy is taken once and never refreshed, so shapes are posed with a stale combat (M5)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    actionStartCombats_ = combats_; // same order: ascending EntityId",
+      "replace": "    if (actionStartCombats_.empty()) actionStartCombats_ = combats_;",
+      "check": "authority_digest",
+      "expect": "golden authority subset differs"
     }
   ]
 }
