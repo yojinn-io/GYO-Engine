@@ -1,6 +1,6 @@
 # v8-product-hitbox-acceptance 的事前宣告
 
-更新：2026-11-03。Owner：`object_fps_pvp`。**狀態：草稿，等你決定 4 項**（檔位已照建議：「開始，檔位照建議」）。計畫：[hitbox-plan](hitbox-plan.md) 第 8 節（「L1、相關突變、B4／B5 的量測、L2 試玩（收支行）」）。估時 8～14 h（計畫估 4～6 h，見「為什麼比計畫大」；超過 21 h 停下回報）。
+更新：2026-11-03。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hitbox-acceptance-declaration-approve`，2026-11-03，4 項照建議 (a)；檔位照建議。L2 的機器尚待使用者告知，A3 在那之前不開工）。計畫：[hitbox-plan](hitbox-plan.md) 第 8 節（「L1、相關突變、B4／B5 的量測、L2 試玩（收支行）」）。估時 8～14 h（計畫估 4～6 h，見「為什麼比計畫大」；超過 21 h 停下回報）。
 
 ## 這批做什麼
 
