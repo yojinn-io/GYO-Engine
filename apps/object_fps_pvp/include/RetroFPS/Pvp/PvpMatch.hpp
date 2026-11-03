@@ -31,6 +31,10 @@ struct WorldSnapshot final {
 // a value the Gateway would refuse fails the whole Gateway, so it is a
 // Programmer Error here (GYO_ASSERT on ValidPlayerAnimations).
 void RequireValidAnimation(const WorldSnapshot& snapshot);
+// Every component of a snapshot lists the same entities in strictly ascending
+// EntityId order (entity-model E-5, E-9): the order the digest and the wire
+// see is the order of the columns, never of joins and leaves.
+void RequireEntityOrder(const WorldSnapshot& snapshot);
 // Every component of a snapshot names the same entities in the same order
 // (entity-model E-7): what RequireValidAnimation checks for animation, for
 // combat too. The host runs it before a publication leaves the Match side.

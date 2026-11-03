@@ -632,10 +632,18 @@ void RequireValidAnimation(const WorldSnapshot& snapshot) {
     GYO_ASSERT(ValidPlayerAnimations(snapshot.players, snapshot.animation, snapshot.tick));
 }
 
-void RequireValidSnapshot(const WorldSnapshot& snapshot) {
+void RequireEntityOrder(const WorldSnapshot& snapshot) {
+    GYO_ASSERT(StrictlyAscending(std::span<const PlayerState>(snapshot.players)));
     GYO_ASSERT(snapshot.combat.size() == snapshot.players.size());
-    for (std::size_t i = 0; i < snapshot.players.size(); ++i)
+    GYO_ASSERT(snapshot.animation.size() == snapshot.players.size());
+    for (std::size_t i = 0; i < snapshot.players.size(); ++i) {
         GYO_ASSERT(snapshot.combat[i].playerId == snapshot.players[i].playerId);
+        GYO_ASSERT(snapshot.animation[i].playerId == snapshot.players[i].playerId);
+    }
+}
+
+void RequireValidSnapshot(const WorldSnapshot& snapshot) {
+    RequireEntityOrder(snapshot);
     RequireValidAnimation(snapshot);
 }
 
@@ -657,6 +665,7 @@ WorldSnapshot PvpMatch::Snapshot() const {
         result.combat.push_back(combats_[i]);
         result.animation.push_back(animations_[i].value);
     }
+    RequireEntityOrder(result);
     RequireValidAnimation(result);
     return result;
 }
