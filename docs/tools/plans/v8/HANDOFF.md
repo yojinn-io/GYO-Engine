@@ -154,6 +154,7 @@
 - 2026-11-02：你選 (a)，在工具內修回歸：`TextInputActive()`（ImGui 的欄位或預覽欄位）暫停快捷鍵與微移；§14.3 先 Red 後 Green。第二次審查指出回歸測試只驗判斷函式，已改成驗實際效果（編輯中 Ctrl＋D、方向鍵不改文件、不中斷編輯），並加呼叫處的兩條突變；第一次兩條都存活，原因是測試裡 macOS 的 Ctrl／Cmd 對調與點擊順序，修正測試後 killed。最後一輪突變 13／13，ctest 67／67。dev_log 寫好、開 PR；停在關卡：守衛收緊的核准（§14.4）、macOS 的 L3、合併。你說完成後休眠，所以做到這裡就停。
 - 2026-11-02：你核准 IU-2 的守衛收緊（`v8-tool-ui-editor-input-guard-approve`）。PR #136 的 L1 在 `bd88770a`（含全部程式修正）三平台綠。剩 macOS 的 L3 與合併。
 - 2026-11-02：IU-2 的 L3（macOS）你回報全部通過：預覽打英文、日文組字、Cmd＋A／V、編輯中 Cmd＋Z／D 與方向鍵不改文件、Inspector 照舊。剩合併。
+- 2026-11-03：你說「始まる」開工 `v8-tool-audio-editor-edit`。核對現況：GYO::Audio 播放控制層只在 audio-line 的本機分支 `claude/v8-engine-audio-control`（`1f271a32`，未推送、無 PR），`-edit` 依賴它。你接受三項建議（`v8-tool-audio-editor-edit-restart`）：控制層先由 audio-line 會話合併；工程檔自己連 nlohmann；模型表上段（Opus／Opus／Fable）。舊的本機分支改名 `claude/v8-tool-audio-editor-edit-1031`，新分支從 master `b9f79cb7` 開，事前宣告重寫進 assets.md。已請 audio-line 會話推送控制層並開 PR；合併前本批不實作。
 ## A3 用：ui_editor 對外殼的需求（2026-11-01，讀 `framework/src/ImGuiSdlHost.cpp` 與 `PvpApplication::Run` 整理）
 
 A3 現在是架構計畫的 `v8-framework-shell`，草圖在它的 PLAN §2.4（`ImGuiShellContext` 交出 `SdlPlatform&` 與 `SdlRenderer&`，不寫 `imgui.ini`，不加 live frame）。下列保留給 T3a 的事前宣告對照。
