@@ -2,12 +2,13 @@
 #include "gyo/ui_editor/DocumentSession.hpp"
 #include "gyo/ui_editor/ElementClipboard.hpp"
 #include "gyo/ui_editor/ElementSchema.hpp"
-#include "gyo/ui_editor/FileService.hpp"
 #include "gyo/ui_editor/GizmoMath.hpp"
 #include "gyo/ui_editor/PathDialog.hpp"
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
+#include "engine/io/fs/NativeFileSystem.hpp"
+#include "engine/io/helpers/UserFiles.hpp"
 #include "engine/ui/UiDocumentCodec.hpp"
 #include "engine/ui/UiRuntime.hpp"
 
@@ -16,16 +17,35 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <optional>
+#include <iterator>
 #include <string>
 #include <string_view>
-#include <thread>
 
 namespace {
 
 using namespace Gyo::Tools::UiEditor;
+namespace Framework = Gyo::Tools::Framework;
 
 int failures{};
+
+// Test fixtures are written with the standard library, so the code under test
+// is not also the code that prepares its files.
+bool WriteFixture(const std::filesystem::path& path, const std::string_view text) {
+    std::error_code error;
+    if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path(), error);
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file.write(text.data(), static_cast<std::streamsize>(text.size()));
+    return static_cast<bool>(file);
+}
+
+std::optional<std::string> ReadFixture(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return std::nullopt;
+    return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+}
 
 void Expect(const bool condition, const std::string_view message) {
     if (!condition) {
@@ -90,13 +110,13 @@ void TestCommandLine() {
 
 void TestContentManifestMount(const std::filesystem::path& root) {
     const auto assets = root / "manifest-assets";
-    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "content.json",
+    Expect(static_cast<bool>(WriteFixture(assets / "content.json",
         R"({"version":1,"catalogs":["fonts.json","images.json"],"shader_bundles":[]})")), "write content manifest");
-    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "fonts.json",
+    Expect(static_cast<bool>(WriteFixture(assets / "fonts.json",
         R"({"version":1,"assets":[{"id":"font.default","type":"font","path":"font.bin"}]})")), "write font catalog");
-    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "images.json",
+    Expect(static_cast<bool>(WriteFixture(assets / "images.json",
         R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"image.bmp"}]})")), "write image catalog");
-    ReadOnlyAssetCatalog catalog;
+    Framework::ReadOnlyAssetCatalog catalog;
     Expect(static_cast<bool>(catalog.MountRoot(assets)), "mount all manifest catalogs");
     Expect(catalog.IsMounted() && catalog.CatalogPath().empty() && catalog.Assets().size() == 2,
         "root mode exposes the complete content snapshot");
@@ -107,12 +127,12 @@ void TestContentManifestMount(const std::filesystem::path& root) {
             R"({"version":1,"assets":[{"id":"font.default","type":"texture","path":"image.bmp"}]})",
             R"({"version":1,"assets":[{"id":"texture.logo","type":"texture","path":"../escape.bmp"}]})",
             "broken"}) {
-        Expect(static_cast<bool>(WriteTextFileAtomically(assets / "images.json", bad)), "replace candidate catalog");
+        Expect(static_cast<bool>(WriteFixture(assets / "images.json", bad)), "replace candidate catalog");
         Expect(!catalog.MountRoot(assets), "invalid candidate is rejected");
         Expect(catalog.Find("texture.logo") != nullptr && catalog.Find("font.default") != nullptr,
             "failed candidate preserves the previous complete snapshot");
     }
-    Expect(static_cast<bool>(WriteTextFileAtomically(assets / "content.json",
+    Expect(static_cast<bool>(WriteFixture(assets / "content.json",
         R"({"version":1,"catalogs":["missing.json"],"shader_bundles":[]})")), "declare missing catalog");
     Expect(!catalog.MountRoot(assets), "missing declared catalog does not partially mount");
     Expect(catalog.Assets().size() == 2, "missing file preserves old mount");
@@ -182,7 +202,7 @@ void TestExportAndExternalModification(const std::filesystem::path& root) {
     auto exported = session.Export(output, nullptr);
     Expect(static_cast<bool>(exported), "valid document exports without a catalog");
 
-    const auto text = ReadTextFile(output);
+    const auto text = ReadFixture(output);
     Expect(static_cast<bool>(text), "exported JSON can be read");
     if (text) {
         Expect(text->starts_with("{\n  \"schema\": \"gyo.ui\""),
@@ -200,7 +220,7 @@ void TestExportAndExternalModification(const std::filesystem::path& root) {
     session.EditDocument()["design_canvas"]["size"][1] = 900.0;
     session.CommitEdit("resize canvas");
     Expect(
-        static_cast<bool>(WriteTextFileAtomically(output, "externally changed\n")),
+        static_cast<bool>(WriteFixture(output, "externally changed\n")),
         "test can simulate an external edit");
     const auto guarded = session.Save(nullptr);
     Expect(
@@ -220,10 +240,10 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
 }
 )";
     Expect(
-        static_cast<bool>(WriteTextFileAtomically(catalogPath, catalog)),
+        static_cast<bool>(WriteFixture(catalogPath, catalog)),
         "catalog fixture is written");
 
-    ReadOnlyAssetCatalog mounted;
+    Framework::ReadOnlyAssetCatalog mounted;
     Expect(
         static_cast<bool>(mounted.Mount(catalogPath, assetRoot)),
         "asset catalog mounts read-only");
@@ -238,6 +258,17 @@ void TestReadOnlyCatalogAndExportGuard(const std::filesystem::path& root) {
     Expect(
         !std::filesystem::exists(assetRoot / "ui" / "menu.json"),
         "guarded export writes no app asset");
+
+    // A root spelled with a trailing separator names the same folder, as a
+    // catalog given alone mounts its folder "." (v8-tool-user-files-adopt;
+    // the framework's IsPathWithin let such exports through).
+    Framework::ReadOnlyAssetCatalog trailing;
+    Expect(static_cast<bool>(trailing.Mount(catalogPath, assetRoot / "")), "a root with a trailing separator mounts");
+    DocumentSession trailingSession;
+    const auto trailingGuarded = trailingSession.Export(assetRoot / "trailing.json", &trailing);
+    Expect(!trailingGuarded && trailingGuarded.error().code == SessionErrorCode::OutputInsideMountedAssetRoot,
+        "export rejects a path below a root written with a trailing separator");
+    Expect(!std::filesystem::exists(assetRoot / "trailing.json"), "that export writes no app asset");
 
     // A path that reaches the asset root through a symbolic link is below it
     // too: links in the existing part of a path are resolved, as
@@ -298,7 +329,7 @@ void TestRootOutsideAnsiCodePage(const std::filesystem::path& root) {
     const std::filesystem::path assetRoot = folder / "app-assets";
     const std::filesystem::path catalogPath = assetRoot / "asset_catalog.json";
     Expect(
-        static_cast<bool>(WriteTextFileAtomically(catalogPath, R"({
+        static_cast<bool>(WriteFixture(catalogPath, R"({
   "version": 1,
   "assets": [
     {"id":"font.default","type":"font","path":"fonts/default.ttf"},
@@ -307,10 +338,10 @@ void TestRootOutsideAnsiCodePage(const std::filesystem::path& root) {
 }
 )")),
         "catalog fixture is written under a root outside the ANSI code page");
-    ReadOnlyAssetCatalog mounted;
+    Framework::ReadOnlyAssetCatalog mounted;
     Expect(static_cast<bool>(mounted.Mount(catalogPath, assetRoot)),
         "a catalog mounts under a root outside the ANSI code page");
-    const CatalogAsset* logo = mounted.Find("texture.logo");
+    const Framework::CatalogAsset* logo = mounted.Find("texture.logo");
     Expect(logo != nullptr && logo->resolvedPath == assetRoot / "textures" / "logo.png",
         "a resolved asset path keeps the characters of its root");
 
@@ -329,33 +360,17 @@ void TestContentHashIsFnv1a(const std::filesystem::path& root) {
     // Pinned before FNV-1a moved to GYO::Base: external-change detection
     // compares stamps, so the content hash must stay the same function.
     const auto path = root / "content-hash.txt";
-    Expect(static_cast<bool>(WriteTextFileAtomically(path, "foobar")), "content hash fixture is written");
-    const auto stamp = ProbeFileStamp(path);
+    Expect(static_cast<bool>(WriteFixture(path, "foobar")), "content hash fixture is written");
+    Engine::IO::FS::NativeFileSystem files;
+    const std::u8string utf8 = path.u8string();
+    const auto uri = Engine::IO::FS::NativeFileUri(std::string(utf8.begin(), utf8.end()));
+    const auto stamp = uri ? Engine::IO::Helpers::ProbeFileStamp(files, uri.value(), {})
+                           : Engine::IO::IoResult<Engine::IO::Helpers::FileStamp>(Engine::Base::Err(uri.error()));
     Expect(stamp && stamp.value().contentHash == 0x85944171f73967e8ULL,
         "file content hash is the 64-bit FNV-1a of the text");
 }
 
 } // namespace
-
-// A dialog result posted from another thread (as SDL may call back) is taken
-// once, in posting order, by the editor's thread.
-void TestPathDialogInbox() {
-    PathDialogInbox inbox;
-    std::thread poster([&inbox] {
-        inbox.Post({.purpose = PathDialogPurpose::OpenDocument,
-                    .outcome = PathDialogOutcome::Chosen,
-                    .path = "a.json"});
-        inbox.Post({.purpose = PathDialogPurpose::AssetFolder,
-                    .outcome = PathDialogOutcome::Cancelled});
-    });
-    poster.join();
-    const auto taken = inbox.Take();
-    Expect(taken.size() == 2, "inbox returns every posted result");
-    Expect(taken.size() == 2 && taken[0].path == "a.json" &&
-               taken[1].purpose == PathDialogPurpose::AssetFolder,
-        "inbox keeps posting order");
-    Expect(inbox.Take().empty(), "a taken result is not returned again");
-}
 
 // Canvas gizmo rule without ImGui. The parent is a 1280x720 design canvas at
 // the screen origin, drawn at designScale screen pixels per design pixel.
@@ -846,10 +861,54 @@ void TestElementClipboard() {
         "a value that is not an element is not pasted");
 }
 
+// The OS answers a dialog at most once, maybe never, and on Windows may follow
+// a Failed answer with one more (platform-sdl Design Invariant 10): only the
+// latest request's answers count.
+void TestPathDialogRequests() {
+    using Outcome = PathDialogOutcome;
+    using Purpose = PathDialogPurpose;
+    {
+        PathDialogRequests requests;
+        const std::uint64_t tag = requests.Begin(Purpose::OpenDocument);
+        Expect(requests.Accept(tag, Outcome::Chosen) == Purpose::OpenDocument, "a chosen path answers its request");
+        Expect(!requests.Accept(tag, Outcome::Chosen).has_value(), "a second answer to the same request is ignored");
+    }
+    {
+        PathDialogRequests requests;
+        const std::uint64_t tag = requests.Begin(Purpose::AssetFolder);
+        Expect(requests.Accept(tag, Outcome::Cancelled) == Purpose::AssetFolder, "a cancel answers its request");
+        Expect(!requests.Accept(tag, Outcome::Chosen).has_value(), "nothing counts after a cancel");
+    }
+    {
+        PathDialogRequests requests;
+        const std::uint64_t tag = requests.Begin(Purpose::ExportDocument);
+        Expect(requests.Accept(tag, Outcome::Failed) == Purpose::ExportDocument, "a failure answers its request");
+        Expect(requests.Accept(tag, Outcome::Chosen) == Purpose::ExportDocument,
+            "the answer that follows a failure (the fallback dialog) still applies");
+        Expect(!requests.Accept(tag, Outcome::Chosen).has_value(), "and ends the request");
+    }
+    {
+        PathDialogRequests requests;
+        const std::uint64_t old = requests.Begin(Purpose::OpenDocument);
+        Expect(requests.Accept(old, Outcome::Failed).has_value(), "the first request fails");
+        const std::uint64_t next = requests.Begin(Purpose::CatalogField);
+        Expect(next != old, "every request gets its own tag");
+        Expect(!requests.Accept(old, Outcome::Chosen).has_value(), "a newer request makes an older answer stale");
+        Expect(requests.Accept(next, Outcome::Chosen) == Purpose::CatalogField, "the newer request is answered");
+    }
+    {
+        PathDialogRequests requests;
+        const std::uint64_t tag = requests.Begin(Purpose::AssetRootField);
+        requests.Abandon();
+        Expect(!requests.Accept(tag, Outcome::Chosen).has_value(), "an answer after Stop waiting is ignored");
+        Expect(!requests.Accept(0, Outcome::Chosen).has_value(), "an answer nobody asked for is ignored");
+    }
+}
+
 int main() {
     TemporaryDirectory temporary;
     TestCommandLine();
-    TestPathDialogInbox();
+    TestPathDialogRequests();
     TestGizmoHit();
     TestGizmoAnchorDrag();
     TestGizmoMoveAndResize();

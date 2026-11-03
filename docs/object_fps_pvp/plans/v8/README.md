@@ -16,7 +16,7 @@
 
 ## 樹狀總覽
 
-格式：「檔位｜引擎｜簡述」。引擎照 [變速箱規則](../../../../agents/effort-gearbox.md)「エンジン（モデル）」：主會話的引擎與檔位由使用者決定，下面寫的是建議；子 agent 的引擎由 Claude 設定，開始前說明。「Opus 5.5」＝目前主會話的引擎；「Sonnet 5.5」用在唯讀偵察與對抗式檢查（對抗式檢查盡量用和提案者不同的引擎）。估時是第一版，誤差可能到 ±50%，每批開始前重估。
+格式：「檔位｜模型｜簡述」。檔位照 [變速箱規則](../../../../agents/effort-gearbox.md)，模型照 [領航員規則](../../../../agents/navigator.md)：主會話的模型與檔位由使用者決定，下面寫的是建議；子 agent 的模型由 Claude 設定，開始前說明。「Opus 5.5」＝目前主會話的模型。2026-11-01 前寫的模型（例如對抗用 Sonnet 5.5、偵察用 Sonnet 5.5）是舊規則下的指定；未完成的批次在開始時照領航員規則補上上段／下段與各角色的模型，經使用者確認。估時是第一版，誤差可能到 ±50%，每批開始前重估。
 
 ```
 v8-plan
@@ -33,10 +33,22 @@ v8-plan
 │   │   ├── pv8-seq-ceiling        「high｜Opus 5.5｜不改 wire：WireCounterMax 取代 uint64 上限檢查（完成）」
 │   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼（完成）」
 │   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告（完成）」
-│   └── hitbox-line                「PR 線：部位 hitbox（pv7 已有欄位）」
-│       ├── v8-product-hitbox-data            「high｜Opus 5.5｜骨骼→部位形狀的 Data Contract，先手寫 JSON」
-│       ├── v8-product-hitbox-rewind          「high（回溯局部 xhigh）｜Opus 5.5｜Match 的權威姿勢歷史、射擊照開槍時刻回溯」
-│       └── v8-product-hit-rules              「medium｜Opus 5.5｜部位倍率（數值由使用者決定）」
+│   ├── hitbox-line                「PR 線：部位判定（hitbox-plan.md 第 2 版，以 Valorant 為基底，待核准）」
+│   ├── 素材結構標準化              「[asset-layout.md](asset-layout.md)（asset-layout 線，PR #125；合併前此連結在本分支不存在）」
+│   │   ├── v8-product-anim-bottlenecks       「high｜Opus 5.5｜Match 端取樣耗時、載入、四平台決定性」（完成：B1、B2 通過，B3 平台間不一致）
+│   │   ├── pv9-hitbox-declare                「ultracode（先問）｜案 Opus 5.5、對抗 Sonnet 5.5｜protocol-v9 草稿、動畫狀態欄位、形狀契約」
+│   │   ├── pv9-rename                        「low｜Sonnet 5.5｜proto、Go 套件、CMake target 改名為 v9」
+│   │   ├── v8-product-hit-rules-permille     「high｜Opus 5.5｜千分之一點、版本值 9」
+│   │   ├── v8-product-hit-rules-leg-wire     「high｜Opus 5.5｜HitPart 加腿」
+│   │   ├── v8-product-anim-authority         「high（狀態機局部 xhigh）｜Opus 5.5｜動畫狀態機移到 domain、Match 推進、上 snapshot」
+│   │   ├── v8-product-hitbox-data            「high｜Opus 5.5｜三部位形狀契約、Match 載入骨架與 clip」
+│   │   ├── v8-product-hitbox-shot            「high（平手局部 xhigh）｜Opus 5.5｜逐部位判定、倍率傷害」
+│   │   ├── v8-product-hit-presentation       「medium｜Opus 5.5｜受擊動畫依部位、驗收工具」
+│   │   └── v8-product-hitbox-acceptance      「medium｜Sonnet 5.5｜L1、突變、L2 試玩（收支行）」
+│   └── rewind-line                「PR 線：射擊回溯（部位判定線合併後）」
+│       ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
+│       ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
+│       └── v8-product-hitbox-rewind          「high（τ、夾取局部 xhigh）｜Opus 5.5｜姿勢歷史、ShotRewind、守衛第二段核准」
 │
 ├── ② 體驗優化                     「pv8 欄位已在 ① 合併，這裡只填行為」
 │   └── v8-product-sprint                     「high｜Opus 5.5｜衝刺；改變權威結果，事前宣告」
@@ -74,7 +86,7 @@ v8-plan
 | `v8-product-crouch` | high（預測重播局部 xhigh）｜Opus 5.5 | 16～24 h | 碰撞高度（站起時頭上有牆不能站）、視角高度、遠端動畫；pv8 欄位實作並合併 | 改變權威結果：事前宣告，同機兩樹 digest 比對；三角色同一個 PR |
 | `v8-product-hitbox-data` | high｜Opus 5.5 | 6～10 h | 骨骼對應的形狀與部位標記（通用格式）＋部位語意（產品資料），先手寫 JSON | 通用格式的 owner 在規劃時定（v8 候選表「PvP 骨骼 hitbox」）；④ 的 Assets Editor 之後接手 |
 | `v8-product-hitbox-rewind` | high（回溯局部 xhigh）｜Opus 5.5 | 20～30 h | Match 保存權威姿勢歷史，照射手開槍時看到的遠端時刻回溯；填 pv7 已預留的欄位（v7.1 D87、D89） | 蹲下之後做：蹲下會改變姿勢 |
-| `v8-product-hit-rules` | medium｜Opus 5.5 | 2～4 h | 部位倍率 | 倍率由使用者決定 |
+| `v8-product-hit-rules` | medium｜Opus 5.5 | 2～4 h | 部位倍率 | 數值照 object_fps_v2（`v8-product-hit-rules-v2-values`）；加 `HIT_PART_LIMB`（`v8-product-hit-rules-limb-wire`）；千分位計算（`v8-product-hit-rules-permille`）。版本處理（pv8 延續或升 pv9）在 hitbox-line 的事前宣告決定 |
 | `v8-product-sprint` | high｜Opus 5.5 | 8～12 h | 衝刺速度與限制 | 改變權威結果：事前宣告 |
 | `v8-product-analyzer-105`、`v8-product-phase-golden`、`v8-product-correct-assert`、`v8-product-lead-withdraw-plan`、`v8-product-lead-withdraw`、`v8-product-input-delay` | 見樹 | 3～4、6～10、1～2、4～6、16～24 h；A4 開工時估 | 下面「v7.1 交過來的項目」 | pv8 改了移動與預測的路徑，B6 與 A4 的基準在 pv8 合併後重新取得 |
 | ④ 三項 | 見樹 | 開工時估 | `v8-tool-ui-editor-widgets`（v8 候選表「大廳 UI 的元件化」）、`v8-tool-voxel-map-editor`（未決事項 b）、`v8-tool-assets-editor` | 工具照 AGENTS §5「手動 → Script → Tool」、§8 Data Contract |
@@ -123,6 +135,24 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `pv8-seq-ceiling` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_seq_ceiling.zh-Hant.md) |
 | `pv8-seq-narrow` | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_seq_narrow.zh-Hant.md) |
 | `v8-product-crouch`（wire 接入） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_crouch_wire.zh-Hant.md) |
+| `v8-product-hitbox-survey` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_hitbox_survey.zh-Hant.md) |
+| `v8-product-anim-bottlenecks` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_bottlenecks.zh-Hant.md) |
+| `pv9-hitbox-declare` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_pv9_hitbox_declare.zh-Hant.md) |
+| `pv9-rename` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_pv9_rename.zh-Hant.md) |
+| `v8-product-hit-rules-permille` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_hit_rules_permille.zh-Hant.md) |
+| `v8-product-hit-rules-leg-wire` | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_hit_rules_leg_wire.zh-Hant.md) |
+| `v8-product-anim-authority-domain`（A1） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_authority_domain.zh-Hant.md) |
+| `v8-product-anim-authority-match`（A2） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_authority_match.zh-Hant.md) |
+| `v8-product-anim-authority-wire`（A3） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_authority_wire.zh-Hant.md) |
+| `v8-product-anim-authority-client`（A4） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_anim_authority_client.zh-Hant.md) |
+| `v8-product-hitbox-data-shapes`（D1） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_data_shapes.zh-Hant.md) |
+| `v8-product-hitbox-data-pose`（D2） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_data_pose.zh-Hant.md) |
+| `v8-product-hitbox-data-digest`（D3） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_data_digest.zh-Hant.md) |
+| `v8-product-hitbox-shot-frame`（S1） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_frame.zh-Hant.md) |
+| `v8-product-hitbox-shot-judge`（S2） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_judge.zh-Hant.md) |
+| `v8-product-hitbox-shot-wire`（S3） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_wire.zh-Hant.md) |
+| `v8-input-ui-adapter` IU-1（framework 核心的 Input→Ui adapter） | [2026-11-02](../../../dev_logs/2026_11_02_framework_v8_input_ui_adapter_iu1.zh-Hant.md) |
+| `v8-input-ui-adapter` IU-3（遊戲宣告 FRAMEWORK、改用共用轉換） | [2026-11-02](../../../dev_logs/2026_11_02_pvp_v8_input_ui_adapter_iu3.zh-Hant.md) |
 
 ---
 
@@ -190,7 +220,7 @@ v7.1 的 `re-evaluate` 用 pv7 的數據判斷為「還需要」、交給 v8 的
 
 | 項目 | 為什麼還需要 | 規劃時要注意 |
 |---|---|---|
-| B6：延遲結束後撤回多加的領先（**重新規劃**，不沿用 09b 的 S／M） | 一次 45～60 ms、持續 150 ms 的延遲，會留下約 +25 ms、約 4 秒的延遲（pv7 補量 4/8 個單位）。原因是 late 修正之後的重新擷取在 slew 結束時就決定，用到的還是延遲期間的樣本 | 09b 的 S／M 估計到不了 150 ms 的邊界。先定義玩家可見的目標（撤回時間、不增加 held 與重設），用 schema 3 的 `phase_decision` 補齊「放出相對 slew 結束」的曲線，再比較候選（S、M、放出後依正值樣本撤回、縮短 late 後的決定視窗）。相位追蹤不在 digest 裡，先做 phase-tracking-golden。時序邏輯，規劃用 ultracode 或 xhigh（先問使用者）。09b 1-7 第 3 點一起處理。**v7.1 outage-resync 之後（PR #90）**：B6 的基準要在它合併後重新取得。它改了相位追蹤的入口與 slack 的來源：被替代序號只存一份、保留 600 序號；晚到超過 N_o（333,333 µs）的第一份副本不產生樣本，改成 Resync；恢復時 `LocalPlayerPrediction::Resume`（`resume_reset`）。它也留下兩個交給 B6 的已知例外：只上行中斷後，以及 Match 停頓後恢復時，多出的領先量要等 Backlog 清掉（network-architecture §7「連線中斷與重新對時」的已知項目）。`Correct()`、`reacquiring_`、deadband、p90 視窗沒有改 |
+| B6：延遲結束後撤回多加的領先（**重新規劃**，不沿用 09b 的 S／M） | 一次 45～60 ms、持續 150 ms 的延遲，會留下約 +25 ms、約 4 秒的延遲（pv7 補量 4/8 個單位）。原因是 late 修正之後的重新擷取在 slew 結束時就決定，用到的還是延遲期間的樣本 | 09b 的 S／M 估計到不了 150 ms 的邊界。先定義玩家可見的目標（撤回時間、不增加 held 與重設），用 schema 3 的 `phase_decision` 補齊「放出相對 slew 結束」的曲線，再比較候選（S、M、放出後依正值樣本撤回、縮短 late 後的決定視窗）。相位追蹤不在 digest 裡，先做 phase-tracking-golden。時序邏輯，規劃用 ultracode 或 xhigh（先問使用者）。09b 1-7 第 3 點一起處理。**v7.1 outage-resync 之後（PR #90）**：B6 的基準要在它合併後重新取得。它改了相位追蹤的入口與 slack 的來源：被替代序號只存一份、保留 600 序號；晚到超過 N_o（333,333 µs）的第一份副本不產生樣本，改成 Resync；恢復時 `LocalPlayerPrediction::Resume`（`resume_reset`）。它也留下兩個交給 B6 的已知例外：只上行中斷後，以及 Match 停頓後恢復時，多出的領先量要等 Backlog 清掉（network-architecture §7「連線中斷與重新對時」的已知項目）。後者也會讓連線品質窗口判失敗：Match 停頓超過約 100 ms 時追趕上限（5 步）丟掉時間，Client 多領先 2～4 個命令，0.5 秒內觸發 Backlog 重設，而窗口的規則是「1 次重設就判失敗」，所以 HUD 顯示 CONNECTION POOR 10 秒（單次不會移出）。2026-10-30 在不含音效的 master 上重現（停 140 ms 每次重現、60 ms 不會），使用者決定不改、當成已知例外交給 B6（調查報告：[dev_log 2026-10-30 connection-poor](../../../dev_logs/2026_10_30_pvp_v8_connection_poor.zh-Hant.md)）。`Correct()`、`reacquiring_`、deadband、p90 視窗沒有改 |
 | A4：延遲位移（產生→執行約 38 ms） | 玩家感受得到；A1 之後射擊也照命令步判定。手感上的取捨，不是缺陷 | 改領先會改 backlog 穩態（30 Tick 合計 60→30），碰到 D44 的停止條件；需要 WAN 資料與 phase-tracking-golden |
 | N-analyzer-literal-105 | backlog 門檻 105 與視窗 30 在 Match 與 4 個分析器的 6 處手動維持（AGENTS.md §9） | 改成共用常數，加從 `Movement.hpp` 解析並核對的測試；動到凍結分析器，下一個 L2 重新凍結（v7.1 analyzer-converge 後：`quad_evidence.py` 的那一處隨 `command_metrics` 刪除，分析器剩 `command_evidence.py` 2 處、`gameplay_evidence.py` 2 處、`gameplay_soak_evidence.py` 1 處） |
 | B10：相位追蹤的 golden（D158） | 權威 digest 的 `RunLink` 不經 TrackSlack，35 個情境的相位樣本都是 0，相位追蹤改壞了沒有測試會失敗 | 排在 B6 之前（即上面的 phase-tracking-golden） |

@@ -243,7 +243,7 @@ void EditorApp::DrawDialogs() {
                 ? catalog_.AssetRoot() / "content.json" : catalog_.CatalogPath();
             ImGui::Text("Read-only: %s", Engine::Os::Files::PathForMessage(source).c_str());
             ImGui::BeginChild("assets", {620.0F, 320.0F}, true);
-            for (const CatalogAsset& asset : catalog_.Assets()) {
+            for (const Framework::CatalogAsset& asset : catalog_.Assets()) {
                 const char* expectedType =
                     assetPickerTarget_ == AssetPickerTarget::FontAlias
                     ? "font"

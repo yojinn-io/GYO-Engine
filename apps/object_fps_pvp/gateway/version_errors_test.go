@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // pv7 contract §1: a refused join names the Gateway's own version; every
@@ -117,7 +117,7 @@ func TestReadyOfAnotherVersionIsNamedAndAnswered(t *testing.T) {
 	}
 	ready := func(version, maxPlayers uint32) []byte {
 		return marshal(&runtime.RuntimeEnvelope{ProtocolVersion: version, Message: &runtime.RuntimeEnvelope_Ready{Ready: &runtime.Ready{JumpHeight: .6, Gravity: 18,
-			ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: maxPlayers, CombatRules: testRules()}}})
+			ArenaId: "test_arena", ArenaVersion: 1, ArenaDigest: testArenaDigest, AnimationDigest: testAnimationDigest, TickRate: 60, SnapshotIntervalTicks: 1, MaxPlayers: maxPlayers, CombatRules: testRules()}}})
 	}
 	cases := []struct {
 		name    string

@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-tool-assets-anim-events (gyo.anim_events in GYO::Model, docs/architecture/animation-events.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/anim_events_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its test run fails with the expected message. The product mutants of the same batch are in tests/object_fps_pvp/mutations.json (batch v8-tool-assets-anim-events). Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "mutants": [
+    {
+      "id": "ae-repeated-key-kept",
+      "what": "A repeated key is taken silently (the DOM keeps the last)",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "            if (!open.back().insert(key).second) Fail(\"repeated key '\" + key + \"'\", \"\");",
+      "replace": "            open.back().insert(key);",
+      "target": "gyo_model_tests",
+      "cases": "*unknown and repeated fields*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-unknown-field-ignored",
+      "what": "An unknown field is ignored",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "        if (!keys.contains(item.key())) Fail(\"unknown field '\" + item.key() + \"'\", path);",
+      "replace": "        static_cast<void>(item);",
+      "target": "gyo_model_tests",
+      "cases": "*unknown and repeated fields*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-other-version-read",
+      "what": "Another version is read as version 1",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "version.get<long long>() != AnimationEventsVersion)",
+      "replace": "version.get<long long>() < AnimationEventsVersion)",
+      "target": "gyo_model_tests",
+      "cases": "*rejects another schema or version*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-negative-seconds",
+      "what": "A slightly negative moment is accepted",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "event.seconds < 0)",
+      "replace": "event.seconds < -1)",
+      "target": "gyo_model_tests",
+      "cases": "*not negative and non-decreasing in a clip*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-unsorted-accepted",
+      "what": "Events out of order are accepted",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "            if (event.seconds < previous.seconds) Fail",
+      "replace": "            if (false) Fail",
+      "target": "gyo_model_tests",
+      "cases": "*not negative and non-decreasing in a clip*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-repeat-at-same-time",
+      "what": "The same event twice at the same moment is accepted",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "                if (it->name == event.name) Fail",
+      "replace": "                if (false) Fail",
+      "target": "gyo_model_tests",
+      "cases": "*same event twice*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-name-uppercase",
+      "what": "Event names may use upper-case letters",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "return (c >= 'a' && c <= 'z') ||",
+      "replace": "return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||",
+      "target": "gyo_model_tests",
+      "cases": "*names are 1 to 64*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-name-too-long",
+      "what": "An event name of 65 characters is accepted",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "name.size() > MaxAnimationEventNameLength",
+      "replace": "name.size() > MaxAnimationEventNameLength + 1",
+      "target": "gyo_model_tests",
+      "cases": "*names are 1 to 64*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-empty-clip-list",
+      "what": "A clip without events is accepted",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "if (!events.is_array() || events.empty())",
+      "replace": "if (!events.is_array())",
+      "target": "gyo_model_tests",
+      "cases": "*not of its shape*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-missing-clip-skipped",
+      "what": "Binding skips a clip the model does not have",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "        if (!clip) return Base::Err(MakeError(\"the model has no clip '\" + track.clip + \"'\", path));",
+      "replace": "        if (!clip) continue;",
+      "target": "gyo_model_tests",
+      "cases": "*binding fails as a whole*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-beyond-clip-accepted",
+      "what": "Binding accepts a moment beyond its clip",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "if (!(track.events[i].seconds <= duration))",
+      "replace": "if (!(track.events[i].seconds <= duration + 1))",
+      "target": "gyo_model_tests",
+      "cases": "*binding fails as a whole*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-bound-wrong-clip",
+      "what": "Binding puts the events on the first clip",
+      "file": "engine/model/src/AnimationEvents.cpp",
+      "find": "        bound.byClip[*clip] = track.events;",
+      "replace": "        bound.byClip[0] = track.events;",
+      "target": "gyo_model_tests",
+      "cases": "*binding resolves clips*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-model-links-audio",
+      "what": "GYO::Model gains a link it must not have (Design Invariant 1)",
+      "file": "engine/model/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_model PUBLIC GYO::Engine GYO::Math PRIVATE nlohmann_json::nlohmann_json)",
+      "replace": "target_link_libraries(gyo_model PUBLIC GYO::Engine GYO::Math GYO::Time PRIVATE nlohmann_json::nlohmann_json)",
+      "target": "gyo_model_tests",
+      "expect_build_failure": true,
+      "expect": "(?s)gyo_model links.*expected\\s+exactly"
+    }
+  ]
+}

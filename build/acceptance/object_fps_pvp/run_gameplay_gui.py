@@ -89,7 +89,7 @@ def run(args):
         result['captures'].append(screenshot(out,'dead-respawn-countdown-hud',ids['join']));record('dead-controls-suppressed')
         result['checks']['dead_controls_suppressed']=True
         alive=wait_state(out,'join',lambda s:s['presented'] and s['presented_weapon']['life_generation']==2 and not s['presented_weapon']['dead'],'Automatic respawn absent',5)
-        require(alive['weapon']['hp']==100 and alive['weapon']['ammo']==12,'Respawn did not restore authority HUD')
+        require(alive['weapon']['hp']==100000 and alive['weapon']['ammo']==12,'Respawn did not restore authority HUD')
         result['captures'].append(screenshot(out,'respawn-hud',ids['join']));record('respawn')
         require(sample()['weapon']['ammo']==12 and not sample()['weapon']['reloading'],'Actor reload did not finish')
         aim(math.pi,'join');prior=sample('join')['weapon']['submitted'];desktop.click(ids['join'],.03)

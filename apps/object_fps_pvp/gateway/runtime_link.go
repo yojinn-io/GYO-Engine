@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"gyo.local/gateway/framing"
 	"gyo.local/object_fps_pvp/gateway/adapter"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // This queue is product-owned: lifecycle requests are never dropped, input
@@ -153,7 +153,7 @@ func connectRuntime(ctx context.Context, address string) (*runtimeLink, *runtime
 	}
 	ready := envelope.GetReady()
 	if err == nil && (ready == nil ||
-		ready.ArenaId == "" || ready.ArenaVersion == 0 || ready.ArenaDigest == 0 || ready.TickRate != adapter.AuthorityTickRate ||
+		ready.ArenaId == "" || ready.ArenaVersion == 0 || ready.ArenaDigest == 0 || ready.AnimationDigest == 0 || ready.TickRate != adapter.AuthorityTickRate ||
 		ready.SnapshotIntervalTicks != adapter.SnapshotIntervalTicks || ready.MaxPlayers != adapter.MaxPlayers || !adapter.ValidRules(ready.CombatRules) || !adapter.ReadyFitsWelcome(ready)) {
 		err = errors.New("runtime readiness contract mismatch")
 	}

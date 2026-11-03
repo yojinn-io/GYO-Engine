@@ -4,7 +4,7 @@
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
-#include "runtime_v8.pb.h"
+#include "runtime_v9.pb.h"
 
 #include <asio.hpp>
 
@@ -29,7 +29,7 @@ namespace {
 using namespace fps::pvp;
 using namespace std::chrono_literals;
 using asio::ip::tcp;
-namespace pb = object_fps_pvp::runtime::v8;
+namespace pb = object_fps_pvp::runtime::v9;
 // Test bodies sit outside this namespace, where protobuf's own ::pb makes pb ambiguous.
 using Envelope = pb::RuntimeEnvelope;
 using WireDecision = pb::ShotDecision;
@@ -51,9 +51,11 @@ unsigned short FreePort() {
 
 // The Match and its IPC on a free loopback port, started in production order:
 // the IpcHost registers its publish listener before the host's role starts.
+// An opaque animation digest (protocol-v9 §4.6): the IpcHost only sends it.
+constexpr std::uint64_t IpcAnimationDigest = 0x0123456789abcdefULL;
 struct Server final {
     MatchRuntimeHost host{IpcArena()};
-    IpcHost ipc{host, IpcArena()};
+    IpcHost ipc{host, IpcArena(), IpcAnimationDigest};
     std::string address = "127.0.0.1:" + std::to_string(FreePort());
     Server() {
         std::string error;
@@ -266,6 +268,7 @@ TEST_CASE("PvP IPC greets with Ready and sends a join's result before any snapsh
     REQUIRE(ready->has_ready());
     CHECK(ready->ready().arena_id() == "synthetic_ipc_arena");
     CHECK(ready->ready().arena_digest() != 0);
+    CHECK(ready->ready().animation_digest() == IpcAnimationDigest);
     gateway.Send(Join(7));
     bool joined = false;
     for (int frames = 0; frames < 600 && !joined; ++frames) {
@@ -321,6 +324,35 @@ TEST_CASE("PvP IPC carries the stance rules in Ready, the crouch in and the stan
         CHECK(player.crouched());
         CHECK_FALSE(player.sprinting());
     }
+}
+
+// v8-product-anim-authority A3 (E6): the Match's animation authority reaches
+// the runtime wire one per player, with the values the Match holds.
+TEST_CASE("PvP IPC carries the animation authority of every player") {
+    Server server;
+    Gateway gateway(server.address);
+    REQUIRE(gateway.Receive());
+    gateway.Send(Join(7));
+    static_cast<void>(ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); }));
+    auto window = InputWindow(7, 1, 3);
+    for (auto& command : *window.mutable_input()->mutable_commands()) command.set_move_forward(1);
+    gateway.Send(window);
+    const auto walked = ReceiveFirst(gateway, [](const auto& message) {
+        if (!message.has_snapshot()) return false;
+        for (const auto& player : message.snapshot().players())
+            if (player.player_id() == 7 && player.last_resolved_command() >= 3) return true;
+        return false;
+    });
+    const auto& snapshot = walked.snapshot();
+    REQUIRE(snapshot.animation_size() == snapshot.players_size());
+    const auto& value = snapshot.animation(0);
+    CHECK(value.player_id() == 7);
+    CHECK(value.life_generation() == snapshot.players(0).life_generation());
+    CHECK(value.gait_phase_q16() > 0);       // three steps forward
+    CHECK(value.move_weight_permille() == 500); // 3 of 6 transition steps
+    CHECK(value.jump_phase() == object_fps_pvp::runtime::v9::JUMP_PHASE_GROUNDED);
+    CHECK(value.jump_phase_tick() <= snapshot.tick());
+    CHECK(value.sprint_weight_permille() == 0);
 }
 
 TEST_CASE("PvP IPC resets the Match between connections") {
@@ -536,7 +568,12 @@ TEST_CASE("PvP IPC refuses an arena with fewer spawns than the room holds") {
     MatchRuntimeHost host{IpcArena()};
     const auto refusal = "Arena " + small.id + " has " + std::to_string(MaxPlayers - 1) + " spawns; a room of " +
                          std::to_string(MaxPlayers) + " players needs at least that many";
-    CHECK_THROWS_WITH_AS(IpcHost(host, small), refusal.c_str(), std::runtime_error);
+    CHECK_THROWS_WITH_AS(IpcHost(host, small, IpcAnimationDigest), refusal.c_str(), std::runtime_error);
+}
+
+TEST_CASE("PvP IPC refuses a zero animation digest") {
+    MatchRuntimeHost host{IpcArena()};
+    CHECK_THROWS_WITH_AS(IpcHost(host, IpcArena(), 0), "Animation content digest is zero", std::runtime_error);
 }
 
 TEST_CASE("PvP IPC ends a session on a protocol violation and accepts the next Gateway") {
@@ -703,7 +740,7 @@ TEST_CASE("PvP IPC answers a refused action batch with one results frame") {
     // The host refuses this one: it acknowledges what was never decided.
     const auto refusals = {malformed, Actions(5, over, 1), Actions(5, {}, 99)};
     // pv7 §5 (D-6): each answer counts the refusal and names its reason.
-    const auto reasons = {object_fps_pvp::runtime::v8::ACTION_REFUSAL_MALFORMED, object_fps_pvp::runtime::v8::ACTION_REFUSAL_OVER_BATCH, object_fps_pvp::runtime::v8::ACTION_REFUSAL_INVALID_BATCH};
+    const auto reasons = {object_fps_pvp::runtime::v9::ACTION_REFUSAL_MALFORMED, object_fps_pvp::runtime::v9::ACTION_REFUSAL_OVER_BATCH, object_fps_pvp::runtime::v9::ACTION_REFUSAL_INVALID_BATCH};
     auto reason = reasons.begin();
     std::uint64_t refusedSoFar = 0;
     for (const auto& refused : refusals) {
@@ -721,7 +758,7 @@ TEST_CASE("PvP IPC answers a refused action batch with one results frame") {
     gateway.Send(Actions(5, {2}, 1));
     const auto accepted = ReceiveFirst(gateway, [](const auto& message) { return Carries(message, 2); });
     CHECK(accepted.action_results().refused_batches() == 3);
-    CHECK(accepted.action_results().last_refusal() == object_fps_pvp::runtime::v8::ACTION_REFUSAL_INVALID_BATCH);
+    CHECK(accepted.action_results().last_refusal() == object_fps_pvp::runtime::v9::ACTION_REFUSAL_INVALID_BATCH);
 }
 
 TEST_CASE("PvP IPC writes a decision before the snapshot of its tick when the lane was idle") {
@@ -874,14 +911,14 @@ TEST_CASE("PvP IPC hands every malformed input and action batch to the host's in
     for (ActionId id = 1; id <= MaxActionBatch + 1; ++id) {
         auto* shot = overBatch.mutable_actions()->add_shots();
         shot->set_action_id(id);
-        shot->set_kind(object_fps_pvp::runtime::v8::ACTION_RELOAD);
+        shot->set_kind(object_fps_pvp::runtime::v9::ACTION_RELOAD);
         shot->set_life_generation(1);
     }
     gateway.Send(overBatch);
     auto noYaw = Actions(5, {}, 0);
     auto* aimless = noYaw.mutable_actions()->add_shots();
     aimless->set_action_id(1);
-    aimless->set_kind(object_fps_pvp::runtime::v8::ACTION_SHOT);
+    aimless->set_kind(object_fps_pvp::runtime::v9::ACTION_SHOT);
     aimless->set_life_generation(1);
     aimless->set_pitch(0);
     gateway.Send(noYaw);
@@ -889,7 +926,7 @@ TEST_CASE("PvP IPC hands every malformed input and action batch to the host's in
     auto conflicting = Actions(5, {}, 0);
     auto* shot = conflicting.mutable_actions()->add_shots();
     shot->set_action_id(1);
-    shot->set_kind(object_fps_pvp::runtime::v8::ACTION_SHOT);
+    shot->set_kind(object_fps_pvp::runtime::v9::ACTION_SHOT);
     shot->set_life_generation(1);
     shot->set_yaw(0.5F);
     shot->set_pitch(0);
@@ -1088,7 +1125,7 @@ DecisionOutcome RunDecisionScenario(bool clockSamples, bool copies = false, bool
     ClogCapture log;
     auto now = Clock::time_point{} + 1000s;
     MatchRuntimeHost host{IpcArena(), [&now] { return now; }};
-    IpcHost ipc{host, IpcArena()};
+    IpcHost ipc{host, IpcArena(), IpcAnimationDigest};
     const auto address = "127.0.0.1:" + std::to_string(FreePort());
     std::string error;
     REQUIRE(ipc.Start(address, error));
@@ -1430,10 +1467,10 @@ TEST_CASE("PvP IPC logs each Leave reason and removes the player for any") {
             return message.has_join_result() && message.join_result().player_id() == player;
         }));
     }
-    const std::vector<std::pair<PlayerId, int>> leaves{{7, object_fps_pvp::runtime::v8::LEAVE_REASON_CLIENT_REQUEST}, {8, 0}, {9, 77}};
+    const std::vector<std::pair<PlayerId, int>> leaves{{7, object_fps_pvp::runtime::v9::LEAVE_REASON_CLIENT_REQUEST}, {8, 0}, {9, 77}};
     for (const auto& [player, reason] : leaves) {
         auto leave = Leave(player);
-        leave.mutable_leave()->set_reason(static_cast<object_fps_pvp::runtime::v8::LeaveReason>(reason));
+        leave.mutable_leave()->set_reason(static_cast<object_fps_pvp::runtime::v9::LeaveReason>(reason));
         gateway.Send(leave);
     }
     CHECK(log.Shows("leave player=7 reason=client_request"));
@@ -1485,7 +1522,7 @@ TEST_CASE("PvP IPC refusal names are the host's rejection names") {
         const auto rejection = static_cast<IngressActionRejection>(index);
         std::string name(IngressName(rejection));
         for (auto& c : name) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        CHECK(object_fps_pvp::runtime::v8::ActionRefusal_Name(static_cast<object_fps_pvp::runtime::v8::ActionRefusal>(index + 1)) == "ACTION_REFUSAL_" + name);
+        CHECK(object_fps_pvp::runtime::v9::ActionRefusal_Name(static_cast<object_fps_pvp::runtime::v9::ActionRefusal>(index + 1)) == "ACTION_REFUSAL_" + name);
     }
 }
 
@@ -1509,7 +1546,7 @@ TEST_CASE("PvP IPC carries the hitbox fields and E, S and the view tick") {
     shot->set_view_tick_q16(3);
     gateway.Send(action);
     const auto decided = ReceiveFirst(gateway, [](const auto& message) { return Carries(message, 1); });
-    CHECK(decided.action_results().decisions(0).hit_part() == object_fps_pvp::runtime::v8::HIT_PART_UNSPECIFIED); // a reload
+    CHECK(decided.action_results().decisions(0).hit_part() == object_fps_pvp::runtime::v9::HIT_PART_UNSPECIFIED); // a reload
     std::optional<ShotShadowRecord> record;
     for (const auto giveUp = Clock::now() + 2s; !record && Clock::now() < giveUp;) {
         for (const auto& r : server.host.DrainShotRecords().records)

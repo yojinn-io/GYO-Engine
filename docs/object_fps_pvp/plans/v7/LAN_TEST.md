@@ -12,7 +12,7 @@
 
 ## 0. 快速開始（複製貼上）
 
-Mac 已準備好測試包 `~/gyo-lan-v7/`（不用下載）。先查 Mac 的 IP，下面的 `MAC_IP` 都換成它：
+Mac 已準備好測試包 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/`（不用下載）。先查 Mac 的 IP，下面的 `MAC_IP` 都換成它：
 
 ```bash
 ipconfig getifaddr en0
@@ -21,19 +21,19 @@ ipconfig getifaddr en0
 Mac 終端機 1（Match；等到出現 `Match ready` 再開終端機 2）：
 
 ```bash
-~/gyo-lan-v7/gyo-object_fps_pvp/bin/gyo_object_fps_pvp-match --arena ~/gyo-lan-v7/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --listen 127.0.0.1:27016 --log ~/gyo-lan-v7/match.log --movement-trace ~/gyo-lan-v7/match-commands.jsonl
+/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo-object_fps_pvp/bin/gyo_object_fps_pvp-match --arena /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --listen 127.0.0.1:27016 --log /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/match.log --movement-trace /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/match-commands.jsonl
 ```
 
 Mac 終端機 2（Gateway）：
 
 ```bash
-~/gyo-lan-v7/gyo_object_fps_pvp-gateway -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 -advertise-ip MAC_IP -log ~/gyo-lan-v7/gateway.log
+/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo_object_fps_pvp-gateway -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 -advertise-ip MAC_IP -log /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gateway.log
 ```
 
 Mac 終端機 3（選用：Mac 也當玩家）：
 
 ```bash
-cd ~/gyo-lan-v7/gyo-object_fps_pvp/bin && ./gyo_object_fps_pvp --gateway MAC_IP:8080 --movement-trace logs/client-commands.jsonl
+cd /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo-object_fps_pvp/bin && ./gyo_object_fps_pvp --gateway MAC_IP:8080 --movement-trace logs/client-commands.jsonl
 ```
 
 Windows（每台）：從 snapshot `object_fps_pvp-snapshot-20261014-6d3f287` 下載 `gyo-object_fps_pvp-windows-x64.tar.gz`，`tar -xzf` 解壓後在命令提示字元執行：
@@ -45,7 +45,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 
 注意：trace（`.jsonl`）每次啟動都從頭覆寫。中途重啟某個程式時，把它的 trace 檔名改成 `-2`、`-3` …（見第 3 節）。**v7.1 D191 起**不再覆寫：檔案已存在時自動改用 `client.2-commands.jsonl` 這類編號名，實際檔名寫在 log 裡，不必手動改名。
 結束：Client 按 Esc 離開並關閉視窗 → Mac 的 Gateway 按 Ctrl+C → Match 按 Ctrl+C。
-上傳：Mac 的 `~/gyo-lan-v7/` 中的 `match.log`、`match-commands.jsonl`、`match-ingress.jsonl`、`gateway.log`（Mac 當玩家時加上 `gyo-object_fps_pvp/bin/logs/`），以及每台 Windows 的 `bin\logs\` 整個資料夾。
+上傳：Mac 的 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/` 中的 `match.log`、`match-commands.jsonl`、`match-ingress.jsonl`、`gateway.log`（Mac 當玩家時加上 `gyo-object_fps_pvp/bin/logs/`），以及每台 Windows 的 `bin\logs\` 整個資料夾。
 
 ## 1. 準備同一個版本
 
@@ -59,7 +59,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 
   - 可以核對下載的檔案：`certutil -hashfile gyo-object_fps_pvp-windows-x64.tar.gz SHA256` 應該是 `f0e06e2862833ba2b8ed168d56fac4c9c5614f762e3442a5b5aa9abcfce965fe`（GitHub 記錄的值）。
   - 第一次執行時若出現 SmartScreen（未簽章的程式），按「其他資訊」→「仍要執行」。
-- **Mac**：測試包已在 `~/gyo-lan-v7/`，從 `6d3f287` 在本機建置（打包方式和 CI 的 `macos-x64` 相同，不用下載）。內容與 SHA-256 見第 8 節。
+- **Mac**：測試包已在 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/`，從 `6d3f287` 在本機建置（打包方式和 CI 的 `macos-x64` 相同，不用下載）。內容與 SHA-256 見第 8 節。
   - `gyo-object_fps_pvp/`：Match、Mac 版 Client、資產、`lib/`（Client 用的 SDL）、`build_metadata.json`。
   - `gyo_object_fps_pvp-gateway`：Gateway（發行包沒有 macOS 版的 Gateway，和 v6 一樣在本機建置）。
 - **核對版本**：
@@ -87,7 +87,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 終端機 1：Match。出現 `Object_FPS_PVP Match ready: 127.0.0.1:27016 arena=pvp_corners_v1 authority=60Hz` 之後，再啟動 Gateway：
 
 ```bash
-~/gyo-lan-v7/gyo-object_fps_pvp/bin/gyo_object_fps_pvp-match --arena ~/gyo-lan-v7/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --listen 127.0.0.1:27016 --log ~/gyo-lan-v7/match.log --movement-trace ~/gyo-lan-v7/match-commands.jsonl
+/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo-object_fps_pvp/bin/gyo_object_fps_pvp-match --arena /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --listen 127.0.0.1:27016 --log /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/match.log --movement-trace /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/match-commands.jsonl
 ```
 
 - v7 新增：指定 `--movement-trace` 時，Match 會在同一個資料夾另外寫 `match-ingress.jsonl`（命令到達 Match 的細節：被替代的序號、晚到多久、被拒的原因）。檔名由 `-commands.jsonl` 換成 `-ingress.jsonl` 自動決定，不需要另外指定。
@@ -96,7 +96,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 終端機 2：Gateway。把 `MAC_IP` 換成實際的位址：
 
 ```bash
-~/gyo-lan-v7/gyo_object_fps_pvp-gateway -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 -advertise-ip MAC_IP -log ~/gyo-lan-v7/gateway.log
+/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo_object_fps_pvp-gateway -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 -advertise-ip MAC_IP -log /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gateway.log
 ```
 
 - 啟動後會印出 `Object FPS Gateway HTTP=... UDP=... advertise=MAC_IP runtime=127.0.0.1:27016`。`advertise` 必須是 Mac 的 LAN IP，不能是 `127.0.0.1`，否則 Windows 連不上遊戲（大廳看得到，但進不了對局）。
@@ -105,10 +105,10 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 終端機 3（選用）：Mac 也當玩家。和 Windows 一樣用 `MAC_IP`：
 
 ```bash
-cd ~/gyo-lan-v7/gyo-object_fps_pvp/bin && ./gyo_object_fps_pvp --gateway MAC_IP:8080 --movement-trace logs/client-commands.jsonl
+cd /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo-object_fps_pvp/bin && ./gyo_object_fps_pvp --gateway MAC_IP:8080 --movement-trace logs/client-commands.jsonl
 ```
 
-- 日誌自動寫到 `~/gyo-lan-v7/gyo-object_fps_pvp/bin/logs/client-<時間>.log`。重新啟動時和 Windows 一樣，把 trace 的檔名改成 `-2`、`-3` …（trace 每次從頭覆寫）。
+- 日誌自動寫到 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo-object_fps_pvp/bin/logs/client-<時間>.log`。重新啟動時和 Windows 一樣，把 trace 的檔名改成 `-2`、`-3` …（trace 每次從頭覆寫）。
 - 注意：Mac 同時跑 Match、Gateway 與 Client（畫面），Match 的 Tick 可能受影響。Match 的 10 秒統計行會記錄晚醒，分析時可以看出有沒有影響。只有 2 位 Windows 玩家時才建議 Mac 加入。
 
 ### Windows（每台）
@@ -144,7 +144,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 
 | 機器 | 檔案 |
 |---|---|
-| Mac | `~/gyo-lan-v7/` 中的 `match.log`、`match-commands.jsonl`、`match-ingress.jsonl`、`gateway.log`；Mac 當玩家時加上 `~/gyo-lan-v7/gyo-object_fps_pvp/bin/logs/` 整個資料夾；終端機的畫面輸出（若有錯誤訊息） |
+| Mac | `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/` 中的 `match.log`、`match-commands.jsonl`、`match-ingress.jsonl`、`gateway.log`；Mac 當玩家時加上 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/gyo-object_fps_pvp/bin/logs/` 整個資料夾；終端機的畫面輸出（若有錯誤訊息） |
 | 每台 Windows | `bin\logs\` 整個資料夾（`client-*.log`、`client-commands.jsonl`） |
 | 文字說明 | 每台機器的名稱、CPU、GPU、螢幕更新率、有線或 Wi-Fi；異常的時間與現象；切換視窗的時間；各機器的時區是否相同 |
 
@@ -188,9 +188,9 @@ v6 的內容都保留（[v6 手冊](../v6/LAN_TEST.md)第 6 節）。下面標�
 - **移到之後的版本**：跨機器對時與 pv7、日誌補強（v7.1）；FPS 上限、解析度選擇、音效（v8）；遠端角色外觀相同、受擊方向只指向最後一位攻擊者（不變）。
 - Client 關閉時可能最多卡約 3 秒（已知，關閉後等它結束即可）。
 
-## 8. 測試包的內容（Mac，`~/gyo-lan-v7/`）
+## 8. 測試包的內容（Mac，`/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/`）
 
-2026-10-14 由 lan-kit-v7 準備。證據：`build/target/_build/test/logs/pvp-v7-lan-kit-20261014/`（git 忽略，只在本機；`summary.md`、`commands.txt`、`kit-SHA256SUMS.txt`）。全部檔案的 SHA-256 在 `~/gyo-lan-v7/SHA256SUMS.txt`。
+2026-10-14 由 lan-kit-v7 準備。證據：`build/target/_build/test/logs/pvp-v7-lan-kit-20261014/`（git 忽略，只在本機；`summary.md`、`commands.txt`、`kit-SHA256SUMS.txt`）。全部檔案的 SHA-256 在 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/SHA256SUMS.txt`。
 
 | 檔案 | SHA-256 | 說明 |
 |---|---|---|
@@ -205,4 +205,4 @@ v6 的內容都保留（[v6 手冊](../v6/LAN_TEST.md)第 6 節）。下面標�
   - Gateway 的 SHA-256 和 v7final 完全相同（同一個命令從同一個目錄建置）。
   - Match 與 Client 的 SHA-256 不同（建置目錄的路徑不同），以 16-L1 的正規化比對：符號 0 差異、反組譯 0 差異（Match 533,612 行、Client 1,025,177 行）；資產 31 檔完全相同。
 - 這個 Mac 版 Client 和 GitHub snapshot 的 `macos-x64` 包不是逐位元組相同的檔案（各自建置），來源相同。
-- 冒煙測試（2026-10-14 23:52～23:55，`MAC_IP`＝`127.0.0.1`，本節的命令）：`Match ready`、`/rooms` 回應、兩個無頭 Client 進房連射 8 秒（每人 210 個裁決，`passed`＝true）、Mac 版 Client 用 Metal 啟動並看到房間；依序 Ctrl+C（SIGINT）結束，Gateway 與 Match 都 exit 0，`match-commands.jsonl` 與 `match-ingress.jsonl` 都有 `trace_end`，兩邊都寫出 `final=1` 的 ingress 統計。冒煙測試的日誌已移到證據資料夾，`~/gyo-lan-v7/` 中沒有留下。
+- 冒煙測試（2026-10-14 23:52～23:55，`MAC_IP`＝`127.0.0.1`，本節的命令）：`Match ready`、`/rooms` 回應、兩個無頭 Client 進房連射 8 秒（每人 210 個裁決，`passed`＝true）、Mac 版 Client 用 Metal 啟動並看到房間；依序 Ctrl+C（SIGINT）結束，Gateway 與 Match 都 exit 0，`match-commands.jsonl` 與 `match-ingress.jsonl` 都有 `trace_end`，兩邊都寫出 `final=1` 的 ingress 統計。冒煙測試的日誌已移到證據資料夾，`/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan-v7/` 中沒有留下。

@@ -11,9 +11,9 @@ struct SDL_Renderer;
 struct SDL_Texture;
 namespace Engine::Text { class ITextRasterizer; }
 
-namespace Gyo::Tools::UiEditor {
-class ReadOnlyAssetCatalog;
+namespace Gyo::Tools::Framework { class ReadOnlyAssetCatalog; }
 
+namespace Gyo::Tools::UiEditor {
 struct TextTextureView final {
     SDL_Texture* texture{};
     float width{};
@@ -32,13 +32,13 @@ public:
     AssetPreviewContext(const AssetPreviewContext&) = delete;
     AssetPreviewContext& operator=(const AssetPreviewContext&) = delete;
 
-    // Creates the SDL_ttf rasterizer; failing to do so is a Runtime Error.
+    // Creates the SDL3_ttf rasterizer; failing to do so is a Runtime Error.
     [[nodiscard]] Result<void, PreviewError> Initialize(SDL_Renderer& renderer);
     // Initializing twice or with a null rasterizer is API misuse (GYO_ASSERT).
     void Initialize(SDL_Renderer& renderer,
         std::unique_ptr<Engine::Text::ITextRasterizer> rasterizer);
     // Requires an initialized context, a mounted catalog and no active frame.
-    void Mount(const ReadOnlyAssetCatalog& catalog);
+    void Mount(const Framework::ReadOnlyAssetCatalog& catalog);
     // Requires no active frame.
     void Unmount();
 

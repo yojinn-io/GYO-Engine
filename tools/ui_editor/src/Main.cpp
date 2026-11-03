@@ -1,13 +1,15 @@
 #include "gyo/ui_editor/CommandLine.hpp"
 #include "gyo/ui_editor/DocumentSession.hpp"
 #include "gyo/ui_editor/EditorGui.hpp"
-#include "gyo/ui_editor/ReadOnlyAssetCatalog.hpp"
+#include "gyo/framework/HeadlessShell.hpp"
+#include "gyo/framework/ReadOnlyAssetCatalog.hpp"
 #include "gyo/ui_editor/UiDocumentBridge.hpp"
 
-#include "engine/os/Console.hpp"
+#include "engine/base/Error.hpp"
 #include "engine/os/Files.hpp"
 
 #include <iostream>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -33,13 +35,14 @@ void PrintDiagnostics(const std::vector<Diagnostic>& diagnostics) {
 
 int Validate(const Gyo::Tools::UiEditor::CommandLineOptions& options) {
     using namespace Gyo::Tools::UiEditor;
+    namespace Framework = Gyo::Tools::Framework;
     if (!options.inputPath.has_value()) {
         std::cerr << "error: --validate requires a JSON path\n";
         return 2;
     }
 
-    ReadOnlyAssetCatalog catalog;
-    const ReadOnlyAssetCatalog* catalogPointer = nullptr;
+    Framework::ReadOnlyAssetCatalog catalog;
+    const Framework::ReadOnlyAssetCatalog* catalogPointer = nullptr;
     if (options.assetRoot.has_value()) {
         const auto mounted = options.catalogPath.has_value()
             ? catalog.Mount(*options.catalogPath, *options.assetRoot)
@@ -70,22 +73,12 @@ int Validate(const Gyo::Tools::UiEditor::CommandLineOptions& options) {
     return 0;
 }
 
-} // namespace
-
-int main(const int argc, char* argv[]) {
+int Run(const std::span<const std::string> commandLine) {
     using namespace Gyo::Tools::UiEditor;
-    // UTF-8 shows as UTF-8 on a Windows console until main returns.
-    const auto utf8Console = Engine::Os::Console::Utf8ConsoleOutput::Enable();
-    // UTF-8 arguments on every platform (the narrow argv is the ANSI code page on Windows).
-    const auto commandLine = Engine::Os::Console::CommandLineUtf8(argc, argv);
-    if (!commandLine) {
-        std::cerr << "error: " << Engine::Base::Describe(commandLine.error()) << "\n\n" << CommandLineHelp();
-        return 2;
-    }
     std::vector<std::string_view> arguments;
-    arguments.reserve(commandLine->size() > 1 ? commandLine->size() - 1 : 0U);
-    for (std::size_t index = 1; index < commandLine->size(); ++index) {
-        arguments.emplace_back((*commandLine)[index]);
+    arguments.reserve(commandLine.size() > 1 ? commandLine.size() - 1 : 0U);
+    for (std::size_t index = 1; index < commandLine.size(); ++index) {
+        arguments.emplace_back(commandLine[index]);
     }
 
     const auto parsed = ParseCommandLine(arguments);
@@ -101,4 +94,15 @@ int main(const int argc, char* argv[]) {
         return Validate(*parsed);
     }
     return RunEditorGui(*parsed);
+}
+
+} // namespace
+
+int main(const int argc, char* argv[]) {
+    // The shell turns the command line into UTF-8 (the narrow argv is the
+    // ANSI code page on Windows) and shows UTF-8 console output as UTF-8.
+    return Gyo::Tools::Framework::RunHeadlessShell(argc, argv, Run, [](const std::string_view reason) {
+        std::cerr << "error: " << reason << "\n\n" << Gyo::Tools::UiEditor::CommandLineHelp();
+        return 2;
+    });
 }

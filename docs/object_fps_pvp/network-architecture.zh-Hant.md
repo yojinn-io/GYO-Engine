@@ -106,7 +106,7 @@ Client A / Client B (each process; v7 batch 04: three roles)
     snapshot history <= 64 -> Drain() (main) / DrainSimulation() (sim role)
          |
          v
-  HTTP control / UDP Client Protocol pv8 (client_v8.proto)
+  HTTP control / UDP Client Protocol pv8 (client_v9.proto)
          |
          v
   Product Go Gateway (goroutines; apps/object_fps_pvp/gateway) -- stateless edge (pv7 §2a)
@@ -123,7 +123,7 @@ Client A / Client B (each process; v7 batch 04: three roles)
     expire, logStatistics (ingress / drop counts), runDiagnostics, HTTP serve
          |
          v
-  loopback TCP / Runtime Protocol pv8 (runtime_v8.proto)
+  loopback TCP / Runtime Protocol pv8 (runtime_v9.proto)
          |
          v
   Match process (v7 batch 07)
@@ -450,7 +450,7 @@ socket 讀寫與序列化不在世界 Tick 內執行。
 
 ## 3. 兩份獨立 Protocol
 
-來源為產品的 `protocol/client_v8.proto` 與 `protocol/runtime_v8.proto`（Go 套件 `clientv8`／`runtimev8`），彼此不 import。
+來源為產品的 `protocol/client_v9.proto` 與 `protocol/runtime_v9.proto`（Go 套件 `clientv9`／`runtimev9`），彼此不 import。
 目前兩者版本都為 8（pv8，v8 的 pv8-line；規則見 [protocol-v8](protocol-v8.zh-Hant.md)，沒有改寫的條款沿用 pv7），Client／Gateway／Match 必須一起升級，明確拒絕其他所有版本
 （C++ `wire::ProtocolVersion`、Go `adapter.ProtocolVersion`）。Adapter 明確映射兩份生成型別，
 Match 核心只接收普通 C++ domain 值。本節只列結構；送達語意、Gateway 的約束、對時與回聲、丟棄回報的細節見
@@ -745,7 +745,7 @@ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
 protoc --version  # 必須為 libprotoc 36.2；PATH 指向本次 CMake 建置的 protoc
 protoc --proto_path=apps/object_fps_pvp/protocol `
   --go_out=apps/object_fps_pvp --go_opt=module=gyo.local/object_fps_pvp `
-  apps/object_fps_pvp/protocol/client_v8.proto apps/object_fps_pvp/protocol/runtime_v8.proto
+  apps/object_fps_pvp/protocol/client_v9.proto apps/object_fps_pvp/protocol/runtime_v9.proto
 git diff -- apps/object_fps_pvp/protocol
 ```
 
@@ -852,6 +852,7 @@ Arena JSON Data Contract 維持不變。v2 測試證據見
 | 控制事件有序，完整狀態可合併 | Join／Leave 不丟失，快照不形成無界 FIFO | 是否誤丟控制，或替換已部分寫出的 TCP frame？ |
 | 連線 generation 與 movementEpoch 分工 | 換連線清整體歷史；單人 epoch 只切該玩家區段 | 是否為一人復原而重置另一人的時間線？ |
 | 觀測與模擬契約分開 | 診斷時間戳不能成為 Client 指定的模擬參數 | 是否以診斷欄位驅動玩法，或把測試注入放入正式遊戲？ |
+| 判定姿勢只來自 Match 的權威動畫狀態（protocol-v9 §7 第 2 項，`v8-product-anim-authority`） | 畫面上的遠端姿勢就是被判定的姿勢；Client 的呈現不參與判定 | 是否讓 Client 自己累積步伐相位或權重，或讓呈現的狀態回流到判定？（[player-presentation](player-presentation.zh-Hant.md) 的 Design Invariants） |
 
 觀測也必須符合因果：Host 可能在 Client 的 send 呼叫返回前就接受命令，因此成功
 send 保存開始／結束區間，不能用晚記錄的單點時間否定真實接收。首次送出延遲用
@@ -951,7 +952,7 @@ Gateway 是無狀態的邊緣：內部訊息保留身分並且冪等，可靠送
 **已知項目**（只記錄）：
 
 - **P2 的例外（D173 的 D-15 (a)）**：只有上行中斷時，Client 在新 epoch 裡把窗口填到 12。上行恢復後，這 12 個命令的領先量要等 Backlog 保險絲清掉，最長約 1 s（中斷結束後約 31 Tick，或冷卻結束時）。修剪多餘的領先量交給 v8 B6。
-- **P2 的第二個例外**：Match 自己停頓、恢復時 epoch 相同而權威 < tip，Client 不改寫在途的序號，所以中斷期間累積的領先量（最多約 7 Tick）留到 Backlog 保險絲清掉（約 0.5～1 s，冷卻期內要等冷卻結束）。在那之前，新命令的樣本被這段領先量墊高，第一次相位決定可能據此把相位往後移（最多 2 Tick）。和第一個例外一樣交給 v8 B6。
+- **P2 的第二個例外**：Match 自己停頓、恢復時 epoch 相同而權威 < tip，Client 不改寫在途的序號，所以中斷期間累積的領先量（最多約 7 Tick）留到 Backlog 保險絲清掉（約 0.5～1 s，冷卻期內要等冷卻結束）。在那之前，新命令的樣本被這段領先量墊高，第一次相位決定可能據此把相位往後移（最多 2 Tick）。停頓超過約 100 ms 時（追趕上限 5 步開始丟時間），這段領先量會在約 0.5 秒內觸發 1 次 Backlog 重設，連線品質窗口因此判失敗，HUD 顯示 CONNECTION POOR 約 10 秒；單次停頓只讓連續失敗數到 1，不會移出（2026-10-30 在 master 上以停頓 140 ms 重現）。和第一個例外一樣交給 v8 B6。
 - **只有上行中斷時 Client 不顯示中斷**：Client 照常收到 snapshot，看到的是角色停住再起步。
 - **不換 epoch 的中斷**：§4 列出的三種，由相位重新擷取處理。
 - **pv7 的限制**：只保證 Match 看得到的中斷換 epoch（§4）。
@@ -1051,7 +1052,7 @@ Client：S = N（處理點擊那一幀所用預測的 epoch 裡已產生的最�
 | 無狀態邊緣的守衛（狀態白名單） | `apps/object_fps_pvp/gateway/state_whitelist_test.go` |
 | Gateway ingress 與丟棄計數；送出間隔統計 | `apps/object_fps_pvp/gateway/ingress_statistics.go`；`send_statistics.go` |
 | 時間基準、Waiter、角色執行緒（Engine，不屬本產品） | `engine/time/include/engine/time/Waiter.hpp`、`engine/threads/include/engine/threads/RoleThread.hpp` |
-| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v8.proto`、`runtime_v8.proto`（規則見 [protocol-v7](protocol-v7.zh-Hant.md)，未改寫的條款沿用 [pv6 契約](protocol-v6.zh-Hant.md) 與 [v5 契約](protocol-v5.zh-Hant.md)；v5 契約第 9 節為 v4 歷史） |
+| 線上資料契約 | `apps/object_fps_pvp/protocol/client_v9.proto`、`runtime_v9.proto`（規則見 [protocol-v7](protocol-v7.zh-Hant.md)，未改寫的條款沿用 [pv6 契約](protocol-v6.zh-Hant.md) 與 [v5 契約](protocol-v5.zh-Hant.md)；v5 契約第 9 節為 v4 歷史） |
 | 日誌格式 | [日誌 Data Contract](log-contract.zh-Hant.md)；`drop_` 鍵的名稱表在 `apps/object_fps_pvp/gateway/ingress_statistics.go` |
 | 產品驗收與證據分析 | `tests/object_fps_pvp/`、`build/acceptance/object_fps_pvp/` |
 

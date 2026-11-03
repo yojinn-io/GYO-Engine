@@ -32,9 +32,9 @@ def simulate(duration):
                             "action_kind": kind, "slot": entry["slot"]})
         decisions.append({"action_id": action_id, "resolved_tick": tick, "accepted": True, "rejection": 0,
                           "hit_kind": 2 if hit else (1 if kind == 0 else 0), "target_id": TARGET if hit else 0,
-                          "damage": 25 if hit else 0, "action_kind": kind, "received_seconds": generated + .05})
+                          "damage": 25000 if hit else 0, "action_kind": kind, "received_seconds": generated + .05})
         replay.append((SHOOTER, {"action_id": action_id, "resolved_tick": tick, "accepted": True, "action_kind": kind,
-                                 "life_generation": 1, "damage": 25 if hit else 0, "target_id": TARGET if hit else 0,
+                                 "life_generation": 1, "damage": 25000 if hit else 0, "target_id": TARGET if hit else 0,
                                  "target_life_generation": life if hit else 0}))
         if hit:
             hits += 1
@@ -172,7 +172,7 @@ class CombatGuiEvidenceTests(unittest.TestCase):
         self.assert_error(analyze_combat_gui(directory), "repeat an ActionId")
 
     def test_corpse_damage_or_rejected_reload_is_a_wrong_verdict(self):
-        for index, change in ((4, {"damage": 25, "hit_kind": 2, "target_id": TARGET}),
+        for index, change in ((4, {"damage": 25000, "hit_kind": 2, "target_id": TARGET}),
                               (12, {"accepted": False, "rejection": 6})):
             with self.subTest(index=index):
                 directory, _ = self.fixture()
@@ -210,7 +210,7 @@ class CombatGuiEvidenceTests(unittest.TestCase):
     def test_presented_hud_may_lag_the_newest_snapshot(self):
         directory, _ = self.fixture()
         def lag(rows):
-            first = next(i for i, row in enumerate(rows) if row["combat"][1]["hp"] < 100)
+            first = next(i for i, row in enumerate(rows) if row["combat"][1]["hp"] < 100000)
             previous = rows[first - 1]
             rows[first].update(hud_tick=previous["snapshot_tick"], hud_hp=previous["hud_hp"], hud_ammo=previous["hud_ammo"])
         self.edit_hp(directory, lag)

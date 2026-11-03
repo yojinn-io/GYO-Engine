@@ -17,7 +17,7 @@
 - **Mac 的 Gateway**：發行包不含 macOS 版的 Gateway，在 repository 中 checkout 同一個 commit 後建置：
 
   ```bash
-  cd apps/object_fps_pvp && GOWORK=off go build -o ~/gyo-lan/gyo_object_fps_pvp-gateway ./gateway/cmd
+  cd apps/object_fps_pvp && GOWORK=off go build -o /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/gyo_object_fps_pvp-gateway ./gateway/cmd
   ```
 
 - **核對版本**：每個發行包的 `gyo-object_fps_pvp/build_metadata.json` 中，`source_revision` 都要相同。啟動後，每個角色的日誌第一行也會記錄自己執行檔的 SHA-256。
@@ -42,19 +42,19 @@
 先建立放日誌的資料夾，並解壓 Match：
 
 ```bash
-mkdir -p ~/gyo-lan && tar -xzf gyo-object_fps_pvp-macos-x64.tar.gz -C ~/gyo-lan
+mkdir -p /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan && tar -xzf gyo-object_fps_pvp-macos-x64.tar.gz -C /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan
 ```
 
 終端機 1：Match。出現 `Match ready` 之後，再啟動 Gateway：
 
 ```bash
-~/gyo-lan/gyo-object_fps_pvp/bin/gyo_object_fps_pvp-match --arena ~/gyo-lan/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --listen 127.0.0.1:27016 --log ~/gyo-lan/match.log --movement-trace ~/gyo-lan/match-commands.jsonl
+/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/gyo-object_fps_pvp/bin/gyo_object_fps_pvp-match --arena /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/gyo-object_fps_pvp/bin/assets/object_fps_pvp/pvp_corners.json --listen 127.0.0.1:27016 --log /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/match.log --movement-trace /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/match-commands.jsonl
 ```
 
 終端機 2：Gateway。把 `MAC_IP` 換成實際的位址：
 
 ```bash
-~/gyo-lan/gyo_object_fps_pvp-gateway -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 -advertise-ip MAC_IP -log ~/gyo-lan/gateway.log
+/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/gyo_object_fps_pvp-gateway -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 -advertise-ip MAC_IP -log /Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/gateway.log
 ```
 
 ### Windows（每台）
@@ -83,7 +83,7 @@ gyo_object_fps_pvp.exe --gateway MAC_IP:8080 --movement-trace logs\client-comman
 
 | 機器 | 檔案 |
 |---|---|
-| Mac | `~/gyo-lan/match.log`、`~/gyo-lan/gateway.log`、`~/gyo-lan/match-commands.jsonl`，以及兩個終端機的畫面輸出（若有錯誤訊息） |
+| Mac | `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/match.log`、`/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/gateway.log`、`/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo-lan/match-commands.jsonl`，以及兩個終端機的畫面輸出（若有錯誤訊息） |
 | 每台 Windows | `bin\logs\` 整個資料夾（`client-*.log`、`client-commands.jsonl`） |
 | 文字說明 | 每台機器的名稱、GPU、螢幕更新率，有線或 Wi-Fi；異常的時間與現象；Mac 與 Windows 的時區是否相同 |
 

@@ -10,6 +10,8 @@
 
 Windows 的檢測 log（`docs/tools/plans/v8/evidence/ime-observe/`）：SDL 預設由作業系統畫組字，遊戲收不到組字事件（0 筆），組字中的字看不到，字在確定時才成批出現。
 
+（後續，2026-10-31）`docs/tools/plans/v8/evidence/ime-observe/` 已移出 repo（AGENTS §15），現在在主 checkout 的 `build/evidence/tool-v8-ime-observe/report.txt`（使用者的 Intel Mac，git 管理外）；腳本的分類全文抄在 [2026_10_30_tool_v8_ui_ime_observe](2026_10_30_tool_v8_ui_ime_observe.zh-Hant.md)「判定為什麼不成立」一節。
+
 ## 做了什麼（全部只加不改）
 
 - `SdlPlatformOptions::imeComposition`（預設 false）：在 `Create` 啟動 SDL 視訊之前，把 `SDL_HINT_IME_IMPLEMENTED_UI` 設成 `composition`。這個 hint 作用於整個 process，在視訊啟動時讀取；設為 false 時不動它。

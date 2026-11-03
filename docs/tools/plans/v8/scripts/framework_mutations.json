@@ -1,0 +1,361 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the tools' guards for the framework (v8-tool-framework-shell; v8-tool-ui-editor-path-dialog-adopt and -shell-adopt add the dialog and command-line mutants): ui_editor and audio_editor, owned by the tool line. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The framework's own mutants moved to docs/architecture/plans/framework-rework/scripts/framework_mutations.json (v8-framework-guard-ratchet).",
+  "mutants": [
+    {
+      "id": "ui-guard-native-target",
+      "what": "ui_editor names the native SDL platform beside the framework's ImGui binding",
+      "file": "tools/ui_editor/CMakeLists.txt",
+      "find": "        GYO::RenderBackendSDLNative\n    )\n",
+      "replace": "        GYO::RenderBackendSDLNative\n        GYO::PlatformSDLNative\n    )\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "names GYO::PlatformSDLNative"
+    },
+    {
+      "id": "ui-dialog-stale-accepted",
+      "what": "An answer counts for whatever request is waiting, whatever its tag",
+      "file": "tools/ui_editor/src/PathDialog.cpp",
+      "find": "if (!waiting_.has_value() || tag != lastTag_) return std::nullopt;",
+      "replace": "if (!waiting_.has_value()) return std::nullopt;",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: a newer request makes an older answer stale"
+    },
+    {
+      "id": "ui-dialog-failed-ends",
+      "what": "A Failed answer ends its request, so the fallback dialog's answer is dropped",
+      "file": "tools/ui_editor/src/PathDialog.cpp",
+      "find": "if (outcome != PathDialogOutcome::Failed) waiting_.reset();",
+      "replace": "waiting_.reset();",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: the answer that follows a failure \\(the fallback dialog\\) still applies"
+    },
+    {
+      "id": "ui-dialog-abandon-noop",
+      "what": "Stop waiting keeps the request, so its late answer still applies",
+      "file": "tools/ui_editor/src/PathDialog.cpp",
+      "find": "void PathDialogRequests::Abandon() noexcept {\n    waiting_.reset();\n}",
+      "replace": "void PathDialogRequests::Abandon() noexcept {\n}",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: an answer after Stop waiting is ignored"
+    },
+    {
+      "id": "ui-dialog-same-tag",
+      "what": "Every request gets the same tag",
+      "file": "tools/ui_editor/src/PathDialog.cpp",
+      "find": "    ++lastTag_;\n",
+      "replace": "    lastTag_ = 1;\n",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: every request gets its own tag"
+    },
+    {
+      "id": "ui-dialog-stale-applied",
+      "what": "The editor applies an answer its dialogs marked as no longer awaited",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "        if (!result.current) {\n",
+      "replace": "        if (false) {\n",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: a stale folder answer mounts nothing"
+    },
+    {
+      "id": "ui-dialog-current-mapping",
+      "what": "The adapter marks every answer as awaited",
+      "file": "tools/ui_editor/src/SdlPathDialogs.cpp",
+      "find": "            .current = purpose.has_value()};",
+      "replace": "            .current = true};",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: an answer after the request ended is marked as not awaited"
+    },
+    {
+      "id": "ui-dialog-kind-mapping",
+      "what": "Exporting asks for an open-file dialog",
+      "file": "tools/ui_editor/src/SdlPathDialogs.cpp",
+      "find": "        request.kind = Sdl::PathDialogKind::SaveFile;",
+      "replace": "        request.kind = Sdl::PathDialogKind::OpenFile;",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: exporting saves a file"
+    },
+    {
+      "id": "ui-dialog-outcome-mapping",
+      "what": "A chosen path reaches the editor as a cancel",
+      "file": "tools/ui_editor/src/SdlPathDialogs.cpp",
+      "find": "        return PathDialogOutcome::Chosen;",
+      "replace": "        return PathDialogOutcome::Cancelled;",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: the fallback dialog's choice reaches the editor"
+    },
+    {
+      "id": "ae-guard-json-target",
+      "what": "The audio editor names nlohmann_json beside the framework's JSON binding",
+      "file": "tools/audio_editor/CMakeLists.txt",
+      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
+      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson nlohmann_json::nlohmann_json",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "names nlohmann_json::nlohmann_json"
+    },
+    {
+      "id": "ui-io-within-false",
+      "what": "The export guard never finds a path inside the asset root",
+      "file": "tools/ui_editor/src/DocumentSession.cpp",
+      "find": "    return within.value();\n}",
+      "replace": "    return false;\n}",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: export rejects every path below the mounted app asset root"
+    },
+    {
+      "id": "ui-io-no-parents",
+      "what": "ui_editor's export no longer creates missing folders",
+      "file": "tools/ui_editor/src/DocumentSession.cpp",
+      "find": "bytes, {.createParentDirectories = true})",
+      "replace": "bytes, {.createParentDirectories = false})",
+      "target": "gyo_ui_editor_core_tests",
+      "expect": "FAILED: valid document exports without a catalog"
+    },
+    {
+      "id": "ae-io-no-parents",
+      "what": "The audio editor no longer creates the clip's missing folders",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "{.createParentDirectories = true});",
+      "replace": "{.createParentDirectories = false});",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "ExportSound writes the clip*",
+      "expect": "REQUIRE\\( report.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-guard-io-platform",
+      "what": "The audio editor's CMake names the SDL platform beside engine/io",
+      "file": "tools/audio_editor/CMakeLists.txt",
+      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
+      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::PlatformSDL GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "names GYO::PlatformSDL"
+    },
+    {
+      "id": "ui-guard-sdl-target",
+      "what": "ui_editor's preview names SDL3 directly instead of Engine's native target",
+      "file": "tools/ui_editor/CMakeLists.txt",
+      "find": "        gyo_ui_editor_core\n        GYO::RenderBackendSDLNative\n",
+      "replace": "        gyo_ui_editor_core\n        GYO::RenderBackendSDLNative\n        SDL3::SDL3\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "names SDL3::SDL3"
+    },
+    {
+      "id": "ui-guard-sdl-outside-native",
+      "what": "An editor file outside the native renderer's files includes SDL",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "#include \"engine/base/Log.hpp\"\n",
+      "replace": "#include \"engine/base/Log.hpp\"\n#include <SDL3/SDL.h>\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "EditorApp.cpp: includes SDL3/SDL.h"
+    },
+    {
+      "id": "ui-guard-native-list-ignored",
+      "what": "The ui_editor guard lets SDL_ names through in every file",
+      "file": "tests/ui_editor/ui_editor_dependency_guard.py",
+      "find": "                if relative not in NATIVE_FILES or not NATIVE_SDL_NAMES.fullmatch(name):\n",
+      "replace": "                if False:\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ui_editor",
+        "-p",
+        "test_ui_editor_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_sdl_outside_the_native_files_fails"
+    },
+    {
+      "id": "ae-guard-sdl-symbol",
+      "what": "The audio editor uses an SDL name of its own",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "constexpr std::string_view kSoundType = \"sound\";",
+      "replace": "constexpr std::string_view kSoundType = \"sound\";\n[[maybe_unused]] constexpr unsigned kOwnSdl = SDL_INIT_AUDIO;",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "uses SDL_INIT_AUDIO"
+    },
+    {
+      "id": "ae-guard-native-include",
+      "what": "The audio editor includes an Engine native-layer header",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "#include \"engine/io/fs/NativeFileSystem.hpp\"\n",
+      "replace": "#include \"engine/io/fs/NativeFileSystem.hpp\"\n#include \"engine/platform/sdl/SdlPlatformNative.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "includes engine/platform/sdl/SdlPlatformNative.hpp"
+    },
+    {
+      "id": "ui-guard-native-api-ignored",
+      "what": "The ui_editor guard lets any SDL_ name through in the native renderer's files",
+      "file": "tests/ui_editor/ui_editor_dependency_guard.py",
+      "find": "                if relative not in NATIVE_FILES or not NATIVE_SDL_NAMES.fullmatch(name):\n",
+      "replace": "                if relative not in NATIVE_FILES:\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ui_editor",
+        "-p",
+        "test_ui_editor_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_native_file_uses_only_the_renderer"
+    },
+    {
+      "id": "ui-guard-native-window-api",
+      "what": "A native renderer file creates an SDL window itself",
+      "file": "tools/ui_editor/src/AssetPreviewContext.cpp",
+      "find": "#include <SDL3/SDL.h>\n",
+      "replace": "#include <SDL3/SDL.h>\n[[maybe_unused]] static auto* const kOwnWindow = &SDL_CreateWindow;\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "AssetPreviewContext.cpp: uses SDL_CreateWindow"
+    },
+    {
+      "id": "ui-guard-native-platform-header",
+      "what": "A native renderer file includes the SDL platform's native header",
+      "file": "tools/ui_editor/src/EditorWindow.cpp",
+      "find": "#include \"engine/render/backend/sdl/SdlRendererNative.hpp\"\n",
+      "replace": "#include \"engine/render/backend/sdl/SdlRendererNative.hpp\"\n#include \"engine/platform/sdl/SdlPlatformNative.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "EditorWindow.cpp: includes engine/platform/sdl/SdlPlatformNative.hpp"
+    },
+    {
+      "id": "ui-input-composition-dropped",
+      "what": "The preview drops the input method's composition before Ui sees it",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "        if (editingText && physicalInput != nullptr) input.text = PreviewTextInput(*physicalInput);",
+      "replace": "        if (editingText && physicalInput != nullptr) {\n            input.text = PreviewTextInput(*physicalInput);\n            std::erase_if(input.text, [](const Engine::Ui::UiTextInput& entry) { return entry.kind == Engine::Ui::UiTextInputKind::Composition; });\n        }",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: the input method's composition is drawn in the field"
+    },
+    {
+      "id": "ui-input-shortcut-always-ctrl",
+      "what": "The preview takes Ctrl for select-all and paste even where ImGui follows macOS",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "ImGui::GetIO().ConfigMacOSXBehaviors ? Framework::TextShortcutModifier::Gui",
+      "replace": "false ? Framework::TextShortcutModifier::Gui",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: Ctrl\\+A does not select all where Command is the shortcut"
+    },
+    {
+      "id": "ui-input-request-when-idle",
+      "what": "The preview asks for text input while no field is edited",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "    if (previewMode && inputEnabled && !editingElement.empty()) {\n        for (const Engine::Ui::UiEvaluatedElement& element : evaluated.value()) {",
+      "replace": "    result.textInput = FrameOutput::TextInputRequest{};\n    if (previewMode && inputEnabled && !editingElement.empty()) {\n        for (const Engine::Ui::UiEvaluatedElement& element : evaluated.value()) {",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: no text input is asked for while no field is edited"
+    },
+    {
+      "id": "ui-input-request-missing",
+      "what": "The preview never asks for text input over the edited field",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "            result.textInput = FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "replace": "            [[maybe_unused]] const auto dropped = FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: an edited field asks for text input"
+    },
+    {
+      "id": "ui-guard-imgui-internal-ignored",
+      "what": "The ui_editor guard no longer refuses imgui_internal.h",
+      "file": "tests/ui_editor/ui_editor_dependency_guard.py",
+      "find": "FORBIDDEN_HEADERS = {\"imgui_internal.h\"}",
+      "replace": "FORBIDDEN_HEADERS = set()",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/ui_editor",
+        "-p",
+        "test_ui_editor_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_imgui_internal_fails"
+    },
+    {
+      "id": "ui-guard-imgui-internal",
+      "what": "The preview includes ImGui's internals again",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "#include <imgui.h>\n#include <nlohmann/json.hpp>\n",
+      "replace": "#include <imgui.h>\n#include <imgui_internal.h>\n#include <nlohmann/json.hpp>\n",
+      "command": [
+        "{python}",
+        "tests/ui_editor/ui_editor_dependency_guard.py"
+      ],
+      "expect": "PreviewAdapter.cpp: includes imgui_internal.h"
+    },
+    {
+      "id": "ui-editor-keys-ignore-preview",
+      "what": "The editor's shortcuts and nudging wait only for ImGui's own fields, not the preview's",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "    return ImGui::GetIO().WantTextInput || previewEditingText_;",
+      "replace": "    return ImGui::GetIO().WantTextInput;",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: typing belongs to the edited preview field, so editor shortcuts wait"
+    },
+    {
+      "id": "ui-editor-preview-editing-unrecorded",
+      "what": "The editor does not record that the preview's field is being edited",
+      "file": "tools/ui_editor/src/EditorAppCanvas.cpp",
+      "find": "    previewEditingText_ = result.textInput.has_value();\n",
+      "replace": "",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: typing belongs to the edited preview field, so editor shortcuts wait"
+    },
+    {
+      "id": "ui-input-request-without-origin",
+      "what": "The text input request ignores where the preview is drawn",
+      "file": "tools/ui_editor/src/PreviewAdapter.cpp",
+      "find": "FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,",
+      "replace": "FrameOutput::TextInputRequest{element.boundsPixels.x,",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: the request follows the preview's origin exactly"
+    },
+    {
+      "id": "ui-editor-shortcuts-ignore-preview",
+      "what": "The editor's shortcut chords go back to ImGui's own text-input flag only",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "    if (io.KeyCtrl && !TextInputActive()) {",
+      "replace": "    if (io.KeyCtrl && !io.WantTextInput) {",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: a shortcut chord while typing leaves the document and the edit alone"
+    },
+    {
+      "id": "ui-editor-nudge-ignores-preview",
+      "what": "Arrow nudging goes back to ImGui's own text-input flag only",
+      "file": "tools/ui_editor/src/EditorApp.cpp",
+      "find": "selectedNode_.empty() || TextInputActive() || io.KeyCtrl",
+      "replace": "selectedNode_.empty() || io.WantTextInput || io.KeyCtrl",
+      "target": "gyo_ui_editor_preview_tests",
+      "expect": "FAILED: an arrow while typing moves no element and keeps the edit"
+    }
+  ]
+}

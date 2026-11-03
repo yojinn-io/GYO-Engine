@@ -3,6 +3,7 @@
 #include "RetroFPS/Gameplay/Weapon/WeaponShotGeometry.hpp"
 #include "engine/asset/AssetId.hpp"
 #include "engine/model/Animation.hpp"
+#include "engine/model/AnimationEvents.hpp"
 #include "engine/render/RenderTypes.hpp"
 
 #include <array>
@@ -20,6 +21,9 @@ struct WeaponPresentationDefinition final {
     std::shared_ptr<const Engine::Model::ModelAsset> model;
     // Idle, Shoot, Reload, Draw, Hide.
     std::array<std::size_t, 5> clips{};
+    // Each action clip's gyo.anim_events moments, in the clip's own seconds;
+    // empty without an animation_events_asset_id or for a clip without events.
+    std::array<std::vector<Engine::Model::AnimationEvent>, 5> events{};
     Engine::Math::Vec3 idleAnchor{};
     Engine::Render::Transform3D placement{};
     Engine::Render::PerspectiveCamera3D camera{};

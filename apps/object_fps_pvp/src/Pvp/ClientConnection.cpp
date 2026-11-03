@@ -10,7 +10,7 @@
 #include "engine/base/Assert.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/threads/RoleThread.hpp"
-#include "client_v8.pb.h"
+#include "client_v9.pb.h"
 #include <asio.hpp>
 #include <httplib.h>
 #include <nlohmann/json.hpp>
@@ -31,7 +31,7 @@
 #include <utility>
 
 namespace fps::pvp {
-namespace pb=object_fps_pvp::client::v8;
+namespace pb=object_fps_pvp::client::v9;
 using Json=nlohmann::json;
 using Clock=std::chrono::steady_clock;
 using asio::ip::udp;
@@ -149,6 +149,7 @@ struct ClientConnection::Impl {
     // The simulation role's own copy of the history and its resume flag (DrainSimulation).
     ClientSimulationHistory simulationHistory;
     std::vector<ArenaIdentity> installedArenas;
+    std::optional<std::uint64_t> animationDigest;
     std::atomic<std::uint64_t> generation{0};
     asio::io_context io;
     udp::socket socket{io};
@@ -303,6 +304,14 @@ struct ClientConnection::Impl {
             throw std::runtime_error("arena_content_mismatch: arena "+id+" content differs (Match "+
                 (digest?Hex64(*digest):std::string("missing"))+", this Client "+Hex64(installed->digest)+")");
         state.arenaId=id;
+    }
+    // protocol-v9 §4.6: another animation content poses the bodies this Client
+    // draws differently from the ones the Match judges. A zero digest differs too.
+    void CheckAnimation(std::uint64_t digest) {
+        std::scoped_lock lock(mutex);
+        if(animationDigest && digest!=*animationDigest)
+            throw std::runtime_error("Match animation content differs from this client (Match "+
+                (digest?Hex64(digest):std::string("missing"))+", this Client "+Hex64(*animationDigest)+")");
     }
     // closing: the Client itself is closing, so the /leave uses the short timeouts.
     void DisconnectRemote(const bool closing=false) {
@@ -559,6 +568,7 @@ struct ClientConnection::Impl {
                 }
                 CheckArena(message.arena_id(),message.arena_version(),
                     message.arena_digest()?std::optional<std::uint64_t>{message.arena_digest()}:std::nullopt);
+                CheckAnimation(message.animation_digest());
                 if(message.tick_rate()!=AuthorityTickRate || message.snapshot_rate()!=AuthorityTickRate/SnapshotIntervalTicks)
                     throw std::runtime_error("Unsupported Match cadence");
                 const auto rules=ReadRules(message);
@@ -644,6 +654,14 @@ struct ClientConnection::Impl {
                     if(!ValidDamageRecord(record,player.lifeState==LifeState::Dead,player.lifeStateTick,message.tick(),maximumHp)){valid=false;break;}
                     snapshot.combat.push_back(record);
                 }
+                // pv9 §4.5: the animation authority, checked like the Match guards it.
+                for(const auto& a:message.animation()) {
+                    // The enum's range before the narrowing cast: 258 must not read as Start.
+                    if(a.jump_phase()<pb::JUMP_PHASE_GROUNDED || a.jump_phase()>pb::JUMP_PHASE_LAND){valid=false;break;}
+                    snapshot.animation.push_back({a.player_id(),a.life_generation(),a.gait_phase_q16(),a.move_weight_permille(),
+                        a.jog_weight_permille(),static_cast<JumpPhase>(a.jump_phase()),a.jump_phase_tick(),a.sprint_weight_permille()});
+                }
+                if(valid && !ValidPlayerAnimations(snapshot.players,snapshot.animation,snapshot.tick))valid=false;
                 if(!valid){++invalidSnapshotDatagrams;continue;}
                 std::scoped_lock lock(mutex);
                 if(activeGeneration!=generation.load())return;
@@ -957,6 +975,10 @@ void ClientConnection::Join(std::string gateway,std::string room){impl_->Push(Im
 void ClientConnection::Leave(){impl_->Push(Impl::Action::Leave);}
 void ClientConnection::SetArenaIdentity(std::string id,std::uint32_t version,std::uint64_t digest){
     SetArenaIdentities({{std::move(id),version,digest}});
+}
+void ClientConnection::SetAnimationDigest(std::uint64_t digest){
+    if(!digest)throw std::invalid_argument("animation content digest is zero");
+    std::scoped_lock lock(impl_->mutex);impl_->animationDigest=digest;
 }
 void ClientConnection::SetArenaIdentities(std::vector<ArenaIdentity> installed){
     for(std::size_t i=0;i<installed.size();++i) {

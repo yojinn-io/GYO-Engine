@@ -5,7 +5,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <numbers>
 #include <stdexcept>
 
@@ -37,7 +39,7 @@ std::optional<SoundSettings> ParseSoundSettings(const std::string& text, std::st
     error.clear();
     try {
         const auto json = nlohmann::json::parse(text);
-        if (json.at("version").get<int>() != 1) throw std::runtime_error("unsupported version");
+        if (json.at("version").get<int>() != 2) throw std::runtime_error("unsupported version");
         SoundSettings settings;
         const auto& cues = json.at("cues");
         for (std::size_t i = 0; i < SoundCueCount; ++i) {
@@ -52,11 +54,28 @@ std::optional<SoundSettings> ParseSoundSettings(const std::string& text, std::st
         const auto& footsteps = json.at("footsteps");
         settings.strideDistance = Bounded(footsteps.at("stride_distance"), 0.01F, 100, "the stride is positive");
         settings.teleportDistance = Bounded(footsteps.at("teleport_distance"), 0.01F, 1000, "the teleport distance is positive");
+        const auto& events = json.at("animation_events");
+        if (!events.is_object()) throw std::runtime_error("animation_events maps event names to sounds");
+        for (const auto& [event, sound] : events.items()) {
+            if (event.empty()) throw std::runtime_error("an animation event sound names its event");
+            const auto cueName = sound.at("cue").get<std::string>();
+            const auto cue = std::find_if(std::begin(CueNames), std::end(CueNames),
+                [&cueName](const char* name) { return cueName == name; });
+            if (cue == std::end(CueNames)) throw std::runtime_error("animation event '" + event + "' plays no known cue");
+            settings.eventSounds.push_back({event, static_cast<SoundCue>(cue - std::begin(CueNames)),
+                                            Bounded(sound.at("sync_seconds"), 0, 60, "sync points are in [0, 60] seconds")});
+        }
         return settings;
     } catch (const std::exception& failure) {
         error = std::string("sound settings: ") + failure.what();
         return std::nullopt;
     }
+}
+
+const SoundSettings::EventSound* FindEventSound(const SoundSettings& settings, const std::string_view event) noexcept {
+    for (const auto& sound : settings.eventSounds)
+        if (sound.event == event) return &sound;
+    return nullptr;
 }
 
 StereoGains CentredGains(const float volume) noexcept { return {volume, volume}; }
@@ -76,9 +95,12 @@ StereoGains SpatialGains(const Engine::Math::Vec3 listener, const float listener
     return {Engine::Math::Min(4.0F, scale * std::cos(angle)), Engine::Math::Min(4.0F, scale * std::sin(angle))};
 }
 
-double ReloadSoundOffsetSeconds(const double reloadSeconds, const double clipSeconds) noexcept {
-    if (!std::isfinite(reloadSeconds) || !std::isfinite(clipSeconds)) return 0;
-    return Engine::Math::Max(0.0, reloadSeconds - clipSeconds);
+std::optional<double> EventSoundOffsetSeconds(const double eventSeconds, const double clipSeconds,
+                                              const double actionSeconds, const double syncSeconds) noexcept {
+    if (!std::isfinite(eventSeconds) || !std::isfinite(syncSeconds) || !std::isfinite(clipSeconds) ||
+        !std::isfinite(actionSeconds) || clipSeconds <= 0 || actionSeconds <= 0)
+        return std::nullopt;
+    return eventSeconds * (actionSeconds / clipSeconds) - syncSeconds;
 }
 
 std::vector<RemoteShotTracker::Shot> RemoteShotTracker::Observe(const WorldSnapshot& snapshot, const PlayerId self) {

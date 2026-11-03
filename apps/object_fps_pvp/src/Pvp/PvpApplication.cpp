@@ -45,6 +45,8 @@
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/os/Files.hpp"
 
+#include "gyo/framework/UiTextInput.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -262,38 +264,13 @@ struct PvpApplication::Impl final {
     }
 
     // The frame's text for the field being edited, as Ui's neutral input
-    // (Ui Design Invariant 7): which key means which edit is this product's
-    // mapping; what the edit does is Ui's. Enter and Escape are the UI
-    // frame's activate and cancel.
+    // (Ui Design Invariant 7): which key means which edit is the product's
+    // mapping; this game takes the framework's (v8-input-ui-adapter), with
+    // Ctrl for select-all and paste; what the edit does is Ui's. Enter and
+    // Escape are the UI frame's activate and cancel.
     std::vector<Engine::Ui::UiTextInput> TextInput(const std::vector<Engine::Input::TextEvent>& text) const {
-        using Engine::Input::Key;
-        using Engine::Input::TextEvent;
-        using Engine::Ui::UiTextInputKind;
-        std::vector<Engine::Ui::UiTextInput> result;
-        for (const auto& entry : text) {
-            if (entry.kind == TextEvent::Kind::Text) {
-                result.push_back({UiTextInputKind::Insert, entry.text});
-            } else if (entry.kind == TextEvent::Kind::Composition) {
-                result.push_back({UiTextInputKind::Composition, entry.text, entry.cursor});
-            } else if (entry.modifiers.ctrl && entry.layoutKey == Key::A) {
-                result.push_back({UiTextInputKind::SelectAll});
-            } else if (entry.modifiers.ctrl && entry.layoutKey == Key::V) {
-                result.push_back({UiTextInputKind::Insert, platform->ClipboardText()});
-            } else if (entry.layoutKey == Key::Backspace) {
-                result.push_back({UiTextInputKind::Backspace});
-            } else if (entry.layoutKey == Key::Delete) {
-                result.push_back({UiTextInputKind::Delete});
-            } else if (entry.layoutKey == Key::Left) {
-                result.push_back({UiTextInputKind::MoveLeft});
-            } else if (entry.layoutKey == Key::Right) {
-                result.push_back({UiTextInputKind::MoveRight});
-            } else if (entry.layoutKey == Key::Home) {
-                result.push_back({UiTextInputKind::MoveHome});
-            } else if (entry.layoutKey == Key::End) {
-                result.push_back({UiTextInputKind::MoveEnd});
-            }
-        }
-        return result;
+        return Gyo::Tools::Framework::ToUiTextInput(text, Gyo::Tools::Framework::TextShortcutModifier::Ctrl,
+                                                   [this] { return platform->ClipboardText(); });
     }
 
     Engine::Ui::UiBindingTable Bindings() const {
@@ -634,14 +611,23 @@ struct PvpApplication::Impl final {
                     static_cast<double>(state.snapshot->tick - weaponFeedback.reloadStartTick) / AuthorityTickRate : 0;
                 weaponAction = fps::WeaponViewModelAction::Reload;
                 ++weaponFeedback.reloadAnimationStarts;
-                // Ending with the reload, as the animation does: from the reload's
-                // authority start (as far as it has already run), offset so the
-                // clip's last click lands at the reload's end.
+                // The clip's animation events sound where the stretched clip shows
+                // them: each moment becomes Engine time from the reload's authority
+                // start (as far as it has already run), all scheduled now. A moment
+                // already past plays late, at once. The local weapon sounds centred.
                 const double reloadSeconds = static_cast<double>(weaponFeedback.reloadEndTick -
                     weaponFeedback.reloadStartTick) / AuthorityTickRate;
-                sound.Play(SoundCue::Reload, now + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(
-                        ReloadSoundOffsetSeconds(reloadSeconds, sound.ClipSeconds(SoundCue::Reload)) - reloadAnchorSeconds)),
-                    CentredGains(sound.Settings().cues[static_cast<std::size_t>(SoundCue::Reload)].volume));
+                const double clipSeconds = weapon->GetActionDurationSeconds(fps::WeaponViewModelAction::Reload);
+                for (const auto& event : weapon->GetActionEvents(fps::WeaponViewModelAction::Reload)) {
+                    const auto* eventSound = FindEventSound(sound.Settings(), event.name);
+                    if (!eventSound) continue;
+                    const auto offset = EventSoundOffsetSeconds(event.seconds, clipSeconds, reloadSeconds,
+                                                                eventSound->syncSeconds);
+                    if (!offset) continue;
+                    sound.Play(eventSound->cue, now + std::chrono::duration_cast<Clock::duration>(
+                            std::chrono::duration<double>(*offset - reloadAnchorSeconds)),
+                        CentredGains(sound.Settings().cues[static_cast<std::size_t>(eventSound->cue)].volume));
+                }
                 ++weaponFeedback.animationRevision;
             }
             duration = static_cast<double>(weaponFeedback.reloadEndTick - weaponFeedback.reloadStartTick) / AuthorityTickRate;
@@ -801,43 +787,15 @@ struct PvpApplication::Impl final {
             } else {
                 remoteSteps.erase(player.playerId);
             }
-            PlayerPresentationFrame characterFrame;
-            characterFrame.playerId = player.playerId;
-            characterFrame.movementEpoch = presented.movementEpoch;
-            characterFrame.lifeGeneration = presented.lifeGeneration;
-            characterFrame.dead = presented.lifeState == LifeState::Dead;
-            characterFrame.position = position;
-            characterFrame.yaw = presented.yaw;
-            characterFrame.pitch = presented.pitch;
-            characterFrame.presentationSeconds = sampled ? sampled->presentationTick / AuthorityTickRate :
-                static_cast<double>(state.snapshot->tick) / AuthorityTickRate;
+            // The authority half is shared with the Match's judged pose
+            // (v8-product-hitbox-frame-sharing); the Client adds its own fields.
+            auto characterFrame = PlayerFrameFromAuthority(presented,
+                sampled ? sampled->combat : std::nullopt, sampled ? sampled->animation : std::nullopt,
+                sampled ? sampled->presentationTick : static_cast<double>(state.snapshot->tick));
             characterFrame.deltaSeconds = deltaSeconds;
-            characterFrame.planarSpeed = sampled ? sampled->planarSpeed : 0;
             characterFrame.continuous = sampled && !characterPresentationSkipped &&
                 sampled->phaseReanchors == reanchorsBefore;
             characterFrame.holding = sampled && sampled->holding;
-            characterFrame.grounded = presented.grounded;
-            characterFrame.crouched = presented.crouched; // pv8 section 4: the stance selects the clips
-            characterFrame.verticalVelocity = presented.verticalVelocity;
-            characterFrame.lifeStateSeconds = static_cast<double>(presented.lifeStateTick) / AuthorityTickRate;
-            // Actions come only from the sampled interval's own combat state, so
-            // newer combat is never paired with an older position or life.
-            if (sampled && sampled->combat) {
-                const auto& combat = *sampled->combat;
-                if (combat.lastShotActionId) {
-                    characterFrame.shotActionId = combat.lastShotActionId;
-                    characterFrame.shotSeconds = static_cast<double>(combat.lastShotTick) / AuthorityTickRate;
-                }
-                if (combat.damageCount) {
-                    characterFrame.damageCount = combat.damageCount;
-                    characterFrame.damageSeconds = static_cast<double>(combat.lastDamageTick) / AuthorityTickRate;
-                }
-                if (combat.reloadActionId && combat.reloadEndTick > combat.reloadStartTick) {
-                    characterFrame.reloadActionId = combat.reloadActionId;
-                    characterFrame.reloadStartSeconds = static_cast<double>(combat.reloadStartTick) / AuthorityTickRate;
-                    characterFrame.reloadEndSeconds = static_cast<double>(combat.reloadEndTick) / AuthorityTickRate;
-                }
-            }
             characterFrames.push_back(characterFrame);
             if (sampled) reanchorsNow = sampled->phaseReanchors;
         }
@@ -1058,6 +1016,8 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     // The current two-player product needs one remote slot. Preallocate it so
     // joining/rejoining never creates a skinned GPU instance in a live frame.
     if (!impl_->players->Initialize(*impl_->device, impl_->assets, impl_->arena->bodyHeight, MaxPlayers - 1, error)) return false;
+    // protocol-v9 §4.6: a Match with other animation content is refused on Welcome.
+    impl_->connection.SetAnimationDigest(impl_->players->AnimationDigest());
     // Prepare the actual viewmodel pass before joining. Model, images and GPU
     // resources are loaded above; rendering Idle also warms the lazy pipelines
     // shared by Draw and Shoot, so the first click performs no asset loading.
@@ -1226,8 +1186,8 @@ Control PvpApplication::Render(const Engine::Runtime::FrameContext& context) {
             {16+14*scale,16+8*scale,490*scale,25*scale},18*scale);
         AddText(draws, "WASD move | Space jump | Ctrl crouch | Click shoot | R reload | Tab cursor | Esc leave",
             {16+14*scale,16+34*scale,660*scale,22*scale},14*scale);
-        AddText(draws, "HP " + std::to_string(impl_->weaponFeedback.hp) + " / " +
-            std::to_string(impl_->weaponFeedback.maximumHp) + "    MARK23  " +
+        AddText(draws, "HP " + std::to_string(DisplayPoints(impl_->weaponFeedback.hp)) + " / " +
+            std::to_string(DisplayPoints(impl_->weaponFeedback.maximumHp)) + "    MARK23  " +
             std::to_string(impl_->weaponFeedback.magazineAmmo) + " / " +
             std::to_string(impl_->weaponFeedback.magazineCapacity) + "   reserve: unlimited",
             {16+14*scale,16+58*scale,660*scale,22*scale},14*scale, hit.hpHighlighted ?

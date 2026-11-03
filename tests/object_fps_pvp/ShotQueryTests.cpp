@@ -1,12 +1,14 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "RetroFPS/Pvp/PlayerHitModel.hpp"
 
 #include <array>
 #include <cmath>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
+#include <vector>
 
 namespace {
 fps::pvp::Arena ShotArena() {
@@ -159,4 +161,114 @@ TEST_CASE("PvP dead capsules do not occlude a living target behind them") {
     CHECK(hit.targetId == 3);
     CHECK(hit.distance == 4.75F);
     CHECK(QueryShot(arena, shooter, 0, 0, std::span{players}.first(1), 100).kind == ShotHitKind::Miss);
+}
+
+// v8-product-hitbox-shot S2 (J3): shapes along one ray. The shooter at the
+// origin looks along +z from eye height 1.
+namespace {
+fps::pvp::PlayerWorldHitShape Sphere(fps::pvp::HitPart part, float z, float y = 1, float radius = .2F) {
+    return {part, Engine::Math::Capsule{{0, y, z}, {0, y, z}, radius}};
+}
+}
+
+TEST_CASE("PvP a target's nearest shape decides its hit and its part") {
+    using namespace fps::pvp;
+    const auto arena = ShotArena();
+    const PlayerState shooter{7, {0, 0, 0}};
+    // A leg in front of the body on the ray: the leg is hit first, in either order.
+    for (const bool reversed : {false, true}) {
+        CAPTURE(reversed);
+        std::vector shapes{Sphere(HitPart::Leg, 4), Sphere(HitPart::Body, 5)};
+        if (reversed) std::swap(shapes[0], shapes[1]);
+        const std::array targets{ShotTarget{8, shapes}};
+        const auto hit = QueryShot(arena, DefaultStanceRules, shooter, 0, 0, targets, 100);
+        CHECK(hit.kind == ShotHitKind::Player);
+        CHECK(hit.targetId == 8);
+        CHECK(hit.part == HitPart::Leg);
+        CHECK(hit.distance == doctest::Approx(3.8));
+    }
+    // A shape off the ray is not hit; the one behind it is.
+    std::vector shapes{Sphere(HitPart::Head, 4, 3), Sphere(HitPart::Body, 6)};
+    const std::array targets{ShotTarget{8, shapes}};
+    const auto hit = QueryShot(arena, DefaultStanceRules, shooter, 0, 0, targets, 100);
+    CHECK(hit.part == HitPart::Body);
+    CHECK(hit.distance == doctest::Approx(5.8));
+    // No shape on the ray: the target is missed.
+    std::vector off{Sphere(HitPart::Head, 4, 3)};
+    const std::array missed{ShotTarget{8, off}};
+    CHECK(QueryShot(arena, DefaultStanceRules, shooter, 0, 0, missed, 100).kind == ShotHitKind::Miss);
+}
+
+TEST_CASE("PvP shapes of one target at one distance take the higher part") {
+    using namespace fps::pvp;
+    const auto arena = ShotArena();
+    const PlayerState shooter{7, {0, 0, 0}};
+    // v8-product-hitbox-tie (a): Head over Body over Leg, whatever the shape order.
+    const std::array<std::array<HitPart, 2>, 3> pairs{{{HitPart::Head, HitPart::Body}, {HitPart::Head, HitPart::Leg},
+                                                       {HitPart::Body, HitPart::Leg}}};
+    for (const auto& [higher, lower] : pairs) {
+        for (const bool reversed : {false, true}) {
+            CAPTURE(static_cast<int>(higher));
+            CAPTURE(static_cast<int>(lower));
+            CAPTURE(reversed);
+            std::vector shapes{Sphere(higher, 5), Sphere(lower, 5)};
+            if (reversed) std::swap(shapes[0], shapes[1]);
+            const std::array targets{ShotTarget{8, shapes}};
+            const auto hit = QueryShot(arena, DefaultStanceRules, shooter, 0, 0, targets, 100);
+            CHECK(hit.part == higher);
+        }
+    }
+    // An eye inside a shape is at distance 0; the higher part counts there too.
+    std::vector inside{Sphere(HitPart::Leg, 0), Sphere(HitPart::Body, 0)};
+    const std::array targets{ShotTarget{8, inside}};
+    const auto hit = QueryShot(arena, DefaultStanceRules, shooter, 0, 0, targets, 100);
+    CHECK(hit.distance == 0);
+    CHECK(hit.part == HitPart::Body);
+}
+
+TEST_CASE("PvP targets at one distance keep the lowest id and the world before them") {
+    using namespace fps::pvp;
+    auto arena = ShotArena();
+    const PlayerState shooter{7, {0, 0, 0}};
+    // The lower id wins even with the lower part: parts rank only within one target.
+    std::vector nine{Sphere(HitPart::Head, 5)}, eight{Sphere(HitPart::Leg, 5)};
+    for (const bool reversed : {false, true}) {
+        CAPTURE(reversed);
+        std::vector targets{ShotTarget{9, nine}, ShotTarget{8, eight}};
+        if (reversed) std::swap(targets[0], targets[1]);
+        const auto hit = QueryShot(arena, DefaultStanceRules, shooter, 0, 0, targets, 100);
+        CHECK(hit.targetId == 8);
+        CHECK(hit.part == HitPart::Leg);
+    }
+    // A wall in front of the shapes occludes them; the equal-distance world
+    // priority keeps its own test above.
+    arena.walls.push_back({{-1, 0, 4.5F}, {1, 2, 6}});
+    const std::array targets{ShotTarget{8, eight}};
+    const auto hit = QueryShot(arena, DefaultStanceRules, shooter, 0, 0, targets, 100);
+    CHECK(hit.kind == ShotHitKind::World);
+    CHECK(hit.distance == doctest::Approx(4.5));
+    // The shooter's own shapes are skipped.
+    const std::array own{ShotTarget{7, eight}};
+    arena.walls.clear();
+    CHECK(QueryShot(arena, DefaultStanceRules, shooter, 0, 0, own, 100).kind == ShotHitKind::Miss);
+}
+
+TEST_CASE("PvP the synthetic model is the stance capsule judged as Body") {
+    using namespace fps::pvp;
+    const auto arena = ShotArena();
+    for (const bool crouched : {false, true}) {
+        PlayerState player{8, {1, 0, 5}};
+        player.crouched = crouched;
+        const CombatState combat;
+        const PlayerAnimation animation;
+        std::vector<PlayerWorldHitShape> shapes;
+        SyntheticPlayerHitModel()->Shapes({arena, DefaultStanceRules, player, combat, animation, 1}, shapes);
+        REQUIRE(shapes.size() == 1);
+        CHECK(shapes[0].part == HitPart::Body);
+        const auto& capsule = std::get<Engine::Collision::VerticalCapsule>(shapes[0].volume);
+        CHECK(capsule.feet.x == 1);
+        CHECK(capsule.feet.z == 5);
+        CHECK(capsule.height == StanceBodyHeight(arena, DefaultStanceRules, crouched));
+        CHECK(capsule.radius == arena.radius);
+    }
 }

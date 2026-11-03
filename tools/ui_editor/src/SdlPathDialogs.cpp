@@ -1,6 +1,4 @@
-#include "SdlPathDialogs.hpp"
-
-#include <SDL3/SDL.h>
+#include "gyo/ui_editor/SdlPathDialogs.hpp"
 
 #include <string>
 #include <utility>
@@ -8,72 +6,75 @@
 namespace Gyo::Tools::UiEditor {
 namespace {
 
-// SDL reads the filters until the callback runs, so they are static.
-constexpr SDL_DialogFileFilter kJsonFilters[]{
-    {"UI JSON", "json"},
-};
-constexpr SDL_DialogFileFilter kCatalogFilters[]{
-    {"Asset catalog JSON", "json"},
-};
+namespace Sdl = Engine::Platform::Sdl;
 
-// Owned by one pending dialog and deleted by its callback. It keeps the inbox
-// and the default location alive for as long as SDL may use them.
-struct PendingDialog final {
-    std::shared_ptr<PathDialogInbox> inbox;
-    PathDialogPurpose purpose{};
-    std::string defaultLocation;
-};
-
-void SDLCALL OnDialogClosed(void* userdata, const char* const* files, int) {
-    std::unique_ptr<PendingDialog> pending(static_cast<PendingDialog*>(userdata));
-    PathDialogResult result{.purpose = pending->purpose};
-    if (files == nullptr) {
-        result.outcome = PathDialogOutcome::Failed;
-        result.error = SDL_GetError();
-    } else if (files[0] == nullptr) {
-        result.outcome = PathDialogOutcome::Cancelled;
-    } else {
-        result.outcome = PathDialogOutcome::Chosen;
-        result.path = files[0];
+PathDialogOutcome OutcomeOf(const Sdl::PathDialogOutcome outcome) noexcept {
+    switch (outcome) {
+    case Sdl::PathDialogOutcome::Chosen:
+        return PathDialogOutcome::Chosen;
+    case Sdl::PathDialogOutcome::Cancelled:
+        return PathDialogOutcome::Cancelled;
+    case Sdl::PathDialogOutcome::Failed:
+        break;
     }
-    pending->inbox->Post(std::move(result));
+    return PathDialogOutcome::Failed;
 }
 
 } // namespace
 
-SdlPathDialogs::SdlPathDialogs(SDL_Window* window)
-    : window_(window),
-      inbox_(std::make_shared<PathDialogInbox>()) {}
-
-void SdlPathDialogs::Show(const PathDialogPurpose purpose, const std::string_view defaultLocation) {
-    auto pending = std::make_unique<PendingDialog>(
-        PendingDialog{inbox_, purpose, std::string(defaultLocation)});
-    const char* location = pending->defaultLocation.empty() ? nullptr : pending->defaultLocation.c_str();
-    // From here SDL owns the request until OnDialogClosed runs, which may be
-    // before the Show call returns.
-    void* userdata = pending.release();
+Sdl::PathDialogRequest PathDialogRequestFor(const PathDialogPurpose purpose, const std::string_view defaultLocation) {
+    Sdl::PathDialogRequest request;
+    request.defaultLocation = std::string(defaultLocation);
     switch (purpose) {
     case PathDialogPurpose::OpenDocument:
-        SDL_ShowOpenFileDialog(OnDialogClosed, userdata, window_, kJsonFilters, SDL_arraysize(kJsonFilters),
-            location, false);
+        request.kind = Sdl::PathDialogKind::OpenFile;
+        request.filters = {{"UI JSON", "json"}};
         break;
     case PathDialogPurpose::ExportDocument:
-        SDL_ShowSaveFileDialog(OnDialogClosed, userdata, window_, kJsonFilters, SDL_arraysize(kJsonFilters),
-            location);
+        request.kind = Sdl::PathDialogKind::SaveFile;
+        request.filters = {{"UI JSON", "json"}};
         break;
     case PathDialogPurpose::CatalogField:
-        SDL_ShowOpenFileDialog(OnDialogClosed, userdata, window_, kCatalogFilters,
-            SDL_arraysize(kCatalogFilters), location, false);
+        request.kind = Sdl::PathDialogKind::OpenFile;
+        request.filters = {{"Asset catalog JSON", "json"}};
         break;
     case PathDialogPurpose::AssetFolder:
     case PathDialogPurpose::AssetRootField:
-        SDL_ShowOpenFolderDialog(OnDialogClosed, userdata, window_, location, false);
+        request.kind = Sdl::PathDialogKind::OpenFolder;
         break;
     }
+    return request;
+}
+
+PathDialogResult PathDialogResultFor(PathDialogRequests& requests, Sdl::PathDialogAnswer answer) {
+    const PathDialogOutcome outcome = OutcomeOf(answer.outcome);
+    const auto purpose = requests.Accept(answer.tag, outcome);
+    return {.purpose = purpose.value_or(PathDialogPurpose::OpenDocument),
+            .outcome = outcome,
+            .path = std::move(answer.path),
+            .error = std::move(answer.error),
+            .current = purpose.has_value()};
+}
+
+SdlPathDialogs::SdlPathDialogs(Sdl::SdlPlatform& platform)
+    : platform_(platform) {}
+
+void SdlPathDialogs::Show(const PathDialogPurpose purpose, const std::string_view defaultLocation) {
+    Sdl::PathDialogRequest request = PathDialogRequestFor(purpose, defaultLocation);
+    request.tag = requests_.Begin(purpose);
+    platform_.ShowPathDialog(std::move(request));
 }
 
 std::vector<PathDialogResult> SdlPathDialogs::TakeResults() {
-    return inbox_->Take();
+    std::vector<PathDialogResult> results;
+    for (Sdl::PathDialogAnswer& answer : platform_.TakePathDialogAnswers()) {
+        results.push_back(PathDialogResultFor(requests_, std::move(answer)));
+    }
+    return results;
+}
+
+void SdlPathDialogs::Abandon() {
+    requests_.Abandon();
 }
 
 } // namespace Gyo::Tools::UiEditor

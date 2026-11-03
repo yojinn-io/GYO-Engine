@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
-	client "gyo.local/object_fps_pvp/protocol/clientv8"
-	runtime "gyo.local/object_fps_pvp/protocol/runtimev8"
+	client "gyo.local/object_fps_pvp/protocol/clientv9"
+	runtime "gyo.local/object_fps_pvp/protocol/runtimev9"
 )
 
 // pv6 contract §2, four fields in pv7 §7: the presentation-only hit record of
@@ -13,10 +13,10 @@ import (
 func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 	in := &runtime.WorldSnapshot{Tick: 20,
 		Players: []*runtime.PlayerState{{PlayerId: 1, MovementEpoch: 1, LifeGeneration: 2, LifeState: runtime.LifeState_LIFE_ALIVE, LifeStateTick: 10}},
-		Combat:  []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 50, MagazineAmmo: 4, LastDamageTick: 15, DamageCount: 2, LastAttackerId: 7,
+		Combat: []*runtime.CombatState{{PlayerId: 1, LifeGeneration: 2, Hp: 50000, MagazineAmmo: 4, LastDamageTick: 15, DamageCount: 2, LastAttackerId: 7,
 			LastHitPart: runtime.HitPart_HIT_PART_BODY}},
 	}
-	out, err := SnapshotForClient(in, testRules())
+	out, err := snapshotForClient(in, testRules())
 	if err != nil || out.Combat[0].LastDamageTick != 15 || out.Combat[0].DamageCount != 2 || out.Combat[0].LastAttackerId != 7 ||
 		out.Combat[0].LastHitPart != client.HitPart_HIT_PART_BODY {
 		t.Fatalf("hit record not kept: %v %v", out, err)
@@ -24,7 +24,7 @@ func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 	none := proto.Clone(in).(*runtime.WorldSnapshot)
 	none.Combat[0].LastDamageTick, none.Combat[0].DamageCount, none.Combat[0].LastAttackerId = 0, 0, 0
 	none.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_UNSPECIFIED
-	if _, err := SnapshotForClient(none, testRules()); err != nil {
+	if _, err := snapshotForClient(none, testRules()); err != nil {
 		t.Fatalf("no hit rejected: %v", err)
 	}
 	for name, edit := range map[string]func(*runtime.WorldSnapshot){
@@ -33,6 +33,7 @@ func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 		"attacker only zero": func(s *runtime.WorldSnapshot) { s.Combat[0].LastAttackerId = 0 },
 		"part only zero":     func(s *runtime.WorldSnapshot) { s.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_UNSPECIFIED },
 		"unknown part":       func(s *runtime.WorldSnapshot) { s.Combat[0].LastHitPart = 99 },
+		"part after leg":     func(s *runtime.WorldSnapshot) { s.Combat[0].LastHitPart = 4 },
 		"part without a hit": func(s *runtime.WorldSnapshot) {
 			s.Combat[0].LastDamageTick, s.Combat[0].DamageCount, s.Combat[0].LastAttackerId = 0, 0, 0
 		},
@@ -49,23 +50,28 @@ func TestHitRecordIsValidatedAndKeptVerbatim(t *testing.T) {
 	} {
 		bad := proto.Clone(in).(*runtime.WorldSnapshot)
 		edit(bad)
-		if _, err := SnapshotForClient(bad, testRules()); err == nil {
+		if _, err := snapshotForClient(bad, testRules()); err == nil {
 			t.Fatalf("%s accepted: %v", name, bad)
 		}
 	}
 	dead := proto.Clone(in).(*runtime.WorldSnapshot)
 	kill(dead)
-	if _, err := SnapshotForClient(dead, testRules()); err != nil {
+	if _, err := snapshotForClient(dead, testRules()); err != nil {
 		t.Fatalf("lethal hit rejected: %v", err)
 	}
 	head := proto.Clone(in).(*runtime.WorldSnapshot) // v8's part: accepted already
 	head.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_HEAD
-	if out, err := SnapshotForClient(head, testRules()); err != nil || out.Combat[0].LastHitPart != client.HitPart_HIT_PART_HEAD {
+	if out, err := snapshotForClient(head, testRules()); err != nil || out.Combat[0].LastHitPart != client.HitPart_HIT_PART_HEAD {
 		t.Fatalf("head rejected or changed: %v %v", out, err)
+	}
+	leg := proto.Clone(in).(*runtime.WorldSnapshot) // pv9 §2
+	leg.Combat[0].LastHitPart = runtime.HitPart_HIT_PART_LEG
+	if out, err := snapshotForClient(leg, testRules()); err != nil || out.Combat[0].LastHitPart != client.HitPart_HIT_PART_LEG {
+		t.Fatalf("leg rejected or changed: %v %v", out, err)
 	}
 	limit := proto.Clone(in).(*runtime.WorldSnapshot)
 	limit.Combat[0].DamageCount = testRules().MaximumHp
-	if _, err := SnapshotForClient(limit, testRules()); err != nil {
+	if _, err := snapshotForClient(limit, testRules()); err != nil {
 		t.Fatalf("count at max hp rejected: %v", err)
 	}
 }

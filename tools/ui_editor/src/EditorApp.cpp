@@ -3,6 +3,7 @@
 #include "EditorDocumentEdits.hpp"
 #include "gyo/ui_editor/ElementClipboard.hpp"
 
+#include "engine/base/Log.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/os/Files.hpp"
 
@@ -125,6 +126,11 @@ void EditorApp::ApplyPendingAssetChanges() {
 void EditorApp::ApplyPathDialogResults() {
     if (dialogs_ == nullptr) return;
     for (const PathDialogResult& result : dialogs_->TakeResults()) {
+        if (!result.current) {
+            statusMessage_ = "Ignored the answer of a file dialog the editor no longer waits for";
+            Engine::Base::Log(Engine::Base::LogLevel::Warning, "ui_editor.dialogs", statusMessage_);
+            continue;
+        }
         pathDialogOpen_ = false;
         if (result.outcome == PathDialogOutcome::Cancelled) continue;
         if (result.outcome == PathDialogOutcome::Failed) {
@@ -187,9 +193,28 @@ void EditorApp::RequestAssetUnmount() {
     pendingCatalogUnmount_ = true;
 }
 
+void EditorApp::SetPhysicalInput(const Engine::Input::PhysicalInputFrame* const input) noexcept {
+    physicalInput_ = input;
+}
+
+std::optional<PreviewAdapter::FrameOutput::TextInputRequest> EditorApp::TakeTextInputRequest() noexcept {
+    return std::exchange(textInputRequest_, std::nullopt);
+}
+
+void EditorApp::SetPreviewMode(const bool preview) noexcept {
+    previewMode_ = preview;
+}
+
+bool EditorApp::TextInputActive() const noexcept {
+    // ImGui knows only its own fields; the preview's field is told by its last
+    // frame, one frame late as ImGui's own flag is.
+    return ImGui::GetIO().WantTextInput || previewEditingText_;
+}
+
 void EditorApp::Draw() {
+    textInputRequest_.reset();
     const ImGuiIO& io = ImGui::GetIO();
-    if (io.KeyCtrl && !io.WantTextInput) {
+    if (io.KeyCtrl && !TextInputActive()) {
         if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
             RequestPath(PathDialogPurpose::ExportDocument, exportPath_, showExportDialog_);
         } else if (ImGui::IsKeyPressed(ImGuiKey_S, false)) {
@@ -372,6 +397,18 @@ void EditorApp::DrawStatusBar() {
                                        ImGuiWindowFlags_NoTitleBar |
                                        ImGuiWindowFlags_NoScrollbar;
     ImGui::Begin("Status", nullptr, flags);
+    if (pathDialogOpen_ && dialogs_ != nullptr) {
+        // The OS may never answer (docs/architecture/platform-sdl.md, Design
+        // Invariant 10); this gives the editor's dialogs back.
+        ImGui::TextUnformatted("Waiting for the file dialog");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Stop waiting")) {
+            dialogs_->Abandon();
+            pathDialogOpen_ = false;
+            statusMessage_ = "Stopped waiting for the file dialog; its answer will be ignored";
+        }
+        ImGui::SameLine();
+    }
     ImGui::TextUnformatted(statusMessage_.empty() ? "Ready" : statusMessage_.c_str());
     ImGui::SameLine(ImGui::GetWindowWidth() - 310.0F);
     ImGui::TextUnformatted(catalog_.IsMounted() ? "Catalog: read-only" : "Catalog: none");
@@ -415,7 +452,7 @@ void EditorApp::NudgeSelectedElement(const bool canvasFocused) {
         session_.EndEdit();
         nudgeTransactionActive_ = false;
     }
-    if (!canvasFocused || selectedNode_.empty() || io.WantTextInput || io.KeyCtrl || gizmoTransactionActive_) {
+    if (!canvasFocused || selectedNode_.empty() || TextInputActive() || io.KeyCtrl || gizmoTransactionActive_) {
         return;
     }
     const float step = io.KeyShift ? 10.0F : 1.0F;
@@ -515,7 +552,7 @@ void EditorApp::ExportDocument(
 
 Result<void, CatalogError> EditorApp::MountCatalog(const std::filesystem::path& catalogPath,
     const std::filesystem::path& assetRoot) {
-    ReadOnlyAssetCatalog candidate;
+    Framework::ReadOnlyAssetCatalog candidate;
     auto root = assetRoot;
     if (root.empty() && !catalogPath.empty()) {
         root = catalogPath.parent_path();

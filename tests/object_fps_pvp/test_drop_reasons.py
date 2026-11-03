@@ -12,7 +12,7 @@ import unittest
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 GOLDEN = REPOSITORY / 'tests/object_fps_pvp/fixtures/drop_reasons.json'
-PROTO = REPOSITORY / 'apps/object_fps_pvp/protocol/runtime_v8.proto'
+PROTO = REPOSITORY / 'apps/object_fps_pvp/protocol/runtime_v9.proto'
 
 
 def proto_enum():

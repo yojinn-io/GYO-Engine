@@ -21,10 +21,8 @@ add_library(gyo_ui_editor_core STATIC
     src/EditorDocumentEdits.cpp
     src/ElementClipboard.cpp
     src/ElementSchema.cpp
-    src/FileService.cpp
     src/GizmoMath.cpp
     src/PathDialog.cpp
-    src/ReadOnlyAssetCatalog.cpp
     src/UiDocumentBridge.cpp
     src/UndoStack.cpp
 )
@@ -33,9 +31,12 @@ target_include_directories(gyo_ui_editor_core PUBLIC
     "${GYO_UI_EDITOR_ROOT}/include"
 )
 target_compile_features(gyo_ui_editor_core PUBLIC cxx_std_20)
+# File access and the read-only catalog mount come from the framework layer
+# (docs/framework/architecture.md).
 target_link_libraries(gyo_ui_editor_core
     PUBLIC
         GYO::Engine
+        GYO::ToolFramework
         GYO::Ui
         nlohmann_json::nlohmann_json
 )
@@ -44,17 +45,18 @@ target_link_libraries(gyo_ui_editor_core PRIVATE GYO::Math GYO::Os)
 
 add_executable(gyo_ui_editor src/Main.cpp)
 target_compile_features(gyo_ui_editor PRIVATE cxx_std_20)
-# The UTF-8 command line and console output come from GYO::Os.
-target_link_libraries(gyo_ui_editor PRIVATE gyo_ui_editor_core GYO::Os)
+# The UTF-8 command line and console output come from the framework's headless
+# shell; Validate's messages use GYO::Os.
+target_link_libraries(gyo_ui_editor PRIVATE gyo_ui_editor_core GYO::ToolFramework GYO::Os)
 
 if(GYO_TOOL_VARIANT STREQUAL "gui")
     foreach(_target IN ITEMS
+        GYO::ToolFrameworkImGui
         GYO::PlatformSDL
-        GYO::RenderBackendSDL
+        GYO::RenderBackendSDLNative
         GYO::AssetSdlImage
         GYO::TextBackendSDLTTF
         imgui::core
-        imgui::sdl3_sdlrenderer3
     )
         if(NOT TARGET ${_target})
             message(FATAL_ERROR
@@ -69,24 +71,33 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
         src/EditorAppHierarchy.cpp
         src/EditorAppInspector.cpp
         src/PreviewAdapter.cpp
+        src/SdlPathDialogs.cpp
     )
+    # The preview makes its textures on the native SDL renderer; SDL comes
+    # through Engine's native target (platform-sdl, Replacement Criterion 2).
     target_link_libraries(gyo_ui_editor_preview PUBLIC
         gyo_ui_editor_core
-        SDL3::SDL3
+        GYO::RenderBackendSDLNative
         GYO::AssetSdlImage
         GYO::TextBackendSDLTTF
         imgui::core
+        # The editor's dialogs on Engine's platform dialogs (SdlPathDialogs.hpp names its types).
+        GYO::PlatformSDL
     )
-    # PreviewAdapter calls Math functions directly (sRGB, Rect); EditorApp's
-    # path fields go to UTF-8 through GYO::Os.
-    target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math GYO::Os)
-    target_sources(gyo_ui_editor PRIVATE src/ImGuiSdlRendererHost.cpp src/SdlPathDialogs.cpp)
-    # The ImGui SDL3 backend needs the native window, renderer and events.
+    # PreviewAdapter calls Math functions directly (sRGB, Rect) and reads
+    # Engine's input frame for text fields (GYO::Input); EditorApp's path
+    # fields go to UTF-8 through GYO::Os.
+    target_link_libraries(gyo_ui_editor_preview PRIVATE GYO::Math GYO::Input GYO::Os)
+    target_sources(gyo_ui_editor PRIVATE src/EditorWindow.cpp)
+    # The window and ImGui's SDL backends come from the framework's ImGui
+    # binding, the system dialogs from Engine's platform. The preview makes
+    # its textures on the native renderer until Engine's SDL renderer has a
+    # texture API (docs/architecture/platform-sdl.md, Replacement Criterion 2).
     target_link_libraries(gyo_ui_editor PRIVATE
         gyo_ui_editor_preview
-        GYO::PlatformSDLNative
+        GYO::ToolFrameworkImGui
+        GYO::PlatformSDL
         GYO::RenderBackendSDLNative
-        imgui::sdl3_sdlrenderer3
     )
     target_compile_definitions(gyo_ui_editor PRIVATE
         GYO_UI_EDITOR_WITH_GUI=1
