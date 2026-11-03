@@ -589,6 +589,21 @@ void RequireValidAnimation(const WorldSnapshot& snapshot) {
     GYO_ASSERT(ValidPlayerAnimations(snapshot.players, snapshot.animation, snapshot.tick));
 }
 
+void RequireValidSnapshot(const WorldSnapshot& snapshot) {
+    GYO_ASSERT(snapshot.combat.size() == snapshot.players.size());
+    for (std::size_t i = 0; i < snapshot.players.size(); ++i)
+        GYO_ASSERT(snapshot.combat[i].playerId == snapshot.players[i].playerId);
+    RequireValidAnimation(snapshot);
+}
+
+bool EraseEntity(WorldSnapshot& snapshot, PlayerId entityId) {
+    const auto players = std::erase_if(snapshot.players, [&](const auto& p) { return p.playerId == entityId; });
+    const auto combat = std::erase_if(snapshot.combat, [&](const auto& c) { return c.playerId == entityId; });
+    const auto animation = std::erase_if(snapshot.animation, [&](const auto& a) { return a.playerId == entityId; });
+    GYO_ASSERT(players == combat && players == animation && players <= 1);
+    return players == 1;
+}
+
 WorldSnapshot PvpMatch::Snapshot() const {
     WorldSnapshot result{tick_, {}, {}};
     for (const auto& [id, participant] : players_) {

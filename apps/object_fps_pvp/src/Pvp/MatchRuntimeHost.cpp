@@ -469,6 +469,7 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             else ++input;
         }
         if (tick.tickId % SnapshotIntervalTicks == 0) {
+            RequireValidSnapshot(state);
             publication = std::move(state);
             for (const auto& player : publication->players)
                 TraceMovement({.kind = MovementTraceKind::SnapshotProduced, .playerId = player.playerId,
@@ -756,8 +757,7 @@ void MatchRuntimeHost::JudgeConnectionQuality(WorldSnapshot& state) {
         const bool left = match_.Leave(playerId); // an evicted player is one of quality_'s
         GYO_ASSERT(left);
         RemovePlayerState(playerId, resolvedThrough);
-        std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });
-        std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });
+        static_cast<void>(EraseEntity(state, playerId));
     }
 }
 

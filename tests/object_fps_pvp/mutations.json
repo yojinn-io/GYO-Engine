@@ -8720,6 +8720,26 @@
       "replace": "            if (!bound) return definition;",
       "check": "presentation",
       "expect": "InvalidAnimationEvents|is NOT correct"
+    },
+    {
+      "id": "evict-animation-orphan-erase-skips-animation",
+      "batch": "v8-product-evict-animation-orphan",
+      "what": "EraseEntity(WorldSnapshot&) leaves the entity's animation in the snapshot (the pv9 regression)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    const auto animation = std::erase_if(snapshot.animation, [&](const auto& a) { return a.playerId == entityId; });",
+      "replace": "    const auto animation = players;",
+      "check": "cpu",
+      "expect": "PublicationComponentsAgree|is NOT correct"
+    },
+    {
+      "id": "evict-animation-orphan-host-erases-two",
+      "batch": "v8-product-evict-animation-orphan",
+      "what": "The host's eviction erases players and combat itself instead of every component through EraseEntity",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        static_cast<void>(EraseEntity(state, playerId));",
+      "replace": "        std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });\n        std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });",
+      "check": "cpu",
+      "expect": "PublicationComponentsAgree|is NOT correct"
     }
   ]
 }

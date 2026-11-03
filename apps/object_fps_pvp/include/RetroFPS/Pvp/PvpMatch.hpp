@@ -30,6 +30,13 @@ struct WorldSnapshot final {
 // a value the Gateway would refuse fails the whole Gateway, so it is a
 // Programmer Error here (GYO_ASSERT on ValidPlayerAnimations).
 void RequireValidAnimation(const WorldSnapshot& snapshot);
+// Every component of a snapshot names the same entities in the same order
+// (entity-model E-7): what RequireValidAnimation checks for animation, for
+// combat too. The host runs it before a publication leaves the Match side.
+void RequireValidSnapshot(const WorldSnapshot& snapshot);
+// The one way to take an entity out of a snapshot: every component at once
+// (entity-model E-7). Returns whether the entity was in the snapshot.
+bool EraseEntity(WorldSnapshot& snapshot, PlayerId entityId);
 
 // Cumulative movement resolution counts of one participant, for the host's
 // connection-quality judgement; never gameplay input.
