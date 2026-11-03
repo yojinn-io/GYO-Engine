@@ -4,6 +4,7 @@
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "hit_aim.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
@@ -589,4 +590,73 @@ TEST_CASE("PvP B5: shapes of the Client's interpolated body against the Match's 
                       << "; the Match's own move per tick " << summary(matchStep));
         CHECK(offsets.back() >= 0);
     }
+}
+
+// v8-product-real-match-acceptance-repair (defect, 2026-11-03): the probes'
+// torso aim (hit_aim.hpp) must be judged Body by the posed shapes. Every
+// ordered pair of the product arena's spawns, both standing idle as spawned.
+TEST_CASE("PvP the probes' torso aim is judged Body from every product spawn") {
+    std::string error;
+    const auto arena = Arena::Load(ContentRoot() / "pvp_arena.json", error);
+    REQUIRE_MESSAGE(arena, error);
+    const HitAimModel aim(ContentRoot(), arena->bodyHeight);
+    const auto& model = *LoadedProduct().model;
+    for (std::size_t s = 0; s < arena->spawns.size(); ++s)
+        for (std::size_t t = 0; t < arena->spawns.size(); ++t) {
+            if (s == t) continue;
+            CAPTURE(s);
+            CAPTURE(t);
+            const auto make = [&](PlayerId id, const SpawnPoint& spawn) {
+                PlayerState state;
+                state.playerId = id;
+                state.position = spawn.position;
+                state.yaw = spawn.yaw;
+                state.grounded = true;
+                state.lifeGeneration = 1;
+                state.lifeState = LifeState::Alive;
+                state.lifeStateTick = 100;
+                return state;
+            };
+            WorldSnapshot snapshot;
+            snapshot.tick = 600;
+            snapshot.players = {make(1, arena->spawns[s]), make(2, arena->spawns[t])};
+            for (const PlayerId id : {PlayerId{1}, PlayerId{2}}) {
+                CombatState combat;
+                combat.playerId = id;
+                snapshot.combat.push_back(combat);
+                PlayerAnimation animation;
+                animation.playerId = id;
+                animation.lifeGeneration = 1;
+                animation.jumpPhase = JumpPhase::Grounded;
+                animation.jumpPhaseTick = 100;
+                snapshot.animation.push_back(animation);
+            }
+            const auto aimed = aim.Aim(*arena, DefaultStanceRules, snapshot, 1, 2, HitPart::Body);
+            std::vector<PlayerWorldHitShape> shapes;
+            model.Shapes({*arena, DefaultStanceRules, snapshot.players[1], snapshot.combat[1], snapshot.animation[1],
+                          snapshot.tick}, shapes);
+            const std::array targets{ShotTarget{2, shapes}};
+            const auto hit = QueryShot(*arena, DefaultStanceRules, snapshot.players[0], aimed.yaw, aimed.pitch, targets, 100);
+            CHECK(hit.kind == ShotHitKind::Player);
+            CHECK(hit.part == HitPart::Body);
+            // The GUI runner aims once and fires several shots: the later ones meet
+            // the target in its hit reaction (Body or Head), at every tick of it.
+            for (const HitPart struck : {HitPart::Body, HitPart::Head})
+                for (std::uint64_t k = 0; k <= 20; ++k) {
+                    CAPTURE(static_cast<int>(struck));
+                    CAPTURE(k);
+                    auto combat = snapshot.combat[1];
+                    combat.damageCount = 1;
+                    combat.lastDamageTick = snapshot.tick - k;
+                    combat.lastAttackerId = 1;
+                    combat.lastHitPart = struck;
+                    std::vector<PlayerWorldHitShape> reacting;
+                    model.Shapes({*arena, DefaultStanceRules, snapshot.players[1], combat, snapshot.animation[1], snapshot.tick},
+                                 reacting);
+                    const std::array moved{ShotTarget{2, reacting}};
+                    const auto later = QueryShot(*arena, DefaultStanceRules, snapshot.players[0], aimed.yaw, aimed.pitch, moved, 100);
+                    CHECK(later.kind == ShotHitKind::Player);
+                    CHECK(later.part == HitPart::Body);
+                }
+        }
 }

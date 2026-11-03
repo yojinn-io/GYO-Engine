@@ -85,6 +85,8 @@ add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp Pr
     PlayerAnimationEquivalenceTests.cpp PlayerHitboxTests.cpp PlayerAnimationDigestTests.cpp
     PlayerHitModelTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
+# hit_aim.hpp: the acceptance probes' aim, checked against the posed judgement.
+target_include_directories(${presentation_tests} PRIVATE "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp")
 target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
     GYO::PlatformSDL nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)
 gyo_use_app_config(${presentation_tests} "${GYO_CURRENT_APP}")

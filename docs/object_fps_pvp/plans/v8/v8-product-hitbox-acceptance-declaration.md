@@ -96,6 +96,36 @@ A1、A2 可以馬上做；A3 等你告訴我 L2 的機器。
   - 交出前，每條命令和每支腳本，在能跑的機器上實際跑過一次。Mac 用 127.0.0.1 跑非 X11 的部分。
   - X11 的部分無法在 Mac 乾跑，這是範圍的限界。場次開始時，先在 Linux 上乾跑 G5、G6 各一次，失敗就停下，不進入試玩。
 
+> **2026-11-03 修改（`v8-product-hitbox-g5g6-docker`）**：使用者提議「我可以啟動 Docker，你直接用 docker 測試」。G5、G6 改在本機的 Docker 容器裡跑。
+> - 環境：ubuntu 24.04，套件和 CI 的 Linux 列相同；Xvfb 加 Mesa lavapipe（軟體 Vulkan），openbox 當視窗管理員；`ci-linux` preset 在容器內建置。
+> - Dockerfile 與建置腳本在主 checkout 的 `build/evidence/v8-hitbox-l2-docker/`。
+> - 判定（K6、K7）不變，時間檢查的重跑規則也不變。
+> - 量不到的：實體 GPU 與驅動、真的桌面與合成器、真實的輸入裝置；Docker Desktop 的 VM 的計時和實機不同。所以時間檢查的失敗不能直接當成產品的缺陷，照 §14.1 切分。
+> - 試玩（K8）仍要實機與人，等使用者告知機器；A3 的 kit 只剩試玩用的部分。
+
+> **2026-11-03 試行 1 的結果與重跑的宣告（`v8-product-hitbox-g5g6-rerun`，使用者：「新宣告修正重跑」）**
+> - 試行 1（Docker，證據在 `build/evidence/v8-hitbox-l2-docker/`）：
+>   - G5 **不成立**：「12tick native shot rejected or missed」。`run_gameplay_gui.py` 有自己的原生滑鼠 `aim(yaw)`，pitch 固定拉回 0，P2 漏改。原宣告對 G5 的描述（17 格的 SDL 排程）也錯了。
+>   - G6 **不成立**：V3、V4（四槍的 hp 路徑）通過，之後截圖時容器缺 `xwd`（環境）。
+>   - 兩次失敗都保留在紀錄裡。
+> - 修正：
+>   - `run_gameplay_gui.py` 的 `aim` 改成可帶 pitch，射擊前轉向 probe 狀態檔的 `torso_aim`（和 G6 相同）。新生命那一槍不判命中，照舊。
+>   - Docker image 加 `x11-apps`。
+> - 重跑的判定（看到結果後不改）：G5′、G6′ 各跑一次，要整體通過；只在時間檢查失敗時可重跑一次，傷害、生命相關的錯誤不重跑，直接停下回報。
+> - **範圍的限界**：P2 改的 SDL 排程（`combat_latency.hpp`）只有 `run_timing.py --gui --combat` 用到，G5′、G6′ 都驗不到它；那條路徑卡在 HUD 檢查的未結事項，在那之前寫成「未驗證」。
+
+> **2026-11-03 試行 2 的結果與第三次試行的宣告（`v8-product-hitbox-g5g6-trial3`，使用者：「修正後重跑」）**
+> - 試行 2：
+>   - G5′ **不成立**：第三槍打到腿。
+>   - G6′ **不成立**：V3、V4 通過後，容器缺 PIL（環境）。
+>   - 紀錄保留。
+> - 觀察跑次（不算判定）找到原因：probe 的 `torso_aim` 正確（0.0625），但 runner 的 `aim()` 送出移動後只等 80～100 ms 就讀狀態檔，在約 27 fps 時讀到舊值，於是同一個修正送了兩次，相機停在 0.125。
+> - 修正：
+>   - 兩支 runner 的 `aim()` 每次移動後，等到 `mouse_consumptions` 增加、而且連續兩次讀到相同的 yaw／pitch，才算下一個修正；
+>   - Docker image 加 `python3-pil`；
+>   - 新增單元測試「the probes' torso aim is judged Body from every product spawn」，守住瞄準點。
+> - 判定不變：G5″、G6″ 各一次，要整體通過；只在時間檢查（例如 G5 的射擊間隔 10～20 Tick）失敗時可重跑一次。傷害、生命相關的錯誤不重跑，直接停下。時間檢查重跑後仍失敗，記為 Docker 環境的限界，G5 留到實機。
+
 ## A4：L2 場次
 
 - **K6**：G5 `run_gameplay_gui.py` 預設案例通過（`combat_gui_evidence` 的 17 格，hp 照每發 25000）。
