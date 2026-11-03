@@ -54,6 +54,25 @@ std::vector<PlayerId> Ids(const std::vector<Component>& components) {
     return ids;
 }
 
+// A hit model that remembers the combat it was handed, per entity and tick,
+// and otherwise judges like the synthetic one (entity-model G13).
+class RecordingHitModel final : public PlayerHitModel {
+public:
+    struct Seen final {
+        std::uint64_t tick{};
+        EntityId entity{};
+        CombatState combat;
+    };
+    mutable std::vector<Seen> seen;
+    void Shapes(const PlayerHitInput& input, std::vector<PlayerWorldHitShape>& output) const override {
+        seen.push_back({input.tick, input.player.playerId, input.combat});
+        synthetic_->Shapes(input, output);
+    }
+
+private:
+    std::shared_ptr<const PlayerHitModel> synthetic_ = SyntheticPlayerHitModel();
+};
+
 Arena ThreeSpawnArena() {
     Arena arena;
     arena.id = "synthetic_three_spawns";
@@ -176,4 +195,49 @@ TEST_CASE("G3 PublicationComponentsAgree: an eviction removes the player from ev
     REQUIRE(evicted);
     REQUIRE(latest);
     CHECK(Ids(latest->players) == std::vector<PlayerId>{1});
+}
+
+TEST_CASE("G13 ActionStartCombatIsTickStart: shapes are posed with the combat as this tick's actions began") {
+    auto recording = std::make_shared<RecordingHitModel>();
+    PvpMatch match(ThreeSpawnArena(), PvpCombatRules, DefaultStanceRules, SyntheticPlayerAnimationRules, recording);
+    std::string error;
+    REQUIRE(match.Join(1, error));
+    REQUIRE(match.Join(2, error));
+    const ShotReferenceAge fresh = [](std::uint64_t) {
+        return std::optional<std::chrono::nanoseconds>{std::chrono::nanoseconds{0}};
+    };
+    const auto combatOf = [](const WorldSnapshot& snapshot, PlayerId id) {
+        for (const auto& combat : snapshot.combat)
+            if (combat.playerId == id) return combat;
+        FAIL("no combat for player ", id);
+        return CombatState{};
+    };
+    Step(match); // tick 1: a copy taken here and never refreshed would still equal the defaults
+    REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0, ActionKind::Shot, 1}}}) == ActionAdmission::Accepted);
+    Step(match, 1, fresh); // tick 2: the first shot changes player 1's combat
+    const auto afterFirst = combatOf(match.Snapshot(), 1);
+    REQUIRE(afterFirst.magazineAmmo == match.Rules().magazineCapacity - 1);
+    REQUIRE(afterFirst.lastShotActionId == 1);
+    Step(match, static_cast<unsigned>(match.Rules().cooldownTicks)); // past the cooldown
+    const auto beforeSecond = combatOf(match.Snapshot(), 1);
+    REQUIRE(beforeSecond == afterFirst);
+    const auto shotTick = match.TickCount() + 1;
+    REQUIRE(match.SubmitActions({1, {{2, shotTick - 1, 0, 0, ActionKind::Shot, 1}}}) == ActionAdmission::Accepted);
+    recording->seen.clear();
+    Step(match, 1, fresh);
+    const auto afterSecond = combatOf(match.Snapshot(), 1);
+    REQUIRE(afterSecond.lastShotActionId == 2);
+    // Both living targets were placed once this tick, with the combat of the
+    // tick's start: the first shot's record, not the defaults and not the
+    // second shot's result.
+    REQUIRE(recording->seen.size() == 2);
+    for (const auto& seen : recording->seen) {
+        CAPTURE(seen.entity);
+        CHECK(seen.tick == shotTick);
+        if (seen.entity == 1) {
+            CHECK(seen.combat == beforeSecond);
+            CHECK_FALSE(seen.combat == afterSecond);
+            CHECK(seen.combat.lastShotActionId == 1);
+        }
+    }
 }

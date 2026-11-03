@@ -8784,12 +8784,12 @@
     {
       "id": "entity-split-action-start-stale",
       "batch": "v8-product-match-entity-split",
-      "what": "The action-start combat copy is taken once and never refreshed, so shapes are posed with a stale combat (M5)",
+      "what": "The action-start combat copy is taken once and never refreshed, so shapes are posed with a stale combat (M5); detected by G13, not by the digest: the synthetic hit model reads no combat",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
       "find": "    actionStartCombats_ = combats_; // same order: ascending EntityId",
       "replace": "    if (actionStartCombats_.empty()) actionStartCombats_ = combats_;",
-      "check": "authority_digest",
-      "expect": "golden authority subset differs"
+      "check": "cpu",
+      "expect": "ActionStartCombatIsTickStart|is NOT correct"
     }
   ]
 }

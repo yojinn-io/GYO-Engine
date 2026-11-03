@@ -178,6 +178,8 @@
 - 2026-11-03：S3 完成：`players_` map 拆成 `bodies_`、`combats_`、`animations_`（`AnimationTrack{id, value, before}`）三欄；`PvpMatch::EraseEntity` 成為唯一刪除入口（Leave 經它）；`ContainsPlayer` 等連線 API 查 `connections_`；`Decide`、`Kill`、`AdvanceAnimation` 改簽名；守衛 G1（降冪 Join 3,2,1、Leave 後 Rejoin）、G2（friend `PvpMatchTestAccess::ColumnIds`，開一槍填滿快取後 Leave，各欄與快取都不含該 id）通過 410 斷言；產品測試 13,694,036 斷言、`authority_digest`、兩樹比對 scale 1 0 差分（`s3_*`）。
 - 2026-11-03：S4 完成：`shapes_`／`actionsCombat_` 的 map 改成升冪 vector `tickShapes_`（`EntityShapes{id, shapes}`）、`actionStartCombats_`（`combats_` 的整欄複本）；`Decide` 建 targets 時保留「每個活著的 body 都已放置」的 Assert；`EraseEntity` 也清兩個快取。測試、digest、兩樹比對 scale 1 皆同前（`s4_*`）。
 - 2026-11-03：S5 完成：`RequireEntityOrder`（三個 vector 的 id 嚴格升冪且相同）進 `Snapshot()` 與 `RequireValidSnapshot`；兩樹比對 scale 1 與 10 都「42 scenarios, 0 differing」，42 個情境的 `--dump` 逐一 cmp 相同（標籤不變），`git diff edbd827f` 的 golden 與 AuthorityDigest.cpp 為空，DigestVersion 仍 4；產品測試 13,694,036 斷言（`s5_*`）。entity-model「實作現況」已更新。
+- 2026-11-03：S6：突變 M1～M4 killed，**M5（`actionStartCombats_` 只複製一次、之後不更新）survived**（`build/evidence/v8-product-match-entity-split/mutations_run.txt`）。宣告的驗收第 5 項「M1～M5 全部被殺」不成立，照 AGENTS §14.1 停下報告，未改判定、未再跑。Opus xhigh 審查進行中。
+- 2026-11-03：使用者決定（`v8-product-match-entity-split-m5-g13`）：加 G13 `ActionStartCombatIsTickStart`（記錄型假命中模型，斷言 `Shapes()` 收到的 combat 是 Tick 開頭的值：第一槍的紀錶、不是預設也不是第二槍的結果），M5 的檢查改成 cpu、由 G13 殺；M5 仍必須被殺，不放寬。原因：digest runner 的合成命中模型 `SyntheticHitModel::Shapes` 只讀 arena、stance、player，不讀 combat（`ShotQuery.cpp:30-33`），M5 在 digest 路徑上不可偵測，宣告寫錯了偵測路徑。G13 14 斷言通過。
 
 ## 未結事項
 
