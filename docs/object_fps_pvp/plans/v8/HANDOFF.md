@@ -167,6 +167,7 @@
 - 2026-11-03：`v8-product-evict-animation-orphan` 開始。本工作樹 `cmake --preset test` 設定（138 s），build 兩個 digest runner。
 - 2026-11-03：重現：`--dump host-poor-connection/corridor` 的最後一筆 record #2399（tick 2400）是 players=1、combats=1、animations=2，被逐出的玩家 2 的 animation 留在 snapshot（`build/evidence/v8-product-evict-animation-orphan/before_dump.txt`）。G3 `PublicationComponentsAgree`（新檔 `tests/object_fps_pvp/EntityModelTests.cpp`）Red：4806 個斷言中只有 tick 2400 的 animation 與 players 的 id 序列不同這 1 個失敗（`g3_red.txt`）。未提交，修正未開始。
 - 2026-11-03：**停下（變速箱原則 5、navigator「実行中に割り当てを変えるとき」）**：主會話模型從 Fable 5.1 變成 Opus 5.5，和核准的分派（實作者主會話 Fable 5.1、§14.4 檢證者 Opus 5.5）不一致；檢證者會和實作者同模型。等使用者決定分派後再進修正。
+- 2026-11-03：使用者切回 Fable 5.1（`/model`），分派一致，續做。修正提交 `9ec4442e`（golden 未更新，`authority_digest` CTest 在該 commit 會以 host-poor-connection 一行失敗）：`EraseEntity(WorldSnapshot&, PlayerId)`、`RequireValidSnapshot`、host 逐出改用；G3 Green 4806／4806，產品單元測試 397／397。兩樹比對（base `cf3118f4`）42 個情境 1 個不同、第一個差異 record 2399 `animations` 2→1，和事前宣告一致。[事前宣告與 §14.4 的 1～5](v8-product-evict-animation-orphan-declaration.md)寫好。突變工具的基準 ctest 兩次逾時（60 秒上限；同款命令手動 24～27 秒；推測建置剛結束的 CPU 降頻），第三次 2／2 killed。證據在主 checkout `build/evidence/v8-product-evict-animation-orphan/`。
 
 ## 未結事項
 
