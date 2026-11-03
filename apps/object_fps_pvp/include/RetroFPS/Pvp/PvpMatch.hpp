@@ -181,19 +181,26 @@ private:
     // The one way an entity leaves the Match: every column, input source and
     // tick cache at once (entity-model E-7). Returns whether it was present.
     bool EraseEntity(EntityId entityId);
-    // The living players' hit shapes of this tick, placed once on its first
-    // shot (v8-product-hitbox-tick-pose (a)).
-    [[nodiscard]] const std::map<PlayerId, std::vector<PlayerWorldHitShape>>& TickShapes();
+    // The hit shapes of one living entity this tick (entity-model §3.4: a
+    // tick cache, rebuilt from the components, never published or digested).
+    struct EntityShapes final {
+        EntityId id{};
+        std::vector<PlayerWorldHitShape> shapes;
+    };
+    // The living entities' hit shapes of this tick, placed once on its first
+    // shot (v8-product-hitbox-tick-pose (a)); ascending EntityId.
+    [[nodiscard]] const std::vector<EntityShapes>& TickShapes();
     Arena arena_;
     CombatRules rules_;
     StanceRules stance_;
     PlayerAnimationRules animation_;
     std::shared_ptr<const PlayerHitModel> hitModel_;
-    std::uint64_t shapesTick_{};
-    std::map<PlayerId, std::vector<PlayerWorldHitShape>> shapes_;
-    // Every player's combat state as this tick's actions began: the shapes
-    // are posed with it, so no action of the tick reaches the judged pose.
-    std::map<PlayerId, CombatState> actionsCombat_;
+    std::uint64_t tickShapesTick_{};
+    std::vector<EntityShapes> tickShapes_;
+    // Every entity's combat state as this tick's actions began, a copy of
+    // combats_ in the same order: the shapes are posed with it, so no action
+    // of the tick reaches the judged pose.
+    std::vector<CombatState> actionStartCombats_;
     // Entity components, one column each in ascending EntityId order
     // (entity-model §3.2, E-5). Every entity has all three; rows are inserted
     // by Join and erased by EraseEntity only, so the columns stay aligned.

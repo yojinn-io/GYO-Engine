@@ -77,8 +77,8 @@ bool PvpMatch::EraseEntity(EntityId entityId) {
     static_cast<void>(::fps::pvp::EraseEntity(actionLedgers_, entityId));
     static_cast<void>(::fps::pvp::EraseEntity(connections_, entityId));
     // Tick caches are rebuilt each tick, but never let one outlive its entity.
-    shapes_.erase(entityId);
-    actionsCombat_.erase(entityId);
+    static_cast<void>(::fps::pvp::EraseEntity(tickShapes_, entityId));
+    static_cast<void>(::fps::pvp::EraseEntity(actionStartCombats_, entityId));
     return body;
 }
 
@@ -385,8 +385,12 @@ bool PvpMatch::Decide(PlayerId playerId, PlayerState& state, CombatState& combat
         // shapes are this tick's, placed once (v8-product-hitbox-tick-pose (a)).
         const auto& shapes = TickShapes();
         std::vector<ShotTarget> targets;
-        for (const auto& body : bodies_) // ascending EntityId: the tie-break order
-            if (body.lifeState == LifeState::Alive) targets.push_back({body.playerId, shapes.at(body.playerId)});
+        for (const auto& body : bodies_) { // ascending EntityId: the tie-break order
+            if (body.lifeState != LifeState::Alive) continue;
+            const auto* placed = FindEntity(shapes, body.playerId);
+            GYO_ASSERT(placed); // every living body was placed this tick
+            targets.push_back({body.playerId, placed->shapes});
+        }
         const auto hit = QueryShot(arena_, stance_, state, shot.yaw, shot.pitch, targets, rules_.shotRange);
         --combat.magazineAmmo;
         combat.lastShotActionId = actionId;
@@ -414,8 +418,7 @@ bool PvpMatch::Decide(PlayerId playerId, PlayerState& state, CombatState& combat
 }
 
 void PvpMatch::ResolveActions(const ShotReferenceAge& referenceAge) {
-    actionsCombat_.clear();
-    for (const auto& combat : combats_) actionsCombat_.emplace(combat.playerId, combat);
+    actionStartCombats_ = combats_; // same order: ascending EntityId
     std::vector<std::tuple<std::uint64_t, PlayerId, ActionId>> order;
     std::map<PlayerId, std::vector<ActionId>> ascending;
     for (auto& ledger : actionLedgers_) { // ascending EntityId
@@ -590,9 +593,9 @@ void PvpMatch::AdvanceAnimation(AnimationTrack& track, const PlayerState& state)
     track.before = state;
 }
 
-const std::map<PlayerId, std::vector<PlayerWorldHitShape>>& PvpMatch::TickShapes() {
-    if (shapesTick_ == tick_) return shapes_;
-    shapes_.clear();
+const std::vector<PvpMatch::EntityShapes>& PvpMatch::TickShapes() {
+    if (tickShapesTick_ == tick_) return tickShapes_;
+    tickShapes_.clear();
     for (std::size_t i = 0; i < bodies_.size(); ++i) {
         const auto& state = bodies_[i];
         const auto& track = animations_[i];
@@ -603,11 +606,14 @@ const std::map<PlayerId, std::vector<PlayerWorldHitShape>>& PvpMatch::TickShapes
         // movement and life only, so for a target still alive at the end of
         // the tick it equals the value the snapshot of this tick carries.
         const auto animation = AdvancePlayerAnimation(animation_, track.value, &track.before, state, tick_);
-        hitModel_->Shapes({arena_, stance_, state, actionsCombat_.at(state.playerId), animation, tick_},
-                          shapes_[state.playerId]);
+        const auto* actionStart = FindEntity(actionStartCombats_, state.playerId);
+        GYO_ASSERT(actionStart);
+        // bodies_ is ascending, so appending keeps tickShapes_ ascending.
+        auto& placed = tickShapes_.emplace_back(EntityShapes{state.playerId, {}});
+        hitModel_->Shapes({arena_, stance_, state, *actionStart, animation, tick_}, placed.shapes);
     }
-    shapesTick_ = tick_;
-    return shapes_;
+    tickShapesTick_ = tick_;
+    return tickShapes_;
 }
 
 void PvpMatch::Reset() noexcept {
@@ -617,9 +623,9 @@ void PvpMatch::Reset() noexcept {
     actionLedgers_.clear();
     connections_.clear();
     tick_ = 0;
-    shapesTick_ = 0;
-    shapes_.clear();
-    actionsCombat_.clear();
+    tickShapesTick_ = 0;
+    tickShapes_.clear();
+    actionStartCombats_.clear();
 }
 
 void RequireValidAnimation(const WorldSnapshot& snapshot) {

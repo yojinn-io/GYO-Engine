@@ -29,11 +29,8 @@ struct PvpMatchTestAccess final {
         column("animations", match.animations_);
         column("actionLedgers", match.actionLedgers_);
         column("connections", match.connections_);
-        std::vector<EntityId> shapes, actionStart;
-        for (const auto& [id, value] : match.shapes_) shapes.push_back(id);
-        for (const auto& [id, value] : match.actionsCombat_) actionStart.push_back(id);
-        columns.emplace_back("tickShapes", std::move(shapes));
-        columns.emplace_back("actionStartCombats", std::move(actionStart));
+        column("tickShapes", match.tickShapes_);
+        column("actionStartCombats", match.actionStartCombats_);
         return columns;
     }
 };
