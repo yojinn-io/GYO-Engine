@@ -1,6 +1,6 @@
 # v8-product-evict-animation-orphan 的事前宣告與 §14.4 的判定變更
 
-更新：2026-11-03。Owner：`object_fps_pvp`。**狀態：等核准。** §14.4 的 1～5 已由檢證者（Opus 5.5，和提案者 Fable 5.1 不同引擎）以實際資料核對，指出的 4 處字句不符已改（報告在證據目錄 `verification_opus.md`）。事前宣告的內容在結果之前就寫在 [entity-model](../../entity-model.zh-Hant.md) §9.0（`cf3118f4`）。 契約：[entity-model](../../entity-model.zh-Hant.md) E-7、§9.0（決定 3 (a)）。檔位 high、上段（回歸修正）；實作者主會話 Fable 5.1、§14.4 檢證者 Opus 5.5。估 3～5 h。
+更新：2026-11-03。Owner：`object_fps_pvp`。**狀態：已核准（`v8-product-evict-animation-orphan-approve`，2026-11-03），golden 已重生。** §14.4 的 1～5 已由檢證者（Opus 5.5，和提案者 Fable 5.1 不同引擎）以實際資料核對，指出的 4 處字句不符已改（報告在證據目錄 `verification_opus.md`）。事前宣告的內容在結果之前就寫在 [entity-model](../../entity-model.zh-Hant.md) §9.0（`cf3118f4`）。 契約：[entity-model](../../entity-model.zh-Hant.md) E-7、§9.0（決定 3 (a)）。檔位 high、上段（回歸修正）；實作者主會話 Fable 5.1、§14.4 檢證者 Opus 5.5。估 3～5 h。
 
 ## 這批修什麼
 

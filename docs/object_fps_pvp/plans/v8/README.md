@@ -52,7 +52,7 @@ v8-plan
 │   └── entity-line                「PR 線：實體資料模型（架構掃描 2026-11-01 開的卡 `v8-product-entity-model`）；split 排在 rewind 之前，讓姿勢歷史第一個以元件寫」
 │       ├── v8-product-tarkov-requirements ✓  「medium｜下段｜主會話 Fable 5.1｜玩法需求問卷：實體種類與數量、身分、屬性、PvE、PvP／PvE 組合、可見性；數值由使用者定」
 │       ├── v8-product-entity-contract ✓      「ultracode（先問）｜上段｜提案者 3×Opus 5.5 high、統合者 Fable 5.1 high、敵對檢查者 Opus 5.5 xhigh｜單一 EntityId、元件清單、複寫通道、決定性契約與 Design Invariants；pv10 附錄 C 的改寫建議」
-│       ├── v8-product-evict-animation-orphan 「high｜上段（回歸修正）｜實作者主會話 Fable 5.1、檢證者 Opus 5.5｜host 逐出不刪 snapshot 的 animation：先 Red（G3）後 Green；golden 重生有緩める面，照 §14.4 核准」
+│       ├── v8-product-evict-animation-orphan ✓ 「high｜上段（回歸修正）｜實作者主會話 Fable 5.1、檢證者 Opus 5.5｜host 逐出不刪 snapshot 的 animation：先 Red（G3）後 Green；golden 重生有緩める面，照 §14.4 核准」
 │       └── v8-product-match-entity-split     「high（digest、迭代順序局部 xhigh）｜上段｜實作者主會話 Fable 5.1、審查者 Opus 5.5 xhigh、檢證者 Opus 5.5｜Participant 拆成輸入來源與實體元件；不改 wire 與行為；兩樹 digest 0 差分」
 │
 ├── ② 體驗優化                     「pv8 欄位已在 ① 合併，這裡只填行為」
@@ -163,6 +163,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hitbox-shot-wire`（S3） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_wire.zh-Hant.md) |
 | `v8-product-tarkov-requirements` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_tarkov_requirements.zh-Hant.md) |
 | `v8-product-entity-contract` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_entity_contract.zh-Hant.md) |
+| `v8-product-evict-animation-orphan` | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_evict_animation_orphan.zh-Hant.md) |
 
 ---
 
