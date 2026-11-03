@@ -1,6 +1,6 @@
 # v8-product-match-entity-split 的事前宣告
 
-更新：2026-11-03。Owner：`object_fps_pvp`。**狀態：等同意。** 契約：[entity-model](../../entity-model.zh-Hant.md) §3（元件）、§5（決定性）、§9（步驗序與驗收）、Design Invariants E-5、E-7、E-8、E-9；決定 4 (a)（每元件一欄的 vector）。檔位 high、digest 與迭代順序局部 xhigh；上段（Architecture 判斷、DI 守衛測試）；實作者主會話 Fable 5.1、審查者 `xhigh-reviewer` 指定 Opus 5.5 xhigh、§14.4 檢證者 Opus 5.5。估 14～20 h（超過 30 h 停下回報）。
+更新：2026-11-03。Owner：`object_fps_pvp`。**狀態：已同意（`v8-product-match-entity-split-declaration-approve`，2026-11-03，檔位照建議）。** 契約：[entity-model](../../entity-model.zh-Hant.md) §3（元件）、§5（決定性）、§9（步驗序與驗收）、Design Invariants E-5、E-7、E-8、E-9；決定 4 (a)（每元件一欄的 vector）。檔位 high、digest 與迭代順序局部 xhigh；上段（Architecture 判斷、DI 守衛測試）；實作者主會話 Fable 5.1、審查者 `xhigh-reviewer` 指定 Opus 5.5 xhigh、§14.4 檢證者 Opus 5.5。估 14～20 h（超過 30 h 停下回報）。
 
 ## 這批做什麼
 
