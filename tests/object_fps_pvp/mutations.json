@@ -8784,12 +8784,12 @@
     {
       "id": "entity-split-action-start-stale",
       "batch": "v8-product-match-entity-split",
-      "what": "The action-start combat copy is taken once and never refreshed, so shapes are posed with a stale combat (M5); detected by G13, not by the digest: the synthetic hit model reads no combat",
+      "what": "The action-start combat copy is taken once and never refreshed, so shapes are posed with a stale combat (M5); detected by G13, not by the digest: the synthetic hit model reads no combat; in the whole cpu run an earlier test (leave then shoot) hits the actionStart Assert first",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
       "find": "    actionStartCombats_ = combats_; // same order: ascending EntityId",
       "replace": "    if (actionStartCombats_.empty()) actionStartCombats_ = combats_;",
       "check": "cpu",
-      "expect": "ActionStartCombatIsTickStart|is NOT correct"
+      "expect": "ActionStartCombatIsTickStart|is NOT correct|GYO_ASSERT failed"
     }
   ]
 }
