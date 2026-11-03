@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/Pvp/EntityColumns.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/Combat.hpp"
 #include "RetroFPS/Pvp/PlayerAnimation.hpp"
@@ -130,6 +131,9 @@ private:
         std::uint64_t holdUntil{};
         bool held{};
     };
+    // The entity components of one player (entity-model §3.2): body, combat
+    // and animation. The input source and the diagnostics live in their own
+    // columns below (v8-product-match-entity-split S2).
     struct Participant final {
         PlayerState state;
         CombatState combat;
@@ -137,8 +141,19 @@ private:
         // to: the next tick's `previous` and `before` (protocol-v9 §4.4).
         PlayerAnimation animation;
         PlayerState animationState;
-        ActionId retiredActionThrough{};
+    };
+    // The action ledger of one shooter: an input source every shooter has,
+    // connected or not (entity-model §3.2). ACK and retirement are the
+    // connection's business; the Match only honours them.
+    struct ActionLedger final {
+        EntityId id{};
+        ActionId retiredThrough{};
         std::map<ActionId, ActionEntry> actions;
+    };
+    // The movement input source and the connection-quality diagnostics of
+    // one connected entity. Not an entity component: an AI has none of this.
+    struct Connection final {
+        EntityId id{};
         std::map<std::uint64_t, MovementCommand> commands;
         MovementCommand lastActualCommand;
         std::uint32_t missingInputTicks{};
@@ -152,11 +167,11 @@ private:
         MovementResetReason movementResetReason{};
         MovementQuality quality;
     };
-    [[nodiscard]] static std::uint32_t ContiguousPending(const Participant& player) noexcept;
-    [[nodiscard]] bool ActionDue(const Participant& player, const ActionEntry& entry) const noexcept;
+    [[nodiscard]] static std::uint32_t ContiguousPending(const PlayerState& state, const Connection& connection) noexcept;
+    [[nodiscard]] bool ActionDue(const PlayerState& state, const ActionEntry& entry) const noexcept;
     // Decides one due action now, or starts its cooldown hold (returns false).
     [[nodiscard]] bool Decide(PlayerId playerId, Participant& player, ActionId actionId, ActionEntry& entry);
-    void ResetMovementEpoch(Participant& player, MovementResetReason reason);
+    void ResetMovementEpoch(PlayerState& state, Connection& connection, MovementResetReason reason);
     void ResolveLifeBoundaries();
     [[nodiscard]] const SpawnPoint* FindSpawn(PlayerId playerId) const;
     void Kill(Participant& player);
@@ -176,6 +191,10 @@ private:
     // are posed with it, so no action of the tick reaches the judged pose.
     std::map<PlayerId, CombatState> actionsCombat_;
     std::map<PlayerId, Participant> players_;
+    // Columns in ascending EntityId order (entity-model E-5); every player of
+    // players_ has one row in each, inserted by Join and erased by Leave.
+    std::vector<ActionLedger> actionLedgers_;
+    std::vector<Connection> connections_;
     std::uint64_t tick_{};
 };
 

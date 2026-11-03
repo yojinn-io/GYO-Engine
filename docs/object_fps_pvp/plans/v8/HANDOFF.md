@@ -174,6 +174,7 @@
 - 2026-11-03：使用者核准（`v8-product-evict-animation-orphan-approve`）。golden 的 host-poor-connection/corridor 一行重生，舊檔另存 `authority_golden.pv9-anim-checkpoint.txt`，`authority_digest` CTest 通過。**`v8-product-evict-animation-orphan` 完成**（[dev_log](../../../dev_logs/2026_11_03_pvp_v8_evict_animation_orphan.zh-Hant.md)），實際約 3.5 h。下一批 `v8-product-match-entity-split`，先寫事前宣告。
 - 2026-11-03：`v8-product-match-entity-split` 的[事前宣告](v8-product-match-entity-split-declaration.md)寫好（base `edbd827f`、S0～S7、G1／G2／G7、M1～M5、驗收 8 項、估 14～20 h），等使用者同意後開 S0。scratchpad 的 base 工作樹已移除。
 - 2026-11-03：使用者同意（`v8-product-match-entity-split-declaration-approve`）。S0 開始：base 樹（`edbd827f`，scratchpad `base_split`）建兩個 runner；證據目錄 `build/evidence/v8-product-match-entity-split/`。估 14～20 h 從此起算。
+- 2026-11-03：S0 完成（base runner `--list` 42 情境、37 golden）。S1 完成（`78778d00`：EntityId.hpp、EntityColumns.hpp、4 個單元測試 22 斷言；compare 未跑）。S2 完成：`Participant` 只留 state／combat／animation／animationState，`ActionLedger`、`Connection` 兩欄（升冪 vector），連線與帳本相關的公開 API 查對應的欄；產品測試 13,693,626 斷言通過、`authority_digest` 通過、兩樹比對 scale 1「42 scenarios, 0 differing」（`build/evidence/v8-product-match-entity-split/s2_*`）。
 
 ## 未結事項
 
