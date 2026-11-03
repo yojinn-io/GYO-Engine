@@ -171,6 +171,7 @@
 - 2026-11-03：使用者切回 Fable 5.1（`/model`），分派一致，續做。修正提交 `9ec4442e`（golden 未更新，`authority_digest` CTest 在該 commit 會以 host-poor-connection 一行失敗）：`EraseEntity(WorldSnapshot&, PlayerId)`、`RequireValidSnapshot`、host 逐出改用；G3 Green 4806／4806，產品單元測試 397／397。兩樹比對（base `cf3118f4`）42 個情境 1 個不同、第一個差異 record 2399 `animations` 2→1，和事前宣告一致。[事前宣告與 §14.4 的 1～5](v8-product-evict-animation-orphan-declaration.md)寫好。突變工具的基準 ctest 兩次逾時（60 秒上限；同款命令手動 24～27 秒；推測建置剛結束的 CPU 降頻），第三次 2／2 killed。證據在主 checkout `build/evidence/v8-product-evict-animation-orphan/`。
 - 2026-11-03：§14.4 檢證者（Opus 5.5，high，唯讀）核對 1～5：數據成立，4 處字句不符（GYO_ASSERT 的建置設定、token 數、突變被殺的機制、G3 的覆蓋範圍）已照改，報告摘錄在證據目錄 `verification_opus.md`。停在 golden 重生的核准（有緩める面，AGENTS §14.4）。
 - 2026-11-03：使用者核准（`v8-product-evict-animation-orphan-approve`）。golden 的 host-poor-connection/corridor 一行重生，舊檔另存 `authority_golden.pv9-anim-checkpoint.txt`，`authority_digest` CTest 通過。**`v8-product-evict-animation-orphan` 完成**（[dev_log](../../../dev_logs/2026_11_03_pvp_v8_evict_animation_orphan.zh-Hant.md)），實際約 3.5 h。下一批 `v8-product-match-entity-split`，先寫事前宣告。
+- 2026-11-03：`v8-product-match-entity-split` 的[事前宣告](v8-product-match-entity-split-declaration.md)寫好（base `edbd827f`、S0～S7、G1／G2／G7、M1～M5、驗收 8 項、估 14～20 h），等使用者同意後開 S0。scratchpad 的 base 工作樹已移除。
 
 ## 未結事項
 
