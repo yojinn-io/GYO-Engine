@@ -35,15 +35,16 @@ void RequireValidAnimation(const WorldSnapshot& snapshot);
 // EntityId order (entity-model E-5, E-9): the order the digest and the wire
 // see is the order of the columns, never of joins and leaves.
 void RequireEntityOrder(const WorldSnapshot& snapshot);
-// Every component of a snapshot names the same entities in the same order
-// (entity-model E-7): what RequireValidAnimation checks for animation, for
-// combat too. The host runs it before a publication leaves the Match side.
+// Every component of a snapshot names the same entities in the same strictly
+// ascending order (RequireEntityOrder, entity-model E-5/E-7) and the animation
+// values are valid (RequireValidAnimation). The host runs it before a
+// publication leaves the Match side.
 void RequireValidSnapshot(const WorldSnapshot& snapshot);
 // The one way to take an entity out of a snapshot: every component at once
 // (entity-model E-7). Returns whether the entity was in the snapshot.
 bool EraseEntity(WorldSnapshot& snapshot, PlayerId entityId);
 
-// Cumulative movement resolution counts of one participant, for the host's
+// Cumulative movement resolution counts of one connected entity, for the host's
 // connection-quality judgement; never gameplay input.
 struct MovementQuality final {
     std::uint64_t resolved{};
@@ -61,7 +62,7 @@ enum class InputAdmission : std::uint8_t {
     Accepted, UnknownPlayer, Malformed, EpochOld, EpochFuture, LifeOld, LifeFuture, BeyondWindow, ConflictQueued
 };
 
-// Sole gameplay authority. No player controller, camera, connection or clock.
+// Sole gameplay authority. No player controller, camera, socket or clock.
 // The spawn a joining or respawning player takes (pv6 contract §5): among the
 // spawns where a body fits clear of the walls and of the given living players,
 // the one farthest from the nearest of them, in content order on ties; the first

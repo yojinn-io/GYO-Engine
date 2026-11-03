@@ -33,6 +33,8 @@ struct PvpMatchTestAccess final {
         column("actionStartCombats", match.actionStartCombats_);
         return columns;
     }
+    // The body column itself, for a guard that stages a state (G7).
+    static std::vector<PlayerState>& Bodies(PvpMatch& match) { return match.bodies_; }
 };
 } // namespace fps::pvp
 
@@ -114,7 +116,7 @@ TEST_CASE("G1 EntityColumnsStayOrdered: descending joins and a rejoin keep every
     RequireSnapshotIds(match, {1, 2, 3});
     for (const auto& [name, ids] : PvpMatchTestAccess::ColumnIds(match)) {
         CAPTURE(name);
-        if (name == "tickShapes") continue; // only alive shooters' targets, filled by a shot
+        if (name == "tickShapes") continue; // the living targets, filled only by a shot
         CHECK(ids == std::vector<EntityId>{1, 2, 3});
     }
 }
@@ -240,4 +242,38 @@ TEST_CASE("G13 ActionStartCombatIsTickStart: shapes are posed with the combat as
             CHECK(seen.combat.lastShotActionId == 1);
         }
     }
+}
+
+TEST_CASE("G7 TieBreakByEntityId: entities that respawn on the same tick are placed in id order") {
+    // QueryShot's equal-distance tie (ShotQueryTests) and ResolveActions' same-A
+    // order (CombatTests) are guarded already; concurrent respawn was not.
+    PvpMatch match(ThreeSpawnArena());
+    std::string error;
+    REQUIRE(match.Join(3, error));
+    REQUIRE(match.Join(2, error));
+    REQUIRE(match.Join(1, error));
+    Step(match);
+    // All three dead, all due on the next tick. Placement goes in ascending
+    // id: 1 takes the first spawn (nobody alive), 2 the farthest from 1, 3
+    // the farthest from both. A descending walk would give 3 the first spawn.
+    for (auto& body : PvpMatchTestAccess::Bodies(match)) {
+        body.lifeState = LifeState::Dead;
+        body.lifeStateTick = match.TickCount();
+        body.respawnTick = match.TickCount() + 1;
+    }
+    Step(match);
+    const auto snapshot = match.Snapshot();
+    REQUIRE(Ids(snapshot.players) == std::vector<PlayerId>{1, 2, 3});
+    const auto& spawns = match.GetArena().spawns;
+    for (const auto& body : snapshot.players) {
+        CAPTURE(body.playerId);
+        CHECK(body.lifeState == LifeState::Alive);
+        CHECK(body.lifeGeneration == 2);
+    }
+    const auto samePoint = [](const Engine::Math::Vec3& a, const Engine::Math::Vec3& b) {
+        return a.x == b.x && a.y == b.y && a.z == b.z;
+    };
+    CHECK(samePoint(snapshot.players[0].position, spawns[0].position));
+    CHECK(samePoint(snapshot.players[1].position, spawns[2].position));
+    CHECK(samePoint(snapshot.players[2].position, spawns[1].position));
 }

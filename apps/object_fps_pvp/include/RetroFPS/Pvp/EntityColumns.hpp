@@ -13,9 +13,10 @@ namespace fps::pvp {
 
 // A column is a std::vector of one component type kept in strictly ascending
 // EntityId order (entity-model E-5): iteration order depends on ids alone,
-// never on the history of joins and leaves. These three free functions are
-// the only way a column gains or loses a member; a lookup is a binary search.
-// No registry, no template class: the structure is the contract.
+// never on the history of joins and leaves. A component or input-source
+// column gains and loses members only through these three free functions
+// (tick caches are rebuilt whole); a lookup is a binary search. No registry,
+// no template class: the structure is the contract.
 
 template <typename T>
 concept HasPlayerId = requires(const T& value) {
@@ -35,10 +36,11 @@ template <HasEntityId T>
 [[nodiscard]] constexpr EntityId EntityOf(const T& value) noexcept { return value.id; }
 
 namespace detail {
-template <typename T>
-[[nodiscard]] auto EntityLowerBound(std::span<T> column, EntityId id) noexcept {
-    return std::lower_bound(column.begin(), column.end(), id,
-                            [](const T& value, EntityId key) { return EntityOf(value) < key; });
+// On the container's own iterators: a std::span iterator is a different type
+// from std::vector's on libstdc++ and MSVC, so it cannot meet vector::end().
+template <typename Iterator>
+[[nodiscard]] Iterator EntityLowerBound(Iterator first, Iterator last, EntityId id) noexcept {
+    return std::lower_bound(first, last, id, [](const auto& value, EntityId key) { return EntityOf(value) < key; });
 }
 } // namespace detail
 
@@ -53,7 +55,7 @@ template <typename T>
 // The element with this id, or nullptr.
 template <typename T>
 [[nodiscard]] const T* FindEntity(std::span<const T> column, EntityId id) noexcept {
-    const auto position = detail::EntityLowerBound(column, id);
+    const auto position = detail::EntityLowerBound(column.begin(), column.end(), id);
     return position != column.end() && EntityOf(*position) == id ? &*position : nullptr;
 }
 template <typename T>
@@ -62,7 +64,7 @@ template <typename T>
 }
 template <typename T>
 [[nodiscard]] T* FindEntity(std::vector<T>& column, EntityId id) noexcept {
-    const auto position = detail::EntityLowerBound(std::span<T>(column), id);
+    const auto position = detail::EntityLowerBound(column.begin(), column.end(), id);
     return position != column.end() && EntityOf(*position) == id ? &*position : nullptr;
 }
 
@@ -72,7 +74,7 @@ template <typename T>
 template <typename T>
 T& InsertEntity(std::vector<T>& column, T value) {
     const auto id = EntityOf(value);
-    const auto position = detail::EntityLowerBound(std::span<T>(column), id);
+    const auto position = detail::EntityLowerBound(column.begin(), column.end(), id);
     GYO_ASSERT(position == column.end() || EntityOf(*position) != id);
     return *column.insert(position, std::move(value));
 }
@@ -81,7 +83,7 @@ T& InsertEntity(std::vector<T>& column, T value) {
 // swap-and-pop). Returns whether it was present.
 template <typename T>
 bool EraseEntity(std::vector<T>& column, EntityId id) {
-    const auto position = detail::EntityLowerBound(std::span<T>(column), id);
+    const auto position = detail::EntityLowerBound(column.begin(), column.end(), id);
     if (position == column.end() || EntityOf(*position) != id) return false;
     column.erase(position);
     return true;
