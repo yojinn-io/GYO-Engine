@@ -1,12 +1,12 @@
 # Engine audio：`audio_sdl.disk` 停止 frame 偶發失敗的修正
 
-日期：2026-11-04。批次代號 `v8-engine-audio-disk-stop-window`。**進行中**（判定變更待使用者核准，AGENTS §14.4）。計畫見 [audio 計畫](../architecture/plans/audio/README.md)。
+日期：2026-11-04。批次代號 `v8-engine-audio-disk-stop-window`。**完成**（判定變更經使用者核准，AGENTS §14.4；CI 等 PR）。計畫見 [audio 計畫](../architecture/plans/audio/README.md)。
 
 ## 為什麼做
 
 - #138 合併後的 master CI（run 41775642108，Quick acceptance／toolchain／linux-x64）在 `SdlAudioOutputTests.cpp:292` 失敗：停止 frame `end = 9678`，候選 `8771`、`9198`。之後三次 master run 通過，看起來是偶發。
 - 失敗的是 audio.md Design Invariant 10 的守衛「plays a clip loaded after opening and stops it at its mapped frame」（從 `v8-engine-audio-control-live` 起）。
-- 使用者：「在這裡切分」，切分後選「照選項 1 修」，查出主因後選「標記加放寬」。
+- 使用者：「在這裡切分」，切分後選「照選項 1 修」，查出主因後選「標記加放寬」。看過 1～5 與驗證者的結果後：「核准並開 PR」（接受 4 的「沒有守住的」一面）。
 
 ## 原因（§14.1 的切分：Test 自身，環境觸發；實作照契約）
 
