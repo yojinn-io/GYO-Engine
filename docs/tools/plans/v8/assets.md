@@ -563,7 +563,7 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
   - 重新取樣在 UI 執行緒上做，長的非 48 kHz 素材按下 Play 會停頓一下。
   - 沒有「未存檔」的提示；關視窗時改動會丟失。
   - 命令列給相對路徑時，工程檔照原樣存相對路徑。
-- 觀察到的壓力（報告，不在本批處理）：系統選擇窗的「只認最新一次請求、Failed 不結束」規則，ui_editor（`PathDialogRequests`）和 audio_editor 各寫了一份。照「共用功能先進 framework」，兩處都用到了，可以考慮移進 framework。
+- 觀察到的壓力（報告，不在本批處理）：系統選擇窗的「只認最新一次請求、Failed 不結束」規則，ui_editor（`PathDialogRequests`）和 audio_editor 各寫了一份。照「共用功能先進 framework」，兩處都用到了，可以考慮移進 framework。2026-11-04 交回 v8 規劃會話，記成 v8 驗收前必須完成（`v8-tool-path-dialog-rule-handover`）。
 
 §14.4（audio_editor 守衛，放寬；這是 Design Invariants 的守衛，要你核准）：
 
@@ -858,4 +858,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-audio-editor-di3-plural` | （2026-11-04）核准 audio_editor Design Invariant 3 的新措辭（檢驗後的版本：每個匯出的片段各有輸出檔與該片段 id 的條目；一次匯出可寫多個，id 與檔案不重複，任何一段被拒絕就什麼都不寫；寫到一半失敗時已寫的片段不登錄、工具列出它們）。§14.4 的 1～5 與検証者的更正見「`v8-tool-audio-editor-regions` 的事前宣告」的「實作後的結果」 | 對「DI 3 的新措辭（assets.md）照檢驗後的版本核准嗎？」答「核准」 |
 | `v8-tool-audio-editor-l3-deferred` | （2026-11-04）`-edit`（判定 8）與 `-regions`（判定 7）的 GUI L3 延後，等 Model Viewer 出來後一起試。兩個判定都記為未判定，不是通過 | 「感覺不太符合我的需求，不過先這樣。等model viewer出來了。我一起聯動看看效果。」 |
 | `v8-tool-audio-editor-merge-wait` | （2026-11-04）PR #141 先不合併，等 Model Viewer 出來、一起試過 GUI 之後再決定 | 「先不合，等model viewer 一起。」 |
+| `v8-tool-path-dialog-rule-handover` | （2026-11-04）系統選擇窗的記帳規則（每次請求新 tag、只認最新一次、Chosen／Cancelled 才結束、Failed 不結束、可放棄等待；Engine `platform-sdl` Design Invariant 10 的消費端）在 ui_editor（`PathDialogRequests`）與 audio_editor（`ApplyDialogAnswers`）各寫一份。交回 v8 規劃會話，記成 v8 驗收前必須完成的事項；放不放進 framework、由誰做，交 framework 的 owner（架構會話）判斷，本線不自行搬。使用者寫「8v驗收」，照上下文讀成 v8 | 「丟回給v8會話，記成8v驗收前必須完成的事項。」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
