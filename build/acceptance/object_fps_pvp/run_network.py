@@ -26,6 +26,8 @@ def free_port(kind=socket.SOCK_STREAM):
 # followed by the listen address and " arena=...".
 MATCH_READY_PREFIX = "Object_FPS_PVP Match ready: "
 MATCH_READY_TIMEOUT_SECONDS = 15.0
+# The Match's own content folder next to its executable (Gyo::AppConfig::Assets), copied with it.
+MATCH_CONTENT = Path("assets") / "object_fps_pvp"
 
 
 def match_ready(log_text, listen):
@@ -121,10 +123,27 @@ def main():
     handles = []
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     try:
-        # Prove that Match starts without the product's SDL DLLs or asset catalog.
+        # Prove that Match starts without the product's SDL DLLs: only the executable and its own
+        # content folder (movement rules since pv8; the player content through its catalog since
+        # protocol-v9 §4.4) are copied (v8-product-real-match-isolation (a)). They sit in a
+        # subfolder, so the working folder (isolated) still holds no assets.
         with isolated_runtime(processes) as isolated:
-            staged = Path(isolated) / args.match.name
+            deployed = Path(isolated) / "match"
+            staged = deployed / args.match.name
+            deployed.mkdir()
             shutil.copy2(args.match, staged)
+            shutil.copytree(args.match.parent / MATCH_CONTENT, deployed / MATCH_CONTENT)
+            # The same copy without its movement rules must stop with exit 1 before it listens.
+            bare = Path(isolated) / "match-without-rules"
+            shutil.copytree(deployed, bare)
+            (bare / MATCH_CONTENT / "movement_rules.json").unlink()
+            missing = subprocess.run([str(bare / args.match.name), "--arena", str(args.arena.resolve()),
+                                      "--listen", "127.0.0.1:" + str(free_port())],
+                                     cwd=isolated, capture_output=True, text=True, timeout=8, creationflags=flags)
+            if missing.returncode != 1 or "Cannot open movement rules" not in missing.stderr:
+                raise RuntimeError(f"Match without its movement rules did not stop: "
+                                   f"exit={missing.returncode}, error={missing.stderr!r}")
+            shutil.rmtree(bare)
 
             def start(name, command, executable=None):
                 log = (args.output / f"{name}.log").open("w", encoding="utf-8")
@@ -192,7 +211,7 @@ def main():
             if result.returncode:
                 raise RuntimeError(result.stdout + result.stderr)
             life_cleanup = subprocess.run([str(args.probe.resolve()), "--gateway", f"127.0.0.1:{http}",
-                                           "--life-cleanup-only"], cwd=isolated, capture_output=True, text=True,
+                                           "--arena", str(args.arena.resolve()), "--life-cleanup-only"], cwd=isolated, capture_output=True, text=True,
                                            timeout=15, creationflags=flags)
             (args.output / "life-cleanup.log").write_text(life_cleanup.stdout + life_cleanup.stderr, encoding="utf-8")
             if life_cleanup.returncode:
@@ -266,7 +285,8 @@ def main():
             time.sleep(0.3)
             ready = Path(isolated) / "failure-probe-ready"
             failure_probe = start("failure-probe", [str(args.probe.resolve()), "--gateway",
-                                  f"127.0.0.1:{http}", "--disconnect-ready", str(ready)])
+                                  f"127.0.0.1:{http}", "--arena", str(args.arena.resolve()),
+                                  "--disconnect-ready", str(ready)])
             deadline = time.monotonic() + 15
             while not ready.exists():
                 if failure_probe.poll() is not None or gateway.poll() is not None:

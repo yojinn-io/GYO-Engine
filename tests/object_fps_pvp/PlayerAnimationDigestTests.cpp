@@ -148,9 +148,11 @@ TEST_CASE("PvP animation digest changes with one key, the clip order or one pare
     const auto base = AnimationContentDigest(ClientDefinition());
     using Edit = std::pair<const char*, std::function<void(PlayerPresentationDefinition&, Engine::Model::ModelAsset&)>>;
     const Edit edits[] = {
-        // One key of one clip; every clip of the 15 is in the digest.
+        // One key of one clip; every clip of the 16 is in the digest.
         {"translation value", [](auto& d, auto& m) { KeyedTrack(m.clips.at(d.walkClip)).translations[1].value.y += 0.001F; }},
         {"rotation value", [](auto& d, auto& m) { KeyedTrack(m.clips.at(d.hitClip)).rotations[1].value.x += 0.001F; }},
+        // v8-product-hit-clip-by-part G3: the head hit clip is in the digest too.
+        {"head hit key", [](auto& d, auto& m) { KeyedTrack(m.clips.at(d.hitHeadClip)).rotations[1].value.x += 0.001F; }},
         {"key time", [](auto& d, auto& m) { KeyedTrack(m.clips.at(d.jumpLandClip)).translations[1].timeSeconds += 0.001; }},
         {"key removed", [](auto& d, auto& m) { KeyedTrack(m.clips.at(d.crouchMoveClip)).rotations.pop_back(); }},
         {"track node", [](auto& d, auto& m) {
@@ -161,6 +163,7 @@ TEST_CASE("PvP animation digest changes with one key, the clip order or one pare
         {"clip name", [](auto& d, auto& m) { m.clips.at(d.aimUpClip).name += "_v2"; }},
         // The order: idle and walk exchanged.
         {"clip order", [](auto& d, auto&) { std::swap(d.idleClip, d.walkClip); }},
+        {"hit clip order", [](auto& d, auto&) { std::swap(d.hitClip, d.hitHeadClip); }},
         // The skeleton.
         {"parent", [](auto&, auto& m) { m.nodes.at(NodeNamed(m, "hand_r")).parentIndex = NodeNamed(m, "Head"); }},
         {"reference pose", [](auto&, auto& m) { m.nodes.at(NodeNamed(m, "thigh_l")).localTransform.translation.x += 0.001F; }},

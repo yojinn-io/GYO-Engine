@@ -5,7 +5,7 @@ gyo_get_app_target("${GYO_CURRENT_APP}" client_simulation simulation)
 set(probe "gyo_${GYO_CURRENT_APP}_network_probe")
 add_executable(${probe} network_main.cpp)
 target_compile_features(${probe} PRIVATE cxx_std_20)
-# --hit-parts-only aims from the posed hit model on the product content.
+# --hit-parts-only and --life-cleanup-only aim from the posed hit model (hit_aim.hpp).
 gyo_get_app_target("${GYO_CURRENT_APP}" player_content player_content)
 target_link_libraries(${probe} PRIVATE ${network} ${simulation} ${host} ${player_content} httplib::httplib "gyo_${GYO_CURRENT_APP}_client_v9")
 gyo_register_acceptance_probe(OWNER "${GYO_CURRENT_APP}" ROLE network TARGET ${probe})
@@ -17,7 +17,8 @@ gyo_register_acceptance_probe(OWNER "${GYO_CURRENT_APP}" ROLE timing TARGET ${ti
 set(action "gyo_${GYO_CURRENT_APP}_action_probe")
 add_executable(${action} action_main.cpp)
 target_compile_features(${action} PRIVATE cxx_std_20)
-target_link_libraries(${action} PRIVATE ${network} ${simulation} nlohmann_json::nlohmann_json)
+# The gameplay plan aims at the target's torso from the posed hit model (hit_aim.hpp).
+target_link_libraries(${action} PRIVATE ${network} ${simulation} ${player_content} nlohmann_json::nlohmann_json)
 gyo_register_acceptance_probe(OWNER "${GYO_CURRENT_APP}" ROLE action TARGET ${action})
 set(worker "gyo_${GYO_CURRENT_APP}_worker_probe")
 add_executable(${worker} worker_main.cpp)

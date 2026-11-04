@@ -43,8 +43,9 @@ v8-plan
 │   │   ├── v8-product-anim-authority         「high（狀態機局部 xhigh）｜Opus 5.5｜動畫狀態機移到 domain、Match 推進、上 snapshot」
 │   │   ├── v8-product-hitbox-data            「high｜Opus 5.5｜三部位形狀契約、Match 載入骨架與 clip」
 │   │   ├── v8-product-hitbox-shot            「high（平手局部 xhigh）｜Opus 5.5｜逐部位判定、倍率傷害」
-│   │   ├── v8-product-hit-presentation       「medium｜Opus 5.5｜受擊動畫依部位、驗收工具」
-│   │   └── v8-product-hitbox-acceptance      「medium｜Sonnet 5.5｜L1、突變、L2 試玩（收支行）」
+│   │   ├── v8-product-real-match-acceptance-repair 「high｜Opus 5.5｜修真 Match 開槍的本機驗收（[宣告](v8-product-real-match-acceptance-repair-declaration.md)，已核准）」
+│   │   ├── v8-product-hit-presentation       「上段｜Opus 5.5／high｜受擊動畫依部位、GUI 驗收工具瞄軀幹（[宣告](v8-product-hit-presentation-declaration.md)，已核准）」
+│   │   └── v8-product-hitbox-acceptance      「上段｜Opus 5.5／medium～high｜PR 與 L1（H6′）、B5、L2 kit、L2（G5／G6、試玩）（[宣告](v8-product-hitbox-acceptance-declaration.md)，已核准）」
 │   ├── rewind-line                「PR 線：射擊回溯（部位判定線合併後；entity-line 的 split 之後）」
 │   │   ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
 │   │   ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
@@ -161,6 +162,8 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hitbox-shot-frame`（S1） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_frame.zh-Hant.md) |
 | `v8-product-hitbox-shot-judge`（S2） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_judge.zh-Hant.md) |
 | `v8-product-hitbox-shot-wire`（S3） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_wire.zh-Hant.md) |
+| `v8-product-real-match-acceptance-repair` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_real_match_acceptance_repair.zh-Hant.md) |
+| `v8-product-hit-clip-by-part`（P1） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hit_clip_by_part.zh-Hant.md) |
 | `v8-product-tarkov-requirements` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_tarkov_requirements.zh-Hant.md) |
 | `v8-product-entity-contract` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_entity_contract.zh-Hant.md) |
 | `v8-input-ui-adapter` IU-1（framework 核心的 Input→Ui adapter） | [2026-11-02](../../../dev_logs/2026_11_02_framework_v8_input_ui_adapter_iu1.zh-Hant.md) |

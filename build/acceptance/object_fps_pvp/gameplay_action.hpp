@@ -1,4 +1,5 @@
 // Included only by the product acceptance executable, never by the application.
+#include "hit_aim.hpp"
 #include "start_phase_record.hpp"
 struct GameplayStep {
     double at{}; unsigned player{}; const char* name{}; ActionKind kind{ActionKind::Shot};
@@ -86,6 +87,8 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         {"fault_policy","Original actions remain denominator; only <=5.6s events may gain InvalidReference/Expired or ammo-dependent terminal outcome under injected faults; later life events retain exact verdict except operations generated inside a declared fault with original reference age >250ms may terminal Expired."}}.dump(2)<<'\n';}
     MovementTraceWriter trace(output/"clients-commands.jsonl");ActionEvidenceWriter evidence(output);
     std::string error;const auto arena=Arena::Load(arenaPath,error);Require(arena.has_value(),error);
+    // Shots at the target aim at its torso (v8-product-real-match-aim (a)): every hit is Body, 25000.
+    const HitAimModel aim(arenaPath.parent_path(),arena->bodyHeight);
     std::array<ClientConnection,2> clients;
     for(auto& c:clients)c.SetArenaIdentity(arena->id,arena->version,ArenaContentDigest(*arena));
     // One simulation role per Client, running from before the join as in the
@@ -163,8 +166,10 @@ int RunGameplay(const std::string& gateway,const std::filesystem::path& arenaPat
         }
         while(nextStep<plan.size()&&age>=plan[nextStep].at){const auto& s=plan[nextStep];auto& state=states[s.player];
             const auto& self=Player(*state.snapshot,ids[s.player]);const auto& target=Player(*state.snapshot,ids[1-s.player]);
-            const float yaw=s.target?std::atan2(target.position.x-self.position.x,target.position.z-self.position.z):0;
-            const float pitch=s.kind==ActionKind::Reload||s.target?0:1.3F;
+            const auto torso=s.target&&s.kind!=ActionKind::Reload?aim.Aim(*arena,state.movementRules->stance,*state.snapshot,
+                ids[s.player],ids[1-s.player],HitPart::Body):HitAim{};
+            const float yaw=s.target?(s.kind==ActionKind::Reload?std::atan2(target.position.x-self.position.x,target.position.z-self.position.z):torso.yaw):0;
+            const float pitch=s.kind==ActionKind::Reload?0:s.target?torso.pitch:1.3F;
             const auto context=presentedSteps[s.player]?ActionContext(*presentedSteps[s.player],s.kind,contexts[s.player].viewTickQ16):ShotContext{};
             const auto id=clients[s.player].SubmitAction(s.kind,s.life,state.snapshot->tick,yaw,pitch,context);
             Require(id.has_value(),"Predeclared gameplay action could not allocate immutable ID");

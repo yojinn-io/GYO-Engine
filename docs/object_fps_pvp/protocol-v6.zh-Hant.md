@@ -210,7 +210,7 @@ Authority Tick
   - 映射範圍與動作時的俯仰（第 11 批，D11⑥ 使用者確認，[批次文件](plans/v6/11-remote-pitch-aim.md)）：上下限用 Aim 姿勢實測的槍口角度（`presentation.json` 的 `aim`），範圍內線性、超過夾限，正 `pitch` 朝下；射擊、換彈與待命都以 clip 相對第一幀的變化量疊在俯仰姿勢上，所以保留俯仰；死亡時忽略俯仰。
 - 受擊反應（第 13 批）：
   - 權威依據只有 §2 的受擊欄位：以（player_id、life_generation）為鍵，`damage_count` 相對同一生命上一次觀察值的增加就是新的受擊（增加量＝次數；新生命的基準為 0，所以重生 Tick 的命中或合併、遺失的 Snapshot 也不會漏掉），時點取 `last_damage_tick`，攻擊者取 `last_attacker_id`。不由 HP 下降推導；攻擊者可能不在同一份 Snapshot，呈現必須容許。
-  - 遠端使用 Hit_Chest；Hit_Head 沒有權威依據，不使用。
+  - 遠端使用 Hit_Chest；Hit_Head 沒有權威依據，不使用。（2026-11-01 起由 `v8-product-hit-clip-by-part` 取代：pv9 的權威欄位 `last_hit_part` 為頭時播 Hit_Head，其他播 Hit_Chest。）
   - 第一人稱有閃紅與 HUD，並依攻擊者位置顯示受擊方向。
   - 晃動只作呈現，不改變送出的 yaw／pitch 或射線。
   - 優先順序：死亡＞受擊＞射擊／換彈＞俯仰基底（第 13 批，D11⑥ 使用者確認，[批次文件](plans/v6/13-hit-reaction.md)）。遠端的 Hit_Chest 以第 11 批的方式疊在俯仰姿勢上；第一人稱閃紅（峰值 0.35、0.3 秒）、HP 文字變紅 0.6 秒、方向弧線 1 秒淡出；鏡頭晃動（俯仰、翻滾各 1°、0.25 秒）只進渲染相機。只讀 §2 的欄位，沒有新增 wire 資料。

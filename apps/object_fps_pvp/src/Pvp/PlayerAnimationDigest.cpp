@@ -72,11 +72,13 @@ std::uint64_t AnimationContentDigest(const PlayerPresentationDefinition& definit
     out.F64(definition.aimDownRadians);
     out.Text(model.nodes.at(definition.upperBodyRoot).name);
 
-    // The clips the pose samples, in the definition's fixed order.
+    // The clips the pose samples, in this fixed order: the original 15, then
+    // hit_head (v8-product-hit-clip-by-part), whatever the definition's field order.
     for (const std::size_t index : {definition.idleClip, definition.walkClip, definition.jogClip,
              definition.shootClip, definition.reloadClip, definition.jumpStartClip, definition.jumpLoopClip,
              definition.jumpLandClip, definition.deathClip, definition.aimUpClip, definition.aimNeutralClip,
-             definition.aimDownClip, definition.hitClip, definition.crouchIdleClip, definition.crouchMoveClip}) {
+             definition.aimDownClip, definition.hitClip, definition.crouchIdleClip, definition.crouchMoveClip,
+             definition.hitHeadClip}) {
         const auto& clip = model.clips.at(index);
         out.Text(clip.name);
         out.F64(clip.durationSeconds);

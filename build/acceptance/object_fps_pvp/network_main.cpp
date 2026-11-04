@@ -1,10 +1,9 @@
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
-#include "RetroFPS/Pvp/PlayerHitbox.hpp"
-#include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "acceptance_capacity.hpp"
 #include "acceptance_protocol.hpp"
+#include "hit_aim.hpp"
 #include "client_v9.pb.h"
 #include <httplib.h>
 #include <algorithm>
@@ -190,33 +189,18 @@ int main(int argc,char** argv) {
             // v8-product-hitbox-shot J6: the real Match judges by part on the posed
             // body. The aim points come from the same model on the product content,
             // posed from the target's snapshot; the target stands still at its spawn.
-            Require(!arenaPath.empty() && !contentRoot.empty(),"--hit-parts-only needs --arena and --content");
+            Require(!arenaPath.empty(),"--hit-parts-only needs --arena");
             std::string error;
             const auto arena=Arena::Load(arenaPath,error);
             if(!arena)throw std::runtime_error(error);
-            const auto hitbox=LoadPlayerHitbox(contentRoot,error);
-            if(!hitbox)throw std::runtime_error(error);
-            const auto pose=LoadPlayerPoseDefinition(contentRoot,arena->bodyHeight,error);
-            if(!pose)throw std::runtime_error(error);
-            const auto model=MakePosedPlayerHitModel(pose,*hitbox);
+            const HitAimModel model(contentRoot.empty()?arenaPath.parent_path():contentRoot,arena->bodyHeight);
             Require(a.State().movementRules.has_value(),"Welcome lacks movement rules");
             const auto stance=a.State().movementRules->stance;
             struct Aim{HitPart part;std::uint32_t damage;const char* name;};
             for(const auto& aim:{Aim{HitPart::Head,50000,"head"},Aim{HitPart::Leg,18750,"leg"}}) {
                 const auto sa=a.State();const auto& snapshot=*sa.snapshot;
-                const auto& self=Player(snapshot,idA);const auto& target=Player(snapshot,idB);
-                const auto combat=std::find_if(snapshot.combat.begin(),snapshot.combat.end(),[&](const auto& c){return c.playerId==idB;});
-                const auto animation=std::find_if(snapshot.animation.begin(),snapshot.animation.end(),[&](const auto& c){return c.playerId==idB;});
-                Require(combat!=snapshot.combat.end() && animation!=snapshot.animation.end(),"Snapshot lacks the target's combat or animation");
-                std::vector<PlayerWorldHitShape> shapes;
-                model->Shapes({*arena,stance,target,*combat,*animation,snapshot.tick},shapes);
-                const auto shape=std::find_if(shapes.begin(),shapes.end(),[&](const auto& s){return s.part==aim.part;});
-                Require(shape!=shapes.end(),"The posed model has no shape of the aimed part");
-                const auto& capsule=std::get<Engine::Math::Capsule>(shape->volume);
-                const auto point=(capsule.segmentStart+capsule.segmentEnd)*0.5F;
-                const Engine::Math::Vec3 eye{self.position.x,self.position.y+StanceEyeHeight(*arena,stance,self.crouched),self.position.z};
-                const auto direction=Engine::Math::Normalize(point-eye);
-                const auto id=a.SubmitShot(snapshot.tick,std::atan2(direction.x,direction.z),-std::asin(direction.y));
+                const auto aimed=model.Aim(*arena,stance,snapshot,idA,idB,aim.part);
+                const auto id=a.SubmitShot(snapshot.tick,aimed.yaw,aimed.pitch);
                 Require(id.has_value(),"Cannot allocate a hit-part shot");
                 std::optional<ShotDecision> decided;
                 Wait([&]{for(const auto& d:a.Drain().decisions)if(d.actionId==*id)decided=d;return decided.has_value();},"Hit-part shot decision missing");
@@ -243,13 +227,20 @@ int main(int argc,char** argv) {
         if(lifeCleanupOnly || !disconnectReady.empty()) {
             // This branch starts at untouched spawns, so the four-shot line is
             // deterministic. It does not fabricate HP or skip authority time.
+            // The shots aim at the torso (v8-product-real-match-aim (a)), from the arena's own content.
+            Require(!arenaPath.empty(),"--life-cleanup-only needs --arena");
+            std::string arenaError;
+            const auto cleanupArena=Arena::Load(arenaPath,arenaError);
+            if(!cleanupArena)throw std::runtime_error(arenaError);
+            const HitAimModel torso(contentRoot.empty()?arenaPath.parent_path():contentRoot,cleanupArena->bodyHeight);
             for(unsigned shot=0;shot<4;++shot) {
-                const auto sa=a.State();const auto& self=Player(*sa.snapshot,idA);const auto& target=Player(*sa.snapshot,idB);
-                const auto id=a.SubmitShot(sa.snapshot->tick,std::atan2(target.position.x-self.position.x,target.position.z-self.position.z),0);
+                const auto sa=a.State();
+                const auto aimed=torso.Aim(*cleanupArena,sa.movementRules->stance,*sa.snapshot,idA,idB,HitPart::Body);
+                const auto id=a.SubmitShot(sa.snapshot->tick,aimed.yaw,aimed.pitch);
                 Require(id.has_value(),"Cannot allocate life-cleanup shot");
                 std::uint64_t resolved{};
                 Wait([&]{for(const auto& d:a.Drain().decisions)if(d.actionId==*id){
-                    Require(d.accepted && d.damage==25 && d.targetId==idB && d.targetLifeGeneration==1,"Life-cleanup lethal shot not accepted");resolved=d.resolvedTick;}
+                    Require(d.accepted && d.damage==sa.combatRules->shotDamage && d.targetId==idB && d.targetLifeGeneration==1,"Life-cleanup lethal shot not accepted");resolved=d.resolvedTick;}
                     return resolved!=0;},"Life-cleanup shot decision missing");
                 if(shot<3)Wait([&]{return a.State().snapshot->tick>=resolved+10;},"Authority cooldown did not advance");
             }
