@@ -2,7 +2,7 @@
 
 日期：2026-11-04。分支 `claude/recursing-dijkstra-38a360`（基底 PR #142 `ad348a0c`，#142 尚未合併）。上段（新 Data Contract、Design Invariants、守衛正向清單）。実装者：主會話 Opus 5.5／high；審査者：Opus 5.5／high 子 Agent（唯讀）；§14.4 検証者：Fable 5.1／high 子 Agent（唯讀，使用者同意 D-es-2）。估 3.5～5.5 h，實際約 1 h。
 
-**狀態：** 完成（Mac 上的 test 樹建置、全量 CTest、兩種組態的 configure、突變）。Windows、Linux 由 CI 的 L1 驗證。
+**狀態：** 完成（Mac 上的 test 樹建置、全量 CTest、兩種組態的 configure、突變）。CI 的 L1（run 41781301280）linux-x64、macos-arm64、windows-x64 第一次就全部 success。
 
 件數の突き合わせ：一致（本批突變：宣告 33・執行 33・killed 33・stale 0。D184 重跑：宣告 25・執行 25・killed 25，其中第一次 stale 3，經使用者核准改錨後 3/3）
 
