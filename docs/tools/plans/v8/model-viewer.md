@@ -2,7 +2,7 @@
 
 更新：2026-11-04（第 2 版：`-render` 加入 (B′)，重比、重估，建議改為 (B′)；見文末「修訂紀錄」）。Owner：新工具 `model_viewer`（`tools/model_viewer/`，本批建立）。所屬 PR 線：anim-events-line（[assets.md](assets.md)「實作順序」）。記錄器是 [HANDOFF](HANDOFF.md)。
 
-**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」），沒有實作；等你說開始才動 `-core`。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
+**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；下一批 `v8-engine-render-offscreen` 等你說開始。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
 
 ## 代號對照
 
@@ -126,6 +126,30 @@ v8-tool-model-viewer                      「anim-events-line 的第二批：模
 - C4：只寫它編輯的檔（DI 4）。存檔只動事件檔本身；同目錄的其他檔、catalog（不新建時）位元組不變。載入後被外部改過的檔，存檔被拒、外部的內容留著。
 - C5：`info` 的輸出對合成模型逐行符合預期（節點數、網格的頂點／三角形／骨骼數、材質名、片段名與長度）。
 - C6：依賴守衛（DI 1）：自我測試通過；加一個遊戲目標、`SDL3/` include、`imgui_internal.h` include 時都失敗。
+
+#### `-core` 實作後的結果（2026-11-04）
+
+- 本機 macOS（`build/target/_build/mv`，`GYO_TOOLS=model_viewer`）：整棵樹的 `cpu|shader` 56／56 通過，其中 `gyo_model_viewer.*` 4／4（core 的測試 14 個 case、157 個 assertion）。
+- 件數の突き合わせ：一致。
+  - 宣告 7 條，全部 killed。
+  - 第一輪 13／13 killed；審查後補了 5 條，第二輪 18／18 killed，stale 0。
+  - 證據在使用者的 Mac，主 checkout `build/evidence/tool-v8-model-viewer/core/`（`mutations.txt`、`mutations-round1.txt`、`ctest.txt`、`ctest-all.txt`、`pvp-explore.txt`）。
+- 探索（不是判定 P2，P2 在 `-trial` 正式做）：PvP 的 nailer 事件檔 `roundtrip` 後逐位元組相同。
+- 審查（Opus 5.5／high，子 agent）：沒有擋住這批的錯誤。指出的問題都在本批修掉了：
+  - 存檔後要核對 stamp 和寫入的位元組；
+  - 新建事件檔時要檢查模型 id；
+  - `info` 要綁定到模型之後才說檔案合法；
+  - 守衛抓不到遊戲的一般目標名（遊戲的目標不是 `Name::Name` 的形式），已收緊；
+  - DI 6 的守衛字句要回到核准的版本（「不提已登錄的其他 id」），已實作；
+  - CLI 成功的路徑、`SameEvents`、「只改被編輯的那一筆」、存檔不動 catalog、catalog 寫失敗，這幾項補了測試。
+- 和事前宣告不同的地方：
+  - CLI 的形式改成 `info --asset-root … [--asset-catalog …] --model <id>` 與 `roundtrip … --events <id>`，另加 `models`。宣告原本寫的是 `info <asset_root> <catalog> <model_id>`、`events roundtrip`；改成選項的形式，是為了和 audio_editor 一致，而且 `--asset-catalog` 可以省略（省略時掛載整個 content root）。P2 照舊跑往返，只是命令名稱換成 `roundtrip`。
+  - `roundtrip` 在記憶體裡寫出、交給 Engine 解析，**不寫暫存檔**。宣告原本是「寫到暫存再重新解析」。這樣它和存檔走同一個 `CheckedText`，而且 DI 4（只寫它編輯的檔）不用為 CLI 開例外。比對的內容不變。
+  - 工具帶一個自己的 fixture `tests/model_viewer/fixtures/animated_triangle.fbx`：一個三角形加一個片段，由 Engine 測試裡的 ASCII FBX 組成，不屬於任何產品。
+- 範圍的限界多兩項：
+  - 測試「catalog 寫失敗」靠把目錄改成唯讀。唯讀目錄仍寫得進去的主機（Windows 不看這些權限位元，root 也不受限）上，這個 case 會跳過並印出訊息，不算通過也不算失敗。
+  - 突變 `mv-info-without-binding` 經 ctest 跑 CLI 測試，`--build-dir` 要用 `build/target/_build/mv`。
+- 發現（不在本批範圍，只報告）：audio_editor 的依賴守衛也只看 `Name::Name`，抓不到遊戲的一般目標名。
 
 ### `-preview`
 

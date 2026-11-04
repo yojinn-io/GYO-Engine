@@ -1,0 +1,94 @@
+# GYO Model Viewer
+
+A design tool that shows a model of a mounted product (its nodes, meshes, materials and clips) and edits the
+moments of its `gyo.anim_events` file ([contract](../architecture/animation-events.md)). It is one tool of the
+asset toolchain ([plan](../tools/plans/v8/assets.md); batches and judgments in
+[model-viewer.md](../tools/plans/v8/model-viewer.md)): the tool edits the events, the catalog registers them, and
+the runtime only loads them.
+
+Owner: `model_viewer` (`tools/model_viewer/`).
+
+**Status (2026-11-04): `v8-tool-model-viewer-core`.** The core library and the command line; the window
+(`-preview`, `-events`) and the event sounds (`-event-sounds`, after the framework's `gyo.event_sounds` lands) follow.
+
+## Design Invariants
+
+A change against any item below is an Architecture Delta that needs the user's agreement, however small
+(AGENTS.md section 3). So is changing this section. (User, 2026-11-04, `v8-tool-model-viewer-declaration`.)
+
+1. **Dependencies.** The viewer links no game and names no product. It may use any Engine module; what two or more
+   products compose in the same way comes through the framework (for `gyo.event_sounds`, the framework's
+   `ParseEventSounds`, `BindEventSounds` and `EventSoundOffsetSeconds`). It includes no `SDL3/` header, calls no
+   `SDL_` function, names no SDL or `*Native` target and includes no `imgui_internal.h`. Guard: the viewer's
+   dependency guard (`tests/model_viewer/model_viewer_dependency_guard.py`), a positive list of include prefixes and
+   of targets (every `Name::Name`, and every library a `target_link_libraries` call names, so a game's plain target
+   name fails too), and its self-test.
+2. **One validator.** Whether a file is valid is decided by Engine (`ParseAnimationEvents` and
+   `BindAnimationEvents`) and, for event sounds, the framework (`ParseEventSounds` and `BindEventSounds`) alone. The
+   viewer keeps no copy of their rules: before every write it reads the text it is about to write back through them,
+   bound to the opened model, and writes nothing when any step fails. Guard: the core tests ("Engine decides what is
+   refused", "saving writes only the opened file") and their mutants.
+3. **Lossless.** An opened file saved without an edit reads back as the same events, every seconds value bit for
+   bit (the shortest decimal that reads back as the same double). An edit changes only the event it edits. The
+   layout may change (clips in name order, the writer's indentation). Guard: the round-trip tests.
+4. **Writes only what it edits.** The opened events file (and, after `-event-sounds`, the opened event sounds
+   file), by atomic replace through `engine/io`; a file that changed since it was opened is not overwritten. A new
+   events file is written only where no file is, and registered in the one catalog the user names, with type
+   `text`, through the framework's `RegisterAsset` (`v8-tool-model-viewer-new-file`); a product's own definitions
+   that refer to it are the user's to edit. Model files, textures, product definitions and every other catalog
+   entry are left as they are. Guard: the save and create tests and their mutants.
+5. **The preview is Engine's.** A pose is `SamplePose` at the clip's own seconds; skinning and drawing are Engine's
+   `ModelRenderer` and `Renderer` (`v8-tool-model-viewer-render`, (B′)). The viewer has no sampler, interpolation
+   or shading of its own. A playback speed only maps wall time to clip seconds and never enters a file. When an
+   event sound starts is `EventSoundOffsetSeconds` only. Guard: the pose-equality test of `-preview` and its mutants.
+6. **Neutral.** An event name is an opaque string to the viewer: it does not know what an event means and does not
+   branch on a product. Guard: review, and the dependency guard: no file of the viewer names an id registered in
+   `engine/config/tools.csv` or `engine/config/projects.csv` other than its own.
+
+### Replacement Criteria
+
+Meeting one of these stops further repair: propose to the user whether to repair or rebuild the viewer.
+
+1. The preview is good enough only when the viewer draws itself (its own projection, sorting or shading), or
+   Engine's offscreen drawing with a synchronous readback and upload misses the frame-time judgment (P1 in
+   [model-viewer.md](../tools/plans/v8/model-viewer.md)). Propose the next step (an asynchronous readback, a smaller
+   preview, moving the ImGui binding to SDL_GPU); do not patch it in the viewer.
+2. Editing reaches beyond these two formats (hit volumes, animation sets, material bindings), turning the viewer
+   into a general model editor.
+3. A preview of another model's clips is needed (retargeting, blending): `gyo.anim_events` Replacement Criterion 2.
+4. The viewer has to rewrite a format rule of its own, or re-verify the formats' rules each time it gains a feature.
+
+## Command line
+
+`gyo_model_viewer` (variant `cli`) reads a mounted content root (`--asset-root`, with `content.json`) or one
+catalog (`--asset-catalog`, its entries under `--asset-root`). It writes nothing.
+
+- `models`: the model assets, id and path.
+- `info --model <id>`: Engine's view of the model (`DescribeModel`: node tree, meshes, materials, clips) and the
+  text assets that are its `gyo.anim_events` files, each parsed and bound to the model by Engine. A text that mentions
+  the schema but Engine refuses (to parse, or to bind to this model) is listed with Engine's reason; whether a file is
+  valid is still Engine's.
+- `roundtrip --events <id>`: opens the events file against the model it names and writes its text in memory as a
+  save would (`CheckedText`), reporting whether the bytes are the file's own. The judgment P2 runs it on a
+  product's data.
+
+Exit status: 0 done, 2 usage, 3 a file could not be read, 4 content that cannot be mounted or that Engine or the
+catalog refuses.
+
+## Core library
+
+`gyo_model_viewer_core` (`tools/model_viewer/include/gyo/model_viewer/`):
+
+- `ModelContent`: the framework's read-only catalog mount; a model through Engine's `UfbxModelLoader` from the
+  file's bytes (read through `engine/io`, at most 256 MB, the loader's own limit); a text asset; the events files of
+  a model.
+- `EventDocument`: the events being edited. `Add`, `Move`, `Rename` and `Remove` keep a clip's events in
+  non-decreasing seconds (a moved or added event goes after the events at the same moment) and drop a clip that
+  loses its last event. They check nothing else: `CheckedText` does, through Engine.
+- `WriteAnimationEvents` and `CheckedText`: the text of version 1 in the layout a hand-written file uses, and that
+  text once Engine reads it back as the same events, bound to the model.
+- `OpenEvents`, `SaveEvents`, `CreateEvents`: a file with its stamp (`engine/io`'s `FileStamp`), saved only while
+  the file is still that stamp, and the stamp after a save checked against the bytes written; a new file only for
+  the opened model, written first and the catalog last, so a failed catalog write leaves an unregistered file that
+  the error names. The probe and the write are two steps (a change between them is seen by the next save), and the
+  catalog is not stamped: the user names a catalog nothing else edits meanwhile.

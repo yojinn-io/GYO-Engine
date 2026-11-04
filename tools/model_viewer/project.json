@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "display_name": "GYO Model Viewer",
+  "default_variant": "cli",
+  "requires_apps": {},
+  "variants": {
+    "cli": {
+      "components": [
+        "UFBX"
+      ],
+      "packageable": false
+    }
+  }
+}

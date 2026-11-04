@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-tool-model-viewer-core (docs/tools/plans/v8/model-viewer.md, '-core'), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "mutants": [
+    {
+      "id": "mv-writer-drops-last",
+      "what": "The writer leaves out a clip's last event",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "for (std::size_t e = 0; e < events.size(); ++e) {",
+      "replace": "for (std::size_t e = 0; e + 1 < events.size(); ++e) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*read back as the same events*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-writer-six-digits",
+      "what": "The writer prints seconds with 6 significant digits",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "std::to_chars(digits.data(), digits.data() + digits.size(), seconds);",
+      "replace": "std::to_chars(digits.data(), digits.data() + digits.size(), seconds, std::chars_format::general, 6);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*read back as the same events*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-save-unchecked",
+      "what": "Saving writes the text without Engine reading it back",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "    auto text = CheckedText(events, model);\n    if (!text) return Engine::Base::Err(std::move(text).error());\n    auto current = Probe(path);",
+      "replace": "    std::optional<std::string> text = WriteAnimationEvents(events);\n    auto current = Probe(path);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*writes only the opened file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-save-ignores-stamp",
+      "what": "Saving does not check that the file is still the one opened",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "if (current.value() != opened) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*writes only the opened file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-save-temp-not-renamed",
+      "what": "The file is written beside the target and never replaces it",
+      "file": "tools/model_viewer/src/FileAccess.cpp",
+      "find": "    auto uri = Io::FS::NativeFileUri(path);\n    if (!uri) return Engine::Base::Err(FileError(ModelViewerErrorCode::WriteFailed",
+      "replace": "    auto uri = Io::FS::NativeFileUri(path + \".tmp\");\n    if (!uri) return Engine::Base::Err(FileError(ModelViewerErrorCode::WriteFailed",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*writes only the opened file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-negative-zero",
+      "what": "Negative zero is written as -0, which reads back as +0 (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "if (seconds == 0.0 && std::signbit(seconds)) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*negative zero keeps its sign*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-open-other-model",
+      "what": "Opening takes events written for another model (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "if (parsed->modelAssetId != modelAssetId) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*events of another model*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-create-replaces-file",
+      "what": "A new events file replaces an unregistered file at the path (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "if (existing->exists) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*written and registered as text*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-create-moves-entry",
+      "what": "A new events file re-points an id already registered (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "if (!update->added) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*written and registered as text*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-move-keeps-place",
+      "what": "A moved event stays at its old index (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "    const auto moved = static_cast<std::size_t>(at - events.begin());\n    events.insert(at, std::move(event));\n    return moved;",
+      "replace": "    events.insert(events.begin() + static_cast<std::ptrdiff_t>(index), std::move(event));\n    return index;",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*keep a clip's events in order*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-guard-game-target",
+      "what": "The viewer's CMake names a game's target",
+      "file": "tools/model_viewer/CMakeLists.txt",
+      "find": "# Models and gyo.anim_events are Engine's (GYO::Model, its ufbx loader)",
+      "replace": "# Models and gyo.anim_events are Engine's (GYO::Model SomeGame::Core, its ufbx loader)",
+      "command": [
+        "{python}",
+        "tests/model_viewer/model_viewer_dependency_guard.py"
+      ],
+      "expect": "names SomeGame::Core"
+    },
+    {
+      "id": "mv-guard-sdl-include",
+      "what": "The viewer includes an SDL header",
+      "file": "tools/model_viewer/src/Main.cpp",
+      "find": "#include \"gyo/framework/HeadlessShell.hpp\"",
+      "replace": "#include \"gyo/framework/HeadlessShell.hpp\"\n#include <SDL3/SDL.h>",
+      "command": [
+        "{python}",
+        "tests/model_viewer/model_viewer_dependency_guard.py"
+      ],
+      "expect": "includes SDL3/SDL.h"
+    },
+    {
+      "id": "mv-guard-imgui-internal-ignored",
+      "what": "The guard's imgui_internal.h rule stops working (not declared; added while implementing)",
+      "file": "tests/model_viewer/model_viewer_dependency_guard.py",
+      "find": "if include.rsplit(\"/\", 1)[-1] == IMGUI_INTERNAL:",
+      "replace": "if False:",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/model_viewer",
+        "-p",
+        "test_model_viewer_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "mv-guard-game-target-rule-ignored",
+      "what": "The guard's game-target rules stop working (declared: 'the guard's game-target rule fails, the self-test fails')",
+      "file": "tests/model_viewer/model_viewer_dependency_guard.py",
+      "find": "                if \"::\" not in name and not OWN_TARGET.match(name):",
+      "replace": "                if False:",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/model_viewer",
+        "-p",
+        "test_model_viewer_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "mv-guard-registered-id-ignored",
+      "what": "The guard stops checking registered ids, Design Invariant 6 (not declared; added after review)",
+      "file": "tests/model_viewer/model_viewer_dependency_guard.py",
+      "find": "            if pattern.search(text):",
+      "replace": "            if False:",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/model_viewer",
+        "-p",
+        "test_model_viewer_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "mv-create-other-model",
+      "what": "A new events file may name another model than the one opened (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "    if (events.modelAssetId != modelAssetId) {\n        return Engine::Base::Err(ModelViewerError::Make(ModelViewerErrorCode::OtherModel,\n                                                        \"the events name another model than the one opened\",",
+      "replace": "    if (false) {\n        return Engine::Base::Err(ModelViewerError::Make(ModelViewerErrorCode::OtherModel,\n                                                        \"the events name another model than the one opened\",",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*written and registered as text*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-same-seconds-value",
+      "what": "Seconds are compared by value, so -0.0 equals 0.0 (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "    return std::bit_cast<std::uint64_t>(left) == std::bit_cast<std::uint64_t>(right);",
+      "replace": "    return left == right;",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*same only field by field*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-info-without-binding",
+      "what": "info calls a parsed file valid without binding it to the model (not declared; added after review)",
+      "file": "tools/model_viewer/src/Main.cpp",
+      "find": "        if (auto bound = Engine::Model::BindAnimationEvents(*candidate.events, *loaded->model); !bound) {",
+      "replace": "        if (auto bound = Engine::Model::BindAnimationEvents(*candidate.events, *loaded->model); false) {",
+      "target": "gyo_model_viewer",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/mv",
+        "-R",
+        "^gyo_model_viewer\\.cli$",
+        "--output-on-failure"
+      ],
+      "expect": "the file Engine cannot bind is not refused"
+    }
+  ]
+}
