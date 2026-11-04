@@ -1,7 +1,7 @@
 # 動畫事件 → 聲音（`gyo.event_sounds`）：framework 擁有的組合格式
 
 更新：2026-11-04。Owner：framework（`framework/`）。架構卡 `v8-arch-event-sounds-contract`。
-**狀態：第 1 批完成；第 2 批進行中（2026-11-04）。** 先讀本頁，再讀 [交接](HANDOFF.md)。
+**狀態：兩批都完成（2026-11-04），等 PR 合併。** 先讀本頁，再讀 [交接](HANDOFF.md)。
 
 ## 代號對照
 
@@ -52,7 +52,7 @@
 | 綁定結果 | 驗證過的對應表 `BoundEventSounds`，`Find(eventName)` 回傳該事件的聲音或空。沒有對應的事件靜默，不是錯誤 | 兩個呼叫者都已從 Engine 拿到每個 clip 的事件（PvP 的 `GetActionEvents`、Model Viewer 的 `BoundAnimationEvents`），只需要逐名查聲音（PvP 今天的 `FindEventSound` 就是這樣）；依 clip 再列一份等於複製 Engine 的資料。對應是單向的：聲音引用事件，事件不必都有聲音（事件也可能是特效或玩法提示） |
 | 事件名的字元規則 | 解析時只檢查非空；1～64 字元 `[a-z0-9_.]` 由綁定的「名字必須出現在所引用集合裡」間接保證 | Engine 的 `ValidEventName` 沒有公開；framework 自己再寫一份會碰到 framework 的 Replacement Criteria（複製沒有共用 fixture 檢查的 Engine 規則）。使用者 2026-11-04 核准（宣告 D-es-1） |
 | `animation_events_asset_id` 的核對 | framework 不知道 id：呼叫者確認傳入的集合就是它點名的那個 | 比照 Engine（`BindAnimationEvents` 不知道 id，PvP 自己核對 `model_asset_id`）。framework 沒有 catalog 可查 |
-| `EventSoundOffsetSeconds` | 原樣搬進核心（含負偏移與 `nullopt` 條件），附測試 | 兩個產品共用的排程算法，DI 5 的組合 |
+| `EventSoundOffsetSeconds` | 搬進核心（含負偏移與 `nullopt` 條件），附測試；另外收緊為「結果不是有限值就沒有值」 | 兩個產品共用的排程算法，DI 5 的組合。收緊：有限的輸入也會溢位成 inf，審査者指出、使用者 2026-11-04 核准（PvP 的版本沒有這條） |
 
 ## 批次
 
@@ -75,12 +75,14 @@ v8-arch-event-sounds-contract
 
 ## 給下游的交接（本卡合併後，各線在自己的線上接）
 
-- **PvP 遷移（產品會話做）**：`sfx.json` 升第 3 版、刪 `animation_events` 段與只被它用到的 `reload` cue；`nailer_v2_viewmodel.json` 加 `event_sounds_asset_id`；新檔手寫、登錄為 `text`；`SoundCues`／`PvpSound` 改呼叫 framework（`ParseEventSounds` → `BindEventSounds`，片段長度由 `PvpSound` 回答），刪自己的 `EventSoundOffsetSeconds`；玩家聽到的不變。B 需要 anim_events 多幾個事件（`magazine_out`、`magazine_in`、`bolt_pull`）與 audio_editor 匯出的多段片段。
+- **PvP 遷移（產品會話做）**：`sfx.json` 升第 3 版、刪 `animation_events` 段與只被它用到的 `reload` cue；`nailer_v2_viewmodel.json` 加 `event_sounds_asset_id`；新檔手寫、登錄為 `text`；`SoundCues`／`PvpSound` 改呼叫 framework（`ParseEventSounds` → `BindEventSounds`，片段長度由 `PvpSound` 回答），刪自己的 `EventSoundOffsetSeconds`（framework 的版本對溢位的結果回傳沒有值，PvP 的實際輸入不受影響）；`SoundCuesTests.cpp` 的「event sounds name events of the weapon's gyo.anim_events」由 framework 的綁定取代；玩家聽到的不變。B 需要 anim_events 多幾個事件（`magazine_out`、`magazine_in`、`bolt_pull`）與 audio_editor 匯出的多段片段。
 - **Model Viewer（anim-events-line）**：讀兩個格式（`gyo.anim_events` 經 Engine、`gyo.event_sounds` 經 framework 的 JSON 綁定）、用同一個 `EventSoundOffsetSeconds` 預覽；之後編輯 event_sounds（framework 不寫檔，工具自己經 `engine/io` 寫）。
 - **audio_editor（工具線）**：不知道事件，不寫這個檔。
+- **之後的候選（本卡不做）**：嚴格 JSON 的輔助函式（欄位精確、重複鍵的偵測）在 Engine 的 `AnimationEvents.cpp` 與 framework 的 `EventSoundsText.cpp` 各有一份（第二次出現，審査者記為 code smell）；寫入函式（序列化）等 Model Viewer 要編輯時另開一批。
 
 ## 完成
 
 | 批 | 日期 | dev_log |
 |---|---|---|
 | v8-arch-event-sounds-contract-doc | 2026-11-04 | [契約與事前宣告](../../../dev_logs/2026_11_04_framework_v8_event_sounds_contract_doc.zh-Hant.md) |
+| v8-arch-event-sounds-impl | 2026-11-04 | [核心、JSON 綁定、測試與守衛](../../../dev_logs/2026_11_04_framework_v8_event_sounds_impl.zh-Hant.md) |

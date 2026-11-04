@@ -102,8 +102,8 @@
       "id": "fw-guard-core-json-link",
       "what": "The core's own CMake links nlohmann (the core has no JSON link)",
       "file": "framework/CMakeLists.txt",
-      "find": "    PUBLIC GYO::Engine\n",
-      "replace": "    PUBLIC GYO::Engine nlohmann_json::nlohmann_json\n",
+      "find": "    PUBLIC GYO::Engine GYO::Input GYO::Ui GYO::Model\n",
+      "replace": "    PUBLIC GYO::Engine GYO::Input GYO::Ui GYO::Model nlohmann_json::nlohmann_json\n",
       "command": [
         "{python}",
         "tests/framework/framework_dependency_guard.py"
@@ -290,8 +290,8 @@
       "id": "fw-guard-core-ui-dropped",
       "what": "The core's positive list loses GYO::Ui, which the core links for the text input mapping",
       "file": "tests/framework/framework_dependency_guard.py",
-      "find": "\"GYO::Input\", \"GYO::InputBackendSDL\", \"GYO::Ui\"},",
-      "replace": "\"GYO::Input\", \"GYO::InputBackendSDL\"},",
+      "find": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\"},",
+      "replace": "\"GYO::Model\", \"GYO::Audio\"},",
       "command": [
         "{python}",
         "tests/framework/framework_dependency_guard.py"

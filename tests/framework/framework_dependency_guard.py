@@ -54,8 +54,10 @@ CORE = {
     "bare_includes": (),
     "native_headers": (),
     "symbols": re.compile(r"\bSDL_\w+|\bImGui\w*|\bnlohmann\b"),
+    # GYO::Model and GYO::Audio: gyo.event_sounds binds to Engine's event set and checks gains with Engine
+    # (docs/framework/event-sounds.md, v8-arch-event-sounds-impl).
     "targets": {"GYO::ToolFramework", "GYO::ToolFrameworkWindow", "GYO::Engine", "GYO::Os", "GYO::PlatformSDL",
-                "GYO::Input", "GYO::InputBackendSDL", "GYO::Ui"},
+                "GYO::Input", "GYO::InputBackendSDL", "GYO::Ui", "GYO::Model", "GYO::Audio"},
 }
 BINDINGS = {
     "imgui": {

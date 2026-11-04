@@ -1,0 +1,344 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-arch-event-sounds-impl (gyo.event_sounds in the framework, docs/framework/event-sounds.md; declaration docs/architecture/plans/event-sounds/contract-declaration.md section 3). Run from the repository root with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/event-sounds/scripts/event_sounds_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes. es-order-unchecked, es-events-not-object, es-string-type and es-number-type were added after review (tightening only, AGENTS.md section 14.4); removing the document's or an entry's is_object check is an equivalent mutant (RequireExactKeys refuses a non-object with the same path), so it is not listed. es-offset-overflow was added and es-offset-zero-clip redefined when the offset was tightened to give nothing for a non-finite result (user, 2026-11-04).",
+  "mutants": [
+    {
+      "id": "es-repeated-key-kept",
+      "what": "A repeated key is taken silently (the DOM keeps the last)",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "            if (!open.back().keys.insert(key).second)\n                Fail(\"repeated key '\" + key + \"'\", MemberPath(open.back().path, key));",
+      "replace": "            open.back().keys.insert(key);",
+      "target": "gyo_framework_tests",
+      "cases": "*ES1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-unknown-field-ignored",
+      "what": "An unknown top-level field is ignored",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "    RequireExactKeys(document, {\"schema\", \"version\", \"animation_events_asset_id\", \"events\"}, \"\");",
+      "replace": "    for (const char* key : {\"schema\", \"version\", \"animation_events_asset_id\", \"events\"}) if (!document.contains(key)) Fail(\"missing field\", \"\");",
+      "target": "gyo_framework_tests",
+      "cases": "*ES1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-entry-field-ignored",
+      "what": "An unknown field of an event's entry is ignored",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "        RequireExactKeys(entry, {\"sound_asset_id\", \"sync_seconds\", \"gain\"}, path);",
+      "replace": "        for (const char* key : {\"sound_asset_id\", \"sync_seconds\", \"gain\"}) if (!entry.contains(key)) Fail(\"missing field\", path);",
+      "target": "gyo_framework_tests",
+      "cases": "*ES1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-missing-field-accepted",
+      "what": "An entry without gain is read with a default gain",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "        RequireExactKeys(entry, {\"sound_asset_id\", \"sync_seconds\", \"gain\"}, path);\n        EventSound sound;\n        sound.event = item.key();\n        sound.soundAssetId = String(entry.at(\"sound_asset_id\"), \"sound_asset_id\", path + \".sound_asset_id\");\n        sound.syncSeconds = Number(entry.at(\"sync_seconds\"), \"sync_seconds\", path + \".sync_seconds\");\n        const double gain = Number(entry.at(\"gain\"), \"gain\", path + \".gain\");",
+      "replace": "        for (const auto& field : entry.items()) if (field.key() != \"sound_asset_id\" && field.key() != \"sync_seconds\" && field.key() != \"gain\") Fail(\"unknown field\", path);\n        EventSound sound;\n        sound.event = item.key();\n        sound.soundAssetId = String(entry.at(\"sound_asset_id\"), \"sound_asset_id\", path + \".sound_asset_id\");\n        sound.syncSeconds = Number(entry.at(\"sync_seconds\"), \"sync_seconds\", path + \".sync_seconds\");\n        const double gain = Number(entry.value(\"gain\", Json(1.0)), \"gain\", path + \".gain\");",
+      "target": "gyo_framework_tests",
+      "cases": "*ES1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-other-schema-read",
+      "what": "Another schema is read",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "    if (!schema.is_string() || schema.get<std::string>() != EventSoundsSchema)",
+      "replace": "    if (!schema.is_string())",
+      "target": "gyo_framework_tests",
+      "cases": "*ES2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-other-version-read",
+      "what": "Another version is read as version 1",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "version.get<long long>() != EventSoundsVersion)",
+      "replace": "version.get<long long>() < 1)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-version-not-integer",
+      "what": "A version written as a float (1.0) counts as 1",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "    if (!version.is_number_integer() ||",
+      "replace": "    if (!version.is_number() ||",
+      "target": "gyo_framework_tests",
+      "cases": "*ES2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-empty-anim-id",
+      "what": "An empty animation_events_asset_id is accepted",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "    if (sounds.animationEventsAssetId.empty())",
+      "replace": "    if (sounds.animationEventsAssetId.empty() && false)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-empty-events",
+      "what": "An empty events object is accepted",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "    if (sounds.sounds.empty()) return invalid(\"events is a nonempty object\", \"events\");",
+      "replace": "",
+      "target": "gyo_framework_tests",
+      "cases": "*ES4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-empty-name",
+      "what": "An empty event name is accepted",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (sound.event.empty()) return invalid(",
+      "replace": "        if (false) return invalid(",
+      "target": "gyo_framework_tests",
+      "cases": "*ES4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-empty-sound-id",
+      "what": "An empty sound_asset_id is accepted",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (sound.soundAssetId.empty())",
+      "replace": "        if (false)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES5:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-negative-sync",
+      "what": "A negative sync_seconds is accepted",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "!std::isfinite(sound.syncSeconds) || sound.syncSeconds < 0)",
+      "replace": "!std::isfinite(sound.syncSeconds))",
+      "target": "gyo_framework_tests",
+      "cases": "*ES6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-nonfinite-sync",
+      "what": "A non-finite sync_seconds is accepted (structure)",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (!std::isfinite(sound.syncSeconds) || sound.syncSeconds < 0)",
+      "replace": "        if (sound.syncSeconds < 0)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-gain-unchecked",
+      "what": "Gains are not checked with Engine's IsValidGain",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (!Engine::Audio::IsValidGain(sound.gain))",
+      "replace": "        if (false)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-gain-clamped",
+      "what": "A gain above kMaxGain is clamped to it instead of refused",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "        sound.gain = static_cast<float>(gain);",
+      "replace": "        sound.gain = static_cast<float>(gain > 8.0 ? 8.0 : gain);",
+      "target": "gyo_framework_tests",
+      "cases": "*ES6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-bind-unknown-event",
+      "what": "An event name in no clip is bound",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (!InSomeClip(events, sound.event))",
+      "replace": "        if (false)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES7:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-bind-first-clip-only",
+      "what": "Only the first clip's events are searched",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        for (const auto& event : track.events)",
+      "replace": "        for (const auto& event : events.tracks.front().events)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES7:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-bind-sync-beyond",
+      "what": "sync_seconds is not compared with the sound's length",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (!(sound.syncSeconds <= *length))",
+      "replace": "        if (false)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-bind-sync-boundary",
+      "what": "A sync point equal to the sound's length is refused",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (!(sound.syncSeconds <= *length))",
+      "replace": "        if (!(sound.syncSeconds < *length))",
+      "target": "gyo_framework_tests",
+      "cases": "*ES8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-bind-unanswered",
+      "what": "A sound the caller does not know is bound",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (!length || !std::isfinite(*length) || *length < 0)",
+      "replace": "        if (!length) continue;\n        if (!std::isfinite(*length) || *length < 0)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-bind-drop",
+      "what": "An entry that fails binding is dropped and the rest is bound",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "    for (const auto& sound : sounds.sounds) {\n        const auto path = EventPath(sound.event);\n        if (!InSomeClip(events, sound.event))\n            return unbound(\"no clip of the anim_events set has the event '\" + sound.event + \"'\", path);\n        const auto length = soundSeconds ? soundSeconds(sound.soundAssetId) : std::nullopt;\n        if (!length || !std::isfinite(*length) || *length < 0)\n            return unbound(\"no length for the sound '\" + sound.soundAssetId + \"'\", path + \".sound_asset_id\");\n        if (!(sound.syncSeconds <= *length))\n            return unbound(\"sync_seconds lies beyond the sound's \" + std::to_string(*length) + \" seconds\",\n                           path + \".sync_seconds\");\n    }\n    return BoundEventSounds{sounds.sounds};",
+      "replace": "    BoundEventSounds kept;\n    for (const auto& sound : sounds.sounds) {\n        if (!InSomeClip(events, sound.event)) continue;\n        const auto length = soundSeconds ? soundSeconds(sound.soundAssetId) : std::nullopt;\n        if (!length || !std::isfinite(*length) || *length < 0) continue;\n        if (!(sound.syncSeconds <= *length)) continue;\n        kept.sounds.push_back(sound);\n    }\n    static_cast<void>(unbound);\n    return kept;",
+      "target": "gyo_framework_tests",
+      "cases": "*ES8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-bind-wrong-id",
+      "what": "The caller is asked by event name instead of sound asset id",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "soundSeconds(sound.soundAssetId)",
+      "replace": "soundSeconds(sound.event)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-offset-no-stretch",
+      "what": "The offset ignores the stretch of the clip over the action",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "    const double offset = eventSeconds * (actionSeconds / clipSeconds) - syncSeconds;",
+      "replace": "    const double offset = eventSeconds - syncSeconds;",
+      "target": "gyo_framework_tests",
+      "cases": "*ES9:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-offset-sign",
+      "what": "The sync point is added instead of subtracted",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "    const double offset = eventSeconds * (actionSeconds / clipSeconds) - syncSeconds;",
+      "replace": "    const double offset = eventSeconds * (actionSeconds / clipSeconds) + syncSeconds;",
+      "target": "gyo_framework_tests",
+      "cases": "*ES9:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-offset-zero-clip",
+      "what": "A clip without a positive length gives an offset (the clip's length is not checked; since the result check, a zero length alone is caught there, so the mutant drops the whole check and a negative length shows it)",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "clipSeconds <= 0 || actionSeconds <= 0)",
+      "replace": "actionSeconds <= 0)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES9:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-offset-nonfinite",
+      "what": "Non-finite arguments give an offset",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "    if (!std::isfinite(eventSeconds) || !std::isfinite(syncSeconds) || !std::isfinite(clipSeconds) ||\n        !std::isfinite(actionSeconds) || clipSeconds <= 0 || actionSeconds <= 0)",
+      "replace": "    if (clipSeconds <= 0 || actionSeconds <= 0)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES9:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-guard-audio-backend-listed",
+      "what": "The guard's core positive list takes GYO::AudioBackendSDL (SDL) along with Engine's mixer",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\"},",
+      "replace": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\", \"GYO::AudioBackendSDL\"},",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAIL: test_audio_backend_target_in_the_core_fails"
+    },
+    {
+      "id": "es-link-model-json-public",
+      "what": "GYO::Model hands its JSON library on PUBLIC (Engine's CMake, changed only while the mutant runs); the configure-time link check stops the core reaching it through GYO::Model",
+      "file": "engine/model/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_model PUBLIC GYO::Engine GYO::Math PRIVATE nlohmann_json::nlohmann_json)",
+      "replace": "target_link_libraries(gyo_model PUBLIC GYO::Engine GYO::Math nlohmann_json::nlohmann_json)",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_tool_framework\\s+\\(core\\)\\s+links\\s+1\\s+forbidden\\s+targets\\s+\\[nlohmann_json::nlohmann_json\\]"
+    },
+    {
+      "id": "es-order-unchecked",
+      "what": "Structure with repeated or unordered names is accepted (Find relies on the order)",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "        if (i > 0 && !(sounds.sounds[i - 1].event < sound.event))",
+      "replace": "        if (false)",
+      "target": "gyo_framework_tests",
+      "cases": "*ES4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "es-events-not-object",
+      "what": "events is not checked to be an object",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "    if (!events.is_object()) Fail(\"events is an object\", \"events\");",
+      "replace": "",
+      "target": "gyo_framework_tests",
+      "cases": "*ES4:*",
+      "expect": "is NOT correct|THREW exception"
+    },
+    {
+      "id": "es-string-type",
+      "what": "A string field is read without checking its type",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "    if (!value.is_string()) Fail(std::string(what) + \" is a string\", path);",
+      "replace": "",
+      "target": "gyo_framework_tests",
+      "cases": "*ES3:*",
+      "expect": "is NOT correct|THREW exception"
+    },
+    {
+      "id": "es-number-type",
+      "what": "A number field is read without checking its type",
+      "file": "framework/bindings/json/src/EventSoundsText.cpp",
+      "find": "    if (!value.is_number()) Fail(std::string(what) + \" is a number\", path);",
+      "replace": "",
+      "target": "gyo_framework_tests",
+      "cases": "*ES6:*",
+      "expect": "is NOT correct|THREW exception"
+    },
+    {
+      "id": "es-offset-overflow",
+      "what": "A result that overflowed to infinity is given as an offset",
+      "file": "framework/src/EventSounds.cpp",
+      "find": "    if (!std::isfinite(offset)) return std::nullopt;",
+      "replace": "",
+      "target": "gyo_framework_tests",
+      "cases": "*ES9:*",
+      "expect": "is NOT correct"
+    }
+  ]
+}

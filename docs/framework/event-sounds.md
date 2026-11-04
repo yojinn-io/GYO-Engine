@@ -62,11 +62,14 @@ and 8 an `UnboundEventSounds`; the detail is the path of the offending value (fo
 4. `events` is a nonempty object; each key is a nonempty event name and each value an object with exactly
    `sound_asset_id`, `sync_seconds` and `gain`. One name, one entry (rule 1 refuses a second).
 5. `sound_asset_id` is a nonempty string.
-6. `sync_seconds` is a finite number, not negative. `gain` is a number that `Engine::Audio::IsValidGain` accepts
-   as a float.
+6. `sync_seconds` is a finite number, not negative. `gain` is a number a float can hold, and
+   `Engine::Audio::IsValidGain` accepts it once rounded to a float: `8.0000001` rounds to 8 and is accepted,
+   `-1e-46` rounds to −0 and is accepted, `8.0001` and `-0.1` are refused. The range is Engine's; the framework
+   compares no gain itself.
 7. Binding, events: every event name is the name of at least one event in the `gyo.anim_events` set the file is
-   bound to. Since Engine validated those names, a bound name also has Engine's form (1 to 64 characters of
-   `a`–`z`, `0`–`9`, `_` and `.`); the framework does not copy that rule (Design Invariant 3).
+   bound to, a set Engine's `ParseAnimationEvents` returned. Since Engine validated those names, a bound name also
+   has Engine's form (1 to 64 characters of `a`–`z`, `0`–`9`, `_` and `.`); the framework does not copy that rule
+   (Design Invariant 3).
 8. Binding, sounds: for every entry, `soundSeconds(sound_asset_id)` answers the clip's length in seconds, finite and
    not negative, and `sync_seconds` is at most that length. No answer (`std::nullopt`) or another length is an
    error. Binding fails as a whole; no entry is dropped.
@@ -90,9 +93,10 @@ product definition ──event_sounds_asset_id──► text asset ──ParseEv
   iterates the events Engine bound to a clip and looks each one up.
 - `EventSoundOffsetSeconds(eventSeconds, clipSeconds, actionSeconds, syncSeconds)` is when an event's sound starts,
   in seconds after the action starts, for a clip of `clipSeconds` played stretched over an action of
-  `actionSeconds`: `eventSeconds × actionSeconds / clipSeconds − syncSeconds`. It may be negative (the sound leads
+  `actionSeconds`: `eventSeconds × (actionSeconds / clipSeconds) − syncSeconds`, in that order. It may be negative (the sound leads
   the action; a consumer that starts now plays it late or skips its start, its own choice). It gives nothing for a
-  clip or an action without a positive finite length, or a non-finite moment or sync point. Every consumer that
+  clip or an action without a positive finite length, a non-finite moment or sync point, or a result that is not
+  finite (finite arguments can overflow, as in a moment of 1e300 s on a clip of 1e-10 s). Every consumer that
   previews or plays event sounds uses this one function, so a preview lands where the game does.
 
 ## Contracts

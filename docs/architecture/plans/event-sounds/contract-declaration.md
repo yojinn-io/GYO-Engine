@@ -28,7 +28,7 @@
 | ES3 | 3 `animation_events_asset_id` | 空字串、數字拒絕 |
 | ES4 | 4 `events` | `{}`、`[]`、字串拒絕；鍵為空字串拒絕；值是數字、陣列拒絕（D-es-1 採 (b) 時，解析接受 `Magazine In`，ES7 拒絕它） |
 | ES5 | 5 `sound_asset_id` | 空字串、數字拒絕 |
-| ES6 | 6 `sync_seconds`、`gain` | `sync_seconds` −0.01、字串拒絕，0 接受；`gain` −0.1、8.0001、`1e39`（轉成 float 是 inf）、字串拒絕，0 與 8 接受；結構層（不經文字）的 NaN、inf 的 `sync_seconds` 與 NaN 的 `gain` 由 `CheckEventSoundSet` 拒絕 |
+| ES6 | 6 `sync_seconds`、`gain` | `sync_seconds` −0.01、字串拒絕，0 接受；`gain` −0.1、8.0001、`1e39`（float 裝不下；轉型前先拒絕，因為超出範圍的轉型是未定義行為。實作時更正措辭，判定不變）、字串拒絕，0 與 8 接受；結構層（不經文字）的 NaN、inf 的 `sync_seconds` 與 NaN 的 `gain` 由 `CheckEventSoundSet` 拒絕 |
 | ES7 | 7 綁定：事件名 | 只出現在第二個 clip 的名字接受；不在任何 clip 的名字拒絕（detail `events."<名>"`，code `UnboundEventSounds`）；大小寫不同拒絕 |
 | ES8 | 8 綁定：聲音 | `sync_seconds` 等於長度接受、大於長度拒絕；回呼回答 `nullopt`、NaN、負數都拒絕（detail `events."<名>".sound_asset_id` 或 `.sync_seconds`）；回呼收到的是該項的 `sound_asset_id`；一項失敗時整體失敗，沒有部分結果 |
 | ES9 | Using it 的偏移 | 與 PvP 現有判定相同的數值：(2, 3, 1.5, 0) = 1、(2, 3, 1.5, 0.25) = 0.75、(2, 1, 4, 0) = 8、(0.1, 1, 1, 0.3) = −0.2；clip 長度 0 或負、動作長度 0 或負、任一參數 NaN 或 inf 時沒有值（四個參數各一次） |
@@ -95,3 +95,13 @@
 - 只有 PvP 讀今天的對應；Model Viewer 尚未開工（D-es-4）。第二個讀者出現前，契約裡「兩個產品」的一半是預測。
 - 寫入（序列化）不在第 1 版：Model Viewer 要編輯時，寫入函式另開一批（framework 回傳文字，不寫檔）。
 - PvP 的 `SoundCuesTests.cpp`「event sounds name events of the weapon's gyo.anim_events」是產品側的對齊測試，遷移後由 framework 的綁定取代；那是產品會話的事。
+
+## 補記（第 2 批實作時，2026-11-04）
+
+- **突變的增減**（只收緊；宣告的「改壞什麼」與「由哪組殺掉」沒有放寬）：
+  - 審査者之後補 4 條：es-order-unchecked（ES4）、es-events-not-object（ES4）、es-string-type（ES3）、es-number-type（ES6）。審査者另提的「文件／項目是物件」兩條是等價突變（拿掉後 `RequireExactKeys` 以相同路徑拒絕），不列。
+  - 使用者核准把偏移函式收緊為「結果不是有限值就沒有值」（「照建議處理」）：新增 es-offset-overflow（ES9）；es-offset-zero-clip 在收緊後變成等價（長度 0 的結果是 inf 或 NaN，由結果檢查擋下），改成「拿掉 clip 長度的檢查」，由負長度的案例殺掉；es-offset-no-stretch、es-offset-sign 改錨到新的那一行。共 33 條。
+- **ES6 的措辭**：`1e39` 不是「轉成 float 是 inf」，float 裝不下的數在轉型前就拒絕（超出範圍的轉型是未定義行為）。判定不變。
+- **ES9 的收緊**：加 (1e300, 1e-10, 1e10, 0) 與 (1, 1e-300, 1e300, 0) 兩個溢位案例，都要沒有值。這是使用者核准的語意變更（DI 6 的函式），和 PvP 現有版本不同；PvP 遷移時改用 framework 的版本。
+- **D184 的判定不成立與處理**：第一次重跑 stale 3（fw-guard-core-json-link 在本批之前就已 stale；fw-guard-core-ui-dropped、fw-cat-json-missing 是本批改了錨點）。使用者核准改錨（「照建議處理」）：三條的意圖與預期訊息不變，只改 find／replace 到現在的文字，預檢後只重跑這三條。第一次的結果保留在證據資料夾（§14.1）。
+- **守衛變更**：使用者核准（「照建議處理」）。
