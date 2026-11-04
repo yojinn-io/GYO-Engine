@@ -324,7 +324,7 @@ L1／L2／L3 不排固定順序，依機器與你的空檔。
 | `v8-tool-model-viewer-reviewer` | 審查者的模型 | Opus 5.5（同實作者，用量少；寫出靠 parser 往返檢查）／Fable 5.1（不同模型，盲點不重疊；比主會話大，要你同意，用量多） | Opus 5.5 | 用量；`-core`、`-event-sounds` 的審查角度 |
 | `v8-tool-model-viewer-declaration` | 本宣告（判定、門檻、突變、L3、範圍限界、Design Invariants 草稿、模型表）照草稿核准嗎 | 照草稿／修改後核准 | — | 能不能開工 `-core` |
 
-## `v8-framework-close-request` 的事前宣告（2026-11-04，草稿，等你核准）
+## `v8-framework-close-request` 的事前宣告（2026-11-04，已核准：(a)）
 
 起因：`-events` 的 L3 第 6 項（關閉時有未存檔提示）照原文做不到；你選了「改 framework 外殼」。
 
@@ -381,4 +381,5 @@ L1／L2／L3 不排固定順序，依機器與你的空檔。
 | `v8-tool-model-viewer-trial-platform` | （2026-11-04）L3 只在 macOS | 同上 |
 | `v8-tool-model-viewer-reviewer` | （2026-11-04）審查者 Opus 5.5／high | 同上 |
 | `v8-tool-model-viewer-start` | （2026-11-04）開工，先寫事前宣告 | 「現在開工先寫宣告」（經啟動本會話的會話轉述） |
+| `v8-framework-close-request` | （2026-11-04）照宣告核准，含 framework DI 6 的字句補充；`-ui-editor` 選 (a)：ui_editor 同一批接上 | 「(a) 一起接上，核准」 |
 | `v8-engine-sdl-renderer-texture-t3` | （2026-11-04）(a)：platform-sdl Replacement Criteria 2 的期限從「到 SDL 渲染器有貼圖 API 為止」改成「到 ui_editor 改用 SDL 渲染器的貼圖 API 為止」；ui_editor 改用它記成之後的候選。沒有選 (b)（本批就改 ui_editor） | 「(a) 改字句」 |
