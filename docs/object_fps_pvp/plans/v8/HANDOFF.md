@@ -196,6 +196,12 @@
 
 ## 未結事項
 
+- **v8 驗收前必須完成：系統選擇窗的記帳規則有兩份（`v8-tool-path-dialog-rule-handover`，2026-11-04 工具線交回）**。使用者指示：「丟回給v8會話，記成8v驗收前必須完成的事項。」（「8v」照上下文讀成 v8。）
+  - 規則：Engine `platform-sdl` 的 Design Invariant 10 只保證每次請求最多一個答案、可能不回，Windows 上 Failed 之後可能還有備用窗的答案。所以呼叫端要自己記帳：每次請求給新的 tag、只認最新一次；Chosen／Cancelled 才算結束，Failed 不算；答案不來時可以放棄等待。
+  - 兩份的位置：ui_editor `tools/ui_editor/include/gyo/ui_editor/PathDialog.hpp:57` 的 `PathDialogRequests`；audio_editor `tools/audio_editor/src/AudioEditorWindow.cpp:269-281` 的 `ApplyDialogAnswers`（PR #141 的分支）。Model Viewer 做 GUI 時可能出現第三份。
+  - 壓力：同一條規則手動維護兩處（AGENTS.md §9），Windows 的特例要各自驗證。
+  - 待決定：要不要搬進 framework、由誰做，由 framework 的 owner（架構會話）判斷；搬的話會動 framework 的公開介面，算 Architecture Delta。反方向的依據：架構會話當初（經轉述）說彈窗「流程那一半是工具的，留在工具」。工具線的紀錄在 `docs/tools/plans/v8/assets.md` 的決定紀錄與 HANDOFF（`89489a4f`），工具線不自行搬。
+
 - **任務卡 `v8-input-ui-adapter`（2026-11-01 開卡，已核准 `v8-input-ui-adapter-approve`；2026-11-01 更新：使用者決定 IU-1、IU-3 由推動會話「處理 Input→Ui 轉換重複與預覽輸入管線」做（等 PR B 合併），IU-2 由工具線做，組字驗收只做 macOS；本線不再負責 IU-3）**：[input-ui-adapter-card](input-ui-adapter-card.md)。Input→Ui 轉換兩份、編輯器預覽用 `imgui_internal`、預覽沒有組字，三件事串成 IU-1（framework 整改線）→ IU-2（工具線）、IU-3（本線）。使用者指示由本會話開卡；完成後通知架構會話。
 - **pv9 的回歸（2026-11-01，entity-line 回報、本會話在 master 上確認）**：`MatchRuntimeHost.cpp` 逐出玩家時只刪 snapshot 的 `players` 與 `combat`，沒有刪 `animation`（A2 `4cdb5bad` 加了 animation，逐出路徑沒有跟上）。Gateway 的 `adapter.go` 見到 animation 數 ≠ players 數就 `runtimeFailed`，整個房間斷線。使用者已決定由 entity-line 的缺陷批 `v8-product-evict-animation-orphan` 修（排在 split 前、同一個 entity-line PR）。本線不修。
 - **pv10（⑤）的協議規劃要納入 entity-line 的三件事**（`docs/object_fps_pvp/entity-model.zh-Hant.md` §8，分支 `claude/gifted-khorana-d38ac5`，未推送）：
