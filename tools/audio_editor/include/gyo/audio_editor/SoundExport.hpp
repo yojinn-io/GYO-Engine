@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gyo/audio_editor/AudioEditorError.hpp"
+#include "gyo/audio_editor/Edit.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -21,6 +22,7 @@ struct ExportRequest final {
     std::string assetRoot;   // the mounted product's asset root
     std::string catalogPath; // that product's catalog
     SoundRegistration registration;
+    EditSettings settings; // the trim and gain of the output; the default converts the whole source
 };
 
 struct ExportReport final {
@@ -36,10 +38,11 @@ struct ExportReport final {
     std::optional<std::string> previousPath;
 };
 
-// Converts the source, writes the clip into the asset root and registers it in
-// the catalog. Both files are written by atomic replace, the clip first; the
-// catalog is not touched when the clip fails. The clip's path may not be the
-// source itself, so a source is never overwritten.
+// Renders the source with the settings (RenderClip, as the preview does),
+// writes the clip into the asset root and registers it in the catalog. Both
+// files are written by atomic replace, the clip first; the catalog is not
+// touched when the clip fails. The clip's path may not be the source itself,
+// so a source is never overwritten.
 [[nodiscard]] Result<ExportReport, AudioEditorError> ExportSound(const ExportRequest& request);
 
 } // namespace Gyo::Tools::AudioEditor

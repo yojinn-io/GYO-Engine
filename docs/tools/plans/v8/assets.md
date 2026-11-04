@@ -547,6 +547,64 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
 |---|---|---|---|---|
 | 上段 | Design Invariants 的守衛放寬；新的資料格式（工程檔） | Opus 5.5／high（主會話） | Opus 5.5／high | Fable 5.1／high |
 
+### 實作後的結果（2026-11-04）
+
+- 前提：GYO::Audio 播放控制層已合併（PR #139，merge `8a713b1e`），公開介面和 10-31 的 `1f271a32` 相同；本分支已和 master 合併（`a9bbe1fb`）。
+- 判定 1～7：本機 macOS 全部通過（`build/target/_build/framework`，ui_editor＋audio_editor）。判定 8 交你在 GUI 上試用。
+  - 判定 1：五個 WAV 以 `golden.<檔名>` 轉換，SHA-256 和基準 5／5 相同（主 checkout `build/evidence/tool-v8-audio-editor-edit/regression/compare.txt`）。
+  - 判定 2～7：`tests/audio_editor/AudioEditorEditTests.cpp`。
+- 突變：26／26 killed，見下方「突變結果」。
+- 和事前宣告不同的地方：
+  - 裁剪後一幀都不剩（重新取樣前或後）時拒絕（`InvalidSettings`），所以不會寫出 Engine 的 `ClipBank` 拒收的空片段。舊的 `convert` 遇到 0 幀的 WAV 會寫出空片段，現在改成回 4。
+  - 試聽的混音器沒有排程延遲、兩個片段槽（`PreviewMixerConfig`），停止與卸載在取走它們的那個區塊就生效。
+  - 指令 `edit [<project.json> | <source.wav>]` 開視窗；不帶指令時照舊回 2（CLI 測試不變）。
+- 範圍的限界：
+  - GUI 的邏輯（欄位與工程檔之間的轉換、對話框）沒有自動測試，只靠 L3。
+  - 重新取樣在 UI 執行緒上做，長的非 48 kHz 素材按下 Play 會停頓一下。
+  - 沒有「未存檔」的提示；關視窗時改動會丟失。
+  - 命令列給相對路徑時，工程檔照原樣存相對路徑。
+- 觀察到的壓力（報告，不在本批處理）：系統選擇窗的「只認最新一次請求、Failed 不結束」規則，ui_editor（`PathDialogRequests`）和 audio_editor 各寫了一份。照「共用功能先進 framework」，兩處都用到了，可以考慮移進 framework。
+
+§14.4（audio_editor 守衛，放寬；這是 Design Invariants 的守衛，要你核准）：
+
+1. 守的性質：audio_editor DI 1。不連遊戲、不指名其他產品；自己不 include `SDL3/`、不呼叫 `SDL_`、不指名 SDL 或 `*Native` 的 target。SDL 只經 Engine 的 SDL 後端與 framework 的綁定。
+2. 緩的面：以前判失敗、現在通過的情況：
+   - CMake 指名 `GYO::ToolFrameworkImGui`、`GYO::AudioBackendSDL`、`imgui::core`、`nlohmann_json::nlohmann_json`；
+   - include 前綴 `nlohmann/`：nlohmann 目錄下的每個標頭都通過（`json.hpp`、`json_fwd.hpp`、`detail/*` 等，全是 JSON 函式庫自己的檔案）。
+   - `<imgui.h>` 不含 `/`，本來就不檢查。
+   - 前綴比對的既有弱點：`nlohmann/../SDL3/SDL.h` 也會通過，但 `engine/../SDL3/SDL.h` 以前就通過，實質上不是新的面。
+   - 突變 `ae-guard-json-target`（指名 nlohmann 時守衛失敗）因此刪除。
+3. 緊的面：無。
+4. 緩的面之後，性質由誰守：
+   - 本守衛的其餘規則沒動：`SDL_` 名稱、`SDL3/` 與 native 標頭的 include、`SDL3::` 與 `*Native` 的 target、名單外的 target 與 include 都照舊失敗。
+   - `GYO::AudioBackendSDL` 自己把 SDL 留在私有、沒有 native target：由 Engine 的 G1～G3 守（`docs/architecture/audio.md` DI 2）。
+   - ImGui 綁定把 SDL、ImGui 的 SDL 後端與 `*Native` 留在私有：寫在 `framework/bindings/imgui/CMakeLists.txt`，只靠審查守。framework 的守衛只查名稱，設定時的連結檢查不分 PUBLIC／PRIVATE，G3 也不涵蓋這個綁定。
+     - 綁定經公開連結帶來的 `GYO::PlatformSDL` 與 `GYO::RenderBackendSDL`，SDL 是私有的，由 G3 守。所以現在沒有 SDL3 的 include 目錄進到 audio_editor。
+     - 如果綁定哪天改成公開連結，SDL3 標頭與 native 標頭就會進到 audio_editor 的 include 路徑，這時只剩本守衛的 `SDL3/`、`*Native` 與 `SDL_` 規則在守。
+     - 新的事實：SDL3 現在會（只以連結的形式）連進 GUI 執行檔，手寫一個 `SDL_` 的宣告也連得過；擋住它的只有本守衛的 `SDL_` 規則。
+   - `imgui::sdl3_sdlrenderer3` 不在名單內。
+   - nlohmann 是 JSON 函式庫，不帶 SDL，也不帶遊戲。
+5. 根據：
+   - 事前宣告（2026-11-03 的目標清單，上方）；
+   - 自我測試新增兩條：視窗與工程檔的目標通過；在 SDL 後端旁再指名 `SDL3::SDL3` 或 `imgui::sdl3_sdlrenderer3` 時失敗；
+   - 突變：見下方「突變結果」；
+   - 検証者：見下方「検証者」。
+   - 已知的一點：視窗用 `SdlPlatform` 的系統選擇窗，`GYO::PlatformSDL` 經 ImGui 綁定的公開連結取得（綁定 → 視窗外殼 → 平台，兩層），CMake 不指名它（突變 `ae-guard-io-platform` 證明指名時守衛照舊失敗）。`docs/audio_editor/architecture.md`「Editing and preview」與 CMake 註解寫明了這一點。
+
+突變結果（主 checkout `build/evidence/tool-v8-audio-editor-edit/`）：
+- 件數の突き合わせ：一致。宣告 26 條（新 22、改寫位置 3、沿用 1），最後一輪 26／26 killed，stale 0（`mutations.txt`）。
+- 第一輪 22／26（`mutations-run1.txt`），survived 4 條都是核心測試的突變，不是守衛的：
+  - 3 條（試聽）：測試名稱有逗號，doctest 的 `-tc` 篩選在逗號切開，一個測試都沒跑。這是測試方法的錯，改了測試名稱。
+  - 1 條（`ae-edit-empty-trim-accepted`）：重新取樣後的空片段檢查擋下了同一個情況，`ValidateSettings` 本身沒有被直接測到。這是測試的缺口，補了直接的檢查。
+  - 另外 `ae-preview-update-stops` 即使篩選正常也抓不到（沒有測試在播放中呼叫 `Update`），補了這個檢查。
+- 刪除 1 條：`ae-guard-json-target`（第 2 點）。改寫位置 3 條（`ae-io-no-parents`、`ae-guard-native-include` 移到 `FileAccess.cpp`；`ae-guard-io-platform` 的連結行變了），判定不變。
+
+検証者（Fable 5.1／high，2026-11-04；不改檔案，用舊守衛與新守衛對 51 個合成輸入比對）：
+- 第 1、3、5 點：確認。
+- 第 2、4 點：確認，附更正，已照更正改寫在上面（`nlohmann/` 的範圍；ImGui 綁定的私有連結只靠審查；SDL3 以連結的形式進到 GUI 執行檔）。
+- 措辭的提醒：DI 1 的「names no SDL or `*Native` target」裡，`GYO::AudioBackendSDL` 的名字也有 SDL。這裡把「SDL target」讀成 SDL3 自己的 target，同一句的「Playback goes through `GYO::Audio` and its SDL backend」支持這個讀法。要不要改成「no SDL3 target」由你決定；改 DI 本身是 Architecture Delta。
+- 既有的弱點（不是本批造成的）：不帶目錄的 `#include <SDL.h>` 兩版守衛都放過（用到時會被 `SDL_` 規則抓到）；CMake 註解裡的 `::` 名稱也會被當成 target。
+
 ## 實作順序（提案）
 
 ```text

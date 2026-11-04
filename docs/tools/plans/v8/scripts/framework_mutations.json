@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the tools' guards for the framework (v8-tool-framework-shell; v8-tool-ui-editor-path-dialog-adopt and -shell-adopt add the dialog and command-line mutants): ui_editor and audio_editor, owned by the tool line. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The framework's own mutants moved to docs/architecture/plans/framework-rework/scripts/framework_mutations.json (v8-framework-guard-ratchet).",
+  "description": "Declared mutants of the tools' guards for the framework (v8-tool-framework-shell; v8-tool-ui-editor-path-dialog-adopt and -shell-adopt add the dialog and command-line mutants; v8-tool-audio-editor-edit adds the editor's trim, gain, preview, waveform, project and window-guard mutants): ui_editor and audio_editor, owned by the tool line. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The framework's own mutants moved to docs/architecture/plans/framework-rework/scripts/framework_mutations.json (v8-framework-guard-ratchet).",
   "mutants": [
     {
       "id": "ui-guard-native-target",
@@ -87,18 +87,6 @@
       "expect": "FAILED: the fallback dialog's choice reaches the editor"
     },
     {
-      "id": "ae-guard-json-target",
-      "what": "The audio editor names nlohmann_json beside the framework's JSON binding",
-      "file": "tools/audio_editor/CMakeLists.txt",
-      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
-      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson nlohmann_json::nlohmann_json",
-      "command": [
-        "{python}",
-        "tests/audio_editor/audio_editor_dependency_guard.py"
-      ],
-      "expect": "names nlohmann_json::nlohmann_json"
-    },
-    {
       "id": "ui-io-within-false",
       "what": "The export guard never finds a path inside the asset root",
       "file": "tools/ui_editor/src/DocumentSession.cpp",
@@ -119,7 +107,7 @@
     {
       "id": "ae-io-no-parents",
       "what": "The audio editor no longer creates the clip's missing folders",
-      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "file": "tools/audio_editor/src/FileAccess.cpp",
       "find": "{.createParentDirectories = true});",
       "replace": "{.createParentDirectories = false});",
       "target": "gyo_audio_editor_core_tests",
@@ -130,8 +118,8 @@
       "id": "ae-guard-io-platform",
       "what": "The audio editor's CMake names the SDL platform beside engine/io",
       "file": "tools/audio_editor/CMakeLists.txt",
-      "find": "PRIVATE GYO::Audio GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
-      "replace": "PRIVATE GYO::Audio GYO::Engine GYO::PlatformSDL GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson",
+      "find": "PRIVATE GYO::Engine GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson nlohmann_json::nlohmann_json",
+      "replace": "PRIVATE GYO::Engine GYO::PlatformSDL GYO::Os GYO::ToolFramework GYO::ToolFrameworkJson nlohmann_json::nlohmann_json",
       "command": [
         "{python}",
         "tests/audio_editor/audio_editor_dependency_guard.py"
@@ -195,7 +183,7 @@
     {
       "id": "ae-guard-native-include",
       "what": "The audio editor includes an Engine native-layer header",
-      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "file": "tools/audio_editor/src/FileAccess.cpp",
       "find": "#include \"engine/io/fs/NativeFileSystem.hpp\"\n",
       "replace": "#include \"engine/io/fs/NativeFileSystem.hpp\"\n#include \"engine/platform/sdl/SdlPlatformNative.hpp\"\n",
       "command": [
@@ -356,6 +344,238 @@
       "replace": "selectedNode_.empty() || io.WantTextInput || io.KeyCtrl",
       "target": "gyo_ui_editor_preview_tests",
       "expect": "FAILED: an arrow while typing moves no element and keeps the edit"
+    },
+    {
+      "id": "ae-edit-trim-start-ignored",
+      "what": "The trim keeps the source from its first frame",
+      "file": "tools/audio_editor/src/Edit.cpp",
+      "find": "std::vector<double> edited(plane.begin() + static_cast<std::ptrdiff_t>(settings.trimStart),",
+      "replace": "std::vector<double> edited(plane.begin(),",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Trimming a 48 kHz source*",
+      "expect": "CHECK\\( \\(\\*planes\\)\\[channel\\] == expected \\) is NOT correct"
+    },
+    {
+      "id": "ae-edit-gain-ignored",
+      "what": "The gain never reaches the samples",
+      "file": "tools/audio_editor/src/Edit.cpp",
+      "find": "        for (double& sample : edited) sample *= factor;\n",
+      "replace": "",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Gain scales every sample*",
+      "expect": "CHECK\\( \\(\\*planes\\)\\[channel\\]\\[frame\\] == source.planes\\[channel\\]\\[frame\\] \\* factor \\) is NOT correct"
+    },
+    {
+      "id": "ae-edit-empty-trim-accepted",
+      "what": "A trim that keeps no frame is accepted",
+      "file": "tools/audio_editor/src/Edit.cpp",
+      "find": "settings.trimStart >= end",
+      "replace": "settings.trimStart > end",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Settings that keep no frame*",
+      "expect": "CHECK_FALSE\\( ValidateSettings\\(\\{.trimStart = 5, .trimEnd = 5\\}, 10\\).has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-edit-gain-range-unchecked",
+      "what": "A gain outside the editor's range is accepted",
+      "file": "tools/audio_editor/src/Edit.cpp",
+      "find": "settings.gainDb < kMinGainDb || settings.gainDb > kMaxGainDb",
+      "replace": "settings.gainDb < kMinGainDb",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Settings that keep no frame*",
+      "expect": "CHECK\\( refused\\(\\{.gainDb = kMaxGainDb \\+ 0.5\\}\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-export-ignores-settings",
+      "what": "Export converts the whole source whatever the trim and gain",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "RenderClip(*decoded, request.settings, DitherSeed(request.registration.id))",
+      "replace": "RenderClip(*decoded, {}, DitherSeed(request.registration.id))",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "The preview plays the bytes export writes",
+      "expect": "CHECK\\( clip->samples == written \\) is NOT correct"
+    },
+    {
+      "id": "ae-preview-plays-at-half-gain",
+      "what": "The preview plays the clip at another gain than 1",
+      "file": "tools/audio_editor/src/PreviewPlayer.cpp",
+      "find": "submitter_.Play({.clip = *clip_, .at = at})",
+      "replace": "submitter_.Play({.clip = *clip_, .at = at, .gainLeft = 0.5f, .gainRight = 0.5f})",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "The preview plays the bytes export writes",
+      "expect": "CHECK\\( heard == written \\) is NOT correct"
+    },
+    {
+      "id": "ae-preview-volume-ignored",
+      "what": "The preview volume does not reach the mixer",
+      "file": "tools/audio_editor/src/PreviewPlayer.cpp",
+      "find": "    if (mixer_ != nullptr) mixer_->SetMasterGain(std::clamp(volume, 0.0f, 1.0f));\n",
+      "replace": "    static_cast<void>(volume);\n",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "The preview volume changes*",
+      "expect": "CHECK\\( out\\[0\\] == 500 \\) is NOT correct"
+    },
+    {
+      "id": "ae-preview-update-stops",
+      "what": "Every editor frame stops the sound that plays (the defect found while writing the tests)",
+      "file": "tools/audio_editor/src/PreviewPlayer.cpp",
+      "find": "    if (releasing_) {\n",
+      "replace": "    if (true) {\n",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "The preview player plays and stops*",
+      "expect": "CHECK\\( RenderBlock\\(\\*rig.mixer, 480, kAnchor\\)\\[0\\] == swap \\+ 20 \\) is NOT correct"
+    },
+    {
+      "id": "ae-preview-no-retry",
+      "what": "Update never starts a waiting clip, so a clip that waited for a slot never plays",
+      "file": "tools/audio_editor/src/PreviewPlayer.cpp",
+      "find": "    if (waiting_.has_value()) TryStart(at);\n",
+      "replace": "",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "The preview player plays and stops*",
+      "expect": "CHECK_FALSE\\( rig.player->Waiting\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-preview-no-stop",
+      "what": "The preview unloads a clip without stopping its sound",
+      "file": "tools/audio_editor/src/PreviewPlayer.cpp",
+      "find": "        if (!submitter_.Stop(sound_, at)) return false;\n",
+      "replace": "",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "The preview player plays and stops*",
+      "expect": "CHECK\\( sample == 0 \\) is NOT correct"
+    },
+    {
+      "id": "ae-waveform-extremes-swapped",
+      "what": "A waveform column shows its maximum as its minimum",
+      "file": "tools/audio_editor/src/Waveform.cpp",
+      "find": "result.push_back({*low, *high});",
+      "replace": "result.push_back({*high, *low});",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Each waveform column*",
+      "expect": "CHECK\\( result\\[column\\] == WaveColumn\\{low, high\\} \\) is NOT correct"
+    },
+    {
+      "id": "ae-waveform-columns-shifted",
+      "what": "A waveform column starts one sample late",
+      "file": "tools/audio_editor/src/Waveform.cpp",
+      "find": "const std::size_t first = column * count / columns;",
+      "replace": "const std::size_t first = (column * count + columns - 1) / columns;",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Each waveform column*",
+      "expect": "CHECK\\( result\\[column\\] == WaveColumn\\{low, high\\} \\) is NOT correct"
+    },
+    {
+      "id": "ae-project-inside-root",
+      "what": "A project is saved inside the asset root",
+      "file": "tools/audio_editor/src/ProjectFile.cpp",
+      "find": "        if (within.value()) {\n",
+      "replace": "        if (false) {\n",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A project reads back*",
+      "expect": "REQUIRE_FALSE\\( refused.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-project-newer-version",
+      "what": "A newer project version is read as version 1",
+      "file": "tools/audio_editor/src/ProjectFile.cpp",
+      "find": "version->get<std::int64_t>() != kProjectVersion",
+      "replace": "version->get<std::int64_t>() < kProjectVersion",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A project reads back*",
+      "expect": "REQUIRE_FALSE\\( newer.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-project-gain-as-float",
+      "what": "The project keeps the gain as a float",
+      "file": "tools/audio_editor/src/ProjectFile.cpp",
+      "find": "json[\"gain_db\"] = request.settings.gainDb;",
+      "replace": "json[\"gain_db\"] = static_cast<float>(request.settings.gainDb);",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A project reads back*",
+      "expect": "CHECK\\( \\*loaded == project \\) is NOT correct"
+    },
+    {
+      "id": "ae-project-trim-end-lost",
+      "what": "The project's trim end is not read back",
+      "file": "tools/audio_editor/src/ProjectFile.cpp",
+      "find": "    if (!end.is_null()) request.settings.trimEnd = end.get<std::size_t>();\n",
+      "replace": "",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A project reads back*",
+      "expect": "CHECK\\( \\*loaded == project \\) is NOT correct"
+    },
+    {
+      "id": "ae-guard-sdl-target-beside-backend",
+      "what": "The window names SDL itself beside GYO::Audio's SDL backend",
+      "file": "tools/audio_editor/CMakeLists.txt",
+      "find": "PRIVATE GYO::ToolFrameworkImGui GYO::AudioBackendSDL imgui::core)",
+      "replace": "PRIVATE GYO::ToolFrameworkImGui GYO::AudioBackendSDL SDL3::SDL3 imgui::core)",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "names SDL3::SDL3"
+    },
+    {
+      "id": "ae-guard-imgui-sdl-backend",
+      "what": "The window names ImGui's SDL backend instead of the framework's binding",
+      "file": "tools/audio_editor/CMakeLists.txt",
+      "find": "PRIVATE GYO::ToolFrameworkImGui GYO::AudioBackendSDL imgui::core)",
+      "replace": "PRIVATE GYO::ToolFrameworkImGui GYO::AudioBackendSDL imgui::core imgui::sdl3_sdlrenderer3)",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "names imgui::sdl3_sdlrenderer3"
+    },
+    {
+      "id": "ae-guard-platform-native-target",
+      "what": "The window names the platform's native target",
+      "file": "tools/audio_editor/CMakeLists.txt",
+      "find": "PRIVATE GYO::ToolFrameworkImGui GYO::AudioBackendSDL imgui::core)",
+      "replace": "PRIVATE GYO::ToolFrameworkImGui GYO::PlatformSDLNative GYO::AudioBackendSDL imgui::core)",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "names GYO::PlatformSDLNative"
+    },
+    {
+      "id": "ae-guard-window-sdl-include",
+      "what": "The window includes an SDL3 header",
+      "file": "tools/audio_editor/src/AudioEditorWindow.cpp",
+      "find": "#include <imgui.h>\n",
+      "replace": "#include <imgui.h>\n#include <SDL3/SDL_audio.h>\n",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "includes SDL3/SDL_audio.h"
+    },
+    {
+      "id": "ae-guard-window-sdl-call",
+      "what": "The window calls SDL itself",
+      "file": "tools/audio_editor/src/AudioEditorWindow.cpp",
+      "find": "        if (player_.has_value()) player_->Stop(Engine::Time::Now());\n",
+      "replace": "        if (player_.has_value()) player_->Stop(Engine::Time::Now());\n        SDL_PauseAudioStreamDevice(nullptr);\n",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "uses SDL_PauseAudioStreamDevice"
+    },
+    {
+      "id": "ae-guard-window-native-include",
+      "what": "The window includes the native renderer",
+      "file": "tools/audio_editor/src/AudioEditorWindow.cpp",
+      "find": "#include \"gyo/framework/imgui/ImGuiShell.hpp\"\n",
+      "replace": "#include \"gyo/framework/imgui/ImGuiShell.hpp\"\n#include \"engine/render/backend/sdl/SdlRendererNative.hpp\"\n",
+      "command": [
+        "{python}",
+        "tests/audio_editor/audio_editor_dependency_guard.py"
+      ],
+      "expect": "includes engine/render/backend/sdl/SdlRendererNative.hpp"
     }
   ]
 }
