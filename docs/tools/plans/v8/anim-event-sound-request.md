@@ -1,7 +1,7 @@
 # 架構評估請求：動畫事件 → 聲音的對應由誰持有（`v8-tool-anim-event-sound-request`）
 
 日期：2026-11-04。提出：v8 工具線（audio_editor 的會話）。交給：架構師（例行架構掃描的會話）。
-狀態：**等架構評估**。使用者說「這個問題是架構變動，整理一下，交給架構師評估。」A／B（下方）使用者還沒選。
+狀態：**已評估，使用者已決定（2026-11-04）**，結果見文末「評估結果」。提出時，使用者說「這個問題是架構變動，整理一下，交給架構師評估。」
 
 ## 功能（使用者的需求）
 
@@ -62,3 +62,25 @@
 
 - 本線不改契約、不改 PvP 資料、不改 Model Viewer。
 - 架構評估出來、使用者決定之後，本線只寫 audio_editor 那一批的事前宣告。
+
+## 評估結果（2026-11-04，架構會話回報；使用者的決定經架構會話轉述，不是原話）
+
+- **第 1 題**：成為 Data Contract，owner 是 framework（不是 Engine，也不是產品）。
+  - (b) 否決：會違反 anim_events 的 DI 1，並觸發它的 Replacement Criteria 1。Engine 側的 anim_events 第 1 版與 GYO::Audio 都不改。
+  - 依據是 PR #142（`docs/architecture.md` 新節「Layers: admission and format ownership」、framework DI 3 改寫）：framework 可以擁有「描述 Engine 資產如何組合」的格式，每個引用只能是 Engine 的 asset id 或 Engine 的值。PR #142 在 2026-11-04 仍未合併。
+  - 建議的形狀：schema `gyo.event_sounds`、version 1、`animation_events_asset_id`、`events`（事件名 → `sound_asset_id`、`sync_seconds`、`gain`）；一個檔對一個 anim_events 檔；規則比照 anim_events 第 1 版（嚴格、沒有選用欄位）。
+  - `EventSoundOffsetSeconds` 從 PvP 搬進 framework 核心，Model Viewer 預覽時和遊戲跑同一個函式。
+  - 架構卡 `v8-arch-event-sounds-contract`（契約文件、驗證器、偏移函式、守衛、測試；一條 PR，估 5～8 h）。
+- **第 2 題**：PvP 的 `sfx.json` 由產品會話在契約落地後遷移：
+  - 升到第 3 版；
+  - 刪掉 `animation_events` 段，以及只有它用到的 `reload` cue；
+  - presentation 加 `event_sounds_asset_id`；
+  - 第一份資料手寫。
+- **第 3 題**：選 B。契約兩種都撐得住，但 B 的「一個事件一段聲音」正好對上 PvP 現在的逐事件排程；A 的拉伸漂移是功能缺陷，而且會碰到 audio_editor 時間軸的 Replacement Criteria。
+- **第 4 題**：
+  - framework：架構卡；
+  - audio_editor（本線）：只管片段，不知道事件、不寫 event_sounds 檔，DI 8 不動。下一批是 B 的多段匯出（一個原檔切多段、批次匯出、淡入淡出）。DI 3 的字面是單數，要改的話照 §14.4 列 1～5 交使用者同意。這一批不依賴架構卡。
+  - Model Viewer（anim-events-line）：經 framework 讀 anim_events 與 event_sounds 兩個格式，用 framework 的偏移函式預覽，之後編輯 event_sounds。依賴架構卡。
+  - Engine、PvP：本線不碰。
+- **順序**：framework 契約（架構卡）→ PvP 遷移（產品會話）；audio_editor 的多段匯出與 Model Viewer 的預覽各自並行。
+- **本線的後續**：`v8-tool-audio-editor-regions` 的事前宣告在 [assets.md](assets.md)（草稿，等使用者核准）；決定記為 `v8-tool-anim-event-sound-owner`。
