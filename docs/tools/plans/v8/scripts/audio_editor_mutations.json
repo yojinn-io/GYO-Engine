@@ -123,16 +123,16 @@
       "expect": "REQUIRE_FALSE\\( refused.has_value\\(\\) \\) is NOT correct"
     },
     {
-      "id": "ae-guard-input-target",
-      "what": "The editor's CMake names GYO::Input",
+      "id": "ae-guard-game-target",
+      "what": "The editor's CMake names a game's target (v8-tool-editor-engine-access: GYO::Input is now allowed)",
       "file": "tools/audio_editor/CMakeLists.txt",
       "find": "# The clip format comes from GYO::Audio (Design Invariant 2)",
-      "replace": "# The clip format comes from GYO::Audio GYO::Input (Design Invariant 2)",
+      "replace": "# The clip format comes from GYO::Audio SomeGame::Core (Design Invariant 2)",
       "command": [
         "{python}",
         "tests/audio_editor/audio_editor_dependency_guard.py"
       ],
-      "expect": "names GYO::Input"
+      "expect": "names SomeGame::Core"
     }
   ]
 }

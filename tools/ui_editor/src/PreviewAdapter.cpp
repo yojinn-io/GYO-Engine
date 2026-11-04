@@ -7,11 +7,12 @@
 #include "gyo/ui_editor/AssetPreviewContext.hpp"
 #include "gyo/ui_editor/GizmoMath.hpp"
 
+#include "gyo/framework/UiTextInput.hpp"
+
 #include <imgui.h>
-// PlatformImeData: the only way to ask the platform backend for text input
-// without an ImGui text widget (ImGui 1.92 has no public call for it).
-#include <imgui_internal.h>
 #include <nlohmann/json.hpp>
+
+#include "engine/input/PhysicalInputFrame.hpp"
 
 #include "engine/ui/UiDocumentCodec.hpp"
 #include "engine/ui/UiRuntime.hpp"
@@ -228,42 +229,16 @@ void DrawText(
 
 namespace {
 
-// This frame's typed characters and editing keys as Ui text input. ImGui
-// keeps characters and keys apart, so characters come first; the paste and
-// select-all chords follow the platform's (Cmd on macOS).
-std::vector<Engine::Ui::UiTextInput> PreviewTextInput() {
-    using Engine::Ui::UiTextInputKind;
-    std::vector<Engine::Ui::UiTextInput> text;
-    std::string typed;
-    const ImGuiIO& io = ImGui::GetIO();
-    for (int index = 0; index < io.InputQueueCharacters.Size; ++index) {
-        std::uint32_t code = io.InputQueueCharacters[index];
-        if (code >= 0xD800 && code < 0xDC00 && index + 1 < io.InputQueueCharacters.Size) {
-            const std::uint32_t low = io.InputQueueCharacters[index + 1];
-            if (low >= 0xDC00 && low < 0xE000) {
-                code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
-                ++index;
-            }
-        }
-        char encoded[5]{};
-        ImTextCharToUtf8(encoded, code);
-        typed += encoded;
-    }
-    if (!typed.empty()) text.push_back({UiTextInputKind::Insert, std::move(typed)});
-    const std::pair<ImGuiKey, UiTextInputKind> keys[]{
-        {ImGuiKey_Backspace, UiTextInputKind::Backspace}, {ImGuiKey_Delete, UiTextInputKind::Delete},
-        {ImGuiKey_LeftArrow, UiTextInputKind::MoveLeft},  {ImGuiKey_RightArrow, UiTextInputKind::MoveRight},
-        {ImGuiKey_Home, UiTextInputKind::MoveHome},       {ImGuiKey_End, UiTextInputKind::MoveEnd},
-    };
-    for (const auto& [key, kind] : keys) {
-        if (ImGui::IsKeyPressed(key, true)) text.push_back({kind, {}});
-    }
-    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_A)) text.push_back({UiTextInputKind::SelectAll, {}});
-    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_V)) {
+// A text field's typing and composition, through the framework's mapping
+// that the game uses too (v8-input-ui-adapter). Select-all and paste take
+// Command where ImGui follows macOS conventions, as the editor's own fields do.
+std::vector<Engine::Ui::UiTextInput> PreviewTextInput(const Engine::Input::PhysicalInputFrame& input) {
+    const auto shortcut = ImGui::GetIO().ConfigMacOSXBehaviors ? Framework::TextShortcutModifier::Gui
+                                                                 : Framework::TextShortcutModifier::Ctrl;
+    return Framework::ToUiTextInput(input.text, shortcut, [] {
         const char* clipboard = ImGui::GetClipboardText();
-        if (clipboard != nullptr) text.push_back({UiTextInputKind::Insert, clipboard});
-    }
-    return text;
+        return clipboard != nullptr ? std::string(clipboard) : std::string();
+    });
 }
 
 } // namespace
@@ -297,7 +272,8 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
     const bool previewMode,
     const bool inputEnabled,
     const bool snapToGrid,
-    const float gridSize) const {
+    const float gridSize,
+    const Engine::Input::PhysicalInputFrame* const physicalInput) const {
     FrameOutput result;
     if (viewport.width <= 0.0F || viewport.height <= 0.0F) {
         return result;
@@ -365,7 +341,7 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
             ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
             (!editingText && ImGui::IsKeyPressed(ImGuiKey_Space, false));
         input.cancelPressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
-        if (editingText) input.text = PreviewTextInput();
+        if (editingText && physicalInput != nullptr) input.text = PreviewTextInput(*physicalInput);
     }
 
     const Engine::Ui::UiViewport runtimeViewport{viewport.width, viewport.height};
@@ -414,18 +390,17 @@ PreviewAdapter::FrameOutput PreviewAdapter::Draw(
         result.error = std::move(evaluated).error();
         return result;
     }
-    // Asks the platform backend for text input (and puts the input method's
-    // window under the field) while a text field is edited in the preview.
+    // While a text field is edited in the preview, the host asks the
+    // platform for text input over it (and the input method's window goes
+    // under the field).
     const std::string& editingElement = impl_->runtime.InteractionState().editingElement;
     if (previewMode && inputEnabled && !editingElement.empty()) {
         for (const Engine::Ui::UiEvaluatedElement& element : evaluated.value()) {
             if (element.id != editingElement) continue;
-            ImGuiPlatformImeData& ime = ImGui::GetCurrentContext()->PlatformImeData;
-            ime.WantVisible = true;
-            ime.WantTextInput = true;
-            ime.InputPos = {viewport.x + element.boundsPixels.x, viewport.y + element.boundsPixels.y};
-            ime.InputLineHeight = element.boundsPixels.height;
-            ime.ViewportId = ImGui::GetMainViewport()->ID;
+            result.textInput = FrameOutput::TextInputRequest{viewport.x + element.boundsPixels.x,
+                                                             viewport.y + element.boundsPixels.y,
+                                                             element.boundsPixels.width,
+                                                             element.boundsPixels.height, 0};
         }
     }
     if (pointerInside) {

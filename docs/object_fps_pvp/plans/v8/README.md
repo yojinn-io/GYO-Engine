@@ -163,6 +163,8 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hitbox-shot-wire`（S3） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_wire.zh-Hant.md) |
 | `v8-product-tarkov-requirements` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_tarkov_requirements.zh-Hant.md) |
 | `v8-product-entity-contract` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_entity_contract.zh-Hant.md) |
+| `v8-input-ui-adapter` IU-1（framework 核心的 Input→Ui adapter） | [2026-11-02](../../../dev_logs/2026_11_02_framework_v8_input_ui_adapter_iu1.zh-Hant.md) |
+| `v8-input-ui-adapter` IU-3（遊戲宣告 FRAMEWORK、改用共用轉換） | [2026-11-02](../../../dev_logs/2026_11_02_pvp_v8_input_ui_adapter_iu3.zh-Hant.md) |
 | `v8-product-evict-animation-orphan` | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_evict_animation_orphan.zh-Hant.md) |
 | `v8-product-match-entity-split` | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_match_entity_split.zh-Hant.md) |
 

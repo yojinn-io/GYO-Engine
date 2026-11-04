@@ -33,8 +33,19 @@ public:
     void ApplyPathDialogResults();
     void RequestAssetMount(std::filesystem::path catalogPath, std::filesystem::path assetRoot);
     void RequestAssetUnmount();
+    // This frame's input from Engine, for the preview's text fields; valid
+    // until the frame ends. nullptr: none.
+    void SetPhysicalInput(const Engine::Input::PhysicalInputFrame* input) noexcept;
     void Draw();
+    // Where the preview's edited text field wants text input this frame, if
+    // it does; taken once after Draw.
+    [[nodiscard]] std::optional<PreviewAdapter::FrameOutput::TextInputRequest> TakeTextInputRequest() noexcept;
     [[nodiscard]] bool WantsExit() const noexcept;
+    // As the View menu's "Preview interaction".
+    void SetPreviewMode(bool preview) noexcept;
+    // Whether typing goes to a text field (ImGui's, or the preview's text
+    // field being edited) and the editor's own key shortcuts and nudging wait.
+    [[nodiscard]] bool TextInputActive() const noexcept;
 
 private:
     enum class AssetPickerTarget {
@@ -79,6 +90,10 @@ private:
     DocumentSession session_;
     Framework::ReadOnlyAssetCatalog catalog_;
     PreviewAdapter preview_;
+    const Engine::Input::PhysicalInputFrame* physicalInput_{};
+    std::optional<PreviewAdapter::FrameOutput::TextInputRequest> textInputRequest_;
+    // A preview text field was being edited in the last drawn frame.
+    bool previewEditingText_{};
     std::vector<Diagnostic> diagnostics_;
     std::vector<std::string> actionLog_;
     std::string selectedCanvas_{"main"};
@@ -112,7 +127,8 @@ private:
     bool showOverwriteDialog_{};
     bool showAssetPicker_{};
     bool showRenameDialog_{};
-    // One host dialog at a time; cleared when its result arrives.
+    // One host dialog at a time; cleared when its current result arrives or
+    // the user stops waiting.
     bool pathDialogOpen_{};
     AssetPickerTarget assetPickerTarget_{AssetPickerTarget::FontAlias};
     RenameTarget renameTarget_{RenameTarget::FontAlias};
