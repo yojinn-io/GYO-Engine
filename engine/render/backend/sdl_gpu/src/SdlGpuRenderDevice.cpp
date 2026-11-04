@@ -135,6 +135,13 @@ struct SdlGpuRenderDevice::Impl final {
     SDL_GPUCommandBuffer* frameCommand{};
     SDL_GPUTexture* frameSwapchain{};
     AcquiredFrame activeFrame{};
+    // Offscreen only: the frame target, the size the next frame gets, and
+    // whether the target holds a frame that was submitted (not abandoned).
+    bool offscreen{};
+    SDL_GPUTexture* offscreenTarget{};
+    TextureDesc offscreenDescription{};
+    std::uint32_t requestedWidth{}, requestedHeight{};
+    bool offscreenFrameReady{};
     ~Impl() { Shutdown(); }
     [[nodiscard]] Base::Result<void, RenderError> CheckThread() const {
         if (std::this_thread::get_id() != ownerThread) {
@@ -160,6 +167,7 @@ struct SdlGpuRenderDevice::Impl final {
         for (auto& slot : shaders) if (slot.shader) SDL_ReleaseGPUShader(device, slot.shader);
         if (linearClampSampler) SDL_ReleaseGPUSampler(device, linearClampSampler);
         if (linearWrapSampler) SDL_ReleaseGPUSampler(device, linearWrapSampler);
+        if (offscreenTarget) SDL_ReleaseGPUTexture(device, offscreenTarget);
         if (windowClaimed) SDL_ReleaseWindowFromGPUDevice(device, window);
         SDL_DestroyGPUDevice(device); device = nullptr;
     }
@@ -242,31 +250,54 @@ struct SdlGpuRenderDevice::Impl final {
         return SDL_CreateGPUSampler(device, &info);
     }
 
-    [[nodiscard]] Base::Result<void, RenderError> Initialize(
+    // The part both kinds of device share: the driver, the device and the
+    // built-in samplers. Nothing here touches the window.
+    [[nodiscard]] Base::Result<void, RenderError> CreateDevice(
         Platform::Sdl::SdlPlatform& sourcePlatform,
-        const SdlGpuOptions& options) {
-
+        const std::string& requestedDriver,
+        ShaderFormatMask availableShaderFormats,
+        bool debug) {
         platform = &sourcePlatform;
-        window = Platform::Sdl::NativeWindow(sourcePlatform);
         ownerThread = std::this_thread::get_id();
-        debugMode = options.debugMode;
+        debugMode = debug;
 
-        ShaderFormatMask formats = options.availableShaderFormats & AllShaderFormats;
+        ShaderFormatMask formats = availableShaderFormats & AllShaderFormats;
         const char* driver = nullptr;
-        if (options.driver == "d3d12") { driver = "direct3d12"; formats &= FormatBit(ShaderFormat::DXIL); }
-        else if (options.driver == "vulkan") { driver = "vulkan"; formats &= FormatBit(ShaderFormat::SPIRV); }
-        else if (options.driver == "metal") { driver = "metal"; formats &= FormatBit(ShaderFormat::Metallib); }
-        else if (options.driver != "auto") return Base::Err(MakeError(RenderErrorCode::InvalidArgument,
+        if (requestedDriver == "d3d12") { driver = "direct3d12"; formats &= FormatBit(ShaderFormat::DXIL); }
+        else if (requestedDriver == "vulkan") { driver = "vulkan"; formats &= FormatBit(ShaderFormat::SPIRV); }
+        else if (requestedDriver == "metal") { driver = "metal"; formats &= FormatBit(ShaderFormat::Metallib); }
+        else if (requestedDriver != "auto") return Base::Err(MakeError(RenderErrorCode::InvalidArgument,
             "SDL_GPU: driver must be auto, d3d12, vulkan or metal"));
         if (!formats) return Base::Err(MakeError(RenderErrorCode::BackendUnavailable,
             "SDL_GPU: selected driver has no complete shader artifact format"));
-        device = SDL_CreateGPUDevice(ToSdlFormats(formats), options.debugMode, driver);
+        device = SDL_CreateGPUDevice(ToSdlFormats(formats), debug, driver);
         if (!device) return Base::Err(MakeSdlError(RenderErrorCode::BackendUnavailable,
-            "SDL_GPU: device creation failed for driver " + options.driver));
+            "SDL_GPU: device creation failed for driver " + requestedDriver));
         info.shaderFormats = FromSdlFormats(SDL_GetGPUShaderFormats(device)) & formats;
         info.driver = SDL_GetGPUDeviceDriver(device);
         if (!info.shaderFormats) return Base::Err(MakeError(RenderErrorCode::BackendUnavailable,
             "SDL_GPU: driver does not accept packaged shader formats"));
+        if (!SDL_SetGPUAllowedFramesInFlight(device, 2)) {
+            return Base::Err(MakeSdlError(
+                RenderErrorCode::BackendUnavailable,
+                "SDL_GPU: failed to configure frames in flight"));
+        }
+        linearClampSampler = CreateSampler(SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE);
+        linearWrapSampler = CreateSampler(SDL_GPU_SAMPLERADDRESSMODE_REPEAT);
+        if (linearClampSampler == nullptr || linearWrapSampler == nullptr) {
+            return Base::Err(MakeSdlError(
+                RenderErrorCode::ResourceCreationFailed,
+                "SDL_GPU: failed to create built-in samplers"));
+        }
+        return {};
+    }
+
+    [[nodiscard]] Base::Result<void, RenderError> Initialize(
+        Platform::Sdl::SdlPlatform& sourcePlatform,
+        const SdlGpuOptions& options) {
+        auto created = CreateDevice(sourcePlatform, options.driver, options.availableShaderFormats, options.debugMode);
+        if (!created) return created;
+        window = Platform::Sdl::NativeWindow(sourcePlatform);
         if (!SDL_ClaimWindowForGPUDevice(device, window)) {
             return Base::Err(MakeSdlError(
                 RenderErrorCode::BackendUnavailable,
@@ -297,11 +328,6 @@ struct SdlGpuRenderDevice::Impl final {
                 RenderErrorCode::BackendUnavailable,
                 "SDL_GPU: failed to configure a linear SDR swapchain"));
         }
-        if (!SDL_SetGPUAllowedFramesInFlight(device, 2)) {
-            return Base::Err(MakeSdlError(
-                RenderErrorCode::BackendUnavailable,
-                "SDL_GPU: failed to configure frames in flight"));
-        }
 
         swapchainFormat = SDL_GetGPUSwapchainTextureFormat(device, window);
         if (swapchainFormat != SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB &&
@@ -310,15 +336,42 @@ struct SdlGpuRenderDevice::Impl final {
                 RenderErrorCode::BackendUnavailable,
                 "SDL_GPU: linear SDR swapchain did not provide an sRGB target"));
         }
+        return {};
+    }
 
-        linearClampSampler = CreateSampler(SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE);
-        linearWrapSampler = CreateSampler(SDL_GPU_SAMPLERADDRESSMODE_REPEAT);
-        if (linearClampSampler == nullptr || linearWrapSampler == nullptr) {
-            return Base::Err(MakeSdlError(
-                RenderErrorCode::ResourceCreationFailed,
-                "SDL_GPU: failed to create built-in samplers"));
-        }
+    [[nodiscard]] Base::Result<void, RenderError> InitializeOffscreen(
+        Platform::Sdl::SdlPlatform& sourcePlatform,
+        const SdlGpuOffscreenOptions& options) {
+        if (!options.width || !options.height)
+            return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: offscreen frame size must be nonzero"));
+        auto created = CreateDevice(sourcePlatform, options.driver, options.availableShaderFormats, options.debugMode);
+        if (!created) return created;
+        offscreen = true;
+        swapchainFormat = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;
+        constexpr SDL_GPUTextureUsageFlags usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        if (!SDL_GPUTextureSupportsFormat(device, swapchainFormat, SDL_GPU_TEXTURETYPE_2D, usage))
+            return Base::Err(MakeError(RenderErrorCode::BackendUnavailable,
+                "SDL_GPU: driver cannot render to an RGBA8 sRGB texture"));
+        requestedWidth = options.width; requestedHeight = options.height;
+        return {};
+    }
 
+    // The offscreen frame target at the requested size, recreated when the
+    // size changed; a recreated target holds no submitted frame.
+    [[nodiscard]] Base::Result<void, RenderError> OffscreenTarget() {
+        if (offscreenTarget && offscreenDescription.width == requestedWidth &&
+            offscreenDescription.height == requestedHeight) return {};
+        SDL_GPUTextureCreateInfo create{};
+        create.type = SDL_GPU_TEXTURETYPE_2D; create.format = swapchainFormat;
+        create.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        create.width = requestedWidth; create.height = requestedHeight;
+        create.layer_count_or_depth = 1; create.num_levels = 1; create.sample_count = SDL_GPU_SAMPLECOUNT_1;
+        auto* texture = SDL_CreateGPUTexture(device, &create);
+        if (!texture) return Base::Err(MakeSdlError(RenderErrorCode::ResourceCreationFailed, "SDL_GPU: offscreen frame target creation failed"));
+        if (offscreenTarget) SDL_ReleaseGPUTexture(device, offscreenTarget);
+        offscreenTarget = texture;
+        offscreenDescription = {requestedWidth, requestedHeight, TextureFormat::Rgba8SRgb, false, true, false};
+        offscreenFrameReady = false;
         return {};
     }
     [[nodiscard]] Base::Result<MeshSlot*, RenderError> FindMesh(MeshHandle handle) {
@@ -930,8 +983,20 @@ struct SdlGpuRenderDevice::Impl final {
     Base::Result<std::optional<AcquiredFrame>, RenderError> AcquireFrame() {
         auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
         if (frameCommand) return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: a frame is already acquired"));
+        if (offscreen) {
+            auto target = OffscreenTarget(); if (!target) return Base::Err(target.error());
+        }
         auto* command = SDL_AcquireGPUCommandBuffer(device);
         if (!command) return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: command buffer acquisition failed"));
+        if (offscreen) {
+            // The previous frame's commands write the same target; SDL orders
+            // them on the queue, and ReadFrame waits for its own copy.
+            auto token = nextFrameToken.fetch_add(1, std::memory_order_relaxed);
+            if (!token) token = nextFrameToken.fetch_add(1, std::memory_order_relaxed);
+            activeFrame = {token, offscreenDescription.width, offscreenDescription.height, TextureFormat::Rgba8SRgb};
+            frameCommand = command; frameSwapchain = offscreenTarget;
+            return activeFrame;
+        }
         SDL_GPUTexture* swapchain{}; Uint32 width{}, height{};
         // The blocking acquire, split into its two waits so a slow acquire can
         // say which one stalled: the in-flight fence, or the drawable (Metal's
@@ -972,6 +1037,7 @@ struct SdlGpuRenderDevice::Impl final {
         if (!frameCommand || frame.token != activeFrame.token || std::this_thread::get_id() != ownerThread) return;
         static_cast<void>(SDL_SubmitGPUCommandBuffer(frameCommand));
         frameCommand = nullptr; frameSwapchain = nullptr; activeFrame = {};
+        offscreenFrameReady = false;
     }
     Base::Result<void, RenderError> Validate(const PreparedFrame& prepared) {
         for (const auto& pass : prepared.passes) {
@@ -1068,14 +1134,40 @@ struct SdlGpuRenderDevice::Impl final {
             SDL_EndGPURenderPass(pass);
         }
         auto* command = frameCommand; frameCommand = nullptr; frameSwapchain = nullptr; activeFrame = {};
-        if (!SDL_SubmitGPUCommandBuffer(command)) return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: frame submission failed"));
+        if (!SDL_SubmitGPUCommandBuffer(command)) {
+            offscreenFrameReady = false;
+            return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: frame submission failed"));
+        }
+        // Ready only when a pass stored into the frame target itself.
+        offscreenFrameReady = offscreen && std::any_of(prepared.passes.begin(), prepared.passes.end(),
+            [](const PreparedPass& pass) { return !pass.color && pass.storeColor; });
         return PresentStatus::Presented;
     }
     Base::Result<TextureReadback, RenderError> ReadTexture(TextureHandle handle) {
         auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
         auto found = FindTexture(handle); if (!found) return Base::Err(found.error());
         if (frameCommand) return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: readback requires a submitted frame"));
-        const auto& desc = found.value()->description;
+        return Download(found.value()->texture, found.value()->description);
+    }
+    Base::Result<void, RenderError> SetFrameSize(std::uint32_t width, std::uint32_t height) {
+        auto thread = CheckThread(); if (!thread) return thread;
+        if (!offscreen) return Base::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: only an offscreen device has a frame size"));
+        if (frameCommand) return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: the frame size cannot change during a frame"));
+        if (!width || !height) return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: offscreen frame size must be nonzero"));
+        requestedWidth = width; requestedHeight = height;
+        // A frame of the old size is no longer the frame of this device.
+        if (width != offscreenDescription.width || height != offscreenDescription.height) offscreenFrameReady = false;
+        return {};
+    }
+    Base::Result<TextureReadback, RenderError> ReadFrame() {
+        auto thread = CheckThread(); if (!thread) return Base::Err(thread.error());
+        if (!offscreen) return Base::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: only an offscreen device reads its frame back"));
+        if (frameCommand) return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: readback requires a submitted frame"));
+        if (!offscreenFrameReady || !offscreenTarget)
+            return Base::Err(MakeError(RenderErrorCode::InvalidArgument, "SDL_GPU: no submitted frame to read back"));
+        return Download(offscreenTarget, offscreenDescription);
+    }
+    Base::Result<TextureReadback, RenderError> Download(SDL_GPUTexture* texture, const TextureDesc& desc) {
         if (desc.format == TextureFormat::Depth32Float)
             return Base::Err(MakeError(RenderErrorCode::UnsupportedOperation, "SDL_GPU: depth readback is unsupported"));
         const std::uint32_t bpp = desc.format == TextureFormat::Rgba16Float ? 8U : 4U;
@@ -1092,7 +1184,7 @@ struct SdlGpuRenderDevice::Impl final {
         if (!command) { SDL_ReleaseGPUTransferBuffer(device, transfer); return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback command acquisition failed")); }
         auto* copy = SDL_BeginGPUCopyPass(command);
         if (!copy) { static_cast<void>(SDL_CancelGPUCommandBuffer(command)); SDL_ReleaseGPUTransferBuffer(device, transfer); return Base::Err(MakeSdlError(RenderErrorCode::SubmissionFailed, "SDL_GPU: readback copy pass failed")); }
-        SDL_GPUTextureRegion source{}; source.texture = found.value()->texture; source.w = desc.width; source.h = desc.height; source.d = 1;
+        SDL_GPUTextureRegion source{}; source.texture = texture; source.w = desc.width; source.h = desc.height; source.d = 1;
         SDL_GPUTextureTransferInfo destination{}; destination.transfer_buffer = transfer; destination.pixels_per_row = static_cast<Uint32>(pitch / bpp); destination.rows_per_layer = desc.height;
         SDL_DownloadFromGPUTexture(copy, &source, &destination); SDL_EndGPUCopyPass(copy);
         auto* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(command);
@@ -1109,6 +1201,12 @@ struct SdlGpuRenderDevice::Impl final {
 Base::Result<std::unique_ptr<SdlGpuRenderDevice>, RenderError> SdlGpuRenderDevice::Create(
     Platform::Sdl::SdlPlatform& platform, const SdlGpuOptions& options) {
     auto impl = std::make_unique<Impl>(); auto initialized = impl->Initialize(platform, options);
+    if (!initialized) return Base::Err(initialized.error());
+    return std::unique_ptr<SdlGpuRenderDevice>(new SdlGpuRenderDevice(std::move(impl)));
+}
+Base::Result<std::unique_ptr<SdlGpuRenderDevice>, RenderError> SdlGpuRenderDevice::CreateOffscreen(
+    Platform::Sdl::SdlPlatform& platform, const SdlGpuOffscreenOptions& options) {
+    auto impl = std::make_unique<Impl>(); auto initialized = impl->InitializeOffscreen(platform, options);
     if (!initialized) return Base::Err(initialized.error());
     return std::unique_ptr<SdlGpuRenderDevice>(new SdlGpuRenderDevice(std::move(impl)));
 }
@@ -1129,4 +1227,6 @@ Base::Result<std::optional<AcquiredFrame>, RenderError> SdlGpuRenderDevice::Acqu
 Base::Result<PresentStatus, RenderError> SdlGpuRenderDevice::SubmitFrame(const AcquiredFrame& frame, const PreparedFrame& prepared) { return impl_->SubmitFrame(frame, prepared); }
 void SdlGpuRenderDevice::AbandonFrame(const AcquiredFrame& frame) noexcept { impl_->AbandonFrame(frame); }
 Base::Result<TextureReadback, RenderError> SdlGpuRenderDevice::ReadTexture(TextureHandle handle) { return impl_->ReadTexture(handle); }
+Base::Result<void, RenderError> SdlGpuRenderDevice::SetFrameSize(std::uint32_t width, std::uint32_t height) { return impl_->SetFrameSize(width, height); }
+Base::Result<TextureReadback, RenderError> SdlGpuRenderDevice::ReadFrame() { return impl_->ReadFrame(); }
 } // namespace Engine::Render::Backend::SdlGpu

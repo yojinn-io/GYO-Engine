@@ -2,7 +2,7 @@
 
 更新：2026-11-04（第 2 版：`-render` 加入 (B′)，重比、重估，建議改為 (B′)；見文末「修訂紀錄」）。Owner：新工具 `model_viewer`（`tools/model_viewer/`，本批建立）。所屬 PR 線：anim-events-line（[assets.md](assets.md)「實作順序」）。記錄器是 [HANDOFF](HANDOFF.md)。
 
-**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 2026-11-04 開始。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
+**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；下一批 `v8-engine-sdl-renderer-texture` 等你說開始。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
 
 ## 代號對照
 
@@ -166,6 +166,17 @@ v8-tool-model-viewer                      「anim-events-line 的第二批：模
 - R4：改變大小後，讀回的寬高是新的大小；畫面進行中（`AcquireFrame` 之後、`SubmitFrame` 之前）讀回被拒（和現在的 `ReadTexture` 規則相同）。
 - R5：視窗模式的既有測試全部照舊通過（`render.*`）。
 - 平台：R1～R5 在 Linux CI（Lavapipe）與你的 Mac（Metal，L2）各跑一次；Windows（D3D12）不驗（範圍的限界）。
+
+#### `v8-engine-render-offscreen` 實作後的結果（2026-11-04）
+
+- R1～R4：在你的 Mac（Metal）通過，`render.sdl_gpu_offscreen`。R5：`render.*` 3／3 通過。Linux（Lavapipe）要看 L1。
+- 介面：`SdlGpuRenderDevice::CreateOffscreen(SdlPlatform&, SdlGpuOffscreenOptions)`、`SetFrameSize`、`ReadFrame`。`IRenderDevice` 與 `Renderer` 沒有改。
+- 平台仍要傳入：Vulkan 載入驅動時需要 SDL 的視訊子系統，它由平台持有（platform-sdl DI 8）。
+- R1 的觀測方式：SDL 把「已認領」記在視窗自己身上，同一個視窗不能認領兩次。所以「離屏裝置還在時，視窗模式的裝置仍能建立」就證明離屏裝置沒有認領。
+- 和宣告不同的地方：
+  - 讀回只有在某個 pass 真的寫進幀貼圖時才可用；放棄的幀、沒寫進幀貼圖的幀、改了大小還沒送出新幀時，讀回都會被拒。
+  - 離屏的 `AcquireFrame` 不等之前的幀；不每幀讀回的呼叫端要自己控速（標頭寫明）。
+- 突變：宣告 4 條，加上審查後的 1 條，共 5／5 killed。
 
 ### `v8-engine-sdl-renderer-texture`（(B′)）
 

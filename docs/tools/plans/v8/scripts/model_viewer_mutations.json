@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-model-viewer-core (docs/tools/plans/v8/model-viewer.md, '-core'), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' and the 'ro-' ids; the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
   "mutants": [
     {
       "id": "mv-writer-drops-last",
@@ -216,6 +216,51 @@
         "--output-on-failure"
       ],
       "expect": "the file Engine cannot bind is not refused"
+    },
+    {
+      "id": "ro-claims-window",
+      "what": "The offscreen device claims the window (R1)",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "        offscreen = true;\n        swapchainFormat = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;",
+      "replace": "        window = Platform::Sdl::NativeWindow(sourcePlatform);\n        if (!SDL_ClaimWindowForGPUDevice(device, window)) return Base::Err(MakeSdlError(RenderErrorCode::BackendUnavailable, \"SDL_GPU: failed to claim the SDL window\"));\n        windowClaimed = true;\n        offscreen = true;\n        swapchainFormat = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "offscreen device beside the SDL 2D renderer|windowed device while an offscreen device lives"
+    },
+    {
+      "id": "ro-reads-earlier-frame",
+      "what": "ReadFrame hands out the device's first readback instead of the frame just submitted",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "        return Download(offscreenTarget, offscreenDescription);",
+      "replace": "        static const void* owner{};\n        static std::optional<TextureReadback> kept;\n        if (owner != this) { owner = this; kept.reset(); }\n        if (!kept) { auto read = Download(offscreenTarget, offscreenDescription); if (!read) return read; kept = std::move(read.value()); }\n        return *kept;",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "second frame"
+    },
+    {
+      "id": "ro-no-depth-test",
+      "what": "Pipelines are built without the depth test (R3)",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "        info.depth_stencil_state.enable_depth_test = hasDepth;",
+      "replace": "        info.depth_stencil_state.enable_depth_test = false;",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "crossing quads were not depth tested"
+    },
+    {
+      "id": "ro-resize-keeps-target",
+      "what": "A new frame size keeps the old frame target (R4)",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "        if (offscreenTarget && offscreenDescription.width == requestedWidth &&\n            offscreenDescription.height == requestedHeight) return {};",
+      "replace": "        if (offscreenTarget) return {};",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "resized frame"
+    },
+    {
+      "id": "ro-ready-without-store",
+      "what": "A submitted frame counts as readable even when no pass stored into the frame target (not declared; added after review)",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "[](const PreparedPass& pass) { return !pass.color && pass.storeColor; });",
+      "replace": "[](const PreparedPass&) { return true; }) || offscreen;",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "ReadFrame after a frame that stored nothing"
     }
   ]
 }
