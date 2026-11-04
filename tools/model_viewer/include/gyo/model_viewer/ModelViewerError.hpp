@@ -25,6 +25,7 @@ enum class ModelViewerErrorCode : std::uint8_t {
     ChangedOnDisk,       // the file changed since it was opened; saving would overwrite that change
     AlreadyExists,       // a new events file would replace an existing file
     InvalidRegistration, // the id or path cannot be registered in that catalog
+    PreviewFailed,       // the preview's device, shaders or renderer could not start or draw
 };
 
 [[nodiscard]] constexpr const char* ToString(const ModelViewerErrorCode code) noexcept {
@@ -39,6 +40,7 @@ enum class ModelViewerErrorCode : std::uint8_t {
     case ModelViewerErrorCode::ChangedOnDisk: return "ChangedOnDisk";
     case ModelViewerErrorCode::AlreadyExists: return "AlreadyExists";
     case ModelViewerErrorCode::InvalidRegistration: return "InvalidRegistration";
+    case ModelViewerErrorCode::PreviewFailed: return "PreviewFailed";
     }
     return "Unknown";
 }

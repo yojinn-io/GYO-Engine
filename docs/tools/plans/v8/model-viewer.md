@@ -2,7 +2,7 @@
 
 更新：2026-11-04（第 2 版：`-render` 加入 (B′)，重比、重估，建議改為 (B′)；見文末「修訂紀錄」）。Owner：新工具 `model_viewer`（`tools/model_viewer/`，本批建立）。所屬 PR 線：anim-events-line（[assets.md](assets.md)「實作順序」）。記錄器是 [HANDOFF](HANDOFF.md)。
 
-**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；`v8-engine-sdl-renderer-texture` 完成（見「`v8-engine-sdl-renderer-texture` 實作後的結果」）；`-preview` 2026-11-04 開始。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
+**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；`v8-engine-sdl-renderer-texture` 完成（見「`v8-engine-sdl-renderer-texture` 實作後的結果」）；`-preview` 完成（見「`-preview` 實作後的結果」）；下一批 `-events`。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
 
 ## 代號對照
 
@@ -177,6 +177,17 @@ v8-tool-model-viewer                      「anim-events-line 的第二批：模
   - 讀回只有在某個 pass 真的寫進幀貼圖時才可用；放棄的幀、沒寫進幀貼圖的幀、改了大小還沒送出新幀時，讀回都會被拒。
   - 離屏的 `AcquireFrame` 不等之前的幀；不每幀讀回的呼叫端要自己控速（標頭寫明）。
 - 突變：宣告 4 條，加上審查後的 1 條，共 5／5 killed。
+
+#### `-preview` 實作後的結果（2026-11-04）
+
+- V1、V3：`gyo_model_viewer.core`（`cpu`）。V2，以及 V3 中和 GPU 有關的部分：`gyo_model_viewer.preview`（`gpu`），只在你的 Mac 跑。
+- V4：C1、C6 照舊通過。C6 的守衛加了 7 個目標，並收緊了名稱比對（[判定變更](model-viewer-guard-judgment-change.md)，你已核准）。
+- 和宣告不同的地方：
+  - V2 只有 L2，沒有 L1：CI 的 GPU 步驟只跑 `^render\.` 開頭的測試。工具的測試不冒用 Engine 的名稱，所以 L1 的表裡 V2 改成 L2。
+  - V2 讀回用的是離屏裝置的 `ReadFrame`，不是 `ReadTexture`；兩者共用同一段下載程式。
+  - gui 變體成為預設，cli 變體仍保留。
+- 突變：宣告 3 條，加上審查後 1 條，4／4 killed；守衛的突變 3／3 也重跑過。
+- GUI：你試開了三次，沒有問題（2026-11-04）。L3 照計畫在 `-trial` 做。
 
 #### `v8-engine-sdl-renderer-texture` 實作後的結果（2026-11-04）
 

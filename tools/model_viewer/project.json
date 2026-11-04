@@ -1,9 +1,19 @@
 {
   "version": 1,
   "display_name": "GYO Model Viewer",
-  "default_variant": "cli",
+  "default_variant": "gui",
   "requires_apps": {},
   "variants": {
+    "gui": {
+      "components": [
+        "UFBX",
+        "SDL_GPU",
+        "SDL_RENDERER",
+        "SDL_INPUT",
+        "IMGUI"
+      ],
+      "packageable": false
+    },
     "cli": {
       "components": [
         "UFBX"

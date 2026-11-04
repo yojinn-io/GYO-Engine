@@ -3,6 +3,8 @@
 #include "gyo/model_viewer/ModelContent.hpp"
 #include "gyo/model_viewer/ModelSummary.hpp"
 
+#include "ViewerWindow.hpp"
+
 #include "gyo/framework/HeadlessShell.hpp"
 
 #include "engine/base/Error.hpp"
@@ -26,12 +28,15 @@ constexpr std::string_view kHelp =
     "  gyo_model_viewer models    --asset-root <dir> [--asset-catalog <catalog.json>]\n"
     "  gyo_model_viewer info      --asset-root <dir> [--asset-catalog <catalog.json>] --model <asset id>\n"
     "  gyo_model_viewer roundtrip --asset-root <dir> [--asset-catalog <catalog.json>] --events <asset id>\n"
+    "  gyo_model_viewer window    [--asset-root <dir> [--asset-catalog <catalog.json>]] [--gpu-driver <driver>]\n"
     "  gyo_model_viewer --help\n"
     "\n"
     "Without --asset-catalog the asset root is a content root (content.json).\n"
     "models lists the model assets; info describes a model and its gyo.anim_events\n"
     "files; roundtrip checks that the viewer would save an events file as Engine\n"
-    "reads it. Nothing is written.\n"
+    "reads it. Nothing is written. window opens the viewer's window (gui variant):\n"
+    "the models, a model's 3D preview and its clips; --gpu-driver is auto, d3d12,\n"
+    "vulkan or metal.\n"
     "Exit status: 0 done, 2 usage, 3 a file could not be read, 4 content that\n"
     "cannot be mounted or that Engine or the catalog refuses.\n";
 
@@ -148,6 +153,17 @@ int Run(const std::span<const std::string> arguments) {
     } else if (command == "info") {
         options = Options(arguments, {"--asset-root", "--asset-catalog", "--model"}, problem);
         required = "--model";
+    } else if (command == "window") {
+        options = Options(arguments, {"--asset-root", "--asset-catalog", "--gpu-driver"}, problem);
+        if (!options) return Usage(problem);
+        if (options->contains("--asset-catalog") && !options->contains("--asset-root")) {
+            return Usage("--asset-catalog needs --asset-root");
+        }
+        WindowOptions window;
+        if (const auto found = options->find("--asset-root"); found != options->end()) window.assetRoot = found->second;
+        if (const auto found = options->find("--asset-catalog"); found != options->end()) window.assetCatalog = found->second;
+        if (const auto found = options->find("--gpu-driver"); found != options->end()) window.gpuDriver = found->second;
+        return RunViewerWindow(window);
     } else if (command == "roundtrip") {
         options = Options(arguments, {"--asset-root", "--asset-catalog", "--events"}, problem);
         required = "--events";

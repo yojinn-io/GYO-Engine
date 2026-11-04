@@ -60,6 +60,26 @@ class ModelViewerDependencyGuardTests(unittest.TestCase):
                               "target_link_libraries(gyo_model_viewer PRIVATE gyo_model_viewer_core some_game_domain)\n"})
         self.assertEqual(findings, ["tools/model_viewer/CMakeLists.txt: links some_game_domain"])
 
+    def test_window_targets_pass(self):
+        self.assertEqual(self.scan({"tools/model_viewer/CMakeLists.txt":
+                                    "target_link_libraries(gyo_model_viewer_preview PUBLIC GYO::Render GYO::ModelRenderer "
+                                    "GYO::PlatformSDL GYO::RenderBackendSDL PRIVATE GYO::RenderBackendSDLGPU)\n"
+                                    "target_link_libraries(gyo_model_viewer PRIVATE GYO::ToolFrameworkImGui imgui::core)\n"}), [])
+
+    def test_native_and_other_imgui_targets_still_fail(self):
+        findings = self.scan({"tools/model_viewer/CMakeLists.txt":
+                              "target_link_libraries(a PRIVATE GYO::RenderBackendSDLGPUNative GYO::PlatformSDLNative "
+                              "imgui::sdl3_sdlrenderer3 SDL3::SDL3-static)\n"})
+        self.assertEqual(len(findings), 4)
+
+    def test_a_name_going_on_after_an_allowed_one_fails(self):
+        findings = self.scan({"tools/model_viewer/CMakeLists.txt":
+                              "target_link_libraries(a PRIVATE GYO::PlatformSDL-Native imgui::core.sdl3 GYO::Render+x)\n"
+                              "# GYO::Model.\n"})
+        self.assertEqual(sorted(findings), ["tools/model_viewer/CMakeLists.txt: names GYO::PlatformSDL-Native",
+                                            "tools/model_viewer/CMakeLists.txt: names GYO::Render+x",
+                                            "tools/model_viewer/CMakeLists.txt: names imgui::core.sdl3"])
+
     def test_own_targets_and_variables_pass(self):
         self.assertEqual(self.scan({"tools/model_viewer/CMakeLists.txt":
                                     "target_link_libraries(gyo_model_viewer_core\n    PUBLIC GYO::Model\n"

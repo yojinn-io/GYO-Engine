@@ -8,8 +8,8 @@ the runtime only loads them.
 
 Owner: `model_viewer` (`tools/model_viewer/`).
 
-**Status (2026-11-04): `v8-tool-model-viewer-core`.** The core library and the command line; the window
-(`-preview`, `-events`) and the event sounds (`-event-sounds`, after the framework's `gyo.event_sounds` lands) follow.
+**Status (2026-11-04): `v8-tool-model-viewer-preview`.** The core library, the command line and the window with the
+3D preview and playback; editing events in the window (`-events`) and the event sounds (`-event-sounds`) follow.
 
 ## Design Invariants
 
@@ -74,6 +74,27 @@ catalog (`--asset-catalog`, its entries under `--asset-root`). It writes nothing
 
 Exit status: 0 done, 2 usage, 3 a file could not be read, 4 content that cannot be mounted or that Engine or the
 catalog refuses.
+
+## Window
+
+`gyo_model_viewer window [--asset-root <dir> [--asset-catalog <catalog.json>]] [--gpu-driver <driver>]` (variant `gui`,
+the default) runs on the framework's ImGui shell: the content (from the command line or the OS folder dialog), the
+model list, Engine's description of the model (`DescribeModel`), clip playback and the 3D preview.
+
+- `ModelSession`: the opened model, its clip and its `PlaybackClock`, or the reason the last open failed; a failed open
+  shows nothing of the model before it.
+- `PlaybackClock` and `PreviewPose`: wall time becomes clip seconds through the speed; the pose is `SamplePose` at
+  those seconds, or `MakeDefaultPose` for a model without clips (Design Invariant 5).
+- `PreviewRenderer` (`gyo_model_viewer_preview`): Engine's `ModelRenderer` and `Renderer` on an offscreen GPU device
+  (`SdlGpuRenderDevice::CreateOffscreen`), each frame read back; every material's base colour is its tint (no
+  textures: which texture a material gets is the product's); the bones as thin boxes on the `WorldOverlay` layer.
+  `OrbitCamera` and `FrameModel` place the camera; drawing is Engine's.
+- `UploadFrame`: the frame into a texture of the shell's SDL renderer (`SdlRenderer::UploadTexture`), shown with the
+  framework's `ImGuiTextureId`; the texture changes only in `BeginFrame`, before ImGui draws.
+- Engine's builtin shaders are copied next to the executable (`shaders/builtin`) on every build.
+
+The guard's positive list has the window's targets since `v8-tool-model-viewer-preview`
+([judgment change](../tools/plans/v8/model-viewer-guard-judgment-change.md), user, 2026-11-04).
 
 ## Core library
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' the 'ro-' ids, and v8-engine-sdl-renderer-texture, the 'rt-' ids; the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux; the rt-imgui ones need a tree with the ImGui binding, such as GYO_TOOLS=ui_editor;model_viewer), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' the 'ro-' ids, and v8-engine-sdl-renderer-texture, the 'rt-' ids, and v8-tool-model-viewer-preview, the 'mvp-' ids (mvp-stale-frame needs a GPU); the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux; the rt-imgui ones need a tree with the ImGui binding, such as GYO_TOOLS=ui_editor;model_viewer), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
   "mutants": [
     {
       "id": "mv-writer-drops-last",
@@ -289,6 +289,44 @@
       "replace": "    if (rowPitch < row || bytes.size() < needed) {",
       "target": "gyo_sdl_renderer_texture_tests",
       "expect": "a row pitch above INT_MAX was accepted"
+    },
+    {
+      "id": "mvp-bind-pose",
+      "what": "The preview draws the default pose instead of sampling the clip",
+      "file": "tools/model_viewer/src/Playback.cpp",
+      "find": "    if (!clip) {\n        return Engine::Model::MakeDefaultPose(model, output);\n    }",
+      "replace": "    if (clip || !clip) {\n        return Engine::Model::MakeDefaultPose(model, output);\n    }",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "V1:*",
+      "expect": "the preview drew the rest pose, not the sampled one"
+    },
+    {
+      "id": "mvp-speed-twice",
+      "what": "The speed enters the clip seconds twice",
+      "file": "tools/model_viewer/src/Playback.cpp",
+      "find": "    const double next = seconds + wallSeconds * (std::isfinite(speed) ? std::max(speed, 0.0) : 0.0);",
+      "replace": "    const double next = seconds + wallSeconds * (std::isfinite(speed) ? std::max(speed, 0.0) * std::max(speed, 0.0) : 0.0);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "V1:*",
+      "expect": "the speed is applied other than once"
+    },
+    {
+      "id": "mvp-stale-frame",
+      "what": "The preview hands out the frame it read first instead of reading each frame back",
+      "file": "tools/model_viewer/src/PreviewRenderer.cpp",
+      "find": "    auto read = impl_->device->ReadFrame();\n    if (!read) return Engine::Base::Err(PreviewError(\"cannot read the frame back\", Engine::Base::CauseDetail(read.error())));\n    impl_->frame = std::move(read.value());",
+      "replace": "    if (impl_->frame.bytes.empty()) {\n    auto read = impl_->device->ReadFrame();\n    if (!read) return Engine::Base::Err(PreviewError(\"cannot read the frame back\", Engine::Base::CauseDetail(read.error())));\n    impl_->frame = std::move(read.value());\n    }",
+      "target": "gyo_model_viewer_preview_smoke",
+      "expect": "an earlier frame was handed out|another frame than the device"
+    },
+    {
+      "id": "mvp-bone-no-pitch",
+      "what": "Bones are not turned toward their child (no yaw or pitch) (not declared; added after review)",
+      "file": "tools/model_viewer/src/PreviewRenderer.cpp",
+      "find": "{(from + to) * 0.5F, {pitch, yaw, 0}, {boneThickness, boneThickness, length}};",
+      "replace": "{(from + to) * 0.5F, {0, 0, 0 * (pitch + yaw)}, {boneThickness, boneThickness, length}};",
+      "target": "gyo_model_viewer_preview_smoke",
+      "expect": "the bone is not drawn along X"
     }
   ]
 }
