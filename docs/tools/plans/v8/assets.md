@@ -605,7 +605,7 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
 - 措辭的提醒：DI 1 的「names no SDL or `*Native` target」裡，`GYO::AudioBackendSDL` 的名字也有 SDL。這裡把「SDL target」讀成 SDL3 自己的 target，同一句的「Playback goes through `GYO::Audio` and its SDL backend」支持這個讀法。要不要改成「no SDL3 target」由你決定；改 DI 本身是 Architecture Delta。
 - 既有的弱點（不是本批造成的）：不帶目錄的 `#include <SDL.h>` 兩版守衛都放過（用到時會被 `SDL_` 規則抓到）；CMake 註解裡的 `::` 名稱也會被當成 target。
 
-## `v8-tool-audio-editor-regions` 的事前宣告（§14.1，草稿，2026-11-04，等你核准）
+## `v8-tool-audio-editor-regions` 的事前宣告（§14.1，2026-11-04 使用者「照草稿核准」）
 
 **功能**：從一個原檔切出多段，每段是一個片段，一次匯出、各自登錄，並可以淡入淡出。使用的情境：把換彈的錄音切成 `magazine_out`、`magazine_in`、`bolt_pull` 等，每個動作一個事件、一段聲音（聲音側的 B，`v8-tool-anim-event-sound-owner`）。
 
@@ -709,6 +709,7 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
   4. **守的性質是否仍有其他判定守著**：有。`AudioEditorCoreTests.cpp` 的「ExportSound keeps an existing entry's other fields …」與「… writes nothing for a bad source」繼續守單段；判定 3（其他條目不變）與判定 4（拒絕時什麼都不寫）把同一個性質延伸到多段。
   5. **根據**：架構評估的第 4 點（「多段匯出等於多個輸出各自登錄」）、你選的 B、本節的判定 3 與 4。
 - 程序：改 DI 的字面要你同意；本批的守衛（相依性守衛）不變。開工實作後跑突變，並在交你核准前由検証者用實際的資料核對上面的 1～5。
+- 2026-11-04 你照草稿核准了本宣告，包括這段措辭的方向。照上面的程序，實作後的 1～5（突變與検証者核對後）再交你核准一次，才改進 `docs/audio_editor/architecture.md`。
 
 ### 範圍的限界
 
@@ -734,7 +735,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-audio-editor-convert    「high（重新取樣局部 xhigh）｜Opus 5.5｜核心程式庫＋CLI：讀 WAV、轉換（演算法等價）、輸出並登錄 catalog」
 │   ├── v8-tool-framework-shell         「medium～high｜Opus 5.5｜工具共用層 tools/framework/：從 ui_editor 搬出外殼四塊，行為不變」（PR #123，已合併）
 │   ├── v8-tool-audio-editor-edit       「high｜Opus 5.5｜GUI：播放、波形、資訊、裁剪、增益、工程檔」（PR #141）
-│   └── v8-tool-audio-editor-regions    「high｜Opus 5.5｜一個原檔切多段、一次匯出、淡入淡出」（事前宣告草稿；#141 合併後）
+│   └── v8-tool-audio-editor-regions    「high｜Opus 5.5｜一個原檔切多段、一次匯出、淡入淡出」（事前宣告已核准；#141 合併後開工）
 │
 ├── framework-rework-line               「PR #123 的整改，工具側（2026-11-01 依架構整改計畫重排）：全部等架構的 PR A 合併」
 │   ├── v8-tool-ui-editor-path-dialog-adopt「high｜Opus 5.5｜T1：ui_editor 改呼叫 Engine 的選擇窗（和 T3a 一起做）」
@@ -757,7 +758,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-audio-editor-convert` | high（局部 xhigh）｜Opus 5.5 | 6～10 h | 工具登錄（`tools.csv`、`project.json`）、核心程式庫與 CLI；照上方事前宣告通過；catalog 條目正確；突變檢查 |
 | `v8-tool-framework-shell` | medium～high｜Opus 5.5 | 3～5 h | `tools/framework/` 有 ImGui＋SDL 宿主、系統選擇窗、檔案存取、唯讀 catalog 掛載、catalog 寫入（從音效工具搬入）；ui_editor 改用它、測試全過；Design Invariants＋守衛；`framework` 加進保留名 |
 | `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過。事前宣告已核准，2026-11-03 開工時更新（上方）；等 GYO::Audio 播放控制層合併後才實作 |
-| `v8-tool-audio-editor-regions` | high｜Opus 5.5 | 8～12 h | 多段匯出、淡入淡出、工程檔 version 2、`export` 命令；DI 3 的措辭改成複數（要你同意）；使用者在 GUI 上試過。事前宣告在上方（草稿） |
+| `v8-tool-audio-editor-regions` | high｜Opus 5.5 | 8～12 h | 多段匯出、淡入淡出、工程檔 version 2、`export` 命令；DI 3 的措辭改成複數（要你同意）；使用者在 GUI 上試過。事前宣告在上方，2026-11-04 核准；#141 合併後開工 |
 | `v8-tool-ui-editor-path-dialog-adopt`（T1） | high｜Opus 5.5 | 和 T3a 合計 5～7 h | 等 PR A 合併（含 `v8-engine-platform-path-dialog`）；和 T3a 一起做，因為舊宿主交不出 `SdlPlatform&`（架構計畫 D-4）。`SdlPathDialogs` 改收 `SdlPlatform&`，只留用途↔tag 對照與每幀套用；`PathDialog.hpp` 不再 include framework；CMake 具名 `GYO::PlatformSDL`；ui_toolchain.md Design Invariant 1 改寫（要你同意）。`pathDialogOpen_`（`EditorApp.cpp`）加「答案不來」時的恢復規則：Engine 新的 Design Invariant 10 只保證最多一個答案。守衛加 `GYO::PlatformSDL`（放寬，§14.4 出示 1～5 並經你核准）。L3 實機（Windows 優先）：選檔、取消、非 ASCII 路徑、對話窗開著時關視窗、答案不來。事前宣告帶入架構批的範圍限界：真實 OS 對話窗的回呼執行緒、Linux portal 的 pump、平台或父視窗銷毀時的行為，CI 都量不到 |
 | `v8-tool-ui-editor-shell-adopt`（T3a） | high｜Opus 5.5 | （見 T1） | 等 PR A 合併（含 `v8-framework-shell`）。GUI 用 `RunImGuiShell`，cli 用 `RunHeadlessShell`（命令列錯誤印 help、回 2）；資產預覽用 `NativeRenderer(context.renderer)`，ui_editor 自己連 `GYO::RenderBackendSDLNative`（platform-sdl Replacement Criteria 2 的新例外，Engine 的貼圖 API 另案）。守衛加 `GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative`，拿掉 `GYO::ToolFrameworkGui`（§14.4）；突變 `ui-guard-native-target` 改寫。GUI 由你試過 |
 | `v8-tool-user-files-adopt`（T2） | medium～high｜Opus 5.5 | 2～3 h | 等 PR A 合併（含 `v8-engine-io-user-files`）。ui_editor 的 `DocumentSession` 改呼叫 engine/io；audio_editor 的讀寫改用 `ReadAllBytes` 與 `WriteFileAtomically`（暫存檔名會變）。`ProbeFileStamp` 與 `ReadAllBytes` 都明確傳 `maxBytes`（預設 64 MB）。`AbsolutePath` 留在 framework 核心（架構計畫 D-2），ui_editor 繼續用那一份。audio_editor 現在完全沒用 `FileService`，改用 engine/io 是新依賴：CMake 具名 `GYO::Engine`，守衛加 `engine/io/` 與 `GYO::Engine`（放寬，§14.4）；ui_editor 的守衛預期不變，開工前確認。兩個工具的測試照舊通過 |
@@ -795,4 +796,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-ui-editor-input-guard-approve` | （2026-11-02）核准 IU-2 的 ui_editor 守衛收緊：任何檔案都不得 include `imgui_internal.h`（§14.4 的 1～5 見 IU-2 實作後的結果） | 對「守衛的收緊（不得 include imgui_internal.h）核准嗎？」答「核准」 |
 | `v8-tool-audio-editor-edit-restart` | （2026-11-03）`-edit` 開工時的更新：(1) GYO::Audio 播放控制層由 audio-line 會話推送、開 PR、合併後才實作；(2) 工程檔 audio_editor 自己連 nlohmann；(3) 模型表：上段，実装者／審査者 Opus 5.5／high、検証者 Fable 5.1／high；守衛目標的 `GYO::ToolFrameworkGui` 換成 `GYO::ToolFrameworkImGui` | 「いいです、意見を受け入れます」（接受三項建議） |
 | `v8-tool-anim-event-sound-owner` | （2026-11-04）「事件 → 聲音」由 framework 持有，是組合格式（建議形狀 `gyo.event_sounds`，架構卡 `v8-arch-event-sounds-contract`）；Engine 不動；聲音側選 B（每個動作一個事件、一段聲音）。audio_editor 只管片段（DI 8 不動），下一批是多段匯出（`v8-tool-audio-editor-regions`）。PvP 的 `sfx.json` 遷移由產品會話在契約落地後做 | 經架構會話轉述（不是原話）：使用者 2026-11-04 決定 |
+| `v8-tool-audio-editor-regions-predeclare` | （2026-11-04）`v8-tool-audio-editor-regions` 的事前宣告照草稿核准：改動、判定 1～7、突變 12 條、範圍的限界、模型表（上段；実装者／審査者 Opus 5.5／high、検証者 Fable 5.1／high），以及 DI 3 改成複數的措辭方向。DI 3 的 §14.4 1～5 在實作、突變、検証者核對後再交使用者核准 | 對「多段匯出的事前宣告（含 DI 3 改成複數）照草稿核准嗎？」答「照草稿核准」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |

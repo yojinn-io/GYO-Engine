@@ -83,4 +83,4 @@
   - Model Viewer（anim-events-line）：經 framework 讀 anim_events 與 event_sounds 兩個格式，用 framework 的偏移函式預覽，之後編輯 event_sounds。依賴架構卡。
   - Engine、PvP：本線不碰。
 - **順序**：framework 契約（架構卡）→ PvP 遷移（產品會話）；audio_editor 的多段匯出與 Model Viewer 的預覽各自並行。
-- **本線的後續**：`v8-tool-audio-editor-regions` 的事前宣告在 [assets.md](assets.md)（草稿，等使用者核准）；決定記為 `v8-tool-anim-event-sound-owner`。
+- **本線的後續**：`v8-tool-audio-editor-regions` 的事前宣告在 [assets.md](assets.md)（2026-11-04 核准，`v8-tool-audio-editor-regions-predeclare`）；決定記為 `v8-tool-anim-event-sound-owner`。
