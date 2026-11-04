@@ -181,7 +181,7 @@ v8-tool-model-viewer                      「anim-events-line 的第二批：模
 #### `-trial` 的結果（2026-11-04）
 
 - P1 通過（每個模型的 p95 ≤ 6.0 ms，門檻 16.7 ms），P2 通過。詳細見 [model-viewer-trial.md](model-viewer-trial.md)。
-- L3：步驟與限制寫在同一份文件，等你操作。第 5 項「遊戲裡聽到」做不到，因為 PvP 不讀 `gyo.event_sounds`。
+- L3：你試用後的結論是「model viewer 可以沒問題了」（2026-11-04）。逐項的結果沒有回報；第 5 項「遊戲裡聽到」做不到，因為 PvP 不讀 `gyo.event_sounds`。audio_editor 的部分等你決定它的邊界。
 
 #### `-event-sounds` 實作後的結果（2026-11-04）
 
