@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/Pvp/EntityColumns.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/Combat.hpp"
 #include "RetroFPS/Pvp/PlayerAnimation.hpp"
@@ -30,8 +31,20 @@ struct WorldSnapshot final {
 // a value the Gateway would refuse fails the whole Gateway, so it is a
 // Programmer Error here (GYO_ASSERT on ValidPlayerAnimations).
 void RequireValidAnimation(const WorldSnapshot& snapshot);
+// Every component of a snapshot lists the same entities in strictly ascending
+// EntityId order (entity-model E-5, E-9): the order the digest and the wire
+// see is the order of the columns, never of joins and leaves.
+void RequireEntityOrder(const WorldSnapshot& snapshot);
+// Every component of a snapshot names the same entities in the same strictly
+// ascending order (RequireEntityOrder, entity-model E-5/E-7) and the animation
+// values are valid (RequireValidAnimation). The host runs it before a
+// publication leaves the Match side.
+void RequireValidSnapshot(const WorldSnapshot& snapshot);
+// The one way to take an entity out of a snapshot: every component at once
+// (entity-model E-7). Returns whether the entity was in the snapshot.
+bool EraseEntity(WorldSnapshot& snapshot, PlayerId entityId);
 
-// Cumulative movement resolution counts of one participant, for the host's
+// Cumulative movement resolution counts of one connected entity, for the host's
 // connection-quality judgement; never gameplay input.
 struct MovementQuality final {
     std::uint64_t resolved{};
@@ -49,7 +62,7 @@ enum class InputAdmission : std::uint8_t {
     Accepted, UnknownPlayer, Malformed, EpochOld, EpochFuture, LifeOld, LifeFuture, BeyondWindow, ConflictQueued
 };
 
-// Sole gameplay authority. No player controller, camera, connection or clock.
+// Sole gameplay authority. No player controller, camera, socket or clock.
 // The spawn a joining or respawning player takes (pv6 contract §5): among the
 // spawns where a body fits clear of the walls and of the given living players,
 // the one farthest from the nearest of them, in content order on ties; the first
@@ -66,6 +79,9 @@ struct ActionTiming final {
     std::uint64_t resolvedTick{};
     bool held{};
 };
+
+// Test seam: reads the Match's private columns (entity-model G2).
+struct PvpMatchTestAccess;
 
 class PvpMatch final {
 public:
@@ -123,15 +139,26 @@ private:
         std::uint64_t holdUntil{};
         bool held{};
     };
-    struct Participant final {
-        PlayerState state;
-        CombatState combat;
-        // The animation value of the latest tick and the state it was advanced
-        // to: the next tick's `previous` and `before` (protocol-v9 §4.4).
-        PlayerAnimation animation;
-        PlayerState animationState;
-        ActionId retiredActionThrough{};
+    // The animation component of one entity: the value of the latest tick and
+    // the state it was advanced to, the next tick's `previous` and `before`
+    // (protocol-v9 §4.4). `before` never leaves the Match.
+    struct AnimationTrack final {
+        EntityId id{};
+        PlayerAnimation value;
+        PlayerState before;
+    };
+    // The action ledger of one shooter: an input source every shooter has,
+    // connected or not (entity-model §3.2). ACK and retirement are the
+    // connection's business; the Match only honours them.
+    struct ActionLedger final {
+        EntityId id{};
+        ActionId retiredThrough{};
         std::map<ActionId, ActionEntry> actions;
+    };
+    // The movement input source and the connection-quality diagnostics of
+    // one connected entity. Not an entity component: an AI has none of this.
+    struct Connection final {
+        EntityId id{};
         std::map<std::uint64_t, MovementCommand> commands;
         MovementCommand lastActualCommand;
         std::uint32_t missingInputTicks{};
@@ -145,30 +172,50 @@ private:
         MovementResetReason movementResetReason{};
         MovementQuality quality;
     };
-    [[nodiscard]] static std::uint32_t ContiguousPending(const Participant& player) noexcept;
-    [[nodiscard]] bool ActionDue(const Participant& player, const ActionEntry& entry) const noexcept;
+    [[nodiscard]] static std::uint32_t ContiguousPending(const PlayerState& state, const Connection& connection) noexcept;
+    [[nodiscard]] bool ActionDue(const PlayerState& state, const ActionEntry& entry) const noexcept;
     // Decides one due action now, or starts its cooldown hold (returns false).
-    [[nodiscard]] bool Decide(PlayerId playerId, Participant& player, ActionId actionId, ActionEntry& entry);
-    void ResetMovementEpoch(Participant& player, MovementResetReason reason);
+    [[nodiscard]] bool Decide(PlayerId playerId, PlayerState& state, CombatState& combat, ActionId actionId,
+                              ActionEntry& entry);
+    void ResetMovementEpoch(PlayerState& state, Connection& connection, MovementResetReason reason);
     void ResolveLifeBoundaries();
     [[nodiscard]] const SpawnPoint* FindSpawn(PlayerId playerId) const;
-    void Kill(Participant& player);
+    void Kill(PlayerState& state, CombatState& combat);
     void ResolveActions(const ShotReferenceAge& referenceAge);
-    void AdvanceAnimation(Participant& player);
-    // The living players' hit shapes of this tick, placed once on its first
-    // shot (v8-product-hitbox-tick-pose (a)).
-    [[nodiscard]] const std::map<PlayerId, std::vector<PlayerWorldHitShape>>& TickShapes();
+    void AdvanceAnimation(AnimationTrack& track, const PlayerState& state);
+    // The one way an entity leaves the Match: every column, input source and
+    // tick cache at once (entity-model E-7). Returns whether it was present.
+    bool EraseEntity(EntityId entityId);
+    // The hit shapes of one living entity this tick (entity-model §3.4: a
+    // tick cache, rebuilt from the components, never published or digested).
+    struct EntityShapes final {
+        EntityId id{};
+        std::vector<PlayerWorldHitShape> shapes;
+    };
+    // The living entities' hit shapes of this tick, placed once on its first
+    // shot (v8-product-hitbox-tick-pose (a)); ascending EntityId.
+    [[nodiscard]] const std::vector<EntityShapes>& TickShapes();
     Arena arena_;
     CombatRules rules_;
     StanceRules stance_;
     PlayerAnimationRules animation_;
     std::shared_ptr<const PlayerHitModel> hitModel_;
-    std::uint64_t shapesTick_{};
-    std::map<PlayerId, std::vector<PlayerWorldHitShape>> shapes_;
-    // Every player's combat state as this tick's actions began: the shapes
-    // are posed with it, so no action of the tick reaches the judged pose.
-    std::map<PlayerId, CombatState> actionsCombat_;
-    std::map<PlayerId, Participant> players_;
+    std::uint64_t tickShapesTick_{};
+    std::vector<EntityShapes> tickShapes_;
+    // Every entity's combat state as this tick's actions began, a copy of
+    // combats_ in the same order: the shapes are posed with it, so no action
+    // of the tick reaches the judged pose.
+    std::vector<CombatState> actionStartCombats_;
+    // Entity components, one column each in ascending EntityId order
+    // (entity-model §3.2, E-5). Every entity has all three; rows are inserted
+    // by Join and erased by EraseEntity only, so the columns stay aligned.
+    std::vector<PlayerState> bodies_;
+    std::vector<CombatState> combats_;
+    std::vector<AnimationTrack> animations_;
+    // Input sources, ascending EntityId: one row per connected entity.
+    std::vector<ActionLedger> actionLedgers_;
+    std::vector<Connection> connections_;
+    friend struct PvpMatchTestAccess;
     std::uint64_t tick_{};
 };
 

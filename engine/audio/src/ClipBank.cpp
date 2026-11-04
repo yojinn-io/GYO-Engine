@@ -1,14 +1,17 @@
 #include "engine/audio/ClipBank.hpp"
 
 #include <string>
+#include <utility>
+
+#include "ClipValidation.hpp"
 
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/base/Assert.hpp"
 
 namespace Engine::Audio {
 
-Base::Result<ClipId, AudioError> ClipBank::Add(const Base::ConstSpan<std::int16_t> interleaved,
-                                               const std::uint16_t channels, const std::uint32_t sampleRate) {
+Base::Result<void, AudioError> Detail::ValidateClip(const Base::ConstSpan<std::int16_t> interleaved,
+                                                   const std::uint16_t channels, const std::uint32_t sampleRate) {
     if (channels != 1 && channels != 2) {
         return Base::Err(AudioError::Make(AudioErrorCode::InvalidClip, "a clip has 1 or 2 channels",
                                           "channels=" + std::to_string(channels)));
@@ -24,8 +27,16 @@ Base::Result<ClipId, AudioError> ClipBank::Add(const Base::ConstSpan<std::int16_
         return Base::Err(AudioError::Make(AudioErrorCode::InvalidClip, "a clip's samples are whole frames",
                                           "samples=" + std::to_string(interleaved.size())));
     }
+    return {};
+}
+
+Base::Result<ClipId, AudioError> ClipBank::Add(const Base::ConstSpan<std::int16_t> interleaved,
+                                               const std::uint16_t channels, const std::uint32_t sampleRate) {
+    if (auto valid = Detail::ValidateClip(interleaved, channels, sampleRate); !valid) {
+        return Base::Err(std::move(valid).error());
+    }
     clips_.push_back(Clip{std::vector<std::int16_t>(interleaved.begin(), interleaved.end()), channels});
-    return ClipId{static_cast<std::uint32_t>(clips_.size())};
+    return ClipId{clips_.size()};
 }
 
 ClipView ClipBank::View(const ClipId id) const {
