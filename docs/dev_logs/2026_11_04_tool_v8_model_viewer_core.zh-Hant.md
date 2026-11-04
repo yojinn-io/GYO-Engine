@@ -54,9 +54,16 @@
   - framework 的掛載依 id 排序列出資產，不是照 catalog 原本的順序；
   - 被 Engine 拒絕的檔，原因是「缺欄位」，不是版本號；
   - 改了預期和標頭註解，實作沒動。
+- L1（[PR #146](https://github.com/yojinn-io/GYO-Engine/pull/146)，手動 dispatch，run 41805066180）：
+  - linux-x64、macos-arm64 綠；windows-x64 的 `gyo_model_viewer.cli` 失敗：`roundtrip` 回報「讀回相同，但排版不同」。
+  - 原因切分（§14.1）：Test 自身。CMake 的 `file(WRITE)` 以文字模式開檔，Windows 上 `\n` 變成 `\r\n`，事件檔就不是寫出程式給的 LF 位元組；工具回報「排版不同」是對的。
+  - 根據：同一個比對在 core 測試（C++ 字串）裡，Windows 也通過了。
+  - 修正：CLI 測試改用 `file(CONFIGURE … NEWLINE_STYLE LF)` 寫事件檔，「沒寫檔」的檢查改用 SHA-256 比對。判定不變（逐位元組相同）。
+  - 照 D184 只重跑殺它的突變 `mv-info-without-binding`：killed（`mutations-ci-fix.txt`）。
+  - 修正後的 L1 結果記在 HANDOFF。
 - 探索：PvP 的 `object_fps_pvp.anim_events.nailer_v2.viewmodel` 用 `roundtrip` 往返後逐位元組相同；`info` 讀到 nailer 的 5 個片段（`Armature|Reload` 3.733 s）。這不是判定 P2，P2 在 `-trial` 照宣告做。
 - 審查的指出與處理：見 [model-viewer.md](../tools/plans/v8/model-viewer.md)「`-core` 實作後的結果」。全部在本批修正，並加了突變。
-- 證據：使用者的 Mac，主 checkout `build/evidence/tool-v8-model-viewer/core/`，有 `mutations.txt`（第二輪）、`mutations-round1.txt`、`ctest.txt`、`ctest-all.txt`、`pvp-explore.txt`、`base-commit.txt`。
+- 證據：使用者的 Mac，主 checkout `build/evidence/tool-v8-model-viewer/core/`，有 `mutations.txt`（第二輪）、`mutations-round1.txt`、`mutations-ci-fix.txt`、`ctest.txt`、`ctest-all.txt`、`pvp-explore.txt`、`base-commit.txt`。
 
 ## 和事前宣告不同的地方
 
