@@ -162,9 +162,9 @@
     {
       "id": "09-hit-count",
       "batch": "09",
-      "what": "Match stops counting hits",
+      "what": "Match stops counting hits [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            ++target.combat.damageCount;\n",
+      "find": "            ++targetCombat.damageCount;\n",
       "replace": "",
       "check": "cpu",
       "expect": "hit record"
@@ -172,9 +172,9 @@
     {
       "id": "09-hit-attacker",
       "batch": "09",
-      "what": "Match stops recording the attacker",
+      "what": "Match stops recording the attacker [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            target.combat.lastAttackerId = playerId;\n",
+      "find": "            targetCombat.lastAttackerId = playerId;\n",
       "replace": "",
       "check": "cpu",
       "expect": "hit record"
@@ -542,10 +542,10 @@
     {
       "id": "16-match-one-over",
       "batch": "16",
-      "what": "The Match admits one player above the room capacity",
+      "what": "The Match admits one player above the room capacity [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "if (players_.size() >= MaxPlayers) { error = \"match_full\"; return false; }",
-      "replace": "if (players_.size() > MaxPlayers) { error = \"match_full\"; return false; }",
+      "find": "if (connections_.size() >= MaxPlayers) { error = \"match_full\"; return false; }",
+      "replace": "if (connections_.size() > MaxPlayers) { error = \"match_full\"; return false; }",
       "check": "cpu",
       "expect": "error == \"match_full\""
     },
@@ -562,10 +562,10 @@
     {
       "id": "16-attacker-first",
       "batch": "16",
-      "what": "The hit record keeps the first attacker instead of the last",
+      "what": "The hit record keeps the first attacker instead of the last [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            target.combat.lastAttackerId = playerId;",
-      "replace": "            if (!target.combat.lastAttackerId) target.combat.lastAttackerId = playerId;",
+      "find": "            targetCombat.lastAttackerId = playerId;",
+      "replace": "            if (!targetCombat.lastAttackerId) targetCombat.lastAttackerId = playerId;",
       "check": "cpu",
       "expect": "PvP same tick shots from two and three players all hit and the record keeps the last attacker"
     },
@@ -1392,10 +1392,10 @@
     {
       "id": "v7-flow-admit-window-before-player",
       "batch": "v7-flow",
-      "what": "AdmitInput checks the window before the player",
+      "what": "AdmitInput checks the window before the player [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    if (found == players_.end()) return InputAdmission::UnknownPlayer;\n    if (!ValidInput(input)) return InputAdmission::Malformed;\n",
-      "replace": "    if (!ValidInput(input)) return InputAdmission::Malformed;\n    if (found == players_.end()) return InputAdmission::UnknownPlayer;\n",
+      "find": "    if (!connection) return InputAdmission::UnknownPlayer;\n    if (!ValidInput(input)) return InputAdmission::Malformed;\n",
+      "replace": "    if (!ValidInput(input)) return InputAdmission::Malformed;\n    if (!connection) return InputAdmission::UnknownPlayer;\n",
       "check": "cpu",
       "expect": "CHECK\\( unknownMalformed == InputAdmission::UnknownPlayer \\) is NOT correct"
     },
@@ -4512,9 +4512,9 @@
     {
       "id": "v71hf-match-last-hit-part-unset",
       "batch": "v71-hitbox-fields",
-      "what": "The Match leaves the hit record's part unset",
+      "what": "The Match leaves the hit record's part unset [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            target.combat.lastHitPart = hit.part;\n",
+      "find": "            targetCombat.lastHitPart = hit.part;\n",
       "replace": "",
       "check": "cpu",
       "expect": "lastHitPart == HitPart::Body"
@@ -4682,30 +4682,30 @@
     {
       "id": "v71a1-due-at-handoff",
       "batch": "v71-a1-shot-step",
-      "what": "Every action is due at its hand-off tick (pv6 arrival judgement)",
+      "what": "Every action is due at its hand-off tick (pv6 arrival judgement) [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    return tick_ >= entry.acceptedTick && (shot.movementEpoch != player.state.movementEpoch ||\n",
-      "replace": "    return tick_ >= entry.acceptedTick || (shot.movementEpoch != player.state.movementEpoch ||\n",
+      "find": "    return tick_ >= entry.acceptedTick && (shot.movementEpoch != state.movementEpoch ||\n",
+      "replace": "    return tick_ >= entry.acceptedTick || (shot.movementEpoch != state.movementEpoch ||\n",
       "check": "cpu",
       "expect": "PvP A1 decides an on-time shot"
     },
     {
       "id": "v71a1-hold-unbounded",
       "batch": "v71-a1-shot-step",
-      "what": "A shot is held for any gap up to the whole cooldown, not K",
+      "what": "A shot is held for any gap up to the whole cooldown, not K [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "        if (!entry.held && player.combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
-      "replace": "        if (!entry.held && player.combat.nextAllowedShotTick - tick_ <= rules_.cooldownTicks) {\n",
+      "find": "        if (!entry.held && combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
+      "replace": "        if (!entry.held && combat.nextAllowedShotTick - tick_ <= rules_.cooldownTicks) {\n",
       "check": "cpu",
       "expect": "PvP A1 holds a shot"
     },
     {
       "id": "v71a1-hold-twice",
       "batch": "v71-a1-shot-step",
-      "what": "A held shot may be held again when judged once more",
+      "what": "A held shot may be held again when judged once more [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "        if (!entry.held && player.combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
-      "replace": "        if (player.combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
+      "find": "        if (!entry.held && combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
+      "replace": "        if (combat.nextAllowedShotTick - tick_ <= ShotHoldLimit(rules_.cooldownTicks)) {\n",
       "check": "cpu",
       "expect": "PvP A1 never holds a shot twice"
     },
@@ -4762,10 +4762,10 @@
     {
       "id": "v71a1-s0-waits",
       "batch": "v71-a1-shot-step",
-      "what": "S = 0 with L = 0 waits instead of being due at A",
+      "what": "S = 0 with L = 0 waits instead of being due at A [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "        player.state.lastResolvedCommand >= shot.commandSequence ||\n",
-      "replace": "        (player.state.lastResolvedCommand >= shot.commandSequence && player.state.lastResolvedCommand != 0) ||\n",
+      "find": "        state.lastResolvedCommand >= shot.commandSequence ||\n",
+      "replace": "        (state.lastResolvedCommand >= shot.commandSequence && state.lastResolvedCommand != 0) ||\n",
       "check": "cpu",
       "expect": "PvP A1 waits at most W ticks"
     },
@@ -5803,10 +5803,10 @@
     {
       "id": "oc-fuse-never-starves",
       "batch": "v71-outage-characterize",
-      "what": "The Starvation fuse never fires",
+      "what": "The Starvation fuse never fires [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "const bool starved = player.backlogSamples.size() == MovementBacklogSampleTicks &&",
-      "replace": "const bool starved = false && player.backlogSamples.size() == MovementBacklogSampleTicks &&",
+      "find": "const bool starved = connection.backlogSamples.size() == MovementBacklogSampleTicks &&",
+      "replace": "const bool starved = false && connection.backlogSamples.size() == MovementBacklogSampleTicks &&",
       "check": "cpu",
       "expect": "outage characterization: (two-way|one-way) outages"
     },
@@ -5953,40 +5953,40 @@
     {
       "id": "mr-resync-held-by-cooldown",
       "batch": "v71-match-resync",
-      "what": "A Resync waits for the reset cooldown",
+      "what": "A Resync waits for the reset cooldown [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n",
-      "replace": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n    if (found->second.lastMovementResetTick != 0 && tick_ - found->second.lastMovementResetTick < MovementResetCooldownTicks) return false;\n",
+      "find": "    if (!connection || connection->movementResetScheduled) return false;\n",
+      "replace": "    if (!connection || connection->movementResetScheduled) return false;\n    if (connection->lastMovementResetTick != 0 && tick_ - connection->lastMovementResetTick < MovementResetCooldownTicks) return false;\n",
       "check": "cpu",
       "expect": "Resync rotates the epoch at the next tick inside the reset cooldown"
     },
     {
       "id": "mr-resync-overrides-scheduled",
       "batch": "v71-match-resync",
-      "what": "A Resync replaces an already scheduled reset",
+      "what": "A Resync replaces an already scheduled reset [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    if (found == players_.end() || found->second.movementResetScheduled) return false;\n",
-      "replace": "    if (found == players_.end()) return false;\n",
+      "find": "    if (!connection || connection->movementResetScheduled) return false;\n",
+      "replace": "    if (!connection) return false;\n",
       "check": "cpu",
       "expect": "Resync rotates the epoch at the next tick inside the reset cooldown|merges into it"
     },
     {
       "id": "mr-resync-quality-uncounted",
       "batch": "v71-match-resync",
-      "what": "A Resync epoch is not counted as a connection-quality reset",
+      "what": "A Resync epoch is not counted as a connection-quality reset [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "        reason == MovementResetReason::Resync) ++player.quality.resets;",
-      "replace": "        false) ++player.quality.resets;",
+      "find": "        reason == MovementResetReason::Resync) ++connection.quality.resets;",
+      "replace": "        false) ++connection.quality.resets;",
       "check": "cpu",
       "expect": "Resync rotates the epoch at the next tick inside the reset cooldown"
     },
     {
       "id": "mr-respawn-keeps-resync",
       "batch": "v71-match-resync",
-      "what": "A respawn leaves a requested Resync scheduled for the tick after it",
+      "what": "A respawn leaves a requested Resync scheduled for the tick after it [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    player.movementResetScheduled = false;\n    player.movementResetReason = MovementResetReason::None;\n",
-      "replace": "    player.movementResetScheduled = reason == MovementResetReason::LifeRespawn && player.movementResetReason == MovementResetReason::Resync;\n    if (!player.movementResetScheduled) player.movementResetReason = MovementResetReason::None;\n",
+      "find": "    connection.movementResetScheduled = false;\n    connection.movementResetReason = MovementResetReason::None;\n",
+      "replace": "    connection.movementResetScheduled = reason == MovementResetReason::LifeRespawn && connection.movementResetReason == MovementResetReason::Resync;\n    if (!connection.movementResetScheduled) connection.movementResetReason = MovementResetReason::None;\n",
       "check": "cpu",
       "expect": "merges into the respawn"
     },
@@ -6953,20 +6953,20 @@
     {
       "id": "pv8sc-respawn-life-u64",
       "batch": "pv8-seq-ceiling",
-      "what": "Respawn checks the life against the uint64 limit",
+      "what": "Respawn checks the life against the uint64 limit [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "if (WireCounterExhausted(player.state.lifeGeneration))",
-      "replace": "if (player.state.lifeGeneration == (std::numeric_limits<std::uint64_t>::max)())",
+      "find": "if (WireCounterExhausted(state.lifeGeneration))",
+      "replace": "if (state.lifeGeneration == (std::numeric_limits<std::uint64_t>::max)())",
       "check": "wire_counter_sites",
       "expect": "test_each_site_decides_with_the_wire_counter"
     },
     {
       "id": "pv8sc-respawn-epoch-u64",
       "batch": "pv8-seq-ceiling",
-      "what": "Respawn checks the epoch against the uint64 limit",
+      "what": "Respawn checks the epoch against the uint64 limit [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            if (WireCounterExhausted(player.state.movementEpoch))\n                throw",
-      "replace": "            if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())\n                throw",
+      "find": "            if (WireCounterExhausted(state.movementEpoch))\n                throw",
+      "replace": "            if (state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())\n                throw",
       "check": "wire_counter_sites",
       "expect": "test_each_site_decides_with_the_wire_counter"
     },
@@ -6983,10 +6983,10 @@
     {
       "id": "pv8sc-reset-epoch-u64",
       "batch": "pv8-seq-ceiling",
-      "what": "ResetMovementEpoch checks the epoch against the uint64 limit",
+      "what": "ResetMovementEpoch checks the epoch against the uint64 limit [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    if (WireCounterExhausted(player.state.movementEpoch))\n        throw std::overflow_error(\"Movement epoch exhausted\");\n    const auto cancelled",
-      "replace": "    if (player.state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())\n        throw std::overflow_error(\"Movement epoch exhausted\");\n    const auto cancelled",
+      "find": "    if (WireCounterExhausted(state.movementEpoch))\n        throw std::overflow_error(\"Movement epoch exhausted\");\n    const auto cancelled",
+      "replace": "    if (state.movementEpoch == (std::numeric_limits<std::uint64_t>::max)())\n        throw std::overflow_error(\"Movement epoch exhausted\");\n    const auto cancelled",
       "check": "wire_counter_sites",
       "expect": "test_each_site_decides_with_the_wire_counter"
     },
@@ -7003,10 +7003,10 @@
     {
       "id": "pv8sc-sequence-u64",
       "batch": "pv8-seq-ceiling",
-      "what": "SequenceExhausted resets at the uint64 limit",
+      "what": "SequenceExhausted resets at the uint64 limit [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "if (WireCounterExhausted(player.state.lastResolvedCommand)) {",
-      "replace": "if (player.state.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)()) {",
+      "find": "if (WireCounterExhausted(state.lastResolvedCommand)) {",
+      "replace": "if (state.lastResolvedCommand == (std::numeric_limits<std::uint64_t>::max)()) {",
       "check": "wire_counter_sites",
       "expect": "test_each_site_decides_with_the_wire_counter"
     },
@@ -7774,9 +7774,9 @@
     {
       "id": "a2-no-advance",
       "batch": "v8-product-anim-authority-match",
-      "what": "The Match never advances the animation after the join",
+      "what": "The Match never advances the animation after the join [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    for (auto& [id, player] : players_) {\n        static_cast<void>(id);\n        AdvanceAnimation(player);\n    }\n",
+      "find": "    for (std::size_t i = 0; i < animations_.size(); ++i) {\n        GYO_ASSERT(animations_[i].id == bodies_[i].playerId);\n        AdvanceAnimation(animations_[i], bodies_[i]);\n    }\n",
       "replace": "",
       "check": "cpu",
       "expect": "gaitPhaseQ16 > 0|GYO_ASSERT failed: ValidPlayerAnimations"
@@ -7784,12 +7784,12 @@
     {
       "id": "a2-join-without-value",
       "batch": "v8-product-anim-authority-match",
-      "what": "A joining player has no animation value until its first tick",
+      "what": "A joining player has no animation value until its first tick [find remapped by v8-product-match-entity-split] [after match-entity-split RequireEntityOrder asserts the animation id first]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "        player.animation = AdvancePlayerAnimation(animation_, std::nullopt, nullptr, player.state, tick_);\n",
-      "replace": "",
+      "find": "        AnimationTrack track{playerId, AdvancePlayerAnimation(animation_, std::nullopt, nullptr, state, tick_), state};",
+      "replace": "        AnimationTrack track{playerId, PlayerAnimation{}, state};",
       "check": "cpu",
-      "expect": "ValidPlayerAnimations"
+      "expect": "ValidPlayerAnimations|GYO_ASSERT failed: snapshot.animation"
     },
     {
       "id": "a2-check-life",
@@ -8514,30 +8514,30 @@
     {
       "id": "s2-previous-animation",
       "batch": "v8-product-hitbox-shot-judge",
-      "what": "Shapes are posed with the previous tick's animation",
+      "what": "Shapes are posed with the previous tick's animation [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "        const auto animation = AdvancePlayerAnimation(animation_, player.animation, &player.animationState,\n                                                      player.state, tick_);",
-      "replace": "        const auto animation = player.animation;",
+      "find": "        const auto animation = AdvancePlayerAnimation(animation_, track.value, &track.before, state, tick_);",
+      "replace": "        const auto animation = track.value;",
       "check": "cpu",
       "expect": "judged with the animation"
     },
     {
       "id": "s2-placed-every-shot",
       "batch": "v8-product-hitbox-shot-judge",
-      "what": "Shapes are placed again for every shot",
+      "what": "Shapes are placed again for every shot [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    if (shapesTick_ == tick_) return shapes_;\n",
-      "replace": "    if (false) return shapes_;\n",
+      "find": "    if (tickShapesTick_ == tick_) return tickShapes_;\n",
+      "replace": "    if (false) return tickShapes_;\n",
       "check": "cpu",
       "expect": "places every living"
     },
     {
       "id": "s2-killed-still-hit",
       "batch": "v8-product-hitbox-shot-judge",
-      "what": "A target killed earlier in the tick can still be hit",
+      "what": "A target killed earlier in the tick can still be hit [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "            if (target.state.lifeState == LifeState::Alive) targets.push_back({id, shapes.at(id)});",
-      "replace": "            if (target.state.lifeState == LifeState::Alive || shapes.contains(id)) targets.push_back({id, shapes.at(id)});",
+      "find": "            if (body.lifeState != LifeState::Alive) continue;\n            const auto* placed = FindEntity(shapes, body.playerId);\n",
+      "replace": "            const auto* placed = FindEntity(shapes, body.playerId);\n            if (body.lifeState != LifeState::Alive && !placed) continue;\n",
       "check": "cpu",
       "expect": "places every living|lethal hit inside a tick"
     },
@@ -8574,22 +8574,22 @@
     {
       "id": "s2-combat-after-actions",
       "batch": "v8-product-hitbox-shot-judge",
-      "what": "Shapes are posed with the combat state the tick's earlier actions changed",
+      "what": "Shapes are posed with the combat state the tick's earlier actions changed [find remapped by v8-product-match-entity-split]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "player.state, actionsCombat_.at(id), animation, tick_}",
-      "replace": "player.state, player.combat, animation, tick_}",
+      "find": "        hitModel_->Shapes({arena_, stance_, state, *actionStart, animation, tick_}, placed.shapes);",
+      "replace": "        hitModel_->Shapes({arena_, stance_, state, combats_[i], animation, tick_}, placed.shapes);",
       "check": "cpu",
       "expect": "combat state from before its actions"
     },
     {
       "id": "s2-stale-shapes",
       "batch": "v8-product-hitbox-shot-judge",
-      "what": "The previous tick's shapes are kept",
+      "what": "The previous tick's shapes are kept [find remapped by v8-product-match-entity-split] [after match-entity-split the stale rows make the cache non-ascending]",
       "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
-      "find": "    if (shapesTick_ == tick_) return shapes_;\n    shapes_.clear();\n",
-      "replace": "    if (shapesTick_ == tick_) return shapes_;\n",
+      "find": "    if (tickShapesTick_ == tick_) return tickShapes_;\n    tickShapes_.clear();\n",
+      "replace": "    if (tickShapesTick_ == tick_) return tickShapes_;\n",
       "check": "cpu",
-      "expect": "places every living"
+      "expect": "places every living|GYO_ASSERT failed: StrictlyAscending"
     },
     {
       "id": "s2-decision-part-body",
@@ -8720,6 +8720,86 @@
       "replace": "            if (!bound) return definition;",
       "check": "presentation",
       "expect": "InvalidAnimationEvents|is NOT correct"
+    },
+    {
+      "id": "evict-animation-orphan-erase-skips-animation",
+      "batch": "v8-product-evict-animation-orphan",
+      "what": "EraseEntity(WorldSnapshot&) leaves the entity's animation in the snapshot (the pv9 regression)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    const auto animation = std::erase_if(snapshot.animation, [&](const auto& a) { return a.playerId == entityId; });",
+      "replace": "    const auto animation = players;",
+      "check": "cpu",
+      "expect": "PublicationComponentsAgree|is NOT correct"
+    },
+    {
+      "id": "evict-animation-orphan-host-erases-two",
+      "batch": "v8-product-evict-animation-orphan",
+      "what": "The host's eviction erases players and combat itself instead of every component through EraseEntity",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        static_cast<void>(EraseEntity(state, playerId));",
+      "replace": "        std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });\n        std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });",
+      "check": "cpu",
+      "expect": "PublicationComponentsAgree|is NOT correct"
+    },
+    {
+      "id": "entity-split-insert-appends",
+      "batch": "v8-product-match-entity-split",
+      "what": "InsertEntity appends instead of inserting at the ordered position (M1)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
+      "find": "    return *column.insert(position, std::move(value));",
+      "replace": "    static_cast<void>(position);\n    column.push_back(std::move(value));\n    return column.back();",
+      "check": "cpu",
+      "expect": "Entity columns insert|EntityColumnsStayOrdered|GYO_ASSERT failed"
+    },
+    {
+      "id": "entity-split-erase-swap-and-pop",
+      "batch": "v8-product-match-entity-split",
+      "what": "EraseEntity moves the last element into the hole (M2)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
+      "find": "    column.erase(position);\n    return true;",
+      "replace": "    *position = std::move(column.back());\n    column.pop_back();\n    return true;",
+      "check": "cpu",
+      "expect": "Entity columns erase|EntityColumnsStayOrdered|GYO_ASSERT failed"
+    },
+    {
+      "id": "entity-split-erase-skips-animations",
+      "batch": "v8-product-match-entity-split",
+      "what": "PvpMatch::EraseEntity leaves the animation row behind (M3)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    const bool animation = ::fps::pvp::EraseEntity(animations_, entityId);",
+      "replace": "    const bool animation = body;",
+      "check": "cpu",
+      "expect": "EraseEntityRemovesEveryColumn|GYO_ASSERT failed"
+    },
+    {
+      "id": "entity-split-snapshot-reversed",
+      "batch": "v8-product-match-entity-split",
+      "what": "Snapshot walks the columns from the last entity to the first (M4)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    for (std::size_t i = 0; i < bodies_.size(); ++i) {\n        auto state = bodies_[i];",
+      "replace": "    for (std::size_t j = bodies_.size(); j-- > 0;) {\n        const auto i = j;\n        auto state = bodies_[i];",
+      "check": "cpu",
+      "expect": "EntityColumnsStayOrdered|GYO_ASSERT failed: StrictlyAscending"
+    },
+    {
+      "id": "entity-split-action-start-stale",
+      "batch": "v8-product-match-entity-split",
+      "what": "The action-start combat copy is taken once and never refreshed (M5b, registered variant); detected by G13 and by the actionStart Assert, not by the digest: the synthetic hit model reads no combat",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    actionStartCombats_ = combats_; // same order: ascending EntityId",
+      "replace": "    if (actionStartCombats_.empty()) actionStartCombats_ = combats_;",
+      "check": "cpu",
+      "expect": "ActionStartCombatIsTickStart|is NOT correct|GYO_ASSERT failed"
+    },
+    {
+      "id": "entity-split-respawn-reversed",
+      "batch": "v8-product-match-entity-split",
+      "what": "ResolveLifeBoundaries walks the bodies from the last entity to the first, so concurrent respawns are placed in descending id (M6, from the xhigh review)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "    for (std::size_t i = 0; i < bodies_.size(); ++i) {\n        auto& state = bodies_[i];",
+      "replace": "    for (std::size_t j = bodies_.size(); j-- > 0;) {\n        const auto i = j;\n        auto& state = bodies_[i];",
+      "check": "cpu",
+      "expect": "TieBreakByEntityId|is NOT correct"
     }
   ]
 }

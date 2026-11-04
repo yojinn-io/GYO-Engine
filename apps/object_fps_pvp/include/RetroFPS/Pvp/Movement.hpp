@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RetroFPS/Pvp/Arena.hpp"
+#include "RetroFPS/Pvp/EntityId.hpp"
 #include "engine/math/scalar/Angle.hpp"
 
 #include <chrono>
@@ -10,8 +11,6 @@
 #include <vector>
 
 namespace fps::pvp {
-
-using PlayerId = std::uint64_t;
 
 inline constexpr std::uint32_t AuthorityTickRate = 60;
 // Room capacity (pv6 contract §1, 2026-10-07 revision): the Match's join limit,

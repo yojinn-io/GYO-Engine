@@ -23,7 +23,7 @@ SITES = {
     'src/Pvp/ClientConnection.cpp': {'WireCounterExhausted(': 1},
     'gateway/server.go': {'s.nextPlayer >= math.MaxUint32': 1},
 }
-FORBIDDEN = ('numeric_limits<std::uint64_t>', 'numeric_limits<ActionId>', 'numeric_limits<PlayerId>',
+FORBIDDEN = ('numeric_limits<std::uint64_t>', 'numeric_limits<ActionId>', 'numeric_limits<PlayerId>', 'numeric_limits<EntityId>',
              '^uint64(0)', 'math.MaxUint64', 'UINT64_MAX')
 
 

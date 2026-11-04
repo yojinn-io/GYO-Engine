@@ -45,10 +45,15 @@ v8-plan
 │   │   ├── v8-product-hitbox-shot            「high（平手局部 xhigh）｜Opus 5.5｜逐部位判定、倍率傷害」
 │   │   ├── v8-product-hit-presentation       「medium｜Opus 5.5｜受擊動畫依部位、驗收工具」
 │   │   └── v8-product-hitbox-acceptance      「medium｜Sonnet 5.5｜L1、突變、L2 試玩（收支行）」
-│   └── rewind-line                「PR 線：射擊回溯（部位判定線合併後）」
-│       ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
-│       ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
-│       └── v8-product-hitbox-rewind          「high（τ、夾取局部 xhigh）｜Opus 5.5｜姿勢歷史、ShotRewind、守衛第二段核准」
+│   ├── rewind-line                「PR 線：射擊回溯（部位判定線合併後；entity-line 的 split 之後）」
+│   │   ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
+│   │   ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
+│   │   └── v8-product-hitbox-rewind          「high（τ、夾取局部 xhigh）｜Opus 5.5｜姿勢歷史、ShotRewind、守衛第二段核准」
+│   └── entity-line                「PR 線：實體資料模型（架構掃描 2026-11-01 開的卡 `v8-product-entity-model`）；split 排在 rewind 之前，讓姿勢歷史第一個以元件寫」
+│       ├── v8-product-tarkov-requirements ✓  「medium｜下段｜主會話 Fable 5.1｜玩法需求問卷：實體種類與數量、身分、屬性、PvE、PvP／PvE 組合、可見性；數值由使用者定」
+│       ├── v8-product-entity-contract ✓      「ultracode（先問）｜上段｜提案者 3×Opus 5.5 high、統合者 Fable 5.1 high、敵對檢查者 Opus 5.5 xhigh｜單一 EntityId、元件清單、複寫通道、決定性契約與 Design Invariants；pv10 附錄 C 的改寫建議」
+│       ├── v8-product-evict-animation-orphan ✓ 「high｜上段（回歸修正）｜實作者主會話 Fable 5.1、檢證者 Opus 5.5｜host 逐出不刪 snapshot 的 animation：先 Red（G3）後 Green；golden 重生有緩める面，照 §14.4 核准」
+│       └── v8-product-match-entity-split ✓   「high（digest、迭代順序局部 xhigh）｜上段｜實作者主會話 Fable 5.1、審查者 Opus 5.5 xhigh、檢證者 Opus 5.5｜Participant 拆成輸入來源與實體元件；不改 wire 與行為；兩樹 digest 0 差分」
 │
 ├── ② 體驗優化                     「pv8 欄位已在 ① 合併，這裡只填行為」
 │   └── v8-product-sprint                     「high｜Opus 5.5｜衝刺；改變權威結果，事前宣告」
@@ -86,6 +91,10 @@ v8-plan
 | `v8-product-crouch` | high（預測重播局部 xhigh）｜Opus 5.5 | 16～24 h | 碰撞高度（站起時頭上有牆不能站）、視角高度、遠端動畫；pv8 欄位實作並合併 | 改變權威結果：事前宣告，同機兩樹 digest 比對；三角色同一個 PR |
 | `v8-product-hitbox-data` | high｜Opus 5.5 | 6～10 h | 骨骼對應的形狀與部位標記（通用格式）＋部位語意（產品資料），先手寫 JSON | 通用格式的 owner 在規劃時定（v8 候選表「PvP 骨骼 hitbox」）；④ 的 Assets Editor 之後接手 |
 | `v8-product-hitbox-rewind` | high（回溯局部 xhigh）｜Opus 5.5 | 20～30 h | Match 保存權威姿勢歷史，照射手開槍時看到的遠端時刻回溯；填 pv7 已預留的欄位（v7.1 D87、D89） | 蹲下之後做：蹲下會改變姿勢 |
+| `v8-product-tarkov-requirements` | medium｜下段（問卷文件，不碰 DI、協議、資料格式）｜實作者主會話 Fable 5.1；沒有審查者與檢證者 | 2～3 h | [實體需求問卷](entity-requirements.md)：實體種類與同時存在的數量、身分、人物屬性、PvE 規模、PvP／PvE 組合、誰看得到什麼；pv8 問卷已問的沿用 | 架構卡 `v8-product-entity-model`（HANDOFF `v8-product-entity-model-start`）。數值由使用者定 |
+| `v8-product-entity-contract` | ultracode（先問）｜上段（Design Invariants、資料格式、Architecture 判斷）｜照 navigator 上段表：提案者 3×Opus 5.5 high、統合者 Fable 5.1 high、敵對檢查者 Opus 5.5 xhigh；偵察不用小模型；文件由主會話 Fable 5.1 寫 | 6～10 h | 四件事：單一 EntityId 空間（含玩家 id 由 Gateway 配的對照）、元件＝現在拆法的推廣（PlayerState／CombatState／PlayerAnimation 與 Match 內按 PlayerId 的 map）、複寫屬性掛在元件上（公開／私人／事件）、決定性契約（迭代順序＝EntityId 升冪、id 進 digest）；pv10 附錄 C 的改寫建議；新文件 `entity-model.zh-Hant.md` 的 Design Invariants 與守衛測試設計 | 先讀 EnTT／flecs 的儲存設計並寫下為何、能用多少、要改裝多少。新增 DI 節是 Architecture Delta，要使用者同意 |
+| `v8-product-evict-animation-orphan` | high｜上段（回歸修正）｜實作者主會話 Fable 5.1；§14.4 檢證者 Opus 5.5 | 3～5 h | host 逐出玩家時只刪 snapshot 的 players 與 combat、沒刪 animation（`MatchRuntimeHost.cpp:756-760`），Gateway 的同長檢查會讓整個 Gateway 失效。照 §14.3：重跑 runner `--dump` 重現 → G3 Red → 加 `EraseEntity(WorldSnapshot&, EntityId)`、發布前 `RequireValidSnapshot` → Green | entity-model 決定 3 (a)：排在 split 之前，同一 PR。只有 host-poor-connection/corridor 一行 golden 改變，是緩める面，1～5 經檢證者核對後要使用者核准才重生 |
+| `v8-product-match-entity-split` | high（digest、迭代順序局部 xhigh）｜上段（Architecture 判斷、DI 守衛測試）｜實作者主會話 Fable 5.1；審查者 `xhigh-reviewer` 指定 Opus 5.5 xhigh（和實作者不同模型）；§14.4 檢證者 Opus 5.5 | 12～18 h | `PvpMatch::Participant` 拆成輸入來源（命令、動作帳本、替補、品質）與實體元件；`shapes_`、`actionsCombat_` 一起歸位；不改 wire、不改行為 | Match 內部 Ownership 重整，照 AGENTS §3 寫七點；驗收＝同機兩樹 `compare_authority_trees.py` 0 差分、golden 不變、digest version 不升。排在 `v8-product-hitbox-rewind` 之前 |
 | `v8-product-hit-rules` | medium｜Opus 5.5 | 2～4 h | 部位倍率 | 數值照 object_fps_v2（`v8-product-hit-rules-v2-values`）；加 `HIT_PART_LIMB`（`v8-product-hit-rules-limb-wire`）；千分位計算（`v8-product-hit-rules-permille`）。版本處理（pv8 延續或升 pv9）在 hitbox-line 的事前宣告決定 |
 | `v8-product-sprint` | high｜Opus 5.5 | 8～12 h | 衝刺速度與限制 | 改變權威結果：事前宣告 |
 | `v8-product-analyzer-105`、`v8-product-phase-golden`、`v8-product-correct-assert`、`v8-product-lead-withdraw-plan`、`v8-product-lead-withdraw`、`v8-product-input-delay` | 見樹 | 3～4、6～10、1～2、4～6、16～24 h；A4 開工時估 | 下面「v7.1 交過來的項目」 | pv8 改了移動與預測的路徑，B6 與 A4 的基準在 pv8 合併後重新取得 |
@@ -104,6 +113,7 @@ v8-plan
 PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR。
 
 - ①：`audio-line`、`pv8-line`、`hitbox-line` 三條。`audio-line` 不碰 wire，可以和 `pv8-line` 並行；`hitbox-line` 排在 `pv8-line` 之後。
+- `entity-line`（架構卡）：一條；四批同一個 PR（#140，2026-11-04 開），`match-entity-split` 不碰 wire。排在 `rewind-line` 之前（`v8-product-entity-model-start`），和 hitbox-line 剩下的 hit-presentation、hitbox-acceptance、real-match-acceptance-repair 不碰同一批檔案。
 - ②：`v8-product-sprint` 一條（ADS 取消，v8-product-ads-cancel）。③：一條（`v8-product-lead-withdraw`、`v8-product-input-delay` 若太大再分）。④：每個工具一條。⑤：`v8-product-match-rules` 一條，其餘依開工時的分組。
 
 ## 不在 v8 的項目
@@ -151,8 +161,12 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hitbox-shot-frame`（S1） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_frame.zh-Hant.md) |
 | `v8-product-hitbox-shot-judge`（S2） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_judge.zh-Hant.md) |
 | `v8-product-hitbox-shot-wire`（S3） | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_hitbox_shot_wire.zh-Hant.md) |
+| `v8-product-tarkov-requirements` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_tarkov_requirements.zh-Hant.md) |
+| `v8-product-entity-contract` | [2026-11-01](../../../dev_logs/2026_11_01_pvp_v8_entity_contract.zh-Hant.md) |
 | `v8-input-ui-adapter` IU-1（framework 核心的 Input→Ui adapter） | [2026-11-02](../../../dev_logs/2026_11_02_framework_v8_input_ui_adapter_iu1.zh-Hant.md) |
 | `v8-input-ui-adapter` IU-3（遊戲宣告 FRAMEWORK、改用共用轉換） | [2026-11-02](../../../dev_logs/2026_11_02_pvp_v8_input_ui_adapter_iu3.zh-Hant.md) |
+| `v8-product-evict-animation-orphan` | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_evict_animation_orphan.zh-Hant.md) |
+| `v8-product-match-entity-split` | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_match_entity_split.zh-Hant.md) |
 
 ---
 
