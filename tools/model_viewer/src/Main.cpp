@@ -29,6 +29,7 @@ constexpr std::string_view kHelp =
     "  gyo_model_viewer info      --asset-root <dir> [--asset-catalog <catalog.json>] --model <asset id>\n"
     "  gyo_model_viewer roundtrip --asset-root <dir> [--asset-catalog <catalog.json>] --events <asset id>\n"
     "  gyo_model_viewer window    [--asset-root <dir> [--asset-catalog <catalog.json>]] [--gpu-driver <driver>]\n"
+    "  gyo_model_viewer measure-preview --asset-root <dir> --csv <file> [--frames <n>] [--gpu-driver <driver>]\n"
     "  gyo_model_viewer --help\n"
     "\n"
     "Without --asset-catalog the asset root is a content root (content.json).\n"
@@ -164,6 +165,20 @@ int Run(const std::span<const std::string> arguments) {
         if (const auto found = options->find("--asset-catalog"); found != options->end()) window.assetCatalog = found->second;
         if (const auto found = options->find("--gpu-driver"); found != options->end()) window.gpuDriver = found->second;
         return RunViewerWindow(window);
+    } else if (command == "measure-preview") {
+        options = Options(arguments, {"--asset-root", "--csv", "--frames", "--gpu-driver"}, problem);
+        if (!options) return Usage(problem);
+        if (!options->contains("--asset-root") || !options->contains("--csv")) {
+            return Usage("measure-preview needs --asset-root and --csv");
+        }
+        MeasureOptions measure;
+        measure.assetRoot = options->find("--asset-root")->second;
+        measure.csvPath = options->find("--csv")->second;
+        if (const auto found = options->find("--frames"); found != options->end()) {
+            measure.frames = static_cast<std::uint32_t>(std::stoul(found->second));
+        }
+        if (const auto found = options->find("--gpu-driver"); found != options->end()) measure.gpuDriver = found->second;
+        return RunPreviewMeasure(measure);
     } else if (command == "roundtrip") {
         options = Options(arguments, {"--asset-root", "--asset-catalog", "--events"}, problem);
         required = "--events";

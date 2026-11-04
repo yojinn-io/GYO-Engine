@@ -10,4 +10,9 @@ int RunViewerWindow(const WindowOptions&) {
     return 3;
 }
 
+int RunPreviewMeasure(const MeasureOptions&) {
+    std::cerr << "error: this gyo_model_viewer build has no preview; build the gui variant.\n";
+    return 3;
+}
+
 } // namespace Gyo::Tools::ModelViewer

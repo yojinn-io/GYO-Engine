@@ -58,7 +58,7 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
     add_dependencies(gyo_model_viewer_preview gyo_builtin_shaders)
     # The window on the framework's ImGui shell; the preview reaches the
     # screen as a texture of Engine's SDL renderer, so no *Native target.
-    target_sources(gyo_model_viewer PRIVATE src/ViewerWindow.cpp)
+    target_sources(gyo_model_viewer PRIVATE src/ViewerWindow.cpp src/PreviewMeasure.cpp)
     target_link_libraries(gyo_model_viewer PRIVATE
         gyo_model_viewer_preview GYO::ToolFrameworkImGui GYO::RenderBackendSDL imgui::core)
     # Engine's builtin shaders next to the executable, where the window looks;

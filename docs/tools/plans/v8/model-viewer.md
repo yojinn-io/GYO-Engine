@@ -178,6 +178,11 @@ v8-tool-model-viewer                      「anim-events-line 的第二批：模
   - 離屏的 `AcquireFrame` 不等之前的幀；不每幀讀回的呼叫端要自己控速（標頭寫明）。
 - 突變：宣告 4 條，加上審查後的 1 條，共 5／5 killed。
 
+#### `-trial` 的結果（2026-11-04）
+
+- P1 通過（每個模型的 p95 ≤ 6.0 ms，門檻 16.7 ms），P2 通過。詳細見 [model-viewer-trial.md](model-viewer-trial.md)。
+- L3：步驟與限制寫在同一份文件，等你操作。第 5 項「遊戲裡聽到」做不到，因為 PvP 不讀 `gyo.event_sounds`。
+
 #### `-event-sounds` 實作後的結果（2026-11-04）
 
 - S1、S2、S3：`gyo_model_viewer.core`（`cpu`）。
