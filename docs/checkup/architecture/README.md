@@ -31,6 +31,10 @@ Owner：Engine（共通架構），由架構會話負責。本資料夾只放架
    3. 多個獨立專案需要（重複只用來佐證需求）；
    4. 契約本來就歸 Engine 所有，但 Engine 只實作了一部分。
 
+3. **格式放在對的層**：Engine 擁有描述單一資產的格式，framework 擁有描述資產如何組合的格式，產品擁有自己的定義
+   （`docs/architecture.md`「Layers: admission and format ownership」）。放錯層的格式記為漂移：Engine 格式帶產品意義、
+   framework 格式引用了 Engine asset id 與 Engine 值以外的東西、產品私有格式被第二個產品讀取。
+
 另外也記錄 Engine 對獨立消費端的影響，例如沒有遷移路徑的公開 API 破壞性變更。
 
 Engine 內部也要看兩件事，結果寫進報告的「Engine 這一側的問題」：

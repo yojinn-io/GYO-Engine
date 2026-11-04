@@ -47,6 +47,41 @@ GYO-Engine/
 
 `apps/` contains game code. It does not carry test runners, package scripts, editor code, vendor source archives or CI definitions. Tests consume game libraries from outside the game. Root `tools/` is reserved for design support such as UI and map editing. Root `framework/` holds what several products share above the engine: dependencies point game or tool → framework → engine, the engine never names it, and it is built only while a selected product uses it ([framework](framework/architecture.md)). Compilation, integration and release orchestration belong to `build/`. Shader compilation is a rendering responsibility and its implementation stays with `engine/render/shaders/pipeline/`.
 
+## Layers: admission and format ownership
+
+Three layers, each admitting a thing by questions that can be answered yes or no from the change alone, not by
+rank. "The engine is the most general layer" orders the layers; it does not say where a new piece goes. The same
+questions decide which layer owns a data format (AGENTS.md section 8): the dependency rules above place code and
+said nothing about data, and three candidate homes for one format in 2026-11 (Engine, framework, product) each
+matched one layer. Adopted with the user on 2026-11-04; the framework's Design Invariants 3 and 5
+([framework](framework/architecture.md)) apply it to that layer.
+
+| Layer | Admits code when | Owns a format when | Never holds |
+|---|---|---|---|
+| Engine (`engine/`) | it is a capability: an OS or hardware difference, a mechanism, or the reading and validation of one asset, stated in Engine vocabulary (clips, seconds, gains, ids, scancodes) and carrying no product meaning | the format describes **one asset**: a model, a sound clip, a catalog, the moments on one model's clips (`gyo.anim_events`) | product names, gameplay constants, what a name means to a product, how a product is put together |
+| Framework (`framework/`) | two or more products **compose or adapt** Engine capabilities in the same way: an adapter between Engine modules (`ToUiTextInput`), a composition of Engine assets, a shell. Two products calling the same single Engine capability is not composition; they call Engine directly | the format describes **how Engine assets combine** (for example which sound plays at a clip's moment, and from where in the sound), every reference in it is an Engine asset id or an Engine value, and it names no product | a product's meaning, a branch on which product calls, a façade over one Engine call |
+| Product (`apps/<game>/`, `tools/<tool>/`) | everything else, including what looks general while one product uses it | the format is the product's own definition (a sound cue table, a weapon presentation, a character) | nothing it needs is forbidden; where it bypasses Engine, the bypass is recorded with the Engine capability whose arrival ends it |
+
+Checks for a change:
+
+1. A new Engine function, type or format: does its signature, its fields or its documentation name a product, a
+   gameplay concept or the meaning of a name? Yes: it is not Engine.
+2. A new framework piece: name the two products that use it and the Engine capabilities it joins or adapts. One
+   product: that product takes Engine directly. One capability passed through: the products call Engine, and the
+   framework does not wrap it.
+3. A new format: does it describe one asset (Engine), how assets combine (framework), or what a product means
+   (product)? A document that needs two of these answers is two documents. A composition read by one product is that
+   product's until a second product reads it.
+4. A framework format's fields: every reference is an Engine asset id or an Engine value (seconds, gains, counts);
+   no field carries a product name, and no field decides a product's behaviour by what a name means. The framework
+   validates the facts a document references (an id exists, a moment lies within its clip) by calling Engine.
+5. A product's bypass of Engine (a `*Native` target, a direct SDL or OS call): recorded in that product's Design
+   Invariants together with the Engine capability that ends it (today: ui_editor's native renderer, until Engine has
+   a texture API).
+
+Guards: review against this table for every Architecture Delta (AGENTS.md section 3); the framework dependency guard
+for product names (item 4); the periodic checkup ([procedure](checkup/architecture/README.md)) for items 2, 3 and 5.
+
 ## Workflow evolution
 
 Every workflow progresses through **manual operation → script → tool → platform**. First make the inputs, ordered operations, outputs and failure conditions understandable and repeatable by hand. A script then performs those same operations; a design tool edits their stable data contracts. A platform is justified only after the tool and workflow have matured through actual use.
