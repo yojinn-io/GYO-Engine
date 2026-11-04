@@ -19,7 +19,7 @@
   3. 依據 PR #142（`claude/arch-layer-formats`）的 `docs/architecture.md`「Layers: admission and format ownership」與 framework DI 3 改寫。
 - 工具線的請求：分支 `claude/v8-tool-audio-editor-edit` 的 `docs/tools/plans/v8/anim-event-sound-request.md`。
 - 成熟方案的對照（架構會話已做）：Godot 的 Audio 軌、Unreal 的 AnimNotify_PlaySound 把聲音放在動畫資料裡；Source 與 FMOD／Wwise 把名稱事件和聲音對應分開。GYO 選分開：Engine 純粹是既定原則、framework 是這類組合的家；代價是每個模型兩個檔，用事件名 join。
-- 基底：#142 在本卡開工時（2026-11-04）尚未合併，本分支以它為基底（`ad348a0c`）。PR 先以 `claude/arch-layer-formats` 為 base，#142 合併後改回 master。
+- 基底：#142 在本卡開工時（2026-11-04）尚未合併，本分支以它為基底（`ad348a0c`）。#142 同日合併進 master（`4918b1fa`）；PR 改由 yojinn-io/GYO-Engine#145（base master）承接。
 
 ## 現況（master `e15e5e41`）
 

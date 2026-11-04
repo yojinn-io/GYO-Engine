@@ -47,6 +47,7 @@
 - 結果：test 樹重建成功、全量 CTest 125/125（54.3 s，`ctest_full_2.txt`）、ES 10 案例 190 斷言、守衛通過。改錨 3 條 3/3 killed（`mutations_reanchored_*.txt`）；偏移 5 條 5/5（`mutations_offset_tightened.txt`）；最終程式上本批 33 條完整重跑 33/33 killed、stale 0（`mutations_event_sounds_final.txt`）。D184 合計 25/25 killed（第一次 22 killed＋stale 3，改錨後 3/3）。
 - 2026-11-04：PR yojinn-io/GYO-Engine#144（base `claude/arch-layer-formats`）。#142 合併後把 base 改回 master；L1 的結果在 PR 上看。
 - 2026-11-04：L1 run 41781301280 第一次就全部 success（`L1 / linux-x64` 6m48s、`macos-arm64` 6m56s、`windows-x64` 11m12s，CI gate success）。#142 仍未合併（OPEN），合併方式等使用者決定。
+- 2026-11-04：架構會話通知 #142 已合併進 master（`4918b1fa`，我以 gh 核對；DI 5 的收窄使用者已正式同意）。#142 合併時刪掉了 `claude/arch-layer-formats`，#144 因 base 被刪而自動關閉（沒有合併，07:09 UTC）。以同一分支開 yojinn-io/GYO-Engine#145（base master）取代，內容相同；本分支已含 #142 的 commit，對 master 的 diff 只剩本卡。#145 的合併等使用者決定。
 - **第 2 批完成**（14:45 JST）。實際約 1 h（13:50 起；估 3.5～5.5 h）；整卡約 1.5 h（估 5～8 h）。dev_log 與本批同一變更提交；PR 的 base 是 `claude/arch-layer-formats`（#142 未合併），#142 合併後改回 master。
 
 ## 估時（開工前，2026-11-04）
