@@ -172,3 +172,4 @@ A3 現在是架構計畫的 `v8-framework-shell`，草圖在它的 PLAN §2.4（
 - 可考慮：PvP 用 `SdlPlatform::SetLiveFrameHandler` 在調整視窗大小時也繼續畫（`PvpApplication.cpp:1383-1395`）；ui_editor 現在沒有，macOS 拖動視窗邊緣時畫面會停住。不是現有需求，列給草圖參考。
 - audio_editor（`-edit`）另外需要：同一個外殼加上 `SdlAudioOutput`（由工具自己開，外殼不管音訊）。
 - 2026-11-04：audio-line 會話通知 GYO::Audio 播放控制層已合併（PR #139，`8a713b1e`，介面和 `1f271a32` 相同），本分支合入 master（`a9bbe1fb`）後開始實作 `v8-tool-audio-editor-edit`。途中：寫測試時找到試聽播放器的缺陷（每幀的 `Update` 會停掉正在播的聲音），提交前修正並列為突變；審査者指出 4 個缺陷（工程檔警告被蓋掉、原檔打不開時存檔覆寫設定、裁剪過短時輸出空片段、一條突變的期待寫錯），都已修；突變第一輪 22／26（doctest 的 `-tc` 在逗號切開 3 條、測試缺口 1 條），修正後 26／26；検証者（Fable）確認 §14.4 第 1、3、5 點，第 2、4 點附更正，已改寫。
+- 2026-11-04：你問多段剪輯與拼接（換彈音照動畫剪、在 Model Viewer 預覽）。查到「事件 → 聲音」的對應只寫在 PvP 的 `sfx.json`，中立的 Model Viewer 讀不到，複製一份又違反 AGENTS §9。你說「這個問題是架構變動，整理一下，交給架構師評估。」整理成 [anim-event-sound-request.md](anim-event-sound-request.md)，交給架構師（例行架構掃描的會話）。A（拼成一個片段）／B（每個動作一個事件）你還沒選。
