@@ -31,6 +31,12 @@ Owner：Engine（共通架構），由架構會話負責。本資料夾只放架
    3. 多個獨立專案需要（重複只用來佐證需求）；
    4. 契約本來就歸 Engine 所有，但 Engine 只實作了一部分。
 
+3. **格式放在對的層**：Engine 擁有描述單一資產的格式，framework 擁有描述資產如何組合的格式，產品擁有自己的定義
+   （`docs/architecture.md`「Layers: admission and format ownership」）。放錯層的格式記為漂移：Engine 格式帶產品意義、
+   framework 格式引用了 Engine asset id 與 Engine 值以外的東西、產品私有格式被第二個產品讀取。
+4. **framework 是否變成轉接層**：framework 新增的每一段公開介面，要能說出它組合或改接了哪些 Engine 能力、哪兩個產品用
+   （framework DI 5）。只包一個 Engine 呼叫的門面記為漂移；兩個門面就達到 framework 的 Replacement Criteria。
+
 另外也記錄 Engine 對獨立消費端的影響，例如沒有遷移路徑的公開 API 破壞性變更。
 
 Engine 內部也要看兩件事，結果寫進報告的「Engine 這一側的問題」：
@@ -55,12 +61,14 @@ Engine 內部也要看兩件事，結果寫進報告的「Engine 這一側的問
    巨集與標頭之外，也要看不靠 `#if` 的直接呼叫（例如 `std::signal`、平台專屬的 socket 錯誤碼）。
    產品與工具的命中依判斷標準第 2 條判斷；Engine 的命中依上面「OS 差異由誰處理」記錄。
    另外列出上一份報告以來 OS 層新增的部件，逐一對照它的壓力來源或支撐的功能。
-6. 只有介面的抽象：在 `engine/*/include` 找出介面（純虛擬函式、`I` 開頭的類別）與只有宣告的契約，
+6. framework：列出上一份報告以來 framework 新增的公開介面與格式（`git diff <base>..HEAD -- framework/include framework/bindings/*/include`），
+   逐一寫出它組合或改接的 Engine 能力與使用它的兩個產品；寫不出的記為漂移。
+7. 只有介面的抽象：在 `engine/*/include` 找出介面（純虛擬函式、`I` 開頭的類別）與只有宣告的契約，
    用 `git grep` 確認各有實作，並且在 Engine 自己的模組與測試以外有消費端；同時看產品或工具是否繞過它
    （例如不用 Engine 的檔案抽象，直接用 `std::fstream` 開檔）。
-7. 執行期的證據：讀上一份報告以來各計畫 HANDOFF 的未結事項、事故與臨時測試紀錄，找出指向 Engine 缺口或平台差異的項目。
+8. 執行期的證據：讀上一份報告以來各計畫 HANDOFF 的未結事項、事故與臨時測試紀錄，找出指向 Engine 缺口或平台差異的項目。
    這類問題靜態搜尋看不到，例如只在 Windows 的深資料夾才出現的路徑長度限制。
-8. 在本資料夾新增 `YYYY_MM_DD_architecture.zh-Hant.md`，並更新下方的報告列表。
+9. 在本資料夾新增 `YYYY_MM_DD_architecture.zh-Hant.md`，並更新下方的報告列表。
 
 ## 報告列表
 

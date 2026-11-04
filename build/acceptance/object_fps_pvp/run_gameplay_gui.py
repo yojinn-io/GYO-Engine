@@ -55,14 +55,28 @@ def run(args):
                 x,y,width,height=desktop.geometry(w);desktop.move_pointer(w,x+width//2,y+height//2);desktop.click(w,.03)
                 wait_state(out,role,lambda s:s['weapon']['captured'],'Native pointer capture failed')
                 require(sample(role)['weapon']['submitted']==before,'Capture click fired')
-        def aim(yaw,role='create'):
-            capture(role)
+        def settle(role):
+            # One relative move may reach the Client over several frames: wait until it
+            # was consumed and the angle stopped changing before measuring again.
+            deadline=time.monotonic()+3;last=None
+            while time.monotonic()<deadline:
+                w=sample(role)['weapon'];now=(w['mouse_consumptions'],w['yaw'],w['pitch'])
+                if last and now==last:return w
+                last=now;time.sleep(.06)
+            return sample(role)['weapon']
+        def aim(yaw,role='create',pitch=0.):
+            capture(role);w=settle(role)
             for _ in range(10):
-                w=sample(role)['weapon'];dx=math.remainder(yaw-w['yaw'],2*math.pi);dy=-w['pitch']
+                dx=math.remainder(yaw-w['yaw'],2*math.pi);dy=pitch-w['pitch']
                 if abs(dx)<.004 and abs(dy)<.004:return
-                desktop.relative(ids[role],round(dx/.0025),round(dy/.0025));time.sleep(.08)
+                consumed=w['mouse_consumptions']
+                desktop.relative(ids[role],round(dx/.0025),round(dy/.0025))
+                wait_state(out,role,lambda s:s['weapon']['mouse_consumptions']>consumed,'Native aim move not consumed')
+                w=settle(role)
             raise RuntimeError('Native aim failed')
-        aim(0);record('capture-no-shot');result['checks']['capture_no_shot']=True
+        # The probe names the peer's torso, so the four hits are Body (v8-product-hit-gui-aim (a)).
+        torso=wait_state(out,'create',lambda s:s.get('torso_aim') is not None,'Torso aim absent')['torso_aim']
+        aim(torso['yaw'],pitch=torso['pitch']);record('capture-no-shot');result['checks']['capture_no_shot']=True
         desktop.key(ids['create'],'space',True);time.sleep(.85);desktop.key(ids['create'],'space',False);time.sleep(.2)
         require(sample()['weapon']['grounded'],'Held Space did not land')
         record('held-space-landed')

@@ -100,6 +100,7 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 
 - `Ready.animation_digest`＝18、`Welcome.animation_digest`＝20（fixed64；避開 pv8 預留的 Ready 14～17、Welcome 16～19）。
 - 內容：Match 載入的動畫定義的雜湊——判定與呈現用到的 clip 轉換後的 key（B3 的 H-load 的範圍）、各動作的跨度、transition 秒數、native speed 等 `presentation.json` 中影響姿勢的值。確切的位元組順序在 `v8-product-hitbox-data` 的事前宣告定，Match 與 Client 共用同一個函式。0 無效。
+- 2026-11-01（`v8-product-hit-clip-by-part`）：clip 列表的最後多了 `hit_head`（共 16 個），順序以 `PlayerAnimationDigest.cpp` 的列表為準。部位選 clip 的規則（頭 → `hit_head`，其他 → `hit`）是程式，不在 digest 內；只改規則、不改內容時，digest 擋不住不同版本的混用。
 - Gateway：Ready→Welcome 逐欄複製；`ReadyFitsWelcome` 把它算進去。
 - Client：收到 Welcome 時和自己載入的內容比對，不合就明確報錯（例如 `Match animation content differs from this client`），不進入對局。和移動規則的 D-5（不偵測）不同，理由是動畫內容不同時 Client 畫面上的姿勢不是被判定的姿勢。
 

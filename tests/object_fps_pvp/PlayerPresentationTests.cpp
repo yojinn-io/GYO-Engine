@@ -831,7 +831,7 @@ TEST_CASE("PvP independent players and rejoined identities cannot inherit anothe
 TEST_CASE("PvP player definitions reject missing clips bones and invalid stride calibration") {
     for (const std::string_view fault : {"mask", "leg_mask", "weapon", "clip", "action_clip", "speed", "stride",
                                          "action_span", "aim_clip", "aim_zero", "aim_beyond", "aim_missing",
-                                         "hit_clip", "hit_span"}) {
+                                         "hit_clip", "hit_head_clip", "hit_span"}) {
         CAPTURE(fault);
         PresentationAssets fixture;
         if (fault == "clip") {
@@ -845,6 +845,10 @@ TEST_CASE("PvP player definitions reject missing clips bones and invalid stride 
         } else if (fault == "hit_clip") {
             fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
                 json["clips"].erase("hit");
+            });
+        } else if (fault == "hit_head_clip") { // v8-product-hit-clip-by-part (xhigh review)
+            fixture.Override("object_fps_pvp.player.animations", [](auto& json) {
+                json["clips"].erase("hit_head");
             });
         } else if (fault == "hit_span") {
             fixture.Override("object_fps_pvp.player.presentation", [](auto& json) {
@@ -1497,6 +1501,50 @@ TEST_CASE("PvP remote hit reaction plays Hit_Chest from the latest damage, once,
     busy.lifeStateSeconds = 2.0;
     CHECK(Resolve(state, busy).lower == PlayerLowerAction::Death);
     CHECK(Resolve(state, busy).upper == PlayerUpperAction::Hold);
+}
+
+// v8-product-hit-clip-by-part (a), v8-product-hit-leg-clip (a): G1.
+TEST_CASE("PvP remote hit reaction plays Hit_Head for a head hit and Hit_Chest otherwise") {
+    const auto& definition = ProductionDefinition();
+    const auto& model = *definition.character->model;
+    CHECK(model.clips.at(definition.hitClip).name == "Armature|Hit_Chest");
+    CHECK(model.clips.at(definition.hitHeadClip).name == "Armature|Hit_Head");
+    PlayerLocomotionState state;
+    state.initialized = true;
+    const double span = definition.hitSeconds;
+    const struct {
+        HitPart part;
+        bool head;
+        std::size_t clip;
+    } cases[] = {{HitPart::Head, true, definition.hitHeadClip}, {HitPart::Body, false, definition.hitClip},
+                 {HitPart::Leg, false, definition.hitClip}, {HitPart::Unspecified, false, definition.hitClip}};
+    for (const auto& c : cases) {
+        CAPTURE(static_cast<int>(c.part));
+        auto frame = Struck(2.0 + span / 2, 1, 2.0);
+        frame.damagePart = c.part;
+        const auto actions = Resolve(state, frame);
+        CHECK(actions.upper == PlayerUpperAction::Hit);
+        CHECK(actions.headHit == c.head);
+        CHECK(actions.upperClipSeconds == doctest::Approx(ClipSeconds(c.clip) / 2));
+    }
+    // The part of a damage outside its span changes nothing.
+    auto later = Struck(2.0 + span, 1, 2.0);
+    later.damagePart = HitPart::Head;
+    CHECK(Resolve(state, later).upper == PlayerUpperAction::Hold);
+    CHECK_FALSE(Resolve(state, later).headHit);
+    // The body poses differ: the head hit samples its own clip.
+    PlayerActionPose head, chest;
+    head.upper = chest.upper = PlayerUpperAction::Hit;
+    head.headHit = true;
+    head.upperClipSeconds = chest.upperClipSeconds = ClipSeconds(definition.hitHeadClip) / 2;
+    Engine::Model::Pose headPose, chestPose;
+    std::string error;
+    REQUIRE(SamplePlayerBodyPose(definition, state, head, headPose, error));
+    REQUIRE(SamplePlayerBodyPose(definition, state, chest, chestPose, error));
+    const auto neck = model.FindNode("Head");
+    REQUIRE(neck);
+    CHECK(Engine::Math::Length(Engine::Math::TransformPoint(headPose.globalTransforms[*neck], {}) -
+                               Engine::Math::TransformPoint(chestPose.globalTransforms[*neck], {})) > 1e-3F);
 }
 
 TEST_CASE("PvP remote hit reaction adds its motion to the pitched aim pose") {

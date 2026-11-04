@@ -6,7 +6,7 @@ add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp Predi
     PlayerAnimationTests.cpp CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp CrouchTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp SoundCuesTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
     NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
-    DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp AddressTextTests.cpp)
+    DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp AddressTextTests.cpp EntityModelTests.cpp EntityColumnsTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
     PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
@@ -85,6 +85,8 @@ add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp Pr
     PlayerAnimationEquivalenceTests.cpp PlayerHitboxTests.cpp PlayerAnimationDigestTests.cpp
     PlayerHitModelTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
+# hit_aim.hpp: the acceptance probes' aim, checked against the posed judgement.
+target_include_directories(${presentation_tests} PRIVATE "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp")
 target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GYO::AssetSdlImage
     GYO::PlatformSDL nlohmann_json::nlohmann_json gyo_test_support doctest::doctest)
 gyo_use_app_config(${presentation_tests} "${GYO_CURRENT_APP}")

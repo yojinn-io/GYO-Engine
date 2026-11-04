@@ -45,6 +45,9 @@ struct PlayerPresentationFrame final {
     // The latest damage of this life: its count (zero means none) and time.
     std::uint32_t damageCount{};
     double damageSeconds{};
+    // The part of the latest damage (v8-product-hit-clip-by-part): a head hit
+    // plays its own clip; Body, Leg and none play the chest hit.
+    HitPart damagePart{HitPart::Unspecified};
     // The authoritative stance (protocol-v8 section 4). It selects the lower
     // body's crouch clips only; the model keeps its standing scale.
     bool crouched{};
@@ -58,6 +61,9 @@ struct PlayerPresentationDefinition final {
     // The upper body aims by blending these poses (their first frames) by
     // pitch; the idle, shot and reload clips move relative to their first frame.
     std::size_t aimUpClip{}, aimNeutralClip{}, aimDownClip{}, hitClip{};
+    // The head hit (hit_head); hitClip is the chest hit, also for the legs
+    // (v8-product-hit-leg-clip (a)).
+    std::size_t hitHeadClip{};
     // The crouched lower body: idle and moving, blended by the move weight.
     std::size_t crouchIdleClip{}, crouchMoveClip{};
     // Pitch magnitudes at which the up and down poses apply in full: the
@@ -91,7 +97,8 @@ LoadPlayerPoseDefinition(Engine::Asset::AssetManager& assets, float bodyHeight, 
 LoadPlayerPoseDefinition(const std::filesystem::path& contentRoot, float bodyHeight, std::string& error);
 // The animation content both ends pose with (protocol-v9 §4.6,
 // v8-product-hitbox-digest-scope (a)): the presentation values that move the
-// pose, the transferred keys of the 15 clips in their fixed order and the
+// pose, the transferred keys of the 16 clips in the digest's fixed order
+// (hit_head last, after the original 15) and the
 // skeleton. Never zero: zero is an invalid digest on the wire. The shapes, the
 // weapon and the accessories are outside it.
 [[nodiscard]] std::uint64_t AnimationContentDigest(const PlayerPresentationDefinition& definition);
@@ -156,6 +163,8 @@ struct PlayerActionPose final {
     PlayerUpperAction upper{PlayerUpperAction::Hold};
     PlayerLowerAction lower{PlayerLowerAction::Locomotion};
     double upperClipSeconds{}, lowerClipSeconds{};
+    // For Hit: whether it is the head hit clip.
+    bool headHit{};
     // -1 is the full up pose, 0 neutral, 1 the full down pose.
     float aimWeight{};
     std::uint64_t shotActionId{}, reloadActionId{};

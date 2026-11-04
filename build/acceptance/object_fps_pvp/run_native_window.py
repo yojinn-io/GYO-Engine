@@ -371,16 +371,31 @@ def run(args):
             value = wait_state(directory, role, lambda s: s["weapon"]["captured"], "Native capture failed")
             require(value["weapon"]["submitted"] == before, "Capture click fired a ghost shot")
             return value
+        def settle(role):
+            # One relative move may reach the Client over several frames: wait until it
+            # was consumed and the angle stopped changing before measuring again.
+            deadline = time.monotonic() + 3
+            last = None
+            while time.monotonic() < deadline:
+                w = sample(role)["weapon"]
+                now = (w["mouse_consumptions"], w["yaw"], w["pitch"])
+                if last and now == last:
+                    return w
+                last = now
+                time.sleep(.06)
+            return sample(role)["weapon"]
         def aim(yaw, pitch=0., role="create"):
             capture(role)
+            w = settle(role)
             for _ in range(10):
-                w = sample(role)["weapon"]
                 dx = math.remainder(yaw - w["yaw"], 2 * math.pi)
                 dy = pitch - w["pitch"]
                 if abs(dx) < .004 and abs(dy) < .004:
                     return
+                consumed = w["mouse_consumptions"]
                 desktop.relative(ids[role], round(dx / .0025), round(dy / .0025))
-                time.sleep(.10)
+                wait_state(directory, role, lambda s: s["weapon"]["mouse_consumptions"] > consumed, "Native aim move not consumed")
+                w = settle(role)
             raise RuntimeError("Native aim did not converge from read-only angle")
         def shoot(role="create", hold=.08):
             capture(role)
@@ -408,9 +423,11 @@ def run(args):
             result["checks"]["native_WM_drag_resize_only"] = {"drag": move, "resize": resized}
             result["passed"] = True
             return 0
-        # At original spawns, yaw zero points directly from creator to peer.
+        # At original spawns, yaw zero points directly from creator to peer; the probe
+        # names the peer's torso so every hit is Body (v8-product-hit-gui-aim (a)).
         capture()
-        aim(0)
+        torso = wait_state(directory, "create", lambda s: s.get("torso_aim") is not None, "Torso aim absent")["torso_aim"]
+        aim(torso["yaw"], torso["pitch"])
         record("capture-click-no-shot")
         hp = []
         for index in range(4):

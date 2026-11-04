@@ -52,6 +52,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 | `v8-engine-audio-control-clips` | high，回收順序局部 xhigh｜繼承 | 4～6 h | 完成（2026-10-31；core 38／38、test 109／109、突變 57／57＋TSan 6／6＋ASan 1／1、xhigh 審查已處置；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_clips.zh-Hant.md)） | 執行中的片段槽、`LoadClip`／`UnloadClip`、租約與交還 |
 | `v8-engine-audio-control-playhead` | xhigh｜繼承＋Sonnet 5.5 的對抗式檢查 | 3～4 h | 完成（2026-10-31；core 39／39、test 110／110、突變 70／70＋TSan 6／6＋ASan 1／1、xhigh 審查與 Sonnet 對抗式檢查已處置；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_playhead.zh-Hant.md)） | `PlayheadBoard`、`Mixer::PlayheadOf`、交錯測試、「不讀 board」的原始碼檢查 |
 | `v8-engine-audio-control-live` | medium，測試程式 high｜繼承 | 2～3 h | 完成（2026-10-31；完整突變 82／82＋TSan 6／6＋ASan 1／1、test 110／110、core 39／39；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_live.zh-Hant.md)） | dummy／disk 驅動上的停止、換片段、播放頭；`docs/architecture.md` |
+| `v8-engine-audio-disk-stop-window` | high｜繼承（Opus 5.5）；驗證者 Opus 5.5／high | 2 h（續 1.5 h） | 完成（2026-11-04；判定變更經使用者核准；`au-sdl-*` 突變 13／13；[dev_log](../../../dev_logs/2026_11_04_engine_audio_disk_stop_window.zh-Hant.md)） | `audio_sdl.disk` 停止 frame 偶發失敗：檔案開頭的標記與取走 stop 的 block 範圍 |
 
 `v8-engine-audio` 合計 12～18 h（與消費端計畫的估時相同）。檔位與引擎的說明見 [PLAN](PLAN.md)「分批」。
 

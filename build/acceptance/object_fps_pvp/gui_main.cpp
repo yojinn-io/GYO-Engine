@@ -13,6 +13,7 @@
 #include "engine/render/backend/sdl_gpu/SceneCaptureFile.hpp"
 #include "engine/time/Waiter.hpp"
 #include "acceptance_protocol.hpp"
+#include "hit_aim.hpp" // at file scope: gui_aim.hpp includes it again inside the namespace below
 #include "timer_baseline.hpp"
 
 #include <algorithm>
@@ -222,6 +223,7 @@ void SleepFor(double seconds) {
 #include "platform_fingerprint.hpp"
 #include "gui_room.hpp"
 #include "gui_input.hpp"
+#include "gui_aim.hpp"
 #include "player_short.hpp"
 #include "action_short.hpp"
 #include "sound_shots.hpp"
