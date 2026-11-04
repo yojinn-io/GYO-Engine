@@ -1,6 +1,6 @@
 # v8-product-hit-gui-aim-sdl 的事前宣告
 
-更新：2026-11-04。Owner：`object_fps_pvp`。**狀態：草稿，等使用者核准。** 估時 1～2 h（超過 3 h 停下回報）。檔位 medium（執行驗收與記錄）｜主會話 Opus 5.5；不開子 agent。
+更新：2026-11-04。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hit-gui-aim-sdl-declaration-approve`，2026-11-04，使用者：「照建議核准」；`-sdl-rounds` (a) 3 輪、`-sdl-negative` (a) 跑負面對照）。 估時 1～2 h（超過 3 h 停下回報）。檔位 medium（執行驗收與記錄）｜主會話 Opus 5.5；不開子 agent。
 
 ## 這批做什麼
 
