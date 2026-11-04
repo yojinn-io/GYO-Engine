@@ -51,6 +51,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── v8-tool-ui-editor-nudge ✓            「medium｜Opus 5.5｜方向鍵微調；縮放時 Alt 從中心、Shift 等比例」
 │   ├── （候選）v8-tool-ui-editor-snap-guides 「high｜Opus 5.5｜拖動時貼齊其他元素的邊與中線；排版覺得累時再排」
 │   ├── （候選）v8-tool-ui-editor-multi-select「high｜Opus 5.5｜多選、對齊、平均分布；同上」
+│   ├── （候選）v8-tool-ui-editor-texture-api「high｜Opus 5.5｜資產預覽改用 SDL 渲染器的貼圖 API、拿掉 *Native 例外（platform-sdl Replacement Criteria 2）」
 │   ├── v8-tool-ui-editor-text-field ✓       「high｜Opus 5.5｜ui_editor 編輯、預覽、驗證 v2 文件」
 │   ├── （延後）v8-tool-ui-button-style       「medium｜Opus 5.5｜按鈕外觀的共用樣式；第二個畫面也重複時再排（v8-tool-ui-widget-scope）」
 │   └── v8-product-lobby-text-field ✓        「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
@@ -235,3 +236,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-ui-editor-ime-enter` | [2026_11_01_tool_v8_ui_editor_ime_enter](../../../dev_logs/2026_11_01_tool_v8_ui_editor_ime_enter.zh-Hant.md) |
 | `v8-tool-model-viewer-core` | [2026_11_04_tool_v8_model_viewer_core](../../../dev_logs/2026_11_04_tool_v8_model_viewer_core.zh-Hant.md) |
 | `v8-engine-render-offscreen` | [2026_11_04_tool_v8_render_offscreen](../../../dev_logs/2026_11_04_tool_v8_render_offscreen.zh-Hant.md) |
+| `v8-engine-sdl-renderer-texture` | [2026_11_04_tool_v8_sdl_renderer_texture](../../../dev_logs/2026_11_04_tool_v8_sdl_renderer_texture.zh-Hant.md) |

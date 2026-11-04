@@ -212,9 +212,9 @@ place for GYO behaviour.
 Stop patching and let the user decide between patching and rebuilding when any of these holds:
 
 1. A second, non-SDL backend is needed: propose a backend-neutral platform interface instead.
-2. Apart from the framework's ImGui binding (GYO::ToolFrameworkImGui), and ui_editor's asset preview until the SDL
-   renderer has a texture API, an active product needs a *Native target for a new capability: the neutral API is cut
-   wrongly.
+2. Apart from the framework's ImGui binding (GYO::ToolFrameworkImGui), and ui_editor's asset preview until it moves
+   to the SDL renderer's texture API (`SdlRenderer::CreateStreamingTexture`, from `v8-engine-sdl-renderer-texture`;
+   user, 2026-11-04), an active product needs a *Native target for a new capability: the neutral API is cut wrongly.
 3. `PlatformEvent` has to expose fields to users other than `SdlInput` and the native layer.
 4. Each new event kind or window feature requires re-verifying the timestamp conversion or the log bridge.
 5. Keeping invariant 3 on the pump path requires per-event sampling or sleep detection.

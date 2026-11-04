@@ -2,7 +2,7 @@
 
 更新：2026-11-04（第 2 版：`-render` 加入 (B′)，重比、重估，建議改為 (B′)；見文末「修訂紀錄」）。Owner：新工具 `model_viewer`（`tools/model_viewer/`，本批建立）。所屬 PR 線：anim-events-line（[assets.md](assets.md)「實作順序」）。記錄器是 [HANDOFF](HANDOFF.md)。
 
-**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；`v8-engine-sdl-renderer-texture` 2026-11-04 開始。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
+**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；`v8-engine-sdl-renderer-texture` 完成（見「`v8-engine-sdl-renderer-texture` 實作後的結果」）；下一批 `-preview` 等你說開始。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
 
 ## 代號對照
 
@@ -178,6 +178,16 @@ v8-tool-model-viewer                      「anim-events-line 的第二批：模
   - 離屏的 `AcquireFrame` 不等之前的幀；不每幀讀回的呼叫端要自己控速（標頭寫明）。
 - 突變：宣告 4 條，加上審查後的 1 條，共 5／5 killed。
 
+#### `v8-engine-sdl-renderer-texture` 實作後的結果（2026-11-04）
+
+- T1：`render.sdl_renderer_texture`（`cpu`，dummy 視訊驅動＋軟體渲染器）；T2：`gyo_framework.imgui_texture`（`cpu;editor`，只跑 `T2:*`）。本機通過；L1 要看 CI。
+- T3：使用者選 (a)，見決定紀錄 `v8-engine-sdl-renderer-texture-t3`。framework 的 Design Invariants 沒有改：綁定本來就 PRIVATE 連 `*Native`，新函式也不寫 `SDL_` 符號。
+- 介面：`SdlRenderer::CreateStreamingTexture`／`UploadTexture`／`ReleaseTexture`、`SdlTextureHandle`；原生層 `NativeTexture`；綁定 `ImGuiTextureId`。
+- 和宣告不同的地方：
+  - 列距超過 `INT_MAX`、大小超過 `INT_MAX` 也被拒（SDL 用 int 收這些值）；
+  - 貼圖要在 BeginFrame 釋放：ImGui 在 Draw 之後才畫（標頭寫明）。
+- 突變：宣告 2 條，加審查後 1 條，共 3／3 killed。
+
 ### `v8-engine-sdl-renderer-texture`（(B′)）
 
 - T1：建立、上傳、釋放串流貼圖；大小或位元組數不對時回錯誤，不寫越界。這些用 SDL 的軟體渲染器跑（`cpu`，三平台 CI）。
@@ -308,3 +318,4 @@ L1／L2／L3 不排固定順序，依機器與你的空檔。
 | `v8-tool-model-viewer-trial-platform` | （2026-11-04）L3 只在 macOS | 同上 |
 | `v8-tool-model-viewer-reviewer` | （2026-11-04）審查者 Opus 5.5／high | 同上 |
 | `v8-tool-model-viewer-start` | （2026-11-04）開工，先寫事前宣告 | 「現在開工先寫宣告」（經啟動本會話的會話轉述） |
+| `v8-engine-sdl-renderer-texture-t3` | （2026-11-04）(a)：platform-sdl Replacement Criteria 2 的期限從「到 SDL 渲染器有貼圖 API 為止」改成「到 ui_editor 改用 SDL 渲染器的貼圖 API 為止」；ui_editor 改用它記成之後的候選。沒有選 (b)（本批就改 ui_editor） | 「(a) 改字句」 |
