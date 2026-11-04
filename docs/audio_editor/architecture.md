@@ -28,9 +28,13 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    rebuilding the editor follows it; only a new encoding (float, compressed)
    needs an editor change. Guard: every converted output is loaded through
    `SoundLoader` and accepted by `ClipBank`.
-3. The editor writes only what it registers: the output file and the catalog
-   entry with the same id. It leaves every other entry, every other file and
-   product data (such as a product's sound cue table) untouched. The catalog is
+3. The editor writes only what it registers: for each exported clip, its output
+   file and the catalog entry with that clip's id. One export may write several
+   clips; within it the ids are distinct and no two clips are one file, and when
+   any clip is refused nothing is written. A write that fails after others
+   leaves the clips already written unregistered, and the editor names them. It
+   leaves every other entry, every other file and product data (such as a
+   product's sound cue table) untouched. The catalog is
    written by atomic replace and checked against the content contract (ids
    unique within the catalog, paths inside the asset root); duplicates across
    catalogs and overlaps with shader bundles are decided at load by Engine's

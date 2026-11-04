@@ -8,7 +8,7 @@
 
 **狀態：**
 - 程式、測試、突變、審查、DI 3 的檢驗都完成。
-- DI 3 的新措辭（§14.4）等你核准；核准前 `docs/audio_editor/architecture.md` 的 DI 3 不改。
+- DI 3 的新措辭（§14.4）2026-11-04 核准，已寫進 `docs/audio_editor/architecture.md`（`v8-tool-audio-editor-di3-plural`）。
 - GUI 的試用（判定 7，L3 macOS）等你做。
 
 相關文件：

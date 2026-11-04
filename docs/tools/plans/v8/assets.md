@@ -774,7 +774,7 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
   - 單段的 `convert --path audio/Other.wav` 會蓋掉另一個條目已登錄的 `audio/other.wav`（検証者的 E2，在不分大小寫的磁碟上），違反 DI 3 的「其他檔案不碰」。
   - 這要拿新的 path 和 catalog 裡其他條目的檔案比對，屬於登錄規則（framework 的 catalog 規則）。可以另排一批。
 
-### Design Invariant 3 的新措辭（檢驗後的版本，要你核准）
+### Design Invariant 3 的新措辭（檢驗後的版本，2026-11-04 核准，已寫進 architecture.md）
 
 「3. The editor writes only what it registers: for each exported clip, its output file and the catalog entry with that clip's id. One export may write several clips; within it the ids are distinct and no two clips are one file, and when any clip is refused nothing is written. A write that fails after others leaves the clips already written unregistered, and the editor names them. It leaves every other entry, every other file and product data (such as a product's sound cue table) untouched. …」（之後關於 atomic replace 與 content contract 的句子照舊。）
 
@@ -855,4 +855,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-audio-editor-edit-restart` | （2026-11-03）`-edit` 開工時的更新：(1) GYO::Audio 播放控制層由 audio-line 會話推送、開 PR、合併後才實作；(2) 工程檔 audio_editor 自己連 nlohmann；(3) 模型表：上段，実装者／審査者 Opus 5.5／high、検証者 Fable 5.1／high；守衛目標的 `GYO::ToolFrameworkGui` 換成 `GYO::ToolFrameworkImGui` | 「いいです、意見を受け入れます」（接受三項建議） |
 | `v8-tool-anim-event-sound-owner` | （2026-11-04）「事件 → 聲音」由 framework 持有，是組合格式（建議形狀 `gyo.event_sounds`，架構卡 `v8-arch-event-sounds-contract`）；Engine 不動；聲音側選 B（每個動作一個事件、一段聲音）。audio_editor 只管片段（DI 8 不動），下一批是多段匯出（`v8-tool-audio-editor-regions`）。PvP 的 `sfx.json` 遷移由產品會話在契約落地後做 | 經架構會話轉述（不是原話）：使用者 2026-11-04 決定 |
 | `v8-tool-audio-editor-regions-predeclare` | （2026-11-04）`v8-tool-audio-editor-regions` 的事前宣告照草稿核准：改動、判定 1～7、突變 12 條、範圍的限界、模型表（上段；実装者／審査者 Opus 5.5／high、検証者 Fable 5.1／high），以及 DI 3 改成複數的措辭方向。DI 3 的 §14.4 1～5 在實作、突變、検証者核對後再交使用者核准 | 對「多段匯出的事前宣告（含 DI 3 改成複數）照草稿核准嗎？」答「照草稿核准」 |
+| `v8-tool-audio-editor-di3-plural` | （2026-11-04）核准 audio_editor Design Invariant 3 的新措辭（檢驗後的版本：每個匯出的片段各有輸出檔與該片段 id 的條目；一次匯出可寫多個，id 與檔案不重複，任何一段被拒絕就什麼都不寫；寫到一半失敗時已寫的片段不登錄、工具列出它們）。§14.4 的 1～5 與検証者的更正見「`v8-tool-audio-editor-regions` 的事前宣告」的「實作後的結果」 | 對「DI 3 的新措辭（assets.md）照檢驗後的版本核准嗎？」答「核准」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |
