@@ -25,6 +25,7 @@ void RunNativeWindow(const Options& options) {
     else connection.Refresh(options.gateway);
     const auto started = Clock::now();
     auto previous = started, refreshed = started, published = started;
+    GuiTorsoAim torso(options.assetRoot);
     const auto statePath = options.output / (options.role + "-native-state.json");
     const auto tempPath = options.output / (options.role + "-native-state.tmp");
     const auto stopPath = options.output / (options.role + "-native-stop");
@@ -77,9 +78,25 @@ void RunNativeWindow(const Options& options) {
                     {"yaw", player.yaw}, {"pitch", player.pitch}, {"epoch", player.movementEpoch}, {"y", player.position.y},
                     {"life_generation", player.lifeGeneration}, {"life_state", static_cast<int>(player.lifeState)},
                     {"grounded", player.grounded}, {"vertical_velocity", player.verticalVelocity}};
-                for (const auto& combat : state.snapshot->combat) if (combat.playerId == player.playerId) value["hp"] = combat.hp;
+                for (const auto& combat : state.snapshot->combat) if (combat.playerId == player.playerId) {
+                    value["hp"] = combat.hp;
+                    // Observation only (v8-product-hitbox-acceptance): what poses the judged body.
+                    value["damage_count"] = combat.damageCount;
+                    value["last_damage_tick"] = combat.lastDamageTick;
+                    value["last_hit_part"] = static_cast<int>(combat.lastHitPart);
+                }
+                value["crouched"] = player.crouched;
+                for (const auto& animation : state.snapshot->animation) if (animation.playerId == player.playerId)
+                    value["animation"] = {{"gait_phase_q16", animation.gaitPhaseQ16}, {"move_permille", animation.moveWeightPermille},
+                        {"jog_permille", animation.jogWeightPermille}, {"jump_phase", static_cast<int>(animation.jumpPhase)},
+                        {"jump_phase_tick", animation.jumpPhaseTick}};
                 sample["players"].push_back(std::move(value));
             }
+            // v8-product-hit-gui-aim (a): the aim at the other player's torso, for run_native_window.py.
+            for (const auto& player : state.snapshot->players)
+                if (player.playerId != state.playerId)
+                    if (const auto aim = torso.Aim(state, player.playerId))
+                        sample["torso_aim"] = {{"yaw", aim->yaw}, {"pitch", aim->pitch}};
         }
         if (const auto& shown = application.PresentedMovement()) {
             Require(shown->frameId == frame.frameIndex, "Native observer reused a stale Presented frame");

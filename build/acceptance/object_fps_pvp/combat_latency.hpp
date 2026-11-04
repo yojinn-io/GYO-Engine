@@ -50,6 +50,8 @@ class CombatLatencyEvidence {
     const Options& options_;
     // Bots may share the room: only the two GUI participants are combat evidence.
     const GuiRoom& room_;
+    // The creator turns to the living peer's torso every frame (v8-product-hit-gui-aim (a)).
+    GuiTorsoAim torso_;
     bool mover_{}, releaseMouse_{}, releaseReload_{};
     std::optional<CombatStep> expected_;
     unsigned planned_{}, dispatched_{}, suppressed_{};
@@ -72,7 +74,7 @@ class CombatLatencyEvidence {
     }
 public:
     CombatLatencyEvidence(const Options& options, const GuiRoom& room)
-        : options_(options), room_(room), mover_(options.role == "create") {
+        : options_(options), room_(room), torso_(options.assetRoot), mover_(options.role == "create") {
         if (!options.combat) return;
         if (mover_) while (CombatSlotStart + planned_ * CombatSlotPeriod < options.duration) ++planned_;
         bound_ = static_cast<std::size_t>(std::ceil((options.duration + 45) * options.fps)) + 1024;
@@ -87,6 +89,19 @@ public:
         ProbeInput input(application.Platform());
         if (releaseMouse_) { PushMouse(input, false); releaseMouse_ = false; }
         if (releaseReload_) { PushKey(input, Key::R, false); releaseReload_ = false; }
+        if (mover_) {
+            const auto state = application.Connection().State();
+            if (const auto peer = room_.Peer(state)) {
+                if (const auto aim = torso_.Aim(state, *peer)) {
+                    // The Client turns 0.0025 rad per relative mouse unit (run_native_window.py).
+                    const auto& weapon = application.WeaponFeedback();
+                    const double dx = std::remainder(static_cast<double>(aim->yaw) - weapon.yaw, 2 * std::numbers::pi);
+                    const double dy = static_cast<double>(aim->pitch) - weapon.pitch;
+                    if (std::abs(dx) > .002 || std::abs(dy) > .002)
+                        PushMotion(input, static_cast<float>(dx / .0025), static_cast<float>(dy / .0025));
+                }
+            }
+        }
         if (!mover_ || dispatched_ >= planned_ || elapsed < CombatSlotStart + dispatched_ * CombatSlotPeriod) return;
         const double due = CombatSlotStart + dispatched_ * CombatSlotPeriod;
         const auto step = StepAt(dispatched_++);

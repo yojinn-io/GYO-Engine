@@ -2,7 +2,9 @@
 
 #include "RetroFPS/Pvp/PlayerHitbox.hpp"
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
+#include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "hit_aim.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/scalar/Scalar.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
@@ -15,6 +17,7 @@
 #include <utility>
 #include <cmath>
 #include <filesystem>
+#include <sstream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -415,4 +418,245 @@ TEST_CASE("PvP an action restarted in the judged tick against the run it replace
     MESSAGE("restarted action, worst shape offset over 1..40 ticks (m): hit " << hit << " shot " << shot
             << " head hit " << headHit << " chest then head " << chestToHead);
     CHECK(hit >= 0);
+}
+
+// v8-product-hitbox-acceptance A2 (B5), measured only (v8-product-hitbox-b5-threshold (a)):
+// how far the shapes on the body the Client draws between two snapshots lie
+// from the shapes the Match judges at the earlier tick J. The authority runs
+// come from the real PvpMatch with the product's animation rules; a hit is
+// written into the recorded combat state, which both ends read the same way.
+// The Client side samples as SnapshotTimeline does (position, yaw and pitch
+// interpolated, combat from the earlier snapshot, the animation interpolated)
+// and carries its locomotion state from sample to sample.
+TEST_CASE("PvP B5: shapes of the Client's interpolated body against the Match's judged body") {
+    const auto& product = LoadedProduct();
+    const auto& definition = *product.definition;
+    Arena arena;
+    arena.id = "b5_arena";
+    arena.width = arena.depth = 20;
+    arena.spawns = {{{4, 0, 4}, 0}, {{4, 0, 14}, 0}};
+    struct Run final {
+        const char* name;
+        MovementCommand (*command)(std::uint64_t);
+        bool struck;
+    };
+    const Run runs[] = {
+        {"idle", [](std::uint64_t) { return MovementCommand{}; }, false},
+        {"running and turning", [](std::uint64_t k) {
+             MovementCommand c;
+             c.moveForward = 1;
+             c.yaw = 0.02F * static_cast<float>(k);
+             return c;
+         }, false},
+        {"jumping forward", [](std::uint64_t k) {
+             MovementCommand c;
+             c.moveForward = 1;
+             c.jumpRequested = k % 40 == 1;
+             return c;
+         }, false},
+        {"crouched strafing", [](std::uint64_t) {
+             MovementCommand c;
+             c.moveRight = 1;
+             c.crouchHeld = true;
+             return c;
+         }, false},
+        {"struck while running", [](std::uint64_t) {
+             MovementCommand c;
+             c.moveForward = 1;
+             return c;
+         }, true},
+    };
+    const auto& hitbox = product.hitbox;
+    const auto endpoints = [&](const Engine::Model::Pose& pose, const PlayerState& state) {
+        std::vector<Vec3> points;
+        for (const auto& shape : hitbox.shapes) {
+            const auto world = [&](std::size_t node, Vec3 local) {
+                return PlayerBodyPointToWorld(definition, state.position, state.yaw,
+                    Engine::Math::TransformPoint(pose.globalTransforms.at(node), local));
+            };
+            const bool sphere = shape.kind == PlayerHitShape::Kind::Sphere;
+            points.push_back(sphere ? world(shape.node, shape.offset) : world(shape.node, {}));
+            points.push_back(sphere ? points.back() : world(shape.nodeTo, {}));
+        }
+        return points;
+    };
+    for (const auto& run : runs) {
+        CAPTURE(std::string(run.name));
+        PvpMatch match(arena, PvpCombatRules, DefaultStanceRules, definition.animationRules);
+        std::string error;
+        REQUIRE(match.Join(1, error));
+        REQUIRE(match.Join(2, error));
+        std::vector<WorldSnapshot> history;
+        for (std::uint64_t k = 1; k <= 240; ++k) {
+            auto command = run.command(k);
+            command.sequence = k;
+            REQUIRE(match.SubmitInput({2, {command}}));
+            match.Tick({match.TickCount() + 1, MovementTickSeconds});
+            history.push_back(match.Snapshot());
+            if (run.struck && k % 25 == 0) { // a Body or Head hit every 25 ticks, written into this tick's record
+                for (auto& combat : history.back().combat)
+                    if (combat.playerId == 2) {
+                        ++combat.damageCount;
+                        combat.lastDamageTick = history.back().tick;
+                        combat.lastAttackerId = 1;
+                        combat.lastHitPart = k % 50 == 0 ? HitPart::Head : HitPart::Body;
+                    }
+            }
+            if (run.struck && k > 1) // the record carries over until the next hit
+                for (auto& combat : history.back().combat)
+                    if (combat.playerId == 2 && k % 25 != 0)
+                        for (const auto& previous : history[history.size() - 2].combat)
+                            if (previous.playerId == 2) {
+                                combat.damageCount = previous.damageCount;
+                                combat.lastDamageTick = previous.lastDamageTick;
+                                combat.lastAttackerId = previous.lastAttackerId;
+                                combat.lastHitPart = previous.lastHitPart;
+                            }
+        }
+        const auto find = [](const auto& items) {
+            const auto found = std::find_if(items.begin(), items.end(), [](const auto& item) { return item.playerId == 2; });
+            REQUIRE(found != items.end());
+            return *found;
+        };
+        PlayerLocomotionState locomotion;
+        std::vector<float> offsets, interpolationOnly, historyOnly, matchStep;
+        for (std::size_t j = 60; j + 1 < history.size(); ++j) {
+            const auto& a = history[j];
+            const auto& b = history[j + 1];
+            const auto aPlayer = find(a.players), bPlayer = find(b.players);
+            const auto aCombat = find(a.combat);
+            const auto aAnimation = find(a.animation), bAnimation = find(b.animation);
+            std::vector<PlayerWorldHitShape> judged;
+            product.model->Shapes({arena, DefaultStanceRules, aPlayer, aCombat, aAnimation, a.tick}, judged);
+            // The Match's own move from tick J to J+1: what one tick of motion is.
+            std::vector<PlayerWorldHitShape> next;
+            product.model->Shapes({arena, DefaultStanceRules, bPlayer, find(b.combat), bAnimation, b.tick}, next);
+            float step = 0;
+            for (std::size_t i = 0; i < judged.size(); ++i) {
+                step = std::max(step, Engine::Math::Length(Volume(judged[i]).segmentStart - Volume(next[i]).segmentStart));
+                step = std::max(step, Engine::Math::Length(Volume(judged[i]).segmentEnd - Volume(next[i]).segmentEnd));
+            }
+            matchStep.push_back(step);
+            for (const double alpha : {0.25, 0.5, 0.75}) {
+                auto player = aPlayer;
+                const auto fraction = static_cast<float>(alpha);
+                player.position = Engine::Math::Lerp(aPlayer.position, bPlayer.position, fraction);
+                player.yaw = Engine::Math::LerpRadiansShortest(aPlayer.yaw, bPlayer.yaw, fraction);
+                player.pitch = Engine::Math::Lerp(aPlayer.pitch, bPlayer.pitch, fraction);
+                auto frame = PlayerFrameFromAuthority(player, aCombat,
+                    InterpolatePlayerAnimation(aAnimation, bAnimation, alpha), static_cast<double>(a.tick) + alpha);
+                frame.deltaSeconds = MovementTickSeconds / 4;
+                REQUIRE(AdvancePlayerLocomotion(locomotion, frame, definition, error));
+                PlayerActionPose actions;
+                REQUIRE(ResolvePlayerActions(definition, locomotion, frame, actions, error));
+                Engine::Model::Pose pose;
+                REQUIRE(SamplePlayerBodyPose(definition, locomotion, actions, pose, error));
+                const auto drawn = endpoints(pose, player);
+                // The same sample from a fresh locomotion state, as the Match poses:
+                // splits the offset into interpolation and the Client's own history.
+                PlayerLocomotionState fresh;
+                auto freshFrame = frame;
+                REQUIRE(AdvancePlayerLocomotion(fresh, freshFrame, definition, error));
+                PlayerActionPose freshActions;
+                REQUIRE(ResolvePlayerActions(definition, fresh, freshFrame, freshActions, error));
+                Engine::Model::Pose freshPose;
+                REQUIRE(SamplePlayerBodyPose(definition, fresh, freshActions, freshPose, error));
+                const auto freshDrawn = endpoints(freshPose, player);
+                float worst = 0, interpolation = 0, own = 0;
+                for (std::size_t i = 0; i < judged.size(); ++i) {
+                    const Vec3 match[2] = {Volume(judged[i]).segmentStart, Volume(judged[i]).segmentEnd};
+                    for (std::size_t e = 0; e < 2; ++e) {
+                        worst = std::max(worst, Engine::Math::Length(match[e] - drawn[2 * i + e]));
+                        interpolation = std::max(interpolation, Engine::Math::Length(match[e] - freshDrawn[2 * i + e]));
+                        own = std::max(own, Engine::Math::Length(freshDrawn[2 * i + e] - drawn[2 * i + e]));
+                    }
+                }
+                offsets.push_back(worst);
+                interpolationOnly.push_back(interpolation);
+                historyOnly.push_back(own);
+            }
+        }
+        REQUIRE(!offsets.empty());
+        const auto summary = [](std::vector<float> values) {
+            std::sort(values.begin(), values.end());
+            const auto at = [&](double q) { return values[static_cast<std::size_t>(q * static_cast<double>(values.size() - 1))]; };
+            std::ostringstream text;
+            text << "P50 " << at(0.5) << " P95 " << at(0.95) << " max " << values.back();
+            return text.str();
+        };
+        MESSAGE("B5 " << std::string(run.name) << ": " << offsets.size() << " samples (m); drawn against judged "
+                      << summary(offsets) << "; interpolation only " << summary(interpolationOnly)
+                      << "; the Client's history only " << summary(historyOnly)
+                      << "; the Match's own move per tick " << summary(matchStep));
+        CHECK(offsets.back() >= 0);
+    }
+}
+
+// v8-product-real-match-acceptance-repair (defect, 2026-11-03): the probes'
+// torso aim (hit_aim.hpp) must be judged Body by the posed shapes. Every
+// ordered pair of the product arena's spawns, both standing idle as spawned.
+TEST_CASE("PvP the probes' torso aim is judged Body from every product spawn") {
+    std::string error;
+    const auto arena = Arena::Load(ContentRoot() / "pvp_arena.json", error);
+    REQUIRE_MESSAGE(arena, error);
+    const HitAimModel aim(ContentRoot(), arena->bodyHeight);
+    const auto& model = *LoadedProduct().model;
+    for (std::size_t s = 0; s < arena->spawns.size(); ++s)
+        for (std::size_t t = 0; t < arena->spawns.size(); ++t) {
+            if (s == t) continue;
+            CAPTURE(s);
+            CAPTURE(t);
+            const auto make = [&](PlayerId id, const SpawnPoint& spawn) {
+                PlayerState state;
+                state.playerId = id;
+                state.position = spawn.position;
+                state.yaw = spawn.yaw;
+                state.grounded = true;
+                state.lifeGeneration = 1;
+                state.lifeState = LifeState::Alive;
+                state.lifeStateTick = 100;
+                return state;
+            };
+            WorldSnapshot snapshot;
+            snapshot.tick = 600;
+            snapshot.players = {make(1, arena->spawns[s]), make(2, arena->spawns[t])};
+            for (const PlayerId id : {PlayerId{1}, PlayerId{2}}) {
+                CombatState combat;
+                combat.playerId = id;
+                snapshot.combat.push_back(combat);
+                PlayerAnimation animation;
+                animation.playerId = id;
+                animation.lifeGeneration = 1;
+                animation.jumpPhase = JumpPhase::Grounded;
+                animation.jumpPhaseTick = 100;
+                snapshot.animation.push_back(animation);
+            }
+            const auto aimed = aim.Aim(*arena, DefaultStanceRules, snapshot, 1, 2, HitPart::Body);
+            std::vector<PlayerWorldHitShape> shapes;
+            model.Shapes({*arena, DefaultStanceRules, snapshot.players[1], snapshot.combat[1], snapshot.animation[1],
+                          snapshot.tick}, shapes);
+            const std::array targets{ShotTarget{2, shapes}};
+            const auto hit = QueryShot(*arena, DefaultStanceRules, snapshot.players[0], aimed.yaw, aimed.pitch, targets, 100);
+            CHECK(hit.kind == ShotHitKind::Player);
+            CHECK(hit.part == HitPart::Body);
+            // The GUI runner aims once and fires several shots: the later ones meet
+            // the target in its hit reaction (Body or Head), at every tick of it.
+            for (const HitPart struck : {HitPart::Body, HitPart::Head})
+                for (std::uint64_t k = 0; k <= 20; ++k) {
+                    CAPTURE(static_cast<int>(struck));
+                    CAPTURE(k);
+                    auto combat = snapshot.combat[1];
+                    combat.damageCount = 1;
+                    combat.lastDamageTick = snapshot.tick - k;
+                    combat.lastAttackerId = 1;
+                    combat.lastHitPart = struck;
+                    std::vector<PlayerWorldHitShape> reacting;
+                    model.Shapes({*arena, DefaultStanceRules, snapshot.players[1], combat, snapshot.animation[1], snapshot.tick},
+                                 reacting);
+                    const std::array moved{ShotTarget{2, reacting}};
+                    const auto later = QueryShot(*arena, DefaultStanceRules, snapshot.players[0], aimed.yaw, aimed.pitch, moved, 100);
+                    CHECK(later.kind == ShotHitKind::Player);
+                    CHECK(later.part == HitPart::Body);
+                }
+        }
 }
