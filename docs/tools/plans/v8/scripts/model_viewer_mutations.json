@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' the 'ro-' ids, and v8-engine-sdl-renderer-texture, the 'rt-' ids, and v8-tool-model-viewer-preview, the 'mvp-' ids (mvp-stale-frame needs a GPU); the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux; the rt-imgui ones need a tree with the ImGui binding, such as GYO_TOOLS=ui_editor;model_viewer), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' the 'ro-' ids, and v8-engine-sdl-renderer-texture, the 'rt-' ids, and v8-tool-model-viewer-preview, the 'mvp-' ids (mvp-stale-frame needs a GPU), and v8-tool-model-viewer-events, the 'mve-' ids; the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux; the rt-imgui ones need a tree with the ImGui binding, such as GYO_TOOLS=ui_editor;model_viewer), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
   "mutants": [
     {
       "id": "mv-writer-drops-last",
@@ -327,6 +327,56 @@
       "replace": "{(from + to) * 0.5F, {0, 0, 0 * (pitch + yaw)}, {boneThickness, boneThickness, length}};",
       "target": "gyo_model_viewer_preview_smoke",
       "expect": "the bone is not drawn along X"
+    },
+    {
+      "id": "mve-move-not-reordered",
+      "what": "A moved event stays at its index instead of being placed by its new moment",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "    const auto at = std::upper_bound(events.begin(), events.end(), seconds,\n                                     [](const double value, const auto& other) { return value < other.seconds; });\n    const auto moved = static_cast<std::size_t>(at - events.begin());",
+      "replace": "    const auto at = events.begin() + static_cast<std::ptrdiff_t>(index);\n    const auto moved = index;",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E1:*",
+      "expect": "the move did not reorder the clip"
+    },
+    {
+      "id": "mve-undo-keeps-name",
+      "what": "Undo does not give a rename back: the rename is no undo step",
+      "file": "tools/model_viewer/src/EventHistory.cpp",
+      "find": "    document_.Rename(clip, index, std::move(name));\n    Record();",
+      "replace": "    document_.Rename(clip, index, std::move(name));",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E2:*",
+      "expect": "Undo did not give the name back|history\\.Undo\\(\\)"
+    },
+    {
+      "id": "mve-lit-while-past",
+      "what": "A marker lights while the playhead is at or past it, not when playback passes it",
+      "file": "tools/model_viewer/src/Playback.cpp",
+      "find": "        if (interval.Crossed(track.events[index].seconds)) crossed.push_back(index);",
+      "replace": "        if (interval.currentSeconds >= track.events[index].seconds) crossed.push_back(index);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E4:*",
+      "expect": "an event behind the playhead lit again|after the loop's end did not light"
+    },
+    {
+      "id": "mve-unsaved-after-undo",
+      "what": "Saving forgets which state the file holds: Undo after saving still says saved (not declared; added while implementing)",
+      "file": "tools/model_viewer/include/gyo/model_viewer/EventHistory.hpp",
+      "find": "    [[nodiscard]] bool Unsaved() const noexcept { return saved_ != current_; }",
+      "replace": "    [[nodiscard]] bool Unsaved() const noexcept { return !saved_ || *saved_ < current_; }",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E2:*",
+      "expect": "Undo after saving does not show the document as unsaved"
+    },
+    {
+      "id": "mve-step-not-a-loop",
+      "what": "Advance hands out a clamped interval for a looping clock (not declared; added after review)",
+      "file": "tools/model_viewer/src/Playback.cpp",
+      "find": "    return Engine::Model::PlaybackInterval{previous, next, durationSeconds, Mode()};",
+      "replace": "    return Engine::Model::PlaybackInterval{previous, next, durationSeconds, Engine::Model::PlaybackMode::Clamp};",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E4:*",
+      "expect": "a looping clock's step is not a loop's"
     }
   ]
 }

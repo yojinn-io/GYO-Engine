@@ -1,4 +1,5 @@
-add_executable(gyo_model_viewer_core_tests ModelViewerCoreTests.cpp ModelViewerPlaybackTests.cpp)
+add_executable(gyo_model_viewer_core_tests ModelViewerCoreTests.cpp ModelViewerPlaybackTests.cpp
+                                           ModelViewerEventEditingTests.cpp)
 target_compile_features(gyo_model_viewer_core_tests PRIVATE cxx_std_20)
 target_link_libraries(gyo_model_viewer_core_tests PRIVATE gyo_model_viewer_core GYO::Model doctest::doctest)
 target_compile_definitions(gyo_model_viewer_core_tests PRIVATE

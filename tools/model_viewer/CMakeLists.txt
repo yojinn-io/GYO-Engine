@@ -14,6 +14,7 @@ endif()
 
 add_library(gyo_model_viewer_core STATIC
     src/EventDocument.cpp
+    src/EventHistory.cpp
     src/EventFiles.cpp
     src/FileAccess.cpp
     src/ModelContent.cpp

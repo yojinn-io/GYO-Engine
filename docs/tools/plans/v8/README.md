@@ -238,3 +238,4 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-engine-render-offscreen` | [2026_11_04_tool_v8_render_offscreen](../../../dev_logs/2026_11_04_tool_v8_render_offscreen.zh-Hant.md) |
 | `v8-engine-sdl-renderer-texture` | [2026_11_04_tool_v8_sdl_renderer_texture](../../../dev_logs/2026_11_04_tool_v8_sdl_renderer_texture.zh-Hant.md) |
 | `v8-tool-model-viewer-preview` | [2026_11_04_tool_v8_model_viewer_preview](../../../dev_logs/2026_11_04_tool_v8_model_viewer_preview.zh-Hant.md) |
+| `v8-tool-model-viewer-events` | [2026_11_04_tool_v8_model_viewer_events](../../../dev_logs/2026_11_04_tool_v8_model_viewer_events.zh-Hant.md) |

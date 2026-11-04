@@ -8,8 +8,8 @@ the runtime only loads them.
 
 Owner: `model_viewer` (`tools/model_viewer/`).
 
-**Status (2026-11-04): `v8-tool-model-viewer-preview`.** The core library, the command line and the window with the
-3D preview and playback; editing events in the window (`-events`) and the event sounds (`-event-sounds`) follow.
+**Status (2026-11-04): `v8-tool-model-viewer-events`.** The core library, the command line and the window with the
+3D preview, playback and event editing; the event sounds (`-event-sounds`) follow.
 
 ## Design Invariants
 
@@ -92,6 +92,12 @@ model list, Engine's description of the model (`DescribeModel`), clip playback a
 - `UploadFrame`: the frame into a texture of the shell's SDL renderer (`SdlRenderer::UploadTexture`), shown with the
   framework's `ImGuiTextureId`; the texture changes only in `BeginFrame`, before ImGui draws.
 - Engine's builtin shaders are copied next to the executable (`shaders/builtin`) on every build.
+- Events: one of the model's `gyo.anim_events` files (`OpenEvents`) or a new one (`CreateEvents`, registered in the
+  catalog the mount reads), edited through `EventHistory`: each edit one undo step, the state the file holds tracked
+  for "unsaved". A dragged marker stops at the clip's ends (`DragSeconds`); a typed moment is not clamped, and Engine
+  refuses it on save. A marker lights when playback passes it (`CrossedEvents`, Engine's `PlaybackInterval::Crossed`).
+  Changing the model, the content or closing the file asks before unsaved edits go; the shell lets no client stop the
+  window from closing, so closing it with unsaved edits only logs a warning.
 
 The guard's positive list has the window's targets since `v8-tool-model-viewer-preview`
 ([judgment change](../tools/plans/v8/model-viewer-guard-judgment-change.md), user, 2026-11-04).

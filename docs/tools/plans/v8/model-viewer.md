@@ -2,7 +2,7 @@
 
 更新：2026-11-04（第 2 版：`-render` 加入 (B′)，重比、重估，建議改為 (B′)；見文末「修訂紀錄」）。Owner：新工具 `model_viewer`（`tools/model_viewer/`，本批建立）。所屬 PR 線：anim-events-line（[assets.md](assets.md)「實作順序」）。記錄器是 [HANDOFF](HANDOFF.md)。
 
-**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；`v8-engine-sdl-renderer-texture` 完成（見「`v8-engine-sdl-renderer-texture` 實作後的結果」）；`-preview` 完成（見「`-preview` 實作後的結果」）；下一批 `-events`。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
+**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；`v8-engine-sdl-renderer-texture` 完成（見「`v8-engine-sdl-renderer-texture` 實作後的結果」）；`-preview` 完成（見「`-preview` 實作後的結果」）；`-events` 完成（見「`-events` 實作後的結果」）；下一批 `-event-sounds`。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
 
 ## 代號對照
 
@@ -177,6 +177,22 @@ v8-tool-model-viewer                      「anim-events-line 的第二批：模
   - 讀回只有在某個 pass 真的寫進幀貼圖時才可用；放棄的幀、沒寫進幀貼圖的幀、改了大小還沒送出新幀時，讀回都會被拒。
   - 離屏的 `AcquireFrame` 不等之前的幀；不每幀讀回的呼叫端要自己控速（標頭寫明）。
 - 突變：宣告 4 條，加上審查後的 1 條，共 5／5 killed。
+
+#### `-events` 實作後的結果（2026-11-04）
+
+- E1～E4：`gyo_model_viewer.core`（`cpu`）。`EventHistory`（Undo、Redo、存檔狀態）、`DragSeconds`、`CrossedEvents` 在核心，視窗只呼叫它們。
+- 視窗：
+  - 開啟模型的事件檔，或新建一個（`CreateEvents`，登錄到掛載讀的 catalog）；
+  - 時間軸可以拖動標記（停在片段的兩端；點一下只選取，不移動），點線上的空處換播放位置；
+  - 「Add at playhead」、改名、輸入秒數（不夾住）、刪除；
+  - Undo／Redo（按鈕、Ctrl+Z、Ctrl+Shift+Z／Ctrl+Y）、存檔（Ctrl+S）、未存檔標示；
+  - 播放經過時，標記會亮。
+- **L3 第 6 項做不到原本寫的樣子**：framework 的 ImGui 外殼在視窗關閉時直接結束，客戶沒辦法攔下來。現在做到的：
+  - 換模型、換內容資料夾、關閉事件檔時，會先問要不要丟掉未存檔的修改；
+  - 關閉視窗時，只在 log 寫一行警告。
+  - 要讓關閉視窗前也能問，得改 framework 的外殼契約（Architecture Delta），交你決定。
+- 和宣告不同的地方：新建的事件檔在寫出之前，每個狀態都算「未存檔」。
+- 突變：宣告 3 條，加上實作中 1 條、審查後 1 條，共 5／5 killed。
 
 #### `-preview` 實作後的結果（2026-11-04）
 
