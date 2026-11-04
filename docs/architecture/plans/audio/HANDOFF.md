@@ -40,6 +40,8 @@
 - 2026-10-31：`v8-engine-audio-control-playhead` 完成：`PlayheadBoard`、`Mixer::PlayheadOf`、窮舉交錯測試（182 組）、CTest `gyo_audio_board_readers`（Invariant 4「音效執行緒不讀 board」的原始碼檢查）。core 39／39、test 110／110、突變 70／70、TSan 5 次無警告＋6／6、ASan 3 次無報告＋1／1。Sonnet 5.5 的對抗式檢查推翻不了主張；xhigh 審查沒有 blocker，major 3 個（Mixer 層的聲部重用、非第 0 個聲部、grep 守衛沒有實作）全部處置。和計畫的差異：`-playhead-no-bounds-check` 換成 `-no-validity-check`（實作掃描 tag，不以 handle 當索引）；`au-ctl-board-state-relaxed` 依計畫不列入必殺。dev_log：[2026_10_31_engine_audio_control_playhead](../../../dev_logs/2026_10_31_engine_audio_control_playhead.zh-Hant.md)。
 - 2026-10-31：使用者說「開始 live」，開始 `v8-engine-audio-control-live`（medium，測試程式 high，估 2～3 h）。做法：①dummy 驅動：載入、播放、等到 Playing、停止、等到停止生效、卸載、等到能重新載入、播新片段（只靠 5 秒的掛起守衛，沒有時間上界）。②disk 驅動：開啟後載入的片段聽得到，停止 frame 以錨點紀錄重算，接受「送出前最後一個錨點」與「之後第一個錨點」兩個候選（同 record 批）。③只會被 disk 測試殺掉的突變：送進 `Render` 的錨點比記進紀錄的晚 1 ms（`au-sdl-render-anchor-shifted`）。④`docs/architecture.md` 的 Audio 列與段落；PR 線合併前的完整突變在背景跑一次（D184）。
 - 2026-10-31：`v8-engine-audio-control-live` 完成：dummy 驅動上停止、換片段、播放頭；disk 驅動上開啟後載入的片段聽得到，停止 frame 等於以錨點重算的值（連跑 30 次通過）；突變 `au-sdl-render-anchor-shifted`。PR 線合併前的完整突變（D184）：`mutations.json` 82／82、TSan 6／6、ASan 1／1；test 110／110、core 39／39。`docs/architecture.md` 的 Audio 列與「audio control layer」一段已補。dev_log：[2026_10_31_engine_audio_control_live](../../../dev_logs/2026_10_31_engine_audio_control_live.zh-Hant.md)。控制層的分支 `claude/v8-engine-audio-control`（未推送）；四平台 CI 未跑。
+- 2026-11-04：#138 合併後的 master CI（run 41775642108，linux-x64）在 disk 守衛「stops it at its mapped frame」失敗。使用者說「在這裡切分」，開始 `v8-engine-audio-disk-stop-window`（high，估 2 h）。切分：Test 自身，環境觸發，實作照契約。主因是 SDL 在 `Open` resume 前把靜音寫進 disk 檔（檔案比 mixer 多一個 block）；次要是測試執行緒在 sentAt 與入列之間被耽擱。使用者先選「照選項 1 修」（放寬範圍），查出主因後停下（AGENTS §14：原因改變前提），再選「標記加放寬」。
+- 2026-11-04：`v8-engine-audio-disk-stop-window` 實作完成、**判定變更待使用者核准**（Design Invariant 10 的守衛，AGENTS §14.4）：測試在 mixer 的 frame 0 放標記並扣掉檔案開頭，候選範圍延伸到 `Stop()` 返回後第一個 block，遲到計數須和結果一致；新增暫停 1 ms／3 ms 一案；`au-sdl-*` 突變 13／13；閒置 200、滿載 100 次通過。驗證者指出未守住的一面：後端在串流開頭加入的固定延遲（V1）。分支 `claude/v8-engine-audio-disk-stop-window`（本機，未推送）。dev_log：[2026_11_04_engine_audio_disk_stop_window](../../../dev_logs/2026_11_04_engine_audio_disk_stop_window.zh-Hant.md)。
 - 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -58,6 +60,7 @@
 | `v8-engine-audio-control-playhead` | 公布播放位置 |
 | `v8-engine-audio-control-live` | SDL 上的驗證與收尾 |
 | `v8-engine-audio-record` | disk 驅動的量測（只記錄）與收尾 |
+| `v8-engine-audio-disk-stop-window` | disk 守衛的停止 frame 偶發失敗：開頭標記與 block 範圍 |
 | `v8-engine-audio-producers` 等 | 2026-10-30 核准的 6 項決策（決策紀錄） |
 
 ## 閱讀入口
@@ -69,7 +72,10 @@
 
 ## 等使用者決定
 
-目前沒有。
+### `v8-engine-audio-disk-stop-window`：Design Invariant 10 守衛的判定變更（2026-11-04 提出）
+
+- 守的性質、緩的面、締的面與證據：見 [dev_log](../../../dev_logs/2026_11_04_engine_audio_disk_stop_window.zh-Hant.md)「判定變更」。
+- 要決定的一面：新判定不再抓「後端在串流開頭加入的固定延遲」（驗證者的 V1：舊判定 5／5 失敗、新判定 5／5 通過）。延遲不在 Invariants 3、10 的契約裡，目前沒有其他判定守它。
 
 ### `v8-engine-audio-control-*`：控制層重建計畫的 9 項（2026-10-31 提出；同日全部照建議核准，見決策紀錄）
 
@@ -195,3 +201,4 @@
 | `v8-engine-audio-control-clips` | 4～6 h | 約 3 h | 含 xhigh 審查約 12 分鐘、ASan 建置、突變 3 輪（背景） |
 | `v8-engine-audio-control-playhead` | 3～4 h | 約 2.5 h | 含 xhigh 審查約 10 分鐘、Sonnet 檢查約 2 分鐘、突變 3 輪（背景） |
 | `v8-engine-audio-control-live` | 2～3 h | 約 1 h | 含完整突變（背景，約 25 分鐘） |
+| `v8-engine-audio-disk-stop-window` | 2 h（切分）＋1.5 h（修正） | 約 1.5 h＋約 1.5 h | 含驗證者約 10 分鐘、突變（背景）；中途因主因改變停下一次 |
