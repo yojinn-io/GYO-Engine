@@ -73,6 +73,8 @@ public:
     }
 
     [[nodiscard]] bool WantsExit() const override { return editor_.WantsExit(); }
+    // Unsaved changes: the editor asks in the next frame (v8-framework-close-request).
+    [[nodiscard]] bool CloseRequested() override { return editor_.CloseRequested(); }
 
     void EndFrame() override {
         editor_.SetPhysicalInput(nullptr);

@@ -96,8 +96,8 @@ model list, Engine's description of the model (`DescribeModel`), clip playback a
   catalog the mount reads), edited through `EventHistory`: each edit one undo step, the state the file holds tracked
   for "unsaved". A dragged marker stops at the clip's ends (`DragSeconds`); a typed moment is not clamped, and Engine
   refuses it on save. A marker lights when playback passes it (`CrossedEvents`, Engine's `PlaybackInterval::Crossed`).
-  Changing the model, the content or closing the file asks before unsaved edits go; the shell lets no client stop the
-  window from closing, so closing it with unsaved edits only logs a warning.
+  Changing the model, the content, closing the file or closing the window (the shell's `CloseRequested`,
+  `v8-framework-close-request`) asks before unsaved edits go; a field still being typed in counts as an edit.
 
 The guard's positive list has the window's targets since `v8-tool-model-viewer-preview`
 ([judgment change](../tools/plans/v8/model-viewer-guard-judgment-change.md), user, 2026-11-04).

@@ -24,8 +24,12 @@ class LoopAdapter final : public Engine::Runtime::IRuntimeClient {
 public:
     LoopAdapter(SdlPlatform& platform, WindowShellClient& client) noexcept : platform_(platform), client_(client) {}
 
+    // PumpEvents stops only for a close request or quit: the client may keep the window open.
     RuntimeControl ProcessEvents(const FrameContext&) override {
-        return platform_.PumpEvents([this](const PlatformEvent& event) { client_.OnEvent(event); });
+        const RuntimeControl control =
+            platform_.PumpEvents([this](const PlatformEvent& event) { client_.OnEvent(event); });
+        if (control == RuntimeControl::Stop && !client_.CloseRequested()) return RuntimeControl::Continue;
+        return control;
     }
     RuntimeControl Update(const FrameContext& frame) override { return client_.Update(frame); }
     RuntimeControl Render(const FrameContext& frame) override { return client_.Render(frame); }

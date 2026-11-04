@@ -34,6 +34,10 @@ if(TARGET GYO::ToolFrameworkWindow)
     add_test(NAME gyo_framework.window_shell COMMAND gyo_framework_window_tests)
     set_tests_properties(gyo_framework.window_shell PROPERTIES
         LABELS "editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy" TIMEOUT 30)
+    # Q1 and Q2 of v8-framework-close-request, in the cpu set as well (L1).
+    add_test(NAME gyo_framework.window_close COMMAND gyo_framework_window_tests "--test-case=Q*")
+    set_tests_properties(gyo_framework.window_close PROPERTIES
+        LABELS "cpu;editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy" TIMEOUT 30)
 endif()
 
 # The ImGui binding, on the dummy video driver and the software renderer, in a
@@ -57,6 +61,12 @@ if(TARGET GYO::ToolFrameworkImGui)
         WORKING_DIRECTORY "${_gyo_imgui_directory}")
     set_tests_properties(gyo_framework.imgui_shell_no_renderer PROPERTIES
         LABELS "editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=gyo-no-such-driver" TIMEOUT 30)
+    # Q3 of v8-framework-close-request, in the cpu set as well (L1).
+    add_test(NAME gyo_framework.imgui_close
+        COMMAND gyo_framework_imgui_tests "--test-case=Q3:*"
+        WORKING_DIRECTORY "${_gyo_imgui_directory}")
+    set_tests_properties(gyo_framework.imgui_close PROPERTIES
+        LABELS "cpu;editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software" TIMEOUT 30)
     # T2 of v8-engine-sdl-renderer-texture, in the cpu set as well (L1).
     add_test(NAME gyo_framework.imgui_texture
         COMMAND gyo_framework_imgui_tests "--test-case=T2:*"

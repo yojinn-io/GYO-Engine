@@ -134,12 +134,16 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    platform, also while an exception unwinds; it owns the one RuntimeLoop,
    passes every event of a pump to OnEvent before that pump's Update, returns
    1 for its own failures and otherwise the client's code, and sets no
-   live-frame handler and no log handler. The ImGui binding's renderer is its
+   live-frame handler and no log handler. When a pump ends with a quit or a
+   close request, it asks the client (CloseRequested, once per such pump)
+   and keeps the loop running when the client says no; the ImGui binding
+   asks its client the same way (user, 2026-11-04,
+   `v8-framework-close-request`). The ImGui binding's renderer is its
    own, lent to the product, and lives until the product is destroyed. No
    shell catches an exception, and shells log only through Base::Log. Guards:
    the headless, window-shell and ImGui-shell tests, the configure-time check
    that the shells are built where their Engine targets are, and the
-   fw-shell-* and fw-imgui-* mutants.
+   fw-shell-* and fw-imgui-* mutants (the close request: fw-close-*).
 
 ### Replacement Criteria
 

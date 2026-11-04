@@ -30,6 +30,8 @@ GYO::*Native (INTERFACE): the only targets that carry SDL3 to a user
 - **Neutral layer.** The ordinary backend headers (`SdlPlatform.hpp`, `SdlInput.hpp`, `SdlRenderer.hpp`,
   `SdlGpuRenderDevice.hpp`) neither include SDL directly nor indirectly and contain no `SDL_` symbol. Events reach
   observers as `PlatformEvent` (valid only during the call, not copyable), carrying an Engine-time `Timestamp()`.
+  `PumpEvents` returns `Stop` only for a quit request or a close request of the platform's window, and the caller
+  decides what happens next (the framework's windowed shell asks its client, `v8-framework-close-request`).
   `SdlRenderer` also holds streaming textures (`CreateStreamingTexture`, `UploadTexture` of RGBA8 sRGB rows with a
   row pitch, `ReleaseTexture`), named by `SdlTextureHandle`; `NativeTexture` in the native layer gives the SDL texture
   of a live handle and nullptr for any other (`v8-engine-sdl-renderer-texture`).

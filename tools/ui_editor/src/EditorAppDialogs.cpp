@@ -155,6 +155,24 @@ void EditorApp::DrawDialogs() {
         ImGui::EndPopup();
     }
 
+    if (showDiscardDialog_) {
+        // A second request while it is open keeps it as it is.
+        if (!ImGui::IsPopupOpen("Discard unsaved changes?")) ImGui::OpenPopup("Discard unsaved changes?");
+        showDiscardDialog_ = false;
+    }
+    if (ImGui::BeginPopupModal("Discard unsaved changes?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("The document has changes that are not saved.");
+        if (ImGui::Button("Discard and close")) {
+            wantsExit_ = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Keep editing")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
     if (showOverwriteDialog_) {
         ImGui::OpenPopup("Output changed");
         showOverwriteDialog_ = false;

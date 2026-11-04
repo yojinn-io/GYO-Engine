@@ -446,6 +446,8 @@ public:
         return RuntimeControl::Continue;
     }
 
+    [[nodiscard]] bool CloseRequested() override { return client_ == nullptr || client_->CloseRequested(); }
+
     [[nodiscard]] int ExitCode() const noexcept override { return exitCode_; }
 
 private:

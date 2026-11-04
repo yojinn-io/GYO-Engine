@@ -64,6 +64,10 @@ public:
     virtual void Draw() = 0;
     // Checked after Draw; true ends the run with exit code 0.
     [[nodiscard]] virtual bool WantsExit() const = 0;
+    // The window was asked to close or the program to quit, between frames:
+    // true ends the run with exit code 0, false keeps it running (ask the
+    // user in the next Draw, then WantsExit). The default ends the run.
+    [[nodiscard]] virtual bool CloseRequested() { return true; }
     // Once per BeginFrame, rendered or not.
     virtual void EndFrame() {}
 };

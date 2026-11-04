@@ -596,3 +596,34 @@ TEST_CASE("T2: a texture's ImGui id is its own while it lives, reaches ImGui's d
     CHECK_MESSAGE(releasedHasNoId, "a released texture still has an ImGui id");
     CHECK(noHandleHasNoId);
 }
+
+TEST_CASE("Q3: the binding asks its client about a close request; a no keeps drawing until the client exits") {
+    class Asking final : public Client {
+    public:
+        using Client::Client;
+        bool CloseRequested() override {
+            ++asked;
+            return asked > 1;
+        }
+        int asked{};
+    };
+    Counts counts;
+    int asked = 0;
+    const int code = RunImGuiShell(SmallWindow(), [&](const ImGuiShellContext& context) {
+        auto client = std::make_unique<Asking>(context, counts, 0);
+        auto* raw = client.get();
+        client->onBeginFrame = [&context, raw, &asked](int frame) {
+            asked = raw->asked;
+            if (frame != 2 && frame != 5) return;
+            SDL_Event close{};
+            close.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+            close.window.windowID = OwnWindow(context);
+            PushInjected(context, close);
+        };
+        return client;
+    });
+    CHECK(code == 0);
+    // The first request (after frame 2) is refused: frames 3 to 5 run; the second (after 5) is accepted.
+    CHECK_MESSAGE(counts.beginFrame == 5, "the binding did not hand the close request to its client");
+    CHECK(asked == 1);
+}

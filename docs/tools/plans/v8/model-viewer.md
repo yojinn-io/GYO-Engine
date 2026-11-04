@@ -354,6 +354,17 @@ L1／L2／L3 不排固定順序，依機器與你的空檔。
 
 突變（全部預期 killed）：外殼不理會客戶的回答（一律結束）；綁定不轉交（一律 true）；quit 事件不經詢問就結束。
 
+### 實作後的結果（2026-11-04）
+
+- Q1～Q3：`gyo_framework.window_close`、`gyo_framework.imgui_close`（都標 `cpu`）本機通過。Q1 多一個 case：同一輪 pump 裡同時有關閉請求和 quit 時，只問一次（審查補的）。
+- 客戶：
+  - model_viewer：還在輸入中的欄位，問之前先寫入；
+  - ui_editor：File > Exit 也走同一個檢查；
+  - 兩者的詢問開著時再收到關閉請求，不重開詢問。
+- SDL 把 SIGINT、SIGTERM 轉成 quit。有未存檔時，這兩個訊號也會先問；寫在 `WindowShell.hpp`。
+- 突變：宣告 3 條 3／3 killed；既有的 `fw-shell-no-observer`，因為 find 的那行程式改了，更新後重跑，killed。
+- Q4（L3）留給 `-trial`。
+
 ### 估時、檔位與模型
 
 - 上段（framework 公開介面、DI 6 的字句）。實作者 Opus 5.5／high（主會話），審查者 Opus 5.5／high（子 agent）；檢驗者只在出現放寬時開。

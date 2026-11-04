@@ -63,7 +63,7 @@ public:
 
     ~ViewerClient() override {
         if (texture_.handle) static_cast<void>(renderer_.ReleaseTexture(texture_.handle));
-        // The shell gives a client no say when the window closes: say what was lost.
+        // A way out the shell does not ask about (a crash path, a client exit): say what was lost.
         if (history_ && history_->Unsaved()) {
             Engine::Base::Log(Engine::Base::LogLevel::Warning, "model_viewer",
                               "the window closed with unsaved event edits: " + (eventsPath_.empty() ? std::string("a new file") : eventsPath_));
@@ -149,11 +149,19 @@ public:
         ImGui::End();
     }
 
-    [[nodiscard]] bool WantsExit() const override { return false; }
+    [[nodiscard]] bool WantsExit() const override { return wantsExit_; }
+    // Unsaved event edits: the window asks in the next frame (v8-framework-close-request).
+    [[nodiscard]] bool CloseRequested() override {
+        CommitPending(); // a field still being typed in counts as an edit
+        if (!history_ || !history_->Unsaved()) return true;
+        Guarded([this] { wantsExit_ = true; });
+        return false;
+    }
 
 private:
     // Runs action now, or after the user agrees to drop unsaved event edits.
     void Guarded(std::function<void()> action) {
+        CommitPending();
         if (history_ && history_->Unsaved()) {
             // Opened from the main window's ID stack, where the prompt is drawn.
             pendingAction_ = std::move(action);
@@ -165,7 +173,8 @@ private:
 
     void DrawDiscardPrompt() {
         if (openDiscard_) {
-            ImGui::OpenPopup("Discard unsaved events?");
+            // A second request while it is open keeps it as it is.
+            if (!ImGui::IsPopupOpen("Discard unsaved events?")) ImGui::OpenPopup("Discard unsaved events?");
             openDiscard_ = false;
         }
         if (!ImGui::BeginPopupModal("Discard unsaved events?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
@@ -716,6 +725,7 @@ private:
     std::optional<std::string> contentCatalog_;
     std::function<void()> pendingAction_;
     bool openDiscard_{};
+    bool wantsExit_{};
 };
 
 } // namespace
