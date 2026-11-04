@@ -1,8 +1,8 @@
-# 模型檢視工具的事前宣告（`v8-tool-model-viewer`，草稿，等你核准）
+# 模型檢視工具的事前宣告（`v8-tool-model-viewer`，2026-11-04 核准）
 
 更新：2026-11-04（第 2 版：`-render` 加入 (B′)，重比、重估，建議改為 (B′)；見文末「修訂紀錄」）。Owner：新工具 `model_viewer`（`tools/model_viewer/`，本批建立）。所屬 PR 線：anim-events-line（[assets.md](assets.md)「實作順序」）。記錄器是 [HANDOFF](HANDOFF.md)。
 
-**狀態：草稿，沒有實作。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
+**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」），沒有實作；等你說開始才動 `-core`。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
 
 ## 代號對照
 
@@ -62,16 +62,16 @@
   3. 誰做：看 `v8-tool-model-viewer-engine-owner`。
 - **Design Invariants 與 Replacement Criteria**：新 Component 要先寫（AGENTS §3）。草稿在下一節，核准後由 `-core` 寫進 `docs/model_viewer/architecture.md`。
 
-## Design Invariants 草稿（`docs/model_viewer/architecture.md`，要你同意）
+## Design Invariants（`docs/model_viewer/architecture.md`，2026-11-04 同意，由 `-core` 寫入）
 
 1. **依賴**：不連結遊戲、不提任何產品。可用任何 Engine 模組（(B′) 會用到 `GYO::Render`、`GYO::ModelRenderer`、`GYO::RenderBackendSDLGpu`，都不是 `*Native`）；兩個以上產品同樣組合的東西經 framework（`gyo.event_sounds` 用 framework 的 `ParseEventSounds`、`BindEventSounds`、`EventSoundOffsetSeconds`）。不 include `SDL3/`、不呼叫 `SDL_`、不連 `*Native` 或 SDL 目標；不 include `imgui_internal.h`。守衛：工具的依賴守衛（目標與 include 前綴的正面清單）。
 2. **一個驗證者**：檔案合不合法只由 Engine（`ParseAnimationEvents`＋`BindAnimationEvents`）與 framework（`ParseEventSounds`＋`BindEventSounds`）決定。工具不留規則的副本；每次寫出前把要寫的文字重新解析並綁定到開著的模型，任何一步失敗就不寫。守衛：存檔路徑的測試＋突變。
 3. **不失真**：載入後不編輯就存，解析結果和原檔相同（秒數逐位元相同；用最短往返的十進位表示）。編輯只改被編輯的那一筆。守衛：往返測試。
-4. **只寫它編輯的檔**：開著的事件檔（和 #145 之後的 event_sounds 檔），用 `engine/io` 的原子取代寫入；載入後磁碟上的檔被別人改過就拒絕覆寫。模型檔、貼圖、產品的定義檔（例如武器的 presentation JSON）、catalog 的其他條目都不碰。catalog 只在「新建事件檔」時加一條（看 `v8-tool-model-viewer-new-file` 的決定）。守衛：測試＋突變。
+4. **只寫它編輯的檔**：開著的事件檔（和 #145 之後的 event_sounds 檔），用 `engine/io` 的原子取代寫入；載入後磁碟上的檔被別人改過就拒絕覆寫。模型檔、貼圖、產品的定義檔（例如武器的 presentation JSON）、catalog 的其他條目都不碰。catalog 只在「新建事件檔」時加一條 type `text`（`v8-tool-model-viewer-new-file` 選 (b)），用 framework 的 `RegisterAsset`；產品定義裡的引用由使用者手改。守衛：測試＋突變。
 5. **預覽就是 Engine 的結果**：姿勢＝`SamplePose`（片段自己的秒數），蒙皮與繪製＝Engine 的 `ModelRenderer`＋`Renderer`（(B′)；選 (A) 時是 `SkinMesh`＋工具的投影）；工具沒有自己的取樣、內插或著色。變速只把牆鐘時間換成片段秒數，不進檔案。聲音的時刻只用 `EventSoundOffsetSeconds`。守衛：姿勢相等測試＋突變。
 6. **中立**：事件名稱對工具是不透明的字串；不知道事件代表什麼，不依產品分支。守衛：審查＋依賴守衛（不提 `tools.csv`／`projects.csv` 裡的其他 id）。
 
-### Replacement Criteria（草稿）
+### Replacement Criteria（2026-11-04 同意）
 
 符合任一條就停止修補，交你決定修還是重建：
 
@@ -238,6 +238,8 @@ L1／L2／L3 不排固定順序，依機器與你的空檔。
 
 ## 等你決定
 
+（2026-11-04 全部決定，見「決定紀錄」；下表保留選項與理由。）
+
 每項：機制、取捨、建議。「會改變」寫最後一欄。
 
 | 代號 | 問題 | 選項與取捨 | 建議 | 會改變 |
@@ -263,4 +265,11 @@ L1／L2／L3 不排固定順序，依機器與你的空檔。
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-model-viewer-declaration` | （2026-11-04）本宣告第 2 版照草稿核准：判定、門檻（P1 p95 ≤ 16.7 ms，試行 1 次）、突變、L1／L2／L3、範圍的限界、Design Invariants 1～6 與 Replacement Criteria 1～4、模型表。實作等使用者說開始 | 「沒有，照建議核准」 |
+| `v8-tool-model-viewer-render` | （2026-11-04）(B′)：Engine 離屏繪製＋讀回＋上傳成 SDL 2D 渲染器的貼圖；Architecture Delta 為 `v8-engine-render-offscreen` 與 `v8-engine-sdl-renderer-texture` | 同上（使用者先前經分支會話轉述：(B′)「是好方案」） |
+| `v8-tool-model-viewer-engine-owner` | （2026-11-04）(a)：兩個 Engine 批由本線做，同一條 PR，排在 `-preview` 之前；Delta 記在本文件與 render／platform-sdl 文件 | 同上 |
+| `v8-tool-model-viewer-new-file` | （2026-11-04）(b)：可新建事件檔並在 catalog 登錄 type `text`；產品定義的引用由使用者手改 | 同上 |
+| `v8-tool-model-viewer-sounds-timing` | （2026-11-04）(a)：#145 在 L3 試用前合併就進同一條 PR，否則另開小 PR | 同上 |
+| `v8-tool-model-viewer-trial-platform` | （2026-11-04）L3 只在 macOS | 同上 |
+| `v8-tool-model-viewer-reviewer` | （2026-11-04）審查者 Opus 5.5／high | 同上 |
 | `v8-tool-model-viewer-start` | （2026-11-04）開工，先寫事前宣告 | 「現在開工先寫宣告」（經啟動本會話的會話轉述） |

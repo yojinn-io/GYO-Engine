@@ -524,7 +524,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │
 ├── anim-events-line                    「PR 線：動畫事件從無到手工，再到工具」
 │   ├── v8-tool-assets-anim-events      「high｜Opus 5.5｜手工：gyo.anim_events 契約＋PvP 手寫資料＋Runtime 排程；移除過渡規則（產品批）」
-│   └── v8-tool-model-viewer            「high｜Opus 5.5｜工具：模型資訊、骨骼動畫預覽、事件時刻的編輯」（事前宣告草稿在 model-viewer.md，等核准）
+│   └── v8-tool-model-viewer            「high｜Opus 5.5｜工具：模型資訊、骨骼動畫預覽、事件時刻的編輯」（事前宣告在 model-viewer.md，2026-11-04 核准）
 │
 ├── （延後）v8-tool-assets-pack          「Asset build：打包成自訂二進位包」
 └── （待定）SpriteSheet、視頻、文字與劇情 「出現需求時從手工開始」
@@ -540,7 +540,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-user-files-adopt`（T2） | medium～high｜Opus 5.5 | 2～3 h | 等 PR A 合併（含 `v8-engine-io-user-files`）。ui_editor 的 `DocumentSession` 改呼叫 engine/io；audio_editor 的讀寫改用 `ReadAllBytes` 與 `WriteFileAtomically`（暫存檔名會變）。`ProbeFileStamp` 與 `ReadAllBytes` 都明確傳 `maxBytes`（預設 64 MB）。`AbsolutePath` 留在 framework 核心（架構計畫 D-2），ui_editor 繼續用那一份。audio_editor 現在完全沒用 `FileService`，改用 engine/io 是新依賴：CMake 具名 `GYO::Engine`，守衛加 `engine/io/` 與 `GYO::Engine`（放寬，§14.4）；ui_editor 的守衛預期不變，開工前確認。兩個工具的測試照舊通過 |
 | `v8-tool-audio-editor-catalog-adopt`（T3b） | high｜Opus 5.5 | 2～3 h | 等 PR A 合併（含 `v8-framework-catalog-structure` 與 `-extra-fields`）。CMake 具名 `GYO::ToolFrameworkJson`；`RegisterAsset` 的參數改 Engine 的 `RawCatalogEntry`，登錄政策用預設值；CLI 的 `convert_taken_path` 仍回 4。Main 改 `RunHeadlessShell`。守衛加 `GYO::ToolFrameworkJson`（§14.4），突變 `ae-guard-json-target` 改寫。audio_editor Design Invariant 3 的「unique ids」改寫成「catalog 內唯一；跨 catalog 與 shader 重疊在載入時由 ContentManifest 判定」（要你同意）。`-edit` 的工程檔用 JSON 要不要把 nlohmann 加回守衛，在這批一起決定 |
 | `v8-tool-assets-anim-events` | high｜Opus 5.5 | 5～8 h | `gyo.anim_events` 的契約與 Design Invariants（Engine 多一個格式，Architecture Delta）、PvP 把事件名稱對到音效、Runtime 排程、移除過渡規則；使用者實聽 |
-| `v8-tool-model-viewer` | high｜Opus 5.5 | 12～20 h（`-event-sounds` 另加 3～5 h） | 模型資訊、骨骼動畫預覽、事件時刻的編輯。2026-11-04 事前宣告草稿：[model-viewer.md](model-viewer.md)，分成 `-core`、`-preview`、`-events`、`-event-sounds`（等 PR #145）、`-trial`；等你核准，沒有實作 |
+| `v8-tool-model-viewer` | high｜Opus 5.5 | 18～28 h（(B′) 的兩個 Engine 批在內；`-event-sounds` 另加 3～5 h） | 模型資訊、骨骼動畫預覽、事件時刻的編輯。2026-11-04 事前宣告核准（第 2 版，(B′)）：[model-viewer.md](model-viewer.md)，分成 `-core`、`v8-engine-render-offscreen`、`v8-engine-sdl-renderer-texture`、`-preview`、`-events`、`-event-sounds`（等 PR #145）、`-trial`；沒有實作 |
 
 ## 等你決定
 
