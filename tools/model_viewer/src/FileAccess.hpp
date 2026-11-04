@@ -27,4 +27,11 @@ inline constexpr std::size_t kMaxTextBytes = 16U * 1024U * 1024U;
 // WriteFailed when it cannot.
 [[nodiscard]] Result<void, ModelViewerError> WriteReplacing(const std::string& path, std::span<const std::byte> bytes);
 
+// The stamp of what was just written as text. Another writer that replaced
+// the file right after would hand back its stamp, and the next save would
+// overwrite its change unseen: ChangedOnDisk instead. The file was written
+// either way.
+[[nodiscard]] Result<Engine::IO::Helpers::FileStamp, ModelViewerError> StampOfWritten(const std::string& path,
+                                                                                    const std::string& text);
+
 } // namespace Gyo::Tools::ModelViewer

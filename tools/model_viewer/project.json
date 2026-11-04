@@ -10,7 +10,8 @@
         "SDL_GPU",
         "SDL_RENDERER",
         "SDL_INPUT",
-        "IMGUI"
+        "IMGUI",
+        "SDL_AUDIO"
       ],
       "packageable": false
     },

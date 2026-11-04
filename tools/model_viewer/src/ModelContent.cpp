@@ -1,5 +1,10 @@
 #include "gyo/model_viewer/ModelContent.hpp"
 
+#include "gyo/framework/EventSounds.hpp"
+#include "gyo/framework/json/EventSoundsText.hpp"
+
+#include "engine/asset/loaders/SoundLoader.hpp"
+
 #include "FileAccess.hpp"
 
 #include "engine/asset/loading/LoadContext.hpp"
@@ -80,6 +85,54 @@ Result<std::string, ModelViewerError> ModelContent::ReadText(const std::string_v
     auto bytes = ReadAll(Utf8Path(asset->resolvedPath), kMaxTextBytes);
     if (!bytes) return Engine::Base::Err(std::move(bytes).error());
     return std::string(reinterpret_cast<const char*>(bytes->data()), bytes->size());
+}
+
+Result<std::vector<EventSoundsCandidate>, ModelViewerError> ModelContent::EventSoundsFor(
+    const std::string_view eventsAssetId) const {
+    std::vector<EventSoundsCandidate> candidates;
+    for (const auto& asset : catalog_->Assets()) {
+        if (asset.type != kTextType) continue;
+        auto text = ReadText(asset.id);
+        if (!text) return Engine::Base::Err(std::move(text).error());
+        if (text->find(Framework::EventSoundsSchema) == std::string::npos) continue;
+        EventSoundsCandidate candidate{asset.id, Utf8Path(asset.resolvedPath), false, {}};
+        auto parsed = Framework::ParseEventSounds(*text);
+        if (!parsed) {
+            candidate.refusal = Engine::Base::Describe(parsed.error());
+        } else if (parsed->animationEventsAssetId == eventsAssetId) {
+            candidate.parsed = true;
+        } else {
+            continue;
+        }
+        candidates.push_back(std::move(candidate));
+    }
+    return candidates;
+}
+
+Result<LoadedSound, ModelViewerError> ModelContent::LoadSound(const std::string_view id) const {
+    const auto* asset = catalog_->Find(id);
+    if (!asset || asset->type != kSoundType) return Engine::Base::Err(Unknown(id, kSoundType));
+    const std::string path = Utf8Path(asset->resolvedPath);
+    auto bytes = ReadAll(path, kMaxModelBytes);
+    if (!bytes) return Engine::Base::Err(std::move(bytes).error());
+    Engine::Asset::Loading::LoadContext context;
+    context.resolvedPath = path;
+    Engine::Asset::Loaders::SoundLoader loader;
+    auto loadedAsset = loader.Load(Engine::Base::ConstSpan<std::byte>(bytes->data(), bytes->size()), context);
+    if (!loadedAsset) {
+        return Engine::Base::Err(ModelViewerError::Make(ModelViewerErrorCode::InvalidSound, "Engine refuses the sound",
+                                                        Engine::Base::CauseDetail(loadedAsset.error(), path)));
+    }
+    auto sound = loadedAsset.value().ShareAs<Engine::Asset::Loaders::SoundAsset>();
+    if (!sound) {
+        return Engine::Base::Err(ModelViewerError::Make(ModelViewerErrorCode::InvalidSound, "the loader gave no sound", path));
+    }
+    return LoadedSound{std::string(id), sound->sampleRate, sound->channels, sound->pcm16};
+}
+
+double LoadedSound::Seconds() const noexcept {
+    if (sampleRate == 0 || channels == 0) return 0.0;
+    return static_cast<double>(pcm16.size() / channels) / static_cast<double>(sampleRate);
 }
 
 Result<std::vector<EventsCandidate>, ModelViewerError> ModelContent::EventsFor(const std::string_view modelId) const {

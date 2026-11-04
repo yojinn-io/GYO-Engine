@@ -2,11 +2,13 @@
 
 #include "gyo/model_viewer/EventFiles.hpp"
 #include "gyo/model_viewer/EventHistory.hpp"
+#include "gyo/model_viewer/EventSoundFiles.hpp"
 #include "gyo/model_viewer/ModelContent.hpp"
 #include "gyo/model_viewer/ModelSession.hpp"
 #include "gyo/model_viewer/ModelSummary.hpp"
 #include "gyo/model_viewer/Playback.hpp"
 #include "gyo/model_viewer/PreviewRenderer.hpp"
+#include "gyo/model_viewer/PreviewSounds.hpp"
 
 #include "gyo/framework/imgui/ImGuiShell.hpp"
 
@@ -24,6 +26,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -64,9 +67,10 @@ public:
     ~ViewerClient() override {
         if (texture_.handle) static_cast<void>(renderer_.ReleaseTexture(texture_.handle));
         // A way out the shell does not ask about (a crash path, a client exit): say what was lost.
-        if (history_ && history_->Unsaved()) {
+        if (AnyUnsaved()) {
             Engine::Base::Log(Engine::Base::LogLevel::Warning, "model_viewer",
-                              "the window closed with unsaved event edits: " + (eventsPath_.empty() ? std::string("a new file") : eventsPath_));
+                              "the window closed with unsaved edits of the events or their sounds: " +
+                                  (eventsPath_.empty() ? std::string("a new events file") : eventsPath_));
         }
     }
 
@@ -89,6 +93,12 @@ public:
                 LogError(previewError_);
             }
         }
+        if (auto opened = PreviewSounds::Open(); opened) {
+            audio_ = std::move(opened.value());
+        } else {
+            soundsError_ = Engine::Base::Describe(opened.error());
+            LogError(soundsError_);
+        }
         if (options_.assetRoot) {
             MountContent(*options_.assetRoot, options_.assetCatalog);
         }
@@ -110,12 +120,19 @@ public:
         last_ = now;
         for (auto& flash : flashes_) flash.second -= wall;
         std::erase_if(flashes_, [](const auto& flash) { return flash.second <= 0.0; });
-        if (const auto step = session_.clock.Advance(wall); step && history_) {
+        const auto step = session_.clock.Advance(wall);
+        if (step && history_) {
             // A marker lights up when playback passes its moment (Engine's Crossed only).
             if (const auto* track = CurrentTrack()) {
                 for (const std::size_t index : CrossedEvents(*track, *step)) flashes_.push_back({index, 0.3});
             }
         }
+        // A clip change gives another schedule: a new version.
+        if (session_.Clip() != soundsClip_) {
+            soundsClip_ = session_.Clip();
+            ++soundsVersion_;
+        }
+        UpdateSounds(step.has_value() && step->currentSeconds >= session_.clock.durationSeconds && session_.clock.loop);
         // ImGui draws a frame's images after Draw: the texture changes size only here.
         if (preview_ && (wanted_[0] != size_[0] || wanted_[1] != size_[1])) {
             if (texture_.handle) static_cast<void>(renderer_.ReleaseTexture(texture_.handle));
@@ -153,7 +170,7 @@ public:
     // Unsaved event edits: the window asks in the next frame (v8-framework-close-request).
     [[nodiscard]] bool CloseRequested() override {
         CommitPending(); // a field still being typed in counts as an edit
-        if (!history_ || !history_->Unsaved()) return true;
+        if (!AnyUnsaved()) return true;
         Guarded([this] { wantsExit_ = true; });
         return false;
     }
@@ -162,7 +179,7 @@ private:
     // Runs action now, or after the user agrees to drop unsaved event edits.
     void Guarded(std::function<void()> action) {
         CommitPending();
-        if (history_ && history_->Unsaved()) {
+        if (AnyUnsaved()) {
             // Opened from the main window's ID stack, where the prompt is drawn.
             pendingAction_ = std::move(action);
             openDiscard_ = true;
@@ -178,11 +195,12 @@ private:
             openDiscard_ = false;
         }
         if (!ImGui::BeginPopupModal("Discard unsaved events?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
-        ImGui::TextUnformatted("The events have changes that are not saved.");
+        ImGui::TextUnformatted("The events or their sounds have changes that are not saved.");
         if (ImGui::Button("Discard")) {
             auto action = std::move(pendingAction_);
             pendingAction_ = {};
             history_.reset();
+            sounds_.reset();
             if (action) action();
             ImGui::CloseCurrentPopup();
         }
@@ -196,6 +214,7 @@ private:
 
     void MountContent(const std::string& root, const std::optional<std::string>& catalog) {
         CloseEvents();
+        ForgetSoundFiles();
         session_.Close();
         content_.reset();
         auto mounted = ModelContent::Mount(PathOf(root),
@@ -239,6 +258,7 @@ private:
     }
 
     void CloseEvents() {
+        CloseSounds();
         history_.reset();
         candidates_.clear();
         eventsPath_.clear();
@@ -251,6 +271,8 @@ private:
 
     // Event indices refer to one clip's events in one state: they go with any change.
     void ForgetIndices() {
+        // Every edit of the events passes here: the sounds bind to the events as they now are.
+        if (sounds_) Rebind();
         selected_.reset();
         dragging_.reset();
         flashes_.clear();
@@ -273,6 +295,7 @@ private:
         eventsError_.clear();
         eventsStatus_ = "Opened " + candidate.assetId;
         ForgetIndices();
+        FindSounds();
     }
 
     void NewEvents() {
@@ -296,6 +319,254 @@ private:
     [[nodiscard]] const Engine::Model::AnimationEventTrack* CurrentTrack() const {
         if (!history_) return nullptr;
         return history_->Document().Track(CurrentClipName());
+    }
+
+    [[nodiscard]] bool AnyUnsaved() const {
+        return (history_ && history_->Unsaved()) || (sounds_ && soundsUnsaved_);
+    }
+
+    // The length of a sound asset, through Engine's sound loader, loaded into
+    // the preview's mixer on the way (the framework's SoundSeconds).
+    [[nodiscard]] Framework::SoundSeconds SoundLengths() {
+        return [this](std::string_view id) -> std::optional<double> {
+            if (const auto known = soundSeconds_.find(id); known != soundSeconds_.end()) return known->second;
+            if (!content_) return std::nullopt;
+            auto loaded = content_->LoadSound(id);
+            if (!loaded) {
+                soundsError_ = Engine::Base::Describe(loaded.error());
+                return std::nullopt;
+            }
+            if (audio_) {
+                // The length still binds; only the preview cannot play it (a sample rate the mixer lacks, no slot).
+                if (auto put = audio_->Load(loaded.value()); !put) audioWarning_ = Engine::Base::Describe(put.error());
+            }
+            soundSeconds_.emplace(std::string(id), loaded->Seconds());
+            return loaded->Seconds();
+        };
+    }
+
+    void CloseSounds() {
+        if (audio_) playback_.Stop(*audio_);
+        ++soundsVersion_;
+        sounds_.reset();
+        bound_.reset();
+        soundCandidates_.clear();
+        soundsUnsaved_ = false;
+        soundsStatus_.clear();
+        soundsError_.clear();
+        audioWarning_.clear();
+    }
+
+    // The sounds are read again from disk the next time a length is asked for.
+    void ForgetSoundFiles() {
+        soundSeconds_.clear();
+        if (audio_) audio_->Clear();
+    }
+
+    // The gyo.event_sounds files of the opened events file; the first one the framework accepts is opened.
+    void FindSounds() {
+        CloseSounds();
+        ForgetSoundFiles();
+        if (!content_ || eventsId_.empty()) return;
+        auto candidates = content_->EventSoundsFor(eventsId_);
+        if (!candidates) {
+            soundsError_ = Engine::Base::Describe(candidates.error());
+            return;
+        }
+        soundCandidates_ = std::move(candidates.value());
+        for (const auto& candidate : soundCandidates_) {
+            if (!candidate.parsed) continue;
+            auto opened = OpenEventSounds(candidate.path, eventsId_, history_->Document().Set(), SoundLengths());
+            if (!opened) {
+                soundsError_ = Engine::Base::Describe(opened.error());
+                continue;
+            }
+            soundsId_ = candidate.assetId;
+            sounds_ = std::move(opened.value());
+            Rebind();
+            soundsStatus_ = "Opened " + soundsId_;
+            return;
+        }
+    }
+
+    // The bound set the schedule reads; none while an edit does not bind (the reason is shown).
+    void Rebind() {
+        bound_.reset();
+        ++soundsVersion_;
+        if (!sounds_ || !history_) return;
+        auto bound = Framework::BindEventSounds(sounds_->set, history_->Document().Set(), SoundLengths());
+        if (!bound) {
+            soundsError_ = Engine::Base::Describe(bound.error());
+            return;
+        }
+        bound_ = std::move(bound.value());
+        soundsError_.clear();
+    }
+
+    void SaveSounds() {
+        // Bound to events that are not on disk, the file could name an event the events file does not have.
+        if (history_->Unsaved()) {
+            soundsError_ = "save the events first: the sounds are checked against the events file as saved";
+            return;
+        }
+        auto saved = SaveEventSounds(sounds_->path, sounds_->stamp, sounds_->set, history_->Document().Set(), SoundLengths());
+        if (!saved) {
+            soundsError_ = Engine::Base::Describe(saved.error());
+            return;
+        }
+        sounds_->stamp = saved.value();
+        soundsUnsaved_ = false;
+        soundsError_.clear();
+        soundsStatus_ = "Saved " + sounds_->path;
+    }
+
+    // The clip's sounds on the mixer as it plays (SoundPlayback, at the times
+    // EventSoundOffsetSeconds gives).
+    void UpdateSounds(const bool wrapped) {
+        if (!audio_) return;
+        const auto* track = CurrentTrack();
+        std::vector<ScheduledSound> schedule;
+        if (bound_ && track != nullptr) {
+            schedule = ScheduleSounds(*bound_, *track, session_.clock.durationSeconds, session_.clock.speed);
+        }
+        const SoundClock clock{session_.clock.playing, session_.clock.loop, session_.clock.speed, session_.clock.seconds,
+                               session_.clock.durationSeconds, wrapped};
+        // The mixer's default schedule delay: a start this late still sounds on time.
+        playback_.Update(*audio_, schedule, soundsVersion_, clock, Engine::Time::Now(), std::chrono::milliseconds(60));
+    }
+
+    void DrawSounds() {
+        if (!ImGui::TreeNodeEx("Sounds", ImGuiTreeNodeFlags_DefaultOpen)) return;
+        if (!audio_) ImGui::TextUnformatted("No audio output: sounds are not heard.");
+        if (!sounds_) {
+            for (const auto& candidate : soundCandidates_) {
+                if (!candidate.parsed) {
+                    ImGui::TextColored(ImVec4(1, 0.4F, 0.4F, 1), "%s: %s", candidate.assetId.c_str(), candidate.refusal.c_str());
+                }
+            }
+            if (soundCandidates_.empty()) ImGui::TextUnformatted("These events have no gyo.event_sounds file.");
+            if (!eventsId_.empty() && ImGui::Button("New sounds file")) NewSounds();
+        } else {
+            DrawSoundEntries();
+        }
+        if (!soundsError_.empty()) ImGui::TextColored(ImVec4(1, 0.4F, 0.4F, 1), "%s", soundsError_.c_str());
+        else if (!soundsStatus_.empty()) ImGui::TextUnformatted(soundsStatus_.c_str());
+        if (!audioWarning_.empty()) ImGui::TextColored(ImVec4(1, 0.8F, 0.3F, 1), "not heard: %s", audioWarning_.c_str());
+        ImGui::TreePop();
+    }
+
+    [[nodiscard]] std::vector<std::string> SoundIds() const {
+        std::vector<std::string> ids;
+        if (!content_) return ids;
+        for (const auto& asset : content_->Catalog().Assets()) {
+            if (asset.type == kSoundType) ids.push_back(asset.id);
+        }
+        return ids;
+    }
+
+    // An entry for the event name, in the set's name order (the format's order).
+    void AddSound(const std::string& event) {
+        const auto ids = SoundIds();
+        auto& list = sounds_->set.sounds;
+        const auto at = std::lower_bound(list.begin(), list.end(), event,
+                                         [](const Framework::EventSound& sound, const std::string& name) { return sound.event < name; });
+        if (at != list.end() && at->event == event) return;
+        list.insert(at, {event, ids.empty() ? std::string() : ids.front(), 0.0, 1.0F});
+        soundsUnsaved_ = true;
+        Rebind();
+    }
+
+    // A set not written yet; it is saved as a new file of the catalog the mount reads.
+    void NewSounds() {
+        OpenedEventSounds created;
+        created.set.animationEventsAssetId = eventsId_;
+        sounds_ = std::move(created);
+        soundsId_.clear();
+        soundsUnsaved_ = true;
+        newSoundsCatalog_ = contentCatalog_ ? *contentCatalog_
+                            : contentRoot_.empty() ? std::string() : Utf8Path(PathOf(contentRoot_) / "asset_catalog.json");
+        if (const auto* track = CurrentTrack(); track != nullptr && !track->events.empty()) {
+            AddSound(track->events[selected_.value_or(0) < track->events.size() ? selected_.value_or(0) : 0].name);
+        }
+        soundsStatus_ = "A new sounds file, not written yet";
+    }
+
+    void SaveNewSounds() {
+        if (history_->Unsaved()) {
+            soundsError_ = "save the events first: the sounds are checked against the events file as saved";
+            return;
+        }
+        NewEventsRequest request{contentRoot_, newSoundsCatalog_, newSoundsId_, newSoundsPath_};
+        auto created = CreateEventSounds(request, eventsId_, sounds_->set, history_->Document().Set(), SoundLengths());
+        if (!created) {
+            soundsError_ = Engine::Base::Describe(created.error());
+            return;
+        }
+        sounds_->path = created->outputPath;
+        sounds_->stamp = created->stamp;
+        soundsId_ = newSoundsId_;
+        soundsUnsaved_ = false;
+        soundsError_.clear();
+        soundsStatus_ = "Saved " + sounds_->path;
+        RefreshContent();
+    }
+
+    void DrawSoundEntries() {
+        ImGui::Text("%s%s", soundsId_.empty() ? "(new sounds file)" : soundsId_.c_str(), soundsUnsaved_ ? "  * unsaved" : "");
+        if (sounds_->path.empty()) {
+            InputString("New sounds id", newSoundsId_);
+            InputString("New sounds path (in the content root)", newSoundsPath_);
+            InputString("Sounds catalog", newSoundsCatalog_);
+            if (ImGui::Button("Save sounds as new file")) SaveNewSounds();
+        } else if (ImGui::Button("Save sounds")) {
+            SaveSounds();
+        }
+        if (const auto* track = CurrentTrack(); track != nullptr && selected_ && *selected_ < track->events.size()) {
+            const auto& name = track->events[*selected_].name;
+            const bool has = std::any_of(sounds_->set.sounds.begin(), sounds_->set.sounds.end(),
+                                         [&](const Framework::EventSound& sound) { return sound.event == name; });
+            if (!has) {
+                ImGui::SameLine();
+                if (ImGui::Button(("Add a sound for " + name).c_str())) AddSound(name);
+            }
+        }
+        const auto soundIds = SoundIds();
+        bool changed = false;
+        std::optional<std::size_t> removed;
+        for (std::size_t index = 0; index < sounds_->set.sounds.size(); ++index) {
+            auto& entry = sounds_->set.sounds[index];
+            ImGui::PushID(static_cast<int>(index));
+            ImGui::TextUnformatted(entry.event.c_str());
+            ImGui::SameLine(160);
+            ImGui::SetNextItemWidth(260);
+            if (ImGui::BeginCombo("Sound", entry.soundAssetId.c_str())) {
+                for (const auto& id : soundIds) {
+                    if (ImGui::Selectable(id.c_str(), id == entry.soundAssetId) && id != entry.soundAssetId) {
+                        entry.soundAssetId = id;
+                        changed = true;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(120);
+            // Typed values are not clamped: the framework refuses what it refuses when the file is saved.
+            if (ImGui::InputDouble("Sync s", &entry.syncSeconds, 0.0, 0.0, "%.4f")) changed = true;
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(90);
+            if (ImGui::InputFloat("Gain", &entry.gain, 0.0F, 0.0F, "%.3f")) changed = true;
+            ImGui::SameLine();
+            if (ImGui::Button("Remove")) removed = index;
+            ImGui::PopID();
+        }
+        if (removed) {
+            sounds_->set.sounds.erase(sounds_->set.sounds.begin() + static_cast<std::ptrdiff_t>(*removed));
+            changed = true;
+        }
+        if (changed) {
+            soundsUnsaved_ = true;
+            Rebind();
+        }
     }
 
     void Save() {
@@ -470,6 +741,7 @@ private:
         DrawEventCommands();
         DrawTimeline();
         DrawSelectedEvent();
+        DrawSounds();
         if (!eventsError_.empty()) ImGui::TextColored(ImVec4(1, 0.4F, 0.4F, 1), "%s", eventsError_.c_str());
         else if (!eventsStatus_.empty()) ImGui::TextUnformatted(eventsStatus_.c_str());
     }
@@ -706,6 +978,23 @@ private:
     };
     std::vector<EventsCandidate> candidates_;
     std::optional<EventHistory> history_;
+    // The opened events' gyo.event_sounds (-event-sounds).
+    std::unique_ptr<PreviewSounds> audio_;
+    std::vector<EventSoundsCandidate> soundCandidates_;
+    std::optional<OpenedEventSounds> sounds_;
+    std::optional<Framework::BoundEventSounds> bound_;
+    std::map<std::string, double, std::less<>> soundSeconds_;
+    std::string soundsId_;
+    std::string soundsStatus_;
+    std::string soundsError_;
+    bool soundsUnsaved_{};
+    SoundPlayback playback_;
+    std::uint64_t soundsVersion_{};
+    std::optional<std::size_t> soundsClip_;
+    std::string audioWarning_;
+    std::string newSoundsId_;
+    std::string newSoundsPath_;
+    std::string newSoundsCatalog_;
     Engine::IO::Helpers::FileStamp stamp_{};
     std::string eventsPath_;
     std::string eventsId_;

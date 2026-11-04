@@ -1,5 +1,7 @@
 #include "FileAccess.hpp"
 
+#include "engine/base/Fnv1a.hpp"
+
 #include "engine/io/fs/NativeFileSystem.hpp"
 #include "engine/io/helpers/ReadAllBytes.hpp"
 #include "engine/io/helpers/WriteFileAtomically.hpp"
@@ -53,5 +55,21 @@ Result<void, ModelViewerError> WriteReplacing(const std::string& path, const std
     }
     return {};
 }
+
+Result<Engine::IO::Helpers::FileStamp, ModelViewerError> StampOfWritten(const std::string& path,
+                                                                        const std::string& text) {
+    auto stamp = Probe(path);
+    if (!stamp) {
+        auto error = std::move(stamp).error();
+        error.detail += "; the file was written";
+        return Engine::Base::Err(std::move(error));
+    }
+    if (!stamp->exists || stamp->contentHash != Engine::Base::Fnv1a64(text)) {
+        return Engine::Base::Err(ModelViewerError::Make(ModelViewerErrorCode::ChangedOnDisk,
+                                                        "the file changed right after it was written", path));
+    }
+    return stamp.value();
+}
+
 
 } // namespace Gyo::Tools::ModelViewer

@@ -66,6 +66,14 @@ class ModelViewerDependencyGuardTests(unittest.TestCase):
                                     "GYO::PlatformSDL GYO::RenderBackendSDL PRIVATE GYO::RenderBackendSDLGPU)\n"
                                     "target_link_libraries(gyo_model_viewer PRIVATE GYO::ToolFrameworkImGui imgui::core)\n"}), [])
 
+    def test_audio_targets_pass_and_their_native_one_fails(self):
+        self.assertEqual(self.scan({"tools/model_viewer/CMakeLists.txt":
+                                    "target_link_libraries(a PRIVATE GYO::Audio GYO::AudioBackendSDL)\n"}), [])
+        findings = self.scan({"tools/model_viewer/CMakeLists.txt":
+                              "target_link_libraries(a PRIVATE GYO::AudioBackendSDLNative GYO::Audio-Native "
+                              "GYO::Audio::Native GYO::PlatformSDL::Native)\n"})
+        self.assertEqual(len(findings), 4)
+
     def test_native_and_other_imgui_targets_still_fail(self):
         findings = self.scan({"tools/model_viewer/CMakeLists.txt":
                               "target_link_libraries(a PRIVATE GYO::RenderBackendSDLGPUNative GYO::PlatformSDLNative "

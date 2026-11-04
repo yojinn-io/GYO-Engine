@@ -47,6 +47,13 @@ struct NewEventsReport final {
     Engine::IO::Helpers::FileStamp stamp;
 };
 
+// Writes text as a new text asset and registers it in the request's catalog:
+// nothing is written when the catalog refuses the entry (InvalidCatalog,
+// InvalidRegistration), the id is registered already or a file is at the path
+// (AlreadyExists). The file first, the catalog last (as below). The caller
+// checks the text first.
+[[nodiscard]] Result<NewEventsReport, ModelViewerError> WriteNewText(const NewEventsRequest& request, const std::string& text);
+
 // Writes a new events file and registers it (type "text"). Nothing is written
 // when the events name another model than modelAssetId (OtherModel), the
 // catalog refuses the entry (InvalidCatalog, InvalidRegistration), a file is

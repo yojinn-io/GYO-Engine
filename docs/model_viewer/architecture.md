@@ -8,8 +8,8 @@ the runtime only loads them.
 
 Owner: `model_viewer` (`tools/model_viewer/`).
 
-**Status (2026-11-04): `v8-tool-model-viewer-events`.** The core library, the command line and the window with the
-3D preview, playback and event editing; the event sounds (`-event-sounds`) follow.
+**Status (2026-11-04): `v8-tool-model-viewer-event-sounds`.** The core library, the command line and the window with
+the 3D preview, playback, event editing and the event sounds; the trial (`-trial`) follows.
 
 ## Design Invariants
 
@@ -98,6 +98,13 @@ model list, Engine's description of the model (`DescribeModel`), clip playback a
   refuses it on save. A marker lights when playback passes it (`CrossedEvents`, Engine's `PlaybackInterval::Crossed`).
   Changing the model, the content, closing the file or closing the window (the shell's `CloseRequested`,
   `v8-framework-close-request`) asks before unsaved edits go; a field still being typed in counts as an edit.
+
+- Event sounds: the `gyo.event_sounds` files of the opened events file (`EventSoundsFor`, `OpenEventSounds`), or a new
+  one (`CreateEventSounds`); every sound's sound id, sync point and gain edited and saved (`SaveEventSounds`), always
+  through the framework's `ParseEventSounds` and `BindEventSounds` (`CheckedEventSoundsText`, Design Invariant 2), and
+  only while the events file is saved (the sounds are checked against it). The preview plays them on Engine's mixer
+  and SDL audio output (`PreviewSounds`), at the times `ScheduleSounds` gives (the framework's
+  `EventSoundOffsetSeconds` only) and `SoundPlayback` sends round by round.
 
 The guard's positive list has the window's targets since `v8-tool-model-viewer-preview`
 ([judgment change](../tools/plans/v8/model-viewer-guard-judgment-change.md), user, 2026-11-04).

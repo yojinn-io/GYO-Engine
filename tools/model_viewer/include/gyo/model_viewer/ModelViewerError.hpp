@@ -26,6 +26,9 @@ enum class ModelViewerErrorCode : std::uint8_t {
     AlreadyExists,       // a new events file would replace an existing file
     InvalidRegistration, // the id or path cannot be registered in that catalog
     PreviewFailed,       // the preview's device, shaders or renderer could not start or draw
+    InvalidEventSounds,  // the framework's gyo.event_sounds parser or binding refused the file
+    OtherEvents,         // the event sounds name another gyo.anim_events file than the one opened
+    InvalidSound,        // Engine's sound loader refused the sound
 };
 
 [[nodiscard]] constexpr const char* ToString(const ModelViewerErrorCode code) noexcept {
@@ -41,6 +44,9 @@ enum class ModelViewerErrorCode : std::uint8_t {
     case ModelViewerErrorCode::AlreadyExists: return "AlreadyExists";
     case ModelViewerErrorCode::InvalidRegistration: return "InvalidRegistration";
     case ModelViewerErrorCode::PreviewFailed: return "PreviewFailed";
+    case ModelViewerErrorCode::InvalidEventSounds: return "InvalidEventSounds";
+    case ModelViewerErrorCode::OtherEvents: return "OtherEvents";
+    case ModelViewerErrorCode::InvalidSound: return "InvalidSound";
     }
     return "Unknown";
 }

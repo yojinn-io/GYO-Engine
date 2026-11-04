@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' the 'ro-' ids, and v8-engine-sdl-renderer-texture, the 'rt-' ids, and v8-tool-model-viewer-preview, the 'mvp-' ids (mvp-stale-frame needs a GPU), and v8-tool-model-viewer-events, the 'mve-' ids; the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux; the rt-imgui ones need a tree with the ImGui binding, such as GYO_TOOLS=ui_editor;model_viewer), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' the 'ro-' ids, and v8-engine-sdl-renderer-texture, the 'rt-' ids, and v8-tool-model-viewer-preview, the 'mvp-' ids (mvp-stale-frame needs a GPU), v8-tool-model-viewer-events, the 'mve-' ids, and v8-tool-model-viewer-event-sounds, the 'mvs-' ids; the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux; the rt-imgui ones need a tree with the ImGui binding, such as GYO_TOOLS=ui_editor;model_viewer), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
   "mutants": [
     {
       "id": "mv-writer-drops-last",
@@ -377,6 +377,66 @@
       "target": "gyo_model_viewer_core_tests",
       "cases": "E4:*",
       "expect": "a looping clock's step is not a loop's"
+    },
+    {
+      "id": "mvs-own-formula",
+      "what": "The preview's sound start is the viewer's own formula without the sync point, not EventSoundOffsetSeconds",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "        const auto offset = Framework::EventSoundOffsetSeconds(event.seconds, clipSeconds, actionSeconds, sound->syncSeconds);",
+      "replace": "        const std::optional<double> offset = event.seconds * (actionSeconds / clipSeconds);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S2:*",
+      "expect": "the sound's start is not the framework's"
+    },
+    {
+      "id": "mvs-save-unparsed",
+      "what": "Saving writes the text without the framework reading it back",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    std::string text = WriteEventSounds(set);\n    auto parsed = Framework::ParseEventSounds(text);\n    if (!parsed) return Engine::Base::Err(Refused(parsed.error(), \"the text to write\"));\n    if (auto bound = Framework::BindEventSounds(parsed.value(), events, soundSeconds); !bound) {\n        return Engine::Base::Err(Refused(bound.error(), \"the text to write\"));\n    }\n    if (!SameEventSounds(parsed.value(), set)) {",
+      "replace": "    std::string text = WriteEventSounds(set);\n    static_cast<void>(events);\n    static_cast<void>(soundSeconds);\n    if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S1:*",
+      "expect": "a sync point after its sound's end was saved"
+    },
+    {
+      "id": "mvs-gain-as-double",
+      "what": "The gain is written as a double, not as the float the format holds",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    const auto written = std::to_chars(digits.data(), digits.data() + digits.size(), gain);",
+      "replace": "    const auto written = std::to_chars(digits.data(), digits.data() + digits.size(), static_cast<double>(gain));",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S1:*",
+      "expect": "the written text is not the file's own"
+    },
+    {
+      "id": "mvs-round-start-without-speed",
+      "what": "A round's start ignores the speed (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    const auto clipStart = now - Wall(clock.seconds / clock.speed);",
+      "replace": "    const auto clipStart = now - Wall(clock.seconds);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S2:*",
+      "expect": "the round's start is not now less seconds over speed"
+    },
+    {
+      "id": "mvs-edit-not-restarted",
+      "what": "A new schedule while playing is sent on top of the old one (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    const bool onCourse = scheduled_ && version_ == scheduleVersion && speed_ == clock.speed",
+      "replace": "    const bool onCourse = scheduled_ && speed_ == clock.speed",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S2:*",
+      "expect": "an edit while playing did not stop the sounds sent before it"
+    },
+    {
+      "id": "mvs-no-long-lead",
+      "what": "Only one round is sent ahead, whatever the lead (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    return 1 + static_cast<int>(std::ceil(lead / round));",
+      "replace": "    return 1 + 0 * static_cast<int>(std::ceil(lead / round));",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S2:*",
+      "expect": "a long lead was not sent rounds ahead"
     }
   ]
 }

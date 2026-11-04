@@ -1,5 +1,7 @@
 #include "gyo/model_viewer/EventDocument.hpp"
 
+#include "JsonText.hpp"
+
 #include "engine/base/Assert.hpp"
 
 #include <algorithm>
@@ -13,9 +15,6 @@
 #include <vector>
 
 namespace Gyo::Tools::ModelViewer {
-namespace {
-
-namespace Model = Engine::Model;
 
 // A JSON string: quotes, backslashes and control characters escaped, every
 // other byte (UTF-8 included) as it is.
@@ -57,6 +56,10 @@ void AppendSeconds(std::string& out, const double seconds) {
     GYO_ASSERT(written.ec == std::errc{});
     out.append(digits.data(), written.ptr);
 }
+
+namespace {
+
+namespace Model = Engine::Model;
 
 bool SameSeconds(const double left, const double right) noexcept {
     return std::bit_cast<std::uint64_t>(left) == std::bit_cast<std::uint64_t>(right);

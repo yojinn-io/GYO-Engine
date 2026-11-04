@@ -7,6 +7,7 @@
 #include "engine/model/AnimationEvents.hpp"
 #include "engine/model/ModelAsset.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -22,6 +23,7 @@ namespace Gyo::Tools::ModelViewer {
 // The catalog type of the models the viewer opens and of the events files.
 inline constexpr std::string_view kModelType = "model";
 inline constexpr std::string_view kTextType = "text";
+inline constexpr std::string_view kSoundType = "sound";
 
 struct LoadedModel final {
     std::string assetId;
@@ -37,6 +39,23 @@ struct EventsCandidate final {
     std::string path; // the resolved file, UTF-8
     std::optional<Engine::Model::AnimationEventSet> events;
     std::string refusal; // Engine's reason when events is empty
+};
+
+// A text asset that is, or tries to be, gyo.event_sounds of one events file.
+struct EventSoundsCandidate final {
+    std::string assetId;
+    std::string path; // the resolved file, UTF-8
+    bool parsed{};     // false: the framework refuses it, refusal says why
+    std::string refusal;
+};
+
+// A sound clip as Engine's sound loader reads it.
+struct LoadedSound final {
+    std::string assetId;
+    std::uint32_t sampleRate{};
+    std::uint16_t channels{};
+    std::vector<std::int16_t> pcm16; // interleaved
+    [[nodiscard]] double Seconds() const noexcept;
 };
 
 class ModelContent final {
@@ -55,6 +74,12 @@ public:
     [[nodiscard]] Result<std::string, ModelViewerError> ReadText(std::string_view id) const;
     // The text assets that are, or try to be, gyo.anim_events of modelId, in id order (the mount's order).
     [[nodiscard]] Result<std::vector<EventsCandidate>, ModelViewerError> EventsFor(std::string_view modelId) const;
+    // The text assets that are gyo.event_sounds naming eventsAssetId, and those that
+    // mention the schema but the framework refuses (so a broken file is not silently missing).
+    [[nodiscard]] Result<std::vector<EventSoundsCandidate>, ModelViewerError> EventSoundsFor(
+        std::string_view eventsAssetId) const;
+    // UnknownAsset for an id that is not a sound; ReadFailed, InvalidSound otherwise.
+    [[nodiscard]] Result<LoadedSound, ModelViewerError> LoadSound(std::string_view id) const;
 
     [[nodiscard]] const Framework::ReadOnlyAssetCatalog& Catalog() const noexcept { return *catalog_; }
 

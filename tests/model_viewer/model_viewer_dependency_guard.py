@@ -25,8 +25,8 @@ OWNER = "tools/model_viewer"
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"}
 INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', re.MULTILINE)
 SDL_SYMBOL = re.compile(r"\bSDL_\w+")
-# The whole CMake name: a name that goes on after an allowed one with -, . or + is another target.
-TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(?:[.+-][A-Za-z0-9_]+)*")
+# The whole CMake name: a name that goes on after an allowed one with -, ., + or :: is another target.
+TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(?:(?:[.+-]|::)[A-Za-z0-9_]+)*")
 
 # Models and gyo.anim_events are Engine's; the catalog is mounted through the framework and a new entry written by
 # its JSON binding, whose own guard (tests/framework/framework_dependency_guard.py) keeps the same SDL rule
@@ -36,11 +36,13 @@ ALLOWED_INCLUDE_PREFIXES = ("gyo/model_viewer/", "gyo/framework/", "engine/")
 # model renderer on its offscreen GPU device beside the SDL 2D renderer and
 # platform (none of them *Native), the framework's ImGui binding, and ImGui for
 # the tool's own drawing code (framework Design Invariant 5). imgui_internal.h
-# stays out (below).
+# stays out (below). The event sounds (v8-tool-model-viewer-event-sounds):
+# Engine's mixer and its SDL audio output (not *Native).
 ALLOWED_TARGETS = {"GYO::Base", "GYO::Engine", "GYO::Model", "GYO::AssetUfbx", "GYO::ToolFramework",
                    "GYO::ToolFrameworkJson",
                    "GYO::Render", "GYO::ModelRenderer", "GYO::RenderBackendSDLGPU", "GYO::RenderBackendSDL",
-                   "GYO::PlatformSDL", "GYO::ToolFrameworkImGui", "imgui::core"}
+                   "GYO::PlatformSDL", "GYO::ToolFrameworkImGui", "imgui::core",
+                   "GYO::Audio", "GYO::AudioBackendSDL"}
 
 LINK_CALL = re.compile(r"target_link_libraries\s*\(([^)]*)\)", re.IGNORECASE)
 LINK_KEYWORDS = {"PUBLIC", "PRIVATE", "INTERFACE", "LINK_PUBLIC", "LINK_PRIVATE", "LINK_INTERFACE_LIBRARIES"}

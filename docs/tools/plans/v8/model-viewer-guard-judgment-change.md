@@ -36,3 +36,27 @@
    - 守衛在目前的樹上回傳 0；自我測試 13／13 通過。
    - 既有的守衛突變（`mv-guard-*`）在新守衛上 3／3 killed：`build/evidence/tool-v8-model-viewer/preview/mutations.txt`。
    - 檢驗者（Opus 5.5／high，和提案者是不同的 agent）的比對腳本與結果：`build/evidence/tool-v8-model-viewer/preview/guard-verify/`。檢驗者另外加的 2 條突變也 killed。
+
+## 第 2 次（`v8-tool-model-viewer-event-sounds`，2026-11-04，等你核准）
+
+**狀態：已核准（2026-11-04，使用者：「核准」）。**
+
+### 變更內容
+
+允許的目標多 2 個：`GYO::Audio`（Engine 的混音器）、`GYO::AudioBackendSDL`（Engine 的 SDL 音訊輸出）。
+- 原因：`-event-sounds` 的試聽要在 Engine 的混音器上出聲，時刻由 framework 的 `EventSoundOffsetSeconds` 決定。
+- 自我測試加 1 個（14 個）：這兩個目標通過；`GYO::AudioBackendSDLNative` 與 `GYO::Audio-Native` 失敗。
+
+### AGENTS §14.4 的 1～5
+
+1. **守的性質**：和第 1 次相同（DI 1 與 DI 6）。
+2. **放寬的部分**：工具的 CMake 檔提到或連結這 2 個目標時，以前失敗，現在通過。其他輸入沒有變化：名稱比對已在第 1 次改成完整的 CMake 名稱。
+3. **收緊的部分**：檢驗者找到一個舊漏洞並已補上：允許的名稱後面再接 `::` 的名稱（例：`GYO::PlatformSDL::Native`）以前會通過，現在失敗。自我測試裡有這個 case。
+4. **放寬之後性質仍然守得住**：
+   - `GYO::AudioBackendSDL` 以 PRIVATE 連 SDL3，沒有 `*Native` 目標（`engine/audio/backend/sdl/CMakeLists.txt`）。
+   - `GYO::Audio` 不連 SDL。
+   - 第 1 次列出的那些輸入，照樣全部失敗。
+5. **根據與證據**：
+   - 守衛在目前的樹上回傳 0；自我測試 14／14 通過（含 `::` 的 case）；
+   - `mv-guard-*` 3／3 killed：`build/evidence/tool-v8-model-viewer/event-sounds/mutations-guard.txt`；
+   - 檢驗者（Opus 5.5／high，和提案者不是同一個 agent）的比對：`build/evidence/tool-v8-model-viewer/event-sounds/guard-verify/`。結論：1、3、5 成立；2、4 只有 `::` 這個例外，已收緊。
