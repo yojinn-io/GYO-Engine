@@ -1,7 +1,7 @@
 # The framework layer (docs/framework/architecture.md); added with it, when
 # a tool is selected or a game declares the component FRAMEWORK.
-add_executable(gyo_framework_tests AbsolutePathTests.cpp CatalogStructureTests.cpp HeadlessShellTests.cpp
-                                   UiTextInputTests.cpp)
+add_executable(gyo_framework_tests AbsolutePathTests.cpp CatalogStructureTests.cpp EventSoundsTests.cpp
+                                   HeadlessShellTests.cpp UiTextInputTests.cpp)
 target_compile_features(gyo_framework_tests PRIVATE cxx_std_20)
 target_link_libraries(gyo_framework_tests PRIVATE GYO::ToolFramework GYO::ToolFrameworkJson GYO::Os
                                                   nlohmann_json::nlohmann_json doctest::doctest)
