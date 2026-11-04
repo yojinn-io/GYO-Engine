@@ -46,7 +46,7 @@ v8-plan
 │   │   ├── v8-product-real-match-acceptance-repair 「high｜Opus 5.5｜修真 Match 開槍的本機驗收（[宣告](v8-product-real-match-acceptance-repair-declaration.md)，已核准）」
 │   │   ├── v8-product-hit-presentation       「上段｜Opus 5.5／high｜受擊動畫依部位、GUI 驗收工具瞄軀幹（[宣告](v8-product-hit-presentation-declaration.md)，已核准）」
 │   │   ├── v8-product-hitbox-acceptance      「上段｜Opus 5.5／medium～high｜PR 與 L1（H6′）、B5、L2 kit、L2（G5／G6、試玩）（[宣告](v8-product-hitbox-acceptance-declaration.md)，已核准）」
-│   │   └── v8-product-hit-gui-aim-sdl        「medium｜Opus 5.5｜SDL 排程瞄軀幹的正式驗收（v7 HUD 規則；[宣告](v8-product-hit-gui-aim-sdl-declaration.md)，已核准）」
+│   │   └── v8-product-hit-gui-aim-sdl ✓      「medium｜Opus 5.5｜SDL 排程瞄軀幹的正式驗收（v7 HUD 規則；[宣告](v8-product-hit-gui-aim-sdl-declaration.md)，已完成）」
 │   ├── rewind-line                「PR 線：射擊回溯（部位判定線合併後；entity-line 的 split 之後）」
 │   │   ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
 │   │   ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
@@ -172,6 +172,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-evict-animation-orphan` | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_evict_animation_orphan.zh-Hant.md) |
 | `v8-product-match-entity-split` | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_match_entity_split.zh-Hant.md) |
 | `v8-product-hit-gui-aim`（P2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hit_gui_aim.zh-Hant.md) |
+| `v8-product-hit-gui-aim-sdl` | [2026-11-04](../../../dev_logs/2026_11_04_pvp_v8_hit_gui_aim_sdl.zh-Hant.md) |
 | `v8-product-hitbox-b5`（A2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hitbox_b5.zh-Hant.md) |
 
 ---
