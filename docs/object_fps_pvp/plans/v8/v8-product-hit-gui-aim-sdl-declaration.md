@@ -21,7 +21,7 @@ P2（`v8-product-hit-gui-aim`）讓 SDL 的 17 格排程（`build/acceptance/obj
 
 ```
 run_timing.py --match <match> --gateway <gateway> --probe <gui_probe> --arena <pvp_arena.json> \
-  --output <dir> --gui --combat --short --duration 16
+  --output <dir> --gui --combat --short --duration 16 --events 20
 python3 combat_gui_evidence_v7.py <dir>/round-1
 ```
 
@@ -48,3 +48,4 @@ S1～S3 成立；dev_log（`docs/dev_logs/`）與 HANDOFF、README 同一變更�
 ## 修訂紀錄
 
 - 2026-11-04（核准後、量測前）：命令的 `--duration 20` 改成 `--duration 16`。`run_timing.py` 的 `--combat` 只接受 16 或 120 秒，第一次執行在參數檢查就被拒（沒有開始量測，紀錄在 `build/evidence/v8-hit-gui-aim-sdl/s1.out`）。探索跑次實際用的也是 16。判定條件 S1～S3 不變。
+- 2026-11-04（同上，量測前）：再補 `--events 20`。`--short` 要求至少 20 個事件、每個至少 600 ms，預設 200 個被拒（沒有開始量測，`build/evidence/v8-hit-gui-aim-sdl/rejected-events-s1.out`）。探索跑次也是 `--duration 16 --events 20`。判定條件不變。
