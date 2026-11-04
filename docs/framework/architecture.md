@@ -78,12 +78,22 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    `v8-framework-invariants`. Guards: the dependency guard (core rules and one
    positive list per binding; the removed allowlist coming back fails) and the
    configure-time link check in `tests/framework/CMakeLists.txt`.
-3. The framework is neutral. Its code names no tool, no product and no document
-   format (UI JSON, sound, and so on): window titles and asset types come from
-   the caller. Registration policy is chosen by the caller's options, never by
-   which product calls. Guard: the dependency guard fails when framework code
-   names an id registered in `engine/config/tools.csv` or
-   `engine/config/projects.csv`.
+3. The framework is neutral. Its code names no tool and no product and knows
+   no product's meaning: window titles and asset types come from the caller,
+   and registration policy is chosen by the caller's options, never by which
+   product calls. It owns no product format and no Engine asset format (UI
+   JSON, a sound clip, a catalog: whether a text is one of those is Engine's to
+   decide). It may own a composition format: a document that says how Engine
+   assets combine (for example which sound plays at a clip's moment, and from
+   where in the sound), in which every reference is an Engine asset id or an
+   Engine value (seconds, gains) and no name carries product meaning; the
+   facts such a document references (an id exists, a moment lies within its
+   clip) are validated by calling Engine. Which of the three kinds a format is
+   follows the layer table in `docs/architecture.md` ("Layers: admission and
+   format ownership", user, 2026-11-04). Guards: the dependency guard fails
+   when framework code names an id registered in `engine/config/tools.csv` or
+   `engine/config/projects.csv`; a composition format has rule tests and
+   mutants like the catalog's (C1–C7), one group per rule.
 4. The framework writes no file of its own. The ImGui binding writes no side
    file (`imgui.ini`, ImGui's log). The catalog mount is read-only and has no
    write API. The JSON binding's `RegisterAsset` returns the new catalog text
@@ -102,13 +112,18 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    mounting, registration policy). It holds no product's UI, document format or
    rules, and names no concrete UI or data-format library; such a library
    enters only as a binding. A capability Engine lacks is added to Engine, not
-   to the framework. What two or more products use (a game and a tool, or two
-   tools) enters the framework first, even where Engine has the capability:
-   the framework calls Engine and the products call the framework. What one
-   product alone needs, it takes from Engine directly. The game part, a game's
-   own composition (its loop, its scenes), enters only on the condition above;
-   a capability that a game and a tool both call is shared and enters by this
-   rule (user, 2026-11-01). The windowed shell has one user (ui_editor) when
+   to the framework. What two or more products (a game and a tool, or two
+   tools) compose or adapt in the same way enters the framework first, even
+   where Engine has every capability it joins: an adapter between Engine
+   modules (`ToUiTextInput`), a composition of Engine assets, a shell. The
+   framework calls Engine and the products call the framework. Two products
+   calling the same single Engine capability is not composition: they call
+   Engine directly, and the framework does not wrap it (user, 2026-11-04,
+   narrowing the 2026-11-01 rule "a capability that a game and a tool both
+   call is shared", so that the framework does not become a façade over
+   Engine). What one product alone needs, it takes from Engine directly. The
+   game part, a game's own composition (its loop, its scenes), enters only on
+   the condition above. The windowed shell has one user (ui_editor) when
    it is added; the user accepted that on 2026-11-01
    (framework-rework D-8). Replacing ImGui means replacing its binding and the
    tool's own drawing code; the core shell and Engine stay.
@@ -139,6 +154,8 @@ repair or rebuild the component.
 - A binding has to know which product calls it.
 - The windowed shell has to create or choose a render device for its client.
 - The framework copies an Engine rule that no shared fixture checks.
+- A framework function does nothing but call one Engine function (a façade);
+  two of them meet this criterion.
 - Serving one product needs a callback or flag in a shell that no other
   product uses, or a client has to pump events or run a RuntimeLoop itself.
   Handing every client of a binding a neutral capability that only the
