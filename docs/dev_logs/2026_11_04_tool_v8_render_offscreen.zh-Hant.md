@@ -10,7 +10,7 @@
 
 **狀態：**
 - 程式、測試、突變、審查都完成。
-- 本機 Metal（L2）通過；Linux（Lavapipe）要看 L1。
+- 本機 Metal（L2）通過；L1（run 41821955996，`ae078675`）三平台 success，Linux 的 Lavapipe 上 `render.sdl_gpu_offscreen` 通過。
 - Windows（D3D12）不驗（宣告的範圍的限界）。
 
 相關文件：

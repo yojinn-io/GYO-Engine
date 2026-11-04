@@ -169,7 +169,7 @@ v8-tool-model-viewer                      「anim-events-line 的第二批：模
 
 #### `v8-engine-render-offscreen` 實作後的結果（2026-11-04）
 
-- R1～R4：在你的 Mac（Metal）通過，`render.sdl_gpu_offscreen`。R5：`render.*` 3／3 通過。Linux（Lavapipe）要看 L1。
+- R1～R4：在你的 Mac（Metal）通過，`render.sdl_gpu_offscreen`。R5：`render.*` 3／3 通過。Linux（Lavapipe）：L1 run 41821955996 通過。
 - 介面：`SdlGpuRenderDevice::CreateOffscreen(SdlPlatform&, SdlGpuOffscreenOptions)`、`SetFrameSize`、`ReadFrame`。`IRenderDevice` 與 `Renderer` 沒有改。
 - 平台仍要傳入：Vulkan 載入驅動時需要 SDL 的視訊子系統，它由平台持有（platform-sdl DI 8）。
 - R1 的觀測方式：SDL 把「已認領」記在視窗自己身上，同一個視窗不能認領兩次。所以「離屏裝置還在時，視窗模式的裝置仍能建立」就證明離屏裝置沒有認領。
