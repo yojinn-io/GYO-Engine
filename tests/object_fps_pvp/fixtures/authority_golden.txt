@@ -18,6 +18,11 @@
 # animation authority (synthetic rules). The two-tree comparison against f2974e74 (compare_authority_trees.py --added
 # animations,..., scale 1 and 3) found every other field identical (docs/dev_logs/2026_10_31_pvp_v8_anim_authority_match.zh-Hant.md);
 # the file before it is authority_golden.pv9-permille-checkpoint.txt.
+# v8-product-evict-animation-orphan (digest version 4) changed host-poor-connection/corridor only: the host's eviction
+# now erases the evicted player's animation with its body and combat (a pv9 regression from A2), so record #2399
+# carries animations=1 instead of 2. The two-tree comparison against cf3118f4 (scale 1) found the other 41 scenarios
+# identical (docs/dev_logs/2026_11_03_pvp_v8_evict_animation_orphan.zh-Hant.md); the file before it is
+# authority_golden.pv9-anim-checkpoint.txt.
 move-axial/contract f7b990ac6692596d622f949cd4b62f0811849d86b59f6977ab413948da6f1cd4
 move-diagonal/contract 67c21a4fec22e0743181c4491f4a6864e6afd7bb833544bfaec5e9a6bfe4064f
 move-jump/contract 6ced0660c1e67fb935c037ace4df0208b975ca387d330741b2dd577d2e4052d4
@@ -54,4 +59,4 @@ prediction-stall-rtt40/contract 45b87a5b30b6cc55d58f939f7ec2b937cc2084c4dcf2927b
 prediction-fps30-rtt40/contract 728104bf52fdb52c23766ddc2da5d2aa9256940aa707bb94ff27e78a5f7706be
 prediction-fps144-rtt40/contract 33c9be6a301094b8317965ffa277251eb7a0626e2e22d143db042979aa7899e0
 host-play/corridor 07d30c35473d8616ee820e03bfc8121d5d4448906de46352008e96afe1869630
-host-poor-connection/corridor 68c48ca50a82f01850035acb0e052d212e539ee8236685cc90319edc24a6014e
+host-poor-connection/corridor 52a34210131788269c53b3eb8374d0b0ccf15458f96e951bb21a11ba74495209

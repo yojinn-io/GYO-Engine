@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
         // Every event that happened since the previous frame, stamped with its tick.
         while (origin + Ticks(nextTick) <= now) {
             const TimePoint at = origin + Ticks(nextTick);
-            const bool accepted = submitter->Play({*clip, at, 1.0f, 1.0f});
+            const bool accepted = submitter->Play({*clip, at, 1.0f, 1.0f}).Valid();
             events << index << ',' << nextTick << ',' << Ns(at, origin) << ',' << Ns(now, origin) << ','
                    << (accepted ? 1 : 0) << '\n';
             ++index;

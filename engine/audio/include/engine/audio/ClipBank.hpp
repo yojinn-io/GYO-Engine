@@ -9,9 +9,12 @@
 
 namespace Engine::Audio {
 
-// Names a clip of one ClipBank. Zero is never a valid clip.
+// Names a clip: a clip of the mixer's ClipBank (1 to its count), or a clip a
+// submitter loaded while output runs (a value above 2^32 that encodes the
+// submitter, its slot and the slot's generation). Opaque to consumers; zero is
+// never a valid clip.
 struct ClipId final {
-    std::uint32_t value = 0;
+    std::uint64_t value = 0;
     friend constexpr bool operator==(ClipId, ClipId) = default;
 };
 

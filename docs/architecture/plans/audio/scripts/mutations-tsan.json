@@ -41,6 +41,26 @@
       "target": "gyo_audio_tests",
       "cases": "*concurrent producers*",
       "expect": "ThreadSanitizer: data race"
+    },
+    {
+      "id": "au-ctl-clip-handback-relaxed",
+      "what": "The audio thread hands a slot back without release",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    slot.handedBack.store(true, std::memory_order_release);",
+      "replace": "    slot.handedBack.store(true, std::memory_order_relaxed);",
+      "target": "gyo_audio_tests",
+      "cases": "*while another thread renders*",
+      "expect": "ThreadSanitizer"
+    },
+    {
+      "id": "au-ctl-clip-reclaim-relaxed",
+      "what": "LoadClip sees a handed-back slot without acquire",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "!entry.handedBack.load(std::memory_order_acquire)) continue;",
+      "replace": "!entry.handedBack.load(std::memory_order_relaxed)) continue;",
+      "target": "gyo_audio_tests",
+      "cases": "*while another thread renders*",
+      "expect": "ThreadSanitizer"
     }
   ]
 }
