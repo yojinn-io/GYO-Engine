@@ -55,4 +55,21 @@ enum class CatalogErrorCode : std::uint8_t {
 using CatalogError = Engine::Base::Error<CatalogErrorCode>;
 static_assert(Engine::Base::CodedError<CatalogError>);
 
+// Reading and binding a gyo.event_sounds document (docs/framework/event-sounds.md).
+enum class EventSoundsErrorCode : std::uint8_t {
+    InvalidEventSounds = 1, // the document breaks a rule that needs no other asset
+    UnboundEventSounds,     // the document does not match its anim_events set or its sounds
+};
+
+[[nodiscard]] constexpr const char* ToString(const EventSoundsErrorCode code) noexcept {
+    switch (code) {
+    case EventSoundsErrorCode::InvalidEventSounds: return "InvalidEventSounds";
+    case EventSoundsErrorCode::UnboundEventSounds: return "UnboundEventSounds";
+    }
+    return "Unknown";
+}
+
+using EventSoundsError = Engine::Base::Error<EventSoundsErrorCode>;
+static_assert(Engine::Base::CodedError<EventSoundsError>);
+
 } // namespace Gyo::Tools::Framework

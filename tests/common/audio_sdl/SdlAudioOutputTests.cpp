@@ -224,72 +224,148 @@ TEST_CASE("Audio SDL output on the dummy driver stops, swaps and reports sounds 
     CHECK(stats.stopsSubmitted == stats.stopsMatched + stats.stopsUnmatched + stats.stopsDroppedQueueFull);
 }
 
-TEST_CASE("Audio SDL output on the disk driver plays a clip loaded after opening and stops it at its mapped frame") {
-    const char* path = std::getenv("SDL_AUDIO_DISK_OUTPUT_FILE");
-    REQUIRE(path != nullptr);
-    constexpr std::int16_t kLevel = 1000;
+namespace {
+
+// One play and stop on the disk driver, with what the judgment needs.
+// The driver's file is not the mixer's frame count: while the device stream is
+// paused, between SDL opening it and SdlAudioOutput::Open resuming it, SDL's
+// device thread writes whole blocks of silence to the file when it runs first.
+// A marker played from the mixer's frame 0 finds that offset.
+struct DiskStopRun final {
     std::vector<Engine::Audio::Sdl::OutputAnchor> anchors;
     Engine::Time::TimePoint stopAt{};
-    Engine::Time::TimePoint sentAt{};
+    Engine::Time::TimePoint sentAt{}; // read before Stop is called
+    Engine::Time::TimePoint doneAt{}; // read after Stop returned: the stop is queued
+    std::uint64_t stopsLate = 0;
+    std::vector<char> bytes; // the file the driver wrote
+};
+
+constexpr std::int16_t kDiskLevel = 1000;
+constexpr std::int16_t kDiskMarker = 500;
+constexpr std::size_t kDiskMarkerFrames = 48;
+
+// pause: how long the test thread waits between reading sentAt and calling
+// Stop, standing in for a runner that deschedules it there.
+DiskStopRun PlayAndStopOnDisk(const std::chrono::microseconds pause) {
+    const char* path = std::getenv("SDL_AUDIO_DISK_OUTPUT_FILE");
+    REQUIRE(path != nullptr);
+    DiskStopRun run;
     {
         MixerConfig config;
         config.clipSlotsPerSubmitter = 1;
         config.scheduleDelay = Engine::Time::Duration::zero();
-        auto created = Mixer::Create(config, ClipBank{});
+        ClipBank bank;
+        const std::vector<std::int16_t> marker(kDiskMarkerFrames, kDiskMarker);
+        auto markerClip = bank.Add(Engine::Base::ConstSpan<std::int16_t>(marker.data(), marker.size()), 1, kSampleRate);
+        REQUIRE(markerClip.has_value());
+        auto created = Mixer::Create(config, std::move(bank));
         REQUIRE(created.has_value());
         auto submitter = created->CreateSubmitter();
         REQUIRE(submitter.has_value());
+        // Queued before the output opens, so the first block takes it late and
+        // it starts at the mixer's frame 0.
+        REQUIRE(submitter->Play({*markerClip, Engine::Time::Now()}));
         Engine::Audio::Sdl::SdlAudioOutputConfig outputConfig;
         outputConfig.anchorLogCapacity = 4096;
         SdlAudioOutput output = OpenOutput(std::move(created).value(), outputConfig);
         Mixer& mixer = output.OwnedMixer();
         REQUIRE(WaitFor([&] { return mixer.Stats().renderedFrames > 4800; })); // output runs
-        const std::vector<std::int16_t> clip(480000, kLevel);
+        const std::vector<std::int16_t> clip(480000, kDiskLevel);
         auto loaded =
             submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(clip.data(), clip.size()), 1, kSampleRate);
         REQUIRE(loaded.has_value());
         const SoundHandle sound = submitter->Play({*loaded, Engine::Time::Now()});
         REQUIRE(sound);
         REQUIRE(WaitFor([&] { return mixer.PlayheadOf(sound).status == Playhead::Status::Playing; }));
-        stopAt = Engine::Time::Now() + std::chrono::milliseconds(2);
-        sentAt = Engine::Time::Now();
-        REQUIRE(submitter->Stop(sound, stopAt));
+        run.stopAt = Engine::Time::Now() + std::chrono::milliseconds(2);
+        run.sentAt = Engine::Time::Now();
+        if (pause.count() > 0) std::this_thread::sleep_for(pause);
+        REQUIRE(submitter->Stop(sound, run.stopAt));
+        run.doneAt = Engine::Time::Now();
         REQUIRE(WaitFor([&] { return mixer.PlayheadOf(sound).status == Playhead::Status::NotPlaying; }));
         CHECK(mixer.Stats().stopsMatched == 1);
-        static_cast<void>(output.TakeAnchors(anchors));
+        run.stopsLate = mixer.Stats().stopsLate;
+        static_cast<void>(output.TakeAnchors(run.anchors));
         CHECK(output.Stats().anchorsDropped == 0);
     }
     std::ifstream file(path, std::ios::binary);
     REQUIRE(file.good());
-    const std::vector<char> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    run.bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    return run;
+}
+
+// The clip sounds in one contiguous run that ends at the stop frame of the
+// block that took the stop (audio.md Invariants 3 and 10). That block is the
+// first whose callback drained the queue after the stop was queued: at the
+// earliest the last one whose anchor was read before sentAt (a callback in
+// progress), at the latest the first one whose anchor was read after doneAt.
+// Blocks in between may have started before the stop was queued, so any of
+// them may be the one. Its stop frame is the stop time mapped from its anchor,
+// or its first frame when that is already rendered, counted late. Each block
+// here is one pass (480 frames, under the backend's 4096 per pass).
+void CheckDiskStopFrame(const DiskStopRun& run) {
+    std::vector<std::uint64_t> marked;
     std::vector<std::uint64_t> sounding;
-    for (std::size_t frame = 0; frame * 4 < bytes.size(); ++frame) {
-        const auto lo = static_cast<std::uint8_t>(bytes[frame * 4]);
-        const auto hi = static_cast<std::uint8_t>(bytes[frame * 4 + 1]);
-        if (static_cast<std::int16_t>(lo | (hi << 8)) == kLevel) sounding.push_back(frame);
+    for (std::size_t frame = 0; frame * 4 < run.bytes.size(); ++frame) {
+        const auto lo = static_cast<std::uint8_t>(run.bytes[frame * 4]);
+        const auto hi = static_cast<std::uint8_t>(run.bytes[frame * 4 + 1]);
+        const auto sample = static_cast<std::int16_t>(lo | (hi << 8));
+        if (sample == kDiskMarker) marked.push_back(frame);
+        if (sample == kDiskLevel) sounding.push_back(frame);
     }
+    // The marker: one contiguous run of its length; its first frame in the file
+    // is the mixer's frame 0.
+    REQUIRE(marked.size() == kDiskMarkerFrames);
+    REQUIRE(marked.back() - marked.front() + 1 == marked.size());
+    const auto silence = static_cast<std::int64_t>(marked.front());
+    CAPTURE(silence);
     REQUIRE_FALSE(sounding.empty());
     CHECK(sounding.back() - sounding.front() + 1 == sounding.size()); // one contiguous run
-    // The stop frame from the anchor of the block that took the stop: the last
-    // anchor read before it was sent, or the first one after (S16 little-endian).
+    // The stop frame from a block's anchor (S16 little-endian above).
     const auto mapped = [&](const Engine::Audio::Sdl::OutputAnchor& anchor) {
-        const std::int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(stopAt - anchor.anchor).count();
+        const std::int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(run.stopAt - anchor.anchor).count();
         const std::int64_t scaled = ns * 6 + 62500; // floor(ns * 48000 / 10^9 + 1/2)
         const std::int64_t offset = scaled / 125000 - ((scaled % 125000 != 0 && scaled < 0) ? 1 : 0);
         return static_cast<std::int64_t>(anchor.firstFrame) + offset;
     };
-    std::vector<std::int64_t> candidates;
-    for (std::size_t i = 0; i < anchors.size(); ++i) {
-        const bool lastBefore = anchors[i].anchor <= sentAt && (i + 1 == anchors.size() || anchors[i + 1].anchor > sentAt);
-        const bool firstAfter = anchors[i].anchor > sentAt && (i == 0 || anchors[i - 1].anchor <= sentAt);
-        if (lastBefore || firstAfter) candidates.push_back(mapped(anchors[i]));
+    REQUIRE_FALSE(run.anchors.empty());
+    std::size_t first = 0; // the last anchor read before sentAt, or the first one
+    while (first + 1 < run.anchors.size() && run.anchors[first + 1].anchor <= run.sentAt) ++first;
+    std::size_t last = first; // the first anchor read after doneAt, or the last one
+    while (last + 1 < run.anchors.size() && run.anchors[last].anchor <= run.doneAt) ++last;
+    const auto end = static_cast<std::int64_t>(sounding.back()) + 1 - silence; // in the mixer's frames
+    bool found = false;
+    std::string blocks;
+    const auto us = [&](const Engine::Time::TimePoint at) {
+        return std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(at - run.sentAt).count());
+    };
+    for (std::size_t i = first; i <= last; ++i) {
+        const auto start = static_cast<std::int64_t>(run.anchors[i].firstFrame);
+        const std::int64_t at = mapped(run.anchors[i]);
+        const bool late = at < start;
+        if ((late ? start : at) == end && late == (run.stopsLate == 1)) found = true;
+        blocks += "\n  block " + std::to_string(i) + ": anchor " + us(run.anchors[i].anchor) + " us after sentAt, first " +
+                  std::to_string(start) + ", mapped " + std::to_string(at) + (late ? " (late)" : "");
     }
-    REQUIRE_FALSE(candidates.empty());
-    const auto end = static_cast<std::int64_t>(sounding.back()) + 1;
-    CAPTURE(end);
-    CAPTURE(candidates.front());
-    CAPTURE(candidates.back());
-    CHECK(std::find(candidates.begin(), candidates.end(), end) != candidates.end());
+    INFO("stop ends at frame " << end << ", stopsLate " << run.stopsLate << ", stopAt " << us(run.stopAt)
+                               << " us and doneAt " << us(run.doneAt) << " us after sentAt; candidate blocks:" << blocks);
+    CHECK(found);
+}
+
+} // namespace
+
+TEST_CASE("Audio SDL output on the disk driver plays a clip loaded after opening and stops it at its mapped frame") {
+    CheckDiskStopFrame(PlayAndStopOnDisk(std::chrono::microseconds::zero()));
+}
+
+TEST_CASE("Audio SDL output on the disk driver stops at the frame of the block that takes a stop queued blocks later") {
+    // The test thread waits after sentAt, so blocks start before the stop is
+    // queued (about one per millisecond at this timescale); after 3 ms the
+    // block that takes it is past the stop time, so the stop is late.
+    for (const auto pause : {std::chrono::microseconds(1000), std::chrono::microseconds(3000)}) {
+        CAPTURE(pause.count());
+        CheckDiskStopFrame(PlayAndStopOnDisk(pause));
+    }
 }
 
 TEST_CASE("Audio SDL output reports an unavailable driver and leaves submitters usable") {

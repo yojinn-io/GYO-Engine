@@ -19,7 +19,11 @@ It has two parts. Only the first exists so far:
     registering a catalog entry as structure (`CatalogPlan`: the
     catalog-level rules and the registration policy), and the text input
     mapping the products share (`ToUiTextInput`: Engine's input entries as
-    Ui's text input; `v8-input-ui-adapter`). File access on user
+    Ui's text input; `v8-input-ui-adapter`), and the composition format
+    `gyo.event_sounds` as structure (`EventSounds`: which sound plays at an
+    animation event and from where in it, its rules, its binding to Engine's
+    event set and the one schedule offset; [contract](event-sounds.md),
+    `v8-arch-event-sounds-contract`). File access on user
     paths is Engine's (`engine/io`), and so are the system path dialogs
     (`docs/architecture/platform-sdl.md`).
   - `GYO::ToolFrameworkWindow`, built where Engine's SDL platform is: the
@@ -31,7 +35,8 @@ It has two parts. Only the first exists so far:
     windowed shell (`RunImGuiShell`), which hands the client the window's
     input (`ImGuiShellInput`).
   - The JSON binding `GYO::ToolFrameworkJson` (`framework/bindings/json/`),
-    built with the core: catalog v1 text (`ReadCatalog`, `RegisterAsset`).
+    built with the core: catalog v1 text (`ReadCatalog`, `RegisterAsset`)
+    and `gyo.event_sounds` text (`ParseEventSounds`).
     Whether a text is a catalog v1 is Engine's `CatalogParser`'s to decide.
 - **The game part** (not built): how games are put together on the engine,
   such as the skeleton, the role arrangement, the client prediction loop and
@@ -229,6 +234,12 @@ repair or rebuild the component.
   The binding applies it after ImGui's frame, so within a frame it wins over
   an ImGui text field; when the client stops asking, text input goes back to
   the ImGui field, or off when none wants it.
+- A product or tool that plays or previews the sounds of animation events reads
+  a `gyo.event_sounds` text with the JSON binding's `ParseEventSounds`, binds
+  it with the core's `BindEventSounds` to the `AnimationEventSet` Engine parsed
+  and to the lengths of the clips it loaded, looks each event up with
+  `BoundEventSounds::Find` and schedules it with `EventSoundOffsetSeconds`
+  ([contract](event-sounds.md)).
 - `AbsolutePath(path)` gives the absolute, lexically normal form of a path
   through `engine/os` and never throws; a tool remembers paths in that form.
 - System path dialogs are Engine's (`ShowPathDialog` and
