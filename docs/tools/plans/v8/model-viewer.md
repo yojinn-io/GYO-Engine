@@ -324,6 +324,42 @@ L1／L2／L3 不排固定順序，依機器與你的空檔。
 | `v8-tool-model-viewer-reviewer` | 審查者的模型 | Opus 5.5（同實作者，用量少；寫出靠 parser 往返檢查）／Fable 5.1（不同模型，盲點不重疊；比主會話大，要你同意，用量多） | Opus 5.5 | 用量；`-core`、`-event-sounds` 的審查角度 |
 | `v8-tool-model-viewer-declaration` | 本宣告（判定、門檻、突變、L3、範圍限界、Design Invariants 草稿、模型表）照草稿核准嗎 | 照草稿／修改後核准 | — | 能不能開工 `-core` |
 
+## `v8-framework-close-request` 的事前宣告（2026-11-04，草稿，等你核准）
+
+起因：`-events` 的 L3 第 6 項（關閉時有未存檔提示）照原文做不到；你選了「改 framework 外殼」。
+
+### Feature → Contract → Architecture
+
+- **Feature**：關閉視窗（或 Cmd+Q）時，有未存檔的修改就先問，選「放棄」才關；沒有修改就照常關閉。model_viewer 用它；ui_editor 也有同樣的缺口。
+- **Contract**：
+  - Engine：`SdlPlatform::PumpEvents` 回傳 `Stop` 的條件，現在只寫在程式裡（收到 SDL 的 quit，或本視窗的關閉請求）。把這個既有行為寫進標頭與 platform-sdl.md 的中立層說明，不改程式；不在 Design Invariants 節。
+  - framework：`WindowShellClient` 多一個 `CloseRequested()`（預設回 true＝照常結束）。`PumpEvents` 回傳 `Stop` 時，外殼先問客戶；回 false 時這一輪不結束，下一幀照常跑。`ImGuiShellClient` 也多一個同名函式，由綁定轉交。
+- **Architecture Delta**：framework 的公開介面多一個函式，framework DI 6（外殼的生命週期）的字句要補上這一條，所以要你同意（Design Invariants 節的變更）。依賴方向不變。
+
+### 範圍與決定
+
+- framework：`WindowShell` 與 ImGui 綁定的轉交；DI 6 的字句；測試。
+- model_viewer：有未存檔時回 false，並開出「Discard unsaved events?」的詢問；按「Discard」後結束。
+- **要你決定 `v8-framework-close-request-ui-editor`**：framework 的 Replacement Criteria 有一條是「為了一個產品，需要一個其他產品都不用的回呼」。只有 model_viewer 用的話，這條就成立了。
+  - (a) 建議：ui_editor 在同一批也接上（它已經有 `IsDirty()`；有未存檔時開出同樣的詢問），約 +1 h。
+  - (b) 只有 model_viewer 用，ui_editor 記成候選。這樣上面那條 Replacement Criteria 會成立，要你明確接受。
+- 不在範圍：其他結束方式（SIGKILL、當機）。
+
+### 判定（L1：`cpu`，dummy 視訊驅動；外殼的測試另外登錄成 `cpu`，讓它進 L1）
+
+- Q1：客戶對關閉請求回 false 時，迴圈繼續（之後還有 Update），每一次請求只問一次；回 true 時結束，回傳客戶的結束碼。沒有覆寫的客戶照舊結束（既有的 W6 不變）。
+- Q2：SDL 的 quit 事件和關閉請求走同一條路。
+- Q3：ImGui 外殼把問題轉給 `ImGuiShellClient::CloseRequested`；回 false 時，幀照常畫；之後 `WantsExit` 回 true 就結束。
+- Q4（L3）：model_viewer（以及選 (a) 時的 ui_editor）有未存檔時，關閉視窗會出現詢問；「Keep editing」不關閉，「Discard」關閉；沒有未存檔就直接關。
+
+突變（全部預期 killed）：外殼不理會客戶的回答（一律結束）；綁定不轉交（一律 true）；quit 事件不經詢問就結束。
+
+### 估時、檔位與模型
+
+- 上段（framework 公開介面、DI 6 的字句）。實作者 Opus 5.5／high（主會話），審查者 Opus 5.5／high（子 agent）；檢驗者只在出現放寬時開。
+- 估時：(a) 3～4 h，(b) 2～3 h。超過 1.5 倍停下回報。
+- 分支與 PR：本分支、同一條 PR（#146）。
+
 ## 修訂紀錄
 
 - 第 2 版（2026-11-04）：你認為 (B′)「Engine 加離屏繪製＋讀回 CPU，再上傳成 SDL_Renderer 的貼圖」是好方案（經分支會話轉述）。查證後：
