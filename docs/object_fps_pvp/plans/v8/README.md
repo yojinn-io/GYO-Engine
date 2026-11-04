@@ -113,7 +113,7 @@ v8-plan
 PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR。
 
 - ①：`audio-line`、`pv8-line`、`hitbox-line` 三條。`audio-line` 不碰 wire，可以和 `pv8-line` 並行；`hitbox-line` 排在 `pv8-line` 之後。
-- `entity-line`（架構卡）：一條；三批同一個 PR，`match-entity-split` 不碰 wire。排在 `rewind-line` 之前（`v8-product-entity-model-start`），和 hitbox-line 剩下的 hit-presentation、hitbox-acceptance、real-match-acceptance-repair 不碰同一批檔案。
+- `entity-line`（架構卡）：一條；四批同一個 PR（#140，2026-11-04 開），`match-entity-split` 不碰 wire。排在 `rewind-line` 之前（`v8-product-entity-model-start`），和 hitbox-line 剩下的 hit-presentation、hitbox-acceptance、real-match-acceptance-repair 不碰同一批檔案。
 - ②：`v8-product-sprint` 一條（ADS 取消，v8-product-ads-cancel）。③：一條（`v8-product-lead-withdraw`、`v8-product-input-delay` 若太大再分）。④：每個工具一條。⑤：`v8-product-match-rules` 一條，其餘依開工時的分組。
 
 ## 不在 v8 的項目
