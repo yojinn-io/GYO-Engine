@@ -106,7 +106,7 @@ public:
             if (EndsWith(initialFile_, ".json")) {
                 OpenProject(initialFile_);
             } else {
-                OpenSource(initialFile_, true);
+                OpenSource(initialFile_);
             }
         }
         return true;
@@ -128,6 +128,7 @@ public:
             ClampTrim();
             DrawMenu();
             DrawSource();
+            DrawRegions();
             DrawWaveform();
             DrawEdit();
             DrawPreview();
@@ -150,11 +151,12 @@ public:
 private:
     // --- files ---------------------------------------------------------------
 
-    // resetSettings false keeps a project's settings for the source it names.
-    void OpenSource(const std::string& path, const bool resetSettings) {
+    // Opening a source keeps every region, which may have been cut from the
+    // same recording somewhere else; regions that do not fit it are named, and
+    // the selected one is clamped to it. A source that cannot be read leaves
+    // the current one as it was.
+    void OpenSource(const std::string& path) {
         StopPreview();
-        project_.request.sourcePath = path;
-        source_.reset();
         auto bytes = Detail::ReadAll(path);
         if (!bytes) {
             status_ = "Cannot read the source: " + Engine::Base::Describe(bytes.error());
@@ -165,20 +167,22 @@ private:
             status_ = "Not a WAV the editor reads: " + Engine::Base::Describe(decoded.error());
             return;
         }
+        CollectFields();
+        project_.batch.sourcePath = path;
         source_ = std::move(decoded).value();
         sourcePeak_ = 0.0;
         for (const auto& plane : source_->planes) {
             for (const double sample : plane) sourcePeak_ = std::max(sourcePeak_, std::abs(sample));
         }
-        if (resetSettings) {
-            project_.request.settings = {};
-        }
-        LoadSettingsIntoFields();
+        LoadRegionIntoFields();
         waveform_.clear();
         status_ = "Opened " + path;
-        if (const auto valid = ValidateSettings(project_.request.settings, source_->Frames()); !valid) {
-            status_ += ". The project's trim or gain does not fit this source: " +
-                       Engine::Base::Describe(valid.error());
+        for (std::size_t index = 0; index < project_.batch.regions.size(); ++index) {
+            const EditSettings& settings = project_.batch.regions[index].settings;
+            if (const auto valid = ValidateSettings(settings, source_->Frames()); !valid) {
+                status_ += ". Region " + std::to_string(index + 1) + " does not fit this source: " +
+                           Engine::Base::Describe(valid.error());
+            }
         }
     }
 
@@ -190,11 +194,12 @@ private:
         }
         project_ = std::move(loaded).value();
         projectPath_ = path;
-        SetField(assetRoot_, project_.request.assetRoot);
-        SetField(catalog_, project_.request.catalogPath);
-        SetField(id_, project_.request.registration.id);
-        SetField(clipPath_, project_.request.registration.path);
-        OpenSource(project_.request.sourcePath, false);
+        selected_ = 0;
+        source_.reset();
+        SetField(assetRoot_, project_.batch.assetRoot);
+        SetField(catalog_, project_.batch.catalogPath);
+        LoadRegionIntoFields();
+        OpenSource(project_.batch.sourcePath);
         // OpenSource's message says whether the source opened and the settings fit it.
         status_ = "Opened project " + path + ". " + status_;
     }
@@ -209,18 +214,24 @@ private:
         status_ = "Saved project " + path;
     }
 
+    // Every region at once (ExportSounds): nothing is written when one is refused.
     void Export() {
         CollectFields();
-        const auto report = ExportSound(project_.request);
-        if (!report) {
-            status_ = "Export failed: " + Engine::Base::Describe(report.error());
+        const auto reports = ExportSounds(project_.batch);
+        if (!reports) {
+            status_ = "Export failed, nothing was registered: " + Engine::Base::Describe(reports.error());
             return;
         }
-        status_ = std::string(report->added ? "Added " : "Updated ") + project_.request.registration.id + ": " +
-                  report->outputPath + ", " + std::to_string(report->frames) + " frames, saturated " +
-                  std::to_string(report->saturated) + ".";
-        if (report->previousPath.has_value()) {
-            status_ += " " + *report->previousPath + " is no longer registered; remove it if nothing else uses it.";
+        status_ = "Exported " + std::to_string(reports->size()) + " clips.";
+        for (std::size_t index = 0; index < reports->size(); ++index) {
+            const ExportReport& report = (*reports)[index];
+            status_ += std::string(report.added ? " Added " : " Updated ") +
+                       project_.batch.regions[index].registration.id + ": " + report.outputPath + ", " +
+                       std::to_string(report.frames) + " frames, saturated " + std::to_string(report.saturated) +
+                       ".";
+            if (report.previousPath.has_value()) {
+                status_ += " " + *report.previousPath + " is no longer registered; remove it if nothing else uses it.";
+            }
         }
     }
 
@@ -271,7 +282,7 @@ private:
             if (answer.outcome != Sdl::PathDialogOutcome::Chosen) continue;
             switch (purpose) {
             case DialogPurpose::OpenSource:
-                OpenSource(answer.path, true);
+                OpenSource(answer.path);
                 break;
             case DialogPurpose::OpenProject:
                 OpenProject(answer.path);
@@ -291,28 +302,62 @@ private:
 
     // --- fields --------------------------------------------------------------
 
+    // The project always has at least one region; the fields edit the selected one.
+    SoundRegion& Region() { return project_.batch.regions[selected_]; }
+
     void CollectFields() {
-        project_.request.assetRoot = Field(assetRoot_);
-        project_.request.catalogPath = Field(catalog_);
-        project_.request.registration.id = Field(id_);
-        project_.request.registration.path = Field(clipPath_);
+        project_.batch.assetRoot = Field(assetRoot_);
+        project_.batch.catalogPath = Field(catalog_);
+        SoundRegion& region = Region();
+        region.registration.id = Field(id_);
+        region.registration.path = Field(clipPath_);
         // Without a source the fields show nothing of the project's settings,
         // so they are kept as the project has them.
         if (!source_.has_value()) return;
-        project_.request.settings.trimStart = static_cast<std::size_t>(trimStart_);
+        EditSettings& settings = region.settings;
+        settings.trimStart = static_cast<std::size_t>(trimStart_);
         // The whole source is "no end", so a project keeps following its source.
-        const bool toEnd = source_.has_value() && trimEnd_ == source_->Frames();
-        project_.request.settings.trimEnd =
-            toEnd ? std::nullopt : std::optional<std::size_t>(static_cast<std::size_t>(trimEnd_));
-        project_.request.settings.gainDb = gainDb_;
+        const bool toEnd = trimEnd_ == source_->Frames();
+        settings.trimEnd = toEnd ? std::nullopt : std::optional<std::size_t>(static_cast<std::size_t>(trimEnd_));
+        settings.gainDb = gainDb_;
+        settings.fadeIn = static_cast<std::size_t>(fadeIn_);
+        settings.fadeOut = static_cast<std::size_t>(fadeOut_);
     }
 
-    void LoadSettingsIntoFields() {
-        const EditSettings& settings = project_.request.settings;
+    void LoadRegionIntoFields() {
+        const SoundRegion& region = Region();
+        SetField(id_, region.registration.id);
+        SetField(clipPath_, region.registration.path);
+        const EditSettings& settings = region.settings;
         const std::size_t frames = source_.has_value() ? source_->Frames() : 0;
         trimStart_ = settings.trimStart;
         trimEnd_ = settings.trimEnd.value_or(frames);
         gainDb_ = settings.gainDb;
+        fadeIn_ = settings.fadeIn;
+        fadeOut_ = settings.fadeOut;
+    }
+
+    void Select(const std::size_t index) {
+        if (index == selected_ || index >= project_.batch.regions.size()) return;
+        CollectFields();
+        selected_ = index;
+        LoadRegionIntoFields();
+    }
+
+    // A new region starts as a copy of the selected one, with no id or path.
+    void AddRegion() {
+        CollectFields();
+        SoundRegion region{{}, Region().settings};
+        project_.batch.regions.push_back(std::move(region));
+        selected_ = project_.batch.regions.size() - 1;
+        LoadRegionIntoFields();
+    }
+
+    void RemoveRegion() {
+        if (project_.batch.regions.size() <= 1) return;
+        project_.batch.regions.erase(project_.batch.regions.begin() + static_cast<std::ptrdiff_t>(selected_));
+        selected_ = std::min(selected_, project_.batch.regions.size() - 1);
+        LoadRegionIntoFields();
     }
 
     // --- preview -------------------------------------------------------------
@@ -320,13 +365,15 @@ private:
     void PlayPreview() {
         if (!source_.has_value()) return;
         CollectFields();
-        auto clip = RenderClip(*source_, project_.request.settings, DitherSeed(project_.request.registration.id));
+        // The selected region, rendered as export renders it (Design Invariant 6).
+        const SoundRegion& region = Region();
+        auto clip = RenderClip(*source_, region.settings, DitherSeed(region.registration.id));
         if (!clip) {
             status_ = "Cannot render: " + Engine::Base::Describe(clip.error());
             return;
         }
         renderedSaturated_ = clip->saturated;
-        playedTrimStart_ = project_.request.settings.trimStart;
+        playedTrimStart_ = region.settings.trimStart;
         playedFrames_ = clip->Frames();
         player_->Play(std::move(clip).value(), Engine::Time::Now());
     }
@@ -335,12 +382,16 @@ private:
         if (player_.has_value()) player_->Stop(Engine::Time::Now());
     }
 
-    // The trim fields always keep at least one frame of the source.
+    // The trim fields always keep at least one frame of the source, and the
+    // fades fit inside the trim.
     void ClampTrim() {
         if (!source_.has_value() || source_->Frames() == 0) return;
         const std::uint64_t frames = source_->Frames();
         trimEnd_ = std::clamp<std::uint64_t>(trimEnd_, 1, frames);
         trimStart_ = std::min(trimStart_, trimEnd_ - 1);
+        const std::uint64_t kept = trimEnd_ - trimStart_;
+        fadeIn_ = std::min(fadeIn_, kept);
+        fadeOut_ = std::min(fadeOut_, kept - fadeIn_);
     }
 
     // --- panels --------------------------------------------------------------
@@ -348,7 +399,7 @@ private:
     void DrawMenu() {
         if (!ImGui::BeginMenuBar()) return;
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Open WAV...")) ShowDialog(DialogPurpose::OpenSource, project_.request.sourcePath);
+            if (ImGui::MenuItem("Open WAV...")) ShowDialog(DialogPurpose::OpenSource, project_.batch.sourcePath);
             if (ImGui::MenuItem("Open Project...")) ShowDialog(DialogPurpose::OpenProject, projectPath_);
             if (ImGui::MenuItem("Save Project", nullptr, false, !projectPath_.empty())) SaveProjectTo(projectPath_);
             if (ImGui::MenuItem("Save Project As...")) ShowDialog(DialogPurpose::SaveProject, projectPath_);
@@ -361,9 +412,9 @@ private:
 
     void DrawSource() {
         ImGui::SeparatorText("Source");
-        if (ImGui::Button("Open WAV...")) ShowDialog(DialogPurpose::OpenSource, project_.request.sourcePath);
+        if (ImGui::Button("Open WAV...")) ShowDialog(DialogPurpose::OpenSource, project_.batch.sourcePath);
         ImGui::SameLine();
-        ImGui::TextUnformatted(project_.request.sourcePath.empty() ? "(none)" : project_.request.sourcePath.c_str());
+        ImGui::TextUnformatted(project_.batch.sourcePath.empty() ? "(none)" : project_.batch.sourcePath.c_str());
         if (!projectPath_.empty()) ImGui::Text("Project: %s", projectPath_.c_str());
         if (!source_.has_value()) return;
         const double seconds = static_cast<double>(source_->Frames()) / source_->sampleRate;
@@ -371,6 +422,30 @@ private:
                     static_cast<unsigned>(source_->bits), source_->formatTag == 3 ? "float" : "integer",
                     source_->planes.size(), source_->Frames(), Format("%.3f", seconds).c_str(),
                     Format("%.3f", sourcePeak_).c_str());
+    }
+
+    void DrawRegions() {
+        ImGui::SeparatorText("Regions");
+        ImGui::TextDisabled("Each region is one clip with its own id; Export writes them all.");
+        const double rate = source_.has_value() ? source_->sampleRate : 0.0;
+        for (std::size_t index = 0; index < project_.batch.regions.size(); ++index) {
+            const SoundRegion& region = project_.batch.regions[index];
+            // The selected region shows the fields, which may not be collected yet.
+            const std::string id = index == selected_ ? Field(id_) : region.registration.id;
+            std::string label = std::to_string(index + 1) + ". " + (id.empty() ? std::string("(no id)") : id);
+            if (rate > 0.0 && index != selected_) {
+                const std::size_t end = region.settings.trimEnd.value_or(source_->Frames());
+                label += "  " + Format("%.3f", static_cast<double>(region.settings.trimStart) / rate) + " - " +
+                         Format("%.3f", static_cast<double>(end) / rate) + " s";
+            }
+            label += "##region" + std::to_string(index);
+            if (ImGui::Selectable(label.c_str(), index == selected_)) Select(index);
+        }
+        if (ImGui::Button("Add region")) AddRegion();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(project_.batch.regions.size() <= 1);
+        if (ImGui::Button("Remove region")) RemoveRegion();
+        ImGui::EndDisabled();
     }
 
     void DrawWaveform() {
@@ -397,6 +472,7 @@ private:
             const float x = ImGui::GetIO().MousePos.x;
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) trimStart_ = std::min(frameAt(x), trimEnd_ - 1);
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) trimEnd_ = std::max(frameAt(x), trimStart_ + 1);
+            ClampTrim(); // the fades drawn below fit the new trim
         }
         ImDrawList* draw = ImGui::GetWindowDrawList();
         draw->AddRectFilled(origin, {origin.x + width, origin.y + height}, IM_COL32(18, 20, 26, 255));
@@ -424,12 +500,27 @@ private:
                               clips ? IM_COL32(230, 90, 70, 255) : IM_COL32(110, 190, 240, 255));
             }
         }
-        // Outside the trim is dimmed.
+        // The other regions are outlined; outside the selected one is dimmed.
+        for (std::size_t index = 0; index < project_.batch.regions.size(); ++index) {
+            if (index == selected_) continue;
+            const EditSettings& other = project_.batch.regions[index].settings;
+            const std::uint64_t otherEnd = std::min<std::uint64_t>(other.trimEnd.value_or(frames), frames);
+            draw->AddRect({xOf(std::min<std::uint64_t>(other.trimStart, frames)), origin.y + 1.0f},
+                          {xOf(otherEnd), origin.y + height - 1.0f}, IM_COL32(200, 160, 255, 160));
+        }
         draw->AddRectFilled(origin, {xOf(trimStart_), origin.y + height}, IM_COL32(0, 0, 0, 150));
         draw->AddRectFilled({xOf(trimEnd_), origin.y}, {origin.x + width, origin.y + height}, IM_COL32(0, 0, 0, 150));
         draw->AddLine({xOf(trimStart_), origin.y}, {xOf(trimStart_), origin.y + height}, IM_COL32(120, 230, 120, 255),
                       2.0f);
         draw->AddLine({xOf(trimEnd_), origin.y}, {xOf(trimEnd_), origin.y + height}, IM_COL32(230, 200, 90, 255), 2.0f);
+        // The fades as the gain ramps they are, from silence at the edge to full.
+        const ImU32 fadeColor = IM_COL32(255, 255, 255, 140);
+        if (fadeIn_ > 0) {
+            draw->AddLine({xOf(trimStart_), origin.y + height}, {xOf(trimStart_ + fadeIn_), origin.y}, fadeColor, 1.5f);
+        }
+        if (fadeOut_ > 0) {
+            draw->AddLine({xOf(trimEnd_ - fadeOut_), origin.y}, {xOf(trimEnd_), origin.y + height}, fadeColor, 1.5f);
+        }
         // The mixer's playhead, for display only (GYO::Audio Design Invariant 4).
         const Audio::Playhead playhead = player_->Position();
         if (playhead.status == Audio::Playhead::Status::Playing) {
@@ -470,6 +561,18 @@ private:
         ImGui::SliderScalar("Gain (dB)", ImGuiDataType_Double, &gainDb_, &minDb, &maxDb, "%.2f dB");
         ImGui::SameLine();
         if (ImGui::Button("0 dB")) gainDb_ = 0.0;
+        const std::uint64_t kept = trimEnd_ - trimStart_;
+        const std::uint64_t lastFadeIn = kept - std::min(fadeOut_, kept);
+        const std::uint64_t lastFadeOut = kept - std::min(fadeIn_, kept);
+        ImGui::SetNextItemWidth(360.0f);
+        ImGui::SliderScalar("Fade in (frames)", ImGuiDataType_U64, &fadeIn_, &zero, &lastFadeIn);
+        ImGui::SameLine();
+        ImGui::Text("%s ms", Format("%.1f", 1000.0 * static_cast<double>(fadeIn_) / rate).c_str());
+        ImGui::SetNextItemWidth(360.0f);
+        ImGui::SliderScalar("Fade out (frames)", ImGuiDataType_U64, &fadeOut_, &zero, &lastFadeOut);
+        ImGui::SameLine();
+        ImGui::Text("%s ms", Format("%.1f", 1000.0 * static_cast<double>(fadeOut_) / rate).c_str());
+        ClampTrim();
         if (renderedSaturated_.has_value()) {
             ImGui::Text("Last render: %zu samples clamped at full scale", *renderedSaturated_);
         }
@@ -519,14 +622,14 @@ private:
         ImGui::SameLine();
         if (ImGui::Button("Browse...##catalog")) ShowDialog(DialogPurpose::Catalog, Field(catalog_));
         ImGui::SetNextItemWidth(520.0f);
-        ImGui::InputText("Id", id_.data(), id_.size());
+        ImGui::InputText("Id (selected region)", id_.data(), id_.size());
         ImGui::SetNextItemWidth(520.0f);
-        ImGui::InputText("Path in the asset root", clipPath_.data(), clipPath_.size());
+        ImGui::InputText("Path in the asset root (selected region)", clipPath_.data(), clipPath_.size());
         ImGui::BeginDisabled(!source_.has_value());
-        if (ImGui::Button("Export and register")) Export();
+        if (ImGui::Button("Export all and register")) Export();
         ImGui::EndDisabled();
         ImGui::SameLine();
-        ImGui::TextDisabled("Writes the clip and its \"sound\" entry; the source is only read.");
+        ImGui::TextDisabled("Writes every region's clip and \"sound\" entry; the source is only read.");
     }
 
     std::string initialFile_;
@@ -537,7 +640,8 @@ private:
     std::optional<PreviewPlayer> player_;
     std::string audioProblem_;
 
-    AudioProject project_;
+    AudioProject project_{.batch = {.regions = {SoundRegion{}}}};
+    std::size_t selected_{};
     std::string projectPath_;
     std::optional<DecodedWav> source_;
     double sourcePeak_{};
@@ -551,6 +655,8 @@ private:
     std::uint64_t trimStart_{};
     std::uint64_t trimEnd_{};
     double gainDb_{};
+    std::uint64_t fadeIn_{};
+    std::uint64_t fadeOut_{};
     float volume_ = 0.8f;
 
     std::uint64_t playedTrimStart_{};

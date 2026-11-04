@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the tools' guards for the framework (v8-tool-framework-shell; v8-tool-ui-editor-path-dialog-adopt and -shell-adopt add the dialog and command-line mutants; v8-tool-audio-editor-edit adds the editor's trim, gain, preview, waveform, project and window-guard mutants): ui_editor and audio_editor, owned by the tool line. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The framework's own mutants moved to docs/architecture/plans/framework-rework/scripts/framework_mutations.json (v8-framework-guard-ratchet).",
+  "description": "Declared mutants of the tools' guards for the framework (v8-tool-framework-shell; v8-tool-ui-editor-path-dialog-adopt and -shell-adopt add the dialog and command-line mutants; v8-tool-audio-editor-edit adds the editor's trim, gain, preview, waveform, project and window-guard mutants; v8-tool-audio-editor-regions adds the fade, batch export, project version 2, window and export-command mutants): ui_editor and audio_editor, owned by the tool line. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/framework_mutations.json --build-dir <a tree with GYO_TOOLS=AUTO (ui_editor and audio_editor) and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. The framework's own mutants moved to docs/architecture/plans/framework-rework/scripts/framework_mutations.json (v8-framework-guard-ratchet).",
   "mutants": [
     {
       "id": "ui-guard-native-target",
@@ -359,8 +359,8 @@
       "id": "ae-edit-gain-ignored",
       "what": "The gain never reaches the samples",
       "file": "tools/audio_editor/src/Edit.cpp",
-      "find": "        for (double& sample : edited) sample *= factor;\n",
-      "replace": "",
+      "find": "double sample = edited[frame] * factor;",
+      "replace": "double sample = edited[frame];",
       "target": "gyo_audio_editor_core_tests",
       "cases": "Gain scales every sample*",
       "expect": "CHECK\\( \\(\\*planes\\)\\[channel\\]\\[frame\\] == source.planes\\[channel\\]\\[frame\\] \\* factor \\) is NOT correct"
@@ -389,8 +389,8 @@
       "id": "ae-export-ignores-settings",
       "what": "Export converts the whole source whatever the trim and gain",
       "file": "tools/audio_editor/src/SoundExport.cpp",
-      "find": "RenderClip(*decoded, request.settings, DitherSeed(request.registration.id))",
-      "replace": "RenderClip(*decoded, {}, DitherSeed(request.registration.id))",
+      "find": "RenderClip(*decoded, region.settings, DitherSeed(region.registration.id))",
+      "replace": "RenderClip(*decoded, {}, DitherSeed(region.registration.id))",
       "target": "gyo_audio_editor_core_tests",
       "cases": "The preview plays the bytes export writes",
       "expect": "CHECK\\( clip->samples == written \\) is NOT correct"
@@ -489,8 +489,8 @@
       "id": "ae-project-gain-as-float",
       "what": "The project keeps the gain as a float",
       "file": "tools/audio_editor/src/ProjectFile.cpp",
-      "find": "json[\"gain_db\"] = request.settings.gainDb;",
-      "replace": "json[\"gain_db\"] = static_cast<float>(request.settings.gainDb);",
+      "find": "entry[\"gain_db\"] = region.settings.gainDb;",
+      "replace": "entry[\"gain_db\"] = static_cast<float>(region.settings.gainDb);",
       "target": "gyo_audio_editor_core_tests",
       "cases": "A project reads back*",
       "expect": "CHECK\\( \\*loaded == project \\) is NOT correct"
@@ -499,7 +499,7 @@
       "id": "ae-project-trim-end-lost",
       "what": "The project's trim end is not read back",
       "file": "tools/audio_editor/src/ProjectFile.cpp",
-      "find": "    if (!end.is_null()) request.settings.trimEnd = end.get<std::size_t>();\n",
+      "find": "    if (!end.is_null()) region.settings.trimEnd = end.get<std::size_t>();\n",
       "replace": "",
       "target": "gyo_audio_editor_core_tests",
       "cases": "A project reads back*",
@@ -576,6 +576,153 @@
         "tests/audio_editor/audio_editor_dependency_guard.py"
       ],
       "expect": "includes engine/render/backend/sdl/SdlRendererNative.hpp"
+    },
+    {
+      "id": "ae-fade-in-off-by-one",
+      "what": "The fade in is one frame ahead: its first frame is not silent",
+      "file": "tools/audio_editor/src/Edit.cpp",
+      "find": "sample *= static_cast<double>(frame) / static_cast<double>(settings.fadeIn);",
+      "replace": "sample *= static_cast<double>(frame + 1) / static_cast<double>(settings.fadeIn);",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Fades ramp the samples*",
+      "expect": "CHECK\\( \\(\\*planes\\)\\[channel\\]\\[i\\] == expected \\) is NOT correct"
+    },
+    {
+      "id": "ae-fade-out-reversed",
+      "what": "The fade out rises toward the end instead of falling",
+      "file": "tools/audio_editor/src/Edit.cpp",
+      "find": "sample *= static_cast<double>(fromEnd) / static_cast<double>(settings.fadeOut);",
+      "replace": "sample *= static_cast<double>(settings.fadeOut - fromEnd) / static_cast<double>(settings.fadeOut);",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Fades ramp the samples*",
+      "expect": "CHECK\\( \\(\\*planes\\)\\[channel\\]\\[i\\] == expected \\) is NOT correct"
+    },
+    {
+      "id": "ae-fade-after-resample",
+      "what": "The fades count the clip's frames after resampling, not the source's",
+      "file": "tools/audio_editor/src/Edit.cpp",
+      "find": "        const std::size_t count = edited.size();\n        for (std::size_t frame = 0; frame < count; ++frame) {\n            double sample = edited[frame] * factor;\n            if (frame < settings.fadeIn) {\n                sample *= static_cast<double>(frame) / static_cast<double>(settings.fadeIn);\n            }\n            if (const std::size_t fromEnd = count - 1 - frame; fromEnd < settings.fadeOut) {\n                sample *= static_cast<double>(fromEnd) / static_cast<double>(settings.fadeOut);\n            }\n            edited[frame] = sample;\n        }\n        planes.push_back(Resample(edited, source.sampleRate, Engine::Audio::kSampleRate));\n",
+      "replace": "        for (double& sample : edited) sample *= factor;\n        edited = Resample(edited, source.sampleRate, Engine::Audio::kSampleRate);\n        const std::size_t count = edited.size();\n        for (std::size_t frame = 0; frame < count; ++frame) {\n            double sample = edited[frame];\n            if (frame < settings.fadeIn) {\n                sample *= static_cast<double>(frame) / static_cast<double>(settings.fadeIn);\n            }\n            if (const std::size_t fromEnd = count - 1 - frame; fromEnd < settings.fadeOut) {\n                sample *= static_cast<double>(fromEnd) / static_cast<double>(settings.fadeOut);\n            }\n            edited[frame] = sample;\n        }\n        planes.push_back(edited);\n",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Fades ramp the samples*",
+      "expect": "CHECK\\( \\(\\*resampled\\)\\[0\\] == Resample\\(faded, 24000, Audio::kSampleRate\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-fade-length-unchecked",
+      "what": "Fades longer than the trim are accepted",
+      "file": "tools/audio_editor/src/Edit.cpp",
+      "find": "if (settings.fadeIn > kept || settings.fadeOut > kept - settings.fadeIn) {",
+      "replace": "if (false) {",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Fades ramp the samples*",
+      "expect": "REQUIRE_FALSE\\( refused.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-export-duplicate-id",
+      "what": "Two regions with one id are exported, the later one moving the entry",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "if (batch.regions[other].registration.id == batch.regions[index].registration.id) {",
+      "replace": "if (false) {",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "An export with a refused region*",
+      "expect": "REQUIRE_FALSE\\( exported.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-export-duplicate-file",
+      "what": "Two regions whose paths name one file are both written",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "        for (const std::string& earlier : outputs) {\n            auto same = SameFile(*output, earlier);",
+      "replace": "        for (const std::string& earlier : std::vector<std::string>{}) {\n            auto same = SameFile(*output, earlier);",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "An export with a refused region*",
+      "expect": "REQUIRE_FALSE\\( exported.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-export-writes-while-checking",
+      "what": "Each clip is written as soon as it renders, before the later regions are checked",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "        wavs.push_back(EncodePcm16Wav(clip.channels, clip.sampleRate, clip.samples));\n",
+      "replace": "        wavs.push_back(EncodePcm16Wav(clip.channels, clip.sampleRate, clip.samples));\n        (void)WriteReplacing(reports[index].outputPath, wavs.back());\n",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "An export with a refused region*",
+      "expect": "CHECK\\( FilesUnder\\(root.assets\\) == before \\) is NOT correct"
+    },
+    {
+      "id": "ae-export-registers-last-only",
+      "what": "Each region registers in the catalog as it was read, so only the last entry is kept",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "        auto update = Framework::RegisterAsset(\n            text, {",
+      "replace": "        auto update = Framework::RegisterAsset(\n            std::string_view(reinterpret_cast<const char*>(catalogText->data()), catalogText->size()), {",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "Three regions export as three clips*",
+      "expect": "CHECK\\( ids == std::set<std::string>\\{\"game.ui.menu\", \"game.audio.magazine_out\", \"game.audio.magazine_in\","
+    },
+    {
+      "id": "ae-project-v1-drops-gain",
+      "what": "A version 1 project is read without its gain",
+      "file": "tools/audio_editor/src/ProjectFile.cpp",
+      "find": "    region.settings.gainDb = gain.get<double>();\n    if (!fades) return true;\n",
+      "replace": "    if (!fades) return true;\n    region.settings.gainDb = gain.get<double>();\n",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A version 1 project reads as one region*",
+      "expect": "CHECK\\( region.settings == EditSettings\\{.trimStart = 40, .trimEnd = 250, .gainDb = -1.5\\} \\) is NOT correct"
+    },
+    {
+      "id": "ae-project-region-extra-field",
+      "what": "A version 2 region with a field more is read",
+      "file": "tools/audio_editor/src/ProjectFile.cpp",
+      "find": "if (!HasExactly(entry, kRegionFields) || !ReadRegion(entry, true, region)) {",
+      "replace": "if (!entry.is_object() || !ReadRegion(entry, true, region)) {",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A version 2 project keeps its regions*",
+      "expect": "REQUIRE_FALSE\\( parsed.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-cli-export-first-region",
+      "what": "The export command exports only the first region (needs ctest on PATH and the framework tree)",
+      "file": "tools/audio_editor/src/Main.cpp",
+      "find": "    const auto exported = ExportSounds(batch);\n",
+      "replace": "    ExportBatch first = batch;\n    first.regions.resize(1);\n    const auto exported = ExportSounds(first);\n",
+      "target": "gyo_audio_editor",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/framework",
+        "-R",
+        "^gyo_audio_editor\\.cli$",
+        "--output-on-failure"
+      ],
+      "expect": "export: audio/in.wav was not written"
+    },
+    {
+      "id": "ae-export-reports-taken-path",
+      "what": "A path one region gives up and another registers is reported as left behind",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "                report.previousPath.reset();\n",
+      "replace": "",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A path one region gives up*",
+      "expect": "CHECK_FALSE\\( \\(\\*moved\\)\\[0\\].previousPath.has_value\\(\\) \\) is NOT correct"
+    },
+    {
+      "id": "ae-export-orphans-unnamed",
+      "what": "A failed clip write does not name the clips already written",
+      "file": "tools/audio_editor/src/SoundExport.cpp",
+      "find": "            for (std::size_t done = 0; done < index; ++done) {\n                error.detail += (done == 0 ? \"; written but not registered: \" : \", \") + reports[done].outputPath;\n            }\n",
+      "replace": "",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A clip that cannot be written*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ae-project-v1-extra-field",
+      "what": "A version 1 project with a field more or less is read",
+      "file": "tools/audio_editor/src/ProjectFile.cpp",
+      "find": "if (first ? !HasExactly(json, kFieldsV1) : !HasExactly(json, kFieldsV2)) {",
+      "replace": "if (first ? !json.is_object() : !HasExactly(json, kFieldsV2)) {",
+      "target": "gyo_audio_editor_core_tests",
+      "cases": "A version 2 project keeps its regions*",
+      "expect": "REQUIRE_FALSE\\( parsed.has_value\\(\\) \\) is NOT correct"
     }
   ]
 }

@@ -1,4 +1,5 @@
 #include "gyo/audio_editor/AudioEditorGui.hpp"
+#include "gyo/audio_editor/ProjectFile.hpp"
 #include "gyo/audio_editor/SoundExport.hpp"
 #include "gyo/audio_editor/WavFile.hpp"
 
@@ -28,14 +29,17 @@ constexpr std::string_view kHelp =
     "  gyo_audio_editor info <source.wav>\n"
     "  gyo_audio_editor convert <source.wav> --asset-root <dir> --asset-catalog <catalog.json>\n"
     "                            --id <asset id> --path <path in the asset root>\n"
+    "  gyo_audio_editor export <project.json>\n"
     "  gyo_audio_editor --help\n"
     "\n"
     "edit opens the editor's window: playback, waveform, trim, gain, the project\n"
     "file and export.\n"
     "convert writes the source as a clip of the engine's format into the asset root\n"
     "and adds or updates its \"sound\" entry in the catalog. The source is only read.\n"
+    "export does the same for every region of a project: all are checked first,\n"
+    "then the clips are written and the catalog once.\n"
     "Exit status: 0 done, 2 usage, 3 a file could not be read or written,\n"
-    "4 an invalid WAV, catalog or registration.\n";
+    "4 an invalid WAV, catalog, registration or project.\n";
 
 int ExitCode(const AudioEditorError& error) {
     switch (error.code) {
@@ -85,6 +89,18 @@ int Info(const std::string& path) {
     return 0;
 }
 
+void PrintExported(const std::string& source, const std::string& id, const std::string& catalog,
+                   const ExportReport& exported) {
+    std::cout << source << " -> " << exported.outputPath << ": " << exported.sourceRate << " Hz "
+              << exported.sourceBits << "-bit " << exported.channels << " ch -> " << exported.outputRate
+              << " Hz 16-bit, " << exported.frames << " frames, saturated " << exported.saturated << '\n';
+    std::cout << (exported.added ? "added " : "updated ") << id << " in " << catalog << '\n';
+    if (exported.previousPath) {
+        std::cout << "warning: " << *exported.previousPath
+                  << " is no longer registered; remove it if nothing else uses it\n";
+    }
+}
+
 int Convert(const std::span<const std::string> arguments) {
     std::optional<std::string> source;
     std::map<std::string, std::string, std::less<>> options{
@@ -117,14 +133,24 @@ int Convert(const std::span<const std::string> arguments) {
         std::cerr << "error: " << Engine::Base::Describe(exported.error()) << '\n';
         return ExitCode(exported.error());
     }
-    std::cout << request.sourcePath << " -> " << exported->outputPath << ": " << exported->sourceRate << " Hz "
-              << exported->sourceBits << "-bit " << exported->channels << " ch -> " << exported->outputRate
-              << " Hz 16-bit, " << exported->frames << " frames, saturated " << exported->saturated << '\n';
-    std::cout << (exported->added ? "added " : "updated ") << request.registration.id << " in "
-              << request.catalogPath << '\n';
-    if (exported->previousPath) {
-        std::cout << "warning: " << *exported->previousPath
-                  << " is no longer registered; remove it if nothing else uses it\n";
+    PrintExported(request.sourcePath, request.registration.id, request.catalogPath, *exported);
+    return 0;
+}
+
+int Export(const std::string& path) {
+    const auto project = LoadProject(path);
+    if (!project) {
+        std::cerr << "error: " << Engine::Base::Describe(project.error()) << '\n';
+        return ExitCode(project.error());
+    }
+    const ExportBatch& batch = project->batch;
+    const auto exported = ExportSounds(batch);
+    if (!exported) {
+        std::cerr << "error: " << Engine::Base::Describe(exported.error()) << '\n';
+        return ExitCode(exported.error());
+    }
+    for (std::size_t index = 0; index < exported->size(); ++index) {
+        PrintExported(batch.sourcePath, batch.regions[index].registration.id, batch.catalogPath, (*exported)[index]);
     }
     return 0;
 }
@@ -141,6 +167,10 @@ int Run(const std::span<const std::string> arguments) {
         return Info(arguments[2]);
     }
     if (command == "convert") return Convert(arguments);
+    if (command == "export") {
+        if (arguments.size() != 3 || arguments[2].starts_with("--")) return Usage("export needs one project file");
+        return Export(arguments[2]);
+    }
     if (command == "edit") {
         if (arguments.size() > 3) return Usage("edit takes at most one file");
         if (arguments.size() == 3 && arguments[2].starts_with("--")) return Usage("unexpected argument " + arguments[2]);

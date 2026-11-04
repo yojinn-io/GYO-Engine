@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace Gyo::Tools::AudioEditor {
 
@@ -25,6 +26,25 @@ struct ExportRequest final {
     EditSettings settings; // the trim and gain of the output; the default converts the whole source
 };
 
+// One clip cut from a source: its entry and its settings.
+struct SoundRegion final {
+    SoundRegistration registration;
+    EditSettings settings;
+
+    friend bool operator==(const SoundRegion& left, const SoundRegion& right) {
+        return left.registration.id == right.registration.id && left.registration.path == right.registration.path &&
+               left.settings == right.settings;
+    }
+};
+
+// Several clips cut from one source into one asset root and catalog.
+struct ExportBatch final {
+    std::string sourcePath;  // the WAV to convert; only read (Design Invariant 4)
+    std::string assetRoot;   // the mounted product's asset root
+    std::string catalogPath; // that product's catalog
+    std::vector<SoundRegion> regions;
+};
+
 struct ExportReport final {
     std::string outputPath; // assetRoot joined with registration.path
     std::uint32_t sourceRate{};
@@ -38,11 +58,21 @@ struct ExportReport final {
     std::optional<std::string> previousPath;
 };
 
-// Renders the source with the settings (RenderClip, as the preview does),
-// writes the clip into the asset root and registers it in the catalog. Both
-// files are written by atomic replace, the clip first; the catalog is not
-// touched when the clip fails. The clip's path may not be the source itself,
-// so a source is never overwritten.
+// Renders every region of the source (RenderClip, as the preview does),
+// writes each clip into the asset root and registers each in the catalog, one
+// report per region in their order. Everything is checked and rendered before
+// anything is written: no region, two regions with one id or one path, a clip
+// path that is the source or the catalog, a region the catalog or its settings
+// refuse, and nothing is written. Two paths are one file when the OS layer
+// compares their names equal (Files::SamePathComponent: ignoring case on
+// Windows, byte for byte elsewhere). Then the clips are written by atomic
+// replace in order and the catalog once, last; when a write fails the catalog
+// is not touched, and the clips already written stay, unregistered, named in
+// the error's detail. A previous path that another region of the export
+// registers is not reported.
+[[nodiscard]] Result<std::vector<ExportReport>, AudioEditorError> ExportSounds(const ExportBatch& batch);
+
+// ExportSounds with the request's one region.
 [[nodiscard]] Result<ExportReport, AudioEditorError> ExportSound(const ExportRequest& request);
 
 } // namespace Gyo::Tools::AudioEditor

@@ -16,38 +16,88 @@ namespace {
 
 using Json = nlohmann::ordered_json;
 
-// Every field of version 1, in the order the file has them.
-constexpr std::array<std::string_view, 10> kFields{
+// Every field of each version, in the order the file has them.
+constexpr std::array<std::string_view, 10> kFieldsV1{
     "format", "version", "source", "asset_root", "asset_catalog", "id", "path", "trim_start", "trim_end", "gain_db"};
+constexpr std::array<std::string_view, 6> kFieldsV2{"format", "version", "source", "asset_root", "asset_catalog",
+                                                    "regions"};
+constexpr std::array<std::string_view, 7> kRegionFields{"id",      "path",    "trim_start", "trim_end",
+                                                        "gain_db", "fade_in", "fade_out"};
 
 AudioEditorError Invalid(std::string message) {
     return AudioEditorError::Make(AudioEditorErrorCode::InvalidProject, std::move(message));
 }
 
+template <std::size_t Count>
+bool HasExactly(const Json& json, const std::array<std::string_view, Count>& fields) {
+    if (!json.is_object() || json.size() != fields.size()) return false;
+    for (const std::string_view field : fields) {
+        if (!json.contains(field)) return false;
+    }
+    return true;
+}
+
+bool TextField(const Json& json, const char* name, std::string& out) {
+    const Json& value = json.at(name);
+    if (!value.is_string()) return false;
+    out = value.get<std::string>();
+    return true;
+}
+
+// The id, path, trim and gain fields both versions share; version 2 adds the fades.
+bool ReadRegion(const Json& json, const bool fades, SoundRegion& region) {
+    if (!TextField(json, "id", region.registration.id) || !TextField(json, "path", region.registration.path)) {
+        return false;
+    }
+    const Json& start = json.at("trim_start");
+    const Json& end = json.at("trim_end");
+    const Json& gain = json.at("gain_db");
+    if (!start.is_number_unsigned() || !(end.is_null() || end.is_number_unsigned()) || !gain.is_number()) {
+        return false;
+    }
+    region.settings.trimStart = start.get<std::size_t>();
+    if (!end.is_null()) region.settings.trimEnd = end.get<std::size_t>();
+    region.settings.gainDb = gain.get<double>();
+    if (!fades) return true;
+    const Json& fadeIn = json.at("fade_in");
+    const Json& fadeOut = json.at("fade_out");
+    if (!fadeIn.is_number_unsigned() || !fadeOut.is_number_unsigned()) return false;
+    region.settings.fadeIn = fadeIn.get<std::size_t>();
+    region.settings.fadeOut = fadeOut.get<std::size_t>();
+    return true;
+}
+
 } // namespace
 
 bool operator==(const AudioProject& left, const AudioProject& right) {
-    const ExportRequest& a = left.request;
-    const ExportRequest& b = right.request;
+    const ExportBatch& a = left.batch;
+    const ExportBatch& b = right.batch;
     return a.sourcePath == b.sourcePath && a.assetRoot == b.assetRoot && a.catalogPath == b.catalogPath &&
-           a.registration.id == b.registration.id && a.registration.path == b.registration.path &&
-           a.settings == b.settings;
+           a.regions == b.regions;
 }
 
 std::string ProjectText(const AudioProject& project) {
-    const ExportRequest& request = project.request;
+    const ExportBatch& batch = project.batch;
     Json json;
     json["format"] = kProjectFormat;
     json["version"] = kProjectVersion;
-    json["source"] = request.sourcePath;
-    json["asset_root"] = request.assetRoot;
-    json["asset_catalog"] = request.catalogPath;
-    json["id"] = request.registration.id;
-    json["path"] = request.registration.path;
-    json["trim_start"] = request.settings.trimStart;
-    json["trim_end"] = request.settings.trimEnd.has_value() ? Json(*request.settings.trimEnd) : Json(nullptr);
-    json["gain_db"] = request.settings.gainDb;
-    // nlohmann writes a double with as many digits as reading it back needs.
+    json["source"] = batch.sourcePath;
+    json["asset_root"] = batch.assetRoot;
+    json["asset_catalog"] = batch.catalogPath;
+    Json regions = Json::array();
+    for (const SoundRegion& region : batch.regions) {
+        Json entry;
+        entry["id"] = region.registration.id;
+        entry["path"] = region.registration.path;
+        entry["trim_start"] = region.settings.trimStart;
+        entry["trim_end"] = region.settings.trimEnd.has_value() ? Json(*region.settings.trimEnd) : Json(nullptr);
+        // nlohmann writes a double with as many digits as reading it back needs.
+        entry["gain_db"] = region.settings.gainDb;
+        entry["fade_in"] = region.settings.fadeIn;
+        entry["fade_out"] = region.settings.fadeOut;
+        regions.push_back(std::move(entry));
+    }
+    json["regions"] = std::move(regions);
     return json.dump(2) + "\n";
 }
 
@@ -58,42 +108,48 @@ Result<AudioProject, AudioEditorError> ParseProject(const std::string_view text)
         format == json.end() || !format->is_string() || format->get<std::string>() != kProjectFormat) {
         return Engine::Base::Err(Invalid("not an audio editor project"));
     }
-    if (const auto version = json.find("version");
-        version == json.end() || !version->is_number_integer() || version->get<std::int64_t>() != kProjectVersion) {
+    const auto version = json.find("version");
+    if (version == json.end() || !version->is_number_integer() ||
+        (version->get<std::int64_t>() != 1 && version->get<std::int64_t>() != kProjectVersion)) {
         return Engine::Base::Err(Invalid("a project version this editor does not read"));
     }
-    if (json.size() != kFields.size()) return Engine::Base::Err(Invalid("not the fields of version 1"));
-    for (const std::string_view field : kFields) {
-        if (!json.contains(field)) return Engine::Base::Err(Invalid("no field " + std::string(field)));
+    const bool first = version->get<std::int64_t>() == 1;
+    if (first ? !HasExactly(json, kFieldsV1) : !HasExactly(json, kFieldsV2)) {
+        return Engine::Base::Err(Invalid(first ? "not the fields of version 1" : "not the fields of version 2"));
     }
     AudioProject project;
-    ExportRequest& request = project.request;
-    const auto textField = [&json](const char* name, std::string& out) {
-        const Json& value = json.at(name);
-        if (!value.is_string()) return false;
-        out = value.get<std::string>();
-        return true;
-    };
-    if (!textField("source", request.sourcePath) || !textField("asset_root", request.assetRoot) ||
-        !textField("asset_catalog", request.catalogPath) || !textField("id", request.registration.id) ||
-        !textField("path", request.registration.path)) {
-        return Engine::Base::Err(Invalid("a path or the id is not a string"));
+    ExportBatch& batch = project.batch;
+    if (!TextField(json, "source", batch.sourcePath) || !TextField(json, "asset_root", batch.assetRoot) ||
+        !TextField(json, "asset_catalog", batch.catalogPath)) {
+        return Engine::Base::Err(Invalid("a path is not a string"));
     }
-    const Json& start = json.at("trim_start");
-    const Json& end = json.at("trim_end");
-    const Json& gain = json.at("gain_db");
-    if (!start.is_number_unsigned() || !(end.is_null() || end.is_number_unsigned()) || !gain.is_number()) {
-        return Engine::Base::Err(Invalid("the trim or the gain is not a number"));
+    if (first) {
+        // Version 1 is one region without fades.
+        SoundRegion region;
+        if (!ReadRegion(json, false, region)) return Engine::Base::Err(Invalid("the id, a trim or the gain is wrong"));
+        batch.regions.push_back(std::move(region));
+        return project;
     }
-    request.settings.trimStart = start.get<std::size_t>();
-    if (!end.is_null()) request.settings.trimEnd = end.get<std::size_t>();
-    request.settings.gainDb = gain.get<double>();
+    const Json& regions = json.at("regions");
+    if (!regions.is_array() || regions.empty()) return Engine::Base::Err(Invalid("the project has no region"));
+    for (const Json& entry : regions) {
+        SoundRegion region;
+        if (!HasExactly(entry, kRegionFields) || !ReadRegion(entry, true, region)) {
+            return Engine::Base::Err(Invalid("a region is not the fields of version 2"));
+        }
+        batch.regions.push_back(std::move(region));
+    }
     return project;
 }
 
 Result<void, AudioEditorError> SaveProject(const std::string& path, const AudioProject& project) {
-    if (!project.request.assetRoot.empty()) {
-        const auto within = Engine::IO::FS::IsNativePathWithin(path, project.request.assetRoot);
+    // ParseProject refuses a project without a region, so none is written.
+    if (project.batch.regions.empty()) {
+        return Engine::Base::Err(AudioEditorError::Make(AudioEditorErrorCode::InvalidProject,
+                                                        "the project has no region", path));
+    }
+    if (!project.batch.assetRoot.empty()) {
+        const auto within = Engine::IO::FS::IsNativePathWithin(path, project.batch.assetRoot);
         if (!within) {
             return Engine::Base::Err(AudioEditorError::Make(AudioEditorErrorCode::WriteFailed,
                                                             "cannot compare the project with the asset root",

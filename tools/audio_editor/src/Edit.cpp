@@ -20,6 +20,13 @@ Result<void, AudioEditorError> ValidateSettings(const EditSettings& settings, co
                                                         "the gain is outside the editor's range",
                                                         std::to_string(settings.gainDb) + " dB"));
     }
+    const std::size_t kept = end - settings.trimStart;
+    if (settings.fadeIn > kept || settings.fadeOut > kept - settings.fadeIn) {
+        return Engine::Base::Err(AudioEditorError::Make(
+            AudioEditorErrorCode::InvalidSettings, "the fades are longer than the trim",
+            std::to_string(settings.fadeIn) + " + " + std::to_string(settings.fadeOut) + " of " +
+                std::to_string(kept) + " frames"));
+    }
     return {};
 }
 
@@ -36,7 +43,17 @@ Result<std::vector<std::vector<double>>, AudioEditorError> RenderPlanes(const De
     for (const std::vector<double>& plane : source.planes) {
         std::vector<double> edited(plane.begin() + static_cast<std::ptrdiff_t>(settings.trimStart),
                                    plane.begin() + static_cast<std::ptrdiff_t>(end));
-        for (double& sample : edited) sample *= factor;
+        const std::size_t count = edited.size();
+        for (std::size_t frame = 0; frame < count; ++frame) {
+            double sample = edited[frame] * factor;
+            if (frame < settings.fadeIn) {
+                sample *= static_cast<double>(frame) / static_cast<double>(settings.fadeIn);
+            }
+            if (const std::size_t fromEnd = count - 1 - frame; fromEnd < settings.fadeOut) {
+                sample *= static_cast<double>(fromEnd) / static_cast<double>(settings.fadeOut);
+            }
+            edited[frame] = sample;
+        }
         planes.push_back(Resample(edited, source.sampleRate, Engine::Audio::kSampleRate));
     }
     // A trim shorter than one output frame (a source above kSampleRate)

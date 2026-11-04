@@ -614,7 +614,7 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
 - audio_editor 只管片段，不知道事件，也不寫 event_sounds 檔（DI 8 不動）；
 - 本批不依賴架構卡，也不依賴 PR #142（架構評估引用的條文，2026-11-04 仍未合併）。
 
-**前提**：#141（`-edit`）合併後才開工，分支從 master 開。
+**前提**：~~#141（`-edit`）合併後才開工，分支從 master 開。~~ 2026-11-04 更正：這是 Claude 自己加的前提，架構評估寫的是「這一批不依賴架構卡，可以先做」。你說「照建議。繼續」，並指出這一點，所以現在開工。本批接在 #141 的分支 `claude/v8-tool-audio-editor-edit` 上，同一條功能線，不另開 PR。接在哪條分支是 Claude 照「少開 PR」選的，你沒有另外選。
 
 **不做**：
 - 拼接與時間軸：各段之間沒有先後，也不放在同一條時間上；
@@ -726,6 +726,64 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
 
 估時 8～12 h（不含 L3）。
 
+### 實作後的結果（2026-11-04）
+
+件數の突き合わせ：一致。第二輪宣告 18 條、18 條 killed；第三輪 3 條、3 條 killed；stale 0。
+
+- 判定 1～6：本機 macOS 通過。
+  - 框架樹 `build/target/_build/framework` 的 ctest 69／69（`ctest-framework.txt`）；核心測試 27 個案例。
+  - 第一次跑完整 ctest 時，`os.boundary_guard` 失敗：測試裡的 `#ifdef _WIN32` 違反 OS 層的規則（只有 OS 層可以分平台）。這是測試的錯。改成問 `Files::SamePathComponent`，測試多連 `GYO::Os`，重跑後 69／69。
+  - 判定 1 的 SHA-256：五個 WAV 和基準 5／5 相同（`build/evidence/tool-v8-audio-editor-regions/regression/compare.txt`）。
+  - 判定 1 的單元測試（version 1 讀成一段）比較的兩邊都經過新的 `ExportSounds`，所以不是獨立的證據。獨立的只有 SHA-256 的比對。
+- 判定 7（GUI）：等你試用。
+- 審査者（Opus 5.5／high）指出的事，都已修：
+  - **缺陷**：兩個 path 只差大小寫時，在 Windows 上是同一個檔案，卻沒有擋下。改成照 OS 層的 `Files::SamePathComponent` 逐段比對：Windows 上不分大小寫，其他平台逐位元組。
+  - **缺陷**：一段把 path 讓出來、另一段在同一次匯出登錄了它時，報告卻說那個檔案「已經沒有登錄」。改成不報告。
+  - **缺陷**：在視窗裡開 WAV 會把區段清成一段（例如工程檔的原檔搬走之後重新指定）。改成保留全部區段，不合的區段在狀態列點名；讀不了的 WAV 不改變現在的原檔。這改了 `-edit` 的行為：以前開 WAV 會重設裁剪。
+  - **測試缺口**，已補：
+    - 判定 3 加了每個條目的 path、每份報告的 path 與幀數；
+    - 判定 4 的「`./`」那一例改了註解：它是被 catalog 的規則擋下的；另加大小寫不同的例子（只在 Windows 上期待拒絕）；
+    - 判定 5 加了 version 1 的嚴格性（多一欄、少一欄）；
+    - 新增兩個案例：寫到一半失敗、path 讓出後被別段登錄。
+  - **小問題**，已修：
+    - `regions` 是空的工程檔不存；
+    - 命令列的說明寫出工程檔無效時回 4；
+    - 在波形上點擊後馬上收緊淡入淡出的範圍。
+  - **小問題**，不修，記為範圍的限界：同一次匯出裡，一段把 path 讓給另一段時，順序有影響。讓出的那段排在後面時，會被 catalog 的規則拒絕。
+- 検証者（Fable 5.1／high）核對 DI 3 的 1～5（用 24 個合成的情形跑 `export`，不改 repo）：
+  - 第 1、2、4、5 點：確認。
+  - 第 3 點：確認，附兩點更正，都已處理：
+    - 大小寫不同的 path 漏掉（同上，已修；macOS 仍會漏，見下）；
+    - 測試的註解（同上）。
+  - 措辭的建議，已寫進下面的新措辭：
+    - 「the catalog entry with the same id」的「same」沒有清楚的對象；
+    - 收緊的部分（同一次匯出裡 id 與檔案不重複、任何一段被拒絕就什麼都不寫）不在句子裡。
+  - 検証者的報告沒有存檔；結論寫在這裡。它的實驗腳本放在 `/private/tmp/claude-501/verify-di3/`，那個位置會消失，所以不當證據。
+- 突變：
+  - 第一輪：16 條，15 killed（`build/evidence/tool-v8-audio-editor-regions/mutations-run1.txt`）。
+    - 存活的是 `ae-gui-preview-first-region`（視窗固定播第一段）。和事前預測的一樣：視窗的邏輯沒有自動測試，只靠判定 7。
+    - 這條已從目錄拿掉，否則合併前的完整一輪會一直失敗。
+  - 修正後新增 3 條：`ae-export-reports-taken-path`、`ae-export-orphans-unnamed`、`ae-project-v1-extra-field`；`ae-export-duplicate-file` 跟著程式改了位置。
+  - 第二輪：18 條，18 killed（`mutations-run2.txt`，也複製成 `mutations.txt`）。
+  - 第三輪：之後判定 4 的測試又改了一次（OS 層的守衛不准在 OS 層外用 `_WIN32`，改成問 OS 層），所以重跑被它殺的 3 條，3 killed（`mutations-run3.txt`）。
+  - `ae-export-duplicate-file` 只在能建目錄連結的機器上被殺（Windows 沒有權限時，那段測試會跳過）。
+- 範圍的限界：
+  - **macOS 的大小寫**：macOS 預設的磁碟不分大小寫，但 OS 層在 macOS 上逐位元組比對（os-subsystem D56），所以只差大小寫的兩個 path 在 macOS 上仍會寫到同一個檔案。
+  - **寫到一半失敗**：已寫的片段沒有登錄，錯誤訊息會列出它們。單段匯出原本也會這樣，多段時更容易碰到。不做回滾，因為刪除可能連帶刪掉被覆蓋的舊版本。
+- **發現（不是本批造成的，只報告）**：
+  - 單段的 `convert --path audio/Other.wav` 會蓋掉另一個條目已登錄的 `audio/other.wav`（検証者的 E2，在不分大小寫的磁碟上），違反 DI 3 的「其他檔案不碰」。
+  - 這要拿新的 path 和 catalog 裡其他條目的檔案比對，屬於登錄規則（framework 的 catalog 規則）。可以另排一批。
+
+### Design Invariant 3 的新措辭（檢驗後的版本，要你核准）
+
+「3. The editor writes only what it registers: for each exported clip, its output file and the catalog entry with that clip's id. One export may write several clips; within it the ids are distinct and no two clips are one file, and when any clip is refused nothing is written. A write that fails after others leaves the clips already written unregistered, and the editor names them. It leaves every other entry, every other file and product data (such as a product's sound cue table) untouched. …」（之後關於 atomic replace 與 content contract 的句子照舊。）
+
+和事前宣告的版本相比，多了兩句：
+- 收緊的部分（id 不重複、檔案不重複、任何一段被拒絕就什麼都不寫）；
+- 寫到一半失敗時的例外。
+
+§14.4 的 1～5 照上一節，加上本節第 3 點的更正。
+
 ## 實作順序（提案）
 
 ```text
@@ -735,7 +793,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-audio-editor-convert    「high（重新取樣局部 xhigh）｜Opus 5.5｜核心程式庫＋CLI：讀 WAV、轉換（演算法等價）、輸出並登錄 catalog」
 │   ├── v8-tool-framework-shell         「medium～high｜Opus 5.5｜工具共用層 tools/framework/：從 ui_editor 搬出外殼四塊，行為不變」（PR #123，已合併）
 │   ├── v8-tool-audio-editor-edit       「high｜Opus 5.5｜GUI：播放、波形、資訊、裁剪、增益、工程檔」（PR #141）
-│   └── v8-tool-audio-editor-regions    「high｜Opus 5.5｜一個原檔切多段、一次匯出、淡入淡出」（事前宣告已核准；#141 合併後開工）
+│   └── v8-tool-audio-editor-regions    「high｜Opus 5.5｜一個原檔切多段、一次匯出、淡入淡出」（事前宣告已核准；2026-11-04 開工，接在 #141）
 │
 ├── framework-rework-line               「PR #123 的整改，工具側（2026-11-01 依架構整改計畫重排）：全部等架構的 PR A 合併」
 │   ├── v8-tool-ui-editor-path-dialog-adopt「high｜Opus 5.5｜T1：ui_editor 改呼叫 Engine 的選擇窗（和 T3a 一起做）」
@@ -758,7 +816,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-audio-editor-convert` | high（局部 xhigh）｜Opus 5.5 | 6～10 h | 工具登錄（`tools.csv`、`project.json`）、核心程式庫與 CLI；照上方事前宣告通過；catalog 條目正確；突變檢查 |
 | `v8-tool-framework-shell` | medium～high｜Opus 5.5 | 3～5 h | `tools/framework/` 有 ImGui＋SDL 宿主、系統選擇窗、檔案存取、唯讀 catalog 掛載、catalog 寫入（從音效工具搬入）；ui_editor 改用它、測試全過；Design Invariants＋守衛；`framework` 加進保留名 |
 | `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過。事前宣告已核准，2026-11-03 開工時更新（上方）；等 GYO::Audio 播放控制層合併後才實作 |
-| `v8-tool-audio-editor-regions` | high｜Opus 5.5 | 8～12 h | 多段匯出、淡入淡出、工程檔 version 2、`export` 命令；DI 3 的措辭改成複數（要你同意）；使用者在 GUI 上試過。事前宣告在上方，2026-11-04 核准；#141 合併後開工 |
+| `v8-tool-audio-editor-regions` | high｜Opus 5.5 | 8～12 h | 多段匯出、淡入淡出、工程檔 version 2、`export` 命令；DI 3 的措辭改成複數（要你同意）；使用者在 GUI 上試過。事前宣告在上方，2026-11-04 核准並開工（接在 #141 的分支） |
 | `v8-tool-ui-editor-path-dialog-adopt`（T1） | high｜Opus 5.5 | 和 T3a 合計 5～7 h | 等 PR A 合併（含 `v8-engine-platform-path-dialog`）；和 T3a 一起做，因為舊宿主交不出 `SdlPlatform&`（架構計畫 D-4）。`SdlPathDialogs` 改收 `SdlPlatform&`，只留用途↔tag 對照與每幀套用；`PathDialog.hpp` 不再 include framework；CMake 具名 `GYO::PlatformSDL`；ui_toolchain.md Design Invariant 1 改寫（要你同意）。`pathDialogOpen_`（`EditorApp.cpp`）加「答案不來」時的恢復規則：Engine 新的 Design Invariant 10 只保證最多一個答案。守衛加 `GYO::PlatformSDL`（放寬，§14.4 出示 1～5 並經你核准）。L3 實機（Windows 優先）：選檔、取消、非 ASCII 路徑、對話窗開著時關視窗、答案不來。事前宣告帶入架構批的範圍限界：真實 OS 對話窗的回呼執行緒、Linux portal 的 pump、平台或父視窗銷毀時的行為，CI 都量不到 |
 | `v8-tool-ui-editor-shell-adopt`（T3a） | high｜Opus 5.5 | （見 T1） | 等 PR A 合併（含 `v8-framework-shell`）。GUI 用 `RunImGuiShell`，cli 用 `RunHeadlessShell`（命令列錯誤印 help、回 2）；資產預覽用 `NativeRenderer(context.renderer)`，ui_editor 自己連 `GYO::RenderBackendSDLNative`（platform-sdl Replacement Criteria 2 的新例外，Engine 的貼圖 API 另案）。守衛加 `GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative`，拿掉 `GYO::ToolFrameworkGui`（§14.4）；突變 `ui-guard-native-target` 改寫。GUI 由你試過 |
 | `v8-tool-user-files-adopt`（T2） | medium～high｜Opus 5.5 | 2～3 h | 等 PR A 合併（含 `v8-engine-io-user-files`）。ui_editor 的 `DocumentSession` 改呼叫 engine/io；audio_editor 的讀寫改用 `ReadAllBytes` 與 `WriteFileAtomically`（暫存檔名會變）。`ProbeFileStamp` 與 `ReadAllBytes` 都明確傳 `maxBytes`（預設 64 MB）。`AbsolutePath` 留在 framework 核心（架構計畫 D-2），ui_editor 繼續用那一份。audio_editor 現在完全沒用 `FileService`，改用 engine/io 是新依賴：CMake 具名 `GYO::Engine`，守衛加 `engine/io/` 與 `GYO::Engine`（放寬，§14.4）；ui_editor 的守衛預期不變，開工前確認。兩個工具的測試照舊通過 |

@@ -8,6 +8,8 @@
 #include "gyo/audio_editor/WavFile.hpp"
 #include "gyo/audio_editor/Waveform.hpp"
 
+#include "AudioEditorTestSupport.hpp"
+
 #include "engine/audio/AudioFormat.hpp"
 #include "engine/audio/ClipBank.hpp"
 #include "engine/audio/Mixer.hpp"
@@ -28,98 +30,7 @@
 // (docs/tools/plans/v8/assets.md). All are deterministic and run once.
 
 using namespace Gyo::Tools::AudioEditor;
-
-namespace {
-
-namespace Audio = Engine::Audio;
-
-const std::filesystem::path kReference = std::filesystem::path(GYO_AUDIO_EDITOR_FIXTURES) / "reference";
-const Engine::Time::TimePoint kAnchor =
-    Engine::Time::TimePoint{} + std::chrono::duration_cast<Engine::Time::Duration>(std::chrono::seconds(10));
-
-std::vector<std::byte> ReadBytes(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    const std::vector<char> chars((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    std::vector<std::byte> bytes(chars.size());
-    for (std::size_t index = 0; index < chars.size(); ++index) bytes[index] = static_cast<std::byte>(chars[index]);
-    return bytes;
-}
-
-std::string ReadText(const std::filesystem::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-}
-
-std::string Utf8(const std::filesystem::path& path) {
-    const auto text = path.generic_u8string();
-    return {reinterpret_cast<const char*>(text.data()), text.size()};
-}
-
-std::filesystem::path TemporaryDirectory(const std::string& name) {
-    const auto path = std::filesystem::temp_directory_path() / ("gyo_audio_editor_edit_tests_" + name);
-    std::filesystem::remove_all(path);
-    std::filesystem::create_directories(path);
-    return path;
-}
-
-DecodedWav Decode(const char* name) {
-    auto decoded = DecodeWav(ReadBytes(kReference / (std::string(name) + ".wav")));
-    REQUIRE(decoded.has_value());
-    return std::move(decoded).value();
-}
-
-// A synthetic source: channel c, frame f is (f + 1) / 1000 * (c ? -1 : 1).
-DecodedWav Synthetic(const std::uint32_t rate, const std::size_t frames, const std::size_t channels = 2) {
-    DecodedWav source;
-    source.sampleRate = rate;
-    source.formatTag = 3;
-    source.bits = 32;
-    for (std::size_t channel = 0; channel < channels; ++channel) {
-        std::vector<double> plane(frames);
-        for (std::size_t frame = 0; frame < frames; ++frame) {
-            plane[frame] = static_cast<double>(frame + 1) / 1000.0 * (channel == 0 ? 1.0 : -1.0);
-        }
-        source.planes.push_back(std::move(plane));
-    }
-    return source;
-}
-
-// The interleaved samples of a canonical 44-byte-header PCM16 WAV (EncodePcm16Wav).
-std::vector<std::int16_t> DataChunk(const std::vector<std::byte>& wav) {
-    REQUIRE(wav.size() >= 44);
-    std::vector<std::int16_t> samples((wav.size() - 44) / 2);
-    for (std::size_t index = 0; index < samples.size(); ++index) {
-        const auto low = std::to_integer<std::uint16_t>(wav[44 + index * 2]);
-        const auto high = std::to_integer<std::uint16_t>(wav[45 + index * 2]);
-        samples[index] = static_cast<std::int16_t>(static_cast<std::uint16_t>(low | (high << 8)));
-    }
-    return samples;
-}
-
-struct PreviewRig final {
-    std::unique_ptr<Audio::Mixer> mixer; // the player keeps its address
-    std::optional<PreviewPlayer> player;
-};
-
-// The preview's own mixer configuration, rendered by the test's thread.
-PreviewRig MakePreviewRig() {
-    auto created = Audio::Mixer::Create(PreviewMixerConfig(), Audio::ClipBank{});
-    REQUIRE(created.has_value());
-    PreviewRig rig{std::make_unique<Audio::Mixer>(std::move(created).value()), std::nullopt};
-    auto submitter = rig.mixer->CreateSubmitter();
-    REQUIRE(submitter.has_value());
-    rig.player.emplace(std::move(submitter).value(), rig.mixer.get());
-    return rig;
-}
-
-std::vector<std::int16_t> RenderBlock(Audio::Mixer& mixer, const std::uint32_t frames,
-                                      const Engine::Time::TimePoint anchor) {
-    std::vector<std::int16_t> out(std::size_t{frames} * Audio::kChannels, 0x5555);
-    mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
-    return out;
-}
-
-} // namespace
+using namespace Gyo::Tools::AudioEditor::TestSupport;
 
 TEST_CASE("Default settings render what ConvertToClip converts") {
     for (const char* name :
@@ -384,9 +295,9 @@ TEST_CASE("A waveform wider than its samples repeats them, and no samples give n
 TEST_CASE("A project reads back as saved, and is refused inside the asset root or with another version") {
     const auto root = TemporaryDirectory("project");
     AudioProject project;
-    project.request = {Utf8(root / "sources" / std::filesystem::path(u8"シャッター.wav")), Utf8(root / "assets"),
-                       Utf8(root / "assets" / "asset_catalog.json"), {"game.audio.shutter", "audio/shutter.wav"},
-                       {.trimStart = 12, .trimEnd = 3400, .gainDb = -4.7}};
+    project.batch = {Utf8(root / "sources" / std::filesystem::path(u8"シャッター.wav")), Utf8(root / "assets"),
+                     Utf8(root / "assets" / "asset_catalog.json"),
+                     {{{"game.audio.shutter", "audio/shutter.wav"}, {.trimStart = 12, .trimEnd = 3400, .gainDb = -4.7}}}};
     const std::string path = Utf8(root / "projects" / "shutter.audio.json");
     REQUIRE(SaveProject(path, project).has_value());
     const auto loaded = LoadProject(path);
@@ -395,12 +306,12 @@ TEST_CASE("A project reads back as saved, and is refused inside the asset root o
     CHECK(ProjectText(*loaded) == ReadText(root / "projects" / "shutter.audio.json"));
 
     AudioProject untrimmed = project;
-    untrimmed.request.settings = {.gainDb = 0.1 + 0.2}; // a double that needs all its digits
+    untrimmed.batch.regions[0].settings = {.gainDb = 0.1 + 0.2}; // a double that needs all its digits
     REQUIRE(SaveProject(path, untrimmed).has_value());
     const auto again = LoadProject(path);
     REQUIRE(again.has_value());
     CHECK(*again == untrimmed);
-    CHECK_FALSE(again->request.settings.trimEnd.has_value());
+    CHECK_FALSE(again->batch.regions[0].settings.trimEnd.has_value());
 
     std::filesystem::create_directories(root / "assets");
     const std::string inside = Utf8(root / "assets" / "audio" / "shutter.audio.json");
@@ -410,9 +321,10 @@ TEST_CASE("A project reads back as saved, and is refused inside the asset root o
     CHECK_FALSE(std::filesystem::exists(root / "assets" / "audio"));
 
     std::string text = ProjectText(project);
-    const auto at = text.find("\"version\": 1");
+    // Version 2 is what the editor writes now (v8-tool-audio-editor-regions); 3 is unknown.
+    const auto at = text.find("\"version\": 2");
     REQUIRE(at != std::string::npos);
-    text.replace(at, 12, "\"version\": 2");
+    text.replace(at, 12, "\"version\": 3");
     const auto newer = ParseProject(text);
     REQUIRE_FALSE(newer.has_value());
     CHECK(newer.error().code == AudioEditorErrorCode::InvalidProject);

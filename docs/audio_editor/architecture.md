@@ -64,14 +64,21 @@ repair or rebuild the editor.
 ## Editing and preview
 
 `gyo_audio_editor edit [<project.json> | <source.wav>]` opens the window
-(`v8-tool-audio-editor-edit`); `info` and `convert` stay command-line only.
+(`v8-tool-audio-editor-edit`); `info`, `convert` and `export <project.json>`
+(every region of a project, `v8-tool-audio-editor-regions`) are command-line
+only.
 
 - **Settings** (`Edit.hpp`): a trim in the source's own frames (start, and an
-  end or "to the source's end") and a gain in dB, from -60 to +24. A trim that
-  keeps no frame, before or after resampling, is refused (`InvalidSettings`),
-  so export never writes a clip the engine's `ClipBank` refuses.
-- **One render** (`RenderClip`): trim, gain (`x * 10^(dB / 20)`), resample,
-  quantize. Export and the preview both call it with the same dither seed (the
+  end or "to the source's end"), a gain in dB, from -60 to +24, and a fade in
+  and a fade out, also in source frames. A trim that keeps no frame, before or
+  after resampling, is refused (`InvalidSettings`), so export never writes a
+  clip the engine's `ClipBank` refuses; so are fades longer together than the
+  trim.
+- **One render** (`RenderClip`): trim, gain (`x * 10^(dB / 20)`), fades,
+  resample, quantize. The fades are linear over the source frames: of the n
+  trimmed frames, frame i is multiplied by `i / fadeIn` while `i < fadeIn` and
+  by `(n - 1 - i) / fadeOut` while `n - 1 - i < fadeOut`, so a fade starts or
+  ends in silence. Export and the preview both call it with the same dither seed (the
   id's), so the preview's samples are export's data chunk (Design Invariant 6).
   The default settings give the bytes `convert` gave before.
 - **Preview** (`PreviewPlayer.hpp`): plays on a `GYO::Audio` mixer opened through
@@ -83,6 +90,23 @@ repair or rebuild the editor.
   Without an audio device the editor still edits and exports; nothing is heard.
 - **Waveform** (`Waveform.hpp`): the extremes of each column's samples, drawn
   with the gain applied so clipping shows; outside the trim is dimmed.
+- **Regions** (`SoundExport.hpp`): a project cuts any number of clips from one
+  source, each with its own id, path and settings; they may overlap in the
+  source and have no order in time (no timeline, no mixing: the Replacement
+  Criteria). `ExportSounds` checks every region and renders every clip before
+  it writes anything: no region, two regions with one id, two paths that name
+  one file, a path that is the source or the catalog, or a region the catalog
+  or its settings refuse, and nothing is written. Two resolved paths are one
+  file when the OS layer compares each name equal (`Files::SamePathComponent`:
+  ignoring case on Windows, byte for byte elsewhere, so on macOS's default
+  volume two paths that differ only in case are still missed). Then the clips
+  are written in order and the catalog once, last, with every entry. A write
+  that fails leaves the catalog untouched; the clips written before it stay,
+  unregistered, and the error names them. A path one region gives up and
+  another registers is not reported as left behind. `ExportSound` is the same
+  for one region. The window edits the selected region, previews it and
+  exports all of them; opening a WAV keeps every region and names those that
+  do not fit it.
 - **Window**: the framework's ImGui shell (`RunImGuiShell`); its context lends
   Engine's platform, whose path dialogs open WAVs, projects, the asset root and
   the catalog. The editor reaches `GYO::PlatformSDL` only through that binding's
@@ -93,20 +117,29 @@ repair or rebuild the editor.
 
 The editor's own format (Design Invariants 4 and 5); the game never reads it,
 and only the editor writes it, so it is not a Data Contract with the runtime.
-A UTF-8 JSON object with exactly these fields:
+A UTF-8 JSON object with exactly these fields (version 2,
+`v8-tool-audio-editor-regions`):
 
 | Field | Value |
 |---|---|
 | `format` | `"gyo.audio_editor.project"` |
-| `version` | `1`; another version is refused |
+| `version` | `2`; version 1 is read as one region without fades, another version is refused |
 | `source` | the source WAV, as it was opened (UTF-8) |
 | `asset_root`, `asset_catalog` | where export writes, as for `convert` |
-| `id`, `path` | the catalog entry |
+| `regions` | a non-empty array of regions, each an object with exactly the fields below |
+
+| Region field | Value |
+|---|---|
+| `id`, `path` | the region's catalog entry |
 | `trim_start` | first source frame kept |
 | `trim_end` | one past the last frame kept, or `null` for the source's end |
 | `gain_db` | the gain, written with every digit it needs |
+| `fade_in`, `fade_out` | the fades, in source frames |
+
+Version 1 had `id`, `path`, `trim_start`, `trim_end` and `gain_db` at the top
+level, one region; the editor reads it and writes version 2.
 
 The same project always gives the same text. A file with other fields, a field
-of another type or another `format` is refused (`InvalidProject`); saving it
+of another type, another `format` or no region is refused (`InvalidProject`); saving it
 inside its own asset root is refused too. The settings are checked against the
 source when it is opened and again on export.
