@@ -735,7 +735,7 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
   - 第一次跑完整 ctest 時，`os.boundary_guard` 失敗：測試裡的 `#ifdef _WIN32` 違反 OS 層的規則（只有 OS 層可以分平台）。這是測試的錯。改成問 `Files::SamePathComponent`，測試多連 `GYO::Os`，重跑後 69／69。
   - 判定 1 的 SHA-256：五個 WAV 和基準 5／5 相同（`build/evidence/tool-v8-audio-editor-regions/regression/compare.txt`）。
   - 判定 1 的單元測試（version 1 讀成一段）比較的兩邊都經過新的 `ExportSounds`，所以不是獨立的證據。獨立的只有 SHA-256 的比對。
-- 判定 7（GUI）：等你試用。
+- 判定 7（GUI）：**未判定**。2026-11-04 你開了視窗、看過，沒有照 1～6 項試。你的話：「感覺不太符合我的需求，不過先這樣。等model viewer出來了。我一起聯動看看效果。」所以判定 7 不算通過，延到 Model Viewer 出來後和它一起試；哪裡不符合需求，那時再一起看。
 - 審査者（Opus 5.5／high）指出的事，都已修：
   - **缺陷**：兩個 path 只差大小寫時，在 Windows 上是同一個檔案，卻沒有擋下。改成照 OS 層的 `Files::SamePathComponent` 逐段比對：Windows 上不分大小寫，其他平台逐位元組。
   - **缺陷**：一段把 path 讓出來、另一段在同一次匯出登錄了它時，報告卻說那個檔案「已經沒有登錄」。改成不報告。
@@ -856,4 +856,5 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-anim-event-sound-owner` | （2026-11-04）「事件 → 聲音」由 framework 持有，是組合格式（建議形狀 `gyo.event_sounds`，架構卡 `v8-arch-event-sounds-contract`）；Engine 不動；聲音側選 B（每個動作一個事件、一段聲音）。audio_editor 只管片段（DI 8 不動），下一批是多段匯出（`v8-tool-audio-editor-regions`）。PvP 的 `sfx.json` 遷移由產品會話在契約落地後做 | 經架構會話轉述（不是原話）：使用者 2026-11-04 決定 |
 | `v8-tool-audio-editor-regions-predeclare` | （2026-11-04）`v8-tool-audio-editor-regions` 的事前宣告照草稿核准：改動、判定 1～7、突變 12 條、範圍的限界、模型表（上段；実装者／審査者 Opus 5.5／high、検証者 Fable 5.1／high），以及 DI 3 改成複數的措辭方向。DI 3 的 §14.4 1～5 在實作、突變、検証者核對後再交使用者核准 | 對「多段匯出的事前宣告（含 DI 3 改成複數）照草稿核准嗎？」答「照草稿核准」 |
 | `v8-tool-audio-editor-di3-plural` | （2026-11-04）核准 audio_editor Design Invariant 3 的新措辭（檢驗後的版本：每個匯出的片段各有輸出檔與該片段 id 的條目；一次匯出可寫多個，id 與檔案不重複，任何一段被拒絕就什麼都不寫；寫到一半失敗時已寫的片段不登錄、工具列出它們）。§14.4 的 1～5 與検証者的更正見「`v8-tool-audio-editor-regions` 的事前宣告」的「實作後的結果」 | 對「DI 3 的新措辭（assets.md）照檢驗後的版本核准嗎？」答「核准」 |
+| `v8-tool-audio-editor-l3-deferred` | （2026-11-04）`-edit`（判定 8）與 `-regions`（判定 7）的 GUI L3 延後，等 Model Viewer 出來後一起試。兩個判定都記為未判定，不是通過 | 「感覺不太符合我的需求，不過先這樣。等model viewer出來了。我一起聯動看看效果。」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |

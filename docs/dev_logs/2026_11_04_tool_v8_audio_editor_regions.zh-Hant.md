@@ -9,7 +9,7 @@
 **狀態：**
 - 程式、測試、突變、審查、DI 3 的檢驗都完成。
 - DI 3 的新措辭（§14.4）2026-11-04 核准，已寫進 `docs/audio_editor/architecture.md`（`v8-tool-audio-editor-di3-plural`）。
-- GUI 的試用（判定 7，L3 macOS）等你做。
+- GUI 的試用（判定 7）：**未判定**。你開了視窗、看過，說「感覺不太符合我的需求，不過先這樣」，延到 Model Viewer 出來後一起試（`v8-tool-audio-editor-l3-deferred`）。
 
 相關文件：
 - [事前宣告與結果](../tools/plans/v8/assets.md)「`v8-tool-audio-editor-regions` 的事前宣告」；
