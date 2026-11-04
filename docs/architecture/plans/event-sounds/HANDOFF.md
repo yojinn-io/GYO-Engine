@@ -45,6 +45,7 @@
 
 - 2026-11-04，使用者：「照建議處理」。三件事：(1) stale 3 條改錨後只重跑這三條；(2) 偏移函式收緊為「結果不是有限值就沒有值」（ES9 加兩個溢位案例、es-offset-overflow，es-offset-zero-clip 因收緊變等價而重新定義）；(3) 守衛變更核准。
 - 結果：test 樹重建成功、全量 CTest 125/125（54.3 s，`ctest_full_2.txt`）、ES 10 案例 190 斷言、守衛通過。改錨 3 條 3/3 killed（`mutations_reanchored_*.txt`）；偏移 5 條 5/5（`mutations_offset_tightened.txt`）；最終程式上本批 33 條完整重跑 33/33 killed、stale 0（`mutations_event_sounds_final.txt`）。D184 合計 25/25 killed（第一次 22 killed＋stale 3，改錨後 3/3）。
+- 2026-11-04：PR yojinn-io/GYO-Engine#144（base `claude/arch-layer-formats`）。#142 合併後把 base 改回 master；L1 的結果在 PR 上看。
 - **第 2 批完成**（14:45 JST）。實際約 1 h（13:50 起；估 3.5～5.5 h）；整卡約 1.5 h（估 5～8 h）。dev_log 與本批同一變更提交；PR 的 base 是 `claude/arch-layer-formats`（#142 未合併），#142 合併後改回 master。
 
 ## 估時（開工前，2026-11-04）
