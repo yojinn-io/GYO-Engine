@@ -88,8 +88,8 @@
       "id": "fw-cat-json-missing",
       "what": "The JSON binding is not built",
       "file": "framework/bindings/json/CMakeLists.txt",
-      "find": "add_library(gyo_tool_framework_json STATIC src/CatalogText.cpp)",
-      "replace": "return()\nadd_library(gyo_tool_framework_json STATIC src/CatalogText.cpp)",
+      "find": "add_library(gyo_tool_framework_json STATIC src/CatalogText.cpp src/EventSoundsText.cpp)",
+      "replace": "return()\nadd_library(gyo_tool_framework_json STATIC src/CatalogText.cpp src/EventSoundsText.cpp)",
       "target": "gyo_framework_tests",
       "expect_build_failure": true,
       "expect": "but no\\s+GYO::ToolFrameworkJson"

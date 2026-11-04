@@ -16,6 +16,7 @@ endfunction()
 add_library(gyo_tool_framework STATIC
     src/AbsolutePath.cpp
     src/CatalogPlan.cpp
+    src/EventSounds.cpp
     src/HeadlessShell.cpp
     src/ReadOnlyAssetCatalog.cpp
     src/UiTextInput.cpp
@@ -25,10 +26,12 @@ target_include_directories(gyo_tool_framework PUBLIC "${CMAKE_CURRENT_SOURCE_DIR
 target_compile_features(gyo_tool_framework PUBLIC cxx_std_20)
 # The catalog mount names engine/asset types; paths go to UTF-8 and the
 # command line comes as UTF-8 through GYO::Os. The text input mapping turns
-# Engine's input entries into Ui's (v8-input-ui-adapter).
+# Engine's input entries into Ui's (v8-input-ui-adapter). Event sounds bind to
+# Engine's event set (GYO::Model, in the public header) and check gains with
+# GYO::Audio (docs/framework/event-sounds.md).
 target_link_libraries(gyo_tool_framework
-    PUBLIC GYO::Engine GYO::Input GYO::Ui
-    PRIVATE GYO::Os
+    PUBLIC GYO::Engine GYO::Input GYO::Ui GYO::Model
+    PRIVATE GYO::Os GYO::Audio
 )
 set(_gyo_framework_targets gyo_tool_framework)
 

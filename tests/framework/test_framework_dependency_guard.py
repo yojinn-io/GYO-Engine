@@ -82,6 +82,23 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Input)\n"}),
                          ["framework/bindings/json/CMakeLists.txt: names GYO::Input"])
 
+    def test_model_and_audio_targets_in_the_core_pass(self):
+        # v8-arch-event-sounds-impl: gyo.event_sounds binds to Engine's event set and checks gains with Engine.
+        self.assertEqual(self.scan({
+            "framework/src/A.cpp": '#include "engine/model/AnimationEvents.hpp"\n#include "engine/audio/AudioFormat.hpp"\n',
+            "framework/CMakeLists.txt": "target_link_libraries(a PUBLIC GYO::Model PRIVATE GYO::Audio)\n",
+        }), [])
+
+    def test_audio_backend_target_in_the_core_fails(self):
+        # The SDL audio backend carries SDL; Engine's mixer alone is listed.
+        self.assertEqual(self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::AudioBackendSDL)\n"}),
+                         ["framework/CMakeLists.txt: names GYO::AudioBackendSDL"])
+
+    def test_model_target_in_the_json_binding_fails(self):
+        # The JSON binding reaches Engine's event set through the core and names it nowhere.
+        self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Model)\n"}),
+                         ["framework/bindings/json/CMakeLists.txt: names GYO::Model"])
+
     def test_ui_target_in_the_core_passes(self):
         # v8-input-ui-adapter: the products' shared text input mapping turns Engine's input entries into Ui's.
         self.assertEqual(self.scan({
