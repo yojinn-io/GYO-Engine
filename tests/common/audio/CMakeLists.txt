@@ -1,11 +1,23 @@
 # The mixer's sample-domain core is tested offline, without a device: the test
 # reaches the internal VoiceMixer header (engine/audio/src) on purpose, since
 # the public Mixer that wraps it arrives with v8-engine-audio-schedule.
-add_executable(gyo_audio_tests MixerTests.cpp ScheduleTests.cpp)
+add_executable(gyo_audio_tests MixerTests.cpp ScheduleTests.cpp CharacterizationTests.cpp StopTests.cpp ClipSlotTests.cpp PlayheadTests.cpp)
 target_include_directories(gyo_audio_tests PRIVATE ${PROJECT_SOURCE_DIR}/engine/audio/src)
 target_link_libraries(gyo_audio_tests PRIVATE GYO::Audio gyo_test_support doctest::doctest)
 add_test(NAME gyo_audio_tests COMMAND gyo_audio_tests)
 set_tests_properties(gyo_audio_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
+
+# Design Invariant 4: only Mixer::PlayheadOf reads the playhead board.
+add_test(NAME gyo_audio_board_readers
+         COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${PROJECT_SOURCE_DIR}/engine/audio/src
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/CheckBoardReaders.cmake)
+set_tests_properties(gyo_audio_board_readers PROPERTIES LABELS "cpu" TIMEOUT 60)
+
+# Replaces the global allocation functions, so it is its own executable.
+add_executable(gyo_audio_alloc_tests RenderAllocTests.cpp)
+target_link_libraries(gyo_audio_alloc_tests PRIVATE GYO::Audio doctest::doctest)
+add_test(NAME gyo_audio_alloc_tests COMMAND gyo_audio_alloc_tests)
+set_tests_properties(gyo_audio_alloc_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 
 # The mixer is a leaf above the time base: its links, private and interface
 # alike, are exactly GYO::Base and GYO::Time, so no SDL, asset or engine library

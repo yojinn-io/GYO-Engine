@@ -1,6 +1,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -184,6 +185,111 @@ TEST_CASE("Audio SDL output on the disk driver writes the mixer's samples where 
     bool atAnchor = false;
     for (const auto& anchor : anchors) atAnchor = atAnchor || anchor.firstFrame == sounding[0];
     CHECK(atAnchor);
+}
+
+TEST_CASE("Audio SDL output on the dummy driver stops, swaps and reports sounds while it runs") {
+    MixerConfig config;
+    config.clipSlotsPerSubmitter = 1;
+    auto created = Mixer::Create(config, ClipBank{});
+    REQUIRE(created.has_value());
+    auto submitter = created->CreateSubmitter();
+    REQUIRE(submitter.has_value());
+    SdlAudioOutput output = OpenOutput(std::move(created).value());
+    Mixer& mixer = output.OwnedMixer();
+    const std::vector<std::int16_t> longClip(480000, 300); // ten seconds
+    const auto load = [&](const std::vector<std::int16_t>& samples) {
+        return submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1,
+                                   kSampleRate);
+    };
+    auto first = load(longClip);
+    REQUIRE(first.has_value());
+    const SoundHandle sound = submitter->Play({*first, Engine::Time::Now()});
+    REQUIRE(sound);
+    CHECK(WaitFor([&] { return mixer.PlayheadOf(sound).status == Playhead::Status::Playing; }));
+    REQUIRE(submitter->Stop(sound, Engine::Time::Now()));
+    CHECK(WaitFor([&] { return mixer.PlayheadOf(sound).status == Playhead::Status::NotPlaying; }));
+    CHECK(mixer.Stats().stopsMatched == 1);
+    REQUIRE(submitter->UnloadClip(*first));
+    // The single slot comes back once the audio thread has taken the unload.
+    Engine::Base::Result<ClipId, AudioError> second = load(longClip);
+    CHECK(WaitFor([&] {
+        if (!second) second = load(longClip);
+        return second.has_value();
+    }));
+    REQUIRE(second.has_value());
+    const SoundHandle next = submitter->Play({*second, Engine::Time::Now()});
+    CHECK(WaitFor([&] { return mixer.PlayheadOf(next).status == Playhead::Status::Playing; }));
+    const MixerStats stats = mixer.Stats();
+    CHECK(stats.unloadsTaken == 1);
+    CHECK(stats.stopsSubmitted == stats.stopsMatched + stats.stopsUnmatched + stats.stopsDroppedQueueFull);
+}
+
+TEST_CASE("Audio SDL output on the disk driver plays a clip loaded after opening and stops it at its mapped frame") {
+    const char* path = std::getenv("SDL_AUDIO_DISK_OUTPUT_FILE");
+    REQUIRE(path != nullptr);
+    constexpr std::int16_t kLevel = 1000;
+    std::vector<Engine::Audio::Sdl::OutputAnchor> anchors;
+    Engine::Time::TimePoint stopAt{};
+    Engine::Time::TimePoint sentAt{};
+    {
+        MixerConfig config;
+        config.clipSlotsPerSubmitter = 1;
+        config.scheduleDelay = Engine::Time::Duration::zero();
+        auto created = Mixer::Create(config, ClipBank{});
+        REQUIRE(created.has_value());
+        auto submitter = created->CreateSubmitter();
+        REQUIRE(submitter.has_value());
+        Engine::Audio::Sdl::SdlAudioOutputConfig outputConfig;
+        outputConfig.anchorLogCapacity = 4096;
+        SdlAudioOutput output = OpenOutput(std::move(created).value(), outputConfig);
+        Mixer& mixer = output.OwnedMixer();
+        REQUIRE(WaitFor([&] { return mixer.Stats().renderedFrames > 4800; })); // output runs
+        const std::vector<std::int16_t> clip(480000, kLevel);
+        auto loaded =
+            submitter->LoadClip(Engine::Base::ConstSpan<std::int16_t>(clip.data(), clip.size()), 1, kSampleRate);
+        REQUIRE(loaded.has_value());
+        const SoundHandle sound = submitter->Play({*loaded, Engine::Time::Now()});
+        REQUIRE(sound);
+        REQUIRE(WaitFor([&] { return mixer.PlayheadOf(sound).status == Playhead::Status::Playing; }));
+        stopAt = Engine::Time::Now() + std::chrono::milliseconds(2);
+        sentAt = Engine::Time::Now();
+        REQUIRE(submitter->Stop(sound, stopAt));
+        REQUIRE(WaitFor([&] { return mixer.PlayheadOf(sound).status == Playhead::Status::NotPlaying; }));
+        CHECK(mixer.Stats().stopsMatched == 1);
+        static_cast<void>(output.TakeAnchors(anchors));
+        CHECK(output.Stats().anchorsDropped == 0);
+    }
+    std::ifstream file(path, std::ios::binary);
+    REQUIRE(file.good());
+    const std::vector<char> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    std::vector<std::uint64_t> sounding;
+    for (std::size_t frame = 0; frame * 4 < bytes.size(); ++frame) {
+        const auto lo = static_cast<std::uint8_t>(bytes[frame * 4]);
+        const auto hi = static_cast<std::uint8_t>(bytes[frame * 4 + 1]);
+        if (static_cast<std::int16_t>(lo | (hi << 8)) == kLevel) sounding.push_back(frame);
+    }
+    REQUIRE_FALSE(sounding.empty());
+    CHECK(sounding.back() - sounding.front() + 1 == sounding.size()); // one contiguous run
+    // The stop frame from the anchor of the block that took the stop: the last
+    // anchor read before it was sent, or the first one after (S16 little-endian).
+    const auto mapped = [&](const Engine::Audio::Sdl::OutputAnchor& anchor) {
+        const std::int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(stopAt - anchor.anchor).count();
+        const std::int64_t scaled = ns * 6 + 62500; // floor(ns * 48000 / 10^9 + 1/2)
+        const std::int64_t offset = scaled / 125000 - ((scaled % 125000 != 0 && scaled < 0) ? 1 : 0);
+        return static_cast<std::int64_t>(anchor.firstFrame) + offset;
+    };
+    std::vector<std::int64_t> candidates;
+    for (std::size_t i = 0; i < anchors.size(); ++i) {
+        const bool lastBefore = anchors[i].anchor <= sentAt && (i + 1 == anchors.size() || anchors[i + 1].anchor > sentAt);
+        const bool firstAfter = anchors[i].anchor > sentAt && (i == 0 || anchors[i - 1].anchor <= sentAt);
+        if (lastBefore || firstAfter) candidates.push_back(mapped(anchors[i]));
+    }
+    REQUIRE_FALSE(candidates.empty());
+    const auto end = static_cast<std::int64_t>(sounding.back()) + 1;
+    CAPTURE(end);
+    CAPTURE(candidates.front());
+    CAPTURE(candidates.back());
+    CHECK(std::find(candidates.begin(), candidates.end(), end) != candidates.end());
 }
 
 TEST_CASE("Audio SDL output reports an unavailable driver and leaves submitters usable") {
