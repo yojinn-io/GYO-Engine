@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' and the 'ro-' ids; the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' the 'ro-' ids, and v8-engine-sdl-renderer-texture, the 'rt-' ids; the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux; the rt-imgui ones need a tree with the ImGui binding, such as GYO_TOOLS=ui_editor;model_viewer), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
   "mutants": [
     {
       "id": "mv-writer-drops-last",
@@ -261,6 +261,34 @@
       "replace": "[](const PreparedPass&) { return true; }) || offscreen;",
       "target": "gyo_sdl_gpu_offscreen_smoke",
       "expect": "ReadFrame after a frame that stored nothing"
+    },
+    {
+      "id": "rt-upload-unchecked-bytes",
+      "what": "UploadTexture does not check that the bytes fill the rows (T1)",
+      "file": "engine/render/backend/sdl/src/SdlRenderer.cpp",
+      "find": "    if (rowPitch < row || rowPitch > INT_MAX || bytes.size() < needed) {",
+      "replace": "    if (rowPitch < row || rowPitch > INT_MAX) {",
+      "target": "gyo_sdl_renderer_texture_tests",
+      "expect": "an upload shorter than the rows need was accepted"
+    },
+    {
+      "id": "rt-imgui-id-after-release",
+      "what": "A released texture keeps its slot, so the binding still hands out its id (T2)",
+      "file": "engine/render/backend/sdl/src/SdlRenderer.cpp",
+      "find": "    SDL_DestroyTexture(slot->texture);\n    *slot = {};",
+      "replace": "    SDL_DestroyTexture(slot->texture);",
+      "target": "gyo_framework_imgui_tests",
+      "cases": "T2:*",
+      "expect": "a released texture still has an ImGui id"
+    },
+    {
+      "id": "rt-pitch-above-int-max",
+      "what": "UploadTexture lets a row pitch above INT_MAX reach SDL (not declared; added after review)",
+      "file": "engine/render/backend/sdl/src/SdlRenderer.cpp",
+      "find": "    if (rowPitch < row || rowPitch > INT_MAX || bytes.size() < needed) {",
+      "replace": "    if (rowPitch < row || bytes.size() < needed) {",
+      "target": "gyo_sdl_renderer_texture_tests",
+      "expect": "a row pitch above INT_MAX was accepted"
     }
   ]
 }

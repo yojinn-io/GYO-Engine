@@ -30,6 +30,9 @@ GYO::*Native (INTERFACE): the only targets that carry SDL3 to a user
 - **Neutral layer.** The ordinary backend headers (`SdlPlatform.hpp`, `SdlInput.hpp`, `SdlRenderer.hpp`,
   `SdlGpuRenderDevice.hpp`) neither include SDL directly nor indirectly and contain no `SDL_` symbol. Events reach
   observers as `PlatformEvent` (valid only during the call, not copyable), carrying an Engine-time `Timestamp()`.
+  `SdlRenderer` also holds streaming textures (`CreateStreamingTexture`, `UploadTexture` of RGBA8 sRGB rows with a
+  row pitch, `ReleaseTexture`), named by `SdlTextureHandle`; `NativeTexture` in the native layer gives the SDL texture
+  of a live handle and nullptr for any other (`v8-engine-sdl-renderer-texture`).
 - **Native layer.** Every API that carries an SDL type lives in a `*Native.hpp` under a separate include root
   (`engine/<backend>/native/include`), exposed by one INTERFACE target per backend: `GYO::PlatformSDLNative`,
   `GYO::InputBackendSDLNative`, `GYO::RenderBackendSDLNative` (only when the SDL renderer component is enabled).

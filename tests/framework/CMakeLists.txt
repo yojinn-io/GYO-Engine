@@ -57,6 +57,12 @@ if(TARGET GYO::ToolFrameworkImGui)
         WORKING_DIRECTORY "${_gyo_imgui_directory}")
     set_tests_properties(gyo_framework.imgui_shell_no_renderer PROPERTIES
         LABELS "editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=gyo-no-such-driver" TIMEOUT 30)
+    # T2 of v8-engine-sdl-renderer-texture, in the cpu set as well (L1).
+    add_test(NAME gyo_framework.imgui_texture
+        COMMAND gyo_framework_imgui_tests "--test-case=T2:*"
+        WORKING_DIRECTORY "${_gyo_imgui_directory}")
+    set_tests_properties(gyo_framework.imgui_texture PROPERTIES
+        LABELS "cpu;editor" ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_RENDER_DRIVER=software" TIMEOUT 30)
     unset(_gyo_imgui_directory)
 
     # The public headers need neither ImGui's nor SDL's include paths.

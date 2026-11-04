@@ -191,6 +191,14 @@ repair or rebuild the component.
   `BeginFrame` (before ImGui's frame), `Draw` (inside it), checks
   `WantsExit`, renders and calls `EndFrame`. ImGui is shut down before the
   client is destroyed, and the renderer after it.
+- A client shows pixels of its own (a preview read back from an offscreen GPU
+  device) as a texture of the binding's renderer: Engine's
+  `SdlRenderer::CreateStreamingTexture`, `UploadTexture` and `ReleaseTexture`,
+  and the binding's `ImGuiTextureId(renderer, texture)`, which gives the id
+  `ImGui::Image` takes while the texture lives and nothing after it is
+  released. It is the binding's adapter from Engine's texture to ImGui's id,
+  reachable only in the binding (Design Invariant 2); the client needs no
+  `*Native` target (`v8-engine-sdl-renderer-texture`).
 - A tool registers a catalog entry with the JSON binding's
   `RegisterAsset(text, entry, policy)`: the entry is Engine's
   `RawCatalogEntry` (id, type, path); the policy says whether the id may get

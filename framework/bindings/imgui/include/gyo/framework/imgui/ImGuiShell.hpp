@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include "engine/input/PhysicalInputFrame.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
@@ -69,6 +71,16 @@ public:
 // Called once the renderer exists and before ImGui is created. nullptr ends
 // the run with exit code 1.
 using ImGuiShellClientFactory = std::function<std::unique_ptr<ImGuiShellClient>(const ImGuiShellContext& context)>;
+
+// The ImGui texture id (ImTextureID holds it unchanged, as ImGui::Image takes
+// it) of a live texture of the binding's renderer (ImGuiShellContext::renderer,
+// SdlRenderer::CreateStreamingTexture). Nothing for any other handle: a
+// released texture, one never created, or another renderer's. The id is the
+// texture's until it is released; take it again each frame rather than keep it.
+// ImGui draws a frame's images after Draw, so release a texture in BeginFrame
+// (or one not drawn this frame), never after drawing it in the same Draw.
+[[nodiscard]] std::optional<std::uint64_t> ImGuiTextureId(const Engine::Render::Backend::Sdl::SdlRenderer& renderer,
+                                                          Engine::Render::Backend::Sdl::SdlTextureHandle texture);
 
 // RunWindowShell with the binding's own client, which creates the SDL
 // renderer, the factory's client, ImGui with a system CJK chrome font and
