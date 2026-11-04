@@ -1,6 +1,6 @@
 # 音效（GYO::Audio）：交接
 
-更新：2026-10-30。**狀態：`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值定為 60 ms（使用者決定）；`v8-engine-audio-record` 完成（2026-10-30，錨點版 L2：299／299 起音落在重建的 frame）。`v8-engine-audio` 四批全部完成；下一步是消費端的 `v8-product-sfx`（同一條 PR 線）。**
+更新：2026-10-31。**2026-10-31：`v8-engine-audio-control-plan` 完成（9 項照建議核准；Invariants 與 RC 寫進 audio.md，標 planned）；`v8-engine-audio-control` 六批全部完成（plan、baseline、stop、clips、playhead、live）；依決策 `-pr-line`，和工具線的 `v8-tool-audio-editor-edit` 同一條 PR 線，Engine 部分先在 `claude/v8-engine-audio-control`（未推送）（[CONTROL](CONTROL.md)）。** 以下是之前的狀態：**`v8-engine-audio-plan` 完成（2026-10-30 使用者核准，6 項待決事項照建議）；`v8-engine-audio-core` 完成（2026-10-30，本機 L1 與突變 9／9）；`v8-engine-audio-schedule` 完成（2026-10-30，本機 L1、xhigh 審查、突變 21／21＋TSan 4／4）；`v8-engine-audio-sdl` 完成（2026-10-30，本機 L1、突變 5／5）；`scheduleDelay` 的預設值定為 60 ms（使用者決定）；`v8-engine-audio-record` 完成（2026-10-30，錨點版 L2：299／299 起音落在重建的 frame）。`v8-engine-audio` 四批全部完成；下一步是消費端的 `v8-product-sfx`（同一條 PR 線）。**
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。依 Engine 計畫夾的慣例，不點名消費端。
 
 ## 現況
@@ -28,6 +28,18 @@
 - 2026-10-30：使用者說「開PR推送」。併入 origin/master 後本機 test 102／102、core 37／37，推送並開 PR（Engine 四批與消費端的音效批同一個 PR）。
 - 2026-10-30：`audio_sdl.disk` 在 macOS arm64 CI 偶發失敗（錨點記錄在 `TIMESCALE=0` 下被不等待的 disk 驅動填滿）：測試環境改為 `TIMESCALE=0.1` 並加入 100 ms 停頓的回歸測試；dev_log：[2026_10_30_engine_audio_disk_flake](../../../dev_logs/2026_10_30_engine_audio_disk_flake.zh-Hant.md)。
 - 2026-10-31：`v8-engine-audio-windows-blocks`（只量測）：Windows 11、i7-8750H、Realtek 內建喇叭（推定為預設裝置）、WASAPI。SDL 預設區塊就是 480，回呼最長間隔最大 11.0 ms → 需要約 44.4 ms，60 ms 足夠；真實裝置兩輪 299／299 準時。disk 驅動有 116～208 ms 的停頓，第一輪 anchored match 297／299（原因未切分；使用者選「A：照現狀記錄」，見決策紀錄 `v8-engine-audio-windows-disk`）。dev_log：[2026_10_31_engine_audio_windows_blocks](../../../dev_logs/2026_10_31_engine_audio_windows_blocks.zh-Hant.md)。
+- 2026-10-31：工具線轉來資產工具 `audio_editor` 預覽的需求：停止已送出的聲音、輸出執行中換片段、讀播放位置。這碰到 audio.md 的 Replacement Criteria 1、2 與 Invariant 7。使用者在「修補現有 Mixer」與「重建控制層」之間選「重建控制層」（保留樣本域與時間換算），並核准以 ultracode 規劃。workflow `v8-engine-audio-control-plan`（run `wf_38a2c8c8-6db`）：3 個提案、1 個審查者、1 個對抗式檢查（blocker 1、major 7、minor 12，全部納入）。計畫：[CONTROL](CONTROL.md)；dev_log：[2026_10_31_engine_audio_control_plan](../../../dev_logs/2026_10_31_engine_audio_control_plan.zh-Hant.md)。分支 `claude/v8-engine-audio-control`（未推送）。核准前不改 audio.md 與程式。
+- 2026-10-31：使用者「Approve as recommended」，9 項全部照建議（決策紀錄）。依 `-plan` 批的範圍：audio.md 寫入核准的 Invariants 3、4、6、7、8、10、11 與 RC 1～8，尚未實作的部分標「planned」並寫明由哪一批成立；PLAN.md 的範圍加註。偏離計畫一處：`docs/architecture.md` 的 Audio 列與段落描述現有程式，移到 `-live` 批再改（CONTROL 的分批表已更新）。
+- 2026-10-31：使用者說「Start baseline」，開始 `v8-engine-audio-control-baseline`（high，估 1～1.5 h）。做法：①特性測試放進 `gyo_audio_tests`（新檔 `CharacterizationTests.cpp`），只用公開 `Mixer`：多個片段、兩個提交端、跨錨點、遲到、佇列滿、聲部滿、飽和、主音量變更，輸出與統計取 FNV-1a 雜湊，在現有程式上錄下（特性測試，不是 Red）。②「不配置」守衛另開執行檔 `gyo_audio_alloc_tests`（替換全域 `operator new`／`delete` 會影響整個執行檔），以 thread_local 旗標只計 `Render` 期間；並以一案示範守衛數得到配置（檢出力）。
+- 2026-10-31：`v8-engine-audio-control-baseline` 完成：特性測試的雜湊 `12184034990701221815`（macOS x86_64 錄製，四平台待 CI）、`gyo_audio_alloc_tests`；core 38／38、突變 2／2（`au-ctl-alloc-in-render` 的第一版因最佳化省略配置而存活，改寫突變後被殺）。之後雜湊不同就停下回報，不重錄。dev_log：[2026_10_31_engine_audio_control_baseline](../../../dev_logs/2026_10_31_engine_audio_control_baseline.zh-Hant.md)。
+- 2026-10-31：使用者說「開始」，開始 `v8-engine-audio-control-stop`（high，換算與佇列順序局部 xhigh 用 `xhigh-reviewer`，估 4～5 h）。做法：①環的元素從 `PlayRequest` 改成內部的 `Command`（播放、停止、全部停止），入列共用一個函式，所以既有的佇列突變仍然唯一；停止的換算是獨立的一行（突變能只打壞停止）。②`VoiceMixer` 只加停止 frame 與不透明的 cookie，以及依 cookie（或前綴）停止的函式；handle 的知識留在 `Mixer`。③先寫一個「停止入列但不生效」的骨架，讓新測試 Red，再實作。
+- 2026-10-31：`v8-engine-audio-control-stop` 完成：`SoundHandle`、`Stop`／`StopAll`、停止的計數與規則（Invariant 10）。core 38／38、突變 40／40（相關的 core、sched、ctl）、TSan 3 次無警告＋4／4。xhigh 審查沒有 blocker；major 2 個（測試缺口）與 minor 全部處置，其中 D3（已開始、在區塊開頭停止的聲部立刻釋放）改了行為但輸出不變。和計畫的差異：結束陣列延到 `-clips`；宣告的 `au-ctl-late-stop-unclamped` 是等價突變，換成 `-uncounted` 與 `-boundary`。test preset 有 3 案在負載 158 下逾時，逐一重跑通過（判為環境）。dev_log：[2026_10_31_engine_audio_control_stop](../../../dev_logs/2026_10_31_engine_audio_control_stop.zh-Hant.md)。
+- 2026-10-31：使用者說「開始 clips」，開始 `v8-engine-audio-control-clips`（high，回收順序局部 xhigh 用 `xhigh-reviewer`，估 4～6 h）。做法：①`ClipId` 改 64 位：bank 片段維持 1～N；執行中的片段把 generation（≥1）放在高 32 位、`(提交端索引+1)<<16 | 槽` 放在低 32 位，所以 bank 的 `Contains` 自然不認它。②樣本域只多一個不透明的租約標記：`ScheduledPlay` 帶片段的 view 與標記，`VoiceMixer` 把結束（含被停止釋放）的聲部的標記寫進建立時配置、容量為 `maxVoices` 的陣列，`Mixer` 在每個停止命令與每次 `Render` 後取出，處理租約與交還（計畫的「結束陣列」在這批做）。③驗證抽成內部的 `ValidateClip`，`ClipBank::Add` 與 `LoadClip` 共用，既有突變 `au-clip-rate-unchecked` 的字串不變。④ASan 另建 `build/target/_build/audio-asan`（只建 audio 目標）。
+- 2026-10-31：`v8-engine-audio-control-clips` 完成：64 位 `ClipId`、每個提交端的片段槽、`LoadClip`／`UnloadClip`、租約與交還（Invariant 7 的生命期規則）。core 38／38、test 109／109、突變 57／57、TSan 3 次無警告＋6／6、ASan 3 次無報告＋1／1（ASan 對「回收不等交還」3／3 報 heap-use-after-free）。xhigh 審查沒有 blocker；major 1 個（多聲部的租約計數沒有守衛）與 minor 全部處置。新設 `build/target/_build/audio-asan`。dev_log：[2026_10_31_engine_audio_control_clips](../../../dev_logs/2026_10_31_engine_audio_control_clips.zh-Hant.md)。
+- 2026-10-31：使用者說「開始 playhead」，開始 `v8-engine-audio-control-playhead`（xhigh，估 3～4 h；收尾的對抗式檢查用 Sonnet 5.5，決策 `-gears`）。做法：①`PlayheadBoard<Hook>`（`engine/audio/src`）：每個聲部一對 atomic（tag、state）；寫端只有 `Assign`（tag 清 0 → 寫 state → 寫 tag）、`Publish`、`Clear`，讀端只有 `Read`；Hook 在每個 store 之後與每個 load 之前被呼叫，正式建置是空操作。②`Mixer` 在每次 `Render` 結尾同步：逐一看聲部，和音效執行緒私有的「已公布 tag」陣列比對，換人就 `Assign`、同一個就 `Publish`、空了就 `Clear`；音效執行緒從不讀 board。③確定性的交錯測試：寫端照真正的轉換（`Clear`、`Assign`、`Publish`）執行，讀端在每次 load 之前把 board 設成「寫端前 n 個 store 之後」的狀態（從頭重放前 n 個 store，以例外停在第 n 個；只在測試的 Hook 允許例外），n 不遞減，窮舉所有組合。
+- 2026-10-31：`v8-engine-audio-control-playhead` 完成：`PlayheadBoard`、`Mixer::PlayheadOf`、窮舉交錯測試（182 組）、CTest `gyo_audio_board_readers`（Invariant 4「音效執行緒不讀 board」的原始碼檢查）。core 39／39、test 110／110、突變 70／70、TSan 5 次無警告＋6／6、ASan 3 次無報告＋1／1。Sonnet 5.5 的對抗式檢查推翻不了主張；xhigh 審查沒有 blocker，major 3 個（Mixer 層的聲部重用、非第 0 個聲部、grep 守衛沒有實作）全部處置。和計畫的差異：`-playhead-no-bounds-check` 換成 `-no-validity-check`（實作掃描 tag，不以 handle 當索引）；`au-ctl-board-state-relaxed` 依計畫不列入必殺。dev_log：[2026_10_31_engine_audio_control_playhead](../../../dev_logs/2026_10_31_engine_audio_control_playhead.zh-Hant.md)。
+- 2026-10-31：使用者說「開始 live」，開始 `v8-engine-audio-control-live`（medium，測試程式 high，估 2～3 h）。做法：①dummy 驅動：載入、播放、等到 Playing、停止、等到停止生效、卸載、等到能重新載入、播新片段（只靠 5 秒的掛起守衛，沒有時間上界）。②disk 驅動：開啟後載入的片段聽得到，停止 frame 以錨點紀錄重算，接受「送出前最後一個錨點」與「之後第一個錨點」兩個候選（同 record 批）。③只會被 disk 測試殺掉的突變：送進 `Render` 的錨點比記進紀錄的晚 1 ms（`au-sdl-render-anchor-shifted`）。④`docs/architecture.md` 的 Audio 列與段落；PR 線合併前的完整突變在背景跑一次（D184）。
+- 2026-10-31：`v8-engine-audio-control-live` 完成：dummy 驅動上停止、換片段、播放頭；disk 驅動上開啟後載入的片段聽得到，停止 frame 等於以錨點重算的值（連跑 30 次通過）；突變 `au-sdl-render-anchor-shifted`。PR 線合併前的完整突變（D184）：`mutations.json` 82／82、TSan 6／6、ASan 1／1；test 110／110、core 39／39。`docs/architecture.md` 的 Audio 列與「audio control layer」一段已補。dev_log：[2026_10_31_engine_audio_control_live](../../../dev_logs/2026_10_31_engine_audio_control_live.zh-Hant.md)。控制層的分支 `claude/v8-engine-audio-control`（未推送）；四平台 CI 未跑。
 - 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。
 
 ## 代號對照
@@ -38,6 +50,13 @@
 | `v8-engine-audio-core` | 片段庫、聲部與離線混音 |
 | `v8-engine-audio-schedule` | 提交佇列與「時間戳 → 樣本位置」 |
 | `v8-engine-audio-sdl` | SDL 輸出後端 |
+| `v8-engine-audio-control` | 控制層重建：停止、執行中換片段、播放頭（[CONTROL](CONTROL.md)） |
+| `v8-engine-audio-control-plan` | 控制層重建的計畫與 Invariants 修改案 |
+| `v8-engine-audio-control-baseline` | 先固定 PvP 形狀的輸出與「音效執行緒不配置」守衛 |
+| `v8-engine-audio-control-stop` | 聲音代號與停止 |
+| `v8-engine-audio-control-clips` | 執行中載入、卸載與回收片段 |
+| `v8-engine-audio-control-playhead` | 公布播放位置 |
+| `v8-engine-audio-control-live` | SDL 上的驗證與收尾 |
 | `v8-engine-audio-record` | disk 驅動的量測（只記錄）與收尾 |
 | `v8-engine-audio-producers` 等 | 2026-10-30 核准的 6 項決策（決策紀錄） |
 
@@ -51,6 +70,26 @@
 ## 等使用者決定
 
 目前沒有。
+
+### `v8-engine-audio-control-*`：控制層重建計畫的 9 項（2026-10-31 提出；同日全部照建議核准，見決策紀錄）
+
+每項第一個選項是建議。機制與證據見 [CONTROL](CONTROL.md) 標示的節。
+
+| 代號 | 問題 | 選項與取捨 | 證據 |
+|---|---|---|---|
+| `v8-engine-audio-control-invariants` | Design Invariants 與 Replacement Criteria 的修改 | **A（建議）照 CONTROL 的修改案**：3、4、6 加嚴；7 放寬一面（輸出執行中可以載入，由生命期規則與守衛接手原本保護的性質）；8 拆成兩句；新增 10（停止）、11（handle 不混淆）；RC1、RC2 改寫，新增 RC7、RC8。B：逐項修改後再核准。C：延後 | CONTROL「Design Invariants 與 Replacement Criteria 的修改案」 |
+| `-stop-timing` | 停止什麼時候生效 | **a（建議）帶時間戳，和播放同一套換算**：Invariant 8 保持純粹，但延遲等於 `scheduleDelay`（工具可調低自己的）。b：在取出它的區塊立刻生效：延遲小一點，但 Invariant 8 要退成「給定每個命令被哪個區塊取出」。c：兩者都提供 | CONTROL「成熟方案的參考」（Web Audio、FMOD、miniaudio、Unity 都用帶時間的停止） |
+| `-clip-model` | 執行中的片段放哪裡 | **a（建議）每個提交端自己的槽，卸載走同一個環**：順序只靠一個 SPSC 環與一個 release／acquire 旗標。b：混音器共用池、另開控制環與 mutex：任何提交端都能播任何片段，但要證明跨環的順序。c：任何執行緒都能釋放（旗標＋epoch）：讓競態成為合法結果。d：整個混音器熱抽換：重設 `renderedFrames`、切斷錨點紀錄、所有聲音中斷 | CONTROL「機制」；綜合計畫的 D3、D4 |
+| `-playhead-hook` | 播放頭的順序怎麼驗證 | **a（建議）在 board 留 Hook 範本參數，做確定性的交錯測試**：正式程式多一個測試接縫（正式建置是空操作），但殺得掉「寫端順序錯」的突變。b：只用 TSan 壓力測試：機率性，殺不掉寫端順序的突變 | CONTROL 風險 2；對抗式檢查 M5 |
+| `-stop-click` | 停止時要不要淡出 | **a（建議）硬切**，聽過再說。b：固定約 64 frame 的整數斜坡：屬於 RC2 的「淡出」，而且要重新證明切法無關 | CONTROL 風險 5 |
+| `-clipid-width` | `ClipId` 的寬度 | **a（建議）64 位、不透明**：PvP 不受影響（只當不透明 id 用）。b：維持 32 位、16 位 generation：同一個槽重載 65,536 次後會繞回 | CONTROL「公開介面草案」 |
+| `-l2` | 要不要新的 L2 | **a（建議）不要**：disk 驅動的 L1 就是精度檢查，CI 是主要標準。b：重跑一次 `onset_record`，只記錄：需要一台機器的時間 | CONTROL `-live` 批 |
+| `-pr-line` | PR 怎麼開 | **a（建議）和工具線的 `v8-tool-audio-editor-edit` 同一條 PR 線，Engine 的批次先做**：子系統和第一個消費端一起合併的慣例。b：Engine 單獨開 PR：會合併一個還沒有消費端在用的 API | README「執行規則」 |
+| `-gears` | 檔位與引擎 | **A（建議）照 CONTROL「分批」的樹**：引擎全部繼承；`-playhead` 的對抗式檢查另外用不同的引擎（Sonnet 5.5，低於主對話，所以不需要另外同意；目的是避免同一引擎共有盲點）。B：全部同一引擎 | `agents/effort-gearbox.md`「エンジン」 |
+
+此外，「重新檢視前提」（AGENTS §14）的選項是：不做執行中的片段，工具每次改設定就重建混音器與輸出。這和 F2「不重建輸出」衝突，使用者已選擇重建控制層，所以不建議；列出只為完整。
+
+### 之前的待決事項（已決定）
 
 ### `v8-engine-audio-l2-premise`：起音量測的做法（2026-10-30 提出；同日決定 A，見決策紀錄）
 
@@ -105,6 +144,16 @@
 | 2026-10-30 | `v8-engine-audio-delay-default`＝A：`MixerConfig::scheduleDelay` 的預設為 60 ms（30 FPS＋macOS 的 SDL 預設區塊不遲到；消費端可調低）。Windows 的區塊大小未量 | 使用者：「預設 60 ms」 |
 | 2026-10-30 | `v8-engine-audio-l2-premise`＝A：輸出端以有上限的環記錄每次回呼的錨點 `(T0, F0)`（只供紀錄與驗收），起音量測以錨點重建預期的 frame 逐一比對 | 使用者：「A：記錄錨點」 |
 | 2026-10-31 | `v8-engine-audio-windows-disk`＝A：Windows 上 disk 驅動有 116～208 ms 的停頓，30 秒紀錄第一輪 297／299 起音落在重建的 frame（第二輪 299／299），原因未切分；照現狀記錄，Windows 的 disk 結果不當判定，不加診斷、不改量法 | 使用者：「A：照現狀記錄」 |
+| 2026-10-31 | 工具預覽的增強採「重建控制層」（保留樣本域與時間換算），規劃用 ultracode | 使用者：「Rebuild control layer」、AskUserQuestion 選「ultracode（建議）」 |
+| 2026-10-31 | `v8-engine-audio-control-invariants`＝A：照 CONTROL 的修改案（3、4、6 加嚴；7 放寬一面；8 拆成兩句；新增 10、11；RC1、RC2 改寫，新增 RC7、RC8） | 使用者：「Approve as recommended」（9 項全部照建議） |
+| 2026-10-31 | `-stop-timing`＝a：停止帶時間戳，和播放同一套換算 | 同上 |
+| 2026-10-31 | `-clip-model`＝a：每個提交端自己的片段槽，卸載走同一個環 | 同上 |
+| 2026-10-31 | `-playhead-hook`＝a：board 留 Hook 範本參數，做確定性的交錯測試 | 同上 |
+| 2026-10-31 | `-stop-click`＝a：硬切，聽過再說 | 同上 |
+| 2026-10-31 | `-clipid-width`＝a：`ClipId` 64 位、不透明 | 同上 |
+| 2026-10-31 | `-l2`＝a：不加新的 L2 | 同上 |
+| 2026-10-31 | `-pr-line`＝a：和工具線的 `v8-tool-audio-editor-edit` 同一條 PR 線，Engine 的批次先做 | 同上 |
+| 2026-10-31 | `-gears`＝A：照 CONTROL「分批」；`-playhead` 的對抗式檢查用另一個引擎（Sonnet 5.5） | 同上 |
 | 2026-10-30 | `v8-engine-audio-gears`：照 PLAN「分批」的檔位與引擎（全部繼承，schedule 局部 xhigh 用 `xhigh-reviewer`），不用 ultracode | 使用者：「audio 計畫的 6 項待決事項都照建議核准」 |
 
 ## 研究事實（2026-10-30）
@@ -140,3 +189,9 @@
 | `v8-engine-audio-schedule` | 4～5 h | 約 2.5 h | 含 xhigh 審查約 18 分鐘、兩次 Invariant 5 的決定 |
 | `v8-engine-audio-sdl` | 3～5 h | 約 2 h | 含完整 test preset 的建置與 CTest |
 | `v8-engine-audio-record` | 2～4 h | 約 2.3 h | 第一輪 1.3 h（停在 `v8-engine-audio-l2-premise`）＋錨點 1 h |
+| `v8-engine-audio-control-plan` | 2～3 h | 約 2 h | workflow 約 22 分鐘（5 個 agent）＋整理與寫文件 |
+| `v8-engine-audio-control-baseline` | 1～1.5 h | 約 0.7 h | 含 core 建置、CTest 約 1 分鐘、突變 2 次 |
+| `v8-engine-audio-control-stop` | 4～5 h | 約 2.5 h | 含 xhigh 審查約 13 分鐘、突變 3 輪（背景） |
+| `v8-engine-audio-control-clips` | 4～6 h | 約 3 h | 含 xhigh 審查約 12 分鐘、ASan 建置、突變 3 輪（背景） |
+| `v8-engine-audio-control-playhead` | 3～4 h | 約 2.5 h | 含 xhigh 審查約 10 分鐘、Sonnet 檢查約 2 分鐘、突變 3 輪（背景） |
+| `v8-engine-audio-control-live` | 2～3 h | 約 1 h | 含完整突變（背景，約 25 分鐘） |
