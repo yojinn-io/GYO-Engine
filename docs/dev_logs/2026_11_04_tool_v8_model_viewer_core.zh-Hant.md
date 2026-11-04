@@ -8,7 +8,7 @@
 
 **狀態：**
 - 程式、測試、突變、審查都完成。
-- L1（CI）要等推送後才看得到。
+- L1（CI）通過（見下方「驗證與經過」）。
 - 這批沒有 L2、L3；P1、P2 在 `-trial`。
 
 相關文件：
@@ -60,7 +60,7 @@
   - 根據：同一個比對在 core 測試（C++ 字串）裡，Windows 也通過了。
   - 修正：CLI 測試改用 `file(CONFIGURE … NEWLINE_STYLE LF)` 寫事件檔，「沒寫檔」的檢查改用 SHA-256 比對。判定不變（逐位元組相同）。
   - 照 D184 只重跑殺它的突變 `mv-info-without-binding`：killed（`mutations-ci-fix.txt`）。
-  - 修正後的 L1 結果記在 HANDOFF。
+  - 修正後重新 dispatch（run 41810410842，`4712ccff`）：L1 的 linux-x64、macos-arm64、windows-x64 與 Quick acceptance 全部 success。
 - 探索：PvP 的 `object_fps_pvp.anim_events.nailer_v2.viewmodel` 用 `roundtrip` 往返後逐位元組相同；`info` 讀到 nailer 的 5 個片段（`Armature|Reload` 3.733 s）。這不是判定 P2，P2 在 `-trial` 照宣告做。
 - 審查的指出與處理：見 [model-viewer.md](../tools/plans/v8/model-viewer.md)「`-core` 實作後的結果」。全部在本批修正，並加了突變。
 - 證據：使用者的 Mac，主 checkout `build/evidence/tool-v8-model-viewer/core/`，有 `mutations.txt`（第二輪）、`mutations-round1.txt`、`mutations-ci-fix.txt`、`ctest.txt`、`ctest-all.txt`、`pvp-explore.txt`、`base-commit.txt`。
