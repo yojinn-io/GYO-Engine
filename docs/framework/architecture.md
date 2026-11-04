@@ -112,13 +112,18 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    mounting, registration policy). It holds no product's UI, document format or
    rules, and names no concrete UI or data-format library; such a library
    enters only as a binding. A capability Engine lacks is added to Engine, not
-   to the framework. What two or more products use (a game and a tool, or two
-   tools) enters the framework first, even where Engine has the capability:
-   the framework calls Engine and the products call the framework. What one
-   product alone needs, it takes from Engine directly. The game part, a game's
-   own composition (its loop, its scenes), enters only on the condition above;
-   a capability that a game and a tool both call is shared and enters by this
-   rule (user, 2026-11-01). The windowed shell has one user (ui_editor) when
+   to the framework. What two or more products (a game and a tool, or two
+   tools) compose or adapt in the same way enters the framework first, even
+   where Engine has every capability it joins: an adapter between Engine
+   modules (`ToUiTextInput`), a composition of Engine assets, a shell. The
+   framework calls Engine and the products call the framework. Two products
+   calling the same single Engine capability is not composition: they call
+   Engine directly, and the framework does not wrap it (user, 2026-11-04,
+   narrowing the 2026-11-01 rule "a capability that a game and a tool both
+   call is shared", so that the framework does not become a façade over
+   Engine). What one product alone needs, it takes from Engine directly. The
+   game part, a game's own composition (its loop, its scenes), enters only on
+   the condition above. The windowed shell has one user (ui_editor) when
    it is added; the user accepted that on 2026-11-01
    (framework-rework D-8). Replacing ImGui means replacing its binding and the
    tool's own drawing code; the core shell and Engine stay.
@@ -149,6 +154,8 @@ repair or rebuild the component.
 - A binding has to know which product calls it.
 - The windowed shell has to create or choose a render device for its client.
 - The framework copies an Engine rule that no shared fixture checks.
+- A framework function does nothing but call one Engine function (a façade);
+  two of them meet this criterion.
 - Serving one product needs a callback or flag in a shell that no other
   product uses, or a client has to pump events or run a RuntimeLoop itself.
   Handing every client of a binding a neutral capability that only the
