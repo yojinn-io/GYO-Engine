@@ -1,6 +1,6 @@
 # 實體容器（entity store）：交接
 
-更新：2026-11-05。**狀態：batch 2 核准（2026-11-05，§7 全照建議）；batch 3a `v8-arch-entity-store-impl-3a` 完成（判定 1～7 全部通過）；PR #156 待使用者決定轉正式與合併；3b 待第一個非玩家批。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
+更新：2026-11-05。**狀態：batch 2 核准（2026-11-05，§7 全照建議）；batch 3a `v8-arch-entity-store-impl-3a` 完成（判定 1～7 全部通過）；PR #156 已轉正式（使用者「轉正式並合併」），待 CI 後合併；3b 待第一個非玩家批。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。
 
 ## 代號對照
@@ -44,6 +44,7 @@
 - 2026-11-06：實作者完成審查修正與 M1、M2 退役（約 40 分；`0c862822`、`90821624`、`e40e512d`）：S1 static_assert、S2 include 白名單（自我測試 18 案例）、S3 assert 攔截、N3／N4 契約措辭、新增轉接突變（expect 含 `GYO_ASSERT failed: row`，新判定）；Engine 突變 15/15、產品 5/5、ctest 126/126、golden 不變；修正後 runner 對照前次 branch，42 情境 digest 與 records 全同（只多一個 static_assert）。dev_log `docs/dev_logs/2026_11_06_arch_v8_entity_store_impl_3a.zh-Hant.md`。推送並手動觸發 L1（草稿 PR 推送時 L1 會 skip）。
 - 2026-11-06：L1 手動觸發 `cross-platform.yml`（`build-and-validate.yml` 沒有 workflow_dispatch，是被呼叫的工作流程）：[run 42056321286](https://github.com/yojinn-io/GYO-Engine/actions/runs/42056321286)，`fd52f8a7`，結果待讀（判讀看 L1 job 結論）。已通知圖書管理員以 delta §5 的 3a 版改 `docs/architecture.md` 與 `docs/creating_apps.md:41`，推到同一分支。
 - 2026-11-06：L1 [run 42056321286](https://github.com/yojinn-io/GYO-Engine/actions/runs/42056321286) 全部 success（L1 macos-arm64、linux-x64、windows-x64，Quick acceptance）→ 判定 7 通過。圖書管理員推送 `c7878e47`（只動 `docs/architecture.md` 與 `docs/creating_apps.md`，3a 版文字，日期 2026-11-06），主會話核對無 `DeferredChanges` 字樣；3b 合併時再通知它補完整版。
+- 2026-11-06：使用者「轉正式並合併」。PR #156 轉正式後，與 master（arena-v2、lag-l2、voxel map 已合入）在 3 檔衝突。app 的同步工具因 master 新增 `tests/voxel_map_editor/fixtures/.gitattributes`（內容只有 `* -text`）拒絕，改由主會話自行合併 `5bfd7226`：兩個 CMake 連結清單取聯集（`GYO::EntityStore`＋master 的 `GYO::VoxelMesh`）；`mutations.json` 以 master 為底重套本線三項（退役註記、刪 M1／M2、追加轉接突變），與 master 差異 +11／−21、903 個突變。master 自分歧點起沒有動 `PvpMatch.cpp`、`EntityColumns.hpp`、golden、`engine/entity_store`，3a 的驗收結論不受影響。本機合併後 configure、全量建置、ctest cpu|shader 132/132（master 帶入 6 個）。推送並等 PR 的完整 CI。
 
 ## 未結事項
 
