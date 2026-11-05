@@ -1,13 +1,13 @@
 #include "gyo/audio_editor/SoundExport.hpp"
 
 #include "gyo/audio_editor/Conversion.hpp"
+#include "gyo/audio_editor/Edit.hpp"
 #include "gyo/audio_editor/WavFile.hpp"
 
 #include "gyo/framework/json/CatalogText.hpp"
 
-#include "engine/io/fs/NativeFileSystem.hpp"
-#include "engine/io/helpers/ReadAllBytes.hpp"
-#include "engine/io/helpers/WriteFileAtomically.hpp"
+#include "FileAccess.hpp"
+
 #include "engine/os/Files.hpp"
 
 #include <cstddef>
@@ -20,11 +20,8 @@ namespace Gyo::Tools::AudioEditor {
 namespace {
 
 namespace Files = Engine::Os::Files;
-namespace Io = Engine::IO;
-
-// Larger sources or catalogs are refused rather than read whole: about four
-// minutes of 48 kHz 24-bit stereo.
-constexpr std::size_t kMaxReadBytes = 64U * 1024U * 1024U;
+using Detail::ReadAll;
+using Detail::WriteReplacing;
 
 template <class E>
 AudioEditorError FileError(const AudioEditorErrorCode code, std::string message, const E& cause,
@@ -41,32 +38,6 @@ AudioEditorError RegistrationFailed(Framework::CatalogError error) {
                                           ? AudioEditorErrorCode::InvalidCatalog
                                           : AudioEditorErrorCode::InvalidRegistration;
     return AudioEditorError::Make(code, std::move(error.message), std::move(error.detail));
-}
-
-Result<std::vector<std::byte>, AudioEditorError> ReadAll(const std::string& path) {
-    Io::FS::NativeFileSystem files;
-    auto uri = Io::FS::NativeFileUri(path);
-    if (!uri) return Engine::Base::Err(FileError(AudioEditorErrorCode::ReadFailed, "cannot open", uri.error(), path));
-    Io::Helpers::ReadAllOptions read;
-    read.maxBytes = kMaxReadBytes;
-    auto bytes = Io::Helpers::ReadAllBytes(files, uri.value(), read);
-    if (!bytes) return Engine::Base::Err(FileError(AudioEditorErrorCode::ReadFailed, "cannot read", bytes.error(), path));
-    return std::move(bytes).value();
-}
-
-// engine/io writes beside the target, then renames over it: a reader sees the
-// old file or the new one. Missing folders above the target are created.
-Result<void, AudioEditorError> WriteReplacing(const std::string& path, const std::span<const std::byte> bytes) {
-    Io::FS::NativeFileSystem files;
-    auto uri = Io::FS::NativeFileUri(path);
-    if (!uri) return Engine::Base::Err(FileError(AudioEditorErrorCode::WriteFailed, "cannot write", uri.error(), path));
-    auto written = Io::Helpers::WriteFileAtomically(files, uri.value(),
-                                                    Engine::Base::ConstSpan<std::byte>(bytes.data(), bytes.size()),
-                                                    {.createParentDirectories = true});
-    if (!written) {
-        return Engine::Base::Err(FileError(AudioEditorErrorCode::WriteFailed, "cannot write", written.error(), path));
-    }
-    return {};
 }
 
 Result<std::string, AudioEditorError> Resolved(const std::string& path) {
@@ -116,7 +87,9 @@ Result<ExportReport, AudioEditorError> ExportSound(const ExportRequest& request)
         error.detail = request.sourcePath;
         return Engine::Base::Err(std::move(error));
     }
-    const ConvertedClip clip = ConvertToClip(*decoded, DitherSeed(request.registration.id));
+    auto rendered = RenderClip(*decoded, request.settings, DitherSeed(request.registration.id));
+    if (!rendered) return Engine::Base::Err(std::move(rendered).error());
+    const ConvertedClip& clip = *rendered;
 
     const std::vector<std::byte> wav = EncodePcm16Wav(clip.channels, clip.sampleRate, clip.samples);
     if (auto written = WriteReplacing(report.outputPath, wav); !written) {

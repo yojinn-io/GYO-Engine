@@ -4,8 +4,10 @@ Turns a WAV from anywhere into a clip the engine plays, writes it into a
 product's asset root and registers it in that product's catalog. Design and
 Design Invariants: [docs/audio_editor/architecture.md](../../docs/audio_editor/architecture.md).
 
-This version is command-line only (`v8-tool-audio-editor-convert`); the window
-with playback, waveform, trimming and gain comes with `v8-tool-audio-editor-edit`.
+The window (`edit`) plays the source, shows its waveform and information, and
+edits a trim and a gain that the exported clip gets; a project file keeps the
+source, the destination and those settings. `info` and `convert` are the
+command line.
 
 ## Build
 
@@ -15,11 +17,14 @@ cmake --build build/target/_build/audio --target gyo_audio_editor
 ```
 
 The tool is local (`release=false` in `engine/config/tools.csv`); the
-executable is under `build/target/_tools/audio_editor/bin`.
+executable is under `build/target/_tools/audio_editor/bin`. The default `gui`
+variant needs SDL (renderer, input, audio) and ImGui; `-DGYO_TOOLS=audio_editor:cli`
+builds the command line alone.
 
 ## Use
 
 ```sh
+gyo_audio_editor edit [project.json | source.wav]
 gyo_audio_editor info source.wav
 gyo_audio_editor convert source.wav --asset-root assets/<product> \
     --asset-catalog assets/<product>/asset_catalog.json \
@@ -37,6 +42,10 @@ gyo_audio_editor convert source.wav --asset-root assets/<product> \
   rewritten in place; nothing else in the catalog changes. An id registered with
   another type, or a path registered under another id, is refused. When an
   entry's path changes, the old file is reported, not deleted.
+- In the window, Play renders the clip as export would and plays it (Space
+  too); the preview volume changes only what is heard. Left and right clicks on
+  the waveform set the trim's start and end. Save the project outside the asset
+  root (inside is refused).
 - The source is only read, and a clip path that is the source or the catalog is
   refused. Keep sources outside the asset root: every file there must be
   registered.

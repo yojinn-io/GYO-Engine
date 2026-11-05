@@ -1,9 +1,18 @@
 {
   "version": 1,
   "display_name": "GYO Audio Editor",
-  "default_variant": "cli",
+  "default_variant": "gui",
   "requires_apps": {},
   "variants": {
+    "gui": {
+      "components": [
+        "SDL_RENDERER",
+        "SDL_INPUT",
+        "SDL_AUDIO",
+        "IMGUI"
+      ],
+      "packageable": false
+    },
     "cli": {
       "components": [],
       "packageable": false

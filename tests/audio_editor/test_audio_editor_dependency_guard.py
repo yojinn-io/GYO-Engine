@@ -54,6 +54,24 @@ class AudioEditorDependencyGuardTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("SDL_CreateGPUDevice", findings[0])
 
+    def test_window_and_project_file_pass(self):
+        # v8-tool-audio-editor-edit: the framework's ImGui binding with ImGui itself, GYO::Audio's SDL backend and
+        # the project file's JSON.
+        self.assertEqual(self.scan({
+            "tools/audio_editor/src/W.cpp": '#include "gyo/framework/imgui/ImGuiShell.hpp"\n'
+                                            '#include "engine/audio/backend/sdl/SdlAudioOutput.hpp"\n'
+                                            '#include "nlohmann/json.hpp"\n#include <imgui.h>\n',
+            "tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::ToolFrameworkImGui GYO::AudioBackendSDL"
+                                                 " imgui::core nlohmann_json::nlohmann_json)\n",
+        }), [])
+
+    def test_sdl_beside_the_audio_backend_fails(self):
+        findings = self.scan({"tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::AudioBackendSDL"
+                                                                   " SDL3::SDL3 imgui::sdl3_sdlrenderer3)\n"})
+        self.assertEqual(len(findings), 2)
+        self.assertIn("names SDL3::SDL3", findings[0])
+        self.assertIn("names imgui::sdl3_sdlrenderer3", findings[1])
+
     def test_unlisted_target_fails(self):
         findings = self.scan({"tools/audio_editor/CMakeLists.txt": "target_link_libraries(a PRIVATE SomeGame::World)\n"})
         self.assertEqual(len(findings), 1)
