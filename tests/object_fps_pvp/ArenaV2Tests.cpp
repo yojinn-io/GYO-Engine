@@ -5,6 +5,9 @@
 #include "RetroFPS/Pvp/Movement.hpp"
 
 #include <algorithm>
+#include <iterator>
+#include <limits>
+#include <set>
 #include <cmath>
 #include <utility>
 #include <array>
@@ -244,4 +247,90 @@ TEST_CASE("A spawn stands on the floor or on a wall top, as movement grounds it"
     CHECK(error.find("wall top") != std::string::npos);
     arena.spawns[1] = {{5, 0, 15}, 0}; // the floor, as before
     CHECK(arena.Validate(error));
+}
+
+TEST_CASE("A baked map draws exactly the surface it collides with") {
+    // P11 (v8-product-arena-v2-p10): on the 1/16 grid of the baked file,
+    // (1) every collision face open to empty space is covered by a drawn quad
+    // (no hole), and (2) every drawn quad has a solid unit behind it (nothing
+    // is drawn where a body would pass). Faces hidden between solids may be
+    // drawn (the tool keeps faces between the boxes of one cell).
+    for (const char* name : {"pvp_arena.voxel_mesh.json", "pvp_corners.voxel_mesh.json"}) {
+        CAPTURE(name);
+        std::ifstream file(ProductAssets() / name, std::ios::binary);
+        REQUIRE(file);
+        const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        const auto mesh = Engine::VoxelMesh::ParseVoxelMesh(text);
+        REQUIRE(mesh);
+        REQUIRE_FALSE(mesh->colliders.empty());
+        std::array<std::int32_t, 3> low{}, high{};
+        for (int axis = 0; axis < 3; ++axis) {
+            low[axis] = std::numeric_limits<std::int32_t>::max();
+            high[axis] = std::numeric_limits<std::int32_t>::min();
+        }
+        for (const auto& box : mesh->colliders) {
+            const std::array<std::int32_t, 3> mn{box.minimum.x, box.minimum.y, box.minimum.z};
+            const std::array<std::int32_t, 3> mx{box.maximum.x, box.maximum.y, box.maximum.z};
+            for (int axis = 0; axis < 3; ++axis) {
+                low[axis] = std::min(low[axis], mn[axis]);
+                high[axis] = std::max(high[axis], mx[axis]);
+            }
+        }
+        // One empty unit of margin all round.
+        for (int axis = 0; axis < 3; ++axis) {
+            --low[axis];
+            ++high[axis];
+        }
+        const std::int64_t nx = high[0] - low[0], ny = high[1] - low[1], nz = high[2] - low[2];
+        std::vector<bool> solid(static_cast<std::size_t>(nx * ny * nz));
+        const auto at = [&](std::int64_t x, std::int64_t y, std::int64_t z) {
+            return static_cast<std::size_t>(((y - low[1]) * nz + (z - low[2])) * nx + (x - low[0]));
+        };
+        const auto isSolid = [&](std::int64_t x, std::int64_t y, std::int64_t z) {
+            if (x < low[0] || y < low[1] || z < low[2] || x >= high[0] || y >= high[1] || z >= high[2]) return false;
+            return static_cast<bool>(solid[at(x, y, z)]);
+        };
+        for (const auto& box : mesh->colliders)
+            for (auto y = box.minimum.y; y < box.maximum.y; ++y)
+                for (auto z = box.minimum.z; z < box.maximum.z; ++z)
+                    for (auto x = box.minimum.x; x < box.maximum.x; ++x) solid[at(x, y, z)] = true;
+        // A unit face: the solid unit it belongs to and the direction it looks at.
+        using Face = std::array<std::int32_t, 4>;
+        const std::array<std::array<int, 3>, 6> step{{{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}}};
+        std::set<Face> drawn;
+        for (const auto& q : mesh->quads) {
+            const int dir = static_cast<int>(q.face);
+            const int axis = dir / 2;
+            const bool positive = dir % 2 == 0;
+            // In-plane extents: X faces (Z, Y), Y faces (X, Z), Z faces (X, Y).
+            const int u = axis == 0 ? 2 : 0;
+            const int v = axis == 1 ? 2 : 1;
+            std::array<std::int32_t, 3> corner{q.x, q.y, q.z};
+            for (std::int32_t a = 0; a < q.width; ++a)
+                for (std::int32_t b = 0; b < q.height; ++b) {
+                    auto unit = corner;
+                    unit[static_cast<std::size_t>(u)] += a;
+                    unit[static_cast<std::size_t>(v)] += b;
+                    if (positive) unit[static_cast<std::size_t>(axis)] -= 1; // the unit behind a +face
+                    drawn.insert({unit[0], unit[1], unit[2], dir});
+                }
+        }
+        std::size_t holes = 0, floating = 0, open = 0;
+        for (const auto& f : drawn)
+            if (!isSolid(f[0], f[1], f[2])) ++floating;
+        for (auto y = low[1]; y < high[1]; ++y)
+            for (auto z = low[2]; z < high[2]; ++z)
+                for (auto x = low[0]; x < high[0]; ++x) {
+                    if (!solid[at(x, y, z)]) continue;
+                    for (int dir = 0; dir < 6; ++dir) {
+                        const auto& d = step[static_cast<std::size_t>(dir)];
+                        if (isSolid(x + d[0], y + d[1], z + d[2])) continue;
+                        ++open;
+                        if (!drawn.contains({x, y, z, dir})) ++holes;
+                    }
+                }
+        CHECK(open > 0);
+        CHECK(holes == 0);
+        CHECK(floating == 0);
+    }
 }

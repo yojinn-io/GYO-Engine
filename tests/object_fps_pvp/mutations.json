@@ -9100,6 +9100,26 @@
       "replace": "",
       "check": "asset_catalog",
       "expect": "FAIL: test_paths_follow_the_layout"
+    },
+    {
+      "id": "av2-mesh-hole",
+      "batch": "v8-product-arena-v2",
+      "what": "A drawn face is missing from a baked map (a hole where the body collides)",
+      "file": "assets/object_fps_pvp/maps/pvp_corners.voxel_mesh.json",
+      "find": "    [0, 0, 0, 3, 16, 16, 0],\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "exactly the surface"
+    },
+    {
+      "id": "av2-mesh-floating",
+      "batch": "v8-product-arena-v2",
+      "what": "A collider is missing, so its faces are drawn where a body passes",
+      "file": "assets/object_fps_pvp/maps/pvp_corners.voxel_mesh.json",
+      "find": "    { \"min\": [160, 0, 160], \"max\": [192, 32, 192] },\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "exactly the surface"
     }
   ]
 }
