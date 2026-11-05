@@ -1,0 +1,560 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-arch-big-map-engine-format (judgment F2 of docs/architecture/plans/big-map/engine-format.zh-Hant.md): gyo.voxel_map and gyo.voxel_region in GYO::VoxelMesh and gyo.map_markers in GYO::MapMarkers. mm-two-shapes-accepted survived in the engine-map run (two shapes are also rejected as an unknown field); see the engine-format dev_log. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/big-map/scripts/engine_format_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its test run fails with the expected message. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "mutants": [
+    {
+      "id": "sj-repeated-key-kept-markers",
+      "what": "A repeated key is taken silently in gyo.map_markers",
+      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "find": "        if (open_.back().insert(key).second) return true;",
+      "replace": "        open_.back().insert(key);\n        return true;",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-unknown-field-ignored",
+      "what": "An unknown field of the map is ignored",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!keys.contains(item.key())) Fail(\"unknown field '\" + item.key() + \"'\", path);",
+      "replace": "        static_cast<void>(item);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-version-2-accepted",
+      "what": "A map version other than 1 is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (!version.is_number_integer() || version.get<long long>() != expectedVersion)",
+      "replace": "    if (!version.is_number_integer())",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-sha-length-unchecked",
+      "what": "A source_sha256 of any length is accepted in the map",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (text.size() != 64) return false;",
+      "replace": "    if (text.empty()) return false;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-cell-size-no-floor",
+      "what": "A map cell_size below 2^-16 is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (!(result.cellSize >= MinCellSize) || !(result.cellSize <= MaxCellSize))",
+      "replace": "    if (!(result.cellSize <= MaxCellSize))",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-chunk-size-unchecked",
+      "what": "A chunk_size other than 16 is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (!chunkSize.is_number_integer() || chunkSize.get<long long>() != ChunkCells)",
+      "replace": "    if (!chunkSize.is_number_integer())",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M5:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-region-size-unchecked",
+      "what": "A region_size other than 8 is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (!regionSize.is_number_integer() || regionSize.get<long long>() != RegionChunks)",
+      "replace": "    if (!regionSize.is_number_integer())",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M5:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-bounds-reversed",
+      "what": "Bounds with min above max are accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!(minimum[axis] <= maximum[axis])) Fail(\"bounds.min is at most bounds.max on every axis\", \"bounds\");",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-bounds-far-side",
+      "what": "The bounds' range check misses the far side of the last chunk",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        RequireInRange(offset + maximum[axis] * ChunkUnits + ChunkUnits, At(\"bounds.max\", axis));",
+      "replace": "        RequireInRange(offset + maximum[axis] * ChunkUnits, At(\"bounds.max\", axis));",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-bounds-no-origin",
+      "what": "The bounds' range check leaves out the origin",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        const auto offset = common.origin[axis] * UnitsPerCell;",
+      "replace": "        const auto offset = common.origin[axis] * 0;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-palette-name-repeats",
+      "what": "A repeated palette name is accepted in the map",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!names.insert(entry.name).second) Fail(\"a palette name repeats\", At(\"palette\", i) + \".name\");",
+      "replace": "        names.insert(entry.name);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M7:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-region-outside-bounds",
+      "what": "A region outside the bounds is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            Fail(\"a region lies within the bounds\", path + \".at\");",
+      "replace": "            static_cast<void>(path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-region-file-dot-segments",
+      "what": "A region file with '.' or '..' segments is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
+      "replace": "        if (segment.empty()) return false;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-region-file-repeats",
+      "what": "A repeated region file is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!files.insert(file.get<std::string>()).second) Fail(\"a region file repeats\", path + \".file\");",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-regions-unordered",
+      "what": "Regions out of order are accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            Fail(\"regions are in strictly increasing order of at\", path + \".at\");",
+      "replace": "            static_cast<void>(path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-integer-unbounded",
+      "what": "Integers beyond +-2^30 are accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (signedValue < -RawIntegerLimit || signedValue > RawIntegerLimit) Fail(\"the integer is too large\", path);",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M9:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-size-unchecked",
+      "what": "A map text over 1 MiB is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (text.size() > MaxMapTextBytes) Fail(\"the text exceeds 1 MiB\", \"\");",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M10:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-unknown-field-ignored",
+      "what": "An unknown field of the region is ignored",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    RequireExactKeys(document, {\"schema\", \"version\", \"at\", \"chunks\"}, \"\");",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-schema-unchecked",
+      "what": "A region with another schema or version is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    RequireSchemaAndVersion(document, VoxelRegionSchema, VoxelRegionVersion);",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-unlisted-accepted",
+      "what": "A region the map does not list is read against the nearest entry",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (listed == map.regions.end() || listed->at != key) Fail(\"the map lists the region\", \"at\");",
+      "replace": "    if (listed == map.regions.end()) Fail(\"the map lists the region\", \"at\");",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-sha-unchecked",
+      "what": "A region text whose SHA-256 differs from the map's entry is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (Base::Sha256(bytes) != listed->sha256) Fail(\"the text's SHA-256 differs from the map's entry\", \"\");",
+      "replace": "    static_cast<void>(bytes);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-foreign-chunk",
+      "what": "A chunk outside its region is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            Fail(\"a chunk lies in its region\", path + \".at\");",
+      "replace": "            static_cast<void>(path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-region-truncating",
+      "what": "A chunk's region is found by truncating division (wrong for negative keys)",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    return (value % divisor != 0 && (value < 0) != (divisor < 0)) ? quotient - 1 : quotient;",
+      "replace": "    return quotient;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-chunks-unordered",
+      "what": "Chunks out of order are accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            Fail(\"chunks are in strictly increasing order of at\", path + \".at\");",
+      "replace": "            static_cast<void>(path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-no-chunks",
+      "what": "A region without chunks is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (!chunks.is_array() || chunks.empty()) Fail(\"chunks lists one or more chunks\", \"chunks\");",
+      "replace": "    if (!chunks.is_array()) Fail(\"chunks lists one or more chunks\", \"chunks\");",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vreg-size-unchecked",
+      "what": "A region text over 16 MiB is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (text.size() > MaxRegionTextBytes) Fail(\"the text exceeds 16 MiB\", \"\");",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R5:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-empty-accepted",
+      "what": "An empty chunk is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (raw.quads.empty() && raw.colliders.empty()) Fail(\"a chunk has a quad or a collider\", prefix);",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-outside-bounds",
+      "what": "A chunk outside the map's bounds is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            Fail(\"a chunk lies within the map's bounds\", Join(prefix, \"at\"));",
+      "replace": "            static_cast<void>(prefix);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-dir-6-accepted",
+      "what": "A quad direction of 6 is accepted in a chunk",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (v[3] < 0 || v[3] >= static_cast<std::int64_t>(FaceCount)) Fail(\"dir is 0 to 5\", At(path, 3));",
+      "replace": "    if (v[3] < 0) Fail(\"dir is 0 to 5\", At(path, 3));",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-palette-unchecked",
+      "what": "A quad naming no palette entry is accepted in a chunk",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (v[6] < 0 || v[6] >= static_cast<std::int64_t>(paletteSize)) Fail(\"palette names an entry\", At(path, 6));",
+      "replace": "    if (v[6] < 0) Fail(\"palette names an entry\", At(path, 6));",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-flat-collider-accepted",
+      "what": "A flat collider is accepted in a chunk",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!(minimum[axis] < maximum[axis])) Fail(\"min is below max on every axis\", path);",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-upper-bound-unchecked",
+      "what": "Chunk coordinates beyond 256 are accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (units < 0 || units > ChunkUnits) Fail(\"a coordinate lies outside the chunk (0 to 256 units)\", path);",
+      "replace": "    if (units < 0) Fail(\"a coordinate lies outside the chunk (0 to 256 units)\", path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-far-corner-unchecked",
+      "what": "Only a quad's minimum corner is range-checked",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        requireInRange(v[axis] + extent[axis] + offset[axis], path);",
+      "replace": "        static_cast<void>(extent);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-quads-unordered",
+      "what": "Quads out of order are accepted in a chunk",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            Fail(\"quads are in strictly increasing order\", path);",
+      "replace": "            static_cast<void>(path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C5:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-colliders-unordered",
+      "what": "Colliders out of order are accepted in a chunk",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            Fail(\"colliders are in strictly increasing order\", path);",
+      "replace": "            static_cast<void>(path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C5:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-validate-skips-rules",
+      "what": "ValidateVoxelChunk does not run the shared chunk rules",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        static_cast<void>(CheckChunk(ToRawChunk(chunk), map, \"\"));",
+      "replace": "        static_cast<void>(chunk);\n        static_cast<void>(map);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*C2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-expand-no-key",
+      "what": "A chunk expands without its key's offset",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    const std::int64_t ox = std::int64_t{map.origin.x} * UnitsPerCell + std::int64_t{chunk.at.x} * ChunkUnits;",
+      "replace": "    const std::int64_t ox = std::int64_t{map.origin.x} * UnitsPerCell;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*golden chunk*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-origin-wrong",
+      "what": "ChunkWorldOrigin leaves out the map's origin",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    return {ToWorld(std::int64_t{map.origin.x} * UnitsPerCell + std::int64_t{key.x} * ChunkUnits, map.cellSize),",
+      "replace": "    return {ToWorld(std::int64_t{key.x} * ChunkUnits, map.cellSize),",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*golden chunk*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "map-units-no-origin",
+      "what": "MapUnitsToWorld leaves out the map's origin",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    return {ToWorld(std::int64_t{units.x} + std::int64_t{map.origin.x} * UnitsPerCell, map.cellSize),",
+      "replace": "    return {ToWorld(std::int64_t{units.x}, map.cellSize),",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*golden world coordinates at both*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "chunk-palette-rows-swapped",
+      "what": "The palette image is laid out row-major by entry instead of by direction",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            const auto base = (row * width + column) * 4;",
+      "replace": "            const auto base = (column * height + row) * 4;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*golden chunk*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-unknown-field-ignored",
+      "what": "An unknown field of the markers is ignored",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "        if (!keys.contains(item.key())) Fail(\"unknown field '\" + item.key() + \"'\", path);",
+      "replace": "        static_cast<void>(item);",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-version-2-accepted",
+      "what": "A markers version other than 1 is accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "    if (!version.is_number_integer() || version.get<long long>() != MapMarkersVersion)",
+      "replace": "    if (!version.is_number_integer())",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-ids-unordered",
+      "what": "Markers out of id order are accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "            Fail(\"markers are in strictly increasing order of id\", At(\"markers\", i) + \".id\");",
+      "replace": "            static_cast<void>(i);",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-count-unbounded",
+      "what": "More than 65536 markers are accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "    if (!markers.is_array() || markers.size() > MaxMarkers) Fail(\"markers lists 0 to 65536 markers\", \"markers\");",
+      "replace": "    if (!markers.is_array()) Fail(\"markers lists 0 to 65536 markers\", \"markers\");",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-two-shapes-accepted",
+      "what": "A marker with two shapes is accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "    if (shapes != 1) Fail(\"a marker has exactly one of point, box and path\", path);",
+      "replace": "    if (shapes < 1) Fail(\"a marker has exactly one of point, box and path\", path);",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-name-any-character",
+      "what": "ids and kinds accept any character",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-';",
+      "replace": "        return c != '\\0';",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K5:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-tags-unordered",
+      "what": "Tag keys out of order are accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "        if (!result.empty() && !(result.back().first < key)) Fail(\"tag keys are in strictly increasing order\", path);",
+      "replace": "",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-tags-unbounded",
+      "what": "More than 32 tags are accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "    if (tags.size() > MaxTags) Fail(\"tags has at most 32 entries\", path);",
+      "replace": "",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-yaw-infinite",
+      "what": "A yaw that is infinite as a float is accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "        if (!std::isfinite(point.yaw)) Fail(\"yaw is finite as a float\", path + \".yaw\");",
+      "replace": "",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K7:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-flat-box-accepted",
+      "what": "A flat marker box is accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "            Fail(\"min is below max on every axis\", boxPath);",
+      "replace": "            static_cast<void>(boxPath);",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-one-point-path",
+      "what": "A path of one point is accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "        if (!points.is_array() || points.size() < MinPathPoints || points.size() > MaxPathPoints)",
+      "replace": "        if (!points.is_array() || points.size() > MaxPathPoints)",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K9:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-range-unchecked",
+      "what": "Marker coordinates beyond +-2^20 are accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "            Fail(\"a coordinate lies beyond +-2^20 units\", At(path, axis));",
+      "replace": "            static_cast<void>(path);",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K10:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-size-unchecked",
+      "what": "A markers text over 4 MiB is accepted",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "    if (text.size() > MaxTextBytes) Fail(\"the text exceeds 4 MiB\", \"\");",
+      "replace": "",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K10:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-guard-gameplay-word",
+      "what": "A gameplay word enters the module (Design Invariant 1)",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "// Ordered: rule K6 asks for tag keys",
+      "replace": "// Ordered (a spawn table): rule K6 asks for tag keys",
+      "command": [
+        "{python}",
+        "tests/common/map_markers/neutral_names_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "neutral names guard: 1 gameplay word"
+    },
+    {
+      "id": "mm-links-voxel-mesh",
+      "what": "GYO::MapMarkers gains a link it must not have (Design Invariant 2)",
+      "file": "engine/map_markers/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_map_markers PUBLIC GYO::Base GYO::Math PRIVATE nlohmann_json::nlohmann_json)",
+      "replace": "target_link_libraries(gyo_map_markers PUBLIC GYO::Base GYO::Math GYO::VoxelMesh PRIVATE nlohmann_json::nlohmann_json)",
+      "target": "gyo_map_markers_tests",
+      "expect_build_failure": true,
+      "expect": "(?s)gyo_map_markers links.*expected\\s+exactly"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-add_executable(gyo_voxel_mesh_tests VoxelMeshTests.cpp)
+add_executable(gyo_voxel_mesh_tests VoxelMeshTests.cpp VoxelMapTests.cpp)
 target_link_libraries(gyo_voxel_mesh_tests PRIVATE GYO::VoxelMesh doctest::doctest)
 add_test(NAME gyo_voxel_mesh_tests COMMAND gyo_voxel_mesh_tests)
 
