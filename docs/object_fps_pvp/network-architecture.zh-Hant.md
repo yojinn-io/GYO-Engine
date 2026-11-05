@@ -699,7 +699,7 @@ Pop-Location
 Native Client／Match 隨產品 role 組裝至 `build/target/object_fps_pvp/bin`；Gateway
 獨立放在 `_services/object_fps_pvp/bin`，不混入 native archive。服務分別手動啟動，
 不使用程序池或 supervisor。主機具備相應 C++ runtime 時，Match 可只攜帶有效
-Arena JSON 與其執行檔運行，不需要 SDL 或 asset catalog；
+Arena JSON（schema 2 時連同它以 `geometry` 引用的相鄰 `.voxel_mesh.json`）與其執行檔運行，不需要 SDL 或 asset catalog；
 GUI Client 需要部署的 fonts、UI 與 shader bundle。
 
 第一個終端啟動 Match，明確指定 Arena 可避免工作目錄混淆：
