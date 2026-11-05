@@ -48,7 +48,7 @@ v8-plan
 │   │   ├── v8-product-hitbox-acceptance      「上段｜Opus 5.5／medium～high｜PR 與 L1（H6′）、B5、L2 kit、L2（G5／G6、試玩）（[宣告](v8-product-hitbox-acceptance-declaration.md)，已核准）」
 │   │   └── v8-product-hit-gui-aim-sdl ✓      「medium｜Opus 5.5｜SDL 排程瞄軀幹的正式驗收（v7 HUD 規則；[宣告](v8-product-hit-gui-aim-sdl-declaration.md)，已完成）」
 │   ├── rewind-line                「PR 線：射擊回溯（部位判定線合併後；entity-line 的 split 之後）」
-│   │   ├── v8-product-hitbox-lag-shadow      「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算（可先做）」
+│   │   ├── v8-product-hitbox-lag-shadow      「上段｜Opus 5.5／medium｜影子紀錄 v3：view_lag 以 J 計算（[宣告](v8-product-hitbox-lag-shadow-declaration.md)草稿，等核准）」
 │   │   ├── v8-product-hitbox-lag-l2          「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
 │   │   └── v8-product-hitbox-rewind          「high（τ、夾取局部 xhigh）｜Opus 5.5｜姿勢歷史、ShotRewind、守衛第二段核准」
 │   └── entity-line                「PR 線：實體資料模型（架構掃描 2026-11-01 開的卡 `v8-product-entity-model`）；split 排在 rewind 之前，讓姿勢歷史第一個以元件寫」
