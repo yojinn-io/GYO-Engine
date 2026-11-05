@@ -607,6 +607,8 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
 
 ## `v8-tool-audio-editor-regions` 的事前宣告（§14.1，2026-11-04 使用者「照草稿核准」）
 
+**狀態：2026-11-05 撤回（`v8-tool-audio-editor-regions-withdrawn`）。** 程式、測試、DI 3 的措辭與突變目錄退回 `-edit` 完成時的內容（`43487d42^`）；本節與「實作後的結果」留作紀錄。
+
 **功能**：從一個原檔切出多段，每段是一個片段，一次匯出、各自登錄，並可以淡入淡出。使用的情境：把換彈的錄音切成 `magazine_out`、`magazine_in`、`bolt_pull` 等，每個動作一個事件、一段聲音（聲音側的 B，`v8-tool-anim-event-sound-owner`）。
 
 **依據**：架構評估（[請求](anim-event-sound-request.md)，結論見該文件「評估結果」）。
@@ -793,7 +795,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 │   ├── v8-tool-audio-editor-convert    「high（重新取樣局部 xhigh）｜Opus 5.5｜核心程式庫＋CLI：讀 WAV、轉換（演算法等價）、輸出並登錄 catalog」
 │   ├── v8-tool-framework-shell         「medium～high｜Opus 5.5｜工具共用層 tools/framework/：從 ui_editor 搬出外殼四塊，行為不變」（PR #123，已合併）
 │   ├── v8-tool-audio-editor-edit       「high｜Opus 5.5｜GUI：播放、波形、資訊、裁剪、增益、工程檔」（PR #141）
-│   └── v8-tool-audio-editor-regions    「high｜Opus 5.5｜一個原檔切多段、一次匯出、淡入淡出」（事前宣告已核准；2026-11-04 開工，接在 #141）
+│   └── v8-tool-audio-editor-regions    「high｜Opus 5.5｜一個原檔切多段、一次匯出、淡入淡出」（2026-11-05 撤回，退回 `-edit`）
 │
 ├── framework-rework-line               「PR #123 的整改，工具側（2026-11-01 依架構整改計畫重排）：全部等架構的 PR A 合併」
 │   ├── v8-tool-ui-editor-path-dialog-adopt「high｜Opus 5.5｜T1：ui_editor 改呼叫 Engine 的選擇窗（和 T3a 一起做）」
@@ -816,7 +818,7 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-audio-editor-convert` | high（局部 xhigh）｜Opus 5.5 | 6～10 h | 工具登錄（`tools.csv`、`project.json`）、核心程式庫與 CLI；照上方事前宣告通過；catalog 條目正確；突變檢查 |
 | `v8-tool-framework-shell` | medium～high｜Opus 5.5 | 3～5 h | `tools/framework/` 有 ImGui＋SDL 宿主、系統選擇窗、檔案存取、唯讀 catalog 掛載、catalog 寫入（從音效工具搬入）；ui_editor 改用它、測試全過；Design Invariants＋守衛；`framework` 加進保留名 |
 | `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過。事前宣告已核准，2026-11-03 開工時更新（上方）；等 GYO::Audio 播放控制層合併後才實作 |
-| `v8-tool-audio-editor-regions` | high｜Opus 5.5 | 8～12 h | 多段匯出、淡入淡出、工程檔 version 2、`export` 命令；DI 3 的措辭改成複數（要你同意）；使用者在 GUI 上試過。事前宣告在上方，2026-11-04 核准並開工（接在 #141 的分支） |
+| `v8-tool-audio-editor-regions` | high｜Opus 5.5 | 8～12 h | 多段匯出、淡入淡出、工程檔 version 2、`export` 命令；DI 3 的措辭改成複數（要你同意）；使用者在 GUI 上試過。事前宣告在上方，2026-11-04 核准並開工（接在 #141 的分支）。**2026-11-05 撤回**（`v8-tool-audio-editor-regions-withdrawn`） |
 | `v8-tool-ui-editor-path-dialog-adopt`（T1） | high｜Opus 5.5 | 和 T3a 合計 5～7 h | 等 PR A 合併（含 `v8-engine-platform-path-dialog`）；和 T3a 一起做，因為舊宿主交不出 `SdlPlatform&`（架構計畫 D-4）。`SdlPathDialogs` 改收 `SdlPlatform&`，只留用途↔tag 對照與每幀套用；`PathDialog.hpp` 不再 include framework；CMake 具名 `GYO::PlatformSDL`；ui_toolchain.md Design Invariant 1 改寫（要你同意）。`pathDialogOpen_`（`EditorApp.cpp`）加「答案不來」時的恢復規則：Engine 新的 Design Invariant 10 只保證最多一個答案。守衛加 `GYO::PlatformSDL`（放寬，§14.4 出示 1～5 並經你核准）。L3 實機（Windows 優先）：選檔、取消、非 ASCII 路徑、對話窗開著時關視窗、答案不來。事前宣告帶入架構批的範圍限界：真實 OS 對話窗的回呼執行緒、Linux portal 的 pump、平台或父視窗銷毀時的行為，CI 都量不到 |
 | `v8-tool-ui-editor-shell-adopt`（T3a） | high｜Opus 5.5 | （見 T1） | 等 PR A 合併（含 `v8-framework-shell`）。GUI 用 `RunImGuiShell`，cli 用 `RunHeadlessShell`（命令列錯誤印 help、回 2）；資產預覽用 `NativeRenderer(context.renderer)`，ui_editor 自己連 `GYO::RenderBackendSDLNative`（platform-sdl Replacement Criteria 2 的新例外，Engine 的貼圖 API 另案）。守衛加 `GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative`，拿掉 `GYO::ToolFrameworkGui`（§14.4）；突變 `ui-guard-native-target` 改寫。GUI 由你試過 |
 | `v8-tool-user-files-adopt`（T2） | medium～high｜Opus 5.5 | 2～3 h | 等 PR A 合併（含 `v8-engine-io-user-files`）。ui_editor 的 `DocumentSession` 改呼叫 engine/io；audio_editor 的讀寫改用 `ReadAllBytes` 與 `WriteFileAtomically`（暫存檔名會變）。`ProbeFileStamp` 與 `ReadAllBytes` 都明確傳 `maxBytes`（預設 64 MB）。`AbsolutePath` 留在 framework 核心（架構計畫 D-2），ui_editor 繼續用那一份。audio_editor 現在完全沒用 `FileService`，改用 engine/io 是新依賴：CMake 具名 `GYO::Engine`，守衛加 `engine/io/` 與 `GYO::Engine`（放寬，§14.4）；ui_editor 的守衛預期不變，開工前確認。兩個工具的測試照舊通過 |
@@ -859,4 +861,6 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-audio-editor-l3-deferred` | （2026-11-04）`-edit`（判定 8）與 `-regions`（判定 7）的 GUI L3 延後，等 Model Viewer 出來後一起試。兩個判定都記為未判定，不是通過 | 「感覺不太符合我的需求，不過先這樣。等model viewer出來了。我一起聯動看看效果。」 |
 | `v8-tool-audio-editor-merge-wait` | （2026-11-04）PR #141 先不合併，等 Model Viewer 出來、一起試過 GUI 之後再決定 | 「先不合，等model viewer 一起。」 |
 | `v8-tool-path-dialog-rule-handover` | （2026-11-04）系統選擇窗的記帳規則（每次請求新 tag、只認最新一次、Chosen／Cancelled 才結束、Failed 不結束、可放棄等待；Engine `platform-sdl` Design Invariant 10 的消費端）在 ui_editor（`PathDialogRequests`）與 audio_editor（`ApplyDialogAnswers`）各寫一份。交回 v8 規劃會話，記成 v8 驗收前必須完成的事項；放不放進 framework、由誰做，交 framework 的 owner（架構會話）判斷，本線不自行搬。使用者寫「8v驗收」，照上下文讀成 v8 | 「丟回給v8會話，記成8v驗收前必須完成的事項。」 |
+| `v8-tool-audio-editor-scope` | （2026-11-05）audio_editor 的邊界：簡單剪輯（裁剪、增益、試聽）與轉換、登錄就好；不做大規模編輯與混音，留給專業軟體。「之前的版本」照上下文讀成 `-edit` 完成時（GUI：播放、波形、裁剪、增益、工程檔；`-convert` 的轉換與登錄）。多段切割交給外部軟體，每段各存一個 WAV 再匯入；聲音側的 B（一個事件一段聲音，`v8-tool-anim-event-sound-owner`）不受影響 | 「audio_editor 我想了想，退回到之前的版本（可以做簡單剪輯，轉換）就好了。audio_editor不做大規模編輯混音，留給專業軟體做就好。」 |
+| `v8-tool-audio-editor-regions-withdrawn` | （2026-11-05）依 `v8-tool-audio-editor-scope` 撤回 `v8-tool-audio-editor-regions`：多段匯出、淡入淡出、工程檔 version 2、`export` 命令都拿掉；`tools/audio_editor`、`tests/audio_editor`、`docs/audio_editor`、`framework_mutations.json` 退回 `43487d42^`（和 `-edit` 完成時逐位元組相同）。DI 3 回到單數的措辭，`v8-tool-audio-editor-di3-plural` 因此失效（措辭的變更是撤回的一部分，不是另一個 DI 變更）。退回後本機 ctest 69／69；`-edit` 的 26 條突變重跑 26／26 killed、stale 0（主 checkout `build/evidence/tool-v8-audio-editor-regions/mutations-after-withdraw.txt`）。`-regions` 的判定 7 不再判定；它的 dev_log 留作紀錄 | 同上 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |

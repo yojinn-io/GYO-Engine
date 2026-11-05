@@ -10,7 +10,6 @@
 
 #include "engine/os/Files.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <span>
 #include <string_view>
@@ -49,27 +48,6 @@ Result<std::string, AudioEditorError> Resolved(const std::string& path) {
     return std::move(*resolved);
 }
 
-// Whether two resolved paths name one file under the OS layer's comparison of
-// names (ignoring case on Windows). ResolvedPath gives an existing prefix its
-// real form but keeps a name that does not exist yet as written, so this
-// compares those names too.
-Result<bool, AudioEditorError> SameFile(const std::string_view left, const std::string_view right) {
-    std::size_t a = 0;
-    std::size_t b = 0;
-    while (true) {
-        const std::size_t aEnd = std::min(left.find('/', a), left.size());
-        const std::size_t bEnd = std::min(right.find('/', b), right.size());
-        auto same = Files::SamePathComponent(left.substr(a, aEnd - a), right.substr(b, bEnd - b));
-        if (!same) {
-            return Engine::Base::Err(FileError(AudioEditorErrorCode::ReadFailed, "cannot compare", same.error(), left));
-        }
-        if (!*same) return false;
-        if (aEnd == left.size() || bEnd == right.size()) return aEnd == left.size() && bEnd == right.size();
-        a = aEnd + 1;
-        b = bEnd + 1;
-    }
-}
-
 std::string Join(std::string root, const std::string_view relative) {
     if (!root.empty() && root.back() != '/' && root.back() != '\\') root += '/';
     root += relative;
@@ -78,136 +56,61 @@ std::string Join(std::string root, const std::string_view relative) {
 
 } // namespace
 
-Result<std::vector<ExportReport>, AudioEditorError> ExportSounds(const ExportBatch& batch) {
-    if (batch.regions.empty()) {
-        return Engine::Base::Err(AudioEditorError::Make(AudioEditorErrorCode::InvalidRegistration,
-                                                        "there is no region to export", batch.sourcePath));
-    }
-    for (std::size_t index = 0; index < batch.regions.size(); ++index) {
-        for (std::size_t other = 0; other < index; ++other) {
-            if (batch.regions[other].registration.id == batch.regions[index].registration.id) {
-                return Engine::Base::Err(AudioEditorError::Make(AudioEditorErrorCode::InvalidRegistration,
-                                                                "two regions have the same id",
-                                                                batch.regions[index].registration.id));
-            }
-        }
-    }
-
-    auto catalogText = ReadAll(batch.catalogPath);
+Result<ExportReport, AudioEditorError> ExportSound(const ExportRequest& request) {
+    auto catalogText = ReadAll(request.catalogPath);
     if (!catalogText) return Engine::Base::Err(std::move(catalogText).error());
-    std::string text(reinterpret_cast<const char*>(catalogText->data()), catalogText->size());
-    std::vector<ExportReport> reports(batch.regions.size());
-    for (std::size_t index = 0; index < batch.regions.size(); ++index) {
-        const SoundRegistration& registration = batch.regions[index].registration;
-        // The default policy refuses an id of another type and a path another id has (exit status 4).
-        auto update = Framework::RegisterAsset(
-            text, {.id = registration.id, .type = std::string(kSoundType), .path = registration.path});
-        if (!update) return Engine::Base::Err(RegistrationFailed(std::move(update).error()));
-        text = std::move(update->text);
-        reports[index].added = update->added;
-        reports[index].previousPath = std::move(update->previousPath);
-    }
-    // A path one region gives up and another registers in the same export is
-    // still registered, so it is not reported as left behind.
-    for (ExportReport& report : reports) {
-        if (!report.previousPath.has_value()) continue;
-        for (const SoundRegion& region : batch.regions) {
-            if (region.registration.path == *report.previousPath) {
-                report.previousPath.reset();
-                break;
-            }
+    // The default policy refuses an id of another type and a path another id has (exit status 4).
+    auto update = Framework::RegisterAsset(
+        std::string_view(reinterpret_cast<const char*>(catalogText->data()), catalogText->size()),
+        {.id = request.registration.id, .type = std::string(kSoundType), .path = request.registration.path});
+    if (!update) return Engine::Base::Err(RegistrationFailed(std::move(update).error()));
+
+    ExportReport report;
+    report.outputPath = Join(request.assetRoot, request.registration.path);
+    auto output = Resolved(report.outputPath);
+    if (!output) return Engine::Base::Err(std::move(output).error());
+    for (const std::string* protectedPath : {&request.sourcePath, &request.catalogPath}) {
+        auto resolved = Resolved(*protectedPath);
+        if (!resolved) return Engine::Base::Err(std::move(resolved).error());
+        if (*resolved == *output) {
+            return Engine::Base::Err(AudioEditorError::Make(AudioEditorErrorCode::InvalidRegistration,
+                                                            "the clip would overwrite its source or the catalog",
+                                                            report.outputPath));
         }
     }
 
-    std::vector<std::string> outputs;
-    outputs.reserve(batch.regions.size());
-    auto source = Resolved(batch.sourcePath);
-    if (!source) return Engine::Base::Err(std::move(source).error());
-    auto catalog = Resolved(batch.catalogPath);
-    if (!catalog) return Engine::Base::Err(std::move(catalog).error());
-    for (std::size_t index = 0; index < batch.regions.size(); ++index) {
-        reports[index].outputPath = Join(batch.assetRoot, batch.regions[index].registration.path);
-        auto output = Resolved(reports[index].outputPath);
-        if (!output) return Engine::Base::Err(std::move(output).error());
-        for (const std::string* protectedPath : {&*source, &*catalog}) {
-            auto same = SameFile(*output, *protectedPath);
-            if (!same) return Engine::Base::Err(std::move(same).error());
-            if (*same) {
-                return Engine::Base::Err(AudioEditorError::Make(AudioEditorErrorCode::InvalidRegistration,
-                                                                "the clip would overwrite its source or the catalog",
-                                                                reports[index].outputPath));
-            }
-        }
-        for (const std::string& earlier : outputs) {
-            auto same = SameFile(*output, earlier);
-            if (!same) return Engine::Base::Err(std::move(same).error());
-            if (*same) {
-                return Engine::Base::Err(AudioEditorError::Make(AudioEditorErrorCode::InvalidRegistration,
-                                                                "two regions write the same file",
-                                                                reports[index].outputPath));
-            }
-        }
-        outputs.push_back(std::move(*output));
-    }
-
-    auto sourceBytes = ReadAll(batch.sourcePath);
+    auto sourceBytes = ReadAll(request.sourcePath);
     if (!sourceBytes) return Engine::Base::Err(std::move(sourceBytes).error());
     auto decoded = DecodeWav(*sourceBytes);
     if (!decoded) {
         auto error = std::move(decoded).error();
-        error.detail = batch.sourcePath;
+        error.detail = request.sourcePath;
         return Engine::Base::Err(std::move(error));
     }
-    std::vector<std::vector<std::byte>> wavs;
-    wavs.reserve(batch.regions.size());
-    for (std::size_t index = 0; index < batch.regions.size(); ++index) {
-        const SoundRegion& region = batch.regions[index];
-        auto rendered = RenderClip(*decoded, region.settings, DitherSeed(region.registration.id));
-        if (!rendered) {
-            auto error = std::move(rendered).error();
-            error.detail = region.registration.id + ": " + error.detail;
-            return Engine::Base::Err(std::move(error));
-        }
-        const ConvertedClip& clip = *rendered;
-        wavs.push_back(EncodePcm16Wav(clip.channels, clip.sampleRate, clip.samples));
-        ExportReport& report = reports[index];
-        report.sourceRate = decoded->sampleRate;
-        report.sourceFormatTag = decoded->formatTag;
-        report.sourceBits = decoded->bits;
-        report.channels = clip.channels;
-        report.outputRate = clip.sampleRate;
-        report.frames = clip.Frames();
-        report.saturated = clip.saturated;
-    }
+    auto rendered = RenderClip(*decoded, request.settings, DitherSeed(request.registration.id));
+    if (!rendered) return Engine::Base::Err(std::move(rendered).error());
+    const ConvertedClip& clip = *rendered;
 
-    for (std::size_t index = 0; index < wavs.size(); ++index) {
-        if (auto written = WriteReplacing(reports[index].outputPath, wavs[index]); !written) {
-            // The clips already written stay in the asset root, unregistered: say which.
-            auto error = std::move(written).error();
-            for (std::size_t done = 0; done < index; ++done) {
-                error.detail += (done == 0 ? "; written but not registered: " : ", ") + reports[done].outputPath;
-            }
-            return Engine::Base::Err(std::move(error));
-        }
+    const std::vector<std::byte> wav = EncodePcm16Wav(clip.channels, clip.sampleRate, clip.samples);
+    if (auto written = WriteReplacing(report.outputPath, wav); !written) {
+        return Engine::Base::Err(std::move(written).error());
     }
-    if (auto written = WriteReplacing(batch.catalogPath, std::as_bytes(std::span(text.data(), text.size())));
+    const std::string& text = update->text;
+    if (auto written = WriteReplacing(request.catalogPath, std::as_bytes(std::span(text.data(), text.size())));
         !written) {
-        auto error = std::move(written).error();
-        for (std::size_t done = 0; done < reports.size(); ++done) {
-            error.detail += (done == 0 ? "; written but not registered: " : ", ") + reports[done].outputPath;
-        }
-        return Engine::Base::Err(std::move(error));
+        return Engine::Base::Err(std::move(written).error());
     }
-    return reports;
-}
 
-Result<ExportReport, AudioEditorError> ExportSound(const ExportRequest& request) {
-    auto reports = ExportSounds({.sourcePath = request.sourcePath,
-                                 .assetRoot = request.assetRoot,
-                                 .catalogPath = request.catalogPath,
-                                 .regions = {{request.registration, request.settings}}});
-    if (!reports) return Engine::Base::Err(std::move(reports).error());
-    return std::move(reports->front());
+    report.sourceRate = decoded->sampleRate;
+    report.sourceFormatTag = decoded->formatTag;
+    report.sourceBits = decoded->bits;
+    report.channels = clip.channels;
+    report.outputRate = clip.sampleRate;
+    report.frames = clip.Frames();
+    report.saturated = clip.saturated;
+    report.added = update->added;
+    report.previousPath = std::move(update->previousPath);
+    return report;
 }
 
 } // namespace Gyo::Tools::AudioEditor

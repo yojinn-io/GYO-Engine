@@ -84,3 +84,4 @@
   - Engine、PvP：本線不碰。
 - **順序**：framework 契約（架構卡）→ PvP 遷移（產品會話）；audio_editor 的多段匯出與 Model Viewer 的預覽各自並行。
 - **本線的後續**：`v8-tool-audio-editor-regions` 的事前宣告在 [assets.md](assets.md)（2026-11-04 核准，`v8-tool-audio-editor-regions-predeclare`）；決定記為 `v8-tool-anim-event-sound-owner`。
+  - 2026-11-05：使用者把 audio_editor 的邊界定在簡單剪輯與轉換（`v8-tool-audio-editor-scope`），`-regions` 撤回（`v8-tool-audio-editor-regions-withdrawn`）。多段切割改在專業軟體做，每段各存一個 WAV 再匯入。B 的選擇、framework 的契約與 Model Viewer 都不受影響。
