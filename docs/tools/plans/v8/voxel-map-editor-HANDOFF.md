@@ -154,3 +154,8 @@
     2. 本 owner 的 tool-chunked 批。
     3. window 批。
   - 在那之前，不動 build 和預覽的路徑。
+- 2026-11-06：架構會話通知，engine-map 拆成兩批（你的決定）。
+  1. `v8-arch-big-map-engine-grid`：Collision 的靜態 broadphase，加上 VoxelMesh 內部的解析加速；不碰格式。
+  2. `v8-arch-big-map-engine-format`：VoxelMesh v2 的索引＋region、`ValidateVoxelChunk`、v1 退役、MapMarkers。
+  - tool-chunked 批要等的是第 2 批（格式）。window 批（PR #158）也照樣等格式定案。
+  - 等待期間，若要做不依賴新格式的編輯器功能，要先向你提，不自行動 build／預覽路徑。
