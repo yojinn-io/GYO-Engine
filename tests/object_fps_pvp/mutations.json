@@ -387,7 +387,7 @@
       "find": "    ('definition-name', 'weapons/nailer_v2/viewmodel/nailer_v2_viewmodel.json'):\n        'the next feature batch that edits this definition',\n",
       "replace": "",
       "check": "asset_catalog",
-      "expect": "FAIL: test_paths_follow_the_layout"
+      "expect": "FAIL: test_names_follow_the_naming_rules"
     },
     {
       "id": "v8-asset-layout-guard-source-license",
