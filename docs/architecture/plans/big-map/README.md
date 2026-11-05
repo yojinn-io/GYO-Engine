@@ -22,6 +22,7 @@
 - [engine-map 宣告](engine-map.zh-Hant.md)：拆批前的一份宣告（使用者 2026-11-06 核准），下面兩份由它拆出。
 - [engine-grid 宣告](engine-grid.zh-Hant.md)：第一批。
 - [交接（HANDOFF）](HANDOFF.md)：記錄器。
+- [代辦（功能、歸屬批次、觸發條件）](todo.zh-Hant.md)：分區載入、局部重建、視錐剔除的現況與觸發條件（使用者 2026-11-06 要求記錄）。
 
 ## 批次一覽（照 proposal §11.11）
 
