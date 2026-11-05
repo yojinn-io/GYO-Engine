@@ -8860,6 +8860,46 @@
       "replace": "    for (std::size_t j = bodies_.size(); j-- > 0;) {\n        const auto i = j;\n        auto& state = bodies_[i];",
       "check": "cpu",
       "expect": "TieBreakByEntityId|is NOT correct"
+    },
+    {
+      "id": "ui-action-check-no-unhandled",
+      "batch": "v8-product-ui-action-check",
+      "what": "CheckLobbyActions no longer reports a declared lobby action that has no handler",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/LobbyActions.hpp",
+      "find": "if (entry == handled.end()) append(unhandled, declaration.id);",
+      "replace": "if (entry == handled.end()) {}",
+      "check": "cpu",
+      "expect": "declared but not handled: test\\.extra"
+    },
+    {
+      "id": "ui-action-check-no-undeclared",
+      "batch": "v8-product-ui-action-check",
+      "what": "CheckLobbyActions no longer reports a handled lobby action that is not declared",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/LobbyActions.hpp",
+      "find": "if (!found) append(undeclared, entry.id);",
+      "replace": "(void)found;",
+      "check": "cpu",
+      "expect": "handled but not declared: test\\.go"
+    },
+    {
+      "id": "ui-action-check-no-payload",
+      "batch": "v8-product-ui-action-check",
+      "what": "CheckLobbyActions no longer compares the handled payload type with the declared one",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/LobbyActions.hpp",
+      "find": "else if (entry->payload != declaration.payload)",
+      "replace": "else if (false && entry->payload != declaration.payload)",
+      "check": "cpu",
+      "expect": "payload type differs from the declaration: test\\.say"
+    },
+    {
+      "id": "ui-action-check-not-called",
+      "batch": "v8-product-ui-action-check",
+      "what": "The lobby document is started without the action check (ParseLobbyDocument skips CheckLobbyActions)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/LobbyActions.hpp",
+      "find": "error = CheckLobbyActions(document.value().actions, kLobbyActions);",
+      "replace": "error.clear();",
+      "check": "cpu",
+      "expect": "declares an action the product does not handle"
     }
   ]
 }

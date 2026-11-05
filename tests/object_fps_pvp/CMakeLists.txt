@@ -6,7 +6,8 @@ add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp Predi
     PlayerAnimationTests.cpp CombatTests.cpp CombatHostTests.cpp ShotQueryTests.cpp CrouchTests.cpp LifePredictionTests.cpp MathCharacterizationTests.cpp WireTests.cpp
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp SoundCuesTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
     NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
-    DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp AddressTextTests.cpp EntityModelTests.cpp EntityColumnsTests.cpp)
+    DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp AddressTextTests.cpp EntityModelTests.cpp EntityColumnsTests.cpp
+    LobbyActionsTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
     PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
@@ -14,9 +15,11 @@ target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_
     PVP_SOUND_SETTINGS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/audio/sfx.json"
     PVP_WEAPON_ANIM_EVENTS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/weapons/nailer_v2/viewmodel/viewmodel.anim_events.json"
     PVP_PRODUCT_ARENA_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/pvp_arena.json"
+    PVP_LOBBY_UI_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/pvp_lobby.json"
     PVP_CONNECTION_TIMING_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/connection_timing.json")
 target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} ${client_simulation} GYO::Net GYO::Model gyo_test_support nlohmann_json::nlohmann_json doctest::doctest
-    asio::asio) # ConnectionLivenessTests: the socket error codes asio reports
+    asio::asio # ConnectionLivenessTests: the socket error codes asio reports
+    GYO::Ui) # LobbyActionsTests: the lobby document against the handled actions
 if(WIN32)
     target_compile_definitions(${tests} PRIVATE NOMINMAX)
 endif()
