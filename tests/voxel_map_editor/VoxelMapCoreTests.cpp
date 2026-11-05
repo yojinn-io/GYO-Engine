@@ -397,6 +397,34 @@ TEST_CASE("merge: a 2x1x1 bar is one box; an L is two") {
                                       {{0, 32, 0}, {16, 48, 16}}}) == std::vector<Box>{{{0, 0, 0}, {16, 48, 16}}});
 }
 
+TEST_CASE("merge: walls along z keep the corners, walls along x stop at them") {
+    // A ring of walls one cell thick and three high around a 2x2 room, and a
+    // pillar: cell boxes in, the strip boxes out (z runs first, equal runs
+    // merged along x), as a hand-written level of axis walls would list them.
+    std::vector<Box> cells;
+    const auto cell = [&cells](const int x, const int z, const int height) {
+        for (int y = 0; y < height; ++y)
+            cells.push_back({{x * 16, y * 16, z * 16}, {x * 16 + 16, y * 16 + 16, z * 16 + 16}});
+    };
+    for (int z = 0; z < 6; ++z) {
+        cell(0, z, 3);
+        cell(5, z, 3);
+    }
+    for (int x = 1; x < 5; ++x) {
+        cell(x, 0, 3);
+        cell(x, 5, 3);
+    }
+    cell(2, 2, 2);
+    cell(3, 2, 2);
+    cell(2, 3, 2);
+    cell(3, 3, 2);
+    CHECK(MergeBoxes(cells) == std::vector<Box>{{{0, 0, 0}, {16, 48, 96}},
+                                                {{16, 0, 0}, {80, 48, 16}},
+                                                {{16, 0, 80}, {80, 48, 96}},
+                                                {{32, 0, 32}, {64, 32, 64}},
+                                                {{80, 0, 0}, {96, 48, 96}}});
+}
+
 TEST_CASE("merge: 200 random sets keep their union and never overlap") {
     // A fixed linear congruential generator: the same sets on every platform.
     std::uint64_t state = 0x9E3779B97F4A7C15ULL;

@@ -11,7 +11,7 @@
   - `v8-tool-voxel-map-plan`：方案、分批。
   - `v8-engine-voxel-mesh-contract`：`gyo.voxel_mesh` 契約與讀取器，V1～V6 通過；L1 三平台綠，run 42000098862。
 - **完成**：`v8-tool-voxel-map-editor-core`：E1～E10 通過（L1 三平台綠，run 42010316153）。dev_log：[2026_11_05_tool_v8_voxel_map_editor_core](../../../dev_logs/2026_11_05_tool_v8_voxel_map_editor_core.zh-Hant.md)。
-- **進行中**：`v8-product-arena-v2`。你選了「arena v2 から」「ここでやる」。事前宣告已寫進 voxel-map-editor.md，決定 1、決定 2 你都選了建議（R2、條帶式），宣告全文**等你核准**。
+- **進行中**：`v8-product-arena-v2`。你選了「arena v2 から」「ここでやる」。事前宣告已寫進 voxel-map-editor.md，宣告已核准（`v8-product-arena-v2-declare`），實作中。
 - **前提**：PR #146 已合併，所以 `v8-framework-preview-component` 可以排了；開始前要和架構會話協調。
 - **等你決定**：目前沒有。
 
@@ -19,6 +19,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-product-arena-v2-declare` | （2026-11-05）核准 arena-v2 批的事前宣告（P1～P10） | 「承認」 |
 | `v8-product-arena-v2-render` | （2026-11-05）arena-v2 批由 Client 畫烘好的 mesh（R2） | 選「R2 描く（推奨）」 |
 | `v8-product-arena-v2-merge` | （2026-11-05）碰撞盒合併改成條帶式：每一行取沿 z 的最長段，完全相同的段沿 x 合併，相同的矩形沿 y 往上長 | 選「帯状に変える（推奨）」 |
 | `v8-tool-voxel-map-editor-core-deviations` | （2026-11-05）確認 core 批實作和宣告的差異：`convert-arena-v1` 改成中立的 `import-boxes <json> <pointer> <grid>`；結束碼對齊 model_viewer（1 輸入、2 用法、3 讀寫、4 verify 不同）；碰撞盒合併改成沿 y 逐層做；格子格式的範圍規則；E6 的做法；fixtures 的 `.gitattributes` | 「確認，送審查」 |

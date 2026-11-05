@@ -36,6 +36,8 @@ RETAINED = {
     'object_fps_pvp.arena': 'loaded by path (pvp_arena.json) by the Match and, through arenas.json, by the Client',
     'object_fps_pvp.arena.corners': 'loaded by path (pvp_corners.json) by the Match and, through arenas.json, by the Client',
     'object_fps_pvp.arenas': 'loaded by path (arenas.json): the arenas the Client installs',
+    'object_fps_pvp.arena.mesh': 'loaded by path (pvp_arena.voxel_mesh.json, the geometry pvp_arena.json names) by the Match and the Client',
+    'object_fps_pvp.arena.corners.mesh': 'loaded by path (pvp_corners.voxel_mesh.json, the geometry pvp_corners.json names) by the Match and the Client',
     'object_fps_pvp.movement_rules': 'loaded by path (movement_rules.json) by the Match only (protocol-v8 section 3)',
 }
 
@@ -82,6 +84,9 @@ LAYOUT_EXCEPTIONS = {
     ('root-file', 'arenas.json'): PATH_LOADED_MOVE,
     ('root-file', 'pvp_arena.json'): PATH_LOADED_MOVE,
     ('root-file', 'pvp_corners.json'): PATH_LOADED_MOVE,
+    # The baked maps sit next to the arena files that name them (v8-product-arena-v2).
+    ('root-file', 'pvp_arena.voxel_mesh.json'): PATH_LOADED_MOVE,
+    ('root-file', 'pvp_corners.voxel_mesh.json'): PATH_LOADED_MOVE,
     ('root-file', 'movement_rules.json'): PATH_LOADED_MOVE,
     ('definition-name', 'weapons/nailer_v2/viewmodel/nailer_v2_viewmodel.json'):
         'the next feature batch that edits this definition',

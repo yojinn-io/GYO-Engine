@@ -74,12 +74,22 @@
     },
     {
       "id": "vme-merge-overlap",
-      "what": "Merged rectangles are not marked as used, so they overlap",
+      "what": "A strip is emitted again in every column it covers, so boxes overlap",
       "file": "tools/voxel_map_editor/src/Build.cpp",
-      "find": "                    for (auto xx = x; xx < xEnd; ++xx) filled[index(xx, zz)] = 0;",
-      "replace": "                    for (auto xx = x; xx < xEnd; ++xx) static_cast<void>(index(xx, zz));",
+      "find": "                    column.emplace(strip, previous != strips.end() ? previous->second : x);",
+      "replace": "                    column.emplace(strip, x);\n                    if (previous != strips.end()) emit(previous->second, x + 1, strip.first, strip.second);",
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "*random sets*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-merge-unequal-strips",
+      "what": "A strip goes on along x from a neighbour that only starts at the same z (different strips merged)",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "                    const auto previous = strips.find(strip);",
+      "replace": "                    const auto previous = std::find_if(strips.begin(), strips.end(), [&](const auto& s) { return s.first.first == strip.first; });",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*keep the corners*",
       "expect": "is NOT correct"
     },
     {

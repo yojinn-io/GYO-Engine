@@ -89,9 +89,12 @@ std::string Ints(const std::initializer_list<std::int64_t> values) {
 } // namespace
 
 std::vector<Box> MergeBoxes(const std::span<const Box> boxes) {
-    // Slab by slab along y: the rectangles of the boxes that span a slab are
-    // merged greedily (along x, then z), and a rectangle that continues into
-    // the next slab unchanged extends its box upwards.
+    // Slab by slab along y. Inside a slab, every column x is cut into its
+    // longest runs along z (strips), and a strip goes on along x only while
+    // the next column has exactly the same strip. A rectangle that goes on
+    // unchanged into the next slab extends its box upwards. So a wall along z
+    // keeps its corners and a wall along x stops at them, and the boxes are
+    // disjoint with the input's union.
     std::vector<std::int32_t> ys;
     for (const auto& box : boxes) {
         ys.push_back(box.minimum[1]);
@@ -135,27 +138,37 @@ std::vector<Box> MergeBoxes(const std::span<const Box> boxes) {
                 for (auto x = x0; x < x1; ++x) filled[index(x, z)] = 1;
         }
         std::map<Rectangle, std::int32_t> next;
-        for (std::size_t z = 0; z < nz; ++z) {
-            for (std::size_t x = 0; x < nx; ++x) {
-                if (!filled[index(x, z)]) continue;
-                auto xEnd = x + 1;
-                while (xEnd < nx && filled[index(xEnd, z)]) ++xEnd;
-                auto zEnd = z + 1;
-                while (zEnd < nz && std::all_of(filled.begin() + static_cast<std::ptrdiff_t>(index(x, zEnd)),
-                                                filled.begin() + static_cast<std::ptrdiff_t>(index(xEnd, zEnd)),
-                                                [](const char c) { return c != 0; }))
-                    ++zEnd;
-                for (auto zz = z; zz < zEnd; ++zz)
-                    for (auto xx = x; xx < xEnd; ++xx) filled[index(xx, zz)] = 0;
-                const Rectangle r{xs[x], zs[z], xs[xEnd], zs[zEnd]};
-                const auto continued = open.find(r);
-                if (continued != open.end()) {
-                    next.emplace(r, continued->second);
-                    open.erase(continued);
-                } else {
-                    next.emplace(r, y0);
+        const auto emit = [&](const std::size_t x0, const std::size_t x1, const std::size_t z0, const std::size_t z1) {
+            const Rectangle r{xs[x0], zs[z0], xs[x1], zs[z1]};
+            const auto continued = open.find(r);
+            if (continued != open.end()) {
+                next.emplace(r, continued->second);
+                open.erase(continued);
+            } else {
+                next.emplace(r, y0);
+            }
+        };
+        std::map<std::pair<std::size_t, std::size_t>, std::size_t> strips; // (z0, z1) -> first column
+        for (std::size_t x = 0; x <= nx; ++x) {
+            std::map<std::pair<std::size_t, std::size_t>, std::size_t> column;
+            if (x < nx) {
+                for (std::size_t z = 0; z < nz;) {
+                    if (!filled[index(x, z)]) {
+                        ++z;
+                        continue;
+                    }
+                    auto end = z + 1;
+                    while (end < nz && filled[index(x, end)]) ++end;
+                    const auto strip = std::make_pair(z, end);
+                    const auto previous = strips.find(strip);
+                    column.emplace(strip, previous != strips.end() ? previous->second : x);
+                    z = end;
                 }
             }
+            // A strip the column does not repeat ends here.
+            for (const auto& [strip, first] : strips)
+                if (!column.contains(strip)) emit(first, x, strip.first, strip.second);
+            strips = std::move(column);
         }
         for (const auto& [r, start] : open) close(r, start, y0);
         open = std::move(next);

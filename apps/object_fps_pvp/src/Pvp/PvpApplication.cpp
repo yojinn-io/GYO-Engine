@@ -1,4 +1,5 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
+#include "RetroFPS/Pvp/ArenaMesh.hpp"
 #include "RetroFPS/Pvp/ClientLog.hpp"
 #include "RetroFPS/Pvp/SessionSummary.hpp"
 #include "RetroFPS/Pvp/AddressText.hpp"
@@ -114,6 +115,15 @@ struct PvpApplication::Impl final {
     std::unique_ptr<Engine::Input::Backend::Sdl::SdlInput> input;
     Engine::Render::MeshHandle cube;
     Engine::Render::MeshHandle floor;
+    // The baked map of each installed arena, in arenas' order (v8-product-arena-v2):
+    // the geometry from gyo.voxel_mesh, and its GPU mesh and palette texture.
+    // Empty for an arena of schema 1, which is drawn as boxes.
+    std::vector<Engine::VoxelMesh::VoxelMeshGeometry> arenaGeometries;
+    struct ArenaMesh final {
+        Engine::Render::MeshHandle mesh;
+        Engine::Render::TextureHandle palette;
+    };
+    std::vector<ArenaMesh> arenaMeshes;
     Engine::Render::RenderQueue queue;
     std::unique_ptr<fps::WeaponViewModel> weapon;
     std::unique_ptr<PlayerPresentation> players;
@@ -187,6 +197,10 @@ struct PvpApplication::Impl final {
         if (device) {
             if (cube.IsValid()) static_cast<void>(device->ReleaseMesh(cube));
             if (floor.IsValid()) static_cast<void>(device->ReleaseMesh(floor));
+            for (const auto& baked : arenaMeshes) {
+                if (baked.mesh.IsValid()) static_cast<void>(device->ReleaseMesh(baked.mesh));
+                if (baked.palette.IsValid()) static_cast<void>(device->ReleaseTexture(baked.palette));
+            }
         }
     }
 
@@ -664,6 +678,13 @@ struct PvpApplication::Impl final {
             static_cast<double>(shotGate.RemainingTicks(presented.shotGate)) / AuthorityTickRate : 0;
     }
 
+    // The GPU mesh of an installed arena's baked map; nullptr for schema 1.
+    const ArenaMesh* BakedMeshOf(const Arena& shown) const {
+        for (std::size_t i = 0; i < arenas.size() && i < arenaMeshes.size(); ++i)
+            if (arenas[i].id == shown.id && arenaMeshes[i].mesh.IsValid()) return &arenaMeshes[i];
+        return nullptr;
+    }
+
     bool SubmitBox(Engine::Math::Vec3 center, Engine::Math::Vec3 scale,
         Engine::Render::Color color, float rotation = 0.0F) {
         Engine::Render::MeshSubmission draw;
@@ -728,7 +749,15 @@ struct PvpApplication::Impl final {
                 if (!result) { lastError = Explain(result.error()); return false; }
             }
         }
-        for (const auto& wall : arena->walls) {
+        if (const auto* baked = BakedMeshOf(*arena)) {
+            // One draw: the baked faces, coloured by the palette texture.
+            Engine::Render::MeshSubmission draw;
+            draw.mesh = baked->mesh;
+            draw.material.texture = baked->palette;
+            draw.material.tint = {1, 1, 1, 1};
+            const auto result = queue.Submit(draw);
+            if (!result) { lastError = Explain(result.error()); return false; }
+        } else for (const auto& wall : arena->walls) {
             const auto& a = wall.minimum;
             const auto& b = wall.maximum;
             if (!SubmitBox(Engine::Math::Center(wall), b - a, {.20F,.31F,.39F,1})) return false;
@@ -931,7 +960,7 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     impl_->loaders.Register(std::make_unique<Asset::Loaders::SoundLoader>());
     impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
     impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
-    auto installed = LoadInstalledArenas(assetRoot / "arenas.json", error);
+    auto installed = LoadInstalledArenas(assetRoot / "arenas.json", error, &impl_->arenaGeometries);
     if (!installed) return false;
     std::vector<ArenaIdentity> identities;
     for (const auto& arena : *installed) {
@@ -1014,6 +1043,18 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     auto floor = impl_->device->CreateMesh(Engine::Render::MakeUnitQuadXZ().View());
     if (!floor) { error = Explain(floor.error()); return false; }
     impl_->floor = floor.value();
+    for (const auto& geometry : impl_->arenaGeometries) {
+        Impl::ArenaMesh baked;
+        if (DrawsBakedMesh(geometry)) {
+            auto mesh = impl_->device->CreateMesh(ArenaRenderMesh(geometry).View());
+            if (!mesh) { error = Explain(mesh.error()); return false; }
+            baked.mesh = mesh.value();
+            auto palette = impl_->device->CreateTexture(ArenaPaletteImage(geometry));
+            if (!palette) { error = Explain(palette.error()); return false; }
+            baked.palette = palette.value();
+        }
+        impl_->arenaMeshes.push_back(baked);
+    }
     impl_->weapon = std::make_unique<fps::WeaponViewModel>();
     if (!impl_->weapon->Initialize(*impl_->device, impl_->assets,
         Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error)) return false;

@@ -7,6 +7,8 @@
     { "id": "object_fps_pvp.player.animations", "type": "text", "path": "characters/player/animations.animset.json" },
     { "id": "object_fps_pvp.arena", "type": "text", "path": "pvp_arena.json" },
     { "id": "object_fps_pvp.arena.corners", "type": "text", "path": "pvp_corners.json" },
+    { "id": "object_fps_pvp.arena.mesh", "type": "text", "path": "pvp_arena.voxel_mesh.json" },
+    { "id": "object_fps_pvp.arena.corners.mesh", "type": "text", "path": "pvp_corners.voxel_mesh.json" },
     { "id": "object_fps_pvp.arenas", "type": "text", "path": "arenas.json" },
     { "id": "object_fps_pvp.movement_rules", "type": "text", "path": "movement_rules.json" },
     { "id": "object_fps_pvp.ui.pvp_lobby", "type": "text", "path": "ui/pvp_lobby.json" },

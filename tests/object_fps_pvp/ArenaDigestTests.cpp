@@ -285,7 +285,9 @@ TEST_CASE("A Client installs its arenas, and a Match writes its traces, in a fol
 #endif
     };
     std::filesystem::create_directories(setup(deep));
-    for (const char* name : {"arenas.json", "pvp_arena.json", "pvp_corners.json"})
+    // Schema 2 arenas name their baked maps next to them (v8-product-arena-v2).
+    for (const char* name : {"arenas.json", "pvp_arena.json", "pvp_corners.json", "pvp_arena.voxel_mesh.json",
+                             "pvp_corners.voxel_mesh.json"})
         std::filesystem::copy_file(ProductAssets() / name, setup(deep / name));
     std::string error;
     const auto installed = LoadInstalledArenas(deep / "arenas.json", error);
@@ -334,6 +336,8 @@ TEST_CASE("An arena list rejects other versions, paths, repeats and a different 
     std::filesystem::create_directories(directory);
     std::filesystem::copy_file(ProductAssets() / "pvp_arena.json", directory / "a.json");
     std::filesystem::copy_file(ProductAssets() / "pvp_corners.json", directory / "b.json");
+    for (const char* mesh : {"pvp_arena.voxel_mesh.json", "pvp_corners.voxel_mesh.json"})
+        std::filesystem::copy_file(ProductAssets() / mesh, directory / mesh);
     auto taller = nlohmann::json::parse(std::ifstream(ProductAssets() / "pvp_corners.json"));
     taller["id"] = "taller";
     taller["body_height"] = 2.0;

@@ -7,7 +7,7 @@ add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp Predi
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp SoundCuesTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
     NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
     DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp AddressTextTests.cpp EntityModelTests.cpp EntityColumnsTests.cpp
-    LobbyActionsTests.cpp)
+    LobbyActionsTests.cpp ArenaV2Tests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
     PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
@@ -85,7 +85,7 @@ add_custom_target(${presentation_content})
 gyo_stage_app_content(${presentation_content} "${GYO_CURRENT_APP}" "${presentation_stage}")
 add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp
     PlayerAnimationEquivalenceTests.cpp PlayerHitboxTests.cpp PlayerAnimationDigestTests.cpp
-    PlayerHitModelTests.cpp WeaponEventSoundsTests.cpp)
+    PlayerHitModelTests.cpp WeaponEventSoundsTests.cpp ArenaMeshTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
 # hit_aim.hpp: the acceptance probes' aim, checked against the posed judgement.
 target_include_directories(${presentation_tests} PRIVATE "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp")
@@ -429,7 +429,7 @@ set_target_properties(${digest_o0} PROPERTIES CXX_EXTENSIONS OFF)
 target_include_directories(${digest_o0} PRIVATE "${digest_app_root}/include")
 gyo_use_app_config(${digest_o0} "${GYO_CURRENT_APP}")
 target_compile_definitions(${digest_o0} PRIVATE ${digest_arena_definitions})
-target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads GYO::Trace GYO::Os
+target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads GYO::Trace GYO::Os GYO::VoxelMesh
     nlohmann_json::nlohmann_json)
 # Appended after the configuration's flags, so the last optimisation flag wins.
 target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>)
