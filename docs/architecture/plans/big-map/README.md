@@ -1,7 +1,7 @@
 # 大地圖（區塊化地圖）計畫（`v8-arch-big-map`）
 
 更新：2026-11-06。Owner：架構（Engine 契約的判斷）；各批的實作 owner 見下表。卡片由架構師會話（「[Job][架構師]例行架構掃描」）開出。
-**狀態：survey 進行中。** 先讀本頁，再讀 [交接](HANDOFF.md)。
+**狀態：survey 完成（2026-11-06），六個未決事項等使用者決定（[survey](survey.zh-Hant.md) 第 4 節）。** 先讀本頁，再讀 [交接](HANDOFF.md)。
 
 ## 代號對照
 
@@ -31,7 +31,7 @@ v8-arch-big-map
 
 | 批次 | 段 | 模型／ギア | Owner | 狀態 |
 |---|---|---|---|---|
-| `-survey` | 上段（Architecture 判斷的根據） | 調查者 Opus／high；對抗檢查者 Fable／xhigh（要使用者同意） | 架構 | 進行中 |
+| `-survey` | 上段（Architecture 判斷的根據） | 調查者 Opus／high；對抗檢查者 Fable／xhigh（使用者已同意） | 架構 | 完成，等使用者決定 |
 | `-engine-map` | 上段 | 未開；survey 定案後由架構師開卡 | Engine | 未開 |
 | `-tool-chunked` | 未定 | 未開 | voxel 地圖編輯器線 | 未開 |
 | `-product-arena-v3` | 未定 | 未開 | 產品（object_fps_pvp） | 未開 |
@@ -42,3 +42,7 @@ survey 之後的三批，範圍以使用者對 survey 六個未決事項的決�
 
 - 不開 engine-map／tool／product 批；不改 Engine、工具、產品的程式碼；不改 PR #152 的文件；不碰 framework、Gateway、pv10。
 - 不把 proposal 的估算當結論；標 ⚠ 的數字沒量到就寫「未量」。
+
+## dev_log
+
+- [2026-11-06 `v8-arch-big-map-survey`](../../../dev_logs/2026_11_06_arch_v8_big_map_survey.zh-Hant.md)

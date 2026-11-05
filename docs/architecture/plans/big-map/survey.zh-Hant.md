@@ -1,20 +1,25 @@
 # 大地圖 survey：以來源與量測檢驗方案 v0.1（`v8-arch-big-map-survey`）
 
 更新：2026-11-06。Owner：架構。計畫：[README](README.md)；假說：[proposal-v0.1](proposal-v0.1.zh-Hant.md)；記錄：[HANDOFF](HANDOFF.md)。
-**狀態：調查與量測完成，對抗檢查結果附在第 7 節。六個未決事項等使用者決定；本文只給建議，不替使用者決定。**
+**狀態：調查與量測完成；對抗檢查（Fable／xhigh）的指正已核對並修正，結果附在第 7 節。六個未決事項等使用者決定；本文只給建議，不替使用者決定。**
 
 ## 0. 摘要
 
-- **量測**：慢的不是畫面，也不是 JSON。只畫不重建的畫面 p95 4.6 ms；Engine 解析 5.3 MB 要 1.3～1.4 s，其中約 1.1 s 是 nlohmann「回呼式解析」的機制成本，
-  換掉它（契約不變）推算可快 4 倍以上。Match 的線性碰撞掃描和盒子數成線性：合成圖（2 萬盒）＋4 人就用掉 tick 的 29～55 %，加上 AI 會超過。
+- **量測**：慢的不是畫面，也不是 JSON 本身。
+  - 只畫不重建的畫面 p95 4.6 ms；explore-p1 每幀 2.7 s 幾乎全是重建與文字往返。
+  - Engine 解析 5.3 MB 要 1.3～1.4 s，其中約 1.1 s 來自 nlohmann「回呼式解析」的一個二次方行為：每結束一個物件，就線性掃一次它所在的陣列
+    （合成圖的 20,691 個碰撞盒物件放在同一個陣列）。成本跟「同一陣列裡的物件數」的平方走，**不是每位元組或每個值的常數**，所以「4 MB/s」不能外推到別的地圖。
+    換掉回呼（契約不變）可降到約 0.3 s。
+  - Match 的線性碰撞掃描和盒子數成線性：合成圖（2 萬盒）上一位玩家站在地形上走一步約 2.2 ms，4 人約用掉 tick 的一半，加上 AI 會超過。
 - **參照**：v0.1 的骨架（16³ 區塊、region 檔、索引、作者配置與執行期分離、broadphase、Engine 擁有中立的標記格式、產品擁有意義、greedy 在工具）
-  都有成熟方案的對應；但有三處和 proposal 的記憶不符，會影響契約的寫法：
-  1. **broadphase 查詢在業界不是決定性的**（Jolt 明寫）。v0.1 的「結果等於線性掃描，平手取索引小者」沒有現成來源，是 GYO 自己要立的契約；
-     Jolt 的建議（以精確邊界再測、結果一致排序）與它的線性掃描「參考實作」是同一個想法的最近來源。
-  2. **遠處實體的處理三家三樣**：Minecraft 暫停、Luanti 存成靜態資料並在回來時補算時間、Veloren 刪除後交給粗模擬；塔科夫（社群擷取的資料）是依距離睡眠。
-     沒有一家宣稱決定性。GYO 若要「遠處降頻」，權威與決定性要自己寫。
-  3. **Godot 的導航是每格一個區域，不是每 octant 烘焙**；UE 的 One File Per Actor 只在編輯器、cook 後嵌回 level。
+  都有成熟方案的對應。和 proposal 的記憶不符、會影響契約寫法的有兩件（第 3 節標「大」）：
+  1. **broadphase 的決定性**：Jolt 明寫它的 broadphase 查詢不是決定性的，原因是多執行緒修改與動態樹的邊界放寬，這對 GYO「單執行緒、靜態、不變」的格子不成立。
+     要帶走的是：**查詢結果的順序與平手要寫進契約，並以暴力線性掃描比對**。這個寫法沒有現成來源；Jolt 的「以精確邊界再測、一致排序」與它的線性掃描「參考實作」是最近的來源。
+  2. **塔科夫「伺服器全圖模擬 AI」沒有根據**：官方沒有說明；社群擷取的設定裡有「啟動距離／睡眠距離」欄位（約 300 m），但它的語意只是從欄位名推的。
+     遠處實體的處理在業界三家三樣（Minecraft 不處理、Luanti 存成靜態資料、Veloren 刪除後交給粗模擬），沒有一家宣稱決定性。
 - **規模**（社群資料，非官方）：塔科夫每圖玩家 9～16、AI 上限 19～48、地圖影像邊界 0.3～1.9 km²（含不可玩區）。GYO 的 4 人房、約 1 km² 在這個範圍內。
+- **之後的批次會帶的 Architecture Delta**（本批不做，contract 批要寫 AGENTS §3 的 7 項）：`GYO::VoxelMesh` v2 的公開介面與 v1 退役、新 Subsystem `GYO::MapMarkers`、
+  `GYO::Collision` 的 broadphase、工具 DI 2／DI 3／DI 4 的改寫與守衛變更（§14.4 要使用者核准）、產品 arena v3。
 
 ## 1. 方法與來源
 
@@ -42,7 +47,7 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 | 16×16 的 chunk 柱、全高；柱內切 16³ 的 section；整柱一起載入 | **一手理由未找到**。wiki 只說 section 用於顯示與部分機制 | 驗證與重烘的單位＝16³ 區塊，和工具的 `gyo.voxel_grid` `ChunkSize = 16` 一致（工具 owner）。GYO 不需要「柱」：v0.1 是 3D 區塊，空區塊省略 | 採る（16³）；改装（不用柱） | (wiki) https://minecraft.wiki/w/Chunk |
 | region 檔：32×32 chunk 一檔、4 KiB sector、位置表＋timestamp；取代 Alpha 的一 chunk 一檔 | 一檔一 chunk 的檔案數太多（取代 Alpha 格式的歷史）；32 的理由未找到 | 「檔案單位≠編輯單位」：region 是檔案單位（Engine 格式）。GYO 用 JSON 文字（G10），不用 sector 二進位 | 改装 | (wiki) https://minecraft.wiki/w/Region_file_format |
 | 每 section 一個 palette＋packed 索引（最少 4 bit）；網路協議超過 8 bit 改用全域 id | 壓縮：全石頭的 section 不必每格 15 bit | v0.1 是全圖共用 palette（≤256），四邊形帶 palette 索引；文字格式不靠 bit packing 省空間 | 採らない（RC 候選：每區塊 palette） | (wiki) https://minecraft.wiki/w/Chunk_format 、https://minecraft.wiki/w/Java_Edition_protocol/Chunk_format |
-| view-distance 與 simulation-distance 分開（預設 10、21w38a 加入）；ticket／load level；模擬距離外的實體**暫停**，回來時恢復 | Mojang：讓視距可以大、CPU 負擔小 | 「Client 收什麼」與「Match 模擬什麼」分開，GYO 已是這樣（地形是資產、實體 interest 100 m 在 Match）。模擬範圍是玩法決定（第 4.1 節） | 改装（若採用，載入集合要由權威位置決定性導出，G4） | https://www.minecraft.net/en-us/article/minecraft-snapshot-21w38a ；(wiki) https://minecraft.wiki/w/Server.properties |
+| view-distance 與 simulation-distance 分開（預設 10、21w38a 加入）；ticket／load level；模擬距離外的實體「不處理但仍可存取」，等區塊等級回升後再處理（wiki 對恢復條件的描述不一致） | Mojang：讓視距可以大、CPU 負擔小 | 「Client 收什麼」與「Match 模擬什麼」分開，GYO 已是這樣（地形是資產、實體 interest 100 m 在 Match）。模擬範圍是玩法決定（第 4.1 節） | 改装（若採用，載入集合要由權威位置決定性導出，G4） | https://www.minecraft.net/en-us/article/minecraft-snapshot-21w38a ；(wiki) https://minecraft.wiki/w/Server.properties |
 | 1.17 起實體存在另一組 region 檔 | 未說明 | 靜態幾何與實體分開存。GYO 的標記層（markers）與幾何（region）分檔是同一方向 | 採る（分檔） | (wiki) Chunk_format 的 History |
 
 ### 2.2 Luanti（原 Minetest）
@@ -80,7 +85,7 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 | 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
 |---|---|---|---|---|
 | 一個持久 level 切成串流格子；actor 自由擺放，依設定被指派到 cell；串流來源預設是 PlayerController。預設 cell 大小與距離沒寫（例子 256 m／768 m） | 取代手動的 sublevel，自動依距離串流 | 「作者怎麼放」與「執行期怎麼載」分開：GYO 的作者資料是工具的格子（`gyo.voxel_grid`），執行期是烘好的 region。已是這個分法 | 採る（維持） | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition-in-unreal-engine |
-| 伺服器串流預設關閉（`wp.Runtime.EnableServerStreaming`；UE 5.1 的 KB 文章：開了才只串流玩家附近）→ 預設伺服器整張載入 | 未說明（只有 KB 文章開頭可讀） | 支持 v0.1「Match 整張載入」作為起點 | 採る（作為起點的旁證） | https://forums.unrealengine.com/t/knowledge-base-world-partition-server-streaming/688971 |
+| 伺服器串流由 `wp.Runtime.EnableServerStreaming` 控制；UE 5.1 的 KB 文章說開了可以「只串流玩家來源，而不是全部載入」 | 未說明（只有 KB 文章開頭可讀；預設值文件沒寫） | **推論**：不開時伺服器整張載入。只能當 v0.1「Match 整張載入」的弱旁證 | 參考（推論） | https://forums.unrealengine.com/t/knowledge-base-world-partition-server-streaming/688971 |
 | HLOD：未載入 cell 的代理（Instancing／Merged Mesh／Simplified Mesh），每層自己的格子 | 遠處內容、減少 draw | 現在不需要（4.6） | 採らない；RC 候選 | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition---hierarchical-level-of-detail-in-unreal-engine |
 | One File Per Actor：每個 actor 一檔，**只在編輯器**，cook 後嵌回 level；不限於 WP | 多人同時編輯一個 level | GYO 是單人編輯器。region 各自一檔已給 diff 與存檔的粒度 | 採らない | https://dev.epicgames.com/documentation/en-us/unreal-engine/one-file-per-actor-in-unreal-engine |
 | Data Layers：編輯器層與執行期層（Loaded／Activated），多人遊戲只有伺服器能啟用；用途是任務、進度、季節變化 | 同一張地圖的內容變化 | 現在沒有 Feature 點名「同圖不同內容」 | 採らない；RC 候選 | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition---data-layers-in-unreal-engine |
@@ -90,16 +95,16 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 | 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
 |---|---|---|---|---|
 | Jolt：四叉 AABB 樹（每節點 4 子），每 broadphase 層一棵；建議靜態一層、動態一層；大量加入要批次或之後最佳化 | 4 子＝一個 SIMD 指令測 4 盒；靜態物體很少更新、更新又貴 | GYO 只有靜態盒（地形），不需要動態樹。v0.1 選均勻格 | 改装 | Jolt `Docs/Architecture.md:579-595, 35-42` |
-| **Jolt 明寫 broadphase 查詢不是決定性的**（盒子放寬到維護為止）；建議在收集結果時以精確邊界再測、並一致排序；有一個線性掃描的「參考實作」可換用 | 多執行緒的 broadphase 變動 | GYO 的契約「每個查詢的結果＝對全部盒子依索引順序線性掃描的結果（距離相同取索引小者）」**沒有現成來源**；是把 Jolt 的建議與參考實作寫成契約。量測（第 5 節 (b)）顯示線性掃描已不可行，所以這個等價契約＋與線性掃描比對的守衛是保住 G3 的方式（Engine `GYO::Collision`） | 改装 | Jolt `Docs/Architecture.md:787-812`、`BroadPhaseBruteForce.h:12` |
+| **Jolt 明寫 broadphase 查詢不是決定性的**；原因是多執行緒修改、移動中的物體讓樹的邊界放寬到下次維護為止。建議在收集結果時以精確邊界再測、並一致排序；有一個線性掃描的「參考實作」可換用 | 多執行緒的動態 broadphase | 這個原因對 GYO「單執行緒、靜態、建好後不變」的格子不成立；要帶走的是「結果的順序與平手要定義」。GYO 的契約「每個查詢的結果＝對全部盒子依索引順序線性掃描的結果」**沒有現成來源**，是把 Jolt 的建議與參考實作寫成契約，守衛是與線性掃描逐一比對（Engine `GYO::Collision`）。**平手規則要依查詢分別寫**：現在的 Movement 取先到的（`<`），ShotQuery 對牆取後到的（`<=`）；後者對結果沒有影響（牆的命中只帶距離），但契約要寫明 | 改装 | Jolt `Docs/Architecture.md:787-812`、`BroadPhaseBruteForce.h:12` |
 | Jolt 在求解前把 contact 與 constraint 排序（雜湊鍵，平手用 body id） | 「為了決定性的模擬」 | 同一想法：平手以索引（或 EntityId，entity-model §5.1）決定 | 採る（平手規則） | Jolt `ContactConstraintManager.cpp:1487-1505` |
-| Bullet：動態樹（固定／動態兩棵）、三軸 sweep-and-prune（要事先給世界範圍）、O(n²) 的 simple broadphase 只當 unit test 的參考；可選依 id 排序 pair 以求決定性；**CPU 沒有均勻格** | 樹：插入刪除快；SAP：大量物體 | 均勻格 vs 樹：**一手的取捨來源沒找到**（Ericson《Real-Time Collision Detection》第 7 章沒讀）。GYO 的盒子靜態、軸對齊、大小有上限（區塊內合併）、密度大致均勻，均勻格的前提成立；若出現「極不均勻的密度或很大的盒子」，換樹 | 改装（均勻格）；RC 候選（換樹） | Bullet `btDbvtBroadphase.h:59-72, 123`、`btAxisSweep3.h:30-45`、`btSimpleBroadphase.h:39-40`、`btDispatcher.h:50, 65` |
+| Bullet：動態樹（固定／動態兩棵）、三軸 sweep-and-prune（要事先給世界範圍）、O(n²) 的 simple broadphase 只當 unit test 的參考；可選依 id 排序 pair 以求決定性；**CPU 沒有均勻格** | 樹：插入刪除快；SAP：大量物體 | 均勻格 vs 樹：**一手的取捨來源沒找到**（Ericson《Real-Time Collision Detection》第 7 章沒讀）。GYO 的盒子靜態、軸對齊、大小有上限（區塊內合併）、密度大致均勻，均勻格的前提成立；「密度大致均勻」是**假設**：手工地圖是建築密集處加空地。對抗檢查者指出 Ericson 第 7 章（調查者未讀）的做法：格長取最大物體、大小差異大時用分層格（hierarchical grid），比直接換樹便宜 | 改装（均勻格）；RC 候選（分層格，再來才是樹） | Bullet `btDbvtBroadphase.h:59-72, 123`、`btAxisSweep3.h:30-45`、`btSimpleBroadphase.h:39-40`、`btDispatcher.h:50, 65` |
 
 ### 2.7 逃離塔科夫（規模參照）
 
 | 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
 |---|---|---|---|---|
 | 每圖玩家 9～16；AI 上限（BotMax）19～48；每區域 2～8；Boss 可超出上限 | 未說明 | GYO 4 人房；AI 上限的量級 30 左右可作為 Match 每 tick 的設計點（產品） | 採る（規模參照） | Fandom 各圖頁（準官方社群 wiki）；SPT `project/assets/database/locations/*/base.json`（社群擷取） |
-| **bot 依與玩家的距離睡眠與喚醒**（DistToActivate 260～330 m、DistToSleep 300～350 m） | 未說明 | 「遠處降頻／凍結」的實例；決定性未知（Unity、無公開說明） | 參考（4.1） | SPT 同上（社群擷取，非官方） |
+| 設定裡有 `DistToActivate`（260～330 m）與 `DistToSleep`（300～350 m）兩個欄位，位於 bot 的位置修正設定中 | 未說明 | **推論**（只從欄位名推）：bot 依與玩家的距離睡眠與喚醒，是「遠處凍結」的實例；決定性未知 | 參考（推論，4.1） | SPT 同上（社群擷取，非官方） |
 | 地圖影像邊界 0.3～1.9 km²（含不可玩區）；raid 35～50 分鐘 | — | 「約 1 km²、0.5 m」在範圍內 | 採る（規模參照） | tarkov.dev `src/data/maps.json`（社群工具） |
 | 區域、spawn 點、Boss 區、撤離點以**字串名**對應到 Unity 場景物件；spawn 點帶陣營、類別、區域名、半徑 | 未說明 | 標記層的形狀（點＋名字＋鍵值；區域以名字被引用）與 v0.1 §11.3 一致 | 採る（標記層的形狀） | SPT 同上 |
 | PvE 單人 raid 在本機跑，組隊與 Streets 用伺服器（2024）；Streets 的伺服器系統調整（2023）；新的 culling（2023） | 排隊時間、rubberbanding、效能 | 塔科夫在大地圖上也遇到伺服器負載與畫面剔除問題；GYO 的 broadphase 與 region 剔除對應這兩點 | 參考 | 媒體轉述的 patch notes（見 R3 報告的 URL） |
@@ -121,17 +126,17 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 
 | 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| greedy：每軸切片，以固定字典序反覆取最大矩形；結果在固定順序下唯一（調查者由定義推得），不一定最少（≤8 倍最佳） | 線性時間 | 進工具的烘焙（G6）；掃描順序寫進工具 DI 3 的決定性（同一格子→同一位元組）。Engine 規則 6 的 `w`、`h` 已支持 | 採る（工具 owner） | https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/ |
+| greedy：每軸切片，以固定字典序反覆取最大矩形；文章寫明以總序取唯一的最小元素，所以結果在固定順序下唯一；不一定最少（≤8 倍最佳） | 線性時間 | 進工具的烘焙（G6）；掃描順序寫進工具 DI 3 的決定性（同一格子→同一位元組）。Engine 規則 6 的 `w`、`h` 已支持 | 採る（工具 owner） | https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/ |
 | 縮減依形狀：實心 8³ 384→6、地形 6634→1983、雜訊 2198→1670、球 4770→2100；成本和只剔面相當（65³：92～198 ms 對 82～297 ms） | — | 平坦的地面與牆面縮減大，雜訊幾乎無效。合成圖是雜訊，不能代表手工地圖 | 採る；GYO 數字未量（4.5） | 同上、https://0fps.net/2012/07/07/meshing-minecraft-part-2/ |
 | 合併的代價在貼圖（貼圖集要每 tile 重複 UV）、光照、AO：只能合併光照與 AO 相同的面 | — | GYO 每面一色、uv 取 palette 貼圖的 texel 中心（`voxel-mesh.md`）、無光照、無 AO → **這些代價都不存在**。Godot Voxel Tools 的頂點色 mesher 預設開 greedy，是同一情況 | 採る | https://0fps.net/2013/07/09/texture-atlases-wrapping-and-mip-mapping/ 、https://voxel-tools.readthedocs.io/en/latest/api/VoxelMesherCubes/ |
-| T-junction：合併後的大面與鄰接小面的頂點不對齊，可能有像素裂縫；文章本體沒談，論壇有爭議 | — | 要在工具批用實際地圖目視確認；不行就只在同一平面內合併到 T 不出現（或加縫的處理） | 未確認（4.5） | 0fps part 2 留言、Urho3D 論壇（R3 報告） |
+| T-junction：合併後的大面與鄰接小面的頂點不對齊，可能有像素裂縫；0fps 第二篇作者提到但不確定是否真有問題，論壇有爭議 | — | 要在工具批用實際地圖目視確認；不行就只在同一平面內合併到 T 不出現（或加縫的處理） | 未確認（4.5） | 0fps part 2 留言、Urho3D 論壇（R3 報告） |
 | LOD：Minecraft 原版沒有（以 chunk 視距控制）；Distant Horizons 為 256＋chunk（4 km 以上）視距另開一個 pass；Luanti 沒有，`viewing_range` 預設 200 node；Voxel Tools 的平滑地形用 Transvoxel | 極遠距離的畫面 | 1 km² 的視距在 Minecraft 的 chunk 視距範圍內（約 64 chunk），業界在這個距離多數不用 LOD | 採らない（現在）；RC 候選（4.6） | https://modrinth.com/mod/distanthorizons 、Luanti `builtin/settingtypes.txt` |
 
 ## 3. proposal 第 3 節（憑記憶）的修正
 
 | proposal 的說法 | 來源的事實 | 影響 |
 |---|---|---|
-| Minecraft「伺服器只在 simulation distance 內跑邏輯」 | 21w38a 起初只管實體；之後方塊實體與排程 tick 也受限。模擬距離外的實體**暫停**、回來恢復 | 小。凍結模型的實例 |
+| Minecraft「伺服器只在 simulation distance 內跑邏輯」 | 21w38a 起初只管實體；之後方塊實體與排程 tick 也受限。模擬距離外的實體不處理、仍可存取 | 小。凍結模型的實例 |
 | Minecraft「palette 壓縮」 | 磁碟永遠用 per-section palette（最少 4 bit）；「超過門檻改全域 id」是**網路協議**的事 | 小 |
 | Luanti「SQLite 以區塊座標為鍵」 | 5.12 起新庫主鍵是 `(x,z,y)` 三欄；舊的整數鍵（`getBlockAsInteger`）仍可讀；LevelDB／Redis 仍用整數鍵 | 小 |
 | Luanti「伺服器只模擬 active block range」 | 確認；預設 4 block；物件另有送出範圍（預設 8）與視線錐；**ABM 順序每輪隨機打亂，沒有決定性** | 中：凍結模型不能照搬 |
@@ -140,8 +145,8 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 | Godot「navmesh 也按 octant」 | **每格一個導航區域**；不是每 octant 烘焙 | 小（導航不在本案） |
 | Godot「每個 octant 烘一個 mesh＋碰撞」 | 每 octant 一個 static body；渲染是每種 item 一個 MultiMesh；合成 mesh 是另一條給光照烘焙的路，編輯就丟 | 小 |
 | UE「One File Per Actor 給多人編輯」 | 確認；但只在編輯器，cook 後嵌回；不限於 WP | 小 |
-| 物理 broadphase「疊代順序以區塊鍵排序保決定性」 | Jolt 明寫 broadphase 查詢**不是決定性的**；沒有來源寫「結果＝線性掃描」的契約；Bullet 的 CPU 端沒有均勻格 | **大**：v0.1 §11.4 的等價契約是 GYO 自己要立的，要有守衛 |
-| 塔科夫「伺服器全圖模擬 AI」 | **未確認**。社群擷取的資料顯示 bot 依距離睡眠（約 300 m）；PvE 單人 raid 在本機跑 | **大**：proposal §6a 以「全圖模擬」為前提推「整張載入」；整張載入（碰撞）仍成立，但「全圖模擬 AI」沒有塔科夫的根據 |
+| 物理 broadphase「疊代順序以區塊鍵排序保決定性」 | Jolt 明寫它的 broadphase 查詢**不是決定性的**（多執行緒、動態樹）；沒有來源寫「結果＝線性掃描」的契約；Bullet 的 CPU 端沒有均勻格 | **大**：v0.1 §11.4 的等價契約是 GYO 自己要立的，要有守衛 |
+| 塔科夫「伺服器全圖模擬 AI」 | **未確認**。社群擷取的資料顯示 bot 依距離睡眠（約 300 m）；PvE 單人 raid 在本機跑 | **大**：proposal §6a 以「全圖模擬」為前提推「整張載入」；整張載入（碰撞）仍可成立，但「全圖模擬 AI」沒有塔科夫的根據（睡眠也只是從欄位名推的） |
 | 塔科夫「約 1～3 km²」 | 影像邊界 0.3～1.9 km²（含不可玩區）；媒體說約 0.8 km² | 中：上限偏小，1 km² 的設計點足夠 |
 
 ## 4. 六個未決事項（proposal §11.9）
@@ -151,19 +156,19 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 ### 4.1 模擬模型：全圖模擬，還是遠處 AI 降頻／凍結
 
 - **業界**：
-  - Minecraft：模擬距離外的實體暫停，回來恢復（ticket／load level）。
+  - Minecraft：模擬距離外的實體不處理、仍可存取（ticket／load level）。
   - Luanti：離開活動範圍的物件存成靜態資料，回來時以經過時間補算；ABM 順序隨機，**沒有決定性**。
   - Veloren：所有玩家視距外的 NPC 刪除，交給粗略的 rtsim 繼續；玩家物理是 Client 權威。
-  - 塔科夫（社群擷取的資料，非官方）：bot 依與玩家的距離睡眠（約 300 m）與喚醒；每圖 AI 上限 19～48。
-  - UE：伺服器串流預設關閉，即伺服器整張載入（KB 文章）。
+  - 塔科夫（社群擷取的資料，非官方）：每圖 AI 上限 19～48；有「啟動距離／睡眠距離」（約 300 m）兩個欄位，**依距離睡眠是從欄位名推的**。
+  - UE：伺服器串流要開 CVar 才「只串流玩家附近」，**推論**不開時整張載入（KB 文章，預設值沒寫）。
   - **沒有一家宣稱決定性。**
 - **建議**：分兩件事決定。
-  1. **地形的載入**：Match 整張載入碰撞盒（v0.1 §11.5），沒有「已載入集合」。碰撞盒的記憶體小（10⁶ 盒 × 24 B ≈ 24 MB，推算）；UE 的伺服器預設也是整張載入。
+  1. **地形的載入**：Match 整張載入碰撞盒（v0.1 §11.5），沒有「已載入集合」。碰撞盒的記憶體小（10⁶ 盒 × 24 B ≈ 24 MB，推算）；UE 的伺服器很可能預設也是整張載入（推論）。
   2. **AI 的模擬**：第一步全部模擬（4 人＋AI 上限約 30），不做降頻。等 broadphase 落地後，在產品批**量一個 tick 的成本**（玩家＋AI 的移動、射擊），
      超過預算才加「遠處睡眠」。屆時的寫法：睡眠狀態是**元件**（權威、進 digest），每個 tick 開始時依權威位置與固定規則（距最近玩家 > D_sleep 入睡、< D_activate 醒來；
      兩個距離不同，所以需要前一 tick 的狀態，是權威狀態而不是可重建的暫存），依 EntityId 升冪處理（entity-model §5.1、E-8）。
-- **理由**：量測顯示線性掃描下一位實體一步 1.2～2.3 ms（2 萬盒），有 broadphase 後的單步成本**未量**；在量到之前加睡眠，是對沒有觀測到的壓力加權威狀態（AGENTS §2）。
-  塔科夫的 300 m 睡眠距離也大於 GYO 的 interest 100 m，在 1 km² 上睡眠能省下的比例有限（未量）。
+- **理由**：量測顯示線性掃描下一位實體在地形上一步約 2.2 ms（2 萬盒），有 broadphase 後的單步成本**未量**；在量到之前加睡眠，是對沒有觀測到的壓力加權威狀態（AGENTS §2）。
+  若塔科夫的欄位確實是睡眠距離（推論），約 300 m 也大於 GYO 的 interest 100 m，在 1 km² 上睡眠能省下的比例有限（未量）。
 - **不採的代價**：
   - 現在就做睡眠：多一個權威元件與它的守衛（digest、決定性、補算規則），玩法上「AI 在遠處停住」也要先定義；如果之後量到不需要，就是白做。
   - 永遠全圖模擬：AI 數量往上加時，tick 會超過預算（每隻 AI 的成本和玩家同級）；這時再改是產品批的事，格式不受影響（可逆）。
@@ -194,16 +199,23 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 ### 4.3 JSON＋快解析是否足夠，或必須二進位
 
 - **業界**：Minecraft（NBT＋zlib 的 region 檔）、Luanti（資料庫裡的二進位 blob）、Veloren（二進位）都是二進位；UE 的 cook 產物也是。沒有一家用文字當執行期格式。
-- **量測**（第 5 節 (c)）：現在的 3.8～4.3 MB/s 慢在 nlohmann 的回呼式解析機制，不在 JSON。同一份文字：SAX 掃描 71～74 MB/s、建 DOM 36 MB/s、SAX＋重複鍵檢查 69 MB/s。
-  換掉回呼、規則不變，推算約 15～35 MB/s（端到端未量）。
-- **建議**：契約只有 JSON 文字一種編碼（G10）。在 engine-map 批把 Engine 內部的解析換成不經回呼的嚴格解析（同一套規則、同一組規則測試與黃金值、突變重跑），
-  並在該批事前宣告載入時間的判定。二進位快取記為 Replacement Criterion，條件寫成量得到的形式（例如「最大地圖的 Match 載入時間在換掉解析方式之後仍超過宣告值」）。
+- **量測**（第 5 節 (c)，含對抗檢查者的追加量測）：
+  - 現在的 1.3～1.4 s，約 1.1 s 是 nlohmann 回呼式解析的**二次方行為**：每結束一個物件，就線性掃一次所在的陣列。合成圖的 20,691 個碰撞盒是同一陣列裡的物件。
+    同一份資料把碰撞盒改寫成 6 個整數的陣列，空回呼的解析從 1,328 ms 降到 143 ms。
+  - 所以「4 MB/s」**不是解析器的速率**，是這一張圖「同一陣列裡有多少物件」的結果。v0.1 的格式把碰撞盒分到各區塊（每組數百個），現在的解析器在那種檔上就會快很多；
+    反過來，一個陣列 4 萬個物件要 4.4 s。
+  - 不經回呼：SAX 掃描 71～74 MB/s、建 DOM 36 MB/s、SAX＋重複鍵檢查 69 MB/s；規則檢查約 83～124 ms。
+- **建議**：契約只有 JSON 文字一種編碼（G10）。在 engine-map 批把 Engine 內部的解析換成不經回呼的嚴格解析，規則與規則測試、黃金值不變，突變重跑：
+  - 最小的改法：先用 SAX 掃一次查重複鍵（77 ms），再用不帶回呼的 `json::parse` 建 DOM（149 ms），規則程式不動。合成圖推算約 0.31～0.35 s（約 15～17 MB/s，**分項相加，端到端未量**）。
+  - 並在該批事前宣告載入時間的判定。二進位快取記為 Replacement Criterion，條件寫成量得到的形式（「換掉解析方式之後，最大地圖的載入時間仍超過宣告值」）。
+  - 換第三方解析器（simdjson、RapidJSON，對抗檢查者指出其嚴格驗證可達數百 MB/s 以上，調查者未讀其來源）是 Engine 的新依賴，是另一個 Architecture Delta，要使用者決定。
+  - region 的平行解析**不能放進 `GYO::VoxelMesh`**（Engine DI 1：只連 Base、Math、JSON）；由呼叫端（產品）以 `GYO::Threads` 平行呼叫，結果依 `at` 排回。
 - **理由**：
-  - 推算的文字量（10⁶＋10⁶ 約 89 MB）÷ 15～35 MB/s ≈ 2.5～6 s（單執行緒）；region 可平行解析，結果依 `at` 排回，不影響決定性。
+  - 推算的文字量（10⁶ 四邊形＋10⁶ 盒約 89 MB）÷ 15～35 MB/s ≈ 2.5～6 s（單執行緒、推算）；平行後更少。
   - 二進位要成為第二種編碼，就有兩份讀取程式，「一個驗證者」（G2、DI 3）要靠兩種編碼共用規則實作才能保住；文字的手寫、diff 也會失去。
 - **不採的代價**：
   - 先做二進位：多一種編碼與它的守衛（兩種編碼往返一致），工具的存檔路徑也要寫兩種。
-  - 只保留現在的解析：km² 地圖載入約 22 s（89 MB ÷ 4 MB/s，推算）。
+  - 保留現在的回呼解析：載入時間取決於每個陣列有多少物件（二次方），格式稍有改變就可能從 0.1 s 變成數秒，不可預測。
 - **範圍的限界**：解析速度只量了 macOS／Intel 一台；Windows（Client 主戰場）與 Linux（Match）未量。推算的文字量來自雜訊合成圖的比例。
 
 ### 4.4 標記層的 owner 與格式輪廓
@@ -216,6 +228,8 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
   - 每個標記：`id`（唯一、依 id 遞增）、`kind`、`tags`（字串鍵值），名字不透明。
   - Engine 只檢查形式（唯一、遞增、有限、長度與字元集）；不知道 spawn、boss 是什麼。
   - 產品提供 `marker_kinds.json`（產品格式，FGD 的角色）：編輯器當調色盤讀；產品載入時把不認得的 kind 當錯誤（比 Source 嚴格，抓錯字）。
+- **Architecture Delta**：`GYO::MapMarkers` 是新的 Subsystem（AGENTS §3），engine-map 批要寫 7 項並取得同意。Engine 的文件與範例**不能出現 `spawn`、`boss` 這類玩法名詞**
+  （Layers 檢查 1）；proposal §11.3 的範例要換成中立的名字（例如 `kind: "a"`），玩法名詞只出現在產品的 `marker_kinds.json`。
 - **理由**：`docs/architecture.md` 的 Layers 表——它描述**一個資產**（一張地圖的標記），不引用別的資產 id，沒有產品意義 → Engine 欄；
   framework 擁有的格式是「多個 Engine 資產怎麼組合」，標記不是。先例是 `gyo.anim_events`（Engine 解析、名字不透明、產品賦義）與 `gyo.voxel_mesh`（工具寫、遊戲讀，格式在 Engine）。
 - **不採的代價**：
@@ -231,6 +245,8 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 - **量測**：**未量**。合成圖是雜訊（隨機填、方向亂），greedy 幾乎無效，不能拿來估；碰撞盒「區塊內合併」比「整張合併」多多少盒子也未量。
 - **建議**：
   - greedy 進工具的烘焙，掃描順序固定，寫進工具 DI 3（同一格子→同一位元組），Engine 不變（規則 6 已支持 `w`×`h`）。
+    **但工具的 Design Invariants 守衛會變**：greedy 改變烘出的位元組與四邊形清單，DI 3 的黃金值與 DI 4（無損：面與盒的並集不變）的守衛都要改寫。
+    這是 Design Invariants 守衛的判定變更，照 AGENTS §14.4 要附 1～5 並取得使用者核准（tool-chunked 批）。
   - 碰撞盒改為區塊內合併（盒子不跨區塊），換得局部重烘。
   - 在 tool-chunked 批的事前宣告中量：以 `pvp_corners` 與一張「像建築」的合成圖（平面牆與地面為主），記錄剔面後與 greedy 後的四邊形數、
     整張合併與區塊內合併的盒子數、每個區塊的重烘時間；並在預覽目視 T-junction。
@@ -244,14 +260,15 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 - **量測**：雜訊合成圖 497k 頂點，只畫不重建 p95 4.6 ms（預覽路徑、含讀回）。km² 地圖的頂點數與 Client 的畫面時間**未量**。
 - **建議**：v0.1 不做 LOD。Client 以 region 為單位做視錐與距離剔除。在 product-arena-v3 批量 Client 的畫面時間（km² 大小、像建築的合成圖、最大視距、全部 region 可見的最壞角度），
   RC 寫成「最壞角度的畫面 p95 超過宣告值」→ 由工具烘每個 region 的低精度代理（UE 的 HLOD 想法），以另一個資產加入，不改 region 格式。
-- **理由**：1 km 的視距約 64 chunk（16 m），是 Minecraft 原版上限（32 chunk，約 512 m）的兩倍，遠低於 Distant Horizons 針對的 256 chunk 以上；介於「不用 LOD」與「需要 LOD」之間，業界來源不能直接回答。greedy 之後的頂點數未知，現在做 LOD 是對預測的壓力（AGENTS §2）。
+- **理由**：Minecraft 原版的視距上限 32 chunk 是**半徑**（約 512 m，看得到的範圍直徑約 1 km）；1 km² 的地圖從中央到角約 0.7 km，從一角到對角約 1.4 km。
+  所以大部分位置的視距在 Minecraft 原版「不用 LOD」的範圍內，只有角對角超出；遠低於 Distant Horizons 針對的 256 chunk 以上。greedy 之後的頂點數未知，現在做 LOD 是對預測的壓力（AGENTS §2）。
   region 鍵已能讓代理以另一個資產掛上，延後是可逆的。
 - **不採的代價**：現在就做：工具多一種烘焙與它的決定性守衛、Client 多一套切換。延後而之後需要：多一個批次，但格式不必改。
 
 ## 5. 量測（`v8-arch-big-map-survey-measure`）
 
 ```text
-件數の突き合わせ：一致（(a) 要求 600 幀／完成 600／失敗 0；(b) 9 情境 × 要求 2,000 次／完成 2,000；(c) 第一輪 5 項 × 10 次、第二輪 7 項 × 10 次，全部完成、ParseVoxelMesh 20／20 成功）
+件數の突き合わせ：一致（(a) 要求 600 幀／完成 600／失敗 0；(b) 9 情境 × 要求 2,000 次／完成 2,000；(c) 第一輪 5 項 × 10 次、第二輪 7 項 × 10 次，全部完成、ParseVoxelMesh 20／20 成功；對抗檢查者另行核對 .txt／.csv 一致）
 ```
 
 - **性質**：探索與描述，不是受け入れ判定；沒有門檻。方法在量之前寫進 [HANDOFF](HANDOFF.md)；(c) 看到第一輪後追加了兩項，第一輪保留。
@@ -291,15 +308,21 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 | 103,455（×5） | 6,235／7,150 | 11,603／13,073 | 1,524／1,867 |
 | 517,275（×25） | 31,810／35,167 | 58,585／63,581 | 7,977／9,015 |
 
-每盒成本幾乎固定（一步地面約 60 ns、空中約 112 ns、一槍約 15 ns），**和盒子數成線性**。
-「站地面」時 `IsCharacterSupported` 在 `y = 0` 提前返回（`CharacterCollision.cpp`），只剩 `MoveCharacterBody` 的掃描；「空中」時 supported 也要掃全部。
+每盒成本幾乎固定（一步地面約 60 ns、空中約 112 ns、一槍約 15 ns），和盒子數成線性。
+
+**情境的偏差（對抗檢查者指出並追加量測，調查者重讀證據後採用）**：
+- 「站地面」的玩家在 `y = 0`、而且在地圖外（z ≈ −8 m），沒有任何接觸：`IsCharacterSupported` 提前返回，只剩 `MoveCharacterBody` 各掃一次。這是**最便宜的路徑**，不是典型。
+- 追加量測（`adversary/match_tick_realistic.txt`，同一機器，各 2,000 次）：站在圖內方塊頂（y = 16 m）走一步 p50 2,226 µs、站著不動 1,816 µs、在 y = 0 推向地圖邊緣 1,783 µs。
+  有牆接觸時 `MoveCharacterBody` 最多 8＋5 輪掃描，會更貴。
+- ×5、×25 的複本都在玩家遠處，每個盒子都是 miss，所以「線性」是必然的下界。
 
 **解讀**（tick 預算 1/60 s＝16.7 ms，`Movement.hpp` 的 `AuthorityTickRate = 60`）：
 
 | 情境 | 每 tick 的移動成本（推算＝人數 × 一步 p50） | 佔 tick 預算 |
 |---|---|---|
-| 20,691 盒、4 位玩家 | 4.8～9.1 ms | 29～55 % |
-| 20,691 盒、4 位玩家＋20 隻 AI（若 AI 走同一套移動） | 29～55 ms | 超過 |
+| 20,691 盒、4 位玩家都在地形上（一步約 2.2 ms） | 約 8.9 ms | 約 53 % |
+| 同上，最便宜的特例（y = 0、無接觸，一步 1.2 ms） | 4.8 ms | 29 % |
+| 20,691 盒、4 位玩家＋20 隻 AI（若 AI 走同一套移動） | 約 29～53 ms | 超過 |
 | 103,455 盒、4 位玩家 | 25～46 ms | 超過 |
 
 所以 **broadphase 不是大地圖才需要**：合成圖的規模＋PvPvE 的 AI 就已經超過 tick。proposal §11.4 的「必要」由量測支持。
@@ -320,10 +343,15 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 | `ExpandVoxelMesh` | 5／5 | — |
 
 - **規則檢查**≈`ParseVoxelMesh` −（DOM＋重複鍵回呼）＝ 83～124 ms。
-- **慢的是 nlohmann 的回呼式解析機制**：空回呼就要 1.27 s，是無回呼 DOM 的 8.5 倍。原因在 nlohmann 3.12.0
-  `include/nlohmann/detail/input/json_sax.hpp:820` 起的 `json_sax_dom_callback_parser::handle_value`：每個值都先建一個暫時的 json 物件，
-  再經 `std::function` 呼叫回呼。合成圖約有百萬個數值，每個都付這筆成本。重複鍵檢查本身（SAX＋鍵集合）只多 2 ms。
-- proposal §5 第 6 點、§11.7 的「約 4 MB/s ⚠」**量到了：3.8～4.3 MB/s**。
+- **歸因（對抗檢查後更正）**：調查者原本寫「每個值都建暫時物件、經 `std::function` 呼叫，百萬個數值各付一次」。這和本表的數據分不出「每值」還是「每物件」。
+  對抗檢查者的追加量測（`adversary/nl_scaling.txt`，調查者重跑可重現）：
+  - 7 個整數的陣列 2 萬～16 萬個：空回呼與無回呼的比值 1.0～1.1（**每值的成本可以忽略**）。
+  - 物件 5 千／1 萬／2 萬／4 萬個放在同一陣列：空回呼 76／287／1,112／4,380 ms（數量翻倍、時間四倍，**二次方**）。
+  - 同樣 4 萬個物件，每 1,000 個分一個陣列：175 ms。
+  - 合成圖的碰撞盒改寫成 6 個整數的陣列（數字不變）：空回呼 1,328 → 143 ms，無回呼 134 ms。
+  - 原因在 nlohmann 3.12.0 `include/nlohmann/detail/input/json_sax.hpp` 的 `json_sax_dom_callback_parser::end_object`（`:592` 起）：
+    每結束一個物件，就從頭掃一次父容器找被丟棄的元素（`:628` 的「remove discarded value」迴圈，沒有「有沒有丟棄」的前置判斷）。
+- 所以 proposal §5 第 6 點、§11.7 的「約 4 MB/s ⚠」**量到的值是 3.8～4.3 MB/s，但它不是速率**，不能用來外推別的地圖的載入時間。重複鍵檢查本身（SAX＋鍵集合）只多 2 ms。
 - **契約不變、只換 Engine 內部解析方式**的空間（推算＝量到的分項相加，不是端到端量測）：
   SAX 重複鍵檢查 77 ms＋建 DOM 149 ms＋規則 83～124 ms ≈ 0.31～0.35 s（約 15～17 MB/s，約 4 倍）；
   若規則直接在 SAX 事件上檢查、不建 DOM，下限約是 SAX 掃描的 75 ms＋規則（約 25～35 MB/s）。端到端未量。
@@ -342,7 +370,7 @@ contract 批（engine-map、tool-chunked、product-arena-v3）寫正式的 Desig
 | 未載入區塊的碰撞規則 | Engine Collision＋產品 | 採用活動範圍時（先寫規則或證明不可能碰到） | Luanti（2.2） |
 | 遠處 AI 的睡眠或粗模擬 | 產品 | product 批量到的 tick 成本（玩家＋AI）超過預算 | 塔科夫、Luanti、Veloren（4.1） |
 | Client 背景串流 | 產品 | Client 的載入時間超過宣告值，或記憶體不夠放全部 region | Veloren（2.3） |
-| 均勻格換成樹 | Engine Collision | 量到格子的桶極不均勻（少數桶裝大多數盒子），或出現很大的盒子 | Jolt、Bullet（2.6） |
+| 均勻格換成分層格，再來才是樹 | Engine Collision | 量到格子的桶極不均勻（少數桶裝大多數盒子），或盒子大小差很多 | Jolt、Bullet、Ericson 第 7 章（2.6，最後一項調查者未讀） |
 | 動態物體的 broadphase | Engine Collision | 出現會移動的碰撞體（門、可破壞物） | Jolt（2.6） |
 | region 代理（HLOD） | 工具＋產品 | 最壞角度的 Client 畫面 p95 超過宣告值 | UE、Distant Horizons（4.6） |
 | Data Layers（同圖不同內容） | 未定 | 有 Feature 點名「同一張地圖依任務或狀態改變內容」 | UE（2.5） |
@@ -351,13 +379,51 @@ contract 批（engine-map、tool-chunked、product-arena-v3）寫正式的 Desig
 
 ## 7. 對抗檢查（`v8-arch-big-map-survey-adversary`）
 
-（待填）
+- **檢查者**：Fable 5.1／xhigh（general-purpose 子 Agent，唯讀；使用者同意用比主會話強的模型）。和調查者（Opus 5.5）不同模型。
+- **讀了**：本文、proposal、三份來源報告、量測程式與結果、AGENTS、voxel-mesh 契約、Layers 表、entity-model、工具架構、產品碰撞程式；
+  自己重讀 Jolt、Luanti、Godot、Veloren 的釘選原始碼與 SPT 的四張圖設定；重跑並追加量測。
+- **證據**：主 checkout `build/evidence/big-map/survey/adversary/`（`README.txt` 列出每個檔；`nl_scaling.*`、`match_tick_realistic.*`、重讀的來源副本）。
+
+### 7.1 判定與處置
+
+| 項目 | 檢查者判定 | 處置 |
+|---|---|---|
+| §2.1、§2.2、§2.3、§2.4、§2.8、§4.2、§4.6 | 成立 | 不改；§4.6 的 Minecraft 比較（半徑對直徑）依指正改寫，結論不變 |
+| §2.1 Minecraft「暫停、回來恢復」 | 弱い：wiki 原文是「不處理但可存取」，恢復條件自相矛盾 | 改成原文的意思 |
+| §2.5 UE 伺服器「預設整張載入」 | 弱い：預設值文件沒寫，§4.1 卻寫成事實 | §2.5、§4.1 改標「推論」 |
+| §2.6 Jolt 非決定性 → 自立等價契約 | 弱い：Jolt 的原因（多執行緒、動態樹）對靜態格不成立；平手規則 Movement 取先、ShotQuery 取後 | §0、§2.6 改寫：帶走的是「順序與平手寫進契約、與暴力掃描比對」；平手依查詢分別寫 |
+| §2.6 均勻格 | 弱い：「密度均勻」是假設；分層格沒列 | 標為假設；RC 候選加分層格（Ericson 第 7 章，調查者未讀） |
+| §2.7 塔科夫睡眠 | 弱い：數字屬實，但「依距離睡眠」只從欄位名推 | §0、§2.7、§3、§4.1 改標「推論」 |
+| §2.9 greedy 的措辭 | 成立，措辭要改（唯一性是文章寫的；T-junction 作者有談） | 改措辭 |
+| §4.1 先全圖模擬 | 成立（理由裡的兩個推論要標） | 已標 |
+| §4.3 JSON＋換解析 | **數字崩れる，方向成立**：4 MB/s 不是速率，22 s 外推無效 | §0、§4.3、§5(c) 重寫；刪除 22 s；加「SAX 查重複鍵＋普通解析」的最小改法 |
+| §4.4 標記 owner＝Engine | 成立，有兩個缺口：新 Subsystem 的 Delta 沒標；Engine 範例不能出現玩法名詞 | §4.4 補上兩點；§0 列出之後批次的 Delta |
+| §4.5 greedy 進工具 | 成立，但隱藏 Delta：工具 DI 3 黃金值與 DI 4 守衛要改（§14.4） | §4.5 補上 |
+| §5(a) | 成立 | 不改 |
+| §5(b) 區間 | 「站地面」是最便宜的路徑；地形上 4 人約 53 % | §5(b) 改寫，加追加量測 |
+| §5(c) 歸因 | **最嚴重**：1.1 s 是同一陣列內物件數的二次方，不是每值成本 | §5(c) 重寫；調查者核對了 nlohmann 原始碼並重跑追加量測，可重現 |
+| 算術、件數の突き合わせ | 全部重算無誤；與 .txt／.csv 一致 | — |
+
+### 7.2 沒讀的來源（檢查者指出）
+
+- nlohmann 回呼解析器的 `end_object`：已讀並寫進 §5(c)。
+- Ericson《Real-Time Collision Detection》§7.1（格長）、§7.2（分層格）：調查者**未讀**；只在 §2.6 與 §6 記為候選。
+- simdjson、RapidJSON 的嚴格解析速度：調查者**未讀**；§4.3 記為「換依賴是另一個 Delta」。
+- Vintage Story（伺服器 chunk 32 的立方）、Teardown 作者的新引擎（8³ 區塊）：§4.2 的兩個資料點，仍沒有一手的尺寸理由；調查者**未讀**。
+- 塔科夫的 AI 在伺服器還是 Client：仍沒有官方說法。
+
+### 7.3 內部一致性
+
+- 檢查者確認**沒有替使用者決定**的地方，六項都是建議。
+- 摘要與本文的不一致（「三處不符」對上第 3 節的大／中分級、推論被寫成事實、隱藏的 Delta）已依上表修正。
+
 
 ## 8. 範圍的限界與未確認
 
 - 量測只有一台（macOS、Intel、雙 GPU 未記錄用哪一顆）；Windows（Client）與 Linux（Match）未量。
 - 合成圖是雜訊，不代表手工地圖；greedy、碰撞盒區塊內合併、Client 的畫面時間、broadphase 後的單步成本都**未量**。
 - 推算（不是量測）：文字量 89 MB（10⁶＋10⁶）、換掉解析後 15～35 MB/s、碰撞盒記憶體 24 MB、每 tick 的移動成本（人數 × 一步）。
-- 未確認的來源：Minecraft 16／32 的一手理由、Luanti 與 Godot 的尺寸理由、塔科夫的 AI 在伺服器還是客戶端與是否整圖載入、UE 的 cell 指派時機與伺服器串流全文、
-  均勻格與樹的一手取捨（Ericson 第 7 章）、Valve wiki 全文、Teardown 與 Vintage Story。
+- 推論（不是來源明寫）：UE 伺服器預設整張載入、塔科夫依距離睡眠。
+- 未確認或未讀的來源：Minecraft 16／32 的一手理由、Luanti 與 Godot 的尺寸理由、塔科夫的 AI 在伺服器還是客戶端與是否整圖載入、UE 的 cell 指派時機與伺服器串流全文、
+  Ericson 第 7 章、simdjson／RapidJSON、Valve wiki 全文、Teardown 與 Vintage Story。
 - proposal 標 ⚠ 而本批沒量的數字（palette 上限、建築四邊形數、碰撞盒數、draw 數、km² 的文字總量）仍是估算。

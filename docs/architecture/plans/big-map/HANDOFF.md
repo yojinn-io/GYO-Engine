@@ -52,3 +52,15 @@
 - 2026-11-06 三份子 Agent 報告收齊（存於 `build/evidence/big-map/survey/sources/`）。survey 本文寫完：九項參照表、proposal §3 的修正、六個未決事項、量測、RC 候選、範圍限界。
   重要修正：Jolt 明寫 broadphase 查詢非決定性（v0.1 的等價契約是 GYO 自己要立的）；塔科夫「伺服器全圖模擬 AI」未確認，社群資料顯示 bot 依距離睡眠；Veloren 玩家物理預設 Client 權威。
   下一步：對抗檢查（Fable／xhigh）。
+- 2026-11-06 對抗檢查（Fable 5.1／xhigh）完成，證據在 `build/evidence/big-map/survey/adversary/`。主要指正：
+  - (c) 的 1.1 s 是 nlohmann 回呼解析器對「同一陣列內物件數」的二次方（`json_sax.hpp:592` 起的 `end_object`、`:628` 的迴圈），不是每值成本；「4 MB/s」不是速率、22 s 外推無效。
+    調查者讀了原始碼並重跑檢查者的 `nl_scaling`，可重現（2 萬物件 1,096 ms）。
+  - (b) 「站地面」是最便宜的路徑；站在地形上一步 2.23 ms，4 人約 53 %。
+  - 推論被寫成事實（UE 伺服器預設整張載入、塔科夫依距離睡眠）；隱藏的 Delta（工具 DI 3／4 守衛、`GYO::MapMarkers` 新 Subsystem、平行解析不能進 VoxelMesh）。
+  - 全部採納，survey 已修正（第 7 節列出判定與處置）。
+- 2026-11-06 04:40 JST **停下，交使用者決定六個未決事項**（survey 第 4 節）。用時約 1.2 h（子 Agent 平行），估時 8～12 h 之內。
+
+## 待決（使用者）
+
+survey 第 4 節的六項：(1) 模擬模型、(2) 區塊與 region 大小、(3) JSON＋換解析 或 二進位、(4) 標記層 owner、(5) greedy 與區塊內碰撞合併、(6) LOD。
+決定後由架構師會話開 engine-map 批（之後 tool-chunked、product-arena-v3）。
