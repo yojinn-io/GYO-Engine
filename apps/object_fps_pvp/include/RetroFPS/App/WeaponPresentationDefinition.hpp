@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/App/WeaponEventSounds.hpp"
 #include "RetroFPS/Gameplay/Weapon/WeaponShotGeometry.hpp"
 #include "engine/asset/AssetId.hpp"
 #include "engine/model/Animation.hpp"
@@ -8,6 +9,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,6 +26,9 @@ struct WeaponPresentationDefinition final {
     // Each action clip's gyo.anim_events moments, in the clip's own seconds;
     // empty without an animation_events_asset_id or for a clip without events.
     std::array<std::vector<Engine::Model::AnimationEvent>, 5> events{};
+    // The sounds of those events (event_sounds_asset_id, gyo.event_sounds),
+    // checked against the events' asset id, not yet bound to sound lengths.
+    std::optional<WeaponEventSounds> eventSounds;
     Engine::Math::Vec3 idleAnchor{};
     Engine::Render::Transform3D placement{};
     Engine::Render::PerspectiveCamera3D camera{};

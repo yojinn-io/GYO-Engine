@@ -57,7 +57,7 @@ SHARED_ROOTS = {'animations', 'textures'}
 # Definitions in object folders are named after their schema.
 OBJECT_ROOTS = {'characters', 'weapons'}
 DEFINITION_NAMES = {'character.json', 'presentation.json', 'viewmodel.json', 'hitbox.json'}
-DEFINITION_SUFFIXES = ('.animset.json', '.anim_events.json')
+DEFINITION_SUFFIXES = ('.animset.json', '.anim_events.json', '.event_sounds.json')
 # Files of these types are written in the repository and named in snake_case;
 # delivered models, textures and fonts keep their names.
 AUTHORED_TYPES = {'text', 'sound'}

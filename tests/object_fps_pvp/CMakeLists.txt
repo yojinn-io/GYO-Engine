@@ -12,7 +12,6 @@ target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_
     PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
     PVP_SOUND_SETTINGS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/audio/sfx.json"
-    PVP_WEAPON_ANIM_EVENTS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/weapons/nailer_v2/viewmodel/viewmodel.anim_events.json"
     PVP_PRODUCT_ARENA_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/pvp_arena.json"
     PVP_CONNECTION_TIMING_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/connection_timing.json")
 target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} ${client_simulation} GYO::Net GYO::Model gyo_test_support nlohmann_json::nlohmann_json doctest::doctest
@@ -83,7 +82,7 @@ add_custom_target(${presentation_content})
 gyo_stage_app_content(${presentation_content} "${GYO_CURRENT_APP}" "${presentation_stage}")
 add_executable(${presentation_tests} TestMain.cpp PlayerPresentationTests.cpp PresentationMathCharacterizationTests.cpp
     PlayerAnimationEquivalenceTests.cpp PlayerHitboxTests.cpp PlayerAnimationDigestTests.cpp
-    PlayerHitModelTests.cpp)
+    PlayerHitModelTests.cpp WeaponEventSoundsTests.cpp)
 target_compile_features(${presentation_tests} PRIVATE cxx_std_20)
 # hit_aim.hpp: the acceptance probes' aim, checked against the posed judgement.
 target_include_directories(${presentation_tests} PRIVATE "${GYO_REPOSITORY_ROOT}/build/acceptance/object_fps_pvp")
@@ -92,7 +91,11 @@ target_link_libraries(${presentation_tests} PRIVATE ${support} GYO::AssetUfbx GY
 gyo_use_app_config(${presentation_tests} "${GYO_CURRENT_APP}")
 # Test-only accessory content: appended to the staged product catalog, never shipped.
 target_compile_definitions(${presentation_tests} PRIVATE
-    PVP_PRESENTATION_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hair_buns")
+    PVP_PRESENTATION_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/hair_buns"
+    PVP_WEAPON_ANIM_EVENTS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/weapons/nailer_v2/viewmodel/viewmodel.anim_events.json"
+    PVP_WEAPON_EVENT_SOUNDS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/weapons/nailer_v2/viewmodel/viewmodel.event_sounds.json"
+    PVP_WEAPON_PRESENTATION_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/weapons/nailer_v2/viewmodel/nailer_v2_viewmodel.json"
+    PVP_RELOAD_SOUND_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/audio/gun_reload.wav")
 set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${presentation_stage}/bin")
 foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
     set_target_properties(${presentation_tests} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_${config} "${presentation_stage}/bin")

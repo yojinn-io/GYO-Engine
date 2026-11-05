@@ -502,8 +502,14 @@ struct PvpApplication::Impl final {
             if (error.empty()) error = "PvP sound settings asset has no text payload";
             return false;
         }
-        const PvpSound::ClipSource source = [this](const std::string& id,
-                const std::function<void(const SoundClipData&)>& use, std::string& clipError) {
+        return sound.Initialize(*settings, SoundClips(), error);
+    }
+
+    // Sound clips from the content, as PvpSound loads them.
+    PvpSound::ClipSource SoundClips() {
+        namespace Asset = Engine::Asset;
+        return [this](const std::string& id, const std::function<void(const SoundClipData&)>& use,
+                      std::string& clipError) {
             const auto clip = assets.Load(Asset::AssetId::FromString(id),
                 Asset::AssetRequest::WithTypeHint(Asset::AssetType::FromString("sound")));
             if (!clip) { clipError = Explain(clip.error()); return false; }
@@ -513,7 +519,6 @@ struct PvpApplication::Impl final {
             if (!data) { clipError = "Sound asset " + id + " has no samples"; return false; }
             return true;
         };
-        return sound.Initialize(*settings, source, error);
     }
 
     void ObserveLocalFootsteps(const Clock::time_point at) {
@@ -619,14 +624,13 @@ struct PvpApplication::Impl final {
                     weaponFeedback.reloadStartTick) / AuthorityTickRate;
                 const double clipSeconds = weapon->GetActionDurationSeconds(fps::WeaponViewModelAction::Reload);
                 for (const auto& event : weapon->GetActionEvents(fps::WeaponViewModelAction::Reload)) {
-                    const auto* eventSound = FindEventSound(sound.Settings(), event.name);
+                    const auto* eventSound = sound.FindEventSound(event.name);
                     if (!eventSound) continue;
-                    const auto offset = EventSoundOffsetSeconds(event.seconds, clipSeconds, reloadSeconds,
-                                                                eventSound->syncSeconds);
-                    if (!offset) continue;
-                    sound.Play(eventSound->cue, now + std::chrono::duration_cast<Clock::duration>(
-                            std::chrono::duration<double>(*offset - reloadAnchorSeconds)),
-                        CentredGains(sound.Settings().cues[static_cast<std::size_t>(eventSound->cue)].volume));
+                    const auto scheduled = fps::ScheduleEventSound(*eventSound, event.seconds, clipSeconds, reloadSeconds,
+                                                              reloadAnchorSeconds);
+                    if (!scheduled) continue;
+                    sound.PlayEventSound(*eventSound, now + std::chrono::duration_cast<Clock::duration>(
+                            std::chrono::duration<double>(scheduled->secondsFromNow)), scheduled->gain);
                 }
                 ++weaponFeedback.animationRevision;
             }
@@ -1012,6 +1016,8 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
     impl_->weapon = std::make_unique<fps::WeaponViewModel>();
     if (!impl_->weapon->Initialize(*impl_->device, impl_->assets,
         Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error)) return false;
+    if (const auto* eventSounds = impl_->weapon->GetEventSounds();
+        eventSounds && !impl_->sound.BindEventSounds(*eventSounds, impl_->SoundClips(), error)) return false;
     impl_->players = std::make_unique<PlayerPresentation>();
     // The current two-player product needs one remote slot. Preallocate it so
     // joining/rejoining never creates a skinned GPU instance in a live frame.

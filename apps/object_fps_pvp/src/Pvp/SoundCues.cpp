@@ -5,9 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include <algorithm>
 #include <cmath>
-#include <iterator>
 #include <numbers>
 #include <stdexcept>
 
@@ -15,7 +13,7 @@ namespace fps::pvp {
 namespace {
 
 constexpr const char* CueNames[SoundCueCount] = {"local_shot", "remote_shot", "hit_taken", "hit_confirmed",
-                                                 "reload", "footstep", "landing"};
+                                                 "footstep", "landing"};
 
 float Bounded(const nlohmann::json& value, const float low, const float high, const char* what) {
     const auto number = value.get<float>();
@@ -39,7 +37,7 @@ std::optional<SoundSettings> ParseSoundSettings(const std::string& text, std::st
     error.clear();
     try {
         const auto json = nlohmann::json::parse(text);
-        if (json.at("version").get<int>() != 2) throw std::runtime_error("unsupported version");
+        if (json.at("version").get<int>() != 3) throw std::runtime_error("unsupported version");
         SoundSettings settings;
         const auto& cues = json.at("cues");
         for (std::size_t i = 0; i < SoundCueCount; ++i) {
@@ -54,28 +52,15 @@ std::optional<SoundSettings> ParseSoundSettings(const std::string& text, std::st
         const auto& footsteps = json.at("footsteps");
         settings.strideDistance = Bounded(footsteps.at("stride_distance"), 0.01F, 100, "the stride is positive");
         settings.teleportDistance = Bounded(footsteps.at("teleport_distance"), 0.01F, 1000, "the teleport distance is positive");
-        const auto& events = json.at("animation_events");
-        if (!events.is_object()) throw std::runtime_error("animation_events maps event names to sounds");
-        for (const auto& [event, sound] : events.items()) {
-            if (event.empty()) throw std::runtime_error("an animation event sound names its event");
-            const auto cueName = sound.at("cue").get<std::string>();
-            const auto cue = std::find_if(std::begin(CueNames), std::end(CueNames),
-                [&cueName](const char* name) { return cueName == name; });
-            if (cue == std::end(CueNames)) throw std::runtime_error("animation event '" + event + "' plays no known cue");
-            settings.eventSounds.push_back({event, static_cast<SoundCue>(cue - std::begin(CueNames)),
-                                            Bounded(sound.at("sync_seconds"), 0, 60, "sync points are in [0, 60] seconds")});
-        }
+        // Version 2's section, moved to the weapon's gyo.event_sounds: a file
+        // still carrying it would sound nothing it names.
+        if (json.contains("animation_events"))
+            throw std::runtime_error("animation event sounds are the weapon's gyo.event_sounds, not animation_events");
         return settings;
     } catch (const std::exception& failure) {
         error = std::string("sound settings: ") + failure.what();
         return std::nullopt;
     }
-}
-
-const SoundSettings::EventSound* FindEventSound(const SoundSettings& settings, const std::string_view event) noexcept {
-    for (const auto& sound : settings.eventSounds)
-        if (sound.event == event) return &sound;
-    return nullptr;
 }
 
 StereoGains CentredGains(const float volume) noexcept { return {volume, volume}; }
@@ -93,14 +78,6 @@ StereoGains SpatialGains(const Engine::Math::Vec3 listener, const float listener
     const float angle = (pan + 1.0F) * std::numbers::pi_v<float> * 0.25F;
     const float scale = volume * falloff * std::numbers::sqrt2_v<float>;
     return {Engine::Math::Min(4.0F, scale * std::cos(angle)), Engine::Math::Min(4.0F, scale * std::sin(angle))};
-}
-
-std::optional<double> EventSoundOffsetSeconds(const double eventSeconds, const double clipSeconds,
-                                              const double actionSeconds, const double syncSeconds) noexcept {
-    if (!std::isfinite(eventSeconds) || !std::isfinite(syncSeconds) || !std::isfinite(clipSeconds) ||
-        !std::isfinite(actionSeconds) || clipSeconds <= 0 || actionSeconds <= 0)
-        return std::nullopt;
-    return eventSeconds * (actionSeconds / clipSeconds) - syncSeconds;
 }
 
 std::vector<RemoteShotTracker::Shot> RemoteShotTracker::Observe(const WorldSnapshot& snapshot, const PlayerId self) {

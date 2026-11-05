@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/App/WeaponEventSounds.hpp"
 #include "RetroFPS/Pvp/SoundCues.hpp"
 #include "engine/base/Span.hpp"
 #include "engine/time/MonotonicClock.hpp"
@@ -7,7 +8,9 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace fps::pvp {
@@ -28,7 +31,8 @@ struct SoundDiagnostics final {
         std::uint64_t firstFrame{};
     };
     struct Cue final {
-        SoundCue cue{};
+        std::optional<SoundCue> cue;      // nothing for an animation event's sound
+        std::string event;                // that sound's event name
         Engine::Time::TimePoint at{};     // the time the cue belongs to
         Engine::Time::TimePoint played{}; // when Play handed it to the mixer
     };
@@ -63,6 +67,16 @@ public:
     [[nodiscard]] bool Initialize(const SoundSettings& settings, const ClipSource& source, std::string& error);
     // Main thread. A cue at the Engine time it belongs to, with its side gains.
     void Play(SoundCue cue, Engine::Time::TimePoint at, StereoGains gains);
+    // Main thread, after Initialize: loads the sounds of a weapon's animation
+    // events through source and binds them to the weapon's events and to the
+    // sounds' lengths (gyo.event_sounds), replacing an earlier binding. False
+    // for a content error, or when the mixer has no clip slot left.
+    [[nodiscard]] bool BindEventSounds(const fps::WeaponEventSounds& weapon, const ClipSource& source, std::string& error);
+    // The bound sound of an animation event, or nullptr for a silent event.
+    [[nodiscard]] const Gyo::Tools::Framework::EventSound* FindEventSound(std::string_view event) const noexcept;
+    // Main thread. An event's sound at the Engine time it starts, centred at
+    // the gain ScheduleEventSound gave.
+    void PlayEventSound(const Gyo::Tools::Framework::EventSound& sound, Engine::Time::TimePoint at, float gain);
     [[nodiscard]] const SoundSettings& Settings() const noexcept { return settings_; }
     // One log line with the mixer's counters (log-contract: "PvP sound summary").
     void LogSummary() const;
