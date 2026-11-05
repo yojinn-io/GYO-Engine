@@ -74,3 +74,10 @@
    - (a) 本會話做，接在 `claude/v8-tool-line-records` 上，和工具線的紀錄同一條 PR（先例：`v8-product-lobby-fullwidth` 在工具線的 #111）；
    - (b) 交給產品會話。
    建議 (a)：範圍小，判斷都在本線。PvP 計畫的同步照舊由產品會話做，本線只通知它。
+
+## 實作後的結果（2026-11-05）
+
+- commit `6764f65f`（實作）、`f38c6e43`（審查後的修正）。dev_log：[2026_11_05_pvp_v8_ui_action_check](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md)。
+- 判定 1：PvP `cpu|shader` 50／50，測試未改。判定 2：大廳 10 個 case 全過。判定 3：6／6 killed（宣告 4＋審查後追加 2，只收緊）。判定 4：待 PR 的 L1。判定 5：不需要。
+- 和宣告寫法不同之處：突變 4 用「真的 UI 檔多宣告一個 `pvp.unhandled`」殺，不是「少宣告一個」（少宣告會先被 Engine 的驗證拒絕，抓不到比對）。
+- `Execute` 每個 case 的內容與啟動時的呼叫點，由審查確認，沒有測試涵蓋（`PvpApplication.cpp` 沒有測試呼叫）。
