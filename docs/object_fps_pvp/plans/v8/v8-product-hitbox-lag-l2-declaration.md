@@ -50,7 +50,7 @@ protocol-v9 第 113 行：τ＝clamp(view_tick/65536, J−R, J)，R≤15（`maxi
 
 ### 場次（L2）
 
-- **構成**：Mac（Intel）跑 Match＋Gateway；Windows Client 至少 2 台。程式是本批 PR 的 L1 產物（Windows 套件；Mac 從同一個 commit 建置），SHA-256 記錄在證據裡。
+- **構成**：Mac（Intel）跑 Match＋Gateway；Windows Client 至少 2 台。程式是本批 PR 合併後 master 整合建置的套件（PR 的 L1 不產生套件；修訂 6），Gateway 從同一個 commit 建置，SHA-256 記錄在證據裡。
 - **進行**：全員加入後連續對戰至少 10 分鐘，照常遊玩（移動中互射）；不做刻意的斷線。見選項 `-session`。
 - **S1 的區間**（修訂 3）：從 Match log 上 `s1_end` 之前最後一行 `join player=N accepted`，到 `marks.txt` 的 `s1_end`（Mac 的時刻，你在連續對戰結束時記下）。影子紀錄的 `time_ns` 和 Match log 的 `mono_ns` 是同一個 Match 程序的 steady_clock，`s1_end` 經 Match log 上牆鐘最接近的那一行換算過去。K8 的斷線與重連都在 `s1_end` 之後。
 - **S1（資料足夠）**：有效的 Shot 至少 500 發（`view_lag_q16` 不是 `null`），而且至少 2 位玩家各至少 100 發。不足時不算 R，停下回報（不延長、不補跑；要不要再排一次由你決定）。
@@ -90,3 +90,4 @@ protocol-v9 第 113 行：τ＝clamp(view_tick/65536, J−R, J)，R≤15（`maxi
    - T3 的突變由 3 個增為 5 個（加上 S1 起點與送出數的檢查），只收緊。
    - 新增限界：Client 的 `PvP summary` 每秒寫一次，離開對局時最後不滿 1 秒的那一段不會寫出；離開前最後 1 秒內的射擊會讓 S2 不一致。場次腳本要求「停止射擊與換彈至少 3 秒後才離開」（同 lan15）。K8 的斷線也算在全場的對帳裡，造成不一致時 R 不給，由你判斷。
 5. 2026-11-05（看到任何場次結果之前，場次腳本的審查後）：修正修訂 4 最後一句的說法。K8 的斷線若超過 5 秒，Gateway 讓舊的 id 逾時，那個 id 不進 K1、K2（lan15 的 `normal_leavers` 排除它）；重新加入的新 id 照常對帳。全場都算的只有 `trace_end` 的 `records`、`dropped`、`view_tick_invalid`。手冊要求斷線一直持續到回到 Lobby。
+6. 2026-11-05（看到任何場次結果之前）：PR 的 L1 不產生套件（`Trial packages` 只在 PR 有 `package` 標籤或手動執行時跑）。改用合併後 master 的整合建置的套件；判定不變。

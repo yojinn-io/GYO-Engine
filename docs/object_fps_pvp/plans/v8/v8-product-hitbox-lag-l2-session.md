@@ -16,7 +16,7 @@
 
 ## 1. 事前準備（有網路時）
 
-- 程式全部來自本批 PR 的同一次 L1（run 編號在 PR 上）。`mac.sh`、`lag_l2_summary.py` 用本批 PR 的分支（`claude/pvp-v8-lag-l2`；合併後用 master）的 checkout。
+- 程式全部來自同一個 commit：本批 PR（#155）合併到 master 後，master 的整合建置（`cross-platform` workflow）上傳的套件 artifacts（PR 的 L1 不產生套件，2026-11-05 查過）。run 編號與 commit 開場前記到 HANDOFF。Gateway 也從那個 commit 建置；`mac.sh`、`lag_l2_summary.py` 用那個 commit 的 checkout。
 - 套件的 zip 裡是一個 `gyo-object_fps_pvp-<平台>.tar.gz`，解開後是 `gyo-object_fps_pvp/` 資料夾（裡面有 `build_metadata.json`、`bin/`、`lib/`）。**`PKG` 指的是這個 `gyo-object_fps_pvp` 資料夾**，不是解壓的上一層。
 - **Windows（每台）**：下載 `gyo-package-object_fps_pvp-windows-x64`，解開 zip 後在 PowerShell 用 `tar -xzf gyo-object_fps_pvp-windows-x64.tar.gz` 解開（檔案總管打不開 `.tar.gz`），放在本機磁碟的新資料夾。把 repo 的 `build/acceptance/object_fps_pvp/lag_l2_session/windows.ps1` 也複製過去。
 - **Mac**：
