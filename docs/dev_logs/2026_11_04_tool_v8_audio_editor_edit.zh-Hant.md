@@ -8,8 +8,8 @@
 
 **狀態：**
 - 程式、測試、突變、審查都完成。
-- 守衛的放寬（§14.4）等你核准。
-- GUI 的試用（判定 8）：**未判定**。2026-11-04 延到 Model Viewer 出來後一起試（`v8-tool-audio-editor-l3-deferred`）。
+- 守衛的放寬（§14.4）：2026-11-05 核准（`v8-tool-audio-editor-edit-guard-approved`），#141 合併。
+- GUI 的試用（判定 8）：**未判定**。2026-11-04 延到 Model Viewer 出來後一起試（`v8-tool-audio-editor-l3-deferred`）。2026-11-05 合併時仍未做。
 
 相關文件：
 - [事前宣告與結果](../tools/plans/v8/assets.md)「`v8-tool-audio-editor-edit` 的事前宣告」與「實作後的結果」；
