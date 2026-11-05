@@ -43,6 +43,9 @@
     "quad_evidence": {
       "ctest": "object_fps_pvp.quad_evidence"
     },
+    "lag_l2_summary": {
+      "ctest": "object_fps_pvp.lag_l2_summary"
+    },
     "probe_command_path": {
       "ctest": "object_fps_pvp.probe_command_path"
     },
@@ -8980,6 +8983,36 @@
       "replace": "            record.viewLagAQ16 = static_cast<std::int64_t>(decision.resolvedTick * 65536) - view;\n",
       "check": "cpu",
       "expect": "held\\.viewLagAQ16"
+    },
+    {
+      "id": "lag-l2-quantile-interpolated",
+      "batch": "v8-product-hitbox-lag-l2",
+      "what": "The quantile interpolates between neighbours instead of taking the nearest rank",
+      "file": "build/acceptance/object_fps_pvp/lag_l2_summary.py",
+      "find": "    rank = max(1, math.ceil(q * len(sorted_values)))\n    return sorted_values[rank - 1]\n",
+      "replace": "    position = q * (len(sorted_values) - 1)\n    low = int(position)\n    high = min(low + 1, len(sorted_values) - 1)\n    return sorted_values[low] + (sorted_values[high] - sorted_values[low]) * (position - low)\n",
+      "check": "lag_l2_summary",
+      "expect": "test_baseline_gives_the_hand_computed_r|test_nearest_rank_by_hand"
+    },
+    {
+      "id": "lag-l2-null-as-zero",
+      "batch": "v8-product-hitbox-lag-l2",
+      "what": "Shots with no view tick count as a lag of 0",
+      "file": "build/acceptance/object_fps_pvp/lag_l2_summary.py",
+      "find": "        shots = [d for d in decisions if d.get(\"action_kind\") == \"shot\" and d.get(\"view_lag_q16\") is not None\n",
+      "replace": "        for d in decisions:\n            if d.get(\"view_lag_q16\") is None: d[\"view_lag_q16\"], d[\"view_lag_a_q16\"] = 0, 0\n        shots = [d for d in decisions if d.get(\"action_kind\") == \"shot\"\n",
+      "check": "lag_l2_summary",
+      "expect": "test_baseline_gives_the_hand_computed_r"
+    },
+    {
+      "id": "lag-l2-version-unchecked",
+      "batch": "v8-product-hitbox-lag-l2",
+      "what": "A shadow record of another version is read",
+      "file": "build/acceptance/object_fps_pvp/lag_l2_summary.py",
+      "find": "        if record.get(\"version\") != TRACE_VERSION:\n",
+      "replace": "        if False:\n",
+      "check": "lag_l2_summary",
+      "expect": "test_version_two_is_refused"
     }
   ]
 }

@@ -1,6 +1,6 @@
 # v8-product-hitbox-lag-l2 的事前宣告
 
-更新：2026-11-05。Owner：`object_fps_pvp`。**狀態：草稿，等核准**（核准前不寫程式，也不跑場次）。
+更新：2026-11-05。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hitbox-lag-l2-declaration-approve`，2026-11-05，使用者：「Approve as recommended」；`-session` (a)、`-r-quantile` (a)）。
 估時：工具與場次腳本 3～5 h，加一次 L2 場次（你的時間約 30 分鐘）。超過 1.5 倍停下回報。
 
 | 角色 | 模型／檔位 | 理由 |
@@ -52,6 +52,7 @@ protocol-v9 第 113 行：τ＝clamp(view_tick/65536, J−R, J)，R≤15（`maxi
 
 - **構成**：Mac（Intel）跑 Match＋Gateway；Windows Client 至少 2 台。程式是本批 PR 的 L1 產物（Windows 套件；Mac 從同一個 commit 建置），SHA-256 記錄在證據裡。
 - **進行**：全員加入後連續對戰至少 10 分鐘，照常遊玩（移動中互射）；不做刻意的斷線。見選項 `-session`。
+- **S1 的區間**（修訂 3）：從 Match log 上 `s1_end` 之前最後一行 `join player=N accepted`，到 `marks.txt` 的 `s1_end`（Mac 的時刻，你在連續對戰結束時記下）。影子紀錄的 `time_ns` 和 Match log 的 `mono_ns` 是同一個 Match 程序的 steady_clock，`s1_end` 經 Match log 上牆鐘最接近的那一行換算過去。K8 的斷線與重連都在 `s1_end` 之後。
 - **S1（資料足夠）**：有效的 Shot 至少 500 發（`view_lag_q16` 不是 `null`），而且至少 2 位玩家各至少 100 發。不足時不算 R，停下回報（不延長、不補跑；要不要再排一次由你決定）。
 - **S2（帳目）**：`trace_end` 的 `dropped`＝0。另外記錄：送出的射擊數（各 Client log）、收到的決定數、`view_tick_invalid` 數，三者對帳。不一致時不確定 R，等你判斷（§14 開頭）。
 - **R1（R 的規則，見選項 `-r-quantile`）**：R＝min(15, ceil(p99 的 Tick 數)＋2)。p99 是全部有效 Shot 的 `view_lag_q16/65536`。另外記錄 p50、p90、p95、p99、最大值（Tick 與 ms），以及 R＝8～15 各自會被夾住的比例。
@@ -80,3 +81,5 @@ protocol-v9 第 113 行：τ＝clamp(view_tick/65536, J−R, J)，R≤15（`maxi
 ## 修訂紀錄
 
 1. 2026-11-05 草稿。
+2. 2026-11-05 核准，`-session` (a)、`-r-quantile` (a)。
+3. 2026-11-05（看到任何場次結果之前）：補上 S1 的區間定義。核准的版本只寫「K8 放在 10 分鐘之後，不影響 S1」，沒寫怎麼把 K8 排除在 R 的資料之外；這裡只把它寫成可以計算的規則，判定的門檻不變。
