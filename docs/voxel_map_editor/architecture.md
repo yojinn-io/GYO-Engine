@@ -87,8 +87,11 @@ turned stair still collides as boxes. The number is stored in grid files, so thi
 3. Colours: one palette entry per block in use, ordered by name; each face direction is the block's colour times a
    brightness of the tool's own (+X/−X 80 %, +Y 100 %, −Y 50 %, +Z/−Z 65 %), rounded to the nearest integer
    (halves up: 150 × 65 % = 97.5 → 98); alpha unchanged.
-4. Collision: the union of every box, merged slab by slab along y (greedy along x, then z; a rectangle that goes on
-   unchanged into the next slab extends its box upwards). The boxes are disjoint and their union is the input's.
+4. Collision: the union of every box, merged slab by slab along y. Inside a slab every column x is cut into its
+   longest runs along z (strips), and a strip goes on along x only while the next column has exactly the same strip;
+   a rectangle that goes on unchanged into the next slab extends its box upwards. So a wall along z keeps its
+   corners and a wall along x stops at them (as hand-written levels of axis walls list them;
+   v8-product-arena-v2-merge). The boxes are disjoint and their union is the input's.
    How many boxes a product accepts is the product's rule, not the tool's.
 5. Output: Engine's canonical order, written in one layout; `source_sha256` is the SHA-256 of the grid file's bytes
    and `build_version` is `voxel_map_editor 1`. The text is read back with Engine's `ParseVoxelMesh` before it is

@@ -6,8 +6,9 @@ Plan and record: [voxel map editor](../tools/plans/v8/voxel-map-editor.md), batc
 v8-tool-voxel-artifact-encoding: a tool bakes a grid-built map offline; the game reads only the baked file, whose
 format and only validator belong to Engine).
 
-**Status (2026-11-05): version 1 landed with v8-engine-voxel-mesh-contract.** No producer exists yet; the voxel map
-editor (`v8-tool-voxel-map-editor-core`) will write these files, and a product loads them (`v8-product-arena-v2`).
+**Status (2026-11-05): version 1 landed with v8-engine-voxel-mesh-contract.** The voxel map editor
+(`v8-tool-voxel-map-editor-core`) writes these files; object_fps_pvp loads them as the geometry of its arena files
+(`v8-product-arena-v2`).
 
 ## What it is
 

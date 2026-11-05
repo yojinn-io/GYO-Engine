@@ -19,4 +19,11 @@ Engine::Render::ImageView ArenaPaletteImage(const Engine::VoxelMesh::VoxelMeshGe
             Engine::Render::TextureColorSpace::SRgb};
 }
 
+std::optional<std::size_t> InstalledArenaIndex(const std::span<const Arena> installed,
+                                               const std::string_view id) noexcept {
+    for (std::size_t i = 0; i < installed.size(); ++i)
+        if (installed[i].id == id) return i;
+    return std::nullopt;
+}
+
 } // namespace fps::pvp

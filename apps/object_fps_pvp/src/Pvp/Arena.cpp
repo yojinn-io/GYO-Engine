@@ -89,6 +89,7 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
             throw std::runtime_error("Arena schema 2 takes its walls from its geometry, not from walls");
         if (!json.at("spawns").is_array()) throw std::runtime_error("Arena spawns must be an array");
         Arena arena;
+        Engine::VoxelMesh::VoxelMeshGeometry baked;
         arena.id = json.at("id").get<std::string>();
         arena.width = json.at("width").get<float>();
         arena.depth = json.at("depth").get<float>();
@@ -117,13 +118,14 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
                 throw std::runtime_error("Cannot open arena geometry: " + Engine::Os::Files::PathForMessage(meshPath));
             const auto mesh = Engine::VoxelMesh::ParseVoxelMesh(std::string_view(meshBytes->data(), meshBytes->size()));
             if (!mesh) throw std::runtime_error("Arena geometry: " + Engine::Base::Describe(mesh.error()));
-            auto expanded = Engine::VoxelMesh::ExpandVoxelMesh(*mesh);
-            arena.walls = expanded.colliders;
-            if (geometry) *geometry = std::move(expanded);
+            baked = Engine::VoxelMesh::ExpandVoxelMesh(*mesh);
+            arena.walls = baked.colliders;
         }
         for (const auto& spawn : json.at("spawns"))
             arena.spawns.push_back({ReadPosition(spawn.at("position")), spawn.at("yaw").get<float>()});
         if (!arena.Validate(error)) return std::nullopt;
+        // Handed out only with an arena that loaded: a failure leaves it empty.
+        if (geometry) *geometry = std::move(baked);
         return arena;
     } catch (const std::exception& exception) {
         error = exception.what();
@@ -190,6 +192,7 @@ std::optional<std::vector<Arena>> LoadInstalledArenas(const std::filesystem::pat
         return arenas;
     } catch (const std::exception& exception) {
         error = "arena list " + Engine::Os::Files::PathForMessage(list) + ": " + exception.what();
+        if (geometries) geometries->clear();
         return std::nullopt;
     }
 }

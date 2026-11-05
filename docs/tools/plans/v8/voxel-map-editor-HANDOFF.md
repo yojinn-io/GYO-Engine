@@ -19,6 +19,10 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-product-arena-v2-maps-move` | （2026-11-05）把延後的 `v8-product-asset-path-loaded-move` 併進 arena-v2 批：arena 一組（含烘焙地圖）搬進 `maps/`，`movement_rules.json` 搬進 `rules/`，根目錄的例外全部刪除；不加新例外 | 「这2个问题就能放到pvp的assets的config下么」→ 選「今 maps/ に移す」 |
+| `v8-product-arena-v2-p3-regression` | （2026-11-05）審查實測：P3 的軌跡對「集合相同、分法不同」沒有檢出力（AGENTS §14 停下回報）。P3 降為回歸檢查，退役證據只靠 P2（集合相同）；P3 的腳本加上繞柱、沿柱滑、斜進四角（只收緊） | 選「回帰チェックに下げる（推奨）」 |
+| `v8-product-arena-v2-maps-guard` | （2026-11-05）資產標準 DI-2 的守衛加 `maps` 資料夾種類：照 §14.4 先做突變與另一個驗證者的確認，再請你核准 | 選「手続きを進める（推奨）」 |
+| `v8-product-arena-v2-p10` | （2026-11-05）P10（L3）的判定事前定為：形狀、位置、顏色（每個面方向的亮度）與碰撞的手感一致即通過；不要求逐像素相同；舊牆頂的青色飾條不再畫 | 沒有偏好，採建議的定義 |
 | `v8-product-arena-v2-declare` | （2026-11-05）核准 arena-v2 批的事前宣告（P1～P10） | 「承認」 |
 | `v8-product-arena-v2-render` | （2026-11-05）arena-v2 批由 Client 畫烘好的 mesh（R2） | 選「R2 描く（推奨）」 |
 | `v8-product-arena-v2-merge` | （2026-11-05）碰撞盒合併改成條帶式：每一行取沿 z 的最長段，完全相同的段沿 x 合併，相同的矩形沿 y 往上長 | 選「帯状に変える（推奨）」 |
@@ -58,3 +62,4 @@
 - 2026-11-05：core 批的審查（Opus／high）沒有 blocker。修 C1（匯入的格子讀不回來）、C2（pointer 讓程式 abort）、T1（朝向的字面表）、T2（補齊規則測試）、A1（`gyo_tool_install_target`）和其他 nit。突變審查後 20 條：19／20，倖存的一條是 runner 找到了舊位置的執行檔（計測路徑），修正後 20／20。提交並推送，等 L1。
 - 2026-11-05：core 批的 L1 三平台通過（run 42010316153，`5f410c60`），批次完成。
 - 2026-11-05：你選 `v8-product-arena-v2`，由這個會話做。讀了 `Arena.cpp` 的載入與 digest、`Arena::Load` 的 20 多個呼叫端、`Movement.cpp` 的站立判定、資產契約測試的 RETAINED 與 root-file 例外。發現：現在的合併得到的盒子集合和 v1 不同（盒子數相同、分法相反）。重估 10～14 h。事前宣告寫進 voxel-map-editor.md，等你核准。
+- 2026-11-05：arena-v2 批審查（Opus／high）：沒有 blocker。實測發現 P3 對分法不同的分解沒有檢出力，照 AGENTS §14 停下回報；你選 P3 降為回歸檢查、`maps` 守衛照 §14.4 走程序，P10 採建議的定義。其餘 should-fix 照審查修。

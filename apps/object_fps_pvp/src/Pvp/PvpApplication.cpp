@@ -680,9 +680,9 @@ struct PvpApplication::Impl final {
 
     // The GPU mesh of an installed arena's baked map; nullptr for schema 1.
     const ArenaMesh* BakedMeshOf(const Arena& shown) const {
-        for (std::size_t i = 0; i < arenas.size() && i < arenaMeshes.size(); ++i)
-            if (arenas[i].id == shown.id && arenaMeshes[i].mesh.IsValid()) return &arenaMeshes[i];
-        return nullptr;
+        const auto index = InstalledArenaIndex(arenas, shown.id);
+        if (!index || *index >= arenaMeshes.size() || !arenaMeshes[*index].mesh.IsValid()) return nullptr;
+        return &arenaMeshes[*index];
     }
 
     bool SubmitBox(Engine::Math::Vec3 center, Engine::Math::Vec3 scale,
@@ -1050,11 +1050,18 @@ bool PvpApplication::InitializeGraphics(const PvpApplicationOptions& options, st
             if (!mesh) { error = Explain(mesh.error()); return false; }
             baked.mesh = mesh.value();
             auto palette = impl_->device->CreateTexture(ArenaPaletteImage(geometry));
-            if (!palette) { error = Explain(palette.error()); return false; }
+            if (!palette) {
+                static_cast<void>(impl_->device->ReleaseMesh(baked.mesh));
+                error = Explain(palette.error());
+                return false;
+            }
             baked.palette = palette.value();
         }
         impl_->arenaMeshes.push_back(baked);
     }
+    // Uploaded: the CPU copy is no longer needed.
+    impl_->arenaGeometries.clear();
+    impl_->arenaGeometries.shrink_to_fit();
     impl_->weapon = std::make_unique<fps::WeaponViewModel>();
     if (!impl_->weapon->Initialize(*impl_->device, impl_->assets,
         Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error)) return false;

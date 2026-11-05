@@ -3,6 +3,12 @@
 #include "engine/render/PrimitiveMesh.hpp"
 #include "engine/render/RenderTypes.hpp"
 #include "engine/voxel_mesh/VoxelMesh.hpp"
+#include "RetroFPS/Pvp/Arena.hpp"
+
+#include <cstddef>
+#include <optional>
+#include <span>
+#include <string_view>
 
 namespace fps::pvp {
 
@@ -14,5 +20,9 @@ namespace fps::pvp {
 [[nodiscard]] Engine::Render::MeshData ArenaRenderMesh(const Engine::VoxelMesh::VoxelMeshGeometry& geometry);
 // The palette as an sRGB image over the geometry's own pixels (no copy).
 [[nodiscard]] Engine::Render::ImageView ArenaPaletteImage(const Engine::VoxelMesh::VoxelMeshGeometry& geometry) noexcept;
+// Which installed arena an id names (the Match chooses by id), so its baked
+// map is drawn; nullopt for an id that is not installed.
+[[nodiscard]] std::optional<std::size_t> InstalledArenaIndex(std::span<const Arena> installed,
+                                                             std::string_view id) noexcept;
 
 } // namespace fps::pvp

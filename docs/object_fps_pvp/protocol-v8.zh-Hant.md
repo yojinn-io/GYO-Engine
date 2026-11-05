@@ -151,7 +151,7 @@ pv8 的 proto 以 `reserved` 預留下列號碼，只防撞號，不產生行為
 
 ### 移動規則資料（新的產品內 Data Contract）
 
-- Match 端的一份產品資料（檔名與位置在 v8-product-crouch 批決定，例如 `assets/object_fps_pvp/movement_rules.json`），帶 `version` 與上面的驗證規則；可以手寫（AGENTS §8）。
+- Match 端的一份產品資料（檔名與位置在 v8-product-crouch 批決定，例如 `assets/object_fps_pvp/rules/movement_rules.json`），帶 `version` 與上面的驗證規則；可以手寫（AGENTS §8）。
 - 只有 Match 讀。Client 不安裝、不讀；Client 只認 Welcome 的值。
 - 調整倍率只要更新 Match 的規則資料，Client 不必重新安裝地圖內容。
 - 混版（① 的 Client 對 ② 的 Match）不偵測（pv8-design-remaining-picks：D-5 (a)，遊戲還沒上線）。

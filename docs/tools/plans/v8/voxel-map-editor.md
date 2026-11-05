@@ -92,7 +92,7 @@ v8-tool-voxel-map-editor
 ├── v8-framework-preview-component        「high｜Opus｜framework：抽出 3D 預覽元件，model_viewer 改用（等 #146）」
 ├── v8-tool-voxel-map-editor-core         「high｜Opus｜工具：登錄、格子格式、形狀庫、build、CLI ✓（L1 三平台通過）」
 ├── v8-tool-voxel-map-editor-window       「high｜Opus｜工具：ImGui 視窗、編輯平面、工具、朝向、undo、預覽」
-├── v8-product-arena-v2                   「high｜Opus｜產品批：arena v2、出生點支撐規則、兩張地圖轉換、v1 退役」
+├── v8-product-arena-v2                   「high｜Opus｜產品批：arena v2、出生點支撐規則、兩張地圖轉換、v1 退役、搬進 maps/（審查後修正中）」
 ├── v8-product-step-up                    「high｜Opus｜產品批：走上半格台階（產品會話做）」
 └── v8-tool-voxel-map-editor-trial        「medium｜Opus｜P1 量測、L3 試用」
 ```
@@ -433,6 +433,22 @@ v8-tool-voxel-map-editor
   - P3 的軌跡只比 `StepMovement`（Match 與 Client 的預測共用），不比網路的流程。
   - `walls` 的順序和 v1 不同：v1 照檔案順序，v2 是正規順序。如果 P3 因為順序而不同，就照 AGENTS §14 停下回報。
 - 證據放主 checkout 的 `build/evidence/tool-v8-voxel-map/arena-v2/`。
+
+### 實作後的變更（2026-11-05，經使用者決定）
+
+- **搬到 `maps/`**（`v8-product-arena-v2-maps-move`）：原本宣告「產物放資產根目錄、加 root-file 例外」，改成把延後的 `v8-product-asset-path-loaded-move` 併進這一批。
+  - arena 一組（`arenas.json`、`pvp_<name>.json`、`pvp_<name>.voxel_mesh.json`）搬進 `maps/`，`movement_rules.json` 搬進 `rules/`。
+  - 根目錄的 6 筆例外全部刪除，不加新例外。
+  - 資產守衛的 `FOLDER_TYPES` 加 `maps`（DI-2 守衛的判定變更，照 §14.4 走程序：`v8-product-arena-v2-maps-guard`）。
+  - `content_deep_path` 的常數沒有改，理由寫在 dev_log。
+- **P3 降為回歸檢查**（`v8-product-arena-v2-p3-regression`）：審查實測發現，軌跡對「集合相同、分法不同」的分解沒有檢出力。所以 v1 退役的證據只有 P2（集合逐位元相同）。P3 的腳本加上繞柱、沿柱滑、斜進四角，只收緊。
+- **P10 的判定**（`v8-product-arena-v2-p10`）：形狀、位置、顏色（每個面方向的亮度）與碰撞的手感一致即通過；不要求逐像素相同；舊牆頂的青色飾條不再畫。
+- **補的測試與突變**（依審查）：
+  - 柱子邊緣逐點比較 `Validate` 與 `StepMovement` 的著地；
+  - Client 依 id 選烘焙地圖（`InstalledArenaIndex`）；
+  - 載入失敗時不交出 geometry；
+  - 出生點低於地板；
+  - `maps` 資料夾種類被拿掉時守衛會失敗。
 
 ## 風險
 

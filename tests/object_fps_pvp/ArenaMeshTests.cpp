@@ -4,7 +4,9 @@
 
 #include <bit>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <vector>
 
 using namespace fps::pvp;
 
@@ -32,8 +34,12 @@ TEST_CASE("A baked arena is drawn as its mesh and palette; a schema 1 arena as b
     REQUIRE(mesh.vertices.size() == geometry.vertices.size());
     CHECK(mesh.indices == geometry.indices);
     for (std::size_t i = 0; i < mesh.vertices.size(); ++i) {
+        CHECK(std::bit_cast<std::uint32_t>(mesh.vertices[i].position.x) ==
+              std::bit_cast<std::uint32_t>(geometry.vertices[i].position.x));
         CHECK(std::bit_cast<std::uint32_t>(mesh.vertices[i].position.y) ==
               std::bit_cast<std::uint32_t>(geometry.vertices[i].position.y));
+        CHECK(std::bit_cast<std::uint32_t>(mesh.vertices[i].position.z) ==
+              std::bit_cast<std::uint32_t>(geometry.vertices[i].position.z));
         CHECK(std::bit_cast<std::uint32_t>(mesh.vertices[i].uv.x) == std::bit_cast<std::uint32_t>(geometry.vertices[i].uv.x));
         CHECK(std::bit_cast<std::uint32_t>(mesh.vertices[i].uv.y) == std::bit_cast<std::uint32_t>(geometry.vertices[i].uv.y));
     }
@@ -43,4 +49,14 @@ TEST_CASE("A baked arena is drawn as its mesh and palette; a schema 1 arena as b
     CHECK(image.rowPitch == 0);
     CHECK(image.rgba8.size() == 24);
     CHECK(image.colorSpace == Engine::Render::TextureColorSpace::SRgb);
+}
+
+TEST_CASE("The baked map drawn is the one of the arena the Match chose") {
+    std::vector<Arena> installed(3);
+    installed[0].id = "a";
+    installed[1].id = "b";
+    installed[2].id = "c";
+    CHECK(InstalledArenaIndex(installed, "a") == std::optional<std::size_t>{0});
+    CHECK(InstalledArenaIndex(installed, "c") == std::optional<std::size_t>{2});
+    CHECK_FALSE(InstalledArenaIndex(installed, "d"));
 }

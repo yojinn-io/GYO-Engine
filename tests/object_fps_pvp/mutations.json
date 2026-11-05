@@ -9050,6 +9050,56 @@
       "replace": "",
       "check": "asset_catalog",
       "expect": "maps/pvp_arena.voxel_mesh.json"
+    },
+    {
+      "id": "av2-movement-own-rule",
+      "batch": "v8-product-arena-v2",
+      "what": "Movement keeps its own copy of support, stricter at the edge (normal.y > 0.9)",
+      "file": "apps/object_fps_pvp/src/Pvp/Movement.cpp",
+      "find": "        return IsCharacterSupported({feet, bodyHeight, arena.radius}, arena.walls);",
+      "replace": "        if (feet.y <= 0.0001F) return true;\n        for (const auto& wall : arena.walls) {\n            const auto c = Engine::Collision::SweepVerticalCapsuleAgainstAabb({feet, bodyHeight, arena.radius}, {0, -0.002F, 0}, wall);\n            if (c && c->normal.y > 0.9F) return true;\n        }\n        return false;",
+      "check": "cpu",
+      "expect": "At the pillar"
+    },
+    {
+      "id": "av2-spawn-below-floor",
+      "batch": "v8-product-arena-v2",
+      "what": "A spawn below the floor is accepted (support counts any y <= 0.0001)",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "        if (!Engine::Math::IsFinite(body.feet) || spawn.position.y < 0 ||",
+      "replace": "        if (!Engine::Math::IsFinite(body.feet) ||",
+      "check": "cpu",
+      "expect": "wall top"
+    },
+    {
+      "id": "av2-geometry-left-on-failure",
+      "batch": "v8-product-arena-v2",
+      "what": "A load that fails still hands out the geometry",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "        if (!arena.Validate(error)) return std::nullopt;\n        // Handed out only with an arena that loaded: a failure leaves it empty.\n        if (geometry) *geometry = std::move(baked);",
+      "replace": "        if (geometry) *geometry = std::move(baked);\n        if (!arena.Validate(error)) return std::nullopt;",
+      "check": "cpu",
+      "expect": "Arena schema 2 takes its walls"
+    },
+    {
+      "id": "av2-arena-index-first",
+      "batch": "v8-product-arena-v2",
+      "what": "The baked map of the first installed arena is drawn whatever the Match chose",
+      "file": "apps/object_fps_pvp/src/Pvp/ArenaMesh.cpp",
+      "find": "        if (installed[i].id == id) return i;",
+      "replace": "        if (installed[i].id == id) return std::size_t{0};",
+      "check": "presentation",
+      "expect": "the Match chose"
+    },
+    {
+      "id": "av2-maps-folder-type-dropped",
+      "batch": "v8-product-arena-v2",
+      "what": "The maps folder type is not allowed (guard DI-2 must see the real layout; v8-product-arena-v2-maps-guard)",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "    'maps': {'text'},\n",
+      "replace": "",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_paths_follow_the_layout"
     }
   ]
 }

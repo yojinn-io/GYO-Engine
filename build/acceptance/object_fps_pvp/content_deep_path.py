@@ -6,8 +6,10 @@ paths exceed the Windows MAX_PATH (260) still loads all of its content.
 
 P (--prefix-length) is the length of the path up to and including "bin" and its separator, as in the incident
 (P = 156, shader path 271). Declared in docs/object_fps_pvp/plans/v7.1/windows-long-path.md: P = 200 lies above
-the shader failure depth (145) and below the next known failure, the product's own arenas.json (about 219), and
-the executable itself (238). On Windows the check also requires the longest .dxil path to exceed 260 characters,
+the shader failure depth (145) and below the next failures known then, the product's own arenas.json (about 219), and
+the executable itself (238). Since os-files-write the product reads its arenas through engine/io, which reads deep
+paths (ArenaDigestTests: "deeper than the Windows path limit"), and this probe does not read arenas at all; the
+arena files moved to assets/<product>/maps/ (v8-product-arena-v2) without changing the declared range. On Windows the check also requires the longest .dxil path to exceed 260 characters,
 so a pass shows the long-path read and not a short layout. The probe (content_main.cpp) reads the manifest, the
 catalogs, every shader bundle and every catalog asset.
 """
