@@ -1,12 +1,13 @@
 # 實體容器（entity store）：Engine 共通模組的分批計畫
 
 更新：2026-11-05。Owner：Engine（架構）。任務卡 `v8-arch-entity-store`，由架構師會話（例行架構掃描）於 2026-11-05 開出。
-**狀態：batch 1 `v8-arch-entity-store-survey` 完成，等使用者核准；batch 2 未開始。** 每批結束時停下，取得使用者核准後才進下一批。
+**狀態：batch 2 `v8-arch-entity-store-delta` 完成，等使用者決定 [delta §7](delta.zh-Hant.md) 的 10 項；batch 3 未開始。** 每批結束時停下，取得使用者核准後才進下一批。
 
 ## 這是什麼
 
-把「實體的容器」（entity store）放進 Engine，成為共通模組。容器指的是：實體 id（index＋generation）、SoA 的元件欄、以 EntityId 升冪的決定性迭代、延後到同步點才套用的結構變更（Commands）、change tick。
-不放進 Engine 的是通用執行期：system、scheduler、world、resources、events、app、plugin（這是架構師的暫定立場，尚未由使用者採納；由 batch 2 的 Design Invariants 核准時決定）。id 分段的政策與實體種類的意義留在產品。
+把「實體的容器」（entity store）放進 Engine，成為共通模組。
+架構師開卡時的暫定立場：容器＝實體 id（index＋generation）、SoA 的元件欄、以 EntityId 升冪的決定性迭代、延後到同步點才套用的結構變更（Commands）、change tick；不放進 Engine 的是通用執行期（system、scheduler、world、resources、events、app、plugin）；id 分段的政策與實體種類的意義留在產品。
+batch 1 的 [survey](survey.zh-Hant.md) 檢驗後，batch 2 的 [Delta](delta.zh-Hant.md) 建議的「容器版」只剩四件：外部給的 `EntityId` 鍵（不帶 generation）、每元件一欄依 id 升冪、依 id 的查找／插入／保序刪除、生成與刪除的待辦在呼叫端指定的同步點依 id 升冪套用；generation 與 change tick 都不收（條件列為 Replacement Criteria）。採哪一版由使用者在核准 Design Invariants 時決定。
 
 ## 來源（決定的經過）
 
@@ -20,8 +21,8 @@
 
 | 代號 | 一句話 | 模型／檔位 | 產出 | 狀態 |
 |---|---|---|---|---|
-| `v8-arch-entity-store-survey` | 讀 Bevy ECS 與 EnTT 的實際程式碼，逐機制判定「採／改裝後採／不採」，作為 Design Invariants 的根據 | 實作者 Opus 5.5／high；敵對檢查者 Fable 5.1／xhigh（與實作者不同模型，避免盲點重疊） | [survey.zh-Hant.md](survey.zh-Hant.md)、本 README、[HANDOFF](HANDOFF.md)、dev_log | 完成，等核准 |
-| `v8-arch-entity-store-delta` | 寫 Architecture Delta 與 Engine 契約文件 `docs/architecture/entity-store.md`（英文）：Design Invariants、Replacement Criteria、AGENTS §3 的 7 項、pvp 的 DI 哪些搬進 Engine、哪些留在產品；不寫程式 | 實作者 Opus 5.5／high；審查者 Opus 5.5／high | 契約文件、對應表、Delta | 待核准後開始 |
+| `v8-arch-entity-store-survey` | 讀 Bevy ECS 與 EnTT 的實際程式碼，逐機制判定「採／改裝後採／不採」，作為 Design Invariants 的根據 | 實作者 Opus 5.5／high；敵對檢查者 Fable 5.1／xhigh（與實作者不同模型，避免盲點重疊） | [survey.zh-Hant.md](survey.zh-Hant.md)、本 README、[HANDOFF](HANDOFF.md)、dev_log | 完成，已核准 |
+| `v8-arch-entity-store-delta` | 寫 Architecture Delta 與 Engine 契約文件 `docs/architecture/entity-store.md`（英文）：Design Invariants、Replacement Criteria、AGENTS §3 的 7 項、pvp 的 DI 哪些搬進 Engine、哪些留在產品；不寫程式 | 實作者 Opus 5.5／high；審查者 Opus 5.5／high | [entity-store.md](../../entity-store.md)（英文契約）、[delta.zh-Hant.md](delta.zh-Hant.md) | 完成，等決定 |
 | `v8-arch-entity-store-impl` | 照核准的契約實作 Engine 模組（暫提 `engine/entity/`，batch 2 定案），pvp 作為第一個消費端在同一條 PR 線換上；守衛、突變、digest 前後相同為驗收 | 實作者 Opus 5.5／high（id 配發與 Commands 套用順序局部 xhigh）；審查者 Opus 5.5；檢證者 Fable 5.1（啟動前問使用者） | 程式、守衛、dev_log | 待 batch 2 |
 
 ## 不做的事
@@ -39,3 +40,4 @@
 ## dev_log 一覽
 
 - [2026-11-05 v8-arch-entity-store-survey](../../../dev_logs/2026_11_05_arch_v8_entity_store_survey.zh-Hant.md)：Bevy ECS 與 EnTT 的逐機制參照調查；敵對檢查 must 2／should 7／note 8 全部處置。
+- [2026-11-05 v8-arch-entity-store-delta](../../../dev_logs/2026_11_05_arch_v8_entity_store_delta.zh-Hant.md)：Engine 契約 `entity-store.md`（DI 10、RC 15）與 Architecture Delta；審查 must 1／should 12／note 11 全部處置。

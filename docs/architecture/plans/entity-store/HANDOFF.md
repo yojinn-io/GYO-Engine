@@ -1,6 +1,6 @@
 # 實體容器（entity store）：交接
 
-更新：2026-11-05。**狀態：batch 1 `v8-arch-entity-store-survey` 完成，等使用者核准；batch 2 未開始。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
+更新：2026-11-05。**狀態：batch 2 `v8-arch-entity-store-delta` 完成，等使用者決定 delta §7 的 10 項；batch 3 未開始。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。
 
 ## 代號對照
@@ -26,6 +26,11 @@
 - 2026-11-05：敵對檢查者（Fable 5.1／xhigh）交回 must 2／should 7／note 8（約 40 分；抽查 permalink 約 70／111）。兩個 must 都是「判定對、理由錯」：(1) 把 Rust 借用檢查與階段紀律混為一談——Bevy 的 Commands 守存取衝突，exclusive system 與 `spawn_at`／`despawn_no_free` 可隨時改結構，E-12 在 C++ 可用型別分離表達；(2) Bevy `spawn_at` 與 EnTT `generate(hint)` 不是「容器不配 id」的先例，兩者仍以容器為 id 權威，根據只有 E-2。3a 確認、3b／3c 收窄（3c 由「不成立」改「不採（第一版）」，理由換成 C++ 無 `DerefMut` 攔截、§1.4 已核准不採、無觀測到的消費者）。報告存主 checkout `build/evidence/entity-store/survey-adversarial-check-20261105.md`。
 - 2026-11-05：實作者（同一子 agent）處置全部 17 項（約 30 分），無反對；survey 284 → 321 行，新增 §6a「敵對檢查的處置」。主會話核對：判定與理由已改寫、無日語與簡體字殘留、參照定義 120 個全部對應。dev_log `docs/dev_logs/2026_11_05_arch_v8_entity_store_survey.zh-Hant.md`。**batch 1 完成，停下等使用者核准**；總用時約 2.5 h（估 2.5～3.5 h）。
 - 2026-11-05：架構師會話轉達使用者的語言規則更正（`~/.claude/CLAUDE.md` 例外節，已核對）：本卡片會話全程用正體中文回覆；文件、commit、PR 語言不變。
+- 2026-11-05：使用者說「核准，進 batch 2」。batch 2 `v8-arch-entity-store-delta` 開始：實作者 Opus 5.5／high（general-purpose），審查者 Opus 5.5／high；不寫程式。產出 `docs/architecture/entity-store.md`（英文契約）與 `docs/architecture/plans/entity-store/delta.zh-Hant.md`（AGENTS §3 七點、搬移或新建的決定、E-1～E-12／RC-1～RC-5 的歸屬對應表、給圖書管理員的 architecture.md:129 修改稿）。估時 2.5～3 h。
+- 2026-11-05：batch 2 實作者交回 `docs/architecture/entity-store.md`（213 行，DI 1～10、RC 1～15）與 `delta.zh-Hant.md`（171 行），約 10 分（根據大多已在 survey 與 entity-model）。建議：新建 Engine 模組 `GYO::EntityStore`＋pvp 改裝（不直接搬檔，因現行標頭含產品知識）、容器版、batch 3 拆 3a（欄，現在做）／3b（`DeferredChanges`，與第一個非玩家批同時）。報告存主 checkout `build/evidence/entity-store/delta-implementer-report-20261105.md`。
+- 2026-11-05：審查者（Opus 5.5／high，唯讀）交回 must 1／should 12／note 11（約 35 分），總評「修正後可交核准、不需重做；設計方向無反對根據」。must：`EntityOf`「所有者多載優先」以同名多載會 ambiguous、匿名命名空間的測試在 Engine 內 ADL 找不到 → 契約要改成所有者提供的 hook。should 主要：Engine 文件不得引產品路徑（可刪除性）；「觀測」壓力只有「容器內容已與產品無關」、其餘是使用者決定與預測；33 行應為 30 行；E-5／E-12 的產品 DI 變更要列入並取使用者同意；architecture.md 稿與 3a 分割衝突；缺 batch 3 事前宣告。報告存 `build/evidence/entity-store/delta-review-20261105.md`。修正交回同一實作者。
+- 2026-11-05：實作者處置審查全部項目（約 6 分；M1、S1～S12、N1～N9，N10／N11 不需改）：鍵的讀法改為 `EntityKey<T>` trait（所有者特化優先，預設讀 `id`，不靠 ADL）；契約移除所有產品路徑（grep 0 件）；判斷事項全部移到 delta §7（10 項）；新增 delta §10「審查的處置」。實作者自行在契約定了「callback 擲出時清空待辦」（N6），可改列為決定。主會話核對：DI 10／RC 15、§7 10 項、無假名與簡體。dev_log `docs/dev_logs/2026_11_05_arch_v8_entity_store_delta.zh-Hant.md`。**batch 2 完成，停下等使用者決定**；總用時約 1.5 h（估 2.5～3 h）。
+- 待辦（核准後）：通知圖書管理員會話本線分支與 delta §5 的 architecture.md 修改稿（用哪一版依決定 8）；開 PR（batch 1～2 文件）；batch 3 開始前事前宣告驗收判定（delta §7 第 9 項）。
 
 ## 未結事項
 
