@@ -116,3 +116,17 @@
   - PR #158 先不合併。
   - W9 的核准、S4、P1 都等架構師定案之後再處理。
   - 這段期間不動 window 批的程式。
+- 2026-11-06：架構會話回覆大地圖效能的委託（你與架構師討論後的決定）。
+  - **規模**：以逃離塔科夫的 raid 地圖為參照，cell_size 0.5 m。
+  - **定性**：這是契約問題，不是編輯器的效能問題。
+  - **方案 v0.1**：一張地圖＝索引＋region 檔（8×8 區塊柱）＋標記層。
+    - Engine：VoxelMesh v2、MapMarkers、Collision 的靜態 broadphase。
+    - 工具：只重烘有修改的區塊，加 greedy 合併，文字只在存檔時寫。
+    - 產品：arena v3，撤掉 walls／1024 的上限。
+  - **window 批**：等分區塊契約定案，宣告的 P1 不放寬。
+    - 契約定案後，先做工具批 `v8-arch-big-map-*-tool-chunked`：改寫 DI 2、處置 Replacement Criteria 3，仍由本 owner 負責。
+    - 之後再接 window 批。
+  - **調查**：架構師開了 survey 卡 `v8-arch-big-map-survey`，方案文件會放在 `docs/architecture/plans/big-map/`。
+  - **配合事項**：
+    - survey 期間不動 `tools/voxel_map_editor` 的 build 和預覽路徑；
+    - 量測會用主 checkout 的 `build/evidence/tool-v8-voxel-map/window/explore-p1/prof.cpp` 的合成圖。
