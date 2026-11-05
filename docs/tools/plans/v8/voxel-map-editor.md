@@ -89,7 +89,7 @@
 v8-tool-voxel-map-editor
 ├── v8-tool-voxel-map-plan ✓              「medium｜Opus｜本文件、README、HANDOFF、dev_log」
 ├── v8-engine-voxel-mesh-contract         「high｜Opus｜Engine：產物的格式、讀取器、驗證規則、Design Invariants ✓（L1 三平台通過）」
-├── v8-framework-preview-component        「high｜Opus｜framework：抽出 3D 預覽元件，model_viewer 改用（等 #146）」
+├── v8-framework-preview-component        「high｜Opus｜framework：抽出 3D 預覽元件，model_viewer 改用 ✓（架構會話，PR #157）」
 ├── v8-tool-voxel-map-editor-core         「high｜Opus｜工具：登錄、格子格式、形狀庫、build、CLI ✓（L1 三平台通過）」
 ├── v8-tool-voxel-map-editor-window       「high｜Opus｜工具：ImGui 視窗、編輯平面、工具、朝向、undo、預覽」
 ├── v8-product-arena-v2                   「high｜Opus｜產品批：arena v2、出生點支撐規則、兩張地圖轉換、v1 退役、搬進 maps/ ✓」
@@ -452,6 +452,134 @@ v8-tool-voxel-map-editor
   - 載入失敗時不交出 geometry；
   - 出生點低於地板；
   - `maps` 資料夾種類被拿掉時守衛會失敗。
+
+## v8-tool-voxel-map-editor-window 的事前宣告
+
+2026-11-06 寫，**要使用者核准後才實作**。結果出來之後，判定不放寬（AGENTS §14.1）。實作時如果要改宣告，在**審查前**先回報。
+
+- **分支**：`claude/v8-tool-voxel-map-window`（切自 master `2cd57244`，#152 和 #157 都已合併），新的 PR。
+- **重估**：16～22 h（原本 12～20 h）。多出來的是 GPU 上的拾取一致性測試和 P1 的量測指令。
+- **段**：上段（使用者操作的手感；要改工具的 Design Invariants 1 和 5，並新增 7）。
+- **模型**：
+  - 實作：主會話（Opus 5.5／high）。
+  - 審查：子 Agent（Opus 5.5／high）。
+  - 驗證者：依賴守衛的判定會放寬（下面的 W9），照 §14.4 另開一個子 Agent（Opus 5.5／high）。
+  - 這三個角色都用同一種模型。navigator 的規則只要求「敵對式檢查」換用不同的模型，這一批沒有敵對式檢查。
+
+### 範圍
+
+- **做**：
+  - **編輯模型**：放在核心程式庫，不含 ImGui，CI 可以測。
+    - 操作：
+      - 放置：貼在打到的面旁邊，或放在編輯平面上；
+      - 擦除；
+      - 塗：換掉已有格子的方塊；
+      - 吸取；
+      - 框選填滿／清空：在編輯平面上拖出矩形，高度可以設；
+      - 選方塊和朝向。
+    - 編輯平面與樓層：一個 y 值，可以上下移動。
+    - undo／redo：
+      - 一次拖曳記成一筆，內容是每格的座標和新舊值；
+      - 調色盤和形狀庫的修改，各記成一筆快照。
+    - 調色盤（方塊）和形狀庫的編輯：
+      - 新增、改名、改顏色、改形狀；
+      - 用數值編輯形狀的盒子（1/16 單位）；
+      - 刪除使用中的方塊或形狀會被拒絕。
+  - **拾取**：
+    - 用 DDA 走格子，射線打到第一個非空的格子，並給出打到哪一面；沒打到時，交到編輯平面上。
+    - 射線由工具自己的相機算出，算法照 Engine 的相機慣例（`PerspectiveCamera3D`：Z、Y、X 的 Euler 角，+Z 朝前；用 Math 的 `MakePerspective`）。
+  - **存檔**：
+    1. 用記憶體裡的文件跑 `WriteGrid`，再跑 `BuildMesh`（裡面經 Engine 的 `ParseVoxelMesh` 讀回）；
+    2. 兩步都成功，才先寫格子、再寫產物，都用原子替換；
+    3. 檔案在開啟之後被別人改過，就不覆寫；
+    4. 寫完格子、產物卻寫失敗時，回報錯誤並保留「未存檔」，`verify` 也能查出不一致。
+  - **預覽**：
+    - 每次編輯後，整張地圖重新 build；
+    - 產物文字經 Engine 的 `ParseVoxelMesh`／`ExpandVoxelMesh` 展開，再交給 framework 的 `OffscreenPreview` 畫；
+    - 游標和編輯平面的格線，用 ImGui 的 draw list 疊在預覽上，投影和拾取用同一套算法。
+  - **視窗**：`gyo_voxel_map_editor edit <grid> <mesh>`（gui 版本）。
+    - 格子檔不存在時，從空的格子開始，形狀庫用預設的三種。
+    - 路徑由使用者給，工具不知道任何產品的位置。
+    - 關閉時，如果有未存的修改，會提示。
+  - **量測指令**：`measure-preview`，比照 model_viewer 的 `PreviewMeasure`。這一批只做出指令，trial 批才用它量 P1。
+  - **登錄**：`project.json` 加 `gui` 版本並設為預設（元件：SDL_GPU、SDL_RENDERER、SDL_INPUT、IMGUI）；執行檔旁邊放 Engine 的 builtin shaders。
+- **不做**：
+  - 擠出、圖層、形狀筆刷（照 `v8-tool-voxel-first-tools`，延後）；
+  - 局部重建（只在 P1 不過時，照 Replacement Criteria 3 提出）；
+  - catalog 登錄（工具只寫命令列指定的兩個檔）；
+  - 產品端的任何修改。
+
+### Architecture Delta（AGENTS §3）
+
+1. **為什麼需要**：`v8-tool-voxel-first-tools`（GUI 的第一版工具）和 `v8-tool-voxel-layers`（預覽用 framework 元件）。
+2. **現在的問題**：工具的 DI 1 禁止 ImGui、render、platform 的 target，所以做不出視窗。
+3. **會改的邊界**：
+   - 工具的 DI 1：分成核心和視窗兩部分（下面的草案）。
+   - 工具的 DI 5：加上「開啟後被改過的檔不覆寫」。
+   - 新增 DI 7：預覽經過 Engine 的讀取器。
+4. **影響範圍**：只有 `tools/voxel_map_editor`、`tests/voxel_map_editor`、`docs/voxel_map_editor`。framework、Engine、產品都不改。
+5. **依賴方向**：新增「工具 → `GYO::ToolFrameworkImGui`、`GYO::ToolFrameworkPreview`（它帶來 Render、SDL GPU、SDL renderer、PlatformSDL）、`imgui::core`」。這和 model_viewer 的 gui 版本相同，方向不變。
+6. **Ownership**：不變。預覽元件仍屬 framework，由工具建立並持有（preview.md 的 DI 1）。
+7. **為什麼不能更小**：要有視窗就得有這些依賴。把它們只放在視窗的檔案裡，核心仍然維持現在的限制，這已經是最小的做法。
+
+### Design Invariants 的修改（草案，寫進 `docs/voxel_map_editor/architecture.md`）
+
+- **DI 1 改為**：
+  - 工具不連遊戲，也不提產品的名字。
+  - **核心**（`gyo_voxel_map_editor_core` 和 CLI）維持現在的限制：
+    - 不 include SDL、ImGui 的標頭；
+    - 不提 SDL、ImGui、render、platform、`*Native` 的 target；
+    - 可以加 `GYO::Math`，用來算拾取。
+  - **視窗**（`tools/voxel_map_editor/src/window/`，只在 gui 版本）可以用：
+    - `GYO::ToolFrameworkImGui`、`GYO::ToolFrameworkPreview`、`GYO::Render`、`GYO::RenderBackendSDL`、`GYO::PlatformSDL`、`imgui::core`；
+    - 但仍然不能 include `SDL3/` 的標頭、不能用 `SDL_` 開頭的名字、不能用 `*Native`、不能 include `imgui_internal.h`。
+  - 守衛：依賴守衛分兩份清單，依檔案位置套用。
+- **DI 5 加上**：開啟之後被改過的檔不覆寫。存檔只寫命令列指定的格子檔和產物兩個檔。
+- **新增 DI 7「看到的就是遊戲讀到的」**：
+  - 預覽畫的，是 `BuildMesh` 交出的文字經 Engine 的 `ParseVoxelMesh`／`ExpandVoxelMesh` 得到的幾何。
+  - 工具不另外從格子產生要畫的三角形。
+  - 守衛：W6 和它的突變。
+- **Replacement Criteria**：不新增。P1 不過時用既有的第 3 條（要局部重建），停下來交使用者決定。
+
+### 已知的重複（Code Smell，先記下，不在這一批處理）
+
+- 「`VoxelMeshGeometry` 轉成 Render 的 `MeshData`／調色盤的 `ImageView`」：產品已經有一份（`ArenaRenderMesh`／`ArenaPaletteImage`），工具會再寫一份，大約 20 行。
+- 不搬到共用層，理由如下：
+  - Engine 的 VoxelMesh 刻意不依賴 Render，讓 Match 不必連 Render（voxel-mesh.md 的 DI）；
+  - 產品不連 framework。
+- 出現第三個使用者，或兩份的換算規則開始不同時，再提出。
+
+### 判定（現在固定）
+
+| 判定 | 內容 | 通過條件 |
+|---|---|---|
+| W1 | 編輯操作：放置、擦除、塗、吸取、框選填滿／清空，只改到目標格；超出 `CellLimit` 的格子會被拒絕，文件不變 | 全部通過 |
+| W2 | undo／redo：每一步之後，`WriteGrid` 的結果和那一步之前（或之後）逐位元組相同；一次拖曳只算一步；做了新的編輯後，redo 清空；調色盤和形狀的修改也能 undo | 全部通過 |
+| W3 | 拾取（CPU）：沿軸、斜向、從格子內部出發、打不到時落到編輯平面，和手算的格子與面相同；把格子中心用 Math 的「Projection × View」投影到畫面，再從那個畫素反算射線，會打回同一格 | 全部通過 |
+| W4 | 拾取和 Engine 的畫面一致（GPU，只在 Linux CI 的 Lavapipe 跑，標籤 `gpu`）：用 `OffscreenPreview` 畫一個方塊並讀回；方塊輪廓內的 9 個畫素，拾取都打到它；輪廓外的 9 個畫素都打不到 | 全部通過 |
+| W5 | 存檔：寫出的產物的 `source_sha256`，等於寫出的格子檔位元組的 SHA-256；`verify` 對這兩個檔通過；Engine 拒絕的產物不寫出任何檔；開啟後被改過的檔不覆寫；兩個檔寫完後讀回，和記憶體裡的文件相同 | 全部通過 |
+| W6 | 預覽經過 Engine（DI 7）：預覽的頂點和索引，和 `ExpandVoxelMesh(ParseVoxelMesh(BuildMesh(格子).text))` 逐筆相同 | 全部通過 |
+| W7 | 調色盤和形狀庫：刪除使用中的方塊或形狀會被拒絕；超過 `MaxBlocks`／`MaxShapes` 會被拒絕；盒子超出 [0, 16] 會被拒絕；改完的文件 `WriteGrid` 之後能用 `ParseGrid` 讀回 | 全部通過 |
+| W8 | CLI：既有的四個指令和判定都不變（E7 照樣通過）；cli 版本執行 `edit` 時，回報「這個版本沒有視窗」並以 2 結束 | 通過 |
+| W9 | 依賴守衛：核心的清單不變；視窗的清單加上 DI 1 列出的 target 和 `imgui` 的標頭。這是放寬，照 §14.4：實作後寫 1～5、跑突變、由另一個驗證者確認，**再請使用者核准** | 核准後通過 |
+| W10 | 突變（加進 `voxel_map_editor_mutations.json`，至少 12 條）：拖曳拆成多筆 undo、undo 沒還原舊值、redo 沒在新編輯時清空、DDA 跳過一格、拾取的面法線反了、反算的射線少乘 aspect、存檔沒檢查外部修改、產物在格子前寫出（格子失敗時留下不一致的產物）、sha 算的是舊的格子位元組、預覽繞過 Engine（直接用工具的四邊形）、刪除使用中的方塊被接受、核心 include imgui（守衛失敗） | 全部 killed |
+| W11 | L1：三平台的 cpu\|shader；Linux 另跑 gpu（W4） | 綠 |
+
+- 本機用 macOS Intel；W4 也在本機的 Metal 跑一次，作為參考。
+- 證據放主 checkout 的 `build/evidence/tool-v8-voxel-map/window/`。
+- **沒有 L3**：GUI 的手感由 trial 批的 L3 確認。
+
+### P1（現在宣告，在 trial 批量測）
+
+- **量什麼**：每幀做「1 格編輯（放置和擦除交替）＋整張重新 build（含 Engine 讀回）＋展開＋上傳 mesh＋`Renderer::Render`＋讀回（含等 GPU）＋上傳到視窗的貼圖」，ImGui 本身不算。
+- **條件**：預覽大小 1280×720，每張地圖 600 幀。
+- **地圖**：
+  - (a) `pvp_corners` 的格子原始檔，在主 checkout 的 `build/art-source/`；
+  - (b) 合成的 64×16×64，固定種子，填 30%。
+- **門檻**：每張地圖的 p95 ≤ 16.7 ms。試 1 次，不重試。
+- **件數的核對**：每張地圖應有 600 筆，少了就算「不一致」。
+- **不通過時**：停下來，照 Replacement Criteria 3 提出局部重建或其他下一步，交使用者決定。不放寬門檻。
+- **範圍的限界**：只在使用者的 Mac 上量。
 
 ## 風險
 

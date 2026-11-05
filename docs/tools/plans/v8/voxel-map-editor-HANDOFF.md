@@ -69,3 +69,8 @@
 - 2026-11-05：arena-v2 批合入 master（`0c5db246`，`mutations.json` 依 id 合併兩邊的突變）。本機 cpu|shader 129／129；L1 三平台綠（run 42034025482）。剩 L3（P10）。
 - 2026-11-05：arena-v2 批的 L3（P10）你在 macOS 判定「問題なし（合格）」。啟動腳本與 log 在主 checkout 的 `build/evidence/tool-v8-voxel-map/arena-v2/l3/`（`pvp_corners` 兩人同房、命中 26）。arena-v2 批完成。下一批：`v8-framework-preview-component`（要和架構會話協調）；`v8-product-step-up` 由產品會話做。
 - 2026-11-05：你問編輯器做好了沒：只完成資料格式、build、CLI 與遊戲端讀取，GUI 視窗還沒做。framework 批交給架構會話（「[Job][架構師]例行架構掃描」），已送出委託（範圍、留在 model_viewer 的部分、客戶端建立元件、voxel 編輯器的需求）。等它完成後接 window 批。
+- 2026-11-06：PR #152 已合併（`a9ccad7d`）。架構會話完成 `v8-framework-preview-component`（PR #157，合併為 `2cd57244`）。
+- 2026-11-06：你說「開始」，開工 `v8-tool-voxel-map-editor-window`（high，Opus 5.5）。從 master `2cd57244` 切出分支 `claude/v8-tool-voxel-map-window`。
+  - 讀了 `docs/framework/preview.md` 的 DI 與 Replacement Criteria、工具的 DI，以及 model_viewer 的 gui 版本（CMake、`PreviewMeasure`、依賴守衛）。
+  - 重估為 16～22 h。
+  - 事前宣告寫進 voxel-map-editor.md，裡面包括：改 DI 1 和 DI 5、新增 DI 7，以及判定 W1～W11 和 P1。等你核准，核准前不實作。
