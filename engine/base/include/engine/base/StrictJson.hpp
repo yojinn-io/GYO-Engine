@@ -9,9 +9,9 @@
 
 namespace Engine::Base {
 
-// Strict JSON parsing for the modules that own a JSON data contract
-// (gyo.voxel_mesh, gyo.map_markers): a repeated key in any object is an error,
-// not "the last one wins" as in the parser's DOM.
+// Strict JSON parsing for the modules that own a JSON data contract (today
+// gyo.voxel_mesh): a repeated key in any object is an error, not "the last one
+// wins" as in the parser's DOM.
 //
 // Json is a nlohmann::basic_json type (nlohmann::json or nlohmann::ordered_json).
 // This header names nlohmann only through that parameter and includes none of
