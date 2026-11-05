@@ -25,7 +25,7 @@ foreach(contract client_v9 runtime_v9)
 endforeach()
 
 gyo_app_add_library(match_domain OUT_TARGET domain SOURCES ${PVP_DOMAIN_SOURCES}
-    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::EntityStore GYO::Collision GYO::Time GYO::Trace GYO::Os
+    PUBLIC_LIBRARIES GYO::Engine GYO::Math GYO::EntityStore GYO::Collision GYO::Time GYO::Trace GYO::Os GYO::VoxelMesh
     PRIVATE_LIBRARIES nlohmann_json::nlohmann_json)
 gyo_app_add_library(runtime_host OUT_TARGET host SOURCES src/Pvp/MatchRuntimeHost.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Threads)
@@ -49,7 +49,7 @@ gyo_app_add_library(player_content OUT_TARGET content
         src/Pvp/PlayerAnimationContent.cpp src/Pvp/PlayerHitbox.cpp src/Pvp/PlayerPose.cpp src/Pvp/PlayerAnimationDigest.cpp src/Pvp/PlayerHitModel.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Render GYO::Model
     PRIVATE_LIBRARIES GYO::AssetUfbx nlohmann_json::nlohmann_json)
-gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp
+gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp src/Pvp/ArenaMesh.cpp
         src/Pvp/PlayerPresentation.cpp
         src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/WeaponEventSounds.cpp
     PUBLIC_LIBRARIES ${domain} ${content} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer

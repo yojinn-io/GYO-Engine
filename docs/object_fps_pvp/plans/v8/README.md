@@ -49,7 +49,7 @@ v8-plan
 │   │   └── v8-product-hit-gui-aim-sdl ✓      「medium｜Opus 5.5｜SDL 排程瞄軀幹的正式驗收（v7 HUD 規則；[宣告](v8-product-hit-gui-aim-sdl-declaration.md)，已完成）」
 │   ├── rewind-line                「PR 線：射擊回溯（部位判定線合併後；entity-line 的 split 之後）」
 │   │   ├── v8-product-hitbox-lag-shadow ✓    「上段｜Opus 5.5／medium｜影子紀錄 v3：view_lag 以 J 計算（[宣告](v8-product-hitbox-lag-shadow-declaration.md)已核准；完成）」
-│   │   ├── v8-product-hitbox-lag-l2          「上段｜Opus 5.5／medium｜L2 收 view_lag 分布，定 R（舊寫 Sonnet 5.5，照領航員規則上段不用小模型）」
+│   │   ├── v8-product-hitbox-lag-l2          「上段｜Opus 5.5／medium｜L2 收 view_lag 分布，定 R（舊寫 Sonnet 5.5，照領航員規則上段不用小模型；[宣告](v8-product-hitbox-lag-l2-declaration.md)已核准；工具完成，等場次）」
 │   │   └── v8-product-hitbox-rewind          「high（τ、夾取局部 xhigh）｜Opus 5.5｜姿勢歷史、ShotRewind、守衛第二段核准」
 │   └── entity-line                「PR 線：實體資料模型（架構掃描 2026-11-01 開的卡 `v8-product-entity-model`）；split 排在 rewind 之前，讓姿勢歷史第一個以元件寫」
 │       ├── v8-product-tarkov-requirements ✓  「medium｜下段｜主會話 Fable 5.1｜玩法需求問卷：實體種類與數量、身分、屬性、PvE、PvP／PvE 組合、可見性；數值由使用者定」
@@ -176,6 +176,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hit-gui-aim`（P2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hit_gui_aim.zh-Hant.md) |
 | `v8-product-hit-gui-aim-sdl` | [2026-11-04](../../../dev_logs/2026_11_04_pvp_v8_hit_gui_aim_sdl.zh-Hant.md) |
 | `v8-product-event-sounds-migrate`（L1、實聽未做） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_event_sounds_migrate.zh-Hant.md) |
+| `v8-product-hitbox-lag-l2`（工具；場次未跑） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_hitbox_lag_l2.zh-Hant.md) |
 | `v8-product-hitbox-lag-shadow` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_hitbox_lag_shadow.zh-Hant.md) |
 | `v8-product-ui-action-check` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md) |
 | `v8-product-hitbox-b5`（A2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hitbox_b5.zh-Hant.md) |

@@ -212,7 +212,7 @@ def run_round(args, directory):
 
     ipc, http, udp = free_port(), free_port(), free_port(socket.SOCK_DGRAM)
     try:
-        match = start('match', [args.match, '--arena', args.assets / 'pvp_arena.json', '--listen', f'127.0.0.1:{ipc}'])
+        match = start('match', [args.match, '--arena', args.assets / 'maps' / 'pvp_arena.json', '--listen', f'127.0.0.1:{ipc}'])
         wait_for_match_ready(match, directory / 'match.log', f'127.0.0.1:{ipc}')
         start('gateway', [args.gateway, '--runtime', f'127.0.0.1:{ipc}', '--http', f'127.0.0.1:{http}',
                           '--udp', f'127.0.0.1:{udp}', '--advertise-ip', '127.0.0.1'])

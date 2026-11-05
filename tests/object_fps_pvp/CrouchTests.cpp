@@ -185,7 +185,7 @@ TEST_CASE("PvP movement rules data loads the release file and refuses every viol
     for (const char* name : {"pvp_arena.json", "pvp_corners.json"}) {
         const auto arena = Arena::Load(assets / name, error);
         REQUIRE_MESSAGE(arena, error);
-        const auto rules = LoadStanceRules(assets / "movement_rules.json", *arena, error);
+        const auto rules = LoadStanceRules(assets.parent_path() / "rules" / "movement_rules.json", *arena, error);
         REQUIRE_MESSAGE(rules, error);
         CHECK(*rules == DefaultStanceRules);
     }

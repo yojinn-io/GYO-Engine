@@ -2,7 +2,7 @@
 
 日期：2026-11-05。分支 `claude/pvp-v8-rewind-line`。主會話 Opus 5.5／medium；審查者子 agent Opus 5.5／high（general-purpose，唯讀；和實作者同一個模型，沒有用別的模型）。估時 1～2 h，實際約 1 h。
 
-**狀態：L1～L4 通過；L5（PR 的 L1）待 CI。** [事前宣告](../object_fps_pvp/plans/v8/v8-product-hitbox-lag-shadow-declaration.md)已核准（`-a-field` (a)）。
+**狀態：L1～L5 全部通過。** PR #154 已合併（2026-11-05，merge commit `318b4e66`）。 [事前宣告](../object_fps_pvp/plans/v8/v8-product-hitbox-lag-shadow-declaration.md)已核准（`-a-field` (a)）。
 
 ## 做了什麼
 
@@ -25,7 +25,7 @@
 | L2 格式 | 通過：逐字比對與 `trace_end` 都是 version 3，`null` 情況兩欄都是 `null` |
 | L3 本機 | PvP `cpu\|shader` 50／50 通過（測試數沒變：新 case 在既有的 `object_fps_pvp.cpu` 執行檔內）；審查後改了註解與文件，重建後再跑一次也是 50／50 |
 | L4 突變 | 10／10 killed：新的 3 個，加上 `find` 在 `MatchShotTrace.hpp` 的既有 7 個（D184） |
-| L5 CI | 待 PR 的 L1 |
+| L5 CI | 通過：PR #154 head `a354b861` 的 L1（run `42013454125`）linux-x64、macos-arm64、windows-x64 三平台 |
 
 ## 經過
 

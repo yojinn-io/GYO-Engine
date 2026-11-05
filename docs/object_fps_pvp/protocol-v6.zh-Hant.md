@@ -109,7 +109,7 @@ Gateway→Match 的 `PlayerInput` 不再是 Client 未確認窗口的完整副�
 
 兩份 proto 改名為 `client_v6.proto`／`runtime_v6.proto`（package `object_fps_pvp.{client,runtime}.v6`，Go 套件 `clientv6`／`runtimev6`）。
 HTTP join、Ready／Welcome、wire 版本與建置引用在同一 PR 切換，不交付混用三角色的可部署組合。
-v5 §2 的其餘身分、生命世代、動作帳本與 latest-wins 規則不變。`arena_version` 仍是 arena 格式版本（目前只接受 1），不是內容修訂號。
+v5 §2 的其餘身分、生命世代、動作帳本與 latest-wins 規則不變。`arena_version` 仍是 arena 格式版本（目前只接受 1），不是內容修訂號。（2026-11-05 補記，`v8-product-arena-v2`：arena 的**檔案** schema 有 1 與 2；schema 2 用 `geometry` 引用相鄰的 `gyo.voxel_mesh`，載入後的 `Arena` 成員與正規化和 schema 1 相同，`Arena::version` 與 wire 上的 `arena_version` 仍是 1。檔案 schema 不上 wire。）
 
 ### 受擊欄位（D2）
 
@@ -146,8 +146,8 @@ u32 出生點數，接每個出生點 f32 position.x position.y position.z yaw
 f32 jump_height gravity
 ```
 
-- 順序就是 `Arena` 成員的宣告順序。牆與出生點保持內容順序，不排序：出生點順序決定同距離的選擇（v5 §5）。
-- 出生點數（2026-10-07 修訂，第 16 批）：arena v1 的出生點數為 2～64，版本與正規化不變（先例 D11⑨）。Match 只主持出生點數不少於 `MaxPlayers` 的 arena。修訂前的 v6 二進位會拒絕出生點數不是 2 的 arena，所以內容的混用必定明確失敗；日後修改 arena 時要保持這個性質。
+- 順序就是 `Arena` 成員的宣告順序。牆與出生點保持內容順序，不排序：出生點順序決定同距離的選擇（v5 §5）。schema 2 的牆是烘焙地圖的碰撞盒，依產物裡的正規順序（2026-11-05 補記）。
+- 出生點數（2026-10-07 修訂，第 16 批）：arena v1 的出生點數為 2～64，版本與正規化不變（先例 D11⑨）。Match 只主持出生點數不少於 `MaxPlayers` 的 arena。出生點要站在地板（y＝0）或牆頂上，判定和移動的著地共用同一個函式（2026-11-05 補記，`v8-product-arena-v2`；出生點的 y 本來就在 digest 裡，不是 wire 變更）。修訂前的 v6 二進位會拒絕出生點數不是 2 的 arena，所以內容的混用必定明確失敗；日後修改 arena 時要保持這個性質。
 - 正規化函式以 13 個名稱的 structured binding 取出 `Arena` 的全部成員；成員數或順序改變時編譯失敗，必須同時更新正規化（屬 §1 的 wire 變更）。
 - f32 是解析後 binary32 值的位元樣式，不做正規化：−0 與 +0 視為不同內容（寧可誤拒，不可誤收）。JSON 的 `-0` 解析為整數 0（+0），只有 `-0.0` 得到 −0；L1 的數字寫法不變性不使用 0，−0 的敏感性以 `-0.0` 驗證。NaN 與 Inf 已被 `Validate` 拒絕。id 是 JSON 跳脫解碼後的 UTF-8 位元組，不做 Unicode 正規化。
 - 演算法：Engine `Fnv1a64`（FF-3）對整個位元組串計算一次，64 bit。0 保留為「缺少」：結果為 0 的 arena 視為載入失敗，Match 不啟動，Client 啟動失敗（與 `Arena::Load` 失敗相同）；`SetArenaIdentity` 拒絕 digest 0。

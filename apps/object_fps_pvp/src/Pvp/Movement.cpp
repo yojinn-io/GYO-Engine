@@ -71,14 +71,7 @@ PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
         alive ? command.moveRight : 0,
         result.yaw, speed, static_cast<float>(MovementTickSeconds));
     const auto supported = [&](const Engine::Math::Vec3& feet) {
-        if (feet.y <= 0.0001F) return true;
-        const Engine::Collision::VerticalCapsule body{feet, bodyHeight, arena.radius};
-        for (const auto& wall : arena.walls) {
-            const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(
-                body, {0, -0.002F, 0}, wall);
-            if (contact && contact->normal.y > 0.5F) return true;
-        }
-        return false;
+        return IsCharacterSupported({feet, bodyHeight, arena.radius}, arena.walls);
     };
     if (result.grounded) result.grounded = supported(p);
     if (alive && command.jumpRequested && result.grounded && !crouched) {

@@ -136,7 +136,7 @@ def main():
             # The same copy without its movement rules must stop with exit 1 before it listens.
             bare = Path(isolated) / "match-without-rules"
             shutil.copytree(deployed, bare)
-            (bare / MATCH_CONTENT / "movement_rules.json").unlink()
+            (bare / MATCH_CONTENT / "rules" / "movement_rules.json").unlink()
             missing = subprocess.run([str(bare / args.match.name), "--arena", str(args.arena.resolve()),
                                       "--listen", "127.0.0.1:" + str(free_port())],
                                      cwd=isolated, capture_output=True, text=True, timeout=8, creationflags=flags)
