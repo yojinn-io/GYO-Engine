@@ -21,6 +21,7 @@
 |---|---|---|
 | `v8-product-arena-v2-maps-move` | （2026-11-05）把延後的 `v8-product-asset-path-loaded-move` 併進 arena-v2 批：arena 一組（含烘焙地圖）搬進 `maps/`，`movement_rules.json` 搬進 `rules/`，根目錄的例外全部刪除；不加新例外 | 「这2个问题就能放到pvp的assets的config下么」→ 選「今 maps/ に移す」 |
 | `v8-product-arena-v2-p3-regression` | （2026-11-05）審查實測：P3 的軌跡對「集合相同、分法不同」沒有檢出力（AGENTS §14 停下回報）。P3 降為回歸檢查，退役證據只靠 P2（集合相同）；P3 的腳本加上繞柱、沿柱滑、斜進四角（只收緊） | 選「回帰チェックに下げる（推奨）」 |
+| `v8-framework-preview-component-owner` | （2026-11-05）framework 的 3D 預覽元件批交給架構會話（framework 的 owner）做；本線等它的分支與 PR，再接 `v8-tool-voxel-map-editor-window` | 「架構師【アーキテクト】」 |
 | `v8-product-arena-v2-maps-guard-approved` | （2026-11-05）核准資產守衛 DI-2 的變更（§14.4，驗證者確認後的 1～5）：`maps/` 為 text 專用的第一層資料夾、RETAINED 加 2 個烘焙地圖 id、刪除根目錄的 4 筆例外 | 「承認する」 |
 | `v8-product-arena-v2-maps-guard` | （2026-11-05）資產標準 DI-2 的守衛加 `maps` 資料夾種類：照 §14.4 先做突變與另一個驗證者的確認，再請你核准 | 選「手続きを進める（推奨）」 |
 | `v8-product-arena-v2-p10` | （2026-11-05）P10（L3）的判定事前定為：形狀、位置、顏色與碰撞的手感一致即通過（**已被 `-p10-rewrite` 取代**） | 沒有偏好，採建議的定義 |
@@ -67,3 +68,4 @@
 - 2026-11-05：arena-v2 批審查（Opus／high）：沒有 blocker。實測發現 P3 對分法不同的分解沒有檢出力，照 AGENTS §14 停下回報；你選 P3 降為回歸檢查、`maps` 守衛照 §14.4 走程序，P10 採建議的定義。其餘 should-fix 照審查修。
 - 2026-11-05：arena-v2 批合入 master（`0c5db246`，`mutations.json` 依 id 合併兩邊的突變）。本機 cpu|shader 129／129；L1 三平台綠（run 42034025482）。剩 L3（P10）。
 - 2026-11-05：arena-v2 批的 L3（P10）你在 macOS 判定「問題なし（合格）」。啟動腳本與 log 在主 checkout 的 `build/evidence/tool-v8-voxel-map/arena-v2/l3/`（`pvp_corners` 兩人同房、命中 26）。arena-v2 批完成。下一批：`v8-framework-preview-component`（要和架構會話協調）；`v8-product-step-up` 由產品會話做。
+- 2026-11-05：你問編輯器做好了沒：只完成資料格式、build、CLI 與遊戲端讀取，GUI 視窗還沒做。framework 批交給架構會話（「[Job][架構師]例行架構掃描」），已送出委託（範圍、留在 model_viewer 的部分、客戶端建立元件、voxel 編輯器的需求）。等它完成後接 window 批。
