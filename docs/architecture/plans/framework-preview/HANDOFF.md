@@ -82,3 +82,4 @@
 - configure 檢查已改了兩次方法，不再追第三次（§14 冒頭），兩種繞法照實寫進判定變更文件的限界與第 4 項；要不要補記為之後的候選。
 - **停在關卡 2**：守衛變更的核准。未提交。
 - 2026-11-06，使用者：「Approve」。守衛的判定變更（A、B，含限界）核准。下一步：併入 master、commit、開 PR、通知 voxel 會話與架構師會話。
+- 2026-11-06：commit `e49f0752`，併入 origin/master `a9ccad7d`（#152，帶進 voxel_map_editor；沒有衝突，`sync_with_base_branch` 因 master 有 `.gitattributes` 拒絕，內容只有 `* -text`，自行 merge）。合併後的樹：兩個守衛通過、全量 `cpu|shader` 130/130、`gpu` 4/4（`build/evidence/framework-preview/*_after_merge.txt`）。開 PR，L1 的結果在 PR 上看。
