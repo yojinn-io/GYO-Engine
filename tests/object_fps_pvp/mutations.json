@@ -9006,8 +9006,8 @@
       "batch": "v8-product-arena-v2",
       "what": "The baked walls are not in the file's order",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "            arena.walls = expanded.colliders;",
-      "replace": "            arena.walls.assign(expanded.colliders.rbegin(), expanded.colliders.rend());",
+      "find": "            arena.walls = baked.colliders;",
+      "replace": "            arena.walls.assign(baked.colliders.rbegin(), baked.colliders.rend());",
       "check": "cpu",
       "expect": "Arena schema 2 takes its walls"
     },
