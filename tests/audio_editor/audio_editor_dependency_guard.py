@@ -24,9 +24,13 @@ TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*\b")
 # The catalog entry is written through the framework layer, whose own guard
 # (tests/framework/framework_dependency_guard.py) keeps the same rule (docs/framework/architecture.md, Design
 # Invariant 2).
-ALLOWED_INCLUDE_PREFIXES = ("gyo/audio_editor/", "gyo/framework/", "engine/")
-ALLOWED_TARGETS = {"GYO::Base", "GYO::Audio", "GYO::Engine", "GYO::Input", "GYO::Os", "GYO::ToolFramework",
-                   "GYO::ToolFrameworkJson"}
+# The window is the framework's ImGui binding with ImGui itself, and playback is
+# GYO::Audio's SDL backend, which keeps SDL inside it; the project file is the
+# editor's own JSON (v8-tool-audio-editor-edit).
+ALLOWED_INCLUDE_PREFIXES = ("gyo/audio_editor/", "gyo/framework/", "engine/", "nlohmann/")
+ALLOWED_TARGETS = {"GYO::Base", "GYO::Audio", "GYO::AudioBackendSDL", "GYO::Engine", "GYO::Input", "GYO::Os",
+                   "GYO::ToolFramework", "GYO::ToolFrameworkImGui", "GYO::ToolFrameworkJson", "imgui::core",
+                   "nlohmann_json::nlohmann_json"}
 
 
 ENGINE_NATIVE_HEADER = re.compile(r"/native/|Native\.(h|hh|hpp|hxx|inl)$")

@@ -504,6 +504,288 @@ audio_editor（`tests/audio_editor/audio_editor_dependency_guard.py`）：
    - 兩條都 killed（`mutations.txt`）。
    - 已知漏洞：`imstb_*.h` 和巨集形式的 include 不受檢；風險低，因為要碰 ImGui 的私有狀態需要 `imgui_internal.h`。
 
+## `v8-tool-audio-editor-edit` 的事前宣告（§14.1，2026-10-31 使用者「照草稿核准」；2026-11-03 開工時更新）
+
+設定是裁剪（原檔的幀）與增益（dB）。試聽與匯出用同一個 `RenderClip`，依序是裁剪 → 增益 → 重新取樣 → 量化。全部是確定性的判定，不重試。
+
+1. **回歸**：預設設定（不裁剪、0 dB）下，匯出的位元組和改動前的 `-convert` 相同。
+   - 基準：五個測試用 WAV 以 id `golden.<檔名>` 轉換的結果，SHA-256 存在主 checkout 的 `build/evidence/tool-v8-audio-editor-edit/baseline/sha256.txt`。
+   - 基準由 `18f5c726` 的音效工具產生。T2、T3b 都和它比對過，5／5 相同。
+2. **裁剪**：
+   - 48 kHz 的原檔不重新取樣，量化前的值等於原檔的那一段，完全相等。
+   - 其他取樣率的輸出幀數等於 `floor(裁剪後幀數 × 比例)`。
+3. **增益**：
+   - 48 kHz 的原檔，量化前的值等於 `原值 × 10^(dB/20)`，完全相等。
+   - +6 dB 推到滿格時，飽和計數等於實際被截斷的樣本數。
+4. **試聽等於匯出**：同一組設定下，送進 `LoadClip` 的位元組和 `ExportSound` 寫出的 data chunk 相同。
+5. **工程檔**：存了再讀回內容不變；存到資產根目錄裡、或版本不認識時拒絕。
+6. **波形**：合成輸入的每一欄最小值與最大值正確。
+7. **播放狀態機**：不開裝置，由測試的執行緒自己呼叫 `Render`。
+   - 播放後進到 Playing，`clipFrame` 前進。
+   - 停止生效後是 NotPlaying，之後的區塊都是靜音。
+   - 槽數 2、連續換 10 次片段，`NoClipSlot` 不會拖過下一幀。
+   - 舊的 handle 每次都被停掉。
+8. **GUI**：使用者在 macOS 上試用。
+
+### 2026-11-03 開工時的更新（`v8-tool-audio-editor-edit-restart`）
+
+- **前提**：GYO::Audio 的播放控制層（`SoundHandle`、`Stop`、`LoadClip`、`PlayheadOf` 等）要先進 master。
+  - 它目前只在 audio-line 的本機分支 `claude/v8-engine-audio-control`（`1f271a32`，比 master 多 8 個提交），沒有推送，也沒有 PR。
+  - 你選了建議做法：由 audio-line 會話推送、開 PR、合併之後，本批才開工實作。
+- **外殼**：GUI 用 framework 的 `RunImGuiShell`，命令列照舊用 `RunHeadlessShell`。`SdlAudioOutput` 由工具自己開，外殼不管音訊。
+- **守衛**（§14.4，放寬；開工實作後先跑突變、經検証者核對，再交你核准）：
+  - 目標加 `GYO::ToolFrameworkImGui`、`GYO::AudioBackendSDL`、`imgui::core`、`nlohmann_json::nlohmann_json`。
+  - 原本核准的 `GYO::ToolFrameworkGui` 已在 PR B 刪除，換成 `GYO::ToolFrameworkImGui`。
+  - `GYO::AudioBackendSDL` 是「把 SDL 留在私有的 Engine SDL 後端」，符合 T4 的 DI 1。
+  - `SDL3::` 與 `*Native` 照舊禁止。
+- **工程檔**：照建議採 (a)。audio_editor 自己連 nlohmann 讀寫工程檔。
+  - 理由：目前只有 audio_editor 一處用到這個格式，照「共用功能先進 framework」，要觀察到多處使用才放進 framework。
+  - ui_editor 也是自己連 nlohmann。
+- **模型與檔位**（領航員規則，照建議）：
+
+| 段 | 根據 | 実装者 | 審査者 | 検証者 |
+|---|---|---|---|---|
+| 上段 | Design Invariants 的守衛放寬；新的資料格式（工程檔） | Opus 5.5／high（主會話） | Opus 5.5／high | Fable 5.1／high |
+
+### 實作後的結果（2026-11-04）
+
+- 前提：GYO::Audio 播放控制層已合併（PR #139，merge `8a713b1e`），公開介面和 10-31 的 `1f271a32` 相同；本分支已和 master 合併（`a9bbe1fb`）。
+- 判定 1～7：本機 macOS 全部通過（`build/target/_build/framework`，ui_editor＋audio_editor）。判定 8 交你在 GUI 上試用。
+  - 判定 1：五個 WAV 以 `golden.<檔名>` 轉換，SHA-256 和基準 5／5 相同（主 checkout `build/evidence/tool-v8-audio-editor-edit/regression/compare.txt`）。
+  - 判定 2～7：`tests/audio_editor/AudioEditorEditTests.cpp`。
+- 突變：26／26 killed，見下方「突變結果」。
+- 和事前宣告不同的地方：
+  - 裁剪後一幀都不剩（重新取樣前或後）時拒絕（`InvalidSettings`），所以不會寫出 Engine 的 `ClipBank` 拒收的空片段。舊的 `convert` 遇到 0 幀的 WAV 會寫出空片段，現在改成回 4。
+  - 試聽的混音器沒有排程延遲、兩個片段槽（`PreviewMixerConfig`），停止與卸載在取走它們的那個區塊就生效。
+  - 指令 `edit [<project.json> | <source.wav>]` 開視窗；不帶指令時照舊回 2（CLI 測試不變）。
+- 範圍的限界：
+  - GUI 的邏輯（欄位與工程檔之間的轉換、對話框）沒有自動測試，只靠 L3。
+  - 重新取樣在 UI 執行緒上做，長的非 48 kHz 素材按下 Play 會停頓一下。
+  - 沒有「未存檔」的提示；關視窗時改動會丟失。
+  - 命令列給相對路徑時，工程檔照原樣存相對路徑。
+- 觀察到的壓力（報告，不在本批處理）：系統選擇窗的「只認最新一次請求、Failed 不結束」規則，ui_editor（`PathDialogRequests`）和 audio_editor 各寫了一份。照「共用功能先進 framework」，兩處都用到了，可以考慮移進 framework。2026-11-04 交回 v8 規劃會話，記成 v8 驗收前必須完成（`v8-tool-path-dialog-rule-handover`）。
+
+§14.4（audio_editor 守衛，放寬；這是 Design Invariants 的守衛，要你核准）：
+
+1. 守的性質：audio_editor DI 1。不連遊戲、不指名其他產品；自己不 include `SDL3/`、不呼叫 `SDL_`、不指名 SDL 或 `*Native` 的 target。SDL 只經 Engine 的 SDL 後端與 framework 的綁定。
+2. 緩的面：以前判失敗、現在通過的情況：
+   - CMake 指名 `GYO::ToolFrameworkImGui`、`GYO::AudioBackendSDL`、`imgui::core`、`nlohmann_json::nlohmann_json`；
+   - include 前綴 `nlohmann/`：nlohmann 目錄下的每個標頭都通過（`json.hpp`、`json_fwd.hpp`、`detail/*` 等，全是 JSON 函式庫自己的檔案）。
+   - `<imgui.h>` 不含 `/`，本來就不檢查。
+   - 前綴比對的既有弱點：`nlohmann/../SDL3/SDL.h` 也會通過，但 `engine/../SDL3/SDL.h` 以前就通過，實質上不是新的面。
+   - 突變 `ae-guard-json-target`（指名 nlohmann 時守衛失敗）因此刪除。
+3. 緊的面：無。
+4. 緩的面之後，性質由誰守：
+   - 本守衛的其餘規則沒動：`SDL_` 名稱、`SDL3/` 與 native 標頭的 include、`SDL3::` 與 `*Native` 的 target、名單外的 target 與 include 都照舊失敗。
+   - `GYO::AudioBackendSDL` 自己把 SDL 留在私有、沒有 native target：由 Engine 的 G1～G3 守（`docs/architecture/audio.md` DI 2）。
+   - ImGui 綁定把 SDL、ImGui 的 SDL 後端與 `*Native` 留在私有：寫在 `framework/bindings/imgui/CMakeLists.txt`，只靠審查守。framework 的守衛只查名稱，設定時的連結檢查不分 PUBLIC／PRIVATE，G3 也不涵蓋這個綁定。
+     - 綁定經公開連結帶來的 `GYO::PlatformSDL` 與 `GYO::RenderBackendSDL`，SDL 是私有的，由 G3 守。所以現在沒有 SDL3 的 include 目錄進到 audio_editor。
+     - 如果綁定哪天改成公開連結，SDL3 標頭與 native 標頭就會進到 audio_editor 的 include 路徑，這時只剩本守衛的 `SDL3/`、`*Native` 與 `SDL_` 規則在守。
+     - 新的事實：SDL3 現在會（只以連結的形式）連進 GUI 執行檔，手寫一個 `SDL_` 的宣告也連得過；擋住它的只有本守衛的 `SDL_` 規則。
+   - `imgui::sdl3_sdlrenderer3` 不在名單內。
+   - nlohmann 是 JSON 函式庫，不帶 SDL，也不帶遊戲。
+5. 根據：
+   - 事前宣告（2026-11-03 的目標清單，上方）；
+   - 自我測試新增兩條：視窗與工程檔的目標通過；在 SDL 後端旁再指名 `SDL3::SDL3` 或 `imgui::sdl3_sdlrenderer3` 時失敗；
+   - 突變：見下方「突變結果」；
+   - 検証者：見下方「検証者」。
+   - 已知的一點：視窗用 `SdlPlatform` 的系統選擇窗，`GYO::PlatformSDL` 經 ImGui 綁定的公開連結取得（綁定 → 視窗外殼 → 平台，兩層），CMake 不指名它（突變 `ae-guard-io-platform` 證明指名時守衛照舊失敗）。`docs/audio_editor/architecture.md`「Editing and preview」與 CMake 註解寫明了這一點。
+
+突變結果（主 checkout `build/evidence/tool-v8-audio-editor-edit/`）：
+- 件數の突き合わせ：一致。宣告 26 條（新 22、改寫位置 3、沿用 1），最後一輪 26／26 killed，stale 0（`mutations.txt`）。
+- 第一輪 22／26（`mutations-run1.txt`），survived 4 條都是核心測試的突變，不是守衛的：
+  - 3 條（試聽）：測試名稱有逗號，doctest 的 `-tc` 篩選在逗號切開，一個測試都沒跑。這是測試方法的錯，改了測試名稱。
+  - 1 條（`ae-edit-empty-trim-accepted`）：重新取樣後的空片段檢查擋下了同一個情況，`ValidateSettings` 本身沒有被直接測到。這是測試的缺口，補了直接的檢查。
+  - 另外 `ae-preview-update-stops` 即使篩選正常也抓不到（沒有測試在播放中呼叫 `Update`），補了這個檢查。
+- 刪除 1 條：`ae-guard-json-target`（第 2 點）。改寫位置 3 條（`ae-io-no-parents`、`ae-guard-native-include` 移到 `FileAccess.cpp`；`ae-guard-io-platform` 的連結行變了），判定不變。
+
+検証者（Fable 5.1／high，2026-11-04；不改檔案，用舊守衛與新守衛對 51 個合成輸入比對）：
+- 第 1、3、5 點：確認。
+- 第 2、4 點：確認，附更正，已照更正改寫在上面（`nlohmann/` 的範圍；ImGui 綁定的私有連結只靠審查；SDL3 以連結的形式進到 GUI 執行檔）。
+- 措辭的提醒：DI 1 的「names no SDL or `*Native` target」裡，`GYO::AudioBackendSDL` 的名字也有 SDL。這裡把「SDL target」讀成 SDL3 自己的 target，同一句的「Playback goes through `GYO::Audio` and its SDL backend」支持這個讀法。要不要改成「no SDL3 target」由你決定；改 DI 本身是 Architecture Delta。
+- 既有的弱點（不是本批造成的）：不帶目錄的 `#include <SDL.h>` 兩版守衛都放過（用到時會被 `SDL_` 規則抓到）；CMake 註解裡的 `::` 名稱也會被當成 target。
+
+## `v8-tool-audio-editor-regions` 的事前宣告（§14.1，2026-11-04 使用者「照草稿核准」）
+
+**狀態：2026-11-05 撤回（`v8-tool-audio-editor-regions-withdrawn`）。** 程式、測試、DI 3 的措辭與突變目錄退回 `-edit` 完成時的內容（`43487d42^`）；本節與「實作後的結果」留作紀錄。
+
+**功能**：從一個原檔切出多段，每段是一個片段，一次匯出、各自登錄，並可以淡入淡出。使用的情境：把換彈的錄音切成 `magazine_out`、`magazine_in`、`bolt_pull` 等，每個動作一個事件、一段聲音（聲音側的 B，`v8-tool-anim-event-sound-owner`）。
+
+**依據**：架構評估（[請求](anim-event-sound-request.md)，結論見該文件「評估結果」）。
+- 「事件 → 聲音」由 framework 持有（架構卡 `v8-arch-event-sounds-contract`）；
+- audio_editor 只管片段，不知道事件，也不寫 event_sounds 檔（DI 8 不動）；
+- 本批不依賴架構卡，也不依賴 PR #142（架構評估引用的條文，2026-11-04 仍未合併）。
+
+**前提**：~~#141（`-edit`）合併後才開工，分支從 master 開。~~ 2026-11-04 更正：這是 Claude 自己加的前提，架構評估寫的是「這一批不依賴架構卡，可以先做」。你說「照建議。繼續」，並指出這一點，所以現在開工。本批接在 #141 的分支 `claude/v8-tool-audio-editor-edit` 上，同一條功能線，不另開 PR。接在哪條分支是 Claude 照「少開 PR」選的，你沒有另外選。
+
+**不做**：
+- 拼接與時間軸：各段之間沒有先後，也不放在同一條時間上；
+- 多軌與混音：Replacement Criteria 的第 2 條不碰；
+- 事件名稱、對齊點、event_sounds 檔。
+
+### 改動
+
+- **區段**（`Edit.hpp`）：`EditSettings` 加 `fadeIn`、`fadeOut`，單位是原檔的幀（和裁剪相同）。
+  - `RenderPlanes` 的順序：裁剪 → 增益 → 淡入淡出 → 重新取樣 → 量化。
+  - 淡入淡出用直線。設裁剪後有 n 幀，第 i 幀（0 起算）的係數：
+    - 淡入 `in(i)`：`fadeIn` 為 0 或 `i ≥ fadeIn` 時是 1，否則是 `i / fadeIn`；
+    - 淡出 `out(i)`：令 `j = n − 1 − i`，`fadeOut` 為 0 或 `j ≥ fadeOut` 時是 1，否則是 `j / fadeOut`；
+    - 量化前的值是 `(x × g) × in(i) × out(i)`（double，照這個順序乘）。
+  - `ValidateSettings` 加一條：`fadeIn + fadeOut ≤ n`。
+- **多段匯出**（`SoundExport.hpp`）：新增 `ExportSounds`，參數是一個原檔、一個目的地和多個區段（每段有 id、path 與設定）。原本的 `ExportSound` 改成呼叫它（一段）。
+  1. 先全部檢查：
+     - 至少一段；
+     - 同一次匯出裡 id 不重複、path 不重複；
+     - path 不等於原檔或 catalog；
+     - 每段的設定都有效，重新取樣後也至少一幀。
+  2. 全部在記憶體裡算好；catalog 的文字在記憶體裡連續套用 `RegisterAsset`，每段一次。
+  3. 逐一寫片段（atomic replace），最後寫一次 catalog。
+  - 第 1、2 步失敗時什麼都不寫。
+  - 第 3 步寫第 k 段失敗時，catalog 不動，前 k−1 段的檔案留在資產根目錄、沒有登錄（和現在單段匯出時 catalog 寫入失敗的情形相同；範圍的限界）。
+- **工程檔 version 2**（`ProjectFile.hpp`）：
+  - 欄位：`format`、`version`（2）、`source`、`asset_root`、`asset_catalog`、`regions`；
+  - `regions` 是陣列，每段剛好有 `id`、`path`、`trim_start`、`trim_end`、`gain_db`、`fade_in`、`fade_out`；
+  - 讀到 version 1 時當成一段、淡入淡出為 0；存檔一律寫 version 2；
+  - 其他規則照舊：欄位一個不多一個不少、同一個工程永遠寫出同一段文字、存進資產根目錄時拒絕。
+- **命令列**：新增 `export <project.json>`，不開視窗、照工程檔匯出全部區段（手工 → 腳本 → 工具，AGENTS §5；判定也用它在無視窗下跑）。`convert` 不變。
+- **視窗**：
+  - 區段列表：從目前的裁剪新增一段、選取、改 id 與 path、刪除；
+  - 編輯欄位作用在選取的那段；
+  - 波形畫出所有區段，選取的那段畫出淡入淡出；
+  - 試聽播選取的那段；
+  - 「Export all」匯出全部區段。
+
+### 判定（都通過才算完成；全部是確定性的，不重試）
+
+1. **回歸**：一段、淡入淡出為 0 時：
+   - 五個測試用 WAV 匯出的位元組和基準 SHA-256 相同（`build/evidence/tool-v8-audio-editor-edit/baseline/sha256.txt`）；
+   - `-edit` 存下的 version 1 工程檔，讀進來匯出，結果和 `-edit` 匯出的相同。
+2. **淡入淡出**：48 kHz 的原檔，量化前的值和上面的公式完全相等。
+   - 淡入大於 0 時第一幀是 0，淡出大於 0 時最後一幀是 0；
+   - 淡入淡出都是 0 時和沒有這兩個欄位時相同；
+   - `fadeIn + fadeOut > n` 時拒絕（`InvalidSettings`）。
+3. **多段匯出**：一個原檔切三段，一次匯出：
+   - 每個片段和單獨匯出那一段的位元組相同；
+   - catalog 多了或更新了這三個條目；
+   - 其他條目的文字位元組不變。
+4. **拒絕時什麼都不寫**：下列各情形，資產根目錄裡不多任何檔案，catalog 的位元組不變：
+   - id 重複、path 重複；
+   - path 等於原檔；
+   - 其中一段的設定無效（包括排在最後的那段）；
+   - 零段。
+5. **工程檔 version 2**：
+   - 存了再讀回內容不變；
+   - version 1 讀成一段；
+   - 版本不認識、多一個欄位、少一個欄位時拒絕。
+6. **試聽等於匯出**：三段中的第二段，送進 `LoadClip` 的位元組和匯出的 data chunk 相同（DI 6）。
+7. **GUI**：你在 macOS 上試用：
+   - 切三段、聽到淡入淡出；
+   - 一次匯出；
+   - 存工程檔、重開後區段都在。
+
+**突變**（預計 12 條，加進 `framework_mutations.json`，只跑本批相關的，D184）：
+- 淡入：係數差一幀；
+- 淡出：方向反了；
+- 淡入淡出放到重新取樣之後；
+- 不檢查 `fadeIn + fadeOut ≤ n`；
+- 不檢查重複的 id；
+- 不檢查重複的 path；
+- 檢查晚於寫入（寫完前面幾段才檢查後面的）；
+- catalog 只登錄最後一段；
+- version 1 轉換時丟掉增益；
+- version 2 接受多出的欄位；
+- 試聽固定播第一段；
+- `export` 命令只匯出第一段。
+
+### Design Invariant 3 的措辭（要你同意；§3、§14.4）
+
+現在的字面是單數：「the output file and the catalog entry with the same id」。多段匯出時，一次匯出會寫出多個檔案與多個條目，所以照字面會違反這條。
+
+- **改成**：「The editor writes only what it registers: for each exported clip, the output file and the catalog entry with the same id; one export may write several clips. It leaves every other entry, every other file and product data … untouched.」（後半照舊。）
+- §14.4 的 1～5：
+  1. **守的性質**：工具只寫它登錄的東西；其他條目、其他檔案、產品的資料都不碰。
+  2. **緩的面**：一次匯出寫出多個片段與多個條目（每段一個）。以前照字面算違反，改了之後算通過。
+  3. **緊的面**：
+     - 同一次匯出裡 id 或 path 重複時拒絕（以前沒有這個概念）；
+     - 任何一段無效時什麼都不寫。
+  4. **守的性質是否仍有其他判定守著**：有。`AudioEditorCoreTests.cpp` 的「ExportSound keeps an existing entry's other fields …」與「… writes nothing for a bad source」繼續守單段；判定 3（其他條目不變）與判定 4（拒絕時什麼都不寫）把同一個性質延伸到多段。
+  5. **根據**：架構評估的第 4 點（「多段匯出等於多個輸出各自登錄」）、你選的 B、本節的判定 3 與 4。
+- 程序：改 DI 的字面要你同意；本批的守衛（相依性守衛）不變。開工實作後跑突變，並在交你核准前由検証者用實際的資料核對上面的 1～5。
+- 2026-11-04 你照草稿核准了本宣告，包括這段措辭的方向。照上面的程序，實作後的 1～5（突變與検証者核對後）再交你核准一次，才改進 `docs/audio_editor/architecture.md`。
+
+### 範圍的限界
+
+- 寫到一半失敗時，已寫的片段不會登錄（見「改動」第 3 步）。
+- GUI 的邏輯沒有自動測試，只靠判定 7。
+- 重新取樣仍在 UI 執行緒上做；多段匯出會停頓得更久。
+- 每段都從原檔重新算，沒有快取。
+
+### 模型與檔位（領航員規則）
+
+| 段 | 根據 | 実装者 | 審査者 | 検証者 |
+|---|---|---|---|---|
+| 上段 | Design Invariant 3 的措辭；工程檔的格式變更（version 2） | Opus 5.5／high（主會話） | Opus 5.5／high | Fable 5.1／high（DI 3 的 §14.4） |
+
+估時 8～12 h（不含 L3）。
+
+### 實作後的結果（2026-11-04）
+
+件數の突き合わせ：一致。第二輪宣告 18 條、18 條 killed；第三輪 3 條、3 條 killed；stale 0。
+
+- 判定 1～6：本機 macOS 通過。
+  - 框架樹 `build/target/_build/framework` 的 ctest 69／69（`ctest-framework.txt`）；核心測試 27 個案例。
+  - 第一次跑完整 ctest 時，`os.boundary_guard` 失敗：測試裡的 `#ifdef _WIN32` 違反 OS 層的規則（只有 OS 層可以分平台）。這是測試的錯。改成問 `Files::SamePathComponent`，測試多連 `GYO::Os`，重跑後 69／69。
+  - 判定 1 的 SHA-256：五個 WAV 和基準 5／5 相同（`build/evidence/tool-v8-audio-editor-regions/regression/compare.txt`）。
+  - 判定 1 的單元測試（version 1 讀成一段）比較的兩邊都經過新的 `ExportSounds`，所以不是獨立的證據。獨立的只有 SHA-256 的比對。
+- 判定 7（GUI）：**未判定**。2026-11-04 你開了視窗、看過，沒有照 1～6 項試。你的話：「感覺不太符合我的需求，不過先這樣。等model viewer出來了。我一起聯動看看效果。」所以判定 7 不算通過，延到 Model Viewer 出來後和它一起試；哪裡不符合需求，那時再一起看。
+- 審査者（Opus 5.5／high）指出的事，都已修：
+  - **缺陷**：兩個 path 只差大小寫時，在 Windows 上是同一個檔案，卻沒有擋下。改成照 OS 層的 `Files::SamePathComponent` 逐段比對：Windows 上不分大小寫，其他平台逐位元組。
+  - **缺陷**：一段把 path 讓出來、另一段在同一次匯出登錄了它時，報告卻說那個檔案「已經沒有登錄」。改成不報告。
+  - **缺陷**：在視窗裡開 WAV 會把區段清成一段（例如工程檔的原檔搬走之後重新指定）。改成保留全部區段，不合的區段在狀態列點名；讀不了的 WAV 不改變現在的原檔。這改了 `-edit` 的行為：以前開 WAV 會重設裁剪。
+  - **測試缺口**，已補：
+    - 判定 3 加了每個條目的 path、每份報告的 path 與幀數；
+    - 判定 4 的「`./`」那一例改了註解：它是被 catalog 的規則擋下的；另加大小寫不同的例子（只在 Windows 上期待拒絕）；
+    - 判定 5 加了 version 1 的嚴格性（多一欄、少一欄）；
+    - 新增兩個案例：寫到一半失敗、path 讓出後被別段登錄。
+  - **小問題**，已修：
+    - `regions` 是空的工程檔不存；
+    - 命令列的說明寫出工程檔無效時回 4；
+    - 在波形上點擊後馬上收緊淡入淡出的範圍。
+  - **小問題**，不修，記為範圍的限界：同一次匯出裡，一段把 path 讓給另一段時，順序有影響。讓出的那段排在後面時，會被 catalog 的規則拒絕。
+- 検証者（Fable 5.1／high）核對 DI 3 的 1～5（用 24 個合成的情形跑 `export`，不改 repo）：
+  - 第 1、2、4、5 點：確認。
+  - 第 3 點：確認，附兩點更正，都已處理：
+    - 大小寫不同的 path 漏掉（同上，已修；macOS 仍會漏，見下）；
+    - 測試的註解（同上）。
+  - 措辭的建議，已寫進下面的新措辭：
+    - 「the catalog entry with the same id」的「same」沒有清楚的對象；
+    - 收緊的部分（同一次匯出裡 id 與檔案不重複、任何一段被拒絕就什麼都不寫）不在句子裡。
+  - 検証者的報告沒有存檔；結論寫在這裡。它的實驗腳本放在 `/private/tmp/claude-501/verify-di3/`，那個位置會消失，所以不當證據。
+- 突變：
+  - 第一輪：16 條，15 killed（`build/evidence/tool-v8-audio-editor-regions/mutations-run1.txt`）。
+    - 存活的是 `ae-gui-preview-first-region`（視窗固定播第一段）。和事前預測的一樣：視窗的邏輯沒有自動測試，只靠判定 7。
+    - 這條已從目錄拿掉，否則合併前的完整一輪會一直失敗。
+  - 修正後新增 3 條：`ae-export-reports-taken-path`、`ae-export-orphans-unnamed`、`ae-project-v1-extra-field`；`ae-export-duplicate-file` 跟著程式改了位置。
+  - 第二輪：18 條，18 killed（`mutations-run2.txt`，也複製成 `mutations.txt`）。
+  - 第三輪：之後判定 4 的測試又改了一次（OS 層的守衛不准在 OS 層外用 `_WIN32`，改成問 OS 層），所以重跑被它殺的 3 條，3 killed（`mutations-run3.txt`）。
+  - `ae-export-duplicate-file` 只在能建目錄連結的機器上被殺（Windows 沒有權限時，那段測試會跳過）。
+- 範圍的限界：
+  - **macOS 的大小寫**：macOS 預設的磁碟不分大小寫，但 OS 層在 macOS 上逐位元組比對（os-subsystem D56），所以只差大小寫的兩個 path 在 macOS 上仍會寫到同一個檔案。
+  - **寫到一半失敗**：已寫的片段沒有登錄，錯誤訊息會列出它們。單段匯出原本也會這樣，多段時更容易碰到。不做回滾，因為刪除可能連帶刪掉被覆蓋的舊版本。
+- **發現（不是本批造成的，只報告）**：
+  - 單段的 `convert --path audio/Other.wav` 會蓋掉另一個條目已登錄的 `audio/other.wav`（検証者的 E2，在不分大小寫的磁碟上），違反 DI 3 的「其他檔案不碰」。
+  - 這要拿新的 path 和 catalog 裡其他條目的檔案比對，屬於登錄規則（framework 的 catalog 規則）。可以另排一批。
+
+### Design Invariant 3 的新措辭（檢驗後的版本，2026-11-04 核准，已寫進 architecture.md）
+
+「3. The editor writes only what it registers: for each exported clip, its output file and the catalog entry with that clip's id. One export may write several clips; within it the ids are distinct and no two clips are one file, and when any clip is refused nothing is written. A write that fails after others leaves the clips already written unregistered, and the editor names them. It leaves every other entry, every other file and product data (such as a product's sound cue table) untouched. …」（之後關於 atomic replace 與 content contract 的句子照舊。）
+
+和事前宣告的版本相比，多了兩句：
+- 收緊的部分（id 不重複、檔案不重複、任何一段被拒絕就什麼都不寫）；
+- 寫到一半失敗時的例外。
+
+§14.4 的 1～5 照上一節，加上本節第 3 點的更正。
+
 ## 實作順序（提案）
 
 ```text
@@ -512,7 +794,8 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 ├── audio-tool-line                     「PR 線：音效從腳本走到工具」
 │   ├── v8-tool-audio-editor-convert    「high（重新取樣局部 xhigh）｜Opus 5.5｜核心程式庫＋CLI：讀 WAV、轉換（演算法等價）、輸出並登錄 catalog」
 │   ├── v8-tool-framework-shell         「medium～high｜Opus 5.5｜工具共用層 tools/framework/：從 ui_editor 搬出外殼四塊，行為不變」（PR #123，已合併）
-│   └── v8-tool-audio-editor-edit       「high｜Opus 5.5｜GUI：播放、波形、資訊、裁剪、增益、工程檔」（排在 framework-rework-line 之後）
+│   ├── v8-tool-audio-editor-edit       「high｜Opus 5.5｜GUI：播放、波形、資訊、裁剪、增益、工程檔」（PR #141）
+│   └── v8-tool-audio-editor-regions    「high｜Opus 5.5｜一個原檔切多段、一次匯出、淡入淡出」（2026-11-05 撤回，退回 `-edit`）
 │
 ├── framework-rework-line               「PR #123 的整改，工具側（2026-11-01 依架構整改計畫重排）：全部等架構的 PR A 合併」
 │   ├── v8-tool-ui-editor-path-dialog-adopt「high｜Opus 5.5｜T1：ui_editor 改呼叫 Engine 的選擇窗（和 T3a 一起做）」
@@ -534,7 +817,8 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 |---|---|---|---|
 | `v8-tool-audio-editor-convert` | high（局部 xhigh）｜Opus 5.5 | 6～10 h | 工具登錄（`tools.csv`、`project.json`）、核心程式庫與 CLI；照上方事前宣告通過；catalog 條目正確；突變檢查 |
 | `v8-tool-framework-shell` | medium～high｜Opus 5.5 | 3～5 h | `tools/framework/` 有 ImGui＋SDL 宿主、系統選擇窗、檔案存取、唯讀 catalog 掛載、catalog 寫入（從音效工具搬入）；ui_editor 改用它、測試全過；Design Invariants＋守衛；`framework` 加進保留名 |
-| `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過。排在 T3b 之後（T1～T3b 都合併）；事前宣告已核准（上方），分支 `claude/v8-tool-audio-editor-edit` 只有宣告的提交（本機） |
+| `v8-tool-audio-editor-edit` | high｜Opus 5.5 | 8～12 h | 播放、波形、裁剪、增益、工程檔；使用者在 GUI 上試過。事前宣告已核准，2026-11-03 開工時更新（上方）；等 GYO::Audio 播放控制層合併後才實作 |
+| `v8-tool-audio-editor-regions` | high｜Opus 5.5 | 8～12 h | 多段匯出、淡入淡出、工程檔 version 2、`export` 命令；DI 3 的措辭改成複數（要你同意）；使用者在 GUI 上試過。事前宣告在上方，2026-11-04 核准並開工（接在 #141 的分支）。**2026-11-05 撤回**（`v8-tool-audio-editor-regions-withdrawn`） |
 | `v8-tool-ui-editor-path-dialog-adopt`（T1） | high｜Opus 5.5 | 和 T3a 合計 5～7 h | 等 PR A 合併（含 `v8-engine-platform-path-dialog`）；和 T3a 一起做，因為舊宿主交不出 `SdlPlatform&`（架構計畫 D-4）。`SdlPathDialogs` 改收 `SdlPlatform&`，只留用途↔tag 對照與每幀套用；`PathDialog.hpp` 不再 include framework；CMake 具名 `GYO::PlatformSDL`；ui_toolchain.md Design Invariant 1 改寫（要你同意）。`pathDialogOpen_`（`EditorApp.cpp`）加「答案不來」時的恢復規則：Engine 新的 Design Invariant 10 只保證最多一個答案。守衛加 `GYO::PlatformSDL`（放寬，§14.4 出示 1～5 並經你核准）。L3 實機（Windows 優先）：選檔、取消、非 ASCII 路徑、對話窗開著時關視窗、答案不來。事前宣告帶入架構批的範圍限界：真實 OS 對話窗的回呼執行緒、Linux portal 的 pump、平台或父視窗銷毀時的行為，CI 都量不到 |
 | `v8-tool-ui-editor-shell-adopt`（T3a） | high｜Opus 5.5 | （見 T1） | 等 PR A 合併（含 `v8-framework-shell`）。GUI 用 `RunImGuiShell`，cli 用 `RunHeadlessShell`（命令列錯誤印 help、回 2）；資產預覽用 `NativeRenderer(context.renderer)`，ui_editor 自己連 `GYO::RenderBackendSDLNative`（platform-sdl Replacement Criteria 2 的新例外，Engine 的貼圖 API 另案）。守衛加 `GYO::ToolFrameworkImGui`、`GYO::RenderBackendSDLNative`，拿掉 `GYO::ToolFrameworkGui`（§14.4）；突變 `ui-guard-native-target` 改寫。GUI 由你試過 |
 | `v8-tool-user-files-adopt`（T2） | medium～high｜Opus 5.5 | 2～3 h | 等 PR A 合併（含 `v8-engine-io-user-files`）。ui_editor 的 `DocumentSession` 改呼叫 engine/io；audio_editor 的讀寫改用 `ReadAllBytes` 與 `WriteFileAtomically`（暫存檔名會變）。`ProbeFileStamp` 與 `ReadAllBytes` 都明確傳 `maxBytes`（預設 64 MB）。`AbsolutePath` 留在 framework 核心（架構計畫 D-2），ui_editor 繼續用那一份。audio_editor 現在完全沒用 `FileService`，改用 engine/io 是新依賴：CMake 具名 `GYO::Engine`，守衛加 `engine/io/` 與 `GYO::Engine`（放寬，§14.4）；ui_editor 的守衛預期不變，開工前確認。兩個工具的測試照舊通過 |
@@ -570,4 +854,14 @@ v8-tool-assets-plan                     「high｜Opus 5.5｜本規劃（草稿�
 | `v8-tool-editor-engine-access-approve` | （2026-11-01）核准 T4：ui_editor 與 audio_editor 的 DI 1 改寫，以及兩支守衛的變更（§14.4 的 1～5 見 T4 一節），並在 L1 通過後合併 PR #131。ui_editor 守衛是否掃 `tests/ui_editor` 未定，照現狀不掃 | 對「核准 T4，並在 L1 通過後合併 #131 嗎？」答「核准並合併」 |
 | `v8-tool-ui-editor-input-adapter-predeclare` | （2026-11-02）IU-2 的事前宣告（本文件「`v8-tool-ui-editor-input-adapter`（IU-2）的事前宣告」）核准：改動、判定、突變、L3 與範圍的限界、模型表 | 對「IU-2 的事前宣告照草稿核准嗎？」答「照草稿核准」 |
 | `v8-tool-ui-editor-input-guard-approve` | （2026-11-02）核准 IU-2 的 ui_editor 守衛收緊：任何檔案都不得 include `imgui_internal.h`（§14.4 的 1～5 見 IU-2 實作後的結果） | 對「守衛的收緊（不得 include imgui_internal.h）核准嗎？」答「核准」 |
+| `v8-tool-audio-editor-edit-restart` | （2026-11-03）`-edit` 開工時的更新：(1) GYO::Audio 播放控制層由 audio-line 會話推送、開 PR、合併後才實作；(2) 工程檔 audio_editor 自己連 nlohmann；(3) 模型表：上段，実装者／審査者 Opus 5.5／high、検証者 Fable 5.1／high；守衛目標的 `GYO::ToolFrameworkGui` 換成 `GYO::ToolFrameworkImGui` | 「いいです、意見を受け入れます」（接受三項建議） |
+| `v8-tool-anim-event-sound-owner` | （2026-11-04）「事件 → 聲音」由 framework 持有，是組合格式（建議形狀 `gyo.event_sounds`，架構卡 `v8-arch-event-sounds-contract`）；Engine 不動；聲音側選 B（每個動作一個事件、一段聲音）。audio_editor 只管片段（DI 8 不動），下一批是多段匯出（`v8-tool-audio-editor-regions`）。PvP 的 `sfx.json` 遷移由產品會話在契約落地後做 | 經架構會話轉述（不是原話）：使用者 2026-11-04 決定 |
+| `v8-tool-audio-editor-regions-predeclare` | （2026-11-04）`v8-tool-audio-editor-regions` 的事前宣告照草稿核准：改動、判定 1～7、突變 12 條、範圍的限界、模型表（上段；実装者／審査者 Opus 5.5／high、検証者 Fable 5.1／high），以及 DI 3 改成複數的措辭方向。DI 3 的 §14.4 1～5 在實作、突變、検証者核對後再交使用者核准 | 對「多段匯出的事前宣告（含 DI 3 改成複數）照草稿核准嗎？」答「照草稿核准」 |
+| `v8-tool-audio-editor-di3-plural` | （2026-11-04）核准 audio_editor Design Invariant 3 的新措辭（檢驗後的版本：每個匯出的片段各有輸出檔與該片段 id 的條目；一次匯出可寫多個，id 與檔案不重複，任何一段被拒絕就什麼都不寫；寫到一半失敗時已寫的片段不登錄、工具列出它們）。§14.4 的 1～5 與検証者的更正見「`v8-tool-audio-editor-regions` 的事前宣告」的「實作後的結果」 | 對「DI 3 的新措辭（assets.md）照檢驗後的版本核准嗎？」答「核准」 |
+| `v8-tool-audio-editor-l3-deferred` | （2026-11-04）`-edit`（判定 8）與 `-regions`（判定 7）的 GUI L3 延後，等 Model Viewer 出來後一起試。兩個判定都記為未判定，不是通過 | 「感覺不太符合我的需求，不過先這樣。等model viewer出來了。我一起聯動看看效果。」 |
+| `v8-tool-audio-editor-merge-wait` | （2026-11-04）PR #141 先不合併，等 Model Viewer 出來、一起試過 GUI 之後再決定 | 「先不合，等model viewer 一起。」 |
+| `v8-tool-path-dialog-rule-handover` | （2026-11-04）系統選擇窗的記帳規則（每次請求新 tag、只認最新一次、Chosen／Cancelled 才結束、Failed 不結束、可放棄等待；Engine `platform-sdl` Design Invariant 10 的消費端）在 ui_editor（`PathDialogRequests`）與 audio_editor（`ApplyDialogAnswers`）各寫一份。交回 v8 規劃會話，記成 v8 驗收前必須完成的事項；放不放進 framework、由誰做，交 framework 的 owner（架構會話）判斷，本線不自行搬。使用者寫「8v驗收」，照上下文讀成 v8 | 「丟回給v8會話，記成8v驗收前必須完成的事項。」 |
+| `v8-tool-audio-editor-scope` | （2026-11-05）audio_editor 的邊界：簡單剪輯（裁剪、增益、試聽）與轉換、登錄就好；不做大規模編輯與混音，留給專業軟體。「之前的版本」照上下文讀成 `-edit` 完成時（GUI：播放、波形、裁剪、增益、工程檔；`-convert` 的轉換與登錄）。多段切割交給外部軟體，每段各存一個 WAV 再匯入；聲音側的 B（一個事件一段聲音，`v8-tool-anim-event-sound-owner`）不受影響 | 「audio_editor 我想了想，退回到之前的版本（可以做簡單剪輯，轉換）就好了。audio_editor不做大規模編輯混音，留給專業軟體做就好。」 |
+| `v8-tool-audio-editor-regions-withdrawn` | （2026-11-05）依 `v8-tool-audio-editor-scope` 撤回 `v8-tool-audio-editor-regions`：多段匯出、淡入淡出、工程檔 version 2、`export` 命令都拿掉；`tools/audio_editor`、`tests/audio_editor`、`docs/audio_editor`、`framework_mutations.json` 退回 `43487d42^`（和 `-edit` 完成時逐位元組相同）。DI 3 回到單數的措辭，`v8-tool-audio-editor-di3-plural` 因此失效（措辭的變更是撤回的一部分，不是另一個 DI 變更）。退回後本機 ctest 69／69；`-edit` 的 26 條突變重跑 26／26 killed、stale 0（主 checkout `build/evidence/tool-v8-audio-editor-regions/mutations-after-withdraw.txt`）。`-regions` 的判定 7 不再判定；它的 dev_log 留作紀錄 | 同上 |
+| `v8-tool-audio-editor-edit-guard-approved` | （2026-11-05）核准 `-edit` 的守衛放寬（audio_editor Design Invariant 1 的守衛，§14.4）：1～5 見「`v8-tool-audio-editor-edit`」的「實作後的結果（2026-11-04）」。並合併 #141（只含 `-edit`），取代 `v8-tool-audio-editor-merge-wait`。判定 8（GUI 的 L3）沒有做，合併時仍是**未判定**，不是通過 | 對「核准 -edit 的守衛放寬，然後合併 #141 嗎？」答「核准並合併」 |
 | `v8-tool-assets-toolchain` | （2026-10-31）工具鏈，不是一個工具：沒有統一的來源與輸出位置；工具加工素材 → Asset 登錄；Asset build（自訂二進位包）延後；照「手工 → 腳本 → 工具」。第一版草稿的製作設定格式、處理器、Build 階段，以及 `source-root`、`output`、`processor-home`、`processor-language` 四個待決，都撤下 | 「這個是一條工具鏈而不是一個工具。……關鍵是現在的工具。（手工-腳本-工具）這個順序。」 |

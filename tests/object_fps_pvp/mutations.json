@@ -377,7 +377,7 @@
       "find": "PRODUCT_ROOTS = [REPOSITORY / 'apps' / 'object_fps_pvp']",
       "replace": "PRODUCT_ROOTS = CODE_ROOTS",
       "check": "asset_catalog",
-      "expect": "FAIL: test_every_exception_is_still_needed"
+      "expect": "FAIL: test_the_product_use_check_ignores_a_reference_from_a_test"
     },
     {
       "id": "v8-asset-layout-guard-exception-dropped",
@@ -8642,64 +8642,94 @@
       "expect": "Hit-part shot at the head decided accepted=1 kind=2 target=[0-9]+ part=1 damage=25000"
     },
     {
-      "id": "anim-events-no-stretch",
-      "batch": "v8-tool-assets-anim-events",
-      "what": "An event sound ignores how the clip is stretched over the action",
-      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
-      "find": "    return eventSeconds * (actionSeconds / clipSeconds) - syncSeconds;",
-      "replace": "    return eventSeconds - syncSeconds;",
-      "check": "cpu",
-      "expect": "CHECK\\( \\*EventSoundOffsetSeconds\\(2, 3, 1.5, 0\\) == doctest::Approx\\(1\\) \\) is NOT correct"
+      "id": "es-migrate-id-unchecked",
+      "batch": "v8-product-event-sounds-migrate",
+      "what": "Event sounds written for another anim_events asset are taken",
+      "file": "apps/object_fps_pvp/src/App/WeaponEventSounds.cpp",
+      "find": "    if (parsed.value().animationEventsAssetId != animationEventsAssetId) {",
+      "replace": "    if (false) {",
+      "check": "presentation",
+      "expect": "ParseWeaponEventSounds\\(product\\.dump\\(\\), \"object_fps_pvp\\.anim_events\\.other\", error\\) \\) is NOT correct"
     },
     {
-      "id": "anim-events-sync-ignored",
-      "batch": "v8-tool-assets-anim-events",
+      "id": "es-migrate-lengths-ignored",
+      "batch": "v8-product-event-sounds-migrate",
+      "what": "Binding answers every sound with a length, known or not",
+      "file": "apps/object_fps_pvp/src/App/WeaponEventSounds.cpp",
+      "find": "    auto bound = Gyo::Tools::Framework::BindEventSounds(weapon.sounds, weapon.events, soundSeconds);",
+      "replace": "    auto bound = Gyo::Tools::Framework::BindEventSounds(weapon.sounds, weapon.events,\n        [](std::string_view) -> std::optional<double> { return 1e9; });",
+      "check": "presentation",
+      "expect": "Bind\\(Weapon\\(changed\\.dump\\(\\)\\), bindError\\) \\) is NOT correct"
+    },
+    {
+      "id": "es-migrate-sfx-version-2-accepted",
+      "batch": "v8-product-event-sounds-migrate",
+      "what": "sfx.json version 2 is still read",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "if (json.at(\"version\").get<int>() != 3)",
+      "replace": "if (json.at(\"version\").get<int>() < 2)",
+      "check": "cpu",
+      "expect": "logged: version 2\\r?\\n"
+    },
+    {
+      "id": "es-migrate-old-section-tolerated",
+      "batch": "v8-product-event-sounds-migrate",
+      "what": "sfx.json may still carry version 2's animation_events",
+      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
+      "find": "        if (json.contains(\"animation_events\"))",
+      "replace": "        if (false)",
+      "check": "cpu",
+      "expect": "version 2's animation_events"
+    },
+    {
+      "id": "es-migrate-gain-fixed",
+      "batch": "v8-product-event-sounds-migrate",
+      "what": "An event sound plays at full gain instead of its file's",
+      "file": "apps/object_fps_pvp/src/App/WeaponEventSounds.cpp",
+      "find": "    return ScheduledEventSound{*offset - anchorSeconds, sound.gain};",
+      "replace": "    return ScheduledEventSound{*offset - anchorSeconds, 1.0F};",
+      "check": "presentation",
+      "expect": "CHECK\\( scheduled->gain == OldVolume \\) is NOT correct"
+    },
+    {
+      "id": "es-migrate-sync-ignored",
+      "batch": "v8-product-event-sounds-migrate",
       "what": "An event sound starts at the event instead of leading it by its sync point",
-      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
-      "find": "    return eventSeconds * (actionSeconds / clipSeconds) - syncSeconds;",
-      "replace": "    return eventSeconds * (actionSeconds / clipSeconds);",
-      "check": "cpu",
-      "expect": "CHECK\\( \\*EventSoundOffsetSeconds\\(2, 3, 1.5, 0.25\\) == doctest::Approx\\(0.75\\) \\) is NOT correct"
+      "file": "apps/object_fps_pvp/src/App/WeaponEventSounds.cpp",
+      "find": "                                                                       sound.syncSeconds);",
+      "replace": "                                                                       0.0);",
+      "check": "presentation",
+      "expect": "CHECK\\( scheduled->secondsFromNow == doctest::Approx\\(moment \\* \\(action / clip\\) - OldSync - 0\\.25\\) \\) is NOT correct"
     },
     {
-      "id": "anim-events-zero-clip-divides",
-      "batch": "v8-tool-assets-anim-events",
-      "what": "A clip without length still yields an offset",
-      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
-      "find": "!std::isfinite(actionSeconds) || clipSeconds <= 0 || actionSeconds <= 0)",
-      "replace": "!std::isfinite(actionSeconds) || actionSeconds <= 0)",
-      "check": "cpu",
-      "expect": "CHECK_FALSE\\( EventSoundOffsetSeconds\\(1, 0, 1.5, 0\\) \\) is NOT correct"
+      "id": "es-migrate-anchor-ignored",
+      "batch": "v8-product-event-sounds-migrate",
+      "what": "An event sound ignores how far the reload already ran",
+      "file": "apps/object_fps_pvp/src/App/WeaponEventSounds.cpp",
+      "find": "    return ScheduledEventSound{*offset - anchorSeconds, sound.gain};",
+      "replace": "    return ScheduledEventSound{*offset, sound.gain};",
+      "check": "presentation",
+      "expect": "CHECK\\( scheduled->secondsFromNow == doctest::Approx\\(moment \\* \\(action / clip\\) - OldSync - 0\\.25\\) \\) is NOT correct"
     },
     {
-      "id": "anim-events-sfx-version-1-accepted",
-      "batch": "v8-tool-assets-anim-events",
-      "what": "sfx.json version 1 (without animation events) is still read",
-      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
-      "find": "if (json.at(\"version\").get<int>() != 2)",
-      "replace": "if (json.at(\"version\").get<int>() > 2)",
-      "check": "cpu",
-      "expect": "version 1"
+      "id": "es-migrate-not-read",
+      "batch": "v8-product-event-sounds-migrate",
+      "what": "The weapon never reads its event sounds, so the reload is silent",
+      "file": "apps/object_fps_pvp/src/App/WeaponPresentationDefinition.cpp",
+      "find": "            if (config.contains(\"event_sounds_asset_id\")) {",
+      "replace": "            if (false) {",
+      "check": "presentation",
+      "expect": "REQUIRE\\( definition->eventSounds \\) is NOT correct"
     },
     {
-      "id": "anim-events-unknown-cue-accepted",
-      "batch": "v8-tool-assets-anim-events",
-      "what": "An event sound may name a cue that does not exist",
-      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
-      "find": "            if (cue == std::end(CueNames)) throw",
-      "replace": "            if (false) throw",
-      "check": "cpu",
-      "expect": "an unknown cue"
-    },
-    {
-      "id": "anim-events-find-wrong-event",
-      "batch": "v8-tool-assets-anim-events",
-      "what": "Looking up an event sound returns another event's sound",
-      "file": "apps/object_fps_pvp/src/Pvp/SoundCues.cpp",
-      "find": "        if (sound.event == event) return &sound;",
-      "replace": "        if (sound.event != event) return &sound;",
-      "check": "cpu",
-      "expect": "REQUIRE\\( magazine \\) is NOT correct"
+      "id": "es-migrate-checked-against-own-id",
+      "batch": "v8-product-event-sounds-migrate",
+      "what": "The weapon checks its event sounds against their own anim_events id",
+      "file": "apps/object_fps_pvp/src/App/WeaponPresentationDefinition.cpp",
+      "find": "                    config.at(\"animation_events_asset_id\").get<std::string>(), soundsError);",
+      "replace": "                    nlohmann::json::parse(soundsText->text).at(\"animation_events_asset_id\").get<std::string>(), soundsError);",
+      "check": "presentation",
+      "expect": "object_fps_pvp\\.anim_events\\.other\"; \\}\\)"
     },
     {
       "id": "anim-events-other-model-accepted",

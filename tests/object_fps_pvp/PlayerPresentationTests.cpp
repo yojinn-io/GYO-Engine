@@ -2,6 +2,7 @@
 
 #include "PresentationLegacyMath.hpp"
 #include "RetroFPS/App/WeaponPresentationDefinition.hpp"
+#include "RetroFPS/Pvp/Combat.hpp"
 #include "RetroFPS/Pvp/Movement.hpp"
 #include "RetroFPS/Pvp/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/PvpApplication.hpp"
@@ -31,6 +32,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <optional>
 #include <set>
 #include <numbers>
@@ -1194,6 +1196,54 @@ TEST_CASE("production weapon binds its reload animation events within the reload
     for (const auto& event : reload) CHECK(event.seconds <= duration);
     CHECK(std::any_of(reload.begin(), reload.end(), [](const auto& event) { return event.name == "magazine_in"; }));
     CHECK(definition->events[0].empty());
+}
+
+TEST_CASE("E1/E3: production weapon loads its event sounds and schedules the reload sound as before") {
+    // v8-product-event-sounds-migrate: the loader the Client uses reads the
+    // weapon's gyo.event_sounds; sfx.json version 2 played magazine_in's reload
+    // cue (volume 0.8, centred) at event x (action / clip) - 0.33 s.
+    PresentationAssets fixture;
+    std::string error;
+    const auto definition = fps::LoadWeaponPresentationDefinition(
+        fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error);
+    REQUIRE_MESSAGE(definition, error);
+    REQUIRE(definition->eventSounds);
+    CHECK(definition->eventSounds->sounds.animationEventsAssetId == "object_fps_pvp.anim_events.nailer_v2.viewmodel");
+    const auto bound = fps::BindWeaponEventSounds(*definition->eventSounds,
+        [](std::string_view id) -> std::optional<double> {
+            return id == "object_fps_pvp.audio.gun_reload" ? std::optional<double>(1.0) : std::nullopt;
+        }, error);
+    REQUIRE_MESSAGE(bound, error);
+    const auto* magazine = bound->Find("magazine_in");
+    REQUIRE(magazine);
+    CHECK(magazine->soundAssetId == "object_fps_pvp.audio.gun_reload");
+    const double clip = definition->model->clips[definition->clips[2]].durationSeconds; // Reload
+    const double ReloadSeconds = static_cast<double>(fps::pvp::CombatRules{}.reloadTicks) / fps::pvp::AuthorityTickRate;
+    std::size_t scheduled = 0;
+    for (const auto& event : definition->events[2]) {
+        const auto* sound = bound->Find(event.name);
+        if (!sound) continue;
+        const auto play = fps::ScheduleEventSound(*sound, event.seconds, clip, ReloadSeconds, 0.25);
+        REQUIRE(play);
+        CHECK(play->secondsFromNow == doctest::Approx(event.seconds * (ReloadSeconds / clip) - 0.33 - 0.25));
+        CHECK(play->gain == 0.8F);
+        ++scheduled;
+    }
+    CHECK(scheduled == 1);
+}
+
+TEST_CASE("E2: weapon presentation refuses event sounds written for other animation events") {
+    const auto rejected = [](auto edit) {
+        PresentationAssets fixture;
+        fixture.Override("object_fps_pvp.event_sounds.nailer_v2.viewmodel", edit);
+        std::string error;
+        CHECK_FALSE(fps::LoadWeaponPresentationDefinition(
+            fixture.assets, Engine::Asset::AssetId::FromString("object_fps_pvp.weapon.nailer_v2"), error));
+        return error;
+    };
+    CHECK(rejected([](nlohmann::json& json) { json["animation_events_asset_id"] = "object_fps_pvp.anim_events.other"; })
+              .find("object_fps_pvp.anim_events.other") != std::string::npos);
+    CHECK(rejected([](nlohmann::json& json) { json["version"] = 2; }).find("InvalidEventSounds") != std::string::npos);
 }
 
 TEST_CASE("weapon presentation rejects animation events of another model or a missing clip") {

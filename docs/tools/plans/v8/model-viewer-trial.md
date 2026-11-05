@@ -80,3 +80,9 @@ audio_editor 在它自己那條線的工作樹裡已經建好（[PR #141](https:
 - 從檔案看得到的：第 3 項的存檔有作用。`magazine_in` 從 2.35 s 改成了 1.8870078722635908 s，其他內容沒有變。你決定保留（2026-11-04，「保留 1.887」），和本記錄同一條 PR 提交。
 - 第 5 項的「遊戲裡聽到」做不到（PvP 不讀 `gyo.event_sounds`）。
 - audio_editor 的邊界你還在想：要加更多功能，或者只做轉換、把編輯交給外部工具。所以和 audio_editor 一起的那部分試用，留到你決定之後。
+
+### 2026-11-05 補記
+
+- master 併進分支後的狀態：#149（`v8-product-event-sounds-migrate`）合併後，PvP 改從 `gyo.event_sounds` 讀換彈聲，上面「第 5 項做不到」的限制已經不成立。
+- audio_editor 的邊界你已定為簡單剪輯與轉換（`v8-tool-audio-editor-scope`，記在 HANDOFF）。
+- 和 audio_editor 一起的那部分試用（第 5 項）沒有做，留到之後。

@@ -1,4 +1,4 @@
-add_executable(gyo_audio_editor_core_tests AudioEditorCoreTests.cpp)
+add_executable(gyo_audio_editor_core_tests AudioEditorCoreTests.cpp AudioEditorEditTests.cpp)
 target_compile_features(gyo_audio_editor_core_tests PRIVATE cxx_std_20)
 # GYO::Engine and GYO::Audio only for the guard of Design Invariant 2: the
 # converted clip loads through SoundLoader and ClipBank.

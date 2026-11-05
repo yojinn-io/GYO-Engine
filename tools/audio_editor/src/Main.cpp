@@ -1,3 +1,4 @@
+#include "gyo/audio_editor/AudioEditorGui.hpp"
 #include "gyo/audio_editor/SoundExport.hpp"
 #include "gyo/audio_editor/WavFile.hpp"
 
@@ -23,11 +24,14 @@ using namespace Gyo::Tools::AudioEditor;
 
 constexpr std::string_view kHelp =
     "Usage:\n"
+    "  gyo_audio_editor edit [<project.json> | <source.wav>]\n"
     "  gyo_audio_editor info <source.wav>\n"
     "  gyo_audio_editor convert <source.wav> --asset-root <dir> --asset-catalog <catalog.json>\n"
     "                            --id <asset id> --path <path in the asset root>\n"
     "  gyo_audio_editor --help\n"
     "\n"
+    "edit opens the editor's window: playback, waveform, trim, gain, the project\n"
+    "file and export.\n"
     "convert writes the source as a clip of the engine's format into the asset root\n"
     "and adds or updates its \"sound\" entry in the catalog. The source is only read.\n"
     "Exit status: 0 done, 2 usage, 3 a file could not be read or written,\n"
@@ -53,7 +57,7 @@ int Info(const std::string& path) {
         std::cerr << "error: cannot open " << path << ": " << Engine::Base::Describe(uri.error()) << '\n';
         return 3;
     }
-    // The same limit as conversion (SoundExport.cpp).
+    // The same limit as conversion (src/FileAccess.hpp).
     Engine::IO::Helpers::ReadAllOptions read;
     read.maxBytes = 64U * 1024U * 1024U;
     const auto whole = Engine::IO::Helpers::ReadAllBytes(files, uri.value(), read);
@@ -137,6 +141,11 @@ int Run(const std::span<const std::string> arguments) {
         return Info(arguments[2]);
     }
     if (command == "convert") return Convert(arguments);
+    if (command == "edit") {
+        if (arguments.size() > 3) return Usage("edit takes at most one file");
+        if (arguments.size() == 3 && arguments[2].starts_with("--")) return Usage("unexpected argument " + arguments[2]);
+        return RunAudioEditorGui(arguments.size() == 3 ? arguments[2] : std::string());
+    }
     return Usage("unknown command " + std::string(command));
 }
 

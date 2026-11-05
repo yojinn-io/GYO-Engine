@@ -60,3 +60,53 @@ repair or rebuild the editor.
   sequencer.
 - Registering a sound requires editing a product's own JSON.
 - Formats other than WAV must be read, which needs decoders.
+
+## Editing and preview
+
+`gyo_audio_editor edit [<project.json> | <source.wav>]` opens the window
+(`v8-tool-audio-editor-edit`); `info` and `convert` stay command-line only.
+
+- **Settings** (`Edit.hpp`): a trim in the source's own frames (start, and an
+  end or "to the source's end") and a gain in dB, from -60 to +24. A trim that
+  keeps no frame, before or after resampling, is refused (`InvalidSettings`),
+  so export never writes a clip the engine's `ClipBank` refuses.
+- **One render** (`RenderClip`): trim, gain (`x * 10^(dB / 20)`), resample,
+  quantize. Export and the preview both call it with the same dither seed (the
+  id's), so the preview's samples are export's data chunk (Design Invariant 6).
+  The default settings give the bytes `convert` gave before.
+- **Preview** (`PreviewPlayer.hpp`): plays on a `GYO::Audio` mixer opened through
+  `SdlAudioOutput`, one clip at a time, at gain 1; the preview volume is the
+  mixer's master gain. The mixer has two clip slots and no schedule delay, so a
+  stop and an unload take effect in the block that takes them and a new clip
+  that finds no free slot starts after the next block. The position shown is
+  the mixer's `PlayheadOf`, for display only (`GYO::Audio` Design Invariant 4).
+  Without an audio device the editor still edits and exports; nothing is heard.
+- **Waveform** (`Waveform.hpp`): the extremes of each column's samples, drawn
+  with the gain applied so clipping shows; outside the trim is dimmed.
+- **Window**: the framework's ImGui shell (`RunImGuiShell`); its context lends
+  Engine's platform, whose path dialogs open WAVs, projects, the asset root and
+  the catalog. The editor reaches `GYO::PlatformSDL` only through that binding's
+  public interface and does not name the target. Only the latest dialog's answer counts; a Failed answer does not
+  end the wait (platform-sdl Design Invariant 10).
+
+## Project file
+
+The editor's own format (Design Invariants 4 and 5); the game never reads it,
+and only the editor writes it, so it is not a Data Contract with the runtime.
+A UTF-8 JSON object with exactly these fields:
+
+| Field | Value |
+|---|---|
+| `format` | `"gyo.audio_editor.project"` |
+| `version` | `1`; another version is refused |
+| `source` | the source WAV, as it was opened (UTF-8) |
+| `asset_root`, `asset_catalog` | where export writes, as for `convert` |
+| `id`, `path` | the catalog entry |
+| `trim_start` | first source frame kept |
+| `trim_end` | one past the last frame kept, or `null` for the source's end |
+| `gain_db` | the gain, written with every digit it needs |
+
+The same project always gives the same text. A file with other fields, a field
+of another type or another `format` is refused (`InvalidProject`); saving it
+inside its own asset root is refused too. The settings are checked against the
+source when it is opened and again on export.

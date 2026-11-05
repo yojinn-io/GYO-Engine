@@ -20,6 +20,8 @@ enum class AudioEditorErrorCode : std::uint8_t {
     UnsupportedFormat,   // a WAV, but a sample format or channel count the editor does not convert
     InvalidCatalog,      // the mounted catalog does not satisfy the content contract
     InvalidRegistration, // the id or path cannot be registered in that catalog
+    InvalidSettings,     // a trim or gain the editor does not apply
+    InvalidProject,      // a project file the editor does not read, or may not write there
 };
 
 [[nodiscard]] constexpr const char* ToString(const AudioEditorErrorCode code) noexcept {
@@ -30,6 +32,8 @@ enum class AudioEditorErrorCode : std::uint8_t {
     case AudioEditorErrorCode::UnsupportedFormat: return "UnsupportedFormat";
     case AudioEditorErrorCode::InvalidCatalog: return "InvalidCatalog";
     case AudioEditorErrorCode::InvalidRegistration: return "InvalidRegistration";
+    case AudioEditorErrorCode::InvalidSettings: return "InvalidSettings";
+    case AudioEditorErrorCode::InvalidProject: return "InvalidProject";
     }
     return "Unknown";
 }
