@@ -112,6 +112,122 @@ v8-tool-voxel-map-editor
 - 順序：contract → core →（framework）→ window → arena-v2 → trial。framework 那批可以在 #146 合併後和 core 並行。
 - 每批都屬於 Architecture Delta：開始前讀該 owner 的 Design Invariants，事前宣告寫明 Delta，並取得使用者同意（AGENTS §3）。Render 和 Collision 沒有 Design Invariants 文件；本線不改它們的介面，如果之後要改，得先補文件。
 
+## v8-engine-voxel-mesh-contract 的事前宣告
+
+2026-11-05 寫，**要使用者核准後才實作**。結果出來之後，判定不放寬（AGENTS §14.1）。
+
+- **分支**：沿用本線的 PR #152（`claude/v8-tool-voxel-map-plan`），一條功能線一個 PR。
+- **重估**：8～12 h，和計畫相同。
+- **段**：上段（新 Subsystem、Data Contract）。
+- **實作**：主會話，Opus 5.5／high。
+- **審查**：子 Agent，Opus 5.5／high（審查者）。
+- **驗證者**：這批沒有放寬既有判定（§14.4），所以不需要。
+
+### 範圍
+
+- **做**：
+  - Engine 新模組：產物的解析、驗證、四邊形展開、1/16 換算、調色盤貼圖、碰撞 AABB；
+  - Design Invariants 文件、規則測試、相關突變。
+- **不做**：
+  - 工具的寫出端（core 批）；
+  - 產品的載入與 catalog（arena-v2 批）；
+  - 繪製與碰撞的接線。
+
+### Architecture Delta（AGENTS §3）
+
+1. **為什麼需要**：`v8-tool-voxel-offline-build` 定了「遊戲只讀產物」，`v8-tool-voxel-layers` 定了產物格式歸 Engine。Client、Match 和工具（寫出後讀回）都要用同一個驗證者。
+2. **現況的問題**：Engine 沒有任何「靜態地圖幾何」的資產格式。arena v1 的 `walls` 是產品格式，沒有繪製資料。
+3. **變化的邊界**：Engine 多一個資產格式和它的讀取器。
+4. **影響範圍**：Engine（新模組）。之後的工具和產品會依賴它，但這一批不改它們。
+5. **依賴方向**：新模組 → `GYO::Base`、`GYO::Math`（PUBLIC）、nlohmann（PRIVATE）。不依賴 Render、Collision、Asset、產品。`Engine::Math::Aabb` 在 Math（`engine/math/include/engine/math/geometry/Aabb.hpp:11`），所以 Match 不帶 Render 也能連結。
+6. **Ownership**：格式和驗證歸 Engine，寫出和 build 的決定（剔除、合併、亮度）歸工具。
+7. **為什麼沒有更小的做法**：如果放進產品，工具就得持有一份規則的副本（違反 `v8-tool-voxel-layers`）；如果沿用 FBX，repo 裡沒有寫出器（`UfbxModelLoader.cpp:228`）。
+
+### 名稱（請一併核准）
+
+- 格式 `gyo.voxel_mesh`。
+- 模組 `engine/voxel_mesh/`，target `GYO::VoxelMesh`，標頭 `engine/voxel_mesh/VoxelMesh.hpp`，命名空間 `Engine::VoxelMesh`。
+- 文件 `docs/architecture/voxel-mesh.md`。
+- catalog type 由產品批登錄，這一批不定。
+
+### 格式 version 1（草案；實作時如有修改，會在審查前回報）
+
+```json
+{
+  "schema": "gyo.voxel_mesh",
+  "version": 1,
+  "source_sha256": "<64 個小寫十六進位字元>",
+  "build_version": "voxel_map_editor 1",
+  "origin": [-1, 0, -1],
+  "cell_size": 1.0,
+  "palette": [
+    { "name": "wall", "faces": [[r,g,b,a], …6 組，順序 +X −X +Y −Y +Z −Z] }
+  ],
+  "quads": [[x, y, z, dir, w, h, palette], …],
+  "colliders": [{ "min": [x, y, z], "max": [x, y, z] }, …]
+}
+```
+
+- **座標**：`quads` 和 `colliders` 用整數，單位是 1/16 格，相對於 `origin`。`origin` 以格為單位。
+- **世界座標**：`float(q + 16×origin) × cell_size / 16`。整數相加是精確的；轉成 float 時，絕對值 ≤ 2^20 也是精確的；乘法捨入一次；除以 16 是精確的（2 的冪）。所以各平台結果逐位元相同。
+- **`dir`**：0～5，依序是 +X −X +Y −Y +Z −Z。`(x, y, z)` 是面的最小角。
+- **`w`／`h`**：面的兩個邊長，沿面內的兩軸，依序是 X 面 (Z, Y)、Y 面 (X, Z)、Z 面 (X, Y)。
+- **面的位置**：正向的面（+X 等）位在 `x` 這個平面；負向的面也位在 `x`，法線朝外。
+- **調色盤的亮度**：每個條目有 6 個面方向的顏色（sRGB 8 bit）。亮度由工具決定，Engine 不帶美術判斷。
+
+### 驗證規則（每條在測試裡各自一組，任何違反都是 Runtime Error，細節是出錯值的路徑）
+
+1. 文件是一個 JSON 物件，欄位剛好是上面 9 個；任何物件的 key 都不能重複。
+2. `schema` 是 `"gyo.voxel_mesh"`，`version` 是整數 1。
+3. `source_sha256` 是 64 個小寫十六進位字元；`build_version` 是 1～64 字元的可印 ASCII。
+4. `origin` 是 3 個整數；`cell_size` 是有限的正數。
+5. `palette` 有 1～256 個條目；`name` 是 1～64 字元的 `a`–`z`、`0`–`9`、`_`、`.`，且不重複；`faces` 剛好 6 組，每組 4 個 0～255 的整數。
+6. `quads` 至少一筆。每筆剛好 7 個整數：`dir` 0～5，`w`、`h` ≥ 1，`palette` 小於條目數。
+7. `colliders` 可以是空的。每筆剛好有 `min`、`max`，各 3 個整數，每軸 `min < max`。
+8. 範圍：每個頂點與角加上 `16×origin` 之後，絕對值 ≤ 2^20。
+9. 正規形：`quads` 依 7 個整數的字典序嚴格遞增，所以不會重複；`colliders` 依 (min, max) 的字典序嚴格遞增。
+10. 文字大小 ≤ 16 MiB（解析前檢查）。
+
+### 介面（草案）
+
+- `ParseVoxelMesh(std::string_view text)` → `Base::Result<VoxelMeshDocument, VoxelMeshError>`：整數形式，規則 1～10。
+- `ExpandVoxelMesh(const VoxelMeshDocument&)` → `VoxelMeshGeometry`：不會失敗，因為輸入已經驗證過。
+  - `vertices`（`Math::Vec3 position`、`Math::Vec2 uv`）、`indices`（`uint32`）：每個面固定 4 個頂點、6 個索引，順序依 `quads`。
+  - 從外側看是順時針（`RenderDeviceTypes.hpp:28-29`：GYO 的正面是順時針）。
+  - `paletteImage`：寬＝條目數，高＝6（列＝`dir`），RGBA8，sRGB。UV 取該格的中心 `((p+0.5)/W, (dir+0.5)/6)`（Render 只有 Linear 取樣，`RenderTypes.hpp:84-87`）。
+  - `colliders`：`std::vector<Math::Aabb>`。
+- 不提供 `MeshView`／`ImageView`：Engine 的格式不依賴 Render，由使用端轉換。
+
+### Design Invariants（草案，寫進 `docs/architecture/voxel-mesh.md`）
+
+1. **中立**：格式和模組只知道面、顏色、盒子和不透明的名稱。不知道方塊、形狀、朝向、出生點、產品。連結只有 Base、Math 和 PRIVATE 的 JSON。守衛：configure 時的連結檢查（比照 `gyo_expect_model_links`）。
+2. **不做 build**：Engine 只展開、只換算，不剔除、不合併、不決定亮度。這些都是工具的事。守衛：審查；介面上只有 Parse 和 Expand。
+3. **一個驗證者**：檔案是否合法，只由 `ParseVoxelMesh` 決定，和檔案是誰寫的無關。工具寫出後要用它讀回。守衛：規則測試加突變。
+4. **嚴格**：未知的 schema、version、欄位，重複的 key，非正規的順序，超出範圍的值，一律是錯誤，不忽略、不修正。守衛：同上。
+5. **確定**：同一份文件，在每個平台展開出逐位元相同的 float。守衛：黃金值測試，比對 float 的位元。
+
+### Replacement Criteria（草案）
+
+1. 碰撞需要 AABB 以外的形狀（B2 斜坡）。
+2. 面需要非軸向，或需要每頂點的屬性（AO、法線）。
+3. 載入或碰撞查詢量到壓力，需要依區塊切分或空間索引。
+4. 工具每加一個功能，就得重新驗證這些規則。
+
+### 判定（現在固定）
+
+| 判定 | 內容 | 通過條件 |
+|---|---|---|
+| V1 | 規則 1～10 各一組測試（合法的最小文件也算） | 全部通過 |
+| V2 | 展開的黃金值：一個 +Y 面、一個 −X 面、一個 w=3 h=2 的 +Z 面，比對頂點、索引、UV 的 float 位元 | 位元相同 |
+| V3 | 換算的黃金值：`cell_size` 1.0 和 0.3、`origin` 為負、範圍邊界 ±2^20，比對 float 位元 | 位元相同，邊界外拒絕 |
+| V4 | 連結守衛：configure 時檢查模組只連 Base、Math、nlohmann | 通過；守衛的突變被殺死 |
+| V5 | 宣告的突變（`docs/tools/plans/v8/scripts/voxel_mesh_mutations.json`，至少 10 條：重複 key 被接受、未知欄位被忽略、version 2 被接受、sha 長度不檢查、faces 少一組被接受、`dir` 6 被接受、`w`=0 被接受、正規順序不檢查、範圍不檢查、winding 反轉、UV 不取中心、換算少除以 16） | 全部 killed（被預期的測試以預期的訊息擋下） |
+| V6 | L1：三個平台的 cpu\|shader | 綠 |
+
+- 判定 V1～V5 在本機 macOS 跑。
+- 證據放主 checkout 的 `build/evidence/tool-v8-voxel-map/engine-contract/`。
+- 沒有 L2、L3。
+
 ## 風險
 
 - **格子出現第二個讀者**（例如場景編輯器要在格子上擺東西）：格子就要升到 Engine，等於再搬一次契約。寫進工具的 Replacement Criteria。
