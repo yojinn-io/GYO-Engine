@@ -429,7 +429,7 @@ set_target_properties(${digest_o0} PROPERTIES CXX_EXTENSIONS OFF)
 target_include_directories(${digest_o0} PRIVATE "${digest_app_root}/include")
 gyo_use_app_config(${digest_o0} "${GYO_CURRENT_APP}")
 target_compile_definitions(${digest_o0} PRIVATE ${digest_arena_definitions})
-target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::Collision GYO::Threads GYO::Trace GYO::Os
+target_link_libraries(${digest_o0} PRIVATE GYO::Engine GYO::Math GYO::EntityStore GYO::Collision GYO::Threads GYO::Trace GYO::Os
     nlohmann_json::nlohmann_json)
 # Appended after the configuration's flags, so the last optimisation flag wins.
 target_compile_options(${digest_o0} PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/Od,-O0>)

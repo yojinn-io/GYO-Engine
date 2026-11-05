@@ -8,6 +8,12 @@
       ],
       "ctest": "object_fps_pvp.cpu"
     },
+    "engine_entity_store": {
+      "build": [
+        "gyo_entity_store_tests"
+      ],
+      "ctest": "gyo_entity_store_tests"
+    },
     "worker": {
       "build": [
         "gyo_object_fps_pvp_worker_probe"
@@ -8835,21 +8841,21 @@
       "id": "entity-split-insert-appends",
       "batch": "v8-product-match-entity-split",
       "what": "InsertEntity appends instead of inserting at the ordered position (M1)",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
       "find": "    return *column.insert(position, std::move(value));",
       "replace": "    static_cast<void>(position);\n    column.push_back(std::move(value));\n    return column.back();",
-      "check": "cpu",
-      "expect": "Entity columns insert|EntityColumnsStayOrdered|GYO_ASSERT failed"
+      "check": "engine_entity_store",
+      "expect": "Entity store insert: the ordered position"
     },
     {
       "id": "entity-split-erase-swap-and-pop",
       "batch": "v8-product-match-entity-split",
       "what": "EraseEntity moves the last element into the hole (M2)",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
       "find": "    column.erase(position);\n    return true;",
       "replace": "    *position = std::move(column.back());\n    column.pop_back();\n    return true;",
-      "check": "cpu",
-      "expect": "Entity columns erase|EntityColumnsStayOrdered|GYO_ASSERT failed"
+      "check": "engine_entity_store",
+      "expect": "Entity store erase: keeps the order"
     },
     {
       "id": "entity-split-erase-skips-animations",
