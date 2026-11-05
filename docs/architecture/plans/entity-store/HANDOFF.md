@@ -1,6 +1,6 @@
 # 實體容器（entity store）：交接
 
-更新：2026-11-05。**狀態：batch 2 核准（2026-11-05，§7 全照建議）；batch 3a `v8-arch-entity-store-impl` 待驗收事前宣告的承認。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
+更新：2026-11-05。**狀態：batch 2 核准（2026-11-05，§7 全照建議）；batch 3a `v8-arch-entity-store-impl-3a` 進行中（事前宣告已承認 2026-11-05）。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。
 
 ## 代號對照
@@ -35,6 +35,7 @@
 - 2026-11-05：使用者「全照建議核准」（見「決策」）。契約與 delta 的狀態改為已核准；推送分支、開 PR [#156](https://github.com/yojinn-io/GYO-Engine/pull/156)（草稿；batch 1～2 文件，3a 的程式與圖書管理員的 architecture.md 修改進同一 PR）；已通知圖書管理員會話（請它先讀 delta §5 與契約，等 3a 程式進分支後再改 architecture.md，用「3a 版」）。下一步：提出 batch 3a 的驗收事前宣告，取得承認後開始。
 - 2026-11-05：寫 batch 3a 的[驗收事前宣告](impl-3a-declaration.zh-Hant.md)（7 項判定、範圍、模型／檔位、估時 9～13 h），停下等使用者承認；檢證者 Fable 5.1 也在此一併請示。
 - 2026-11-05：圖書管理員回覆：delta §5 三段無異議、連結存在、3a 版通順；提兩點：`docs/creating_apps.md:41` 公開 target 清單要加 `GYO::EntityStore`（決定：由它在同一 commit 一起改）；契約狀態句在 3a 合併時要更新（決定：納入 3a 範圍）。已回覆。
+- 2026-11-05：使用者「承認，開始 3a」（事前宣告 7 項判定、檢證者 Fable 5.1 一併承認）。開始：實作者 Opus 5.5／high。
 
 ## 未結事項
 

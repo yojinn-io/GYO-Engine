@@ -1,6 +1,6 @@
 # v8-arch-entity-store-impl-3a：驗收的事前宣告
 
-更新：2026-11-05。Owner：Engine（架構）。**狀態：草稿，待使用者承認（AGENTS §14.1：判定在看結果前宣告並取得承認；結果出來後不放寬）。**
+更新：2026-11-05。Owner：Engine（架構）。**狀態：已承認（2026-11-05，使用者「承認，開始 3a」，含檢證者 Fable 5.1）。判定在看結果前宣告並取得承認；結果出來後不放寬（AGENTS §14.1）。**
 依據：[delta §7 第 9 項](delta.zh-Hant.md)（已核准的內容）、entity-model §9.2 的方法（件數對照與 compare 的用法）、[契約 Guard 節](../../entity-store.md)。
 
 ## 範圍
