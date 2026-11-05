@@ -46,3 +46,9 @@
   - (b) 線性掃（每情境 2,000 次）：20,691 盒時一位玩家一步 地面 1.20 ms／空中 2.28 ms，一槍 0.29 ms；×5、×25 時每盒成本固定（約 60／112／15 ns），確認線性。
   - (c) 解析（各 10 次，中位數）：SAX 掃描 75 ms、建 DOM 149 ms、建 DOM＋重複鍵回呼 1,278 ms、空回呼 1,268 ms、SAX＋重複鍵 77 ms、`ParseVoxelMesh` 1,403 ms、展開 5 ms。
     慢的是 nlohmann 回呼式解析的機制，不是 JSON 也不是重複鍵檢查。
+- 2026-11-06 使用者同意對抗檢查者用 Fable／xhigh（比主會話 Opus 5.5 強，照計畫先問）。
+- 九項參照：開三個子 Agent（general-purpose、Opus 5.5 繼承、high 繼承）讀主要來源，只回事實與來源；判定由調查者（主會話）做。
+  分工：R1 Minecraft／Luanti／Veloren；R2 Godot GridMap／UE5 World Partition／Jolt・Bullet broadphase；R3 塔科夫／標記層／greedy 與 LOD。
+- 2026-11-06 三份子 Agent 報告收齊（存於 `build/evidence/big-map/survey/sources/`）。survey 本文寫完：九項參照表、proposal §3 的修正、六個未決事項、量測、RC 候選、範圍限界。
+  重要修正：Jolt 明寫 broadphase 查詢非決定性（v0.1 的等價契約是 GYO 自己要立的）；塔科夫「伺服器全圖模擬 AI」未確認，社群資料顯示 bot 依距離睡眠；Veloren 玩家物理預設 Client 權威。
+  下一步：對抗檢查（Fable／xhigh）。
