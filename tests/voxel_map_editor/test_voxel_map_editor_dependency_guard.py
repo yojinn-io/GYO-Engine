@@ -74,6 +74,9 @@ class VoxelMapEditorDependencyGuardTests(unittest.TestCase):
             f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links GYO::Render",
             f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links imgui::core",
             f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor links GYO::PlatformSDL",
+            f"{TOOL}/CMakeLists.txt: names GYO::Render outside the window's links",
+            f"{TOOL}/CMakeLists.txt: names imgui::core outside the window's links",
+            f"{TOOL}/CMakeLists.txt: names GYO::PlatformSDL outside the window's links",
         ]))
 
     def test_sdl_and_native_targets_fail_everywhere(self):
@@ -81,6 +84,87 @@ class VoxelMapEditorDependencyGuardTests(unittest.TestCase):
                                                         "SDL3::SDL3 GYO::RenderBackendSDLNative)\n"})
         # Each is named outside both lists and linked outside the window's list.
         self.assertEqual(len(findings), 4)
+
+    def test_hidden_ways_round_the_lists_fail(self):
+        # Found by the §14.4 verifier: each passed the first split guard.
+        findings = self.scan({
+            f"{TOOL}/src/window/W.cpp": '#include "gyo/framework/imgui/XNative.hpp"\n'
+                                        '#include "gyo/framework/imgui/imgui_internal.h"\n'
+                                        '#include "gyo/framework/imgui/backends/imgui_impl_sdl3.h"\n'
+                                        '#include "window/../SDL3/SDL.h"\n'
+                                        '#include "engine/../SomeGame/World.hpp"\n',
+            f"{TOOL}/CMakeLists.txt": "link_libraries(GYO::Render)\n"
+                                      "set_property(TARGET gyo_voxel_map_editor_core APPEND PROPERTY "
+                                      "INTERFACE_LINK_LIBRARIES GYO::PlatformSDL)\n"
+                                      "set(_v imgui::core)\n"
+                                      "target_link_libraries(gyo_voxel_map_editor_core PRIVATE "
+                                      "$<TARGET_NAME:GYO::ToolFrameworkImGui>)\n"
+                                      "target_link_libraries(gyo_voxel_map_editor_core PUBLIC gyo_voxel_map_editor_window)\n"
+                                      "foreach(_target IN ITEMS GYO::ToolFrameworkPreview)\nendforeach()\n"
+                                      "target_link_libraries(gyo_voxel_map_editor_window PRIVATE GYO::RenderBackendSDL)\n"
+                                      "target_link_libraries(gyo_voxel_map_editor PRIVATE gyo_voxel_map_editor_window)\n"})
+        self.assertEqual(sorted(findings), sorted([
+            f"{TOOL}/src/window/W.cpp: includes gyo/framework/imgui/XNative.hpp",
+            f"{TOOL}/src/window/W.cpp: includes gyo/framework/imgui/imgui_internal.h",
+            f"{TOOL}/src/window/W.cpp: includes gyo/framework/imgui/backends/imgui_impl_sdl3.h",
+            f"{TOOL}/src/window/W.cpp: includes window/../SDL3/SDL.h",
+            f"{TOOL}/src/window/W.cpp: includes engine/../SomeGame/World.hpp",
+            f"{TOOL}/CMakeLists.txt: names GYO::Render outside the window's links",
+            f"{TOOL}/CMakeLists.txt: names GYO::PlatformSDL outside the window's links",
+            f"{TOOL}/CMakeLists.txt: names imgui::core outside the window's links",
+            f"{TOOL}/CMakeLists.txt: names GYO::ToolFrameworkImGui outside the window's links",
+            f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links gyo_voxel_map_editor_window",
+            f"{TOOL}/CMakeLists.txt: names gyo_voxel_map_editor_window outside its own commands and the executable's links",
+            f"{TOOL}/CMakeLists.txt: links outside target_link_libraries",
+            f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links $<TARGET_NAME:GYO::ToolFrameworkImGui>, "
+            "not a literal name",
+        ]))
+
+    def test_links_only_by_literal_names(self):
+        # Found by the §14.4 verifier's second round.
+        findings = self.scan({f"{TOOL}/CMakeLists.txt":
+                              "foreach(_target IN ITEMS GYO::ToolFrameworkPreview)\n"
+                              "    target_link_libraries(gyo_voxel_map_editor_core PUBLIC ${_target})\n"
+                              "endforeach()\n"
+                              "target_link_libraries(gyo_voxel_map_editor_core PUBLIC $<TARGET_NAME:gyo_voxel_map_editor_window>)\n"
+                              "set_property(TARGET gyo_voxel_map_editor_core APPEND PROPERTY INTERFACE_LINK_LIBRARIES x)\n"
+                              'set(_x "#") link_libraries(GYO::Render)\n'})
+        self.assertEqual(sorted(findings), sorted([
+            f"{TOOL}/CMakeLists.txt: links outside target_link_libraries",
+            f"{TOOL}/CMakeLists.txt: names GYO::Render outside the window's links",
+            f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links ${{_target}}, not a literal name",
+            f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links $<TARGET_NAME:gyo_voxel_map_editor_window>, not a literal name",
+            f"{TOOL}/CMakeLists.txt: names gyo_voxel_map_editor_window outside its own commands and the executable's links",
+        ]))
+
+    def test_third_round_ways_round_the_lists_fail(self):
+        # Found by the §14.4 verifier's third round, and the pre-existing weaknesses it listed.
+        findings = self.scan({
+            f"{TOOL}/src/window/W.cpp": '#include "gyo/framework/imgui/XNATIVE.hpp"\n'
+                                        '#include "window\\..\\SDL3\\SDL.h"\n'
+                                        '#include "gyo/framework/imgui/./X.hpp"\n'
+                                        '#include "gyo/framework/imgui/backendsX.hpp"\n',
+            f"{TOOL}/src/Main.cpp": '#include "engine/render/RenderTypes.hpp"\n'
+                                    '#include "engine/platform/sdl/SdlPlatform.hpp"\n'
+                                    '#include "gyo/framework/Preview.hpp"\n',
+            f"{TOOL}/CMakeLists.txt":
+                "set_property(TARGET gyo_voxel_map_editor_core APPEND PROPERTY INTERFACE_LINK_LIBRARIES_DIRECT x)\n"
+                "target_sources(gyo_voxel_map_editor_core PRIVATE gyo_voxel_map_editor_window)\n"
+                "set(X [[#]]) target_link_libraries(gyo_voxel_map_editor_core PUBLIC GYO::Render)\n"
+                "target_link_options(gyo_voxel_map_editor_core PRIVATE -lSDL3)\n"})
+        self.assertEqual(sorted(findings), sorted([
+            f"{TOOL}/src/window/W.cpp: includes gyo/framework/imgui/XNATIVE.hpp",
+            f"{TOOL}/src/window/W.cpp: includes window\\..\\SDL3\\SDL.h",
+            f"{TOOL}/src/window/W.cpp: includes gyo/framework/imgui/./X.hpp",
+            f"{TOOL}/src/window/W.cpp: includes gyo/framework/imgui/backendsX.hpp",
+            f"{TOOL}/src/Main.cpp: includes engine/render/RenderTypes.hpp",
+            f"{TOOL}/src/Main.cpp: includes engine/platform/sdl/SdlPlatform.hpp",
+            f"{TOOL}/src/Main.cpp: includes gyo/framework/Preview.hpp",
+            f"{TOOL}/CMakeLists.txt: links outside target_link_libraries",
+            f"{TOOL}/CMakeLists.txt: names gyo_voxel_map_editor_window outside its own commands and the executable's links",
+            f"{TOOL}/CMakeLists.txt: names GYO::Render outside the window's links",
+            f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links GYO::Render",
+        ]))
 
     def test_game_include_and_plain_target_fail(self):
         findings = self.scan({f"{TOOL}/src/A.cpp": '#include "SomeGame/World.hpp"\n',

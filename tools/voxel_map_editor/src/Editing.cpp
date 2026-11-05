@@ -4,6 +4,7 @@
 #include "engine/math/linear/Vec2.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <span>
@@ -35,6 +36,13 @@ Result<void> CheckReadsBack(const GridDocument& document) {
     auto parsed = ParseGrid(WriteGrid(document));
     if (!parsed) return Engine::Base::Err(std::move(parsed).error());
     return {};
+}
+
+// floor(value) as a cell coordinate; nullopt when it is not finite or not an int32.
+std::optional<std::int32_t> FloorCell(const double value) {
+    const double floored = std::floor(value);
+    if (!std::isfinite(floored) || floored < -2147483648.0 || floored > 2147483647.0) return std::nullopt;
+    return static_cast<std::int32_t>(floored);
 }
 
 Math::Vec3 Unproject(const Math::Matrix4& inverse, const float x, const float y, const float z) {
@@ -69,7 +77,10 @@ bool EditSession::Modified() const noexcept {
     return !savedPosition_ || *savedPosition_ != position_ || (stroke_ && !stroke_->changes.empty());
 }
 
-void EditSession::MarkSaved() noexcept { savedPosition_ = position_; }
+void EditSession::MarkSaved() {
+    EndStroke();
+    savedPosition_ = position_;
+}
 
 void EditSession::BeginStroke() {
     if (!stroke_) stroke_.emplace();
@@ -79,6 +90,9 @@ void EditSession::EndStroke() {
     if (!stroke_) return;
     auto step = std::move(*stroke_);
     stroke_.reset();
+    // A cell set and set back in one drag is no change.
+    std::erase_if(step.changes, [](const CellChange& change) { return change.before == change.after; });
+    step.index.clear();
     if (!step.changes.empty()) Push(std::move(step));
 }
 
@@ -103,10 +117,12 @@ Result<void> EditSession::ApplyCell(const Vec3i& cell, Cell value) {
     const bool ownStroke = !stroke_;
     if (ownStroke) BeginStroke();
     auto& changes = stroke_->changes;
-    const auto earlier = std::find_if(changes.begin(), changes.end(),
-                                      [&](const CellChange& change) { return change.cell == cell; });
-    if (earlier != changes.end()) earlier->after = value;
-    else changes.push_back({cell, before, value});
+    if (const auto earlier = stroke_->index.find(cell); earlier != stroke_->index.end()) {
+        changes[earlier->second].after = value;
+    } else {
+        stroke_->index.emplace(cell, changes.size());
+        changes.push_back({cell, before, value});
+    }
     document_.Set(cell, value);
     ++revision_;
     if (ownStroke) EndStroke();
@@ -133,6 +149,10 @@ Result<void> EditSession::FillBox(const Vec3i& corner, const Vec3i& other, const
     }
     if (!CellInRange(document_, low) || !CellInRange(document_, high))
         return Refuse(VoxelMapErrorCode::InvalidGrid, "the box lies beyond +-2^16 cells");
+    std::int64_t cells = 1;
+    for (int axis = 0; axis < 3; ++axis) cells *= std::int64_t{high[axis]} - low[axis] + 1;
+    if (cells > MaxBoxCells)
+        return Refuse(VoxelMapErrorCode::InvalidGrid, "a box changes at most 2^20 cells");
     // Checked once, so a refused value changes no cell.
     if (value.block > document_.blocks.size() || value.orientation >= OrientationCount ||
         (value.block == 0 && value.orientation != 0))
@@ -292,7 +312,11 @@ std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const 
     std::array<double, 3> delta{};  // ray parameter across one cell on each axis
     constexpr double infinity = std::numeric_limits<double>::infinity();
     for (int axis = 0; axis < 3; ++axis) {
-        cell[axis] = static_cast<std::int32_t>(std::floor(origin[axis]));
+        if (!std::isfinite(direction[axis])) return std::nullopt;
+        const auto start = FloorCell(origin[axis]);
+        // Far beyond any cell (+-2^16), so the walk of maxCells cannot overflow.
+        if (!start || *start < -(1 << 30) || *start > (1 << 30)) return std::nullopt;
+        cell[axis] = *start;
         if (direction[axis] > 0.0) {
             step[axis] = 1;
             delta[axis] = 1.0 / direction[axis];
@@ -323,9 +347,12 @@ std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const 
     if (direction[1] == 0.0) return std::nullopt;
     const double face = direction[1] < 0.0 ? planeY + 1.0 : static_cast<double>(planeY);
     const double t = (face - origin[1]) / direction[1];
-    if (t < 0.0) return std::nullopt;
-    const Vec3i planeCell{static_cast<std::int32_t>(std::floor(origin[0] + t * direction[0])), planeY,
-                          static_cast<std::int32_t>(std::floor(origin[2] + t * direction[2]))};
+    // Not behind the ray, and not beyond maxCells along it (a ray near the horizon meets the plane far away).
+    if (!(t >= 0.0) || t > static_cast<double>(maxCells)) return std::nullopt;
+    const auto x = FloorCell(origin[0] + t * direction[0]);
+    const auto z = FloorCell(origin[2] + t * direction[2]);
+    if (!x || !z) return std::nullopt;
+    const Vec3i planeCell{*x, planeY, *z};
     if (!CellInRange(document, planeCell)) return std::nullopt;
     return PickHit{planeCell, {0, 0, 0}, true};
 }

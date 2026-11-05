@@ -132,6 +132,7 @@ public:
             return;
         }
         Shortcuts();
+        if (draftRevision_ != Session().Revision()) ReconcileDrafts();
         ImGui::BeginChild("side", ImVec2(380, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
         DrawFile();
         DrawTools();
@@ -200,7 +201,7 @@ private:
 
     void Shortcuts() {
         const ImGuiIO& io = ImGui::GetIO();
-        if (io.WantTextInput) return;
+        if (io.WantTextInput || promptOpen_) return;
         const bool command = io.KeyCtrl || io.KeySuper;
         if (command && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
             if (io.KeyShift) static_cast<void>(Session().Redo());
@@ -254,16 +255,32 @@ private:
         ImGui::TextDisabled("left: tool  right drag: orbit  middle drag: pan  wheel: zoom");
     }
 
+    // After a change: indices back in range (an undone "Add shape" leaves one
+    // past the end), and a draft reloaded only when what it was loaded from
+    // changed, so an unapplied draft survives painting.
+    void ReconcileDrafts() {
+        const auto& document = Document();
+        const bool blockGone = block_ == 0 || block_ > document.blocks.size() ||
+                               !(document.blocks[block_ - 1].name == blockSource_.name &&
+                                 document.blocks[block_ - 1].shape == blockSource_.shape &&
+                                 document.blocks[block_ - 1].color == blockSource_.color);
+        const bool shapeGone = shape_ >= document.shapes.size() ||
+                               !(document.shapes[shape_].name == shapeSource_.name &&
+                                 document.shapes[shape_].boxes == shapeSource_.boxes);
+        if (blockGone || shapeGone) LoadDrafts();
+        draftRevision_ = Session().Revision();
+    }
+
     // The fields of the selected block and shape, applied as one edit each.
     void LoadDrafts() {
         const auto& document = Document();
         if (block_ == 0 || block_ > document.blocks.size()) block_ = document.blocks.empty() ? 0 : 1;
         if (block_ != 0) {
-            blockDraft_ = document.blocks[block_ - 1];
+            blockDraft_ = blockSource_ = document.blocks[block_ - 1];
             for (std::size_t c = 0; c < 4; ++c) blockColor_[c] = static_cast<float>(blockDraft_.color[c]) / 255.0F;
         }
         if (shape_ >= document.shapes.size()) shape_ = 0;
-        if (!document.shapes.empty()) shapeDraft_ = document.shapes[shape_];
+        if (!document.shapes.empty()) shapeDraft_ = shapeSource_ = document.shapes[shape_];
         draftRevision_ = Session().Revision();
     }
 
@@ -359,7 +376,6 @@ private:
     // The preview: rebuilt when the grid changed, drawn every frame.
     void DrawPreview() {
         if (!previewError_.empty()) ImGui::TextColored(ImVec4(1, 0.4F, 0.4F, 1), "%s", previewError_.c_str());
-        if (draftRevision_ != Session().Revision()) LoadDrafts();
         if (!scene_) return;
         if (builtRevision_ != Session().Revision()) {
             builtRevision_ = Session().Revision();
@@ -456,6 +472,8 @@ private:
         case Tool::Place: {
             // A drag does not climb onto the cells it placed itself.
             if (block_ == 0 || (!hover_->onPlane && strokeCells_.contains(hover_->cell))) return;
+            // From inside a filled cell there is no face to place beside.
+            if (!hover_->onPlane && hover_->normal == Vec3i{0, 0, 0}) return;
             const Vec3i target = PlacementCell(*hover_);
             if (strokeCells_.contains(target)) return;
             Apply(Session().SetCell(target, brush));
@@ -481,6 +499,8 @@ private:
     }
 
     void EndEdit() {
+        if (boxStart_ && !planeHover_ && session_->InStroke())
+            status_ = "the box was not applied: release the button over the edit plane";
         if (boxStart_ && planeHover_ && session_->InStroke()) {
             Vec3i other = *planeHover_;
             other[1] = planeY_ + boxHeight_ - 1;
@@ -573,7 +593,8 @@ private:
             if (!ImGui::IsPopupOpen("Unsaved map")) ImGui::OpenPopup("Unsaved map");
             openClose_ = false;
         }
-        if (!ImGui::BeginPopupModal("Unsaved map", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
+        promptOpen_ = ImGui::BeginPopupModal("Unsaved map", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+        if (!promptOpen_) return;
         ImGui::TextUnformatted("The map has changes that are not saved.");
         if (ImGui::Button("Save and close")) {
             Save();
@@ -609,6 +630,8 @@ private:
     int planeY_{};
     int boxHeight_{1};
     Block blockDraft_;
+    Block blockSource_;
+    Shape shapeSource_;
     std::array<float, 4> blockColor_{};
     std::size_t shape_{};
     Shape shapeDraft_;
@@ -617,6 +640,7 @@ private:
     std::optional<Vec3i> boxStart_;
     std::set<Vec3i> strokeCells_;
     bool openClose_{};
+    bool promptOpen_{};
     bool wantsExit_{};
 };
 

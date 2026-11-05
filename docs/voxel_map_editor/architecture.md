@@ -143,15 +143,19 @@ A change against any item below is an Architecture Delta that needs the user's a
 1. **Dependencies.** The editor links no game and names no product. It has two parts.
    - The **core** (every file outside `src/window/`; the libraries `gyo_voxel_map_editor_core` and
      `gyo_voxel_map_editor`) uses Engine (`GYO::VoxelMesh`, engine/io, `GYO::Base`, `GYO::Math`), the framework's
-     headless shell and its own JSON parser. It includes no SDL or ImGui header (nor the framework's ImGui binding)
+     headless shell and its own JSON parser. It includes no SDL or ImGui header (nor the framework's ImGui binding),
+     no `engine/render/` or `engine/platform/` header and none of the framework's preview or window-shell headers,
      and links no SDL, ImGui, render, platform or `*Native` target; of the window it includes only the entry header
-     `window/EditorWindow.hpp`.
+     `window/EditorWindow.hpp`, and only the executable links the window's library (gui variant), which brings the
+     window's targets with it.
    - The **window** (`src/window/`, the library `gyo_voxel_map_editor_window`, gui variant only) may also use the
      framework's ImGui shell and offscreen preview (`GYO::ToolFrameworkImGui`, `GYO::ToolFrameworkPreview`), Engine's
      `GYO::Render`, `GYO::RenderBackendSDL`, `GYO::PlatformSDL`, and `imgui.h` (`imgui::core`). It still includes no
-     `SDL3/` header, uses no `SDL_` name, no `*Native` header or target, no `imgui_internal.h` or ImGui backend.
-   Guard: the dependency guard (`tests/voxel_map_editor/voxel_map_editor_dependency_guard.py`, a positive list per
-   part) and its self-test. (`v8-tool-voxel-map-editor-window`, user, 2026-11-06.)
+     `SDL3/` header, uses no `SDL_` name, no `*Native` header or target, no `imgui_internal.h` or ImGui backend; a
+     window-only target is named only in the window library's links and the gui variant's existence check.
+   Links are made only by `target_link_libraries` with literal names, and includes are plain forward-slash paths
+   without `.` or `..` steps, so the lists cannot be gone round. Guard: the dependency guard
+   (`tests/voxel_map_editor/voxel_map_editor_dependency_guard.py`, a positive list per part) and its self-test. (`v8-tool-voxel-map-editor-window`, user, 2026-11-06.)
 2. **One validator.** Whether a baked file is valid is decided by Engine's `ParseVoxelMesh` alone. The editor keeps
    no copy of its rules: it reads every text it bakes back through it and returns nothing Engine refuses. Guard:
    "build: what Engine refuses is not returned", the command-line test `build_refused`, and their mutants.
@@ -163,7 +167,8 @@ A change against any item below is an Architecture Delta that needs the user's a
    which compares whole quad lists (a cube, two cubes, a cube beside a slab) and a stair's two sides.
 5. **Writes only what it makes.** The baked file or the grid a command names; the window, the grid and the mesh its
    command line names. Each by atomic replace through engine/io, and the window never overwrites a file that changed
-   on disk since it was opened or saved. No catalog, product file or arena. Guard: the command-line test (refused
+   on disk since it was opened or saved; `measure-preview`, the CSV its command line names. No catalog, product file
+   or arena. Guard: the command-line test (refused
    inputs write nothing) and the save tests (W5).
 6. **The grid is the tool's.** `gyo.voxel_grid` has one reader, this tool; Engine knows no blocks, shapes or
    orientations (`voxel-mesh.md`, Design Invariant 1). Guard: review.

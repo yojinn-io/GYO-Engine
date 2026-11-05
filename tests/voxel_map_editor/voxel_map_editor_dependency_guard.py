@@ -16,6 +16,12 @@ The rule is a positive list, so no product is named here (AGENTS.md sections 7 a
   one;
 - every library a target_link_libraries call names is an allowed target of the linking target's part, or one of the
   tool's own (gyo_voxel_map_editor*), so a game's plain target name (gyo_app_add_library gives such names) fails too;
+  only the executable links the window's library; a window-only target is named only in the window library's links
+  and in the gui variant's existence check (not in link_libraries, a property, a variable or a generator expression);
+- links are made only by target_link_libraries with literal names (no variable, generator expression,
+  link_libraries or LINK_LIBRARIES property), so the existence check's loop variable cannot link;
+- a # inside a quoted CMake string is not a comment;
+- no include steps up with "..";
 - Design Invariant 6, neutral: no file names an id registered in engine/config/tools.csv or engine/config/projects.csv
   other than the tool's own.
 A new dependency fails until it is added here, which is the point: it changes the editor's Design Invariants.
@@ -43,6 +49,8 @@ CORE_INCLUDE_PREFIXES = ("gyo/voxel_map_editor/", "gyo/framework/", "engine/", "
 CORE_TARGETS = {"GYO::Base", "GYO::Engine", "GYO::Math", "GYO::VoxelMesh", "GYO::ToolFramework",
                 "nlohmann_json::nlohmann_json"}
 CORE_WINDOW_ENTRY = "window/EditorWindow.hpp"
+# What only the window may include: Engine's render and platform, and the framework's window-side headers.
+WINDOW_ONLY_INCLUDES = ("engine/render/", "engine/platform/", "gyo/framework/Preview", "gyo/framework/WindowShell")
 # The window: the framework's ImGui shell and offscreen preview (which bring Engine's render targets), shown as a
 # texture of Engine's SDL renderer (framework Design Invariant 5); imgui.h only.
 WINDOW_DIRECTORY = "src/window/"
@@ -51,8 +59,25 @@ WINDOW_TARGETS = CORE_TARGETS | {"GYO::ToolFrameworkPreview", "GYO::ToolFramewor
                                  "GYO::RenderBackendSDL", "GYO::PlatformSDL", "imgui::core"}
 WINDOW_LIBRARY = "gyo_voxel_map_editor_window"
 WINDOW_IMGUI_HEADER = "imgui.h"
-# The framework's ImGui binding (its shell): the window's, never the core's.
+# The framework's ImGui binding (its shell): the window's, never the core's; even there, no native, internal or
+# backend header.
 FRAMEWORK_IMGUI = "gyo/framework/imgui/"
+IMGUI_INTERNAL = "imgui_internal.h"
+# Only the executable links the window's library.
+WINDOW_LINKERS = {"gyo_voxel_map_editor"}
+# Where a window-only target may be named in the tool's CMake files: the window library's own links, and the gui
+# variant's existence check (a foreach over IN ITEMS). Anywhere else (another target's links, link_libraries,
+# a property, a variable, a generator expression) it fails.
+WINDOW_LINK_CALL = re.compile(r"target_link_libraries\s*\(\s*" + WINDOW_LIBRARY + r"\b[^)]*\)", re.IGNORECASE)
+OTHER_LINK = re.compile(r"(?<![A-Za-z_])link_libraries\s*\(|LINK_LIBRARIES\w*|link_options\s*\(|TARGET_OBJECTS", re.IGNORECASE)
+# Where the window library's name may stand: as the first argument of its own commands, in the executable's links,
+# and in the list of the tool's targets for the warning flags.
+COMMAND = re.compile(r"\b([A-Za-z_]\w*)\s*\(([^()]*)\)")
+WINDOW_OWN_COMMANDS = {"add_library", "target_link_libraries", "target_include_directories", "target_sources",
+                       "target_compile_options", "target_compile_definitions", "target_compile_features",
+                       "add_dependencies"}
+TOOL_TARGET_LIST = "_gyo_voxel_map_editor_targets"
+EXISTENCE_CHECK = re.compile(r"foreach\s*\(\s*_target\s+IN\s+ITEMS\b[^)]*\)", re.IGNORECASE)
 
 LINK_CALL = re.compile(r"target_link_libraries\s*\(([^)]*)\)", re.IGNORECASE)
 LINK_KEYWORDS = {"PUBLIC", "PRIVATE", "INTERFACE", "LINK_PUBLIC", "LINK_PRIVATE", "LINK_INTERFACE_LIBRARIES"}
@@ -60,7 +85,7 @@ OWN_TARGET = re.compile(r"^gyo_voxel_map_editor\w*$")
 REGISTRIES = ("engine/config/tools.csv", "engine/config/projects.csv")
 OWN_ID = "voxel_map_editor"
 
-ENGINE_NATIVE_HEADER = re.compile(r"/native/|Native\.(h|hh|hpp|hxx|inl)$")
+ENGINE_NATIVE_HEADER = re.compile(r"/native/|Native\.(h|hh|hpp|hxx|inl)$", re.IGNORECASE)
 IMGUI_HEADER = re.compile(r"^imgui", re.IGNORECASE)
 
 
@@ -80,15 +105,22 @@ def registered_ids(root: Path) -> list[str]:
     return ids
 
 
+def strip_comments(text: str) -> str:
+    """CMake text without its whole-line comments. A # after code is kept: what follows it is still checked, so a
+    # inside a string or a bracket argument cannot hide a link (stricter, never looser)."""
+    return "\n".join(line for line in text.split("\n") if not line.lstrip().startswith("#"))
+
+
 def linked_names(text: str) -> list[tuple[str, str]]:
     """(linking target, linked name) for every library a target_link_libraries call names."""
     names = []
-    for call in LINK_CALL.findall(re.sub(r"#[^\n]*", "", text)):
+    # On the stripped text and on the raw text: a whole-line "comment" may sit inside a multi-line string.
+    for call in LINK_CALL.findall(strip_comments(text)) + LINK_CALL.findall(text):
         tokens = call.split()
         if not tokens:
             continue
         for token in tokens[1:]:  # the first is the target being linked
-            if token in LINK_KEYWORDS or token.startswith(("${", "$<")):
+            if token in LINK_KEYWORDS:
                 continue
             names.append((tokens[0], token))
     return names
@@ -109,8 +141,14 @@ def scan(root: Path) -> list[str]:
             window = path.relative_to(root / OWNER).as_posix().startswith(WINDOW_DIRECTORY)
             prefixes = WINDOW_INCLUDE_PREFIXES if window else CORE_INCLUDE_PREFIXES
             for include in INCLUDE.findall(text):
+                # Only plain forward-slash paths: a parent step leaves every prefix; a backslash or a "." step hides one.
+                if "\\" in include or any(step in ("", ".", "..") for step in include.split("/")):
+                    findings.append(f"{relative}: includes {include}")
+                    continue
                 if include.startswith(FRAMEWORK_IMGUI):
-                    if not window:
+                    base = include.rsplit("/", 1)[-1].lower()
+                    if (not window or is_native_include(include) or base == IMGUI_INTERNAL
+                            or base.startswith("imgui_impl") or "backends" in include.lower()):
                         findings.append(f"{relative}: includes {include}")
                     continue
                 if IMGUI_HEADER.match(include.rsplit("/", 1)[-1]) or include.startswith(("imgui/", "backends/")):
@@ -119,6 +157,9 @@ def scan(root: Path) -> list[str]:
                     continue
                 if "/" not in include:
                     continue  # standard headers and the tool's own local headers
+                if not window and include.lower().startswith(tuple(p.lower() for p in WINDOW_ONLY_INCLUDES)):
+                    findings.append(f"{relative}: includes {include}")
+                    continue
                 if not window and include == CORE_WINDOW_ENTRY:
                     continue
                 if not include.startswith(prefixes) or is_native_include(include):
@@ -129,8 +170,46 @@ def scan(root: Path) -> list[str]:
             for target in sorted(set(TARGET.findall(text))):
                 if target not in WINDOW_TARGETS:
                     findings.append(f"{relative}: names {target}")
+            # A window-only target outside its two places.
+            code = strip_comments(text)
+            # Links only by target_link_libraries with literal names, so every link is checked above and below.
+            # On the raw text too: a whole-line "comment" may sit inside a multi-line string (stricter only).
+            if any(OTHER_LINK.search(re.sub(r"\btarget_link_libraries\s*\(", "(", body, flags=re.IGNORECASE))
+                   for body in (code, text)):
+                findings.append(f"{relative}: links outside target_link_libraries")
+            outside = EXISTENCE_CHECK.sub("", WINDOW_LINK_CALL.sub("", code))
+            raw_outside = EXISTENCE_CHECK.sub("", WINDOW_LINK_CALL.sub("", text))
+            commented = {target for line in text.split("\n") if line.lstrip().startswith("#")
+                         for target in TARGET.findall(line)}
+            # A window-only target in a "comment" line that is really inside a string counts as named outside.
+            hidden = set(TARGET.findall(raw_outside)) - set(TARGET.findall(outside)) - commented
+            for target in sorted(set(TARGET.findall(outside)) | hidden):
+                if target in WINDOW_TARGETS and target not in CORE_TARGETS:
+                    findings.append(f"{relative}: names {target} outside the window's links")
+            allowed_uses = 0
+            for command, arguments in COMMAND.findall(code):
+                tokens = arguments.split()
+                uses = tokens.count(WINDOW_LIBRARY)
+                if not uses:
+                    continue
+                name = command.lower()
+                if name in WINDOW_OWN_COMMANDS and tokens[0] == WINDOW_LIBRARY and uses == 1:
+                    allowed_uses += 1
+                elif name == "target_link_libraries" and tokens[0] in WINDOW_LINKERS and uses == 1:
+                    allowed_uses += 1
+                elif name == "list" and tokens[:2] == ["APPEND", TOOL_TARGET_LIST] and uses == 1:
+                    allowed_uses += 1
+            if len(re.findall(r"\b" + WINDOW_LIBRARY + r"\b", code)) != allowed_uses:
+                findings.append(f"{relative}: names {WINDOW_LIBRARY} outside its own commands and the executable's links")
             for linking, name in sorted(set(linked_names(text))):
+                if name.startswith(("${", "$<")):
+                    findings.append(f"{relative}: {linking} links {name}, not a literal name")
+                    continue
                 allowed = WINDOW_TARGETS if linking == WINDOW_LIBRARY else CORE_TARGETS
+                if name == WINDOW_LIBRARY:
+                    if linking not in WINDOW_LINKERS:
+                        findings.append(f"{relative}: {linking} links {name}")
+                    continue
                 if OWN_TARGET.match(name):
                     continue
                 if name not in allowed:

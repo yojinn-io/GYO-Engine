@@ -34,7 +34,7 @@ if(TARGET gyo_voxel_map_editor_window)
     add_executable(gyo_voxel_map_editor_pick_smoke VoxelMapPickSmoke.cpp)
     target_compile_features(gyo_voxel_map_editor_pick_smoke PRIVATE cxx_std_20)
     target_include_directories(gyo_voxel_map_editor_pick_smoke PRIVATE "${GYO_REPOSITORY_ROOT}/tools/voxel_map_editor/src")
-    target_link_libraries(gyo_voxel_map_editor_pick_smoke PRIVATE gyo_voxel_map_editor_window)
+    target_link_libraries(gyo_voxel_map_editor_pick_smoke PRIVATE gyo_voxel_map_editor_window GYO::ToolFrameworkPreview)
     target_compile_definitions(gyo_voxel_map_editor_pick_smoke PRIVATE
         GYO_TEST_SHADER_BUNDLE="${PROJECT_BINARY_DIR}/shaders/builtin")
     add_dependencies(gyo_voxel_map_editor_pick_smoke gyo_builtin_shaders)

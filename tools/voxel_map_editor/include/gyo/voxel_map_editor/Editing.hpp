@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <variant>
@@ -27,6 +28,9 @@ namespace Gyo::Tools::VoxelMapEditor {
 // [-2^16, 2^16 - 1] on every axis.
 [[nodiscard]] bool CellInRange(const GridDocument& document, const Vec3i& cell) noexcept;
 
+// The most cells one box edit may change (a 256 x 16 x 256 box).
+inline constexpr std::int64_t MaxBoxCells = std::int64_t{1} << 20;
+
 struct CellChange final {
     Vec3i cell{};
     Cell before{};
@@ -44,7 +48,8 @@ public:
     // Changes since the last MarkSaved (or the start); also true when the
     // saved state cannot be reached by undo or redo any more.
     [[nodiscard]] bool Modified() const noexcept;
-    void MarkSaved() noexcept;
+    // Ends an open stroke first, so the saved state is the document as written.
+    void MarkSaved();
     // Counts every change to the document (edits, undo, redo), so a preview
     // knows when to rebuild.
     [[nodiscard]] std::uint64_t Revision() const noexcept { return revision_; }
@@ -60,7 +65,8 @@ public:
     // Paint: a filled cell takes the block, keeping its orientation; an
     // empty cell stays empty.
     Result<void> PaintCell(const Vec3i& cell, std::uint16_t block);
-    // Every cell of the box from one corner to the other (both included).
+    // Every cell of the box from one corner to the other (both included); at
+    // most MaxBoxCells cells.
     Result<void> FillBox(const Vec3i& corner, const Vec3i& other, Cell value);
 
     // Palette and shape library; each refused edit leaves the document as it
@@ -80,6 +86,7 @@ public:
 private:
     struct CellStep final {
         std::vector<CellChange> changes;
+        std::map<Vec3i, std::size_t> index;  // cell -> its change, while the stroke is open
     };
     struct DocumentStep final {
         GridDocument before;
@@ -136,7 +143,8 @@ struct PickHit final {
 
 // Walks the cells along a world ray (DDA) and returns the first filled cell
 // (a cell of any shape counts as whole) within maxCells; when there is none,
-// the cell of the edit plane (relative y == planeY) the ray crosses, if any.
+// the cell of the edit plane (relative y == planeY) the ray crosses within
+// maxCells cells, if any.
 [[nodiscard]] std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, std::int32_t planeY,
                                           std::int32_t maxCells = 1024) noexcept;
 // Where placing goes: the plane cell itself, or the cell beside the hit face.

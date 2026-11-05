@@ -9,6 +9,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -455,4 +456,71 @@ TEST_CASE("W7 shapes: boxes within [0, 16], shapes in use stay") {
     CHECK(session.Document().blocks[1].shape == 2);
     CHECK(session.Document().shapes[2].name == "post");
     REQUIRE(ParseGrid(Text(session.Document())));
+}
+
+TEST_CASE("W1 edits: a box changes at most 2^20 cells") {
+    EditSession session(TwoBlocks());
+    CHECK_FALSE(session.FillBox({0, 0, 0}, {1024, 0, 1024}, kCube));
+    CHECK(session.Document().chunks.empty());
+    CHECK_FALSE(session.CanUndo());
+    REQUIRE(session.FillBox({0, 0, 0}, {255, 15, 255}, {}));  // exactly 2^20: nothing to clear, no step
+    CHECK_FALSE(session.CanUndo());
+}
+
+TEST_CASE("W2 undo: a cell set and set back in one drag leaves no step") {
+    EditSession session(TwoBlocks());
+    session.BeginStroke();
+    REQUIRE(session.SetCell({0, 0, 0}, kCube));
+    REQUIRE(session.SetCell({0, 0, 0}, {}));
+    session.EndStroke();
+    CHECK_FALSE(session.CanUndo());
+    CHECK_FALSE(session.Modified());
+}
+
+TEST_CASE("W2 undo: saving during a drag saves the drag's cells as one step") {
+    EditSession session(TwoBlocks());
+    session.BeginStroke();
+    REQUIRE(session.SetCell({0, 0, 0}, kCube));
+    session.MarkSaved();  // the window saves while the button is still down
+    CHECK_FALSE(session.InStroke());
+    CHECK_FALSE(session.Modified());
+    REQUIRE(session.Undo());
+    CHECK(session.Modified());  // the cell on disk is no longer shown
+    REQUIRE(session.Redo());
+    CHECK_FALSE(session.Modified());
+}
+
+TEST_CASE("W3 pick: the plane is met within maxCells, and broken rays pick nothing") {
+    const auto document = NewGrid();
+    // Nearly level: the plane's top (y = 1) is 1000 cells away along the ray.
+    const auto far = RayOf({0.5F, 2.0F, 0.5F}, {1.0F, -0.001F, 0.0F});
+    CHECK(Pick(document, far, 0, 2000));
+    CHECK_FALSE(Pick(document, far, 0, 500));
+    constexpr float nan = std::numeric_limits<float>::quiet_NaN();
+    constexpr float inf = std::numeric_limits<float>::infinity();
+    CHECK_FALSE(Pick(document, Ray{{0.5F, 2.0F, 0.5F}, {0.0F, nan, 0.0F}}, 0));
+    CHECK_FALSE(Pick(document, Ray{{nan, 2.0F, 0.5F}, {0.0F, -1.0F, 0.0F}}, 0));
+    CHECK_FALSE(Pick(document, Ray{{inf, 2.0F, 0.5F}, {0.0F, -1.0F, 0.0F}}, 0));
+    CHECK_FALSE(Pick(document, Ray{{3e9F, 2.0F, 0.5F}, {0.0F, -1.0F, 0.0F}}, 0));
+}
+
+TEST_CASE("W5 save: when the grid is written but the mesh is not, the next save does not see a change") {
+    const auto folder = Scratch("meshfails");
+    const auto gridPath = (folder / "map.voxel_grid.json").string();
+    WriteText(folder / "blocker", "a file, not a folder");
+    const auto meshPath = (folder / "blocker" / "map.voxel_mesh.json").string();
+    auto opened = OpenEditor(gridPath, meshPath);
+    REQUIRE(opened);
+    EditSession session(opened->document);
+    REQUIRE(session.SetCell({0, 0, 0}, kCube));
+    const auto failed = SaveEditor(opened->files, session.Document());
+    REQUIRE_FALSE(failed);
+    CHECK(failed.error().code == VoxelMapErrorCode::WriteFailed);
+    CHECK(ReadText(gridPath) == Text(session.Document()));  // the grid is saved
+    REQUIRE(opened->files.grid.known);
+    // Once the mesh can be written, saving again works: the grid's known bytes followed the write.
+    std::filesystem::remove(folder / "blocker");
+    REQUIRE(SaveEditor(opened->files, session.Document()));
+    CHECK(std::filesystem::exists(meshPath));
+    std::filesystem::remove_all(folder);
 }

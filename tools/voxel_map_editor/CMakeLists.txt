@@ -57,8 +57,8 @@ if(GYO_TOOL_VARIANT STREQUAL "gui")
     )
     target_include_directories(gyo_voxel_map_editor_window PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
     target_link_libraries(gyo_voxel_map_editor_window
-        PUBLIC gyo_voxel_map_editor_core GYO::ToolFrameworkPreview
-        PRIVATE GYO::ToolFrameworkImGui GYO::RenderBackendSDL GYO::PlatformSDL imgui::core
+        PUBLIC gyo_voxel_map_editor_core
+        PRIVATE GYO::ToolFrameworkPreview GYO::ToolFrameworkImGui GYO::RenderBackendSDL GYO::PlatformSDL imgui::core
     )
     add_dependencies(gyo_voxel_map_editor_window gyo_builtin_shaders)
     target_link_libraries(gyo_voxel_map_editor PRIVATE gyo_voxel_map_editor_window)

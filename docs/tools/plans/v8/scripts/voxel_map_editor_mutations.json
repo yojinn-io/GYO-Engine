@@ -407,6 +407,46 @@
         "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py"
       ],
       "expect": "gyo_voxel_map_editor_core links GYO::Render"
+    },
+    {
+      "id": "vmw-saved-mid-stroke",
+      "what": "Saving during a drag records the state before the drag",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "void EditSession::MarkSaved() {\n    EndStroke();",
+      "replace": "void EditSession::MarkSaved() {",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*saving during a drag*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-setback-kept",
+      "what": "A cell set and set back in one drag stays an undo step",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    std::erase_if(step.changes, [](const CellChange& change) { return change.before == change.after; });\n",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*set back in one drag*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-box-unbounded",
+      "what": "A box of any size is accepted",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    if (cells > MaxBoxCells)",
+      "replace": "    if (false)",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*at most 2^20*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-plane-unbounded",
+      "what": "The plane is met at any distance",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    if (!(t >= 0.0) || t > static_cast<double>(maxCells)) return std::nullopt;",
+      "replace": "    if (!(t >= 0.0)) return std::nullopt;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*within maxCells*",
+      "expect": "is NOT correct"
     }
   ]
 }

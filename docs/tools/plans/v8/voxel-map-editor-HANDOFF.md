@@ -6,14 +6,23 @@
 
 ## 現況（每次停下來時更新）
 
-- **PR**：[PR #152](https://github.com/yojinn-io/GYO-Engine/pull/152)（分支 `claude/v8-tool-voxel-map-plan`，一條功能線一個 PR）。尚未合併。
+- **PR**：
+  - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
+  - window 批在分支 `claude/v8-tool-voxel-map-window`，有它自己的 PR。
 - **完成**：
-  - `v8-tool-voxel-map-plan`：方案、分批。
-  - `v8-engine-voxel-mesh-contract`：`gyo.voxel_mesh` 契約與讀取器，V1～V6 通過；L1 三平台綠，run 42000098862。
-- **完成**：`v8-tool-voxel-map-editor-core`：E1～E10 通過（L1 三平台綠，run 42010316153）。dev_log：[2026_11_05_tool_v8_voxel_map_editor_core](../../../dev_logs/2026_11_05_tool_v8_voxel_map_editor_core.zh-Hant.md)。
-- **進行中**：`v8-product-arena-v2`。你選了「arena v2 から」「ここでやる」。事前宣告已寫進 voxel-map-editor.md，宣告已核准（`v8-product-arena-v2-declare`），實作中。
-- **前提**：PR #146 已合併，所以 `v8-framework-preview-component` 可以排了；開始前要和架構會話協調。
-- **等你決定**：目前沒有。
+  - plan
+  - `v8-engine-voxel-mesh-contract`
+  - `v8-tool-voxel-map-editor-core`
+  - `v8-product-arena-v2`（L3 合格）
+  - `v8-framework-preview-component`（架構會話，PR #157）
+- **進行中**：`v8-tool-voxel-map-editor-window`
+  - 功能、審查修正、測試都完成。
+  - dev_log：[2026_11_06_tool_v8_voxel_map_editor_window](../../../dev_logs/2026_11_06_tool_v8_voxel_map_editor_window.zh-Hant.md)。
+- **等你決定**：
+  - 守衛判定變更（W9）的 §14.4 核准；DI 1 和 DI 5 這次的文字修改，也一起請你核准。
+  - S4：檔案被外部修改之後，視窗要不要加「重新載入」或「另存」。
+- **等架構會話**：P1（`v8-tool-voxel-window-p1-to-architect`）。
+- **之後**：`v8-tool-voxel-map-editor-trial`（P1 照架構師的結論重新宣告；L3：用 GUI 建一張有二樓和階梯的地圖）。`v8-product-step-up` 由產品會話做。
 
 ## 決定紀錄
 
@@ -92,3 +101,14 @@
   - 效能問題（P1）交給架構會話，旁支已把觀測轉過去。
   - 縮小測試地圖或範圍的做法（A／D）不採用，因為大地圖正是編輯器存在的理由。
   - 這一批繼續完成編輯器的功能與互動。P1 的宣告怎麼改，等架構師的結論；要改宣告時先回報你。
+- 2026-11-06：window 批的實作與審查。
+  - 審查（Opus／high）：
+    - B1：undo 之後索引越界；
+    - S1～S3：框選上限、拖曳中存檔、核心可以 include render 的標頭；
+    - nit：N1～N9。
+    - 以上都修了。S4 交你決定。
+  - §14.4 驗證者（Opus／high）做了四輪，前三輪都找到守衛隱藏的放寬。每次都把守衛改嚴，沒有放寬文字。
+  - 第四輪剩下的罕見寫法，修好後由提案者自己重跑確認。
+  - 突變：視窗 22 條、相關的既有突變都 killed。
+  - 本機結果：cpu|shader 130／130；編輯器與 GPU 6／6。
+  - 證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/window/`。
