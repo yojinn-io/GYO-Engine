@@ -1,6 +1,6 @@
-# PvP 的 UI action 對照表的事前宣告（`v8-product-ui-action-check`，草稿）
+# PvP 的 UI action 對照表的事前宣告（`v8-product-ui-action-check`）
 
-日期：2026-11-05。提出：v8 工具線。**狀態：草稿，等你核准。**
+日期：2026-11-05。提出：v8 工具線。**狀態：2026-11-05 核准，由本線（v8 工具線）實作（`v8-product-ui-action-check-approved`）。**
 
 來源：`v8-tool-ui-navigation` 你選了 (A)「產品內改成表」，先做（`v8-tool-ui-navigation-a-first`，見 [HANDOFF](HANDOFF.md) 決定紀錄）。
 
@@ -67,7 +67,7 @@
 - 検証者：不需要（沒有放寬的判定）。
 - 估時：2～3 h。超過 4.5 h 就停下回報。
 
-## 要你決定
+## 要你決定（2026-11-05 已決定：核准，(a) 本線做）
 
 1. 本草稿核准嗎？
 2. 誰做：

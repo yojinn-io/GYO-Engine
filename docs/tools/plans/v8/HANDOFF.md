@@ -16,6 +16,7 @@
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
+- **進行中（`v8-product-ui-action-check`，分支 `claude/v8-tool-line-records`）**：2026-11-05 核准（`v8-product-ui-action-check-approved`），實作中。
 - **移出本線**：`v8-tool-voxel-map-editor`（2026-11-05，`v8-tool-voxel-map-editor-moved-out`）：大任務，由 v8 規劃會話另開的會話「v8 voxel map editor」負責；本線不再追蹤。
 - **進行中（`v8-tool-audio-editor-edit`，分支 `claude/v8-tool-audio-editor-edit`）**：已實作（GUI：播放、波形、資訊、裁剪、增益、工程檔、匯出）。判定 1～7 本機通過；突變 26／26 killed；審査者與検証者已回報，指出的事已修或已寫進 assets.md「實作後的結果（2026-11-04）」。**等你**：守衛的放寬（§14.4）核准；GUI 的 L3（macOS）。dev_log：[2026_11_04_tool_v8_audio_editor_edit](../../../dev_logs/2026_11_04_tool_v8_audio_editor_edit.zh-Hant.md)。
 - **撤回（`v8-tool-audio-editor-regions`，2026-11-05）**：你把 audio_editor 的邊界定在簡單剪輯與轉換，大規模編輯與混音交給專業軟體（`v8-tool-audio-editor-scope`）。`-regions` 撤回（`v8-tool-audio-editor-regions-withdrawn`）：程式、測試、DI 3 的措辭與突變目錄退回 `-edit` 完成時（`43487d42^`，逐位元組相同），#141 現在只含 `-edit`。退回後本機 ctest 69／69（主 checkout `build/evidence/tool-v8-audio-editor-regions/ctest-framework-after-withdraw.txt`）；`-edit` 的 26 條突變重跑：26／26 killed、stale 0（`mutations-after-withdraw.txt`，同一資料夾）。`-regions` 的事前宣告、實作後的結果與 dev_log（[2026_11_04_tool_v8_audio_editor_regions](../../../dev_logs/2026_11_04_tool_v8_audio_editor_regions.zh-Hant.md)）留作紀錄。2026-11-05 你核准 `-edit` 的守衛放寬並合併 #141（`v8-tool-audio-editor-edit-guard-approved`，取代 `-merge-wait`）；`-edit` 判定 8 合併時仍未判定。其他：master 已在 2026-11-04 合進本分支（`0342a259`）；系統選擇窗的記帳規則已交回 v8 規劃會話（`v8-tool-path-dialog-rule-handover`）。
@@ -67,6 +68,7 @@
 | `v8-tool-scope-ui-first` | （2026-10-30）先處理 `v8-tool-ui-editor-widgets`。voxel 與 assets 沒有暫停，等使用者逐個給方案再討論；第一版 Claude 自己寫的地圖建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端）撤下。取代同日的 `v8-tool-scope-ui-only`（Claude 誤解成「暫停」） | 「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」→「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」 |
 | `v8-tool-voxel-map-editor-moved-out` | （2026-11-05）`v8-tool-voxel-map-editor` 移出工具線：是大任務，由 v8 規劃會話另開的會話負責（會話標題「v8 voxel map editor（v8-tool-voxel-map-editor）」）。README 的事實盤點（arena、舊格子地圖、ImGui 後端）留著給那邊參考；本線不再追蹤、不做它的規劃 | 「這個任務我得移出你的任務範圍，那個是個大任務。」 |
 | `v8-tool-ui-navigation-a-first` | （2026-11-05）`v8-tool-ui-navigation` 選 (A)：產品內改成對照表，啟動時和 UI 檔的 `actions` 宣告雙向比對；不改 `gyo.ui`。(B) 等要加頁面時再決定。先做 PvP；事前宣告草稿在 [ui-navigation.md](ui-navigation.md)（`v8-product-ui-action-check`，等核准） | 對「ui-navigation 選哪一個？」答「A 先做」 |
+| `v8-product-ui-action-check-approved` | （2026-11-05）[ui-navigation.md](ui-navigation.md) 的事前宣告（判定 1～5、突變 4 條、下段、Opus 5.5／high）核准；由本線實作，接在 `claude/v8-tool-line-records` 上，和本線的紀錄同一條 PR。PvP 計畫的同步由產品會話做，本線只通知 | 對「草稿照建議核准、由本會話做嗎？」選「核准，本會話做」 |
 
 ## 紀錄
 
