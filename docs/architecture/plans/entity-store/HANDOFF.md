@@ -18,6 +18,7 @@
 - 2026-11-05（使用者，本會話）：核准 batch 1 的構成：實作者 Opus 5.5／high；敵對檢查者 Fable 5.1／xhigh（xhigh 的理由：要否定的三點涉及決定性與協議）；參照程式以 shallow clone pin 到 release tag（Bevy v0.20.1 `a0577b5c`、EnTT v3.16.0 `b4e58bdd`），放在會話的 scratchpad（不保存），文件以 tag＋路徑＋行號的 permalink 作為耐久的出處。
 - 架構師的暫定立場（**未採納**，batch 2 核准 DI 時由使用者決定）：Engine 只收「容器」（Entity＝index＋generation、SoA column、id 升冪的決定性迭代、延後結構變更的 Commands、change tick）；system／scheduler／world／resources／events／app／plugin 不收；id 分段政策與種類意義留在產品。
 - 2026-11-05（使用者，本會話）：「全照建議核准」delta §7 的 10 項：容器版；batch 3 拆 3a（欄，現在做）／3b（`DeferredChanges`，與第一個非玩家批同時）；`engine/entity_store` → `GYO::EntityStore`；待辦套用生成先、刪除後、各依 id 升冪；同點重複刪除合併；函數名沿用 pvp 現名；E-12 以消費端 Assert 守（凍結區間＝Tick 扣掉 Apply），並同意產品 E-5 守衛欄與 E-12 措辭的改寫；`architecture.md` 3a 合併時用 3a 版、3b 補完整版；batch 3 驗收內容照第 9 項、於開始時正式宣告；契約 DI 1～10 與 RC 1～15 生效。
+- 2026-11-06（使用者，本會話）：「退役 M1、M2」：產品目錄的 `entity-split-insert-appends`、`entity-split-erase-swap-and-pop` 退役，由 Engine 目錄同文的 `es-row2-*` 守；同時承認 M1、M2 判定變更的 §14.4 說明（採檢證者收窄後的第 2、4 項）。
 
 ## 現況
 
@@ -39,6 +40,7 @@
 - 2026-11-05：主會話由使用者改為 Opus 5.5（`/model`）。使用者指示：已核准計畫的模型指派照計畫，不因主會話換模型而重問；檢證者 Fable 5.1 照計畫（使用者再次同意）。
 - 2026-11-05：上一個 Claude Code 程序結束時 3a 實作者仍在執行，未完成。留下的狀態：`838e7f8e`（Engine 模組 `engine/entity_store`、common 測試與字詞守衛、Engine 突變目錄 15 個；原記 16 個有誤，2026-11-06 更正）已 commit；pvp 換上（`EntityId.hpp`、`EntityColumns.hpp`、`match_domain` 連結、`EntityColumnsTests.cpp`、產品 `mutations.json`、`entity-model.zh-Hant.md` 註記、契約狀態句）未 commit、未驗證；Engine 突變第一次執行被中斷（報告為空檔），留下突變 `es-row10-entityof-reads-id` 的置換文字在 `EntityKey.hpp`，主會話已還原成 commit 版本並掃描兩個突變目錄，無其他殘留。base 工作樹在 scratchpad 的 `base`（`2c959fbc`，與宣告的 base `ffd64346` 只差計畫文件，程式相同），base runner 已建好。由新的實作者（Opus 5.5／high）接手：先核對未提交的修改，再重跑 Engine 突變，繼續 pvp 換上與驗收。
 - 2026-11-06：接手實作者完成（約 30 分）。`2aa9c9df`：pvp 換上（`EntityId.hpp` 別名、`EntityColumns.hpp` 轉接＝using 宣告＋`playerId` 型別的 `EntityKey` 特化、刪 `HasEntityId`；`match_domain` 與 -O0 digest runner 連結 `GYO::EntityStore`；產品測試拆分；產品 M1、M2 改指 Engine 標頭並由 common 測試殺；entity-model 註記；契約狀態句）。事前宣告 V1～V6 通過：compare `--scale 1`／`10` 42 情境 0 差分（records 19,636／195,757 兩樹相同）；golden 不變；範圍外無 diff；Engine 突變 15/15、產品 M1～M6 6/6；連結與字詞守衛通過；ctest cpu|shader 126/126。V7（L1）待推送。主會話核對證據一致。報告存 `build/evidence/entity-store/impl-3a/implementer-report-20261106.md`。接著並行啟動審查者（Opus 5.5／high）與 §14.4 檢證者（Fable 5.1／high，M1、M2 判定變更有放寬面，核准前要檢證與使用者承認）。待決：產品目錄的 M1、M2 與 Engine 目錄的 `es-row2-*` 重複（delta §1 第 4 項原寫「搬到 Engine 目錄」），保留或退役。
+- 2026-11-06：§14.4 檢證者（Fable 5.1／high）：確認 3、否定 0、收窄 2；對兩段固定突變文字無舊殺新放的輸入，放寬的是驗證冗餘；發現產品轉接標頭無登錄突變。審查者（Opus 5.5／high）：must 0／should 3／note 8，總評修正後可合併（S1 特化遇同時有 id 與 playerId 的型別改成編譯失敗、S2 字詞守衛改白名單、S3 測試加 assert 攔截）。報告存 `build/evidence/entity-store/impl-3a/verifier-1444-report-20261106.md`、`review-20261106.md`。修正與補一個產品轉接突變交回實作者；使用者決定退役 M1、M2，一併交辦。
 
 ## 未結事項
 
