@@ -87,3 +87,4 @@
   - 原因：`tests/framework/PreviewTests.cpp` 的變數 `far` 和 `windef.h` 的巨集撞名（MSVC C2513）。這是我寫的測試的錯（§14.1：Test 自身），和 voxel 線在 #152 遇到的相同。
   - 修正：改名為 `distant`，判定不變。本機 `gyo_framework.preview*` 2/2；殺手是 PV6 的 4 條突變重跑 4/4（`mutations_ci_fix_pv6.txt`）。
   - 第一次的失敗 log 在主 checkout 的 `build/evidence/framework-preview/ci/l1_windows_failed.log`。
+- 2026-11-06：L1 run 42069928709（`341fc5d8`）：linux-x64 8m06s、macos-arm64 8m03s、windows-x64 13m01s 都通過，CI gate 通過。**批次完成。** 合併由使用者決定（repo 不允許 auto-merge，合併方式 `gh pr merge --merge`）。
