@@ -8,6 +8,7 @@
 #include "engine/base/Log.hpp"
 #include "engine/platform/sdl/SdlPlatformNative.hpp"
 
+#include <algorithm>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -261,4 +262,92 @@ TEST_CASE("W10: the shell installs no log handler") {
     CHECK(code == 0);
     CHECK(seen == &RecordingHandler);
     CHECK(after == &RecordingHandler);
+}
+
+namespace {
+
+// Pushes a close request of the window (or SDL's quit) in the given updates,
+// and answers CloseRequested from answers in turn.
+class ClosingClient final : public RecordingClient {
+public:
+    ClosingClient(SdlPlatform& platform, Record& record, std::vector<int> pushAt, std::vector<bool> answers, bool quit,
+                  bool both = false)
+        : RecordingClient(platform, record, 1000, 3), pushAt_(std::move(pushAt)), answers_(std::move(answers)), quit_(quit),
+          both_(both) {}
+    RuntimeControl Update(const FrameContext& frame) override {
+        const RuntimeControl control = RecordingClient::Update(frame);
+        if (std::find(pushAt_.begin(), pushAt_.end(), updates_) != pushAt_.end()) {
+            SDL_Event close{};
+            if (quit_) {
+                close.type = SDL_EVENT_QUIT;
+            } else {
+                close.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+                close.window.windowID = SDL_GetWindowID(Engine::Platform::Sdl::NativeWindow(platform_));
+            }
+            REQUIRE(Engine::Platform::Sdl::PushInjectedEvent(platform_, close));
+            if (both_) {
+                SDL_Event quit{};
+                quit.type = SDL_EVENT_QUIT;
+                REQUIRE(Engine::Platform::Sdl::PushInjectedEvent(platform_, quit));
+            }
+        }
+        return control;
+    }
+    bool CloseRequested() override {
+        record_.calls.push_back("close?");
+        const bool answer = asked_ < answers_.size() ? answers_[asked_] : true;
+        ++asked_;
+        return answer;
+    }
+
+private:
+    std::vector<int> pushAt_;
+    std::vector<bool> answers_;
+    bool quit_;
+    bool both_;
+    std::size_t asked_{};
+};
+
+std::vector<std::string> WithoutEvents(const std::vector<std::string>& calls) {
+    std::vector<std::string> kept;
+    for (const auto& call : calls) {
+        if (call != "event") kept.push_back(call);
+    }
+    return kept;
+}
+
+} // namespace
+
+TEST_CASE("Q1: a client that says no to a close request keeps the loop running; a yes ends it with its code") {
+    Record record;
+    const int code = RunWindowShell(SmallWindow(), [&](SdlPlatform& platform) {
+        return std::make_unique<ClosingClient>(platform, record, std::vector<int>{1, 3}, std::vector<bool>{false, true}, false);
+    });
+    CHECK(code == 3);
+    // Asked once per request: the first answer keeps two more frames, the second ends the loop.
+    CHECK_MESSAGE(WithoutEvents(record.calls) ==
+                      (std::vector<std::string>{"update", "render", "close?", "update", "render", "update", "render", "close?"}),
+                  "the close request was not handed to the client, or its answer was not kept");
+}
+
+TEST_CASE("Q2: a quit request is asked like a close request") {
+    Record record;
+    const int code = RunWindowShell(SmallWindow(), [&](SdlPlatform& platform) {
+        return std::make_unique<ClosingClient>(platform, record, std::vector<int>{1, 2}, std::vector<bool>{false, true}, true);
+    });
+    CHECK(code == 3);
+    CHECK_MESSAGE(WithoutEvents(record.calls) ==
+                      (std::vector<std::string>{"update", "render", "close?", "update", "render", "close?"}),
+                  "the quit request ended the loop without asking the client");
+}
+
+TEST_CASE("Q1: a close request and a quit in one pump are asked once") {
+    Record record;
+    const int code = RunWindowShell(SmallWindow(), [&](SdlPlatform& platform) {
+        return std::make_unique<ClosingClient>(platform, record, std::vector<int>{1, 2}, std::vector<bool>{false, true}, false, true);
+    });
+    CHECK(code == 3);
+    CHECK_MESSAGE(WithoutEvents(record.calls) ==
+                      (std::vector<std::string>{"update", "render", "close?", "update", "render", "close?"}),
+                  "the client was asked more than once for one pump");
 }

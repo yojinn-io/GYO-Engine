@@ -446,6 +446,8 @@ public:
         return RuntimeControl::Continue;
     }
 
+    [[nodiscard]] bool CloseRequested() override { return client_ == nullptr || client_->CloseRequested(); }
+
     [[nodiscard]] int ExitCode() const noexcept override { return exitCode_; }
 
 private:
@@ -463,6 +465,18 @@ private:
 };
 
 } // namespace
+
+// ImGui's SDL renderer backend reads an ImTextureID as the native texture pointer.
+static_assert(sizeof(ImTextureID) == sizeof(std::uint64_t) && sizeof(void*) <= sizeof(ImTextureID));
+
+std::optional<std::uint64_t> ImGuiTextureId(const Engine::Render::Backend::Sdl::SdlRenderer& renderer,
+                                            Engine::Render::Backend::Sdl::SdlTextureHandle texture) {
+    auto* native = Engine::Render::Backend::Sdl::NativeTexture(renderer, texture);
+    if (native == nullptr) {
+        return std::nullopt;
+    }
+    return static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(native));
+}
 
 int RunImGuiShell(const WindowShellOptions& options, const ImGuiShellClientFactory& factory) {
     GYO_ASSERT(factory);
