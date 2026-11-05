@@ -72,4 +72,23 @@ enum class EventSoundsErrorCode : std::uint8_t {
 using EventSoundsError = Engine::Base::Error<EventSoundsErrorCode>;
 static_assert(Engine::Base::CodedError<EventSoundsError>);
 
+// The offscreen 3D preview (docs/framework/preview.md).
+enum class PreviewErrorCode : std::uint8_t {
+    StartFailed = 1, // the shader bundle, the offscreen device or the renderer cannot start
+    DrawFailed,      // a frame's size, drawing or readback was refused
+    UploadFailed,    // the window's renderer refused the texture or the upload
+};
+
+[[nodiscard]] constexpr const char* ToString(const PreviewErrorCode code) noexcept {
+    switch (code) {
+    case PreviewErrorCode::StartFailed: return "StartFailed";
+    case PreviewErrorCode::DrawFailed: return "DrawFailed";
+    case PreviewErrorCode::UploadFailed: return "UploadFailed";
+    }
+    return "Unknown";
+}
+
+using PreviewError = Engine::Base::Error<PreviewErrorCode>;
+static_assert(Engine::Base::CodedError<PreviewError>);
+
 } // namespace Gyo::Tools::Framework

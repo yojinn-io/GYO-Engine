@@ -85,12 +85,14 @@ model list, Engine's description of the model (`DescribeModel`), clip playback a
   shows nothing of the model before it.
 - `PlaybackClock` and `PreviewPose`: wall time becomes clip seconds through the speed; the pose is `SamplePose` at
   those seconds, or `MakeDefaultPose` for a model without clips (Design Invariant 5).
-- `PreviewRenderer` (`gyo_model_viewer_preview`): Engine's `ModelRenderer` and `Renderer` on an offscreen GPU device
-  (`SdlGpuRenderDevice::CreateOffscreen`), each frame read back; every material's base colour is its tint (no
-  textures: which texture a material gets is the product's); the bones as thin boxes on the `WorldOverlay` layer.
-  `OrbitCamera` and `FrameModel` place the camera; drawing is Engine's.
-- `UploadFrame`: the frame into a texture of the shell's SDL renderer (`SdlRenderer::UploadTexture`), shown with the
-  framework's `ImGuiTextureId`; the texture changes only in `BeginFrame`, before ImGui draws.
+- `PreviewRenderer` (`gyo_model_viewer_preview`): Engine's `ModelRenderer` submitting into a frame of the framework's
+  offscreen preview (`OffscreenPreview`: the offscreen GPU device, Engine's `Renderer` and the readback,
+  [contract](../framework/preview.md), `v8-framework-preview-component`), at the size the panel wants; every
+  material's base colour is its tint (no textures: which texture a material gets is the product's); the bones as thin
+  boxes on the `WorldOverlay` layer. The framework's `OrbitCamera` and the viewer's `FrameModel` place the camera;
+  drawing is Engine's.
+- The framework's `UploadFrame`: the frame into a texture of the shell's SDL renderer, shown with the framework's
+  `ImGuiTextureId`; it runs in `Draw` before `ImGui::Image`, so the texture ImGui draws is the one just uploaded.
 - Engine's builtin shaders are copied next to the executable (`shaders/builtin`) on every build.
 - Events: one of the model's `gyo.anim_events` files (`OpenEvents`) or a new one (`CreateEvents`, registered in the
   catalog the mount reads), edited through `EventHistory`: each edit one undo step, the state the file holds tracked

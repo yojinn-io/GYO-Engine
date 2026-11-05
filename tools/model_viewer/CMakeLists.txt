@@ -41,19 +41,20 @@ target_link_libraries(gyo_model_viewer PRIVATE gyo_model_viewer_core GYO::ToolFr
 
 set(_gyo_model_viewer_targets gyo_model_viewer_core gyo_model_viewer)
 if(GYO_TOOL_VARIANT STREQUAL "gui")
-    foreach(_target IN ITEMS GYO::Render GYO::ModelRenderer GYO::RenderBackendSDLGPU GYO::RenderBackendSDL
+    foreach(_target IN ITEMS GYO::ModelRenderer GYO::ToolFrameworkPreview GYO::RenderBackendSDL
                              GYO::PlatformSDL GYO::ToolFrameworkImGui imgui::core GYO::Audio GYO::AudioBackendSDL)
         if(NOT TARGET ${_target})
             message(FATAL_ERROR "gyo_model_viewer GUI requires the ${_target} target")
         endif()
     endforeach()
-    # The 3D preview is Engine's drawing on an offscreen GPU device (Design
-    # Invariant 5): ModelRenderer and Renderer on Engine's GPU backend; the
-    # event sounds on Engine's mixer and its SDL audio output.
+    # The 3D preview is Engine's drawing (Design Invariant 5): ModelRenderer
+    # into a frame of the framework's offscreen preview (the offscreen GPU
+    # device, Engine's Renderer and the readback, docs/framework/preview.md);
+    # the event sounds on Engine's mixer and its SDL audio output.
     add_library(gyo_model_viewer_preview STATIC src/PreviewRenderer.cpp src/PreviewSounds.cpp)
     target_link_libraries(gyo_model_viewer_preview
-        PUBLIC gyo_model_viewer_core GYO::Render GYO::ModelRenderer GYO::PlatformSDL GYO::RenderBackendSDL
-        PRIVATE GYO::RenderBackendSDLGPU GYO::Audio GYO::AudioBackendSDL
+        PUBLIC gyo_model_viewer_core GYO::ModelRenderer GYO::ToolFrameworkPreview
+        PRIVATE GYO::Audio GYO::AudioBackendSDL
     )
     add_dependencies(gyo_model_viewer_preview gyo_builtin_shaders)
     # The window on the framework's ImGui shell; the preview reaches the

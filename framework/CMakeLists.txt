@@ -44,6 +44,20 @@ if(TARGET GYO::PlatformSDL)
     list(APPEND _gyo_framework_targets gyo_tool_framework_window)
 endif()
 
+# The offscreen 3D preview (docs/framework/preview.md), where the build has
+# Engine's SDL GPU backend and its SDL renderer: the device, Engine's renderer
+# and the readback put together, the frame uploaded as a texture of the
+# window's renderer. The client creates and holds it; no shell does.
+if(TARGET GYO::RenderBackendSDLGPU AND TARGET GYO::RenderBackendSDL)
+    add_library(gyo_tool_framework_preview STATIC src/Preview.cpp src/PreviewCamera.cpp src/PreviewTexture.cpp)
+    add_library(GYO::ToolFrameworkPreview ALIAS gyo_tool_framework_preview)
+    target_link_libraries(gyo_tool_framework_preview
+        PUBLIC gyo_tool_framework GYO::PlatformSDL GYO::Render GYO::RenderBackendSDLGPU GYO::RenderBackendSDL
+        PRIVATE GYO::Os
+    )
+    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)
+endif()
+
 foreach(_target IN LISTS _gyo_framework_targets)
     gyo_framework_warnings(${_target})
 endforeach()

@@ -312,10 +312,10 @@
     },
     {
       "id": "mvp-stale-frame",
-      "what": "The preview hands out the frame it read first instead of reading each frame back",
-      "file": "tools/model_viewer/src/PreviewRenderer.cpp",
-      "find": "    auto read = impl_->device->ReadFrame();\n    if (!read) return Engine::Base::Err(PreviewError(\"cannot read the frame back\", Engine::Base::CauseDetail(read.error())));\n    impl_->frame = std::move(read.value());",
-      "replace": "    if (impl_->frame.bytes.empty()) {\n    auto read = impl_->device->ReadFrame();\n    if (!read) return Engine::Base::Err(PreviewError(\"cannot read the frame back\", Engine::Base::CauseDetail(read.error())));\n    impl_->frame = std::move(read.value());\n    }",
+      "what": "The preview hands out the frame it read first instead of reading each frame back (since v8-framework-preview-component, in the framework's preview the viewer draws into)",
+      "file": "framework/src/Preview.cpp",
+      "find": "    return std::move(read.value());\n}",
+      "replace": "    static std::optional<Render::TextureReadback> kept;\n    if (!kept) kept = std::move(read.value());\n    return *kept;\n}",
       "target": "gyo_model_viewer_preview_smoke",
       "expect": "an earlier frame was handed out|another frame than the device"
     },

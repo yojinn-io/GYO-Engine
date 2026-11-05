@@ -32,15 +32,17 @@ TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(?:(?:[.+-
 # its JSON binding, whose own guard (tests/framework/framework_dependency_guard.py) keeps the same SDL rule
 # (docs/framework/architecture.md, Design Invariant 2).
 ALLOWED_INCLUDE_PREFIXES = ("gyo/model_viewer/", "gyo/framework/", "engine/")
-# The window (gui variant, v8-tool-model-viewer-preview): Engine's renderer and
-# model renderer on its offscreen GPU device beside the SDL 2D renderer and
-# platform (none of them *Native), the framework's ImGui binding, and ImGui for
-# the tool's own drawing code (framework Design Invariant 5). imgui_internal.h
-# stays out (below). The event sounds (v8-tool-model-viewer-event-sounds):
-# Engine's mixer and its SDL audio output (not *Native).
+# The window (gui variant, v8-tool-model-viewer-preview): Engine's model
+# renderer drawing into the framework's offscreen preview (the offscreen GPU
+# device, Engine's renderer and the readback, v8-framework-preview-component)
+# beside the SDL 2D renderer and platform (none of them *Native), the
+# framework's ImGui binding, and ImGui for the tool's own drawing code
+# (framework Design Invariant 5). imgui_internal.h stays out (below). The event
+# sounds (v8-tool-model-viewer-event-sounds): Engine's mixer and its SDL audio
+# output (not *Native).
 ALLOWED_TARGETS = {"GYO::Base", "GYO::Engine", "GYO::Model", "GYO::AssetUfbx", "GYO::ToolFramework",
                    "GYO::ToolFrameworkJson",
-                   "GYO::Render", "GYO::ModelRenderer", "GYO::RenderBackendSDLGPU", "GYO::RenderBackendSDL",
+                   "GYO::ModelRenderer", "GYO::ToolFrameworkPreview", "GYO::RenderBackendSDL",
                    "GYO::PlatformSDL", "GYO::ToolFrameworkImGui", "imgui::core",
                    "GYO::Audio", "GYO::AudioBackendSDL"}
 

@@ -61,10 +61,19 @@ class ModelViewerDependencyGuardTests(unittest.TestCase):
         self.assertEqual(findings, ["tools/model_viewer/CMakeLists.txt: links some_game_domain"])
 
     def test_window_targets_pass(self):
+        # Since v8-framework-preview-component the offscreen device and Engine's renderer come through the
+        # framework's preview; the viewer links Engine's model renderer beside it.
         self.assertEqual(self.scan({"tools/model_viewer/CMakeLists.txt":
-                                    "target_link_libraries(gyo_model_viewer_preview PUBLIC GYO::Render GYO::ModelRenderer "
-                                    "GYO::PlatformSDL GYO::RenderBackendSDL PRIVATE GYO::RenderBackendSDLGPU)\n"
+                                    "target_link_libraries(gyo_model_viewer_preview PUBLIC GYO::ModelRenderer "
+                                    "GYO::ToolFrameworkPreview GYO::PlatformSDL GYO::RenderBackendSDL)\n"
                                     "target_link_libraries(gyo_model_viewer PRIVATE GYO::ToolFrameworkImGui imgui::core)\n"}), [])
+
+    def test_offscreen_device_and_renderer_targets_fail(self):
+        # The framework's preview puts them together; naming them again is a dependency edge of its own.
+        findings = self.scan({"tools/model_viewer/CMakeLists.txt":
+                              "target_link_libraries(gyo_model_viewer_preview PRIVATE GYO::Render GYO::RenderBackendSDLGPU)\n"})
+        self.assertEqual(sorted(findings), ["tools/model_viewer/CMakeLists.txt: names GYO::Render",
+                                            "tools/model_viewer/CMakeLists.txt: names GYO::RenderBackendSDLGPU"])
 
     def test_audio_targets_pass_and_their_native_one_fails(self):
         self.assertEqual(self.scan({"tools/model_viewer/CMakeLists.txt":
