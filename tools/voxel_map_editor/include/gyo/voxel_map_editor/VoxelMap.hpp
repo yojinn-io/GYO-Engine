@@ -24,6 +24,8 @@ enum class VoxelMapErrorCode : std::uint8_t {
     BuildRefused,     // the baked text did not pass Engine's ParseVoxelMesh
     ReadFailed,
     WriteFailed,
+    FileChanged,      // a file changed on disk since the editor opened or saved it
+    PreviewFailed,    // the window's preview could not start or draw
 };
 
 [[nodiscard]] constexpr const char* ToString(const VoxelMapErrorCode code) noexcept {
@@ -33,6 +35,8 @@ enum class VoxelMapErrorCode : std::uint8_t {
     case VoxelMapErrorCode::BuildRefused: return "BuildRefused";
     case VoxelMapErrorCode::ReadFailed: return "ReadFailed";
     case VoxelMapErrorCode::WriteFailed: return "WriteFailed";
+    case VoxelMapErrorCode::FileChanged: return "FileChanged";
+    case VoxelMapErrorCode::PreviewFailed: return "PreviewFailed";
     }
     return "Unknown";
 }
@@ -156,5 +160,7 @@ struct BuildOutput final {
 // Files through engine/io. ReadFailed / WriteFailed.
 [[nodiscard]] Result<std::vector<std::byte>> ReadFile(const std::string& path, std::size_t maxBytes);
 [[nodiscard]] Result<void> WriteFileReplacing(const std::string& path, std::string_view text);
+// Whether a file is there; ReadFailed when that cannot be told.
+[[nodiscard]] Result<bool> FileExists(const std::string& path);
 
 } // namespace Gyo::Tools::VoxelMapEditor

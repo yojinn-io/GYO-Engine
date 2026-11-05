@@ -7,8 +7,9 @@ A design tool that edits a map as a grid of shaped, coloured blocks and bakes it
 
 Owner: `voxel_map_editor` (`tools/voxel_map_editor/`).
 
-**Status (2026-11-05): `v8-tool-voxel-map-editor-core`.** The core library and the command line (the `cli`
-variant); the window (`-window`) follows.
+**Status (2026-11-06): `v8-tool-voxel-map-editor-window`.** The core library, the command line and the window
+(the `gui` variant, the default; the `cli` variant has no window). The preview's frame time on large maps is with the
+architecture session (`v8-tool-voxel-window-p1-to-architect`).
 
 ## The grid: `gyo.voxel_grid` version 1
 
@@ -110,17 +111,47 @@ turned stair still collides as boxes. The number is stored in grid files, so thi
 fine), places the grid's origin at the lowest x and z, refuses a box below the floor (y < 0) or not in whole cells,
 and reads the grid it made back with `ParseGrid` before it writes it.
 
+| `edit <grid> <mesh> [--gpu-driver <driver>]` | opens the window (gui variant): a new grid when `<grid>` does not exist; every save writes `<grid>`, then `<mesh>` | 0 when the window closes; 2 in the cli variant |
+| `measure-preview (--grid <grid> \| --synthetic) --csv <file> [--frames <n>] [--gpu-driver <driver>]` | the preview's frame time with one cell edit per frame (P1 of the trial batch) | 0; 3; 4 a frame failed; 2 in the cli variant |
+
 A wrong command line exits with 2.
+
+## The window
+
+- **Editing model** (`Editing.hpp`, in the core, so the CPU tests cover it): place (beside the face the pointer is
+  on, or on the edit plane), erase, paint (another block, the orientation kept), pick a cell's block and orientation,
+  fill or clear a box drawn on the edit plane with a height; the edit plane is one cell layer y, moved with
+  PgUp/PgDn. Undo and redo: a drag is one step; a block or shape edit is one step. A block or shape in use cannot be
+  removed; every block or shape edit must read back through `ParseGrid`.
+- **Picking**: the ray through the pointer's pixel, in Engine's camera convention (`ViewProjection` composes the
+  camera as Engine's `Renderer` does), walked through the cells (DDA); a cell of any shape counts as whole. With no
+  cell hit, the ray meets the edit plane.
+- **Saving**: the grid text, then its build (Engine reads it back); only when both succeed, the grid and then the
+  mesh by atomic replace. A file that changed on disk since it was opened or saved is not overwritten
+  (`FileChanged`); a mesh that could not be written after the grid was is reported, and `verify` finds the pair
+  different.
+- **Preview**: after every change the whole grid is built and Engine's `ParseVoxelMesh` and `ExpandVoxelMesh` give
+  what is drawn, on the framework's offscreen preview ([preview.md](../framework/preview.md)), with Engine's unlit
+  shader and the palette texture, as the game draws it. The pointer's cell and the edit plane's grid are lines of
+  ImGui's draw list, projected by the same `ViewProjection`.
 
 ## Design Invariants
 
 A change against any item below is an Architecture Delta that needs the user's agreement, however small
 (AGENTS.md section 3). So is changing this section. (User, 2026-11-05, `v8-tool-voxel-map-editor-core` declaration.)
 
-1. **Dependencies.** The editor links no game and names no product. It uses Engine (`GYO::VoxelMesh`, engine/io,
-   `GYO::Base`), the framework's headless shell, and its own JSON parser. It includes no SDL or ImGui header and
-   names no SDL, ImGui, render, platform or `*Native` target. Guard: the dependency guard
-   (`tests/voxel_map_editor/voxel_map_editor_dependency_guard.py`, a positive list) and its self-test.
+1. **Dependencies.** The editor links no game and names no product. It has two parts.
+   - The **core** (every file outside `src/window/`; the libraries `gyo_voxel_map_editor_core` and
+     `gyo_voxel_map_editor`) uses Engine (`GYO::VoxelMesh`, engine/io, `GYO::Base`, `GYO::Math`), the framework's
+     headless shell and its own JSON parser. It includes no SDL or ImGui header (nor the framework's ImGui binding)
+     and links no SDL, ImGui, render, platform or `*Native` target; of the window it includes only the entry header
+     `window/EditorWindow.hpp`.
+   - The **window** (`src/window/`, the library `gyo_voxel_map_editor_window`, gui variant only) may also use the
+     framework's ImGui shell and offscreen preview (`GYO::ToolFrameworkImGui`, `GYO::ToolFrameworkPreview`), Engine's
+     `GYO::Render`, `GYO::RenderBackendSDL`, `GYO::PlatformSDL`, and `imgui.h` (`imgui::core`). It still includes no
+     `SDL3/` header, uses no `SDL_` name, no `*Native` header or target, no `imgui_internal.h` or ImGui backend.
+   Guard: the dependency guard (`tests/voxel_map_editor/voxel_map_editor_dependency_guard.py`, a positive list per
+   part) and its self-test. (`v8-tool-voxel-map-editor-window`, user, 2026-11-06.)
 2. **One validator.** Whether a baked file is valid is decided by Engine's `ParseVoxelMesh` alone. The editor keeps
    no copy of its rules: it reads every text it bakes back through it and returns nothing Engine refuses. Guard:
    "build: what Engine refuses is not returned", the command-line test `build_refused`, and their mutants.
@@ -130,10 +161,15 @@ A change against any item below is an Architecture Delta that needs the user's a
 4. **Lossless.** The collision boxes are disjoint and their union is the union of every block's boxes; a face is
    dropped only when a neighbour covers that whole side. Guard: the 200 random merge sets, and the cullface test,
    which compares whole quad lists (a cube, two cubes, a cube beside a slab) and a stair's two sides.
-5. **Writes only what it makes.** The baked file or the grid a command names, by atomic replace through engine/io.
-   No catalog, product file or arena. Guard: the command-line test (refused inputs write nothing).
+5. **Writes only what it makes.** The baked file or the grid a command names; the window, the grid and the mesh its
+   command line names. Each by atomic replace through engine/io, and the window never overwrites a file that changed
+   on disk since it was opened or saved. No catalog, product file or arena. Guard: the command-line test (refused
+   inputs write nothing) and the save tests (W5).
 6. **The grid is the tool's.** `gyo.voxel_grid` has one reader, this tool; Engine knows no blocks, shapes or
    orientations (`voxel-mesh.md`, Design Invariant 1). Guard: review.
+7. **What is shown is what the game reads.** The preview draws the geometry Engine's `ParseVoxelMesh` and
+   `ExpandVoxelMesh` give for the text `BuildMesh` returns; the editor makes no triangles of its own from the grid.
+   Guard: W6 ("preview: what is drawn is Engine's expansion of the baked text") and its mutant. (User, 2026-11-06.)
 
 ### Replacement Criteria
 

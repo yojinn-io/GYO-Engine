@@ -74,3 +74,21 @@
   - 讀了 `docs/framework/preview.md` 的 DI 與 Replacement Criteria、工具的 DI，以及 model_viewer 的 gui 版本（CMake、`PreviewMeasure`、依賴守衛）。
   - 重估為 16～22 h。
   - 事前宣告寫進 voxel-map-editor.md，裡面包括：改 DI 1 和 DI 5、新增 DI 7，以及判定 W1～W11 和 P1。等你核准，核准前不實作。
+- 2026-11-06：你核准 window 批的宣告（「承認する」），開始實作。
+  - 核心的編輯模型、拾取、存檔（`Editing.hpp`／`Editing.cpp`）寫完；W1～W3、W5～W7 的測試共 34 個 test case，本機全部通過。
+  - 視窗、預覽、`measure-preview` 都能建置。
+  - **停下（AGENTS §14：原因改變計畫的前提）**：用 `measure-preview` 試跑 30 幀（探索用，不是 P1 的正式量測）。
+    - 合成地圖（64×16×64、填 30%）：每幀約 2.5 s。
+      - 產物有 124,236 個四邊形、20,691 個碰撞盒，文字 5.3 MB；
+      - build 約 1.36 s，其中 Engine 讀回約 1.2 s；
+      - 預覽又再讀一次，約 1.2 s。
+    - `pvp_corners`：p95 13.1 ms。
+    - 結論：「每次編輯都整張 build，並經過文字往返」在合成地圖上差了兩個數量級，宣告中的 P1 (b) 必然不過（Replacement Criteria 3）。
+  - 程式留在工作樹，沒有提交。
+  - 證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/window/explore-p1/`。
+  - 等你決定做法。
+- 2026-11-06：你決定（經旁支會話轉達，`v8-tool-voxel-window-p1-to-architect`）：
+  - 原話：「現在為何會有地圖編輯器，就是在為大地圖做準備。要不然就更本不需要編輯器這個東西。」「把這個問題轉給架構師，讓他來考慮。現在 map editor 這邊就想像如何做出editor，性能問題由架構師來處理。」
+  - 效能問題（P1）交給架構會話，旁支已把觀測轉過去。
+  - 縮小測試地圖或範圍的做法（A／D）不採用，因為大地圖正是編輯器存在的理由。
+  - 這一批繼續完成編輯器的功能與互動。P1 的宣告怎麼改，等架構師的結論；要改宣告時先回報你。

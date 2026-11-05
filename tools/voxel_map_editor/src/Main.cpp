@@ -1,4 +1,5 @@
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
+#include "window/EditorWindow.hpp"
 
 #include "gyo/framework/HeadlessShell.hpp"
 
@@ -23,6 +24,9 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor verify  <grid> <mesh>\n"
     "  gyo_voxel_map_editor inspect <file>\n"
     "  gyo_voxel_map_editor import-boxes <json> <pointer> <grid>\n"
+    "  gyo_voxel_map_editor edit <grid> <mesh> [--gpu-driver <driver>]\n"
+    "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic) --csv <file>\n"
+    "                       [--frames <n>] [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor --help\n"
     "\n"
     "build bakes a gyo.voxel_grid into a gyo.voxel_mesh that Engine accepts and\n"
@@ -30,6 +34,9 @@ constexpr std::string_view kHelp =
     "with <mesh>. inspect summarizes a grid or a baked mesh. import-boxes makes a\n"
     "grid of cubes from the boxes at a JSON pointer (for example /walls), each\n"
     "{\"min\": [x, y, z], \"max\": [x, y, z]} in whole cells.\n"
+    "edit opens the window (gui variant): a new grid when <grid> does not exist;\n"
+    "every save writes <grid> and then <mesh>. measure-preview times the window's\n"
+    "preview for an edit per frame (gui variant).\n"
     "Exit status: 0 done, 1 an input the formats refuse, 2 usage, 3 a file could\n"
     "not be read or written, 4 verify found a different mesh.\n";
 
@@ -145,6 +152,39 @@ int Run(const std::span<const std::string> arguments) {
     if (command == "import-boxes") {
         if (arguments.size() != 5) return Usage("import-boxes takes <json> <pointer> <grid>");
         return ImportBoxesCommand(arguments[2], arguments[3], arguments[4]);
+    }
+    if (command == "edit") {
+        if (arguments.size() != 4 && !(arguments.size() == 6 && arguments[4] == "--gpu-driver"))
+            return Usage("edit takes <grid> <mesh> [--gpu-driver <driver>]");
+        WindowOptions window;
+        window.gridPath = arguments[2];
+        window.meshPath = arguments[3];
+        if (arguments.size() == 6) window.gpuDriver = arguments[5];
+        return RunEditorWindow(window);
+    }
+    if (command == "measure-preview") {
+        MeasureOptions measure;
+        for (std::size_t i = 2; i < arguments.size(); ++i) {
+            const std::string& option = arguments[i];
+            if (option == "--synthetic") {
+                measure.synthetic = true;
+                continue;
+            }
+            if (i + 1 >= arguments.size()) return Usage(option + " needs a value");
+            const std::string& value = arguments[++i];
+            if (option == "--grid") measure.gridPath = value;
+            else if (option == "--csv") measure.csvPath = value;
+            else if (option == "--gpu-driver") measure.gpuDriver = value;
+            else if (option == "--frames") {
+                if (value.empty() || value.size() > 6 || value.find_first_not_of("0123456789") != std::string::npos ||
+                    std::stoul(value) == 0)
+                    return Usage("--frames takes a whole number from 1 to 999999");
+                measure.frames = static_cast<std::uint32_t>(std::stoul(value));
+            } else return Usage("unknown option " + option);
+        }
+        if (measure.csvPath.empty() || measure.synthetic == !measure.gridPath.empty())
+            return Usage("measure-preview takes --grid <grid> or --synthetic, and --csv <file>");
+        return RunPreviewMeasure(measure);
     }
     return Usage("unknown command " + command);
 }

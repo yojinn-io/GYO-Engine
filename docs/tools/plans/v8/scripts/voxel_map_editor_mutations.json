@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9 of the declaration in docs/tools/plans/v8/voxel-map-editor.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
+  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9) and v8-tool-voxel-map-editor-window (judgment W10; ids vmw-* of the declaration in docs/tools/plans/v8/voxel-map-editor.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
   "mutants": [
     {
       "id": "vme-cull-partial",
@@ -221,6 +221,192 @@
         "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py"
       ],
       "expect": "includes SDL3/SDL.h"
+    },
+    {
+      "id": "vmw-stroke-split",
+      "what": "Every cell of a drag is its own undo step",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    const bool ownStroke = !stroke_;\n    if (ownStroke) BeginStroke();\n    auto& changes",
+      "replace": "    const bool ownStroke = true;\n    if (ownStroke) BeginStroke();\n    auto& changes",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W2 undo: a drag*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-undo-keeps-after",
+      "what": "Undo sets the new value again instead of the old one",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "document_.Set(change->cell, change->before);",
+      "replace": "document_.Set(change->cell, change->after);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W2 undo*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-redo-kept-after-edit",
+      "what": "A new edit keeps the undone steps after it",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    steps_.resize(position_);\n",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W2 undo: a new edit*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-dda-skips",
+      "what": "The walk steps two cells at a time",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        cell[axis] += step[axis];",
+      "replace": "        cell[axis] += 2 * step[axis];",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W3 pick*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-normal-flipped",
+      "what": "The hit face is the one the ray leaves through",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        normal[axis] = -step[axis];",
+      "replace": "        normal[axis] = step[axis];",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W3 pick*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-ray-square",
+      "what": "The pixel's ray ignores the image's aspect ratio",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    const float aspect = static_cast<float>(width) / static_cast<float>(height);",
+      "replace": "    const float aspect = 1.0F;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*projected to a pixel*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-plane-top-ignored",
+      "what": "Coming down, the ray meets the plane layer's bottom, not its top",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "direction[1] < 0.0 ? planeY + 1.0 : static_cast<double>(planeY)",
+      "replace": "static_cast<double>(planeY)",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*edit plane*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-save-ignores-change",
+      "what": "Saving overwrites a file that changed on disk",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        if (*now != file->known)",
+      "replace": "        if (false)",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W5 save*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-mesh-before-grid",
+      "what": "The mesh is written before the grid, so a grid that fails leaves a mesh behind",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    if (auto written = WriteFileReplacing(files.grid.path, gridText); !written) return written;",
+      "replace": "    static_cast<void>(WriteFileReplacing(files.mesh.path, built->text));\n    if (auto written = WriteFileReplacing(files.grid.path, gridText); !written) return written;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W5 save*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-sha-not-saved-grid",
+      "what": "The mesh's source_sha256 is not of the grid bytes saved",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    auto built = BuildMesh(document, AsBytes(gridText));",
+      "replace": "    auto built = BuildMesh(document, {});",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W5 save*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-preview-own-colours",
+      "what": "The preview changes Engine's expansion (colours of its own)",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    return Engine::VoxelMesh::ExpandVoxelMesh(*parsed);",
+      "replace": "    auto own = Engine::VoxelMesh::ExpandVoxelMesh(*parsed);\n    for (std::size_t i = 0; i < own.paletteRgba8.size(); i += 4) own.paletteRgba8[i] = std::byte{255};\n    return own;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W6 preview*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-remove-used-block",
+      "what": "A block in use can be removed",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    if (AnyCellUses(document_, removed))",
+      "replace": "    if (false)",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W7 palette*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-remove-used-shape",
+      "what": "A shape a block uses can be removed",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        if (block.shape == index)\n            return Refuse",
+      "replace": "        if (false)\n            return Refuse",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W7 shapes*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-cell-range-off-by-one",
+      "what": "A cell at 2^16 after adding origin is accepted",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        if (at < -CellLimit || at > CellLimit - 1) return false;",
+      "replace": "        if (at < -CellLimit || at > CellLimit) return false;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W1 edits: refused*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-paint-turns",
+      "what": "Paint resets the cell's orientation",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    return ApplyCell(cell, {block, current.orientation});",
+      "replace": "    return ApplyCell(cell, {block, 0});",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W1 edits: place*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmw-guard-core-imgui",
+      "what": "The core includes an ImGui header",
+      "file": "tools/voxel_map_editor/src/Main.cpp",
+      "find": "#include \"gyo/framework/HeadlessShell.hpp\"",
+      "replace": "#include \"gyo/framework/HeadlessShell.hpp\"\n#include <imgui.h>",
+      "command": [
+        "{python}",
+        "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "includes imgui.h"
+    },
+    {
+      "id": "vmw-guard-window-native",
+      "what": "The window includes an Engine native header",
+      "file": "tools/voxel_map_editor/src/window/PreviewScene.cpp",
+      "find": "#include \"engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp\"",
+      "replace": "#include \"engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp\"\n#include \"engine/render/backend/sdl/SdlRendererNative.hpp\"",
+      "command": [
+        "{python}",
+        "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "includes engine/render/backend/sdl/SdlRendererNative.hpp"
+    },
+    {
+      "id": "vmw-guard-core-links-render",
+      "what": "The core library links Engine's render target",
+      "file": "tools/voxel_map_editor/CMakeLists.txt",
+      "find": "    PUBLIC GYO::Base GYO::Engine GYO::Math GYO::VoxelMesh",
+      "replace": "    PUBLIC GYO::Base GYO::Engine GYO::Math GYO::VoxelMesh GYO::Render",
+      "command": [
+        "{python}",
+        "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "gyo_voxel_map_editor_core links GYO::Render"
     }
   ]
 }
