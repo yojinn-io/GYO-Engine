@@ -1,0 +1,141 @@
+# v8 工具：voxel 地圖編輯器（`v8-tool-voxel-map-editor`）
+
+更新：2026-11-05（`v8-tool-voxel-map-plan`）。Owner：新工具 `voxel_map_editor`（編輯器、格子格式、build）；Engine（建置產物的格式與讀取器）；framework（3D 預覽元件，owner 是架構會話）；`object_fps_pvp`（arena v2、step-up）。記錄器是 [HANDOFF](HANDOFF.md)，工具線的總覽在 [README](README.md)。
+
+**狀態：方案與分批已由使用者確認（2026-11-05）。還沒有實作；每一批等使用者說「開始」，開始前寫事前宣告。**
+
+## 由來
+
+- 照 `v8-tool-scope-ui-first`，地圖編輯器的方案由使用者給，工具線不先提案。
+- 使用者給的材料：自己寫的報告《用方塊製作遊戲地圖：Voxel 技術說明》（PDF 與文字版在主 checkout 的 `build/evidence/tool-v8-voxel-map/plan/`）。
+- 使用者的方向（2026-11-05）：「格子是用來做地圖編輯的。build之後成為mesh。也就是我文章裡面提到的技術。goxel、MagicaVoxel，是製作工具的UI的交互邏輯。GridMap則可以成為存儲格式，voxel則是 editor格式。」
+- 做法：
+  - 主會話讀了三個參考專案的原始碼或規格：Goxel（GPL-3.0，只參考設計）、MagicaVoxel 的 `.vox`、Godot 的 GridMap（MIT）。
+  - 經兩輪 Fable／high 的統合（唯讀的 Plan agent，只有統合者一人，**沒有**敵對式檢查者，所以不算完整的 ultracode）。
+  - 再和使用者逐點定案。
+  - 討論經過與兩輪統合的原文在 `build/evidence/tool-v8-voxel-map/plan/plan-discussion.md`。
+
+## 參考專案：借了什麼
+
+| 參考 | 借用 | 不借 |
+|---|---|---|
+| Godot GridMap（`modules/gridmap/`，master `bf194eb5`） | 儲存結構（整數座標→格子內容、24 種直角朝向）；編輯器的操作（編輯平面、樓層、塗、擦、吸取、框選、貼上、游標旋轉）；編輯器只經公開 API 改資料 | 每格擺預製網格＋MultiMesh 的繪製（GYO 的 Render 沒有 instancing）；宣告了卻沒用到的 `layer` 欄位 |
+| Goxel（`src/volume*.c`、`src/tools/`） | 稀疏的 16³ 區塊；頂點 UV 指向調色盤貼圖；筆刷類工具的手感 | 每個 voxel 存 RGBA（地圖需要方塊種類）；程式碼（GPL-3.0） |
+| MagicaVoxel `.vox` | 「索引 → 定義」的調色盤 | 單一模型 256³ 的上限、z 朝上 |
+| Minecraft 的 block model | 形狀＝一組 1/16 單位的盒子；只剔除蓋滿整個格面的面（cullface）；用半磚和朝向做樓梯 | — |
+
+## Feature → Contract → Architecture（AGENTS §2）
+
+**Feature（玩家和編輯者看到什麼）**
+
+- 用方塊編輯地圖：有二樓、有樓梯、二樓可以出生；方塊有形狀和朝向，方便做地形和裝飾。
+- 遊戲載入編輯好的地圖，碰撞、射線、出生判定和畫面都一致。
+- 出問題時，可以從檔案反查。
+
+**Contract（約定什麼）**
+
+| 契約 | owner | 讀者 | 內容 |
+|---|---|---|---|
+| 格子原始檔 `gyo.voxel_grid` | 工具 `voxel_map_editor` | 只有編輯器（和它的 CLI） | JSON，依 16³ 區塊分段，區塊內 RLE；形狀庫（每種形狀是一組 1/16 單位的盒子）；方塊＝{名稱, 形狀, 顏色}；每格 [方塊索引, 朝向（24 種）]；`origin`（y 固定 0）、`cell_size` |
+| 建置產物（名稱在 `v8-engine-voxel-mesh-contract` 定） | Engine | Client（繪製）、Match 和 Client（碰撞），工具（寫出後讀回驗證） | JSON，全部是整數（1/16 格）：`schema`、`version`、`source_sha256`、`build_version`、`origin`、`cell_size`、調色盤、四邊形清單 `[x,y,z,方向,寬,高,調色盤]`、`colliders`（AABB）。讀取器把四邊形展開成三角形，展開規則屬於契約 |
+| arena v2 | `object_fps_pvp`（之後歸場景編輯器） | Match、Client | 檔案的 schema 是 v2：用相鄰檔名引用產物，取代 `walls`；出生點、`width`／`depth`、移動參數照舊手寫。記憶體裡的 `Arena.version` 維持 1 |
+
+**Architecture（結構怎麼變）**
+
+```text
+[工具] voxel_map_editor
+  ├─ 讀寫 gyo.voxel_grid（原始檔放 build/art-source/，git 不追蹤）
+  ├─ build：形狀展開與旋轉 → 面剔除 → 6 方向亮度的調色盤 UV → 合併碰撞 AABB
+  │    ├─▶ 記憶體裡的結果 ─▶ [framework] 3D 預覽元件（畫面外繪製、讀回、ImGui 貼圖、OrbitCamera）
+  │    └─▶ 存檔時一定同時寫出產物（附 source_sha256、build_version）─▶ assets/<產品>/…（catalog 登錄）
+  └─ 拾取：編輯平面求交＋對格子的 DDA
+
+[Engine] 產物的讀取器（唯一的驗證者）
+  ├─▶ Client：四邊形 → MeshData → CreateMesh、MeshSubmission
+  └─▶ Match／Client：colliders → Arena::walls（既有的碰撞、ShotQuery、出生判定都不改）
+```
+
+- 依賴方向：工具 → framework → Engine；產品 → Engine。Engine 不知道工具和產品，Runtime 不依賴編輯器（AGENTS §6、§8）。
+- 分層的依據：`docs/architecture.md`「Layers: admission and format ownership」與 framework 的 Design Invariants 3、5。
+
+## 已定案的決定
+
+代號照 `v8-tool-voxel-…`；使用者原話在 [HANDOFF](HANDOFF.md) 的決定紀錄。
+
+| 代號 | 決定 |
+|---|---|
+| `v8-tool-voxel-contract-split` | 契約拆兩層：格子原始檔（工具持有）＋建置產物（Engine 持有）。之後另外做場景編輯器，接手 arena v2 和玩法標記 |
+| `v8-tool-voxel-offline-build` | 離線 build，產物存檔，遊戲只讀產物；碰撞也烘進產物；產物記原始檔的 SHA-256 和 build 版本 |
+| `v8-tool-voxel-layers` | 產物格式與讀取器＝Engine；格子格式、build、拾取＝工具；3D 預覽元件＝framework；catalog 登錄沿用 framework 的 `CatalogPlan`／`RegisterAsset`；arena v2＝產品 |
+| `v8-tool-voxel-units` | 整數，1/16 格的子單位。讀取器換算世界座標 `(index+origin)×cell_size/16` 和 UV `(c+0.5)/s`，每一步只捨入一次，各平台結果相同 |
+| `v8-tool-voxel-artifact-encoding` | 產物用 JSON 四邊形清單（見上表）；不依區塊切、不附空間索引，兩者寫進 Replacement Criteria |
+| `v8-tool-voxel-render` | 面剔除＋6 個方向的亮度（Render 只有 unlit、沒有 nearest 取樣，所以 UV 取格子中心；Render 沒有 mipmap）。繪製的 greedy、AO 是候選 |
+| `v8-tool-voxel-arena-v2` | 只有檔案的 schema 是 v2，`Arena.version` 維持 1；產物的碰撞填進 `Arena::walls`。wire、digest 演算法、協議文件都不變（pv6 §2：arena 內容的修改不是 wire 變更）。`walls≤1024` 不放寬，build 超過就失敗 |
+| `v8-tool-voxel-grid-format` | 格子檔：JSON、依 16³ 區塊分段、區塊內 RLE；形狀用資料定義；24 種直角朝向 |
+| `v8-tool-voxel-coords` | origin 的 y 固定為 0，地板維持隱含的 y=0 平面；`width`／`depth` 在 arena v2 手寫（使用者無偏好，採建議） |
+| `v8-tool-voxel-spawn` | 出生點手寫在 arena v2，編輯器不知道它們；`Arena::Validate` 的 `y==0` 改成「腳下要有支撐（地板或 AABB 頂面）」，這是 arena 契約變更，wire 不變 |
+| `v8-tool-voxel-stairs` | B1：用形狀和朝向做出階梯，碰撞仍然全是 AABB；step-up 是產品批，由產品會話做。B2 斜坡另立 Feature，本線只把形狀做成可以擴充的資料 |
+| `v8-tool-voxel-preview-framework` | PR #146 合併後，抽出 framework 的 3D 預覽元件成一批，model_viewer 同一批改用；和架構會話協調 |
+| `v8-tool-voxel-first-tools` | 第一版：編輯平面與樓層、塗、擦、吸取、框選填滿／清空、選方塊與朝向、調色盤與形狀庫的編輯、undo；擠出、圖層、形狀筆刷延後；P1 先重新宣告再量 |
+| `v8-tool-voxel-source-location` | 原始檔放 `build/art-source/`，位置由編輯器決定；編輯器存檔時一定同時寫出產物；**CI 不重新 build**，只驗證產物本身；本機可以用 CLI 的 `verify` 比對原始檔和產物 |
+| `v8-tool-voxel-retire-v1` | v1 退役的證據：先比對合併後的 AABB 集合是否等於 v1 的 `walls`（不相等就先調整合併的掃描順序），再用固定命令序列比對移動軌跡，最後 L3 進遊戲走一圈 |
+
+## 分批
+
+- 檔位照[變速箱規則](../../../../agents/effort-gearbox.md)，模型照[領航員規則](../../../../agents/navigator.md)，格式是「檔位｜模型」。
+- 估時是第一版，誤差可能到 ±50%。每批開始前重估；超過估時 1.5 倍，或單一問題累計超過 2 小時，就停下回報。
+
+```
+v8-tool-voxel-map-editor
+├── v8-tool-voxel-map-plan ✓              「medium｜Opus｜本文件、README、HANDOFF、dev_log」
+├── v8-engine-voxel-mesh-contract         「high｜Opus｜Engine：產物的格式、讀取器、驗證規則、Design Invariants」
+├── v8-framework-preview-component        「high｜Opus｜framework：抽出 3D 預覽元件，model_viewer 改用（等 #146）」
+├── v8-tool-voxel-map-editor-core         「high｜Opus｜工具：登錄、格子格式、形狀庫、build、CLI」
+├── v8-tool-voxel-map-editor-window       「high｜Opus｜工具：ImGui 視窗、編輯平面、工具、朝向、undo、預覽」
+├── v8-product-arena-v2                   「high｜Opus｜產品批：arena v2、出生點支撐規則、兩張地圖轉換、v1 退役」
+├── v8-product-step-up                    「high｜Opus｜產品批：走上半格台階（產品會話做）」
+└── v8-tool-voxel-map-editor-trial        「medium｜Opus｜P1 量測、L3 試用」
+```
+
+| 代號 | 段 | 檔位｜模型（實作／審查／驗證） | 估時 | 內容 | 驗收 | 依賴 |
+|---|---|---|---|---|---|---|
+| `v8-tool-voxel-map-plan` ✓ | 下段（只有文件） | medium｜Opus／—／— | 2～3 h | 本文件、README、HANDOFF、dev_log；參考資料存證 | 使用者確認 | — |
+| `v8-engine-voxel-mesh-contract` | 上段（新 Subsystem、Data Contract） | high｜Opus／Opus／Opus | 8～12 h | Engine 新模組：產物的解析、驗證、四邊形展開、1/16 換算；只依賴 Base 和 Math，讓 Match 不帶 Render 也能連結；給 Render 的是 `MeshView`／`ImageView`。寫 `docs/architecture/<模組>.md` 的 Design Invariants 和 Replacement Criteria（比照 [animation-events.md](../../../architecture/animation-events.md)） | CI：每條規則一組測試＋相關突變；展開的黃金值；換算的跨平台一致性 | — |
+| `v8-framework-preview-component` | 上段（framework 公開介面、DI） | high｜Opus／Opus／Opus | 6～10 h | 從 model_viewer 的 `PreviewRenderer` 抽出中立的部分（畫面外裝置、`Renderer`、讀回、上傳、`OrbitCamera`）；由客戶端建立（framework 的 Replacement Criteria：外殼不替客戶端建裝置）；model_viewer 同一批改用 | CI：framework 的測試與守衛；model_viewer 的既有測試不變；model_viewer 的 P1 重跑 | PR #146 合併；架構會話同意 |
+| `v8-tool-voxel-map-editor-core` | 上段（產物寫出端，牽動 Engine 契約） | high｜Opus／Opus／Opus | 12～18 h | 登錄 `tools.csv`（`release=false`）；`gyo.voxel_grid` 的讀寫；形狀庫；build（形狀旋轉、cullface、方向亮度、AABB 合併、固定掃描順序）；CLI `build`／`verify`／`inspect`／`convert-arena-v1`；寫出後經 Engine 讀回；寫 `docs/voxel_map_editor/architecture.md` 的 DI（含「格子出現第二個讀者時升到 Engine」） | CI：build 的黃金值（1 格立方體 6 個面、內部面 0、半磚和階梯的 AABB）；同輸入同位元組；往返不失真；相關突變 | engine 批 |
+| `v8-tool-voxel-map-editor-window` | 上段（使用者操作的手感） | high｜Opus／Opus／Opus | 12～20 h | ImGui 視窗；編輯平面與樓層、DDA 拾取；`v8-tool-voxel-first-tools` 的工具；undo（每次拖曳一筆，記格座標與新舊值）；預覽用 framework 元件 | CI：編輯模型與 undo 的單元測試；P1 事前宣告 | framework 批、core 批 |
+| `v8-product-arena-v2` | 上段（Data Contract、Match） | high｜Opus／Opus／Opus | 6～10 h | arena v2 的載入（`Arena.version` 維持 1）；出生點的支撐規則；兩張現行地圖轉成格子並 build；產物登錄 catalog、列入 `RETAINED`；改 [assets.zh-Hant.md](../../../object_fps_pvp/assets.zh-Hant.md)。**產品批**，由誰做在開始前和產品會話定 | CI：`v8-tool-voxel-retire-v1` 的集合與軌跡等價；digest 的既有測試；資產契約測試 | core 批 |
+| `v8-product-step-up` | 上段（移動、預測） | high｜Opus／Opus／Opus | 產品會話估 | 角色走上半格高的台階；Match 和 Client 的預測同一份規則。**產品批**，由產品會話做 | 產品會話宣告 | arena-v2 批（要有階梯地圖） |
+| `v8-tool-voxel-map-editor-trial` | 下段 | medium｜Opus／—／— | 3～5 h＋L3 | P1 量測；L3：使用者用 GUI 建一張有二樓和階梯的地圖，進遊戲走一圈 | 照事前宣告 | 全部 |
+
+- 總估時（不含 step-up）約 49～78 h。
+- 順序：contract → core →（framework）→ window → arena-v2 → trial。framework 那批可以在 #146 合併後和 core 並行。
+- 每批都屬於 Architecture Delta：開始前讀該 owner 的 Design Invariants，事前宣告寫明 Delta，並取得使用者同意（AGENTS §3）。Render 和 Collision 沒有 Design Invariants 文件；本線不改它們的介面，如果之後要改，得先補文件。
+
+## 風險
+
+- **格子出現第二個讀者**（例如場景編輯器要在格子上擺東西）：格子就要升到 Engine，等於再搬一次契約。寫進工具的 Replacement Criteria。
+- **改了碰撞盒的分解演算法，digest 就會變**：舊的 Client 全部不相容。`build_version` 要和內容一起管理。
+- **v1 退役的等價不是必然成立**：合併出來的盒子不一定和手寫的牆相同，所以先比集合（`v8-tool-voxel-retire-v1`）。
+- **CI 不重新 build**：原始檔和產物是否一致，只靠「編輯器存檔時一定同時寫出產物」和 `source_sha256`。原始檔放在 git 不追蹤的位置，遺失就只剩產物。
+- **framework 批要等 PR #146 合併**：#146 如果再改 `PreviewRenderer` 的介面，這一批要重估。
+- **P1**：編輯時要局部重建預覽，每幀的工作比 model_viewer 多，(B′) 的讀回可能不夠快。
+
+## 候選與延後
+
+| 項目 | 何時再看 |
+|---|---|
+| 繪製的 greedy | 量到三角形數或產物大小的壓力 |
+| AO | Render 有頂點屬性和光照時（Render 的 Delta） |
+| 空間索引、產物依區塊切 | 量到載入或碰撞查詢的壓力；`walls≤1024` 不夠時 |
+| B2 斜坡 | B1 完成後，用實際地圖確認範圍；最好和下一次已經要改協議的批次一起做（Collision 的新形狀、`Arena` 新成員、新的 pvN） |
+| 地板用方塊（坑洞、地下層） | 產品要這個 Feature 時 |
+| 擠出、圖層、形狀筆刷 | 第一版用過之後 |
+| 地圖搬進 `maps/`、改用 asset id 引用 | `v8-product-asset-path-loaded-move`（[asset-layout.md](../../../object_fps_pvp/plans/v8/asset-layout.md)） |
+
+## 證據
+
+- 主 checkout 的 `build/evidence/tool-v8-voxel-map/plan/`（git 不追蹤）：
+  - 使用者的報告（PDF＋文字版）；
+  - Goxel、`.vox` 規格、Godot GridMap 的原始檔，出處在 `reference/SOURCES.txt`；
+  - 兩輪統合與逐點討論的計畫檔 `plan-discussion.md`。
