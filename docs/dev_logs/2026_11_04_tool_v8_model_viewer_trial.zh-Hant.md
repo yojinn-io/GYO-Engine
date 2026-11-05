@@ -25,6 +25,13 @@
   - `p1-frames.csv`、`p1-summary.txt`、`p2-roundtrip.txt`、`commit.txt`；
   - `l3-window.txt`。
 
+## L1 的失敗與修正（2026-11-05）
+
+- L1（run 41852235377，`e9d7ee7c`）的 linux-x64 與 windows-x64 失敗：`os.boundary_guard` 指出 `PreviewMeasure.cpp` 用了 `std::ofstream`（docs/architecture/os.md 的 R4：工具的檔案存取要經 engine/io）。
+- 原因：加了 `measure-preview` 之後，我只跑了量測，沒有跑整套 `cpu|shader`，所以本機沒抓到。實作的錯，守衛是對的。
+- 修正：CSV 先在記憶體裡組好，最後用 `WriteReplacing`（engine/io）一次寫出。量測的內容與計時的範圍都沒變；P1 的數字是修正前量的，只有寫檔的方式不同。
+- 修正後：本機 `cpu|shader` 119／119 通過；用 5 幀試跑，CSV 的列數正確。
+
 ## 發現（不在本批範圍）
 
 - PvP 讀 `gyo.event_sounds`，遊戲裡的換彈聲才會跟著工具配的聲音變。這是 PvP 那一側的候選工作。

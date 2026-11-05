@@ -1,5 +1,7 @@
 #include "ViewerWindow.hpp"
 
+#include "FileAccess.hpp"
+
 #include "gyo/model_viewer/ModelContent.hpp"
 #include "gyo/model_viewer/Playback.hpp"
 #include "gyo/model_viewer/PreviewRenderer.hpp"
@@ -12,7 +14,8 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
-#include <fstream>
+#include <span>
+#include <sstream>
 #include <iostream>
 #include <vector>
 
@@ -60,7 +63,8 @@ int RunPreviewMeasure(const MeasureOptions& options) {
         std::cerr << "error: " << Engine::Base::Describe(content.error()) << '\n';
         return 4;
     }
-    std::ofstream csv(std::filesystem::path(std::u8string(options.csvPath.begin(), options.csvPath.end())));
+    // Written once at the end, through engine/io (the OS layer's file rule).
+    std::ostringstream csv;
     csv << "model,clip,frame,clip_seconds,frame_ms\n";
     int failures = 0;
     for (const auto* asset : content->Models()) {
@@ -117,6 +121,11 @@ int RunPreviewMeasure(const MeasureOptions& options) {
         std::printf("%s clip=%s frames=%zu/%u p50=%.3f p95=%.3f p99=%.3f max=%.3f ms\n", asset->id.c_str(),
                     clip ? model.clips[*clip].name.c_str() : "(none)", times.size(), options.frames, at(0.5), at(0.95),
                     at(0.99), sorted.empty() ? 0.0 : sorted.back());
+    }
+    const std::string text = csv.str();
+    if (auto written = WriteReplacing(options.csvPath, std::as_bytes(std::span(text.data(), text.size()))); !written) {
+        std::cerr << "error: " << Engine::Base::Describe(written.error()) << '\n';
+        return 3;
     }
     return failures == 0 ? 0 : 4;
 }
