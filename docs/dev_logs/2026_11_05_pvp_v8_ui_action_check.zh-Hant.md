@@ -54,6 +54,9 @@
      - 解析失敗時，錯誤訊息等於 codec 的訊息。
 3. **ミューテーションテスト**：通過，宣告的 4 條加審查後的 2 條，6／6 killed（見下方「突變」）。
 4. **L1**：待 PR。
+   - 第一次（#151，run `41979130043`，head `bf5daa57`）：linux-x64、macos-arm64 通過。windows-x64 失敗：建置成功（第 6 步，約 4 分），第 7 步跑測試 45 分鐘後 runner 斷線，訊息是「The hosted runner lost communication with the server」，job 的 log 與 junit 都沒留下（API 回 BlobNotFound）。
+   - 原因切分（§14.1）：無法確定。指向環境的證據：斷線訊息、沒有任何測試的失敗輸出。不能排除的疑點：平常 Windows 整個 job 10～12 分，這次測試步驟就 45 分；但每個 ctest 測試都有 TIMEOUT，單一測試卡住會被砍掉，不該拖到 45 分。本批改的程式在 CI 上只跑得到純函式的測試。
+   - 處理：合入 master（`1a60d87c`，帶進 #149），本機重建後 PvP `cpu|shader` 50／50（`ctest-pvp-after-master-merge.txt`），推送後重跑 L1。第一次的失敗記在這裡，不被之後的結果覆蓋。
 5. **L3**：不需要（事前宣告）。
 
 ## 突變
@@ -111,3 +114,4 @@
 - `lobby-tests.txt`：審查前大廳測試的結果。
 - `ctest-pvp-cpu-shader.txt`：判定 1 的 50／50。
 - `mutations.txt`、`mutations-run.txt`：突變結果。
+- `build-after-master-merge.txt`、`ctest-pvp-after-master-merge.txt`：合入 master 後的重建與 50／50。
