@@ -65,3 +65,4 @@
 - 2026-11-05：core 批的 L1 三平台通過（run 42010316153，`5f410c60`），批次完成。
 - 2026-11-05：你選 `v8-product-arena-v2`，由這個會話做。讀了 `Arena.cpp` 的載入與 digest、`Arena::Load` 的 20 多個呼叫端、`Movement.cpp` 的站立判定、資產契約測試的 RETAINED 與 root-file 例外。發現：現在的合併得到的盒子集合和 v1 不同（盒子數相同、分法相反）。重估 10～14 h。事前宣告寫進 voxel-map-editor.md，等你核准。
 - 2026-11-05：arena-v2 批審查（Opus／high）：沒有 blocker。實測發現 P3 對分法不同的分解沒有檢出力，照 AGENTS §14 停下回報；你選 P3 降為回歸檢查、`maps` 守衛照 §14.4 走程序，P10 採建議的定義。其餘 should-fix 照審查修。
+- 2026-11-05：arena-v2 批合入 master（`0c5db246`，`mutations.json` 依 id 合併兩邊的突變）。本機 cpu|shader 129／129；L1 三平台綠（run 42034025482）。剩 L3（P10）。
