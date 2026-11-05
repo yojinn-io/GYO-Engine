@@ -2,7 +2,7 @@
 
 日期：2026-11-05。分支 `claude/pvp-v8-after-pv8`。主會話 Opus 5.5／high；審查者子 agent Opus 5.5／high（general-purpose，唯讀）。估時 4～6 h，到停下時約 1 h。
 
-**狀態：程式與本機判定完成；E4 的 L1 與 E6 的實聽未做。** E5 的 D184 範圍有 1 條突變活下來，這條在 master 上本來就活著（見「判定」）。照 AGENTS.md §14.1 先回報，沒有重跑也沒有改它。使用者（2026-11-05）：「這個問題開一個fable模型的fix card來處理。」這條交給 fix 會話（`fix-product-use`，Fable 5.1，自 master 開分支），這一批照常提交。宣告與修訂紀錄：[事前宣告](../object_fps_pvp/plans/v8/v8-product-event-sounds-migrate-declaration.md)。
+**狀態：E1～E4 通過（L1 見下）；E6 的實聽未做。** E5 的 D184 範圍有 1 條突變活下來，這條在 master 上本來就活著（見「判定」）。照 AGENTS.md §14.1 先回報，沒有重跑也沒有改它。使用者（2026-11-05）：「這個問題開一個fable模型的fix card來處理。」這條交給 fix 會話（`fix-product-use`，Fable 5.1，自 master 開分支），這一批照常提交。宣告與修訂紀錄：[事前宣告](../object_fps_pvp/plans/v8/v8-product-event-sounds-migrate-declaration.md)。
 
 ## 做了什麼
 
@@ -33,7 +33,7 @@
 | E1 產品資料能綁定 | 通過（`presentation_cpu` 與 `WeaponEventSoundsTests`；E 開頭 5 案例 100 斷言） |
 | E2 壞資料被拒 | 通過（另一個 anim_events id、未知事件、sync 超過聲音長度、未知聲音、event_sounds 版本 2；`sfx.json` 版本 2 與帶 `animation_events` 段） |
 | E3 聽到的不變 | 通過：開始時刻等於舊公式、gain 0.8；`apps/object_fps_pvp` 裡 `EventSoundOffsetSeconds` 的定義 0 件 |
-| E4 | 本機 `cpu|shader` 115／115 通過；**L1 未跑**（還沒推送） |
+| E4 | 本機 `cpu|shader` 115／115 通過；L1 三平台通過（PR yojinn-io/GYO-Engine#149，[run 41953935847](https://github.com/yojinn-io/GYO-Engine/actions/runs/41953935847)） |
 | E5 | 本批 9 條全部 killed。**D184 範圍 24 條中 23 條 killed，1 條 survived：`v8-asset-layout-guard-product-use`**（不成立；使用者決定交給 fix 會話） |
 | E6 實聽 | **未做**（要使用者） |
 
