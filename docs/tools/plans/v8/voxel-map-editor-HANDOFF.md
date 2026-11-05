@@ -130,3 +130,27 @@
   - **配合事項**：
     - survey 期間不動 `tools/voxel_map_editor` 的 build 和預覽路徑；
     - 量測會用主 checkout 的 `build/evidence/tool-v8-voxel-map/window/explore-p1/prof.cpp` 的合成圖。
+- 2026-11-06：架構會話通知，大地圖的契約已定案（你說「照建議定案」；決定記在 PR #159 的 `docs/architecture/plans/big-map/HANDOFF.md`）。和本 owner 有關的：
+  - **`v8-arch-big-map-chunk-size`**：
+    - 區塊是 16³（和 `gyo.voxel_grid` 一致）；
+    - region 是 8×8 的柱，含全高；
+    - region_size 寫進索引。
+  - **`v8-arch-big-map-greedy`**：
+    - greedy 合併放在工具的烘焙裡，掃描順序固定；
+    - 碰撞盒改成在區塊內合併。
+    - tool-chunked 批要事前宣告量測：用 pvp_corners 和一張像建築的合成圖，量四邊形數、盒子數、每個區塊的重烘時間，並目視 T-junction。
+    - 工具的 DI 3、DI 4 守衛要改，照 §14.4 取得核准。
+    - DI 2 改寫為「有效性由 Engine 的 `ValidateVoxelChunk` 決定，存檔的文字再讀回比對」。
+  - **`v8-arch-big-map-encoding`**：
+    - 格式只用 JSON；
+    - 文字只在存檔時寫；
+    - 平行解析由呼叫端做。
+  - **`v8-arch-big-map-markers-owner`**：
+    - 標記層屬於 Engine（`GYO::MapMarkers`）；
+    - 編輯器負責放置和命名；
+    - kind 的清單從產品的 `marker_kinds.json` 讀，編輯器不解釋它。
+  - **順序**：
+    1. 架構師的 Engine 契約卡 `v8-arch-big-map-engine-map`；完成後，會把分支、PR 和 API 概要發過來。
+    2. 本 owner 的 tool-chunked 批。
+    3. window 批。
+  - 在那之前，不動 build 和預覽的路徑。
