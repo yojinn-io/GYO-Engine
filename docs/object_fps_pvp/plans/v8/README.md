@@ -70,6 +70,7 @@ v8-plan
 │
 ├── ④ 工具                         「各自開工時規劃，現在不估」
 │   ├── v8-tool-ui-editor-widgets          「high｜Opus 5.5｜按鈕與輸入框元件化，連同大廳；輸入法組字」
+│   ├── v8-product-ui-action-check ✓       「high｜Opus 5.5｜大廳 action 改對照表，啟動時和 UI 檔的宣告雙向比對（工具線 `v8-tool-ui-navigation-a-first`；PR #151，已合併）」
 │   ├── v8-tool-voxel-map-editor           「ultracode 規劃｜同上｜Editor → Data Contract → Application」
 │   └── v8-tool-assets-editor              「ultracode 規劃｜同上｜hitbox 形狀等；接手 ① 手寫的 JSON」
 │
@@ -101,6 +102,7 @@ v8-plan
 | `v8-product-sprint` | high｜Opus 5.5 | 8～12 h | 衝刺速度與限制 | 改變權威結果：事前宣告 |
 | `v8-product-analyzer-105`、`v8-product-phase-golden`、`v8-product-correct-assert`、`v8-product-lead-withdraw-plan`、`v8-product-lead-withdraw`、`v8-product-input-delay` | 見樹 | 3～4、6～10、1～2、4～6、16～24 h；A4 開工時估 | 下面「v7.1 交過來的項目」 | pv8 改了移動與預測的路徑，B6 與 A4 的基準在 pv8 合併後重新取得 |
 | ④ 三項 | 見樹 | 開工時估 | `v8-tool-ui-editor-widgets`（v8 候選表「大廳 UI 的元件化」）、`v8-tool-voxel-map-editor`（未決事項 b）、`v8-tool-assets-editor` | 工具照 AGENTS §5「手動 → Script → Tool」、§8 Data Contract |
+| `v8-product-ui-action-check` | high｜Opus 5.5 | 已完成（PR #151 已合併） | 大廳的 action 處理改成對照表（`LobbyActions.hpp`），啟動時和 `gyo.ui` 檔宣告的 action 雙向比對：宣告了沒處理、處理了沒宣告都報錯 | 工具線選 (A)（`v8-tool-ui-navigation-a-first`）後由工具線會話實作；宣告與結果在 [ui-navigation.md](../../../tools/plans/v8/ui-navigation.md)「實作後的結果」 |
 | `v8-product-match-rules` | ultracode（契約）＋high｜Opus 5.5 | 32～48 h | 對局狀態、計分、計分板、擊殺訊息、結束與勝負、結算回大廳 | 要再升一次協議（pv8-scope-crouch-sprint） |
 | `v8-product-spawn-layout` | high｜Opus 5.5 | 10～16 h | v8 候選表「正式的 4 人地圖」 | 改變 2 人的出生位置與驗收幾何 |
 | `v8-product-pause-menu` | high｜Opus 5.5 | 6～10 h | Esc 開選單 | 和 `v8-product-display-settings` 的選單共用 |
@@ -174,6 +176,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hit-gui-aim`（P2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hit_gui_aim.zh-Hant.md) |
 | `v8-product-hit-gui-aim-sdl` | [2026-11-04](../../../dev_logs/2026_11_04_pvp_v8_hit_gui_aim_sdl.zh-Hant.md) |
 | `v8-product-event-sounds-migrate`（L1、實聽未做） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_event_sounds_migrate.zh-Hant.md) |
+| `v8-product-ui-action-check` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md) |
 | `v8-product-hitbox-b5`（A2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hitbox_b5.zh-Hant.md) |
 
 ---
