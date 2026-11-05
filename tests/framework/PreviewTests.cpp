@@ -336,7 +336,7 @@ TEST_CASE("PV6: OrbitCamera gives Engine's camera: behind the target along its f
     CHECK(close.nearClip == doctest::Approx(0.001F));
     CHECK(close.farClip == doctest::Approx(1.0F));
     orbit.distance = 200.0F;
-    const auto far = orbit.Camera();
-    CHECK(far.nearClip == doctest::Approx(2.0F));
-    CHECK(far.farClip == doctest::Approx(2000.0F));
+    const auto distant = orbit.Camera(); // not "far": windef.h defines far and near on Windows
+    CHECK(distant.nearClip == doctest::Approx(2.0F));
+    CHECK(distant.farClip == doctest::Approx(2000.0F));
 }

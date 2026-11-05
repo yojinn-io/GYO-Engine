@@ -50,6 +50,8 @@
   - 第 2 輪：不成立。補強造成回歸（用實名直接連的 target 不跟進，因為看過的 entry 和展開過的 target 共用一張清單）；我的突變都走別名或 genex，沒發現。依 §14 停下，使用者選「修正並重新檢證」：清單拆成兩張，加突變 `fw-link-window-preview-variable`。
   - 第 3 輪：部分確認。回歸已修；另有名字含 `-`／`.` 的輔助 target、經變數的 archive 路徑或 `-l` 兩種繞法，寫進限界（configure 檢查已改兩次方法，不追第三次）。
 
+- **L1 第一次**（run 42067582426）：linux-x64、macos-arm64 通過；windows-x64 編譯失敗（PreviewTests.cpp 的變數 `far` 和 `windef.h` 的巨集撞名，測試自身的錯）。改名為 `distant`，判定不變，PV6 的 4 條突變重跑 4/4。第一次的失敗保留在這裡（§14.1）。
+
 ## 和宣告不同的地方
 
 - 基底：宣告寫 `a9ccad7d`，實際是本機 master `54948874`；PR 前併入 master（本批相關檔案沒有重疊）。

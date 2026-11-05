@@ -83,3 +83,7 @@
 - **停在關卡 2**：守衛變更的核准。未提交。
 - 2026-11-06，使用者：「Approve」。守衛的判定變更（A、B，含限界）核准。下一步：併入 master、commit、開 PR、通知 voxel 會話與架構師會話。
 - 2026-11-06：commit `e49f0752`，併入 origin/master `a9ccad7d`（#152，帶進 voxel_map_editor；沒有衝突，`sync_with_base_branch` 因 master 有 `.gitattributes` 拒絕，內容只有 `* -text`，自行 merge）。合併後的樹：兩個守衛通過、全量 `cpu|shader` 130/130、`gpu` 4/4（`build/evidence/framework-preview/*_after_merge.txt`）。開 PR，L1 的結果在 PR 上看。
+- 2026-11-06：PR yojinn-io/GYO-Engine#157。L1 run 42067582426：linux-x64、macos-arm64 通過；windows-x64 編譯失敗，所以 CI gate 失敗。
+  - 原因：`tests/framework/PreviewTests.cpp` 的變數 `far` 和 `windef.h` 的巨集撞名（MSVC C2513）。這是我寫的測試的錯（§14.1：Test 自身），和 voxel 線在 #152 遇到的相同。
+  - 修正：改名為 `distant`，判定不變。本機 `gyo_framework.preview*` 2/2；殺手是 PV6 的 4 條突變重跑 4/4（`mutations_ci_fix_pv6.txt`）。
+  - 第一次的失敗 log 在主 checkout 的 `build/evidence/framework-preview/ci/l1_windows_failed.log`。
