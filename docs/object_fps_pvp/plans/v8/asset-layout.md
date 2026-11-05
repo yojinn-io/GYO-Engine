@@ -1,6 +1,6 @@
 # PvP v8：素材結構標準化（asset-layout）
 
-更新：2026-10-31。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，PR [#125](https://github.com/yojinn-io/GYO-Engine/pull/125) 已開；延後批以外全部完成（`v8-product-art-source-out` 在主 checkout 操作）；PR #125 的 L1 通過，合併（使用者：「L1 過了就合併」）。剩：8 筆授權待使用者提供、延後批 `v8-product-asset-path-loaded-move`。**
+更新：2026-11-05。Owner：`object_fps_pvp`（另含 Engine 層的 `v8-engine-assets-common-retire`）。**狀態：`v8-product-asset-layout-doc`、`v8-product-asset-layout-guard` 完成，PR [#125](https://github.com/yojinn-io/GYO-Engine/pull/125) 已開；延後批以外全部完成（`v8-product-art-source-out` 在主 checkout 操作）；PR #125 的 L1 通過，合併（使用者：「L1 過了就合併」）。剩：8 筆授權待使用者提供、延後批 `v8-product-asset-path-loaded-move`。**
 本文件是 asset-layout 線的計畫與記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。標準本身寫在 [PvP 素材標準](../../assets.zh-Hant.md)。
 
 ## 代號對照
@@ -15,6 +15,7 @@
 | `v8-product-art-source-out` | 主 checkout 的 5 個交付檔移到 repo 外 |
 | `v8-engine-assets-common-retire` | 刪掉沒有 owner 的 `assets/common` |
 | `v8-product-asset-path-loaded-move` | ［延後］arena 搬進 `maps/`，`movement_rules.json` 搬進 `rules/` |
+| `v8-product-asset-guard-product-use` | （#125 之後）補回「只被測試引用的素材不算產品使用」這條守衛的檢出力：用 hair_buns fixture 當自測資料，讓一直存活的突變被抓到 |
 
 ## 決定（2026-10-31）
 
@@ -93,6 +94,7 @@ asset-layout
 - 2026-11-01：使用者決定在 #125 修那 2 個過時的突變 expect（「在 #125 一起修」）：pistol → weapon，重跑 2／2 killed。已通知 v8 規劃會話。
 - 2026-11-01：`v8-product-art-source-out` 完成（使用者選 `build/art-source`）：主 checkout 的 6 個未追蹤素材移到 `build/art-source/object_fps_pvp/`，SHA-256 前後相同，`git status` 乾淨。除了原定的 5 個交付檔，也移了 `Player_V20.fbx`：實測未追蹤的同路徑檔即使內容相同，git 也會拒絕更新。
 - 2026-11-01：PR #125 的 L1 在 `72334c70` 通過（run `41216411302`：linux-x64、macos-arm64、windows-x64，CI gate pass）；使用者：「L1 過了就合併」。之後的 docs-only 推送只更新本紀錄。
+- 2026-11-05：`v8-product-asset-guard-product-use`（獨立的 fix card，分支 `claude/fix-asset-guard-product-use-eb5795`）：突變 `v8-asset-layout-guard-product-use` 自 buns-fixture 刪掉 3 筆 `product-use` 例外後就沒有東西能抓它（hitbox-acceptance 的 K3 與 event-sounds-migrate 的 D184 重跑都撞到）。原因是檢出力不足，不是等價突變；加自測 `test_the_product_use_check_ignores_a_reference_from_a_test`（以 hair_buns fixture 為資料）、`expect` 改指它。單條 1／1、整批 13／13 killed。守衛的判定沒有改。
 
 ## dev_log
 
@@ -102,3 +104,4 @@ asset-layout
 - [2026_10_31_engine_v8_assets_common_retire](../../../dev_logs/2026_10_31_engine_v8_assets_common_retire.zh-Hant.md)：`v8-engine-assets-common-retire`
 - [2026_11_01_pvp_v8_asset_buns_fixture](../../../dev_logs/2026_11_01_pvp_v8_asset_buns_fixture.zh-Hant.md)：`v8-product-asset-buns-fixture`
 - [2026_11_01_pvp_v8_art_source_out](../../../dev_logs/2026_11_01_pvp_v8_art_source_out.zh-Hant.md)：`v8-product-art-source-out`
+- [2026_11_05_pvp_v8_asset_guard_product_use](../../../dev_logs/2026_11_05_pvp_v8_asset_guard_product_use.zh-Hant.md)：`v8-product-asset-guard-product-use`

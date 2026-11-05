@@ -27,6 +27,8 @@ CODE_ROOTS = [
 # The product's own code: an id referenced only from tests or acceptance code is not shipped content.
 PRODUCT_ROOTS = [REPOSITORY / 'apps' / 'object_fps_pvp']
 CODE_SUFFIXES = {'.cpp', '.hpp', '.h', '.py', '.go'}
+# Test-only content (assets standard section 7): referenced by tests, never by the product.
+TEST_ONLY_CATALOG = REPOSITORY / 'tests' / 'object_fps_pvp' / 'fixtures' / 'hair_buns' / 'asset_catalog.json'
 MANIFESTS = {'asset_catalog.json', 'content.json'}
 SOURCES = REPOSITORY / 'tests' / 'object_fps_pvp' / 'asset_sources.json'
 # Ids in use without a reference by id, with the reason.
@@ -414,6 +416,14 @@ class AssetLayoutSelfTests(unittest.TestCase):
         self.assertIn(('product-use', orphan['path']), product_use_findings(catalog() + [orphan], product))
         self.assertNotIn(('product-use', orphan['path']),
                          product_use_findings(catalog() + [orphan], product + '\n"object_fps_pvp.test.unused"'))
+
+    def test_the_product_use_check_ignores_a_reference_from_a_test(self):
+        # The hair_buns fixture is used by tests only, so shipping it would be a finding.
+        # Its model and texture are not read by used_ids, so their paths need not exist under ASSETS.
+        fixture = [e for e in json.loads(TEST_ONLY_CATALOG.read_text(encoding='utf-8'))['assets'] if e['type'] != 'text']
+        self.assertEqual(used_ids(fixture, code_text()), {e['id'] for e in fixture})
+        self.assertEqual(used_ids(fixture, code_text(PRODUCT_ROOTS)), set())
+        self.assertEqual(product_use_findings(fixture, code_text(PRODUCT_ROOTS)), {('product-use', e['path']) for e in fixture})
 
     def test_the_exception_check_finds_a_stale_exception(self):
         exceptions = {('root-file', 'kept.json'): 'batch', ('root-file', 'gone.json'): 'batch'}
