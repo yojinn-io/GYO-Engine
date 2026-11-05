@@ -1,6 +1,6 @@
 # 實體容器（entity store）：交接
 
-更新：2026-11-05。**狀態：batch 2 核准（2026-11-05，§7 全照建議）；batch 3a `v8-arch-entity-store-impl-3a` 進行中（事前宣告已承認 2026-11-05）。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
+更新：2026-11-05。**狀態：batch 2 核准（2026-11-05，§7 全照建議）；batch 3a `v8-arch-entity-store-impl-3a` 完成（判定 1～6 通過；判定 7 L1 見現況）；3b 待第一個非玩家批。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。
 
 ## 代號對照
@@ -41,6 +41,7 @@
 - 2026-11-05：上一個 Claude Code 程序結束時 3a 實作者仍在執行，未完成。留下的狀態：`838e7f8e`（Engine 模組 `engine/entity_store`、common 測試與字詞守衛、Engine 突變目錄 15 個；原記 16 個有誤，2026-11-06 更正）已 commit；pvp 換上（`EntityId.hpp`、`EntityColumns.hpp`、`match_domain` 連結、`EntityColumnsTests.cpp`、產品 `mutations.json`、`entity-model.zh-Hant.md` 註記、契約狀態句）未 commit、未驗證；Engine 突變第一次執行被中斷（報告為空檔），留下突變 `es-row10-entityof-reads-id` 的置換文字在 `EntityKey.hpp`，主會話已還原成 commit 版本並掃描兩個突變目錄，無其他殘留。base 工作樹在 scratchpad 的 `base`（`2c959fbc`，與宣告的 base `ffd64346` 只差計畫文件，程式相同），base runner 已建好。由新的實作者（Opus 5.5／high）接手：先核對未提交的修改，再重跑 Engine 突變，繼續 pvp 換上與驗收。
 - 2026-11-06：接手實作者完成（約 30 分）。`2aa9c9df`：pvp 換上（`EntityId.hpp` 別名、`EntityColumns.hpp` 轉接＝using 宣告＋`playerId` 型別的 `EntityKey` 特化、刪 `HasEntityId`；`match_domain` 與 -O0 digest runner 連結 `GYO::EntityStore`；產品測試拆分；產品 M1、M2 改指 Engine 標頭並由 common 測試殺；entity-model 註記；契約狀態句）。事前宣告 V1～V6 通過：compare `--scale 1`／`10` 42 情境 0 差分（records 19,636／195,757 兩樹相同）；golden 不變；範圍外無 diff；Engine 突變 15/15、產品 M1～M6 6/6；連結與字詞守衛通過；ctest cpu|shader 126/126。V7（L1）待推送。主會話核對證據一致。報告存 `build/evidence/entity-store/impl-3a/implementer-report-20261106.md`。接著並行啟動審查者（Opus 5.5／high）與 §14.4 檢證者（Fable 5.1／high，M1、M2 判定變更有放寬面，核准前要檢證與使用者承認）。待決：產品目錄的 M1、M2 與 Engine 目錄的 `es-row2-*` 重複（delta §1 第 4 項原寫「搬到 Engine 目錄」），保留或退役。
 - 2026-11-06：§14.4 檢證者（Fable 5.1／high）：確認 3、否定 0、收窄 2；對兩段固定突變文字無舊殺新放的輸入，放寬的是驗證冗餘；發現產品轉接標頭無登錄突變。審查者（Opus 5.5／high）：must 0／should 3／note 8，總評修正後可合併（S1 特化遇同時有 id 與 playerId 的型別改成編譯失敗、S2 字詞守衛改白名單、S3 測試加 assert 攔截）。報告存 `build/evidence/entity-store/impl-3a/verifier-1444-report-20261106.md`、`review-20261106.md`。修正與補一個產品轉接突變交回實作者；使用者決定退役 M1、M2，一併交辦。
+- 2026-11-06：實作者完成審查修正與 M1、M2 退役（約 40 分；`0c862822`、`90821624`、`e40e512d`）：S1 static_assert、S2 include 白名單（自我測試 18 案例）、S3 assert 攔截、N3／N4 契約措辭、新增轉接突變（expect 含 `GYO_ASSERT failed: row`，新判定）；Engine 突變 15/15、產品 5/5、ctest 126/126、golden 不變；修正後 runner 對照前次 branch，42 情境 digest 與 records 全同（只多一個 static_assert）。dev_log `docs/dev_logs/2026_11_06_arch_v8_entity_store_impl_3a.zh-Hant.md`。推送並手動觸發 L1（草稿 PR 推送時 L1 會 skip）。
 
 ## 未結事項
 

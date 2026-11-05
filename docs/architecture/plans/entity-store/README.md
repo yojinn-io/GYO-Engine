@@ -1,7 +1,7 @@
 # 實體容器（entity store）：Engine 共通模組的分批計畫
 
 更新：2026-11-05。Owner：Engine（架構）。任務卡 `v8-arch-entity-store`，由架構師會話（例行架構掃描）於 2026-11-05 開出。
-**狀態：batch 2 核准（2026-11-05，[delta §7](delta.zh-Hant.md) 全照建議）；batch 3a 進行中（事前宣告已承認）。** 每批結束時停下，取得使用者核准後才進下一批。
+**狀態：batch 2 核准（2026-11-05，[delta §7](delta.zh-Hant.md) 全照建議）；batch 3a 完成（判定 1～6 通過，L1 見 HANDOFF）；3b 待第一個非玩家批。** 每批結束時停下，取得使用者核准後才進下一批。
 
 ## 這是什麼
 
@@ -23,7 +23,7 @@ batch 1 的 [survey](survey.zh-Hant.md) 檢驗後，batch 2 的 [Delta](delta.zh
 |---|---|---|---|---|
 | `v8-arch-entity-store-survey` | 讀 Bevy ECS 與 EnTT 的實際程式碼，逐機制判定「採／改裝後採／不採」，作為 Design Invariants 的根據 | 實作者 Opus 5.5／high；敵對檢查者 Fable 5.1／xhigh（與實作者不同模型，避免盲點重疊） | [survey.zh-Hant.md](survey.zh-Hant.md)、本 README、[HANDOFF](HANDOFF.md)、dev_log | 完成，已核准 |
 | `v8-arch-entity-store-delta` | 寫 Architecture Delta 與 Engine 契約文件 `docs/architecture/entity-store.md`（英文）：Design Invariants、Replacement Criteria、AGENTS §3 的 7 項、pvp 的 DI 哪些搬進 Engine、哪些留在產品；不寫程式 | 實作者 Opus 5.5／high；審查者 Opus 5.5／high | [entity-store.md](../../entity-store.md)（英文契約）、[delta.zh-Hant.md](delta.zh-Hant.md) | 完成，已核准 |
-| `v8-arch-entity-store-impl-3a` | 照核准的契約實作 `engine/entity_store` → `GYO::EntityStore` 的欄的部分（`EntityId`、`EntityKey`、四個函數）、common 守衛與突變，pvp 換上；驗收＝digest 前後 0 差分（事前宣告） | 實作者 Opus 5.5／high；審查者 Opus 5.5／high；檢證者 Fable 5.1（啟動前問使用者） | 程式、守衛、dev_log；[事前宣告](impl-3a-declaration.zh-Hant.md) | 進行中 |
+| `v8-arch-entity-store-impl-3a` | 照核准的契約實作 `engine/entity_store` → `GYO::EntityStore` 的欄的部分（`EntityId`、`EntityKey`、四個函數）、common 守衛與突變，pvp 換上；驗收＝digest 前後 0 差分（事前宣告） | 實作者 Opus 5.5／high；審查者 Opus 5.5／high；檢證者 Fable 5.1（啟動前問使用者） | 程式、守衛、dev_log；[事前宣告](impl-3a-declaration.zh-Hant.md) | 完成 |
 | `v8-arch-entity-store-impl-3b` | `DeferredChanges`（生成先、刪除後、各依 id 升冪）與 G12，與第一個非玩家實體批同時做 | 實作者 Opus 5.5／high（套用順序局部 xhigh）；審查者 Opus 5.5／high | 程式、守衛、dev_log | 待第一個非玩家批 |
 
 ## 不做的事
@@ -42,3 +42,4 @@ batch 1 的 [survey](survey.zh-Hant.md) 檢驗後，batch 2 的 [Delta](delta.zh
 
 - [2026-11-05 v8-arch-entity-store-survey](../../../dev_logs/2026_11_05_arch_v8_entity_store_survey.zh-Hant.md)：Bevy ECS 與 EnTT 的逐機制參照調查；敵對檢查 must 2／should 7／note 8 全部處置。
 - [2026-11-05 v8-arch-entity-store-delta](../../../dev_logs/2026_11_05_arch_v8_entity_store_delta.zh-Hant.md)：Engine 契約 `entity-store.md`（DI 10、RC 15）與 Architecture Delta；審查 must 1／should 12／note 11 全部處置。
+- [2026-11-06 v8-arch-entity-store-impl-3a](../../../dev_logs/2026_11_06_arch_v8_entity_store_impl_3a.zh-Hant.md)：`GYO::EntityStore` 欄的部分與 pvp 換上；compare 0 差分、Engine 突變 15/15；M1、M2 退役。
