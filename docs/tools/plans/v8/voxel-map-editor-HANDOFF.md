@@ -1,0 +1,49 @@
+# v8 voxel 地圖編輯器交接
+
+更新：2026-11-05。Owner：工具 `voxel_map_editor`、Engine（`GYO::VoxelMesh`）、framework（3D 預覽元件，owner 是架構會話）、`object_fps_pvp`（arena v2、step-up）。分工見 [voxel-map-editor.md](voxel-map-editor.md)。
+
+本文件是 `v8-tool-voxel-map-editor` 的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [voxel-map-editor.md](voxel-map-editor.md)。這條線 2026-11-05 移出工具線（工具線 [HANDOFF](HANDOFF.md) 的 `v8-tool-voxel-map-editor-moved-out`）。2026-11-05 以前的決定與紀錄原本寫在工具線的 HANDOFF，同日搬到這裡（`v8-tool-voxel-handoff-split`）。
+
+## 現況（每次停下來時更新）
+
+- **PR**：[PR #152](https://github.com/yojinn-io/GYO-Engine/pull/152)（分支 `claude/v8-tool-voxel-map-plan`，一條功能線一個 PR）。尚未合併。
+- **完成**：
+  - `v8-tool-voxel-map-plan`：方案、分批。
+  - `v8-engine-voxel-mesh-contract`：`gyo.voxel_mesh` 契約與讀取器，V1～V6 通過；L1 三平台綠，run 42000098862。
+- **下一批**：`v8-tool-voxel-map-editor-core`，等你說「開始」。
+- **前提**：PR #146 已合併，所以 `v8-framework-preview-component` 可以排了；開始前要和架構會話協調。
+- **等你決定**：目前沒有。
+
+## 決定紀錄
+
+| 代號 | 決定 | 使用者原話 |
+|---|---|---|
+| `v8-tool-voxel-handoff-split` | （2026-11-05）voxel 這條線另開專用的 HANDOFF，把工具線 HANDOFF 裡的 voxel 決定與紀錄搬過來 | 「另開 HANDOFF」 |
+| `v8-engine-voxel-mesh-contract-deviations` | （2026-11-05）確認實作和事前宣告的差異：`cell_size` 在 [2^-16, 2^16]、整數在 ±2^30、錯誤細節的路徑、`ExpandVoxelMesh` 的 assert（都是收緊，見 dev_log） | 「確認」 |
+| `v8-engine-voxel-mesh-contract-declare` | （2026-11-05）核准事前宣告與名稱（`gyo.voxel_mesh`、`GYO::VoxelMesh`、`engine/voxel_mesh/`、`docs/architecture/voxel-mesh.md`） | 「核准」 |
+| `v8-tool-voxel-contract-split` | （2026-11-05）契約拆兩層：格子原始檔（工具持有）＋建置產物（Engine 持有）；之後另外做場景編輯器，接手 arena v2 和玩法標記 | 「D1 契約：照建議，之後我會分出另一個場景編輯器。」 |
+| `v8-tool-voxel-offline-build` | （2026-11-05）離線 build，產物存檔，遊戲只讀產物；碰撞也烘進產物；產物記原始檔的 SHA-256 和 build 版本 | 「我認為要存檔，否則後期載入時都會有細微差別，容易出bug，還不好查，有檔我至少可以反查。」 |
+| `v8-tool-voxel-layers` | （2026-11-05）產物格式與讀取器＝Engine；格子格式、build、拾取＝工具；3D 預覽元件＝framework（第二個組合者，framework DI 5）；arena v2＝產品 | 「我們不光有工具和engine 還有framework。」→ 分配表：「可以」 |
+| `v8-tool-voxel-units` | （2026-11-05）產物和格子用整數，1/16 格的子單位（原本建議整格，因為要有樓梯而重開） | 選「1/16 格」 |
+| `v8-tool-voxel-artifact-encoding` | （2026-11-05）產物用 JSON 四邊形清單，讀取器展開成三角形；不依區塊切、不附空間索引 | 選「(d) JSON 四邊形（建議）」 |
+| `v8-tool-voxel-render` | （2026-11-05）面剔除＋6 個方向的亮度；繪製的 greedy、AO 是候選 | 選「面剔除＋方向亮度（建議）」 |
+| `v8-tool-voxel-arena-v2` | （2026-11-05）只有檔案的 schema 是 v2，`Arena.version` 維持 1；相鄰檔名引用產物；產物的碰撞填進 `Arena::walls`；wire 不變；`walls≤1024` 不放寬 | 選「(ii) 只有檔案是 v2（建議）」 |
+| `v8-tool-voxel-grid-format` | （2026-11-05）格子檔：JSON、16³ 區塊分段、區塊內 RLE；形狀用資料定義（1/16 單位的盒子）；24 種直角朝向 | 「這個半轉是個例子，首先這個轉塊是給編輯器用的。後續還要轉成mesh。其次這個帶方向可以在編輯時可以更加方便做地形和裝飾。」；選「24 種直角朝向（建議）」「資料定義（建議）」「依區塊分段」 |
+| `v8-tool-voxel-coords` | （2026-11-05）origin 的 y 固定 0，地板維持隱含平面；`width`／`depth` 在 arena v2 手寫 | 沒有偏好，採建議 |
+| `v8-tool-voxel-spawn` | （2026-11-05）出生點手寫在 arena v2；`Arena::Validate` 改成「腳下要有支撐」，arena 契約變更，wire 不變 | 選「照這樣做（建議）」 |
+| `v8-tool-voxel-stairs` | （2026-11-05）B1 用形狀和朝向做階梯（碰撞全是 AABB），step-up 列入本線、由產品會話做；B2 斜坡另立 Feature | 旁支會話「btw: 這個問題時,我要是要去二樓要如何處理?」的結論，回到本會話後修正為：「這個概念類似minecraft的半轉，利用這個機制我能做樓梯。人也可以走上去。」；step-up 選「列入本線，由產品會話做（建議）」 |
+| `v8-tool-voxel-preview-framework` | （2026-11-05）PR #146 合併後抽出 framework 的 3D 預覽元件，model_viewer 同一批改用 | 選「#146 合併後抽（建議）」 |
+| `v8-tool-voxel-first-tools` | （2026-11-05）第一版做基本工具；擠出、圖層、形狀筆刷延後 | 選「基本工具（建議）」 |
+| `v8-tool-voxel-source-location` | （2026-11-05）原始檔放 `build/art-source/`，位置由編輯器決定；存檔時一定同時寫出產物；CI 不重新 build（修改 `v8-tool-voxel-offline-build` 原本的「CI 逐位元比較」） | 「讓編輯器自己找地方存。」→ 選「放 build/art-source」 |
+| `v8-tool-voxel-retire-v1` | （2026-11-05）v1 退役：先比 AABB 集合，再比軌跡，最後 L3 | 選「先比集合，再比軌跡（建議）」 |
+
+## 紀錄
+
+- 2026-11-05：`v8-tool-voxel-map-plan`（medium，Opus 5.5）。主會話交來 `v8-tool-voxel-map-editor` 的規劃卡；先盤點現況，不先提案。你給了自己寫的報告，要我讀兩個參考專案（Goxel、MagicaVoxel），再指定參考 Godot 的 GridMap。兩輪 Fable／high 統合（唯讀，只有統合者，沒有敵對式檢查者）後逐點定案（決定紀錄的 `v8-tool-voxel-*`），方案與分批寫進 [voxel-map-editor.md](voxel-map-editor.md)。證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/plan/`。dev_log：[2026_11_05_tool_v8_voxel_map_plan](../../../dev_logs/2026_11_05_tool_v8_voxel_map_plan.zh-Hant.md)。
+- 2026-11-05：你說「開始」，開工 `v8-engine-voxel-mesh-contract`（high，Opus 5.5）。讀了先例：`animation-events.md` 的契約與 DI、`engine/model` 的 CMake 與連結守衛、`anim_events_mutations.json`、Render 的正面方向（`RenderDeviceTypes.hpp:28-29`，順時針）、`Aabb` 在 Math。重估 8～12 h，和計畫相同。事前宣告寫進 [voxel-map-editor.md](voxel-map-editor.md)「v8-engine-voxel-mesh-contract 的事前宣告」，等你核准；核准前不實作。
+- 2026-11-05：你核准事前宣告，實作 `v8-engine-voxel-mesh-contract`。本機 14／14 通過，突變 16／16 killed；Opus 審查無 blocker，修 C1（`cell_size` 上限算錯）、C2（沒有下限）與測試缺口後，329 個斷言通過、突變 20／20 killed。和宣告的差異列在 dev_log，等你確認。證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/engine-contract/`。
+- 2026-11-05：PR #152 的 CI 處理。
+  - Windows L1 編譯失敗：測試變數 `far` 和 `windef.h` 的巨集衝突，改名為 `atEdge`（`3e6a46f6`），判定不變。
+  - 修正推送後 CI 沒有跑：PR 和 master 衝突（#146 合併時，工具線把 voxel 移出，改到 README／HANDOFF 的同一段）。合入 master（`62b6f0cc`），保留「移出」的說法，加上指向 voxel-map-editor.md 的連結。
+  - 之後 L1 三平台通過，記錄在 dev_log（`6ca245b1`）。
+- 2026-11-05：你說「另開 HANDOFF」：建立本文件，搬移 17 筆決定與 3 筆紀錄（`v8-tool-voxel-handoff-split`）。
