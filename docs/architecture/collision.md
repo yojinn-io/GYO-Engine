@@ -1,14 +1,14 @@
 # Collision: the static broadphase
 
 Owner: Engine (`engine/collision` → `GYO::Collision`; `engine/collision/StaticAabbGrid.hpp`).
-Plan and record: [big map](plans/big-map/README.md), batch v8-arch-big-map-engine-map (survey: one player's step
+Plan and record: [big map](plans/big-map/README.md), batch v8-arch-big-map-engine-grid (survey: one player's step
 over 20,691 boxes costs about 2.2 ms with a linear scan, about half of a 60 Hz tick for four players).
 
 This page covers the static broadphase only. The exact queries (`RaycastAabb`, `SweepVerticalCapsuleAgainstAabb`,
 `OverlapVerticalCapsuleAabb` and the rest), their numeric semantics and their single 1e-7 tolerance are stated in
 `engine/collision/Collision.hpp`; the module's place is in the [module table](../architecture.md).
 
-**Status (2026-11-06): landed with v8-arch-big-map-engine-map.** No product uses it yet; object_fps_pvp is planned to
+**Status (2026-11-06): landed with v8-arch-big-map-engine-grid.** No product uses it yet; object_fps_pvp is planned to
 replace its linear scans with it (v8-arch-big-map-product-arena-v3).
 
 ## What it is
@@ -60,7 +60,7 @@ A change against any item below is an Architecture Delta that needs the user's a
 1. **Equivalent.** Every broadphase query returns, bit for bit, the result of the linear scan of all boxes in index
    order with the stated tie rule; the cell length changes speed only. Guard: `tests/common/collision/
    StaticAabbGridTests.cpp` (200 random sets and the edge cases compared with the scans; mutants `grid-*` in
-   `docs/architecture/plans/big-map/scripts/engine_map_mutations.json`).
+   `docs/architecture/plans/big-map/scripts/engine_grid_mutations.json`).
 2. **Static.** The grid is built once and never changes; queries are const and keep no state between calls. Guard:
    the public header (no mutating member) and review.
 3. **No new dependency.** `GYO::Collision` links `GYO::Math` and, privately, `GYO::Base` only. Guard: the

@@ -100,7 +100,11 @@ mipmaps. The module returns its own vertex type and plain pixels: converting the
   a version it does not know. Version 1 has no optional fields.
 - **Producers.** Any file that passes validation is valid, whoever wrote it. A producer reads what it wrote back with
   `ParseVoxelMesh` before it keeps it.
-- **Cost.** Parsing and expansion happen when content loads; nothing here runs per frame.
+- **Cost.** Parsing and expansion happen when content loads; nothing here runs per frame. Parsing scans the text
+  once for repeated keys and once to build the document (`engine/base/StrictJson.hpp`), never through nlohmann's
+  parser callback, which rescans the enclosing array at the end of every object (quadratic in the objects of one
+  array; big-map survey, section 5 (c)). The 5.3 MB synthetic map of that survey took 1,580 ms with the callback and
+  382 ms after (median of five, Intel Mac; v8-arch-big-map-engine-grid).
 
 ## Design Invariants
 

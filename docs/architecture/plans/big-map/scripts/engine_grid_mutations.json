@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-arch-big-map-engine-grid (judgment J2 of docs/architecture/plans/big-map/engine-grid.zh-Hant.md): the StaticAabbGrid broadphase in GYO::Collision and Base's strict JSON parse used by ParseVoxelMesh. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/big-map/scripts/engine_grid_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its test run fails with the expected message. grid-margin-zero is expected to survive as an equivalent mutant (the margin is defence in depth; see the dev_log); it is kept so a change that makes it matter is seen. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "mutants": [
+    {
+      "id": "sj-repeated-key-kept",
+      "what": "A repeated key is taken silently (the DOM keeps the last): the SAX scan's check is gone",
+      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "find": "        if (open_.back().insert(key).second) return true;",
+      "replace": "        open_.back().insert(key);\n        return true;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "sj-scan-skipped",
+      "what": "The SAX scan is not run, so repeated keys and its error message are lost",
+      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "find": "    if (!Json::sax_parse(text.begin(), text.end(), &scan)) {",
+      "replace": "    if (false) {",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "sj-repeat-message-lost",
+      "what": "A repeated key is reported as 'not JSON' instead of naming the key",
+      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "find": "        failure_ = \"repeated key '\" + std::string(key) + \"'\";",
+      "replace": "        failure_ = \"not JSON\";",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-tie-ignored",
+      "what": "The tie rule is ignored (the lowest index always wins)",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "    return tie == TieBreak::LowestIndex ? index < bestIndex : index > bestIndex;",
+      "replace": "    return index < bestIndex;",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-tie-never-replaces",
+      "what": "An equal value never replaces (the first tested wins)",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "    if (value != bestValue) return value < bestValue;",
+      "replace": "    return value < bestValue;",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-count-short",
+      "what": "The grid has one cell too few on each axis",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "        counts_[axis] = static_cast<std::int64_t>(std::floor((high[axis] - low[axis]) / cell_)) + 1;",
+      "replace": "        counts_[axis] = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::floor((high[axis] - low[axis]) / cell_)));",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct|GYO_ASSERT failed"
+    },
+    {
+      "id": "grid-first-cell-dropped",
+      "what": "A query whose range ends in the first cell finds nothing",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "        if (high < 0 || low >= counts_[axis]) return range;",
+      "replace": "        if (high <= 0 || low >= counts_[axis]) return range;",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct|GYO_ASSERT failed"
+    },
+    {
+      "id": "grid-last-cell-dropped",
+      "what": "A query whose range starts in the last cell finds nothing",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "        if (high < 0 || low >= counts_[axis]) return range;",
+      "replace": "        if (high < 0 || low >= counts_[axis] - 1) return range;",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct|GYO_ASSERT failed"
+    },
+    {
+      "id": "grid-candidates-unsorted",
+      "what": "Candidates are neither sorted nor made unique",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "    std::sort(out.begin(), out.end());\n    out.erase(std::unique(out.begin(), out.end()), out.end());",
+      "replace": "",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-ray-stops-at-first-hit",
+      "what": "The ray walk stops at the first piece after any hit",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "        if (best && t0 > static_cast<double>(best->distance) + Margin(t0 + LargestMagnitude(origin, origin)))",
+      "replace": "        if (best)",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-capsule-no-height",
+      "what": "Capsule candidates leave out the capsule's height",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "    double maximum[3]{std::max(start[0], end[0]) + r, std::max(start[1], end[1]) + capsule.height,",
+      "replace": "    double maximum[3]{std::max(start[0], end[0]) + r, std::max(start[1], end[1]),",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-capsule-no-radius",
+      "what": "Capsule candidates leave out the capsule's radius",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "    double minimum[3]{std::min(start[0], end[0]) - r, std::min(start[1], end[1]), std::min(start[2], end[2]) - r};",
+      "replace": "    double minimum[3]{std::min(start[0], end[0]), std::min(start[1], end[1]), std::min(start[2], end[2])};",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-ray-clip-wrong-axis",
+      "what": "The ray's walk is clipped to the hull with the wrong side",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "            last = std::min(last, std::max(a, b));",
+      "replace": "            last = std::min(last, std::min(a, b));",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-margin-zero",
+      "what": "Candidate bounds are not inflated (expected equivalent: see the catalog description)",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "double Margin(const double largestMagnitude) { return 1e-3 + 1e-5 * largestMagnitude; }",
+      "replace": "double Margin(const double largestMagnitude) { return 0.0 * largestMagnitude; }",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-capsule-start-only",
+      "what": "Capsule candidates come from the start position only (the end of a sweep is left out)",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "    const double end[3]{start[0] + displacement.x, start[1] + displacement.y, start[2] + displacement.z};",
+      "replace": "    const double end[3]{start[0], start[1], start[2]};",
+      "target": "gyo_collision_tests",
+      "cases": "*grid*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-links-voxel-mesh",
+      "what": "GYO::Collision gains a link it must not have (Design Invariant 3)",
+      "file": "engine/collision/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_collision PUBLIC GYO::Math PRIVATE GYO::Base)",
+      "replace": "target_link_libraries(gyo_collision PUBLIC GYO::Math PRIVATE GYO::Base GYO::VoxelMesh)",
+      "target": "gyo_collision_tests",
+      "expect_build_failure": true,
+      "expect": "(?s)gyo_collision links.*expected\\s+exactly"
+    }
+  ]
+}
