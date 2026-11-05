@@ -18,6 +18,14 @@ struct Legacy final { // the transition shape: PlayerState, CombatState, PlayerA
     int payload{};
 };
 
+// A type with only playerId has a key through the adapter's EntityKey
+// specialization; that the key is the playerId value is checked at run time
+// below (the adapter's mutant in mutations.json must reach that case). A type
+// with both playerId and id is refused by the specialization's static_assert
+// (EntityColumns.hpp); it cannot be written here as a case, since this
+// translation unit would then not compile.
+static_assert(Engine::EntityStore::HasEntityKey<Legacy>);
+
 template <typename T>
 std::vector<EntityId> Ids(const std::vector<T>& column) {
     std::vector<EntityId> ids;

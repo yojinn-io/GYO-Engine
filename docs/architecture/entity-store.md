@@ -6,8 +6,9 @@ with its mapping to the first consumer's clauses, and the batches). Implementati
 **Status: approved 2026-11-05** (the user approved every recommendation of the Delta's decision list, `v8-arch-entity-store-delta`): the
 `Design Invariants` section below is an Architecture Delta (AGENTS.md §3) and is in force; changing it is a new Delta.
 The column part (`EntityId`, `EntityKey`/`EntityOf`, the column functions) exists since batch
-`v8-arch-entity-store-impl-3a` (2026-11-05), with its guard (rows 1-3, 7 for the column functions, 9, 10 and the
-text scan of rows 5, 6, 8); `DeferredChanges` and its guard rows are pending batch 3b.
+`v8-arch-entity-store-impl-3a` (2026-11-05), with its guard (row 1 for the columns, rows 2, 3, row 7 for the column
+functions, rows 9, 10 and the text scan of rows 5, 6, 8); `DeferredChanges` and its guard parts (row 1's `onSpawn`
+part, row 4, the rest of rows 5-8) are pending batch 3b.
 
 Evidence notation. "Survey" is the approved reference survey of Bevy ECS and EnTT in the plan folder; "§2.1 Commands
 row" means the row of its table. "E-n" and "RC-n" are the approved clauses of the first consumer's entity model; each
@@ -38,7 +39,7 @@ where it keeps columns.
 |---|---|---|
 | `EntityId` | The key type, `std::uint64_t`. No value is reserved (a consumer may give 0 a meaning; the store does not), no generation bits, no range | implemented (3a) |
 | Key access `EntityKey<T>`, `EntityOf` | `EntityOf(value)` returns `EntityKey<T>::Of(value)`. The primary `EntityKey<T>` reads the member `id`. An element's owner whose key lives elsewhere specializes `EntityKey` (a partial specialization constrained by a concept is allowed); a specialization always wins over the primary, also for a type that has an `id` member too. The specialization must be visible wherever the column is used. No specialization and no member `id`: the column does not compile | implemented (3a) |
-| Column functions | `FindEntity`, `InsertEntity`, `EraseEntity` over a caller-owned `std::vector<T>`; `FindEntity` and `StrictlyAscending` also over `std::span<const T>` | implemented (3a) |
+| Column functions | `InsertEntity`, `EraseEntity` over a caller-owned `std::vector<T>`; `FindEntity` over a `std::vector<T>` (const or mutable) or a `std::span<const T>`; `StrictlyAscending` over a `std::span<const T>` | implemented (3a) |
 | `DeferredChanges<Spawn>` | The to-do of one sync point: `RecordSpawn(spawn)`, `RecordDestroy(id)`, `Apply(onSpawn, onDestroy)`, `Empty()`. `Spawn` is the consumer's record; its key is read through `EntityOf` | proposed; lands with its first consumer (Delta, open decision on timing) |
 
 Names are proposals; the column functions keep the names their first consumer already uses (Delta §2). Batch 3 may
@@ -90,8 +91,9 @@ rename them; the semantics below may not change without a new Delta.
 
 ## Guard
 
-Proposed for batch 3; rows 1-3, 9, 10, the column part of row 7 and the text scan of rows 5, 6, 8 are implemented
-(3a), row 4 and the `DeferredChanges` parts of rows 5-8 come with 3b. Tests live in `tests/common/entity_store/` (`gyo_entity_store_tests`, CTest label `cpu`, so L1
+Proposed for batch 3; the column part of row 1, rows 2, 3, 9, 10, the column part of row 7 and the text scan of
+rows 5, 6, 8 are implemented (3a); row 1's `onSpawn` part, row 4 and the `DeferredChanges` parts of rows 5-8 come
+with 3b. Tests live in `tests/common/entity_store/` (`gyo_entity_store_tests`, CTest label `cpu`, so L1
 runs it) and use synthetic element types only, never a product's (AGENTS.md §7). Mutants go in the plan folder's
 `scripts/mutations.json` and must be killed by these common tests alone; a mutant counts as killed only when the
 expected test fails. These rule tests are written from this contract (AGENTS.md §14.2), so each one shows its

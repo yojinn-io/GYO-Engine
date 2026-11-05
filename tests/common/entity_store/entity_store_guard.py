@@ -4,6 +4,8 @@ Scans every C/C++ file and CMakeLists.txt under engine/entity_store/ for:
 
   W1  a product, tool or connection-role name, in code or comments: object_fps, RetroFPS, fps::pvp, Pvp/pvp,
       Player/player, Gateway, and the capitalized word Match (the lowercase English verb "match" is allowed).
+      The list is the known consumers' names. Removing a product needs no change here: a name that no longer
+      exists anywhere is harmless. Adding a consumer adds its names.
   W2  an unordered container or a hash: unordered_, std::hash.
   W3  a clock, random source, thread or atomic: an include of <chrono>, <random>, <thread>, <atomic>, <mutex>,
       <condition_variable>, <future>, <shared_mutex>, <stop_token>, <semaphore>, <latch>, <barrier>, <ctime>,
@@ -17,7 +19,11 @@ Scans every C/C++ file and CMakeLists.txt under engine/entity_store/ for:
       static_assert and static_cast never match (the word is followed by "_"). A variable direct-initialized
       with parentheses and a single argument ("static int x(0);") is reported (fail closed); a static variable
       written so that it looks like a function declaration with a named parameter is left to review.
-  W5  an include of a header that is neither the standard library nor engine/base or engine/entity_store.
+  W5  an include outside an allowlist: an angle-bracket include of a C++ standard library header named in
+      STANDARD_HEADERS (the C++ headers and the <cxxx> C wrappers; no .h C header, no platform header such as
+      <pthread.h>, <windows.h>, <unistd.h>, <stdatomic.h> or <threads.h>), or an include (either form) under
+      engine/base/ or engine/entity_store/. The banned standard headers of W3 are in the allowlist so they are
+      reported once, as W3.
 
 Literals and comments are blanked before W2-W5 (W1 also reads comments: a product name in a comment is product
 knowledge too). Engine-owned: names no product's path and reads nothing outside engine/entity_store.
@@ -41,6 +47,17 @@ W3 = re.compile(r"\bstd::(?:chrono|random_device|mt19937\w*|s?rand|thread|jthrea
                 r"|(?<![\w:.])s?rand\s*\(")
 INCLUDE = re.compile(r"^[ \t]*#[ \t]*include[ \t]*([<\"])([^>\"]+)[>\"]", re.MULTILINE)
 ALLOWED_PROJECT_INCLUDES = ("engine/base/", "engine/entity_store/")
+STANDARD_HEADERS = frozenset("""
+    algorithm any array atomic barrier bit bitset charconv chrono compare complex concepts condition_variable
+    coroutine deque exception execution expected filesystem flat_map flat_set format forward_list fstream
+    functional future generator initializer_list iomanip ios iosfwd iostream istream iterator latch limits list
+    locale map mdspan memory memory_resource mutex new numbers numeric optional ostream print queue random ranges
+    ratio regex scoped_allocator semaphore set shared_mutex source_location span spanstream sstream stack
+    stacktrace stdexcept stop_token streambuf string string_view syncstream system_error thread tuple type_traits
+    typeindex typeinfo unordered_map unordered_set utility valarray variant vector version
+    cassert cctype cerrno cfenv cfloat cinttypes climits clocale cmath csetjmp csignal cstdarg cstddef cstdint
+    cstdio cstdlib cstring ctime cuchar cwchar cwctype
+""".split())
 STATIC = re.compile(r"\b(?:static|thread_local)\b")
 PARAMETER = re.compile(r"^\s*(?:const\s+|volatile\s+)*[\w:<>]+[\s&*]+[&*\s]*\w+")
 
@@ -117,9 +134,8 @@ def file_findings(relative, raw):
         kind, target = include.groups()
         if kind == "<" and target in W3_HEADERS:
             yield number, "W3", "<" + target + ">"
-        if "/" in target or kind == '"':
-            if not target.startswith(ALLOWED_PROJECT_INCLUDES):
-                yield number, "W5", target
+        if not (target.startswith(ALLOWED_PROJECT_INCLUDES) or (kind == "<" and target in STANDARD_HEADERS)):
+            yield number, "W5", target
     for match in W2.finditer(code):
         yield line_of(code, match.start()), "W2", match.group(0)
     for match in W3.finditer(code):

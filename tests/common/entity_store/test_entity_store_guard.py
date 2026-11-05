@@ -95,7 +95,7 @@ class Rules(GuardTree):
         self.assertReported("Added.hpp:3: W2 std::hash")
 
     def test_forbidden_headers_are_reported(self):
-        for header in ("chrono", "random", "thread", "atomic", "mutex"):
+        for header in guard.W3_HEADERS:
             with self.subTest(header=header):
                 self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
                            "#pragma once\n#include <" + header + ">\n")
@@ -142,9 +142,43 @@ class Rules(GuardTree):
         self.assertReported("Added.hpp:2: W5 engine/math/linear/Vec3.hpp")
         self.assertReported("Added.hpp:3: W5 engine/os/Files.hpp")
 
+    def test_platform_and_c_headers_are_reported(self):
+        for header in ("pthread.h", "windows.h", "unistd.h", "stdatomic.h", "threads.h", "stdint.h",
+                       "sys/time.h", "boost/container/flat_map.hpp"):
+            with self.subTest(header=header):
+                self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+                           "#pragma once\n#include <" + header + ">\n")
+                self.assertReported("Added.hpp:2: W5 " + header)
+
+    def test_standard_headers_and_store_includes_pass(self):
+        self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+                   "#pragma once\n#include <cstdint>\n#include <span>\n#include <type_traits>\n"
+                   "#include <engine/base/Assert.hpp>\n#include \"engine/entity_store/EntityId.hpp\"\n")
+        self.assertClean()
+
+    def test_quoted_standard_name_is_reported(self):
+        self.write("engine/entity_store/include/engine/entity_store/Added.hpp",
+                   "#pragma once\n#include \"vector\"\n")
+        self.assertReported("Added.hpp:2: W5 vector")
+
     def test_words_in_literals_are_not_code(self):
         self.header('inline const char* Text() { return "unordered_map std::thread static int x;"; }\n')
         self.assertClean()
+
+    def test_block_comment_and_raw_string_are_not_code(self):
+        self.header("/* std::unordered_map<int, int> index; static int cache;\n   #include <pthread.h> */\n"
+                    'inline const char* Text() { return R"x(std::thread static int y; ")x"; }\n')
+        self.assertClean()
+
+    def test_code_after_a_block_comment_or_raw_string_is_still_scanned(self):
+        self.header('inline const char* Text() { return R"x(text)x"; } /* note */ inline std::unordered_map<int, '
+                    "int> index;\n")
+        self.assertReported("Added.hpp:3: W2 unordered_map")
+
+    def test_digit_separator_does_not_open_a_character_literal(self):
+        # Read as a character literal, the ' would blank the rest of the line and hide the variable.
+        self.header("inline int F() { constexpr int k = 1'000; static int cache = k; return cache; }\n")
+        self.assertReported("Added.hpp:3: W4 static")
 
 
 if __name__ == "__main__":

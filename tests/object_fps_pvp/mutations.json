@@ -8986,6 +8986,16 @@
       "replace": "            record.viewLagAQ16 = static_cast<std::int64_t>(decision.resolvedTick * 65536) - view;\n",
       "check": "cpu",
       "expect": "held\\.viewLagAQ16"
+    },
+    {
+      "id": "entity-store-adapter-key-not-player-id",
+      "batch": "v8-arch-entity-store-impl-3a",
+      "what": "The adapter's EntityKey specialization keys a playerId type by another value than playerId",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
+      "find": "{ return value.playerId; }",
+      "replace": "{ return ~value.playerId; }",
+      "check": "cpu",
+      "expect": "Entity columns insert at the ordered position"
     }
   ]
 }
