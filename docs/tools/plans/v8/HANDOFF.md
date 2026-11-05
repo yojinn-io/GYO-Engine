@@ -16,7 +16,7 @@
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
-- **待討論**：`v8-tool-voxel-map-editor`（你會給方案）。
+- **移出本線**：`v8-tool-voxel-map-editor`（2026-11-05，`v8-tool-voxel-map-editor-moved-out`）：大任務，由 v8 規劃會話另開的會話「v8 voxel map editor」負責；本線不再追蹤。
 - **進行中（`v8-tool-audio-editor-edit`，分支 `claude/v8-tool-audio-editor-edit`）**：已實作（GUI：播放、波形、資訊、裁剪、增益、工程檔、匯出）。判定 1～7 本機通過；突變 26／26 killed；審査者與検証者已回報，指出的事已修或已寫進 assets.md「實作後的結果（2026-11-04）」。**等你**：守衛的放寬（§14.4）核准；GUI 的 L3（macOS）。dev_log：[2026_11_04_tool_v8_audio_editor_edit](../../../dev_logs/2026_11_04_tool_v8_audio_editor_edit.zh-Hant.md)。
 - **撤回（`v8-tool-audio-editor-regions`，2026-11-05）**：你把 audio_editor 的邊界定在簡單剪輯與轉換，大規模編輯與混音交給專業軟體（`v8-tool-audio-editor-scope`）。`-regions` 撤回（`v8-tool-audio-editor-regions-withdrawn`）：程式、測試、DI 3 的措辭與突變目錄退回 `-edit` 完成時（`43487d42^`，逐位元組相同），#141 現在只含 `-edit`。退回後本機 ctest 69／69（主 checkout `build/evidence/tool-v8-audio-editor-regions/ctest-framework-after-withdraw.txt`）；`-edit` 的 26 條突變重跑：26／26 killed、stale 0（`mutations-after-withdraw.txt`，同一資料夾）。`-regions` 的事前宣告、實作後的結果與 dev_log（[2026_11_04_tool_v8_audio_editor_regions](../../../dev_logs/2026_11_04_tool_v8_audio_editor_regions.zh-Hant.md)）留作紀錄。2026-11-05 你核准 `-edit` 的守衛放寬並合併 #141（`v8-tool-audio-editor-edit-guard-approved`，取代 `-merge-wait`）；`-edit` 判定 8 合併時仍未判定。其他：master 已在 2026-11-04 合進本分支（`0342a259`）；系統選擇窗的記帳規則已交回 v8 規劃會話（`v8-tool-path-dialog-rule-handover`）。
 - **anim-events-line（另一個會話）**：`v8-tool-assets-anim-events` 完成，[PR #119](https://github.com/yojinn-io/GYO-Engine/pull/119) 已合併進 master（`45019dff`）。契約在 [animation-events.md](../../../architecture/animation-events.md)。下一批 `v8-tool-model-viewer`。
@@ -65,6 +65,7 @@
 | `v8-tool-ui-order` | （2026-10-30）UI 的順序：先寫 `v8-tool-ui-invariants`，再整理（`v8-tool-ui-editor-panels` → `v8-tool-ui-editor-element-schema`），再做 `text_field`，編輯器的小功能（複製貼上、方向鍵微調）穿插；對齊參考線、多選等需要時再排。見 [README](README.md)「順序與依賴」 | 「照你建議做吧。」 |
 | `v8-tool-ui-editor-gizmo-bug` | （2026-10-30）拖動照 (a) Unity 的 RectTransform：本體＝移動 `position`；邊與角＝縮放（`size_delta`、`position`），錨點不動；拖錨點與 pivot 時補償 `position`、`size_delta`，元素的矩形不動。「相等時一起移動」的實作細節由 Claude 定為：被拖的錨點推著另一個走，所以往對方那側拖時一起動、往反方向拖時分開（否則相等的錨點在 gizmo 上永遠分不開）。Snap 只對齊這次拖動的座標 | 「(a) Unity 式」 |
 | `v8-tool-scope-ui-first` | （2026-10-30）先處理 `v8-tool-ui-editor-widgets`。voxel 與 assets 沒有暫停，等使用者逐個給方案再討論；第一版 Claude 自己寫的地圖建議（烘焙到 arena v1、`gyo.voxel_map`、ImGui 的 SDL_GPU 後端）撤下。取代同日的 `v8-tool-scope-ui-only`（Claude 誤解成「暫停」） | 「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」→「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」 |
+| `v8-tool-voxel-map-editor-moved-out` | （2026-11-05）`v8-tool-voxel-map-editor` 移出工具線：是大任務，由 v8 規劃會話另開的會話負責（會話標題「v8 voxel map editor（v8-tool-voxel-map-editor）」）。README 的事實盤點（arena、舊格子地圖、ImGui 後端）留著給那邊參考；本線不再追蹤、不做它的規劃 | 「這個任務我得移出你的任務範圍，那個是個大任務。」 |
 
 ## 紀錄
 

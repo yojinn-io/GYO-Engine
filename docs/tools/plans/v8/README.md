@@ -55,7 +55,8 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │   ├── （延後）v8-tool-ui-button-style       「medium｜Opus 5.5｜按鈕外觀的共用樣式；第二個畫面也重複時再排（v8-tool-ui-widget-scope）」
 │   └── v8-product-lobby-text-field ✓        「high｜Opus 5.5｜大廳改用 text_field，刪掉手寫的編輯（產品批，產品會話做）」
 │
-└── （待討論）v8-tool-voxel-map-editor、v8-tool-assets-editor   「待討論：等使用者逐個給方案（v8-tool-scope-ui-first）」
+├── （待討論）v8-tool-assets-editor   「待討論：等使用者逐個給方案（v8-tool-scope-ui-first）」
+└── （移出）v8-tool-voxel-map-editor   「2026-11-05 移出本線，另開會話（v8-tool-voxel-map-editor-moved-out）」
 ```
 
 ## 範圍
@@ -181,7 +182,7 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 
 使用者（2026-10-30）：「我們這次只改UI Editor，voxel Map Editor我後續給妳方案。」之後更正：「我不是要把工具都暫停，而是 voxel assets 都需要討論，我會把方案一個個給你，現在先處理UI。」
 
-- `v8-tool-voxel-map-editor`：沒有暫停，等使用者逐個給方案再一起討論；本線不先提案。上面「現況盤點」裡 arena、舊格子地圖、ImGui 後端的列只是事實，留給之後的規劃參考。
+- `v8-tool-voxel-map-editor`：**2026-11-05 移出本線**（`v8-tool-voxel-map-editor-moved-out`）：是大任務，由 v8 規劃會話另開的會話負責。下面的事實盤點留著，那邊可以參考。原本：沒有暫停，等使用者逐個給方案再一起討論；本線不先提案。上面「現況盤點」裡 arena、舊格子地圖、ImGui 後端的列只是事實，留給之後的規劃參考。
 - `v8-tool-assets-editor`：2026-10-31 收到使用者的方向，規劃草稿在 [assets.md](assets.md)（`v8-tool-assets-plan`，等決定）。它也要和 `v8-product-hitbox-data` 定下的格式與 owner 對齊。
   - 已收到的需求：**音效匯入**（`v8-tool-assets-audio-import`，2026-10-30）。使用者在音效會話說：「這個你先轉好，需求加到 assets editor 中。」由音效線（`v8-engine-audio-plan`）轉來，這裡只記需求，不排實作。
     1. 匯入任意取樣率與位元深度的 WAV（8／16／24／32 位元整數、32 位元浮點；1 或 2 聲道），轉成 `GYO::Audio` 的片段格式：48 kHz、PCM16、原聲道數。理由：混音器執行中不重新取樣（[audio.md](../../../architecture/audio.md) Design Invariant 9），`SoundLoader` 只讀 16 位元。
