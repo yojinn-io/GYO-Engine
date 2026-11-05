@@ -32,7 +32,8 @@
 - 2026-11-05：審查者（Opus 5.5／high，唯讀）交回 must 1／should 12／note 11（約 35 分），總評「修正後可交核准、不需重做；設計方向無反對根據」。must：`EntityOf`「所有者多載優先」以同名多載會 ambiguous、匿名命名空間的測試在 Engine 內 ADL 找不到 → 契約要改成所有者提供的 hook。should 主要：Engine 文件不得引產品路徑（可刪除性）；「觀測」壓力只有「容器內容已與產品無關」、其餘是使用者決定與預測；33 行應為 30 行；E-5／E-12 的產品 DI 變更要列入並取使用者同意；architecture.md 稿與 3a 分割衝突；缺 batch 3 事前宣告。報告存 `build/evidence/entity-store/delta-review-20261105.md`。修正交回同一實作者。
 - 2026-11-05：實作者處置審查全部項目（約 6 分；M1、S1～S12、N1～N9，N10／N11 不需改）：鍵的讀法改為 `EntityKey<T>` trait（所有者特化優先，預設讀 `id`，不靠 ADL）；契約移除所有產品路徑（grep 0 件）；判斷事項全部移到 delta §7（10 項）；新增 delta §10「審查的處置」。實作者自行在契約定了「callback 擲出時清空待辦」（N6），可改列為決定。主會話核對：DI 10／RC 15、§7 10 項、無假名與簡體。dev_log `docs/dev_logs/2026_11_05_arch_v8_entity_store_delta.zh-Hant.md`。**batch 2 完成，停下等使用者決定**；總用時約 1.5 h（估 2.5～3 h）。
 - 待辦（核准後）：通知圖書管理員會話本線分支與 delta §5 的 architecture.md 修改稿（用哪一版依決定 8）；開 PR（batch 1～2 文件）；batch 3 開始前事前宣告驗收判定（delta §7 第 9 項）。
-- 2026-11-05：使用者「全照建議核准」（見「決策」）。契約與 delta 的狀態改為已核准；推送分支、開 PR（草稿；batch 1～2 文件，3a 的程式與圖書管理員的 architecture.md 修改進同一 PR）；通知圖書管理員會話。下一步：提出 batch 3a 的驗收事前宣告，取得承認後開始。
+- 2026-11-05：使用者「全照建議核准」（見「決策」）。契約與 delta 的狀態改為已核准；推送分支、開 PR [#156](https://github.com/yojinn-io/GYO-Engine/pull/156)（草稿；batch 1～2 文件，3a 的程式與圖書管理員的 architecture.md 修改進同一 PR）；已通知圖書管理員會話（請它先讀 delta §5 與契約，等 3a 程式進分支後再改 architecture.md，用「3a 版」）。下一步：提出 batch 3a 的驗收事前宣告，取得承認後開始。
+- 2026-11-05：寫 batch 3a 的[驗收事前宣告](impl-3a-declaration.zh-Hant.md)（7 項判定、範圍、模型／檔位、估時 9～13 h），停下等使用者承認；檢證者 Fable 5.1 也在此一併請示。
 
 ## 未結事項
 
