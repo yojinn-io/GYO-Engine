@@ -16,7 +16,7 @@
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
-- **voxel-map-line**：`v8-tool-voxel-map-editor` 的方案與分批已確認（2026-11-05），在 [voxel-map-editor.md](voxel-map-editor.md)。`v8-tool-voxel-map-plan` 完成（PR #152）。`v8-engine-voxel-mesh-contract`：宣告已核准，已實作（本機 V1～V5 通過，突變 20／20 killed）；實作和宣告的差異（`cell_size` 範圍、原始整數 ±2^30 等，都是收緊）**等你確認**，L1 待 CI。dev_log：[2026_11_05_engine_v8_voxel_mesh_contract](../../../dev_logs/2026_11_05_engine_v8_voxel_mesh_contract.zh-Hant.md)。framework 那批要等 PR #146 合併，並和架構會話協調。
+- **voxel-map-line**：`v8-tool-voxel-map-editor` 的方案與分批已確認（2026-11-05），在 [voxel-map-editor.md](voxel-map-editor.md)。`v8-tool-voxel-map-plan` 完成（PR #152）。`v8-engine-voxel-mesh-contract`：宣告已核准，已實作（本機 V1～V5 通過，突變 20／20 killed）；實作和宣告的差異（`cell_size` 範圍、原始整數 ±2^30 等，都是收緊）你已確認（`v8-engine-voxel-mesh-contract-deviations`），L1 待 CI。下一批 `v8-tool-voxel-map-editor-core` 等你說「開始」。dev_log：[2026_11_05_engine_v8_voxel_mesh_contract](../../../dev_logs/2026_11_05_engine_v8_voxel_mesh_contract.zh-Hant.md)。framework 那批要等 PR #146 合併，並和架構會話協調。
 - **待討論**：`v8-tool-assets-editor`（你會給方案）。
 - **進行中（`v8-tool-audio-editor-edit`，分支 `claude/v8-tool-audio-editor-edit`）**：已實作（GUI：播放、波形、資訊、裁剪、增益、工程檔、匯出）。判定 1～7 本機通過；突變 26／26 killed；審査者與検証者已回報，指出的事已修或已寫進 assets.md「實作後的結果（2026-11-04）」。**等你**：守衛的放寬（§14.4）核准；GUI 的 L3（macOS）。dev_log：[2026_11_04_tool_v8_audio_editor_edit](../../../dev_logs/2026_11_04_tool_v8_audio_editor_edit.zh-Hant.md)。
 - **撤回（`v8-tool-audio-editor-regions`，2026-11-05）**：你把 audio_editor 的邊界定在簡單剪輯與轉換，大規模編輯與混音交給專業軟體（`v8-tool-audio-editor-scope`）。`-regions` 撤回（`v8-tool-audio-editor-regions-withdrawn`）：程式、測試、DI 3 的措辭與突變目錄退回 `-edit` 完成時（`43487d42^`，逐位元組相同），#141 現在只含 `-edit`。退回後本機 ctest 69／69（主 checkout `build/evidence/tool-v8-audio-editor-regions/ctest-framework-after-withdraw.txt`）；`-edit` 的 26 條突變重跑：26／26 killed、stale 0（`mutations-after-withdraw.txt`，同一資料夾）。`-regions` 的事前宣告、實作後的結果與 dev_log（[2026_11_04_tool_v8_audio_editor_regions](../../../dev_logs/2026_11_04_tool_v8_audio_editor_regions.zh-Hant.md)）留作紀錄。2026-11-05 你核准 `-edit` 的守衛放寬並合併 #141（`v8-tool-audio-editor-edit-guard-approved`，取代 `-merge-wait`）；`-edit` 判定 8 合併時仍未判定。其他：master 已在 2026-11-04 合進本分支（`0342a259`）；系統選擇窗的記帳規則已交回 v8 規劃會話（`v8-tool-path-dialog-rule-handover`）。
@@ -43,6 +43,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-engine-voxel-mesh-contract-deviations` | （2026-11-05）確認實作和事前宣告的差異：`cell_size` 在 [2^-16, 2^16]、整數在 ±2^30、錯誤細節的路徑、`ExpandVoxelMesh` 的 assert（都是收緊，見 dev_log） | 「確認」 |
 | `v8-engine-voxel-mesh-contract-declare` | （2026-11-05）核准事前宣告與名稱（`gyo.voxel_mesh`、`GYO::VoxelMesh`、`engine/voxel_mesh/`、`docs/architecture/voxel-mesh.md`） | 「核准」 |
 | `v8-tool-voxel-contract-split` | （2026-11-05）契約拆兩層：格子原始檔（工具持有）＋建置產物（Engine 持有）；之後另外做場景編輯器，接手 arena v2 和玩法標記 | 「D1 契約：照建議，之後我會分出另一個場景編輯器。」 |
 | `v8-tool-voxel-offline-build` | （2026-11-05）離線 build，產物存檔，遊戲只讀產物；碰撞也烘進產物；產物記原始檔的 SHA-256 和 build 版本 | 「我認為要存檔，否則後期載入時都會有細微差別，容易出bug，還不好查，有檔我至少可以反查。」 |

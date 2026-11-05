@@ -2,7 +2,7 @@
 
 日期：2026-11-05。分支 `claude/v8-tool-voxel-map-plan`（PR #152）。上段；實作是主會話（Opus 5.5／high），審查是子 Agent（Opus 5.5／high）。事前宣告在 [voxel-map-editor.md](../tools/plans/v8/voxel-map-editor.md)「v8-engine-voxel-mesh-contract 的事前宣告」，2026-11-05 使用者核准（「核准」）。
 
-**狀態：** 本機判定 V1～V5 通過；V6（L1）待 CI。實作和事前宣告有幾處不同（見「和事前宣告的差異」），**等使用者確認**。
+**狀態：** 本機判定 V1～V5 通過；V6（L1）待 CI。實作和事前宣告有幾處不同（見「和事前宣告的差異」），使用者 2026-11-05 確認（「確認」）。
 
 相關文件：[voxel-mesh.md](../architecture/voxel-mesh.md)（契約、Design Invariants、Replacement Criteria）、[voxel-map-editor.md](../tools/plans/v8/voxel-map-editor.md)、[HANDOFF](../tools/plans/v8/HANDOFF.md)。
 
@@ -51,7 +51,7 @@
    - DI 2 的措辭改成「入口是 Parse 和 Expand（另外命名錯誤碼）」。
    - 規則 9 的措辭改成「一種幾何只有一種四邊形和盒子的順序」。
 
-## 和事前宣告的差異（等使用者確認）
+## 和事前宣告的差異（使用者已確認）
 
 | 項目 | 宣告 | 實作 | 方向 |
 |---|---|---|---|

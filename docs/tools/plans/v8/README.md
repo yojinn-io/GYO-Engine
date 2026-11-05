@@ -57,7 +57,7 @@ v8-tool-plan ✓                              「high｜Opus 5.5｜本計畫、H
 │
 ├── voxel-map-line                            「方案已確認（2026-11-05），分批在 voxel-map-editor.md」
 │   ├── v8-tool-voxel-map-plan ✓             「medium｜Opus 5.5｜方案、分批、HANDOFF、dev_log」
-│   └── v8-engine-voxel-mesh-contract        「high｜Opus 5.5｜gyo.voxel_mesh 契約與讀取器（實作完成，等確認差異與 L1）」
+│   └── v8-engine-voxel-mesh-contract        「high｜Opus 5.5｜gyo.voxel_mesh 契約與讀取器（實作完成，差異已確認，等 L1）」
 │
 └── （待討論）v8-tool-assets-editor           「等使用者逐個給方案（v8-tool-scope-ui-first）」
 ```
