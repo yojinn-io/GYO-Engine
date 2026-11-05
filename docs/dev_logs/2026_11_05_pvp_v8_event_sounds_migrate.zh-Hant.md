@@ -34,7 +34,7 @@
 | E2 壞資料被拒 | 通過（另一個 anim_events id、未知事件、sync 超過聲音長度、未知聲音、event_sounds 版本 2；`sfx.json` 版本 2 與帶 `animation_events` 段） |
 | E3 聽到的不變 | 通過：開始時刻等於舊公式、gain 0.8；`apps/object_fps_pvp` 裡 `EventSoundOffsetSeconds` 的定義 0 件 |
 | E4 | 本機 `cpu|shader` 115／115 通過；L1 三平台通過（PR yojinn-io/GYO-Engine#149，[run 41953935847](https://github.com/yojinn-io/GYO-Engine/actions/runs/41953935847)） |
-| E5 | 本批 9 條全部 killed。**D184 範圍 24 條中 23 條 killed，1 條 survived：`v8-asset-layout-guard-product-use`**（不成立；使用者決定交給 fix 會話） |
+| E5 | 本批 9 條全部 killed。**D184 範圍 24 條中 23 條 killed，1 條 survived：`v8-asset-layout-guard-product-use`**（不成立；使用者決定交給 fix 會話，PR #150 已修好並合併，`4224df76`） |
 | E6 實聽 | **未做**（要使用者） |
 
 `v8-asset-layout-guard-product-use` 的事實：
