@@ -1,6 +1,6 @@
 # 實體容器（entity store）：交接
 
-更新：2026-11-05。**狀態：batch 2 核准（2026-11-05，§7 全照建議）；batch 3a `v8-arch-entity-store-impl-3a` 完成（判定 1～6 通過；判定 7 L1 見現況）；3b 待第一個非玩家批。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
+更新：2026-11-05。**狀態：batch 2 核准（2026-11-05，§7 全照建議）；batch 3a `v8-arch-entity-store-impl-3a` 完成（判定 1～7 全部通過）；PR #156 待使用者決定轉正式與合併；3b 待第一個非玩家批。** 分支 `claude/v8-arch-entity-store`（自 master `318b4e66` 切出）。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。
 
 ## 代號對照
@@ -43,8 +43,9 @@
 - 2026-11-06：§14.4 檢證者（Fable 5.1／high）：確認 3、否定 0、收窄 2；對兩段固定突變文字無舊殺新放的輸入，放寬的是驗證冗餘；發現產品轉接標頭無登錄突變。審查者（Opus 5.5／high）：must 0／should 3／note 8，總評修正後可合併（S1 特化遇同時有 id 與 playerId 的型別改成編譯失敗、S2 字詞守衛改白名單、S3 測試加 assert 攔截）。報告存 `build/evidence/entity-store/impl-3a/verifier-1444-report-20261106.md`、`review-20261106.md`。修正與補一個產品轉接突變交回實作者；使用者決定退役 M1、M2，一併交辦。
 - 2026-11-06：實作者完成審查修正與 M1、M2 退役（約 40 分；`0c862822`、`90821624`、`e40e512d`）：S1 static_assert、S2 include 白名單（自我測試 18 案例）、S3 assert 攔截、N3／N4 契約措辭、新增轉接突變（expect 含 `GYO_ASSERT failed: row`，新判定）；Engine 突變 15/15、產品 5/5、ctest 126/126、golden 不變；修正後 runner 對照前次 branch，42 情境 digest 與 records 全同（只多一個 static_assert）。dev_log `docs/dev_logs/2026_11_06_arch_v8_entity_store_impl_3a.zh-Hant.md`。推送並手動觸發 L1（草稿 PR 推送時 L1 會 skip）。
 - 2026-11-06：L1 手動觸發 `cross-platform.yml`（`build-and-validate.yml` 沒有 workflow_dispatch，是被呼叫的工作流程）：[run 42056321286](https://github.com/yojinn-io/GYO-Engine/actions/runs/42056321286)，`fd52f8a7`，結果待讀（判讀看 L1 job 結論）。已通知圖書管理員以 delta §5 的 3a 版改 `docs/architecture.md` 與 `docs/creating_apps.md:41`，推到同一分支。
+- 2026-11-06：L1 [run 42056321286](https://github.com/yojinn-io/GYO-Engine/actions/runs/42056321286) 全部 success（L1 macos-arm64、linux-x64、windows-x64，Quick acceptance）→ 判定 7 通過。圖書管理員推送 `c7878e47`（只動 `docs/architecture.md` 與 `docs/creating_apps.md`，3a 版文字，日期 2026-11-06），主會話核對無 `DeferredChanges` 字樣；3b 合併時再通知它補完整版。
 
 ## 未結事項
 
-- `docs/architecture.md:129` 的 ECS 字樣：在 batch 2 的 PR 內由圖書管理員會話修改；本線不改。
+- `docs/architecture.md:129` 的 ECS 字樣：已由圖書管理員以 3a 版修改（`c7878e47`）；3b 合併時補成完整版。
 - batch 3 的換上時機（與第一個非玩家實體的批同時，或先做）：batch 2 決定。

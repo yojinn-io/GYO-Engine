@@ -2,7 +2,7 @@
 
 日期：2026-11-05～11-06。分支 `claude/v8-arch-entity-store`（PR #156，草稿）。主會話 Fable 5.1，途中由使用者改為 Opus 5.5（已核准計畫的模型指派照計畫）。實作者 Opus 5.5／high（第一個在程序結束時中斷，由第二個接手）；審查者 Opus 5.5／high（唯讀）；§14.4 檢證者 Fable 5.1／high（xhigh-reviewer，唯讀）。估時 9～13 h，實際約 4 h（中斷前的實作者時間未精確計入）。
 
-**狀態：事前宣告的判定 1～6 通過；判定 7（PR 的 L1）見 HANDOFF。** 上段任務。計畫見 [README](../architecture/plans/entity-store/README.md)，[事前宣告](../architecture/plans/entity-store/impl-3a-declaration.zh-Hant.md)，經過見 [HANDOFF](../architecture/plans/entity-store/HANDOFF.md)。
+**狀態：事前宣告的判定 1～7 全部通過。** 上段任務。計畫見 [README](../architecture/plans/entity-store/README.md)，[事前宣告](../architecture/plans/entity-store/impl-3a-declaration.zh-Hant.md)，經過見 [HANDOFF](../architecture/plans/entity-store/HANDOFF.md)。
 
 ## 做了什麼
 
@@ -25,7 +25,7 @@
 | 4 | Engine 守衛的檢出力 | 通過：15/15 killed，只靠 common（測試、字詞守衛、連結檢查）；審查修正後重跑仍 15/15 |
 | 5 | 產品守衛不退化 | 通過：初次 M1～M6 6/6（M1、M2 由 common 殺）；退役後 M3～M6＋轉接突變 5/5；G1、G2、G3、G7、G13 Green |
 | 6 | 依賴與字詞 | 通過：連結檢查（`es-row9-links-math` 證明會失敗）、字詞守衛與自我測試（18 案例）通過；產品無 `HasEntityId` |
-| 7 | L1 | 見 HANDOFF（推送後手動觸發） |
+| 7 | L1 | 通過：[run 42056321286](https://github.com/yojinn-io/GYO-Engine/actions/runs/42056321286)（`fd52f8a7`，手動觸發 `cross-platform.yml`）：L1 macos-arm64、linux-x64、windows-x64 與 Quick acceptance 全部 success |
 | — | ctest cpu\|shader（本機 Mac） | 126/126；本機沒有 shader 標籤的測試 |
 
 ## Test 判定的變更（§14.4）
@@ -55,5 +55,5 @@
 ## 留給之後
 
 - 3b（`DeferredChanges`、G12、E-12 措辭的改寫）與第一個非玩家實體批同時做。
-- 圖書管理員在本 PR 改 `docs/architecture.md`（3a 版）與 `docs/creating_apps.md:41`。
+- 圖書管理員已在本 PR 以 3a 版改 `docs/architecture.md` 與 `docs/creating_apps.md:41`（`c7878e47`）；3b 合併時再通知它補成完整版。
 - 檢證者列的缺口 2：產品側 `playerId` 路徑的 `EraseEntity` 沒有單元測試，只靠 G1、G2 整合覆蓋；記錄，不在本批補。
