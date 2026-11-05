@@ -261,6 +261,10 @@ set_tests_properties("${GYO_CURRENT_APP}.log_contract" PROPERTIES LABELS "cpu;pv
 add_test(NAME "${GYO_CURRENT_APP}.lan15_judge"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_lan15_judge.py")
 set_tests_properties("${GYO_CURRENT_APP}.lan15_judge" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# The lag-l2 summary's discrimination check (docs/object_fps_pvp/plans/v8/v8-product-hitbox-lag-l2-declaration.md, T1).
+add_test(NAME "${GYO_CURRENT_APP}.lag_l2_summary"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_lag_l2_summary.py")
+set_tests_properties("${GYO_CURRENT_APP}.lag_l2_summary" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 add_test(NAME "${GYO_CURRENT_APP}.max_players"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_max_players.py")
 set_tests_properties("${GYO_CURRENT_APP}.max_players" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
