@@ -1,18 +1,12 @@
 {
   "version": 1,
-  "description": "Declared mutants of object_fps_pvp. A mutant is killed only when its check fails with the expected message (run_mutations.py).",
+  "description": "Declared mutants of object_fps_pvp. A mutant is killed only when its check fails with the expected message (run_mutations.py). Retired in v8-arch-entity-store-impl-3a: entity-split-insert-appends (M1) and entity-split-erase-swap-and-pop (M2) (the column mechanism moved to the Engine entity store; moved to the Engine catalog docs/architecture/plans/entity-store/scripts/mutations.json as es-row2-insert-appends and es-row2-erase-swap-and-pop, user decision 2026-11-06).",
   "checks": {
     "cpu": {
       "build": [
         "gyo_object_fps_pvp_tests"
       ],
       "ctest": "object_fps_pvp.cpu"
-    },
-    "engine_entity_store": {
-      "build": [
-        "gyo_entity_store_tests"
-      ],
-      "ctest": "gyo_entity_store_tests"
     },
     "worker": {
       "build": [
@@ -8836,26 +8830,6 @@
       "replace": "        std::erase_if(state.players, [&](const auto& player) { return player.playerId == playerId; });\n        std::erase_if(state.combat, [&](const auto& combat) { return combat.playerId == playerId; });",
       "check": "cpu",
       "expect": "PublicationComponentsAgree|is NOT correct"
-    },
-    {
-      "id": "entity-split-insert-appends",
-      "batch": "v8-product-match-entity-split",
-      "what": "InsertEntity appends instead of inserting at the ordered position (M1)",
-      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
-      "find": "    return *column.insert(position, std::move(value));",
-      "replace": "    static_cast<void>(position);\n    column.push_back(std::move(value));\n    return column.back();",
-      "check": "engine_entity_store",
-      "expect": "Entity store insert: the ordered position"
-    },
-    {
-      "id": "entity-split-erase-swap-and-pop",
-      "batch": "v8-product-match-entity-split",
-      "what": "EraseEntity moves the last element into the hole (M2)",
-      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
-      "find": "    column.erase(position);\n    return true;",
-      "replace": "    *position = std::move(column.back());\n    column.pop_back();\n    return true;",
-      "check": "engine_entity_store",
-      "expect": "Entity store erase: keeps the order"
     },
     {
       "id": "entity-split-erase-skips-animations",
