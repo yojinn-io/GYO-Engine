@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9 of the declaration in docs/tools/plans/v8/voxel-map-editor.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
+  "mutants": [
+    {
+      "id": "vme-cull-partial",
+      "what": "A face is dropped beside any block, covered or not",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "                                    if (otherShape.coversSide[static_cast<std::size_t>(dir ^ 1)]) continue;",
+      "replace": "                                    static_cast<void>(otherShape); continue;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*cullface*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-cull-wrong-side",
+      "what": "The neighbour's far side decides, not the side touching the face",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "otherShape.coversSide[static_cast<std::size_t>(dir ^ 1)]",
+      "replace": "otherShape.coversSide[static_cast<std::size_t>(dir)]",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*cullface*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-orientation-shifted",
+      "what": "The orientation table is off by one quarter turn",
+      "file": "tools/voxel_map_editor/src/Orientation.cpp",
+      "find": "table[o] = Multiply(UpRotations[o / 4], YawRotations[o % 4]);",
+      "replace": "table[o] = Multiply(UpRotations[o / 4], YawRotations[(o + 1) % 4]);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*orientation*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-rotation-pivot",
+      "what": "Boxes turn about the cell corner instead of its centre",
+      "file": "tools/voxel_map_editor/src/Orientation.cpp",
+      "find": "    const Vec3i d{p[0] - Units / 2, p[1] - Units / 2, p[2] - Units / 2};",
+      "replace": "    const Vec3i d{p[0], p[1], p[2]};",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*orientation*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-runs-short",
+      "what": "Runs that do not cover 4096 cells are accepted",
+      "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+      "find": "        if (filled != ChunkCells) Fail(\"the runs of a chunk cover exactly 4096 cells\", path + \".runs\");",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*chunks and runs*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-empty-turned",
+      "what": "An empty cell with an orientation is accepted",
+      "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+      "find": "            if (block == 0 && orientation != 0) Fail(\"an empty cell has orientation 0\", At(runPath, 1));",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*chunks and runs*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-grid-runs-unmerged",
+      "what": "The writer splits equal cells into separate runs",
+      "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+      "find": "            if (i < cells.size() && cells[i] == cells[start]) continue;",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*round-trips*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-merge-overlap",
+      "what": "Merged rectangles are not marked as used, so they overlap",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "                    for (auto xx = x; xx < xEnd; ++xx) filled[index(xx, zz)] = 0;",
+      "replace": "                    for (auto xx = x; xx < xEnd; ++xx) static_cast<void>(index(xx, zz));",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*random sets*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-merge-drops-last",
+      "what": "The boxes still open at the top slab are lost",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "        for (const auto& [r, start] : open) close(r, start, ys.back());",
+      "replace": "        for (const auto& [r, start] : open) static_cast<void>(r), static_cast<void>(start);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*merge*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-brightness-swapped",
+      "what": "Up and down faces swap their brightness",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "            const auto percent = FaceBrightnessPercent[dir];",
+      "replace": "            const auto percent = FaceBrightnessPercent[dir == 2 ? 3 : dir == 3 ? 2 : dir];",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*golden file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-quads-unsorted",
+      "what": "Quads are written in build order, not Engine's canonical order",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "    std::sort(quads.begin(), quads.end());\n",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*golden file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-readback-ignored",
+      "what": "A text Engine refuses is still returned",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "    if (!readBack) {",
+      "replace": "    if (false) {",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*Engine refuses*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-sha-not-source",
+      "what": "source_sha256 is not the source's bytes",
+      "file": "tools/voxel_map_editor/src/Build.cpp",
+      "find": "Engine::Base::Sha256(sourceBytes)",
+      "replace": "Engine::Base::Sha256(std::span<const std::byte>{})",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*golden file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-repeated-key-kept",
+      "what": "A repeated key is taken silently",
+      "file": "tools/voxel_map_editor/src/JsonRules.hpp",
+      "find": "            if (!open.back().insert(key).second) Fail(\"repeated key '\" + key + \"'\", \"\");",
+      "replace": "            open.back().insert(key);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*schema and version*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-block-name-repeat",
+      "what": "Two blocks with one name are accepted",
+      "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+      "find": "        if (!names.insert(block.name).second) Fail(\"a block name repeats\", path + \".name\");",
+      "replace": "        names.insert(block.name);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*grid rule: blocks*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-cell-range-unchecked",
+      "what": "Filled cells beyond 2^16 after adding origin are accepted",
+      "file": "tools/voxel_map_editor/src/GridDocument.cpp",
+      "find": "                        if (cell[axis] < -CellLimit || cell[axis] > CellLimit - 1)",
+      "replace": "                        if (false)",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*chunks and runs*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-up-renumbered",
+      "what": "The -X up orientations are renumbered (a quarter turn added)",
+      "file": "tools/voxel_map_editor/src/Orientation.cpp",
+      "find": "    {{{0, -1, 0}, {1, 0, 0}, {0, 0, 1}}},  // +90 degrees about Z",
+      "replace": "    {{{0, -1, 0}, {0, 0, 1}, {-1, 0, 0}}},  // +90 degrees about Z, then a quarter turn",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*table is part of the format*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vme-import-pointer-throws",
+      "what": "A pointer nlohmann cannot follow escapes as an exception",
+      "file": "tools/voxel_map_editor/src/BoxImport.cpp",
+      "find": "    } catch (const Json::exception&) {\n        Fail(\"not a JSON pointer that leads to a value\", std::string(pointer));\n    }",
+      "replace": "    } catch (const Json::exception&) {\n        throw;\n    }",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*import*",
+      "expect": "(?s)import"
+    },
+    {
+      "id": "vme-verify-always-same",
+      "what": "verify reports a different mesh as the same (the executable gyo_tool_install_target places in build/target/_tools; a stale copy in the build tree once hid this mutant)",
+      "file": "tools/voxel_map_editor/src/Main.cpp",
+      "find": "    if (Text(*existing) != built->text) {",
+      "replace": "    if (false) {",
+      "command": [
+        "{python}",
+        "-c",
+        "import os,subprocess,sys; exe=sys.argv[1]+('.exe' if os.path.exists(sys.argv[1]+'.exe') else ''); r=subprocess.run([exe]+sys.argv[2:]); sys.exit(0 if r.returncode == 4 else 'verify passed a different file')",
+        "build/target/_tools/voxel_map_editor/bin/gyo_voxel_map_editor",
+        "verify",
+        "tests/voxel_map_editor/fixtures/sample.voxel_grid.json",
+        "tests/voxel_map_editor/fixtures/sample.voxel_grid.json"
+      ],
+      "target": "gyo_voxel_map_editor",
+      "expect": "verify passed a different file"
+    },
+    {
+      "id": "vme-guard-sdl-include",
+      "what": "The editor includes an SDL header",
+      "file": "tools/voxel_map_editor/src/Main.cpp",
+      "find": "#include \"gyo/framework/HeadlessShell.hpp\"",
+      "replace": "#include \"gyo/framework/HeadlessShell.hpp\"\n#include <SDL3/SDL.h>",
+      "command": [
+        "{python}",
+        "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "includes SDL3/SDL.h"
+    }
+  ]
+}

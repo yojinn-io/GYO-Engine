@@ -39,7 +39,8 @@ to the same floats.
   coordinate is `float(units + 16 × origin) × cell_size / 16`: the integer sum is exact, its conversion to float is
   exact within ±2^20, the product rounds once and the division by 16 is exact, because `cell_size` stays within
   [2^-16, 2^16] and no result leaves the normal floats. `cell_size` is the decimal's nearest double, then that
-  double's nearest float; a producer writes the shortest decimal of the float it means.
+  double's nearest float; a producer writes a decimal that reads back as the float it means (the voxel map
+  editor writes the shortest decimal of that float's double).
 - **Quads.** `[x, y, z, dir, w, h, palette]`. `dir` is the direction the face looks at: 0 to 5 for +X, −X, +Y, −Y, +Z,
   −Z, which is also the face's row in the palette image. `(x, y, z)` is the face's minimum corner, on the face's
   plane; `w` and `h` run along its two in-plane axes: X faces (Z, Y), Y faces (X, Z), Z faces (X, Y).

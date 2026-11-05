@@ -10,7 +10,7 @@
 - **完成**：
   - `v8-tool-voxel-map-plan`：方案、分批。
   - `v8-engine-voxel-mesh-contract`：`gyo.voxel_mesh` 契約與讀取器，V1～V6 通過；L1 三平台綠，run 42000098862。
-- **進行中**：`v8-tool-voxel-map-editor-core`。你說了「開始」，事前宣告已寫進 voxel-map-editor.md，**等你核准**。其中包括對 `walls≤1024` 的解讀：工具不檢查，由產品擋下。
+- **進行中**：`v8-tool-voxel-map-editor-core`。已實作並審查（Opus，無 blocker，指出的事已修）；本機 E1～E9 通過，突變 20／20 killed；L1 待 CI。dev_log：[2026_11_05_tool_v8_voxel_map_editor_core](../../../dev_logs/2026_11_05_tool_v8_voxel_map_editor_core.zh-Hant.md)。
 - **前提**：PR #146 已合併，所以 `v8-framework-preview-component` 可以排了；開始前要和架構會話協調。
 - **等你決定**：目前沒有。
 
@@ -18,6 +18,8 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-map-editor-core-deviations` | （2026-11-05）確認 core 批實作和宣告的差異：`convert-arena-v1` 改成中立的 `import-boxes <json> <pointer> <grid>`；結束碼對齊 model_viewer（1 輸入、2 用法、3 讀寫、4 verify 不同）；碰撞盒合併改成沿 y 逐層做；格子格式的範圍規則；E6 的做法；fixtures 的 `.gitattributes` | 「確認，送審查」 |
+| `v8-tool-voxel-map-editor-core-declare` | （2026-11-05）核准 core 批的事前宣告，包括「`walls≤1024` 工具不檢查，由產品擋下」的解讀 | 「核准」 |
 | `v8-tool-voxel-handoff-split` | （2026-11-05）voxel 這條線另開專用的 HANDOFF，把工具線 HANDOFF 裡的 voxel 決定與紀錄搬過來 | 「另開 HANDOFF」 |
 | `v8-engine-voxel-mesh-contract-deviations` | （2026-11-05）確認實作和事前宣告的差異：`cell_size` 在 [2^-16, 2^16]、整數在 ±2^30、錯誤細節的路徑、`ExpandVoxelMesh` 的 assert（都是收緊，見 dev_log） | 「確認」 |
 | `v8-engine-voxel-mesh-contract-declare` | （2026-11-05）核准事前宣告與名稱（`gyo.voxel_mesh`、`GYO::VoxelMesh`、`engine/voxel_mesh/`、`docs/architecture/voxel-mesh.md`） | 「核准」 |
@@ -48,3 +50,5 @@
   - 之後 L1 三平台通過，記錄在 dev_log（`6ca245b1`）。
 - 2026-11-05：你說「另開 HANDOFF」：建立本文件，搬移 17 筆決定與 3 筆紀錄（`v8-tool-voxel-handoff-split`）。
 - 2026-11-05：你說「開始」，開工 `v8-tool-voxel-map-editor-core`（high，Opus 5.5）。讀了 model_viewer 的登錄、CMake、測試結構和 DI，以及 `tool_projects.md`、`Sha256`、`WriteFileAtomically`。重估 14～20 h。事前宣告寫進 voxel-map-editor.md，等你核准。
+- 2026-11-05：你核准 core 批的宣告，實作完成。本機：工具 ctest 4／4，核心測試 10037 個斷言；整套 cpu|shader 128／128；突變第一輪 15／16。倖存的 `vme-repeated-key-kept` 是突變目錄的篩選字串含逗號，doctest 切開後一個測試都沒選到，屬於 Test 自身的錯誤；修正後重跑 killed，合計 16／16。實作和宣告有差異，審查前先請你確認。證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/core/`。
+- 2026-11-05：core 批的審查（Opus／high）沒有 blocker。修 C1（匯入的格子讀不回來）、C2（pointer 讓程式 abort）、T1（朝向的字面表）、T2（補齊規則測試）、A1（`gyo_tool_install_target`）和其他 nit。突變審查後 20 條：19／20，倖存的一條是 runner 找到了舊位置的執行檔（計測路徑），修正後 20／20。提交並推送，等 L1。
