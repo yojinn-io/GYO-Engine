@@ -364,6 +364,76 @@ v8-tool-voxel-map-editor
 - 沒有 L2、L3（GUI 在 window 批）。
 - **範圍的限制**：兩張現行地圖的轉換只做 smoke（能轉、能 build、能讀回）。和 v1 的等價（`v8-tool-voxel-retire-v1`）留給 arena-v2 批。
 
+## v8-product-arena-v2 的事前宣告
+
+2026-11-05 寫，**要使用者核准後才實作**。結果出來之後，判定不放寬（AGENTS §14.1）。實作時要改宣告，在審查前先回報。
+
+- **誰做**：這個會話（使用者 2026-11-05：「ここでやる」）。這是產品批，觸到的範圍會通知產品會話。
+- **分支**：PR #152。
+- **重估**：10～14 h（原本 6～10 h）。多出來的是下面的兩個決定點。
+- **段**：上段（Data Contract、Match 的碰撞）。
+- **模型**：實作是主會話（Opus 5.5／high），審查是子 Agent（Opus 5.5／high）。
+
+### 要先決定的兩件事
+
+**決定 1：Client 這一批要不要畫烘好的 mesh？**
+
+- **(R1) 不畫**：Client 照舊，把 `walls`（產物的碰撞盒）一個個畫成盒子，畫面和現在一樣；mesh 的繪製另外開一批。
+- **(R2) 畫（建議）**：Client 用產物的四邊形建一個 mesh、用調色盤建一張貼圖，一次提交；v1 的 arena 照舊畫盒子。理由：
+  - 不畫的話，編輯器做出來的樓梯、半磚和顏色在遊戲裡看不到；
+  - window 批的 L3（「建一張有二樓和階梯的地圖，進遊戲走一圈」）也需要它。
+  - 代價約 +3～4 h。
+- **怎麼把 mesh 交給 Client**：`Arena` 不能加成員（digest 會變成 wire 變更，`v8-tool-voxel-arena-v2`），所以 `LoadInstalledArenas` 多一個可選的輸出參數，同時交出每張 arena 的幾何（`Engine::VoxelMesh::VoxelMeshGeometry`，v1 是空的）。Match 和其他呼叫端不變。
+
+**決定 2：碰撞盒的合併方式要改（`v8-tool-voxel-retire-v1` 的「不相等就先調整掃描順序」）**
+
+- **現況**：用現在的合併（沿 x 延伸再沿 z），現行地圖會得到「南北牆含角落、東西牆在中間」；v1 剛好相反，是「東西牆含角落、南北牆在中間」。兩者盒子數相同（5 個），但集合不同。
+- **改法（建議）**：每一層裡，先在每一行 x 上取沿 z 的**最長連續段**，再把**完全相同**的相鄰段沿 x 合併；最後和現在一樣，相同的矩形沿 y 往上長。
+  - 這是掃描線式的條帶合併。聯集相同、互不重疊的性質不變（工具的 DI 4）。
+  - 照手算，現行的兩張地圖會和 v1 的牆集合完全相同。
+- **影響**：這是工具 core 的行為變更。黃金產物要重新產生，碰撞盒相關的測試和突變也要更新。工具的 DI 和格式都不變。
+
+### 範圍
+
+- **arena 檔的 schema v2**：
+  - `"version": 2`；
+  - 用 `"geometry": "<相鄰的檔名>"` 取代 `walls`，其他欄位不變。
+  - 檔名的規則比照 `arenas.json`：純檔名，UTF-8。
+- **`Arena::Load` 同時接受 v1 和 v2**。v2 會讀相鄰的 `gyo.voxel_mesh`（上限 16 MiB），經 `ParseVoxelMesh` 和 `ExpandVoxelMesh` 之後，把碰撞盒依產物的順序填進 `walls`。
+  - 記憶體裡的 `Arena.version` 維持 1。
+  - `Arena` 的成員和 digest 演算法都不變。
+  - `walls≤1024` 照舊。
+- **出生點的規則**：從 `y==0` 改成「`y==0`，或依 `Movement.cpp` 的站立判定有支撐」。
+  - 站立判定抽成一個共用函式，`Movement` 和 `Validate` 都呼叫它，所以兩邊一定一致。
+  - 這是 arena 契約的變更，不是 wire 變更（出生點的 y 本來就在 digest 裡）。
+- **兩張現行地圖轉成 v2**：
+  - 用 `gyo_voxel_map_editor import-boxes <v1> /walls` 和 `build` 轉換；
+  - 格子原始檔放主 checkout 的 `build/art-source/object_fps_pvp/maps/`（`v8-tool-voxel-source-location`）；
+  - 產物 `pvp_arena.voxel_mesh.json`、`pvp_corners.voxel_mesh.json` 放在資產根目錄，和 arena 檔相鄰；
+  - 登錄 catalog（type `text`），列入 `RETAINED`（以路徑載入），加上 root-file 的例外（和 arena 檔同一個理由：`v8-product-asset-path-loaded-move` 延後）。
+- **(R2) 的話**：Client 的繪製改用 mesh，v1 照舊。
+- **文件**：`docs/object_fps_pvp/assets.zh-Hant.md`（地圖產物的登錄與 RETAINED）；arena 的契約說明寫在產品文件裡協議引用的位置，在實作時查出確切的檔案。
+
+### 判定（現在固定）
+
+| 判定 | 內容 | 通過條件 |
+|---|---|---|
+| P1 | v2 載入的規則：缺 `geometry`、檔名不合法、找不到檔、產物不合法（例如 Engine 拒絕的檔）、v2 卻還有 `walls`，都要拒絕，並有明確的錯誤 | 全部通過 |
+| P2 | **退役證據一**：兩張地圖的 v2 `walls` 和 v1 `walls` 作為集合逐位元相同 | 兩張都相同 |
+| P3 | **退役證據二**：v1 和 v2 的 `Arena`，以同一串固定命令（走、跳、撞牆、沿牆滑、蹲；含四個角落和柱子）跑 `StepMovement`，每一步的位置逐位元相同 | 兩張都相同 |
+| P4 | 出生點的規則：在方塊頂面上的出生點會被接受、懸空的會被拒絕、地板上的照舊；`Validate` 和 `Movement` 用的是同一個函式 | 通過 |
+| P5 | 資產契約測試（catalog、RETAINED、root-file 例外）通過；格子原始檔不在 repo | 通過 |
+| P6 | 既有的 PvP 測試全部通過（`ArenaDigestTests`、`PvpMatchTests`、移動相關測試）。digest 會變，這是內容變更；寫死既有 digest 值的測試，如果因此要改，依 AGENTS §14.4 列出並取得核准 | 通過，或改動經核准 |
+| P7 | 工具（決定 2）：合併的性質測試照舊通過；新黃金值重新產生；「現行兩張地圖的集合等於 v1」也寫成工具端的測試 | 通過 |
+| P8 | 突變（至少 8 條）：v2 讀到 `walls` 卻被接受、`geometry` 檔名含路徑、產物不經 Engine 驗證、出生點懸空卻被接受、`Validate` 和 `Movement` 各寫一份判定、碰撞盒順序被打亂、(R2) 有 mesh 卻退回畫盒子、合併時把不同段沿 x 合在一起 | 全部 killed |
+| P9 | L1：三平台的 cpu\|shader | 綠 |
+| P10 | L3（R2 才有）：使用者在 macOS 進遊戲，兩張地圖的外觀與碰撞和以前一致 | 使用者確認 |
+
+- **範圍的限制**：
+  - P3 的軌跡只比 `StepMovement`（Match 與 Client 的預測共用），不比網路的流程。
+  - `walls` 的順序和 v1 不同：v1 照檔案順序，v2 是正規順序。如果 P3 因為順序而不同，就照 AGENTS §14 停下回報。
+- 證據放主 checkout 的 `build/evidence/tool-v8-voxel-map/arena-v2/`。
+
 ## 風險
 
 - **格子出現第二個讀者**（例如場景編輯器要在格子上擺東西）：格子就要升到 Engine，等於再搬一次契約。寫進工具的 Replacement Criteria。

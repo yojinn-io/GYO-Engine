@@ -11,7 +11,7 @@
   - `v8-tool-voxel-map-plan`：方案、分批。
   - `v8-engine-voxel-mesh-contract`：`gyo.voxel_mesh` 契約與讀取器，V1～V6 通過；L1 三平台綠，run 42000098862。
 - **完成**：`v8-tool-voxel-map-editor-core`：E1～E10 通過（L1 三平台綠，run 42010316153）。dev_log：[2026_11_05_tool_v8_voxel_map_editor_core](../../../dev_logs/2026_11_05_tool_v8_voxel_map_editor_core.zh-Hant.md)。
-- **下一批**：`v8-framework-preview-component`（PR #146 已合併；要和架構會話協調）或 `v8-product-arena-v2`（依賴 core，已可開始），等你選、說「開始」。
+- **進行中**：`v8-product-arena-v2`。你選了「arena v2 から」「ここでやる」。事前宣告已寫進 voxel-map-editor.md，**等你核准**：包括決定 1（Client 要不要畫 mesh，建議 R2）和決定 2（碰撞盒合併改成條帶式，讓 v1 退役的集合相同）。
 - **前提**：PR #146 已合併，所以 `v8-framework-preview-component` 可以排了；開始前要和架構會話協調。
 - **等你決定**：目前沒有。
 
@@ -54,3 +54,4 @@
 - 2026-11-05：你核准 core 批的宣告，實作完成。本機：工具 ctest 4／4，核心測試 10037 個斷言；整套 cpu|shader 128／128；突變第一輪 15／16。倖存的 `vme-repeated-key-kept` 是突變目錄的篩選字串含逗號，doctest 切開後一個測試都沒選到，屬於 Test 自身的錯誤；修正後重跑 killed，合計 16／16。實作和宣告有差異，審查前先請你確認。證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/core/`。
 - 2026-11-05：core 批的審查（Opus／high）沒有 blocker。修 C1（匯入的格子讀不回來）、C2（pointer 讓程式 abort）、T1（朝向的字面表）、T2（補齊規則測試）、A1（`gyo_tool_install_target`）和其他 nit。突變審查後 20 條：19／20，倖存的一條是 runner 找到了舊位置的執行檔（計測路徑），修正後 20／20。提交並推送，等 L1。
 - 2026-11-05：core 批的 L1 三平台通過（run 42010316153，`5f410c60`），批次完成。
+- 2026-11-05：你選 `v8-product-arena-v2`，由這個會話做。讀了 `Arena.cpp` 的載入與 digest、`Arena::Load` 的 20 多個呼叫端、`Movement.cpp` 的站立判定、資產契約測試的 RETAINED 與 root-file 例外。發現：現在的合併得到的盒子集合和 v1 不同（盒子數相同、分法相反）。重估 10～14 h。事前宣告寫進 voxel-map-editor.md，等你核准。
