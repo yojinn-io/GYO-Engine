@@ -1,6 +1,6 @@
 # v8-product-event-sounds-migrate 的事前宣告
 
-更新：2026-11-05。Owner：`object_fps_pvp`。**狀態：草稿，等使用者核准。** 估時 4～6 h（超過 9 h 停下回報）。
+更新：2026-11-05。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-event-sounds-migrate-declaration-approve`，2026-11-05，使用者：「照建議核准」；`-listen` (a) 實聽、`-log` (a) 刪 `reload=`、加 `event_sounds=`）。 估時 4～6 h（超過 9 h 停下回報）。
 
 上段（理由：PvP 的資料格式 `sfx.json` 升版；這批是 framework DI 6「consumer 的遷移批次要審查」點名的那種批次）。
 
@@ -104,3 +104,28 @@
 ## 完成條件
 
 E1～E5 成立，E6 依選項。dev_log（`docs/dev_logs/`）、HANDOFF、README 與這批同一變更提交。HANDOFF 的 event-sounds 條目標為完成。告訴 Model Viewer 會話「遊戲裡聽到」已可試。
+
+## 修訂紀錄
+
+2026-11-05，核准後、量測前（突變與 CTest 判定都還沒跑）。判定 E1～E6 不變，以下是做法的調整：
+
+1. **程式放在 `app_support`，檔案在 App 底下**（`src/App/WeaponEventSounds.cpp`，`namespace fps`）。
+   - `app_support` 改成 PUBLIC 元件 `FRAMEWORK`（公開標頭用到 framework 的結構），PRIVATE 連 `GYO::ToolFrameworkJson`。Match 不連 framework，`SoundCues.cpp` 所在的 `match_domain` 沒有變。
+   - 測試放在 `presentation_cpu`（`cpu` 標籤，連 `app_support`），能走 Client 實際用的 `LoadWeaponPresentationDefinition`。
+   - 經過：第一版開了新的產品目標 `event_sounds`，理由之一寫成「`app_support` 需要 SDL GPU，`cpu` 測試連不到它」。審查指出這是錯的：`presentation_cpu` 已經連它。撤掉新目標，建置圖只多了 `app_support` 的兩條連結。放在 App 底下，是為了不新增 App → Pvp 的標頭引用。
+2. **綁定時機**：聲音在內容階段初始化，武器到圖形階段才載入。所以在武器載入後才綁定。事件聲音的片段用 Engine 混音器的執行期載入（`Submitter::LoadClip`，每個 submitter 16 格），不放進建立混音器時的 ClipBank。
+3. **排程改成可測**：加 `ScheduleEventSound`，內部呼叫 framework 的 `EventSoundOffsetSeconds`（DI 6，不複製）。換彈段改呼叫它。這樣突變 4（gain）、6（sync）才會落在有測試的程式，另外加一條「忽略換彈已經跑了多久」。
+4. **突變 2、5 的落點**：
+   - 突變 2 改成「綁定時任何聲音都回答長度」：效果和「綁定失敗照樣繼續」同一類，都是該拒絕的綁定通過。
+   - 突變 5 改成「武器指到別的 event_sounds 檔」：事件查找是 framework 的 `Find`（由它自己的 `es-*` 突變守住），PvP 的 `PvpSound::FindEventSound` 只是轉呼叫，沒有單元測試。
+5. **命名規則**：`tests/object_fps_pvp/test_asset_catalog.py` 的定義檔後綴加 `.event_sounds.json`，`docs/object_fps_pvp/assets.zh-Hant.md` 第 3 節同步。
+   - 這條是一般測試，該文件寫明它不列為 Design Invariants、可以隨 Feature 調整。
+   - 放寬面只有一個：`<set>.event_sounds.json` 從「名稱不合規」變成合規，其他名稱的判定不變。
+6. **範圍的限界**：`PvpSound` 的綁定與播放，以及 `PvpApplication` 的呼叫處，沒有單元測試（和 `v8-tool-assets-anim-events` 時相同）。由 E6 實聽與審查守。武器定義讀 event_sounds 的那段（`WeaponPresentationDefinition`）由 `presentation_cpu` 的 E1～E3 守，並有突變 `es-migrate-not-read`、`es-migrate-checked-against-own-id`。
+7. **審查後的調整**（審查者 Opus 5.5／high，唯讀）：
+   - E1、E3 改在 `presentation_cpu` 經正式載入路徑檢查；E3 用模型的真實換彈片段長度，換彈時間取自 `CombatRules{}.reloadTicks`。
+   - 突變 5 改成 `es-migrate-not-read`（武器不讀 event_sounds，換彈無聲）。加 `es-migrate-checked-against-own-id`（拿 event_sounds 自己寫的 id 來核對）。
+   - `es-migrate-sfx-version-2-accepted` 的預期字串改成只配對整行，不會被另一條的 `version 2's animation_events` 誤配。
+   - 小問題修正：重新綁定時先卸下前一次的片段；診斷列的 cue 改成 `std::optional`，事件聲音不會被當成 `local_shot`；註解改正。
+   - 記錄而不改：event_sounds 的錯誤現在在圖形階段（視窗與 GPU 裝置建立之後）才報，以前 `sfx.json` 的錯誤在內容階段報；武器定義為了綁定，多保存一份 anim_events 集合。
+   - framework 的 `docs/framework/event-sounds.md` 第 118 行「PvP 的換彈聲來自它自己的 `sfx.json`」這批之後就過時了。那份是 framework 的文件，只回報，不在這批改。

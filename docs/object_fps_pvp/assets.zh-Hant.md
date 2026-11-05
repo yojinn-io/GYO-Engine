@@ -28,7 +28,7 @@ assets/object_fps_pvp/
 │   ├── player/                             模型、character.json、presentation.json、animations.animset.json、
 │   │                                       ［v8］hitbox.json、textures/（有才建）
 │   └── hairstyles/<name>/                  配件
-├── weapons/<weapon>/{viewmodel,world}/     模型＋定義＋animset／anim_events＋textures/
+├── weapons/<weapon>/{viewmodel,world}/     模型＋定義＋animset／anim_events／event_sounds＋textures/
 ├── animations/<library>/                   clip 來源模型
 ├── fonts/
 ├── ui/                                     gyo.ui 文件、HUD 參數
@@ -45,7 +45,7 @@ assets/object_fps_pvp/
 |---|---|---|
 | Manifest | 根目錄，固定 | `content.json`、`asset_catalog.json` |
 | 定義（character、presentation、viewmodel、hitbox） | 對象資料夾 | 檔名就是 schema 名：`character.json`、`presentation.json`、`viewmodel.json`、`hitbox.json` |
-| animset、anim_events | 被它驅動的對象資料夾 | `<set>.animset.json`、`<set>.anim_events.json` |
+| animset、anim_events、event_sounds | 被它驅動的對象資料夾 | `<set>.animset.json`、`<set>.anim_events.json`、`<set>.event_sounds.json`（v8-product-event-sounds-migrate） |
 | 3D 模型 | 對象資料夾 | 交付檔名，大小寫不改 |
 | clip 來源模型 | `animations/<library>/` | 交付檔名；只有這裡的模型可以被別的資料夾引用 |
 | 專屬貼圖 | `<對象資料夾>/textures/` | 交付檔名；轉換過的用轉換後的檔名 |

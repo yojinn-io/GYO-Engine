@@ -15,6 +15,8 @@ namespace Engine::Render { class IRenderDevice; class RenderQueue; }
 
 namespace fps {
 
+struct WeaponEventSounds;
+
 struct WeaponPresentationSnapshot;
 
 // Client presentation does not require Campaign weapon/ammunition state.
@@ -66,6 +68,9 @@ public:
     // before Initialize); the clip lasts GetActionDurationSeconds.
     [[nodiscard]] std::span<const Engine::Model::AnimationEvent> GetActionEvents(
         WeaponViewModelAction action) const noexcept;
+    // The weapon's animation event sounds (empty before Initialize or for a
+    // weapon without event_sounds_asset_id), for the sound output to bind.
+    [[nodiscard]] const WeaponEventSounds* GetEventSounds() const noexcept;
     // Observes successful pose/GPU preparation and queue submission; reading
     // this cannot advance or restart an animation.
     [[nodiscard]] WeaponViewModelObservation GetObservation() const;

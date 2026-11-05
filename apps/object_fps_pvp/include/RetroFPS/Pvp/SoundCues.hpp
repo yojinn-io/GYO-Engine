@@ -19,12 +19,13 @@ namespace fps::pvp {
 // only: it reads snapshots and the presented movement, never changes them, and
 // knows nothing of how sound is mixed or played (v8-product-sfx).
 
-enum class SoundCue : std::uint8_t { LocalShot, RemoteShot, HitTaken, HitConfirmed, Reload, Footstep, Landing };
-inline constexpr std::size_t SoundCueCount = 7;
+enum class SoundCue : std::uint8_t { LocalShot, RemoteShot, HitTaken, HitConfirmed, Footstep, Landing };
+inline constexpr std::size_t SoundCueCount = 6;
 
-// audio/sfx.json (version 2): the clip each cue plays, its volume, the
-// animation events that sound, and the spatial and footstep tuning. Content,
-// so it is edited without code.
+// audio/sfx.json (version 3): the clip each cue plays, its volume, and the
+// spatial and footstep tuning. Content, so it is edited without code. The
+// sounds of animation events are the weapon's gyo.event_sounds
+// (WeaponEventSounds), no longer here.
 struct SoundSettings final {
     struct Cue final {
         std::string clip; // an asset id of type sound
@@ -39,21 +40,10 @@ struct SoundSettings final {
     // beyond which a position change is a teleport (respawn, correction), not a step.
     float strideDistance{};
     float teleportDistance{};
-    // An animation event (gyo.anim_events) that plays a cue: the point of the
-    // cue's clip, in seconds from its start, that lands on the event's moment
-    // (v8-tool-assets-anim-events). Events without an entry are silent.
-    struct EventSound final {
-        std::string event;
-        SoundCue cue{};
-        double syncSeconds{}; // 0 to 60; within the clip, checked when it is loaded
-    };
-    std::vector<EventSound> eventSounds;
 };
 
 [[nodiscard]] std::optional<SoundSettings> ParseSoundSettings(const std::string& text, std::string& error);
 [[nodiscard]] const char* SoundCueName(SoundCue cue) noexcept;
-[[nodiscard]] const SoundSettings::EventSound* FindEventSound(const SoundSettings& settings,
-                                                              std::string_view event) noexcept;
 
 struct StereoGains final {
     float left{}, right{};
@@ -73,14 +63,6 @@ struct StereoGains final {
 [[nodiscard]] constexpr bool HitTakenSounds(const HitFeedbackOutcome outcome) noexcept {
     return outcome == HitFeedbackOutcome::Played || outcome == HitFeedbackOutcome::SuppressedDead;
 }
-
-// When an animation event's sound starts, in seconds after the action's start,
-// for an animation clip of clipSeconds played stretched over the action's
-// actionSeconds: the event's moment in the action, less the sound's sync point.
-// May be negative (the sound leads the action). Nothing for a clip or action
-// without a positive finite length, or a non-finite event or sync point.
-[[nodiscard]] std::optional<double> EventSoundOffsetSeconds(double eventSeconds, double clipSeconds,
-                                                            double actionSeconds, double syncSeconds) noexcept;
 
 // New remote shots in snapshots, in arrival order: a shot is a combat state
 // whose last shot action differs from the one seen before in the same life.

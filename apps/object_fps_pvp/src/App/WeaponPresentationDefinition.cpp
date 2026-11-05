@@ -138,6 +138,18 @@ std::shared_ptr<const WeaponPresentationDefinition> LoadWeaponPresentationDefini
                 const auto clipEvents = bound.value().ForClip(definition->clips[slot]);
                 definition->events[slot].assign(clipEvents.begin(), clipEvents.end());
             }
+            if (config.contains("event_sounds_asset_id")) {
+                const auto soundsId = ReadAssetId(config.at("event_sounds_asset_id"));
+                const auto soundsText = LoadShared<Engine::Asset::Loaders::TextAsset>(
+                    assets, soundsId, Engine::Asset::AssetType::Text());
+                std::string soundsError;
+                auto sounds = ParseWeaponEventSounds(soundsText->text,
+                    config.at("animation_events_asset_id").get<std::string>(), soundsError);
+                if (!sounds) throw std::runtime_error("'" + soundsId.debugName + "': " + soundsError);
+                definition->eventSounds = WeaponEventSounds{events.value(), std::move(*sounds)};
+            }
+        } else if (config.contains("event_sounds_asset_id")) {
+            throw std::runtime_error("event_sounds_asset_id needs an animation_events_asset_id");
         }
         const auto anchor = definition->model->FindNode(config.at("anchor_node").get<std::string>());
         if (!anchor) throw std::runtime_error("model is missing the viewmodel anchor node");

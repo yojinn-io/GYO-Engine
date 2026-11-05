@@ -173,6 +173,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-match-entity-split` | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_match_entity_split.zh-Hant.md) |
 | `v8-product-hit-gui-aim`（P2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hit_gui_aim.zh-Hant.md) |
 | `v8-product-hit-gui-aim-sdl` | [2026-11-04](../../../dev_logs/2026_11_04_pvp_v8_hit_gui_aim_sdl.zh-Hant.md) |
+| `v8-product-event-sounds-migrate`（L1、實聽未做） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_event_sounds_migrate.zh-Hant.md) |
 | `v8-product-hitbox-b5`（A2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hitbox_b5.zh-Hant.md) |
 
 ---

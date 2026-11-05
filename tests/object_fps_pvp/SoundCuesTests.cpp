@@ -2,13 +2,11 @@
 
 #include "RetroFPS/Pvp/SnapshotTimeline.hpp"
 #include "RetroFPS/Pvp/SoundCues.hpp"
-#include "engine/model/AnimationEvents.hpp"
 
 #include <nlohmann/json.hpp>
 
 #include <cmath>
 #include <fstream>
-#include <limits>
 #include <sstream>
 #include <string>
 
@@ -56,7 +54,7 @@ TEST_CASE("PvP sound settings parse the product content and reject bad values") 
     CHECK(settings.cues[static_cast<std::size_t>(SoundCue::HitConfirmed)].clip == "object_fps_pvp.audio.hit_flesh");
     CHECK(settings.strideDistance > 0);
     std::string error;
-    CHECK_FALSE(ParseSoundSettings("{\"version\":2}", error));
+    CHECK_FALSE(ParseSoundSettings("{\"version\":3}", error));
     CHECK_FALSE(error.empty());
     const auto product = nlohmann::json::parse(ProductText());
     const auto rejects = [&error, &product](const std::string& what, const auto& change) {
@@ -64,11 +62,11 @@ TEST_CASE("PvP sound settings parse the product content and reject bad values") 
         change(changed);
         CHECK_FALSE_MESSAGE(ParseSoundSettings(changed.dump(), error), what);
     };
-    rejects("version 1", [](nlohmann::json& j) { j["version"] = 1; });
-    rejects("no animation_events", [](nlohmann::json& j) { j.erase("animation_events"); });
-    rejects("an unknown cue", [](nlohmann::json& j) { j["animation_events"]["magazine_in"]["cue"] = "reloading"; });
-    rejects("a negative sync point", [](nlohmann::json& j) { j["animation_events"]["magazine_in"]["sync_seconds"] = -0.1; });
-    rejects("an empty event name", [](nlohmann::json& j) { j["animation_events"][""] = {{"cue", "reload"}, {"sync_seconds", 0}}; });
+    rejects("version 2", [](nlohmann::json& j) { j["version"] = 2; });
+    // Event sounds are the weapon's gyo.event_sounds since version 3 (v8-product-event-sounds-migrate).
+    rejects("version 2's animation_events", [](nlohmann::json& j) {
+        j["animation_events"] = {{"magazine_in", {{"cue", "reload"}, {"sync_seconds", 0.33}}}};
+    });
     std::ifstream file(PVP_SOUND_SETTINGS_PATH);
     std::stringstream text;
     text << file.rdbuf();
@@ -177,41 +175,6 @@ TEST_CASE("PvP timeline display time is the inverse of the presentation cursor")
     CHECK(*timeline.DisplayTime(90) < *timeline.DisplayTime(100));
     const double old = std::chrono::duration<double>(timeline.DisplayTime(90)->time_since_epoch()).count();
     CHECK(old == doctest::Approx(1.0 - 9 * MovementTickSeconds).epsilon(1e-9)); // ten ticks before the base, shown one tick late
-}
-
-TEST_CASE("PvP animation event sounds start at the stretched moment less their sync point") {
-    // A 3 s clip over a 1.5 s action: the event at 2 s of the clip is 1 s into the action.
-    CHECK(*EventSoundOffsetSeconds(2, 3, 1.5, 0) == doctest::Approx(1));
-    CHECK(*EventSoundOffsetSeconds(2, 3, 1.5, 0.25) == doctest::Approx(0.75));
-    CHECK(*EventSoundOffsetSeconds(2, 1, 4, 0) == doctest::Approx(8)); // a slowed clip
-    CHECK(*EventSoundOffsetSeconds(0.1, 1, 1, 0.3) == doctest::Approx(-0.2)); // the sound leads the action
-    CHECK_FALSE(EventSoundOffsetSeconds(1, 0, 1.5, 0));
-    CHECK_FALSE(EventSoundOffsetSeconds(1, 3, 0, 0));
-    CHECK_FALSE(EventSoundOffsetSeconds(std::nan(""), 3, 1.5, 0));
-    CHECK_FALSE(EventSoundOffsetSeconds(1, 3, 1.5, std::numeric_limits<double>::infinity()));
-}
-
-TEST_CASE("PvP animation event sounds name events of the weapon's gyo.anim_events") {
-    // The mapping and the events are separate content; a renamed event must not
-    // silence its sound unnoticed.
-    const auto settings = ProductSettings();
-    std::ifstream file(PVP_WEAPON_ANIM_EVENTS_PATH);
-    REQUIRE(file);
-    std::stringstream text;
-    text << file.rdbuf();
-    const auto events = Engine::Model::ParseAnimationEvents(text.str());
-    if (!events) FAIL(Engine::Base::Describe(events.error()));
-    REQUIRE_FALSE(settings.eventSounds.empty());
-    for (const auto& sound : settings.eventSounds) {
-        bool named = false;
-        for (const auto& track : events.value().tracks)
-            for (const auto& event : track.events) named = named || event.name == sound.event;
-        CHECK_MESSAGE(named, sound.event);
-    }
-    const auto* magazine = FindEventSound(settings, "magazine_in");
-    REQUIRE(magazine);
-    CHECK(magazine->cue == SoundCue::Reload);
-    CHECK_FALSE(FindEventSound(settings, "no_such_event"));
 }
 
 TEST_CASE("PvP hit taken sounds for a new hit and the killing one, never for a new life's first state") {

@@ -180,6 +180,10 @@ std::span<const Engine::Model::AnimationEvent> WeaponViewModel::GetActionEvents(
     return impl_->definition->events[slot];
 }
 
+const WeaponEventSounds* WeaponViewModel::GetEventSounds() const noexcept {
+    return impl_ && impl_->definition->eventSounds ? &*impl_->definition->eventSounds : nullptr;
+}
+
 WeaponViewModelObservation WeaponViewModel::GetObservation() const {
     if (!impl_) return {};
     return {true, impl_->definition->model->meshes.size(),
