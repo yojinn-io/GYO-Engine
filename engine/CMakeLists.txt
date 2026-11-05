@@ -92,6 +92,8 @@ if(TARGET SDL3_image::SDL3_image)
 endif()
 
 add_subdirectory(model)
+# The baked geometry of grid-built maps (docs/architecture/voxel-mesh.md).
+add_subdirectory(voxel_mesh)
 add_subdirectory(collision)
 add_subdirectory(net)
 add_subdirectory(text)

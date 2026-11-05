@@ -66,6 +66,15 @@ bool CanPlaceCharacterBody(const Engine::Collision::VerticalCapsule &body,
             return false;
     return true;
 }
+bool IsCharacterSupported(const Engine::Collision::VerticalCapsule &body,
+                          std::span<const Engine::Math::Aabb> walls) {
+    if (body.feet.y <= 0.0001F) return true;
+    for (const auto &wall : walls) {
+        const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(body, {0, -0.002F, 0}, wall);
+        if (contact && contact->normal.y > 0.5F) return true;
+    }
+    return false;
+}
 Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, Engine::Math::Vec3 displacement,
                          std::span<const Engine::Math::Aabb> walls,
                          std::span<const Engine::Collision::VerticalCapsule> actors,

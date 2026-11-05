@@ -114,6 +114,7 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 | `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule` | Math, Base |
 | `GYO::Input` | physical input (full keyboard scancodes, mouse, modifiers), window interaction events (focus, move, resize, minimize, restore) and action/axis evaluation | Base (private) |
 | `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS); named moments on clips, the `gyo.anim_events` data contract ([contract](architecture/animation-events.md)) | Engine, Math; the JSON parser privately |
+| `GYO::VoxelMesh` | the `gyo.voxel_mesh` data contract: validating a baked grid-built map (faces, per-direction colours, collision boxes in 1/16-cell integers) and expanding it to world-space vertices, a palette image and boxes; no culling, merging or shading ([contract](architecture/voxel-mesh.md)) | Base, Math; the JSON parser privately |
 | `GYO::ModelRenderer` | shared model/material GPU resources and independent skinned mesh instances; consumes an already evaluated pose | Model, Render |
 | `GYO::PlatformSDL` | SDL process, window and event ownership | Engine and SDL |
 | `GYO::Text` | encoded-font to owning RGBA bitmap contract | Engine |

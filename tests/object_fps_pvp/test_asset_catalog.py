@@ -33,10 +33,12 @@ MANIFESTS = {'asset_catalog.json', 'content.json'}
 SOURCES = REPOSITORY / 'tests' / 'object_fps_pvp' / 'asset_sources.json'
 # Ids in use without a reference by id, with the reason.
 RETAINED = {
-    'object_fps_pvp.arena': 'loaded by path (pvp_arena.json) by the Match and, through arenas.json, by the Client',
-    'object_fps_pvp.arena.corners': 'loaded by path (pvp_corners.json) by the Match and, through arenas.json, by the Client',
-    'object_fps_pvp.arenas': 'loaded by path (arenas.json): the arenas the Client installs',
-    'object_fps_pvp.movement_rules': 'loaded by path (movement_rules.json) by the Match only (protocol-v8 section 3)',
+    'object_fps_pvp.arena': 'loaded by path (maps/pvp_arena.json) by the Match and, through maps/arenas.json, by the Client',
+    'object_fps_pvp.arena.corners': 'loaded by path (maps/pvp_corners.json) by the Match and, through maps/arenas.json, by the Client',
+    'object_fps_pvp.arenas': 'loaded by path (maps/arenas.json): the arenas the Client installs',
+    'object_fps_pvp.arena.mesh': 'loaded by path (maps/pvp_arena.voxel_mesh.json, the geometry maps/pvp_arena.json names) by the Match and the Client',
+    'object_fps_pvp.arena.corners.mesh': 'loaded by path (maps/pvp_corners.voxel_mesh.json, the geometry maps/pvp_corners.json names) by the Match and the Client',
+    'object_fps_pvp.movement_rules': 'loaded by path (rules/movement_rules.json) by the Match only (protocol-v8 section 3)',
 }
 
 # First folder -> catalog types it may hold.
@@ -48,6 +50,7 @@ FOLDER_TYPES = {
     'ui': {'text', 'texture'},
     'audio': {'sound', 'text'},
     'rules': {'text'},
+    'maps': {'text'},
     'textures': {'texture'},
 }
 # Under these first folders a texture sits in a folder named "textures".
@@ -75,14 +78,9 @@ COMMON_IN_GROUPS = ['tests/common', 'tests/framework', 'build/acceptance/common'
 PRODUCT_GROUPS = ['apps', 'tests', 'build/acceptance']
 OTHER_OWNER_SUFFIXES = CODE_SUFFIXES | {'.c', '.cmake', '.txt', '.json', '.csv', '.yml', '.yaml', '.sh', '.ps1'}
 
-PATH_LOADED_MOVE = 'v8-product-asset-path-loaded-move'
 # Known departures from the layout, keyed by (rule, catalog path), with the batch
 # that removes each. Adding one loosens the guard and needs the user's approval.
 LAYOUT_EXCEPTIONS = {
-    ('root-file', 'arenas.json'): PATH_LOADED_MOVE,
-    ('root-file', 'pvp_arena.json'): PATH_LOADED_MOVE,
-    ('root-file', 'pvp_corners.json'): PATH_LOADED_MOVE,
-    ('root-file', 'movement_rules.json'): PATH_LOADED_MOVE,
     ('definition-name', 'weapons/nailer_v2/viewmodel/nailer_v2_viewmodel.json'):
         'the next feature batch that edits this definition',
 }
@@ -301,7 +299,7 @@ class AssetCatalogTests(unittest.TestCase):
 
     def test_a_reference_is_the_whole_id(self):
         # A longer id or a file name that contains an id does not reference it.
-        entries = [{'id': 'object_fps_pvp.arena', 'path': 'pvp_arena.json'}]
+        entries = [{'id': 'object_fps_pvp.arena', 'path': 'maps/pvp_arena.json'}]
         longer = '"object_fps_pvp.arena.corners" "object_fps_pvp.arenas" object_fps_pvp.arena.json'
         self.assertEqual(used_ids(entries, longer), set())
         self.assertEqual(used_ids(entries, 'Find("object_fps_pvp.arena");'), {'object_fps_pvp.arena'})
