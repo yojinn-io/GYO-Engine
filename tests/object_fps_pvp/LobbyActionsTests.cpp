@@ -60,9 +60,21 @@ TEST_CASE("A handled lobby action with no declaration fails the check and is nam
 TEST_CASE("A lobby action handled with another payload type than declared fails the check and is named") {
     const auto message = CheckLobbyActions(Declared({{"test.say", UiActionPayloadType::None}, {"test.go", UiActionPayloadType::None}}), kHandled);
     CHECK(Contains(message, "payload type differs from the declaration: test.say"));
-    CHECK_MESSAGE(CheckLobbyActions(Declared({{"test.say", UiActionPayloadType::String}, {"test.go", UiActionPayloadType::Number}}), kHandled)
-                      != "",
+    CHECK_MESSAGE(Contains(CheckLobbyActions(Declared({{"test.say", UiActionPayloadType::String}, {"test.go", UiActionPayloadType::Number}}),
+                                             kHandled),
+                           "payload type differs from the declaration: test.go"),
                   "none against number differs too");
+}
+
+TEST_CASE("A lobby action handled twice fails the check and is named once") {
+    constexpr std::array<LobbyActionEntry, 3> twice{{
+        {"test.go", UiActionPayloadType::None, LobbyAction::Refresh},
+        {"test.say", UiActionPayloadType::String, LobbyAction::SubmitAddress},
+        {"test.go", UiActionPayloadType::String, LobbyAction::Create},
+    }};
+    const auto message = CheckLobbyActions(Declared({{"test.say", UiActionPayloadType::String}, {"test.go", UiActionPayloadType::None}}), twice);
+    CHECK(Contains(message, "handled more than once: test.go"));
+    CHECK_FALSE(Contains(message, "test.go, test.go"));
 }
 
 TEST_CASE("Every mismatched lobby action is named in one message") {
@@ -72,6 +84,28 @@ TEST_CASE("Every mismatched lobby action is named in one message") {
     CHECK(Contains(message, "declared but not handled: test.a, test.b"));
     CHECK(Contains(message, "handled but not declared: test.go"));
     CHECK(Contains(message, "payload type differs from the declaration: test.say"));
+}
+
+// What each lobby id does: the handler the product's table gives it and the
+// payload it reads. A swapped or retyped entry still passes the check against
+// the document, so the table itself is fixed here.
+TEST_CASE("The product's lobby actions map each id to its handler and payload") {
+    const std::array<LobbyActionEntry, 6> expected{{
+        {"pvp.submit_address", UiActionPayloadType::String, LobbyAction::SubmitAddress},
+        {"pvp.refresh", UiActionPayloadType::None, LobbyAction::Refresh},
+        {"pvp.create", UiActionPayloadType::None, LobbyAction::Create},
+        {"pvp.join", UiActionPayloadType::None, LobbyAction::Join},
+        {"pvp.leave", UiActionPayloadType::None, LobbyAction::Leave},
+        {"pvp.quit", UiActionPayloadType::None, LobbyAction::Quit},
+    }};
+    REQUIRE(fps::pvp::kLobbyActions.size() == expected.size());
+    for (const auto& want : expected) {
+        const auto* entry = fps::pvp::FindLobbyAction(want.id);
+        REQUIRE_MESSAGE(entry != nullptr, want.id);
+        CHECK_MESSAGE(entry->action == want.action, want.id);
+        CHECK_MESSAGE(entry->payload == want.payload, want.id);
+    }
+    CHECK(fps::pvp::FindLobbyAction("pvp.unknown") == nullptr);
 }
 
 TEST_CASE("The product lobby document and the product's lobby actions match") {
@@ -94,7 +128,9 @@ TEST_CASE("Starting the lobby fails when its document declares an action the pro
 }
 
 TEST_CASE("Starting the lobby fails with the codec's message when the document does not parse") {
+    const auto parsed = Engine::Ui::UiDocumentCodec::Parse("{", "broken.json");
+    REQUIRE_FALSE(parsed);
     std::string error;
     CHECK_FALSE(fps::pvp::ParseLobbyDocument("{", "broken.json", error).has_value());
-    CHECK_FALSE(error.empty());
+    CHECK(error == fps::pvp::ExplainUi(parsed.error()));
 }

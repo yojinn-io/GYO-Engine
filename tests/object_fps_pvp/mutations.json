@@ -8900,6 +8900,26 @@
       "replace": "error.clear();",
       "check": "cpu",
       "expect": "declares an action the product does not handle"
+    },
+    {
+      "id": "ui-action-check-no-repeated",
+      "batch": "v8-product-ui-action-check",
+      "what": "CheckLobbyActions no longer reports a lobby action listed twice in the handled table (from the review)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/LobbyActions.hpp",
+      "find": "std::count_if(entry, handled.end(), same) > 1",
+      "replace": "std::count_if(entry, handled.end(), same) > 2",
+      "check": "cpu",
+      "expect": "handled more than once: test\\.go"
+    },
+    {
+      "id": "ui-action-table-swapped",
+      "batch": "v8-product-ui-action-check",
+      "what": "The lobby table sends pvp.create to the join handler, which the check against the document cannot see (from the review)",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/LobbyActions.hpp",
+      "find": "{\"pvp.create\", Engine::Ui::UiActionPayloadType::None, LobbyAction::Create},",
+      "replace": "{\"pvp.create\", Engine::Ui::UiActionPayloadType::None, LobbyAction::Join},",
+      "check": "cpu",
+      "expect": "map each id to its handler and payload"
     }
   ]
 }

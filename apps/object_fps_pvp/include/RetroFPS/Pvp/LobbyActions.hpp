@@ -48,11 +48,12 @@ inline constexpr std::array<LobbyActionEntry, 6> kLobbyActions{{
 }
 
 // Empty when every declared action is handled with the payload type it is
-// declared with and every handled action is declared; otherwise one message
-// naming every id that does not match.
+// declared with, every handled action is declared and handled once; otherwise
+// one message naming every id that does not match. (The codec already rejects
+// an id declared twice.)
 [[nodiscard]] inline std::string CheckLobbyActions(const std::span<const Engine::Ui::UiActionDeclaration> declared,
                                                    const std::span<const LobbyActionEntry> handled) {
-    std::string unhandled, undeclared, payload;
+    std::string unhandled, undeclared, payload, repeated;
     const auto append = [](std::string& list, const std::string_view id) {
         list += list.empty() ? "" : ", ";
         list += id;
@@ -62,6 +63,11 @@ inline constexpr std::array<LobbyActionEntry, 6> kLobbyActions{{
             [&](const LobbyActionEntry& candidate) { return candidate.id == declaration.id; });
         if (entry == handled.end()) append(unhandled, declaration.id);
         else if (entry->payload != declaration.payload) append(payload, declaration.id);
+    }
+    for (auto entry = handled.begin(); entry != handled.end(); ++entry) {
+        const auto same = [&](const LobbyActionEntry& other) { return other.id == entry->id; };
+        if (std::find_if(handled.begin(), entry, same) == entry && std::count_if(entry, handled.end(), same) > 1)
+            append(repeated, entry->id);
     }
     for (const auto& entry : handled) {
         const bool found = std::any_of(declared.begin(), declared.end(),
@@ -78,6 +84,7 @@ inline constexpr std::array<LobbyActionEntry, 6> kLobbyActions{{
     report("declared but not handled: ", unhandled);
     report("handled but not declared: ", undeclared);
     report("payload type differs from the declaration: ", payload);
+    report("handled more than once: ", repeated);
     return message;
 }
 
