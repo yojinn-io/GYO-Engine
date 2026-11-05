@@ -396,8 +396,8 @@ TEST_CASE("voxel mesh conversion: golden world coordinates") {
     Doc edge;
     edge.cellSize = "1.0";
     edge.quads = "[[" + std::to_string(CoordinateLimit - 16) + ", 0, 0, 2, 16, 16, 0]]";
-    const auto far = ExpandVoxelMesh(Accepted(edge));
-    CHECK(Bits(far.vertices[1].position.x) == Bits(65536.0F));
+    const auto atEdge = ExpandVoxelMesh(Accepted(edge));
+    CHECK(Bits(atEdge.vertices[1].position.x) == Bits(65536.0F));
 
     // The negative bound, reached through a negative origin, at cell 0.3.
     Doc negative;
