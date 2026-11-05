@@ -10,8 +10,9 @@
 - Engine 的突變目錄 `docs/architecture/plans/entity-store/scripts/mutations.json`，以 `docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog` 執行（os-subsystem 的先例）。
 - pvp 換上：`EntityId.hpp` 改為 Engine 型別的別名（保留 `PlayerId`、`NoEntity`）；`EntityColumns.hpp` 變成轉接（`EntityKey` 對 `playerId` 欄位的特化＋using 宣告；刪除產品的 `HasEntityId` 版多載）；`match_domain` 公開連結 `GYO::EntityStore`。`PvpMatch.cpp` 的 30 行呼叫不改。
 - 產品測試：`EntityColumnsTests.cpp` 的 `Fresh` 搬到 common（換合成型別），`Legacy` 留在產品；`mutations.json` 的 M1、M2（`entity-split-insert-appends`、`entity-split-erase-swap-and-pop`）`file` 改到 Engine 路徑、`expect` 改成 common 測試；M3～M6 不動。
-- 產品契約的註記（delta §6 列出的 entity-model §0 第 2 項、§3.1、§11 第 4～5 項、E-5 守衛欄；E-12 措辭留到 3b）；本線的 dev_log、README、HANDOFF。
-- **不做**：`DeferredChanges`（3b）、G12、Gateway、wire、digest 編碼、Client 行為、`docs/architecture.md`（圖書管理員在同一 PR 做，用 3a 版）。
+- 產品契約的註記（delta §6 列出的 entity-model §0 第 2 項、§3.1、§11 第 4～5 項、E-5 守衛欄；E-12 措辭留到 3b）；Engine 契約 `entity-store.md` 的狀態句（「Nothing in `engine/` exists yet」、Components 表各列「proposed (batch 3)」）改成已實作；本線的 dev_log、README、HANDOFF。
+- 圖書管理員會話（同一 PR、日語 commit、等我通知 3a 的 commit 後）：`docs/architecture.md` 第 129 行、模組表、「Architecture changes」節的 3a 版，以及 `docs/creating_apps.md:41` 公開 engine target 清單加 `GYO::EntityStore`（圖書管理員 2026-11-05 提出，已同意）。
+- **不做**：`DeferredChanges`（3b）、G12、Gateway、wire、digest 編碼、Client 行為；`docs/architecture.md` 與 `docs/creating_apps.md` 由圖書管理員做（上一項）。
 
 ## 判定（結果出來前宣告）
 

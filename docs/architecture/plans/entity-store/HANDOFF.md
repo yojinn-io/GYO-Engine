@@ -34,6 +34,7 @@
 - 待辦（核准後）：通知圖書管理員會話本線分支與 delta §5 的 architecture.md 修改稿（用哪一版依決定 8）；開 PR（batch 1～2 文件）；batch 3 開始前事前宣告驗收判定（delta §7 第 9 項）。
 - 2026-11-05：使用者「全照建議核准」（見「決策」）。契約與 delta 的狀態改為已核准；推送分支、開 PR [#156](https://github.com/yojinn-io/GYO-Engine/pull/156)（草稿；batch 1～2 文件，3a 的程式與圖書管理員的 architecture.md 修改進同一 PR）；已通知圖書管理員會話（請它先讀 delta §5 與契約，等 3a 程式進分支後再改 architecture.md，用「3a 版」）。下一步：提出 batch 3a 的驗收事前宣告，取得承認後開始。
 - 2026-11-05：寫 batch 3a 的[驗收事前宣告](impl-3a-declaration.zh-Hant.md)（7 項判定、範圍、模型／檔位、估時 9～13 h），停下等使用者承認；檢證者 Fable 5.1 也在此一併請示。
+- 2026-11-05：圖書管理員回覆：delta §5 三段無異議、連結存在、3a 版通順；提兩點：`docs/creating_apps.md:41` 公開 target 清單要加 `GYO::EntityStore`（決定：由它在同一 commit 一起改）；契約狀態句在 3a 合併時要更新（決定：納入 3a 範圍）。已回覆。
 
 ## 未結事項
 
