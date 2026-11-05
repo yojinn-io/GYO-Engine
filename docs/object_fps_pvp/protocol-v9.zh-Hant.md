@@ -118,7 +118,7 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 
 - 目標在 τ 活著、到 J 已經死了（同一條命）時：判 Miss，和跨生命同一條規則。
 - **接受的限制**：Client 漏收或 snapshot 被合併（`DROP_COALESCED_SNAPSHOTS`）時，Client 畫面上的兩筆 snapshot 隔了好幾個 Tick，它內插出的姿勢和 Match 在同一 τ 重建的姿勢不同（離散值更新得更晚、內插跨度更長）。Client 漏收目標新生命的前幾筆時，也會看到比 Match 晚的區段起點。這兩點接受為限制，`ShotRequest` 不加欄位（`pv9-rewind-client-view` (a)）；影子紀錄 v3 量漏收時的落差，量到問題再處理。
-- 影子紀錄 `match-shots.jsonl`（產品內的 Data Contract，不是 wire）升 version 3：`view_lag` 以 J 計算（對齊 pv7 §7 的文字，`MatchShotTrace.hpp:230` 現在用 A），保留 A 的值供比較（`v8-product-hitbox-view-lag-base`）。
+- 影子紀錄 `match-shots.jsonl`（產品內的 Data Contract，不是 wire）升 version 3：`view_lag` 以 J 計算（對齊 pv7 §7 的文字；版本 2 的程式用 A），保留 A 的值供比較（`v8-product-hitbox-view-lag-base`）。已實作（`v8-product-hitbox-lag-shadow`，2026-11-05）：`view_lag_q16`＝J×65536−view_tick_q16，A 的值寫在 `view_lag_a_q16`。
 
 ## 6. 大小（推論；`v8-product-hit-rules-leg-wire` 與 `v8-product-anim-authority` 以 `proto.Size` 實測重釘）
 

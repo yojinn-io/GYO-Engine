@@ -1,6 +1,6 @@
 # v8-product-hitbox-lag-shadow 的事前宣告
 
-更新：2026-11-05。Owner：`object_fps_pvp`。**狀態：草稿，等核准**（核准前不寫程式）。
+更新：2026-11-05。Owner：`object_fps_pvp`。**狀態：已核准**（`v8-product-hitbox-lag-shadow-declaration-approve`，2026-11-05，使用者：「Approve as recommended」；`-a-field` (a)）。
 估時 1～2 h（超過 3 h 停下回報）。
 
 | 角色 | 模型／檔位 | 理由 |
@@ -78,3 +78,4 @@ pv7 §7 的文字把 `view_lag` 定義成「裁決 Tick J 減掉射手看到的�
 ## 修訂紀錄
 
 1. 2026-11-05 草稿。
+2. 2026-11-05 核准，`-a-field` (a)。

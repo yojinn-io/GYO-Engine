@@ -47,7 +47,7 @@
 |---|---|---|---|---|
 | 移動紀錄（`*-commands.jsonl`） | `MovementTraceWriter.hpp` | 每行 `schema_version: 3`（v7.1 D152：版本 2 加上 Client 相位追蹤的 `phase_decision`；版本 2 的其他 kind 位元組不變，只改版本號） | `DiagnosticFileTests.cpp`（位元組 golden） | `command_evidence.py`※ 等（讀版本 1～3） |
 | `match-ingress.jsonl` | `MatchIngressTrace.hpp` | 每行 `schema: object_fps_pvp.match_ingress`、`version: 1` | `fixtures/ingress_v1/match-ingress.jsonl` | `ingress_evidence.py`※ |
-| `match-shots.jsonl` | `MatchShotTrace.hpp` | 每行 `version: 2`（沒有 schema 欄） | `CombatTests.cpp` | 各 L2 的 `shadow_*.py` |
+| `match-shots.jsonl` | `MatchShotTrace.hpp` | 每行 `version: 3`（沒有 schema 欄；v8 `v8-product-hitbox-lag-shadow`：`view_lag_q16` 改以裁決 Tick J 計算，新增以 A 計算的 `view_lag_a_q16`） | `CombatTests.cpp`、`CombatHostTests.cpp` | `lan15_judge.py`（只讀 `kind`、`player_id`、`rejection` 與 `trace_end`；不檢查版本）。舊記載的「各 L2 的 `shadow_*.py`」在 repo 裡找不到（2026-11-05 查） |
 
 三種檔頭不同，照實登記、不改。新的紀錄檔用 `{schema, version}`。
 
