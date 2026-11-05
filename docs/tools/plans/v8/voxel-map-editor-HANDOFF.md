@@ -66,3 +66,4 @@
 - 2026-11-05：你選 `v8-product-arena-v2`，由這個會話做。讀了 `Arena.cpp` 的載入與 digest、`Arena::Load` 的 20 多個呼叫端、`Movement.cpp` 的站立判定、資產契約測試的 RETAINED 與 root-file 例外。發現：現在的合併得到的盒子集合和 v1 不同（盒子數相同、分法相反）。重估 10～14 h。事前宣告寫進 voxel-map-editor.md，等你核准。
 - 2026-11-05：arena-v2 批審查（Opus／high）：沒有 blocker。實測發現 P3 對分法不同的分解沒有檢出力，照 AGENTS §14 停下回報；你選 P3 降為回歸檢查、`maps` 守衛照 §14.4 走程序，P10 採建議的定義。其餘 should-fix 照審查修。
 - 2026-11-05：arena-v2 批合入 master（`0c5db246`，`mutations.json` 依 id 合併兩邊的突變）。本機 cpu|shader 129／129；L1 三平台綠（run 42034025482）。剩 L3（P10）。
+- 2026-11-05：arena-v2 批的 L3（P10）你在 macOS 判定「問題なし（合格）」。啟動腳本與 log 在主 checkout 的 `build/evidence/tool-v8-voxel-map/arena-v2/l3/`（`pvp_corners` 兩人同房、命中 26）。arena-v2 批完成。下一批：`v8-framework-preview-component`（要和架構會話協調）；`v8-product-step-up` 由產品會話做。
