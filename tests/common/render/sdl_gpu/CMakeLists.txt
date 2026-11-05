@@ -12,6 +12,18 @@ if(TARGET GYO::RenderBackendSDLGPU)
     add_test(NAME render.sdl_gpu_mesh_smoke COMMAND gyo_sdl_gpu_mesh_smoke)
     set_tests_properties(render.sdl_gpu_mesh_smoke PROPERTIES TIMEOUT 30 LABELS "gpu")
 
+    # The offscreen device beside the SDL 2D renderer (v8-engine-render-offscreen).
+    if(TARGET GYO::RenderBackendSDL)
+        add_executable(gyo_sdl_gpu_offscreen_smoke OffscreenSmoke.cpp)
+        target_link_libraries(gyo_sdl_gpu_offscreen_smoke PRIVATE GYO::RenderBackendSDLGPU GYO::RenderBackendSDL)
+        target_compile_definitions(gyo_sdl_gpu_offscreen_smoke PRIVATE NOMINMAX
+            GYO_TEST_SHADER_BUNDLE="${PROJECT_BINARY_DIR}/shaders/builtin")
+        add_dependencies(gyo_sdl_gpu_offscreen_smoke gyo_builtin_shaders)
+        gyo_copy_runtime_dlls(gyo_sdl_gpu_offscreen_smoke)
+        add_test(NAME render.sdl_gpu_offscreen COMMAND gyo_sdl_gpu_offscreen_smoke)
+        set_tests_properties(render.sdl_gpu_offscreen PROPERTIES TIMEOUT 30 LABELS "gpu")
+    endif()
+
     # The capture file writer needs no GPU (IP-4 ip4b).
     add_executable(gyo_sdl_gpu_capture_tests SceneCaptureFileTests.cpp)
     target_link_libraries(gyo_sdl_gpu_capture_tests PRIVATE GYO::RenderBackendSDLGPU GYO::PlatformSDLNative doctest::doctest)

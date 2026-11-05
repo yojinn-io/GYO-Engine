@@ -1,0 +1,442 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-tool-model-viewer-core and v8-engine-render-offscreen (docs/tools/plans/v8/model-viewer.md, '-core' the 'ro-' ids, and v8-engine-sdl-renderer-texture, the 'rt-' ids, and v8-tool-model-viewer-preview, the 'mvp-' ids (mvp-stale-frame needs a GPU), v8-tool-model-viewer-events, the 'mve-' ids, and v8-tool-model-viewer-event-sounds, the 'mvs-' ids; the offscreen ones need a GPU: Metal on macOS, Lavapipe on Linux; the rt-imgui ones need a tree with the ImGui binding, such as GYO_TOOLS=ui_editor;model_viewer), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/model_viewer_mutations.json --build-dir <a tree with GYO_TOOLS=model_viewer and BUILD_TESTING=ON>. A mutant is killed only when its test run fails with the expected message. Mutants marked 'not declared' were added while implementing or after the review, beyond the declaration. mv-info-without-binding runs the CLI test through ctest in build/target/_build/mv; give that tree as --build-dir. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "mutants": [
+    {
+      "id": "mv-writer-drops-last",
+      "what": "The writer leaves out a clip's last event",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "for (std::size_t e = 0; e < events.size(); ++e) {",
+      "replace": "for (std::size_t e = 0; e + 1 < events.size(); ++e) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*read back as the same events*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-writer-six-digits",
+      "what": "The writer prints seconds with 6 significant digits",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "std::to_chars(digits.data(), digits.data() + digits.size(), seconds);",
+      "replace": "std::to_chars(digits.data(), digits.data() + digits.size(), seconds, std::chars_format::general, 6);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*read back as the same events*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-save-unchecked",
+      "what": "Saving writes the text without Engine reading it back",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "    auto text = CheckedText(events, model);\n    if (!text) return Engine::Base::Err(std::move(text).error());\n    auto current = Probe(path);",
+      "replace": "    std::optional<std::string> text = WriteAnimationEvents(events);\n    auto current = Probe(path);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*writes only the opened file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-save-ignores-stamp",
+      "what": "Saving does not check that the file is still the one opened",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "if (current.value() != opened) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*writes only the opened file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-save-temp-not-renamed",
+      "what": "The file is written beside the target and never replaces it",
+      "file": "tools/model_viewer/src/FileAccess.cpp",
+      "find": "    auto uri = Io::FS::NativeFileUri(path);\n    if (!uri) return Engine::Base::Err(FileError(ModelViewerErrorCode::WriteFailed",
+      "replace": "    auto uri = Io::FS::NativeFileUri(path + \".tmp\");\n    if (!uri) return Engine::Base::Err(FileError(ModelViewerErrorCode::WriteFailed",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*writes only the opened file*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-negative-zero",
+      "what": "Negative zero is written as -0, which reads back as +0 (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "if (seconds == 0.0 && std::signbit(seconds)) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*negative zero keeps its sign*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-open-other-model",
+      "what": "Opening takes events written for another model (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "if (parsed->modelAssetId != modelAssetId) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*events of another model*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-create-replaces-file",
+      "what": "A new events file replaces an unregistered file at the path (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "if (existing->exists) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*written and registered as text*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-create-moves-entry",
+      "what": "A new events file re-points an id already registered (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "if (!update->added) {",
+      "replace": "if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*written and registered as text*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-move-keeps-place",
+      "what": "A moved event stays at its old index (not declared; added while implementing)",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "    const auto moved = static_cast<std::size_t>(at - events.begin());\n    events.insert(at, std::move(event));\n    return moved;",
+      "replace": "    events.insert(events.begin() + static_cast<std::ptrdiff_t>(index), std::move(event));\n    return index;",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*keep a clip's events in order*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-guard-game-target",
+      "what": "The viewer's CMake names a game's target",
+      "file": "tools/model_viewer/CMakeLists.txt",
+      "find": "# Models and gyo.anim_events are Engine's (GYO::Model, its ufbx loader)",
+      "replace": "# Models and gyo.anim_events are Engine's (GYO::Model SomeGame::Core, its ufbx loader)",
+      "command": [
+        "{python}",
+        "tests/model_viewer/model_viewer_dependency_guard.py"
+      ],
+      "expect": "names SomeGame::Core"
+    },
+    {
+      "id": "mv-guard-sdl-include",
+      "what": "The viewer includes an SDL header",
+      "file": "tools/model_viewer/src/Main.cpp",
+      "find": "#include \"gyo/framework/HeadlessShell.hpp\"",
+      "replace": "#include \"gyo/framework/HeadlessShell.hpp\"\n#include <SDL3/SDL.h>",
+      "command": [
+        "{python}",
+        "tests/model_viewer/model_viewer_dependency_guard.py"
+      ],
+      "expect": "includes SDL3/SDL.h"
+    },
+    {
+      "id": "mv-guard-imgui-internal-ignored",
+      "what": "The guard's imgui_internal.h rule stops working (not declared; added while implementing)",
+      "file": "tests/model_viewer/model_viewer_dependency_guard.py",
+      "find": "if include.rsplit(\"/\", 1)[-1] == IMGUI_INTERNAL:",
+      "replace": "if False:",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/model_viewer",
+        "-p",
+        "test_model_viewer_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "mv-guard-game-target-rule-ignored",
+      "what": "The guard's game-target rules stop working (declared: 'the guard's game-target rule fails, the self-test fails')",
+      "file": "tests/model_viewer/model_viewer_dependency_guard.py",
+      "find": "                if \"::\" not in name and not OWN_TARGET.match(name):",
+      "replace": "                if False:",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/model_viewer",
+        "-p",
+        "test_model_viewer_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "mv-guard-registered-id-ignored",
+      "what": "The guard stops checking registered ids, Design Invariant 6 (not declared; added after review)",
+      "file": "tests/model_viewer/model_viewer_dependency_guard.py",
+      "find": "            if pattern.search(text):",
+      "replace": "            if False:",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/model_viewer",
+        "-p",
+        "test_model_viewer_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "mv-create-other-model",
+      "what": "A new events file may name another model than the one opened (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventFiles.cpp",
+      "find": "    if (events.modelAssetId != modelAssetId) {\n        return Engine::Base::Err(ModelViewerError::Make(ModelViewerErrorCode::OtherModel,\n                                                        \"the events name another model than the one opened\",",
+      "replace": "    if (false) {\n        return Engine::Base::Err(ModelViewerError::Make(ModelViewerErrorCode::OtherModel,\n                                                        \"the events name another model than the one opened\",",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*written and registered as text*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-same-seconds-value",
+      "what": "Seconds are compared by value, so -0.0 equals 0.0 (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "    return std::bit_cast<std::uint64_t>(left) == std::bit_cast<std::uint64_t>(right);",
+      "replace": "    return left == right;",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "*same only field by field*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mv-info-without-binding",
+      "what": "info calls a parsed file valid without binding it to the model (not declared; added after review)",
+      "file": "tools/model_viewer/src/Main.cpp",
+      "find": "        if (auto bound = Engine::Model::BindAnimationEvents(*candidate.events, *loaded->model); !bound) {",
+      "replace": "        if (auto bound = Engine::Model::BindAnimationEvents(*candidate.events, *loaded->model); false) {",
+      "target": "gyo_model_viewer",
+      "command": [
+        "ctest",
+        "--test-dir",
+        "build/target/_build/mv",
+        "-R",
+        "^gyo_model_viewer\\.cli$",
+        "--output-on-failure"
+      ],
+      "expect": "the file Engine cannot bind is not refused"
+    },
+    {
+      "id": "ro-claims-window",
+      "what": "The offscreen device claims the window (R1)",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "        offscreen = true;\n        swapchainFormat = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;",
+      "replace": "        window = Platform::Sdl::NativeWindow(sourcePlatform);\n        if (!SDL_ClaimWindowForGPUDevice(device, window)) return Base::Err(MakeSdlError(RenderErrorCode::BackendUnavailable, \"SDL_GPU: failed to claim the SDL window\"));\n        windowClaimed = true;\n        offscreen = true;\n        swapchainFormat = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB;",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "offscreen device beside the SDL 2D renderer|windowed device while an offscreen device lives"
+    },
+    {
+      "id": "ro-reads-earlier-frame",
+      "what": "ReadFrame hands out the device's first readback instead of the frame just submitted",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "        return Download(offscreenTarget, offscreenDescription);",
+      "replace": "        static const void* owner{};\n        static std::optional<TextureReadback> kept;\n        if (owner != this) { owner = this; kept.reset(); }\n        if (!kept) { auto read = Download(offscreenTarget, offscreenDescription); if (!read) return read; kept = std::move(read.value()); }\n        return *kept;",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "second frame"
+    },
+    {
+      "id": "ro-no-depth-test",
+      "what": "Pipelines are built without the depth test (R3)",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "        info.depth_stencil_state.enable_depth_test = hasDepth;",
+      "replace": "        info.depth_stencil_state.enable_depth_test = false;",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "crossing quads were not depth tested"
+    },
+    {
+      "id": "ro-resize-keeps-target",
+      "what": "A new frame size keeps the old frame target (R4)",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "        if (offscreenTarget && offscreenDescription.width == requestedWidth &&\n            offscreenDescription.height == requestedHeight) return {};",
+      "replace": "        if (offscreenTarget) return {};",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "resized frame"
+    },
+    {
+      "id": "ro-ready-without-store",
+      "what": "A submitted frame counts as readable even when no pass stored into the frame target (not declared; added after review)",
+      "file": "engine/render/backend/sdl_gpu/src/SdlGpuRenderDevice.cpp",
+      "find": "[](const PreparedPass& pass) { return !pass.color && pass.storeColor; });",
+      "replace": "[](const PreparedPass&) { return true; }) || offscreen;",
+      "target": "gyo_sdl_gpu_offscreen_smoke",
+      "expect": "ReadFrame after a frame that stored nothing"
+    },
+    {
+      "id": "rt-upload-unchecked-bytes",
+      "what": "UploadTexture does not check that the bytes fill the rows (T1)",
+      "file": "engine/render/backend/sdl/src/SdlRenderer.cpp",
+      "find": "    if (rowPitch < row || rowPitch > INT_MAX || bytes.size() < needed) {",
+      "replace": "    if (rowPitch < row || rowPitch > INT_MAX) {",
+      "target": "gyo_sdl_renderer_texture_tests",
+      "expect": "an upload shorter than the rows need was accepted"
+    },
+    {
+      "id": "rt-imgui-id-after-release",
+      "what": "A released texture keeps its slot, so the binding still hands out its id (T2)",
+      "file": "engine/render/backend/sdl/src/SdlRenderer.cpp",
+      "find": "    SDL_DestroyTexture(slot->texture);\n    *slot = {};",
+      "replace": "    SDL_DestroyTexture(slot->texture);",
+      "target": "gyo_framework_imgui_tests",
+      "cases": "T2:*",
+      "expect": "a released texture still has an ImGui id"
+    },
+    {
+      "id": "rt-pitch-above-int-max",
+      "what": "UploadTexture lets a row pitch above INT_MAX reach SDL (not declared; added after review)",
+      "file": "engine/render/backend/sdl/src/SdlRenderer.cpp",
+      "find": "    if (rowPitch < row || rowPitch > INT_MAX || bytes.size() < needed) {",
+      "replace": "    if (rowPitch < row || bytes.size() < needed) {",
+      "target": "gyo_sdl_renderer_texture_tests",
+      "expect": "a row pitch above INT_MAX was accepted"
+    },
+    {
+      "id": "mvp-bind-pose",
+      "what": "The preview draws the default pose instead of sampling the clip",
+      "file": "tools/model_viewer/src/Playback.cpp",
+      "find": "    if (!clip) {\n        return Engine::Model::MakeDefaultPose(model, output);\n    }",
+      "replace": "    if (clip || !clip) {\n        return Engine::Model::MakeDefaultPose(model, output);\n    }",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "V1:*",
+      "expect": "the preview drew the rest pose, not the sampled one"
+    },
+    {
+      "id": "mvp-speed-twice",
+      "what": "The speed enters the clip seconds twice",
+      "file": "tools/model_viewer/src/Playback.cpp",
+      "find": "    double next = seconds + wallSeconds * (std::isfinite(speed) ? std::max(speed, 0.0) : 0.0);",
+      "replace": "    double next = seconds + wallSeconds * (std::isfinite(speed) ? std::max(speed, 0.0) * std::max(speed, 0.0) : 0.0);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "V1:*",
+      "expect": "the speed is applied other than once"
+    },
+    {
+      "id": "mvp-stale-frame",
+      "what": "The preview hands out the frame it read first instead of reading each frame back",
+      "file": "tools/model_viewer/src/PreviewRenderer.cpp",
+      "find": "    auto read = impl_->device->ReadFrame();\n    if (!read) return Engine::Base::Err(PreviewError(\"cannot read the frame back\", Engine::Base::CauseDetail(read.error())));\n    impl_->frame = std::move(read.value());",
+      "replace": "    if (impl_->frame.bytes.empty()) {\n    auto read = impl_->device->ReadFrame();\n    if (!read) return Engine::Base::Err(PreviewError(\"cannot read the frame back\", Engine::Base::CauseDetail(read.error())));\n    impl_->frame = std::move(read.value());\n    }",
+      "target": "gyo_model_viewer_preview_smoke",
+      "expect": "an earlier frame was handed out|another frame than the device"
+    },
+    {
+      "id": "mvp-bone-no-pitch",
+      "what": "Bones are not turned toward their child (no yaw or pitch) (not declared; added after review)",
+      "file": "tools/model_viewer/src/PreviewRenderer.cpp",
+      "find": "{(from + to) * 0.5F, {pitch, yaw, 0}, {boneThickness, boneThickness, length}};",
+      "replace": "{(from + to) * 0.5F, {0, 0, 0 * (pitch + yaw)}, {boneThickness, boneThickness, length}};",
+      "target": "gyo_model_viewer_preview_smoke",
+      "expect": "the bone is not drawn along X"
+    },
+    {
+      "id": "mve-move-not-reordered",
+      "what": "A moved event stays at its index instead of being placed by its new moment",
+      "file": "tools/model_viewer/src/EventDocument.cpp",
+      "find": "    const auto at = std::upper_bound(events.begin(), events.end(), seconds,\n                                     [](const double value, const auto& other) { return value < other.seconds; });\n    const auto moved = static_cast<std::size_t>(at - events.begin());",
+      "replace": "    const auto at = events.begin() + static_cast<std::ptrdiff_t>(index);\n    const auto moved = index;",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E1:*",
+      "expect": "the move did not reorder the clip"
+    },
+    {
+      "id": "mve-undo-keeps-name",
+      "what": "Undo does not give a rename back: the rename is no undo step",
+      "file": "tools/model_viewer/src/EventHistory.cpp",
+      "find": "    document_.Rename(clip, index, std::move(name));\n    Record();",
+      "replace": "    document_.Rename(clip, index, std::move(name));",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E2:*",
+      "expect": "Undo did not give the name back|history\\.Undo\\(\\)"
+    },
+    {
+      "id": "mve-lit-while-past",
+      "what": "A marker lights while the playhead is at or past it, not when playback passes it",
+      "file": "tools/model_viewer/src/Playback.cpp",
+      "find": "        if (interval.Crossed(track.events[index].seconds)) crossed.push_back(index);",
+      "replace": "        if (interval.currentSeconds >= track.events[index].seconds) crossed.push_back(index);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E4:*",
+      "expect": "an event behind the playhead lit again|after the loop's end did not light"
+    },
+    {
+      "id": "mve-unsaved-after-undo",
+      "what": "Saving forgets which state the file holds: Undo after saving still says saved (not declared; added while implementing)",
+      "file": "tools/model_viewer/include/gyo/model_viewer/EventHistory.hpp",
+      "find": "    [[nodiscard]] bool Unsaved() const noexcept { return saved_ != current_; }",
+      "replace": "    [[nodiscard]] bool Unsaved() const noexcept { return !saved_ || *saved_ < current_; }",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E2:*",
+      "expect": "Undo after saving does not show the document as unsaved"
+    },
+    {
+      "id": "mve-step-not-a-loop",
+      "what": "Advance hands out a clamped interval for a looping clock (not declared; added after review)",
+      "file": "tools/model_viewer/src/Playback.cpp",
+      "find": "    return Engine::Model::PlaybackInterval{previous, next, durationSeconds, Mode()};",
+      "replace": "    return Engine::Model::PlaybackInterval{previous, next, durationSeconds, Engine::Model::PlaybackMode::Clamp};",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "E4:*",
+      "expect": "a looping clock's step is not a loop's"
+    },
+    {
+      "id": "mvs-own-formula",
+      "what": "The preview's sound start is the viewer's own formula without the sync point, not EventSoundOffsetSeconds",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "        const auto offset = Framework::EventSoundOffsetSeconds(event.seconds, clipSeconds, actionSeconds, sound->syncSeconds);",
+      "replace": "        const std::optional<double> offset = event.seconds * (actionSeconds / clipSeconds);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S2:*",
+      "expect": "the sound's start is not the framework's"
+    },
+    {
+      "id": "mvs-save-unparsed",
+      "what": "Saving writes the text without the framework reading it back",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    std::string text = WriteEventSounds(set);\n    auto parsed = Framework::ParseEventSounds(text);\n    if (!parsed) return Engine::Base::Err(Refused(parsed.error(), \"the text to write\"));\n    if (auto bound = Framework::BindEventSounds(parsed.value(), events, soundSeconds); !bound) {\n        return Engine::Base::Err(Refused(bound.error(), \"the text to write\"));\n    }\n    if (!SameEventSounds(parsed.value(), set)) {",
+      "replace": "    std::string text = WriteEventSounds(set);\n    static_cast<void>(events);\n    static_cast<void>(soundSeconds);\n    if (false) {",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S1:*",
+      "expect": "a sync point after its sound's end was saved"
+    },
+    {
+      "id": "mvs-gain-as-double",
+      "what": "The gain is written as a double, not as the float the format holds",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    const auto written = std::to_chars(digits.data(), digits.data() + digits.size(), gain);",
+      "replace": "    const auto written = std::to_chars(digits.data(), digits.data() + digits.size(), static_cast<double>(gain));",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S1:*",
+      "expect": "the written text is not the file's own"
+    },
+    {
+      "id": "mvs-round-start-without-speed",
+      "what": "A round's start ignores the speed (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    const auto clipStart = now - Wall(clock.seconds / clock.speed);",
+      "replace": "    const auto clipStart = now - Wall(clock.seconds);",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S2:*",
+      "expect": "the round's start is not now less seconds over speed"
+    },
+    {
+      "id": "mvs-edit-not-restarted",
+      "what": "A new schedule while playing is sent on top of the old one (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    const bool onCourse = scheduled_ && version_ == scheduleVersion && speed_ == clock.speed",
+      "replace": "    const bool onCourse = scheduled_ && speed_ == clock.speed",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S2:*",
+      "expect": "an edit while playing did not stop the sounds sent before it"
+    },
+    {
+      "id": "mvs-no-long-lead",
+      "what": "Only one round is sent ahead, whatever the lead (not declared; added after review)",
+      "file": "tools/model_viewer/src/EventSoundFiles.cpp",
+      "find": "    return 1 + static_cast<int>(std::ceil(lead / round));",
+      "replace": "    return 1 + 0 * static_cast<int>(std::ceil(lead / round));",
+      "target": "gyo_model_viewer_core_tests",
+      "cases": "S2:*",
+      "expect": "a long lead was not sent rounds ahead"
+    }
+  ]
+}

@@ -2,6 +2,7 @@
 #include "RetroFPS/Pvp/ClientLog.hpp"
 #include "RetroFPS/Pvp/SessionSummary.hpp"
 #include "RetroFPS/Pvp/AddressText.hpp"
+#include "RetroFPS/Pvp/LobbyActions.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ShotGate.hpp"
@@ -37,7 +38,6 @@
 #include "engine/render/PrimitiveMesh.hpp"
 #include "engine/render/Renderer.hpp"
 #include "engine/text/backend/sdl_ttf/SdlTtfTextRasterizer.hpp"
-#include "engine/ui/UiDocumentCodec.hpp"
 #include "engine/ui/UiRenderer.hpp"
 #include "engine/ui/UiRuntime.hpp"
 #include "engine/math/geometry/Aabb.hpp"
@@ -73,9 +73,6 @@ std::uint64_t ApplicationMilliseconds() {
 }
 template<class Error> std::string Explain(const Error& error) {
     return error.message + (error.detail.empty() ? "" : ": " + error.detail);
-}
-std::string ExplainUi(const Engine::Ui::UiError& error) {
-    return error.message + (error.jsonPointer.empty() ? "" : " at " + error.jsonPointer);
 }
 const PlayerState* FindPlayer(const WorldSnapshot& snapshot, PlayerId id) {
     const auto found = std::find_if(snapshot.players.begin(), snapshot.players.end(),
@@ -297,20 +294,24 @@ struct PvpApplication::Impl final {
     }
 
     void Execute(const Engine::Ui::UiActionEvent& event) {
-        const std::string& action = event.action;
-        if (action == "pvp.submit_address") {
+        // Start-up checked that every declared action has an entry (ParseLobbyDocument).
+        const auto* entry = FindLobbyAction(event.action);
+        if (entry == nullptr) return;
+        if (entry->action != LobbyAction::SubmitAddress) localStatus.clear();
+        const bool inLobby = state.phase == ConnectionPhase::Lobby;
+        switch (entry->action) {
+        case LobbyAction::SubmitAddress:
             if (const auto* submitted = std::get_if<std::string>(&event.payload)) address = *submitted;
             return;
-        }
-        localStatus.clear();
-        if (action == "pvp.leave") { connection.Leave(); return; }
-        if (action == "pvp.quit") { connection.Leave(); quit = true; return; }
-        if (state.phase != ConnectionPhase::Lobby) return;
-        if (action == "pvp.refresh") connection.Refresh(address);
-        else if (action == "pvp.create") connection.CreateAndJoin(address);
-        else if (action == "pvp.join") {
+        case LobbyAction::Leave: connection.Leave(); return;
+        case LobbyAction::Quit: connection.Leave(); quit = true; return;
+        case LobbyAction::Refresh: if (inLobby) connection.Refresh(address); return;
+        case LobbyAction::Create: if (inLobby) connection.CreateAndJoin(address); return;
+        case LobbyAction::Join:
+            if (!inLobby) return;
             if (state.rooms.empty()) localStatus = "No room selected. Refresh the room list first.";
             else connection.Join(address, state.rooms.front().id);
+            return;
         }
     }
 
@@ -956,10 +957,10 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
         error = "PvP Lobby asset has no text payload";
         return false;
     }
-    auto document = Engine::Ui::UiDocumentCodec::Parse(text->text, "object_fps_pvp.ui.pvp_lobby");
+    auto document = ParseLobbyDocument(text->text, "object_fps_pvp.ui.pvp_lobby", error);
     impl_->assets.Release(loaded.value());
-    if (!document) { error = ExplainUi(document.error()); return false; }
-    const auto ready = impl_->ui.Initialize(std::make_shared<const Engine::Ui::UiDocument>(std::move(document).value()));
+    if (!document) return false;
+    const auto ready = impl_->ui.Initialize(std::make_shared<const Engine::Ui::UiDocument>(std::move(*document)));
     if (!ready) { error = ExplainUi(ready.error()); return false; }
     const auto activated = impl_->ui.ActivateCanvas("lobby");
     if (!activated) { error = ExplainUi(activated.error()); return false; }

@@ -159,6 +159,8 @@ Overlay / HUD → Present
 
 動畫每幀更新固定大小的頂點內容，保留 mesh handle 與 index topology。診斷讀回只在明確請求時等待 GPU，日常呈現不進行這種同步。Scene capture 包含 WorldOverlay 與武器，但在曝光／gamma／螢幕 Overlay／HUD 之前，並非最終螢幕截圖。
 
+離屏裝置（`SdlGpuRenderDevice::CreateOffscreen`）不認領視窗，視窗可以留給別的渲染器（例如工具外殼的 SDL 2D 渲染器）；平台仍要傳入，因為它持有 GPU 驅動載入時用到的 SDL 子系統。每幀畫到裝置自己的 RGBA8 sRGB 貼圖：`AcquireFrame` 一定交出目前大小的幀，`SubmitFrame` 回傳 `Presented`，`Renderer` 照常使用。`SetFrameSize` 改的大小從下一幀生效；`ReadFrame` 同步等 GPU（和 `ReadTexture` 相同），讀回最後送出的那一幀，含曝光與 Overlay，是最終畫面。幀進行中不能讀回或改大小；放棄的幀、或大小改了之後還沒送出新幀時，讀回會被拒。驗證：`render.sdl_gpu_offscreen`（標籤 `gpu`）。用途與判定見[模型檢視工具的事前宣告](tools/plans/v8/model-viewer.md)。
+
 <a id="r07"></a>
 ## 7. 建置選擇
 
