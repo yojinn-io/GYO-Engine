@@ -8,6 +8,8 @@ add_subdirectory(model)
 add_subdirectory(net)
 add_subdirectory(threads)
 add_subdirectory(time)
+# After time: its directory defines gyo_expect_links.
+add_subdirectory(entity_store)
 add_subdirectory(os)
 add_subdirectory(trace)
 add_subdirectory(audio)

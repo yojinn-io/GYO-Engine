@@ -3,6 +3,9 @@
 # either.
 add_subdirectory(base)
 add_subdirectory(math)
+# The entity store is a header-only leaf directly above Base, like Math
+# (docs/architecture/entity-store.md).
+add_subdirectory(entity_store)
 # The OS layer sits directly above Base and below every module that needs the
 # operating system (docs/architecture/os.md).
 add_subdirectory(os)

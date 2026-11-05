@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the entity-store plan (docs/architecture/entity-store.md, Guard). A mutant is killed only when its check fails with the expected message; every check is a common test (no product test). Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/entity-store/scripts/mutations.json.",
+  "mutants": [
+    {
+      "id": "es-row1-find-zero-absent",
+      "what": "FindEntity treats key 0 as absent (Guard row 1)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "    return position != last && EntityStore::EntityOf(*position) == id ? position : last;",
+      "replace": "    return id != 0 && position != last && EntityStore::EntityOf(*position) == id ? position : last;",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store keys: zero"
+    },
+    {
+      "id": "es-row1-insert-asserts-zero",
+      "what": "InsertEntity asserts on 0 as a reserved value (Guard row 1)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "    GYO_ASSERT(position == column.end() || EntityStore::EntityOf(*position) != id);",
+      "replace": "    GYO_ASSERT(id != 0);\n    GYO_ASSERT(position == column.end() || EntityStore::EntityOf(*position) != id);",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store keys: zero"
+    },
+    {
+      "id": "es-row2-insert-appends",
+      "what": "InsertEntity appends instead of inserting at the lower_bound position (Guard row 2)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "    return *column.insert(position, std::move(value));",
+      "replace": "    static_cast<void>(position);\n    column.push_back(std::move(value));\n    return column.back();",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store insert: the ordered position"
+    },
+    {
+      "id": "es-row2-erase-swap-and-pop",
+      "what": "EraseEntity moves the last element into the hole (Guard row 2)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "    column.erase(position);\n    return true;",
+      "replace": "    *position = std::move(column.back());\n    column.pop_back();\n    return true;",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store erase: keeps the order"
+    },
+    {
+      "id": "es-row3-find-skips-key-compare",
+      "what": "FindEntity returns the lower_bound element without comparing its key (Guard row 3)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "    return position != last && EntityStore::EntityOf(*position) == id ? position : last;",
+      "replace": "    return position;",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store find: present, absent"
+    },
+    {
+      "id": "es-row3-find-linear",
+      "what": "The lookup scans the column linearly instead of a binary search (Guard row 3, comparison budget)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "    return std::lower_bound(first, last, id,\n                            [](const auto& value, EntityId key) { return EntityStore::EntityOf(value) < key; });",
+      "replace": "    return std::find_if(first, last, [id](const auto& value) { return !(EntityStore::EntityOf(value) < id); });",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store find: a lookup reads at most"
+    },
+    {
+      "id": "es-row7-insert-duplicate-unchecked",
+      "what": "InsertEntity no longer asserts on a present key (Guard row 7)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "    GYO_ASSERT(position == column.end() || EntityStore::EntityOf(*position) != id);\n",
+      "replace": "",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store insert: a present key"
+    },
+    {
+      "id": "es-row7-erase-absent-asserts",
+      "what": "EraseEntity of an absent key fails a GYO_ASSERT instead of returning false (Guard row 7)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "    if (position == column.end()) return false;",
+      "replace": "    GYO_ASSERT(position != column.end());\n    if (position == column.end()) return false;",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store erase: keeps the order"
+    },
+    {
+      "id": "es-row10-entityof-reads-id",
+      "what": "EntityOf reads the member id directly when there is one instead of going through EntityKey (Guard row 10)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityKey.hpp",
+      "find": "    return EntityKey<T>::Of(value);",
+      "replace": "    if constexpr (requires { value.id; }) return static_cast<EntityId>(value.id);\n    else return EntityKey<T>::Of(value);",
+      "target": "gyo_entity_store_tests",
+      "expect": "Entity store key access"
+    },
+    {
+      "id": "es-row9-links-math",
+      "what": "GYO::EntityStore links GYO::Math (Guard row 9, configure-time link check)",
+      "file": "engine/entity_store/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_entity_store INTERFACE GYO::Base)",
+      "replace": "target_link_libraries(gyo_entity_store INTERFACE GYO::Base GYO::Math)",
+      "target": "gyo_entity_store_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_entity_store links .*expected exactly GYO::Base"
+    },
+    {
+      "id": "es-row9-includes-math",
+      "what": "A store header includes an engine/math header (Guard row 9: the test executable cannot compile it)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityId.hpp",
+      "find": "#include <cstdint>\n",
+      "replace": "#include <cstdint>\n#include \"engine/math/scalar/Scalar.hpp\"\n",
+      "target": "gyo_entity_store_tests",
+      "expect_build_failure": true,
+      "expect": "engine/math/scalar/Scalar\\.hpp.*(file not found|No such file)|Cannot open include file"
+    },
+    {
+      "id": "es-guard-unordered-index",
+      "what": "The store adds a std::unordered_map index (Guard rows 5, 6, 8; word guard W2)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "#include <span>\n",
+      "replace": "#include <span>\n#include <unordered_map>\n",
+      "command": [
+        "{python}",
+        "tests/common/entity_store/entity_store_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "EntityColumns\\.hpp:\\d+: W2 unordered_map"
+    },
+    {
+      "id": "es-guard-static-cache",
+      "what": "StrictlyAscending keeps a function-local static counter (Guard rows 5, 6, 8; word guard W4)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "[[nodiscard]] bool StrictlyAscending(std::span<const T> column) noexcept {\n",
+      "replace": "[[nodiscard]] bool StrictlyAscending(std::span<const T> column) noexcept {\n    static std::size_t calls = 0;\n    ++calls;\n",
+      "command": [
+        "{python}",
+        "tests/common/entity_store/entity_store_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "EntityColumns\\.hpp:\\d+: W4 static"
+    },
+    {
+      "id": "es-guard-clock",
+      "what": "The store includes <chrono> (Design Invariant 8; word guard W3)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "#include <span>\n",
+      "replace": "#include <chrono>\n#include <span>\n",
+      "command": [
+        "{python}",
+        "tests/common/entity_store/entity_store_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "EntityColumns\\.hpp:\\d+: W3 <chrono>"
+    },
+    {
+      "id": "es-guard-product-name",
+      "what": "A store header names a product type in a comment (Design Invariant 9; word guard W1)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityId.hpp",
+      "find": "using EntityId = std::uint64_t;\n",
+      "replace": "using EntityId = std::uint64_t; // the same as PlayerId\n",
+      "command": [
+        "{python}",
+        "tests/common/entity_store/entity_store_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "EntityId\\.hpp:\\d+: W1 Player"
+    }
+  ]
+}
