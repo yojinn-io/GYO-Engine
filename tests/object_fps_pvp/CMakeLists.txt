@@ -13,7 +13,7 @@ target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_
     PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
     PVP_HIT_FEEDBACK_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/hit_feedback.json"
     PVP_SOUND_SETTINGS_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/audio/sfx.json"
-    PVP_PRODUCT_ARENA_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/pvp_arena.json"
+    PVP_PRODUCT_ARENA_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/maps/pvp_arena.json"
     PVP_LOBBY_UI_PATH="${GYO_REPOSITORY_ROOT}/assets/object_fps_pvp/ui/pvp_lobby.json"
     PVP_CONNECTION_TIMING_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/connection_timing.json")
 target_link_libraries(${tests} PRIVATE ${match_domain} ${runtime_host} ${client_simulation} GYO::Net GYO::Model gyo_test_support nlohmann_json::nlohmann_json doctest::doctest
@@ -309,7 +309,7 @@ set_tests_properties("${GYO_CURRENT_APP}.ingress_evidence" PROPERTIES LABELS "cp
 add_test(NAME "${GYO_CURRENT_APP}.ingress_cross"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/ingress_cross_check.py"
         --match $<TARGET_FILE:${match}> --probe $<TARGET_FILE:gyo_${GYO_CURRENT_APP}_timing_probe>
-        --arena "${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/pvp_corners.json"
+        --arena "${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/maps/pvp_corners.json"
         --output "${CMAKE_CURRENT_BINARY_DIR}/ingress_cross" --go "${GYO_GO_EXECUTABLE}")
 set_tests_properties("${GYO_CURRENT_APP}.ingress_cross" PROPERTIES LABELS "network;go;pvp" TIMEOUT 300
     SKIP_RETURN_CODE 77)
@@ -318,7 +318,7 @@ set_tests_properties("${GYO_CURRENT_APP}.ingress_cross" PROPERTIES LABELS "netwo
 add_test(NAME "${GYO_CURRENT_APP}.hit_part_cross"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/hit_part_cross_check.py"
         --match $<TARGET_FILE:${match}> --probe $<TARGET_FILE:gyo_${GYO_CURRENT_APP}_network_probe>
-        --arena "${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/pvp_arena.json"
+        --arena "${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/maps/pvp_arena.json"
         --output "${CMAKE_CURRENT_BINARY_DIR}/hit_part_cross" --go "${GYO_GO_EXECUTABLE}")
 set_tests_properties("${GYO_CURRENT_APP}.hit_part_cross" PROPERTIES LABELS "network;go;pvp" TIMEOUT 300)
 # P2-log: the network path's 10-second statistics lines (Gateway, Match, Client worker).
@@ -411,7 +411,7 @@ set_tests_properties("${GYO_CURRENT_APP}.service_startup" PROPERTIES LABELS "cpu
 # (compare_authority_trees.py), not this test.
 set(digest_arena_definitions
     PVP_DIGEST_CONTRACT_ARENA="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
-    PVP_DIGEST_PRODUCT_ARENA="${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/pvp_arena.json")
+    PVP_DIGEST_PRODUCT_ARENA="${GYO_REPOSITORY_ROOT}/assets/${GYO_CURRENT_APP}/maps/pvp_arena.json")
 set(digest "gyo_${GYO_CURRENT_APP}_authority_digest")
 add_executable(${digest} AuthorityDigest.cpp)
 target_compile_features(${digest} PRIVATE cxx_std_20)

@@ -56,8 +56,8 @@ int main(int argc,char** argv) {
         for(std::size_t index=1;index<arguments.size();++index) {
             const std::string& argument=arguments[index];
             if(argument=="--help") {
-                std::cout<<"Match runtime: [--arena path (default: the release arena pvp_corners.json)] [--listen 127.0.0.1:27016]\n"
-                           "  [--movement-rules path (default: the release movement_rules.json)]\n"
+                std::cout<<"Match runtime: [--arena path (default: the release arena maps/pvp_corners.json)] [--listen 127.0.0.1:27016]\n"
+                           "  [--movement-rules path (default: the release rules/movement_rules.json)]\n"
                            "  [--movement-trace path [--ingress-trace path (default: next to it, -commands.jsonl -> -ingress.jsonl)]]\n"
                            "  (with a movement trace, the shadow records go next to it: -commands.jsonl -> -shots.jsonl)\n"
                            "  [--log path (also append console output, timestamped)]\n";return 0;
@@ -89,7 +89,7 @@ int main(int argc,char** argv) {
         if(!logPath.empty()) {log.emplace(logPath);log->FlushOnCrash();log->Tee(std::cout);log->Tee(std::cerr);log->Tee(std::clog);}
         // Without --arena the Match hosts the release arena; tests and acceptance name theirs.
         const auto arenaPath=explicitArena ? *explicitArena
-            : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"pvp_corners.json";
+            : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"maps"/"pvp_corners.json";
         std::clog<<"[ObjectFPS/PvP Match] start executable_sha256="<<fps::pvp::FileSha256(fps::pvp::RunningExecutablePath())
                  <<" arena_file="<<Engine::Os::Files::PathForMessage(arenaPath)<<'\n';
         std::string error;
@@ -98,7 +98,7 @@ int main(int argc,char** argv) {
         std::clog<<"[ObjectFPS/PvP Match] arena id="<<arena->id<<" version="<<arena->version<<" spawns="<<arena->spawns.size()<<'\n';
         // protocol-v8 section 3: the movement rules data; invalid rules stop the Match.
         const auto rulesPath=explicitMovementRules ? *explicitMovementRules
-            : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"movement_rules.json";
+            : fps::pvp::RunningExecutablePath().parent_path()/Gyo::AppConfig::Assets/"rules"/"movement_rules.json";
         const auto stance=fps::pvp::LoadStanceRules(rulesPath,*arena,error);
         if(!stance){std::cerr<<error<<'\n';return 1;}
         std::clog<<"[ObjectFPS/PvP Match] movement rules file="<<Engine::Os::Files::PathForMessage(rulesPath)

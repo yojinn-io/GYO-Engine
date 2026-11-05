@@ -14,7 +14,7 @@
 | `v8-product-asset-buns-fixture` | buns 髮型與頭髮貼圖改成測試專用的 fixture，不再出貨 |
 | `v8-product-art-source-out` | 主 checkout 的 5 個交付檔移到 repo 外 |
 | `v8-engine-assets-common-retire` | 刪掉沒有 owner 的 `assets/common` |
-| `v8-product-asset-path-loaded-move` | ［延後］arena 搬進 `maps/`，`movement_rules.json` 搬進 `rules/` |
+| `v8-product-asset-path-loaded-move` | 完成（2026-11-05，併進 `v8-product-arena-v2`，PR #152）：arena 搬進 `maps/`，`movement_rules.json` 搬進 `rules/` |
 | `v8-product-asset-guard-product-use` | （#125 之後）補回「只被測試引用的素材不算產品使用」這條守衛的檢出力：用 hair_buns fixture 當自測資料，讓一直存活的突變被抓到 |
 
 ## 決定（2026-10-31）
@@ -49,7 +49,7 @@ asset-layout
 ├── v8-product-asset-buns-fixture      medium｜buns＋頭髮貼圖改成測試 fixture，不再出貨
 ├── v8-engine-assets-common-retire     low   ｜刪 assets/common
 ├── v8-product-art-source-out          low   ｜主 checkout 的 5 個交付檔移到 repo 外（先確認位置）
-└── v8-product-asset-path-loaded-move  high  ｜［延後］arena→maps/、movement_rules→rules/
+└── v8-product-asset-path-loaded-move  high  ｜✓ arena→maps/、movement_rules→rules/（併進 v8-product-arena-v2）
 ```
 
 | 代號 | 估時 | 支撐的 Feature | 驗收 | 狀態 |
@@ -60,7 +60,7 @@ asset-layout
 | `v8-product-asset-buns-fixture` | 1.5～2.5 h（開工時重估） | 出貨內容只放產品用到的素材（AGENTS §7） | CI L1；catalog 不再有 buns 的 3 個 id；`PlayerPresentationTests` 用 fixture 通過 | 完成 |
 | `v8-engine-assets-common-retire` | 0.5 h | 沒有（使用者同意的清理） | CI 全量 | 完成（CI 全量待合併） |
 | `v8-product-art-source-out` | 0.25 h | 主 checkout 能跑 ctest | 主 checkout 的 `git status` 沒有未追蹤的素材 | 完成 |
-| `v8-product-asset-path-loaded-move` | 4～6 h | 地圖增加、voxel 地圖 | arena digest 搬移前後相同；驗收常數先宣告並經核准 | 延後 |
+| `v8-product-asset-path-loaded-move` | 4～6 h | 地圖增加、voxel 地圖 | arena digest 搬移前後相同；驗收常數先宣告並經核准 | 完成（併進 `v8-product-arena-v2`；`content_deep_path` 的常數未改，理由見該批 dev_log） |
 
 - 順序：doc＋guard 先做（同一 PR），接著 player-folder、buns-fixture、common-retire，每做完一批就刪掉對應的例外（只締）。art-source-out 不進 PR，在主 checkout 操作。
 - 合計估時（不含延後批）：8.25～12.25 h。單批超過估時 1.5 倍、或單一問題累計超過 2 小時就停下回報。

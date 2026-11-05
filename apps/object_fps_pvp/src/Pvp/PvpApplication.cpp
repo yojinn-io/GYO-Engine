@@ -960,7 +960,7 @@ bool PvpApplication::InitializeContent(const std::filesystem::path& assetRoot, s
     impl_->loaders.Register(std::make_unique<Asset::Loaders::SoundLoader>());
     impl_->loaders.Register(std::make_unique<Engine::Model::Ufbx::UfbxModelLoader>());
     impl_->loaders.Register(std::make_unique<Asset::Loaders::SdlImage::SdlImageTextureLoader>());
-    auto installed = LoadInstalledArenas(assetRoot / "arenas.json", error, &impl_->arenaGeometries);
+    auto installed = LoadInstalledArenas(assetRoot / "maps" / "arenas.json", error, &impl_->arenaGeometries);
     if (!installed) return false;
     std::vector<ArenaIdentity> identities;
     for (const auto& arena : *installed) {

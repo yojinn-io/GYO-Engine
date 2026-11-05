@@ -706,7 +706,7 @@ GUI Client 需要部署的 fonts、UI 與 shader bundle。
 
 ```powershell
 & ./build/target/object_fps_pvp/bin/gyo_object_fps_pvp-match.exe `
-  --arena ./build/target/object_fps_pvp/bin/assets/object_fps_pvp/pvp_arena.json `
+  --arena ./build/target/object_fps_pvp/bin/assets/object_fps_pvp/maps/pvp_arena.json `
   --listen 127.0.0.1:27016
 ```
 

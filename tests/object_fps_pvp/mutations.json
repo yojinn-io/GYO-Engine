@@ -382,9 +382,9 @@
     {
       "id": "v8-asset-layout-guard-exception-dropped",
       "batch": "v8-asset-layout-guard",
-      "what": "A real departure loses its exception (the check must see the real catalog)",
+      "what": "A real departure loses its exception (the check must see the real catalog) (retargeted by v8-product-arena-v2: the root-file exceptions it used are gone with the move to maps/ and rules/)",
       "file": "tests/object_fps_pvp/test_asset_catalog.py",
-      "find": "    ('root-file', 'movement_rules.json'): PATH_LOADED_MOVE,\n",
+      "find": "    ('definition-name', 'weapons/nailer_v2/viewmodel/nailer_v2_viewmodel.json'):\n        'the next feature batch that edits this definition',\n",
       "replace": "",
       "check": "asset_catalog",
       "expect": "FAIL: test_paths_follow_the_layout"
@@ -9046,10 +9046,10 @@
       "batch": "v8-product-arena-v2",
       "what": "A baked map is not in the catalog",
       "file": "assets/object_fps_pvp/asset_catalog.json",
-      "find": "    { \"id\": \"object_fps_pvp.arena.mesh\", \"type\": \"text\", \"path\": \"pvp_arena.voxel_mesh.json\" },\n",
+      "find": "    { \"id\": \"object_fps_pvp.arena.mesh\", \"type\": \"text\", \"path\": \"maps/pvp_arena.voxel_mesh.json\" },\n",
       "replace": "",
       "check": "asset_catalog",
-      "expect": "pvp_arena.voxel_mesh.json"
+      "expect": "maps/pvp_arena.voxel_mesh.json"
     }
   ]
 }
