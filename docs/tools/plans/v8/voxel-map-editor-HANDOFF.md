@@ -112,3 +112,7 @@
   - 突變：視窗 22 條、相關的既有突變都 killed。
   - 本機結果：cpu|shader 130／130；編輯器與 GPU 6／6。
   - 證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/window/`。
+- 2026-11-06：你說「先等架構師定案，目前設計可能需要修改。」（`v8-tool-voxel-window-wait-architect`）
+  - PR #158 先不合併。
+  - W9 的核准、S4、P1 都等架構師定案之後再處理。
+  - 這段期間不動 window 批的程式。
