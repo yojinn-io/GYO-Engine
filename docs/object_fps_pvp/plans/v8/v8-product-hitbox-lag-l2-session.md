@@ -18,15 +18,12 @@
 
 - 程式全部來自同一個 commit：本批 PR（#155）合併到 master 後，master 的整合建置（`cross-platform` workflow）上傳的套件 artifacts（PR 的 L1 不產生套件，2026-11-05 查過）。run 編號與 commit 開場前記到 HANDOFF。Gateway 也從那個 commit 建置；`mac.sh`、`lag_l2_summary.py` 用那個 commit 的 checkout。
 - 套件的 zip 裡是一個 `gyo-object_fps_pvp-<平台>.tar.gz`，解開後是 `gyo-object_fps_pvp/` 資料夾（裡面有 `build_metadata.json`、`bin/`、`lib/`）。**`PKG` 指的是這個 `gyo-object_fps_pvp` 資料夾**，不是解壓的上一層。
-- **Windows（每台）**：下載 `gyo-package-object_fps_pvp-windows-x64`，解開 zip 後在 PowerShell 用 `tar -xzf gyo-object_fps_pvp-windows-x64.tar.gz` 解開（檔案總管打不開 `.tar.gz`），放在本機磁碟的新資料夾。把 repo 的 `build/acceptance/object_fps_pvp/lag_l2_session/windows.ps1` 也複製過去。
-- **Mac**：
-  - 下載同一次 run 的 `gyo-package-object_fps_pvp-macos-x64`，在 `/Users/karasu/Code/Source/GYO-Engine/build/evidence/v8-hitbox-lag-l2/pkg/` 用 `tar -xzf` 解開；`PKG` 是 `.../pkg/gyo-object_fps_pvp`。
-  - 用瀏覽器下載的檔案會帶隔離標記，Gatekeeper 會擋未簽章的 Match。解開後執行 `xattr -dr com.apple.quarantine PKG`。
-  - Gateway：發行包沒有 macOS 版，在本機從同一個 commit 建置：
-
-    ```bash
-    cd <同一個 commit 的工作樹>/apps/object_fps_pvp && /usr/local/go/bin/go build -o /Users/karasu/Code/Source/GYO-Engine/build/evidence/v8-hitbox-lag-l2/gateway ./gateway/cmd
-    ```
+- **Windows（每台）**：從 run `42031502557` 下載 `gyo-package-object_fps_pvp-windows-x64`（artifact 保留到 2026-11-19），解開 zip 後在 PowerShell 用 `tar -xzf gyo-object_fps_pvp-windows-x64.tar.gz` 解開（檔案總管打不開 `.tar.gz`），放在本機磁碟的新資料夾。把 repo 的 `build/acceptance/object_fps_pvp/lag_l2_session/windows.ps1` 也複製過去。
+- **場次的程式（2026-11-05 定）**：commit `549488745d0221efc4cc651b0da0dd855bed3db9`（#155 的合併），master 整合建置 run `42031502557`。
+- **Mac（已準備好）**：CI 沒有 macos-x64 套件，Match 與 Gateway 都是這台 Intel Mac 從同一個 commit 的本機建置（宣告修訂 7）：
+  - `PKG`＝`/Users/karasu/Code/Source/GYO-Engine/build/evidence/v8-hitbox-lag-l2/pkg/gyo-object_fps_pvp`
+  - `GATEWAY`＝`/Users/karasu/Code/Source/GYO-Engine/build/evidence/v8-hitbox-lag-l2/gateway`
+  - SHA-256 記在同一資料夾的 `session_binaries_sha256.txt`；`prepare` 也會寫進 `marks.txt`。本機建置沒有隔離標記，不必 `xattr`。
 
   - 腳本用 repo 裡的 `build/acceptance/object_fps_pvp/lag_l2_session/mac.sh`（下面寫成 `mac.sh`）。
 - **預演（有網路、在場次要用的同一台路由器上）**：Mac 跑一次 `prepare`（用一個試用的資料夾）、`match`、`gateway`；兩台 Windows 各跑一次 `windows.ps1`，確認印出 `source_revision`、連得到 Gateway、進得了 Lobby，然後關掉。
