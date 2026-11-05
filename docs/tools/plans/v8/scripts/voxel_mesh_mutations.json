@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-engine-voxel-mesh-contract (gyo.voxel_mesh in GYO::VoxelMesh, docs/architecture/voxel-mesh.md; judgment V5 of the declaration in docs/tools/plans/v8/voxel-map-editor.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_mesh_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its test run fails with the expected message. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "mutants": [
+    {
+      "id": "vm-repeated-key-kept",
+      "what": "A repeated key is taken silently (the DOM keeps the last)",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            if (!open.back().insert(key).second) Fail(\"repeated key '\" + key + \"'\", \"\");",
+      "replace": "            open.back().insert(key);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-unknown-field-ignored",
+      "what": "An unknown field is ignored",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!keys.contains(item.key())) Fail(\"unknown field '\" + item.key() + \"'\", path);",
+      "replace": "        static_cast<void>(item);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-version-2-accepted",
+      "what": "A version other than 1 is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (!version.is_number_integer() || version.get<long long>() != VoxelMeshVersion)",
+      "replace": "    if (!version.is_number_integer())",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 2:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-sha-length-unchecked",
+      "what": "source_sha256 of any length is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (text.size() != 64) return false;",
+      "replace": "    if (text.empty()) return false;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-five-faces-accepted",
+      "what": "A palette entry with fewer than six face colours is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (!faces.is_array() || faces.size() != FaceCount) Fail(\"faces lists six colours\", path + \".faces\");",
+      "replace": "    if (!faces.is_array() || faces.size() > FaceCount) Fail(\"faces lists six colours\", path + \".faces\");\n    if (faces.size() < FaceCount) return {name.get<std::string>(), {}};",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 5:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-dir-6-accepted",
+      "what": "dir 6 is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (v[3] < 0 || v[3] >= static_cast<std::int64_t>(FaceCount)) Fail(\"dir is 0 to 5\", At(path, 3));",
+      "replace": "    if (v[3] < 0 || v[3] > static_cast<std::int64_t>(FaceCount)) Fail(\"dir is 0 to 5\", At(path, 3));",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-zero-width-accepted",
+      "what": "A quad of width 0 is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (v[4] < 1) Fail(\"width is at least 1\", At(path, 4));",
+      "replace": "    if (v[4] < 0) Fail(\"width is at least 1\", At(path, 4));",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-flat-collider-accepted",
+      "what": "A collider with min equal to max on an axis is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!(minimum[axis] < maximum[axis])) Fail(\"min is below max on every axis\", path);",
+      "replace": "        if (!(minimum[axis] <= maximum[axis])) Fail(\"min is below max on every axis\", path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 7:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-range-unchecked",
+      "what": "Coordinates beyond +-2^20 units are accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (units < -CoordinateLimit || units > CoordinateLimit) Fail(\"a coordinate lies beyond +-2^20 units\", path);",
+      "replace": "    static_cast<void>(units); static_cast<void>(path);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-far-corner-unchecked",
+      "what": "Only a quad's minimum corner is range-checked",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        RequireInRange(v[axis] + extent[axis] + offset[axis], path);",
+      "replace": "        static_cast<void>(extent);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-order-unchecked",
+      "what": "Quads out of canonical order are accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!result.quads.empty() && !(QuadKey(result.quads.back()) < QuadKey(quad)))",
+      "replace": "        if (false)",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 9:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-size-unchecked",
+      "what": "A text over 16 MiB is parsed",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (text.size() > MaxTextBytes) Fail(\"the text exceeds 16 MiB\", \"\");",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 10:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-winding-reversed",
+      "what": "+Z faces are wound counter-clockwise",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            corners = {world(x0, y0, z0), world(x1, y0, z0), world(x1, y1, z0), world(x0, y1, z0)};",
+      "replace": "            corners = {world(x0, y1, z0), world(x1, y1, z0), world(x1, y0, z0), world(x0, y0, z0)};",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*clockwise*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-uv-not-centred",
+      "what": "The uv samples a texel corner instead of its centre",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        const Math::Vec2 uv{(static_cast<float>(quad.palette) + 0.5F) / width,",
+      "replace": "        const Math::Vec2 uv{(static_cast<float>(quad.palette) + 0.0F) / width,",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*golden vertices*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-origin-not-scaled",
+      "what": "The origin is added in cells instead of 1/16 units",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    const std::int64_t ox = std::int64_t{document.origin.x} * UnitsPerCell;",
+      "replace": "    const std::int64_t ox = std::int64_t{document.origin.x};",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*golden world*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-no-divide-by-16",
+      "what": "The conversion forgets to divide by 16",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    return static_cast<float>(units) * cellSize / static_cast<float>(UnitsPerCell);",
+      "replace": "    return static_cast<float>(units) * cellSize;",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*golden world*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-collider-order-not-strict",
+      "what": "Two identical colliders are accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (!result.colliders.empty() && !(BoxKey(result.colliders.back()) < BoxKey(box)))",
+      "replace": "        if (!result.colliders.empty() && BoxKey(box) < BoxKey(result.colliders.back()))",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 9:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-cell-size-no-floor",
+      "what": "cell_size below 2^-16 is accepted",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (!(result.cellSize >= MinCellSize) || !(result.cellSize <= MaxCellSize))",
+      "replace": "    if (!(result.cellSize > 0.0F) || !(result.cellSize <= MaxCellSize))",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-repeated-key-nested-only",
+      "what": "Repeated keys are caught only inside nested objects",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "            if (!open.back().insert(key).second) Fail(\"repeated key '\" + key + \"'\", \"\");",
+      "replace": "            if (!open.back().insert(key).second && open.size() > 1) Fail(\"repeated key '\" + key + \"'\", \"\");",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*rule 1:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vm-links-collision",
+      "what": "GYO::VoxelMesh gains a link it must not have (Design Invariant 1)",
+      "file": "engine/voxel_mesh/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_voxel_mesh PUBLIC GYO::Base GYO::Math PRIVATE nlohmann_json::nlohmann_json)",
+      "replace": "target_link_libraries(gyo_voxel_mesh PUBLIC GYO::Base GYO::Math GYO::Collision PRIVATE nlohmann_json::nlohmann_json)",
+      "target": "gyo_voxel_mesh_tests",
+      "expect_build_failure": true,
+      "expect": "(?s)gyo_voxel_mesh links.*expected\\s+exactly"
+    }
+  ]
+}

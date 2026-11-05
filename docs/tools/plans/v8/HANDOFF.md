@@ -16,7 +16,7 @@
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
-- **voxel-map-line**：`v8-tool-voxel-map-editor` 的方案與分批已確認（2026-11-05），在 [voxel-map-editor.md](voxel-map-editor.md)。`v8-tool-voxel-map-plan` 完成（PR #152）。`v8-engine-voxel-mesh-contract`：你說「開始」，事前宣告已寫進 voxel-map-editor.md，**等你核准**（含名稱 `gyo.voxel_mesh`／`GYO::VoxelMesh`）。framework 那批要等 PR #146 合併，並和架構會話協調。
+- **voxel-map-line**：`v8-tool-voxel-map-editor` 的方案與分批已確認（2026-11-05），在 [voxel-map-editor.md](voxel-map-editor.md)。`v8-tool-voxel-map-plan` 完成（PR #152）。`v8-engine-voxel-mesh-contract`：宣告已核准，已實作（本機 V1～V5 通過，突變 20／20 killed）；實作和宣告的差異（`cell_size` 範圍、原始整數 ±2^30 等，都是收緊）**等你確認**，L1 待 CI。dev_log：[2026_11_05_engine_v8_voxel_mesh_contract](../../../dev_logs/2026_11_05_engine_v8_voxel_mesh_contract.zh-Hant.md)。framework 那批要等 PR #146 合併，並和架構會話協調。
 - **待討論**：`v8-tool-assets-editor`（你會給方案）。
 - **進行中（`v8-tool-audio-editor-edit`，分支 `claude/v8-tool-audio-editor-edit`）**：已實作（GUI：播放、波形、資訊、裁剪、增益、工程檔、匯出）。判定 1～7 本機通過；突變 26／26 killed；審査者與検証者已回報，指出的事已修或已寫進 assets.md「實作後的結果（2026-11-04）」。**等你**：守衛的放寬（§14.4）核准；GUI 的 L3（macOS）。dev_log：[2026_11_04_tool_v8_audio_editor_edit](../../../dev_logs/2026_11_04_tool_v8_audio_editor_edit.zh-Hant.md)。
 - **撤回（`v8-tool-audio-editor-regions`，2026-11-05）**：你把 audio_editor 的邊界定在簡單剪輯與轉換，大規模編輯與混音交給專業軟體（`v8-tool-audio-editor-scope`）。`-regions` 撤回（`v8-tool-audio-editor-regions-withdrawn`）：程式、測試、DI 3 的措辭與突變目錄退回 `-edit` 完成時（`43487d42^`，逐位元組相同），#141 現在只含 `-edit`。退回後本機 ctest 69／69（主 checkout `build/evidence/tool-v8-audio-editor-regions/ctest-framework-after-withdraw.txt`）；`-edit` 的 26 條突變重跑：26／26 killed、stale 0（`mutations-after-withdraw.txt`，同一資料夾）。`-regions` 的事前宣告、實作後的結果與 dev_log（[2026_11_04_tool_v8_audio_editor_regions](../../../dev_logs/2026_11_04_tool_v8_audio_editor_regions.zh-Hant.md)）留作紀錄。2026-11-05 你核准 `-edit` 的守衛放寬並合併 #141（`v8-tool-audio-editor-edit-guard-approved`，取代 `-merge-wait`）；`-edit` 判定 8 合併時仍未判定。其他：master 已在 2026-11-04 合進本分支（`0342a259`）；系統選擇窗的記帳規則已交回 v8 規劃會話（`v8-tool-path-dialog-rule-handover`）。
@@ -43,6 +43,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-engine-voxel-mesh-contract-declare` | （2026-11-05）核准事前宣告與名稱（`gyo.voxel_mesh`、`GYO::VoxelMesh`、`engine/voxel_mesh/`、`docs/architecture/voxel-mesh.md`） | 「核准」 |
 | `v8-tool-voxel-contract-split` | （2026-11-05）契約拆兩層：格子原始檔（工具持有）＋建置產物（Engine 持有）；之後另外做場景編輯器，接手 arena v2 和玩法標記 | 「D1 契約：照建議，之後我會分出另一個場景編輯器。」 |
 | `v8-tool-voxel-offline-build` | （2026-11-05）離線 build，產物存檔，遊戲只讀產物；碰撞也烘進產物；產物記原始檔的 SHA-256 和 build 版本 | 「我認為要存檔，否則後期載入時都會有細微差別，容易出bug，還不好查，有檔我至少可以反查。」 |
 | `v8-tool-voxel-layers` | （2026-11-05）產物格式與讀取器＝Engine；格子格式、build、拾取＝工具；3D 預覽元件＝framework（第二個組合者，framework DI 5）；arena v2＝產品 | 「我們不光有工具和engine 還有framework。」→ 分配表：「可以」 |
@@ -192,3 +193,4 @@ A3 現在是架構計畫的 `v8-framework-shell`，草圖在它的 PLAN §2.4（
 - 2026-11-04：你問多段剪輯與拼接（換彈音照動畫剪、在 Model Viewer 預覽）。查到「事件 → 聲音」的對應只寫在 PvP 的 `sfx.json`，中立的 Model Viewer 讀不到，複製一份又違反 AGENTS §9。你說「這個問題是架構變動，整理一下，交給架構師評估。」整理成 [anim-event-sound-request.md](anim-event-sound-request.md)，交給架構師（例行架構掃描的會話）。A（拼成一個片段）／B（每個動作一個事件）你還沒選。
 - 2026-11-05：`v8-tool-voxel-map-plan`（medium，Opus 5.5）。主會話交來 `v8-tool-voxel-map-editor` 的規劃卡；先盤點現況，不先提案。你給了自己寫的報告，要我讀兩個參考專案（Goxel、MagicaVoxel），再指定參考 Godot 的 GridMap。兩輪 Fable／high 統合（唯讀，只有統合者，沒有敵對式檢查者）後逐點定案（決定紀錄的 `v8-tool-voxel-*`），方案與分批寫進 [voxel-map-editor.md](voxel-map-editor.md)。證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/plan/`。dev_log：[2026_11_05_tool_v8_voxel_map_plan](../../../dev_logs/2026_11_05_tool_v8_voxel_map_plan.zh-Hant.md)。
 - 2026-11-05：你說「開始」，開工 `v8-engine-voxel-mesh-contract`（high，Opus 5.5）。讀了先例：`animation-events.md` 的契約與 DI、`engine/model` 的 CMake 與連結守衛、`anim_events_mutations.json`、Render 的正面方向（`RenderDeviceTypes.hpp:28-29`，順時針）、`Aabb` 在 Math。重估 8～12 h，和計畫相同。事前宣告寫進 [voxel-map-editor.md](voxel-map-editor.md)「v8-engine-voxel-mesh-contract 的事前宣告」，等你核准；核准前不實作。
+- 2026-11-05：你核准事前宣告，實作 `v8-engine-voxel-mesh-contract`。本機 14／14 通過，突變 16／16 killed；Opus 審查無 blocker，修 C1（`cell_size` 上限算錯）、C2（沒有下限）與測試缺口後，329 個斷言通過、突變 20／20 killed。和宣告的差異列在 dev_log，等你確認。證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/engine-contract/`。
