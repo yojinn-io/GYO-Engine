@@ -32,6 +32,14 @@
 - 修正：CSV 先在記憶體裡組好，最後用 `WriteReplacing`（engine/io）一次寫出。量測的內容與計時的範圍都沒變；P1 的數字是修正前量的，只有寫檔的方式不同。
 - 修正後：本機 `cpu|shader` 119／119 通過；用 5 幀試跑，CSV 的列數正確。
 
+## 合併前的完整突變（D184，2026-11-05）
+
+- 件數の突き合わせ：一致。model_viewer 41 條（貼圖的 3 條用 dummy 視訊驅動加軟體渲染器跑），framework 外殼 33 條，共 74／74 killed。
+- 經過：
+  - 第一次 model_viewer 的部分是 0／0。我在 zsh 裡傳 id 清單時沒有拆成多個參數，結果一條都沒選到；不是突變的結果。改正後重跑。
+  - 重跑後 `mvp-speed-twice` 是 stale：`-events` 改了 `Advance` 的那一行，卻沒有重跑這條（D184 的「find 在改動範圍」我漏算了）。更新 find 後 killed。
+- 證據：主 checkout `build/evidence/tool-v8-model-viewer/pre-merge/`。
+
 ## 發現（不在本批範圍）
 
 - PvP 讀 `gyo.event_sounds`，遊戲裡的換彈聲才會跟著工具配的聲音變。這是 PvP 那一側的候選工作。

@@ -304,8 +304,8 @@
       "id": "mvp-speed-twice",
       "what": "The speed enters the clip seconds twice",
       "file": "tools/model_viewer/src/Playback.cpp",
-      "find": "    const double next = seconds + wallSeconds * (std::isfinite(speed) ? std::max(speed, 0.0) : 0.0);",
-      "replace": "    const double next = seconds + wallSeconds * (std::isfinite(speed) ? std::max(speed, 0.0) * std::max(speed, 0.0) : 0.0);",
+      "find": "    double next = seconds + wallSeconds * (std::isfinite(speed) ? std::max(speed, 0.0) : 0.0);",
+      "replace": "    double next = seconds + wallSeconds * (std::isfinite(speed) ? std::max(speed, 0.0) * std::max(speed, 0.0) : 0.0);",
       "target": "gyo_model_viewer_core_tests",
       "cases": "V1:*",
       "expect": "the speed is applied other than once"
