@@ -11,7 +11,10 @@ The rules read the registries instead of naming any product or tool (AGENTS.md s
     third-party target changes the Invariant.
   - The core includes only gyo/framework/ and Engine's neutral headers (no *Native.hpp) besides standard and local
     headers, and nothing whose name starts with SDL, imgui or json.hpp; it names no SDL_ (SDL_GPU included), ImGui
-    or nlohmann symbol in code; its CMake files name only the core's targets.
+    or nlohmann symbol in code; its CMake files name only the core's targets (CORE["targets"]), and each core
+    library links only what its own list allows (CORE["links"], one list per target the core's CMake defines with
+    add_library; a core library without a list fails). So the windowed shell links no render device and the
+    offscreen preview alone links Engine's render targets (v8-framework-preview-component).
   - Each binding has its own positive list (BINDINGS); a directory under framework/bindings/ without one fails.
     Only the ImGui binding may include a *Native.hpp header or name a GYO::*Native target, and no binding names
     SDL3::SDL3 or an SDL_ symbol.
@@ -55,10 +58,27 @@ CORE = {
     "native_headers": (),
     "symbols": re.compile(r"\bSDL_\w+|\bImGui\w*|\bnlohmann\b"),
     # GYO::Model and GYO::Audio: gyo.event_sounds binds to Engine's event set and checks gains with Engine
-    # (docs/framework/event-sounds.md, v8-arch-event-sounds-impl).
-    "targets": {"GYO::ToolFramework", "GYO::ToolFrameworkWindow", "GYO::Engine", "GYO::Os", "GYO::PlatformSDL",
-                "GYO::Input", "GYO::InputBackendSDL", "GYO::Ui", "GYO::Model", "GYO::Audio"},
+    # (docs/framework/event-sounds.md, v8-arch-event-sounds-impl). GYO::Render, GYO::RenderBackendSDLGPU and
+    # GYO::RenderBackendSDL: the offscreen preview (docs/framework/preview.md, v8-framework-preview-component).
+    "targets": {"GYO::ToolFramework", "GYO::ToolFrameworkWindow", "GYO::ToolFrameworkPreview", "GYO::Engine", "GYO::Os",
+                "GYO::PlatformSDL", "GYO::Input", "GYO::InputBackendSDL", "GYO::Ui", "GYO::Model", "GYO::Audio",
+                "GYO::Render", "GYO::RenderBackendSDLGPU", "GYO::RenderBackendSDL"},
+    # What each core library may link (target_link_libraries), by the name its add_library gives it. The windowed
+    # shell reaches SDL through Engine's neutral platform only and links no render device (Design Invariant 6); the
+    # preview is the one core library on Engine's render backends.
+    "links": {
+        "gyo_tool_framework": {"GYO::Engine", "GYO::Input", "GYO::Ui", "GYO::Model", "GYO::Os", "GYO::Audio"},
+        "gyo_tool_framework_window": {"gyo_tool_framework", "GYO::PlatformSDL"},
+        "gyo_tool_framework_preview": {"gyo_tool_framework", "GYO::PlatformSDL", "GYO::Render",
+                                       "GYO::RenderBackendSDLGPU", "GYO::RenderBackendSDL", "GYO::Os"},
+    },
 }
+LINK_CALL = re.compile(r"target_link_libraries\s*\(([^)]*)\)", re.IGNORECASE)
+LINK_KEYWORDS = {"PUBLIC", "PRIVATE", "INTERFACE", "LINK_PUBLIC", "LINK_PRIVATE", "LINK_INTERFACE_LIBRARIES"}
+# A library the core's CMake defines (an ALIAS defines a name for one, not another library).
+# A library defined through a variable has no name to look its list up by.
+ADD_LIBRARY_VARIABLE = re.compile(r"^\s*add_library\s*\(\s*\$\{", re.IGNORECASE | re.MULTILINE)
+ADD_LIBRARY = re.compile(r"^\s*add_library\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s+(?!ALIAS\b)", re.IGNORECASE | re.MULTILINE)
 BINDINGS = {
     "imgui": {
         "include_prefixes": ("gyo/framework/", "engine/"),
@@ -145,6 +165,37 @@ def include_allowed(include: str, rules: dict) -> bool:
     return include in rules.get("exact_includes", ()) or include.startswith(rules["include_prefixes"])
 
 
+def link_findings(relative: str, text: str, rules: dict) -> list[str]:
+    """The core's per-library link lists: each target_link_libraries call of a listed library names only its own
+    libraries, the names inside a generator expression included; a library the CMake defines without a list, or
+    through a variable, is a finding. Comments are dropped first. A call on a variable has no library to look up:
+    its names meet the core's list only, and the configure-time check in tests/framework/CMakeLists.txt reads what
+    the core libraries really link, whatever the spelling."""
+    links = rules.get("links")
+    if links is None:
+        return []
+    findings = []
+    code = re.sub(r"#[^\n]*", "", text)
+    if ADD_LIBRARY_VARIABLE.search(code):
+        findings.append(f"{relative}: defines a library through a variable")
+    for library in ADD_LIBRARY.findall(code):
+        if library not in links:
+            findings.append(f"{relative}: {library} has no link list in the guard")
+    for call in LINK_CALL.findall(code):
+        tokens = call.split()
+        if not tokens or tokens[0] not in links:
+            continue
+        for token in tokens[1:]:
+            token = token[1:-1] if len(token) >= 2 and token[0] == token[-1] == '"' else token  # CMake's "X" is X
+            if token in LINK_KEYWORDS or token.startswith("${"):
+                continue
+            names = TARGET.findall(token) if token.startswith("$<") else [token]
+            for name in names:
+                if name not in links[tokens[0]]:
+                    findings.append(f"{relative}: {tokens[0]} links {name}")
+    return findings
+
+
 def file_findings(relative: str, path: Path, named) -> list[str]:
     findings = []
     if path.name == "project.json":
@@ -168,6 +219,7 @@ def file_findings(relative: str, path: Path, named) -> list[str]:
                 findings.append(f"{relative}: names {target}")
         for command in sorted(set(TOOL_COMMAND.findall(text))):
             findings.append(f"{relative}: calls {command}")
+        findings.extend(link_findings(relative, text, rules))
     return findings
 
 

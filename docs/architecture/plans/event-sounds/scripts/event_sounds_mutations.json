@@ -266,8 +266,8 @@
       "id": "es-guard-audio-backend-listed",
       "what": "The guard's core positive list takes GYO::AudioBackendSDL (SDL) along with Engine's mixer",
       "file": "tests/framework/framework_dependency_guard.py",
-      "find": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\"},",
-      "replace": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\", \"GYO::AudioBackendSDL\"},",
+      "find": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\",\n",
+      "replace": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\", \"GYO::AudioBackendSDL\",\n",
       "command": [
         "{python}",
         "-m",

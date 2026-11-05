@@ -2,42 +2,28 @@
 
 #include "gyo/model_viewer/ModelViewerError.hpp"
 
-#include "engine/math/linear/Vec3.hpp"
+#include "gyo/framework/Preview.hpp"
+#include "gyo/framework/PreviewCamera.hpp"
+
 #include "engine/model/Animation.hpp"
 #include "engine/model/ModelAsset.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/render/RenderDeviceTypes.hpp"
-#include "engine/render/RenderTypes.hpp"
-#include "engine/render/backend/sdl/SdlRenderer.hpp"
 
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
 
-namespace Engine::Render::Backend::SdlGpu {
-class SdlGpuRenderDevice;
-}
-
 // The 3D preview (Design Invariant 5, the (B') drawing of
-// docs/tools/plans/v8/model-viewer.md): Engine's ModelRenderer and Renderer
-// draw the posed model on an offscreen GPU device, which leaves the
-// window to the shell's SDL renderer, and the frame is read back for upload.
-// The viewer has no projection, sorting or shading of its own.
+// docs/tools/plans/v8/model-viewer.md): Engine's ModelRenderer draws the posed
+// model into a frame of the framework's offscreen preview (the offscreen GPU
+// device, Engine's Renderer and the readback, docs/framework/preview.md), which
+// leaves the window to the shell's SDL renderer. The viewer has no projection,
+// sorting or shading of its own; the camera is the framework's OrbitCamera.
 namespace Gyo::Tools::ModelViewer {
 
-// A camera turning about a point: yaw about the vertical, then pitch (positive
-// looks down), at distance from target. Engine's camera convention: the
-// camera's rotation is Z, then Y, then X Euler angles, +Z forward.
-struct OrbitCamera final {
-    Engine::Math::Vec3 target{};
-    float yawRadians{};
-    float pitchRadians{0.3F};
-    float distance{3.0F};
-    float verticalFieldOfViewRadians{0.9F};
-
-    [[nodiscard]] Engine::Render::PerspectiveCamera3D Camera() const noexcept;
-};
+using Framework::OrbitCamera;
 
 // The camera that fits pose: the target at the middle of the model's points
 // (mesh vertices placed by their nodes, and nodes), the distance from their
@@ -54,8 +40,7 @@ struct PreviewOptions final {
 
 class PreviewRenderer final {
 public:
-    // PreviewFailed when the device, the shaders or
-    // the renderer cannot start (Engine's cause in detail).
+    // PreviewFailed when the framework's preview cannot start (its cause in detail).
     [[nodiscard]] static Result<std::unique_ptr<PreviewRenderer>, ModelViewerError> Create(
         Engine::Platform::Sdl::SdlPlatform& platform, const PreviewOptions& options);
     ~PreviewRenderer();
@@ -67,35 +52,21 @@ public:
     // none. A model without meshes draws only its skeleton.
     [[nodiscard]] Result<void, ModelViewerError> Show(std::shared_ptr<const Engine::Model::ModelAsset> model,
                                                       const Engine::Model::Pose& pose);
-    [[nodiscard]] Result<void, ModelViewerError> Resize(std::uint32_t width, std::uint32_t height);
     void SetSkeleton(bool shown) noexcept;
 
-    // Draws the shown model in pose (a pose of that model) and reads the frame
-    // back: the bytes to upload, Rgba8SRgb rows of rowPitch bytes.
-    [[nodiscard]] Result<const Engine::Render::TextureReadback*, ModelViewerError> Render(
-        const Engine::Model::Pose& pose, const OrbitCamera& camera);
+    // Draws the shown model in pose (a pose of that model) into a frame of
+    // width x height pixels and reads the frame back: the bytes to upload,
+    // Rgba8SRgb rows of rowPitch bytes.
+    [[nodiscard]] Result<Engine::Render::TextureReadback, ModelViewerError> Render(
+        const Engine::Model::Pose& pose, const OrbitCamera& camera, std::uint32_t width, std::uint32_t height);
 
-    // The offscreen device, for tests that read the frame themselves.
-    [[nodiscard]] Engine::Render::Backend::SdlGpu::SdlGpuRenderDevice& Device() noexcept;
+    // The framework's preview, for tests that read the frame themselves.
+    [[nodiscard]] Framework::OffscreenPreview& Preview() noexcept;
 
 private:
     struct Impl;
     explicit PreviewRenderer(std::unique_ptr<Impl> impl) noexcept;
     std::unique_ptr<Impl> impl_;
 };
-
-// The texture of the window's renderer that shows the preview, and its size.
-struct PreviewTexture final {
-    Engine::Render::Backend::Sdl::SdlTextureHandle handle;
-    std::uint32_t width{}, height{};
-};
-
-// Puts frame into texture: a texture of another size (or none) is released
-// and a new one of the frame's size made, then the frame's bytes are uploaded
-// as they were read back. Call it before the texture is drawn in a frame,
-// never after: ImGui draws a frame's images after Draw (ImGuiTextureId).
-[[nodiscard]] Result<void, ModelViewerError> UploadFrame(Engine::Render::Backend::Sdl::SdlRenderer& renderer,
-                                                         PreviewTexture& texture,
-                                                         const Engine::Render::TextureReadback& frame);
 
 } // namespace Gyo::Tools::ModelViewer

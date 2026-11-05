@@ -160,7 +160,7 @@
     },
     {
       "id": "fw-shell-core-render",
-      "what": "The core's windowed shell links a render device",
+      "what": "The core's windowed shell links a render device (since v8-framework-preview-component the name is in the core's list, the shell's own link list refuses it)",
       "file": "framework/CMakeLists.txt",
       "find": "    target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL)",
       "replace": "    target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL GYO::RenderBackendSDL)",
@@ -168,7 +168,7 @@
         "{python}",
         "tests/framework/framework_dependency_guard.py"
       ],
-      "expect": "names GYO::RenderBackendSDL"
+      "expect": "gyo_tool_framework_window links GYO::RenderBackendSDL"
     },
     {
       "id": "fw-shell-core-native",

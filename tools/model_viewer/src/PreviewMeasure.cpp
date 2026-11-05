@@ -6,6 +6,8 @@
 #include "gyo/model_viewer/Playback.hpp"
 #include "gyo/model_viewer/PreviewRenderer.hpp"
 
+#include "gyo/framework/PreviewTexture.hpp"
+
 #include "engine/base/Error.hpp"
 #include "engine/model/Animation.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
@@ -21,9 +23,9 @@
 
 // The frame time of the preview (judgment P1 of -trial): per frame, the pose
 // (SamplePose), Engine's ModelRenderer update and Renderer::Render on the
-// offscreen device, the readback (waiting for the GPU) and the upload into a
-// texture of the window's SDL renderer: everything the window does for its
-// preview but ImGui. The clip is the model's longest, played at speed 1 in
+// framework's offscreen preview, the readback (waiting for the GPU) and the
+// upload into a texture of the window's SDL renderer: everything the window
+// does for its preview but ImGui. The clip is the model's longest, played at speed 1 in
 // 60 Hz steps.
 namespace Gyo::Tools::ModelViewer {
 
@@ -87,15 +89,15 @@ int RunPreviewMeasure(const MeasureOptions& options) {
             return 4;
         }
         const OrbitCamera camera = FrameModel(model, pose, {});
-        PreviewTexture texture;
+        Framework::PreviewTexture texture;
         std::vector<double> times;
         times.reserve(options.frames);
         for (std::uint32_t frame = 0; frame < options.frames; ++frame) {
             static_cast<void>(platform.value()->PumpEvents());
             const auto started = std::chrono::steady_clock::now();
             bool ok = static_cast<bool>(PreviewPose(model, clip, clock, pose));
-            auto drawn = preview.value()->Render(pose, camera);
-            ok = ok && drawn && UploadFrame(*renderer.value(), texture, *drawn.value());
+            auto drawn = preview.value()->Render(pose, camera, options.width, options.height);
+            ok = ok && drawn && Framework::UploadFrame(*renderer.value(), texture, drawn.value());
             const auto ended = std::chrono::steady_clock::now();
             if (!ok) {
                 ++failures;

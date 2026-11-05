@@ -1,0 +1,324 @@
+{
+  "version": 1,
+  "description": "Declared mutants of v8-framework-preview-component (docs/framework/preview.md; docs/architecture/plans/framework-preview/README.md, PV1 to PV7). Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/framework-preview/scripts/framework_preview_mutations.json --build-dir <a tree with BUILD_TESTING=ON, Engine's SDL GPU backend and SDL renderer>. PV1 to PV4 need a GPU (Metal on macOS); PV5 runs through run_shell_test.py on SDL's dummy video driver and the software renderer, as tests/framework/CMakeLists.txt sets for CTest. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
+  "mutants": [
+    {
+      "id": "pv-create-ignores-bundle-error",
+      "what": "Create goes on when the shader bundle cannot be loaded (PV1)",
+      "file": "framework/src/Preview.cpp",
+      "find": "    if (!bundle) {\n",
+      "replace": "    if (false) {\n",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV1:*",
+      "expect": "does not name the shader bundle|REQUIRE_FALSE"
+    },
+    {
+      "id": "pv-stale-frame",
+      "what": "EndFrame hands out the frame it read first instead of this frame's readback (PV2)",
+      "file": "framework/src/Preview.cpp",
+      "find": "    return std::move(read.value());\n}",
+      "replace": "    static std::optional<Render::TextureReadback> kept;\n    if (!kept) kept = std::move(read.value());\n    return *kept;\n}",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV2:*",
+      "expect": "still shows the frame before|another frame than the device"
+    },
+    {
+      "id": "pv-no-render",
+      "what": "EndFrame reads the frame back without Engine's renderer drawing the queue (PV2)",
+      "file": "framework/src/Preview.cpp",
+      "find": "    auto rendered = impl_->renderer.Render(impl_->queue);\n",
+      "replace": "    Engine::Base::Result<Render::PresentStatus, Render::RenderError> rendered = Render::PresentStatus::Skipped;\n",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV2:*",
+      "expect": "cannot read the frame back|square is not at the middle"
+    },
+    {
+      "id": "pv-queue-not-reset",
+      "what": "BeginFrame keeps the submissions of the frame before (PV2)",
+      "file": "framework/src/Preview.cpp",
+      "find": "    impl_->queue.Reset({clearColor, {}});\n",
+      "replace": "",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV2:*",
+      "expect": "still shows the frame before"
+    },
+    {
+      "id": "pv-size-ignored",
+      "what": "BeginFrame keeps the first frame size instead of the one it is given (PV3)",
+      "file": "framework/src/Preview.cpp",
+      "find": "    auto sized = impl_->device->SetFrameSize(width, height);\n",
+      "replace": "    auto sized = impl_->device->SetFrameSize(width == 0 ? 0 : 61, height == 0 ? 0 : 45);\n",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV3:*",
+      "expect": "small\\.width == 40"
+    },
+    {
+      "id": "pv-camera-ignored",
+      "what": "BeginFrame draws from a fixed camera, not the one it is given (PV4)",
+      "file": "framework/src/Preview.cpp",
+      "find": "    impl_->queue.SetCamera(camera);\n",
+      "replace": "    impl_->queue.SetCamera(Render::PerspectiveCamera3D{{0, 0, -4}, {}, camera.verticalFieldOfViewRadians, camera.nearClip, camera.farClip});\n",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV4:*",
+      "expect": "turned away, the middle still shows the square"
+    },
+    {
+      "id": "pv-upload-keeps-old-size",
+      "what": "UploadFrame keeps a texture of another size (PV5)",
+      "file": "framework/src/PreviewTexture.cpp",
+      "find": "    if (texture.handle && (texture.width != frame.width || texture.height != frame.height)) {\n",
+      "replace": "    if (false) {\n",
+      "target": "gyo_framework_preview_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--",
+        "{exe:gyo_framework_preview_tests}",
+        "-tc=PV5:*"
+      ],
+      "expect": "texture, third|old size was not released"
+    },
+    {
+      "id": "pv-upload-skipped",
+      "what": "UploadFrame makes the texture but does not upload the bytes (PV5)",
+      "file": "framework/src/PreviewTexture.cpp",
+      "find": "    auto uploaded = renderer.UploadTexture(texture.handle, frame.bytes, frame.rowPitch);\n",
+      "replace": "    Engine::Base::Result<void, Engine::Render::Backend::Sdl::SdlRendererError> uploaded{};\n",
+      "target": "gyo_framework_preview_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--",
+        "{exe:gyo_framework_preview_tests}",
+        "-tc=PV5:*"
+      ],
+      "expect": "does not hold the first frame"
+    },
+    {
+      "id": "pv-upload-new-every-call",
+      "what": "UploadFrame makes a new texture for every frame (PV5)",
+      "file": "framework/src/PreviewTexture.cpp",
+      "find": "    if (!texture.handle) {\n",
+      "replace": "    if (true) {\n",
+      "target": "gyo_framework_preview_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--",
+        "{exe:gyo_framework_preview_tests}",
+        "-tc=PV5:*"
+      ],
+      "expect": "same size made a new texture"
+    },
+    {
+      "id": "pv-orbit-pitch-sign",
+      "what": "A positive pitch looks up (PV6)",
+      "file": "framework/src/PreviewCamera.cpp",
+      "find": "Math::MakeRotationX(pitchRadians)",
+      "replace": "Math::MakeRotationX(-pitchRadians)",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV6:*",
+      "expect": "does not look down"
+    },
+    {
+      "id": "pv-orbit-distance-sign",
+      "what": "The camera sits in front of the target, not behind it (PV6)",
+      "file": "framework/src/PreviewCamera.cpp",
+      "find": "    camera.position = target - forward * distance;\n",
+      "replace": "    camera.position = target + forward * distance;\n",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV6:*",
+      "expect": "straight\\.position\\.z"
+    },
+    {
+      "id": "pv-orbit-near-clip",
+      "what": "The near clip does not follow the distance as declared (PV6)",
+      "file": "framework/src/PreviewCamera.cpp",
+      "find": "std::max(distance * 0.01F, 0.001F)",
+      "replace": "std::max(distance * 0.1F, 0.001F)",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV6:*",
+      "expect": "nearClip"
+    },
+    {
+      "id": "fw-guard-preview-native-listed",
+      "what": "The preview links Engine's native SDL renderer target (PV7)",
+      "file": "framework/CMakeLists.txt",
+      "find": "        PRIVATE GYO::Os\n    )\n    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)",
+      "replace": "        PRIVATE GYO::Os GYO::RenderBackendSDLNative\n    )\n    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "names GYO::RenderBackendSDLNative"
+    },
+    {
+      "id": "fw-guard-link-list-ignored",
+      "what": "The guard stops checking each core library's own link list (PV7)",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "                if name not in links[tokens[0]]:\n",
+      "replace": "                if False:\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "fw-guard-link-list-missing-ignored",
+      "what": "A core library without a link list in the guard passes (PV7)",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "        if library not in links:\n",
+      "replace": "        if False:\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "fw-link-preview-missing",
+      "what": "The build has Engine's SDL GPU backend and SDL renderer but the preview is not built (PV7)",
+      "file": "framework/CMakeLists.txt",
+      "find": "if(TARGET GYO::RenderBackendSDLGPU AND TARGET GYO::RenderBackendSDL)\n",
+      "replace": "if(FALSE)\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "but no\\s+GYO::ToolFrameworkPreview|requires the GYO::ToolFrameworkPreview target"
+    },
+    {
+      "id": "fw-link-preview-native",
+      "what": "The preview links a native target through a spelling the source guard cannot read; the configure-time link check stops it (PV7)",
+      "file": "framework/CMakeLists.txt",
+      "find": "    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)\n",
+      "replace": "    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)\n    set(_gyo_kind Native)\n    target_link_libraries(gyo_tool_framework_preview PRIVATE GYO::RenderBackendSDL${_gyo_kind})\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_tool_framework_preview \\(core\\) links 1 forbidden targets \\[GYO::RenderBackendSDLNative\\]"
+    },
+    {
+      "id": "pv-orbit-rotation-order",
+      "what": "OrbitCamera turns X then Y instead of Engine's Y then X (PV6; added after the review)",
+      "file": "framework/src/PreviewCamera.cpp",
+      "find": "Math::Multiply(Math::MakeRotationY(yawRadians), Math::MakeRotationX(pitchRadians))",
+      "replace": "Math::Multiply(Math::MakeRotationX(pitchRadians), Math::MakeRotationY(yawRadians))",
+      "target": "gyo_framework_preview_tests",
+      "cases": "PV6:*",
+      "expect": "not applied in Engine's order"
+    },
+    {
+      "id": "pv-upload-format-unchecked",
+      "what": "UploadFrame uploads a frame in another format as RGBA8 (PV5; added after the review)",
+      "file": "framework/src/PreviewTexture.cpp",
+      "find": "    if (frame.format != Engine::Render::TextureFormat::Rgba8SRgb) {\n",
+      "replace": "    if (false) {\n",
+      "target": "gyo_framework_preview_tests",
+      "command": [
+        "{python}",
+        "docs/architecture/plans/framework-rework/scripts/run_shell_test.py",
+        "--env",
+        "SDL_VIDEODRIVER=dummy",
+        "--env",
+        "SDL_RENDER_DRIVER=software",
+        "--",
+        "{exe:gyo_framework_preview_tests}",
+        "-tc=PV5:*"
+      ],
+      "expect": "not RGBA8 sRGB was uploaded"
+    },
+    {
+      "id": "fw-guard-window-render-genex",
+      "what": "The windowed shell links a render target inside a generator expression; the per-library list reads it (PV7; added after the review)",
+      "file": "framework/CMakeLists.txt",
+      "find": "    target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL)\n",
+      "replace": "    target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL \"$<BUILD_INTERFACE:GYO::RenderBackendSDL>\")\n",
+      "command": [
+        "{python}",
+        "tests/framework/framework_dependency_guard.py"
+      ],
+      "expect": "gyo_tool_framework_window links GYO::RenderBackendSDL"
+    },
+    {
+      "id": "fw-link-window-render",
+      "what": "The windowed shell links a render target through a spelling no source guard reads; the configure-time check stops it (PV7; added after the review)",
+      "file": "framework/CMakeLists.txt",
+      "find": "    list(APPEND _gyo_framework_targets gyo_tool_framework_window)\n",
+      "replace": "    list(APPEND _gyo_framework_targets gyo_tool_framework_window)\n    set(_gyo_kind RenderBackendSDL)\n    target_link_libraries(gyo_tool_framework_window PUBLIC GYO::${_gyo_kind})\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_tool_framework_window \\(core\\) reaches a render target"
+    },
+    {
+      "id": "fw-guard-link-genex-ignored",
+      "what": "The guard stops reading names inside a generator expression of a core library's link call (PV7; added after the review)",
+      "file": "tests/framework/framework_dependency_guard.py",
+      "find": "            names = TARGET.findall(token) if token.startswith(\"$<\") else [token]\n",
+      "replace": "            if token.startswith(\"$<\"):\n                continue\n            names = [token]\n",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/framework",
+        "-p",
+        "test_framework_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "fw-link-window-preview-genex",
+      "what": "The windowed shell links the preview's own target inside a generator expression; the configure-time check follows it to Engine's render targets (PV7; added after the verifier)",
+      "file": "framework/CMakeLists.txt",
+      "find": "    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)\n",
+      "replace": "    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)\n    target_link_libraries(gyo_tool_framework_window PUBLIC $<BUILD_INTERFACE:gyo_tool_framework_preview>)\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_tool_framework_window \\(core\\) reaches a render target"
+    },
+    {
+      "id": "fw-link-window-render-interface",
+      "what": "The windowed shell links a render target as INTERFACE through a variable; the configure-time check reads its interface links too (PV7; added after the verifier)",
+      "file": "framework/CMakeLists.txt",
+      "find": "    list(APPEND _gyo_framework_targets gyo_tool_framework_window)\n",
+      "replace": "    list(APPEND _gyo_framework_targets gyo_tool_framework_window)\n    set(_gyo_kind Render)\n    target_link_libraries(gyo_tool_framework_window INTERFACE GYO::${_gyo_kind})\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_tool_framework_window \\(core\\) reaches a render target"
+    },
+    {
+      "id": "fw-link-window-preview-variable",
+      "what": "The windowed shell links the preview's own target by its real name through a variable; the configure-time check follows it (PV7; added after the verifier's second round)",
+      "file": "framework/CMakeLists.txt",
+      "find": "    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)\n",
+      "replace": "    list(APPEND _gyo_framework_targets gyo_tool_framework_preview)\n    set(_gyo_preview gyo_tool_framework_preview)\n    target_link_libraries(gyo_tool_framework_window PUBLIC ${_gyo_preview})\n",
+      "target": "gyo_framework_tests",
+      "expect_build_failure": true,
+      "expect": "gyo_tool_framework_window \\(core\\) reaches a render target"
+    }
+  ]
+}

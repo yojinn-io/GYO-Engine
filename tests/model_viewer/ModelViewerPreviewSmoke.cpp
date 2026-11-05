@@ -3,6 +3,8 @@
 // device, read back, and the texture the window shows holds those bytes.
 #include "gyo/model_viewer/PreviewRenderer.hpp"
 
+#include "gyo/framework/PreviewTexture.hpp"
+
 #include "engine/base/Error.hpp"
 #include "engine/model/Animation.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
@@ -21,6 +23,8 @@
 #include <string_view>
 
 using namespace Gyo::Tools::ModelViewer;
+using Gyo::Tools::Framework::PreviewTexture;
+using Gyo::Tools::Framework::UploadFrame;
 namespace Model = Engine::Model;
 
 namespace {
@@ -61,7 +65,7 @@ bool IsRed(std::array<int, 4> pixel) { return pixel[0] > 200 && pixel[1] < 40 &&
 
 // The frame the preview handed out is the device's last frame, byte for byte.
 bool SameAsDevice(PreviewRenderer& preview, const Engine::Render::TextureReadback& frame, const char* label) {
-    auto device = preview.Device().ReadFrame();
+    auto device = preview.Preview().Device().ReadFrame();
     if (!Expect(device, label)) return false;
     if (device.value().width != frame.width || device.value().height != frame.height ||
         device.value().rowPitch != frame.rowPitch || device.value().bytes != frame.bytes) {
@@ -156,9 +160,9 @@ int main(int argc, char** argv) {
     PreviewTexture texture;
 
     // V2: the square is drawn, the frame is the device's, the texture holds it.
-    auto drawn = preview.Render(pose, facing);
+    auto drawn = preview.Render(pose, facing, 61, 45);
     if (!Expect(drawn, "frame with the square")) return 1;
-    const auto& first = *drawn.value();
+    const auto& first = drawn.value();
     if (!IsRed(Pixel(first, first.width / 2U, first.height / 2U))) {
         std::cerr << "the square is not at the middle of the frame\n";
         return 1;
@@ -171,9 +175,9 @@ int main(int argc, char** argv) {
     OrbitCamera away = facing;
     away.yawRadians = std::numbers::pi_v<float>;
     away.target = {0, 0, -8};
-    auto turned = preview.Render(pose, away);
+    auto turned = preview.Render(pose, away, 61, 45);
     if (!Expect(turned, "frame turned away")) return 1;
-    const auto& second = *turned.value();
+    const auto& second = turned.value();
     if (IsRed(Pixel(second, second.width / 2U, second.height / 2U))) {
         std::cerr << "the frame turned away still shows the square: an earlier frame was handed out\n";
         return 1;
@@ -183,20 +187,19 @@ int main(int argc, char** argv) {
         !TextureHolds(*renderer.value(), texture, second)) return 1;
 
     // A new size makes a new texture of that size.
-    if (!Expect(preview.Resize(40, 30), "resize")) return 1;
-    auto resized = preview.Render(pose, facing);
-    if (!Expect(resized, "resized frame") || resized.value()->width != 40 || resized.value()->height != 30 ||
-        !Expect(UploadFrame(*renderer.value(), texture, *resized.value()), "resized upload") ||
-        texture.width != 40 || texture.height != 30 || !TextureHolds(*renderer.value(), texture, *resized.value())) {
+    auto resized = preview.Render(pose, facing, 40, 30);
+    if (!Expect(resized, "resized frame") || resized.value().width != 40 || resized.value().height != 30 ||
+        !Expect(UploadFrame(*renderer.value(), texture, resized.value()), "resized upload") ||
+        texture.width != 40 || texture.height != 30 || !TextureHolds(*renderer.value(), texture, resized.value())) {
         std::cerr << "the resized frame does not reach a texture of its size\n";
         return 1;
     }
 
     // V3: no model shows the background only; a model without meshes draws its skeleton.
     if (!Expect(preview.Show(nullptr, pose), "show none")) return 1;
-    auto empty = preview.Render(pose, facing);
+    auto empty = preview.Render(pose, facing, 40, 30);
     if (!Expect(empty, "frame without a model") ||
-        IsRed(Pixel(*empty.value(), empty.value()->width / 2U, empty.value()->height / 2U))) {
+        IsRed(Pixel(empty.value(), empty.value().width / 2U, empty.value().height / 2U))) {
         std::cerr << "a frame without a model still shows the model before\n";
         return 1;
     }
@@ -208,11 +211,10 @@ int main(int argc, char** argv) {
     Model::Pose bonePose;
     if (!Model::ValidateModel(*bones) || !Expect(Model::MakeDefaultPose(*bones, bonePose), "skeleton pose")) return 1;
     preview.SetSkeleton(true);
-    if (!Expect(preview.Resize(241, 181), "resize for the skeleton") || !Expect(preview.Show(bones, bonePose), "show skeleton"))
-        return 1;
-    auto skeleton = preview.Render(bonePose, FrameModel(*bones, bonePose, facing));
+    if (!Expect(preview.Show(bones, bonePose), "show skeleton")) return 1;
+    auto skeleton = preview.Render(bonePose, FrameModel(*bones, bonePose, facing), 241, 181);
     if (!Expect(skeleton, "skeleton frame")) return 1;
-    const auto& boneFrame = *skeleton.value();
+    const auto& boneFrame = skeleton.value();
     const auto isBone = [](std::array<int, 4> p) { return p[0] > 200 && p[1] > 150 && p[2] < 170; };
     const std::uint32_t cx = boneFrame.width / 2U, cy = boneFrame.height / 2U;
     const std::uint32_t along = boneFrame.width / 6U, across = boneFrame.height / 6U;

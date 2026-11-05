@@ -1,15 +1,9 @@
 #include "gyo/model_viewer/PreviewRenderer.hpp"
 
-#include "gyo/model_viewer/ModelContent.hpp"
-
-#include "engine/asset/loading/NativeFileAssetSource.hpp"
-#include "engine/asset/resolver/AssetPathResolver.hpp"
 #include "engine/base/Error.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/render/PrimitiveMesh.hpp"
 #include "engine/render/RenderQueue.hpp"
-#include "engine/render/Renderer.hpp"
-#include "engine/render/ShaderLibrary.hpp"
 #include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"
 #include "engine/render/model/ModelRenderer.hpp"
 
@@ -24,7 +18,6 @@ namespace Gyo::Tools::ModelViewer {
 
 namespace Math = Engine::Math;
 namespace Render = Engine::Render;
-using GpuDevice = Render::Backend::SdlGpu::SdlGpuRenderDevice;
 
 namespace {
 
@@ -34,21 +27,10 @@ ModelViewerError PreviewError(std::string message, std::string detail = {}) {
 
 Math::Vec3 Translation(const Math::Matrix4& matrix) noexcept { return Math::TransformPoint(matrix, {}); }
 
-} // namespace
+// The preview's background, linear.
+constexpr Render::Color kBackground{0.18F, 0.19F, 0.21F, 1.0F};
 
-Render::PerspectiveCamera3D OrbitCamera::Camera() const noexcept {
-    // Engine's camera: rotation Z, then Y, then X; +Z forward. MakeRotationX
-    // takes +Z to (0, -sin, cos), so a positive pitch looks down.
-    const Math::Matrix4 rotation = Math::Multiply(Math::MakeRotationY(yawRadians), Math::MakeRotationX(pitchRadians));
-    const Math::Vec3 forward = Math::TransformPoint(rotation, {0, 0, 1});
-    Render::PerspectiveCamera3D camera;
-    camera.position = target - forward * distance;
-    camera.rotationRadians = {pitchRadians, yawRadians, 0};
-    camera.verticalFieldOfViewRadians = verticalFieldOfViewRadians;
-    camera.nearClip = std::max(distance * 0.01F, 0.001F);
-    camera.farClip = std::max(distance * 10.0F, 1.0F);
-    return camera;
-}
+} // namespace
 
 OrbitCamera FrameModel(const Engine::Model::ModelAsset& model, const Engine::Model::Pose& pose, OrbitCamera camera) noexcept {
     constexpr float kHuge = std::numeric_limits<float>::max();
@@ -72,21 +54,17 @@ OrbitCamera FrameModel(const Engine::Model::ModelAsset& model, const Engine::Mod
 }
 
 struct PreviewRenderer::Impl final {
-    Render::ShaderLibrary shaders;
-    std::unique_ptr<GpuDevice> device;
-    Render::Renderer renderer;
+    std::unique_ptr<Framework::OffscreenPreview> preview;
     std::shared_ptr<const Engine::Model::ModelAsset> model;
     std::unique_ptr<Engine::ModelRenderer::ModelInstance> instance;
     Render::MeshHandle bone{};
     bool skeleton{true};
     float boneThickness{0.01F};
-    Render::TextureReadback frame;
 
     ~Impl() {
-        // Renderer and model resources release device objects before the device goes.
+        // Model resources release device objects before the preview's device goes.
         instance.reset();
-        renderer.Reset();
-        if (device && bone) static_cast<void>(device->ReleaseMesh(bone));
+        if (preview && bone) static_cast<void>(preview->Device().ReleaseMesh(bone));
     }
 
     // Each bone (a node and its parent) as a thin box from parent to child.
@@ -123,30 +101,18 @@ Result<std::unique_ptr<PreviewRenderer>, ModelViewerError> PreviewRenderer::Crea
     Engine::Platform::Sdl::SdlPlatform& platform, const PreviewOptions& options) {
     auto impl = std::make_unique<Impl>();
     impl->skeleton = options.skeleton;
-    Engine::Asset::Loading::NativeFileAssetSource source;
-    Engine::Asset::Resolver::AssetPathResolver::Options resolver;
-    resolver.assetsRoot = Utf8Path(options.shaderBundle);
-    auto bundle = impl->shaders.AppendBundle(source, Engine::Asset::Resolver::AssetPathResolver(resolver));
-    if (!bundle) {
-        return Engine::Base::Err(PreviewError("cannot load Engine's shader bundle " + resolver.assetsRoot,
-                                              Engine::Base::CauseDetail(bundle.error())));
-    }
-    Render::Backend::SdlGpu::SdlGpuOffscreenOptions device;
-    device.width = options.width;
-    device.height = options.height;
-    device.driver = options.driver;
-    device.availableShaderFormats = impl->shaders.CompleteFormats();
-    auto created = GpuDevice::CreateOffscreen(platform, device);
+    Framework::PreviewOptions preview;
+    preview.shaderBundle = options.shaderBundle;
+    preview.width = options.width;
+    preview.height = options.height;
+    preview.driver = options.driver;
+    auto created = Framework::OffscreenPreview::Create(platform, preview);
     if (!created) {
-        return Engine::Base::Err(PreviewError("cannot create the offscreen GPU device", Engine::Base::CauseDetail(created.error())));
+        return Engine::Base::Err(PreviewError("the preview cannot start", Engine::Base::CauseDetail(created.error())));
     }
-    impl->device = std::move(created.value());
-    auto initialized = impl->renderer.Initialize(*impl->device, impl->shaders);
-    if (!initialized) {
-        return Engine::Base::Err(PreviewError("cannot start Engine's renderer", Engine::Base::CauseDetail(initialized.error())));
-    }
+    impl->preview = std::move(created.value());
     const Render::MeshData cube = Render::MakeUnitCube();
-    auto bone = impl->device->CreateMesh(cube.View());
+    auto bone = impl->preview->Device().CreateMesh(cube.View());
     if (!bone) {
         return Engine::Base::Err(PreviewError("cannot create the bone mesh", Engine::Base::CauseDetail(bone.error())));
     }
@@ -166,7 +132,7 @@ Result<void, ModelViewerError> PreviewRenderer::Show(std::shared_ptr<const Engin
             const auto& c = material.baseColorLinear;
             materials.push_back({std::nullopt, {c[0], c[1], c[2], c[3]}, Render::SamplerMode::LinearClamp});
         }
-        auto resource = Engine::ModelRenderer::ModelResource::Create(*impl_->device, model, materials);
+        auto resource = Engine::ModelRenderer::ModelResource::Create(impl_->preview->Device(), model, materials);
         if (!resource) {
             return Engine::Base::Err(PreviewError("Engine cannot prepare the model for drawing",
                                                   Engine::Base::CauseDetail(resource.error())));
@@ -184,54 +150,36 @@ Result<void, ModelViewerError> PreviewRenderer::Show(std::shared_ptr<const Engin
     return {};
 }
 
-Result<void, ModelViewerError> PreviewRenderer::Resize(const std::uint32_t width, const std::uint32_t height) {
-    auto resized = impl_->device->SetFrameSize(width, height);
-    if (!resized) {
-        return Engine::Base::Err(PreviewError("cannot resize the preview", Engine::Base::CauseDetail(resized.error())));
-    }
-    return {};
-}
-
 void PreviewRenderer::SetSkeleton(const bool shown) noexcept { impl_->skeleton = shown; }
 
-Result<const Render::TextureReadback*, ModelViewerError> PreviewRenderer::Render(const Engine::Model::Pose& pose,
-                                                                                 const OrbitCamera& camera) {
-    Render::RenderQueue queue({{0.18F, 0.19F, 0.21F, 1.0F}, {}});
-    queue.SetCamera(camera.Camera());
+Result<Render::TextureReadback, ModelViewerError> PreviewRenderer::Render(const Engine::Model::Pose& pose,
+                                                                          const OrbitCamera& camera,
+                                                                          const std::uint32_t width,
+                                                                          const std::uint32_t height) {
     if (impl_->instance) {
         auto updated = impl_->instance->UpdatePose(pose);
         if (!updated) return Engine::Base::Err(PreviewError("Engine cannot skin the pose", Engine::Base::CauseDetail(updated.error())));
-        auto submitted = impl_->instance->Submit(queue, {});
-        if (!submitted) return Engine::Base::Err(PreviewError("the model cannot be drawn", Engine::Base::CauseDetail(submitted.error())));
+    }
+    auto queue = impl_->preview->BeginFrame(width, height, camera.Camera(), kBackground);
+    if (!queue) return Engine::Base::Err(PreviewError("the preview cannot start the frame", Engine::Base::CauseDetail(queue.error())));
+    // From here the frame is open: every path ends it, so that a failure leaves the preview ready for the next frame.
+    const auto fail = [&](std::string message, std::string detail) {
+        static_cast<void>(impl_->preview->EndFrame());
+        return Engine::Base::Err(PreviewError(std::move(message), std::move(detail)));
+    };
+    if (impl_->instance) {
+        auto submitted = impl_->instance->Submit(*queue.value(), {});
+        if (!submitted) return fail("the model cannot be drawn", Engine::Base::CauseDetail(submitted.error()));
     }
     if (impl_->model && impl_->skeleton) {
-        auto skeleton = impl_->SubmitSkeleton(queue, pose);
-        if (!skeleton) return Engine::Base::Err(skeleton.error());
+        auto skeleton = impl_->SubmitSkeleton(*queue.value(), pose);
+        if (!skeleton) return fail(skeleton.error().message, skeleton.error().detail);
     }
-    auto rendered = impl_->renderer.Render(queue);
-    if (!rendered) return Engine::Base::Err(PreviewError("Engine's renderer cannot draw the frame", Engine::Base::CauseDetail(rendered.error())));
-    auto read = impl_->device->ReadFrame();
-    if (!read) return Engine::Base::Err(PreviewError("cannot read the frame back", Engine::Base::CauseDetail(read.error())));
-    impl_->frame = std::move(read.value());
-    return &impl_->frame;
+    auto frame = impl_->preview->EndFrame();
+    if (!frame) return Engine::Base::Err(PreviewError("the preview cannot draw the frame", Engine::Base::CauseDetail(frame.error())));
+    return std::move(frame.value());
 }
 
-GpuDevice& PreviewRenderer::Device() noexcept { return *impl_->device; }
-
-Result<void, ModelViewerError> UploadFrame(Engine::Render::Backend::Sdl::SdlRenderer& renderer, PreviewTexture& texture,
-                                           const Render::TextureReadback& frame) {
-    if (texture.handle && (texture.width != frame.width || texture.height != frame.height)) {
-        static_cast<void>(renderer.ReleaseTexture(texture.handle));
-        texture = {};
-    }
-    if (!texture.handle) {
-        auto created = renderer.CreateStreamingTexture(frame.width, frame.height);
-        if (!created) return Engine::Base::Err(PreviewError("cannot create the preview texture", Engine::Base::CauseDetail(created.error())));
-        texture = {created.value(), frame.width, frame.height};
-    }
-    auto uploaded = renderer.UploadTexture(texture.handle, frame.bytes, frame.rowPitch);
-    if (!uploaded) return Engine::Base::Err(PreviewError("cannot upload the preview", Engine::Base::CauseDetail(uploaded.error())));
-    return {};
-}
+Framework::OffscreenPreview& PreviewRenderer::Preview() noexcept { return *impl_->preview; }
 
 } // namespace Gyo::Tools::ModelViewer

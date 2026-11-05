@@ -29,6 +29,11 @@ It has two parts. Only the first exists so far:
   - `GYO::ToolFrameworkWindow`, built where Engine's SDL platform is: the
     windowed shell (`RunWindowShell`), through Engine's neutral platform
     target only.
+  - `GYO::ToolFrameworkPreview`, built where Engine's SDL GPU backend and SDL
+    renderer are: the offscreen 3D preview a tool shows in its window
+    (`OffscreenPreview`, `UploadFrame`, `OrbitCamera`; [contract](preview.md),
+    `v8-framework-preview-component`), through those neutral Engine targets
+    only. The client creates and holds it.
   - The ImGui binding `GYO::ToolFrameworkImGui` (`framework/bindings/imgui/`),
     built where the windowed shell, the SDL renderer, Engine's SDL input and
     ImGui's SDL backends are: ImGui on Engine's SDL renderer, run by the
@@ -208,6 +213,14 @@ repair or rebuild the component.
   released. It is the binding's adapter from Engine's texture to ImGui's id,
   reachable only in the binding (Design Invariant 2); the client needs no
   `*Native` target (`v8-engine-sdl-renderer-texture`).
+- A tool that shows 3D content in its window creates an `OffscreenPreview`
+  (`GYO::ToolFrameworkPreview`) from its platform and holds it: each frame
+  `BeginFrame(width, height, camera, clearColor)` hands it Engine's
+  `RenderQueue` to submit its meshes to, `EndFrame` draws and reads the frame
+  back, and `UploadFrame` puts it into a texture of the binding's renderer,
+  shown with `ImGuiTextureId` ([contract](preview.md)). `OrbitCamera` gives a
+  camera turning about a point; a client may give its own
+  `PerspectiveCamera3D` instead.
 - A tool registers a catalog entry with the JSON binding's
   `RegisterAsset(text, entry, policy)`: the entry is Engine's
   `RawCatalogEntry` (id, type, path); the policy says whether the id may get

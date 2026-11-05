@@ -8,6 +8,8 @@
 #include "gyo/model_viewer/ModelSummary.hpp"
 #include "gyo/model_viewer/Playback.hpp"
 #include "gyo/model_viewer/PreviewRenderer.hpp"
+
+#include "gyo/framework/PreviewTexture.hpp"
 #include "gyo/model_viewer/PreviewSounds.hpp"
 
 #include "gyo/framework/imgui/ImGuiShell.hpp"
@@ -82,8 +84,8 @@ public:
         } else {
             PreviewOptions preview;
             preview.shaderBundle = base.value() / "shaders" / "builtin";
-            preview.width = size_[0];
-            preview.height = size_[1];
+            preview.width = wanted_[0];
+            preview.height = wanted_[1];
             preview.driver = options_.gpuDriver;
             auto created = PreviewRenderer::Create(platform_, preview);
             if (created) {
@@ -133,17 +135,6 @@ public:
             ++soundsVersion_;
         }
         UpdateSounds(step.has_value() && step->currentSeconds >= session_.clock.durationSeconds && session_.clock.loop);
-        // ImGui draws a frame's images after Draw: the texture changes size only here.
-        if (preview_ && (wanted_[0] != size_[0] || wanted_[1] != size_[1])) {
-            if (texture_.handle) static_cast<void>(renderer_.ReleaseTexture(texture_.handle));
-            texture_ = {};
-            if (auto resized = preview_->Resize(wanted_[0], wanted_[1]); resized) {
-                size_[0] = wanted_[0];
-                size_[1] = wanted_[1];
-            } else {
-                previewError_ = Engine::Base::Describe(resized.error());
-            }
-        }
     }
 
     void Draw() override {
@@ -928,21 +919,22 @@ private:
                 return;
             }
         }
-        auto frame = preview_->Render(pose_, camera_);
+        // The frame has the size the panel wants; the texture follows it (UploadFrame).
+        auto frame = preview_->Render(pose_, camera_, wanted_[0], wanted_[1]);
         if (!frame) {
             previewError_ = Engine::Base::Describe(frame.error());
             return;
         }
-        const auto* image = frame.value();
-        if (auto uploaded = UploadFrame(renderer_, texture_, *image); !uploaded) {
+        const auto& image = frame.value();
+        if (auto uploaded = Framework::UploadFrame(renderer_, texture_, image); !uploaded) {
             previewError_ = Engine::Base::Describe(uploaded.error());
             return;
         }
         previewError_.clear();
         const auto id = Framework::ImGuiTextureId(renderer_, texture_.handle);
         if (!id) return;
-        ImGui::Image(static_cast<ImTextureID>(*id), ImVec2(static_cast<float>(image->width) / std::max(scale.x, 1e-3F),
-                                                           static_cast<float>(image->height) / std::max(scale.y, 1e-3F)));
+        ImGui::Image(static_cast<ImTextureID>(*id), ImVec2(static_cast<float>(image.width) / std::max(scale.x, 1e-3F),
+                                                           static_cast<float>(image.height) / std::max(scale.y, 1e-3F)));
         if (ImGui::IsItemHovered()) {
             const ImGuiIO& io = ImGui::GetIO();
             if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
@@ -966,8 +958,7 @@ private:
     std::string previewError_;
     OrbitCamera camera_;
     bool skeleton_{true};
-    PreviewTexture texture_;
-    std::uint32_t size_[2]{640, 480};
+    Framework::PreviewTexture texture_;
     std::uint32_t wanted_[2]{640, 480};
     std::chrono::steady_clock::time_point last_;
     // The events of the opened model (-events).

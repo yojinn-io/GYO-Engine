@@ -47,7 +47,9 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
             "framework/src/A.cpp": '#include <SDL3/SDL.h>\n#include <backends/imgui_impl_sdl3.h>\n',
             "framework/CMakeLists.txt": "target_link_libraries(gyo_tool_framework PUBLIC imgui::core)\n",
         })
-        self.assertEqual(sorted(findings), ["framework/CMakeLists.txt: names imgui::core",
+        # The core library's own link list refuses it too (v8-framework-preview-component).
+        self.assertEqual(sorted(findings), ["framework/CMakeLists.txt: gyo_tool_framework links imgui::core",
+                                            "framework/CMakeLists.txt: names imgui::core",
                                             "framework/src/A.cpp: includes SDL3/SDL.h",
                                             "framework/src/A.cpp: includes backends/imgui_impl_sdl3.h"])
 
@@ -129,8 +131,83 @@ class FrameworkDependencyGuardTests(unittest.TestCase):
         self.assertIn("SDL_CreateGPUDevice", findings[0])
 
     def test_unlisted_target_fails(self):
-        findings = self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::RenderBackendSDLGPU)\n"})
-        self.assertEqual(findings, ["framework/CMakeLists.txt: names GYO::RenderBackendSDLGPU"])
+        findings = self.scan({"framework/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::ModelRenderer)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: names GYO::ModelRenderer"])
+
+    # v8-framework-preview-component: the offscreen preview is the one core library on Engine's render backends,
+    # and each core library links only its own list.
+
+    def test_preview_library_linking_the_render_targets_passes(self):
+        self.assertEqual(self.scan({
+            "framework/src/Preview.cpp": '#include "engine/render/Renderer.hpp"\n'
+                                         '#include "engine/render/backend/sdl_gpu/SdlGpuRenderDevice.hpp"\n',
+            "framework/CMakeLists.txt":
+                "if(TARGET GYO::RenderBackendSDLGPU AND TARGET GYO::RenderBackendSDL)\n"
+                "add_library(gyo_tool_framework_preview STATIC src/Preview.cpp)\n"
+                "add_library(GYO::ToolFrameworkPreview ALIAS gyo_tool_framework_preview)\n"
+                "target_link_libraries(gyo_tool_framework_preview\n"
+                "    PUBLIC gyo_tool_framework GYO::Render GYO::RenderBackendSDLGPU GYO::RenderBackendSDL PRIVATE GYO::Os)\n"
+                "endif()\n",
+        }), [])
+
+    def test_window_shell_linking_a_render_target_fails(self):
+        # The windowed shell creates no render device (Design Invariant 6); the name is in the core's list, the
+        # shell's own list refuses it.
+        findings = self.scan({"framework/CMakeLists.txt":
+                              "target_link_libraries(gyo_tool_framework_window PUBLIC gyo_tool_framework GYO::PlatformSDL GYO::RenderBackendSDL)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: gyo_tool_framework_window links GYO::RenderBackendSDL"])
+
+    def test_core_library_linking_outside_its_list_fails(self):
+        findings = self.scan({"framework/CMakeLists.txt": "target_link_libraries(gyo_tool_framework PRIVATE GYO::PlatformSDL)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: gyo_tool_framework links GYO::PlatformSDL"])
+
+    def test_preview_library_linking_another_engine_target_fails(self):
+        findings = self.scan({"framework/CMakeLists.txt": "target_link_libraries(gyo_tool_framework_preview PUBLIC GYO::Ui)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: gyo_tool_framework_preview links GYO::Ui"])
+
+    def test_window_shell_linking_a_render_target_in_a_generator_expression_fails(self):
+        findings = self.scan({"framework/CMakeLists.txt":
+                              "target_link_libraries(gyo_tool_framework_window PUBLIC $<BUILD_INTERFACE:GYO::RenderBackendSDL>)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: gyo_tool_framework_window links GYO::RenderBackendSDL"])
+
+    def test_quoted_link_names_are_read_without_their_quotes(self):
+        # CMake reads "X" as X: a quoted generator expression is judged by the names inside it, and a quoted name on
+        # the library's list passes (before, the quotes made it look like another name).
+        findings = self.scan({"framework/CMakeLists.txt":
+                              'target_link_libraries(gyo_tool_framework_window PUBLIC "$<BUILD_INTERFACE:GYO::RenderBackendSDL>")\n'})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: gyo_tool_framework_window links GYO::RenderBackendSDL"])
+        self.assertEqual(self.scan({"framework/CMakeLists.txt":
+                                    'target_link_libraries(gyo_tool_framework PRIVATE "GYO::Os")\n'}), [])
+        self.assertEqual(self.scan({"framework/CMakeLists.txt":
+                                    'target_link_libraries(gyo_tool_framework PRIVATE "GYO::PlatformSDL")\n'}),
+                         ["framework/CMakeLists.txt: gyo_tool_framework links GYO::PlatformSDL"])
+
+    def test_core_library_defined_through_a_variable_fails(self):
+        findings = self.scan({"framework/CMakeLists.txt": "add_library(${_name} STATIC src/Other.cpp)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: defines a library through a variable"])
+
+    def test_core_library_without_a_link_list_fails(self):
+        findings = self.scan({"framework/CMakeLists.txt": "add_library(gyo_tool_framework_other STATIC src/Other.cpp)\n"})
+        self.assertEqual(findings, ["framework/CMakeLists.txt: gyo_tool_framework_other has no link list in the guard"])
+
+    def test_link_call_through_a_variable_is_read_by_the_union_rule(self):
+        # A link call on a variable has no library to look up; its names still have to be in the core's list. What
+        # the core libraries really link is read at configure time (tests/framework/CMakeLists.txt).
+        self.assertEqual(self.scan({"framework/CMakeLists.txt":
+                                    "target_link_libraries(${_target} PRIVATE GYO::Render)\n"}), [])
+        self.assertEqual(self.scan({"framework/CMakeLists.txt":
+                                    "target_link_libraries(${_target} PRIVATE GYO::ModelRenderer)\n"}),
+                         ["framework/CMakeLists.txt: names GYO::ModelRenderer"])
+
+    def test_render_native_target_in_the_core_fails(self):
+        findings = self.scan({"framework/CMakeLists.txt":
+                              "target_link_libraries(gyo_tool_framework_preview PRIVATE GYO::RenderBackendSDLNative)\n"})
+        self.assertEqual(sorted(findings), ["framework/CMakeLists.txt: gyo_tool_framework_preview links GYO::RenderBackendSDLNative",
+                                            "framework/CMakeLists.txt: names GYO::RenderBackendSDLNative"])
+
+    def test_render_targets_in_a_binding_fail(self):
+        self.assertEqual(self.scan({"framework/bindings/json/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Render)\n"}),
+                         ["framework/bindings/json/CMakeLists.txt: names GYO::Render"])
 
     def test_registered_tool_name_fails(self):
         findings = self.scan({"framework/src/A.cpp": "// opens what sketch_tool saved\n"})

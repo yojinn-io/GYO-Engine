@@ -4,15 +4,15 @@
   "mutants": [
     {
       "id": "fw-guard-unlisted-engine-target",
-      "what": "The framework's CMake names an Engine target outside its positive list (GYO::Input was the example until v8-framework-engine-access allowed it)",
+      "what": "The framework's CMake names an Engine target outside its positive list (GYO::Input, then GYO::RenderBackendSDLGPU, were the example until v8-framework-engine-access and v8-framework-preview-component allowed them)",
       "file": "framework/CMakeLists.txt",
       "find": "# command line comes as UTF-8 through GYO::Os.",
-      "replace": "# command line comes as UTF-8 through GYO::Os and GYO::RenderBackendSDLGPU.",
+      "replace": "# command line comes as UTF-8 through GYO::Os and GYO::AudioBackendSDL.",
       "command": [
         "{python}",
         "tests/framework/framework_dependency_guard.py"
       ],
-      "expect": "names GYO::RenderBackendSDLGPU"
+      "expect": "names GYO::AudioBackendSDL"
     },
     {
       "id": "fw-guard-tool-header",
@@ -290,8 +290,8 @@
       "id": "fw-guard-core-ui-dropped",
       "what": "The core's positive list loses GYO::Ui, which the core links for the text input mapping",
       "file": "tests/framework/framework_dependency_guard.py",
-      "find": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\"},",
-      "replace": "\"GYO::Model\", \"GYO::Audio\"},",
+      "find": "\"GYO::Ui\", \"GYO::Model\", \"GYO::Audio\",\n",
+      "replace": "\"GYO::Model\", \"GYO::Audio\",\n",
       "command": [
         "{python}",
         "tests/framework/framework_dependency_guard.py"
