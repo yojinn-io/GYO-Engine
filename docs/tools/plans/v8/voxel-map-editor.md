@@ -90,7 +90,7 @@ v8-tool-voxel-map-editor
 ├── v8-tool-voxel-map-plan ✓              「medium｜Opus｜本文件、README、HANDOFF、dev_log」
 ├── v8-engine-voxel-mesh-contract         「high｜Opus｜Engine：產物的格式、讀取器、驗證規則、Design Invariants ✓（L1 三平台通過）」
 ├── v8-framework-preview-component        「high｜Opus｜framework：抽出 3D 預覽元件，model_viewer 改用（等 #146）」
-├── v8-tool-voxel-map-editor-core         「high｜Opus｜工具：登錄、格子格式、形狀庫、build、CLI（已實作，等 L1）」
+├── v8-tool-voxel-map-editor-core         「high｜Opus｜工具：登錄、格子格式、形狀庫、build、CLI ✓（L1 三平台通過）」
 ├── v8-tool-voxel-map-editor-window       「high｜Opus｜工具：ImGui 視窗、編輯平面、工具、朝向、undo、預覽」
 ├── v8-product-arena-v2                   「high｜Opus｜產品批：arena v2、出生點支撐規則、兩張地圖轉換、v1 退役」
 ├── v8-product-step-up                    「high｜Opus｜產品批：走上半格台階（產品會話做）」

@@ -2,7 +2,7 @@
 
 日期：2026-11-05。分支 `claude/v8-tool-voxel-map-plan`（PR #152）。上段；實作是主會話（Opus 5.5／high），審查是子 Agent（Opus 5.5／high）。事前宣告在 [voxel-map-editor.md](../tools/plans/v8/voxel-map-editor.md)「v8-tool-voxel-map-editor-core 的事前宣告」，2026-11-05 使用者核准（「核准」）；實作和宣告的差異在審查前回報，使用者確認（「確認，送審查」）。
 
-**狀態：** 本機判定 E1～E9 通過；E10（L1）待 CI。
+**狀態：** 完成。判定 E1～E10 全部通過。
 
 相關文件：
 - [voxel_map_editor/architecture.md](../voxel_map_editor/architecture.md)：格式、朝向表、build、CLI、Design Invariants 6 條、Replacement Criteria 4 條
@@ -41,7 +41,7 @@
 | E7 CLI | 通過 |
 | E8 依賴守衛 | 通過 |
 | E9 突變 | 第一輪 15／16；修正突變目錄後 16／16。審查後 20 條，合計 20／20 killed（見「經過」6） |
-| E10 L1 | 待 CI |
+| E10 L1 | 通過：run 42010316153（`5f410c60`），windows-x64、macos-arm64、linux-x64 都綠，CI gate success |
 
 ## 經過
 
