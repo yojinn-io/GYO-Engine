@@ -231,6 +231,11 @@ public:
     SdlPlatform(SdlPlatform&&) = delete;
     SdlPlatform& operator=(SdlPlatform&&) = delete;
 
+    // Hands every queued event to observer, in order. Returns Stop when the
+    // pass held a quit request (the OS or the user quitting the program) or a
+    // close request of this window, and Continue otherwise; nothing else
+    // stops it. A caller may still keep running after Stop (a shell asks its
+    // client first).
     [[nodiscard]] Runtime::RuntimeControl PumpEvents(
         const EventObserver& observer = {});
 

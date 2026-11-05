@@ -273,6 +273,12 @@ bool EditorApp::WantsExit() const noexcept {
     return wantsExit_;
 }
 
+bool EditorApp::CloseRequested() {
+    if (!session_.IsDirty()) return true;
+    showDiscardDialog_ = true;
+    return false;
+}
+
 void EditorApp::RefreshDiagnostics() {
     diagnostics_ = session_.Validate(catalog_.IsMounted() ? &catalog_ : nullptr);
 }
@@ -308,7 +314,7 @@ void EditorApp::DrawMainMenu() {
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Exit")) {
-            wantsExit_ = true;
+            wantsExit_ = CloseRequested();
         }
         ImGui::EndMenu();
     }

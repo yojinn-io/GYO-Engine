@@ -139,12 +139,16 @@ agreement, however small (AGENTS.md section 3). So is changing this section.
    platform, also while an exception unwinds; it owns the one RuntimeLoop,
    passes every event of a pump to OnEvent before that pump's Update, returns
    1 for its own failures and otherwise the client's code, and sets no
-   live-frame handler and no log handler. The ImGui binding's renderer is its
+   live-frame handler and no log handler. When a pump ends with a quit or a
+   close request, it asks the client (CloseRequested, once per such pump)
+   and keeps the loop running when the client says no; the ImGui binding
+   asks its client the same way (user, 2026-11-04,
+   `v8-framework-close-request`). The ImGui binding's renderer is its
    own, lent to the product, and lives until the product is destroyed. No
    shell catches an exception, and shells log only through Base::Log. Guards:
    the headless, window-shell and ImGui-shell tests, the configure-time check
    that the shells are built where their Engine targets are, and the
-   fw-shell-* and fw-imgui-* mutants.
+   fw-shell-* and fw-imgui-* mutants (the close request: fw-close-*).
 
 ### Replacement Criteria
 
@@ -196,6 +200,14 @@ repair or rebuild the component.
   `BeginFrame` (before ImGui's frame), `Draw` (inside it), checks
   `WantsExit`, renders and calls `EndFrame`. ImGui is shut down before the
   client is destroyed, and the renderer after it.
+- A client shows pixels of its own (a preview read back from an offscreen GPU
+  device) as a texture of the binding's renderer: Engine's
+  `SdlRenderer::CreateStreamingTexture`, `UploadTexture` and `ReleaseTexture`,
+  and the binding's `ImGuiTextureId(renderer, texture)`, which gives the id
+  `ImGui::Image` takes while the texture lives and nothing after it is
+  released. It is the binding's adapter from Engine's texture to ImGui's id,
+  reachable only in the binding (Design Invariant 2); the client needs no
+  `*Native` target (`v8-engine-sdl-renderer-texture`).
 - A tool registers a catalog entry with the JSON binding's
   `RegisterAsset(text, entry, policy)`: the entry is Engine's
   `RawCatalogEntry` (id, type, path); the policy says whether the id may get

@@ -26,6 +26,14 @@ public:
     [[nodiscard]] virtual Engine::Runtime::RuntimeControl Update(const Engine::Runtime::FrameContext& frame) = 0;
     // Only after an Update that returned Continue, with the same frame.
     [[nodiscard]] virtual Engine::Runtime::RuntimeControl Render(const Engine::Runtime::FrameContext& frame) = 0;
+    // After a pump in which the window was asked to close or the program to
+    // quit (SdlPlatform::PumpEvents returned Stop), before that pump's Update:
+    // true ends the loop, false keeps it running (the client may end it later
+    // through Update). Once per such pump, outside the pump's observer, so it
+    // may run platform operations. SDL turns SIGINT and SIGTERM into a quit:
+    // a client that says no keeps running until it ends the loop itself. The
+    // default ends the loop.
+    [[nodiscard]] virtual bool CloseRequested() { return true; }
     // Read once after the loop ends, for any reason, before the client is
     // destroyed.
     [[nodiscard]] virtual int ExitCode() const noexcept { return 0; }

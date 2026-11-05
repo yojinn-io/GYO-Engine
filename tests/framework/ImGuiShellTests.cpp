@@ -12,6 +12,9 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <array>
 #include <filesystem>
 #include <functional>
@@ -532,4 +535,95 @@ TEST_CASE("I11: the client's request owns text input while it asks, and gets the
             CHECK(run.area[index].y == 200);
         }
     }
+}
+
+TEST_CASE("T2: a texture's ImGui id is its own while it lives, reaches ImGui's draw list, and goes with it") {
+    using Engine::Render::Backend::Sdl::SdlTextureHandle;
+    Counts counts;
+    SdlTextureHandle texture;
+    std::vector<std::optional<std::uint64_t>> ids;
+    std::vector<bool> drawn;
+    std::uint64_t native{};
+    bool releasedHasNoId{};
+    bool noHandleHasNoId{};
+    const int code = RunImGuiShell(SmallWindow(), [&](const ImGuiShellContext& context) {
+        auto client = std::make_unique<Client>(context, counts, 4);
+        auto& renderer = context.renderer;
+        client->onBeginFrame = [&](int frame) {
+            if (frame == 4) {
+                // Released before ImGui's frame: the last frame that drew it is rendered.
+                REQUIRE(renderer.ReleaseTexture(texture));
+                releasedHasNoId = !ImGuiTextureId(renderer, texture).has_value();
+                noHandleHasNoId = !ImGuiTextureId(renderer, {}).has_value();
+                return;
+            }
+            if (frame != 1) {
+                return;
+            }
+            auto created = renderer.CreateStreamingTexture(4, 4);
+            REQUIRE(created);
+            texture = created.value();
+            native = reinterpret_cast<std::uintptr_t>(Engine::Render::Backend::Sdl::NativeTexture(renderer, texture));
+            const std::vector<std::byte> pixels(64, std::byte{200});
+            REQUIRE(renderer.UploadTexture(texture, pixels, 16));
+        };
+        client->onDraw = [&](int frame) {
+            if (frame <= 3) {
+                const auto id = ImGuiTextureId(renderer, texture);
+                ids.push_back(id);
+                bool found = false;
+                if (id) {
+                    ImGui::Begin("texture");
+                    ImGui::Image(static_cast<ImTextureID>(*id), ImVec2(4, 4));
+                    for (const ImDrawCmd& command : ImGui::GetWindowDrawList()->CmdBuffer) {
+                        found = found || command.GetTexID() == static_cast<ImTextureID>(*id);
+                    }
+                    ImGui::End();
+                }
+                drawn.push_back(found);
+            }
+        };
+        return client;
+    });
+    CHECK(code == 0);
+    REQUIRE(ids.size() == 3);
+    for (std::size_t frame = 0; frame < ids.size(); ++frame) {
+        CAPTURE(frame);
+        REQUIRE(ids[frame].has_value());
+        CHECK(*ids[frame] == native);
+        CHECK(drawn[frame]);
+    }
+    CHECK_MESSAGE(releasedHasNoId, "a released texture still has an ImGui id");
+    CHECK(noHandleHasNoId);
+}
+
+TEST_CASE("Q3: the binding asks its client about a close request; a no keeps drawing until the client exits") {
+    class Asking final : public Client {
+    public:
+        using Client::Client;
+        bool CloseRequested() override {
+            ++asked;
+            return asked > 1;
+        }
+        int asked{};
+    };
+    Counts counts;
+    int asked = 0;
+    const int code = RunImGuiShell(SmallWindow(), [&](const ImGuiShellContext& context) {
+        auto client = std::make_unique<Asking>(context, counts, 0);
+        auto* raw = client.get();
+        client->onBeginFrame = [&context, raw, &asked](int frame) {
+            asked = raw->asked;
+            if (frame != 2 && frame != 5) return;
+            SDL_Event close{};
+            close.type = SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+            close.window.windowID = OwnWindow(context);
+            PushInjected(context, close);
+        };
+        return client;
+    });
+    CHECK(code == 0);
+    // The first request (after frame 2) is refused: frames 3 to 5 run; the second (after 5) is accepted.
+    CHECK_MESSAGE(counts.beginFrame == 5, "the binding did not hand the close request to its client");
+    CHECK(asked == 1);
 }

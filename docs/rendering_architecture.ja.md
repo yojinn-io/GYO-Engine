@@ -159,6 +159,8 @@ Overlay / HUD → Present
 
 アニメーションは固定サイズの頂点データを更新し、mesh handle と index topology を維持します。診断の読み戻しは明示要求時だけ GPU を待ち、通常の表示ではこの同期を行いません。Scene capture は WorldOverlay と武器を含みますが、exposure／gamma／画面 Overlay／HUD より前のシーンであり、最終スクリーンショットではありません。
 
+オフスクリーン device（`SdlGpuRenderDevice::CreateOffscreen`）はウィンドウを claim しないため、ウィンドウは別のレンダラー（ツールのシェルの SDL 2D レンダラーなど）に残せます。GPU ドライバの読み込みに使う SDL サブシステムを platform が持つので、platform は引き続き渡します。各フレームは device 自身の RGBA8 sRGB テクスチャに描きます。`AcquireFrame` は常に現在のサイズのフレームを返し、`SubmitFrame` は `Presented` を返すので、`Renderer` はそのまま使えます。`SetFrameSize` のサイズは次のフレームから有効です。`ReadFrame` は（`ReadTexture` と同じく）GPU を同期的に待ち、最後に送信したフレームを読み戻します。exposure と Overlay を含む最終画像です。フレームの途中では読み戻しもサイズ変更もできません。破棄したフレーム、またはサイズ変更後に新しいフレームをまだ送信していない場合、読み戻しは拒否されます。検証：`render.sdl_gpu_offscreen`（ラベル `gpu`）。用途と判定は[モデルビューアの事前宣言](tools/plans/v8/model-viewer.md)を参照してください。
+
 <a id="r07"></a>
 ## 7. ビルドの選択
 

@@ -41,6 +41,9 @@ public:
     // it does; taken once after Draw.
     [[nodiscard]] std::optional<PreviewAdapter::FrameOutput::TextInputRequest> TakeTextInputRequest() noexcept;
     [[nodiscard]] bool WantsExit() const noexcept;
+    // The window was asked to close: true when nothing is unsaved; otherwise
+    // false, and the next Draw asks whether to discard the changes.
+    [[nodiscard]] bool CloseRequested();
     // As the View menu's "Preview interaction".
     void SetPreviewMode(bool preview) noexcept;
     // Whether typing goes to a text field (ImGui's, or the preview's text
@@ -121,6 +124,7 @@ private:
     float canvasPanY_{};
     float gridSize_{8.0F};
     bool wantsExit_{};
+    bool showDiscardDialog_{};
     bool showOpenDialog_{};
     bool showExportDialog_{};
     bool showCatalogDialog_{};
