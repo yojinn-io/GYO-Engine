@@ -36,14 +36,15 @@ def decision(player, action, seconds, lag_ticks, hold=0, kind="shot"):
     lag = None if lag_ticks is None else int(round(lag_ticks * Q16))
     return {"version": 3, "kind": "decision", "time_ns": mono(seconds), "player_id": player, "action_id": action,
             "action_kind": kind, "rejection": "none", "cooldown_hold_ticks": hold if kind == "shot" else None,
+            "view_valid": True,
             "view_lag_q16": lag, "view_lag_a_q16": None if lag is None else lag - hold * Q16}
 
 
 def baseline():
     """600 valid shots in S1: 594 at 3 ticks and 6 at 7.5 ticks, so the nearest-rank p99
     (the 594th) is 3 and R = 3 + 2 = 5; an interpolated p99 would be above 3 and give 6.
-    Also: 50 shots with no view tick, one reload, 10 shots after s1_end at 14 ticks, and
-    four held shots (hold 2)."""
+    Also: 50 shots with no view tick, one reload, four held shots (hold 2), and 14-tick
+    shots on both sides of S1: 20 between the first and the last join, 10 after s1_end."""
     records = []
     action = {1: 0, 2: 0}
 
@@ -60,6 +61,8 @@ def baseline():
     add(1, JOIN_2 + 2, None, kind="reload")
     for i in range(10):
         add(1 + i % 2, S1_END + 5 + i, 14.0)
+    for i in range(20):
+        add(1, 11 + i * 0.4, 14.0)   # player 1 joined at 10 s, player 2 at JOIN_2: before S1
     records.sort(key=lambda r: r["time_ns"])
     return records, action
 
@@ -73,6 +76,7 @@ class Session:
         self.actions = actions
         self.s1_end = S1_END
         self.client_extra = 0
+        self.client_submitted_extra = 0
 
     def write(self):
         mac = self.root / "mac"
@@ -93,7 +97,8 @@ class Session:
             folder.mkdir(parents=True, exist_ok=True)
             n = sum(1 for r in self.records if r.get("player_id") == player) + (self.client_extra if player == 1 else 0)
             (folder / "client.log").write_text(cpp_line(
-                890, f"[info] PvP summary player={player} tick=1 players=2 actions_submitted={n} accepted={n} "
+                890, f"[info] PvP summary player={player} tick=1 players=2 "
+                     f"actions_submitted={n + (self.client_submitted_extra if player == 1 else 0)} accepted={n} "
                      "rejected=0 actions_pending=0") + "\n", encoding="utf-8")
 
 
@@ -129,8 +134,11 @@ class LagL2SummaryTests(unittest.TestCase):
         self.assertEqual(self.run_tool(), 0)
         checks = self.report()["checks"]
         self.assertEqual(checks["S1"]["status"], "passed")
-        self.assertEqual(checks["S1"]["valid_shots"], 600)   # no null, no reload, nothing after s1_end
+        self.assertEqual(checks["S1"]["valid_shots"], 600)   # no null, no reload, nothing outside S1
         self.assertEqual(checks["S1"]["per_player"], {"1": 300, "2": 300})
+        self.assertEqual(checks["S1"]["excluded_before"], 20)
+        self.assertEqual(checks["S1"]["excluded_after"], 10)
+        self.assertEqual(checks["S1"]["null_in_window"], 50)
         self.assertEqual(checks["S2"]["status"], "passed")
         self.assertEqual(checks["R2"]["status"], "passed")
         self.assertEqual(checks["R1"]["status"], "passed")
@@ -157,11 +165,57 @@ class LagL2SummaryTests(unittest.TestCase):
         self.assertEqual(self.run_tool(), 0)
         self.assertEqual(self.report()["checks"]["R1"]["r"], 15)
 
-    def test_short_s1_fails(self):
+    def test_s1_length_is_recorded_not_judged(self):
+        # 9 min 59 s with enough shots: the 10 minutes are the procedure, not an S1 threshold.
         self.session.s1_end = JOIN_2 + 599
+        self.assertEqual(self.run_tool(), 0)
+        self.assertEqual(self.report()["checks"]["S1"]["seconds"], 599.0)
+
+    def test_too_few_shots_fail_s1(self):
+        # 499 valid shots, both players far above 100 each.
+        self.session.s1_end = JOIN_2 + 499
         self.assertEqual(self.run_tool(), 1)
         checks = self.report()["checks"]
+        self.assertEqual(checks["S1"]["valid_shots"], 499)
         self.assertEqual(checks["S1"]["status"], "failed")
+        self.assertEqual(checks["R1"]["status"], "undetermined")
+
+    def test_second_player_under_one_hundred_fails_s1(self):
+        # 600 shots split 550 / 50.
+        moved = 0
+        for r in self.session.records:
+            if r["player_id"] == 2 and r["view_lag_q16"] is not None and JOIN_2 < (r["time_ns"] / 1e9 - 100000) < S1_END:
+                if moved < 250:
+                    r["player_id"] = 1
+                    moved += 1
+        self.renumber()
+        self.assertEqual(self.run_tool(), 1)
+        checks = self.report()["checks"]
+        self.assertEqual(checks["S1"]["per_player"], {"1": 550, "2": 50})
+        self.assertEqual(checks["S1"]["status"], "failed")
+
+    def renumber(self):
+        counts = {}
+        for r in self.session.records:
+            counts[r["player_id"]] = counts.get(r["player_id"], 0) + 1
+            r["action_id"] = counts[r["player_id"]]
+
+    def test_records_count_mismatch_fails_s2(self):
+        self.session.end["records"] += 1
+        self.assertEqual(self.run_tool(), 1)
+        self.assertEqual(self.report()["checks"]["S2"]["status"], "failed")
+
+    def test_view_tick_invalid_mismatch_fails_s2(self):
+        self.session.records[0]["view_valid"] = False   # the trace_end still says 0
+        self.assertEqual(self.run_tool(), 1)
+        self.assertEqual(self.report()["checks"]["S2"]["status"], "failed")
+
+    def test_sent_but_not_decided_fails_s2(self):
+        # A Client submitted one action more than it got back, and the Match never decided it.
+        self.session.client_submitted_extra = 1
+        self.assertEqual(self.run_tool(), 1)
+        checks = self.report()["checks"]
+        self.assertEqual(checks["S2"]["status"], "failed")
         self.assertEqual(checks["R1"]["status"], "undetermined")
 
     def test_one_player_is_not_enough(self):
@@ -186,7 +240,9 @@ class LagL2SummaryTests(unittest.TestCase):
         held = next(r for r in self.session.records if r["cooldown_hold_ticks"] == 2)
         held["view_lag_a_q16"] = held["view_lag_q16"]
         self.assertEqual(self.run_tool(), 1)
-        self.assertEqual(self.report()["checks"]["R2"]["status"], "failed")
+        checks = self.report()["checks"]
+        self.assertEqual(checks["R2"]["status"], "failed")
+        self.assertEqual(checks["R1"]["status"], "undetermined")
 
     def test_version_two_is_refused(self):
         self.session.records[0]["version"] = 2
@@ -194,6 +250,22 @@ class LagL2SummaryTests(unittest.TestCase):
 
     def test_negative_lag_is_refused(self):
         self.session.records[0]["view_lag_q16"] = -1
+        self.assertEqual(self.run_tool(), 2)
+
+    def test_no_trace_end_is_refused(self):
+        self.session.write()
+        path = self.root / "mac" / "match-shots.jsonl"
+        lines = path.read_text(encoding="utf-8").splitlines()[:-1]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.assertEqual(lag_l2_summary.main([str(self.root)]), 2)
+
+    def test_unknown_kind_is_refused(self):
+        self.session.records.insert(3, {"version": 3, "kind": "note"})
+        self.assertEqual(self.run_tool(), 2)
+
+    def test_half_set_lags_are_refused(self):
+        r = next(r for r in self.session.records if r["view_lag_q16"] is not None)
+        r["view_lag_a_q16"] = None
         self.assertEqual(self.run_tool(), 2)
 
     def test_two_trace_ends_are_refused(self):

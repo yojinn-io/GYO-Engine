@@ -19,9 +19,10 @@ log line nearest to it in wall time.
 
 Checks: S1 (enough data), S2 (bookkeeping), R1 (R by the declared rule), R2
 (the J and A lags differ by the cooldown hold). Each is "passed", "failed" or
-"undetermined"; R is only given when S1 and S2 passed. A malformed trace
-(another version, a negative lag, not exactly one trace_end) is an error:
-exit 2 with no summary. Exit 0 when every check passed, 1 otherwise.
+"undetermined"; R is only given when S1, S2 and R2 passed. A malformed trace
+(another version, a negative lag, an unknown kind, a line after trace_end,
+not exactly one trace_end) or any other error reading the session exits 2
+with no summary. Exit 0 when every check passed, 1 otherwise.
 """
 import argparse
 import json
@@ -40,7 +41,6 @@ TICK_MS = 1000.0 / 60  # AuthorityTickRate (Movement.hpp)
 MAXIMUM_R = 15         # protocol-v9: maximum_reference_age_ms 250 ms at 60 Hz
 R_MARGIN = 2           # ticks above the declared quantile
 R_QUANTILE = 0.99      # -r-quantile (a)
-S1_MIN_SECONDS = 600   # at least 10 minutes of play
 MIN_SHOTS = 500        # valid shots in S1
 MIN_PLAYERS = 2        # players with at least MIN_SHOTS_PER_PLAYER each
 MIN_SHOTS_PER_PLAYER = 100
@@ -72,13 +72,23 @@ def read_trace(path):
         record = json.loads(text)
         if record.get("version") != TRACE_VERSION:
             raise TraceError(f"{path.name}:{number}: version {record.get('version')}, not {TRACE_VERSION}")
+        if ends:
+            raise TraceError(f"{path.name}:{number}: a line after trace_end")
         if record.get("kind") == "trace_end":
             ends.append(record)
         elif record.get("kind") == "decision":
-            for key in ("view_lag_q16", "view_lag_a_q16"):
-                if record.get(key) is not None and record[key] < 0:
-                    raise TraceError(f"{path.name}:{number}: negative {key} {record[key]}")
+            lags = [record.get("view_lag_q16"), record.get("view_lag_a_q16")]
+            if (lags[0] is None) != (lags[1] is None):
+                raise TraceError(f"{path.name}:{number}: view_lag_q16 and view_lag_a_q16 not both set or both null")
+            # A negative view_lag_a_q16 is refused too: A <= J and the view tick is at most the observed tick <= A.
+            for key, lag in zip(("view_lag_q16", "view_lag_a_q16"), lags):
+                if lag is not None and lag < 0:
+                    raise TraceError(f"{path.name}:{number}: negative {key} {lag}")
+            if record.get("action_kind") == "shot" and lags[0] is not None and record.get("cooldown_hold_ticks") is None:
+                raise TraceError(f"{path.name}:{number}: a shot with no cooldown_hold_ticks")
             decisions.append(record)
+        else:
+            raise TraceError(f"{path.name}:{number}: unknown kind {record.get('kind')!r}")
     if len(ends) != 1:
         raise TraceError(f"{path.name}: {len(ends)} trace_end lines, not 1")
     return decisions, ends[0]
@@ -118,28 +128,39 @@ def summarize(root):
         shots = []
     else:
         start, stop = window
-        shots = [d for d in decisions if d.get("action_kind") == "shot" and d.get("view_lag_q16") is not None
-                 and start <= d["time_ns"] <= stop]
+        all_shots = [d for d in decisions if d.get("action_kind") == "shot"]
+        inside = [d for d in all_shots if start <= d["time_ns"] <= stop]
+        shots = [d for d in inside if d.get("view_lag_q16") is not None]
         per_player = {}
         for d in shots:
             per_player[d["player_id"]] = per_player.get(d["player_id"], 0) + 1
         seconds = (stop - start) / 1e9
         enough = [p for p, n in per_player.items() if n >= MIN_SHOTS_PER_PLAYER]
+        # The 10 minutes are the procedure, not an S1 threshold: recorded, not judged.
         checks["S1"] = lan15_judge.passed_if(
-            seconds >= S1_MIN_SECONDS and len(shots) >= MIN_SHOTS and len(enough) >= MIN_PLAYERS,
-            seconds=round(seconds, 3), valid_shots=len(shots), per_player=per_player)
+            len(shots) >= MIN_SHOTS and len(enough) >= MIN_PLAYERS,
+            seconds=round(seconds, 3), valid_shots=len(shots), per_player=per_player,
+            excluded_before=sum(1 for d in all_shots if d["time_ns"] < start),
+            excluded_after=sum(1 for d in all_shots if d["time_ns"] > stop),
+            null_in_window=len(inside) - len(shots))
 
-    k2 = lan15_judge.check_k2(s)
+    # Sent = decided per player (K1: submitted = accepted + rejected, nothing pending; K2: the
+    # Client's counts by reason = the Match's decisions by rejection), and the trace's own counts.
+    k1, k2 = lan15_judge.check_k1(s), lan15_judge.check_k2(s)
     dropped = end.get("dropped")
-    s2_status = "failed" if dropped != 0 or k2["status"] == "failed" else k2["status"]
-    checks["S2"] = lan15_judge.result(s2_status, dropped=dropped, view_tick_invalid=end.get("view_tick_invalid"),
-                                      records=end.get("records"), decisions=len(decisions), per_player_counts=k2)
+    invalid = sum(1 for d in decisions if d.get("view_valid") is False)
+    own = dropped == 0 and end.get("records") == len(decisions) and end.get("view_tick_invalid") == invalid
+    statuses = {k1["status"], k2["status"]}
+    s2_status = "failed" if not own or "failed" in statuses else ("undetermined" if "undetermined" in statuses else "passed")
+    checks["S2"] = lan15_judge.result(s2_status, dropped=dropped, records=end.get("records"), decisions=len(decisions),
+                                      view_tick_invalid=end.get("view_tick_invalid"), view_valid_false=invalid,
+                                      sent_and_pending=k1, by_reason=k2)
 
     hold_mismatch = []
     for d in decisions:
         if d.get("view_lag_q16") is None or d.get("action_kind") != "shot":
             continue
-        hold = d.get("cooldown_hold_ticks") or 0
+        hold = d["cooldown_hold_ticks"]
         if d["view_lag_q16"] - d["view_lag_a_q16"] != hold * Q16:
             hold_mismatch.append({"player_id": d["player_id"], "action_id": d["action_id"]})
     checks["R2"] = lan15_judge.passed_if(not hold_mismatch, mismatches=hold_mismatch[:20],
@@ -156,12 +177,12 @@ def summarize(root):
         }
         distribution["quantiles_ms"] = {k: v * TICK_MS for k, v in distribution["quantiles_ticks"].items()}
         distribution["max_ms"] = ticks[-1] * TICK_MS
-    if checks["S1"]["status"] == "passed" and checks["S2"]["status"] == "passed":
+    if all(checks[k]["status"] == "passed" for k in ("S1", "S2", "R2")):
         p = nearest_rank(sorted(d["view_lag_q16"] / Q16 for d in shots), R_QUANTILE)
         checks["R1"] = lan15_judge.result("passed", r=bound_r(p), quantile=R_QUANTILE, quantile_ticks=p,
                                           margin=R_MARGIN, maximum=MAXIMUM_R)
     else:
-        checks["R1"] = lan15_judge.result("undetermined", reason="S1 and S2 must pass before R is given")
+        checks["R1"] = lan15_judge.result("undetermined", reason="S1, S2 and R2 must pass before R is given")
     return {"summary": SUMMARY_ID, "checks": checks, "distribution": distribution}
 
 
@@ -172,8 +193,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         report = summarize(Path(args.session))
-    except (TraceError, json.JSONDecodeError, KeyError) as error:
-        print(f"lag_l2_summary: {error}", file=sys.stderr)
+    except Exception as error:  # a malformed session is never a failed check: exit 2, no summary
+        print(f"lag_l2_summary: {type(error).__name__}: {error}", file=sys.stderr)
         return 2
     text = json.dumps(report, indent=2, ensure_ascii=False)
     if args.output:

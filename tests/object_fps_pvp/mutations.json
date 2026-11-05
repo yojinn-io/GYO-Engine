@@ -8999,8 +8999,8 @@
       "batch": "v8-product-hitbox-lag-l2",
       "what": "Shots with no view tick count as a lag of 0",
       "file": "build/acceptance/object_fps_pvp/lag_l2_summary.py",
-      "find": "        shots = [d for d in decisions if d.get(\"action_kind\") == \"shot\" and d.get(\"view_lag_q16\") is not None\n",
-      "replace": "        for d in decisions:\n            if d.get(\"view_lag_q16\") is None: d[\"view_lag_q16\"], d[\"view_lag_a_q16\"] = 0, 0\n        shots = [d for d in decisions if d.get(\"action_kind\") == \"shot\"\n",
+      "find": "        shots = [d for d in inside if d.get(\"view_lag_q16\") is not None]\n",
+      "replace": "        for d in inside:\n            if d.get(\"view_lag_q16\") is None: d[\"view_lag_q16\"], d[\"view_lag_a_q16\"] = 0, 0\n        shots = list(inside)\n",
       "check": "lag_l2_summary",
       "expect": "test_baseline_gives_the_hand_computed_r"
     },
@@ -9013,6 +9013,26 @@
       "replace": "        if False:\n",
       "check": "lag_l2_summary",
       "expect": "test_version_two_is_refused"
+    },
+    {
+      "id": "lag-l2-window-first-join",
+      "batch": "v8-product-hitbox-lag-l2",
+      "what": "S1 starts at the first join, not the last (review S-a)",
+      "file": "build/acceptance/object_fps_pvp/lag_l2_summary.py",
+      "find": "    start = joins[-1].mono\n",
+      "replace": "    start = joins[0].mono\n",
+      "check": "lag_l2_summary",
+      "expect": "test_baseline_gives_the_hand_computed_r"
+    },
+    {
+      "id": "lag-l2-sent-unchecked",
+      "batch": "v8-product-hitbox-lag-l2",
+      "what": "S2 drops the sent = decided check (review B1)",
+      "file": "build/acceptance/object_fps_pvp/lag_l2_summary.py",
+      "find": "    k1, k2 = lan15_judge.check_k1(s), lan15_judge.check_k2(s)\n",
+      "replace": "    k1, k2 = lan15_judge.result(\"passed\"), lan15_judge.check_k2(s)\n",
+      "check": "lag_l2_summary",
+      "expect": "test_sent_but_not_decided_fails_s2"
     }
   ]
 }
