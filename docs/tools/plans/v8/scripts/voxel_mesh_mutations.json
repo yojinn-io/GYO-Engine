@@ -5,9 +5,9 @@
     {
       "id": "vm-repeated-key-kept",
       "what": "A repeated key is taken silently (the DOM keeps the last)",
-      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
-      "find": "            if (!open.back().insert(key).second) Fail(\"repeated key '\" + key + \"'\", \"\");",
-      "replace": "            open.back().insert(key);",
+      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "find": "        if (open_.back().insert(key).second) return true;",
+      "replace": "        open_.back().insert(key);\n        return true;",
       "target": "gyo_voxel_mesh_tests",
       "cases": "*rule 1:*",
       "expect": "is NOT correct"
@@ -185,9 +185,9 @@
     {
       "id": "vm-repeated-key-nested-only",
       "what": "Repeated keys are caught only inside nested objects",
-      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
-      "find": "            if (!open.back().insert(key).second) Fail(\"repeated key '\" + key + \"'\", \"\");",
-      "replace": "            if (!open.back().insert(key).second && open.size() > 1) Fail(\"repeated key '\" + key + \"'\", \"\");",
+      "file": "engine/base/include/engine/base/StrictJson.hpp",
+      "find": "        if (open_.back().insert(key).second) return true;",
+      "replace": "        if (open_.back().insert(key).second || open_.size() == 1) return true;",
       "target": "gyo_voxel_mesh_tests",
       "cases": "*rule 1:*",
       "expect": "is NOT correct"

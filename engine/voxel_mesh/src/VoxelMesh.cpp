@@ -1,6 +1,7 @@
 #include "engine/voxel_mesh/VoxelMesh.hpp"
 
 #include "engine/base/Assert.hpp"
+#include "engine/base/StrictJson.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -39,25 +40,15 @@ void RequireExactKeys(const Json& object, const std::set<std::string>& keys, con
         if (!keys.contains(item.key())) Fail("unknown field '" + item.key() + "'", path);
 }
 
-// The DOM keeps the last of repeated keys, so repeats are caught while parsing.
+// The DOM keeps the last of repeated keys, so repeats are caught by a scan
+// before the DOM is built (engine/base/StrictJson.hpp). Not a parser callback:
+// nlohmann's callback parser rescans the enclosing array at the end of every
+// object, quadratic in the objects of one array.
 Json ParseWithoutRepeatedKeys(const std::string_view text) {
-    std::vector<std::set<std::string>> open;
-    Json::parser_callback_t callback = [&open](int, const Json::parse_event_t event, Json& parsed) {
-        if (event == Json::parse_event_t::object_start) {
-            open.emplace_back();
-        } else if (event == Json::parse_event_t::object_end) {
-            open.pop_back();
-        } else if (event == Json::parse_event_t::key) {
-            const auto key = parsed.get<std::string>();
-            if (!open.back().insert(key).second) Fail("repeated key '" + key + "'", "");
-        }
-        return true;
-    };
-    try {
-        return Json::parse(text.begin(), text.end(), callback);
-    } catch (const Json::exception& failure) {
-        Fail(std::string("not JSON: ") + failure.what(), "");
-    }
+    std::string failure;
+    auto document = Base::ParseStrictJson<Json>(text, failure);
+    if (!document) Fail(failure, "");
+    return std::move(*document);
 }
 
 // An integer in [-2^30, 2^30]; a number with a fraction or exponent is not one.

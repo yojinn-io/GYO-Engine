@@ -1,4 +1,4 @@
-add_library(gyo_collision STATIC src/Collision.cpp src/CapsuleQueries.cpp)
+add_library(gyo_collision STATIC src/Collision.cpp src/CapsuleQueries.cpp src/StaticAabbGrid.cpp)
 add_library(GYO::Collision ALIAS gyo_collision)
 target_include_directories(gyo_collision PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(gyo_collision PUBLIC GYO::Math PRIVATE GYO::Base)
