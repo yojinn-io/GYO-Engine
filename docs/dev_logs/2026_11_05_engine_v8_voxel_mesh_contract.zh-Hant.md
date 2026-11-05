@@ -2,7 +2,7 @@
 
 日期：2026-11-05。分支 `claude/v8-tool-voxel-map-plan`（PR #152）。上段；實作是主會話（Opus 5.5／high），審查是子 Agent（Opus 5.5／high）。事前宣告在 [voxel-map-editor.md](../tools/plans/v8/voxel-map-editor.md)「v8-engine-voxel-mesh-contract 的事前宣告」，2026-11-05 使用者核准（「核准」）。
 
-**狀態：** 本機判定 V1～V5 通過；V6（L1）待 CI。實作和事前宣告有幾處不同（見「和事前宣告的差異」），使用者 2026-11-05 確認（「確認」）。
+**狀態：** 完成。判定 V1～V6 全部通過。實作和事前宣告有幾處不同（見「和事前宣告的差異」），使用者 2026-11-05 確認（「確認」）。
 
 相關文件：[voxel-mesh.md](../architecture/voxel-mesh.md)（契約、Design Invariants、Replacement Criteria）、[voxel-map-editor.md](../tools/plans/v8/voxel-map-editor.md)、[HANDOFF](../tools/plans/v8/HANDOFF.md)。
 
@@ -25,7 +25,7 @@
 | V3 換算的黃金值 | 通過：`cell_size` 1.0 和 0.3、負的 origin、+2^20 和 −2^20 兩端，比對字面的位元（`0x3F666667`、`0xBE99999A`、`0xC699999A`） |
 | V4 連結守衛 | 通過：突變 `vm-links-collision` 在 configure 時被擋下 |
 | V5 宣告的突變 | 審查前 16／16 killed；審查後 20／20 killed（見下） |
-| V6 L1 | 待 CI |
+| V6 L1 | 通過：run 42000098862（`62b6f0cc`），macos-arm64、linux-x64、windows-x64 都綠，CI gate success |
 
 ## 經過
 
@@ -53,6 +53,8 @@
 
 6. L1（`c2c6b0dc`）：Linux 通過；Windows 建置失敗。原因是測試檔的變數名 `far`：Windows 標頭有 `#define far`（經 doctest 引入），MSVC 報 C2513。改名為 `atEdge`，只改測試的區域變數，判定不變（AGENTS §14.4 不適用）。分類：Test 自身（可攜性），不是實作的 Defect。
    - 更早一輪（`a10a5932`）的 L1 被下一次推送取消了，所以那一輪的 `CI gate` 顯示 failure，但沒有任何測試失敗。
+
+7. 修正後的推送沒有觸發 CI：PR #152 和 master 衝突（`CONFLICTING`），GitHub 建不出合併 ref。原因是 #146 合併時，工具線把 voxel 移出本線（`v8-tool-voxel-map-editor-moved-out`），README 和 HANDOFF 的同一段改到了。合入 master（`62b6f0cc`）時保留 master 的「移出」說法，加上指向 voxel-map-editor.md 的連結。之後 L1 三平台通過。
 
 ## 和事前宣告的差異（使用者已確認）
 
