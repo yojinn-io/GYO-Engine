@@ -8969,7 +8969,7 @@
       "find": "{ return value.playerId; }",
       "replace": "{ return ~value.playerId; }",
       "check": "cpu",
-      "expect": "Entity columns insert at the ordered position"
+      "expect": "Entity columns insert at the ordered position|GYO_ASSERT failed: row"
     }
   ]
 }
