@@ -1,10 +1,11 @@
 # GYO entity store
 
-Owner: Engine (proposed: `engine/entity_store` → `GYO::EntityStore`, namespace `Engine::EntityStore`).
+Owner: Engine (`engine/entity_store` → `GYO::EntityStore`, namespace `Engine::EntityStore`; decided 2026-11-05).
 Plan, evidence and record: [entity-store](plans/entity-store/README.md) (the reference survey, the Architecture Delta
 with its mapping to the first consumer's clauses, and the batches). Implementation is batch `v8-arch-entity-store-impl`.
-**Status: proposed, not approved.** The `Design Invariants` section below is an Architecture Delta (AGENTS.md §3);
-it takes effect when the user approves it. Nothing in `engine/` exists yet.
+**Status: approved 2026-11-05** (the user approved every recommendation of the Delta's decision list, `v8-arch-entity-store-delta`): the
+`Design Invariants` section below is an Architecture Delta (AGENTS.md §3) and is in force; changing it is a new Delta.
+Nothing in `engine/` exists yet (batch `v8-arch-entity-store-impl`, 3a first).
 
 Evidence notation. "Survey" is the approved reference survey of Bevy ECS and EnTT in the plan folder; "§2.1 Commands
 row" means the row of its table. "E-n" and "RC-n" are the approved clauses of the first consumer's entity model; each

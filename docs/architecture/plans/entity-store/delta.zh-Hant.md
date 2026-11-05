@@ -1,7 +1,7 @@
 # 實體容器（entity store）：Architecture Delta
 
 更新：2026-11-05（`v8-arch-entity-store-delta`）。Owner：Engine（架構）。
-**狀態：提案，未核准。** 本文件是 AGENTS §3 的 Architecture Delta 紀錄；契約本體與 `Design Invariants`、`Replacement Criteria` 在 [entity-store.md](../../entity-store.md)（英文，下稱契約）。核准時由使用者決定 §7 的各項。
+**狀態：已核准（2026-11-05，使用者「全照建議核准」：§7 的 10 項全部採建議案，即容器版、batch 3 拆 3a／3b、`GYO::EntityStore`、生成先刪除後各依 id 升冪、重複刪除合併、函數名沿用、消費端 Assert 並同意產品 E-5 守衛欄與 E-12 措辭的改寫、architecture.md 先 3a 版再完整版、驗收內容照第 9 項於 batch 3 開始時正式宣告、DI 1～10 與 RC 1～15 生效）。** 本文件是 AGENTS §3 的 Architecture Delta 紀錄；契約本體與 `Design Invariants`、`Replacement Criteria` 在 [entity-store.md](../../entity-store.md)（英文，下稱契約）。契約內「callback 擲出時清空待辦並還原執行中狀態」照實作者所定，使用者未另行指示。
 根據：[survey.zh-Hant.md](survey.zh-Hant.md)（batch 1，已核准；下稱 survey）、[entity-model.zh-Hant.md](../../../object_fps_pvp/entity-model.zh-Hant.md)（E-1～E-12、RC-1～RC-5，已核准）。行號以工作樹 `8bfc1335` 為準。契約不引用產品的檔案與行號；產品側的對應、守衛與行號集中在本文件（§1 第 4 項、§4、§6）。
 
 ## 0. 摘要
