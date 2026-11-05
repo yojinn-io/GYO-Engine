@@ -377,7 +377,7 @@
       "find": "PRODUCT_ROOTS = [REPOSITORY / 'apps' / 'object_fps_pvp']",
       "replace": "PRODUCT_ROOTS = CODE_ROOTS",
       "check": "asset_catalog",
-      "expect": "FAIL: test_every_exception_is_still_needed"
+      "expect": "FAIL: test_the_product_use_check_ignores_a_reference_from_a_test"
     },
     {
       "id": "v8-asset-layout-guard-exception-dropped",
