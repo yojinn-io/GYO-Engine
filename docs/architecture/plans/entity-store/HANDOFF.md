@@ -36,6 +36,8 @@
 - 2026-11-05：寫 batch 3a 的[驗收事前宣告](impl-3a-declaration.zh-Hant.md)（7 項判定、範圍、模型／檔位、估時 9～13 h），停下等使用者承認；檢證者 Fable 5.1 也在此一併請示。
 - 2026-11-05：圖書管理員回覆：delta §5 三段無異議、連結存在、3a 版通順；提兩點：`docs/creating_apps.md:41` 公開 target 清單要加 `GYO::EntityStore`（決定：由它在同一 commit 一起改）；契約狀態句在 3a 合併時要更新（決定：納入 3a 範圍）。已回覆。
 - 2026-11-05：使用者「承認，開始 3a」（事前宣告 7 項判定、檢證者 Fable 5.1 一併承認）。開始：實作者 Opus 5.5／high。
+- 2026-11-05：主會話由使用者改為 Opus 5.5（`/model`）。使用者指示：已核准計畫的模型指派照計畫，不因主會話換模型而重問；檢證者 Fable 5.1 照計畫（使用者再次同意）。
+- 2026-11-05：上一個 Claude Code 程序結束時 3a 實作者仍在執行，未完成。留下的狀態：`838e7f8e`（Engine 模組 `engine/entity_store`、common 測試與字詞守衛、Engine 突變目錄 16 個）已 commit；pvp 換上（`EntityId.hpp`、`EntityColumns.hpp`、`match_domain` 連結、`EntityColumnsTests.cpp`、產品 `mutations.json`、`entity-model.zh-Hant.md` 註記、契約狀態句）未 commit、未驗證；Engine 突變第一次執行被中斷（報告為空檔），留下突變 `es-row10-entityof-reads-id` 的置換文字在 `EntityKey.hpp`，主會話已還原成 commit 版本並掃描兩個突變目錄，無其他殘留。base 工作樹在 scratchpad 的 `base`（`2c959fbc`，與宣告的 base `ffd64346` 只差計畫文件，程式相同），base runner 已建好。由新的實作者（Opus 5.5／high）接手：先核對未提交的修改，再重跑 Engine 突變，繼續 pvp 換上與驗收。
 
 ## 未結事項
 
