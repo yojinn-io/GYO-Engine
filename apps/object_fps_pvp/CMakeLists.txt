@@ -51,10 +51,13 @@ gyo_app_add_library(player_content OUT_TARGET content
     PRIVATE_LIBRARIES GYO::AssetUfbx nlohmann_json::nlohmann_json)
 gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp
         src/Pvp/PlayerPresentation.cpp
-        src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp
+        src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/WeaponEventSounds.cpp
     PUBLIC_LIBRARIES ${domain} ${content} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
-    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer GYO::Os GYO::Audio nlohmann_json::nlohmann_json
-    PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_AUDIO SDL_PLATFORM SDL_GPU SDL_TTF FRAMEWORK)
+    # The weapon's gyo.event_sounds is read through the framework's JSON binding
+    # (v8-product-event-sounds-migrate); its structure is in the public headers.
+    PRIVATE_LIBRARIES GYO::Input GYO::Text GYO::UiRenderer GYO::Os GYO::Audio GYO::ToolFrameworkJson nlohmann_json::nlohmann_json
+    PUBLIC_COMPONENTS FRAMEWORK
+    PRIVATE_COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_AUDIO SDL_PLATFORM SDL_GPU SDL_TTF)
 gyo_app_add_executable(main MAIN OUT_TARGET app SOURCES main.cpp LIBRARIES ${support}
     COMPONENTS SDL_IMAGE UFBX SDL_INPUT SDL_AUDIO SDL_PLATFORM SDL_GPU SDL_TTF)
 target_compile_definitions(${app} PRIVATE GYO_DEFAULT_GPU_DRIVER="${GYO_DEFAULT_GPU_DRIVER}")

@@ -163,7 +163,8 @@ void RunSoundShots(const Options& options) {
     std::ofstream cueFile(options.output / "sound-cues.csv");
     cueFile << "cue,at_ns,played_ns\n";
     for (const auto& cue : cues)
-        cueFile << SoundCueName(cue.cue) << ',' << EngineNs(cue.at) << ',' << EngineNs(cue.played) << '\n';
+        cueFile << (cue.cue ? std::string(SoundCueName(*cue.cue)) : "event." + cue.event) << ','
+                << EngineNs(cue.at) << ',' << EngineNs(cue.played) << '\n';
     std::ofstream pressFile(options.output / "sound-presses.csv");
     pressFile << "index,pushed_ns,reload_key\n";
     for (const auto& press : presses) pressFile << press.index << ',' << press.pushedNs << ',' << (press.reloadKey ? 1 : 0) << '\n';
