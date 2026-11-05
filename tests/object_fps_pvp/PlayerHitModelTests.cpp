@@ -597,7 +597,7 @@ TEST_CASE("PvP B5: shapes of the Client's interpolated body against the Match's 
 // ordered pair of the product arena's spawns, both standing idle as spawned.
 TEST_CASE("PvP the probes' torso aim is judged Body from every product spawn") {
     std::string error;
-    const auto arena = Arena::Load(ContentRoot() / "pvp_arena.json", error);
+    const auto arena = Arena::Load(ContentRoot() / "maps" / "pvp_arena.json", error);
     REQUIRE_MESSAGE(arena, error);
     const HitAimModel aim(ContentRoot(), arena->bodyHeight);
     const auto& model = *LoadedProduct().model;

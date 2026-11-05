@@ -385,12 +385,12 @@
     {
       "id": "v8-asset-layout-guard-exception-dropped",
       "batch": "v8-asset-layout-guard",
-      "what": "A real departure loses its exception (the check must see the real catalog)",
+      "what": "A real departure loses its exception (the check must see the real catalog) (retargeted by v8-product-arena-v2: the root-file exceptions it used are gone with the move to maps/ and rules/)",
       "file": "tests/object_fps_pvp/test_asset_catalog.py",
-      "find": "    ('root-file', 'movement_rules.json'): PATH_LOADED_MOVE,\n",
+      "find": "    ('definition-name', 'weapons/nailer_v2/viewmodel/nailer_v2_viewmodel.json'):\n        'the next feature batch that edits this definition',\n",
       "replace": "",
       "check": "asset_catalog",
-      "expect": "FAIL: test_paths_follow_the_layout"
+      "expect": "FAIL: test_names_follow_the_naming_rules"
     },
     {
       "id": "v8-asset-layout-guard-source-license",
@@ -9033,6 +9033,176 @@
       "replace": "    k1, k2 = lan15_judge.result(\"passed\"), lan15_judge.check_k2(s)\n",
       "check": "lag_l2_summary",
       "expect": "test_sent_but_not_decided_fails_s2"
+    },
+    {
+      "id": "av2-walls-accepted",
+      "batch": "v8-product-arena-v2",
+      "what": "A schema 2 arena that still lists walls is accepted",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "        if (schema == 2 && json.contains(\"walls\"))\n            throw std::runtime_error(\"Arena schema 2 takes its walls from its geometry, not from walls\");\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "Arena schema 2 takes its walls"
+    },
+    {
+      "id": "av2-geometry-path",
+      "batch": "v8-product-arena-v2",
+      "what": "A geometry name with a path is accepted",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "        throw std::runtime_error(std::string(what) + \" is a plain file name: \" + file);",
+      "replace": "        static_cast<void>(what);",
+      "check": "cpu",
+      "expect": "Arena schema 2 takes its walls"
+    },
+    {
+      "id": "av2-mesh-unvalidated",
+      "batch": "v8-product-arena-v2",
+      "what": "A geometry Engine refuses gives an arena without walls instead of an error",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "            if (!mesh) throw std::runtime_error(\"Arena geometry: \" + Engine::Base::Describe(mesh.error()));",
+      "replace": "            if (!mesh) return arena;",
+      "check": "cpu",
+      "expect": "Arena schema 2 takes its walls"
+    },
+    {
+      "id": "av2-spawn-floating",
+      "batch": "v8-product-arena-v2",
+      "what": "A spawn in the air is accepted",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, walls)) || !std::isfinite(spawn.yaw) ||",
+      "replace": "            false || !std::isfinite(spawn.yaw) ||",
+      "check": "cpu",
+      "expect": "wall top"
+    },
+    {
+      "id": "av2-spawn-own-rule",
+      "batch": "v8-product-arena-v2",
+      "what": "The spawn rule keeps its own copy of support (any height up to 2 counts)",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, walls)) || !std::isfinite(spawn.yaw) ||",
+      "replace": "            (spawn.position.y != 0 && !(spawn.position.y <= 2.0001F)) || !std::isfinite(spawn.yaw) ||",
+      "check": "cpu",
+      "expect": "wall top"
+    },
+    {
+      "id": "av2-walls-reordered",
+      "batch": "v8-product-arena-v2",
+      "what": "The baked walls are not in the file's order",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "            arena.walls = baked.colliders;",
+      "replace": "            arena.walls.assign(baked.colliders.rbegin(), baked.colliders.rend());",
+      "check": "cpu",
+      "expect": "Arena schema 2 takes its walls"
+    },
+    {
+      "id": "av2-support-diverges",
+      "batch": "v8-product-arena-v2",
+      "what": "Grounding on a wall top needs a steeper contact than a floor gives",
+      "file": "apps/object_fps_pvp/src/Collision/CharacterCollision.cpp",
+      "find": "        if (contact && contact->normal.y > 0.5F) return true;",
+      "replace": "        if (contact && contact->normal.y > 1.5F) return true;",
+      "check": "cpu",
+      "expect": "wall top"
+    },
+    {
+      "id": "av2-baked-not-drawn",
+      "batch": "v8-product-arena-v2",
+      "what": "A baked arena falls back to boxes",
+      "file": "apps/object_fps_pvp/src/Pvp/ArenaMesh.cpp",
+      "find": "    return !geometry.vertices.empty() && !geometry.indices.empty() && !geometry.paletteRgba8.empty();",
+      "replace": "    return false;",
+      "check": "presentation",
+      "expect": "drawn as its mesh and palette"
+    },
+    {
+      "id": "av2-uv-dropped",
+      "batch": "v8-product-arena-v2",
+      "what": "The baked faces lose their palette uv",
+      "file": "apps/object_fps_pvp/src/Pvp/ArenaMesh.cpp",
+      "find": "    for (const auto& vertex : geometry.vertices) mesh.vertices.push_back({vertex.position, vertex.uv});",
+      "replace": "    for (const auto& vertex : geometry.vertices) mesh.vertices.push_back({vertex.position, {}});",
+      "check": "presentation",
+      "expect": "drawn as its mesh and palette"
+    },
+    {
+      "id": "av2-mesh-uncatalogued",
+      "batch": "v8-product-arena-v2",
+      "what": "A baked map is not in the catalog",
+      "file": "assets/object_fps_pvp/asset_catalog.json",
+      "find": "    { \"id\": \"object_fps_pvp.arena.mesh\", \"type\": \"text\", \"path\": \"maps/pvp_arena.voxel_mesh.json\" },\n",
+      "replace": "",
+      "check": "asset_catalog",
+      "expect": "maps/pvp_arena.voxel_mesh.json"
+    },
+    {
+      "id": "av2-movement-own-rule",
+      "batch": "v8-product-arena-v2",
+      "what": "Movement keeps its own copy of support, stricter at the edge (normal.y > 0.9)",
+      "file": "apps/object_fps_pvp/src/Pvp/Movement.cpp",
+      "find": "        return IsCharacterSupported({feet, bodyHeight, arena.radius}, arena.walls);",
+      "replace": "        if (feet.y <= 0.0001F) return true;\n        for (const auto& wall : arena.walls) {\n            const auto c = Engine::Collision::SweepVerticalCapsuleAgainstAabb({feet, bodyHeight, arena.radius}, {0, -0.002F, 0}, wall);\n            if (c && c->normal.y > 0.9F) return true;\n        }\n        return false;",
+      "check": "cpu",
+      "expect": "At the pillar"
+    },
+    {
+      "id": "av2-spawn-below-floor",
+      "batch": "v8-product-arena-v2",
+      "what": "A spawn below the floor is accepted (support counts any y <= 0.0001)",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "        if (!Engine::Math::IsFinite(body.feet) || spawn.position.y < 0 ||",
+      "replace": "        if (!Engine::Math::IsFinite(body.feet) ||",
+      "check": "cpu",
+      "expect": "wall top"
+    },
+    {
+      "id": "av2-geometry-left-on-failure",
+      "batch": "v8-product-arena-v2",
+      "what": "A load that fails still hands out the geometry",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "        if (!arena.Validate(error)) return std::nullopt;\n        // Handed out only with an arena that loaded: a failure leaves it empty.\n        if (geometry) *geometry = std::move(baked);",
+      "replace": "        if (geometry) *geometry = std::move(baked);\n        if (!arena.Validate(error)) return std::nullopt;",
+      "check": "cpu",
+      "expect": "Arena schema 2 takes its walls"
+    },
+    {
+      "id": "av2-arena-index-first",
+      "batch": "v8-product-arena-v2",
+      "what": "The baked map of the first installed arena is drawn whatever the Match chose",
+      "file": "apps/object_fps_pvp/src/Pvp/ArenaMesh.cpp",
+      "find": "        if (installed[i].id == id) return i;",
+      "replace": "        if (installed[i].id == id) return std::size_t{0};",
+      "check": "presentation",
+      "expect": "the Match chose"
+    },
+    {
+      "id": "av2-maps-folder-type-dropped",
+      "batch": "v8-product-arena-v2",
+      "what": "The maps folder type is not allowed (guard DI-2 must see the real layout; v8-product-arena-v2-maps-guard)",
+      "file": "tests/object_fps_pvp/test_asset_catalog.py",
+      "find": "    'maps': {'text'},\n",
+      "replace": "",
+      "check": "asset_catalog",
+      "expect": "FAIL: test_paths_follow_the_layout"
+    },
+    {
+      "id": "av2-mesh-hole",
+      "batch": "v8-product-arena-v2",
+      "what": "A drawn face is missing from a baked map (a hole where the body collides)",
+      "file": "assets/object_fps_pvp/maps/pvp_corners.voxel_mesh.json",
+      "find": "    [0, 0, 0, 3, 16, 16, 0],\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "exactly the surface"
+    },
+    {
+      "id": "av2-mesh-floating",
+      "batch": "v8-product-arena-v2",
+      "what": "A collider is missing, so its faces are drawn where a body passes",
+      "file": "assets/object_fps_pvp/maps/pvp_corners.voxel_mesh.json",
+      "find": "    { \"min\": [160, 0, 160], \"max\": [192, 32, 192] },\n",
+      "replace": "",
+      "check": "cpu",
+      "expect": "exactly the surface"
     }
   ]
 }

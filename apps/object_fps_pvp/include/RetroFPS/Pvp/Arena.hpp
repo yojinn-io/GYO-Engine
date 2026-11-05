@@ -2,6 +2,7 @@
 
 #include "engine/collision/Collision.hpp"
 #include "engine/math/linear/Vec3.hpp"
+#include "engine/voxel_mesh/VoxelMesh.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -33,8 +34,14 @@ struct Arena final {
     float gravity{18.0F};
 
     [[nodiscard]] bool Validate(std::string& error) const;
+    // Arena files: schema 1 lists walls; schema 2 names a gyo.voxel_mesh next
+    // to it ("geometry", a plain file name), whose collision boxes become the
+    // walls in the file's order. The file schema is not Arena::version, which
+    // stays 1: the members and the digest do not change (v8-tool-voxel-arena-v2).
+    // geometry, when given, receives the baked mesh (empty for schema 1).
     [[nodiscard]] static std::optional<Arena> Load(
-        const std::filesystem::path& path, std::string& error);
+        const std::filesystem::path& path, std::string& error,
+        Engine::VoxelMesh::VoxelMeshGeometry* geometry = nullptr);
 };
 
 // Content digest of a loaded arena (pv6 contract §2): 64-bit FNV-1a over the
@@ -57,7 +64,9 @@ inline constexpr std::size_t MaximumArenaSpawns = 64;
 // Client selects the installed one with the Match's id (ClientConnection), and
 // shows the first before it joins. Ids are unique and every arena shares the
 // first one's body height, which the character presentation is built for.
+// geometries, when given, receives each arena's baked mesh in the same order.
 [[nodiscard]] std::optional<std::vector<Arena>> LoadInstalledArenas(
-    const std::filesystem::path& list, std::string& error);
+    const std::filesystem::path& list, std::string& error,
+    std::vector<Engine::VoxelMesh::VoxelMeshGeometry>* geometries = nullptr);
 
 } // namespace fps::pvp

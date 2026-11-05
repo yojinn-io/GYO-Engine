@@ -15,6 +15,15 @@
 
 namespace fps::pvp {
 namespace {
+// A plain file name next to the file that names it (the arenas.json rule).
+std::filesystem::path SiblingFile(const std::filesystem::path& owner, const std::string& file, const char* what) {
+    if (file.empty() || file.find_first_of("/\\:") != std::string::npos || file == "." || file == "..")
+        throw std::runtime_error(std::string(what) + " is a plain file name: " + file);
+    auto name = Engine::Os::Files::PathFromUtf8(file);
+    if (!name) throw std::runtime_error(std::string(what) + " " + file + ": " + Engine::Base::Describe(name.error()));
+    return owner.parent_path() / *name;
+}
+
 Engine::Math::Vec3 ReadPosition(const nlohmann::json& value) {
     if (!value.is_array() || value.size() != 3)
         throw std::invalid_argument("Arena vectors require three numbers");
@@ -48,11 +57,13 @@ bool Arena::Validate(std::string& error) const {
     std::vector<Engine::Collision::VerticalCapsule> bodies;
     for (const auto& spawn : spawns) {
         const Engine::Collision::VerticalCapsule body{spawn.position, bodyHeight, radius};
-        if (!Engine::Math::IsFinite(body.feet) || spawn.position.y != 0 || !std::isfinite(spawn.yaw) ||
+        // On the floor, or on a wall top where Movement would ground it (one rule).
+        if (!Engine::Math::IsFinite(body.feet) || spawn.position.y < 0 ||
+            (spawn.position.y != 0 && !IsCharacterSupported(body, walls)) || !std::isfinite(spawn.yaw) ||
             spawn.position.x < radius || spawn.position.x > width - radius ||
             spawn.position.z < radius || spawn.position.z > depth - radius ||
             !CanPlaceCharacterBody(body, walls, bodies)) {
-            error = "Arena spawn must be on the floor, inside the arena and free of walls/other spawns";
+            error = "Arena spawn must stand on the floor or a wall top, inside the arena and free of walls/other spawns";
             return false;
         }
         bodies.push_back(body);
@@ -60,19 +71,25 @@ bool Arena::Validate(std::string& error) const {
     return true;
 }
 
-std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string& error) {
+std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string& error,
+                                 Engine::VoxelMesh::VoxelMeshGeometry* geometry) {
     error.clear();
+    if (geometry) *geometry = {};
     try {
         NativeReadFailure failure;
         const auto bytes = ReadNativeFile(path, failure, 256 * 1024);
         if (!bytes && failure.tooLarge) throw std::runtime_error("Arena content exceeds 256 KiB");
         if (!bytes) throw std::runtime_error("Cannot open arena: " + Engine::Os::Files::PathForMessage(path));
         const auto json = nlohmann::json::parse(bytes->begin(), bytes->end());
-        if (!json.at("version").is_number_integer() || json.at("version").get<std::int64_t>() != 1)
-            throw std::runtime_error("Unsupported arena version");
-        if (!json.at("walls").is_array() || !json.at("spawns").is_array())
-            throw std::runtime_error("Arena walls and spawns must be arrays");
+        if (!json.at("version").is_number_integer()) throw std::runtime_error("Unsupported arena version");
+        const auto schema = json.at("version").get<std::int64_t>();
+        if (schema != 1 && schema != 2) throw std::runtime_error("Unsupported arena version");
+        if (schema == 1 && !json.at("walls").is_array()) throw std::runtime_error("Arena walls must be an array");
+        if (schema == 2 && json.contains("walls"))
+            throw std::runtime_error("Arena schema 2 takes its walls from its geometry, not from walls");
+        if (!json.at("spawns").is_array()) throw std::runtime_error("Arena spawns must be an array");
         Arena arena;
+        Engine::VoxelMesh::VoxelMeshGeometry baked;
         arena.id = json.at("id").get<std::string>();
         arena.width = json.at("width").get<float>();
         arena.depth = json.at("depth").get<float>();
@@ -83,14 +100,32 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
         arena.eyeHeight = json.value("eye_height", 1.6F);
         arena.jumpHeight = json.value("jump_height", 0.6F);
         arena.gravity = json.value("gravity", 18.0F);
-        for (const auto& wall : json.at("walls")) {
-            const auto minimum = ReadPosition(wall.at("min"));
-            const auto maximum = ReadPosition(wall.at("max"));
-            arena.walls.push_back({minimum, maximum});
+        if (schema == 1) {
+            for (const auto& wall : json.at("walls")) {
+                const auto minimum = ReadPosition(wall.at("min"));
+                const auto maximum = ReadPosition(wall.at("max"));
+                arena.walls.push_back({minimum, maximum});
+            }
+        } else {
+            // The baked map: Engine's gyo.voxel_mesh is its one validator.
+            const auto& name = json.at("geometry");
+            if (!name.is_string()) throw std::runtime_error("Arena geometry is a file name");
+            const auto meshPath = SiblingFile(path, name.get<std::string>(), "Arena geometry");
+            NativeReadFailure meshFailure;
+            const auto meshBytes = ReadNativeFile(meshPath, meshFailure, Engine::VoxelMesh::MaxTextBytes);
+            if (!meshBytes && meshFailure.tooLarge) throw std::runtime_error("Arena geometry exceeds 16 MiB");
+            if (!meshBytes)
+                throw std::runtime_error("Cannot open arena geometry: " + Engine::Os::Files::PathForMessage(meshPath));
+            const auto mesh = Engine::VoxelMesh::ParseVoxelMesh(std::string_view(meshBytes->data(), meshBytes->size()));
+            if (!mesh) throw std::runtime_error("Arena geometry: " + Engine::Base::Describe(mesh.error()));
+            baked = Engine::VoxelMesh::ExpandVoxelMesh(*mesh);
+            arena.walls = baked.colliders;
         }
         for (const auto& spawn : json.at("spawns"))
             arena.spawns.push_back({ReadPosition(spawn.at("position")), spawn.at("yaw").get<float>()});
         if (!arena.Validate(error)) return std::nullopt;
+        // Handed out only with an arena that loaded: a failure leaves it empty.
+        if (geometry) *geometry = std::move(baked);
         return arena;
     } catch (const std::exception& exception) {
         error = exception.what();
@@ -122,8 +157,10 @@ std::uint64_t ArenaContentDigest(const Arena& arena) {
     return Engine::Base::Fnv1a64(bytes);
 }
 
-std::optional<std::vector<Arena>> LoadInstalledArenas(const std::filesystem::path& list, std::string& error) {
+std::optional<std::vector<Arena>> LoadInstalledArenas(const std::filesystem::path& list, std::string& error,
+                                                      std::vector<Engine::VoxelMesh::VoxelMeshGeometry>* geometries) {
     error.clear();
+    if (geometries) geometries->clear();
     try {
         NativeReadFailure failure;
         const auto bytes = ReadNativeFile(list, failure);
@@ -142,17 +179,20 @@ std::optional<std::vector<Arena>> LoadInstalledArenas(const std::filesystem::pat
             // The name is JSON text, so UTF-8; never read in the ANSI code page.
             auto name8 = Engine::Os::Files::PathFromUtf8(file);
             if (!name8) throw std::runtime_error("Arena list entry " + file + ": " + Engine::Base::Describe(name8.error()));
-            auto arena = Arena::Load(list.parent_path() / *name8, error);
+            Engine::VoxelMesh::VoxelMeshGeometry geometry;
+            auto arena = Arena::Load(list.parent_path() / *name8, error, geometries ? &geometry : nullptr);
             if (!arena) throw std::runtime_error(error);
             for (const auto& other : arenas)
                 if (other.id == arena->id) throw std::runtime_error("Arena installed twice: " + arena->id);
             if (!arenas.empty() && arena->bodyHeight != arenas.front().bodyHeight)
                 throw std::runtime_error("Installed arenas must share one body height: " + arena->id);
             arenas.push_back(std::move(*arena));
+            if (geometries) geometries->push_back(std::move(geometry));
         }
         return arenas;
     } catch (const std::exception& exception) {
         error = "arena list " + Engine::Os::Files::PathForMessage(list) + ": " + exception.what();
+        if (geometries) geometries->clear();
         return std::nullopt;
     }
 }

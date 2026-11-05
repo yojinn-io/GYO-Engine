@@ -22,8 +22,6 @@
 ```text
 assets/object_fps_pvp/
 ├── content.json, asset_catalog.json        Engine 契約（2 個 manifest）
-├── arenas.json, pvp_arena.json, pvp_corners.json, movement_rules.json
-│                                           依路徑載入，暫留根目錄（例外，第 9 節）
 ├── characters/
 │   ├── player/                             模型、character.json、presentation.json、animations.animset.json、
 │   │                                       ［v8］hitbox.json、textures/（有才建）
@@ -34,9 +32,10 @@ assets/object_fps_pvp/
 ├── ui/                                     gyo.ui 文件、HUD 參數
 │   └── textures/                           ［v8］UI 圖片
 ├── audio/[<group>/]<name>.wav, audio/sfx.json
-├── rules/<topic>.json                      新增的 Match 規則資料
-├── textures/<group>/                       兩個以上對象共用時才建（目前沒有）
-└── (maps/)                                 ［延後］地圖一組平放（v8-product-asset-path-loaded-move）
+├── rules/<topic>.json                      Match 規則資料（movement_rules.json，依路徑載入）
+├── maps/                                   地圖一組平放：arenas.json、pvp_<name>.json，以及 arena 以相鄰檔名
+│                                           引用的烘焙地圖 pvp_<name>.voxel_mesh.json（gyo.voxel_mesh）
+└── textures/<group>/                       兩個以上對象共用時才建（目前沒有）
 ```
 
 ## 3. 各種檔案放哪裡
@@ -56,7 +55,7 @@ assets/object_fps_pvp/
 | 音效 | `audio/[<group>/]<name>.wav`（48 kHz PCM16，Engine 的音效契約） | 小寫 snake_case |
 | 音效設定 | `audio/sfx.json` | |
 | Match 規則資料 | `rules/<topic>.json`，列進同一份 catalog | 主題名，小寫 snake_case |
-| 地圖 | 根目錄（之後 `maps/`） | `pvp_<name>.json` |
+| 地圖 | `maps/`，arena 和它引用的烘焙地圖放在一起 | `pvp_<name>.json`、`pvp_<name>.voxel_mesh.json` |
 | 只有測試用的素材 | `tests/object_fps_pvp/fixtures/`，不出貨（第 7 節） | |
 | 原始檔、交付包、原始錄音 | repo 外（第 8 節） | 依交付版本 |
 | 生成腳本（例如程序生成的音效） | `apps/object_fps_pvp/<子目錄>/` | 腳本裡不寫 AssetId |
@@ -71,6 +70,7 @@ assets/object_fps_pvp/
 | `ui/` | text；`ui/textures/` 放 texture |
 | `audio/` | sound、text |
 | `rules/` | text |
+| `maps/` | text |
 | `textures/` | texture |
 
 在 `characters/`、`weapons/`、`ui/` 裡，貼圖一定放在名為 `textures` 的資料夾。
@@ -102,7 +102,7 @@ assets/object_fps_pvp/
 ## 6. 依路徑載入的檔
 
 - 一般的素材由程式以 AssetId 經 catalog 讀取。
-- 依路徑讀的檔，在 `test_asset_catalog.py` 的 `RETAINED` 列出 id 與理由。目前有 4 個：`arenas.json`、`pvp_arena.json`、`pvp_corners.json`、`movement_rules.json`。
+- 依路徑讀的檔，在 `test_asset_catalog.py` 的 `RETAINED` 列出 id 與理由。目前有 6 個：`maps/` 的 `arenas.json`、`pvp_arena.json`、`pvp_corners.json`、`pvp_arena.voxel_mesh.json`、`pvp_corners.voxel_mesh.json`，以及 `rules/movement_rules.json`。
 - 新增依路徑載入的檔時，也要列進 `RETAINED`。位置照第 3 節的種類決定，不因為依路徑載入就放根目錄。
 - 依路徑載入的檔放在哪裡不寫成固定清單：hitbox 由誰、怎麼讀還沒定，而 Match 也已經開始經 catalog 以 AssetId 讀檔。
 
@@ -130,7 +130,7 @@ assets/object_fps_pvp/
   - 新增例外等於放寬守衛，要經使用者核准（AGENTS §14.4）。
   - 某一批解除了不一致，就在同一批刪掉對應的例外。例外不再需要時守衛會失敗，所以例外不會留著過期。
   - 刪除已解除的例外只締不緩，已經事先核准，事後在 dev_log 報告 AGENTS §14.4 的 1～5 項。
-- 依路徑載入的 4 個檔放在根目錄，也是例外，由 `v8-product-asset-path-loaded-move` 解除。
+- 依路徑載入的檔原本放在根目錄，是例外；2026-11-05 由 `v8-product-asset-path-loaded-move`（併進 `v8-product-arena-v2`）搬進 `maps/`、`rules/`，例外已刪除。
 
 ## 10. 工具與其他程式
 

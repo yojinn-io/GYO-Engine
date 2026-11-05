@@ -16,7 +16,7 @@ class GuiTorsoAim final {
 public:
     explicit GuiTorsoAim(std::filesystem::path assetRoot) : assetRoot_(std::move(assetRoot)) {}
     // The torso aim at the living peer, or none before the world, rules or a
-    // living peer exist. The room's arena must be the deployed pvp_arena.json.
+    // living peer exist. The room's arena must be the deployed maps/pvp_arena.json.
     std::optional<fps::pvp::HitAim> Aim(const fps::pvp::ClientConnectionState& state, fps::pvp::PlayerId peer) {
         if (!state.snapshot || !state.movementRules || !state.playerId || !peer) return std::nullopt;
         const auto target = std::find_if(state.snapshot->players.begin(), state.snapshot->players.end(),
@@ -24,7 +24,7 @@ public:
         if (target == state.snapshot->players.end() || target->lifeState != fps::pvp::LifeState::Alive) return std::nullopt;
         if (!arena_) {
             std::string error;
-            arena_ = fps::pvp::Arena::Load(assetRoot_ / "pvp_arena.json", error);
+            arena_ = fps::pvp::Arena::Load(assetRoot_ / "maps" / "pvp_arena.json", error);
             if (!arena_) throw std::runtime_error(error);
             model_ = std::make_unique<fps::pvp::HitAimModel>(assetRoot_, arena_->bodyHeight);
         }
