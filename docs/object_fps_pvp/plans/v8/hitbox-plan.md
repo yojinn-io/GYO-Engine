@@ -125,7 +125,7 @@ hitbox-line
 └── v8-product-hitbox-acceptance    「medium｜Sonnet 5.5｜L1、相關突變、B4／B5 的量測、L2 試玩（收支行）」
 rewind-line（部位判定線合併後）
 ├── v8-product-hitbox-lag-shadow    「medium｜Opus 5.5｜影子紀錄 v3：view_lag 以 J 計算」
-├── v8-product-hitbox-lag-l2        「medium｜Sonnet 5.5｜L2 收 view_lag 分布，定 R」
+├── v8-product-hitbox-lag-l2        「medium｜Opus 5.5｜L2 收 view_lag 分布，定 R」（2026-11-05 由 Sonnet 5.5 改：上段不用小模型，見 [lag-shadow 宣告](v8-product-hitbox-lag-shadow-declaration.md)）
 └── v8-product-hitbox-rewind        「high（局部 xhigh）｜Opus 5.5｜姿勢歷史、ShotRewind 單一入口、守衛兩段核准」
 ```
 

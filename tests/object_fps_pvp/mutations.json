@@ -8950,6 +8950,36 @@
       "replace": "{\"pvp.create\", Engine::Ui::UiActionPayloadType::None, LobbyAction::Join},",
       "check": "cpu",
       "expect": "map each id to its handler and payload"
+    },
+    {
+      "id": "lag-shadow-view-lag-from-a",
+      "batch": "v8-product-hitbox-lag-shadow",
+      "what": "view_lag counts from A again, not from the decision tick J",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "            record.viewLagQ16 = static_cast<std::int64_t>(decision.resolvedTick * 65536) - view;\n",
+      "replace": "            record.viewLagQ16 = static_cast<std::int64_t>(pending.a * 65536) - view;\n",
+      "check": "cpu",
+      "expect": "held\\.viewLagQ16"
+    },
+    {
+      "id": "lag-shadow-version-2",
+      "batch": "v8-product-hitbox-lag-shadow",
+      "what": "match-shots.jsonl stays at version 2",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "inline constexpr int MatchShotTraceVersion = 3;\n",
+      "replace": "inline constexpr int MatchShotTraceVersion = 2;\n",
+      "check": "cpu",
+      "expect": "MatchShotRecordLine\\(record\\)"
+    },
+    {
+      "id": "lag-shadow-a-field-from-j",
+      "batch": "v8-product-hitbox-lag-shadow",
+      "what": "view_lag_a counts from J",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MatchShotTrace.hpp",
+      "find": "            record.viewLagAQ16 = static_cast<std::int64_t>(pending.a * 65536) - view;\n",
+      "replace": "            record.viewLagAQ16 = static_cast<std::int64_t>(decision.resolvedTick * 65536) - view;\n",
+      "check": "cpu",
+      "expect": "held\\.viewLagAQ16"
     }
   ]
 }

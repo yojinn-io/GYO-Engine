@@ -1101,16 +1101,17 @@ TEST_CASE("PvP shadow record lines and the shot trace path") {
         .sequence = 20, .requestLife = 1, .currentEpoch = 3, .lastResolved = 15, .life = 1,
         .step = {ShotStepPath::OnTime, 105}, .dueTick = 105, .resolvedTick = 107, .held = true,
         .cooldownHoldTicks = 2, .rejection = ShotRejection::None,
-        .viewTickQ16 = 98 * 65536 + 32768, .viewValid = true, .viewLagQ16 = 2 * 65536 - 32768};
+        .viewTickQ16 = 98 * 65536 + 32768, .viewValid = true, .viewLagQ16 = 9 * 65536 - 32768,
+        .viewLagAQ16 = 2 * 65536 - 32768};
     CHECK(MatchShotRecordLine(record) ==
-          "{\"version\":2,\"kind\":\"decision\",\"time_ns\":1234567,\"player_id\":2,\"action_id\":9,\"action_kind\":\"shot\",\"a\":100,\"e\":3,"
+          "{\"version\":3,\"kind\":\"decision\",\"time_ns\":1234567,\"player_id\":2,\"action_id\":9,\"action_kind\":\"shot\",\"a\":100,\"e\":3,"
           "\"s\":20,\"request_life\":1,\"epoch_at_a\":3,\"last_resolved_at_a\":15,\"life_at_a\":1,\"path\":\"on_time\","
           "\"step_tick\":105,\"due_tick\":105,\"resolved_tick\":107,\"held\":true,\"cooldown_hold_ticks\":2,"
-          "\"rejection\":\"none\",\"view_tick_q16\":6455296,\"view_valid\":true,\"view_lag_q16\":98304}");
+          "\"rejection\":\"none\",\"view_tick_q16\":6455296,\"view_valid\":true,\"view_lag_q16\":557056,\"view_lag_a_q16\":98304}");
     ShotShadowRecord reload{.kind = ActionKind::Reload, .viewTickQ16 = 5, .viewValid = false};
     CHECK(MatchShotRecordLine(reload).find("\"cooldown_hold_ticks\":null") != std::string::npos);
-    CHECK(MatchShotRecordLine(reload).find("\"view_valid\":false,\"view_lag_q16\":null}") != std::string::npos);
-    CHECK(MatchShotTraceEndLine(4, 1, 2) == "{\"version\":2,\"kind\":\"trace_end\",\"records\":4,\"dropped\":1,\"view_tick_invalid\":2}");
+    CHECK(MatchShotRecordLine(reload).find("\"view_valid\":false,\"view_lag_q16\":null,\"view_lag_a_q16\":null}") != std::string::npos);
+    CHECK(MatchShotTraceEndLine(4, 1, 2) == "{\"version\":3,\"kind\":\"trace_end\",\"records\":4,\"dropped\":1,\"view_tick_invalid\":2}");
     CHECK(MatchShotTracePath("out/match-commands.jsonl") == std::filesystem::path("out/match-shots.jsonl"));
     CHECK(MatchShotTracePath("out/trace.jsonl") == std::filesystem::path("out/trace.jsonl.shots.jsonl"));
     CHECK(MatchShotTracePath({}).empty());

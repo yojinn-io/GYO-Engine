@@ -1,13 +1,13 @@
 #pragma once
 
 // Product-owned diagnostics (v7.1 hitbox-fields, pv7 §6 "影子量測", D-2): the
-// Match's record of every action decision, match-shots.jsonl version 2
-// (a1-shot-step). Header-only, like MatchIngressTrace.hpp. The host hands each
-// request's copy to this track; at the hand-off tick A the track keeps the
-// shooter's epoch, cursor and life and the path pv7 §6 gives at A, and when
-// the decision comes (tick J) it writes them with the Match's first due tick D,
-// J and the cooldown hold (PvpMatch::GetActionTiming), and the recorded view
-// tick check (pv7 §7). The view tick never reaches a decision. Which command the step tick resolved
+// Match's record of every action decision, match-shots.jsonl version 3
+// (a1-shot-step; v8 lag-shadow: view_lag counts from J). Header-only, like
+// MatchIngressTrace.hpp. The host hands each request's copy to this track;
+// at the hand-off tick A the track keeps the shooter's epoch, cursor and
+// life and the path pv7 §6 gives at A, and when the decision comes (tick J)
+// it writes them with the Match's first due tick D, J and the cooldown hold
+// (PvpMatch::GetActionTiming), and the recorded view tick check (pv7 §7). The view tick never reaches a decision. Which command the step tick resolved
 // (Actual, Held, Neutral) and whether it arrived later are not repeated here:
 // match-commands.jsonl (resolved, by player, epoch and sequence) and
 // match-ingress.jsonl (substitution records with their first late copy) hold
@@ -40,7 +40,7 @@
 
 namespace fps::pvp {
 
-inline constexpr int MatchShotTraceVersion = 2;
+inline constexpr int MatchShotTraceVersion = 3;
 inline constexpr std::size_t MatchShotRecordCapacity = 4096;
 
 // The path of a request as pv7 §6 sees it at its hand-off tick A. A record of
@@ -110,9 +110,12 @@ struct ShotShadowRecord final {
     ShotRejection rejection{ShotRejection::None};
     std::uint64_t viewTickQ16{};
     bool viewValid{true};
-    // A - view tick, in Tick x 65536, for a valid nonzero view tick (pv7 §7
-    // view_lag; v8's rewind reference).
+    // J - view tick, in Tick x 65536, for a valid nonzero view tick (pv7 §7
+    // view_lag; v8's rewind reference: the rewind judges at J).
     std::optional<std::int64_t> viewLagQ16;
+    // A - view tick, the same way: version 2's view_lag, kept for comparison
+    // (they differ by the cooldown hold).
+    std::optional<std::int64_t> viewLagAQ16;
 };
 
 struct ShotRecords final {
@@ -136,7 +139,7 @@ struct ShotRecords final {
         ",\"held\":" + (r.held ? "true" : "false") +
         ",\"cooldown_hold_ticks\":" + optional(r.cooldownHoldTicks) + ",\"rejection\":\"" +
         std::string(ShotRejectionName(r.rejection)) + "\",\"view_tick_q16\":" + std::to_string(r.viewTickQ16) +
-        ",\"view_valid\":" + (r.viewValid ? "true" : "false") + ",\"view_lag_q16\":" + optional(r.viewLagQ16) + "}";
+        ",\"view_valid\":" + (r.viewValid ? "true" : "false") + ",\"view_lag_q16\":" + optional(r.viewLagQ16) + ",\"view_lag_a_q16\":" + optional(r.viewLagAQ16) + "}";
 }
 
 [[nodiscard]] inline std::string MatchShotTraceEndLine(std::uint64_t records, std::uint64_t dropped,
@@ -226,8 +229,11 @@ private:
         if (request.kind == ActionKind::Shot) record.cooldownHoldTicks = record.held ? record.resolvedTick - record.dueTick : 0;
         record.viewValid = ValidViewTick(request.kind, request.observedAuthorityTick, request.viewTickQ16);
         if (!record.viewValid) ++buffer_.viewTickInvalid;
-        else if (request.viewTickQ16)
-            record.viewLagQ16 = static_cast<std::int64_t>(pending.a * 65536) - static_cast<std::int64_t>(request.viewTickQ16);
+        else if (request.viewTickQ16) {
+            const auto view = static_cast<std::int64_t>(request.viewTickQ16);
+            record.viewLagQ16 = static_cast<std::int64_t>(decision.resolvedTick * 65536) - view;
+            record.viewLagAQ16 = static_cast<std::int64_t>(pending.a * 65536) - view;
+        }
         if (buffer_.records.size() >= MatchShotRecordCapacity) ++buffer_.dropped;
         else buffer_.records.push_back(record);
     }
