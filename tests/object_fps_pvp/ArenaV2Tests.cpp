@@ -200,19 +200,26 @@ TEST_CASE("The baked arenas retire v1: the same movement, bit for bit") {
 
 TEST_CASE("At the pillar's edge, a spawn is valid exactly where movement grounds a body") {
     auto arena = LoadOrFail(FrozenV1() / "pvp_arena.json");
-    // Feet on the pillar's top plane at points walking off its edge: on the top,
-    // over the rounded edge (0.5 < normal.y < 1), and past it.
-    for (float x = 10.5F; x <= 11.4F; x += 0.05F) {
+    // Bodies walking off the pillar's edge at x = 11: on the top, resting on the
+    // edge with the bottom sphere (contact normal.y between 0.5 and 1: the
+    // sphere's centre sits at 2 + sqrt(r^2 - dx^2)), and past it.
+    const float r = arena.radius;
+    int onEdge = 0;
+    for (float x = 10.5F; x <= 11.4F; x += 0.02F) {
         CAPTURE(x);
-        const Engine::Math::Vec3 feet{x, 2, 10};
+        const float dx = x - 11.0F;
+        const float y = dx <= 0 ? 2.0F : dx < r ? 2.0F + std::sqrt(r * r - dx * dx) - r : 2.0F;
+        if (dx > 0.11F && dx < 0.21F) ++onEdge; // normal.y within about (0.6, 0.9)
+        const Engine::Math::Vec3 feet{x, y, 10};
         arena.spawns[1] = {feet, 0};
         std::string error;
         const bool valid = arena.Validate(error);
         const auto stepped = StepMovement(arena, PlayerState{1, feet, 0}, MovementCommand{1});
         // A body that stays where it was put stands there.
-        const bool standsThere = stepped.grounded && stepped.position.y == 2;
+        const bool standsThere = stepped.grounded && stepped.position.y == feet.y;
         CHECK(valid == standsThere);
     }
+    CHECK(onEdge >= 4); // the edge band is sampled
 }
 
 TEST_CASE("A spawn stands on the floor or on a wall top, as movement grounds it") {
