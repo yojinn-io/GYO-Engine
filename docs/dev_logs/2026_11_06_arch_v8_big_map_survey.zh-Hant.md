@@ -4,7 +4,7 @@
 段：上段（Architecture 判斷的根據）。調查者：主會話，開工時 Fable 5.1，之後由使用者切成計畫指定的 Opus 5.5／high；
 參照的讀取：三個子 Agent（general-purpose、Opus 5.5、high）；對抗檢查者：Fable 5.1／xhigh（使用者同意用比主會話強的模型）。
 
-**狀態：** 完成，停下等使用者決定六個未決事項。只改文件，沒有程式變更。
+**狀態：** 完成。六個未決事項 2026-11-06 由使用者照建議定案（「照建議定案」，代號 `v8-arch-big-map-sim-model`、`-chunk-size`、`-encoding`、`-markers-owner`、`-greedy`、`-lod`，內容在 HANDOFF「決定」）。只改文件，沒有程式變更。
 
 相關文件：[計畫 README](../architecture/plans/big-map/README.md)、[survey](../architecture/plans/big-map/survey.zh-Hant.md)、
 [proposal v0.1](../architecture/plans/big-map/proposal-v0.1.zh-Hant.md)、[HANDOFF](../architecture/plans/big-map/HANDOFF.md)。
@@ -77,6 +77,6 @@
 
 ## 留給之後
 
-- 使用者決定六個未決事項（survey 第 4 節）後，由架構師會話開 engine-map 批。
+- 六項已定案；由架構師會話開 engine-map 批（之後 tool-chunked、product-arena-v3）。
 - 未量：greedy 的縮減、碰撞盒區塊內合併的增量、broadphase 後的單步成本、Client 的畫面時間、Windows／Linux 的解析速度。各自寫在 survey 第 4 節的建議裡，排在之後的批次量。
 - 未讀：Ericson 第 7 章、simdjson／RapidJSON、Vintage Story、Teardown 作者的新引擎。

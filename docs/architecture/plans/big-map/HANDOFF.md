@@ -60,7 +60,21 @@
   - 全部採納，survey 已修正（第 7 節列出判定與處置）。
 - 2026-11-06 04:40 JST **停下，交使用者決定六個未決事項**（survey 第 4 節）。用時約 1.2 h（子 Agent 平行），估時 8～12 h 之內。
 
-## 待決（使用者）
+## 決定（使用者，2026-11-06）
 
-survey 第 4 節的六項：(1) 模擬模型、(2) 區塊與 region 大小、(3) JSON＋換解析 或 二進位、(4) 標記層 owner、(5) greedy 與區塊內碰撞合併、(6) LOD。
-決定後由架構師會話開 engine-map 批（之後 tool-chunked、product-arena-v3）。
+使用者原話：「照建議定案」。survey 第 4 節的六項全部採用建議。
+
+| 代號 | 決定 |
+|---|---|
+| `v8-arch-big-map-sim-model` | Match 整張載入碰撞盒，沒有「已載入集合」；AI 先全部模擬。產品批量到 tick（玩家＋AI）超過預算時，才加「遠處睡眠」，睡眠狀態是權威元件（進 digest、依 EntityId 升冪）。 |
+| `v8-arch-big-map-chunk-size` | 區塊 16³（cell 0.5 m 時 8 m）；region 8×8 區塊柱 × 全高（64 m）；`region_size` 寫進索引。 |
+| `v8-arch-big-map-encoding` | 契約只有 JSON 文字一種編碼。engine-map 批把 Engine 內部解析換成不經回呼的嚴格解析（最小改法：SAX 查重複鍵＋不帶回呼的 `json::parse`，規則不動），並事前宣告載入時間的判定；二進位快取記為 Replacement Criterion；換第三方解析器另案（Engine 新依賴，要使用者決定）；region 平行解析由呼叫端做，不進 `GYO::VoxelMesh`。 |
+| `v8-arch-big-map-markers-owner` | 標記層 owner＝Engine 新模組 `GYO::MapMarkers`（只依賴 Base、Math）：點、盒、路徑，1/16 格整數座標，`id`／`kind`／`tags` 名字不透明；產品提供 `marker_kinds.json` 並拒絕不認得的 kind；Engine 文件與範例不出現玩法名詞。新 Subsystem 的 Architecture Delta 由 engine-map 批寫 7 項。 |
+| `v8-arch-big-map-greedy` | greedy 進工具的烘焙，掃描順序固定；碰撞盒改為區塊內合併。tool-chunked 批事前宣告量測（`pvp_corners` 與像建築的合成圖：四邊形數、盒子數、每區塊重烘時間、T-junction 目視）；工具 DI 3／DI 4 守衛的變更照 §14.4 取得使用者核准。 |
+| `v8-arch-big-map-lod` | v0.1 不做 LOD；Client 以 region 做視錐與距離剔除。product-arena-v3 批量 Client 畫面時間（km² 大小、像建築的合成圖、最壞角度），超過宣告值時才由工具烘 region 代理（RC）。 |
+
+proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 §11.3 的範例名、§11.7 的 4 MB/s 外推、§6a 的「全圖模擬 AI」前提）。
+
+## 下一步
+
+由架構師會話開 `v8-arch-big-map-engine-map`（之後 `-tool-chunked`、`-product-arena-v3`）。本批不開。

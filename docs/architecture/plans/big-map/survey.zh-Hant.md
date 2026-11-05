@@ -1,7 +1,7 @@
 # 大地圖 survey：以來源與量測檢驗方案 v0.1（`v8-arch-big-map-survey`）
 
 更新：2026-11-06。Owner：架構。計畫：[README](README.md)；假說：[proposal-v0.1](proposal-v0.1.zh-Hant.md)；記錄：[HANDOFF](HANDOFF.md)。
-**狀態：調查與量測完成；對抗檢查（Fable／xhigh）的指正已核對並修正，結果附在第 7 節。六個未決事項等使用者決定；本文只給建議，不替使用者決定。**
+**狀態：調查與量測完成；對抗檢查（Fable／xhigh）的指正已核對並修正，結果附在第 7 節。六個未決事項 2026-11-06 由使用者照建議定案（「照建議定案」，代號見 [HANDOFF](HANDOFF.md)「決定」）。**
 
 ## 0. 摘要
 
@@ -151,9 +151,11 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 
 ## 4. 六個未決事項（proposal §11.9）
 
-每節：業界怎麼做、對 GYO 的建議、理由、不採建議的代價。**決定由使用者做。**
+每節：業界怎麼做、對 GYO 的建議、理由、不採建議的代價。2026-11-06 使用者照建議定案。
 
 ### 4.1 模擬模型：全圖模擬，還是遠處 AI 降頻／凍結
+
+> **決定（2026-11-06，`v8-arch-big-map-sim-model`）：採用本節的建議。**
 
 - **業界**：
   - Minecraft：模擬距離外的實體不處理、仍可存取（ticket／load level）。
@@ -174,6 +176,8 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
   - 永遠全圖模擬：AI 數量往上加時，tick 會超過預算（每隻 AI 的成本和玩家同級）；這時再改是產品批的事，格式不受影響（可逆）。
 
 ### 4.2 區塊 16³、region 8×8 的大小
+
+> **決定（2026-11-06，`v8-arch-big-map-chunk-size`）：採用本節的建議。**
 
 - **業界**（換成公尺比較）：
 
@@ -198,6 +202,8 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 
 ### 4.3 JSON＋快解析是否足夠，或必須二進位
 
+> **決定（2026-11-06，`v8-arch-big-map-encoding`）：採用本節的建議。**
+
 - **業界**：Minecraft（NBT＋zlib 的 region 檔）、Luanti（資料庫裡的二進位 blob）、Veloren（二進位）都是二進位；UE 的 cook 產物也是。沒有一家用文字當執行期格式。
 - **量測**（第 5 節 (c)，含對抗檢查者的追加量測）：
   - 現在的 1.3～1.4 s，約 1.1 s 是 nlohmann 回呼式解析的**二次方行為**：每結束一個物件，就線性掃一次所在的陣列。合成圖的 20,691 個碰撞盒是同一陣列裡的物件。
@@ -220,6 +226,8 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 
 ### 4.4 標記層的 owner 與格式輪廓
 
+> **決定（2026-11-06，`v8-arch-big-map-markers-owner`）：採用本節的建議。**
+
 - **業界**：Source（字串 classname＋keyvalue，遊戲 DLL 賦義，FGD 由遊戲提供給編輯器，未知名字只警告）、Godot（Marker3D、Area3D、Path3D，groups 是名字）、
   UE（Target Point、Volume，Gameplay Tags 由專案定義字典）、Minecraft（structure block 的字串，由程式解釋）、塔科夫（spawn 點、Boss 區、撤離點都以字串名引用）。
   共同模式：**引擎擁有格式，遊戲擁有意義，編輯器的種類清單由遊戲提供。**
@@ -240,6 +248,8 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 
 ### 4.5 greedy 合併與碰撞盒「區塊內合併」的代價
 
+> **決定（2026-11-06，`v8-arch-big-map-greedy`）：採用本節的建議。**
+
 - **業界**：greedy 的縮減依形狀而定（實心方塊 384→6、地形 6634→1983、雜訊 2198→1670），時間和只剔面相當；代價在貼圖集、光照、AO，GYO 都沒有。
   Godot 的頂點色 mesher 預設開 greedy。T-junction 的裂縫有爭議，沒有一手的結論。Godot GridMap 每 octant 一個 body，碰撞也是以分組為界。
 - **量測**：**未量**。合成圖是雜訊（隨機填、方向亂），greedy 幾乎無效，不能拿來估；碰撞盒「區塊內合併」比「整張合併」多多少盒子也未量。
@@ -254,6 +264,8 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 - **不採的代價**：不做 greedy：檔案與頂點數大一到兩個數量級（推算）。碰撞盒跨區塊合併：一個區塊的編輯要重算跨區塊的盒子，增量重烘失去局部性。
 
 ### 4.6 LOD／遠處代理在 1 km² 視距下是否已經需要
+
+> **決定（2026-11-06，`v8-arch-big-map-lod`）：採用本節的建議。**
 
 - **業界**：Minecraft 原版沒有 LOD（以 chunk 視距控制，最大 32 chunk）；Distant Horizons 是為 256 chunk 以上（約 4 km 以上）另開一個 pass；Luanti 沒有，預設視距 200 node；
   UE 的 HLOD 給大型開放世界；塔科夫用 Unity 的 LOD（未確認細節），2023 年還在改 culling。
