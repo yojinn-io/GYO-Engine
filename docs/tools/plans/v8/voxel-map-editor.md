@@ -228,6 +228,142 @@ v8-tool-voxel-map-editor
 - 證據放主 checkout 的 `build/evidence/tool-v8-voxel-map/engine-contract/`。
 - 沒有 L2、L3。
 
+## v8-tool-voxel-map-editor-core 的事前宣告
+
+2026-11-05 寫，**要使用者核准後才實作**。結果出來之後，判定不放寬（AGENTS §14.1）。實作時如果要改宣告，在**審查前**先回報（上一批這點沒做到）。
+
+- **分支**：PR #152，同一條功能線。
+- **重估**：14～20 h（原本 12～18 h）。多出來的是 24 種朝向、形狀庫和碰撞盒合併的性質測試。
+- **段**：上段：產物的寫出端牽動 Engine 契約；新的工具 owner。
+- **模型**：實作是主會話（Opus 5.5／high）；審查是子 Agent（Opus 5.5／high）；這批不放寬既有判定，所以不需要驗證者。
+
+### 範圍
+
+- **做**：
+  - 登錄新工具 `voxel_map_editor`：`tools/voxel_map_editor/`、`project.json`、`tools.csv` 的一列（enabled、default 都是 true，release 是 false，三平台）、`tests/voxel_map_editor/`。
+  - 核心程式庫：
+    - `gyo.voxel_grid` 的讀寫；
+    - 形狀庫和 24 種朝向；
+    - build（格子 → `gyo.voxel_mesh`）；
+    - 寫出前經 Engine 的 `ParseVoxelMesh` 讀回驗證。
+  - CLI。
+  - `docs/voxel_map_editor/architecture.md` 的 Design Invariants 和 Replacement Criteria。
+  - 依賴守衛、規則測試、性質測試、突變。
+- **不做**：
+  - GUI、預覽（window 批）；
+  - catalog 登錄、產品的 arena v2、兩張地圖的正式轉換與等價驗收（arena-v2 批）；
+  - framework 的預覽元件。
+- **只有 CLI 版本**：這一批 `project.json` 只有 `cli` 一個 variant。window 批再加 `gui`，並改成預設。
+
+### Architecture Delta（AGENTS §3）
+
+1. **為什麼需要**：`v8-tool-voxel-offline-build` 和 `v8-tool-voxel-layers` 定了「格子格式、build 歸工具」。
+2. **現況的問題**：沒有任何東西能產生 `gyo.voxel_mesh`。
+3. **變化的邊界**：新的工具 owner（依 [tool_projects.md](../../../tool_projects.md) 登錄）；新的、工具持有的格式 `gyo.voxel_grid`。
+4. **影響範圍**：只有工具本身。Engine 和產品都不改。
+5. **依賴方向**：工具 → Engine（`GYO::VoxelMesh`、`GYO::Engine` 的 io、`GYO::Base` 的 `Sha256`）、framework（`GYO::ToolFramework` 的 headless 外殼）、nlohmann（工具自己連，先例是 audio_editor 的工程檔）。不連遊戲、SDL、ImGui。
+6. **Ownership**：格子格式和它的規則都歸工具。Engine 不知道方塊、形狀、朝向（`voxel-mesh.md` 的 DI 1）。
+7. **為什麼沒有更小的做法**：照 AGENTS §5，CLI 就是 Script 階段；GUI 留到下一批。
+
+### 格式 `gyo.voxel_grid` version 1（工具持有；草案，實作時要改會在審查前回報）
+
+```json
+{
+  "schema": "gyo.voxel_grid",
+  "version": 1,
+  "origin": [-1, 0, -1],
+  "cell_size": 1.0,
+  "shapes": [
+    { "name": "cube", "boxes": [{ "min": [0, 0, 0], "max": [16, 16, 16] }] },
+    { "name": "slab", "boxes": [{ "min": [0, 0, 0], "max": [16, 8, 16] }] },
+    { "name": "stair", "boxes": [{ "min": [0, 0, 0], "max": [16, 8, 16] }, { "min": [0, 8, 8], "max": [16, 16, 16] }] }
+  ],
+  "blocks": [{ "name": "wall", "shape": 0, "color": [51, 79, 99, 255] }],
+  "chunks": [{ "at": [0, 0, 0], "runs": [[0, 0, 100], [1, 0, 16], …] }]
+}
+```
+
+- **`origin`**：以格為單位，y 必須是 0（`v8-tool-voxel-coords`）。
+- **`cell_size`**：範圍和 `gyo.voxel_mesh` 相同，[2^-16, 2^16]。
+- **`shapes`**：每種形狀是一組盒子，單位是 1/16 格，範圍 0～16，每軸 `min < max`。名稱不能重複。
+- **`blocks`**：每種方塊是 {名稱, 形狀的索引, sRGB 顏色}。
+- **`chunks`**：
+  - 每個區塊是 16³ 格，`at` 是區塊座標（格座標除以 16）。
+  - `runs` 是 RLE，每段 `[方塊, 朝向, 長度]`：方塊 0 代表空格，1 以後代表 `blocks[方塊−1]`；朝向 0～23；每個區塊的長度加起來剛好是 4096。
+  - 格子的順序是 x 最快，其次 z，最後 y。
+  - 區塊依 `at` 的字典序嚴格遞增；全空的區塊不寫。
+- **規則和 Engine 的格式一樣嚴格**：未知欄位、重複 key、超出範圍、非正規順序、空格卻帶朝向，一律報錯。
+- **寫出的格式是固定的**：同一份內容只會寫成一種文字，讀進來再寫回去會逐位元組相同。
+
+### 朝向（24 種）
+
+- 朝向 `o` 的定義：「上方」= 6 個軸方向中的第 `o / 4` 個（+Y −Y +X −X +Z −Z），再繞這個上方軸轉 `(o % 4) × 90°`。
+- 旋轉以格子中心 (8, 8, 8) 為軸心，盒子轉完仍然是軸對齊的盒子。
+- 24 種朝向的矩陣列成一張表，寫進文件和測試。
+
+### build
+
+1. 每個非空格：把形狀的盒子轉成這格的朝向，換算成以 `origin` 為準的 1/16 單位。
+2. **面**：每個盒子有 6 個面。一個面落在格子的邊界上，而且相鄰格在那一側蓋滿整個 16×16 面時，剔除它（Minecraft 的 cullface）。其他的面都保留：不做繪製的 greedy，格子內部盒子之間的面也不剔除。
+3. **顏色**：
+   - 調色盤的條目＝方塊，6 個方向的顏色＝方塊顏色乘上固定的亮度：+Y 1.0、−Y 0.5、±X 0.8、±Z 0.65（參考 Minecraft 的方向亮度）。
+   - 亮度是工具的常數，在 Engine 之外，寫進工具文件。
+   - 只列出用到的方塊，依名稱排序。
+4. **碰撞**：
+   - 所有盒子聯集之後，先把座標壓縮（取所有盒子的邊界值），再在壓縮後的格子上做固定順序的 3D greedy 合併：先沿 x 延伸，再 z，再 y。
+   - 合併出的盒子彼此不重疊，聯集和輸入相同。
+   - 形狀目前都是實心的（沒有 `solid` 欄位，`v8-tool-voxel-grid-format`）。
+5. **輸出**：
+   - 依 Engine 的正規順序排序，去掉重複的四邊形，寫成固定格式的 JSON。
+   - `source_sha256` 是原始檔位元組的 SHA-256（`Engine::Base::Sha256`）；`build_version` 是 `"voxel_map_editor 1"`。
+   - 寫出前用 `ParseVoxelMesh` 讀回；不通過就什麼都不寫。檔案用 `engine/io` 的原子替換寫出。
+6. **`walls≤1024` 不在工具裡檢查**：這個數字是產品的規則，放進工具會讓工具知道產品（違反中立）。工具只回報盒子數，由產品的載入和測試擋下（arena-v2 批）。這是我對「build 超過就失敗」（`v8-tool-voxel-arena-v2`）的解讀，**請一併確認**。
+
+### CLI（`gyo_voxel_map_editor`，經 framework 的 headless 外殼）
+
+| 指令 | 內容 | 結束碼 |
+|---|---|---|
+| `build <grid> <mesh>` | build 並寫出產物 | 0 成功；1 輸入不合法；2 寫入失敗 |
+| `verify <grid> <mesh>` | 重新 build，和已有的產物逐位元組比較 | 0 相同；3 不同；1 輸入不合法 |
+| `inspect <file>` | 依 `schema` 判斷是格子還是產物，印出摘要：格數、方塊數、四邊形數、盒子數、hash | 0／1 |
+| `convert-arena-v1 <arena.json> <grid>` | 把 arena v1 的 `walls`（必須落在整數格上）轉成格子，全部用 `cube`。出生點和移動參數不轉（它們歸 arena v2） | 0／1 |
+
+### Design Invariants（草案，寫進 `docs/voxel_map_editor/architecture.md`）
+
+1. **依賴**：不連遊戲、不提產品的名字。不包含 SDL、ImGui 的標頭，也不連它們的 target。守衛：依賴守衛（比照 model_viewer 的正向清單）和它的自我測試。
+2. **一個驗證者**：產物是否合法，只由 Engine 的 `ParseVoxelMesh` 決定。工具寫出前一定讀回，不另外持有一份產物規則。守衛：「讀回失敗就不寫」的測試和突變。
+3. **確定**：同一份格子，在每個平台都 build 出逐位元組相同的產物；格子讀進來再寫回也逐位元組相同。守衛：黃金檔比對、兩次 build 的比對。
+4. **不失真**：碰撞盒的聯集等於所有盒子的聯集，盒子彼此不重疊；面只在被蓋滿時才剔除。守衛：性質測試。
+5. **只寫它產生的檔**：原子替換；不碰 catalog、產品檔、arena。守衛：CLI 測試。
+6. **格子歸工具**：`gyo.voxel_grid` 只有這個工具讀；出現第二個讀者時，就該升到 Engine（Replacement Criterion）。
+
+### Replacement Criteria（草案）
+
+1. 格子出現第二個讀者（例如場景編輯器）。
+2. 形狀需要盒子以外的幾何（斜坡，B2）。
+3. build 時間或產物大小量到壓力，需要繪製的 greedy、依區塊切分或增量 build。
+4. 工具每加一個功能，就得重新驗證 Engine 的產物規則。
+
+### 判定（現在固定）
+
+| 判定 | 內容 | 通過條件 |
+|---|---|---|
+| E1 | `gyo.voxel_grid` 的規則：每條一組測試（含合法的最小文件、讀進來再寫回逐位元組相同） | 全部通過 |
+| E2 | 朝向：24 個矩陣兩兩不同、都是正交矩陣、行列式 +1；朝向 0 是恆等；樓梯轉 90° 的盒子和手算的值相同 | 全部通過 |
+| E3 | 面剔除的黃金值：1 個立方體 → 6 個面；2 個相鄰的立方體 → 10 個面；半磚旁的立方體 → 立方體朝向半磚的面保留，半磚朝向立方體的側面被剔除 | 四邊形逐筆相同 |
+| E4 | 碰撞的性質：多組合成的格子（含隨機的，固定種子，200 組）都滿足「聯集相同」和「互不重疊」，比對在壓縮後的格子上做；2×1×1 個立方體 → 1 個盒子；L 形 → 2 個盒子 | 全部通過 |
+| E5 | 確定性：一份含立方體、半磚、樓梯、多種朝向和顏色的格子，build 結果和 repo 裡的黃金產物逐位元組相同，在三平台都比對；同一輸入 build 兩次結果相同 | 逐位元組相同 |
+| E6 | 一個驗證者：把寫出端改壞（例如讓 `dir` 變成 6），讀回會失敗，檔案沒有被寫出；所有黃金產物都通過 `ParseVoxelMesh` | 通過 |
+| E7 | CLI：四個指令各自的成功與失敗路徑（`cmake -P`，比照 model_viewer）；`verify` 能偵測一個位元組的差異 | 通過 |
+| E8 | 依賴守衛＋自我測試 | 通過 |
+| E9 | 突變（`docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json`，至少 14 條）：cullface 不檢查蓋滿、剔除方向反了、朝向表錯一格、旋轉軸心錯、RLE 長度不檢查、空格帶朝向被接受、合併後盒子重疊、合併漏掉一塊、亮度用錯方向、排序不正規、讀回失敗仍然寫出、`verify` 永遠成功、sha 算的不是原始檔、依賴守衛放進 SDL | 全部 killed |
+| E10 | L1：三平台的 cpu\|shader | 綠 |
+
+- 本機用 macOS Intel。
+- 證據放主 checkout 的 `build/evidence/tool-v8-voxel-map/core/`。
+- 沒有 L2、L3（GUI 在 window 批）。
+- **範圍的限制**：兩張現行地圖的轉換只做 smoke（能轉、能 build、能讀回）。和 v1 的等價（`v8-tool-voxel-retire-v1`）留給 arena-v2 批。
+
 ## 風險
 
 - **格子出現第二個讀者**（例如場景編輯器要在格子上擺東西）：格子就要升到 Engine，等於再搬一次契約。寫進工具的 Replacement Criteria。

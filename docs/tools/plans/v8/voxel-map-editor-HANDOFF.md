@@ -10,7 +10,7 @@
 - **完成**：
   - `v8-tool-voxel-map-plan`：方案、分批。
   - `v8-engine-voxel-mesh-contract`：`gyo.voxel_mesh` 契約與讀取器，V1～V6 通過；L1 三平台綠，run 42000098862。
-- **下一批**：`v8-tool-voxel-map-editor-core`，等你說「開始」。
+- **進行中**：`v8-tool-voxel-map-editor-core`。你說了「開始」，事前宣告已寫進 voxel-map-editor.md，**等你核准**。其中包括對 `walls≤1024` 的解讀：工具不檢查，由產品擋下。
 - **前提**：PR #146 已合併，所以 `v8-framework-preview-component` 可以排了；開始前要和架構會話協調。
 - **等你決定**：目前沒有。
 
@@ -47,3 +47,4 @@
   - 修正推送後 CI 沒有跑：PR 和 master 衝突（#146 合併時，工具線把 voxel 移出，改到 README／HANDOFF 的同一段）。合入 master（`62b6f0cc`），保留「移出」的說法，加上指向 voxel-map-editor.md 的連結。
   - 之後 L1 三平台通過，記錄在 dev_log（`6ca245b1`）。
 - 2026-11-05：你說「另開 HANDOFF」：建立本文件，搬移 17 筆決定與 3 筆紀錄（`v8-tool-voxel-handoff-split`）。
+- 2026-11-05：你說「開始」，開工 `v8-tool-voxel-map-editor-core`（high，Opus 5.5）。讀了 model_viewer 的登錄、CMake、測試結構和 DI，以及 `tool_projects.md`、`Sha256`、`WriteFileAtomically`。重估 14～20 h。事前宣告寫進 voxel-map-editor.md，等你核准。
