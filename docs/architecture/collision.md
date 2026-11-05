@@ -1,14 +1,14 @@
 # Collision: the static broadphase
 
 Owner: Engine (`engine/collision` → `GYO::Collision`; `engine/collision/StaticAabbGrid.hpp`).
-Plan and record: [big map](plans/big-map/README.md), batch v8-arch-big-map-engine-grid (survey: one player's step
-over 20,691 boxes costs about 2.2 ms with a linear scan, about half of a 60 Hz tick for four players).
+Plan and record: [big map](plans/big-map/README.md), batch v8-arch-big-map-engine-grid (survey: one moving body's
+step over 20,691 boxes costs about 2.2 ms with a linear scan, about half of a 60 Hz tick for four).
 
 This page covers the static broadphase only. The exact queries (`RaycastAabb`, `SweepVerticalCapsuleAgainstAabb`,
 `OverlapVerticalCapsuleAabb` and the rest), their numeric semantics and their single 1e-7 tolerance are stated in
 `engine/collision/Collision.hpp`; the module's place is in the [module table](../architecture.md).
 
-**Status (2026-11-06): landed with v8-arch-big-map-engine-grid.** No product uses it yet; object_fps_pvp is planned to
+**Status (2026-11-06): added by v8-arch-big-map-engine-grid (PR #161).** No product uses it yet; object_fps_pvp is planned to
 replace its linear scans with it (v8-arch-big-map-product-arena-v3).
 
 ## What it is
@@ -29,8 +29,8 @@ Every query returns, bit for bit, what a linear scan of all boxes in index order
 | `SweepVerticalCapsuleAll(c, δ)` | every `(SweepVerticalCapsuleAgainstAabb(c, δ, box i), i)` that has a value, increasing `i` |
 | `OverlapVerticalCapsuleAll(c)` | every `(OverlapVerticalCapsuleAabb(c, box i), i)` that has a value, increasing `i` |
 
-- **Ties are the caller's choice.** Consumers break ties differently today (a nearest wall for a shot takes the later
-  of equal walls; a character's sweep the earlier), so the tie rule is a parameter, not a policy of this module.
+- **Ties are the caller's choice.** Consumers break ties differently today (one keeps the later of equal hits,
+  another the earlier), so the tie rule is a parameter, not a policy of this module.
 - **`…All` keep the consumer's policy outside.** A consumer that wants "any contact with an upward normal", "the
   deepest penetration" or a filtered nearest runs its own loop over the `…All` result, which arrives in index order
   as its scan did. The grid owns the conservative candidate region, so no consumer needs to know how far a rounded
