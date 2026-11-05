@@ -376,6 +376,7 @@ TEST_CASE("PvP combat host records the view tick without deciding by it") {
     CHECK(shooter->rejection == decision.rejection);
     CHECK_FALSE(shooter->viewValid);
     CHECK_FALSE(shooter->viewLagQ16);
+    CHECK_FALSE(shooter->viewLagAQ16);
     REQUIRE(shooter->cooldownHoldTicks);
     CHECK(*shooter->cooldownHoldTicks == 0);
     CHECK_FALSE(shooter->held);
@@ -401,8 +402,43 @@ TEST_CASE("PvP combat host records the view lag of a valid view tick") {
     const auto& record = records.records.front();
     CHECK(record.viewValid);
     REQUIRE(record.viewLagQ16);
-    CHECK(*record.viewLagQ16 == static_cast<std::int64_t>(record.handoffTick * 65536) -
+    CHECK(*record.viewLagQ16 == static_cast<std::int64_t>(record.resolvedTick * 65536) -
                                 static_cast<std::int64_t>((observed - 1) * 65536 + 16384));
+    CHECK(records.viewTickInvalid == 0);
+}
+
+// v8 lag-shadow: view_lag counts from the decision tick J, where the rewind
+// judges; version 2's lag from A stays as view_lag_a. A shot held for its
+// cooldown is the case where they differ, by the hold.
+TEST_CASE("PvP combat host records a held shot's view lag from J and keeps A's") {
+    CombatHostFixture fixture;
+    fixture.Step();
+    fixture.Step();
+    const auto observed = fixture.host.TakeSnapshot()->tick;
+    REQUIRE(observed >= 2);
+    const auto view = (observed - 1) * 65536 + 16384;
+    REQUIRE(fixture.host.SubmitActions({1, {{1, observed, 0, 0, ActionKind::Shot, 1, 0, 0, view}}}) ==
+            ActionAdmission::Accepted);
+    fixture.Step();
+    REQUIRE(fixture.host.DrainShotRecords().records.size() == 1);
+    for (unsigned k = 0; k < PvpCombatRules.cooldownTicks - 3; ++k) fixture.Step();
+    REQUIRE(fixture.host.SubmitActions({1, {{2, observed, 0, 0, ActionKind::Shot, 1, 0, 0, view}}}) ==
+            ActionAdmission::Accepted);
+    for (int k = 0; k < 3; ++k) fixture.Step(); // A two ticks before the boundary, then the hold
+    const auto records = fixture.host.DrainShotRecords();
+    REQUIRE(records.records.size() == 1);
+    const auto& held = records.records.front();
+    REQUIRE(held.actionId == 2);
+    CHECK(held.rejection == ShotRejection::None);
+    CHECK(held.viewValid);
+    REQUIRE(held.cooldownHoldTicks);
+    CHECK(*held.cooldownHoldTicks == 2);
+    CHECK(held.resolvedTick == held.handoffTick + 2);
+    REQUIRE(held.viewLagQ16);
+    REQUIRE(held.viewLagAQ16);
+    CHECK(*held.viewLagQ16 == static_cast<std::int64_t>(held.resolvedTick * 65536) - static_cast<std::int64_t>(view));
+    CHECK(*held.viewLagAQ16 == static_cast<std::int64_t>(held.handoffTick * 65536) - static_cast<std::int64_t>(view));
+    CHECK(*held.viewLagQ16 - *held.viewLagAQ16 == 2 * 65536);
     CHECK(records.viewTickInvalid == 0);
 }
 
