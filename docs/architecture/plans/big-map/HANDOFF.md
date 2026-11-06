@@ -143,6 +143,8 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
   J4 重跑（**件數の突き合わせ：一致**）：隨機 70,000、邊界 688＋1,400、遠座標 6,300 次，不一致 0；反例案例通過。J6：全量建置成功，`cpu|shader` 130/130、`gpu` 4/4。
   證據：主 checkout `build/evidence/big-map/engine-grid/rerun_after_review/`。拆批前一輪的 J2 失敗（`grid-margin-zero` 存活）保留在 `mutations_engine_grid_final.txt`，不被這次的成功覆蓋（AGENTS §14.1）。
 
+- 2026-11-06 L1（head `7e7ea5db`，run 42147144545）：linux-x64、macos-arm64、windows-x64 全部通過，CI gate 通過。J6 成立。
+
 ## 下一步
 
-推送後等 L1 三平台與審查者複核；PR 1 合併後開 PR 2。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
+等審查者複核（B1、S1）與使用者合併；PR 1 合併後 rebase 開 PR 2。N3、N4、U1～U4 待使用者決定。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。

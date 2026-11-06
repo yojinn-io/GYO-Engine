@@ -59,7 +59,7 @@
 - **J2 突變：不成立（宣告的寫法下）。** `engine_grid_mutations.json` 最後一輪 15/16 被殺（`mutations_engine_grid_final.txt`），存活的是 `grid-margin-zero`。我把它記為等價突變，但審查者找到殺它的輸入，推定被推翻，見下。`voxel_mesh_mutations.json` 在 PR 1 分支上 20/20 被殺。
   三個格子邊界突變（`grid-count-short`、`grid-first-cell-dropped`、`grid-last-cell-dropped`）是被建構時的斷言 `GYO_ASSERT failed: !ranges[i].empty` 抓到，所以 expect 也接受這段訊息。拆批前那一輪只認比對失敗，所以標成 wrong_failure。
 - **J6 迴歸：** 本機全量建置成功；`ctest -L "cpu|shader"` 130/130、`ctest -L gpu` 4/4 通過。修法提交後重跑，結果相同。
-  L1 第一次在 windows-x64 失敗：`StaticAabbGrid.cpp` 缺 `#include <iterator>`，MSVC 報 C2039。`dc3f9dd0` 修正；修正後的 L1 結果寫在 HANDOFF。
+  L1 第一次在 windows-x64 失敗：`StaticAabbGrid.cpp` 缺 `#include <iterator>`，MSVC 報 C2039。`dc3f9dd0` 修正。之後 head `7e7ea5db` 的 L1（run 42147144545）三平台全部通過，J6 成立。
 - **J7 依賴守衛：** `vm-links-collision` 與 `grid-links-voxel-mesh` 都以 configure 失敗被殺。
 
 ### `grid-margin-zero`：原推定「等價突變」錯誤（審查者的反例）
