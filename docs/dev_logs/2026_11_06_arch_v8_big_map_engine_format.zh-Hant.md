@@ -1,0 +1,65 @@
+# 架構 v8：v8-arch-big-map-engine-format（區塊地圖格式與標記層）
+
+日期：2026-11-06。分支 `claude/v8-arch-big-map-engine-format`（rebase 到 master `c70e8fdc`，即 PR #161 合併後）。PR #162。
+段：上段（Engine 公開介面、新 Subsystem、DI）。實作者是主會話，Opus 5.5／high。審查者是 engine-grid 會話（Opus），由架構師指定。
+**狀態：** 受理判定在本機全部成立；L1 與審查待 PR。
+宣告：[engine-format](../architecture/plans/big-map/engine-format.zh-Hant.md)，使用者 2026-11-06 核准（「照建議核准」）。
+
+相關文件：
+- [計畫 README](../architecture/plans/big-map/README.md)
+- [HANDOFF](../architecture/plans/big-map/HANDOFF.md)（「現況：engine-format」）
+- [voxel-mesh 契約](../architecture/voxel-mesh.md)
+- [map-markers 契約](../architecture/map-markers.md)
+- [collision 契約](../architecture/collision.md)
+
+## 做了什麼
+
+- `GYO::VoxelMesh` 加了區塊地圖的兩種格式：`gyo.voxel_map` v1（索引）和 `gyo.voxel_region` v1（region 檔）。
+  - 解析與驗證：`ParseVoxelMap`、`ParseVoxelRegion`、`ValidateVoxelChunk`。`ValidateVoxelChunk` 和 Parse 共用 `CheckChunk` 這一份規則實作。
+  - 展開與座標：`ExpandVoxelChunk`、`ExpandVoxelPalette`、`RegionOf`、`ChunkWorldOrigin`、`MapUnitsToWorld`。
+  - quad 與 box 的規則（`CheckQuad`、`CheckBox`），v1 和區塊共用同一份。
+- `gyo.voxel_mesh` v1 保留，標成 deprecated。刪除放在 `-product-arena-v3`：遷移兩張地圖的同一批，以「`ParseVoxelMesh` 的呼叫為 0 件」確認。
+- 新 Subsystem `GYO::MapMarkers`（`gyo.map_markers` v1）：點加 yaw、盒、路徑三種幾何，id、kind、tags 都是不透明的名字。
+  - 嚴格解析用第一批合併的 `StrictJson.hpp`，以 `ordered_json` instantiate，這樣才看得到 tags 在文字裡的鍵順序。
+  - 守衛：依賴守衛，以及 Python 的玩法名詞守衛。
+- 文件：
+  - `voxel-mesh.md` 升版：DI 6、7，RC 5～7，RC 3 標為已處置。
+  - `map-markers.md` 新建。
+  - `docs/architecture.md` 的模組表與目錄樹。
+  - `collision.md` 加 RC 4、5，來自 PR #161 審查者的 N4、U1。
+- 突變 catalog `docs/architecture/plans/big-map/scripts/engine_format_mutations.json`，共 55 個。
+
+## 經過
+
+1. 實作是在拆批前，照使用者核准的 engine-map 宣告寫的。拆批後保留在本機分支。
+2. PR #161 合併後，原工作樹 `bold-mahavira-68c717` 已被刪除，所以改開工作樹 `.claude/worktrees/engine-format`。
+   把實作提交 rebase 到 `c70e8fdc`，沒有衝突。
+3. 宣告草稿改成正式版，以 draft 開出 PR #162；使用者核准第 7 節。
+4. 照新的「突變存活的處理」規則，拆批前存活的 `mm-two-shapes-accepted` 先補了測試，沒有自己認定成等價。
+   - 突變把「恰好一種幾何」的檢查改成「至少一種」。兩種幾何的標記仍會被拒，但理由變成「unknown field」。
+   - 原本 K4 的測試只檢查路徑，所以抓不到。現在 K4 也檢查訊息「exactly one of point, box and path」，突變被殺。
+5. 規則測試是在實作後才寫的。Red 的證據是突變（F2）。
+
+## 受理判定
+
+件數の突き合わせ：一致。突變每個都有結果（被殺／存活／過期），沒有漏跑；測試全部執行完。
+
+| 判定 | 結果 | 成立 |
+|---|---|---|
+| F1 規則 | `gyo.voxel_map` M1～M10、`gyo.voxel_region` R1～R5／C1～C5、`gyo.map_markers` K1～K10，各有自己的 test case。C1～C5 另有 `ValidateVoxelChunk` 的反例 | 是 |
+| F2 突變 | `engine_format_mutations.json` 55/55、`voxel_mesh_mutations.json` 20/20、`engine_grid_mutations.json` 16/16 被殺 | 是 |
+| F3 黃金值 | 區塊展開的頂點、uv、盒；`ChunkWorldOrigin`；`MapUnitsToWorld` 與字面值 bits 一致，含 ±2²⁰ 兩端與負區塊鍵。「v1 單文件與區塊展開位元相同」也通過。三平台待 L1 | 本機是 |
+| F4 守衛 | 依賴守衛的突變（`vm-links-collision`、`mm-links-voxel-mesh`、`grid-links-voxel-mesh`）與名詞守衛的突變（`mm-guard-gameplay-word`）都被殺 | 是 |
+| F5 迴歸 | 全量建置成功，`ctest -L "cpu\|shader"` 132/132、`-L gpu` 4/4。L1 待 PR | 本機是 |
+
+## 發現的事
+
+- 「Engine 文件與範例不出現玩法名詞」只用守衛檢查 MapMarkers 的範圍。`voxel-mesh.md` 的 DI 1 原文以否定句寫了「spawn points」。改 DI 文字需要使用者同意，本批照原文保留（宣告第 7 節第 6 項）。
+
+## 證據
+
+主 checkout 的 `build/evidence/big-map/engine-format/`，git 不追蹤：
+- 三個突變 catalog 的結果：`engine_format_mutations.txt`、`voxel_mesh_mutations.txt`、`engine_grid_mutations.txt`。
+- 全量建置與測試：`build_all.txt`、`ctest_cpu_shader.txt`、`ctest_gpu.txt`。
+
+拆批前那一輪的參考結果在 `build/evidence/big-map/engine-map/`。

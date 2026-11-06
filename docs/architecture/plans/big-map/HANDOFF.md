@@ -156,6 +156,10 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 - **2026-11-06 使用者核准 engine-format 宣告**（原話「照建議核准」：第 7 節 1～5 全部照建議）。開始補測試、寫 RC、跑 F1～F5。
   - `mm-two-shapes-accepted` 照突變存活的規則補測試：K4 檢查訊息「exactly one of point, box and path」。
   - `collision.md` 加 RC 4（登記數或建構時間超過宣告值）、RC 5（離群盒子讓格長加倍）。
+- 2026-11-06 F1～F5（本機 Intel Mac，head `eb516ffc`；**件數の突き合わせ：一致**）：
+  - 突變：`engine_format_mutations.json` 55/55、`voxel_mesh_mutations.json` 20/20、`engine_grid_mutations.json` 16/16 被殺。
+  - 全量建置成功；`cpu|shader` 132/132、`gpu` 4/4。
+  - 證據在主 checkout `build/evidence/big-map/engine-format/`。dev_log 已寫。PR #162 改成 ready，等 L1 與審查者。
 
 ## 之後（另案，不開卡）
 
@@ -164,4 +168,4 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 
 ## 下一步
 
-使用者核准 engine-format 宣告後：補 K4 的訊息檢查、把 RC 4／5 寫進 `collision.md`、跑 F1～F5、dev_log，再把 PR 2 改成 ready。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
+PR #162 的 L1 三平台與審查（engine-grid 會話）；合併由使用者決定。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。

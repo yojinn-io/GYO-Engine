@@ -1,7 +1,7 @@
 # 大地圖（區塊化地圖）計畫（`v8-arch-big-map`）
 
 更新：2026-11-06。Owner：架構（Engine 契約的判斷）；各批的實作 owner 見下表。卡片由架構師會話（「[Job][架構師]例行架構掃描」）開出。
-**狀態：survey 完成；六個未決事項 2026-11-06 照建議定案（[HANDOFF](HANDOFF.md)「決定」）。engine-map 拆成兩批（`v8-arch-big-map-split-engine`）：engine-grid（PR #161）已合併；engine-format（PR 2）事前宣告等使用者核准。** 先讀本頁，再讀 [交接](HANDOFF.md)。
+**狀態：survey 完成；六個未決事項 2026-11-06 照建議定案（[HANDOFF](HANDOFF.md)「決定」）。engine-map 拆成兩批（`v8-arch-big-map-split-engine`）：engine-grid（PR #161）已合併；engine-format（PR #162）宣告已核准，本機受理判定成立，等 L1 與審查。** 先讀本頁，再讀 [交接](HANDOFF.md)。
 
 ## 代號對照
 
@@ -37,7 +37,7 @@ v8-arch-big-map
 |---|---|---|---|---|
 | `-survey` | 上段（Architecture 判斷的根據） | 調查者 Opus／high；對抗檢查者 Fable／xhigh（使用者已同意） | 架構 | 完成；六項照建議定案 |
 | `-engine-grid` | 上段（Engine 公開介面、DI） | 實作者 Opus／high；審查者 Opus（engine-grid 會話）；驗證者 Fable／xhigh | Engine | 完成（PR #161，merge `c70e8fdc`） |
-| `-engine-format` | 上段（Engine 公開介面、新 Subsystem、DI） | 同上 | Engine | 宣告等使用者核准（[engine-format](engine-format.zh-Hant.md)）；實作已 rebase 到 `c70e8fdc` |
+| `-engine-format` | 上段（Engine 公開介面、新 Subsystem、DI） | 同上 | Engine | PR #162：宣告已核准，本機 F1～F5 成立，等 L1 與審查 |
 | `-tool-chunked` | 未定 | 未開 | voxel 地圖編輯器線 | 未開 |
 | `-product-arena-v3` | 未定 | 未開 | 產品（object_fps_pvp） | 未開 |
 
@@ -52,3 +52,4 @@ survey 之後的三批，範圍以 HANDOFF「決定」的六項為準（與 prop
 
 - [2026-11-06 `v8-arch-big-map-survey`](../../../dev_logs/2026_11_06_arch_v8_big_map_survey.zh-Hant.md)
 - [2026-11-06 `v8-arch-big-map-engine-grid`](../../../dev_logs/2026_11_06_arch_v8_big_map_engine_grid.zh-Hant.md)
+- [2026-11-06 `v8-arch-big-map-engine-format`](../../../dev_logs/2026_11_06_arch_v8_big_map_engine_format.zh-Hant.md)

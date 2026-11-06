@@ -206,6 +206,11 @@ Math::Vec3          MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& m
 
 **範圍的限界：** 本批沒有時間判定（解析時間在第一批）。合成圖是雜訊，不代表手工地圖。
 
+## 4a. 結果（摘要；細節在 dev_log）
+
+- 本機 F1～F5 成立。突變：engine-format 55/55、v1 20/20、engine-grid 16/16。cpu\|shader 132/132，gpu 4/4。
+- L1 三平台待 PR #162。
+
 ## 5. 證據位置
 
 - 主 checkout 的 `build/evidence/big-map/engine-format/`（git 不追蹤）：突變結果、全量建置與 ctest 的輸出。
