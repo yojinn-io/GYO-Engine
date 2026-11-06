@@ -139,6 +139,10 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 - 2026-11-06 CI：L1 windows-x64 編譯失敗（`StaticAabbGrid.cpp` 用 `std::back_inserter` 卻沒 include `<iterator>`，MSVC 的 C2039）。使用者指示修好並推送：`dc3f9dd0` 只補 include，連同 nit 的 `f113f96e` 推送。
 - **2026-11-06 使用者對 J2 不成立的決定**（原話「照修法重跑 J2」）：選項 1。判定不改；反例留成測試；推送工作樹的修法（B1、S1、S2、N1），重跑整個 J2 與 L1。
 
+- 2026-11-06 J2 重跑（修法提交 `ecee00c2` 之上，本機 Intel Mac）：**成立**。`engine_grid_mutations.json` 16/16 被殺（`grid-margin-zero` 由反例測試殺掉）、`voxel_mesh_mutations.json` 20/20 被殺。
+  J4 重跑（**件數の突き合わせ：一致**）：隨機 70,000、邊界 688＋1,400、遠座標 6,300 次，不一致 0；反例案例通過。J6：全量建置成功，`cpu|shader` 130/130、`gpu` 4/4。
+  證據：主 checkout `build/evidence/big-map/engine-grid/rerun_after_review/`。拆批前一輪的 J2 失敗（`grid-margin-zero` 存活）保留在 `mutations_engine_grid_final.txt`，不被這次的成功覆蓋（AGENTS §14.1）。
+
 ## 下一步
 
-重跑整個 J2 與全量測試，推送，等 L1 與審查者複核；PR 1 合併後開 PR 2。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
+推送後等 L1 三平台與審查者複核；PR 1 合併後開 PR 2。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
