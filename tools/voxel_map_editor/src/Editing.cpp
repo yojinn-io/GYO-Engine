@@ -482,7 +482,8 @@ std::span<const std::byte> AsBytes(const std::string& text) {
 
 } // namespace
 
-Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& mapDirectory) {
+Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& mapDirectory,
+                                const std::string& markersPath, const std::string& kindsPath) {
     OpenedEditor opened;
     opened.files.grid.path = gridPath;
     opened.files.mapDirectory = mapDirectory;
@@ -501,12 +502,42 @@ Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& 
     }
     opened.files.grid.known = std::move(*grid);
     opened.files.mapIndex.known = std::move(*index);
+    if (!markersPath.empty()) {
+        auto kindsBytes = ReadFile(kindsPath, kMaxRead);
+        if (!kindsBytes) return Engine::Base::Err(std::move(kindsBytes).error());
+        auto kinds = ReadMarkerKinds({reinterpret_cast<const char*>(kindsBytes->data()), kindsBytes->size()});
+        if (!kinds) return Engine::Base::Err(std::move(kinds).error());
+        auto markers = Current(markersPath);
+        if (!markers) return Engine::Base::Err(std::move(markers).error());
+        EditorMarkers edited;
+        edited.kinds = std::move(*kinds);
+        if (*markers) {
+            const auto& bytes = **markers;
+            auto parsed = ReadMarkers({reinterpret_cast<const char*>(bytes.data()), bytes.size()});
+            if (!parsed) return Engine::Base::Err(std::move(parsed).error());
+            edited.document = std::move(*parsed);
+        }
+        opened.files.markers.path = markersPath;
+        opened.files.markers.known = std::move(*markers);
+        opened.markers = std::move(edited);
+    }
     return opened;
 }
 
 Result<SaveResult> SaveEditor(EditorFiles& files, const GridDocument& document, const MapPreview& preview,
-                              const SaveMode mode) {
+                              const SaveMode mode, const EditorMarkers* markers) {
     const std::string gridText = WriteGrid(document);
+    // The markers' text first too: an unknown kind or a refused text writes nothing.
+    std::optional<std::string> markersText;
+    if (markers) {
+        const auto unknown = Engine::MapMarkers::UnknownMarkerKinds(markers->document, markers->kinds);
+        if (!unknown.empty())
+            return Engine::Base::Err(VoxelMapError::Make(VoxelMapErrorCode::UnknownKinds,
+                                                         "a marker's kind is not in the kinds list", unknown.front()));
+        auto written = WriteMarkers(markers->document);
+        if (!written) return Engine::Base::Err(std::move(written).error());
+        markersText = std::move(*written);
+    }
     // The map's texts first, so a map Engine refuses writes nothing.
     std::optional<MapText> mapText;
     if (preview.Map()) {
@@ -515,7 +546,8 @@ Result<SaveResult> SaveEditor(EditorFiles& files, const GridDocument& document, 
         mapText = std::move(*written);
     }
     if (mode == SaveMode::Checked) {
-        for (const EditorFile* file : {&files.grid, &files.mapIndex}) {
+        for (const EditorFile* file : {&files.grid, &files.mapIndex, &files.markers}) {
+            if (file->path.empty()) continue;
             auto now = Current(file->path);
             if (!now) return Engine::Base::Err(std::move(now).error());
             if (*now != file->known)
@@ -525,14 +557,25 @@ Result<SaveResult> SaveEditor(EditorFiles& files, const GridDocument& document, 
     if (auto written = WriteFileReplacing(files.grid.path, gridText); !written) return Engine::Base::Err(std::move(written).error());
     const auto gridBytes = AsBytes(gridText);
     files.grid.known = std::vector<std::byte>(gridBytes.begin(), gridBytes.end());
-    if (!mapText) return SaveResult{false};
-    if (auto saved = SaveMap(files.mapDirectory, *mapText); !saved) {
-        return Refuse(VoxelMapErrorCode::WriteFailed,
-                      "the grid was saved but its map was not: " + Engine::Base::Describe(saved.error()));
+    SaveResult result;
+    if (mapText) {
+        if (auto saved = SaveMap(files.mapDirectory, *mapText); !saved) {
+            return Refuse(VoxelMapErrorCode::WriteFailed,
+                          "the grid was saved but its map was not: " + Engine::Base::Describe(saved.error()));
+        }
+        const auto indexBytes = AsBytes(mapText->index);
+        files.mapIndex.known = std::vector<std::byte>(indexBytes.begin(), indexBytes.end());
+        result.mapWritten = true;
     }
-    const auto indexBytes = AsBytes(mapText->index);
-    files.mapIndex.known = std::vector<std::byte>(indexBytes.begin(), indexBytes.end());
-    return SaveResult{true};
+    if (markersText) {
+        if (auto written = WriteFileReplacing(files.markers.path, *markersText); !written) {
+            return Refuse(VoxelMapErrorCode::WriteFailed,
+                          "the grid and the map were saved but the markers were not: " + Engine::Base::Describe(written.error()));
+        }
+        const auto markerBytes = AsBytes(*markersText);
+        files.markers.known = std::vector<std::byte>(markerBytes.begin(), markerBytes.end());
+    }
+    return result;
 }
 
 } // namespace Gyo::Tools::VoxelMapEditor

@@ -111,4 +111,35 @@ Result<std::string> WriteMarkers(const MM::MapMarkersDocument& document) {
     return out;
 }
 
+Engine::Math::Vec3i MarkerPointOf(const Vec3i& cell) noexcept {
+    return {cell[0] * Units + Units / 2, cell[1] * Units, cell[2] * Units + Units / 2};
+}
+
+MM::MarkerBox MarkerBoxOf(const Vec3i& corner, const Vec3i& other) noexcept {
+    MM::MarkerBox box;
+    box.minimum = {std::min(corner[0], other[0]) * Units, std::min(corner[1], other[1]) * Units,
+                   std::min(corner[2], other[2]) * Units};
+    box.maximum = {(std::max(corner[0], other[0]) + 1) * Units, (std::max(corner[1], other[1]) + 1) * Units,
+                   (std::max(corner[2], other[2]) + 1) * Units};
+    return box;
+}
+
+std::string NextMarkerId(const MM::MapMarkersDocument& document) {
+    for (std::size_t n = 1;; ++n) {
+        const auto id = "m" + std::to_string(n);
+        if (std::none_of(document.markers.begin(), document.markers.end(),
+                         [&id](const MM::Marker& marker) { return marker.id == id; }))
+            return id;
+    }
+}
+
+Result<void> InsertMarker(MM::MapMarkersDocument& document, MM::Marker marker) {
+    const auto at = std::lower_bound(document.markers.begin(), document.markers.end(), marker.id,
+                                     [](const MM::Marker& m, const std::string& id) { return m.id < id; });
+    if (at != document.markers.end() && at->id == marker.id)
+        return Engine::Base::Err(VoxelMapError::Make(VoxelMapErrorCode::InvalidMarkers, "marker id '" + marker.id + "' is taken"));
+    document.markers.insert(at, std::move(marker));
+    return {};
+}
+
 } // namespace Gyo::Tools::VoxelMapEditor

@@ -25,6 +25,8 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <variant>
+#include <vector>
 
 // The window: the editing model (Editing.hpp) under ImGui, and the map on the
 // framework's offscreen preview. Everything that changes the grid goes
@@ -37,11 +39,14 @@ namespace Sdl = Engine::Render::Backend::Sdl;
 namespace Platform = Engine::Platform::Sdl;
 
 // Goxel's tools and modes (v8-tool-voxel-window-1), with their keys.
-enum class Tool : int { Brush, Shape, Laser, Line, Extrude, Plane, Picker };
-constexpr std::array<const char*, 7> kToolNames{"Brush", "Shape", "Laser", "Line", "Extrude", "Plane", "Picker"};
-constexpr std::array<ImGuiKey, 7> kToolKeys{ImGuiKey_B, ImGuiKey_S, ImGuiKey_L, ImGuiKey_N,
-                                            ImGuiKey_F, ImGuiKey_P, ImGuiKey_C};
-constexpr std::array<const char*, 7> kToolKeyNames{"B", "S", "L", "N", "F", "P", "C"};
+// Marker (K) places markers when the window edits them.
+enum class Tool : int { Brush, Shape, Laser, Line, Extrude, Plane, Picker, Marker };
+constexpr std::array<const char*, 8> kToolNames{"Brush", "Shape", "Laser", "Line", "Extrude", "Plane", "Picker", "Marker"};
+constexpr std::array<ImGuiKey, 8> kToolKeys{ImGuiKey_B, ImGuiKey_S, ImGuiKey_L, ImGuiKey_N,
+                                            ImGuiKey_F, ImGuiKey_P, ImGuiKey_C, ImGuiKey_K};
+constexpr std::array<const char*, 8> kToolKeyNames{"B", "S", "L", "N", "F", "P", "C", "K"};
+enum class MarkerShape : int { Point, Box, Path };
+constexpr std::array<const char*, 3> kMarkerShapeNames{"Point", "Box", "Path"};
 constexpr std::array<const char*, 3> kModeNames{"Add (T)", "Sub (R)", "Paint (G)"};
 constexpr std::array<const char*, 3> kShapeNames{"Cube", "Sphere", "Cylinder"};
 constexpr std::array<const char*, 3> kAxisNames{"X", "Y", "Z"};
@@ -98,7 +103,7 @@ public:
 
     ~EditorClient() override {
         if (texture_.handle) static_cast<void>(renderer_.ReleaseTexture(texture_.handle));
-        if (session_ && session_->Modified())
+        if (session_ && (session_->Modified() || markersModified_))
             Engine::Base::Log(Engine::Base::LogLevel::Warning, "voxel_map_editor",
                               "the window closed with unsaved edits of " + options_.gridPath);
     }
@@ -137,6 +142,7 @@ public:
         DrawTools();
         DrawBlocks();
         DrawShapes();
+        DrawMarkers();
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("view", ImVec2(0, 0));
@@ -151,7 +157,7 @@ public:
 
     // Unsaved edits: the window asks in the next frame.
     [[nodiscard]] bool CloseRequested() override {
-        if (!session_ || !session_->Modified()) return true;
+        if (!session_ || !(session_->Modified() || markersModified_)) return true;
         openClose_ = true;
         return false;
     }
@@ -161,7 +167,7 @@ private:
 
     // Reads the files; the session, the preview and the drafts start again.
     bool Open() {
-        auto opened = OpenEditor(options_.gridPath, options_.mapDirectory);
+        auto opened = OpenEditor(options_.gridPath, options_.mapDirectory, options_.markersPath, options_.kindsPath);
         if (!opened) {
             error_ = Engine::Base::Describe(opened.error());
             return false;
@@ -174,6 +180,10 @@ private:
         files_ = std::move(opened->files);
         session_.emplace(std::move(opened->document));
         preview_ = std::move(*preview);
+        markers_ = std::move(opened->markers);
+        markersModified_ = false;
+        marker_ = 0;
+        pathPoints_.clear();
         if (scene_) scene_->Clear();
         status_ = files_.grid.known ? "opened " + options_.gridPath : "new grid: " + options_.gridPath;
         error_.clear();
@@ -236,7 +246,7 @@ private:
             error_ = previewError_;
             return;
         }
-        auto saved = SaveEditor(files_, Document(), *preview_, mode);
+        auto saved = SaveEditor(files_, Document(), *preview_, mode, markers_ ? &*markers_ : nullptr);
         if (!saved) {
             if (saved.error().code == VoxelMapErrorCode::FileChanged) {
                 changedFile_ = saved.error().message;
@@ -246,6 +256,7 @@ private:
             return;
         }
         Session().MarkSaved();
+        markersModified_ = false;
         error_.clear();
         status_ = "saved " + files_.grid.path +
                   (saved->mapWritten ? " and " + files_.mapDirectory : " (no filled cell, so no map)");
@@ -255,7 +266,11 @@ private:
         const ImGuiIO& io = ImGui::GetIO();
         if (io.WantTextInput || promptOpen_) return;
         const bool command = io.KeyCtrl || io.KeySuper;
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) CancelDrag();
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+            CancelDrag();
+            pathPoints_.clear();
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) FinishPath();
         if (command && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
             CancelDrag();
             if (io.KeyShift) static_cast<void>(Session().Redo());
@@ -302,9 +317,10 @@ private:
     }
 
     void SelectTool(const Tool tool) {
-        if (tool == tool_) return;
+        if (tool == tool_ || (tool == Tool::Marker && !markers_)) return;
         CancelDrag();
         lineStart_.reset();
+        pathPoints_.clear();
         tool_ = tool;
     }
 
@@ -321,7 +337,7 @@ private:
         ImGui::BeginDisabled(!Session().CanRedo());
         if (ImGui::Button("Redo")) static_cast<void>(Session().Redo());
         ImGui::EndDisabled();
-        if (Session().Modified()) ImGui::TextColored(ImVec4(1, 0.8F, 0.3F, 1), "* unsaved");
+        if (Session().Modified() || markersModified_) ImGui::TextColored(ImVec4(1, 0.8F, 0.3F, 1), "* unsaved");
         if (!status_.empty()) ImGui::TextWrapped("%s", status_.c_str());
         if (!error_.empty()) ImGui::TextColored(ImVec4(1, 0.4F, 0.4F, 1), "%s", error_.c_str());
     }
@@ -597,6 +613,10 @@ private:
         }
         if (pressed) BeginDrag(io);
         if (drag_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) UpdateDrag(io, view);
+        if (boxStart_ && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            if (hover_) AddMarker(MarkerBoxOf(*boxStart_, PlacementCell(*hover_)));
+            boxStart_.reset();
+        }
     }
 
     void BeginDrag(const ImGuiIO& io) {
@@ -620,6 +640,19 @@ private:
         case Tool::Extrude:
             if (!hover_ || hover_->onPlane || hover_->normal == Vec3i{0, 0, 0}) return;
             break;
+        case Tool::Marker: {
+            // Markers stand where a block placed there would go.
+            const auto at = hover_ ? std::optional<Vec3i>(PlacementCell(*hover_)) : std::nullopt;
+            if (!at || !markers_) return;
+            if (markerShape_ == MarkerShape::Point) {
+                AddMarker(Engine::MapMarkers::MarkerPoint{MarkerPointOf(*at), camera_.yawRadians});
+            } else if (markerShape_ == MarkerShape::Path) {
+                pathPoints_.push_back(*at);
+            } else {
+                boxStart_ = at;
+            }
+            return;
+        }
         case Tool::Laser: break;
         default:
             if (!target) return;
@@ -712,8 +745,13 @@ private:
         case Tool::Extrude: hint = "drag a face to push it out or in"; break;
         case Tool::Plane: hint = "click a face to put the edit plane on it"; break;
         case Tool::Picker: hint = "click a block to take it"; break;
+        case Tool::Marker:
+            hint = markerShape_ == MarkerShape::Point ? "click to place a point (facing the camera's direction)"
+                   : markerShape_ == MarkerShape::Box ? "drag from corner to corner"
+                                                      : "click the path's points; Enter: finish, Esc: cancel";
+            break;
         }
-        if (tool_ != Tool::Picker && tool_ != Tool::Plane) hint += "; Ctrl+click: take a block";
+        if (tool_ != Tool::Picker && tool_ != Tool::Plane && tool_ != Tool::Marker) hint += "; Ctrl+click: take a block";
         if (drag_) hint += "; Esc: cancel";
         ImGui::GetWindowDrawList()->AddText(ImVec2(at.x + 8, at.y + 6), IM_COL32(230, 230, 230, 220), hint.c_str());
     }
@@ -808,7 +846,147 @@ private:
             }
             Outline(view, low, high, colour);
         }
+        DrawMarkerOverlay(view);
         list->PopClipRect();
+    }
+
+    // ---- Markers (v8-tool-voxel-window-1, vw1-markers) ----
+
+    // A new marker of the chosen kind, with the next free id; it becomes the selected one.
+    void AddMarker(std::variant<Engine::MapMarkers::MarkerPoint, Engine::MapMarkers::MarkerBox, Engine::MapMarkers::MarkerPath> shape) {
+        if (!markers_ || markers_->kinds.empty()) return;
+        Engine::MapMarkers::Marker marker;
+        marker.id = NextMarkerId(markers_->document);
+        marker.kind = markers_->kinds[std::min(kind_, markers_->kinds.size() - 1)];
+        marker.shape = std::move(shape);
+        const auto id = marker.id;
+        if (auto inserted = InsertMarker(markers_->document, std::move(marker)); !inserted) {
+            Report(inserted.error());
+            return;
+        }
+        markersModified_ = true;
+        for (std::size_t i = 0; i < markers_->document.markers.size(); ++i)
+            if (markers_->document.markers[i].id == id) marker_ = i;
+    }
+
+    void FinishPath() {
+        if (pathPoints_.size() < 2) return;
+        Engine::MapMarkers::MarkerPath path;
+        for (const auto& cell : pathPoints_) path.points.push_back(MarkerPointOf(cell));
+        AddMarker(std::move(path));
+        pathPoints_.clear();
+    }
+
+    void DrawMarkers() {
+        if (!markers_) return;
+        ImGui::SeparatorText("Markers (K)");
+        ImGui::TextDisabled("markers are not part of undo");
+        for (std::size_t s = 0; s < kMarkerShapeNames.size(); ++s) {
+            if (s != 0) ImGui::SameLine();
+            if (ImGui::RadioButton(kMarkerShapeNames[s], markerShape_ == static_cast<MarkerShape>(s))) {
+                markerShape_ = static_cast<MarkerShape>(s);
+                pathPoints_.clear();
+            }
+        }
+        auto& kinds = markers_->kinds;
+        if (!kinds.empty()) {
+            kind_ = std::min(kind_, kinds.size() - 1);
+            if (ImGui::BeginCombo("new kind", kinds[kind_].c_str())) {
+                for (std::size_t k = 0; k < kinds.size(); ++k)
+                    if (ImGui::Selectable(kinds[k].c_str(), k == kind_)) kind_ = k;
+                ImGui::EndCombo();
+            }
+        }
+        auto& list = markers_->document.markers;
+        ImGui::BeginChild("markers", ImVec2(0, 120), ImGuiChildFlags_Borders);
+        for (std::size_t i = 0; i < list.size(); ++i) {
+            const std::string label = list[i].id + "  " + list[i].kind;
+            if (ImGui::Selectable(label.c_str(), i == marker_)) marker_ = i;
+        }
+        ImGui::EndChild();
+        if (marker_ >= list.size()) return;
+        auto& marker = list[marker_];
+        // The kind: from the product's list; one the list does not hold stops saving.
+        if (ImGui::BeginCombo("kind", marker.kind.c_str())) {
+            for (const auto& kind : kinds)
+                if (ImGui::Selectable(kind.c_str(), kind == marker.kind)) {
+                    marker.kind = kind;
+                    markersModified_ = true;
+                }
+            ImGui::EndCombo();
+        }
+        if (auto* point = std::get_if<Engine::MapMarkers::MarkerPoint>(&marker.shape)) {
+            if (ImGui::SliderFloat("yaw", &point->yaw, -3.1415927F, 3.1415927F)) markersModified_ = true;
+        }
+        // Tags: kept in key order, as the format asks.
+        for (std::size_t t = 0; t < marker.tags.size(); ++t) {
+            ImGui::PushID(static_cast<int>(t));
+            ImGui::Text("%s = %s", marker.tags[t].first.c_str(), marker.tags[t].second.c_str());
+            ImGui::SameLine();
+            const bool remove = ImGui::SmallButton("x");
+            ImGui::PopID();
+            if (remove) {
+                marker.tags.erase(marker.tags.begin() + static_cast<std::ptrdiff_t>(t));
+                markersModified_ = true;
+                break;
+            }
+        }
+        InputString("tag key", tagKey_);
+        InputString("tag value", tagValue_);
+        if (ImGui::Button("Set tag") && !tagKey_.empty()) {
+            auto at = std::lower_bound(marker.tags.begin(), marker.tags.end(), tagKey_,
+                                       [](const auto& tag, const std::string& key) { return tag.first < key; });
+            if (at != marker.tags.end() && at->first == tagKey_) at->second = tagValue_;
+            else marker.tags.insert(at, {tagKey_, tagValue_});
+            markersModified_ = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Delete marker")) {
+            list.erase(list.begin() + static_cast<std::ptrdiff_t>(marker_));
+            markersModified_ = true;
+            if (marker_ > 0) --marker_;
+        }
+    }
+
+    void DrawMarkerOverlay(const View& view) {
+        if (!markers_) return;
+        const auto& document = Document();
+        const auto world = [&document](const Engine::Math::Vec3i& units) {
+            const Math::Vec3 origin = CellCorner(document, {0, 0, 0});
+            return origin + Math::Vec3{static_cast<float>(units.x), static_cast<float>(units.y), static_cast<float>(units.z)} *
+                                (document.cellSize / static_cast<float>(Units));
+        };
+        const auto& list = markers_->document.markers;
+        for (std::size_t i = 0; i < list.size(); ++i) {
+            const ImU32 colour = i == marker_ ? IM_COL32(255, 120, 255, 255) : IM_COL32(200, 120, 255, 200);
+            if (const auto* point = std::get_if<Engine::MapMarkers::MarkerPoint>(&list[i].shape)) {
+                const auto at = world(point->position);
+                const float r = document.cellSize * 0.3F;
+                Line(view, at, at + Math::Vec3{0, document.cellSize, 0}, colour, 2.0F);
+                Line(view, at, at + Math::Vec3{std::sin(point->yaw) * r * 2, 0, std::cos(point->yaw) * r * 2}, colour, 2.0F);
+            } else if (const auto* box = std::get_if<Engine::MapMarkers::MarkerBox>(&list[i].shape)) {
+                const auto a = world(box->minimum);
+                const auto b = world(box->maximum);
+                const std::array<Math::Vec3, 8> c{Math::Vec3{a.x, a.y, a.z}, {b.x, a.y, a.z}, {b.x, a.y, b.z}, {a.x, a.y, b.z},
+                                                  {a.x, b.y, a.z}, {b.x, b.y, a.z}, {b.x, b.y, b.z}, {a.x, b.y, b.z}};
+                constexpr std::array<std::array<int, 2>, 12> edges{{{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
+                                                                    {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}}};
+                for (const auto& edge : edges)
+                    Line(view, c[static_cast<std::size_t>(edge[0])], c[static_cast<std::size_t>(edge[1])], colour, 1.5F);
+            } else {
+                const auto& points = std::get<Engine::MapMarkers::MarkerPath>(list[i].shape).points;
+                for (std::size_t p = 1; p < points.size(); ++p) Line(view, world(points[p - 1]), world(points[p]), colour, 2.0F);
+            }
+        }
+        // A path being drawn.
+        for (std::size_t p = 1; p < pathPoints_.size(); ++p)
+            Line(view, world(MarkerPointOf(pathPoints_[p - 1])), world(MarkerPointOf(pathPoints_[p])), IM_COL32(255, 255, 255, 220), 2.0F);
+        if (boxStart_ && hover_) {
+            const auto box = MarkerBoxOf(*boxStart_, PlacementCell(*hover_));
+            Outline(view, {box.minimum.x / Units, box.minimum.y / Units, box.minimum.z / Units},
+                    {box.maximum.x / Units - 1, box.maximum.y / Units - 1, box.maximum.z / Units - 1},
+                    IM_COL32(255, 120, 255, 255));
+        }
     }
 
     // A file changed on disk since it was opened or saved (the save wrote nothing).
@@ -846,7 +1024,7 @@ private:
         ImGui::TextUnformatted("The map has changes that are not saved.");
         if (ImGui::Button("Save and close")) {
             Save();
-            if (!Session().Modified()) wantsExit_ = true;
+            if (!Session().Modified() && !markersModified_) wantsExit_ = true;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
@@ -895,6 +1073,15 @@ private:
     std::optional<Drag> drag_;
     std::optional<Vec3i> lastStamp_;
     std::optional<Vec3i> lineStart_;
+    std::optional<EditorMarkers> markers_;
+    bool markersModified_{};
+    MarkerShape markerShape_{MarkerShape::Point};
+    std::size_t kind_{};
+    std::size_t marker_{};
+    std::vector<Vec3i> pathPoints_;
+    std::optional<Vec3i> boxStart_;
+    std::string tagKey_;
+    std::string tagValue_;
     bool openClose_{};
     bool promptOpen_{};
     bool wantsExit_{};
