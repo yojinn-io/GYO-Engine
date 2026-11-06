@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06（本分支 `claude/v8-arch-big-map-tool-chunked`）**：big-map 的 Engine 兩批（PR #161、#162）已合併。`v8-arch-big-map-tool-chunked` 的事前宣告 [voxel-map-tool-chunked.md](voxel-map-tool-chunked.md) 寫好，2026-11-06 你核准（`v8-tool-chunked-declare`），實作 `tc-bake` 中。window 批（PR #158，分支 `claude/v8-tool-voxel-map-window`）凍結，在本批之後 rebase 重新宣告；那條分支上的 HANDOFF 紀錄，rebase 時合進來。`tc-markers` 等架構師寫 `map-markers.md` 的「Kinds」節。
+- **2026-11-06（本分支 `claude/v8-arch-big-map-tool-chunked`）**：big-map 的 Engine 兩批（PR #161、#162）已合併。`v8-arch-big-map-tool-chunked` 的事前宣告 [voxel-map-tool-chunked.md](voxel-map-tool-chunked.md) 寫好，2026-11-06 你核准（`v8-tool-chunked-declare`）。`tc-bake`、`tc-measure` 完成（本機 135/135、突變 37/37、T5 p95 1.11 ms）；**等你確認和宣告的差異 4 項與 M6 邊界的處置**（dev_log）。window 批（PR #158，分支 `claude/v8-tool-voxel-map-window`）凍結，在本批之後 rebase 重新宣告；那條分支上的 HANDOFF 紀錄，rebase 時合進來。`tc-markers` 等架構師寫 `map-markers.md` 的「Kinds」節。
 - **PR**：[PR #152](https://github.com/yojinn-io/GYO-Engine/pull/152)（分支 `claude/v8-tool-voxel-map-plan`，一條功能線一個 PR）。尚未合併。
 - **完成**：
   - `v8-tool-voxel-map-plan`：方案、分批。
@@ -74,3 +74,4 @@
 - 2026-11-05：你問編輯器做好了沒：只完成資料格式、build、CLI 與遊戲端讀取，GUI 視窗還沒做。framework 批交給架構會話（「[Job][架構師]例行架構掃描」），已送出委託（範圍、留在 model_viewer 的部分、客戶端建立元件、voxel 編輯器的需求）。等它完成後接 window 批。
 - 2026-11-06：架構師轉達 big-map 的 Engine 兩批已合併（engine-grid PR #161 `c70e8fdc`、engine-format PR #162 `915ddc62`），`-tool-chunked` 可以規劃。讀了 `voxel-mesh.md`、`map-markers.md`、big-map 的 README／HANDOFF，提出計畫案；你照建議定了五個判斷（`v8-tool-chunked-plan`）。從 master `915ddc62` 開工作樹 `.claude/worktrees/v8-tool-chunked`，寫事前宣告，等你核准。已請架構師在 `map-markers.md` 定義 `marker_kinds.json` 的形式。
 - 2026-11-06：架構師寫好 `marker_kinds.json` 的契約（PR #160，`29c79fbf`），`tc-markers` 改為在 Engine 實作 `ParseMarkerKinds`／`UnknownMarkerKinds`，宣告已反映。你核准宣告（`v8-tool-chunked-declare`），開工 `tc-bake`（Opus 5.5／high）。
+- 2026-11-06：`tc-bake`、`tc-measure` 完成（Opus 5.5／high）。第一輪突變 13/14（`tc-chunk-not-validated` 存活）；Opus 審查無 blocker，3 個 should-fix（形狀變更沒觸發全部重烘、T1 缺 Engine 拒收的案例、M6 邊界）照修，存活突變由審查者找到的反例殺掉；第二輪 37/37。T5（建築合成圖 768 區塊）p95 1.11 ms ≤ 16 ms，件數一致。和宣告的差異：engine/io 不能列目錄，舊 region 檔只刪舊索引列過的。dev_log：[2026_11_06_tool_v8_voxel_map_tool_chunked](../../../dev_logs/2026_11_06_tool_v8_voxel_map_tool_chunked.zh-Hant.md)。證據在主 checkout `build/evidence/tool-v8-voxel-map/tool-chunked/`。

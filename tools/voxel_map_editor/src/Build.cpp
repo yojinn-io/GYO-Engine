@@ -1,5 +1,6 @@
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 
+#include "BuildParts.hpp"
 #include "JsonRules.hpp"
 
 #include "engine/base/Sha256.hpp"
@@ -12,7 +13,11 @@
 namespace Gyo::Tools::VoxelMapEditor {
 namespace {
 
-using Quad = std::array<std::int32_t, 7>; // x, y, z, dir, w, h, palette (Engine's order)
+using BuildParts::Quad;
+using BuildParts::CoversSide;
+using BuildParts::FaceQuad;
+using BuildParts::Ints;
+using BuildParts::Shade;
 
 // A shape turned to one orientation, and whether it covers each whole side of
 // its cell (Engine's face order: +X, -X, +Y, -Y, +Z, -Z).
@@ -20,20 +25,6 @@ struct TurnedShape final {
     std::vector<Box> boxes;
     std::array<bool, 6> coversSide{};
 };
-
-bool CoversSide(const std::vector<Box>& boxes, const int side) {
-    const int axis = side / 2;
-    const bool positive = side % 2 == 0;
-    const int u = axis == 0 ? 2 : 0; // the two in-plane axes
-    const int v = axis == 1 ? 2 : 1;
-    std::array<bool, Units * Units> covered{};
-    for (const auto& box : boxes) {
-        if ((positive ? box.maximum[axis] : box.minimum[axis]) != (positive ? Units : 0)) continue;
-        for (int a = box.minimum[u]; a < box.maximum[u]; ++a)
-            for (int b = box.minimum[v]; b < box.maximum[v]; ++b) covered[static_cast<std::size_t>(a * Units + b)] = true;
-    }
-    return std::all_of(covered.begin(), covered.end(), [](const bool c) { return c; });
-}
 
 std::map<std::pair<std::uint32_t, std::uint8_t>, TurnedShape> TurnShapes(const GridDocument& document) {
     std::map<std::pair<std::uint32_t, std::uint8_t>, TurnedShape> turned;
@@ -50,40 +41,6 @@ std::map<std::pair<std::uint32_t, std::uint8_t>, TurnedShape> TurnShapes(const G
         }
     }
     return turned;
-}
-
-// The face of a box looking along dir, in Engine's quad form.
-Quad FaceQuad(const Box& b, const int dir, const std::int32_t palette) {
-    const int axis = dir / 2;
-    const bool positive = dir % 2 == 0;
-    Quad q{};
-    q[0] = b.minimum[0];
-    q[1] = b.minimum[1];
-    q[2] = b.minimum[2];
-    q[static_cast<std::size_t>(axis)] = positive ? b.maximum[axis] : b.minimum[axis];
-    q[3] = dir;
-    switch (axis) {
-    case 0: q[4] = b.maximum[2] - b.minimum[2]; q[5] = b.maximum[1] - b.minimum[1]; break; // (Z, Y)
-    case 1: q[4] = b.maximum[0] - b.minimum[0]; q[5] = b.maximum[2] - b.minimum[2]; break; // (X, Z)
-    default: q[4] = b.maximum[0] - b.minimum[0]; q[5] = b.maximum[1] - b.minimum[1]; break; // (X, Y)
-    }
-    q[6] = palette;
-    return q;
-}
-
-std::uint8_t Shade(const std::uint8_t channel, const std::uint32_t percent) {
-    return static_cast<std::uint8_t>((channel * percent + 50u) / 100u);
-}
-
-std::string Ints(const std::initializer_list<std::int64_t> values) {
-    std::string out = "[";
-    bool first = true;
-    for (const auto v : values) {
-        if (!first) out += ", ";
-        first = false;
-        out += std::to_string(v);
-    }
-    return out + "]";
 }
 
 } // namespace

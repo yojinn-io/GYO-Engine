@@ -16,6 +16,7 @@ add_library(gyo_voxel_map_editor_core STATIC
     src/Orientation.cpp
     src/GridDocument.cpp
     src/Build.cpp
+    src/MapBuild.cpp
     src/BoxImport.cpp
     src/FileAccess.cpp
 )
@@ -30,7 +31,7 @@ target_link_libraries(gyo_voxel_map_editor_core
     PRIVATE nlohmann_json::nlohmann_json
 )
 
-add_executable(gyo_voxel_map_editor src/Main.cpp)
+add_executable(gyo_voxel_map_editor src/Main.cpp src/MapMeasure.cpp)
 target_compile_features(gyo_voxel_map_editor PRIVATE cxx_std_20)
 # The UTF-8 command line and console come from the framework's headless shell.
 # The schema of a file to inspect is read with the tool's JSON parser too.
