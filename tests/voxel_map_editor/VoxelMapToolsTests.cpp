@@ -194,11 +194,15 @@ TEST_CASE("W2 cancel: a drag put back leaves the document and the steps as they 
     session.BeginStroke();
     REQUIRE(ApplyCells(session, ShapeCells({0, 0, 0}, {3, 1, 2}, BrushShape::Cube), EditMode::Add, {2, 3}));
     REQUIRE(ApplyCells(session, std::vector<Vec3i>{{0, 0, 0}}, EditMode::Sub, {}));
+    // A window takes the changes every frame, so the drag's cells are gone from them before Esc.
+    static_cast<void>(session.TakeChanges());
     session.CancelStroke();
     CHECK(WriteGrid(session.Document()) == before);
     CHECK_FALSE(session.InStroke());
-    // The cells it touched are reported, so a preview puts them back too.
-    CHECK(session.TakeChanges().cells.size() >= 24);
+    // Esc reports the cells it put back, so a preview puts them back too.
+    const auto changes = session.TakeChanges();
+    CHECK(changes.cells.size() >= 24);
+    CHECK(std::find(changes.cells.begin(), changes.cells.end(), Vec3i{3, 1, 2}) != changes.cells.end());
     // Undo still takes back the edit before the drag, not the drag.
     CHECK(session.Undo());
     CHECK(Filled(session.Document()).empty());

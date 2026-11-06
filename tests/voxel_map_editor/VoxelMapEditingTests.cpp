@@ -719,8 +719,9 @@ TEST_CASE("W5 save: markers are written last, read back, and an unknown kind sto
     REQUIRE(again->markers);
     CHECK(again->markers->document.markers.size() == 2);
     WriteText(markersPath, ReadText(markersPath) + " ");
-    CHECK(SaveEditor(again->files, again->document, *preview, SaveMode::Checked, &*again->markers).error().code ==
-          VoxelMapErrorCode::FileChanged);
+    const auto changed = SaveEditor(again->files, again->document, *preview, SaveMode::Checked, &*again->markers);
+    REQUIRE_FALSE(changed);
+    CHECK(changed.error().code == VoxelMapErrorCode::FileChanged);
     // A kinds list Engine refuses, or a missing one, is an error when opening.
     WriteText(kindsPath, R"({"schema": "gyo.marker_kinds", "version": 1, "kinds": []})");
     CHECK(OpenEditor(gridPath, (folder / "map").string(), markersPath, kindsPath).error().code ==
@@ -729,3 +730,26 @@ TEST_CASE("W5 save: markers are written last, read back, and an unknown kind sto
           VoxelMapErrorCode::ReadFailed);
     std::filesystem::remove_all(folder);
 }
+
+TEST_CASE("W7 preview: a cell on a chunk's side redraws the chunk across it") {
+    // A cube at x = 16 (chunk 1); filling and emptying x = 15 (chunk 0) hides and shows its -X face.
+    auto document = TwoBlocks();
+    document.Set({16, 3, 3}, kCube);
+    EditSession session(document);
+    auto preview = MapPreview::Create(document);
+    REQUIRE(preview);
+    Drawn drawn;
+    std::vector<std::byte> palette;
+    Take(*preview, drawn, palette);
+    const auto across = drawn.at({1, 0, 0}).indices.size();
+    for (const Cell value : {kCube, Cell{}}) {
+        REQUIRE(session.SetCell({15, 3, 3}, value));
+        REQUIRE(preview->Apply(session.Document(), session.TakeChanges()));
+        const auto changes = preview->TakeChanges();
+        REQUIRE(changes.chunks.contains({1, 0, 0}));
+        REQUIRE(changes.chunks.at({1, 0, 0}));
+        // Hidden: one face fewer (6 indices); shown again: as before.
+        CHECK(changes.chunks.at({1, 0, 0})->indices.size() == (value.block != 0 ? across - 6 : across));
+    }
+}
+

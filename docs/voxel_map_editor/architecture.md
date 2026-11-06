@@ -8,11 +8,11 @@ A design tool that edits a map as a grid of shaped, coloured blocks and bakes it
 
 Owner: `voxel_map_editor` (`tools/voxel_map_editor/`).
 
-**Status (2026-11-06): `v8-arch-big-map-tool-chunked` landed** ([declaration](../tools/plans/v8/voxel-map-tool-chunked.md)):
-the chunked bake, its commands and markers, on top of the core library and the command line. The window
-(`v8-tool-voxel-map-editor-window`, the `gui` variant, the default; the `cli` variant has no window) is being
-declared again on top of it, with Goxel's functions and interaction (`v8-tool-voxel-window-goxel`); until then it
-previews and saves the single file.
+**Status (2026-11-06): `v8-tool-voxel-window-1`** ([declaration](../tools/plans/v8/voxel-map-window-goxel.md)):
+the window (the `gui` variant, the default; the `cli` variant has no window) previews and saves the chunked map and
+edits with Goxel's functions and interaction, on top of `v8-arch-big-map-tool-chunked` (the chunked bake, its
+commands and markers) and the core library and command line. Selection, Move and Symmetry (`-window-2`) and Layers
+(`-window-3`) follow.
 
 ## The grid: `gyo.voxel_grid` version 1
 
@@ -174,29 +174,46 @@ markers in the window is the window batch's.
 fine), places the grid's origin at the lowest x and z, refuses a box below the floor (y < 0) or not in whole cells,
 and reads the grid it made back with `ParseGrid` before it writes it.
 
-| `edit <grid> <mesh> [--gpu-driver <driver>]` | opens the window (gui variant): a new grid when `<grid>` does not exist; every save writes `<grid>`, then `<mesh>` | 0 when the window closes; 2 in the cli variant |
-| `measure-preview (--grid <grid> \| --synthetic) --csv <file> [--frames <n>] [--gpu-driver <driver>]` | the preview's frame time with one cell edit per frame (P1 of the trial batch) | 0; 3; 4 a frame failed; 2 in the cli variant |
+| `edit <grid> <map-dir> [--markers <file> --marker-kinds <file>] [--gpu-driver <driver>]` | opens the window (gui variant): a new grid when `<grid>` does not exist; every save writes `<grid>`, then the chunked map in `<map-dir>`, then the markers | 0 when the window closes; 2 in the cli variant |
+| `measure-preview (--grid <grid> \| --synthetic) --csv <file> [--no-edit] [--frames <n>] [--gpu-driver <driver>]` | the preview's frame time, with one cell edit per frame or drawing only (P1 of `v8-tool-voxel-window-1`) | 0; 3; 4 a frame failed; 2 in the cli variant |
 
 A wrong command line exits with 2.
 
 ## The window
 
-- **Editing model** (`Editing.hpp`, in the core, so the CPU tests cover it): place (beside the face the pointer is
-  on, or on the edit plane), erase, paint (another block, the orientation kept), pick a cell's block and orientation,
-  fill or clear a box drawn on the edit plane with a height; the edit plane is one cell layer y, moved with
-  PgUp/PgDn. Undo and redo: a drag is one step; a block or shape edit is one step. A block or shape in use cannot be
-  removed; every block or shape edit must read back through `ParseGrid`.
+The window's functions and interaction follow Goxel's; its look and its code are this editor's own, written for
+blocks, shapes and orientations (`v8-tool-voxel-window-goxel`, `v8-tool-voxel-window-1`).
+
+- **Modes** (top of the tools): Add (T) sets cells to the chosen block and orientation, Sub (R) empties them, Paint
+  (G) gives filled cells the chosen block and keeps their orientation.
+- **Tools** (`Tools.hpp`, in the core, so the CPU tests cover them): Brush (B; size 1 to 16, cube, sphere or
+  vertical cylinder, stamped along the drag; Shift+click draws a line from the last stamp), Shape (S; a box, or the
+  sphere or cylinder inscribed in it, dragged from corner to corner), Laser (L; cuts along the view; in Add or Paint
+  it still cuts), Line (N; two clicks), Extrude (F; drags the connected uncovered face of one layer out or in), Plane
+  (P; puts the edit plane on a face, on any axis), Picker (C; Ctrl+click picks in any tool), Marker (K; with
+  `--markers`). Orientation: Q and E turn about the up axis, with Shift they choose the up axis; `[` and `]` change
+  the brush size; PgUp and PgDn move the edit plane.
+- **Snap**: the surface of filled cells (volume), the edit plane, or both (whichever the ray meets first). Add acts
+  on the cell beside the face it points at, Sub and Paint on the cell itself. During a drag the pick looks at the map
+  as it was when the drag began, so a drag does not climb onto what it made.
+- **Drags**: what a drag changes is applied as it goes and shown at once; releasing keeps it as one undo step, Esc
+  puts it back (`EditSession::CancelStroke`). A block or shape edit is one step; markers are not in undo.
+- **Camera**: the middle button rotates, the right one pans, the wheel zooms, the arrows rotate; 1, 3 and 7 look from
+  the front, the right and the top, 0 frames the map. No orthographic view yet (it needs the framework or Engine).
 - **Picking**: the ray through the pointer's pixel, in Engine's camera convention (`ViewProjection` composes the
-  camera as Engine's `Renderer` does), walked through the cells (DDA); a cell of any shape counts as whole. With no
-  cell hit, the ray meets the edit plane.
-- **Saving**: the grid text, then its build (Engine reads it back); only when both succeed, the grid and then the
-  mesh by atomic replace. A file that changed on disk since it was opened or saved is not overwritten
-  (`FileChanged`); a mesh that could not be written after the grid was is reported, and `verify` finds the pair
-  different.
-- **Preview**: after every change the whole grid is built and Engine's `ParseVoxelMesh` and `ExpandVoxelMesh` give
-  what is drawn, on the framework's offscreen preview ([preview.md](../framework/preview.md)), with Engine's unlit
-  shader and the palette texture, as the game draws it. The pointer's cell and the edit plane's grid are lines of
-  ImGui's draw list, projected by the same `ViewProjection`.
+  camera as Engine's `Renderer` does), walked through the cells (DDA); a cell of any shape counts as whole.
+- **Preview** (`MapPreview`): the chunks `BakeMap` and `RebakeChunks` keep, expanded by Engine's `ExpandVoxelChunk`
+  with the palette image of `ExpandVoxelPalette`, drawn on the framework's offscreen preview
+  ([preview.md](../framework/preview.md)) with Engine's unlit shader, one mesh per chunk, as the game draws them. An
+  edit rebakes and uploads only the chunks it touched. The edit plane's grid, the outlines and the markers are lines
+  of ImGui's draw list, projected by the same `ViewProjection`.
+- **Markers** (with `--markers` and `--marker-kinds`): points (facing the camera's direction), boxes and paths,
+  placed where a block would go; the kind is chosen from the product's list, tags are edited in key order.
+- **Saving**: the grid, then the map of the previewed chunks (`WriteMap` and `SaveMap`), then the markers
+  (`WriteMarkers`). A marker whose kind the list does not hold, or a text Engine refuses, writes nothing. A file
+  that changed on disk since it was opened or saved (the grid, `map.json` or the markers) stops the save
+  (`FileChanged`), and the window asks: reload from disk (the edits are dropped), overwrite, or cancel. A grid
+  without filled cells saves the grid and no map.
 
 ## Design Invariants
 
@@ -243,15 +260,20 @@ A change against any item below is an Architecture Delta that needs the user's a
 5. **Writes only what it makes.** The baked file or the grid a command names, by atomic replace through engine/io;
    in a map folder a command names, `map.json` and region files, and it removes only the region files the previous
    `map.json` listed and the new one does not (names of the region file form under `regions/`); `measure-map`, the
-   synthetic grid and the CSV in the folder its command line names; the window, the grid and the mesh its command
-   line names, never overwriting a file that changed on disk since it was opened or saved; `measure-preview`, the
-   CSV its command line names. No catalog, product file or arena. Guard: the command-line test (refused inputs write
+   synthetic grid and the CSV in the folder its command line names; the window, the grid, the map folder (by the
+   same rules as `build-map`) and the markers file its command line names, never overwriting one that changed on
+   disk since it was opened or saved unless the user chooses to overwrite it; `measure-preview`, the CSV its command
+   line names. No catalog, product file or arena. Guard: the command-line test (refused inputs write
    nothing), "map: a save stopped before the index leaves the previous map readable" and the save tests (W5).
 6. **The grid is the tool's.** `gyo.voxel_grid` has one reader, this tool; Engine knows no blocks, shapes or
    orientations (`voxel-mesh.md`, Design Invariant 1). Guard: review.
-7. **What is shown is what the game reads.** The preview draws the geometry Engine's `ParseVoxelMesh` and
-   `ExpandVoxelMesh` give for the text `BuildMesh` returns; the editor makes no triangles of its own from the grid.
-   Guard: W6 ("preview: what is drawn is Engine's expansion of the baked text") and its mutant. (User, 2026-11-06.)
+7. **What is shown is what the game reads.** The preview draws, per chunk, the geometry Engine's `ExpandVoxelChunk`
+   gives for the chunks `BakeMap` and `RebakeChunks` keep (each accepted by `ValidateVoxelChunk`), with the palette
+   image of `ExpandVoxelPalette`; saving writes those same chunks (`WriteMap` reads them back equal). The editor
+   makes no triangles of its own from the grid, and the preview during a drag goes the same way. Guard: W6
+   ("preview: what is drawn is Engine's expansion of the saved text, chunk by chunk"), W7 ("after every edit, undo
+   and redo, the drawn chunks are those of a whole bake") and their mutants. (User, 2026-11-06,
+   `v8-tool-voxel-window-1-declare`.)
 
 ### Replacement Criteria
 
