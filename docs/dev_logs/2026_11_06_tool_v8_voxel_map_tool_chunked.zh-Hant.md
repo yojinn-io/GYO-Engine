@@ -5,7 +5,7 @@
 - 審查：子 Agent（Opus／high，唯讀）。
 - 事前宣告：[voxel-map-tool-chunked.md](../tools/plans/v8/voxel-map-tool-chunked.md)，2026-11-06 使用者核准（「推奨どおり承認」）。
 
-**狀態：** `tc-bake` 與 `tc-measure` 完成；`tc-markers` 等 PR #160（`marker_kinds.json` 的契約）合併後再做。L1 待 PR。
+**狀態：** `tc-bake` 與 `tc-measure` 完成；`tc-markers` 等 PR #160（`marker_kinds.json` 的契約）合併後再做。L1 三平台通過（PR #163）。
 
 相關文件：
 - [voxel_map_editor/architecture.md](../voxel_map_editor/architecture.md)：「The chunked map」節，DI 2～5、RC 3、RC 5、RC 6
@@ -50,7 +50,7 @@
 | T6 | 未做（`tc-markers`） | — |
 | T7 | 成立：突變 37/37 被殺（`tc-*` 16、既有 21）。第一輪 13/14 的紀錄見下 | `mutations-tc-round1.txt`、`mutations-all-round2.txt` |
 | T8 | 成立：依賴守衛與自我測試通過（本批沒有新的依賴，守衛不改） | ctest |
-| T9 | 本機：全量建置成功；`cpu|shader` 135/135。L1 待 PR | `ctest-cpu-shader-round2.txt` |
+| T9 | 成立。<br>- 本機：全量建置成功；`cpu|shader` 135/135。<br>- L1（PR #163，head `585f599b`，run 42188382428）：windows-x64、linux-x64、macos-arm64 全部通過。<br>- 第一次 L1 的 windows-x64 編譯失敗（測試變數 `far` 被 `windef.h` 的巨集吃掉，C2660），改名 `farSide` 後通過，判定不變 | `ctest-cpu-shader-round2.txt`、CI |
 
 T5 是對審查前的程式碼量的。審查修正後，用同一方法再量一次，只當確認：p95 1.12 ms（`measure-after-review/`）。
 
