@@ -78,3 +78,7 @@ Stop patching and let the user decide between patching and rebuilding when any o
 2. Static collision needs a shape other than an axis-aligned box.
 3. The cells are measured to be very uneven (a few cells hold most boxes) or box sizes differ widely, so queries
    slow down: a hierarchical grid (Ericson, Real-Time Collision Detection §7.2, not yet read) first, then a tree.
+4. The registrations (each box counted once per cell it covers) or the build time are measured above the value a
+   consumer's batch declared: a hierarchical grid first, or a list of large boxes that every query tests.
+5. One box far from the others makes the grid double its cell length and slows every query (results stay the same):
+   a consumer records `CellLength()`, and a length of four times the one it gave or more is reported to the user.

@@ -145,6 +145,67 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 
 - 2026-11-06 L1（head `7e7ea5db`，run 42147144545）：linux-x64、macos-arm64、windows-x64 全部通過，CI gate 通過。J6 成立。
 
+- 2026-11-06 審查者複核 `7e7ea5db`：B1、S1 關閉，沒有剩下的 blocker 或 should-fix。使用者指示合併，PR #161 合併進 master（merge `c70e8fdc`，分支已刪）。engine-grid 批完成。
+
+## 現況：engine-format（`v8-arch-big-map-engine-format`，PR 2）
+
+- 2026-11-06 開工。原工作樹 `bold-mahavira-68c717` 已刪除，改用工作樹 `.claude/worktrees/engine-format`。分支 `claude/v8-arch-big-map-engine-format` 的實作提交已 rebase 到 `c70e8fdc`，沒有衝突。
+- 架構師轉達：先把宣告草稿改成正式事前宣告，開 PR 2 時先給使用者核准宣告，再推實作的審查；審查者仍是 engine-grid 會話。
+- 宣告 [engine-format](engine-format.zh-Hant.md) 已寫成正式版。第 7 節列出要使用者決定的事：v1 退役的時點、`collision.md` 的 RC 4／5（PR #161 的 N4、U1）、`AnimationEvents` 另案（U4）、突變存活的處理規則、模型。
+- 2026-11-06 PR #162 以 draft 開出（draft 不跑 L1），停在核准關卡。
+- **2026-11-06 使用者核准 engine-format 宣告**（原話「照建議核准」：第 7 節 1～5 全部照建議）。開始補測試、寫 RC、跑 F1～F5。
+  - `mm-two-shapes-accepted` 照突變存活的規則補測試：K4 檢查訊息「exactly one of point, box and path」。
+  - `collision.md` 加 RC 4（登記數或建構時間超過宣告值）、RC 5（離群盒子讓格長加倍）。
+- 2026-11-06 架構師會話轉達使用者在那邊對第 7 節的定案：1～5 與本會話的核准相同；第 6 項不同，改為「DI 1 改成中性說法」（`v8-arch-big-map-neutral-wording`）。
+  - `voxel-mesh.md` DI 1 的「spawn points」改成「placement data」，守的性質不變。
+  - 名詞守衛擴到 `GYO::VoxelMesh` 的程式、測試與契約，加突變 `vm-guard-gameplay-word`。
+  - §14.4：守衛只加嚴，沒有緩的面，1～5 寫在 dev_log。
+- 2026-11-06 F1～F5（本機 Intel Mac，head `eb516ffc`；**件數の突き合わせ：一致**）：
+  - 突變：`engine_format_mutations.json` 55/55、`voxel_mesh_mutations.json` 20/20、`engine_grid_mutations.json` 16/16 被殺。
+  - 全量建置成功；`cpu|shader` 132/132、`gpu` 4/4。
+  - 證據在主 checkout `build/evidence/big-map/engine-format/`。dev_log 已寫。PR #162 改成 ready，等 L1 與審查者。
+
+- 2026-11-06 PR #162 的審查（engine-grid 會話，對 `7886e7c4`）：B1、S1、N1～N4；使用者決定全部在本 PR 修（經架構師轉達）。修正提交 `757ba5df`（未推送），宣告加「審查後變更」節。之後追加 N5（守衛移到共用位置），尚未做。
+- **2026-11-06 停下（宣告第 4 節「突變存活的處理」與 AGENTS §14）：F2 不成立。** `757ba5df` 上重跑：
+  - **件數の突き合わせ：一致**（要求 98、結果 98：被殺 96、存活 2、過期 0）。
+  - 結果：engine-format 60/62、v1 20/20、engine-grid 16/16；全量建置成功，`cpu|shader` 132/132、`gpu` 4/4。
+  - 證據在主 checkout `build/evidence/big-map/engine-format/after_review/`。
+  - 存活的兩個，都是審查修正讓舊檢查變成多餘（推論，未經使用者認定）：
+    - `vmap-region-file-dot-segments`：N1 的「段名結尾不能是 `.`」已經涵蓋 `.` 與 `..`。
+    - `mm-tags-unbounded`：S1 的預掃描先拒絕鍵超過 32 個的物件，K6 那一行不會再被執行到。
+  - 給使用者的選項：
+    - (1) 建議：刪掉兩處多餘的檢查，退役這兩個突變，由新突變守同一性質。
+    - (2) 保留兩處檢查，記為等價突變（要使用者接受）。
+    - (3) 回頭看前提：把預掃描的上限提高到 64，讓兩處各管一段。
+  - 用時：審查修正約 1.5 h。
+  - 下次會改變的判斷：加新規則時，要先查舊的檢查會不會被新規則蓋過。
+- **2026-11-06 使用者決定**（原話「刪多餘檢查（建議）」）：選項 (1)。
+  - 刪掉 `ValidRegionFile` 裡「`.`、`..`」的比較，以及 `ParseTags` 裡「tags 超過 32」的檢查。
+  - 退役 `vmap-region-file-dot-segments`、`mm-tags-unbounded`，engine-format 的 catalog 從 62 個減為 60 個。
+  - 同一性質由 `vmap-region-file-trailing-dot`、`mm-object-key-cap-removed` 守。之後做 N5，再完整重跑。
+- 2026-11-06 N5：名詞守衛移到 `tests/common/scripts/neutral_names_guard.py`，範圍由呼叫端給。
+  `gyo_voxel_mesh.neutral_names` 與 `gyo_map_markers.neutral_names` 各自登記；守衛突變改成透過各自的 ctest 執行。提交 `e566fd1a`。
+- 2026-11-06 完整重跑（`e566fd1a`；**件數の突き合わせ：一致**——要求 96、結果 96：被殺 96、存活 0、過期 0）：**F2 成立**。
+  - 突變：engine-format 60/60、v1 20/20、engine-grid 16/16。
+  - 全量建置成功；`cpu|shader` 133/133、`gpu` 4/4。
+  - 證據在 `build/evidence/big-map/engine-format/after_review_2/`。上一輪的失敗（60/62）保留在 `after_review/`。
+- 2026-11-06 推送 `e756e7d9`。L1 三平台（windows-x64、linux-x64、macos-arm64）全部通過，已通知架構師。
+- **2026-11-06 停下（架構師依 AGENTS §14）：審查者複核 `e756e7d9`，發現 S1 帶進回歸 B2。**
+  - B2：S1 的預掃描每層存完整路徑，記憶體隨巢狀深度平方成長（深度 32,000 約 1.6 GB），`bad_alloc` 會從 `ParseMapMarkers` 漏出。
+  - 其餘七項（B1、S1、N1～N5）與兩個退役突變都確認了。
+- **2026-11-06 使用者決定**（經架構師轉達）：先修 B2 再合併，用審查者的 (a)。
+  - 判定 G1～G4 先寫進宣告 4b 節的 B2，再看結果。
+  - G2：新測試 `gyo_map_markers_alloc_tests` 在 `e756e7d9` 失敗（比值 3.91／3.71），修正後通過（2.00／2.00）。
+  - G3：`mm-*` 18/18 被殺（**件數の突き合わせ：一致**），含新突變 `mm-key-scan-full-path`。
+  - G4：`gyo_map_markers_tests` 11/11、`gyo_voxel_mesh_tests` 39/39、兩條名詞守衛通過；全量建置成功，`cpu|shader` 134/134、`gpu` 4/4。L1 待新 head。
+  - 順手改了守衛 docstring（審查者的參考項）。
+  - 證據在 `build/evidence/big-map/engine-format/b2/`。
+
+## 之後（另案，不開卡）
+
+- `GYO::Model` 的 `AnimationEvents.cpp:40` 改用 `StrictJson.hpp`。它的回呼有同樣的二次方（PR #161 的 U4）。
+- PR #161 審查者的 N3（極小半徑時候選邊際是否足夠）：Collision 的事，待使用者決定。
+
 ## 下一步
 
-等審查者複核（B1、S1）與使用者合併；PR 1 合併後 rebase 開 PR 2。N3、N4、U1～U4 待使用者決定。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
+PR #162 的 B2 修正：新 head 的 L1 三平台與審查者（engine-grid 會話）的複核；之後由架構師合併（使用者已在架構師會話說合併）。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
