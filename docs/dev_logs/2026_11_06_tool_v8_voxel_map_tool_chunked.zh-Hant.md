@@ -183,7 +183,7 @@ nit：
   - map-markers.md 的 Status 改為「工具讀，程式庫寫」。
 - **記錄，不處理**：
   - kinds 的解析沒有用 `KeyCountScan`：64 KiB 內最壞 128 ms（-O2），上限有界。要改是 Engine 的事，交架構師。
-  - `check_markers_unknown` 沒有專屬突變：runner 不能突變 CLI 測試的判斷；這條路徑由 `tc-unknown-kinds-none` 間接守住。
+  - `check_markers_unknown` 沒有專屬突變：runner 不能突變 CLI 測試的判斷；這條路徑由 `mm-unknown-kinds-none` 間接守住。
 
 ### §14.4（DI 1 的守衛）
 
@@ -209,3 +209,14 @@ nit：
 - DI 2 字句的追加（`ParseMarkerKinds`、`UnknownMarkerKinds`）。宣告只核准了「markers 經 `ParseMapMarkers`」。這次加的只會收緊，但照 AGENTS §3，改 DI 節要同意。
 
 **另案（交架構師）**：map-markers.md 的 DI 3 還寫著「the kinds rules and their mutants arrive with the parser」，已經過時（突變在工具的目錄裡）。改 DI 節要使用者同意，所以本批不動。
+
+### 架構師轉達的使用者定案（2026-11-06，PR #163 內處理）
+
+1. **kinds 的突變搬到 Engine 的目錄。**
+   - 從 `voxel_map_editor_mutations.json` 移到 `engine_format_mutations.json`，改名 `mm-kinds-*`、`mm-unknown-kinds-none`；規則與 find 不變。
+   - 理由：它們守的是 Engine 模組的 DI。放在工具的目錄裡，刪掉編輯器時守衛會跟著消失（AGENTS §7）。
+   - 工具的目錄從 48 條減為 41 條。
+   - **engine_format 目錄重跑：68/68 被殺**（原有 61、新加 7；件數の突き合わせ：一致，要求 68、結果 68）。
+   - 證據：`mutations-engine-format-with-kinds.txt`。
+2. **map-markers.md 的 DI 3**：把「the kinds rules and their mutants arrive with the parser」換成「the kinds rules are tested in the same file, mutants mm-kinds-* and mm-unknown-kinds-none in the same catalog」。這是使用者同意的 DI 節變更。
+3. **`ParseMarkerKinds` 不加鍵數預掃**（使用者同意）。map-markers.md 的「Cost」段末補一句：64 KiB 的上限把最壞情況限制在約 130 ms，只在載入時發生。
