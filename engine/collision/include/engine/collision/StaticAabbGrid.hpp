@@ -54,8 +54,9 @@ class StaticAabbGrid final {
 public:
     // At most 2^22 cells: a longer cell is used (doubled until they fit) when
     // cellLength would make more. Boxes are copied. Every box must be valid
-    // (IsValid), cellLength finite and positive, and there must be fewer than
-    // 2^32 boxes (asserted).
+    // (IsValid), cellLength finite and positive, there must be fewer than 2^32
+    // boxes, and the registrations (each box counted once per cell it covers)
+    // must number fewer than 2^32 (all asserted).
     static constexpr std::size_t MaxCells = std::size_t{1} << 22;
 
     StaticAabbGrid(std::span<const Math::Aabb> boxes, float cellLength);

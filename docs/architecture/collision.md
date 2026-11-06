@@ -37,8 +37,9 @@ Every query returns, bit for bit, what a linear scan of all boxes in index order
   sweep can reach.
 - **The cell length is a hint.** The grid uses at most 2^22 cells; a cell length that would make more is doubled
   until it fits. Results never depend on the length in use (`CellLength()`).
-- **Preconditions.** Every box valid (`IsValid`), the cell length finite and positive, fewer than 2^32 boxes, and
-  query inputs as for the exact queries; anything else is a Programmer Error (`GYO_ASSERT`).
+- **Preconditions.** Every box valid (`IsValid`), the cell length finite and positive, fewer than 2^32 boxes, fewer
+  than 2^32 registrations (each box counted once per cell it covers; about 1,024 boxes that each cover all 2^22 cells
+  reach the limit), and query inputs as for the exact queries; anything else is a Programmer Error (`GYO_ASSERT`).
 
 ### How it stays exact
 
@@ -46,7 +47,9 @@ Every query returns, bit for bit, what a linear scan of all boxes in index order
   The function is monotonic, so two closed intervals that intersect always have cell ranges that intersect; each
   box is registered in every cell its closed extent covers, and `Overlapping` needs no margin.
 - Capsule and ray queries collect candidates from bounds inflated by `1e-3 + 1e-5 × the largest coordinate
-  magnitude`, far beyond the exact queries' tolerance and double rounding; extra candidates cost time only.
+  magnitude`. The inflation is needed, not only a safeguard: the exact sweep accepts a root up to 1e-12 of the path
+  beyond its end and clamps it, so a box just past the end still reports a contact (a test keeps that case); the
+  inflation also covers double rounding. Extra candidates cost time only.
 - A ray is walked in pieces one cell long, from its entry into the hull of all boxes; once a hit is known, pieces
   that start beyond it (plus the margin) are skipped, since any equal or nearer hit lies in an earlier piece.
 - The tie rule is applied as "smaller value, then lower or higher index", which is what the scans produce whatever

@@ -357,6 +357,28 @@ TEST_CASE("grid edge: a tiny cell length is doubled, results unchanged") {
     Report(tally, "grid edge tiny cell");
 }
 
+TEST_CASE("grid edge: a sweep that ends just short of a face on a cell line") {
+    // The reviewer's counterexample to the "equivalent mutant" claim for
+    // grid-margin-zero (PR #161): the exact sweep accepts a root up to 1e-12 of
+    // the path beyond its end (CapsuleQueries.cpp, RayRoundedBox) and clamps
+    // it, so a box whose face lies just past the end still reports a contact.
+    // Box 0 fixes the hull's minimum at x = 0, so box 1's face x = 2.25 is a
+    // cell line for cell 0.25; the capsule ends 2^-40 short of that face. The
+    // candidate bounds need their margin to keep box 1.
+    const std::vector<Aabb> boxes{{{0, 0, 5}, {0.25F, 2, 6}}, {{2.25F, 0, -1}, {3, 2, 1}}};
+    const VerticalCapsule capsule{{-std::ldexp(1.0F, -40), 0.5F, 0}, 1.0F, 0.25F};
+    const Vec3 move{2, 0, 0};
+    const StaticAabbGrid grid(boxes, 0.25F);
+    const auto scan = ScanSweep(boxes, capsule, move, TieBreak::LowestIndex);
+    REQUIRE(scan);
+    CHECK(scan->index == 1);
+    CHECK(scan->contact.fraction == 1.0F);
+    for (const auto tie : {TieBreak::LowestIndex, TieBreak::HighestIndex})
+        CHECK(Same(grid.SweepVerticalCapsuleNearest(capsule, move, tie), ScanSweep(boxes, capsule, move, tie)));
+    CHECK(Same(grid.SweepVerticalCapsuleAll(capsule, move), ScanSweepAll(boxes, capsule, move)));
+    CHECK(Same(grid.OverlapVerticalCapsuleAll(capsule), ScanOverlapAll(boxes, capsule)));
+}
+
 TEST_CASE("grid edge: boxes a million metres from the origin") {
     // Far coordinates: float spacing there is 1/16 m, so faces still coincide
     // and the candidate margins are relative.

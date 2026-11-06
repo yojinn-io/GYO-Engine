@@ -99,6 +99,12 @@ StaticAabbGrid::StaticAabbGrid(const std::span<const Math::Aabb> boxes, const fl
                 for (auto x = r.low[0]; x <= r.high[0]; ++x)
                     ++counts[static_cast<std::size_t>((z * counts_[1] + y) * counts_[0] + x)];
     }
+    // Every (box, cell) registration is an entry of items_, indexed by uint32:
+    // the total must stay below 2^32 (a precondition, checked in 64 bits so it
+    // cannot wrap silently).
+    std::uint64_t registrations = 0;
+    for (std::size_t c = 0; c < cells; ++c) registrations += counts[c];
+    GYO_ASSERT(registrations < (std::uint64_t{1} << 32U));
     offsets_.assign(cells + 1, 0);
     for (std::size_t c = 0; c < cells; ++c) offsets_[c + 1] = offsets_[c] + counts[c];
     items_.resize(offsets_[cells]);

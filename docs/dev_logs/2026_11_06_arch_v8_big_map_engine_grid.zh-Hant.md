@@ -56,20 +56,33 @@
   | PR 1 程式碼（確認，不是判定） | 364.0 ms | | |
 
   三次的展開結果 SHA-256 都是 `678a28c2…e299`，表示契約沒變。
-- **J2 突變：** `engine_grid_mutations.json` 最後一輪 15/16 被殺（`mutations_engine_grid_final.txt`），存活的是 `grid-margin-zero`，見下。`voxel_mesh_mutations.json` 在 PR 1 分支上 20/20 被殺。
+- **J2 突變：不成立（宣告的寫法下）。** `engine_grid_mutations.json` 最後一輪 15/16 被殺（`mutations_engine_grid_final.txt`），存活的是 `grid-margin-zero`。我把它記為等價突變，但審查者找到殺它的輸入，推定被推翻，見下。`voxel_mesh_mutations.json` 在 PR 1 分支上 20/20 被殺。
   三個格子邊界突變（`grid-count-short`、`grid-first-cell-dropped`、`grid-last-cell-dropped`）是被建構時的斷言 `GYO_ASSERT failed: !ranges[i].empty` 抓到，所以 expect 也接受這段訊息。拆批前那一輪只認比對失敗，所以標成 wrong_failure。
 - **J6 迴歸：** 本機全量建置成功；`ctest -L "cpu|shader"` 130/130、`ctest -L gpu` 4/4 通過。L1 三平台待 PR。
 - **J7 依賴守衛：** `vm-links-collision` 與 `grid-links-voxel-mesh` 都以 configure 失敗被殺。
 
-### 存活的突變：`grid-margin-zero`（等價突變，推定）
+### `grid-margin-zero`：原推定「等價突變」錯誤（審查者的反例）
 
-這個突變把候選範圍的放大邊際歸零，結果存活。我推定它是等價突變，理由：
+這個突變把候選範圍的放大邊際歸零，結果存活。我當時推定它是等價突變，理由如下（**已被推翻**）：
 
 - 候選範圍是膠囊或射線段的外包盒，用 double 精確算出；精確查詢自己也用 double 計算。
 - 1e-7 的容許值只會「減少」接觸：淺的初始重疊若分離或切向移動，就不算阻擋。
 - 所以精確查詢回報接觸的盒子，幾何上必然和外包盒相交（閉區間）。格子的格索引是單調函式，`Overlapping` 也不需要邊際。
 
-邊際是防禦：以後若改了精確查詢的容許方向，它還能保住等價。這個突變留在 catalog 裡，判定不刪。審查時若找到會讓它被殺的輸入，就把那個輸入加成測試。
+**推翻的經過（2026-11-06，PR #161 的審查者，engine-grid 會話）：**
+
+- 第一點不成立。精確掃掠 `RayRoundedBox`（`CapsuleQueries.cpp:116`）在 `t <= last + 1e-12` 的窗口內接受根，再夾到 `last`。所以路徑終點外、距離不超過 1e-12 × |δ| 的盒子也會回報接觸。
+- 反例：兩個盒子 `[0,0,5]-[0.25,2,6]` 和 `[2.25,0,-1]-[3,2,1]`，格長 0.25；膠囊 feet `(−2^−40, 0.5, 0)`、高 1、半徑 0.25，位移 `(2, 0, 0)`。
+  線性掃描的結果是索引 1、fraction 1；原版格子相同；邊際歸零的格子沒有結果。
+  審查者的 probe 在主 checkout `build/evidence/big-map/engine-grid/review_pr161/`。
+- PR 原本的 6 個 grid 測試，在邊際歸零時全部通過。也就是說，我的隨機集合與邊界案例都沒有碰到這個窗口。
+
+處置（工作樹，未提交；等使用者決定，見 HANDOFF）：
+
+- 反例加成 J4 的邊界案例：測試「a sweep that ends just short of a face on a cell line」。原程式碼通過；`grid-margin-zero` 重跑後被殺（`build/evidence/big-map/engine-grid/mutations_margin_zero_after_review.txt`）。
+- catalog 的說明與 `what` 改掉「expected equivalent」。
+- 邊際的作用改寫：它涵蓋的不只是 double 的捨入，還有精確查詢的根接受窗口。這寫進 `collision.md` 的「How it stays exact」。
+- 照 AGENTS §14.1，J2 的不成立先報告使用者，再修。
 
 ### §14.4：兩個突變改指向（DI 3／DI 4 的守衛）
 

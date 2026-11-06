@@ -91,7 +91,7 @@ public:
 
 - 現在：`json::parse` 帶回呼查重複鍵 → nlohmann 回呼解析器在 `end_object` 對父陣列的線性掃描，物件數的二次方（survey §5(c)）。
 - 換成：(1) `sax_parse` 掃一次，每個開著的物件一個鍵集合，重複就失敗；(2) 不帶回呼的 `parse`。規則程式不動。
-- **放哪裡**：`engine/base/include/engine/base/StrictJson.hpp`，一個**只依賴標準函式庫的模板**：`template <class Json> Json ParseStrictJson(std::string_view text, auto onError)`。
+- **放哪裡**：`engine/base/include/engine/base/StrictJson.hpp`，一個**只依賴標準函式庫的模板**：`template <class Json> std::optional<Json> ParseStrictJson(std::string_view text, std::string& failure)`（失敗時回 `std::nullopt`，`failure` 是「repeated key '…'」或「not JSON: …」；不丟例外）。
   它的 SAX 處理器只透過模板參數（`Json::number_integer_t`、`Json::sax_parse`、`Json::exception`）碰 nlohmann，標頭本身不 include nlohmann，所以 Base 仍是「header-only、只依賴標準函式庫」；只有 instantiate 它的模組（本批是 VoxelMesh；第二批的 MapMarkers 也會用，都 PRIVATE 連 nlohmann）需要 nlohmann。
   - 為什麼不放 voxel_mesh 內部：MapMarkers 不能依賴 VoxelMesh（兩個並列的格式模組，一個依賴另一個沒有理由）。
   - 為什麼不另開模組：卡片指定不開；一個 60 行的模板不值得一個 target。
@@ -164,7 +164,7 @@ broadphase 不設效能判定。「同一陣列 4 萬個物件」的二次方消
 | `cg-no-dedupe`、`cg-no-sort` | 有 | `grid-candidates-unsorted`（同時打掉排序與去重） |
 | `cg-large-list-skipped`、`cg-clamp-removed` | 無 | 沒有大盒子清單；夾限見上 |
 | `cg-swept-bounds-start-only` | 無 → 補 | 補 `grid-capsule-start-only`（候選只取起點的膠囊） |
-| `cg-ray-bounds-no-margin` | 等價 | `grid-margin-zero`：存活，記為等價突變（理由見 dev_log） |
+| `cg-ray-bounds-no-margin` | 等價 | `grid-margin-zero`：一度存活並記為等價突變，審查者的反例推翻了這個推定；反例已加成測試，突變被殺（dev_log） |
 | `cg-links-threads` | 有 | `grid-links-voxel-mesh` |
 | 解析：SAX 查重複鍵＋不帶回呼的 `parse`，規則不動 | 有 | 嚴格解析放在 `GYO::Base` 的 `StrictJson.hpp`（Delta B），對方放在 `VoxelMesh.cpp` 內部 |
 | P-1：5.3 MB 合成圖中位數 ≤ 0.50 s | 有（更嚴） | J5：≤ 450 ms |
@@ -176,7 +176,8 @@ broadphase 不設效能判定。「同一陣列 4 萬個物件」的二次方消
 
 - J4：200 組隨機 70,000 次查詢、邊界案例 2,088 次，與線性掃描不一致 0。成立。
 - J5：中位數 382.2 ms（判定試行，拆批前）≤ 450 ms；替換前 1,579.7 ms；展開結果位元相同。成立。PR 1 程式碼的確認量測 364.0 ms。
-- J2、J6、J7：見 dev_log（突變、全量、L1）。
+- J2：**不成立**（宣告的寫法下）：`grid-margin-zero` 存活並記為等價突變，審查者以反例推翻。修法在工作樹，等使用者決定（HANDOFF）。
+- J6、J7：見 dev_log（全量、L1）。
 
 ## 6. 證據位置
 

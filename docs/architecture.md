@@ -101,7 +101,7 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 
 | Owner | Responsibility | Dependencies |
 |---|---|---|
-| `GYO::Base` | failure handling: `GYO_ASSERT` for Programmer Errors, `Result`/`Error` for Runtime Errors ([contract](architecture/error-handling.md)); the log facade (`Log.hpp`, one replaceable handler); other domain-free helpers | C++ standard library only |
+| `GYO::Base` | failure handling: `GYO_ASSERT` for Programmer Errors, `Result`/`Error` for Runtime Errors ([contract](architecture/error-handling.md)); the log facade (`Log.hpp`, one replaceable handler); the strict JSON parse for modules that own a JSON data contract (`StrictJson.hpp`: a template that rejects repeated keys without nlohmann's quadratic parser callback; it names the parser only through its template parameter, so the module that instantiates it links the parser privately); other domain-free helpers | C++ standard library only |
 | `GYO::Math` | vectors, matrices, quaternions, geometric primitives and queries, coordinate conventions ([contract](architecture/math.md)) | Base |
 | `GYO::Os` | the OS differences behind neutral APIs: files with UTF-8 paths (reads, writes, rename, resolve, compare), process facts, the console and shutdown requests, thread names and priority hints ([contract](architecture/os.md)) | Base; OS system libraries |
 | `GYO::Time` | the engine time base (`MonotonicClock`), the deadline-or-notify `Waiter` and `LateWakeStats` ([contract](architecture/time.md)) | Base; the operating system (kqueue, Win32 waitable timers, or a condition variable) |

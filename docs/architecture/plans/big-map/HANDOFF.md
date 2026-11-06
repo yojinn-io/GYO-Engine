@@ -116,6 +116,29 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 - J6：本機全量建置成功；`ctest -L "cpu|shader"` 130/130、`-L gpu` 4/4 通過。L1 待 PR。J7：兩個依賴守衛的突變都被殺。
 - 證據：主 checkout `build/evidence/big-map/engine-map/`（J5、探索、拆批前的突變）與 `build/evidence/big-map/engine-grid/`（PR 1 的突變、建置、ctest）。
 
+- 2026-11-06 PR #161 開出（head `f7374738`）。架構師的文件審查：沒有 blocker，兩個 nit（collision.md 的產品詞彙、Status 的寫法）已在本機提交 `f113f96e`，未推送。
+- **2026-11-06 停下（AGENTS §14 冒頭與 §14.1）：J2 不成立。** 審查者（engine-grid 會話）對 `f7374738` 的結論是 blocker 1、should-fix 2、nit 4、交使用者決定 4。
+  審查草稿在主 checkout `build/evidence/big-map/engine-grid/review_pr161/review_ja.md`，尚未送 GitHub。
+  - B1：`grid-margin-zero` 不是等價突變。精確掃掠接受終點外 1e-12 × |δ| 內的根，所以邊際歸零會漏掉盒子。反例和 probe 在同一目錄。
+    宣告 J2 的「若存活就記錄為等價突變並說明理由」，理由被推翻，所以 J2 未達成。照 §14.1 先報告使用者、再修；架構師會話寫報告。
+  - 用時：從開工到停下約 4 h（估時 8～12 h 之內）。
+  - 分到的事實：我的隨機集合與邊界案例都沒碰到精確查詢的根接受窗口。原本的論證漏掉窗口，沒有讀窄相位的程式碼。
+  - 下一次會改變的判斷：「等價突變」不只靠推理，要讀窄相位的每個容許與窗口，或請不同的人找反例。
+- **工作樹裡已準備、未提交、未推送的修法**（等使用者決定）：
+  - B1：反例加成 J4 的邊界案例（「a sweep that ends just short of a face on a cell line」）。原程式碼通過；`grid-margin-zero` 單獨重跑後被殺。
+    dev_log、catalog、宣告與 collision.md 改寫為「原推定錯誤，反例已加成測試」，判定本身不動。
+  - S1：建構時以 64 位元累加登記總數，`GYO_ASSERT` 小於 2³²；前提寫進標頭與 collision.md。
+  - S2：`docs/architecture.md` 的 `GYO::Base` 列與 `engine/base/CMakeLists.txt` 的說明補上 StrictJson。
+  - N1：宣告 2.2 的簽名改成實作的 `std::optional<Json>`＋`std::string& failure`。
+  - N2：已在 `f113f96e`。
+  - N3（極小半徑時邊際是否足夠）、N4（離群盒子讓格長加倍）、U1～U4（交使用者決定的四項）：還沒處理，等決定。
+- 給使用者的選項（報告由架構師會話整理）：
+  1. 照上面的修法：反例加成測試、`grid-margin-zero` 被殺後重跑整個 J2，判定不改。
+  2. 回頭看計畫的前提：例如把精確查詢的根接受窗口寫進 Collision 的契約，或另開一批處理窄相位，也就是改變範圍。
+
+- 2026-11-06 CI：L1 windows-x64 編譯失敗（`StaticAabbGrid.cpp` 用 `std::back_inserter` 卻沒 include `<iterator>`，MSVC 的 C2039）。使用者指示修好並推送：`dc3f9dd0` 只補 include，連同 nit 的 `f113f96e` 推送。
+- **2026-11-06 使用者對 J2 不成立的決定**（原話「照修法重跑 J2」）：選項 1。判定不改；反例留成測試；推送工作樹的修法（B1、S1、S2、N1），重跑整個 J2 與 L1。
+
 ## 下一步
 
-PR 1 的突變、全量測試、L1；審查（engine-grid 會話）；PR 1 合併後開 PR 2。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
+重跑整個 J2 與全量測試，推送，等 L1 與審查者複核；PR 1 合併後開 PR 2。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。

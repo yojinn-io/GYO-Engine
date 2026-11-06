@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-arch-big-map-engine-grid (judgment J2 of docs/architecture/plans/big-map/engine-grid.zh-Hant.md): the StaticAabbGrid broadphase in GYO::Collision and Base's strict JSON parse used by ParseVoxelMesh. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/big-map/scripts/engine_grid_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its test run fails with the expected message. grid-margin-zero is expected to survive as an equivalent mutant (the margin is defence in depth; see the dev_log); it is kept so a change that makes it matter is seen. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
+  "description": "Declared mutants of v8-arch-big-map-engine-grid (judgment J2 of docs/architecture/plans/big-map/engine-grid.zh-Hant.md): the StaticAabbGrid broadphase in GYO::Collision and Base's strict JSON parse used by ParseVoxelMesh. Run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/big-map/scripts/engine_grid_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its test run fails with the expected message. grid-margin-zero was first recorded as an equivalent mutant; the PR #161 reviewer's counterexample (an exact sweep reports a box just past the path's end) refuted that, and the test \"a sweep that ends just short of a face on a cell line\" now kills it. Test-case filters must not contain commas: doctest splits -tc on commas, and a filter that matches nothing passes.",
   "mutants": [
     {
       "id": "sj-repeated-key-kept",
@@ -134,7 +134,7 @@
     },
     {
       "id": "grid-margin-zero",
-      "what": "Candidate bounds are not inflated (expected equivalent: see the catalog description)",
+      "what": "Candidate bounds are not inflated (the exact sweep accepts a root up to 1e-12 of the path beyond its end)",
       "file": "engine/collision/src/StaticAabbGrid.cpp",
       "find": "double Margin(const double largestMagnitude) { return 1e-3 + 1e-5 * largestMagnitude; }",
       "replace": "double Margin(const double largestMagnitude) { return 0.0 * largestMagnitude; }",
