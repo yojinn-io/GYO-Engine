@@ -254,8 +254,8 @@ TEST_CASE("map: a palette change rebakes everything") {
 TEST_CASE("map: the chunks a change touches") {
     const std::vector<Vec3i> corner{{0, 0, 0}};
     CHECK(ChunksTouchedBy(corner) == std::set<Vec3i>{{-1, 0, 0}, {0, -1, 0}, {0, 0, -1}, {0, 0, 0}});
-    const std::vector<Vec3i> far{{15, 5, 15}};
-    CHECK(ChunksTouchedBy(far) == std::set<Vec3i>{{0, 0, 0}, {1, 0, 0}, {0, 0, 1}});
+    const std::vector<Vec3i> farSide{{15, 5, 15}};
+    CHECK(ChunksTouchedBy(farSide) == std::set<Vec3i>{{0, 0, 0}, {1, 0, 0}, {0, 0, 1}});
     const std::vector<Vec3i> negative{{-1, 5, 7}};
     CHECK(ChunksTouchedBy(negative) == std::set<Vec3i>{{-1, 0, 0}, {0, 0, 0}});
     const std::vector<Vec3i> inside{{-24, 7, 40}};
