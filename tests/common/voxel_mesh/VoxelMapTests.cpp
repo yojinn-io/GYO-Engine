@@ -12,8 +12,8 @@
 using namespace Engine::VoxelMesh;
 
 // Rules and expansion of gyo.voxel_map version 1 and gyo.voxel_region version 1
-// (docs/architecture/voxel-mesh.md). Judgments J1 (one test case per rule, named
-// by its rule code) and J3 (goldens) of the v8-arch-big-map-engine-format
+// (docs/architecture/voxel-mesh.md). Judgments F1 (one test case per rule, named
+// by its rule code) and F3 (goldens) of the v8-arch-big-map-engine-format
 // declaration (docs/architecture/plans/big-map/engine-format.zh-Hant.md).
 
 namespace {
@@ -27,6 +27,8 @@ struct RegionDoc final {
     std::string schema = R"("gyo.voxel_region")";
     std::string version = "1";
     std::string at = "[0, 0]";
+    // The map entry the text is read for (ParseVoxelRegion's expected).
+    VoxelRegionKey expected{0, 0};
     std::string chunks =
         R"([{"at": [0, 0, 0], "quads": [[0, 0, 0, 2, 16, 16, 0]], "colliders": [{"min": [0, 0, 0], "max": [16, 16, 16]}]}])";
     std::string extra;
@@ -89,7 +91,7 @@ std::string MapMessage(const MapDoc& doc) {
 VoxelMeshResult<VoxelRegionDocument> ReadPair(const MapDoc& map, const RegionDoc& region) {
     const auto text = region.Text();
     const auto document = AcceptedMap(map, ShaOf(text));
-    return ParseVoxelRegion(text, document);
+    return ParseVoxelRegion(text, document, region.expected);
 }
 
 VoxelRegionDocument AcceptedRegion(const RegionDoc& region, const MapDoc& map = MapDoc{}) {
@@ -212,6 +214,26 @@ TEST_CASE("M4: map origin and cell size") {
     MapDoc text;
     text.cellSize = R"("1")";
     CHECK(RejectedMap(text) == "cell_size");
+    // 16 * origin lies within +-2^20 units on each axis (review N2 of PR
+    // #162), so marker units within +-2^20 convert exactly. 65,536 cells is
+    // the limit; the bounds are set so that rule M6 holds at it.
+    MapDoc edge;
+    edge.origin = "[65536, 0, -65536]";
+    edge.bounds = R"({"min": [-8, 0, 0], "max": [-1, 3, 7]})";
+    edge.regions = R"([{"at": [-1, 0], "file": "r", "sha256": "@"}])";
+    CHECK(AcceptedMap(edge).origin.x == 65536);
+    MapDoc beyond = edge;
+    beyond.origin = "[65537, 0, 0]";
+    CHECK(RejectedMap(beyond) == "origin[0]");
+    MapDoc beyondNegative = edge;
+    beyondNegative.origin = "[0, 0, -65537]";
+    CHECK(RejectedMap(beyondNegative) == "origin[2]");
+    // The reviewer's probe: a far origin whose bounds cancel it out.
+    MapDoc cancelled;
+    cancelled.origin = "[4194304, 0, 0]";
+    cancelled.bounds = R"({"min": [-262144, 0, 0], "max": [-262144, 0, 0]})";
+    cancelled.regions = R"([{"at": [-32768, 0], "file": "r", "sha256": "@"}])";
+    CHECK(RejectedMap(cancelled) == "origin[0]");
 }
 
 TEST_CASE("M5: chunk and region sizes") {
@@ -307,6 +329,19 @@ TEST_CASE("M8: regions") {
         bad.regions = std::string(R"([{"at": [0, 0], "file": ")") + file + R"(", "sha256": "@"}])";
         CHECK_MESSAGE(RejectedMap(bad) == "regions[0].file", file);
     }
+    // Names Windows would alias (review N1 of PR #162): a segment ending in
+    // "." and the device names, alone or before an extension.
+    for (const auto* file : {"r.", "a./b", "con", "prn", "aux", "nul", "nul.json", "com1", "com9.json", "lpt1",
+                             "lpt9", "regions/con.json", "a/aux/b"}) {
+        MapDoc bad;
+        bad.regions = std::string(R"([{"at": [0, 0], "file": ")") + file + R"(", "sha256": "@"}])";
+        CHECK_MESSAGE(RejectedMap(bad) == "regions[0].file", file);
+    }
+    for (const auto* file : {"com0", "com10", "lpt", "console", "nul_", "conx.json", "a.b", ".con"}) {
+        MapDoc good;
+        good.regions = std::string(R"([{"at": [0, 0], "file": ")") + file + R"(", "sha256": "@"}])";
+        CHECK_MESSAGE(AcceptedMap(good).regions[0].file == file, file);
+    }
     MapDoc longFile;
     longFile.regions = R"([{"at": [0, 0], "file": ")" + std::string(129, 'a') + R"(", "sha256": "@"}])";
     CHECK(RejectedMap(longFile) == "regions[0].file");
@@ -359,7 +394,7 @@ TEST_CASE("R1: region fields and repeated keys") {
     nested.chunks = R"([{"at": [0, 0, 0], "at": [0, 0, 0], "quads": [[0, 0, 0, 2, 16, 16, 0]], "colliders": []}])";
     CHECK(RegionMessage(nested).find("repeated key 'at'") != std::string::npos);
     const auto map = DefaultMap();
-    const auto notJson = ParseVoxelRegion("not json", map);
+    const auto notJson = ParseVoxelRegion("not json", map, {0, 0});
     REQUIRE_FALSE(notJson);
     CHECK(notJson.error().code == VoxelMeshErrorCode::InvalidVoxelRegion);
     CHECK(notJson.error().message.find("not JSON") != std::string::npos);
@@ -384,19 +419,30 @@ TEST_CASE("R3: the region belongs to the map") {
     // A text other than the one the map lists.
     const auto text = RegionDoc{}.Text();
     const auto map = AcceptedMap(MapDoc{}, ShaOf(text));
-    const auto stale = ParseVoxelRegion(text + " ", map);
+    const auto stale = ParseVoxelRegion(text + " ", map, {0, 0});
     REQUIRE_FALSE(stale);
     CHECK(stale.error().code == VoxelMeshErrorCode::InvalidVoxelRegion);
     CHECK(stale.error().message.find("SHA-256") != std::string::npos);
-    CHECK(ParseVoxelRegion(text, map));
+    CHECK(ParseVoxelRegion(text, map, {0, 0}));
     // The listed entry among several.
     MapDoc several;
     several.regions =
         R"([{"at": [-1, -1], "file": "a", "sha256": "@"}, {"at": [0, -1], "file": "b", "sha256": "@"}, {"at": [0, 0], "file": "c", "sha256": "@"}])";
     RegionDoc second;
     second.at = "[0, -1]";
+    second.expected = {0, -1};
     second.chunks = ChunkText("[0, 0, -1]", "[[0, 0, 0, 2, 16, 16, 0]]", "[]");
     CHECK(AcceptedRegion(second, several).at == VoxelRegionKey{0, -1});
+    // A file that holds another listed region's text (a copy mistake, or two
+    // names of one file): read for entry (0, -1), the text says (0, 0). The
+    // text's own entry would pass its SHA-256; the entry it was read for is
+    // what decides (review B1 of PR #162).
+    RegionDoc swapped;
+    swapped.expected = {0, -1};
+    CHECK(RejectedRegion(swapped, several) == "at");
+    CHECK(RegionMessage(swapped, several).find("map entry it was read for") != std::string::npos);
+    swapped.expected = {0, 0};
+    CHECK(AcceptedRegion(swapped, several).at == VoxelRegionKey{0, 0});
 }
 
 TEST_CASE("R4: chunks of the region") {
@@ -439,10 +485,12 @@ TEST_CASE("R4: chunks of the region") {
     negativeMap.regions = R"([{"at": [-1, -1], "file": "a", "sha256": "@"}])";
     RegionDoc negative;
     negative.at = "[-1, -1]";
+    negative.expected = {-1, -1};
     negative.chunks = R"([{"at": [-8, 0, -1], "quads": [[0, 0, 0, 2, 16, 16, 0]], "colliders": []}])";
     CHECK(AcceptedRegion(negative, negativeMap).chunks[0].at == VoxelChunkKey{-8, 0, -1});
     RegionDoc negativeForeign;
     negativeForeign.at = "[-1, -1]";
+    negativeForeign.expected = {-1, -1};
     negativeForeign.chunks = R"([{"at": [-9, 0, -1], "quads": [[0, 0, 0, 2, 16, 16, 0]], "colliders": []}])";
     MapDoc wideNegative = negativeMap;
     wideNegative.bounds = R"({"min": [-16, 0, -8], "max": [7, 3, 7]})";

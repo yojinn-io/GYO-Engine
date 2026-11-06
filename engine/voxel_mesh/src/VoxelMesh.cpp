@@ -299,8 +299,18 @@ std::int64_t FloorDivide(const std::int64_t value, const std::int64_t divisor) {
     return (value % divisor != 0 && (value < 0) != (divisor < 0)) ? quotient - 1 : quotient;
 }
 
+// A Windows device name, alone or before an extension ("con", "nul.json"):
+// such a file name opens the device on Windows.
+bool ReservedOnWindows(const std::string& segment) {
+    const auto stem = segment.substr(0, segment.find('.'));
+    if (stem == "con" || stem == "prn" || stem == "aux" || stem == "nul") return true;
+    return stem.size() == 4 && (stem.starts_with("com") || stem.starts_with("lpt")) && stem[3] >= '1' &&
+           stem[3] <= '9';
+}
+
 // A region file name: 1 to 128 characters of a-z 0-9 _ . - /, relative, with
-// no empty, "." or ".." segment.
+// no empty, "." or ".." segment, no segment ending in "." (Windows drops it,
+// so "a." and "a" would name one file) and no Windows device name.
 bool ValidRegionFile(const std::string& file) {
     if (file.empty() || file.size() > MaxRegionFileLength) return false;
     const bool characters = std::all_of(file.begin(), file.end(), [](const char c) {
@@ -312,6 +322,8 @@ bool ValidRegionFile(const std::string& file) {
         const auto end = file.find('/', start);
         const auto segment = file.substr(start, end == std::string::npos ? std::string::npos : end - start);
         if (segment.empty() || segment == "." || segment == "..") return false;
+        if (segment.back() == '.') return false;
+        if (ReservedOnWindows(segment)) return false;
         if (end == std::string::npos) return true;
         start = end + 1;
     }
@@ -336,6 +348,10 @@ VoxelMapDocument ParseMapDocument(const std::string_view text) {
                      "");
     RequireSchemaAndVersion(document, VoxelMapSchema, VoxelMapVersion);
     auto common = ParseCommon(document);
+    // Rule M4 (beyond version 1 rule 4): 16 * origin within +-2^20 units, so
+    // marker positions within +-2^20 of the origin convert exactly.
+    for (std::size_t axis = 0; axis < 3; ++axis)
+        RequireInRange(common.origin[axis] * UnitsPerCell, At("origin", axis));
 
     const auto& chunkSize = document.at("chunk_size");
     if (!chunkSize.is_number_integer() || chunkSize.get<long long>() != ChunkCells)
@@ -467,7 +483,12 @@ RawChunk ParseRawChunk(const Json& entry, const std::string& path) {
     return raw;
 }
 
-VoxelRegionDocument ParseRegionDocument(const std::string_view text, const VoxelMapDocument& map) {
+VoxelRegionDocument ParseRegionDocument(const std::string_view text, const VoxelMapDocument& map,
+                                        const VoxelRegionKey expected) {
+    const auto listed = std::lower_bound(map.regions.begin(), map.regions.end(), expected,
+                                         [](const VoxelMapRegion& region, const VoxelRegionKey& k) { return region.at < k; });
+    // The caller names an entry of the map; any other key is a programmer error.
+    GYO_ASSERT(listed != map.regions.end() && listed->at == expected);
     if (text.size() > MaxRegionTextBytes) Fail("the text exceeds 16 MiB", "");
     const auto document = ParseWithoutRepeatedKeys(text);
     if (!document.is_object()) Fail("the document is an object", "");
@@ -476,9 +497,7 @@ VoxelRegionDocument ParseRegionDocument(const std::string_view text, const Voxel
 
     const auto at = Pair(document.at("at"), "at");
     const VoxelRegionKey key{static_cast<std::int32_t>(at[0]), static_cast<std::int32_t>(at[1])};
-    const auto listed = std::lower_bound(map.regions.begin(), map.regions.end(), key,
-                                         [](const VoxelMapRegion& region, const VoxelRegionKey& k) { return region.at < k; });
-    if (listed == map.regions.end() || listed->at != key) Fail("the map lists the region", "at");
+    if (key != expected) Fail("the text is the region of the map entry it was read for", "at");
     const auto bytes = std::as_bytes(std::span(text.data(), text.size()));
     if (Base::Sha256(bytes) != listed->sha256) Fail("the text's SHA-256 differs from the map's entry", "");
 
@@ -651,9 +670,10 @@ VoxelMeshResult<VoxelMapDocument> ParseVoxelMap(const std::string_view text) {
     }
 }
 
-VoxelMeshResult<VoxelRegionDocument> ParseVoxelRegion(const std::string_view text, const VoxelMapDocument& map) {
+VoxelMeshResult<VoxelRegionDocument> ParseVoxelRegion(const std::string_view text, const VoxelMapDocument& map,
+                                                      const VoxelRegionKey expected) {
     try {
-        return ParseRegionDocument(text, map);
+        return ParseRegionDocument(text, map, expected);
     } catch (Invalid& invalid) {
         return Base::Err(MakeError(VoxelMeshErrorCode::InvalidVoxelRegion, VoxelRegionSchema, invalid));
     }

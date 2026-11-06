@@ -193,16 +193,6 @@
       "expect": "is NOT correct"
     },
     {
-      "id": "vreg-unlisted-accepted",
-      "what": "A region the map does not list is read against the nearest entry",
-      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
-      "find": "    if (listed == map.regions.end() || listed->at != key) Fail(\"the map lists the region\", \"at\");",
-      "replace": "    if (listed == map.regions.end()) Fail(\"the map lists the region\", \"at\");",
-      "target": "gyo_voxel_mesh_tests",
-      "cases": "*R3:*",
-      "expect": "is NOT correct"
-    },
-    {
       "id": "vreg-sha-unchecked",
       "what": "A region text whose SHA-256 differs from the map's entry is accepted",
       "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
@@ -569,6 +559,76 @@
         "."
       ],
       "expect": "neutral names guard: 1 gameplay word"
+    },
+    {
+      "id": "vreg-expected-unchecked",
+      "what": "A region text is accepted for another map entry than the one it was read for (review B1 of PR #162)",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "    if (key != expected) Fail(\"the text is the region of the map entry it was read for\", \"at\");",
+      "replace": "    static_cast<void>(key);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*R3:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-region-file-trailing-dot",
+      "what": "A region file segment ending in '.' is accepted (review N1 of PR #162)",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (segment.back() == '.') return false;",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-region-file-reserved",
+      "what": "A Windows device name is accepted as a region file segment (review N1 of PR #162)",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        if (ReservedOnWindows(segment)) return false;",
+      "replace": "",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M8:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vmap-origin-unbounded",
+      "what": "16 * origin beyond +-2^20 is accepted in the map (review N2 of PR #162)",
+      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
+      "find": "        RequireInRange(common.origin[axis] * UnitsPerCell, At(\"origin\", axis));",
+      "replace": "        static_cast<void>(axis);",
+      "target": "gyo_voxel_mesh_tests",
+      "cases": "*M4:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-object-key-cap-removed",
+      "what": "Objects with more keys than any valid one are built into the DOM first (review S1 of PR #162)",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "        if (++frame.count <= MaxObjectKeys) return true;",
+      "replace": "        ++frame.count;\n        return true;",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-key-scan-loses-index",
+      "what": "The key-count scan reports an array element's container path instead of the element's",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "        if (frame.array) return At(frame.path, frame.count);",
+      "replace": "        if (frame.array) return frame.path;",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-tags-plain-json",
+      "what": "The DOM sorts keys (nlohmann::json), so rule K6 cannot see the text's key order (review N4 of PR #162)",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "using Json = nlohmann::ordered_json;",
+      "replace": "using Json = nlohmann::json;",
+      "target": "gyo_map_markers_tests",
+      "cases": "*K6:*",
+      "expect": "is NOT correct"
     }
   ]
 }

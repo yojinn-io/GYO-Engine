@@ -222,12 +222,15 @@ struct VoxelRegionDocument final {
 // offending path as detail).
 [[nodiscard]] VoxelMeshResult<VoxelMapDocument> ParseVoxelMap(std::string_view text);
 
-// Checks every rule of gyo.voxel_region version 1 against the map it belongs
-// to: the region is listed in the map, its text has the listed SHA-256, and
-// every chunk lies in the region and the map's bounds (InvalidVoxelRegion).
-// map must come from ParseVoxelMap.
+// Checks every rule of gyo.voxel_region version 1 against the map entry the
+// caller read the text for: the text is the region expected names (its at),
+// it has that entry's SHA-256, and every chunk lies in the region and the
+// map's bounds (InvalidVoxelRegion). So a file that holds another region's
+// text is rejected here, not left to each consumer to notice. map must come
+// from ParseVoxelMap and list expected (asserted).
 [[nodiscard]] VoxelMeshResult<VoxelRegionDocument> ParseVoxelRegion(std::string_view text,
-                                                                    const VoxelMapDocument& map);
+                                                                    const VoxelMapDocument& map,
+                                                                    VoxelRegionKey expected);
 
 // Checks one chunk without text, by the same rules (the same code) that
 // ParseVoxelRegion applies to each chunk: within the map's bounds, at least
@@ -267,7 +270,8 @@ struct VoxelPaletteImage final {
 [[nodiscard]] Math::Vec3 ChunkWorldOrigin(VoxelChunkKey key, const VoxelMapDocument& map);
 // The world position of integer units in 1/16 of a cell from the map's
 // origin (gyo.map_markers coordinates, for example): float(units + 16 *
-// origin) * cellSize / 16 per axis, exact while each sum lies within +-2^24.
+// origin) * cellSize / 16 per axis. Exact for every units within +-2^20:
+// rule M4 keeps 16 * origin within +-2^20, so each sum stays within +-2^21.
 [[nodiscard]] Math::Vec3 MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& map);
 
 } // namespace Engine::VoxelMesh

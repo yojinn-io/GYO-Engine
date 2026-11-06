@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace Engine::MapMarkers {
 namespace {
@@ -87,6 +88,88 @@ bool ValidTagValue(const std::string& value) {
     return std::all_of(value.begin(), value.end(), [](const char c) { return c >= 0x20 && c <= 0x7E; });
 }
 
+// No object of a valid document has more keys than rule K6 allows tags.
+// ordered_json inserts each key with a linear search, so a larger object would
+// cost quadratic time before any rule rejects it; this scan rejects it first.
+// It changes when an error is found, not which documents are valid: the path
+// it reports is the one the rules would report for that object.
+constexpr std::size_t MaxObjectKeys = MaxTags;
+
+class KeyCountScan final {
+public:
+    using number_integer_t = Json::number_integer_t;
+    using number_unsigned_t = Json::number_unsigned_t;
+    using number_float_t = Json::number_float_t;
+    using string_t = Json::string_t;
+    using binary_t = Json::binary_t;
+
+    bool null() { return Value(); }
+    bool boolean(bool) { return Value(); }
+    bool number_integer(number_integer_t) { return Value(); }
+    bool number_unsigned(number_unsigned_t) { return Value(); }
+    bool number_float(number_float_t, const string_t&) { return Value(); }
+    bool string(string_t&) { return Value(); }
+    bool binary(binary_t&) { return Value(); }
+    bool start_object(std::size_t) {
+        frames_.push_back({ChildPath(), false, 0, {}});
+        return true;
+    }
+    bool key(string_t& key) {
+        auto& frame = frames_.back();
+        frame.key = key;
+        if (++frame.count <= MaxObjectKeys) return true;
+        tooManyKeys_ = true;
+        path_ = frame.path;
+        return false;
+    }
+    bool end_object() {
+        frames_.pop_back();
+        return Value();
+    }
+    bool start_array(std::size_t) {
+        frames_.push_back({ChildPath(), true, 0, {}});
+        return true;
+    }
+    bool end_array() {
+        frames_.pop_back();
+        return Value();
+    }
+    // Text that is not JSON is the strict parse's to report.
+    bool parse_error(std::size_t, const std::string&, const Json::exception&) { return false; }
+
+    [[nodiscard]] bool TooManyKeys() const noexcept { return tooManyKeys_; }
+    [[nodiscard]] const std::string& Path() const noexcept { return path_; }
+
+private:
+    // An open container: its path, whether it is an array, and its count of
+    // elements so far (an array) or keys so far (an object, whose last key is
+    // the member being read).
+    struct Frame final {
+        std::string path;
+        bool array{};
+        std::size_t count{};
+        std::string key;
+    };
+
+    // The path of the value that starts now, written as the rules write it.
+    [[nodiscard]] std::string ChildPath() const {
+        if (frames_.empty()) return "";
+        const auto& frame = frames_.back();
+        if (frame.array) return At(frame.path, frame.count);
+        return frame.path.empty() ? frame.key : frame.path + "." + frame.key;
+    }
+
+    // A value of the current container ended: the next array element follows.
+    bool Value() {
+        if (!frames_.empty() && frames_.back().array) ++frames_.back().count;
+        return true;
+    }
+
+    std::vector<Frame> frames_;
+    bool tooManyKeys_{};
+    std::string path_;
+};
+
 std::vector<std::pair<std::string, std::string>> ParseTags(const Json& tags, const std::string& path) {
     if (!tags.is_object()) Fail("tags is an object", path);
     if (tags.size() > MaxTags) Fail("tags has at most 32 entries", path);
@@ -158,6 +241,9 @@ Marker ParseMarker(const Json& entry, const std::string& path) {
 
 MapMarkersDocument ParseDocument(const std::string_view text) {
     if (text.size() > MaxTextBytes) Fail("the text exceeds 4 MiB", "");
+    KeyCountScan keys;
+    if (!Json::sax_parse(text.begin(), text.end(), &keys) && keys.TooManyKeys())
+        Fail("an object has more than " + std::to_string(MaxObjectKeys) + " keys", keys.Path());
     std::string failure;
     const auto parsed = Base::ParseStrictJson<Json>(text, failure);
     if (!parsed) Fail(failure, "");

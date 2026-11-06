@@ -9,7 +9,7 @@
 using namespace Engine::MapMarkers;
 
 // Rules of gyo.map_markers version 1 (docs/architecture/map-markers.md).
-// Judgment J1 of the v8-arch-big-map-engine-format declaration
+// Judgment F1 of the v8-arch-big-map-engine-format declaration
 // (docs/architecture/plans/big-map/engine-format.zh-Hant.md): one test case per
 // rule, named by its rule code. Names in the data are neutral on purpose.
 
@@ -208,6 +208,29 @@ TEST_CASE("K6: tags") {
     CHECK(Rejected(withTags(many + "}")) == "markers[0].tags");
     const auto thirtyTwo = many.substr(0, many.rfind(',')) + "}";
     CHECK(Accepted(withTags(thirtyTwo)).markers[0].tags.size() == 32);
+    // More keys than any valid object has are rejected before the document is
+    // built (ordered_json inserts keys with a linear search; review S1 of PR
+    // #162), at the path the rules would report.
+    CHECK(Message(withTags(many + "}")).find("more than 32 keys") != std::string::npos);
+    std::string huge = "{";
+    for (int i = 0; i < 20000; ++i) huge += (i > 0 ? ",\"k" : "\"k") + std::to_string(i) + "\": \"v\"";
+    CHECK(Rejected(withTags(huge + "}")) == "markers[0].tags");
+    std::string extraFields;
+    for (int i = 0; i < 33; ++i) extraFields += ", \"x" + std::to_string(i) + "\": 0";
+    const auto wideMarker = WithMarkers(
+        One(R"({"id": "m", "kind": "a", "tags": {}, "path": [[0,0,0],[1,0,0]])" + extraFields + "}"));
+    CHECK(Rejected(wideMarker) == "markers[0]");
+    CHECK(Message(wideMarker).find("more than 32 keys") != std::string::npos);
+    const auto wideBox = WithMarkers(
+        One(R"({"id": "m", "kind": "a", "tags": {}, "box": {"min": [0,0,0], "max": [1,1,1])" + extraFields + "}}"));
+    CHECK(Rejected(wideBox) == "markers[0].box");
+    const auto secondMarker = WithMarkers(R"([{"id": "a", "kind": "a", "tags": {}, "path": [[0,0,0],[1,0,0]]},)"
+                                          R"( {"id": "b", "kind": "a", "tags": )" + many + "}, \"path\": [[0,0,0],[1,0,0]]}]");
+    CHECK(Rejected(secondMarker) == "markers[1].tags");
+    Doc wideDocument;
+    wideDocument.extra = extraFields;
+    CHECK(Rejected(wideDocument).empty());
+    CHECK(Message(wideDocument).find("more than 32 keys") != std::string::npos);
 }
 
 TEST_CASE("K7: point and yaw") {

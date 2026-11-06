@@ -64,7 +64,8 @@ the consumer resolves.
    `chunk_size`, `region_size`, `bounds`, `palette` and `regions`; no key repeats in any object.
 2. (M2) `schema` is `"gyo.voxel_map"`; `version` is the integer 1.
 3. (M3) `source_sha256` and `build_version` as version 1 rule 3.
-4. (M4) `origin` and `cell_size` as version 1 rule 4.
+4. (M4) `origin` and `cell_size` as version 1 rule 4, and `16 × origin` lies within ±2^20 units on each axis (so
+   positions within ±2^20 units of the origin, such as `gyo.map_markers` coordinates, convert to world exactly).
 5. (M5) `chunk_size` is the integer 16 and `region_size` the integer 8 (fixed in version 1; another value is a
    new version).
 6. (M6) `bounds` has exactly `min` and `max`, three integers each, chunk keys, both ends included, `min ≤ max` on
@@ -73,16 +74,22 @@ the consumer resolves.
 7. (M7) `palette` as version 1 rule 5.
 8. (M8) `regions` lists one or more entries of exactly `at` (two integers, the region's `x` and `z`), `file` (1 to
    128 characters of `a`–`z`, `0`–`9`, `_`, `.`, `-` and `/`, not starting with `/`, without empty, `.` or `..`
-   segments, unique in the list) and `sha256` (64 lowercase hexadecimal digits); every `at` lies in the regions of
+   segments, no segment ending in `.` and no segment that is a Windows device name (`con`, `prn`, `aux`, `nul`,
+   `com1`–`com9`, `lpt1`–`lpt9`) alone or before an extension, since Windows reads both as another file; unique in
+   the list) and `sha256` (64 lowercase hexadecimal digits); every `at` lies in the regions of
    `bounds`; entries are in strictly increasing order of `at`.
 9. (M9) Every integer lies within ±2^30.
 10. (M10) The text is at most 1 MiB.
 
-### Validation of a region (`ParseVoxelRegion(text, map)`, error `InvalidVoxelRegion`)
+### Validation of a region (`ParseVoxelRegion(text, map, expected)`, error `InvalidVoxelRegion`)
+
+`expected` is the key of the map entry whose `file` the caller read; a key the map does not list is a programmer
+error (asserted).
 
 1. (R1) One JSON object with exactly `schema`, `version`, `at` and `chunks`; no key repeats.
 2. (R2) `schema` is `"gyo.voxel_region"`; `version` is the integer 1.
-3. (R3) `at` is two integers naming a region the map lists, and the text's SHA-256 is that entry's `sha256`.
+3. (R3) `at` is two integers equal to `expected`, and the text's SHA-256 is that entry's `sha256`. So a file that
+   holds another region's text is rejected here, and a consumer that reads every entry gets every region once.
 4. (R4) `chunks` lists one or more objects of exactly `at`, `quads` and `colliders`; each `at` is three integers,
    in this region and in the map's bounds; chunks are in strictly increasing key order (empty chunks are left out).
 5. (R5) Every integer lies within ±2^30; the text is at most 16 MiB.
@@ -110,10 +117,13 @@ tool ──writes──► map.json + regions ──ParseVoxelMap / ParseVoxelRe
                       VoxelChunkGeometry per chunk (vertices, indices, boxes) + one VoxelPaletteImage
 ```
 
+A consumer reads each entry of the index's `regions` from its `file` and passes that entry's `at` as `expected`.
+
 `ExpandVoxelChunk` cannot fail; it takes only chunks that `ParseVoxelRegion` returned or `ValidateVoxelChunk`
 accepted with the same map, and anything else is a programmer error that it asserts on. Vertex order, winding and uv
 are those of version 1. `RegionOf(key)`, `ChunkWorldOrigin(key, map)` and `MapUnitsToWorld(units, map)` (integer
-units from the map's origin, such as `gyo.map_markers` positions) use the same conversion. Parsing regions on several
+units from the map's origin, such as `gyo.map_markers` positions; exact for any units within ±2^20, by rule M4) use
+the same conversion. Parsing regions on several
 threads is the consumer's (with `GYO::Threads`, putting results back in key order); the module stays single-threaded.
 
 ## The single-file format (version 1, deprecated)

@@ -109,7 +109,8 @@ struct VoxelChunkDocument { VoxelChunkKey at; std::vector<VoxelQuad> quads; std:
 struct VoxelRegionDocument{ VoxelRegionKey at; std::vector<VoxelChunkDocument> chunks; };
 
 VoxelMeshResult<VoxelMapDocument>    ParseVoxelMap(std::string_view text);
-VoxelMeshResult<VoxelRegionDocument> ParseVoxelRegion(std::string_view text, const VoxelMapDocument& map);
+VoxelMeshResult<VoxelRegionDocument> ParseVoxelRegion(std::string_view text, const VoxelMapDocument& map,
+                                                      VoxelRegionKey expected); // 審查後變更 R-1，見 4b 節
 VoxelMeshResult<void>                ValidateVoxelChunk(const VoxelChunkDocument& chunk, const VoxelMapDocument& map); // C1～C5、R4 的 bounds；不經文字
 VoxelChunkGeometry  ExpandVoxelChunk(const VoxelChunkDocument& chunk, const VoxelMapDocument& map); // 世界座標的頂點、索引、碰撞盒
 VoxelPaletteImage   ExpandVoxelPalette(const VoxelMapDocument& map);  // 全圖一張 palette 圖
@@ -153,7 +154,7 @@ Math::Vec3          MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& m
 - **座標換成世界**：MapMarkers 不知道 cell_size 與 origin（那是地圖的事實，只放一處）；消費端用 `GYO::VoxelMesh` 的 `MapUnitsToWorld`。MapMarkers 回整數。
 - **API**：`ParseMapMarkers(text) → MapMarkersResult<MapMarkersDocument>`；錯誤碼 `MapMarkersErrorCode::InvalidMapMarkers`，detail 是路徑（`markers[2].tags`）。
 - **鍵在文字中的順序**：nlohmann 的 `json` 用 `std::map`，會把鍵排序而看不到文字裡的順序；K6 要求文字順序，所以 MapMarkers 用 `nlohmann::ordered_json` 解析（第 0 節的共用解析入口是模板，兩種 DOM 都能用）。
-- **玩法名詞**：Engine 的文件、範例、測試資料、程式碼不出現 `spawn`、`boss`、`loot`、`extract`、`patrol`、`team`、`zone`（守衛見 J7）。
+- **玩法名詞**：Engine 的文件、範例、測試資料、程式碼不出現 `spawn`、`boss`、`loot`、`extract`、`patrol`、`team`、`zone`（守衛見 F4）。
 
 ## 3. Architecture Delta（AGENTS §3 的 7 項）
 
@@ -210,6 +211,42 @@ Math::Vec3          MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& m
 
 - 本機 F1～F5 成立。突變：engine-format 55/55、v1 20/20、engine-grid 16/16。cpu\|shader 132/132，gpu 4/4。
 - L1 三平台待 PR #162。
+
+## 4b. 審查後變更（PR #162 的審查；使用者 2026-11-06 決定全部修，經架構師會話轉達）
+
+審查者（engine-grid 會話）對 `7886e7c4` 提出 B1、S1、N1～N4。使用者決定全部在本 PR 修，而且都是收緊。
+
+| 代號 | 變更 | 理由 |
+|---|---|---|
+| R-1（B1） | `ParseVoxelRegion` 的簽名，從 `(text, map)` 改成 `(text, map, VoxelRegionKey expected)`。R3 從「`at` 是索引列出的 region」改成「`at` 等於 `expected`」。`expected` 不在索引裡時，是呼叫端的錯（斷言） | 原簽名不知道呼叫端讀的是哪個項目的檔案。一個檔案裡裝了別的 region 的文字（複製錯、Windows 的別名）也會通過：讀全部項目的消費端會拿到同一個 region 兩次，另一個 region 默默缺掉。要消費端自己比對 `at` 的話，驗證就分散到消費端，違反 DI 3（一個驗證者）。現在還沒有消費端，改簽名的成本最低 |
+| R-2（S1） | MapMarkers 建 DOM 之前，先用 SAX 掃描。任何物件的鍵超過 32 個（K6 的上限，也是合法物件的最大鍵數）就失敗，回報的路徑和規則會回報的相同 | `ordered_json` 每插入一個鍵都要線性搜尋。鍵很多的物件在規則拒絕之前，光建 DOM 就要二次方的時間（審查者量到 3.2 萬鍵約 2.8 s）。這和 PR #161 從 `gyo.voxel_mesh` 拿掉的是同一種二次方 |
+| R-3（N1） | M8 拒絕兩種段名：結尾是 `.` 的段，以及 Windows 的裝置名（`con`、`prn`、`aux`、`nul`、`com1`～`com9`、`lpt1`～`lpt9`，單獨或帶副檔名） | Windows 會把它們讀成別的檔案（`a.` 等於 `a`，`con.json` 是裝置） |
+| R-4（N2） | M4 加上每軸 \|16 × origin\| ≤ 2²⁰ | 這樣 `MapUnitsToWorld` 對 ±2²⁰ 內的單位（K10 的標記座標）精確，規則就能推出這一點。只加在索引；v1 的規則 4 不動 |
+| N3 | 測試註解與 §2.2 的舊代號（J1、J3、J7）改成 F1、F3、F4 | — |
+| N4 | catalog 加 `mm-tags-plain-json`：把 `ordered_json` 換成 `json`，K6 的順序測試要失敗 | 把 K6 的前提寫成宣告過的守衛 |
+
+**§14.4 的 1～5**（受理判定和規則測試的判定變更）：
+
+1. **守的性質：**
+   - R3：索引項目和它的檔案一一對應。
+   - M8：檔名不會在任何平台上指向別的檔案。
+   - M4：標記座標可以精確換算。
+   - K 規則：形式的檢查（R-2 不改規則）。
+2. **緩める面：** 沒有。
+   - R-1：以前會拒絕的輸入，現在全部仍拒絕（`at` 不在索引裡，就不會等於索引裡的 `expected`）。
+   - R-3、R-4：只增加拒絕。
+   - R-2：被拒的文件集合不變（鍵超過 32 個的物件，本來就違反 K6 或「unknown field」）。只是失敗得較早，回報的路徑與規則相同；訊息改成「more than 32 keys」。
+   - 既有測試的期待值沒有放寬：K6 的 33 個鍵仍期待 `markers[0].tags`。
+3. **締める面：**
+   - R-1：別的 region 的文字被拒絕。
+   - R-3：結尾 `.` 與裝置名被拒絕。
+   - R-4：\|16 × origin\| > 2²⁰ 的索引被拒絕。
+4. 不適用（沒有緩める面）。
+5. **根據：**
+   - 舊判定殺掉的突變，在新判定下仍全部被殺（F2 重跑）。
+   - 新突變也都被殺：`vreg-expected-unchecked`、`vmap-region-file-trailing-dot`、`vmap-region-file-reserved`、`vmap-origin-unbounded`、`mm-object-key-cap-removed`、`mm-key-scan-loses-index`、`mm-tags-plain-json`。
+   - 舊的 `vreg-unlisted-accepted` 所守的那一行已經不存在，由 `vreg-expected-unchecked` 取代。
+   - 證據在主 checkout `build/evidence/big-map/engine-format/after_review/`。
 
 ## 5. 證據位置
 

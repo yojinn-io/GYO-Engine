@@ -65,7 +65,11 @@ valid: what they mean is the product's.
   reader rejects a version it does not know. Version 1 has no optional fields.
 - **Producers.** Any file that passes validation is valid, whoever wrote it (a tool, a script or a hand). A
   producer writes tags in key order and reads what it wrote back with `ParseMapMarkers` before it keeps it.
-- **Cost.** Parsing happens when content loads; nothing here runs per frame.
+- **Cost.** Parsing happens when content loads; nothing here runs per frame. The document is built with nlohmann's
+  `ordered_json`, which keeps keys in text order (rule K6 needs it) and inserts each key with a linear search; so
+  before building it, a scan rejects any object with more than 32 keys, more than any valid object has, at the path
+  the rules would report for that object. The rules decide the same documents either way; the scan only keeps a
+  malformed file from costing quadratic time.
 
 ## Design Invariants
 
