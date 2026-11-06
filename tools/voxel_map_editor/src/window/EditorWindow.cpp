@@ -2,6 +2,7 @@
 #include "window/PreviewScene.hpp"
 
 #include "gyo/voxel_map_editor/Editing.hpp"
+#include "gyo/voxel_map_editor/Tools.hpp"
 
 #include "gyo/framework/PreviewCamera.hpp"
 #include "gyo/framework/PreviewTexture.hpp"
@@ -35,8 +36,15 @@ namespace Math = Engine::Math;
 namespace Sdl = Engine::Render::Backend::Sdl;
 namespace Platform = Engine::Platform::Sdl;
 
-enum class Tool : int { Place, Erase, Paint, Pick, BoxFill, BoxClear };
-constexpr std::array<const char*, 6> kToolNames{"Place", "Erase", "Paint", "Pick", "Box fill", "Box clear"};
+// Goxel's tools and modes (v8-tool-voxel-window-1), with their keys.
+enum class Tool : int { Brush, Shape, Laser, Line, Extrude, Plane, Picker };
+constexpr std::array<const char*, 7> kToolNames{"Brush", "Shape", "Laser", "Line", "Extrude", "Plane", "Picker"};
+constexpr std::array<ImGuiKey, 7> kToolKeys{ImGuiKey_B, ImGuiKey_S, ImGuiKey_L, ImGuiKey_N,
+                                            ImGuiKey_F, ImGuiKey_P, ImGuiKey_C};
+constexpr std::array<const char*, 7> kToolKeyNames{"B", "S", "L", "N", "F", "P", "C"};
+constexpr std::array<const char*, 3> kModeNames{"Add (T)", "Sub (R)", "Paint (G)"};
+constexpr std::array<const char*, 3> kShapeNames{"Cube", "Sphere", "Cylinder"};
+constexpr std::array<const char*, 3> kAxisNames{"X", "Y", "Z"};
 constexpr std::array<const char*, 6> kUpNames{"+Y", "-Y", "+X", "-X", "+Z", "-Z"};
 
 void LogError(const std::string& text) { Engine::Base::Log(Engine::Base::LogLevel::Error, "voxel_map_editor", text); }
@@ -247,21 +255,57 @@ private:
         const ImGuiIO& io = ImGui::GetIO();
         if (io.WantTextInput || promptOpen_) return;
         const bool command = io.KeyCtrl || io.KeySuper;
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) CancelDrag();
         if (command && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+            CancelDrag();
             if (io.KeyShift) static_cast<void>(Session().Redo());
             else static_cast<void>(Session().Undo());
         }
-        if (command && ImGui::IsKeyPressed(ImGuiKey_Y, false)) static_cast<void>(Session().Redo());
+        if (command && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+            CancelDrag();
+            static_cast<void>(Session().Redo());
+        }
         if (command && ImGui::IsKeyPressed(ImGuiKey_S, false)) Save();
         if (command) return;
-        if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) ++planeY_;
-        if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) --planeY_;
-        if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
-            // R turns about the up axis; Shift+R chooses the next up axis.
+        // Modes and tools (Goxel's keys).
+        if (ImGui::IsKeyPressed(ImGuiKey_T, false)) mode_ = EditMode::Add;
+        if (ImGui::IsKeyPressed(ImGuiKey_R, false)) mode_ = EditMode::Sub;
+        if (ImGui::IsKeyPressed(ImGuiKey_G, false)) mode_ = EditMode::Paint;
+        for (std::size_t t = 0; t < kToolKeys.size(); ++t)
+            if (ImGui::IsKeyPressed(kToolKeys[t], false)) SelectTool(static_cast<Tool>(t));
+        // Orientation: Q and E turn about the up axis; with Shift they choose the up axis.
+        if (ImGui::IsKeyPressed(ImGuiKey_E, false))
             orientation_ = io.KeyShift ? (orientation_ + 4) % 24 : orientation_ / 4 * 4 + (orientation_ % 4 + 1) % 4;
-        }
-        for (int key = 0; key < static_cast<int>(kToolNames.size()); ++key)
-            if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(ImGuiKey_1 + key), false)) tool_ = static_cast<Tool>(key);
+        if (ImGui::IsKeyPressed(ImGuiKey_Q, false))
+            orientation_ = io.KeyShift ? (orientation_ + 20) % 24 : orientation_ / 4 * 4 + (orientation_ % 4 + 3) % 4;
+        // Brush size and the edit plane.
+        if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)) brushSize_ = std::max(brushSize_ - 1, 1);
+        if (ImGui::IsKeyPressed(ImGuiKey_RightBracket)) brushSize_ = std::min(brushSize_ + 1, MaxBrushSize);
+        if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) plane_.at = std::min(plane_.at + 1, CellLimit - 1);
+        if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) plane_.at = std::max(plane_.at - 1, -CellLimit);
+        // The camera: arrows turn it; 1, 3, 7 and 0 (or the keypad's) look from the front, the right, the top, or as at the start.
+        const float turn = 0.05F;
+        if (ImGui::IsKeyDown(ImGuiKey_LeftArrow)) camera_.yawRadians -= turn;
+        if (ImGui::IsKeyDown(ImGuiKey_RightArrow)) camera_.yawRadians += turn;
+        if (ImGui::IsKeyDown(ImGuiKey_UpArrow)) camera_.pitchRadians = std::clamp(camera_.pitchRadians + turn, -1.5F, 1.5F);
+        if (ImGui::IsKeyDown(ImGuiKey_DownArrow)) camera_.pitchRadians = std::clamp(camera_.pitchRadians - turn, -1.5F, 1.5F);
+        const auto view = [](const ImGuiKey a, const ImGuiKey b) { return ImGui::IsKeyPressed(a, false) || ImGui::IsKeyPressed(b, false); };
+        if (view(ImGuiKey_1, ImGuiKey_Keypad1)) SetView(0.0F, 0.0F);
+        if (view(ImGuiKey_3, ImGuiKey_Keypad3)) SetView(-1.5707964F, 0.0F);
+        if (view(ImGuiKey_7, ImGuiKey_Keypad7)) SetView(0.0F, 1.5F);
+        if (view(ImGuiKey_0, ImGuiKey_Keypad0)) FrameCamera();
+    }
+
+    void SetView(const float yaw, const float pitch) {
+        camera_.yawRadians = yaw;
+        camera_.pitchRadians = pitch;
+    }
+
+    void SelectTool(const Tool tool) {
+        if (tool == tool_) return;
+        CancelDrag();
+        lineStart_.reset();
+        tool_ = tool;
     }
 
     void DrawFile() {
@@ -283,20 +327,36 @@ private:
     }
 
     void DrawTools() {
-        ImGui::SeparatorText("Tool (1-6)");
-        for (std::size_t i = 0; i < kToolNames.size(); ++i) {
-            if (i % 3 != 0) ImGui::SameLine();
-            if (ImGui::RadioButton(kToolNames[i], tool_ == static_cast<Tool>(i))) tool_ = static_cast<Tool>(i);
+        ImGui::SeparatorText("Mode");
+        for (std::size_t m = 0; m < kModeNames.size(); ++m) {
+            if (m != 0) ImGui::SameLine();
+            if (ImGui::RadioButton(kModeNames[m], mode_ == static_cast<EditMode>(m))) mode_ = static_cast<EditMode>(m);
         }
-        ImGui::InputInt("plane y (PgUp/PgDn)", &planeY_);
-        planeY_ = std::clamp(planeY_, -CellLimit, CellLimit - 1);
-        if (tool_ == Tool::BoxFill || tool_ == Tool::BoxClear) {
-            ImGui::InputInt("box height", &boxHeight_);
-            boxHeight_ = std::clamp(boxHeight_, 1, 256);
+        ImGui::SeparatorText("Tool");
+        for (std::size_t t = 0; t < kToolNames.size(); ++t) {
+            if (t % 4 != 0) ImGui::SameLine();
+            const std::string label = std::string(kToolNames[t]) + " (" + kToolKeyNames[t] + ")";
+            if (ImGui::RadioButton(label.c_str(), tool_ == static_cast<Tool>(t))) SelectTool(static_cast<Tool>(t));
         }
-        ImGui::SliderInt("orientation (R, Shift+R)", &orientation_, 0, 23);
+        if (tool_ == Tool::Brush || tool_ == Tool::Shape || tool_ == Tool::Line || tool_ == Tool::Laser) {
+            int shape = static_cast<int>(brushShape_);
+            if (tool_ != Tool::Laser && ImGui::Combo("shape", &shape, kShapeNames.data(), static_cast<int>(kShapeNames.size())))
+                brushShape_ = static_cast<BrushShape>(shape);
+            if (tool_ != Tool::Shape) ImGui::SliderInt("size ([ ])", &brushSize_, 1, MaxBrushSize);
+        }
+        ImGui::SeparatorText("Snap");
+        ImGui::Checkbox("volume", &snapVolume_);
+        ImGui::SameLine();
+        ImGui::Checkbox("plane", &snapPlane_);
+        int axis = plane_.axis;
+        if (ImGui::Combo("plane axis", &axis, kAxisNames.data(), 3)) plane_.axis = axis;
+        ImGui::InputInt("plane at (PgUp/PgDn)", &plane_.at);
+        plane_.at = std::clamp(plane_.at, -CellLimit, CellLimit - 1);
+        ImGui::SeparatorText("Orientation");
+        ImGui::SliderInt("orientation (Q/E, Shift)", &orientation_, 0, 23);
         ImGui::Text("up %s, %d quarter turn(s)", kUpNames[static_cast<std::size_t>(orientation_ / 4)], orientation_ % 4);
-        ImGui::TextDisabled("left: tool  right drag: orbit  middle drag: pan  wheel: zoom");
+        ImGui::TextDisabled("middle drag: rotate  right drag: pan  wheel: zoom");
+        ImGui::TextDisabled("arrows: rotate  1/3/7: front/right/top  0: frame the map");
     }
 
     // After a change: indices back in range (an undone "Add shape" leaves one
@@ -453,36 +513,36 @@ private:
         View view{PoseOf(camera), static_cast<int>(width), static_cast<int>(height), imageMin, scale};
         const ImGuiIO& io = ImGui::GetIO();
         hover_.reset();
-        planeHover_.reset();
-        if (hovered) {
+        if (hovered || drag_) {
             const float px = (io.MousePos.x - imageMin.x) * scale.x - 0.5F;
             const float py = (io.MousePos.y - imageMin.y) * scale.y - 0.5F;
-            const Ray ray = PixelRay(view.pose, view.width, view.height, px, py);
-            hover_ = Pick(Document(), ray, planeY_);
-            planeHover_ = PlaneCell(ray);
-            Navigate(io);
-            Edit();
+            ray_ = PixelRay(view.pose, view.width, view.height, px, py);
+            // During a drag the pick looks at the map as it was when the drag began, so a
+            // drag does not climb onto the cells it made (Goxel's snapping to the original).
+            hover_ = Pick(drag_ ? drag_->base : Document(), ray_, plane_, PickOptions{snapVolume_, snapPlane_});
+            if (hovered) Navigate(io);
+            Edit(io, view);
         }
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) EndEdit();
+        if (drag_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) EndDrag();
         DrawOverlay(view);
+        DrawHint(imageMin);
     }
 
-    // Where a ray crosses the edit plane, ignoring the cells (box tools).
-    std::optional<Vec3i> PlaneCell(const Ray& ray) const {
-        GridDocument plane;
-        plane.origin = Document().origin;
-        plane.cellSize = Document().cellSize;
-        const auto hit = Pick(plane, ray, planeY_);
-        if (!hit) return std::nullopt;
-        return hit->cell;
-    }
+    struct View final {
+        CameraPose pose;
+        int width{};
+        int height{};
+        ImVec2 imageMin;
+        ImVec2 scale;
+    };
 
     void Navigate(const ImGuiIO& io) {
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+        // Goxel's mouse: the middle button rotates, the right one pans, the wheel zooms.
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
             camera_.yawRadians += io.MouseDelta.x * 0.01F;
             camera_.pitchRadians = std::clamp(camera_.pitchRadians + io.MouseDelta.y * 0.01F, -1.5F, 1.5F);
         }
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
             // Along the camera's right and up, at the target's distance.
             const auto camera = camera_.Camera();
             const auto pose = PoseOf(camera);
@@ -496,69 +556,167 @@ private:
         if (io.MouseWheel != 0.0F) camera_.distance = std::max(camera_.distance * (1.0F - io.MouseWheel * 0.1F), 0.05F);
     }
 
-    void Edit() {
-        const bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
-        const bool held = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-        if (!held) return;
-        if (pressed) {
-            strokeCells_.clear();
-            Session().BeginStroke();
-            if ((tool_ == Tool::BoxFill || tool_ == Tool::BoxClear) && planeHover_) boxStart_ = planeHover_;
+    Cell Brush() const {
+        return {block_, block_ == 0 ? std::uint8_t{0} : static_cast<std::uint8_t>(orientation_)};
+    }
+
+    // The cell an edit at the hover acts on: Add goes beside the face it points
+    // at (or onto the plane), Sub and Paint act on the cell itself.
+    std::optional<Vec3i> Target() const {
+        if (!hover_) return std::nullopt;
+        if (mode_ == EditMode::Add) {
+            if (!hover_->onPlane && hover_->normal == Vec3i{0, 0, 0}) return std::nullopt; // inside a cell
+            return PlacementCell(*hover_);
         }
-        if (!Session().InStroke()) return;
-        if (tool_ == Tool::BoxFill || tool_ == Tool::BoxClear || !hover_) return;
-        const Cell brush{block_, block_ == 0 ? std::uint8_t{0} : static_cast<std::uint8_t>(orientation_)};
-        switch (tool_) {
-        case Tool::Place: {
-            // A drag does not climb onto the cells it placed itself.
-            if (block_ == 0 || (!hover_->onPlane && strokeCells_.contains(hover_->cell))) return;
-            // From inside a filled cell there is no face to place beside.
-            if (!hover_->onPlane && hover_->normal == Vec3i{0, 0, 0}) return;
-            const Vec3i target = PlacementCell(*hover_);
-            if (strokeCells_.contains(target)) return;
-            Apply(Session().SetCell(target, brush));
-            strokeCells_.insert(target);
-            break;
-        }
-        case Tool::Erase:
-            if (!hover_->onPlane) Apply(Session().SetCell(hover_->cell, {}));
-            break;
-        case Tool::Paint:
-            if (!hover_->onPlane && block_ != 0) Apply(Session().PaintCell(hover_->cell, block_));
-            break;
-        case Tool::Pick:
-            if (pressed && !hover_->onPlane) {
+        return hover_->cell;
+    }
+
+    // A drag: its changes go into one open stroke and are shown as they are made;
+    // releasing keeps them as one undo step, Esc puts them back.
+    struct Drag final {
+        Tool tool{};
+        GridDocument base;           // the map when the drag began (what picks look at)
+        Vec3i start{};
+        std::optional<Vec3i> last;   // the brush's last stamp
+        Vec3i normal{};              // extrude: the face's side
+        std::vector<Vec3i> face;     // extrude: the face
+        ImVec2 mouseStart{};
+    };
+
+    void Edit(const ImGuiIO& io, const View& view) {
+        const bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered();
+        // Ctrl+click picks the block and orientation in any tool, as the picker does.
+        if (pressed && (io.KeyCtrl || tool_ == Tool::Picker)) {
+            if (hover_ && !hover_->onPlane) {
                 const Cell picked = Document().At(hover_->cell);
                 block_ = picked.block;
                 orientation_ = picked.orientation;
                 LoadDrafts();
             }
+            return;
+        }
+        if (pressed) BeginDrag(io);
+        if (drag_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) UpdateDrag(io, view);
+    }
+
+    void BeginDrag(const ImGuiIO& io) {
+        const auto target = Target();
+        switch (tool_) {
+        case Tool::Plane:
+            if (hover_) {
+                if (const auto plane = PlaneThrough(*hover_)) plane_ = *plane;
+            }
+            return;
+        case Tool::Line:
+            // The first click sets the start, the second draws the line.
+            if (!target) return;
+            if (!lineStart_) {
+                lineStart_ = target;
+                return;
+            }
+            Apply(ApplyCells(Session(), StrokeCells(*lineStart_, *target, brushSize_, brushShape_), mode_, Brush()));
+            lineStart_.reset();
+            return;
+        case Tool::Extrude:
+            if (!hover_ || hover_->onPlane || hover_->normal == Vec3i{0, 0, 0}) return;
             break;
+        case Tool::Laser: break;
+        default:
+            if (!target) return;
+        }
+        Drag drag;
+        drag.tool = tool_;
+        drag.base = Document();
+        drag.mouseStart = io.MousePos;
+        if (tool_ == Tool::Extrude) {
+            drag.start = hover_->cell;
+            drag.normal = hover_->normal;
+            drag.face = ExtrudeFace(Document(), hover_->cell, hover_->normal);
+        } else if (target) {
+            drag.start = *target;
+        }
+        Session().BeginStroke();
+        // Shift+click with the brush: a line from the last stamp of the previous stroke.
+        if (tool_ == Tool::Brush && io.KeyShift && lastStamp_ && target)
+            Apply(ApplyCells(Session(), StrokeCells(*lastStamp_, *target, brushSize_, brushShape_), mode_, Brush()));
+        drag_ = std::move(drag);
+    }
+
+    void UpdateDrag(const ImGuiIO& io, const View& view) {
+        auto& drag = *drag_;
+        const auto target = Target();
+        switch (drag.tool) {
+        case Tool::Brush: {
+            if (!target || (drag.last && *drag.last == *target)) return;
+            const Vec3i from = drag.last ? *drag.last : *target;
+            Apply(ApplyCells(Session(), StrokeCells(from, *target, brushSize_, brushShape_), mode_, Brush()));
+            drag.last = target;
+            break;
+        }
+        case Tool::Shape: {
+            if (!target) return;
+            // The shape follows the mouse: put back the last one, make the new one.
+            Session().CancelStroke();
+            Session().BeginStroke();
+            Apply(ApplyCells(Session(), ShapeCells(drag.start, *target, brushShape_), mode_, Brush()));
+            break;
+        }
+        case Tool::Laser:
+            // Always taking away (Laser in Add or Paint acts as Sub).
+            Apply(ApplyCells(Session(), LaserCells(Document(), ray_, brushSize_), EditMode::Sub, {}));
+            break;
+        case Tool::Extrude: {
+            // How far: the mouse's travel along the face's side as it looks on screen, in cells.
+            const auto& document = Document();
+            const Vec3i next{drag.start[0] + drag.normal[0], drag.start[1] + drag.normal[1], drag.start[2] + drag.normal[2]};
+            const auto a = OnScreen(view, CellCorner(document, drag.start));
+            const auto b = OnScreen(view, CellCorner(document, next));
+            if (!a || !b) return;
+            const float dx = b->x - a->x;
+            const float dy = b->y - a->y;
+            const float length2 = dx * dx + dy * dy;
+            if (length2 < 1.0F) return;
+            const float travelled = ((io.MousePos.x - drag.mouseStart.x) * dx + (io.MousePos.y - drag.mouseStart.y) * dy) / length2;
+            const int distance = std::clamp(static_cast<int>(std::lround(travelled)), -64, 64);
+            Session().CancelStroke();
+            Session().BeginStroke();
+            Apply(Extrude(Session(), drag.face, drag.normal, distance));
+            break;
+        }
         default: break;
         }
     }
 
-    void EndEdit() {
-        if (boxStart_ && !planeHover_ && session_->InStroke())
-            status_ = "the box was not applied: release the button over the edit plane";
-        if (boxStart_ && planeHover_ && session_->InStroke()) {
-            Vec3i other = *planeHover_;
-            other[1] = planeY_ + boxHeight_ - 1;
-            const Cell value = tool_ == Tool::BoxFill ? Cell{block_, static_cast<std::uint8_t>(block_ == 0 ? 0 : orientation_)}
-                                                      : Cell{};
-            Apply(Session().FillBox(*boxStart_, other, value));
-        }
-        boxStart_.reset();
-        if (session_->InStroke()) Session().EndStroke();
+    void EndDrag() {
+        if (!drag_) return;
+        if (drag_->tool == Tool::Brush && drag_->last) lastStamp_ = drag_->last;
+        drag_.reset();
+        if (Session().InStroke()) Session().EndStroke();
     }
 
-    struct View final {
-        CameraPose pose;
-        int width{};
-        int height{};
-        ImVec2 imageMin;
-        ImVec2 scale;
-    };
+    void CancelDrag() {
+        lineStart_.reset();
+        if (!drag_) return;
+        drag_.reset();
+        Session().CancelStroke();
+    }
+
+    // One line of what the left button does now (Goxel's hints, in our words).
+    void DrawHint(const ImVec2 at) const {
+        std::string hint;
+        switch (tool_) {
+        case Tool::Brush: hint = "drag to draw; Shift+click: a line from the last point"; break;
+        case Tool::Shape: hint = "drag from corner to corner"; break;
+        case Tool::Laser: hint = "drag to cut along the view"; break;
+        case Tool::Line: hint = lineStart_ ? "click the end of the line (Esc: cancel)" : "click the start of the line"; break;
+        case Tool::Extrude: hint = "drag a face to push it out or in"; break;
+        case Tool::Plane: hint = "click a face to put the edit plane on it"; break;
+        case Tool::Picker: hint = "click a block to take it"; break;
+        }
+        if (tool_ != Tool::Picker && tool_ != Tool::Plane) hint += "; Ctrl+click: take a block";
+        if (drag_) hint += "; Esc: cancel";
+        ImGui::GetWindowDrawList()->AddText(ImVec2(at.x + 8, at.y + 6), IM_COL32(230, 230, 230, 220), hint.c_str());
+    }
 
     static std::optional<ImVec2> OnScreen(const View& view, const Math::Vec3 world) {
         const auto pixel = ProjectToPixel(view.pose, view.width, view.height, world);
@@ -588,42 +746,67 @@ private:
         ImDrawList* list = ImGui::GetWindowDrawList();
         list->PushClipRect(view.imageMin, ImVec2(view.imageMin.x + static_cast<float>(view.width) / view.scale.x,
                                                  view.imageMin.y + static_cast<float>(view.height) / view.scale.y));
-        // The edit plane's grid, around where the mouse is on it (or the camera's target).
         const auto& document = Document();
+        // The edit plane's grid, around where the mouse is on it (or the camera's target).
+        const auto u = static_cast<std::size_t>((plane_.axis + 1) % 3);
+        const auto v = static_cast<std::size_t>((plane_.axis + 2) % 3);
+        const auto w = static_cast<std::size_t>(plane_.axis);
         Vec3i centre{};
-        if (planeHover_) {
-            centre = *planeHover_;
+        if (hover_ && hover_->onPlane) {
+            centre = hover_->cell;
         } else {
-            for (int axis = 0; axis < 3; axis += 2) {
-                const float target = axis == 0 ? camera_.target.x : camera_.target.z;
-                centre[axis] = static_cast<std::int32_t>(std::floor(target / document.cellSize)) - document.origin[axis];
-            }
+            const std::array<float, 3> target{camera_.target.x, camera_.target.y, camera_.target.z};
+            for (std::size_t axis = 0; axis < 3; ++axis)
+                centre[axis] = static_cast<std::int32_t>(std::floor(target[axis] / document.cellSize)) - document.origin[axis];
         }
+        centre[w] = plane_.at;
+        // The grid lies on the side of the layer the camera looks at.
+        const std::array<float, 3> eye{camera_.Camera().position.x, camera_.Camera().position.y, camera_.Camera().position.z};
+        const float layer = (static_cast<float>(plane_.at + document.origin[w]) + 0.5F) * document.cellSize;
+        const std::int32_t side = eye[w] > layer ? plane_.at + 1 : plane_.at;
+        const auto corner = [&](const std::int32_t a, const std::int32_t b) {
+            Vec3i cell{};
+            cell[u] = a;
+            cell[v] = b;
+            cell[w] = side;
+            return CellCorner(document, cell);
+        };
         constexpr int reach = 16;
         const ImU32 grid = IM_COL32(120, 160, 200, 90);
         for (int i = -reach; i <= reach + 1; ++i) {
-            Line(view, CellCorner(document, {centre[0] + i, planeY_, centre[2] - reach}),
-                 CellCorner(document, {centre[0] + i, planeY_, centre[2] + reach + 1}), grid, 1.0F);
-            Line(view, CellCorner(document, {centre[0] - reach, planeY_, centre[2] + i}),
-                 CellCorner(document, {centre[0] + reach + 1, planeY_, centre[2] + i}), grid, 1.0F);
+            Line(view, corner(centre[u] + i, centre[v] - reach), corner(centre[u] + i, centre[v] + reach + 1), grid, 1.0F);
+            Line(view, corner(centre[u] - reach, centre[v] + i), corner(centre[u] + reach + 1, centre[v] + i), grid, 1.0F);
         }
-        if (boxStart_ && planeHover_) {
-            Vec3i other = *planeHover_;
-            other[1] = planeY_ + boxHeight_ - 1;
-            Vec3i low{};
-            Vec3i high{};
+        // What the left button would touch.
+        const ImU32 colour = mode_ == EditMode::Add ? IM_COL32(120, 230, 120, 255)
+                             : mode_ == EditMode::Sub ? IM_COL32(240, 90, 90, 255) : IM_COL32(240, 200, 90, 255);
+        const auto bounds = [](const std::vector<Vec3i>& cells) -> std::optional<std::pair<Vec3i, Vec3i>> {
+            if (cells.empty()) return std::nullopt;
+            Vec3i low = cells.front(), high = cells.front();
+            for (const auto& c : cells)
+                for (int axis = 0; axis < 3; ++axis) {
+                    low[axis] = std::min(low[axis], c[axis]);
+                    high[axis] = std::max(high[axis], c[axis]);
+                }
+            return std::make_pair(low, high);
+        };
+        const auto target = Target();
+        if (tool_ == Tool::Line && lineStart_ && target) {
+            if (const auto box = bounds(LineCells(*lineStart_, *target))) Outline(view, box->first, box->second, colour);
+        } else if (tool_ == Tool::Extrude && hover_ && !hover_->onPlane && !drag_) {
+            if (const auto box = bounds(ExtrudeFace(document, hover_->cell, hover_->normal)))
+                Outline(view, box->first, box->second, IM_COL32(230, 230, 230, 220));
+        } else if ((tool_ == Tool::Brush || tool_ == Tool::Line) && target && !drag_) {
+            if (const auto box = bounds(BrushCells(*target, brushSize_, brushShape_))) Outline(view, box->first, box->second, colour);
+        } else if ((tool_ == Tool::Shape || tool_ == Tool::Picker || tool_ == Tool::Plane) && hover_ && !drag_) {
+            Outline(view, hover_->cell, hover_->cell, IM_COL32(230, 230, 230, 200));
+        } else if (tool_ == Tool::Shape && drag_ && target) {
+            Vec3i low{}, high{};
             for (int axis = 0; axis < 3; ++axis) {
-                low[axis] = std::min((*boxStart_)[axis], other[axis]);
-                high[axis] = std::max((*boxStart_)[axis], other[axis]);
+                low[axis] = std::min(drag_->start[axis], (*target)[axis]);
+                high[axis] = std::max(drag_->start[axis], (*target)[axis]);
             }
-            Outline(view, low, high, tool_ == Tool::BoxFill ? IM_COL32(120, 230, 120, 255) : IM_COL32(240, 90, 90, 255));
-        } else if ((tool_ == Tool::BoxFill || tool_ == Tool::BoxClear) && planeHover_) {
-            Outline(view, *planeHover_, *planeHover_, IM_COL32(230, 230, 230, 200));
-        } else if (hover_) {
-            const bool placing = tool_ == Tool::Place;
-            const Vec3i cell = placing ? PlacementCell(*hover_) : hover_->cell;
-            if (placing || !hover_->onPlane)
-                Outline(view, cell, cell, placing ? IM_COL32(120, 230, 120, 255) : IM_COL32(240, 200, 90, 255));
+            Outline(view, low, high, colour);
         }
         list->PopClipRect();
     }
@@ -692,11 +875,15 @@ private:
     std::string status_;
     std::string error_;
     std::string previewError_;
-    Tool tool_{Tool::Place};
+    Tool tool_{Tool::Brush};
+    EditMode mode_{EditMode::Add};
+    BrushShape brushShape_{BrushShape::Cube};
+    int brushSize_{1};
+    bool snapVolume_{true};
+    bool snapPlane_{true};
+    EditPlane plane_{};
     std::uint16_t block_{1};
     int orientation_{};
-    int planeY_{};
-    int boxHeight_{1};
     Block blockDraft_;
     Block blockSource_;
     Shape shapeSource_;
@@ -704,9 +891,10 @@ private:
     std::size_t shape_{};
     Shape shapeDraft_;
     std::optional<PickHit> hover_;
-    std::optional<Vec3i> planeHover_;
-    std::optional<Vec3i> boxStart_;
-    std::set<Vec3i> strokeCells_;
+    Ray ray_{};
+    std::optional<Drag> drag_;
+    std::optional<Vec3i> lastStamp_;
+    std::optional<Vec3i> lineStart_;
     bool openClose_{};
     bool promptOpen_{};
     bool wantsExit_{};
