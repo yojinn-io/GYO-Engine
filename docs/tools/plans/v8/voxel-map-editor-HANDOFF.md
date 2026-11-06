@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，**等你核准**。
+- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`），實作中。
 - **PR**：
   - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
   - window 批在分支 `claude/v8-tool-voxel-map-window`，有它自己的 PR。
@@ -29,6 +29,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-window-1-declare` | （2026-11-06）核准 window-1 的宣告：視窗存 grid＋區塊化地圖＋標記（不寫 v1）；P1 不編輯 p95 ≤ 16.7 ms、每幀編輯 p95 ≤ 33 ms；Extrude 推出同方向同平面相連的面；Laser 在 Add／Paint 時當 Sub；正交投影延後；DI 5 擴充、DI 7 改寫 | 「推奨どおり承認」 |
 | `v8-tool-voxel-window-goxel` | （2026-11-06）視窗的功能與互動照 Goxel，外觀用我們自己的；只取功能、不搬程式碼，依我們的編輯邏輯客製；分三批（window-1 核心、window-2 選取／移動／對稱、window-3 Layers）；鏡像用 (c)（只鏡像對稱的形狀）；Layers 會改格子格式，另批宣告 | 「我建議你的操作模式和交互使用這個的形式」「UI 我們可以使用自己的形式，但是功能上和交互上我建議是用goxel的」「注意我要的是功能，而不是連代碼都照搬」「如果不影響現有機能…沒問題。如果有影響，列出來」「OK，照建議開始。」 |
 | `v8-tool-chunked-markers-guard` | （2026-11-06）核准 §14.4：依賴守衛允許 CMake 文字中出現 `GYO::MapMarkers` 這個名字（沒有收緊的面，驗證者確認 1～5）；DI 2 追加 `ParseMarkerKinds`、`UnknownMarkerKinds` | 「両方承認」 |
 | `v8-tool-chunked-deviations` | （2026-11-06）確認 tc-bake 和宣告的差異 4 項（舊 region 檔只刪舊索引列過的、tc-measure 併入、突變第一輪 13/14 的處置、合成圖的 v1 是拒收）；M6 邊界（origin 不在 16 的倍數時，邊緣格子 `build-map` 拒收）只記錄，不收緊格子的範圍 | 「確認、(a) 記録のみ」 |

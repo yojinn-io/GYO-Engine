@@ -5,7 +5,7 @@
 - 區塊化：[voxel-map-tool-chunked.md](voxel-map-tool-chunked.md)（PR #163 已合併）。
 - 紀錄：[HANDOFF](voxel-map-editor-HANDOFF.md)。
 
-**狀態：window-1 的宣告草稿，等使用者核准；核准前不實作。**
+**狀態：2026-11-06 使用者核准 window-1 的宣告（原話「推奨どおり承認」：決定 1～5 全部照建議）。實作中。**
 
 ## 代號對照
 
