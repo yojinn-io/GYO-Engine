@@ -214,4 +214,7 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 
 ## 下一步
 
-Engine 的兩批（engine-grid、engine-format）已合併。`-tool-chunked` 由 voxel 線開（五個判斷 2026-11-06 使用者照建議定案；`marker_kinds` 的契約見決定 `v8-arch-big-map-marker-kinds-format`，先出事前宣告再動）。`-product-arena-v3` 何時開，待使用者決定。
+Engine 的兩批（engine-grid、engine-format）與 tool-chunked（PR #163，merge `24f111eb`，voxel 線）都已合併。
+`-product-arena-v3` 何時開，待使用者決定；它的輸入（兩張既有地圖的 v3 產出、`build-map`、`marker_kinds`）已齊。
+voxel 線接著重做 window 批（PR #158）：功能與互動照 Goxel；範圍、Layers（會改格子格式 `gyo.voxel_grid` v2，是 Architecture Delta）
+與鏡像朝向的處置，在 voxel 線等使用者決定——這是工具格式，owner 是 voxel 線，架構師只在它觸及 Engine 契約時介入。
