@@ -1,30 +1,37 @@
-# 大地圖 engine-format：事前宣告（草稿，第二批；`v8-arch-big-map-engine-format`）
+# 大地圖 engine-format：區塊地圖格式與標記層（`v8-arch-big-map-engine-format`）
 
-更新：2026-11-06。Owner：Engine（`GYO::VoxelMesh`、新 `GYO::MapMarkers`）。
+更新：2026-11-06。Owner：Engine（`GYO::VoxelMesh`、新 `GYO::MapMarkers`；`GYO::Collision` 只改契約文件的 RC）。
 計畫：[README](README.md)；記錄：[HANDOFF](HANDOFF.md)；根據：[survey](survey.zh-Hant.md) 與 HANDOFF「決定」的六項。
-**狀態：由 [engine-map 宣告](engine-map.zh-Hant.md)拆出，已核准（使用者 2026-11-06，engine-map 會話「照建議核准」：v1 退役＝(a)、Delta 同意）。架構師 2026-11-06 轉達使用者「用現有分支，拆成兩個 PR」：本批＝PR 2，在 PR 1（[engine-grid](engine-grid.zh-Hant.md)）合併後 rebase 再開。**
+**狀態：事前宣告，等使用者核准。** 由 [engine-map 宣告](engine-map.zh-Hant.md)拆出：格式、MapMarkers、v1 退役 (a) 與 Delta A／B，使用者 2026-11-06 已在 engine-map 會話核准（「照建議核准」）。
+本稿新增、需要核准的是第 7 節列的事：v1 退役的時點、`collision.md` 的兩條 RC、`AnimationEvents` 另案、突變存活的處理規則。核准前不推實作的審查。
 
-## 0. 來歷與現況（先讀）
+## 0. 來歷與現況
 
-- 本稿從 [engine-map 宣告](engine-map.zh-Hant.md)（拆批前的一批宣告，使用者 2026-11-06 曾核准）切出格式與 MapMarkers 的部分。
-  架構師會話 2026-11-06 傳達使用者的拆批決定（`v8-arch-big-map-split-engine`）：第一批 `-engine-grid`（broadphase＋解析替換）、第二批 `-engine-format`（本稿）。
-- **拆批之前，engine-map 會話已在本機分支 `claude/v8-arch-big-map-engine-map` 實作了本稿的內容並提交**（未推送）：
-  `447f9194`（`gyo.voxel_map`／`gyo.voxel_region`、`ValidateVoxelChunk`、`ExpandVoxelChunk` 等，同一提交也含解析替換）、`c2287961`（`GYO::MapMarkers`）。
-  規則測試全部通過；突變（J2）當時正在跑。第二批開工時，可以從這兩個提交取用，但仍要照本稿重新受理（engine-grid 的解析替換若與分支上的寫法不同，以 engine-grid 合併的為準）。
-- 解析替換屬第一批。本稿假設第一批之後，VoxelMesh 已有不經回呼的嚴格解析；MapMarkers 要用同一個入口（分支上的寫法是 `engine/base/include/engine/base/StrictJson.hpp` 的模板，只依賴標準函式庫）。若第一批把它放在 VoxelMesh 內部，MapMarkers 不能依賴 VoxelMesh，本稿要改成把那個入口移到 Base（另寫 Delta）。
+- 拆批（`v8-arch-big-map-split-engine`）後，第一批 [engine-grid](engine-grid.zh-Hant.md)（PR #161）已合併進 master，merge commit 是 `c70e8fdc`。本批是第二批（PR 2）。
+- 本批的實作在拆批前就寫好了，當時是在使用者核准的 engine-map 宣告之下：
+  - 原提交：`447f9194` 的 v2 部分、`c2287961`。
+  - 現在的提交：分支 `claude/v8-arch-big-map-engine-format` 上的一個提交，已 rebase 到 `c70e8fdc`。
+  - 嚴格解析用第一批合併的 `engine/base/include/engine/base/StrictJson.hpp`，`GYO::MapMarkers` 也用它（以 `nlohmann::ordered_json` instantiate）。
+- 拆批前那一輪在 engine-map 分支上跑過規則測試與突變，結果只當參考，受理判定照本稿重跑（第 4 節）。
+  那一輪的突變在格式與 MapMarkers 的範圍裡存活 1 個：`mm-two-shapes-accepted`，見 F2。
 
 ## 1. 範圍
 
 ### 做
 
-- `gyo.voxel_map` v1（索引）＋`gyo.voxel_region` v1（region 檔）的契約、驗證、展開；`ValidateVoxelChunk`（不經文字）與 Parse 共用一份規則實作。
-- 新 Subsystem `GYO::MapMarkers`：`engine/map_markers/`、`docs/architecture/map-markers.md`。
-- `docs/architecture/voxel-mesh.md` 升版（DI 6、7、RC 5～7、RC 3 標為已處置）、`docs/architecture.md` 模組表加 MapMarkers。
-- 測試、突變 catalog、黃金值、依賴守衛、名詞守衛、dev_log、HANDOFF、README。
+- `gyo.voxel_map` v1（索引）與 `gyo.voxel_region` v1（region 檔）的契約、驗證與展開。`ValidateVoxelChunk`（不經文字）和 Parse 共用一份規則實作。
+- 新 Subsystem `GYO::MapMarkers`：`engine/map_markers/` 和 `docs/architecture/map-markers.md`。
+- `gyo.voxel_mesh` v1 保留，文件與標頭標為 deprecated。刪除的時點見第 7 節。
+- `docs/architecture/voxel-mesh.md` 升版：DI 6、7，RC 5～7，RC 3 改寫成「已處置」。`docs/architecture.md` 的模組表與目錄樹加上 MapMarkers。
+- `docs/architecture/collision.md` 加兩條 Replacement Criteria（第 7 節，PR #161 審查者的 N4、U1）。
+- 測試、突變 catalog `docs/architecture/plans/big-map/scripts/engine_format_mutations.json`、黃金值、依賴守衛、名詞守衛、dev_log、HANDOFF、README。
 
 ### 不做
 
-- broadphase 與解析替換（第一批）；不改產品與工具；不換第三方解析器、不做平行解析、二進位、LOD。
+- 不改產品與工具：arena v3、遷移兩張地圖、工具的 region 存檔都屬後面的批次。
+- 不換第三方解析器，不做平行解析、二進位、LOD。
+- 不改 `StaticAabbGrid` 的程式。審查者的 N3（極小半徑時邊際是否足夠）不在本批；它是 Collision 的事，交使用者另外決定。
+- `GYO::Model` 的 `AnimationEvents.cpp` 也用回呼查重複鍵，有同樣的二次方，改用 `StrictJson.hpp` 是另案（第 7 節，PR #161 的 U4）。本批不改。
 
 ## 2. 設計概要
 
@@ -116,7 +123,7 @@ Math::Vec3          MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& m
 - **錯誤碼**：`VoxelMeshErrorCode` 加 `InvalidVoxelMap`、`InvalidVoxelRegion`、`InvalidVoxelChunk`。
 - **v1**：`ParseVoxelMesh`／`ExpandVoxelMesh` 依第 7 節的決定處理（建議：本批保留並標 deprecated）。
 
-### 2.2 `GYO::MapMarkers`：`GYO::MapMarkers`
+### 2.2 `GYO::MapMarkers`
 
 ```json
 {
@@ -181,20 +188,52 @@ Math::Vec3          MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& m
 - **DI**：1 中立（只知道 id、kind、tags、點、盒、路徑；名字不透明；文件與資料不出現玩法名詞）；2 只連 Base、Math、nlohmann（PRIVATE）；3 一個驗證者 `ParseMapMarkers`；4 嚴格；5 整數座標（不在本模組換成 float）。
 - **RC**：1 標記需要語意驗證（例如「必須站得住」）→ 那是產品的，不擴本模組；2 需要點、盒、路徑以外的形狀（多邊形、球）→ 新版本；3 標記需要引用別的資產 id → 那是組合，重新判斷 Layers 表的歸屬。
 
-## 4. 受理判定（草稿；核准時確定）
+## 4. 受理判定（看結果前宣告；核准後不放寬）
 
 | 代號 | 判定 | 怎麼量 |
 |---|---|---|
-| F1 規則 | `gyo.voxel_map` 的 M1～M10、`gyo.voxel_region` 的 R1～R5／C1～C5、`gyo.map_markers` 的 K1～K10：每條至少一個 test case（名稱以規則代號開頭），正例與反例都有；`ValidateVoxelChunk` 對 C1～C5 有自己的反例，同一缺陷 Parse 與 Validate 都失敗 | doctest，Red→Green |
-| F2 突變 | 每條規則至少一個突變，加上「Validate 不呼叫共用規則」、展開的區塊偏移、`ChunkWorldOrigin`／`MapUnitsToWorld` 漏掉原點、palette 圖的排列；**每個都要被殺**；既有 `voxel_mesh_mutations.json` 全部仍被殺 | 突變腳本 |
-| F3 黃金值 | `ExpandVoxelChunk` 的頂點、索引、uv、碰撞盒與 `ChunkWorldOrigin`、`MapUnitsToWorld`：以 float bits 與字面值比對，含 ±2²⁰ 兩端與負區塊鍵；Mac 本機與 CI 的 Linux、Windows 都通過；另有「同一份幾何以 v1 單文件與以區塊展開，位元相同」 | doctest＋L1 |
-| F4 依賴與名詞守衛 | configure 時：`gyo_voxel_mesh` 只連 Base、Math、nlohmann；`gyo_map_markers` 只連 Base、Math、nlohmann；加突變。名詞：一支 Python 檢查 MapMarkers 的程式、測試、契約文件不含玩法名詞，加突變 | CMake＋Python |
-| F5 迴歸 | 本機全量 cpu\|shader 與既有 gpu 測試不變；CI L1 三平台通過 | ctest＋L1 |
+| F1 規則 | `gyo.voxel_map` 的 M1～M10、`gyo.voxel_region` 的 R1～R5／C1～C5、`gyo.map_markers` 的 K1～K10：每條至少一個 test case（名稱以規則代號開頭），正例與反例都有。`ValidateVoxelChunk` 對 C1～C5 有自己的反例；同一缺陷 Parse 與 Validate 都失敗 | doctest |
+| F2 突變 | `engine_format_mutations.json`：每條規則至少一個突變，加上「Validate 不呼叫共用規則」、展開的區塊偏移、`ChunkWorldOrigin` 和 `MapUnitsToWorld` 漏掉原點、palette 圖的排列、依賴守衛、名詞守衛。**每個都要被殺**；既有的 `voxel_mesh_mutations.json` 與 `engine_grid_mutations.json` 也全部仍被殺 | 突變腳本 |
+| F3 黃金值 | `ExpandVoxelChunk` 的頂點、索引、uv、碰撞盒，以及 `ChunkWorldOrigin`、`MapUnitsToWorld`：以 float bits 和字面值比對，含 ±2²⁰ 兩端與負區塊鍵。另有「同一份幾何以 v1 單文件與以區塊展開，位元相同」。Mac 本機與 CI 的 Linux、Windows 都要通過 | doctest＋L1 |
+| F4 依賴與名詞守衛 | configure 時檢查：`gyo_voxel_mesh` 和 `gyo_map_markers` 都只連 Base、Math、nlohmann，各配一個突變。名詞：Python 守衛檢查 MapMarkers 的程式、測試、契約文件不含玩法名詞，也配一個突變 | CMake＋Python |
+| F5 迴歸 | 本機全量 cpu\|shader 與 gpu 測試全部通過；CI L1 三平台通過 | ctest＋L1 |
 
-## 5. 要使用者決定的事
+**突變存活時的處理（PR #161 的教訓）：**
+- 存活的突變不能由實作者自己認定成「等價突變」。PR #161 的 `grid-margin-zero` 就是這樣被推定為等價，後來審查者用反例推翻。
+- 存活就是 F2 不成立：先報告使用者，再補測試。
+- 若要主張等價，要附上推理所依據的程式碼位置，交審查者找反例，由使用者決定。
+- 拆批前那一輪存活的 `mm-two-shapes-accepted`，在這條規則下先補測試：K4 的測試除了檢查路徑，也要檢查訊息「exactly one of point, box and path」。補完後它應該被殺。
 
-1. **v1 退役時點**（engine-map 會話 2026-11-06 曾得到「照建議」＝(a)；拆批後移到本批，重新確認）：
-   - **建議 (a)**：本批保留 `ParseVoxelMesh`／`ExpandVoxelMesh`，標 deprecated；`-product-arena-v3` 遷移兩張地圖後，在該批刪 v1（含測試與突變）。理由：v1 現在被產品與工具使用，本批若刪就得同批改產品與工具，超出 Engine 範圍。代價：一段時間內 Engine 有兩種地圖格式（v1 只讀、不再擴充）。
-   - (b) 本批刪 v1，同批遷移產品與工具：產品與工具的改動進本批。
-2. **Delta A、B 的同意**（VoxelMesh v2 公開介面、新 Subsystem MapMarkers）。
-3. **模型**：實作者 Opus／high、審查者 Opus／high、驗證者 Fable／xhigh（比主會話強時先問）。
+**範圍的限界：** 本批沒有時間判定（解析時間在第一批）。合成圖是雜訊，不代表手工地圖。
+
+## 5. 證據位置
+
+- 主 checkout 的 `build/evidence/big-map/engine-format/`（git 不追蹤）：突變結果、全量建置與 ctest 的輸出。
+- 拆批前那一輪的參考結果在 `build/evidence/big-map/engine-map/`。
+
+## 6. 模型、檔位與估時
+
+上段（Engine 公開介面、新 Subsystem、DI）。
+
+| 角色 | 模型／檔位 | 理由 |
+|---|---|---|
+| 實作者 | Opus 5.5／high（主會話） | 2026-11-06 使用者同意「領航員和檔位照建議」 |
+| 審查者 | engine-grid 會話（Opus） | 架構師指定；與實作者不同會話 |
+| 驗證者（§14.4 的 1～5，若有判定變更） | Fable 5.1／xhigh，比主會話強，啟動前先問使用者 | 同上 |
+
+- 估時：4～6 h，實作已有，主要是補測試、跑突變、文件與 L1。超過 9 h、或單一問題累計超過 2 h，就停下回報。
+- 停下條件：AGENTS §14 冒頭；F2 有突變存活；黃金值跨平台不一致。
+
+## 7. 要使用者決定的事
+
+1. **v1 退役的時點**（選項 (a) 已核准，這裡寫成可檢查的條件）：
+   - 本批保留 `ParseVoxelMesh`、`ExpandVoxelMesh`、`VoxelMeshDocument`、`VoxelMeshGeometry`，標 deprecated，不再擴充。
+   - 刪除放在 `v8-arch-big-map-product-arena-v3`：該批把 `pvp_arena`、`pvp_corners` 遷移到 `gyo.voxel_map` 後，**在同一批**刪掉 v1 的程式、測試、`voxel_mesh_mutations.json` 裡只守 v1 的突變，以及 voxel-mesh.md 的 v1 節。
+   - 前提：工具在 `-tool-chunked` 已經改成寫 region。刪除時 repo 裡不能再有呼叫 v1 的程式；用 grep `ParseVoxelMesh` 是否為 0 件來確認，寫進該批的受理判定。
+2. **`collision.md` 加兩條 Replacement Criteria**（PR #161 審查者的 N4、U1）：
+   - RC 4：盒子對格子的登記數或建構時間，量到超過產品批宣告的值時，改用大盒子清單或分層格（以分層格優先）。
+   - RC 5：一個離群盒子會讓格長自動加倍、整體變慢（結果不變）。產品批要記錄 `CellLength()`，量到它是給定格長的 4 倍以上時，回報給使用者。
+3. **另案記錄（不開卡）：** `GYO::Model` 的 `AnimationEvents.cpp:40` 改用 `StrictJson.hpp`（PR #161 的 U4）。寫進 HANDOFF 的「之後」。
+4. **突變存活的處理規則**（第 4 節）：存活就是不成立，不由實作者自己認定等價。
+5. **模型：** 實作者 Opus、審查者 engine-grid 會話、驗證者 Fable（先問）。
+6. **既有文字（參考，不在本批改）：** `voxel-mesh.md` 的 DI 1 原文以否定句列出「spawn points」，表示這個模組不知道它。改 DI 的文字需要使用者同意，本批照原文保留；要改成中立的說法，請另外指示。

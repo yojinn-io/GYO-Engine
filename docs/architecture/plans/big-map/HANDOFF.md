@@ -145,6 +145,20 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 
 - 2026-11-06 L1（head `7e7ea5db`，run 42147144545）：linux-x64、macos-arm64、windows-x64 全部通過，CI gate 通過。J6 成立。
 
+- 2026-11-06 審查者複核 `7e7ea5db`：B1、S1 關閉，沒有剩下的 blocker 或 should-fix。使用者指示合併，PR #161 合併進 master（merge `c70e8fdc`，分支已刪）。engine-grid 批完成。
+
+## 現況：engine-format（`v8-arch-big-map-engine-format`，PR 2）
+
+- 2026-11-06 開工。原工作樹 `bold-mahavira-68c717` 已刪除，改用工作樹 `.claude/worktrees/engine-format`。分支 `claude/v8-arch-big-map-engine-format` 的實作提交已 rebase 到 `c70e8fdc`，沒有衝突。
+- 架構師轉達：先把宣告草稿改成正式事前宣告，開 PR 2 時先給使用者核准宣告，再推實作的審查；審查者仍是 engine-grid 會話。
+- 宣告 [engine-format](engine-format.zh-Hant.md) 已寫成正式版。第 7 節列出要使用者決定的事：v1 退役的時點、`collision.md` 的 RC 4／5（PR #161 的 N4、U1）、`AnimationEvents` 另案（U4）、突變存活的處理規則、模型。
+- **停在核准關卡：** PR 2 以 draft 開出（draft 不跑 L1）。核准前不跑受理判定、不改程式。
+
+## 之後（另案，不開卡）
+
+- `GYO::Model` 的 `AnimationEvents.cpp:40` 改用 `StrictJson.hpp`。它的回呼有同樣的二次方（PR #161 的 U4）。
+- PR #161 審查者的 N3（極小半徑時候選邊際是否足夠）：Collision 的事，待使用者決定。
+
 ## 下一步
 
-等審查者複核（B1、S1）與使用者合併；PR 1 合併後 rebase 開 PR 2。N3、N4、U1～U4 待使用者決定。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
+使用者核准 engine-format 宣告後：補 K4 的訊息檢查、把 RC 4／5 寫進 `collision.md`、跑 F1～F5、dev_log，再把 PR 2 改成 ready。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
