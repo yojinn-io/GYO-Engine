@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06（本分支 `claude/v8-arch-big-map-tool-chunked`）**：big-map 的 Engine 兩批（PR #161、#162）已合併。`v8-arch-big-map-tool-chunked` 的事前宣告 [voxel-map-tool-chunked.md](voxel-map-tool-chunked.md) 寫好，2026-11-06 你核准（`v8-tool-chunked-declare`）。`tc-bake`、`tc-measure` 完成（本機 135/135、突變 37/37、T5 p95 1.11 ms）；**等你確認和宣告的差異 4 項與 M6 邊界的處置**（dev_log）。window 批（PR #158，分支 `claude/v8-tool-voxel-map-window`）凍結，在本批之後 rebase 重新宣告；那條分支上的 HANDOFF 紀錄，rebase 時合進來。`tc-markers` 等架構師寫 `map-markers.md` 的「Kinds」節。
+- **2026-11-06（本分支 `claude/v8-arch-big-map-tool-chunked`）**：big-map 的 Engine 兩批（PR #161、#162）已合併。`v8-arch-big-map-tool-chunked` 的事前宣告 [voxel-map-tool-chunked.md](voxel-map-tool-chunked.md) 寫好，2026-11-06 你核准（`v8-tool-chunked-declare`）。`tc-bake`、`tc-measure` 完成（本機 135/135、突變 37/37、T5 p95 1.11 ms）；和宣告的差異 4 項你已確認，M6 邊界只記錄（`v8-tool-chunked-deviations`）。L1 待 PR。window 批（PR #158，分支 `claude/v8-tool-voxel-map-window`）凍結，在本批之後 rebase 重新宣告；那條分支上的 HANDOFF 紀錄，rebase 時合進來。`tc-markers` 等架構師寫 `map-markers.md` 的「Kinds」節。
 - **PR**：[PR #152](https://github.com/yojinn-io/GYO-Engine/pull/152)（分支 `claude/v8-tool-voxel-map-plan`，一條功能線一個 PR）。尚未合併。
 - **完成**：
   - `v8-tool-voxel-map-plan`：方案、分批。
@@ -20,6 +20,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-chunked-deviations` | （2026-11-06）確認 tc-bake 和宣告的差異 4 項（舊 region 檔只刪舊索引列過的、tc-measure 併入、突變第一輪 13/14 的處置、合成圖的 v1 是拒收）；M6 邊界（origin 不在 16 的倍數時，邊緣格子 `build-map` 拒收）只記錄，不收緊格子的範圍 | 「確認、(a) 記録のみ」 |
 | `v8-tool-chunked-declare` | （2026-11-06）核准 tool-chunked 的事前宣告：範圍、介面草案、判定 T1～T9（T5：區塊重烘 p95 ≤ 16 ms）、DI 1～5 的變更與 DI 2 改寫、RC 3 處置與 RC 5／6；存檔用帶雜湊的 region 檔名＋最後換索引；調色盤放格子的全部方塊；T-junction 目視移到 window 批 | 「推奨どおり承認」 |
 | `v8-tool-chunked-plan` | （2026-11-06）tool-chunked 的五個判斷：從 master 分支、window 之後 rebase；v1 輸出保留到 arena-v3、新格式用新命令、v1 不加 greedy；標記讀寫核心在本批、放置 UI 在 window 批；`marker_kinds.json` 的形式由架構師寫進 map-markers.md；重烘判定值在宣告定（候選 p95 ≤ 16 ms） | 「推奨どおり決める」 |
 | `v8-product-arena-v2-maps-move` | （2026-11-05）把延後的 `v8-product-asset-path-loaded-move` 併進 arena-v2 批：arena 一組（含烘焙地圖）搬進 `maps/`，`movement_rules.json` 搬進 `rules/`，根目錄的例外全部刪除；不加新例外 | 「这2个问题就能放到pvp的assets的config下么」→ 選「今 maps/ に移す」 |
