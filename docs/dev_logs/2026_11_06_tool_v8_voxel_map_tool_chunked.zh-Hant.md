@@ -5,7 +5,7 @@
 - 審查：子 Agent（Opus／high，唯讀）。
 - 事前宣告：[voxel-map-tool-chunked.md](../tools/plans/v8/voxel-map-tool-chunked.md)，2026-11-06 使用者核准（「推奨どおり承認」）。
 
-**狀態：** `tc-bake`、`tc-measure`、`tc-markers` 完成。DI 1 守衛的放寬（§14.4）與 DI 2 字句的追加，2026-11-06 使用者核准（「両方承認」）。`tc-bake` 的 L1 三平台通過（PR #163）；`tc-markers` 的 L1 待推送後。
+**狀態：** `tc-bake`、`tc-measure`、`tc-markers` 完成。DI 1 守衛的放寬（§14.4）與 DI 2 字句的追加，2026-11-06 使用者核准（「両方承認」）。L1 三平台通過（PR #163）：`tc-bake` 在 run 42188382428；`tc-markers` 在 run 42195132825（head `137085ae`）。之後的 `16a28c62` 只改文件與突變目錄，L1 照規則 skip，CI gate 通過。
 
 相關文件：
 - [voxel_map_editor/architecture.md](../voxel_map_editor/architecture.md)：「The chunked map」節，DI 2～5、RC 3、RC 5、RC 6
@@ -162,7 +162,7 @@ PR #160（`gyo.marker_kinds` 的契約）合併後，把 master（`15257faf`）m
 | T6 | 成立：<br>- Q1～Q5 各一個 case；<br>- `UnknownMarkerKinds` 的路徑與順序；<br>- golden 逐位元相同、寫兩次相同、讀回相等（含 `"`、`\`、yaw 的位元）；<br>- 非 UTF-8 的名字讀回不同時被拒；<br>- CLI 的 `check_markers*` 六條；<br>- Engine 的 `neutral_names` 與 `gyo_expect_map_markers_links` 通過 |
 | T7 | 成立：整份目錄 48/48 被殺（`mutations-all-round3.txt`） |
 | T8 | 成立：依賴守衛與自我測試通過；`tc-guard-*` 兩條被殺 |
-| T9 | 本機：全量建置成功，`cpu|shader` 135/135（`ctest-cpu-shader-markers-final.txt`）。L1 待推送 |
+| T9 | 成立：本機全量建置成功，`cpu|shader` 135/135（`ctest-cpu-shader-markers-final.txt`）；L1 三平台通過（run 42195132825，head `137085ae`） |
 
 - **突變的經過**：
   - 第一輪 9/10。`tc-markers-not-read-back` 是 wrong_failure：原本只拿掉 parse 的檢查，程式碰到失敗的結果就崩潰，沒有到斷言。

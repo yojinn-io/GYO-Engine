@@ -80,3 +80,4 @@
 - 2026-11-06：開 PR #163。第一次 L1 的 windows-x64 編譯失敗：測試變數 `far` 被 `windef.h` 的巨集吃掉，和 PR #152 是同一個原因。改名後（`585f599b`）三平台都通過（run 42188382428）。
 - 2026-11-06：PR #160 合併（`15257faf`），把 master merge 進本分支（`929c7664`），開工 `tc-markers`。實作 Engine 的 `ParseMarkerKinds`／`UnknownMarkerKinds` 與工具的標記讀寫、`check-markers`。突變 48/48，`cpu|shader` 135/135。審查沒有 blocker，2 個 should-fix 已修。§14.4 驗證者確認 1～5（放寬的範圍是「CMake 文字中出現 `GYO::MapMarkers` 這個名字」）。你核准了 DI 1 守衛的放寬與 DI 2 字句的追加（`v8-tool-chunked-markers-guard`）。
 - 2026-11-06：架構師轉達你的定案：kinds 的 7 條突變搬到 Engine 的目錄，改名 `mm-*`；map-markers.md 的 DI 3 改字句；「Cost」段補一句（不加預掃）。engine_format 目錄 68/68 被殺。
+- 2026-11-06：`tc-markers` 的 L1 三平台通過（run 42195132825，head `137085ae`）；`16a28c62` 只改文件，L1 skip。tool-chunked 批的判定 T1～T9 全部成立，**等你決定是否合併 PR #163**。
