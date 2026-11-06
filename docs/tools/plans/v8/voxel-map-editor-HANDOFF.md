@@ -159,3 +159,10 @@
   2. `v8-arch-big-map-engine-format`：VoxelMesh v2 的索引＋region、`ValidateVoxelChunk`、v1 退役、MapMarkers。
   - tool-chunked 批要等的是第 2 批（格式）。window 批（PR #158）也照樣等格式定案。
   - 等待期間，若要做不依賴新格式的編輯器功能，要先向你提，不自行動 build／預覽路徑。
+- 2026-11-06：架構會話通知，第一批 `v8-arch-big-map-engine-grid`（PR #161）已併進 master（`c70e8fdc`）。
+  - 內容：
+    - `GYO::Collision` 的 `StaticAabbGrid`：契約是「與線性掃描等價」；
+    - `engine/base/StrictJson.hpp`；
+    - `ParseVoxelMesh` 改用不經回呼的嚴格解析。5.3 MB 的文字從 1,580 ms 降到 382 ms，契約不變。
+  - 對本 owner 的影響：編輯器讀回文字約 1.2 s 那一段，現在約 0.3 s。本分支切自 `2cd57244`，還沒合入這一批。
+  - tool-chunked 批照樣等第二批（格式：`gyo.voxel_map`／region、`ValidateVoxelChunk`、MapMarkers）。
