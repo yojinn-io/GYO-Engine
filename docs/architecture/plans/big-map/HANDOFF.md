@@ -72,6 +72,7 @@
 | `v8-arch-big-map-markers-owner` | 標記層 owner＝Engine 新模組 `GYO::MapMarkers`（只依賴 Base、Math）：點、盒、路徑，1/16 格整數座標，`id`／`kind`／`tags` 名字不透明；產品提供 `marker_kinds.json` 並拒絕不認得的 kind；Engine 文件與範例不出現玩法名詞。新 Subsystem 的 Architecture Delta 由 engine-map 批寫 7 項。 |
 | `v8-arch-big-map-greedy` | greedy 進工具的烘焙，掃描順序固定；碰撞盒改為區塊內合併。tool-chunked 批事前宣告量測（`pvp_corners` 與像建築的合成圖：四邊形數、盒子數、每區塊重烘時間、T-junction 目視）；工具 DI 3／DI 4 守衛的變更照 §14.4 取得使用者核准。 |
 | `v8-arch-big-map-lod` | v0.1 不做 LOD；Client 以 region 做視錐與距離剔除。product-arena-v3 批量 Client 畫面時間（km² 大小、像建築的合成圖、最壞角度），超過宣告值時才由工具烘 region 代理（RC）。 |
+| `v8-arch-big-map-marker-kinds-format` | `marker_kinds.json` 的**形式**由 Engine 擁有（`gyo.marker_kinds` v1：`schema`、`version`、`kinds` 1～256 個、K5 字元、嚴格遞增、文字 ≤ 64 KiB），**內容**由產品擁有；解析 `ParseMarkerKinds` 與對照 `UnknownMarkerKinds` 放 `GYO::MapMarkers`，由 tool-chunked 的 `-markers` 小批實作，並在其宣告列為 Engine 公開介面的追加。依據：Layers 表（格式描述一個資產的詞彙、名字不透明 → Engine），兩個讀者（產品、編輯器）共用一個驗證者。使用者 2026-11-06 在 voxel 線核准「寫進 `map-markers.md` 的 Kinds 節」；proposal §11.3 的「產品格式」以本決定為準。`map-markers.md` DI 3 的字句隨之擴大（PR #160 請使用者確認）。 |
 
 proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 §11.3 的範例名、§11.7 的 4 MB/s 外推、§6a 的「全圖模擬 AI」前提）。
 
@@ -200,12 +201,17 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
   - G4：`gyo_map_markers_tests` 11/11、`gyo_voxel_mesh_tests` 39/39、兩條名詞守衛通過；全量建置成功，`cpu|shader` 134/134、`gpu` 4/4。L1 待新 head。
   - 順手改了守衛 docstring（審查者的參考項）。
   - 證據在 `build/evidence/big-map/engine-format/b2/`。
+- 2026-11-06 推送 `5a6eead1`。審查者複核：B2 解決、無阻擋項、既有七項與 B1／S1 不退步（深度 200 萬仍線性；峰值的註記見「之後」）。
+  L1 三平台通過（linux-x64 7m55s、macos-arm64 10m3s、windows-x64 15m7s）。
+- **2026-11-06 架構師合併 PR #162**（merge `915ddc62`，分支已刪）。engine-format 完成；Engine 的兩批到此結束。
 
 ## 之後（另案，不開卡）
 
+- `MapMarkers.cpp` 的 `ParseDocument`：把 `KeyCountScan` 包進自己的區塊，掃描結束就釋放（審查者的建議，約 2 行）；深度 100 萬時峰值 221 MB → 141 MB（審查者的 `exp_scoped_scan/`）。做不做由 product-arena-v3 或下一次碰 MapMarkers 時決定。
+- 「解析的記憶體與文字長度成線性」若要成為約束，應寫成 Engine 資料契約模組（`StrictJson.hpp` 的使用者：`VoxelMesh`、`MapMarkers`、之後的 `AnimationEvents`）共用的約束，而不只升 `MapMarkers` 的 DI（審查者對 5a6eead1 的意見）。架構師的候選 Architecture Delta，定期掃描時提。
 - `GYO::Model` 的 `AnimationEvents.cpp:40` 改用 `StrictJson.hpp`。它的回呼有同樣的二次方（PR #161 的 U4）。
 - PR #161 審查者的 N3（極小半徑時候選邊際是否足夠）：Collision 的事，待使用者決定。
 
 ## 下一步
 
-PR #162 的 B2 修正：新 head 的 L1 三平台與審查者（engine-grid 會話）的複核；之後由架構師合併（使用者已在架構師會話說合併）。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
+Engine 的兩批（engine-grid、engine-format）已合併。`-tool-chunked` 由 voxel 線開（五個判斷 2026-11-06 使用者照建議定案；`marker_kinds` 的契約見決定 `v8-arch-big-map-marker-kinds-format`，先出事前宣告再動）。`-product-arena-v3` 何時開，待使用者決定。
