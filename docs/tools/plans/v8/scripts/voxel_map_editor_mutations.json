@@ -827,6 +827,108 @@
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "*W1 markers*",
       "expect": "is NOT correct"
+    },
+    {
+      "id": "vw1-guard-entry-header-as-window",
+      "what": "The entry header and the stand-in get the window's rules",
+      "file": "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py",
+      "find": "WINDOW_CORE_FILES = {\"src/window/EditorWindow.hpp\", \"src/window/EditorWindowUnavailable.cpp\"}",
+      "replace": "WINDOW_CORE_FILES = set()",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/voxel_map_editor",
+        "-p",
+        "test_voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "vw1-guard-window-sources-anywhere",
+      "what": "Any target may compile the files of src/window/",
+      "file": "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py",
+      "find": "                    if not (command.lower() in (\"add_library\", \"target_sources\") and tokens and tokens[0] == WINDOW_LIBRARY):",
+      "replace": "                    if False:",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/voxel_map_editor",
+        "-p",
+        "test_voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "vw1-guard-gui-ignored",
+      "what": "The window may be built outside the gui variant",
+      "file": "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py",
+      "find": "            inside = lambda at: any(start <= at < end for start, end in spans)  # noqa: E731",
+      "replace": "            inside = lambda at: True  # noqa: E731",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/voxel_map_editor",
+        "-p",
+        "test_voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "vw1-guard-bare-sdl",
+      "what": "An SDL header without a directory passes",
+      "file": "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py",
+      "find": "                if BARE_SDL_HEADER.match(include):",
+      "replace": "                if False:",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/voxel_map_editor",
+        "-p",
+        "test_voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "vw1-snap-volume-first",
+      "what": "A filled cell behind the edit plane wins over the plane",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        if (entered > planeT) break;\n",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W3 pick: the plane wins*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vw1-extrude-uncapped",
+      "what": "An extrude may change more than 2^20 cells",
+      "file": "tools/voxel_map_editor/src/Tools.cpp",
+      "find": "    if (static_cast<std::int64_t>(face.size()) * std::abs(distance) > MaxBoxCells)",
+      "replace": "    if (false)",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W1 limits*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vw1-known-after-stale-removal",
+      "what": "map.json's known bytes follow only when the old regions are removed too",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        files.mapIndex.known = std::vector<std::byte>(indexBytes.begin(), indexBytes.end());\n        result.mapWritten = true;\n        if (auto removed = RemoveStaleRegionFiles(files.mapDirectory, *mapText, previous); !removed)\n            return Refuse(VoxelMapErrorCode::WriteFailed,\n                          \"the map was saved but an old region file could not be removed: \" +\n                              Engine::Base::Describe(removed.error()));",
+      "replace": "        if (auto removed = RemoveStaleRegionFiles(files.mapDirectory, *mapText, previous); !removed)\n            return Refuse(VoxelMapErrorCode::WriteFailed,\n                          \"the map was saved but an old region file could not be removed: \" +\n                              Engine::Base::Describe(removed.error()));\n        files.mapIndex.known = std::vector<std::byte>(indexBytes.begin(), indexBytes.end());\n        result.mapWritten = true;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W5 save: map.json's known bytes*",
+      "expect": "is NOT correct"
     }
   ]
 }

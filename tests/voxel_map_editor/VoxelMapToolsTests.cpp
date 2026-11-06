@@ -208,3 +208,41 @@ TEST_CASE("W2 cancel: a drag put back leaves the document and the steps as they 
     CHECK(Filled(session.Document()).empty());
     CHECK_FALSE(session.Undo());
 }
+
+TEST_CASE("W3 pick: the plane wins when the ray meets it before a filled cell (a second floor over the first)") {
+    auto document = Blocks();
+    document.Set({0, 0, 0}, kStone); // the first floor
+    const auto down = RayOf({0.5F, 10.5F, 0.5F}, {0, -1, 0});
+    // The plane at y = 5 lies between the camera and the floor: Add goes onto the plane.
+    const auto hit = Pick(document, down, EditPlane{1, 5}, PickOptions{true, true});
+    REQUIRE(hit);
+    CHECK(hit->onPlane);
+    CHECK(hit->cell == Vec3i{0, 5, 0});
+    // Below the floor, the floor is met first.
+    const auto under = Pick(document, down, EditPlane{1, -3}, PickOptions{true, true});
+    REQUIRE(under);
+    CHECK_FALSE(under->onPlane);
+    CHECK(under->cell == Vec3i{0, 0, 0});
+    // A filled cell in the plane's own layer is the cell, not the plane.
+    const auto same = Pick(document, down, EditPlane{1, 0}, PickOptions{true, true});
+    REQUIRE(same);
+    CHECK_FALSE(same->onPlane);
+}
+
+TEST_CASE("W1 limits: shapes, extrudes and lasers change at most 2^20 cells") {
+    CHECK(ShapeCells({-2147483647, 0, 0}, {2147483647, 2147483647, 2147483647}, BrushShape::Cube).empty());
+    CHECK(ShapeCells({0, 0, 0}, {1 << 20, 0, 0}, BrushShape::Sphere).empty());
+    EditSession session(Blocks());
+    REQUIRE(session.FillBox({0, 0, 0}, {1023, 0, 1}, kStone));
+    std::vector<Vec3i> face;
+    for (std::int32_t x = 0; x < 1024; ++x)
+        for (std::int32_t z = 0; z < 2; ++z) face.push_back({x, 0, z});
+    CHECK(Extrude(session, face, {0, 1, 0}, 512));  // 2^20 cells: allowed
+    CHECK(session.Document().At({1023, 512, 1}) == kStone);
+    CHECK(session.Undo());
+    const auto refused = Extrude(session, face, {0, 1, 0}, 513);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().code == VoxelMapErrorCode::InvalidGrid);
+    CHECK(LaserCells(Blocks(), RayOf({0.5F, 0.5F, 0.5F}, {1, 0.3F, 0.2F}), 16, 100000).size() <=
+          static_cast<std::size_t>(MaxBoxCells) + 16 * 16 * 16);
+}

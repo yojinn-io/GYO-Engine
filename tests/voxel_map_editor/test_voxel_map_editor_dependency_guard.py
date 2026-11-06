@@ -11,10 +11,13 @@ TOOL = "tools/voxel_map_editor"
 
 
 class VoxelMapEditorDependencyGuardTests(unittest.TestCase):
-    def scan(self, files: dict[str, str]) -> list[str]:
+    def scan(self, files: dict[str, str], gui: bool = True) -> list[str]:
+        """The tool's CMake files are put in the gui variant's branch unless gui is False (as the real one is)."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for name, text in files.items():
+                if gui and (name.endswith("CMakeLists.txt") or name.endswith(".cmake")):
+                    text = 'if(GYO_TOOL_VARIANT STREQUAL "gui")\n' + text + "endif()\n"
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(text, encoding="utf-8")
@@ -168,13 +171,68 @@ class VoxelMapEditorDependencyGuardTests(unittest.TestCase):
         ]))
 
     def test_other_engine_modules_still_fail(self):
-        # Allowing GYO::MapMarkers allows that one module, not Engine at large.
+        # Allowing GYO::MapMarkers allows that one module, not Engine at large: each other name is reported as
+        # named and as linked, exactly, and GYO::MapMarkers itself never.
         findings = self.scan({f"{TOOL}/CMakeLists.txt": "target_link_libraries(gyo_voxel_map_editor_core PUBLIC "
-                                                        "GYO::Collision GYO::MapMarkersNative GYO::MapMarkers.extra)\n"})
-        # Each name is reported (as named and as linked); the module itself never is.
+                                                        "GYO::Collision GYO::MapMarkersNative GYO::MapMarkers.extra "
+                                                        "GYO::MapMarkers)\n"})
+        expected = []
         for name in ("GYO::Collision", "GYO::MapMarkersNative", "GYO::MapMarkers.extra"):
-            self.assertTrue(any(finding.endswith(name) for finding in findings), name)
-        self.assertFalse(any(finding.endswith("GYO::MapMarkers") for finding in findings))
+            expected += [f"{TOOL}/CMakeLists.txt: names {name}", f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links {name}"]
+        self.assertEqual(sorted(findings), sorted(expected))
+
+    def test_the_entry_header_and_the_stand_in_keep_the_core_rules(self):
+        # Review round of v8-tool-voxel-window-1 (A): the core includes the entry header and compiles the stand-in.
+        findings = self.scan({f"{TOOL}/src/window/EditorWindow.hpp": '#include "imgui.h"\n#include "engine/render/Renderer.hpp"\n',
+                              f"{TOOL}/src/window/EditorWindowUnavailable.cpp": '#include "gyo/framework/imgui/ImGuiShell.hpp"\n',
+                              f"{TOOL}/src/window/Other.cpp": '#include "imgui.h"\n#include "engine/render/Renderer.hpp"\n'})
+        self.assertEqual(sorted(findings), sorted([
+            f"{TOOL}/src/window/EditorWindow.hpp: includes imgui.h",
+            f"{TOOL}/src/window/EditorWindow.hpp: includes engine/render/Renderer.hpp",
+            f"{TOOL}/src/window/EditorWindowUnavailable.cpp: includes gyo/framework/imgui/ImGuiShell.hpp",
+        ]))
+
+    def test_window_sources_only_in_the_window_library(self):
+        # (B) A file of src/window/ gets the window's rules, so only the window library may compile it.
+        findings = self.scan({f"{TOOL}/CMakeLists.txt":
+                              "add_library(gyo_voxel_map_editor_window STATIC src/window/A.cpp)\n"
+                              "target_sources(gyo_voxel_map_editor_window PRIVATE src/window/B.cpp)\n"
+                              "add_library(gyo_voxel_map_editor_core STATIC src/Core.cpp src/window/W.cpp)\n"
+                              "target_sources(gyo_voxel_map_editor PRIVATE src/window/X.cpp)\n"
+                              "target_sources(gyo_voxel_map_editor PRIVATE src/window/EditorWindowUnavailable.cpp)\n"})
+        self.assertEqual(sorted(findings), sorted([
+            f"{TOOL}/CMakeLists.txt: compiles src/window/W.cpp outside the window library",
+            f"{TOOL}/CMakeLists.txt: compiles src/window/X.cpp outside the window library",
+        ]))
+
+    def test_the_window_only_in_the_gui_variant(self):
+        # (C) The window library and its targets only inside if(GYO_TOOL_VARIANT STREQUAL "gui"), up to its else.
+        cmake = ('if(GYO_TOOL_VARIANT STREQUAL "gui")\n'
+                 "    if(WIN32)\n    endif()\n"
+                 "    add_library(gyo_voxel_map_editor_window STATIC src/window/A.cpp)\n"
+                 "    target_link_libraries(gyo_voxel_map_editor_window PRIVATE imgui::core)\n"
+                 "else()\n"
+                 "    target_link_libraries(gyo_voxel_map_editor_window PRIVATE GYO::Render)\n"
+                 "endif()\n"
+                 "add_library(gyo_voxel_map_editor_window STATIC src/window/B.cpp)\n")
+        findings = self.scan({f"{TOOL}/CMakeLists.txt": cmake}, gui=False)
+        self.assertEqual(sorted(findings), sorted([
+            f"{TOOL}/CMakeLists.txt: names gyo_voxel_map_editor_window outside the gui variant",
+            f"{TOOL}/CMakeLists.txt: names gyo_voxel_map_editor_window outside the gui variant",
+            f"{TOOL}/CMakeLists.txt: names GYO::Render outside the gui variant",
+        ]))
+
+    def test_bare_sdl_headers_and_upper_case_imgui_paths_fail(self):
+        findings = self.scan({f"{TOOL}/src/A.cpp": '#include <SDL.h>\n#include "SDL_events.h"\n'
+                                                   '#include "gyo/framework/IMGUI/Foo.hpp"\n',
+                              f"{TOOL}/src/window/B.cpp": '#include <SDL.h>\n'})
+        self.assertEqual(sorted(findings), sorted([
+            f"{TOOL}/src/A.cpp: includes SDL.h",
+            f"{TOOL}/src/A.cpp: includes SDL_events.h",
+            f"{TOOL}/src/A.cpp: uses SDL_events",  # the SDL_ name rule sees it too
+            f"{TOOL}/src/A.cpp: includes gyo/framework/IMGUI/Foo.hpp",
+            f"{TOOL}/src/window/B.cpp: includes SDL.h",
+        ]))
 
     def test_game_include_and_plain_target_fail(self):
         findings = self.scan({f"{TOOL}/src/A.cpp": '#include "SomeGame/World.hpp"\n',

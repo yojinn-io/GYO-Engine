@@ -753,3 +753,56 @@ TEST_CASE("W7 preview: a cell on a chunk's side redraws the chunk across it") {
     }
 }
 
+
+TEST_CASE("W5 save: map.json's known bytes follow it even when an old region file cannot be removed") {
+    const auto folder = Scratch("staleremove");
+    const auto gridPath = (folder / "map.voxel_grid.json").string();
+    auto o = OpenFor(gridPath, (folder / "map").string());
+    REQUIRE(o.session.SetCell({0, 0, 0}, kCube));
+    Sync(o);
+    REQUIRE(SaveEditor(o.editor.files, o.session.Document(), o.preview));
+    // The old region file becomes a folder, which engine/io does not remove.
+    const auto index = Engine::VoxelMesh::ParseVoxelMap(ReadText(folder / "map" / "map.json"));
+    REQUIRE(index);
+    const auto old = folder / "map" / index->regions.front().file;
+    std::filesystem::remove(old);
+    std::filesystem::create_directories(old / "inside");
+    REQUIRE(o.session.SetCell({1, 0, 0}, kCube));
+    Sync(o);
+    const auto failed = SaveEditor(o.editor.files, o.session.Document(), o.preview);
+    REQUIRE_FALSE(failed);
+    CHECK(failed.error().code == VoxelMapErrorCode::WriteFailed);
+    CHECK(ReadMap(folder / "map").size() == 1); // the new map is saved and reads
+    // The next save sees no change of its own writes.
+    std::filesystem::remove_all(old);
+    REQUIRE(o.session.SetCell({2, 0, 0}, kCube));
+    Sync(o);
+    CHECK(SaveEditor(o.editor.files, o.session.Document(), o.preview));
+    std::filesystem::remove_all(folder);
+}
+
+TEST_CASE("W5 save: when the markers cannot be written, the grid and map are saved and their known bytes follow") {
+    const auto folder = Scratch("markersfail");
+    const auto gridPath = (folder / "map.voxel_grid.json").string();
+    const auto kindsPath = (folder / "kinds.json").string();
+    WriteText(kindsPath, R"({"schema": "gyo.marker_kinds", "version": 1, "kinds": ["a"]})");
+    WriteText(folder / "blocker", "a file, not a folder");
+    const auto markersPath = (folder / "blocker" / "map.markers.json").string();
+    auto opened = OpenEditor(gridPath, (folder / "map").string(), markersPath, kindsPath);
+    REQUIRE(opened);
+    EditSession session(opened->document);
+    REQUIRE(session.SetCell({0, 0, 0}, kCube));
+    auto preview = MapPreview::Create(session.Document());
+    REQUIRE(preview);
+    auto markers = *opened->markers;
+    REQUIRE(InsertMarker(markers.document, {"m1", "a", {}, Engine::MapMarkers::MarkerPoint{}}));
+    const auto failed = SaveEditor(opened->files, session.Document(), *preview, SaveMode::Checked, &markers);
+    REQUIRE_FALSE(failed);
+    CHECK(failed.error().code == VoxelMapErrorCode::WriteFailed);
+    CHECK(ReadText(gridPath) == Text(session.Document()));
+    CHECK(ReadMap(folder / "map").size() == 1);
+    std::filesystem::remove(folder / "blocker");
+    CHECK(SaveEditor(opened->files, session.Document(), *preview, SaveMode::Checked, &markers));
+    CHECK(ReadMarkers(ReadText(markersPath)));
+    std::filesystem::remove_all(folder);
+}

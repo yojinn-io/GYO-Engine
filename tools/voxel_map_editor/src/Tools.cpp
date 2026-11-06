@@ -91,9 +91,11 @@ std::vector<Vec3i> ShapeCells(const Vec3i& corner, const Vec3i& other, const Bru
     for (int axis = 0; axis < 3; ++axis) {
         lo[axis] = std::min(corner[axis], other[axis]);
         hi[axis] = std::max(corner[axis], other[axis]);
-        count *= std::int64_t{hi[axis]} - lo[axis] + 1;
+        const std::int64_t side = std::int64_t{hi[axis]} - lo[axis] + 1;
+        // Checked side by side, so the product cannot overflow.
+        if (side > MaxBoxCells || count * side > MaxBoxCells) return {};
+        count *= side;
     }
-    if (count > MaxBoxCells) return {};
     std::vector<Vec3i> out;
     // Inside the inscribed shape: the cell's centre, scaled to the box, within the unit circle or sphere.
     // In integers: (2 * (x - lo) + 1 - n)^2 / n^2 summed is at most 1.
@@ -156,6 +158,8 @@ std::vector<Vec3i> LaserCells(const GridDocument& document, const Ray& ray, cons
     }
     for (std::int32_t walked = 0; walked <= maxCells; ++walked) {
         if (CellInRange(document, cell)) AddStamp(out, cell, size, BrushShape::Cube);
+        // The same bound as a box: at most MaxBoxCells cells.
+        if (out.size() > static_cast<std::size_t>(MaxBoxCells)) break;
         int axis = 0;
         if (next[1] < next[axis]) axis = 1;
         if (next[2] < next[axis]) axis = 2;
@@ -215,9 +219,12 @@ Result<void> ApplyCells(EditSession& session, const std::span<const Vec3i> cells
 }
 
 Result<void> Extrude(EditSession& session, const std::span<const Vec3i> face, const Vec3i& normal, const int distance) {
-    if (std::abs(normal[0]) + std::abs(normal[1]) + std::abs(normal[2]) != 1 || std::abs(distance) > ChunkSize * 16)
+    if (std::abs(normal[0]) + std::abs(normal[1]) + std::abs(normal[2]) != 1)
         return Engine::Base::Err(VoxelMapError::Make(VoxelMapErrorCode::InvalidGrid, "extrude takes a unit normal"));
     if (distance == 0 || face.empty()) return {};
+    // The same bound as a box: at most MaxBoxCells cells change.
+    if (static_cast<std::int64_t>(face.size()) * std::abs(distance) > MaxBoxCells)
+        return Engine::Base::Err(VoxelMapError::Make(VoxelMapErrorCode::InvalidGrid, "an extrude changes at most 2^20 cells"));
     const bool own = !session.InStroke();
     if (own) session.BeginStroke();
     // Read every source first: the edit must not see its own writes.

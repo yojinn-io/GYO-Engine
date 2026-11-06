@@ -44,7 +44,8 @@ inline constexpr int MaxBrushSize = 16;
 [[nodiscard]] std::vector<Vec3i> ShapeCells(const Vec3i& corner, const Vec3i& other, BrushShape shape);
 
 // The laser: the cells within the brush (cube of size) around each cell the
-// ray walks through, up to maxCells along it. Sorted, no repeats.
+// ray walks through, up to maxCells along it, and stopping once it holds more
+// than MaxBoxCells cells. Sorted, no repeats.
 [[nodiscard]] std::vector<Vec3i> LaserCells(const GridDocument& document, const Ray& ray, int size,
                                             std::int32_t maxCells = 1024);
 
@@ -62,7 +63,8 @@ Result<void> ApplyCells(EditSession& session, std::span<const Vec3i> cells, Edit
 // Extrude by distance along normal: outward (distance > 0) each face cell is
 // copied distance times beyond its face (block and orientation); inward
 // (distance < 0) the face cells and the -distance - 1 layers behind them are
-// emptied. One stroke when none is open.
+// emptied. One stroke when none is open. InvalidGrid when it would change more
+// than MaxBoxCells cells.
 Result<void> Extrude(EditSession& session, std::span<const Vec3i> face, const Vec3i& normal, int distance);
 
 // The edit plane through a picked face: the layer of the cell beside the face

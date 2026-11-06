@@ -55,6 +55,15 @@ WINDOW_ONLY_INCLUDES = ("engine/render/", "engine/platform/", "gyo/framework/Pre
 # The window: the framework's ImGui shell and offscreen preview (which bring Engine's render targets), shown as a
 # texture of Engine's SDL renderer (framework Design Invariant 5); imgui.h only.
 WINDOW_DIRECTORY = "src/window/"
+# Files of src/window/ that the core compiles or includes keep the core's rules: the entry header (the executable
+# includes it in every variant) and the stand-in the cli variant compiles into the executable.
+WINDOW_CORE_FILES = {"src/window/EditorWindow.hpp", "src/window/EditorWindowUnavailable.cpp"}
+# Only the window library compiles the other files of src/window/, and only in the gui variant.
+GUI_BLOCK = re.compile(r'\bif\s*\(\s*GYO_TOOL_VARIANT\s+STREQUAL\s+"gui"\s*\)', re.IGNORECASE)
+BLOCK_WORD = re.compile(r"\b(if|elseif|else|endif)\s*\(", re.IGNORECASE)
+WINDOW_SOURCE = re.compile(r"src/window/[^\s)\"]*")
+# An SDL header written without a directory ("SDL.h", "SDL_events.h").
+BARE_SDL_HEADER = re.compile(r"^SDL\w*\.h$", re.IGNORECASE)
 WINDOW_INCLUDE_PREFIXES = CORE_INCLUDE_PREFIXES + ("window/",)
 WINDOW_TARGETS = CORE_TARGETS | {"GYO::ToolFrameworkPreview", "GYO::ToolFrameworkImGui", "GYO::Render",
                                  "GYO::RenderBackendSDL", "GYO::PlatformSDL", "imgui::core"}
@@ -127,6 +136,25 @@ def linked_names(text: str) -> list[tuple[str, str]]:
     return names
 
 
+def gui_spans(code: str) -> list[tuple[int, int]]:
+    """[start, end) of every if(GYO_TOOL_VARIANT STREQUAL "gui") branch, up to its else, elseif or endif."""
+    spans = []
+    for opening in GUI_BLOCK.finditer(code):
+        depth = 0
+        end = len(code)
+        for word in BLOCK_WORD.finditer(code, opening.end()):
+            name = word.group(1).lower()
+            if name == "if":
+                depth += 1
+            elif name == "endif" and depth > 0:
+                depth -= 1
+            elif depth == 0:
+                end = word.start()
+                break
+        spans.append((opening.end(), end))
+    return spans
+
+
 def scan(root: Path) -> list[str]:
     findings = []
     ids = [(name, re.compile(r"\b" + re.escape(name) + r"\b")) for name in registered_ids(root)]
@@ -139,14 +167,18 @@ def scan(root: Path) -> list[str]:
             if pattern.search(text):
                 findings.append(f"{relative}: names the registered id {name}")
         if path.suffix in SUFFIXES:
-            window = path.relative_to(root / OWNER).as_posix().startswith(WINDOW_DIRECTORY)
+            local = path.relative_to(root / OWNER).as_posix()
+            window = local.startswith(WINDOW_DIRECTORY) and local not in WINDOW_CORE_FILES
             prefixes = WINDOW_INCLUDE_PREFIXES if window else CORE_INCLUDE_PREFIXES
             for include in INCLUDE.findall(text):
                 # Only plain forward-slash paths: a parent step leaves every prefix; a backslash or a "." step hides one.
                 if "\\" in include or any(step in ("", ".", "..") for step in include.split("/")):
                     findings.append(f"{relative}: includes {include}")
                     continue
-                if include.startswith(FRAMEWORK_IMGUI):
+                if BARE_SDL_HEADER.match(include):
+                    findings.append(f"{relative}: includes {include}")
+                    continue
+                if include.lower().startswith(FRAMEWORK_IMGUI):
                     base = include.rsplit("/", 1)[-1].lower()
                     if (not window or is_native_include(include) or base == IMGUI_INTERNAL
                             or base.startswith("imgui_impl") or "backends" in include.lower()):
@@ -187,6 +219,24 @@ def scan(root: Path) -> list[str]:
             for target in sorted(set(TARGET.findall(outside)) | hidden):
                 if target in WINDOW_TARGETS and target not in CORE_TARGETS:
                     findings.append(f"{relative}: names {target} outside the window's links")
+            # The window's sources and window-only targets only in the gui variant; its sources only in the
+            # window library (the stand-in excepted).
+            spans = gui_spans(code)
+            inside = lambda at: any(start <= at < end for start, end in spans)  # noqa: E731
+            for target in WINDOW_TARGETS - CORE_TARGETS:
+                for match in re.finditer(re.escape(target) + r"(?![A-Za-z0-9_.+:-])", code):
+                    if not inside(match.start()):
+                        findings.append(f"{relative}: names {target} outside the gui variant")
+            for match in re.finditer(r"\b" + WINDOW_LIBRARY + r"\b", code):
+                if not inside(match.start()):
+                    findings.append(f"{relative}: names {WINDOW_LIBRARY} outside the gui variant")
+            for command, arguments in COMMAND.findall(code):
+                tokens = arguments.split()
+                for source in WINDOW_SOURCE.findall(arguments):
+                    if source in WINDOW_CORE_FILES:
+                        continue
+                    if not (command.lower() in ("add_library", "target_sources") and tokens and tokens[0] == WINDOW_LIBRARY):
+                        findings.append(f"{relative}: compiles {source} outside the window library")
             allowed_uses = 0
             for command, arguments in COMMAND.findall(code):
                 tokens = arguments.split()

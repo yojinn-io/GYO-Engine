@@ -24,6 +24,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -167,6 +168,7 @@ private:
 
     // Reads the files; the session, the preview and the drafts start again.
     bool Open() {
+        if (session_) CancelDrag();
         auto opened = OpenEditor(options_.gridPath, options_.mapDirectory, options_.markersPath, options_.kindsPath);
         if (!opened) {
             error_ = Engine::Base::Describe(opened.error());
@@ -235,6 +237,8 @@ private:
     }
 
     void Save(const SaveMode mode = SaveMode::Checked) {
+        // A drag in progress is put back first: a save keeps what was released, not half a drag.
+        CancelDrag();
         if (previewStale_) {
             if (auto rebuilt = preview_->Apply(Document(), {{}, true}); !rebuilt) {
                 Report(rebuilt.error());
@@ -271,14 +275,15 @@ private:
             pathPoints_.clear();
         }
         if (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false)) FinishPath();
+        // During a drag, undo puts the drag back and does nothing else.
         if (command && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
-            CancelDrag();
-            if (io.KeyShift) static_cast<void>(Session().Redo());
+            if (drag_) CancelDrag();
+            else if (io.KeyShift) static_cast<void>(Session().Redo());
             else static_cast<void>(Session().Undo());
         }
         if (command && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
-            CancelDrag();
-            static_cast<void>(Session().Redo());
+            if (drag_) CancelDrag();
+            else static_cast<void>(Session().Redo());
         }
         if (command && ImGui::IsKeyPressed(ImGuiKey_S, false)) Save();
         if (command) return;
@@ -321,6 +326,7 @@ private:
         CancelDrag();
         lineStart_.reset();
         pathPoints_.clear();
+        boxStart_.reset();
         tool_ = tool;
     }
 
@@ -359,6 +365,7 @@ private:
             if (tool_ != Tool::Laser && ImGui::Combo("shape", &shape, kShapeNames.data(), static_cast<int>(kShapeNames.size())))
                 brushShape_ = static_cast<BrushShape>(shape);
             if (tool_ != Tool::Shape) ImGui::SliderInt("size ([ ])", &brushSize_, 1, MaxBrushSize);
+            if (tool_ == Tool::Shape) ImGui::Checkbox("stay on the start's plane", &shapePlanar_);
         }
         ImGui::SeparatorText("Snap");
         ImGui::Checkbox("volume", &snapVolume_);
@@ -501,8 +508,13 @@ private:
             if (preview_->Apply(Document(), {{}, true})) previewStale_ = false;
         }
         if (SyncPreview() && !previewStale_) {
-            if (auto shown = scene_->Apply(preview_->TakeChanges()); !shown) previewError_ = Engine::Base::Describe(shown.error());
-            else previewError_.clear();
+            if (auto shown = scene_->Apply(preview_->TakeChanges()); !shown) {
+                // The changes are used up: everything is baked and uploaded again next frame.
+                previewError_ = Engine::Base::Describe(shown.error());
+                previewStale_ = true;
+            } else {
+                previewError_.clear();
+            }
         }
         const ImVec2 area = ImGui::GetContentRegionAvail();
         const ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
@@ -594,9 +606,12 @@ private:
         GridDocument base;           // the map when the drag began (what picks look at)
         Vec3i start{};
         std::optional<Vec3i> last;   // the brush's last stamp
-        Vec3i normal{};              // extrude: the face's side
+        Vec3i normal{};              // extrude: the face's side; shape: the start face's side
         std::vector<Vec3i> face;     // extrude: the face
         ImVec2 mouseStart{};
+        std::optional<Vec3i> shown;  // shape: the corner last applied
+        std::optional<int> distance; // extrude: the distance last applied
+        ImVec2 laserAt{-1e9F, -1e9F}; // laser: where the mouse was when it last cut
     };
 
     void Edit(const ImGuiIO& io, const View& view) {
@@ -613,8 +628,8 @@ private:
         }
         if (pressed) BeginDrag(io);
         if (drag_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) UpdateDrag(io, view);
-        if (boxStart_ && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-            if (hover_) AddMarker(MarkerBoxOf(*boxStart_, PlacementCell(*hover_)));
+        if (boxStart_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            if (tool_ == Tool::Marker && hover_ && ImGui::IsItemHovered()) AddMarker(MarkerBoxOf(*boxStart_, PlacementCell(*hover_)));
             boxStart_.reset();
         }
     }
@@ -667,12 +682,20 @@ private:
             drag.face = ExtrudeFace(Document(), hover_->cell, hover_->normal);
         } else if (target) {
             drag.start = *target;
+            drag.normal = hover_ ? hover_->normal : Vec3i{};
         }
         Session().BeginStroke();
         // Shift+click with the brush: a line from the last stamp of the previous stroke.
         if (tool_ == Tool::Brush && io.KeyShift && lastStamp_ && target)
             Apply(ApplyCells(Session(), StrokeCells(*lastStamp_, *target, brushSize_, brushShape_), mode_, Brush()));
         drag_ = std::move(drag);
+    }
+
+    // The layer a planar shape stays on: across the start face's side, or the edit plane's axis.
+    EditPlane StartPlane(const Drag& drag) const {
+        for (int axis = 0; axis < 3; ++axis)
+            if (drag.normal[axis] != 0) return EditPlane{axis, drag.start[axis]};
+        return EditPlane{plane_.axis, drag.start[static_cast<std::size_t>(plane_.axis)]};
     }
 
     void UpdateDrag(const ImGuiIO& io, const View& view) {
@@ -687,16 +710,25 @@ private:
             break;
         }
         case Tool::Shape: {
-            if (!target) return;
+            std::optional<Vec3i> corner = target;
+            if (shapePlanar_) {
+                // Staying on the start's plane: the corner is where the ray meets that layer.
+                const auto planar = Pick(drag.base, ray_, StartPlane(drag), PickOptions{false, true});
+                corner = planar ? std::optional<Vec3i>(planar->cell) : std::nullopt;
+            }
+            if (!corner || (drag.shown && *drag.shown == *corner)) return;
             // The shape follows the mouse: put back the last one, make the new one.
             Session().CancelStroke();
             Session().BeginStroke();
-            Apply(ApplyCells(Session(), ShapeCells(drag.start, *target, brushShape_), mode_, Brush()));
+            Apply(ApplyCells(Session(), ShapeCells(drag.start, *corner, brushShape_), mode_, Brush()));
+            drag.shown = corner;
             break;
         }
         case Tool::Laser:
-            // Always taking away (Laser in Add or Paint acts as Sub).
-            Apply(ApplyCells(Session(), LaserCells(Document(), ray_, brushSize_), EditMode::Sub, {}));
+            // Always taking away (Laser in Add or Paint acts as Sub), once per position of the mouse.
+            if (io.MousePos.x == drag.laserAt.x && io.MousePos.y == drag.laserAt.y) return;
+            drag.laserAt = io.MousePos;
+            Apply(ApplyCells(Session(), LaserCells(Document(), ray_, brushSize_, 256), EditMode::Sub, {}));
             break;
         case Tool::Extrude: {
             // How far: the mouse's travel along the face's side as it looks on screen, in cells.
@@ -711,6 +743,8 @@ private:
             if (length2 < 1.0F) return;
             const float travelled = ((io.MousePos.x - drag.mouseStart.x) * dx + (io.MousePos.y - drag.mouseStart.y) * dy) / length2;
             const int distance = std::clamp(static_cast<int>(std::lround(travelled)), -64, 64);
+            if (drag.distance && *drag.distance == distance) return;
+            drag.distance = distance;
             Session().CancelStroke();
             Session().BeginStroke();
             Apply(Extrude(Session(), drag.face, drag.normal, distance));
@@ -729,6 +763,7 @@ private:
 
     void CancelDrag() {
         lineStart_.reset();
+        boxStart_.reset();
         if (!drag_) return;
         drag_.reset();
         Session().CancelStroke();
@@ -832,8 +867,13 @@ private:
         if (tool_ == Tool::Line && lineStart_ && target) {
             if (const auto box = bounds(LineCells(*lineStart_, *target))) Outline(view, box->first, box->second, colour);
         } else if (tool_ == Tool::Extrude && hover_ && !hover_->onPlane && !drag_) {
-            if (const auto box = bounds(ExtrudeFace(document, hover_->cell, hover_->normal)))
-                Outline(view, box->first, box->second, IM_COL32(230, 230, 230, 220));
+            // The face is found again only when the pointer's face or the map changed.
+            const auto key = std::make_tuple(hover_->cell, hover_->normal, Session().Revision());
+            if (faceKey_ != key) {
+                faceKey_ = key;
+                faceBounds_ = bounds(ExtrudeFace(document, hover_->cell, hover_->normal));
+            }
+            if (faceBounds_) Outline(view, faceBounds_->first, faceBounds_->second, IM_COL32(230, 230, 230, 220));
         } else if ((tool_ == Tool::Brush || tool_ == Tool::Line) && target && !drag_) {
             if (const auto box = bounds(BrushCells(*target, brushSize_, brushShape_))) Outline(view, box->first, box->second, colour);
         } else if ((tool_ == Tool::Shape || tool_ == Tool::Picker || tool_ == Tool::Plane) && hover_ && !drag_) {
@@ -855,6 +895,26 @@ private:
     // A new marker of the chosen kind, with the next free id; it becomes the selected one.
     void AddMarker(std::variant<Engine::MapMarkers::MarkerPoint, Engine::MapMarkers::MarkerBox, Engine::MapMarkers::MarkerPath> shape) {
         if (!markers_ || markers_->kinds.empty()) return;
+        // Marker coordinates stay within the format's +-2^20 units.
+        const auto inRange = [](const Engine::Math::Vec3i& p) {
+            const auto limit = Engine::MapMarkers::CoordinateLimit;
+            return std::abs(std::int64_t{p.x}) <= limit && std::abs(std::int64_t{p.y}) <= limit && std::abs(std::int64_t{p.z}) <= limit;
+        };
+        bool fits = true;
+        if (const auto* point = std::get_if<Engine::MapMarkers::MarkerPoint>(&shape)) {
+            fits = inRange(point->position);
+            // The camera's yaw, turned into (-pi, pi].
+            auto& yaw = std::get<Engine::MapMarkers::MarkerPoint>(shape).yaw;
+            yaw = std::remainder(yaw, 6.2831855F);
+        } else if (const auto* box = std::get_if<Engine::MapMarkers::MarkerBox>(&shape)) {
+            fits = inRange(box->minimum) && inRange(box->maximum);
+        } else {
+            for (const auto& p : std::get<Engine::MapMarkers::MarkerPath>(shape).points) fits = fits && inRange(p);
+        }
+        if (!fits) {
+            error_ = "a marker there lies beyond +-2^20 units of the origin";
+            return;
+        }
         Engine::MapMarkers::Marker marker;
         marker.id = NextMarkerId(markers_->document);
         marker.kind = markers_->kinds[std::min(kind_, markers_->kinds.size() - 1)];
@@ -905,6 +965,29 @@ private:
         }
         ImGui::EndChild();
         if (marker_ >= list.size()) return;
+        // The id: renamed in place, kept in id order; Engine checks its form when saving.
+        if (idDraftFor_ != marker_) {
+            idDraft_ = list[marker_].id;
+            idDraftFor_ = marker_;
+        }
+        InputString("id", idDraft_);
+        ImGui::SameLine();
+        if (ImGui::Button("Rename") && idDraft_ != list[marker_].id) {
+            auto renamed = list[marker_];
+            renamed.id = idDraft_;
+            auto copy = markers_->document;
+            copy.markers.erase(copy.markers.begin() + static_cast<std::ptrdiff_t>(marker_));
+            if (auto inserted = InsertMarker(copy, renamed); !inserted) {
+                Report(inserted.error());
+            } else {
+                markers_->document = std::move(copy);
+                markersModified_ = true;
+                for (std::size_t i = 0; i < list.size(); ++i)
+                    if (list[i].id == idDraft_) marker_ = i;
+                idDraftFor_ = marker_;
+            }
+            return;
+        }
         auto& marker = list[marker_];
         // The kind: from the product's list; one the list does not hold stops saving.
         if (ImGui::BeginCombo("kind", marker.kind.c_str())) {
@@ -1082,6 +1165,11 @@ private:
     std::optional<Vec3i> boxStart_;
     std::string tagKey_;
     std::string tagValue_;
+    std::string idDraft_;
+    std::size_t idDraftFor_{std::numeric_limits<std::size_t>::max()};
+    bool shapePlanar_{};
+    std::optional<std::tuple<Vec3i, Vec3i, std::uint64_t>> faceKey_;
+    std::optional<std::pair<Vec3i, Vec3i>> faceBounds_;
     bool openClose_{};
     bool promptOpen_{};
     bool wantsExit_{};

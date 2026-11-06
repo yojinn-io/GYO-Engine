@@ -327,6 +327,34 @@ std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const 
     const std::array<double, 3> origin{ray.origin.x / size - document.origin[0], ray.origin.y / size - document.origin[1],
                                        ray.origin.z / size - document.origin[2]};
     const std::array<double, 3> direction{ray.direction.x, ray.direction.y, ray.direction.z};
+    // The plane first: the volume wins only where the ray enters a filled cell
+    // before it meets the plane (whichever the ray meets first).
+    double planeT = std::numeric_limits<double>::infinity();
+    const auto planeHit = [&]() -> std::optional<PickHit> {
+        // The edit plane: the layer of cells whose coordinate on plane.axis is
+        // plane.at. The ray meets its far side when coming from above it, its near
+        // side when coming from below; t is where, along the ray.
+        if (!options.plane || plane.axis < 0 || plane.axis > 2) return std::nullopt;
+        const auto a = static_cast<std::size_t>(plane.axis);
+        if (direction[a] == 0.0) return std::nullopt;
+        const double face = direction[a] < 0.0 ? plane.at + 1.0 : static_cast<double>(plane.at);
+        const double t = (face - origin[a]) / direction[a];
+        // Not behind the ray, and not beyond maxCells along it (a ray near the plane meets it far away).
+        if (!(t >= 0.0) || t > static_cast<double>(maxCells)) return std::nullopt;
+        Vec3i planeCell{};
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            if (axis == a) {
+                planeCell[axis] = plane.at;
+                continue;
+            }
+            const auto at = FloorCell(origin[axis] + t * direction[axis]);
+            if (!at) return std::nullopt;
+            planeCell[axis] = *at;
+        }
+        if (!CellInRange(document, planeCell)) return std::nullopt;
+        planeT = t;
+        return PickHit{planeCell, {0, 0, 0}, true};
+    }();
     Vec3i cell{};
     std::array<int, 3> step{};
     std::array<double, 3> next{};   // ray parameter at the next boundary on each axis
@@ -352,40 +380,22 @@ std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const 
         }
     }
     Vec3i normal{};
+    double entered = 0.0; // where the ray enters the current cell
     for (std::int32_t walked = 0; walked <= maxCells; ++walked) {
+        if (entered > planeT) break;
         if (options.volume && CellInRange(document, cell) && document.At(cell).block != 0)
             return PickHit{cell, normal, false};
         int axis = 0;
         if (next[1] < next[axis]) axis = 1;
         if (next[2] < next[axis]) axis = 2;
         if (next[axis] == infinity) break;
+        entered = next[axis];
         cell[axis] += step[axis];
         next[axis] += delta[axis];
         normal = {0, 0, 0};
         normal[axis] = -step[axis];
     }
-    // No filled cell: the edit plane, the layer of cells whose coordinate on
-    // plane.axis is plane.at. The ray meets its far side when coming from
-    // above it, its near side when coming from below.
-    if (!options.plane || plane.axis < 0 || plane.axis > 2) return std::nullopt;
-    const auto a = static_cast<std::size_t>(plane.axis);
-    if (direction[a] == 0.0) return std::nullopt;
-    const double face = direction[a] < 0.0 ? plane.at + 1.0 : static_cast<double>(plane.at);
-    const double t = (face - origin[a]) / direction[a];
-    // Not behind the ray, and not beyond maxCells along it (a ray near the plane meets it far away).
-    if (!(t >= 0.0) || t > static_cast<double>(maxCells)) return std::nullopt;
-    Vec3i planeCell{};
-    for (std::size_t axis = 0; axis < 3; ++axis) {
-        if (axis == a) {
-            planeCell[axis] = plane.at;
-            continue;
-        }
-        const auto at = FloorCell(origin[axis] + t * direction[axis]);
-        if (!at) return std::nullopt;
-        planeCell[axis] = *at;
-    }
-    if (!CellInRange(document, planeCell)) return std::nullopt;
-    return PickHit{planeCell, {0, 0, 0}, true};
+    return planeHit;
 }
 
 std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const std::int32_t planeY,
@@ -559,13 +569,21 @@ Result<SaveResult> SaveEditor(EditorFiles& files, const GridDocument& document, 
     files.grid.known = std::vector<std::byte>(gridBytes.begin(), gridBytes.end());
     SaveResult result;
     if (mapText) {
-        if (auto saved = SaveMap(files.mapDirectory, *mapText); !saved) {
+        // SaveMap's steps, so map.json's known bytes follow as soon as it is replaced.
+        const auto previous = ListedRegionFiles(files.mapDirectory);
+        if (auto written = WriteRegionFiles(files.mapDirectory, *mapText); !written)
             return Refuse(VoxelMapErrorCode::WriteFailed,
-                          "the grid was saved but its map was not: " + Engine::Base::Describe(saved.error()));
-        }
+                          "the grid was saved but its map was not: " + Engine::Base::Describe(written.error()));
+        if (auto replaced = ReplaceMapIndex(files.mapDirectory, *mapText); !replaced)
+            return Refuse(VoxelMapErrorCode::WriteFailed,
+                          "the grid was saved but its map was not: " + Engine::Base::Describe(replaced.error()));
         const auto indexBytes = AsBytes(mapText->index);
         files.mapIndex.known = std::vector<std::byte>(indexBytes.begin(), indexBytes.end());
         result.mapWritten = true;
+        if (auto removed = RemoveStaleRegionFiles(files.mapDirectory, *mapText, previous); !removed)
+            return Refuse(VoxelMapErrorCode::WriteFailed,
+                          "the map was saved but an old region file could not be removed: " +
+                              Engine::Base::Describe(removed.error()));
     }
     if (markersText) {
         if (auto written = WriteFileReplacing(files.markers.path, *markersText); !written) {

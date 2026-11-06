@@ -172,10 +172,11 @@ struct PickOptions final {
     bool plane{true};
 };
 
-// Walks the cells along a world ray (DDA) and returns the first filled cell
-// (a cell of any shape counts as whole) within maxCells; when there is none
-// (or volume is off), the cell of the edit plane the ray crosses within
-// maxCells cells, if any (and plane is on).
+// Whichever the ray meets first (Goxel's snap): the first filled cell along a
+// world ray (DDA; a cell of any shape counts as whole; with volume on), or the
+// cell of the edit plane it crosses (with plane on); a filled cell the ray
+// enters where it meets the plane (one in the plane's layer) wins. Both within
+// maxCells cells.
 [[nodiscard]] std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const EditPlane& plane,
                                           const PickOptions& options, std::int32_t maxCells = 1024) noexcept;
 // The same with the edit plane at relative y == planeY and both snaps on.
