@@ -18,7 +18,7 @@ GYO-Engine/
     threads/                  named role threads with cooperative stop
     trace/                    bounded multi-producer line sink with a notified writer thread
     net/                      GYOP datagram header codec (byte transport only)
-    collision/                collision raycasts, sweeps, overlaps and contacts
+    collision/                collision raycasts, sweeps, overlaps, contacts and the static broadphase
     config/projects.csv       integrated game selection
     config/tools.csv          design-tool default/release/platform selection
     input/                    neutral input and adapters
@@ -101,7 +101,7 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 
 | Owner | Responsibility | Dependencies |
 |---|---|---|
-| `GYO::Base` | failure handling: `GYO_ASSERT` for Programmer Errors, `Result`/`Error` for Runtime Errors ([contract](architecture/error-handling.md)); the log facade (`Log.hpp`, one replaceable handler); other domain-free helpers | C++ standard library only |
+| `GYO::Base` | failure handling: `GYO_ASSERT` for Programmer Errors, `Result`/`Error` for Runtime Errors ([contract](architecture/error-handling.md)); the log facade (`Log.hpp`, one replaceable handler); the strict JSON parse for modules that own a JSON data contract (`StrictJson.hpp`: a template that rejects repeated keys without nlohmann's quadratic parser callback; it names the parser only through its template parameter, so the module that instantiates it links the parser privately); other domain-free helpers | C++ standard library only |
 | `GYO::Math` | vectors, matrices, quaternions, geometric primitives and queries, coordinate conventions ([contract](architecture/math.md)) | Base |
 | `GYO::Os` | the OS differences behind neutral APIs: files with UTF-8 paths (reads, writes, rename, resolve, compare), process facts, the console and shutdown requests, thread names and priority hints ([contract](architecture/os.md)) | Base; OS system libraries |
 | `GYO::Time` | the engine time base (`MonotonicClock`), the deadline-or-notify `Waiter` and `LateWakeStats` ([contract](architecture/time.md)) | Base; the operating system (kqueue, Win32 waitable timers, or a condition variable) |
@@ -111,7 +111,7 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 | `GYO::AudioBackendSDL` | plays a `GYO::Audio` mixer on the default playback device through an SDL audio stream; the `SDL_AUDIO` component; SDL stays PRIVATE, with no native target ([contract](architecture/audio.md)) | Audio; SDL3 privately |
 | `GYO::Net` | the GYOP 24-byte datagram header codec and size limits; message kinds, payloads and protocol versions belong to products | Base |
 | `GYO::Engine` | IO, runtime lifecycle, CPU asset identity/cache/loading | Base, Math, Time; C++ library; JSON parser privately |
-| `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule` | Math, Base |
+| `GYO::Collision` | collision algorithms (raycasts, sweeps, overlaps, contacts) over Math primitives, plus the character `VerticalCapsule`; `StaticAabbGrid`, a static broadphase whose every query equals a linear scan of all boxes ([contract](architecture/collision.md)) | Math, Base |
 | `GYO::Input` | physical input (full keyboard scancodes, mouse, modifiers), window interaction events (focus, move, resize, minimize, restore) and action/axis evaluation | Base (private) |
 | `GYO::Model` | owning meshes, skeletons, clips, sampling and CPU skinning; asset `Transform` (TRS); named moments on clips, the `gyo.anim_events` data contract ([contract](architecture/animation-events.md)) | Engine, Math; the JSON parser privately |
 | `GYO::VoxelMesh` | the `gyo.voxel_mesh` data contract: validating a baked grid-built map (faces, per-direction colours, collision boxes in 1/16-cell integers) and expanding it to world-space vertices, a palette image and boxes; no culling, merging or shading ([contract](architecture/voxel-mesh.md)) | Base, Math; the JSON parser privately |
@@ -228,7 +228,11 @@ ray distances, sweep fractions and contacts); tolerance-free geometric queries
 belong to Math. Render's wire generators also accept Math values, without a
 Collision dependency. `WorldOverlay` provides world-camera drawing without depth testing
 or writing; an empty layer adds no pass. Application-specific collision policies,
-controls and diagnostic meanings belong to their product owners. See the
+controls and diagnostic meanings belong to their product owners. Collision's
+`StaticAabbGrid` only chooses which boxes a query tests: each query equals a
+linear scan of all boxes with a tie rule the caller picks, so a product keeps
+its policy and swaps only where the boxes come from
+([collision](architecture/collision.md)). See the
 [rendering architecture](rendering_architecture.zh-Hant.md) for pass and resource contracts.
 
 Coordinate, matrix, Euler and clip-space conventions are owned by the

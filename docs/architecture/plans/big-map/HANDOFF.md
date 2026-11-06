@@ -75,6 +75,76 @@
 
 proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 §11.3 的範例名、§11.7 的 4 MB/s 外推、§6a 的「全圖模擬 AI」前提）。
 
+## 拆批與撞期（`v8-arch-big-map-split-engine`）
+
+| 代號 | 白話 |
+|---|---|
+| `v8-arch-big-map-engine-map` | 拆批前的一批：格式＋MapMarkers＋broadphase＋解析替換（宣告 [engine-map](engine-map.zh-Hant.md)） |
+| `v8-arch-big-map-engine-grid` | 第一批（PR 1）：broadphase＋解析替換（宣告 [engine-grid](engine-grid.zh-Hant.md)） |
+| `v8-arch-big-map-engine-format` | 第二批（PR 2）：格式＋MapMarkers＋v1 退役 |
+| `v8-arch-big-map-split-engine` | 拆批的決定 |
+
+時序（2026-11-06，JST，依各會話紀錄）：
+
+1. 架構師會話開 `-engine-map` 卡給 engine-map 會話（工作樹 `bold-mahavira-68c717`）。engine-map 會話寫宣告（`8464d66f`），使用者核准（原話「照建議核准」：v1 退役 (a)、解析門檻 450 ms、broadphase 多兩個 `…All` 查詢、Delta A～D），之後照宣告實作：`447f9194`（解析替換＋格式）、`c2287961`（MapMarkers）、`49449a12`（broadphase）。
+2. 同一時段，使用者在架構師會話決定拆批（原話「拆兩批（建議）：先 broadphase＋解析，再格式＋MapMarkers」），並另開 engine-grid 會話（工作樹 `funny-bouman-3d0818`）。
+   該會話寫了自己的 engine-grid 宣告（`25026d7d`，未合併），使用者在該會話核准（原話「核准，用 Fable」）；程式寫了一部分，沒有建置、沒有測試。
+3. 架構師把拆批轉達給 engine-map 會話時，engine-map 會話的兩批程式都已提交。兩個會話各有一份使用者核准的宣告，內容不同：
+
+   | 項目 | engine-map 宣告（本 PR 採用） | engine-grid 會話的宣告（`25026d7d`，不採用） |
+   |---|---|---|
+   | 解析門檻 | J5：中位數 ≤ 450 ms | P-1：≤ 0.50 s；另有 P-2（同一陣列 1～8 萬盒，t(8 萬)÷t(1 萬) ≤ 12） |
+   | 嚴格解析放哪 | `GYO::Base` 的 `StrictJson.hpp`（Delta） | `VoxelMesh.cpp` 內部，不抽 |
+   | broadphase 的 API | 查詢內含保守候選範圍；多 `…All` 兩個查詢；格子數上限時格長加倍 | 公開 `CapsuleBounds`／`SweptBounds`／`RayBounds`＋`Overlapping`；格座標夾在 ±2³⁰＋大盒子清單 |
+
+4. 使用者在 engine-map 會話選「當第一批基礎」，在架構師會話選「用現有分支，拆成兩個 PR」。處置：
+   - PR 1＝engine-map 會話分支中的 broadphase（`49449a12` 的內容）＋`StrictJson.hpp`＋`ParseVoxelMesh` 改用它（從 `447f9194` 拆出，不含任何 v2 格式）；宣告由 engine-map 宣告拆出（[engine-grid](engine-grid.zh-Hant.md)），判定照 engine-map 的核准（450 ms）。
+   - engine-grid 會話的宣告與程式不合併；它擔任 PR 1 的審查者（Opus，與實作者不同會話）。它指出的兩點已處理：重複鍵突變的改指向照 §14.4 寫在 dev_log；`IsCharacterSupported` 不能換成「取最近」，對照表用 `SweepVerticalCapsuleAll`＋原條件。
+   - P-2 沒有在 engine-map 宣告裡事前宣告，所以不當判定；同樣的量測以「探索」記在 dev_log。
+   - PR 2 從 PR 1 的分支分出，PR 1 合併後 rebase 再開；宣告用 [engine-format](engine-format.zh-Hant.md) 草稿（在 PR 2 的分支上）。
+
+## 現況：engine-grid（`v8-arch-big-map-engine-grid`，PR 1）
+
+- 分支 `claude/v8-arch-big-map-engine-grid`（從 master `d54b60ef`），工作樹 `bold-mahavira-68c717`。拆批前的整套實作留在本機分支 `claude/v8-arch-big-map-engine-map`（`7c0786f3`），PR 2 的材料。
+- J5 解析時間（受理判定；**件數の突き合わせ：一致**——要求 5／完成 5／成功 5，展開後 quads 124,236、colliders 20,691）：
+  拆批前的判定試行（engine-map 分支的程式碼）中位數 **382.2 ms** ≤ 450 ms，成立；替換前（master）1,579.7 ms；展開結果 SHA-256 兩者相同 `678a28c2…e299`。
+  拆批後 PR 1 的程式碼再量一次（確認，不是判定）：中位數 364.0 ms，SHA-256 相同。
+- J4 broadphase 等價（**件數の突き合わせ：一致**）：200 組隨機集合 70,000 次查詢，比對 70,000，不一致 0；邊界案例 4 種格長 × 172 次＋極小格長 1,400 次，不一致 0。
+- 探索（未宣告、不判定）：同一陣列 1／2／4／8 萬個碰撞盒，替換前中位數 345／1,139／4,341／17,081 ms（每加倍約 4 倍），替換後 42.5／85.4／181.1／384.9 ms（每加倍約 2 倍）。
+- 補強（對照 `25026d7d` 而加）：座標 ±1e6 的邊界案例 6,300 次查詢，不一致 0；突變 `grid-capsule-start-only`。
+- J2 突變（PR 1 分支，最後一輪）：`engine_grid_mutations.json` 15/16 被殺，存活的 `grid-margin-zero` 記為等價突變（理由在 dev_log）；`voxel_mesh_mutations.json` 20/20 被殺（兩個重複鍵突變改指向，§14.4 的 1～5 在 dev_log）。
+- J6：本機全量建置成功；`ctest -L "cpu|shader"` 130/130、`-L gpu` 4/4 通過。L1 待 PR。J7：兩個依賴守衛的突變都被殺。
+- 證據：主 checkout `build/evidence/big-map/engine-map/`（J5、探索、拆批前的突變）與 `build/evidence/big-map/engine-grid/`（PR 1 的突變、建置、ctest）。
+
+- 2026-11-06 PR #161 開出（head `f7374738`）。架構師的文件審查：沒有 blocker，兩個 nit（collision.md 的產品詞彙、Status 的寫法）已在本機提交 `f113f96e`，未推送。
+- **2026-11-06 停下（AGENTS §14 冒頭與 §14.1）：J2 不成立。** 審查者（engine-grid 會話）對 `f7374738` 的結論是 blocker 1、should-fix 2、nit 4、交使用者決定 4。
+  審查草稿在主 checkout `build/evidence/big-map/engine-grid/review_pr161/review_ja.md`，尚未送 GitHub。
+  - B1：`grid-margin-zero` 不是等價突變。精確掃掠接受終點外 1e-12 × |δ| 內的根，所以邊際歸零會漏掉盒子。反例和 probe 在同一目錄。
+    宣告 J2 的「若存活就記錄為等價突變並說明理由」，理由被推翻，所以 J2 未達成。照 §14.1 先報告使用者、再修；架構師會話寫報告。
+  - 用時：從開工到停下約 4 h（估時 8～12 h 之內）。
+  - 分到的事實：我的隨機集合與邊界案例都沒碰到精確查詢的根接受窗口。原本的論證漏掉窗口，沒有讀窄相位的程式碼。
+  - 下一次會改變的判斷：「等價突變」不只靠推理，要讀窄相位的每個容許與窗口，或請不同的人找反例。
+- **工作樹裡已準備、未提交、未推送的修法**（等使用者決定）：
+  - B1：反例加成 J4 的邊界案例（「a sweep that ends just short of a face on a cell line」）。原程式碼通過；`grid-margin-zero` 單獨重跑後被殺。
+    dev_log、catalog、宣告與 collision.md 改寫為「原推定錯誤，反例已加成測試」，判定本身不動。
+  - S1：建構時以 64 位元累加登記總數，`GYO_ASSERT` 小於 2³²；前提寫進標頭與 collision.md。
+  - S2：`docs/architecture.md` 的 `GYO::Base` 列與 `engine/base/CMakeLists.txt` 的說明補上 StrictJson。
+  - N1：宣告 2.2 的簽名改成實作的 `std::optional<Json>`＋`std::string& failure`。
+  - N2：已在 `f113f96e`。
+  - N3（極小半徑時邊際是否足夠）、N4（離群盒子讓格長加倍）、U1～U4（交使用者決定的四項）：還沒處理，等決定。
+- 給使用者的選項（報告由架構師會話整理）：
+  1. 照上面的修法：反例加成測試、`grid-margin-zero` 被殺後重跑整個 J2，判定不改。
+  2. 回頭看計畫的前提：例如把精確查詢的根接受窗口寫進 Collision 的契約，或另開一批處理窄相位，也就是改變範圍。
+
+- 2026-11-06 CI：L1 windows-x64 編譯失敗（`StaticAabbGrid.cpp` 用 `std::back_inserter` 卻沒 include `<iterator>`，MSVC 的 C2039）。使用者指示修好並推送：`dc3f9dd0` 只補 include，連同 nit 的 `f113f96e` 推送。
+- **2026-11-06 使用者對 J2 不成立的決定**（原話「照修法重跑 J2」）：選項 1。判定不改；反例留成測試；推送工作樹的修法（B1、S1、S2、N1），重跑整個 J2 與 L1。
+
+- 2026-11-06 J2 重跑（修法提交 `ecee00c2` 之上，本機 Intel Mac）：**成立**。`engine_grid_mutations.json` 16/16 被殺（`grid-margin-zero` 由反例測試殺掉）、`voxel_mesh_mutations.json` 20/20 被殺。
+  J4 重跑（**件數の突き合わせ：一致**）：隨機 70,000、邊界 688＋1,400、遠座標 6,300 次，不一致 0；反例案例通過。J6：全量建置成功，`cpu|shader` 130/130、`gpu` 4/4。
+  證據：主 checkout `build/evidence/big-map/engine-grid/rerun_after_review/`。拆批前一輪的 J2 失敗（`grid-margin-zero` 存活）保留在 `mutations_engine_grid_final.txt`，不被這次的成功覆蓋（AGENTS §14.1）。
+
+- 2026-11-06 L1（head `7e7ea5db`，run 42147144545）：linux-x64、macos-arm64、windows-x64 全部通過，CI gate 通過。J6 成立。
+
 ## 下一步
 
-由架構師會話開 `v8-arch-big-map-engine-map`（之後 `-tool-chunked`、`-product-arena-v3`）。本批不開。
+等審查者複核（B1、S1）與使用者合併；PR 1 合併後 rebase 開 PR 2。N3、N4、U1～U4 待使用者決定。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
