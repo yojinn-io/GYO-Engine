@@ -23,10 +23,11 @@ class VoxelMapEditorDependencyGuardTests(unittest.TestCase):
     def test_clean_tree_passes(self):
         self.assertEqual(self.scan({
             f"{TOOL}/src/A.cpp": '#include "gyo/voxel_map_editor/VoxelMap.hpp"\n#include "engine/voxel_mesh/VoxelMesh.hpp"\n'
+                                 '#include "engine/map_markers/MapMarkers.hpp"\n'
                                  '#include "gyo/framework/HeadlessShell.hpp"\n#include <nlohmann/json.hpp>\n'
                                  '#include "JsonRules.hpp"\n#include <vector>\n',
             f"{TOOL}/CMakeLists.txt": "target_link_libraries(gyo_voxel_map_editor_core PUBLIC GYO::Base "
-                                      "GYO::Engine GYO::VoxelMesh PRIVATE nlohmann_json::nlohmann_json)\n"
+                                      "GYO::Engine GYO::VoxelMesh GYO::MapMarkers PRIVATE nlohmann_json::nlohmann_json)\n"
                                       "target_link_libraries(gyo_voxel_map_editor PRIVATE gyo_voxel_map_editor_core "
                                       "GYO::ToolFramework)\n",
         }), [])
@@ -44,6 +45,12 @@ class VoxelMapEditorDependencyGuardTests(unittest.TestCase):
         findings = self.scan({f"{TOOL}/CMakeLists.txt": "target_link_libraries(a PRIVATE GYO::Render GYO::PlatformSDL "
                                                         "GYO::ToolFrameworkImGui imgui::core SDL3::SDL3)\n"})
         self.assertEqual(len(findings), 5)
+
+    def test_other_engine_modules_still_fail(self):
+        # Allowing GYO::MapMarkers allows that one module, not Engine at large.
+        findings = self.scan({f"{TOOL}/CMakeLists.txt": "target_link_libraries(gyo_voxel_map_editor_core PUBLIC "
+                                                        "GYO::Collision GYO::MapMarkersNative GYO::MapMarkers.extra)\n"})
+        self.assertEqual(len(findings), 3)
 
     def test_game_include_and_plain_target_fail(self):
         findings = self.scan({f"{TOOL}/src/A.cpp": '#include "SomeGame/World.hpp"\n',

@@ -280,7 +280,54 @@ MapMarkersDocument ParseDocument(const std::string_view text) {
     return result;
 }
 
+std::vector<std::string> ParseKindsDocument(const std::string_view text) {
+    if (text.size() > MaxKindsTextBytes) Fail("the text exceeds 64 KiB", "");
+    std::string failure;
+    const auto parsed = Base::ParseStrictJson<Json>(text, failure);
+    if (!parsed) Fail(failure, "");
+    const auto& document = *parsed;
+    if (!document.is_object()) Fail("the document is an object", "");
+    RequireExactKeys(document, {"schema", "version", "kinds"}, "");
+    const auto& schema = document.at("schema");
+    if (!schema.is_string() || schema.get<std::string>() != MarkerKindsSchema)
+        Fail("schema is '" + std::string(MarkerKindsSchema) + "'", "schema");
+    const auto& version = document.at("version");
+    if (!version.is_number_integer() || version.get<long long>() != MarkerKindsVersion)
+        Fail("version is " + std::to_string(MarkerKindsVersion), "version");
+    const auto& kinds = document.at("kinds");
+    if (!kinds.is_array() || kinds.empty() || kinds.size() > MaxKinds) Fail("kinds lists 1 to 256 kinds", "kinds");
+    std::vector<std::string> result;
+    result.reserve(kinds.size());
+    for (std::size_t i = 0; i < kinds.size(); ++i) {
+        const auto& kind = kinds[i];
+        if (!kind.is_string() || !ValidName(kind.get<std::string>()))
+            Fail("a kind is 1 to 64 characters of a-z, 0-9, '_', '.' and '-'", At("kinds", i));
+        auto name = kind.get<std::string>();
+        if (!result.empty() && !(result.back() < name)) Fail("kinds are in strictly increasing order", At("kinds", i));
+        result.push_back(std::move(name));
+    }
+    return result;
+}
+
 } // namespace
+
+MapMarkersResult<std::vector<std::string>> ParseMarkerKinds(const std::string_view text) {
+    try {
+        return ParseKindsDocument(text);
+    } catch (Invalid& invalid) {
+        return Base::Err(MapMarkersError::Make(MapMarkersErrorCode::InvalidMarkerKinds,
+                                               "gyo.marker_kinds: " + std::move(invalid.message),
+                                               std::move(invalid.path)));
+    }
+}
+
+std::vector<std::string> UnknownMarkerKinds(const MapMarkersDocument& markers, const std::span<const std::string> kinds) {
+    std::vector<std::string> unknown;
+    for (std::size_t i = 0; i < markers.markers.size(); ++i)
+        if (std::find(kinds.begin(), kinds.end(), markers.markers[i].kind) == kinds.end())
+            unknown.push_back(At("markers", i) + ".kind");
+    return unknown;
+}
 
 MapMarkersResult<MapMarkersDocument> ParseMapMarkers(const std::string_view text) {
     try {

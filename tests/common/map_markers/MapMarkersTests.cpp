@@ -5,6 +5,7 @@
 
 #include <string>
 #include <variant>
+#include <vector>
 
 using namespace Engine::MapMarkers;
 
@@ -295,4 +296,122 @@ TEST_CASE("K10: coordinate range and text size") {
     exact.extra = std::string(MaxTextBytes - Doc{}.Text().size(), ' ');
     REQUIRE(exact.Text().size() == MaxTextBytes);
     CHECK(Accepted(exact).markers.size() == 1);
+}
+
+// ---- gyo.marker_kinds version 1 (rules Q1 to Q5, map-markers.md "Marker kinds") ----
+// Judgment T6 of v8-arch-big-map-tool-chunked (docs/tools/plans/v8/voxel-map-tool-chunked.md).
+
+namespace {
+struct Kinds final {
+    std::string schema = R"("gyo.marker_kinds")";
+    std::string version = "1";
+    std::string kinds = R"(["a", "b.c", "d-e_f"])";
+    std::string extra;
+
+    [[nodiscard]] std::string Text() const {
+        return "{\"schema\": " + schema + ", \"version\": " + version + ", \"kinds\": " + kinds + extra + "}";
+    }
+};
+
+std::vector<std::string> KindsAccepted(const std::string& text) {
+    auto parsed = ParseMarkerKinds(text);
+    REQUIRE_MESSAGE(parsed, (parsed ? std::string() : parsed.error().message + " at " + parsed.error().detail));
+    return std::move(*parsed);
+}
+
+std::string KindsRejected(const std::string& text) {
+    const auto parsed = ParseMarkerKinds(text);
+    REQUIRE_FALSE(parsed);
+    CHECK(parsed.error().code == MapMarkersErrorCode::InvalidMarkerKinds);
+    return parsed.error().detail;
+}
+
+std::string KindsMessage(const std::string& text) {
+    const auto parsed = ParseMarkerKinds(text);
+    REQUIRE_FALSE(parsed);
+    return parsed.error().message;
+}
+
+Kinds WithKinds(const std::string& kinds) {
+    Kinds doc;
+    doc.kinds = kinds;
+    return doc;
+}
+} // namespace
+
+TEST_CASE("marker kinds: a valid list is returned in text order") {
+    CHECK(KindsAccepted(Kinds{}.Text()) == std::vector<std::string>{"a", "b.c", "d-e_f"});
+}
+
+TEST_CASE("Q1: kinds fields and repeated keys") {
+    Kinds unknown;
+    unknown.extra = R"(, "comment": "x")";
+    CHECK(KindsRejected(unknown.Text()).empty());
+    CHECK(KindsMessage(unknown.Text()).find("unknown field 'comment'") != std::string::npos);
+    Kinds repeated;
+    repeated.extra = R"(, "kinds": ["a"])";
+    CHECK(KindsMessage(repeated.Text()).find("repeated key 'kinds'") != std::string::npos);
+    CHECK(KindsRejected(R"({"schema": "gyo.marker_kinds", "version": 1})").empty());
+    CHECK(KindsRejected("[]").empty());
+    CHECK(KindsRejected("not json").empty());
+}
+
+TEST_CASE("Q2: kinds schema and version") {
+    Kinds schema;
+    schema.schema = R"("gyo.map_markers")";
+    CHECK(KindsRejected(schema.Text()) == "schema");
+    Kinds version;
+    version.version = "2";
+    CHECK(KindsRejected(version.Text()) == "version");
+    version.version = "1.0";
+    CHECK(KindsRejected(version.Text()) == "version");
+}
+
+TEST_CASE("Q3: kinds count and order") {
+    CHECK(KindsRejected(WithKinds("[]").Text()) == "kinds");
+    CHECK(KindsRejected(WithKinds(R"("a")").Text()) == "kinds");
+    CHECK(KindsRejected(WithKinds(R"(["b", "a"])").Text()) == "kinds[1]");
+    CHECK(KindsRejected(WithKinds(R"(["a", "a"])").Text()) == "kinds[1]");
+    // Byte order: "a-" (0x2D) comes before "a." (0x2E) and "a0".
+    CHECK(KindsAccepted(WithKinds(R"(["a-", "a.", "a0"])").Text()).size() == 3);
+    std::string many = "[";
+    for (std::size_t i = 0; i < MaxKinds; ++i) {
+        const auto name = std::string(1, static_cast<char>('a' + i / 26 % 26)) + static_cast<char>('a' + i % 26) +
+                          std::to_string(i / 676);
+        many += (i > 0 ? ", \"" : "\"") + name + "\"";
+    }
+    CHECK(KindsAccepted(WithKinds(many + "]").Text()).size() == MaxKinds);
+    CHECK(KindsRejected(WithKinds(many + ", \"zzz\"]").Text()) == "kinds");
+}
+
+TEST_CASE("Q4: each kind follows rule K5") {
+    CHECK(KindsRejected(WithKinds(R"(["a", "B"])").Text()) == "kinds[1]");
+    CHECK(KindsRejected(WithKinds(R"([""])").Text()) == "kinds[0]");
+    CHECK(KindsRejected(WithKinds(R"(["a b"])").Text()) == "kinds[0]");
+    CHECK(KindsRejected(WithKinds(R"([1])").Text()) == "kinds[0]");
+    CHECK(KindsAccepted(WithKinds("[\"" + std::string(MaxNameLength, 'a') + "\"]").Text()).size() == 1);
+    CHECK(KindsRejected(WithKinds("[\"" + std::string(MaxNameLength + 1, 'a') + "\"]").Text()) == "kinds[0]");
+}
+
+TEST_CASE("Q5: kinds text size") {
+    Kinds exact;
+    exact.extra = std::string(MaxKindsTextBytes - Kinds{}.Text().size(), ' ');
+    REQUIRE(exact.Text().size() == MaxKindsTextBytes);
+    CHECK(KindsAccepted(exact.Text()).size() == 3);
+    Kinds padded;
+    padded.extra = std::string(MaxKindsTextBytes, ' ');
+    CHECK(KindsRejected(padded.Text()).empty());
+    CHECK(KindsMessage(padded.Text()).find("64 KiB") != std::string::npos);
+}
+
+TEST_CASE("marker kinds: unknown kinds are found in markers order") {
+    const auto document = Accepted(WithMarkers(
+        R"([{"id": "m1", "kind": "c", "tags": {}, "point": [0, 0, 0], "yaw": 0},)"
+        R"( {"id": "m2", "kind": "a", "tags": {}, "point": [0, 0, 0], "yaw": 0},)"
+        R"( {"id": "m3", "kind": "z", "tags": {}, "point": [0, 0, 0], "yaw": 0}])"));
+    const std::vector<std::string> kinds{"a", "b"};
+    CHECK(UnknownMarkerKinds(document, kinds) == std::vector<std::string>{"markers[0].kind", "markers[2].kind"});
+    const std::vector<std::string> all{"a", "c", "z"};
+    CHECK(UnknownMarkerKinds(document, all).empty());
+    CHECK(UnknownMarkerKinds(Accepted(WithMarkers("[]")), kinds).empty());
 }

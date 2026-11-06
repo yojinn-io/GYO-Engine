@@ -1,4 +1,5 @@
 #include "gyo/voxel_map_editor/ChunkedMap.hpp"
+#include "gyo/voxel_map_editor/MarkersFile.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 
 #include "MapMeasure.hpp"
@@ -30,6 +31,7 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor verify-map  <grid> <map-dir>\n"
     "  gyo_voxel_map_editor inspect-map <map-dir>\n"
     "  gyo_voxel_map_editor measure-map <out-dir> [<grid>...]\n"
+    "  gyo_voxel_map_editor check-markers <markers> --marker-kinds <kinds>\n"
     "  gyo_voxel_map_editor --help\n"
     "\n"
     "build bakes a gyo.voxel_grid into a gyo.voxel_mesh that Engine accepts and\n"
@@ -43,6 +45,8 @@ constexpr std::string_view kHelp =
     "map.json and every region file it lists. inspect-map summarizes a map.\n"
     "measure-map writes the declared measurement of the chunked bake (a synthetic\n"
     "building-like grid, a per-chunk CSV and a summary) into <out-dir>.\n"
+    "check-markers reads a gyo.map_markers file and the product's gyo.marker_kinds\n"
+    "list with Engine's parsers and lists every marker whose kind is not in it.\n"
     "Exit status: 0 done, 1 an input the formats refuse, 2 usage, 3 a file could\n"
     "not be read or written, 4 verify found a different mesh.\n";
 
@@ -221,6 +225,26 @@ int InspectMap(const std::string& directory) {
     return 0;
 }
 
+int CheckMarkers(const std::string& markersPath, const std::string& kindsPath) {
+    auto markersBytes = ReadFile(markersPath, kMaxRead);
+    if (!markersBytes) return Fail(markersBytes.error());
+    auto kindsBytes = ReadFile(kindsPath, kMaxRead);
+    if (!kindsBytes) return Fail(kindsBytes.error());
+    auto markers = ReadMarkers(Text(*markersBytes));
+    if (!markers) return Fail(markers.error());
+    auto kinds = ReadMarkerKinds(Text(*kindsBytes));
+    if (!kinds) return Fail(kinds.error());
+    const auto unknown = Engine::MapMarkers::UnknownMarkerKinds(*markers, *kinds);
+    if (!unknown.empty()) {
+        for (const auto& path : unknown) std::cerr << "unknown kind: " << path << '\n';
+        return Fail(VoxelMapError::Make(VoxelMapErrorCode::UnknownKinds,
+                                        std::to_string(unknown.size()) + " markers have a kind not in " + kindsPath,
+                                        unknown.front()));
+    }
+    std::cout << "markers: " << markers->markers.size() << " markers, every kind in " << kinds->size() << " kinds\n";
+    return 0;
+}
+
 int Run(const std::span<const std::string> arguments) {
     if (arguments.size() < 2) return Usage("a command is required");
     const std::string& command = arguments[1];
@@ -247,6 +271,11 @@ int Run(const std::span<const std::string> arguments) {
     if (command == "inspect-map") {
         if (arguments.size() != 3) return Usage("inspect-map takes <map-dir>");
         return InspectMap(arguments[2]);
+    }
+    if (command == "check-markers") {
+        if (arguments.size() != 5 || arguments[3] != "--marker-kinds")
+            return Usage("check-markers takes <markers> --marker-kinds <kinds>");
+        return CheckMarkers(arguments[2], arguments[4]);
     }
     if (command == "measure-map") {
         if (arguments.size() < 3) return Usage("measure-map takes <out-dir> [<grid>...]");

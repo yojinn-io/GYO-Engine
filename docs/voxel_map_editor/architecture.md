@@ -137,6 +137,23 @@ Range: a grid accepts a filled cell within [-2^16, 2^16 - 1] after adding origin
 steps from origin, so when origin's x or z is not a multiple of 16 a chunk at the edge of that range ends past
 Engine's ±2^20 units (rule M6) and `build-map` refuses the grid (`BuildRefused`), while `build` still bakes it.
 
+## Markers
+
+The editor places and names markers of a map (`gyo.map_markers`) and offers the kinds a product lists
+(`gyo.marker_kinds`), both Engine formats ([map markers](../architecture/map-markers.md)); it interprets no kind
+and no tag. Header `MarkersFile.hpp`:
+
+- `ReadMarkers` and `ReadMarkerKinds` are Engine's `ParseMapMarkers` and `ParseMarkerKinds` (`InvalidMarkers`
+  with Engine's message and path).
+- `WriteMarkers` writes one text (markers and tags in the document's order, yaw as the shortest decimal of the
+  float's double), reads it back with `ParseMapMarkers` and compares it with the document; what Engine refuses
+  or reads back different is not returned.
+- Which markers have a kind the list does not hold is Engine's `UnknownMarkerKinds`; the editor keeps no copy of
+  that check.
+
+Where the kinds list comes from is the command line's (`--marker-kinds`): the tool names no product. Placing
+markers in the window is the window batch's.
+
 ## Command line (`gyo_voxel_map_editor`)
 
 | Command | Does | Exit status |
@@ -148,6 +165,7 @@ Engine's ±2^20 units (rule M6) and `build-map` refuses the grid (`BuildRefused`
 | `build-map <grid> <map-dir>` | bakes the chunked map and saves it in the folder (`SaveMap`) | 0; 1; 3 |
 | `verify-map <grid> <map-dir>` | bakes again and compares `map.json` and every region file it lists | 0 the same; 4 different; 1 or 3 |
 | `inspect-map <map-dir>` | summarizes a chunked map, read with Engine's parsers | 0; 1; 3 |
+| `check-markers <markers> --marker-kinds <kinds>` | reads both files with Engine's parsers and lists every marker whose kind is not in the list (`UnknownKinds`) | 0; 1; 3 |
 | `measure-map <out-dir> [<grid>...]` | the declared measurement of `v8-arch-big-map-tool-chunked`: writes a synthetic building-like grid and a per-chunk CSV, prints a summary per map | 0; 1; 3 |
 
 `import-boxes` takes every item with `min` and `max` (other fields of an item are ignored, overlapping boxes are
@@ -161,17 +179,19 @@ A wrong command line exits with 2.
 A change against any item below is an Architecture Delta that needs the user's agreement, however small
 (AGENTS.md section 3). So is changing this section. (User, 2026-11-05, `v8-tool-voxel-map-editor-core` declaration.)
 
-1. **Dependencies.** The editor links no game and names no product. It uses Engine (`GYO::VoxelMesh`, engine/io,
-   `GYO::Base`), the framework's headless shell, and its own JSON parser. It includes no SDL or ImGui header and
-   names no SDL, ImGui, render, platform or `*Native` target. Guard: the dependency guard
-   (`tests/voxel_map_editor/voxel_map_editor_dependency_guard.py`, a positive list) and its self-test.
+1. **Dependencies.** The editor links no game and names no product. It uses Engine (`GYO::VoxelMesh`,
+   `GYO::MapMarkers`, engine/io, `GYO::Base`), the framework's headless shell, and its own JSON parser. It
+   includes no SDL or ImGui header and names no SDL, ImGui, render, platform or `*Native` target. Guard: the
+   dependency guard (`tests/voxel_map_editor/voxel_map_editor_dependency_guard.py`, a positive list) and its
+   self-test. (`GYO::MapMarkers`: user, 2026-11-06, `v8-tool-chunked-declare`.)
 2. **One validator.** Whether baked output is valid is decided by Engine alone: `ValidateVoxelChunk` for every chunk
-   the editor bakes, `ParseVoxelMap` and `ParseVoxelRegion` for the map text it writes, and `ParseVoxelMesh` for the
-   deprecated single file. The editor keeps no copy of these rules: it reads every text it writes back, compares
+   the editor bakes, `ParseVoxelMap` and `ParseVoxelRegion` for the map text it writes, `ParseVoxelMesh` for the
+   deprecated single file, `ParseMapMarkers` for markers, `ParseMarkerKinds` for a kinds list and
+   `UnknownMarkerKinds` for whether a marker's kind is listed. The editor keeps no copy of these rules: it reads every text it writes back, compares
    what it read with what it baked, and returns nothing Engine refuses. Guard: "build: what Engine refuses is not
    returned", "map: a chunk Engine refuses is not kept", "map: an index Engine refuses is not returned", "map: a
-   region Engine refuses is not returned", the command-line tests `build_refused` and `build_map_refused`, and
-   their mutants. (User, 2026-11-06,
+   region Engine refuses is not returned", "markers: a document Engine refuses is not written", the command-line
+   tests `build_refused`, `build_map_refused` and `check_markers_unknown`, and their mutants. (User, 2026-11-06,
    `v8-tool-chunked-declare`.)
 3. **Deterministic.** One grid bakes to the same bytes on every platform, in either format; a grid the editor wrote
    reads back and writes again byte for byte; rebaking the chunks a change touched gives the bytes of baking

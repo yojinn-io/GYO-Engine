@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 
 #include "gyo/voxel_map_editor/ChunkedMap.hpp"
+#include "gyo/voxel_map_editor/MarkersFile.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 
 #include "engine/base/Sha256.hpp"
@@ -540,4 +541,74 @@ TEST_CASE("map: a chunk Engine refuses is not kept") {
     REQUIRE_FALSE(rebaked);
     CHECK(rebaked.error().code == VoxelMapErrorCode::BuildRefused);
     CHECK(SameTexts(Texts(*map), before));
+}
+
+// ---- T6: markers through Engine (tc-markers) ----
+
+namespace {
+namespace MM = Engine::MapMarkers;
+
+MM::MapMarkersDocument SampleMarkers() {
+    MM::MapMarkersDocument document;
+    document.markers.push_back({"m1", "a", {}, MM::MarkerPoint{{0, 16, 0}, 0.1F}});
+    document.markers.push_back({"m2", "b", {{"k", "v"}, {"x", "q \"r\" \\s"}},
+                                MM::MarkerBox{{-32, 0, -32}, {32, 48, 32}}});
+    document.markers.push_back({"m3", "c", {}, MM::MarkerPath{{{0, 0, 0}, {16, 0, 0}, {16, 0, 16}}}});
+    document.markers.push_back({"m4", "a", {}, MM::MarkerPoint{{1, 2, 3}, -3.14159274F}});
+    return document;
+}
+} // namespace
+
+TEST_CASE("markers: a document writes one text that reads back the same") {
+    const auto document = SampleMarkers();
+    const auto text = WriteMarkers(document);
+    REQUIRE_MESSAGE(text, (text ? std::string() : text.error().message));
+    CHECK(*text == ReadFixture("sample.map_markers.json"));
+    const auto again = ReadMarkers(*text);
+    REQUIRE(again);
+    const auto second = WriteMarkers(*again);
+    REQUIRE(second);
+    CHECK(*second == *text);
+    REQUIRE(again->markers.size() == 4);
+    CHECK(std::get<MM::MarkerPoint>(again->markers[0].shape).yaw == 0.1F);
+    CHECK(std::get<MM::MarkerPoint>(again->markers[3].shape).yaw == -3.14159274F);
+    CHECK(again->markers[1].tags == document.markers[1].tags);
+    const auto empty = WriteMarkers({});
+    REQUIRE(empty);
+    CHECK(ReadMarkers(*empty));
+}
+
+TEST_CASE("markers: a document Engine refuses is not written") {
+    auto unordered = SampleMarkers();
+    std::swap(unordered.markers[0], unordered.markers[1]);
+    const auto refused = WriteMarkers(unordered);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().code == VoxelMapErrorCode::BuildRefused);
+    CHECK(refused.error().detail == "markers[1].id");
+    // Bytes that are not UTF-8 are dropped from the text, which then reads back different.
+    auto notUtf8 = SampleMarkers();
+    notUtf8.markers[0].id = std::string("m\xff") + "0";
+    const auto different = WriteMarkers(notUtf8);
+    REQUIRE_FALSE(different);
+    CHECK(different.error().code == VoxelMapErrorCode::BuildRefused);
+    CHECK(different.error().message.find("reads back different") != std::string::npos);
+    auto badTag = SampleMarkers();
+    badTag.markers[1].tags = {{"K", "v"}};
+    const auto tag = WriteMarkers(badTag);
+    REQUIRE_FALSE(tag);
+    CHECK(tag.error().code == VoxelMapErrorCode::BuildRefused);
+}
+
+TEST_CASE("markers: files and kinds are read through Engine") {
+    const auto markers = ReadMarkers(R"({"schema": "gyo.map_markers", "version": 2, "markers": []})");
+    REQUIRE_FALSE(markers);
+    CHECK(markers.error().code == VoxelMapErrorCode::InvalidMarkers);
+    CHECK(markers.error().detail == "version");
+    const auto kinds = ReadMarkerKinds(R"({"schema": "gyo.marker_kinds", "version": 1, "kinds": ["b", "a"]})");
+    REQUIRE_FALSE(kinds);
+    CHECK(kinds.error().code == VoxelMapErrorCode::InvalidMarkers);
+    CHECK(kinds.error().detail == "kinds[1]");
+    const auto listed = ReadMarkerKinds(R"({"schema": "gyo.marker_kinds", "version": 1, "kinds": ["a", "b"]})");
+    REQUIRE(listed);
+    CHECK(*listed == std::vector<std::string>{"a", "b"});
 }
