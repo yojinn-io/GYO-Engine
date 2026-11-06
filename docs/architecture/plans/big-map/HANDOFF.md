@@ -183,6 +183,12 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
   - 刪掉 `ValidRegionFile` 裡「`.`、`..`」的比較，以及 `ParseTags` 裡「tags 超過 32」的檢查。
   - 退役 `vmap-region-file-dot-segments`、`mm-tags-unbounded`，engine-format 的 catalog 從 62 個減為 60 個。
   - 同一性質由 `vmap-region-file-trailing-dot`、`mm-object-key-cap-removed` 守。之後做 N5，再完整重跑。
+- 2026-11-06 N5：名詞守衛移到 `tests/common/scripts/neutral_names_guard.py`，範圍由呼叫端給。
+  `gyo_voxel_mesh.neutral_names` 與 `gyo_map_markers.neutral_names` 各自登記；守衛突變改成透過各自的 ctest 執行。提交 `e566fd1a`。
+- 2026-11-06 完整重跑（`e566fd1a`；**件數の突き合わせ：一致**——要求 96、結果 96：被殺 96、存活 0、過期 0）：**F2 成立**。
+  - 突變：engine-format 60/60、v1 20/20、engine-grid 16/16。
+  - 全量建置成功；`cpu|shader` 133/133、`gpu` 4/4。
+  - 證據在 `build/evidence/big-map/engine-format/after_review_2/`。上一輪的失敗（60/62）保留在 `after_review/`。
 
 ## 之後（另案，不開卡）
 

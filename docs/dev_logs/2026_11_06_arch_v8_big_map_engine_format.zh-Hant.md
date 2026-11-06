@@ -72,9 +72,31 @@
    - 證據在主 checkout `build/evidence/big-map/engine-format/mutations_neutral_wording.txt`。
    - DI 的文字變更由使用者同意（經架構師會話轉達）。
 
+## 審查後變更（PR #162）
+
+審查者（engine-grid 會話）提了 B1、S1、N1～N5，使用者決定全部在本 PR 修，而且都是收緊。
+內容與 §14.4 的 1～5 在宣告的 4b 節；用一句話說明如下：
+
+- **B1：** `ParseVoxelRegion` 多收 `expected`，也就是讀的是哪個索引項。檔案裡裝了別的 region 的文字，在 `at` 失敗。
+- **S1：** MapMarkers 建 DOM 之前，以規則會回報的路徑，拒絕鍵超過 32 個的物件。
+- **N1：** M8 拒絕結尾是 `.` 的段名與 Windows 裝置名。
+- **N2：** M4 每軸 |16 × origin| ≤ 2²⁰。
+- **N3：** 改正舊代號。
+- **N4：** 突變 `mm-tags-plain-json`。
+- **N5：** 名詞守衛移到共用位置，各模組自己登記。
+
+**第一輪 F2 不成立（AGENTS §14）：**
+- 修正提交 `757ba5df` 上重跑，engine-format 60/62，有兩個存活：
+  - `vmap-region-file-dot-segments`：N1 的「結尾 `.`」已涵蓋 `.`、`..`。
+  - `mm-tags-unbounded`：S1 的預掃描先以同一路徑拒絕。
+- 先停下報告，使用者決定刪掉兩處多餘的檢查並退役這兩個突變（「刪多餘檢查（建議）」）。
+- 第二輪（`e566fd1a`）：**件數の突き合わせ：一致**（要求 96、結果 96、存活 0），60/60、20/20、16/16。全量建置成功，`cpu|shader` 133/133、`gpu` 4/4。F2 成立。
+- 第一輪的失敗保留在 `after_review/`，沒有被這次的成功覆蓋。
+- 會改變的判斷：加新規則時，要先查舊的檢查會不會被新規則蓋過。
+
 ## 證據
 
-主 checkout 的 `build/evidence/big-map/engine-format/`，git 不追蹤：
+主 checkout 的 `build/evidence/big-map/engine-format/`，git 不追蹤。審查修正後的兩輪在 `after_review/`（第一輪，60/62）與 `after_review_2/`（第二輪，60/60）。核准後第一次的結果：
 - 三個突變 catalog 的結果：`engine_format_mutations.txt`、`voxel_mesh_mutations.txt`、`engine_grid_mutations.txt`。
 - 全量建置與測試：`build_all.txt`、`ctest_cpu_shader.txt`、`ctest_gpu.txt`。
 

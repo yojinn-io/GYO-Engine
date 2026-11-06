@@ -209,7 +209,7 @@ Math::Vec3          MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& m
 
 ## 4a. 結果（摘要；細節在 dev_log）
 
-- 本機 F1～F5 成立。突變：engine-format 55/55、v1 20/20、engine-grid 16/16。cpu\|shader 132/132，gpu 4/4。
+- 本機 F1～F5 成立（審查修正後的第二輪）。突變：engine-format 60/60、v1 20/20、engine-grid 16/16。cpu\|shader 133/133，gpu 4/4。
 - L1 三平台待 PR #162。
 
 ## 4b. 審查後變更（PR #162 的審查；使用者 2026-11-06 決定全部修，經架構師會話轉達）
@@ -246,7 +246,17 @@ Math::Vec3          MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& m
    - 舊判定殺掉的突變，在新判定下仍全部被殺（F2 重跑）。
    - 新突變也都被殺：`vreg-expected-unchecked`、`vmap-region-file-trailing-dot`、`vmap-region-file-reserved`、`vmap-origin-unbounded`、`mm-object-key-cap-removed`、`mm-key-scan-loses-index`、`mm-tags-plain-json`。
    - 舊的 `vreg-unlisted-accepted` 所守的那一行已經不存在，由 `vreg-expected-unchecked` 取代。
-   - 證據在主 checkout `build/evidence/big-map/engine-format/after_review/`。
+   - 證據在主 checkout `build/evidence/big-map/engine-format/after_review/`（第一輪，60/62）與 `after_review_2/`（第二輪，60/60）。
+
+**第一輪 F2 不成立與處置：**
+- 審查修正後的第一輪，有兩個突變存活。`vmap-region-file-dot-segments` 是因為 R-3 的「結尾 `.`」已涵蓋 `.`、`..`；`mm-tags-unbounded` 是因為 R-2 的預掃描先拒絕。
+- 使用者決定刪掉這兩處多餘的檢查，退役這兩個突變（「刪多餘檢查（建議）」）。
+- 第二輪成立。
+
+**N5（審查者複核 `62fe5fd3` 時追加）：** 名詞守衛移到 `tests/common/scripts/`，voxel_mesh 和 map_markers 各自登記測試。這樣刪掉一個模組，只會帶走它自己的守衛（AGENTS §7）。
+
+- **§14.4：** 掃描範圍與詞表都沒變，所以沒有緩める面；締める面是「兩個模組各有自己的守衛」。
+- **根據：** 兩條守衛突變各自被殺。
 
 ## 5. 證據位置
 
