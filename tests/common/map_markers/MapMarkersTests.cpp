@@ -138,9 +138,14 @@ TEST_CASE("K3: markers in id order") {
 
 TEST_CASE("K4: exactly one shape") {
     CHECK(Rejected(WithMarkers(One(R"({"id": "m", "kind": "a", "tags": {}})"))) == "markers[0]");
-    CHECK(Rejected(WithMarkers(One(
-              R"({"id": "m", "kind": "a", "tags": {}, "point": [0,0,0], "yaw": 0, "path": [[0,0,0],[1,0,0]]})"))) ==
-          "markers[0]");
+    // Two shapes are rejected by this rule itself, not only because the
+    // second shape's field is unknown to the first (engine-format F2).
+    const auto twoShapes = WithMarkers(
+        One(R"({"id": "m", "kind": "a", "tags": {}, "point": [0,0,0], "yaw": 0, "path": [[0,0,0],[1,0,0]]})"));
+    CHECK(Rejected(twoShapes) == "markers[0]");
+    CHECK(Message(twoShapes).find("exactly one of point, box and path") != std::string::npos);
+    const auto noShape = WithMarkers(One(R"({"id": "m", "kind": "a", "tags": {}})"));
+    CHECK(Message(noShape).find("exactly one of point, box and path") != std::string::npos);
     CHECK(Rejected(WithMarkers(One(R"({"id": "m", "kind": "a", "tags": {}, "point": [0,0,0]})"))) == "markers[0]");
     const auto yawOnBox = WithMarkers(
         One(R"({"id": "m", "kind": "a", "tags": {}, "box": {"min": [0,0,0], "max": [1,1,1]}, "yaw": 0})"));

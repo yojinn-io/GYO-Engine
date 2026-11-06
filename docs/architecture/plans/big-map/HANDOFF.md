@@ -152,7 +152,10 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 - 2026-11-06 開工。原工作樹 `bold-mahavira-68c717` 已刪除，改用工作樹 `.claude/worktrees/engine-format`。分支 `claude/v8-arch-big-map-engine-format` 的實作提交已 rebase 到 `c70e8fdc`，沒有衝突。
 - 架構師轉達：先把宣告草稿改成正式事前宣告，開 PR 2 時先給使用者核准宣告，再推實作的審查；審查者仍是 engine-grid 會話。
 - 宣告 [engine-format](engine-format.zh-Hant.md) 已寫成正式版。第 7 節列出要使用者決定的事：v1 退役的時點、`collision.md` 的 RC 4／5（PR #161 的 N4、U1）、`AnimationEvents` 另案（U4）、突變存活的處理規則、模型。
-- **停在核准關卡：** PR 2 以 draft 開出（draft 不跑 L1）。核准前不跑受理判定、不改程式。
+- 2026-11-06 PR #162 以 draft 開出（draft 不跑 L1），停在核准關卡。
+- **2026-11-06 使用者核准 engine-format 宣告**（原話「照建議核准」：第 7 節 1～5 全部照建議）。開始補測試、寫 RC、跑 F1～F5。
+  - `mm-two-shapes-accepted` 照突變存活的規則補測試：K4 檢查訊息「exactly one of point, box and path」。
+  - `collision.md` 加 RC 4（登記數或建構時間超過宣告值）、RC 5（離群盒子讓格長加倍）。
 
 ## 之後（另案，不開卡）
 

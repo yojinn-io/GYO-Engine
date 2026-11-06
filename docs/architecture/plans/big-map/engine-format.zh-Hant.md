@@ -2,7 +2,7 @@
 
 更新：2026-11-06。Owner：Engine（`GYO::VoxelMesh`、新 `GYO::MapMarkers`；`GYO::Collision` 只改契約文件的 RC）。
 計畫：[README](README.md)；記錄：[HANDOFF](HANDOFF.md)；根據：[survey](survey.zh-Hant.md) 與 HANDOFF「決定」的六項。
-**狀態：事前宣告，等使用者核准。** 由 [engine-map 宣告](engine-map.zh-Hant.md)拆出：格式、MapMarkers、v1 退役 (a) 與 Delta A／B，使用者 2026-11-06 已在 engine-map 會話核准（「照建議核准」）。
+**狀態：事前宣告，使用者 2026-11-06 核准（原話「照建議核准」：第 7 節 1～5 全部照建議）。核准後不放寬。** 由 [engine-map 宣告](engine-map.zh-Hant.md)拆出：格式、MapMarkers、v1 退役 (a) 與 Delta A／B，使用者 2026-11-06 已在 engine-map 會話核准（「照建議核准」）。
 本稿新增、需要核准的是第 7 節列的事：v1 退役的時點、`collision.md` 的兩條 RC、`AnimationEvents` 另案、突變存活的處理規則。核准前不推實作的審查。
 
 ## 0. 來歷與現況
