@@ -20,6 +20,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-chunked-markers-guard` | （2026-11-06）核准 §14.4：依賴守衛允許 CMake 文字中出現 `GYO::MapMarkers` 這個名字（沒有收緊的面，驗證者確認 1～5）；DI 2 追加 `ParseMarkerKinds`、`UnknownMarkerKinds` | 「両方承認」 |
 | `v8-tool-chunked-deviations` | （2026-11-06）確認 tc-bake 和宣告的差異 4 項（舊 region 檔只刪舊索引列過的、tc-measure 併入、突變第一輪 13/14 的處置、合成圖的 v1 是拒收）；M6 邊界（origin 不在 16 的倍數時，邊緣格子 `build-map` 拒收）只記錄，不收緊格子的範圍 | 「確認、(a) 記録のみ」 |
 | `v8-tool-chunked-declare` | （2026-11-06）核准 tool-chunked 的事前宣告：範圍、介面草案、判定 T1～T9（T5：區塊重烘 p95 ≤ 16 ms）、DI 1～5 的變更與 DI 2 改寫、RC 3 處置與 RC 5／6；存檔用帶雜湊的 region 檔名＋最後換索引；調色盤放格子的全部方塊；T-junction 目視移到 window 批 | 「推奨どおり承認」 |
 | `v8-tool-chunked-plan` | （2026-11-06）tool-chunked 的五個判斷：從 master 分支、window 之後 rebase；v1 輸出保留到 arena-v3、新格式用新命令、v1 不加 greedy；標記讀寫核心在本批、放置 UI 在 window 批；`marker_kinds.json` 的形式由架構師寫進 map-markers.md；重烘判定值在宣告定（候選 p95 ≤ 16 ms） | 「推奨どおり決める」 |
@@ -77,4 +78,4 @@
 - 2026-11-06：架構師寫好 `marker_kinds.json` 的契約（PR #160，`29c79fbf`），`tc-markers` 改為在 Engine 實作 `ParseMarkerKinds`／`UnknownMarkerKinds`，宣告已反映。你核准宣告（`v8-tool-chunked-declare`），開工 `tc-bake`（Opus 5.5／high）。
 - 2026-11-06：`tc-bake`、`tc-measure` 完成（Opus 5.5／high）。第一輪突變 13/14（`tc-chunk-not-validated` 存活）；Opus 審查無 blocker，3 個 should-fix（形狀變更沒觸發全部重烘、T1 缺 Engine 拒收的案例、M6 邊界）照修，存活突變由審查者找到的反例殺掉；第二輪 37/37。T5（建築合成圖 768 區塊）p95 1.11 ms ≤ 16 ms，件數一致。和宣告的差異：engine/io 不能列目錄，舊 region 檔只刪舊索引列過的。dev_log：[2026_11_06_tool_v8_voxel_map_tool_chunked](../../../dev_logs/2026_11_06_tool_v8_voxel_map_tool_chunked.zh-Hant.md)。證據在主 checkout `build/evidence/tool-v8-voxel-map/tool-chunked/`。
 - 2026-11-06：開 PR #163。第一次 L1 的 windows-x64 編譯失敗：測試變數 `far` 被 `windef.h` 的巨集吃掉，和 PR #152 是同一個原因。改名後（`585f599b`）三平台都通過（run 42188382428）。
-- 2026-11-06：PR #160 合併（`15257faf`），把 master merge 進本分支（`929c7664`），開工 `tc-markers`。實作 Engine 的 `ParseMarkerKinds`／`UnknownMarkerKinds` 與工具的標記讀寫、`check-markers`。突變 48/48，`cpu|shader` 135/135。審查沒有 blocker，2 個 should-fix 已修。§14.4 驗證者確認 1～5（放寬的範圍是「CMake 文字中出現 `GYO::MapMarkers` 這個名字」）。**等你核准 DI 1 守衛的放寬與 DI 2 字句的追加。**
+- 2026-11-06：PR #160 合併（`15257faf`），把 master merge 進本分支（`929c7664`），開工 `tc-markers`。實作 Engine 的 `ParseMarkerKinds`／`UnknownMarkerKinds` 與工具的標記讀寫、`check-markers`。突變 48/48，`cpu|shader` 135/135。審查沒有 blocker，2 個 should-fix 已修。§14.4 驗證者確認 1～5（放寬的範圍是「CMake 文字中出現 `GYO::MapMarkers` 這個名字」）。你核准了 DI 1 守衛的放寬與 DI 2 字句的追加（`v8-tool-chunked-markers-guard`）。

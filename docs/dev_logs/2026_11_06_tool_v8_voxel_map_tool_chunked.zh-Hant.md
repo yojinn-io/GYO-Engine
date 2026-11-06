@@ -5,7 +5,7 @@
 - 審查：子 Agent（Opus／high，唯讀）。
 - 事前宣告：[voxel-map-tool-chunked.md](../tools/plans/v8/voxel-map-tool-chunked.md)，2026-11-06 使用者核准（「推奨どおり承認」）。
 
-**狀態：** `tc-bake`、`tc-measure`、`tc-markers` 完成。DI 1 守衛的放寬（§14.4）與 DI 2 字句的追加等使用者核准。`tc-bake` 的 L1 三平台通過（PR #163）；`tc-markers` 的 L1 待推送後。
+**狀態：** `tc-bake`、`tc-measure`、`tc-markers` 完成。DI 1 守衛的放寬（§14.4）與 DI 2 字句的追加，2026-11-06 使用者核准（「両方承認」）。`tc-bake` 的 L1 三平台通過（PR #163）；`tc-markers` 的 L1 待推送後。
 
 相關文件：
 - [voxel_map_editor/architecture.md](../voxel_map_editor/architecture.md)：「The chunked map」節，DI 2～5、RC 3、RC 5、RC 6
@@ -204,7 +204,7 @@ nit：
    - 突變 `tc-guard-allows-any-engine-module`、`tc-guard-core-links-collision` 被殺；
    - 驗證者的比較腳本與輸出在本會話的 scratchpad，未保存。
 
-**要使用者核准的事：**
+**要使用者核准的事（2026-11-06 核准：「両方承認」）：**
 - 上面的放寬；
 - DI 2 字句的追加（`ParseMarkerKinds`、`UnknownMarkerKinds`）。宣告只核准了「markers 經 `ParseMapMarkers`」。這次加的只會收緊，但照 AGENTS §3，改 DI 節要同意。
 
