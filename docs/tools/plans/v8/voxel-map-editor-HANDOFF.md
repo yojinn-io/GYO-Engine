@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，正在寫 window-1 的事前宣告。
+- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，**等你核准**。
 - **PR**：
   - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
   - window 批在分支 `claude/v8-tool-voxel-map-window`，有它自己的 PR。
@@ -29,6 +29,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-window-goxel` | （2026-11-06）視窗的功能與互動照 Goxel，外觀用我們自己的；只取功能、不搬程式碼，依我們的編輯邏輯客製；分三批（window-1 核心、window-2 選取／移動／對稱、window-3 Layers）；鏡像用 (c)（只鏡像對稱的形狀）；Layers 會改格子格式，另批宣告 | 「我建議你的操作模式和交互使用這個的形式」「UI 我們可以使用自己的形式，但是功能上和交互上我建議是用goxel的」「注意我要的是功能，而不是連代碼都照搬」「如果不影響現有機能…沒問題。如果有影響，列出來」「OK，照建議開始。」 |
 | `v8-tool-chunked-markers-guard` | （2026-11-06）核准 §14.4：依賴守衛允許 CMake 文字中出現 `GYO::MapMarkers` 這個名字（沒有收緊的面，驗證者確認 1～5）；DI 2 追加 `ParseMarkerKinds`、`UnknownMarkerKinds` | 「両方承認」 |
 | `v8-tool-chunked-deviations` | （2026-11-06）確認 tc-bake 和宣告的差異 4 項（舊 region 檔只刪舊索引列過的、tc-measure 併入、突變第一輪 13/14 的處置、合成圖的 v1 是拒收）；M6 邊界（origin 不在 16 的倍數時，邊緣格子 `build-map` 拒收）只記錄，不收緊格子的範圍 | 「確認、(a) 記録のみ」 |
 | `v8-tool-chunked-declare` | （2026-11-06）核准 tool-chunked 的事前宣告：範圍、介面草案、判定 T1～T9（T5：區塊重烘 p95 ≤ 16 ms）、DI 1～5 的變更與 DI 2 改寫、RC 3 處置與 RC 5／6；存檔用帶雜湊的 region 檔名＋最後換索引；調色盤放格子的全部方塊；T-junction 目視移到 window 批 | 「推奨どおり承認」 |
@@ -178,3 +179,4 @@
 - 2026-11-06：PR #160 合併（`15257faf`），把 master merge 進本分支（`929c7664`），開工 `tc-markers`。實作 Engine 的 `ParseMarkerKinds`／`UnknownMarkerKinds` 與工具的標記讀寫、`check-markers`。突變 48/48，`cpu|shader` 135/135。審查沒有 blocker，2 個 should-fix 已修。§14.4 驗證者確認 1～5（放寬的範圍是「CMake 文字中出現 `GYO::MapMarkers` 這個名字」）。你核准了 DI 1 守衛的放寬與 DI 2 字句的追加（`v8-tool-chunked-markers-guard`）。
 - 2026-11-06：架構師轉達你的定案：kinds 的 7 條突變搬到 Engine 的目錄，改名 `mm-*`；map-markers.md 的 DI 3 改字句；「Cost」段補一句（不加預掃）。engine_format 目錄 68/68 被殺。
 - 2026-11-06：`tc-markers` 的 L1 三平台通過（run 42195132825，head `137085ae`）；`16a28c62` 只改文件，L1 skip。tool-chunked 批的判定 T1～T9 全部成立，**等你決定是否合併 PR #163**。
+- 2026-11-06：PR #163 合併（`24f111eb`），tool-chunked 批完成。你試用了上一版的視窗，指定照 Goxel 的功能與互動重做（`v8-tool-voxel-window-goxel`）。讀了 Goxel 的 `src/tools/`、`src/gui/`、`goxel.c`、`gesture3d.c`、`tools.c`（只讀行為）。把 master merge 進本分支，解決 PR #158 的衝突（`9c2a2479`；守衛的自我測試改成逐名檢查，判定同等或更嚴）。寫好 window-1 的事前宣告，等你核准。
