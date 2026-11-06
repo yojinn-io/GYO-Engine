@@ -182,3 +182,8 @@
 - 2026-11-06：`tc-markers` 的 L1 三平台通過（run 42195132825，head `137085ae`）；`16a28c62` 只改文件，L1 skip。tool-chunked 批的判定 T1～T9 全部成立，**等你決定是否合併 PR #163**。
 - 2026-11-06：PR #163 合併（`24f111eb`），tool-chunked 批完成。你試用了上一版的視窗，指定照 Goxel 的功能與互動重做（`v8-tool-voxel-window-goxel`）。讀了 Goxel 的 `src/tools/`、`src/gui/`、`goxel.c`、`gesture3d.c`、`tools.c`（只讀行為）。把 master merge 進本分支，解決 PR #158 的衝突（`9c2a2479`；守衛的自我測試改成逐名檢查，判定同等或更嚴）。寫好 window-1 的事前宣告，等你核准。
 - 2026-11-06：window-1 實作完成（vw1-preview、vw1-tools、vw1-markers）。探索時，第一版每幀編輯 p95 152 ms（每次編輯複製整張地圖、所有區塊標髒），修正後 P1 判定成立：(a) 7.48 ms、(b) 8.82 ms。審查：B1（snap 沒取先碰到的）與 5 個 should-fix 已修，宣告漏做的兩項已補。§14.4 驗證者找出 3 個隱藏放寬，已改嚴。突變 87/87。dev_log：[2026_11_06_tool_v8_voxel_window_1](../../../dev_logs/2026_11_06_tool_v8_voxel_window_1.zh-Hant.md)。
+- 2026-11-06～07：L3 前的試用。
+  - 你用視窗編輯 `pvp_corners` 並存檔：`verify-map` 一致。用 CLI `build` 成 v1，放進遊戲資料夾的副本，以 1 個 client 遊玩（腳本與 log 在主 checkout `build/evidence/tool-v8-voxel-map/window-1/l3/`）。
+  - 你給的 MagicaVoxel `biome.vox`（126×126×32）用一次性腳本轉成格子：64 區塊，`verify-map` 一致（`window-1/biome/`）。v1 有 1,260 個碰撞盒，超過產品 arena 的 1,024 上限，遊戲載入不了。
+  - 你明確同意後，在副本裡用暫時改過上限的執行檔試玩：60 fps。原始碼當下就還原了（未提交）。之後照你的指示，把副本的執行檔也換回標準版，標準 Match 再次拒收。
+  - 「上限太低」已照你的指示回報架構師（屬於 product-arena-v3）。
