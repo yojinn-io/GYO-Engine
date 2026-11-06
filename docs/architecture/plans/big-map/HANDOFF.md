@@ -156,6 +156,10 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 - **2026-11-06 使用者核准 engine-format 宣告**（原話「照建議核准」：第 7 節 1～5 全部照建議）。開始補測試、寫 RC、跑 F1～F5。
   - `mm-two-shapes-accepted` 照突變存活的規則補測試：K4 檢查訊息「exactly one of point, box and path」。
   - `collision.md` 加 RC 4（登記數或建構時間超過宣告值）、RC 5（離群盒子讓格長加倍）。
+- 2026-11-06 架構師會話轉達使用者在那邊對第 7 節的定案：1～5 與本會話的核准相同；第 6 項不同，改為「DI 1 改成中性說法」（`v8-arch-big-map-neutral-wording`）。
+  - `voxel-mesh.md` DI 1 的「spawn points」改成「placement data」，守的性質不變。
+  - 名詞守衛擴到 `GYO::VoxelMesh` 的程式、測試與契約，加突變 `vm-guard-gameplay-word`。
+  - §14.4：守衛只加嚴，沒有緩的面，1～5 寫在 dev_log。
 - 2026-11-06 F1～F5（本機 Intel Mac，head `eb516ffc`；**件數の突き合わせ：一致**）：
   - 突變：`engine_format_mutations.json` 55/55、`voxel_mesh_mutations.json` 20/20、`engine_grid_mutations.json` 16/16 被殺。
   - 全量建置成功；`cpu|shader` 132/132、`gpu` 4/4。

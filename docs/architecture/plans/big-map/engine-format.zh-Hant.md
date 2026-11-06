@@ -241,4 +241,6 @@ Math::Vec3          MapUnitsToWorld(Math::Vec3i units, const VoxelMapDocument& m
 3. **另案記錄（不開卡）：** `GYO::Model` 的 `AnimationEvents.cpp:40` 改用 `StrictJson.hpp`（PR #161 的 U4）。寫進 HANDOFF 的「之後」。
 4. **突變存活的處理規則**（第 4 節）：存活就是不成立，不由實作者自己認定等價。
 5. **模型：** 實作者 Opus、審查者 engine-grid 會話、驗證者 Fable（先問）。
-6. **既有文字（參考，不在本批改）：** `voxel-mesh.md` 的 DI 1 原文以否定句列出「spawn points」，表示這個模組不知道它。改 DI 的文字需要使用者同意，本批照原文保留；要改成中立的說法，請另外指示。
+6. **DI 1 改成中性說法**（`v8-arch-big-map-neutral-wording`）：`voxel-mesh.md` 的 DI 1 原文以否定句列出「spawn points」，改成「placement data」。
+   守的性質不變（模組不知道放置資料），只換詞。名詞守衛擴到 `GYO::VoxelMesh` 的程式、測試與契約，並加突變 `vm-guard-gameplay-word`。
+   使用者的決定經架構師會話轉達（2026-11-06）。本會話原本的建議是照原文保留。

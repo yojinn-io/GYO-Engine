@@ -219,9 +219,11 @@ A change against any item below is an Architecture Delta that needs the user's a
 (AGENTS.md section 3). So is changing this section.
 
 1. **Neutral.** `GYO::VoxelMesh` knows faces, colours, boxes, chunks and opaque names only: no blocks, shapes,
-   orientations, spawn points or product names. Its links are exactly `GYO::Base`, `GYO::Math` and, privately, the JSON parser: no
+   orientations, placement data or product names. Its links are exactly `GYO::Base`, `GYO::Math` and, privately, the JSON parser: no
    render, collision, asset or product library. Guard: the configure-time check `gyo_expect_voxel_mesh_links`
-   (`tests/common/voxel_mesh/CMakeLists.txt`; mutant `vm-links-collision`) and review for names.
+   (`tests/common/voxel_mesh/CMakeLists.txt`; mutant `vm-links-collision`) and, for names, the neutral-names guard
+   `gyo_map_markers.neutral_names` (`tests/common/map_markers/neutral_names_guard.py`, which also scans this
+   module, its tests and this contract; mutant `vm-guard-gameplay-word`).
 2. **No build.** The module validates, expands and converts. It does not cull, merge, shade or choose anything the
    producer decided; its entry points are `ParseVoxelMap`, `ParseVoxelRegion`, `ValidateVoxelChunk`,
    `ExpandVoxelChunk`, `ExpandVoxelPalette`, `RegionOf`, `ChunkWorldOrigin`, `MapUnitsToWorld` and the deprecated

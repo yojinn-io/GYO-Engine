@@ -1,7 +1,9 @@
-"""Guard for GYO::MapMarkers Design Invariant 1 (docs/architecture/map-markers.md): neutral names.
+"""Guard for neutral names in Engine's map formats: GYO::MapMarkers Design Invariant 1
+(docs/architecture/map-markers.md) and GYO::VoxelMesh Design Invariant 1 (docs/architecture/voxel-mesh.md).
 
-Engine's marker format carries opaque names; what a kind means belongs to a product (docs/architecture.md,
-Layers check 1). So the module, its tests and its contract name no gameplay concept. The words below are the
+Engine's map formats carry opaque names; what a name means belongs to a product (docs/architecture.md, Layers
+check 1). So these modules, their tests and their contracts name no gameplay concept (decision
+v8-arch-big-map-neutral-wording). The words below are the
 gameplay nouns a map's markers are typically used for; none may appear, in any case, anywhere in those files
 (comments and examples included). This file is the only place that lists them and is not scanned.
 
@@ -13,7 +15,8 @@ import sys
 from pathlib import Path
 
 WORDS = ("spawn", "boss", "loot", "extract", "patrol", "team", "zone")
-SCANNED = ("engine/map_markers", "tests/common/map_markers", "docs/architecture/map-markers.md")
+SCANNED = ("engine/map_markers", "tests/common/map_markers", "docs/architecture/map-markers.md",
+           "engine/voxel_mesh", "tests/common/voxel_mesh", "docs/architecture/voxel-mesh.md")
 
 
 def scan(root):
@@ -44,7 +47,7 @@ def main():
     for hit in hits:
         print(hit)
     if hits:
-        print(f"neutral names guard: {len(hits)} gameplay word(s) in GYO::MapMarkers files")
+        print(f"neutral names guard: {len(hits)} gameplay word(s) in Engine map format files")
         return 1
     print("neutral names guard: clean")
     return 0

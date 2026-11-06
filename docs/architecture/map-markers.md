@@ -74,8 +74,8 @@ A change against any item below is an Architecture Delta that needs the user's a
 
 1. **Neutral.** `GYO::MapMarkers` knows ids, kinds, tags, points, boxes and paths; names are opaque. The module,
    its tests and this contract name no product and no gameplay concept. Guard: `gyo_map_markers.neutral_names`
-   (`tests/common/map_markers/neutral_names_guard.py`, which lists the words it rejects; mutant
-   `mm-guard-gameplay-word`) and review.
+   (`tests/common/map_markers/neutral_names_guard.py`, which lists the words it rejects and also scans
+   `GYO::VoxelMesh`; mutant `mm-guard-gameplay-word`) and review.
 2. **Leaf.** Its links are exactly `GYO::Base`, `GYO::Math` and, privately, the JSON parser: no geometry format,
    collision, render, asset or product library. Guard: the configure-time check `gyo_expect_map_markers_links`
    (`tests/common/map_markers/CMakeLists.txt`; mutant `mm-links-voxel-mesh`).

@@ -47,14 +47,30 @@
 | 判定 | 結果 | 成立 |
 |---|---|---|
 | F1 規則 | `gyo.voxel_map` M1～M10、`gyo.voxel_region` R1～R5／C1～C5、`gyo.map_markers` K1～K10，各有自己的 test case。C1～C5 另有 `ValidateVoxelChunk` 的反例 | 是 |
-| F2 突變 | `engine_format_mutations.json` 55/55、`voxel_mesh_mutations.json` 20/20、`engine_grid_mutations.json` 16/16 被殺 | 是 |
+| F2 突變 | `engine_format_mutations.json` 55/55（之後新增的 `vm-guard-gameplay-word` 也被殺，共 56）、`voxel_mesh_mutations.json` 20/20、`engine_grid_mutations.json` 16/16 被殺 | 是 |
 | F3 黃金值 | 區塊展開的頂點、uv、盒；`ChunkWorldOrigin`；`MapUnitsToWorld` 與字面值 bits 一致，含 ±2²⁰ 兩端與負區塊鍵。「v1 單文件與區塊展開位元相同」也通過。三平台待 L1 | 本機是 |
 | F4 守衛 | 依賴守衛的突變（`vm-links-collision`、`mm-links-voxel-mesh`、`grid-links-voxel-mesh`）與名詞守衛的突變（`mm-guard-gameplay-word`）都被殺 | 是 |
 | F5 迴歸 | 全量建置成功，`ctest -L "cpu\|shader"` 132/132、`-L gpu` 4/4。L1 待 PR | 本機是 |
 
-## 發現的事
+## DI 1 的中性說法（`v8-arch-big-map-neutral-wording`）
 
-- 「Engine 文件與範例不出現玩法名詞」只用守衛檢查 MapMarkers 的範圍。`voxel-mesh.md` 的 DI 1 原文以否定句寫了「spawn points」。改 DI 文字需要使用者同意，本批照原文保留（宣告第 7 節第 6 項）。
+使用者在架構師會話定案。本會話原本的建議是照原文保留。
+
+- `voxel-mesh.md` 的 DI 1 原文以否定句寫了「spawn points」，改成「placement data」。守的性質不變：這個模組不知道放置資料。
+- 名詞守衛 `neutral_names_guard.py` 原本只掃 MapMarkers，擴大到 `engine/voxel_mesh`、`tests/common/voxel_mesh`、`docs/architecture/voxel-mesh.md`。
+- 加突變 `vm-guard-gameplay-word`：把 DI 1 改回「spawn points」，守衛要失敗。它和 `mm-guard-gameplay-word` 都被殺（`mutations_neutral_wording.txt`）。
+- 改完後再跑一次 `cpu|shader`，132/132 通過。
+
+這是 Design Invariants 的守衛判定的變更，照 §14.4 寫明 1～5：
+
+1. **守的性質：** Engine 的地圖格式模組、它的測試與契約，不出現玩法名詞（MapMarkers DI 1、VoxelMesh DI 1）。
+2. **緩的面：** 沒有。掃描的檔案只增不減，拒絕的詞也沒變。
+3. **嚴的面：** `GYO::VoxelMesh` 的程式、測試、契約裡出現玩法名詞時，以前通過，現在失敗。
+4. 不適用（沒有緩的面）。
+5. **根據：**
+   - 舊守衛會失敗的突變 `mm-guard-gameplay-word`，在新守衛下仍被殺；新突變 `vm-guard-gameplay-word` 也被殺。
+   - 證據在主 checkout `build/evidence/big-map/engine-format/mutations_neutral_wording.txt`。
+   - DI 的文字變更由使用者同意（經架構師會話轉達）。
 
 ## 證據
 

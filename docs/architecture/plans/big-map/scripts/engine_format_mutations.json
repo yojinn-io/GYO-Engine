@@ -555,6 +555,20 @@
       "target": "gyo_map_markers_tests",
       "expect_build_failure": true,
       "expect": "(?s)gyo_map_markers links.*expected\\s+exactly"
+    },
+    {
+      "id": "vm-guard-gameplay-word",
+      "what": "A gameplay word enters GYO::VoxelMesh's contract (Design Invariant 1, neutral names)",
+      "file": "docs/architecture/voxel-mesh.md",
+      "find": "orientations, placement data or product names.",
+      "replace": "orientations, spawn points or product names.",
+      "command": [
+        "{python}",
+        "tests/common/map_markers/neutral_names_guard.py",
+        "--root",
+        "."
+      ],
+      "expect": "neutral names guard: 1 gameplay word"
     }
   ]
 }
