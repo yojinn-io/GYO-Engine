@@ -68,6 +68,8 @@ public:
 
     void BeginStroke();
     void EndStroke();
+    // Puts back every cell the open stroke changed; no step is kept (Esc during a drag).
+    void CancelStroke();
     [[nodiscard]] bool InStroke() const noexcept { return stroke_.has_value(); }
 
     // Cell edits; outside a stroke each is a stroke of its own. InvalidGrid
@@ -154,10 +156,28 @@ struct PickHit final {
     friend bool operator==(const PickHit&, const PickHit&) = default;
 };
 
+// The edit plane: the layer of cells whose coordinate on axis (0 x, 1 y, 2 z)
+// is at.
+struct EditPlane final {
+    int axis{1};
+    std::int32_t at{};
+    friend bool operator==(const EditPlane&, const EditPlane&) = default;
+};
+
+// What a pick snaps to (Goxel's snap): the surface of filled cells (volume),
+// the edit plane, or both (the first the ray meets).
+struct PickOptions final {
+    bool volume{true};
+    bool plane{true};
+};
+
 // Walks the cells along a world ray (DDA) and returns the first filled cell
-// (a cell of any shape counts as whole) within maxCells; when there is none,
-// the cell of the edit plane (relative y == planeY) the ray crosses within
-// maxCells cells, if any.
+// (a cell of any shape counts as whole) within maxCells; when there is none
+// (or volume is off), the cell of the edit plane the ray crosses within
+// maxCells cells, if any (and plane is on).
+[[nodiscard]] std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const EditPlane& plane,
+                                          const PickOptions& options, std::int32_t maxCells = 1024) noexcept;
+// The same with the edit plane at relative y == planeY and both snaps on.
 [[nodiscard]] std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, std::int32_t planeY,
                                           std::int32_t maxCells = 1024) noexcept;
 // Where placing goes: the plane cell itself, or the cell beside the hit face.

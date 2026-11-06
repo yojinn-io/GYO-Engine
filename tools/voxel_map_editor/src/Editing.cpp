@@ -96,6 +96,16 @@ void EditSession::EndStroke() {
     if (!step.changes.empty()) Push(std::move(step));
 }
 
+void EditSession::CancelStroke() {
+    if (!stroke_) return;
+    for (auto change = stroke_->changes.rbegin(); change != stroke_->changes.rend(); ++change) {
+        document_.Set(change->cell, change->before);
+        changes_.cells.push_back(change->cell);
+    }
+    if (!stroke_->changes.empty()) ++revision_;
+    stroke_.reset();
+}
+
 void EditSession::Push(Step step) {
     steps_.resize(position_);
     if (savedPosition_ && *savedPosition_ > position_) savedPosition_.reset();
@@ -310,8 +320,8 @@ Math::Vec3 CellCorner(const GridDocument& document, const Vec3i& cell) noexcept 
             static_cast<float>(cell[2] + document.origin[2]) * document.cellSize};
 }
 
-std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const std::int32_t planeY,
-                            const std::int32_t maxCells) noexcept {
+std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const EditPlane& plane,
+                            const PickOptions& options, const std::int32_t maxCells) noexcept {
     // In relative cell coordinates: world / cell_size - origin.
     const double size = document.cellSize;
     const std::array<double, 3> origin{ray.origin.x / size - document.origin[0], ray.origin.y / size - document.origin[1],
@@ -343,7 +353,8 @@ std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const 
     }
     Vec3i normal{};
     for (std::int32_t walked = 0; walked <= maxCells; ++walked) {
-        if (CellInRange(document, cell) && document.At(cell).block != 0) return PickHit{cell, normal, false};
+        if (options.volume && CellInRange(document, cell) && document.At(cell).block != 0)
+            return PickHit{cell, normal, false};
         int axis = 0;
         if (next[1] < next[axis]) axis = 1;
         if (next[2] < next[axis]) axis = 2;
@@ -353,19 +364,33 @@ std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const 
         normal = {0, 0, 0};
         normal[axis] = -step[axis];
     }
-    // No filled cell: the edit plane, the cell layer y in [planeY, planeY + 1).
-    // The ray meets its top when coming down onto it, its bottom when coming up.
-    if (direction[1] == 0.0) return std::nullopt;
-    const double face = direction[1] < 0.0 ? planeY + 1.0 : static_cast<double>(planeY);
-    const double t = (face - origin[1]) / direction[1];
-    // Not behind the ray, and not beyond maxCells along it (a ray near the horizon meets the plane far away).
+    // No filled cell: the edit plane, the layer of cells whose coordinate on
+    // plane.axis is plane.at. The ray meets its far side when coming from
+    // above it, its near side when coming from below.
+    if (!options.plane || plane.axis < 0 || plane.axis > 2) return std::nullopt;
+    const auto a = static_cast<std::size_t>(plane.axis);
+    if (direction[a] == 0.0) return std::nullopt;
+    const double face = direction[a] < 0.0 ? plane.at + 1.0 : static_cast<double>(plane.at);
+    const double t = (face - origin[a]) / direction[a];
+    // Not behind the ray, and not beyond maxCells along it (a ray near the plane meets it far away).
     if (!(t >= 0.0) || t > static_cast<double>(maxCells)) return std::nullopt;
-    const auto x = FloorCell(origin[0] + t * direction[0]);
-    const auto z = FloorCell(origin[2] + t * direction[2]);
-    if (!x || !z) return std::nullopt;
-    const Vec3i planeCell{*x, planeY, *z};
+    Vec3i planeCell{};
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        if (axis == a) {
+            planeCell[axis] = plane.at;
+            continue;
+        }
+        const auto at = FloorCell(origin[axis] + t * direction[axis]);
+        if (!at) return std::nullopt;
+        planeCell[axis] = *at;
+    }
     if (!CellInRange(document, planeCell)) return std::nullopt;
     return PickHit{planeCell, {0, 0, 0}, true};
+}
+
+std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const std::int32_t planeY,
+                            const std::int32_t maxCells) noexcept {
+    return Pick(document, ray, EditPlane{1, planeY}, PickOptions{}, maxCells);
 }
 
 Vec3i PlacementCell(const PickHit& hit) noexcept {
