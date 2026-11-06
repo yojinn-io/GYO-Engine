@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`），實作中。
+- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；**等你：守衛 §14.4 的核准、空格子存檔時舊地圖的處置、L3 試用**。
 - **PR**：
   - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
   - window 批在分支 `claude/v8-tool-voxel-map-window`，有它自己的 PR。
@@ -181,3 +181,4 @@
 - 2026-11-06：架構師轉達你的定案：kinds 的 7 條突變搬到 Engine 的目錄，改名 `mm-*`；map-markers.md 的 DI 3 改字句；「Cost」段補一句（不加預掃）。engine_format 目錄 68/68 被殺。
 - 2026-11-06：`tc-markers` 的 L1 三平台通過（run 42195132825，head `137085ae`）；`16a28c62` 只改文件，L1 skip。tool-chunked 批的判定 T1～T9 全部成立，**等你決定是否合併 PR #163**。
 - 2026-11-06：PR #163 合併（`24f111eb`），tool-chunked 批完成。你試用了上一版的視窗，指定照 Goxel 的功能與互動重做（`v8-tool-voxel-window-goxel`）。讀了 Goxel 的 `src/tools/`、`src/gui/`、`goxel.c`、`gesture3d.c`、`tools.c`（只讀行為）。把 master merge 進本分支，解決 PR #158 的衝突（`9c2a2479`；守衛的自我測試改成逐名檢查，判定同等或更嚴）。寫好 window-1 的事前宣告，等你核准。
+- 2026-11-06：window-1 實作完成（vw1-preview、vw1-tools、vw1-markers）。探索時，第一版每幀編輯 p95 152 ms（每次編輯複製整張地圖、所有區塊標髒），修正後 P1 判定成立：(a) 7.48 ms、(b) 8.82 ms。審查：B1（snap 沒取先碰到的）與 5 個 should-fix 已修，宣告漏做的兩項已補。§14.4 驗證者找出 3 個隱藏放寬，已改嚴。突變 87/87。dev_log：[2026_11_06_tool_v8_voxel_window_1](../../../dev_logs/2026_11_06_tool_v8_voxel_window_1.zh-Hant.md)。
