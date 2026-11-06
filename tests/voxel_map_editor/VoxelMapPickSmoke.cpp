@@ -62,8 +62,8 @@ int main(int argc, char** argv) {
     document.origin = {3, 0, -2};
     document.cellSize = 0.5F;
     document.Set({1, 2, 1}, {1, 0});
-    auto geometry = PreviewGeometry(document);
-    if (!geometry || !scene.value()->Show(*geometry)) {
+    auto preview = MapPreview::Create(document);
+    if (!preview || !scene.value()->Apply(preview->TakeChanges())) {
         std::cerr << "the cube cannot be shown\n";
         return 1;
     }

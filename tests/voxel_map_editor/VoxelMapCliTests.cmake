@@ -83,6 +83,10 @@ endif()
 # without the window says so and opens nothing.
 check(2 edit_arguments edit "${WORK}/only.voxel_grid.json")
 check(2 edit_option edit "${WORK}/a.voxel_grid.json" "${WORK}/a.voxel_mesh.json" --gpu "metal")
+# The markers file and the kinds list go together (v8-tool-voxel-window-1, W8).
+check(2 edit_markers_alone edit "${WORK}/a.voxel_grid.json" "${WORK}/a-map" --markers "${WORK}/m.json")
+check(2 edit_kinds_alone edit "${WORK}/a.voxel_grid.json" "${WORK}/a-map" --marker-kinds "${WORK}/k.json")
+check(2 measure_no_edit_value measure-preview --synthetic --csv "${WORK}/m.csv" --no-edit --frames)
 check(2 measure_no_map measure-preview --csv "${WORK}/m.csv")
 check(2 measure_both measure-preview --synthetic --grid "${WORK}/a.voxel_grid.json" --csv "${WORK}/m.csv")
 check(2 measure_no_csv measure-preview --synthetic)

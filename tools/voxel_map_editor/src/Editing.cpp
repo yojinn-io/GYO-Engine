@@ -125,6 +125,7 @@ Result<void> EditSession::ApplyCell(const Vec3i& cell, Cell value) {
     }
     document_.Set(cell, value);
     ++revision_;
+    changes_.cells.push_back(cell);
     if (ownStroke) EndStroke();
     return {};
 }
@@ -172,6 +173,7 @@ Result<void> EditSession::ApplyDocument(GridDocument next) {
     DocumentStep step{document_, next};
     document_ = std::move(next);
     ++revision_;
+    changes_.whole = true;
     Push(std::move(step));
     return {};
 }
@@ -230,6 +232,8 @@ Result<void> EditSession::RemoveShape(const std::size_t index) {
     return ApplyDocument(std::move(next));
 }
 
+DocumentChanges EditSession::TakeChanges() { return std::exchange(changes_, {}); }
+
 bool EditSession::CanUndo() const noexcept { return position_ > 0 || (stroke_ && !stroke_->changes.empty()); }
 bool EditSession::CanRedo() const noexcept { return !stroke_ && position_ < steps_.size(); }
 
@@ -238,10 +242,13 @@ bool EditSession::Undo() {
     if (position_ == 0) return false;
     const auto& step = steps_[--position_];
     if (const auto* cells = std::get_if<CellStep>(&step)) {
-        for (auto change = cells->changes.rbegin(); change != cells->changes.rend(); ++change)
+        for (auto change = cells->changes.rbegin(); change != cells->changes.rend(); ++change) {
             document_.Set(change->cell, change->before);
+            changes_.cells.push_back(change->cell);
+        }
     } else {
         document_ = std::get<DocumentStep>(step).before;
+        changes_.whole = true;
     }
     ++revision_;
     return true;
@@ -251,9 +258,13 @@ bool EditSession::Redo() {
     if (stroke_ || position_ >= steps_.size()) return false;
     const auto& step = steps_[position_++];
     if (const auto* cells = std::get_if<CellStep>(&step)) {
-        for (const auto& change : cells->changes) document_.Set(change.cell, change.after);
+        for (const auto& change : cells->changes) {
+            document_.Set(change.cell, change.after);
+            changes_.cells.push_back(change.cell);
+        }
     } else {
         document_ = std::get<DocumentStep>(step).after;
+        changes_.whole = true;
     }
     ++revision_;
     return true;
@@ -362,14 +373,68 @@ Vec3i PlacementCell(const PickHit& hit) noexcept {
     return {hit.cell[0] + hit.normal[0], hit.cell[1] + hit.normal[1], hit.cell[2] + hit.normal[2]};
 }
 
-Result<Engine::VoxelMesh::VoxelMeshGeometry> PreviewGeometry(const GridDocument& document) {
-    if (document.chunks.empty()) return Engine::VoxelMesh::VoxelMeshGeometry{};
-    // The source hash does not reach the geometry, so no grid text is written here.
-    auto built = BuildMesh(document, {});
-    if (!built) return Engine::Base::Err(std::move(built).error());
-    auto parsed = Engine::VoxelMesh::ParseVoxelMesh(built->text);
-    if (!parsed) return Refuse(VoxelMapErrorCode::BuildRefused, Engine::Base::Describe(parsed.error()));
-    return Engine::VoxelMesh::ExpandVoxelMesh(*parsed);
+Result<MapPreview> MapPreview::Create(const GridDocument& document) {
+    MapPreview preview;
+    if (auto applied = preview.Apply(document, {{}, true}); !applied) return Engine::Base::Err(std::move(applied).error());
+    return preview;
+}
+
+Result<void> MapPreview::Apply(const GridDocument& document, const DocumentChanges& changes) {
+    namespace VM = Engine::VoxelMesh;
+    const auto before = map_ ? map_->index.palette : std::vector<VM::VoxelPaletteEntry>{};
+    std::set<Vec3i> touched;
+    std::optional<BakedMap> next;
+    if (changes.whole || !map_) {
+        // Everything: the chunks there were and the chunks there are.
+        if (map_)
+            for (const auto& [at, chunk] : map_->chunks) touched.insert(at);
+        auto baked = BakeMap(document);
+        if (!baked && baked.error().code != VoxelMapErrorCode::EmptyMap) return Engine::Base::Err(std::move(baked).error());
+        if (baked) {
+            for (const auto& [at, chunk] : baked->chunks) touched.insert(at);
+            next = std::move(*baked);
+        }
+    } else {
+        // Cell edits leave the palette, the shapes, the origin and the cell size
+        // as they were (those are whole-document changes), so RebakeChunks
+        // rebakes only these chunks, in place, and leaves the map as it was on
+        // an error.
+        touched = ChunksTouchedBy(changes.cells);
+        if (touched.empty()) return {};
+        const std::vector<Vec3i> keys(touched.begin(), touched.end());
+        auto rebaked = RebakeChunks(document, *map_, keys);
+        if (!rebaked && rebaked.error().code != VoxelMapErrorCode::EmptyMap)
+            return Engine::Base::Err(std::move(rebaked).error());
+        if (!rebaked) {
+            for (const auto& [at, chunk] : map_->chunks) touched.insert(at);
+            map_.reset();
+        } else {
+            next = std::move(map_);
+        }
+    }
+    const auto& after = next ? next->index.palette : std::vector<VM::VoxelPaletteEntry>{};
+    const bool samePalette = std::equal(before.begin(), before.end(), after.begin(), after.end(),
+                                        [](const auto& a, const auto& b) { return a.name == b.name && a.faces == b.faces; });
+    if (!samePalette) paletteDirty_ = true;
+    map_ = std::move(next);
+    dirty_.insert(touched.begin(), touched.end());
+    return {};
+}
+
+MapPreview::Changes MapPreview::TakeChanges() {
+    namespace VM = Engine::VoxelMesh;
+    Changes out;
+    for (const auto& at : dirty_) {
+        std::optional<VM::VoxelChunkGeometry> geometry;
+        if (map_)
+            if (const auto chunk = map_->chunks.find(at); chunk != map_->chunks.end())
+                geometry = VM::ExpandVoxelChunk(chunk->second, map_->index);
+        out.chunks.emplace(at, std::move(geometry));
+    }
+    dirty_.clear();
+    if (paletteDirty_ && map_) out.palette = VM::ExpandVoxelPalette(map_->index);
+    paletteDirty_ = false;
+    return out;
 }
 
 namespace {
@@ -392,14 +457,15 @@ std::span<const std::byte> AsBytes(const std::string& text) {
 
 } // namespace
 
-Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& meshPath) {
+Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& mapDirectory) {
     OpenedEditor opened;
     opened.files.grid.path = gridPath;
-    opened.files.mesh.path = meshPath;
+    opened.files.mapDirectory = mapDirectory;
+    opened.files.mapIndex.path = mapDirectory + "/" + std::string(MapIndexFile);
     auto grid = Current(gridPath);
     if (!grid) return Engine::Base::Err(std::move(grid).error());
-    auto mesh = Current(meshPath);
-    if (!mesh) return Engine::Base::Err(std::move(mesh).error());
+    auto index = Current(opened.files.mapIndex.path);
+    if (!index) return Engine::Base::Err(std::move(index).error());
     if (*grid) {
         const auto& bytes = **grid;
         auto parsed = ParseGrid({reinterpret_cast<const char*>(bytes.data()), bytes.size()});
@@ -409,30 +475,39 @@ Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& 
         opened.document = NewGrid();
     }
     opened.files.grid.known = std::move(*grid);
-    opened.files.mesh.known = std::move(*mesh);
+    opened.files.mapIndex.known = std::move(*index);
     return opened;
 }
 
-Result<void> SaveEditor(EditorFiles& files, const GridDocument& document) {
+Result<SaveResult> SaveEditor(EditorFiles& files, const GridDocument& document, const MapPreview& preview,
+                              const SaveMode mode) {
     const std::string gridText = WriteGrid(document);
-    auto built = BuildMesh(document, AsBytes(gridText));
-    if (!built) return Engine::Base::Err(std::move(built).error());
-    for (const EditorFile* file : {&files.grid, &files.mesh}) {
-        auto now = Current(file->path);
-        if (!now) return Engine::Base::Err(std::move(now).error());
-        if (*now != file->known)
-            return Refuse(VoxelMapErrorCode::FileChanged, file->path + " changed since it was opened or saved");
+    // The map's texts first, so a map Engine refuses writes nothing.
+    std::optional<MapText> mapText;
+    if (preview.Map()) {
+        auto written = WriteMap(*preview.Map(), AsBytes(gridText));
+        if (!written) return Engine::Base::Err(std::move(written).error());
+        mapText = std::move(*written);
     }
-    if (auto written = WriteFileReplacing(files.grid.path, gridText); !written) return written;
+    if (mode == SaveMode::Checked) {
+        for (const EditorFile* file : {&files.grid, &files.mapIndex}) {
+            auto now = Current(file->path);
+            if (!now) return Engine::Base::Err(std::move(now).error());
+            if (*now != file->known)
+                return Refuse(VoxelMapErrorCode::FileChanged, file->path + " changed since it was opened or saved");
+        }
+    }
+    if (auto written = WriteFileReplacing(files.grid.path, gridText); !written) return Engine::Base::Err(std::move(written).error());
     const auto gridBytes = AsBytes(gridText);
     files.grid.known = std::vector<std::byte>(gridBytes.begin(), gridBytes.end());
-    if (auto written = WriteFileReplacing(files.mesh.path, built->text); !written) {
+    if (!mapText) return SaveResult{false};
+    if (auto saved = SaveMap(files.mapDirectory, *mapText); !saved) {
         return Refuse(VoxelMapErrorCode::WriteFailed,
-                      "the grid was saved but its mesh was not: " + Engine::Base::Describe(written.error()));
+                      "the grid was saved but its map was not: " + Engine::Base::Describe(saved.error()));
     }
-    const auto meshBytes = AsBytes(built->text);
-    files.mesh.known = std::vector<std::byte>(meshBytes.begin(), meshBytes.end());
-    return {};
+    const auto indexBytes = AsBytes(mapText->index);
+    files.mapIndex.known = std::vector<std::byte>(indexBytes.begin(), indexBytes.end());
+    return SaveResult{true};
 }
 
 } // namespace Gyo::Tools::VoxelMapEditor

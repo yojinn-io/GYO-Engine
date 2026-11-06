@@ -19,12 +19,14 @@
 #include <sstream>
 #include <vector>
 
-// P1 of the trial batch (docs/tools/plans/v8/voxel-map-editor.md): per frame
-// one cell edit (placed, then erased, in turn), the whole build with Engine's
-// read-back (PreviewGeometry), the mesh and palette upload, Engine's drawing
-// on the framework's offscreen preview, the readback (waiting for the GPU) and
-// the upload into a texture of the window's SDL renderer: what the window does
-// for an edit but ImGui.
+// P1 of v8-tool-voxel-window-1 (docs/tools/plans/v8/voxel-map-window-goxel.md):
+// per frame, with edit, one cell edit from a fixed sequence (the centre of a
+// chunk, then a cell on a chunk's side, chunk after chunk in key order; the
+// cell filled when empty and emptied when filled), the rebake of the chunks it
+// touched (MapPreview), Engine's expansion and upload of those chunks; then,
+// with or without edit, Engine's drawing on the framework's offscreen preview,
+// the readback (waiting for the GPU) and the upload into a texture of the
+// window's SDL renderer: what the window does for an edit but ImGui.
 namespace Gyo::Tools::VoxelMapEditor {
 namespace {
 
@@ -70,16 +72,25 @@ int RunPreviewMeasure(const MeasureOptions& options) {
         }
         document = std::move(*parsed);
     }
-    // The edited cell: one above the map's highest chunk, at its first column.
     Vec3i low{0, 0, 0};
     Vec3i high{1, 1, 1};
+    std::vector<Vec3i> chunkKeys;
     for (const auto& [at, chunk] : document.chunks) {
+        chunkKeys.push_back(at);
         for (int axis = 0; axis < 3; ++axis) {
             low[axis] = std::min(low[axis], at[axis] * ChunkSize);
             high[axis] = std::max(high[axis], at[axis] * ChunkSize + ChunkSize);
         }
     }
-    const Vec3i edited{low[0], high[1], low[2]};
+    if (chunkKeys.empty()) {
+        std::cerr << "error: the grid has no filled cell\n";
+        return 1;
+    }
+    const auto editedCell = [&chunkKeys](const std::uint32_t frame) {
+        const auto& key = chunkKeys[(frame / 2) % chunkKeys.size()];
+        const std::int32_t x = frame % 2 == 0 ? ChunkSize / 2 : 0; // the centre, then the -X side
+        return Vec3i{key[0] * ChunkSize + x, key[1] * ChunkSize + ChunkSize / 2, key[2] * ChunkSize + ChunkSize / 2};
+    };
 
     Engine::Platform::Sdl::SdlPlatformOptions platformOptions;
     platformOptions.title = "GYO Voxel Map Editor preview measure";
@@ -115,21 +126,41 @@ int RunPreviewMeasure(const MeasureOptions& options) {
     orbit.distance = std::max(Math::Length(highWorld - lowWorld) * 0.9F, 4.0F * size);
     const auto camera = orbit.Camera();
 
+    auto preview = MapPreview::Create(document);
+    if (!preview) {
+        std::cerr << "error: " << Engine::Base::Describe(preview.error()) << '\n';
+        return 1;
+    }
+    // Setting up the map is not measured: the window does it once when it opens.
+    if (auto shown = scene.value()->Apply(preview->TakeChanges()); !shown) {
+        std::cerr << "error: " << Engine::Base::Describe(shown.error()) << '\n';
+        return 4;
+    }
     EditSession session(std::move(document));
     Framework::PreviewTexture texture;
     std::vector<double> times;
     times.reserve(options.frames);
     std::ostringstream csv;
-    csv << "map,frame,vertices,frame_ms\n";
+    csv << "map,frame,edit,chunks_uploaded,frame_ms\n";
     const std::string name = options.synthetic ? std::string("synthetic") : options.gridPath;
-    int failures = 0;
+    std::uint32_t failures = 0;
+    std::uint32_t measured = 0;
     for (std::uint32_t frame = 0; frame < options.frames; ++frame) {
         static_cast<void>(platform.value()->PumpEvents());
         const auto started = std::chrono::steady_clock::now();
-        const Cell value = frame % 2 == 0 ? Cell{1, 0} : Cell{};
-        bool ok = static_cast<bool>(session.SetCell(edited, value));
-        auto geometry = PreviewGeometry(session.Document());
-        ok = ok && geometry && scene.value()->Show(*geometry);
+        bool ok = true;
+        std::size_t uploaded = 0;
+        if (options.edit) {
+            const Vec3i cell = editedCell(frame);
+            const Cell value = session.Document().At(cell).block == 0 ? Cell{1, 0} : Cell{};
+            ok = static_cast<bool>(session.SetCell(cell, value));
+            ok = ok && preview->Apply(session.Document(), session.TakeChanges());
+            if (ok) {
+                const auto changes = preview->TakeChanges();
+                uploaded = changes.chunks.size();
+                ok = static_cast<bool>(scene.value()->Apply(changes));
+            }
+        }
         auto drawn = scene.value()->Render(camera, options.width, options.height);
         ok = ok && drawn && Framework::UploadFrame(*renderer.value(), texture, drawn.value());
         const auto ended = std::chrono::steady_clock::now();
@@ -137,9 +168,10 @@ int RunPreviewMeasure(const MeasureOptions& options) {
             ++failures;
             continue;
         }
+        ++measured;
         const double ms = std::chrono::duration<double, std::milli>(ended - started).count();
-        times.push_back(ms);
-        csv << name << ',' << frame << ',' << geometry->vertices.size() << ',' << ms << '\n';
+        if (frame >= options.warmup) times.push_back(ms);
+        csv << name << ',' << frame << ',' << (options.edit ? 1 : 0) << ',' << uploaded << ',' << ms << '\n';
         // The window shows the texture each frame; so does this.
         static_cast<void>(renderer.value()->Clear({0, 0, 0, 255}));
         static_cast<void>(renderer.value()->Present());
@@ -152,8 +184,10 @@ int RunPreviewMeasure(const MeasureOptions& options) {
         const auto index = static_cast<std::size_t>(std::ceil(q * static_cast<double>(sorted.size()))) - 1;
         return sorted[std::min(index, sorted.size() - 1)];
     };
-    std::printf("%s frames=%zu/%u p50=%.3f p95=%.3f p99=%.3f max=%.3f ms\n", name.c_str(), times.size(), options.frames,
-                at(0.5), at(0.95), at(0.99), sorted.empty() ? 0.0 : sorted.back());
+    std::printf("%s edit=%d requested=%u measured=%u failed=%u warmup=%u counted=%zu p50=%.3f p95=%.3f p99=%.3f "
+                "max=%.3f ms chunks=%zu\n",
+                name.c_str(), options.edit ? 1 : 0, options.frames, measured, failures, options.warmup, times.size(),
+                at(0.5), at(0.95), at(0.99), sorted.empty() ? 0.0 : sorted.back(), scene.value()->ChunkCount());
     if (auto written = WriteFileReplacing(options.csvPath, csv.str()); !written) {
         std::cerr << "error: " << Engine::Base::Describe(written.error()) << '\n';
         return 3;

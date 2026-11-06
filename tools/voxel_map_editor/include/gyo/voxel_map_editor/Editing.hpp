@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gyo/voxel_map_editor/ChunkedMap.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 
 #include "engine/math/linear/Matrix4.hpp"
@@ -10,6 +11,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <variant>
 #include <vector>
@@ -37,6 +39,14 @@ struct CellChange final {
     Cell after{};
 };
 
+// What changed in a document since it was last asked: the cells a cell edit,
+// its undo or its redo set, and whether a palette or shape edit (or its undo
+// or redo) replaced the document.
+struct DocumentChanges final {
+    std::vector<Vec3i> cells;
+    bool whole{};
+};
+
 // Edits a document. Cell edits between BeginStroke and EndStroke are one undo
 // step (one drag); a palette or shape edit is one step of its own. A new edit
 // clears what could be redone.
@@ -53,6 +63,8 @@ public:
     // Counts every change to the document (edits, undo, redo), so a preview
     // knows when to rebuild.
     [[nodiscard]] std::uint64_t Revision() const noexcept { return revision_; }
+    // The changes since the last call (a preview rebakes only what they touch).
+    [[nodiscard]] DocumentChanges TakeChanges();
 
     void BeginStroke();
     void EndStroke();
@@ -104,6 +116,7 @@ private:
     std::optional<std::size_t> savedPosition_{0};
     std::optional<CellStep> stroke_;
     std::uint64_t revision_{};
+    DocumentChanges changes_;
 };
 
 // The camera of the preview, in Engine's camera convention
@@ -150,12 +163,40 @@ struct PickHit final {
 // Where placing goes: the plane cell itself, or the cell beside the hit face.
 [[nodiscard]] Vec3i PlacementCell(const PickHit& hit) noexcept;
 
-// What the preview draws (Design Invariant 7): the text BuildMesh returns, read
-// and expanded by Engine. Empty geometry for a grid without cells.
-[[nodiscard]] Result<Engine::VoxelMesh::VoxelMeshGeometry> PreviewGeometry(const GridDocument& document);
+// What the preview draws (Design Invariant 7): the chunks BakeMap and
+// RebakeChunks keep (each accepted by Engine's ValidateVoxelChunk), expanded by
+// Engine's ExpandVoxelChunk, with ExpandVoxelPalette's image. The same chunks
+// are what saving writes. A grid without filled cells has no map and draws
+// nothing.
+class MapPreview final {
+public:
+    [[nodiscard]] static Result<MapPreview> Create(const GridDocument& document);
 
-// The two files the window edits. A file's bytes as they were when it was
-// opened or last saved; nullopt when it did not exist.
+    // Rebakes what the changes touch (everything when whole); on an error the
+    // preview is left as it was.
+    Result<void> Apply(const GridDocument& document, const DocumentChanges& changes);
+
+    // The baked map, empty when the grid has no filled cell.
+    [[nodiscard]] const std::optional<BakedMap>& Map() const noexcept { return map_; }
+
+    // What changed since the last call: every chunk to draw anew (nullopt: no
+    // longer drawn), and the palette image when it changed. The first call
+    // after Create gives everything.
+    struct Changes final {
+        std::map<Vec3i, std::optional<Engine::VoxelMesh::VoxelChunkGeometry>> chunks;
+        std::optional<Engine::VoxelMesh::VoxelPaletteImage> palette;
+    };
+    [[nodiscard]] Changes TakeChanges();
+
+private:
+    std::optional<BakedMap> map_;
+    std::set<Vec3i> dirty_;
+    bool paletteDirty_{true};
+};
+
+// The files the window edits. A file's bytes as they were when it was opened
+// or last saved; nullopt when it did not exist. The map is a folder; its
+// map.json stands for it.
 struct EditorFile final {
     std::string path;
     std::optional<std::vector<std::byte>> known;
@@ -163,7 +204,8 @@ struct EditorFile final {
 
 struct EditorFiles final {
     EditorFile grid;
-    EditorFile mesh;
+    std::string mapDirectory;
+    EditorFile mapIndex; // <mapDirectory>/map.json
 };
 
 struct OpenedEditor final {
@@ -171,13 +213,24 @@ struct OpenedEditor final {
     GridDocument document;
 };
 
-// Reads the grid (NewGrid when the file does not exist) and remembers both
-// files' bytes.
-[[nodiscard]] Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& meshPath);
-// Writes the grid, then its baked mesh, each by atomic replace; nothing when
-// the build is refused or a file changed since it was opened or saved
-// (FileChanged). When the mesh cannot be written after the grid was, the
-// grid's known bytes are updated and WriteFailed is returned.
-[[nodiscard]] Result<void> SaveEditor(EditorFiles& files, const GridDocument& document);
+// Reads the grid (NewGrid when the file does not exist) and remembers the
+// grid's and the map index's bytes.
+[[nodiscard]] Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& mapDirectory);
+
+enum class SaveMode : std::uint8_t {
+    Checked,   // FileChanged, writing nothing, when a file changed since it was opened or saved
+    Overwrite, // the user chose to replace what is on disk
+};
+
+struct SaveResult final {
+    bool mapWritten{}; // false when the grid has no filled cell (a map needs one)
+};
+
+// Writes the grid, then the map of those chunks (WriteMap and SaveMap: what
+// Engine refuses is not written), each by atomic replace. When the map cannot
+// be written after the grid was, the grid's known bytes are updated and the
+// error is returned.
+[[nodiscard]] Result<SaveResult> SaveEditor(EditorFiles& files, const GridDocument& document,
+                                            const MapPreview& preview, SaveMode mode = SaveMode::Checked);
 
 } // namespace Gyo::Tools::VoxelMapEditor

@@ -9,7 +9,10 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <cstring>
 #include <limits>
+#include <map>
+#include <span>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -18,7 +21,8 @@ using namespace Gyo::Tools::VoxelMapEditor;
 namespace Math = Engine::Math;
 
 // Judgments W1 to W3 and W5 to W7 of the v8-tool-voxel-map-editor-window
-// declaration (docs/tools/plans/v8/voxel-map-editor.md).
+// declaration (docs/tools/plans/v8/voxel-map-editor.md), and W5 to W7 of
+// v8-tool-voxel-window-1 (docs/tools/plans/v8/voxel-map-window-goxel.md).
 
 namespace {
 
@@ -268,150 +272,6 @@ TEST_CASE("W3 pick: a cell projected to a pixel is picked back through that pixe
     CHECK(up->y < 240.0F);
 }
 
-TEST_CASE("W5 save: grid then mesh, the mesh's source_sha256 is the saved grid's, both read back") {
-    const auto folder = Scratch("save");
-    const auto gridPath = (folder / "map.voxel_grid.json").string();
-    const auto meshPath = (folder / "sub" / "map.voxel_mesh.json").string();
-    auto opened = OpenEditor(gridPath, meshPath);
-    REQUIRE(opened);
-    CHECK_FALSE(opened->files.grid.known);
-    EditSession session(opened->document);
-    REQUIRE(session.FillBox({0, 0, 0}, {3, 0, 2}, kCube));
-    REQUIRE(session.SetCell({1, 1, 1}, {1, 7}));
-    REQUIRE(SaveEditor(opened->files, session.Document()));
-
-    const auto gridText = ReadText(gridPath);
-    const auto meshText = ReadText(meshPath);
-    CHECK(gridText == Text(session.Document()));
-    const auto mesh = Engine::VoxelMesh::ParseVoxelMesh(meshText);
-    REQUIRE(mesh);
-    CHECK(mesh->sourceSha256 == Engine::Base::Sha256(std::as_bytes(std::span{gridText.data(), gridText.size()})));
-    // What verify does: the saved grid builds to the saved mesh, byte for byte.
-    const auto reread = ParseGrid(gridText);
-    REQUIRE(reread);
-    const auto rebuilt = BuildMesh(*reread, std::as_bytes(std::span{gridText.data(), gridText.size()}));
-    REQUIRE(rebuilt);
-    CHECK(rebuilt->text == meshText);
-    CHECK(Text(*reread) == Text(session.Document()));
-
-    // A second save after another edit works: the known bytes followed the save.
-    REQUIRE(session.SetCell({3, 1, 2}, kCube));
-    REQUIRE(SaveEditor(opened->files, session.Document()));
-    CHECK(ReadText(gridPath) == Text(session.Document()));
-    std::filesystem::remove_all(folder);
-}
-
-TEST_CASE("W5 save: a file changed since it was opened is not overwritten; nothing is written") {
-    const auto folder = Scratch("changed");
-    const auto gridPath = (folder / "map.voxel_grid.json").string();
-    const auto meshPath = (folder / "map.voxel_mesh.json").string();
-    auto opened = OpenEditor(gridPath, meshPath);
-    REQUIRE(opened);
-    EditSession session(opened->document);
-    REQUIRE(session.SetCell({0, 0, 0}, kCube));
-    REQUIRE(SaveEditor(opened->files, session.Document()));
-    const auto savedGrid = ReadText(gridPath);
-    const auto savedMesh = ReadText(meshPath);
-
-    // Someone else rewrites the mesh: neither file is written.
-    WriteText(meshPath, savedMesh + " ");
-    REQUIRE(session.SetCell({1, 0, 0}, kCube));
-    const auto refused = SaveEditor(opened->files, session.Document());
-    REQUIRE_FALSE(refused);
-    CHECK(refused.error().code == VoxelMapErrorCode::FileChanged);
-    CHECK(ReadText(gridPath) == savedGrid);
-    CHECK(ReadText(meshPath) == savedMesh + " ");
-
-    // A grid file that appears after opening a new one is not overwritten either.
-    const auto other = (folder / "other.voxel_grid.json").string();
-    auto fresh = OpenEditor(other, (folder / "other.voxel_mesh.json").string());
-    REQUIRE(fresh);
-    WriteText(other, "someone else's");
-    CHECK(SaveEditor(fresh->files, session.Document()).error().code == VoxelMapErrorCode::FileChanged);
-    CHECK(ReadText(other) == "someone else's");
-    CHECK_FALSE(std::filesystem::exists(folder / "other.voxel_mesh.json"));
-    std::filesystem::remove_all(folder);
-}
-
-TEST_CASE("W5 save: when the grid cannot be written, the mesh is not written either") {
-    const auto folder = Scratch("unwritable");
-    // The grid's folder is a file, so the grid cannot be written there.
-    WriteText(folder / "blocker", "a file, not a folder");
-    const auto gridPath = (folder / "blocker" / "map.voxel_grid.json").string();
-    const auto meshPath = (folder / "map.voxel_mesh.json").string();
-    auto opened = OpenEditor(gridPath, meshPath);
-    REQUIRE(opened);
-    EditSession session(opened->document);
-    REQUIRE(session.SetCell({0, 0, 0}, kCube));
-    const auto refused = SaveEditor(opened->files, session.Document());
-    REQUIRE_FALSE(refused);
-    CHECK(refused.error().code == VoxelMapErrorCode::WriteFailed);
-    CHECK_FALSE(std::filesystem::exists(meshPath));
-    std::filesystem::remove_all(folder);
-}
-
-TEST_CASE("W5 save: a grid Engine refuses to bake writes nothing") {
-    const auto folder = Scratch("refused");
-    const auto gridPath = (folder / "map.voxel_grid.json").string();
-    const auto meshPath = (folder / "map.voxel_mesh.json").string();
-    auto opened = OpenEditor(gridPath, meshPath);
-    REQUIRE(opened);
-    // An empty grid bakes to no quads, which Engine refuses.
-    const auto refused = SaveEditor(opened->files, opened->document);
-    REQUIRE_FALSE(refused);
-    CHECK(refused.error().code == VoxelMapErrorCode::BuildRefused);
-    CHECK_FALSE(std::filesystem::exists(gridPath));
-    CHECK_FALSE(std::filesystem::exists(meshPath));
-    std::filesystem::remove_all(folder);
-}
-
-TEST_CASE("W5 open: an existing grid is read, a broken one refused") {
-    const auto folder = Scratch("open");
-    const auto gridPath = (folder / "map.voxel_grid.json").string();
-    auto document = TwoBlocks();
-    document.Set({4, 2, 1}, {2, 9});
-    WriteText(gridPath, Text(document));
-    auto opened = OpenEditor(gridPath, (folder / "map.voxel_mesh.json").string());
-    REQUIRE(opened);
-    CHECK(Text(opened->document) == Text(document));
-    CHECK(opened->files.grid.known);
-    CHECK_FALSE(opened->files.mesh.known);
-    WriteText(gridPath, "{}");
-    CHECK(OpenEditor(gridPath, (folder / "map.voxel_mesh.json").string()).error().code ==
-          VoxelMapErrorCode::InvalidGrid);
-    std::filesystem::remove_all(folder);
-}
-
-TEST_CASE("W6 preview: what is drawn is Engine's expansion of the baked text") {
-    auto document = TwoBlocks();
-    document.Set({0, 0, 0}, kCube);
-    document.Set({1, 0, 0}, {2, 0});
-    document.Set({0, 1, 0}, {1, 6});
-    document.blocks[1].shape = 2;  // a stair
-    const auto preview = PreviewGeometry(document);
-    REQUIRE(preview);
-    const auto built = BuildMesh(document, {});
-    REQUIRE(built);
-    const auto parsed = Engine::VoxelMesh::ParseVoxelMesh(built->text);
-    REQUIRE(parsed);
-    const auto expected = Engine::VoxelMesh::ExpandVoxelMesh(*parsed);
-    REQUIRE(preview->vertices.size() == expected.vertices.size());
-    for (std::size_t i = 0; i < expected.vertices.size(); ++i) {
-        CHECK(preview->vertices[i].position.x == expected.vertices[i].position.x);
-        CHECK(preview->vertices[i].position.y == expected.vertices[i].position.y);
-        CHECK(preview->vertices[i].position.z == expected.vertices[i].position.z);
-        CHECK(preview->vertices[i].uv.x == expected.vertices[i].uv.x);
-        CHECK(preview->vertices[i].uv.y == expected.vertices[i].uv.y);
-    }
-    CHECK(preview->indices == expected.indices);
-    CHECK(preview->paletteRgba8 == expected.paletteRgba8);
-    CHECK(preview->paletteWidth == expected.paletteWidth);
-    // No cells: nothing to draw, and no build.
-    const auto empty = PreviewGeometry(NewGrid());
-    REQUIRE(empty);
-    CHECK(empty->vertices.empty());
-}
-
 TEST_CASE("W7 palette: blocks in use stay, the rest renumber, limits hold") {
     EditSession session(TwoBlocks());
     REQUIRE(session.AddBlock({"green", 1, {40, 200, 40, 255}}));
@@ -504,23 +364,301 @@ TEST_CASE("W3 pick: the plane is met within maxCells, and broken rays pick nothi
     CHECK_FALSE(Pick(document, Ray{{3e9F, 2.0F, 0.5F}, {0.0F, -1.0F, 0.0F}}, 0));
 }
 
-TEST_CASE("W5 save: when the grid is written but the mesh is not, the next save does not see a change") {
-    const auto folder = Scratch("meshfails");
-    const auto gridPath = (folder / "map.voxel_grid.json").string();
-    WriteText(folder / "blocker", "a file, not a folder");
-    const auto meshPath = (folder / "blocker" / "map.voxel_mesh.json").string();
-    auto opened = OpenEditor(gridPath, meshPath);
+// ---- v8-tool-voxel-window-1: saving the grid and its chunked map (W5) ----
+
+namespace {
+
+std::span<const std::byte> BytesOf(const std::string& text) { return std::as_bytes(std::span{text.data(), text.size()}); }
+
+// Reads a saved map with Engine only, as a game would; the chunks in key order.
+std::vector<Engine::VoxelMesh::VoxelChunkDocument> ReadMap(const std::filesystem::path& folder) {
+    const auto index = Engine::VoxelMesh::ParseVoxelMap(ReadText(folder / "map.json"));
+    REQUIRE(index);
+    std::vector<Engine::VoxelMesh::VoxelChunkDocument> chunks;
+    for (const auto& entry : index->regions) {
+        const auto region = Engine::VoxelMesh::ParseVoxelRegion(ReadText(folder / entry.file), *index, entry.at);
+        REQUIRE(region);
+        chunks.insert(chunks.end(), region->chunks.begin(), region->chunks.end());
+    }
+    return chunks;
+}
+
+struct Opened final {
+    OpenedEditor editor;
+    EditSession session;
+    MapPreview preview;
+};
+
+Opened OpenFor(const std::string& gridPath, const std::string& mapDirectory) {
+    auto opened = OpenEditor(gridPath, mapDirectory);
     REQUIRE(opened);
+    auto preview = MapPreview::Create(opened->document);
+    REQUIRE(preview);
     EditSession session(opened->document);
-    REQUIRE(session.SetCell({0, 0, 0}, kCube));
-    const auto failed = SaveEditor(opened->files, session.Document());
-    REQUIRE_FALSE(failed);
-    CHECK(failed.error().code == VoxelMapErrorCode::WriteFailed);
-    CHECK(ReadText(gridPath) == Text(session.Document()));  // the grid is saved
-    REQUIRE(opened->files.grid.known);
-    // Once the mesh can be written, saving again works: the grid's known bytes followed the write.
-    std::filesystem::remove(folder / "blocker");
-    REQUIRE(SaveEditor(opened->files, session.Document()));
-    CHECK(std::filesystem::exists(meshPath));
+    return {std::move(*opened), std::move(session), std::move(*preview)};
+}
+
+void Sync(Opened& o) { REQUIRE(o.preview.Apply(o.session.Document(), o.session.TakeChanges())); }
+
+} // namespace
+
+TEST_CASE("W5 save: the grid, then the map of the previewed chunks; verify-map's bytes; known bytes follow") {
+    const auto folder = Scratch("save");
+    const auto gridPath = (folder / "map.voxel_grid.json").string();
+    const auto mapDir = (folder / "sub" / "map").string();
+    auto o = OpenFor(gridPath, mapDir);
+    CHECK_FALSE(o.editor.files.grid.known);
+    CHECK_FALSE(o.editor.files.mapIndex.known);
+    REQUIRE(o.session.FillBox({0, 0, 0}, {20, 0, 2}, kCube));
+    REQUIRE(o.session.SetCell({1, 1, 1}, {1, 7}));
+    Sync(o);
+    const auto saved = SaveEditor(o.editor.files, o.session.Document(), o.preview);
+    REQUIRE(saved);
+    CHECK(saved->mapWritten);
+
+    const auto gridText = ReadText(gridPath);
+    CHECK(gridText == Text(o.session.Document()));
+    // What verify-map does: the saved grid bakes to the saved files, byte for byte.
+    const auto reread = ParseGrid(gridText);
+    REQUIRE(reread);
+    const auto baked = BakeMap(*reread);
+    REQUIRE(baked);
+    const auto text = WriteMap(*baked, BytesOf(gridText));
+    REQUIRE(text);
+    CHECK(ReadText(folder / "sub" / "map" / "map.json") == text->index);
+    for (const auto& region : text->regions) CHECK(ReadText(folder / "sub" / "map" / region.file) == region.text);
+    CHECK(ReadMap(folder / "sub" / "map").size() == baked->chunks.size());
+
+    // A second save after another edit works: the known bytes followed the save.
+    REQUIRE(o.session.SetCell({3, 1, 2}, kCube));
+    Sync(o);
+    REQUIRE(SaveEditor(o.editor.files, o.session.Document(), o.preview));
+    CHECK(ReadText(gridPath) == Text(o.session.Document()));
     std::filesystem::remove_all(folder);
 }
+
+TEST_CASE("W5 save: a changed grid or map.json stops a checked save; overwrite replaces them") {
+    const auto folder = Scratch("changed");
+    const auto gridPath = (folder / "map.voxel_grid.json").string();
+    const auto mapDir = (folder / "map").string();
+    auto o = OpenFor(gridPath, mapDir);
+    REQUIRE(o.session.SetCell({0, 0, 0}, kCube));
+    Sync(o);
+    REQUIRE(SaveEditor(o.editor.files, o.session.Document(), o.preview));
+    const auto savedGrid = ReadText(gridPath);
+    const auto savedIndex = ReadText(folder / "map" / "map.json");
+
+    // Someone else rewrites map.json: nothing is written.
+    WriteText(folder / "map" / "map.json", savedIndex + " ");
+    REQUIRE(o.session.SetCell({1, 0, 0}, kCube));
+    Sync(o);
+    const auto refused = SaveEditor(o.editor.files, o.session.Document(), o.preview);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().code == VoxelMapErrorCode::FileChanged);
+    CHECK(ReadText(gridPath) == savedGrid);
+    CHECK(ReadText(folder / "map" / "map.json") == savedIndex + " ");
+
+    // The user chooses to overwrite: both are replaced, and the next checked save works.
+    REQUIRE(SaveEditor(o.editor.files, o.session.Document(), o.preview, SaveMode::Overwrite));
+    CHECK(ReadText(gridPath) == Text(o.session.Document()));
+    CHECK(ReadMap(folder / "map").size() == 1);
+    REQUIRE(o.session.SetCell({2, 0, 0}, kCube));
+    Sync(o);
+    CHECK(SaveEditor(o.editor.files, o.session.Document(), o.preview));
+
+    // A grid file that appears after opening a new one is not overwritten either.
+    const auto other = (folder / "other.voxel_grid.json").string();
+    auto fresh = OpenFor(other, (folder / "other").string());
+    WriteText(other, "someone else's");
+    CHECK(SaveEditor(fresh.editor.files, o.session.Document(), o.preview).error().code ==
+          VoxelMapErrorCode::FileChanged);
+    CHECK(ReadText(other) == "someone else's");
+    CHECK_FALSE(std::filesystem::exists(folder / "other"));
+    std::filesystem::remove_all(folder);
+}
+
+TEST_CASE("W5 save: when the grid cannot be written, the map is not written either") {
+    const auto folder = Scratch("unwritable");
+    WriteText(folder / "blocker", "a file, not a folder");
+    const auto gridPath = (folder / "blocker" / "map.voxel_grid.json").string();
+    auto o = OpenFor(gridPath, (folder / "map").string());
+    REQUIRE(o.session.SetCell({0, 0, 0}, kCube));
+    Sync(o);
+    const auto refused = SaveEditor(o.editor.files, o.session.Document(), o.preview);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().code == VoxelMapErrorCode::WriteFailed);
+    CHECK_FALSE(std::filesystem::exists(folder / "map"));
+    std::filesystem::remove_all(folder);
+}
+
+TEST_CASE("W5 save: when the grid is written but the map is not, the next save does not see a change") {
+    const auto folder = Scratch("mapfails");
+    const auto gridPath = (folder / "map.voxel_grid.json").string();
+    WriteText(folder / "blocker", "a file, not a folder");
+    auto o = OpenFor(gridPath, (folder / "blocker" / "map").string());
+    REQUIRE(o.session.SetCell({0, 0, 0}, kCube));
+    Sync(o);
+    const auto failed = SaveEditor(o.editor.files, o.session.Document(), o.preview);
+    REQUIRE_FALSE(failed);
+    CHECK(failed.error().code == VoxelMapErrorCode::WriteFailed);
+    CHECK(ReadText(gridPath) == Text(o.session.Document()));
+    REQUIRE(o.editor.files.grid.known);
+    std::filesystem::remove(folder / "blocker");
+    REQUIRE(SaveEditor(o.editor.files, o.session.Document(), o.preview));
+    CHECK(std::filesystem::exists(folder / "blocker" / "map" / "map.json"));
+    std::filesystem::remove_all(folder);
+}
+
+TEST_CASE("W5 save: a grid without filled cells saves the grid and no map") {
+    const auto folder = Scratch("empty");
+    const auto gridPath = (folder / "map.voxel_grid.json").string();
+    auto o = OpenFor(gridPath, (folder / "map").string());
+    CHECK_FALSE(o.preview.Map());
+    const auto saved = SaveEditor(o.editor.files, o.session.Document(), o.preview);
+    REQUIRE(saved);
+    CHECK_FALSE(saved->mapWritten);
+    CHECK(ReadText(gridPath) == Text(o.session.Document()));
+    CHECK_FALSE(std::filesystem::exists(folder / "map"));
+    std::filesystem::remove_all(folder);
+}
+
+TEST_CASE("W5 open: an existing grid is read, a broken one refused") {
+    const auto folder = Scratch("open");
+    const auto gridPath = (folder / "map.voxel_grid.json").string();
+    auto document = TwoBlocks();
+    document.Set({4, 2, 1}, {2, 9});
+    WriteText(gridPath, Text(document));
+    auto opened = OpenEditor(gridPath, (folder / "map").string());
+    REQUIRE(opened);
+    CHECK(Text(opened->document) == Text(document));
+    CHECK(opened->files.grid.known);
+    CHECK_FALSE(opened->files.mapIndex.known);
+    WriteText(gridPath, "{}");
+    CHECK(OpenEditor(gridPath, (folder / "map").string()).error().code == VoxelMapErrorCode::InvalidGrid);
+    std::filesystem::remove_all(folder);
+}
+
+// ---- W6 and W7: what is drawn ----
+
+namespace {
+
+void CheckSameGeometry(const Engine::VoxelMesh::VoxelChunkGeometry& drawn, const Engine::VoxelMesh::VoxelChunkGeometry& expected) {
+    REQUIRE(drawn.vertices.size() == expected.vertices.size());
+    for (std::size_t i = 0; i < expected.vertices.size(); ++i) {
+        const auto& a = drawn.vertices[i];
+        const auto& b = expected.vertices[i];
+        CHECK((std::memcmp(&a.position, &b.position, sizeof a.position) == 0 && std::memcmp(&a.uv, &b.uv, sizeof a.uv) == 0));
+    }
+    CHECK(drawn.indices == expected.indices);
+}
+
+// The chunks a preview has given so far, kept as a window keeps its meshes.
+using Drawn = std::map<Vec3i, Engine::VoxelMesh::VoxelChunkGeometry>;
+
+void Take(MapPreview& preview, Drawn& drawn, std::vector<std::byte>& palette) {
+    auto changes = preview.TakeChanges();
+    for (auto& [at, geometry] : changes.chunks) {
+        if (geometry) drawn.insert_or_assign(at, std::move(*geometry));
+        else drawn.erase(at);
+    }
+    if (changes.palette) palette = changes.palette->rgba8;
+}
+
+} // namespace
+
+TEST_CASE("W6 preview: what is drawn is Engine's expansion of the saved text, chunk by chunk") {
+    auto document = TwoBlocks();
+    document.Set({0, 0, 0}, kCube);
+    document.Set({1, 0, 0}, {2, 0});
+    document.Set({0, 1, 0}, {1, 6});
+    document.Set({17, 0, -3}, kCube);
+    document.blocks[1].shape = 2;  // a stair
+    auto preview = MapPreview::Create(document);
+    REQUIRE(preview);
+    Drawn drawn;
+    std::vector<std::byte> palette;
+    Take(*preview, drawn, palette);
+
+    // The text saving writes, read back by Engine as the game reads it.
+    const std::string gridText = Text(document);
+    const auto text = WriteMap(*preview->Map(), BytesOf(gridText));
+    REQUIRE(text);
+    const auto index = Engine::VoxelMesh::ParseVoxelMap(text->index);
+    REQUIRE(index);
+    std::size_t chunks = 0;
+    for (std::size_t r = 0; r < text->regions.size(); ++r) {
+        const auto region = Engine::VoxelMesh::ParseVoxelRegion(text->regions[r].text, *index, index->regions[r].at);
+        REQUIRE(region);
+        for (const auto& chunk : region->chunks) {
+            const Vec3i at{chunk.at.x, chunk.at.y, chunk.at.z};
+            REQUIRE(drawn.contains(at));
+            CheckSameGeometry(drawn.at(at), Engine::VoxelMesh::ExpandVoxelChunk(chunk, *index));
+            ++chunks;
+        }
+    }
+    CHECK(chunks == drawn.size());
+    CHECK(palette == Engine::VoxelMesh::ExpandVoxelPalette(*index).rgba8);
+    // No cells: nothing to draw.
+    auto empty = MapPreview::Create(NewGrid());
+    REQUIRE(empty);
+    CHECK_FALSE(empty->Map());
+    CHECK(empty->TakeChanges().chunks.empty());
+}
+
+TEST_CASE("W7 preview: after every edit, undo and redo, the drawn chunks are those of a whole bake (200 sequences)") {
+    std::uint64_t state = 0x853C49E6748FEA9BULL;
+    const auto next = [&state](const std::uint32_t bound) {
+        state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+        return static_cast<std::int32_t>((state >> 33) % bound);
+    };
+    for (int round = 0; round < 200; ++round) {
+        auto document = TwoBlocks();
+        document.blocks.push_back({"half", 1, {10, 20, 30, 255}});
+        document.blocks.push_back({"steps", 2, {1, 2, 3, 255}});
+        EditSession session(document);
+        auto preview = MapPreview::Create(document);
+        REQUIRE(preview);
+        Drawn drawn;
+        std::vector<std::byte> palette;
+        Take(*preview, drawn, palette);
+        for (int step = 0; step < 6; ++step) {
+            const int action = next(10);
+            if (action < 6) {
+                session.BeginStroke();
+                const int count = 1 + next(6);
+                for (int i = 0; i < count; ++i) {
+                    const Vec3i cell{-17 + next(34), next(18), -17 + next(34)};
+                    const Cell value = next(3) == 0 ? Cell{} : Cell{static_cast<std::uint16_t>(1 + next(4)),
+                                                                     static_cast<std::uint8_t>(next(24))};
+                    REQUIRE(session.SetCell(cell, value));
+                }
+                session.EndStroke();
+            } else if (action < 8) {
+                static_cast<void>(session.Undo());
+            } else if (action < 9) {
+                static_cast<void>(session.Redo());
+            } else {
+                auto block = session.Document().blocks[0];
+                block.color[0] = static_cast<std::uint8_t>(next(256));
+                REQUIRE(session.UpdateBlock(0, block));
+            }
+            REQUIRE(preview->Apply(session.Document(), session.TakeChanges()));
+            Take(*preview, drawn, palette);
+            // Expected: a whole bake of the document now.
+            auto whole = MapPreview::Create(session.Document());
+            REQUIRE(whole);
+            Drawn expected;
+            std::vector<std::byte> expectedPalette;
+            Take(*whole, expected, expectedPalette);
+            REQUIRE_MESSAGE(drawn.size() == expected.size(), "round " << round << " step " << step);
+            for (const auto& [at, geometry] : expected) {
+                REQUIRE(drawn.contains(at));
+                CheckSameGeometry(drawn.at(at), geometry);
+            }
+            // Without a map nothing is drawn, so the palette a window still holds does not matter.
+            if (whole->Map()) CHECK(palette == expectedPalette);
+            CHECK(static_cast<bool>(preview->Map()) == static_cast<bool>(whole->Map()));
+        }
+    }
+}
+

@@ -33,35 +33,41 @@ Result<std::unique_ptr<PreviewScene>> PreviewScene::Create(Engine::Platform::Sdl
     return scene;
 }
 
-PreviewScene::~PreviewScene() { Release(); }
+PreviewScene::~PreviewScene() { Clear(); }
 
-void PreviewScene::Release() {
+void PreviewScene::Clear() {
     // The map's device objects go before the preview's device.
     if (!preview_) return;
-    if (mesh_.IsValid()) static_cast<void>(preview_->Device().ReleaseMesh(mesh_));
+    for (const auto& [at, mesh] : meshes_) static_cast<void>(preview_->Device().ReleaseMesh(mesh));
     if (palette_.IsValid()) static_cast<void>(preview_->Device().ReleaseTexture(palette_));
-    mesh_ = {};
+    meshes_.clear();
     palette_ = {};
 }
 
-Result<void> PreviewScene::Show(const Engine::VoxelMesh::VoxelMeshGeometry& geometry) {
-    Release();
-    if (geometry.vertices.empty() || geometry.indices.empty() || geometry.paletteRgba8.empty()) return {};
-    // Engine's expansion as Render's mesh: the same positions, uvs and indices.
-    std::vector<Render::Vertex3D> vertices;
-    vertices.reserve(geometry.vertices.size());
-    for (const auto& vertex : geometry.vertices) vertices.push_back({vertex.position, vertex.uv});
+Result<void> PreviewScene::Apply(const MapPreview::Changes& changes) {
     auto& device = preview_->Device();
-    auto mesh = device.CreateMesh(Render::MeshView{vertices, geometry.indices});
-    if (!mesh) return PreviewFailed("the map mesh cannot be created", Engine::Base::CauseDetail(mesh.error()));
-    auto palette = device.CreateTexture(Render::ImageView{geometry.paletteWidth, geometry.paletteHeight, 0,
-                                                          geometry.paletteRgba8, Render::TextureColorSpace::SRgb});
-    if (!palette) {
-        static_cast<void>(device.ReleaseMesh(mesh.value()));
-        return PreviewFailed("the palette texture cannot be created", Engine::Base::CauseDetail(palette.error()));
+    if (changes.palette) {
+        const auto& image = *changes.palette;
+        auto palette = device.CreateTexture(
+            Render::ImageView{image.width, image.height, 0, image.rgba8, Render::TextureColorSpace::SRgb});
+        if (!palette) return PreviewFailed("the palette texture cannot be created", Engine::Base::CauseDetail(palette.error()));
+        if (palette_.IsValid()) static_cast<void>(device.ReleaseTexture(palette_));
+        palette_ = palette.value();
     }
-    mesh_ = mesh.value();
-    palette_ = palette.value();
+    for (const auto& [at, geometry] : changes.chunks) {
+        if (const auto old = meshes_.find(at); old != meshes_.end()) {
+            static_cast<void>(device.ReleaseMesh(old->second));
+            meshes_.erase(old);
+        }
+        if (!geometry || geometry->vertices.empty() || geometry->indices.empty()) continue;
+        // Engine's expansion as Render's mesh: the same positions, uvs and indices.
+        std::vector<Render::Vertex3D> vertices;
+        vertices.reserve(geometry->vertices.size());
+        for (const auto& vertex : geometry->vertices) vertices.push_back({vertex.position, vertex.uv});
+        auto mesh = device.CreateMesh(Render::MeshView{vertices, geometry->indices});
+        if (!mesh) return PreviewFailed("a chunk mesh cannot be created", Engine::Base::CauseDetail(mesh.error()));
+        meshes_.emplace(at, mesh.value());
+    }
     return {};
 }
 
@@ -71,13 +77,18 @@ Result<Render::TextureReadback> PreviewScene::Render(const Render::PerspectiveCa
     if (!queue) return PreviewFailed("the preview cannot start the frame", Engine::Base::CauseDetail(queue.error()));
     // The frame is open from here: EndFrame runs on every path.
     std::string submitError;
-    if (mesh_.IsValid()) {
-        // As the game draws the baked map: one draw, Engine's unlit shader, the palette texture.
-        Render::MeshSubmission draw;
-        draw.mesh = mesh_;
-        draw.material.texture = palette_;
-        draw.material.tint = {1, 1, 1, 1};
-        if (auto submitted = queue.value()->Submit(draw); !submitted) submitError = Engine::Base::CauseDetail(submitted.error());
+    if (palette_.IsValid()) {
+        // As the game draws the baked map: one draw per chunk, Engine's unlit shader, the palette texture.
+        for (const auto& [at, mesh] : meshes_) {
+            Render::MeshSubmission draw;
+            draw.mesh = mesh;
+            draw.material.texture = palette_;
+            draw.material.tint = {1, 1, 1, 1};
+            if (auto submitted = queue.value()->Submit(draw); !submitted) {
+                submitError = Engine::Base::CauseDetail(submitted.error());
+                break;
+            }
+        }
     }
     auto frame = preview_->EndFrame();
     if (!submitError.empty()) return PreviewFailed("the map cannot be drawn", submitError);

@@ -96,17 +96,8 @@ public:
     }
 
     [[nodiscard]] bool Initialize(const Framework::ImGuiShellContext&) override {
-        auto opened = OpenEditor(options_.gridPath, options_.meshPath);
-        if (!opened) {
-            error_ = Engine::Base::Describe(opened.error());
-            LogError(error_);
-        } else {
-            files_ = std::move(opened->files);
-            session_.emplace(std::move(opened->document));
-            status_ = files_.grid.known ? "opened " + options_.gridPath : "new grid: " + options_.gridPath;
-            FrameCamera();
-            LoadDrafts();
-        }
+        if (!Open()) LogError(error_);
+        else FrameCamera();
         // Engine's builtin shaders are built next to the executable (shaders/builtin).
         if (auto base = Platform::BaseDirectory(); !base) {
             previewError_ = "no base directory: " + Engine::Base::Describe(base.error());
@@ -144,6 +135,7 @@ public:
         DrawPreview();
         ImGui::EndChild();
         DrawClosePrompt();
+        DrawChangedPrompt();
         ImGui::End();
     }
 
@@ -158,6 +150,28 @@ public:
 
 private:
     EditSession& Session() { return *session_; }
+
+    // Reads the files; the session, the preview and the drafts start again.
+    bool Open() {
+        auto opened = OpenEditor(options_.gridPath, options_.mapDirectory);
+        if (!opened) {
+            error_ = Engine::Base::Describe(opened.error());
+            return false;
+        }
+        auto preview = MapPreview::Create(opened->document);
+        if (!preview) {
+            error_ = Engine::Base::Describe(preview.error());
+            return false;
+        }
+        files_ = std::move(opened->files);
+        session_.emplace(std::move(opened->document));
+        preview_ = std::move(*preview);
+        if (scene_) scene_->Clear();
+        status_ = files_.grid.known ? "opened " + options_.gridPath : "new grid: " + options_.gridPath;
+        error_.clear();
+        LoadDrafts();
+        return true;
+    }
     const GridDocument& Document() const { return session_->Document(); }
 
     void Report(const VoxelMapError& error) {
@@ -189,14 +203,44 @@ private:
         camera_.distance = std::max(Math::Length(high - low) * size * 0.9F, 4.0F * size);
     }
 
-    void Save() {
-        if (auto saved = SaveEditor(files_, Document()); !saved) {
+    // Brings the preview's map up to the document (saving writes its chunks).
+    bool SyncPreview() {
+        const auto changes = Session().TakeChanges();
+        if (changes.cells.empty() && !changes.whole) return true;
+        if (auto applied = preview_->Apply(Document(), changes); !applied) {
+            // Keep the changes for the next try: the whole map is baked again then.
+            previewError_ = Engine::Base::Describe(applied.error());
+            previewStale_ = true;
+            return false;
+        }
+        return true;
+    }
+
+    void Save(const SaveMode mode = SaveMode::Checked) {
+        if (previewStale_) {
+            if (auto rebuilt = preview_->Apply(Document(), {{}, true}); !rebuilt) {
+                Report(rebuilt.error());
+                return;
+            }
+            previewStale_ = false;
+        }
+        if (!SyncPreview()) {
+            error_ = previewError_;
+            return;
+        }
+        auto saved = SaveEditor(files_, Document(), *preview_, mode);
+        if (!saved) {
+            if (saved.error().code == VoxelMapErrorCode::FileChanged) {
+                changedFile_ = saved.error().message;
+                openChanged_ = true;
+            }
             Report(saved.error());
             return;
         }
         Session().MarkSaved();
         error_.clear();
-        status_ = "saved " + files_.grid.path + " and " + files_.mesh.path;
+        status_ = "saved " + files_.grid.path +
+                  (saved->mapWritten ? " and " + files_.mapDirectory : " (no filled cell, so no map)");
     }
 
     void Shortcuts() {
@@ -223,7 +267,7 @@ private:
     void DrawFile() {
         ImGui::SeparatorText("File");
         ImGui::TextWrapped("grid: %s", files_.grid.path.c_str());
-        ImGui::TextWrapped("mesh: %s", files_.mesh.path.c_str());
+        ImGui::TextWrapped("map: %s", files_.mapDirectory.c_str());
         if (ImGui::Button("Save (Ctrl+S)")) Save();
         ImGui::SameLine();
         ImGui::BeginDisabled(!Session().CanUndo());
@@ -377,16 +421,12 @@ private:
     void DrawPreview() {
         if (!previewError_.empty()) ImGui::TextColored(ImVec4(1, 0.4F, 0.4F, 1), "%s", previewError_.c_str());
         if (!scene_) return;
-        if (builtRevision_ != Session().Revision()) {
-            builtRevision_ = Session().Revision();
-            auto geometry = PreviewGeometry(Document());
-            if (!geometry) {
-                previewError_ = Engine::Base::Describe(geometry.error());
-            } else if (auto shown = scene_->Show(*geometry); !shown) {
-                previewError_ = Engine::Base::Describe(shown.error());
-            } else {
-                previewError_.clear();
-            }
+        if (previewStale_) {
+            if (preview_->Apply(Document(), {{}, true})) previewStale_ = false;
+        }
+        if (SyncPreview() && !previewStale_) {
+            if (auto shown = scene_->Apply(preview_->TakeChanges()); !shown) previewError_ = Engine::Base::Describe(shown.error());
+            else previewError_.clear();
         }
         const ImVec2 area = ImGui::GetContentRegionAvail();
         const ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
@@ -588,6 +628,31 @@ private:
         list->PopClipRect();
     }
 
+    // A file changed on disk since it was opened or saved (the save wrote nothing).
+    void DrawChangedPrompt() {
+        if (openChanged_) {
+            if (!ImGui::IsPopupOpen("File changed")) ImGui::OpenPopup("File changed");
+            openChanged_ = false;
+        }
+        const bool open = ImGui::BeginPopupModal("File changed", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+        promptOpen_ = promptOpen_ || open;
+        if (!open) return;
+        ImGui::TextUnformatted(changedFile_.c_str());
+        if (ImGui::Button("Reload from disk")) {
+            // The edits are dropped; what is on disk is opened again.
+            if (Open()) FrameCamera();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Overwrite")) {
+            Save(SaveMode::Overwrite);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
     void DrawClosePrompt() {
         if (openClose_) {
             if (!ImGui::IsPopupOpen("Unsaved map")) ImGui::OpenPopup("Unsaved map");
@@ -619,7 +684,10 @@ private:
     std::unique_ptr<PreviewScene> scene_;
     Framework::PreviewTexture texture_;
     Framework::OrbitCamera camera_;
-    std::uint64_t builtRevision_{std::numeric_limits<std::uint64_t>::max()};
+    std::optional<MapPreview> preview_;
+    bool previewStale_{};
+    bool openChanged_{};
+    std::string changedFile_;
     std::uint64_t draftRevision_{};
     std::string status_;
     std::string error_;
