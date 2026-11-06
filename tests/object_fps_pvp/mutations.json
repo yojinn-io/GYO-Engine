@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of object_fps_pvp. A mutant is killed only when its check fails with the expected message (run_mutations.py).",
+  "description": "Declared mutants of object_fps_pvp. A mutant is killed only when its check fails with the expected message (run_mutations.py). Retired in v8-arch-entity-store-impl-3a: entity-split-insert-appends (M1) and entity-split-erase-swap-and-pop (M2) (the column mechanism moved to the Engine entity store; moved to the Engine catalog docs/architecture/plans/entity-store/scripts/mutations.json as es-row2-insert-appends and es-row2-erase-swap-and-pop, user decision 2026-11-06).",
   "checks": {
     "cpu": {
       "build": [
@@ -8835,26 +8835,6 @@
       "expect": "PublicationComponentsAgree|is NOT correct"
     },
     {
-      "id": "entity-split-insert-appends",
-      "batch": "v8-product-match-entity-split",
-      "what": "InsertEntity appends instead of inserting at the ordered position (M1)",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
-      "find": "    return *column.insert(position, std::move(value));",
-      "replace": "    static_cast<void>(position);\n    column.push_back(std::move(value));\n    return column.back();",
-      "check": "cpu",
-      "expect": "Entity columns insert|EntityColumnsStayOrdered|GYO_ASSERT failed"
-    },
-    {
-      "id": "entity-split-erase-swap-and-pop",
-      "batch": "v8-product-match-entity-split",
-      "what": "EraseEntity moves the last element into the hole (M2)",
-      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
-      "find": "    column.erase(position);\n    return true;",
-      "replace": "    *position = std::move(column.back());\n    column.pop_back();\n    return true;",
-      "check": "cpu",
-      "expect": "Entity columns erase|EntityColumnsStayOrdered|GYO_ASSERT failed"
-    },
-    {
       "id": "entity-split-erase-skips-animations",
       "batch": "v8-product-match-entity-split",
       "what": "PvpMatch::EraseEntity leaves the animation row behind (M3)",
@@ -9203,6 +9183,16 @@
       "replace": "",
       "check": "cpu",
       "expect": "exactly the surface"
+    },
+    {
+      "id": "entity-store-adapter-key-not-player-id",
+      "batch": "v8-arch-entity-store-impl-3a",
+      "what": "The adapter's EntityKey specialization keys a playerId type by another value than playerId",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/EntityColumns.hpp",
+      "find": "{ return value.playerId; }",
+      "replace": "{ return ~value.playerId; }",
+      "check": "cpu",
+      "expect": "Entity columns insert at the ordered position|GYO_ASSERT failed: row"
     }
   ]
 }
