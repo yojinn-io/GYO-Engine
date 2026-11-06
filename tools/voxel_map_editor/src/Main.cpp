@@ -1,5 +1,9 @@
+#include "gyo/voxel_map_editor/ChunkedMap.hpp"
+#include "gyo/voxel_map_editor/MarkersFile.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 #include "window/EditorWindow.hpp"
+
+#include "MapMeasure.hpp"
 
 #include "gyo/framework/HeadlessShell.hpp"
 
@@ -27,6 +31,11 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor edit <grid> <mesh> [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic) --csv <file>\n"
     "                       [--frames <n>] [--gpu-driver <driver>]\n"
+    "  gyo_voxel_map_editor build-map   <grid> <map-dir>\n"
+    "  gyo_voxel_map_editor verify-map  <grid> <map-dir>\n"
+    "  gyo_voxel_map_editor inspect-map <map-dir>\n"
+    "  gyo_voxel_map_editor measure-map <out-dir> [<grid>...]\n"
+    "  gyo_voxel_map_editor check-markers <markers> --marker-kinds <kinds>\n"
     "  gyo_voxel_map_editor --help\n"
     "\n"
     "build bakes a gyo.voxel_grid into a gyo.voxel_mesh that Engine accepts and\n"
@@ -37,6 +46,14 @@ constexpr std::string_view kHelp =
     "edit opens the window (gui variant): a new grid when <grid> does not exist;\n"
     "every save writes <grid> and then <mesh>. measure-preview times the window's\n"
     "preview for an edit per frame (gui variant).\n"
+    "build-map bakes a grid into Engine's chunked map: <map-dir>/map.json and its\n"
+    "region files under <map-dir>/regions (region files of the old map that the\n"
+    "new index does not list are removed). verify-map bakes again and compares\n"
+    "map.json and every region file it lists. inspect-map summarizes a map.\n"
+    "measure-map writes the declared measurement of the chunked bake (a synthetic\n"
+    "building-like grid, a per-chunk CSV and a summary) into <out-dir>.\n"
+    "check-markers reads a gyo.map_markers file and the product's gyo.marker_kinds\n"
+    "list with Engine's parsers and lists every marker whose kind is not in it.\n"
     "Exit status: 0 done, 1 an input the formats refuse, 2 usage, 3 a file could\n"
     "not be read or written, 4 verify found a different mesh.\n";
 
@@ -134,6 +151,107 @@ int ImportBoxesCommand(const std::string& jsonPath, const std::string& pointer, 
     return 0;
 }
 
+struct BakedFiles final {
+    std::size_t chunks{};
+    MapText text;
+};
+
+Result<BakedFiles> BakeFrom(const std::string& gridPath) {
+    auto bytes = ReadFile(gridPath, kMaxRead);
+    if (!bytes) return Engine::Base::Err(std::move(bytes).error());
+    auto grid = ParseGrid(Text(*bytes));
+    if (!grid) return Engine::Base::Err(std::move(grid).error());
+    auto map = BakeMap(*grid);
+    if (!map) return Engine::Base::Err(std::move(map).error());
+    auto text = WriteMap(*map, *bytes);
+    if (!text) return Engine::Base::Err(std::move(text).error());
+    return BakedFiles{map->chunks.size(), std::move(text).value()};
+}
+
+int BuildMap(const std::string& gridPath, const std::string& directory) {
+    auto baked = BakeFrom(gridPath);
+    if (!baked) return Fail(baked.error());
+    if (auto saved = SaveMap(directory, baked->text); !saved) return Fail(saved.error());
+    std::cout << "built " << directory << ": " << baked->text.regions.size() << " regions, " << baked->chunks
+              << " chunks\n";
+    return 0;
+}
+
+int VerifyMap(const std::string& gridPath, const std::string& directory) {
+    auto baked = BakeFrom(gridPath);
+    if (!baked) return Fail(baked.error());
+    const auto* text = &baked->text;
+    const auto same = [](const std::string& path, const std::string& expected) -> Result<bool> {
+        auto bytes = ReadFile(path, kMaxRead);
+        if (!bytes) return Engine::Base::Err(std::move(bytes).error());
+        return Text(*bytes) == expected;
+    };
+    auto index = same(directory + "/" + std::string(MapIndexFile), text->index);
+    if (!index) return Fail(index.error());
+    bool all = *index;
+    for (const auto& region : text->regions) {
+        if (!all) break;
+        auto file = same(directory + "/" + region.file, region.text);
+        if (!file) return Fail(file.error());
+        all = *file;
+    }
+    if (!all) {
+        std::cerr << "different: " << directory << " is not what " << gridPath << " builds\n";
+        return 4;
+    }
+    std::cout << "same: " << directory << '\n';
+    return 0;
+}
+
+int InspectMap(const std::string& directory) {
+    auto bytes = ReadFile(directory + "/" + std::string(MapIndexFile), kMaxRead);
+    if (!bytes) return Fail(bytes.error());
+    auto index = Engine::VoxelMesh::ParseVoxelMap(Text(*bytes));
+    if (!index) {
+        std::cerr << "error: " << Engine::Base::Describe(index.error()) << '\n';
+        return 1;
+    }
+    std::size_t chunks = 0, quads = 0, colliders = 0;
+    for (const auto& entry : index->regions) {
+        auto regionBytes = ReadFile(directory + "/" + entry.file, kMaxRead);
+        if (!regionBytes) return Fail(regionBytes.error());
+        auto region = Engine::VoxelMesh::ParseVoxelRegion(Text(*regionBytes), *index, entry.at);
+        if (!region) {
+            std::cerr << "error: " << entry.file << ": " << Engine::Base::Describe(region.error()) << '\n';
+            return 1;
+        }
+        for (const auto& chunk : region->chunks) {
+            ++chunks;
+            quads += chunk.quads.size();
+            colliders += chunk.colliders.size();
+        }
+    }
+    std::cout << "gyo.voxel_map: " << index->palette.size() << " palette entries, " << index->regions.size()
+              << " regions, " << chunks << " chunks, " << quads << " quads, " << colliders << " colliders\n"
+              << "source_sha256: " << index->sourceSha256 << "\nbuild_version: " << index->buildVersion << '\n';
+    return 0;
+}
+
+int CheckMarkers(const std::string& markersPath, const std::string& kindsPath) {
+    auto markersBytes = ReadFile(markersPath, kMaxRead);
+    if (!markersBytes) return Fail(markersBytes.error());
+    auto kindsBytes = ReadFile(kindsPath, kMaxRead);
+    if (!kindsBytes) return Fail(kindsBytes.error());
+    auto markers = ReadMarkers(Text(*markersBytes));
+    if (!markers) return Fail(markers.error());
+    auto kinds = ReadMarkerKinds(Text(*kindsBytes));
+    if (!kinds) return Fail(kinds.error());
+    const auto unknown = Engine::MapMarkers::UnknownMarkerKinds(*markers, *kinds);
+    if (!unknown.empty()) {
+        for (const auto& path : unknown) std::cerr << "unknown kind: " << path << '\n';
+        return Fail(VoxelMapError::Make(VoxelMapErrorCode::UnknownKinds,
+                                        std::to_string(unknown.size()) + " markers have a kind not in " + kindsPath,
+                                        unknown.front()));
+    }
+    std::cout << "markers: " << markers->markers.size() << " markers, every kind in " << kinds->size() << " kinds\n";
+    return 0;
+}
+
 int Run(const std::span<const std::string> arguments) {
     if (arguments.size() < 2) return Usage("a command is required");
     const std::string& command = arguments[1];
@@ -185,6 +303,23 @@ int Run(const std::span<const std::string> arguments) {
         if (measure.csvPath.empty() || measure.synthetic == !measure.gridPath.empty())
             return Usage("measure-preview takes --grid <grid> or --synthetic, and --csv <file>");
         return RunPreviewMeasure(measure);
+    }
+    if (command == "build-map" || command == "verify-map") {
+        if (arguments.size() != 4) return Usage(command + " takes <grid> <map-dir>");
+        return command == "build-map" ? BuildMap(arguments[2], arguments[3]) : VerifyMap(arguments[2], arguments[3]);
+    }
+    if (command == "inspect-map") {
+        if (arguments.size() != 3) return Usage("inspect-map takes <map-dir>");
+        return InspectMap(arguments[2]);
+    }
+    if (command == "check-markers") {
+        if (arguments.size() != 5 || arguments[3] != "--marker-kinds")
+            return Usage("check-markers takes <markers> --marker-kinds <kinds>");
+        return CheckMarkers(arguments[2], arguments[4]);
+    }
+    if (command == "measure-map") {
+        if (arguments.size() < 3) return Usage("measure-map takes <out-dir> [<grid>...]");
+        return MeasureMap(arguments[2], std::vector<std::string>(arguments.begin() + 3, arguments.end()));
     }
     return Usage("unknown command " + command);
 }

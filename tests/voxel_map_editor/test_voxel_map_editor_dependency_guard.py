@@ -23,10 +23,11 @@ class VoxelMapEditorDependencyGuardTests(unittest.TestCase):
     def test_clean_tree_passes(self):
         self.assertEqual(self.scan({
             f"{TOOL}/src/A.cpp": '#include "gyo/voxel_map_editor/VoxelMap.hpp"\n#include "engine/voxel_mesh/VoxelMesh.hpp"\n'
+                                 '#include "engine/map_markers/MapMarkers.hpp"\n'
                                  '#include "gyo/framework/HeadlessShell.hpp"\n#include <nlohmann/json.hpp>\n'
                                  '#include "JsonRules.hpp"\n#include <vector>\n',
             f"{TOOL}/CMakeLists.txt": "target_link_libraries(gyo_voxel_map_editor_core PUBLIC GYO::Base "
-                                      "GYO::Engine GYO::Math GYO::VoxelMesh PRIVATE nlohmann_json::nlohmann_json)\n"
+                                      "GYO::Engine GYO::Math GYO::VoxelMesh GYO::MapMarkers PRIVATE nlohmann_json::nlohmann_json)\n"
                                       "target_link_libraries(gyo_voxel_map_editor PRIVATE gyo_voxel_map_editor_core "
                                       "GYO::ToolFramework)\n",
         }), [])
@@ -165,6 +166,15 @@ class VoxelMapEditorDependencyGuardTests(unittest.TestCase):
             f"{TOOL}/CMakeLists.txt: names GYO::Render outside the window's links",
             f"{TOOL}/CMakeLists.txt: gyo_voxel_map_editor_core links GYO::Render",
         ]))
+
+    def test_other_engine_modules_still_fail(self):
+        # Allowing GYO::MapMarkers allows that one module, not Engine at large.
+        findings = self.scan({f"{TOOL}/CMakeLists.txt": "target_link_libraries(gyo_voxel_map_editor_core PUBLIC "
+                                                        "GYO::Collision GYO::MapMarkersNative GYO::MapMarkers.extra)\n"})
+        # Each name is reported (as named and as linked); the module itself never is.
+        for name in ("GYO::Collision", "GYO::MapMarkersNative", "GYO::MapMarkers.extra"):
+            self.assertTrue(any(finding.endswith(name) for finding in findings), name)
+        self.assertFalse(any(finding.endswith("GYO::MapMarkers") for finding in findings))
 
     def test_game_include_and_plain_target_fail(self):
         findings = self.scan({f"{TOOL}/src/A.cpp": '#include "SomeGame/World.hpp"\n',

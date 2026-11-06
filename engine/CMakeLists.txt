@@ -94,6 +94,8 @@ endif()
 add_subdirectory(model)
 # The baked geometry of grid-built maps (docs/architecture/voxel-mesh.md).
 add_subdirectory(voxel_mesh)
+# Named points, boxes and paths placed on a map (docs/architecture/map-markers.md).
+add_subdirectory(map_markers)
 add_subdirectory(collision)
 add_subdirectory(net)
 add_subdirectory(text)
