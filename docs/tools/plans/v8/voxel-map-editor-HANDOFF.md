@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06（本分支 `claude/v8-arch-big-map-tool-chunked`）**：big-map 的 Engine 兩批（PR #161、#162）已合併。`v8-arch-big-map-tool-chunked` 的事前宣告 [voxel-map-tool-chunked.md](voxel-map-tool-chunked.md) 寫好，**等你核准**。window 批（PR #158，分支 `claude/v8-tool-voxel-map-window`）凍結，在本批之後 rebase 重新宣告；那條分支上的 HANDOFF 紀錄，rebase 時合進來。`tc-markers` 等架構師寫 `map-markers.md` 的「Kinds」節。
+- **2026-11-06（本分支 `claude/v8-arch-big-map-tool-chunked`）**：big-map 的 Engine 兩批（PR #161、#162）已合併。`v8-arch-big-map-tool-chunked` 的事前宣告 [voxel-map-tool-chunked.md](voxel-map-tool-chunked.md) 寫好，2026-11-06 你核准（`v8-tool-chunked-declare`），實作 `tc-bake` 中。window 批（PR #158，分支 `claude/v8-tool-voxel-map-window`）凍結，在本批之後 rebase 重新宣告；那條分支上的 HANDOFF 紀錄，rebase 時合進來。`tc-markers` 等架構師寫 `map-markers.md` 的「Kinds」節。
 - **PR**：[PR #152](https://github.com/yojinn-io/GYO-Engine/pull/152)（分支 `claude/v8-tool-voxel-map-plan`，一條功能線一個 PR）。尚未合併。
 - **完成**：
   - `v8-tool-voxel-map-plan`：方案、分批。
@@ -20,6 +20,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-chunked-declare` | （2026-11-06）核准 tool-chunked 的事前宣告：範圍、介面草案、判定 T1～T9（T5：區塊重烘 p95 ≤ 16 ms）、DI 1～5 的變更與 DI 2 改寫、RC 3 處置與 RC 5／6；存檔用帶雜湊的 region 檔名＋最後換索引；調色盤放格子的全部方塊；T-junction 目視移到 window 批 | 「推奨どおり承認」 |
 | `v8-tool-chunked-plan` | （2026-11-06）tool-chunked 的五個判斷：從 master 分支、window 之後 rebase；v1 輸出保留到 arena-v3、新格式用新命令、v1 不加 greedy；標記讀寫核心在本批、放置 UI 在 window 批；`marker_kinds.json` 的形式由架構師寫進 map-markers.md；重烘判定值在宣告定（候選 p95 ≤ 16 ms） | 「推奨どおり決める」 |
 | `v8-product-arena-v2-maps-move` | （2026-11-05）把延後的 `v8-product-asset-path-loaded-move` 併進 arena-v2 批：arena 一組（含烘焙地圖）搬進 `maps/`，`movement_rules.json` 搬進 `rules/`，根目錄的例外全部刪除；不加新例外 | 「这2个问题就能放到pvp的assets的config下么」→ 選「今 maps/ に移す」 |
 | `v8-product-arena-v2-p3-regression` | （2026-11-05）審查實測：P3 的軌跡對「集合相同、分法不同」沒有檢出力（AGENTS §14 停下回報）。P3 降為回歸檢查，退役證據只靠 P2（集合相同）；P3 的腳本加上繞柱、沿柱滑、斜進四角（只收緊） | 選「回帰チェックに下げる（推奨）」 |
@@ -72,3 +73,4 @@
 - 2026-11-05：arena-v2 批的 L3（P10）你在 macOS 判定「問題なし（合格）」。啟動腳本與 log 在主 checkout 的 `build/evidence/tool-v8-voxel-map/arena-v2/l3/`（`pvp_corners` 兩人同房、命中 26）。arena-v2 批完成。下一批：`v8-framework-preview-component`（要和架構會話協調）；`v8-product-step-up` 由產品會話做。
 - 2026-11-05：你問編輯器做好了沒：只完成資料格式、build、CLI 與遊戲端讀取，GUI 視窗還沒做。framework 批交給架構會話（「[Job][架構師]例行架構掃描」），已送出委託（範圍、留在 model_viewer 的部分、客戶端建立元件、voxel 編輯器的需求）。等它完成後接 window 批。
 - 2026-11-06：架構師轉達 big-map 的 Engine 兩批已合併（engine-grid PR #161 `c70e8fdc`、engine-format PR #162 `915ddc62`），`-tool-chunked` 可以規劃。讀了 `voxel-mesh.md`、`map-markers.md`、big-map 的 README／HANDOFF，提出計畫案；你照建議定了五個判斷（`v8-tool-chunked-plan`）。從 master `915ddc62` 開工作樹 `.claude/worktrees/v8-tool-chunked`，寫事前宣告，等你核准。已請架構師在 `map-markers.md` 定義 `marker_kinds.json` 的形式。
+- 2026-11-06：架構師寫好 `marker_kinds.json` 的契約（PR #160，`29c79fbf`），`tc-markers` 改為在 Engine 實作 `ParseMarkerKinds`／`UnknownMarkerKinds`，宣告已反映。你核准宣告（`v8-tool-chunked-declare`），開工 `tc-bake`（Opus 5.5／high）。

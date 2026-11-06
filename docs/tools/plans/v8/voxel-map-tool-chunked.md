@@ -2,7 +2,7 @@
 
 更新：2026-11-06。Owner：voxel 地圖編輯器線（本會話）。上層計畫：[大地圖](../../../architecture/plans/big-map/README.md)；
 本線的計畫與紀錄：[voxel-map-editor.md](voxel-map-editor.md)、[HANDOFF](voxel-map-editor-HANDOFF.md)。
-**狀態：宣告草稿，等使用者核准；核准前不實作。**
+**狀態：2026-11-06 使用者核准（原話「推奨どおり承認」：宣告、DI 與 RC 的變更、要決定的事 3～5 全部照建議）。實作 `tc-bake` 中；`tc-markers` 等 PR #160。**
 
 ## 代號對照
 
