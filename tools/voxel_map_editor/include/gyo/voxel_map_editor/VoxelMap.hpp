@@ -24,6 +24,9 @@ enum class VoxelMapErrorCode : std::uint8_t {
     BuildRefused,     // the baked text did not pass Engine's ParseVoxelMesh
     ReadFailed,
     WriteFailed,
+    EmptyMap,         // a grid without filled cells has no chunked map
+    InvalidMarkers,   // Engine refuses a gyo.map_markers or gyo.marker_kinds text
+    UnknownKinds,     // a marker's kind is not in the product's list
 };
 
 [[nodiscard]] constexpr const char* ToString(const VoxelMapErrorCode code) noexcept {
@@ -33,6 +36,9 @@ enum class VoxelMapErrorCode : std::uint8_t {
     case VoxelMapErrorCode::BuildRefused: return "BuildRefused";
     case VoxelMapErrorCode::ReadFailed: return "ReadFailed";
     case VoxelMapErrorCode::WriteFailed: return "WriteFailed";
+    case VoxelMapErrorCode::EmptyMap: return "EmptyMap";
+    case VoxelMapErrorCode::InvalidMarkers: return "InvalidMarkers";
+    case VoxelMapErrorCode::UnknownKinds: return "UnknownKinds";
     }
     return "Unknown";
 }

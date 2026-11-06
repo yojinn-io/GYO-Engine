@@ -1,14 +1,16 @@
 # GYO Voxel Map Editor
 
-A design tool that edits a map as a grid of shaped, coloured blocks and bakes it into Engine's `gyo.voxel_mesh`
-([contract](../architecture/voxel-mesh.md)), the only file a game reads. Plan, batches and judgments:
+A design tool that edits a map as a grid of shaped, coloured blocks and bakes it into Engine's formats
+([contract](../architecture/voxel-mesh.md)), the only files a game reads: the chunked map (`gyo.voxel_map` with
+`gyo.voxel_region`) and, until v8-arch-big-map-product-arena-v3 retires it, the single file `gyo.voxel_mesh`. Plan, batches and judgments:
 [voxel-map-editor.md](../tools/plans/v8/voxel-map-editor.md); record:
 [voxel-map-editor-HANDOFF.md](../tools/plans/v8/voxel-map-editor-HANDOFF.md).
 
 Owner: `voxel_map_editor` (`tools/voxel_map_editor/`).
 
-**Status (2026-11-05): `v8-tool-voxel-map-editor-core`.** The core library and the command line (the `cli`
-variant); the window (`-window`) follows.
+**Status (2026-11-06): `v8-arch-big-map-tool-chunked`** ([declaration](../tools/plans/v8/voxel-map-tool-chunked.md)):
+the chunked bake and its commands, on top of `v8-tool-voxel-map-editor-core` (the core library and the command
+line, the `cli` variant). The window (`-window`) follows and is declared again on top of this.
 
 ## The grid: `gyo.voxel_grid` version 1
 
@@ -97,6 +99,61 @@ turned stair still collides as boxes. The number is stored in grid files, so thi
    and `build_version` is `voxel_map_editor 1`. The text is read back with Engine's `ParseVoxelMesh` before it is
    returned; a text Engine refuses is never written.
 
+## The chunked map
+
+The build of `gyo.voxel_map` and its regions, one chunk at a time (`BakeMap`, `RebakeChunks`; header
+`ChunkedMap.hpp`). The grid's chunks (16³ cells from origin) are Engine's chunks; the map's origin and cell size
+are the grid's.
+
+1. Per chunk, the blocks' boxes and their faces as in steps 1 and 2 of the single file, in units from the chunk's
+   minimum corner (0 to 256). A face on the chunk's side reads the neighbouring cell across it, so culling does not
+   depend on where chunks end.
+2. Greedy merge, inside the chunk only: the faces left are grouped by direction, plane and palette entry, the
+   group's edges are the only coordinates, and a fixed scan (rows along v, then along u) grows each rectangle along
+   u as far as it can, then along v while the whole row is free. The union of the quads is the union of the faces,
+   and no two quads overlap. No merge crosses a chunk's side.
+3. Collision: `MergeBoxes` (step 4 of the single file) on each chunk's boxes. A cell's boxes never leave its cell,
+   so no box crosses a chunk's side.
+4. Palette: every block of the grid, in grid order (the single file lists only the blocks in use, by name). So only
+   a palette edit changes every chunk; `RebakeChunks` then bakes everything.
+5. Every chunk is checked with Engine's `ValidateVoxelChunk`; the index is read back with `ParseVoxelMap`.
+6. Rebake: `ChunksTouchedBy` gives the chunks a change of some cells can change (each cell's chunk, and the chunk
+   across any side the cell lies on); `RebakeChunks` bakes only those and rebuilds the index when the bounds or the
+   regions change. The result is the same as baking everything (Design Invariant 3).
+7. Output (`WriteMap`): `map.json` and one file per region, `regions/r_<x>_<z>_<h>.json` (`h`, the first 16
+   hexadecimal digits of the region text's SHA-256), in Engine's key order; `build_version` is
+   `voxel_map_editor 2`. Every text is read back with `ParseVoxelMap` and `ParseVoxelRegion` and compared with the
+   baked map before it is returned.
+8. Saving (`SaveMap`): region files first (a file already holding the same bytes is left alone), then `map.json` by
+   atomic replace, then the region files the previous `map.json` listed and the new one does not (names of the
+   region file form under `regions/` only). A save that stops before `map.json` leaves the previous map readable.
+   engine/io cannot list a directory, so a region file that no index lists (left by such a stopped save) stays.
+
+A grid without filled cells has no chunked map (`EmptyMap`, the tool's own check before Engine's rule M8). Only
+cell edits are rebaked chunk by chunk: when the palette, the shape library, a block's shape, the origin or the cell
+size changed, `RebakeChunks` bakes everything.
+
+Range: a grid accepts a filled cell within [-2^16, 2^16 - 1] after adding origin, but a chunk covers whole 16-cell
+steps from origin, so when origin's x or z is not a multiple of 16 a chunk at the edge of that range ends past
+Engine's ±2^20 units (rule M6) and `build-map` refuses the grid (`BuildRefused`), while `build` still bakes it.
+
+## Markers
+
+The editor places and names markers of a map (`gyo.map_markers`) and offers the kinds a product lists
+(`gyo.marker_kinds`), both Engine formats ([map markers](../architecture/map-markers.md)); it interprets no kind
+and no tag. Header `MarkersFile.hpp`:
+
+- `ReadMarkers` and `ReadMarkerKinds` are Engine's `ParseMapMarkers` and `ParseMarkerKinds` (`InvalidMarkers`
+  with Engine's message and path).
+- `WriteMarkers` writes one text (markers and tags in the document's order, yaw as the shortest decimal of the
+  float's double), reads it back with `ParseMapMarkers` and compares it with the document; what Engine refuses
+  or reads back different is not returned.
+- Which markers have a kind the list does not hold is Engine's `UnknownMarkerKinds`; the editor keeps no copy of
+  that check.
+
+Where the kinds list comes from is the command line's (`--marker-kinds`): the tool names no product. Placing
+markers in the window is the window batch's.
+
 ## Command line (`gyo_voxel_map_editor`)
 
 | Command | Does | Exit status |
@@ -105,6 +162,11 @@ turned stair still collides as boxes. The number is stored in grid files, so thi
 | `verify <grid> <mesh>` | bakes again and compares the bytes | 0 the same; 4 different; 1 or 3 as above |
 | `inspect <file>` | summarizes a grid or a baked mesh, chosen by the file's `schema` field | 0; 1; 3 |
 | `import-boxes <json> <pointer> <grid>` | a grid of cubes from boxes in whole cells at a JSON pointer | 0; 1; 3 |
+| `build-map <grid> <map-dir>` | bakes the chunked map and saves it in the folder (`SaveMap`) | 0; 1; 3 |
+| `verify-map <grid> <map-dir>` | bakes again and compares `map.json` and every region file it lists | 0 the same; 4 different; 1 or 3 |
+| `inspect-map <map-dir>` | summarizes a chunked map, read with Engine's parsers | 0; 1; 3 |
+| `check-markers <markers> --marker-kinds <kinds>` | reads both files with Engine's parsers and lists every marker whose kind is not in the list (`UnknownKinds`) | 0; 1; 3 |
+| `measure-map <out-dir> [<grid>...]` | the declared measurement of `v8-arch-big-map-tool-chunked`: writes a synthetic building-like grid and a per-chunk CSV, prints a summary per map | 0; 1; 3 |
 
 `import-boxes` takes every item with `min` and `max` (other fields of an item are ignored, overlapping boxes are
 fine), places the grid's origin at the lowest x and z, refuses a box below the floor (y < 0) or not in whole cells,
@@ -117,21 +179,38 @@ A wrong command line exits with 2.
 A change against any item below is an Architecture Delta that needs the user's agreement, however small
 (AGENTS.md section 3). So is changing this section. (User, 2026-11-05, `v8-tool-voxel-map-editor-core` declaration.)
 
-1. **Dependencies.** The editor links no game and names no product. It uses Engine (`GYO::VoxelMesh`, engine/io,
-   `GYO::Base`), the framework's headless shell, and its own JSON parser. It includes no SDL or ImGui header and
-   names no SDL, ImGui, render, platform or `*Native` target. Guard: the dependency guard
-   (`tests/voxel_map_editor/voxel_map_editor_dependency_guard.py`, a positive list) and its self-test.
-2. **One validator.** Whether a baked file is valid is decided by Engine's `ParseVoxelMesh` alone. The editor keeps
-   no copy of its rules: it reads every text it bakes back through it and returns nothing Engine refuses. Guard:
-   "build: what Engine refuses is not returned", the command-line test `build_refused`, and their mutants.
-3. **Deterministic.** One grid bakes to the same bytes on every platform; a grid the editor wrote reads back and
-   writes again byte for byte. Guard: the golden files in `tests/voxel_map_editor/fixtures/` (kept byte for byte
-   by their `.gitattributes`), the build-twice test and the round-trip test.
-4. **Lossless.** The collision boxes are disjoint and their union is the union of every block's boxes; a face is
-   dropped only when a neighbour covers that whole side. Guard: the 200 random merge sets, and the cullface test,
-   which compares whole quad lists (a cube, two cubes, a cube beside a slab) and a stair's two sides.
-5. **Writes only what it makes.** The baked file or the grid a command names, by atomic replace through engine/io.
-   No catalog, product file or arena. Guard: the command-line test (refused inputs write nothing).
+1. **Dependencies.** The editor links no game and names no product. It uses Engine (`GYO::VoxelMesh`,
+   `GYO::MapMarkers`, engine/io, `GYO::Base`), the framework's headless shell, and its own JSON parser. It
+   includes no SDL or ImGui header and names no SDL, ImGui, render, platform or `*Native` target. Guard: the
+   dependency guard (`tests/voxel_map_editor/voxel_map_editor_dependency_guard.py`, a positive list) and its
+   self-test. (`GYO::MapMarkers`: user, 2026-11-06, `v8-tool-chunked-declare`.)
+2. **One validator.** Whether baked output is valid is decided by Engine alone: `ValidateVoxelChunk` for every chunk
+   the editor bakes, `ParseVoxelMap` and `ParseVoxelRegion` for the map text it writes, `ParseVoxelMesh` for the
+   deprecated single file, `ParseMapMarkers` for markers, `ParseMarkerKinds` for a kinds list and
+   `UnknownMarkerKinds` for whether a marker's kind is listed. The editor keeps no copy of these rules: it reads every text it writes back, compares
+   what it read with what it baked, and returns nothing Engine refuses. Guard: "build: what Engine refuses is not
+   returned", "map: a chunk Engine refuses is not kept", "map: an index Engine refuses is not returned", "map: a
+   region Engine refuses is not returned", "markers: a document Engine refuses is not written", the command-line
+   tests `build_refused`, `build_map_refused` and `check_markers_unknown`, and their mutants. (User, 2026-11-06,
+   `v8-tool-chunked-declare`.)
+3. **Deterministic.** One grid bakes to the same bytes on every platform, in either format; a grid the editor wrote
+   reads back and writes again byte for byte; rebaking the chunks a change touched gives the bytes of baking
+   everything. Guard: the golden files in `tests/voxel_map_editor/fixtures/` (`sample.voxel_mesh.json`,
+   `sample_map/`; kept byte for byte by their `.gitattributes`), the build-twice tests, the round-trip test and
+   "map: a rebake of the touched chunks equals a whole bake" (200 edit sequences).
+4. **Lossless.** The collision boxes are disjoint and their union is the union of every block's boxes (in the
+   chunked map, per chunk); a face is dropped only when a neighbour covers that whole side. Greedy merging keeps the
+   covered area: for every direction, plane and palette entry, the union of the merged quads is the union of the
+   faces left after culling, and no two quads overlap. Guard: the 200 random merge sets, the cullface test, which
+   compares whole quad lists (a cube, two cubes, a cube beside a slab) and a stair's two sides, "map: greedy keeps
+   every face square once" and "map: each chunk's boxes are disjoint and fill its blocks" (200 random grids each,
+   against the single file's faces), and "map: cullface and greedy across a chunk border".
+5. **Writes only what it makes.** The baked file or the grid a command names, by atomic replace through engine/io;
+   in a map folder a command names, `map.json` and region files, and it removes only the region files the previous
+   `map.json` listed and the new one does not (names of the region file form under `regions/`); `measure-map`, the
+   synthetic grid and the CSV in the folder its command line names. No catalog,
+   product file or arena. Guard: the command-line test (refused inputs write nothing) and "map: a save stopped
+   before the index leaves the previous map readable".
 6. **The grid is the tool's.** `gyo.voxel_grid` has one reader, this tool; Engine knows no blocks, shapes or
    orientations (`voxel-mesh.md`, Design Invariant 1). Guard: review.
 
@@ -141,6 +220,11 @@ Meeting one of these stops further repair: propose to the user whether to repair
 
 1. The grid gains a second reader (for example a scene editor): it belongs in Engine then.
 2. A shape needs geometry other than boxes (slopes).
-3. Build time or the size of the baked file is measured to need render merging, chunked output or incremental
-   builds.
+3. (Met and handled, 2026-11-06.) Build time or the size of the baked file was measured to need render merging,
+   chunked output or incremental builds (big-map survey and explore-p1): the chunked map, greedy merging and
+   `RebakeChunks` are this tool's answer (`v8-arch-big-map-tool-chunked`).
 4. The editor has to re-verify Engine's rules on its own each time it gains a feature.
+5. Rebaking one chunk takes longer than `v8-arch-big-map-tool-chunked` declared (judgment T5: the 95th percentile
+   of every chunk's median over a building-like map at most 16 ms), or a change has to rebake more than its
+   chunks and the chunks across their sides.
+6. Greedy merging leaves visible cracks (T-junctions) that need merging across chunks or a change in Render.

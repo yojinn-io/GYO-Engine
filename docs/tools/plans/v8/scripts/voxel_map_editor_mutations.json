@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9 of the declaration in docs/tools/plans/v8/voxel-map-editor.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
+  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9 of the declaration in docs/tools/plans/v8/voxel-map-editor.md) and of v8-arch-big-map-tool-chunked (judgment T7, the tc-* entries; docs/tools/plans/v8/voxel-map-tool-chunked.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
   "mutants": [
     {
       "id": "vme-cull-partial",
@@ -221,6 +221,216 @@
         "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py"
       ],
       "expect": "includes SDL3/SDL.h"
+    },
+    {
+      "id": "tc-greedy-off",
+      "what": "Faces are not merged",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "        for (const auto& r : Greedy(rectangles)) chunk.quads.push_back(QuadOf(dir, plane, r, palette));",
+      "replace": "        for (const auto& r : rectangles) chunk.quads.push_back(QuadOf(dir, plane, r, palette));",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*golden map*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-greedy-row-unchecked",
+      "what": "A rectangle grows along v when only the first square of the next row is free",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "                for (auto x = u; x < u1 && whole; ++x) whole = open[at(x, v1)] != 0;",
+      "replace": "                whole = open[at(u, v1)] != 0;",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*greedy keeps*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-greedy-reuses-squares",
+      "what": "Squares already in a rectangle are not marked",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "                for (auto x = u; x < u1; ++x) open[at(x, y)] = 0;",
+      "replace": "                for (auto x = u; x < u; ++x) open[at(x, y)] = 0;",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*greedy keeps*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-cull-inside-chunk-only",
+      "what": "A neighbour across the chunk border never hides a face",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "                            const auto other = grid.At(neighbour);",
+      "replace": "                            const auto other = (neighbour[axis] >= at[axis] * ChunkSize && neighbour[axis] < (at[axis] + 1) * ChunkSize) ? grid.At(neighbour) : Cell{};",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*across a chunk border*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-touched-no-neighbours",
+      "what": "A change on a chunk's side does not rebake the chunk across it",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "            if (local == 0) {",
+      "replace": "            if (local == 0 && false) {",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*rebake of the touched*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-rebake-keeps-index",
+      "what": "The index is not updated when the bounds or regions change",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "    if (!sameIndex) map.index = std::move(index).value();",
+      "replace": "    static_cast<void>(sameIndex);",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*rebake of the touched*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-palette-change-ignored",
+      "what": "A palette change rebakes only the listed chunks",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "    if (!SamePalette(palette, map.index.palette) || !SameShapes(grid.shapes, map.shapes) ||",
+      "replace": "    if (!SameShapes(grid.shapes, map.shapes) ||",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*palette change*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-region-not-read-back",
+      "what": "Region texts are not read back through Engine",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "        auto region = VM::ParseVoxelRegion(text.regions[r].text, *index, entries[r].at);\n        if (!region) return Engine::Base::Err(Refused(text.regions[r].file, region.error()));\n        for (const auto& read : region->chunks) {",
+      "replace": "        VM::VoxelRegionDocument skipped;\n        auto* region = &skipped;\n        for (const auto& read : region->chunks) {",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*region Engine refuses*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-chunk-not-validated",
+      "what": "A chunk is not checked by Engine before it is kept",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "        if (auto valid = VM::ValidateVoxelChunk(chunk, *index); !valid)\n            return Engine::Base::Err(Refused(\"a chunk\", valid.error()));\n    return BakedMap",
+      "replace": "    return BakedMap",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*chunk Engine refuses*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-stale-removes-listed",
+      "what": "Region files the new index lists are removed too",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "        if (listed.contains(file) || !file.starts_with(prefix) ||",
+      "replace": "        if (!file.starts_with(prefix) ||",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*save stopped*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-stale-ignores-form",
+      "what": "Files that do not have the region file form are removed",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "        if (listed.contains(file) || !file.starts_with(prefix) || !IsRegionFileName(std::string_view(file).substr(prefix.size())))",
+      "replace": "        if (listed.contains(file))",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*save stopped*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-region-always-written",
+      "what": "A region file holding the same bytes is written again",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "            existing && std::string_view(reinterpret_cast<const char*>(existing->data()), existing->size()) == region.text)",
+      "replace": "            existing && false)",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*same map twice*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-region-name-uppercase",
+      "what": "Upper-case hexadecimal digits pass as a region file name",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "(c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });",
+      "replace": "(c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); });",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*region file names*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-colliders-unmerged",
+      "what": "A chunk's boxes are kept as the blocks give them",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "    for (const auto& box : MergeBoxes(solids))",
+      "replace": "    for (const auto& box : solids)",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*golden map*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-shape-change-ignored",
+      "what": "A shape edit rebakes only the listed chunks",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "    if (!SamePalette(palette, map.index.palette) || !SameShapes(grid.shapes, map.shapes) ||\n        BlockShapes(grid) != map.blockShapes || grid.cellSize != map.index.cellSize ||",
+      "replace": "    if (!SamePalette(palette, map.index.palette) || grid.cellSize != map.index.cellSize ||",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*shape edit*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-rebake-chunk-not-validated",
+      "what": "A rebaked chunk is not checked by Engine before it is kept",
+      "file": "tools/voxel_map_editor/src/MapBuild.cpp",
+      "find": "            if (auto valid = VM::ValidateVoxelChunk(*chunk, *index); !valid)\n                return Engine::Base::Err(Refused(\"a chunk\", valid.error()));",
+      "replace": "            static_cast<void>(chunk);",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*chunk Engine refuses*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-markers-not-read-back",
+      "what": "The markers text is returned without reading it back through Engine",
+      "file": "tools/voxel_map_editor/src/MarkersFile.cpp",
+      "find": "    // One validator (Design Invariant 2): what Engine refuses or reads back\n",
+      "replace": "    return out;\n    // One validator (Design Invariant 2): what Engine refuses or reads back\n",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*Engine refuses is not written*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "tc-guard-allows-any-engine-module",
+      "what": "The guard lets the editor link another Engine module",
+      "file": "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py",
+      "find": "\"GYO::MapMarkers\", \"GYO::ToolFramework\",",
+      "replace": "\"GYO::MapMarkers\", \"GYO::Collision\", \"GYO::ToolFramework\",",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/voxel_map_editor",
+        "-p",
+        "test_voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "FAILED"
+    },
+    {
+      "id": "tc-guard-core-links-collision",
+      "what": "The core links an Engine module the invariant does not list",
+      "file": "tools/voxel_map_editor/CMakeLists.txt",
+      "find": "    PUBLIC GYO::Base GYO::Engine GYO::VoxelMesh GYO::MapMarkers",
+      "replace": "    PUBLIC GYO::Base GYO::Engine GYO::VoxelMesh GYO::MapMarkers GYO::Collision",
+      "command": [
+        "{python}",
+        "tests/voxel_map_editor/voxel_map_editor_dependency_guard.py"
+      ],
+      "expect": "GYO::Collision"
+    },
+    {
+      "id": "tc-markers-read-back-not-compared",
+      "what": "A markers text that reads back different is returned",
+      "file": "tools/voxel_map_editor/src/MarkersFile.cpp",
+      "find": "    if (!std::equal(readBack->markers.begin(), readBack->markers.end(), document.markers.begin(),",
+      "replace": "    if (false && !std::equal(readBack->markers.begin(), readBack->markers.end(), document.markers.begin(),",
+      "target": "gyo_voxel_map_editor_chunked_tests",
+      "cases": "*Engine refuses is not written*",
+      "expect": "is NOT correct"
     }
   ]
 }

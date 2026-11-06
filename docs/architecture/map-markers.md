@@ -4,9 +4,9 @@ Owner: Engine (`engine/map_markers` → `GYO::MapMarkers`; `engine/map_markers/M
 Plan and record: [big map](plans/big-map/README.md), batch v8-arch-big-map-engine-format (decision
 v8-arch-big-map-markers-owner: Engine owns the format, a product owns the meaning, a tool edits it).
 
-**Status (2026-11-06): version 1 landed with v8-arch-big-map-engine-format.** No product or tool reads it yet; the
-voxel map editor (v8-arch-big-map-tool-chunked) is planned to edit it and object_fps_pvp
-(v8-arch-big-map-product-arena-v3) to read it.
+**Status (2026-11-06): version 1 landed with v8-arch-big-map-engine-format.** The voxel map editor reads it and its
+library writes it (v8-arch-big-map-tool-chunked; placing markers in its window is the window batch's); object_fps_pvp
+(v8-arch-big-map-product-arena-v3) is planned to read it.
 
 ## What it is
 
@@ -72,9 +72,10 @@ product; the two readers then share one validator instead of each writing its ow
 { "schema": "gyo.marker_kinds", "version": 1, "kinds": ["a", "b", "c"] }
 ```
 
-**Status (2026-11-06): contract written; no parser yet.** `ParseMarkerKinds` and `UnknownMarkerKinds` land with
-v8-arch-big-map-tool-chunked (its `-markers` step) as additions to this module's public interface, declared in that
-batch with one rule test per rule and mutants in its catalog.
+**Status (2026-11-06): `ParseMarkerKinds` and `UnknownMarkerKinds` landed with v8-arch-big-map-tool-chunked (its
+`-markers` step)**, with one rule test per rule (Q1 to Q5) in `tests/common/map_markers/MapMarkersTests.cpp` and
+their mutants (`mm-kinds-*`, `mm-unknown-kinds-none`) in `docs/architecture/plans/big-map/scripts/engine_format_mutations.json`.
+The voxel map editor reads kinds through them (`check-markers`).
 
 ### Validation (version 1)
 
@@ -93,7 +94,7 @@ batch with one rule test per rule and mutants in its catalog.
 A markers file is valid on its own: `ParseMapMarkers` does not take a kinds list, and which list applies to a map
 is the product's fact. A marker whose `kind` is not in that list is an error for the product that loads the map and
 for an editor that places markers for it, and both find it the same way: `UnknownMarkerKinds(markers, kinds)`
-returns the paths of the offending markers in markers order, empty when there are none. What a kind means, which
+returns the paths of the offending markers' kinds (`markers[i].kind`) in markers order, empty when there are none. What a kind means, which
 shape it should have and which tags it needs stay the product's (Invariant 1); a version 2 may add per-kind form
 facts (for example the shapes a kind allows) when an editor or a product shows the need, not before.
 
@@ -109,7 +110,9 @@ facts (for example the shapes a kind allows) when an editor or a product shows t
   the rules would report for that object. The rules decide the same documents either way; the scan only keeps a
   malformed file from costing quadratic time. The scan itself keeps, per open container, only a count and the last
   key, and builds a path only to report an error, so its memory is linear in the text however deep the nesting
-  (test `gyo_map_markers_alloc_tests`).
+  (test `gyo_map_markers_alloc_tests`). `ParseMarkerKinds` has no such scan: its 64 KiB limit bounds the worst
+  malformed file (one object of about 8,000 keys) to about 130 ms (measured by the v8-arch-big-map-tool-chunked
+  reviewer at -O2), and only when content loads.
 
 ## Design Invariants
 
@@ -128,7 +131,7 @@ A change against any item below is an Architecture Delta that needs the user's a
    is valid by `ParseMarkerKinds` alone, and whether a marker's kind is listed by `UnknownMarkerKinds` alone; no
    tool or product re-implements a rule. Guard: the rule tests in `tests/common/map_markers/MapMarkersTests.cpp`
    (one test case per rule, mutants `mm-*` in `docs/architecture/plans/big-map/scripts/engine_format_mutations.json`;
-   the kinds rules and their mutants arrive with the parser), and review.
+   the kinds rules are tested in the same file, mutants mm-kinds-* and mm-unknown-kinds-none in the same catalog), and review.
 4. **Strict.** An unknown schema, version or field, a repeated key, a non-canonical order and a value out of range
    are errors, never ignored, clamped or repaired. Guard: the same rule tests and mutants.
 5. **Integers.** Positions stay integers in the map's units; the module converts nothing to world floats, so it

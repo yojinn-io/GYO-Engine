@@ -31,10 +31,11 @@ SDL_SYMBOL = re.compile(r"\bSDL_\w+")
 # The whole CMake name: a name that goes on after an allowed one with -, ., + or :: is another target.
 TARGET = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*(?:(?:[.+-]|::)[A-Za-z0-9_]+)*")
 
-# The baked file and its validator are Engine's (GYO::VoxelMesh); files go through engine/io; the command line through the
-# framework's headless shell; gyo.voxel_grid is read with the tool's own JSON parser.
+# The baked file and its validator are Engine's (GYO::VoxelMesh); markers and their kinds are read and written only
+# through Engine's GYO::MapMarkers (v8-arch-big-map-tool-chunked, user 2026-11-06); files go through engine/io; the
+# command line through the framework's headless shell; gyo.voxel_grid is read with the tool's own JSON parser.
 ALLOWED_INCLUDE_PREFIXES = ("gyo/voxel_map_editor/", "gyo/framework/", "engine/", "nlohmann/")
-ALLOWED_TARGETS = {"GYO::Base", "GYO::Engine", "GYO::VoxelMesh", "GYO::ToolFramework",
+ALLOWED_TARGETS = {"GYO::Base", "GYO::Engine", "GYO::VoxelMesh", "GYO::MapMarkers", "GYO::ToolFramework",
                    "nlohmann_json::nlohmann_json"}
 
 LINK_CALL = re.compile(r"target_link_libraries\s*\(([^)]*)\)", re.IGNORECASE)

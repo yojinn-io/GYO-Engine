@@ -16,6 +16,8 @@ add_library(gyo_voxel_map_editor_core STATIC
     src/Orientation.cpp
     src/GridDocument.cpp
     src/Build.cpp
+    src/MapBuild.cpp
+    src/MarkersFile.cpp
     src/BoxImport.cpp
     src/FileAccess.cpp
 )
@@ -23,14 +25,14 @@ target_include_directories(gyo_voxel_map_editor_core PUBLIC "${CMAKE_CURRENT_SOU
 target_compile_features(gyo_voxel_map_editor_core PUBLIC cxx_std_20)
 # The baked file and its only validator are Engine's (GYO::VoxelMesh); files go
 # through engine/io (GYO::Engine); gyo.voxel_grid is the tool's own format, read
-# with the tool's own JSON parser (docs/voxel_map_editor/architecture.md,
-# Design Invariant 1).
+# with the tool's own JSON parser; markers and their kinds only through
+# GYO::MapMarkers (docs/voxel_map_editor/architecture.md, Design Invariant 1).
 target_link_libraries(gyo_voxel_map_editor_core
-    PUBLIC GYO::Base GYO::Engine GYO::VoxelMesh
+    PUBLIC GYO::Base GYO::Engine GYO::VoxelMesh GYO::MapMarkers
     PRIVATE nlohmann_json::nlohmann_json
 )
 
-add_executable(gyo_voxel_map_editor src/Main.cpp)
+add_executable(gyo_voxel_map_editor src/Main.cpp src/MapMeasure.cpp)
 target_compile_features(gyo_voxel_map_editor PRIVATE cxx_std_20)
 # The UTF-8 command line and console come from the framework's headless shell.
 # The schema of a file to inspect is read with the tool's JSON parser too.

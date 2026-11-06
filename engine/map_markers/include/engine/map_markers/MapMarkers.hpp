@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -33,16 +34,25 @@ inline constexpr std::size_t MaxPathPoints = 4096;
 // +-2^20 units.
 inline constexpr std::int64_t CoordinateLimit = std::int64_t{1} << 20;
 
+// gyo.marker_kinds version 1: the kinds a product knows.
+inline constexpr std::string_view MarkerKindsSchema = "gyo.marker_kinds";
+inline constexpr int MarkerKindsVersion = 1;
+inline constexpr std::size_t MaxKindsTextBytes = std::size_t{64} * 1024;
+inline constexpr std::size_t MaxKinds = 256;
+
 // Failure classes of the module. Zero is not a valid code; the numeric values
 // are not a data contract.
 enum class MapMarkersErrorCode : std::uint8_t {
     // A gyo.map_markers document breaks its contract.
     InvalidMapMarkers = 1,
+    // A gyo.marker_kinds document breaks its contract.
+    InvalidMarkerKinds,
 };
 
 [[nodiscard]] constexpr const char* ToString(const MapMarkersErrorCode code) noexcept {
     switch (code) {
     case MapMarkersErrorCode::InvalidMapMarkers: return "InvalidMapMarkers";
+    case MapMarkersErrorCode::InvalidMarkerKinds: return "InvalidMarkerKinds";
     }
     return "Unknown";
 }
@@ -89,5 +99,17 @@ struct MapMarkersDocument final {
 // InvalidMapMarkers error with the offending path as its detail; nothing is
 // ignored or repaired.
 [[nodiscard]] MapMarkersResult<MapMarkersDocument> ParseMapMarkers(std::string_view text);
+
+// Checks every rule of gyo.marker_kinds version 1 (Q1 to Q5) and returns the
+// kinds in text order, which the rules make strictly increasing. Anything the
+// contract does not allow is an InvalidMarkerKinds error with the offending
+// path as its detail.
+[[nodiscard]] MapMarkersResult<std::vector<std::string>> ParseMarkerKinds(std::string_view text);
+
+// The paths (markers[i].kind) of the markers whose kind is not in kinds, in
+// markers order; empty when every kind is listed. The one place a product and
+// an editor decide this.
+[[nodiscard]] std::vector<std::string> UnknownMarkerKinds(const MapMarkersDocument& markers,
+                                                          std::span<const std::string> kinds);
 
 } // namespace Engine::MapMarkers
