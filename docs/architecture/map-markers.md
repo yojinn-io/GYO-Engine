@@ -69,7 +69,9 @@ valid: what they mean is the product's.
   `ordered_json`, which keeps keys in text order (rule K6 needs it) and inserts each key with a linear search; so
   before building it, a scan rejects any object with more than 32 keys, more than any valid object has, at the path
   the rules would report for that object. The rules decide the same documents either way; the scan only keeps a
-  malformed file from costing quadratic time.
+  malformed file from costing quadratic time. The scan itself keeps, per open container, only a count and the last
+  key, and builds a path only to report an error, so its memory is linear in the text however deep the nesting
+  (test `gyo_map_markers_alloc_tests`).
 
 ## Design Invariants
 

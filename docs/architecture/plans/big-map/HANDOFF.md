@@ -189,6 +189,17 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
   - 突變：engine-format 60/60、v1 20/20、engine-grid 16/16。
   - 全量建置成功；`cpu|shader` 133/133、`gpu` 4/4。
   - 證據在 `build/evidence/big-map/engine-format/after_review_2/`。上一輪的失敗（60/62）保留在 `after_review/`。
+- 2026-11-06 推送 `e756e7d9`。L1 三平台（windows-x64、linux-x64、macos-arm64）全部通過，已通知架構師。
+- **2026-11-06 停下（架構師依 AGENTS §14）：審查者複核 `e756e7d9`，發現 S1 帶進回歸 B2。**
+  - B2：S1 的預掃描每層存完整路徑，記憶體隨巢狀深度平方成長（深度 32,000 約 1.6 GB），`bad_alloc` 會從 `ParseMapMarkers` 漏出。
+  - 其餘七項（B1、S1、N1～N5）與兩個退役突變都確認了。
+- **2026-11-06 使用者決定**（經架構師轉達）：先修 B2 再合併，用審查者的 (a)。
+  - 判定 G1～G4 先寫進宣告 4b 節的 B2，再看結果。
+  - G2：新測試 `gyo_map_markers_alloc_tests` 在 `e756e7d9` 失敗（比值 3.91／3.71），修正後通過（2.00／2.00）。
+  - G3：`mm-*` 18/18 被殺（**件數の突き合わせ：一致**），含新突變 `mm-key-scan-full-path`。
+  - G4：`gyo_map_markers_tests` 11/11、`gyo_voxel_mesh_tests` 39/39、兩條名詞守衛通過；全量建置成功，`cpu|shader` 134/134、`gpu` 4/4。L1 待新 head。
+  - 順手改了守衛 docstring（審查者的參考項）。
+  - 證據在 `build/evidence/big-map/engine-format/b2/`。
 
 ## 之後（另案，不開卡）
 
@@ -197,4 +208,4 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 
 ## 下一步
 
-PR #162 的 L1 三平台與審查（engine-grid 會話）；合併由使用者決定。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。
+PR #162 的 B2 修正：新 head 的 L1 三平台與審查者（engine-grid 會話）的複核；之後由架構師合併（使用者已在架構師會話說合併）。之後 `-tool-chunked`、`-product-arena-v3` 由架構師會話開。

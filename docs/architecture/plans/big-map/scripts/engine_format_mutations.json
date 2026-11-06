@@ -598,10 +598,20 @@
       "id": "mm-key-scan-loses-index",
       "what": "The key-count scan reports an array element's container path instead of the element's",
       "file": "engine/map_markers/src/MapMarkers.cpp",
-      "find": "        if (frame.array) return At(frame.path, frame.count);",
-      "replace": "        if (frame.array) return frame.path;",
+      "find": "                path += \"[\" + std::to_string(frame.count) + \"]\";",
+      "replace": "                continue;",
       "target": "gyo_map_markers_tests",
       "cases": "*K6:*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "mm-key-scan-full-path",
+      "what": "The key-count scan keeps a copy of each open array's full path again, quadratic in nesting depth (review B2 of PR #162; judgment G1)",
+      "file": "engine/map_markers/src/MapMarkers.cpp",
+      "find": "        frames_.push_back({true, 0, {}});",
+      "replace": "        frames_.push_back({true, 0, PathAt(frames_.size())});",
+      "target": "gyo_map_markers_alloc_tests",
+      "cases": "*nested arrays*",
       "expect": "is NOT correct"
     },
     {

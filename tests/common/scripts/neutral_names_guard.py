@@ -6,8 +6,8 @@ nouns a map's data is typically used for; none may appear, in any case, anywhere
 examples included). This file is the only place that lists them.
 
 Each module registers its own test that calls this script with its own paths (tests/common/<module>/CMakeLists.txt),
-so removing a module removes only its own check (AGENTS.md section 7). Today: GYO::VoxelMesh Design Invariant 1
-(docs/architecture/voxel-mesh.md) and GYO::MapMarkers Design Invariant 1 (docs/architecture/map-markers.md).
+so removing a module removes only its own check (AGENTS.md section 7). The modules that use it are the ones whose
+CMakeLists register such a test; this file does not list them, so removing a module needs no change here.
 
 Usage: neutral_names_guard.py --root <repository root> --scan <path> [<path> ...]
 Paths are relative to the root, files or directories. Exit status 0 when clean, 1 with the hits listed.

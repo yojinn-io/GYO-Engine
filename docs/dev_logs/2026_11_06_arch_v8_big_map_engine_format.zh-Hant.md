@@ -2,7 +2,7 @@
 
 日期：2026-11-06。分支 `claude/v8-arch-big-map-engine-format`（rebase 到 master `c70e8fdc`，即 PR #161 合併後）。PR #162。
 段：上段（Engine 公開介面、新 Subsystem、DI）。實作者是主會話，Opus 5.5／high。審查者是 engine-grid 會話（Opus），由架構師指定。
-**狀態：** 受理判定在本機全部成立；L1 與審查待 PR。
+**狀態：** F1～F5 成立（L1 三平台對 `e756e7d9` 通過）。審查者複核找到 B2，已修（G1～G4 見「審查者複核與 B2」），等審查者再複核。
 宣告：[engine-format](../architecture/plans/big-map/engine-format.zh-Hant.md)，使用者 2026-11-06 核准（「照建議核准」）。
 
 相關文件：
@@ -94,9 +94,47 @@
 - 第一輪的失敗保留在 `after_review/`，沒有被這次的成功覆蓋。
 - 會改變的判斷：加新規則時，要先查舊的檢查會不會被新規則蓋過。
 
+## L1（`e756e7d9`）
+
+windows-x64、linux-x64、macos-arm64 三平台全部通過，CI gate 通過。F3 的「三平台待 L1」與 F5 的 L1 至此成立。
+
+## 審查者複核與 B2（PR #162）
+
+審查者複核 `e756e7d9`：B1、S1、N1～N5 與兩個退役突變都確認了，但 S1 帶進一個新的回歸 B2。架構師依 AGENTS §14 停下，使用者決定先修再合併，用審查者的 (a)。
+
+- **B2：** S1 的預掃描 `KeyCountScan` 每開一層容器就存一份完整路徑，記憶體隨巢狀深度平方成長。
+  - 審查者量到深度 32,000 時 1.2 s／1.6 GB（`62fe5fd3` 是 12 ms／2.6 MB）。
+  - 4 MiB 內可做到約 200 萬層，`bad_alloc` 會從 `ParseMapMarkers` 漏出去。
+- **修法 (a)：** 每層只存「是不是陣列、數量、最後一個鍵」，路徑只在失敗時從根組出來。回報的路徑不變，規則不變。
+- **判定：** 先寫進宣告 4b 節的 B2（G1～G4），再看結果。
+  - G1 是新的測試執行檔 `gyo_map_markers_alloc_tests`：替換全域 `operator new`，數 `ParseMapMarkers` 要求的位元組；深度 4,000 與 2,000 的比值要 < 3。先例是 `gyo_audio_alloc_tests`。
+- **G2 Red→Green**（測試本身沒改）：
+
+  | 形狀 | `e756e7d9`（Red） | 修正後（Green） |
+  |---|---|---|
+  | 陣列 | 9,401,655 → 36,802,679 位元組，比值 3.91 | 303,565 → 606,285 位元組，比值 2.00 |
+  | 物件 | 4,675,725 → 17,350,765 位元組，比值 3.71 | 565,581 → 1,130,317 位元組，比值 2.00 |
+
+- **紀錄（不作判定）：** 審查者的探針 `deep_one.cpp`，本機 Intel Mac，`-O1`：
+
+  | 深度 | `e756e7d9` | `62fe5fd3` | 修正後 |
+  |---|---|---|---|
+  | 32,000 | 1,098 ms／峰值 1.6 GB | 15 ms／3.1 MB | 12 ms／5.1 MB |
+  | 1,000,000 | 未跑 | 337 ms／61 MB（審查者的數字） | 393 ms／153 MB |
+
+  修正後是線性的，但每層的 `Frame` 比 `62fe5fd3` 多，深度 100 萬時峰值約是它的 2.5 倍。極深的文件在記憶體很小的機器上仍可能 `bad_alloc`；把它轉成錯誤或加深度上限（審查者的 (b)），不在本次範圍。
+- **G3 突變：**
+  - 新突變 `mm-key-scan-full-path`：陣列每層開啟時又存一份完整路徑，被 G1 殺。
+  - `mm-key-scan-loses-index` 原來的那一行已不存在，`find` 換成新程式中組陣列索引的那一行；守的性質、目標、期待的訊息都不變。
+  - 依 D184 重跑全部 `mm-*`：**件數の突き合わせ：一致**（要求 18、結果 18：被殺 18、存活 0、過期 0）。`vmap-*`、`vreg-*`、`vm-*` 與另兩個 catalog 的對象程式沒動，沒重跑。catalog 現在 61 個。
+- **G4 迴歸：** `gyo_map_markers_tests` 11/11（269 assertions）、`gyo_voxel_mesh_tests` 39/39（954 assertions）、兩條名詞守衛通過。全量建置成功，`cpu|shader` 134/134（多了 `gyo_map_markers_alloc_tests`）、`gpu` 4/4。L1 待新 head。
+- **§14.4：** 只新增判定，沒改既有判定，所以沒有緩める面。
+- **順手處理（審查者的參考項）：** `neutral_names_guard.py` 的 docstring 不再列出使用它的模組，刪模組時不必改它。`map-markers.md` 的 Cost 補一句：掃描的記憶體與文字長度成線性。
+- **會改變的判斷：** 加這類預掃描或任何「每層的狀態」時，要另外確認它的時間和記憶體與輸入大小成線性。F2 的突變與規則測試量不到複雜度，這次的 B2 是審查者用深度探針找到的。
+
 ## 證據
 
-主 checkout 的 `build/evidence/big-map/engine-format/`，git 不追蹤。審查修正後的兩輪在 `after_review/`（第一輪，60/62）與 `after_review_2/`（第二輪，60/60）。核准後第一次的結果：
+主 checkout 的 `build/evidence/big-map/engine-format/`，git 不追蹤。審查修正後的兩輪在 `after_review/`（第一輪，60/62）與 `after_review_2/`（第二輪，60/60）。B2 在 `b2/`：`red_alloc_tests_e756e7d9.txt`、`green_alloc_tests.txt`、`depth32000_before.txt`、`depth32000_after.txt`、`mutations_mm.txt`、`build_all.txt`、`ctest_cpu_shader.txt`、`ctest_gpu.txt`。審查者的探針在 `review_pr162/`。核准後第一次的結果：
 - 三個突變 catalog 的結果：`engine_format_mutations.txt`、`voxel_mesh_mutations.txt`、`engine_grid_mutations.txt`。
 - 全量建置與測試：`build_all.txt`、`ctest_cpu_shader.txt`、`ctest_gpu.txt`。
 

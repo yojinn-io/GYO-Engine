@@ -2,6 +2,14 @@ add_executable(gyo_map_markers_tests MapMarkersTests.cpp)
 target_link_libraries(gyo_map_markers_tests PRIVATE GYO::MapMarkers doctest::doctest)
 add_test(NAME gyo_map_markers_tests COMMAND gyo_map_markers_tests)
 
+# Rejecting a deep document costs memory linear in its depth (judgment G1 of the
+# engine-format declaration). It replaces the global allocation functions, so it
+# is its own executable.
+add_executable(gyo_map_markers_alloc_tests MapMarkersAllocTests.cpp)
+target_link_libraries(gyo_map_markers_alloc_tests PRIVATE GYO::MapMarkers doctest::doctest)
+add_test(NAME gyo_map_markers_alloc_tests COMMAND gyo_map_markers_alloc_tests)
+set_tests_properties(gyo_map_markers_alloc_tests PROPERTIES LABELS cpu TIMEOUT 60)
+
 # Design Invariant 1: the module, its tests and its contract name no gameplay
 # concept (docs/architecture/map-markers.md). The shared guard script scans
 # only the paths this module names.

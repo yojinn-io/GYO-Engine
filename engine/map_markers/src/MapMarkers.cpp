@@ -111,7 +111,7 @@ public:
     bool string(string_t&) { return Value(); }
     bool binary(binary_t&) { return Value(); }
     bool start_object(std::size_t) {
-        frames_.push_back({ChildPath(), false, 0, {}});
+        frames_.push_back({false, 0, {}});
         return true;
     }
     bool key(string_t& key) {
@@ -119,7 +119,7 @@ public:
         frame.key = key;
         if (++frame.count <= MaxObjectKeys) return true;
         tooManyKeys_ = true;
-        path_ = frame.path;
+        path_ = PathAt(frames_.size() - 1);
         return false;
     }
     bool end_object() {
@@ -127,7 +127,7 @@ public:
         return Value();
     }
     bool start_array(std::size_t) {
-        frames_.push_back({ChildPath(), true, 0, {}});
+        frames_.push_back({true, 0, {}});
         return true;
     }
     bool end_array() {
@@ -141,22 +141,31 @@ public:
     [[nodiscard]] const std::string& Path() const noexcept { return path_; }
 
 private:
-    // An open container: its path, whether it is an array, and its count of
-    // elements so far (an array) or keys so far (an object, whose last key is
-    // the member being read).
+    // An open container: whether it is an array, and its count of elements so
+    // far (an array) or keys so far (an object, whose last key is the member
+    // being read). It keeps no path: a path per open container would cost
+    // memory quadratic in the nesting depth (review B2 of PR #162). The keys of
+    // the open containers together are no longer than the text.
     struct Frame final {
-        std::string path;
         bool array{};
         std::size_t count{};
         std::string key;
     };
 
-    // The path of the value that starts now, written as the rules write it.
-    [[nodiscard]] std::string ChildPath() const {
-        if (frames_.empty()) return "";
-        const auto& frame = frames_.back();
-        if (frame.array) return At(frame.path, frame.count);
-        return frame.path.empty() ? frame.key : frame.path + "." + frame.key;
+    // The path of the value being read inside the first `depth` open
+    // containers, written as the rules write it. Built only to report an error.
+    [[nodiscard]] std::string PathAt(const std::size_t depth) const {
+        std::string path;
+        for (std::size_t i = 0; i < depth; ++i) {
+            const auto& frame = frames_[i];
+            if (frame.array) {
+                path += "[" + std::to_string(frame.count) + "]";
+            } else {
+                if (!path.empty()) path += '.';
+                path += frame.key;
+            }
+        }
+        return path;
     }
 
     // A value of the current container ended: the next array element follows.
