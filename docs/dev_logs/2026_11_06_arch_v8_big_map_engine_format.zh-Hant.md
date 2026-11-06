@@ -132,6 +132,13 @@ windows-x64、linux-x64、macos-arm64 三平台全部通過，CI gate 通過。F
 - **順手處理（審查者的參考項）：** `neutral_names_guard.py` 的 docstring 不再列出使用它的模組，刪模組時不必改它。`map-markers.md` 的 Cost 補一句：掃描的記憶體與文字長度成線性。
 - **會改變的判斷：** 加這類預掃描或任何「每層的狀態」時，要另外確認它的時間和記憶體與輸入大小成線性。F2 的突變與規則測試量不到複雜度，這次的 B2 是審查者用深度探針找到的。
 
+## 合併（`5a6eead1` → PR #162）
+
+- 審查者（engine-grid 會話）對 `5a6eead1` 的複核：B2 解決（deep_one 深度 100 萬→200 萬 412→829 ms，線性）、無阻擋項；B1、N1、N2、S1 的探針輸出除時間外與 `e756e7d9` 一字不差；`mm-key-scan-full-path` 被 G1 殺（比值 3.97）。
+  非阻擋意見兩條（`KeyCountScan` 包進自己的區塊；線性記憶體若成約束應為資料契約模組共用）記在 HANDOFF「之後」。
+- L1 三平台通過：linux-x64 7m55s、macos-arm64 10m3s、windows-x64 15m7s。
+- 2026-11-06 架構師合併（merge `915ddc62`），分支 `claude/v8-arch-big-map-engine-format` 已刪。本節由架構師在 PR #160 補記（合併時分支已刪，無文件線可寫）。
+
 ## 證據
 
 主 checkout 的 `build/evidence/big-map/engine-format/`，git 不追蹤。審查修正後的兩輪在 `after_review/`（第一輪，60/62）與 `after_review_2/`（第二輪，60/60）。B2 在 `b2/`：`red_alloc_tests_e756e7d9.txt`、`green_alloc_tests.txt`、`depth32000_before.txt`、`depth32000_after.txt`、`mutations_mm.txt`、`build_all.txt`、`ctest_cpu_shader.txt`、`ctest_gpu.txt`。審查者的探針在 `review_pr162/`。核准後第一次的結果：

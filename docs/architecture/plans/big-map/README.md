@@ -1,7 +1,7 @@
 # 大地圖（區塊化地圖）計畫（`v8-arch-big-map`）
 
 更新：2026-11-06。Owner：架構（Engine 契約的判斷）；各批的實作 owner 見下表。卡片由架構師會話（「[Job][架構師]例行架構掃描」）開出。
-**狀態：survey 完成；六個未決事項 2026-11-06 照建議定案（[HANDOFF](HANDOFF.md)「決定」）。engine-map 拆成兩批（`v8-arch-big-map-split-engine`）：engine-grid（PR #161）已合併；engine-format（PR #162）宣告已核准，本機受理判定成立，等 L1 與審查。** 先讀本頁，再讀 [交接](HANDOFF.md)。
+**狀態：survey 完成；六個未決事項 2026-11-06 照建議定案（[HANDOFF](HANDOFF.md)「決定」）。engine-map 拆成兩批（`v8-arch-big-map-split-engine`）：engine-grid（PR #161）與 engine-format（PR #162）都已合併；tool-chunked 由 voxel 線規劃中。** 先讀本頁，再讀 [交接](HANDOFF.md)。
 
 ## 代號對照
 
@@ -22,6 +22,7 @@
 - [engine-map 宣告](engine-map.zh-Hant.md)：拆批前的一份宣告（使用者 2026-11-06 核准），下面兩份由它拆出。
 - [engine-grid 宣告](engine-grid.zh-Hant.md)：第一批。
 - [交接（HANDOFF）](HANDOFF.md)：記錄器。
+- [代辦（功能、歸屬批次、觸發條件）](todo.zh-Hant.md)：分區載入、局部重建、視錐剔除的現況與觸發條件（使用者 2026-11-06 要求記錄）。
 
 ## 批次一覽（照 proposal §11.11）
 
@@ -37,8 +38,8 @@ v8-arch-big-map
 |---|---|---|---|---|
 | `-survey` | 上段（Architecture 判斷的根據） | 調查者 Opus／high；對抗檢查者 Fable／xhigh（使用者已同意） | 架構 | 完成；六項照建議定案 |
 | `-engine-grid` | 上段（Engine 公開介面、DI） | 實作者 Opus／high；審查者 Opus（engine-grid 會話）；驗證者 Fable／xhigh | Engine | 完成（PR #161，merge `c70e8fdc`） |
-| `-engine-format` | 上段（Engine 公開介面、新 Subsystem、DI） | 同上 | Engine | PR #162：宣告已核准，本機 F1～F5 成立，等 L1 與審查 |
-| `-tool-chunked` | 未定 | 未開 | voxel 地圖編輯器線 | 未開 |
+| `-engine-format` | 上段（Engine 公開介面、新 Subsystem、DI） | 同上 | Engine | 完成（PR #162，merge `915ddc62`；審查 B1／S1／N1～N5／B2 都在 PR 內修） |
+| `-tool-chunked` | voxel 線定 | voxel 線定 | voxel 地圖編輯器線 | 規劃中（分支 `claude/v8-arch-big-map-tool-chunked`；五個判斷已定，等事前宣告） |
 | `-product-arena-v3` | 未定 | 未開 | 產品（object_fps_pvp） | 未開 |
 
 survey 之後的三批，範圍以 HANDOFF「決定」的六項為準（與 proposal v0.1 不一致處以決定為準）；樹狀圖只記錄 v0.1 的路線。

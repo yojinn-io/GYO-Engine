@@ -33,8 +33,8 @@ to the product that reads the file; this module checks form only. The precedent 
   The module returns them as integers: the cell size and the origin are facts of the map, kept in one place, so a
   consumer converts them with the map (for a `gyo.voxel_map`, `Engine::VoxelMesh::MapUnitsToWorld`).
 - **Yaw.** An angle in radians, a finite float; its zero, direction and range are the product's.
-- **Kinds.** A product lists the kinds it knows (its own data, for example a `marker_kinds.json`) and rejects others
-  when it loads the file; an editor reads that list as a palette without interpreting it.
+- **Kinds.** A product lists the kinds it knows in a `gyo.marker_kinds` file (below) and rejects a marker whose kind
+  is not listed when it loads the map; an editor reads the same file as a palette without interpreting it.
 
 ### Validation (version 1)
 
@@ -58,6 +58,44 @@ not JSON reports an empty path. Nothing is ignored or repaired.
 
 A JSON number with a fraction or an exponent is not an integer. Repeated path points and overlapping shapes are
 valid: what they mean is the product's.
+
+## Marker kinds (gyo.marker_kinds)
+
+The list of kinds a product knows: written by the product, read by the product and by any editor that places
+markers for it (decision `v8-arch-big-map-marker-kinds-format`, 2026-11-06). It plays the role a Source `.fgd`
+file plays for Hammer: the game tells the editor which names exist, the editor offers them and interprets none.
+The format describes one asset's vocabulary in Engine vocabulary (opaque names) and carries no meaning, so the
+layers table ([architecture](../architecture.md), "Layers") gives the format to Engine and the content to the
+product; the two readers then share one validator instead of each writing its own.
+
+```json
+{ "schema": "gyo.marker_kinds", "version": 1, "kinds": ["a", "b", "c"] }
+```
+
+**Status (2026-11-06): contract written; no parser yet.** `ParseMarkerKinds` and `UnknownMarkerKinds` land with
+v8-arch-big-map-tool-chunked (its `-markers` step) as additions to this module's public interface, declared in that
+batch with one rule test per rule and mutants in its catalog.
+
+### Validation (version 1)
+
+`ParseMarkerKinds(text)` decides every rule and returns the kinds in text order. Any violation is a
+`MapMarkersErrorCode::InvalidMarkerKinds` Runtime Error whose detail is the path of the offending value (for example
+`kinds[3]`); a repeated key or a text that is not JSON reports an empty path. Nothing is ignored or repaired.
+
+1. (Q1) The document is one JSON object with exactly the fields `schema`, `version` and `kinds`; no key repeats.
+2. (Q2) `schema` is `"gyo.marker_kinds"`; `version` is the integer 1.
+3. (Q3) `kinds` lists 1 to 256 strings in strictly increasing byte order (so kinds are unique).
+4. (Q4) Each kind satisfies rule K5 (1 to 64 characters of `a`–`z`, `0`–`9`, `_`, `.` and `-`).
+5. (Q5) The text is at most 64 KiB.
+
+### Relation to a markers file
+
+A markers file is valid on its own: `ParseMapMarkers` does not take a kinds list, and which list applies to a map
+is the product's fact. A marker whose `kind` is not in that list is an error for the product that loads the map and
+for an editor that places markers for it, and both find it the same way: `UnknownMarkerKinds(markers, kinds)`
+returns the paths of the offending markers in markers order, empty when there are none. What a kind means, which
+shape it should have and which tags it needs stay the product's (Invariant 1); a version 2 may add per-kind form
+facts (for example the shapes a kind allows) when an editor or a product shows the need, not before.
 
 ## Contracts
 
@@ -86,9 +124,11 @@ A change against any item below is an Architecture Delta that needs the user's a
 2. **Leaf.** Its links are exactly `GYO::Base`, `GYO::Math` and, privately, the JSON parser: no geometry format,
    collision, render, asset or product library. Guard: the configure-time check `gyo_expect_map_markers_links`
    (`tests/common/map_markers/CMakeLists.txt`; mutant `mm-links-voxel-mesh`).
-3. **One validator.** Whether a file is valid is decided by `ParseMapMarkers` alone. Guard: the rule tests in
-   `tests/common/map_markers/MapMarkersTests.cpp` (one test case per rule, mutants `mm-*` in
-   `docs/architecture/plans/big-map/scripts/engine_format_mutations.json`).
+3. **One validator.** Whether a markers file is valid is decided by `ParseMapMarkers` alone, whether a kinds file
+   is valid by `ParseMarkerKinds` alone, and whether a marker's kind is listed by `UnknownMarkerKinds` alone; no
+   tool or product re-implements a rule. Guard: the rule tests in `tests/common/map_markers/MapMarkersTests.cpp`
+   (one test case per rule, mutants `mm-*` in `docs/architecture/plans/big-map/scripts/engine_format_mutations.json`;
+   the kinds rules and their mutants arrive with the parser), and review.
 4. **Strict.** An unknown schema, version or field, a repeated key, a non-canonical order and a value out of range
    are errors, never ignored, clamped or repaired. Guard: the same rule tests and mutants.
 5. **Integers.** Positions stay integers in the map's units; the module converts nothing to world floats, so it
