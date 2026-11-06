@@ -309,8 +309,9 @@ bool ReservedOnWindows(const std::string& segment) {
 }
 
 // A region file name: 1 to 128 characters of a-z 0-9 _ . - /, relative, with
-// no empty, "." or ".." segment, no segment ending in "." (Windows drops it,
-// so "a." and "a" would name one file) and no Windows device name.
+// no empty segment, no segment ending in "." (which also rules out "." and
+// ".."; Windows drops a trailing dot, so "a." and "a" would name one file) and
+// no Windows device name.
 bool ValidRegionFile(const std::string& file) {
     if (file.empty() || file.size() > MaxRegionFileLength) return false;
     const bool characters = std::all_of(file.begin(), file.end(), [](const char c) {
@@ -321,7 +322,7 @@ bool ValidRegionFile(const std::string& file) {
     while (true) {
         const auto end = file.find('/', start);
         const auto segment = file.substr(start, end == std::string::npos ? std::string::npos : end - start);
-        if (segment.empty() || segment == "." || segment == "..") return false;
+        if (segment.empty()) return false;
         if (segment.back() == '.') return false;
         if (ReservedOnWindows(segment)) return false;
         if (end == std::string::npos) return true;

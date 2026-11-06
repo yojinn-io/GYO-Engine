@@ -165,6 +165,25 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
   - 全量建置成功；`cpu|shader` 132/132、`gpu` 4/4。
   - 證據在主 checkout `build/evidence/big-map/engine-format/`。dev_log 已寫。PR #162 改成 ready，等 L1 與審查者。
 
+- 2026-11-06 PR #162 的審查（engine-grid 會話，對 `7886e7c4`）：B1、S1、N1～N4；使用者決定全部在本 PR 修（經架構師轉達）。修正提交 `757ba5df`（未推送），宣告加「審查後變更」節。之後追加 N5（守衛移到共用位置），尚未做。
+- **2026-11-06 停下（宣告第 4 節「突變存活的處理」與 AGENTS §14）：F2 不成立。** `757ba5df` 上重跑：
+  - **件數の突き合わせ：一致**（要求 98、結果 98：被殺 96、存活 2、過期 0）。
+  - 結果：engine-format 60/62、v1 20/20、engine-grid 16/16；全量建置成功，`cpu|shader` 132/132、`gpu` 4/4。
+  - 證據在主 checkout `build/evidence/big-map/engine-format/after_review/`。
+  - 存活的兩個，都是審查修正讓舊檢查變成多餘（推論，未經使用者認定）：
+    - `vmap-region-file-dot-segments`：N1 的「段名結尾不能是 `.`」已經涵蓋 `.` 與 `..`。
+    - `mm-tags-unbounded`：S1 的預掃描先拒絕鍵超過 32 個的物件，K6 那一行不會再被執行到。
+  - 給使用者的選項：
+    - (1) 建議：刪掉兩處多餘的檢查，退役這兩個突變，由新突變守同一性質。
+    - (2) 保留兩處檢查，記為等價突變（要使用者接受）。
+    - (3) 回頭看前提：把預掃描的上限提高到 64，讓兩處各管一段。
+  - 用時：審查修正約 1.5 h。
+  - 下次會改變的判斷：加新規則時，要先查舊的檢查會不會被新規則蓋過。
+- **2026-11-06 使用者決定**（原話「刪多餘檢查（建議）」）：選項 (1)。
+  - 刪掉 `ValidRegionFile` 裡「`.`、`..`」的比較，以及 `ParseTags` 裡「tags 超過 32」的檢查。
+  - 退役 `vmap-region-file-dot-segments`、`mm-tags-unbounded`，engine-format 的 catalog 從 62 個減為 60 個。
+  - 同一性質由 `vmap-region-file-trailing-dot`、`mm-object-key-cap-removed` 守。之後做 N5，再完整重跑。
+
 ## 之後（另案，不開卡）
 
 - `GYO::Model` 的 `AnimationEvents.cpp:40` 改用 `StrictJson.hpp`。它的回呼有同樣的二次方（PR #161 的 U4）。

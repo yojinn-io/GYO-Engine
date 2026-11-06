@@ -172,7 +172,8 @@ private:
 
 std::vector<std::pair<std::string, std::string>> ParseTags(const Json& tags, const std::string& path) {
     if (!tags.is_object()) Fail("tags is an object", path);
-    if (tags.size() > MaxTags) Fail("tags has at most 32 entries", path);
+    // At most 32 entries (rule K6): the key-count scan rejects a larger object
+    // before the document is built, at this same path.
     std::vector<std::pair<std::string, std::string>> result;
     for (const auto& item : tags.items()) {
         const auto& key = item.key();

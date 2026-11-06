@@ -123,16 +123,6 @@
       "expect": "is NOT correct"
     },
     {
-      "id": "vmap-region-file-dot-segments",
-      "what": "A region file with '.' or '..' segments is accepted",
-      "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
-      "find": "        if (segment.empty() || segment == \".\" || segment == \"..\") return false;",
-      "replace": "        if (segment.empty()) return false;",
-      "target": "gyo_voxel_mesh_tests",
-      "cases": "*M8:*",
-      "expect": "is NOT correct"
-    },
-    {
       "id": "vmap-region-file-repeats",
       "what": "A repeated region file is accepted",
       "file": "engine/voxel_mesh/src/VoxelMesh.cpp",
@@ -463,16 +453,6 @@
       "expect": "is NOT correct"
     },
     {
-      "id": "mm-tags-unbounded",
-      "what": "More than 32 tags are accepted",
-      "file": "engine/map_markers/src/MapMarkers.cpp",
-      "find": "    if (tags.size() > MaxTags) Fail(\"tags has at most 32 entries\", path);",
-      "replace": "",
-      "target": "gyo_map_markers_tests",
-      "cases": "*K6:*",
-      "expect": "is NOT correct"
-    },
-    {
       "id": "mm-yaw-infinite",
       "what": "A yaw that is infinite as a float is accepted",
       "file": "engine/map_markers/src/MapMarkers.cpp",
@@ -529,10 +509,12 @@
       "find": "// Ordered: rule K6 asks for tag keys",
       "replace": "// Ordered (a spawn table): rule K6 asks for tag keys",
       "command": [
-        "{python}",
-        "tests/common/map_markers/neutral_names_guard.py",
-        "--root",
-        "."
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^gyo_map_markers\\.neutral_names$",
+        "--output-on-failure"
       ],
       "expect": "neutral names guard: 1 gameplay word"
     },
@@ -553,10 +535,12 @@
       "find": "orientations, placement data or product names.",
       "replace": "orientations, spawn points or product names.",
       "command": [
-        "{python}",
-        "tests/common/map_markers/neutral_names_guard.py",
-        "--root",
-        "."
+        "ctest",
+        "--test-dir",
+        "build/target/_build/test",
+        "-R",
+        "^gyo_voxel_mesh\\.neutral_names$",
+        "--output-on-failure"
       ],
       "expect": "neutral names guard: 1 gameplay word"
     },

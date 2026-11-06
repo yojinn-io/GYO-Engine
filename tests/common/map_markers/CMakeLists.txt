@@ -3,11 +3,13 @@ target_link_libraries(gyo_map_markers_tests PRIVATE GYO::MapMarkers doctest::doc
 add_test(NAME gyo_map_markers_tests COMMAND gyo_map_markers_tests)
 
 # Design Invariant 1: the module, its tests and its contract name no gameplay
-# concept (docs/architecture/map-markers.md).
+# concept (docs/architecture/map-markers.md). The shared guard script scans
+# only the paths this module names.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(NAME gyo_map_markers.neutral_names
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/neutral_names_guard.py"
-        --root "${GYO_REPOSITORY_ROOT}")
+    COMMAND "${Python3_EXECUTABLE}" "${GYO_REPOSITORY_ROOT}/tests/common/scripts/neutral_names_guard.py"
+        --root "${GYO_REPOSITORY_ROOT}"
+        --scan engine/map_markers tests/common/map_markers docs/architecture/map-markers.md)
 set_tests_properties(gyo_map_markers.neutral_names PROPERTIES LABELS cpu TIMEOUT 60)
 
 # Design Invariant 2: its links are exactly Base, Math and, privately, the JSON
