@@ -212,9 +212,42 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 - `GYO::Model` 的 `AnimationEvents.cpp:40` 改用 `StrictJson.hpp`。它的回呼有同樣的二次方（PR #161 的 U4）。
 - PR #161 審查者的 N3（極小半徑時候選邊際是否足夠）：Collision 的事，待使用者決定。
 
+## 觀測：產品的碰撞盒上限 1024（2026-11-06，voxel 線轉達使用者的要求）
+
+- `apps/object_fps_pvp/src/Pvp/Arena.cpp:44`：`walls.size() > 1024` 拒收；錯誤訊息只說 spawns，看不出真因。
+- 地圖：使用者給的 MagicaVoxel `biome.vox`（126×126×32，39,717 voxel，21 色），一次性腳本轉成 `gyo.voxel_grid`（cell 0.5 m，約 63 m 見方）。
+  區塊化產出 64 區塊、8,300 quads、1,518 colliders（區塊內合併）；v1 單檔 38,214 quads、1,260 colliders → 超過 1024，標準 Match 拒收。
+- 實驗（使用者同意，未提交，原始碼已還原）：上限暫改 2^20 後，Match 載入 biome、1～2 個 client 60 fps、最長幀 18～20 ms；Match 仍線性掃，tick 成本沒量。
+- 含意：63 m 見方就超過上限；1 km² 目標是它的上百倍。區塊內合併讓盒子多 20%，查詢成本要由 `StaticAabbGrid` 承擔（Engine 已有、產品尚無消費端）。
+  **撤上限不能單獨做**：只撤上限、留線性掃是 AGENTS §4 說的「變更量少的 workaround」；撤上限要和 broadphase 同一批。
+- 證據：主 checkout `build/evidence/tool-v8-voxel-map/window-1/biome/`（`vox_to_grid.py`、`biome.voxel_grid.json`、`map/`、`game/`、`logs-*`）。
+
+## product-arena-v3 計畫草案（架構師，2026-11-07，待使用者核准）
+
+owner 是產品會話；上段（Match 判定、Collision 語意、資料契約）。優先序由上而下；第一批單獨就能讓 biome 經 v1 進標準 Match。
+
+```text
+v8-arch-big-map-product-arena-v3
+├── pa-broadphase   實作 Opus／high（局部 xhigh：查詢等價）；審查 Opus（engine-grid 會話，知道 StaticAabbGrid）；驗證 Fable／xhigh｜估 6～10 h
+│                   Movement（supported、place、sweep）、ShotQuery、spawn 驗證改用 StaticAabbGrid（Match 與 Client 預測同一份）；
+│                   1024 → 宣告的預算（候選 2^20 個 colliders；Engine 的 2^22 cells、2^32 登記在內），錯誤訊息說出真因；
+│                   判定（先宣告）：與線性掃 bit-identical（既有 golden＋隨機 cross）、biome 1,518 盒與合成 10^5 盒的 tick 成本閾值。
+├── pa-arena-v3     實作 Opus／high；審查 Opus；驗證 Fable／xhigh（契約）｜估 16～24 h
+│                   arena v3：`map` 目錄取代 `geometry`（ParseVoxelMap／ParseVoxelRegion／ExpandVoxelChunk）；spawns 搬到 markers
+│                   （產品 `marker_kinds.json`＋UnknownMarkerKinds；不認得的 kind＝載入錯誤）；權威 digest＝arena id＋index 文字 sha
+│                   （index 已綁 region sha，B1）；Client 每 region 一個 GPU mesh＋視錐／距離剔除；pvp_arena、pvp_corners、biome 以 build-map 遷移；
+│                   v1 單檔（`ParseVoxelMesh` grep＝0）與 arena v2 退役，§7 清理。Delta 7 項、DI／RC；wire 不變。
+└── pa-measure      Opus／medium｜估 4～6 h
+                    宣告後量：Match 載入時間與記憶體（biome、合成 km²）、Client 畫面 p95（決定 `v8-arch-big-map-lod` 要的 km² 合成圖、最壞角度）、
+                    區塊內合併的盒子增量對 broadphase 的影響。結果交使用者決定 LOD／背景串流 RC。
+```
+
+- 不做：活動範圍載入、遠處 AI 降頻、背景串流、LOD（各有 RC；量到才做）。
+- 停止條件照 AGENTS §14；每批 dev_log 在產品線；HANDOFF 由產品會話續記。
+
 ## 下一步
 
 Engine 的兩批（engine-grid、engine-format）與 tool-chunked（PR #163，merge `24f111eb`，voxel 線）都已合併。
-`-product-arena-v3` 何時開，待使用者決定；它的輸入（兩張既有地圖的 v3 產出、`build-map`、`marker_kinds`）已齊。
+`-product-arena-v3` 的計畫草案在上一節，等使用者核准後由架構師開卡給產品會話；第一批 `pa-broadphase` 解 1024 上限。
 voxel 線接著重做 window 批（PR #158）：功能與互動照 Goxel；範圍、Layers（會改格子格式 `gyo.voxel_grid` v2，是 Architecture Delta）
 與鏡像朝向的處置，在 voxel 線等使用者決定——這是工具格式，owner 是 voxel 線，架構師只在它觸及 Engine 契約時介入。

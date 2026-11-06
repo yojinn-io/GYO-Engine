@@ -40,7 +40,7 @@ v8-arch-big-map
 | `-engine-grid` | 上段（Engine 公開介面、DI） | 實作者 Opus／high；審查者 Opus（engine-grid 會話）；驗證者 Fable／xhigh | Engine | 完成（PR #161，merge `c70e8fdc`） |
 | `-engine-format` | 上段（Engine 公開介面、新 Subsystem、DI） | 同上 | Engine | 完成（PR #162，merge `915ddc62`；審查 B1／S1／N1～N5／B2 都在 PR 內修） |
 | `-tool-chunked` | voxel 線定 | voxel 線定 | voxel 地圖編輯器線 | 完成（PR #163，merge `24f111eb`；判定 T1～T9 成立；dev_log 在 voxel 線） |
-| `-product-arena-v3` | 未定 | 未開 | 產品（object_fps_pvp） | 未開 |
+| `-product-arena-v3` | 上段（Match 判定、Collision 語意、資料契約） | 草案：pa-broadphase／pa-arena-v3 Opus／high、審查 Opus、驗證 Fable／xhigh；pa-measure Opus／medium | 產品（object_fps_pvp） | 計畫草案待核准（[HANDOFF](HANDOFF.md)「product-arena-v3 計畫草案」）；第一批解 1024 上限 |
 
 survey 之後的三批，範圍以 HANDOFF「決定」的六項為準（與 proposal v0.1 不一致處以決定為準）；樹狀圖只記錄 v0.1 的路線。
 
