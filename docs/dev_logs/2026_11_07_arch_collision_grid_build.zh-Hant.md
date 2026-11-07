@@ -46,6 +46,17 @@
 
 `engine_grid_mutations.json` 19/19 被殺（**件數の突き合わせ：一致**——要求 19、結果 19：被殺 19、存活 0、過期 0）；`mutations_engine_grid_full.txt`。
 
+## 審查後變更（PR #166，審查者 engine-grid 會話，對 ab555eec；無阻擋項，L1 三平台 pass）
+
+- 審查確認：404 組輸入（含 13 種格長加倍）比對 `boxes_`／`origin_`／`extent_`／`cell_`／`counts_`／`offsets_`／`items_`，舊建構子、新建構子、`Build` 逐位元相同；
+  64 bit 加總與 `items_.size()` 全等、上界 < 2^54；失敗只回 Err；格式合 error-handling.md；Base 變 PUBLIC 無實際可見性變化（Math 本來就 INTERFACE 連 Base）。
+- S1（合併前）：`static_assert(Base::CodedError<CollisionError>)`。
+- N1：`items_.resize` 前加 `GYO_ASSERT(offsets_[cells] == registrations)`，讓 (2) 的相等在每次建置的執行期被檢查；突變 `grid-build-registrations-unchecked` 的 expect 收窄成這條 assert 的訊息（原本接受 doctest 的「test case CRASHED」）。
+- N2 測試 CMake 註解；N4 `InvalidCellLength` 的 detail 改用 `%g`（`std::to_string` 會把 −1e-30 印成 −0.000000）；N5 測試只比 code 與 detail，不比 `Describe` 全文。
+- 未採：N3（建構子單一 assert 看不出哪個前提）——Programmer Error 的路徑，debugger 看 `failure` 即可；N6（DI 3「both public」沒守衛）——`gyo_expect_links` 比連結集合，PUBLIC／PRIVATE 由 review 守，與 DI 3 原文一致。
+- 修正提交 `d51fe4eb`：`gyo_collision_tests` 30/30（750 assertions）；三條 Build 突變 3/3 被殺（`mutations_build_after_review.txt`）。
+- 審查證據：`build/evidence/big-map/collision-build/review_pr166/`。
+
 ## 證據
 
 主 checkout `build/evidence/big-map/collision-build/`（git 不追蹤）：`mutations_build.txt`（第一輪 2/4）、`mutations_build_rerun.txt`（4/4）、
