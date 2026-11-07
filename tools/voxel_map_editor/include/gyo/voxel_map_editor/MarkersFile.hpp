@@ -30,15 +30,4 @@ namespace Gyo::Tools::VoxelMapEditor {
 // that is not UTF-8, whose bytes are dropped).
 [[nodiscard]] Result<std::string> WriteMarkers(const Engine::MapMarkers::MapMarkersDocument& document);
 
-// Placing markers on the grid (v8-tool-voxel-window-1). Marker coordinates are
-// integers in 1/16 of a cell from the map's origin, the grid's own frame.
-// A point placed on a cell stands on the middle of its floor.
-[[nodiscard]] Engine::Math::Vec3i MarkerPointOf(const Vec3i& cell) noexcept;
-// The box of the cells from one corner to the other, both included.
-[[nodiscard]] Engine::MapMarkers::MarkerBox MarkerBoxOf(const Vec3i& corner, const Vec3i& other) noexcept;
-// The first of m1, m2, ... no marker uses.
-[[nodiscard]] std::string NextMarkerId(const Engine::MapMarkers::MapMarkersDocument& document);
-// Puts a marker in id order; InvalidMarkers when its id is taken.
-Result<void> InsertMarker(Engine::MapMarkers::MapMarkersDocument& document, Engine::MapMarkers::Marker marker);
-
 } // namespace Gyo::Tools::VoxelMapEditor

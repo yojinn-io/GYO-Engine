@@ -174,7 +174,7 @@ markers in the window is the window batch's.
 fine), places the grid's origin at the lowest x and z, refuses a box below the floor (y < 0) or not in whole cells,
 and reads the grid it made back with `ParseGrid` before it writes it.
 
-| `edit <grid> <map-dir> [--markers <file> --marker-kinds <file>] [--gpu-driver <driver>]` | opens the window (gui variant): a new grid when `<grid>` does not exist; every save writes `<grid>`, then the chunked map in `<map-dir>`, then the markers | 0 when the window closes; 2 in the cli variant |
+| `edit <grid> <map-dir> [--gpu-driver <driver>]` | opens the window (gui variant): a new grid when `<grid>` does not exist; every save writes `<grid>`, then the chunked map in `<map-dir>` | 0 when the window closes; 2 in the cli variant |
 | `measure-preview (--grid <grid> \| --synthetic) --csv <file> [--no-edit] [--frames <n>] [--gpu-driver <driver>]` | the preview's frame time, with one cell edit per frame or drawing only (P1 of `v8-tool-voxel-window-1`) | 0; 3; 4 a frame failed; 2 in the cli variant |
 
 A wrong command line exits with 2.
@@ -190,14 +190,13 @@ blocks, shapes and orientations (`v8-tool-voxel-window-goxel`, `v8-tool-voxel-wi
   vertical cylinder, stamped along the drag; Shift+click draws a line from the last stamp), Shape (S; a box, or the
   sphere or cylinder inscribed in it, dragged from corner to corner), Laser (L; cuts along the view; in Add or Paint
   it still cuts), Line (N; two clicks), Extrude (F; drags the connected uncovered face of one layer out or in), Plane
-  (P; puts the edit plane on a face, on any axis), Picker (C; Ctrl+click picks in any tool), Marker (K; with
-  `--markers`). Orientation: Q and E turn about the up axis, with Shift they choose the up axis; `[` and `]` change
+  (P; puts the edit plane on a face, on any axis), Picker (C; Ctrl+click picks in any tool). Orientation: Q and E turn about the up axis, with Shift they choose the up axis; `[` and `]` change
   the brush size; PgUp and PgDn move the edit plane.
 - **Snap**: the surface of filled cells (volume), the edit plane, or both (whichever the ray meets first). Add acts
   on the cell beside the face it points at, Sub and Paint on the cell itself. During a drag the pick looks at the map
   as it was when the drag began, so a drag does not climb onto what it made.
 - **Drags**: what a drag changes is applied as it goes and shown at once; releasing keeps it as one undo step, Esc
-  puts it back (`EditSession::CancelStroke`). A block or shape edit is one step; markers are not in undo.
+  puts it back (`EditSession::CancelStroke`). A block or shape edit is one step.
 - **Camera**: the middle button rotates, the right one pans, the wheel zooms, the arrows rotate; 1, 3 and 7 look from
   the front, the right and the top, 0 frames the map. No orthographic view yet (it needs the framework or Engine).
 - **Picking**: the ray through the pointer's pixel, in Engine's camera convention (`ViewProjection` composes the
@@ -207,11 +206,11 @@ blocks, shapes and orientations (`v8-tool-voxel-window-goxel`, `v8-tool-voxel-wi
   ([preview.md](../framework/preview.md)) with Engine's unlit shader, one mesh per chunk, as the game draws them. An
   edit rebakes and uploads only the chunks it touched. The edit plane's grid, the outlines and the markers are lines
   of ImGui's draw list, projected by the same `ViewProjection`.
-- **Markers** (with `--markers` and `--marker-kinds`): points (facing the camera's direction), boxes and paths,
-  placed where a block would go; the kind is chosen from the product's list, tags are edited in key order.
-- **Saving**: the grid, then the map of the previewed chunks (`WriteMap` and `SaveMap`), then the markers
-  (`WriteMarkers`). A marker whose kind the list does not hold, or a text Engine refuses, writes nothing. A file
-  that changed on disk since it was opened or saved (the grid, `map.json` or the markers) stops the save
+- **Geometry only**: the window edits the map's geometry; markers and whatever else stands on the map are placed by
+  a scene editor, another tool (decision `v8-arch-map-scene-split`, 2026-11-07). The markers core of
+  `v8-arch-big-map-tool-chunked` (`MarkersFile.hpp`, `check-markers`) stays until it moves there.
+- **Saving**: the grid, then the map of the previewed chunks (`WriteMap` and `SaveMap`). A text Engine refuses
+  writes nothing. A file that changed on disk since it was opened or saved (the grid or `map.json`) stops the save
   (`FileChanged`), and the window asks: reload from disk (the edits are dropped), overwrite, or cancel. A grid
   without filled cells saves the grid and no map.
 
@@ -260,8 +259,8 @@ A change against any item below is an Architecture Delta that needs the user's a
 5. **Writes only what it makes.** The baked file or the grid a command names, by atomic replace through engine/io;
    in a map folder a command names, `map.json` and region files, and it removes only the region files the previous
    `map.json` listed and the new one does not (names of the region file form under `regions/`); `measure-map`, the
-   synthetic grid and the CSV in the folder its command line names; the window, the grid, the map folder (by the
-   same rules as `build-map`) and the markers file its command line names, never overwriting one that changed on
+   synthetic grid and the CSV in the folder its command line names; the window, the grid and the map folder (by the
+   same rules as `build-map`) its command line names, never overwriting one that changed on
    disk since it was opened or saved unless the user chooses to overwrite it; `measure-preview`, the CSV its command
    line names. No catalog, product file or arena. Guard: the command-line test (refused inputs write
    nothing), "map: a save stopped before the index leaves the previous map readable" and the save tests (W5).

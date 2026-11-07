@@ -5,7 +5,7 @@
 - 區塊化：[voxel-map-tool-chunked.md](voxel-map-tool-chunked.md)（PR #163 已合併）。
 - 紀錄：[HANDOFF](voxel-map-editor-HANDOFF.md)。
 
-**狀態：2026-11-06 使用者核准 window-1 的宣告（原話「推奨どおり承認」：決定 1～5 全部照建議）。實作、審查修正、P1 完成（[dev_log](../../../dev_logs/2026_11_06_tool_v8_voxel_window_1.zh-Hant.md)）；等 §14.4 核准、空格子存檔的決定、L1、L3。**
+**狀態：2026-11-06 使用者核准 window-1 的宣告（原話「推奨どおり承認」：決定 1～5 全部照建議）。實作、審查修正、P1 完成（[dev_log](../../../dev_logs/2026_11_06_tool_v8_voxel_window_1.zh-Hant.md)）；等 §14.4 核准、空格子存檔的決定、L1、L3。2026-11-07 照使用者的決定拿掉標記放置 UI（見文末「實作後的變更」）。**
 
 ## 代號對照
 
@@ -194,3 +194,20 @@ v8-tool-voxel-window-1（上段：Data Contract 的寫出、DI 5／7）
 3. **Extrude 的範圍**（建議：同一方向、在同一平面上、相連的那片面）。另一個選項是只推一格的面。
 4. **Laser 在 Add／Paint 模式**（建議：一律當 Sub）。另一個選項是沿視線塗色。
 5. **正交投影延後**（建議延後；要做的話是 framework 或 Engine 的變更，另案）。
+
+## 實作後的變更（2026-11-07，使用者決定）
+
+- **拿掉 C「標記的放置」**。依據是使用者的決定 `v8-arch-map-scene-split`（經架構師轉達，PR #164 `bcea47de`）：地圖是幾何，場景是放在幾何上的東西，兩者分開；場景編輯器是另一個工具，voxel 地圖編輯器只編幾何。使用者在本會話確認（原話「外す」）。
+  - 拿掉的：
+    - 工具 Marker（K）與標記面板；
+    - `edit` 的 `--markers`、`--marker-kinds`；
+    - 存檔時寫標記；
+    - vw1 加進 `MarkersFile` 的放置輔助（還原成 master 的狀態）；
+    - 對應的測試，以及 3 條突變（`vw1-save-unknown-kinds`、`vw1-save-markers-unchecked`、`vw1-marker-order`）。
+  - 留下的：tc-markers 的讀寫核心（`MarkersFile`、`check-markers`、Engine 的兩個函式），記為待搬到場景編輯器（HANDOFF 的 TODO #8），不再往上加功能。
+  - 判定的影響：
+    - W1 少了標記的部分；
+    - W5 少了標記檔的寫入、清單外的 kind、標記寫不出等三條；
+    - W8 改成「`--markers` 是用法錯誤」。
+    - 這些都是隨功能一起移除，留下的判定沒有放寬。
+

@@ -789,43 +789,13 @@
       "expect": "is NOT correct"
     },
     {
-      "id": "vw1-save-unknown-kinds",
-      "what": "A marker of a kind the list does not hold is saved",
-      "file": "tools/voxel_map_editor/src/Editing.cpp",
-      "find": "        if (!unknown.empty())\n            return Engine::Base::Err(VoxelMapError::Make(VoxelMapErrorCode::UnknownKinds,",
-      "replace": "        if (false)\n            return Engine::Base::Err(VoxelMapError::Make(VoxelMapErrorCode::UnknownKinds,",
-      "target": "gyo_voxel_map_editor_core_tests",
-      "cases": "*W5 save: markers*",
-      "expect": "is NOT correct"
-    },
-    {
-      "id": "vw1-save-markers-unchecked",
-      "what": "A markers file changed on disk is overwritten",
-      "file": "tools/voxel_map_editor/src/Editing.cpp",
-      "find": "        for (const EditorFile* file : {&files.grid, &files.mapIndex, &files.markers}) {",
-      "replace": "        for (const EditorFile* file : {&files.grid, &files.mapIndex}) {",
-      "target": "gyo_voxel_map_editor_core_tests",
-      "cases": "*W5 save: markers*",
-      "expect": "is NOT correct"
-    },
-    {
       "id": "vw1-save-map-unchecked",
       "what": "A map.json changed on disk is overwritten",
       "file": "tools/voxel_map_editor/src/Editing.cpp",
-      "find": "        for (const EditorFile* file : {&files.grid, &files.mapIndex, &files.markers}) {",
-      "replace": "        for (const EditorFile* file : {&files.grid, &files.markers}) {",
+      "find": "        for (const EditorFile* file : {&files.grid, &files.mapIndex}) {",
+      "replace": "        for (const EditorFile* file : {&files.grid}) {",
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "*W5 save: a changed*",
-      "expect": "is NOT correct"
-    },
-    {
-      "id": "vw1-marker-order",
-      "what": "A new marker goes last, out of id order",
-      "file": "tools/voxel_map_editor/src/MarkersFile.cpp",
-      "find": "    document.markers.insert(at, std::move(marker));",
-      "replace": "    document.markers.push_back(std::move(marker));",
-      "target": "gyo_voxel_map_editor_core_tests",
-      "cases": "*W1 markers*",
       "expect": "is NOT correct"
     },
     {

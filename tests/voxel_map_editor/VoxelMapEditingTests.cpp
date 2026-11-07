@@ -663,74 +663,6 @@ TEST_CASE("W7 preview: after every edit, undo and redo, the drawn chunks are tho
 }
 
 
-// ---- v8-tool-voxel-window-1: markers (W5 and their placement) ----
-
-TEST_CASE("W1 markers: a point stands on the middle of a cell's floor, a box covers whole cells, ids fill in") {
-    CHECK(MarkerPointOf({1, 2, -3}) == Engine::Math::Vec3i{24, 32, -40});
-    const auto box = MarkerBoxOf({2, 0, 1}, {0, 1, -1});
-    CHECK(box.minimum == Engine::Math::Vec3i{0, 0, -16});
-    CHECK(box.maximum == Engine::Math::Vec3i{48, 32, 32});
-    Engine::MapMarkers::MapMarkersDocument document;
-    CHECK(NextMarkerId(document) == "m1");
-    REQUIRE(InsertMarker(document, {"m2", "a", {}, Engine::MapMarkers::MarkerPoint{}}));
-    CHECK(NextMarkerId(document) == "m1");
-    REQUIRE(InsertMarker(document, {"m1", "a", {}, Engine::MapMarkers::MarkerPoint{}}));
-    CHECK(NextMarkerId(document) == "m3");
-    CHECK(document.markers[0].id == "m1"); // kept in id order
-    CHECK_FALSE(InsertMarker(document, {"m2", "b", {}, Engine::MapMarkers::MarkerPoint{}}));
-    // m10 sorts before m2 as bytes; the order is still the format's.
-    REQUIRE(InsertMarker(document, {"m10", "a", {}, Engine::MapMarkers::MarkerPoint{}}));
-    CHECK(document.markers[1].id == "m10");
-    CHECK(WriteMarkers(document));
-}
-
-TEST_CASE("W5 save: markers are written last, read back, and an unknown kind stops the whole save") {
-    const auto folder = Scratch("markers");
-    const auto gridPath = (folder / "map.voxel_grid.json").string();
-    const auto markersPath = (folder / "map.markers.json").string();
-    const auto kindsPath = (folder / "kinds.json").string();
-    WriteText(kindsPath, R"({"schema": "gyo.marker_kinds", "version": 1, "kinds": ["a", "b"]})");
-    auto opened = OpenEditor(gridPath, (folder / "map").string(), markersPath, kindsPath);
-    REQUIRE(opened);
-    REQUIRE(opened->markers);
-    CHECK(opened->markers->kinds == std::vector<std::string>{"a", "b"});
-    CHECK(opened->markers->document.markers.empty());
-    auto preview = MapPreview::Create(opened->document);
-    REQUIRE(preview);
-    auto markers = *opened->markers;
-    REQUIRE(InsertMarker(markers.document, {"m1", "a", {{"k", "v"}}, Engine::MapMarkers::MarkerPoint{MarkerPointOf({0, 0, 0}), 0.5F}}));
-    REQUIRE(InsertMarker(markers.document, {"m2", "c", {}, Engine::MapMarkers::MarkerBox{{0, 0, 0}, {16, 16, 16}}}));
-    // Kind c is not in the list: nothing is written, the path names the marker.
-    const auto refused = SaveEditor(opened->files, opened->document, *preview, SaveMode::Checked, &markers);
-    REQUIRE_FALSE(refused);
-    CHECK(refused.error().code == VoxelMapErrorCode::UnknownKinds);
-    CHECK(refused.error().detail == "markers[1].kind");
-    CHECK_FALSE(std::filesystem::exists(gridPath));
-    CHECK_FALSE(std::filesystem::exists(markersPath));
-    markers.document.markers[1].kind = "b";
-    REQUIRE(SaveEditor(opened->files, opened->document, *preview, SaveMode::Checked, &markers));
-    const auto read = ReadMarkers(ReadText(markersPath));
-    REQUIRE(read);
-    CHECK(read->markers.size() == 2);
-    CHECK(read->markers[0].tags == markers.document.markers[0].tags);
-    // Reopened, the markers come back; a markers file changed on disk stops a checked save.
-    auto again = OpenEditor(gridPath, (folder / "map").string(), markersPath, kindsPath);
-    REQUIRE(again);
-    REQUIRE(again->markers);
-    CHECK(again->markers->document.markers.size() == 2);
-    WriteText(markersPath, ReadText(markersPath) + " ");
-    const auto changed = SaveEditor(again->files, again->document, *preview, SaveMode::Checked, &*again->markers);
-    REQUIRE_FALSE(changed);
-    CHECK(changed.error().code == VoxelMapErrorCode::FileChanged);
-    // A kinds list Engine refuses, or a missing one, is an error when opening.
-    WriteText(kindsPath, R"({"schema": "gyo.marker_kinds", "version": 1, "kinds": []})");
-    CHECK(OpenEditor(gridPath, (folder / "map").string(), markersPath, kindsPath).error().code ==
-          VoxelMapErrorCode::InvalidMarkers);
-    CHECK(OpenEditor(gridPath, (folder / "map").string(), markersPath, (folder / "none.json").string()).error().code ==
-          VoxelMapErrorCode::ReadFailed);
-    std::filesystem::remove_all(folder);
-}
-
 TEST_CASE("W7 preview: a cell on a chunk's side redraws the chunk across it") {
     // A cube at x = 16 (chunk 1); filling and emptying x = 15 (chunk 0) hides and shows its -X face.
     auto document = TwoBlocks();
@@ -778,31 +710,5 @@ TEST_CASE("W5 save: map.json's known bytes follow it even when an old region fil
     REQUIRE(o.session.SetCell({2, 0, 0}, kCube));
     Sync(o);
     CHECK(SaveEditor(o.editor.files, o.session.Document(), o.preview));
-    std::filesystem::remove_all(folder);
-}
-
-TEST_CASE("W5 save: when the markers cannot be written, the grid and map are saved and their known bytes follow") {
-    const auto folder = Scratch("markersfail");
-    const auto gridPath = (folder / "map.voxel_grid.json").string();
-    const auto kindsPath = (folder / "kinds.json").string();
-    WriteText(kindsPath, R"({"schema": "gyo.marker_kinds", "version": 1, "kinds": ["a"]})");
-    WriteText(folder / "blocker", "a file, not a folder");
-    const auto markersPath = (folder / "blocker" / "map.markers.json").string();
-    auto opened = OpenEditor(gridPath, (folder / "map").string(), markersPath, kindsPath);
-    REQUIRE(opened);
-    EditSession session(opened->document);
-    REQUIRE(session.SetCell({0, 0, 0}, kCube));
-    auto preview = MapPreview::Create(session.Document());
-    REQUIRE(preview);
-    auto markers = *opened->markers;
-    REQUIRE(InsertMarker(markers.document, {"m1", "a", {}, Engine::MapMarkers::MarkerPoint{}}));
-    const auto failed = SaveEditor(opened->files, session.Document(), *preview, SaveMode::Checked, &markers);
-    REQUIRE_FALSE(failed);
-    CHECK(failed.error().code == VoxelMapErrorCode::WriteFailed);
-    CHECK(ReadText(gridPath) == Text(session.Document()));
-    CHECK(ReadMap(folder / "map").size() == 1);
-    std::filesystem::remove(folder / "blocker");
-    CHECK(SaveEditor(opened->files, session.Document(), *preview, SaveMode::Checked, &markers));
-    CHECK(ReadMarkers(ReadText(markersPath)));
     std::filesystem::remove_all(folder);
 }

@@ -10,8 +10,6 @@ namespace Gyo::Tools::VoxelMapEditor {
 struct WindowOptions final {
     std::string gridPath; // UTF-8; a new grid when the file does not exist
     std::string mapDirectory; // UTF-8; the chunked map (map.json and regions/) written with the grid on every save
-    std::string markersPath;  // UTF-8; the map's markers (gyo.map_markers), empty when not edited
-    std::string kindsPath;    // UTF-8; the kinds a product lists (gyo.marker_kinds), given with markersPath
     std::string gpuDriver{"auto"};
 };
 

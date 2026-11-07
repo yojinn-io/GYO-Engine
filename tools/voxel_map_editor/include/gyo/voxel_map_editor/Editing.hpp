@@ -1,7 +1,6 @@
 #pragma once
 
 #include "gyo/voxel_map_editor/ChunkedMap.hpp"
-#include "gyo/voxel_map_editor/MarkersFile.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 
 #include "engine/math/linear/Matrix4.hpp"
@@ -228,27 +227,17 @@ struct EditorFiles final {
     EditorFile grid;
     std::string mapDirectory;
     EditorFile mapIndex; // <mapDirectory>/map.json
-    EditorFile markers;  // path empty when markers are not edited
-};
-
-// The map's markers and the kinds their product lists, when edited.
-struct EditorMarkers final {
-    Engine::MapMarkers::MapMarkersDocument document;
-    std::vector<std::string> kinds;
 };
 
 struct OpenedEditor final {
     EditorFiles files;
     GridDocument document;
-    std::optional<EditorMarkers> markers;
 };
 
 // Reads the grid (NewGrid when the file does not exist) and remembers the
-// grid's and the map index's bytes. With markersPath (and kindsPath), reads
-// the markers (none when the file does not exist) and the kinds list (which
-// must exist), each through Engine.
-[[nodiscard]] Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& mapDirectory,
-                                              const std::string& markersPath = {}, const std::string& kindsPath = {});
+// grid's and the map index's bytes. The window edits the map's geometry only:
+// markers belong to the scene editor (decision v8-arch-map-scene-split).
+[[nodiscard]] Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& mapDirectory);
 
 enum class SaveMode : std::uint8_t {
     Checked,   // FileChanged, writing nothing, when a file changed since it was opened or saved
@@ -263,11 +252,7 @@ struct SaveResult final {
 // Engine refuses is not written), each by atomic replace. When the map cannot
 // be written after the grid was, the grid's known bytes are updated and the
 // error is returned.
-// With markers, the markers file is written last (WriteMarkers); a marker whose
-// kind the list does not hold stops the save before anything is written
-// (UnknownKinds, detail the marker's path).
 [[nodiscard]] Result<SaveResult> SaveEditor(EditorFiles& files, const GridDocument& document,
-                                            const MapPreview& preview, SaveMode mode = SaveMode::Checked,
-                                            const EditorMarkers* markers = nullptr);
+                                            const MapPreview& preview, SaveMode mode = SaveMode::Checked);
 
 } // namespace Gyo::Tools::VoxelMapEditor

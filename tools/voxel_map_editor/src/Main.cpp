@@ -28,8 +28,7 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor verify  <grid> <mesh>\n"
     "  gyo_voxel_map_editor inspect <file>\n"
     "  gyo_voxel_map_editor import-boxes <json> <pointer> <grid>\n"
-    "  gyo_voxel_map_editor edit <grid> <map-dir> [--markers <file> --marker-kinds <file>]\n"
-    "                       [--gpu-driver <driver>]\n"
+    "  gyo_voxel_map_editor edit <grid> <map-dir> [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic) --csv <file>\n"
     "                       [--no-edit] [--frames <n>] [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor build-map   <grid> <map-dir>\n"
@@ -45,9 +44,9 @@ constexpr std::string_view kHelp =
     "grid of cubes from the boxes at a JSON pointer (for example /walls), each\n"
     "{\"min\": [x, y, z], \"max\": [x, y, z]} in whole cells.\n"
     "edit opens the window (gui variant): a new grid when <grid> does not exist;\n"
-    "every save writes <grid> and then the chunked map in <map-dir> (and the\n"
-    "markers, when given). measure-preview times the window's preview, with an\n"
-    "edit per frame or (--no-edit) drawing only (gui variant).\n"
+    "every save writes <grid> and then the chunked map in <map-dir>. measure-preview\n"
+    "times the window's preview, with an edit per frame or (--no-edit) drawing\n"
+    "only (gui variant).\n"
     "build-map bakes a grid into Engine's chunked map: <map-dir>/map.json and its\n"
     "region files under <map-dir>/regions (region files of the old map that the\n"
     "new index does not list are removed). verify-map bakes again and compares\n"
@@ -274,23 +273,12 @@ int Run(const std::span<const std::string> arguments) {
         return ImportBoxesCommand(arguments[2], arguments[3], arguments[4]);
     }
     if (command == "edit") {
-        constexpr std::string_view usage =
-            "edit takes <grid> <map-dir> [--markers <file> --marker-kinds <file>] [--gpu-driver <driver>]";
-        if (arguments.size() < 4) return Usage(usage);
+        if (arguments.size() != 4 && !(arguments.size() == 6 && arguments[4] == "--gpu-driver"))
+            return Usage("edit takes <grid> <map-dir> [--gpu-driver <driver>]");
         WindowOptions window;
         window.gridPath = arguments[2];
         window.mapDirectory = arguments[3];
-        for (std::size_t i = 4; i < arguments.size(); i += 2) {
-            if (i + 1 >= arguments.size()) return Usage(usage);
-            const std::string& option = arguments[i];
-            const std::string& value = arguments[i + 1];
-            if (option == "--markers" && window.markersPath.empty()) window.markersPath = value;
-            else if (option == "--marker-kinds" && window.kindsPath.empty()) window.kindsPath = value;
-            else if (option == "--gpu-driver") window.gpuDriver = value;
-            else return Usage(usage);
-        }
-        // The markers file and the kinds a product lists go together.
-        if (window.markersPath.empty() != window.kindsPath.empty()) return Usage(usage);
+        if (arguments.size() == 6) window.gpuDriver = arguments[5];
         return RunEditorWindow(window);
     }
     if (command == "measure-preview") {

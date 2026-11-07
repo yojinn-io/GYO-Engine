@@ -176,3 +176,15 @@
 | `mutations-round*.txt` | 突變的各輪結果 |
 
 審查者與驗證者的 probe 在本會話的 scratchpad，未保存。
+
+## 2026-11-07：拿掉標記的放置（使用者決定）
+
+- **依據**：使用者的決定 `v8-arch-map-scene-split`，地圖只管幾何，標記屬於另一個場景編輯器（經架構師轉達）。使用者在本會話確認（「外す」）。
+- **拿掉的**：
+  - vw1-markers 的 UI、`edit` 的 `--markers`／`--marker-kinds`、存檔寫標記；
+  - `MarkersFile` 的放置輔助（還原成 master 的狀態）；
+  - 對應的 3 個測試案例與 3 條突變；
+  - CLI 測試改成「`--markers` 是用法錯誤」。
+- **出過的錯**：一次刪除時，把存檔裡產生地圖文字的那段也刪了。建置與測試之前用 grep 發現並補回，沒有提交過那個狀態。
+- **判定**：留下的判定沒有放寬，被拿掉的只有隨功能一起移除的部分。重跑全目錄的突變：**84/84** 被殺（件數の突き合わせ：一致，要求 84、結果 84；`mutations-round4-no-markers.txt`）。本機 `cpu|shader` 135/135（`ctest-cpu-shader-no-markers.txt`）。
+

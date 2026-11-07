@@ -41,6 +41,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-window-1-no-markers` | （2026-11-07）照 `v8-arch-map-scene-split`（地圖只管幾何，標記屬於另一個場景編輯器），window-1 拿掉標記放置 UI、`--markers` 選項與存檔寫標記；tc-markers 的讀寫核心留著，待搬（TODO #8） | 「外す」 |
 | `v8-tool-voxel-window-1-declare` | （2026-11-06）核准 window-1 的宣告：視窗存 grid＋區塊化地圖＋標記（不寫 v1）；P1 不編輯 p95 ≤ 16.7 ms、每幀編輯 p95 ≤ 33 ms；Extrude 推出同方向同平面相連的面；Laser 在 Add／Paint 時當 Sub；正交投影延後；DI 5 擴充、DI 7 改寫 | 「推奨どおり承認」 |
 | `v8-tool-voxel-window-goxel` | （2026-11-06）視窗的功能與互動照 Goxel，外觀用我們自己的；只取功能、不搬程式碼，依我們的編輯邏輯客製；分三批（window-1 核心、window-2 選取／移動／對稱、window-3 Layers）；鏡像用 (c)（只鏡像對稱的形狀）；Layers 會改格子格式，另批宣告 | 「我建議你的操作模式和交互使用這個的形式」「UI 我們可以使用自己的形式，但是功能上和交互上我建議是用goxel的」「注意我要的是功能，而不是連代碼都照搬」「如果不影響現有機能…沒問題。如果有影響，列出來」「OK，照建議開始。」 |
 | `v8-tool-chunked-markers-guard` | （2026-11-06）核准 §14.4：依賴守衛允許 CMake 文字中出現 `GYO::MapMarkers` 這個名字（沒有收緊的面，驗證者確認 1～5）；DI 2 追加 `ParseMarkerKinds`、`UnknownMarkerKinds` | 「両方承認」 |
@@ -199,3 +200,4 @@
   - 你給的 MagicaVoxel `biome.vox`（126×126×32）用一次性腳本轉成格子：64 區塊，`verify-map` 一致（`window-1/biome/`）。v1 有 1,260 個碰撞盒，超過產品 arena 的 1,024 上限，遊戲載入不了。
   - 你明確同意後，在副本裡用暫時改過上限的執行檔試玩：60 fps。原始碼當下就還原了（未提交）。之後照你的指示，把副本的執行檔也換回標準版，標準 Match 再次拒收。
   - 「上限太低」已照你的指示回報架構師（屬於 product-arena-v3）。
+- 2026-11-07：架構師轉達你的決定 `v8-arch-map-scene-split`；你確認 window-1 拿掉標記放置 UI（`v8-tool-voxel-window-1-no-markers`）。已移除程式碼、測試與 3 條突變，文件已更新；突變全目錄 84/84，`cpu|shader` 135/135。
