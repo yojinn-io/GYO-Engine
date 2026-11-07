@@ -145,6 +145,8 @@ int RunPreviewMeasure(const MeasureOptions& options) {
     orbit.yawRadians = 0.6F;
     orbit.pitchRadians = 0.7F;
     orbit.distance = std::max(Math::Length(highWorld - lowWorld) * 0.9F, 4.0F * size);
+    // A closer camera at the same target and direction (ve-feel-survey on km2-ground: within the pick reach).
+    if (options.orbitDistanceCells > 0) orbit.distance = static_cast<float>(options.orbitDistanceCells) * size;
     const auto camera = orbit.Camera();
 
     auto preview = MapPreview::Create(document);
@@ -191,9 +193,11 @@ int RunPreviewMeasure(const MeasureOptions& options) {
                                                options.height);
             return drawn && Framework::UploadFrame(*renderer.value(), texture, drawn.value());
         };
+        std::optional<PickHit> pressHit;
         const auto target = [&](const GridDocument& picked, const float pixelX) -> std::optional<Vec3i> {
             const auto hit = Pick(picked, PixelRay(pose, width, height, pixelX, static_cast<float>(height) * 0.5F),
                                   plane, snaps);
+            pressHit = hit;
             if (!hit || (!hit->onPlane && hit->normal == Vec3i{0, 0, 0})) return std::nullopt;
             return PlacementCell(*hit);
         };
@@ -204,16 +208,20 @@ int RunPreviewMeasure(const MeasureOptions& options) {
             std::array<double, 4> ms{};
             std::array<std::size_t, 4> uploaded{};
             bool ok = true;
+            std::size_t failedPhase = 0;
             const auto timed = [&](const std::size_t phase, auto&& work) {
                 if (!ok) return;
                 const auto started = std::chrono::steady_clock::now();
+                failedPhase = phase;
                 ok = work() && show(uploaded[phase]);
                 ms[phase] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
             };
             std::optional<GridDocument> base;
             std::optional<Vec3i> last;
+            std::optional<PickHit> firstHit;
             timed(0, [&] {
                 last = target(session.Document(), pixelX);
+                firstHit = pressHit;
                 base = session.Document(); // Drag::base
                 session.BeginStroke();
                 return last && static_cast<bool>(ApplyCells(session, StrokeCells(*last, *last, options.brushSize,
@@ -235,8 +243,26 @@ int RunPreviewMeasure(const MeasureOptions& options) {
             });
             timed(3, [&] { return session.Undo(); });
             if (!ok) {
+                // Counted and kept in the CSV with the phase that failed (the count reconciliation).
                 ++failures;
+                lines << mapName << ',' << cycle << ",failed-" << kPhase[failedPhase] << ',' << options.brushSize
+                      << ',' << uploaded[0] + uploaded[1] << ",0,0\n";
                 if (session.InStroke()) session.CancelStroke();
+                if (firstHit) {
+                    // What the press picked (diagnosis of strokes that change nothing).
+                    const Vec3i placed = PlacementCell(*firstHit);
+                    const Cell there = session.Document().At(placed);
+                    std::fprintf(stderr, "cycle %u failed in %s: press hit cell (%d,%d,%d) normal (%d,%d,%d) onPlane %d, "
+                                         "placement (%d,%d,%d) holds block %u\n",
+                                 cycle, kPhase[failedPhase], firstHit->cell[0], firstHit->cell[1], firstHit->cell[2],
+                                 firstHit->normal[0], firstHit->normal[1], firstHit->normal[2],
+                                 firstHit->onPlane ? 1 : 0, placed[0], placed[1], placed[2],
+                                 static_cast<unsigned>(there.block));
+                    const Ray ray = PixelRay(pose, width, height, pixelX, static_cast<float>(height) * 0.5F);
+                    std::fprintf(stderr, "  ray origin (%.9g, %.9g, %.9g) direction (%.9g, %.9g, %.9g), cell size %.9g\n",
+                                 ray.origin.x, ray.origin.y, ray.origin.z, ray.direction.x, ray.direction.y,
+                                 ray.direction.z, static_cast<double>(size));
+                }
                 continue;
             }
             ++measured;

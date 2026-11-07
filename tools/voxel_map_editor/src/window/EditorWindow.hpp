@@ -35,6 +35,7 @@ struct MeasureOptions final {
     float drawDistanceCells{DefaultDrawDistanceCells}; // from the orbit target, in x and z (Visibility.hpp)
     std::string scenario;  // empty: P1's frames; "stroke": ve-feel-survey's press, drag, release, undo per cycle
     int brushSize{1};      // stroke: the brush's size (cube)
+    int orbitDistanceCells{}; // 0: the overview distance (0.9 x the map's diagonal); else this many cells
 };
 
 [[nodiscard]] int RunPreviewMeasure(const MeasureOptions& options);

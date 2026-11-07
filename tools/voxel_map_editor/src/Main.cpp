@@ -32,7 +32,7 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor edit <grid> <map-dir> [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic | --synthetic-map <name>) --csv <file>\n"
     "                       [--no-edit] [--frames <n>] [--draw-distance <cells>] [--gpu-driver <driver>]\n"
-    "                       [--scenario stroke [--brush-size <1-16>]]\n"
+    "                       [--scenario stroke [--brush-size <1-16>]] [--orbit-distance <cells>]\n"
     "  gyo_voxel_map_editor build-map   <grid> <map-dir>\n"
     "  gyo_voxel_map_editor verify-map  <grid> <map-dir>\n"
     "  gyo_voxel_map_editor inspect-map <map-dir>\n"
@@ -317,6 +317,11 @@ int Run(const std::span<const std::string> arguments) {
                     std::stoi(value) < 1 || std::stoi(value) > MaxBrushSize)
                     return Usage("--brush-size takes a whole number from 1 to 16");
                 measure.brushSize = std::stoi(value);
+            } else if (option == "--orbit-distance") {
+                if (value.empty() || value.size() > 4 || value.find_first_not_of("0123456789") != std::string::npos ||
+                    std::stoi(value) < 4)
+                    return Usage("--orbit-distance takes a whole number of cells from 4 to 9999");
+                measure.orbitDistanceCells = std::stoi(value);
             } else if (option == "--draw-distance") {
                 if (value.empty() || value.size() > 4 || value.find_first_not_of("0123456789") != std::string::npos ||
                     std::stoul(value) < static_cast<unsigned long>(MinDrawDistanceCells) ||

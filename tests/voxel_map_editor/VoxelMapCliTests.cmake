@@ -204,3 +204,5 @@ check(2 measure_preview_draw_distance_text measure-preview --synthetic --csv "${
 check(2 measure_preview_scenario_unknown measure-preview --synthetic --csv "${WORK}/m.csv" --scenario press)
 check(2 measure_preview_brush_size_zero measure-preview --synthetic --csv "${WORK}/m.csv" --scenario stroke --brush-size 0)
 check(2 measure_preview_brush_size_high measure-preview --synthetic --csv "${WORK}/m.csv" --scenario stroke --brush-size 17)
+check(2 measure_preview_orbit_distance_low measure-preview --synthetic --csv "${WORK}/m.csv" --orbit-distance 3)
+check(2 measure_preview_orbit_distance_text measure-preview --synthetic --csv "${WORK}/m.csv" --orbit-distance far)

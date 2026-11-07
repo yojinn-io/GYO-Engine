@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9), v8-tool-voxel-map-editor-window (judgment W10, ids vmw-*; both declarations in docs/tools/plans/v8/voxel-map-editor.md) v8-arch-big-map-tool-chunked (judgment T7, ids tc-*; docs/tools/plans/v8/voxel-map-tool-chunked.md) and v8-tool-voxel-window-1 (judgment W10, ids vw1-*; docs/tools/plans/v8/voxel-map-window-goxel.md), and ve-cull (judgments C1 and C2, ids math-frustum-*, render-cvp-*, ve-cull-*; docs/tools/plans/v8/voxel-editor-cull.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
+  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9), v8-tool-voxel-map-editor-window (judgment W10, ids vmw-*; both declarations in docs/tools/plans/v8/voxel-map-editor.md) v8-arch-big-map-tool-chunked (judgment T7, ids tc-*; docs/tools/plans/v8/voxel-map-tool-chunked.md) and v8-tool-voxel-window-1 (judgment W10, ids vw1-*; docs/tools/plans/v8/voxel-map-window-goxel.md), and ve-cull (judgments C1 and C2, ids math-frustum-*, render-cvp-*, ve-cull-*; docs/tools/plans/v8/voxel-editor-cull.md), and ve-pick-tie (judgment PT2, id ve-pick-tie-*; docs/tools/plans/v8/voxel-editor-pick-tie.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
   "mutants": [
     {
       "id": "vme-cull-partial",
@@ -874,7 +874,7 @@
       "id": "vw1-snap-volume-first",
       "what": "A filled cell behind the edit plane wins over the plane",
       "file": "tools/voxel_map_editor/src/Editing.cpp",
-      "find": "        if (entered > planeT) break;\n",
+      "find": "        if (entered > planeT && !(planeHit && cell == planeHit->cell)) break;\n",
       "replace": "",
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "*W3 pick: the plane wins*",
@@ -998,6 +998,16 @@
       "replace": "    return true;",
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "Visibility: a chunk within the distance but outside*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ve-pick-tie-no-exemption",
+      "what": "The cell where the ray meets the plane loses to the plane when the walk's summed entry is a rounding past planeT",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        if (entered > planeT && !(planeHit && cell == planeHit->cell)) break;",
+      "replace": "        if (entered > planeT) break;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-pick-tie*",
       "expect": "is NOT correct"
     }
   ]
