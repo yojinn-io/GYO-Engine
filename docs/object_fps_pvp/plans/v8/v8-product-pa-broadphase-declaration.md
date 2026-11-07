@@ -58,6 +58,7 @@
 | B6 突變 | 新突變（Movement 的 tie 改 HighestIndex、ShotQuery 改 LowestIndex 且不比地板、上限差一、Validate 在建格子前用空格子、All 換成 Nearest） | 全部 killed |
 | B7 L1 | 三平台 | 通過 |
 
+- B4 的量法（2026-11-07 補，跑之前寫下）：測試 `WallGridEquivalenceTests.cpp` 的 B4（CI 跳過，`--no-skip` 執行）。4 名玩家各 20,000 tick：每 tick 每人一步 `StepMovement`（約每秒換一次方向、約 1/30 機率跳）與一發 `QueryShot`（射程 100 m，其他玩家都在場）。「Movement 一步」「ShotQuery 一發」各自計時取 p99；「4 人同一 tick 合計」＝該 tick 4 步＋4 發的總和取 p99。biome 用 `build/evidence/tool-v8-voxel-map/window-1/biome/game/bin/assets/object_fps_pvp/maps/biome.json`（1,260 盒）；合成圖是 600×600 m、高 0～20 m、邊長 0.5～4 m 的 10^5 個盒子（固定亂數）。
 - B4 的閾值依據：tick 16.67 ms；Match 的一個 tick 還要做網路與其他處理，牆的查詢給 12%。數字是事前宣告，看到結果後不放寬。
 - 件數的突き合わせ：B2 記錄「產生的查詢數＝比較的查詢數」，不一致就不判定。
 

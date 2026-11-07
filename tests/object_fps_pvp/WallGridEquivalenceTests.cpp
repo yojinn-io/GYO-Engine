@@ -321,3 +321,121 @@ TEST_CASE("PvP arena refuses colliders too large for the grid instead of asserti
     CHECK_FALSE(arena.Validate(error));
     CHECK(error.find("too large for the collision grid") != std::string::npos);
 }
+
+// ---------------------------------------------------------------------------
+// pa-broadphase B4: the wall queries' cost per tick. Skipped in CI; run with
+//   gyo_object_fps_pvp_tests -tc='*B4*' --no-skip
+// PVP_B4_BIOME names the biome arena file (when unset, only the synthetic map
+// runs). Thresholds are declared (v8-product-pa-broadphase-declaration.md §4).
+#include <algorithm>
+#include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <string>
+
+namespace {
+struct Timings final {
+    std::vector<double> step, shot, tick; // milliseconds
+};
+
+double P99(std::vector<double> values) {
+    std::sort(values.begin(), values.end());
+    const auto rank = static_cast<std::size_t>(std::ceil(0.99 * static_cast<double>(values.size())));
+    return values[std::max<std::size_t>(rank, 1) - 1];
+}
+
+// Four players walk, turn, jump and shoot for `ticks` ticks; each step and each
+// shot is timed, and a tick is the sum of its four steps and four shots.
+Timings Run(const fps::pvp::Arena &arena, std::size_t ticks) {
+    using namespace fps::pvp;
+    using Clock = std::chrono::steady_clock;
+    Draw draw{0xb4b4b4b4ULL};
+    std::vector<PlayerState> players;
+    for (std::size_t i = 0; players.size() < 4 && i < arena.spawns.size(); ++i) {
+        PlayerState state;
+        state.playerId = static_cast<PlayerId>(players.size() + 1);
+        state.position = arena.spawns[i].position;
+        players.push_back(state);
+    }
+    REQUIRE(players.size() == 4);
+    Timings timings;
+    std::array<float, 4> yaw{}, forward{}, right{};
+    for (std::uint64_t tick = 1; tick <= ticks; ++tick) {
+        double total = 0;
+        for (std::size_t p = 0; p < players.size(); ++p) {
+            if (tick % 60 == p) { // a new intent about once a second
+                yaw[p] = static_cast<float>(draw.Int(-180, 180)) * 0.0174532925F;
+                forward[p] = static_cast<float>(draw.Int(-1, 1));
+                right[p] = static_cast<float>(draw.Int(-1, 1));
+            }
+            const MovementCommand command{tick, forward[p], right[p], yaw[p], 0, draw.Int(0, 29) == 0};
+            auto start = Clock::now();
+            players[p] = StepMovement(arena, players[p], command);
+            const double step = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+            const float pitch = static_cast<float>(draw.Int(-30, 30)) * 0.0174532925F;
+            start = Clock::now();
+            const auto hit = QueryShot(arena, players[p], yaw[p], pitch, std::span<const PlayerState>(players), 100.0F);
+            const double shot = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+            (void)hit;
+            timings.step.push_back(step);
+            timings.shot.push_back(shot);
+            total += step + shot;
+        }
+        timings.tick.push_back(total);
+    }
+    return timings;
+}
+
+void Report(const char *name, const fps::pvp::Arena &arena, const Timings &t) {
+    const double step = P99(t.step), shot = P99(t.shot), tick = P99(t.tick);
+    MESSAGE("B4 " << name << ": colliders " << arena.walls.size() << ", cell " << arena.WallGrid().CellLength()
+                  << " (given " << arena.cellSize << "), steps " << t.step.size() << ", ticks " << t.tick.size()
+                  << ", p99 step " << step << " ms, p99 shot " << shot << " ms, p99 tick " << tick << " ms");
+    CHECK(step <= 0.4);
+    CHECK(shot <= 0.2);
+    CHECK(tick <= 2.0);
+}
+
+// 10^5 boxes of biome's size class (0.5 to 4 m) on a 0.5 m lattice over
+// 600 x 600 m and up to 20 m high: walls, slabs and pillars, overlapping freely.
+fps::pvp::Arena SyntheticCity() {
+    fps::pvp::Arena arena;
+    arena.id = "pa_broadphase_b4_synthetic";
+    arena.width = arena.depth = 600;
+    arena.cellSize = 1;
+    Draw draw{0xc17c17ULL};
+    arena.walls.reserve(100000);
+    while (arena.walls.size() < 100000) {
+        const Engine::Math::Vec3 minimum{static_cast<float>(draw.Int(0, 1199)) * 0.5F,
+                                         static_cast<float>(draw.Int(0, 40)) * 0.5F,
+                                         static_cast<float>(draw.Int(0, 1199)) * 0.5F};
+        const Engine::Math::Vec3 size{static_cast<float>(draw.Int(1, 8)) * 0.5F,
+                                      static_cast<float>(draw.Int(1, 8)) * 0.5F,
+                                      static_cast<float>(draw.Int(1, 8)) * 0.5F};
+        arena.walls.push_back({minimum, minimum + size});
+    }
+    // Four floor spawns where a standing body fits.
+    arena.BuildWallGrid();
+    for (int x = 2; arena.spawns.size() < 4 && x < 598; x += 7)
+        for (int z = 2; arena.spawns.size() < 4 && z < 598; z += 11) {
+            const Engine::Math::Vec3 feet{static_cast<float>(x) + 0.25F, 0, static_cast<float>(z) + 0.25F};
+            if (fps::CanPlaceCharacterBody({feet, arena.bodyHeight, arena.radius}, arena.WallGrid(), {}))
+                arena.spawns.push_back({feet, 0});
+        }
+    std::string error;
+    REQUIRE(arena.Validate(error));
+    return arena;
+}
+} // namespace
+
+TEST_CASE("PvP wall query cost per tick on biome and a 10^5 box map (pa-broadphase B4)" * doctest::skip()) {
+    constexpr std::size_t Ticks = 20000;
+    if (const char *biome = std::getenv("PVP_B4_BIOME")) {
+        std::string error;
+        const auto arena = fps::pvp::Arena::Load(std::filesystem::path(biome), error);
+        REQUIRE_MESSAGE(arena, error);
+        Report("biome", *arena, Run(*arena, Ticks));
+    }
+    const auto city = SyntheticCity();
+    Report("synthetic", city, Run(city, Ticks));
+}
