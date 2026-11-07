@@ -6,6 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
+- **2026-11-07（設計稿）**：架構師支援卡起草了下一階段的設計稿 [design.zh-Hant.md](../../../voxel_map_editor/design.zh-Hant.md)（文件模型、照 Goxel 的操作模型、手感 H1～H8、契約影響、分批建議），把 window-2、window-3、TODO #9、#10 重排成 `ve-*` 批次。**等你回答頁首的 Q1～Q12**（先調查手感、Layers 延後、先量大地圖等）；回答前不開工。dev_log：[2026_11_07_arch_v8_voxel_editor_design](../../../dev_logs/2026_11_07_arch_v8_voxel_editor_design.zh-Hant.md)。
 - **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；§14.4 已核准、空格子拒存、L3 合格。**window-1 完成，等你決定是否合併 PR #158**。
 - **PR**：
   - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
