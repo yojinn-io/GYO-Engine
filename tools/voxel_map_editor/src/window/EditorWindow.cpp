@@ -366,6 +366,11 @@ private:
         ImGui::Text("up %s, %d quarter turn(s)", kUpNames[static_cast<std::size_t>(orientation_ / 4)], orientation_ % 4);
         ImGui::TextDisabled("middle drag: rotate  right drag: pan  wheel: zoom");
         ImGui::TextDisabled("arrows: rotate  1/3/7: front/right/top  0: frame the map");
+        ImGui::SeparatorText("View");
+        // Chunks farther than this from the orbit target (in x and z) are not drawn (Visibility.hpp).
+        ImGui::SliderFloat("draw distance (cells)", &drawDistanceCells_, MinDrawDistanceCells, MaxDrawDistanceCells,
+                           "%.0f", ImGuiSliderFlags_AlwaysClamp);
+        if (scene_) ImGui::Text("drawn %zu / %zu chunks", scene_->DrawnCount(), scene_->ChunkCount());
     }
 
     // After a change: indices back in range (an undone "Add shape" leaves one
@@ -507,7 +512,7 @@ private:
         const auto width = static_cast<std::uint32_t>(std::max(area.x * scale.x, 16.0F));
         const auto height = static_cast<std::uint32_t>(std::max(area.y * scale.y, 16.0F));
         const auto camera = camera_.Camera();
-        auto frame = scene_->Render(camera, width, height);
+        auto frame = scene_->Render(camera, camera_.target, drawDistanceCells_ * Document().cellSize, width, height);
         if (!frame) {
             previewError_ = Engine::Base::Describe(frame.error());
             return;
@@ -920,6 +925,7 @@ private:
     EditMode mode_{EditMode::Add};
     BrushShape brushShape_{BrushShape::Cube};
     int brushSize_{1};
+    float drawDistanceCells_{DefaultDrawDistanceCells};
     bool snapVolume_{true};
     bool snapPlane_{true};
     EditPlane plane_{};

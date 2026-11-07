@@ -149,7 +149,7 @@ int RunPreviewMeasure(const MeasureOptions& options) {
     std::vector<double> times;
     times.reserve(options.frames);
     std::ostringstream csv;
-    csv << "map,frame,edit,chunks_uploaded,frame_ms\n";
+    csv << "map,frame,edit,chunks_uploaded,chunks_drawn,frame_ms\n";
     const std::string name = !options.syntheticMap.empty() ? options.syntheticMap
                              : options.synthetic ? std::string("synthetic") : options.gridPath;
     std::uint32_t failures = 0;
@@ -170,7 +170,8 @@ int RunPreviewMeasure(const MeasureOptions& options) {
                 ok = static_cast<bool>(scene.value()->Apply(changes));
             }
         }
-        auto drawn = scene.value()->Render(camera, options.width, options.height);
+        auto drawn = scene.value()->Render(camera, orbit.target, options.drawDistanceCells * size, options.width,
+                                           options.height);
         ok = ok && drawn && Framework::UploadFrame(*renderer.value(), texture, drawn.value());
         const auto ended = std::chrono::steady_clock::now();
         if (!ok) {
@@ -180,7 +181,8 @@ int RunPreviewMeasure(const MeasureOptions& options) {
         ++measured;
         const double ms = std::chrono::duration<double, std::milli>(ended - started).count();
         if (frame >= options.warmup) times.push_back(ms);
-        csv << name << ',' << frame << ',' << (options.edit ? 1 : 0) << ',' << uploaded << ',' << ms << '\n';
+        csv << name << ',' << frame << ',' << (options.edit ? 1 : 0) << ',' << uploaded << ','
+            << scene.value()->DrawnCount() << ',' << ms << '\n';
         // The window shows the texture each frame; so does this.
         static_cast<void>(renderer.value()->Clear({0, 0, 0, 255}));
         static_cast<void>(renderer.value()->Present());
@@ -194,9 +196,10 @@ int RunPreviewMeasure(const MeasureOptions& options) {
         return sorted[std::min(index, sorted.size() - 1)];
     };
     std::printf("%s edit=%d requested=%u measured=%u failed=%u warmup=%u counted=%zu p50=%.3f p95=%.3f p99=%.3f "
-                "max=%.3f ms chunks=%zu\n",
+                "max=%.3f ms chunks=%zu drawn=%zu draw_distance=%.0f\n",
                 name.c_str(), options.edit ? 1 : 0, options.frames, measured, failures, options.warmup, times.size(),
-                at(0.5), at(0.95), at(0.99), sorted.empty() ? 0.0 : sorted.back(), scene.value()->ChunkCount());
+                at(0.5), at(0.95), at(0.99), sorted.empty() ? 0.0 : sorted.back(), scene.value()->ChunkCount(),
+                scene.value()->DrawnCount(), static_cast<double>(options.drawDistanceCells));
     if (auto written = WriteFileReplacing(options.csvPath, csv.str()); !written) {
         std::cerr << "error: " << Engine::Base::Describe(written.error()) << '\n';
         return 3;

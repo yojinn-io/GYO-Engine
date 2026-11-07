@@ -30,7 +30,7 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor import-boxes <json> <pointer> <grid>\n"
     "  gyo_voxel_map_editor edit <grid> <map-dir> [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic | --synthetic-map <name>) --csv <file>\n"
-    "                       [--no-edit] [--frames <n>] [--gpu-driver <driver>]\n"
+    "                       [--no-edit] [--frames <n>] [--draw-distance <cells>] [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor build-map   <grid> <map-dir>\n"
     "  gyo_voxel_map_editor verify-map  <grid> <map-dir>\n"
     "  gyo_voxel_map_editor inspect-map <map-dir>\n"
@@ -305,6 +305,12 @@ int Run(const std::span<const std::string> arguments) {
                     std::stoul(value) == 0)
                     return Usage("--frames takes a whole number from 1 to 999999");
                 measure.frames = static_cast<std::uint32_t>(std::stoul(value));
+            } else if (option == "--draw-distance") {
+                if (value.empty() || value.size() > 4 || value.find_first_not_of("0123456789") != std::string::npos ||
+                    std::stoul(value) < static_cast<unsigned long>(MinDrawDistanceCells) ||
+                    std::stoul(value) > static_cast<unsigned long>(MaxDrawDistanceCells))
+                    return Usage("--draw-distance takes a whole number of cells from 64 to 1024");
+                measure.drawDistanceCells = static_cast<float>(std::stoul(value));
             } else return Usage("unknown option " + option);
         }
         const int sources = (measure.synthetic ? 1 : 0) + (measure.gridPath.empty() ? 0 : 1) + (measure.syntheticMap.empty() ? 0 : 1);

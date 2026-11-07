@@ -196,3 +196,7 @@ check(2 measure_scale_unknown measure-map "${WORK}/scale" --scale nowhere)
 check(2 measure_scale_building measure-map "${WORK}/scale" --scale building)
 check(2 measure_preview_two_sources measure-preview --synthetic --synthetic-map building --csv "${WORK}/m.csv")
 
+# ve-cull: the draw distance is a whole number of cells from 64 to 1024.
+check(2 measure_preview_draw_distance_low measure-preview --synthetic --csv "${WORK}/m.csv" --draw-distance 63)
+check(2 measure_preview_draw_distance_high measure-preview --synthetic --csv "${WORK}/m.csv" --draw-distance 1025)
+check(2 measure_preview_draw_distance_text measure-preview --synthetic --csv "${WORK}/m.csv" --draw-distance 2.5)

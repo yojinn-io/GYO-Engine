@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gyo/voxel_map_editor/Visibility.hpp"
+
 #include <cstdint>
 #include <string>
 
@@ -30,6 +32,7 @@ struct MeasureOptions final {
     std::uint32_t frames{600};
     std::uint32_t width{1280}, height{720};
     std::string gpuDriver{"auto"};
+    float drawDistanceCells{DefaultDrawDistanceCells}; // from the orbit target, in x and z (Visibility.hpp)
 };
 
 [[nodiscard]] int RunPreviewMeasure(const MeasureOptions& options);

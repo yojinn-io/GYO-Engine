@@ -2,6 +2,7 @@
 
 #include "gyo/voxel_map_editor/Editing.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
+#include "gyo/voxel_map_editor/Visibility.hpp"
 
 #include "gyo/framework/Preview.hpp"
 
@@ -36,15 +37,25 @@ public:
     // Drops every chunk and the palette (before showing another map).
     void Clear();
     [[nodiscard]] std::size_t ChunkCount() const noexcept { return meshes_.size(); }
-    // One frame of the map; the readback is this frame's (Rgba8SRgb).
+    // One frame of the map; the readback is this frame's (Rgba8SRgb). Only the
+    // chunks within drawDistance (world units, x and z) of center that overlap
+    // the camera's frustum are drawn (Visibility.hpp).
     Result<Engine::Render::TextureReadback> Render(const Engine::Render::PerspectiveCamera3D& camera,
+                                                   Engine::Math::Vec3 center, float drawDistance,
                                                    std::uint32_t width, std::uint32_t height);
+    // The chunks the last Render drew.
+    [[nodiscard]] std::size_t DrawnCount() const noexcept { return drawn_; }
 
 private:
     PreviewScene() = default;
 
     std::unique_ptr<Framework::OffscreenPreview> preview_;
-    std::map<Vec3i, Engine::Render::MeshHandle> meshes_;
+    struct ChunkMesh final {
+        Engine::Render::MeshHandle mesh{};
+        Engine::Math::Aabb bounds{}; // of the mesh's vertices, world space
+    };
+    std::map<Vec3i, ChunkMesh> meshes_;
+    std::size_t drawn_{};
     Engine::Render::TextureHandle palette_{};
 };
 

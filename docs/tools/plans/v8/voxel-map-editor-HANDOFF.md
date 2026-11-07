@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-07（剔除宣告）**：`ve-scale-measure` 完成並回報架構師。架構師轉達你的決定：視錐的數學放 Engine `GYO::Math`。① 的事前宣告 [voxel-editor-cull.md](voxel-editor-cull.md) 已寫（`ve-cull`：Math 的 `Frustum`／`Intersects`、預覽的距離上限與剔除、預算 CB1～CB3）。**等你核准宣告，並決定 view-projection 矩陣的來源（(b) 公開 Render 既有的計算，或 (a) 工具自己組）**。之後接 `ve-feel-survey`。
+- **2026-11-07（剔除宣告）**：`ve-scale-measure` 完成並回報架構師。架構師轉達你的決定：視錐的數學放 Engine `GYO::Math`。① 的事前宣告 [voxel-editor-cull.md](voxel-editor-cull.md) 已寫（`ve-cull`：Math 的 `Frustum`／`Intersects`、預覽的距離上限與剔除、預算 CB1～CB3）。你已核准，矩陣選 (b) 公開 Render 既有的計算（`v8-tool-voxel-cull-declare`）；距離改從注視點量（量測前，你選「注視点から」）。實作、測試、突變 9/9 完成（未 commit）。**停在 CB1**：building 的 p95 27.4 ms，超過預算 16.7 ms（件數一致 600／600／0；畫了 767／768 區塊）。window-1 的 P1 在同一張圖、同一個相機是 7.48 ms。依 AGENTS §14 停下回報。你選「旧版と並べて診断」：P1 當時的舊版（a19458cc）現在同條件也是 p95 約 23 ms（兩輪），新版 `--grid` 約 25 ms、`--synthetic-map` 約 22～23 ms，p50 都約 10 ms。差距主要是環境（Chrome、WindowServer 佔 CPU），不是 ve-cull；新版比舊版 p95 多約 2 ms，還沒和雜訊分開。CB1 的不成立照記。你關掉 Chrome 後重測（「Chromeを閉じたら測る」）：CB1 **p95 8.12 ms，成立**；對照的舊版 6.39／8.17 ms，第 2 輪新舊相同，2 ms 的差是雜訊。證據 `cull/diag/`、`cull/quiet/`。**下一步：CB2、CB3（km2-ground）先跑 60 幀試跑，先問你。**證據：主 checkout `build/evidence/tool-v8-voxel-map/editor-next/cull/`。之後接 `ve-feel-survey`。
 - **2026-11-07（設計稿）**：架構師支援卡起草了下一階段的設計稿 [design.zh-Hant.md](../../../voxel_map_editor/design.zh-Hant.md)（文件模型、照 Goxel 的操作模型、手感 H1～H8、契約影響、分批建議），把 window-2、window-3、TODO #9、#10 重排成 `ve-*` 批次。你已核准 Q1～Q12 全部照建議（`v8-tool-voxel-design-approve`）。**下一步：voxel 線寫 `ve-feel-survey` 與 `ve-scale-measure` 的事前宣告**（兩批都只量不改）。dev_log：[2026_11_07_arch_v8_voxel_editor_design](../../../dev_logs/2026_11_07_arch_v8_voxel_editor_design.zh-Hant.md)。
 - **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；§14.4 已核准、空格子拒存、L3 合格。**window-1 完成，等你決定是否合併 PR #158**。
 - **PR**：
@@ -44,6 +44,8 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-cull-center` | （2026-11-07，量測前）`ve-cull` 的繪製距離從注視點（orbit 的 target）量，不從相機量；只限編輯器預覽，遊戲端（含過場）以相機為中心、由 scene v1 Client 自己寫。理由寫在 [voxel-editor-cull.md](voxel-editor-cull.md) | 問題框「注視点から (推奨)」；side chat 後「OK，雖然我選了，你把理由交過去吧。」 |
+| `v8-tool-voxel-cull-declare` | （2026-11-07）`ve-cull` 的宣告核准：Math 加 `Frustum`／`Intersects`；Render 公開既有的 view／projection 計算 (b)；預覽的繪製距離預設 256 格；預算 CB1～CB3；km2-building 不測 | 「承認、(b) で」 |
 | `v8-tool-voxel-scale-result` | （2026-11-07）`ve-scale-measure` 的 SM6 km2-building 照現有結果記錄（驅動崩潰也是結果），不重跑；結果回報架構師；其餘照建議：先做視錐與距離剔除（①，另寫宣告），再做 `ve-feel-survey` | 「OK，結果回報架構，剩下照建議執行。」 |
 | `v8-tool-voxel-measure-declare` | （2026-11-07）核准 `ve-scale-measure`、`ve-feel-survey` 的事前宣告；Q10、Q12 照 (a)：在 Goxel 或你熟悉的工具裡試，本批不做第二種 | 「推奨どおり承認」 |
 | `v8-tool-voxel-design-approve` | （2026-11-07）設計稿 [design.zh-Hant.md](../../../voxel_map_editor/design.zh-Hant.md) 的 Q1～Q12 全部照建議：先做手感調查與大地圖量測（只量不改）；Layers 延後、先做剖切顯示；prefab＝v1 格子檔、依名字對應、同名不同義就拒絕；undo 維持一次操作一步、大型操作存區塊前像；對稱 X／Y／Z、不能鏡像就整筆拒絕；盒選＋依方塊相連選取；Line 的操作與飛行相機留給手感調查；大面積填充分幀完成並顯示進度。各批仍另寫事前宣告 | 「照建議全部核准」 |
