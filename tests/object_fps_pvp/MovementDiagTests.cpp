@@ -242,3 +242,106 @@ TEST_CASE("PvP movement diagnostics count what a full queue loses") {
     CHECK(end.at("records").get<std::uint64_t>() == lines.size() - 1);
     CHECK(end.at("records").get<std::uint64_t>() + end.at("dropped").get<std::uint64_t>() == recorded);
 }
+
+// ---------------------------------------------------------------------------
+// pm-detect-diag D4: what the diagnostics add to a tick. Skipped in CI; run with
+//   gyo_object_fps_pvp_tests -tc='*D4*' --no-skip
+// Method and thresholds: v8-product-pm-detect-diag-declaration.md section 4.
+#include "RetroFPS/Pvp/ShotQuery.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <span>
+
+namespace {
+double P99(std::vector<double> values) {
+    std::sort(values.begin(), values.end());
+    const auto rank = static_cast<std::size_t>(std::ceil(0.99 * static_cast<double>(values.size())));
+    return values[std::max<std::size_t>(rank, 1) - 1];
+}
+
+// (i) B4's loop: four players, one step and one shot each per tick.
+std::vector<double> StepAndShotTicks(const Arena& arena, bool diagnose, std::size_t ticks) {
+    using Clock = std::chrono::steady_clock;
+    Draw draw{0xb4b4b4b4ULL};
+    std::vector<PlayerState> players;
+    for (std::size_t i = 0; i < 4; ++i) {
+        PlayerState state;
+        state.playerId = static_cast<PlayerId>(i + 1);
+        state.position = arena.spawns[i % arena.spawns.size()].position;
+        players.push_back(state);
+    }
+    std::vector<double> result;
+    std::array<float, 4> yaw{}, forward{}, right{};
+    for (std::uint64_t tick = 1; tick <= ticks; ++tick) {
+        const auto start = Clock::now();
+        for (std::size_t p = 0; p < players.size(); ++p) {
+            if (tick % 60 == p) {
+                yaw[p] = static_cast<float>(draw.Int(-180, 180)) * 0.0174532925F;
+                forward[p] = static_cast<float>(draw.Int(-1, 1));
+                right[p] = static_cast<float>(draw.Int(-1, 1));
+            }
+            const MovementCommand command{tick, forward[p], right[p], yaw[p], 0, draw.Int(0, 29) == 0};
+            if (diagnose) {
+                MovementDiagEvent diag{.role = MovementDiagRole::Match};
+                players[p] = StepMovement(arena, DefaultStanceRules, players[p], command, &diag.step);
+                diag.playerId = players[p].playerId;
+                diag.sequence = tick;
+                diag.authorityTick = tick;
+                diag.grounded = players[p].grounded;
+                diag.verticalVelocity = players[p].verticalVelocity;
+                RecordMovementDiag(diag);
+            } else {
+                players[p] = StepMovement(arena, DefaultStanceRules, players[p], command);
+            }
+            const float pitch = static_cast<float>(draw.Int(-30, 30)) * 0.0174532925F;
+            static_cast<void>(QueryShot(arena, players[p], yaw[p], pitch, std::span<const PlayerState>(players), 100.0F));
+        }
+        result.push_back(std::chrono::duration<double, std::milli>(Clock::now() - start).count());
+    }
+    return result;
+}
+
+// (ii) PvpMatch::Tick, which the Match runs inside its authority lock.
+std::vector<double> MatchTicks(const Arena& arena, std::size_t ticks) {
+    using Clock = std::chrono::steady_clock;
+    PvpMatch match(arena);
+    std::string error;
+    for (PlayerId id = 1; id <= 4; ++id) REQUIRE(match.Join(id, error));
+    Draw draw{0x7177ULL};
+    std::vector<double> result;
+    for (std::uint64_t sequence = 1; sequence <= ticks; ++sequence) {
+        for (PlayerId id = 1; id <= 4; ++id) {
+            const float yaw = static_cast<float>(((sequence / 60) * 37 + id * 91) % 360) * 0.0174532925F;
+            static_cast<void>(match.SubmitInput({id, {{sequence, 1, 0, yaw, 0, draw.Int(0, 29) == 0}}}));
+        }
+        const auto start = Clock::now();
+        match.Tick({match.TickCount() + 1, 1.0 / 60});
+        result.push_back(std::chrono::duration<double, std::milli>(Clock::now() - start).count());
+    }
+    return result;
+}
+} // namespace
+
+TEST_CASE("PvP movement diagnostics cost per tick (pm-detect-diag D4)" * doctest::skip()) {
+    constexpr std::size_t Ticks = 20000;
+    const auto arena = Biome();
+    const auto path = TempFile("pvp-movement-diag-d4");
+    const auto offTick = P99(StepAndShotTicks(arena, false, Ticks));
+    const auto offMatch = P99(MatchTicks(arena, Ticks));
+    double onTick{}, onMatch{};
+    {
+        MovementDiagFile diag(path);
+        onTick = P99(StepAndShotTicks(arena, true, Ticks));
+        onMatch = P99(MatchTicks(arena, Ticks));
+    }
+    const auto lines = ReadLines(path);
+    std::filesystem::remove(path);
+    REQUIRE_FALSE(lines.empty());
+    MESSAGE("D4 (i) tick p99 off " << offTick << " ms, on " << onTick << " ms, increase " << onTick - offTick
+                                   << " ms; (ii) PvpMatch::Tick p99 off " << offMatch << " ms, on " << onMatch
+                                   << " ms, increase " << onMatch - offMatch << " ms; diag " << lines.back().dump());
+    CHECK(onTick - offTick <= 0.1);
+    CHECK(onMatch - offMatch <= 0.02);
+    CHECK(lines.back().at("dropped") == 0);
+}
