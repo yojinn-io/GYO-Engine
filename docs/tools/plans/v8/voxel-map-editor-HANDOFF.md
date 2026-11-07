@@ -43,6 +43,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-measure-declare` | （2026-11-07）核准 `ve-scale-measure`、`ve-feel-survey` 的事前宣告；Q10、Q12 照 (a)：在 Goxel 或你熟悉的工具裡試，本批不做第二種 | 「推奨どおり承認」 |
 | `v8-tool-voxel-design-approve` | （2026-11-07）設計稿 [design.zh-Hant.md](../../../voxel_map_editor/design.zh-Hant.md) 的 Q1～Q12 全部照建議：先做手感調查與大地圖量測（只量不改）；Layers 延後、先做剖切顯示；prefab＝v1 格子檔、依名字對應、同名不同義就拒絕；undo 維持一次操作一步、大型操作存區塊前像；對稱 X／Y／Z、不能鏡像就整筆拒絕；盒選＋依方塊相連選取；Line 的操作與飛行相機留給手感調查；大面積填充分幀完成並顯示進度。各批仍另寫事前宣告 | 「照建議全部核准」 |
 | `v8-tool-voxel-window-1-l3` | （2026-11-07）window-1 的 L3：在視窗編輯 pvp_corners，進遊戲走一圈，合格；合格的範圍是基礎功能，編輯手感和操作還差得很遠（TODO #10） | 「合格」「這次的合格是基礎功能，編輯手感，和操作差的很遠。之後我會想想如何修正這一方面的內容。」 |
 | `v8-tool-voxel-window-1-empty-save` | （2026-11-07）沒有填任何格子的格子不存檔（`EmptyMap`，什麼都不寫），磁碟上的 grid 不會和地圖對不上 | 「(a) 保存を断る」 |
@@ -208,4 +209,4 @@
   - 「上限太低」已照你的指示回報架構師（屬於 product-arena-v3）。
 - 2026-11-07：架構師轉達你的決定 `v8-arch-map-scene-split`；你確認 window-1 拿掉標記放置 UI（`v8-tool-voxel-window-1-no-markers`）。已移除程式碼、測試與 3 條突變，文件已更新；突變全目錄 84/84，`cpu|shader` 135/135。
 - 2026-11-07：L3 合格（範圍是基礎功能）。window-1 的判定 W1～W11、P1、L3 全部成立。編輯手感與操作記為 TODO #10，待你整理。
-- 2026-11-07：你照建議核准設計稿的 Q1～Q12（經支援卡轉達）。從 PR #169（`1d2f9ffc`）切出分支 `claude/v8-tool-voxel-editor-measure`（工作樹 `.claude/worktrees/v8-tool-voxel-editor-next`），寫好 `ve-scale-measure` 與 `ve-feel-survey` 的事前宣告 [voxel-editor-measure.md](voxel-editor-measure.md)，**等你核准**。
+- 2026-11-07：你照建議核准設計稿的 Q1～Q12（經支援卡轉達）。從 PR #169（`1d2f9ffc`）切出分支 `claude/v8-tool-voxel-editor-measure`（工作樹 `.claude/worktrees/v8-tool-voxel-editor-next`），寫好 `ve-scale-measure` 與 `ve-feel-survey` 的事前宣告 [voxel-editor-measure.md](voxel-editor-measure.md)，你已核准（`v8-tool-voxel-measure-declare`），實作 `ve-scale-measure` 中。

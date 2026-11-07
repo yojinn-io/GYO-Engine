@@ -4,7 +4,7 @@
 - 設計稿：[design.zh-Hant.md](../../../voxel_map_editor/design.zh-Hant.md)（Q1～Q12 已核准，決定 `v8-tool-voxel-design-approve`）。
 - 紀錄：[HANDOFF](voxel-map-editor-HANDOFF.md)。
 
-**狀態：宣告草稿，等使用者核准；核准前不實作。**
+**狀態：2026-11-07 使用者核准（原話「推奨どおり承認」：宣告與 Q10／Q12 的試法 (a)）。實作 `ve-scale-measure` 中。**
 
 ## 代號對照
 
