@@ -10,6 +10,7 @@
 
 #include "engine/base/Error.hpp"
 #include "engine/base/Log.hpp"
+#include "engine/math/linear/Matrix4.hpp"
 #include "engine/platform/sdl/SdlPlatform.hpp"
 #include "engine/render/backend/sdl/SdlRenderer.hpp"
 
@@ -74,28 +75,6 @@ CameraPose PoseOf(const Engine::Render::PerspectiveCamera3D& camera) {
             camera.farClip};
 }
 
-// The filled cells' bounds; nullopt for a grid without cells.
-std::optional<std::pair<Vec3i, Vec3i>> Bounds(const GridDocument& document) {
-    std::optional<std::pair<Vec3i, Vec3i>> bounds;
-    for (const auto& [at, chunk] : document.chunks) {
-        Vec3i low{};
-        Vec3i high{};
-        for (int axis = 0; axis < 3; ++axis) {
-            low[axis] = at[axis] * ChunkSize;
-            high[axis] = low[axis] + ChunkSize;
-        }
-        if (!bounds) {
-            bounds = {low, high};
-            continue;
-        }
-        for (int axis = 0; axis < 3; ++axis) {
-            bounds->first[axis] = std::min(bounds->first[axis], low[axis]);
-            bounds->second[axis] = std::max(bounds->second[axis], high[axis]);
-        }
-    }
-    return bounds;
-}
-
 class EditorClient final : public Framework::ImGuiShellClient {
 public:
     EditorClient(const Framework::ImGuiShellContext& context, WindowOptions options)
@@ -138,10 +117,15 @@ public:
         Shortcuts();
         if (draftRevision_ != Session().Revision()) ReconcileDrafts();
         ImGui::BeginChild("side", ImVec2(380, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
-        DrawFile();
-        DrawTools();
-        DrawBlocks();
-        DrawShapes();
+        // Four groups (ve-feel-1 F2): what each part of the panel is for, the orientation next to the block.
+        if (ImGui::CollapsingHeader("File", ImGuiTreeNodeFlags_DefaultOpen)) DrawFile();
+        if (ImGui::CollapsingHeader("Tool and mode", ImGuiTreeNodeFlags_DefaultOpen)) DrawTools();
+        if (ImGui::CollapsingHeader("Block and orientation", ImGuiTreeNodeFlags_DefaultOpen)) {
+            DrawOrientation();
+            DrawBlocks();
+            DrawShapes();
+        }
+        if (ImGui::CollapsingHeader("View and camera", ImGuiTreeNodeFlags_DefaultOpen)) DrawView();
         ImGui::EndChild();
         ImGui::SameLine();
         ImGui::BeginChild("view", ImVec2(0, 0));
@@ -203,7 +187,8 @@ private:
         const float size = document.cellSize;
         Math::Vec3 low{0, 0, 0};
         Math::Vec3 high{16, 4, 16};
-        if (const auto bounds = Bounds(document)) {
+        const auto bounds = ChunkBounds(document);
+        if (bounds) {
             low = {static_cast<float>(bounds->first[0]), static_cast<float>(bounds->first[1]),
                    static_cast<float>(bounds->first[2])};
             high = {static_cast<float>(bounds->second[0]), static_cast<float>(bounds->second[1]),
@@ -214,7 +199,7 @@ private:
         camera_.target = (low + high) * 0.5F * size + origin * size;
         camera_.yawRadians = 0.6F;
         camera_.pitchRadians = 0.7F;
-        camera_.distance = std::max(Math::Length(high - low) * size * 0.9F, 4.0F * size);
+        camera_.distance = FrameDistance(bounds, size);
     }
 
     // Brings the preview's map up to the document (saving writes its chunks).
@@ -312,7 +297,6 @@ private:
     void SelectTool(const Tool tool) {
         if (tool == tool_) return;
         CancelDrag();
-        lineStart_.reset();
         tool_ = tool;
     }
 
@@ -361,11 +345,34 @@ private:
         if (ImGui::Combo("plane axis", &axis, kAxisNames.data(), 3)) plane_.axis = axis;
         ImGui::InputInt("plane at (PgUp/PgDn)", &plane_.at);
         plane_.at = std::clamp(plane_.at, -CellLimit, CellLimit - 1);
+    }
+
+    void DrawOrientation() {
         ImGui::SeparatorText("Orientation");
         ImGui::SliderInt("orientation (Q/E, Shift)", &orientation_, 0, 23);
         ImGui::Text("up %s, %d quarter turn(s)", kUpNames[static_cast<std::size_t>(orientation_ / 4)], orientation_ % 4);
+    }
+
+    void DrawView() {
         ImGui::TextDisabled("middle drag: rotate  right drag: pan  wheel: zoom");
         ImGui::TextDisabled("arrows: rotate  1/3/7: front/right/top  0: frame the map");
+        // Chunks farther than this from the orbit target (in x and z) are not drawn (Visibility.hpp).
+        ImGui::SliderFloat("draw distance (cells)", &drawDistanceCells_, MinDrawDistanceCells, MaxDrawDistanceCells,
+                           "%.0f", ImGuiSliderFlags_AlwaysClamp);
+        // Zoom (ve-feel-1 F1): a slider over the range, logarithmic, and a lock for the wheel.
+        const ZoomRange zoom = Zoom();
+        const float size = Document().cellSize;
+        float distanceCells = camera_.distance / size;
+        if (ImGui::SliderFloat("zoom (cells)", &distanceCells, zoom.minimum / size, zoom.maximum / size, "%.0f",
+                               ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp))
+            camera_.distance = ClampZoom(distanceCells * size, zoom);
+        ImGui::Checkbox("lock zoom (wheel off)", &zoomLocked_);
+        if (scene_) {
+            ImGui::Text("drawn %zu / %zu chunks", scene_->DrawnCount(), scene_->ChunkCount());
+            if (scene_->Capped())
+                ImGui::TextColored(ImVec4(1, 0.8F, 0.3F, 1), "at most %zu chunks: the farthest are not drawn",
+                                   MaxDrawnChunks);
+        }
     }
 
     // After a change: indices back in range (an undone "Add shape" leaves one
@@ -506,8 +513,13 @@ private:
         const ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
         const auto width = static_cast<std::uint32_t>(std::max(area.x * scale.x, 16.0F));
         const auto height = static_cast<std::uint32_t>(std::max(area.y * scale.y, 16.0F));
+        // The map may have grown or shrunk since the last frame; not during a drag, so the pick ray stays put.
+        if (!drag_) camera_.distance = ClampZoom(camera_.distance, Zoom());
         const auto camera = camera_.Camera();
-        auto frame = scene_->Render(camera, width, height);
+        // Zoomed out, farther than the panel's distance is drawn (ve-feel-1 F1).
+        auto frame = scene_->Render(camera, camera_.target,
+                                    DrawDistanceFor(drawDistanceCells_ * Document().cellSize, camera_.distance), width,
+                                    height);
         if (!frame) {
             previewError_ = Engine::Base::Describe(frame.error());
             return;
@@ -567,7 +579,18 @@ private:
                                    std::max(ImGui::GetItemRectSize().y, 1.0F);
             camera_.target = camera_.target - right * (io.MouseDelta.x * perPixel) + up * (io.MouseDelta.y * perPixel);
         }
-        if (io.MouseWheel != 0.0F) camera_.distance = std::max(camera_.distance * (1.0F - io.MouseWheel * 0.1F), 0.05F);
+        // Between two cells and framing the whole map (ve-feel-1 F1); locked, the wheel leaves it.
+        if (io.MouseWheel != 0.0F && !zoomLocked_)
+            camera_.distance = ClampZoom(camera_.distance * (1.0F - io.MouseWheel * 0.1F), Zoom());
+    }
+
+    // The zoom range, kept until the document changes (walking every chunk each frame costs on a km^2 map).
+    ZoomRange Zoom() {
+        if (!zoomRevision_ || *zoomRevision_ != Session().Revision()) {
+            zoomRange_ = ZoomLimits(ChunkBounds(Document()), Document().cellSize);
+            zoomRevision_ = Session().Revision();
+        }
+        return zoomRange_;
     }
 
     Cell Brush() const {
@@ -595,7 +618,7 @@ private:
         Vec3i normal{};              // extrude: the face's side; shape: the start face's side
         std::vector<Vec3i> face;     // extrude: the face
         ImVec2 mouseStart{};
-        std::optional<Vec3i> shown;  // shape: the corner last applied
+        std::optional<Vec3i> shown;  // shape: the corner last applied; line: the end last applied
         std::optional<int> distance; // extrude: the distance last applied
         ImVec2 laserAt{-1e9F, -1e9F}; // laser: where the mouse was when it last cut
     };
@@ -623,16 +646,6 @@ private:
             if (hover_) {
                 if (const auto plane = PlaneThrough(*hover_)) plane_ = *plane;
             }
-            return;
-        case Tool::Line:
-            // The first click sets the start, the second draws the line.
-            if (!target) return;
-            if (!lineStart_) {
-                lineStart_ = target;
-                return;
-            }
-            Apply(ApplyCells(Session(), StrokeCells(*lineStart_, *target, brushSize_, brushShape_), mode_, Brush()));
-            lineStart_.reset();
             return;
         case Tool::Extrude:
             if (!hover_ || hover_->onPlane || hover_->normal == Vec3i{0, 0, 0}) return;
@@ -693,6 +706,13 @@ private:
             drag.shown = corner;
             break;
         }
+        case Tool::Line: {
+            // Goxel's line (ve-feel-1 F5): from where the drag began to the pointer; the line follows the pointer.
+            if (!target || (drag.shown && *drag.shown == *target)) return;
+            Apply(RedrawStroke(Session(), StrokeCells(drag.start, *target, brushSize_, brushShape_), mode_, Brush()));
+            drag.shown = target;
+            break;
+        }
         case Tool::Laser:
             // Always taking away (Laser in Add or Paint acts as Sub), once per position of the mouse.
             if (io.MousePos.x == drag.laserAt.x && io.MousePos.y == drag.laserAt.y) return;
@@ -731,7 +751,6 @@ private:
     }
 
     void CancelDrag() {
-        lineStart_.reset();
         if (!drag_) return;
         drag_.reset();
         Session().CancelStroke();
@@ -744,7 +763,7 @@ private:
         case Tool::Brush: hint = "drag to draw; Shift+click: a line from the last point"; break;
         case Tool::Shape: hint = "drag from corner to corner"; break;
         case Tool::Laser: hint = "drag to cut along the view"; break;
-        case Tool::Line: hint = lineStart_ ? "click the end of the line (Esc: cancel)" : "click the start of the line"; break;
+        case Tool::Line: hint = "drag from the start to the end of the line (Esc: cancel)"; break;
         case Tool::Extrude: hint = "drag a face to push it out or in"; break;
         case Tool::Plane: hint = "click a face to put the edit plane on it"; break;
         case Tool::Picker: hint = "click a block to take it"; break;
@@ -827,9 +846,7 @@ private:
             return std::make_pair(low, high);
         };
         const auto target = Target();
-        if (tool_ == Tool::Line && lineStart_ && target) {
-            if (const auto box = bounds(LineCells(*lineStart_, *target))) Outline(view, box->first, box->second, colour);
-        } else if (tool_ == Tool::Extrude && hover_ && !hover_->onPlane && !drag_) {
+        if (tool_ == Tool::Extrude && hover_ && !hover_->onPlane && !drag_) {
             // The face is found again only when the pointer's face or the map changed.
             const auto key = std::make_tuple(hover_->cell, hover_->normal, Session().Revision());
             if (faceKey_ != key) {
@@ -849,7 +866,60 @@ private:
             }
             Outline(view, low, high, colour);
         }
+        // The block's orientation where it would go (ve-feel-1 F3): its up and its front (+Z) as arrows.
+        const bool places = tool_ == Tool::Brush || tool_ == Tool::Shape || tool_ == Tool::Line;
+        // Paint keeps a cell's orientation, so in Paint the arrows show the cell's own (the user, 2026-11-07).
+        if (places && mode_ != EditMode::Sub && target)
+            DrawOrientationArrows(view, *target,
+                                  mode_ == EditMode::Paint ? Document().At(*target).orientation : orientation_);
+        DrawAxes(view);
         list->PopClipRect();
+    }
+
+    void DrawOrientationArrows(const View& view, const Vec3i& cell, const int orientation) const {
+        const auto& document = Document();
+        const auto& m = OrientationMatrix(static_cast<std::size_t>(orientation));
+        const auto turned = [&m](const Vec3i local) {
+            std::array<float, 3> r{};
+            for (std::size_t row = 0; row < 3; ++row)
+                for (std::size_t col = 0; col < 3; ++col) r[row] += static_cast<float>(m[row][col] * local[col]);
+            return Math::Vec3{r[0], r[1], r[2]};
+        };
+        const Math::Vec3 centre = CellCorner(document, cell) + Math::Vec3{0.5F, 0.5F, 0.5F} * document.cellSize;
+        const float length = 0.9F * document.cellSize;
+        const auto arrow = [&](const Math::Vec3 direction, const ImU32 color) {
+            const Math::Vec3 tip = centre + direction * length;
+            Line(view, centre, tip, color, 3.0F);
+            if (const auto at = OnScreen(view, tip)) ImGui::GetWindowDrawList()->AddCircleFilled(*at, 4.0F, color);
+        };
+        arrow(turned({0, 1, 0}), IM_COL32(250, 220, 60, 255));  // up: yellow
+        arrow(turned({0, 0, 1}), IM_COL32(60, 210, 250, 255));  // front (+Z): cyan
+    }
+
+    // The camera's orientation (ve-feel-1 F4, as Goxel's corner axes): world X, Y and Z turned into the view.
+    void DrawAxes(const View& view) const {
+        // The rotation part of Engine's view matrix: X, then Y, then Z, each undone.
+        const Math::Matrix4 toView = Math::Multiply(
+            Math::MakeRotationX(-view.pose.rotationRadians.x),
+            Math::Multiply(Math::MakeRotationY(-view.pose.rotationRadians.y),
+                           Math::MakeRotationZ(-view.pose.rotationRadians.z)));
+        const ImVec2 origin(view.imageMin.x + 50.0F, view.imageMin.y + static_cast<float>(view.height) / view.scale.y - 50.0F);
+        constexpr float size = 36.0F;
+        struct Axis final {
+            Math::Vec3 world;
+            ImU32 color;
+            const char* name;
+        };
+        const std::array<Axis, 3> axes{{{{1, 0, 0}, IM_COL32(235, 70, 70, 255), "X"},
+                                        {{0, 1, 0}, IM_COL32(80, 220, 80, 255), "Y"},
+                                        {{0, 0, 1}, IM_COL32(80, 140, 250, 255), "Z"}}};
+        ImDrawList* list = ImGui::GetWindowDrawList();
+        for (const auto& axis : axes) {
+            const Math::Vec3 v = Math::TransformVector(toView, axis.world);
+            const ImVec2 tip(origin.x + v.x * size, origin.y - v.y * size);
+            list->AddLine(origin, tip, axis.color, 2.5F);
+            list->AddText(ImVec2(tip.x + 2.0F, tip.y - 7.0F), axis.color, axis.name);
+        }
     }
 
     // A file changed on disk since it was opened or saved (the save wrote nothing).
@@ -920,6 +990,10 @@ private:
     EditMode mode_{EditMode::Add};
     BrushShape brushShape_{BrushShape::Cube};
     int brushSize_{1};
+    float drawDistanceCells_{DefaultDrawDistanceCells};
+    bool zoomLocked_{};
+    std::optional<std::uint64_t> zoomRevision_;
+    ZoomRange zoomRange_{};
     bool snapVolume_{true};
     bool snapPlane_{true};
     EditPlane plane_{};
@@ -935,7 +1009,6 @@ private:
     Ray ray_{};
     std::optional<Drag> drag_;
     std::optional<Vec3i> lastStamp_;
-    std::optional<Vec3i> lineStart_;
     bool shapePlanar_{};
     std::optional<std::tuple<Vec3i, Vec3i, std::uint64_t>> faceKey_;
     std::optional<std::pair<Vec3i, Vec3i>> faceBounds_;

@@ -80,9 +80,15 @@ int main(int argc, char** argv) {
         const auto camera = orbit.Camera();
         const CameraPose pose{camera.position, camera.rotationRadians, camera.verticalFieldOfViewRadians,
                               camera.nearClip, camera.farClip};
-        auto frame = scene.value()->Render(camera, width, height);
+        auto frame = scene.value()->Render(camera, orbit.target, DefaultDrawDistanceCells * document.cellSize, width,
+                                           height);
         if (!frame) {
             std::cerr << "render: " << Engine::Base::Describe(frame.error()) << '\n';
+            return 1;
+        }
+        // The cube is in view and within the draw distance (ve-cull): culling keeps it.
+        if (scene.value()->DrawnCount() != 1) {
+            std::cerr << "the cube's chunk was culled\n";
             return 1;
         }
         int inside = 0;

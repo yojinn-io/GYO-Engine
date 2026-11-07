@@ -1,5 +1,6 @@
 #include "gyo/voxel_map_editor/ChunkedMap.hpp"
 #include "gyo/voxel_map_editor/MarkersFile.hpp"
+#include "gyo/voxel_map_editor/Tools.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 #include "window/EditorWindow.hpp"
 
@@ -29,12 +30,14 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor inspect <file>\n"
     "  gyo_voxel_map_editor import-boxes <json> <pointer> <grid>\n"
     "  gyo_voxel_map_editor edit <grid> <map-dir> [--gpu-driver <driver>]\n"
-    "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic) --csv <file>\n"
-    "                       [--no-edit] [--frames <n>] [--gpu-driver <driver>]\n"
+    "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic | --synthetic-map <name>) --csv <file>\n"
+    "                       [--no-edit] [--frames <n>] [--draw-distance <cells>] [--gpu-driver <driver>]\n"
+    "                       [--scenario stroke [--brush-size <1-16>]] [--orbit-distance <cells>]\n"
     "  gyo_voxel_map_editor build-map   <grid> <map-dir>\n"
     "  gyo_voxel_map_editor verify-map  <grid> <map-dir>\n"
     "  gyo_voxel_map_editor inspect-map <map-dir>\n"
     "  gyo_voxel_map_editor measure-map <out-dir> [<grid>...]\n"
+    "  gyo_voxel_map_editor measure-map <out-dir> --scale km2-ground|km2-building\n"
     "  gyo_voxel_map_editor check-markers <markers> --marker-kinds <kinds>\n"
     "  gyo_voxel_map_editor --help\n"
     "\n"
@@ -283,6 +286,7 @@ int Run(const std::span<const std::string> arguments) {
     }
     if (command == "measure-preview") {
         MeasureOptions measure;
+        bool framesGiven = false;
         for (std::size_t i = 2; i < arguments.size(); ++i) {
             const std::string& option = arguments[i];
             if (option == "--synthetic") {
@@ -296,6 +300,7 @@ int Run(const std::span<const std::string> arguments) {
             if (i + 1 >= arguments.size()) return Usage(option + " needs a value");
             const std::string& value = arguments[++i];
             if (option == "--grid") measure.gridPath = value;
+            else if (option == "--synthetic-map") measure.syntheticMap = value;
             else if (option == "--csv") measure.csvPath = value;
             else if (option == "--gpu-driver") measure.gpuDriver = value;
             else if (option == "--frames") {
@@ -303,10 +308,36 @@ int Run(const std::span<const std::string> arguments) {
                     std::stoul(value) == 0)
                     return Usage("--frames takes a whole number from 1 to 999999");
                 measure.frames = static_cast<std::uint32_t>(std::stoul(value));
+                framesGiven = true;
+            } else if (option == "--scenario") {
+                if (value != "stroke") return Usage("--scenario takes stroke");
+                measure.scenario = value;
+            } else if (option == "--brush-size") {
+                if (value.empty() || value.size() > 2 || value.find_first_not_of("0123456789") != std::string::npos ||
+                    std::stoi(value) < 1 || std::stoi(value) > MaxBrushSize)
+                    return Usage("--brush-size takes a whole number from 1 to 16");
+                measure.brushSize = std::stoi(value);
+            } else if (option == "--orbit-distance") {
+                if (value.empty() || value.size() > 4 || value.find_first_not_of("0123456789") != std::string::npos ||
+                    std::stoi(value) < 4)
+                    return Usage("--orbit-distance takes a whole number of cells from 4 to 9999");
+                measure.orbitDistanceCells = std::stoi(value);
+            } else if (option == "--draw-distance") {
+                if (value.empty() || value.size() > 4 || value.find_first_not_of("0123456789") != std::string::npos ||
+                    std::stoul(value) < static_cast<unsigned long>(MinDrawDistanceCells) ||
+                    std::stoul(value) > static_cast<unsigned long>(MaxDrawDistanceCells))
+                    return Usage("--draw-distance takes a whole number of cells from 64 to 1024");
+                measure.drawDistanceCells = static_cast<float>(std::stoul(value));
             } else return Usage("unknown option " + option);
         }
-        if (measure.csvPath.empty() || measure.synthetic == !measure.gridPath.empty())
-            return Usage("measure-preview takes --grid <grid> or --synthetic, and --csv <file>");
+        if (measure.scenario == "stroke") {
+            // ve-feel-survey: 300 cycles, the first 30 left out of the statistics.
+            measure.warmup = 30;
+            if (!framesGiven) measure.frames = 300;
+        }
+        const int sources = (measure.synthetic ? 1 : 0) + (measure.gridPath.empty() ? 0 : 1) + (measure.syntheticMap.empty() ? 0 : 1);
+        if (measure.csvPath.empty() || sources != 1)
+            return Usage("measure-preview takes one of --grid <grid>, --synthetic and --synthetic-map <name>, and --csv <file>");
         return RunPreviewMeasure(measure);
     }
     if (command == "build-map" || command == "verify-map") {
@@ -324,6 +355,10 @@ int Run(const std::span<const std::string> arguments) {
     }
     if (command == "measure-map") {
         if (arguments.size() < 3) return Usage("measure-map takes <out-dir> [<grid>...]");
+        if (arguments.size() >= 4 && arguments[3] == "--scale") {
+            if (arguments.size() != 5) return Usage("measure-map takes <out-dir> --scale km2-ground|km2-building");
+            return MeasureScale(arguments[2], arguments[4]);
+        }
         return MeasureMap(arguments[2], std::vector<std::string>(arguments.begin() + 3, arguments.end()));
     }
     return Usage("unknown command " + command);

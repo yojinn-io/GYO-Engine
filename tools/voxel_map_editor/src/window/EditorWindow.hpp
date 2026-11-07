@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gyo/voxel_map_editor/Visibility.hpp"
+
 #include <cstdint>
 #include <string>
 
@@ -23,12 +25,17 @@ struct WindowOptions final {
 struct MeasureOptions final {
     std::string gridPath;  // UTF-8; empty with synthetic
     bool synthetic{};      // a 64 x 16 x 64 grid, 30% filled, fixed seed
+    std::string syntheticMap; // building, km2-ground or km2-building, made in memory (Synthetic.hpp)
     bool edit{true};       // one cell edit per frame (P1 (b)); false: drawing only (P1 (a))
     std::uint32_t warmup{60}; // frames measured but left out of the statistics
     std::string csvPath;   // UTF-8
     std::uint32_t frames{600};
     std::uint32_t width{1280}, height{720};
     std::string gpuDriver{"auto"};
+    float drawDistanceCells{DefaultDrawDistanceCells}; // from the orbit target, in x and z (Visibility.hpp)
+    std::string scenario;  // empty: P1's frames; "stroke": ve-feel-survey's press, drag, release, undo per cycle
+    int brushSize{1};      // stroke: the brush's size (cube)
+    int orbitDistanceCells{}; // 0: the overview distance (0.9 x the map's diagonal); else this many cells
 };
 
 [[nodiscard]] int RunPreviewMeasure(const MeasureOptions& options);

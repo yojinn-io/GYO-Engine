@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9), v8-tool-voxel-map-editor-window (judgment W10, ids vmw-*; both declarations in docs/tools/plans/v8/voxel-map-editor.md) v8-arch-big-map-tool-chunked (judgment T7, ids tc-*; docs/tools/plans/v8/voxel-map-tool-chunked.md) and v8-tool-voxel-window-1 (judgment W10, ids vw1-*; docs/tools/plans/v8/voxel-map-window-goxel.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
+  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9), v8-tool-voxel-map-editor-window (judgment W10, ids vmw-*; both declarations in docs/tools/plans/v8/voxel-map-editor.md) v8-arch-big-map-tool-chunked (judgment T7, ids tc-*; docs/tools/plans/v8/voxel-map-tool-chunked.md) and v8-tool-voxel-window-1 (judgment W10, ids vw1-*; docs/tools/plans/v8/voxel-map-window-goxel.md), and ve-cull (judgments C1 and C2, ids math-frustum-*, render-cvp-*, ve-cull-*; docs/tools/plans/v8/voxel-editor-cull.md), and ve-pick-tie (judgment PT2, id ve-pick-tie-*; docs/tools/plans/v8/voxel-editor-pick-tie.md), and ve-feel-1 (judgments E1 to E3, ids vf1-*; docs/tools/plans/v8/voxel-editor-feel-1.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
   "mutants": [
     {
       "id": "vme-cull-partial",
@@ -874,7 +874,7 @@
       "id": "vw1-snap-volume-first",
       "what": "A filled cell behind the edit plane wins over the plane",
       "file": "tools/voxel_map_editor/src/Editing.cpp",
-      "find": "        if (entered > planeT) break;\n",
+      "find": "        if (entered > planeT && !(planeHit && cell == planeHit->cell)) break;\n",
       "replace": "",
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "*W3 pick: the plane wins*",
@@ -908,6 +908,186 @@
       "replace": "    if (!preview.Map()) {\n        static_cast<void>(WriteFileReplacing(files.grid.path, WriteGrid(document)));\n        return SaveResult{};\n    }\n    if (false)\n        return Refuse(VoxelMapErrorCode::EmptyMap,",
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "*W5 save: a grid without filled cells*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "math-frustum-near-opengl",
+      "what": "The near plane uses the -1..1 depth formula (w + z) instead of z >= 0",
+      "file": "engine/math/include/engine/math/geometry/Frustum.hpp",
+      "find": "result.planes[4] = FrustumDetail::PlaneFromRow(m[2], m[6], m[10], m[14]); // near:   z >= 0",
+      "replace": "result.planes[4] = bound(2, 1.0F); // near (wrong convention)",
+      "target": "gyo_math_tests",
+      "cases": "Frustum near plane*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "math-frustum-negative-vertex",
+      "what": "Each plane tests the box corner nearest the inside instead of the furthest",
+      "file": "engine/math/include/engine/math/geometry/Frustum.hpp",
+      "find": "plane.normal.x >= 0.0F ? box.maximum.x : box.minimum.x",
+      "replace": "plane.normal.x >= 0.0F ? box.minimum.x : box.maximum.x",
+      "target": "gyo_math_tests",
+      "cases": "Frustum-Aabb overlap keeps*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "math-frustum-unnormalized",
+      "what": "The planes are not normalized",
+      "file": "engine/math/include/engine/math/geometry/Frustum.hpp",
+      "find": "return {normal / length, -d / length};",
+      "replace": "static_cast<void>(length); return {normal, -d};",
+      "target": "gyo_math_tests",
+      "cases": "Frustum planes are unit*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "math-frustum-no-far",
+      "what": "The far plane is left out",
+      "file": "engine/math/include/engine/math/geometry/Frustum.hpp",
+      "find": "    result.planes[5] = bound(2, -1.0F);",
+      "replace": "    // far plane left out",
+      "target": "gyo_math_tests",
+      "cases": "Frustum-Aabb overlap rejects*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "math-frustum-open-touch",
+      "what": "A box touching a plane counts as outside",
+      "file": "engine/math/include/engine/math/geometry/Frustum.hpp",
+      "find": "if (SignedDistance(plane, corner) < 0.0F) return false;",
+      "replace": "if (SignedDistance(plane, corner) <= 0.0F) return false;",
+      "target": "gyo_math_tests",
+      "cases": "Frustum-Aabb overlap is closed*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "render-cvp-not-drawn-matrix",
+      "what": "The renderer draws world meshes with a matrix other than CameraViewProjection",
+      "file": "engine/render/src/Renderer.cpp",
+      "find": "            CameraViewProjection(camera, static_cast<float>(width) / static_cast<float>(height));",
+      "replace": "            Math::Multiply(ProjectionMatrix(camera, 1.0F), ViewMatrix(camera));",
+      "target": "gyo_render_tests",
+      "cases": "CameraViewProjection*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ve-cull-distance-open",
+      "what": "A chunk exactly at the draw distance is not drawn",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "> view.drawDistance * view.drawDistance",
+      "replace": ">= view.drawDistance * view.drawDistance",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "Visibility: a chunk past*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ve-cull-distance-x-only",
+      "what": "The draw distance looks at x only",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "    return dx * dx + dz * dz;",
+      "replace": "    return dx * dx + 0.0F * dz;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "Visibility: a chunk past*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ve-cull-no-frustum",
+      "what": "Chunks outside the frustum are drawn",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "    return Math::Intersects(view.frustum, box);",
+      "replace": "    return true;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "Visibility: a chunk within the distance but outside*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "ve-pick-tie-no-exemption",
+      "what": "The cell where the ray meets the plane loses to the plane when the walk's summed entry is a rounding past planeT",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "        if (entered > planeT && !(planeHit && cell == planeHit->cell)) break;",
+      "replace": "        if (entered > planeT) break;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-pick-tie*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-zoom-no-minimum",
+      "what": "The zoom can go into a cell",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "const float minimum = 2.0F * cellSize;",
+      "replace": "const float minimum = 0.0F * cellSize;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E1*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-zoom-fixed-maximum",
+      "what": "The zoom-out limit is a fixed number, not the map's size",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "return {minimum, Math::Max(FrameDistance(bounds, cellSize), minimum)};",
+      "replace": "return {minimum, Math::Max(1024.0F * cellSize, minimum)};",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E1*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-draw-panel-only",
+      "what": "Zooming out does not draw farther than the panel's distance",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "return Math::Max(panelDistance, cameraDistance * DrawDistancePerCameraDistance);",
+      "replace": "static_cast<void>(cameraDistance); return panelDistance;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E2: zooming*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-cap-farthest",
+      "what": "Over the cap, the farthest chunks are kept",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "keyed.emplace_back(FlatDistance2(view.center, boxes[index]), index);",
+      "replace": "keyed.emplace_back(-FlatDistance2(view.center, boxes[index]), index);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E2: at most*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-cap-unreported",
+      "what": "Chunks left out over the cap are not reported",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "    chosen.capped = true;",
+      "replace": "    chosen.capped = false;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E2: at most*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-line-keeps-old",
+      "what": "A dragged line keeps the lines drawn before it",
+      "file": "tools/voxel_map_editor/src/Tools.cpp",
+      "find": "    session.CancelStroke();\n    session.BeginStroke();\n    return ApplyCells(session, cells, mode, value);",
+      "replace": "    if (!session.InStroke()) session.BeginStroke();\n    return ApplyCells(session, cells, mode, value);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E3*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-bounds-swapped",
+      "what": "The map's bounds keep the smallest high and the largest low",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "            bounds->first[axis] = Math::Min(bounds->first[axis], low[axis]);\n            bounds->second[axis] = Math::Max(bounds->second[axis], high[axis]);",
+      "replace": "            bounds->first[axis] = Math::Max(bounds->first[axis], low[axis]);\n            bounds->second[axis] = Math::Min(bounds->second[axis], high[axis]);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E1*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-cap-ties-by-distance-only",
+      "what": "At the cut, equally far chunks are not ordered by index",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "    std::nth_element(keyed.begin(), keyed.begin() + static_cast<std::ptrdiff_t>(maxChunks), keyed.end());",
+      "replace": "    std::nth_element(keyed.begin(), keyed.begin() + static_cast<std::ptrdiff_t>(maxChunks), keyed.end(),\n                     [](const auto& a, const auto& b) { return a.first < b.first || (a.first == b.first && a.second > b.second); });",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E2: at most*",
       "expect": "is NOT correct"
     }
   ]

@@ -3,6 +3,7 @@
 #include "gyo/voxel_map_editor/Tools.hpp"
 
 #include <algorithm>
+#include <array>
 #include <set>
 #include <vector>
 
@@ -227,6 +228,62 @@ TEST_CASE("W3 pick: the plane wins when the ray meets it before a filled cell (a
     const auto same = Pick(document, down, EditPlane{1, 0}, PickOptions{true, true});
     REQUIRE(same);
     CHECK_FALSE(same->onPlane);
+}
+
+TEST_CASE("ve-feel-1 E3: a dragged line keeps only the latest line, as one step") {
+    const Vec3i start{0, 0, 0};
+    const auto first = StrokeCells(start, {6, 0, 0}, 1, BrushShape::Cube);
+    const auto latest = StrokeCells(start, {0, 0, 5}, 2, BrushShape::Cube);
+    // What two clicks made before: the same StrokeCells, applied once.
+    EditSession clicked(Blocks());
+    REQUIRE(ApplyCells(clicked, latest, EditMode::Add, kStone));
+
+    EditSession dragged(Blocks());
+    dragged.BeginStroke();
+    REQUIRE(RedrawStroke(dragged, first, EditMode::Add, kStone));
+    REQUIRE(RedrawStroke(dragged, latest, EditMode::Add, kStone));
+    dragged.EndStroke();
+    // The first line is gone, the latest is there: the same grid as the click.
+    CHECK(WriteGrid(dragged.Document()) == WriteGrid(clicked.Document()));
+    CHECK(dragged.Document().At({6, 0, 0}).block == 0);
+    // One step: one undo takes the whole line back.
+    CHECK(dragged.Undo());
+    CHECK(Filled(dragged.Document()).empty());
+    CHECK_FALSE(dragged.Undo());
+}
+
+TEST_CASE("ve-feel-1 E3: Esc during a line drag puts the line back") {
+    EditSession session(Blocks());
+    session.BeginStroke();
+    REQUIRE(RedrawStroke(session, StrokeCells({0, 0, 0}, {4, 0, 0}, 1, BrushShape::Cube), EditMode::Add, kStone));
+    session.CancelStroke();
+    CHECK(Filled(session.Document()).empty());
+    CHECK_FALSE(session.CanUndo());
+}
+
+TEST_CASE("ve-pick-tie: a slanted ray entering a filled cell of the plane's layer picks the cell") {
+    // Rays measured on km2-ground (ve-feel-survey): entering the floor at y = 0 from above, the walk's summed
+    // entry parameter came out about 1e-12 past the plane's own, and the plane cell (already filled) was
+    // returned, so Add placed nothing.
+    struct Case final {
+        Ray ray;
+        Vec3i cell;
+    };
+    const std::array<Case, 2> cases{{
+        {{{858.911499F, 218.464203F, 793.7677F}, {0.432154864F, -0.644752443F, 0.630504906F}}, {1004, 0, 1006}},
+        {{{858.970032F, 218.464203F, 793.727661F}, {0.449775845F, -0.644594669F, 0.618222713F}}, {1010, 0, 1002}},
+    }};
+    for (const auto& [ray, cell] : cases) {
+        auto document = Blocks();
+        document.Set(cell, kStone);
+        const auto hit = Pick(document, ray, EditPlane{1, 0}, PickOptions{true, true});
+        REQUIRE(hit);
+        CAPTURE(cell);
+        CHECK_FALSE(hit->onPlane);
+        CHECK(hit->cell == cell);
+        CHECK(hit->normal == Vec3i{0, 1, 0});
+        CHECK(PlacementCell(*hit) == Vec3i{cell[0], 1, cell[2]});
+    }
 }
 
 TEST_CASE("W1 limits: shapes, extrudes and lasers change at most 2^20 cells") {

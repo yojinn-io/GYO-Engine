@@ -578,6 +578,40 @@ TEST_CASE("ViewModel mesh uniforms are byte-identical to the frozen row-vector r
     CheckMeshLayer(MeshLayer::ViewModel, 3U);
 }
 
+TEST_CASE("CameraViewProjection is the clip matrix world meshes are drawn with") {
+    // Culling against CameraViewProjection keeps exactly what the renderer draws:
+    // a mesh at the identity transform uploads that matrix (equal values; the
+    // identity product may turn -0 into +0).
+    auto library = Library();
+    Device device;
+    Renderer renderer;
+    REQUIRE(renderer.Initialize(device, library));
+    Lcg random{gSeed + 6U};
+    for (int frame = 0; frame < 40; ++frame) {
+        device.width = 16U + random.Next() % 2400U;
+        device.height = 16U + random.Next() % 1600U;
+        const PerspectiveCamera3D camera = RandomCamera(random);
+        RenderQueue queue;
+        queue.SetCamera(camera);
+        MeshSubmission mesh;
+        mesh.mesh = MeshHandle::FromParts(99, 1);
+        REQUIRE(queue.Submit(mesh));
+        REQUIRE(renderer.Render(queue));
+        const auto uploaded = UploadedMatrices(device.captured);
+        REQUIRE(uploaded.size() == 1U);
+        REQUIRE(uploaded[0].size() == sizeof(float) * 16U);
+        std::array<float, 16> actual{};
+        std::memcpy(actual.data(), uploaded[0].data(), sizeof(actual));
+        const Math::Matrix4 expected =
+            CameraViewProjection(camera, static_cast<float>(device.width) / static_cast<float>(device.height));
+        for (std::size_t element = 0; element < 16; ++element) {
+            CAPTURE(frame);
+            CAPTURE(element);
+            CHECK(actual[element] == expected.values[element]);
+        }
+    }
+}
+
 TEST_CASE("Scene sprite uniforms are byte-identical to the frozen row-vector renderer") {
     CheckSpriteLayer(CompositeLayer::Scene, 4U);
 }

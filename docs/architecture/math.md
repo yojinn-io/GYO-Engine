@@ -21,7 +21,7 @@ A function belongs in Math when it remains meaningful without any domain word: a
 ```text
 engine/math/include/engine/math/
   linear/    Vec2 Vec3 Vec4 Vec3d VecInt(Vec2i Vec3i) Matrix3 Matrix4 Quaternion
-  geometry/  Rect Segment Aabb Ray Plane Sphere Capsule Triangle Intersection
+  geometry/  Rect Segment Aabb Ray Plane Sphere Capsule Triangle Frustum Intersection
   scalar/    Scalar Constants Angle ColorSpace
 ```
 
@@ -34,7 +34,7 @@ All types are `final` aggregates without constructors, trivially copyable and st
 - **Vectors**: `Vec2`, `Vec3`, `Vec4` (float), `Vec3d` (double), `Vec2i`, `Vec3i` (int32). There is one vector type per dimension for points, directions and sizes; `TransformPoint` and `TransformVector` express the difference. Float vectors have no `==`; integer vectors do.
 - **Matrices**: `Matrix3`, `Matrix4`, column-major (`values[column * N + row]`), column vectors, default identity.
 - **Quaternion**: `{x, y, z, w}`, default identity.
-- **Geometry**: `Rect {x, y, width, height}`, `Segment {start, end}`, `Aabb {minimum, maximum}`, `Ray {origin, direction}`, `Plane {normal, distance}`, `Sphere {center, radius}`, `Capsule {segmentStart, segmentEnd, radius}`, `Triangle {a, b, c}`. `Segmentd` and `Aabbd` are double-precision variants for algorithms that work in `Vec3d`.
+- **Geometry**: `Rect {x, y, width, height}`, `Segment {start, end}`, `Aabb {minimum, maximum}`, `Ray {origin, direction}`, `Plane {normal, distance}`, `Sphere {center, radius}`, `Capsule {segmentStart, segmentEnd, radius}`, `Triangle {a, b, c}`, `Frustum {planes}` (six `Plane`s). `Segmentd` and `Aabbd` are double-precision variants for algorithms that work in `Vec3d`.
 
 ## Conventions
 
@@ -50,6 +50,15 @@ All types are `final` aggregates without constructors, trivially copyable and st
 - **Triangle**: vertex order defines `Normal = Cross(b - a, c - a)`. Math defines no front face; facing and culling are render pipeline state.
 - **Rect**: queries assume a non-negative size; callers that can produce negative sizes (for example UI layout) handle them first. The axis direction (for example y-down pixels) belongs to the caller's space.
 - **Containment and overlap** are closed: touching counts.
+
+## Frustum
+
+`Frustum` (`geometry/Frustum.hpp`) is the volume a clip matrix keeps, for culling.
+
+- `MakeFrustum(clip)` takes a clip matrix such as `Multiply(projection, view)` under the clip-space convention above (`-w <= x, y <= w`, `0 <= z <= w`) and returns six normalized planes, normals pointing inward, in the order left, right, bottom, top, near, far. The near plane is the `z >= 0` row, not the OpenGL `w + z >= 0` one; a change of the depth convention (for example reversed Z) changes these rows too. The matrix must describe a non-degenerate volume; a plane with a zero normal yields NaN.
+- `Intersects(frustum, box)` is conservative: it returns false only when the box lies entirely on the outside of one plane (the box corner furthest along that plane's normal is outside). A box outside the frustum near an edge or corner can still return true, so it suits culling, not exact intersection. Touching counts as overlap; there is no tolerance.
+- Only a `MakeFrustum` result is meaningful; a default `Frustum{}` (six default planes) is neither an everything-passes nor an empty volume.
+- Math knows no camera. A renderer's camera-to-clip composition stays with its owner (for example `Engine::Render::CameraViewProjection`), and the loop over chunks or objects, distance limits and their centre belong to each caller.
 
 ## Numeric policy
 
