@@ -55,3 +55,4 @@ survey 之後的三批，範圍以 HANDOFF「決定」的六項為準（與 prop
 - [2026-11-06 `v8-arch-big-map-engine-grid`](../../../dev_logs/2026_11_06_arch_v8_big_map_engine_grid.zh-Hant.md)
 - [2026-11-06 `v8-arch-big-map-engine-format`](../../../dev_logs/2026_11_06_arch_v8_big_map_engine_format.zh-Hant.md)
 - [2026-11-06 `v8-arch-big-map-tool-chunked`（voxel 線）](../../../dev_logs/2026_11_06_tool_v8_voxel_map_tool_chunked.zh-Hant.md)
+- [2026-11-07 `v8-arch-collision-grid-build`](../../../dev_logs/2026_11_07_arch_collision_grid_build.zh-Hant.md)
