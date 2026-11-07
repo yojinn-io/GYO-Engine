@@ -3,7 +3,7 @@
 日期：2026-11-07。分支 `claude/v8-tool-voxel-editor-measure`。下段。實作：主會話（Opus 5.5）；審查：Opus／high（唯讀）。
 事前宣告：[voxel-editor-feel-1.md](../tools/plans/v8/voxel-editor-feel-1.md)，你核准（「承認、PR は後で」）。
 
-**狀態：** E1～E4、L3 成立；E5 的本機部分成立（`cpu|shader` 138/138），L1 待 PR。
+**狀態：** E1～E5、L3 成立（`cpu|shader` 138/138；L1 三平台通過（PR #170，2026-11-07，run 42377813964））。
 
 ## 做了什麼
 

@@ -3,7 +3,7 @@
 日期：2026-11-07。分支 `claude/v8-tool-voxel-editor-measure`。上段（觸及 Engine 公開介面）。實作：主會話（Opus 5.5）。
 事前宣告：[voxel-editor-cull.md](../tools/plans/v8/voxel-editor-cull.md)，2026-11-07 使用者核准，矩陣選 (b)（「承認、(b) で」）。
 
-**狀態：** 判定 C1～C4、C5 的本機部分、C6 完成。C5 的 L1 待 PR（依賴 PR #169）。
+**狀態：** 判定 C1～C6 完成；L1 三平台通過（PR #170，2026-11-07，run 42377813964）。
 
 ## 做了什麼
 

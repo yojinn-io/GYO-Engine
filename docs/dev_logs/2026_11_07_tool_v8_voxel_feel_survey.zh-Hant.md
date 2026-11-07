@@ -3,7 +3,7 @@
 日期：2026-11-07。分支 `claude/v8-tool-voxel-editor-measure`。下段（只量不改）。實作：主會話（Opus 5.5）。
 事前宣告：[voxel-editor-measure.md](../tools/plans/v8/voxel-editor-measure.md) 的 `ve-feel-survey`（2026-11-07 核准）。調查表：[feel-survey.zh-Hant.md](../voxel_map_editor/feel-survey.zh-Hant.md)。
 
-**狀態：** FS1～FS3 成立；FS4 的本機部分成立（`cpu|shader` 138/138），L1 待 PR（依賴 PR #169）。
+**狀態：** FS1～FS4 成立（`cpu|shader` 138/138；L1 三平台通過（PR #170，2026-11-07，run 42377813964））。
 
 ## 做了什麼
 

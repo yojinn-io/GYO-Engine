@@ -3,7 +3,7 @@
 日期：2026-11-07。分支 `claude/v8-tool-voxel-editor-measure`（從 PR #169 `1d2f9ffc` 切出）。下段。實作：主會話（Opus 5.5／medium）。
 事前宣告：[voxel-editor-measure.md](../tools/plans/v8/voxel-editor-measure.md)，2026-11-07 使用者核准（「推奨どおり承認」）。
 
-**狀態：** 量測完成，結果只描述、不設門檻。本機 `cpu|shader` 138/138；L1 待 PR（依賴 PR #169 先合併）。
+**狀態：** 量測完成，結果只描述、不設門檻。本機 `cpu|shader` 138/138；L1 三平台通過（PR #170，2026-11-07，run 42377813964）。
 
 ## 做了什麼
 

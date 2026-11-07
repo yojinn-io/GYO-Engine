@@ -3,7 +3,7 @@
 日期：2026-11-07。分支 `claude/v8-tool-voxel-editor-measure`。實作：主會話（Opus 5.5／high）。
 事前宣告：[voxel-editor-pick-tie.md](../tools/plans/v8/voxel-editor-pick-tie.md)，使用者選「今、小さな修正バッチで」。
 
-**狀態：** PT1～PT3 成立。L1 待 PR（依賴 PR #169）。
+**狀態：** PT1～PT3 成立；L1 三平台通過（PR #170，2026-11-07，run 42377813964）。
 
 ## 經過
 
