@@ -16,6 +16,7 @@ fps::pvp::Arena ShotArena() {
     arena.eyeHeight = 1;
     arena.bodyHeight = 2;
     arena.radius = .25F;
+    arena.BuildWallGrid();
     return arena;
 }
 constexpr float HalfPi = std::numbers::pi_v<float> / 2;
@@ -57,17 +58,21 @@ TEST_CASE("PvP shot respects wall occlusion and equal-distance world priority") 
     const PlayerState shooter{1, {0, 0, 0}};
     const std::array players{PlayerState{2, {0, 0, 5}}};
     arena.walls = {{{-1, 0, 3}, {1, 3, 4}}};
+    arena.BuildWallGrid();
     auto hit = QueryShot(arena, shooter, 0, 0, players, 100);
     CHECK(hit.kind == ShotHitKind::World);
     CHECK(hit.targetId == 0);
     CHECK(hit.distance == 3);
     arena.walls.front() = {{-1, 0, 4.75F}, {1, 3, 6}};
+    arena.BuildWallGrid();
     hit = QueryShot(arena, shooter, 0, 0, players, 100);
     CHECK(hit.kind == ShotHitKind::World);
     CHECK(hit.distance == 4.75F);
     arena.walls.front() = {{-1, 0, 6}, {1, 3, 7}};
+    arena.BuildWallGrid();
     CHECK(QueryShot(arena, shooter, 0, 0, players, 100).kind == ShotHitKind::Player);
     arena.walls.front() = {{-1, 0, -.1F}, {1, 3, .1F}};
+    arena.BuildWallGrid();
     hit = QueryShot(arena, shooter, 0, 0, players, 100);
     CHECK(hit.kind == ShotHitKind::World);
     CHECK(hit.distance == 0);
@@ -243,6 +248,7 @@ TEST_CASE("PvP targets at one distance keep the lowest id and the world before t
     // A wall in front of the shapes occludes them; the equal-distance world
     // priority keeps its own test above.
     arena.walls.push_back({{-1, 0, 4.5F}, {1, 2, 6}});
+    arena.BuildWallGrid();
     const std::array targets{ShotTarget{8, eight}};
     const auto hit = QueryShot(arena, DefaultStanceRules, shooter, 0, 0, targets, 100);
     CHECK(hit.kind == ShotHitKind::World);
@@ -250,6 +256,7 @@ TEST_CASE("PvP targets at one distance keep the lowest id and the world before t
     // The shooter's own shapes are skipped.
     const std::array own{ShotTarget{7, eight}};
     arena.walls.clear();
+    arena.BuildWallGrid();
     CHECK(QueryShot(arena, DefaultStanceRules, shooter, 0, 0, own, 100).kind == ShotHitKind::Miss);
 }
 

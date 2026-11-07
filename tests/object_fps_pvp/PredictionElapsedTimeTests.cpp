@@ -14,6 +14,7 @@ Arena TimingArena() {
     arena.id = "prediction_callsite_timing";
     arena.width = arena.depth = 30;
     arena.spawns = {{{2, 0, 2}, 0}, {{20, 0, 2}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 }

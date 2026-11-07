@@ -40,6 +40,7 @@ Arena IpcArena() {
     arena.id = "synthetic_ipc_arena";
     arena.width = arena.depth = 16;
     arena.spawns = {{{2, 0, 2}, 0}, {{13, 0, 2}, 0}, {{2, 0, 13}, 0}, {{13, 0, 13}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

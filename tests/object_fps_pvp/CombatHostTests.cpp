@@ -18,6 +18,7 @@ Arena CombatHostArena() {
     arena.id = "synthetic_combat_host";
     arena.width = arena.depth = 12;
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 6}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

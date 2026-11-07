@@ -19,6 +19,7 @@ Arena RoleArena() {
     arena.id = "synthetic_match_role";
     arena.width = arena.depth = 12;
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 6}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

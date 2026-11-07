@@ -46,6 +46,7 @@ Arena EntityModelArena() {
     arena.id = "synthetic_entity_model";
     arena.width = arena.depth = 12;
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 6}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 
@@ -80,6 +81,7 @@ Arena ThreeSpawnArena() {
     arena.id = "synthetic_three_spawns";
     arena.width = arena.depth = 12;
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 6}, 0}, {{2, 0, 10}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

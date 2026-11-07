@@ -59,7 +59,7 @@ PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
         const bool jumpFromGround = command.jumpRequested && state.grounded;
         if (command.crouchHeld && !jumpFromGround) {
             crouched = true;
-        } else if (crouched && CanPlaceCharacterBody({p, arena.bodyHeight, arena.radius}, arena.walls, {})) {
+        } else if (crouched && CanPlaceCharacterBody({p, arena.bodyHeight, arena.radius}, arena.WallGrid(), {})) {
             crouched = false;
         }
     }
@@ -71,7 +71,7 @@ PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
         alive ? command.moveRight : 0,
         result.yaw, speed, static_cast<float>(MovementTickSeconds));
     const auto supported = [&](const Engine::Math::Vec3& feet) {
-        return IsCharacterSupported({feet, bodyHeight, arena.radius}, arena.walls);
+        return IsCharacterSupported({feet, bodyHeight, arena.radius}, arena.WallGrid());
     };
     if (result.grounded) result.grounded = supported(p);
     if (alive && command.jumpRequested && result.grounded && !crouched) {
@@ -90,7 +90,7 @@ PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
         }
     }
     result.position = MoveCharacterBody({p, bodyHeight, arena.radius},
-        {displacement.x, desiredY - p.y, displacement.z}, arena.walls, {}, false);
+        {displacement.x, desiredY - p.y, displacement.z}, arena.WallGrid(), {}, false);
     if (std::abs(result.position.y - desiredY) > 0.0001F) result.verticalVelocity = 0;
     result.grounded = result.verticalVelocity <= 0 && supported(result.position);
     if (result.grounded) result.verticalVelocity = 0;

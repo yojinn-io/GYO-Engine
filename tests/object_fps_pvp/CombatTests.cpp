@@ -23,6 +23,7 @@ Arena CombatArena() {
     arena.id = "synthetic_combat_arena";
     arena.width = arena.depth = 20;
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 8}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 
@@ -833,6 +834,7 @@ Arena QuadArena() {
     Arena arena = CombatArena();
     arena.id = "synthetic_quad_arena";
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 8}, 0}, {{8, 0, 8}, 0}, {{8, 0, 2}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

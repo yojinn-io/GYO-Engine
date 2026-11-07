@@ -106,6 +106,7 @@ Arena WithSpawns(std::size_t count) {
     // An 8 x 8 grid two metres apart, clear of the fixture walls.
     for (std::size_t i = 0; i < count; ++i)
         arena.spawns.push_back({{1.5F + 2.0F * static_cast<float>(i % 8), 0, 0.6F + 1.4F * static_cast<float>(i / 8)}, 0});
+    arena.BuildWallGrid();
     return arena;
 }
 

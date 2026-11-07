@@ -21,6 +21,7 @@ Arena StatisticsArena() {
     arena.id = "synthetic_network_statistics";
     arena.width = arena.depth = 12;
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 6}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

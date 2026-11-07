@@ -34,6 +34,7 @@ Arena RoleArena(const char* id = "synthetic_role_arena") {
     arena.id = id;
     arena.width = arena.depth = 1000;
     arena.spawns = {{{2, 0, 2}, 0}, {{20, 0, 2}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

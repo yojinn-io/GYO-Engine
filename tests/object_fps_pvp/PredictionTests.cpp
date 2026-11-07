@@ -30,6 +30,7 @@ Arena PredictionArena() {
                    {{0, 0, -1}, {30, 3, 0}}, {{0, 0, 30}, {30, 3, 31}},
                    {{8, 0, 4}, {9, 3, 10}}, {{5, 0, 9}, {9, 3, 10}}};
     arena.spawns = {{{2, 0, 2}, 0}, {{20, 0, 2}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 void SamePosition(Engine::Math::Vec3 actual, Engine::Math::Vec3 expected) {
@@ -42,7 +43,7 @@ float HorizontalDistance(Engine::Math::Vec3 lhs, Engine::Math::Vec3 rhs) {
     return std::hypot(lhs.x - rhs.x, lhs.z - rhs.z);
 }
 void ClearBody(const Arena& arena, Engine::Math::Vec3 position) {
-    CHECK(fps::CanPlaceCharacterBody({position, arena.bodyHeight, arena.radius}, arena.walls, {}));
+    CHECK(fps::CanPlaceCharacterBody({position, arena.bodyHeight, arena.radius}, arena.WallGrid(), {}));
 }
 void Step(PvpMatch& match) { match.Tick({match.TickCount() + 1, MovementTickSeconds}); }
 

@@ -272,7 +272,7 @@ const SpawnPoint* SelectSpawn(const Arena& arena, const std::span<const Engine::
     double bestDistance = -1;
     for (const auto& spawn : arena.spawns) {
         const auto p = spawn.position;
-        if (!CanPlaceCharacterBody({p, arena.bodyHeight, arena.radius}, arena.walls, blockers)) continue;
+        if (!CanPlaceCharacterBody({p, arena.bodyHeight, arena.radius}, arena.WallGrid(), blockers)) continue;
         double nearest = (std::numeric_limits<double>::max)();
         for (const auto& blocker : blockers) {
             // Float difference, then double squares: the established spawn distance.

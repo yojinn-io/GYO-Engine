@@ -66,6 +66,7 @@ Arena SeamArena() {
                    {{0, 0, -1}, {30, 3, 0}}, {{0, 0, 30}, {30, 3, 31}},
                    {{8, 0, 4}, {9, 3, 10}}};
     arena.spawns = {{{2, 0, 2}, 0}, {{20, 0, 2}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 
