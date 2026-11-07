@@ -212,7 +212,8 @@ blocks, shapes and orientations (`v8-tool-voxel-window-goxel`, `v8-tool-voxel-wi
 - **Saving**: the grid, then the map of the previewed chunks (`WriteMap` and `SaveMap`). A text Engine refuses
   writes nothing. A file that changed on disk since it was opened or saved (the grid or `map.json`) stops the save
   (`FileChanged`), and the window asks: reload from disk (the edits are dropped), overwrite, or cancel. A grid
-  without filled cells saves the grid and no map.
+  without filled cells is not saved (`EmptyMap`, nothing written), so the grid on disk never goes out of step with
+  its map (a map needs one filled cell; user, 2026-11-07).
 
 ## Design Invariants
 

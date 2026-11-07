@@ -509,19 +509,28 @@ TEST_CASE("W5 save: when the grid is written but the map is not, the next save d
     std::filesystem::remove_all(folder);
 }
 
-TEST_CASE("W5 save: a grid without filled cells saves the grid and no map") {
+TEST_CASE("W5 save: a grid without filled cells is not saved, and nothing is written") {
     const auto folder = Scratch("empty");
     const auto gridPath = (folder / "map.voxel_grid.json").string();
     auto o = OpenFor(gridPath, (folder / "map").string());
     CHECK_FALSE(o.preview.Map());
-    const auto saved = SaveEditor(o.editor.files, o.session.Document(), o.preview);
-    REQUIRE(saved);
-    CHECK_FALSE(saved->mapWritten);
-    CHECK(ReadText(gridPath) == Text(o.session.Document()));
+    const auto refused = SaveEditor(o.editor.files, o.session.Document(), o.preview);
+    REQUIRE_FALSE(refused);
+    CHECK(refused.error().code == VoxelMapErrorCode::EmptyMap);
+    CHECK_FALSE(std::filesystem::exists(gridPath));
     CHECK_FALSE(std::filesystem::exists(folder / "map"));
+    // Emptying a saved map: the save is refused and the old grid and map stay as they were, in step.
+    REQUIRE(o.session.SetCell({0, 0, 0}, kCube));
+    Sync(o);
+    REQUIRE(SaveEditor(o.editor.files, o.session.Document(), o.preview));
+    const auto grid = ReadText(gridPath);
+    REQUIRE(o.session.SetCell({0, 0, 0}, {}));
+    Sync(o);
+    CHECK(SaveEditor(o.editor.files, o.session.Document(), o.preview).error().code == VoxelMapErrorCode::EmptyMap);
+    CHECK(ReadText(gridPath) == grid);
+    CHECK(ReadMap(folder / "map").size() == 1);
     std::filesystem::remove_all(folder);
 }
-
 TEST_CASE("W5 open: an existing grid is read, a broken one refused") {
     const auto folder = Scratch("open");
     const auto gridPath = (folder / "map.voxel_grid.json").string();

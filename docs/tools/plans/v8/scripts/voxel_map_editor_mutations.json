@@ -899,6 +899,16 @@
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "*W5 save: map.json's known bytes*",
       "expect": "is NOT correct"
+    },
+    {
+      "id": "vw1-empty-grid-saved",
+      "what": "A grid without filled cells saves the grid and no map (the old behaviour), leaving the old map out of step",
+      "file": "tools/voxel_map_editor/src/Editing.cpp",
+      "find": "    if (!preview.Map())\n        return Refuse(VoxelMapErrorCode::EmptyMap,",
+      "replace": "    if (!preview.Map()) {\n        static_cast<void>(WriteFileReplacing(files.grid.path, WriteGrid(document)));\n        return SaveResult{};\n    }\n    if (false)\n        return Refuse(VoxelMapErrorCode::EmptyMap,",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "*W5 save: a grid without filled cells*",
+      "expect": "is NOT correct"
     }
   ]
 }

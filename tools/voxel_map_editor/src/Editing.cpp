@@ -516,10 +516,14 @@ Result<OpenedEditor> OpenEditor(const std::string& gridPath, const std::string& 
 
 Result<SaveResult> SaveEditor(EditorFiles& files, const GridDocument& document, const MapPreview& preview,
                               const SaveMode mode) {
+    // A map needs one filled cell (Engine's rule M8): saving a grid without one is refused, so the grid on disk
+    // never goes out of step with its map (user, 2026-11-07).
+    if (!preview.Map())
+        return Refuse(VoxelMapErrorCode::EmptyMap, "the map has no filled cell, so it cannot be saved; nothing was written");
     const std::string gridText = WriteGrid(document);
     // The map's texts first, so a map Engine refuses writes nothing.
     std::optional<MapText> mapText;
-    if (preview.Map()) {
+    {
         auto written = WriteMap(*preview.Map(), AsBytes(gridText));
         if (!written) return Engine::Base::Err(std::move(written).error());
         mapText = std::move(*written);

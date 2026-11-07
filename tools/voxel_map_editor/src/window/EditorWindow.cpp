@@ -255,8 +255,7 @@ private:
         }
         Session().MarkSaved();
         error_.clear();
-        status_ = "saved " + files_.grid.path +
-                  (saved->mapWritten ? " and " + files_.mapDirectory : " (no filled cell, so no map)");
+        status_ = "saved " + files_.grid.path + " and " + files_.mapDirectory;
     }
 
     void Shortcuts() {

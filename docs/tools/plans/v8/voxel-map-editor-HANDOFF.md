@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；§14.4 已核准；**等你：空格子存檔時舊地圖的處置、L3 試用**。
+- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；§14.4 已核准、空格子拒存；**等你：L3 試用**。
 - **PR**：
   - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
   - window 批在分支 `claude/v8-tool-voxel-map-window`，有它自己的 PR。
@@ -41,6 +41,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-window-1-empty-save` | （2026-11-07）沒有填任何格子的格子不存檔（`EmptyMap`，什麼都不寫），磁碟上的 grid 不會和地圖對不上 | 「(a) 保存を断る」 |
 | `v8-tool-voxel-window-1-guard` | （2026-11-07）核准依賴守衛的 §14.4：視窗可 include `imgui.h`、framework 的 ImGui 殼、`window/…`，可連六個視窗 target；核心只可 include 入口標頭；含舊視窗批沒核准完的 W9。驗證者找出的 3 個隱藏放寬已改嚴 | 「承認する」 |
 | `v8-tool-voxel-window-1-no-markers` | （2026-11-07）照 `v8-arch-map-scene-split`（地圖只管幾何，標記屬於另一個場景編輯器），window-1 拿掉標記放置 UI、`--markers` 選項與存檔寫標記；tc-markers 的讀寫核心留著，待搬（TODO #8） | 「外す」 |
 | `v8-tool-voxel-window-1-declare` | （2026-11-06）核准 window-1 的宣告：視窗存 grid＋區塊化地圖＋標記（不寫 v1）；P1 不編輯 p95 ≤ 16.7 ms、每幀編輯 p95 ≤ 33 ms；Extrude 推出同方向同平面相連的面；Laser 在 Add／Paint 時當 Sub；正交投影延後；DI 5 擴充、DI 7 改寫 | 「推奨どおり承認」 |

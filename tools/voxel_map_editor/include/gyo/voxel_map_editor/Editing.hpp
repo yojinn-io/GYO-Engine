@@ -245,10 +245,12 @@ enum class SaveMode : std::uint8_t {
 };
 
 struct SaveResult final {
-    bool mapWritten{}; // false when the grid has no filled cell (a map needs one)
+    bool mapWritten{};
 };
 
-// Writes the grid, then the map of those chunks (WriteMap and SaveMap: what
+// EmptyMap, writing nothing, when the grid has no filled cell (a map needs
+// one, so the grid on disk never goes out of step with its map). Otherwise
+// writes the grid, then the map of those chunks (WriteMap and SaveMap: what
 // Engine refuses is not written), each by atomic replace. When the map cannot
 // be written after the grid was, the grid's known bytes are updated and the
 // error is returned.
