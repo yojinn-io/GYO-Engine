@@ -114,15 +114,19 @@ public:
 
     // Any thread: a copy into the queue, or a count when it is full or closed.
     void Record(const MovementDiagEvent& event) {
+        bool wasEmpty{};
         {
             std::lock_guard lock(mutex_);
             if (closed_ || queue_.size() >= Capacity) {
                 ++dropped_;
                 return;
             }
+            wasEmpty = queue_.empty();
             queue_.push_back(event);
         }
-        wake_.notify_one();
+        // Only the record that finds the queue empty wakes the writer: it
+        // takes the whole queue at once, so later records need no wake-up.
+        if (wasEmpty) wake_.notify_one();
     }
 
     // Writes what is queued, then diag_end with the lines written and the
@@ -177,28 +181,20 @@ private:
     std::thread thread_;
 };
 
-// One optional writer per product process (installed before the producers
-// start, removed before Finish). enabled is checked first so that a process
-// without diagnostics pays one relaxed load per step.
-inline std::atomic<bool> movementDiagEnabled{false};
-inline std::mutex movementDiagMutex;
-inline std::shared_ptr<MovementDiagWriter> movementDiagWriter;
+// One optional writer per product process. Its owner (MovementDiagFile)
+// installs it before the producers start and removes it after they stop, then
+// finishes it, so a producer reads a plain atomic pointer: no lock and no
+// reference count per step (D4 trial 1 measured those inside the Match's lock).
+inline std::atomic<MovementDiagWriter*> movementDiagWriter{nullptr};
 
-inline void SetMovementDiag(std::shared_ptr<MovementDiagWriter> writer) noexcept {
-    std::shared_ptr<MovementDiagWriter> previous;
-    {
-        std::lock_guard lock(movementDiagMutex);
-        previous = std::exchange(movementDiagWriter, std::move(writer));
-        movementDiagEnabled.store(movementDiagWriter != nullptr, std::memory_order_relaxed);
-    }
+inline void SetMovementDiag(MovementDiagWriter* writer) noexcept {
+    movementDiagWriter.store(writer, std::memory_order_release);
 }
-[[nodiscard]] inline bool MovementDiagEnabled() noexcept { return movementDiagEnabled.load(std::memory_order_relaxed); }
+[[nodiscard]] inline bool MovementDiagEnabled() noexcept {
+    return movementDiagWriter.load(std::memory_order_relaxed) != nullptr;
+}
 inline void RecordMovementDiag(MovementDiagEvent event) {
-    std::shared_ptr<MovementDiagWriter> writer;
-    {
-        std::lock_guard lock(movementDiagMutex);
-        writer = movementDiagWriter;
-    }
+    auto* writer = movementDiagWriter.load(std::memory_order_acquire);
     if (!writer) return;
     if (!event.timeNs) event.timeNs = MovementTraceNowNs();
     writer->Record(event);
@@ -211,18 +207,18 @@ class MovementDiagFile final {
 public:
     explicit MovementDiagFile(const std::filesystem::path& path) {
         if (path.empty()) return;
-        writer_ = std::make_shared<MovementDiagWriter>(path);
-        SetMovementDiag(writer_);
+        writer_ = std::make_unique<MovementDiagWriter>(path);
+        SetMovementDiag(writer_.get());
     }
     ~MovementDiagFile() {
         if (!writer_) return;
-        SetMovementDiag({});
+        SetMovementDiag(nullptr);
         writer_->Finish();
     }
     MovementDiagFile(const MovementDiagFile&) = delete;
     MovementDiagFile& operator=(const MovementDiagFile&) = delete;
 private:
-    std::shared_ptr<MovementDiagWriter> writer_;
+    std::unique_ptr<MovementDiagWriter> writer_;
 };
 
 } // namespace fps::pvp
