@@ -208,3 +208,4 @@
   - 「上限太低」已照你的指示回報架構師（屬於 product-arena-v3）。
 - 2026-11-07：架構師轉達你的決定 `v8-arch-map-scene-split`；你確認 window-1 拿掉標記放置 UI（`v8-tool-voxel-window-1-no-markers`）。已移除程式碼、測試與 3 條突變，文件已更新；突變全目錄 84/84，`cpu|shader` 135/135。
 - 2026-11-07：L3 合格（範圍是基礎功能）。window-1 的判定 W1～W11、P1、L3 全部成立。編輯手感與操作記為 TODO #10，待你整理。
+- 2026-11-07：你照建議核准設計稿的 Q1～Q12（經支援卡轉達）。從 PR #169（`1d2f9ffc`）切出分支 `claude/v8-tool-voxel-editor-measure`（工作樹 `.claude/worktrees/v8-tool-voxel-editor-next`），寫好 `ve-scale-measure` 與 `ve-feel-survey` 的事前宣告 [voxel-editor-measure.md](voxel-editor-measure.md)，**等你核准**。
