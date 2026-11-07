@@ -97,6 +97,32 @@ not predicted pressure.
 * Contract と Architecture の作業は、それが支える Feature（次のバージョンの Feature を含む）を明示する。
   支える Feature を示せない項目は延期する。
 
+### Architecture の反復（イテレーション）を計画する条件
+
+次のいずれかを観測したら、局所的な回避策を積み重ねず、Architecture の反復を計画する。
+
+1. 上の Valid evidence に当たる Architecture Pressure。
+2. 既存の Architecture が、Product を支えきれない上限に当たった。
+   * Tool 層の設計を支えられない：Editor などの Tool が Data Contract に従って作った有効な Content を、
+     Runtime が既存の構造では扱えない（例：編集した Map が大きすぎて Match に読み込めない）。
+   * 実行時の性能・資源の消費が、計画で示した予算を超える
+     （例：フレーム時間、読み込み時間、メモリ）。超えたことは計測で示す。
+   * Feature を、Design Invariants・Contract・Product Boundary を破らずに実現できない。
+   * 実現するには、同じ回避策（Adapter、Special Case、状態の写しなど）を複数箇所に入れる必要がある。
+   * Component の Replacement Criteria（§3）を満たした。
+
+計画の進め方：
+
+* 性能や資源に関わる Feature の計画は、判定に使う予算（フレーム時間、読み込み時間、メモリなど）を書く。
+* 気づいた会話は、Feature の作業の中で Architecture を変えない。
+  観測した証拠（どこで、何が、何回）と上限に当たった Feature を記録し、ユーザーに報告する。
+* Contract の変更（例：Content の上限を Contract に書く）で足りるかを先に確かめる。
+  足りない場合にだけ Architecture を変える（Derivation Order）。
+* 計画は、支える Feature（次のバージョンの Feature を含む）を示す。示せないものは延期する。
+* 計画には、§3 の 7 項目、変える Design Invariants と Replacement Criteria、バッチの分け方を含める。
+* 進行中の作業を止めるか、安定版を先に完成させてから反復するかは、ユーザーが決める。
+* 予測だけの Pressure では計画しない（§2 の原則）。
+
 ---
 
 ## 3. Architecture Drift Control
