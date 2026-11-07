@@ -5,7 +5,7 @@
 - 你選「ve-free-camera」。
 - 紀錄：[HANDOFF](voxel-map-editor-HANDOFF.md)。
 
-**狀態：2026-11-07 你核准（「承認」）。**
+**狀態：2026-11-07 你核准（「承認」）。FC1～FC3 成立，等 L3（[dev_log](../../../dev_logs/2026_11_08_tool_v8_voxel_free_camera.zh-Hant.md)）。**
 
 ## 範圍
 

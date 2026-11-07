@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gyo/voxel_map_editor/Editing.hpp"
+#include "gyo/voxel_map_editor/Visibility.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 
 #include "engine/math/linear/Vec3.hpp"
@@ -46,12 +47,14 @@ void FlyScrollSpeed(FlyCamera& camera, float notches) noexcept;
 [[nodiscard]] FlyCamera FlyFromPose(const CameraPose& pose, float speedCells) noexcept;
 
 // Free to orbit: the same position and look; the target on the look ray, as far as the first filled cell's
-// centre (within the pick reach), or FlyOrbitFallbackCells ahead.
+// centre seen past the near plane (within the pick reach), or FlyOrbitFallbackCells ahead; the distance kept
+// within the orbit camera's zoom range (so the camera stays put and only the target slides along the ray).
 struct OrbitPlacement final {
     Engine::Math::Vec3 target{};
     float distance{};
 };
-[[nodiscard]] OrbitPlacement OrbitFromFly(const FlyCamera& camera, const GridDocument& document) noexcept;
+[[nodiscard]] OrbitPlacement OrbitFromFly(const FlyCamera& camera, const GridDocument& document,
+                                          const ZoomRange& zoom) noexcept;
 
 // Which use the keys W, A, S, D, Q and E have now: the free camera's while the right button is held in it,
 // the editor's (tools, orientation) otherwise.

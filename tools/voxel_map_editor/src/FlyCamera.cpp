@@ -48,14 +48,17 @@ FlyCamera FlyFromPose(const CameraPose& pose, const float speedCells) noexcept {
     return {pose.position, pose.rotationRadians.y, pose.rotationRadians.x, speedCells};
 }
 
-OrbitPlacement OrbitFromFly(const FlyCamera& camera, const GridDocument& document) noexcept {
+OrbitPlacement OrbitFromFly(const FlyCamera& camera, const GridDocument& document, const ZoomRange& zoom) noexcept {
     const Math::Vec3 forward = FlyForward(camera);
-    const auto hit = Pick(document, Ray{camera.position, forward}, EditPlane{}, PickOptions{true, false});
+    // From the near plane, as PixelRay: a cell the near plane cuts away is not what the camera looks at.
+    const Math::Vec3 from = camera.position + forward * (FlyNearCells * document.cellSize);
+    const auto hit = Pick(document, Ray{from, forward}, EditPlane{}, PickOptions{true, false});
     float distance = FlyOrbitFallbackCells * document.cellSize;
     if (hit) {
         const Math::Vec3 centre = CellCorner(document, hit->cell) + Math::Vec3{0.5F, 0.5F, 0.5F} * document.cellSize;
         distance = Math::Length(centre - camera.position);
     }
+    distance = ClampZoom(distance, zoom);
     // On the look ray, so the orbit camera (target - forward x distance) stands where the free one did.
     return {camera.position + forward * distance, distance};
 }

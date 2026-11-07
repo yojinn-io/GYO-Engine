@@ -91,16 +91,47 @@ TEST_CASE("ve-free-camera FC2: free to orbit keeps the position, the target on t
     document.Set({0, 0, 10}, {1, 0});
     FlyCamera camera;
     camera.position = {0.5F, 0.5F, 0.5F};
-    const auto placed = OrbitFromFly(camera, document); // looking along +Z at the cell's centre (0.5, 0.5, 10.5)
+    const ZoomRange zoom{2.0F, 100.0F};
+    const auto placed = OrbitFromFly(camera, document, zoom); // looking along +Z at the cell's centre (0.5, 0.5, 10.5)
     CHECK(placed.distance == doctest::Approx(10.0F));
     CheckNear(placed.target, {0.5F, 0.5F, 10.5F});
     // The orbit camera stands where the free one did.
     CheckNear(placed.target - FlyForward(camera) * placed.distance, camera.position);
     // Nothing in sight: FlyOrbitFallbackCells ahead.
     camera.yawRadians = 3.1415927F;
-    const auto ahead = OrbitFromFly(camera, document);
+    const auto ahead = OrbitFromFly(camera, document, zoom);
     CHECK(ahead.distance == doctest::Approx(FlyOrbitFallbackCells));
     CheckNear(ahead.target - FlyForward(camera) * ahead.distance, camera.position);
+    // Looking down at the empty ground: the edit plane is not a target, only filled cells are.
+    FlyCamera down;
+    down.position = {0.5F, 5.5F, 0.5F};
+    down.pitchRadians = 1.5F;
+    CHECK(OrbitFromFly(down, document, zoom).distance == doctest::Approx(FlyOrbitFallbackCells));
+}
+
+TEST_CASE("ve-free-camera FC2: free to orbit keeps the camera within the zoom range, the target sliding on the ray") {
+    GridDocument document = NewGrid();
+    document.cellSize = 1.0F;
+    document.Set({0, 0, 1}, {1, 0}); // a wall right in front: its centre 1 cell ahead
+    FlyCamera camera;
+    camera.position = {0.5F, 0.5F, 0.5F};
+    const auto close = OrbitFromFly(camera, document, ZoomRange{2.0F, 100.0F});
+    CHECK(close.distance == doctest::Approx(2.0F));
+    CheckNear(close.target - FlyForward(camera) * close.distance, camera.position);
+    // A small map: the fallback is past the zoom-out limit.
+    camera.yawRadians = 3.1415927F;
+    const auto far = OrbitFromFly(camera, document, ZoomRange{2.0F, 6.0F});
+    CHECK(far.distance == doctest::Approx(6.0F));
+    CheckNear(far.target - FlyForward(camera) * far.distance, camera.position);
+    // A cell the near plane cuts away (within half a cell) is not the target: the one past it is.
+    GridDocument behind = NewGrid();
+    behind.cellSize = 1.0F;
+    behind.Set({0, 0, 0}, {1, 0});  // the camera stands in it
+    behind.Set({0, 0, 20}, {1, 0});
+    FlyCamera inside;
+    inside.position = {0.5F, 0.5F, 0.9F}; // 0.1 inside the cell's +Z face: the near plane is past it
+    const auto past = OrbitFromFly(inside, behind, ZoomRange{2.0F, 100.0F});
+    CHECK(past.distance == doctest::Approx(19.6F));
 }
 
 TEST_CASE("ve-free-camera FC3: the keys are the camera's only while the right button is held in the free camera") {

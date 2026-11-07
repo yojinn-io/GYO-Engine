@@ -109,7 +109,8 @@ public:
         ImGui::SetNextWindowPos(viewport->WorkPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
         ImGui::Begin("Voxel Map Editor", nullptr,
-                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                         ImGuiWindowFlags_NoNavInputs);
         if (!session_) {
             ImGui::TextColored(ImVec4(1, 0.4F, 0.4F, 1), "%s", error_.c_str());
             ImGui::End();
@@ -117,7 +118,9 @@ public:
         }
         Shortcuts();
         if (draftRevision_ != Session().Revision()) ReconcileDrafts();
-        ImGui::BeginChild("side", ImVec2(380, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX);
+        // Tab switches the camera (ve-free-camera), so ImGui's own Tab between widgets is off in these windows.
+        ImGui::BeginChild("side", ImVec2(380, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX,
+                          ImGuiWindowFlags_NoNavInputs);
         // Four groups (ve-feel-1 F2): what each part of the panel is for, the orientation next to the block.
         if (ImGui::CollapsingHeader("File", ImGuiTreeNodeFlags_DefaultOpen)) DrawFile();
         if (ImGui::CollapsingHeader("Tool and mode", ImGuiTreeNodeFlags_DefaultOpen)) DrawTools();
@@ -129,7 +132,7 @@ public:
         if (ImGui::CollapsingHeader("View and camera", ImGuiTreeNodeFlags_DefaultOpen)) DrawView();
         ImGui::EndChild();
         ImGui::SameLine();
-        ImGui::BeginChild("view", ImVec2(0, 0));
+        ImGui::BeginChild("view", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoNavInputs);
         DrawPreview();
         ImGui::EndChild();
         DrawClosePrompt();
@@ -264,7 +267,7 @@ private:
         // Tab: the orbit camera or the free one (ve-free-camera).
         if (ImGui::IsKeyPressed(ImGuiKey_Tab, false)) ToggleCamera();
         // Flying (the right button held in the free camera), W, A, S, D, Q and E move the camera only.
-        const bool flying = KeysFor(freeCamera_, ImGui::IsMouseDown(ImGuiMouseButton_Right)) == KeyUse::Camera;
+        const bool flying = KeysFor(freeCamera_, flying_) == KeyUse::Camera;
         const auto editKey = [flying](const ImGuiKey key) { return !(flying && IsFlyKey(key)) && ImGui::IsKeyPressed(key, false); };
         // Modes and tools (Goxel's keys).
         if (ImGui::IsKeyPressed(ImGuiKey_T, false)) mode_ = EditMode::Add;
@@ -324,12 +327,13 @@ private:
     // Orbit to free and back without the view jumping (ve-free-camera FC2).
     void ToggleCamera() {
         CancelDrag();
+        flying_ = false;
         if (!freeCamera_) {
             fly_ = FlyFromPose(PoseOf(camera_.Camera()), fly_.speedCells);
             freeCamera_ = true;
             return;
         }
-        const OrbitPlacement placed = OrbitFromFly(fly_, Document());
+        const OrbitPlacement placed = OrbitFromFly(fly_, Document(), Zoom());
         camera_.target = placed.target;
         camera_.yawRadians = fly_.yawRadians;
         camera_.pitchRadians = fly_.pitchRadians;
@@ -602,6 +606,7 @@ private:
 
         View view{PoseOf(camera), static_cast<int>(width), static_cast<int>(height), imageMin, scale};
         const ImGuiIO& io = ImGui::GetIO();
+        Fly(io, hovered);
         hover_.reset();
         if (hovered || drag_) {
             const float px = (io.MousePos.x - imageMin.x) * scale.x - 0.5F;
@@ -626,20 +631,32 @@ private:
         ImVec2 scale;
     };
 
+    // The free camera (ve-free-camera): flying starts with a right press on the image and lasts until the
+    // button is let go, wherever the mouse goes; the mouse looks, W/A/S/D/E/Q fly, Shift is faster. Not during
+    // a left drag, whose pick ray would move under it.
+    void Fly(const ImGuiIO& io, const bool hovered) {
+        if (!freeCamera_ || !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+            flying_ = false;
+            return;
+        }
+        if (!flying_ && hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) flying_ = true;
+        if (!flying_ || drag_) return;
+        ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+        FlyLook(fly_, io.MouseDelta.x * 0.005F, io.MouseDelta.y * 0.005F);
+        const FlyInput input{.forward = ImGui::IsKeyDown(ImGuiKey_W),
+                             .back = ImGui::IsKeyDown(ImGuiKey_S),
+                             .left = ImGui::IsKeyDown(ImGuiKey_A),
+                             .right = ImGui::IsKeyDown(ImGuiKey_D),
+                             .up = ImGui::IsKeyDown(ImGuiKey_E),
+                             .down = ImGui::IsKeyDown(ImGuiKey_Q),
+                             .fast = io.KeyShift};
+        // A long frame (a whole rebake) does not throw the camera far.
+        FlyMove(fly_, input, std::min(io.DeltaTime, 0.1F), Document().cellSize);
+    }
+
     void Navigate(const ImGuiIO& io) {
         if (freeCamera_) {
-            // The right button held: the mouse looks, W/A/S/D/E/Q fly, Shift is faster; the wheel sets the speed.
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-                FlyLook(fly_, io.MouseDelta.x * 0.005F, io.MouseDelta.y * 0.005F);
-                const FlyInput input{.forward = ImGui::IsKeyDown(ImGuiKey_W),
-                                     .back = ImGui::IsKeyDown(ImGuiKey_S),
-                                     .left = ImGui::IsKeyDown(ImGuiKey_A),
-                                     .right = ImGui::IsKeyDown(ImGuiKey_D),
-                                     .up = ImGui::IsKeyDown(ImGuiKey_E),
-                                     .down = ImGui::IsKeyDown(ImGuiKey_Q),
-                                     .fast = io.KeyShift};
-                FlyMove(fly_, input, io.DeltaTime, Document().cellSize);
-            }
+            // The wheel sets the flying speed.
             if (io.MouseWheel != 0.0F) FlyScrollSpeed(fly_, io.MouseWheel);
             return;
         }
@@ -1061,6 +1078,7 @@ private:
     Framework::PreviewTexture texture_;
     Framework::OrbitCamera camera_;
     bool freeCamera_{};
+    bool flying_{};
     FlyCamera fly_{};
     std::optional<MapPreview> preview_;
     bool previewStale_{};

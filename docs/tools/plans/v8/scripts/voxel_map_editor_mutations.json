@@ -1169,6 +1169,36 @@
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "ve-free-camera FC3*",
       "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-pick-plane-on",
+      "what": "Free to orbit targets the edit plane as well as filled cells",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "PickOptions{true, false}",
+      "replace": "PickOptions{true, true}",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC2: free to orbit keeps the position*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-orbit-unclamped",
+      "what": "Free to orbit leaves the distance outside the zoom range (the camera then jumps)",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    distance = ClampZoom(distance, zoom);\n",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC2: free to orbit keeps the camera*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-pick-from-camera",
+      "what": "Free to orbit targets a cell the near plane cuts away",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    const Math::Vec3 from = camera.position + forward * (FlyNearCells * document.cellSize);",
+      "replace": "    const Math::Vec3 from = camera.position;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC2: free to orbit keeps the camera*",
+      "expect": "is NOT correct"
     }
   ]
 }
