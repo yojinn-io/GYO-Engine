@@ -39,7 +39,35 @@ Every query returns, bit for bit, what a linear scan of all boxes in index order
   until it fits. Results never depend on the length in use (`CellLength()`).
 - **Preconditions.** Every box valid (`IsValid`), the cell length finite and positive, fewer than 2^32 boxes, fewer
   than 2^32 registrations (each box counted once per cell it covers; about 1,024 boxes that each cover all 2^22 cells
-  reach the limit), and query inputs as for the exact queries; anything else is a Programmer Error (`GYO_ASSERT`).
+  reach the limit), and query inputs as for the exact queries. The constructor asserts them (a Programmer Error);
+  `Build` reports them (below).
+
+### Validation: `Build`
+
+Boxes that come from content (a map file) can break the preconditions without the program being wrong, so since
+2026-11-07 (`v8-arch-collision-grid-build`, asked for by the product's `pa-broadphase`) the grid has a validating
+form beside the asserting constructor, following [error-handling](error-handling.md) rule 2:
+
+```cpp
+static Base::Result<StaticAabbGrid, CollisionError> StaticAabbGrid::Build(std::span<const Math::Aabb> boxes,
+                                                                          float cellLength);
+```
+
+| Code | When | Detail |
+|---|---|---|
+| `InvalidCellLength` | the cell length is not finite or not positive | the value |
+| `TooManyBoxes` | 2^32 − 1 boxes or more | the count |
+| `InvalidBox` | a box fails `IsValid` | the index of the first such box |
+| `TooManyRegistrations` | the registrations number 2^32 or more | the count |
+
+- A grid `Build` returns is the one the constructor builds from the same input: one implementation, two surfaces
+  (`Initialize`), so the equivalence contract and its guards cover both.
+- The registrations are summed from the cell ranges in 64 bits **before** anything of their size is allocated, so a
+  huge input is rejected in the time it takes to read the boxes, and the count cannot wrap (test: 1,049 boxes that
+  each cover 4,096,000 cells, rejected with the count; mutant `grid-build-registrations-unchecked` shows the fill
+  writing out of bounds otherwise).
+- A consumer's own budget (for example a product's collider limit) is the consumer's rule, checked before `Build`;
+  the grid knows only its own limits.
 
 ### How it stays exact
 
@@ -66,8 +94,9 @@ A change against any item below is an Architecture Delta that needs the user's a
    `docs/architecture/plans/big-map/scripts/engine_grid_mutations.json`).
 2. **Static.** The grid is built once and never changes; queries are const and keep no state between calls. Guard:
    the public header (no mutating member) and review.
-3. **No new dependency.** `GYO::Collision` links `GYO::Math` and, privately, `GYO::Base` only. Guard: the
-   configure-time check `gyo_expect_collision_links` (`tests/common/collision/CMakeLists.txt`; mutant
+3. **No new dependency.** `GYO::Collision` links `GYO::Math` and `GYO::Base` only, both public (`Base::Result`
+   is in the API since `Build`, 2026-11-07, with the user's agreement; before that `GYO::Base` was private). Guard:
+   the configure-time check `gyo_expect_collision_links` (`tests/common/collision/CMakeLists.txt`; mutant
    `grid-links-voxel-mesh`).
 
 ### Replacement Criteria

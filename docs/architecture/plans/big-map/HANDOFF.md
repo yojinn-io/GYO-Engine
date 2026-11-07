@@ -87,6 +87,7 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 | `v8-arch-big-map-engine-map` | 拆批前的一批：格式＋MapMarkers＋broadphase＋解析替換（宣告 [engine-map](engine-map.zh-Hant.md)） |
 | `v8-arch-big-map-engine-grid` | 第一批（PR 1）：broadphase＋解析替換（宣告 [engine-grid](engine-grid.zh-Hant.md)） |
 | `v8-arch-big-map-engine-format` | 第二批（PR 2）：格式＋MapMarkers＋v1 退役 |
+| `v8-arch-collision-grid-build` | 架構師小批（2026-11-07）：`StaticAabbGrid::Build` 回 Result；給產品 pa-broadphase 用 |
 | `v8-arch-big-map-split-engine` | 拆批的決定 |
 
 時序（2026-11-06，JST，依各會話紀錄）：
@@ -151,6 +152,19 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 - 2026-11-06 L1（head `7e7ea5db`，run 42147144545）：linux-x64、macos-arm64、windows-x64 全部通過，CI gate 通過。J6 成立。
 
 - 2026-11-06 審查者複核 `7e7ea5db`：B1、S1 關閉，沒有剩下的 blocker 或 should-fix。使用者指示合併，PR #161 合併進 master（merge `c70e8fdc`，分支已刪）。engine-grid 批完成。
+
+## 現況：collision-grid-build（`v8-arch-collision-grid-build`，2026-11-07，架構師小批）
+
+- 起因：產品線的 `pa-broadphase` 事前宣告 §1「上限」（使用者核准做法 (b)）：`StaticAabbGrid` 的前提條件只有 assert，壞地圖會讓 Match 當機；
+  產品自己重算分格規則會重複 Engine 的知識。11/9 場次前要合併。
+- 使用者決定（2026-11-07）：**Result 形式＋改 DI 3**。`static Base::Result<StaticAabbGrid, CollisionError> Build(boxes, cellLength)`，
+  錯誤碼 `InvalidCellLength`／`TooManyBoxes`／`InvalidBox`（detail＝索引）／`TooManyRegistrations`（detail＝數）；建構子保留（斷言版）；
+  `GYO::Base` 連結 PRIVATE → PUBLIC；`collision.md` DI 3 字句隨之改。Architecture Delta（Engine 公開介面追加、DI 節變更），7 項在 dev_log。
+- 實作：建構子本體移成 `Initialize()`，建構子斷言、`Build` 回 Err，一份實作；登記數在配置前以 64 bit 由 cell range 加總（原本是數完 counts 才 assert）。
+- 本機（Intel Mac，test preset）：`gyo_collision_tests` 30/30（751 assertions）；新突變 3 條＋`grid-links-voxel-mesh` 4/4 被殺；
+  `engine_grid_mutations.json` 全目錄重跑結果見 dev_log。第一輪兩條新突變的定義有誤（cell length 0 變無限迴圈只會 timeout；登記數不查會 SIGSEGV 而非 doctest 失敗），
+  改成「去掉 isfinite」與「expect 接受 test case CRASHED」後被殺——寫在 dev_log。
+- 證據：主 checkout `build/evidence/big-map/collision-build/`。
 
 ## 現況：engine-format（`v8-arch-big-map-engine-format`，PR 2）
 
