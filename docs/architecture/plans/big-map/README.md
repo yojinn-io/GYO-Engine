@@ -1,7 +1,7 @@
 # 大地圖（區塊化地圖）計畫（`v8-arch-big-map`）
 
 更新：2026-11-06。Owner：架構（Engine 契約的判斷）；各批的實作 owner 見下表。卡片由架構師會話（「[Job][架構師]例行架構掃描」）開出。
-**狀態：survey 完成；六個未決事項 2026-11-06 照建議定案（[HANDOFF](HANDOFF.md)「決定」）。engine-map 拆成兩批（`v8-arch-big-map-split-engine`）：engine-grid（PR #161）與 engine-format（PR #162）都已合併；tool-chunked 由 voxel 線規劃中。** 先讀本頁，再讀 [交接](HANDOFF.md)。
+**狀態：survey 完成；六個未決事項 2026-11-06 照建議定案（[HANDOFF](HANDOFF.md)「決定」）。engine-map 拆成兩批（`v8-arch-big-map-split-engine`）：engine-grid（PR #161）、engine-format（PR #162）與 tool-chunked（PR #163，voxel 線）都已合併；product-arena-v3 核准（2026-11-07），第一批 `pa-broadphase` 開卡。場景／互動物件／pv10 只有需求紀錄（[scene](../scene/README.md)、[pv10-requirements](../../../object_fps_pvp/plans/v8/pv10-requirements.md)）。** 先讀本頁，再讀 [交接](HANDOFF.md)。
 
 ## 代號對照
 
@@ -39,8 +39,8 @@ v8-arch-big-map
 | `-survey` | 上段（Architecture 判斷的根據） | 調查者 Opus／high；對抗檢查者 Fable／xhigh（使用者已同意） | 架構 | 完成；六項照建議定案 |
 | `-engine-grid` | 上段（Engine 公開介面、DI） | 實作者 Opus／high；審查者 Opus（engine-grid 會話）；驗證者 Fable／xhigh | Engine | 完成（PR #161，merge `c70e8fdc`） |
 | `-engine-format` | 上段（Engine 公開介面、新 Subsystem、DI） | 同上 | Engine | 完成（PR #162，merge `915ddc62`；審查 B1／S1／N1～N5／B2 都在 PR 內修） |
-| `-tool-chunked` | voxel 線定 | voxel 線定 | voxel 地圖編輯器線 | 規劃中（分支 `claude/v8-arch-big-map-tool-chunked`；五個判斷已定，等事前宣告） |
-| `-product-arena-v3` | 未定 | 未開 | 產品（object_fps_pvp） | 未開 |
+| `-tool-chunked` | voxel 線定 | voxel 線定 | voxel 地圖編輯器線 | 完成（PR #163，merge `24f111eb`；判定 T1～T9 成立；dev_log 在 voxel 線） |
+| `-product-arena-v3` | 上段（Match 判定、Collision 語意、資料契約） | pa-broadphase／scene v1：實作 Opus／high、審查 Opus、驗證 Fable／xhigh（使用者已同意）；pa-measure Opus／medium | 產品（object_fps_pvp） | 核准（[HANDOFF](HANDOFF.md)「product-arena-v3（核准版）」）：`pa-broadphase` 開卡 → 產品線 movement-fix → `scene v1`（原 arena v3）→ `pa-measure`（km²） |
 
 survey 之後的三批，範圍以 HANDOFF「決定」的六項為準（與 proposal v0.1 不一致處以決定為準）；樹狀圖只記錄 v0.1 的路線。
 
@@ -54,3 +54,4 @@ survey 之後的三批，範圍以 HANDOFF「決定」的六項為準（與 prop
 - [2026-11-06 `v8-arch-big-map-survey`](../../../dev_logs/2026_11_06_arch_v8_big_map_survey.zh-Hant.md)
 - [2026-11-06 `v8-arch-big-map-engine-grid`](../../../dev_logs/2026_11_06_arch_v8_big_map_engine_grid.zh-Hant.md)
 - [2026-11-06 `v8-arch-big-map-engine-format`](../../../dev_logs/2026_11_06_arch_v8_big_map_engine_format.zh-Hant.md)
+- [2026-11-06 `v8-arch-big-map-tool-chunked`（voxel 線）](../../../dev_logs/2026_11_06_tool_v8_voxel_map_tool_chunked.zh-Hant.md)

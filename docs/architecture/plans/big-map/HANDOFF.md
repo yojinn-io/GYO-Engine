@@ -72,6 +72,10 @@
 | `v8-arch-big-map-markers-owner` | 標記層 owner＝Engine 新模組 `GYO::MapMarkers`（只依賴 Base、Math）：點、盒、路徑，1/16 格整數座標，`id`／`kind`／`tags` 名字不透明；產品提供 `marker_kinds.json` 並拒絕不認得的 kind；Engine 文件與範例不出現玩法名詞。新 Subsystem 的 Architecture Delta 由 engine-map 批寫 7 項。 |
 | `v8-arch-big-map-greedy` | greedy 進工具的烘焙，掃描順序固定；碰撞盒改為區塊內合併。tool-chunked 批事前宣告量測（`pvp_corners` 與像建築的合成圖：四邊形數、盒子數、每區塊重烘時間、T-junction 目視）；工具 DI 3／DI 4 守衛的變更照 §14.4 取得使用者核准。 |
 | `v8-arch-big-map-lod` | v0.1 不做 LOD；Client 以 region 做視錐與距離剔除。product-arena-v3 批量 Client 畫面時間（km² 大小、像建築的合成圖、最壞角度），超過宣告值時才由工具烘 region 代理（RC）。 |
+| `v8-arch-big-map-product-order` | 2026-11-07。產品側的順序：`pa-broadphase`（撤 1024＋`StaticAabbGrid`，同一批；只撤上限留線性掃是 AGENTS §4 的 workaround）→ 產品線的 `pm-detect`、`pm-vertical`（角色移動的缺陷，**不在 big-map 下**，見 `docs/object_fps_pvp/plans/v8/movement-fix.md`）→ `scene v1`（原 arena v3）→ `pa-measure`（**km² 不縮**：使用者 2026-11-07 說明 biome 的 3～4 倍只是基礎格子，場景未算，仍按 big-map 尺度設計）。 |
+| `v8-arch-big-map-scale` | 2026-11-07。角色以公尺為權威（1.8 m；速度、跳高、眼高都是公尺）；地圖的比例用匯入時的 `cell_size` 對齊，**參照＝門高 2 m＝4 格**，cell 維持 0.5 m；**角色半徑 0.25 → 0.3 m**（0.25＝半格是「一格縫剛好塞進」的退化點，見試玩回饋）。半徑改在 `pm-vertical`。 |
+| `v8-arch-big-map-gravity` | 2026-11-07。「自然重力」的內容：去掉 y＝0 的隱藏地板（地板只來自地圖；掉出範圍的規則由產品定）、下落不被擦邊歸零、貼地吸附；**不做跨階**（維持「低於 r 的台階才能上」；風險：voxel 的 stair 半格 0.25 m 正好＝r，`pm-detect` 先量能不能上，不能就回來問）。實作在產品線 `pm-vertical`。 |
+| `v8-arch-map-scene-split` | 2026-11-07。**地圖＝幾何、場景＝放在幾何上的東西**，兩者分開（使用者：MC 能混是因為遊戲本身就是編輯器；多數遊戲有地圖不一定要編輯場景）。推論：arena v3 改名 **scene v1**＝「用哪張地圖、放了什麼（markers 檔屬於場景，**不在地圖目錄**；proposal §11.1 的 `markers.json` 位置以此為準）、規則」；一張地圖可配多個場景；**場景編輯器是另一個工具**，voxel 編輯器只編幾何（window 批重做不做 markers 放置 UI）；tool-chunked 放進 voxel_map_editor 的 markers 讀寫核心與 `--marker-kinds` 記為「待搬到場景編輯器」。互動物件、物品、技能、寵物、pv10 只寫需求紀錄（`docs/architecture/plans/scene/README.md`、`docs/object_fps_pvp/plans/v8/pv10-requirements.md`），不開卡（使用者：「這些需求先紀錄，目前要做的是把地圖處理好」）。 |
 | `v8-arch-big-map-marker-kinds-format` | `marker_kinds.json` 的**形式**由 Engine 擁有（`gyo.marker_kinds` v1：`schema`、`version`、`kinds` 1～256 個、K5 字元、嚴格遞增、文字 ≤ 64 KiB），**內容**由產品擁有；解析 `ParseMarkerKinds` 與對照 `UnknownMarkerKinds` 放 `GYO::MapMarkers`，由 tool-chunked 的 `-markers` 小批實作，並在其宣告列為 Engine 公開介面的追加。依據：Layers 表（格式描述一個資產的詞彙、名字不透明 → Engine），兩個讀者（產品、編輯器）共用一個驗證者。使用者 2026-11-06 在 voxel 線核准「寫進 `map-markers.md` 的 Kinds 節」；proposal §11.3 的「產品格式」以本決定為準。`map-markers.md` DI 3 的字句隨之擴大（PR #160 請使用者確認）。 |
 
 proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 §11.3 的範例名、§11.7 的 4 MB/s 外推、§6a 的「全圖模擬 AI」前提）。
@@ -207,11 +211,63 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 
 ## 之後（另案，不開卡）
 
+- 場景線（互動物件、物品、場景編輯器）與 pv10 的七項功能：需求紀錄在 `docs/architecture/plans/scene/README.md` 與 `docs/object_fps_pvp/plans/v8/pv10-requirements.md`；開工時先 survey（範圍寫在 scene/README）。
 - `MapMarkers.cpp` 的 `ParseDocument`：把 `KeyCountScan` 包進自己的區塊，掃描結束就釋放（審查者的建議，約 2 行）；深度 100 萬時峰值 221 MB → 141 MB（審查者的 `exp_scoped_scan/`）。做不做由 product-arena-v3 或下一次碰 MapMarkers 時決定。
 - 「解析的記憶體與文字長度成線性」若要成為約束，應寫成 Engine 資料契約模組（`StrictJson.hpp` 的使用者：`VoxelMesh`、`MapMarkers`、之後的 `AnimationEvents`）共用的約束，而不只升 `MapMarkers` 的 DI（審查者對 5a6eead1 的意見）。架構師的候選 Architecture Delta，定期掃描時提。
 - `GYO::Model` 的 `AnimationEvents.cpp:40` 改用 `StrictJson.hpp`。它的回呼有同樣的二次方（PR #161 的 U4）。
 - PR #161 審查者的 N3（極小半徑時候選邊際是否足夠）：Collision 的事，待使用者決定。
 
+## 觀測：產品的碰撞盒上限 1024（2026-11-06，voxel 線轉達使用者的要求）
+
+- `apps/object_fps_pvp/src/Pvp/Arena.cpp:44`：`walls.size() > 1024` 拒收；錯誤訊息只說 spawns，看不出真因。
+- 地圖：使用者給的 MagicaVoxel `biome.vox`（126×126×32，39,717 voxel，21 色），一次性腳本轉成 `gyo.voxel_grid`（cell 0.5 m，約 63 m 見方）。
+  區塊化產出 64 區塊、8,300 quads、1,518 colliders（區塊內合併）；v1 單檔 38,214 quads、1,260 colliders → 超過 1024，標準 Match 拒收。
+- 實驗（使用者同意，未提交，原始碼已還原）：上限暫改 2^20 後，Match 載入 biome、1～2 個 client 60 fps、最長幀 18～20 ms；Match 仍線性掃，tick 成本沒量。
+- 含意：63 m 見方就超過上限；1 km² 目標是它的上百倍。區塊內合併讓盒子多 20%，查詢成本要由 `StaticAabbGrid` 承擔（Engine 已有、產品尚無消費端）。
+  **撤上限不能單獨做**：只撤上限、留線性掃是 AGENTS §4 說的「變更量少的 workaround」；撤上限要和 broadphase 同一批。
+- 證據：主 checkout `build/evidence/tool-v8-voxel-map/window-1/biome/`（`vox_to_grid.py`、`biome.voxel_grid.json`、`map/`、`game/`、`logs-*`）。
+
+## 觀測：試玩回饋（2026-11-07，使用者用 biome 試玩後的七個問題）
+
+分類與根因候選的全文在架構師的 plan 檔第 12 節（會話的 scratchpad，未保存）；這裡只記結論。證據：主 checkout `build/evidence/tool-v8-voxel-map/window-1/biome/`。
+
+- 試玩設定：arena v2 `biome.json`（`width 63、depth 63、cell_size 1`，角色 `body_height 1.8、radius 0.25、eye_height 1.6`，幾何用 v1 單檔 1,260 盒、上限暫改的副本）；地圖 cell 0.5 m、64 m 見方、高 8 m。
+- **缺陷（產品移動，先檢測再修 → `movement-fix.md`）**：#1 跳到兩塊之間卡在空中不能跳；#6 空氣牆；#7 沒有自然重力。
+  從程式碼可證明的機制：y＝0 是三重保證的隱藏地板（`Movement.cpp:87-90`、`MoveCharacterBody:145`、`IsCharacterSupported:71`，x/z 無限延伸）；沒有跨階（高度 ≥ r 的台階＝硬牆）；
+  產品穿透解除只處理 depth＞1e-5 而 Engine 掃描對 depth＞1e-7 的任何位移回 fraction 0 → (1e-7, 1e-5] 全方向凍結；r 0.25＝半格，一格縫＝2r 兩側同時接觸來回彈；
+  解出的 y 與 desiredY 差＞1e-4 就把垂直速度歸零、懸空又不算支撐 → 永久懸空。arena 的 `width/depth` **不**限制移動（只畫棋盤地板與驗出生點），空氣牆不是邊界。
+  哪一個是現場的，要先有檢測（位置、接觸法線、depth 的紀錄＋重放）。
+- **可解釋**：#2「build 後更大」比的是 v1 單檔（1.4 MB，無 greedy，38k quads）對原始格子 140 KB；區塊化 404 KB（38% 縮排，單行約 252 KB）。烘焙產物本來就比格子大；JSON 是契約（`v8-arch-big-map-encoding`）。→ voxel 線 TODO：build 寫單行。
+  #4 目標地圖是 biome 的 3～4 倍且多層，但使用者說明那只是基礎格子 → 仍按 km² 設計。
+- **方向（已決定）**：#3 方塊外觀先接受現狀（TODO：光照／AO，render 線）；#5 比例 → `v8-arch-big-map-scale`；#7 的定義 → `v8-arch-big-map-gravity`。
+
+## product-arena-v3（核准版，2026-11-07；取代 2026-11-07 的草案）
+
+owner 是產品會話；上段（Match 判定、Collision 語意、資料契約）。順序見 `v8-arch-big-map-product-order`。驗證者 Fable／xhigh 比主會話強，使用者 2026-11-07 核准計畫時同意。
+
+```text
+v8-arch-big-map-product-arena-v3
+├── pa-broadphase   實作 Opus／high（查詢等價局部 xhigh）；審查 Opus（engine-grid 會話）；驗證 Fable／xhigh｜估 6～10 h｜現在開
+│                   Movement（supported、place、sweep）、ShotQuery、spawn 驗證改用 StaticAabbGrid（Match 與 Client 預測同一份）；
+│                   1024 → 宣告的預算（候選 2^20 個 colliders；Engine 的 2^22 cells、2^32 登記在內），錯誤訊息說出真因；
+│                   判定（先宣告）：與線性掃 bit-identical（既有 golden＋隨機 cross）、biome 1,518 盒與合成 10^5 盒的 tick 成本閾值。
+│                   單獨就能讓 biome 經 v1 進標準 Match。
+├── （產品線 movement-fix：pm-detect → pm-vertical，見 docs/object_fps_pvp/plans/v8/movement-fix.md；與 pa-broadphase 共用 Movement.cpp，排在它之後）
+├── scene v1        實作 Opus／high；審查 Opus；驗證 Fable／xhigh（契約）｜估 16～24 h
+│                   原 arena v3：`map`（地圖目錄）取代 `geometry`；場景檔帶 markers（spawns 搬進 markers；產品 `marker_kinds.json`＋UnknownMarkerKinds；
+│                   不認得的 kind＝載入錯誤）與規則；刪 arena 的 width／depth／cell_size（事實只在地圖，§9）；權威 digest＝場景 id＋index 文字 sha（index 已綁 region sha）；
+│                   Client 每 region 一個 GPU mesh＋視錐／距離剔除；pvp_arena、pvp_corners、biome 以 build-map 遷移；v1 單檔（`ParseVoxelMesh` grep＝0）與 arena v2 退役，§7 清理。
+│                   Delta 7 項、DI（含「地圖不知道場景的存在」）／RC；wire 不變。
+└── pa-measure      Opus／medium｜估 4～6 h
+                    宣告後量：Match 載入時間與記憶體（biome、合成 km²）、Client 畫面 p95（`v8-arch-big-map-lod` 要的 km² 合成圖、最壞角度）、
+                    區塊內合併的盒子增量對 broadphase 的影響。結果交使用者決定 LOD／背景串流 RC。
+```
+
+- 不做：活動範圍載入、遠處 AI 降頻、背景串流、LOD（各有 RC；量到才做）；互動物件、物品、pv10（需求紀錄）。
+- 停止條件照 AGENTS §14；每批 dev_log 在產品線；HANDOFF 由產品會話續記。
+
 ## 下一步
 
-Engine 的兩批（engine-grid、engine-format）已合併。`-tool-chunked` 由 voxel 線開（五個判斷 2026-11-06 使用者照建議定案；`marker_kinds` 的契約見決定 `v8-arch-big-map-marker-kinds-format`，先出事前宣告再動）。`-product-arena-v3` 何時開，待使用者決定。
+產品線（使用者 2026-11-07 在產品規劃會話決定）：lag-l2＋K8 的 L2 場次 → `v8-product-hitbox-rewind` → **`pa-broadphase`**（rewind 合併後；兩者都改 `ShotQuery`，不並行、hitbox 的流程不中斷）→ `pm-detect`。pa-broadphase 開卡前照慣例先出事前宣告。之後 `scene v1`、`pa-measure`。
+voxel 線：window 批重做（不做 markers 放置 UI）；它的 TODO 見 [todo](todo.zh-Hant.md)。
+場景、互動物件、pv10：只有需求紀錄（`docs/architecture/plans/scene/README.md`、`docs/object_fps_pvp/plans/v8/pv10-requirements.md`），使用者說開工才開 survey。
