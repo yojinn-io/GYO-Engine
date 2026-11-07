@@ -4,6 +4,20 @@
 #include "engine/math/linear/Vec3.hpp"
 #include <span>
 namespace fps {
+// What one MoveCharacterBody call met, for the optional movement diagnostics
+// (v8-product-pm-detect-diag). Filling it never changes the result.
+struct CharacterMoveDiagnostics final {
+    // Penetration resolution: how many pushes ran, and the deepest contact the
+    // first pass found (the embedding the body started in).
+    int penetrationPushes{};
+    Engine::Math::Vec3 deepestNormal{};
+    float deepestDepth{};
+    // Sweep and slide: how many passes hit something, and the last hit used.
+    int sweepHits{};
+    Engine::Math::Vec3 sweepNormal{};
+    float sweepFraction{};
+};
+
 // Pure product-local kinematic policy; Engine owns shape queries.
 // The walls are a StaticAabbGrid (the arena's, Arena::WallGrid): every function
 // returns, bit for bit, what the former linear scan of the walls in index order
@@ -13,7 +27,8 @@ namespace fps {
 [[nodiscard]] Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, Engine::Math::Vec3 displacement,
                                        const Engine::Collision::StaticAabbGrid &walls,
                                        std::span<const Engine::Collision::VerticalCapsule> actors,
-                                       bool constrainToFloor = false);
+                                       bool constrainToFloor = false,
+                                       CharacterMoveDiagnostics* diagnostics = nullptr);
 [[nodiscard]] bool
 CanPlaceCharacterBody(const Engine::Collision::VerticalCapsule &body,
                       const Engine::Collision::StaticAabbGrid &walls,

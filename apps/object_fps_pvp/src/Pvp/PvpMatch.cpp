@@ -1,3 +1,4 @@
+#include "RetroFPS/Pvp/MovementDiag.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/WireCounter.hpp"
@@ -565,7 +566,21 @@ void PvpMatch::Tick(const Engine::Runtime::TickContext& tick, const ShotReferenc
         command.sequence = sequence;
         ++connection.quality.resolved;
         if (source != MovementInputSource::Actual) ++connection.quality.substituted;
-        state = StepMovement(arena_, stance_, state, command);
+        if (MovementDiagEnabled()) {
+            MovementDiagEvent diag{.role = MovementDiagRole::Match};
+            state = StepMovement(arena_, stance_, state, command, &diag.step);
+            diag.playerId = id;
+            diag.lifeGeneration = state.lifeGeneration;
+            diag.epoch = state.movementEpoch;
+            diag.sequence = sequence;
+            diag.authorityTick = tick_;
+            diag.grounded = state.grounded;
+            diag.verticalVelocity = state.verticalVelocity;
+            diag.crouched = state.crouched;
+            RecordMovementDiag(diag);
+        } else {
+            state = StepMovement(arena_, stance_, state, command);
+        }
         const auto pending = ContiguousPending(state, connection);
         state.contiguousPendingCommands = pending;
         TraceMovement({.kind = MovementTraceKind::Resolved, .playerId = id,

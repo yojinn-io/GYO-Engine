@@ -1,7 +1,7 @@
-# v8-product-pm-detect-diag 事前宣告（草稿，待使用者核准）
+# v8-product-pm-detect-diag 事前宣告
 
 更新：2026-11-07。Owner：`object_fps_pvp`。來源：[movement-fix](movement-fix.md) 的 pm-detect 拆成兩半（使用者 2026-11-07，架構師轉達）：「診斷」在 11/9 場次之前做，「量、判定、修」在 lag-l2 之後。
-**狀態：草稿。** 判定與閾值在看到任何結果之前寫下，核准後不放寬（AGENTS §14.1）。
+**狀態：使用者 2026-11-07 照推薦核准**（`-diag-scope` (a) 每一步都記、`-radius` (a) 維持 0.25）。判定與閾值在看到任何結果之前寫下，核准後不放寬（AGENTS §14.1）。
 
 ## 0. 為什麼（Feature → Contract → Architecture）
 
@@ -41,6 +41,7 @@
 | D5 突變 | 新突變（診斷改到結果、漏記一步、在鎖裡寫檔、Client 記到重播、`dropped` 不計） | 全部 killed |
 | D6 L1 | 三平台 | 通過 |
 
+- D4 的量法（2026-11-07 補，跑之前寫下）：`MovementDiagTests.cpp` 的 D4（CI 跳過，`--no-skip` 執行），biome、Intel Mac、RelWithDebInfo。(i)「一 tick」：B4 的迴圈（4 人 × 20,000 tick，每人一步＋一發），一次不開診斷、一次開診斷並寫到檔案（每步建事件並 `RecordMovementDiag`），比 p99 的差。(ii)「鎖內」：`PvpMatch::Tick`（正式執行時在 authority 鎖內呼叫）4 人各送一個指令、20,000 tick，計時 `Tick` 本身，開與不開比 p99 的差。兩次的順序固定為先關後開，各跑一次。
 - D3 的「本機自動送指令」：用現有的 network probe 或測試裡的 IPC driver，不靠 GUI；具體做法在實作時選，寫進 dev_log，不改判定。
 - 件數的突き合わせ照 AGENTS §14：D2、D3 都先對件數，不一致就不判定。
 
