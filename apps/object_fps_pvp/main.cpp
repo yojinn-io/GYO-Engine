@@ -1,6 +1,7 @@
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "RetroFPS/Pvp/LogFile.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "RetroFPS/Pvp/MovementDiag.hpp"
 #include "RetroFPS/Pvp/TracePaths.hpp"
 #include "gyo/AppConfig.hpp"
 
@@ -74,13 +75,14 @@ int GyoMain(int argc, char* argv[]) {
     fps::pvp::PvpApplicationOptions options;
     options.title = Gyo::AppConfig::DisplayName;
     options.gpuDriver = GYO_DEFAULT_GPU_DRIVER;
-    std::filesystem::path movementTrace, logPath;
+    std::filesystem::path movementTrace, logPath, movementDiag;
     bool gatewayFromArgument = false;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument = argv[index];
         if (argument == "--help") {
             ClientLog(LogLevel::Info, "%s [--gpu-driver auto|d3d12|vulkan|metal] [--gateway host:port] [--movement-trace path] "
-                    "[--log path (default: logs/client-<time>.log next to the executable)] [--text-input-trace]",
+                    "[--log path (default: logs/client-<time>.log next to the executable)] [--text-input-trace] "
+                    "[--movement-diag path]",
                     Gyo::AppConfig::DisplayName);
             return 0;
         }
@@ -91,7 +93,8 @@ int GyoMain(int argc, char* argv[]) {
         } else if (argument == "--gateway" && index + 1 < argc) {
             options.gateway = argv[++index];
             gatewayFromArgument = true;
-        } else if ((argument == "--movement-trace" || argument == "--log") && index + 1 < argc) {
+        } else if ((argument == "--movement-trace" || argument == "--log" || argument == "--movement-diag") &&
+                   index + 1 < argc) {
             // SDL hands main UTF-8 arguments; text that is not UTF-8 is refused, not guessed.
             auto path = Engine::Os::Files::PathFromUtf8(argv[++index]);
             if (!path) {
@@ -100,6 +103,7 @@ int GyoMain(int argc, char* argv[]) {
                 return 2;
             }
             if (argument == "--log") logPath = std::move(*path);
+            else if (argument == "--movement-diag") movementDiag = std::move(*path);
             else movementTrace = std::move(*path);
         } else {
             ClientLog(LogLevel::Error, "Unknown or incomplete option: %s", argv[index]);
@@ -108,6 +112,7 @@ int GyoMain(int argc, char* argv[]) {
     }
     // A restart never truncates an earlier trace (D191): the next free name.
     movementTrace = fps::pvp::FreshTracePath(movementTrace);
+    movementDiag = fps::pvp::FreshTracePath(movementDiag);
     const auto baseDirectory = Engine::Platform::Sdl::BaseDirectory();
     if (!baseDirectory) {
         ClientLog(LogLevel::Error, "Cannot locate executable directory");
@@ -149,6 +154,7 @@ int GyoMain(int argc, char* argv[]) {
     }
     try {
         fps::pvp::MovementTraceWriter trace(movementTrace);
+        fps::pvp::MovementDiagFile diag(movementDiag);
         int result{};
         {
             fps::pvp::PvpApplication application;

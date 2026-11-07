@@ -9263,6 +9263,56 @@
       "replace": "    if (false) {\n        error = \"Arena colliders do not fit the collision grid: \"",
       "check": "cpu",
       "expect": "refuses colliders too large"
+    },
+    {
+      "id": "pmd-diag-changes-result",
+      "batch": "v8-product-pm-detect-diag",
+      "what": "Filling the diagnostics moves the body",
+      "file": "apps/object_fps_pvp/src/Pvp/Movement.cpp",
+      "find": "        diagnostics->after = result.position;",
+      "replace": "        diagnostics->after = result.position;\n        result.position.y += 0.001F;",
+      "check": "cpu",
+      "expect": "never change a step"
+    },
+    {
+      "id": "pmd-match-skips-step",
+      "batch": "v8-product-pm-detect-diag",
+      "what": "The Match leaves some resolved steps out of the diagnostics",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            RecordMovementDiag(diag);\n        } else {\n            state = StepMovement(arena_, stance_, state, command);",
+      "replace": "            if (sequence % 7 != 0) RecordMovementDiag(diag);\n        } else {\n            state = StepMovement(arena_, stance_, state, command);",
+      "check": "cpu",
+      "expect": "one line per resolved step"
+    },
+    {
+      "id": "pmd-client-records-replay",
+      "batch": "v8-product-pm-detect-diag",
+      "what": "The Client records the replays of a reconcile too",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "            for (const auto& command : pending_) {\n                current_ = StepMovement(arena_, stance_, current_, command);",
+      "replace": "            for (const auto& command : pending_) {\n                current_ = PredictStep(arena_, stance_, current_, command);",
+      "check": "cpu",
+      "expect": "first predictions, not replays"
+    },
+    {
+      "id": "pmd-dropped-uncounted",
+      "batch": "v8-product-pm-detect-diag",
+      "what": "A full queue loses events without counting them",
+      "file": "apps/object_fps_pvp/include/RetroFPS/Pvp/MovementDiag.hpp",
+      "find": "            if (closed_ || queue_.size() >= Capacity) {\n                ++dropped_;\n                return;",
+      "replace": "            if (closed_ || queue_.size() >= Capacity) {\n                return;",
+      "check": "cpu",
+      "expect": "count what a full queue loses"
+    },
+    {
+      "id": "pmd-client-first-unrecorded",
+      "batch": "v8-product-pm-detect-diag",
+      "what": "The Client records no first prediction",
+      "file": "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+      "find": "    RecordMovementDiag(diag);\n    return next;",
+      "replace": "    return next;",
+      "check": "cpu",
+      "expect": "first predictions, not replays"
     }
   ]
 }

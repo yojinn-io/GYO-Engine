@@ -9,6 +9,8 @@
 #   mac.sh s1-end   SESSION               writes s1_end=<now> to marks.txt (end of the continuous play)
 #   mac.sh judge    SESSION               lag_l2_summary.py on the collected session folder
 #
+# MOVEMENT_DIAG=1 also writes the Match's movement diagnostics (v8-product-pm-detect-diag;
+# a package from before it refuses the option).
 # ARENA_FILE picks the arena file in the package (default pvp_corners.json; the
 # 11/9 session uses biome.json, lag-l2 declaration revision 8): set it the same
 # for prepare and match.
@@ -57,7 +59,8 @@ match)
     # caffeinate: an idle Mac must not sleep during the session (nobody touches it for minutes).
     arena="$(arena_of "$pkg")"
     exec caffeinate -i "$pkg/bin/gyo_object_fps_pvp-match" --arena "$arena" --listen 127.0.0.1:27016 \
-        --log "$session/mac/match.log" --movement-trace "$session/mac/match-commands.jsonl"
+        --log "$session/mac/match.log" --movement-trace "$session/mac/match-commands.jsonl" \
+        ${MOVEMENT_DIAG:+--movement-diag "$session/mac/match-movement-diag.jsonl"}
     ;;
 gateway)
     session="$1"; gateway="$2"; mac_ip="$3"
@@ -78,7 +81,7 @@ judge)
     python3 "$here/../lag_l2_summary.py" "$session" --output "$session/lag_l2_summary.json"
     ;;
 *)
-    sed -n '2,16p' "$0" >&2
+    sed -n '2,18p' "$0" >&2
     exit 2
     ;;
 esac

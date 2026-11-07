@@ -176,7 +176,8 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hit-gui-aim`（P2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hit_gui_aim.zh-Hant.md) |
 | `v8-product-hit-gui-aim-sdl` | [2026-11-04](../../../dev_logs/2026_11_04_pvp_v8_hit_gui_aim_sdl.zh-Hant.md) |
 | `v8-product-event-sounds-migrate`（L1、實聽未做） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_event_sounds_migrate.zh-Hant.md) |
-| `v8-product-pa-broadphase`（審查、L1 未完） | [2026-11-07](../../../dev_logs/2026_11_07_pvp_v8_pa_broadphase.zh-Hant.md) |
+| `v8-product-pm-detect-diag`（審查、L1 未完） | [2026-11-07](../../../dev_logs/2026_11_07_pvp_v8_pm_detect_diag.zh-Hant.md) |
+| `v8-product-pa-broadphase` | [2026-11-07](../../../dev_logs/2026_11_07_pvp_v8_pa_broadphase.zh-Hant.md) |
 | `v8-product-hitbox-lag-l2`（工具；場次未跑） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_hitbox_lag_l2.zh-Hant.md) |
 | `v8-product-hitbox-lag-shadow` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_hitbox_lag_shadow.zh-Hant.md) |
 | `v8-product-ui-action-check` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md) |

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "RetroFPS/Collision/CharacterCollision.hpp"
 #include "RetroFPS/Pvp/Arena.hpp"
 #include "RetroFPS/Pvp/EntityId.hpp"
 #include "engine/math/scalar/Angle.hpp"
@@ -190,9 +191,23 @@ struct PlayerState final {
 [[nodiscard]] float StanceEyeHeight(const Arena& arena, const StanceRules& rules, bool crouched) noexcept;
 
 [[nodiscard]] bool ValidMovementCommand(const MovementCommand& command) noexcept;
+
+// What one movement step computed, for the optional movement diagnostics
+// (v8-product-pm-detect-diag): only filled when asked for, never read back.
+struct MovementStepDiagnostics final {
+    Engine::Math::Vec3 before{};
+    bool groundedBefore{};
+    bool supportedBefore{}; // grounded at the start and still supported there (before a jump leaves the ground)
+    float desiredY{};
+    Engine::Math::Vec3 after{}; // the grounded and vertical velocity after are the step's result
+    CharacterMoveDiagnostics move{};
+};
+
 // Shared product policy used by prediction, replay and authority. No clock or I/O.
+// diagnostics, when given, receives what the step computed; the result is the
+// same with or without it.
 [[nodiscard]] PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
-    const PlayerState& state, const MovementCommand& command);
+    const PlayerState& state, const MovementCommand& command, MovementStepDiagnostics* diagnostics = nullptr);
 // DefaultStanceRules; for callers without Match-delivered rules (tests).
 [[nodiscard]] PlayerState StepMovement(
     const Arena& arena, const PlayerState& state, const MovementCommand& command);

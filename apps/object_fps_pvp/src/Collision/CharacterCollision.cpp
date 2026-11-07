@@ -77,7 +77,7 @@ bool IsCharacterSupported(const Engine::Collision::VerticalCapsule &body,
 Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, Engine::Math::Vec3 displacement,
                          const Engine::Collision::StaticAabbGrid &walls,
                          std::span<const Engine::Collision::VerticalCapsule> actors,
-                         const bool constrainToFloor) {
+                         const bool constrainToFloor, CharacterMoveDiagnostics* diagnostics) {
     if (constrainToFloor)
         displacement.y = 0;
     // Resolve existing penetration (e.g. landing beside an actor), then sweep and slide.
@@ -109,6 +109,13 @@ Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, En
         }
         if (!deepest)
             break;
+        if (diagnostics) {
+            if (iteration == 0) {
+                diagnostics->deepestNormal = deepest->normal;
+                diagnostics->deepestDepth = deepest->penetrationDepth;
+            }
+            ++diagnostics->penetrationPushes;
+        }
         body.feet = body.feet + deepest->normal * (deepest->penetrationDepth + 0.0001F);
     }
     for (int iteration = 0; iteration < 5; ++iteration) {
@@ -141,6 +148,11 @@ Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, En
         body.feet = body.feet + d * fraction;
         if (!nearest)
             break;
+        if (diagnostics) {
+            ++diagnostics->sweepHits;
+            diagnostics->sweepNormal = nearest->normal;
+            diagnostics->sweepFraction = nearest->fraction;
+        }
         displacement = d * (1 - fraction);
         const auto n = nearest->normal;
         const float into = Engine::Math::Min(0.0F, Engine::Math::Dot(displacement, n));
