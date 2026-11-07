@@ -96,9 +96,9 @@ ShotHit QueryShot(const Arena& arena, const StanceRules& rules, const PlayerStat
                floor && *floor <= range) {
         closest = {ShotHitKind::World, 0, *floor};
     }
-    // The nearest wall; the linear scan replaced on "<=", so the highest index
-    // wins a tie. Every wall gives the same World result, so only the distance
-    // (and "<=" against the floor) decides.
+    // The nearest wall. Every wall gives the same World result, so the tie rule
+    // does not matter (HighestIndex matches the former "<=" scan); only the
+    // distance and "<=" against the floor decide.
     if (const auto wall = arena.WallGrid().RaycastNearest({origin, direction}, range,
                                                           Engine::Collision::TieBreak::HighestIndex);
         wall && wall->distance <= closest.distance)

@@ -43,8 +43,10 @@ struct Arena final {
     // Builds wallGrid from walls (cell length cellSize). walls and cellSize must
     // already be valid (Validate checks them first).
     void BuildWallGrid();
-    // The grid every wall query uses; asserts that it was built for these walls
-    // (an arena without walls needs no build).
+    // The grid every wall query uses. It asserts only that the grid has as many
+    // boxes as walls: changing a wall in place without BuildWallGrid goes
+    // unnoticed (only Load writes walls in the product). An arena without walls
+    // needs no build.
     [[nodiscard]] const Engine::Collision::StaticAabbGrid& WallGrid() const;
     // Arena files: schema 1 lists walls; schema 2 names a gyo.voxel_mesh next
     // to it ("geometry", a plain file name), whose collision boxes become the

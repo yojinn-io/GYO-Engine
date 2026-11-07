@@ -244,7 +244,7 @@ TEST_CASE("PvP wall queries on the grid equal the linear scans bit for bit (pa-b
             ++generated;
             const Engine::Collision::VerticalCapsule body{
                 {draw.Coordinate(0, 15), draw.Int(0, 2) == 0 ? 0.0F : draw.Coordinate(0, 4), draw.Coordinate(0, 15)},
-                draw.Int(0, 1) == 0 ? 1.8F : 1.2F, 0.25F};
+                draw.Int(0, 1) == 0 ? 1.8F : 1.2F, draw.Int(0, 3) == 0 ? 0.3F : 0.25F};
             const auto displacement = RandomDisplacement(draw);
             const bool floor = draw.Int(0, 1) == 0;
             bool same = fps::CanPlaceCharacterBody(body, grid, {}) == reference::CanPlace(body, arena.walls) &&
