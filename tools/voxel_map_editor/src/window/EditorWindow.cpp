@@ -868,14 +868,17 @@ private:
         }
         // The block's orientation where it would go (ve-feel-1 F3): its up and its front (+Z) as arrows.
         const bool places = tool_ == Tool::Brush || tool_ == Tool::Shape || tool_ == Tool::Line;
-        if (places && mode_ != EditMode::Sub && target) DrawOrientationArrows(view, *target);
+        // Paint keeps a cell's orientation, so in Paint the arrows show the cell's own (the user, 2026-11-07).
+        if (places && mode_ != EditMode::Sub && target)
+            DrawOrientationArrows(view, *target,
+                                  mode_ == EditMode::Paint ? Document().At(*target).orientation : orientation_);
         DrawAxes(view);
         list->PopClipRect();
     }
 
-    void DrawOrientationArrows(const View& view, const Vec3i& cell) const {
+    void DrawOrientationArrows(const View& view, const Vec3i& cell, const int orientation) const {
         const auto& document = Document();
-        const auto& m = OrientationMatrix(static_cast<std::size_t>(orientation_));
+        const auto& m = OrientationMatrix(static_cast<std::size_t>(orientation));
         const auto turned = [&m](const Vec3i local) {
             std::array<float, 3> r{};
             for (std::size_t row = 0; row < 3; ++row)
