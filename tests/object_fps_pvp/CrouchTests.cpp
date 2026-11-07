@@ -27,6 +27,7 @@ Arena CrouchArena() {
         {{6, 1.5F, 0}, {8, 3, 12}},
     };
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 9}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

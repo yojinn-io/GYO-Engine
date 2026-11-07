@@ -91,3 +91,10 @@ protocol-v9 第 113 行：τ＝clamp(view_tick/65536, J−R, J)，R≤15（`maxi
    - 新增限界：Client 的 `PvP summary` 每秒寫一次，離開對局時最後不滿 1 秒的那一段不會寫出；離開前最後 1 秒內的射擊會讓 S2 不一致。場次腳本要求「停止射擊與換彈至少 3 秒後才離開」（同 lan15）。K8 的斷線也算在全場的對帳裡，造成不一致時 R 不給，由你判斷。
 5. 2026-11-05（看到任何場次結果之前，場次腳本的審查後）：修正修訂 4 最後一句的說法。K8 的斷線若超過 5 秒，Gateway 讓舊的 id 逾時，那個 id 不進 K1、K2（lan15 的 `normal_leavers` 排除它）；重新加入的新 id 照常對帳。全場都算的只有 `trace_end` 的 `records`、`dropped`、`view_tick_invalid`。手冊要求斷線一直持續到回到 Lobby。
 6. 2026-11-05（看到任何場次結果之前）：PR 的 L1 不產生套件（`Trial packages` 只在 PR 有 `package` 標籤或手動執行時跑）。改用合併後 master 的整合建置的套件；判定不變。
+7. 2026-11-05（看到任何場次結果之前）：master 的整合建置（run `42031502557`，commit `54948874`）沒有 macos-x64 套件（只有 windows-x64、linux-x64、macos-arm64）。Intel Mac 的 Match 改用同一個 commit 在本機的建置，照發行包的結構組成 `PKG`（`build_metadata.json` 寫 commit 與「本機建置」）；Windows 用該 run 的 windows-x64 套件。判定不變。
+8. 2026-11-07（看到任何場次結果之前）：使用者決定 11/9 的場次用大地圖 biome、2～3 人（第 3 台 Windows `win3`），現場沒有網路，而且不能讓 lag-l2 卡住其他任務。biome 有 1,260 個碰撞盒，舊的 Match 以 1024 上限拒收，所以先做 `v8-product-pa-broadphase`（[宣告](v8-product-pa-broadphase-declaration.md)）。
+   - 程式改為 pa-broadphase 的 PR 合併後的 master commit：Windows 用那個 commit 的 master 整合建置的 windows-x64 套件；Intel Mac 的 Match 與 Gateway 用同一個 commit 的本機建置（同修訂 7 的做法）。run 編號、commit、SHA-256 開場前記到 HANDOFF。
+   - 地圖改為 `biome_trial`（`maps/biome.json`），`mac.sh` 用 `ARENA_FILE=biome.json` 選它。
+   - 人數 2～3 人；S1 的門檻不變（區間內有效 Shot ≥500，至少 2 人各 ≥100），S2、R1、R2 不變。
+   - 退路：pa-broadphase 在 11/8 晚上前沒合併，就照修訂 7 的 kit（`54948874`、`pvp_corners`）跑，人數照樣 2～3 人。
+   - 已知風險：biome 上的移動缺陷（卡在空中、空氣牆；`pm-detect` 之前）可能讓射擊數不足，S1 不成立時照本文不重跑。

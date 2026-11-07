@@ -26,6 +26,7 @@ Arena RecorderArena() {
     arena.walls = {{{-1, 0, -1}, {0, 3, 31}}, {{30, 0, -1}, {31, 3, 31}},
                    {{0, 0, -1}, {30, 3, 0}}, {{0, 0, 30}, {30, 3, 31}}};
     arena.spawns = {{{2, 0, 2}, 0}, {{20, 0, 2}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

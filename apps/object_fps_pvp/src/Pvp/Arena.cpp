@@ -6,12 +6,15 @@
 #include "engine/base/Fnv1a.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/base/Error.hpp"
+#include "engine/base/Assert.hpp"
 #include "engine/os/Files.hpp"
 
 #include <nlohmann/json.hpp>
 #include <bit>
 #include <cmath>
+#include <span>
 #include <stdexcept>
+#include <string>
 
 namespace fps::pvp {
 namespace {
@@ -31,7 +34,13 @@ Engine::Math::Vec3 ReadPosition(const nlohmann::json& value) {
 }
 }
 
-bool Arena::Validate(std::string& error) const {
+namespace {
+// Every Validate rule; on success, the wall grid built while checking the
+// spawns, which Load keeps (one build per load).
+std::shared_ptr<const Engine::Collision::StaticAabbGrid> CheckedWallGrid(const Arena& arena, std::string& error) {
+    const auto& [version, id, width, depth, cellSize, movementSpeed, bodyHeight, radius, eyeHeight,
+        walls, spawns, jumpHeight, gravity, wallGrid] = arena;
+    (void)wallGrid;
     error.clear();
     const auto positive = [](float value) { return std::isfinite(value) && value > 0; };
     if (version != 1 || id.empty() || id.size() > 64 ||
@@ -41,9 +50,14 @@ bool Arena::Validate(std::string& error) const {
         !std::isfinite(2 * gravity * jumpHeight) ||
         !Engine::Collision::IsValid(Engine::Collision::VerticalCapsule{{}, bodyHeight, radius}) ||
         eyeHeight > bodyHeight ||
-        spawns.size() < MinimumArenaSpawns || spawns.size() > MaximumArenaSpawns || walls.size() > 1024) {
+        spawns.size() < MinimumArenaSpawns || spawns.size() > MaximumArenaSpawns) {
         error = "Arena v1 requires an id, valid dimensions/movement settings and 2-64 spawns";
-        return false;
+        return nullptr;
+    }
+    if (walls.size() > MaximumArenaColliders) {
+        error = "Arena has " + std::to_string(walls.size()) + " colliders; at most " +
+                std::to_string(MaximumArenaColliders);
+        return nullptr;
     }
     for (const auto& wall : walls) {
         // Engine validity allows zero thickness; an empty wall is a content error.
@@ -51,25 +65,36 @@ bool Arena::Validate(std::string& error) const {
             wall.minimum.x >= wall.maximum.x || wall.minimum.y >= wall.maximum.y ||
             wall.minimum.z >= wall.maximum.z) {
             error = "Arena wall must be a finite non-empty AABB";
-            return false;
+            return nullptr;
         }
     }
+    // Content can exceed the grid's limits (registrations): an error, never
+    // the constructor's assert. The spawn rules ask the grid Movement uses.
+    auto built = Engine::Collision::StaticAabbGrid::Build(walls, cellSize);
+    if (!built) {
+        error = "Arena colliders do not fit the collision grid: " + Engine::Base::Describe(built.error());
+        return nullptr;
+    }
+    auto grid = std::make_shared<const Engine::Collision::StaticAabbGrid>(std::move(*built));
     std::vector<Engine::Collision::VerticalCapsule> bodies;
     for (const auto& spawn : spawns) {
         const Engine::Collision::VerticalCapsule body{spawn.position, bodyHeight, radius};
         // On the floor, or on a wall top where Movement would ground it (one rule).
         if (!Engine::Math::IsFinite(body.feet) || spawn.position.y < 0 ||
-            (spawn.position.y != 0 && !IsCharacterSupported(body, walls)) || !std::isfinite(spawn.yaw) ||
+            (spawn.position.y != 0 && !IsCharacterSupported(body, *grid)) || !std::isfinite(spawn.yaw) ||
             spawn.position.x < radius || spawn.position.x > width - radius ||
             spawn.position.z < radius || spawn.position.z > depth - radius ||
-            !CanPlaceCharacterBody(body, walls, bodies)) {
+            !CanPlaceCharacterBody(body, *grid, bodies)) {
             error = "Arena spawn must stand on the floor or a wall top, inside the arena and free of walls/other spawns";
-            return false;
+            return nullptr;
         }
         bodies.push_back(body);
     }
-    return true;
+    return grid;
 }
+} // namespace
+
+bool Arena::Validate(std::string& error) const { return CheckedWallGrid(*this, error) != nullptr; }
 
 std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string& error,
                                  Engine::VoxelMesh::VoxelMeshGeometry* geometry) {
@@ -123,7 +148,8 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
         }
         for (const auto& spawn : json.at("spawns"))
             arena.spawns.push_back({ReadPosition(spawn.at("position")), spawn.at("yaw").get<float>()});
-        if (!arena.Validate(error)) return std::nullopt;
+        arena.wallGrid = CheckedWallGrid(arena, error);
+        if (!arena.wallGrid) return std::nullopt;
         // Handed out only with an arena that loaded: a failure leaves it empty.
         if (geometry) *geometry = std::move(baked);
         return arena;
@@ -133,11 +159,25 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
     }
 }
 
+void Arena::BuildWallGrid() {
+    wallGrid = std::make_shared<const Engine::Collision::StaticAabbGrid>(walls, cellSize);
+}
+
+const Engine::Collision::StaticAabbGrid& Arena::WallGrid() const {
+    // An arena without walls needs no build (synthetic arenas in tests).
+    static const Engine::Collision::StaticAabbGrid none({}, 1.0F);
+    if (!wallGrid && walls.empty()) return none;
+    GYO_ASSERT(wallGrid != nullptr && wallGrid->Size() == walls.size());
+    return *wallGrid;
+}
+
 std::uint64_t ArenaContentDigest(const Arena& arena) {
-    // Thirteen names: adding, removing or reordering a member of Arena breaks
+    // Fourteen names: adding, removing or reordering a member of Arena breaks
     // this binding, so the canonical form changes with it (a wire change).
+    // wallGrid is derived from walls and is not part of the content.
     const auto& [version, id, width, depth, cellSize, movementSpeed, bodyHeight, radius, eyeHeight,
-        walls, spawns, jumpHeight, gravity] = arena;
+        walls, spawns, jumpHeight, gravity, wallGrid] = arena;
+    (void)wallGrid;
     std::string bytes;
     const auto u32 = [&](std::uint32_t value) {
         for (int shift = 24; shift >= 0; shift -= 8) bytes.push_back(static_cast<char>((value >> shift) & 0xffU));

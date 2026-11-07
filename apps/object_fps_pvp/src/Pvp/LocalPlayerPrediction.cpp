@@ -456,7 +456,7 @@ LocalRenderSample InterpolateLocalPresentation(const Arena& arena, const LocalPr
     // offset cannot carry the camera through a wall, including around corners.
     auto render = MoveCharacterBody(
         {position, state.bodyHeight > 0 ? state.bodyHeight : arena.bodyHeight, arena.radius},
-        target - position, arena.walls, {}, false);
+        target - position, arena.WallGrid(), {}, false);
     render.y = Engine::Math::Max(0.0F, render.y);
     return {render, render - base, alpha};
 }

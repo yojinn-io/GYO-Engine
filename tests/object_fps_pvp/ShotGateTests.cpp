@@ -94,6 +94,7 @@ Arena GateArena() {
     arena.id = "synthetic_gate_arena";
     arena.width = arena.depth = 20;
     arena.spawns = {{{2, 0, 2}, 0}, {{2, 0, 8}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 

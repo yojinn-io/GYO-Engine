@@ -34,6 +34,7 @@ fps::pvp::Arena TestArena() {
         {{5, 0, 4}, {6, 3, 8}},
     };
     arena.spawns = {{{2, 0, 2}, 0}, {{9, 0, 2}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 
@@ -1072,6 +1073,7 @@ TEST_CASE("PvP actual jump is never repeated by held or neutral command substitu
     using namespace fps::pvp;
     auto arena = TestArena();
     arena.walls.push_back({{0, 2, 0}, {12, 2.2F, 12}});
+    arena.BuildWallGrid();
     PvpMatch match(arena);
     std::string error;
     REQUIRE(match.Join(1, error));
@@ -1095,13 +1097,14 @@ TEST_CASE("PvP jump sweeps the full capsule against ceiling walls and corners") 
     using namespace fps::pvp;
     auto arena = TestArena();
     arena.walls.push_back({{0, 2, 0}, {12, 2.2F, 12}});
+    arena.BuildWallGrid();
     PlayerState state{1, {4.6F, 0, 5}};
     bool touchedCeiling{};
     for (std::uint64_t sequence = 1; sequence <= 90; ++sequence) {
         state = StepMovement(arena, state, {sequence, sequence < 40 ? 0.0F : -1.0F,
             1, 0, 0, sequence == 1});
         CHECK(fps::CanPlaceCharacterBody({{state.position.x, state.position.y, state.position.z},
-            arena.bodyHeight, arena.radius}, arena.walls, {}));
+            arena.bodyHeight, arena.radius}, arena.WallGrid(), {}));
         CHECK(state.position.y >= 0);
         CHECK(state.position.y <= 0.2001F);
         if (state.position.y > 0.19F && state.verticalVelocity == 0) {
@@ -1120,12 +1123,13 @@ TEST_CASE("PvP capsule lands on a raised wall top and falls when walking off its
     using namespace fps::pvp;
     auto arena = TestArena();
     arena.walls.push_back({{1, 0, 3}, {4, 0.3F, 4}});
+    arena.BuildWallGrid();
     PlayerState state{1, {2, 0, 2.5F}};
     bool landedOnTop{};
     for (std::uint64_t sequence = 1; sequence <= 75; ++sequence) {
         state = StepMovement(arena, state, {sequence, 1, 0, 0, 0, sequence == 1});
         CHECK(fps::CanPlaceCharacterBody({{state.position.x, state.position.y, state.position.z},
-            arena.bodyHeight, arena.radius}, arena.walls, {}));
+            arena.bodyHeight, arena.radius}, arena.WallGrid(), {}));
         if (state.grounded && state.position.y > 0.29F) {
             landedOnTop = true;
             CHECK(state.verticalVelocity == 0);

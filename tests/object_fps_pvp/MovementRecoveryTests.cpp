@@ -33,6 +33,7 @@ Arena RecoveryArena() {
     arena.id = "synthetic_recovery_arena";
     arena.width = arena.depth = 1000;
     arena.spawns = {{{2, 0, 2}, 0}, {{20, 0, 2}, 0}};
+    arena.BuildWallGrid();
     return arena;
 }
 struct RecoveryResult {

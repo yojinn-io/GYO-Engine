@@ -35,6 +35,8 @@ SOURCES = REPOSITORY / 'tests' / 'object_fps_pvp' / 'asset_sources.json'
 RETAINED = {
     'object_fps_pvp.arena': 'loaded by path (maps/pvp_arena.json) by the Match and, through maps/arenas.json, by the Client',
     'object_fps_pvp.arena.corners': 'loaded by path (maps/pvp_corners.json) by the Match and, through maps/arenas.json, by the Client',
+    'object_fps_pvp.arena.biome': 'loaded by path (maps/biome.json) by the Match and, through maps/arenas.json, by the Client',
+    'object_fps_pvp.arena.biome.mesh': 'loaded by path (maps/biome.voxel_mesh.json, the geometry maps/biome.json names) by the Match and the Client',
     'object_fps_pvp.arenas': 'loaded by path (maps/arenas.json): the arenas the Client installs',
     'object_fps_pvp.arena.mesh': 'loaded by path (maps/pvp_arena.voxel_mesh.json, the geometry maps/pvp_arena.json names) by the Match and the Client',
     'object_fps_pvp.arena.corners.mesh': 'loaded by path (maps/pvp_corners.voxel_mesh.json, the geometry maps/pvp_corners.json names) by the Match and the Client',

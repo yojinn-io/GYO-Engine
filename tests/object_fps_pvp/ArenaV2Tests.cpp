@@ -236,12 +236,12 @@ TEST_CASE("A spawn stands on the floor or on a wall top, as movement grounds it"
     const PlayerState standing = StepMovement(arena, PlayerState{1, onPillar, 0}, MovementCommand{1});
     CHECK(standing.grounded);
     CHECK(standing.position.y == 2);
-    CHECK(fps::IsCharacterSupported({onPillar, arena.bodyHeight, arena.radius}, arena.walls));
+    CHECK(fps::IsCharacterSupported({onPillar, arena.bodyHeight, arena.radius}, arena.WallGrid()));
 
     arena.spawns[1] = {{5, 1, 15}, 0}; // in the air
     CHECK_FALSE(arena.Validate(error));
     CHECK(error.find("wall top") != std::string::npos);
-    CHECK_FALSE(fps::IsCharacterSupported({{5, 1, 15}, arena.bodyHeight, arena.radius}, arena.walls));
+    CHECK_FALSE(fps::IsCharacterSupported({{5, 1, 15}, arena.bodyHeight, arena.radius}, arena.WallGrid()));
     arena.spawns[1] = {{5, -1, 15}, 0}; // below the floor
     CHECK_FALSE(arena.Validate(error));
     CHECK(error.find("wall top") != std::string::npos);

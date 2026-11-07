@@ -136,6 +136,10 @@ int main(int argc,char** argv) {
         // v8-product-hitbox-shot S3: the Match judges by the shapes on the posed body.
         const auto hitModel=fps::pvp::MakePosedPlayerHitModel(pose,*hitbox);
         std::clog<<"[ObjectFPS/PvP Match] hit model=posed shapes="<<hitbox->shapes.size()<<'\n';
+        // v8-product-pa-broadphase: a cell four or more times the given one is
+        // reported to the user (collision.md, Replacement Criteria 5).
+        std::clog<<"[ObjectFPS/PvP Match] wall grid colliders="<<arena->walls.size()
+                 <<" cell="<<arena->WallGrid().CellLength()<<" given="<<arena->cellSize<<'\n';
         fps::pvp::MatchRuntimeHost runtime(*arena,std::chrono::steady_clock::now,*stance,*animation,hitModel);
         fps::pvp::IpcHost ipc(runtime,*arena,animationDigest);
         if(!runtime.Start(error)){std::cerr<<error<<'\n';return 1;}

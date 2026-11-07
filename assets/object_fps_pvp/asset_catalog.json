@@ -9,6 +9,8 @@
     { "id": "object_fps_pvp.arena.corners", "type": "text", "path": "maps/pvp_corners.json" },
     { "id": "object_fps_pvp.arena.mesh", "type": "text", "path": "maps/pvp_arena.voxel_mesh.json" },
     { "id": "object_fps_pvp.arena.corners.mesh", "type": "text", "path": "maps/pvp_corners.voxel_mesh.json" },
+    { "id": "object_fps_pvp.arena.biome", "type": "text", "path": "maps/biome.json" },
+    { "id": "object_fps_pvp.arena.biome.mesh", "type": "text", "path": "maps/biome.voxel_mesh.json" },
     { "id": "object_fps_pvp.arenas", "type": "text", "path": "maps/arenas.json" },
     { "id": "object_fps_pvp.movement_rules", "type": "text", "path": "rules/movement_rules.json" },
     { "id": "object_fps_pvp.ui.pvp_lobby", "type": "text", "path": "ui/pvp_lobby.json" },

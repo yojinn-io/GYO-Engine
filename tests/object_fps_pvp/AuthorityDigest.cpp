@@ -241,6 +241,7 @@ Arena Boxed(std::string id, float width, float depth) {
     arena.depth = depth;
     arena.walls = {{{-1, 0, -1}, {0, 3, depth + 1}}, {{width, 0, -1}, {width + 1, 3, depth + 1}},
                    {{0, 0, -1}, {width, 3, 0}}, {{0, 0, depth}, {width, 3, depth + 1}}};
+    arena.BuildWallGrid();
     return arena;
 }
 
@@ -251,11 +252,13 @@ Arena NamedArena(std::string_view name) {
         auto arena = Boxed("digest_pillar", 12, 12);
         arena.walls.push_back({{5, 0, 5}, {7, 3, 7}});
         arena.spawns = {{{6, 0, 2}, 0}, {{6, 0, 10}, 0}};
+        arena.BuildWallGrid();
         return arena;
     }
     if (name == "corridor") {
         auto arena = Boxed("digest_corridor", 6, 20);
         arena.spawns = {{{3, 0, 2}, 0}, {{3, 0, 12}, 0}};
+        arena.BuildWallGrid();
         return arena;
     }
     if (name == "slab") {
@@ -264,6 +267,7 @@ Arena NamedArena(std::string_view name) {
         auto arena = Boxed("digest_slab", 12, 12);
         arena.walls.push_back({{6, 1.5F, 0}, {8, 3, 12}});
         arena.spawns = {{{3, 0, 6}, 0}, {{10, 0, 6}, 0}};
+        arena.BuildWallGrid();
         return arena;
     }
     if (name == "corner") {
@@ -271,6 +275,7 @@ Arena NamedArena(std::string_view name) {
         arena.walls.push_back({{4, 0, 6}, {10, 3, 7}});
         arena.walls.push_back({{9, 0, 2}, {10, 3, 6}});
         arena.spawns = {{{6, 0, 3}, 0}, {{2, 0, 10}, 0}};
+        arena.BuildWallGrid();
         return arena;
     }
     throw std::runtime_error("Unknown arena " + std::string(name));

@@ -106,6 +106,7 @@ Arena WithSpawns(std::size_t count) {
     // An 8 x 8 grid two metres apart, clear of the fixture walls.
     for (std::size_t i = 0; i < count; ++i)
         arena.spawns.push_back({{1.5F + 2.0F * static_cast<float>(i % 8), 0, 0.6F + 1.4F * static_cast<float>(i / 8)}, 0});
+    arena.BuildWallGrid();
     return arena;
 }
 
@@ -259,13 +260,14 @@ TEST_CASE("The release arena puts its four spawns in the corners, facing the cen
     CHECK(Same(second->position, expected[1]));
 }
 
-TEST_CASE("A Client installs the arenas of its list: the training arena first, then the release arena") {
+TEST_CASE("A Client installs the arenas of its list: the training arena first, then the release arenas") {
     std::string error;
     const auto installed = LoadInstalledArenas(ProductAssets() / "arenas.json", error);
     REQUIRE_MESSAGE(installed, error);
-    REQUIRE(installed->size() == 2);
+    REQUIRE(installed->size() == 3);
     CHECK((*installed)[0].id == "pvp_training_v1");
     CHECK((*installed)[1].id == "pvp_corners_v1");
+    CHECK((*installed)[2].id == "biome_trial"); // v8-product-pa-broadphase: over the former 1024 colliders
 }
 
 // os-files-write: a release unpacked into a deep folder (P about 235 and
@@ -287,12 +289,12 @@ TEST_CASE("A Client installs its arenas, and a Match writes its traces, in a fol
     std::filesystem::create_directories(setup(deep));
     // Schema 2 arenas name their baked maps next to them (v8-product-arena-v2).
     for (const char* name : {"arenas.json", "pvp_arena.json", "pvp_corners.json", "pvp_arena.voxel_mesh.json",
-                             "pvp_corners.voxel_mesh.json"})
+                             "pvp_corners.voxel_mesh.json", "biome.json", "biome.voxel_mesh.json"})
         std::filesystem::copy_file(ProductAssets() / name, setup(deep / name));
     std::string error;
     const auto installed = LoadInstalledArenas(deep / "arenas.json", error);
     CHECK_MESSAGE(installed, error);
-    if (installed) CHECK(installed->size() == 2);
+    if (installed) CHECK(installed->size() == 3);
     {
         MatchShotTraceFile shots(deep / "match-shots.jsonl");
         shots.Finish({});

@@ -9049,7 +9049,7 @@
       "batch": "v8-product-arena-v2",
       "what": "A spawn in the air is accepted",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, walls)) || !std::isfinite(spawn.yaw) ||",
+      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, *grid)) || !std::isfinite(spawn.yaw) ||",
       "replace": "            false || !std::isfinite(spawn.yaw) ||",
       "check": "cpu",
       "expect": "wall top"
@@ -9059,7 +9059,7 @@
       "batch": "v8-product-arena-v2",
       "what": "The spawn rule keeps its own copy of support (any height up to 2 counts)",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, walls)) || !std::isfinite(spawn.yaw) ||",
+      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, *grid)) || !std::isfinite(spawn.yaw) ||",
       "replace": "            (spawn.position.y != 0 && !(spawn.position.y <= 2.0001F)) || !std::isfinite(spawn.yaw) ||",
       "check": "cpu",
       "expect": "wall top"
@@ -9079,8 +9079,8 @@
       "batch": "v8-product-arena-v2",
       "what": "Grounding on a wall top needs a steeper contact than a floor gives",
       "file": "apps/object_fps_pvp/src/Collision/CharacterCollision.cpp",
-      "find": "        if (contact && contact->normal.y > 0.5F) return true;",
-      "replace": "        if (contact && contact->normal.y > 1.5F) return true;",
+      "find": "        if (hit.contact.normal.y > 0.5F) return true;",
+      "replace": "        if (hit.contact.normal.y > 1.5F) return true;",
       "check": "cpu",
       "expect": "wall top"
     },
@@ -9119,7 +9119,7 @@
       "batch": "v8-product-arena-v2",
       "what": "Movement keeps its own copy of support, stricter at the edge (normal.y > 0.9)",
       "file": "apps/object_fps_pvp/src/Pvp/Movement.cpp",
-      "find": "        return IsCharacterSupported({feet, bodyHeight, arena.radius}, arena.walls);",
+      "find": "        return IsCharacterSupported({feet, bodyHeight, arena.radius}, arena.WallGrid());",
       "replace": "        if (feet.y <= 0.0001F) return true;\n        for (const auto& wall : arena.walls) {\n            const auto c = Engine::Collision::SweepVerticalCapsuleAgainstAabb({feet, bodyHeight, arena.radius}, {0, -0.002F, 0}, wall);\n            if (c && c->normal.y > 0.9F) return true;\n        }\n        return false;",
       "check": "cpu",
       "expect": "At the pillar"
@@ -9139,8 +9139,8 @@
       "batch": "v8-product-arena-v2",
       "what": "A load that fails still hands out the geometry",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "        if (!arena.Validate(error)) return std::nullopt;\n        // Handed out only with an arena that loaded: a failure leaves it empty.\n        if (geometry) *geometry = std::move(baked);",
-      "replace": "        if (geometry) *geometry = std::move(baked);\n        if (!arena.Validate(error)) return std::nullopt;",
+      "find": "        arena.wallGrid = CheckedWallGrid(arena, error);\n        if (!arena.wallGrid) return std::nullopt;\n        // Handed out only with an arena that loaded: a failure leaves it empty.\n        if (geometry) *geometry = std::move(baked);",
+      "replace": "        if (geometry) *geometry = std::move(baked);\n        arena.wallGrid = CheckedWallGrid(arena, error);\n        if (!arena.wallGrid) return std::nullopt;",
       "check": "cpu",
       "expect": "Arena schema 2 takes its walls"
     },
@@ -9193,6 +9193,76 @@
       "replace": "{ return ~value.playerId; }",
       "check": "cpu",
       "expect": "Entity columns insert at the ordered position|GYO_ASSERT failed: row"
+    },
+    {
+      "id": "pab-sweep-highest-index",
+      "batch": "v8-product-pa-broadphase",
+      "what": "The sliding sweep keeps the last of equally near walls (the grid tie rule reversed)",
+      "file": "apps/object_fps_pvp/src/Collision/CharacterCollision.cpp",
+      "find": "        for (const auto &hit : walls.SweepVerticalCapsuleAll(body, d))\n            consider(std::optional<Engine::Collision::Contact>{hit.contact});",
+      "replace": "        auto all = walls.SweepVerticalCapsuleAll(body, d);\n        for (auto it = all.rbegin(); it != all.rend(); ++it)\n            consider(std::optional<Engine::Collision::Contact>{it->contact});",
+      "check": "cpu",
+      "expect": "linear scans bit for bit"
+    },
+    {
+      "id": "pab-sweep-nearest-before-filter",
+      "batch": "v8-product-pa-broadphase",
+      "what": "The sliding sweep asks the grid for the nearest wall, so the floor filter drops it instead of the next one",
+      "file": "apps/object_fps_pvp/src/Collision/CharacterCollision.cpp",
+      "find": "        for (const auto &hit : walls.SweepVerticalCapsuleAll(body, d))\n            consider(std::optional<Engine::Collision::Contact>{hit.contact});",
+      "replace": "        if (const auto hit = walls.SweepVerticalCapsuleNearest(body, d, Engine::Collision::TieBreak::LowestIndex))\n            consider(std::optional<Engine::Collision::Contact>{hit->contact});",
+      "check": "cpu",
+      "expect": "linear scans bit for bit"
+    },
+    {
+      "id": "pab-penetration-highest-index",
+      "batch": "v8-product-pa-broadphase",
+      "what": "Penetration keeps the last of equally deep walls",
+      "file": "apps/object_fps_pvp/src/Collision/CharacterCollision.cpp",
+      "find": "        for (const auto &hit : walls.OverlapVerticalCapsuleAll(body)) {\n            std::optional<Engine::Collision::Contact> contact = hit.contact;",
+      "replace": "        auto overlaps = walls.OverlapVerticalCapsuleAll(body);\n        for (auto it = overlaps.rbegin(); it != overlaps.rend(); ++it) {\n            const auto &hit = *it;\n            std::optional<Engine::Collision::Contact> contact = hit.contact;",
+      "check": "cpu",
+      "expect": "linear scans bit for bit"
+    },
+    {
+      "id": "pab-shot-wall-beats-floor",
+      "batch": "v8-product-pa-broadphase",
+      "what": "A wall behind the floor still hits (no comparison with the floor), lowest index",
+      "file": "apps/object_fps_pvp/src/Pvp/ShotQuery.cpp",
+      "find": "                                                          Engine::Collision::TieBreak::HighestIndex);\n        wall && wall->distance <= closest.distance)",
+      "replace": "                                                          Engine::Collision::TieBreak::LowestIndex);\n        wall)",
+      "check": "cpu",
+      "expect": "linear scans bit for bit"
+    },
+    {
+      "id": "pab-budget-off-by-one",
+      "batch": "v8-product-pa-broadphase",
+      "what": "The collider budget refuses exactly 2^20",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "    if (walls.size() > MaximumArenaColliders) {",
+      "replace": "    if (walls.size() >= MaximumArenaColliders) {",
+      "check": "cpu",
+      "expect": "collider budget is 2\\^20"
+    },
+    {
+      "id": "pab-validate-empty-grid",
+      "batch": "v8-product-pa-broadphase",
+      "what": "Validate checks the spawns against no walls",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "    auto built = Engine::Collision::StaticAabbGrid::Build(walls, cellSize);",
+      "replace": "    auto built = Engine::Collision::StaticAabbGrid::Build({}, cellSize);",
+      "check": "cpu",
+      "expect": "wall top|free of walls|GYO_ASSERT failed: wallGrid"
+    },
+    {
+      "id": "pab-registrations-unchecked",
+      "batch": "v8-product-pa-broadphase",
+      "what": "A grid that Build refused is used anyway",
+      "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
+      "find": "    if (!built) {\n        error = \"Arena colliders do not fit the collision grid: \"",
+      "replace": "    if (false) {\n        error = \"Arena colliders do not fit the collision grid: \"",
+      "check": "cpu",
+      "expect": "refuses colliders too large"
     }
   ]
 }

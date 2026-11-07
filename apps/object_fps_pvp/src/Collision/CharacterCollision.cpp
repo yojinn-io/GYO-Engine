@@ -2,6 +2,7 @@
 #include "engine/math/scalar/Scalar.hpp"
 #include <array>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 namespace fps {
 namespace {
@@ -54,11 +55,11 @@ Engine::Collision::Contact PlanarPenetration(Engine::Collision::Contact contact,
 }
 } // namespace
 bool CanPlaceCharacterBody(const Engine::Collision::VerticalCapsule &body,
-                           std::span<const Engine::Math::Aabb> walls,
+                           const Engine::Collision::StaticAabbGrid &walls,
                            std::span<const Engine::Collision::VerticalCapsule> actors) {
-    for (const auto &wall : walls)
-        if (auto c = Engine::Collision::OverlapVerticalCapsuleAabb(body, wall);
-            c && c->penetrationDepth > 0.00001F)
+    // Only the walls the exact query reports; their order does not matter here.
+    for (const auto &hit : walls.OverlapVerticalCapsuleAll(body))
+        if (hit.contact.penetrationDepth > 0.00001F)
             return false;
     for (const auto &actor : actors)
         if (auto c = Engine::Collision::OverlapVerticalCapsules(body, actor);
@@ -67,16 +68,14 @@ bool CanPlaceCharacterBody(const Engine::Collision::VerticalCapsule &body,
     return true;
 }
 bool IsCharacterSupported(const Engine::Collision::VerticalCapsule &body,
-                          std::span<const Engine::Math::Aabb> walls) {
+                          const Engine::Collision::StaticAabbGrid &walls) {
     if (body.feet.y <= 0.0001F) return true;
-    for (const auto &wall : walls) {
-        const auto contact = Engine::Collision::SweepVerticalCapsuleAgainstAabb(body, {0, -0.002F, 0}, wall);
-        if (contact && contact->normal.y > 0.5F) return true;
-    }
+    for (const auto &hit : walls.SweepVerticalCapsuleAll(body, {0, -0.002F, 0}))
+        if (hit.contact.normal.y > 0.5F) return true;
     return false;
 }
 Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, Engine::Math::Vec3 displacement,
-                         std::span<const Engine::Math::Aabb> walls,
+                         const Engine::Collision::StaticAabbGrid &walls,
                          std::span<const Engine::Collision::VerticalCapsule> actors,
                          const bool constrainToFloor) {
     if (constrainToFloor)
@@ -89,9 +88,12 @@ Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, En
                 (!deepest || c->penetrationDepth > deepest->penetrationDepth))
                 deepest = c;
         };
-        for (const auto &wall : walls) {
-            auto contact = Engine::Collision::OverlapVerticalCapsuleAabb(body, wall);
-            if (constrainToFloor && contact && contact->penetrationDepth > 0.00001F)
+        // Every wall the exact overlap reports, in increasing index: the order the
+        // linear scan considered them in (the others gave nothing to consider).
+        for (const auto &hit : walls.OverlapVerticalCapsuleAll(body)) {
+            std::optional<Engine::Collision::Contact> contact = hit.contact;
+            const auto &wall = walls.Box(hit.index);
+            if (constrainToFloor && contact->penetrationDepth > 0.00001F)
                 contact = PlanarPenetration(*contact, body, [&](const auto &candidate) {
                     return Engine::Collision::OverlapVerticalCapsuleAabb(candidate, wall);
                 });
@@ -125,8 +127,10 @@ Engine::Math::Vec3 MoveCharacterBody(Engine::Collision::VerticalCapsule body, En
                 nearest = c;
         };
         const Engine::Math::Vec3 d = displacement;
-        for (const auto &wall : walls)
-            consider(Engine::Collision::SweepVerticalCapsuleAgainstAabb(body, d, wall));
+        // All hits in increasing index, not the nearest: consider filters before it
+        // compares, as the linear scan did.
+        for (const auto &hit : walls.SweepVerticalCapsuleAll(body, d))
+            consider(std::optional<Engine::Collision::Contact>{hit.contact});
         for (const auto &actor : actors)
             consider(Engine::Collision::SweepVerticalCapsuleAgainstCapsule(body, d, actor));
         const float length = Engine::Math::Length(d);
