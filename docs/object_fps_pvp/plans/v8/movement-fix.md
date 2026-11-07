@@ -25,15 +25,24 @@
 
 ```text
 movement-fix
-├── pm-detect     medium→high｜Opus｜估 4～6 h
-│                 可開關的移動診斷（每 tick 位置、desiredY、解出的 y、接觸法線、depth、supported）；用 biome 重現症狀 1、2 並存成重放；
-│                 判定先宣告（哪個機制、重現率）；順帶量「現在的 stair 半格 0.25 m（＝r）能不能上」（不能就回報使用者，`v8-arch-big-map-gravity` 說不做跨階）。
-│                 §14.3：把現象固定成失敗的測試，再修。
+├── pm-detect-diag  上段｜high｜Opus｜估 4～6 h｜**11/9 場次之前**（使用者 2026-11-07，架構師轉達：pm-detect 拆兩半）
+│                   可開關的移動診斷（每 tick 位置、desiredY、解出的 y、接觸法線、嵌入深度、supported、grounded、verticalVelocity），
+│                   Match 與 Client 預測都能開；只記錄、不改任何行為與判定（不進 digest、不上 wire）；場次開著收 2～3 人的真實遊玩。
+│                   [事前宣告](v8-product-pm-detect-diag-declaration.md)。
+├── pm-detect       medium→high｜Opus｜估 3～5 h｜**lag-l2 之後**
+│                   用場次的診斷 log 重現症狀 1、2 並存成重放；判定先宣告（哪個機制、重現率）；
+│                   順帶量「現在的 stair 半格 0.25 m（＝r）能不能上」（不能就回報使用者，`v8-arch-big-map-gravity` 說不做跨階）。
+│                   §14.3：把現象固定成失敗的測試，再修。
 └── pm-vertical   high（判定局部 xhigh）｜實作 Opus／審查 Opus／驗證 Fable xhigh（比主會話強，開卡時確認）｜估 10～16 h
                   去 y＝0 隱藏地板（地板只來自地圖；掉出範圍的規則由產品定）；下落不被擦邊歸零；貼地吸附；容差統一（1e-5／1e-7）；角色 r 0.25 → 0.3（arena 欄位）；
                   症狀 1、2 的修正照 pm-detect 固定的測試；**不做跨階**。
                   wire：若 state 已有 verticalVelocity 則不變；否則是 pv 變更，停下回報。
 ```
+
+## 順序（2026-11-07 更正）
+
+pa-broadphase（已合併，#167）→ **pm-detect-diag** → 11/9 場次（lag-l2＋K8，開著診斷）→ hitbox-rewind → pm-detect（用場次的 log）→ pm-vertical。
+行為的改動（pm-vertical 的任何一項）等場次量完 lag-l2／K8 才做，否則場次多一個變因。純資料的緩解（biome 的 `radius` 0.3）由使用者決定場次用不用，用的話記在場次紀錄。
 
 ## 開卡時
 

@@ -286,6 +286,6 @@ v8-arch-big-map-product-arena-v3
 
 ## 下一步
 
-產品線（使用者 2026-11-07 在產品規劃會話決定，同日更正）：**`pa-broadphase`（現在）** → 11/9 場次（biome；週日晚未合併就退回 pvp_corners 的 kit）→ `v8-product-hitbox-rewind` → `pm-detect` → `scene v1` → `pa-measure`。更正的理由：使用者要在場次用 biome，Match 的 1024 上限擋住它。
+產品線（使用者 2026-11-07 在產品規劃會話決定，同日兩次更正）：`pa-broadphase`（已合併，#167）→ **`pm-detect-diag`**（移動診斷，只記錄）→ 11/9 場次（biome、開著診斷；pm-detect-diag 週日晚未合併就用 `8b8eaa19` 的 kit，再不行退回 pvp_corners）→ `v8-product-hitbox-rewind` → `pm-detect`（用場次的 log）→ `pm-vertical` → `scene v1` → `pa-measure`。更正的理由：使用者要在場次用 biome，Match 的 1024 上限擋住它。
 voxel 線：window 批重做（不做 markers 放置 UI）；它的 TODO 見 [todo](todo.zh-Hant.md)。
 場景、互動物件、pv10：只有需求紀錄（`docs/architecture/plans/scene/README.md`、`docs/object_fps_pvp/plans/v8/pv10-requirements.md`），使用者說開工才開 survey。
