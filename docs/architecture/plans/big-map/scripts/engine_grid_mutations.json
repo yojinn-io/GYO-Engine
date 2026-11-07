@@ -164,10 +164,10 @@
     },
     {
       "id": "grid-build-cell-length-unchecked",
-      "what": "Build accepts a cell length that is not finite or not positive",
+      "what": "Build accepts an infinite cell length (the isfinite part of the check is gone)",
       "file": "engine/collision/src/StaticAabbGrid.cpp",
-      "find": "    if (!(std::isfinite(cellLength) && cellLength > 0.0F))\n        return CollisionError::Make(CollisionErrorCode::InvalidCellLength,",
-      "replace": "    if (false)\n        return CollisionError::Make(CollisionErrorCode::InvalidCellLength,",
+      "find": "    if (!(std::isfinite(cellLength) && cellLength > 0.0F))",
+      "replace": "    if (!(cellLength > 0.0F))",
       "target": "gyo_collision_tests",
       "cases": "*grid build*",
       "expect": "is NOT correct"
@@ -184,13 +184,13 @@
     },
     {
       "id": "grid-build-registrations-unchecked",
-      "what": "Build does not count the registrations against 2^32 (it would try to allocate them)",
+      "what": "Build does not count the registrations against 2^32: the 32-bit offsets wrap and the fill writes out of bounds (the test crashes instead of seeing the rejection)",
       "file": "engine/collision/src/StaticAabbGrid.cpp",
       "find": "    if (registrations >= (std::uint64_t{1} << 32U))\n        return CollisionError::Make(CollisionErrorCode::TooManyRegistrations,",
       "replace": "    if (registrations >= (std::uint64_t{1} << 40U))\n        return CollisionError::Make(CollisionErrorCode::TooManyRegistrations,",
       "target": "gyo_collision_tests",
       "cases": "*grid build*",
-      "expect": "is NOT correct"
+      "expect": "(?s)(is NOT correct|test case CRASHED)"
     }
   ]
 }
