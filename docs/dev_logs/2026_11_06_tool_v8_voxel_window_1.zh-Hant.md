@@ -78,7 +78,7 @@
 | W10 | 成立：最後一輪 **87/87** 被殺（`mutations-round3.txt`）；第一輪的不足見下面的「突變」 |
 | W11 | 成立：本機全量建置成功，`cpu|shader` 135/135、`gpu` 5/5；拿掉標記之後再跑一次，`cpu|shader` 仍是 135/135。L1（PR #158，head `44a06c82`，run 42342459066）：windows-x64、linux-x64、macos-arm64 全部通過 |
 | P1 | **成立**。(a) 不編輯：p95 **7.48 ms** ≤ 16.7 ms。(b) 每幀編輯：p95 **8.82 ms** ≤ 33 ms。用像建築的合成圖（tool-chunked 的 `measure-map` 產生的同一張，768 區塊，grid sha `60e3aa3c…`），`--grid` 給的；不是 `--synthetic` 的小圖 |
-| L3 | **成立**（2026-11-07，使用者「合格」）。使用者在視窗裡編輯 `pvp_corners`（加了一種方塊，311 格），`verify-map` 一致；遊戲用啟動腳本重新 build 的 v1（906 quads、24 colliders）跑 60 fps，有走動與落地。腳本與 log 在主 checkout `build/evidence/tool-v8-voxel-map/window-1/l3/` |
+| L3 | **成立，範圍是基礎功能**（2026-11-07，使用者「合格」）。使用者補充：這次合格的是基礎功能，編輯手感和操作還差得很遠，之後再想怎麼改（HANDOFF 的 TODO #10）。使用者在視窗裡編輯 `pvp_corners`（加了一種方塊，311 格），`verify-map` 一致；遊戲用啟動腳本重新 build 的 v1（906 quads、24 colliders）跑 60 fps，有走動與落地。腳本與 log 在主 checkout `build/evidence/tool-v8-voxel-map/window-1/l3/` |
 
 ### 突變
 
