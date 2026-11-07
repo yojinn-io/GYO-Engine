@@ -6,6 +6,8 @@
 
 **狀態：2026-11-07 使用者核准（原話「推奨どおり承認」：宣告與 Q10／Q12 的試法 (a)）。`ve-scale-measure` 完成（[dev_log](../../../dev_logs/2026_11_07_tool_v8_voxel_scale_measure.zh-Hant.md)）：SM6 的 km2-building 在 AMD 的 Metal 驅動裡崩潰，使用者決定照現有結果記錄。`ve-feel-survey` 照使用者「剩下照建議執行」，排在剔除（①）之後。**
 
+**2026-11-07 `ve-feel-survey` 進行中**（你說「ve-feel-survey へ」）：building 的延遲量完，差異表與問題在 [feel-survey.zh-Hant.md](../../../voxel_map_editor/feel-survey.zh-Hant.md)。和宣告的差異（看結果之前定的）：情境不分四次跑，改成 `--scenario stroke` 每一輪依序計時按下、拖曳、放開、undo（undo 同時把地圖還原給下一輪），次數與丟棄規則照宣告（300 輪、丟前 30 輪）；繪製距離用 ve-cull 的預設 256 格。
+
 ## 代號對照
 
 | 代號 | 白話 |

@@ -1,0 +1,76 @@
+# voxel 地圖編輯器：手感調查表（`ve-feel-survey`）
+
+更新：2026-11-07。Owner：voxel 地圖編輯器線。
+- 宣告：[voxel-editor-measure.md](../tools/plans/v8/voxel-editor-measure.md) 的 `ve-feel-survey`（2026-11-07 核准）。
+- 設計稿：[design.zh-Hant.md](design.zh-Hant.md) §3（操作模型）、§4（H1～H8）。
+
+這份表給你試用時對照用。上半是**量到的延遲**（H1、H4），中間是**和 Goxel 的差異**（只比行為，不含程式碼），下半是**要你回答的問題**。
+
+## 1. 延遲（H1、H4）
+
+**方法**：`measure-preview --scenario stroke`，每一輪照視窗的做法畫一筆 Brush（Add、方塊 1）。
+- **計時範圍**：每一段都從「輸入」計到「畫面上傳完成」，包含重烘、上傳區塊、畫、讀回、貼到視窗的貼圖。
+- **四個階段**：
+  - **按下**：拖曳開始的整份複製（`Drag::base`）、一次拾取、第一筆。
+  - **拖曳**：在拖曳開始時的副本上拾取一次，往右 16 像素補筆。
+  - **放開**：`EndStroke` 加下一幀。
+  - **undo**：`Undo` 加下一幀；同時把地圖還原，給下一輪用。
+- **次數**：每輪 4 段，跑 300 輪，丟掉前 30 輪。
+- **相機**：P1 的俯瞰相機，繪製距離 256 格。
+- **環境**：本機 Intel Mac、RelWithDebInfo，Chrome 關閉。
+
+**件數の突き合わせ**：building 的筆刷 1、4：一致（要求 300、量到 300、失敗 0、統計 270）。每一輪的按下、拖曳、undo 都有上傳區塊；放開沒有上傳區塊，符合預期。
+
+| 圖 | 筆刷 | 按下 p50／p95 | 拖曳 p50／p95 | 放開 p50／p95 | undo p50／p95 |
+|---|---|---|---|---|---|
+| building（768 區塊） | 1 | 11.4／11.8 ms | 8.5／10.3 ms | 5.3／5.6 ms | 8.4／10.4 ms |
+| building | 4 | 11.5／13.4 ms | 9.7／11.6 ms | 5.3／5.5 ms | 9.8／10.8 ms |
+| km2-ground（15,625 區塊） | 1、4 | 待量（先問你） | | | |
+
+- 設計稿 §4 的候選門檻：拖曳中 ≤ 2 幀（33 ms）、按下 ≤ 50 ms。
+  - building 的四段 p95 都在 1 幀（16.7 ms）以內。
+  - km2-ground 上，按下時的整份複製單獨就約 130 ms（ve-scale-measure 的 SM3），預期會超過。
+- 量測只含畫面這一側，不含 ImGui 本身與作業系統的輸入延遲。
+
+## 2. 和 Goxel 的差異（行為）
+
+Goxel 的出處是 `~/Code/GitHome/goxel-master/src/` 下的檔名（GPL-3.0，只讀行為）。我們的出處在 `tools/voxel_map_editor/src/window/EditorWindow.cpp`，除非另外註明。
+
+| # | 項目 | Goxel | 我們（window-1） | 相關的 H | 出處（Goxel／我們） |
+|---|---|---|---|---|---|
+| D1 | Line | 拖曳，從起點拉到終點 | 點兩下：第一下是起點，第二下是終點 | H6（Q10） | `tools/line.c`／`BeginDrag` 的 `Tool::Line` |
+| D2 | 懸停預覽 | 懸停時就把「按下會變成什麼」畫成體素 | 只畫線框外框 | H3 | `tools/brush.c`（`get_box`、懸停時的暫存體素）／`DrawOverlay` 的 `Outline` |
+| D3 | 縮放 | 滾輪；縮放後把旋轉中心移到游標下的體素 | 滾輪，朝固定的中心縮放 | H5 | `goxel.c` 的 `on_zoom` 與滾輪處理（`camera_set_target`）／相機輸入的 `MouseWheel` |
+| D4 | 旋轉速度 | 拖滿整個畫面寬＝轉一圈，和視窗大小無關 | 每像素 0.01 rad，視窗越大轉越多 | H5 | `goxel.c` 的 `on_rotate`／相機輸入的 `IsMouseDragging(Middle)` |
+| D5 | 左鍵點在空白處 | 拖曳就旋轉相機 | 平面 snap 開著時落在平面上；關著時沒有反應 | H5 | `goxel.c` 的 `on_drag_rotate`／`Edit` |
+| D6 | 視角鍵 | 1、3、7、0；5 切換正交；Ctrl＋3 左視 | 1、3、7、0；沒有正交，沒有左視 | H5 | `goxel.c` 的視角動作（`default_shortcut` "1"、"3"、"5"、"7"、"0"、"Ctrl 3"）／鍵盤處理 |
+| D7 | 快捷鍵自訂 | 有，可在設定中改 | 沒有 | H6 | `action.c`（`default_shortcut` 複製到 `shortcut`）／— |
+| D8 | 選方塊 | 調色盤面板 | 面板的下拉選單；Ctrl＋點擊取用 | H6 | `gui/palette_panel.c`／面板的方塊區 |
+| D9 | 朝向 | 沒有（Goxel 的體素沒有朝向） | Q／E 轉，Shift 換軸，面板上有 24 種 | H6 | —／鍵盤處理（`ImGuiKey_Q`、`ImGuiKey_E`） |
+| D10 | 游標資訊 | 狀態列有座標提示（`HINT_COORDINATES`） | 只顯示左鍵說明一行，沒有座標 | H8 | `gui/app.c` 的 `render_hint`／`DrawHint` |
+| D11 | Extrude 的距離 | 開始後游標吸到法線方向的直線；可在面板直接輸入距離 | 用螢幕上法線方向的移動量換算；不能輸入 | H6 | `tools/extrude.c`／`UpdateDrag` 的 `Tool::Extrude` |
+| D12 | 拾取的優先 | 依 snap 遮罩取離相機最近的 | Volume 與 Plane 取先碰到的；任何形狀都當整格 | H2 | `goxel.h` 的 snap 旗標／`Editing.cpp` 的 `Pick` |
+| D13 | 筆刷大小 | 面板可調，沒有小的上限 | 1～16 格（8 m） | H7 | `tools/brush.c`／`MaxBrushSize`（`Tools.hpp`） |
+| D14 | 選取、Move、對稱、剪貼簿 | 都有 | 都沒有（排在 `ve-select-move`、`ve-symmetry`） | H6、H7 | `tools/selection.c`、`tools/move.c`、`gui/symmetry_panel.c`、`goxel.c`（Ctrl C／V）／— |
+| D15 | 大地圖的移動 | 繞中心點的相機，適合小模型 | 同左；km² 上只能平移與縮放 | H5（Q12） | `camera.c`／`OrbitCamera`（framework） |
+
+## 3. 要你回答的問題（H1～H8）
+
+請在畫面上試，每一題選「是問題／不是／不確定」，最後指出**最痛的三個**。
+
+| 代號 | 問題 | 量到或觀察到的 |
+|---|---|---|
+| H1 延遲 | 有沒有「按下去頓一下」「拖快了跟不上」「放開後等一下才出現」？在哪個工具、多大的地圖？ | building 上四段都在 1 幀內（表 1）；km2-ground 待量 |
+| H2 命中 | 有沒有「放的位置不是我指的那格」？在 slab、stair 上，還是一般方塊上？什麼角度？ | D12：任何形狀都當整格 |
+| H3 預覽 | 放之前看得出「會放什麼、朝哪邊」嗎？線框加朝向箭頭夠嗎，還是要看到方塊本身？ | D2 |
+| H4 撤銷 | undo 一次回到的地方符合預期嗎？有沒有「undo 了不該 undo 的」或「要按很多次」？ | undo 在 building 上 p95 約 10 ms（表 1） |
+| H5 相機 | 最常卡住的相機操作是哪個？要不要「往游標縮放」「左鍵空白旋轉」？要不要正交？ | D3～D6、D15 |
+| H6 流程 | 哪個操作要點太多次？選方塊要不要像 Minecraft 的快捷列（數字鍵）？ | D1、D7～D9、D11 |
+| H7 尺度 | 蓋牆、鋪地時覺得「一次只能做一點點」嗎？需要多大的筆刷或填充？ | D13、D14 |
+| H8 回饋 | 想看到哪些資訊（座標、選取大小、方塊名）？ | D10 |
+
+**同時要決定的兩點**（照核准的試法 (a)：在 Goxel 或你熟悉的工具體驗，不在本批做第二種）：
+- **Q10**：Line 用拖曳（Goxel）還是點兩下（現況）？
+- **Q12**：大地圖要不要飛行相機（WASD＋滑鼠視角）？這超出「照 Goxel」。
+
+你的回答與決定記進 HANDOFF，`ve-feel-1` 的宣告只放你選中的項目。

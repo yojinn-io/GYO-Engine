@@ -33,6 +33,8 @@ struct MeasureOptions final {
     std::uint32_t width{1280}, height{720};
     std::string gpuDriver{"auto"};
     float drawDistanceCells{DefaultDrawDistanceCells}; // from the orbit target, in x and z (Visibility.hpp)
+    std::string scenario;  // empty: P1's frames; "stroke": ve-feel-survey's press, drag, release, undo per cycle
+    int brushSize{1};      // stroke: the brush's size (cube)
 };
 
 [[nodiscard]] int RunPreviewMeasure(const MeasureOptions& options);
