@@ -1,8 +1,8 @@
 # lag-l2＋K8 的 L2 場次手冊
 
-更新：2026-11-05。Owner：`object_fps_pvp`。判定以[事前宣告](v8-product-hitbox-lag-l2-declaration.md)為準；這份只寫怎麼做，兩者不一致時以宣告為準。K8 的內容見 [hitbox-acceptance 宣告](v8-product-hitbox-acceptance-declaration.md) A4。
+更新：2026-11-07（宣告修訂 8：biome、2～3 人）。Owner：`object_fps_pvp`。判定以[事前宣告](v8-product-hitbox-lag-l2-declaration.md)為準；這份只寫怎麼做，兩者不一致時以宣告為準。K8 的內容見 [hitbox-acceptance 宣告](v8-product-hitbox-acceptance-declaration.md) A4。
 
-構成（使用者 2026-11-05 決定）：Intel Mac 只跑 Match＋Gateway，**不當玩家**；Windows 2 台（`win1`、`win2`）。**現場沒有網路**，所以下面「事前」的東西都要先放好。
+構成（使用者 2026-11-05 決定，2026-11-07 改）：Intel Mac 只跑 Match＋Gateway，**不當玩家**；Windows 2～3 台（`win1`、`win2`、`win3`）。地圖是 biome（`ARENA_FILE=biome.json`）；pa-broadphase 在 11/8 晚上前沒合併時，照修訂 7 用 `pvp_corners`（不設 `ARENA_FILE`）與 `54948874` 的 kit。**現場沒有網路**，所以下面「事前」的東西都要先放好。
 
 ## 0. 順序
 
@@ -19,7 +19,8 @@
 - 程式全部來自同一個 commit：本批 PR（#155）合併到 master 後，master 的整合建置（`cross-platform` workflow）上傳的套件 artifacts（PR 的 L1 不產生套件，2026-11-05 查過）。run 編號與 commit 開場前記到 HANDOFF。Gateway 也從那個 commit 建置；`mac.sh`、`lag_l2_summary.py` 用那個 commit 的 checkout。
 - 套件的 zip 裡是一個 `gyo-object_fps_pvp-<平台>.tar.gz`，解開後是 `gyo-object_fps_pvp/` 資料夾（裡面有 `build_metadata.json`、`bin/`、`lib/`）。**`PKG` 指的是這個 `gyo-object_fps_pvp` 資料夾**，不是解壓的上一層。
 - **Windows（每台）**：從 run `42031502557` 下載 `gyo-package-object_fps_pvp-windows-x64`（artifact 保留到 2026-11-19），解開 zip 後在 PowerShell 用 `tar -xzf gyo-object_fps_pvp-windows-x64.tar.gz` 解開（檔案總管打不開 `.tar.gz`），放在本機磁碟的新資料夾。把 repo 的 `build/acceptance/object_fps_pvp/lag_l2_session/windows.ps1` 也複製過去。
-- **場次的程式（2026-11-05 定）**：commit `549488745d0221efc4cc651b0da0dd855bed3db9`（#155 的合併），master 整合建置 run `42031502557`。
+- **場次的程式（修訂 8，2026-11-07）**：pa-broadphase 的 PR 合併後的 master commit 與它的整合建置 run（合併後記到 HANDOFF 與這裡）；Mac 的 `PKG`、`GATEWAY` 從同一個 commit 在本機建置，放在主 checkout 的 `build/evidence/v8-hitbox-lag-l2/pkg-biome/`。以下是修訂 7 的退路：
+- **退路的程式（2026-11-05 定）**：commit `549488745d0221efc4cc651b0da0dd855bed3db9`（#155 的合併），master 整合建置 run `42031502557`。
 - **Mac（已準備好）**：CI 沒有 macos-x64 套件，Match 與 Gateway 都是這台 Intel Mac 從同一個 commit 的本機建置（宣告修訂 7）：
   - `PKG`＝`/Users/karasu/Code/Source/GYO-Engine/build/evidence/v8-hitbox-lag-l2/pkg/gyo-object_fps_pvp`
   - `GATEWAY`＝`/Users/karasu/Code/Source/GYO-Engine/build/evidence/v8-hitbox-lag-l2/gateway`
@@ -35,7 +36,7 @@
 Mac 終端機 1（準備；`SESSION` 用一個新的資料夾，例如 `.../v8-hitbox-lag-l2/session-20261106`）：
 
 ```bash
-mac.sh prepare SESSION PKG GATEWAY
+ARENA_FILE=biome.json mac.sh prepare SESSION PKG GATEWAY
 ```
 
 它會寫出 `marks.txt` 的開頭（commit、SHA-256、arena 的位置），並列出這台 Mac 的位址。選和 Windows 同一個網段的那個，以下稱 `MAC_IP`。
@@ -43,7 +44,7 @@ mac.sh prepare SESSION PKG GATEWAY
 Mac 終端機 1（Match；出現 ready 後再開終端機 2）：
 
 ```bash
-mac.sh match SESSION PKG
+ARENA_FILE=biome.json mac.sh match SESSION PKG
 ```
 
 Mac 終端機 2（Gateway）：
@@ -96,6 +97,7 @@ powershell -ExecutionPolicy Bypass -File windows.ps1 -MacIp MAC_IP -Name win1 -P
    ```bash
    unzip lag-l2-win1.zip -d SESSION/clients/win1
    unzip lag-l2-win2.zip -d SESSION/clients/win2
+   unzip lag-l2-win3.zip -d SESSION/clients/win3   # 3 人時
    ```
 
 4. Mac 上：

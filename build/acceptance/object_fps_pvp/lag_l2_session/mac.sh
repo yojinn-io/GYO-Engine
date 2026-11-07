@@ -9,20 +9,24 @@
 #   mac.sh s1-end   SESSION               writes s1_end=<now> to marks.txt (end of the continuous play)
 #   mac.sh judge    SESSION               lag_l2_summary.py on the collected session folder
 #
+# ARENA_FILE picks the arena file in the package (default pvp_corners.json; the
+# 11/9 session uses biome.json, lag-l2 declaration revision 8): set it the same
+# for prepare and match.
 # PKG is the package folder gyo-object_fps_pvp/ from the macos-x64 tarball (it holds
 # build_metadata.json and bin/); GATEWAY the
 # Gateway built from the same commit. Nothing here needs the network beyond the LAN.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
+arena_file="${ARENA_FILE:-pvp_corners.json}"
 command="${1:-}"
 shift || true
 
 arena_of() {
     local found
-    found="$(find "$1" -name pvp_corners.json -path '*object_fps_pvp*')"
-    [ -n "$found" ] || { echo "no pvp_corners.json under $1" >&2; exit 2; }
-    [ "$(echo "$found" | wc -l)" -eq 1 ] || { echo "more than one pvp_corners.json under $1: $found" >&2; exit 2; }
+    found="$(find "$1" -name "$arena_file" -path '*object_fps_pvp*')"
+    [ -n "$found" ] || { echo "no $arena_file under $1" >&2; exit 2; }
+    [ "$(echo "$found" | wc -l)" -eq 1 ] || { echo "more than one $arena_file under $1: $found" >&2; exit 2; }
     echo "$found"
 }
 
@@ -74,7 +78,7 @@ judge)
     python3 "$here/../lag_l2_summary.py" "$session" --output "$session/lag_l2_summary.json"
     ;;
 *)
-    sed -n '2,13p' "$0" >&2
+    sed -n '2,16p' "$0" >&2
     exit 2
     ;;
 esac
