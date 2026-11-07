@@ -6,20 +6,48 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06（本分支 `claude/v8-arch-big-map-tool-chunked`）**：big-map 的 Engine 兩批（PR #161、#162）已合併。`v8-arch-big-map-tool-chunked` 的事前宣告 [voxel-map-tool-chunked.md](voxel-map-tool-chunked.md) 寫好，2026-11-06 你核准（`v8-tool-chunked-declare`）。`tc-bake`、`tc-measure` 完成（本機 135/135、突變 37/37、T5 p95 1.11 ms）；和宣告的差異 4 項你已確認，M6 邊界只記錄（`v8-tool-chunked-deviations`）。[PR #163](https://github.com/yojinn-io/GYO-Engine/pull/163) 的 L1 三平台通過；`tc-markers` 等 PR #160 合併後加進同一個 PR。window 批（PR #158，分支 `claude/v8-tool-voxel-map-window`）凍結，在本批之後 rebase 重新宣告；那條分支上的 HANDOFF 紀錄，rebase 時合進來。`tc-markers` 等架構師寫 `map-markers.md` 的「Kinds」節。
-- **PR**：[PR #152](https://github.com/yojinn-io/GYO-Engine/pull/152)（分支 `claude/v8-tool-voxel-map-plan`，一條功能線一個 PR）。尚未合併。
+- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；§14.4 已核准、空格子拒存、L3 合格。**window-1 完成，等你決定是否合併 PR #158**。
+- **PR**：
+  - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
+  - window 批在分支 `claude/v8-tool-voxel-map-window`，有它自己的 PR。
 - **完成**：
-  - `v8-tool-voxel-map-plan`：方案、分批。
-  - `v8-engine-voxel-mesh-contract`：`gyo.voxel_mesh` 契約與讀取器，V1～V6 通過；L1 三平台綠，run 42000098862。
-- **完成**：`v8-tool-voxel-map-editor-core`：E1～E10 通過（L1 三平台綠，run 42010316153）。dev_log：[2026_11_05_tool_v8_voxel_map_editor_core](../../../dev_logs/2026_11_05_tool_v8_voxel_map_editor_core.zh-Hant.md)。
-- **進行中**：`v8-product-arena-v2`。你選了「arena v2 から」「ここでやる」。事前宣告已寫進 voxel-map-editor.md，宣告已核准（`v8-product-arena-v2-declare`），實作中。
-- **前提**：PR #146 已合併，所以 `v8-framework-preview-component` 可以排了；開始前要和架構會話協調。
-- **等你決定**：目前沒有。
+  - plan
+  - `v8-engine-voxel-mesh-contract`
+  - `v8-tool-voxel-map-editor-core`
+  - `v8-product-arena-v2`（L3 合格）
+  - `v8-framework-preview-component`（架構會話，PR #157）
+- **進行中**：`v8-tool-voxel-map-editor-window`
+  - 功能、審查修正、測試都完成。
+  - dev_log：[2026_11_06_tool_v8_voxel_map_editor_window](../../../dev_logs/2026_11_06_tool_v8_voxel_map_editor_window.zh-Hant.md)。
+- **等你決定**：
+  - 守衛判定變更（W9）的 §14.4 核准；DI 1 和 DI 5 這次的文字修改，也一起請你核准。
+  - S4：檔案被外部修改之後，視窗要不要加「重新載入」或「另存」。
+- **等架構會話**：P1（`v8-tool-voxel-window-p1-to-architect`）。
+- **之後**：`v8-tool-voxel-map-editor-trial`（P1 照架構師的結論重新宣告；L3：用 GUI 建一張有二樓和階梯的地圖）。`v8-product-step-up` 由產品會話做。
+
+## TODO（不急；排進之後的批次）
+
+編號沿用 big-map HANDOFF 的 todo（PR #164 `bcea47de`，決定 `v8-arch-map-scene-split`）；#9 是本線新增的。
+
+| # | 內容 | 狀態 |
+|---|---|---|
+| 5 | （2026-11-07 併入 #9 的第 2 項：vox 匯入加上「位置」就是 prefab 貼放） | 併入 #9 |
+| 6 | build 寫單行 JSON（region 文字有 38% 是縮排）；契約不變 | 待排 |
+| 7 | 水方塊的工具側：block 種類、水面剔面、無碰撞盒。觸發條件是第一張需要水的地圖，在那之前不改契約 | 待觸發 |
+| 8 | tc-markers 的讀寫核心（`MarkersFile`、`check-markers`、`--marker-kinds`）待搬到場景編輯器；不急著拆，也不再往上加功能 | 待場景編輯器 |
+| 9 | **擴大地圖面積**（2026-11-07 你在架構師會話釐清，經轉達）：地圖面積變大，但建築尺寸不變。所以**不做**「重採樣」（把整張格子放大或縮小、×2 變 2×2×2）。重採樣解決的是「粗排再細修」或「比例不對」，不是這個問題。下面三項都是工具功能，不碰 Engine 契約與 `cell_size`：<br>1. **邊界可以長**：區塊鍵是任意整數，索引的 bounds 在 build 時算出，格式上地圖沒有大小上限；編輯器要允許在現有範圍外落筆。現況：window-1 沒有固定的格子尺寸，只受格子格式的範圍（相對 origin ±2^16 格）與 M6（±2^20 單位）限制。0.5 m 一格時是 ±32 km，對 km² 足夠。<br>2. **prefab 貼放**：把一棟建築、一段牆存成可重用的格子片段，複製貼到別處，支援平移、90° 旋轉、鏡像（參考 Hammer 的 prefab、Minecraft 的 structure block）。#5 的 vox 匯入（帶比例與位置）併進這一項，當成「把 vox 當 prefab 貼進既有地圖」。注意：朝向只有 24 種旋轉，鏡像要照 (c) 處理（只鏡像對稱的形狀）。<br>3. **大面積填充**：盒子填充、大號筆刷（地面、水面、整片牆）。現況：Shape 與 Extrude 一次最多 2^20 格，Brush 最大 16。1 km² 的地面在 0.5 m 一格時約 4M 格，一次填不完，要能分塊填或提高上限。 | 待排程（觸發與排程由你決定） |
+| 10 | **編輯手感與操作**（2026-11-07 你在 L3 之後說的）：window-1 的 L3 合格的是基礎功能，編輯手感和操作還差得很遠。要怎麼改，你之後會想；屆時從具體的操作問題開始整理 | **待你整理** |
 
 ## 決定紀錄
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-window-1-l3` | （2026-11-07）window-1 的 L3：在視窗編輯 pvp_corners，進遊戲走一圈，合格；合格的範圍是基礎功能，編輯手感和操作還差得很遠（TODO #10） | 「合格」「這次的合格是基礎功能，編輯手感，和操作差的很遠。之後我會想想如何修正這一方面的內容。」 |
+| `v8-tool-voxel-window-1-empty-save` | （2026-11-07）沒有填任何格子的格子不存檔（`EmptyMap`，什麼都不寫），磁碟上的 grid 不會和地圖對不上 | 「(a) 保存を断る」 |
+| `v8-tool-voxel-window-1-guard` | （2026-11-07）核准依賴守衛的 §14.4：視窗可 include `imgui.h`、framework 的 ImGui 殼、`window/…`，可連六個視窗 target；核心只可 include 入口標頭；含舊視窗批沒核准完的 W9。驗證者找出的 3 個隱藏放寬已改嚴 | 「承認する」 |
+| `v8-tool-voxel-window-1-no-markers` | （2026-11-07）照 `v8-arch-map-scene-split`（地圖只管幾何，標記屬於另一個場景編輯器），window-1 拿掉標記放置 UI、`--markers` 選項與存檔寫標記；tc-markers 的讀寫核心留著，待搬（TODO #8） | 「外す」 |
+| `v8-tool-voxel-window-1-declare` | （2026-11-06）核准 window-1 的宣告：視窗存 grid＋區塊化地圖＋標記（不寫 v1）；P1 不編輯 p95 ≤ 16.7 ms、每幀編輯 p95 ≤ 33 ms；Extrude 推出同方向同平面相連的面；Laser 在 Add／Paint 時當 Sub；正交投影延後；DI 5 擴充、DI 7 改寫 | 「推奨どおり承認」 |
+| `v8-tool-voxel-window-goxel` | （2026-11-06）視窗的功能與互動照 Goxel，外觀用我們自己的；只取功能、不搬程式碼，依我們的編輯邏輯客製；分三批（window-1 核心、window-2 選取／移動／對稱、window-3 Layers）；鏡像用 (c)（只鏡像對稱的形狀）；Layers 會改格子格式，另批宣告 | 「我建議你的操作模式和交互使用這個的形式」「UI 我們可以使用自己的形式，但是功能上和交互上我建議是用goxel的」「注意我要的是功能，而不是連代碼都照搬」「如果不影響現有機能…沒問題。如果有影響，列出來」「OK，照建議開始。」 |
 | `v8-tool-chunked-markers-guard` | （2026-11-06）核准 §14.4：依賴守衛允許 CMake 文字中出現 `GYO::MapMarkers` 這個名字（沒有收緊的面，驗證者確認 1～5）；DI 2 追加 `ParseMarkerKinds`、`UnknownMarkerKinds` | 「両方承認」 |
 | `v8-tool-chunked-deviations` | （2026-11-06）確認 tc-bake 和宣告的差異 4 項（舊 region 檔只刪舊索引列過的、tc-measure 併入、突變第一輪 13/14 的處置、合成圖的 v1 是拒收）；M6 邊界（origin 不在 16 的倍數時，邊緣格子 `build-map` 拒收）只記錄，不收緊格子的範圍 | 「確認、(a) 記録のみ」 |
 | `v8-tool-chunked-declare` | （2026-11-06）核准 tool-chunked 的事前宣告：範圍、介面草案、判定 T1～T9（T5：區塊重烘 p95 ≤ 16 ms）、DI 1～5 的變更與 DI 2 改寫、RC 3 處置與 RC 5／6；存檔用帶雜湊的 region 檔名＋最後換索引；調色盤放格子的全部方塊；T-junction 目視移到 window 批 | 「推奨どおり承認」 |
@@ -74,6 +102,94 @@
 - 2026-11-05：arena-v2 批合入 master（`0c5db246`，`mutations.json` 依 id 合併兩邊的突變）。本機 cpu|shader 129／129；L1 三平台綠（run 42034025482）。剩 L3（P10）。
 - 2026-11-05：arena-v2 批的 L3（P10）你在 macOS 判定「問題なし（合格）」。啟動腳本與 log 在主 checkout 的 `build/evidence/tool-v8-voxel-map/arena-v2/l3/`（`pvp_corners` 兩人同房、命中 26）。arena-v2 批完成。下一批：`v8-framework-preview-component`（要和架構會話協調）；`v8-product-step-up` 由產品會話做。
 - 2026-11-05：你問編輯器做好了沒：只完成資料格式、build、CLI 與遊戲端讀取，GUI 視窗還沒做。framework 批交給架構會話（「[Job][架構師]例行架構掃描」），已送出委託（範圍、留在 model_viewer 的部分、客戶端建立元件、voxel 編輯器的需求）。等它完成後接 window 批。
+- 2026-11-06：PR #152 已合併（`a9ccad7d`）。架構會話完成 `v8-framework-preview-component`（PR #157，合併為 `2cd57244`）。
+- 2026-11-06：你說「開始」，開工 `v8-tool-voxel-map-editor-window`（high，Opus 5.5）。從 master `2cd57244` 切出分支 `claude/v8-tool-voxel-map-window`。
+  - 讀了 `docs/framework/preview.md` 的 DI 與 Replacement Criteria、工具的 DI，以及 model_viewer 的 gui 版本（CMake、`PreviewMeasure`、依賴守衛）。
+  - 重估為 16～22 h。
+  - 事前宣告寫進 voxel-map-editor.md，裡面包括：改 DI 1 和 DI 5、新增 DI 7，以及判定 W1～W11 和 P1。等你核准，核准前不實作。
+- 2026-11-06：你核准 window 批的宣告（「承認する」），開始實作。
+  - 核心的編輯模型、拾取、存檔（`Editing.hpp`／`Editing.cpp`）寫完；W1～W3、W5～W7 的測試共 34 個 test case，本機全部通過。
+  - 視窗、預覽、`measure-preview` 都能建置。
+  - **停下（AGENTS §14：原因改變計畫的前提）**：用 `measure-preview` 試跑 30 幀（探索用，不是 P1 的正式量測）。
+    - 合成地圖（64×16×64、填 30%）：每幀約 2.5 s。
+      - 產物有 124,236 個四邊形、20,691 個碰撞盒，文字 5.3 MB；
+      - build 約 1.36 s，其中 Engine 讀回約 1.2 s；
+      - 預覽又再讀一次，約 1.2 s。
+    - `pvp_corners`：p95 13.1 ms。
+    - 結論：「每次編輯都整張 build，並經過文字往返」在合成地圖上差了兩個數量級，宣告中的 P1 (b) 必然不過（Replacement Criteria 3）。
+  - 程式留在工作樹，沒有提交。
+  - 證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/window/explore-p1/`。
+  - 等你決定做法。
+- 2026-11-06：你決定（經旁支會話轉達，`v8-tool-voxel-window-p1-to-architect`）：
+  - 原話：「現在為何會有地圖編輯器，就是在為大地圖做準備。要不然就更本不需要編輯器這個東西。」「把這個問題轉給架構師，讓他來考慮。現在 map editor 這邊就想像如何做出editor，性能問題由架構師來處理。」
+  - 效能問題（P1）交給架構會話，旁支已把觀測轉過去。
+  - 縮小測試地圖或範圍的做法（A／D）不採用，因為大地圖正是編輯器存在的理由。
+  - 這一批繼續完成編輯器的功能與互動。P1 的宣告怎麼改，等架構師的結論；要改宣告時先回報你。
+- 2026-11-06：window 批的實作與審查。
+  - 審查（Opus／high）：
+    - B1：undo 之後索引越界；
+    - S1～S3：框選上限、拖曳中存檔、核心可以 include render 的標頭；
+    - nit：N1～N9。
+    - 以上都修了。S4 交你決定。
+  - §14.4 驗證者（Opus／high）做了四輪，前三輪都找到守衛隱藏的放寬。每次都把守衛改嚴，沒有放寬文字。
+  - 第四輪剩下的罕見寫法，修好後由提案者自己重跑確認。
+  - 突變：視窗 22 條、相關的既有突變都 killed。
+  - 本機結果：cpu|shader 130／130；編輯器與 GPU 6／6。
+  - 證據在主 checkout 的 `build/evidence/tool-v8-voxel-map/window/`。
+- 2026-11-06：你說「先等架構師定案，目前設計可能需要修改。」（`v8-tool-voxel-window-wait-architect`）
+  - PR #158 先不合併。
+  - W9 的核准、S4、P1 都等架構師定案之後再處理。
+  - 這段期間不動 window 批的程式。
+- 2026-11-06：架構會話回覆大地圖效能的委託（你與架構師討論後的決定）。
+  - **規模**：以逃離塔科夫的 raid 地圖為參照，cell_size 0.5 m。
+  - **定性**：這是契約問題，不是編輯器的效能問題。
+  - **方案 v0.1**：一張地圖＝索引＋region 檔（8×8 區塊柱）＋標記層。
+    - Engine：VoxelMesh v2、MapMarkers、Collision 的靜態 broadphase。
+    - 工具：只重烘有修改的區塊，加 greedy 合併，文字只在存檔時寫。
+    - 產品：arena v3，撤掉 walls／1024 的上限。
+  - **window 批**：等分區塊契約定案，宣告的 P1 不放寬。
+    - 契約定案後，先做工具批 `v8-arch-big-map-*-tool-chunked`：改寫 DI 2、處置 Replacement Criteria 3，仍由本 owner 負責。
+    - 之後再接 window 批。
+  - **調查**：架構師開了 survey 卡 `v8-arch-big-map-survey`，方案文件會放在 `docs/architecture/plans/big-map/`。
+  - **配合事項**：
+    - survey 期間不動 `tools/voxel_map_editor` 的 build 和預覽路徑；
+    - 量測會用主 checkout 的 `build/evidence/tool-v8-voxel-map/window/explore-p1/prof.cpp` 的合成圖。
+- 2026-11-06：架構會話通知，大地圖的契約已定案（你說「照建議定案」；決定記在 PR #159 的 `docs/architecture/plans/big-map/HANDOFF.md`）。和本 owner 有關的：
+  - **`v8-arch-big-map-chunk-size`**：
+    - 區塊是 16³（和 `gyo.voxel_grid` 一致）；
+    - region 是 8×8 的柱，含全高；
+    - region_size 寫進索引。
+  - **`v8-arch-big-map-greedy`**：
+    - greedy 合併放在工具的烘焙裡，掃描順序固定；
+    - 碰撞盒改成在區塊內合併。
+    - tool-chunked 批要事前宣告量測：用 pvp_corners 和一張像建築的合成圖，量四邊形數、盒子數、每個區塊的重烘時間，並目視 T-junction。
+    - 工具的 DI 3、DI 4 守衛要改，照 §14.4 取得核准。
+    - DI 2 改寫為「有效性由 Engine 的 `ValidateVoxelChunk` 決定，存檔的文字再讀回比對」。
+  - **`v8-arch-big-map-encoding`**：
+    - 格式只用 JSON；
+    - 文字只在存檔時寫；
+    - 平行解析由呼叫端做。
+  - **`v8-arch-big-map-markers-owner`**：
+    - 標記層屬於 Engine（`GYO::MapMarkers`）；
+    - 編輯器負責放置和命名；
+    - kind 的清單從產品的 `marker_kinds.json` 讀，編輯器不解釋它。
+  - **順序**：
+    1. 架構師的 Engine 契約卡 `v8-arch-big-map-engine-map`；完成後，會把分支、PR 和 API 概要發過來。
+    2. 本 owner 的 tool-chunked 批。
+    3. window 批。
+  - 在那之前，不動 build 和預覽的路徑。
+- 2026-11-06：架構會話通知，engine-map 拆成兩批（你的決定）。
+  1. `v8-arch-big-map-engine-grid`：Collision 的靜態 broadphase，加上 VoxelMesh 內部的解析加速；不碰格式。
+  2. `v8-arch-big-map-engine-format`：VoxelMesh v2 的索引＋region、`ValidateVoxelChunk`、v1 退役、MapMarkers。
+  - tool-chunked 批要等的是第 2 批（格式）。window 批（PR #158）也照樣等格式定案。
+  - 等待期間，若要做不依賴新格式的編輯器功能，要先向你提，不自行動 build／預覽路徑。
+- 2026-11-06：架構會話通知，第一批 `v8-arch-big-map-engine-grid`（PR #161）已併進 master（`c70e8fdc`）。
+  - 內容：
+    - `GYO::Collision` 的 `StaticAabbGrid`：契約是「與線性掃描等價」；
+    - `engine/base/StrictJson.hpp`；
+    - `ParseVoxelMesh` 改用不經回呼的嚴格解析。5.3 MB 的文字從 1,580 ms 降到 382 ms，契約不變。
+  - 對本 owner 的影響：編輯器讀回文字約 1.2 s 那一段，現在約 0.3 s。本分支切自 `2cd57244`，還沒合入這一批。
+  - tool-chunked 批照樣等第二批（格式：`gyo.voxel_map`／region、`ValidateVoxelChunk`、MapMarkers）。
 - 2026-11-06：架構師轉達 big-map 的 Engine 兩批已合併（engine-grid PR #161 `c70e8fdc`、engine-format PR #162 `915ddc62`），`-tool-chunked` 可以規劃。讀了 `voxel-mesh.md`、`map-markers.md`、big-map 的 README／HANDOFF，提出計畫案；你照建議定了五個判斷（`v8-tool-chunked-plan`）。從 master `915ddc62` 開工作樹 `.claude/worktrees/v8-tool-chunked`，寫事前宣告，等你核准。已請架構師在 `map-markers.md` 定義 `marker_kinds.json` 的形式。
 - 2026-11-06：架構師寫好 `marker_kinds.json` 的契約（PR #160，`29c79fbf`），`tc-markers` 改為在 Engine 實作 `ParseMarkerKinds`／`UnknownMarkerKinds`，宣告已反映。你核准宣告（`v8-tool-chunked-declare`），開工 `tc-bake`（Opus 5.5／high）。
 - 2026-11-06：`tc-bake`、`tc-measure` 完成（Opus 5.5／high）。第一輪突變 13/14（`tc-chunk-not-validated` 存活）；Opus 審查無 blocker，3 個 should-fix（形狀變更沒觸發全部重烘、T1 缺 Engine 拒收的案例、M6 邊界）照修，存活突變由審查者找到的反例殺掉；第二輪 37/37。T5（建築合成圖 768 區塊）p95 1.11 ms ≤ 16 ms，件數一致。和宣告的差異：engine/io 不能列目錄，舊 region 檔只刪舊索引列過的。dev_log：[2026_11_06_tool_v8_voxel_map_tool_chunked](../../../dev_logs/2026_11_06_tool_v8_voxel_map_tool_chunked.zh-Hant.md)。證據在主 checkout `build/evidence/tool-v8-voxel-map/tool-chunked/`。
@@ -81,3 +197,12 @@
 - 2026-11-06：PR #160 合併（`15257faf`），把 master merge 進本分支（`929c7664`），開工 `tc-markers`。實作 Engine 的 `ParseMarkerKinds`／`UnknownMarkerKinds` 與工具的標記讀寫、`check-markers`。突變 48/48，`cpu|shader` 135/135。審查沒有 blocker，2 個 should-fix 已修。§14.4 驗證者確認 1～5（放寬的範圍是「CMake 文字中出現 `GYO::MapMarkers` 這個名字」）。你核准了 DI 1 守衛的放寬與 DI 2 字句的追加（`v8-tool-chunked-markers-guard`）。
 - 2026-11-06：架構師轉達你的定案：kinds 的 7 條突變搬到 Engine 的目錄，改名 `mm-*`；map-markers.md 的 DI 3 改字句；「Cost」段補一句（不加預掃）。engine_format 目錄 68/68 被殺。
 - 2026-11-06：`tc-markers` 的 L1 三平台通過（run 42195132825，head `137085ae`）；`16a28c62` 只改文件，L1 skip。tool-chunked 批的判定 T1～T9 全部成立，**等你決定是否合併 PR #163**。
+- 2026-11-06：PR #163 合併（`24f111eb`），tool-chunked 批完成。你試用了上一版的視窗，指定照 Goxel 的功能與互動重做（`v8-tool-voxel-window-goxel`）。讀了 Goxel 的 `src/tools/`、`src/gui/`、`goxel.c`、`gesture3d.c`、`tools.c`（只讀行為）。把 master merge 進本分支，解決 PR #158 的衝突（`9c2a2479`；守衛的自我測試改成逐名檢查，判定同等或更嚴）。寫好 window-1 的事前宣告，等你核准。
+- 2026-11-06：window-1 實作完成（vw1-preview、vw1-tools、vw1-markers）。探索時，第一版每幀編輯 p95 152 ms（每次編輯複製整張地圖、所有區塊標髒），修正後 P1 判定成立：(a) 7.48 ms、(b) 8.82 ms。審查：B1（snap 沒取先碰到的）與 5 個 should-fix 已修，宣告漏做的兩項已補。§14.4 驗證者找出 3 個隱藏放寬，已改嚴。突變 87/87。dev_log：[2026_11_06_tool_v8_voxel_window_1](../../../dev_logs/2026_11_06_tool_v8_voxel_window_1.zh-Hant.md)。
+- 2026-11-06～07：L3 前的試用。
+  - 你用視窗編輯 `pvp_corners` 並存檔：`verify-map` 一致。用 CLI `build` 成 v1，放進遊戲資料夾的副本，以 1 個 client 遊玩（腳本與 log 在主 checkout `build/evidence/tool-v8-voxel-map/window-1/l3/`）。
+  - 你給的 MagicaVoxel `biome.vox`（126×126×32）用一次性腳本轉成格子：64 區塊，`verify-map` 一致（`window-1/biome/`）。v1 有 1,260 個碰撞盒，超過產品 arena 的 1,024 上限，遊戲載入不了。
+  - 你明確同意後，在副本裡用暫時改過上限的執行檔試玩：60 fps。原始碼當下就還原了（未提交）。之後照你的指示，把副本的執行檔也換回標準版，標準 Match 再次拒收。
+  - 「上限太低」已照你的指示回報架構師（屬於 product-arena-v3）。
+- 2026-11-07：架構師轉達你的決定 `v8-arch-map-scene-split`；你確認 window-1 拿掉標記放置 UI（`v8-tool-voxel-window-1-no-markers`）。已移除程式碼、測試與 3 條突變，文件已更新；突變全目錄 84/84，`cpu|shader` 135/135。
+- 2026-11-07：L3 合格（範圍是基礎功能）。window-1 的判定 W1～W11、P1、L3 全部成立。編輯手感與操作記為 TODO #10，待你整理。

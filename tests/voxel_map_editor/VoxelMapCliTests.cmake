@@ -79,6 +79,29 @@ if(EXISTS "${WORK}/nothing.voxel_grid.json")
     message(FATAL_ERROR "import_missing_pointer: a file was written")
 endif()
 
+# W8 of v8-tool-voxel-map-editor-window: edit and measure-preview check their arguments in every variant; a build
+# without the window says so and opens nothing.
+check(2 edit_arguments edit "${WORK}/only.voxel_grid.json")
+check(2 edit_option edit "${WORK}/a.voxel_grid.json" "${WORK}/a.voxel_mesh.json" --gpu "metal")
+# The window edits geometry only: markers are the scene editor's (v8-tool-voxel-window-1, W8).
+check(2 edit_markers edit "${WORK}/a.voxel_grid.json" "${WORK}/a-map" --markers "${WORK}/m.json")
+check(2 measure_no_edit_value measure-preview --synthetic --csv "${WORK}/m.csv" --no-edit --frames)
+check(2 measure_no_map measure-preview --csv "${WORK}/m.csv")
+check(2 measure_both measure-preview --synthetic --grid "${WORK}/a.voxel_grid.json" --csv "${WORK}/m.csv")
+check(2 measure_no_csv measure-preview --synthetic)
+check(2 measure_frames measure-preview --synthetic --csv "${WORK}/m.csv" --frames 0)
+check(2 measure_unknown measure-preview --synthetic --csv "${WORK}/m.csv" --fast yes)
+if(NOT HAS_WINDOW)
+    check(2 edit_without_window edit "${WORK}/a.voxel_grid.json" "${WORK}/a.voxel_mesh.json")
+    if(NOT last_output MATCHES "has no window")
+        message(FATAL_ERROR "edit_without_window\n${last_output}")
+    endif()
+    if(EXISTS "${WORK}/a.voxel_grid.json" OR EXISTS "${WORK}/a.voxel_mesh.json")
+        message(FATAL_ERROR "edit_without_window: a file was written")
+    endif()
+    check(2 measure_without_window measure-preview --synthetic --csv "${WORK}/m.csv")
+endif()
+
 # The chunked map (v8-arch-big-map-tool-chunked, judgments T1, T2 and T4).
 check(2 build_map_arguments build-map "${FIXTURES}/sample.voxel_grid.json")
 check(0 build_map build-map "${FIXTURES}/sample.voxel_grid.json" "${WORK}/map")

@@ -42,4 +42,13 @@ Result<void> WriteFileReplacing(const std::string& path, const std::string_view 
     return {};
 }
 
+Result<bool> FileExists(const std::string& path) {
+    Io::FS::NativeFileSystem files;
+    auto uri = Io::FS::NativeFileUri(path);
+    if (!uri) return Engine::Base::Err(FileError(VoxelMapErrorCode::ReadFailed, "cannot open", uri.error(), path));
+    auto exists = files.Exists(uri.value());
+    if (!exists) return Engine::Base::Err(FileError(VoxelMapErrorCode::ReadFailed, "cannot tell", exists.error(), path));
+    return exists.value();
+}
+
 } // namespace Gyo::Tools::VoxelMapEditor

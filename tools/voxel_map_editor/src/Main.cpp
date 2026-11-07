@@ -1,6 +1,7 @@
 #include "gyo/voxel_map_editor/ChunkedMap.hpp"
 #include "gyo/voxel_map_editor/MarkersFile.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
+#include "window/EditorWindow.hpp"
 
 #include "MapMeasure.hpp"
 
@@ -27,6 +28,9 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor verify  <grid> <mesh>\n"
     "  gyo_voxel_map_editor inspect <file>\n"
     "  gyo_voxel_map_editor import-boxes <json> <pointer> <grid>\n"
+    "  gyo_voxel_map_editor edit <grid> <map-dir> [--gpu-driver <driver>]\n"
+    "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic) --csv <file>\n"
+    "                       [--no-edit] [--frames <n>] [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor build-map   <grid> <map-dir>\n"
     "  gyo_voxel_map_editor verify-map  <grid> <map-dir>\n"
     "  gyo_voxel_map_editor inspect-map <map-dir>\n"
@@ -39,6 +43,10 @@ constexpr std::string_view kHelp =
     "with <mesh>. inspect summarizes a grid or a baked mesh. import-boxes makes a\n"
     "grid of cubes from the boxes at a JSON pointer (for example /walls), each\n"
     "{\"min\": [x, y, z], \"max\": [x, y, z]} in whole cells.\n"
+    "edit opens the window (gui variant): a new grid when <grid> does not exist;\n"
+    "every save writes <grid> and then the chunked map in <map-dir>. measure-preview\n"
+    "times the window's preview, with an edit per frame or (--no-edit) drawing\n"
+    "only (gui variant).\n"
     "build-map bakes a grid into Engine's chunked map: <map-dir>/map.json and its\n"
     "region files under <map-dir>/regions (region files of the old map that the\n"
     "new index does not list are removed). verify-map bakes again and compares\n"
@@ -263,6 +271,43 @@ int Run(const std::span<const std::string> arguments) {
     if (command == "import-boxes") {
         if (arguments.size() != 5) return Usage("import-boxes takes <json> <pointer> <grid>");
         return ImportBoxesCommand(arguments[2], arguments[3], arguments[4]);
+    }
+    if (command == "edit") {
+        if (arguments.size() != 4 && !(arguments.size() == 6 && arguments[4] == "--gpu-driver"))
+            return Usage("edit takes <grid> <map-dir> [--gpu-driver <driver>]");
+        WindowOptions window;
+        window.gridPath = arguments[2];
+        window.mapDirectory = arguments[3];
+        if (arguments.size() == 6) window.gpuDriver = arguments[5];
+        return RunEditorWindow(window);
+    }
+    if (command == "measure-preview") {
+        MeasureOptions measure;
+        for (std::size_t i = 2; i < arguments.size(); ++i) {
+            const std::string& option = arguments[i];
+            if (option == "--synthetic") {
+                measure.synthetic = true;
+                continue;
+            }
+            if (option == "--no-edit") {
+                measure.edit = false;
+                continue;
+            }
+            if (i + 1 >= arguments.size()) return Usage(option + " needs a value");
+            const std::string& value = arguments[++i];
+            if (option == "--grid") measure.gridPath = value;
+            else if (option == "--csv") measure.csvPath = value;
+            else if (option == "--gpu-driver") measure.gpuDriver = value;
+            else if (option == "--frames") {
+                if (value.empty() || value.size() > 6 || value.find_first_not_of("0123456789") != std::string::npos ||
+                    std::stoul(value) == 0)
+                    return Usage("--frames takes a whole number from 1 to 999999");
+                measure.frames = static_cast<std::uint32_t>(std::stoul(value));
+            } else return Usage("unknown option " + option);
+        }
+        if (measure.csvPath.empty() || measure.synthetic == !measure.gridPath.empty())
+            return Usage("measure-preview takes --grid <grid> or --synthetic, and --csv <file>");
+        return RunPreviewMeasure(measure);
     }
     if (command == "build-map" || command == "verify-map") {
         if (arguments.size() != 4) return Usage(command + " takes <grid> <map-dir>");
