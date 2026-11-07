@@ -241,6 +241,8 @@ TEST_CASE("PvP movement diagnostics count what a full queue loses") {
     REQUIRE(end.at("kind") == "diag_end");
     CHECK(end.at("records").get<std::uint64_t>() == lines.size() - 1);
     CHECK(end.at("records").get<std::uint64_t>() + end.at("dropped").get<std::uint64_t>() == recorded);
+    // The loop must actually fill the queue, or the count above proves nothing.
+    CHECK(end.at("dropped").get<std::uint64_t>() > 0);
 }
 
 // ---------------------------------------------------------------------------

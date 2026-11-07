@@ -12,7 +12,8 @@ struct CharacterMoveDiagnostics final {
     int penetrationPushes{};
     Engine::Math::Vec3 deepestNormal{};
     float deepestDepth{};
-    // Sweep and slide: how many passes hit something, and the last hit used.
+    // Sweep and slide: how many passes hit something, and the last hit's
+    // contact (its raw fraction, before the 0.0001 backoff the move applies).
     int sweepHits{};
     Engine::Math::Vec3 sweepNormal{};
     float sweepFraction{};

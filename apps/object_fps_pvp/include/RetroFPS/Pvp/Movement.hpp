@@ -197,7 +197,7 @@ struct PlayerState final {
 struct MovementStepDiagnostics final {
     Engine::Math::Vec3 before{};
     bool groundedBefore{};
-    bool supportedBefore{}; // support at the start, before a jump left the ground
+    bool supportedBefore{}; // grounded at the start and still supported there (before a jump leaves the ground)
     float desiredY{};
     Engine::Math::Vec3 after{}; // the grounded and vertical velocity after are the step's result
     CharacterMoveDiagnostics move{};
