@@ -388,7 +388,7 @@ Timings Run(const fps::pvp::Arena &arena, std::size_t ticks) {
 
 void Report(const char *name, const fps::pvp::Arena &arena, const Timings &t) {
     const double step = P99(t.step), shot = P99(t.shot), tick = P99(t.tick);
-    MESSAGE("B4 " << name << ": colliders " << arena.walls.size() << ", cell " << arena.WallGrid().CellLength()
+    MESSAGE("B4 " << std::string(name) << ": colliders " << arena.walls.size() << ", cell " << arena.WallGrid().CellLength()
                   << " (given " << arena.cellSize << "), steps " << t.step.size() << ", ticks " << t.tick.size()
                   << ", p99 step " << step << " ms, p99 shot " << shot << " ms, p99 tick " << tick << " ms");
     CHECK(step <= 0.4);

@@ -1,4 +1,4 @@
 {
   "version": 1,
-  "arenas": ["pvp_arena.json", "pvp_corners.json"]
+  "arenas": ["pvp_arena.json", "pvp_corners.json", "biome.json"]
 }
