@@ -9049,7 +9049,7 @@
       "batch": "v8-product-arena-v2",
       "what": "A spawn in the air is accepted",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, grid)) || !std::isfinite(spawn.yaw) ||",
+      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, *grid)) || !std::isfinite(spawn.yaw) ||",
       "replace": "            false || !std::isfinite(spawn.yaw) ||",
       "check": "cpu",
       "expect": "wall top"
@@ -9059,7 +9059,7 @@
       "batch": "v8-product-arena-v2",
       "what": "The spawn rule keeps its own copy of support (any height up to 2 counts)",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, grid)) || !std::isfinite(spawn.yaw) ||",
+      "find": "            (spawn.position.y != 0 && !IsCharacterSupported(body, *grid)) || !std::isfinite(spawn.yaw) ||",
       "replace": "            (spawn.position.y != 0 && !(spawn.position.y <= 2.0001F)) || !std::isfinite(spawn.yaw) ||",
       "check": "cpu",
       "expect": "wall top"
