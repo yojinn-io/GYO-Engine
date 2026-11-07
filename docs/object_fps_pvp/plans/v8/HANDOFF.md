@@ -54,6 +54,8 @@
   - `v8-product-sfx` 前：音效資產的來源（v7 D38）。
 - **發現（不在本產品的範圍，只報告）**：Engine 計畫 [輸入與呈現 HANDOFF](../../../architecture/plans/input-and-present/HANDOFF.md) 開頭寫「IP-3 進行中（ip3b）」，但 IP-3／IP-4 已隨 PR #85 在 2026-10-23 合併（merge commit `054b08f`，見 [v7.1 交接](../v7.1/HANDOFF.md) 2026-10-22～23 的規劃紀錄）。開頭已過時，交給該計畫或圖書管理員更新。
 
+- **`v8-product-pa-broadphase`（2026-11-07，順序改變）**：使用者要在 11/9 的 lag-l2＋K8 場次用大地圖 biome（2～3 人，第 3 台 Windows；現場沒有網路），而 Match 以 1024 上限拒收 biome，所以 pa-broadphase 排到場次之前（使用者 2026-11-07：「biome、pa-broadphase 先」；順序 pa-broadphase → 場次 → hitbox-rewind → pm-detect；週日晚上前沒合併就照 `54948874` 的 kit 用 pvp_corners）。[事前宣告](v8-product-pa-broadphase-declaration.md)照推薦核准（assert 採 (b)＝架構師在 Engine 加 `Build`，[#166](https://github.com/yojinn-io/GYO-Engine/pull/166)；biome 進 repo）。實作與 B1～B6 完成（[dev_log](../../../dev_logs/2026_11_07_pvp_v8_pa_broadphase.zh-Hant.md)）：B2 40,000 查詢 0 不一致、B4 遠低於閾值、B5 使用者在 biome 試玩通過、突變 15／15。**等**：審查（engine-grid 會話）、驗證（Fable）、#166 合併後換掉暫時上界、PR 的 L1、lag-l2 宣告修訂 8（biome、3 人、新 commit）。
+
 ## 閱讀入口
 
 - 計畫：[README](README.md)

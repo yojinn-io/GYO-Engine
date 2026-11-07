@@ -152,6 +152,10 @@ proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 �
 
 - 2026-11-06 審查者複核 `7e7ea5db`：B1、S1 關閉，沒有剩下的 blocker 或 should-fix。使用者指示合併，PR #161 合併進 master（merge `c70e8fdc`，分支已刪）。engine-grid 批完成。
 
+## 現況：pa-broadphase（`v8-arch-big-map-product-arena-v3` 第一批，產品線）
+
+2026-11-07，產品會話。[事前宣告](../../../object_fps_pvp/plans/v8/v8-product-pa-broadphase-declaration.md)核准；實作與 B1～B6 完成（[dev_log](../../../dev_logs/2026_11_07_pvp_v8_pa_broadphase.zh-Hant.md)）。Movement、Client 預測、出生點驗證、ShotQuery 改用 `StaticAabbGrid`（與線性掃 bit 一致），collider 上限 2^20，biome（v1 單檔，1,260 盒）進產品的 `arenas.json`。登記數的檢查暫用保守上界，#166（`StaticAabbGrid::Build`）合併後換掉。審查（engine-grid 會話）與驗證（Fable）進行中。
+
 ## 現況：engine-format（`v8-arch-big-map-engine-format`，PR 2）
 
 - 2026-11-06 開工。原工作樹 `bold-mahavira-68c717` 已刪除，改用工作樹 `.claude/worktrees/engine-format`。分支 `claude/v8-arch-big-map-engine-format` 的實作提交已 rebase 到 `c70e8fdc`，沒有衝突。
@@ -268,6 +272,6 @@ v8-arch-big-map-product-arena-v3
 
 ## 下一步
 
-產品線（使用者 2026-11-07 在產品規劃會話決定）：lag-l2＋K8 的 L2 場次 → `v8-product-hitbox-rewind` → **`pa-broadphase`**（rewind 合併後；兩者都改 `ShotQuery`，不並行、hitbox 的流程不中斷）→ `pm-detect`。pa-broadphase 開卡前照慣例先出事前宣告。之後 `scene v1`、`pa-measure`。
+產品線（使用者 2026-11-07 在產品規劃會話決定，同日更正）：**`pa-broadphase`（現在）** → 11/9 場次（biome；週日晚未合併就退回 pvp_corners 的 kit）→ `v8-product-hitbox-rewind` → `pm-detect` → `scene v1` → `pa-measure`。更正的理由：使用者要在場次用 biome，Match 的 1024 上限擋住它。
 voxel 線：window 批重做（不做 markers 放置 UI）；它的 TODO 見 [todo](todo.zh-Hant.md)。
 場景、互動物件、pv10：只有需求紀錄（`docs/architecture/plans/scene/README.md`、`docs/object_fps_pvp/plans/v8/pv10-requirements.md`），使用者說開工才開 survey。
