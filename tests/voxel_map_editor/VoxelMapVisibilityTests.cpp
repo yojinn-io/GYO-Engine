@@ -83,10 +83,20 @@ TEST_CASE("ve-feel-1 E1: the zoom range goes from two cells to framing the whole
     const auto large = ZoomLimits(km2, 1.0F);
     CHECK(large.maximum == doctest::Approx(Math::Length(Math::Vec3{2000.0F, 16.0F, 2000.0F}) * 0.9F));
     CHECK(large.maximum > 2500.0F);
-    // A tiny cell size never gives a maximum below the minimum.
+    // A tiny map: the framing distance's floor of 4 cells.
     const std::optional<std::pair<Vec3i, Vec3i>> flat{{{0, 0, 0}, {1, 1, 1}}};
-    const auto tiny = ZoomLimits(flat, 1.0F);
+    const auto tiny = ZoomLimits(flat, 0.5F);
+    CHECK(tiny.maximum == doctest::Approx(4.0F * 0.5F));
     CHECK(tiny.maximum >= tiny.minimum);
+    // Bounds over several chunks, negative ones too: low inclusive, high exclusive, in cells.
+    GridDocument two = NewGrid();
+    two.Set({-20, 3, 5}, {1, 0});
+    two.Set({40, -1, 33}, {1, 0});
+    const auto spread = ChunkBounds(two);
+    REQUIRE(spread);
+    CHECK(spread->first == Vec3i{-32, -16, 0});
+    CHECK(spread->second == Vec3i{48, 16, 48});
+    CHECK_FALSE(ChunkBounds(NewGrid()));
     // The distance stays between the two.
     CHECK(ClampZoom(0.1F, small) == doctest::Approx(small.minimum));
     CHECK(ClampZoom(1e6F, small) == doctest::Approx(small.maximum));
@@ -118,4 +128,8 @@ TEST_CASE("ve-feel-1 E2: at most the nearest chunks are drawn, the rest reported
     CHECK(four.indices == std::vector<std::size_t>{44, 45, 54, 55});
     // The same choice every time.
     CHECK(ChooseChunks(view, boxes, 4).indices == four.indices);
+    // Ties at the cut: the next ring of eight is equally far, the lowest index wins.
+    CHECK(ChooseChunks(view, boxes, 5).indices == std::vector<std::size_t>{34, 44, 45, 54, 55});
+    // The cap the declaration set: a building-sized map (768 chunks) is always drawn whole.
+    CHECK(MaxDrawnChunks == 2000);
 }

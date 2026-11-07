@@ -278,10 +278,11 @@ int RunPreviewMeasure(const MeasureOptions& options) {
         for (std::size_t phase = 0; phase < 4; ++phase) {
             const auto q = Quantiles(phases[phase]);
             std::printf("%s scenario=stroke phase=%s brush=%d requested=%u measured=%u failed=%u warmup=%u counted=%zu "
-                        "p50=%.3f p95=%.3f p99=%.3f max=%.3f ms chunks=%zu drawn=%zu\n",
+                        "p50=%.3f p95=%.3f p99=%.3f max=%.3f ms chunks=%zu drawn=%zu capped=%d draw_distance_used=%.1f\n",
                         mapName.c_str(), kPhase[phase], options.brushSize, options.frames, measured, failures,
                         options.warmup, phases[phase].size(), q[0], q[1], q[2], q[3], scene.value()->ChunkCount(),
-                        scene.value()->DrawnCount());
+                        scene.value()->DrawnCount(), scene.value()->Capped() ? 1 : 0,
+                        static_cast<double>(DrawDistanceFor(options.drawDistanceCells * size, orbit.distance) / size));
         }
         if (auto written = WriteFileReplacing(options.csvPath, lines.str()); !written) {
             std::cerr << "error: " << Engine::Base::Describe(written.error()) << '\n';
@@ -339,10 +340,11 @@ int RunPreviewMeasure(const MeasureOptions& options) {
         return sorted[std::min(index, sorted.size() - 1)];
     };
     std::printf("%s edit=%d requested=%u measured=%u failed=%u warmup=%u counted=%zu p50=%.3f p95=%.3f p99=%.3f "
-                "max=%.3f ms chunks=%zu drawn=%zu draw_distance=%.0f\n",
+                "max=%.3f ms chunks=%zu drawn=%zu capped=%d panel_draw_distance=%.0f draw_distance_used=%.1f\n",
                 name.c_str(), options.edit ? 1 : 0, options.frames, measured, failures, options.warmup, times.size(),
                 at(0.5), at(0.95), at(0.99), sorted.empty() ? 0.0 : sorted.back(), scene.value()->ChunkCount(),
-                scene.value()->DrawnCount(), static_cast<double>(options.drawDistanceCells));
+                scene.value()->DrawnCount(), scene.value()->Capped() ? 1 : 0, static_cast<double>(options.drawDistanceCells),
+                static_cast<double>(DrawDistanceFor(options.drawDistanceCells * size, orbit.distance) / size));
     if (auto written = WriteFileReplacing(options.csvPath, csv.str()); !written) {
         std::cerr << "error: " << Engine::Base::Describe(written.error()) << '\n';
         return 3;

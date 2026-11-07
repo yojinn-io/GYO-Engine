@@ -1069,6 +1069,26 @@
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "ve-feel-1 E3*",
       "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-bounds-swapped",
+      "what": "The map's bounds keep the smallest high and the largest low",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "            bounds->first[axis] = Math::Min(bounds->first[axis], low[axis]);\n            bounds->second[axis] = Math::Max(bounds->second[axis], high[axis]);",
+      "replace": "            bounds->first[axis] = Math::Max(bounds->first[axis], low[axis]);\n            bounds->second[axis] = Math::Min(bounds->second[axis], high[axis]);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E1*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vf1-cap-ties-by-distance-only",
+      "what": "At the cut, equally far chunks are not ordered by index",
+      "file": "tools/voxel_map_editor/src/Visibility.cpp",
+      "find": "    std::nth_element(keyed.begin(), keyed.begin() + static_cast<std::ptrdiff_t>(maxChunks), keyed.end());",
+      "replace": "    std::nth_element(keyed.begin(), keyed.begin() + static_cast<std::ptrdiff_t>(maxChunks), keyed.end(),\n                     [](const auto& a, const auto& b) { return a.first < b.first || (a.first == b.first && a.second > b.second); });",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-feel-1 E2: at most*",
+      "expect": "is NOT correct"
     }
   ]
 }

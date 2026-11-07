@@ -513,8 +513,8 @@ private:
         const ImVec2 scale = ImGui::GetIO().DisplayFramebufferScale;
         const auto width = static_cast<std::uint32_t>(std::max(area.x * scale.x, 16.0F));
         const auto height = static_cast<std::uint32_t>(std::max(area.y * scale.y, 16.0F));
-        // The map may have grown or shrunk since the last frame.
-        camera_.distance = ClampZoom(camera_.distance, Zoom());
+        // The map may have grown or shrunk since the last frame; not during a drag, so the pick ray stays put.
+        if (!drag_) camera_.distance = ClampZoom(camera_.distance, Zoom());
         const auto camera = camera_.Camera();
         // Zoomed out, farther than the panel's distance is drawn (ve-feel-1 F1).
         auto frame = scene_->Render(camera, camera_.target,
@@ -584,7 +584,14 @@ private:
             camera_.distance = ClampZoom(camera_.distance * (1.0F - io.MouseWheel * 0.1F), Zoom());
     }
 
-    ZoomRange Zoom() const { return ZoomLimits(ChunkBounds(Document()), Document().cellSize); }
+    // The zoom range, kept until the document changes (walking every chunk each frame costs on a km^2 map).
+    ZoomRange Zoom() {
+        if (!zoomRevision_ || *zoomRevision_ != Session().Revision()) {
+            zoomRange_ = ZoomLimits(ChunkBounds(Document()), Document().cellSize);
+            zoomRevision_ = Session().Revision();
+        }
+        return zoomRange_;
+    }
 
     Cell Brush() const {
         return {block_, block_ == 0 ? std::uint8_t{0} : static_cast<std::uint8_t>(orientation_)};
@@ -870,12 +877,10 @@ private:
         const auto& document = Document();
         const auto& m = OrientationMatrix(static_cast<std::size_t>(orientation_));
         const auto turned = [&m](const Vec3i local) {
-            Math::Vec3 out{};
             std::array<float, 3> r{};
             for (std::size_t row = 0; row < 3; ++row)
                 for (std::size_t col = 0; col < 3; ++col) r[row] += static_cast<float>(m[row][col] * local[col]);
-            out = {r[0], r[1], r[2]};
-            return out;
+            return Math::Vec3{r[0], r[1], r[2]};
         };
         const Math::Vec3 centre = CellCorner(document, cell) + Math::Vec3{0.5F, 0.5F, 0.5F} * document.cellSize;
         const float length = 0.9F * document.cellSize;
@@ -890,8 +895,11 @@ private:
 
     // The camera's orientation (ve-feel-1 F4, as Goxel's corner axes): world X, Y and Z turned into the view.
     void DrawAxes(const View& view) const {
-        const Math::Matrix4 toView = Math::Multiply(Math::MakeRotationX(-view.pose.rotationRadians.x),
-                                                    Math::MakeRotationY(-view.pose.rotationRadians.y));
+        // The rotation part of Engine's view matrix: X, then Y, then Z, each undone.
+        const Math::Matrix4 toView = Math::Multiply(
+            Math::MakeRotationX(-view.pose.rotationRadians.x),
+            Math::Multiply(Math::MakeRotationY(-view.pose.rotationRadians.y),
+                           Math::MakeRotationZ(-view.pose.rotationRadians.z)));
         const ImVec2 origin(view.imageMin.x + 50.0F, view.imageMin.y + static_cast<float>(view.height) / view.scale.y - 50.0F);
         constexpr float size = 36.0F;
         struct Axis final {
@@ -981,6 +989,8 @@ private:
     int brushSize_{1};
     float drawDistanceCells_{DefaultDrawDistanceCells};
     bool zoomLocked_{};
+    std::optional<std::uint64_t> zoomRevision_;
+    ZoomRange zoomRange_{};
     bool snapVolume_{true};
     bool snapPlane_{true};
     EditPlane plane_{};
