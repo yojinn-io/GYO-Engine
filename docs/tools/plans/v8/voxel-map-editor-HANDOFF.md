@@ -6,6 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
+- **2026-11-07（設計稿）**：架構師支援卡起草了下一階段的設計稿 [design.zh-Hant.md](../../../voxel_map_editor/design.zh-Hant.md)（文件模型、照 Goxel 的操作模型、手感 H1～H8、契約影響、分批建議），把 window-2、window-3、TODO #9、#10 重排成 `ve-*` 批次。你已核准 Q1～Q12 全部照建議（`v8-tool-voxel-design-approve`）。**下一步：voxel 線寫 `ve-feel-survey` 與 `ve-scale-measure` 的事前宣告**（兩批都只量不改）。dev_log：[2026_11_07_arch_v8_voxel_editor_design](../../../dev_logs/2026_11_07_arch_v8_voxel_editor_design.zh-Hant.md)。
 - **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；§14.4 已核准、空格子拒存、L3 合格。**window-1 完成，等你決定是否合併 PR #158**。
 - **PR**：
   - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
@@ -42,6 +43,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-design-approve` | （2026-11-07）設計稿 [design.zh-Hant.md](../../../voxel_map_editor/design.zh-Hant.md) 的 Q1～Q12 全部照建議：先做手感調查與大地圖量測（只量不改）；Layers 延後、先做剖切顯示；prefab＝v1 格子檔、依名字對應、同名不同義就拒絕；undo 維持一次操作一步、大型操作存區塊前像；對稱 X／Y／Z、不能鏡像就整筆拒絕；盒選＋依方塊相連選取；Line 的操作與飛行相機留給手感調查；大面積填充分幀完成並顯示進度。各批仍另寫事前宣告 | 「照建議全部核准」 |
 | `v8-tool-voxel-window-1-l3` | （2026-11-07）window-1 的 L3：在視窗編輯 pvp_corners，進遊戲走一圈，合格；合格的範圍是基礎功能，編輯手感和操作還差得很遠（TODO #10） | 「合格」「這次的合格是基礎功能，編輯手感，和操作差的很遠。之後我會想想如何修正這一方面的內容。」 |
 | `v8-tool-voxel-window-1-empty-save` | （2026-11-07）沒有填任何格子的格子不存檔（`EmptyMap`，什麼都不寫），磁碟上的 grid 不會和地圖對不上 | 「(a) 保存を断る」 |
 | `v8-tool-voxel-window-1-guard` | （2026-11-07）核准依賴守衛的 §14.4：視窗可 include `imgui.h`、framework 的 ImGui 殼、`window/…`，可連六個視窗 target；核心只可 include 入口標頭；含舊視窗批沒核准完的 W9。驗證者找出的 3 個隱藏放寬已改嚴 | 「承認する」 |
