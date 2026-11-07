@@ -211,5 +211,4 @@
   2. ShotDecision 的 6／10 改名 `hit_entity_id`／`hit_life_generation`，`HIT_PLAYER`→`HIT_ENTITY`，`HIT_NPC` 改為永久 reserved，13→`item_entity_id`，BossState 的預留號碼改成 repeated BossPhase。
   3. Gateway 的 player_id 上限降到 2^24−1，Match 的 Join 加值域檢查。
   - 另外：CombatState 拆成公開的 CombatPose 和私人的 Vitals；MaxPlayers=4 與需求 ≤8 的三方檢查重寫。粗估 40～60 h。
-- **HUD 檢查失敗（2026-11-01 發現，未排程）**：`run_timing.py --gui --combat --short`（Mac）的 `combat_gui_evidence` 報「displayed HUD HP/ammo/life mismatch」11～12 次，改用合成模型的 Match 也一樣；死亡與重生照宣告。和 P2 的滑鼠移動有沒有關係沒有分開（要用舊版的樹建 GUI probe 比對）。照「先建檢測再評估」處理。證據在主 checkout 的 `build/evidence/v8-hit-gui-aim/`。
 - **候選（未排程，2026-11-01 framework 整改線通知）**：「pvp Client 搬上外殼」。外殼草圖已核准（`claude/framework-rework` `558cba22`，`docs/architecture/plans/framework-rework/shell-sketch.md` 第 2、6 節，PR #127 draft 未合併）。採用前 pvp 側要各自決定：(1) framework 改成產品在登錄資料宣告使用（Architecture Delta）；(2) live frame（`PvpApplication.cpp:1377-1395`）外殼沒有，要嘛外殼加通用選項（另行核准），要嘛放棄即時重繪；(3) pump 前後包夾與計時診斷（`:1098-1121`）逐事件 OnEvent 做不到，要嘛放棄、要嘛外殼加通用掛鉤；(4) 迴圈後的收尾移到 client 解構子，初始化失敗改成工廠回 nullptr；(5) GPU 裝置、平台前的內容載入、`Fail()`→`ExitCode()`、進入點 catch 與 SdlLogBridge、最小化節流現在就能對應。Match 最多用 RunHeadlessShell 取代開場，外殼沒有停止要求。外殼實作合併後若介面變了，該線會再通知。
