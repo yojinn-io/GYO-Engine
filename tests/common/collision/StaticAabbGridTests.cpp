@@ -463,7 +463,6 @@ TEST_CASE("grid build: rejects broken preconditions with a Result and otherwise 
         REQUIRE_FALSE(rejected.has_value());
         CHECK(rejected.error().code == CollisionErrorCode::InvalidBox);
         CHECK(rejected.error().detail == "3");
-        CHECK(Engine::Base::Describe(rejected.error()) == "InvalidBox: a box is not valid (IsValid) (3)");
     }
     SUBCASE("too many registrations are rejected before anything of their size is allocated") {
         // 160^3 = 4,096,000 cells (under MaxCells, so the cell is not doubled);

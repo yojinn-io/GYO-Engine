@@ -49,6 +49,7 @@ enum class CollisionErrorCode : std::uint8_t {
 }
 
 using CollisionError = Base::Error<CollisionErrorCode>;
+static_assert(Base::CodedError<CollisionError>);
 
 struct RaycastHit final {
     float distance{};

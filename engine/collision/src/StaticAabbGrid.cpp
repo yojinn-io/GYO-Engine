@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -50,6 +51,14 @@ bool Replaces(const float value, const std::uint32_t index, const float bestValu
     return tie == TieBreak::LowestIndex ? index < bestIndex : index > bestIndex;
 }
 
+// The float as people read it (std::to_string prints six decimals, so a tiny
+// value would show as 0.000000).
+std::string ShortestFloat(const float value) {
+    char text[32]{};
+    std::snprintf(text, sizeof text, "%g", static_cast<double>(value));
+    return text;
+}
+
 } // namespace
 
 StaticAabbGrid::StaticAabbGrid(const std::span<const Math::Aabb> boxes, const float cellLength) {
@@ -68,7 +77,7 @@ std::optional<CollisionError> StaticAabbGrid::Initialize(const std::span<const M
                                                          const float cellLength) {
     if (!(std::isfinite(cellLength) && cellLength > 0.0F))
         return CollisionError::Make(CollisionErrorCode::InvalidCellLength, "the cell length must be finite and positive",
-                                    std::to_string(cellLength));
+                                    ShortestFloat(cellLength));
     if (boxes.size() >= std::size_t{std::numeric_limits<std::uint32_t>::max()})
         return CollisionError::Make(CollisionErrorCode::TooManyBoxes, "boxes are indexed with 32 bits",
                                     std::to_string(boxes.size()));
@@ -138,6 +147,9 @@ std::optional<CollisionError> StaticAabbGrid::Initialize(const std::span<const M
                     ++counts[static_cast<std::size_t>((z * counts_[1] + y) * counts_[0] + x)];
     offsets_.assign(cells + 1, 0);
     for (std::size_t c = 0; c < cells; ++c) offsets_[c + 1] = offsets_[c] + counts[c];
+    // The counted total equals the summed one by construction; checked here
+    // so that nothing of the wrong size is ever filled.
+    GYO_ASSERT(offsets_[cells] == registrations);
     items_.resize(offsets_[cells]);
     std::vector<std::uint32_t> fill(offsets_.begin(), offsets_.end() - 1);
     for (std::size_t i = 0; i < boxes_.size(); ++i) {

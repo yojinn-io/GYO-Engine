@@ -7,7 +7,7 @@ add_test(NAME gyo_collision_tests COMMAND gyo_collision_tests)
 add_executable(gyo_collision_corpus CollisionCorpusMain.cpp CollisionCorpus.cpp)
 target_link_libraries(gyo_collision_corpus PRIVATE GYO::Collision gyo_test_support doctest::doctest)
 
-# Collision links only Math and, privately, Base (docs/architecture.md, module
+# Collision links only Math and Base, both public since Build (docs/architecture.md, module
 # table); the static broadphase adds no dependency (v8-arch-big-map-engine-grid,
 # judgment J7; gyo_expect_links is defined with the time tests). Checked once
 # the whole project is configured.

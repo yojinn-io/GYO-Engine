@@ -184,13 +184,13 @@
     },
     {
       "id": "grid-build-registrations-unchecked",
-      "what": "Build does not count the registrations against 2^32: the 32-bit offsets wrap and the fill writes out of bounds (the test crashes instead of seeing the rejection)",
+      "what": "Build does not count the registrations against 2^32: the 32-bit offsets wrap, caught by the assertion before the fill",
       "file": "engine/collision/src/StaticAabbGrid.cpp",
       "find": "    if (registrations >= (std::uint64_t{1} << 32U))\n        return CollisionError::Make(CollisionErrorCode::TooManyRegistrations,",
       "replace": "    if (registrations >= (std::uint64_t{1} << 40U))\n        return CollisionError::Make(CollisionErrorCode::TooManyRegistrations,",
       "target": "gyo_collision_tests",
       "cases": "*grid build*",
-      "expect": "(?s)(is NOT correct|test case CRASHED)"
+      "expect": "GYO_ASSERT failed: offsets_\\[cells\\] == registrations"
     }
   ]
 }
