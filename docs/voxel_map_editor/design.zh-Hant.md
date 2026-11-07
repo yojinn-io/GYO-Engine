@@ -3,6 +3,8 @@
 **設計稿，由架構師支援卡起草（2026-11-07），voxel 線實作時維護。** 文件 owner 是 voxel 線（`voxel_map_editor`）。
 本頁只寫設計與分批建議，沒有改程式、沒有改既有契約；每一批開工前，照慣例另寫事前宣告並取得使用者核准。
 
+**狀態（2026-11-07）**：使用者核准 Q1～Q12 全部照建議。下一步是 voxel 線寫 `ve-feel-survey` 與 `ve-scale-measure` 的事前宣告。
+
 - 工具契約與現況：[architecture.md](architecture.md)（格子 `gyo.voxel_grid` v1、朝向、build、區塊化地圖、The window、Design Invariants／Replacement Criteria）。
 - 記錄器：[voxel-map-editor-HANDOFF.md](../tools/plans/v8/voxel-map-editor-HANDOFF.md)（TODO #6～#10、決定表）。
 - window-1 的宣告：[voxel-map-window-goxel.md](../tools/plans/v8/voxel-map-window-goxel.md)。
@@ -25,6 +27,25 @@
 ---
 
 ## 要決定的事（使用者）
+
+**2026-11-07 使用者核准：Q1～Q12 全部照建議**（原話「照建議全部核准」，決定 `v8-tool-voxel-design-approve`）。核准後的結果：
+
+| # | 決定 |
+|---|---|
+| Q1 | 先做 `ve-feel-survey`，依結果再宣告 `ve-feel-1` |
+| Q2 | Layers 延後到觀測到壓力；先做不改格式的剖切顯示（DI 7 的處理在 `ve-feel-1` 的宣告中二選一） |
+| Q3 | 先做 `ve-scale-measure`；量到 v1 撐不住才開 `ve-grid-v2` |
+| Q4 | 只有 Q2、Q3 都需要 v2 時才問；屆時建議綁在一起 |
+| Q5 | prefab 就是 `gyo.voxel_grid` v1 檔，錨點是 origin |
+| Q6 | 依名字對應；同名不同義就整次拒絕並列出衝突 |
+| Q7 | 粒度維持「一次操作一步」；大型操作改存區塊前像；歷史總量設上限（數值在宣告時給） |
+| Q8 | 對稱軸 X、Y、Z；不能鏡像時整筆拒絕 |
+| Q9 | 盒選＋依方塊相連選取；不做螢幕矩形選取 |
+| Q10 | 列為手感調查 H6 的問題，兩種都試後再決定 |
+| Q11 | 提交時間的數值在 `ve-big-fill` 宣告時給；做法是分幀完成並顯示進度 |
+| Q12 | 列為手感調查 H5 的問題 |
+
+下表是核准前的原始問題與選項，保留作為理由的出處。
 
 每一項附建議；建議只是建議，順序與範圍由你決定。理由在後面各節，節名寫在括號裡。
 

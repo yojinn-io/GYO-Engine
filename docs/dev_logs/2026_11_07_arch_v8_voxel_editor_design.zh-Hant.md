@@ -4,7 +4,7 @@
 - 執行：架構師開出的任務卡會話（Opus 5.5／high）。沒有開子 Agent。
 - 文件 owner：voxel 線（`voxel_map_editor`）；本卡只起草，實作時由 voxel 線維護。
 
-**狀態：** 設計稿完成，等使用者回答頁首的 Q1～Q12。沒有改程式、沒有改既有契約。
+**狀態：** 設計稿完成；2026-11-07 使用者核准 Q1～Q12 全部照建議（「照建議全部核准」，`v8-tool-voxel-design-approve`），已記進設計稿頁首與 HANDOFF 的決定表。沒有改程式、沒有改既有契約。
 
 相關文件：
 - [voxel_map_editor/design.zh-Hant.md](../voxel_map_editor/design.zh-Hant.md)（本批的產出）
