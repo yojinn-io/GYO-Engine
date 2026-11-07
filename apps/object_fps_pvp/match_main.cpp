@@ -6,6 +6,7 @@
 #include "RetroFPS/Pvp/MatchIngressTrace.hpp"
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
+#include "RetroFPS/Pvp/MovementDiag.hpp"
 #include "RetroFPS/Pvp/NetworkStatistics.hpp"
 #include "RetroFPS/Pvp/PlayerAnimationContent.hpp"
 #include "RetroFPS/Pvp/PlayerHitbox.hpp"
@@ -42,7 +43,7 @@ int main(int argc,char** argv) {
     try {
         std::string listen="127.0.0.1:27016";
         std::optional<std::filesystem::path> explicitArena,explicitMovementRules;
-        std::filesystem::path movementTrace,ingressTraceOverride,logPath;
+        std::filesystem::path movementTrace,ingressTraceOverride,logPath,movementDiag;
         // UTF-8 arguments on every platform (the narrow argv is the ANSI code page on Windows).
         const auto commandLine=Engine::Os::Console::CommandLineUtf8(argc,argv);
         if(!commandLine){std::cerr<<Engine::Base::Describe(commandLine.error())<<'\n';return 2;}
@@ -60,7 +61,8 @@ int main(int argc,char** argv) {
                            "  [--movement-rules path (default: the release rules/movement_rules.json)]\n"
                            "  [--movement-trace path [--ingress-trace path (default: next to it, -commands.jsonl -> -ingress.jsonl)]]\n"
                            "  (with a movement trace, the shadow records go next to it: -commands.jsonl -> -shots.jsonl)\n"
-                           "  [--log path (also append console output, timestamped)]\n";return 0;
+                           "  [--log path (also append console output, timestamped)]\n"
+                           "  [--movement-diag path (one line per movement step, v8-product-pm-detect-diag)]\n";return 0;
             }
             if(index+1>=arguments.size()){std::cerr<<"Missing argument\n";return 2;}
             if(argument=="--arena") explicitArena=pathArgument(arguments[++index]);
@@ -69,6 +71,7 @@ int main(int argc,char** argv) {
             else if(argument=="--movement-trace") movementTrace=pathArgument(arguments[++index]);
             else if(argument=="--ingress-trace") ingressTraceOverride=pathArgument(arguments[++index]);
             else if(argument=="--log") logPath=pathArgument(arguments[++index]);
+            else if(argument=="--movement-diag") movementDiag=pathArgument(arguments[++index]);
             else {std::cerr<<"Unknown argument: "<<argument<<'\n';return 2;}
             if(!invalidPath.empty()){std::cerr<<"Invalid path for "<<argument<<": "<<invalidPath<<'\n';return 2;}
         }
@@ -81,6 +84,7 @@ int main(int argc,char** argv) {
                 fps::pvp::MatchShotTracePath(candidate)};
         });
         ingressTraceOverride=fps::pvp::FreshTracePath(ingressTraceOverride);
+        movementDiag=fps::pvp::FreshTracePath(movementDiag);
         // The ingress detail file (match-ingress.jsonl) is written only with a movement trace.
         std::string usage;
         const auto ingressTracePath=fps::pvp::MatchIngressTracePath(movementTrace,ingressTraceOverride,usage);
@@ -109,6 +113,9 @@ int main(int argc,char** argv) {
                      <<" ingress="<<Engine::Os::Files::PathForMessage(ingressTracePath)
                      <<" shots="<<Engine::Os::Files::PathForMessage(fps::pvp::MatchShotTracePath(movementTrace))<<'\n';
         fps::pvp::MovementTraceWriter trace(movementTrace);
+        if(!movementDiag.empty())
+            std::clog<<"[ObjectFPS/PvP Match] movement diagnostics="<<Engine::Os::Files::PathForMessage(movementDiag)<<'\n';
+        fps::pvp::MovementDiagFile diag(movementDiag);
         std::optional<fps::pvp::MatchIngressTraceFile> ingressTrace;
         if(!ingressTracePath.empty()) ingressTrace.emplace(ingressTracePath);
         std::optional<fps::pvp::MatchShotTraceFile> shotTrace;

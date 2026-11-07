@@ -1,7 +1,7 @@
 # lag-l2 + K8 L2 session, one Windows player
 # (docs/object_fps_pvp/plans/v8/v8-product-hitbox-lag-l2-session.md).
 #
-#   powershell -ExecutionPolicy Bypass -File windows.ps1 -MacIp <MAC_IP> -Name win1 -Package <folder>
+#   powershell -ExecutionPolicy Bypass -File windows.ps1 -MacIp <MAC_IP> -Name win1 -Package <folder> [-MovementDiag]
 #
 # Package is the folder gyo-object_fps_pvp\ from the windows-x64 tarball (it holds
 # bin\ and build_metadata.json). The script prints the package's source revision, checks
@@ -11,7 +11,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$MacIp,
     [Parameter(Mandatory = $true)][string]$Name,
-    [Parameter(Mandatory = $true)][string]$Package
+    [Parameter(Mandatory = $true)][string]$Package,
+    # Also write the Client's movement diagnostics (v8-product-pm-detect-diag).
+    [switch]$MovementDiag
 )
 $ErrorActionPreference = 'Stop'
 
@@ -32,10 +34,14 @@ $out = Join-Path $PSScriptRoot "lag-l2-$Name-$stamp"
 New-Item -ItemType Directory -Path $out | Out-Null
 $client = Join-Path $Package 'bin\gyo_object_fps_pvp.exe'
 Write-Host "Client log and trace: $out"
-$process = Start-Process -FilePath $client -PassThru -Wait -ArgumentList @(
+$arguments = @(
     '--gateway', "${MacIp}:8080",
     '--log', ('"' + (Join-Path $out "client-$stamp.log") + '"'),
     '--movement-trace', ('"' + (Join-Path $out "client-$stamp-commands.jsonl") + '"'))
+if ($MovementDiag) {
+    $arguments += @('--movement-diag', ('"' + (Join-Path $out "client-$stamp-movement-diag.jsonl") + '"'))
+}
+$process = Start-Process -FilePath $client -PassThru -Wait -ArgumentList $arguments
 Write-Host "Client exited with $($process.ExitCode)"
 
 $zip = Join-Path $PSScriptRoot "lag-l2-$Name.zip"

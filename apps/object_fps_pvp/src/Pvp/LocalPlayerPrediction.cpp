@@ -1,3 +1,4 @@
+#include "RetroFPS/Pvp/MovementDiag.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/WireCounter.hpp"
@@ -12,6 +13,26 @@
 #include <vector>
 
 namespace fps::pvp {
+
+namespace {
+// v8-product-pm-detect-diag: a first prediction (not a replay), when diagnostics are on.
+PlayerState PredictStep(const Arena& arena, const StanceRules& stance, const PlayerState& state,
+    const MovementCommand& command) {
+    if (!MovementDiagEnabled()) return StepMovement(arena, stance, state, command);
+    MovementDiagEvent diag{.role = MovementDiagRole::Client};
+    auto next = StepMovement(arena, stance, state, command, &diag.step);
+    diag.playerId = next.playerId;
+    diag.lifeGeneration = next.lifeGeneration;
+    diag.epoch = next.movementEpoch;
+    diag.sequence = command.sequence;
+    diag.grounded = next.grounded;
+    diag.verticalVelocity = next.verticalVelocity;
+    diag.crouched = next.crouched;
+    RecordMovementDiag(diag);
+    return next;
+}
+} // namespace
+
 namespace {
 // A phase correction is slewed: each frame moves the fixed-step clock by at
 // most this share of its elapsed time, so the display never steps backwards.
@@ -85,7 +106,7 @@ void LocalPlayerPrediction::SeedLead(const PlayerState& authority) {
             false, authority.crouched};
         pending_.push_back(command);
         previous_ = current_;
-        current_ = StepMovement(arena_, stance_, current_, command);
+        current_ = PredictStep(arena_, stance_, current_, command);
         TraceMovement({.kind = MovementTraceKind::Generated, .playerId = current_.playerId,
             .epoch = current_.movementEpoch, .sequence = command.sequence, .seededNeutral = true, .lifeGeneration = current_.lifeGeneration});
     }
@@ -392,7 +413,7 @@ bool LocalPlayerPrediction::Advance(double frameSeconds, float forward, float ri
             !WireCounterExhausted(current_.lastResolvedCommand)) {
             MovementCommand command{current_.lastResolvedCommand + 1, forward, right, yaw, pitch, pendingJump_, crouchHeld};
             pendingJump_ = false;
-            current_ = StepMovement(arena_, stance_, current_, command);
+            current_ = PredictStep(arena_, stance_, current_, command);
             pending_.push_back(command);
             TraceMovement({.kind = MovementTraceKind::Generated, .playerId = current_.playerId,
                 .epoch = current_.movementEpoch, .sequence = command.sequence, .lifeGeneration = current_.lifeGeneration});

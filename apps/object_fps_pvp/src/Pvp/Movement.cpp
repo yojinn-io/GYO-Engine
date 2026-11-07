@@ -41,7 +41,7 @@ PlayerState StepMovement(const Arena& arena, const PlayerState& state, const Mov
 }
 
 PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
-    const PlayerState& state, const MovementCommand& command) {
+    const PlayerState& state, const MovementCommand& command, MovementStepDiagnostics* diagnostics) {
     if (!ValidMovementCommand(command)) throw std::invalid_argument("Invalid movement command");
     auto result = state;
     const bool alive = state.lifeState == LifeState::Alive;
@@ -74,6 +74,12 @@ PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
         return IsCharacterSupported({feet, bodyHeight, arena.radius}, arena.WallGrid());
     };
     if (result.grounded) result.grounded = supported(p);
+    if (diagnostics) {
+        *diagnostics = {};
+        diagnostics->before = p;
+        diagnostics->groundedBefore = state.grounded;
+        diagnostics->supportedBefore = result.grounded;
+    }
     if (alive && command.jumpRequested && result.grounded && !crouched) {
         result.verticalVelocity = std::sqrt(2 * arena.gravity * arena.jumpHeight);
         result.grounded = false;
@@ -90,9 +96,14 @@ PlayerState StepMovement(const Arena& arena, const StanceRules& rules,
         }
     }
     result.position = MoveCharacterBody({p, bodyHeight, arena.radius},
-        {displacement.x, desiredY - p.y, displacement.z}, arena.WallGrid(), {}, false);
+        {displacement.x, desiredY - p.y, displacement.z}, arena.WallGrid(), {}, false,
+        diagnostics ? &diagnostics->move : nullptr);
     if (std::abs(result.position.y - desiredY) > 0.0001F) result.verticalVelocity = 0;
     result.grounded = result.verticalVelocity <= 0 && supported(result.position);
+    if (diagnostics) {
+        diagnostics->desiredY = desiredY;
+        diagnostics->after = result.position;
+    }
     if (result.grounded) result.verticalVelocity = 0;
     result.lastResolvedCommand = command.sequence;
     return result;
