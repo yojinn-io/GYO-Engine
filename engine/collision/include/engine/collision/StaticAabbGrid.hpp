@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine/base/Error.hpp"
+#include "engine/base/Result.hpp"
 #include "engine/collision/Collision.hpp"
 #include "engine/math/geometry/Aabb.hpp"
 #include "engine/math/geometry/Ray.hpp"
@@ -20,6 +22,33 @@ enum class TieBreak : std::uint8_t {
     LowestIndex,
     HighestIndex,
 };
+
+// Failure classes of the broadphase's validation (docs/architecture/
+// error-handling.md: content that breaks a precondition is a Runtime Error).
+// Zero is not a valid code; the numeric values are not a data contract.
+enum class CollisionErrorCode : std::uint8_t {
+    // cellLength is not finite or not positive.
+    InvalidCellLength = 1,
+    // 2^32 - 1 boxes or more (indices are 32-bit).
+    TooManyBoxes,
+    // A box fails IsValid; the detail is its index.
+    InvalidBox,
+    // The registrations (each box counted once per cell it covers) number
+    // 2^32 or more; the detail is the count.
+    TooManyRegistrations,
+};
+
+[[nodiscard]] constexpr const char* ToString(const CollisionErrorCode code) noexcept {
+    switch (code) {
+    case CollisionErrorCode::InvalidCellLength: return "InvalidCellLength";
+    case CollisionErrorCode::TooManyBoxes: return "TooManyBoxes";
+    case CollisionErrorCode::InvalidBox: return "InvalidBox";
+    case CollisionErrorCode::TooManyRegistrations: return "TooManyRegistrations";
+    }
+    return "Unknown";
+}
+
+using CollisionError = Base::Error<CollisionErrorCode>;
 
 struct RaycastHit final {
     float distance{};
@@ -56,10 +85,18 @@ public:
     // cellLength would make more. Boxes are copied. Every box must be valid
     // (IsValid), cellLength finite and positive, there must be fewer than 2^32
     // boxes, and the registrations (each box counted once per cell it covers)
-    // must number fewer than 2^32 (all asserted).
+    // must number fewer than 2^32.
     static constexpr std::size_t MaxCells = std::size_t{1} << 22;
 
+    // The asserting form: the preconditions are the caller's (a Programmer
+    // Error when broken).
     StaticAabbGrid(std::span<const Math::Aabb> boxes, float cellLength);
+    // The validating form for boxes that come from content: the same
+    // preconditions, reported as a Runtime Error instead of asserted. A grid
+    // it returns is the one the constructor builds from the same input; the
+    // registrations are counted before anything of their size is allocated.
+    [[nodiscard]] static Base::Result<StaticAabbGrid, CollisionError> Build(std::span<const Math::Aabb> boxes,
+                                                                          float cellLength);
 
     [[nodiscard]] std::size_t Size() const noexcept { return boxes_.size(); }
     [[nodiscard]] const Math::Aabb& Box(std::size_t index) const;
@@ -80,6 +117,11 @@ public:
     [[nodiscard]] std::vector<ContactHit> OverlapVerticalCapsuleAll(const VerticalCapsule& capsule) const;
 
 private:
+    StaticAabbGrid() = default;
+    // Builds the grid from boxes; the first broken precondition is returned
+    // and the grid is then unusable.
+    [[nodiscard]] std::optional<CollisionError> Initialize(std::span<const Math::Aabb> boxes, float cellLength);
+
     struct CellRange final {
         std::int64_t low[3]{};
         std::int64_t high[3]{};

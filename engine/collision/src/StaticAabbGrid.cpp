@@ -6,6 +6,9 @@
 #include <cmath>
 #include <iterator>
 #include <limits>
+#include <optional>
+#include <string>
+#include <utility>
 
 namespace Engine::Collision {
 namespace {
@@ -49,15 +52,35 @@ bool Replaces(const float value, const std::uint32_t index, const float bestValu
 
 } // namespace
 
-StaticAabbGrid::StaticAabbGrid(const std::span<const Math::Aabb> boxes, const float cellLength)
-    : boxes_(boxes.begin(), boxes.end()) {
-    GYO_ASSERT(std::isfinite(cellLength) && cellLength > 0.0F);
-    GYO_ASSERT(boxes_.size() < std::size_t{std::numeric_limits<std::uint32_t>::max()});
-    GYO_ASSERT(std::all_of(boxes_.begin(), boxes_.end(), [](const Math::Aabb& box) { return IsValid(box); }));
+StaticAabbGrid::StaticAabbGrid(const std::span<const Math::Aabb> boxes, const float cellLength) {
+    const auto failure = Initialize(boxes, cellLength);
+    GYO_ASSERT(!failure.has_value());
+}
+
+Base::Result<StaticAabbGrid, CollisionError> StaticAabbGrid::Build(const std::span<const Math::Aabb> boxes,
+                                                                     const float cellLength) {
+    StaticAabbGrid grid;
+    if (auto failure = grid.Initialize(boxes, cellLength)) return Base::Err(std::move(*failure));
+    return grid;
+}
+
+std::optional<CollisionError> StaticAabbGrid::Initialize(const std::span<const Math::Aabb> boxes,
+                                                         const float cellLength) {
+    if (!(std::isfinite(cellLength) && cellLength > 0.0F))
+        return CollisionError::Make(CollisionErrorCode::InvalidCellLength, "the cell length must be finite and positive",
+                                    std::to_string(cellLength));
+    if (boxes.size() >= std::size_t{std::numeric_limits<std::uint32_t>::max()})
+        return CollisionError::Make(CollisionErrorCode::TooManyBoxes, "boxes are indexed with 32 bits",
+                                    std::to_string(boxes.size()));
+    for (std::size_t i = 0; i < boxes.size(); ++i)
+        if (!IsValid(boxes[i]))
+            return CollisionError::Make(CollisionErrorCode::InvalidBox, "a box is not valid (IsValid)",
+                                        std::to_string(i));
+    boxes_.assign(boxes.begin(), boxes.end());
     cell_ = cellLength;
     if (boxes_.empty()) {
         offsets_.assign(1, 0);
-        return;
+        return std::nullopt;
     }
     double low[3]{boxes_[0].minimum.x, boxes_[0].minimum.y, boxes_[0].minimum.z};
     double high[3]{boxes_[0].maximum.x, boxes_[0].maximum.y, boxes_[0].maximum.z};
@@ -84,27 +107,35 @@ StaticAabbGrid::StaticAabbGrid(const std::span<const Math::Aabb> boxes, const fl
         counts_[axis] = static_cast<std::int64_t>(std::floor((high[axis] - low[axis]) / cell_)) + 1;
     const auto cells = static_cast<std::size_t>(counts_[0] * counts_[1] * counts_[2]);
 
-    // Two passes: count per cell, then fill (boxes in increasing index, so
-    // every cell's list is increasing).
+    // Every (box, cell) registration is an entry of items_, indexed by uint32:
+    // the total must stay below 2^32. It is summed from the cell ranges in 64
+    // bits before anything of its size is allocated, so a huge input is
+    // rejected cheaply and the count cannot wrap silently.
     std::vector<CellRange> ranges(boxes_.size());
-    std::vector<std::uint32_t> counts(cells + 1, 0);
+    std::uint64_t registrations = 0;
     for (std::size_t i = 0; i < boxes_.size(); ++i) {
         const double minimum[3]{boxes_[i].minimum.x, boxes_[i].minimum.y, boxes_[i].minimum.z};
         const double maximum[3]{boxes_[i].maximum.x, boxes_[i].maximum.y, boxes_[i].maximum.z};
         ranges[i] = Cells(minimum, maximum);
         GYO_ASSERT(!ranges[i].empty);
         const auto& r = ranges[i];
+        registrations += static_cast<std::uint64_t>(r.high[0] - r.low[0] + 1) *
+                         static_cast<std::uint64_t>(r.high[1] - r.low[1] + 1) *
+                         static_cast<std::uint64_t>(r.high[2] - r.low[2] + 1);
+    }
+    if (registrations >= (std::uint64_t{1} << 32U))
+        return CollisionError::Make(CollisionErrorCode::TooManyRegistrations,
+                                    "the (box, cell) registrations are indexed with 32 bits",
+                                    std::to_string(registrations));
+
+    // Two passes: count per cell, then fill (boxes in increasing index, so
+    // every cell's list is increasing).
+    std::vector<std::uint32_t> counts(cells + 1, 0);
+    for (const auto& r : ranges)
         for (auto z = r.low[2]; z <= r.high[2]; ++z)
             for (auto y = r.low[1]; y <= r.high[1]; ++y)
                 for (auto x = r.low[0]; x <= r.high[0]; ++x)
                     ++counts[static_cast<std::size_t>((z * counts_[1] + y) * counts_[0] + x)];
-    }
-    // Every (box, cell) registration is an entry of items_, indexed by uint32:
-    // the total must stay below 2^32 (a precondition, checked in 64 bits so it
-    // cannot wrap silently).
-    std::uint64_t registrations = 0;
-    for (std::size_t c = 0; c < cells; ++c) registrations += counts[c];
-    GYO_ASSERT(registrations < (std::uint64_t{1} << 32U));
     offsets_.assign(cells + 1, 0);
     for (std::size_t c = 0; c < cells; ++c) offsets_[c + 1] = offsets_[c] + counts[c];
     items_.resize(offsets_[cells]);
@@ -117,6 +148,7 @@ StaticAabbGrid::StaticAabbGrid(const std::span<const Math::Aabb> boxes, const fl
                     items_[fill[static_cast<std::size_t>((z * counts_[1] + y) * counts_[0] + x)]++] =
                         static_cast<std::uint32_t>(i);
     }
+    return std::nullopt;
 }
 
 const Math::Aabb& StaticAabbGrid::Box(const std::size_t index) const {

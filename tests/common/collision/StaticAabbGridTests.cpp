@@ -3,6 +3,7 @@
 #include "engine/collision/StaticAabbGrid.hpp"
 
 #include <bit>
+#include <limits>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -426,4 +427,52 @@ TEST_CASE("grid edge: empty grid and queries outside it") {
     CHECK(Same(grid.SweepVerticalCapsuleNearest(capsule, {200, 0, 0}, TieBreak::LowestIndex),
                ScanSweep(one, capsule, {200, 0, 0}, TieBreak::LowestIndex)));
     CHECK(grid.SweepVerticalCapsuleNearest(capsule, {200, 0, 0}, TieBreak::LowestIndex).has_value());
+}
+
+// Build: the preconditions of the constructor, reported as a Result for boxes
+// that come from content (docs/architecture/collision.md, "Validation").
+TEST_CASE("grid build: rejects broken preconditions with a Result and otherwise equals the constructor") {
+    const std::vector<Aabb> good{{{0, 0, 0}, {1, 1, 1}}, {{2, 0, 0}, {3, 1, 1}}, {{0, 2, 0}, {3, 3, 1}}};
+    auto built = StaticAabbGrid::Build(good, 1.0F);
+    REQUIRE(built.has_value());
+    const StaticAabbGrid direct(good, 1.0F);
+    CHECK(built.value().Size() == direct.Size());
+    CHECK(built.value().CellLength() == direct.CellLength());
+    const Aabb probe{{0.5F, 0.5F, 0.5F}, {2.5F, 2.5F, 0.5F}};
+    CHECK(built.value().Overlapping(probe) == direct.Overlapping(probe));
+    CHECK(built.value().Overlapping(probe) == ScanOverlapping(good, probe));
+    const Ray ray{{-1, 0.5F, 0.5F}, {1, 0, 0}};
+    CHECK(Same(built.value().RaycastNearest(ray, 10.0F, TieBreak::HighestIndex),
+               ScanRaycast(good, ray, 10.0F, TieBreak::HighestIndex)));
+    const std::vector<Aabb> none;
+    CHECK(StaticAabbGrid::Build(none, 1.0F).has_value());
+
+    SUBCASE("cell length") {
+        for (const float bad : {0.0F, -1.0F, std::numeric_limits<float>::quiet_NaN(),
+                                std::numeric_limits<float>::infinity()}) {
+            const auto rejected = StaticAabbGrid::Build(good, bad);
+            REQUIRE_FALSE(rejected.has_value());
+            CHECK(rejected.error().code == CollisionErrorCode::InvalidCellLength);
+        }
+    }
+    SUBCASE("an invalid box names its index") {
+        std::vector<Aabb> boxes = good;
+        boxes.push_back({{1, 1, 1}, {0, 0, 0}}); // inverted: IsValid is false
+        boxes.push_back({{5, 5, 5}, {6, 6, 6}});
+        const auto rejected = StaticAabbGrid::Build(boxes, 1.0F);
+        REQUIRE_FALSE(rejected.has_value());
+        CHECK(rejected.error().code == CollisionErrorCode::InvalidBox);
+        CHECK(rejected.error().detail == "3");
+        CHECK(Engine::Base::Describe(rejected.error()) == "InvalidBox: a box is not valid (IsValid) (3)");
+    }
+    SUBCASE("too many registrations are rejected before anything of their size is allocated") {
+        // 160^3 = 4,096,000 cells (under MaxCells, so the cell is not doubled);
+        // every box covers them all; 1,049 boxes make 4,296,704,000 >= 2^32
+        // registrations. Accepting them would allocate 16 GiB of items.
+        const std::vector<Aabb> wide(1049, Aabb{{0, 0, 0}, {159, 159, 159}});
+        const auto rejected = StaticAabbGrid::Build(wide, 1.0F);
+        REQUIRE_FALSE(rejected.has_value());
+        CHECK(rejected.error().code == CollisionErrorCode::TooManyRegistrations);
+        CHECK(std::stoull(rejected.error().detail) == std::uint64_t{1049} * 4096000);
+    }
 }
