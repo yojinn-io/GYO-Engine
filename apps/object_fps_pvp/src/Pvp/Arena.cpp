@@ -27,24 +27,6 @@ std::filesystem::path SiblingFile(const std::filesystem::path& owner, const std:
     return owner.parent_path() / *name;
 }
 
-// A bound on the grid's registrations (each box counted once per cell it
-// covers) that holds for any uniform grid whose cells are at least cell long:
-// a box spans at most floor(extent / cell) + 2 cells on an axis. The grid may
-// use a longer cell, which only lowers the count. Interim until Engine offers a
-// check that does not assert (v8-product-pa-broadphase §1, option (b)).
-bool RegistrationsFit(std::span<const Engine::Math::Aabb> walls, float cell) {
-    double total = 0;
-    for (const auto& wall : walls) {
-        double cells = 1;
-        for (const auto extent : {wall.maximum.x - wall.minimum.x, wall.maximum.y - wall.minimum.y,
-                                  wall.maximum.z - wall.minimum.z})
-            cells *= std::floor(static_cast<double>(extent) / cell) + 2;
-        total += cells;
-        if (total >= 4294967296.0) return false;
-    }
-    return true;
-}
-
 Engine::Math::Vec3 ReadPosition(const nlohmann::json& value) {
     if (!value.is_array() || value.size() != 3)
         throw std::invalid_argument("Arena vectors require three numbers");
@@ -52,7 +34,13 @@ Engine::Math::Vec3 ReadPosition(const nlohmann::json& value) {
 }
 }
 
-bool Arena::Validate(std::string& error) const {
+namespace {
+// Every Validate rule; on success, the wall grid built while checking the
+// spawns, which Load keeps (one build per load).
+std::shared_ptr<const Engine::Collision::StaticAabbGrid> CheckedWallGrid(const Arena& arena, std::string& error) {
+    const auto& [version, id, width, depth, cellSize, movementSpeed, bodyHeight, radius, eyeHeight,
+        walls, spawns, jumpHeight, gravity, wallGrid] = arena;
+    (void)wallGrid;
     error.clear();
     const auto positive = [](float value) { return std::isfinite(value) && value > 0; };
     if (version != 1 || id.empty() || id.size() > 64 ||
@@ -64,12 +52,12 @@ bool Arena::Validate(std::string& error) const {
         eyeHeight > bodyHeight ||
         spawns.size() < MinimumArenaSpawns || spawns.size() > MaximumArenaSpawns) {
         error = "Arena v1 requires an id, valid dimensions/movement settings and 2-64 spawns";
-        return false;
+        return nullptr;
     }
     if (walls.size() > MaximumArenaColliders) {
         error = "Arena has " + std::to_string(walls.size()) + " colliders; at most " +
                 std::to_string(MaximumArenaColliders);
-        return false;
+        return nullptr;
     }
     for (const auto& wall : walls) {
         // Engine validity allows zero thickness; an empty wall is a content error.
@@ -77,32 +65,36 @@ bool Arena::Validate(std::string& error) const {
             wall.minimum.x >= wall.maximum.x || wall.minimum.y >= wall.maximum.y ||
             wall.minimum.z >= wall.maximum.z) {
             error = "Arena wall must be a finite non-empty AABB";
-            return false;
+            return nullptr;
         }
     }
-    if (!RegistrationsFit(walls, cellSize)) {
-        error = "Arena colliders are too large for the collision grid (cell_size " + std::to_string(cellSize) + ")";
-        return false;
+    // Content can exceed the grid's limits (registrations): an error, never
+    // the constructor's assert. The spawn rules ask the grid Movement uses.
+    auto built = Engine::Collision::StaticAabbGrid::Build(walls, cellSize);
+    if (!built) {
+        error = "Arena colliders do not fit the collision grid: " + Engine::Base::Describe(built.error());
+        return nullptr;
     }
-    // The spawn rules ask the same grid Movement does; built here from the
-    // walls just checked (Validate does not need BuildWallGrid first).
-    const Engine::Collision::StaticAabbGrid grid(walls, cellSize);
+    auto grid = std::make_shared<const Engine::Collision::StaticAabbGrid>(std::move(*built));
     std::vector<Engine::Collision::VerticalCapsule> bodies;
     for (const auto& spawn : spawns) {
         const Engine::Collision::VerticalCapsule body{spawn.position, bodyHeight, radius};
         // On the floor, or on a wall top where Movement would ground it (one rule).
         if (!Engine::Math::IsFinite(body.feet) || spawn.position.y < 0 ||
-            (spawn.position.y != 0 && !IsCharacterSupported(body, grid)) || !std::isfinite(spawn.yaw) ||
+            (spawn.position.y != 0 && !IsCharacterSupported(body, *grid)) || !std::isfinite(spawn.yaw) ||
             spawn.position.x < radius || spawn.position.x > width - radius ||
             spawn.position.z < radius || spawn.position.z > depth - radius ||
-            !CanPlaceCharacterBody(body, grid, bodies)) {
+            !CanPlaceCharacterBody(body, *grid, bodies)) {
             error = "Arena spawn must stand on the floor or a wall top, inside the arena and free of walls/other spawns";
-            return false;
+            return nullptr;
         }
         bodies.push_back(body);
     }
-    return true;
+    return grid;
 }
+} // namespace
+
+bool Arena::Validate(std::string& error) const { return CheckedWallGrid(*this, error) != nullptr; }
 
 std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string& error,
                                  Engine::VoxelMesh::VoxelMeshGeometry* geometry) {
@@ -156,8 +148,8 @@ std::optional<Arena> Arena::Load(const std::filesystem::path& path, std::string&
         }
         for (const auto& spawn : json.at("spawns"))
             arena.spawns.push_back({ReadPosition(spawn.at("position")), spawn.at("yaw").get<float>()});
-        if (!arena.Validate(error)) return std::nullopt;
-        arena.BuildWallGrid();
+        arena.wallGrid = CheckedWallGrid(arena, error);
+        if (!arena.wallGrid) return std::nullopt;
         // Handed out only with an arena that loaded: a failure leaves it empty.
         if (geometry) *geometry = std::move(baked);
         return arena;

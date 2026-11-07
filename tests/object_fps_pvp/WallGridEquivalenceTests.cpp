@@ -313,13 +313,19 @@ TEST_CASE("PvP arena collider budget is 2^20 and its error names the colliders (
 }
 
 TEST_CASE("PvP arena refuses colliders too large for the grid instead of asserting") {
-    auto arena = LatticeArena(2);
-    // Each box covers (1000 / 0.01 + 2)^3 cells by the bound: far over 2^32.
-    arena.cellSize = 0.01F;
-    arena.walls.push_back({{4, 0, 600}, {1004, 1000, 1600}});
+    // A 160 m cube with 1 m cells is 161^3 (about 2^22) cells, so the grid
+    // keeps the cell length; 1100 boxes over all of it are about 4.6e9
+    // registrations, past the grid's limit of fewer than 2^32
+    // (StaticAabbGrid::Build refuses it before allocating them).
+    fps::pvp::Arena arena;
+    arena.id = "pa_broadphase_registrations";
+    arena.width = arena.depth = 200;
+    arena.spawns = {{{170, 0, 170}, 0}, {{180, 0, 180}, 0}};
+    for (int i = 0; i < 1100; ++i) arena.walls.push_back({{0, 0, 0}, {160, 160, 160}});
     std::string error;
     CHECK_FALSE(arena.Validate(error));
-    CHECK(error.find("too large for the collision grid") != std::string::npos);
+    CHECK(error.find("do not fit the collision grid") != std::string::npos);
+    CHECK(error.find("TooManyRegistrations") != std::string::npos);
 }
 
 // ---------------------------------------------------------------------------

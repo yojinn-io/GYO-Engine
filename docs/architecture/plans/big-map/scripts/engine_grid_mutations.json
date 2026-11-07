@@ -156,11 +156,41 @@
       "id": "grid-links-voxel-mesh",
       "what": "GYO::Collision gains a link it must not have (Design Invariant 3)",
       "file": "engine/collision/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_collision PUBLIC GYO::Math PRIVATE GYO::Base)",
-      "replace": "target_link_libraries(gyo_collision PUBLIC GYO::Math PRIVATE GYO::Base GYO::VoxelMesh)",
+      "find": "target_link_libraries(gyo_collision PUBLIC GYO::Math GYO::Base)",
+      "replace": "target_link_libraries(gyo_collision PUBLIC GYO::Math GYO::Base GYO::VoxelMesh)",
       "target": "gyo_collision_tests",
       "expect_build_failure": true,
       "expect": "(?s)gyo_collision links.*expected\\s+exactly"
+    },
+    {
+      "id": "grid-build-cell-length-unchecked",
+      "what": "Build accepts an infinite cell length (the isfinite part of the check is gone)",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "    if (!(std::isfinite(cellLength) && cellLength > 0.0F))",
+      "replace": "    if (!(cellLength > 0.0F))",
+      "target": "gyo_collision_tests",
+      "cases": "*grid build*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-build-invalid-box-unchecked",
+      "what": "Build accepts a box that fails IsValid",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "        if (!IsValid(boxes[i]))\n            return CollisionError::Make(CollisionErrorCode::InvalidBox,",
+      "replace": "        if (false)\n            return CollisionError::Make(CollisionErrorCode::InvalidBox,",
+      "target": "gyo_collision_tests",
+      "cases": "*grid build*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "grid-build-registrations-unchecked",
+      "what": "Build does not count the registrations against 2^32: the 32-bit offsets wrap, caught by the assertion before the fill",
+      "file": "engine/collision/src/StaticAabbGrid.cpp",
+      "find": "    if (registrations >= (std::uint64_t{1} << 32U))\n        return CollisionError::Make(CollisionErrorCode::TooManyRegistrations,",
+      "replace": "    if (registrations >= (std::uint64_t{1} << 40U))\n        return CollisionError::Make(CollisionErrorCode::TooManyRegistrations,",
+      "target": "gyo_collision_tests",
+      "cases": "*grid build*",
+      "expect": "GYO_ASSERT failed: offsets_\\[cells\\] == registrations"
     }
   ]
 }

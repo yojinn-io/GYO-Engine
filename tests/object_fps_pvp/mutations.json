@@ -9139,8 +9139,8 @@
       "batch": "v8-product-arena-v2",
       "what": "A load that fails still hands out the geometry",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "        if (!arena.Validate(error)) return std::nullopt;\n        arena.BuildWallGrid();\n        // Handed out only with an arena that loaded: a failure leaves it empty.\n        if (geometry) *geometry = std::move(baked);",
-      "replace": "        if (geometry) *geometry = std::move(baked);\n        if (!arena.Validate(error)) return std::nullopt;\n        arena.BuildWallGrid();",
+      "find": "        arena.wallGrid = CheckedWallGrid(arena, error);\n        if (!arena.wallGrid) return std::nullopt;\n        // Handed out only with an arena that loaded: a failure leaves it empty.\n        if (geometry) *geometry = std::move(baked);",
+      "replace": "        if (geometry) *geometry = std::move(baked);\n        arena.wallGrid = CheckedWallGrid(arena, error);\n        if (!arena.wallGrid) return std::nullopt;",
       "check": "cpu",
       "expect": "Arena schema 2 takes its walls"
     },
@@ -9249,18 +9249,18 @@
       "batch": "v8-product-pa-broadphase",
       "what": "Validate checks the spawns against no walls",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "    const Engine::Collision::StaticAabbGrid grid(walls, cellSize);",
-      "replace": "    const Engine::Collision::StaticAabbGrid grid({}, cellSize);",
+      "find": "    auto built = Engine::Collision::StaticAabbGrid::Build(walls, cellSize);",
+      "replace": "    auto built = Engine::Collision::StaticAabbGrid::Build({}, cellSize);",
       "check": "cpu",
-      "expect": "wall top|free of walls"
+      "expect": "wall top|free of walls|GYO_ASSERT failed: wallGrid"
     },
     {
       "id": "pab-registrations-unchecked",
       "batch": "v8-product-pa-broadphase",
-      "what": "Colliders too large for the grid reach its constructor (an assert, not an error)",
+      "what": "A grid that Build refused is used anyway",
       "file": "apps/object_fps_pvp/src/Pvp/Arena.cpp",
-      "find": "        if (total >= 4294967296.0) return false;",
-      "replace": "        if (total >= 4294967296.0) return true;",
+      "find": "    if (!built) {\n        error = \"Arena colliders do not fit the collision grid: \"",
+      "replace": "    if (false) {\n        error = \"Arena colliders do not fit the collision grid: \"",
       "check": "cpu",
       "expect": "refuses colliders too large"
     }
