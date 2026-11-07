@@ -6,8 +6,8 @@
 - §14.4 驗證：另一個子 Agent（Opus／high，唯讀）。
 - 事前宣告：[voxel-map-window-goxel.md](../tools/plans/v8/voxel-map-window-goxel.md)，2026-11-06 使用者核准（「推奨どおり承認」）。
 
-**狀態：** 實作、審查修正、P1 完成。還沒做的：
-- L3（使用者試用）。
+**狀態：** 完成：判定 W1～W11、P1、L3 全部成立（2026-11-07）。原本還沒做的項目都已處理：
+- L3（使用者試用）：已合格。
 
 相關文件：
 - [voxel_map_editor/architecture.md](../voxel_map_editor/architecture.md)：「The window」節、命令表、DI 5 擴充、DI 7 改寫
@@ -78,7 +78,7 @@
 | W10 | 成立：最後一輪 **87/87** 被殺（`mutations-round3.txt`）；第一輪的不足見下面的「突變」 |
 | W11 | 成立：本機全量建置成功，`cpu|shader` 135/135、`gpu` 5/5；拿掉標記之後再跑一次，`cpu|shader` 仍是 135/135。L1（PR #158，head `44a06c82`，run 42342459066）：windows-x64、linux-x64、macos-arm64 全部通過 |
 | P1 | **成立**。(a) 不編輯：p95 **7.48 ms** ≤ 16.7 ms。(b) 每幀編輯：p95 **8.82 ms** ≤ 33 ms。用像建築的合成圖（tool-chunked 的 `measure-map` 產生的同一張，768 區塊，grid sha `60e3aa3c…`），`--grid` 給的；不是 `--synthetic` 的小圖 |
-| L3 | 待使用者試用 |
+| L3 | **成立**（2026-11-07，使用者「合格」）。使用者在視窗裡編輯 `pvp_corners`（加了一種方塊，311 格），`verify-map` 一致；遊戲用啟動腳本重新 build 的 v1（906 quads、24 colliders）跑 60 fps，有走動與落地。腳本與 log 在主 checkout `build/evidence/tool-v8-voxel-map/window-1/l3/` |
 
 ### 突變
 

@@ -6,7 +6,7 @@
 
 ## 現況（每次停下來時更新）
 
-- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；§14.4 已核准、空格子拒存；**等你：L3 試用**。
+- **2026-11-06**：`v8-arch-big-map-tool-chunked` 完成並合併（PR #163，`24f111eb`）。window 批改照 Goxel 的功能與互動重做，分三批（`v8-tool-voxel-window-goxel`）；本分支（`claude/v8-tool-voxel-map-window`，PR #158）已 merge 進 master，window-1 的事前宣告 [voxel-map-window-goxel.md](voxel-map-window-goxel.md) 已寫，你已核准（`v8-tool-voxel-window-1-declare`）。實作、審查修正、P1 完成（P1 p95 7.48／8.82 ms，突變 87/87，`cpu|shader` 135/135）；§14.4 已核准、空格子拒存、L3 合格。**window-1 完成，等你決定是否合併 PR #158**。
 - **PR**：
   - PR #152（plan、contract、core、arena-v2）已合併（`a9ccad7d`）。
   - window 批在分支 `claude/v8-tool-voxel-map-window`，有它自己的 PR。
@@ -41,6 +41,7 @@
 
 | 代號 | 決定 | 使用者原話 |
 |---|---|---|
+| `v8-tool-voxel-window-1-l3` | （2026-11-07）window-1 的 L3：在視窗編輯 pvp_corners，進遊戲走一圈，合格 | 「合格」 |
 | `v8-tool-voxel-window-1-empty-save` | （2026-11-07）沒有填任何格子的格子不存檔（`EmptyMap`，什麼都不寫），磁碟上的 grid 不會和地圖對不上 | 「(a) 保存を断る」 |
 | `v8-tool-voxel-window-1-guard` | （2026-11-07）核准依賴守衛的 §14.4：視窗可 include `imgui.h`、framework 的 ImGui 殼、`window/…`，可連六個視窗 target；核心只可 include 入口標頭；含舊視窗批沒核准完的 W9。驗證者找出的 3 個隱藏放寬已改嚴 | 「承認する」 |
 | `v8-tool-voxel-window-1-no-markers` | （2026-11-07）照 `v8-arch-map-scene-split`（地圖只管幾何，標記屬於另一個場景編輯器），window-1 拿掉標記放置 UI、`--markers` 選項與存檔寫標記；tc-markers 的讀寫核心留著，待搬（TODO #8） | 「外す」 |
@@ -203,3 +204,4 @@
   - 你明確同意後，在副本裡用暫時改過上限的執行檔試玩：60 fps。原始碼當下就還原了（未提交）。之後照你的指示，把副本的執行檔也換回標準版，標準 Match 再次拒收。
   - 「上限太低」已照你的指示回報架構師（屬於 product-arena-v3）。
 - 2026-11-07：架構師轉達你的決定 `v8-arch-map-scene-split`；你確認 window-1 拿掉標記放置 UI（`v8-tool-voxel-window-1-no-markers`）。已移除程式碼、測試與 3 條突變，文件已更新；突變全目錄 84/84，`cpu|shader` 135/135。
+- 2026-11-07：L3 合格。window-1 的判定 W1～W11、P1、L3 全部成立。
