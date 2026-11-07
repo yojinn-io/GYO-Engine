@@ -23,6 +23,7 @@ struct WindowOptions final {
 struct MeasureOptions final {
     std::string gridPath;  // UTF-8; empty with synthetic
     bool synthetic{};      // a 64 x 16 x 64 grid, 30% filled, fixed seed
+    std::string syntheticMap; // building, km2-ground or km2-building, made in memory (Synthetic.hpp)
     bool edit{true};       // one cell edit per frame (P1 (b)); false: drawing only (P1 (a))
     std::uint32_t warmup{60}; // frames measured but left out of the statistics
     std::string csvPath;   // UTF-8

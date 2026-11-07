@@ -4,7 +4,7 @@
 - 設計稿：[design.zh-Hant.md](../../../voxel_map_editor/design.zh-Hant.md)（Q1～Q12 已核准，決定 `v8-tool-voxel-design-approve`）。
 - 紀錄：[HANDOFF](voxel-map-editor-HANDOFF.md)。
 
-**狀態：2026-11-07 使用者核准（原話「推奨どおり承認」：宣告與 Q10／Q12 的試法 (a)）。實作 `ve-scale-measure` 中。**
+**狀態：2026-11-07 使用者核准（原話「推奨どおり承認」：宣告與 Q10／Q12 的試法 (a)）。`ve-scale-measure` 完成（[dev_log](../../../dev_logs/2026_11_07_tool_v8_voxel_scale_measure.zh-Hant.md)）：SM6 的 km2-building 在 AMD 的 Metal 驅動裡崩潰，使用者決定照現有結果記錄。`ve-feel-survey` 照使用者「剩下照建議執行」，排在剔除（①）之後。**
 
 ## 代號對照
 

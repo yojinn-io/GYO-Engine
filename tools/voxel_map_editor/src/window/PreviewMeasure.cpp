@@ -2,6 +2,7 @@
 #include "window/PreviewScene.hpp"
 
 #include "gyo/voxel_map_editor/Editing.hpp"
+#include "gyo/voxel_map_editor/Synthetic.hpp"
 
 #include "gyo/framework/PreviewCamera.hpp"
 #include "gyo/framework/PreviewTexture.hpp"
@@ -57,7 +58,14 @@ GridDocument SyntheticGrid() {
 
 int RunPreviewMeasure(const MeasureOptions& options) {
     GridDocument document;
-    if (options.synthetic) {
+    if (!options.syntheticMap.empty()) {
+        auto made = SyntheticByName(options.syntheticMap);
+        if (!made) {
+            std::cerr << "error: no synthetic map " << options.syntheticMap << '\n';
+            return 2;
+        }
+        document = std::move(*made);
+    } else if (options.synthetic) {
         document = SyntheticGrid();
     } else {
         auto bytes = ReadFile(options.gridPath, MaxGridTextBytes + 1);
@@ -142,7 +150,8 @@ int RunPreviewMeasure(const MeasureOptions& options) {
     times.reserve(options.frames);
     std::ostringstream csv;
     csv << "map,frame,edit,chunks_uploaded,frame_ms\n";
-    const std::string name = options.synthetic ? std::string("synthetic") : options.gridPath;
+    const std::string name = !options.syntheticMap.empty() ? options.syntheticMap
+                             : options.synthetic ? std::string("synthetic") : options.gridPath;
     std::uint32_t failures = 0;
     std::uint32_t measured = 0;
     for (std::uint32_t frame = 0; frame < options.frames; ++frame) {

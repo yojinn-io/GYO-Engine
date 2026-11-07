@@ -29,12 +29,13 @@ constexpr std::string_view kHelp =
     "  gyo_voxel_map_editor inspect <file>\n"
     "  gyo_voxel_map_editor import-boxes <json> <pointer> <grid>\n"
     "  gyo_voxel_map_editor edit <grid> <map-dir> [--gpu-driver <driver>]\n"
-    "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic) --csv <file>\n"
+    "  gyo_voxel_map_editor measure-preview (--grid <grid> | --synthetic | --synthetic-map <name>) --csv <file>\n"
     "                       [--no-edit] [--frames <n>] [--gpu-driver <driver>]\n"
     "  gyo_voxel_map_editor build-map   <grid> <map-dir>\n"
     "  gyo_voxel_map_editor verify-map  <grid> <map-dir>\n"
     "  gyo_voxel_map_editor inspect-map <map-dir>\n"
     "  gyo_voxel_map_editor measure-map <out-dir> [<grid>...]\n"
+    "  gyo_voxel_map_editor measure-map <out-dir> --scale km2-ground|km2-building\n"
     "  gyo_voxel_map_editor check-markers <markers> --marker-kinds <kinds>\n"
     "  gyo_voxel_map_editor --help\n"
     "\n"
@@ -296,6 +297,7 @@ int Run(const std::span<const std::string> arguments) {
             if (i + 1 >= arguments.size()) return Usage(option + " needs a value");
             const std::string& value = arguments[++i];
             if (option == "--grid") measure.gridPath = value;
+            else if (option == "--synthetic-map") measure.syntheticMap = value;
             else if (option == "--csv") measure.csvPath = value;
             else if (option == "--gpu-driver") measure.gpuDriver = value;
             else if (option == "--frames") {
@@ -305,8 +307,9 @@ int Run(const std::span<const std::string> arguments) {
                 measure.frames = static_cast<std::uint32_t>(std::stoul(value));
             } else return Usage("unknown option " + option);
         }
-        if (measure.csvPath.empty() || measure.synthetic == !measure.gridPath.empty())
-            return Usage("measure-preview takes --grid <grid> or --synthetic, and --csv <file>");
+        const int sources = (measure.synthetic ? 1 : 0) + (measure.gridPath.empty() ? 0 : 1) + (measure.syntheticMap.empty() ? 0 : 1);
+        if (measure.csvPath.empty() || sources != 1)
+            return Usage("measure-preview takes one of --grid <grid>, --synthetic and --synthetic-map <name>, and --csv <file>");
         return RunPreviewMeasure(measure);
     }
     if (command == "build-map" || command == "verify-map") {
@@ -324,6 +327,10 @@ int Run(const std::span<const std::string> arguments) {
     }
     if (command == "measure-map") {
         if (arguments.size() < 3) return Usage("measure-map takes <out-dir> [<grid>...]");
+        if (arguments.size() >= 4 && arguments[3] == "--scale") {
+            if (arguments.size() != 5) return Usage("measure-map takes <out-dir> --scale km2-ground|km2-building");
+            return MeasureScale(arguments[2], arguments[4]);
+        }
         return MeasureMap(arguments[2], std::vector<std::string>(arguments.begin() + 3, arguments.end()));
     }
     return Usage("unknown command " + command);

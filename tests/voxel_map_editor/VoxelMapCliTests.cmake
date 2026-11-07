@@ -189,3 +189,10 @@ if(NOT last_output MATCHES "InvalidMarkers")
 endif()
 check(1 check_markers_bad_markers check-markers "${WORK}/bad.voxel_grid.json" --marker-kinds "${WORK}/all.marker_kinds.json")
 check(3 check_markers_missing check-markers "${WORK}/nowhere.json" --marker-kinds "${WORK}/all.marker_kinds.json")
+
+# The scale measurement's arguments (v8-tool-voxel-editor-measure, SC3).
+check(2 measure_scale_missing measure-map "${WORK}/scale" --scale)
+check(2 measure_scale_unknown measure-map "${WORK}/scale" --scale nowhere)
+check(2 measure_scale_building measure-map "${WORK}/scale" --scale building)
+check(2 measure_preview_two_sources measure-preview --synthetic --synthetic-map building --csv "${WORK}/m.csv")
+

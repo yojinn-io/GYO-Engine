@@ -22,6 +22,7 @@ add_library(gyo_voxel_map_editor_core STATIC
     src/FileAccess.cpp
     src/Editing.cpp
     src/Tools.cpp
+    src/Synthetic.cpp
 )
 target_include_directories(gyo_voxel_map_editor_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(gyo_voxel_map_editor_core PUBLIC cxx_std_20)
