@@ -55,8 +55,9 @@ All types are `final` aggregates without constructors, trivially copyable and st
 
 `Frustum` (`geometry/Frustum.hpp`) is the volume a clip matrix keeps, for culling.
 
-- `MakeFrustum(clip)` takes a clip matrix such as `Multiply(projection, view)` under the clip-space convention above (`-w <= x, y <= w`, `0 <= z <= w`) and returns six normalized planes, normals pointing inward, in the order left, right, bottom, top, near, far. The near plane is the `z >= 0` row, not the OpenGL `w + z >= 0` one. The matrix must describe a non-degenerate volume; a plane with a zero normal yields NaN.
+- `MakeFrustum(clip)` takes a clip matrix such as `Multiply(projection, view)` under the clip-space convention above (`-w <= x, y <= w`, `0 <= z <= w`) and returns six normalized planes, normals pointing inward, in the order left, right, bottom, top, near, far. The near plane is the `z >= 0` row, not the OpenGL `w + z >= 0` one; a change of the depth convention (for example reversed Z) changes these rows too. The matrix must describe a non-degenerate volume; a plane with a zero normal yields NaN.
 - `Intersects(frustum, box)` is conservative: it returns false only when the box lies entirely on the outside of one plane (the box corner furthest along that plane's normal is outside). A box outside the frustum near an edge or corner can still return true, so it suits culling, not exact intersection. Touching counts as overlap; there is no tolerance.
+- Only a `MakeFrustum` result is meaningful; a default `Frustum{}` (six default planes) is neither an everything-passes nor an empty volume.
 - Math knows no camera. A renderer's camera-to-clip composition stays with its owner (for example `Engine::Render::CameraViewProjection`), and the loop over chunks or objects, distance limits and their centre belong to each caller.
 
 ## Numeric policy

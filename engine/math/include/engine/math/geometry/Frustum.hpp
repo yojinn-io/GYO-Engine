@@ -13,7 +13,9 @@ namespace Engine::Math {
 
 // The volume a clip matrix keeps: six planes whose normals point inward, in
 // the order left, right, bottom, top, near, far. A point is inside when its
-// SignedDistance to every plane is >= 0.
+// SignedDistance to every plane is >= 0. Only a MakeFrustum result is
+// meaningful: the default value (six default Planes) is neither an
+// everything-passes nor an empty volume.
 struct Frustum final {
     std::array<Plane, 6> planes{};
 };
