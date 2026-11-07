@@ -2,6 +2,7 @@
 // Clients in one room, a refused extra join and bots that fight. No GUI.
 // The two-Client probes and analyzers are unchanged; quad_evidence.py reads
 // this probe's output.
+#include "RetroFPS/Pvp/MovementDiag.hpp"
 #include "RetroFPS/Pvp/ClientConnection.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
@@ -41,6 +42,8 @@ struct Options {
     // (off the line between the GUI spawns), then mark themselves parked and
     // stand until the stop file appears.
     bool passive{};std::filesystem::path trace,parkedFile,stopFile;
+    // v8-product-pm-detect-diag D3: the bots' first predictions, one line per step.
+    std::filesystem::path movementDiag;
 };
 Options Parse(int argc,char** argv){
     Options o;bool expectSet{};
@@ -51,7 +54,7 @@ Options Parse(int argc,char** argv){
         else if(key=="--expect-players"){o.expectPlayers=static_cast<unsigned>(std::stoul(value));expectSet=true;}
         else if(key=="--create")o.create=value=="true";else if(key=="--fifth")o.fifth=value=="true";
         else if(key=="--passive")o.passive=value=="true";else if(key=="--trace")o.trace=value;
-        else if(key=="--parked-file")o.parkedFile=value;else if(key=="--stop-file")o.stopFile=value;
+        else if(key=="--parked-file")o.parkedFile=value;else if(key=="--movement-diag")o.movementDiag=value;else if(key=="--stop-file")o.stopFile=value;
         else throw std::runtime_error("Unknown option: "+key);}
     if(!expectSet)o.expectPlayers=o.create?o.clients:0;
     Require(!o.gateway.empty()&&!o.arena.empty()&&!o.output.empty(),"--gateway, --arena and --output are required");
@@ -115,6 +118,7 @@ int main(int argc,char** argv){
         const auto timer=TimerBaseline::Measure("std::this_thread::sleep_until",TimerBaseline::Schedule::Absolute,[](auto deadline){std::this_thread::sleep_until(deadline);});
         std::string error;const auto arena=Arena::Load(options.arena,error);Require(arena.has_value(),error);
         MovementTraceWriter trace(options.trace);
+        MovementDiagFile diag(options.movementDiag);
         std::vector<std::unique_ptr<Bot>> bots;
         for(unsigned i=0;i<options.clients;++i){bots.push_back(std::make_unique<Bot>(*arena));
             bots.back()->connection.SetArenaIdentity(arena->id,arena->version,ArenaContentDigest(*arena));}
