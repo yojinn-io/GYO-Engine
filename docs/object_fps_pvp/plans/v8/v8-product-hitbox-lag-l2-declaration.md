@@ -98,3 +98,8 @@ protocol-v9 第 113 行：τ＝clamp(view_tick/65536, J−R, J)，R≤15（`maxi
    - 人數 2～3 人；S1 的門檻不變（區間內有效 Shot ≥500，至少 2 人各 ≥100），S2、R1、R2 不變。
    - 退路：pa-broadphase 在 11/8 晚上前沒合併，就照修訂 7 的 kit（`54948874`、`pvp_corners`）跑，人數照樣 2～3 人。
    - 已知風險：biome 上的移動缺陷（卡在空中、空氣牆；`pm-detect` 之前）可能讓射擊數不足，S1 不成立時照本文不重跑。
+9. 2026-11-07（看到任何場次結果之前）：pm-detect 拆成兩半，診斷（`v8-product-pm-detect-diag`，[宣告](v8-product-pm-detect-diag-declaration.md)）在場次之前做（使用者 2026-11-07，架構師轉達）。
+   - 程式改為 pm-detect-diag 的 PR 合併後的 master commit（Windows 用它的整合建置套件，Mac 用同一個 commit 的本機建置）；場次時 Match（`MOVEMENT_DIAG=1`）與每台 Client（`-MovementDiag`）都寫移動診斷，log 一起收。
+   - 判定（S1、S2、R1、R2）不變；`lag_l2_summary.py` 不讀診斷檔。
+   - 退路：pm-detect-diag 在 11/8 晚上前沒合併，就用 `8b8eaa19` 的 biome kit（修訂 8，沒有診斷）；再不行用 `54948874` 的 pvp_corners kit（修訂 7）。
+   - 限界：Client 寫診斷增加 Client 的負擔，對 view_lag 的影響沒有量。

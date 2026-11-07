@@ -1,6 +1,6 @@
 # lag-l2＋K8 的 L2 場次手冊
 
-更新：2026-11-07（宣告修訂 8：biome、2～3 人）。Owner：`object_fps_pvp`。判定以[事前宣告](v8-product-hitbox-lag-l2-declaration.md)為準；這份只寫怎麼做，兩者不一致時以宣告為準。K8 的內容見 [hitbox-acceptance 宣告](v8-product-hitbox-acceptance-declaration.md) A4。
+更新：2026-11-07（宣告修訂 8：biome、2～3 人；修訂 9：開著移動診斷）。Owner：`object_fps_pvp`。判定以[事前宣告](v8-product-hitbox-lag-l2-declaration.md)為準；這份只寫怎麼做，兩者不一致時以宣告為準。K8 的內容見 [hitbox-acceptance 宣告](v8-product-hitbox-acceptance-declaration.md) A4。
 
 構成（使用者 2026-11-05 決定，2026-11-07 改）：Intel Mac 只跑 Match＋Gateway，**不當玩家**；Windows 2～3 台（`win1`、`win2`、`win3`）。地圖是 biome（`ARENA_FILE=biome.json`）；pa-broadphase 在 11/8 晚上前沒合併時，照修訂 7 用 `pvp_corners`（不設 `ARENA_FILE`）與 `54948874` 的 kit。**現場沒有網路**，所以下面「事前」的東西都要先放好。
 
@@ -19,6 +19,7 @@
 - 程式全部來自同一個 commit：本批 PR（#155）合併到 master 後，master 的整合建置（`cross-platform` workflow）上傳的套件 artifacts（PR 的 L1 不產生套件，2026-11-05 查過）。run 編號與 commit 開場前記到 HANDOFF。Gateway 也從那個 commit 建置；`mac.sh`、`lag_l2_summary.py` 用那個 commit 的 checkout。
 - 套件的 zip 裡是一個 `gyo-object_fps_pvp-<平台>.tar.gz`，解開後是 `gyo-object_fps_pvp/` 資料夾（裡面有 `build_metadata.json`、`bin/`、`lib/`）。**`PKG` 指的是這個 `gyo-object_fps_pvp` 資料夾**，不是解壓的上一層。
 - **Windows（每台）**：從 run `42031502557` 下載 `gyo-package-object_fps_pvp-windows-x64`（artifact 保留到 2026-11-19），解開 zip 後在 PowerShell 用 `tar -xzf gyo-object_fps_pvp-windows-x64.tar.gz` 解開（檔案總管打不開 `.tar.gz`），放在本機磁碟的新資料夾。把 repo 的 `build/acceptance/object_fps_pvp/lag_l2_session/windows.ps1` 也複製過去。
+- **修訂 9（2026-11-07）**：場次的程式改為 pm-detect-diag 合併後的 commit（合併後記到這裡與 HANDOFF）；上面的命令開著移動診斷（`MOVEMENT_DIAG=1`、`-MovementDiag`）。pm-detect-diag 不能用時，用下面修訂 8 的 kit，**並拿掉這兩個開關**（舊的程式不認得 `--movement-diag`，會拒絕啟動）。
 - **場次的程式（修訂 8，2026-11-07 定）**：commit `8b8eaa192e8821ae55be7ef8a411abcc87ef76ee`（#167 的合併）。
   - **Windows（每台）**：master 整合建置 run `42344354393` 的 `gyo-package-object_fps_pvp-windows-x64`。**有網路時先確認這個 run 成功**（GitHub 的 Actions 頁面，或 `gh run view 42344354393`）；失敗或沒有套件就告訴我，不要用別的 run。解法同上（zip → `tar -xzf`）。這個套件的 `maps/` 有 `biome.json`。
   - **Mac（已準備好，2026-11-07）**：同一個 commit 在這台 Intel Mac 的本機建置。`PKG`＝`/Users/karasu/Code/Source/GYO-Engine/build/evidence/v8-hitbox-lag-l2/pkg-biome/gyo-object_fps_pvp`（這次含 `lib/`，Mac 也能開 Client 預演），`GATEWAY`＝`/Users/karasu/Code/Source/GYO-Engine/build/evidence/v8-hitbox-lag-l2/pkg-biome/gateway`；SHA-256 在同一資料夾的 `session_binaries_sha256.txt`（match `f21dbd11…`、gateway `cc944370…`、biome.json `cad17710…`）。2026-11-07 用 `ARENA_FILE=biome.json` 跑過 `prepare`、`match`、`gateway`、`check`、Ctrl+C（`rehearsal-biome-*`），Match 印出 `wall grid colliders=1260 cell=1 given=1`，`trace_end` 照常。
@@ -48,7 +49,7 @@ ARENA_FILE=biome.json mac.sh prepare SESSION PKG GATEWAY
 Mac 終端機 1（Match；出現 ready 後再開終端機 2）：
 
 ```bash
-ARENA_FILE=biome.json mac.sh match SESSION PKG
+ARENA_FILE=biome.json MOVEMENT_DIAG=1 mac.sh match SESSION PKG
 ```
 
 Mac 終端機 2（Gateway）：
@@ -62,7 +63,7 @@ Mac 終端機 3（確認）：`mac.sh check MAC_IP`，看到 `{"rooms":[...]}` �
 Windows（每台，在 PowerShell 裡）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File windows.ps1 -MacIp MAC_IP -Name win1 -Package PKG
+powershell -ExecutionPolicy Bypass -File windows.ps1 -MacIp MAC_IP -Name win1 -Package PKG -MovementDiag
 ```
 
 - 它先印出 `source_revision`，再確認連得到 Gateway。連不到時什麼都不啟動，照它印的訊息檢查防火牆與網段。
