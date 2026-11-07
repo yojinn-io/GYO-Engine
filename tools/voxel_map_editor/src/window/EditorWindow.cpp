@@ -2,6 +2,7 @@
 #include "window/PreviewScene.hpp"
 
 #include "gyo/voxel_map_editor/Editing.hpp"
+#include "gyo/voxel_map_editor/FlyCamera.hpp"
 #include "gyo/voxel_map_editor/Tools.hpp"
 
 #include "gyo/framework/PreviewCamera.hpp"
@@ -260,16 +261,21 @@ private:
         }
         if (command && ImGui::IsKeyPressed(ImGuiKey_S, false)) Save();
         if (command) return;
+        // Tab: the orbit camera or the free one (ve-free-camera).
+        if (ImGui::IsKeyPressed(ImGuiKey_Tab, false)) ToggleCamera();
+        // Flying (the right button held in the free camera), W, A, S, D, Q and E move the camera only.
+        const bool flying = KeysFor(freeCamera_, ImGui::IsMouseDown(ImGuiMouseButton_Right)) == KeyUse::Camera;
+        const auto editKey = [flying](const ImGuiKey key) { return !(flying && IsFlyKey(key)) && ImGui::IsKeyPressed(key, false); };
         // Modes and tools (Goxel's keys).
         if (ImGui::IsKeyPressed(ImGuiKey_T, false)) mode_ = EditMode::Add;
         if (ImGui::IsKeyPressed(ImGuiKey_R, false)) mode_ = EditMode::Sub;
         if (ImGui::IsKeyPressed(ImGuiKey_G, false)) mode_ = EditMode::Paint;
         for (std::size_t t = 0; t < kToolKeys.size(); ++t)
-            if (ImGui::IsKeyPressed(kToolKeys[t], false)) SelectTool(static_cast<Tool>(t));
+            if (editKey(kToolKeys[t])) SelectTool(static_cast<Tool>(t));
         // Orientation: Q and E turn about the up axis; with Shift they choose the up axis.
-        if (ImGui::IsKeyPressed(ImGuiKey_E, false))
+        if (editKey(ImGuiKey_E))
             orientation_ = io.KeyShift ? (orientation_ + 4) % 24 : orientation_ / 4 * 4 + (orientation_ % 4 + 1) % 4;
-        if (ImGui::IsKeyPressed(ImGuiKey_Q, false))
+        if (editKey(ImGuiKey_Q))
             orientation_ = io.KeyShift ? (orientation_ + 20) % 24 : orientation_ / 4 * 4 + (orientation_ % 4 + 3) % 4;
         // Brush size and the edit plane.
         if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)) brushSize_ = std::max(brushSize_ - 1, 1);
@@ -278,20 +284,64 @@ private:
         if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) plane_.at = std::max(plane_.at - 1, -CellLimit);
         // The camera: arrows turn it; 1, 3, 7 and 0 (or the keypad's) look from the front, the right, the top, or as at the start.
         const float turn = 0.05F;
+        if (freeCamera_) {
+            if (ImGui::IsKeyDown(ImGuiKey_LeftArrow)) FlyLook(fly_, -turn, 0.0F);
+            if (ImGui::IsKeyDown(ImGuiKey_RightArrow)) FlyLook(fly_, turn, 0.0F);
+            if (ImGui::IsKeyDown(ImGuiKey_UpArrow)) FlyLook(fly_, 0.0F, turn);
+            if (ImGui::IsKeyDown(ImGuiKey_DownArrow)) FlyLook(fly_, 0.0F, -turn);
+        } else {
         if (ImGui::IsKeyDown(ImGuiKey_LeftArrow)) camera_.yawRadians -= turn;
         if (ImGui::IsKeyDown(ImGuiKey_RightArrow)) camera_.yawRadians += turn;
         if (ImGui::IsKeyDown(ImGuiKey_UpArrow)) camera_.pitchRadians = std::clamp(camera_.pitchRadians + turn, -1.5F, 1.5F);
         if (ImGui::IsKeyDown(ImGuiKey_DownArrow)) camera_.pitchRadians = std::clamp(camera_.pitchRadians - turn, -1.5F, 1.5F);
+        }
         const auto view = [](const ImGuiKey a, const ImGuiKey b) { return ImGui::IsKeyPressed(a, false) || ImGui::IsKeyPressed(b, false); };
         if (view(ImGuiKey_1, ImGuiKey_Keypad1)) SetView(0.0F, 0.0F);
         if (view(ImGuiKey_3, ImGuiKey_Keypad3)) SetView(-1.5707964F, 0.0F);
         if (view(ImGuiKey_7, ImGuiKey_Keypad7)) SetView(0.0F, 1.5F);
-        if (view(ImGuiKey_0, ImGuiKey_Keypad0)) FrameCamera();
+        if (view(ImGuiKey_0, ImGuiKey_Keypad0)) {
+            if (freeCamera_) ToggleCamera(); // framing the map is the orbit camera's
+            FrameCamera();
+        }
+    }
+
+    // The keys flying takes over (the free camera with the right button held).
+    static bool IsFlyKey(const ImGuiKey key) {
+        return key == ImGuiKey_W || key == ImGuiKey_A || key == ImGuiKey_S || key == ImGuiKey_D || key == ImGuiKey_Q ||
+               key == ImGuiKey_E;
     }
 
     void SetView(const float yaw, const float pitch) {
+        if (freeCamera_) {
+            fly_.yawRadians = yaw;
+            fly_.pitchRadians = pitch;
+            return;
+        }
         camera_.yawRadians = yaw;
         camera_.pitchRadians = pitch;
+    }
+
+    // Orbit to free and back without the view jumping (ve-free-camera FC2).
+    void ToggleCamera() {
+        CancelDrag();
+        if (!freeCamera_) {
+            fly_ = FlyFromPose(PoseOf(camera_.Camera()), fly_.speedCells);
+            freeCamera_ = true;
+            return;
+        }
+        const OrbitPlacement placed = OrbitFromFly(fly_, Document());
+        camera_.target = placed.target;
+        camera_.yawRadians = fly_.yawRadians;
+        camera_.pitchRadians = fly_.pitchRadians;
+        camera_.distance = placed.distance;
+        freeCamera_ = false;
+    }
+
+    // The camera the preview draws with and picks from.
+    Engine::Render::PerspectiveCamera3D ViewCamera() const {
+        if (!freeCamera_) return camera_.Camera();
+        const CameraPose pose = FlyPose(fly_, camera_.verticalFieldOfViewRadians, Document().cellSize);
+        return {pose.position, pose.rotationRadians, pose.verticalFieldOfViewRadians, pose.nearClip, pose.farClip};
     }
 
     void SelectTool(const Tool tool) {
@@ -354,12 +404,24 @@ private:
     }
 
     void DrawView() {
-        ImGui::TextDisabled("middle drag: rotate  right drag: pan  wheel: zoom");
+        // The camera (ve-free-camera): orbit or free, Tab switches.
+        bool free = freeCamera_;
+        if (ImGui::RadioButton("orbit", !free) && free) ToggleCamera();
+        ImGui::SameLine();
+        if (ImGui::RadioButton("free (Tab)", free) && !free) ToggleCamera();
+        if (freeCamera_) {
+            ImGui::TextDisabled("hold right: look; with W/A/S/D fly, E/Q up/down, Shift fast; wheel: speed");
+            ImGui::SliderFloat("speed (cells/s)", &fly_.speedCells, FlyMinSpeedCells, FlyMaxSpeedCells, "%.0f",
+                               ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+        } else {
+            ImGui::TextDisabled("middle drag: rotate  right drag: pan  wheel: zoom");
+        }
         ImGui::TextDisabled("arrows: rotate  1/3/7: front/right/top  0: frame the map");
         // Chunks farther than this from the orbit target (in x and z) are not drawn (Visibility.hpp).
         ImGui::SliderFloat("draw distance (cells)", &drawDistanceCells_, MinDrawDistanceCells, MaxDrawDistanceCells,
                            "%.0f", ImGuiSliderFlags_AlwaysClamp);
-        // Zoom (ve-feel-1 F1): a slider over the range, logarithmic, and a lock for the wheel.
+        // Zoom (ve-feel-1 F1): a slider over the range, logarithmic, and a lock for the wheel (the orbit camera's).
+        if (!freeCamera_) {
         const ZoomRange zoom = Zoom();
         const float size = Document().cellSize;
         float distanceCells = camera_.distance / size;
@@ -367,6 +429,7 @@ private:
                                ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp))
             camera_.distance = ClampZoom(distanceCells * size, zoom);
         ImGui::Checkbox("lock zoom (wheel off)", &zoomLocked_);
+        }
         if (scene_) {
             ImGui::Text("drawn %zu / %zu chunks", scene_->DrawnCount(), scene_->ChunkCount());
             if (scene_->Capped())
@@ -514,12 +577,13 @@ private:
         const auto width = static_cast<std::uint32_t>(std::max(area.x * scale.x, 16.0F));
         const auto height = static_cast<std::uint32_t>(std::max(area.y * scale.y, 16.0F));
         // The map may have grown or shrunk since the last frame; not during a drag, so the pick ray stays put.
-        if (!drag_) camera_.distance = ClampZoom(camera_.distance, Zoom());
-        const auto camera = camera_.Camera();
+        if (!drag_ && !freeCamera_) camera_.distance = ClampZoom(camera_.distance, Zoom());
+        const auto camera = ViewCamera();
         // Zoomed out, farther than the panel's distance is drawn (ve-feel-1 F1).
-        auto frame = scene_->Render(camera, camera_.target,
-                                    DrawDistanceFor(drawDistanceCells_ * Document().cellSize, camera_.distance), width,
-                                    height);
+        // The free camera draws around itself, to the panel's distance (as the game draws around its camera).
+        const float panel = drawDistanceCells_ * Document().cellSize;
+        auto frame = scene_->Render(camera, freeCamera_ ? fly_.position : camera_.target,
+                                    freeCamera_ ? panel : DrawDistanceFor(panel, camera_.distance), width, height);
         if (!frame) {
             previewError_ = Engine::Base::Describe(frame.error());
             return;
@@ -563,6 +627,22 @@ private:
     };
 
     void Navigate(const ImGuiIO& io) {
+        if (freeCamera_) {
+            // The right button held: the mouse looks, W/A/S/D/E/Q fly, Shift is faster; the wheel sets the speed.
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+                FlyLook(fly_, io.MouseDelta.x * 0.005F, io.MouseDelta.y * 0.005F);
+                const FlyInput input{.forward = ImGui::IsKeyDown(ImGuiKey_W),
+                                     .back = ImGui::IsKeyDown(ImGuiKey_S),
+                                     .left = ImGui::IsKeyDown(ImGuiKey_A),
+                                     .right = ImGui::IsKeyDown(ImGuiKey_D),
+                                     .up = ImGui::IsKeyDown(ImGuiKey_E),
+                                     .down = ImGui::IsKeyDown(ImGuiKey_Q),
+                                     .fast = io.KeyShift};
+                FlyMove(fly_, input, io.DeltaTime, Document().cellSize);
+            }
+            if (io.MouseWheel != 0.0F) FlyScrollSpeed(fly_, io.MouseWheel);
+            return;
+        }
         // Goxel's mouse: the middle button rotates, the right one pans, the wheel zooms.
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
             camera_.yawRadians += io.MouseDelta.x * 0.01F;
@@ -810,13 +890,15 @@ private:
         if (hover_ && hover_->onPlane) {
             centre = hover_->cell;
         } else {
-            const std::array<float, 3> target{camera_.target.x, camera_.target.y, camera_.target.z};
+            const Math::Vec3 at = freeCamera_ ? fly_.position : camera_.target;
+            const std::array<float, 3> target{at.x, at.y, at.z};
             for (std::size_t axis = 0; axis < 3; ++axis)
                 centre[axis] = static_cast<std::int32_t>(std::floor(target[axis] / document.cellSize)) - document.origin[axis];
         }
         centre[w] = plane_.at;
         // The grid lies on the side of the layer the camera looks at.
-        const std::array<float, 3> eye{camera_.Camera().position.x, camera_.Camera().position.y, camera_.Camera().position.z};
+        const Math::Vec3 eyeAt = ViewCamera().position;
+        const std::array<float, 3> eye{eyeAt.x, eyeAt.y, eyeAt.z};
         const float layer = (static_cast<float>(plane_.at + document.origin[w]) + 0.5F) * document.cellSize;
         const std::int32_t side = eye[w] > layer ? plane_.at + 1 : plane_.at;
         const auto corner = [&](const std::int32_t a, const std::int32_t b) {
@@ -978,6 +1060,8 @@ private:
     std::unique_ptr<PreviewScene> scene_;
     Framework::PreviewTexture texture_;
     Framework::OrbitCamera camera_;
+    bool freeCamera_{};
+    FlyCamera fly_{};
     std::optional<MapPreview> preview_;
     bool previewStale_{};
     bool openChanged_{};

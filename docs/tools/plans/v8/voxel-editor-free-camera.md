@@ -5,7 +5,7 @@
 - 你選「ve-free-camera」。
 - 紀錄：[HANDOFF](voxel-map-editor-HANDOFF.md)。
 
-**狀態：待你核准。核准前不動工。**
+**狀態：2026-11-07 你核准（「承認」）。**
 
 ## 範圍
 
