@@ -3,7 +3,7 @@
 日期：2026-11-07。分支 `claude/v8-tool-voxel-editor-measure`。下段。實作：主會話（Opus 5.5）；審查：Opus／high（唯讀）。
 事前宣告：[voxel-editor-feel-1.md](../tools/plans/v8/voxel-editor-feel-1.md)，你核准（「承認、PR は後で」）。
 
-**狀態：** E1～E4 成立；E5 的本機部分成立（`cpu|shader` 138/138），L1 待 PR；**L3 待你試用**。
+**狀態：** E1～E4、L3 成立；E5 的本機部分成立（`cpu|shader` 138/138），L1 待 PR。
 
 ## 做了什麼
 
@@ -47,6 +47,10 @@
   4. 每幀重算地圖範圍：改成依 revision 快取。
   5. 拖曳中修正縮放會讓射線跳動：拖曳中不修正。
   6. 軸箭頭加了 Z 旋轉；`RedrawStroke` 註明前提；拿掉多餘的變數。
+
+## L3
+
+**成立**（2026-11-07）。你在 building 地圖的副本上試用後說：「嗯，很好基本功能都有了」。副本與 log 在主 checkout `build/evidence/tool-v8-voxel-map/editor-next/feel-1/l3/`。
 
 ## 和宣告的差異
 
