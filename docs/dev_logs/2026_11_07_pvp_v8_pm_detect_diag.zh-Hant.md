@@ -2,7 +2,7 @@
 
 日期：2026-11-07。分支 `claude/pvp-v8-lag-l2-biome-kit`。主會話 Opus 5.5／high；審查者 Opus 5.5／high（general-purpose 子 agent，唯讀）。估 4～6 h。
 
-**狀態：實作與 D1～D5 完成；審查進行中，D6（L1）未跑。** [事前宣告](../object_fps_pvp/plans/v8/v8-product-pm-detect-diag-declaration.md)使用者 2026-11-07 照推薦核准（`-diag-scope` (a) 每步都記、`-radius` (a) 維持 0.25）。
+**狀態：D1～D5 與審查完成；D6（L1）未跑。** [事前宣告](../object_fps_pvp/plans/v8/v8-product-pm-detect-diag-declaration.md)使用者 2026-11-07 照推薦核准（`-diag-scope` (a) 每步都記、`-radius` (a) 維持 0.25）。
 
 ## 為什麼
 
@@ -47,6 +47,8 @@ pm-detect 拆成兩半（使用者 2026-11-07，架構師轉達）：診斷在 1
 
 - D3 的「本機自動送指令」用 quad probe（無 GUI 的 bot，Client 的程式碼在同一程序）。為此給它加了 `--movement-diag`。真的 Client 程序（GUI）沒有在這批跑；Client 端的記法另由單元測試「first predictions, not replays」驗（122 行＝generated 122，重播約 180 步不記）。
 - 宣告列的突變「在鎖裡寫檔」沒有加：功能測試分不出來，只有 D4（計時，CI 不跑）看得到。
+
+- 審查（Opus 5.5／high，子 agent）：blocker 0、should 0、nit 6。採納：full-queue 測試加「確實有丟失」（只收緊；`pmd-dropped-uncounted` 重跑 killed）、`supportedBefore` 與 `sweepFraction` 的註解照實際的值改寫。未採納：寫檔失敗沒有反映到結束碼（`diag_end` 缺行時事後看得出）、`replays` 計數在重新 seed 時多算（突變已殺）、atomic 讀兩次（停止後才清空，沒有實害）。審查者另跑 D2 5 次皆 0 不一致。
 
 ## 證據
 
