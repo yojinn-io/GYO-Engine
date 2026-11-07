@@ -84,16 +84,25 @@ Result<Render::TextureReadback> PreviewScene::Render(const Render::PerspectiveCa
         Render::CameraViewProjection(camera, static_cast<float>(width) / static_cast<float>(height)), center,
         drawDistance);
     drawn_ = 0;
+    std::vector<Engine::Math::Aabb> boxes;
+    std::vector<Render::MeshHandle> handles;
+    boxes.reserve(meshes_.size());
+    handles.reserve(meshes_.size());
+    for (const auto& [at, chunk] : meshes_) {
+        boxes.push_back(chunk.bounds);
+        handles.push_back(chunk.mesh);
+    }
+    const ChosenChunks chosen = ChooseChunks(view, boxes, MaxDrawnChunks);
+    capped_ = chosen.capped;
     auto queue = preview_->BeginFrame(width, height, camera, kBackground);
     if (!queue) return PreviewFailed("the preview cannot start the frame", Engine::Base::CauseDetail(queue.error()));
     // The frame is open from here: EndFrame runs on every path.
     std::string submitError;
     if (palette_.IsValid()) {
         // As the game draws the baked map: one draw per chunk, Engine's unlit shader, the palette texture.
-        for (const auto& [at, chunk] : meshes_) {
-            if (!Draws(view, chunk.bounds)) continue;
+        for (const std::size_t index : chosen.indices) {
             Render::MeshSubmission draw;
-            draw.mesh = chunk.mesh;
+            draw.mesh = handles[index];
             draw.material.texture = palette_;
             draw.material.tint = {1, 1, 1, 1};
             if (auto submitted = queue.value()->Submit(draw); !submitted) {

@@ -189,7 +189,7 @@ int RunPreviewMeasure(const MeasureOptions& options) {
             const auto changes = preview->TakeChanges();
             uploaded = changes.chunks.size();
             if (!scene.value()->Apply(changes)) return false;
-            auto drawn = scene.value()->Render(camera, orbit.target, options.drawDistanceCells * size, options.width,
+            auto drawn = scene.value()->Render(camera, orbit.target, DrawDistanceFor(options.drawDistanceCells * size, orbit.distance), options.width,
                                                options.height);
             return drawn && Framework::UploadFrame(*renderer.value(), texture, drawn.value());
         };
@@ -313,7 +313,7 @@ int RunPreviewMeasure(const MeasureOptions& options) {
                 ok = static_cast<bool>(scene.value()->Apply(changes));
             }
         }
-        auto drawn = scene.value()->Render(camera, orbit.target, options.drawDistanceCells * size, options.width,
+        auto drawn = scene.value()->Render(camera, orbit.target, DrawDistanceFor(options.drawDistanceCells * size, orbit.distance), options.width,
                                            options.height);
         ok = ok && drawn && Framework::UploadFrame(*renderer.value(), texture, drawn.value());
         const auto ended = std::chrono::steady_clock::now();

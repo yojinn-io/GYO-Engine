@@ -59,6 +59,10 @@ inline constexpr int MaxBrushSize = 16;
 // the chosen block and orientation (Add, and the block of Paint). Cells out of
 // range are skipped. InvalidGrid for a value the grid cannot hold.
 Result<void> ApplyCells(EditSession& session, std::span<const Vec3i> cells, EditMode mode, Cell value);
+// A drag that follows the pointer (Line, ve-feel-1 F5): puts back what the open stroke changed and applies the
+// cells instead, in a new open stroke, so only the latest cells stay; releasing (EndStroke) keeps them as one
+// step, CancelStroke puts them back.
+Result<void> RedrawStroke(EditSession& session, std::span<const Vec3i> cells, EditMode mode, Cell value);
 
 // Extrude by distance along normal: outward (distance > 0) each face cell is
 // copied distance times beyond its face (block and orientation); inward

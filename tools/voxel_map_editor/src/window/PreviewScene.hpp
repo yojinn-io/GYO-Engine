@@ -39,12 +39,15 @@ public:
     [[nodiscard]] std::size_t ChunkCount() const noexcept { return meshes_.size(); }
     // One frame of the map; the readback is this frame's (Rgba8SRgb). Only the
     // chunks within drawDistance (world units, x and z) of center that overlap
-    // the camera's frustum are drawn (Visibility.hpp).
+    // the camera's frustum are drawn, at most MaxDrawnChunks, the nearest
+    // (Visibility.hpp).
     Result<Engine::Render::TextureReadback> Render(const Engine::Render::PerspectiveCamera3D& camera,
                                                    Engine::Math::Vec3 center, float drawDistance,
                                                    std::uint32_t width, std::uint32_t height);
     // The chunks the last Render drew.
     [[nodiscard]] std::size_t DrawnCount() const noexcept { return drawn_; }
+    // Whether the last Render left chunks in view out (MaxDrawnChunks, Visibility.hpp).
+    [[nodiscard]] bool Capped() const noexcept { return capped_; }
 
 private:
     PreviewScene() = default;
@@ -56,6 +59,7 @@ private:
     };
     std::map<Vec3i, ChunkMesh> meshes_;
     std::size_t drawn_{};
+    bool capped_{};
     Engine::Render::TextureHandle palette_{};
 };
 

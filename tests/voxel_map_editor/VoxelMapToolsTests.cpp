@@ -230,6 +230,37 @@ TEST_CASE("W3 pick: the plane wins when the ray meets it before a filled cell (a
     CHECK_FALSE(same->onPlane);
 }
 
+TEST_CASE("ve-feel-1 E3: a dragged line keeps only the latest line, as one step") {
+    const Vec3i start{0, 0, 0};
+    const auto first = StrokeCells(start, {6, 0, 0}, 1, BrushShape::Cube);
+    const auto latest = StrokeCells(start, {0, 0, 5}, 2, BrushShape::Cube);
+    // What two clicks made before: the same StrokeCells, applied once.
+    EditSession clicked(Blocks());
+    REQUIRE(ApplyCells(clicked, latest, EditMode::Add, kStone));
+
+    EditSession dragged(Blocks());
+    dragged.BeginStroke();
+    REQUIRE(RedrawStroke(dragged, first, EditMode::Add, kStone));
+    REQUIRE(RedrawStroke(dragged, latest, EditMode::Add, kStone));
+    dragged.EndStroke();
+    // The first line is gone, the latest is there: the same grid as the click.
+    CHECK(WriteGrid(dragged.Document()) == WriteGrid(clicked.Document()));
+    CHECK(dragged.Document().At({6, 0, 0}).block == 0);
+    // One step: one undo takes the whole line back.
+    CHECK(dragged.Undo());
+    CHECK(Filled(dragged.Document()).empty());
+    CHECK_FALSE(dragged.Undo());
+}
+
+TEST_CASE("ve-feel-1 E3: Esc during a line drag puts the line back") {
+    EditSession session(Blocks());
+    session.BeginStroke();
+    REQUIRE(RedrawStroke(session, StrokeCells({0, 0, 0}, {4, 0, 0}, 1, BrushShape::Cube), EditMode::Add, kStone));
+    session.CancelStroke();
+    CHECK(Filled(session.Document()).empty());
+    CHECK_FALSE(session.CanUndo());
+}
+
 TEST_CASE("ve-pick-tie: a slanted ray entering a filled cell of the plane's layer picks the cell") {
     // Rays measured on km2-ground (ve-feel-survey): entering the floor at y = 0 from above, the walk's summed
     // entry parameter came out about 1e-12 past the plane's own, and the plane cell (already filled) was
