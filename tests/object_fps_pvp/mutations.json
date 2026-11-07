@@ -1058,7 +1058,7 @@
       "what": "A reservation reuses the smallest free player id",
       "file": "apps/object_fps_pvp/gateway/server.go",
       "find": "\ts.nextPlayer++\n\tplayer := &reservation{",
-      "replace": "\ts.nextPlayer = 1\n\tfor s.players[s.nextPlayer] != nil {\n\t\ts.nextPlayer++\n\t}\n\tplayer := &reservation{",
+      "replace": "\ts.nextPlayer = 1\n\tfor s.players[uint32(s.nextPlayer)] != nil {\n\t\ts.nextPlayer++\n\t}\n\tplayer := &reservation{",
       "check": "go",
       "expect": "a removed player's id was reused"
     },
@@ -2058,7 +2058,7 @@
       "what": "The final window leaves out players whose counters were all taken in earlier windows",
       "file": "apps/object_fps_pvp/gateway/server.go",
       "find": "\t\tfor id := range s.ingressPlayers {\n",
-      "replace": "\t\tfor id := range map[uint64]struct{}{} {\n",
+      "replace": "\t\tfor id := range map[uint32]struct{}{} {\n",
       "check": "go",
       "expect": "player 8 has no final line"
     },
@@ -2078,7 +2078,7 @@
       "what": "The link's counters are not reset when a window takes them",
       "file": "apps/object_fps_pvp/gateway/runtime_link.go",
       "find": "\ttaken := l.ingress\n\tl.ingress = nil\n",
-      "replace": "\ttaken := map[uint64]*playerIngressCounts{}\n\tfor id, counts := range l.ingress {\n\t\tcopied := *counts\n\t\ttaken[id] = &copied\n\t}\n",
+      "replace": "\ttaken := map[uint32]*playerIngressCounts{}\n\tfor id, counts := range l.ingress {\n\t\tcopied := *counts\n\t\ttaken[id] = &copied\n\t}\n",
       "check": "go",
       "expect": "window 2: player 7 handed 8 commands, want 3"
     },
@@ -3998,7 +3998,7 @@
       "what": "A batch written after forget recreates the player's send statistics",
       "file": "apps/object_fps_pvp/gateway/action_delivery.go",
       "find": "\tif stats := l.actionStats[playerID]; stats != nil {\n\t\tstats.record(now)\n\t}\n",
-      "replace": "\tif l.actionStats == nil {\n\t\tl.actionStats = map[uint64]*intervalStats{}\n\t}\n\tif l.actionStats[playerID] == nil {\n\t\tl.actionStats[playerID] = &intervalStats{}\n\t}\n\tl.actionStats[playerID].record(now)\n",
+      "replace": "\tif l.actionStats == nil {\n\t\tl.actionStats = map[uint32]*intervalStats{}\n\t}\n\tif l.actionStats[playerID] == nil {\n\t\tl.actionStats[playerID] = &intervalStats{}\n\t}\n\tl.actionStats[playerID].record(now)\n",
       "check": "go",
       "expect": "statistics recreated after forget"
     },
@@ -4550,7 +4550,7 @@
       "find": "    return shotDamage > 0 && shotDamage <= maximumShotDamage && maximumShotDamage <= maximumHp;\n",
       "replace": "    return shotDamage > 0 && shotDamage <= maximumShotDamage;\n",
       "check": "cpu",
-      "expect": "ValidShotDamageBounds\\(25, 101, 100\\)"
+      "expect": "ValidShotDamageBounds\\(25000, 100001, 100000\\)"
     },
     {
       "id": "v71hf-classify-late-boundary",
