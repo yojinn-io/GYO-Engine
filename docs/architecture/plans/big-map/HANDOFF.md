@@ -268,6 +268,6 @@ v8-arch-big-map-product-arena-v3
 
 ## 下一步
 
-產品會話：`pa-broadphase` 開卡（2026-11-07）；合併後開 `pm-detect`。之後 `scene v1`、`pa-measure`。
+產品線（使用者 2026-11-07 在產品規劃會話決定）：lag-l2＋K8 的 L2 場次 → `v8-product-hitbox-rewind` → **`pa-broadphase`**（rewind 合併後；兩者都改 `ShotQuery`，不並行、hitbox 的流程不中斷）→ `pm-detect`。pa-broadphase 開卡前照慣例先出事前宣告。之後 `scene v1`、`pa-measure`。
 voxel 線：window 批重做（不做 markers 放置 UI）；它的 TODO 見 [todo](todo.zh-Hant.md)。
 場景、互動物件、pv10：只有需求紀錄（`docs/architecture/plans/scene/README.md`、`docs/object_fps_pvp/plans/v8/pv10-requirements.md`），使用者說開工才開 survey。
