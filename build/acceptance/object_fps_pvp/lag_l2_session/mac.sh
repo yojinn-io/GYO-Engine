@@ -55,6 +55,15 @@ prepare)
         echo "# gateway sha256=$gateway_hash"
         echo "# arena=$arena"
     } > "$session/marks.txt"
+    # Session facts (field-session C1): this Mac.
+    {
+        echo "start=$(date +%Y-%m-%dT%H:%M:%S%z)"
+        sw_vers | sed 's/^/os_/; s/:[[:space:]]*/=/'
+        echo "cpu=$(sysctl -n machdep.cpu.brand_string)"
+        echo "ram_bytes=$(sysctl -n hw.memsize)"
+        system_profiler SPDisplaysDataType 2>/dev/null | awk -F': ' '/Chipset Model/{print "gpu=" $2}'
+        echo "arena_file=$arena_file movement_diag=${MOVEMENT_DIAG:-0} artificial_delay=none"
+    } > "$session/mac/machine.txt"
     cat "$session/marks.txt"
     echo "This Mac's addresses (pick the one on the Windows machines' network):"
     ifconfig | awk '/^[a-z]/{name=$1} /inet /{print "  " name " " $2}'
@@ -125,6 +134,7 @@ run)
             # caffeinate does not pass SIGINT on: signal the programs themselves (as Ctrl+C would).
             pkill -INT -f "^$gateway -runtime" || true; wait "$gateway_pid" 2>/dev/null || true
             pkill -INT -x gyo_object_fps_pvp-match || true; wait "$match_pid" 2>/dev/null || true
+            echo "# end=$(date +%Y-%m-%dT%H:%M:%S%z)" >> "$session/marks.txt"
             tail -1 "$session/mac/match-shots.jsonl" 2>/dev/null || true
             echo "Stopped. Next: mac.sh collect $session <the Windows zips>"
             break ;;

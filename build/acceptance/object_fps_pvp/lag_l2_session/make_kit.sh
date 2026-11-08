@@ -19,7 +19,9 @@ windows_revision="$(revision "$windows_pkg")"; mac_revision="$(revision "$mac_pk
 [ "$windows_revision" = "$mac_revision" ] || { echo "Windows $windows_revision and Mac $mac_revision differ" >&2; exit 2; }
 manifest() {
     (cd "$1" && { echo "# source_revision=$windows_revision"; echo "# kit=$(basename "$1") built=$(date +%Y-%m-%dT%H:%M:%S)";
-        find . -type f ! -name kit-manifest.txt | LC_ALL=C sort | while read -r f; do shasum -a 256 "$f"; done; } > kit-manifest.txt)
+        echo "# sha256  bytes  path"
+        find . -type f ! -name kit-manifest.txt | LC_ALL=C sort | while read -r f; do
+            echo "$(shasum -a 256 "$f" | cut -d' ' -f1)  $(stat -f %z "$f")  $f"; done; } > kit-manifest.txt)
 }
 mkdir -p "$out"
 for name in "${names[@]}"; do

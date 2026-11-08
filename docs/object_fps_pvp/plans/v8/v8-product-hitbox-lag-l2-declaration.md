@@ -103,3 +103,4 @@ protocol-v9 第 113 行：τ＝clamp(view_tick/65536, J−R, J)，R≤15（`maxi
    - 判定（S1、S2、R1、R2）不變；`lag_l2_summary.py` 不讀診斷檔。
    - 退路：pm-detect-diag 在 11/8 晚上前沒合併，就用 `8b8eaa19` 的 biome kit（修訂 8，沒有診斷）；再不行用 `54948874` 的 pvp_corners kit（修訂 7）。
    - 限界：Client 寫診斷增加 Client 的負擔，對 view_lag 的影響沒有量。
+10. 2026-11-08（看到任何場次結果之前）：場次改成架構師與產品一起宣告、一起讀（使用者 2026-11-08）。通用項（field-session C1～C8，有／缺口／檔名）、產品項、本次執行檔裡的收集碼位置寫在[資料收集宣告](v8-product-l2-session-data-declaration.md) §2A、§2、§3A。本宣告的判定（S1、S2、R1、R2）不變；kit 改為每台一包的離線 kit（`make_kit.sh`）。
