@@ -79,7 +79,7 @@
 | `v8-arch-big-map-density` | 2026-11-07。**規劃基準＝高建築密度**（使用者：覆蓋率要高不能低，設計出來遊戲跑不動比保險更貴）。ve-scale-measure 的 km2-building（格子文字 234 MB、區塊化地圖 242 MB、487 萬 quads、103 萬盒）是正確的參照。後果：格子 v2（工具）必要；二進位快取、LOD 回到候選。 |
 | `v8-arch-big-map-measure-after-real-map` | 2026-11-07。Match／Client 側的規模量測（載入、broadphase、region 畫法）等第一張真的大地圖做出來、用產品的路徑量；不開合成圖的 probe。 |
 | `v8-arch-frustum-in-math` | 2026-11-07。視錐剔除的數學進 Engine（使用者：「Engine 本身就應該具有這些能力」）：`Math::Frustum`、`MakeFrustum(clip)`、`Intersects(Frustum, Aabb)`（PR #170 已合併）；`Render::CameraViewProjection` 公開同一個矩陣。「哪些 region 要畫」的迴圈與距離剔除留在消費端（編輯器預覽、scene v1 的 Client）。 |
-| `v8-arch-field-session-common` | 2026-11-08。實機場次的資料收集分兩層：**通用項（架構師，`docs/architecture/field-session.md` C1～C8）＋產品項（產品的宣告）**，一起宣告、一起讀；場次的目的是收集資料不是只驗單一 case（使用者 2026-11-08）。第一次適用 11/9 的 lag-l2＋K8。 |
+| `v8-arch-field-session-common` | 2026-11-08。實機場次的資料收集分兩層：**通用項（架構師，`docs/architecture/field-session.md` C1～C8）＋產品項（產品的宣告）**，一起宣告、一起讀；場次的目的是收集資料不是只驗單一 case（使用者 2026-11-08）。第一次適用 11/9 的 lag-l2＋K8。使用者同日補：**測試可獨立發版，但不影響線上產品的程式**——收集用的侵入式修改要和發行版分開（建置選項／變體，發行建置不編進去；執行期旗標不算分開），DI 3。 |
 | `v8-arch-big-map-marker-kinds-format` | `marker_kinds.json` 的**形式**由 Engine 擁有（`gyo.marker_kinds` v1：`schema`、`version`、`kinds` 1～256 個、K5 字元、嚴格遞增、文字 ≤ 64 KiB），**內容**由產品擁有；解析 `ParseMarkerKinds` 與對照 `UnknownMarkerKinds` 放 `GYO::MapMarkers`，由 tool-chunked 的 `-markers` 小批實作，並在其宣告列為 Engine 公開介面的追加。依據：Layers 表（格式描述一個資產的詞彙、名字不透明 → Engine），兩個讀者（產品、編輯器）共用一個驗證者。使用者 2026-11-06 在 voxel 線核准「寫進 `map-markers.md` 的 Kinds 節」；proposal §11.3 的「產品格式」以本決定為準。`map-markers.md` DI 3 的字句隨之擴大（PR #160 請使用者確認）。 |
 
 proposal v0.1 與 survey 不一致之處，以 survey 與本表為準（例如 §11.3 的範例名、§11.7 的 4 MB/s 外推、§6a 的「全圖模擬 AI」前提）。

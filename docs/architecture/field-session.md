@@ -35,6 +35,15 @@ for an hour), in the product's JSONL or log-line families ([log contract](../obj
 Items a program cannot yet record are listed in the declaration as gaps, not silently left out; a gap recorded once is a
 candidate for the product's or Engine's next batch (Trace and Log are Engine's, record kinds are the product's).
 
+## Test builds
+
+A session runs a **test variant** of the products: the same commit, built with the collection option on and packaged
+through the trial channel (`Package trial`, Actions artifacts) or a local build, never through `Prepare release`. The
+variant is a separate package with its own metadata flag, so a test build cannot be mistaken for a release and release
+binaries never carry the collection code (Design Invariant 3). Until the build option exists, a product records in its
+declaration which collection code is compiled into the binaries it ships to the session and where that code lives, so the
+separation can be made later without re-reading the code.
+
 ## The product's items
 
 The product's declaration adds its own items under its own ids, next to the common list: the judgments its batch declared
@@ -59,6 +68,12 @@ A change against any item below is an Architecture Delta that needs the user's a
    before any product item is added. Guard: review of the session declaration against this page.
 2. **Recorded, not interpreted, at the venue.** The kit records; judgments are made afterwards from the files, by the
    declared rules. Guard: the kit scripts contain no judgment; review.
+3. **Test code apart from release code.** (User, 2026-11-08.) A session's build may be released on its own as a test
+   build, and collection code may be intrusive, but it never changes the release product: anything beyond the product's
+   normal logging lives in sources or targets that the release build does not compile (a build option or profile that
+   the test variant turns on), and the test variant says so in its `build_metadata.json`. A runtime flag inside the
+   release binary is not separation. Guard: the release packaging builds with the option off and the package check
+   rejects a package whose metadata marks it as a test variant; review of where collection code is placed.
 
 ### Replacement Criteria
 
