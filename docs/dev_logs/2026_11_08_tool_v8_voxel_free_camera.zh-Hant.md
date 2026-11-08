@@ -3,7 +3,7 @@
 日期：2026-11-07～08。分支 `claude/v8-tool-voxel-free-camera`（從 master `1ec57188` 切出）。下段。實作：主會話（Opus 5.5）；審查：Opus／high（唯讀）。
 事前宣告：[voxel-editor-free-camera.md](../tools/plans/v8/voxel-editor-free-camera.md)，你核准（「承認」）。
 
-**狀態：** FC1～FC3 成立；FC4 的本機部分成立（`cpu|shader` 138/138），L1 待 PR；**L3 待你試用**。
+**狀態：** FC1～FC3、L3 成立；FC4 的本機部分成立（`cpu|shader` 138/138），L1 待 PR。
 
 ## 做了什麼
 
@@ -42,6 +42,10 @@
 4. **一幀很長時相機飛很遠**：每幀的移動時間上限 0.1 秒。
 5. **測試的缺口**：補了縮放範圍、near 平面、編輯平面不當目標這三個案例，並加了 3 個突變。
 6. **宣告以外的行為**：列在下一節。另外，左鍵拖曳中不飛行。
+
+## L3
+
+**成立**（2026-11-08）。你在 building 地圖的副本上試用後說：「不錯，目前合格。剩下的問題，我們在深度使用中在來提出。」副本與 log 在主 checkout `build/evidence/tool-v8-voxel-map/free-camera/l3/`。
 
 ## 和宣告的差異
 
