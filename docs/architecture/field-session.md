@@ -35,6 +35,27 @@ for an hour), in the product's JSONL or log-line families ([log contract](../obj
 Items a program cannot yet record are listed in the declaration as gaps, not silently left out; a gap recorded once is a
 candidate for the product's or Engine's next batch (Trace and Log are Engine's, record kinds are the product's).
 
+## The pipeline: feature, tests, variant, field
+
+The user's pipeline (2026-11-08), with one word changed: the collection stage is a **build variant**, not a git branch.
+
+1. **Feature.** On master, by its card and declaration.
+2. **Functional tests, non-intrusive.** Rule tests, mutants, golden values, L1; and the ability to replay offline
+   (digests, trace replay), which is the bridge that turns field data into a reproduction later.
+3. **Collection variant.** The intrusive recording of Design Invariant 3: sources or targets the release build does not
+   compile, turned on by a build option, built from the same commit and packaged through the trial channel. It records
+   and never changes a judgment; the guard is the digest, equal across variants for the same input.
+4. **Field session.** Common and product items declared first (judgments before the data, AGENTS.md §14.1); one kit per
+   machine, every command run before delivery; afterwards the product reads its items and architecture the common ones,
+   and a defect found there is fixed from a failing test reproduced with stage 2 (§14.3).
+
+Why not a branch: a branch of collection code is rebased by whoever tests, drifts from master, is never the binary that
+ships, and gets no review of whether it changed a judgment; a variant lives on master under the same review and digest.
+
+The line between stages 2 and 3: what a product needs to operate (its log contract's lines, network statistics,
+`trace_end`) belongs to the release and to stages 1–2; only the high-frequency recording made for a session (per tick,
+per frame) belongs to the variant.
+
 ## Test builds
 
 A session runs a **test variant** of the products: the same commit, built with the collection option on and packaged
