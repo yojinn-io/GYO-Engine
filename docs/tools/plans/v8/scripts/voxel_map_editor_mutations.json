@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9), v8-tool-voxel-map-editor-window (judgment W10, ids vmw-*; both declarations in docs/tools/plans/v8/voxel-map-editor.md) v8-arch-big-map-tool-chunked (judgment T7, ids tc-*; docs/tools/plans/v8/voxel-map-tool-chunked.md) and v8-tool-voxel-window-1 (judgment W10, ids vw1-*; docs/tools/plans/v8/voxel-map-window-goxel.md), and ve-cull (judgments C1 and C2, ids math-frustum-*, render-cvp-*, ve-cull-*; docs/tools/plans/v8/voxel-editor-cull.md), and ve-pick-tie (judgment PT2, id ve-pick-tie-*; docs/tools/plans/v8/voxel-editor-pick-tie.md), and ve-feel-1 (judgments E1 to E3, ids vf1-*; docs/tools/plans/v8/voxel-editor-feel-1.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
+  "description": "Declared mutants of v8-tool-voxel-map-editor-core (judgment E9), v8-tool-voxel-map-editor-window (judgment W10, ids vmw-*; both declarations in docs/tools/plans/v8/voxel-map-editor.md) v8-arch-big-map-tool-chunked (judgment T7, ids tc-*; docs/tools/plans/v8/voxel-map-tool-chunked.md) and v8-tool-voxel-window-1 (judgment W10, ids vw1-*; docs/tools/plans/v8/voxel-map-window-goxel.md), and ve-cull (judgments C1 and C2, ids math-frustum-*, render-cvp-*, ve-cull-*; docs/tools/plans/v8/voxel-editor-cull.md), and ve-pick-tie (judgment PT2, id ve-pick-tie-*; docs/tools/plans/v8/voxel-editor-pick-tie.md), and ve-feel-1 (judgments E1 to E3, ids vf1-*; docs/tools/plans/v8/voxel-editor-feel-1.md), and ve-free-camera (judgments FC1 to FC3, ids vfc-*; docs/tools/plans/v8/voxel-editor-free-camera.md), run with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/tools/plans/v8/scripts/voxel_map_editor_mutations.json --build-dir build/target/_build/test. A mutant is killed only when its check fails with the expected message. Test-case filters must not contain commas.",
   "mutants": [
     {
       "id": "vme-cull-partial",
@@ -1088,6 +1088,116 @@
       "replace": "    std::nth_element(keyed.begin(), keyed.begin() + static_cast<std::ptrdiff_t>(maxChunks), keyed.end(),\n                     [](const auto& a, const auto& b) { return a.first < b.first || (a.first == b.first && a.second > b.second); });",
       "target": "gyo_voxel_map_editor_core_tests",
       "cases": "ve-feel-1 E2: at most*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-forward-pitch-sign",
+      "what": "A positive pitch looks up",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "-std::sin(camera.pitchRadians)",
+      "replace": "std::sin(camera.pitchRadians)",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC1: the look direction*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-move-follows-pitch",
+      "what": "Forward flies along the look, leaving the ground",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    const Math::Vec3 ahead{std::sin(camera.yawRadians), 0.0F, std::cos(camera.yawRadians)};",
+      "replace": "    const Math::Vec3 ahead = FlyForward(camera);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC1: moving*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-diagonal-faster",
+      "what": "Two keys at once fly faster than one",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    camera.position = camera.position + Math::NormalizeOrZero(step) * (speed * seconds);",
+      "replace": "    camera.position = camera.position + step * (speed * seconds);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC1: moving*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-pitch-unclamped",
+      "what": "The pitch turns past the limit",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    camera.pitchRadians = Math::Clamp(camera.pitchRadians + pitchDelta, -FlyPitchLimit, FlyPitchLimit);",
+      "replace": "    camera.pitchRadians = camera.pitchRadians + pitchDelta;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC1: the pitch*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-speed-unclamped",
+      "what": "The wheel takes the speed out of its range",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "        Math::Clamp(camera.speedCells * std::pow(FlySpeedStep, notches), FlyMinSpeedCells, FlyMaxSpeedCells);",
+      "replace": "        camera.speedCells * std::pow(FlySpeedStep, notches);",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC1: the pitch*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-near-not-cut",
+      "what": "The free camera's near plane does not cut a wall away",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "            FlyNearCells * cellSize, FlyFarCells * cellSize};",
+      "replace": "            0.01F * cellSize, FlyFarCells * cellSize};",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC1: the pitch*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-orbit-target-off-ray",
+      "what": "Free to orbit moves the camera",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    return {camera.position + forward * distance, distance};",
+      "replace": "    return {camera.position + forward * (distance * 0.5F), distance};",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC2: free to orbit*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-keys-without-button",
+      "what": "The free camera takes the keys without the right button",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    return freeCamera && rightButtonHeld ? KeyUse::Camera : KeyUse::Editing;",
+      "replace": "    return freeCamera ? KeyUse::Camera : KeyUse::Editing;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC3*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-pick-plane-on",
+      "what": "Free to orbit targets the edit plane as well as filled cells",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "PickOptions{true, false}",
+      "replace": "PickOptions{true, true}",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC2: free to orbit keeps the position*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-orbit-unclamped",
+      "what": "Free to orbit leaves the distance outside the zoom range (the camera then jumps)",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    distance = ClampZoom(distance, zoom);\n",
+      "replace": "",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC2: free to orbit keeps the camera*",
+      "expect": "is NOT correct"
+    },
+    {
+      "id": "vfc-pick-from-camera",
+      "what": "Free to orbit targets a cell the near plane cuts away",
+      "file": "tools/voxel_map_editor/src/FlyCamera.cpp",
+      "find": "    const Math::Vec3 from = camera.position + forward * (FlyNearCells * document.cellSize);",
+      "replace": "    const Math::Vec3 from = camera.position;",
+      "target": "gyo_voxel_map_editor_core_tests",
+      "cases": "ve-free-camera FC2: free to orbit keeps the camera*",
       "expect": "is NOT correct"
     }
   ]
