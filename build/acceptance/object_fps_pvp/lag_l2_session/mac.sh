@@ -8,6 +8,11 @@
 #   mac.sh check    MAC_IP                the Gateway answers on MAC_IP:8080
 #   mac.sh s1-end   SESSION               writes s1_end=<now> to marks.txt (end of the continuous play)
 #   mac.sh judge    SESSION               lag_l2_summary.py on the collected session folder
+#   mac.sh run      SESSION PKG GATEWAY   the whole Mac side in one terminal: prepare, Match and
+#                                         Gateway in the background, memory samples, then keys:
+#                                         s = s1-end, c = check, q = stop (Gateway, then Match)
+#   mac.sh collect  SESSION ZIP...        unzip each Windows lag-l2-<name>*.zip into
+#                                         clients/<name>/, judge, and zip the whole session
 #
 # MOVEMENT_DIAG=1 also writes the Match's movement diagnostics (v8-product-pm-detect-diag;
 # a package from before it refuses the option).
@@ -80,8 +85,67 @@ judge)
     session="$1"
     python3 "$here/../lag_l2_summary.py" "$session" --output "$session/lag_l2_summary.json"
     ;;
+run)
+    session="$1"; pkg="$2"; gateway="$3"
+    "$0" prepare "$session" "$pkg" "$gateway"
+    mac_ip="${MAC_IP:-}"
+    if [ -z "$mac_ip" ]; then
+        read -r -p "MAC_IP (the address on the Windows machines' network): " mac_ip
+    fi
+    echo "# mac_ip=$mac_ip" >> "$session/marks.txt"
+    "$0" match "$session" "$pkg" > "$session/mac/match.out" 2>&1 &
+    match_pid=$!
+    for _ in $(seq 60); do grep -q "Match ready" "$session/mac/match.log" 2>/dev/null && break; sleep 0.5; done
+    grep -q "Match ready" "$session/mac/match.log" || { echo "the Match did not become ready (see $session/mac/)" >&2; kill -INT "$match_pid"; exit 1; }
+    "$0" gateway "$session" "$gateway" "$mac_ip" > "$session/mac/gateway.out" 2>&1 &
+    gateway_pid=$!
+    sleep 2
+    # Memory of the Match and the Gateway every 10 s (exploratory data).
+    (
+        echo "time,process,rss_kb"
+        while kill -0 "$match_pid" 2>/dev/null; do
+            now="$(date +%Y-%m-%dT%H:%M:%S)"
+            for name in gyo_object_fps_pvp-match "$(basename "$gateway")"; do
+                pid="$(pgrep -nx "$name" || true)"
+                [ -n "$pid" ] && echo "$now,$name,$(ps -o rss= -p "$pid" | tr -d ' ')"
+            done
+            sleep 10
+        done
+    ) > "$session/mac/memory.csv" &
+    "$0" check "$mac_ip" || true
+    echo "Running. Keys: s = s1-end (after the continuous play), c = check, q = stop (only at the very end)."
+    while true; do
+        read -r -n 1 -s key || key=q
+        case "$key" in
+        s) "$0" s1-end "$session" ;;
+        c) "$0" check "$mac_ip" || true ;;
+        q)
+            read -r -p "Stop the Gateway and the Match now? (y/N) " answer
+            [ "$answer" = "y" ] || continue
+            # caffeinate does not pass SIGINT on: signal the programs themselves (as Ctrl+C would).
+            pkill -INT -f "^$gateway -runtime" || true; wait "$gateway_pid" 2>/dev/null || true
+            pkill -INT -x gyo_object_fps_pvp-match || true; wait "$match_pid" 2>/dev/null || true
+            tail -1 "$session/mac/match-shots.jsonl" 2>/dev/null || true
+            echo "Stopped. Next: mac.sh collect $session <the Windows zips>"
+            break ;;
+        esac
+    done
+    ;;
+collect)
+    session="$1"; shift
+    for zip in "$@"; do
+        name="$(basename "$zip" .zip | sed -E 's/^lag-l2-([^-]+).*/\1/')"
+        mkdir -p "$session/clients/$name"
+        unzip -o -q "$zip" -d "$session/clients/$name"
+        echo "unzipped $zip -> clients/$name"
+    done
+    "$0" judge "$session" || echo "judge exit $? (the summary, if any, is in $session/lag_l2_summary.json)"
+    archive="$session.zip"
+    (cd "$(dirname "$session")" && zip -q -r "$(basename "$archive")" "$(basename "$session")")
+    echo "The whole session: $archive"
+    ;;
 *)
-    sed -n '2,18p' "$0" >&2
+    sed -n '2,23p' "$0" >&2
     exit 2
     ;;
 esac

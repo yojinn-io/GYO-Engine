@@ -41,7 +41,20 @@ $arguments = @(
 if ($MovementDiag) {
     $arguments += @('--movement-diag', ('"' + (Join-Path $out "client-$stamp-movement-diag.jsonl") + '"'))
 }
-$process = Start-Process -FilePath $client -PassThru -Wait -ArgumentList $arguments
+$process = Start-Process -FilePath $client -PassThru -ArgumentList $arguments
+# The Client's memory every 10 s while it runs (exploratory data of the session
+# declaration; nothing in the Client logs it). Sampling never stops the Client.
+$memory = Join-Path $out 'client-memory.csv'
+'time,working_set_bytes,private_bytes' | Set-Content -Path $memory -Encoding ascii
+while (-not $process.HasExited) {
+    try {
+        $process.Refresh()
+        "$(Get-Date -Format o),$($process.WorkingSet64),$($process.PrivateMemorySize64)" |
+            Add-Content -Path $memory -Encoding ascii
+    } catch {}
+    Start-Sleep -Seconds 10
+}
+$process.WaitForExit()
 Write-Host "Client exited with $($process.ExitCode)"
 
 $zip = Join-Path $PSScriptRoot "lag-l2-$Name.zip"
