@@ -33,6 +33,7 @@ for name in "${names[@]}"; do
     cat > "$kit/README.txt" <<TEXT
 lag-l2 + K8 session kit: $name (commit $windows_revision)
 
+0. Keep 2 GB free on this disk: one hour of play writes about 1.5-2 GB of logs here.
 1. Copy this folder to a local disk (not a network drive).
 2. Double-click start.cmd. Enter the Mac IP shown in the Mac terminal.
    - If Windows Firewall asks, allow the network the PC is on (often "Public" without internet).
@@ -59,6 +60,7 @@ lag-l2 + K8 session kit: Mac (commit $mac_revision)
 SESSION is a new folder name. Type the Mac IP on the Windows network when asked.
 Keys: s = s1-end after the continuous play, c = check, q = stop at the very end.
 Then: lag_l2_session/mac.sh collect SESSION lag-l2-win1*.zip lag-l2-win2*.zip lag-l2-win3*.zip
+Keep 2 GB free: one hour writes about 1-1.5 GB on the Mac.
 TEXT
 manifest "$kit"
 echo "kits in $out:"; ls -1 "$out"

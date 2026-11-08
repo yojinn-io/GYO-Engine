@@ -198,6 +198,8 @@
 
 ## 未結事項
 
+- **收集碼改成建置選項（field-session DI 3，2026-11-08 架構師提出）**：11/9 場次的收集碼編進了發行建置、只用執行期旗標開關（位置見 [資料收集宣告](v8-product-l2-session-data-declaration.md) §3A：`MovementDiag.hpp` 與相關參數、`MatchShotTrace.hpp`、`MovementTrace*.hpp`）。要改成建置選項或獨立 target，發行建置不編，build_metadata 標明測試變體。觸發：下一次動到那些檔案，或 field-session 的第二次場次，先到者。
+
 - **v8 驗收前必須完成：系統選擇窗的記帳規則有兩份（`v8-tool-path-dialog-rule-handover`，2026-11-04 工具線交回）**。使用者指示：「丟回給v8會話，記成8v驗收前必須完成的事項。」（「8v」照上下文讀成 v8。）
   - 規則：Engine `platform-sdl` 的 Design Invariant 10 只保證每次請求最多一個答案、可能不回，Windows 上 Failed 之後可能還有備用窗的答案。所以呼叫端要自己記帳：每次請求給新的 tag、只認最新一次；Chosen／Cancelled 才算結束，Failed 不算；答案不來時可以放棄等待。
   - 兩份的位置：ui_editor `tools/ui_editor/include/gyo/ui_editor/PathDialog.hpp:57` 的 `PathDialogRequests`；audio_editor `tools/audio_editor/src/AudioEditorWindow.cpp:269-281` 的 `ApplyDialogAnswers`（PR #141 的分支）。Model Viewer 做 GUI 時可能出現第三份。

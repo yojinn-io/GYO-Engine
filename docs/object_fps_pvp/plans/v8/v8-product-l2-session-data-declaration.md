@@ -37,11 +37,11 @@
 | C1 場次事實 | 有 | `marks.txt`（commit、Match／Gateway 的 SHA-256、arena、`mac_ip`、`s1_end`、起訖）、`mac/machine.txt`（macOS、CPU、GPU、RAM、arena、診斷旗標、人工延遲 none）、`clients/*/machine.txt`（名稱、Mac IP、commit、Client 的 SHA-256、Windows、CPU、GPU 與驅動、RAM、旗標、起訖、exit code）、各 kit 的 `kit-manifest.txt` | 參與者（誰用哪台）不記：由使用者寫進 `k8-notes.txt`（選擇性） |
 | C2 時鐘 | 部分 | Match 與 Client 的每一行 log 都有牆鐘與 `mono_ns`（steady clock），統計行每 10 秒一次；Gateway 的 log 有牆鐘與時區 | Gateway 沒有 steady clock 的對照 |
 | C3 伺服器 tick | 部分 | `mac/match.log` 的 `network statistics`（tick_late p50／p99／max、tick_overrun p99／max、advance p99／max、tick_stalls）、`statistics`（players） | 視窗是 10 秒不是 1 秒；分位數是 p50／p99，沒有 p95 |
-| C4 wire per peer | 部分 | `mac/gateway.log` 的 `player send statistics`（每 10 秒：snapshot 與 results 的間隔、`snapshot_bytes` 四個值）、`gw_transport`、`gw_drop report`；Client 的 `worker statistics`（收、舊、壞的 datagram）、`clock sync`（delay min／max） | 每秒的 bytes in／out 沒有；RTT 只有 min／max、沒有 jitter；視窗 10 秒 |
+| C4 wire per peer | 部分 | `mac/gateway.log` 的 `player send statistics`（每 10 秒：snapshot 與 results 的間隔、`snapshot_bytes` 四個值）、`gw_transport`、`gw_drop report`；Client 的 `worker statistics`（收、舊、壞的 datagram）、`clock sync`（delay min／max） | **送出數缺，這次對不了帳**：Gateway 每個 peer 只記 snapshot、results、link_actions 三種的送出數，Client 的 `received_datagrams` 比三者之和大（D3 的一個 10 秒視窗：674 對 356），差額的種類沒有計數，所以「送出＝收到＋計數的丟棄」（§14）算不出來；每秒的 bytes in／out 沒有；RTT 只有 min／max、沒有 jitter；視窗 10 秒 |
 | C5 Client 幀 | 部分 | Client log 的 `PvP summary`（每秒 fps、longest_frame_ms）、`PvP render` | 每秒的 p50／p95 沒有（只有平均 fps 與最長幀）；draw 數、三角形數沒有；預測修正的次數與最大量沒有逐秒值 |
 | C6 載入與記憶體 | 部分 | Client 的 `graphics ready initialization_ms`、`connection phase=playing` 的時刻；`mac/match.log` 的 `start`→`Match ready`；`mac/memory.csv`、`clients/*/client-memory.csv`（每 10 秒）；kit-manifest 有每個檔案的大小 | 峰值 RSS 只靠 10 秒取樣，短尖峰看不到；Client 的「內容載入到 ready」沒有單獨的時間 |
 | C7 故障 | 有 | Match 的 `end reason=… exit_code=…` 與 stderr（`mac/match.out`）；Client 的 exit code（`machine.txt`）與 stdout／stderr（`client-stdout.txt`、`client-stderr.txt`）；各 trace 的 `trace_end`／`diag_end`（dropped）；`leave reason`、`connection summary` | Gateway 異常結束的文字只在 `mac/gateway.out` |
-| C8 kit | 部分 | §1：每台一包、同一 commit、`kit-manifest.txt`；`mac.sh collect` 把整場打成一個 zip | **Windows 的 `start.cmd`、`windows.ps1` 交出前沒有在 Windows 上跑過**（這台 Mac 沒有 PowerShell）；Mac 的命令都跑過 |
+| C8 kit | 待試跑 | §1：每台一包、同一 commit、`kit-manifest.txt`；`mac.sh collect` 把整場打成一個 zip；Mac 的命令都跑過 | **交付條件**：§4 的 Windows 試跑成功前不交出（offline-session 的規則：交出前每條命令實跑過） |
 
 缺口是之後批次的候選（例如 Match 與 Client 每秒的統計、bytes in／out），這次不補（不改產品程式）。
 
@@ -57,7 +57,7 @@
 | 每台 Client 的移動診斷 | 約 110 MB |
 | 其他 log、shots、CSV | 數 MB |
 
-- Mac 與每台 Windows 要留 2 GB 以上的空間。zip 會壓得很小（JSON Lines），交回的檔案量以壓縮後為準。
+- Mac 與每台 Windows 要留 2 GB 以上的空間（每台約 1.5～2 GB 未壓縮，寫在 kit 的 `README.txt`）。zip 會壓得很小（JSON Lines），交回的檔案量以壓縮後為準。
 - 寫入對 tick 的影響：pm-detect-diag 的 D4（試行 2 通過，但量測波動大過閾值，證據偏弱）。場次中用 #4 的 tick_overrun 與 tick_stalls 觀察；出現時照記錄，不中止場次（lag-l2 宣告：場次只跑一次）。
 
 ## 3A. 這次執行檔裡的收集碼（field-session DI 3）
@@ -75,6 +75,13 @@ kit 的腳本（`mac.sh`、`windows.ps1`、`start.cmd`、`make_kit.sh`）不在�
 
 ## 4. 範圍的限界
 
-- `windows.ps1`（含新加的記憶體取樣）與 `start.cmd` **沒有在 Windows 上跑過**（這台 Mac 沒有 PowerShell）。建議今天（11/8，有網路）在一台 Windows 上先跑一次 `start.cmd`，連到 Mac 的 `mac.sh run`。
+- **Windows 試跑（交付條件，11/8 有網路時做）**：
+  1. Mac：在主 checkout 的 `build/evidence/v8-lag-l2-kit/kit-20261109/mac/` 開終端機，執行 `ARENA_FILE=biome.json MOVEMENT_DIAG=1 lag_l2_session/mac.sh run ~/Desktop/rehearsal-win gyo-object_fps_pvp gateway`（`~/Desktop/rehearsal-win` 只是試跑的資料夾，不留），問 IP 時輸入 Mac 在同一個網路的位址。
+  2. 一台 Windows：把 `lag-l2-kit-win1.zip` 解到本機磁碟，雙擊 `start.cmd`，輸入同一個 IP。防火牆詢問就允許。
+  3. 遊戲開起來後建立房間、走幾步、開幾槍，按 Esc 離開、關掉遊戲視窗。
+  4. 黑色視窗出現 `Done`，資料夾裡有 `lag-l2-win1*.zip`；打開確認有 `client-*.log`、`client-*-movement-diag.jsonl`、`client-memory.csv`、`machine.txt`。
+  5. Mac 上按 `q`、`y` 停止。把錯誤訊息（黑色視窗或 Mac 終端機的）原樣交給我，成功就說成功。
+  - 結果：（未跑）
+- 試跑用的 `rehearsal-win` 與 zip 不算場次資料。
 - Mac 端的 `mac.sh run`、`collect` 在 Intel Mac 上用 127.0.0.1 與 3 個無 GUI 的 bot 跑過（主 checkout 的 `build/evidence/v8-lag-l2-kit/dryrun-run-*`）。
 - 記憶體每 10 秒一次，短的尖峰看不到。
