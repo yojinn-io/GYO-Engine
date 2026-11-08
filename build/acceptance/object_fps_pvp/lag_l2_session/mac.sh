@@ -29,6 +29,11 @@ arena_file="${ARENA_FILE:-pvp_corners.json}"
 command="${1:-}"
 shift || true
 
+# An absolute path: a bare name such as "gateway" would otherwise be looked up
+# in PATH by caffeinate and exec (the 2026-11-08 Windows rehearsal: the Gateway
+# never started).
+absolute() { (cd "$(dirname "$1")" && echo "$PWD/$(basename "$1")"); }
+
 arena_of() {
     local found
     found="$(find "$1" -name "$arena_file" -path '*object_fps_pvp*')"
@@ -39,7 +44,7 @@ arena_of() {
 
 case "$command" in
 prepare)
-    session="$1"; pkg="$2"; gateway="$3"
+    session="$1"; pkg="$(absolute "$2")"; gateway="$(absolute "$3")"
     [ ! -e "$session" ] || { echo "$session exists: use a new folder" >&2; exit 2; }
     # Everything is read before the folder is made, so a wrong PKG leaves nothing behind.
     match="$pkg/bin/gyo_object_fps_pvp-match"
@@ -69,7 +74,7 @@ prepare)
     ifconfig | awk '/^[a-z]/{name=$1} /inet /{print "  " name " " $2}'
     ;;
 match)
-    session="$1"; pkg="$2"
+    session="$1"; pkg="$(absolute "$2")"
     # caffeinate: an idle Mac must not sleep during the session (nobody touches it for minutes).
     arena="$(arena_of "$pkg")"
     exec caffeinate -i "$pkg/bin/gyo_object_fps_pvp-match" --arena "$arena" --listen 127.0.0.1:27016 \
@@ -77,7 +82,7 @@ match)
         ${MOVEMENT_DIAG:+--movement-diag "$session/mac/match-movement-diag.jsonl"}
     ;;
 gateway)
-    session="$1"; gateway="$2"; mac_ip="$3"
+    session="$1"; gateway="$(absolute "$2")"; mac_ip="$3"
     exec caffeinate -i "$gateway" -runtime 127.0.0.1:27016 -http 0.0.0.0:8080 -udp 0.0.0.0:27015 \
         -advertise-ip "$mac_ip" -log "$session/mac/gateway.log"
     ;;
@@ -95,7 +100,7 @@ judge)
     python3 "$here/../lag_l2_summary.py" "$session" --output "$session/lag_l2_summary.json"
     ;;
 run)
-    session="$1"; pkg="$2"; gateway="$3"
+    session="$1"; pkg="$(absolute "$2")"; gateway="$(absolute "$3")"
     "$0" prepare "$session" "$pkg" "$gateway"
     mac_ip="${MAC_IP:-}"
     if [ -z "$mac_ip" ]; then
@@ -108,7 +113,7 @@ run)
     grep -q "Match ready" "$session/mac/match.log" || { echo "the Match did not become ready (see $session/mac/)" >&2; kill -INT "$match_pid"; exit 1; }
     "$0" gateway "$session" "$gateway" "$mac_ip" > "$session/mac/gateway.out" 2>&1 &
     gateway_pid=$!
-    sleep 2
+    for _ in $(seq 20); do curl -s --max-time 1 "http://$mac_ip:8080/rooms" > /dev/null && break; sleep 0.5; done
     # Memory of the Match and the Gateway every 10 s (exploratory data).
     (
         echo "time,process,rss_kb"
@@ -121,7 +126,9 @@ run)
             sleep 10
         done
     ) > "$session/mac/memory.csv" &
-    "$0" check "$mac_ip" || true
+    if ! "$0" check "$mac_ip"; then
+        echo "The Gateway does not answer on $mac_ip:8080 (see $session/mac/gateway.out). Press q, y to stop." >&2
+    fi
     echo "Running. Keys: s = s1-end (after the continuous play), c = check, q = stop (only at the very end)."
     while true; do
         read -r -n 1 -s key || key=q

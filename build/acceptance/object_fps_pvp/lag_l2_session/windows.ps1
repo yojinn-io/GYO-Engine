@@ -61,6 +61,9 @@ if ($MovementDiag) {
 # The Client's own output (an assert's text goes to standard error; field-session C7).
 $process = Start-Process -FilePath $client -PassThru -ArgumentList $arguments `
     -RedirectStandardOutput (Join-Path $out 'client-stdout.txt') -RedirectStandardError (Join-Path $out 'client-stderr.txt')
+# Without -Wait, ExitCode stays empty unless the handle is taken now (the
+# 2026-11-08 rehearsal wrote "exit_code=").
+$null = $process.Handle
 # The Client's memory every 10 s while it runs (exploratory data of the session
 # declaration; nothing in the Client logs it). Sampling never stops the Client.
 $memory = Join-Path $out 'client-memory.csv'

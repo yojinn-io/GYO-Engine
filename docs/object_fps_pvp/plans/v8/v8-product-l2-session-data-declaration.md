@@ -81,7 +81,10 @@ kit 的腳本（`mac.sh`、`windows.ps1`、`start.cmd`、`make_kit.sh`）不在�
   3. 遊戲開起來後建立房間、走幾步、開幾槍，按 Esc 離開、關掉遊戲視窗。
   4. 黑色視窗出現 `Done`，資料夾裡有 `lag-l2-win1*.zip`；打開確認有 `client-*.log`、`client-*-movement-diag.jsonl`、`client-memory.csv`、`machine.txt`。
   5. Mac 上按 `q`、`y` 停止。把錯誤訊息（黑色視窗或 Mac 終端機的）原樣交給我，成功就說成功。
-  - 結果：（未跑）
+  - 結果（2026-11-08）：
+    - 第 1 次：Mac 的 Gateway 沒有啟動。`mac.sh` 把相對路徑 `gateway`（沒有 `/`）交給 `caffeinate`，被當成 PATH 上的命令找不到；我之前的乾跑也用相對路徑，但沒有看 `check` 的結果，所以漏掉。修正：`mac.sh` 先把 PKG、GATEWAY 轉成絕對路徑，`run` 等 Gateway 回應、不回應時明確警告。修正後在這台 Mac 用同一行相對路徑的命令、LAN 位址 `192.168.3.71` 重跑：`{"rooms":[]}`、2 個無 GUI 的 bot 經 `192.168.3.71:8080` 加入，診斷 dropped 0（主 checkout 的 `build/evidence/v8-lag-l2-kit/dryrun-lan-*`）。
+    - Windows（win1，i7-8750H、GTX 1060、Windows 11 Pro）：連到 `192.168.3.71:8080`、進 biome、playing 約 2.5 分鐘；`machine.txt`、`client-memory.csv`（17 行）、移動診斷（9,074 行，dropped 0）、movement trace（dropped 0）、stdout／stderr 都在（主 checkout 的 `build/evidence/v8-lag-l2-kit/rehearsal-win1-20261108-1243/`）。發現 `exit_code=` 是空的（PowerShell 的 `Start-Process -PassThru` 沒有 `-Wait` 時要先取 `Handle`），已修正、kit 已重建；這一行修正沒有在 Windows 重跑。
+    - 當時 Mac 端是哪一個 Gateway 服務了這次連線，沒有紀錄可查（那次的 Mac 資料夾在桌面，我讀不到）。
 - 試跑用的 `rehearsal-win` 與 zip 不算場次資料。
 - Mac 端的 `mac.sh run`、`collect` 在 Intel Mac 上用 127.0.0.1 與 3 個無 GUI 的 bot 跑過（主 checkout 的 `build/evidence/v8-lag-l2-kit/dryrun-run-*`）。
 - 記憶體每 10 秒一次，短的尖峰看不到。
