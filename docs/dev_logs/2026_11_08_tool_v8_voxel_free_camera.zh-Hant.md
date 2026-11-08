@@ -3,7 +3,7 @@
 日期：2026-11-07～08。分支 `claude/v8-tool-voxel-free-camera`（從 master `1ec57188` 切出）。下段。實作：主會話（Opus 5.5）；審查：Opus／high（唯讀）。
 事前宣告：[voxel-editor-free-camera.md](../tools/plans/v8/voxel-editor-free-camera.md)，你核准（「承認」）。
 
-**狀態：** FC1～FC3、L3 成立；FC4 的本機部分成立（`cpu|shader` 138/138），L1 待 PR。
+**狀態：** FC1～FC4、L3 成立（`cpu|shader` 138/138；L1 三平台通過，PR #171，run 42439934604）。
 
 ## 做了什麼
 
