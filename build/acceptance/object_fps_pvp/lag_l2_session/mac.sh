@@ -154,6 +154,12 @@ collect)
         name="$(basename "$zip" .zip | sed -E 's/^lag-l2-([^-]+).*/\1/')"
         mkdir -p "$session/clients/$name"
         unzip -o -q "$zip" -d "$session/clients/$name"
+        # A zip that passed through a cloud drive wraps the files in one folder:
+        # move them up so the judge finds clients/<name>/*.log.
+        inner="$(find "$session/clients/$name" -mindepth 1 -maxdepth 1 -type d)"
+        if [ -z "$(find "$session/clients/$name" -maxdepth 1 -name '*.log')" ] && [ "$(echo "$inner" | grep -c .)" -eq 1 ]; then
+            mv "$inner"/* "$session/clients/$name/" && rmdir "$inner"
+        fi
         echo "unzipped $zip -> clients/$name"
     done
     "$0" judge "$session" || echo "judge exit $? (the summary, if any, is in $session/lag_l2_summary.json)"

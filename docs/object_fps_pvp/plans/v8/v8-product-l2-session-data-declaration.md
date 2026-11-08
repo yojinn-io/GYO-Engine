@@ -41,7 +41,7 @@
 | C5 Client 幀 | 部分 | Client log 的 `PvP summary`（每秒 fps、longest_frame_ms）、`PvP render` | 每秒的 p50／p95 沒有（只有平均 fps 與最長幀）；draw 數、三角形數沒有；預測修正的次數與最大量沒有逐秒值 |
 | C6 載入與記憶體 | 部分 | Client 的 `graphics ready initialization_ms`、`connection phase=playing` 的時刻；`mac/match.log` 的 `start`→`Match ready`；`mac/memory.csv`、`clients/*/client-memory.csv`（每 10 秒）；kit-manifest 有每個檔案的大小 | 峰值 RSS 只靠 10 秒取樣，短尖峰看不到；Client 的「內容載入到 ready」沒有單獨的時間 |
 | C7 故障 | 有 | Match 的 `end reason=… exit_code=…` 與 stderr（`mac/match.out`）；Client 的 exit code（`machine.txt`）與 stdout／stderr（`client-stdout.txt`、`client-stderr.txt`）；各 trace 的 `trace_end`／`diag_end`（dropped）；`leave reason`、`connection summary` | Gateway 異常結束的文字只在 `mac/gateway.out` |
-| C8 kit | 待試跑 | §1：每台一包、同一 commit、`kit-manifest.txt`；`mac.sh collect` 把整場打成一個 zip；Mac 的命令都跑過 | **交付條件**：§4 的 Windows 試跑成功前不交出（offline-session 的規則：交出前每條命令實跑過） |
+| C8 kit | 有（試跑成立） | §1：每台一包、同一 commit、`kit-manifest.txt`；`mac.sh collect` 把整場打成一個 zip；Mac 的命令都跑過 | **交付條件**：§4 的 Windows 試跑成功前不交出（offline-session 的規則：交出前每條命令實跑過） |
 
 缺口是之後批次的候選（例如 Match 與 Client 每秒的統計、bytes in／out），這次不補（不改產品程式）。
 
@@ -85,6 +85,7 @@ kit 的腳本（`mac.sh`、`windows.ps1`、`start.cmd`、`make_kit.sh`）不在�
     - 第 1 次：Mac 的 Gateway 沒有啟動。`mac.sh` 把相對路徑 `gateway`（沒有 `/`）交給 `caffeinate`，被當成 PATH 上的命令找不到；我之前的乾跑也用相對路徑，但沒有看 `check` 的結果，所以漏掉。修正：`mac.sh` 先把 PKG、GATEWAY 轉成絕對路徑，`run` 等 Gateway 回應、不回應時明確警告。修正後在這台 Mac 用同一行相對路徑的命令、LAN 位址 `192.168.3.71` 重跑：`{"rooms":[]}`、2 個無 GUI 的 bot 經 `192.168.3.71:8080` 加入，診斷 dropped 0（主 checkout 的 `build/evidence/v8-lag-l2-kit/dryrun-lan-*`）。
     - Windows（win1，i7-8750H、GTX 1060、Windows 11 Pro）：連到 `192.168.3.71:8080`、進 biome、playing 約 2.5 分鐘；`machine.txt`、`client-memory.csv`（17 行）、移動診斷（9,074 行，dropped 0）、movement trace（dropped 0）、stdout／stderr 都在（主 checkout 的 `build/evidence/v8-lag-l2-kit/rehearsal-win1-20261108-1243/`）。發現 `exit_code=` 是空的（PowerShell 的 `Start-Process -PassThru` 沒有 `-Wait` 時要先取 `Handle`），已修正、kit 已重建；這一行修正沒有在 Windows 重跑。
     - 當時 Mac 端是哪一個 Gateway 服務了這次連線，沒有紀錄可查（那次的 Mac 資料夾在桌面，我讀不到）。
+    - **第 2 次（修正後的 kit，兩端一起，2026-11-08 12:52）：成功。** Mac 用 kit 的 `mac.sh run`（相對路徑、`192.168.3.71`），Windows（win1，`192.168.3.6`）用重建的 `lag-l2-kit-win1.zip`：加入、biome、playing、正常離開；Windows 的 `exit_code=0`、診斷 3,248 行 dropped 0、trace dropped 0；Mac 的 shots `trace_end` records 63、dropped 0，診斷 3,247 行 dropped 0，`memory.csv`、`machine.txt`、`end` 都有。`mac.sh collect` 解壓（雲端硬碟多包的一層資料夾已自動拿掉）、判定、打包成一個 zip：**S2 passed**（送出＝接受＋拒絕、依原因計數、`trace_end` 三方對帳）、R2 passed，S1、R1 因為試跑沒有 `s1_end` 是 undetermined（預期）。證據：主 checkout 的 `build/evidence/v8-lag-l2-kit/rehearsal-win3/`、`rehearsal-win3.zip`、`rehearsal-win1-20261108-1252/`。**C8 的交付條件成立。**
 - 試跑用的 `rehearsal-win` 與 zip 不算場次資料。
 - Mac 端的 `mac.sh run`、`collect` 在 Intel Mac 上用 127.0.0.1 與 3 個無 GUI 的 bot 跑過（主 checkout 的 `build/evidence/v8-lag-l2-kit/dryrun-run-*`）。
 - 記憶體每 10 秒一次，短的尖峰看不到。
