@@ -77,3 +77,4 @@
   - 區間內以 J 計：p50 3.85、p90 4.30、p95 4.41、p99 4.57、max 5.04 tick；R 8～15 時被夾取的比例都是 0。
   - 照宣告的規則 min(15, ceil(p99)＋2) 算出 **R＝7 tick（約 117 ms）**——探索值。
   - 證據：主 checkout 的 `build/evidence/v8-lag-l2-session-20261109/session-explore-s1end/`（`lag_l2_summary.json`、`exploration_r.txt`）。
+- **使用者採用 R＝7 tick（2026-11-09，「R=7 で進める」，決定 `v8-product-hitbox-rewind-r-7`）**；protocol-v9 的 τ 一列已記上。
