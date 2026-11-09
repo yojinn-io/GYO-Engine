@@ -382,7 +382,10 @@ std::optional<PickHit> Pick(const GridDocument& document, const Ray& ray, const 
     Vec3i normal{};
     double entered = 0.0; // where the ray enters the current cell
     for (std::int32_t walked = 0; walked <= maxCells; ++walked) {
-        if (entered > planeT) break;
+        // Past the plane, the plane wins; but the cell where the ray meets the plane is the
+        // plane's own cell, whose entry the walk's summed parameter can put a rounding past
+        // planeT (ve-pick-tie): a filled one is the cell, not the plane.
+        if (entered > planeT && !(planeHit && cell == planeHit->cell)) break;
         if (options.volume && CellInRange(document, cell) && document.At(cell).block != 0)
             return PickHit{cell, normal, false};
         int axis = 0;

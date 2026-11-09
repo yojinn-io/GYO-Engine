@@ -1,6 +1,7 @@
 #include "MapMeasure.hpp"
 
 #include "gyo/voxel_map_editor/ChunkedMap.hpp"
+#include "gyo/voxel_map_editor/Synthetic.hpp"
 #include "gyo/voxel_map_editor/VoxelMap.hpp"
 
 #include "engine/base/Sha256.hpp"
@@ -31,57 +32,6 @@ double Milliseconds(const Clock::duration d) { return std::chrono::duration<doub
 
 std::span<const std::byte> Bytes(const std::string& text) {
     return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
-}
-
-// The building-like synthetic map: minstd_rand(20261106), 256 x 48 x 256 cells
-// (16 x 3 x 16 chunks). A one-cell floor every 8 cells, a wall every 16 cells
-// along x and z with random door holes, and per room random stairs and slabs.
-GridDocument BuildingGrid() {
-    GridDocument grid;
-    grid.shapes = DefaultShapes(); // cube, slab, stair
-    grid.blocks = {{"floor", 0, {200, 180, 150, 255}},
-                   {"wall", 0, {120, 130, 140, 255}},
-                   {"stairs", 2, {60, 120, 200, 255}},
-                   {"slab", 1, {220, 40, 40, 255}}};
-    std::minstd_rand random(20261106);
-    const auto pick = [&random](const int bound) { return static_cast<std::int32_t>(random() % static_cast<unsigned>(bound)); };
-    constexpr std::int32_t Size = 256, Height = 48, Storey = 8, Room = 16;
-    for (std::int32_t floor = 0; floor < Height; floor += Storey) {
-        for (std::int32_t z = 0; z < Size; ++z)
-            for (std::int32_t x = 0; x < Size; ++x) grid.Set({x, floor, z}, {1, 0});
-        // Walls on x = 16k (running along z) and z = 16k (running along x), between this floor and the next.
-        for (std::int32_t line = 0; line < Size; line += Room) {
-            for (std::int32_t segment = 0; segment < Size; segment += Room) {
-                const bool door = pick(10) < 6;
-                const auto doorAt = segment + 2 + pick(Room - 5);
-                for (std::int32_t along = segment; along < segment + Room; ++along)
-                    for (std::int32_t y = floor + 1; y < floor + Storey; ++y) {
-                        if (door && along >= doorAt && along < doorAt + 2 && y < floor + 4) continue;
-                        grid.Set({line, y, along}, {2, 0});
-                    }
-                const bool otherDoor = pick(10) < 6;
-                const auto otherAt = segment + 2 + pick(Room - 5);
-                for (std::int32_t along = segment; along < segment + Room; ++along)
-                    for (std::int32_t y = floor + 1; y < floor + Storey; ++y) {
-                        if (otherDoor && along >= otherAt && along < otherAt + 2 && y < floor + 4) continue;
-                        grid.Set({along, y, line}, {2, 0});
-                    }
-            }
-        }
-        // Per room: a stair run of up to 6 steps along +x (30 %), and up to 4 slabs.
-        for (std::int32_t rz = 0; rz < Size; rz += Room)
-            for (std::int32_t rx = 0; rx < Size; rx += Room) {
-                if (pick(10) < 3) {
-                    const auto z = rz + 3 + pick(Room - 6);
-                    for (std::int32_t step = 0; step < 6; ++step)
-                        grid.Set({rx + 3 + step, floor + 1 + step, z}, {3, static_cast<std::uint8_t>(pick(4))});
-                }
-                const auto slabs = pick(5);
-                for (std::int32_t i = 0; i < slabs; ++i)
-                    grid.Set({rx + 2 + pick(Room - 3), floor + 1, rz + 2 + pick(Room - 3)}, {4, 0});
-            }
-    }
-    return grid;
 }
 
 // One chunk of a cube checkerboard: 2,048 cubes, no face culled, nothing merged.
@@ -286,4 +236,137 @@ int MeasureMap(const std::string& outputDirectory, const std::vector<std::string
     return 0;
 }
 
+namespace {
+
+struct Timings final {
+    std::vector<double> ms;
+    std::size_t failed{};
+    [[nodiscard]] double Median() const {
+        if (ms.empty()) return 0.0;
+        auto sorted = ms;
+        std::sort(sorted.begin(), sorted.end());
+        return sorted[sorted.size() / 2];
+    }
+    [[nodiscard]] double Max() const { return ms.empty() ? 0.0 : *std::max_element(ms.begin(), ms.end()); }
+};
+
+constexpr int ScaleRuns = 5;
+
+} // namespace
+
+int MeasureScale(const std::string& outputDirectory, const std::string& map) {
+    std::ostringstream out;
+    const auto made = Clock::now();
+    auto grid = SyntheticByName(map);
+    if (!grid || map == "building") {
+        std::cerr << "error: --scale takes km2-ground or km2-building\n";
+        return 2;
+    }
+    const double makeMs = Milliseconds(Clock::now() - made);
+    std::size_t cells = 0;
+    for (const auto& [at, chunk] : grid->chunks)
+        for (const auto& cell : chunk) cells += cell.block != 0 ? 1 : 0;
+    out << "map " << map << "\nchunks " << grid->chunks.size() << "\ncells " << cells << "\nmake_ms " << makeMs << '\n';
+
+    // SM1: the grid text.
+    Timings write;
+    std::size_t textBytes = 0;
+    for (int run = 0; run < ScaleRuns; ++run) {
+        const auto t0 = Clock::now();
+        const auto text = WriteGrid(*grid);
+        write.ms.push_back(Milliseconds(Clock::now() - t0));
+        textBytes = text.size();
+    }
+    out << "SM1 grid_text_bytes " << textBytes << " over_16MiB " << (textBytes > MaxGridTextBytes ? 1 : 0)
+        << " write_ms_median " << write.Median() << " write_ms_max " << write.Max() << " runs " << write.ms.size()
+        << '\n';
+
+    // SM2: memory of the cells (computed). The process's peak resident memory is read from outside (on macOS,
+    // /usr/bin/time -l), so the tool needs no platform header.
+    const auto cellBytes = static_cast<long long>(grid->chunks.size()) * static_cast<long long>(sizeof(ChunkCellsArray));
+    out << "SM2 cell_bytes " << cellBytes << '\n';
+
+    // SM3: the whole-document copy a drag starts with (Drag::base).
+    Timings copy;
+    for (int run = 0; run < ScaleRuns; ++run) {
+        const auto t0 = Clock::now();
+        const GridDocument base = *grid;
+        copy.ms.push_back(Milliseconds(Clock::now() - t0));
+        if (base.chunks.size() != grid->chunks.size()) ++copy.failed;
+    }
+    out << "SM3 copy_ms_median " << copy.Median() << " copy_ms_max " << copy.Max() << " runs " << copy.ms.size()
+        << " failed " << copy.failed << '\n';
+
+    // SM4: one palette undo step keeps the document before and after (DocumentStep).
+    Timings step;
+    for (int run = 0; run < ScaleRuns; ++run) {
+        const auto t0 = Clock::now();
+        const GridDocument before = *grid;
+        const GridDocument after = *grid;
+        step.ms.push_back(Milliseconds(Clock::now() - t0));
+        if (before.chunks.size() + after.chunks.size() != 2 * grid->chunks.size()) ++step.failed;
+    }
+    out << "SM4 step_bytes " << 2 * cellBytes << " step_copy_ms_median " << step.Median() << " runs "
+        << step.ms.size() << " failed " << step.failed << '\n';
+
+    // SM5: the whole bake and write.
+    Timings bake, mapWrite;
+    std::size_t mapBytes = 0, regions = 0, quads = 0, colliders = 0;
+    const std::string source = "scale";
+    for (int run = 0; run < ScaleRuns; ++run) {
+        auto t0 = Clock::now();
+        auto baked = BakeMap(*grid);
+        bake.ms.push_back(Milliseconds(Clock::now() - t0));
+        if (!baked) {
+            ++bake.failed;
+            out << "SM5 bake_failed " << Engine::Base::Describe(baked.error()) << '\n';
+            continue;
+        }
+        t0 = Clock::now();
+        const auto text = WriteMap(*baked, Bytes(source));
+        mapWrite.ms.push_back(Milliseconds(Clock::now() - t0));
+        if (!text) {
+            ++mapWrite.failed;
+            out << "SM5 write_failed " << Engine::Base::Describe(text.error()) << '\n';
+            continue;
+        }
+        mapBytes = text->index.size();
+        for (const auto& region : text->regions) mapBytes += region.text.size();
+        regions = text->regions.size();
+        quads = colliders = 0;
+        for (const auto& [at, chunk] : baked->chunks) {
+            quads += chunk.quads.size();
+            colliders += chunk.colliders.size();
+        }
+    }
+    out << "SM5 bake_ms_median " << bake.Median() << " bake_ms_max " << bake.Max() << " bake_runs " << bake.ms.size()
+        << " bake_failed " << bake.failed << " write_ms_median " << mapWrite.Median() << " write_runs "
+        << mapWrite.ms.size() << " write_failed " << mapWrite.failed << " map_bytes " << mapBytes << " regions "
+        << regions << " quads " << quads << " colliders " << colliders << '\n';
+
+    // SM7: the pick's reach (1024 cells) against the farthest cell seen from a corner, level with the ground.
+    Vec3i low{}, high{};
+    bool first = true;
+    for (const auto& [at, chunk] : grid->chunks)
+        for (int axis = 0; axis < 3; ++axis) {
+            low[axis] = first ? at[axis] * ChunkSize : std::min(low[axis], at[axis] * ChunkSize);
+            high[axis] = first ? at[axis] * ChunkSize + ChunkSize : std::max(high[axis], at[axis] * ChunkSize + ChunkSize);
+            if (axis == 2) first = false;
+        }
+    const double dx = high[0] - low[0];
+    const double dz = high[2] - low[2];
+    const double diagonal = std::sqrt(dx * dx + dz * dz);
+    out << "SM7 pick_reach_cells 1024 map_diagonal_cells " << diagonal << " reaches " << (diagonal <= 1024.0 ? 1 : 0)
+        << '\n';
+
+    const auto text = out.str();
+    if (auto written = WriteFileReplacing(outputDirectory + "/scale-" + map + ".txt", text); !written) {
+        std::cerr << "error: " << Engine::Base::Describe(written.error()) << '\n';
+        return 3;
+    }
+    std::cout << text;
+    return 0;
+}
+
 } // namespace Gyo::Tools::VoxelMapEditor
+

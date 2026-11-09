@@ -312,6 +312,8 @@ Buffered IO exposes one logical read position. Relative seeks account for unread
 
 Unit and engine capability tests live under root `tests/`. `tests/common` uses engine-owned fixtures, and `tests/<game>` contains game tests. Separate acceptance executables and their checks belong to `build/acceptance/<game>`. Product executables do not receive injected test source files or diagnostics compile definitions. UI editor tests live in `tests/ui_editor` and are registered only when that product is selected and testing is enabled.
 
+Real-machine sessions with players collect a common set of data for every product before the product's own items ([field sessions](architecture/field-session.md)).
+
 These central source directories apply to C++ tests and cross-process acceptance.
 Go unit tests follow Go's package-local `*_test.go` convention in
 `services/gyo_gateway` and the PvP Go packages. They retain the enclosing module's

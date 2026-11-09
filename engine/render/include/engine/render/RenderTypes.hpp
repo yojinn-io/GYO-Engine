@@ -7,6 +7,7 @@
 #include <string>
 
 #include "engine/math/geometry/Rect.hpp"
+#include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/linear/Vec2.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/render/RenderHandle.hpp"
@@ -49,6 +50,11 @@ struct PerspectiveCamera3D final {
     float nearClip{0.05F};
     float farClip{100.0F};
 };
+
+// The clip matrix (projection * view) the renderer draws world meshes with for
+// this camera and width / height aspect ratio. Callers that cull against the
+// view use it so their frustum matches what is drawn.
+[[nodiscard]] Math::Matrix4 CameraViewProjection(const PerspectiveCamera3D& camera, float aspectRatio) noexcept;
 
 struct Vertex3D final {
     Math::Vec3 position{};

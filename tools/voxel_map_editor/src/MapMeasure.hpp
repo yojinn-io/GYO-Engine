@@ -11,4 +11,11 @@ namespace Gyo::Tools::VoxelMapEditor {
 // each grid file given). Exit status as the other commands.
 int MeasureMap(const std::string& outputDirectory, const std::vector<std::string>& gridPaths);
 
+// measure-map --scale: SM1 to SM5 and SM7 of v8-tool-voxel-editor-measure on a
+// synthetic map made in memory (km2-ground or km2-building): the grid text's
+// size, memory, the whole-document copy a drag starts with, a palette undo
+// step, the whole bake and write, and the pick reach. Each timing 5 times.
+// Writes scale-<map>.txt into outputDirectory and prints it.
+int MeasureScale(const std::string& outputDirectory, const std::string& map);
+
 } // namespace Gyo::Tools::VoxelMapEditor

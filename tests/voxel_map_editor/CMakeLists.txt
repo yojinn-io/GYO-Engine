@@ -1,4 +1,5 @@
-add_executable(gyo_voxel_map_editor_core_tests VoxelMapCoreTests.cpp VoxelMapEditingTests.cpp VoxelMapToolsTests.cpp)
+add_executable(gyo_voxel_map_editor_core_tests VoxelMapCoreTests.cpp VoxelMapEditingTests.cpp VoxelMapToolsTests.cpp
+    VoxelMapVisibilityTests.cpp VoxelMapFlyCameraTests.cpp)
 target_compile_features(gyo_voxel_map_editor_core_tests PRIVATE cxx_std_20)
 target_link_libraries(gyo_voxel_map_editor_core_tests PRIVATE gyo_voxel_map_editor_core doctest::doctest)
 target_compile_definitions(gyo_voxel_map_editor_core_tests PRIVATE

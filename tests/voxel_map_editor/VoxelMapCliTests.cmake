@@ -189,3 +189,20 @@ if(NOT last_output MATCHES "InvalidMarkers")
 endif()
 check(1 check_markers_bad_markers check-markers "${WORK}/bad.voxel_grid.json" --marker-kinds "${WORK}/all.marker_kinds.json")
 check(3 check_markers_missing check-markers "${WORK}/nowhere.json" --marker-kinds "${WORK}/all.marker_kinds.json")
+
+# The scale measurement's arguments (v8-tool-voxel-editor-measure, SC3).
+check(2 measure_scale_missing measure-map "${WORK}/scale" --scale)
+check(2 measure_scale_unknown measure-map "${WORK}/scale" --scale nowhere)
+check(2 measure_scale_building measure-map "${WORK}/scale" --scale building)
+check(2 measure_preview_two_sources measure-preview --synthetic --synthetic-map building --csv "${WORK}/m.csv")
+
+# ve-cull: the draw distance is a whole number of cells from 64 to 1024.
+check(2 measure_preview_draw_distance_low measure-preview --synthetic --csv "${WORK}/m.csv" --draw-distance 63)
+check(2 measure_preview_draw_distance_high measure-preview --synthetic --csv "${WORK}/m.csv" --draw-distance 1025)
+check(2 measure_preview_draw_distance_text measure-preview --synthetic --csv "${WORK}/m.csv" --draw-distance 2.5)
+# ve-feel-survey: the stroke scenario and its brush size.
+check(2 measure_preview_scenario_unknown measure-preview --synthetic --csv "${WORK}/m.csv" --scenario press)
+check(2 measure_preview_brush_size_zero measure-preview --synthetic --csv "${WORK}/m.csv" --scenario stroke --brush-size 0)
+check(2 measure_preview_brush_size_high measure-preview --synthetic --csv "${WORK}/m.csv" --scenario stroke --brush-size 17)
+check(2 measure_preview_orbit_distance_low measure-preview --synthetic --csv "${WORK}/m.csv" --orbit-distance 3)
+check(2 measure_preview_orbit_distance_text measure-preview --synthetic --csv "${WORK}/m.csv" --orbit-distance far)

@@ -200,6 +200,13 @@ std::vector<Vec3i> ExtrudeFace(const GridDocument& document, const Vec3i& cell, 
     return Sorted(std::move(seen));
 }
 
+Result<void> RedrawStroke(EditSession& session, const std::span<const Vec3i> cells, const EditMode mode,
+                          const Cell value) {
+    session.CancelStroke();
+    session.BeginStroke();
+    return ApplyCells(session, cells, mode, value);
+}
+
 Result<void> ApplyCells(EditSession& session, const std::span<const Vec3i> cells, const EditMode mode, const Cell value) {
     if (!ValidValue(session.Document(), value) || (mode != EditMode::Sub && value.block == 0))
         return Engine::Base::Err(

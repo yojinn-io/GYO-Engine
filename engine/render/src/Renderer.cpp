@@ -126,6 +126,10 @@ template<class T> std::vector<std::byte> Bytes(const T& value) {
 }
 } // namespace
 
+Math::Matrix4 CameraViewProjection(const PerspectiveCamera3D& camera, const float aspectRatio) noexcept {
+    return Math::Multiply(ProjectionMatrix(camera, aspectRatio), ViewMatrix(camera));
+}
+
 struct Renderer::Impl final {
     IRenderDevice* device{};
     const ShaderLibrary* library{};
@@ -210,8 +214,8 @@ struct Renderer::Impl final {
     Base::Result<void, RenderError> Meshes(PreparedPass& pass, const RenderQueue& queue,
         MeshLayer layer, const PerspectiveCamera3D& camera) {
         // (Projection * View) * World, mirroring the former World * (View * Projection).
-        const Math::Matrix4 viewProjection = Math::Multiply(
-            ProjectionMatrix(camera, static_cast<float>(width) / static_cast<float>(height)), ViewMatrix(camera));
+        const Math::Matrix4 viewProjection =
+            CameraViewProjection(camera, static_cast<float>(width) / static_cast<float>(height));
         for (const auto& mesh : queue.Meshes()) {
             if (mesh.layer != layer) continue;
             const bool sky = mesh.surface == SurfaceMode::Sky;

@@ -1,6 +1,7 @@
 add_executable(gyo_math_tests
     MathTests.cpp
     MathCharacterizationTests.cpp
+    MathFrustumTests.cpp
 )
 target_link_libraries(gyo_math_tests PRIVATE GYO::Math gyo_test_support doctest::doctest)
 # Same warning level as the collision module so header code that would warn in
