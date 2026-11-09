@@ -71,3 +71,9 @@
 - 使用者的觀察（readme）：win1 曾嚴重卡頓（其他 Client 看不到）；win1 被命中時沒有受擊畫面與聲音；移動中卡住、跳就能過；重生後有看不見的牆、跳就消失。追加希望：NPC、地圖 1.5 倍且能進建築與上屋頂、霰彈槍與狙擊槍。
 - 證據：主 checkout 的 `build/evidence/v8-lag-l2-session-20261109/`（`received/` 原樣、`session/` 判定用的複本與 `lag_l2_summary.json`、`exploration_view_lag.txt`）。
 - **使用者決定（2026-11-09）：這次場次當探索**（「今回は探索扱い」）。R 不由這次決定；下一次決定 R 時，另寫宣告並改寫 R2 的前提（J－A＝due－A＋冷卻保留），也要讓 `s1_end` 不靠記得按鍵。
+- **探索：以最晚結束的 Client 當 `s1_end`（使用者 2026-11-09 指示）**。最晚的是 win1 的 `machine.txt` `end=10:40:18`（win3 10:40:14、win2 10:37:40）。在複本 `session-explore-s1end/` 的 `marks.txt` 加上 `s1_end=2026-11-09T10:40:18` 後，照宣告的工具重算。區間是場次之後才定的，**不當受理判定**（§14.1）。
+  - S1 passed：區間依工具規則從 `s1_end` 前最後一次加入（player 7，10:23:01）到 10:40:18，1,036.9 秒、有效 shot 627，三人各 ≥100（286、194、147）；區間前排除 455 個。
+  - S2 passed；宣告的 R2 仍 failed（1,056）。改寫後的前提「J－A＝(due－A)＋冷卻保留」：1,067 個 shot 不一致 0。
+  - 區間內以 J 計：p50 3.85、p90 4.30、p95 4.41、p99 4.57、max 5.04 tick；R 8～15 時被夾取的比例都是 0。
+  - 照宣告的規則 min(15, ceil(p99)＋2) 算出 **R＝7 tick（約 117 ms）**——探索值。
+  - 證據：主 checkout 的 `build/evidence/v8-lag-l2-session-20261109/session-explore-s1end/`（`lag_l2_summary.json`、`exploration_r.txt`）。
