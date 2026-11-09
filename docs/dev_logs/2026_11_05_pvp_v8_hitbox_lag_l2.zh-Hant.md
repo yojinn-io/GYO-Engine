@@ -53,3 +53,20 @@
   - `windows.ps1` 的 log 與 trace 檔名加時刻，重跑時不互相覆蓋；
   - 宣告修訂 5：更正修訂 4 對 K8 斷線與對帳的說法。
 - 改完後照發行包的結構重新乾跑（`dryrun2/`）：錯的 `PKG` 不留下資料夾；Match 與 Gateway 在 `caffeinate` 下執行，Ctrl+C 後 `trace_end` 照常寫出。
+
+## 場次（2026-11-09）：判定不成立，停下（AGENTS §14）
+
+```text
+件數的突き合わせ：一致（S2：Client 送出＝接受＋拒絕且無未決（K1）、依原因計數＝Match 裁決（K2）、trace_end records 1,230＝裁決 1,230、dropped 0、view_tick_invalid 0）
+```
+
+- 構成：Intel Mac（Match＋Gateway，`mac.sh run`，Mac IP `192.168.50.64`）＋Windows 3 台，biome，commit `24943706`，移動診斷開著。10:11～10:49。玩家 id 1～7（加入與離開見 Match log），死亡 73 次。
+- 收到的 log：win1＝`lag-l2-win1-20261109-101244.zip`（i7-8750H、GTX 1060）；win2＝`lag-l2-win2-20261109-101113.7z`（Core 7 240H、RTX 5050）；win3＝`lag-l2-win2-20261109-101109.zip`（i7-12700H、RTX 4060）。第 3 台的測試員用了 win2 的 kit，所以兩個檔的 `machine.txt` 都寫 `name=win2`；使用者 2026-11-09 說明 zip 是 win3、7z 是 win2，照此放到 `clients/win2`、`clients/win3`（`clients/MAPPING.txt`）。
+- 判定（`lag_l2_summary.py`，照宣告）：
+  - **S1 undetermined**：`marks.txt` 沒有 `s1_end`（連續對戰結束時沒有按 `s`）。
+  - S2 passed。
+  - **R2 failed**：1,056／1,067 個有 view_lag 的 shot，J－A ≠ `cooldown_hold_ticks`。這些 shot 的 hold 都是 0，而 J－A 是 1（828 個）或 2（228 個）；J－A 與 `due_tick`－A 完全相同。也就是 J＝due tick，宣告的「J 與 A 的差＝冷卻保留」漏了動作從接受到 due 的 1～2 tick。這個說明改變判定的前提，依 §14 停下。
+  - R1 undetermined（S1、R2 不成立時不給 R）。
+- 探索（不是受理判定）：以 J 計的 view_lag n＝1,067，最近秩 p50 3.75、p90 4.29、p95 4.39、p99 5.00、max 14.00 tick；以 A 計 p50 2.49、p99 4.00、max 14.00。整場都算（沒有 S1 區間）。
+- 使用者的觀察（readme）：win1 曾嚴重卡頓（其他 Client 看不到）；win1 被命中時沒有受擊畫面與聲音；移動中卡住、跳就能過；重生後有看不見的牆、跳就消失。追加希望：NPC、地圖 1.5 倍且能進建築與上屋頂、霰彈槍與狙擊槍。
+- 證據：主 checkout 的 `build/evidence/v8-lag-l2-session-20261109/`（`received/` 原樣、`session/` 判定用的複本與 `lag_l2_summary.json`、`exploration_view_lag.txt`）。
