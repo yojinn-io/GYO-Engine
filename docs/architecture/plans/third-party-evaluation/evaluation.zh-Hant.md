@@ -377,6 +377,7 @@
 
 | # | 事項 | 影響的列 | 建議 | 不照建議的代價 |
 |---|---|---|---|---|
+| **D0** | **GYO 的決定性要哪一級，各模組為它付了什麼**（使用者 2026-11-10 經 side chat 提出，比本文更上游）。三級：(a) 同一程序內可重現（事故回放、L2 分析）；(b) 同一份二進位在同一平台可重現；(c) 跨平台逐位元。現況是**混合**：authority_digest 只對零角度子集要求 (c)，其餘 (b)；動畫取樣 (b)；Collision、Audio、VoxelMesh 的契約按 (c) 設計。各模組為 (c) 付的成本見下表 | 1.2、1.4、1.8、1.11、Math／Collision／Audio 的 DI 用詞 | **這是一張架構卡（上段），排在 D1、D2 之前**：答案若是「只要 (b)」，Collision 的雙精度單次捨入、Audio 的整數混音、Math 的 libm 保留條款都可重新評估，Jolt 與 Detour 的決定性限制也會變輕；若維持 (c)，digest 的強制範圍要從「零角度子集」明寫成契約。EntityStore 的 id 升冪不在這張表上——它守的是「規則結果不依賴歷史」（同 Tick 搶同一件事由 id 定），屬於 (a)，和浮點無關，成本 155 行 | 本文 D1、D2 的判定會在這一題定案後被推翻一次 |
 | D1 | 路線圖上有沒有**權威的剛體玩法**（可推的道具、載具、會影響判定的物理）？ | 1.2 | 現在的 Feature 清單沒有 → **維持 Collision；Jolt 留給 Client 端視覺物理**。有的話，照「基盤先定」排一批 Jolt 基盤評估（含 digest 範圍的重新宣告與 CI、§2.5 的建置條件），量級 4～8 週 | 若之後才加剛體玩法，Collision 的 RC 1／2 會在 Feature 中途觸發，付的就是使用者說的「事後補」 |
 | D2 | entity-requirements 4-6「AI 只要 Match 自己一致、不要求兩台 Match 一致」是否維持？ | 1.4 | 維持 → Recast／Detour 可作第一候選（AI 批事前宣告時定） | 若改成要一致，導航要換掉 libm 呼叫並補 hash CI，或改格子 A* |
 | D3 | AI 批開工前，要不要先做一次「Recast 對體素地圖建圖」的試驗？量：建圖時間、tile 數、PolyRef 位元、最長路徑的節點數（對 65,535）、兩台 host 烘焙的 blob 是否逐位元相同 | 1.4 | 要（量級 1～2 天），讓 AI 批的事前宣告有數字。**同一份宣告也要寫 Match 每 Tick 取樣 25 個骨架（4 人＋20 AI＋Boss）的預算**（1.11、A11） | 不做則 AI 批的估時只能靠推 |
@@ -386,6 +387,18 @@
 | D7 | pv10 的背包（格子 10 × 6、40 件、拖放）要走 `GYO::Ui` 契約的下一版（v2 元素集），還是當成 GYO::Ui 的 RC 觸發（「修還是換 RmlUi」）？ | 1.5 | 走 v2 契約（背包是格子與拖放，不是 rich text／腳本；RC 的條件沒到）；在 pv10 設計前定，因為它影響 ui_editor 的下一批 | 到 pv10 中途才發現 Ui 的元素集不夠，就是 Editor／Runtime 契約在 Feature 中途變 |
 | D8 | pv10 的 wire 要不要**預留** codec／dictionary 版本欄（為之後的 zstd dictionary 壓縮留位置）？ | 1.14 | 預留一個 enum 欄（成本是幾個 byte 與一條契約規則）；不實作壓縮 | 不預留則壓縮進來時是另一次 proto 變更（protocol-v8 §2a 的規則） |
 | D9 | 「GPL／LGPL 會卡」要不要寫成 AGENTS 或 architecture.md 的書面約束？repo 沒有 LICENSE／NOTICE，而現有依賴（FreeType FTL 致謝、protobuf BSD-3、nlohmann MIT）已有附條款的義務——要不要開一張獨立的卡處理第三方授權通知？ | §2.2 | 兩件都要：約束寫下、通知另開卡（不在本卡） | 下一個評估者只能把 LGPL 當成評估者的判斷；出貨包缺通知 |
+
+**D0 的成本表**（各模組為「跨平台逐位元」(c) 付了什麼；若決定只要 (b)，這些是可重新評估的項目）：
+
+| 模組 | 為 (c) 付的 | 守衛 | 若只要 (b) 可放掉的 |
+|---|---|---|---|
+| `GYO::Math` | 全部程式 `-ffp-contract=off`、MSVC `/fp:precise`；sin／cos 等明寫不跨平台一致（所以 (c) 其實只覆蓋不含三角函數的算式） | 特性測試、`GyoBuild.cmake` | contraction 旗標仍要留（同平台的 arm64／x64 也會因 FMA 不同），放掉的是「跨平台」這個宣稱 |
+| `GYO::Collision` | 每個查詢在 double 計算、對 float 捨入一次；`StaticAabbGrid` 逐位元等於線性掃描 | 200 組隨機集合比對、`grid-*` 突變 | 雙精度單次捨入可改成單精度（更快）；等價契約仍有價值（可用暴力掃描驗證），但可放寬成「同一組候選」 |
+| `GYO::Audio` | 整數混音（Q16、int64、半上捨入）、固定 48 kHz PCM16、DI 8 | 「output does not depend on how blocks split it」等 | 可換 float 混音（開 RC 2 的 buses／effects 之路）；L2 的錨點重算改容差比對 |
+| `GYO::VoxelMesh`／`MapMarkers` | 整數單位（1/16 cell、±2^20）、`cell_size` 範圍限制讓展開在每平台得到同樣的 float 位元 | golden 位元測試 | 幾乎不必放：整數契約的成本是零 |
+| `GYO::EntityStore` | （不是為 (c)）id 升冪的不變式、保序 erase | `es-row2-*` 突變 | **不放**：它守的是 (a) 的「不依賴歷史」，與浮點無關 |
+| 產品 `authority_digest` | 零角度子集的四平台 golden；其餘情境只記錄差異 | L1 `cpu` 標籤 | 若只要 (b)：golden 改同平台兩樹；若維持 (c)：要明寫子集的定義 |
+| 動畫取樣（`GYO::Model`） | 已經是 (b)（Slerp 走 libm） | 同平台 golden（hitbox-golden-policy） | — |
 
 其餘 10 列（ECS、2D Physics、UI 的維持部分、Model Import、Mesh Optimization、Audio、Shader Compiler、GPU Abstraction 的維持部分、Animation、Image Processing）的判定不需要使用者現在決定；各列的 RC 觸發時再問。
 
