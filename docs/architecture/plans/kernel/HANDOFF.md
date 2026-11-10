@@ -4,7 +4,7 @@
 
 - 2026-11-10 使用者提出願景稿並要求架構師分析；討論定案：Kernel 應進 Engine（中性），framework 強而 Engine 弱的味道＝framework 在代替不存在的 Kernel；Match 的 Stage 是固定序列；C++ 以顯式存取宣告代替借用檢查；協定先設計、實作薄、先遷移一個 host 量成本。
 - 2026-11-10 三個只讀子代理（Opus）審閱 bevy_app／bevy_ecs、bevy_replicon 0.45.5、lightyear 0.31.0；報告在 `build/evidence/kernel-study/`。結論：八條不變量（見 README 與 networking.zh-Hant.md）；Bevy 的實作選擇（插入順序平手、ambiguity 預設關、多執行緒 executor、Observer 依雜湊順序、ComponentId 依首次使用、並行 entity allocator、變更 tick≠遊戲 tick）不是設計思想，照抄會在核心埋債；兩個網路 plugin 自己都在繞過這些。
-- 2026-11-10 使用者：網路部分先記成設計稿（本線 networking.zh-Hant.md）；再用同樣規則看 Bevy 的其他部分（渲染、資產、平台、能力 plugin），四個子代理進行中。
+- 2026-11-10 使用者：網路部分先記成設計稿（本線 networking.zh-Hant.md）；再用同樣規則看 Bevy 的其他部分（渲染、資產、平台、能力 plugin），五個子代理（渲染、資產、平台、能力 plugin、OS／IO）完成，報告在 build/evidence/kernel-study/；blueprint.zh-Hant.md 已寫（DI-K1～K7 候選）。
 
 ## 決定（使用者）
 
@@ -14,4 +14,4 @@
 
 ## 下一步
 
-四份報告回來 → 寫 blueprint.zh-Hant.md（八條不變量＋偏離＋守衛＋RC）→ 交使用者；之後才談 spike 與遷移順序。
+使用者審 blueprint.zh-Hant.md（核准 DI-K1～K7 為候選 DI？）→ Kernel 協定介面稿與 spike → 遷移順序（編輯器→Match→Client）。

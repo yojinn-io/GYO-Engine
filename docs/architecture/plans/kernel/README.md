@@ -7,12 +7,12 @@
 
 不列功能，找不變量：讀 Bevy 與兩個網路 plugin 的原始碼，問「這些功能都靠哪幾條不變量才成立」，再逐條問 GYO 有沒有、GYO 的約束（決定性、狀態的權威、Engine 中性、C++ 無反射與借用檢查）會不會讓它變形、變形後還守不守得住效果。
 
-證據（只讀審閱的報告，每條有檔名行號）：主 checkout `build/evidence/kernel-study/`（`bevy_core.md`、`replicon.md`、`lightyear.md`，之後加渲染、資產、平台、能力 plugin 四份）。原始碼在 `~/Code/GitHome/{bevy, bevy_replicon, lightyear}`（使用者 2026-11-10 放入）。
+證據（只讀審閱的報告，每條有檔名行號）：主 checkout `build/evidence/kernel-study/`（`bevy_core.md`、`replicon.md`、`lightyear.md`，`render.md`、`assets.md`、`platform.md`、`capabilities.md`、`os_io.md`）。原始碼在 `~/Code/GitHome/{bevy, bevy_replicon, lightyear}`（使用者 2026-11-10 放入）。
 
 ## 文件
 
 - [networking.zh-Hant.md](networking.zh-Hant.md)：網路側的設計稿——網路要成為 Kernel 上的 plugin，Kernel 必須提供什麼；網路層自己的設計圖；對 GYO 現有 Match／Gateway／pv9／預測／回溯的對照。
-- （待寫）blueprint.zh-Hant.md：八條不變量、三處刻意偏離、守衛、Replacement Criteria。
+- [blueprint.zh-Hant.md](blueprint.zh-Hant.md)：設計圖——Kernel 八條不變量、各層補充的不變量（R／A／P／C／O／N）、GYO 刻意的偏離（候選 DI-K1～K7）、反例清單、現況對照、Replacement Criteria、場景驗證。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 
 ## 與其他線的關係
