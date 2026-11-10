@@ -69,25 +69,9 @@ Architecture Pressure とは、既存の構造が Feature または Contract を
 * **予見される Pressure**：まだ Code には現れていないが、下記「予見の根拠」から導ける。
 * **根拠のない予測**：「将来必要かもしれない」「あると便利」。どの層でも Architecture Change の根拠にしない（§1、§11）。
 
-### 層の区別：基盤 Architecture と応用 Architecture
+### Valid evidence
 
-判断基準：その構造を変えたとき、上に積まれたもの（他の Component、Product、保存済みの Data、
-wire の相手、Test の判定）の変更が必要になるか。
-必要になり、その量が上に積むほど増える構造を**基盤 Architecture** とし、それ以外を**応用 Architecture** とする。
-
-* 基盤の例：Engine の公開 Interface と Subsystem の境界、wire protocol、Data Contract の Format と Version の方針、
-  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、framework の共通構造。
-* 応用の例：Product・Tool の内部構造、Product-local の Registration、一つの Product の中で閉じる Adapter。
-* どちらか判断できない場合は、基盤として扱う。
-
-### 応用 Architecture：観測された Pressure で変える
-
-応用 Architecture は、変更の費用が上に積んだ量で大きく増えないため、観測を待ってよい。
-予見で先に一般化すると、過剰設計になる。
-
-#### Valid evidence
-
-観測された Pressure の例（基盤 Architecture でも、観測の根拠として同じ例を使う）：
+観測された Pressure の例（基盤・応用の両方で、観測の根拠として使う）：
 
 * Responsibility の重複
 * Ownership の曖昧化
@@ -102,6 +86,23 @@ wire の相手、Test の判定）の変更が必要になるか。
 * Product 固有 Knowledge が reusable layer に漏れる
 * Product 固有データの存在を共通処理が前提とする
 
+### 層の区別：基盤 Architecture と応用 Architecture
+
+判断基準：その構造を変えたとき、上に積まれたもの（他の Component、Product、保存済みの Data、
+wire の相手、Test の判定）の変更が必要になるか。
+必要になり、その量が上に積むほど増える構造を**基盤 Architecture** とし、それ以外を**応用 Architecture** とする。
+
+* 基盤の例：Engine の公開 Interface と Subsystem の境界、wire protocol、Data Contract の Format と Version の方針、
+  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、framework の共通構造。
+* 応用の例：Product・Tool の内部構造、Product-local の Registration、一つの Product の中で閉じる Adapter。
+* どちらか判断できない場合は、基盤として扱う。
+* 基盤として扱う計画は、基盤と判断した理由（上に積まれるもの）を書く。
+
+### 応用 Architecture：観測された Pressure で変える
+
+応用 Architecture は、変更の費用が上に積んだ量で大きく増えないため、観測を待ってよい。
+予見で先に一般化すると、過剰設計になる。
+
 For application architecture, Architecture Change SHOULD solve observed pressure,
 not predicted pressure.
 
@@ -114,13 +115,16 @@ not predicted pressure.
 そのため、基盤 Architecture を新しく作るとき、または大きな責務を加えるときは、
 観測を待たずに、予見される Pressure を設計に入れる。
 
-予見の根拠（少なくとも一つ。出所を書く）：
+予見の根拠（出所を書く）：
 
 1. **名指しされた Feature**：ユーザーが示した Feature、計画にある Feature（後のバージョンを含む）。
    各 Feature から基盤への要求を導く（下記 Derivation Order）。
 2. **成熟した参考実装**：同じ問題を解いた既存の Engine・Game・Library が、どう設計し、なぜそうしたか（避けた落とし穴）。
    こちらとの相似点と、そのまま使える部分・改める部分を書く。
 3. **領域の既知の規模と予算**：対象の規模（Map の面積、人数、tick rate、Asset の数など）と、計画で示した予算。
+
+1 か 3 の少なくとも一つが必要である。1 と 3 は「要るか、どれだけ要るか」に答え、2 は「どう作るか」に答える。
+2 だけでは根拠にならない（下記 Derivation Order：支える Feature を示せないものは延期する）。
 
 設計の進め方：
 
