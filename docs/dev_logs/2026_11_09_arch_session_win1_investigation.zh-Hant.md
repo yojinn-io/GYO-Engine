@@ -1,0 +1,41 @@
+# 架構 v8：11/9 場次 win1「斷線」的調查（v8-arch-session-win1）
+
+日期：2026-11-09。做的人：架構師會話（使用者 2026-11-09：「我的 win1 出現斷線，你把這個問題交給架構師」）。性質：**調查與分類，不修**（AGENTS §14.3：成因確定的部分交 owner 固定成測試再修；不確定的部分加觀測）。
+證據：主 checkout `build/evidence/v8-lag-l2-session-20261109/session/`（`clients/win1/`、`mac/`、`marks.txt`）。程式 commit `24943706`（#167 pa-broadphase＋biome、#168 移動診斷）。win1＝i7-8750H、GTX 1060＋Intel UHD 630＋「Easy&Light Display HUB Virtual Display」、Windows 11 Pro；radius 0.25、cell 0.5 m。
+
+## 使用者看到的（win1 的玩家）
+
+忽然看到別人的移動是跳躍式的（像瞬間移動），接著自己無法移動，等了 30 秒沒有掉線、沒有提示，**別的 Client 完全看不到他**（使用者 2026-11-09 更正：不是看到他定住，是看不到），只能 Esc 退出重進。發生三次。
+
+## 從 log 能證明的
+
+1. **三次「斷線」都是 Esc 離開，不是連線中斷。** 10:16:46、10:20:06、10:38:25 三次：UDP 無中斷（`connection summary interruptions=0`）、Match 記 `leave reason=client_request`、Gateway 當下收到 `/leave`。程式在對局中送 leave 的路徑只有 Esc（`PvpApplication.cpp:1147`）。整場 Match 對 win1 的輸入 600 個／10 秒、全部 accepted；snapshot 60/s；fps 60（1334 個秒窗只有 2 個長幀 >50 ms）；時鐘同步延遲與 win2 相同。**wire 與幀都正常。**
+2. **第一次（player 5）的「無法移動」是碰撞的卡死，Match 與 Client 兩邊的移動診斷一致，持續 42 秒。** 位置 (39.747, 0.787, 11.252)，biome 的一個 0.5 m 高台階的內角（格子 y=1 層：x≤78 與 z≥23 為實心，玩家中心在 x=79.5、z=22.5 的格線交點）。每 tick：`grounded=false`、`desired_y`＝y−2.5 mm（重力想往下）、`sweep_hits=5`（全部疊代都撞）、`sweep_normal=(0.989, 0.148, 0)`（膠囊下半球壓在台階的上緣，法線幾乎水平、y 分量 0.148 < 0.5 不算支撐）、`sweep_fraction=0`（一步都動不了）、`vertical_velocity=0`（每 tick 歸零）。於是：掉不下去（每 tick 被歸零）、不算站著（跳不了）、水平也推不動——**懸在台階邊緣 0.29 m 的空中**，直到 Esc。這就是 movement-fix.md 列的機制（擦邊歸零＋邊緣支撐角度＋沒有跨階）的第一個真實重現，是 pm-detect 要的失敗案例。
+3. **第二次（player 6）的「無法移動」不是碰撞。** 10:19:38 起 14 秒原地不動（`moved=0`、無 sweep hit、grounded），被殺死、重生在 (10.25, 1, 10.25) 後又 14 秒不動，然後 Esc。Match 收到的輸入數正常，但移動診斷顯示位移為零 → 輸入內容是「不動」。命令紀錄沒有記鍵盤內容，**分不出是鍵盤輸入沒進到遊戲（焦點、裝置）還是沒按**。
+4. **離開後的 HTTP 失敗只有 win1 有。** 第二、三次離開後約 10 秒，房間列表每秒一次的刷新開始失敗（先「Could not establish connection」再 2 秒逾時），第二次持續到 10:23:00 重新加入才好；每次刷新都是新的 TCP 連線。同一時間 Mac 對 win2、win3 的 UDP 正常。兩次都在 win1 的 UDP 流停了約 10 秒之後開始。Gateway 不記 HTTP 請求、Client 不記 socket 錯誤碼，**成因分不出來**（候選：win1 網卡在流量停止後省電或 Wi-Fi 漫遊、Windows 網路設定檔、Mac 側對新連線的拒絕）。
+5. 「別人跳躍式移動」：Client 的 `runtime_gap` 紀錄在 10:15:58（第一次死亡重生時）有 20 筆連續 `pending=12`、每筆丟一幀的追趕，其他時刻沒有；10:19:38 前沒有紀錶。只能說「有一次 200 ms 的追趕」，不能證明它就是使用者看到的那次。
+6. **「別人看不到我」無法從 log 驗證。** Match 在卡死期間把 player 5 放在 (39.747, 0.787, 11.252)、alive（hp 滿、dead=0），snapshot 給所有人都含三名玩家（pv9 沒有 interest 過濾）；但各 Client **沒有記錄它畫了哪些遠端玩家、畫在哪**，所以「其他 Client 的畫面上有沒有 player 5」沒有證據。候選：遠端玩家的呈現在對方停住時出了問題（插值、剔除、模型位置）；或位置在台階內角、對方沒往那裡看。使用者 2026-11-09 補充：他親自看了其他 Client 的螢幕，上面沒有他；他自己的畫面也看不到其他測試員——**雙向**。
+   補查：卡死的 42 秒內，Match 上 player 3（另一台 Windows）一直站在 (52.8, 1.0, 52.8) 沒動，player 4 在 24～43 m 外移動；三台的 `presentation` 紀錄都不含遠端玩家的渲染位置（`remoteMovement` 的觀察沒有進 trace），所以「畫了沒、畫在哪」沒有任何證據。
+   雙向看不到＋同一時間 win1 卡死，比「剛好沒看到」更像一個狀態問題（候選：卡死的玩家在 snapshot 裡的某個欄位讓所有 Client 的遠端呈現略過他，而他自己這邊的時間線取樣也停了）。
+   **可立刻做的重現**：本機兩個 Client 進 biome，一個走到 (39.75, 11.25) 的台階內角把自己卡住，另一個看他還在不在、他看不看得到別人。卡死本身是決定性的，重現成本很低。
+   觀測缺口（C5）：每個 Client 每秒記所畫的遠端玩家（id、位置、是否取樣成功、hold／missing future）。
+7. 受擊回饋：win1 收到 87 筆 `hit feedback`，62 筆 `flash=1 reason=played`。程式認為有畫、有放；使用者說沒看到。顯示路徑沒有紀錄（GPU adapter、視窗在哪個螢幕）。
+
+## 分類與歸屬
+
+| 現象 | 性質 | owner | 下一步 |
+|---|---|---|---|
+| 第一次卡死（台階內角懸空） | 缺陷 #1，**已重現**（位置、地圖、每 tick 的紀錄） | 產品 movement-fix（pm-detect → pm-vertical） | pm-detect 直接用這筆資料固定成失敗的測試（§14.3），不必再找重現 |
+| 第二次原地不動 | 未分類（輸入沒進遊戲？） | 產品 | 加觀測：每秒記輸入摘要（有無移動鍵）、視窗焦點得失事件 |
+| 離開後 HTTP 失敗 | 未分類（網路） | 產品／Gateway | 加觀測：Gateway 記每個 HTTP 請求（來源、路徑、狀態、耗時）；Client 記 socket 錯誤碰與是連線或讀取失敗 |
+| Esc 離開 | 使用者操作 | 產品 | Client 把 Esc 離開記成一行，之後不必推論 |
+| 看不到受擊回饋、跳躍式移動 | 未分類（顯示路徑） | 產品／field-session C1、C5 | 記 GPU adapter 名稱、視窗所在螢幕、每秒 present 的 p95 |
+| 其他 Client 完全看不到 win1（第一次卡死時） | 未分類（遠端玩家的呈現） | 產品（Client 呈現）／field-session C5 | 每個 Client 每秒記所畫的遠端玩家（id、位置）；先問其他玩家是否看向該處 |
+
+## 給 field-session.md 的缺口（下次場次前補）
+
+C1：GPU adapter 名稱與視窗所在螢幕、網卡種類（Wi-Fi／有線）。C4：Gateway 的 HTTP 請求紀錄。C5：每秒輸入摘要、視窗焦點事件、present 的 p95、所畫的遠端玩家（id、位置）。C7：Client 的 socket 錯誤碼；Esc 離開的一行。
+
+## 用時與會改變的判斷
+
+約 2.5 h。會改變的判斷：場次的「斷線」回報要先分「連線層」與「玩法層」——這次三件都是玩法層（碰撞卡死、輸入不動）加一件連線層（HTTP），而連線層那件只在玩家離開後才出現；移動診斷證明了它的價值：沒有它，第一次卡死只會是一句「卡住了」。

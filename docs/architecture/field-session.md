@@ -65,6 +65,14 @@ binaries never carry the collection code (Design Invariant 3). Until the build o
 declaration which collection code is compiled into the binaries it ships to the session and where that code lives, so the
 separation can be made later without re-reading the code.
 
+## Gaps found by the first session (2026-11-09, win1)
+
+Recorded here so the next declaration lists them as filled or still open: C1 the GPU adapter the renderer chose, the
+display the window is on, and the network adapter kind (Wi-Fi or wired); C4 the gateway's HTTP requests (remote,
+path, status, duration); C5 a per-second input summary (any movement key held), window focus gained and lost, present
+time p95, and the remote players each client drew (ids, positions); C7 the client's socket error code and whether a failure was connect or read, and one line when the player
+leaves by Esc. Source: `docs/dev_logs/2026_11_09_arch_session_win1_investigation.zh-Hant.md`.
+
 ## The product's items
 
 The product's declaration adds its own items under its own ids, next to the common list: the judgments its batch declared

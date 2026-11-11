@@ -48,3 +48,8 @@ pa-broadphase（已合併，#167）→ **pm-detect-diag** → 11/9 場次（lag-
 
 - 產品會話補事前宣告（判定、閾值、試行次數），使用者核准後才動。
 - 證據放主 checkout `build/evidence/movement-fix/`；dev_log 在產品線。
+
+## 11/9 場次的重現資料（架構師，2026-11-09）
+
+`docs/dev_logs/2026_11_09_arch_session_win1_investigation.zh-Hant.md`：win1 的 player 5 在 biome (39.747, 0.787, 11.252)（0.5 m 台階的內角）懸空 42 秒——每 tick `grounded=false`、`sweep_hits=5`、`sweep_normal=(0.989, 0.148, 0)`、`sweep_fraction=0`、`vertical_velocity=0`。Match 與 Client 的移動診斷一致。證據：主 checkout `build/evidence/v8-lag-l2-session-20261109/session/`（`mac/match-movement-diag.jsonl`、`clients/win1/*-movement-diag.jsonl`）。pm-detect 的「重現」這一項已由場次給出，直接固定成失敗的測試。第二次（player 6）的 14 秒原地不動沒有碰撞，輸入內容不明，是另一個觀測缺口（輸入摘要、焦點事件）。
+
