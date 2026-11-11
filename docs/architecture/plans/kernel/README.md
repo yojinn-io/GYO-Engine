@@ -15,6 +15,8 @@
 ## 文件
 
 - [mechanism.zh-Hant.md](mechanism.zh-Hant.md)：**本線的基準**。對 v0.2 的理解、機制骨架、契約與控制面（含使用者提供的審查修正與架構師兩條主張）、網路作為 System、規則變機制、不解決什麼、改造的性質與風險、判準。三張圖在 `diagrams/`。
+- [spec.zh-Hant.md](spec.zh-Hant.md)：**規格草案 v0.1（已對抗檢查，待使用者）**。`-spec` 批的產出：A～M 十三節、守衛 J-1～J-47、DI-KS 15 條、RC 13 條；待使用者決定的 17 項在 K.3；對抗檢查 34 條逐條處置在文末。
+- [spike-report.zh-Hant.md](spike-report.zh-Hant.md)（分支 `claude/arch-kernel-spike`）：`-spike` 批的報告；範圍の限界 L1～L8。
 - [networking.zh-Hant.md](networking.zh-Hant.md)：網路側的設計稿——網路要成為機制上的 System，機制必須提供的八條；網路層自己的設計圖 N1–N12；對 GYO 現況的對照。
 - [blueprint.zh-Hant.md](blueprint.zh-Hant.md)：**輸入**（2026-11-11 降級）——Kernel 八條不變量、各層補充的不變量（R／A／P／C／O／N）、GYO 刻意的偏離（候選 DI-K1～K7）、反例清單、現況對照、Replacement Criteria。它沒有契約分類與 Executor 的分離，遷移順序一節假設了改造路線；以 mechanism 為準。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
@@ -31,7 +33,7 @@ v8-arch-kernel
 
 | 批 | 內容 | 產出 | 判定（事前宣告） |
 |---|---|---|---|
-| `-spec` | 把 mechanism 落成規格：World、System 契約（兩半）、Registry、Scheduler（三種分析結果、歧義處置）、Executor（策略與執行緒親和）、延後佇列與事件（同步點）、多 World 與 schedule 組合、Host 保留的職責；每節：資料模型／操作／不變量／C++ 實現手段／Bevy 對照與不採的理由；Design Invariants 與 Replacement Criteria 草案；不含遊戲型別的驗證方式 | `spec.zh-Hant.md`；對抗檢查附末 | 對抗檢查者找不到「規格允許、但會破壞 (c) 區四處契約或獨占寫入」的反例；找到則回提案。不改程式 |
+| `-spec` | **完成（待使用者定 K.3）**。把 mechanism 落成規格：World、System 契約（兩半）、Registry、Scheduler（三種分析結果、歧義處置）、Executor（策略與執行緒親和）、延後佇列與事件（同步點）、多 World 與 schedule 組合、Host 保留的職責；每節：資料模型／操作／不變量／C++ 實現手段／Bevy 對照與不採的理由；Design Invariants 與 Replacement Criteria 草案；不含遊戲型別的驗證方式 | `spec.zh-Hant.md`；對抗檢查附末 | 對抗檢查者找不到「規格允許、但會破壞 (c) 區四處契約或獨占寫入」的反例；找到則回提案。不改程式 |
 | `-spike` | **完成（分支 `claude/arch-kernel-spike`）**：判定 1 本機成立、三平台待 L1；判定 2 照原文成立、攔不到的形狀記為範囲の限界 L1～L8；判定 3 成立（34/34）。獨立子目錄（候選 `spikes/kernel/`，不進任何 target 的依賴），只做兩件：(1) 從函式參數型別在編譯期推出 `{reads, writes}`，含 Component、Resource、事件、延後佇列句柄；(2) 受限句柄＋debug 建置的 World 存取核對，未宣告的 id 即斷言。測試用的型別只存在測試裡 | 原型程式＋測試＋`spike-report.zh-Hant.md`（兩個編譯器的差異、做不到的事） | (1) 10 個以上不同簽名的 System，推出的集合與人手寫的期望逐一相同（static_assert＋執行期），L1 三平台（MSVC、gcc／clang、AppleClang）全綠；(2) 3 種繞路（存參考、拿裸指標、經未宣告 id 讀 World）在 debug 建置各被斷言攔下，release 不攔並寫明；(3) 突變：移除任一宣告 → 對應測試失敗。任一不成立＝spike 結論「做不到」，照 §14 停下回報，不補救 |
 | `-audit` | 拿 `-spec` 去讀現有每個模組：有沒有自己的生命週期或更新迴圈；**有沒有跨 tick 的指標或參考；有沒有全域可變狀態**（原第二問「實際存取能不能被契約框住」依 `v8-arch-kernel-limits-accept` 改為這兩個可檢查的問題）；是不是純函式。事前宣告必須列 spike-report 的範囲の限界 L1～L8 | `audit.zh-Hant.md`：逐模組留／包／重寫＋理由＋行數 | 每個結論附檔名與行號；對抗檢查抽 5 個模組複核 |
 

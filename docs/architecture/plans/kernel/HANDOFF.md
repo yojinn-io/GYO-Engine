@@ -40,8 +40,9 @@
 
 - 2026-11-11 spike 完成並經 Fable／xhigh 對抗審查（R-01～R-14，全部處置或記錄）；三輪突變 32→34 條全殺；分支 `claude/arch-kernel-spike`（5b473017 起）未開 PR。判定 1 待 L1（L1 不建 spikes/，改 workflow 待使用者 R-06）。使用者在側邊會話逐項對審查，R-01 與上限處置已定，R-06 之後待續。
 
+- 2026-11-11 `-spec` 完成：ultracode（提案 Opus×3／high、統合 Fable／high、對抗 Opus／xhigh、修訂 Fable）產出 `spec.zh-Hant.md` 1319 行；對抗檢查 34 條（7 blocker）全部處置，B6（時間來源的契約衝突）待使用者；架構師逐節讀過，判讀見會話回報。K.3 列 17 項待使用者決定（第 16 項已由 R-01 決定）。PR 待開。
+
 ## 下一步
 
-- `v8-arch-kernel-spec`（ultracode，本會話背景）→ 產出 `spec.zh-Hant.md`，停下交使用者。
-- `v8-arch-kernel-spike`（卡）→ 事前宣告見 README；結果回報本線。
-- 兩者齊 → `v8-arch-kernel-audit`（逐模組留／包／重寫）→ 中間層成本 → 改造批次計畫（§3 Delta 計畫層寫一次）。
+- 使用者定 K.3（至少影響 -audit 的第 1、7、8、9、10、11 項）→ `v8-arch-kernel-audit`（事前宣告要列範囲の限界 L1～L8）→ `-spike-pageguard` → 改造批次計畫（§3 Delta 計畫層寫一次）。
+- 判定 1 的三平台：等使用者對 spike R-06（是否改 L1 workflow 建 spikes/kernel/）。
