@@ -17,7 +17,8 @@
 | `v8-arch-kernel-bring-into-gyo` | 2026-11-11。要的是 Bevy 的抽象能力（World／System Contract／Scheduler／Executor）帶入現有 GYO，不是 GYO2；架構改造完成前功能線停。 |
 | `v8-arch-kernel-pause-mode` | 2026-11-11。停功能線的定義＝(a)：已開工的卡做到下一個關卡停、更新 HANDOFF；不開新功能卡。事故修正是否繼續仍未定。 |
 | `v8-arch-kernel-delegation` | 2026-11-11。此次架構調整（含 spike）由架構師全權負責：各批自開自跑、每批關卡回報；本線 docs-only PR 在 CI 綠後架構師直接合併並回報；碰 Design Invariants、`spikes/` 以外的程式、Delta 七項仍先給使用者。使用者封存原 spike 卡（task_8f7c5a80），spike 改由架構師會話的子代理執行。 |
-| `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）與 spike（`v8-arch-kernel-spike`）同時開；審查（`v8-arch-kernel-audit`）等規格。模型／檔位見 README。 |
+| `v8-arch-kernel-sequential` | 2026-11-11。使用者：GYO 最大的架構調整，全部由主會話負責，避免會話間傳遞造成語意偏差；規格與 spike 規劃好後**按計畫一個個執行，不並行**。架構師解讀：批間順序 spec → spike → audit；spike 與 audit 由主會話自己做，不派實作子代理；進行中的規格 ultracode（先前核准）跑完，產出由主會話逐節讀過再採用；每批結尾保留一個不同模型的只讀對抗檢查者。原並行啟動的 spike 子代理已停止，未留下工作樹。 |
+| `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）依序執行（原「同時開」被 `v8-arch-kernel-sequential` 取代）。模型／檔位見 README。 |
 
 ## 未定
 
