@@ -178,16 +178,16 @@ python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py \
 | R-02（should） | 上限表加「host 在同一視窗內經 World API 碰過同一欄後，繞路寫入被 `MarkWritten` 當成新基準」；`Limit:` 測試「a bypass write is taken as the new baseline once host code touched the storage」固定現況 |
 | R-03（should） | 上限表「另一個執行緒」列改寫（`thread_local`，其他執行緒的存取當成 host，未宣告的讀看不到）；`Limit:` 測試「a World read from another thread during a System run is checked as host access」；報告裡「(c) 在存取當下」都加「僅限 System 自己的執行緒」（結論表的格子不改，以表下的註補）。CMakeLists 加 `Threads::Threads` |
 | R-04（nit） | 堆積成員一列改成通則：component、resource、事件 payload 都只比 handle 位元組 |
-| R-05 | 未轉交本代理（由架構師記錄） |
+| R-05 | 檢查者確認無問題：`ks-check-write-accepts-read` 的修法（(c1)–(c5) 加 passed／!passed）確實分出「存取當下」與「邊界」兩層；五個 `Limit:` 測試以 `SPIKE_CHECK_NO_ASSERT` 固定現況，機制進步時會失敗，不是恆過。處置：無需變更（架構師記錄）。 |
 | R-06 | 待使用者 |
-| R-07 | 未轉交本代理（由架構師記錄） |
+| R-07 | 檢查者確認無循環：id 與型別集合皆手寫；`SameSet` 雙向包含；17（現 18）個簽名逐一核對期望與簽名一致；`DerivesExactly` 非恆真（含 `IsSystemFunction<F>`，另有 6 條負向 `static_assert`）。處置：無需變更（架構師記錄）。 |
 | R-08（should） | 加非 const、noexcept 的成員函式 `Steering::Prepare`（`static_assert`＋執行期比對＋`MakeSystem`）；突變 `ks-noexcept-member-not-deduced` |
 | R-09（註記） | `ks-noexcept-function-not-deduced` 由導引層的硬錯誤殺，不是期望層：寫在〈判定 3〉與 catalog 的 `note` |
 | R-10（nit） | `expect_build_failure` 的 16 條 regex 都改成該條特有的 requirement 片段，並以實際輸出核對命中與誤命中 |
 | R-11（nit） | 「宣告移除 9 條全殺」改寫成：debug 核對層殺 7 條，另 2 條由 const 正確性與判定 1 的期望 `static_assert` 殺 |
 | R-12（should） | 加 Control 測試「a declared write also allows reading the same storage through the World」；對偶突變 `ks-check-write-not-readable`（`DeclaresRead(key) || DeclaresWrite(key)` → `DeclaresRead(key)`） |
-| R-13 | 未轉交本代理（由架構師記錄） |
-| R-14 | 未轉交本代理（由架構師記錄） |
+| R-13 | nit、未查證：`alignas(64)` 的測試型別以值傳入 `World::Push(T)`，MSVC 對過度對齊的 by-value 參數歷史上有 C2719（x86）；x64 是否仍報未查證，報告原只提 C4324。處置：待 L1 的 windows-x64 結果判讀；若報錯改以 const& 傳入（測試側，不影響判定）。（架構師記錄） |
+| R-14 | nit、未查證：`Registry.hpp` 的 `Entry{token, ops}` 省略了有 NSDMI 的三個成員，gcc `-Wextra` 的 `-Wmissing-field-initializers` 是否警告未查證；僅警告、spike 無 `-Werror`。處置：待 L1 的 linux-x64 結果判讀。（架構師記錄） |
 
 處置後：全部測試重跑（Debug、Release 兩組態 × 兩目標，33/33 case），全目錄突變第三輪 34/34。
 
