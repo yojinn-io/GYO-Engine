@@ -737,7 +737,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 | 處 | 契約（可檢查的句子） | 機制裡的落點 | 守衛 |
 |---|---|---|---|
 | **World** | 疊代依 EntityId 升冪（W-2）；同步點後所有參考失效（W-4）；Running 期間結構變更只進佇列（W-3、F-1）；佇列依 F.2 套用（F-2）；配發器單調、由衝突序列化（W-9）；World 不含雜湊或位址順序（W-10） | A、F | J-2、J-3、J-4、J-8、J-9、J-31、J-32 |
-| **Executor** | Plan 唯一（D-1），(c) 歧義是錯誤（D-3）；含 (c) 的 schedule 預設 Serial，Parallel 要逐位元守衛（X-2）；**時間只來自 tick 與被記錄的 boundary 輸入**（修訂：B5／B6）：(c) 區讀時間的來源只有兩個——World 的 domain tick（由 clock schedule 推進，Kernel 以 `Res<Tick<domain>>` 類的句柄提供）與 boundary Resource（zone=C、role=Input，由 Host 在 Ready 寫入、被記錄：`HostClockSample`、產品的 `FixedStep{stepNs}`）。System 宣告寫這兩類是啟動錯誤（boundary 只有 Host 與 ingress 可寫）。`FrameTime` 等牆鐘 Resource 是 `external`、zone=B，Z1 擋住。**本稿在這裡與 mechanism §3.3「Time 只來自 tick」不一致、與 determinism.md DI 4「the tick, or a clock injected」一致**；衝突本身要使用者裁決（K.3 第 11 條）。**亂數**只來自 World 中 `rollback = Yes` 的 (c) 狀態（E-10 的 `Brain.rngState`），種子由產品給並進 digest，Kernel 不提供亂數源 | D、E、G.1 | J-20、J-22、J-27、J-39；J-17 的掃描（`<random>`、`rand`、`random_device`） |
+| **Executor** | Plan 唯一（D-1），(c) 歧義是錯誤（D-3）；含 (c) 的 schedule 預設 Serial，Parallel 要逐位元守衛（X-2）；**時間只來自 tick 與被記錄的 boundary 輸入**（修訂：B5／B6）：(c) 區讀時間的來源只有兩個——World 的 domain tick（由 clock schedule 推進，Kernel 以 `Res<Tick<domain>>` 類的句柄提供）與 boundary Resource（zone=C、role=Input，由 Host 在 Ready 寫入、被記錄：`HostClockSample`、產品的 `FixedStep{stepNs}`）。System 宣告寫這兩類是啟動錯誤（boundary 只有 Host 與 ingress 可寫）。`FrameTime` 等牆鐘 Resource 是 `external`、zone=B，Z1 擋住。**使用者 2026-11-11 採此形狀（K.3 第 11 項）**，mechanism §3.3 已改成一致；與 determinism.md DI 4「the tick, or a clock injected」一致。**亂數**只來自 World 中 `rollback = Yes` 的 (c) 狀態（E-10 的 `Brain.rngState`），種子由產品給並進 digest，Kernel 不提供亂數源 | D、E、G.1 | J-20、J-22、J-27、J-39；J-17 的掃描（`<random>`、`rand`、`random_device`） |
 | **Ingress** | 外部訊息只經 Link（I 節）進入；只有 `ingress` System 在 ingress stage 把資料寫進以目標 tick 為鍵的 `InputRing[tick]`（`role = Input`、`rollback = No`，Z8）；(c) 區 System 只讀 `InputRing[目前 tick]`，不碰 Link；到達的牆鐘時機只影響「寫進哪一格、或因過期而丟棄並計數」，不影響 (c) 結果。**到達時刻是資料**（修訂：S5）：IO 執行緒收到每筆訊息時取樣一次時鐘，連同位元組放進 `Link.inbound`（I.2 的 `{arrivalNs, bytes}`）；Ingress 把它當輸入欄位寫進 ring；Host judgement 的 reference age 於是從「到達時刻」算，粒度不變，而且是可記錄、可重放的輸入。(c) 區不回呼 Host 的時鐘。Host 每次喚醒另取樣一次寫進 `HostClockSample`，給需要「現在」的判斷（determinism.md §2：time is an input here, not a read）。Kernel 只能保證「寫入只在一個 stage 發生」；「晚到的輸入寫進已模擬過的 tick 怎麼辦」是產品規則（Match 不回滾只外推，N7）。`rollbackEnabled` 的 schedule 上 ingress System 必須帶 `NotInRollback`（D-E15，修訂：B7），Replay 時 ring 只讀不寫 | Z3、Z8、I 節 | J-40、J-41、J-42；產品守衛：同一份 `InputRing` 內容（含到達時刻欄位）不論實際到達時序如何排列 digest 相同（重放） |
 | **Math／編譯** | determinism.md Design Invariant 3：不收縮、不用 FMA 與 ISA intrinsic、不用 fast-math、不用 long double、只用精確的 libm 函式；超越函式來自 Math 自己的實作（E1 之後）；每條 (c) 路徑有三平台 `cpu` golden 或列在 determinism.md §7 | **Kernel 檢查不了**。Kernel 只要求 zone=C System 所在的編譯單位用 GYO 的旗標，並在啟動時輸出「(c) 區 System 的來源檔清單」供 E2 的掃描與審查 | determinism.md 的 E0～E5；J-17 |
 
@@ -1128,7 +1128,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 9. ~~獨占寫者的單位~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：獨占寫者**以 System 計**，Startup schedule 不計；PvP 的 Body 依 entity-model 第 139 行的欄位分類**拆欄**，不併 System、不改 Shared、不採「以 owner plugin 計」。使用者原話：不拆的話架構改造就沒有意義。拆欄的範圍與 golden 影響由 -audit 量。
 10. ~~Join／Leave 進 tick 內~~ **已決定（使用者 2026-11-11，側邊會話轉述）：採規格**。Ingress 只寫請求進 `InputRing`，(c) 的 `ApplyMembership` 以 `SpawnWithId`／`Despawn` 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（加入／離開晚最多一 tick；`combat-rejoin` 等 golden 可能差一 tick、要重設基準）記為限制 LIM-5，由產品線在遷移批確認；entity-model §5.2 改寫（排進改造的第一個文件批）。
-11. **時間的來源**（G.2 Executor；B6）：mechanism §3.3「Time 只來自 tick」與 determinism.md DI 4「the tick, or a clock injected」衝突。本稿採 DI 4 的形狀（tick ＋ 被記錄的 boundary 取樣 `HostClockSample`），因為 Host judgement 區（determinism.md §2，(c)）本來就要量到達時機。選項：(i) 修 mechanism §3.3 的 Executor 列為「tick 與被記錄的 boundary 輸入」；(ii) 把 Host judgement 改成 (b)，HostClockSample 變 external——這改 determinism.md 的區表與 golden `host-poor-connection` 的地位。
+11. ~~時間的來源~~ **已決定（使用者 2026-11-11，側邊會話轉述）：採 (i)**。(c) 區的時間只來自兩個來源：World 的 domain tick，與被記錄的 boundary 輸入（Host 每次喚醒取樣一次的 `HostClockSample`、隨每筆輸入進 ring 的到達時刻）；(c) System 自己讀時鐘仍禁止。mechanism §3.3 Executor 列那一句已改；determinism.md DI 4 不動。B6 結案。規則寫進 `docs/architecture/target/determinism.md`。
 12. **F.2 的階段順序改成 despawn、remove 先於 spawn、insert**（S4）：讓同窗「刪 X 再以同 id 生成 X」成立；代價是「同窗生成又刪除同一個新 id」從不可見變成生成勝出。
 13. **K.2 第 1 條（Replacement Criteria）的改寫**（S8）：原條件已被 spike 的結果觸發；本稿主張觸發的是事前寫明的上限、不是機制失效，並把條件改寫成三個分項。Replacement Criteria 的變更要使用者核准；若不核准，依原條文本規格進入「修還是重建」的提案。
 14. **`Parallel` 在 v1 是啟動錯誤 D-E17**（S11）而不是靜默 Serial；只含 (b) 的 schedule 也一樣，等 Parallel 實作時再開放。
@@ -1266,7 +1266,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | X19 | 提案 1 F-6「callback 拋出後 World 回 Ready 可繼續用」 | 改為 `Interrupted`（E.5） | E.8 取捨 1 |
 | X20 | mechanism §3.3 Executor 列「RNG 是 resource」 | 亂數狀態是每實體的 (c) 元件（E-10 的 `Brain.rngState`，`rollback = Yes`），不是單一 Resource | 回滾與每實體獨立性：Resource 形式要全體共用一個序列，重放時任一實體的順序變動就牽連全部；元件形式與 entity-model E-10 一致（修訂：N9） |
 | X21 | v0.2 §10.1 的圖：一個 Runtime 內含 Simulation Clock 與 Frame Clock | Runtime＝一個 World；兩個時鐘在不同執行緒時是兩個 Runtime（ClientSim／ClientFrame，H.4.2） | H-2：一個 World 一條執行緒；兩時鐘同執行緒時仍可以是一個 Runtime 兩個 schedule（H.2 第 3 點），所以 v0.2 的圖是其中一種組合，不是被否定（修訂：N9） |
-| X22 | mechanism §3.3 Executor 列「Time 只來自 tick」 | tick 加被記錄的 boundary 取樣（`HostClockSample`） | 與 determinism.md DI 4 一致、與 mechanism 不一致；**要使用者裁決**（K.3 第 11 條；修訂：B6） |
+| X22 | mechanism §3.3 Executor 列「Time 只來自 tick」 | tick 加被記錄的 boundary 取樣（`HostClockSample`） | **已決定（2026-11-11）**：mechanism §3.3 改為一致；DI 4 不動 |
 | X23 | entity-model §5.2「Join／Leave 在 Tick 外（host 呼叫）」 | Ingress 寫請求進 ring、(c) System 在 Simulate 生成與刪除（H.4.1） | Z3 不允許 (b) 寫 role=State、Z5 不允許 (b) despawn 帶 (c) 欄的實體；**已決定（2026-11-11，K.3 第 10 項）**；entity-model §5.2 改寫排進第一個文件批 |
 | X24 | entity-model E-3「Reset 歸回 First」、§5 第 83 行的世代 | World 內無 Reset；世代切換＝Host 重建 World（A.1、H.7） | W-9 的「不重用」只在一個 World 內成立；跨世代的重用由重建 World 隔開（修訂：S4） |
 
@@ -1280,7 +1280,7 @@ bevy_core.md 沒有證據行（要查證得回到 `~/Code/GitHome/bevy` 原始�
 
 ## §對抗檢查（v8-arch-kernel-spec-adversary）
 
-檢查者：Opus／xhigh（架構師安排）。判定：不通過（7 blocker、18 should、9 nit），依 README `-spec` 列的判定回提案。統合者（Fable／high）逐條處置如下；「接受」的條目都已改進規格正文並在改處標「（修訂：代號）」。處置統計：**接受 32、拒絕 0、待使用者 1**（B6 的契約衝突；S7 已由使用者 2026-11-11 決定）。另有 7 條「接受」的處置牽涉使用者層級的決定（S1、S3、S4、S8、S11、S14、B4／S6 的常開檢查），列在 K.3 第 9～17 條。
+檢查者：Opus／xhigh（架構師安排）。判定：不通過（7 blocker、18 should、9 nit），依 README `-spec` 列的判定回提案。統合者（Fable／high）逐條處置如下；「接受」的條目都已改進規格正文並在改處標「（修訂：代號）」。處置統計：**接受 32、拒絕 0、待使用者 0**（B6、S7 均已由使用者 2026-11-11 決定）。另有 7 條「接受」的處置牽涉使用者層級的決定（S1、S3、S4、S8、S11、S14、B4／S6 的常開檢查），列在 K.3 第 9～17 條。
 
 | id | severity | 處置 | 理由與改處 |
 |---|---|---|---|
@@ -1289,7 +1289,7 @@ bevy_core.md 沒有證據行（要查證得回到 `~/Code/GitHome/bevy` 原始�
 | B3 | blocker | 接受 | `Spawn` 改成型別化 `Spawn<Bundle<…>>`，bundle 元件進延後寫、計入寫者、受 Z2（A.1、B.1、B.3、B.4 第 4 點、F.6）；沒有 untyped spawn（F.1）。`EntityAllotter` 宣告 zone，模擬 World 中是 C，(b) 的 Spawn 即 Z2 違反。`SpawnWithId<Bundle<…>>` 定義存取與兩個用途，權威快照改走 Restore（A.1）。J-12、J-15 加 bundle 案例；K.1 第 1、6 條改寫 |
 | B4 | blocker | 接受 | 擇一：`ExclusiveWorld` 只允許 zone=B，句柄唯讀全部、只能寫 zone=B 且 Shared，違反是常開檢查（新 S-13；S-10 改寫；Z4 加「無 ExclusiveWorld」；J-45）。因此它不是 Exclusive 欄的寫者、碰不到 (c) 資料，M 節編輯器檢視器的用途仍成立（改 Shared 或型別化）。K.1 第 1、2 條取消「非 exclusive」的豁免寫法 |
 | B5 | blocker | 接受 | 單一來源：World 的 `tick[domain]`（A.1 資料模型、§0），由 clock schedule 的 `Run` 第一步推進（D.1、A.2），Host 不寫；在快照內，Rewind 一併還原（H.5）；Replay 跑到 `tick == tNow`。產品的 `FixedTime` 拆成只含步長的 `FixedStep`（G.2、G-6、G.7 第 3 條、H.2）；`FixedTickRuntime::tickId_` 降為 Host 簿記（L.1）。H-1 改寫；J-42 加突變「不還原 domain tick」 |
-| B6 | blocker | **待使用者**（規格文字已改成一致） | 衝突屬實：mechanism §3.3「Time 只來自 tick」與 determinism.md DI 4「the tick, or a clock injected」互斥，Host judgement 區（(c)）本來就量到達時機。本稿採 DI 4 的形狀：`HostClockSample` 是 zone=C、role=Input 的 boundary，(c) 讀它合法（G.2 Executor 列、§0），並在 G.2 與附錄一 X22 標明與 mechanism 不一致。選項寫在 K.3 第 11 條：修 mechanism §3.3，或把 Host judgement 改 (b) |
+| B6 | blocker | 已決定（使用者 2026-11-11 採 (i)：mechanism §3.3 改；DI 4 不動） | 衝突屬實：mechanism §3.3「Time 只來自 tick」與 determinism.md DI 4「the tick, or a clock injected」互斥，Host judgement 區（(c)）本來就量到達時機。本稿採 DI 4 的形狀：`HostClockSample` 是 zone=C、role=Input 的 boundary，(c) 讀它合法（G.2 Executor 列、§0），並在 G.2 與附錄一 X22 標明與 mechanism 不一致。選項寫在 K.3 第 11 條：修 mechanism §3.3，或把 Host judgement 改 (b) |
 | B7 | blocker | 接受 | 新增 Z8（role=Input 必須 rollback=No）、H-10 與啟動錯誤 D-E15（`rollbackEnabled` 的 ingress 必帶 `NotInRollback`，不能用 `rollbackSafe` 代替）；H.5 Replay 寫明 ring 只讀不寫、Host 在 Replay 中不寫 boundary；J-42 的合成 schedule 加 ingress stage 與兩個突變；K.1 第 8、12 條改寫 |
 | S1 | should | 接受（含一項待使用者） | B.3 寫明寫者以 System 計、Startup schedule 不計、`ExclusiveWorld` 不計；寫出 `bodies_` 三個寫入點（`PvpMatch.cpp:301-304`、`:310-331`、`:571`、`:582`）會觸發 D-E2，本稿預期的解法是依 entity-model 第 139 行的欄位分類拆欄，不是併 System、不是改 Shared；替代方案「以 owner plugin 計」列為 K.3 第 9 條。L.3 PvpMatch 列同步 |
 | S2 | should | 接受 | H.5 加 `Restore(world, snapshot)`，來源可以是 Host 從權威資料組出的**部分快照**（整欄替換成員集合、不算寫者、Z2 例外、不觸發 hook）；A.2 與 Host 寫入窗口的第 (3) 類改寫；H.4.2 ClientSim 列寫出 Reconcile 的注入點（Host 比較 PredictionHistory[T] 與權威快照，不一致就 Restore 再 Replay）；H.7 加 Host 職責；J-42 加部分快照案例 |

@@ -32,6 +32,7 @@
 | `v8-arch-remove-object-fps` | 2026-11-11（側邊會話轉述，spec K.3 第 8 項）。移除 apps/object_fps、apps/object_fps_v2 與 tools/object_fps_preview 的依賴，照 AGENTS §7 完整刪除、不留相容層；理由：PvP 已有自己的生態。排成改造前的獨立批，兼驗 §7 removability（刪後共通層需要改就記 Delta）。待事前宣告。 |
 | `v8-arch-kernel-writer-unit-system` | 2026-11-11（側邊會話轉述，spec K.3 第 9 項）。獨占寫者以 System 計、Startup 不計；PvP 的 Body 依 entity-model 第 139 行分類拆欄，不併 System、不改 Shared、不採以 owner plugin 計。使用者：不拆的話架構改造就沒有意義。拆欄範圍與 golden 影響由 -audit 量。 |
 | `v8-arch-kernel-membership-in-tick` | 2026-11-11（側邊會話轉述，spec K.3 第 10 項）。採規格：Join／Leave 進 tick 內，Ingress 只寫請求進 InputRing，(c) 的 ApplyMembership 以 SpawnWithId／Despawn 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（晚最多一 tick、golden 如 combat-rejoin 可能差一 tick 需重設基準）記為 LIM-5，產品線在遷移批確認；entity-model §5.2 改寫排進第一個文件批。 |
+| `v8-arch-kernel-time-sources` | 2026-11-11（側邊會話轉述，spec K.3 第 11 項，B6 結案）。(c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入（HostClockSample、隨輸入進 ring 的到達時刻）；(c) System 自己讀時鐘仍禁止。mechanism §3.3 Executor 列已改（含圖）；determinism.md DI 4 不動；規則寫進 target/determinism.md。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定
