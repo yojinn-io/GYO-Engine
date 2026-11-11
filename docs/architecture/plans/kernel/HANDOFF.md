@@ -14,17 +14,25 @@
 | 代號 | 內容 |
 |---|---|
 | `v8-arch-kernel-foundation-first` | 2026-11-10。基盤的協定不等壓力、先設計；功能層才等壓力。寫進 AGENTS §2 的修訂待風紀委員處理（使用者同意後）。 |
-| `v8-arch-kernel-bring-into-gyo` | 2026-11-11。要的是 Bevy 的抽象能力（World／System Contract／Scheduler／Executor）帶入現有 GYO，不是 GYO2；架構改造完成前功能線停。**停的定義未定**（已開工的做到下一個關卡停，或立即停）。 |
+| `v8-arch-kernel-bring-into-gyo` | 2026-11-11。要的是 Bevy 的抽象能力（World／System Contract／Scheduler／Executor）帶入現有 GYO，不是 GYO2；架構改造完成前功能線停。 |
+| `v8-arch-kernel-pause-mode` | 2026-11-11。停功能線的定義＝(a)：已開工的卡做到下一個關卡停、更新 HANDOFF；不開新功能卡。事故修正是否繼續仍未定。 |
+| `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）與 spike（`v8-arch-kernel-spike`）同時開；審查（`v8-arch-kernel-audit`）等規格。模型／檔位見 README。 |
 
-## 未定（使用者說「先不定案」）
+## 未定
 
-- 停功能線的定義；進行中的卡（產品線 pa-broadphase／pm-detect、voxel 編輯器 window 批、framework 檔案對話框交接）與開放 PR（#174、#175、#176、#177）的處置。
-- AGENTS §2「不預測壓力」與 §3 Delta 的條文修訂（風紀委員）。
+- 改造期間事故修正（lag win1）是否繼續。
+- AGENTS §2／§3 條文：風紀委員已在分支 `claude/judgment-agents-foundation-pressure` 起草（使用者 11-10 直接指示）；架構師 11-11 轉交的三點追加（實作薄、先一個 host 量成本；§3 七項計畫層寫一次；跨產品能力當 Feature）待使用者同意。
 - 改造期間事故修正（lag win1）是否繼續。
 - 網路：帳本放 Match 還是 Gateway；兩通道分流採不採。
 - 決定性 DET-0～DET-3（determinism.md §0）。
-- 判斷所需三樣輸入（mechanism §1）的開工與模型／檔位：規格（ultracode：提案 Opus、統合 Fable、對抗 Opus）、spike（xhigh 局部）、審查（Opus／high）。
+
+## 現況（續）
+
+- 2026-11-11 PR #175、#177、#176、#174 依序合併（#176 合併前加註：ECS 列待 mechanism 規格後重判、D1～D4／D7／D8 延後；determinism.md E4 由 mechanism 吸收、DET-3 時機改 (c) 區遷移前、§4.7 指向 World）。
+- 2026-11-11 使用者：「後續我們直接先處理架構問題」→ 定停法 (a)、規格與 spike 同時開。本分支 `claude/arch-kernel-mechanism` 承接規格的產出；spike 在獨立卡的工作樹。
 
 ## 下一步
 
-使用者讀 mechanism.zh-Hant.md 與三張圖，指出理解偏差；定上面「未定」的項目；說「開始」才開卡。
+- `v8-arch-kernel-spec`（ultracode，本會話背景）→ 產出 `spec.zh-Hant.md`，停下交使用者。
+- `v8-arch-kernel-spike`（卡）→ 事前宣告見 README；結果回報本線。
+- 兩者齊 → `v8-arch-kernel-audit`（逐模組留／包／重寫）→ 中間層成本 → 改造批次計畫（§3 Delta 計畫層寫一次）。
