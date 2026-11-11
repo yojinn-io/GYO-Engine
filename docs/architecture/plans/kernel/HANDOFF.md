@@ -69,6 +69,8 @@
 - 2026-11-11 engine 份依對齊後的判法重核（commit e185c864）：只動一列，input Host→包（先拆：SDL 全域查詢與 platform 指標移到 Host 的 pump，取樣結果進 boundary Resource）；render、text 改寫為「包（先收攏）」；os／time／threads／platform／FixedTickRuntime 仍 Host（依 spec §L「只持 OS 資源、只由 Host 使用」與 G-6）。人工補看三類：engine 無 ImGui；pimpl 跨幀裸指標 26 筆，指向他元件的 4 處（Renderer.cpp:134-135、SdlGpuRenderDevice.cpp:117、UiRenderer.cpp:147-149、ModelRenderer.cpp:22）；跨幀捕獲 this 的只在產品 PvpApplication.cpp:1389。新分佈：留 8／包 6／Host 4／服務 2／重寫 1／不適用 1。
 - 主會話待決／待交使用者（合併報告時列出）：(1) framework DI 2／DI 6 的 Delta（WindowShell／ImGuiShell 重寫骨架；K.3 第 7 項未列）；(2) Editor 預覽 readback 回 ImGui 與 H-6 的衝突，候選「ImGui System 全在文件 World、影像經 Host 交換點、預覽晚一幀」（交工具線與使用者）；(3) IRuntimePort 刪除；(4) AssetManager 屬 Frame 或 Render World。
 
+- 2026-11-11 第三份（product-thirdparty，commit d8b45012）回來：件数一致（14＝14＋0；另未審 3、事實列 5）；子列重寫 6；第三方無改判、§2.1 收窄四處；(a) Body 拆欄後 Life 仍兩寫者且同 tick 讀後寫（無結論，交遷移批）；(c) G.4 第 1 條應改 HostClockSample、補第 4（RequestMovementResync）、第 5（IPC 讀權威）；規格衝突：S-8／Z4 使 (c) 不能輸出診斷。主會話合併成 audit.zh-Hant.md（§1 判定、§3 跨部件、§4.5 區表回對：漏 3 標錯候選 1、§6 規格修正七項、§7 判定 1／2／4／5 成立、3 進行中）；對抗複核 Fable／high 抽 5 模組進行中。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
