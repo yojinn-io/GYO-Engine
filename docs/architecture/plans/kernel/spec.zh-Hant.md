@@ -1103,7 +1103,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 ### K.3 待使用者決定（規格內產生）
 
-1. ~~Entity 不帶 generation~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：鍵格式＝u64，低 32 index、高 32 generation（Bevy 格式），Kernel 不看兩段意義、疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0，值與今天逐位元相同；stale 句柄偵測能力取決於策略。A.1、A.8 取捨 1、K.1 第 3／4 條已改；K.2 第 2 條取消。部件文件：`docs/architecture-next/kernel/world.zh-Hant.md`。
+1. ~~Entity 不帶 generation~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：鍵格式＝u64，低 32 index、高 32 generation（Bevy 格式），Kernel 不看兩段意義、疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0，值與今天逐位元相同；stale 句柄偵測能力取決於策略。A.1、A.8 取捨 1、K.1 第 3／4 條已改；K.2 第 2 條取消。部件文件：`docs/architecture/target/world.zh-Hant.md`。
 2. ~~change stamp~~ **已決定（同上）**：接受規格——依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 `tickStamps` 換算；(c) 區禁用變更過濾（G-3）；DI-K5（blueprint）與 networking §1 第 7 條各改一句（已改）。溢出無實際可能（u64）。
 3. 寫入政策預設 Exclusive（A.8 取捨 3）。
 4. Despawn 不算獨占寫者（B.9 取捨 1）。

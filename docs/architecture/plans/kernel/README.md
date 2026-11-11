@@ -20,7 +20,7 @@
 - [networking.zh-Hant.md](networking.zh-Hant.md)：網路側的設計稿——網路要成為機制上的 System，機制必須提供的八條；網路層自己的設計圖 N1–N12；對 GYO 現況的對照。
 - [blueprint.zh-Hant.md](blueprint.zh-Hant.md)：**輸入**（2026-11-11 降級）——Kernel 八條不變量、各層補充的不變量（R／A／P／C／O／N）、GYO 刻意的偏離（候選 DI-K1～K7）、反例清單、現況對照、Replacement Criteria。它沒有契約分類與 Executor 的分離，遷移順序一節假設了改造路線；以 mechanism 為準。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
-- `docs/architecture-next/`（名稱暫定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../../architecture-next/kernel/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
+- `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
 
 ## 批次（2026-11-11 核准）
 

@@ -1,6 +1,8 @@
-# World（目標架構，尚未實作）
+# World
 
-更新：2026-11-11。Owner：架構（架構師會話）。**狀態：目標架構，尚未實作。** 規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §A（World）、§F（延後佇列、hook、事件）；概念基準：`mechanism.zh-Hant.md` §2、§3.3。
+> Status: target, not implemented
+
+更新：2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §A（World）、§F（延後佇列、hook、事件）；概念基準：`mechanism.zh-Hant.md` §2、§3.3。
 本文件只寫**使用者已裁決**的部分與它們的後果；規格中仍標「待使用者」的條目不在這裡。
 
 ## 1. 實體的鍵（使用者 2026-11-11 決定，spec K.3 第 1 項）
