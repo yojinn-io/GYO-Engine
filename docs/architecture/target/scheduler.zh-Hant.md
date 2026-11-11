@@ -24,5 +24,6 @@
 
 ### Replacement Criteria（候選）
 
+- LIM-2：v1 只有 Serial，任何 Parallel 宣告是啟動錯誤；解除條件＝量到 tick 超預算且有逐位元等價的守衛（spec J-27）（詳細在 `limits.zh-Hant.md`）。
 - LIM-1：(b) 讀 (c) 要顯式順序；為消除 D-E8 加的順序宣告一半以上與資料流無關 → 區劃錯了，重審區劃（詳細在 `limits.zh-Hant.md`）。
 - 為表達需求必須引入依賴求解以外的排序（優先權數字、依資料值決定順序、執行期改 Plan）→ 第二種排序機制，停下（spec K.2 第 4 條）。
