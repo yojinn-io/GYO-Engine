@@ -39,3 +39,5 @@
 - 2026-11-10 23:30：side chat（使用者追問「ECS 為何不用開源」）轉來上游問題：GYO 的決定性要哪一級（同程序可重現／同平台／跨平台逐位元），各模組為它付了什麼成本；使用者：「這個問題得需要弄清楚，把結論返回去。」照建議在 evaluation §4 加 **D0**（含各模組為跨平台逐位元付的成本表），排在 D1、D2 之前；轉給架構師開上段的架構卡。本文的 D1、D2 判定在 D0 定案後要重看一次。
 - 2026-11-11：決定性卡（`v8-arch-determinism-levels`，PR #177）回饋四件：L1 三平台非四平台（已改 1.2、D0 表、dev_log）；ufbx 執行期轉換進 `AnimationContentDigest` 的跨平台比對、且在旗標前建置（D0 表加一列、§2.5 第 1 條標為「已發生」）；Collision `sweep_fraction` 跨平台 1～4 ULP 差、原因未明（1.2 現況補一句）；D1、D2 掛在 DET-1（§4 兩列補註）。判定未改。
 - 2026-11-11：使用者「先停下，和架構師商量好了再說」。本會話停止，D0～D9 與 DET-0～3 都等使用者；PR #176 維持開啟（不合併、不再改）。
+
+- 2026-11-11（架構師，合併前加註）：使用者定方向 `v8-arch-kernel-bring-into-gyo`（mechanism.zh-Hant.md，PR #175 已合併）。ECS 列「自製（維持）」在新前提下不成立，標為待重判（Scheduler 自寫已定；World 儲存層借 EnTT 或自寫待規格與 spike）；D1～D4、D7、D8 標延後。同一提交順帶修 determinism.md 三處（E4 改為「由 mechanism §3.1 吸收」、DET-3 的 E1／E3 時機改為「(c) 區 System 遷移前」、§4.7 EntityStore 指向 World 契約）。

@@ -3,6 +3,8 @@
 更新：2026-11-10。Owner：架構（Engine 契約的判斷）。卡片由架構師會話（「[Job][架構師]例行架構掃描」）開出。
 **狀態：評估完成、對抗檢查（Opus／high）26 條全部處置（判定 1 處改：Navigation「採用」→「第一候選」），停下等使用者決定（evaluation §4 的 D0～D9；**D0「決定性要哪一級、各模組付了什麼」是上游的架構卡，排在 D1、D2 之前**）。只寫文件：不改程式、不加依賴、不改契約。**
 
+2026-11-11（架構師）：使用者定方向「Bevy 的抽象能力帶入現有 GYO、改造完成前功能線停」（`plans/kernel/mechanism.zh-Hant.md`）。影響：ECS 列待重判（evaluation §1.1 末）；D1～D4、D7、D8 延後；其餘葉子層判定不受影響（改造不動葉子）。
+
 ## 代號對照
 
 | 代號 | 白話 |
@@ -26,7 +28,7 @@
 
 | # | 子系統 | GYO 現況 | 需要它的 Feature | 判定 | 一句話理由 |
 |---|---|---|---|---|---|
-| 1 | ECS | `GYO::EntityStore`（容器版） | AI 小怪、場景線（3b `DeferredChanges`） | **自製（維持）** | 已有 Bevy／EnTT 參照調查與 DI／RC；兩個候選都不保證 id 升冪迭代，為決定性要再排序 |
+| 1 | ECS | `GYO::EntityStore`（容器版） | AI 小怪、場景線（3b `DeferredChanges`） | **自製（維持）** | 已有 Bevy／EnTT 參照調查與 DI／RC；兩個候選都不保證 id 升冪迭代，為決定性要再排序 **2026-11-11：前提變更（mechanism），待規格後重判；Scheduler 自寫已定** |
 | 2 | Physics | `GYO::Collision`（膠囊／盒子精確查詢＋靜態格） | 場景線的門（動態盒）、技能投射物；**沒有**剛體玩法 | **並存：權威留自製；Jolt 兩條路徑——(a) Client 端視覺物理 Feature 出現時採（不進 digest）；(b) 權威剛體玩法是基盤決定（D1）** | 現在沒有需要剛體的 Feature；Jolt 進權威要重寫 broadphase 契約、狀態權威、建置條件（§2.5），且每個 minor 改模擬結果 |
 | 3 | 2D Physics | 無 | 無 | **不需要（現在）** | 沒有 2D 產品 |
 | 4 | Navigation | 無 | AI 小怪與 Boss（已點名，未排） | **第一候選（Recast 離線建圖＋Detour 查詢）；AI 批事前宣告時由使用者定（D2、D3）** | 體素地圖 → navmesh 由工具烘焙、GYO 索引帶 sha256；Detour 單執行緒、查詢物件各持狀態、節點池 65,535、無官方決定性保證；entity-requirements 4-6 只要求 Match 自己一致 |

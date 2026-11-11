@@ -73,6 +73,8 @@
 
 **讀了什麼**：entity-store.md、plans/entity-store/survey.zh-Hant.md §4–§5、entity-requirements.md、recon-01 §1–§2。
 
+**2026-11-11 前提變更（架構師）**：使用者定了方向——把 Bevy 的抽象能力（World／System Contract／Scheduler／Executor）帶入現有 GYO（`docs/architecture/plans/kernel/mechanism.zh-Hant.md`，PR #175 已合併），架構改造完成前功能線停。本列的比較對象是「EntityStore 容器 對 EnTT／Flecs 容器」，判準是順序不變式與 id 外部配發；新前提下 EntityStore 本身會被 World 取代，所以「自製（維持）」不再是答案，**待 mechanism 的正式規格與 spike 之後重判**。本列查到的事實仍成立並已決定一半：Flecs 的 pipeline 與 Scheduler 搶同一個位置且順序不保證 → **Scheduler 自寫**；EnTT 可當資料層但不提供順序不變式。重判只剩一題：World 的儲存層借 EnTT 還是自寫，判準是 mechanism §2～§3 的整組契約（id 依登記順序、疊代依 index、簽名推存取、獨占寫入檢查、延後佇列、(c)／(b) 策略）。
+
 ### 1.2 Physics：Jolt、Bullet vs `GYO::Collision`（基盤：權威判定的一部分）
 
 **GYO 現況與為什麼自製**
@@ -329,6 +331,8 @@
 
 結論：使用者願景稿 §12 的「是否需要統一 Scheduler」——沒有一個候選方案能提供 Match 需要的「決定性的 Stage 序列」；Flecs 最像 Kernel，卻明寫順序不保證。Kernel 若要做，是 GYO 自己的協定（架構師 2026-11-10 的看法），候選方案都是它下面的能力。
 
+2026-11-11 補：本節的「Kernel」已由 `plans/kernel/mechanism.zh-Hant.md` 取代 blueprint 定義；表中「自帶迴圈／執行緒／全域」正是 mechanism §2 葉子模組「留」的三個否定條件的反面——有迴圈或全域者只能包成 System（執行緒親和與外部副作用走顯式契約），不能當葉子。
+
 ### 2.2 授權
 
 | 授權 | 候選 | 對 GYO（靜態連結進產品）的影響 |
@@ -375,17 +379,19 @@
 
 ## 4. 要使用者決定的事
 
+2026-11-11：使用者定方向「Bevy 抽象能力帶入 GYO，改造完成前功能線停」。屬功能線的決定（D1～D4、D7、D8）**延後**，不是作廢；D5、D9 與改造無關可照常；D0 由 `determinism.md`（PR #177 已合併）接手，DET-0～DET-3 待使用者；D6 已過。
+
 | # | 事項 | 影響的列 | 建議 | 不照建議的代價 |
 |---|---|---|---|---|
 | **D0** | **GYO 的決定性要哪一級，各模組為它付了什麼**（使用者 2026-11-10 經 side chat 提出，比本文更上游；**已成架構卡 `v8-arch-determinism-levels`，PR #177，`docs/architecture/determinism.md`，等使用者定 DET-0～DET-3**；它的結論是「邊界」而不是一級：預測核心、host 判斷、契約資料、join 時比對的內容身分要 (c)；被判定不被預測的中間地帶（有動畫的命中、未來 AI）由使用者選 (b) 或 (c)（DET-1）；呈現層 (b)）。三級：(a) 同一程序內可重現（事故回放、L2 分析）；(b) 同一份二進位在同一平台可重現；(c) 跨平台逐位元。現況是**混合**：authority_digest 只對零角度子集要求 (c)，其餘 (b)；動畫取樣 (b)；Collision、Audio、VoxelMesh 的契約按 (c) 設計。各模組為 (c) 付的成本見下表 | 1.2、1.4、1.8、1.11、Math／Collision／Audio 的 DI 用詞 | **這是一張架構卡（上段），排在 D1、D2 之前**：答案若是「只要 (b)」，Collision 的雙精度單次捨入、Audio 的整數混音、Math 的 libm 保留條款都可重新評估，Jolt 與 Detour 的決定性限制也會變輕；若維持 (c)，digest 的強制範圍要從「零角度子集」明寫成契約。EntityStore 的 id 升冪不在這張表上——它守的是「規則結果不依賴歷史」（同 Tick 搶同一件事由 id 定），屬於 (a)，和浮點無關，成本 155 行 | 本文 D1、D2 的判定會在這一題定案後被推翻一次 |
-| D1 | 路線圖上有沒有**權威的剛體玩法**（可推的道具、載具、會影響判定的物理）？**依 D0 卡：Collision 留在預測核心、(c) 不放；Jolt 進權威仍要 `CROSS_PLATFORM_DETERMINISTIC`＋`USE_FMADD=OFF`＋跨平台 golden（determinism.md §6 (i)(ii)）** | 1.2 | 現在的 Feature 清單沒有 → **維持 Collision；Jolt 留給 Client 端視覺物理**。有的話，照「基盤先定」排一批 Jolt 基盤評估（含 digest 範圍的重新宣告與 CI、§2.5 的建置條件），量級 4～8 週 | 若之後才加剛體玩法，Collision 的 RC 1／2 會在 Feature 中途觸發，付的就是使用者說的「事後補」 |
-| D2 | entity-requirements 4-6「AI 只要 Match 自己一致、不要求兩台 Match 一致」是否維持？**這題現在等於 D0 卡的 DET-1**：中間地帶（未來 AI）選 (c) → AI 決策也要 (c)，Detour 的 libm 呼叫不能進判定路徑（換掉 `dtMath*` 或走格子 A*）；選 (b) → 本列判定維持 | 1.4 | 維持 → Recast／Detour 可作第一候選（AI 批事前宣告時定） | 若改成要一致，導航要換掉 libm 呼叫並補 hash CI，或改格子 A* |
-| D3 | AI 批開工前，要不要先做一次「Recast 對體素地圖建圖」的試驗？量：建圖時間、tile 數、PolyRef 位元、最長路徑的節點數（對 65,535）、兩台 host 烘焙的 blob 是否逐位元相同 | 1.4 | 要（量級 1～2 天），讓 AI 批的事前宣告有數字。**同一份宣告也要寫 Match 每 Tick 取樣 25 個骨架（4 人＋20 AI＋Boss）的預算**（1.11、A11） | 不做則 AI 批的估時只能靠推 |
-| D4 | 技能的特效是否要美術用編輯器製作？ | 1.12 | 可等技能批；答案決定 (a) 最小自製粒子或 (b) Effekseer | 若要編輯器級，Effekseer 的 SDL_GPU 後端＋烘焙時 MaterialCompiler 是 5～10 週 |
+| D1 | **延後（功能線停，2026-11-11）** 路線圖上有沒有**權威的剛體玩法**（可推的道具、載具、會影響判定的物理）？**依 D0 卡：Collision 留在預測核心、(c) 不放；Jolt 進權威仍要 `CROSS_PLATFORM_DETERMINISTIC`＋`USE_FMADD=OFF`＋跨平台 golden（determinism.md §6 (i)(ii)）** | 1.2 | 現在的 Feature 清單沒有 → **維持 Collision；Jolt 留給 Client 端視覺物理**。有的話，照「基盤先定」排一批 Jolt 基盤評估（含 digest 範圍的重新宣告與 CI、§2.5 的建置條件），量級 4～8 週 | 若之後才加剛體玩法，Collision 的 RC 1／2 會在 Feature 中途觸發，付的就是使用者說的「事後補」 |
+| D2 | **延後（功能線停，2026-11-11）** entity-requirements 4-6「AI 只要 Match 自己一致、不要求兩台 Match 一致」是否維持？**這題現在等於 D0 卡的 DET-1**：中間地帶（未來 AI）選 (c) → AI 決策也要 (c)，Detour 的 libm 呼叫不能進判定路徑（換掉 `dtMath*` 或走格子 A*）；選 (b) → 本列判定維持 | 1.4 | 維持 → Recast／Detour 可作第一候選（AI 批事前宣告時定） | 若改成要一致，導航要換掉 libm 呼叫並補 hash CI，或改格子 A* |
+| D3 | **延後（功能線停，2026-11-11）** AI 批開工前，要不要先做一次「Recast 對體素地圖建圖」的試驗？量：建圖時間、tile 數、PolyRef 位元、最長路徑的節點數（對 65,535）、兩台 host 烘焙的 blob 是否逐位元相同 | 1.4 | 要（量級 1～2 天），讓 AI 批的事前宣告有數字。**同一份宣告也要寫 Match 每 Tick 取樣 25 個骨架（4 人＋20 AI＋Boss）的預算**（1.11、A11） | 不做則 AI 批的估時只能靠推 |
+| D4 | **延後（功能線停，2026-11-11）** 技能的特效是否要美術用編輯器製作？ | 1.12 | 可等技能批；答案決定 (a) 最小自製粒子或 (b) Effekseer | 若要編輯器級，Effekseer 的 SDL_GPU 後端＋烘焙時 MaterialCompiler 是 5～10 週 |
 | D5 | 是否請圖書管理員把 Render 後端的 Replacement Criteria 補進 rendering_architecture（GPU 查詢、async compute、bindless、render 執行緒、Metal 阻塞超預算、**depth 格式寫死 D32_FLOAT 在某台機器不支援**）？ | 1.10 | 要（文件工作） | 沒有 RC 就沒有停下來的條件 |
 | D6 | 對抗檢查者用了 Opus／high（不是卡片寫的 Fable／high；原因見 HANDOFF）。接受，或再加一輪 Fable？ | 全部 | 接受；Fable 已是評估者，再用 Fable 檢查是同模型 | — |
-| D7 | pv10 的背包（格子 10 × 6、40 件、拖放）要走 `GYO::Ui` 契約的下一版（v2 元素集），還是當成 GYO::Ui 的 RC 觸發（「修還是換 RmlUi」）？ | 1.5 | 走 v2 契約（背包是格子與拖放，不是 rich text／腳本；RC 的條件沒到）；在 pv10 設計前定，因為它影響 ui_editor 的下一批 | 到 pv10 中途才發現 Ui 的元素集不夠，就是 Editor／Runtime 契約在 Feature 中途變 |
-| D8 | pv10 的 wire 要不要**預留** codec／dictionary 版本欄（為之後的 zstd dictionary 壓縮留位置）？ | 1.14 | 預留一個 enum 欄（成本是幾個 byte 與一條契約規則）；不實作壓縮 | 不預留則壓縮進來時是另一次 proto 變更（protocol-v8 §2a 的規則） |
+| D7 | **延後（功能線停，2026-11-11）** pv10 的背包（格子 10 × 6、40 件、拖放）要走 `GYO::Ui` 契約的下一版（v2 元素集），還是當成 GYO::Ui 的 RC 觸發（「修還是換 RmlUi」）？ | 1.5 | 走 v2 契約（背包是格子與拖放，不是 rich text／腳本；RC 的條件沒到）；在 pv10 設計前定，因為它影響 ui_editor 的下一批 | 到 pv10 中途才發現 Ui 的元素集不夠，就是 Editor／Runtime 契約在 Feature 中途變 |
+| D8 | **延後（功能線停，2026-11-11）** pv10 的 wire 要不要**預留** codec／dictionary 版本欄（為之後的 zstd dictionary 壓縮留位置）？ | 1.14 | 預留一個 enum 欄（成本是幾個 byte 與一條契約規則）；不實作壓縮 | 不預留則壓縮進來時是另一次 proto 變更（protocol-v8 §2a 的規則） |
 | D9 | 「GPL／LGPL 會卡」要不要寫成 AGENTS 或 architecture.md 的書面約束？repo 沒有 LICENSE／NOTICE，而現有依賴（FreeType FTL 致謝、protobuf BSD-3、nlohmann MIT）已有附條款的義務——要不要開一張獨立的卡處理第三方授權通知？ | §2.2 | 兩件都要：約束寫下、通知另開卡（不在本卡） | 下一個評估者只能把 LGPL 當成評估者的判斷；出貨包缺通知 |
 
 **D0 的成本表**（各模組為「跨平台逐位元」(c) 付了什麼；若決定只要 (b)，這些是可重新評估的項目）：
