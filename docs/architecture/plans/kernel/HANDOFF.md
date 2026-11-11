@@ -21,6 +21,9 @@
 | `v8-arch-kernel-spike-verdict` | 2026-11-11（側邊會話轉述）。spike 判定 2 照事前宣告原文記「成立」；實作者多發現的攔不到形狀（寫了又寫回、經存下參考只讀、堆積內容、全域狀態、host 碰過同欄、其他執行緒）全部記為**範囲の限界**（spike-report 專節 L1～L8），後續批次的事前宣告必須寫上，直到解除。 |
 | `v8-arch-kernel-limits-accept` | 2026-11-11（側邊會話轉述）。上限的處置：接受；World 以外的資料靠 code review（mechanism §3.5 三層）；不改計畫前提。-audit 的第二問改為兩個可檢查的問題：有沒有跨 tick 的指標或參考、有沒有全域可變狀態。 |
 | `v8-arch-kernel-spike-pageguard` | 2026-11-11（側邊會話轉述）。新增批 `-spike-pageguard`：debug 版頁保護（mprotect／VirtualProtect）；形狀已定：只對寫設保護、讀放行；只保護標「獨占寫入」的欄；只在 (c) 區 System 執行時開；只在 debug。排在 -spec 之後（欄與 System 的標記要照規格的契約欄位寫）；開工前事前宣告。 |
+| `v8-arch-kernel-entity-key` | 2026-11-11（側邊會話轉述，spec K.3 第 1 項）。EntityId 格式＝u64，低 32 index、高 32 generation（Bevy 格式）；Kernel 不看兩段意義，疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0（值與今天逐位元相同，wire／digest 不改）；stale 句柄偵測能力取決於策略。spec A.1、A.8、K.1 第 3／4 條已改，K.2 第 2 條取消；部件文件 `docs/architecture-next/kernel/world.zh-Hant.md`。 |
+| `v8-arch-kernel-change-stamp` | 2026-11-11（同上，K.3 第 2 項）。接受規格：依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 tickStamps 換算；(c) 區禁變更過濾；blueprint DI-K5 與 networking §1 第 7 條各改一句。 |
+| `v8-arch-docs-next-folder` | 2026-11-11（同上）。新版架構文件與舊版分開、至少分資料夾、不混放：現況留 `docs/architecture/`，目標架構放 `docs/architecture-next/`（名稱暫定，圖書管理員定最終）；每份標「目標架構，尚未實作」或「已實作於哪批」；部件遷移完成後搬回、舊的刪或標廢止，不並存；計畫／HANDOFF／dev_log 留 plans/kernel。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定

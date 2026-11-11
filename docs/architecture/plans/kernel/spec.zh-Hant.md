@@ -71,12 +71,13 @@ World
 ```
 
 **EntityId**
-- `std::uint64_t`，與 `Engine::EntityStore::EntityId` 同型別（`EntityId.hpp:11`）。
-- 在一個 World 的生命期內代表同一個實體，**不重用**。World 不保留任何值（「0 表示無」是產品規則 E-1，Kernel 不採）。
+- `std::uint64_t`，與 `Engine::EntityStore::EntityId` 同型別（`EntityId.hpp:11`）。**封裝格式（使用者 2026-11-11 決定，K.3 第 1 項）**：低 32 位 index、高 32 位 generation，照 Bevy 的格式；**Kernel 不看兩段的意義**，疊代順序＝整個 64 位元值的數值升冪（W-2）。
+- **配發策略是產品的 Resource**（`EntityAllotter` 的實作由產品給）。GYO PvP 選「單調不重用、generation 恆 0」：產生的值與今天的 `EntityId` 逐位元相同，wire 與 digest 不改。別的產品可選「槽回收加版本號」，跨機器一致性的代價自付（兩端配發歷史不同時，數值順序不再是契約鍵順序，需要自己排序）。
+- 後果（寫明）：**stale 句柄的偵測能力取決於配發策略**。Kernel 的 debug 核對只保證「鍵還活著」（W-4 的 epoch 與 run id）；generation 恆 0 的策略下，一個被刪除的 id 永不再出現，所以不需要 generation 來偵測；槽回收策略下，generation 才承擔偵測。
+- 在一個 World 的生命期內，同一個鍵值代表同一個實體。World 不保留任何值（「0 表示無」是產品規則 E-1，Kernel 不採）。
 - **World 的生命期＝一個「世代」**（修訂：S4）。entity-model E-3 的 Match 段「Reset 歸回 First」（`PvpMatch::Reset()`；IpcHost 每條新連線與關閉都 `RequestReset`，entity-model §5 第 83 行）在機制裡是 **Host 銷毀 World 再以同一份凍結的 Registry 重建**（Registry 不含 World 狀態，可重用；Plan 不重建）。World 內沒有「Reset」操作；計數器跨 Reset 保留或在 World 內歸零都不允許（W-9）。這是 Host 的職責（H.7）。
-- **不帶 generation**。理由：entity-store Design Invariant 1 規定 store 無 generation bits、不配發；entity-model E-3 規定 Match 段單調不回收、「舊參照只會查不到」。不重用就不需要 generation 來偵測 stale 句柄。
-- 產品的 `EntityId`（E-1～E-3：Gateway 配玩家段、PvpMatch 配 Match 段、Client 不配發）**就是** World 的鍵，不另設一層對照表。id 的數值與順序因此能直接進 digest（E-9）、上 wire（N1）。
-- 見 A.6「取捨」第 1 條：這一點與任務敘述「Entity（index＋generation）」不同，**要使用者決定**。
+- 產品的 `EntityId`（E-1～E-3：Gateway 配玩家段、PvpMatch 配 Match 段、Client 不配發）**就是** World 的鍵，不另設一層對照表。id 的數值與順序因此能直接進 digest（E-9）、上 wire（N1）。entity-store DI 1「store 無 generation bits、不配發」對 World 的儲存仍成立：World 只存 u64、不解讀位元、不配發。
+- 原稿「不帶 generation」與任務敘述「index＋generation」的分歧已由使用者裁決為上述「格式是 Kernel 的、策略是產品的」（A.8 取捨 1）。
 
 **配發**
 - World 本身不配發 id。配發器是一個 Resource（說明名 `EntityAllotter`）：一段 `[first, last]`、單調、用盡時回報錯誤、不回繞。段界由產品 plugin 登記時給（對應 E-2）。
@@ -187,7 +188,7 @@ ownerPlugin
 
 ### A.8 取捨
 
-1. **Entity 不帶 generation**（採提案 1；提案 2、3 與任務敘述採 index＋generation、World 配發、產品 `EntityId` 另成元件）。理由：(1) 提案 2、3 的模型讓疊代順序依配發歷史而定，Match 與 Client 的 World 歷史不同，於是「結果依跨實體順序而定的 (c) System 必須依契約鍵排序」（提案 2 A.3 第 4 點）變成每個 System 的負擔，而 mechanism §4 第 3 點要 Match 與 Client 共用同一份 FixedUpdate System；提案 1 的模型下順序天生是契約鍵的順序。(2) 提案 2、3 要同時改 entity-store DI 1、entity-model E-3、E-5、E-6、E-9（digest 編碼要先依 `EntityId` 元件排序），是四處 Architecture Delta；提案 1 只延伸 DI 4（F.2）。(3) generation 的用途是偵測 stale 句柄；E-3 的「不重用」讓它沒有用途，W-9 守住不重用。代價：id 不回收（entity-model RC-2 觸發時再加 generation，K.2 第 2 條）。**這與任務敘述不同，要使用者決定**；若使用者選 index＋generation，F.2 的套用順序改為「Plan 位置＋FIFO」（提案 2 F.1），A.3 第 4 點的跨 World 順序承諾撤回，L 節 entity_store 與 entity-model 列改寫。
+1. **Entity 鍵：格式封裝 index＋generation，策略由產品定**（使用者 2026-11-11 決定，取代原稿「不帶 generation」）。原稿採提案 1（u64、不重用、無 generation）；提案 2、3 與任務敘述採 index＋generation、World 配發、產品 `EntityId` 另成元件。裁決：鍵格式是 Kernel 的（u64，低 32 index、高 32 generation，數值升冪疊代），配發策略是產品的 Resource；PvP 選單調不重用、generation 恆 0，數值與今天逐位元相同。Engine 保通用、PvP 保決定性。下列原稿理由仍是 PvP 選這個策略的理由：理由：(1) 提案 2、3 的模型讓疊代順序依配發歷史而定，Match 與 Client 的 World 歷史不同，於是「結果依跨實體順序而定的 (c) System 必須依契約鍵排序」（提案 2 A.3 第 4 點）變成每個 System 的負擔，而 mechanism §4 第 3 點要 Match 與 Client 共用同一份 FixedUpdate System；提案 1 的模型下順序天生是契約鍵的順序。(2) 提案 2、3 要同時改 entity-store DI 1、entity-model E-3、E-5、E-6、E-9（digest 編碼要先依 `EntityId` 元件排序），是四處 Architecture Delta；提案 1 只延伸 DI 4（F.2）。(3) generation 的用途是偵測 stale 句柄；E-3 的「不重用」讓它沒有用途，W-9 守住不重用。代價：PvP 的 id 不回收（格式已容得下回收，所以不再是 Replacement Criteria；K.2 第 2 條取消）。F.2 的「階段＋id」套用順序在 PvP 策略下成立；選槽回收策略的產品，跨 World 的順序承諾（A.3 第 4 點）不再自動成立，由該產品自行排序。
 2. **change stamp 依 Plan 位置取值，不等於遊戲 tick**（採提案 1、2；提案 3 以 World 的 clockTick 當 change tick；DI-K5 與 networking §1 第 7 條也寫「以遊戲 tick 標記」）。理由：只用 tick 時，同一 tick 內排在讀者之後的寫入會被讀者永久漏掉（讀者下次執行 last_run = T，寫入的 tick 也是 T，`T > T` 不成立）；用 `>=` 則重複讀到。Bevy 用執行計數不是任性（bevy_core:50）。遊戲 tick 的視角由 `tickStamps` 推出。配套：(c) 區禁止變更過濾（G-6）。**要使用者確認**，因為它修改 DI-K5 候選的一句。
 3. **寫入政策預設 Exclusive，Shared 要明寫**（採提案 3；提案 1 無預設必須明寫；提案 2 預設 Shared）。理由：mechanism §3.1「進 authority digest 的欄預設獨占」的意圖是 AGENTS §3 的狀態權威；Kernel 不知道 digest，所以把預設放在全部元件上才能變成啟動檢查，又不要 Kernel 認識 digest。另加提案 1 的 S-9：產品 plugin 宣告「這些元件進 digest」，其中有 Shared 就是啟動錯誤。**要使用者確認**（提案 2 列為待決）。
 4. **一個 World 一條擁有執行緒**（採提案 3 的 W-6；提案 1 把「Client 的 FixedUpdate 與 FrameUpdate 是一個 World 還是兩個」留給 -audit）。理由：不這樣就得在 World 外上鎖，等於回到今天 `MatchRuntimeHost::Step` 整段持 `mutex_`（`MatchRuntimeHost.cpp:371`）；兩個時鐘在不同執行緒就是兩個 World（H-2）。
@@ -1069,8 +1070,8 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 1. **描述從簽名推出，一份。** System 的資料存取集合等於其參數型別的 Contribution 聯集（含 bundle 的延後寫、`SetRead` 在 finish 展開的讀；`ExclusiveWorld` 的 Contribution 是「讀全部、寫 zone=B 且 Shared 的全部」）；登記 API 不接受手寫的第二份存取宣告；System 是無狀態的可呼叫物，參數只能是 `ParamTraits` 特化過的型別，句柄不可複製、不可移動。守衛：J-10～J-12。（DI-K2 的推導半；S-1～S-4、S-13）
 2. **經 World 的繞路在 debug 被攔；untyped 路徑常開檢查。** System 自己的執行緒上經 World API 存取未宣告的 `(id, mode)`，debug 在存取當下斷言；未宣告寫入的欄在 System 邊界有淨變化，debug 斷言；release 兩者都不攔，寫明。untyped `Commands`、`Despawn`、`ExclusiveWorld` 對 zone=C 或 Exclusive 資料的寫入，在所有組態斷言。守衛：J-5、J-6、J-32b、J-45。（W-5、W-6、F-10、Z5、S-13；修訂：B4／S6／S8）
-3. **順序只來自 id 與 Plan。** 每個欄依 EntityId 嚴格升冪，查詢依升冪或交集的升冪產出；World、Scheduler、Executor 不用雜湊順序、指標比較、執行緒完成順序決定任何順序。守衛：J-1、J-2、J-9。（DI-K3 的一部分；W-1、W-2、W-10）
-4. **id 由登記順序或配發器決定，凍結後不變。** ComponentId、ResourceId、EventTypeId、registrationSeq＝登記順序；TypeKey 只用於行程內查表；執行期 id 不上 wire、不進 digest；World 不配發實體 id，配發器是 Resource，單調、不重用。守衛：J-8、J-18、J-19；掃描。（DI-K3；R-1～R-3、W-9）
+3. **順序只來自 id 與 Plan。** 每個欄依 EntityId（u64 的數值，Kernel 不解讀 index／generation 兩段）嚴格升冪，查詢依升冪或交集的升冪產出；World、Scheduler、Executor 不用雜湊順序、指標比較、執行緒完成順序決定任何順序。守衛：J-1、J-2、J-9。（DI-K3 的一部分；W-1、W-2、W-10）
+4. **id 由登記順序或配發器決定，凍結後不變。** ComponentId、ResourceId、EventTypeId、registrationSeq＝登記順序；TypeKey 只用於行程內查表；執行期 id 不上 wire、不進 digest；World 不配發實體 id；配發器是產品的 Resource，鍵格式固定為低 32 index、高 32 generation，配發策略（PvP：單調不重用、generation 恆 0）由產品宣告；stale 句柄的偵測能力取決於策略，Kernel 只保證鍵還活著。守衛：J-8、J-18、J-19；掃描。（DI-K3；R-1～R-3、W-9；使用者 2026-11-11 K.3 第 1 項）
 5. **衝突與順序分開；(c) 的歧義是啟動錯誤。** 衝突邊只表示「不能同時」，順序邊表示先後。有衝突且無順序的對：任一方 zone=C→啟動錯誤；兩方 zone=B→登記序平手。Kernel 不提供歧義豁免。(c) 區對登記順序不敏感。守衛：J-20～J-24、J-44。（DI-K1 的修正版；D-1～D-10；主張 A）
 6. **獨占寫入是啟動檢查。** 元件與 Resource 預設 Exclusive；Exclusive 的欄在一個 World 的所有非 Startup schedule 中寫者（以 System 計）至多一個，寫者含 `Write`、型別化 Commands、`Spawn`／`SpawnWithId` 的 bundle、hook；沒有函式體內決定型別的寫入路徑能繞過計數（untyped 路徑寫不到 Exclusive 欄，常開檢查）；進 digest 的欄必須 Exclusive。守衛：J-15、J-16、J-32b。（DI-K2 的單一 writer，範圍從「同階段」改為整個 World；AGENTS §3；修訂：B3／S1）
 7. **(c) 預設 Serial；Parallel 要逐位元守衛。** 含 zone=C System 的 schedule 宣告 Parallel 時，必須指名一個存在、帶 `cpu` 標籤、比對 Serial 與 Parallel 的 (c) digest 逐位元相同的測試，否則啟動錯誤。守衛：J-27。（DI-K1「不做自動平行」的修正版；主張 B）
@@ -1087,7 +1088,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 符合任一條時，停止在 Kernel 上修補，向使用者提出「修還是重建」（memory repair-vs-rebuild）：
 1. **契約不可靠**（修訂：S8。原稿的條件「判定 (2) 在任一編譯器不成立」已被 spike 的「判定 2 部分不成立」觸發，但觸發的部分是 mechanism §3.5 事前寫明的上限（不經 World 的讀取），不是推導或核對本身失效；而且原稿的處置「退回顯式宣告」對那種形狀同樣無效。條件改寫成只指向本機制真正依賴的性質）：(a) spike 判定 (1)（簽名推存取集合）在任一 L1 編譯器不成立；或 (b) 「System 自己的執行緒上經 World API 的存取」在 debug 攔不到（A.6 第一層失效）；或 (c) 上線後「宣告與實際存取不符、A.6 兩層核對與 J-17 掃描都攔不到、且不屬於 spike〈判定 2 的上限〉已列的形狀」的案例在一個版本內出現兩次以上。→ (a)：退回「顯式宣告＋debug 核對」（bevy_core:29、:64）；(b)：核對層重寫；(c)：評估頁保護（spike 報告末段）或縮小「包」的範圍。中間層照 mechanism §1 全部重寫。（blueprint RC 3）**這條的改寫是 Replacement Criteria 的變更，要使用者核准**（K.3）。
-2. **id 要重用**：有 World 必須在一個生命期內重用 id，或兩個 World 需要 id 對照表。→ 提案加 generation 與對照表，K.1 第 3、4 條改寫。（entity-model RC-2、RC-5）
+2. ~~**id 要重用**~~ **取消（使用者 2026-11-11）**：鍵格式已含 generation，重用是配發策略的選擇，不是 Kernel 的置換條件。保留編號以免後文錯位。
 3. **歧義錯誤成為負擔**：同一版本內，為消除 D-E8 而加的 before／after 有一半以上與資料流無關（只是為了讓 Plan 建立）。→ (c) 的粒度或區劃錯了。
 4. **第二種排序機制**：為表達需求，stage 內必須引入依賴求解以外的排序（優先權數字、依資料值決定順序、執行期改 Plan）。（blueprint RC 2）
 5. **過濾誤報**：D-8 造成的誤報使某個 (c) schedule 中的 `after` 宣告超過 System 數的一半，或需要並行的 schedule 因誤報無法並行。→ 提案加入過濾式的不相交判斷。
@@ -1102,8 +1103,8 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 ### K.3 待使用者決定（規格內產生）
 
-1. Entity 不帶 generation、產品 `EntityId` 就是 World 的鍵（A.8 取捨 1；與任務敘述不同）。
-2. change stamp 依 Plan 位置取值、不等於遊戲 tick（A.8 取捨 2；修改 DI-K5 候選與 networking §1 第 7 條的一句）。
+1. ~~Entity 不帶 generation~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：鍵格式＝u64，低 32 index、高 32 generation（Bevy 格式），Kernel 不看兩段意義、疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0，值與今天逐位元相同；stale 句柄偵測能力取決於策略。A.1、A.8 取捨 1、K.1 第 3／4 條已改；K.2 第 2 條取消。部件文件：`docs/architecture-next/kernel/world.zh-Hant.md`。
+2. ~~change stamp~~ **已決定（同上）**：接受規格——依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 `tickStamps` 換算；(c) 區禁用變更過濾（G-3）；DI-K5（blueprint）與 networking §1 第 7 條各改一句（已改）。溢出無實際可能（u64）。
 3. 寫入政策預設 Exclusive（A.8 取捨 3）。
 4. Despawn 不算獨占寫者（B.9 取捨 1）。
 5. 讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序（D.6）。
@@ -1232,8 +1233,8 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 | # | 文件與位置 | 本稿 | 理由與處置 |
 |---|---|---|---|
-| X1 | 任務敘述「Entity（index＋generation）」；提案 2、3 | 不帶 generation；產品 `EntityId` 就是鍵；配發器是 Resource | A.8 取捨 1；**要使用者決定** |
-| X2 | blueprint DI-K5、networking §1 第 7 條「變更以遊戲 tick 標記」 | stamp 依 Plan 位置取值，`tickStamps` 提供 tick 視角；(c) 不用變更過濾 | A.8 取捨 2；**要使用者確認** |
+| X1 | 任務敘述「Entity（index＋generation）」；提案 2、3 | 格式封裝 index＋generation、Kernel 不解讀；配發策略是產品 Resource（PvP：不重用、generation 0） | A.8 取捨 1；**已決定（2026-11-11）** |
+| X2 | blueprint DI-K5、networking §1 第 7 條「變更以遊戲 tick 標記」 | stamp 依 Plan 位置取值，`tickStamps` 提供 tick 視角；(c) 不用變更過濾 | A.8 取捨 2；**已決定（2026-11-11）**，兩處文件已改 |
 | X3 | mechanism §3.1「進 digest 的欄預設獨占」 | 所有元件預設 Exclusive；digestSet 中有 Shared 是啟動錯誤 | Kernel 不知道 digest（A.8 取捨 3） |
 | X4 | mechanism §3.3「佇列依順序套用」 | 明定為「階段＋id」，不用 FIFO（bevy_core:34）；entity-store DI 4 延伸到 insert、remove | F.8 取捨 1 |
 | X5 | blueprint DI-K1「未排序即錯誤」不分區 | 只有 (c) 是錯誤；(b) 依登記序平手 | mechanism §3.2 審查修正 1、2 |

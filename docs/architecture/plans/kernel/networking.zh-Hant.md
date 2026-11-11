@@ -14,7 +14,7 @@
 | 4 | 結構變更延後、在同步點依序套用 | despawn／移除走緩衝；回滾的標記走 Commands | EntityStore 3b（RecordSpawn／Destroy，依 id 升冪）已設計 | 同 Bevy，但套用順序由階段序與 id 決定，不由拓撲平手 |
 | 5 | plugin 兩段生命週期：build 收集、finish 凍結 | replicon 在 finish 結算協議雜湊、建通道、動態組系統 | 沒有 | 同 Bevy；finish 後登錄不可再變（wire id 的前提） |
 | 6 | 生命週期 hook（add／insert／remove／despawn） | 複製靠它知道結構變了；PreSpawned 靠 on_add 算雜湊 | 沒有 | 回呼依**註冊順序**，不依雜湊（Bevy 的 Observer 依 EntityHashMap） |
-| 7 | 每元件每實體的變更 tick | 「跟這個 client 上次確認的 tick 比」決定要不要送 | 沒有（digest 是另一回事） | 變更以**遊戲 tick** 標記，不以 System 執行次數；或每 tick 存一份 snapshot 做 diff |
+| 7 | 每元件每實體的變更 tick | 「跟這個 client 上次確認的 tick 比」決定要不要送 | 沒有（digest 是另一回事） | 變更以**依 Plan 位置取值的單調 u64 stamp**標記（spec A.1；使用者 2026-11-11 決定），tick 視角以 `tickStamps[tick]` 換算：`changed > tickStamps[T+1] − 1`；(c) 區禁用變更過濾。原稿「以遊戲 tick 標記」會讓同 tick 內排在讀者之後的寫入被漏掉 |
 | 8 | 時間是可替換的 Resource，固定步可重入 | 回滾＝同步重跑 N 次 FixedMain 並手動推進 Time<Fixed>；對時＝改 virtual 速度、步長不動 | Time／FixedTickRuntime 有基礎；「可重入、可替換」沒約定 | 模擬 step 必須是純函數 Step(state, inputs, tick)；時間只來自 tick |
 
 結論：網路不在 Kernel 裡。Kernel 提供這八條，網路是它上面的 plugin——Bevy 的分層在兩個第三方 crate 上驗證過。
