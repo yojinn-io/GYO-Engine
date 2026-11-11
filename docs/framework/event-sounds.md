@@ -1,5 +1,7 @@
 # Event sounds (gyo.event_sounds)
 
+> Status: deprecated. The framework concept retires (`v8-arch-framework-retire`, 2026-11-11): its two duties, composing Engine capabilities and adapting third parties, move to the plugins layer (`docs/architecture/target/runtime-composition.zh-Hant.md` section 4). The code and this document stay in force for the existing programs until their migration batch; the Design Invariants below are not amended, they retire with the component. No new work targets the framework.
+
 Owner: the framework (`framework/`): the structure, the rules and the binding in the core
 (`gyo/framework/EventSounds.hpp`, `GYO::ToolFramework`), the text in the JSON binding
 (`gyo/framework/json/EventSoundsText.hpp`, `GYO::ToolFrameworkJson`).

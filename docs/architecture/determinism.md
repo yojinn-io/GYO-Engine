@@ -112,11 +112,26 @@ Rules every inside path obeys, with where each is stated and guarded today:
 - Pays: integer units, one conversion whose every step is exact or rounds once, a `cell_size` range that keeps results normal (voxel-mesh.md Units, M4, DI 5). The JSON parse relies on the libc's decimal-to-double conversion being correctly rounded for `cell_size` and `origin`; `ArenaDigestTests` already pins `strtod` with non-binary decimals on every L1 platform through the same nlohmann → `std::strtod` path, so the reliance is guarded, just not at VoxelMesh's own entry (E2 adds one golden with `cell_size` 0.1 there).
 - Guard: literal-bit goldens, label `cpu`, every L1 platform: a (c) guard.
 
-### 4.7 EntityStore (`GYO::EntityStore`, inside)
+### 4.7 EntityStore columns, becoming the World's storage (`GYO::EntityStore` today; inside)
 
 - Pays: strictly ascending columns, order-preserving erase, id-ordered deferred changes (DI 2, 4, 8). This is level (a) ("results do not depend on history or containers") and has no floating point; it is inside because every digest column is encoded in that order (E-9).
 - Guard: `es-row2-*` mutants, G1. Nothing missing.
-- 2026-11-11: under the mechanism design (`plans/kernel/mechanism.zh-Hant.md`), EntityStore's columns become the World's storage. What it pays becomes the four World contracts of mechanism §3.3 (iteration by index; references invalid after a sync point; structural changes only through the deferred queue during iteration; queue applied in order). The guards move with it; this section is then about World.
+- 2026-11-11 (formalised by `v8-arch-kernel-spec-v03`, user decision K.3 item 7): under the mechanism design (`plans/kernel/mechanism.zh-Hant.md`, spec §A), EntityStore's columns become the World's storage. What it pays becomes the four World contracts of mechanism §3.3 (iteration by index; references invalid after a sync point; structural changes only through the deferred queue during iteration; queue applied in order). The guards move with it; this section is then about World.
+
+### 4.7a Content identity and contract-data parsing paths (inside; added 2026-11-11, `v8-arch-determinism-table-fix`)
+
+Two (c) paths the table missed, named by what they are rather than by the library (`target/naming.zh-Hant.md`):
+- **Content identity**: the SHA-256 over converted content (`AnimationContentDigest`, `ArenaContentDigest`, section 4.9). Evidence: `engine/base` `Sha256` is the hash; the inputs are the converted bytes. Pays: byte-identical converted content on both ends (section 6 for ufbx). Guard: section 4.9's join-time comparison.
+- **Contract-data parsing**: the strict JSON parse that turns `gyo.*` documents into runtime values (section 4.6). Evidence: `engine/base` `StrictJson`; decimals through `strtod`. Pays: the same document yields the same values on every platform. Guard: VoxelMesh and MapMarkers goldens (section 4.6).
+
+### 4.7b Fixed-step accumulator and the host clock sample (added 2026-11-11, `v8-arch-determinism-table-fix`)
+
+- **Fixed-step accumulator** (today `FixedTickRuntime`'s double accumulator; under the mechanism the runner plugin's accumulator, spec G-6): decides how many FixedUpdate runs happen this wake-up. It is (b): the count is host timing, not simulation state; the domain tick itself is advanced by the clock schedule (spec B5). Today's double accumulator and `deltaSeconds` are described in spec G-6; the product's step length becomes an integer `FixedStep{stepNs}`.
+- **Host clock sample** (today `engine/time` read through `now_()` callbacks; under the mechanism the `HostClockSample` boundary resource, spec G.2): time is an input to the host-judgement zone, sampled once per wake-up and recorded, never read inside (c) (spec K.3 item 11; `target/determinism.md` section 2). Pays: the sample is replayable. Guard: spec J-39, J-17.
+
+### 4.2a Animation advance (candidate, pending the determinism line; `v8-arch-determinism-table-fix`)
+
+The audit's zone cross-check (audit section 4.5) flags that the **animation advance that enters the digest's `animations` segment** (today `PlayerAnimation`; under the mechanism an `AnimationState` column written by an `AdvanceAnimation` System) is (c) by rule 1, while section 4.2 lists `GYO::Model` sampling as the middle zone. The two differ: sampling (poses for hit geometry) is the middle zone; the advance of the animation state encoded into the digest is inside. The determinism line verifies this against the digest encoding (`AuthorityDigest.cpp`) before the table changes; until then this entry is a candidate.
 
 ### 4.8 Math (`GYO::Math`, inside wherever called)
 

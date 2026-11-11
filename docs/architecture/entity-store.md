@@ -141,7 +141,7 @@ frozen phases); the Delta lists them and the mutants that move here.
 3. **Lookup is binary search on the column itself.** No sparse array, index, hash or other side table. Reason: a side
    table is a second copy of membership that can disagree with the column, and without id recycling a sparse array
    grows over dead ids. Evidence: survey §2.1 `SparseSet` row, §2.2 sparse-set row; consumer: E-5.
-4. **Structural changes are deferred and applied in id order at the caller's sync point.** `DeferredChanges` records
+4. **Structural changes are deferred and applied in id order at the caller's sync point.** *(Amended 2026-11-11, `v8-arch-kernel-delta-approved`, spec K.3 item 7: this invariant extends to component insert and remove, not only spawn and destroy, and the sync-point application order is the one fixed in `plans/kernel/spec.zh-Hant.md` §F.2: hook queue, despawn, remove, spawn, insert, OnAdd, resource, each phase ascending by id, ties by (planPos, recSeq). The proposed `DeferredChanges<Spawn>` (3b, never implemented) is withdrawn; the World's deferred queue takes its place. DI 5 "the store runs nothing" still holds for the store itself; the World is a new component built on the store's columns.)* `DeferredChanges` records
    spawns with ids the caller already allotted and destroys; `Apply`, called by the caller, applies all spawns in
    ascending id, then all destroys in ascending id, and empties the lists. The store never decides when a sync point
    is, never allots at record time, and stores no closures. Reason: changing membership invalidates references into

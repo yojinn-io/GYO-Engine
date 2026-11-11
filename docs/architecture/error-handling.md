@@ -16,6 +16,19 @@ Result = Runtime Error
 | Shown to people | The handler prints the condition and its location | The error's code, message and detail |
 | Tested with | `GYO_CHECK_ASSERTS(expr)` | Assertions on `error().code` |
 
+### Programmer Error detected from runtime data (added 2026-11-11, `v8-arch-kernel-result-errors`; the kernel line's code)
+
+A third case the two columns do not cover: the program is wrong, but the violation is visible only when an id arrives at runtime (an untyped `Commands` insert into a zone=C or Exclusive column, a `Despawn` of an entity carrying zone=C columns issued by a zone=B System, an `ExclusiveWorld` write outside zone=B Shared data; `plans/kernel/spec.zh-Hant.md` Z5, F-10, S-13).
+
+| | Programmer Error detected from runtime data |
+|---|---|
+| Mechanism | The Kernel API returns `Result<void, KernelError>` carrying the full context (System name, Plan position, command kind, EntityId, ComponentId, violated rule id). Every System returns `Result<void, KernelError>` and wraps the error with its own context (the Go `%w` chain); it neither logs nor swallows. The Executor is the outermost layer and handles once: logs the whole chain once (the log switch is in the Executor's handler; `Base::Result` stays a pure value), marks the World `Interrupted`, ends the run |
+| In every build | The same in release: nothing is silent. In debug the assertion handler is additionally called where the error is recorded |
+| Final disposition | Still a Programmer Error: the fix is in the code. `Result` is the carrier of the diagnostic chain here, not a sign that the caller can recover |
+| Tested with | Release-target tests observe the `Err` and the `Interrupted` state (spec J-32b, J-45); debug tests use `GYO_CHECK_ASSERTS` |
+
+Full text: `docs/architecture/target/error-handling.md`. The user's principle: no silent handling.
+
 These are not errors and use neither mechanism:
 
 - **Plain absence** with a single obvious reason (a lookup that finds nothing): `std::optional`.

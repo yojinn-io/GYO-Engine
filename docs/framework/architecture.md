@@ -1,5 +1,7 @@
 # GYO Framework
 
+> Status: deprecated. The framework concept retires (`v8-arch-framework-retire`, 2026-11-11): its two duties, composing Engine capabilities and adapting third parties, move to the plugins layer (`docs/architecture/target/runtime-composition.zh-Hant.md` section 4). The code and this document stay in force for the existing programs until their migration batch; the Design Invariants below are not amended, they retire with the component. No new work targets the framework.
+
 The layer games and tools share, between the engine and the products that use
 it (`v8-tool-framework-top-level`). The engine supplies mechanisms that do not
 decide how a product is put together and stays pure: it holds no tool or
