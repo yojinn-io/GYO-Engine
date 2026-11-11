@@ -1,6 +1,6 @@
 # 審查報告：`v8-arch-kernel-audit`（現有模組對規格 v0.2 的審查）
 
-更新：2026-11-11。Owner：架構（架構師會話）。**狀態：合併稿，待對抗複核（判定 3）與使用者。** 事前宣告：[audit-declaration.zh-Hant.md](audit-declaration.zh-Hant.md)。三份部分報告（逐列證據在這三份，本稿不重複檔名行號）：[engine](audit-part-engine.zh-Hant.md)、[framework-tools](audit-part-framework-tools.zh-Hant.md)、[product-thirdparty](audit-part-product-thirdparty.zh-Hant.md)。主會話逐列讀過三份後合併；判法在三份間對齊（§0）。只讀：未改程式、未改契約。
+更新：2026-11-11。Owner：架構（架構師會話）。**狀態：完成（五條判定成立；對抗複核 4/5 一致，不一致的一列已重判）；待使用者決定 §3、§4.5 的事項。** 事前宣告：[audit-declaration.zh-Hant.md](audit-declaration.zh-Hant.md)。三份部分報告（逐列證據在這三份，本稿不重複檔名行號）：[engine](audit-part-engine.zh-Hant.md)、[framework-tools](audit-part-framework-tools.zh-Hant.md)、[product-thirdparty](audit-part-product-thirdparty.zh-Hant.md)。主會話逐列讀過三份後合併；判法在三份間對齊（§0）。只讀：未改程式、未改契約。
 
 **件数の突き合わせ：一致**。共用腳本對全範圍一次掃描（`build/evidence/kernel-audit/scan-full/`）＝44 模組、645 命中；三份分別 22＋8＋14＝44 模組、279＋180＋186＝645 命中。報告列數：engine 22＋framework-tools 7＋product-thirdparty 14＝43 列，加掃描根內的未審 1 列（`tools/object_fps_preview`）＝44。掃描根之外另有未審 3 列（`apps/object_fps`、`apps/object_fps_v2`、`services/gyo_gateway`）與事實列 5（#176 候選與 host 工具鏈），不計入掃描件數。
 
@@ -12,6 +12,13 @@
 - **組織層**（Host／重寫骨架）＝模組自己排序其他元件（寫死的呼叫序、擁有迴圈或執行緒並決定誰先誰後），對應 spec H-7；單純每幀被呼叫一次不算。
 - 只持 OS 資源、只由 Host 使用的 adaptor（os、time、threads、platform、FixedTickRuntime）判 **Host**（依 spec §L 的定義與 G-6，不是「排序其他元件」）。
 - **留**＝純函式且三否定皆滿足。第三方：葉子／包／服務；**依附在服務內的函式庫隨服務判**（asio、httplib、protobuf 字面是包，落點是 IO 服務的內部實作；product-thirdparty 觀察 1 的建議，本稿採納並寫進宣告）。
+
+對抗複核者（§8）指出判法五處模糊，主會話定義如下（合併時適用，之後的批照用）：
+- **Q2 的範圍**：含建構子注入的協作者參考（它們將成為 Resource）與指向 World 內資料的快取指標兩類；前者的處置是「先收攏／先拆」，不改判定詞；後者才偏重寫。
+- **「包（先拆）」與「重寫」的分界**：拆掉的狀態能改成輸入或參數、內部邏輯不動 → 包（先拆）；第三方全域 context 是資料主路徑、或元件混了 H.7 的 Host 職責（固定步累加、回滾觸發、幀排序）→ 重寫。
+- **第三方全域的粒度**：只寫出不讀回（`SDL_GetError` 取錯誤字串）比照 I-5 例外，不算 Q3 為是；讀回參與判斷（ImGui context、SDL 全域查詢）才算。
+- **一個目錄兩種性質**：拆成元件列各給一個判定詞；一致率以元件計。
+- **純函式庫的 zone**：填「被哪個區呼叫」，不影響判定詞。
 
 三份都已依此逐列重核（engine 重核改一列：input Host → 包（先拆）；product-thirdparty 改六列，見其 §0.1；framework-tools 兩種讀法並列）。這是判法的對齊，不是看結果後放寬判定。
 
@@ -27,7 +34,7 @@
 | map_markers、voxel_mesh、net、math | 留 | 純函式；math 的 E1 是 determinism 線 | 0 h |
 | model | 留（取樣、loader）＋包或刪（`AnimationInstance`） | ufbx loader 是 (c) 內容身分；`AnimationInstance` 只有 object_fps_v2 用 | 1～4 h |
 | asset | 包（先收攏） | 五個協作者的參考要先收進同一個 Resource；`Update` 內同步 IO 要宣告 `Io:file` | 8～20 h |
-| input | 包（先拆）＋留（`InputActionMap`） | SDL 全域查詢與 `platform_` 移到 Host 的 pump，取樣進 boundary；狀態機再包 | 4～10 h |
+| input | **Host**（`SdlInput` 後端，pump 的零件）＋留（`InputActionMap`、`PhysicalInputFrame`） | 後端讀 SDL 全域、持 `platform_`、只由 Host 的 pump 呼叫，產物是 boundary 資料 `PhysicalInputFrame`；主會話依對抗複核重判（§8）：審查者最終的「包（先拆）」是把狀態機拆出後的設計選項，不是現況的判定 | 4～10 h |
 | io | 包（檔案服務）＋留（路徑、Uri、記憶體串流） | `WriteFileAtomically` 讀時鐘與亂數，(c) 檔不得 include | 2～6 h |
 | render | 包（先收攏；渲染 World 的 Resource，親和 `GraphicsContextOwner`） | 裝置、`ShaderLibrary`、`ModelResource` 的指標收進同一 Resource | 8～24 h |
 | text | 包（後端）＋留（介面） | SDL_ttf 全域 context 拆不掉，審查項 | 1～3 h |
@@ -38,7 +45,7 @@
 | runtime | 重寫（`RuntimeLoop`／`IRuntimeClient`）＋Host（`FixedTickRuntime`）＋刪除候選（`IRuntimePort`） | 三段硬編碼調度由 Host＋ScheduleDef 取代 | 8～20 h |
 | config | 不適用 | `projects.csv` 列有要移除的兩個產品，移除批一併刪 | 0 h |
 
-分佈：留 8、包 6、Host 4、服務 2、重寫 1、不適用 1。工時 52～150 h。
+分佈（重判後）：留 8、包 5、Host 5、服務 2、重寫 1、不適用 1。工時 52～150 h。
 
 ### 1.2 framework 與工具（7 列＋未審 1；行數 19,806）
 
@@ -92,7 +99,7 @@
 
 | 範圍 | 重寫（組織層） | 包 | 留 | Host／服務 | 工時粗估 |
 |---|---|---|---|---|---|
-| engine | 1 | 6 | 8 | 6 | 52～150 h |
+| engine | 1 | 5 | 8 | 7 | 52～150 h |
 | framework | 2 骨架 | 2 | 8 | 1 | 33～66 h |
 | 工具 | 4 client＋1 | 15 | 9 組 | 2 harness | 80～152 h |
 | 產品 | 6 子列＋1 | 2 | 3 | 4 | 250～480 h |
@@ -104,7 +111,7 @@
 
 | 模組 | spec §L | 審查 | 原因 |
 |---|---|---|---|
-| input 後端 | 包 | 包（先拆） | 讀 SDL 全域、持 `platform_`，拆到 Host 的 pump 後才能包 |
+| input 後端 | 包 | Host | 讀 SDL 全域、持 `platform_`、只由 Host 的 pump 呼叫；審查者與對抗複核者不一致，主會話重判為 Host（§8） |
 | platform | 包（Host 擁有） | Host | 永不銷毀的登記表與 `thread_local` 無法成 Resource |
 | `FixedTickRuntime` | 留 | Host | 決定這一幀跑幾次 FixedUpdate（H.7、G-6） |
 | `IRuntimePort` | -audit 定 | 刪除候選 | 移除 object_fps／v2 後只剩自己的測試；形狀與 Link 相反 |
@@ -207,13 +214,25 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 |---|---|---|
 | 1 覆蓋 | 每個目錄一列、third_party 每庫一列、未審附理由 | **成立**（44＝43＋1；掃描根外未審 3 列附理由） |
 | 2 證據 | 每列四問各至少一個檔名行號或「掃描無命中＋人工確認」 | **成立**（三份部分報告逐列；framework/include 與 src 併列說明） |
-| 3 對抗複核 | 另一模型抽 5 個模組獨立判，≥4/5 一致 | **進行中**（Fable／high；模組：engine/collision、engine/asset、engine/input、ui_editor `EditorApp`、`LocalPlayerPrediction`；結果見 §8） |
+| 3 對抗複核 | 另一模型抽 5 個模組獨立判，≥4/5 一致 | **成立**（Fable／high；4/5 一致；不一致的 engine/input 後端已重判並寫明原因，§8） |
 | 4 掃描可重跑、件数一致 | 主 checkout 重跑一次 CSV 與報告引用一致；掃描目錄數＝列數＋未審 | **成立**（全域一次掃描 44／645 與三份合計一致；腳本決定性、未改） |
 | 5 不改程式 | git diff 只有 docs 與 scripts | **成立**（三個 worktree 的 diff 只有各自的報告檔；主會話只加 docs） |
 
 ## 8. 對抗複核（判定 3）
 
-（待 Fable／high 的結果；填入後比對一致率與不一致的重判。）
+複核者：Fable／high（與審查者 Opus 不同模型），只讀程式與判法（spec §I.3、§H.7、limits），**沒讀** spec §L 與三份部分報告；用時約 50 分鐘。模組由主會話挑：含一個「留」、一個「包」、一個「重寫」。
+
+| 模組 | 審查者（最終） | 複核者 | 一致 |
+|---|---|---|---|
+| engine/collision | 留 | 留 | ✓ |
+| engine/asset | 包（先收攏） | 包（先拆） | ✓（判定詞同；註記差異是 Q2 範圔的定義，§0 已定） |
+| engine/input | 包（先拆）＋留 | Host（backend/sdl）＋留（core） | ✗（後端） |
+| ui_editor `EditorApp` | 重寫（介面） | 重寫（介面層） | ✓ |
+| `LocalPlayerPrediction` | 重寫 | 重寫（先拆） | ✓ |
+
+**一致率 4/5 ≥ 4/5，判定 3 成立。** 不一致的 engine/input 後端由主會話重判：審查者的初稿本來就是 Host，依「Q1 只排除留」重核時改成「包（先拆）」；複核者依「只持 OS 資源、只由 Host 使用的 adaptor 判 Host」判 Host。兩條規則都在 §0，衝突時以後者為準——判定描述的是**現況**（後端今天是 pump 的零件、產物是 boundary 資料），「拆出狀態機再包」是遷移的設計選項。重判為 **Host（後端）＋留（core）**，§1.1、§2、§1.4 已改。
+
+複核者提出判法模糊五處，主會話的定義寫在 §0（Q2 範圍、包（先拆）與重寫的分界、第三方全域的粒度、一目錄兩性質、純函式庫的 zone）。複核者另注意到主 checkout 當時沒有 spec 與 target（PR #179 合併前），已從審查分支讀；不影響結論。
 
 ## 9. 下一步
 

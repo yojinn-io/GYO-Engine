@@ -71,9 +71,11 @@
 
 - 2026-11-11 第三份（product-thirdparty，commit d8b45012）回來：件数一致（14＝14＋0；另未審 3、事實列 5）；子列重寫 6；第三方無改判、§2.1 收窄四處；(a) Body 拆欄後 Life 仍兩寫者且同 tick 讀後寫（無結論，交遷移批）；(c) G.4 第 1 條應改 HostClockSample、補第 4（RequestMovementResync）、第 5（IPC 讀權威）；規格衝突：S-8／Z4 使 (c) 不能輸出診斷。主會話合併成 audit.zh-Hant.md（§1 判定、§3 跨部件、§4.5 區表回對：漏 3 標錯候選 1、§6 規格修正七項、§7 判定 1／2／4／5 成立、3 進行中）；對抗複核 Fable／high 抽 5 模組進行中。
 
+- 2026-11-11 -audit **完成**：對抗複核 Fable／high 4/5 一致（engine/input 後端不一致→主會話重判 Host）；判法五處模糊的定義補進 audit §0；dev_log 寫成；PR 待開。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
 - 改造的第一個文件批（待規劃）：K.3 第 7 項的三處 Delta 文件修改；entity-model §5.2（Join／Leave 在 tick 內，K.3 第 10 項）；error-handling.md 加一列（K.3 第 17 項）；mechanism §3.3「Time 只來自 tick」依 K.3 第 11 項裁決修訂。
-- ~~使用者定 K.3~~（2026-11-11 全部定完）→ `v8-arch-kernel-audit`（事前宣告要列範囲の限界 L1～L8）→ `-spike-pageguard` → 改造批次計畫（§3 Delta 計畫層寫一次）。
+- ~~-audit~~ 完成 → 使用者定 audit §3／§4.5 的事項 → 規格修訂（audit §6 七項）與第一個文件批合併規劃 → `-spike-pageguard`（事前宣告待寫）→ 改造批次計畫（§3 Delta 計畫層寫一次；以 audit 的成本形狀分批）。
 - 判定 1 的三平台：**成立**（L1 run 43018979148，PR #180；步驟第一次誤加在 build-and-validate.yml、已改到 cross-platform.yml）。PR #180 含 `spikes/` 以外的 `.github/workflows/cross-platform.yml` 改動，合併由使用者決定。
