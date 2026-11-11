@@ -65,6 +65,9 @@
 
 - 2026-11-11 -audit 第一份（framework-tools，commit 33f4d402 在 agent worktree）回來：件数一致（8＝7＋1）。發現事前宣告的判法「Q1 為是→組織層」比 spec I.3 粗；主會話採 I.3 的讀法（Q1 只排除留；組織層＝排序其他元件）、修正宣告、通知另兩個審查者對齊。另記：WindowShell／ImGuiShell 要重寫骨架會改 framework DI 2／DI 6（K.3 第 7 項未列的 Delta，待使用者）；Editor 預覽 readback 回 ImGui::Image 與 H-6 衝突（候選：ImGui System 全放文件 World、影像經 Host 交換點，預覽晚一幀；交工具線與使用者）；四工具 host 骨架重複（framework 標準 plugin 候選）。
 
+- 2026-11-11 -audit 第二份（engine，commit 77201f03 在 agent worktree）回來：件数一致（22＝22＋0）；判定 留 8／包 5／Host 5／服務 2／重寫 1／不適用 1。採 P（被動）／A（主動）讀法，與主會話的對齊規則一致。與 spec L.1 不同處：input 後端→Host；platform→Host；FixedTickRuntime→Host；IRuntimePort→刪除候選（待使用者）；ui 加 UiRenderer 局部重寫（跨 World 指標；AssetManager 屬 Frame 還是 Render World 未定）；asset 包但要先收攏五個協作者的參考；model 的 ufbx loader 是 (c)。掃描漏兩類：經別名讀時鐘（Time::Now／Clock::now）、匿名命名空間非 const 變數——不改共用腳本（已引用的 CSV 列號不能變），記為 J-17 掃描清單的修正項。兩份部分報告已複製進本分支。
+- 主會話待決／待交使用者（合併報告時列出）：(1) framework DI 2／DI 6 的 Delta（WindowShell／ImGuiShell 重寫骨架；K.3 第 7 項未列）；(2) Editor 預覽 readback 回 ImGui 與 H-6 的衝突，候選「ImGui System 全在文件 World、影像經 Host 交換點、預覽晚一幀」（交工具線與使用者）；(3) IRuntimePort 刪除；(4) AssetManager 屬 Frame 或 Render World。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
