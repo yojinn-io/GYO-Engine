@@ -1,6 +1,6 @@
 # v8 工具線交接
 
-更新：2026-11-05。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。PR #107～#109、#111 已合併（#111：輸入法檢測、組字事件、gyo.ui v2 的 text_field、大廳改用 text_field，Windows 實機通過）。`v8-tool-ui-editor-text-field` 完成並合併（PR #114）。**
+更新：2026-11-11（**本線暫停**：kernel 架構改造完成前不開新卡，`v8-tool-line-paused-kernel`）。Owner：三個工具各自的 owner（見 [README](README.md)）。**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`）。PR #107～#109、#111 已合併（#111：輸入法檢測、組字事件、gyo.ui v2 的 text_field、大廳改用 text_field，Windows 實機通過）。`v8-tool-ui-editor-text-field` 完成並合併（PR #114）。**
 本文件是工具線的記錄器：每批開始、里程碑、停止時，和工作在同一個變更中更新。人看的計畫在 [README](README.md)。v8 產品計畫的同步由產品會話做，本線不改 `docs/object_fps_pvp/plans/v8/`。
 
 ## 代號對照
@@ -16,7 +16,9 @@
 ## 現況（每次停下來時更新）
 
 - **完成**：`v8-tool-plan`（本計畫、本 HANDOFF）；先處理 UI（`v8-tool-scope-ui-first`）。
-- **完成（`v8-product-ui-action-check`，分支 `claude/v8-tool-line-records`，[PR #151](https://github.com/yojinn-io/GYO-Engine/pull/151)）**：2026-11-05 核准（`v8-product-ui-action-check-approved`）並實作（`6764f65f`、`f38c6e43`）。PvP `cpu|shader` 50／50；突變 6／6 killed；審査者的指正已修。L1 三平台通過（第二次；第一次 windows-x64 runner 斷線，見 dev_log）。等你說合併。結果在 [ui-navigation.md](ui-navigation.md)「實作後的結果」，dev_log：[2026_11_05_pvp_v8_ui_action_check](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md)。PvP 計畫的同步要通知產品會話。
+- **暫停（2026-11-11，`v8-tool-line-paused-kernel`）**：GYO 要把 Bevy 的抽象能力（World／System Contract／Scheduler／Executor）帶進現有引擎，架構改造完成前功能線停（停法 (a)：已開工的卡做到下一個關卡停、更新 HANDOFF；不開新功能卡）。本線當時沒有已開工的卡。設計稿：[mechanism.zh-Hant.md](../../../architecture/plans/kernel/mechanism.zh-Hant.md)。架構師轉達：framework 改造後是「共用組合 plugin」（shell、預覽、檔案服務、選擇窗記帳），介面大致留、掛法改。
+- **未開工（`v8-tool-path-dialog-rule-handover`）**：2026-11-07 歸屬已定（`v8-tool-path-dialog-rule-owner`）：header-only 的 `Framework::PathDialogRequests<Purpose>`（`Begin(purpose) → tag`、`Accept(tag, ended) → std::optional<Purpose>`、`Abandon()`）搬進 framework core，不 include SDL 平台標頭；規則本文寫在 framework 的契約文件，platform-sdl DI 10 只引用。ui_editor（`PathDialogRequests`，類與測試搬過去改名）、audio_editor（`ApplyDialogAnswers`）、model_viewer（見下方「已知缺陷」）三處都換用。上段（公開介面）；實作 Opus／high，審查 Opus（另一會話）；估 3～5 h；v8 驗收前必須完成。原排在 11/9 場次之後，現在隨本線暫停。事前宣告還沒寫，要含 §3 的 7 項、framework 新元件的 Replacement Criteria（AGENTS §2「Architecture の反復を計画する条件」）；不是性能／資源的批，不寫預算。
+- **完成並合併（`v8-product-ui-action-check`，[PR #151](https://github.com/yojinn-io/GYO-Engine/pull/151)，`6c33353f`）**：2026-11-05 核准（`v8-product-ui-action-check-approved`）並實作（`6764f65f`、`f38c6e43`）。PvP `cpu|shader` 50／50；突變 6／6 killed；審査者的指正已修。L1 三平台通過（第二次，run `41992180370`；第一次 windows-x64 runner 斷線，見 dev_log）；合併前最後一次 L1（run `41994769774`，head `4e433c2b`）三平台通過。結果在 [ui-navigation.md](ui-navigation.md)「實作後的結果」，dev_log：[2026_11_05_pvp_v8_ui_action_check](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md)。PvP 計畫的同步要通知產品會話。
 - **移出本線**：`v8-tool-voxel-map-editor`（2026-11-05，`v8-tool-voxel-map-editor-moved-out`）：大任務，由 v8 規劃會話另開的會話「v8 voxel map editor」負責；本線不再追蹤。 方案、分批與各批的進度在 [voxel-map-editor.md](voxel-map-editor.md)（PR #152）。
 - **待討論**：`v8-tool-assets-editor`（你會給方案）。
 - **進行中（`v8-tool-audio-editor-edit`，分支 `claude/v8-tool-audio-editor-edit`）**：已實作（GUI：播放、波形、資訊、裁剪、增益、工程檔、匯出）。判定 1～7 本機通過；突變 26／26 killed；審査者與検証者已回報，指出的事已修或已寫進 assets.md「實作後的結果（2026-11-04）」。**等你**：守衛的放寬（§14.4）核准；GUI 的 L3（macOS）。dev_log：[2026_11_04_tool_v8_audio_editor_edit](../../../dev_logs/2026_11_04_tool_v8_audio_editor_edit.zh-Hant.md)。
@@ -30,6 +32,12 @@
 - **等你決定**：下一節。
 - **發現（不在本線的範圍，只報告）**：
   - PvP 有一份從舊產品複製的 `RetroFPS/World/GridMap.hpp`，經 `GameData.hpp` 被武器標頭間接包含，但 PvP 沒有它的載入器。是不是遺留物沒有查證；交給架構健檢。
+
+## 已知缺陷（改造期間不修）
+
+| 位置 | 現象 | 重啟時的處置 |
+|---|---|---|
+| `tools/model_viewer/src/ViewerWindow.cpp:112`（讀回答）、`:43`（`kContentDialog = 1`）、`:621-627`（送請求） | 系統選擇窗的記帳規則（每次請求新 tag、只認最新一次、Chosen／Cancelled 才結束、Failed 不結束、可放棄；platform-sdl DI 10 的消費端）沒照做：每次請求都用同一個固定 tag `1`，也沒有「等待中」的狀態，所以選擇窗開著時再按一次「Open content folder...」會送出第二個請求，之後每個回答（包括舊請求的）都會被套用；Failed 只顯示錯誤。架構師轉達時寫「沒比對 tag、Failed 結束等待」；照 master `54bed520` 的原始碼，實際是「比對的是固定 tag，分不出請求」與「沒有等待狀態可結束」。實機未重現，是讀碼的結論 | 併入 `v8-tool-path-dialog-rule-handover` 一起修（它是「選擇窗記帳規則在消費端各寫一份」的第三份、漏了規則的那份）。照 AGENTS §14.3：先用失敗的測試固定「舊請求的回答被套用」，再換用 `Framework::PathDialogRequests` |
 
 ## 等你決定
 
@@ -70,6 +78,8 @@
 | `v8-tool-voxel-map-editor-moved-out` | （2026-11-05）`v8-tool-voxel-map-editor` 移出工具線：是大任務，由 v8 規劃會話另開的會話負責（會話標題「v8 voxel map editor（v8-tool-voxel-map-editor）」）。README 的事實盤點（arena、舊格子地圖、ImGui 後端）留著給那邊參考；本線不再追蹤、不做它的規劃 | 「這個任務我得移出你的任務範圍，那個是個大任務。」 |
 | `v8-tool-ui-navigation-a-first` | （2026-11-05）`v8-tool-ui-navigation` 選 (A)：產品內改成對照表，啟動時和 UI 檔的 `actions` 宣告雙向比對；不改 `gyo.ui`。(B) 等要加頁面時再決定。先做 PvP；事前宣告草稿在 [ui-navigation.md](ui-navigation.md)（`v8-product-ui-action-check`，等核准） | 對「ui-navigation 選哪一個？」答「A 先做」 |
 | `v8-product-ui-action-check-approved` | （2026-11-05）[ui-navigation.md](ui-navigation.md) 的事前宣告（判定 1～5、突變 4 條、下段、Opus 5.5／high）核准；由本線實作，接在 `claude/v8-tool-line-records` 上，和本線的紀錄同一條 PR。PvP 計畫的同步由產品會話做，本線只通知 | 對「草稿照建議核准、由本會話做嗎？」選「核准，本會話做」 |
+| `v8-tool-path-dialog-rule-owner` | （2026-11-07，使用者在架構師會話決定，架構師轉達）`v8-tool-path-dialog-rule-handover` 的歸屬：`Framework::PathDialogRequests<Purpose>` 搬進 framework core（理由：framework Layers 表第 2 條，兩個以上產品以同一方式改裝同一個 Engine 能力）；「選到的路徑拿去做什麼」（用途對應、過濾器）留在各工具。工具線實作；Architecture Delta（framework 公開介面追加）由架構師審 framework 的標頭與文件 | 「照你的建議來」（架構師轉達） |
+| `v8-tool-line-paused-kernel` | （2026-11-11，使用者在架構師會話決定，架構師轉達）kernel 架構改造完成前功能線停，停法 (a)：已開工的卡做到下一個關卡停並更新 HANDOFF；不開新功能卡。本線當時沒有已開工的卡 | 原話未轉達 |
 
 ## 紀錄
 
