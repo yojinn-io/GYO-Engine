@@ -39,4 +39,6 @@
 
 ## 目錄
 
-- [world.zh-Hant.md](world.zh-Hant.md)：World（鍵格式與配發策略、change stamp；其餘待規格核准）。
+- [world.zh-Hant.md](world.zh-Hant.md)：World（鍵格式與配發策略、change stamp、寫入政策預設獨占與資料路徑；其餘待規格核准）。
+
+規則（使用者 2026-11-11）：spec K.3 的**每一項**決定都要寫進對應的部件文件（Design Invariants 或資料路徑），不只改 spec 的 K.3 與對應節。
