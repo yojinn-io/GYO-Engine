@@ -216,7 +216,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 - LIM-1、LIM-2、LIM-5：只在對應列註記，不量成本。
 - 工時是粗估區間，不是承諾。
 
-## 6. 給規格與守衛的修正項（下一次規格修訂）
+## 6. 給規格與守衛的修正項（**已於 spec v0.3 修正**，2026-11-11，`v8-arch-kernel-spec-v03`；對應處見 spec 修訂記錄）
 
 1. S-8／Z4 與 G.4 第 3 條的衝突（§3.3）：(c) 的診斷輸出要有合法路徑。
 2. J-17：掃 include `engine/time/MonotonicClock.hpp` 而非函式名；區分 `<chrono>` 的型別用與讀時鐘；掃匿名命名空間的非 const 變數；掃第三方全域 context 的呼叫（`ImGui::`、`SDL_*` 全域查詢）。
@@ -298,7 +298,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 
 每個候選要在計畫批寫：目標、依賴清單、Removability 的驗證方式（AGENTS §7：刪掉後 Engine 與其他 plugins 成立）、owner。
 
-### 10.5 規格修正追加
+### 10.5 規格修正追加（已於 spec v0.3 修正）
 
 - 第 8 項：spec H.4.2 的 Client host 改成 runner plugin 提供骨架（§10.2）。
 - 第 9 項：spec I.1 外部系統表與 H.7「Host 保留職責」的「Host」改寫為「runner plugin 加產品 main」；H.7 的職責不變，持有者變。
