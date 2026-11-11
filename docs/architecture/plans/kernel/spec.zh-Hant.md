@@ -1127,7 +1127,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 修訂輪（對抗檢查後）新增：
 
 9. ~~獨占寫者的單位~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：獨占寫者**以 System 計**，Startup schedule 不計；PvP 的 Body 依 entity-model 第 139 行的欄位分類**拆欄**，不併 System、不改 Shared、不採「以 owner plugin 計」。使用者原話：不拆的話架構改造就沒有意義。拆欄的範圍與 golden 影響由 -audit 量。
-10. **Join／Leave 進 tick 內**（H.4.1 (d)；S3）：Ingress 只寫請求進 ring，(c) 的 `ApplyMembership` 生成與刪除；與 entity-model §5.2「Join／Leave 在 Tick 外」不同，golden（`combat-rejoin` 等）可能差一個 tick。
+10. ~~Join／Leave 進 tick 內~~ **已決定（使用者 2026-11-11，側邊會話轉述）：採規格**。Ingress 只寫請求進 `InputRing`，(c) 的 `ApplyMembership` 以 `SpawnWithId`／`Despawn` 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（加入／離開晚最多一 tick；`combat-rejoin` 等 golden 可能差一 tick、要重設基準）記為限制 LIM-5，由產品線在遷移批確認；entity-model §5.2 改寫（排進改造的第一個文件批）。
 11. **時間的來源**（G.2 Executor；B6）：mechanism §3.3「Time 只來自 tick」與 determinism.md DI 4「the tick, or a clock injected」衝突。本稿採 DI 4 的形狀（tick ＋ 被記錄的 boundary 取樣 `HostClockSample`），因為 Host judgement 區（determinism.md §2，(c)）本來就要量到達時機。選項：(i) 修 mechanism §3.3 的 Executor 列為「tick 與被記錄的 boundary 輸入」；(ii) 把 Host judgement 改成 (b)，HostClockSample 變 external——這改 determinism.md 的區表與 golden `host-poor-connection` 的地位。
 12. **F.2 的階段順序改成 despawn、remove 先於 spawn、insert**（S4）：讓同窗「刪 X 再以同 id 生成 X」成立；代價是「同窗生成又刪除同一個新 id」從不可見變成生成勝出。
 13. **K.2 第 1 條（Replacement Criteria）的改寫**（S8）：原條件已被 spike 的結果觸發；本稿主張觸發的是事前寫明的上限、不是機制失效，並把條件改寫成三個分項。Replacement Criteria 的變更要使用者核准；若不核准，依原條文本規格進入「修還是重建」的提案。
@@ -1267,7 +1267,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | X20 | mechanism §3.3 Executor 列「RNG 是 resource」 | 亂數狀態是每實體的 (c) 元件（E-10 的 `Brain.rngState`，`rollback = Yes`），不是單一 Resource | 回滾與每實體獨立性：Resource 形式要全體共用一個序列，重放時任一實體的順序變動就牽連全部；元件形式與 entity-model E-10 一致（修訂：N9） |
 | X21 | v0.2 §10.1 的圖：一個 Runtime 內含 Simulation Clock 與 Frame Clock | Runtime＝一個 World；兩個時鐘在不同執行緒時是兩個 Runtime（ClientSim／ClientFrame，H.4.2） | H-2：一個 World 一條執行緒；兩時鐘同執行緒時仍可以是一個 Runtime 兩個 schedule（H.2 第 3 點），所以 v0.2 的圖是其中一種組合，不是被否定（修訂：N9） |
 | X22 | mechanism §3.3 Executor 列「Time 只來自 tick」 | tick 加被記錄的 boundary 取樣（`HostClockSample`） | 與 determinism.md DI 4 一致、與 mechanism 不一致；**要使用者裁決**（K.3 第 11 條；修訂：B6） |
-| X23 | entity-model §5.2「Join／Leave 在 Tick 外（host 呼叫）」 | Ingress 寫請求進 ring、(c) System 在 Simulate 生成與刪除（H.4.1） | Z3 不允許 (b) 寫 role=State、Z5 不允許 (b) despawn 帶 (c) 欄的實體；**要使用者確認**（K.3 第 10 條；修訂：S3） |
+| X23 | entity-model §5.2「Join／Leave 在 Tick 外（host 呼叫）」 | Ingress 寫請求進 ring、(c) System 在 Simulate 生成與刪除（H.4.1） | Z3 不允許 (b) 寫 role=State、Z5 不允許 (b) despawn 帶 (c) 欄的實體；**已決定（2026-11-11，K.3 第 10 項）**；entity-model §5.2 改寫排進第一個文件批 |
 | X24 | entity-model E-3「Reset 歸回 First」、§5 第 83 行的世代 | World 內無 Reset；世代切換＝Host 重建 World（A.1、H.7） | W-9 的「不重用」只在一個 World 內成立；跨世代的重用由重建 World 隔開（修訂：S4） |
 
 ## 附錄二：未查證

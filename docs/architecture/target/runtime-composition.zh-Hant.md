@@ -19,6 +19,12 @@
 - 代價：多一個 World 與每幀一次 extract。使用者的理由：合起來看著簡單，代價很高——合併後「渲染不改模擬」只能靠 RenderSubmit 唯讀的存取宣告守，而宣告的真實性在 C++ 攔不到（LIM-3）；分開則由機制守。
 - 交換點：意圖 F → S、呈現 S → F 經 Host 擁有的 Mailbox，只在 schedule 之間存取；Link 經 Host 與網路執行緒在 S 的 schedule 前後交換。
 
+## 3. Match：Join／Leave 在 tick 內（使用者 2026-11-11 決定，spec K.3 第 10 項）
+
+- Match 的 FixedUpdate：`Ingress`（zone=B，Z3）把 Link 收到的加入／離開請求、ack、動作、輸入、到達時刻全部以資料寫進 `InputRing[tick]`，**不生成、不刪除實體**；`Simulate`（zone=C）的 `ApplyMembership` 讀 ring 的請求，以 `SpawnWithId<Bundle<…>>`（id 由 Gateway 配，E-2）生成、以 `Despawn` 刪除（它是 (c)，Z5 允許）。
+- 不為 Host 開 Z2／Z5 的例外：Host 在 World Ready 時只寫 boundary 與 external Resource，不直接生成或刪除帶 (c) 欄的實體。
+- 後果記為限制 LIM-5（`limits.zh-Hant.md`）：加入與離開晚最多一個 tick；golden 可能差一 tick、要重設基準；產品線在遷移批確認。entity-model §5.2「Join／Leave 在 Tick 外」改寫，排進改造的第一個文件批。
+
 ## Design Invariants（候選；核准後成為正式條文）
 
 1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
@@ -26,5 +32,6 @@
 
 ### Replacement Criteria（候選）
 
+- LIM-5：Join／Leave 在 tick 內，加入與離開晚最多一 tick；不解除（詳細在 `limits.zh-Hant.md`）。
 - 渲染需要寫回模擬 World（例如渲染驅動的 LOD 狀態要進判定）→ 不是放寬 DI 1，而是把那份狀態搬到來源 World 由模擬側的 System 寫，渲染仍只讀。
 - 第一個真實能力接進機制時仍要改 Host 迴圈或 Kernel 本體，或 Host 的協調邏輯在兩個以上 host 重複 → 「Host 又長回來」，停下（spec K.2 第 7 條）。
