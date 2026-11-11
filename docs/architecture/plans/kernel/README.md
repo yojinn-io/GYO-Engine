@@ -34,6 +34,12 @@ v8-arch-kernel
 | `-spike` | 獨立子目錄（候選 `spikes/kernel/`，不進任何 target 的依賴），只做兩件：(1) 從函式參數型別在編譯期推出 `{reads, writes}`，含 Component、Resource、事件、延後佇列句柄；(2) 受限句柄＋debug 建置的 World 存取核對，未宣告的 id 即斷言。測試用的型別只存在測試裡 | 原型程式＋測試＋`spike-report.zh-Hant.md`（兩個編譯器的差異、做不到的事） | (1) 10 個以上不同簽名的 System，推出的集合與人手寫的期望逐一相同（static_assert＋執行期），L1 三平台（MSVC、gcc／clang、AppleClang）全綠；(2) 3 種繞路（存參考、拿裸指標、經未宣告 id 讀 World）在 debug 建置各被斷言攔下，release 不攔並寫明；(3) 突變：移除任一宣告 → 對應測試失敗。任一不成立＝spike 結論「做不到」，照 §14 停下回報，不補救 |
 | `-audit` | 拿 `-spec` 去讀現有每個模組：有沒有自己的生命週期或更新迴圈；實際存取能不能被一份契約框住；是不是純函式 | `audit.zh-Hant.md`：逐模組留／包／重寫＋理由＋行數 | 每個結論附檔名與行號；對抗檢查抽 5 個模組複核 |
 
+## -audit 的起點（各線 2026-11-11 回報）
+
+- 工具線 voxel 編輯器：迴圈在 `tools/voxel_map_editor/src/window/EditorWindow.cpp`（ImGui 每幀：Shortcuts → DrawPreview［SyncPreview 重烘、scene Apply／Render、Fly、Pick、Edit］→ Overlay）；葉子在核心（Build／MapBuild／Visibility／FlyCamera／Tools／Editing）。這是 Editor Runtime 對照的第一個樣本。
+- 工具線 model_viewer：`ViewerWindow.cpp:112` 已知缺陷（選擇窗不比對 tag、Failed 結束等待），改造期間不修，記在工具線 HANDOFF 與跨元件規則登記頁；是「契約後果在消費端各寫一份」的實例，-audit 讀 framework 時要看。
+- 產品線：PR #167、#168 已合併，無進行中實作；PR #173（11/9 場次記錄）待使用者合併。
+
 ## 與其他線的關係
 
 - 決定性等級（PR #177，`docs/architecture/determinism.md`）：(c)／(b) 區的定義；mechanism §3.3 的四處契約引用它。
