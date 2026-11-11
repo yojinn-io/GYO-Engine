@@ -85,7 +85,7 @@ Executor 的 Serial／Parallel 是策略，不是決定性本身。序列化只�
 |---|---|---|
 | World | 疊代依 index；同步點後所有參考失效；疊代中只進佇列；佇列依順序套用 | 審查補充 5 |
 | Executor | 順序固定；(c) 的時間只來自兩個來源：World 的 domain tick，與被記錄的 boundary 輸入（Host 每次喚醒取樣一次的 `HostClockSample`、隨每筆輸入進 ring 的到達時刻），(c) System 自己讀時鐘仍禁止（使用者 2026-11-11 改，原文「Time 只來自 tick」；spec K.3 第 11 項）；亂數狀態是每實體的 (c) 元件、種子進 digest（spec X20，原文「RNG 是 resource」） | Kernel 第 8 條；determinism.md DI 4 |
-| Ingress | 外部訊息只在同步點寫入 InputRing[tick]；(c) 區 System 不碰 Link；到達時機不影響結果 | v0.2 第十節 10.3 |
+| Ingress | 外部訊息由 Host 在交換點放進 Link，再由 Ingress stage 的 (b) System 寫入 InputRing[tick] 或 MembershipRequests（spec H.2b）；(c) 區 System 不碰 Link；到達時機不影響結果 | v0.2 第十節 10.3 |
 | Math／編譯 | 自己的 Sin／Cos（E1）；fp-contract 旗標順序（E2）；三平台 golden；E0 先找 ULP 來源 | determinism.md |
 
 架構師的主張 B：(c) 區開 Parallel 的唯一條件是有「與 Serial 逐位元相同」的守衛測試（比照 StaticAabbGrid 以「與線性掃描等價」當契約）。沒有守衛就不開；否則「能證明就能並行」會成為之後每個會話開並行的理由。

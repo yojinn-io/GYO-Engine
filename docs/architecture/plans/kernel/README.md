@@ -38,7 +38,7 @@ v8-arch-kernel
 ├── -spec    上段｜ultracode：提案 Opus×3／high、統合 Fable／high、對抗 Opus／xhigh｜約 1 天｜mechanism → 正式規格，每部件一節
 ├── -spike   上段｜實作 Opus／xhigh（主會話的子代理）、審查 Fable／xhigh｜2～3 天｜獨立子目錄最小 C++ 原型，證明簽名推存取與受限句柄
 ├── -spec-v03  上段｜主會話 Fable／high 自寫、對抗 Opus／high 只讀｜規格修訂九項＋第一個文件批（Delta 文件修改）｜執行中（2026-11-11）
-├── -spike-pageguard 上段｜等 -spec-v03｜debug 頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、歸「存取驗證（可關）」的第三層（不是 GYO_ASSERT；頁錯誤處理器記違規、System 以 Err 回傳；B-9 結案後分類）；開工前事前宣告
+├── -spike-pageguard 上段｜等 -spec-v03｜頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、歸「存取驗證（可關）」的第三層（不是 GYO_ASSERT；頁錯誤處理器記違規、System 以 Err 回傳；B-9 結案後分類）；開工前事前宣告
 ├── remove-object-fps 中段｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview，**加 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance（含各自測試；使用者 2026-11-11）**（§7 完整刪除；兼驗 removability）｜待事前宣告
 └── -audit   **完成**｜Opus／high ×3、對抗 Fable／high（4/5）｜現有模組逐一「留／包／重寫」，給中間層成本
 ```

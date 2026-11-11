@@ -39,7 +39,7 @@
 ## 4. 結構變更的套用（使用者 2026-11-11 決定，spec K.3 第 4 項）
 
 - 生成、刪除、加欄、移欄在 System 執行期間只進延後佇列；Running 期間成員不變（spec W-3）。
-- **Despawn 不算獨占寫者、不產生衝突邊**：它是成員關係的結束，不是值的寫入；同一窗內的查詢結果不受 despawn 記錄影響。(c) 資料的保護由區規則 Z5（帶 (c) 欄的實體只能由 (c) 的 System 刪除，套用時常開檢查）。
+- **Despawn 不算獨占寫者、不產生衝突邊**：它是成員關係的結束，不是值的寫入；同一窗內的查詢結果不受 despawn 記錄影響。(c) 資料的保護由區規則 Z5（帶 (c) 欄的實體只能由 (c) 的 System 刪除；記錄當下查、以 Err 回傳，F.2 第 2 步再複核本窗 (c) 的待套用 insert／spawn）。
 - **同步點的套用順序寫死**（spec F.2）：hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource。despawn 階段依 EntityId 升冪、冪等（同一 id 記兩次只處理一次）、對窗開始時不存在的 id 無作用。despawn 排在 spawn 之前，是為了同一窗內「刪 X 再以同 id 生成 X」（重連）成立。
 - 說明案例（使用者）：同一 tick 玩家 10 中彈死亡又退出。Combat 在 tick 內已寫下玩家 7 的擊殺——結構凍結，玩家 10 仍在；同步點才刪它。所以擊殺成立，而且與 despawn 的排序無關。若產品要「退出者不算被擊殺」，那是 Combat 與 ApplyMembership 兩個 System 的 Plan 順序與規則問題，(c) 區的歧義檢查會強迫把順序寫明，不是 despawn 該管的。
 

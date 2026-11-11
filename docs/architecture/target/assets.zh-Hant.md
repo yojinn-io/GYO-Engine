@@ -12,7 +12,7 @@
 1. **請求與狀態 Resource**（Bevy `AssetServer` 的形狀）：要載什麼、載到哪了、發 Handle。在文件／Frame World。
 2. **每種資產型別一個 `Assets<T>` Resource**（不是一個總管物件）；Handle 是帶引用計數的 id。在文件／Frame World。
 3. **loader 由各 plugin 登記**（例：model-assets plugin 登記 ufbx loader）；ufbx 本身是函式庫，不是 plugin 也不是 System，被 plugin 的載入 System 呼叫。
-4. **載入是外部服務**：IO 執行緒加交換點，與 Link 同形（spec I.1、I.2）；不是 v1 先同步讀檔。完成的資產由 Host 在**交換點**寫進 external 的 `AssetInbox` Resource；Loading／Frame 的 System 在 stage 內**依請求順序**套用進 `Assets<T>`，不依完成序（決定性；spec H.2b 第 3 點，F.2 不加階段）。GYO 多一條 Bevy 沒有的約束：**內容身分是 (c)**（determinism.md §4.9），進 Startup 的資產全部載完才凍結——今天「ready 前全載」的原意（blueprint §5 A 列）。
+4. **載入是外部服務**：IO 執行緒加交換點，與 Link 同形（spec I.1、I.2）；不是 v1 先同步讀檔。完成的資產由 Host 在**交換點**寫進 external 的 `AssetInbox` Resource；Loading 的 Ingress stage 的 `StageAssets`（(b)，Z3）把它搬進 role=Input 的 (c) 暫存 `AssetStaging`（以請求序號為鍵）；各 stage 的 (c) System 持 `AssetCursor`，在 stage 內只套用**連續完成的前綴**進 `Assets<T>`，缺一筆就等下一批，不依完成序（決定性；spec H.2b 第 2～3 點，F.2 不加階段；2026-11-12 N-2／B-3 同步）。GYO 多一條 Bevy 沒有的約束：**內容身分是 (c)**（determinism.md §4.9），進 Startup 的資產全部載完才凍結——今天「ready 前全載」的原意（blueprint §5 A 列）。
 5. **GPU 資源**（貼圖、mesh buffer）是渲染 World 的 Resource（Bevy `RenderAssets<T>`）；Extract 搬「哪些資產變了」，渲染 World 的 System 上傳。
 
 後果：今天的 `AssetManager` 物件消失；`UiRenderer`、`WeaponViewModel` 跨 World 持 `AssetManager*` 的問題隨之消失（它們各自改讀自己 World 的 `Assets<T>` 與渲染 World 的 GPU 資源）。audit 的 asset「包（先收攏）」判定不變，但「收攏成一個 Resource」改為「拆成請求狀態、`Assets<T>`、GPU 資源三類」。
@@ -24,9 +24,9 @@
 ## Design Invariants（候選；核准後成為正式條文）
 
 1. **沒有資產總管物件**：請求狀態、`Assets<T>`、GPU 資源是三類 Resource，各在它們的 World；System 以句柄存取，不持指標。守衛：掃描（無 `AssetManager*`／`&` 成員）；spec J-5。
-2. **載入是外部服務，完成依請求順序在同步點套用**：IO 執行緒不碰 World；套用順序與完成時序無關。守衛：等價測試（打亂完成順序，`Assets<T>` 的內容與 Handle 序列相同）。
-3. **內容身分是 (c)；Startup 的資產全載完才凍結**。守衛：determinism.md §4.9 的既有 digest；啟動時「資產未就緒即 Running」是啟動錯誤。
+2. **載入是外部服務，完成的資產經 Loading 的 Ingress stage 進暫存、由 (c) System 依請求序號的連續前綴套用**：IO 執行緒不碰 World；套用順序與批次切分都與完成時序無關。守衛：等價測試（打亂完成順序，`Assets<T>` 的內容與 Handle 序列相同）。
+3. **內容身分是 (c)，由 (c) System 從暫存的位元組算；世界內容的資產在 Loading 宣告 ready 前載完**（Startup 不載內容；runtime-composition §3a）。守衛：determinism.md §4.9 的既有 digest；「資產未就緒即 ready」是 Loading 的 System 以 Err 回傳的 Programmer Error。
 
 ### Replacement Criteria（候選）
 
-- 出現必須在 Running 期間串流載入並進 (c) 的資產 → 本文件第 1 節第 4 點的「Startup 全載」要重審（lightyear／Bevy 的串流模型），不是在 `Assets<T>` 上加特例。
+- 出現必須在 Running 期間串流載入並進 (c) 的資產 → 本文件第 1 節第 4 點的「ready 前載完」要重審（lightyear／Bevy 的串流模型），不是在 `Assets<T>` 上加特例。

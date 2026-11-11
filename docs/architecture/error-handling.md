@@ -27,7 +27,7 @@ A third case the two columns do not cover: the program is wrong, but the violati
 | Final disposition | Still a Programmer Error: the fix is in the code. `Result<void, KernelError>` is the System's **return contract, not an error channel**: every System returns it on every run, Ok is the normal path, Err carries the diagnostic chain and does not mean the caller can recover |
 | Tested with | Target guards, not yet implemented: release-target tests observe the `Err` and the `Interrupted` state (kernel spec J-32b, J-45); debug tests use `GYO_CHECK_ASSERTS` |
 
-Full text: `docs/architecture/target/error-handling.md`. The user's principle: no silent handling. The kernel's access verification (spec A.6) is not an assertion: its findings take this Result path, it has a runtime switch, and `GYO_ASSERT` stays as above for cheap preconditions (`v8-arch-kernel-verification-not-assert`, 2026-11-12).
+Full text: `docs/architecture/target/error-handling.md`. The user's principle: no silent handling. The kernel's access verification (spec A.6) is not an assertion: its findings are returned as `Err` by the System's trampoline the same way, it has a runtime switch, and `GYO_ASSERT` stays as above for cheap preconditions (`v8-arch-kernel-verification-not-assert`, 2026-11-12).
 
 These are not errors and use neither mechanism:
 

@@ -21,14 +21,14 @@
 
 ## 3. Match：Join／Leave 在 tick 內（使用者 2026-11-11 決定，spec K.3 第 10 項）
 
-- Match 的 FixedUpdate：`Ingress`（zone=B，Z3）把 Link 收到的加入／離開請求、ack、動作、輸入、到達時刻全部以資料寫進 `InputRing[tick]`，**不生成、不刪除實體**；`Simulate`（zone=C）的 `ApplyMembership` 讀 ring 的請求，以 `SpawnWithId<Bundle<…>>`（id 由 Gateway 配，E-2）生成、以 `Despawn` 刪除（它是 (c)，Z5 允許）。
+- Match 的 FixedUpdate：`Ingress`（zone=B，Z3）的 `StageMembershipRequests` 把 Link 收到的加入／離開請求寫進 `MembershipRequests`（以請求序號為鍵、帶 ingestedAt），`StageInputs` 把 ack、動作、輸入、到達時刻寫進 `InputRing[tick]`，**不生成、不刪除實體**；`Simulate`（zone=C）的 `ApplyMembership` 依游標讀 `MembershipRequests`（spec H.2b 第 4 點），以 `SpawnWithId<Bundle<…>>`（id 由 Gateway 配，E-2）生成、以 `Despawn` 刪除（它是 (c)，Z5 允許）。
 - 不為 Host 開 Z2／Z5 的例外：Host 在 World Ready 時只寫 boundary 與 external Resource，不直接生成或刪除帶 (c) 欄的實體。
 - 後果記為限制 LIM-5（`limits.zh-Hant.md`）：加入與離開晚最多一個 tick；golden 可能差一 tick、要重設基準；產品線在遷移批確認。entity-model §5.2「Join／Leave 在 Tick 外」改寫，排進改造的第一個文件批。
 
 ## 3a. Loading schedule：世界內容的載入階段（使用者 2026-11-11 決定，spec H.2b）
 
 - Startup 只放 Runtime 建構時就確定、不依內容的東西；**世界內容全部經 `Loading` schedule 進來**，初始成員不走 Startup。
-- Loading 的 stage 固定序：**Ingress** → 地圖 → 場景 → 可互動物件 → 敵人 → 玩家；可分批（Loading 可跑多次，每次一批，由 Host 迴圈驅動）。Ingress 是 Z3 的 ingress stage：(b) 的 ingress System 從 external Resource（`Link`、`AssetInbox`）讀，寫進 role=Input 的 (c) 暫存（`MembershipRequests` 以請求序號為鍵、`AssetStaging`）；之後各 stage 的 (c) System 只讀暫存，依請求順序套用進 `Assets<T>` 或欄（assets §1；spec H.2b、N-2／N-8 修訂）。資產載入本身是 IO 服務，只到 `AssetInbox` 為止。
+- Loading 的 stage 固定序：**Ingress** → 地圖 → 場景 → 可互動物件 → 敵人 → 玩家；可分批（Loading 可跑多次，每次一批，由 Host 迴圈驅動）。Ingress 是 Z3 的 ingress stage，掛三個 (b) System（`StageMembershipRequests`、`StageAssets`；`StageInputs` 只在 FixedUpdate），各從 external Resource（`Link`、`AssetInbox`）讀，寫進 role=Input 的 (c) 暫存（`MembershipRequests`、`AssetStaging`，都以請求序號為鍵）；之後各 stage 的 (c) System 只讀暫存，以 (c) 游標依序號的連續前綴套用進 `Assets<T>` 或欄（assets §1；spec H.2b、N-2／N-8 修訂）。資產載入本身是 IO 服務，只到 `AssetInbox` 為止。
 - 玩家在「玩家」stage 由 `ApplyMembership` 以 `SpawnWithId` 生成，與中途加入是同一個 System；Z2 無例外。
 - 對局時鐘在 Loading 宣告 ready 後才開始：FixedUpdate 的 domain tick 於 ready 後從 0 起算；Loading 的計數不是遊戲 tick。Client 收到 Match 的 ready（wire 事件；pv10-requirements）前停在 loading 狀態。
 - 決定性：載入的內容身分是 (c)，載入順序是 Plan 的函數，ready 時兩端 (c) 狀態可比對。
@@ -56,7 +56,7 @@
 
 1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
 2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；產品與工具只在 main 列 plugin。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）。
-3. **世界內容只經 Loading schedule 進來（且只經它的 Ingress stage 進 (c)）；對局 tick 於 ready 後從 0 起算，Loading 期間 `tick[Fixed]` 不推進、Loading 自己的計數不是 `tick[Loading]` 可被 (c) 讀的時間；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄；Loading 非 Ingress stage 的 System 不得讀 external Resource）；等價測試（分批數不同、ready 時 (c) 狀態逐位元相同）；掃描（Peer 元件不掛在 Player 實體）。
+3. **世界內容只經 Loading schedule 進來（且只經它的 Ingress stage 進 (c)）；對局 tick 計數在 ready 時為 0、第一個模擬 tick 是 1，Loading 期間 `tick[Fixed]` 不推進；`tick[Loading]` 是批次計數，(c) System 可讀它（S-4）但等價測試不比它；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄；Loading 非 Ingress stage 的 System 不得讀 external Resource）；等價測試（分批數不同、資產完成順序打亂：ready 時 (c) 欄與 Resource 逐位元相同，`tick[Loading]` 除外）；掃描（Peer 元件不掛在 Player 實體）。
 4. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
 
 ### Replacement Criteria（候選）
