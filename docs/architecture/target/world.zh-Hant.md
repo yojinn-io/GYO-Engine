@@ -17,7 +17,7 @@
 
 ## 2. change stamp（使用者 2026-11-11 決定，spec K.3 第 2 項）
 
-- 每格一個 `uint64` 的 `added` 與 `changed`。stamp 由 World 依 **Plan 位置**取值：每一個 Plan 步驟（System 或同步點）開始時取下一個值；條件為假被跳過的 System 也消耗它的值。取值依 Plan 位置而不依完成先後，所以 Parallel 與 Serial 相同。
+- 每格一個 `uint64` 的 `added` 與 `changed`。stamp 是 World **依 Plan 順序推進的全域計數**（跨同一 World 的所有 schedule 單調）：每一個 Plan 步驟（System 或同步點）開始時取下一個值；條件為假被跳過的 System 也消耗它的值。取值依 Plan 順序而不依完成先後，所以 Parallel 與 Serial 相同；不是 (c) 資料。
 - stamp **單調、不重置、不回滾、跨世代（World 重建）不比較**。溢出無實際可能（u64）。
 - tick 的視角由 `tickStamps[domain]`（有上限的環形表：tick → 該 tick 第一個 stamp）換算；複製層以 `changed > tickStamps[T+1] − 1` 判「比 Ledger 確認的 tick T 新」。
 - **stamp 不是 (c) 資料**：不進回滾快照、不回滾；(c) 區 System 不得用它做變更過濾（spec G-3：Match 執行一次與 Client 回滾重跑時「上次執行之後的變更」不同，兩端的 stamp 毫無關係）。
@@ -57,7 +57,7 @@
 
 1. **鍵的疊代順序只來自數值**：World 對 `EntityId` 只做 64 位元整數比較，不解讀 index／generation；任何疊代、交集、同步點套用的順序都以此為鍵。守衛：spec J-1、J-2。
 2. **World 不配發、不重用鍵**：配發器是產品的 Resource；World 內沒有配發、回收、歸零的操作；世代切換＝重建 World。守衛：spec J-8（含突變「用盡時回繞」「加 Reset 歸零」）。
-3. **stamp 依 Plan 位置取值、單調、不進 (c)**：跳過的 System 也消耗；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38。
+3. **stamp 是依 Plan 順序推進的全域計數、單調、不進 (c)**：跳過的 System 也消耗；同一 World 的執行歷史相同時序列相同；Changed／Added 的「上次執行」以掛點為單位；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38。
 4. **寫入政策預設獨占，獨占是啟動檢查**：未標 Shared 的欄與 Resource 在一個 World 的所有非 Startup schedule 中寫者至多一個（以 System 計，含型別化 Commands、Spawn 的 bundle、hook）；第二個寫者是啟動錯誤；執行期不加鎖、不仲裁；進 digest 的欄不得 Shared。守衛：spec J-15、J-16。
 5. **結構變更只在同步點、順序寫死、Despawn 不是寫者**：Running 期間成員不變；同步點依「hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource」套用，每階段依 id，despawn 冪等且對窗開始不存在的 id 無作用；Despawn 不計入獨占寫者、不產生衝突邊，(c) 的保護由 Z5。守衛：spec J-3、J-31、J-32、J-32b（突變：spawn 先於 despawn、不去重、依記錄順序套用）。
 6. **事件屬於一個 clock domain，只在它的 clock schedule 內讀寫；無游標，依 Plan 位置讀**。守衛：spec J-36、J-37。

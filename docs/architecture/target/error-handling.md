@@ -20,7 +20,7 @@ The user's principle behind this row: no silent handling. The earlier draft's "a
 
 ## Design Invariants (candidates; become binding once approved)
 
-1. **A runtime-data Programmer Error is reported as `Result<void, KernelError>` with full context, wrapped layer by layer, logged exactly once by the Executor, and ends in `Interrupted`; no build configuration swallows it.** Guards: spec J-32b, J-45, J-35.
+1. **A runtime-data Programmer Error is reported as `Result<void, KernelError>` with full context, wrapped layer by layer (verification violations and the System's own `Err` are siblings in one error list, not nested), logged exactly once by the Executor, and ends in `Interrupted`; no build configuration swallows it.** Guards: spec J-32b, J-45, J-35.
 2. **`Base::Result` stays a pure value**: no logging, no handler inside it; the Executor's handler is the only place a kernel error is logged. Guard: review; spec J-9 scan of the kernel directory for log calls outside the Executor.
 
 ### Replacement Criteria (candidates)

@@ -9,10 +9,10 @@
 
 使用者原則：不用舊思路處理新架構；參考 Bevy。審查原本問「`AssetManager` 屬 Frame World 還是 Render World」，這個問題本身沿用了「一個總管物件」的形狀，不採。
 
-1. **請求與狀態 Resource**（Bevy `AssetServer` 的形狀）：要載什麼、載到哪了、發 Handle。在文件／Frame World。
-2. **每種資產型別一個 `Assets<T>` Resource**（不是一個總管物件）；Handle 是帶引用計數的 id。在文件／Frame World。
+1. **請求與狀態 Resource**（Bevy `AssetServer` 的形狀）：要載什麼、載到哪了、發 Handle。世界內容的資產在 sim World（Loading schedule；spec H.2b）；純呈現用的在 Frame World。
+2. **每種資產型別一個 `Assets<T>` Resource**（不是一個總管物件）；Handle 是帶引用計數的 id。放在使用它的 World（sim 或 Frame）。
 3. **loader 由各 plugin 登記**（例：model-assets plugin 登記 ufbx loader）；ufbx 本身是函式庫，不是 plugin 也不是 System，被 plugin 的載入 System 呼叫。
-4. **載入是外部服務**：IO 執行緒加交換點，與 Link 同形（spec I.1、I.2）；不是 v1 先同步讀檔。完成的資產由 Host 在**交換點**寫進 external 的 `AssetInbox` Resource；Loading 的 Ingress stage 的 `StageAssets`（(b)，Z3）把它搬進 role=Input 的 (c) 暫存 `AssetStaging`（以請求序號為鍵）；各 stage 的 (c) System 持 `AssetCursor`，在 stage 內只套用**連續完成的前綴**進 `Assets<T>`，缺一筆就等下一批，不依完成序（決定性；spec H.2b 第 2～3 點，F.2 不加階段；2026-11-12 N-2／B-3 同步）。GYO 多一條 Bevy 沒有的約束：**內容身分是 (c)**（determinism.md §4.9），進 Startup 的資產全部載完才凍結——今天「ready 前全載」的原意（blueprint §5 A 列）。
+4. **載入是外部服務**：IO 執行緒加交換點，與 Link 同形（spec I.1、I.2）；不是 v1 先同步讀檔。完成的資產由 Host 在**交換點**寫進 external 的 `AssetInbox` Resource；Loading 的 Ingress stage 的 `StageAssets`（(b)，Z3）把它搬進 role=Input 的 (c) 暫存 `AssetStaging`（以請求序號為鍵）；`資產` stage 的 (c) System `ApplyStagedAssets`（`AssetCursor` 的唯一寫者）只套用**連續完成的前綴**進 `Assets<T>`，缺一筆就等下一批，不依完成序（決定性；spec H.2b 第 2～3 點，F.2 不加階段；2026-11-12 N-2／B-3／N4 同步）。GYO 多一條 Bevy 沒有的約束：**內容身分是 (c)**（determinism.md §4.9），世界內容的資產在 Loading 宣告 ready 前全部套用完——今天「ready 前全載」的原意（blueprint §5 A 列）。
 5. **GPU 資源**（貼圖、mesh buffer）是渲染 World 的 Resource（Bevy `RenderAssets<T>`）；Extract 搬「哪些資產變了」，渲染 World 的 System 上傳。
 
 後果：今天的 `AssetManager` 物件消失；`UiRenderer`、`WeaponViewModel` 跨 World 持 `AssetManager*` 的問題隨之消失（它們各自改讀自己 World 的 `Assets<T>` 與渲染 World 的 GPU 資源）。audit 的 asset「包（先收攏）」判定不變，但「收攏成一個 Resource」改為「拆成請求狀態、`Assets<T>`、GPU 資源三類」。

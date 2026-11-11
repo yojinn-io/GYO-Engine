@@ -29,7 +29,7 @@
 **啟動參數開關的四個條件與兩個限制**（使用者 2026-11-12 同意，側邊會話轉述；缺任一條件就是新的靜默來源）：
 
 1. **啟動後凍結**：參數在 Registry 凍結前讀一次，寫進 `KernelSettings`；Running 期間不可改（邊界比對的上一次快照會對不上）。
-2. **狀態進證據**：開關值出現在啟動日誌、場次記錄 header、任何「無違規」報告旁；零 Err 不等於乾淨。
+2. **狀態進證據**：開關值與被 `ColumnInfo` 開關排除的大欄清單，出現在啟動日誌、場次記錄 header、任何「無違規」報告旁；零 Err 不等於乾淨。
 3. **預設跟建置變體，參數只能覆寫**：release 預設關、測試版預設開（寫在建置變體）；啟動參數可在 release 開（場次）或在測試版關（量純效能），兩個方向都在日誌標「被參數覆寫」。
 4. **關閉時零配置成本**：邊界比對的快照緩衝只在開著時配置；關閉只剩每次存取一個分支。
 
@@ -43,7 +43,7 @@
 ## Design Invariants（候選；核准後成為正式條文）
 
 1. **描述從簽名推出，一份**；登記 API 不接受手寫存取宣告；句柄不可複製、不可移動。守衛：spec J-10～J-12。
-2. **System 回 `Result<void, KernelError>`——回傳契約，不是錯誤通道；Ok 是正常路徑**；Err 帶上下文、逐層包裝、Executor 只處理一次並 Interrupted，任何組態都不靜默。守衛：spec J-10（回傳型別）、J-32b、J-45（release 目標也要看到 Err 與 Interrupted）、J-35。
+2. **System 回 `Result<void, KernelError>`——回傳契約，不是錯誤通道；Ok 是正常路徑**；Err 帶上下文、逐層包裝（驗證違規與 System 自己的 Err 是並列清單，不互包）、Executor 只處理一次並 Interrupted，任何組態都不靜默。守衛：spec J-10（回傳型別）、J-32b、J-45（release 目標也要看到 Err 與 Interrupted）、J-35。
 3. **System 無狀態**：無捕獲、無 `this`；(c) 區無 `Local`。守衛：spec J-10、J-14。
 
 ### Replacement Criteria（候選）

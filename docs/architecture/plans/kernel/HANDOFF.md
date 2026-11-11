@@ -39,7 +39,7 @@
 | `v8-arch-kernel-delta-approved` | 2026-11-11（側邊會話轉述，spec K.3 第 7 項）。使用者同意 Architecture Delta 三處：architecture.md:136 禁令改為「Kernel 進 Engine（World／System／Scheduler／Executor）；plugin ABI 與動態載入仍禁」；entity-store DI 4 延伸到 insert／remove、DI 5 仍成立、DeferredChanges（3b）撤回；determinism.md §4.7 正式化。七項以 spec／mechanism 為計畫層一次書寫、各批引用。文件修改排進改造的第一個文件批。 |
 | `v8-arch-remove-object-fps` | 2026-11-11（側邊會話轉述，spec K.3 第 8 項）。移除 apps/object_fps、apps/object_fps_v2 與 tools/object_fps_preview 的依賴，照 AGENTS §7 完整刪除、不留相容層；理由：PvP 已有自己的生態。排成改造前的獨立批，兼驗 §7 removability（刪後共通層需要改就記 Delta）。待事前宣告。 |
 | `v8-arch-kernel-writer-unit-system` | 2026-11-11（側邊會話轉述，spec K.3 第 9 項）。獨占寫者以 System 計、Startup 不計；PvP 的 Body 依 entity-model 第 139 行分類拆欄，不併 System、不改 Shared、不採以 owner plugin 計。使用者：不拆的話架構改造就沒有意義。拆欄範圍與 golden 影響由 -audit 量。 |
-| `v8-arch-kernel-membership-in-tick` | 2026-11-11（側邊會話轉述，spec K.3 第 10 項）。採規格：Join／Leave 進 tick 內，Ingress 只寫請求進 InputRing，(c) 的 ApplyMembership 以 SpawnWithId／Despawn 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（晚最多一 tick、golden 如 combat-rejoin 可能差一 tick 需重設基準）記為 LIM-5，產品線在遷移批確認；entity-model §5.2 改寫排進第一個文件批。 |
+| `v8-arch-kernel-membership-in-tick` | 2026-11-11（側邊會話轉述，spec K.3 第 10 項）。採規格：Join／Leave 進 tick 內，Ingress 只寫請求進暫存（v0.3 N-8 起是 `MembershipRequests`，原記 InputRing），(c) 的 ApplyMembership 以 SpawnWithId／Despawn 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（晚最多一 tick、golden 如 combat-rejoin 可能差一 tick 需重設基準）記為 LIM-5，產品線在遷移批確認；entity-model §5.2 改寫排進第一個文件批。 |
 | `v8-arch-kernel-time-sources` | 2026-11-11（側邊會話轉述，spec K.3 第 11 項，B6 結案）。(c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入（HostClockSample、隨輸入進 ring 的到達時刻）；(c) System 自己讀時鐘仍禁止。mechanism §3.3 Executor 列已改（含圖）；determinism.md DI 4 不動；規則寫進 target/determinism.md。 |
 | `v8-arch-kernel-k3-12-14-15` | 2026-11-11（側邊會話轉述）。第 12 項：同步點套用順序照 F.2（與第 4 項一起）；第 14 項：v1 任何 Parallel 宣告＝D-E17，含只有 (b) 的 schedule（LIM-2）；第 15 項：事件只在該 domain 的 clock schedule 內讀寫（F-9）。 |
 | `v8-arch-kernel-result-errors` | 2026-11-11（側邊會話轉述，spec K.3 第 17 項，有變更）。不採常開檢查巨集，改 Go 式錯誤處理（原則：不靜默）：untyped 路徑回 Result<void, KernelError> 帶完整上下文；System 簽名改回 Result<void, KernelError>，包一層上下文回傳、不自己記錄；Executor 最外層只處理一次（記錄完整鏈一次、World Interrupted；日誌開關在 Executor 的 handler，Base::Result 仍純值）；release 也如此；debug 另在記錯當下呼叫 assertion handler。error-handling.md 加一列（Delta 已同意，排第一個文件批）。使用者接受 System 多一行回傳。部件文件 target/system-contract.zh-Hant.md、target/error-handling.md。 |
@@ -108,7 +108,8 @@
 - 2026-11-12 對抗檢查 S-8 的解讀（架構師）：`v8-arch-framework-retire` 廢止的是 framework **自己的**結構 DI（docs/framework/architecture.md）；event-sounds、preview 的資料契約 DI 不廢止，owner 隨 plugin 搬（audit §10.1）。文件標示照此改。framework DI「整節廢止」與 target README「未遷移照現況 DI」的關係：廢止＝不再新增或修改、隨遷移批刪；遷移前現有程式仍照它。
 - 2026-11-12 v0.3 對抗檢查 9 blocker／11 should／5 nit 全部處置（spec 修訂記錄「v0.3 對抗檢查後」）。
 - 2026-11-12 第二輪（Opus／high）4 blocker／10 should／4 nit（N-1～N-18）→ commit 929ca78e 處置；開關四條件 c64282d9。
-- 2026-11-12 第三輪（Opus／high）2 blocker／11 should／4 nit（B-1～B-17），並指出第二輪 9 項只修一半 → 除 B-8 外全部處置（spec 修訂記錄「第三輪對抗檢查後」）。**B-8 待使用者決定**（見未定）。第四輪只讀複核待派。
+- 2026-11-12 第三輪（Opus／high）2 blocker／11 should／4 nit（B-1～B-17），並指出第二輪 9 項只修一半 → 除 B-8 外全部處置（spec 修訂記錄「第三輪對抗檢查後」）。**B-8 待使用者決定**（見未定）。
+- 2026-11-12 第四輪只讀複核（Opus／high）0 blocker／10 should／4 nit（N1～N14：`CurrentTick` 參數、Link inbound 分種類、序號本地配發、`ApplyStagedAssets`＋`LoadingState`、`KernelSettings` 時間點、E.2 第 ⑤ 步、Z5 複核範圍、stamp 改述、ClientSim 加 Loading、H-A1 移出啟動表、J-48～J-52）→ 全部處置（spec 修訂記錄「第四輪只讀複核後」）。第五輪只對第四輪的 diff 複核，之後開 docs PR。
 
 ## 下一步
 
