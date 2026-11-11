@@ -63,6 +63,8 @@
 
 - 2026-11-11 使用者「開始」→ `-audit` 啟動。派工：審查者 Opus／high ×3（① engine；② framework＋tools；③ object_fps_pvp＋third_party，含 (a)～(d) 四節），各在獨立 worktree 寫 `audit-part-<範圍>.zh-Hant.md`；掃描腳本 `scripts/audit_scan.py` 由主會話先寫（全域一跑：44 模組、645 命中，`build/evidence/kernel-audit/scan-full/`）；對抗複核 Fable／high 等三份合併後抽 5 個模組；(e) 決定性區表回對由主會話合併時做。
 
+- 2026-11-11 -audit 第一份（framework-tools，commit 33f4d402 在 agent worktree）回來：件数一致（8＝7＋1）。發現事前宣告的判法「Q1 為是→組織層」比 spec I.3 粗；主會話採 I.3 的讀法（Q1 只排除留；組織層＝排序其他元件）、修正宣告、通知另兩個審查者對齊。另記：WindowShell／ImGuiShell 要重寫骨架會改 framework DI 2／DI 6（K.3 第 7 項未列的 Delta，待使用者）；Editor 預覽 readback 回 ImGui::Image 與 H-6 衝突（候選：ImGui System 全放文件 World、影像經 Host 交換點，預覽晚一幀；交工具線與使用者）；四工具 host 骨架重複（framework 標準 plugin 候選）。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
