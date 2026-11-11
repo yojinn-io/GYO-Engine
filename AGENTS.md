@@ -14,7 +14,7 @@
 * Architecture Drift を可視化する
 * Ownership と Dependency Direction を維持する
 * Product Boundary を壊さない
-* 実際の Implementation Pressure に基づいて Architecture を進化させる
+* 根拠のある Architecture Pressure に基づいて Architecture を進化させる（応用は観測、基盤は予見を含む。§2）
 * Feature 実装を理由とした不要な一般化や大規模再設計を防止する
 
 ことである。
@@ -42,7 +42,7 @@
 
 * Feature 実装を理由に、無関係なコードを整理しない。
 * 単一の Use Case だけを根拠に新しい汎用 Abstraction を作らない。
-* 将来必要になるかもしれないという理由だけで設計を一般化しない。
+* 将来必要になるかもしれないという理由だけで設計を一般化しない（基盤 Architecture の予見は §2 の根拠に従う）。
 * 明確な根拠なしに既存 Module の責務を移動しない。
 * 見た目を綺麗にするためだけの Architecture Refactoring を行わない。
 * 既存の Ownership Boundary を暗黙に変更しない。
@@ -56,10 +56,22 @@ Architecture の変更自体は禁止しない。
 Feature の実装、Architecture Review、Refactoring によって既存構造の問題が確認された場合、
 Architecture を変更してよい。
 
-ただし Architecture Change は、
-実際に観測された Implementation Pressure に基づかなければならない。
+ただし Architecture Change は、根拠のある Architecture Pressure に基づかなければならない。
+どの種類の根拠を求めるかは、変える構造が基盤か応用か（下記「層の区別」）で決まる。
+
+### Architecture Pressure の定義
+
+Architecture Pressure とは、既存の構造が Feature または Contract を支えるために、
+構造の外側での補償（回避策、重複、Special Case、状態の写し、上限の迂回など）を必要としている状態、
+または必要とすることを根拠から示せる状態をいう。根拠の強さで次の三つに分ける。
+
+* **観測された Pressure**：補償がすでに Code・計測・Content に現れている（下記 Valid evidence、または下記「反復を計画する条件」の 2）。
+* **予見される Pressure**：まだ Code には現れていないが、下記「予見の根拠」から導ける。
+* **根拠のない予測**：「将来必要かもしれない」「あると便利」。どの層でも Architecture Change の根拠にしない（§1、§11）。
 
 ### Valid evidence
+
+観測された Pressure の例（基盤・応用の両方で、観測の根拠として使う）：
 
 * Responsibility の重複
 * Ownership の曖昧化
@@ -74,8 +86,61 @@ Architecture を変更してよい。
 * Product 固有 Knowledge が reusable layer に漏れる
 * Product 固有データの存在を共通処理が前提とする
 
-Architecture Change SHOULD solve observed pressure,
+### 層の区別：基盤 Architecture と応用 Architecture
+
+判断基準：その構造を変えたとき、上に積まれたもの（他の Component、Product、保存済みの Data、
+wire の相手、Test の判定）の変更が必要になるか。
+必要になり、その量が上に積むほど増える構造を**基盤 Architecture** とし、それ以外を**応用 Architecture** とする。
+
+* 基盤の例：Engine の公開 Interface と Subsystem の境界、wire protocol、Data Contract の Format と Version の方針、
+  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、framework の共通構造。
+* 応用の例：Product・Tool の内部構造、Product-local の Registration、一つの Product の中で閉じる Adapter。
+* どちらか判断できない場合は、基盤として扱う。
+* 基盤として扱う計画は、基盤と判断した理由（上に積まれるもの）を書く。
+
+### 応用 Architecture：観測された Pressure で変える
+
+応用 Architecture は、変更の費用が上に積んだ量で大きく増えないため、観測を待ってよい。
+予見で先に一般化すると、過剰設計になる。
+
+For application architecture, Architecture Change SHOULD solve observed pressure,
 not predicted pressure.
+
+### 基盤 Architecture：予見される Pressure で先に設計する
+
+基盤 Architecture は、観測を待つと遅い。
+観測できる時点では、すでにその上に設計が積まれており、変更のリスクが高い。
+基盤の上に積まれた設計は、技術的負債の主な原因になる。
+
+そのため、基盤 Architecture を新しく作るとき、または大きな責務を加えるときは、
+観測を待たずに、予見される Pressure を設計に入れる。
+
+予見の根拠（出所を書く）：
+
+1. **名指しされた Feature**：ユーザーが示した Feature、計画にある Feature（後のバージョンを含む）。
+   各 Feature から基盤への要求を導く（下記 Derivation Order）。
+2. **成熟した参考実装**：同じ問題を解いた既存の Engine・Game・Library が、どう設計し、なぜそうしたか（避けた落とし穴）。
+   こちらとの相似点と、そのまま使える部分・改める部分を書く。
+3. **領域の既知の規模と予算**：対象の規模（Map の面積、人数、tick rate、Asset の数など）と、計画で示した予算。
+
+1 か 3 の少なくとも一つが必要である。1 と 3 は「要るか、どれだけ要るか」に答え、2 は「どう作るか」に答える。
+2 だけでは根拠にならない（下記 Derivation Order：支える Feature を示せないものは延期する）。
+
+設計の進め方：
+
+* 計画に、予見の根拠と、そこから導いた基盤への要求を表で書く。根拠を示せない要求は入れない。
+  導けない要求は未決として書き、ユーザーに尋ねる。仮定として書かない。
+* 予見した要求は、上限・拡張点・Version として Design Invariants か Contract に書き、
+  Replacement Criteria を同時に書く（§3）。
+* 予見が外れた場合に変更を局所化できる境界（Interface、Version）を置く。
+  予見を汎用 Framework や設定言語で吸収しない（§4、§9）。
+* 実装は薄く始める。予見した要求のうち、名指しされた Feature が直近で使う部分だけを実装し、
+  残りは Contract と Interface の形だけを決める。
+* 他の host・Product へ広げる前に、一つの host で費用（性能、資源、移行の手間）を計測し、
+  計画の予算と比べる。
+* 基盤の上に機能を積み上げ始める前に、基盤の反復を済ませる。
+  積み上げた後で気づいた場合は、下記「反復を計画する条件」に従う。
+* 基盤への予見に基づく設計も Architecture Delta であり、ユーザーの同意を得る（§3）。
 
 ### Derivation Order：Feature → Contract → Architecture
 
@@ -83,7 +148,10 @@ not predicted pressure.
 三者は排他的な分類ではない。Contract も Architecture の一部であり、
 この順序は導出と優先の標準的な手順を定めるものである。
 
-1. **Feature**：何を作るかを先に決める。利用者（プレイヤー）から見える部分。
+1. **Feature**：何を作るかを先に決める。利用者（プレイヤー、および Tool を使う開発者）から見える部分。
+   複数の Product にまたがる能力（例：Match と Client の予測が同じシミュレーションの核を共用する）を
+   Feature として挙げる場合は、それを使う Product と、各 Product で見える Feature を書く。
+   Product の Feature に結びつけられない能力は、支える Feature とみなさない。
 2. **Contract**：その Feature のために、Data や Wire で何を約束する必要があるか。
 3. **Architecture**：その Contract を支えるために、構造をどう変える必要があるか。
    Contract が変わっても、Architecture が変わるとは限らない。
@@ -99,9 +167,9 @@ not predicted pressure.
 
 ### Architecture の反復（イテレーション）を計画する条件
 
-次のいずれかを観測したら、局所的な回避策を積み重ねず、Architecture の反復を計画する。
+次のいずれかに当たったら、局所的な回避策を積み重ねず、Architecture の反復を計画する。
 
-1. 上の Valid evidence に当たる Architecture Pressure。
+1. 観測された Architecture Pressure（基盤・応用とも。上の Valid evidence）。
 2. 既存の Architecture が、Product を支えきれない上限に当たった。
    * Tool 層の設計を支えられない：Editor などの Tool が Data Contract に従って作った有効な Content を、
      Runtime が既存の構造では扱えない（例：編集した Map が大きすぎて Match に読み込めない）。
@@ -110,18 +178,22 @@ not predicted pressure.
    * Feature を、Design Invariants・Contract・Product Boundary を破らずに実現できない。
    * 実現するには、同じ回避策（Adapter、Special Case、状態の写しなど）を複数箇所に入れる必要がある。
    * Component の Replacement Criteria（§3）を満たした。
+3. 基盤 Architecture について、予見される Pressure が新たに示された
+   （新しく名指しされた Feature、参考実装との比較、規模や予算の変更）。
+   上に積み上がる前に計画する。
 
 計画の進め方：
 
 * 性能や資源に関わる Feature の計画は、判定に使う予算（フレーム時間、読み込み時間、メモリなど）を書く。
 * 気づいた会話は、Feature の作業の中で Architecture を変えない。
-  観測した証拠（どこで、何が、何回）と上限に当たった Feature を記録し、ユーザーに報告する。
+  観測した証拠（どこで、何が、何回）と上限に当たった Feature、
+  または予見の根拠と影響を受ける基盤を記録し、ユーザーに報告する。
 * Contract の変更（例：Content の上限を Contract に書く）で足りるかを先に確かめる。
   足りない場合にだけ Architecture を変える（Derivation Order）。
 * 計画は、支える Feature（次のバージョンの Feature を含む）を示す。示せないものは延期する。
 * 計画には、§3 の 7 項目、変える Design Invariants と Replacement Criteria、バッチの分け方を含める。
 * 進行中の作業を止めるか、安定版を先に完成させてから反復するかは、ユーザーが決める。
-* 予測だけの Pressure では計画しない（§2 の原則）。
+* 根拠のない予測では計画しない。基盤 Architecture は、予見の根拠があれば観測を待たずに計画する。
 
 ---
 
@@ -157,6 +229,10 @@ Architecture Delta が必要な場合、変更理由を明確にする。
 5. Dependency Direction がどう変化するか
 6. Ownership がどう変化するか
 7. より小さい変更で解決できない理由
+
+複数のバッチにまたがる一つの Architecture Delta は、計画の文書に 7 項目を一度だけ書く。
+各バッチは計画の該当箇所を引用し、計画との差分（新たに影響する Module、Dependency、Ownership の変化）だけを書く。
+差分が計画の範囲を超える場合は、先に計画を更新してユーザーの同意を得る。
 
 Architecture Delta は禁止事項ではない。
 
@@ -816,7 +892,7 @@ Agent の役割は Architecture を完成させることではない。
 依頼された Feature の実装、Architecture Review、Refactoring を進めながら、
 
 * 既存 Architecture を尊重する
-* 実際に発生した Pressure を観測する
+* 実際に発生した Pressure を観測し、基盤 Architecture では根拠のある予見を設計に入れる
 * Architecture Drift を隠さない
 * Ownership と Dependency Direction を維持する
 * Product の独立性と Removability を維持する

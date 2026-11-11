@@ -396,7 +396,8 @@ Known blind spots, left to review:
    an owner declares manifest parts and how they merge (MSVC merges `.manifest` sources, a `.rc` holds one
    resource), or move the manifest out of engine/os.
 9. (os-closeout, D78) engine/os stays the only place for OS differences, and grows only with observed pressure
-   (AGENTS.md §2: observed pressure, not predicted pressure). A batch that moves a site into engine/os is accepted
+   (the user's owner decision D78 for engine/os, stricter than AGENTS.md §2, which lets foundation architecture be designed
+   ahead from foreseen pressure). A batch that moves a site into engine/os is accepted
    by CI L1 and the guards alone. If it needs a real-machine L2 or L3, a ★ declaration or a changed test verdict
    (AGENTS.md §14.4) to be accepted, it is not a pure move: stop, keep the move behaviour-preserving, and hand the
    behaviour change to the product version whose Feature needs it. A component or batch that no observed pressure
