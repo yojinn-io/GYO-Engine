@@ -1122,7 +1122,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 5. ~~讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格，否則 D-E8。配套慣例「呈現放在模擬之後的 stage」記為**限制**（`docs/architecture/target/limits.zh-Hant.md`）：成本落在呈現 System 的數量，產品線遷移時確認；修改條件＝K.2 第 3 條。
 6. ~~Client 的 Frame 與 Render 兩個 World 合併還是獨立~~ **已決定（使用者 2026-11-11，側邊會話轉述）：分開**（規格推薦案）。渲染 World 自己的 Registry，只經 Extract 唯讀來源，渲染無反饋由機制守（H-6、J-43、DI-KS 13）。理由：合起來看著簡單、代價很高。部件文件：`docs/architecture/target/runtime-composition.zh-Hant.md`。
 7. ~~Architecture Delta~~ **已決定（使用者 2026-11-11 同意，側邊會話轉述）**，三處：(1) `docs/architecture.md:136` 的禁令改為「Kernel 進 Engine，含 World／System／Scheduler／Executor；plugin ABI 與動態載入仍禁止」；(2) entity-store DI 4 延伸到 insert／remove、DI 5 對 store 本身仍成立、proposed 的 `DeferredChanges`（3b）撤回由 World 延後佇列取代；(3) determinism.md §4.7 正式化。七項說明以 spec 與 mechanism 為計畫層的一次書寫，各批引用（AGENTS §3 新條款，PR #178）。**文件修改本身排進改造的第一個文件批**，不在此做。
-8. `apps/object_fps`、`object_fps_v2` 是整個遷移、維持舊動詞直到移除、還是移除（H-7 不允許一半）。
+8. ~~`apps/object_fps`、`object_fps_v2`~~ **已決定（使用者 2026-11-11，側邊會話轉述）：移除**，含 `tools/object_fps_preview` 的依賴，照 AGENTS §7 完整刪除（內容、登記、專用測試、支援程式、引用），不留相容層。理由：PvP 已有自己的生態，不需要這個「錨」。排成**改造前的獨立批**（`v8-arch-remove-object-fps`，待事前宣告）；它同時驗證 §7 的 removability——刪掉後共通層不該需要修改，若需要，記為 Delta。L.4 列同步。
 
 修訂輪（對抗檢查後）新增：
 
@@ -1206,10 +1206,10 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 | 對象 | 行數 | 初判 |
 |---|---|---|
-| `apps/object_fps`、`apps/object_fps_v2` | 約 10k 各 | 未審。用 `RuntimeLoop` 加 `IRuntimePort`；依 H-7 要嘛整個遷移、要嘛維持舊動詞直到移除；**要使用者決定**（K.3 第 8 條） |
+| `apps/object_fps`、`apps/object_fps_v2` | 約 10k 各 | **移除**（使用者 2026-11-11，K.3 第 8 項）：含 `tools/object_fps_preview` 的依賴，照 §7 完整刪除；改造前的獨立批，兼驗 removability |
 | `tools/voxel_map_editor` | 5967 | `EditSession` 包（文件 World 的 Resource）；`EditorClient` 重寫成 Editor host（H.4.3） |
 | `tools/audio_editor`、`model_viewer`、`ui_editor` | 1852／3453／6260 | 未審；同為 ImGuiShell 形狀，預期判定同 voxel_map_editor |
-| `tools/object_fps_preview` | 144 | 未審 |
+| `tools/object_fps_preview` | 144 | 隨 object_fps 移除（K.3 第 8 項） |
 
 ### L.5 中間層成本的形狀（未估工時）
 

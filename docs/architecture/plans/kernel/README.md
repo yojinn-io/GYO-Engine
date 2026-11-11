@@ -29,6 +29,7 @@ v8-arch-kernel
 ├── -spec    上段｜ultracode：提案 Opus×3／high、統合 Fable／high、對抗 Opus／xhigh｜約 1 天｜mechanism → 正式規格，每部件一節
 ├── -spike   上段｜實作 Opus／xhigh（主會話的子代理）、審查 Fable／xhigh｜2～3 天｜獨立子目錄最小 C++ 原型，證明簽名推存取與受限句柄
 ├── -spike-pageguard 上段｜等 -spec｜debug 頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、只在 debug；開工前事前宣告
+├── remove-object-fps 中段｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview（§7 完整刪除；兼驗 removability）｜待事前宣告
 └── -audit   上段｜Opus／high（主會話的子代理）、對抗檢查另一模型｜等 -spec｜現有模組逐一「留／包／重寫」，給中間層成本
 ```
 
