@@ -88,6 +88,8 @@
 - 2026-11-11（側邊會話轉述，audit 待決第 6 項）`v8-arch-determinism-table-fix`：區表三漏一錯採 (a)，四處接受、排第一個文件批（與 E4 一起）；PlayerAnimation 推進先由決定性線核對 digest 編碼；條目名照歸屬改（固定步累加器→runner plugin (b)；時鐘樣本→HostClockSample；Sha256／StrictJson→「內容身分」「契約資料解析」兩條 (c) 路徑；以欄與 System 命名）。
 - 2026-11-11（同上）`v8-arch-naming`：命名規範五條（歸屬＝namespace 與目錄；分類＝詞性照 Bevy；World＝前綴；區＝位置非名字；禁止 Manager／Renderer／ViewModel／Host／Shell／Runtime／Controller 後綴），target/naming.zh-Hant.md；遷移批事前宣告列改名清單。**audit 六項待決全部定完。**
 
+- 2026-11-11 PR #181 合併（f8b6f74b）；三個審查者與 spike 的 agent worktree 已清。使用者「開始 spec-v03」→ `v8-arch-kernel-spec-v03` 啟動（事前宣告 spec-v03-declaration.zh-Hant.md；主會話自寫、對抗 Opus／high）。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
