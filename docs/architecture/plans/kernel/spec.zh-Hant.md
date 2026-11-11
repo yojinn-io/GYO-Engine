@@ -834,7 +834,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 - **交換點**：意圖 F → S、呈現 S → F，經 Host 擁有的 `Mailbox<T>`（latest-wins 或有上限的佇列），只在 schedule 之間存取。Link 經 Host 與 asio 執行緒在 S 的 schedule 前後交換。
 - **時鐘策略**：今天模擬執行緒的 deadline 含相位與 re-anchor 判斷（`ClientSimulationRole.cpp`、`LocalPlayerPrediction::TrackPhase`）。「何時跑下一步」是 Host 的時鐘協調；放在 Host 還是 S 裡交 -audit；本稿立場：不是 System。
 - **live frame**：Host 的 live frame 處理器執行 F 的 FrameUpdate，`LiveFrame` 為真使 `Input`、`Intent` 被 run 條件跳過（今天 live frame 看不到輸入，`PvpApplication.cpp:1139`），然後跑 R。
-- **F 與 R 合併的選項**：R 獨立是 blueprint R1 與 DI-K7 的形狀；代價是多一個 World 與一次 extract。合併則 DI-K7 只能靠 `RenderSubmit` 只讀的存取宣告守。**要使用者選；本稿推薦獨立。**
+- **F 與 R 合併的選項**：R 獨立是 blueprint R1 與 DI-K7 的形狀；代價是多一個 World 與一次 extract。合併則 DI-K7 只能靠 `RenderSubmit` 只讀的存取宣告守。**已決定（使用者 2026-11-11）：獨立。**
 
 #### H.4.3 Editor host（以 voxel_map_editor 為例）
 
@@ -1120,7 +1120,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 3. ~~寫入政策預設 Exclusive~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：欄與 Resource 預設 Exclusive，登記時標 `Shared` 允許多寫者；進 digest 的欄禁 Shared（S-12 不變）。B.3.1 新增「獨占下的資料路徑」（獨占欄預設由唯一寫者直接寫；多來源才用漏斗，漏斗可為事件或中間欄；三類資料的表；獨占是啟動檢查非鎖；不採執行期仲裁）。
 4. ~~Despawn 不算獨占寫者~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格——Despawn 不算獨占寫者、不產生衝突邊；(c) 的保護由 Z5；F.2 的套用順序寫死（hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource），despawn 階段內依 EntityId 升冪、冪等、對窗開始不存在的 id 無作用。說明案例見 B.9 取捨 1 與 `docs/architecture/target/world.zh-Hant.md` §4。
 5. ~~讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格，否則 D-E8。配套慣例「呈現放在模擬之後的 stage」記為**限制**（`docs/architecture/target/limits.zh-Hant.md`）：成本落在呈現 System 的數量，產品線遷移時確認；修改條件＝K.2 第 3 條。
-6. Client 的 Frame 與 Render 兩個 World 合併還是獨立（H.4.2；推薦獨立）。
+6. ~~Client 的 Frame 與 Render 兩個 World 合併還是獨立~~ **已決定（使用者 2026-11-11，側邊會話轉述）：分開**（規格推薦案）。渲染 World 自己的 Registry，只經 Extract 唯讀來源，渲染無反饋由機制守（H-6、J-43、DI-KS 13）。理由：合起來看著簡單、代價很高。部件文件：`docs/architecture/target/runtime-composition.zh-Hant.md`。
 7. Architecture Delta：`docs/architecture.md:136`（Engine 不得有 system／scheduler／world／resources／events／app／plugin）要修訂；entity-store DI 4 延伸、`DeferredChanges`（3b，未實作）撤回由 World 的佇列取代；determinism.md §4.7 已預告「columns become the World's storage」。
 8. `apps/object_fps`、`object_fps_v2` 是整個遷移、維持舊動詞直到移除、還是移除（H-7 不允許一半）。
 
