@@ -221,7 +221,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 3. H-7：加呼叫點規則（§3.5）。
 4. G.4：第 1 條改 `HostClockSample`；補第 4、5 條（§3.4）。
 5. L.2：`WindowShell` 是 Editor host 骨架，不是 Client host 的。
-6. target/runtime-composition：寫明 `AssetManager` 的 World 歸屬（待使用者）。
+6. ~~target/runtime-composition：寫明 `AssetManager` 的 World 歸屬~~ 已定（使用者 2026-11-11）：不選 World，照 Bevy 拆開，部件文件 `target/assets.zh-Hant.md`；spec L.1 asset／ui 列已改。
 7. 事前宣告：「依附在服務內的函式庫隨服務判」已補。
 
 ## 7. 判定（事前宣告的五條）
