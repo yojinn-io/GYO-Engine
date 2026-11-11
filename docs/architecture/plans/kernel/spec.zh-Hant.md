@@ -507,7 +507,7 @@ ScheduleGraph（每個 schedule 一張）
 ### D.6 與 mechanism／blueprint 的不一致
 
 - blueprint DI-K1「未排序即錯誤」不分區，比 mechanism §3.2 嚴。本稿照 mechanism：只有 (c) 是錯誤。
-- (c) 與 (b) 的 System 互相衝突時（區規則下只可能是「(b) 讀 (c) 資料」），依第 10 步任一方是 C 就是錯誤。所以讀 (c) 資料的 (b) System（呈現）必須與 (c) 寫者有顯式順序或位於不同 stage。三份提案一致；提案 2 指出這比 mechanism 嚴，是否太嚴列為 K.2 第 3 條（為消除 D-E8 而加的 before／after 一半以上與資料流無關時，區劃錯了）。
+- (c) 與 (b) 的 System 互相衝突時（區規則下只可能是「(b) 讀 (c) 資料」），依第 10 步任一方是 C 就是錯誤。所以讀 (c) 資料的 (b) System（呈現）必須與 (c) 寫者有顯式順序或位於不同 stage。三份提案一致；提案 2 指出這比 mechanism 嚴，是否太嚴列為 K.2 第 3 條（為消除 D-E8 而加的 before／after 一半以上與資料流無關時，區劃錯了）。**使用者 2026-11-11 採此規則**；配套慣例「呈現放在模擬之後的 stage」是限制，記在 `docs/architecture/target/limits.zh-Hant.md`。
 
 ### D.7 取捨
 
@@ -1119,7 +1119,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 2. ~~change stamp~~ **已決定（同上）**：接受規格——依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 `tickStamps` 換算；(c) 區禁用變更過濾（G-3）；DI-K5（blueprint）與 networking §1 第 7 條各改一句（已改）。溢出無實際可能（u64）。
 3. ~~寫入政策預設 Exclusive~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：欄與 Resource 預設 Exclusive，登記時標 `Shared` 允許多寫者；進 digest 的欄禁 Shared（S-12 不變）。B.3.1 新增「獨占下的資料路徑」（獨占欄預設由唯一寫者直接寫；多來源才用漏斗，漏斗可為事件或中間欄；三類資料的表；獨占是啟動檢查非鎖；不採執行期仲裁）。
 4. ~~Despawn 不算獨占寫者~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格——Despawn 不算獨占寫者、不產生衝突邊；(c) 的保護由 Z5；F.2 的套用順序寫死（hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource），despawn 階段內依 EntityId 升冪、冪等、對窗開始不存在的 id 無作用。說明案例見 B.9 取捨 1 與 `docs/architecture/target/world.zh-Hant.md` §4。
-5. 讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序（D.6）。
+5. ~~讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格，否則 D-E8。配套慣例「呈現放在模擬之後的 stage」記為**限制**（`docs/architecture/target/limits.zh-Hant.md`）：成本落在呈現 System 的數量，產品線遷移時確認；修改條件＝K.2 第 3 條。
 6. Client 的 Frame 與 Render 兩個 World 合併還是獨立（H.4.2；推薦獨立）。
 7. Architecture Delta：`docs/architecture.md:136`（Engine 不得有 system／scheduler／world／resources／events／app／plugin）要修訂；entity-store DI 4 延伸、`DeferredChanges`（3b，未實作）撤回由 World 的佇列取代；determinism.md §4.7 已預告「columns become the World's storage」。
 8. `apps/object_fps`、`object_fps_v2` 是整個遷移、維持舊動詞直到移除、還是移除（H-7 不允許一半）。
