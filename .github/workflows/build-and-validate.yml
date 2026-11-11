@@ -161,6 +161,23 @@ jobs:
           ctest --test-dir "build/target/_build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # The kernel spike (spikes/kernel, v8-arch-kernel-spike) is a standalone
+      # CMake project outside the GYO build graph. L1 builds and tests it on every
+      # release platform so the spike report's judgment 1 (access sets derived
+      # from System signatures on MSVC, gcc and AppleClang) is read off CI, not
+      # off one developer machine. Same row selection and MSVC debug-info rule
+      # as the core step above. Remove this step when the spike is retired.
+      - name: Build and test the kernel spike
+        id: kernel_spike
+        if: always() && matrix.kind == 'toolchain' && matrix.host == matrix.platform && steps.setup.outcome == 'success'
+        run: |
+          cmake -S spikes/kernel -B "build/target/_build/$env:PRESET-kernel-spike" -G Ninja -DCMAKE_BUILD_TYPE=Debug '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/kernel-spike-configure.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build "build/target/_build/$env:PRESET-kernel-spike" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/kernel-spike-build.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir "build/target/_build/$env:PRESET-kernel-spike" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/kernel-spike-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/kernel-spike-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Verify independent copied game fixtures
         id: app_copy
         if: runner.os == 'Windows' && matrix.kind == 'toolchain' && inputs.profile == 'release'

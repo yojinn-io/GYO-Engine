@@ -196,7 +196,7 @@ python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py \
 | R-03（should） | 上限表「另一個執行緒」列改寫（`thread_local`，其他執行緒的存取當成 host，未宣告的讀看不到）；`Limit:` 測試「a World read from another thread during a System run is checked as host access」；報告裡「(c) 在存取當下」都加「僅限 System 自己的執行緒」（結論表的格子不改，以表下的註補）。CMakeLists 加 `Threads::Threads` |
 | R-04（nit） | 堆積成員一列改成通則：component、resource、事件 payload 都只比 handle 位元組 |
 | R-05 | 檢查者確認無問題：`ks-check-write-accepts-read` 的修法（(c1)–(c5) 加 passed／!passed）確實分出「存取當下」與「邊界」兩層；五個 `Limit:` 測試以 `SPIKE_CHECK_NO_ASSERT` 固定現況，機制進步時會失敗，不是恆過。處置：無需變更（架構師記錄）。 |
-| R-06 | 待使用者 |
+| R-06 | 使用者 2026-11-11 決定（側邊會話轉述）：判定 1 要判，改 CI 設定讓 L1 三平台建 `spikes/kernel/` 並跑測試。已加 `.github/workflows/build-and-validate.yml` 的「Build and test the kernel spike」步驤（toolchain 列、host＝platform，與 core 步驤同條件；Debug 組態；MSVC 用 Embedded 除錯資訊）。判定 1 的三平台結論以本 PR 的 L1 為準，合併前補進本表。 |
 | R-07 | 檢查者確認無循環：id 與型別集合皆手寫；`SameSet` 雙向包含；17（現 18）個簽名逐一核對期望與簽名一致；`DerivesExactly` 非恆真（含 `IsSystemFunction<F>`，另有 6 條負向 `static_assert`）。處置：無需變更（架構師記錄）。 |
 | R-08（should） | 加非 const、noexcept 的成員函式 `Steering::Prepare`（`static_assert`＋執行期比對＋`MakeSystem`）；突變 `ks-noexcept-member-not-deduced` |
 | R-09（註記） | `ks-noexcept-function-not-deduced` 由導引層的硬錯誤殺，不是期望層：寫在〈判定 3〉與 catalog 的 `note` |
