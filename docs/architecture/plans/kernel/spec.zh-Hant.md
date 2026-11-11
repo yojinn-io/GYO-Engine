@@ -823,6 +823,8 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 
 #### H.4.2 Client host（視窗、預測）
 
+（2026-11-11 註：framework 退役後，Client host 的骨架——pump、live frame、三個 Runtime 的交換點與時鐘策略——由 runner plugin 提供，產品 `main` 只列 plugin 加 Run；本小節的「Host」讀作 runner plugin。audit §10.2、規格修正第 8 項。）
+
 現況：主執行緒跑 `RuntimeLoop`（`PvpApplication.cpp:1383`）：`ProcessEvents` 呼叫 SDL pump，期間 live frame 可能重入（`:1389-1401`）；`Update` 做資產 `BeginFrame`（`:1141`）、輸入（`:1111-1119`）、UI、`PublishIntent`（`:1172`）、`PresentAt` 內插（`:1173`）；`Render`。`gyo-client-sim`（`ClientSimulationRole.cpp:151` 的 `RoleThread::Start`）依自己算的 deadline 跑預測步，以 `mutex_` 與主執行緒交換意圖與呈現（`:161-211`）。asio 的 IO 執行緒；音訊回呼執行緒；trace writer。
 
 改造後：

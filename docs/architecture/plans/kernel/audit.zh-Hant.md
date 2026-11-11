@@ -125,7 +125,7 @@
 
 ## 3. 跨部件的發現（要決定或要改規格）
 
-### 3.1 Architecture Delta：framework 退役，由 plugin 取代（使用者 2026-11-11 決定，側邊會話轉述）
+### 3.1 Architecture Delta：framework 退役，由 plugins 層取代（使用者 2026-11-11 決定，側邊會話轉述）
 
 審查原提案「改 framework DI 2／6、WindowShell／ImGuiShell 重寫成 Editor host 骨架」。使用者決定**不改 DI，framework 這個概念退役**：framework 是舊架構的產物，核心是組合 Engine 能力與對接第三方；plugin 機制建立後兩者都由 plugin 承擔。使用者原則：新架構若沿用舊架構的思路與原則，架構變更就失去意義——思想不變，修改就是在破船上打補丁。
 
@@ -243,7 +243,58 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 
 複核者提出判法模糊五處，主會話的定義寫在 §0（Q2 範圍、包（先拆）與重寫的分界、第三方全域的粒度、一目錄兩性質、純函式庫的 zone）。複核者另注意到主 checkout 當時沒有 spec 與 target（PR #179 合併前），已從審查分支讀；不影響結論。
 
-## 9. 下一步
+## 10. 補遺：framework 退役後的去處（使用者 2026-11-11 要求；判定詞不變，去處改寫）
+
+前提改變（§3.1）動到的是去處，不是判定：四問看的是程式現況，判定詞描述要對程式做什麼，兩者都不因 framework 改成 plugins 層而變。engine 22 列不受影響。本節只改三件事，並列出一個審查沒問過的新問題。
+
+### 10.1 framework 與工具各列的去處（判定詞同 §1.2）
+
+| 列 | 判定 | 原去處 | 新去處（plugins 層） |
+|---|---|---|---|
+| `WindowShell` | Host 骨架重寫 | framework 的視窗 host 骨架與標準 ScheduleDef | **SDL 視窗 runner plugin**：在 finish 安裝 runner（行程入口、pump、live frame、交換點），把 `PlatformEvents` 與對話框回覆寫進 boundary |
+| `ImGuiShell` | Host 骨架重寫 | framework 的 ImGui binding | **ImGui plugin**：擁有 ImGui context（全域，明列例外）、在 build 插入標準 Editor stage 序（輸入換幀、NewFrame、Draw、Render、文字輸入套用、RenderDrawData、Present） |
+| `HeadlessShell` | Host 原樣 | framework 行程入口 | **headless runner plugin**（或產品 main 自跑；Match 的 `match_main` 迴圈同形） |
+| `OffscreenPreview`、`PreviewScene`、`PreviewRenderer` | 包 | framework／工具的預覽 | **offscreen-preview plugin**：渲染 Runtime 的 Resource、Extract、readback 經 Host 交換點（§3.2 的晚一幀） |
+| `ReadOnlyAssetCatalog`、`CatalogPlan` | 包／留 | framework | **asset-catalog plugin**：Resource 加 `Io:file` System；`CatalogPlan` 是資料契約（owner＝此 plugin） |
+| `EventSounds` 加 Mixer 接線 | 留／服務 | framework＋engine audio | **event-sounds plugin**：資料契約（owner＝此 plugin）加 `Submitter` Resource 的接線；PvP 也用 |
+| 選擇窗記帳、關窗提示（四工具重複） | — | 各工具各寫 | **editor-dialogs plugin**（架構師保留：必須真的進共用 plugin） |
+| `PreviewCamera`、`PreviewTexture`、`UiTextInput`、`AbsolutePath`、json binding | 留 | framework | **函式庫**（與層無關；放哪個 target 由計畫批定） |
+| 四個工具的 client | Host 重寫 | 各工具的 Editor host | 各工具的 **main＝plugin 清單＋Run**；工具專有的編輯 System 進該工具自己的 plugin |
+
+### 10.2 產品兩列的形狀改寫（判定詞仍是重寫／Host）
+
+- **P11 `PvpApplication`**：原判「重寫：Client host＋ClientFrame／ClientRender System」。三層規則下產品只在 main 列 plugin 加 Run，所以 Client host 的骨架（pump、live frame、三個 Runtime 的交換點與時鐘策略）也是 **runner plugin** 提供，不是手寫 Host；PvP 專有的 System 進產品 plugin。spec H.4.2 要跟著改（本稿不改規格，記為規格修正第 8 項）。
+- **S1 `main`／`match_main`**：Match 的每 50 ms 迴圈與停止順序＝**headless runner plugin**；`main` 只剩 plugin 清單與 Run。
+
+### 10.3 §0 規則的敘述修正
+
+「只持 OS 資源、只由 Host 使用的 adaptor 判 Host」的四個 engine 模組（os、time、threads、platform）與 `FixedTickRuntime`：判定不變，敘述改為「被 runner plugin 使用的 Engine adaptor」。Host 變薄後，「Host」一詞在報告裡指的是 runner plugin 加產品 main 的那一層，不再是 framework。
+
+### 10.4 審查沒問過的新問題：plugin 的邊界（交計畫批）
+
+審查判的是模組，沒判「哪些東西合成一個 plugin、每個 plugin 的依賴正向清單、刪掉它別的東西還成立嗎」。這是改造計畫的設計題。審查證據裡看得到的切法候選（**不是決定**）：
+
+| 候選 plugin | 收進去的現況 | 依賴（正向） | 刪掉它會壞什麼 |
+|---|---|---|---|
+| sdl-window-runner | `WindowShell`、`SdlPlatform` 的 pump 與 live frame、`SdlInput` 後端、對話框回覆 | engine/platform、input、time | 所有視窗程式；headless 不受影響 |
+| headless-runner | `HeadlessShell`、`match_main` 迴圈與停止順序 | engine/time、threads、os | Match 與工具 CLI 模式 |
+| imgui | `ImGuiShell`、ImGui context、標準 Editor stage | sdl-window-runner、engine/render | 四個工具；PvP 不受影響 |
+| editor-dialogs | 選擇窗記帳（三種實作統一）、關窗提示 | sdl-window-runner | 四個工具的對話框 |
+| offscreen-preview | `OffscreenPreview`、`PreviewScene`、`PreviewRenderer`、readback 交換 | engine/render | 三個有預覽的工具 |
+| asset-catalog | `ReadOnlyAssetCatalog`、`CatalogPlan` | engine/asset、io | 用 catalog 的工具與 PvP 載入 |
+| event-sounds | `EventSounds`、Mixer 與 `Submitter` 接線 | engine/audio | PvP 與 model_viewer 的音效 |
+| net-link | `IpcHost`／`ClientConnection` 的 IO 服務、asio、httplib、protobuf、`Link` Resource | engine/net、threads | Match 與 Client 的連線；Editor 不受影響 |
+| trace-diagnostics | `TraceSink`／`LogFile`／`MovementDiag` 服務、`Diagnostics` effect | engine/trace | 診斷輸出 |
+| object_fps_pvp（產品） | (c) 模擬 System、Ingress／Judge／Egress、呈現 System、scene v1 | 上列多個 plugins＋engine | 只有 PvP |
+
+每個候選要在計畫批寫：目標、依賴清單、Removability 的驗證方式（AGENTS §7：刪掉後 Engine 與其他 plugins 成立）、owner。
+
+### 10.5 規格修正追加
+
+- 第 8 項：spec H.4.2 的 Client host 改成 runner plugin 提供骨架（§10.2）。
+- 第 9 項：spec I.1 外部系統表與 H.7「Host 保留職責」的「Host」改寫為「runner plugin 加產品 main」；H.7 的職責不變，持有者變。
+
+## 11. 下一步
 
 - ~~§3.1~~（已定：framework 退役→`plugins/`）；使用者決定§3.2（預覽回流）、§3.6（IRuntimePort、AssetManager 歸屬、初始成員走 Startup）、§4.5（區表三漏一錯）。
 - 規格修訂批（§6 七項）與第一個文件批合併規劃。

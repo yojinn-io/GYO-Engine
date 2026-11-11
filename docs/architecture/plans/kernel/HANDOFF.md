@@ -74,6 +74,8 @@
 
 - 2026-11-11 -audit **完成**：對抗複核 Fable／high 4/5 一致（engine/input 後端不一致→主會話重判 Host）；判法五處模糊的定義補進 audit §0；dev_log 寫成；PR 待開。
 
+- 2026-11-11 使用者問前提改變要不要重跑審查；架構師：不重跑（四問與判定詞不因去處而變），寫補遺 audit §10（去處改成 plugins 層、P11／S1 形狀改為 runner plugin、§0 敘述修正、plugin 邊界這個新問題交計畫批並附切法候選十個）。命名：層與目錄叫 plugins、單個叫 plugin（使用者）。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
