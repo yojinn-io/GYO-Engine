@@ -19,7 +19,7 @@ kernel 研究線要決定中間層（現有模組的更新介面與資料取得�
 
 - **判定 1（簽名推存取集合）：本機成立，三平台待 L1**。17 個簽名（free function 10、lambda 3、member function 3、function object 1）的型別集合 `static_assert` 與 id 集合執行期比對，都和手寫期望相同。Debug、Release 兩組態 × debug、release 兩目標，四個執行檔都是 30/30 case 通過（debug 目標 145 assertions、release 目標 155），clean 建置零警告。
 - **判定 2（受限句柄＋debug 核對）：部分不成立**。(c1)–(c5)（經捕獲的 `World&` 讀寫未宣告的元件、resource、事件，或碰另一個 World）在存取當下斷言；(a1)(a2)(b1)–(b3)（存下的參考在別的 System 或 host 寫、System 內 `const_cast` 或裸位元組寫）在 System 邊界斷言；release 目標全部不攔、值被改。攔不到的形狀（寫了再寫回、經存下的參考讀、在有 `Write<T>` 的 System 經存下的參考寫、懸空、並行、resource 的堆積內容、全域狀態）各有一個 `Limit:` 測試固定現況。這是 mechanism §3.5 事前寫的上限；照 §14 記為不成立的部分，不補救。
-- **判定 3（突變）：成立**。宣告移除 9 條（七類參數全覆蓋）第一輪全殺。全目錄第一輪 31/32、第二輪 32/32（**件數の突き合わせ：一致**——兩輪都是要求 32、結果 32，過期 0）。
+- **判定 3（突變）：成立**。宣告移除 9 條（七類參數全覆蓋）第一輪全殺：7 條由 debug 核對層殺，另 2 條由 const 正確性（編譯錯誤）與判定 1 的期望 `static_assert` 殺。全目錄第一輪 31/32、第二輪 32/32（**件數の突き合わせ：一致**——兩輪都是要求 32、結果 32，過期 0）。
 
 ## 經緯
 
@@ -29,6 +29,22 @@ kernel 研究線要決定中間層（現有模組的更新介面與資料取得�
 - 第二輪前兩處可攜性修正：型別鍵從 `static constexpr char` 改成可寫的 `static inline char`（避免 MSVC `/OPT:ICF`／lld `--icf=all` 把唯讀資料摺成同一位址）；`IsSystemFunction` 從變數模板裡的立即呼叫 lambda 改成 constexpr 函式。本機都沒有觀測到問題；因改了 `Registry.hpp`、`System.hpp`，第二輪跑全目錄。
 - 估時 4 小時（上限 6 小時）；實際約 25 分鐘。沒有碰到 §14 的停止條件。
 
+## 對抗檢查後變更（v8-arch-kernel-spike-adversary，Fable／xhigh）
+
+架構師轉交的處置要求，判定 1、2 的結論措辭不改（R-01、R-06 待使用者）；逐條表在報告〈對抗檢查〉。
+
+- R-02：`Limit:` 測試「a bypass write is taken as the new baseline once host code touched the storage」——host 在兩次 System 之間 `GetMut` 過同一欄後，經存下的指標寫另一列，下一次執行不斷言（`MarkWritten` 以整欄設 dirty）。上限表加一列。
+- R-03：`Limit:` 測試「a World read from another thread during a System run is checked as host access」——System 內起 `std::thread` 讀 `world.Get<Velocity>`，debug 不斷言（執行中的 System 是 `thread_local`）。上限表「另一個執行緒」列改寫；報告的「(c) 在存取當下」加「僅限 System 自己的執行緒」（結論表的格子不動，以表下的註補）。`spikes/kernel/CMakeLists.txt` 加 `find_package(Threads)` 與 `Threads::Threads`。
+- R-04：上限表的堆積成員列改成通則（component、resource、事件 payload 都只比 handle 位元組）。
+- R-08：`Steering::Prepare(Write<Health>, Res<Gravity>) noexcept`（非 const、noexcept 成員函式）的 `static_assert`、執行期比對、`MakeSystem`；突變 `ks-noexcept-member-not-deduced`。簽名 17 → 18。
+- R-12：Control 測試「a declared write also allows reading the same storage through the World」；對偶突變 `ks-check-write-not-readable`。
+- R-10：16 條 `expect_build_failure` 的 regex 改成各自的 requirement 片段。先把每條突變套上、建置、存下完整輸出，再逐條核對：16 條都命中自己的輸出；只有 `ks-decl-integrate-write-to-constcast` 的 regex 也命中 `ks-decl-integrate-write-to-read`（拿掉同一個宣告、觸發同一個期望），其餘沒有誤命中。輸出摘要在 `build_failure_probe_round3.txt`。
+- R-09：`ks-noexcept-function-not-deduced` 由 `RequireSystemFunction` 的導引 `static_assert`（硬錯誤）殺，不是期望層（`DerivesExactly` 命名 `AccessOf<F>::Reads`，F 推不出時是不合法的型別）。寫進 catalog 的 `note` 與報告。
+- R-11：報告與本 dev_log 的「宣告移除 9 條全殺」改寫成殺它們的層。
+- 測試：Debug、Release 兩組態 × debug、release 兩目標，四個執行檔都是 33/33 case（debug 目標 157 assertions、release 目標 167），零警告。
+- 突變第三輪（全目錄 34 條）：第三輪：要求 34、結果 34（被殺 34、存活 0、過期 0、錯誤失敗 0）。
+- 用時：第一次回報（18:28）之後開始，18:59（JST）完成，含 16 條建置失敗突變的輸出探測與第三輪全目錄。
+
 ## 交給架構師的事
 
 - L1 三平台：L1 目前不建 `spikes/kernel/`；要看 MSVC、gcc、AppleClang arm64，需要改 `.github/workflows/`（`spikes/` 以外，照 `v8-arch-kernel-delegation` 先給使用者）或實機手動跑。
@@ -37,4 +53,4 @@ kernel 研究線要決定中間層（現有模組的更新介面與資料取得�
 
 ## 證據
 
-主 checkout `build/evidence/kernel-spike/`（git 不追蹤；本機 Intel Mac）：`toolchain.txt`（編譯器、CMake、Ninja 版本）；`build_config-debug.txt`、`build_config-release.txt`（clean 建置，零警告）；`tests_config-{debug,release}_target-{debug,release}.txt`（四個執行檔的 doctest 輸出）；`ctest_config-debug.txt`、`ctest_config-release.txt`（突變後還原的樹再建再跑）；`test_cases.txt`（30 個 case 名）；`mutations_round1.txt`（31/32）、`mutations_round2.txt`（32/32）。建置樹在工作樹 `build/target/_build/kernel-spike-debug`、`kernel-spike-release`（git 不追蹤）。第一輪突變前的測試輸出只是開發中的執行，未保存。
+主 checkout `build/evidence/kernel-spike/`（git 不追蹤；本機 Intel Mac）：`toolchain.txt`（編譯器、CMake、Ninja 版本）；`build_config-debug.txt`、`build_config-release.txt`（clean 建置，零警告）；`tests_config-{debug,release}_target-{debug,release}.txt`（四個執行檔的 doctest 輸出）；`ctest_config-debug.txt`、`ctest_config-release.txt`（突變後還原的樹再建再跑）；`test_cases.txt`（30 個 case 名）；`mutations_round1.txt`（31/32）、`mutations_round2.txt`（32/32）；對抗檢查後 `tests_round3_config-{debug,release}_target-{debug,release}.txt`、`test_cases_round3.txt`、`build_failure_probe_round3.txt`、`mutations_round3.txt`（34/34）。建置樹在工作樹 `build/target/_build/kernel-spike-debug`、`kernel-spike-release`（git 不追蹤）。第一輪突變前的測試輸出只是開發中的執行，未保存。

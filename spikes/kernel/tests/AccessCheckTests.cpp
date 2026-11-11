@@ -15,6 +15,7 @@
 #include "kernel_spike/System.hpp"
 
 #include <cstddef>
+#include <thread>
 #include <vector>
 
 using namespace KernelSpike;
@@ -98,6 +99,20 @@ TEST_CASE("Control: host writes through the World API between runs are not repor
     world.ClearEvents();
     SPIKE_CHECK_NO_ASSERT(reader.Run(world));
     CHECK(world.Get<Position>(0).x == doctest::Approx(50.0f));
+}
+
+TEST_CASE("Control: a declared write also allows reading the same storage through the World") {
+    World world(MakeRegistry());
+    Populate(world);
+    float seen = 0.0f;
+    const System adjust = MakeSystem(world.Types(), "Adjust", [&world, &seen](Write<Position> position) {
+        seen = world.Get<Position>(1).x;
+        position[1].x = seen + 1.0f;
+    });
+
+    SPIKE_CHECK_NO_ASSERT(adjust.Run(world));
+    CHECK(seen == doctest::Approx(3.0f));
+    CHECK(world.Get<Position>(1).x == doctest::Approx(4.0f));
 }
 
 // ---- (a) A reference kept past the System, written later
@@ -323,6 +338,37 @@ TEST_CASE("Limit: a raw write that restores the old bytes before the System retu
 
     SPIKE_CHECK_NO_ASSERT(sneak.Run(world));
     CHECK(during == doctest::Approx(123.0f));
+}
+
+TEST_CASE("Limit: a bypass write is taken as the new baseline once host code touched the storage") {
+    World world(MakeRegistry());
+    Populate(world);
+    const Position* kept = nullptr;
+    const System leak = MakeSystem(world.Types(), "Leak", [&kept](Read<Position> position) { kept = &position[1]; });
+    const System next = MakeSystem(world.Types(), "Next", [](Res<Time>) {});
+
+    SPIKE_CHECK_NO_ASSERT(leak.Run(world));
+    // Host code uses the World API on the same column (GetMut alone marks it
+    // written), then writes another row through the kept pointer.
+    world.GetMut<Position>(0).x = 50.0f;
+    const_cast<Position*>(kept)->x = -5.0f;
+    SPIKE_CHECK_NO_ASSERT(next.Run(world));
+    CHECK(world.Get<Position>(1).x == doctest::Approx(-5.0f));
+}
+
+TEST_CASE("Limit: a World read from another thread during a System run is checked as host access") {
+    World world(MakeRegistry());
+    Populate(world);
+    float seen = 0.0f;
+    // The running System is thread_local: the helper thread has none, so its
+    // undeclared read of Velocity is treated as host code and not checked.
+    const System spawn = MakeSystem(world.Types(), "SpawnThread", [&world, &seen](Read<Position>) {
+        std::thread reader([&world, &seen] { seen = world.Get<Velocity>(0).dx; });
+        reader.join();
+    });
+
+    SPIKE_CHECK_NO_ASSERT(spawn.Run(world));
+    CHECK(seen == doctest::Approx(0.5f));
 }
 
 TEST_CASE("Limit: a read through a kept reference in a System that declared nothing for it is not reported") {

@@ -26,6 +26,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 enable_testing()
+find_package(Threads REQUIRED)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/doctest
                  ${CMAKE_CURRENT_BINARY_DIR}/third_party/doctest)
@@ -46,7 +47,7 @@ set(GYO_KERNEL_SPIKE_TEST_SOURCES
 # behaviours; KERNEL_SPIKE_TEST_EXPECT_CHECKS tells the tests which one they are.
 function(gyo_kernel_spike_tests name)
     add_executable(${name} ${GYO_KERNEL_SPIKE_TEST_SOURCES})
-    target_link_libraries(${name} PRIVATE gyo_kernel_spike doctest::doctest)
+    target_link_libraries(${name} PRIVATE gyo_kernel_spike doctest::doctest Threads::Threads)
     target_compile_definitions(${name} PRIVATE ${ARGN})
     target_compile_options(${name} PRIVATE
         "$<$<CXX_COMPILER_ID:MSVC>:/W4;/permissive-;/Zc:preprocessor;/Zc:__cplusplus;/EHsc>"

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel spike (v8-arch-kernel-spike; docs/architecture/plans/kernel/spike-report.zh-Hant.md). A mutant is killed only when its check fails with the expected message: a build failure for the compile-time checks (expect_build_failure), a failing doctest case otherwise. Configure the spike first (spikes/kernel/CMakeLists.txt), then run docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --build-dir <spike build dir> --catalog spikes/kernel/mutations.json.",
+  "description": "Declared mutants of the kernel spike (v8-arch-kernel-spike; docs/architecture/plans/kernel/spike-report.zh-Hant.md). A mutant is killed only when its check fails with the expected message: a build failure for the compile-time checks (expect_build_failure; each regex names the requirement this mutant must trip, checked against the AppleClang output), a failing doctest case otherwise. \"note\" is for readers; the runner ignores it. Configure the spike first (spikes/kernel/CMakeLists.txt), then run docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --build-dir <spike build dir> --catalog spikes/kernel/mutations.json.",
   "mutants": [
     {
       "id": "ks-registry-ids-reversed",
@@ -29,7 +29,7 @@
       "find": "    using Reads = TypeList<>;\n    using Writes = TypeList<Access<AccessKind::Component, T>>;",
       "replace": "    using Reads = TypeList<Access<AccessKind::Component, T>>;\n    using Writes = TypeList<>;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "requirement 'DerivesExactly<\\(lambda at [^)]*\\),\\s*(?:KernelSpike::)?TypeList<>,\\s*(?:KernelSpike::)?TypeList<(?:KernelSpike::)?Access<(?:KernelSpike::)?AccessKind::Component,\\s*(?:KernelSpikeTest::)?Position>>>'",
       "expect_build_failure": true
     },
     {
@@ -39,7 +39,7 @@
       "find": "    using Reads = TypeList<Access<AccessKind::Component, T>>;\n    using Writes = TypeList<>;",
       "replace": "    using Reads = TypeList<>;\n    using Writes = TypeList<>;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "(?s)(?=.*requirement 'DerivesExactly<void \\(\\*\\)\\((?:KernelSpike::)?Read<(?:KernelSpikeTest::)?Position>,\\s*(?:KernelSpike::)?Read<(?:KernelSpikeTest::)?Position>,\\s*(?:KernelSpike::)?Res<(?:KernelSpikeTest::)?Time>\\))(?=.*requirement 'DerivesExactly<void \\(\\*\\)\\((?:KernelSpike::)?Read<(?:KernelSpikeTest::)?Position>,\\s*(?:KernelSpike::)?EventWriter<(?:KernelSpikeTest::)?Hit>\\))",
       "expect_build_failure": true
     },
     {
@@ -49,7 +49,7 @@
       "find": "    using Reads = TypeList<Access<AccessKind::Resource, T>>;",
       "replace": "    using Reads = TypeList<Access<AccessKind::Component, T>>;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "requirement 'DerivesExactly<void \\((?:\\(anonymous namespace\\)::)?Steering::\\*\\)\\((?:KernelSpike::)?Res<(?:KernelSpikeTest::)?Stats>\\) const,",
       "expect_build_failure": true
     },
     {
@@ -59,7 +59,7 @@
       "find": "    using Writes = TypeList<Access<AccessKind::Resource, T>>;",
       "replace": "    using Writes = TypeList<>;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "requirement 'DerivesExactly<void \\(\\*\\)\\((?:KernelSpike::)?ResMut<(?:KernelSpikeTest::)?Time>\\) noexcept,",
       "expect_build_failure": true
     },
     {
@@ -69,7 +69,7 @@
       "find": "    using Reads = TypeList<Access<AccessKind::Event, T>>;",
       "replace": "    using Reads = TypeList<>;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "requirement 'DerivesExactly<void \\((?:\\(anonymous namespace\\)::)?Steering::\\*\\)\\((?:KernelSpike::)?EventReader<(?:KernelSpikeTest::)?Hit>,\\s*(?:KernelSpike::)?EventReader<(?:KernelSpikeTest::)?Spawned>\\) const noexcept,",
       "expect_build_failure": true
     },
     {
@@ -79,7 +79,7 @@
       "find": "    using Writes = TypeList<Access<AccessKind::Event, T>>;",
       "replace": "    using Writes = TypeList<>;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "(?s)(?=.*requirement 'DerivesExactly<void \\(\\*\\)\\((?:KernelSpike::)?Read<(?:KernelSpikeTest::)?Position>,\\s*(?:KernelSpike::)?EventWriter<(?:KernelSpikeTest::)?Hit>\\))(?=.*requirement 'HasAliasing<void \\(\\*\\)\\((?:KernelSpike::)?EventReader<(?:KernelSpikeTest::)?Hit>,\\s*(?:KernelSpike::)?EventWriter<(?:KernelSpikeTest::)?Hit>\\)>')",
       "expect_build_failure": true
     },
     {
@@ -89,7 +89,7 @@
       "find": "    using Writes = TypeList<Access<AccessKind::Deferred, void>>;",
       "replace": "    using Writes = TypeList<>;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "(?s)(?=.*requirement 'DerivesExactly<void \\(\\*\\)\\((?:KernelSpike::)?Deferred,\\s*(?:KernelSpike::)?Res<(?:KernelSpikeTest::)?Time>\\))(?=.*requirement 'HasAliasing<void \\(\\*\\)\\((?:KernelSpike::)?Deferred,\\s*(?:KernelSpike::)?Deferred\\)>')",
       "expect_build_failure": true
     },
     {
@@ -99,8 +99,9 @@
       "find": "struct FunctionArgs<R (*)(A...) noexcept> : FunctionArgs<R (*)(A...)> {};",
       "replace": "struct FunctionArgs<R (*)(A...) noexcept> {\n    static constexpr bool deducible = false;\n};",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
-      "expect_build_failure": true
+      "expect": "requirement 'FunctionArgs<void \\(\\*\\)\\((?:KernelSpike::)?ResMut<(?:KernelSpikeTest::)?Time>\\) noexcept, void>::deducible': a System is",
+      "expect_build_failure": true,
+      "note": "Killed by the guiding static_assert in RequireSystemFunction (a hard error when Describe/MakeSystem is instantiated), not by the expectation layer: DerivesExactly names AccessOf<F>::Reads, which is ill-formed for a non-deducible F, so the expectation static_assert never evaluates (review R-09)."
     },
     {
       "id": "ks-const-member-not-deduced",
@@ -109,8 +110,20 @@
       "find": "struct FunctionArgs<R (C::*)(A...) const> : FunctionArgs<R (*)(A...)> {};",
       "replace": "struct FunctionArgs<R (C::*)(A...) const> {\n    static constexpr bool deducible = false;\n};",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
-      "expect_build_failure": true
+      "expect": "requirement 'FunctionArgs<void \\((?:\\(anonymous namespace\\)::)?Steering::\\*\\)\\((?:KernelSpike::)?Res<(?:KernelSpikeTest::)?Stats>\\) const, void>::deducible': a System is",
+      "expect_build_failure": true,
+      "note": "Also breaks every lambda (a lambda's operator() is a const member function); the regex names Steering::Report so the kill is tied to the const member specialization."
+    },
+    {
+      "id": "ks-noexcept-member-not-deduced",
+      "what": "a non-const noexcept member function is no longer deduced",
+      "file": "spikes/kernel/include/kernel_spike/Access.hpp",
+      "find": "struct FunctionArgs<R (C::*)(A...) noexcept> : FunctionArgs<R (*)(A...)> {};",
+      "replace": "struct FunctionArgs<R (C::*)(A...) noexcept> {\n    static constexpr bool deducible = false;\n};",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "requirement 'FunctionArgs<void \\((?:\\(anonymous namespace\\)::)?Steering::\\*\\)\\((?:KernelSpike::)?Write<(?:KernelSpikeTest::)?Health>,\\s*(?:KernelSpike::)?Res<(?:KernelSpikeTest::)?Gravity>\\) noexcept, void>::deducible': a System is",
+      "expect_build_failure": true,
+      "note": "Same layer as ks-noexcept-function-not-deduced (guiding static_assert)."
     },
     {
       "id": "ks-aliasing-unchecked",
@@ -119,7 +132,7 @@
       "find": "    : std::bool_constant<((CountOf<TypeList<W...>, W>::value > 1 || Contains<Reads, W>) || ...)> {};",
       "replace": "    : std::bool_constant<false> {};",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "(?s)(?=.*requirement 'HasAliasing<void \\(\\*\\)\\((?:KernelSpike::)?Write<(?:KernelSpikeTest::)?Position>,\\s*(?:KernelSpike::)?Write<(?:KernelSpikeTest::)?Position>\\)>')(?=.*requirement 'HasAliasing<void \\(\\*\\)\\((?:KernelSpike::)?Deferred,\\s*(?:KernelSpike::)?Deferred\\)>')",
       "expect_build_failure": true
     },
     {
@@ -129,7 +142,7 @@
       "find": "    static constexpr bool allParams = (ParamAccess<A>::valid && ...);",
       "replace": "    static constexpr bool allParams = true;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "the World is not a parameter",
       "expect_build_failure": true
     },
     {
@@ -148,7 +161,7 @@
       "find": "    Read(const Read&) = delete;",
       "replace": "    Read(const Read&) = default;",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "requirement 'IsSealedHandle<(?:KernelSpike::)?Read<(?:KernelSpikeTest::)?Position>>'",
       "expect_build_failure": true
     },
     {
@@ -158,7 +171,7 @@
       "find": "    friend struct ParamFactory;\n    explicit Write(World& world) {",
       "replace": "public:\n    friend struct ParamFactory;\n    explicit Write(World& world) {",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
+      "expect": "requirement 'IsSealedHandle<(?:KernelSpike::)?Write<(?:KernelSpikeTest::)?Position>>'",
       "expect_build_failure": true
     },
     {
@@ -169,6 +182,15 @@
       "replace": "        const bool declared = mode == AccessMode::Read ? true",
       "target": "gyo_kernel_spike_tests_debug",
       "expect": "Bypass \\(c1\\)"
+    },
+    {
+      "id": "ks-check-write-not-readable",
+      "what": "a declared write no longer allows reading the same storage through the World",
+      "file": "spikes/kernel/include/kernel_spike/World.hpp",
+      "find": "system->DeclaresRead(key) || system->DeclaresWrite(key)",
+      "replace": "system->DeclaresRead(key)",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "Control: a declared write also allows reading"
     },
     {
       "id": "ks-check-write-accepts-read",
@@ -231,7 +253,7 @@
       "find": "void Integrate(Write<Position> position, Read<Velocity> velocity) {",
       "replace": "void Integrate(Read<Position> position, Read<Velocity> velocity) {",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "cannot assign|read-only|const-qualified|l-value specifies const",
+      "expect": "cannot assign to return value because function 'operator\\[\\]' returns a const value|assignment of member '[xy]' in read-only object|C3892|C2166",
       "expect_build_failure": true
     },
     {
@@ -241,8 +263,9 @@
       "find": "void Integrate(Write<Position> position, Read<Velocity> velocity) {\n    for (std::size_t row = 0; row < position.Size(); ++row) {\n        position[row].x += velocity[row].dx;\n        position[row].y += velocity[row].dy;\n",
       "replace": "void Integrate(Read<Position> position, Read<Velocity> velocity) {\n    for (std::size_t row = 0; row < position.Size(); ++row) {\n        const_cast<Position&>(position[row]).x += velocity[row].dx;\n        const_cast<Position&>(position[row]).y += velocity[row].dy;\n",
       "target": "gyo_kernel_spike_tests_debug",
-      "expect": "static assertion failed|static_assert failed",
-      "expect_build_failure": true
+      "expect": "requirement 'DerivesExactly<void \\(\\*\\)\\((?:KernelSpike::)?Read<(?:KernelSpikeTest::)?Position>,\\s*(?:KernelSpike::)?Read<(?:KernelSpikeTest::)?Velocity>\\),",
+      "expect_build_failure": true,
+      "note": "Its regex (the Integrate expectation) also matches ks-decl-integrate-write-to-read's output: both drop the same declaration, so both trip the same expectation; the plain-assignment mutant is told apart by its const-correctness error."
     },
     {
       "id": "ks-decl-heal-write-dropped",

@@ -92,6 +92,7 @@ struct Steering {
     void Think(Read<Position>, Write<Velocity>) { ++thoughts; }
     void Report(Res<Stats>) const {}
     void Audit(EventReader<Hit>, EventReader<Spawned>) const noexcept {}
+    void Prepare(Write<Health>, Res<Gravity>) noexcept { ++thoughts; }
 };
 
 struct Regenerate {
@@ -114,6 +115,7 @@ static_assert(DerivesExactly<decltype(&ReadTwice), TypeList<C<Position>, R<Time>
 static_assert(DerivesExactly<decltype(&Steering::Think), TypeList<C<Position>>, TypeList<C<Velocity>>>);
 static_assert(DerivesExactly<decltype(&Steering::Report), TypeList<R<Stats>>, TypeList<>>);
 static_assert(DerivesExactly<decltype(&Steering::Audit), TypeList<E<Hit>, E<Spawned>>, TypeList<>>);
+static_assert(DerivesExactly<decltype(&Steering::Prepare), TypeList<R<Gravity>>, TypeList<C<Health>>>);
 static_assert(DerivesExactly<Regenerate, TypeList<R<Time>>, TypeList<C<Health>>>);
 
 // ---- Compile-time: what is not a System.
@@ -166,6 +168,7 @@ TEST_CASE("Derivation: free functions, member functions and a function object ma
     CheckDescriptor(Describe<decltype(&Steering::Think)>(registry, "Steering::Think"), {kPosition}, {kVelocity});
     CheckDescriptor(Describe<decltype(&Steering::Report)>(registry, "Steering::Report"), {kStats}, {});
     CheckDescriptor(Describe<decltype(&Steering::Audit)>(registry, "Steering::Audit"), {kHit, kSpawned}, {});
+    CheckDescriptor(Describe<decltype(&Steering::Prepare)>(registry, "Steering::Prepare"), {kGravity}, {kHealth});
     CheckDescriptor(Describe<Regenerate>(registry, "Regenerate"), {kTime}, {kHealth});
 }
 
@@ -214,6 +217,8 @@ TEST_CASE("Derivation: MakeSystem keeps the derived descriptor for every callabl
                     {kVelocity});
     CheckDescriptor(MakeSystem(registry, "Steering::Audit", steering, &Steering::Audit).Descriptor(),
                     {kHit, kSpawned}, {});
+    CheckDescriptor(MakeSystem(registry, "Steering::Prepare", steering, &Steering::Prepare).Descriptor(), {kGravity},
+                    {kHealth});
     CheckDescriptor(MakeSystem(registry, "Regenerate", Regenerate{}).Descriptor(), {kTime}, {kHealth});
 }
 
