@@ -8,7 +8,7 @@
 
 | 判定 | 結論 | 證據 |
 |---|---|---|
-| 1 簽名推存取集合 | **本機成立，三平台待 L1**。17 個不同簽名（free function 10、lambda 3、member function 3、function object 1），型別集合 `static_assert` 與 id 集合執行期比對都和人手寫的期望逐一相同。本機只有 AppleClang 21（x86_64），Debug 與 Release 兩種組態都過。MSVC、gcc、AppleClang arm64 沒有實測。 | `spikes/kernel/tests/AccessDerivationTests.cpp`；`build/evidence/kernel-spike/` 的 `tests_*.txt` |
+| 1 簽名推存取集合 | **成立（三平台，L1 run 43018979148，PR #180，commit c2857496）**：linux-x64（gcc）、windows-x64（MSVC）、macos-arm64（AppleClang）三列的「Build and test the kernel spike」步驤都實際執行且通過，debug 與 release 兩個執行檔各 2/2；spike 自身零警告（windows 的 8 個 C5285 來自 `doctest.h:539`，第三方）。本機（AppleClang x86_64）原記錄保留：17 個不同簽名（free function 10、lambda 3、member function 3、function object 1），型別集合 `static_assert` 與 id 集合執行期比對都和人手寫的期望逐一相同。本機只有 AppleClang 21（x86_64），Debug 與 Release 兩種組態都過。MSVC、gcc、AppleClang arm64 沒有實測。 | `spikes/kernel/tests/AccessDerivationTests.cpp`；`build/evidence/kernel-spike/` 的 `tests_*.txt` |
 | 2 受限句柄＋debug 核對攔繞路 | **成立（照事前宣告原文；使用者 2026-11-11 決定，R-01）**。原文的三種繞路 (a)(b)(c) 在 debug 建置各被斷言攔下、release 不攔。實作者原判「部分不成立」依據的是原文沒要求的更嚴判準，該部分改記為下節〈範囲の限界〉。原文字保留如下以供對照：(c) 成立：經未宣告的 id 碰 World，在存取當下斷言。(a)(b) 只對「寫入的位元組淨變化留到 System 邊界」的形狀成立：debug 斷言、release 不攔。攔不到的形狀見〈判定 2 的上限〉，C++ 在這套機制裡沒有辦法攔。 | `spikes/kernel/tests/AccessCheckTests.cpp`（Bypass／Limit／Control 各案） |
 | 3 突變 | **成立**。事前宣告的「移除任一宣告→對應測試失敗」：9 條宣告移除突變（七類參數全覆蓋）第一輪就全部被殺；其中 7 條由 debug 核對層殺（6 條在存取當下、1 條在 System 邊界），另 2 條由 const 正確性（編譯錯誤）與判定 1 的期望 `static_assert` 殺。全目錄：第一輪 31/32（1 條存活，屬核對層的偵測力，不是宣告移除），收緊測試後第二輪 32/32；對抗檢查後加到 34 條，第三輪 34/34。 | `spikes/kernel/mutations.json`；`build/evidence/kernel-spike/mutations_*.txt` |
 
@@ -154,7 +154,7 @@ python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py \
 
 本機只有一個編譯器：**AppleClang 21.0.0（clang-2100.1.1.101），x86_64-apple-darwin25.6.0（Intel Mac）**，CMake 4.4.3＋Ninja 1.13.2，C++20。Debug 與 Release 兩種 `CMAKE_BUILD_TYPE` 各建兩個目標，四個執行檔全過、零警告（`-Wall -Wextra -Wpedantic`）。
 
-**MSVC、gcc（linux-x64）、AppleClang arm64（macos-arm64）待 L1**。目前 L1 不建 `spikes/kernel/`（根 CMakeLists 不加這個目錄，workflow 也沒有步驟）。要讓 L1 看三平台，需要改 `.github/workflows/`（`spikes/` 以外，照 `v8-arch-kernel-delegation` 要先給使用者），或在 Windows／Linux 實機照 `spikes/kernel/CMakeLists.txt` 開頭的三行命令手動跑。
+**MSVC（windows-x64）、gcc 14（linux-x64）、AppleClang（macos-arm64）已由 L1 實測**（run 43018979148，PR #180）：三者 configure、build、ctest 全過，spike 原始碼零警告；唯一的警告是 MSVC 對 `doctest.h:539` 的 C5285（第三方，與 spike 無關）。下列「預先看到的點」沒有一個在三平台上發作。目前 L1 不建 `spikes/kernel/`（根 CMakeLists 不加這個目錄，workflow 也沒有步驟）。要讓 L1 看三平台，需要改 `.github/workflows/`（`spikes/` 以外，照 `v8-arch-kernel-delegation` 要先給使用者），或在 Windows／Linux 實機照 `spikes/kernel/CMakeLists.txt` 開頭的三行命令手動跑。
 
 預先看到、在其他編譯器上可能出問題的點（沒有實測，供 L1 判讀）：
 - **型別查表鍵的位址唯一性**：Registry 用 per-type 靜態物件的位址當查表鍵。原本寫成 `static constexpr char`（唯讀資料）；MSVC `/OPT:ICF` 或 lld `--icf=all` 可能把內容相同的唯讀資料摺成同一個位址，讓兩個型別撞鍵（Registry 會以「registered twice」斷言）。第二輪前改成可寫的 `static inline char`（可寫資料不被摺疊）。這是事前的可攜性修正，本機沒有觀測到問題。另外，Windows 上跨 DLL 時每個模組各有一份物件、鍵不同；spike 只有單一執行檔，Engine 化時 Registry 由誰擁有、鍵怎麼跨模組，是規格（`-spec`）的事。
@@ -203,8 +203,8 @@ python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py \
 | R-10（nit） | `expect_build_failure` 的 16 條 regex 都改成該條特有的 requirement 片段，並以實際輸出核對命中與誤命中 |
 | R-11（nit） | 「宣告移除 9 條全殺」改寫成：debug 核對層殺 7 條，另 2 條由 const 正確性與判定 1 的期望 `static_assert` 殺 |
 | R-12（should） | 加 Control 測試「a declared write also allows reading the same storage through the World」；對偶突變 `ks-check-write-not-readable`（`DeclaresRead(key) || DeclaresWrite(key)` → `DeclaresRead(key)`） |
-| R-13 | nit、未查證：`alignas(64)` 的測試型別以值傳入 `World::Push(T)`，MSVC 對過度對齊的 by-value 參數歷史上有 C2719（x86）；x64 是否仍報未查證，報告原只提 C4324。處置：待 L1 的 windows-x64 結果判讀；若報錯改以 const& 傳入（測試側，不影響判定）。（架構師記錄） |
-| R-14 | nit、未查證：`Registry.hpp` 的 `Entry{token, ops}` 省略了有 NSDMI 的三個成員，gcc `-Wextra` 的 `-Wmissing-field-initializers` 是否警告未查證；僅警告、spike 無 `-Werror`。處置：待 L1 的 linux-x64 結果判讀。（架構師記錄） |
+| R-13 | nit、未查證：`alignas(64)` 的測試型別以值傳入 `World::Push(T)`，MSVC 對過度對齊的 by-value 參數歷史上有 C2719（x86）；x64 是否仍報未查證，報告原只提 C4324。處置：L1 windows-x64 已觀測——無 C2719、無 C4324，建置零警告（run 43018979148）。結案。（架構師記錄） |
+| R-14 | nit、未查證：`Registry.hpp` 的 `Entry{token, ops}` 省略了有 NSDMI 的三個成員，gcc `-Wextra` 的 `-Wmissing-field-initializers` 是否警告未查證；僅警告、spike 無 `-Werror`。處置：L1 linux-x64（gcc 14）已觀測——無 `-Wmissing-field-initializers` 警告，建置零警告（run 43018979148）。結案。（架構師記錄） |
 
 處置後：全部測試重跑（Debug、Release 兩組態 × 兩目標，33/33 case），全目錄突變第三輪 34/34。
 
@@ -217,6 +217,8 @@ python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py \
 ## 證據
 
 主 checkout `build/evidence/kernel-spike/`（git 不追蹤；本機 Intel Mac）：`toolchain.txt`（編譯器、CMake、Ninja 版本）；`build_config-debug.txt`、`build_config-release.txt`（clean 建置，零警告）；`tests_config-{debug,release}_target-{debug,release}.txt`（四個執行檔的 doctest 輸出）；`ctest_config-debug.txt`、`ctest_config-release.txt`（突變後還原的樹再建再跑）；`test_cases.txt`（30 個 case 名，第二輪時）；`mutations_round1.txt`（31/32）、`mutations_round2.txt`（32/32）。對抗檢查後：`tests_round3_config-{debug,release}_target-{debug,release}.txt`（33 個 case）、`test_cases_round3.txt`、`build_failure_probe_round3.txt`（16 條建置失敗突變各自的錯誤行，用來定 regex）、`mutations_round3.txt`（34/34）。建置樹在工作樹 `build/target/_build/kernel-spike-debug`、`kernel-spike-release`（git 不追蹤）。第一輪突變前的測試輸出只是開發中的執行，未保存。
+
+L1 的證據（主 checkout `build/evidence/kernel-spike/l1-run-43018979148/<platform>/`，從 run 的 `l1-diagnostics-<platform>` artifact 複製）：每平台 `kernel-spike-configure.log`、`kernel-spike-build.log`、`kernel-spike-tests.log`、`kernel-spike-tests.xml`（junit：2 tests、0 failures）。junit 只有執行檔層級；每個執行檔內的案例數以本機第三輪為準（33 案例）。
 
 ## 怎麼重跑
 
