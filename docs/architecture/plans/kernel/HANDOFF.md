@@ -98,6 +98,8 @@
 
 - 2026-11-11 PR #181 合併（f8b6f74b）；三個審查者與 spike 的 agent worktree 已清。使用者「開始 spec-v03」→ `v8-arch-kernel-spec-v03` 啟動（事前宣告 spec-v03-declaration.zh-Hant.md；主會話自寫、對抗 Opus／high）。
 
+- 2026-11-11 **-spec-v03 停止（AGENTS §14：原因改變前提）**。對抗檢查 Opus／high 回 9 blocker、11 should、5 nit；判定 1 不成立、2 有條件、3 不成立、4 成立。停止理由 B-9：規格 §讀法把「debug 斷言」定義為「`GYO_ASSERT`，只在 debug 有效、release 不攔」，但 `Assert.hpp:21` 與 error-handling.md 第 15 行寫明 GYO_ASSERT **在每個建置組態都評估**，架構師已核實。影響：K.3 第 17 項「不採常開檢查巨集、改 Result」的對比對象（常開巨集）其實就是現有 GYO_ASSERT；規格裡所有「debug 斷言…release 不攔」條文（W-4、W-5、W-6、F.2 第 4 步等）的機制名錯；本批已把第 17 項寫進現況 error-handling.md，與同檔「每個建置都跑 handler」並存。其餘 blocker（B-1 §0 Host 定義未改、B-2 H.4.1 (a) 漏改、B-3 H-7 呼叫點例子把 FixedTickRuntime::Advance 當違規、B-4 target 兩份未跟 Diagnostics 例外、B-5 (c) 診斷仍無合法路徑、B-6 ApplyMembership 掛兩個 schedule＝兩個寫者、B-7 entity-store DI 4 內部矛盾、B-8 F.1 untyped Commands 仍寫呼叫 assertion handler）可由架構師修，但依 §14 停下不 commit 修正，先報使用者。分支 claude/arch-kernel-spec-v03 保留現狀，未開 PR。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
