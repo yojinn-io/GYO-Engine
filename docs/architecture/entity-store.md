@@ -8,7 +8,7 @@ with its mapping to the first consumer's clauses, and the batches). Implementati
 The column part (`EntityId`, `EntityKey`/`EntityOf`, the column functions) exists since batch
 `v8-arch-entity-store-impl-3a` (2026-11-05), with its guard (row 1 for the columns, rows 2, 3, row 7 for the column
 functions, rows 9, 10 and the text scan of rows 5, 6, 8); `DeferredChanges` and its guard parts (row 1's `onSpawn`
-part, row 4, the rest of rows 5-8) are pending batch 3b.
+part, row 4, the rest of rows 5-8) were pending batch 3b and are **withdrawn 2026-11-11** (`v8-arch-kernel-delta-approved`, kernel spec K.3 item 7): membership changes become the World's deferred queue (`plans/kernel/spec.zh-Hant.md` section F). Text about `DeferredChanges` below is kept as the history of that never-implemented design and is not in force.
 
 Evidence notation. "Survey" is the approved reference survey of Bevy ECS and EnTT in the plan folder; "§2.1 Commands
 row" means the row of its table. "E-n" and "RC-n" are the approved clauses of the first consumer's entity model; each
@@ -18,8 +18,7 @@ which part of each clause stays with the consumer). Removing that consumer chang
 ## What it is
 
 The container part of an ECS data layout, and nothing else: one typed column per component, kept in strictly
-ascending order of an id the caller gives, and a to-do of spawns and destroys that the caller applies, in ascending id,
-at a sync point it names. It is not an entity runtime: it runs no system, owns no world and allots no id.
+ascending order of an id the caller gives. (The to-do of spawns and destroys that an earlier draft put here is withdrawn; it is the World's deferred queue.) It is not an entity runtime: it runs no system, owns no world and allots no id.
 
 ```text
 consumer (a product) ────────────→ GYO::EntityStore ──→ GYO::Base
@@ -62,7 +61,7 @@ rename them; the semantics below may not change without a new Delta.
 - **Invalidation.** `InsertEntity` and `EraseEntity` invalidate every pointer, reference, iterator and span into that
   column. Pointers from `FindEntity` stay valid until the next `InsertEntity` or `EraseEntity` on the same column.
   This is why a consumer freezes membership while it holds references.
-- **Deferred changes.**
+- **Deferred changes** — *withdrawn 2026-11-11, never implemented; kept as history. The World's deferred queue (kernel spec section F.2) replaces it, with the opposite phase order: despawn and remove before spawn and insert, so a same-sync-point destroy-then-spawn of one id is allowed there.*
   - `RecordSpawn(spawn)` records a spawn whose id the consumer has already allotted, in the consumer's own order.
     Recording a second spawn with an id already recorded fails a `GYO_ASSERT`.
   - `RecordDestroy(id)` records a destroy. Recording an id already recorded has no further effect: two rules may
@@ -83,17 +82,15 @@ rename them; the semantics below may not change without a new Delta.
     running state before the exception leaves it, so the `DeferredChanges` is empty and usable; records not yet
     applied are dropped, and the columns are as the callbacks left them.
 - **Failures.** The store has no entry point for external data, so it returns no `Result` and throws nothing
-  itself ([error handling](error-handling.md) rule 3). Programmer Errors (`GYO_ASSERT`): inserting a present key,
-  recording a spawn id twice, recording or applying while `Apply` runs. A column that is not strictly ascending is a
-  Programmer Error the caller detects with `StrictlyAscending`.
+  itself ([error handling](error-handling.md) rule 3). Programmer Errors (`GYO_ASSERT`): inserting a present key. A column that is not strictly ascending is a
+  Programmer Error the caller detects with `StrictlyAscending`. (The withdrawn `DeferredChanges` also listed recording a spawn id twice and recording or applying while `Apply` runs.)
 - **Not the store's.** When membership is frozen, where the sync point is, which columns an entity has, the one
   erase entry across columns, what a spawn record contains, and how a phase is kept from changing membership.
 
 ## Guard
 
 Proposed for batch 3; the column part of row 1, rows 2, 3, 9, 10, the column part of row 7 and the text scan of
-rows 5, 6, 8 are implemented (3a); row 1's `onSpawn` part, row 4 and the `DeferredChanges` parts of rows 5-8 come
-with 3b. Tests live in `tests/common/entity_store/` (`gyo_entity_store_tests`, CTest label `cpu`, so L1
+rows 5, 6, 8 are implemented (3a); row 1's `onSpawn` part, row 4 and the `DeferredChanges` parts of rows 5-8 were planned for 3b and are **withdrawn** with it (2026-11-11); the corresponding guards belong to the World (kernel spec J-31, J-32). Tests live in `tests/common/entity_store/` (`gyo_entity_store_tests`, CTest label `cpu`, so L1
 runs it) and use synthetic element types only, never a product's (AGENTS.md §7). Mutants go in the plan folder's
 `scripts/mutations.json` and must be killed by these common tests alone; a mutant counts as killed only when the
 expected test fails. These rule tests are written from this contract (AGENTS.md §14.2), so each one shows its
@@ -104,9 +101,9 @@ detection power with the listed mutants.
 | 1 | Ids 0, 2^63 and `UINT64_MAX` insert, find and erase like any other; a spawn's id reaches `onSpawn` unchanged | `FindEntity` treats 0 as absent; `InsertEntity` asserts on 0 as a reserved value |
 | 2 | Insert 5, 1, 9, 3 (descending runs included) → 1, 3, 5, 9; erase the middle and the ends → order kept; insert a key above all present | `InsertEntity` appends; `EraseEntity` swaps with the last |
 | 3 | `FindEntity` on present, absent, below-first, above-last keys; a span and a vector agree. Comparison budget: with an `EntityKey` specialization that counts key reads, a lookup in 1,024 elements reads at most 2·⌈log2 n⌉ + 2 keys. "No side table" beyond what the row below detects: review | `FindEntity` returns the `lower_bound` element without comparing its key; `FindEntity` scans linearly |
-| 4 | Record spawns 7, 3, 5 and destroys 9, 3 in that order → `onSpawn` 3, 5, 7, then `onDestroy` 3, 9; afterwards `Empty()`; a duplicate destroy is called once; recording or applying inside a callback asserts; a throwing callback leaves the object empty and usable | apply in recording order; destroys before spawns; no dedup of destroys; lists not emptied; re-entrancy check removed; running state not cleared on throw |
+| 4 | *Withdrawn with `DeferredChanges` (2026-11-11); the World's J-32 guards the replacement.* Original: Record spawns 7, 3, 5 and destroys 9, 3 in that order → `onSpawn` 3, 5, 7, then `onDestroy` 3, 9; afterwards `Empty()`; a duplicate destroy is called once; recording or applying inside a callback asserts; a throwing callback leaves the object empty and usable | apply in recording order; destroys before spawns; no dedup of destroys; lists not emptied; re-entrancy check removed; running state not cleared on throw |
 | 5, 6, 8 | Text scan of the store's headers (comments and literals ignored), with a self-test: no `unordered_`, `std::hash`, `<random>`, `<chrono>`, `<thread>`, `<atomic>`, `<mutex>`; no variable declared `static` or `thread_local` without `constexpr` (`static_cast`, `static_assert`, `static constexpr` and static member functions are not matches). `DeferredChanges` holds only its two lists and its running state: review | add a `std::unordered_map` index to `FindEntity`; add a function-local `static` cache |
-| 7 | `GYO_CHECK_ASSERTS` on a present-key insert, a twice-recorded spawn, recording and applying during `Apply`; `EraseEntity` of an absent key returns false without asserting | remove each `GYO_ASSERT`; make absent erase assert |
+| 7 | `GYO_CHECK_ASSERTS` on a present-key insert (the twice-recorded spawn and recording-during-`Apply` cases are withdrawn with `DeferredChanges`); `EraseEntity` of an absent key returns false without asserting | remove each `GYO_ASSERT`; make absent erase assert |
 | 9 | `gyo_expect_links(gyo_entity_store GYO::Base)` at configure time (the helper of `tests/common/time/CMakeLists.txt:22`, deferred as `tests/common/trace/CMakeLists.txt:20` does); the test executable links only `GYO::EntityStore` and `gyo_test_support` (itself `GYO::Base` and doctest, `tests/common/support/CMakeLists.txt:4-6`), so a store header that includes anything but the standard library and `engine/base` does not compile there | link `GYO::Math`; include an `engine/math` header |
 | 10 | Through `EntityOf` and the column functions: a type with only `id` is keyed by `id`; a type with an `EntityKey` specialization and no `id` is keyed by it; a type with both an `id` member and a specialization returning another field is keyed by the specialization; a type with neither fails a `requires`-expression check | `EntityOf` reads the member `id` directly instead of going through `EntityKey` |
 
@@ -141,11 +138,7 @@ frozen phases); the Delta lists them and the mutants that move here.
 3. **Lookup is binary search on the column itself.** No sparse array, index, hash or other side table. Reason: a side
    table is a second copy of membership that can disagree with the column, and without id recycling a sparse array
    grows over dead ids. Evidence: survey §2.1 `SparseSet` row, §2.2 sparse-set row; consumer: E-5.
-4. **Structural changes are deferred and applied in id order at the caller's sync point.** *(Amended 2026-11-11, `v8-arch-kernel-delta-approved`, spec K.3 item 7: this invariant extends to component insert and remove, not only spawn and destroy, and the sync-point application order is the one fixed in `plans/kernel/spec.zh-Hant.md` §F.2: hook queue, despawn, remove, spawn, insert, OnAdd, resource, each phase ascending by id; inserts to the same (entity, component) tie by (planPos, recSeq). The proposed `DeferredChanges<Spawn>` (3b, never implemented) is withdrawn; the World's deferred queue takes its place. DI 5 "the store runs nothing" still holds for the store itself; the World is a new component built on the store's columns.)* Membership changes are recorded while rules run and applied by the owner of the columns at its sync point in
-   the order the kernel spec fixes (section F.2: despawn, remove, spawn, insert, each ascending by id). The store
-   itself provides only the ordered insert and the order-preserving erase; the queue lives in the World (the
-   proposed `DeferredChanges<Spawn>`, which applied spawns before destroys, is withdrawn). The store never decides
-   when a sync point is, never allots at record time, and stores no closures. Reason: changing membership invalidates references into
+4. **Structural changes are deferred and applied in id order at the owner's sync point; the store only provides the ordered insert and erase.** *(Amended 2026-11-11, `v8-arch-kernel-delta-approved`, spec K.3 item 7.)* Membership changes are recorded while rules run and applied by the owner of the columns at its sync point, each phase in ascending id; the owner is the World, whose deferred queue and phase order are the kernel spec's (section F.2: hook queue, despawn, remove, spawn, insert, OnAdd, resource; inserts to the same (entity, component) tie by (planPos, recSeq)), and the invariant covers component insert and remove as well as spawn and destroy. The store itself never decides when a sync point is, never allots at record time, and stores no closures; the proposed `DeferredChanges<Spawn>` (3b, never implemented) is withdrawn. Reason: changing membership invalidates references into
    a column, and applying changes in recording order would make the result depend on the order rules ran. Evidence:
    survey §3b, §2.1 `Commands` row, §4.2 Commands row (the purpose of Bevy's Commands adapted, not ported);
    consumer: E-12.
@@ -156,8 +149,7 @@ frozen phases); the Delta lists them and the mutants that move here.
    plugin ABI, dynamic loading and service locator stay forbidden; the store's columns become the World's storage). Evidence: survey §2.1 scheduler, `Resource`/`World`,
    `App`/`Plugin`, `Events`, `Observers` rows; §2.2 registry, context and signal rows.
 6. **State authority** (AGENTS.md §3). The columns belong to the caller. The store holds no state of its own (the withdrawn `DeferredChanges` would
-   have held two pending lists and an `Apply` flag; that state now belongs to the World's deferred queue; the sentence that follows describes the withdrawn design:
-   running. It caches nothing to decide on: no index, count, change tick, last-sent record, per-recipient state or
+   have held two pending lists and an `Apply` flag; that state now belongs to the World's deferred queue). It caches nothing to decide on: no index, count, change tick, last-sent record, per-recipient state or
    interest set. Reason: anything cached to decide on is a copy of the consumer's state that can go stale. Evidence:
    survey §3c (change ticks not adopted in the first version, its reasons a to c), §2.1 change-detection row;
    consumer: E-8.
@@ -166,7 +158,7 @@ frozen phases); the Delta lists them and the mutants that move here.
    `false`). Reason: every input comes from the caller's own code, none from files, network or the environment.
    Evidence: [error handling](error-handling.md) rules 3 and 6; survey §2.2 error-handling row, §4.2 last row.
 8. **Deterministic by construction.** No unordered container, hash, pointer comparison, clock, random source, thread
-   or atomic in the store. Keys within each pending list are unique, so `Apply`'s order is a total order on ids.
+   or atomic in the store. Column order is a total order on ids (the withdrawn `DeferredChanges` argued the same for its pending lists).
    Reason: consumers compare results bit for bit across processes and platforms. Evidence: survey §3a, §2.1
    scheduler row; consumer: E-5, E-6, E-10.
 9. **A leaf that knows no product.** `GYO::EntityStore` is header-only and links exactly `GYO::Base`; its headers

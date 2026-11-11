@@ -12,7 +12,7 @@
 - **配發策略是產品的 Resource**（說明名 `EntityAllotter`，由產品 plugin 登記）。World 本身不配發 id、不保留任何值。
   - GYO PvP 選「**單調不重用、generation 恆 0**」：產生的值與今天的 `EntityId`（E-1～E-3：Gateway 配玩家段、PvpMatch 配 Match 段、Client 不配發）**逐位元相同**，wire 與 digest 不改；Match 與 Client 的 World 對同一組實體產生同一疊代順序，(c) 區 System 不必自己排序。
   - 別的產品可選「槽回收加版本號」。代價自付：兩端配發歷史不同時，數值順序不再是契約鍵的順序，需要該產品自己排序；跨機器一致性也由該產品保證。
-- **後果（寫明）**：stale 句柄的偵測能力取決於配發策略。Kernel 的存取驗證（可關，違規走 Result）只保證「鍵還活著」（句柄記錄取得時的欄 epoch 與 run id，解參考時比對）；不重用的策略下，被刪除的 id 永不再出現，所以不需要 generation 來偵測；槽回收策略下，generation 才承擔偵測。
+- **後果（寫明）**：stale 句柄的偵測能力取決於配發策略。Kernel 的存取驗證（可關，違規以 Err 回傳）只保證「鍵還活著」（句柄記錄取得時的欄 epoch 與 run id，解參考時比對）；不重用的策略下，被刪除的 id 永不再出現，所以不需要 generation 來偵測；槽回收策略下，generation 才承擔偵測。
 - 理由：鍵格式是 Kernel 的、配發策略是產品的——Engine 保通用、PvP 保決定性。
 
 ## 2. change stamp（使用者 2026-11-11 決定，spec K.3 第 2 項）
@@ -51,7 +51,7 @@
 
 ## 6. 其餘（照規格 §A，待實作時搬進本文件）
 
-資料模型（欄的 SoA 佈局、ColumnInfo 的 zone／writePolicy／role／rollback）、A.2 的操作與允許的狀態、A.4 參考失效規則、A.5 不變量 W-1～W-11、A.6 的 C++ 實現手段與 debug 核對兩層，見 spec §A。這些在規格核准前仍是草案。
+資料模型（欄的 SoA 佈局、ColumnInfo 的 zone／writePolicy／role／rollback）、A.2 的操作與允許的狀態、A.4 參考失效規則、A.5 不變量 W-1～W-11、A.6 的 C++ 實現手段與存取驗證兩層，見 spec §A。這些在規格核准前仍是草案。
 
 ## Design Invariants（候選；核准後成為正式條文）
 

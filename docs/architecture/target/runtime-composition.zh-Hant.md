@@ -15,7 +15,7 @@
 
 - Client 有三個 Runtime：`ClientSim`（World S，FixedUpdate，runner＝`gyo-client-sim`）、`ClientFrame`（World F，FrameUpdate，runner＝Main）、`ClientRender`（World R，`Extract` → `RenderSubmit`，與 F 同在主執行緒）。
 - **Render World 自己的 Registry**（各自凍結；render plugin 只登記到渲染 Registry，主 Registry 不因渲染而變 fingerprint）。
-- **渲染只經 Extract 以 const 方式讀來源 World，無反饋**：extract System 的參數 `Extract<Read<T>>`／`ExtractRes<R>` 只讀來源；`Extract<Write<…>>` 不存在（編譯期擋下）；debug 下來源 World 在 extract 期間任何寫入都斷言；渲染 Runtime 不得以任何參數寫回來源，含 boundary Resource；來源 Registry 必須先凍結（spec H-6、J-43；DI-KS 13）。
+- **渲染只經 Extract 以 const 方式讀來源 World，無反饋**：extract System 的參數 `Extract<Read<T>>`／`ExtractRes<R>` 只讀來源；`Extract<Write<…>>` 不存在（編譯期擋下）；來源 World 在 extract 期間任何經 World API 的寫入都由存取驗證（可關）記為違規、以 Err 回傳（2026-11-12 改寫，原文「debug 下…斷言」）；渲染 Runtime 不得以任何參數寫回來源，含 boundary Resource；來源 Registry 必須先凍結（spec H-6、J-43；DI-KS 13）。
 - 代價：多一個 World 與每幀一次 extract。使用者的理由：合起來看著簡單，代價很高——合併後「渲染不改模擬」只能靠 RenderSubmit 唯讀的存取宣告守，而宣告的真實性在 C++ 攔不到（LIM-3）；分開則由機制守。
 - 交換點：意圖 F → S、呈現 S → F 經 Host 擁有的 Mailbox，只在 schedule 之間存取；Link 經 Host 與網路執行緒在 S 的 schedule 前後交換。
 
@@ -28,7 +28,7 @@
 ## 3a. Loading schedule：世界內容的載入階段（使用者 2026-11-11 決定，spec H.2b）
 
 - Startup 只放 Runtime 建構時就確定、不依內容的東西；**世界內容全部經 `Loading` schedule 進來**，初始成員不走 Startup。
-- Loading 的 stage 固定序：地圖 → 場景 → 可互動物件 → 敵人 → 玩家；可分批（Loading 可跑多次，每次一批，由 Host 迴圈驅動）；資產載入是 IO 服務，在同步點依請求順序套用（assets §1）。
+- Loading 的 stage 固定序：**Ingress** → 地圖 → 場景 → 可互動物件 → 敵人 → 玩家；可分批（Loading 可跑多次，每次一批，由 Host 迴圈驅動）。Ingress 是 Z3 的 ingress stage：(b) 的 ingress System 從 external Resource（`Link`、`AssetInbox`）讀，寫進 role=Input 的 (c) 暫存（`MembershipRequests` 以請求序號為鍵、`AssetStaging`）；之後各 stage 的 (c) System 只讀暫存，依請求順序套用進 `Assets<T>` 或欄（assets §1；spec H.2b、N-2／N-8 修訂）。資產載入本身是 IO 服務，只到 `AssetInbox` 為止。
 - 玩家在「玩家」stage 由 `ApplyMembership` 以 `SpawnWithId` 生成，與中途加入是同一個 System；Z2 無例外。
 - 對局時鐘在 Loading 宣告 ready 後才開始：FixedUpdate 的 domain tick 於 ready 後從 0 起算；Loading 的計數不是遊戲 tick。Client 收到 Match 的 ready（wire 事件；pv10-requirements）前停在 loading 狀態。
 - 決定性：載入的內容身分是 (c)，載入順序是 Plan 的函數，ready 時兩端 (c) 狀態可比對。
@@ -56,7 +56,7 @@
 
 1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
 2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；產品與工具只在 main 列 plugin。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）。
-3. **世界內容只經 Loading schedule 進來；對局 tick 於 ready 後從 0 起算；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄）；等價測試（分批數不同、ready 時 (c) 狀態逐位元相同）；掃描（Peer 元件不掛在 Player 實體）。
+3. **世界內容只經 Loading schedule 進來（且只經它的 Ingress stage 進 (c)）；對局 tick 於 ready 後從 0 起算，Loading 期間 `tick[Fixed]` 不推進、Loading 自己的計數不是 `tick[Loading]` 可被 (c) 讀的時間；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄；Loading 非 Ingress stage 的 System 不得讀 external Resource）；等價測試（分批數不同、ready 時 (c) 狀態逐位元相同）；掃描（Peer 元件不掛在 Player 實體）。
 4. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
 
 ### Replacement Criteria（候選）

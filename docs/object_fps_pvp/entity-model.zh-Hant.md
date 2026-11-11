@@ -235,7 +235,7 @@ inline constexpr EntityId MatchEntityIdLast  = 0x0FFF'FFFF;  // 2^28−1：契�
 
 - **Tick 內不改任何欄的成員。** 生成與刪除先記進本 Tick 的待辦（`pendingSpawns_`、`pendingDestroys_`），在固定階段（`ResolveActions` 之後、`AdvanceAnimation` 之前）依 EntityId 升冪套用；新 id 依裁決順序 (A, EntityId, ActionId) 配發。
 - `Join`／`Leave` 在 Tick 外（host 呼叫），不受此限；split 本身不受影響。
-  **2026-11-11 修訂（`v8-arch-kernel-membership-in-tick`、`v8-arch-loading-schedule`，使用者決定）**：機制下 Join／Leave **進 tick 內**——Ingress（(b)）只把加入／離開請求寫進 `InputRing`，(c) 的 `ApplyMembership` System 在 Simulate stage 以 `SpawnWithId`／`Despawn` 生成與刪除；初始成員走 Loading schedule 的「玩家」stage，由同一個 System 生成，不走 Startup、不是 host 直寫。後果：加入與離開晚最多一個 tick，`combat-rejoin` 等 golden **可能**差一 tick（audit §4.1 另點名 `host-play`、`host-poor-connection` 為確定受影響，待實測），其餘以對局開始（ready 後 tick 0）為基準預期不變；一律由遷移批實測，不先假設（limits LIM-5）。E-12 的「待辦」由 World 的延後佇列承擔（spec §F.2），`inTick_` 守衛由 W-3 取代。
+  **2026-11-11 修訂（`v8-arch-kernel-membership-in-tick`、`v8-arch-loading-schedule`，使用者決定；target, not implemented——現況仍是上面兩行，遷移批改碼時搬進條文）**：機制下 Join／Leave **進 tick 內**——Ingress（(b)）只把加入／離開請求寫進 `MembershipRequests`（role=Input、以請求序號為鍵；FixedUpdate 與 Loading 的 Ingress 同一掛點），(c) 的 `ApplyMembership` System 在 Simulate stage 以 `SpawnWithId`／`Despawn` 生成與刪除；初始成員走 Loading schedule 的「玩家」stage，由同一個 System 生成，不走 Startup、不是 host 直寫。後果：加入與離開晚最多一個 tick，`combat-rejoin` 等 golden **可能**差一 tick（audit §4.1 另點名 `host-play`、`host-poor-connection` 為確定受影響，待實測），其餘以對局開始（ready 後 tick 0）為基準預期不變；一律由遷移批實測，不先假設（limits LIM-5）。E-12 的「待辦」由 World 的延後佇列承擔（spec §F.2），`inTick_` 守衛由 W-3 取代。
 - 守衛：`InsertEntity`／`EraseEntity` 加 `GYO_ASSERT(!inTick_)`，並加一個在 `ResolveActions` 內直接呼叫它們的突變。
 
 ### 5.3 id 配發
