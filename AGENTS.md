@@ -134,6 +134,10 @@ not predicted pressure.
   Replacement Criteria を同時に書く（§3）。
 * 予見が外れた場合に変更を局所化できる境界（Interface、Version）を置く。
   予見を汎用 Framework や設定言語で吸収しない（§4、§9）。
+* 実装は薄く始める。予見した要求のうち、名指しされた Feature が直近で使う部分だけを実装し、
+  残りは Contract と Interface の形だけを決める。
+* 他の host・Product へ広げる前に、一つの host で費用（性能、資源、移行の手間）を計測し、
+  計画の予算と比べる。
 * 基盤の上に機能を積み上げ始める前に、基盤の反復を済ませる。
   積み上げた後で気づいた場合は、下記「反復を計画する条件」に従う。
 * 基盤への予見に基づく設計も Architecture Delta であり、ユーザーの同意を得る（§3）。
@@ -144,7 +148,10 @@ not predicted pressure.
 三者は排他的な分類ではない。Contract も Architecture の一部であり、
 この順序は導出と優先の標準的な手順を定めるものである。
 
-1. **Feature**：何を作るかを先に決める。利用者（プレイヤー）から見える部分。
+1. **Feature**：何を作るかを先に決める。利用者（プレイヤー、および Tool を使う開発者）から見える部分。
+   複数の Product にまたがる能力（例：Match と Client の予測が同じシミュレーションの核を共用する）を
+   Feature として挙げる場合は、それを使う Product と、各 Product で見える Feature を書く。
+   Product の Feature に結びつけられない能力は、支える Feature とみなさない。
 2. **Contract**：その Feature のために、Data や Wire で何を約束する必要があるか。
 3. **Architecture**：その Contract を支えるために、構造をどう変える必要があるか。
    Contract が変わっても、Architecture が変わるとは限らない。
@@ -222,6 +229,10 @@ Architecture Delta が必要な場合、変更理由を明確にする。
 5. Dependency Direction がどう変化するか
 6. Ownership がどう変化するか
 7. より小さい変更で解決できない理由
+
+複数のバッチにまたがる一つの Architecture Delta は、計画の文書に 7 項目を一度だけ書く。
+各バッチは計画の該当箇所を引用し、計画との差分（新たに影響する Module、Dependency、Ownership の変化）だけを書く。
+差分が計画の範囲を超える場合は、先に計画を更新してユーザーの同意を得る。
 
 Architecture Delta は禁止事項ではない。
 
