@@ -61,6 +61,8 @@
 
 - 2026-11-11 `-audit` 事前宣告寫成（audit-declaration.zh-Hant.md）；使用者：「寫好事前宣告後先等等，我有需要確認的事項」→ 未啟動；PR #179 也暫不合併，等使用者。
 
+- 2026-11-11 使用者「開始」→ `-audit` 啟動。派工：審查者 Opus／high ×3（① engine；② framework＋tools；③ object_fps_pvp＋third_party，含 (a)～(d) 四節），各在獨立 worktree 寫 `audit-part-<範圍>.zh-Hant.md`；掃描腳本 `scripts/audit_scan.py` 由主會話先寫（全域一跑：44 模組、645 命中，`build/evidence/kernel-audit/scan-full/`）；對抗複核 Fable／high 等三份合併後抽 5 個模組；(e) 決定性區表回對由主會話合併時做。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
