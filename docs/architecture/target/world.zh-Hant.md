@@ -36,7 +36,14 @@
 | 大量非主要場景物（可破壞木門、散落物） | 獨占（Match 端一個 System 管全部） | Match 端同一個 System 批次寫；到 Client 走複製與整欄替換 Restore，不逐物件發事件 | 數量大、規則簡單，一個 System 疊代整欄最便宜；Client 不預測它們，整欄覆蓋就好 |
 | 唯一狀態（按鈕開關、Boss 擊殺歸屬） | 獨占，進 digest | 單一 System 寫，輸入來自事件（誰按了、誰補刀） | 權威只有一個的典型；擊殺歸屬是判定，多寫者會兩人同時拿到 |
 
-## 4. 其餘（照規格 §A，待實作時搬進本文件）
+## 4. 結構變更的套用（使用者 2026-11-11 決定，spec K.3 第 4 項）
+
+- 生成、刪除、加欄、移欄在 System 執行期間只進延後佇列；Running 期間成員不變（spec W-3）。
+- **Despawn 不算獨占寫者、不產生衝突邊**：它是成員關係的結束，不是值的寫入；同一窗內的查詢結果不受 despawn 記錄影響。(c) 資料的保護由區規則 Z5（帶 (c) 欄的實體只能由 (c) 的 System 刪除，套用時常開檢查）。
+- **同步點的套用順序寫死**（spec F.2）：hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource。despawn 階段依 EntityId 升冪、冪等（同一 id 記兩次只處理一次）、對窗開始時不存在的 id 無作用。despawn 排在 spawn 之前，是為了同一窗內「刪 X 再以同 id 生成 X」（重連）成立。
+- 說明案例（使用者）：同一 tick 玩家 10 中彈死亡又退出。Combat 在 tick 內已寫下玩家 7 的擊殺——結構凍結，玩家 10 仍在；同步點才刪它。所以擊殺成立，而且與 despawn 的排序無關。若產品要「退出者不算被擊殺」，那是 Combat 與 ApplyMembership 兩個 System 的 Plan 順序與規則問題，(c) 區的歧義檢查會強迫把順序寫明，不是 despawn 該管的。
+
+## 5. 其餘（照規格 §A，待實作時搬進本文件）
 
 資料模型（欄的 SoA 佈局、ColumnInfo 的 zone／writePolicy／role／rollback）、A.2 的操作與允許的狀態、A.4 參考失效規則、A.5 不變量 W-1～W-11、A.6 的 C++ 實現手段與 debug 核對兩層，見 spec §A。這些在規格核准前仍是草案。
 
@@ -46,6 +53,7 @@
 2. **World 不配發、不重用鍵**：配發器是產品的 Resource；World 內沒有配發、回收、歸零的操作；世代切換＝重建 World。守衛：spec J-8（含突變「用盡時回繞」「加 Reset 歸零」）。
 3. **stamp 依 Plan 位置取值、單調、不進 (c)**：跳過的 System 也消耗；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38。
 4. **寫入政策預設獨占，獨占是啟動檢查**：未標 Shared 的欄與 Resource 在一個 World 的所有非 Startup schedule 中寫者至多一個（以 System 計，含型別化 Commands、Spawn 的 bundle、hook）；第二個寫者是啟動錯誤；執行期不加鎖、不仲裁；進 digest 的欄不得 Shared。守衛：spec J-15、J-16。
+5. **結構變更只在同步點、順序寫死、Despawn 不是寫者**：Running 期間成員不變；同步點依「hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource」套用，每階段依 id，despawn 冪等且對窗開始不存在的 id 無作用；Despawn 不計入獨占寫者、不產生衝突邊，(c) 的保護由 Z5。守衛：spec J-3、J-31、J-32、J-32b（突變：spawn 先於 despawn、不去重、依記錄順序套用）。
 
 ### Replacement Criteria（候選）
 

@@ -330,7 +330,7 @@ SystemDescriptor（不可變，finish 時產生）
 
 ### B.9 取捨
 
-1. Despawn 不算獨占寫者（採提案 2）；提案 1 以虛擬鍵「結構」讓 despawn 與每個查詢衝突，提案 3 讓所有 `Commands` 持有者互相衝突。理由：結構變更在同步點才套用，同一窗內的查詢結果不受 despawn 記錄影響，所以不需要衝突邊；(c) 的 despawn 由 Z5 守，順序由 F.2 的「依 id、去重」保證與記錄順序無關。**提案 2 把它列為待使用者決定**；本稿維持。
+1. **Despawn 不算獨占寫者（已決定，使用者 2026-11-11）**（採提案 2）；提案 1 以虛擬鍵「結構」讓 despawn 與每個查詢衝突，提案 3 讓所有 `Commands` 持有者互相衝突。使用者的說明案例：同一 tick 玩家 10 中彈死亡又退出；Combat 在 tick 內已寫下玩家 7 的擊殺（結構凍結，玩家 10 仍在），同步點才刪，所以擊殺成立且與 despawn 的排序無關。若產品要「退出者不算被擊殺」，那是 Combat 與 ApplyMembership 的 Plan 順序與規則問題，(c) 的歧義檢查會強迫寫明。理由：結構變更在同步點才套用，同一窗內的查詢結果不受 despawn 記錄影響，所以不需要衝突邊；(c) 的 despawn 由 Z5 守，順序由 F.2 的「依 id、去重」保證與記錄順序無關。提案 2 原列為待使用者決定；使用者已採。
 2. (c) 區禁用 `Local`（採提案 2、3）；提案 1 只禁指標型的 Local。理由：回滾只還原 World，Local 殘留會讓重跑與一次跑完不同（H-2）。
 3. 參數上限 16（採提案 2）；提案 1 不設上限。理由：B.6 風險 3。
 
@@ -1118,7 +1118,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 1. ~~Entity 不帶 generation~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：鍵格式＝u64，低 32 index、高 32 generation（Bevy 格式），Kernel 不看兩段意義、疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0，值與今天逐位元相同；stale 句柄偵測能力取決於策略。A.1、A.8 取捨 1、K.1 第 3／4 條已改；K.2 第 2 條取消。部件文件：`docs/architecture/target/world.zh-Hant.md`。
 2. ~~change stamp~~ **已決定（同上）**：接受規格——依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 `tickStamps` 換算；(c) 區禁用變更過濾（G-3）；DI-K5（blueprint）與 networking §1 第 7 條各改一句（已改）。溢出無實際可能（u64）。
 3. ~~寫入政策預設 Exclusive~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：欄與 Resource 預設 Exclusive，登記時標 `Shared` 允許多寫者；進 digest 的欄禁 Shared（S-12 不變）。B.3.1 新增「獨占下的資料路徑」（獨占欄預設由唯一寫者直接寫；多來源才用漏斗，漏斗可為事件或中間欄；三類資料的表；獨占是啟動檢查非鎖；不採執行期仲裁）。
-4. Despawn 不算獨占寫者（B.9 取捨 1）。
+4. ~~Despawn 不算獨占寫者~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格——Despawn 不算獨占寫者、不產生衝突邊；(c) 的保護由 Z5；F.2 的套用順序寫死（hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource），despawn 階段內依 EntityId 升冪、冪等、對窗開始不存在的 id 無作用。說明案例見 B.9 取捨 1 與 `docs/architecture/target/world.zh-Hant.md` §4。
 5. 讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序（D.6）。
 6. Client 的 Frame 與 Render 兩個 World 合併還是獨立（H.4.2；推薦獨立）。
 7. Architecture Delta：`docs/architecture.md:136`（Engine 不得有 system／scheduler／world／resources／events／app／plugin）要修訂；entity-store DI 4 延伸、`DeferredChanges`（3b，未實作）撤回由 World 的佇列取代；determinism.md §4.7 已預告「columns become the World's storage」。
