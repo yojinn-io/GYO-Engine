@@ -78,7 +78,7 @@
 **GYO 現況與為什麼自製**
 - `GYO::Collision`（962 行）：膠囊／盒子／射線的精確查詢（「每個查詢在 double 計算、對 float 捨入一次；一個容差 1e-7」，`Collision.hpp`），加 `StaticAabbGrid`（DI 1：每個查詢逐位元等於依索引順序線性掃描的結果；平手規則是呼叫端的參數）。沒有剛體、沒有動態 broadphase、沒有約束求解。
 - 產品的 Movement（`StepMovement`，60 Hz 固定 tick）與 ShotQuery 在 Match 與 Client 跑同一套，Client 預測、Match 權威。全部程式 `-ffp-contract=off`、MSVC `/fp:precise`（math.md）。
-- **GYO 現在的決定性範圍**（對抗檢查 A3 修正）：L1 的 `object_fps_pvp.authority_digest`（label `cpu`）在四個平台都跑，但只對**零角度情境的 golden 子集**要求跨平台逐位元一致；其餘情境「依 libm 合法地不同」（`tests/object_fps_pvp/CMakeLists.txt:407-452`、`authority_digest_check.cmake`；math.md：sin／cos／tan／pow／acos 依平台的 libm，Math 不保證跨平台逐位元）。也就是：GYO 保證的是「同一份二進位在同一平台可重現＋不含三角函數的子集跨平台一致」。
+- **GYO 現在的決定性範圍**（對抗檢查 A3 修正）：L1 的 `object_fps_pvp.authority_digest`（label `cpu`）在 L1 的三個平台（linux-x64、macos-arm64、windows-x64；macos-x64 自 2026-10-31 不在 L1，決定性卡核對）都跑，但只對**零角度情境的 golden 子集**要求跨平台逐位元一致；其餘情境「依 libm 合法地不同」（`tests/object_fps_pvp/CMakeLists.txt:407-452`、`authority_digest_check.cmake`；math.md：sin／cos／tan／pow／acos 依平台的 libm，Math 不保證跨平台逐位元）。也就是：GYO 保證的是「同一份二進位在同一平台可重現＋不含三角函數的子集跨平台一致」。**而且後者也不乾淨**：決定性卡（`v8-arch-determinism-levels`，PR #177）核對 11/9 場次，有輸入、狀態、位置全同而 `sweep_fraction` 差 1～4 ULP 的步驟（windows-x64 MSVC 對 macos-x64 AppleClang，路徑上沒有 libm），原因未明，先做偵測批 E0（DET-0）。
 - 自製的理由：權威判定要的是**可宣告、可用暴力掃描比對的契約**。big-map survey 讀過 Jolt 的 `Docs/Architecture.md`：「Jolt 明寫它的 broadphase 查詢不是決定性的」，GYO 因此把「結果＝線性掃描」寫成自己的契約（survey §2.6）。
 
 **需要它的 Feature**
@@ -359,7 +359,7 @@
 
 這一節是 SDL_GPU 教訓的另一面：限制不只在對方的標頭，也在 GYO 自己的建置。
 
-1. **contraction 旗標的順序**：`build/cmake/GyoBuild.cmake:35-42` 在 `add_subdirectory(third_party)` **之後**才加 `-ffp-contract=off`（註解寫「Applies to the directories added below」）。照慣例放進 `third_party/` 的任何函式庫（Jolt、Recast、ozz、miniaudio……）都拿不到它；arm64 的 Clang 預設會融合乘加。採用會碰到結果的函式庫時，要嘛把它加在旗標之後，要嘛對該 target 明確設 `-ffp-contract=off`，並加 configure-time 檢查（像 `gyo_expect_*_links` 那樣）。
+1. **contraction 旗標的順序**：`build/cmake/GyoBuild.cmake:35-42` 在 `add_subdirectory(third_party)` **之後**才加 `-ffp-contract=off`（註解寫「Applies to the directories added below」）。照慣例放進 `third_party/` 的任何函式庫（Jolt、Recast、ozz、miniaudio……）都拿不到它；arm64 的 Clang 預設會融合乘加。採用會碰到結果的函式庫時，要嘛把它加在旗標之後，要嘛對該 target 明確設 `-ffp-contract=off`，並加 configure-time 檢查（像 `gyo_expect_*_links` 那樣）。**已經發生的例子**：ufbx 在旗標之前建置，而它的執行期轉換結果進 `AnimationContentDigest` 的跨平台比對（D0 表）。決定性卡（PR #177）的修正方案 A：把旗標搬到 `add_subdirectory(third_party)` 之前＋configure-time 檢查＋intrinsic 掃描（E2）。
 2. **FMA intrinsic 不受旗標管**：ozz 定義 `__FMA__` 時用 `_mm_fmadd_ps`（`simd_math_config.h:44-46`）；Jolt `USE_FMADD` 預設 ON。要決定性就要在 CMake 釘 ISA：Jolt 設 `USE_FMADD=OFF` 或開 `CROSS_PLATFORM_DETERMINISTIC`；ozz 不帶 FMA／AVX2 旗標或用 `ozz_build_simd_ref`。
 3. **預設會帶進來的東西**：Jolt 的 `JPH_USE_DX12／VK／MTL／CPU_COMPUTE`（第二條 shader 工具鏈，和 SDL_GPU 持有 GPU 衝突）、Effekseer 的 `NETWORK_ENABLED`、兩者的 examples／tools——全部要在 GYO 的 `third_party/<x>/CMakeLists.txt` 明確關掉，並以連結守衛確認不連 d3d12／Vulkan／Metal／socket。
 4. **CRT 與旗標**：Jolt 與 Effekseer 預設靜態 MSVC CRT（/MT），GYO 用 /MD＋app-local CRT 部署檢查；Jolt 的 `Build/` 另加 `/Wall /WX`、IPO。要用 GYO 的旗標重建（Jolt 只 include `Jolt.cmake`；只 include 它時 `JPH_USE_*` 是否預設關閉未實際 configure 確認）。
@@ -377,9 +377,9 @@
 
 | # | 事項 | 影響的列 | 建議 | 不照建議的代價 |
 |---|---|---|---|---|
-| **D0** | **GYO 的決定性要哪一級，各模組為它付了什麼**（使用者 2026-11-10 經 side chat 提出，比本文更上游）。三級：(a) 同一程序內可重現（事故回放、L2 分析）；(b) 同一份二進位在同一平台可重現；(c) 跨平台逐位元。現況是**混合**：authority_digest 只對零角度子集要求 (c)，其餘 (b)；動畫取樣 (b)；Collision、Audio、VoxelMesh 的契約按 (c) 設計。各模組為 (c) 付的成本見下表 | 1.2、1.4、1.8、1.11、Math／Collision／Audio 的 DI 用詞 | **這是一張架構卡（上段），排在 D1、D2 之前**：答案若是「只要 (b)」，Collision 的雙精度單次捨入、Audio 的整數混音、Math 的 libm 保留條款都可重新評估，Jolt 與 Detour 的決定性限制也會變輕；若維持 (c)，digest 的強制範圍要從「零角度子集」明寫成契約。EntityStore 的 id 升冪不在這張表上——它守的是「規則結果不依賴歷史」（同 Tick 搶同一件事由 id 定），屬於 (a)，和浮點無關，成本 155 行 | 本文 D1、D2 的判定會在這一題定案後被推翻一次 |
-| D1 | 路線圖上有沒有**權威的剛體玩法**（可推的道具、載具、會影響判定的物理）？ | 1.2 | 現在的 Feature 清單沒有 → **維持 Collision；Jolt 留給 Client 端視覺物理**。有的話，照「基盤先定」排一批 Jolt 基盤評估（含 digest 範圍的重新宣告與 CI、§2.5 的建置條件），量級 4～8 週 | 若之後才加剛體玩法，Collision 的 RC 1／2 會在 Feature 中途觸發，付的就是使用者說的「事後補」 |
-| D2 | entity-requirements 4-6「AI 只要 Match 自己一致、不要求兩台 Match 一致」是否維持？ | 1.4 | 維持 → Recast／Detour 可作第一候選（AI 批事前宣告時定） | 若改成要一致，導航要換掉 libm 呼叫並補 hash CI，或改格子 A* |
+| **D0** | **GYO 的決定性要哪一級，各模組為它付了什麼**（使用者 2026-11-10 經 side chat 提出，比本文更上游；**已成架構卡 `v8-arch-determinism-levels`，PR #177，`docs/architecture/determinism.md`，等使用者定 DET-0～DET-3**；它的結論是「邊界」而不是一級：預測核心、host 判斷、契約資料、join 時比對的內容身分要 (c)；被判定不被預測的中間地帶（有動畫的命中、未來 AI）由使用者選 (b) 或 (c)（DET-1）；呈現層 (b)）。三級：(a) 同一程序內可重現（事故回放、L2 分析）；(b) 同一份二進位在同一平台可重現；(c) 跨平台逐位元。現況是**混合**：authority_digest 只對零角度子集要求 (c)，其餘 (b)；動畫取樣 (b)；Collision、Audio、VoxelMesh 的契約按 (c) 設計。各模組為 (c) 付的成本見下表 | 1.2、1.4、1.8、1.11、Math／Collision／Audio 的 DI 用詞 | **這是一張架構卡（上段），排在 D1、D2 之前**：答案若是「只要 (b)」，Collision 的雙精度單次捨入、Audio 的整數混音、Math 的 libm 保留條款都可重新評估，Jolt 與 Detour 的決定性限制也會變輕；若維持 (c)，digest 的強制範圍要從「零角度子集」明寫成契約。EntityStore 的 id 升冪不在這張表上——它守的是「規則結果不依賴歷史」（同 Tick 搶同一件事由 id 定），屬於 (a)，和浮點無關，成本 155 行 | 本文 D1、D2 的判定會在這一題定案後被推翻一次 |
+| D1 | 路線圖上有沒有**權威的剛體玩法**（可推的道具、載具、會影響判定的物理）？**依 D0 卡：Collision 留在預測核心、(c) 不放；Jolt 進權威仍要 `CROSS_PLATFORM_DETERMINISTIC`＋`USE_FMADD=OFF`＋跨平台 golden（determinism.md §6 (i)(ii)）** | 1.2 | 現在的 Feature 清單沒有 → **維持 Collision；Jolt 留給 Client 端視覺物理**。有的話，照「基盤先定」排一批 Jolt 基盤評估（含 digest 範圍的重新宣告與 CI、§2.5 的建置條件），量級 4～8 週 | 若之後才加剛體玩法，Collision 的 RC 1／2 會在 Feature 中途觸發，付的就是使用者說的「事後補」 |
+| D2 | entity-requirements 4-6「AI 只要 Match 自己一致、不要求兩台 Match 一致」是否維持？**這題現在等於 D0 卡的 DET-1**：中間地帶（未來 AI）選 (c) → AI 決策也要 (c)，Detour 的 libm 呼叫不能進判定路徑（換掉 `dtMath*` 或走格子 A*）；選 (b) → 本列判定維持 | 1.4 | 維持 → Recast／Detour 可作第一候選（AI 批事前宣告時定） | 若改成要一致，導航要換掉 libm 呼叫並補 hash CI，或改格子 A* |
 | D3 | AI 批開工前，要不要先做一次「Recast 對體素地圖建圖」的試驗？量：建圖時間、tile 數、PolyRef 位元、最長路徑的節點數（對 65,535）、兩台 host 烘焙的 blob 是否逐位元相同 | 1.4 | 要（量級 1～2 天），讓 AI 批的事前宣告有數字。**同一份宣告也要寫 Match 每 Tick 取樣 25 個骨架（4 人＋20 AI＋Boss）的預算**（1.11、A11） | 不做則 AI 批的估時只能靠推 |
 | D4 | 技能的特效是否要美術用編輯器製作？ | 1.12 | 可等技能批；答案決定 (a) 最小自製粒子或 (b) Effekseer | 若要編輯器級，Effekseer 的 SDL_GPU 後端＋烘焙時 MaterialCompiler 是 5～10 週 |
 | D5 | 是否請圖書管理員把 Render 後端的 Replacement Criteria 補進 rendering_architecture（GPU 查詢、async compute、bindless、render 執行緒、Metal 阻塞超預算、**depth 格式寫死 D32_FLOAT 在某台機器不支援**）？ | 1.10 | 要（文件工作） | 沒有 RC 就沒有停下來的條件 |
@@ -397,8 +397,9 @@
 | `GYO::Audio` | 整數混音（Q16、int64、半上捨入）、固定 48 kHz PCM16、DI 8 | 「output does not depend on how blocks split it」等 | 可換 float 混音（開 RC 2 的 buses／effects 之路）；L2 的錨點重算改容差比對 |
 | `GYO::VoxelMesh`／`MapMarkers` | 整數單位（1/16 cell、±2^20）、`cell_size` 範圍限制讓展開在每平台得到同樣的 float 位元 | golden 位元測試 | 幾乎不必放：整數契約的成本是零 |
 | `GYO::EntityStore` | （不是為 (c)）id 升冪的不變式、保序 erase | `es-row2-*` 突變 | **不放**：它守的是 (a) 的「不依賴歷史」，與浮點無關 |
-| 產品 `authority_digest` | 零角度子集的四平台 golden；其餘情境只記錄差異 | L1 `cpu` 標籤 | 若只要 (b)：golden 改同平台兩樹；若維持 (c)：要明寫子集的定義 |
+| 產品 `authority_digest` | 零角度子集的 L1 三平台 golden；其餘情境只記錄差異 | L1 `cpu` 標籤 | 若只要 (b)：golden 改同平台兩樹；若維持 (c)：要明寫子集的定義 |
 | 動畫取樣（`GYO::Model`） | 已經是 (b)（Slerp 走 libm） | 同平台 golden（hitbox-golden-policy） | — |
+| **`GYO::AssetUfbx`（第三方 ufbx）** | **今天就在 (c) 的關卡上，但沒有付**：`AnimationContentDigest` 以 ufbx 執行期轉換的結果在 join 時逐位元比對（protocol-v9 §4.6），而 ufbx 在 `-ffp-contract=off` 之前建置、用平台的 sin／cos（決定性卡核對） | 沒有守衛（決定性卡提 E5：字面 golden；長期：烘焙成 GYO 格式） | 這是 §2.5 第 1 條「第三方拿不到旗標」已經發生的例子，不是將來的風險 |
 
 其餘 10 列（ECS、2D Physics、UI 的維持部分、Model Import、Mesh Optimization、Audio、Shader Compiler、GPU Abstraction 的維持部分、Animation、Image Processing）的判定不需要使用者現在決定；各列的 RC 觸發時再問。
 

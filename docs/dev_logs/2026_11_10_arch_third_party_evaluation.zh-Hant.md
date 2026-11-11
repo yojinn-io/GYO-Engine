@@ -51,7 +51,7 @@
 Opus 5.5／high 子代理，只讀；自己再讀候選方案的原始碼、release note、API 變更檔與 issue（本機已登入的 `gh`），並對照 GYO 的 `GyoBuild.cmake`、`tests/object_fps_pvp/CMakeLists.txt`、`SdlGpuRenderDevice.cpp`、`third_party/sdl3_image/CMakeLists.txt`。
 
 - 結果：14 列無否定；成立 8、成立但要修 4（1.2 理由、1.8 事實、1.12 措辭、1.13 事實）、弱 2（1.4、1.11）。發現 26 條（must 7／should 15／note 4）。
-- 三處系統性漏洞（都和 SDL_GPU 同類）：(1) 偵察只讀 CMake `option()` 清單、沒讀預設值帶進什麼——Jolt v5.6 預設編 DX12／Vulkan／Metal 的 GPU compute 後端、靜態 MSVC CRT、`/fp:fast`；Effekseer 預設 `NETWORK_ENABLED=ON`。(2) 沒核對 GYO 自己的建置——`-ffp-contract=off` 在 `add_subdirectory(third_party)` **之後**才加（`build/cmake/GyoBuild.cmake:35-42`），放進 `third_party/` 的函式庫拿不到；FMA intrinsic（ozz `__FMA__`、Jolt `USE_FMADD`）本來就不受旗標管。(3) GYO 的決定性現況寫錯——L1 的 `authority_digest` 四平台都跑，但只對零角度 golden 子集強制，其餘依 libm 合法地不同（`math.md`）；動畫取樣已知跨平台不一致（hitbox-plan R5／B3）。
+- 三處系統性漏洞（都和 SDL_GPU 同類）：(1) 偵察只讀 CMake `option()` 清單、沒讀預設值帶進什麼——Jolt v5.6 預設編 DX12／Vulkan／Metal 的 GPU compute 後端、靜態 MSVC CRT、`/fp:fast`；Effekseer 預設 `NETWORK_ENABLED=ON`。(2) 沒核對 GYO 自己的建置——`-ffp-contract=off` 在 `add_subdirectory(third_party)` **之後**才加（`build/cmake/GyoBuild.cmake:35-42`），放進 `third_party/` 的函式庫拿不到；FMA intrinsic（ozz `__FMA__`、Jolt `USE_FMADD`）本來就不受旗標管。(3) GYO 的決定性現況寫錯——L1 的 `authority_digest` 在 L1 三平台都跑，但只對零角度 golden 子集強制，其餘依 libm 合法地不同（`math.md`）；動畫取樣已知跨平台不一致（hitbox-plan R5／B3）。
 - 處置：評估者核對 A1、A3、A13、A20、A22、A24 的 repo 事實（全部屬實）後，26 條全部接受（A14 部分接受：「GPL／LGPL 會卡」是卡片的硬約束，不因 repo 無書面出處而失效；要不要寫下列為 D9）。
 - **判定改 1 處**：Navigation「採用」→「第一候選，AI 批事前宣告時由使用者定」（原文替使用者定了未排的 Feature）。理由改寫 2 處（Physics、Animation）、事實改正 3 處（Audio、Image、Compression）、結案 2 處（dxil.dll 簽章、Effekseer 的 GPL 字樣）。新增 evaluation §2.5「採用任何候選時的建置條件」與 §4 的 D7～D9。逐條回應在 evaluation §5.1。
 
@@ -67,3 +67,7 @@ Opus 5.5／high 子代理，只讀；自己再讀候選方案的原始碼、rele
 
 主 checkout（`/Users/karasu/Code/Source/GYO-Engine`，Intel Mac）`build/evidence/third-party-evaluation/`（git 不追蹤）：`recon-01～05.md`（偵察原文）、`sources.txt`（來源清單）、`adversarial-check-20261110.md`（對抗檢查原文）。
 偵察的 shallow clone 在會話暫存區，未保存（只用來計數與讀檔，行數為當日值）。
+
+## 後續（2026-11-11）
+
+D0 已成架構卡 `v8-arch-determinism-levels`（PR #177）。它的結論回饋到本評估：L1 只有三平台（原文「四平台」已改）；ufbx 的執行期轉換今天就在跨平台位元關卡上（`AnimationContentDigest`），是 §2.5 第 1 條已經發生的例子；Collision 自己有 1～4 ULP 的跨平台差（原因未明，E0 偵測）；D1、D2 的答案掛在 DET-1。本文的判定未改。
