@@ -44,6 +44,7 @@
 | # | 決定（一句） | 寫在哪個部件文件 |
 |---|---|---|
 | A1 | （audit §3.1）framework 退役；組合與第三方對接由 `plugins/`（新 top-level）承擔；Editor host 骨架＝runner plugin；三層改為 Engine／plugins／產品與工具 | runtime-composition §4、DI 2；spec C.2、R-E6、L.2 |
+| A2 | （audit §3.2）Editor 預覽資料只往前流：文件 World 出場景與 UI draw list，渲染 World 合成；H-6 原樣；ImGui plugin 拆兩半 | runtime-composition §3b |
 | 1 | Entity 鍵格式 u64（低 32 index、高 32 generation）是 Kernel 的；配發策略是產品 Resource，PvP 不重用、generation 0 | world §1、DI 1～2 |
 | 2 | change stamp 依 Plan 位置取值，tick 視角以 tickStamps 換算；(c) 禁變更過濾 | world §2、DI 3 |
 | 3 | 預設獨占、Shared 可選；進 digest 禁 Shared；資料路徑表，事件漏斗可選 | world §3、DI 4；limits LIM-4 |

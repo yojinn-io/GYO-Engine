@@ -25,6 +25,14 @@
 - 不為 Host 開 Z2／Z5 的例外：Host 在 World Ready 時只寫 boundary 與 external Resource，不直接生成或刪除帶 (c) 欄的實體。
 - 後果記為限制 LIM-5（`limits.zh-Hant.md`）：加入與離開晚最多一個 tick；golden 可能差一 tick、要重設基準；產品線在遷移批確認。entity-model §5.2「Join／Leave 在 Tick 外」改寫，排進改造的第一個文件批。
 
+## 3b. Editor：文件 World 加渲染 World，資料只往前流（使用者 2026-11-11 決定，audit §3.2）
+
+- Editor 的組合與 Client **同形**：文件 World（兼 Frame）加渲染 World，Extract 單向、唯讀。
+- 文件 World 產出場景（幾何、相機）與 **UI 繪製資料**（ImGui draw list，CPU 端頂點與指令，(b) 資料）；兩者經 Extract 進渲染 World。合成在渲染 World：先畫場景到 render target，再畫 UI draw list；預覽視窗是 draw list 裡引用該 render target 的貼圖 id，由渲染 World 解析。**沒有影像回到文件 World；H-6 原樣、不開例外、沒有晚一幀。**
+- 選取與編輯用 CPU 射線打文件 World 的幾何，不依賴影像。
+- ImGui 是 plugin，拆兩半：輸入與 widget 邏輯是文件 World 的 System；draw list 的 GPU 繪製是渲染 World 的 System。今天 `OffscreenPreview` 的 readback 與 `ImGuiShell` 的「一個函式從 NewFrame 到 Present」消失。參考：Bevy 的 bevy_egui。
+- 使用者原則：不要用舊思路處理新架構——「readback 放哪」三個選項（晚一幀、H-6 例外、文件與渲染合一）全部不採。
+
 ## 4. framework 退役；組合與第三方對接由 plugins 層承擔（使用者 2026-11-11 決定，audit §3.1）
 
 - **三層改為**：Engine（Kernel＋能力）／**plugins**（`plugins/`：組合與第三方對接，每個 plugin 可選可刪）／產品與工具（plugin 清單＋Run）。層與目錄叫 plugins，單個才叫 plugin（使用者 2026-11-11）。framework 是舊架構的產物，其兩個核心職責（組合 Engine 能力、對接第三方）在 plugin 機制下都由 plugin 承擔，概念淘汰；`docs/framework/` 的 Design Invariants 整節廢止（第一個文件批）。

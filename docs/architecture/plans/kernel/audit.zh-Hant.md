@@ -138,10 +138,17 @@
 
 後果（Delta，使用者已同意）：新 top-level `plugins/`（AGENTS §10）——每個 plugin 一個 target、自己的依賴正向清單，Engine 永不 include 它，產品與工具只在 main 列它；三層原則改為「Engine（Kernel＋能力）／plugins（組合與第三方對接，可選可刪）／產品與工具（plugin 清單＋Run）」；framework DI 5「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」；framework 的 Design Invariants 整節**廢止**（不是改寫），`docs/framework/` 照 target 規則標廢止；spec L.2、H.4.3、target/runtime-composition 對 WindowShell／ImGuiShell 的敘述改成 plugin。審查的 33～66 h 估算大致成立，產出叫 plugin。架構師保留的一點：選擇窗記帳與關窗提示兩個帶判斷狀態的重複**必須真的進共用 plugin**，否則是 framework 的老問題換名。
 
-### 3.2 Editor 預覽的回流（H.4.3 的缺口）
+### 3.2 Editor 預覽：資料只往前流（使用者 2026-11-11 決定，側邊會話轉述）
 
-readback 影像要回到 ImGui 畫成 `ImGui::Image`，而立即模式的 ImGui 在同一次呼叫裡讀輸入、改文件、畫圖。ImGui System 放文件 World，影像就是渲染 World 到文件 World 的回流，H-6 禁止；放渲染 World，編輯就變成渲染 World 寫文件。可行形狀：ImGui System 全在文件 World，readback 經 Host 交換點（像 Client 的 S↔F Mailbox）送過去，**預覽晚一幀**；選取用 CPU 射線打文件，不讀 readback，編輯語意不變。**交工具線與使用者**。
+審查原提的三個選項（晚一幀交換、H-6 開例外、文件與渲染合一）都在問「readback 放哪」，等於沿用今天 `ImGuiShell` 的形狀，**全部不採**。使用者原則：不要用舊思路處理新架構。照 Bevy 的 egui 方式（bevy_egui：UI 在主 World 產生 draw data，渲染 World 消費）：
 
+1. 文件 World 產出兩種資料：**場景**（幾何、相機）與 **UI 的繪製資料**（ImGui draw list：CPU 端的頂點與指令，普通 (b) 資料）；兩者都經 Extract 唯讀進渲染 World。
+2. **合成在渲染 World**：先畫場景到 render target，再畫 UI draw list；UI 裡的預覽視窗只是 draw list 裡引用該 render target 的貼圖 id，由渲染 World 解析。沒有影像回到文件 World，**H-6 原樣、不開例外、沒有晚一幀**。
+3. 選取與編輯用 CPU 射線打文件 World 的幾何（今天已如此），不依賴影像。
+4. Editor 的組合因此與 Client **同形**：文件（兼 Frame）World 加渲染 World，Extract 單向。
+5. **ImGui 與 SDL 一樣都是 plugin**（使用者原話）。ImGui plugin 拆兩半：輸入與 widget 邏輯在文件 World 的 System，draw list 的 GPU 繪製在渲染 World 的 System；今天 `OffscreenPreview` 的 readback 路徑與 `ImGuiShell` 的「一個函式從 NewFrame 到 Present」都消失。與 §3.1 一致。
+
+§10.1 的 offscreen-preview 候選因此改寫：不再是「readback 經 Host 交換點」，而是渲染 World 內的 render target 加 UI draw list 合成；framework-tools 報告觀察 4 的「晚一幀」不成立。
 ### 3.3 (c) 區不能輸出診斷（spec 內部衝突）
 
 spec G.4 第 3 條要移動的呼叫點「改成宣告的 `Diagnostics` 副作用」，但 S-8／Z4 禁止 zone=C 的 System 宣告任何 effect（只有 hook 有 `Diagnostics` 例外），Z1 又禁止它寫 (b) 資料。照現行規格，(c) 完全不能輸出診斷，而 `TraceMovement` 的輸出是診斷資料契約。**規格要改**：要嘛 S-8 比照 hook 開 `Diagnostics` 例外（只寫不讀回，I-5 同理），要嘛定一條 (c)→(b) 的單向診斷通道。另：`Combat.hpp`、`Movement.hpp` 為了 `std::chrono::nanoseconds` 型別 include `<chrono>`，J-17「(c) 檔不得 include `<chrono>`」會誤判，要區分「型別」與「讀時鐘」或改成整數 ns。
@@ -254,7 +261,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 | `WindowShell` | Host 骨架重寫 | framework 的視窗 host 骨架與標準 ScheduleDef | **SDL 視窗 runner plugin**：在 finish 安裝 runner（行程入口、pump、live frame、交換點），把 `PlatformEvents` 與對話框回覆寫進 boundary |
 | `ImGuiShell` | Host 骨架重寫 | framework 的 ImGui binding | **ImGui plugin**：擁有 ImGui context（全域，明列例外）、在 build 插入標準 Editor stage 序（輸入換幀、NewFrame、Draw、Render、文字輸入套用、RenderDrawData、Present） |
 | `HeadlessShell` | Host 原樣 | framework 行程入口 | **headless runner plugin**（或產品 main 自跑；Match 的 `match_main` 迴圈同形） |
-| `OffscreenPreview`、`PreviewScene`、`PreviewRenderer` | 包 | framework／工具的預覽 | **offscreen-preview plugin**：渲染 Runtime 的 Resource、Extract、readback 經 Host 交換點（§3.2 的晚一幀） |
+| `OffscreenPreview`、`PreviewScene`、`PreviewRenderer` | 包 | framework／工具的預覽 | **offscreen-preview plugin**：渲染 World 內的 render target；場景與 UI draw list 都經 Extract 進來，在渲染 World 合成（§3.2）；readback 路徑消失 |
 | `ReadOnlyAssetCatalog`、`CatalogPlan` | 包／留 | framework | **asset-catalog plugin**：Resource 加 `Io:file` System；`CatalogPlan` 是資料契約（owner＝此 plugin） |
 | `EventSounds` 加 Mixer 接線 | 留／服務 | framework＋engine audio | **event-sounds plugin**：資料契約（owner＝此 plugin）加 `Submitter` Resource 的接線；PvP 也用 |
 | 選擇窗記帳、關窗提示（四工具重複） | — | 各工具各寫 | **editor-dialogs plugin**（架構師保留：必須真的進共用 plugin） |
@@ -278,9 +285,9 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 |---|---|---|---|
 | sdl-window-runner | `WindowShell`、`SdlPlatform` 的 pump 與 live frame、`SdlInput` 後端、對話框回覆 | engine/platform、input、time | 所有視窗程式；headless 不受影響 |
 | headless-runner | `HeadlessShell`、`match_main` 迴圈與停止順序 | engine/time、threads、os | Match 與工具 CLI 模式 |
-| imgui | `ImGuiShell`、ImGui context、標準 Editor stage | sdl-window-runner、engine/render | 四個工具；PvP 不受影響 |
+| imgui | `ImGuiShell`、ImGui context、標準 Editor stage；**兩半**：輸入與 widget 邏輯（文件 World 的 System）、draw list 的 GPU 繪製（渲染 World 的 System） | sdl-window-runner、engine/render | 四個工具；PvP 不受影響 |
 | editor-dialogs | 選擇窗記帳（三種實作統一）、關窗提示 | sdl-window-runner | 四個工具的對話框 |
-| offscreen-preview | `OffscreenPreview`、`PreviewScene`、`PreviewRenderer`、readback 交換 | engine/render | 三個有預覽的工具 |
+| offscreen-preview | `OffscreenPreview`、`PreviewScene`、`PreviewRenderer`（render target 與場景合成；無 readback） | engine/render、imgui（draw list 的貼圖 id 解析） | 三個有預覽的工具 |
 | asset-catalog | `ReadOnlyAssetCatalog`、`CatalogPlan` | engine/asset、io | 用 catalog 的工具與 PvP 載入 |
 | event-sounds | `EventSounds`、Mixer 與 `Submitter` 接線 | engine/audio | PvP 與 model_viewer 的音效 |
 | net-link | `IpcHost`／`ClientConnection` 的 IO 服務、asio、httplib、protobuf、`Link` Resource | engine/net、threads | Match 與 Client 的連線；Editor 不受影響 |
@@ -296,7 +303,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 
 ## 11. 下一步
 
-- ~~§3.1~~（已定：framework 退役→`plugins/`）；使用者決定§3.2（預覽回流）、§3.6（IRuntimePort、AssetManager 歸屬、初始成員走 Startup）、§4.5（區表三漏一錯）。
+- ~~§3.1~~（已定：framework 退役→`plugins/`）；~~§3.2~~（已定：資料只往前流，H-6 原樣）；使用者決定 §3.6（IRuntimePort、AssetManager 歸屬、初始成員走 Startup）、§4.5（區表三漏一錯）。
 - 規格修訂批（§6 七項）與第一個文件批合併規劃。
 - `-spike-pageguard`（事前宣告待寫）。
 - 改造批次計畫：以本報告的成本形狀分批（組織層先：Kernel 本體 → Match host 遷移 → Client → Editor），§3 Delta 七項在計畫層寫一次。

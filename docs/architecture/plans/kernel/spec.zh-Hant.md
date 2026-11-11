@@ -842,6 +842,8 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 
 #### H.4.3 Editor host（以 voxel_map_editor 為例）
 
+（2026-11-11 註：使用者決定 Editor 預覽資料只往前流——文件 World 產出場景與 ImGui draw list，經 Extract 進渲染 World，渲染 World 先畫場景到 render target、再畫 UI、預覽視窗是 draw list 裡的貼圖 id；沒有 readback 回文件 World，H-6 原樣。下文「`Preview` Runtime … → `Readback`」的 Readback 一節作廢；ImGui 拆成文件 World 的輸入／widget System 與渲染 World 的繪製 System。audit §3.2、target/runtime-composition §3b。）
+
 現況：`EditorClient : Framework::ImGuiShellClient` 在主執行緒；`EditSession` 有 Undo、Revision、`TakeChanges`；預覽用離屏 Renderer 加 readback；ImGui 有全域 context（`ImGuiShell.cpp:225`、`:267-269`）。
 
 改造後（framework 退役：shell 由提供 runner 的 plugin 與 ImGui plugin 取代，audit §3.1）：`Document` Runtime（World D，`FrameUpdate`，主執行緒）：文件與 `EditSession` 先當 Resource（要讓編輯工具成為 System 時再拆成實體與元件，交 -audit）；存檔與載入是有 `Io:file` 副作用的 System，經資料契約 `gyo.voxel_map` 讀寫（AGENTS §8）。`Preview` Runtime（World R，`Extract` 從 D 唯讀 → `RenderSubmit` → `Readback`）；ImGui 的 System 都宣告 effect `Gpu:imgui`，彼此序列化。全部 zone=B，依登記順序平手，不需寫順序。文件 World 不是產品 Runtime 的 World，Runtime 不知道編輯器存在；工具知識留在工具。「編輯器直接重用 Engine 的 System」（mechanism §7）＝在編輯器多建一個 Match 形狀的 Runtime（play-in-editor），不在 v1，機制允許。

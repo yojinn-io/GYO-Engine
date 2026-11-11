@@ -76,6 +76,8 @@
 
 - 2026-11-11 使用者問前提改變要不要重跑審查；架構師：不重跑（四問與判定詞不因去處而變），寫補遺 audit §10（去處改成 plugins 層、P11／S1 形狀改為 runner plugin、§0 敘述修正、plugin 邊界這個新問題交計畫批並附切法候選十個）。命名：層與目錄叫 plugins、單個叫 plugin（使用者）。
 
+- 2026-11-11（側邊會話轉述，audit 待決第 2 項）`v8-arch-editor-forward-only`：Editor 預覽不是影像回 UI，資料只往前流（照 bevy_egui）：文件 World 出場景＋ImGui draw list → Extract → 渲染 World 合成（場景到 render target、再畫 UI，預覽視窗＝貼圖 id）；H-6 原樣、無例外、無晚一幀；選取用 CPU 射線；Editor 與 Client 同形；ImGui 與 SDL 一樣是 plugin、拆兩半。審查的三個選項全部不採（使用者原則：不用舊思路處理新架構）。audit §3.2／§10 改寫、runtime-composition §3b、spec H.4.3 註。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
