@@ -57,6 +57,6 @@
 
 ### Replacement Criteria（候選）
 
-- 同一 World 中 (c) 的 Exclusive 欄為繞過獨占檢查被改成 Shared 兩次以上 → 重新劃分元件，不放寬檢查（spec K.2 第 10 條）。
+- LIM-4：進 digest 的欄不得 Shared；為繞過獨占檢查改 Shared 兩次以上 → 重新劃分元件（詳細在 `limits.zh-Hant.md`）。
 - 某個產品需要 World 解讀 generation（例如由 World 拒絕 stale 鍵），或需要第二個鍵空間的對照表 → 鍵的形狀要重新設計，不在 World 上加分支。
 - 同一 tick 內需要「本 tick 之後的變更」以外的變更過濾語義且無法以 `tickStamps` 區間查詢表達 → stamp 模型重審。

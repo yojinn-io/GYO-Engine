@@ -32,6 +32,13 @@
 - 遷移批次的事前宣告要寫明它遷移哪些 Component、從此它們受哪份 target 文件約束；遷移完成後文件搬回，衝突自然消失。
 - 目標 DI 本身的變更仍是 Architecture Delta（§3），要使用者同意。
 
+## 限制與修改條件（limits 頁）的規則（圖書管理員 2026-11-11 定；兩條解釋由架構師決定）
+
+- 位置：現在 `target/limits.zh-Hant.md`，最終 `docs/architecture/limits.zh-Hant.md`，檔名不變；**逐條搬**，每條 LIM 自帶狀態行，所涉部件遷移完成時整段搬到頂層，未實作的留 target/。編號全域唯一、永不重用、搬動不改號；解除的標 `Lifted in <batch-id>` 不刪。引用一律用編號。
+- **(a) 與 AGENTS §3「Replacement Criteria 寫在部件 DI 節內」的關係（架構師決定）**：詳細內容只在 limits 頁一處（§9 同一事實只在一處維護）；部件文件 DI 節的 Replacement Criteria 對跨部件的條目只列一行「LIM-n：一句摘要」連結到 limits 頁；只屬該部件的置換條件仍寫在部件文件。
+- **(b) 與 AGENTS §14「範囲の限界要寫進受影響批次的事前宣告」的關係（架構師決定）**：事前宣告寫「LIM-n＋一句摘要」，不能只貼編號；只寫在決定紀錄或 limits 頁裡不算寫進宣告。
+- checkup（圖書管理員）：LIM 編號唯一不重用；條目狀態與所在資料夾一致；部件 RC 引用的 LIM 都存在。
+
 ## 來源與引用
 
 - 概念基準：`docs/architecture/plans/kernel/mechanism.zh-Hant.md`；規格草案：`docs/architecture/plans/kernel/spec.zh-Hant.md`。規格是草案，決定以使用者在 K.3 的裁決為準；裁決後寫進對應的部件文件。
@@ -39,7 +46,7 @@
 
 ## 目錄
 
-- [limits.zh-Hant.md](limits.zh-Hant.md)：**限制與修改條件**（使用者 2026-11-11 要求的集中頁；LIM-1～LIM-4）。位置待圖書管理員確認。
+- [limits.zh-Hant.md](limits.zh-Hant.md)：**限制與修改條件**（使用者 2026-11-11 要求的集中頁；LIM-1～LIM-4；最終位置 `docs/architecture/limits.zh-Hant.md`，逐條搬）。
 - [runtime-composition.zh-Hant.md](runtime-composition.zh-Hant.md)：Runtime 的組合（Client 的 Frame 與 Render World 分開、Extract 唯讀無反饋、一 World 一執行緒）。
 - [scheduler.zh-Hant.md](scheduler.zh-Hant.md)：Scheduler（衝突邊與順序邊、歧義處置、(b) 讀 (c) 的顯式順序）。
 - [world.zh-Hant.md](world.zh-Hant.md)：World（鍵格式與配發策略、change stamp、寫入政策預設獨占與資料路徑、結構變更的套用順序與 Despawn；其餘待規格核准）。
