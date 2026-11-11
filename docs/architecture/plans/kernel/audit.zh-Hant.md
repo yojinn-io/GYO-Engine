@@ -170,13 +170,13 @@ spec G.4 第 3 條要移動的呼叫點「改成宣告的 `Diagnostics` 副作�
 - ~~`AssetManager` 屬 Frame World 還是 Render World~~ **已決定（使用者 2026-11-11，側邊會話轉述）：不選 World，照 Bevy 的資產模型拆開**——請求與狀態 Resource（`AssetServer` 形狀）、每型別一個 `Assets<T>` Resource（Handle 帶引用計數）在文件／Frame World；loader 由各 plugin 登記（ufbx 是函式庫）；載入是外部服務（IO 執行緒加交換點，與 Link 同形），完成依請求順序在同步點套用；內容身分是 (c)，Startup 的資產全載完才凍結；GPU 資源是渲染 World 的 Resource（`RenderAssets<T>`），Extract 搬「哪些變了」。`AssetManager` 物件消失，`UiRenderer`、`WeaponViewModel` 的跨 World 指標問題隨之消失。另：**命名規範待定**，這類名字遷移時都要改（target/assets.zh-Hant.md §2）。部件文件：`target/assets.zh-Hant.md`。
 - 四個工具 host 骨架的重複（選擇窗記帳三種實作、關窗提示 3/4）是 framework 標準 plugin 的候選（framework DI 5）；model_viewer `ViewerWindow.cpp:112-113` 的記帳缺陷屬工具行為變更，不在遷移批順手改。
 - protobuf generated pool：若 Egress System 直接編碼，要比照 I-5 明列例外。
-- 初始成員走 Startup schedule（§4.3）。
+- ~~初始成員走 Startup schedule~~ **已決定（使用者 2026-11-11，側邊會話轉述）：不走 Startup，新增 `Loading` schedule 契約**（spec H.2b）：Startup 只放不依內容的登記與固定 Resource；世界內容經 Loading 進來，stage 固定序地圖 → 場景 → 可互動物件 → 敵人 → 玩家，可分批；玩家在「玩家」stage 由 `ApplyMembership` 以 `SpawnWithId` 生成（與中途加入同一 System）；對局 tick 於 ready 後從 0 起算；Client 收到 ready 前停在 loading；內容身分 (c)、載入順序是 Plan 的函數。Feature＝loading 頁面與分批載入。golden 若以對局開始為基準則 34 個不受影響——遷移批實測確認。**附帶：Peer 與 Player 分開**（networking §3b）。
 
 ## 4. 宣告的四節（出處：product-thirdparty 報告 §5～§8）
 
 ### 4.1 (a) Body 拆欄與 golden
 
-今天 `bodies_` 八個寫入點（W1～W8）依 entity-model 第 139 行拆成 Body、Life、InputCursor、Connection 診斷四欄。拆後：Body 仍有移動與復活兩個寫者、InputCursor 有移動與 `ResetMovementEpoch` 兩個，都可用漏斗（復活改發事件或寫中間欄，移動 System 在本 tick 移動前套用）解。**Life 無結論**：死亡在 `ResolveActions` 內且同 tick 內讀後寫；漏斗放「事件＋下一 tick 套用」會讓死亡晚一 tick 出現在 snapshot，放「同 tick 套用」要求 ApplyLife 同時處理復活與死亡兩個 Plan 位置。交遷移批的事前宣告定。`connectionQualityFailures` 進 digest 但今天只寫在 snapshot 複本上，拆後是 Connection 實體的 (c) 欄。
+今天 `bodies_` 八個寫入點（W1～W8）依 entity-model 第 139 行拆成 Body、Life、InputCursor、Connection 診斷四欄。拆後：Body 仍有移動與復活兩個寫者、InputCursor 有移動與 `ResetMovementEpoch` 兩個，都可用漏斗（復活改發事件或寫中間欄，移動 System 在本 tick 移動前套用）解。**Life 無結論**：死亡在 `ResolveActions` 內且同 tick 內讀後寫；漏斗放「事件＋下一 tick 套用」會讓死亡晚一 tick 出現在 snapshot，放「同 tick 套用」要求 ApplyLife 同時處理復活與死亡兩個 Plan 位置。交遷移批的事前宣告定。`connectionQualityFailures` 進 digest 但今天只寫在 snapshot 複本上，拆後是 Player 實體的 Connection 診斷欄（(c)）。初始成員的路徑：使用者定為 Loading schedule 的「玩家」stage（不是 Startup），34 個 golden 是否不變取決於 tick 從 ready 後起算，遷移批實測。
 
 ### 4.2 (b) Host 保留職責的現況位置
 
@@ -303,7 +303,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 
 ## 11. 下一步
 
-- ~~§3.1~~（已定：framework 退役→`plugins/`）；~~§3.2~~（已定：資料只往前流，H-6 原樣）；使用者決定 §3.6（~~IRuntimePort（已定：刪）~~、~~AssetManager 歸屬（已定：拆開）~~、初始成員走 Startup）、§4.5（區表三漏一錯）。
+- ~~§3.1~~（已定：framework 退役→`plugins/`）；~~§3.2~~（已定：資料只往前流，H-6 原樣）；使用者決定 §3.6（~~IRuntimePort（已定：刪）~~、~~AssetManager 歸屬（已定：拆開）~~、~~初始成員走 Startup（已定：Loading）~~）、§4.5（區表三漏一錯）。
 - 規格修訂批（§6 七項）與第一個文件批合併規劃。
 - `-spike-pageguard`（事前宣告待寫）。
 - 改造批次計畫：以本報告的成本形狀分批（組織層先：Kernel 本體 → Match host 遷移 → Client → Editor），§3 Delta 七項在計畫層寫一次。

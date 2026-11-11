@@ -82,6 +82,9 @@
 
 - 2026-11-11（側邊會話轉述，audit 待決第 4 項）`v8-arch-assets-bevy-model`：AssetManager 不選 World，照 Bevy 拆開——請求狀態 Resource、每型別 Assets<T>（Handle 引用計數）在文件／Frame World；loader 由 plugin 登記（ufbx 是函式庫）；載入是外部服務（IO 執行緒＋交換點，與 Link 同形）、完成依請求順序在同步點套用；內容身分 (c)、Startup 全載完才凍結；GPU 資源是渲染 World 的 Resource，Extract 搬變更。AssetManager 物件消失；UiRenderer／WeaponViewModel 跨 World 指標問題消失。使用者另要求命名規範（待定）：這類名字遷移時都要改。部件文件 target/assets.zh-Hant.md。
 
+- 2026-11-11（側邊會話轉述，audit 待決第 5 項）`v8-arch-loading-schedule`：初始成員不走 Startup；新增 Loading schedule 契約（Startup 只放不依內容的登記與固定 Resource；Loading stage 固定序地圖→場景→可互動物件→敵人→玩家，可分批由 Host 驅動；玩家在「玩家」stage 由 ApplyMembership 以 SpawnWithId 生成；對局 tick 於 ready 後從 0 起算；Client 收到 ready 前停 loading，ready 是 wire 事件→pv10-requirements；內容身分 (c)、載入順序是 Plan 的函數）。Feature＝loading 頁面與分批載入。golden 34 個以對局開始為基準預期不變——遷移批實測。spec H.2b、D.1 domain 加 Loading、H.4.1；runtime-composition §3a、DI 3；limits LIM-5 補註。
+- 2026-11-11（同上附帶）`v8-arch-peer-player-split`：Player 實體（玩家段 id；Body／Life／InputCursor／Connection 診斷）與 Peer 實體（Ledger、Visibility）分開，為觀戰者留位置；Link 是 external Resource 不是實體。networking §3b、spec H.4.1、pv10-requirements。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。

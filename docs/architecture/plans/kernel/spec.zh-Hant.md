@@ -419,7 +419,7 @@ Registry
 
 ```text
 ScheduleDef（Host 提供；Kernel 不內建任何名字）
-├── name, world, domain（Fixed | Frame | Startup）
+├── name, world, domain（Fixed | Frame | Startup | Loading）   // Loading：使用者 2026-11-11 加，H.2b
 ├── stages        : [StageName]   固定序列；plugin 在 build 可於具名 stage 前後插入
 ├── syncPoints    : 每個 stage 末一個（預設）＋顯式宣告的具名同步點 [(stage, after System 或 Set)]
 ├── eventTrim     : 哪個同步點修剪該 domain 的事件（預設：最後一個 stage 末）
@@ -798,6 +798,20 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 - 兩者可共用同一 World（Bevy 的做法），前提是同一條執行緒（H-2）。共用時 Frame 寫者寫 Fixed 讀者讀的資料必須經 Ingress（Z3）。
 - 兩個時鐘在不同執行緒時，必須是兩個 World 加 Host 的交換點（H-2）。跨 domain 的資料不靠 Scheduler 自動同步（v0.2 §10.1）。
 
+### H.2b Loading schedule：世界內容的載入階段（使用者 2026-11-11 決定，audit §3.6 第 5 項）
+
+Feature（Derivation Order）：**loading 頁面與分批載入**——按組件載入順序組合世界，物件多時分批，Client 顯示 loading 讓玩家看不到過程；現在物件少就算 Startup，將來撐不住，先訂契約。
+
+1. **Startup 只放 Runtime 建構時就確定、不依內容的東西**（登記、固定 Resource）。**世界內容全部經 `Loading` schedule 進來**，初始成員不走 Startup。
+2. Loading 的 stage **固定序**＝地圖 → 場景 → 可互動物件 → 敵人 → 玩家（ScheduleDef 的資料，Host 給；plugin 掛載入 System）。
+3. **可分批**：Loading schedule 可跑多次（每次一批，數量或時間預算），由 Host 迴圈驅動；資產載入是 IO 服務在同步點套用（target/assets §1 第 4 點）。
+4. **成員經同一條路**：玩家在「玩家」stage 由 `ApplyMembership` 以 `SpawnWithId` 生成——與中途加入是同一個 System，不是 Host 直寫（Z2 無例外）。
+5. **對局時鐘在 Loading 宣告 ready 後才開始**：FixedUpdate 的 domain tick 從 0 起算於 ready 之後；Loading 自己的計數不是遊戲 tick。golden 若以對局開始為基準則 34 個不受影響——**遷移批實測確認，不先假設**。
+6. **Client 在收到 Match 的 ready 前停在 loading 狀態**（Frame World 的 (b) Resource 驅動畫面）；ready 是 wire 事件（pv10 事件串流或 Welcome 欄位），記進 pv10-requirements。
+7. **決定性**：載入的內容身分是 (c)，載入順序是 Plan 的函數，ready 時兩端 (c) 狀態可比對。
+
+對 B.3 的影響：Startup 的寫者不計（S1）仍成立；Loading 的 System 是正常寫者（計入獨占），所以「地圖」stage 寫地形欄的 System 與 FixedUpdate 中寫同欄的 System 會是兩個寫者——地形欄在 FixedUpdate 應無寫者（唯讀），否則 D-E2，正是機制要抓的。對 H-5 的影響：回滾快照不含 Loading 階段（ready 前沒有 PredictionHistory）。
+
 ### H.3 Match 與 Client 共用 FixedUpdate
 
 - 同一組 (c) plugin 登記同一組 (c) System（mechanism §4 第 3 點）；Client 多出的 Rollback 與 PredictionHistory 在 FixedUpdate 之外（zone=B）。
@@ -815,8 +829,8 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 | 項 | 內容 |
 |---|---|
 | Runtime | `Match`：World M，runner＝`gyo-match-sim` 角色 |
-| schedules | `Startup`（一次）；`FixedUpdate`（clock、Serial） |
-| FixedUpdate 的 stages（中性名；產品掛 System） | `Ingress`（Z3，zone=B：Link 收件 → **join／leave 請求、ack、動作、輸入、到達時刻**全部以資料寫進 `InputRing[tick]`；Ingress 不生成、不刪除實體，修訂：S3）→ `Simulate`（(c)：**`ApplyMembership`**——讀 ring 的 join／leave 請求，以 `SpawnWithId<Bundle<Body, Combat, Animation, Connection, …>>` 生成玩家（id 由 Gateway 配，E-2）、以 `Despawn` 刪除（它是 zone=C，Z5 允許）；→ 生死邊界 → 移動 → 動作裁決 → 動畫推進；順序由 before／after 宣告，是 (c) 所以歧義即錯誤）→ `Judge`（快照組裝、連線品質、修剪；Host judgement 區讀 ring 的到達時刻與 `HostClockSample`）→ `Egress`（run 條件 `tick % N == 0` 寫快照；寫 Link 送件） |
+| schedules | `Startup`（一次，不依內容）；**`Loading`（分批，stage 序：地圖 → 場景 → 可互動物件 → 敵人 → 玩家；H.2b）**；`FixedUpdate`（clock、Serial；tick 於 ready 後從 0 起） |
+| FixedUpdate 的 stages（中性名；產品掛 System） | `Ingress`（Z3，zone=B：Link 收件 → **join／leave 請求、ack、動作、輸入、到達時刻**全部以資料寫進 `InputRing[tick]`；Ingress 不生成、不刪除實體，修訂：S3）→ `Simulate`（(c)：**`ApplyMembership`**——讀 ring 的 join／leave 請求，以 `SpawnWithId<Bundle<Body, Combat, Animation, Connection, …>>` 生成玩家（id 由 Gateway 配，E-2）；**Player 與 Peer 分開**（使用者 2026-11-11）：Player 實體＝Gateway 配的玩家段 id，欄 Body／Life／InputCursor／Connection 診斷；Peer 實體＝每收件者的 Ledger、Visibility，獨立於 Player（為觀戰者等非 Player 的 Peer 留位置）；Link 是 external Resource，不是實體、以 `Despawn` 刪除（它是 zone=C，Z5 允許）；→ 生死邊界 → 移動 → 動作裁決 → 動畫推進；順序由 before／after 宣告，是 (c) 所以歧義即錯誤）→ `Judge`（快照組裝、連線品質、修剪；Host judgement 區讀 ring 的到達時刻與 `HostClockSample`）→ `Egress`（run 條件 `tick % N == 0` 寫快照；寫 Link 送件） |
 | Host 的每次喚醒 | (1) 取樣時鐘一次，寫 `HostClockSample`；(2) 交換點 A：swap IO 執行緒的收件緩衝（每筆帶到達時刻）進 `Link.inbound`；(3) 累加器給出 k 步，呼叫 k 次 `Run(FixedUpdate)`（tick 由 Run 推進）；(4) 交換點 B：swap `Link.outbound` 給 IO 執行緒並 Notify；(5) 以 `secondsUntilNextTick` 算絕對 deadline，用 `Waiter` 等（同今天 `Body`） |
 | 外部服務 | IPC（Gateway 的 loopback TCP）：IO 執行緒只處理位元組與到達時刻；trace writer |
 | 行為差異（-audit） | (a) `ShotReferenceAge` 與連線品質的 reference age 改以 ring 內的到達時刻計算（G.4；粒度不變，golden 預期不變，待 -audit 確認）。(b) IPC 執行緒同步拿到的 refusal（`IpcHost.cpp:685`）改由下一個 tick 的 Ingress System 產生，回覆時機會變；pv9 契約有沒有規定回覆時機**未查證**（本輪 grep `network-architecture.zh-Hant.md` 的 refusal 無結果）。(c) 一次 Advance 內的追趕步拿不到新收件：與今天相同。(d) Join／Leave 從「Tick 外由 host 呼叫」（entity-model §5.2 第 237 行）變成 tick 內的 (c) System（修訂：S3）：生成與刪除晚最多一個 tick、進快照與 digest 的 tick 可能差一；`combat-rejoin` 等 golden 要重核 |

@@ -25,6 +25,16 @@
 - 不為 Host 開 Z2／Z5 的例外：Host 在 World Ready 時只寫 boundary 與 external Resource，不直接生成或刪除帶 (c) 欄的實體。
 - 後果記為限制 LIM-5（`limits.zh-Hant.md`）：加入與離開晚最多一個 tick；golden 可能差一 tick、要重設基準；產品線在遷移批確認。entity-model §5.2「Join／Leave 在 Tick 外」改寫，排進改造的第一個文件批。
 
+## 3a. Loading schedule：世界內容的載入階段（使用者 2026-11-11 決定，spec H.2b）
+
+- Startup 只放 Runtime 建構時就確定、不依內容的東西；**世界內容全部經 `Loading` schedule 進來**，初始成員不走 Startup。
+- Loading 的 stage 固定序：地圖 → 場景 → 可互動物件 → 敵人 → 玩家；可分批（Loading 可跑多次，每次一批，由 Host 迴圈驅動）；資產載入是 IO 服務，在同步點依請求順序套用（assets §1）。
+- 玩家在「玩家」stage 由 `ApplyMembership` 以 `SpawnWithId` 生成，與中途加入是同一個 System；Z2 無例外。
+- 對局時鐘在 Loading 宣告 ready 後才開始：FixedUpdate 的 domain tick 於 ready 後從 0 起算；Loading 的計數不是遊戲 tick。Client 收到 Match 的 ready（wire 事件；pv10-requirements）前停在 loading 狀態。
+- 決定性：載入的內容身分是 (c)，載入順序是 Plan 的函數，ready 時兩端 (c) 狀態可比對。
+- Feature：loading 頁面與分批載入。使用者理由：現在物件少就算 Startup，將來東西多就撐不住，先把契約訂好。
+- **Peer 與 Player 分開**：Player 實體（玩家段 id；Body／Life／InputCursor／Connection 診斷）；Peer 實體（每收件者的 Ledger、Visibility）獨立，為觀戰者等留位置；Link 是 external Resource 不是實體（networking §3b）。
+
 ## 3b. Editor：文件 World 加渲染 World，資料只往前流（使用者 2026-11-11 決定，audit §3.2）
 
 - Editor 的組合與 Client **同形**：文件 World（兼 Frame）加渲染 World，Extract 單向、唯讀。
@@ -46,7 +56,8 @@
 
 1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
 2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；產品與工具只在 main 列 plugin。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）。
-3. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
+3. **世界內容只經 Loading schedule 進來；對局 tick 於 ready 後從 0 起算；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄）；等價測試（分批數不同、ready 時 (c) 狀態逐位元相同）；掃描（Peer 元件不掛在 Player 實體）。
+4. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
 
 ### Replacement Criteria（候選）
 
