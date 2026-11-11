@@ -80,6 +80,8 @@
 
 - 2026-11-11（側邊會話轉述，audit 待決第 3 項）`v8-arch-remove-runtimeport-animinstance`：刪除 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance，含 RuntimePortTests.cpp 與 ModelTests.cpp 的對應部分；併入 `v8-arch-remove-object-fps` 批做 §7 完整清理。取樣函式與 ufbx loader 不動。使用者：不光概念不同，連使用者都不存在了。
 
+- 2026-11-11（側邊會話轉述，audit 待決第 4 項）`v8-arch-assets-bevy-model`：AssetManager 不選 World，照 Bevy 拆開——請求狀態 Resource、每型別 Assets<T>（Handle 引用計數）在文件／Frame World；loader 由 plugin 登記（ufbx 是函式庫）；載入是外部服務（IO 執行緒＋交換點，與 Link 同形）、完成依請求順序在同步點套用；內容身分 (c)、Startup 全載完才凍結；GPU 資源是渲染 World 的 Resource，Extract 搬變更。AssetManager 物件消失；UiRenderer／WeaponViewModel 跨 World 指標問題消失。使用者另要求命名規範（待定）：這類名字遷移時都要改。部件文件 target/assets.zh-Hant.md。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。

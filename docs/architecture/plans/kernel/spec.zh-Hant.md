@@ -1169,10 +1169,10 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | `runtime`：`IRuntimePort` | — | Query／Submit／Events（`IRuntimePort.hpp:17-19`） | **刪除**（使用者 2026-11-11；併入 `v8-arch-remove-object-fps`，含 `RuntimePortTests.cpp`） | 只有 object_fps 與 v2 在用；借用視圖的形狀與 Link 相反，不能當 Link 的前身 |
 | `platform`（sdl） | 1285 | `PumpEvents`；`thread_local`（`SdlPlatform.cpp:61`、`:73`、`:75`；`SdlLogBridge.cpp:24`，修訂：S17） | 包（Host 擁有） | 違反 I-3 第 3 條，不能當葉子；pump 是 Host 的步驟，事件以 `PlatformEvents` boundary 進 World（O2、P1）；platform-sdl.md DI 7「observer 與 live frame 內不得做 operation」是 Host 的 pump 與 live frame 處理器要守的，不進 System |
 | `input` | 1156 | `BeginFrame`／`HandleEvent`／`EndFrame`（呼叫序 `PvpApplication.cpp:1111-1119`） | 後端包；`InputActionMap` 留 | 每幀狀態機變 Resource 加 `Input` stage 的 System |
-| `asset` | 3333 | `AssetManager::BeginFrame`（`:59`）、`Update`（`:62`）；`LoaderRegistry` 已有 K3 形狀；`detail/TypeId.hpp:37` 的 `static const` token（B.6 風險 5） | 包；loader 留 | 存取可框住（`ResMut<AssetManager>`）；非同步完成的套用點對應 A3；`Load`／`Acquire` 的呼叫點 -audit 逐一列 |
+| `asset` | 3333 | `AssetManager::BeginFrame`（`:59`）、`Update`（`:62`）；`LoaderRegistry` 已有 K3 形狀；`detail/TypeId.hpp:37` 的 `static const` token（B.6 風險 5） | 包（**拆成三類 Resource**，使用者 2026-11-11：請求狀態、每型別 `Assets<T>`、渲染 World 的 GPU 資源；載入是外部服務、完成依請求順序套用；`AssetManager` 物件消失）；loader 留（由 plugin 登記） | 原稿「`ResMut<AssetManager>`」作廢；見 `target/assets.zh-Hant.md` |
 | `model` | 1174 | 取樣純函式；ufbx loader；`Advance` 2 處 | 取樣留；loader 留（asset loader；是 (c) 內容身分，determinism.md §4.9）；**`AnimationInstance` 刪除**（使用者 2026-11-11；只有 object_fps_v2 在用；併入 `v8-arch-remove-object-fps`，含 `ModelTests.cpp` 的對應部分） | 取樣是 (b)（determinism.md §4.2） |
 | `render` | 4300 | `Renderer::Render(queue)`；裝置綁建立它的執行緒（未複核） | 包（渲染 World 的 Resource，親和 `GraphicsContextOwner`）；`RenderQueue` 是 extract 的目標 | blueprint §5 R1 列 |
-| `ui` | 4471 | `UiRuntime::Update`（`UiRuntime.hpp:86`）含焦點狀態 | 包；版面與編解碼留 | 狀態變 Resource |
+| `ui` | 4471 | `UiRuntime::Update`（`UiRuntime.hpp:86`）含焦點狀態 | 包；版面與編解碼留；`UiRenderer` 局部重寫（audit）——改讀 Frame World 的 `Assets<T>` 與渲染 World 的 GPU 資源，不再持 `AssetManager*`；名字照待定的命名規範改 | 狀態變 Resource |
 | `audio` | 1619 | Mixer 的 SDL 回呼執行緒（`Mixer.cpp`、`VoiceMixer.cpp` 有 atomic） | 服務；`Submitter` 是 Resource | 整數混音契約不變；Submitter 綁第一個呼叫它的執行緒→親和 |
 | `config` | — | 只有 `projects.csv`、`tools.csv` | 不適用 | 登記資料，不是程式 |
 
