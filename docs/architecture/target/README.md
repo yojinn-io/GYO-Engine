@@ -1,7 +1,5 @@
 # docs/architecture/target：目標架構的文件
 
-> Status: target, not implemented
-
 資料夾與規則由圖書管理員定（2026-11-11），依使用者的要求「新版架構文件與舊版分開、至少分資料夾、不混放」。
 
 ## 分界
@@ -19,7 +17,7 @@
 
 ## 狀態標記
 
-標題下第一行，固定英文、只有兩種（和 `Design Invariants` 見出し同理，方便 grep、不因翻譻走樣）：
+標題下第一行，固定英文、只有兩種（和 `Design Invariants` 見出し同理，方便 grep、不因翻譯走樣）：
 
 ```text
 > Status: target, not implemented
