@@ -262,7 +262,7 @@
 
 ### 1.11 Animation：ozz-animation vs `GYO::Model`（功能層；Match 側取樣是基盤）
 
-**GYO 現況與為什麼自製**：`GYO::Model`（1,174 行）：`SamplePose`（決定性、不推時鐘）、`BlendPoses`（TRS 插值再解階層，刻意不插矩陣）、`AnimationInstance`（一個明確時鐘、轉場）、`SkinMesh`（CPU、最多 4 權重）、`TransferCompatibleAnimation`（明確節點對應的轉移，不推名字）、`PlaybackInterval::Crossed`（事件）、`gyo.anim_events` 契約。**Match 也取樣動畫**：hitbox 綁在骨頭上，Match 每 Tick 取樣 4 位玩家的姿勢、動畫狀態只由權威狀態決定，Client 照 Match 給的狀態播放（hitbox-plan R1～R3）。決定性的要求是 R5：「只要求 Match 自己可重現」，不要求 Match 與 Client 逐位元一致；B3 的量測（2026-10-31）：四平台各自可重現，但取樣結果平台間**不**逐位元一致（Slerp 的 acos／sin 走 libm；math.md 也寫明這些函數不跨平台一致），含命中的 golden 因此只做同平台比對（`v8-product-hitbox-golden-policy`）。限制（mark23 dev_log）：CPU 蒙皮、無動畫混合樹、無雙四元數、無 morph、無 PBR。
+**GYO 現況與為什麼自製**：`GYO::Model`（1,174 行）：`SamplePose`（決定性、不推時鐘）、`BlendPoses`（TRS 插值再解階層，刻意不插矩陣）、`AnimationInstance`（一個明確時鐘、轉場）、`SkinMesh`（CPU、最多 4 權重）、`TransferCompatibleAnimation`（明確節點對應的轉移，不推名字）、`PlaybackInterval::Crossed`（事件）、`gyo.anim_events` 契約。**Match 也取樣動畫**：hitbox 綁在骨頭上，Match 每 Tick 取樣 4 位玩家的姿勢、動畫狀態只由權威狀態決定，Client 照 Match 給的狀態播放（hitbox-plan R1～R3）。決定性的要求是 R5：「只要求 Match 自己可重現」，不要求 Match 與 Client 逐位元一致；B3 的量測（2026-10-31，當時 L1 的四平台）：各平台自己可重現，但取樣結果平台間**不**逐位元一致（Slerp 的 acos／sin 走 libm；math.md 也寫明這些函數不跨平台一致），含命中的 golden 因此只做同平台比對（`v8-product-hitbox-golden-policy`）。限制（mark23 dev_log）：CPU 蒙皮、無動畫混合樹、無雙四元數、無 morph、無 PBR。
 
 **需要它的 Feature**：AI 小怪與 Boss 的動畫（「AI 也走 Match 的動畫狀態與 hitbox」，entity-requirements 4-4）；寵物（裝備式表現，Client 端）；技能的動作。20 個 AI＋4 人在 Client 做 CPU 蒙皮——**未量**。
 
