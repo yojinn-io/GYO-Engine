@@ -4,7 +4,7 @@
 起點是使用者的願景稿「GYO-Engine 架構思想研究」（2026-11-10）與「GYO 架構設計思想」Concept Draft v0.2（2026-11-11；Bevy ECS／Scheduler、Service Mesh、Control／Data Plane）。
 
 使用者 2026-11-10：**基盤的協定不能等壓力出現才改**；功能層的擴充才等壓力。
-使用者 2026-11-11：**要的是 Bevy 那種抽象能力（World／System Contract／Scheduler／Executor），帶入現有 GYO，不是 GYO2；架構改造完成前，功能線停。** 2026-11-11 定：停法 (a)（已開工的卡做到下一個關卡停）；批次由主會話依序執行 spec → spike → audit，不並行（`v8-arch-kernel-sequential`）。
+使用者 2026-11-11：**要的是 Bevy 那種抽象能力（World／System Contract／Scheduler／Executor），帶入現有 GYO，不是 GYO2；架構改造完成前，功能線停。** 2026-11-11 定：停法 (a)（已開工的卡做到下一個關卡停）；規格與 spike 同時開，audit 等 spec；控制權在主會話，子代理由主會話開與收（`v8-arch-kernel-control`）。
 
 ## 方法
 
@@ -24,8 +24,8 @@
 ```text
 v8-arch-kernel
 ├── -spec    上段｜ultracode：提案 Opus×3／high、統合 Fable／high、對抗 Opus／xhigh｜約 1 天｜mechanism → 正式規格，每部件一節
-├── -spike   上段｜主會話自做（Fable／xhigh）、對抗檢查 Opus／xhigh 只讀｜2～3 天｜獨立子目錄最小 C++ 原型，證明簽名推存取與受限句柄
-└── -audit   上段｜主會話自做（Fable／high）、對抗檢查 Opus／high 只讀｜等 -spike｜現有模組逐一「留／包／重寫」，給中間層成本
+├── -spike   上段｜實作 Opus／xhigh（主會話的子代理）、審查 Fable／xhigh｜2～3 天｜獨立子目錄最小 C++ 原型，證明簽名推存取與受限句柄
+└── -audit   上段｜Opus／high（主會話的子代理）、對抗檢查另一模型｜等 -spec｜現有模組逐一「留／包／重寫」，給中間層成本
 ```
 
 | 批 | 內容 | 產出 | 判定（事前宣告） |
