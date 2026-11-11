@@ -48,6 +48,8 @@
 | A3 | （audit §3.6 第 4）`AssetManager` 不選 World，照 Bevy 資產模型拆開；載入是外部服務、依請求順序套用；內容身分 (c)；命名規範待定 | assets §1～2、DI 1～3 |
 | A4 | （audit §3.6 第 5）初始成員不走 Startup；新增 Loading schedule（地圖→場景→可互動物件→敵人→玩家，可分批）；對局 tick 於 ready 後起算；Client ready 前 loading | runtime-composition §3a、DI 3；spec H.2b |
 | A5 | （同上附帶）Peer 與 Player 分開；Link 是 Resource 不是實體 | runtime-composition §3a；networking §3b |
+| A6 | （audit §4.5）決定性區表三漏一錯採 (a)，排第一個文件批；條目照歸屬命名 | naming §適用；determinism.md 第一個文件批 |
+| A7 | 命名規範五條：歸屬／詞性／World 前綴／區＝位置／禁止 Manager、Renderer、ViewModel、Host、Shell、Runtime、Controller | naming、DI 1～3 |
 | 1 | Entity 鍵格式 u64（低 32 index、高 32 generation）是 Kernel 的；配發策略是產品 Resource，PvP 不重用、generation 0 | world §1、DI 1～2 |
 | 2 | change stamp 依 Plan 位置取值，tick 視角以 tickStamps 換算；(c) 禁變更過濾 | world §2、DI 3 |
 | 3 | 預設獨占、Shared 可選；進 digest 禁 Shared；資料路徑表，事件漏斗可選 | world §3、DI 4；limits LIM-4 |
@@ -77,6 +79,7 @@
 - [error-handling.md](error-handling.md)：錯誤處理的擴充列（以執行期資料偵測的 Programmer Error：Result 帶上下文、Executor 記錄一次並 Interrupted、不靜默）。英文，因為最終併入的 `docs/architecture/error-handling.md` 是英文。
 - [determinism.md](determinism.md)：決定性（區是宣告的契約、(c) 的時間只來自 domain tick 與被記錄的 boundary 輸入、亂數是每實體元件、四處契約）。英文，因為最終併入的 `docs/architecture/determinism.md` 是英文。
 - [assets.zh-Hant.md](assets.zh-Hant.md)：資產（不選 World、照 Bevy 拆成請求狀態／`Assets<T>`／GPU 資源；載入是外部服務；內容身分 (c)；命名待辦）。
+- [naming.zh-Hant.md](naming.zh-Hant.md)：命名規範五條（歸屬＝namespace 與目錄、分類＝詞性、World＝前綴、區＝位置、禁止舊角色後綴）。
 - [limits.zh-Hant.md](limits.zh-Hant.md)：**限制與修改條件**（使用者 2026-11-11 要求的集中頁；LIM-1～LIM-5；最終位置 `docs/architecture/limits.zh-Hant.md`，逐條搬）。
 - [runtime-composition.zh-Hant.md](runtime-composition.zh-Hant.md)：Runtime 的組合（Client 的 Frame 與 Render World 分開、Extract 唯讀無反饋、一 World 一執行緒、Match 的 Join／Leave 在 tick 內）。
 - [scheduler.zh-Hant.md](scheduler.zh-Hant.md)：Scheduler（衝突邊與順序邊、歧義處置、(b) 讀 (c) 的顯式順序）。

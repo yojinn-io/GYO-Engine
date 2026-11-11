@@ -206,7 +206,9 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 | third_party：ufbx | C | §6 第三方（例外） | 一致；#177 方案 A 的對象 |
 | third_party：nlohmann | C（契約資料；小數經 `strtod`） | §4.6 提 `strtod` | 一致 |
 
-**漏的模組**：engine/base、`FixedTickRuntime`、engine/time（三列）。**標錯候選**：`PlayerAnimation` 推進（一列）。不改契約；交使用者與決定性線（四處小改照第一個文件批）。
+**漏的模組**：engine/base、`FixedTickRuntime`、engine/time（三列）。**標錯候選**：`PlayerAnimation` 推進（一列）。
+
+**使用者決定（2026-11-11，側邊會話轉述）：採建議 (a)**——四處都接受，排進第一個文件批（與 DET 的 E4 一起）；`PlayerAnimation` 推進那條先由決定性線核對 digest 編碼再改。**區表的名字照歸屬改**（target/naming.zh-Hant.md）：`FixedTickRuntime` 累加器 → runner plugin 的「固定步累加器」（(b)）；engine/time 的時鐘樣本 → `HostClockSample` boundary Resource（(c) 輸入）；engine/base 的 `Sha256`／`StrictJson` → 列成「內容身分」與「契約資料解析」兩條 (c) 路徑，函式庫名只在證據欄；`PlayerAnimation` 推進 → 以欄與 System 命名（例 `AnimationState` 欄、`AdvanceAnimation` System）。
 
 ## 5. 範囲の限界（本批）
 
@@ -302,6 +304,8 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 - 第 9 項：spec I.1 外部系統表與 H.7「Host 保留職責」的「Host」改寫為「runner plugin 加產品 main」；H.7 的職責不變，持有者變。
 
 ## 11. 下一步
+
+**audit 的六項待決至 2026-11-11 全部定完**（§3.1 framework 退役→plugins；§3.2 預覽資料只往前流；§3.6 IRuntimePort／AnimationInstance 刪、AssetManager 拆成 Bevy 模型、初始成員走 Loading＋Peer／Player 分開；§4.5 區表採 (a) 並照歸屬命名）。另定命名規範五條（`target/naming.zh-Hant.md`）。
 
 - ~~§3.1~~（已定：framework 退役→`plugins/`）；~~§3.2~~（已定：資料只往前流，H-6 原樣）；使用者決定 §3.6（~~IRuntimePort（已定：刪）~~、~~AssetManager 歸屬（已定：拆開）~~、~~初始成員走 Startup（已定：Loading）~~）、§4.5（區表三漏一錯）。
 - 規格修訂批（§6 七項）與第一個文件批合併規劃。

@@ -85,9 +85,12 @@
 - 2026-11-11（側邊會話轉述，audit 待決第 5 項）`v8-arch-loading-schedule`：初始成員不走 Startup；新增 Loading schedule 契約（Startup 只放不依內容的登記與固定 Resource；Loading stage 固定序地圖→場景→可互動物件→敵人→玩家，可分批由 Host 驅動；玩家在「玩家」stage 由 ApplyMembership 以 SpawnWithId 生成；對局 tick 於 ready 後從 0 起算；Client 收到 ready 前停 loading，ready 是 wire 事件→pv10-requirements；內容身分 (c)、載入順序是 Plan 的函數）。Feature＝loading 頁面與分批載入。golden 34 個以對局開始為基準預期不變——遷移批實測。spec H.2b、D.1 domain 加 Loading、H.4.1；runtime-composition §3a、DI 3；limits LIM-5 補註。
 - 2026-11-11（同上附帶）`v8-arch-peer-player-split`：Player 實體（玩家段 id；Body／Life／InputCursor／Connection 診斷）與 Peer 實體（Ledger、Visibility）分開，為觀戰者留位置；Link 是 external Resource 不是實體。networking §3b、spec H.4.1、pv10-requirements。
 
+- 2026-11-11（側邊會話轉述，audit 待決第 6 項）`v8-arch-determinism-table-fix`：區表三漏一錯採 (a)，四處接受、排第一個文件批（與 E4 一起）；PlayerAnimation 推進先由決定性線核對 digest 編碼；條目名照歸屬改（固定步累加器→runner plugin (b)；時鐘樣本→HostClockSample；Sha256／StrictJson→「內容身分」「契約資料解析」兩條 (c) 路徑；以欄與 System 命名）。
+- 2026-11-11（同上）`v8-arch-naming`：命名規範五條（歸屬＝namespace 與目錄；分類＝詞性照 Bevy；World＝前綴；區＝位置非名字；禁止 Manager／Renderer／ViewModel／Host／Shell／Runtime／Controller 後綴），target/naming.zh-Hant.md；遷移批事前宣告列改名清單。**audit 六項待決全部定完。**
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
 - 改造的第一個文件批（待規劃）：K.3 第 7 項的三處 Delta 文件修改；entity-model §5.2（Join／Leave 在 tick 內，K.3 第 10 項）；error-handling.md 加一列（K.3 第 17 項）；mechanism §3.3「Time 只來自 tick」依 K.3 第 11 項裁決修訂。
-- ~~-audit~~ 完成 → 使用者定 audit §3／§4.5 的事項 → 規格修訂（audit §6 七項）與第一個文件批合併規劃 → `-spike-pageguard`（事前宣告待寫）→ 改造批次計畫（§3 Delta 計畫層寫一次；以 audit 的成本形狀分批）。
+- ~~-audit~~ 完成，六項待決已定 → 規格修訂（audit §6 七項）與第一個文件批合併規劃 → `-spike-pageguard`（事前宣告待寫）→ 改造批次計畫（§3 Delta 計畫層寫一次；以 audit 的成本形狀分批）。
 - 判定 1 的三平台：**成立**（L1 run 43018979148，PR #180；步驟第一次誤加在 build-and-validate.yml、已改到 cross-platform.yml）。PR #180 含 `spikes/` 以外的 `.github/workflows/cross-platform.yml` 改動，合併由使用者決定。

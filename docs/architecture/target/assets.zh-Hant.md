@@ -19,7 +19,7 @@
 
 ## 2. 命名（待辦，規範本身待定）
 
-使用者 2026-11-11 要求：`UiRenderer`、`WeaponViewModel` 這類名字都要改——它們在新架構裡不再是持指標的物件，而是 System 與 Resource；遷移批時照新架構的命名規範重命名。**命名規範本身待定**（候選：System 以動詞或「動詞＋對象」命名、Resource 以名詞、plugin 以 kebab-case 目錄名；由計畫批提案、使用者定）。
+使用者 2026-11-11 要求：`UiRenderer`、`WeaponViewModel` 這類名字都要改——它們在新架構裡不再是持指標的物件，而是 System 與 Resource；遷移批時照新架構的命名規範重命名。命名規範已定（使用者 2026-11-11）：見 `naming.zh-Hant.md` 五條；`UiRenderer` → `Ui::LayoutText` 類 System 加 `GpuFontAtlas` 類 Resource，`WeaponViewModel` → `Present::WeaponPose` 欄加 `AnimateWeapon` System。
 
 ## Design Invariants（候選；核准後成為正式條文）
 
