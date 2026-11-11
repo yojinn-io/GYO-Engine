@@ -240,7 +240,7 @@ SystemDescriptor（不可變，finish 時產生）
 - `writePolicy == Exclusive` 的欄或 Resource，**在同一個 World 上、跨這個 Runtime 的所有非 Startup schedule**，寫者至多一個。寫者的單位是 **System**（不是 owner plugin；修訂：S1，理由見下）。寫者包括：`Write<T>`／`ResMut<T>` 的 System；型別化 Commands 中宣告 insert／remove `T` 的 System；`Spawn<Bundle<…>>`／`SpawnWithId<Bundle<…>>` 的 bundle 含 `T` 的 System（修訂：B3）；宣告寫 `T` 的 hook。不算寫者：Runtime 的回滾還原、Host 在 Ready 狀態的寫入、**Startup schedule 上的 System**（只跑一次、在任何 clock schedule 之前，與其他寫者沒有同時性；初始化與執行期的權威分開數，修訂：S1）。`ExclusiveWorld` 的 System 寫不到 Exclusive 欄（S-13），所以不計。
 - **Despawn 不算寫者**：它是成員關係結束，不是值的寫入。對 (c) 資料的限制由區規則 Z5 處理。
 - 第二個寫者＝啟動錯誤 D-E2，訊息列出所有寫者的 name 與 `source`。這是 AGENTS §3「狀態的權威只有一個」的機制版。
-- **寫者以 System 計的後果**（修訂：S1）：今天 `bodies_`（`PlayerState`）由三段寫（`ResolveLifeBoundaries` 寫 position 與 lifeState，`PvpMatch.cpp:310-331`；移動迴圈 `StepMovement`，`:571`、`:582`；`Kill` 寫 lifeState 與 respawnTick，`:301-304`）。照 H.4.1 拆成三個 System 就是三個寫者，D-E2 必發。本稿**預期**這條檢查迫使 Body 依 entity-model 第 139 行已做的欄位分類拆欄（身體、生命、輸入游標、host 診斷四組），不是把三段併成一個 System，也不是把 Body 改 Shared（S-12 不准）。這是機制要施加的壓力，不是規格自相矛盾；K.2 第 10 條的計數從遷移後開始算，遷移本身的拆欄不算。替代方案「寫者以 owner plugin 計」能免掉拆欄，但 Scheduler 檢查的粒度就變成 plugin 的程式碼組織而不是資料流，所以本稿不採；**要使用者確認**（K.3）。
+- **寫者以 System 計的後果**（修訂：S1）：今天 `bodies_`（`PlayerState`）由三段寫（`ResolveLifeBoundaries` 寫 position 與 lifeState，`PvpMatch.cpp:310-331`；移動迴圈 `StepMovement`，`:571`、`:582`；`Kill` 寫 lifeState 與 respawnTick，`:301-304`）。照 H.4.1 拆成三個 System 就是三個寫者，D-E2 必發。本稿**預期**這條檢查迫使 Body 依 entity-model 第 139 行已做的欄位分類拆欄（身體、生命、輸入游標、host 診斷四組），不是把三段併成一個 System，也不是把 Body 改 Shared（S-12 不准）。這是機制要施加的壓力，不是規格自相矛盾；K.2 第 10 條的計數從遷移後開始算，遷移本身的拆欄不算。替代方案「寫者以 owner plugin 計」能免掉拆欄，但 Scheduler 檢查的粒度就變成 plugin 的程式碼組織而不是資料流，所以本稿不採；**使用者 2026-11-11 確認採本稿**（K.3 第 9 項）。
 
 #### B.3.1 獨占下的資料路徑（使用者 2026-11-11 決定，K.3 第 3 項）
 
@@ -1126,7 +1126,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 修訂輪（對抗檢查後）新增：
 
-9. **獨占寫者的單位是 System、Startup 不計**（B.3；S1）。後果是 Body 要依 entity-model 的欄位分類拆欄；替代方案「以 owner plugin 計」免拆欄但失去資料流粒度。
+9. ~~獨占寫者的單位~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：獨占寫者**以 System 計**，Startup schedule 不計；PvP 的 Body 依 entity-model 第 139 行的欄位分類**拆欄**，不併 System、不改 Shared、不採「以 owner plugin 計」。使用者原話：不拆的話架構改造就沒有意義。拆欄的範圍與 golden 影響由 -audit 量。
 10. **Join／Leave 進 tick 內**（H.4.1 (d)；S3）：Ingress 只寫請求進 ring，(c) 的 `ApplyMembership` 生成與刪除；與 entity-model §5.2「Join／Leave 在 Tick 外」不同，golden（`combat-rejoin` 等）可能差一個 tick。
 11. **時間的來源**（G.2 Executor；B6）：mechanism §3.3「Time 只來自 tick」與 determinism.md DI 4「the tick, or a clock injected」衝突。本稿採 DI 4 的形狀（tick ＋ 被記錄的 boundary 取樣 `HostClockSample`），因為 Host judgement 區（determinism.md §2，(c)）本來就要量到達時機。選項：(i) 修 mechanism §3.3 的 Executor 列為「tick 與被記錄的 boundary 輸入」；(ii) 把 Host judgement 改成 (b)，HostClockSample 變 external——這改 determinism.md 的區表與 golden `host-poor-connection` 的地位。
 12. **F.2 的階段順序改成 despawn、remove 先於 spawn、insert**（S4）：讓同窗「刪 X 再以同 id 生成 X」成立；代價是「同窗生成又刪除同一個新 id」從不可見變成生成勝出。

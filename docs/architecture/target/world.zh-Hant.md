@@ -27,7 +27,7 @@
 ## 3. 寫入政策：預設獨占（使用者 2026-11-11 決定，spec K.3 第 3 項）
 
 - 每個欄與 Resource 的 `ColumnInfo.writePolicy ∈ {Exclusive, Shared}`，**預設 Exclusive**；登記時標 `Shared` 才允許多寫者。宣告進 authority digest 的欄禁 Shared（spec S-12）。
-- **獨占是啟動時數寫者的檢查**（spec D-E2：同一 World、所有非 Startup schedule 中，寫者以 System 計、含型別化 Commands、Spawn 的 bundle、hook，至多一個），**執行期零成本、不是鎖**；Exclusive 與 Shared 的執行期行為完全相同。Bevy 等於全 Shared、順序隱性；本機制把「最後寫贏」換成「唯一寫者定合併規則」。不採資料庫式的執行期仲裁（鎖、MVCC）：寫入路徑慢 20～100 倍且買不到決定性。
+- **獨占是啟動時數寫者的檢查**（spec D-E2：同一 World、所有非 Startup schedule 中，寫者**以 System 計**（使用者 2026-11-11 決定，K.3 第 9 項；不以 owner plugin 計，否則檢查的粒度變成程式碼組織而非資料流）、含型別化 Commands、Spawn 的 bundle、hook，至多一個；Startup schedule 的寫者不計）。後果：PvP 今天由三段程式寫的 Body 要依 entity-model 的欄位分類拆欄，不併 System、不改 Shared——使用者：不拆的話架構改造就沒有意義。範圍與 golden 影響由 -audit 量，**執行期零成本、不是鎖**；Exclusive 與 Shared 的執行期行為完全相同。Bevy 等於全 Shared、順序隱性；本機制把「最後寫贏」換成「唯一寫者定合併規則」。不採資料庫式的執行期仲裁（鎖、MVCC）：寫入路徑慢 20～100 倍且買不到決定性。
 - **資料路徑**：獨占欄預設由它唯一的寫者直接寫，不需要事件。只有多個來源要影響同一欄時才用漏斗——各來源發事件或寫自己的中間欄，唯一寫者讀取、套用合併規則、寫欄；漏斗可以是事件也可以是中間欄，是可選的路徑（使用者更正：不是標準進料方式）。事件也有寫者，(c) 區多個 `EventWriter<E>` 之間仍要顯式順序。整欄替換（`Restore`）只用於跨 World 接收權威狀態，不是 World 內的寫法。
 
 | 資料 | 寫入政策 | 資料怎麼進來 | 為什麼 |
