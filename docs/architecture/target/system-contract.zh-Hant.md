@@ -23,7 +23,7 @@
 
 - **GYO_ASSERT**：便宜的前置條件與內部不變量，在每個建置組態都評估、失敗即 abort（現有契約，不動）。
 - **Result**：執行期資料才看得出的 Programmer Error，含存取驗證抓到的。`Result<void, KernelError>` 是 System 的**回傳契約**，不是錯誤通道：Ok 是正常路徑，Err 是帶上下文的 Programmer Error。
-- **驗證不叫斷言**：A.6 兩層存取核對與句柄 epoch 比對的成本與 World 大小成正比，不能用 GYO_ASSERT 實作；有執行期開關（同一二進位可開著跑場次測試），開關狀態啟動時寫日誌並放成 Resource，「無違規」報告必附「驗證開著」；release 預設關、測試版預設開，皆明寫設定；關閉時只是不去查、System 仍回 Ok；關閉時這一類不被偵測（limits LIM-3）。便宜那類（untyped `Commands`、Z5、S-13）永遠查。
+- **驗證不叫斷言**：A.6 兩層存取核對與句柄 epoch 比對的成本與 World 大小成正比，不能用 GYO_ASSERT 實作；有**執行期開關，由啟動參數決定**（程式碼永遠在；Host／runner 把啟動參數寫進 Kernel 的設定 Resource；關閉時每次存取只多一個分支；同一二進位可開著跑場次測試），開關狀態啟動時寫日誌並放成 Resource，「無違規」報告必附「驗證開著」；release 預設關、測試版預設開，皆明寫設定；關閉時只是不去查、System 仍回 Ok；關閉時這一類不被偵測（limits LIM-3）。便宜那類（untyped `Commands`、Z5、S-13）永遠查。
 
 ## 3. 無狀態與禁止的形狀（spec S-1、B.4 第 1 點）
 
