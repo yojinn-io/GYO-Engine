@@ -76,7 +76,7 @@
 <g class="c-teal"><rect x="346" y="576" width="140" height="96" rx="8" stroke-width="0.5"/>
 <text class="th" x="416" y="594" text-anchor="middle" dominant-baseline="central">Ingress</text>
 <text class="ts" x="416" y="614" text-anchor="middle" dominant-baseline="central">外部訊息只在同步點</text>
-<text class="ts" x="416" y="630" text-anchor="middle" dominant-baseline="central">寫入 InputRing[tick]／MembershipRequests</text>
+<text class="ts" x="416" y="630" text-anchor="middle" dominant-baseline="central">寫入 InputRing／MembershipRequests／AssetStaging</text>
 <text class="ts" x="416" y="646" text-anchor="middle" dominant-baseline="central">(c) 區 System 不碰 Link</text>
 <text class="ts" x="416" y="662" text-anchor="middle" dominant-baseline="central">到達時機不影響結果</text></g>
 <g class="c-teal"><rect x="499" y="576" width="141" height="96" rx="8" stroke-width="0.5"/>

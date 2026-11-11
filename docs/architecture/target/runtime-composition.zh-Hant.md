@@ -28,9 +28,9 @@
 ## 3a. Loading schedule：世界內容的載入階段（使用者 2026-11-11 決定，spec H.2b）
 
 - Startup 只放 Runtime 建構時就確定、不依內容的東西；**世界內容全部經 `Loading` schedule 進來**，初始成員不走 Startup。
-- Loading 的 stage 固定序：**Ingress** → **資產** → 地圖 → 場景 → 可互動物件 → 敵人 → 玩家；可分批（Loading 可跑多次，每次一批，由 Host 迴圈驅動）。Ingress 是 Z3 的 ingress stage，Loading 掛兩個 (b) System（`StageMembershipRequests`、`StageAssets`；第三個 `StageInputs` 只在 FixedUpdate），各消費自己那份 external 收件 Resource（`LinkMembershipInbound`、`AssetInbox`），寫進 role=Input 的 (c) 暫存（`MembershipRequests`、`AssetStaging`，都以請求序號為鍵）；`資產` stage 的 `ApplyStagedAssets`（(c)，`AssetCursor` 唯一寫者）依序號的連續前綴套用進 `Assets<T>`，之後各 stage 的 (c) System 從 `Assets<T>` 建內容，每個 stage 等前一個 stage 的完成旗標（assets §1；spec H.2b、N-2／N-8 修訂）。資產載入本身是 IO 服務，只到 `AssetInbox` 為止。
+- Loading 的 stage 固定序：**Ingress** → **資產** → 地圖 → 場景 → 可互動物件 → 敵人 → 玩家；可分批（Loading 可跑多次，每次一批，由 Host 迴圈驅動）。Ingress 是 Z3 的 ingress stage，Loading 掛兩個 (b) System（`StageMembershipRequests`、`StageAssets`；第三個 `StageInputs` 只在 FixedUpdate），各消費自己那份 external 收件 Resource（`LinkMembershipInbound`、`AssetInbox`），寫進 role=Input 的 (c) 暫存（`MembershipRequests`、`AssetStaging`，都以請求序號為鍵）；`資產` stage 的 `ApplyStagedAssets`（(c)，`AssetCursor` 唯一寫者）依序號的連續前綴套用進 `Assets<T>`，之後各 stage 的 (c) System 從 `Assets<T>` 建內容，每個 stage 等前一個 stage 的完成旗標 `LoadingStageDone<Stage>`（每 stage 一個 Resource，唯一寫者是該 stage 的 `Finish<Stage>` System；`資產` 的完成條件＝`AssetCursor` 到 `AssetRequestList` 長度；spec H.2b 第 3 點）（assets §1；spec H.2b、N-2／N-8 修訂）。資產載入本身是 IO 服務，只到 `AssetInbox` 為止。
 - 玩家在「玩家」stage 由 `ApplyMembership` 以 `SpawnWithId` 生成，與中途加入是同一個 System；Z2 無例外。
-- 對局時鐘在 Loading 宣告 ready 後才開始：FixedUpdate 的 domain tick 計數在 ready 時為 0、第一個模擬 tick 是 1（spec H.2b 第 5 點）；Loading 的計數不是遊戲 tick。ready 是 (c) 的判定（最後一個 stage 的 System 在所有 stage 旗標齊、`AssetCursor` 到請求清單末尾時寫 `LoadingState = Ready`），Host 在交換點讀它。Client 的 `ClientSim` 也有 Loading schedule（spec H.4.2）。Client 收到 Match 的 ready（wire 事件；pv10-requirements）前停在 loading 狀態。
+- 對局時鐘在 Loading 宣告 ready 後才開始：FixedUpdate 的 domain tick 計數在 ready 時為 0、第一個模擬 tick 是 1（spec H.2b 第 5 點）；Loading 的計數不是遊戲 tick。ready 是 (c) 的判定（`Finish<玩家>` 在所有 stage 旗標齊時寫 `LoadingState = Ready`），Host 在交換點讀它。Client 的 `ClientSim` 也有 Loading schedule：請求清單來自 Match 的 manifest、序號同源，成員與 `tick[Fixed]` 在 Client 自己 ready 且收到 Match 的 ready 後經第一個權威快照的 `Restore` 進來，之後才跑 FixedUpdate（spec H.2b 第 8 點、H.4.2）。Client 收到 Match 的 ready（wire 事件；pv10-requirements）前停在 loading 狀態。
 - 決定性：載入的內容身分是 (c)，載入順序是 Plan 的函數，ready 時兩端 (c) 狀態可比對。
 - Feature：loading 頁面與分批載入。使用者理由：現在物件少就算 Startup，將來東西多就撐不住，先把契約訂好。
 - **Peer 與 Player 分開**：Player 實體（玩家段 id；Body／Life／InputCursor／Connection 診斷）；Peer 實體（每收件者的 Ledger、Visibility）獨立，為觀戰者等留位置；Link 是 external Resource 不是實體（networking §3b）。
@@ -56,7 +56,7 @@
 
 1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
 2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；產品與工具只在 main 列 plugin。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）。
-3. **世界內容只經 Loading schedule 進來（且只經它的 Ingress stage 進 (c)）；對局 tick 計數在 ready 時為 0、第一個模擬 tick 是 1，Loading 期間 `tick[Fixed]` 不推進；`tick[Loading]` 是批次計數，(c) System 可讀它（S-4）但等價測試不比它；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄；Loading 非 Ingress stage 的 System 不得讀 external Resource）；等價測試（分批數不同、資產完成順序打亂：ready 時 (c) 欄與 Resource 逐位元相同，`tick[Loading]` 除外）；掃描（Peer 元件不掛在 Player 實體）。
+3. **世界內容只經 Loading schedule 進來（且只經它的 Ingress stage 進 (c)）；對局 tick 計數在 ready 時為 0、第一個模擬 tick 是 1，Loading 期間 `tick[Fixed]` 不推進；`tick[Loading]` 是批次計數，(c) System 可讀它（S-4）但等價測試不比它；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄；Loading 非 Ingress stage 的 System 不得讀 external Resource）；等價測試（分批數不同、資產完成順序打亂：ready 時 (c) 欄與 Resource 逐位元相同，排除 role=Input 的暫存（`AssetStaging`、`MembershipRequests`、`InputRing`，修剪時機隨批數而異）與 `tick[Loading]`；spec J-51）；掃描（Peer 元件不掛在 Player 實體）。
 4. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
 
 ### Replacement Criteria（候選）
