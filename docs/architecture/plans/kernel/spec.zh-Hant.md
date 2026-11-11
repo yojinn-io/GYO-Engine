@@ -1121,7 +1121,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 4. ~~Despawn 不算獨占寫者~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格——Despawn 不算獨占寫者、不產生衝突邊；(c) 的保護由 Z5；F.2 的套用順序寫死（hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource），despawn 階段內依 EntityId 升冪、冪等、對窗開始不存在的 id 無作用。說明案例見 B.9 取捨 1 與 `docs/architecture/target/world.zh-Hant.md` §4。
 5. ~~讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格，否則 D-E8。配套慣例「呈現放在模擬之後的 stage」記為**限制**（`docs/architecture/target/limits.zh-Hant.md`）：成本落在呈現 System 的數量，產品線遷移時確認；修改條件＝K.2 第 3 條。
 6. ~~Client 的 Frame 與 Render 兩個 World 合併還是獨立~~ **已決定（使用者 2026-11-11，側邊會話轉述）：分開**（規格推薦案）。渲染 World 自己的 Registry，只經 Extract 唯讀來源，渲染無反饋由機制守（H-6、J-43、DI-KS 13）。理由：合起來看著簡單、代價很高。部件文件：`docs/architecture/target/runtime-composition.zh-Hant.md`。
-7. Architecture Delta：`docs/architecture.md:136`（Engine 不得有 system／scheduler／world／resources／events／app／plugin）要修訂；entity-store DI 4 延伸、`DeferredChanges`（3b，未實作）撤回由 World 的佇列取代；determinism.md §4.7 已預告「columns become the World's storage」。
+7. ~~Architecture Delta~~ **已決定（使用者 2026-11-11 同意，側邊會話轉述）**，三處：(1) `docs/architecture.md:136` 的禁令改為「Kernel 進 Engine，含 World／System／Scheduler／Executor；plugin ABI 與動態載入仍禁止」；(2) entity-store DI 4 延伸到 insert／remove、DI 5 對 store 本身仍成立、proposed 的 `DeferredChanges`（3b）撤回由 World 延後佇列取代；(3) determinism.md §4.7 正式化。七項說明以 spec 與 mechanism 為計畫層的一次書寫，各批引用（AGENTS §3 新條款，PR #178）。**文件修改本身排進改造的第一個文件批**，不在此做。
 8. `apps/object_fps`、`object_fps_v2` 是整個遷移、維持舊動詞直到移除、還是移除（H-7 不允許一半）。
 
 修訂輪（對抗檢查後）新增：

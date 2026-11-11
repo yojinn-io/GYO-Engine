@@ -28,6 +28,7 @@
 | `v8-arch-kernel-despawn-not-writer` | 2026-11-11（側邊會話轉述，spec K.3 第 4 項）。採規格：Despawn 不算獨占寫者、不產生衝突邊；(c) 由 Z5 保護；F.2 套用順序寫死（hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource），despawn 依 id 升冪、冪等、對窗開始不存在的 id 無作用；despawn 先於 spawn 為同窗同 id 重連。案例（玩家 10 死亡又退出、玩家 7 擊殺成立）寫進 target/world §4。 |
 | `v8-arch-kernel-b-reads-c-ordered` | 2026-11-11（側邊會話轉述，spec K.3 第 5 項）。採規格：讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序，否則 D-E8；慣例「呈現放模擬之後的 stage」記為限制 LIM-1（成本在呈現 System 數量，產品線遷移時確認；修改條件 K.2 第 3 條）。使用者另要求新架構文件有「限制與修改條件」集中頁 → `target/limits.zh-Hant.md`（LIM-1～LIM-4；位置待圖書管理員）。 |
 | `v8-arch-kernel-render-world-separate` | 2026-11-11（側邊會話轉述，spec K.3 第 6 項）。Client 的 Frame World 與 Render World 分開；渲染 World 自己的 Registry、只經 Extract 唯讀來源、無反饋由機制守（H-6、J-43、DI-KS 13）。理由：合起來看著簡單、代價很高。部件文件 target/runtime-composition.zh-Hant.md。 |
+| `v8-arch-kernel-delta-approved` | 2026-11-11（側邊會話轉述，spec K.3 第 7 項）。使用者同意 Architecture Delta 三處：architecture.md:136 禁令改為「Kernel 進 Engine（World／System／Scheduler／Executor）；plugin ABI 與動態載入仍禁」；entity-store DI 4 延伸到 insert／remove、DI 5 仍成立、DeferredChanges（3b）撤回；determinism.md §4.7 正式化。七項以 spec／mechanism 為計畫層一次書寫、各批引用。文件修改排進改造的第一個文件批。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定
@@ -51,5 +52,6 @@
 
 ## 下一步
 
+- 改造的第一個文件批（待規劃）：K.3 第 7 項的三處 Delta 文件修改；mechanism §3.3「Time 只來自 tick」依 K.3 第 11 項裁決修訂。
 - 使用者定 K.3（至少影響 -audit 的第 1、7、8、9、10、11 項）→ `v8-arch-kernel-audit`（事前宣告要列範囲の限界 L1～L8）→ `-spike-pageguard` → 改造批次計畫（§3 Delta 計畫層寫一次）。
 - 判定 1 的三平台：等使用者對 spike R-06（是否改 L1 workflow 建 spikes/kernel/）。
