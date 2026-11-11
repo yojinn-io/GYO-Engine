@@ -70,9 +70,9 @@
 <g class="c-teal"><rect x="193" y="576" width="140" height="96" rx="8" stroke-width="0.5"/>
 <text class="th" x="263" y="594" text-anchor="middle" dominant-baseline="central">Executor</text>
 <text class="ts" x="263" y="614" text-anchor="middle" dominant-baseline="central">順序固定</text>
-<text class="ts" x="263" y="630" text-anchor="middle" dominant-baseline="central">Time 只來自 tick</text>
-<text class="ts" x="263" y="646" text-anchor="middle" dominant-baseline="central">RNG 是 resource，</text>
-<text class="ts" x="263" y="662" text-anchor="middle" dominant-baseline="central">種子進 digest</text></g>
+<text class="ts" x="263" y="630" text-anchor="middle" dominant-baseline="central">時間只來自 tick 與</text>
+<text class="ts" x="263" y="646" text-anchor="middle" dominant-baseline="central">被記錄的 boundary 輸入</text>
+<text class="ts" x="263" y="662" text-anchor="middle" dominant-baseline="central">亂數是 (c) 元件</text></g>
 <g class="c-teal"><rect x="346" y="576" width="140" height="96" rx="8" stroke-width="0.5"/>
 <text class="th" x="416" y="594" text-anchor="middle" dominant-baseline="central">Ingress</text>
 <text class="ts" x="416" y="614" text-anchor="middle" dominant-baseline="central">外部訊息只在同步點</text>

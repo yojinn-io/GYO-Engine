@@ -40,7 +40,7 @@
 | **DI-K2 顯式存取、單一 writer** | 註冊時宣告 read／write／exclusive；Kernel 驗證衝突；同階段同一 Resource／欄只有一個 writer（狀態的權威） | Rust 借用檢查＋SystemParam 推導；ambiguous_with_all 逃生口 | 註冊時 assert；受限 view 型別；突變測試 |
 | **DI-K3 id 由契約或登錄順序決定** | 元件、Resource、事件的 id 依登錄順序；wire id 由契約（.proto 欄位號／契約檔）；實體 id 單執行緒依階段內順序配發；回呼依註冊順序 | ComponentId 依首次使用、並行 entity allocator、Observer 依 EntityHashMap、InstanceId 隨機 UUID | 登錄表測試；禁止雜湊順序參與判定（review＋守衛掃描容器型別） |
 | **DI-K4 Kernel 中性** | Kernel 不認識任何產品、資產意義、能力名字；跨能力的排序錨點用中性的階段名，不像 bevy_app 持有 AnimationSystems、TransformGizmoRenderStep | C5 | 名詞守衛（現有 neutral_names_guard 的做法）；Layers 表 |
-| **DI-K5 step 是純函數、時間只來自 tick** | 模擬 step＝Step(state, inputs, tick)，可在同一幀重入（回滾）；固定步內不用 f32 delta；變更 tick 用遊戲 tick 標記，不用執行計數 | delta_secs f32、overstep_fraction f32、變更 tick＝System 執行次數、動畫 seek_time 累加 | 既有 digest 與重放；回滾重跑的等價測試 |
+| **DI-K5 step 是純函數、時間只來自 tick** | 模擬 step＝Step(state, inputs, tick)，可在同一幀重入（回滾）；固定步內不用 f32 delta；變更以依 Plan 位置取值的單調 stamp 標記、tick 視角以 tickStamps 換算（使用者 2026-11-11 改，原文「用遊戲 tick 標記」；見 spec A.1），不用執行計數 | delta_secs f32、overstep_fraction f32、變更 tick＝System 執行次數、動畫 seek_time 累加 | 既有 digest 與重放；回滾重跑的等價測試 |
 | **DI-K6 核心不含 OS；OS 事件幀邊界批次進入** | Kernel 與 ECS 不出現平台條件分支；OS 事件與網路收發在幀邊界、固定階段批次交付；收包時間取該幀的時鐘取樣 | lightyear 收包 Instant::now()、winit 幀內時序 | 守衛掃描 Kernel 目錄的平台分支；中立標頭 |
 | **DI-K7 render 只經 extract 讀模擬快照，無反饋** | 模擬與渲染兩個 world；render 只讀 const 快照；禁止 render→Time、readback→模擬事件、搬走資產資料 | Bevy 的四條反饋路徑（send_time、take_gpu_data、entity_sync 寫回、ReadbackComplete） | review；digest 不受渲染影響的測試 |
 

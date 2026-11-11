@@ -4,7 +4,7 @@
 起點是使用者的願景稿「GYO-Engine 架構思想研究」（2026-11-10）與「GYO 架構設計思想」Concept Draft v0.2（2026-11-11；Bevy ECS／Scheduler、Service Mesh、Control／Data Plane）。
 
 使用者 2026-11-10：**基盤的協定不能等壓力出現才改**；功能層的擴充才等壓力。
-使用者 2026-11-11：**要的是 Bevy 那種抽象能力（World／System Contract／Scheduler／Executor），帶入現有 GYO，不是 GYO2；架構改造完成前，功能線停。** 先不定案，目前在對理解。
+使用者 2026-11-11：**要的是 Bevy 那種抽象能力（World／System Contract／Scheduler／Executor），帶入現有 GYO，不是 GYO2；架構改造完成前，功能線停。** 2026-11-11 定：停法 (a)（已開工的卡做到下一個關卡停）；規格與 spike 同時開，audit 等 spec；控制權在主會話，子代理由主會話開與收（`v8-arch-kernel-control`）。
 
 ## 方法
 
@@ -15,9 +15,36 @@
 ## 文件
 
 - [mechanism.zh-Hant.md](mechanism.zh-Hant.md)：**本線的基準**。對 v0.2 的理解、機制骨架、契約與控制面（含使用者提供的審查修正與架構師兩條主張）、網路作為 System、規則變機制、不解決什麼、改造的性質與風險、判準。三張圖在 `diagrams/`。
+- [spec.zh-Hant.md](spec.zh-Hant.md)：**規格草案 v0.1（已對抗檢查，待使用者）**。`-spec` 批的產出：A～M 十三節、守衛 J-1～J-47、DI-KS 15 條、RC 13 條；待使用者決定的 17 項在 K.3；對抗檢查 34 條逐條處置在文末。
+- [spike-report.zh-Hant.md](spike-report.zh-Hant.md)（分支 `claude/arch-kernel-spike`）：`-spike` 批的報告；範圍の限界 L1～L8。
 - [networking.zh-Hant.md](networking.zh-Hant.md)：網路側的設計稿——網路要成為機制上的 System，機制必須提供的八條；網路層自己的設計圖 N1–N12；對 GYO 現況的對照。
 - [blueprint.zh-Hant.md](blueprint.zh-Hant.md)：**輸入**（2026-11-11 降級）——Kernel 八條不變量、各層補充的不變量（R／A／P／C／O／N）、GYO 刻意的偏離（候選 DI-K1～K7）、反例清單、現況對照、Replacement Criteria。它沒有契約分類與 Executor 的分離，遷移順序一節假設了改造路線；以 mechanism 為準。
+- [audit-declaration.zh-Hant.md](audit-declaration.zh-Hant.md)：`-audit` 的事前宣告（待使用者確認；未啟動）。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
+- `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
+
+## 批次（2026-11-11 核准）
+
+```text
+v8-arch-kernel
+├── -spec    上段｜ultracode：提案 Opus×3／high、統合 Fable／high、對抗 Opus／xhigh｜約 1 天｜mechanism → 正式規格，每部件一節
+├── -spike   上段｜實作 Opus／xhigh（主會話的子代理）、審查 Fable／xhigh｜2～3 天｜獨立子目錄最小 C++ 原型，證明簽名推存取與受限句柄
+├── -spike-pageguard 上段｜等 -spec｜debug 頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、只在 debug；開工前事前宣告
+├── remove-object-fps 中段｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview（§7 完整刪除；兼驗 removability）｜待事前宣告
+└── -audit   上段｜Opus／high（主會話的子代理）、對抗檢查另一模型｜等 -spec｜現有模組逐一「留／包／重寫」，給中間層成本
+```
+
+| 批 | 內容 | 產出 | 判定（事前宣告） |
+|---|---|---|---|
+| `-spec` | **完成（待使用者定 K.3）**。把 mechanism 落成規格：World、System 契約（兩半）、Registry、Scheduler（三種分析結果、歧義處置）、Executor（策略與執行緒親和）、延後佇列與事件（同步點）、多 World 與 schedule 組合、Host 保留的職責；每節：資料模型／操作／不變量／C++ 實現手段／Bevy 對照與不採的理由；Design Invariants 與 Replacement Criteria 草案；不含遊戲型別的驗證方式 | `spec.zh-Hant.md`；對抗檢查附末 | 對抗檢查者找不到「規格允許、但會破壞 (c) 區四處契約或獨占寫入」的反例；找到則回提案。不改程式 |
+| `-spike` | **完成（分支 `claude/arch-kernel-spike`）**：判定 1 三平台成立（L1 run 43018979148）；判定 2 照原文成立、攔不到的形狀記為範囲の限界 L1～L8；判定 3 成立（34/34）。獨立子目錄（候選 `spikes/kernel/`，不進任何 target 的依賴），只做兩件：(1) 從函式參數型別在編譯期推出 `{reads, writes}`，含 Component、Resource、事件、延後佇列句柄；(2) 受限句柄＋debug 建置的 World 存取核對，未宣告的 id 即斷言。測試用的型別只存在測試裡 | 原型程式＋測試＋`spike-report.zh-Hant.md`（兩個編譯器的差異、做不到的事） | (1) 10 個以上不同簽名的 System，推出的集合與人手寫的期望逐一相同（static_assert＋執行期），L1 三平台（MSVC、gcc／clang、AppleClang）全綠；(2) 3 種繞路（存參考、拿裸指標、經未宣告 id 讀 World）在 debug 建置各被斷言攔下，release 不攔並寫明；(3) 突變：移除任一宣告 → 對應測試失敗。任一不成立＝spike 結論「做不到」，照 §14 停下回報，不補救 |
+| `-audit` | 拿 `-spec` 去讀現有每個模組：有沒有自己的生命週期或更新迴圈；**有沒有跨 tick 的指標或參考；有沒有全域可變狀態**（原第二問「實際存取能不能被契約框住」依 `v8-arch-kernel-limits-accept` 改為這兩個可檢查的問題）；是不是純函式。事前宣告必須列 spike-report 的範囲の限界 L1～L8 | `audit.zh-Hant.md`：逐模組留／包／重寫＋理由＋行數 | 每個結論附檔名與行號；對抗檢查抽 5 個模組複核 |
+
+## -audit 的起點（各線 2026-11-11 回報）
+
+- 工具線 voxel 編輯器：迴圈在 `tools/voxel_map_editor/src/window/EditorWindow.cpp`（ImGui 每幀：Shortcuts → DrawPreview［SyncPreview 重烘、scene Apply／Render、Fly、Pick、Edit］→ Overlay）；葉子在核心（Build／MapBuild／Visibility／FlyCamera／Tools／Editing）。這是 Editor Runtime 對照的第一個樣本。
+- 工具線 model_viewer：`ViewerWindow.cpp:112` 已知缺陷（選擇窗不比對 tag、Failed 結束等待），改造期間不修，記在工具線 HANDOFF 與跨元件規則登記頁；是「契約後果在消費端各寫一份」的實例，-audit 讀 framework 時要看。
+- 產品線：PR #167、#168 已合併，無進行中實作；PR #173（11/9 場次記錄）待使用者合併。
 
 ## 與其他線的關係
 
