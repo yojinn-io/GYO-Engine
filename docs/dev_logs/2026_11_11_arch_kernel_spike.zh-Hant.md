@@ -54,3 +54,10 @@ kernel 研究線要決定中間層（現有模組的更新介面與資料取得�
 ## 證據
 
 主 checkout `build/evidence/kernel-spike/`（git 不追蹤；本機 Intel Mac）：`toolchain.txt`（編譯器、CMake、Ninja 版本）；`build_config-debug.txt`、`build_config-release.txt`（clean 建置，零警告）；`tests_config-{debug,release}_target-{debug,release}.txt`（四個執行檔的 doctest 輸出）；`ctest_config-debug.txt`、`ctest_config-release.txt`（突變後還原的樹再建再跑）；`test_cases.txt`（30 個 case 名）；`mutations_round1.txt`（31/32）、`mutations_round2.txt`（32/32）；對抗檢查後 `tests_round3_config-{debug,release}_target-{debug,release}.txt`、`test_cases_round3.txt`、`build_failure_probe_round3.txt`、`mutations_round3.txt`（34/34）。建置樹在工作樹 `build/target/_build/kernel-spike-debug`、`kernel-spike-release`（git 不追蹤）。第一輪突變前的測試輸出只是開發中的執行，未保存。
+
+## 使用者決定（2026-11-11，側邊會話轉述）
+
+- R-01：判定 2 照事前宣告原文記「成立」；多發現的攔不到形狀記為「範囲の限界」（報告專節 L1～L8），後續批次事前宣告必須寫上。
+- 上限處置：接受；World 以外靠 code review；不改計畫前提；-audit 第二問改為「跨 tick 指標或參考」「全域可變狀態」兩問。
+- 新增 `-spike-pageguard`（排在 -spec 之後；形狀：只對寫設保護、只保護標獨占寫入的欄、只在 (c) 區 System 執行時、只在 debug）。
+- R-06 之後待使用者續對。

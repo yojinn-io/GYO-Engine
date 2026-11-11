@@ -9,7 +9,7 @@
 | 判定 | 結論 | 證據 |
 |---|---|---|
 | 1 簽名推存取集合 | **本機成立，三平台待 L1**。17 個不同簽名（free function 10、lambda 3、member function 3、function object 1），型別集合 `static_assert` 與 id 集合執行期比對都和人手寫的期望逐一相同。本機只有 AppleClang 21（x86_64），Debug 與 Release 兩種組態都過。MSVC、gcc、AppleClang arm64 沒有實測。 | `spikes/kernel/tests/AccessDerivationTests.cpp`；`build/evidence/kernel-spike/` 的 `tests_*.txt` |
-| 2 受限句柄＋debug 核對攔繞路 | **部分不成立**。(c) 成立：經未宣告的 id 碰 World，在存取當下斷言。(a)(b) 只對「寫入的位元組淨變化留到 System 邊界」的形狀成立：debug 斷言、release 不攔。攔不到的形狀見〈判定 2 的上限〉，C++ 在這套機制裡沒有辦法攔。 | `spikes/kernel/tests/AccessCheckTests.cpp`（Bypass／Limit／Control 各案） |
+| 2 受限句柄＋debug 核對攔繞路 | **成立（照事前宣告原文；使用者 2026-11-11 決定，R-01）**。原文的三種繞路 (a)(b)(c) 在 debug 建置各被斷言攔下、release 不攔。實作者原判「部分不成立」依據的是原文沒要求的更嚴判準，該部分改記為下節〈範囲の限界〉。原文字保留如下以供對照：(c) 成立：經未宣告的 id 碰 World，在存取當下斷言。(a)(b) 只對「寫入的位元組淨變化留到 System 邊界」的形狀成立：debug 斷言、release 不攔。攔不到的形狀見〈判定 2 的上限〉，C++ 在這套機制裡沒有辦法攔。 | `spikes/kernel/tests/AccessCheckTests.cpp`（Bypass／Limit／Control 各案） |
 | 3 突變 | **成立**。事前宣告的「移除任一宣告→對應測試失敗」：9 條宣告移除突變（七類參數全覆蓋）第一輪就全部被殺；其中 7 條由 debug 核對層殺（6 條在存取當下、1 條在 System 邊界），另 2 條由 const 正確性（編譯錯誤）與判定 1 的期望 `static_assert` 殺。全目錄：第一輪 31/32（1 條存活，屬核對層的偵測力，不是宣告移除），收緊測試後第二輪 32/32；對抗檢查後加到 34 條，第三輪 34/34。 | `spikes/kernel/mutations.json`；`build/evidence/kernel-spike/mutations_*.txt` |
 
 表的註（對抗檢查後；判定 1、2 的結論措辭待使用者決定 R-01、R-06，不改）：
@@ -18,9 +18,26 @@
 
 判定 2 的「部分」是 mechanism §3.5 事前就寫了的上限（拿到參考就能存指標），不是本批新發現的缺陷；依 AGENTS §14 照實記為不成立的部分，不補救、不加 workaround。對「中間層包或重寫」的意義寫在〈對「中間層包或重寫」的意義〉。
 
+## 範囲の限界（使用者 2026-11-11 決定；後續批次的事前宣告必須寫上，直到解除）
+
+判定 2 照原文成立，但 debug 核對攔不到下列形狀。依 AGENTS §14 冒頭，這些是本線「計測できない」的經路，之後每一批（-audit、改造各批）的事前宣告都要列為範圍の限界，直到有機制解除並記錄。
+
+| # | 形狀 | 為什麼攔不到 | 解除的候選 |
+|---|---|---|---|
+| L1 | System 內寫了又在結束前寫回原值 | 邊界只比位元組淨變化 | 頁保護 spike（`-spike-pageguard`） |
+| L2 | 經存下的參考**讀**沒宣告的元件 | 讀不改位元組 | 頁保護只對寫設保護，**不解除**；靠審查 |
+| L3 | 在有宣告 `Write<T>` 的 System 裡經存下的參考寫 | 對存取集合合法；繞過句柄，change tick 會漏記 | 審查；change tick 進規格後再評估 |
+| L4 | component／resource／事件 payload 內的堆積成員被改 | World 只比 handle 位元組 | 審查 |
+| L5 | 全域變數、World 以外的狀態 | 不在 World 裡 | 審查（mechanism §3.5 三層）；-audit 第二問之二 |
+| L6 | host 在同一視窗內經 World API 碰過同一欄後的繞路寫入（R-02） | `MarkWritten` 使整欄成為新基準 | 頁保護 spike 可能解除；待該批宣告 |
+| L7 | 其他執行緒的存取（R-03） | 「目前 System」是 thread_local，其他執行緒一律當 host | spike 無並行；Scheduler 批再評估 |
+| L8 | 欄重新配置後的懸空參考 | 未定義行為 | ASan，不是 World 的事 |
+
+使用者同時決定（上限的處置）：**接受**，World 以外的資料靠 code review（mechanism §3.5 的三層：API 讓繞路很醜、debug 核對、審查）；不改計畫前提。`-audit` 的第二問改成兩個可檢查的問題：**有沒有跨 tick 的指標或參考；有沒有全域可變狀態**。
+
 ## 停止與需要的決定（AGENTS §14）
 
-- **停止理由**：判定 2 部分不成立。事前宣告「任一不成立＝結論做不到，照 §14 停下回報，不補救」。本批到此為止，沒有為了判定 2 加任何手段。
+- **停止理由**（原文保留；使用者 2026-11-11 已決定 R-01，判定 2 改記成立，見上節）：判定 2 部分不成立。事前宣告「任一不成立＝結論做不到，照 §14 停下回報，不補救」。本批到此為止，沒有為了判定 2 加任何手段。
 - **用的時間**：約 25 分鐘（估 4 小時）。
 - **知道了什麼**：簽名推存取集合在本機做得到，且 17 種簽名、七類參數、編譯期與執行期兩層都和手寫期望相同。debug 核對對「System 自己的執行緒經 World 的存取」是精確的（存取當下攔；其他執行緒的存取當成 host）；對「不經 World 的寫入」只能在 System 邊界看淨變化；對「不經 World 的讀取」完全看不到。
 - **下一次試行會改變的判斷**：如果再做頁保護（見〈判定 2 的上限〉末段），「寫了再寫回」與「經存下的參考讀」也能在 debug 攔到，`-audit` 對「持有跨 tick 指標的模組」的判斷會從「只能審查」變成「debug 可攔」；全域狀態的判斷不變。
@@ -174,7 +191,7 @@ python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py \
 
 | 條 | 處置 |
 |---|---|
-| R-01 | 待使用者（判定 1、2 的結論措辭不改） |
+| R-01 | 使用者 2026-11-11 決定（側邊會話轉述）：採讀法 (i)。判定 2 照原文記「成立」；實作者多發現的攔不到形狀全部記為「範囲の限界」（見專節），後續批次（-audit 等）的事前宣告必須寫上，直到解除。 |
 | R-02（should） | 上限表加「host 在同一視窗內經 World API 碰過同一欄後，繞路寫入被 `MarkWritten` 當成新基準」；`Limit:` 測試「a bypass write is taken as the new baseline once host code touched the storage」固定現況 |
 | R-03（should） | 上限表「另一個執行緒」列改寫（`thread_local`，其他執行緒的存取當成 host，未宣告的讀看不到）；`Limit:` 測試「a World read from another thread during a System run is checked as host access」；報告裡「(c) 在存取當下」都加「僅限 System 自己的執行緒」（結論表的格子不改，以表下的註補）。CMakeLists 加 `Threads::Threads` |
 | R-04（nit） | 堆積成員一列改成通則：component、resource、事件 payload 都只比 handle 位元組 |
