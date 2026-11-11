@@ -57,6 +57,8 @@
 
 - 2026-11-11 `-spec` 完成：ultracode（提案 Opus×3／high、統合 Fable／high、對抗 Opus／xhigh、修訂 Fable）產出 `spec.zh-Hant.md` 1319 行；對抗檢查 34 條（7 blocker）全部處置，B6（時間來源的契約衝突）待使用者；架構師逐節讀過，判讀見會話回報。K.3 列 17 項待使用者決定（第 16 項已由 R-01 決定）。PR 待開。
 
+- 2026-11-11 `-audit` 事前宣告寫成（audit-declaration.zh-Hant.md）；使用者：「寫好事前宣告後先等等，我有需要確認的事項」→ 未啟動；PR #179 也暫不合併，等使用者。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
