@@ -24,7 +24,7 @@ A third case the two columns do not cover: the program is wrong, but the violati
 |---|---|
 | Mechanism | The Kernel API returns `Result<void, KernelError>` carrying the full context (System name, Plan position, command kind, EntityId, ComponentId, violated rule id). Every System returns `Result<void, KernelError>` and wraps the error with its own context (the Go `%w` chain); it neither logs nor swallows. The Executor is the outermost layer and handles once: logs the whole chain once (the log switch is in the Executor's handler; `Base::Result` stays a pure value), marks the World `Interrupted`, ends the run |
 | In every build | The same in release: nothing is silent. In debug the assertion handler is additionally called where the error is recorded |
-| Final disposition | Still a Programmer Error: the fix is in the code. `Result` is the carrier of the diagnostic chain here, not a sign that the caller can recover |
+| Final disposition | Still a Programmer Error: the fix is in the code. `Result<void, KernelError>` is the System's **return contract, not an error channel**: every System returns it on every run, Ok is the normal path, Err carries the diagnostic chain and does not mean the caller can recover |
 | Tested with | Target guards, not yet implemented: release-target tests observe the `Err` and the `Interrupted` state (kernel spec J-32b, J-45); debug tests use `GYO_CHECK_ASSERTS` |
 
 Full text: `docs/architecture/target/error-handling.md`. The user's principle: no silent handling. The kernel's access verification (spec A.6) is not an assertion: its findings take this Result path, it has a runtime switch, and `GYO_ASSERT` stays as above for cheap preconditions (`v8-arch-kernel-verification-not-assert`, 2026-11-12).
