@@ -48,6 +48,9 @@
 | `v8-arch-kernel-determinism-recheck` | 2026-11-11（側邊會話轉述）。決定性分級契約在新架構下成立，不另開核對卡；四處小改照第一個文件批。-audit 產出加一節：逐模組 zone 判定回對 determinism.md §4 的區表，列漏的模組與標錯的區，交使用者，不改契約。 |
 | `v8-arch-framework-retire` | 2026-11-11（側邊會話轉述，audit §3.1）。framework 退役，不改 DI 2／6：組合與第三方對接由 plugin 承擔；Editor host 骨架＝提供 runner 的 plugin（finish 安裝，一 Runtime 一個，R-E6）；標準 Editor stage＝plugin 在 build 插入；新 top-level `plugins/`（§10 Delta 已同意；Engine 永不 include、產品工具只在 main 列）；三層改為 Engine／plugins／產品與工具；framework DI 整節廢止、docs/framework/ 標廢止；spec L.2、H.4.3、target/runtime-composition 改寫。使用者原則：思想不變，修改就是在破船上打補丁。架構師保留：選擇窗記帳與關窗提示必須進共用 plugin。 |
 | `v8-arch-kernel-verification-not-assert` | 2026-11-12（側邊會話轉述，spec-v03 停止報告 B-9 結案）。GYO_ASSERT 不動（常開、abort；Kernel 的便宜前置條件照用）。A.6 兩層存取核對與句柄 epoch 比對**不叫斷言，叫「驗證」（可關）**，成本與 World 大小成正比；驗證抓到的違規走第 17 項的 Result 路徑（記進目前 System 的描述、跳板回 Err 帶 System 名／Plan 位置／id／模式／規則代號、Executor 記一次、World Interrupted；debug 另在記錯當下呼叫 assertion handler）。機制只剩兩種：GYO_ASSERT 與 Result。用詞：`Result<void, KernelError>` 是 System 的回傳契約（Ok 正常、Err 帶上下文的 Programmer Error）；驗證關掉時仍回 Ok；便宜那類（untyped Commands、Z5、S-13）永遠查。開關：架構師建議執行期（同一二進位可開著跑場次）；開關狀態啟動時寫日誌並放成 Resource，「無違規」報告必附「驗證開著」；release 預設關、測試版預設開，皆明寫設定；關閉時此類不被偵測列入 LIM-3。使用者：「嗯，就是這個」。第 17 項理由改為「相對 GYO_ASSERT 的 abort，給出上下文鏈與 Interrupted」。 |
+| `v8-arch-determinism-table-fix` | 2026-11-11（側邊會話轉述）。區表三漏一錯採 (a)；條目照歸屬命名；PlayerAnimation 推進先由決定性線核對。（原記在現況區，依對抗檢查 S-10 補進決定表） |
+| `v8-arch-loading-schedule` | 2026-11-11（側邊會話轉述）。Loading schedule 契約七點（見現況區 2026-11-11 條目）。 |
+| `v8-arch-naming` | 2026-11-11（側邊會話轉述）。命名規範五條（target/naming）。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定
@@ -101,9 +104,12 @@
 
 - 2026-11-11 **-spec-v03 停止（AGENTS §14：原因改變前提）**。對抗檢查 Opus／high 回 9 blocker、11 should、5 nit；判定 1 不成立、2 有條件、3 不成立、4 成立。停止理由 B-9：規格 §讀法把「debug 斷言」定義為「`GYO_ASSERT`，只在 debug 有效、release 不攔」，但 `Assert.hpp:21` 與 error-handling.md 第 15 行寫明 GYO_ASSERT **在每個建置組態都評估**，架構師已核實。影響：K.3 第 17 項「不採常開檢查巨集、改 Result」的對比對象（常開巨集）其實就是現有 GYO_ASSERT；規格裡所有「debug 斷言…release 不攔」條文（W-4、W-5、W-6、F.2 第 4 步等）的機制名錯；本批已把第 17 項寫進現況 error-handling.md，與同檔「每個建置都跑 handler」並存。其餘 blocker（B-1 §0 Host 定義未改、B-2 H.4.1 (a) 漏改、B-3 H-7 呼叫點例子把 FixedTickRuntime::Advance 當違規、B-4 target 兩份未跟 Diagnostics 例外、B-5 (c) 診斷仍無合法路徑、B-6 ApplyMembership 掛兩個 schedule＝兩個寫者、B-7 entity-store DI 4 內部矛盾、B-8 F.1 untyped Commands 仍寫呼叫 assertion handler）可由架構師修，但依 §14 停下不 commit 修正，先報使用者。分支 claude/arch-kernel-spec-v03 保留現狀，未開 PR。→ 2026-11-12 B-9 由使用者結案（`v8-arch-kernel-verification-not-assert`），解除停止，繼續修 B-1～B-8 與 should。
 
+- 2026-11-12 對抗檢查 S-8 的解讀（架構師）：`v8-arch-framework-retire` 廢止的是 framework **自己的**結構 DI（docs/framework/architecture.md）；event-sounds、preview 的資料契約 DI 不廢止，owner 隨 plugin 搬（audit §10.1）。文件標示照此改。framework DI「整節廢止」與 target README「未遷移照現況 DI」的關係：廢止＝不再新增或修改、隨遷移批刪；遷移前現有程式仍照它。
+- 2026-11-12 v0.3 對抗檢查 9 blocker／11 should／5 nit 全部處置（spec 修訂記錄「v0.3 對抗檢查後」）；第二輪只讀複核待派。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
-- 改造的第一個文件批（待規劃）：K.3 第 7 項的三處 Delta 文件修改；entity-model §5.2（Join／Leave 在 tick 內，K.3 第 10 項）；error-handling.md 加一列（K.3 第 17 項）；mechanism §3.3「Time 只來自 tick」依 K.3 第 11 項裁決修訂。
+- ~~改造的第一個文件批~~ 已於 -spec-v03 做完（architecture.md、entity-store、determinism §4.7／4.7a／4.7b／4.2a、entity-model §5.2、error-handling、framework 廢止標示、mechanism §3.3）。
 - ~~-audit~~ 完成，六項待決已定 → 規格修訂（audit §6 七項）與第一個文件批合併規劃 → `-spike-pageguard`（事前宣告待寫）→ 改造批次計畫（§3 Delta 計畫層寫一次；以 audit 的成本形狀分批）。
 - 判定 1 的三平台：**成立**（L1 run 43018979148，PR #180；步驟第一次誤加在 build-and-validate.yml、已改到 cross-platform.yml）。PR #180 含 `spikes/` 以外的 `.github/workflows/cross-platform.yml` 改動，合併由使用者決定。

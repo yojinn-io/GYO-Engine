@@ -40,7 +40,7 @@ where it keeps columns.
 | `EntityId` | The key type, `std::uint64_t`. No value is reserved (a consumer may give 0 a meaning; the store does not), no generation bits, no range | implemented (3a) |
 | Key access `EntityKey<T>`, `EntityOf` | `EntityOf(value)` returns `EntityKey<T>::Of(value)`. The primary `EntityKey<T>` reads the member `id`. An element's owner whose key lives elsewhere specializes `EntityKey` (a partial specialization constrained by a concept is allowed); a specialization always wins over the primary, also for a type that has an `id` member too. The specialization must be visible wherever the column is used. No specialization and no member `id`: the column does not compile | implemented (3a) |
 | Column functions | `InsertEntity`, `EraseEntity` over a caller-owned `std::vector<T>`; `FindEntity` over a `std::vector<T>` (const or mutable) or a `std::span<const T>`; `StrictlyAscending` over a `std::span<const T>` | implemented (3a) |
-| `DeferredChanges<Spawn>` | The to-do of one sync point: `RecordSpawn(spawn)`, `RecordDestroy(id)`, `Apply(onSpawn, onDestroy)`, `Empty()`. `Spawn` is the consumer's record; its key is read through `EntityOf` | proposed; lands with its first consumer (Delta, open decision on timing) |
+| `DeferredChanges<Spawn>` | **Withdrawn 2026-11-11** (`v8-arch-kernel-delta-approved`): replaced by the World's deferred queue (kernel spec section F); the row is kept for the history of rows 1 and 4. Original: The to-do of one sync point: `RecordSpawn(spawn)`, `RecordDestroy(id)`, `Apply(onSpawn, onDestroy)`, `Empty()`. `Spawn` is the consumer's record; its key is read through `EntityOf` | proposed; lands with its first consumer (Delta, open decision on timing) |
 
 Names are proposals; the column functions keep the names their first consumer already uses (Delta §2). Batch 3 may
 rename them; the semantics below may not change without a new Delta.
@@ -141,21 +141,22 @@ frozen phases); the Delta lists them and the mutants that move here.
 3. **Lookup is binary search on the column itself.** No sparse array, index, hash or other side table. Reason: a side
    table is a second copy of membership that can disagree with the column, and without id recycling a sparse array
    grows over dead ids. Evidence: survey §2.1 `SparseSet` row, §2.2 sparse-set row; consumer: E-5.
-4. **Structural changes are deferred and applied in id order at the caller's sync point.** *(Amended 2026-11-11, `v8-arch-kernel-delta-approved`, spec K.3 item 7: this invariant extends to component insert and remove, not only spawn and destroy, and the sync-point application order is the one fixed in `plans/kernel/spec.zh-Hant.md` §F.2: hook queue, despawn, remove, spawn, insert, OnAdd, resource, each phase ascending by id, ties by (planPos, recSeq). The proposed `DeferredChanges<Spawn>` (3b, never implemented) is withdrawn; the World's deferred queue takes its place. DI 5 "the store runs nothing" still holds for the store itself; the World is a new component built on the store's columns.)* `DeferredChanges` records
-   spawns with ids the caller already allotted and destroys; `Apply`, called by the caller, applies all spawns in
-   ascending id, then all destroys in ascending id, and empties the lists. The store never decides when a sync point
-   is, never allots at record time, and stores no closures. Reason: changing membership invalidates references into
+4. **Structural changes are deferred and applied in id order at the caller's sync point.** *(Amended 2026-11-11, `v8-arch-kernel-delta-approved`, spec K.3 item 7: this invariant extends to component insert and remove, not only spawn and destroy, and the sync-point application order is the one fixed in `plans/kernel/spec.zh-Hant.md` §F.2: hook queue, despawn, remove, spawn, insert, OnAdd, resource, each phase ascending by id; inserts to the same (entity, component) tie by (planPos, recSeq). The proposed `DeferredChanges<Spawn>` (3b, never implemented) is withdrawn; the World's deferred queue takes its place. DI 5 "the store runs nothing" still holds for the store itself; the World is a new component built on the store's columns.)* Membership changes are recorded while rules run and applied by the owner of the columns at its sync point in
+   the order the kernel spec fixes (section F.2: despawn, remove, spawn, insert, each ascending by id). The store
+   itself provides only the ordered insert and the order-preserving erase; the queue lives in the World (the
+   proposed `DeferredChanges<Spawn>`, which applied spawns before destroys, is withdrawn). The store never decides
+   when a sync point is, never allots at record time, and stores no closures. Reason: changing membership invalidates references into
    a column, and applying changes in recording order would make the result depend on the order rules ran. Evidence:
    survey §3b, §2.1 `Commands` row, §4.2 Commands row (the purpose of Bevy's Commands adapted, not ported);
    consumer: E-12.
 5. **The store runs nothing.** No system, scheduler, world, resource, context variable, event, observer or hook, no
-   app or plugin; the only code it calls is the two callbacks passed to `Apply`. Reason: the store is a data
+   app or plugin; it calls no user code (the withdrawn `DeferredChanges::Apply` callbacks are gone). Reason: the store is a data
    structure; who runs what and when belongs to its consumer, and the Engine has no umbrella framework
-   (`docs/architecture.md:129` as amended by this Delta: umbrella framework, plugin ABI and service locator stay
-   forbidden; only "ECS" is narrowed to this store). Evidence: survey §2.1 scheduler, `Resource`/`World`,
+   (`docs/architecture.md`, as amended 2026-11-11 by `v8-arch-kernel-delta-approved`: the Kernel enters the Engine;
+   plugin ABI, dynamic loading and service locator stay forbidden; the store's columns become the World's storage). Evidence: survey §2.1 scheduler, `Resource`/`World`,
    `App`/`Plugin`, `Events`, `Observers` rows; §2.2 registry, context and signal rows.
-6. **State authority** (AGENTS.md §3). The columns belong to the caller, and so does every `DeferredChanges`
-   instance. The store's only state is what a `DeferredChanges` holds: its two pending lists and whether `Apply` is
+6. **State authority** (AGENTS.md §3). The columns belong to the caller. The store holds no state of its own (the withdrawn `DeferredChanges` would
+   have held two pending lists and an `Apply` flag; that state now belongs to the World's deferred queue; the sentence that follows describes the withdrawn design:
    running. It caches nothing to decide on: no index, count, change tick, last-sent record, per-recipient state or
    interest set. Reason: anything cached to decide on is a copy of the consumer's state that can go stale. Evidence:
    survey §3c (change ticks not adopted in the first version, its reasons a to c), §2.1 change-detection row;

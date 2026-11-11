@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-Updated 2026-11-11. Owner: architecture (architect session). Source: `docs/architecture/plans/kernel/spec.zh-Hant.md` §讀法 ("Result 回報"), §E.5, K.3 item 17. Extends the current contract `docs/architecture/error-handling.md`; English because that file is English. The user approved this extension as an Architecture Delta on 2026-11-11; the edit to the current contract is scheduled for the first documentation batch of the migration.
+Updated 2026-11-11. Owner: architecture (architect session). Source: `docs/architecture/plans/kernel/spec.zh-Hant.md` §讀法 ("Result 回報"), §E.5, K.3 item 17. Extends the current contract `docs/architecture/error-handling.md`; English because that file is English. The user approved this extension as an Architecture Delta on 2026-11-11; the current contract was amended in `v8-arch-kernel-spec-v03` (`docs/architecture/error-handling.md`, section "Programmer Error detected from runtime data"). 2026-11-12 (`v8-arch-kernel-verification-not-assert`): access verification (spec A.6) is not an assertion; its findings take this same Result path; `GYO_ASSERT` stays always-on for cheap preconditions; the only mechanisms are these two.
 
 ## The added row
 

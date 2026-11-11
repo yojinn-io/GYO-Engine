@@ -7,7 +7,7 @@ This page records only what the user has decided; spec items still marked "待�
 
 ## 1. Zones are declared contracts, checked at startup
 
-Every System, component, resource and event declares `zone ∈ {C, B}`; there is no default (spec S-6). The Kernel does not decide zones, it checks the declarations against each other (rules Z1 to Z8, spec §G.1): a zone=C System's whole access set (reads, writes, membership filters, events, deferred writes, run conditions, set reads) lies in zone=C data; zone=C data is written only by zone=C Systems or hooks, with the single exception of ingress Systems writing `role = Input` data in the ingress stage; zone=C Systems have no effects, no `Local`, no change filters, no `ExclusiveWorld`; `role = Input` data is `rollback = No`. A violation is a startup error, not a runtime check.
+Every System, component, resource and event declares `zone ∈ {C, B}`; there is no default (spec S-6). The Kernel does not decide zones, it checks the declarations against each other (rules Z1 to Z8, spec §G.1): a zone=C System's whole access set (reads, writes, membership filters, events, deferred writes, run conditions, set reads) lies in zone=C data; zone=C data is written only by zone=C Systems or hooks, with the single exception of ingress Systems writing `role = Input` data in the ingress stage; zone=C Systems have no effects except the write-only `Diagnostics` sink (`DiagnosticsWriter<T>`, spec S-8 v0.3: one-way (c) to (b), not World data, no conflict edges), no `Local`, no change filters, no `ExclusiveWorld`; `role = Input` data is `rollback = No`. A violation is a startup error, not a runtime check.
 
 ## 2. Where (c) code may take time from (user decision 2026-11-11, spec K.3 item 11)
 

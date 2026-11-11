@@ -90,6 +90,10 @@ Rules every inside path obeys, with where each is stated and guarded today:
 - Guard: same-platform goldens; `Animation Slerp equals Math Slerp bit for bit` (characterization against a frozen legacy copy that itself calls `std::acos`/`std::sin`, `MathCharacterizationTests.cpp:131-133`, `:1018`).
 - The architecture checkup of 2026-11-04 noted that `engine/model` states no determinism promise at all. This document is that statement: **pose sampling is (b) until E1**.
 
+### 4.2a Animation advance (candidate, pending the determinism line; `v8-arch-determinism-table-fix`)
+
+The audit's zone cross-check (audit section 4.5) flags that the **animation advance that enters the digest's `animations` segment** (today `PlayerAnimation`; under the mechanism an `AnimationState` column written by an `AdvanceAnimation` System) is (c) by rule 1, while section 4.2 lists `GYO::Model` sampling as the middle zone. The two differ: sampling (poses for hit geometry) is the middle zone; the advance of the animation state encoded into the digest is inside. The determinism line verifies this against the digest encoding (`AuthorityDigest.cpp`) before the table changes; until then this entry is a candidate.
+
 ### 4.3 Movement (product, predicted core)
 
 - `StepMovement` is one function used by Match and Client. Per step: `WrapRadians` (exact), `sin`/`cos` of yaw once (`PlanarMovement.cpp:17-18`), `Normalize` (sqrt, exact), Collision sweeps (double, one rounding), `sqrt` for the jump.
@@ -116,7 +120,7 @@ Rules every inside path obeys, with where each is stated and guarded today:
 
 - Pays: strictly ascending columns, order-preserving erase, id-ordered deferred changes (DI 2, 4, 8). This is level (a) ("results do not depend on history or containers") and has no floating point; it is inside because every digest column is encoded in that order (E-9).
 - Guard: `es-row2-*` mutants, G1. Nothing missing.
-- 2026-11-11 (formalised by `v8-arch-kernel-spec-v03`, user decision K.3 item 7): under the mechanism design (`plans/kernel/mechanism.zh-Hant.md`, spec §A), EntityStore's columns become the World's storage. What it pays becomes the four World contracts of mechanism §3.3 (iteration by index; references invalid after a sync point; structural changes only through the deferred queue during iteration; queue applied in order). The guards move with it; this section is then about World.
+- 2026-11-11 (decision `v8-arch-kernel-delta-approved`, spec K.3 item 7; written by `v8-arch-kernel-spec-v03`): under the mechanism design (`plans/kernel/mechanism.zh-Hant.md`, spec §A), EntityStore's columns become the World's storage. What it pays becomes the four World contracts of mechanism §3.3 (iteration by index; references invalid after a sync point; structural changes only through the deferred queue during iteration; queue applied in order). The guards move with it; this section is then about World.
 
 ### 4.7a Content identity and contract-data parsing paths (inside; added 2026-11-11, `v8-arch-determinism-table-fix`)
 
@@ -126,12 +130,9 @@ Two (c) paths the table missed, named by what they are rather than by the librar
 
 ### 4.7b Fixed-step accumulator and the host clock sample (added 2026-11-11, `v8-arch-determinism-table-fix`)
 
-- **Fixed-step accumulator** (today `FixedTickRuntime`'s double accumulator; under the mechanism the runner plugin's accumulator, spec G-6): decides how many FixedUpdate runs happen this wake-up. It is (b): the count is host timing, not simulation state; the domain tick itself is advanced by the clock schedule (spec B5). Today's double accumulator and `deltaSeconds` are described in spec G-6; the product's step length becomes an integer `FixedStep{stepNs}`.
-- **Host clock sample** (today `engine/time` read through `now_()` callbacks; under the mechanism the `HostClockSample` boundary resource, spec G.2): time is an input to the host-judgement zone, sampled once per wake-up and recorded, never read inside (c) (spec K.3 item 11; `target/determinism.md` section 2). Pays: the sample is replayable. Guard: spec J-39, J-17.
+- **Fixed-step accumulator** (today `FixedTickRuntime`'s double accumulator; under the mechanism the runner plugin's accumulator, spec G-6; the "B5" below is the spec's revision tag B5, not a section): decides how many FixedUpdate runs happen this wake-up. It is (b): the count is host timing, not simulation state; the domain tick itself is advanced by the clock schedule (spec B5). Today's double accumulator and `deltaSeconds` are described in spec G-6; the product's step length becomes an integer `FixedStep{stepNs}`.
+- **Host clock sample** (today `engine/time` read through `now_()` callbacks; under the mechanism the `HostClockSample` boundary resource, spec G.2): time is an input to the host-judgement zone, sampled once per wake-up and recorded, never read inside (c) (spec K.3 item 11; `target/determinism.md` section 2). Pays: the sample is replayable. Guard today: the digest runner's scripted clock (section 2); target guards (not yet implemented): spec J-39, J-17.
 
-### 4.2a Animation advance (candidate, pending the determinism line; `v8-arch-determinism-table-fix`)
-
-The audit's zone cross-check (audit section 4.5) flags that the **animation advance that enters the digest's `animations` segment** (today `PlayerAnimation`; under the mechanism an `AnimationState` column written by an `AdvanceAnimation` System) is (c) by rule 1, while section 4.2 lists `GYO::Model` sampling as the middle zone. The two differ: sampling (poses for hit geometry) is the middle zone; the advance of the animation state encoded into the digest is inside. The determinism line verifies this against the digest encoding (`AuthorityDigest.cpp`) before the table changes; until then this entry is a candidate.
 
 ### 4.8 Math (`GYO::Math`, inside wherever called)
 
