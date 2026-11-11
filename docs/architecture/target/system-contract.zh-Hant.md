@@ -16,13 +16,14 @@
 - **System 的簽名回 `Result<void, KernelError>`**，不是 `void`；`static_assert` 擋其他回傳型別（spec S-2、J-10）。**這是回傳契約，不是錯誤通道**（使用者 2026-11-12 強調）：Ok 是正常路徑，每個 System 每次執行都回傳它；Err 是帶上下文的 Programmer Error。使用者接受每個 System 多一行回傳的代價。
 - 以**執行期資料**才能偵測的 Programmer Error——untyped `Commands`、`Despawn`、`ExclusiveWorld` 的寫入違反區規則（Z5）或獨占（F-10、S-13），以及**存取驗證**（可關；A.6 兩層與句柄 epoch）抓到的違規——Kernel 的 API 回 `Err(KernelError)`，錯誤帶完整上下文：System 名、Plan 位置、命令種類、EntityId、ComponentId、違反的規則代號。
 - System 收到錯誤後**包一層自己的上下文回傳**（Go 的 `%w` 鏈），不自己記錄、不吞掉。
-- **Executor 是最外層，只處理一次**：記錄完整鏈路一次（日誌開關在 Executor 的 handler，`Base::Result` 仍是純值）、World 標 `Interrupted`、本次 `Run` 結束。release 也如此，**不靜默**。debug 建置另在記錯當下呼叫 assertion handler（現場停）。
+- **Executor 是最外層，只處理一次**：記錄完整鏈路一次（日誌開關在 Executor 的 handler，`Base::Result` 仍是純值）、World 標 `Interrupted`、本次 `Run` 結束。release 也如此，**不靜默**。記錯當下不呼叫 AssertionHandler；現場停由 `breakOnKernelError` 掛鉤提供（§2b）。
 - 這是 error-handling 契約的擴充（見 `error-handling.md`）：最終處置仍是 Programmer Error；Err 攜帶診斷鏈，不表示可恢復。Result 本身是回傳契約，不是為錯誤另開的通道。原稿的「常開檢查巨集」不採。
 
 ### 2b. 兩種機制，不多（使用者 2026-11-12 決定，`v8-arch-kernel-verification-not-assert`）
 
 - **GYO_ASSERT**：便宜的前置條件與內部不變量，在每個建置組態都評估、失敗即 abort（現有契約，不動）。
 - **Result**：執行期資料才看得出的 Programmer Error，含存取驗證抓到的。`Result<void, KernelError>` 是 System 的**回傳契約**，不是錯誤通道：Ok 是正常路徑，Err 是帶上下文的 Programmer Error。
+- **一個事件只有一種性質**（使用者 2026-11-12 決定，`v8-arch-kernel-break-hook`，借鑑 Go）：一個錯誤要嘛是 GYO_ASSERT（前置條件、常開、終結），要嘛是以 Err 回傳的 Programmer Error；Err 的產生與回傳路上**不呼叫 AssertionHandler、不呼叫任何終結出口**。現場停改為啟動參數 **`breakOnKernelError`**：在 `KernelError` 建構處（記錯當下）放一個**會返回**的 break 掛鉤（預設 debugger trap，無 debugger 時無作用），返回後照常走 Err；它不是 AssertionHandler、不沿用其契約；與建置組態無關，release 二進位也帶。`breakOnKernelError` 放在 `KernelSettings`，與驗證開關獨立（驗證關而 break 開時只對便宜那類生效），吃同樣的四條件，啟動日誌多一欄。參考出處（Go）：error 值回傳＋最外層處理一次＋結束工作單元而非行程（`net/http` 的 handler、Go blog「Error handling and Go」）；panic 對應 GYO_ASSERT；Go 刻意沒有 assert、沒有 debug／release 二分（Go FAQ「Why does Go not have assertions?」）；`runtime.Breakpoint()` 包在旗標後的慣例＝本掛鉤；`GODEBUG` 執行期偵測開關的形狀＝驗證開關的四條件。不照搬的兩點：GYO_ASSERT 不可 recover（C++ 沒有 Go 的 panic 邊界保證）；GYO 的「API 誤用／執行期資料」分界比 Go 標準庫的 panic 更細，保留。
 - **驗證不叫斷言**：A.6 兩層存取核對與句柄 epoch 比對的成本與 World 大小成正比，不能用 GYO_ASSERT 實作；有**執行期開關，由啟動參數決定**（程式碼永遠在；Host／runner 把啟動參數寫進 Kernel 的設定 Resource；關閉時每次存取只多一個分支；同一二進位可開著跑場次測試），開關狀態啟動時寫日誌並放成 Resource，「無違規」報告必附「驗證開著」；release 預設關、測試版預設開，皆明寫設定；關閉時只是不去查、System 仍回 Ok；關閉時這一類不被偵測（limits LIM-3）。便宜那類（untyped `Commands`、Z5、S-13）永遠查。
 
 
