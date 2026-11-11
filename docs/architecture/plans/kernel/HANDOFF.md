@@ -24,6 +24,7 @@
 | `v8-arch-kernel-entity-key` | 2026-11-11（側邊會話轉述，spec K.3 第 1 項）。EntityId 格式＝u64，低 32 index、高 32 generation（Bevy 格式）；Kernel 不看兩段意義，疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0（值與今天逐位元相同，wire／digest 不改）；stale 句柄偵測能力取決於策略。spec A.1、A.8、K.1 第 3／4 條已改，K.2 第 2 條取消；部件文件 `docs/architecture/target/world.zh-Hant.md`。 |
 | `v8-arch-kernel-change-stamp` | 2026-11-11（同上，K.3 第 2 項）。接受規格：依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 tickStamps 換算；(c) 區禁變更過濾；blueprint DI-K5 與 networking §1 第 7 條各改一句。 |
 | `v8-arch-docs-next-folder` | 2026-11-11（同上）。新版架構文件與舊版分開、至少分資料夾、不混放：現況留 `docs/architecture/`，目標架構放 `docs/architecture/target/`（圖書管理員 2026-11-11 定：平鋪、檔名＝搬回後的檔名、英文 Status 行）；每份標「目標架構，尚未實作」或「已實作於哪批」；部件遷移完成後搬回、舊的刪或標廢止，不並存；計畫／HANDOFF／dev_log 留 plans/kernel。 |
+| `v8-arch-kernel-exclusive-default` | 2026-11-11（側邊會話轉述，spec K.3 第 3 項）。欄與 Resource 預設獨占，登記標 Shared 允許多寫者；進 digest 禁 Shared。獨占＝啟動時數寫者、執行期零成本、非鎖；獨占欄的標準進料＝事件漏斗（唯一消費者定合併規則）；(c) 區多個 EventWriter 仍要顯式順序；整欄替換只用於 Client 收權威狀態。不採資料庫式執行期仲裁（慢 20～100 倍、買不到決定性）。spec B.3.1 新增含三類資料的表。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定

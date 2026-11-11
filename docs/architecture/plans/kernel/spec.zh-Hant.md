@@ -190,7 +190,7 @@ ownerPlugin
 
 1. **Entity 鍵：格式封裝 index＋generation，策略由產品定**（使用者 2026-11-11 決定，取代原稿「不帶 generation」）。原稿採提案 1（u64、不重用、無 generation）；提案 2、3 與任務敘述採 index＋generation、World 配發、產品 `EntityId` 另成元件。裁決：鍵格式是 Kernel 的（u64，低 32 index、高 32 generation，數值升冪疊代），配發策略是產品的 Resource；PvP 選單調不重用、generation 恆 0，數值與今天逐位元相同。Engine 保通用、PvP 保決定性。下列原稿理由仍是 PvP 選這個策略的理由：理由：(1) 提案 2、3 的模型讓疊代順序依配發歷史而定，Match 與 Client 的 World 歷史不同，於是「結果依跨實體順序而定的 (c) System 必須依契約鍵排序」（提案 2 A.3 第 4 點）變成每個 System 的負擔，而 mechanism §4 第 3 點要 Match 與 Client 共用同一份 FixedUpdate System；提案 1 的模型下順序天生是契約鍵的順序。(2) 提案 2、3 要同時改 entity-store DI 1、entity-model E-3、E-5、E-6、E-9（digest 編碼要先依 `EntityId` 元件排序），是四處 Architecture Delta；提案 1 只延伸 DI 4（F.2）。(3) generation 的用途是偵測 stale 句柄；E-3 的「不重用」讓它沒有用途，W-9 守住不重用。代價：PvP 的 id 不回收（格式已容得下回收，所以不再是 Replacement Criteria；K.2 第 2 條取消）。F.2 的「階段＋id」套用順序在 PvP 策略下成立；選槽回收策略的產品，跨 World 的順序承諾（A.3 第 4 點）不再自動成立，由該產品自行排序。
 2. **change stamp 依 Plan 位置取值，不等於遊戲 tick**（採提案 1、2；提案 3 以 World 的 clockTick 當 change tick；DI-K5 與 networking §1 第 7 條也寫「以遊戲 tick 標記」）。理由：只用 tick 時，同一 tick 內排在讀者之後的寫入會被讀者永久漏掉（讀者下次執行 last_run = T，寫入的 tick 也是 T，`T > T` 不成立）；用 `>=` 則重複讀到。Bevy 用執行計數不是任性（bevy_core:50）。遊戲 tick 的視角由 `tickStamps` 推出。配套：(c) 區禁止變更過濾（G-6）。**要使用者確認**，因為它修改 DI-K5 候選的一句。
-3. **寫入政策預設 Exclusive，Shared 要明寫**（採提案 3；提案 1 無預設必須明寫；提案 2 預設 Shared）。理由：mechanism §3.1「進 authority digest 的欄預設獨占」的意圖是 AGENTS §3 的狀態權威；Kernel 不知道 digest，所以把預設放在全部元件上才能變成啟動檢查，又不要 Kernel 認識 digest。另加提案 1 的 S-9：產品 plugin 宣告「這些元件進 digest」，其中有 Shared 就是啟動錯誤。**要使用者確認**（提案 2 列為待決）。
+3. **寫入政策預設 Exclusive，Shared 要明寫**（**已決定，使用者 2026-11-11**；採提案 3；提案 1 無預設必須明寫；提案 2 預設 Shared）。理由：mechanism §3.1「進 authority digest 的欄預設獨占」的意圖是 AGENTS §3 的狀態權威；Kernel 不知道 digest，所以把預設放在全部元件上才能變成啟動檢查，又不要 Kernel 認識 digest。另加提案 1 的 S-9：產品 plugin 宣告「這些元件進 digest」，其中有 Shared 就是啟動錯誤。**要使用者確認**（提案 2 列為待決）。
 4. **一個 World 一條擁有執行緒**（採提案 3 的 W-6；提案 1 把「Client 的 FixedUpdate 與 FrameUpdate 是一個 World 還是兩個」留給 -audit）。理由：不這樣就得在 World 外上鎖，等於回到今天 `MatchRuntimeHost::Step` 整段持 `mutex_`（`MatchRuntimeHost.cpp:371`）；兩個時鐘在不同執行緒就是兩個 World（H-2）。
 5. 欄的 `zone`、`role`、`rollback` 三個屬性（提案 2 的 zone／role、提案 3 的 rollback）合併進 ColumnInfo；提案 1 的 `domainHint` 由 `zone` 加 Z 規則取代。
 
@@ -241,6 +241,18 @@ SystemDescriptor（不可變，finish 時產生）
 - **Despawn 不算寫者**：它是成員關係結束，不是值的寫入。對 (c) 資料的限制由區規則 Z5 處理。
 - 第二個寫者＝啟動錯誤 D-E2，訊息列出所有寫者的 name 與 `source`。這是 AGENTS §3「狀態的權威只有一個」的機制版。
 - **寫者以 System 計的後果**（修訂：S1）：今天 `bodies_`（`PlayerState`）由三段寫（`ResolveLifeBoundaries` 寫 position 與 lifeState，`PvpMatch.cpp:310-331`；移動迴圈 `StepMovement`，`:571`、`:582`；`Kill` 寫 lifeState 與 respawnTick，`:301-304`）。照 H.4.1 拆成三個 System 就是三個寫者，D-E2 必發。本稿**預期**這條檢查迫使 Body 依 entity-model 第 139 行已做的欄位分類拆欄（身體、生命、輸入游標、host 診斷四組），不是把三段併成一個 System，也不是把 Body 改 Shared（S-12 不准）。這是機制要施加的壓力，不是規格自相矛盾；K.2 第 10 條的計數從遷移後開始算，遷移本身的拆欄不算。替代方案「寫者以 owner plugin 計」能免掉拆欄，但 Scheduler 檢查的粒度就變成 plugin 的程式碼組織而不是資料流，所以本稿不採；**要使用者確認**（K.3）。
+
+#### B.3.1 獨占下的資料路徑（使用者 2026-11-11 決定，K.3 第 3 項）
+
+獨占是**啟動時數寫者的檢查**，執行期零成本，不是鎖；`Shared` 與 `Exclusive` 的執行期行為完全相同，差別只在 finish 時是否允許第二個寫者。Bevy 等於全部 Shared、順序隱性（依插入順序平手）；本機制把「最後寫贏」換成「唯一寫者定合併規則」。使用者比較過資料庫式的執行期仲裁（鎖、MVCC）：寫入路徑慢 20～100 倍且買不到決定性，不採。
+
+獨占欄的**標準進料方式是事件漏斗**：多個來源各自發事件（或寫自己的中間欄），唯一的消費者 System 讀事件、套用合併規則、寫那個欄。事件也有寫者：(c) 區多個 `EventWriter<E>` 之間仍要顯式順序（D.2 第 10 步），事件的收益不是免去順序，而是把合併規則集中在一處。整欄替換（`Restore`，H.5）只用於 Client 接收權威狀態，不是 World 內的寫法。
+
+| 資料 | 寫入政策 | 資料怎麼進來 | 為什麼 |
+|---|---|---|---|
+| 玩家狀態（位置、血量） | 獨占，進 digest | 事件漏斗加中間欄：Movement 寫 Velocity，Integrate 寫 Position；Damage 發事件，ApplyHealth 寫 Health | 權威判定，要可回滾、可比對；合併規則寫在唯一寫者裡 |
+| 大量非主要場景物（可破壞木門、散落物） | 獨占（Match 端一個 System 管全部） | Match 端同一個 System 批次寫；到 Client 走複製與整欄替換 Restore，不逐物件發事件 | 數量大、規則簡單，一個 System 疊代整欄最便宜；Client 不預測它們，整欄覆蓋就好 |
+| 唯一狀態（按鈕開關、Boss 擊殺歸屬） | 獨占，進 digest | 單一 System 寫，輸入來自事件（誰按了、誰補刀） | 權威只有一個的典型；擊殺歸屬是判定，多寫者會兩人同時拿到 |
 
 ### B.4 C++ 實現手段（從簽名推出）
 
@@ -1105,7 +1117,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 
 1. ~~Entity 不帶 generation~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：鍵格式＝u64，低 32 index、高 32 generation（Bevy 格式），Kernel 不看兩段意義、疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0，值與今天逐位元相同；stale 句柄偵測能力取決於策略。A.1、A.8 取捨 1、K.1 第 3／4 條已改；K.2 第 2 條取消。部件文件：`docs/architecture/target/world.zh-Hant.md`。
 2. ~~change stamp~~ **已決定（同上）**：接受規格——依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 `tickStamps` 換算；(c) 區禁用變更過濾（G-3）；DI-K5（blueprint）與 networking §1 第 7 條各改一句（已改）。溢出無實際可能（u64）。
-3. 寫入政策預設 Exclusive（A.8 取捨 3）。
+3. ~~寫入政策預設 Exclusive~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：欄與 Resource 預設 Exclusive，登記時標 `Shared` 允許多寫者；進 digest 的欄禁 Shared（S-12 不變）。B.3.1 新增「獨占下的資料路徑」（事件漏斗為標準進料方式、三類資料的表、獨占是啟動檢查非鎖、不採執行期仲裁）。
 4. Despawn 不算獨占寫者（B.9 取捨 1）。
 5. 讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序（D.6）。
 6. Client 的 Frame 與 Render 兩個 World 合併還是獨立（H.4.2；推薦獨立）。
@@ -1235,7 +1247,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 |---|---|---|---|
 | X1 | 任務敘述「Entity（index＋generation）」；提案 2、3 | 格式封裝 index＋generation、Kernel 不解讀；配發策略是產品 Resource（PvP：不重用、generation 0） | A.8 取捨 1；**已決定（2026-11-11）** |
 | X2 | blueprint DI-K5、networking §1 第 7 條「變更以遊戲 tick 標記」 | stamp 依 Plan 位置取值，`tickStamps` 提供 tick 視角；(c) 不用變更過濾 | A.8 取捨 2；**已決定（2026-11-11）**，兩處文件已改 |
-| X3 | mechanism §3.1「進 digest 的欄預設獨占」 | 所有元件預設 Exclusive；digestSet 中有 Shared 是啟動錯誤 | Kernel 不知道 digest（A.8 取捨 3） |
+| X3 | mechanism §3.1「進 digest 的欄預設獨占」 | 所有元件預設 Exclusive；digestSet 中有 Shared 是啟動錯誤 | Kernel 不知道 digest（A.8 取捨 3）；**已決定（2026-11-11）** |
 | X4 | mechanism §3.3「佇列依順序套用」 | 明定為「階段＋id」，不用 FIFO（bevy_core:34）；entity-store DI 4 延伸到 insert、remove | F.8 取捨 1 |
 | X5 | blueprint DI-K1「未排序即錯誤」不分區 | 只有 (c) 是錯誤；(b) 依登記序平手 | mechanism §3.2 審查修正 1、2 |
 | X6 | blueprint DI-K2「同階段同一欄只有一個 writer」 | 範圍改成整個 World、所有 schedule；只限 Exclusive 欄 | 狀態的權威不分 stage；Shared 欄可多寫者 |
