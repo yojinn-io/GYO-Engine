@@ -39,6 +39,28 @@
 - **(b) 與 AGENTS §14「範囲の限界要寫進受影響批次的事前宣告」的關係（架構師決定）**：事前宣告寫「LIM-n＋一句摘要」，不能只貼編號；只寫在決定紀錄或 limits 頁裡不算寫進宣告。
 - checkup（圖書管理員）：LIM 編號唯一不重用；條目狀態與所在資料夾一致；部件 RC 引用的 LIM 都存在。
 
+## spec K.3 決定對照表（2026-11-11 全部 17 項已定）
+
+| # | 決定（一句） | 寫在哪個部件文件 |
+|---|---|---|
+| 1 | Entity 鍵格式 u64（低 32 index、高 32 generation）是 Kernel 的；配發策略是產品 Resource，PvP 不重用、generation 0 | world §1、DI 1～2 |
+| 2 | change stamp 依 Plan 位置取值，tick 視角以 tickStamps 換算；(c) 禁變更過濾 | world §2、DI 3 |
+| 3 | 預設獨占、Shared 可選；進 digest 禁 Shared；資料路徑表，事件漏斗可選 | world §3、DI 4；limits LIM-4 |
+| 4 | Despawn 非寫者；同步點套用順序寫死 | world §4、DI 5 |
+| 5 | (b) 讀 (c) 要顯式順序；慣例「呈現放模擬之後」記為限制 | scheduler §2；limits LIM-1 |
+| 6 | Client 的 Frame 與 Render World 分開 | runtime-composition §2、DI 1 |
+| 7 | Architecture Delta 三處同意（architecture.md:136、entity-store DI 4／DeferredChanges、determinism.md §4.7） | 文件修改排第一個文件批（plans/kernel/HANDOFF「下一步」） |
+| 8 | 移除 object_fps、object_fps_v2、object_fps_preview | 不是部件文件；批 `v8-arch-remove-object-fps`（plans/kernel/README） |
+| 9 | 獨占寫者以 System 計、Startup 不計；Body 拆欄 | world §3 |
+| 10 | Join／Leave 進 tick 內 | runtime-composition §3；limits LIM-5 |
+| 11 | (c) 的時間只來自 domain tick 與被記錄的 boundary 輸入 | determinism §2、DI 2 |
+| 12 | F.2 套用順序（與第 4 項一起） | world §4 |
+| 13 | RC 第 1 條改寫為三分項（核准） | system-contract RC |
+| 14 | v1 任何 Parallel 宣告是啟動錯誤 | limits LIM-2；scheduler RC |
+| 15 | 事件只在該 domain 的 clock schedule 內讀寫 | world §5、DI 6 |
+| 16 | spike 判定 2 照原文成立；上限記為範囲の限界 | limits LIM-3 |
+| 17 | System 回 Result<void, KernelError>；Executor 只處理一次；不靜默 | system-contract §2、DI 2；error-handling |
+
 ## 來源與引用
 
 - 概念基準：`docs/architecture/plans/kernel/mechanism.zh-Hant.md`；規格草案：`docs/architecture/plans/kernel/spec.zh-Hant.md`。規格是草案，決定以使用者在 K.3 的裁決為準；裁決後寫進對應的部件文件。

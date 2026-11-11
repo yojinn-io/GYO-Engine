@@ -35,6 +35,7 @@
 | `v8-arch-kernel-time-sources` | 2026-11-11（側邊會話轉述，spec K.3 第 11 項，B6 結案）。(c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入（HostClockSample、隨輸入進 ring 的到達時刻）；(c) System 自己讀時鐘仍禁止。mechanism §3.3 Executor 列已改（含圖）；determinism.md DI 4 不動；規則寫進 target/determinism.md。 |
 | `v8-arch-kernel-k3-12-14-15` | 2026-11-11（側邊會話轉述）。第 12 項：同步點套用順序照 F.2（與第 4 項一起）；第 14 項：v1 任何 Parallel 宣告＝D-E17，含只有 (b) 的 schedule（LIM-2）；第 15 項：事件只在該 domain 的 clock schedule 內讀寫（F-9）。 |
 | `v8-arch-kernel-result-errors` | 2026-11-11（側邊會話轉述，spec K.3 第 17 項，有變更）。不採常開檢查巨集，改 Go 式錯誤處理（原則：不靜默）：untyped 路徑回 Result<void, KernelError> 帶完整上下文；System 簽名改回 Result<void, KernelError>，包一層上下文回傳、不自己記錄；Executor 最外層只處理一次（記錄完整鏈一次、World Interrupted；日誌開關在 Executor 的 handler，Base::Result 仍純值）；release 也如此；debug 另在記錯當下呼叫 assertion handler。error-handling.md 加一列（Delta 已同意，排第一個文件批）。使用者接受 System 多一行回傳。部件文件 target/system-contract.zh-Hant.md、target/error-handling.md。 |
+| `v8-arch-kernel-rc1-rewrite` | 2026-11-11（側邊會話轉述，spec K.3 第 13 項）。使用者核准 RC 第 1 條改寫為三分項（(a) 判定 1 不成立→退回顯式宣告；(b) 經 World 的存取 debug 攔不到→核對層重寫；(c) 上線後兩次以上不屬範囲の限界的不符→頁保護或縮小「包」）。**K.3 全部 17 項定完**；對照表在 target/README。使用者：接下來照計畫，規格與文件更新 → -audit（事前宣告列 L1～L8）→ -spike-pageguard。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定
@@ -60,5 +61,5 @@
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
 - 改造的第一個文件批（待規劃）：K.3 第 7 項的三處 Delta 文件修改；entity-model §5.2（Join／Leave 在 tick 內，K.3 第 10 項）；error-handling.md 加一列（K.3 第 17 項）；mechanism §3.3「Time 只來自 tick」依 K.3 第 11 項裁決修訂。
-- 使用者定 K.3（至少影響 -audit 的第 1、7、8、9、10、11 項）→ `v8-arch-kernel-audit`（事前宣告要列範囲の限界 L1～L8）→ `-spike-pageguard` → 改造批次計畫（§3 Delta 計畫層寫一次）。
+- ~~使用者定 K.3~~（2026-11-11 全部定完）→ `v8-arch-kernel-audit`（事前宣告要列範囲の限界 L1～L8）→ `-spike-pageguard` → 改造批次計畫（§3 Delta 計畫層寫一次）。
 - 判定 1 的三平台：**成立**（L1 run 43018979148，PR #180；步驟第一次誤加在 build-and-validate.yml、已改到 cross-platform.yml）。PR #180 含 `spikes/` 以外的 `.github/workflows/cross-platform.yml` 改動，合併由使用者決定。

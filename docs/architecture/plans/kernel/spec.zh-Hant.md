@@ -1,6 +1,6 @@
 # Kernel 機制規格：World／System 契約／Registry／Scheduler／Executor
 
-狀態：**規格草案 v0.1（已對抗檢查，待使用者）**。Owner：架構（架構師會話）。日期：2026-11-11。
+狀態：**規格 v0.2（已對抗檢查；K.3 全部 17 項已由使用者於 2026-11-11 裁決，裁決已寫入各節與 `docs/architecture/target/`）**。Owner：架構（架構師會話）。日期：2026-11-11。
 性質：`v8-arch-kernel-spec` 的統合稿，經一輪對抗檢查（`v8-arch-kernel-spec-adversary`：7 blocker、18 should、9 nit）後的修訂版。只讀產出：未改程式、未 commit。每條的處置見文末「§對抗檢查」；修訂輪新增或改寫的句子在各節以「（修訂：Bn／Sn／Nn）」標出處。待使用者決定的事項彙整在 K.3。
 
 來源：三份提案者稿（Opus／high），各從一個角度推導同一套機制：
@@ -1100,7 +1100,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 ### K.2 Replacement Criteria（候選）
 
 符合任一條時，停止在 Kernel 上修補，向使用者提出「修還是重建」（memory repair-vs-rebuild）：
-1. **契約不可靠**（修訂：S8。原稿的條件「判定 (2) 在任一編譯器不成立」已被 spike 的「判定 2 部分不成立」觸發，但觸發的部分是 mechanism §3.5 事前寫明的上限（不經 World 的讀取），不是推導或核對本身失效；而且原稿的處置「退回顯式宣告」對那種形狀同樣無效。條件改寫成只指向本機制真正依賴的性質）：(a) spike 判定 (1)（簽名推存取集合）在任一 L1 編譯器不成立；或 (b) 「System 自己的執行緒上經 World API 的存取」在 debug 攔不到（A.6 第一層失效）；或 (c) 上線後「宣告與實際存取不符、A.6 兩層核對與 J-17 掃描都攔不到、且不屬於 spike〈判定 2 的上限〉已列的形狀」的案例在一個版本內出現兩次以上。→ (a)：退回「顯式宣告＋debug 核對」（bevy_core:29、:64）；(b)：核對層重寫；(c)：評估頁保護（spike 報告末段）或縮小「包」的範圍。中間層照 mechanism §1 全部重寫。（blueprint RC 3）**這條的改寫是 Replacement Criteria 的變更，要使用者核准**（K.3）。
+1. **契約不可靠**（修訂：S8。原稿的條件「判定 (2) 在任一編譯器不成立」已被 spike 的「判定 2 部分不成立」觸發，但觸發的部分是 mechanism §3.5 事前寫明的上限（不經 World 的讀取），不是推導或核對本身失效；而且原稿的處置「退回顯式宣告」對那種形狀同樣無效。條件改寫成只指向本機制真正依賴的性質）：(a) spike 判定 (1)（簽名推存取集合）在任一 L1 編譯器不成立；或 (b) 「System 自己的執行緒上經 World API 的存取」在 debug 攔不到（A.6 第一層失效）；或 (c) 上線後「宣告與實際存取不符、A.6 兩層核對與 J-17 掃描都攔不到、且不屬於 spike〈判定 2 的上限〉已列的形狀」的案例在一個版本內出現兩次以上。→ (a)：退回「顯式宣告＋debug 核對」（bevy_core:29、:64）；(b)：核對層重寫；(c)：評估頁保護（spike 報告末段）或縮小「包」的範圍。中間層照 mechanism §1 全部重寫。（blueprint RC 3）**這條的改寫已由使用者 2026-11-11 核准**（K.3 第 13 項）。
 2. ~~**id 要重用**~~ **取消（使用者 2026-11-11）**：鍵格式已含 generation，重用是配發策略的選擇，不是 Kernel 的置換條件。保留編號以免後文錯位。
 3. **歧義錯誤成為負擔**：同一版本內，為消除 D-E8 而加的 before／after 有一半以上與資料流無關（只是為了讓 Plan 建立）。→ (c) 的粒度或區劃錯了。
 4. **第二種排序機制**：為表達需求，stage 內必須引入依賴求解以外的排序（優先權數字、依資料值決定順序、執行期改 Plan）。（blueprint RC 2）
@@ -1114,7 +1114,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 12. **並行不是策略問題**：為讓 Parallel 通過 X-2 的守衛必須改 (c) System 的語義或放寬 golden。→ 停下。
 13. **每加一個 System 或 plugin 都要重新驗證 Kernel 本體的守衛**（突變名單以外）。→ Kernel 不是穩定的基盤。
 
-### K.3 待使用者決定（規格內產生）
+### K.3 使用者的決定（規格內產生；2026-11-11 全部 17 項已定，對照表在 `docs/architecture/target/README.md`）
 
 1. ~~Entity 不帶 generation~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：鍵格式＝u64，低 32 index、高 32 generation（Bevy 格式），Kernel 不看兩段意義、疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0，值與今天逐位元相同；stale 句柄偵測能力取決於策略。A.1、A.8 取捨 1、K.1 第 3／4 條已改；K.2 第 2 條取消。部件文件：`docs/architecture/target/world.zh-Hant.md`。
 2. ~~change stamp~~ **已決定（同上）**：接受規格——依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 `tickStamps` 換算；(c) 區禁用變更過濾（G-3）；DI-K5（blueprint）與 networking §1 第 7 條各改一句（已改）。溢出無實際可能（u64）。
@@ -1131,7 +1131,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 10. ~~Join／Leave 進 tick 內~~ **已決定（使用者 2026-11-11，側邊會話轉述）：採規格**。Ingress 只寫請求進 `InputRing`，(c) 的 `ApplyMembership` 以 `SpawnWithId`／`Despawn` 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（加入／離開晚最多一 tick；`combat-rejoin` 等 golden 可能差一 tick、要重設基準）記為限制 LIM-5，由產品線在遷移批確認；entity-model §5.2 改寫（排進改造的第一個文件批）。
 11. ~~時間的來源~~ **已決定（使用者 2026-11-11，側邊會話轉述）：採 (i)**。(c) 區的時間只來自兩個來源：World 的 domain tick，與被記錄的 boundary 輸入（Host 每次喚醒取樣一次的 `HostClockSample`、隨每筆輸入進 ring 的到達時刻）；(c) System 自己讀時鐘仍禁止。mechanism §3.3 Executor 列那一句已改；determinism.md DI 4 不動。B6 結案。規則寫進 `docs/architecture/target/determinism.md`。
 12. ~~F.2 的階段順序~~ **已決定（使用者 2026-11-11，與第 4 項一起）**：照規格 F.2。原文：讓同窗「刪 X 再以同 id 生成 X」成立；代價是「同窗生成又刪除同一個新 id」從不可見變成生成勝出。
-13. **K.2 第 1 條（Replacement Criteria）的改寫**（S8）：原條件已被 spike 的結果觸發；本稿主張觸發的是事前寫明的上限、不是機制失效，並把條件改寫成三個分項。Replacement Criteria 的變更要使用者核准；若不核准，依原條文本規格進入「修還是重建」的提案。
+13. ~~K.2 第 1 條的改寫~~ **已決定（使用者 2026-11-11 核准，側邊會話轉述）**：RC 第 1 條改寫成三個分項——(a) 判定 1 在任一 L1 編譯器不成立→退回顯式宣告加 debug 核對；(b) System 自己執行緒上經 World API 的存取在 debug 攔不到→核對層重寫；(c) 上線後兩次以上「宣告與實際不符、兩層核對與掃描都攔不到、不屬範囲の限界」→評估頁保護或縮小「包」的範圍。
 14. ~~`Parallel` 在 v1 是啟動錯誤 D-E17~~ **已決定（使用者 2026-11-11）**：採規格——v1 任何 Parallel 宣告＝啟動錯誤 D-E17，含只有 (b) 的 schedule（LIM-2）。
 15. ~~事件只在 clock schedule 內讀寫~~ **已決定（使用者 2026-11-11）**：採規格 F-9；同 domain 的其他 schedule 用元件或 Resource 傳遞。
 16. ~~**spike 判定 (2) 的狀態**（S7）~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：判定 (2) 照原文「成立」；上限的處置＝接受（World 以外靠 code review，mechanism §3.5 三層）；-audit 第二問改為「跨 tick 指標或參考」「全域可變狀態」兩問（I.3 已照此寫）；另加 `-spike-pageguard` 批（debug 頁保護，只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時）排在本規格之後。本規格 A.6、B.5、I.3 的寫法與決定一致，不需改。
