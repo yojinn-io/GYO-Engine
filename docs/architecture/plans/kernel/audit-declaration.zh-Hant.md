@@ -10,7 +10,9 @@
 ## 範圍
 
 - 審：`engine/*`（每個子目錄一列）、`framework/*`、`apps/object_fps_pvp/src/*`（依現有子目錄）、`tools/voxel_map_editor`、`tools/audio_editor`、`tools/model_viewer`、`tools/ui_editor`。
-- 不審（寫明理由）：`apps/object_fps`、`apps/object_fps_v2`、`tools/object_fps_preview`（使用者 K.3 第 8 項：移除）；`services/gyo_gateway`（外部服務，Go）；`third_party/`（第三方）；`tests/`（守衛本身，另在 J 節）。
+- 審（第三方，使用者 2026-11-11 經側邊會話加入）：**`third_party/` 每個庫一列**（ufbx、DXC／SDL_shadercross／SPIRV-Cross、SDL_GPU、SDL_image、FreeType、ImGui、protobuf、nlohmann、doctest 等現有依賴；加 PR #176 評估過的候選 Recast／Detour、Jolt、miniaudio、EnTT 的事實列），用 spec I.3 同一套四問判**葉子／包／服務**，附執行緒親和與 zone。起點是 PR #176 評估 §2.1「Kernel／plugin 相容性」的表。結論回寫 PR #176 的判定總表（`docs/architecture/plans/third-party-evaluation/README.md`）並標「依 spec v0.2 重核」。
+- 不審（寫明理由）：`apps/object_fps`、`apps/object_fps_v2`、`tools/object_fps_preview`（使用者 K.3 第 8 項：移除）；`services/gyo_gateway`（外部服務，Go）；`tests/`（守衛本身，另在 J 節）。
+- **不在本批做**：ECS 列的 World 儲存層「借 EnTT v4 還是自寫」——等 World 實作批的事前宣告時，用 spec W-1～W-11 逐條對 EnTT 核對，交使用者定案；Scheduler／Registry／Executor 自寫已定。#176 的 D2（Detour 能否進 (c) 路徑）等 DET-1，不受重核影響。
 - 規格 L 節的初判是起點，不是結論；每列要重新用證據判。
 
 ## 每個模組回答的問題（spec I.3）
@@ -24,13 +26,13 @@
 
 ## 產出
 
-- `docs/architecture/plans/kernel/audit.zh-Hant.md`：逐模組一列——模組、行數（腳本統計）、四問的答案各附檔名行號、判定、理由、工時粗估（區間；不是承諾）；另三節：(a) Body 拆欄的範圍與受影響的 golden 清單（K.3 第 9、10 項）；(b) Host 保留職責的現況位置清單（spec H.7、H-7 的掃描清單）；(c) spec G.4「現況中的違反」的逐條確認。
+- `docs/architecture/plans/kernel/audit.zh-Hant.md`：逐模組一列（含第三方庫）——模組、行數（腳本統計）、四問的答案各附檔名行號、判定、理由、工時粗估（區間；不是承諾）；另四節：(d) 第三方庫的重核表（回寫 #176 判定總表的差異清單）；(a) Body 拆欄的範圍與受影響的 golden 清單（K.3 第 9、10 項）；(b) Host 保留職責的現況位置清單（spec H.7、H-7 的掃描清單）；(c) spec G.4「現況中的違反」的逐條確認。
 - `docs/architecture/plans/kernel/scripts/audit_scan.py`：可重跑的掃描（更新入口函式名、執行緒原語、全域狀態、時鐘與亂數），輸出 CSV 到主 checkout `build/evidence/kernel-audit/`；報告的每個掃描結論引用 CSV 的列。
 - dev_log `docs/dev_logs/2026_MM_DD_arch_kernel_audit.zh-Hant.md`；HANDOFF 更新。
 
 ## 判定（看結果前宣告）
 
-1. **覆蓋**：範圍內每個目錄都有一列；「未審」只允許附理由（移除、第三方、外部）。缺列＝不通過。
+1. **覆蓋**：範圍內每個目錄都有一列，`third_party/` 每個庫一列；「未審」只允許附理由（移除、外部）。缺列＝不通過。
 2. **證據**：每列的四問各至少一個檔名行號（或「掃描無命中」加 CSV 列號）；沒有證據的判定不算判定。
 3. **對抗複核**：另一模型的檢查者抽至少 5 個模組（必含一個「留」、一個「包」、一個「重寫」），不看審查者的理由、只看程式，獨立判一次；5 個中至少 4 個與審查者一致，否則審查回到提案（不一致的模組全部重判並寫明原因）。
 4. **掃描可重跑**：腳本在主 checkout 重跑一次，CSV 與報告引用的列一致；件数の突き合わせ：掃描的目錄數＝報告的列數＋「未審」列數。
@@ -50,7 +52,7 @@
 
 ## 估時與停止
 
-- 估：審查者 6～10 小時的代理工作（掃描腳本 1、逐模組 4～7、三節 1～2）；對抗 1～2 小時。上限 1.5 倍；超過停下回報。
+- 估：審查者 8～12 小時的代理工作（掃描腳本 1、逐模組 4～7、第三方 2、四節 1～2）；對抗 1～2 小時。上限 1.5 倍；超過停下回報。
 - 停止條件照 AGENTS §14 冒頭：同一模組換兩種判法仍無結論；發現規格前提錯誤（例如 I.3 三問判不出某類模組）→ 停下報告，不自行改規格。
 
 ## 不做
