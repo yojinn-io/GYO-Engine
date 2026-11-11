@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" viewBox="0 0 680 820" role="img"><title>控制面修訂：兩半契約、三種分析結果、決定性是一組橫跨四處的契約</title><desc>上方 System 契約分為型別推導與顯式宣告兩半。中段分析產出三種不同處置：資料衝突交序列化、依賴循環與獨占違反是啟動錯誤、歧義在 (c) 區是錯誤在 (b) 區穩定平手。下方決定性不是 Executor 單一策略，而是 World、Executor、Ingress、Math 四處各一條契約。</desc>
+<style>
+  svg { font-family: -apple-system, "Segoe UI", "Noto Sans CJK TC", "PingFang TC", sans-serif; }
+  .c-coral  { fill: #fbe9e4; stroke: #c4654a; }
+  .c-teal   { fill: #e3f3ef; stroke: #2f8f7a; }
+  .c-purple { fill: #ece7f6; stroke: #6b4fb3; }
+  .c-gray   { fill: #f1f1f1; stroke: #8a8a8a; }
+  .th { fill: #222; stroke: none; font-size: 12px; font-weight: 600; }
+  .ts { fill: #333; stroke: none; font-size: 10.5px; }
+  .arr { stroke: #666; fill: none; stroke-width: 1.2; }
+  rect[fill="none"] { fill: none; }
+</style>
+<rect width="680" height="820" fill="#ffffff"/>
+<defs><marker id="a7" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<text class="th" x="340" y="24" text-anchor="middle">System 契約：兩半，來源不同</text>
+<g class="c-coral"><rect x="40" y="40" width="290" height="110" rx="8" stroke-width="0.5"/>
+<text class="th" x="185" y="58" text-anchor="middle" dominant-baseline="central">從參數型別推導（編譯期，不手寫）</text>
+<text class="ts" x="185" y="80" text-anchor="middle" dominant-baseline="central">Component Read／Write</text>
+<text class="ts" x="185" y="98" text-anchor="middle" dominant-baseline="central">Resource Read／Write</text>
+<text class="ts" x="185" y="116" text-anchor="middle" dominant-baseline="central">事件讀者／寫者、延後佇列句柄</text>
+<text class="ts" x="185" y="136" text-anchor="middle" dominant-baseline="central">可信度：World 的 debug 核對攔得到</text></g>
+<g class="c-coral"><rect x="350" y="40" width="290" height="110" rx="8" stroke-width="0.5"/>
+<text class="th" x="495" y="58" text-anchor="middle" dominant-baseline="central">顯式宣告（登記時寫）</text>
+<text class="ts" x="495" y="80" text-anchor="middle" dominant-baseline="central">schedule、run 條件、before／after</text>
+<text class="ts" x="495" y="98" text-anchor="middle" dominant-baseline="central">執行緒親和：主、worker、專用</text>
+<text class="ts" x="495" y="116" text-anchor="middle" dominant-baseline="central">外部副作用：socket、檔案、GPU</text>
+<text class="ts" x="495" y="136" text-anchor="middle" dominant-baseline="central">決定性區 (c)／(b)；可信度：審查</text></g>
+<text class="ts" x="340" y="170" text-anchor="middle">資料自己也帶契約：欄可宣告「獨占寫入」（進 digest 的欄預設獨占＝AGENTS §3 狀態的權威）</text>
+<line x1="340" y1="178" x2="340" y2="204" class="arr" marker-end="url(#a7)"/>
+<g class="c-purple"><rect x="40" y="206" width="600" height="56" rx="8" stroke-width="0.5"/>
+<text class="th" x="340" y="224" text-anchor="middle" dominant-baseline="central">分析（每個 schedule 一次，凍結後）</text>
+<text class="ts" x="340" y="246" text-anchor="middle" dominant-baseline="central">同 id 且一方 Write → 衝突邊（只說不能同時）；before／after → 順序邊（說先後）；兩種邊分開存</text></g>
+<line x1="140" y1="262" x2="140" y2="290" class="arr" marker-end="url(#a7)"/>
+<line x1="340" y1="262" x2="340" y2="290" class="arr" marker-end="url(#a7)"/>
+<line x1="540" y1="262" x2="540" y2="290" class="arr" marker-end="url(#a7)"/>
+<g class="c-teal"><rect x="40" y="292" width="190" height="120" rx="8" stroke-width="0.5"/>
+<text class="th" x="135" y="310" text-anchor="middle" dominant-baseline="central">資料衝突</text>
+<text class="ts" x="135" y="332" text-anchor="middle" dominant-baseline="central">兩者都寫 Position</text>
+<text class="ts" x="135" y="350" text-anchor="middle" dominant-baseline="central">不是錯誤</text>
+<text class="ts" x="135" y="368" text-anchor="middle" dominant-baseline="central">處置：不並行，序列化</text>
+<text class="ts" x="135" y="386" text-anchor="middle" dominant-baseline="central">先後由順序邊或平手策略定</text>
+<text class="ts" x="135" y="402" text-anchor="middle" dominant-baseline="central">Scheduler 不假設業務順序</text></g>
+<g class="c-gray"><rect x="245" y="292" width="190" height="120" rx="8" stroke-width="0.5"/>
+<text class="th" x="340" y="310" text-anchor="middle" dominant-baseline="central">啟動錯誤</text>
+<text class="ts" x="340" y="332" text-anchor="middle" dominant-baseline="central">順序邊成環</text>
+<text class="ts" x="340" y="350" text-anchor="middle" dominant-baseline="central">獨占寫入的欄有第二個寫者</text>
+<text class="ts" x="340" y="368" text-anchor="middle" dominant-baseline="central">讀的 resource 沒人登記</text>
+<text class="ts" x="340" y="386" text-anchor="middle" dominant-baseline="central">掛到此 Runtime 沒有的 schedule</text>
+<text class="ts" x="340" y="402" text-anchor="middle" dominant-baseline="central">錯不錯由對應契約定，不由 Scheduler 定</text></g>
+<g class="c-teal"><rect x="450" y="292" width="190" height="120" rx="8" stroke-width="0.5"/>
+<text class="th" x="545" y="310" text-anchor="middle" dominant-baseline="central">歧義：有衝突、無順序</text>
+<text class="ts" x="545" y="332" text-anchor="middle" dominant-baseline="central">(c) 區：啟動錯誤</text>
+<text class="ts" x="545" y="350" text-anchor="middle" dominant-baseline="central">要人寫 before／after</text>
+<text class="ts" x="545" y="368" text-anchor="middle" dominant-baseline="central">理由：登記順序平手會被</text>
+<text class="ts" x="545" y="386" text-anchor="middle" dominant-baseline="central">換 plugin 順序靜默改掉</text>
+<text class="ts" x="545" y="402" text-anchor="middle" dominant-baseline="central">(b) 區：穩定平手，依登記順序</text></g>
+<line x1="340" y1="412" x2="340" y2="440" class="arr" marker-end="url(#a7)"/>
+<g class="c-purple"><rect x="40" y="442" width="600" height="70" rx="8" stroke-width="0.5"/>
+<text class="th" x="340" y="460" text-anchor="middle" dominant-baseline="central">執行計畫 → Executor（策略，不是決定性本身）</text>
+<text class="ts" x="340" y="482" text-anchor="middle" dominant-baseline="central">Serial：(c) 區預設。Parallel：(b) 區無衝突即可；(c) 區只在有「與 Serial 逐位元相同」的守衛測試時才開</text>
+<text class="ts" x="340" y="500" text-anchor="middle" dominant-baseline="central">執行緒親和決定落點；條件在跑時求值；同步點＝每階段末預設，schedule 可加宣告</text></g>
+<line x1="340" y1="512" x2="340" y2="540" class="arr" stroke-dasharray="4 4"/>
+<text class="th" x="340" y="560" text-anchor="middle">決定性 (c) 區＝四處各一條契約，序列化只是其一（PR #177：今天序列化仍有 ULP 差異）</text>
+<g class="c-teal"><rect x="40" y="576" width="140" height="96" rx="8" stroke-width="0.5"/>
+<text class="th" x="110" y="594" text-anchor="middle" dominant-baseline="central">World</text>
+<text class="ts" x="110" y="614" text-anchor="middle" dominant-baseline="central">疊代依 index</text>
+<text class="ts" x="110" y="630" text-anchor="middle" dominant-baseline="central">同步點後參考失效</text>
+<text class="ts" x="110" y="646" text-anchor="middle" dominant-baseline="central">疊代中只進佇列</text>
+<text class="ts" x="110" y="662" text-anchor="middle" dominant-baseline="central">佇列依順序套用</text></g>
+<g class="c-teal"><rect x="193" y="576" width="140" height="96" rx="8" stroke-width="0.5"/>
+<text class="th" x="263" y="594" text-anchor="middle" dominant-baseline="central">Executor</text>
+<text class="ts" x="263" y="614" text-anchor="middle" dominant-baseline="central">順序固定</text>
+<text class="ts" x="263" y="630" text-anchor="middle" dominant-baseline="central">Time 只來自 tick</text>
+<text class="ts" x="263" y="646" text-anchor="middle" dominant-baseline="central">RNG 是 resource，</text>
+<text class="ts" x="263" y="662" text-anchor="middle" dominant-baseline="central">種子進 digest</text></g>
+<g class="c-teal"><rect x="346" y="576" width="140" height="96" rx="8" stroke-width="0.5"/>
+<text class="th" x="416" y="594" text-anchor="middle" dominant-baseline="central">Ingress</text>
+<text class="ts" x="416" y="614" text-anchor="middle" dominant-baseline="central">外部訊息只在同步點</text>
+<text class="ts" x="416" y="630" text-anchor="middle" dominant-baseline="central">寫入 InputRing[tick]</text>
+<text class="ts" x="416" y="646" text-anchor="middle" dominant-baseline="central">(c) 區 System 不碰 Link</text>
+<text class="ts" x="416" y="662" text-anchor="middle" dominant-baseline="central">到達時機不影響結果</text></g>
+<g class="c-teal"><rect x="499" y="576" width="141" height="96" rx="8" stroke-width="0.5"/>
+<text class="th" x="569" y="594" text-anchor="middle" dominant-baseline="central">Math／編譯</text>
+<text class="ts" x="569" y="614" text-anchor="middle" dominant-baseline="central">自己的 Sin／Cos（E1）</text>
+<text class="ts" x="569" y="630" text-anchor="middle" dominant-baseline="central">fp-contract 旗標順序（E2）</text>
+<text class="ts" x="569" y="646" text-anchor="middle" dominant-baseline="central">golden 三平台</text>
+<text class="ts" x="569" y="662" text-anchor="middle" dominant-baseline="central">E0 先找 ULP 來源</text></g>
+<text class="ts" x="340" y="704" text-anchor="middle">事件：寫入者之後的 System 本 tick 可讀；緩衝保留到下一 tick 末，不是一律延一 tick</text>
+<text class="ts" x="340" y="724" text-anchor="middle">Host 保留的協調：多個時鐘、Runtime 啟停、IO 與 World 交換的同步點；IoC 消不掉，也不該消</text>
+<text class="ts" x="340" y="744" text-anchor="middle">繞過受控介面的全域存取：機制攔不到，靠葉子模組「無全域狀態」條件與審查，這是 C++ 版的誠實上限</text>
+<text class="ts" x="340" y="776" text-anchor="middle">外部系統不持有、不修改 World；Gateway → 輸入佇列 → Ingress → World → 模擬 → Egress → 輸出佇列 → Gateway</text>
+<text class="ts" x="340" y="796" text-anchor="middle">Gateway 不知道 World 的布局；Snapshot 在確定的階段產生</text>
+</svg>
