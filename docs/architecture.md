@@ -101,6 +101,8 @@ Each plan folder (for example `docs/object_fps_pvp/plans/v7.1/`) keeps a HANDOFF
 
 ## Runtime boundaries
 
+Which of these results must reproduce across platforms bit for bit, which only on the same platform, and what guards each, is the [determinism contract](architecture/determinism.md) (proposal, 2026-11-11).
+
 | Owner | Responsibility | Dependencies |
 |---|---|---|
 | `GYO::Base` | failure handling: `GYO_ASSERT` for Programmer Errors, `Result`/`Error` for Runtime Errors ([contract](architecture/error-handling.md)); the log facade (`Log.hpp`, one replaceable handler); the strict JSON parse for modules that own a JSON data contract (`StrictJson.hpp`: a template that rejects repeated keys without nlohmann's quadratic parser callback; it names the parser only through its template parameter, so the module that instantiates it links the parser privately); other domain-free helpers | C++ standard library only |
