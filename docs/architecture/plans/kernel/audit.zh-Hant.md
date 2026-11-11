@@ -118,16 +118,25 @@
 | ui | 包 | 包＋`UiRenderer` 局部重寫 | 跨 World 指標 |
 | asset | 包 | 包（先收攏） | 五個協作者由組合根各自持有 |
 | model | 動畫推進包 | `AnimationInstance` 刪除候選；ufbx loader 是 (c) | — |
-| `WindowShell`、`ImGuiShell` | 重寫骨架／包 | 兩者都是 Host 骨架重寫；PvP 不用 WindowShell | 幀排序者；改 framework DI 2／6（§3.1） |
+| `WindowShell`、`ImGuiShell` | 重寫骨架／包 | framework 退役：兩者的職責由 runner plugin 與 ImGui／SDL plugin 承擔；PvP 不用 WindowShell | §3.1（使用者決定） |
 | `src/App`、`NativeFiles` | 未列／留 | 包（先拆）／包 | — |
 | `IpcHost` 同步碰權威 | `:685` | `:645`、`:685` | — |
 | `StepMovement` 的全域 | 在呼叫路徑 | 在呼叫點（P1、P6），`Movement.cpp` 乾淨 | 遷移批不要改 `Movement.cpp` |
 
 ## 3. 跨部件的發現（要決定或要改規格）
 
-### 3.1 Architecture Delta：framework 的 Design Invariants 2 與 6（K.3 第 7 項未列）
+### 3.1 Architecture Delta：framework 退役，由 plugin 取代（使用者 2026-11-11 決定，側邊會話轉述）
 
-`WindowShell` 要重寫成 Editor host 骨架與標準 ScheduleDef，`ImGuiShell` 的 `Update`／`Render` 幀順序要搬進 stage 序。兩者都改 `docs/framework/architecture.md` 的 DI 6（`RunWindowShell` 擁有唯一的 `RuntimeLoop`、pump 的事件先於該幀 `Update` 交給 `OnEvent`）與 DI 2（文字輸入的擁有規則）。**要使用者同意**。另：spec L.2 說 `WindowShell` 會成為 Client host 的骨架不成立，PvP 從未用它、且 Client 是三個 Runtime 加模擬執行緒；規格 L.2 要改成「Editor host 的骨架」。
+審查原提案「改 framework DI 2／6、WindowShell／ImGuiShell 重寫成 Editor host 骨架」。使用者決定**不改 DI，framework 這個概念退役**：framework 是舊架構的產物，核心是組合 Engine 能力與對接第三方；plugin 機制建立後兩者都由 plugin 承擔。使用者原則：新架構若沿用舊架構的思路與原則，架構變更就失去意義——思想不變，修改就是在破船上打補丁。
+
+去處：
+- ImGui／SDL 的相容在 plugin 內實現。
+- Editor host 骨架（行程入口、pump、交換點）＝一個**提供 runner 的 plugin**（照 Bevy `WinitPlugin` 的 `set_runner`）；規格 C.2／H.7 補「plugin 可在 finish 安裝 runner，一個 Runtime 只能一個」（R-E6）。
+- 標準 Editor stage 序＝plugin 群在 build 插入 stage（spec C.2 第 2 點已允許）。
+- 組合格式（catalog plan、event sounds）是資料契約，owner 是提供該 plugin 的人。
+- 葉子（EventSounds、CatalogPlan、PreviewCamera、UiTextInput、json binding）是函式庫，與層無關。
+
+後果（Delta，使用者已同意）：新 top-level `plugins/`（AGENTS §10）——每個 plugin 一個 target、自己的依賴正向清單，Engine 永不 include 它，產品與工具只在 main 列它；三層原則改為「Engine（Kernel＋能力）／plugins（組合與第三方對接，可選可刪）／產品與工具（plugin 清單＋Run）」；framework DI 5「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」；framework 的 Design Invariants 整節**廢止**（不是改寫），`docs/framework/` 照 target 規則標廢止；spec L.2、H.4.3、target/runtime-composition 對 WindowShell／ImGuiShell 的敘述改成 plugin。審查的 33～66 h 估算大致成立，產出叫 plugin。架構師保留的一點：選擇窗記帳與關窗提示兩個帶判斷狀態的重複**必須真的進共用 plugin**，否則是 framework 的老問題換名。
 
 ### 3.2 Editor 預覽的回流（H.4.3 的缺口）
 
@@ -236,7 +245,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 
 ## 9. 下一步
 
-- 使用者決定 §3.1（framework DI Delta）、§3.2（預覽回流）、§3.6（IRuntimePort、AssetManager 歸屬、初始成員走 Startup）、§4.5（區表三漏一錯）。
+- ~~§3.1~~（已定：framework 退役→`plugins/`）；使用者決定§3.2（預覽回流）、§3.6（IRuntimePort、AssetManager 歸屬、初始成員走 Startup）、§4.5（區表三漏一錯）。
 - 規格修訂批（§6 七項）與第一個文件批合併規劃。
 - `-spike-pageguard`（事前宣告待寫）。
 - 改造批次計畫：以本報告的成本形狀分批（組織層先：Kernel 本體 → Match host 遷移 → Client → Editor），§3 Delta 七項在計畫層寫一次。

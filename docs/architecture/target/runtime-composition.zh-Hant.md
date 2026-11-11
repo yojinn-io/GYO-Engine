@@ -25,10 +25,20 @@
 - 不為 Host 開 Z2／Z5 的例外：Host 在 World Ready 時只寫 boundary 與 external Resource，不直接生成或刪除帶 (c) 欄的實體。
 - 後果記為限制 LIM-5（`limits.zh-Hant.md`）：加入與離開晚最多一個 tick；golden 可能差一 tick、要重設基準；產品線在遷移批確認。entity-model §5.2「Join／Leave 在 Tick 外」改寫，排進改造的第一個文件批。
 
+## 4. framework 退役；組合與第三方對接由 plugin 承擔（使用者 2026-11-11 決定，audit §3.1）
+
+- **三層改為**：Engine（Kernel＋能力）／`plugins/`（組合與第三方對接，可選可刪）／產品與工具（plugin 清單＋Run）。framework 是舊架構的產物，其兩個核心職責（組合 Engine 能力、對接第三方）在 plugin 機制下都由 plugin 承擔，概念淘汰；`docs/framework/` 的 Design Invariants 整節廢止（第一個文件批）。
+- **runner plugin**：Editor host 的骨架（行程入口、pump、交換點）是一個在 finish 安裝 runner 的 plugin（照 Bevy `WinitPlugin::set_runner`）；一個 Runtime 只能有一個 runner（spec R-E6）；沒有 plugin 安裝時由 Host 程式自己跑。
+- **標準 Editor stage 序**＝plugin 群在 build 插入 stage（spec C.2 第 2 點）；ImGui、SDL 的相容在各自的 plugin 內實現，全域 context 明列例外。
+- **`plugins/` 是新的 top-level**（AGENTS §10 Delta，已同意）：每個 plugin 一個 target、自己的依賴正向清單；Engine 永不 include 它；產品與工具只在 main 列它。
+- 「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」。架構師保留：四個工具重複的選擇窗記帳與關窗提示必須真的進共用 plugin，否則是 framework 的老問題換名。
+- 組合格式（catalog plan、event sounds）是資料契約，owner 是提供該 plugin 的人；純函式（EventSounds、CatalogPlan、PreviewCamera、UiTextInput、json binding）是函式庫，與層無關。
+
 ## Design Invariants（候選；核准後成為正式條文）
 
 1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
-2. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
+2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；產品與工具只在 main 列 plugin。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）。
+3. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
 
 ### Replacement Criteria（候選）
 

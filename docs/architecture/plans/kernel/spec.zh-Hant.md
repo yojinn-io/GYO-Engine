@@ -363,7 +363,7 @@ Registry
 1. **Host 列出 plugin**：有序清單，是資料。
 2. **build 段**：依清單順序呼叫每個 plugin 的 `Build(Registrar&)`。plugin 登記它擁有的元件、Resource、事件、effect、System、hook、set；可以在既有 schedule 的具名 stage 前後插入新 stage。id 在登記當下依序配發。每個型別只能由一個 plugin 登記（owner）；第二次登記＝啟動錯誤 R-E2。別的 plugin 只在 System 參數中使用它，不登記它。
 3. **依賴檢查**：`requires = {plugin name…}`。被依賴者不在清單中、或排在依賴者之後＝啟動錯誤 R-E3。Kernel **不做拓撲排序**：清單順序就是 id 順序，要顯式；錯了就報錯。
-4. **finish 段**：全部 build 完成後，依同一順序呼叫 `Finish(const FrozenRegistry&, FinishContext&)`。plugin 讀最終的 id，建自己的表（複製的 wire 序列化表、協議雜湊，K5；`bevy_core:8`），初始化 Resource 的值。**不得再登記**：`Registrar` 在 finish 時已不可取得，型別上做不到（R-2）。
+4. **finish 段**：全部 build 完成後，依同一順序呼叫 `Finish(const FrozenRegistry&, FinishContext&)`。plugin 讀最終的 id，建自己的表（複製的 wire 序列化表、協議雜湊，K5；`bevy_core:8`），初始化 Resource 的值。**plugin 可在 finish 安裝 runner**（照 Bevy `WinitPlugin` 的 `set_runner`；使用者 2026-11-11 決定，audit §3.1）：runner 是 Host 迴圈的提供者（行程入口、pump、交換點），**一個 Runtime 只能有一個**，第二個＝啟動錯誤 R-E6；沒有 plugin 安裝時由 Host 程式自己跑。**不得再登記**：`Registrar` 在 finish 時已不可取得，型別上做不到（R-2）。
 5. **凍結**：`frozen = true`，算 fingerprint（依 id 順序對 (name, size, align, zone, writePolicy, role) 與 (System name, schedule, stage, zone, 存取集合) 以及各 Plan 的步驟序列做 SHA-256）。用途：診斷；兩端比對 FixedUpdate 的 Plan 是否相同（H-4）。
 6. **建 Plan**（D 節）。任何啟動錯誤在這裡一次回報。
 
@@ -388,6 +388,7 @@ Registry
 | R-E3 | `requires` 的 plugin 缺漏或排在後面 |
 | R-E4 | System 或 hook 參數引用了未登記的型別 |
 | R-E5 | TypeKey 位址碰撞（A.6） |
+| R-E6 | 兩個 plugin 都安裝 runner（C.2 第 4 點；audit §3.1） |
 
 ### C.5 C++ 實現手段
 
@@ -841,7 +842,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 
 現況：`EditorClient : Framework::ImGuiShellClient` 在主執行緒；`EditSession` 有 Undo、Revision、`TakeChanges`；預覽用離屏 Renderer 加 readback；ImGui 有全域 context（`ImGuiShell.cpp:225`、`:267-269`）。
 
-改造後：`Document` Runtime（World D，`FrameUpdate`，主執行緒）：文件與 `EditSession` 先當 Resource（要讓編輯工具成為 System 時再拆成實體與元件，交 -audit）；存檔與載入是有 `Io:file` 副作用的 System，經資料契約 `gyo.voxel_map` 讀寫（AGENTS §8）。`Preview` Runtime（World R，`Extract` 從 D 唯讀 → `RenderSubmit` → `Readback`）；ImGui 的 System 都宣告 effect `Gpu:imgui`，彼此序列化。全部 zone=B，依登記順序平手，不需寫順序。文件 World 不是產品 Runtime 的 World，Runtime 不知道編輯器存在；工具知識留在工具。「編輯器直接重用 Engine 的 System」（mechanism §7）＝在編輯器多建一個 Match 形狀的 Runtime（play-in-editor），不在 v1，機制允許。
+改造後（framework 退役：shell 由提供 runner 的 plugin 與 ImGui plugin 取代，audit §3.1）：`Document` Runtime（World D，`FrameUpdate`，主執行緒）：文件與 `EditSession` 先當 Resource（要讓編輯工具成為 System 時再拆成實體與元件，交 -audit）；存檔與載入是有 `Io:file` 副作用的 System，經資料契約 `gyo.voxel_map` 讀寫（AGENTS §8）。`Preview` Runtime（World R，`Extract` 從 D 唯讀 → `RenderSubmit` → `Readback`）；ImGui 的 System 都宣告 effect `Gpu:imgui`，彼此序列化。全部 zone=B，依登記順序平手，不需寫順序。文件 World 不是產品 Runtime 的 World，Runtime 不知道編輯器存在；工具知識留在工具。「編輯器直接重用 Engine 的 System」（mechanism §7）＝在編輯器多建一個 Match 形狀的 Runtime（play-in-editor），不在 v1，機制允許。
 
 #### H.4.4 測試 host（驗證的主路徑）
 
@@ -1176,8 +1177,8 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | 模組 | 初判 | 理由 |
 |---|---|---|
 | `HeadlessShell` | 留（行程入口） | 轉換命令列、呼叫一次 body |
-| `WindowShell`、`WindowShellClient` | 重寫，成為視窗 host 的骨架與標準 ScheduleDef | 今天是 `RuntimeLoop` 加 `Update`／`Render` 的 client 介面（`WindowShell.hpp:19-28`、`:49`），與 H-7 不相容；改造後 framework 提供標準 ScheduleDef 與 Host 骨架（blueprint §6；三層原則：framework 持通用結構） |
-| `ImGuiShell`（binding） | 包 | 全域 context（`ImGuiShell.cpp:225`、`:267-269`）不符 I-3 第 3 條；ImGui System 用 effect `Gpu:imgui` 序列化；可插拔模組（memory framework-controller-principle） |
+| `WindowShell`、`WindowShellClient` | **framework 退役**（使用者 2026-11-11，audit §3.1）：職責由「提供 runner 的 plugin」（行程入口、pump、交換點）與插入標準 Editor stage 的 plugin 群承擔；放 `plugins/` | 今天是 `RuntimeLoop` 加 `Update`／`Render` 的 client 介面，與 H-7 不相容；PvP 從未用它，Client host 另寫。原稿「framework 提供標準 ScheduleDef 與 Host 骨架」作廢 |
+| `ImGuiShell`（binding） | **退役→ImGui plugin**（audit §3.1） | 全域 context 由 plugin 承載並明列例外；其幀順序由 plugin 在 build 插入的 stage 序表達，不再是寫死的 `Update`／`Render` |
 | `Preview`、`PreviewCamera`、`PreviewTexture` | 包（渲染 Runtime 的 plugin） | 離屏裝置加 readback |
 | `EventSounds`、`CatalogPlan`、`ReadOnlyAssetCatalog`、`AbsolutePath` | 留 | 資料契約與純函式 |
 | `UiTextInput`、`bindings/json` | 未查證／留 | — |

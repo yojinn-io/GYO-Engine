@@ -38,6 +38,7 @@
 | `v8-arch-kernel-rc1-rewrite` | 2026-11-11（側邊會話轉述，spec K.3 第 13 項）。使用者核准 RC 第 1 條改寫為三分項（(a) 判定 1 不成立→退回顯式宣告；(b) 經 World 的存取 debug 攔不到→核對層重寫；(c) 上線後兩次以上不屬範囲の限界的不符→頁保護或縮小「包」）。**K.3 全部 17 項定完**；對照表在 target/README。使用者：接下來照計畫，規格與文件更新 → -audit（事前宣告列 L1～L8）→ -spike-pageguard。 |
 | `v8-arch-kernel-audit-third-party` | 2026-11-11（側邊會話轉述）。第三方庫的開源方向在新架構下重核：併進 -audit（third_party/ 每庫一列，I.3 四問判葉子／包／服務，附親和與 zone；結論回寫 #176 判定總表標「依 spec v0.2 重核」）；World 儲存層借 EnTT 或自寫不在 audit 做，等 World 實作批用 W-1～W-11 核對；#176 D2 等 DET-1。 |
 | `v8-arch-kernel-determinism-recheck` | 2026-11-11（側邊會話轉述）。決定性分級契約在新架構下成立，不另開核對卡；四處小改照第一個文件批。-audit 產出加一節：逐模組 zone 判定回對 determinism.md §4 的區表，列漏的模組與標錯的區，交使用者，不改契約。 |
+| `v8-arch-framework-retire` | 2026-11-11（側邊會話轉述，audit §3.1）。framework 退役，不改 DI 2／6：組合與第三方對接由 plugin 承擔；Editor host 骨架＝提供 runner 的 plugin（finish 安裝，一 Runtime 一個，R-E6）；標準 Editor stage＝plugin 在 build 插入；新 top-level `plugins/`（§10 Delta 已同意；Engine 永不 include、產品工具只在 main 列）；三層改為 Engine／plugins／產品與工具；framework DI 整節廢止、docs/framework/ 標廢止；spec L.2、H.4.3、target/runtime-composition 改寫。使用者原則：思想不變，修改就是在破船上打補丁。架構師保留：選擇窗記帳與關窗提示必須進共用 plugin。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定
