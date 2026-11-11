@@ -18,7 +18,7 @@
 讀法：
 - 每個部件一節（A～I），固定小節：資料模型／操作／不變量／C++ 實現手段／Bevy 對照與不採的理由／取捨。
 - 不變量寫成可檢查的句子，每條附「檢查」（守衛測試、啟動檢查、編譯失敗測試、文字掃描，或「審查」）。
-- 「啟動錯誤」＝Runtime 建構時（plugin finish 之後、第一次執行 schedule 之前）回報、Runtime 不啟動；全部收集後一次回報，不在第一個就停。「debug 斷言」＝`GYO_ASSERT`，只在 debug 建置有效；release 不攔，本稿每處都寫明。「常開檢查」（修訂：B4／S6）＝不依 `NDEBUG`、所有組態都做的檢查，只用在以執行期 id 為輸入的 untyped 路徑（untyped `Commands`、`Despawn`、`ExclusiveWorld` 的寫入）：id 是執行期資料，查一次 `ColumnInfo` 的旗標與寫入本身同量級，所以不必只留給 debug；違反時呼叫 assertion handler（巨集名未定）。
+- 「啟動錯誤」＝Runtime 建構時（plugin finish 之後、第一次執行 schedule 之前）回報、Runtime 不啟動；全部收集後一次回報，不在第一個就停。「debug 斷言」＝`GYO_ASSERT`，只在 debug 建置有效；release 不攔，本稿每處都寫明。「Result 回報」（使用者 2026-11-11 決定，K.3 第 17 項，取代原稿的「Result 回報」巨集）＝以**執行期資料**才能偵測的 Programmer Error（untyped `Commands`、`Despawn`、`ExclusiveWorld` 的寫入違反區規則或獨占），Kernel 的 API 回 `Result<void, KernelError>`，錯誤帶完整上下文（System 名、Plan 位置、命令種類、EntityId、ComponentId、違反的規則代號）；**System 的簽名回 `Result<void, KernelError>`**，收到錯誤後包一層自己的上下文回傳（Go 的 `%w` 鏈），不自己記錄；Executor 是最外層、**只處理一次**：記錄完整鏈路一次（日誌開關在 Executor 的 handler，`Base::Result` 仍是純值）、World 標 `Interrupted`（E.5）；release 也如此，**不靜默**；debug 建置另在記錯當下呼叫 assertion handler（現場停）。最終處置仍是 Programmer Error，Result 在此是診斷鏈的載具，不表示可恢復（error-handling.md 加一列，Delta 已同意）。
 - 本稿決定語義與資料佈局，不決定 API 名稱。`Read<T>`、`Commands`、`Link` 等只是說明用的名字。
 - 標「統合者補」的段落：三份提案都沒寫、由統合者依 A～M 的要求補上。標「取捨」的小段：三份提案衝突處與取捨理由。
 - 不變量編號：W（World）、S（System）、R（Registry）、D（Scheduler）、X（Executor）、F（延後佇列／hook／事件）、Z 與 G（決定性）、H（多 World）、I（邊界）。守衛測試編號 J-n（J 節）。
@@ -257,12 +257,12 @@ SystemDescriptor（不可變，finish 時產生）
 ### B.4 C++ 實現手段（從簽名推出）
 
 1. **入口形式**（修訂：S9）：`AddSystem<&Fn>(…)`，`Fn` 是非成員、非模板的函式，以**非型別模板引數**傳入（執行期的函式指標不是常數運算式，不能當 `Thunk<Fn>` 的模板引數，所以沒有 `AddSystem(fnPtr)` 這種形式）；無捕獲 lambda 以**型別**傳入 `AddSystem<F>(…)`，C++20 的無捕獲閉包型別可預設建構，跳板內以 `+F{}` 取函式指標或直接呼叫 `F{}(…)`。有捕獲的 lambda、成員函式、泛型 lambda（`auto` 參數）、多載的 `operator()`：`static_assert` 失敗並附說明。理由：捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道；禁止它們把繞路面縮到全域變數與 `Local`。成本：每個 System 一個 `Thunk` 的實例化（一個函式）；沒有執行期間接呼叫。
-2. **型別萃取**：`FunctionTraits<R(*)(Args...)>` 與 `FunctionTraits<R(*)(Args...) noexcept>` 兩個特化（noexcept 是函式型別的一部分）。回傳型別限 `void`。只特化預設呼叫慣例（B.6 風險 2）。
+2. **型別萃取**：`FunctionTraits<R(*)(Args...)>` 與 `FunctionTraits<R(*)(Args...) noexcept>` 兩個特化（noexcept 是函式型別的一部分）。回傳型別限 `Result<void, KernelError>`（K.3 第 17 項；原稿 `void`）。只特化預設呼叫慣例（B.6 風險 2）。
 3. **參數映射**：每個參數型別 `P` 必須有 `ParamTraits<P>` 特化，否則 `static_assert(dependent_false<P>)`。`ParamTraits<P>` 提供 `using Contribution = TypeList<Read<A>, Write<B>, …>`（編譯期只收集型別）、`static P Fetch(SystemContext&)`、`static constexpr bool readOnly`。
 4. **允許的參數型別**（全部以值傳遞的小句柄）：`Query<Q…, F…>`（`Q` ∈ `Read<T>`、`Write<T>`；`F` ∈ `With<T>`、`Without<T>`、`Changed<T>`、`Added<T>`）、`Res<T>`、`ResMut<T>`、`EventReader<E>`、`EventWriter<E>`、`Commands`（untyped；只能 insert／remove zone=B、Shared 的欄，F.1）、`CommandsFor<Inserts<…>, Removes<…>>`、`Spawn<Bundle<…>>`、`SpawnWithId<Bundle<…>>`（修訂：B3；bundle 型別進存取集合）、`Despawn`、`Local<T>`、`ExclusiveWorld`（必須是唯一參數；只允許 zone=B，S-13）、`Extract<Read<T>>`／`ExtractRes<R>`（只在 extract schedule 合法）、`SetRead<SetId>`（修訂：S13；讀 Registry 中一個**具名元件集合**的全部欄，以型別擦除的位元組疊代加 stamp 提供；集合的成員由各 plugin 在 build 登記、finish 時凍結，所以 Scheduler 在 finish 時知道確切的 ComponentId 集合。這是 replicon「讀全部被複製元件」（replicon.md §3，手寫 SystemParam）與 digest 編碼在本機制的形狀；它不是動態查詢：執行期不查型別、不改集合。`digestSet`（S-12）是其中一個具名集合）。任何 `T&`、`T*`、`const T&`、`World&`、`int`：`static_assert` 擋下。
 5. **編譯期自我衝突檢查**：把所有 Contribution 串成一個 TypeList，O(n²) 的 constexpr 比較：同一 `T` 不得同時 `Read` 與 `Write`（要讀又寫只宣告寫）；`Write<T>` 不得出現兩次；`ResMut<T>` 與 `Res<T>` 不得並存。參數上限 16，讓 pack 運算保持在兩個編譯器的 constexpr 與模板深度預設之內（B.6 風險 3）。
 6. **型別 → id**：登記時進行，不在編譯期（id 是執行期依登記順序配的）。查不到＝啟動錯誤 R-E4「System X 引用未登記的型別 T」。
-7. **呼叫跳板**（修訂：S8／S9／N8，採 spike 的形狀）：`template <auto Fn> void Thunk(SystemContext& ctx) { Fn(ParamTraits<Args>::Fetch(ctx)...); }`。句柄是不可複製、不可移動的 prvalue，經 pack expansion 直接初始化以值接收的參數（C++17 保證的複製省略），所以不能先裝進 `std::tuple` 再 `std::apply`（那要移動）。函式呼叫引數的求值順序未指定（MSVC 與 Clang 不同），因此 **`Fetch` 不得有副作用、不得依賴順序**（只解析指標與 id）：這是契約，J-12 的 System 以兩種引數順序的組合檢查結果相同；不依賴 `[dcl.init.list]/4` 的由左到右保證（歷史上編譯器對它有缺陷，GCC PR 51253）。
+7. **呼叫跳板**（修訂：S8／S9／N8，採 spike 的形狀）：`template <auto Fn> Result<void, KernelError> Thunk(SystemContext& ctx) { return Fn(ParamTraits<Args>::Fetch(ctx)...); }`（K.3 第 17 項：System 回 Result，Executor 收到 Err 記錄一次並標 Interrupted）。句柄是不可複製、不可移動的 prvalue，經 pack expansion 直接初始化以值接收的參數（C++17 保證的複製省略），所以不能先裝進 `std::tuple` 再 `std::apply`（那要移動）。函式呼叫引數的求值順序未指定（MSVC 與 Clang 不同），因此 **`Fetch` 不得有副作用、不得依賴順序**（只解析指標與 id）：這是契約，J-12 的 System 以兩種引數順序的組合檢查結果相同；不依賴 `[dcl.init.list]/4` 的由左到右保證（歷史上編譯器對它有缺陷，GCC PR 51253）。
 8. **句柄的受限性**（修訂：S8）：`Query<Read<A>>` 只提供 `const A&`；`Write` 才給 `Mut<A>`。句柄**刪除複製（因而不可移動）、建構子私有、只有 `ParamTraits` 的工廠能造**（spike 的做法）：System 在編譯期就不能把句柄存到 `Local`、全域或靜態變數，也不能自己造一個沒宣告的句柄。句柄內只有 id 與 World 的私有指標；World 的型別化存取 API 放在 `detail`，以 friend 或 passkey 只開放給 `ParamTraits`。能存起來的只剩從句柄取出的 `T&`／`T*`（B.5）。
 9. **型別擦除**：一個 System 一個 `Thunk<Fn>` 函式指標放進描述；參數狀態是 `std::tuple<typename ParamTraits<Args>::State...>`，配置在 System 的節點上。
 10. **debug 核對**：A.6。
@@ -301,7 +301,7 @@ SystemDescriptor（不可變，finish 時產生）
 | # | 不變量 | 檢查 |
 |---|---|---|
 | S-1 | System 的可呼叫物無狀態：函式指標或無捕獲 lambda；有捕獲的 lambda、成員函式、泛型 lambda 不能登記 | `static_assert`；J-10（編譯失敗測試） |
-| S-2 | 每個參數型別都有 `ParamTraits` 特化；`World&`、產品物件、裸指標、`int` 不能當參數 | 編譯失敗；J-10 |
+| S-2 | 每個參數型別都有 `ParamTraits` 特化；`World&`、產品物件、裸指標、`int` 不能當參數；回傳型別必須是 `Result<void, KernelError>`（K.3 第 17 項） | 編譯失敗；J-10 |
 | S-3 | 同一 System 內同一 id 不能寫兩次、不能同時讀又寫 | constexpr 檢查；J-11 |
 | S-4 | derived 存取集合等於各參數 Contribution 的聯集，不多不少；run 條件的 reads 併入 | J-12（spike 判定 (1)：10 個以上簽名） |
 | S-5 | run 條件的參數全唯讀 | `static_assert`；J-13 |
@@ -312,7 +312,7 @@ SystemDescriptor（不可變，finish 時產生）
 | S-10 | `ExclusiveWorld` 參數單獨出現；exclusive System 與同 stage 的所有 System 衝突（衝突分析視為讀全部 id、寫全部 zone=B 且 Shared 的 id） | `static_assert`；Scheduler |
 | S-11 | 獨占寫入：B.3 | finish 檢查 D-E2；J-15 |
 | S-12 | 宣告「進權威 digest」的元件，寫入政策必須是 Exclusive | finish 檢查；J-16 |
-| S-13 | `ExclusiveWorld`（修訂：B4）：只允許 zone=B 的 System（zone=C 持 `ExclusiveWorld`＝D-E7）；它的句柄對所有資料提供唯讀的 untyped 存取，寫入 API 只接受 zone=B 且 `Shared` 的欄與 Resource，對其他 id 的寫入是**常開檢查**（§讀法）的 Programmer Error；它不能 spawn、不能 despawn 帶 zone=C 欄的實體（同 Z5）。因此 exclusive System 永遠不是 Exclusive 欄的寫者、不碰 (c) 資料，B.3 與 Z2 不需要列舉它。編輯器檢視器要改的欄必須登記為 zone=B、Shared，或改用型別化 System | `static_assert`（zone 在登記時給）；常開檢查；J-45 |
+| S-13 | `ExclusiveWorld`（修訂：B4）：只允許 zone=B 的 System（zone=C 持 `ExclusiveWorld`＝D-E7）；它的句柄對所有資料提供唯讀的 untyped 存取，寫入 API 只接受 zone=B 且 `Shared` 的欄與 Resource，對其他 id 的寫入是**Result 回報**（§讀法）的 Programmer Error；它不能 spawn、不能 despawn 帶 zone=C 欄的實體（同 Z5）。因此 exclusive System 永遠不是 Exclusive 欄的寫者、不碰 (c) 資料，B.3 與 Z2 不需要列舉它。編輯器檢視器要改的欄必須登記為 zone=B、Shared，或改用型別化 System | `static_assert`（zone 在登記時給）；Result 回報；J-45 |
 
 ### B.8 Bevy 對照與不採的理由
 
@@ -567,6 +567,7 @@ ExecutorConfig（Host 給）
 
 ### E.5 例外
 
+- **Result 的處置**（K.3 第 17 項）：System 或 hook 回傳 `Err(KernelError)` 時，Executor 記錄完整的上下文鏈一次（handler 可換，開關在 Executor 不在 Result）、World 標 `Interrupted`、本次 `Run` 結束；release 同樣處置，不靜默；debug 下錯誤被記錯的當下已呼叫 assertion handler。
 - Executor 不捕捉 System 或 hook 拋出的例外。`tlCurrent` 以 RAII 清除。
 - 例外穿出時，World 標記 `Interrupted`：當前同步窗已記錄的延後佇列**丟棄**，事件緩衝不動，已套用的部分保持原樣。之後任何 `Run` 在 debug 與 release 都斷言，直到 Host 呼叫 `Restore` 或重建 World。
 - 理由：半個 stage 的狀態不能被下一個 tick 當完整狀態使用。現況 `MatchRuntimeHost::Body` 捕捉例外並停止（`MatchRuntimeHost.cpp:542`），語義一致。
@@ -621,7 +622,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 
 - **`recSeq`**（修訂：B1）：每個佇列自己的記錄序號，從 0 起、每記一筆 +1；同一 System 一次呼叫內的紀錄因此有全序。`planPos` 是記錄者在 Plan 中的位置；hook 的紀錄 `planPos` = 它所屬同步點的 Plan 位置、`recSeq` 由 hook 佇列統一計數（hook 的執行順序由 F.2 的階段與 id 決定，所以 recSeq 是決定性的）。(planPos, recSeq) 在一個同步窗內**唯一**：不同 System 的 planPos 不同；同一 System 的 recSeq 不同；hook 佇列是獨立的一個 planPos。排序鍵的唯一性由這兩個欄位保證，不靠 `stable_sort`。
 - 同一個 System 本次呼叫中 `Spawn` 回傳的 id 立即可用於 `Insert`（id 已配好）；因此不需要 provisional handle。
-- 未型別化的 `Commands` 只能 insert／remove zone=B 且 Shared 的欄，不能 spawn；動 zone=C 或 Exclusive 的欄要用 `CommandsFor<Inserts<…>, Removes<…>>`（型別參數進存取集合、參與 D-E2 與區規則）。違反是**常開檢查**（§讀法；修訂：S6／B4）：記錄當下查 `ColumnInfo` 的 `zone` 與 `writePolicy`，不符就呼叫 assertion handler，debug 與 release 都攔（F-10）。理由：untyped `Commands` 是正式 API，不是繞路；只靠 debug 斷言會讓 release 靜默通過。
+- 未型別化的 `Commands` 只能 insert／remove zone=B 且 Shared 的欄，不能 spawn；動 zone=C 或 Exclusive 的欄要用 `CommandsFor<Inserts<…>, Removes<…>>`（型別參數進存取集合、參與 D-E2 與區規則）。違反是**Result 回報**（§讀法；修訂：S6／B4）：記錄當下查 `ColumnInfo` 的 `zone` 與 `writePolicy`，不符就呼叫 assertion handler，debug 與 release 都攔（F-10）。理由：untyped `Commands` 是正式 API，不是繞路；只靠 debug 斷言會讓 release 靜默通過。
 
 ### F.2 同步點的套用（Applying），逐階段
 
@@ -629,7 +630,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 
 0. **hook 佇列先套用**：上一個同步窗的 hook 記錄的變更，planPos 為該同步點的 Plan 位置、recSeq 依 hook 佇列計數（F.1）。它們觸發的 hook 同樣記到下一窗。
 1. **收集**：同步窗內各 System 的佇列。
-2. **Despawn**：依 EntityId 升冪，只對**窗開始時活著**的實體；對不存在的 id 無作用、不計數。對該實體的每個元件依 ComponentId 升冪執行 OnRemove，再移除並 `destroy`，最後從 `entities` 移除。同一 id 記錄兩次只處理一次（冪等）。(b) 發出者對帶 zone=C 欄的實體的 despawn 是常開檢查（Z5）。
+2. **Despawn**：依 EntityId 升冪，只對**窗開始時活著**的實體；對不存在的 id 無作用、不計數。對該實體的每個元件依 ComponentId 升冪執行 OnRemove，再移除並 `destroy`，最後從 `entities` 移除。同一 id 記錄兩次只處理一次（冪等）。(b) 發出者對帶 zone=C 欄的實體的 despawn 是Result 回報（Z5）。
 3. **Remove**：依 (EntityId 升冪, ComponentId 升冪)。先執行 OnRemove hook（此時格子還讀得到），再移除。移除不存在的格子（含第 2 步已 despawn 的）無作用、不觸發 hook。
 4. **Spawn**：依 EntityId 升冪。加入 `entities`，插入 bundle 的元件；`added` 與 `changed` 設為這個同步點的 stamp。同一 id 本窗記錄兩次 → debug 斷言（entity-store 契約）；id 在窗開始時活著且本窗未 despawn → debug 斷言（只有 SpawnWithId 會碰到）。
 5. **Insert**：依 (EntityId 升冪, ComponentId 升冪, planPos 升冪, recSeq 升冪)。目標實體不存在（含第 2 步 despawn 的）且不在本窗 spawn → 丟棄，計入診斷計數 `deferredDroppedMissingEntity`（結果，不是錯誤）。格子不存在 → 插入，`added`、`changed` 設 stamp。格子已存在 → 覆寫，`changed` 設 stamp；同一 (實體, 元件) 多筆時 (planPos, recSeq) 最大者勝出（跨 System 的兩筆已被 D-E8 強制寫順序，所以 planPos 的大小就是宣告的先後；同一 System 的兩筆依程式順序，後寫的勝）。同一欄的插入已排序，一次合併套用（A.6）。
@@ -679,7 +680,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 | F-7 | 事件：tick T 寫入的項目，位置在寫者之後的讀者 T 就讀到、之前的讀者 T＋1 讀到，T＋1 的 eventTrim 之後讀不到；每筆對每個執行了的讀者恰好一次 | J-36（寫者與讀者四種相對順序 × 兩個 tick） |
 | F-8 | 讀者讀到的順序＝(tick, writerPos, seq) 升冪 | J-36 |
 | F-9 | 事件的寫者與讀者都在該事件 domain 的 **clock schedule** 中（含 hook：所屬同步點在該 schedule 內） | J-37（F-E1） |
-| F-10 | untyped `Commands` 只能 insert／remove zone=B 且 Shared 的欄、不能 spawn；延後插入 Exclusive 欄的記錄者必須是該欄唯一的寫者 | J-15（S-11 涵蓋延後寫與 bundle）；J-32b（**常開檢查**，debug 與 release 都測；修訂：S6） |
+| F-10 | untyped `Commands` 只能 insert／remove zone=B 且 Shared 的欄、不能 spawn；延後插入 Exclusive 欄的記錄者必須是該欄唯一的寫者 | J-15（S-11 涵蓋延後寫與 bundle）；J-32b（**Result 回報**，debug 與 release 都測；修訂：S6） |
 | F-11 | (c) 的 hook 衝突被拒 | J-34（D-E9） |
 
 ### F.6 C++ 實現手段
@@ -725,7 +726,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 | Z2 | zone=C 的資料只由 zone=C 的 System 或 hook 寫入（含 bundle 與 `EntityAllotter`）；例外見 Z3。Runtime 的回滾還原與 Host 在 Ready 狀態對 boundary Resource 的寫入不算 |
 | Z3 | zone=B 且 `ingress = true` 的 System 可寫 `role = Input` 的 zone=C 資料；它必須位於 ScheduleDef 指定為 ingress 的 stage（schedule 的第一個 stage）；可以讀 Link |
 | Z4 | zone=C 的 System：無 effect（S-8）、無 Local（S-7）、無 Changed／Added（S-9）、無 `ExclusiveWorld`（S-13） |
-| Z5 | Despawn 一個帶有 zone=C 欄的實體，發出者必須是 zone=C。檢查：套用時**常開檢查**（修訂：S6；despawn 的目標是執行期 id，查該實體有沒有 zone=C 欄與寫入同量級）；finish 時對 (b) System 的 `Despawn` 無法靜態判斷目標，不做啟動檢查 |
+| Z5 | Despawn 一個帶有 zone=C 欄的實體，發出者必須是 zone=C。檢查：套用時**Result 回報**（§讀法；despawn 的目標是執行期 id，查該實體有沒有 zone=C 欄與寫入同量級）；finish 時對 (b) System 的 `Despawn` 無法靜態判斷目標，不做啟動檢查 |
 | Z6 | `rollbackEnabled` 的 schedule 上，zone=C 的 System 寫的每個欄與 Resource 必須是 `rollback ∈ {Yes, Derived}`（Derived 另受 D-E16 的順序條件）；zone=C 的 hook 寫的必須是 `rollback = Yes`（修訂：S12） |
 | Z7 | zone=C 的 System 不得寫 `external` Resource（`ResMut<Link>` 在 (c) 是 D-E7）；由 Z1 的「全部存取」涵蓋，單列是為了 J-41 的案例（修訂：B2） |
 | Z8 | `role = Input` 的欄與 Resource 必須 `rollback = No`（修訂：B7）：輸入是以 tick 為鍵的歷史，Rewind 不得抹掉 t0 之後已記錄的輸入，Replay 從它讀 |
@@ -746,7 +747,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 | # | 不變量 | 檢查 |
 |---|---|---|
 | G-1 | 區是宣告：每個 System、元件、Resource、事件都宣告 `zone`，沒有預設 | S-6；J-14 |
-| G-2 | Z1～Z8 每一條違反都是啟動錯誤（Z5 是套用時的常開檢查） | J-40、J-41、J-38、J-39、J-14、J-32b；突變：移除每一條檢查、Ingress 豁免擴大到所有 (b) |
+| G-2 | Z1～Z8 每一條違反都是啟動錯誤（Z5 是套用時的Result 回報） | J-40、J-41、J-38、J-39、J-14、J-32b；突變：移除每一條檢查、Ingress 豁免擴大到所有 (b) |
 | G-3 | (c) 區不用變更過濾：理由是 Match 執行一次與 Client 回滾重跑時「上次執行之後的變更」不同，兩端的 stamp 毫無關係 | J-38 |
 | G-4 | Host 寫入的 (c) 輸入（Startup 初始內容、boundary Resource）必須可記錄：產品為它們提供序列化，重放 host 從記錄重現 | 產品守衛（AuthorityDigest 的 scripted clock 就是 `HostClockSample` 的現況形式）；審查 |
 | G-5 | 啟動時輸出「(c) 區資料集」與「(c) 區 System 來源檔清單」兩份報告；前者與 `DigestFields` 對照（determinism.md DI 1） | J-17 讀清單 |
@@ -999,7 +1000,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | J-7 | `CountingDtor` 記錄的解構順序：despawn 依 ComponentId，World 解構依 (ComponentId, EntityId) | W-7 | 依登記反序解構 |
 | J-8 | 配發器單調、用盡時回報錯誤、不回繞；沒有配發器的 World 登記 `Spawn` System 在 finish 失敗（D-E3） | W-9 | 用盡時回繞；缺 Resource 檢查被移除 |
 | J-9 | Kernel 目錄的文字掃描（含自測）：無 `unordered_`、`std::hash` 疊代、`<random>`、`<chrono>`；Parallel 模組外無 `<thread>`／`<atomic>`；無非 constexpr `static`／`thread_local`，**白名單只有 `tlCurrent` 與 `TypeKey<T>` 的 `static inline char`**（A.6；修訂：S10）；無產品名 | W-10、X-8、R-7 | 加 `unordered_map` 索引；加函式內 `static` 快取；加一個產品名；白名單加第三個符號（自測必須失敗） |
-| J-10 | 編譯失敗測試（CMake `try_compile` 預期失敗）：帶捕獲的 lambda、泛型 lambda、成員函式、`World&`／`T&`／`int` 參數 | S-1、S-2 | 移除 `static_assert` |
+| J-10 | 編譯失敗測試（CMake `try_compile` 預期失敗）：帶捕獲的 lambda、泛型 lambda、成員函式、`World&`／`T&`／`int` 參數、回傳 `void` 或非 `Result<void, KernelError>` | S-1、S-2 | 移除 `static_assert` |
 | J-11 | 編譯失敗測試：同一型別寫兩次、同時讀又寫、`Res` 與 `ResMut` 並存；另做「全量對增量重建」等價測試：以 stamp 做差分重建的結果等於全量（抓漏標記） | S-3、W-11 | 移除檢查；`Mut` 不標記 |
 | J-12 | 12 個以上不同簽名的 System，推出的存取集合與手寫期望逐一相同（static_assert 加執行期；spike 判定 (1) 本機 18 個簽名成立、三平台待 L1），含 Query 的 Read／Write／With／Without／Changed、Res／ResMut、EventReader／Writer、Commands／CommandsFor、`Spawn<Bundle<…>>`（bundle 元件進延後寫，B3）、`SetRead`（finish 展開）、Local、ExclusiveWorld、run 條件併入；另以兩種參數順序的同一 System 檢查 `Fetch` 無順序相依（B.4 第 7 點） | S-4 | 某個參數的 Contribution 漏掉一個型別；bundle 不進存取集合 |
 | J-13 | 編譯失敗測試：run 條件帶 Write 參數 | S-5 | 移除 |
@@ -1023,7 +1024,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | J-30 | 條件為假時 stamp 仍被消耗；stamp 只取決於 Plan 位置；寫入時標 stamp、唯讀不標 | X-5、W-11 | 跳過時不消耗 |
 | J-31 | 本窗的 spawn 在同一窗內不可見，過了同步點才可見 | F-1 | 立即套用 |
 | J-32 | 不同 System 執行順序（無衝突者重排）、相同記錄集合，World 位元組相同；同一 System 兩筆同鍵、兩個 hook 各一筆同鍵的勝者有 golden（三平台）；同窗 despawn X 再 `SpawnWithId(X)`：新實體存活、hook 看到 remove 再 add；對已 despawn 實體的 Insert 被丟棄並計數 | F-2 | 依記錄順序套用；spawn 先於 despawn；不去重；Insert 平手勝者反轉；丟掉 recSeq 用 `std::sort`（修訂：B1／S4） |
-| J-32b | untyped `Commands` 動 (c) 或 Exclusive 欄、untyped spawn、(b) System despawn 帶 (c) 欄的實體→**debug 與 release 都**斷言（常開檢查；修訂：S6） | F-10、Z5 | 移除；只在 debug 檢查（release 的測試必須失敗） |
+| J-32b | untyped `Commands` 動 (c) 或 Exclusive 欄、untyped spawn、(b) System despawn 帶 (c) 欄的實體→**debug 與 release 都**斷言（Result 回報；修訂：S6） | F-10、Z5 | 移除；只在 debug 檢查（release 的測試必須失敗） |
 | J-33 | stage 末與宣告的同步點都套用；未宣告處不套用 | F-3 | 每個 System 後都套用 |
 | J-34 | hook 依登記順序；hook 的變更下一窗才生效；Applying 期間 System 路徑記錄斷言；(c) hook 衝突 finish 失敗 | F-4、F-5、F-11 | 立即套用；hook 反序；移除 D-E9 |
 | J-35 | System 拋例外→World `Interrupted`、本窗佇列丟棄、下一次 Run 斷言；Restore 後可用 | E.5、X-9 | 拋出後不標記 |
@@ -1038,7 +1039,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | J-42c | Restore 整欄替換後 OnAdd／OnRemove 不執行；Restore 寫回的格 `changed` = 目前 stamp（修訂：S12） | H-11 | Restore 觸發 hook |
 | J-43 | Extract 期間來源 World 的位元組與 stamps 不變；寫入斷言；來源未凍結先建目標＝啟動錯誤；`Extract<Write>` 編譯失敗 | H-6 | 移除 |
 | J-44 | (c) System 的登記順序做 20 種排列：要嘛全部 D-E8，要嘛每一對衝突 System 的先後與 World 摘要（D-9 的定義：不含 stamps）都不變 | D-9 | 平手改用插入順序以外的不穩定鍵；(c) 歧義改平手 |
-| J-45 | `ExclusiveWorld` System：zone=C 持有它→finish 失敗；(b) 的 exclusive System 寫 zone=C 欄、寫 Exclusive 欄、spawn→常開檢查斷言（debug 與 release）；寫 zone=B 且 Shared 的欄通過；讀任何欄通過（修訂：B4） | S-13 | 移除常開檢查；只在 debug 檢查 |
+| J-45 | `ExclusiveWorld` System：zone=C 持有它→finish 失敗；(b) 的 exclusive System 寫 zone=C 欄、寫 Exclusive 欄、spawn→Result 回報斷言（debug 與 release）；寫 zone=B 且 Shared 的欄通過；讀任何欄通過（修訂：B4） | S-13 | 移除Result 回報；只在 debug 檢查 |
 | J-46 | `rollback = Derived` 的欄：讀者前無同 schedule 立即寫者→finish 失敗（D-E16）；有則通過，且 Rewind 後 Replay 第一步讀到的值等於重算值 | A.1 Derived、Z6 | 移除順序檢查 |
 | J-47 | 具名集合：兩個 plugin 各加一個元件進同一集合，`SetRead` 的 System 在 finish 得到兩個 id 的讀；移除其中一個 plugin 後只剩一個；集合中有 (b) 欄而讀者是 (c) → D-E7（修訂：S13） | B.4 第 4 點、Z1 | 展開漏掉後登記的成員 |
 
@@ -1062,7 +1063,7 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 13. 丟掉 recSeq 用 `std::sort` 排延後佇列（J-32；三平台 golden 才抓得到）
 14. Z1 只看 reads、不看 writes 與 With／Without（J-40）
 15. Rewind 不還原 domain tick；ingress 在 Replay 中執行（J-42）
-16. untyped 路徑的常開檢查退成 debug 斷言（J-32b、J-45 的 release 目標）
+16. untyped 路徑的 Result 回報退成只有 debug 斷言、或 Executor 靜默吞掉 Err（J-32b、J-45 的 release 目標）
 
 ### J.4 產品守衛（不在 Kernel，由 owner 持有）
 
@@ -1081,11 +1082,11 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 ### K.1 Design Invariants（候選 DI-KS）
 
 1. **描述從簽名推出，一份。** System 的資料存取集合等於其參數型別的 Contribution 聯集（含 bundle 的延後寫、`SetRead` 在 finish 展開的讀；`ExclusiveWorld` 的 Contribution 是「讀全部、寫 zone=B 且 Shared 的全部」）；登記 API 不接受手寫的第二份存取宣告；System 是無狀態的可呼叫物，參數只能是 `ParamTraits` 特化過的型別，句柄不可複製、不可移動。守衛：J-10～J-12。（DI-K2 的推導半；S-1～S-4、S-13）
-2. **經 World 的繞路在 debug 被攔；untyped 路徑常開檢查。** System 自己的執行緒上經 World API 存取未宣告的 `(id, mode)`，debug 在存取當下斷言；未宣告寫入的欄在 System 邊界有淨變化，debug 斷言；release 兩者都不攔，寫明。untyped `Commands`、`Despawn`、`ExclusiveWorld` 對 zone=C 或 Exclusive 資料的寫入，在所有組態斷言。守衛：J-5、J-6、J-32b、J-45。（W-5、W-6、F-10、Z5、S-13；修訂：B4／S6／S8）
+2. **經 World 的繞路在 debug 被攔；untyped 路徑以 Result 回報、Executor 記錄一次並 Interrupted，release 不靜默。** System 自己的執行緒上經 World API 存取未宣告的 `(id, mode)`，debug 在存取當下斷言；未宣告寫入的欄在 System 邊界有淨變化，debug 斷言；release 兩者都不攔，寫明。untyped `Commands`、`Despawn`、`ExclusiveWorld` 對 zone=C 或 Exclusive 資料的寫入，在所有組態回 `Err(KernelError)`（帶上下文），System 包一層回傳，Executor 記錄一次並標 Interrupted；debug 另在記錯當下斷言。守衛：J-5、J-6、J-32b、J-45。（W-5、W-6、F-10、Z5、S-13；修訂：B4／S6／S8）
 3. **順序只來自 id 與 Plan。** 每個欄依 EntityId（u64 的數值，Kernel 不解讀 index／generation 兩段）嚴格升冪，查詢依升冪或交集的升冪產出；World、Scheduler、Executor 不用雜湊順序、指標比較、執行緒完成順序決定任何順序。守衛：J-1、J-2、J-9。（DI-K3 的一部分；W-1、W-2、W-10）
 4. **id 由登記順序或配發器決定，凍結後不變。** ComponentId、ResourceId、EventTypeId、registrationSeq＝登記順序；TypeKey 只用於行程內查表；執行期 id 不上 wire、不進 digest；World 不配發實體 id；配發器是產品的 Resource，鍵格式固定為低 32 index、高 32 generation，配發策略（PvP：單調不重用、generation 恆 0）由產品宣告；stale 句柄的偵測能力取決於策略，Kernel 只保證鍵還活著。守衛：J-8、J-18、J-19；掃描。（DI-K3；R-1～R-3、W-9；使用者 2026-11-11 K.3 第 1 項）
 5. **衝突與順序分開；(c) 的歧義是啟動錯誤。** 衝突邊只表示「不能同時」，順序邊表示先後。有衝突且無順序的對：任一方 zone=C→啟動錯誤；兩方 zone=B→登記序平手。Kernel 不提供歧義豁免。(c) 區對登記順序不敏感。守衛：J-20～J-24、J-44。（DI-K1 的修正版；D-1～D-10；主張 A）
-6. **獨占寫入是啟動檢查。** 元件與 Resource 預設 Exclusive；Exclusive 的欄在一個 World 的所有非 Startup schedule 中寫者（以 System 計）至多一個，寫者含 `Write`、型別化 Commands、`Spawn`／`SpawnWithId` 的 bundle、hook；沒有函式體內決定型別的寫入路徑能繞過計數（untyped 路徑寫不到 Exclusive 欄，常開檢查）；進 digest 的欄必須 Exclusive。守衛：J-15、J-16、J-32b。（DI-K2 的單一 writer，範圍從「同階段」改為整個 World；AGENTS §3；修訂：B3／S1）
+6. **獨占寫入是啟動檢查。** 元件與 Resource 預設 Exclusive；Exclusive 的欄在一個 World 的所有非 Startup schedule 中寫者（以 System 計）至多一個，寫者含 `Write`、型別化 Commands、`Spawn`／`SpawnWithId` 的 bundle、hook；沒有函式體內決定型別的寫入路徑能繞過計數（untyped 路徑寫不到 Exclusive 欄，Result 回報）；進 digest 的欄必須 Exclusive。守衛：J-15、J-16、J-32b。（DI-K2 的單一 writer，範圍從「同階段」改為整個 World；AGENTS §3；修訂：B3／S1）
 7. **(c) 預設 Serial；Parallel 要逐位元守衛。** 含 zone=C System 的 schedule 宣告 Parallel 時，必須指名一個存在、帶 `cpu` 標籤、比對 Serial 與 Parallel 的 (c) digest 逐位元相同的測試，否則啟動錯誤。守衛：J-27。（DI-K1「不做自動平行」的修正版；主張 B）
 8. **區規則是啟動檢查。** 每個 System、元件、Resource、事件宣告 zone，沒有預設；Z1～Z8。zone=C System 的全部存取（讀、寫、With／Without、事件、延後寫、run 條件）都落在 zone=C 資料；(c) 只從 domain tick 與被記錄的 boundary 輸入取時間、從 World 取亂數、從 `InputRing` 取輸入；不用變更過濾；不讀寫 external Resource；role=Input 的資料不回滾。守衛：J-14、J-38～J-41；J-17。（DI-K5、DI-K6；G 節；修訂：B2／B6／B7）
 9. **結構變更延後、在宣告的同步點依「hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource」套用，每階段依 id，同鍵依 (planPos, recSeq)，鍵唯一。** Running 期間成員不變；hook 的變更屬下一窗；結果不依 System 之間的記錄順序。守衛：J-3、J-31～J-34。（K4；W-3、F-1～F-5；延伸 entity-store DI 4；修訂：B1／S4）
@@ -1129,12 +1130,12 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 9. ~~獨占寫者的單位~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：獨占寫者**以 System 計**，Startup schedule 不計；PvP 的 Body 依 entity-model 第 139 行的欄位分類**拆欄**，不併 System、不改 Shared、不採「以 owner plugin 計」。使用者原話：不拆的話架構改造就沒有意義。拆欄的範圍與 golden 影響由 -audit 量。
 10. ~~Join／Leave 進 tick 內~~ **已決定（使用者 2026-11-11，側邊會話轉述）：採規格**。Ingress 只寫請求進 `InputRing`，(c) 的 `ApplyMembership` 以 `SpawnWithId`／`Despawn` 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（加入／離開晚最多一 tick；`combat-rejoin` 等 golden 可能差一 tick、要重設基準）記為限制 LIM-5，由產品線在遷移批確認；entity-model §5.2 改寫（排進改造的第一個文件批）。
 11. ~~時間的來源~~ **已決定（使用者 2026-11-11，側邊會話轉述）：採 (i)**。(c) 區的時間只來自兩個來源：World 的 domain tick，與被記錄的 boundary 輸入（Host 每次喚醒取樣一次的 `HostClockSample`、隨每筆輸入進 ring 的到達時刻）；(c) System 自己讀時鐘仍禁止。mechanism §3.3 Executor 列那一句已改；determinism.md DI 4 不動。B6 結案。規則寫進 `docs/architecture/target/determinism.md`。
-12. **F.2 的階段順序改成 despawn、remove 先於 spawn、insert**（S4）：讓同窗「刪 X 再以同 id 生成 X」成立；代價是「同窗生成又刪除同一個新 id」從不可見變成生成勝出。
+12. ~~F.2 的階段順序~~ **已決定（使用者 2026-11-11，與第 4 項一起）**：照規格 F.2。原文：讓同窗「刪 X 再以同 id 生成 X」成立；代價是「同窗生成又刪除同一個新 id」從不可見變成生成勝出。
 13. **K.2 第 1 條（Replacement Criteria）的改寫**（S8）：原條件已被 spike 的結果觸發；本稿主張觸發的是事前寫明的上限、不是機制失效，並把條件改寫成三個分項。Replacement Criteria 的變更要使用者核准；若不核准，依原條文本規格進入「修還是重建」的提案。
-14. **`Parallel` 在 v1 是啟動錯誤 D-E17**（S11）而不是靜默 Serial；只含 (b) 的 schedule 也一樣，等 Parallel 實作時再開放。
-15. **事件只在 clock schedule 內讀寫**（S14；F-9）：同 domain 的其他 schedule 用元件或 Resource 傳遞。
+14. ~~`Parallel` 在 v1 是啟動錯誤 D-E17~~ **已決定（使用者 2026-11-11）**：採規格——v1 任何 Parallel 宣告＝啟動錯誤 D-E17，含只有 (b) 的 schedule（LIM-2）。
+15. ~~事件只在 clock schedule 內讀寫~~ **已決定（使用者 2026-11-11）**：採規格 F-9；同 domain 的其他 schedule 用元件或 Resource 傳遞。
 16. ~~**spike 判定 (2) 的狀態**（S7）~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：判定 (2) 照原文「成立」；上限的處置＝接受（World 以外靠 code review，mechanism §3.5 三層）；-audit 第二問改為「跨 tick 指標或參考」「全域可變狀態」兩問（I.3 已照此寫）；另加 `-spike-pageguard` 批（debug 頁保護，只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時）排在本規格之後。本規格 A.6、B.5、I.3 的寫法與決定一致，不需改。
-17. **untyped 路徑的「常開檢查」**（B4／S6）：引入一個不依 `NDEBUG` 的檢查類別，與現有 error-handling 契約（Assert＝Programmer Error、debug only）的關係要定：是新的巨集（例如 `GYO_VERIFY`）還是 `Result` 回報。本稿寫成「呼叫 assertion handler、所有組態」。
+17. ~~untyped 路徑的「Result 回報」~~ **已決定（使用者 2026-11-11，有變更）**：不採Result 回報巨集，改採 Go 式錯誤處理（原則：不靜默處理）。untyped 路徑回 `Result<void, KernelError>` 帶完整上下文；**System 簽名改回 `Result<void, KernelError>`**（S-2、B.4 第 2／7 點、J-10 已改），收到錯誤包一層上下文回傳、不自己記錄；Executor 最外層只處理一次：記錄完整鏈路一次（日誌開關在 Executor 的 handler，`Base::Result` 仍是純值）、World 標 Interrupted（E.5）；release 也如此；debug 另在記錯當下呼叫 assertion handler。error-handling.md 加一列「以執行期資料偵測的 Programmer Error：Kernel 以帶上下文的 Result 回報、Executor 記錄一次並 Interrupted；最終處置仍是 Programmer Error；Result 在此是診斷鏈的載具，不表示可恢復」——契約擴充（Delta），使用者已同意，排進第一個文件批。使用者接受 System 多一行回傳的代價。部件文件：`target/system-contract.zh-Hant.md`、`target/error-handling.md`。
 
 ---
 

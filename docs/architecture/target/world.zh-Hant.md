@@ -43,7 +43,13 @@
 - **同步點的套用順序寫死**（spec F.2）：hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource。despawn 階段依 EntityId 升冪、冪等（同一 id 記兩次只處理一次）、對窗開始時不存在的 id 無作用。despawn 排在 spawn 之前，是為了同一窗內「刪 X 再以同 id 生成 X」（重連）成立。
 - 說明案例（使用者）：同一 tick 玩家 10 中彈死亡又退出。Combat 在 tick 內已寫下玩家 7 的擊殺——結構凍結，玩家 10 仍在；同步點才刪它。所以擊殺成立，而且與 despawn 的排序無關。若產品要「退出者不算被擊殺」，那是 Combat 與 ApplyMembership 兩個 System 的 Plan 順序與規則問題，(c) 區的歧義檢查會強迫把順序寫明，不是 despawn 該管的。
 
-## 5. 其餘（照規格 §A，待實作時搬進本文件）
+## 5. 事件只在該 domain 的 clock schedule 內讀寫（使用者 2026-11-11 決定，spec K.3 第 15 項）
+
+- 每個事件型別登記時屬於一個 clock domain；寫者與讀者都必須在該 domain 的 **clock schedule** 中（含 hook：所屬同步點在該 schedule 內）。同 domain 的其他 schedule 讀或寫事件＝啟動錯誤 F-E1（spec F-9）。跨 schedule、跨 domain 的傳遞用元件或 Resource，或 Host 的交換點。
+- 理由：「schedule 在 domain 內的序」沒有定義、Host 也沒被約束照它執行，另一個 schedule 若在修剪點之後執行就會靜默漏讀；與其漏讀不如禁止。
+- 讀取規則無游標：位置在寫者之後的讀者本 tick 就讀到，之前的下 tick 讀到；緩衝保留到下一 tick 末；被 run 條件跳過的讀者錯過那個 tick 的事件（寫明）。
+
+## 6. 其餘（照規格 §A，待實作時搬進本文件）
 
 資料模型（欄的 SoA 佈局、ColumnInfo 的 zone／writePolicy／role／rollback）、A.2 的操作與允許的狀態、A.4 參考失效規則、A.5 不變量 W-1～W-11、A.6 的 C++ 實現手段與 debug 核對兩層，見 spec §A。這些在規格核准前仍是草案。
 
@@ -54,6 +60,7 @@
 3. **stamp 依 Plan 位置取值、單調、不進 (c)**：跳過的 System 也消耗；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38。
 4. **寫入政策預設獨占，獨占是啟動檢查**：未標 Shared 的欄與 Resource 在一個 World 的所有非 Startup schedule 中寫者至多一個（以 System 計，含型別化 Commands、Spawn 的 bundle、hook）；第二個寫者是啟動錯誤；執行期不加鎖、不仲裁；進 digest 的欄不得 Shared。守衛：spec J-15、J-16。
 5. **結構變更只在同步點、順序寫死、Despawn 不是寫者**：Running 期間成員不變；同步點依「hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource」套用，每階段依 id，despawn 冪等且對窗開始不存在的 id 無作用；Despawn 不計入獨占寫者、不產生衝突邊，(c) 的保護由 Z5。守衛：spec J-3、J-31、J-32、J-32b（突變：spawn 先於 despawn、不去重、依記錄順序套用）。
+6. **事件屬於一個 clock domain，只在它的 clock schedule 內讀寫；無游標，依 Plan 位置讀**。守衛：spec J-36、J-37。
 
 ### Replacement Criteria（候選）
 
