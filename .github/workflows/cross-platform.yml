@@ -185,6 +185,23 @@ jobs:
           ctest --test-dir "build/target/_build/$env:PRESET-core" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/core-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/core-tests.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # The kernel spike (spikes/kernel, v8-arch-kernel-spike) is a standalone
+      # CMake project outside the GYO build graph. Every L1 row builds and tests
+      # it so the spike report's judgment 1 (access sets derived from System
+      # signatures on MSVC, gcc and AppleClang) is read off CI, not off one
+      # developer machine. Same MSVC debug-info rule as the core step above.
+      # Remove this step when the spike is retired.
+      - name: Build and test the kernel spike
+        id: kernel_spike
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          cmake -S spikes/kernel -B "build/target/_build/$env:PRESET-kernel-spike" -G Ninja -DCMAKE_BUILD_TYPE=Debug '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$<$<CONFIG:Debug,RelWithDebInfo>:Embedded>' 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/kernel-spike-configure.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build "build/target/_build/$env:PRESET-kernel-spike" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/kernel-spike-build.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir "build/target/_build/$env:PRESET-kernel-spike" --output-on-failure --no-tests=error --output-junit "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/logs/kernel-spike-tests.xml" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/kernel-spike-tests.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       # Go work comes only from the configured build record, which always holds
       # the engine-layer module, so it also runs with no registered game. It
       # follows the native steps: a Go failure never skips C++ tests or the
@@ -252,6 +269,8 @@ jobs:
             ${{ env.GYO_HOST_TOOLS }}/Testing/Temporary
             build/target/_build/${{ matrix.preset }}-core/CMakeFiles/CMakeConfigureLog.yaml
             build/target/_build/${{ matrix.preset }}-core/Testing/Temporary
+            build/target/_build/${{ matrix.preset }}-kernel-spike/CMakeFiles/CMakeConfigureLog.yaml
+            build/target/_build/${{ matrix.preset }}-kernel-spike/Testing/Temporary
           if-no-files-found: warn
           retention-days: 14
 
@@ -266,6 +285,7 @@ jobs:
           SHADER_RESULT: ${{ steps.shaders.outcome }}
           GPU_RESULT: ${{ steps.gpu.outcome }}
           CORE_RESULT: ${{ steps.core.outcome }}
+          KERNEL_SPIKE_RESULT: ${{ steps.kernel_spike.outcome }}
           GO_RESULT: ${{ steps.go.outcome }}
           GO_SERVICES_RESULT: ${{ steps.go_services.outcome }}
         run: |
@@ -280,6 +300,7 @@ jobs:
           | Host shader tests (Linux) | $env:SHADER_RESULT |
           | Linux software GPU engine tests | $env:GPU_RESULT |
           | Core baseline (Linux) | $env:CORE_RESULT |
+          | Kernel spike (spikes/kernel) | $env:KERNEL_SPIKE_RESULT |
           | Go vet / test / race (Linux) | $env:GO_RESULT |
           | Go service cross-builds (Linux) | $env:GO_SERVICES_RESULT |
 
