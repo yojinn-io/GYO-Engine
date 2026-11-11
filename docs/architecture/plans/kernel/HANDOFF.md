@@ -16,6 +16,7 @@
 | `v8-arch-kernel-foundation-first` | 2026-11-10。基盤的協定不等壓力、先設計；功能層才等壓力。寫進 AGENTS §2 的修訂待風紀委員處理（使用者同意後）。 |
 | `v8-arch-kernel-bring-into-gyo` | 2026-11-11。要的是 Bevy 的抽象能力（World／System Contract／Scheduler／Executor）帶入現有 GYO，不是 GYO2；架構改造完成前功能線停。 |
 | `v8-arch-kernel-pause-mode` | 2026-11-11。停功能線的定義＝(a)：已開工的卡做到下一個關卡停、更新 HANDOFF；不開新功能卡。事故修正是否繼續仍未定。 |
+| `v8-arch-kernel-delegation` | 2026-11-11。此次架構調整（含 spike）由架構師全權負責：各批自開自跑、每批關卡回報；本線 docs-only PR 在 CI 綠後架構師直接合併並回報；碰 Design Invariants、`spikes/` 以外的程式、Delta 七項仍先給使用者。使用者封存原 spike 卡（task_8f7c5a80），spike 改由架構師會話的子代理執行。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）與 spike（`v8-arch-kernel-spike`）同時開；審查（`v8-arch-kernel-audit`）等規格。模型／檔位見 README。 |
 
 ## 未定
