@@ -1166,11 +1166,11 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | `trace` | 362 | writer 執行緒（`TraceSink.hpp`） | 服務 | `Diagnostics` 副作用的接收端；System 只推已序列化的列 |
 | `runtime`：`FixedTickRuntime` | 291（整個模組） | 純累加器，呼叫者給 elapsed；自有 `tickId_`（`:54-56`、`:68` Reset 歸 0、`:76`） | 留（Host 的時鐘工具） | `TickContext.deltaSeconds`（double，`:19`）由 `FixedStep.stepNs` 取代（G-6）；`tickId_` 不再是 tick 的來源，只供 Host 決定呼叫 `Run` 幾次（B5） |
 | `runtime`：`RuntimeLoop`、`IRuntimeClient` | — | ProcessEvents／Update／Render 三段（`IRuntimeClient.hpp:12-14`）；live frame（`RuntimeLoop.hpp:11-37`） | 重寫 | 三段是硬編碼的調度，由 Host 加 ScheduleDef 取代；live frame 是平台約束，留成 Host 的職責（H.7） |
-| `runtime`：`IRuntimePort` | — | Query／Submit／Events（`IRuntimePort.hpp:17-19`） | -audit 定 | 概念接近 Link；只有 object_fps 與 v2 在用 |
+| `runtime`：`IRuntimePort` | — | Query／Submit／Events（`IRuntimePort.hpp:17-19`） | **刪除**（使用者 2026-11-11；併入 `v8-arch-remove-object-fps`，含 `RuntimePortTests.cpp`） | 只有 object_fps 與 v2 在用；借用視圖的形狀與 Link 相反，不能當 Link 的前身 |
 | `platform`（sdl） | 1285 | `PumpEvents`；`thread_local`（`SdlPlatform.cpp:61`、`:73`、`:75`；`SdlLogBridge.cpp:24`，修訂：S17） | 包（Host 擁有） | 違反 I-3 第 3 條，不能當葉子；pump 是 Host 的步驟，事件以 `PlatformEvents` boundary 進 World（O2、P1）；platform-sdl.md DI 7「observer 與 live frame 內不得做 operation」是 Host 的 pump 與 live frame 處理器要守的，不進 System |
 | `input` | 1156 | `BeginFrame`／`HandleEvent`／`EndFrame`（呼叫序 `PvpApplication.cpp:1111-1119`） | 後端包；`InputActionMap` 留 | 每幀狀態機變 Resource 加 `Input` stage 的 System |
 | `asset` | 3333 | `AssetManager::BeginFrame`（`:59`）、`Update`（`:62`）；`LoaderRegistry` 已有 K3 形狀；`detail/TypeId.hpp:37` 的 `static const` token（B.6 風險 5） | 包；loader 留 | 存取可框住（`ResMut<AssetManager>`）；非同步完成的套用點對應 A3；`Load`／`Acquire` 的呼叫點 -audit 逐一列 |
-| `model` | 1174 | 取樣純函式；ufbx loader；`Advance` 2 處 | 取樣留；loader 留（asset loader）；動畫推進包 | 取樣是 (b)（determinism.md §4.2） |
+| `model` | 1174 | 取樣純函式；ufbx loader；`Advance` 2 處 | 取樣留；loader 留（asset loader；是 (c) 內容身分，determinism.md §4.9）；**`AnimationInstance` 刪除**（使用者 2026-11-11；只有 object_fps_v2 在用；併入 `v8-arch-remove-object-fps`，含 `ModelTests.cpp` 的對應部分） | 取樣是 (b)（determinism.md §4.2） |
 | `render` | 4300 | `Renderer::Render(queue)`；裝置綁建立它的執行緒（未複核） | 包（渲染 World 的 Resource，親和 `GraphicsContextOwner`）；`RenderQueue` 是 extract 的目標 | blueprint §5 R1 列 |
 | `ui` | 4471 | `UiRuntime::Update`（`UiRuntime.hpp:86`）含焦點狀態 | 包；版面與編解碼留 | 狀態變 Resource |
 | `audio` | 1619 | Mixer 的 SDL 回呼執行緒（`Mixer.cpp`、`VoiceMixer.cpp` 有 atomic） | 服務；`Submitter` 是 Resource | 整數混音契約不變；Submitter 綁第一個呼叫它的執行緒→親和 |

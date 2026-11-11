@@ -166,7 +166,7 @@ spec G.4 第 3 條要移動的呼叫點「改成宣告的 `Diagnostics` 副作�
 
 ### 3.6 其他待決
 
-- `IRuntimePort` 刪除（建議併入 `v8-arch-remove-object-fps`）；`AnimationInstance` 同。
+- ~~`IRuntimePort` 刪除~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：刪除 `IRuntimePort`（engine/runtime）與 `AnimationInstance`（engine/model），含各自的測試（`tests/common/core/runtime/RuntimePortTests.cpp`、`tests/common/model/ModelTests.cpp` 中 AnimationInstance 的部分），併入 `v8-arch-remove-object-fps` 批一起做 §7 的完整清理。使用者原話：不光概念不同，連使用者都不存在了。取樣函式（`SamplePose`／`BlendPoses`／`SkinMesh`）與 ufbx loader 不動。
 - `AssetManager` 屬 Frame World 還是 Render World（貼圖上傳要裝置）；`UiRenderer` 與 `WeaponViewModel` 的跨 World 指標都卡在這一題。target 文件沒寫，改造批前要定。
 - 四個工具 host 骨架的重複（選擇窗記帳三種實作、關窗提示 3/4）是 framework 標準 plugin 的候選（framework DI 5）；model_viewer `ViewerWindow.cpp:112-113` 的記帳缺陷屬工具行為變更，不在遷移批順手改。
 - protobuf generated pool：若 Egress System 直接編碼，要比照 I-5 明列例外。
@@ -303,7 +303,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 
 ## 11. 下一步
 
-- ~~§3.1~~（已定：framework 退役→`plugins/`）；~~§3.2~~（已定：資料只往前流，H-6 原樣）；使用者決定 §3.6（IRuntimePort、AssetManager 歸屬、初始成員走 Startup）、§4.5（區表三漏一錯）。
+- ~~§3.1~~（已定：framework 退役→`plugins/`）；~~§3.2~~（已定：資料只往前流，H-6 原樣）；使用者決定 §3.6（~~IRuntimePort（已定：刪）~~、AssetManager 歸屬、初始成員走 Startup）、§4.5（區表三漏一錯）。
 - 規格修訂批（§6 七項）與第一個文件批合併規劃。
 - `-spike-pageguard`（事前宣告待寫）。
 - 改造批次計畫：以本報告的成本形狀分批（組織層先：Kernel 本體 → Match host 遷移 → Client → Editor），§3 Delta 七項在計畫層寫一次。
