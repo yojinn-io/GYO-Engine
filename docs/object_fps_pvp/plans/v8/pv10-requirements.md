@@ -33,3 +33,8 @@
 - 每項功能推出 wire 需求並對照參考實作；清單上的七項都要出現在設計文件裡，不得「假設夠用」。
 - multi-channel-evaluation 的前提（實際流量不緊、先縮預算）要重新驗證：物件與物品把事件量從「擊殺訊息」變成「每局兩萬件」（entity-requirements）。
 - 上段；候選 ultracode（提案者 Opus×3、統合 Fable、對抗 Opus；先問使用者）；排在場景 survey 之後，survey 給 1、2 的輸入。
+
+## 追加（架構師 2026-11-11，使用者決定）
+
+- **Match 的 ready 事件**：Client 在收到 Match 的 ready 前停在 loading 狀態；ready 是 wire 上的事件（pv10 的事件串流，或 Welcome 的欄位），之後 FixedUpdate 的 tick 從 0 起算。來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` H.2b（Loading schedule）。
+- **Peer 與 Player 分開**：每收件者的 Ledger／Visibility 屬 Peer 實體，與 Player 實體不合一（觀戰者等非 Player 的 Peer）；wire 上的收件者身分對應 Peer。來源：`networking.zh-Hant.md` §3b。

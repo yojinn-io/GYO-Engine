@@ -363,7 +363,7 @@ Registry
 1. **Host 列出 plugin**：有序清單，是資料。
 2. **build 段**：依清單順序呼叫每個 plugin 的 `Build(Registrar&)`。plugin 登記它擁有的元件、Resource、事件、effect、System、hook、set；可以在既有 schedule 的具名 stage 前後插入新 stage。id 在登記當下依序配發。每個型別只能由一個 plugin 登記（owner）；第二次登記＝啟動錯誤 R-E2。別的 plugin 只在 System 參數中使用它，不登記它。
 3. **依賴檢查**：`requires = {plugin name…}`。被依賴者不在清單中、或排在依賴者之後＝啟動錯誤 R-E3。Kernel **不做拓撲排序**：清單順序就是 id 順序，要顯式；錯了就報錯。
-4. **finish 段**：全部 build 完成後，依同一順序呼叫 `Finish(const FrozenRegistry&, FinishContext&)`。plugin 讀最終的 id，建自己的表（複製的 wire 序列化表、協議雜湊，K5；`bevy_core:8`），初始化 Resource 的值。**不得再登記**：`Registrar` 在 finish 時已不可取得，型別上做不到（R-2）。
+4. **finish 段**：全部 build 完成後，依同一順序呼叫 `Finish(const FrozenRegistry&, FinishContext&)`。plugin 讀最終的 id，建自己的表（複製的 wire 序列化表、協議雜湊，K5；`bevy_core:8`），初始化 Resource 的值。**plugin 可在 finish 安裝 runner**（照 Bevy `WinitPlugin` 的 `set_runner`；使用者 2026-11-11 決定，audit §3.1）：runner 是 Host 迴圈的提供者（行程入口、pump、交換點），**一個 Runtime 只能有一個**，第二個＝啟動錯誤 R-E6；沒有 plugin 安裝時由 Host 程式自己跑。**不得再登記**：`Registrar` 在 finish 時已不可取得，型別上做不到（R-2）。
 5. **凍結**：`frozen = true`，算 fingerprint（依 id 順序對 (name, size, align, zone, writePolicy, role) 與 (System name, schedule, stage, zone, 存取集合) 以及各 Plan 的步驟序列做 SHA-256）。用途：診斷；兩端比對 FixedUpdate 的 Plan 是否相同（H-4）。
 6. **建 Plan**（D 節）。任何啟動錯誤在這裡一次回報。
 
@@ -388,6 +388,7 @@ Registry
 | R-E3 | `requires` 的 plugin 缺漏或排在後面 |
 | R-E4 | System 或 hook 參數引用了未登記的型別 |
 | R-E5 | TypeKey 位址碰撞（A.6） |
+| R-E6 | 兩個 plugin 都安裝 runner（C.2 第 4 點；audit §3.1） |
 
 ### C.5 C++ 實現手段
 
@@ -418,7 +419,7 @@ Registry
 
 ```text
 ScheduleDef（Host 提供；Kernel 不內建任何名字）
-├── name, world, domain（Fixed | Frame | Startup）
+├── name, world, domain（Fixed | Frame | Startup | Loading）   // Loading：使用者 2026-11-11 加，H.2b
 ├── stages        : [StageName]   固定序列；plugin 在 build 可於具名 stage 前後插入
 ├── syncPoints    : 每個 stage 末一個（預設）＋顯式宣告的具名同步點 [(stage, after System 或 Set)]
 ├── eventTrim     : 哪個同步點修剪該 domain 的事件（預設：最後一個 stage 末）
@@ -797,6 +798,20 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 - 兩者可共用同一 World（Bevy 的做法），前提是同一條執行緒（H-2）。共用時 Frame 寫者寫 Fixed 讀者讀的資料必須經 Ingress（Z3）。
 - 兩個時鐘在不同執行緒時，必須是兩個 World 加 Host 的交換點（H-2）。跨 domain 的資料不靠 Scheduler 自動同步（v0.2 §10.1）。
 
+### H.2b Loading schedule：世界內容的載入階段（使用者 2026-11-11 決定，audit §3.6 第 5 項）
+
+Feature（Derivation Order）：**loading 頁面與分批載入**——按組件載入順序組合世界，物件多時分批，Client 顯示 loading 讓玩家看不到過程；現在物件少就算 Startup，將來撐不住，先訂契約。
+
+1. **Startup 只放 Runtime 建構時就確定、不依內容的東西**（登記、固定 Resource）。**世界內容全部經 `Loading` schedule 進來**，初始成員不走 Startup。
+2. Loading 的 stage **固定序**＝地圖 → 場景 → 可互動物件 → 敵人 → 玩家（ScheduleDef 的資料，Host 給；plugin 掛載入 System）。
+3. **可分批**：Loading schedule 可跑多次（每次一批，數量或時間預算），由 Host 迴圈驅動；資產載入是 IO 服務在同步點套用（target/assets §1 第 4 點）。
+4. **成員經同一條路**：玩家在「玩家」stage 由 `ApplyMembership` 以 `SpawnWithId` 生成——與中途加入是同一個 System，不是 Host 直寫（Z2 無例外）。
+5. **對局時鐘在 Loading 宣告 ready 後才開始**：FixedUpdate 的 domain tick 從 0 起算於 ready 之後；Loading 自己的計數不是遊戲 tick。golden 若以對局開始為基準則 34 個不受影響——**遷移批實測確認，不先假設**。
+6. **Client 在收到 Match 的 ready 前停在 loading 狀態**（Frame World 的 (b) Resource 驅動畫面）；ready 是 wire 事件（pv10 事件串流或 Welcome 欄位），記進 pv10-requirements。
+7. **決定性**：載入的內容身分是 (c)，載入順序是 Plan 的函數，ready 時兩端 (c) 狀態可比對。
+
+對 B.3 的影響：Startup 的寫者不計（S1）仍成立；Loading 的 System 是正常寫者（計入獨占），所以「地圖」stage 寫地形欄的 System 與 FixedUpdate 中寫同欄的 System 會是兩個寫者——地形欄在 FixedUpdate 應無寫者（唯讀），否則 D-E2，正是機制要抓的。對 H-5 的影響：回滾快照不含 Loading 階段（ready 前沒有 PredictionHistory）。
+
 ### H.3 Match 與 Client 共用 FixedUpdate
 
 - 同一組 (c) plugin 登記同一組 (c) System（mechanism §4 第 3 點）；Client 多出的 Rollback 與 PredictionHistory 在 FixedUpdate 之外（zone=B）。
@@ -814,13 +829,15 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 | 項 | 內容 |
 |---|---|
 | Runtime | `Match`：World M，runner＝`gyo-match-sim` 角色 |
-| schedules | `Startup`（一次）；`FixedUpdate`（clock、Serial） |
-| FixedUpdate 的 stages（中性名；產品掛 System） | `Ingress`（Z3，zone=B：Link 收件 → **join／leave 請求、ack、動作、輸入、到達時刻**全部以資料寫進 `InputRing[tick]`；Ingress 不生成、不刪除實體，修訂：S3）→ `Simulate`（(c)：**`ApplyMembership`**——讀 ring 的 join／leave 請求，以 `SpawnWithId<Bundle<Body, Combat, Animation, Connection, …>>` 生成玩家（id 由 Gateway 配，E-2）、以 `Despawn` 刪除（它是 zone=C，Z5 允許）；→ 生死邊界 → 移動 → 動作裁決 → 動畫推進；順序由 before／after 宣告，是 (c) 所以歧義即錯誤）→ `Judge`（快照組裝、連線品質、修剪；Host judgement 區讀 ring 的到達時刻與 `HostClockSample`）→ `Egress`（run 條件 `tick % N == 0` 寫快照；寫 Link 送件） |
+| schedules | `Startup`（一次，不依內容）；**`Loading`（分批，stage 序：地圖 → 場景 → 可互動物件 → 敵人 → 玩家；H.2b）**；`FixedUpdate`（clock、Serial；tick 於 ready 後從 0 起） |
+| FixedUpdate 的 stages（中性名；產品掛 System） | `Ingress`（Z3，zone=B：Link 收件 → **join／leave 請求、ack、動作、輸入、到達時刻**全部以資料寫進 `InputRing[tick]`；Ingress 不生成、不刪除實體，修訂：S3）→ `Simulate`（(c)：**`ApplyMembership`**——讀 ring 的 join／leave 請求，以 `SpawnWithId<Bundle<Body, Combat, Animation, Connection, …>>` 生成玩家（id 由 Gateway 配，E-2）；**Player 與 Peer 分開**（使用者 2026-11-11）：Player 實體＝Gateway 配的玩家段 id，欄 Body／Life／InputCursor／Connection 診斷；Peer 實體＝每收件者的 Ledger、Visibility，獨立於 Player（為觀戰者等非 Player 的 Peer 留位置）；Link 是 external Resource，不是實體、以 `Despawn` 刪除（它是 zone=C，Z5 允許）；→ 生死邊界 → 移動 → 動作裁決 → 動畫推進；順序由 before／after 宣告，是 (c) 所以歧義即錯誤）→ `Judge`（快照組裝、連線品質、修剪；Host judgement 區讀 ring 的到達時刻與 `HostClockSample`）→ `Egress`（run 條件 `tick % N == 0` 寫快照；寫 Link 送件） |
 | Host 的每次喚醒 | (1) 取樣時鐘一次，寫 `HostClockSample`；(2) 交換點 A：swap IO 執行緒的收件緩衝（每筆帶到達時刻）進 `Link.inbound`；(3) 累加器給出 k 步，呼叫 k 次 `Run(FixedUpdate)`（tick 由 Run 推進）；(4) 交換點 B：swap `Link.outbound` 給 IO 執行緒並 Notify；(5) 以 `secondsUntilNextTick` 算絕對 deadline，用 `Waiter` 等（同今天 `Body`） |
 | 外部服務 | IPC（Gateway 的 loopback TCP）：IO 執行緒只處理位元組與到達時刻；trace writer |
 | 行為差異（-audit） | (a) `ShotReferenceAge` 與連線品質的 reference age 改以 ring 內的到達時刻計算（G.4；粒度不變，golden 預期不變，待 -audit 確認）。(b) IPC 執行緒同步拿到的 refusal（`IpcHost.cpp:685`）改由下一個 tick 的 Ingress System 產生，回覆時機會變；pv9 契約有沒有規定回覆時機**未查證**（本輪 grep `network-architecture.zh-Hant.md` 的 refusal 無結果）。(c) 一次 Advance 內的追趕步拿不到新收件：與今天相同。(d) Join／Leave 從「Tick 外由 host 呼叫」（entity-model §5.2 第 237 行）變成 tick 內的 (c) System（修訂：S3）：生成與刪除晚最多一個 tick、進快照與 digest 的 tick 可能差一；`combat-rejoin` 等 golden 要重核 |
 
 #### H.4.2 Client host（視窗、預測）
+
+（2026-11-11 註：framework 退役後，Client host 的骨架——pump、live frame、三個 Runtime 的交換點與時鐘策略——由 runner plugin 提供，產品 `main` 只列 plugin 加 Run；本小節的「Host」讀作 runner plugin。audit §10.2、規格修正第 8 項。）
 
 現況：主執行緒跑 `RuntimeLoop`（`PvpApplication.cpp:1383`）：`ProcessEvents` 呼叫 SDL pump，期間 live frame 可能重入（`:1389-1401`）；`Update` 做資產 `BeginFrame`（`:1141`）、輸入（`:1111-1119`）、UI、`PublishIntent`（`:1172`）、`PresentAt` 內插（`:1173`）；`Render`。`gyo-client-sim`（`ClientSimulationRole.cpp:151` 的 `RoleThread::Start`）依自己算的 deadline 跑預測步，以 `mutex_` 與主執行緒交換意圖與呈現（`:161-211`）。asio 的 IO 執行緒；音訊回呼執行緒；trace writer。
 
@@ -839,9 +856,11 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 
 #### H.4.3 Editor host（以 voxel_map_editor 為例）
 
+（2026-11-11 註：使用者決定 Editor 預覽資料只往前流——文件 World 產出場景與 ImGui draw list，經 Extract 進渲染 World，渲染 World 先畫場景到 render target、再畫 UI、預覽視窗是 draw list 裡的貼圖 id；沒有 readback 回文件 World，H-6 原樣。下文「`Preview` Runtime … → `Readback`」的 Readback 一節作廢；ImGui 拆成文件 World 的輸入／widget System 與渲染 World 的繪製 System。audit §3.2、target/runtime-composition §3b。）
+
 現況：`EditorClient : Framework::ImGuiShellClient` 在主執行緒；`EditSession` 有 Undo、Revision、`TakeChanges`；預覽用離屏 Renderer 加 readback；ImGui 有全域 context（`ImGuiShell.cpp:225`、`:267-269`）。
 
-改造後：`Document` Runtime（World D，`FrameUpdate`，主執行緒）：文件與 `EditSession` 先當 Resource（要讓編輯工具成為 System 時再拆成實體與元件，交 -audit）；存檔與載入是有 `Io:file` 副作用的 System，經資料契約 `gyo.voxel_map` 讀寫（AGENTS §8）。`Preview` Runtime（World R，`Extract` 從 D 唯讀 → `RenderSubmit` → `Readback`）；ImGui 的 System 都宣告 effect `Gpu:imgui`，彼此序列化。全部 zone=B，依登記順序平手，不需寫順序。文件 World 不是產品 Runtime 的 World，Runtime 不知道編輯器存在；工具知識留在工具。「編輯器直接重用 Engine 的 System」（mechanism §7）＝在編輯器多建一個 Match 形狀的 Runtime（play-in-editor），不在 v1，機制允許。
+改造後（framework 退役：shell 由提供 runner 的 plugin 與 ImGui plugin 取代，audit §3.1）：`Document` Runtime（World D，`FrameUpdate`，主執行緒）：文件與 `EditSession` 先當 Resource（要讓編輯工具成為 System 時再拆成實體與元件，交 -audit）；存檔與載入是有 `Io:file` 副作用的 System，經資料契約 `gyo.voxel_map` 讀寫（AGENTS §8）。`Preview` Runtime（World R，`Extract` 從 D 唯讀 → `RenderSubmit` → `Readback`）；ImGui 的 System 都宣告 effect `Gpu:imgui`，彼此序列化。全部 zone=B，依登記順序平手，不需寫順序。文件 World 不是產品 Runtime 的 World，Runtime 不知道編輯器存在；工具知識留在工具。「編輯器直接重用 Engine 的 System」（mechanism §7）＝在編輯器多建一個 Match 形狀的 Runtime（play-in-editor），不在 v1，機制允許。
 
 #### H.4.4 測試 host（驗證的主路徑）
 
@@ -1161,13 +1180,13 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | `trace` | 362 | writer 執行緒（`TraceSink.hpp`） | 服務 | `Diagnostics` 副作用的接收端；System 只推已序列化的列 |
 | `runtime`：`FixedTickRuntime` | 291（整個模組） | 純累加器，呼叫者給 elapsed；自有 `tickId_`（`:54-56`、`:68` Reset 歸 0、`:76`） | 留（Host 的時鐘工具） | `TickContext.deltaSeconds`（double，`:19`）由 `FixedStep.stepNs` 取代（G-6）；`tickId_` 不再是 tick 的來源，只供 Host 決定呼叫 `Run` 幾次（B5） |
 | `runtime`：`RuntimeLoop`、`IRuntimeClient` | — | ProcessEvents／Update／Render 三段（`IRuntimeClient.hpp:12-14`）；live frame（`RuntimeLoop.hpp:11-37`） | 重寫 | 三段是硬編碼的調度，由 Host 加 ScheduleDef 取代；live frame 是平台約束，留成 Host 的職責（H.7） |
-| `runtime`：`IRuntimePort` | — | Query／Submit／Events（`IRuntimePort.hpp:17-19`） | -audit 定 | 概念接近 Link；只有 object_fps 與 v2 在用 |
+| `runtime`：`IRuntimePort` | — | Query／Submit／Events（`IRuntimePort.hpp:17-19`） | **刪除**（使用者 2026-11-11；併入 `v8-arch-remove-object-fps`，含 `RuntimePortTests.cpp`） | 只有 object_fps 與 v2 在用；借用視圖的形狀與 Link 相反，不能當 Link 的前身 |
 | `platform`（sdl） | 1285 | `PumpEvents`；`thread_local`（`SdlPlatform.cpp:61`、`:73`、`:75`；`SdlLogBridge.cpp:24`，修訂：S17） | 包（Host 擁有） | 違反 I-3 第 3 條，不能當葉子；pump 是 Host 的步驟，事件以 `PlatformEvents` boundary 進 World（O2、P1）；platform-sdl.md DI 7「observer 與 live frame 內不得做 operation」是 Host 的 pump 與 live frame 處理器要守的，不進 System |
 | `input` | 1156 | `BeginFrame`／`HandleEvent`／`EndFrame`（呼叫序 `PvpApplication.cpp:1111-1119`） | 後端包；`InputActionMap` 留 | 每幀狀態機變 Resource 加 `Input` stage 的 System |
-| `asset` | 3333 | `AssetManager::BeginFrame`（`:59`）、`Update`（`:62`）；`LoaderRegistry` 已有 K3 形狀；`detail/TypeId.hpp:37` 的 `static const` token（B.6 風險 5） | 包；loader 留 | 存取可框住（`ResMut<AssetManager>`）；非同步完成的套用點對應 A3；`Load`／`Acquire` 的呼叫點 -audit 逐一列 |
-| `model` | 1174 | 取樣純函式；ufbx loader；`Advance` 2 處 | 取樣留；loader 留（asset loader）；動畫推進包 | 取樣是 (b)（determinism.md §4.2） |
+| `asset` | 3333 | `AssetManager::BeginFrame`（`:59`）、`Update`（`:62`）；`LoaderRegistry` 已有 K3 形狀；`detail/TypeId.hpp:37` 的 `static const` token（B.6 風險 5） | 包（**拆成三類 Resource**，使用者 2026-11-11：請求狀態、每型別 `Assets<T>`、渲染 World 的 GPU 資源；載入是外部服務、完成依請求順序套用；`AssetManager` 物件消失）；loader 留（由 plugin 登記） | 原稿「`ResMut<AssetManager>`」作廢；見 `target/assets.zh-Hant.md` |
+| `model` | 1174 | 取樣純函式；ufbx loader；`Advance` 2 處 | 取樣留；loader 留（asset loader；是 (c) 內容身分，determinism.md §4.9）；**`AnimationInstance` 刪除**（使用者 2026-11-11；只有 object_fps_v2 在用；併入 `v8-arch-remove-object-fps`，含 `ModelTests.cpp` 的對應部分） | 取樣是 (b)（determinism.md §4.2） |
 | `render` | 4300 | `Renderer::Render(queue)`；裝置綁建立它的執行緒（未複核） | 包（渲染 World 的 Resource，親和 `GraphicsContextOwner`）；`RenderQueue` 是 extract 的目標 | blueprint §5 R1 列 |
-| `ui` | 4471 | `UiRuntime::Update`（`UiRuntime.hpp:86`）含焦點狀態 | 包；版面與編解碼留 | 狀態變 Resource |
+| `ui` | 4471 | `UiRuntime::Update`（`UiRuntime.hpp:86`）含焦點狀態 | 包；版面與編解碼留；`UiRenderer` 局部重寫（audit）——改讀 Frame World 的 `Assets<T>` 與渲染 World 的 GPU 資源，不再持 `AssetManager*`；名字照待定的命名規範改 | 狀態變 Resource |
 | `audio` | 1619 | Mixer 的 SDL 回呼執行緒（`Mixer.cpp`、`VoiceMixer.cpp` 有 atomic） | 服務；`Submitter` 是 Resource | 整數混音契約不變；Submitter 綁第一個呼叫它的執行緒→親和 |
 | `config` | — | 只有 `projects.csv`、`tools.csv` | 不適用 | 登記資料，不是程式 |
 
@@ -1176,8 +1195,8 @@ Gateway → 外部執行緒 → `Link.inbound` →（交換點）→ Ingress Sys
 | 模組 | 初判 | 理由 |
 |---|---|---|
 | `HeadlessShell` | 留（行程入口） | 轉換命令列、呼叫一次 body |
-| `WindowShell`、`WindowShellClient` | 重寫，成為視窗 host 的骨架與標準 ScheduleDef | 今天是 `RuntimeLoop` 加 `Update`／`Render` 的 client 介面（`WindowShell.hpp:19-28`、`:49`），與 H-7 不相容；改造後 framework 提供標準 ScheduleDef 與 Host 骨架（blueprint §6；三層原則：framework 持通用結構） |
-| `ImGuiShell`（binding） | 包 | 全域 context（`ImGuiShell.cpp:225`、`:267-269`）不符 I-3 第 3 條；ImGui System 用 effect `Gpu:imgui` 序列化；可插拔模組（memory framework-controller-principle） |
+| `WindowShell`、`WindowShellClient` | **framework 退役**（使用者 2026-11-11，audit §3.1）：職責由「提供 runner 的 plugin」（行程入口、pump、交換點）與插入標準 Editor stage 的 plugin 群承擔；放 `plugins/` | 今天是 `RuntimeLoop` 加 `Update`／`Render` 的 client 介面，與 H-7 不相容；PvP 從未用它，Client host 另寫。原稿「framework 提供標準 ScheduleDef 與 Host 骨架」作廢 |
+| `ImGuiShell`（binding） | **退役→ImGui plugin**（audit §3.1） | 全域 context 由 plugin 承載並明列例外；其幀順序由 plugin 在 build 插入的 stage 序表達，不再是寫死的 `Update`／`Render` |
 | `Preview`、`PreviewCamera`、`PreviewTexture` | 包（渲染 Runtime 的 plugin） | 離屏裝置加 readback |
 | `EventSounds`、`CatalogPlan`、`ReadOnlyAssetCatalog`、`AbsolutePath` | 留 | 資料契約與純函式 |
 | `UiTextInput`、`bindings/json` | 未查證／留 | — |

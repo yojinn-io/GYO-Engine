@@ -25,10 +25,39 @@
 - 不為 Host 開 Z2／Z5 的例外：Host 在 World Ready 時只寫 boundary 與 external Resource，不直接生成或刪除帶 (c) 欄的實體。
 - 後果記為限制 LIM-5（`limits.zh-Hant.md`）：加入與離開晚最多一個 tick；golden 可能差一 tick、要重設基準；產品線在遷移批確認。entity-model §5.2「Join／Leave 在 Tick 外」改寫，排進改造的第一個文件批。
 
+## 3a. Loading schedule：世界內容的載入階段（使用者 2026-11-11 決定，spec H.2b）
+
+- Startup 只放 Runtime 建構時就確定、不依內容的東西；**世界內容全部經 `Loading` schedule 進來**，初始成員不走 Startup。
+- Loading 的 stage 固定序：地圖 → 場景 → 可互動物件 → 敵人 → 玩家；可分批（Loading 可跑多次，每次一批，由 Host 迴圈驅動）；資產載入是 IO 服務，在同步點依請求順序套用（assets §1）。
+- 玩家在「玩家」stage 由 `ApplyMembership` 以 `SpawnWithId` 生成，與中途加入是同一個 System；Z2 無例外。
+- 對局時鐘在 Loading 宣告 ready 後才開始：FixedUpdate 的 domain tick 於 ready 後從 0 起算；Loading 的計數不是遊戲 tick。Client 收到 Match 的 ready（wire 事件；pv10-requirements）前停在 loading 狀態。
+- 決定性：載入的內容身分是 (c)，載入順序是 Plan 的函數，ready 時兩端 (c) 狀態可比對。
+- Feature：loading 頁面與分批載入。使用者理由：現在物件少就算 Startup，將來東西多就撐不住，先把契約訂好。
+- **Peer 與 Player 分開**：Player 實體（玩家段 id；Body／Life／InputCursor／Connection 診斷）；Peer 實體（每收件者的 Ledger、Visibility）獨立，為觀戰者等留位置；Link 是 external Resource 不是實體（networking §3b）。
+
+## 3b. Editor：文件 World 加渲染 World，資料只往前流（使用者 2026-11-11 決定，audit §3.2）
+
+- Editor 的組合與 Client **同形**：文件 World（兼 Frame）加渲染 World，Extract 單向、唯讀。
+- 文件 World 產出場景（幾何、相機）與 **UI 繪製資料**（ImGui draw list，CPU 端頂點與指令，(b) 資料）；兩者經 Extract 進渲染 World。合成在渲染 World：先畫場景到 render target，再畫 UI draw list；預覽視窗是 draw list 裡引用該 render target 的貼圖 id，由渲染 World 解析。**沒有影像回到文件 World；H-6 原樣、不開例外、沒有晚一幀。**
+- 選取與編輯用 CPU 射線打文件 World 的幾何，不依賴影像。
+- ImGui 是 plugin，拆兩半：輸入與 widget 邏輯是文件 World 的 System；draw list 的 GPU 繪製是渲染 World 的 System。今天 `OffscreenPreview` 的 readback 與 `ImGuiShell` 的「一個函式從 NewFrame 到 Present」消失。參考：Bevy 的 bevy_egui。
+- 使用者原則：不要用舊思路處理新架構——「readback 放哪」三個選項（晚一幀、H-6 例外、文件與渲染合一）全部不採。
+
+## 4. framework 退役；組合與第三方對接由 plugins 層承擔（使用者 2026-11-11 決定，audit §3.1）
+
+- **三層改為**：Engine（Kernel＋能力）／**plugins**（`plugins/`：組合與第三方對接，每個 plugin 可選可刪）／產品與工具（plugin 清單＋Run）。層與目錄叫 plugins，單個才叫 plugin（使用者 2026-11-11）。framework 是舊架構的產物，其兩個核心職責（組合 Engine 能力、對接第三方）在 plugin 機制下都由 plugin 承擔，概念淘汰；`docs/framework/` 的 Design Invariants 整節廢止（第一個文件批）。
+- **runner plugin**：Editor host 的骨架（行程入口、pump、交換點）是一個在 finish 安裝 runner 的 plugin（照 Bevy `WinitPlugin::set_runner`）；一個 Runtime 只能有一個 runner（spec R-E6）；沒有 plugin 安裝時由 Host 程式自己跑。
+- **標準 Editor stage 序**＝plugin 群在 build 插入 stage（spec C.2 第 2 點）；ImGui、SDL 的相容在各自的 plugin 內實現，全域 context 明列例外。
+- **`plugins/` 是新的 top-level**（AGENTS §10 Delta，已同意）：每個 plugin 一個 target、自己的依賴正向清單；Engine 永不 include 它；產品與工具只在 main 列它。
+- 「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」。架構師保留：四個工具重複的選擇窗記帳與關窗提示必須真的進共用 plugin，否則是 framework 的老問題換名。
+- 組合格式（catalog plan、event sounds）是資料契約，owner 是提供該 plugin 的人；純函式（EventSounds、CatalogPlan、PreviewCamera、UiTextInput、json binding）是函式庫，與層無關。
+
 ## Design Invariants（候選；核准後成為正式條文）
 
 1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
-2. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
+2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；產品與工具只在 main 列 plugin。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）。
+3. **世界內容只經 Loading schedule 進來；對局 tick 於 ready 後從 0 起算；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄）；等價測試（分批數不同、ready 時 (c) 狀態逐位元相同）；掃描（Peer 元件不掛在 Player 實體）。
+4. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
 
 ### Replacement Criteria（候選）
 

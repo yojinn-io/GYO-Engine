@@ -38,6 +38,7 @@
 | `v8-arch-kernel-rc1-rewrite` | 2026-11-11（側邊會話轉述，spec K.3 第 13 項）。使用者核准 RC 第 1 條改寫為三分項（(a) 判定 1 不成立→退回顯式宣告；(b) 經 World 的存取 debug 攔不到→核對層重寫；(c) 上線後兩次以上不屬範囲の限界的不符→頁保護或縮小「包」）。**K.3 全部 17 項定完**；對照表在 target/README。使用者：接下來照計畫，規格與文件更新 → -audit（事前宣告列 L1～L8）→ -spike-pageguard。 |
 | `v8-arch-kernel-audit-third-party` | 2026-11-11（側邊會話轉述）。第三方庫的開源方向在新架構下重核：併進 -audit（third_party/ 每庫一列，I.3 四問判葉子／包／服務，附親和與 zone；結論回寫 #176 判定總表標「依 spec v0.2 重核」）；World 儲存層借 EnTT 或自寫不在 audit 做，等 World 實作批用 W-1～W-11 核對；#176 D2 等 DET-1。 |
 | `v8-arch-kernel-determinism-recheck` | 2026-11-11（側邊會話轉述）。決定性分級契約在新架構下成立，不另開核對卡；四處小改照第一個文件批。-audit 產出加一節：逐模組 zone 判定回對 determinism.md §4 的區表，列漏的模組與標錯的區，交使用者，不改契約。 |
+| `v8-arch-framework-retire` | 2026-11-11（側邊會話轉述，audit §3.1）。framework 退役，不改 DI 2／6：組合與第三方對接由 plugin 承擔；Editor host 骨架＝提供 runner 的 plugin（finish 安裝，一 Runtime 一個，R-E6）；標準 Editor stage＝plugin 在 build 插入；新 top-level `plugins/`（§10 Delta 已同意；Engine 永不 include、產品工具只在 main 列）；三層改為 Engine／plugins／產品與工具；framework DI 整節廢止、docs/framework/ 標廢止；spec L.2、H.4.3、target/runtime-composition 改寫。使用者原則：思想不變，修改就是在破船上打補丁。架構師保留：選擇窗記帳與關窗提示必須進共用 plugin。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定
@@ -63,9 +64,33 @@
 
 - 2026-11-11 使用者「開始」→ `-audit` 啟動。派工：審查者 Opus／high ×3（① engine；② framework＋tools；③ object_fps_pvp＋third_party，含 (a)～(d) 四節），各在獨立 worktree 寫 `audit-part-<範圍>.zh-Hant.md`；掃描腳本 `scripts/audit_scan.py` 由主會話先寫（全域一跑：44 模組、645 命中，`build/evidence/kernel-audit/scan-full/`）；對抗複核 Fable／high 等三份合併後抽 5 個模組；(e) 決定性區表回對由主會話合併時做。
 
+- 2026-11-11 -audit 第一份（framework-tools，commit 33f4d402 在 agent worktree）回來：件数一致（8＝7＋1）。發現事前宣告的判法「Q1 為是→組織層」比 spec I.3 粗；主會話採 I.3 的讀法（Q1 只排除留；組織層＝排序其他元件）、修正宣告、通知另兩個審查者對齊。另記：WindowShell／ImGuiShell 要重寫骨架會改 framework DI 2／DI 6（K.3 第 7 項未列的 Delta，待使用者）；Editor 預覽 readback 回 ImGui::Image 與 H-6 衝突（候選：ImGui System 全放文件 World、影像經 Host 交換點，預覽晚一幀；交工具線與使用者）；四工具 host 骨架重複（framework 標準 plugin 候選）。
+
+- 2026-11-11 -audit 第二份（engine，commit 77201f03 在 agent worktree）回來：件数一致（22＝22＋0）；判定 留 8／包 5／Host 5／服務 2／重寫 1／不適用 1。採 P（被動）／A（主動）讀法，與主會話的對齊規則一致。與 spec L.1 不同處：input 後端→Host；platform→Host；FixedTickRuntime→Host；IRuntimePort→刪除候選（待使用者）；ui 加 UiRenderer 局部重寫（跨 World 指標；AssetManager 屬 Frame 還是 Render World 未定）；asset 包但要先收攏五個協作者的參考；model 的 ufbx loader 是 (c)。掃描漏兩類：經別名讀時鐘（Time::Now／Clock::now）、匿名命名空間非 const 變數——不改共用腳本（已引用的 CSV 列號不能變），記為 J-17 掃描清單的修正項。兩份部分報告已複製進本分支。
+- 2026-11-11 engine 份依對齊後的判法重核（commit e185c864）：只動一列，input Host→包（先拆：SDL 全域查詢與 platform 指標移到 Host 的 pump，取樣結果進 boundary Resource）；render、text 改寫為「包（先收攏）」；os／time／threads／platform／FixedTickRuntime 仍 Host（依 spec §L「只持 OS 資源、只由 Host 使用」與 G-6）。人工補看三類：engine 無 ImGui；pimpl 跨幀裸指標 26 筆，指向他元件的 4 處（Renderer.cpp:134-135、SdlGpuRenderDevice.cpp:117、UiRenderer.cpp:147-149、ModelRenderer.cpp:22）；跨幀捕獲 this 的只在產品 PvpApplication.cpp:1389。新分佈：留 8／包 6／Host 4／服務 2／重寫 1／不適用 1。
+- 主會話待決／待交使用者（合併報告時列出）：(1) framework DI 2／DI 6 的 Delta（WindowShell／ImGuiShell 重寫骨架；K.3 第 7 項未列）；(2) Editor 預覽 readback 回 ImGui 與 H-6 的衝突，候選「ImGui System 全在文件 World、影像經 Host 交換點、預覽晚一幀」（交工具線與使用者）；(3) IRuntimePort 刪除；(4) AssetManager 屬 Frame 或 Render World。
+
+- 2026-11-11 第三份（product-thirdparty，commit d8b45012）回來：件数一致（14＝14＋0；另未審 3、事實列 5）；子列重寫 6；第三方無改判、§2.1 收窄四處；(a) Body 拆欄後 Life 仍兩寫者且同 tick 讀後寫（無結論，交遷移批）；(c) G.4 第 1 條應改 HostClockSample、補第 4（RequestMovementResync）、第 5（IPC 讀權威）；規格衝突：S-8／Z4 使 (c) 不能輸出診斷。主會話合併成 audit.zh-Hant.md（§1 判定、§3 跨部件、§4.5 區表回對：漏 3 標錯候選 1、§6 規格修正七項、§7 判定 1／2／4／5 成立、3 進行中）；對抗複核 Fable／high 抽 5 模組進行中。
+
+- 2026-11-11 -audit **完成**：對抗複核 Fable／high 4/5 一致（engine/input 後端不一致→主會話重判 Host）；判法五處模糊的定義補進 audit §0；dev_log 寫成；PR 待開。
+
+- 2026-11-11 使用者問前提改變要不要重跑審查；架構師：不重跑（四問與判定詞不因去處而變），寫補遺 audit §10（去處改成 plugins 層、P11／S1 形狀改為 runner plugin、§0 敘述修正、plugin 邊界這個新問題交計畫批並附切法候選十個）。命名：層與目錄叫 plugins、單個叫 plugin（使用者）。
+
+- 2026-11-11（側邊會話轉述，audit 待決第 2 項）`v8-arch-editor-forward-only`：Editor 預覽不是影像回 UI，資料只往前流（照 bevy_egui）：文件 World 出場景＋ImGui draw list → Extract → 渲染 World 合成（場景到 render target、再畫 UI，預覽視窗＝貼圖 id）；H-6 原樣、無例外、無晚一幀；選取用 CPU 射線；Editor 與 Client 同形；ImGui 與 SDL 一樣是 plugin、拆兩半。審查的三個選項全部不採（使用者原則：不用舊思路處理新架構）。audit §3.2／§10 改寫、runtime-composition §3b、spec H.4.3 註。
+
+- 2026-11-11（側邊會話轉述，audit 待決第 3 項）`v8-arch-remove-runtimeport-animinstance`：刪除 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance，含 RuntimePortTests.cpp 與 ModelTests.cpp 的對應部分；併入 `v8-arch-remove-object-fps` 批做 §7 完整清理。取樣函式與 ufbx loader 不動。使用者：不光概念不同，連使用者都不存在了。
+
+- 2026-11-11（側邊會話轉述，audit 待決第 4 項）`v8-arch-assets-bevy-model`：AssetManager 不選 World，照 Bevy 拆開——請求狀態 Resource、每型別 Assets<T>（Handle 引用計數）在文件／Frame World；loader 由 plugin 登記（ufbx 是函式庫）；載入是外部服務（IO 執行緒＋交換點，與 Link 同形）、完成依請求順序在同步點套用；內容身分 (c)、Startup 全載完才凍結；GPU 資源是渲染 World 的 Resource，Extract 搬變更。AssetManager 物件消失；UiRenderer／WeaponViewModel 跨 World 指標問題消失。使用者另要求命名規範（待定）：這類名字遷移時都要改。部件文件 target/assets.zh-Hant.md。
+
+- 2026-11-11（側邊會話轉述，audit 待決第 5 項）`v8-arch-loading-schedule`：初始成員不走 Startup；新增 Loading schedule 契約（Startup 只放不依內容的登記與固定 Resource；Loading stage 固定序地圖→場景→可互動物件→敵人→玩家，可分批由 Host 驅動；玩家在「玩家」stage 由 ApplyMembership 以 SpawnWithId 生成；對局 tick 於 ready 後從 0 起算；Client 收到 ready 前停 loading，ready 是 wire 事件→pv10-requirements；內容身分 (c)、載入順序是 Plan 的函數）。Feature＝loading 頁面與分批載入。golden 34 個以對局開始為基準預期不變——遷移批實測。spec H.2b、D.1 domain 加 Loading、H.4.1；runtime-composition §3a、DI 3；limits LIM-5 補註。
+- 2026-11-11（同上附帶）`v8-arch-peer-player-split`：Player 實體（玩家段 id；Body／Life／InputCursor／Connection 診斷）與 Peer 實體（Ledger、Visibility）分開，為觀戰者留位置；Link 是 external Resource 不是實體。networking §3b、spec H.4.1、pv10-requirements。
+
+- 2026-11-11（側邊會話轉述，audit 待決第 6 項）`v8-arch-determinism-table-fix`：區表三漏一錯採 (a)，四處接受、排第一個文件批（與 E4 一起）；PlayerAnimation 推進先由決定性線核對 digest 編碼；條目名照歸屬改（固定步累加器→runner plugin (b)；時鐘樣本→HostClockSample；Sha256／StrictJson→「內容身分」「契約資料解析」兩條 (c) 路徑；以欄與 System 命名）。
+- 2026-11-11（同上）`v8-arch-naming`：命名規範五條（歸屬＝namespace 與目錄；分類＝詞性照 Bevy；World＝前綴；區＝位置非名字；禁止 Manager／Renderer／ViewModel／Host／Shell／Runtime／Controller 後綴），target/naming.zh-Hant.md；遷移批事前宣告列改名清單。**audit 六項待決全部定完。**
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
 - 改造的第一個文件批（待規劃）：K.3 第 7 項的三處 Delta 文件修改；entity-model §5.2（Join／Leave 在 tick 內，K.3 第 10 項）；error-handling.md 加一列（K.3 第 17 項）；mechanism §3.3「Time 只來自 tick」依 K.3 第 11 項裁決修訂。
-- ~~使用者定 K.3~~（2026-11-11 全部定完）→ `v8-arch-kernel-audit`（事前宣告要列範囲の限界 L1～L8）→ `-spike-pageguard` → 改造批次計畫（§3 Delta 計畫層寫一次）。
+- ~~-audit~~ 完成，六項待決已定 → 規格修訂（audit §6 七項）與第一個文件批合併規劃 → `-spike-pageguard`（事前宣告待寫）→ 改造批次計畫（§3 Delta 計畫層寫一次；以 audit 的成本形狀分批）。
 - 判定 1 的三平台：**成立**（L1 run 43018979148，PR #180；步驟第一次誤加在 build-and-validate.yml、已改到 cross-platform.yml）。PR #180 含 `spikes/` 以外的 `.github/workflows/cross-platform.yml` 改動，合併由使用者決定。

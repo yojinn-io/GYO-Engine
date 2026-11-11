@@ -72,6 +72,12 @@ replicon 明寫 client 世界只是最終一致、不假設同 tick 值相同；
 | 命中回溯 | hitbox-rewind 計畫 | 歷史姿態查詢 | 一致 |
 | 契約 | .proto 欄位號、pv 版本 | 登錄順序 id＋雜湊 | GYO 更適合（N2） |
 
+## 3b. Peer 與 Player 分開（使用者 2026-11-11 決定，audit 第 5 項附帶）
+
+- **Player 實體**：成員，Gateway 配的玩家段 EntityId；欄 Body／Life／InputCursor／Connection 診斷。
+- **Peer 實體**：每收件者的 Ledger（N4）與 Visibility 遮罩（N5），獨立於 Player，不合一——為觀戰者等非 Player 的 Peer 留位置。一個 Peer 可能對應零個或一個 Player。
+- **Link 是 external Resource，不是實體**（spec I.2）。mechanism 圖 3「Ledger 與遮罩掛在 Peer 實體上」照此解讀：Peer 是獨立實體。
+
 ## 4. 對 pv10 的含意（只列結構，不設計）
 
 pv10-requirements 的四件結構性需求，對應到設計圖：每收件者的可靠事件串流＝N3 的 Updates 那半＋N11 的依賴標記；每收件者的相關性選擇＝N5 遮罩＋N4 帳本；私人資料塞進收件者那一份＝N4（帳本本來就每收件者一份）；動作請求的 oneof＝N7 的輸入通道。設計時的兩個決定留給使用者：可靠串流的帳本放 Match（評估 C 的建議，Gateway 維持無狀態）還是 Gateway；是否採「結構走可靠、值走不可靠」的兩通道分流。
