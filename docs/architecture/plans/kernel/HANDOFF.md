@@ -114,7 +114,7 @@
 - 2026-11-12 第三輪（Opus／high）2 blocker／11 should／4 nit（B-1～B-17），並指出第二輪 9 項只修一半 → 除 B-8 外全部處置（spec 修訂記錄「第三輪對抗檢查後」）。**B-8 待使用者決定**（見未定）。
 - 2026-11-12 第四輪只讀複核（Opus／high）0 blocker／10 should／4 nit（N1～N14：`CurrentTick` 參數、Link inbound 分種類、序號本地配發、`ApplyStagedAssets`＋`LoadingState`、`KernelSettings` 時間點、E.2 第 ⑤ 步、Z5 複核範圍、stamp 改述、ClientSim 加 Loading、H-A1 移出啟動表、J-48～J-52）→ 全部處置（spec 修訂記錄「第四輪只讀複核後」）。B-8 由使用者決定（`v8-arch-kernel-break-hook`）並寫入。第五輪只對第四輪的 diff 複核：1 blocker（`LoadingProgress` 多寫者）／11 should／9 nit → 全部處置（spec 修訂記錄「第五輪差異複核後」）。對抗檢查到此收口（第四、五輪 blocker 分別 0、1，且都是前一輪新條文的收尾），開 docs PR。
 - 2026-11-12 **PR #182 已合併**（`eb501731`；使用者「合併 #182」）。dev_log 補在 PR #183（已合併 `4bcc4bd8`）。
-- 2026-11-12 使用者「可以下一批了」→ `-spike-pageguard` 事前宣告寫好（`spike-pageguard-declaration.zh-Hant.md`，branch `claude/arch-kernel-spike-pageguard`，draft PR），**等使用者確認判定、門檻、xhigh 與「開始」**。
+- 2026-11-12 使用者「可以下一批了」→ `-spike-pageguard` 事前宣告寫好（`spike-pageguard-declaration.zh-Hant.md`，branch `claude/arch-kernel-spike-pageguard`，draft PR），使用者同日「門檻照你定的，xhigh 同意，開始」→ 實作者子代理（Opus／xhigh，獨立 worktree，只 commit）已啟動；敵對檢查 Fable／xhigh 只讀排在實作回來後。估時實作 6 h（上限 9 h）。
 
 ## 下一步
 
