@@ -182,6 +182,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hitbox-lag-shadow` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_hitbox_lag_shadow.zh-Hant.md) |
 | `v8-product-ui-action-check` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md) |
 | `v8-product-hitbox-b5`（A2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hitbox_b5.zh-Hant.md) |
+| `v8-product-kernel-prep-detect`（kernel 改造前置第一批） | [2026-11-12](../../../dev_logs/2026_11_12_pvp_kernel_prep_detect.zh-Hant.md) |
 
 ---
 

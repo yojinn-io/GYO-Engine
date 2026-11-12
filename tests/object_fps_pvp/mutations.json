@@ -159,6 +159,15 @@
     },
     "player_presentation_evidence": {
       "ctest": "object_fps_pvp.player_presentation_evidence"
+    },
+    "kernel_prep_detect": {
+      "build": [
+        "gyo_object_fps_pvp_tests"
+      ],
+      "ctest": "object_fps_pvp.kernel_prep_detect"
+    },
+    "kernel_prep_sites": {
+      "ctest": "object_fps_pvp.kernel_prep_sites"
     }
   },
   "mutants": [
@@ -9313,6 +9322,66 @@
       "replace": "    return next;",
       "check": "cpu",
       "expect": "first predictions, not replays"
+    },
+    {
+      "id": "kp-death-next-tick",
+      "batch": "v8-product-kernel-prep-detect",
+      "what": "Death is applied at the next tick: Kill writes nothing, ResolveLifeBoundaries kills an Alive body with hp 0 at the start of the following tick (the funnel audit 4.1 left undecided)",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "void PvpMatch::Kill(PlayerState& state, CombatState& combat) {\n    state.respawnTick = FutureTick(tick_, rules_.respawnTicks);\n    state.lifeState = LifeState::Dead;\n    state.lifeStateTick = tick_;\n    combat.reloadActionId = 0;\n    combat.reloadStartTick = 0;\n    combat.reloadEndTick = 0;\n}\n\nvoid PvpMatch::ResolveLifeBoundaries() {\n    // Ascending EntityId makes concurrent respawns deterministic: later\n    // entities see the live capsule placed by every earlier successful respawn.\n    GYO_ASSERT(combats_.size() == bodies_.size());\n    for (std::size_t i = 0; i < bodies_.size(); ++i) {\n        auto& state = bodies_[i];\n        auto& combat = combats_[i];\n        GYO_ASSERT(combat.playerId == state.playerId);\n        const auto id = state.playerId;\n        if (state.lifeState == LifeState::Dead) {\n",
+      "replace": "void PvpMatch::Kill(PlayerState& state, CombatState& combat) {\n    combat.reloadActionId = 0;\n    combat.reloadStartTick = 0;\n    combat.reloadEndTick = 0;\n}\n\nvoid PvpMatch::ResolveLifeBoundaries() {\n    // Ascending EntityId makes concurrent respawns deterministic: later\n    // entities see the live capsule placed by every earlier successful respawn.\n    GYO_ASSERT(combats_.size() == bodies_.size());\n    for (std::size_t i = 0; i < bodies_.size(); ++i) {\n        auto& state = bodies_[i];\n        auto& combat = combats_[i];\n        GYO_ASSERT(combat.playerId == state.playerId);\n        const auto id = state.playerId;\n        if (state.lifeState == LifeState::Alive && combat.hp == 0) {\n            state.respawnTick = FutureTick(tick_, rules_.respawnTicks);\n            state.lifeState = LifeState::Dead;\n            state.lifeStateTick = tick_;\n            continue;\n        }\n        if (state.lifeState == LifeState::Dead) {\n",
+      "check": "kernel_prep_detect",
+      "expect": "kernel-prep D1"
+    },
+    {
+      "id": "kp-respawn-next-tick",
+      "batch": "v8-product-kernel-prep-detect",
+      "what": "The respawn turns Alive one tick after respawnTick",
+      "file": "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp",
+      "find": "            if (tick_ < state.respawnTick) continue;",
+      "replace": "            if (tick_ <= state.respawnTick) continue;",
+      "check": "kernel_prep_detect",
+      "expect": "kernel-prep D1"
+    },
+    {
+      "id": "kp-failures-other-object",
+      "batch": "v8-product-kernel-prep-detect",
+      "what": "connectionQualityFailures is written on another object: the first player of the snapshot instead of the judged one",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (player != state.players.end()) player->connectionQualityFailures = track.failures;",
+      "replace": "        if (!state.players.empty()) state.players.front().connectionQualityFailures = track.failures;",
+      "check": "kernel_prep_detect",
+      "expect": "kernel-prep D3"
+    },
+    {
+      "id": "kp-failures-judgement-tick-only",
+      "batch": "v8-product-kernel-prep-detect",
+      "what": "connectionQualityFailures reaches the snapshot copy only at the judgement tick; the ticks between carry 0",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "        if (player != state.players.end()) player->connectionQualityFailures = track.failures;",
+      "replace": "        if (player != state.players.end() && tick == track.windowStartTick) player->connectionQualityFailures = track.failures;",
+      "check": "kernel_prep_detect",
+      "expect": "kernel-prep D3"
+    },
+    {
+      "id": "kp-site-new-wall-clock",
+      "batch": "v8-product-kernel-prep-detect",
+      "what": "A new wall-clock read in a host function that had none (QueueJoin) must appear as a new row of the ratchet",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "bool MatchRuntimeHost::QueueJoin(std::uint64_t requestId, PlayerId playerId) {\n    return QueueControl(",
+      "replace": "bool MatchRuntimeHost::QueueJoin(std::uint64_t requestId, PlayerId playerId) {\n    static_cast<void>(now_());\n    return QueueControl(",
+      "check": "kernel_prep_sites",
+      "expect": "QueueJoin"
+    },
+    {
+      "id": "kp-site-new-authority-touch",
+      "batch": "v8-product-kernel-prep-detect",
+      "what": "A new I/O-thread touch of the authority (match_ in QueueJoin) must appear as a new row of the ratchet",
+      "file": "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+      "find": "bool MatchRuntimeHost::QueueJoin(std::uint64_t requestId, PlayerId playerId) {\n    return QueueControl(",
+      "replace": "bool MatchRuntimeHost::QueueJoin(std::uint64_t requestId, PlayerId playerId) {\n    static_cast<void>(match_.TickCount());\n    return QueueControl(",
+      "check": "kernel_prep_sites",
+      "expect": "QueueJoin"
     }
   ]
 }
