@@ -103,3 +103,5 @@ protocol-v9 第 113 行：τ＝clamp(view_tick/65536, J−R, J)，R≤15（`maxi
    - 判定（S1、S2、R1、R2）不變；`lag_l2_summary.py` 不讀診斷檔。
    - 退路：pm-detect-diag 在 11/8 晚上前沒合併，就用 `8b8eaa19` 的 biome kit（修訂 8，沒有診斷）；再不行用 `54948874` 的 pvp_corners kit（修訂 7）。
    - 限界：Client 寫診斷增加 Client 的負擔，對 view_lag 的影響沒有量。
+10. 2026-11-08（看到任何場次結果之前）：場次改成架構師與產品一起宣告、一起讀（使用者 2026-11-08）。通用項（field-session C1～C8，有／缺口／檔名）、產品項、本次執行檔裡的收集碼位置寫在[資料收集宣告](v8-product-l2-session-data-declaration.md) §2A、§2、§3A。本宣告的判定（S1、S2、R1、R2）不變；kit 改為每台一包的離線 kit（`make_kit.sh`）。
+11. 2026-11-09（場次之後）：場次的判定不成立：S1 undetermined（沒有 `s1_end`）、R2 failed（J－A＝due tick－A，本宣告「J 與 A 的差＝冷卻保留」的前提漏了接受到 due 的 1～2 tick）、S2 passed、R1 不給。使用者決定（2026-11-09）：**這次場次當探索**，R 不由這次決定。探索值（以 J、整場）：p99 5.00 tick（[dev_log](../../../dev_logs/2026_11_05_pvp_v8_hitbox_lag_l2.zh-Hant.md)）。R2 的前提要在下一次決定 R 的宣告裡改寫；本宣告到此結束，不再修訂。

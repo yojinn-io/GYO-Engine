@@ -110,7 +110,7 @@ Client 現在自己累積步伐相位、移動權重、jog 權重與跳躍階段
 
 | 用途 | 欄位 | 規則 |
 |---|---|---|
-| 射手看到的時刻 τ | `ShotRequest.view_tick_q16`（9） | τ＝clamp(view_tick_q16/65536, J−R, J)；0 或無效時 τ＝J。R≤15 是 Match 常數（`maximum_reference_age_ms` 250 ms×60 Hz），由 lag-l2 的分位數決定（`v8-product-hitbox-rewind-r`） |
+| 射手看到的時刻 τ | `ShotRequest.view_tick_q16`（9） | τ＝clamp(view_tick_q16/65536, J−R, J)；0 或無效時 τ＝J。R≤15 是 Match 常數（`maximum_reference_age_ms` 250 ms×60 Hz）；**R＝7 Tick**（約 117 ms，使用者 2026-11-09 採用 11/9 場次的探索值，`v8-product-hitbox-rewind-r-7`） |
 | 射手自己的時刻 | `movement_epoch`（7）、`command_sequence`（8） | 射手不回溯，用解析完 S 之後的狀態 |
 | 逐目標的界限 | （Match 權威） | 再夾到該目標目前區段（`movement_epoch`、`life_generation`、`life_state`）的起點 |
 | 回溯跨生命 | `ShotDecision` 的既有形狀 | 判 Miss：射線穿過那個目標，結果是既有的 `HIT_MISS`／`HIT_WORLD`／後面的其他玩家（`v8-product-hitbox-rewind-cross-life` (a)）。不新增 `ShotRejection` |
