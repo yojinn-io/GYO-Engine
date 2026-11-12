@@ -162,6 +162,7 @@
 - 2026-11-13 `v8-arch-migration-plan` 稿完成（1050 行；三輪對抗 Opus／xhigh：4→1→0 blocker；驗收點檢 Opus／high：A1～A10 成立、數字一致；8 條半改已補）。合計 632～1,299 h、關鍵路徑 331～692 h、M3 115～247、M4 181～389。PR 開給使用者；**待使用者**：核准計畫、A9 文字修正（`v8-arch-migration-plan-a9`）、未決 U1～U14（U2 已定）。dev_log `2026_11_13_arch_kernel_migration_plan`。
 
 - 2026-11-13（夜間，使用者就寢）`v8-arch-a6-revision` 事前宣告草稿寫好（`a6-revision-declaration.zh-Hant.md`，分支 `claude/arch-a6-revision` 自計畫分支開）；**待使用者核准後開工**。kernel-scaffold、h7-scanner 兩張卡已掛（等使用者點開；h7 的模型照計畫 Fable，考量用量開卡時可選 Opus）。pvp-baseline 卡在容器內重量（U8）。
+- 2026-11-13 04:56 `v8-product-pvp-baseline` 卡回報停下（PR #201，合併等使用者；報告 `docs/object_fps_pvp/plans/v8/pvp-baseline-report.zh-Hant.md`）：件數突き合わせ一致；**閘門用的容器組（Linux gcc-14，10 次）µs 級分母全不穩**（重放 tick p95 散佈 16.7～48.4%、重放載入 38.9%、冷啟動 15.0%），只有穩態 RSS 30.3 MiB（5.0%）過 10% 門檻；本機安靜組也只有 host 組、long4、冷啟動過。照修訂 2「兩組都不穩」寫成「µs 級分母在此機器量不穩」，10% 規則未改。**待使用者定**：(b) 10% 規則對 µs 級分母是否適用（改規則經 §14.1 核准後重量）、(c) 改前提（Linux 實機，或新宣告改量法）；容器 RSS 能否單獨當 BU-4 分母也待確認。**對 U12 的影響**：§6「今天的值 × 倍數」目前只有 RSS 有穩定分母，重放 tick／載入／冷啟動只有參考值；U12 的重核在 (b)／(c) 定後、重量完成後才能做，a6-revision 不受影響。架構師轉交時附自己的看法（見主會話回報）。
 
 ## 下一步
 
