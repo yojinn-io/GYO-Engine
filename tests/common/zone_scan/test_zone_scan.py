@@ -194,6 +194,11 @@ class RuleZS2State(OwnerTree):
             with self.subTest(body=body):
                 self.assertOnly(self.scan_source("namespace Own {\n" + body + "\n}\n"), 2, "ZS2", text)
 
+    def test_zs2_text_starts_at_the_declaration(self):
+        report = self.scan_source("namespace Own {\n// One optional writer per process.\n// Second comment line.\ninline std::atomic<int*> writer{nullptr};\n}\n")
+        self.assertOnly(report, 4, "ZS2", "inline std::atomic<int*> writer")
+        self.assertTrue(report["findings"][0]["text"].startswith("inline"), report["findings"][0]["text"])
+
     def test_zs2_struct_instance_after_definition(self):
         self.assertOnly(self.scan_source("namespace {\nstruct Table {\n    int rows;\n} table;\n}\n"), 4, "ZS2", "table")
         self.assertOnly(self.scan_source("namespace Own {\nstruct Table t;\n}\n"), 2, "ZS2", "struct Table t")
@@ -225,6 +230,11 @@ class RuleZS2State(OwnerTree):
                      "typedef int Id;",
                      "struct Forward;",
                      "enum class Kind : int { A, B };",
+                     "enum class Kind { A, B };",
+                     "enum Plain { A, B };",
+                     "enum class Kind : std::uint8_t { A = 0, B = 1 };",
+                     "[[nodiscard]] Vec3 Move(Capsule body, Vec3 displacement,\n    const Grid &walls,\n    std::span<const Capsule> actors,\n    bool floor = false,\n    Diag* diagnostics = nullptr);",
+                     "bool Place(const Capsule &body,\n           const Grid &walls) {\n    return true;\n}",
                      "struct [[nodiscard]] Result { int code; };",
                      "struct Derived : Base { int x; };",
                      "struct alignas(16) Aligned { float v[4]; };",

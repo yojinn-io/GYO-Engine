@@ -61,6 +61,7 @@ CONST_WORDS = re.compile(r"\b(?:constexpr|consteval)\b")
 TEMPLATE_HEAD = re.compile(r"^\s*template\s*<")
 SKIP_HEAD = re.compile(r"^\s*(?:namespace|using|typedef|static_assert|friend|concept|requires|export|import|module|asm|goto|return|extern\s+template)\b")
 TYPE_HEAD = re.compile(r"^\s*(?:struct|class|union|enum)\b")
+TYPE_KEYWORDS = frozenset(("struct", "class", "union", "enum", "final", "alignas", "typename", "const", "volatile"))
 FIRST_WORD = re.compile(r"\s*([A-Za-z_]\w*)")
 IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
 ARGUMENT_WORDS = frozenset(("nullptr", "true", "false", "this", "sizeof", "alignof", "new", "delete"))
@@ -68,7 +69,7 @@ PARAMETER = re.compile(
     r"^\s*(?:(?:const|volatile|typename|struct|class|enum|union)\s+)*"
     r"(?:::)?[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*"            # a type name, possibly qualified
     r"(?:\s*(?:const|volatile|&&|&|\*|\.\.\.))*"          # cv, references, pointers, pack
-    r"(?:\s+[A-Za-z_]\w*)?"                               # an optional parameter name
+    r"(?:\s*[A-Za-z_]\w*)?"                               # an optional parameter name (`&name` has no space)
     r"(?:\s*\[\s*\d*\s*\])*"                              # array bounds
     r"(?:\s*=\s*[^,]*)?\s*$")                             # a default argument (blank when it was a literal)
 LAMBDA_INTO_MEMBER = re.compile(r"(?:\bthis->\w+|\b\w+_)\s*(?:=|\.(?:push_back|emplace_back|emplace|insert|assign)\s*\()\s*\[(?:this|=|&)")
@@ -280,6 +281,8 @@ def namespace_statement_kind(head, raw_head):
     """Classifies a statement at namespace scope. Returns ("variable", text), ("namespace", None),
     ("class", None), ("other", None) or ("skip", None). head is the masked text before the
     terminator (; or {); raw_head the same span of the original text."""
+    leading = len(head) - len(head.lstrip())  # blanked comments and blank lines before the statement
+    head, raw_head = head[leading:], raw_head[leading:]
     text = strip_template_head(head)
     raw_text = raw_head[len(raw_head) - len(text):]  # the head strip only removes a prefix
     stripped = text.strip()
@@ -292,8 +295,9 @@ def namespace_statement_kind(head, raw_head):
     if TYPE_HEAD.match(text):
         # `struct S {` opens a class scope; `struct S;` is a forward declaration; `struct S s;` is a
         # variable (two identifiers after the keyword, no base clause).
-        words = IDENTIFIER.findall(strip_template_arguments(re.sub(r"\[\[[^\]]*\]\]", "", stripped)))
-        if ":" in stripped or len(words) <= 2 or "final" in words or "alignas" in words:
+        words = [w for w in IDENTIFIER.findall(strip_template_arguments(re.sub(r"\[\[[^\]]*\]\]", "", stripped)))
+                 if w not in TYPE_KEYWORDS]
+        if ":" in stripped or len(words) <= 1:
             return "class", None
         return "variable", squash(raw_text)
     if STATIC.search(text):
