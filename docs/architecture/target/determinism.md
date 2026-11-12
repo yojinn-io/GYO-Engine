@@ -7,14 +7,14 @@ This page records only what the user has decided; spec items still marked "待�
 
 ## 1. Zones are declared contracts, checked at startup
 
-Every System, component, resource and event declares `zone ∈ {C, B}`; there is no default (spec S-6). The Kernel does not decide zones, it checks the declarations against each other (rules Z1 to Z8, spec §G.1): a zone=C System's whole access set (reads, writes, membership filters, events, deferred writes, run conditions, set reads) lies in zone=C data; zone=C data is written only by zone=C Systems or hooks, with the single exception of ingress Systems writing `role = Input` data in the ingress stage; zone=C Systems have no effects, no `Local`, no change filters, no `ExclusiveWorld`; `role = Input` data is `rollback = No`. A violation is a startup error, not a runtime check.
+Every System, component, resource and event declares `zone ∈ {C, B}`; there is no default (spec S-6). The Kernel does not decide zones, it checks the declarations against each other (rules Z1 to Z8, spec §G.1): a zone=C System's whole access set (reads, writes, membership filters, events, deferred writes, run conditions, set reads) lies in zone=C data; zone=C data is written only by zone=C Systems or hooks, with the single exception of ingress Systems writing `role = Input` data in the ingress stage; zone=C Systems have no effects except the write-only `Diagnostics` sink (`DiagnosticsWriter<T>`, spec S-8 v0.3: one-way (c) to (b), not World data, no conflict edges), no `Local`, no change filters, no `ExclusiveWorld`; `role = Input` data is `rollback = No`. A violation is a startup error, not a runtime check.
 
 ## 2. Where (c) code may take time from (user decision 2026-11-11, spec K.3 item 11)
 
 A zone=C System may read time from exactly two sources:
 
 1. **The World's domain tick** (`tick[domain]`, advanced only by the first step of that domain's clock schedule; inside the rollback snapshot).
-2. **Recorded boundary inputs**: zone=C, `role = Input` resources and columns written by the Host while the World is `Ready` or by an ingress System in the ingress stage, and therefore replayable from a record. Today's shapes: `HostClockSample` (the Host samples the clock once per wake-up and writes it), and the arrival time carried with every inbound message (`Link.inbound = {arrivalNs, bytes}`, written into `InputRing[tick]` by ingress).
+2. **Recorded boundary inputs**: zone=C, `role = Input` resources and columns written by the Host while the World is `Ready` or by an ingress System in the ingress stage, and therefore replayable from a record. Today's shapes: `HostClockSample` (the Host samples the clock once per wake-up and writes it), and the arrival time carried with every inbound message (`LinkInputInbound = {arrivalNs, bytes}`, written into `InputRing[tick]` by ingress).
 
 A zone=C System reading a clock itself stays forbidden: wall-clock resources such as `FrameTime` are `external`, zone=B, and rule Z1 keeps (c) away from them; `<chrono>` in a (c) source file is caught by the source-file scan (spec J-17). Writing the domain tick or a boundary resource from any System other than ingress is a startup error (spec J-39).
 
@@ -32,7 +32,7 @@ Serialised execution is necessary, not sufficient (PR #177: the predicted core i
 |---|---|---|
 | World | iteration ascending by key; references invalid after a sync point; structural changes only through the deferred queue during a run; queue applied in the fixed order; allocator monotonic and serialised by conflict analysis; no hash or address order | spec J-2, J-3, J-4, J-8, J-9, J-31, J-32 |
 | Executor | one Plan per schedule, (c) ambiguity is a startup error; Serial by default, Parallel only with a bit-identical guard; time from §2 above; randomness from §3 | spec J-20, J-22, J-27, J-39 |
-| Ingress | external messages enter only through `Link`; only ingress Systems write `InputRing[tick]`; arrival time is data; (c) Systems never touch `Link`; in replay the ring is read-only | spec J-40, J-41, J-42 |
+| Ingress | external messages enter only through the Link family of inbound Resources (and assets through `AssetInbox`); only ingress Systems write the role=Input staging (`InputRing[tick]`, `MembershipRequests`, `AssetStaging`); arrival time is data; (c) Systems never touch `Link`; in replay the ring is read-only | spec J-40, J-41, J-42 |
 | Math / build | current contract DI 3 (no contraction, no FMA or ISA intrinsics, no fast-math, exact libm only, Math's own transcendental functions after E1); the Kernel cannot check this, it only emits the list of (c) source files for the scan | current contract E0 to E5; spec J-17 |
 
 ## Design Invariants (candidates; become binding once approved)

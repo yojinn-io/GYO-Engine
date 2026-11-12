@@ -1,5 +1,7 @@
 # Offscreen 3D preview
 
+> Status: deprecated. The framework concept retires (`v8-arch-framework-retire`, 2026-11-11): its two duties, composing Engine capabilities and adapting third parties, move to the plugins layer (`docs/architecture/target/runtime-composition.zh-Hant.md` section 4). The code and this document stay in force for the existing programs until their migration batch. The data contract and its Design Invariants below carry over: their owner moves from the framework to the plugin that provides them (audit section 10.1); only the framework's own structural invariants (`architecture.md`) retire with it. No new work targets the framework.
+
 Owner: the framework (`framework/`), target `GYO::ToolFrameworkPreview`, headers `gyo/framework/Preview.hpp`,
 `gyo/framework/PreviewTexture.hpp` and `gyo/framework/PreviewCamera.hpp`. Plan and record:
 [framework-preview plan](../architecture/plans/framework-preview/README.md), batch `v8-framework-preview-component`

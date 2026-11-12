@@ -18,7 +18,7 @@
 <text class="ts" x="185" y="80" text-anchor="middle" dominant-baseline="central">Component Read／Write</text>
 <text class="ts" x="185" y="98" text-anchor="middle" dominant-baseline="central">Resource Read／Write</text>
 <text class="ts" x="185" y="116" text-anchor="middle" dominant-baseline="central">事件讀者／寫者、延後佇列句柄</text>
-<text class="ts" x="185" y="136" text-anchor="middle" dominant-baseline="central">可信度：World 的 debug 核對攔得到</text></g>
+<text class="ts" x="185" y="136" text-anchor="middle" dominant-baseline="central">可信度：World 的存取驗證攔得到</text></g>
 <g class="c-coral"><rect x="350" y="40" width="290" height="110" rx="8" stroke-width="0.5"/>
 <text class="th" x="495" y="58" text-anchor="middle" dominant-baseline="central">顯式宣告（登記時寫）</text>
 <text class="ts" x="495" y="80" text-anchor="middle" dominant-baseline="central">schedule、run 條件、before／after</text>
@@ -76,7 +76,7 @@
 <g class="c-teal"><rect x="346" y="576" width="140" height="96" rx="8" stroke-width="0.5"/>
 <text class="th" x="416" y="594" text-anchor="middle" dominant-baseline="central">Ingress</text>
 <text class="ts" x="416" y="614" text-anchor="middle" dominant-baseline="central">外部訊息只在同步點</text>
-<text class="ts" x="416" y="630" text-anchor="middle" dominant-baseline="central">寫入 InputRing[tick]</text>
+<text class="ts" x="416" y="630" text-anchor="middle" dominant-baseline="central">寫入 InputRing／MembershipRequests／AssetStaging</text>
 <text class="ts" x="416" y="646" text-anchor="middle" dominant-baseline="central">(c) 區 System 不碰 Link</text>
 <text class="ts" x="416" y="662" text-anchor="middle" dominant-baseline="central">到達時機不影響結果</text></g>
 <g class="c-teal"><rect x="499" y="576" width="141" height="96" rx="8" stroke-width="0.5"/>

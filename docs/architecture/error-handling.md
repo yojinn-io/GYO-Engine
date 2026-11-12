@@ -16,6 +16,19 @@ Result = Runtime Error
 | Shown to people | The handler prints the condition and its location | The error's code, message and detail |
 | Tested with | `GYO_CHECK_ASSERTS(expr)` | Assertions on `error().code` |
 
+### Programmer Error detected from runtime data (added 2026-11-11, `v8-arch-kernel-result-errors`; target for the kernel line's code, not yet implemented)
+
+A third case the two columns do not cover: the program is wrong, but the violation is visible only when an id arrives at runtime (an untyped `Commands` insert into a zone=C or Exclusive column, a `Despawn` of an entity carrying zone=C columns issued by a zone=B System, an `ExclusiveWorld` write outside zone=B Shared data; `plans/kernel/spec.zh-Hant.md` Z5, F-10, S-13).
+
+| | Programmer Error detected from runtime data |
+|---|---|
+| Mechanism | The Kernel API returns `Result<void, KernelError>` carrying the full context (System name, Plan position, command kind, EntityId, ComponentId, violated rule id). Every System returns `Result<void, KernelError>` and wraps the error with its own context (the Go `%w` chain); it neither logs nor swallows. The Executor is the outermost layer and handles once: logs the whole chain once (the log switch is in the Executor's handler; `Base::Result` stays a pure value), marks the World `Interrupted`, ends the run |
+| In every build | The same in release: nothing is silent, and no build configuration behaves differently. One event has one nature: an error is either a `GYO_ASSERT` or an `Err`; producing an `Err` never calls the assertion handler. Stopping on the spot is the startup parameter `breakOnKernelError` (a returning break hook where the `KernelError` is constructed), not an assertion. After Go: error values handled once at the outermost layer, `panic` as `GYO_ASSERT`, no debug/release split (user decision 2026-11-12, `v8-arch-kernel-break-hook`) |
+| Final disposition | Still a Programmer Error: the fix is in the code. `Result<void, KernelError>` is the System's **return contract, not an error channel**: every System returns it on every run, Ok is the normal path, Err carries the diagnostic chain and does not mean the caller can recover |
+| Tested with | Target guards, not yet implemented: release-target tests observe the `Err` and the `Interrupted` state (kernel spec J-32b, J-45); debug tests use `GYO_CHECK_ASSERTS` |
+
+Full text: `docs/architecture/target/error-handling.md`. The user's principle: no silent handling. The kernel's access verification (spec A.6) is not an assertion: its findings are returned as `Err` by the System's trampoline the same way, it has a runtime switch, and `GYO_ASSERT` stays as above for cheap preconditions (`v8-arch-kernel-verification-not-assert`, 2026-11-12).
+
 These are not errors and use neither mechanism:
 
 - **Plain absence** with a single obvious reason (a lookup that finds nothing): `std::optional`.

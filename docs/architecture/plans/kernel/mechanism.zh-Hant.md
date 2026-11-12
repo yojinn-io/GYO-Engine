@@ -56,7 +56,7 @@ World 只存「id 對應到一段有 size／align／move／destroy 規則的位�
 
 | 來源 | 內容 | 可信度 |
 |---|---|---|
-| 從參數型別推導（編譯期） | Component R／W、Resource R／W、事件讀者／寫者、延後佇列句柄 | World 的 debug 存取核對攔得到（未宣告的 id 即斷言） |
+| 從參數型別推導（編譯期） | Component R／W、Resource R／W、事件讀者／寫者、延後佇列句柄 | World 的存取驗證（可關；spec A.6）攔得到：未宣告的 id 記為違規、System 以 Err 回傳 |
 | 顯式宣告（登記時） | schedule、run 條件、before／after、執行緒親和、外部副作用（socket、檔案、GPU）、決定性區 (c)／(b) | 審查 |
 
 資料自己也帶契約：欄可宣告**獨占寫入**。進 authority digest 的欄預設獨占，這就是 AGENTS §3「狀態的權威只有一個」變成機制的方式。
@@ -85,7 +85,7 @@ Executor 的 Serial／Parallel 是策略，不是決定性本身。序列化只�
 |---|---|---|
 | World | 疊代依 index；同步點後所有參考失效；疊代中只進佇列；佇列依順序套用 | 審查補充 5 |
 | Executor | 順序固定；(c) 的時間只來自兩個來源：World 的 domain tick，與被記錄的 boundary 輸入（Host 每次喚醒取樣一次的 `HostClockSample`、隨每筆輸入進 ring 的到達時刻），(c) System 自己讀時鐘仍禁止（使用者 2026-11-11 改，原文「Time 只來自 tick」；spec K.3 第 11 項）；亂數狀態是每實體的 (c) 元件、種子進 digest（spec X20，原文「RNG 是 resource」） | Kernel 第 8 條；determinism.md DI 4 |
-| Ingress | 外部訊息只在同步點寫入 InputRing[tick]；(c) 區 System 不碰 Link；到達時機不影響結果 | v0.2 第十節 10.3 |
+| Ingress | 外部訊息由 Host 在交換點放進 Link，再由 Ingress stage 的 (b) System 寫入 InputRing[tick] 或 MembershipRequests（spec H.2b）；(c) 區 System 不碰 Link；到達時機不影響結果 | v0.2 第十節 10.3 |
 | Math／編譯 | 自己的 Sin／Cos（E1）；fp-contract 旗標順序（E2）；三平台 golden；E0 先找 ULP 來源 | determinism.md |
 
 架構師的主張 B：(c) 區開 Parallel 的唯一條件是有「與 Serial 逐位元相同」的守衛測試（比照 StaticAabbGrid 以「與線性掃描等價」當契約）。沒有守衛就不開；否則「能證明就能並行」會成為之後每個會話開並行的理由。
@@ -97,7 +97,7 @@ Executor 的 Serial／Parallel 是策略，不是決定性本身。序列化只�
 
 ### 3.5 C++ 的誠實上限
 
-從簽名推存取集合，模板做得到。擋住繞路存取做不到絕對：拿到參考就能存指標，全域變數永遠在那裡。能做的三層：API 讓繞路寫起來很醜；debug 建置在 World 的每次存取核對宣告；剩下靠審查。`GlobalCache::Update()` 那種副作用，機制攔不到，只能靠葉子模組「無全域狀態」的條件與審查。Bevy 自己也留了 unsafe 的後門。
+從簽名推存取集合，模板做得到。擋住繞路存取做不到絕對：拿到參考就能存指標，全域變數永遠在那裡。能做的三層：API 讓繞路寫起來很醜；存取驗證（啟動參數開關；測試建置預設開）在 World 的每次存取核對宣告；剩下靠審查。`GlobalCache::Update()` 那種副作用，機制攔不到，只能靠葉子模組「無全域狀態」的條件與審查。Bevy 自己也留了 unsafe 的後門。
 
 ## 4. 網路作為機制上的 System
 

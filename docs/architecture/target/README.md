@@ -32,6 +32,10 @@
 - 遷移批次的事前宣告要寫明它遷移哪些 Component、從此它們受哪份 target 文件約束；遷移完成後文件搬回，衝突自然消失。
 - 目標 DI 本身的變更仍是 Architecture Delta（§3），要使用者同意。
 
+## 每批事前宣告的檢查項（使用者 2026-11-11 的原則，自 -audit 後適用）
+
+**不要用舊思路處理新架構。** 每批事前宣告列選項時，每個選項先問一句：**「這是不是在為舊形狀找位置？」** 是的就不採，即使它最省工。來源：audit 待決第 2 項（Editor 預覽的三個選項都在問「readback 放哪」，等於沿用 ImGuiShell 的形狀，全部不採）、第 1 項（framework 改 DI 還是退役）、第 4 項（AssetManager 選哪個 World 還是拆開）。使用者原話：新架構若沿用舊架構的思路與原則，架構變更就失去意義——思想不變，修改就是在破船上打補丁。
+
 ## 限制與修改條件（limits 頁）的規則（圖書管理員 2026-11-11 定；兩條解釋由架構師決定）
 
 - 位置：現在 `target/limits.zh-Hant.md`，最終 `docs/architecture/limits.zh-Hant.md`，檔名不變；**逐條搬**，每條 LIM 自帶狀態行，所涉部件遷移完成時整段搬到頂層，未實作的留 target/。編號全域唯一、永不重用、搬動不改號；解除的標 `Lifted in <batch-id>` 不刪。引用一律用編號。
@@ -80,7 +84,7 @@
 - [determinism.md](determinism.md)：決定性（區是宣告的契約、(c) 的時間只來自 domain tick 與被記錄的 boundary 輸入、亂數是每實體元件、四處契約）。英文，因為最終併入的 `docs/architecture/determinism.md` 是英文。
 - [assets.zh-Hant.md](assets.zh-Hant.md)：資產（不選 World、照 Bevy 拆成請求狀態／`Assets<T>`／GPU 資源；載入是外部服務；內容身分 (c)；命名待辦）。
 - [naming.zh-Hant.md](naming.zh-Hant.md)：命名規範五條（歸屬＝namespace 與目錄、分類＝詞性、World＝前綴、區＝位置、禁止舊角色後綴）。
-- [limits.zh-Hant.md](limits.zh-Hant.md)：**限制與修改條件**（使用者 2026-11-11 要求的集中頁；LIM-1～LIM-5；最終位置 `docs/architecture/limits.zh-Hant.md`，逐條搬）。
+- [limits.zh-Hant.md](limits.zh-Hant.md)：**限制與修改條件**（使用者 2026-11-11 要求的集中頁；LIM-1～LIM-6；最終位置 `docs/architecture/limits.zh-Hant.md`，逐條搬）。
 - [runtime-composition.zh-Hant.md](runtime-composition.zh-Hant.md)：Runtime 的組合（Client 的 Frame 與 Render World 分開、Extract 唯讀無反饋、一 World 一執行緒、Match 的 Join／Leave 在 tick 內）。
 - [scheduler.zh-Hant.md](scheduler.zh-Hant.md)：Scheduler（衝突邊與順序邊、歧義處置、(b) 讀 (c) 的顯式順序）。
 - [world.zh-Hant.md](world.zh-Hant.md)：World（鍵格式與配發策略、change stamp、寫入政策預設獨占與資料路徑、結構變更的套用順序與 Despawn、事件只在 clock schedule 內；其餘待規格核准）。

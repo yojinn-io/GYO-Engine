@@ -9,6 +9,14 @@
 - 2026-11-11 使用者提供「GYO 架構設計思想」v0.2；架構師依理解畫三張圖（Runtime 機制、網路作為 System、控制面修訂）；使用者提供審查（4 修正 2 補充：多寫者非錯誤、衝突邊≠順序邊、決定性≠序列化、契約分兩半、World 懂儲存契約、邊界措辭與事件時機）；全部採納並加架構師兩條主張（(c) 區歧義＝啟動錯誤；(c) 區並行只在有逐位元守衛時）。寫成 mechanism.zh-Hant.md，blueprint 降為輸入。
 - 2026-11-11 決定性等級卡完成（PR #177）：一條邊界六區，不是全部一級；預測核心今天也不是 (c)（win1 2 步 ULP 差異，原因未明，E0 偵測批）。mechanism §3.3 引用。
 
+## 觀測到的壓力（AGENTS §2 的根據；使用者本人的觀測，2026-11-11，側邊會話轉述）
+
+使用者原話：
+
+> 雖然工作量爆炸，但是我卻沒有之前 GYO 那種改不動的感覺。第一次改不動是 10/10 的事故，第二次還沒碰到，但是我感覺到架構組織其實有壞味道，我沒有辦法使用統一的邏輯來執行工作。
+
+架構師的對應：-audit 量到的「重寫集中在組織層、每個 host 各自一套手排順序、四個工具 client 各自一套、framework 在中間補」（audit §1.4、§3.1、framework-tools 觀察 3）就是這個壞味道的量化。改造的收斂方向是**每遷一個 host 少一套規矩**，與 v7.1 事故後「在舊形狀上加特例」相反。
+
 ## 決定（使用者）
 
 | 代號 | 內容 |
@@ -20,7 +28,7 @@
 | `v8-arch-kernel-control` | 2026-11-11。使用者：GYO 最大的架構調整，**會話的控制權在主會話**（架構師會話），不交給別的會話或任務卡，避免會話間傳遞造成語意偏差；子代理可以開（使用者澄清「不開並行」指的是控制權，不是禁止子代理）。架構師：各批由主會話開子代理執行、主會話收結果並逐項讀過；原核准的「規格與 spike 同時開」照舊。 |
 | `v8-arch-kernel-spike-verdict` | 2026-11-11（側邊會話轉述）。spike 判定 2 照事前宣告原文記「成立」；實作者多發現的攔不到形狀（寫了又寫回、經存下參考只讀、堆積內容、全域狀態、host 碰過同欄、其他執行緒）全部記為**範囲の限界**（spike-report 專節 L1～L8），後續批次的事前宣告必須寫上，直到解除。 |
 | `v8-arch-kernel-limits-accept` | 2026-11-11（側邊會話轉述）。上限的處置：接受；World 以外的資料靠 code review（mechanism §3.5 三層）；不改計畫前提。-audit 的第二問改為兩個可檢查的問題：有沒有跨 tick 的指標或參考、有沒有全域可變狀態。 |
-| `v8-arch-kernel-spike-pageguard` | 2026-11-11（側邊會話轉述）。新增批 `-spike-pageguard`：debug 版頁保護（mprotect／VirtualProtect）；形狀已定：只對寫設保護、讀放行；只保護標「獨占寫入」的欄；只在 (c) 區 System 執行時開；只在 debug。排在 -spec 之後（欄與 System 的標記要照規格的契約欄位寫）；開工前事前宣告。 |
+| `v8-arch-kernel-spike-pageguard` | 2026-11-11（側邊會話轉述）。新增批 `-spike-pageguard`：debug 版頁保護（mprotect／VirtualProtect）；形狀已定：只對寫設保護、讀放行；只保護標「獨占寫入」的欄；只在 (c) 區 System 執行時開；原文「只在 debug」，B-9 結案（`v8-arch-kernel-verification-not-assert`）後歸「存取驗證（可關）」：隨同一個啟動參數開關，頁錯誤處理器把違規記進本次呼叫的 context、System 以 Err 回傳，不是 GYO_ASSERT。排在 -spec 之後（欄與 System 的標記要照規格的契約欄位寫）；開工前事前宣告。 |
 | `v8-arch-kernel-entity-key` | 2026-11-11（側邊會話轉述，spec K.3 第 1 項）。EntityId 格式＝u64，低 32 index、高 32 generation（Bevy 格式）；Kernel 不看兩段意義，疊代依整數值升冪；配發策略是產品的 Resource，PvP 選單調不重用、generation 恆 0（值與今天逐位元相同，wire／digest 不改）；stale 句柄偵測能力取決於策略。spec A.1、A.8、K.1 第 3／4 條已改，K.2 第 2 條取消；部件文件 `docs/architecture/target/world.zh-Hant.md`。 |
 | `v8-arch-kernel-change-stamp` | 2026-11-11（同上，K.3 第 2 項）。接受規格：依 Plan 位置取值的單調 u64 stamp（不重置、不回滾、跨世代不比較）；tick 視角以 tickStamps 換算；(c) 區禁變更過濾；blueprint DI-K5 與 networking §1 第 7 條各改一句。 |
 | `v8-arch-docs-next-folder` | 2026-11-11（同上）。新版架構文件與舊版分開、至少分資料夾、不混放：現況留 `docs/architecture/`，目標架構放 `docs/architecture/target/`（圖書管理員 2026-11-11 定：平鋪、檔名＝搬回後的檔名、英文 Status 行）；每份標「目標架構，尚未實作」或「已實作於哪批」；部件遷移完成後搬回、舊的刪或標廢止，不並存；計畫／HANDOFF／dev_log 留 plans/kernel。 |
@@ -31,21 +39,26 @@
 | `v8-arch-kernel-delta-approved` | 2026-11-11（側邊會話轉述，spec K.3 第 7 項）。使用者同意 Architecture Delta 三處：architecture.md:136 禁令改為「Kernel 進 Engine（World／System／Scheduler／Executor）；plugin ABI 與動態載入仍禁」；entity-store DI 4 延伸到 insert／remove、DI 5 仍成立、DeferredChanges（3b）撤回；determinism.md §4.7 正式化。七項以 spec／mechanism 為計畫層一次書寫、各批引用。文件修改排進改造的第一個文件批。 |
 | `v8-arch-remove-object-fps` | 2026-11-11（側邊會話轉述，spec K.3 第 8 項）。移除 apps/object_fps、apps/object_fps_v2 與 tools/object_fps_preview 的依賴，照 AGENTS §7 完整刪除、不留相容層；理由：PvP 已有自己的生態。排成改造前的獨立批，兼驗 §7 removability（刪後共通層需要改就記 Delta）。待事前宣告。 |
 | `v8-arch-kernel-writer-unit-system` | 2026-11-11（側邊會話轉述，spec K.3 第 9 項）。獨占寫者以 System 計、Startup 不計；PvP 的 Body 依 entity-model 第 139 行分類拆欄，不併 System、不改 Shared、不採以 owner plugin 計。使用者：不拆的話架構改造就沒有意義。拆欄範圍與 golden 影響由 -audit 量。 |
-| `v8-arch-kernel-membership-in-tick` | 2026-11-11（側邊會話轉述，spec K.3 第 10 項）。採規格：Join／Leave 進 tick 內，Ingress 只寫請求進 InputRing，(c) 的 ApplyMembership 以 SpawnWithId／Despawn 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（晚最多一 tick、golden 如 combat-rejoin 可能差一 tick 需重設基準）記為 LIM-5，產品線在遷移批確認；entity-model §5.2 改寫排進第一個文件批。 |
+| `v8-arch-kernel-membership-in-tick` | 2026-11-11（側邊會話轉述，spec K.3 第 10 項）。採規格：Join／Leave 進 tick 內，Ingress 只寫請求進暫存（v0.3 N-8 起是 `MembershipRequests`，原記 InputRing），(c) 的 ApplyMembership 以 SpawnWithId／Despawn 生成與刪除；不為 Host 開 Z2／Z5 例外。後果（晚最多一 tick、golden 如 combat-rejoin 可能差一 tick 需重設基準）記為 LIM-5，產品線在遷移批確認；entity-model §5.2 改寫排進第一個文件批。 |
 | `v8-arch-kernel-time-sources` | 2026-11-11（側邊會話轉述，spec K.3 第 11 項，B6 結案）。(c) 區的時間只來自 World 的 domain tick 與被記錄的 boundary 輸入（HostClockSample、隨輸入進 ring 的到達時刻）；(c) System 自己讀時鐘仍禁止。mechanism §3.3 Executor 列已改（含圖）；determinism.md DI 4 不動；規則寫進 target/determinism.md。 |
 | `v8-arch-kernel-k3-12-14-15` | 2026-11-11（側邊會話轉述）。第 12 項：同步點套用順序照 F.2（與第 4 項一起）；第 14 項：v1 任何 Parallel 宣告＝D-E17，含只有 (b) 的 schedule（LIM-2）；第 15 項：事件只在該 domain 的 clock schedule 內讀寫（F-9）。 |
-| `v8-arch-kernel-result-errors` | 2026-11-11（側邊會話轉述，spec K.3 第 17 項，有變更）。不採常開檢查巨集，改 Go 式錯誤處理（原則：不靜默）：untyped 路徑回 Result<void, KernelError> 帶完整上下文；System 簽名改回 Result<void, KernelError>，包一層上下文回傳、不自己記錄；Executor 最外層只處理一次（記錄完整鏈一次、World Interrupted；日誌開關在 Executor 的 handler，Base::Result 仍純值）；release 也如此；debug 另在記錯當下呼叫 assertion handler。error-handling.md 加一列（Delta 已同意，排第一個文件批）。使用者接受 System 多一行回傳。部件文件 target/system-contract.zh-Hant.md、target/error-handling.md。 |
+| `v8-arch-kernel-result-errors` | 2026-11-11（側邊會話轉述，spec K.3 第 17 項，有變更）。不採常開檢查巨集，改 Go 式錯誤處理（原則：不靜默）：untyped 路徑回 Result<void, KernelError> 帶完整上下文；System 簽名改回 Result<void, KernelError>，包一層上下文回傳、不自己記錄；Executor 最外層只處理一次（記錄完整鏈一次、World Interrupted；日誌開關在 Executor 的 handler，Base::Result 仍純值）；release 也如此；~~debug 另在記錯當下呼叫 assertion handler~~（2026-11-12 刪，見 `v8-arch-kernel-break-hook`）。error-handling.md 加一列（Delta 已同意，排第一個文件批）。使用者接受 System 多一行回傳。部件文件 target/system-contract.zh-Hant.md、target/error-handling.md。 |
 | `v8-arch-kernel-rc1-rewrite` | 2026-11-11（側邊會話轉述，spec K.3 第 13 項）。使用者核准 RC 第 1 條改寫為三分項（(a) 判定 1 不成立→退回顯式宣告；(b) 經 World 的存取 debug 攔不到→核對層重寫；(c) 上線後兩次以上不屬範囲の限界的不符→頁保護或縮小「包」）。**K.3 全部 17 項定完**；對照表在 target/README。使用者：接下來照計畫，規格與文件更新 → -audit（事前宣告列 L1～L8）→ -spike-pageguard。 |
 | `v8-arch-kernel-audit-third-party` | 2026-11-11（側邊會話轉述）。第三方庫的開源方向在新架構下重核：併進 -audit（third_party/ 每庫一列，I.3 四問判葉子／包／服務，附親和與 zone；結論回寫 #176 判定總表標「依 spec v0.2 重核」）；World 儲存層借 EnTT 或自寫不在 audit 做，等 World 實作批用 W-1～W-11 核對；#176 D2 等 DET-1。 |
 | `v8-arch-kernel-determinism-recheck` | 2026-11-11（側邊會話轉述）。決定性分級契約在新架構下成立，不另開核對卡；四處小改照第一個文件批。-audit 產出加一節：逐模組 zone 判定回對 determinism.md §4 的區表，列漏的模組與標錯的區，交使用者，不改契約。 |
 | `v8-arch-framework-retire` | 2026-11-11（側邊會話轉述，audit §3.1）。framework 退役，不改 DI 2／6：組合與第三方對接由 plugin 承擔；Editor host 骨架＝提供 runner 的 plugin（finish 安裝，一 Runtime 一個，R-E6）；標準 Editor stage＝plugin 在 build 插入；新 top-level `plugins/`（§10 Delta 已同意；Engine 永不 include、產品工具只在 main 列）；三層改為 Engine／plugins／產品與工具；framework DI 整節廢止、docs/framework/ 標廢止；spec L.2、H.4.3、target/runtime-composition 改寫。使用者原則：思想不變，修改就是在破船上打補丁。架構師保留：選擇窗記帳與關窗提示必須進共用 plugin。 |
+| `v8-arch-kernel-verification-not-assert` | 2026-11-12（側邊會話轉述，spec-v03 停止報告 B-9 結案）。GYO_ASSERT 不動（常開、abort；Kernel 的便宜前置條件照用）。A.6 兩層存取核對與句柄 epoch 比對**不叫斷言，叫「驗證」（可關）**，成本與 World 大小成正比；驗證抓到的違規以 Err 作為 System 的回傳值（第 17 項；記進本次呼叫的 SystemContext——描述不可變，第二輪 N-6——跳板回 Err 帶 System 名／Plan 位置／id／模式／規則代號、Executor 記一次、World Interrupted；~~debug 另在記錯當下呼叫 assertion handler~~ 2026-11-12 刪，見 `v8-arch-kernel-break-hook`）。機制只剩兩種：GYO_ASSERT 與 Result。用詞：`Result<void, KernelError>` 是 System 的回傳契約（Ok 正常、Err 帶上下文的 Programmer Error）；驗證關掉時仍回 Ok；便宜那類（untyped Commands、Z5、S-13）永遠查。開關：**使用者定為啟動參數的執行期開關**（不是編譯期；程式碼永遠在，Host／runner 寫進 Kernel 設定 Resource，關閉時每次存取只多一個分支；A.6 兩層與句柄 epoch 都掛它）；開關狀態啟動時寫日誌並放成 Resource，「無違規」報告必附「驗證開著」；release 預設關、測試版預設開，皆明寫設定；關閉時此類不被偵測列入 LIM-3。使用者：「嗯，就是這個」。第 17 項理由改為「相對 GYO_ASSERT 的 abort，給出上下文鏈與 Interrupted」。 2026-11-12 追加（側邊會話轉述，使用者同意）：開關的四個條件（啟動後凍結、狀態進證據、預設跟建置變體且參數只能覆寫、關閉時零配置成本）與兩個限制（行程級共用、不是 (c) 資料），寫進 spec A.6、target/system-contract §2b、limits LIM-6。 |
+| `v8-arch-kernel-break-hook` | 2026-11-12（側邊會話轉述，第三輪 B-8 結案）。刪第 17 項「debug 另在記錯當下呼叫 assertion handler」。規則**一個事件只有一種性質**：GYO_ASSERT（終結）或以 Err 回傳的 Programmer Error，Err 的產生與回傳路上不呼叫 AssertionHandler、不呼叫終結出口。現場停改為啟動參數 `breakOnKernelError`（KernelSettings 的第二個參數，與驗證開關獨立、吃同樣四條件）：KernelError 建構處一個會返回的 break 掛鉤，返回後照常走 Err；不綁建置組態。參考出處（Go：error 值回傳＋最外層處理一次、panic＝GYO_ASSERT、無 assert 無 debug／release 二分、`runtime.Breakpoint()` 包旗標、`GODEBUG`）與不照搬的兩點寫進 spec §讀法／K.3 第 17 項、target/system-contract §2b、target/error-handling、error-handling.md。 |
+| `v8-arch-determinism-table-fix` | 2026-11-11（側邊會話轉述）。區表三漏一錯採 (a)；條目照歸屬命名；PlayerAnimation 推進先由決定性線核對。（原記在現況區，依對抗檢查 S-10 補進決定表） |
+| `v8-arch-loading-schedule` | 2026-11-11（側邊會話轉述）。Loading schedule 契約七點（見現況區 2026-11-11 條目）。 |
+| `v8-arch-naming` | 2026-11-11（側邊會話轉述）。命名規範五條（target/naming）。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
 
 ## 未定
 
+
 - 改造期間事故修正（lag win1）是否繼續。
 - AGENTS §2／§3 條文：風紀委員已在分支 `claude/judgment-agents-foundation-pressure` 起草（使用者 11-10 直接指示）；架構師 11-11 轉交的三點追加（實作薄、先一個 host 量成本；§3 七項計畫層寫一次；跨產品能力當 Feature）待使用者同意。
-- 改造期間事故修正（lag win1）是否繼續。
 - 網路：帳本放 Match 還是 Gateway；兩通道分流採不採。
 - 決定性 DET-0～DET-3（determinism.md §0）。
 
@@ -88,9 +101,20 @@
 - 2026-11-11（側邊會話轉述，audit 待決第 6 項）`v8-arch-determinism-table-fix`：區表三漏一錯採 (a)，四處接受、排第一個文件批（與 E4 一起）；PlayerAnimation 推進先由決定性線核對 digest 編碼；條目名照歸屬改（固定步累加器→runner plugin (b)；時鐘樣本→HostClockSample；Sha256／StrictJson→「內容身分」「契約資料解析」兩條 (c) 路徑；以欄與 System 命名）。
 - 2026-11-11（同上）`v8-arch-naming`：命名規範五條（歸屬＝namespace 與目錄；分類＝詞性照 Bevy；World＝前綴；區＝位置非名字；禁止 Manager／Renderer／ViewModel／Host／Shell／Runtime／Controller 後綴），target/naming.zh-Hant.md；遷移批事前宣告列改名清單。**audit 六項待決全部定完。**
 
+- 2026-11-11 PR #181 合併（f8b6f74b）；三個審查者與 spike 的 agent worktree 已清。使用者「開始 spec-v03」→ `v8-arch-kernel-spec-v03` 啟動（事前宣告 spec-v03-declaration.zh-Hant.md；主會話自寫、對抗 Opus／high）。
+
+- 2026-11-11 **-spec-v03 停止（AGENTS §14：原因改變前提）**。對抗檢查 Opus／high 回 9 blocker、11 should、5 nit；判定 1 不成立、2 有條件、3 不成立、4 成立。停止理由 B-9：規格 §讀法把「debug 斷言」定義為「`GYO_ASSERT`，只在 debug 有效、release 不攔」，但 `Assert.hpp:21` 與 error-handling.md 第 15 行寫明 GYO_ASSERT **在每個建置組態都評估**，架構師已核實。影響：K.3 第 17 項「不採常開檢查巨集、改 Result」的對比對象（常開巨集）其實就是現有 GYO_ASSERT；規格裡所有「debug 斷言…release 不攔」條文（W-4、W-5、W-6、F.2 第 4 步等）的機制名錯；本批已把第 17 項寫進現況 error-handling.md，與同檔「每個建置都跑 handler」並存。其餘 blocker（B-1 §0 Host 定義未改、B-2 H.4.1 (a) 漏改、B-3 H-7 呼叫點例子把 FixedTickRuntime::Advance 當違規、B-4 target 兩份未跟 Diagnostics 例外、B-5 (c) 診斷仍無合法路徑、B-6 ApplyMembership 掛兩個 schedule＝兩個寫者、B-7 entity-store DI 4 內部矛盾、B-8 F.1 untyped Commands 仍寫呼叫 assertion handler）可由架構師修，但依 §14 停下不 commit 修正，先報使用者。分支 claude/arch-kernel-spec-v03 保留現狀，未開 PR。→ 2026-11-12 B-9 由使用者結案（`v8-arch-kernel-verification-not-assert`），解除停止，繼續修 B-1～B-8 與 should。
+
+- 2026-11-12 對抗檢查 S-8 的解讀（架構師）：`v8-arch-framework-retire` 廢止的是 framework **自己的**結構 DI（docs/framework/architecture.md）；event-sounds、preview 的資料契約 DI 不廢止，owner 隨 plugin 搬（audit §10.1）。文件標示照此改。framework DI「整節廢止」與 target README「未遷移照現況 DI」的關係：廢止＝不再新增或修改、隨遷移批刪；遷移前現有程式仍照它。
+- 2026-11-12 v0.3 對抗檢查 9 blocker／11 should／5 nit 全部處置（spec 修訂記錄「v0.3 對抗檢查後」）。
+- 2026-11-12 第二輪（Opus／high）4 blocker／10 should／4 nit（N-1～N-18）→ commit 929ca78e 處置；開關四條件 c64282d9。
+- 2026-11-12 第三輪（Opus／high）2 blocker／11 should／4 nit（B-1～B-17），並指出第二輪 9 項只修一半 → 除 B-8 外全部處置（spec 修訂記錄「第三輪對抗檢查後」）。**B-8 待使用者決定**（見未定）。
+- 2026-11-12 第四輪只讀複核（Opus／high）0 blocker／10 should／4 nit（N1～N14：`CurrentTick` 參數、Link inbound 分種類、序號本地配發、`ApplyStagedAssets`＋`LoadingState`、`KernelSettings` 時間點、E.2 第 ⑤ 步、Z5 複核範圍、stamp 改述、ClientSim 加 Loading、H-A1 移出啟動表、J-48～J-52）→ 全部處置（spec 修訂記錄「第四輪只讀複核後」）。B-8 由使用者決定（`v8-arch-kernel-break-hook`）並寫入。第五輪只對第四輪的 diff 複核：1 blocker（`LoadingProgress` 多寫者）／11 should／9 nit → 全部處置（spec 修訂記錄「第五輪差異複核後」）。對抗檢查到此收口（第四、五輪 blocker 分別 0、1，且都是前一輪新條文的收尾），開 docs PR。
+- 2026-11-12 **PR #182 已開**（docs-only，branch `claude/arch-kernel-spec-v03`，HEAD c155ef24＋本行）。合併等使用者說。使用者就寢前交代：做到開 PR 為止。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
-- 改造的第一個文件批（待規劃）：K.3 第 7 項的三處 Delta 文件修改；entity-model §5.2（Join／Leave 在 tick 內，K.3 第 10 項）；error-handling.md 加一列（K.3 第 17 項）；mechanism §3.3「Time 只來自 tick」依 K.3 第 11 項裁決修訂。
+- ~~改造的第一個文件批~~ 已於 -spec-v03 做完（architecture.md、entity-store、determinism §4.7／4.7a／4.7b／4.2a、entity-model §5.2、error-handling、framework 廢止標示、mechanism §3.3）。
 - ~~-audit~~ 完成，六項待決已定 → 規格修訂（audit §6 七項）與第一個文件批合併規劃 → `-spike-pageguard`（事前宣告待寫）→ 改造批次計畫（§3 Delta 計畫層寫一次；以 audit 的成本形狀分批）。
 - 判定 1 的三平台：**成立**（L1 run 43018979148，PR #180；步驟第一次誤加在 build-and-validate.yml、已改到 cross-platform.yml）。PR #180 含 `spikes/` 以外的 `.github/workflows/cross-platform.yml` 改動，合併由使用者決定。
