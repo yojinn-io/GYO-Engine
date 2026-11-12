@@ -128,8 +128,12 @@
 - 2026-11-12 使用者選 (a)：主會話以 commit `4bb944cb` 改寫 pvp 測試目錄 8 行，判定 3 成立。主會話判定 4、5（基準環境）：ctest 152→152 名單相同全過、doctest 只差 engine_tests −1／gyo_model_tests −3、pvp 57 項案例數相同、空目錄 0。PR #185 開成正式跑 L1。審查者（Fable／high，只讀；`build/evidence/remove-object-fps/review-report.md`）：0 blocker／5 should／6 nit，判定 1～3 獨立重做成立。S1：刪掉的第三個 ModelTests 案例主要在測保留的 `PlaybackInterval::Crossed`，整個刪掉是 §14.4 的緩める面且宣告沒寫明 → 主會話把 5 個 CHECK 以同名案例留回（第五個 commit；gyo_model_tests 24→22，沒有緩める面，事後報告）。S2～S5、N2～N4 已處置；N1 保留；N6 交圖書管理員。
 - 2026-11-12 使用者問有沒有可並行的任務；架構師列表後，使用者決定先開 J-17 掃描器線與圖書管理員兩條，交接卡已寫（分支 `claude/arch-handoffs-j17-librarian`）。
 
+- 2026-11-12 #185 合併（`74e0eb07`）。產品線前置的交接卡寫好（`v8-product-kernel-prep`：-detect 偵測與固定現況、-zones 搬區；PR #188）；CI 準備與 J-17 掃描器的任務卡使用者已點開；AGENTS 兩條教訓已送風紀委員；圖書管理員已確認職責。
+
 ## 下一步
 
+- 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。
+- 架構師線的下一批：遷移批規劃（§3 Delta 計畫層七項、以 audit 的成本形狀分批、plugin 邊界）＋ A.6 修訂吸收 pageguard 的 11 點；等 J-17 清單格式核定與 CI 卡的結論一起排。
 - `v8-arch-remove-object-fps`：判定 1～5 全部成立（三平台（L1 run 43188319281，commit `e9324903`）：linux-x64 ctest 138/138、windows-x64 142 過 1 skip（`os.console_close`，既有的 OS 子系統 skip、與本批無關）、macos-arm64 138/138；`engine_tests` 139、`gyo_model_tests` 22 三平台一致（artifact `tests.xml` 存主 checkout `build/evidence/remove-object-fps/l1-43188319281/<platform>/`）。）；使用者 2026-11-12「#185、#186 都 OK」→ 合併。下一批：遷移批規劃（§3 Delta 計畫層七項、A.6 修訂吸收 pageguard 11 點、plugin 邊界）。
 - ~~改造的第一個文件批~~ 已於 -spec-v03 做完（architecture.md、entity-store、determinism §4.7／4.7a／4.7b／4.2a、entity-model §5.2、error-handling、framework 廢止標示、mechanism §3.3）。
 - ~~-audit~~ 完成，六項待決已定 → 規格修訂（audit §6 七項）與第一個文件批合併規劃 → `-spike-pageguard`（事前宣告待寫）→ 改造批次計畫（§3 Delta 計畫層寫一次；以 audit 的成本形狀分批）。
