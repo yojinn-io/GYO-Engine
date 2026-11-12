@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Pvp/PlayerHitbox.hpp"
-#include "RetroFPS/Pvp/PlayerPresentation.hpp"
+#include "RetroFPS/Sim/PlayerHitbox.hpp"
+#include "RetroFPS/Present/PlayerPresentation.hpp"
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"
 #include "engine/asset/ContentManifest.hpp"

@@ -131,7 +131,7 @@ TEST_CASE("G2 EraseEntityRemovesEveryColumn: a leave empties every column and ti
     Step(match);
     // One accepted shot fills the tick shapes and the action-start combats.
     REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0, ActionKind::Shot, 1}}}) == ActionAdmission::Accepted);
-    Step(match, 1, [](std::uint64_t) { return std::optional<std::chrono::nanoseconds>{std::chrono::nanoseconds{0}}; });
+    Step(match, 1, [](std::uint64_t) { return std::optional<std::int64_t>{0}; });
     const auto results = match.GetActionResults(1);
     REQUIRE(results);
     REQUIRE(results->decisions.size() == 1);
@@ -208,7 +208,7 @@ TEST_CASE("G13 ActionStartCombatIsTickStart: shapes are posed with the combat as
     REQUIRE(match.Join(1, error));
     REQUIRE(match.Join(2, error));
     const ShotReferenceAge fresh = [](std::uint64_t) {
-        return std::optional<std::chrono::nanoseconds>{std::chrono::nanoseconds{0}};
+        return std::optional<std::int64_t>{0};
     };
     const auto combatOf = [](const WorldSnapshot& snapshot, PlayerId id) {
         for (const auto& combat : snapshot.combat)

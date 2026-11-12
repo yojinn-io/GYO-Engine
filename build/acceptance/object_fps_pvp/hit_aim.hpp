@@ -2,10 +2,10 @@
 // The acceptance probes' aim at one part of a target (v8-product-real-match-aim (a)):
 // the target posed by the product's hit model from the shooter's snapshot, the aim
 // point the middle of that part's first shape, from the shooter's stance eye.
-#include "RetroFPS/Pvp/PlayerHitbox.hpp"
-#include "RetroFPS/Pvp/PlayerPresentation.hpp"
+#include "RetroFPS/Sim/PlayerHitbox.hpp"
+#include "RetroFPS/Present/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
-#include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "RetroFPS/Sim/ShotQuery.hpp"
 
 #include <algorithm>
 #include <cmath>

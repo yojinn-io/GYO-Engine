@@ -1,8 +1,20 @@
 # v8-product-kernel-prep-zones 事前宣告
 
 更新：2026-11-12。Owner：`object_fps_pvp`（內容歸產品；執行者是架構師開的任務卡）。來源：交接卡 [kernel-prep](kernel-prep.zh-Hant.md) 第二批；J-17 掃描器卡 [j17-scanner](../../../architecture/plans/kernel/j17-scanner.zh-Hant.md)「給 -zones 批」節。出處：audit `docs/architecture/plans/kernel/audit.zh-Hant.md` §1.3、§4.5；`docs/architecture/target/naming.zh-Hant.md` 第 4 條；清單契約 `docs/architecture/target/zone-c-sources.zh-Hant.md`；spec J-17 規則 1。
-**狀態：草稿，待架構師核定。** 判定與數字在看到任何結果之前寫下，核准後不放寬（AGENTS §14.1）。核定前不改程式。
+**狀態：架構師會話 2026-11-12 核定，六個決定點全採 (a)。** 判定與數字在看到任何結果之前寫下，核准後不放寬（AGENTS §14.1）。
+
+### 宣告錯誤的修正（架構師 2026-11-12 核定）
+
+交接卡第二批寫的「確認清單 26→0」是架構師的宣告錯誤：判定對象（P5／P8 的 17 處、P13 載入器簽名、容器）超出本批「只搬位置與整數化時間型別、P1～P6 不搬」的範圍（與 -spike-pageguard 判定 1 同型）。修正後的門：確認清單 26 → **7**，七行逐一指定（§3 Q3(a)：5 處 `<filesystem>` 載入器簽名＋2 處 ZS7），多一處、換一處都不成立；ZS2～ZS6 為 0；候選清單與第三份 `zone-c-rewrite.json`（P1／P5／P6）只報告不判。這 7 處與 D／E 類在 dev_log 列「交遷移批」的理由：B＝載入器拆讀檔與解析＝API 變更；D＝P5 Host 時鐘；E＝G.4 第 3 條改句柄；F＝決定性線核對 digest 編碼。另：產品 namespace 是 `fps::pvp`，`RetroFPS` 只是 include 目錄名；交接卡「namespace `RetroFPS::Sim`」的措辭由架構師改。
 分支 `claude/arch-pvp-kernel-prep-zones`，base origin/master `3061e879`（#196 已合併；#193 -detect、#192 J-17 都在內）。
+
+### 修訂（實作中；2026-11-12，實作者記、架構師事後核）
+
+1. **ctest 的名稱與判定方式**（§2.5、J5、J9）：三個掃描 ctest 命名 `object_fps_pvp.zone_c_scan_{sources,candidates,rewrite}`，都以 `--no-fail` 跑（只報告；只在契約錯誤如清單檔不存在時失敗）；門改由 `object_fps_pvp.zone_c_lists`（`test_zone_c_lists.py`）負責：確認清單的掃描結果**正好等於**記錄的 7 處殘留（檔、規則、文字的多重集合）且 ZS2～ZS6 為 0。理由：掃描器只有「0 違規」或「有違規」兩種出口，表達不了「正好這 7 行」；清單守衛做精確比對比宣告原文更嚴，沒有放寬。J9 的 `zone_c_sources` 讀為 `zone_c_scan_sources`＋`zone_c_lists`。審查者（should）指出與原文不同，記於此。
+2. **D2／D3 守衛的改動不只兩行**（J4）：審查者（must）發現 D3 的寫點掃描 `SOURCE.glob('*.cpp')` 只掃 `src/Pvp`，搬走 `Movement.cpp` 後 Sim／Present 的 17 個 .cpp 不在範圍內——在 `StepMovement` 加一個 `connectionQualityFailures` 寫點不會被抓。改成 `src/` 全目錄遞迴。這是 §14.4 的「締める面」（掃更多檔、`FAILURES_WRITERS` 不變、白名單 47 列不變），沒有緩める面；1～5：守的性質＝Match 端沒有 failures 的寫點；緩める面＝無；締める面＝Sim／Present／App 的 .cpp 也掃；他處守衛＝無需；證據＝`j3`、`j4` 的 ctest 輸出。
+3. **`match_main.cpp` 含 `Sim/PlayerPose.hpp`**（Q4）：Match 入口只用 `LoadPlayerPoseDefinition` 與 `AnimationContentDigest`，照 Q4(a) 的「只改路徑」會讓 Match host 多一條到 Present 的含入邊；審查者（should）建議，改含拆出的 pose 標頭。測試與驗收程式維持只改路徑。
+4. **清單守衛加兩項**（§2.5）：Sim 的任何檔不得 `#include "RetroFPS/Present/…"`（§0 的方向約束原本沒有守衛）；rewrite 清單釘住三個成員。正例改成真的比對差異（原本的恆真式審查者指出）。
+5. **wire 換算釘住**：`IpcHostTests` 加 `maximum_reference_age_ms() == 250`；突變加第四條 `kz-wire-ms-off-by-one-digit`（`IpcHost.cpp` 的除數少一位，check `ipc`）。審查者指出整數化後 `/ 1'000'000` 與 `* 1'000'000` 沒有 CI 測試釘住；`ClientConnection.cpp` 的 `* 1'000'000` 仍只有本機的 `worker_main.cpp`（333 ms）釘住，記進限界。
 
 ## 0. 為什麼（Feature → Contract → Architecture）
 
@@ -174,7 +186,7 @@ dev_log `docs/dev_logs/2026_11_12_pvp_kernel_prep_zones.zh-Hant.md`（搬動對�
 ## 5. 範囲の限界
 
 - 掃描器的已知限界（J-17 dev_log）照舊：識別字引數的括號初始化、多重宣告子、大小寫不敏感檔案系統的 include 拼法；碰到以人工補看，不改規則。
-- `inline namespace` 不阻止 Host 程式以 `fps::pvp::X` 引用 (c) 型別；區的強制仍是目錄＋清單守衛＋spec G.1 的啟動檢查（未實作）。
+- `inline namespace sim` 是 v1（架構師核定）：inline 讓名字不分區，Host 程式仍能以 `fps::pvp::X` 引用 (c) 型別；區的強制靠目錄與 J-17 掃檔（清單守衛＋spec G.1 的啟動檢查，後者未實作），不靠名字。遷移批重寫時改成非 inline。
 - `zone_c_lists` 只比對 `src/Sim/*.cpp` 與清單；標頭（`include/RetroFPS/Sim/*.hpp`）由掃描器沿 include 展開覆蓋，一個沒被任何 Sim .cpp 含入的孤兒標頭不會被掃到。本批搬進去的 16 個標頭都有含入鏈（§1.1 展開表），不會有孤兒；之後新增要靠審查。
 - 殘留的 5 處 ZS1（B）與 2 處 ZS7（F）在本批**不修**；遷移批把載入器做成 Startup System 時處理 B，決定性線核對 digest 編碼後處理 F。
 - rewrite 清單的命中（D、E 類）本批不處理：G.4 第 3 條（診斷句柄）與 P5 host 時鐘是遷移批的設計決定。

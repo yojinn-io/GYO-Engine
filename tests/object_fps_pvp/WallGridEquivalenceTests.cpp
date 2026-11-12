@@ -5,10 +5,10 @@
 // functions below are the scans as they were before the batch (commit 35d5deea),
 // kept here only as the oracle.
 
-#include "RetroFPS/Collision/CharacterCollision.hpp"
-#include "RetroFPS/Pvp/Arena.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
-#include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "RetroFPS/Sim/CharacterCollision.hpp"
+#include "RetroFPS/Sim/Arena.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
+#include "RetroFPS/Sim/ShotQuery.hpp"
 #include "engine/collision/Collision.hpp"
 #include "engine/math/geometry/Intersection.hpp"
 #include "engine/math/geometry/Plane.hpp"
@@ -247,12 +247,12 @@ TEST_CASE("PvP wall queries on the grid equal the linear scans bit for bit (pa-b
                 draw.Int(0, 1) == 0 ? 1.8F : 1.2F, draw.Int(0, 3) == 0 ? 0.3F : 0.25F};
             const auto displacement = RandomDisplacement(draw);
             const bool floor = draw.Int(0, 1) == 0;
-            bool same = fps::CanPlaceCharacterBody(body, grid, {}) == reference::CanPlace(body, arena.walls) &&
-                        fps::IsCharacterSupported(body, grid) == reference::Supported(body, arena.walls);
+            bool same = fps::pvp::CanPlaceCharacterBody(body, grid, {}) == reference::CanPlace(body, arena.walls) &&
+                        fps::pvp::IsCharacterSupported(body, grid) == reference::Supported(body, arena.walls);
             // MoveCharacterBody may throw (an unresolved planar penetration): both must.
             std::optional<Engine::Math::Vec3> moved, expected;
             bool movedThrew = false, expectedThrew = false;
-            try { moved = fps::MoveCharacterBody(body, displacement, grid, {}, floor); }
+            try { moved = fps::pvp::MoveCharacterBody(body, displacement, grid, {}, floor); }
             catch (const std::runtime_error &) { movedThrew = true; }
             try { expected = reference::Move(body, displacement, arena.walls, floor); }
             catch (const std::runtime_error &) { expectedThrew = true; }
@@ -425,7 +425,7 @@ fps::pvp::Arena SyntheticCity() {
     for (int x = 2; arena.spawns.size() < 4 && x < 598; x += 7)
         for (int z = 2; arena.spawns.size() < 4 && z < 598; z += 11) {
             const Engine::Math::Vec3 feet{static_cast<float>(x) + 0.25F, 0, static_cast<float>(z) + 0.25F};
-            if (fps::CanPlaceCharacterBody({feet, arena.bodyHeight, arena.radius}, arena.WallGrid(), {}))
+            if (fps::pvp::CanPlaceCharacterBody({feet, arena.bodyHeight, arena.radius}, arena.WallGrid(), {}))
                 arena.spawns.push_back({feet, 0});
         }
     std::string error;

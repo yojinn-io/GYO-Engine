@@ -1,6 +1,7 @@
 // Product-owned socket acceptance for ClientConnection's real background worker.
 // The mock is external to production: HTTP joins and current-wire UDP movement and action transport.
 #include "RetroFPS/Pvp/ClientConnection.hpp"
+#include "RetroFPS/Pvp/ConnectionLiveness.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "client_v9.pb.h"
@@ -716,7 +717,7 @@ std::size_t CheckMaximumDatagrams() {
 Json CheckActions(MockGateway& gateway,ClientConnection& connection) {
     const auto rules=connection.State().combatRules;
     Require(rules && rules->maximumHp==200 && rules->shotDamage==37 && rules->cooldownTicks==9 &&
-        rules->shotRange==140 && rules->maximumReferenceAge==333ms && rules->magazineCapacity==7 && rules->reloadTicks==88 && rules->respawnTicks==177 && rules->maximumShotDamage==111,"client duplicated authoritative combat defaults");
+        rules->shotRange==140 && rules->maximumReferenceAgeNs==333'000'000 && rules->magazineCapacity==7 && rules->reloadTicks==88 && rules->respawnTicks==177 && rules->maximumShotDamage==111,"client duplicated authoritative combat defaults");
     Require(connection.State().snapshot->combat.at(0).hp==74 &&
         connection.State().snapshot->combat.at(0).nextAllowedShotTick==900,"snapshot lost independent combat state");
     Require(connection.State().snapshot->combat.at(0).lastDamageTick==connection.State().snapshot->tick &&

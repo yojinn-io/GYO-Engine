@@ -4,7 +4,7 @@
 // client-interrupted; network-architecture §4 "連線中斷與恢復"): connected,
 // interrupted or timed out. It decides only from the arrival times the network
 // worker passes, each the steady_clock read when the datagram was received, and
-// the two constants of Movement.hpp. No clock-sampling value (offset, delay,
+// the two constants below. No clock-sampling value (offset, delay,
 // time echo) may reach it (protocol-v7 §2; test_diagnostic_isolation.py lists this
 // file as deciding). Header-only and clock-free, so tests drive it with any time.
 //
@@ -12,11 +12,19 @@
 // Welcome until the first valid snapshot it may last T_max from that Welcome;
 // later Welcomes extend nothing. While playing (after the first valid snapshot)
 // T_int without a valid snapshot interrupts the connection and T_max ends it.
-#include "RetroFPS/Pvp/Movement.hpp"
-
 #include <chrono>
 
 namespace fps::pvp {
+
+// The Client's connection liveness while playing (v7.1 outage-resync, D172,
+// D173; network-architecture §4 "連線中斷與恢復"): ConnectionInterruptedAfter
+// (T_int) without a valid snapshot interrupts the connection, and
+// ConnectionTimeoutAfter (T_max) without one ends it. The Gateway keeps its own
+// copies (server.go); tests/object_fps_pvp/fixtures/connection_timing.json binds
+// both ends to these values. They lived in Movement.hpp until
+// v8-product-kernel-prep-zones: they are the Client's, not zone-C time.
+inline constexpr std::chrono::milliseconds ConnectionInterruptedAfter{500};
+inline constexpr std::chrono::milliseconds ConnectionTimeoutAfter{5000};
 
 class ConnectionLiveness final {
 public:

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "RetroFPS/Pvp/ShotGate.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Sim/ShotGate.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "engine/runtime/FixedTickRuntime.hpp"
 

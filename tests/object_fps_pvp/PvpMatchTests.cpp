@@ -3,7 +3,7 @@
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
-#include "RetroFPS/Collision/CharacterCollision.hpp"
+#include "RetroFPS/Sim/CharacterCollision.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -1103,7 +1103,7 @@ TEST_CASE("PvP jump sweeps the full capsule against ceiling walls and corners") 
     for (std::uint64_t sequence = 1; sequence <= 90; ++sequence) {
         state = StepMovement(arena, state, {sequence, sequence < 40 ? 0.0F : -1.0F,
             1, 0, 0, sequence == 1});
-        CHECK(fps::CanPlaceCharacterBody({{state.position.x, state.position.y, state.position.z},
+        CHECK(fps::pvp::CanPlaceCharacterBody({{state.position.x, state.position.y, state.position.z},
             arena.bodyHeight, arena.radius}, arena.WallGrid(), {}));
         CHECK(state.position.y >= 0);
         CHECK(state.position.y <= 0.2001F);
@@ -1128,7 +1128,7 @@ TEST_CASE("PvP capsule lands on a raised wall top and falls when walking off its
     bool landedOnTop{};
     for (std::uint64_t sequence = 1; sequence <= 75; ++sequence) {
         state = StepMovement(arena, state, {sequence, 1, 0, 0, 0, sequence == 1});
-        CHECK(fps::CanPlaceCharacterBody({{state.position.x, state.position.y, state.position.z},
+        CHECK(fps::pvp::CanPlaceCharacterBody({{state.position.x, state.position.y, state.position.z},
             arena.bodyHeight, arena.radius}, arena.WallGrid(), {}));
         if (state.grounded && state.position.y > 0.29F) {
             landedOnTop = true;

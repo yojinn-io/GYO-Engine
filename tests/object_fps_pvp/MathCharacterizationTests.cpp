@@ -16,8 +16,8 @@
 
 #include "CharacterizationBits.hpp"
 #include "CharacterizationSupport.hpp"
-#include "RetroFPS/Gameplay/Player/PlanarMovement.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Sim/PlanarMovement.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
 #include "engine/math/geometry/Intersection.hpp"
 #include "engine/math/geometry/Plane.hpp"
 #include "engine/math/geometry/Ray.hpp"
@@ -342,7 +342,7 @@ TEST_CASE("characterization: pvp planar input normalization drifts from Math Nor
         const float forward = Opaque(i % 2 == 0 ? axes[i % axes.size()] : random.Range(-1.25F, 1.25F));
         const float right = Opaque(i % 3 == 0 ? axes[(i / 3) % axes.size()] : random.Range(-1.25F, 1.25F));
         const auto legacy = Legacy::ComputePlanarInput(forward, right, yaw);
-        const auto current = fps::ComputePlanarInput(forward, right, yaw);
+        const auto current = fps::pvp::ComputePlanarInput(forward, right, yaw);
         const float sinYaw = std::sin(yaw);
         const float cosYaw = std::cos(yaw);
         const float clampedForward = std::clamp(forward, -1.0F, 1.0F);

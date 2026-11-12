@@ -3,7 +3,7 @@
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/WireCounter.hpp"
 #include "engine/base/Assert.hpp"
-#include "RetroFPS/Collision/CharacterCollision.hpp"
+#include "RetroFPS/Sim/CharacterCollision.hpp"
 #include "engine/math/linear/Vec3.hpp"
 #include "engine/math/linear/Vec3d.hpp"
 #include "engine/math/scalar/Angle.hpp"
@@ -49,7 +49,7 @@ PvpMatch::PvpMatch(Arena arena, const CombatRules& rules, const StanceRules& sta
     if (!ValidShotDamageBounds(rules_.shotDamage, rules_.maximumShotDamage, rules_.maximumHp) ||
         !ValidPartDamage(rules_) ||
         rules_.magazineCapacity == 0 || !std::isfinite(rules_.shotRange) || rules_.shotRange < 0 ||
-        rules_.maximumReferenceAge < std::chrono::nanoseconds::zero())
+        rules_.maximumReferenceAgeNs < 0)
         throw std::invalid_argument("Invalid combat rules");
     if (!ValidStanceRules(arena_, stance_)) throw std::invalid_argument("Invalid stance rules");
 }
@@ -372,9 +372,9 @@ bool PvpMatch::Decide(PlayerId playerId, PlayerState& state, CombatState& combat
             ShotRejection::StaleLife : ShotRejection::InvalidLife;
     } else if (state.lifeState == LifeState::Dead) {
         decision.rejection = ShotRejection::Dead;
-    } else if (!age || *age < std::chrono::nanoseconds::zero()) {
+    } else if (!age || *age < 0) {
         decision.rejection = ShotRejection::InvalidReference;
-    } else if (*age > rules_.maximumReferenceAge) {
+    } else if (*age > rules_.maximumReferenceAgeNs) {
         decision.rejection = ShotRejection::Expired;
     } else if (combat.reloadActionId != 0) {
         decision.rejection = ShotRejection::Reloading;

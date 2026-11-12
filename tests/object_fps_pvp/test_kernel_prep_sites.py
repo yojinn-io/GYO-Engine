@@ -44,6 +44,7 @@ import unittest
 REPOSITORY = Path(__file__).resolve().parents[2]
 SOURCE = REPOSITORY / 'apps/object_fps_pvp/src/Pvp'
 INCLUDE = REPOSITORY / 'apps/object_fps_pvp/include/RetroFPS/Pvp'
+SIM = REPOSITORY / 'apps/object_fps_pvp/src/Sim'  # v8-product-kernel-prep-zones: Movement.cpp lives here
 
 # Functions of MatchRuntimeHost.cpp that run on the simulation role's thread
 # (inside Advance/Step, or the role body itself); their match_ calls are the
@@ -75,9 +76,9 @@ HOST_TOUCH = re.compile(r'\bhost\.(%s)\(' % '|'.join(HOST_TOUCHES))
 FAILURES_WRITE = re.compile(r'\bconnectionQualityFailures\s*=[^=]')
 
 W_FILES = [SOURCE / 'PvpMatch.cpp', SOURCE / 'MatchRuntimeHost.cpp', SOURCE / 'LocalPlayerPrediction.cpp',
-           SOURCE / 'Movement.cpp', INCLUDE / 'MovementTrace.hpp', INCLUDE / 'MovementDiag.hpp']
+           SIM / 'Movement.cpp', INCLUDE / 'MovementTrace.hpp', INCLUDE / 'MovementDiag.hpp']
 G_FILES = [SOURCE / 'PvpMatch.cpp', SOURCE / 'MatchRuntimeHost.cpp', SOURCE / 'LocalPlayerPrediction.cpp',
-           SOURCE / 'Movement.cpp']
+           SIM / 'Movement.cpp']
 
 # (class, file, function, call shape) -> count. Today's sites at 1e7625d9; the
 # "audit: not listed" rows are off-thread reads audit section 3.4 did not list,
@@ -263,7 +264,9 @@ class KernelPrepSitesTest(unittest.TestCase):
 
     def test_connection_quality_failures_has_one_writer_on_the_host(self):
         found = {}
-        for path in sorted(SOURCE.glob('*.cpp')):
+        # Every product source directory (Pvp, Sim, Present, App): the Match's Movement.cpp moved to Sim in
+        # v8-product-kernel-prep-zones, and a writer there is exactly what D3 forbids (review 2026-11-12, must).
+        for path in sorted(SOURCE.parent.rglob('*.cpp')):
             for (_, function, _), count in scan(read_source(path), FAILURES_WRITE, 'D3').items():
                 found[(path.name, function)] = count
         self.assertEqual(found, FAILURES_WRITERS)

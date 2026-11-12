@@ -6,7 +6,7 @@
 #include <doctest/doctest.h>
 
 #include "AssertTestSupport.hpp"
-#include "RetroFPS/Pvp/EntityColumns.hpp"
+#include "RetroFPS/Sim/EntityColumns.hpp"
 
 #include <vector>
 

@@ -1,0 +1,15 @@
+{
+  "format": "gyo.zone-c-sources",
+  "version": 1,
+  "generated_by": "manual",
+  "repo_commit": "3061e879",
+  "owner_root": "apps/object_fps_pvp",
+  "include_roots": [
+    "apps/object_fps_pvp/include"
+  ],
+  "files": [
+    "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+    "apps/object_fps_pvp/src/Pvp/LocalPlayerPrediction.cpp",
+    "apps/object_fps_pvp/src/Pvp/PvpMatch.cpp"
+  ]
+}

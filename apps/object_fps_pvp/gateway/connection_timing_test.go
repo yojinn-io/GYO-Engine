@@ -8,7 +8,7 @@ import (
 )
 
 // T_int and T_max are one value at both ends (network-architecture §4): the
-// Client's (Movement.hpp, "PvP connection timing matches the shared fixture")
+// Client's (ConnectionLiveness.hpp, "PvP connection timing matches the shared fixture")
 // and these read the same file.
 func TestConnectionTimingMatchesTheSharedFixture(t *testing.T) {
 	data, err := os.ReadFile("../../../tests/object_fps_pvp/fixtures/connection_timing.json")
