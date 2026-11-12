@@ -8,7 +8,7 @@
 交接卡第二批寫的「確認清單 26→0」是架構師的宣告錯誤：判定對象（P5／P8 的 17 處、P13 載入器簽名、容器）超出本批「只搬位置與整數化時間型別、P1～P6 不搬」的範圍（與 -spike-pageguard 判定 1 同型）。修正後的門：確認清單 26 → **7**，七行逐一指定（§3 Q3(a)：5 處 `<filesystem>` 載入器簽名＋2 處 ZS7），多一處、換一處都不成立；ZS2～ZS6 為 0；候選清單與第三份 `zone-c-rewrite.json`（P1／P5／P6）只報告不判。這 7 處與 D／E 類在 dev_log 列「交遷移批」的理由：B＝載入器拆讀檔與解析＝API 變更；D＝P5 Host 時鐘；E＝G.4 第 3 條改句柄；F＝決定性線核對 digest 編碼。另：產品 namespace 是 `fps::pvp`，`RetroFPS` 只是 include 目錄名；交接卡「namespace `RetroFPS::Sim`」的措辭由架構師改。
 分支 `claude/arch-pvp-kernel-prep-zones`，base origin/master `3061e879`（#196 已合併；#193 -detect、#192 J-17 都在內）。
 
-### 修訂（實作中；2026-11-12，實作者記、架構師事後核）
+### 修訂（實作中；2026-11-12，實作者記；**架構師同日事後核定**：五項都是締める面或中性，照 §14.4 事後報告即可，不需使用者另核。四項「回報架構師」收進遷移計畫的區表修正與 match-sim 的輸入，不在本批動）
 
 1. **ctest 的名稱與判定方式**（§2.5、J5、J9）：三個掃描 ctest 命名 `object_fps_pvp.zone_c_scan_{sources,candidates,rewrite}`，都以 `--no-fail` 跑（只報告；只在契約錯誤如清單檔不存在時失敗）；門改由 `object_fps_pvp.zone_c_lists`（`test_zone_c_lists.py`）負責：確認清單的掃描結果**正好等於**記錄的 7 處殘留（檔、規則、文字的多重集合）且 ZS2～ZS6 為 0。理由：掃描器只有「0 違規」或「有違規」兩種出口，表達不了「正好這 7 行」；清單守衛做精確比對比宣告原文更嚴，沒有放寬。J9 的 `zone_c_sources` 讀為 `zone_c_scan_sources`＋`zone_c_lists`。審查者（should）指出與原文不同，記於此。
 2. **D2／D3 守衛的改動不只兩行**（J4）：審查者（must）發現 D3 的寫點掃描 `SOURCE.glob('*.cpp')` 只掃 `src/Pvp`，搬走 `Movement.cpp` 後 Sim／Present 的 17 個 .cpp 不在範圍內——在 `StepMovement` 加一個 `connectionQualityFailures` 寫點不會被抓。改成 `src/` 全目錄遞迴。這是 §14.4 的「締める面」（掃更多檔、`FAILURES_WRITERS` 不變、白名單 47 列不變），沒有緩める面；1～5：守的性質＝Match 端沒有 failures 的寫點；緩める面＝無；締める面＝Sim／Present／App 的 .cpp 也掃；他處守衛＝無需；證據＝`j3`、`j4` 的 ctest 輸出。
