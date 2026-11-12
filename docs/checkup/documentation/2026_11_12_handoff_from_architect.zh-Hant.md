@@ -45,6 +45,7 @@ PR #185（`claude/arch-remove-object-fps`，待 L1 與使用者合併）改了�
 - 日語文件與回覆不用中文詞義：ミューテーションテスト、パッケージング、アセット、共通層、ローカル等（PR #121 的規則）。
 - 繁中檔不混簡體與日文字形、避免大陸用語（README 第 6 條）。
 - 本批新寫的 `docs/object_fps_pvp/assets.zh-Hant.md` 附錄 A 是從英文翻的，順手核一次用字。
+- 已知的錯字：`docs/architecture/plans/big-map/proposal-v0.1.zh-Hant.md:94、149`「範圔」→「範圍」（`git grep -n '圔\|碽' -- docs` 可再掃一次這類罕見異體字）。
 
 ## 回報架構師（圖書管理員填）
 
