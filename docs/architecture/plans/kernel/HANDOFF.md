@@ -138,6 +138,8 @@
 - 2026-11-12 #185 合併（`74e0eb07`）。產品線前置的交接卡寫好（`v8-product-kernel-prep`：-detect 偵測與固定現況、-zones 搬區；PR #188）；CI 準備與 J-17 掃描器的任務卡使用者已點開；AGENTS 兩條教訓已送風紀委員；圖書管理員已確認職責。
 - 2026-11-12 `v8-arch-legacy-impact-scan`（任務卡，子會話）完成：`legacy-impact.zh-Hant.md`。36 檔掃完；DI 198 條（相容 177／衝突 2／被取代 19）、RC 134 條（相容 116／衝突 1／被取代 17）；衝突 4（error-handling L124 無錯誤鏈 vs `KernelError` 鏈；preview.md DI 4 readback vs 資料只往前流；field-session DI 3 編譯期分離 vs 執行期驗證開關；os.md RC 9（D78）vs 頁保護進 engine/os）＋規則層候選 1（AGENTS §9 vs plugin 清單在 main）；卡片列的 threads DI 4、determinism DI 1～3 不成立；守衛 21 個只有 `neutral_names_guard.py` 的 WORDS（spawn／zone／extract）在 kernel 或兩份契約文件出現時會誤判；誤導句 33（4 條已由 #190／#191 處理）；反向依賴 91 處（行號引用 13，PR #191 後 spec 引 entity-model 的行號已失效；target/determinism 刻意不重述 legacy §1／§2）。對抗複核 Opus／high 抽 10 條：一致 8／不一致 2（field-session DI 3、entity-model E-3 複核判相容），並列於報告 §8。處置交架構師（§9）與圖書管理員（§10）。
 
+- 2026-11-12 **`v8-arch-migration-plan` 開始**（使用者同意 ultracode）：提案 Opus×3／high（風險優先、價值優先、成本優先）、統合 Fable／high、對抗 Opus／xhigh、修訂架構師。輸入：spec v0.3、target、audit、ci-readiness §4、pageguard 11 點、legacy-impact 處置、-detect 數字、windows 三條觀察。產出 `migration-plan.zh-Hant.md`（計畫層 §3 七項一次、各批 Feature→Contract→Architecture、模型／檔位、預算、未決）；不寫程式。證據 `build/evidence/kernel-migration-plan/`。
+
 ## 下一步
 
 - 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。

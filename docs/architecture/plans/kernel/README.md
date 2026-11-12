@@ -36,6 +36,7 @@
 - [ci-readiness.zh-Hant.md](ci-readiness.zh-Hant.md)：`v8-arch-kernel-ci-readiness`（任務卡，2026-11-12）——新 Engine 子系統進 L1 的檔清單（假子系統實走）、spike 測試升格方案（逐檔搬／重寫／刪）、Windows VEH 在 CI 的證據與風險；共通層零修改。
 - [legacy-impact.zh-Hant.md](legacy-impact.zh-Hant.md)：`v8-arch-legacy-impact-scan`（任務卡，2026-11-12）——舊架構文件對新架構的影響掃描：37 檔的 DI／RC 三選一判定（衝突 4、被取代 36）、守衛會不會誤判新程式（1 個、有條件）、誤導句 33、target 對 legacy 的反向依賴 91 處；對抗複核 Opus／high 一致 8／不一致 2；只寫不改。
 - 產品線前置的交接卡：[docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md](../../../object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md)（`v8-product-kernel-prep`，2026-11-12）。
+- [migration-plan.zh-Hant.md](migration-plan.zh-Hant.md)：**遷移批規劃（`v8-arch-migration-plan`，進行中，ultracode）**——改造各批的順序、依賴、§3 七項、模型／檔位、預算、未決。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
 
