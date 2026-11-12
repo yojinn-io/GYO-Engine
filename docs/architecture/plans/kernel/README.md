@@ -28,7 +28,7 @@
 - [audit.zh-Hant.md](audit.zh-Hant.md)：**`-audit` 的合併報告（完成）**：逐模組留／包／重寫、跨部件發現與待決、區表回對、規格修正七項、對抗複核。部分報告：`audit-part-{engine,framework-tools,product-thirdparty}.zh-Hant.md`。
 - [spec-v03-declaration.zh-Hant.md](spec-v03-declaration.zh-Hant.md)：`-spec-v03` 的事前宣告（完成，PR #182，2026-11-12）。
 - [spike-pageguard-declaration.zh-Hant.md](spike-pageguard-declaration.zh-Hant.md)：`-spike-pageguard` 的事前宣告（2026-11-12 開始）。
-- [spike-pageguard-report.zh-Hant.md](spike-pageguard-report.zh-Hant.md)：`-spike-pageguard` 的報告（判定 1 照原文不成立、讀法待使用者；判定 2、4、5 成立；3 待 L1）。
+- [spike-pageguard-report.zh-Hant.md](spike-pageguard-report.zh-Hant.md)：`-spike-pageguard` 的報告（判定 1 照原文不成立，使用者 2026-11-12 定讀法 (i)；判定 2、4、5 成立；3 待 L1）。
 - [audit-declaration.zh-Hant.md](audit-declaration.zh-Hant.md)：`-audit` 的事前宣告（已完成）。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
@@ -40,7 +40,7 @@ v8-arch-kernel
 ├── -spec    上段｜ultracode：提案 Opus×3／high、統合 Fable／high、對抗 Opus／xhigh｜約 1 天｜mechanism → 正式規格，每部件一節
 ├── -spike   上段｜實作 Opus／xhigh（主會話的子代理）、審查 Fable／xhigh｜2～3 天｜獨立子目錄最小 C++ 原型，證明簽名推存取與受限句柄
 ├── -spec-v03  上段｜主會話 Fable／high 自寫、對抗 Opus／high 只讀｜規格修訂九項＋第一個文件批（Delta 文件修改）＋五輪對抗／複核（spec 修訂記錄）｜完成（PR #182，2026-11-12）
-├── -spike-pageguard 上段｜實作 Opus／xhigh、敵對 Fable／xhigh｜頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、歸「存取驗證（可關）」的第三層（不是 GYO_ASSERT；頁錯誤處理器記違規、System 以 Err 回傳；B-9 結案後分類）；實作與敵對檢查完成，PR #184 待 L1 與使用者對判定 1 讀法的決定（2026-11-12）
+├── -spike-pageguard 上段｜實作 Opus／xhigh、敵對 Fable／xhigh｜頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、歸「存取驗證（可關）」的第三層（不是 GYO_ASSERT；頁錯誤處理器記違規、System 以 Err 回傳；B-9 結案後分類）；完成：判定 1 照原文不成立（讀法 (i)，使用者 2026-11-12）、2／4／5 成立、3 由 PR #184 的 L1 判；L1 綠後合併（2026-11-12）
 ├── remove-object-fps 中段｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview，**加 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance（含各自測試；使用者 2026-11-11）**（§7 完整刪除；兼驗 removability）｜待事前宣告
 └── -audit   **完成**｜Opus／high ×3、對抗 Fable／high（4/5）｜現有模組逐一「留／包／重寫」，給中間層成本
 ```
