@@ -26,7 +26,7 @@ framework 退役、組合與第三方對接改由 plugins 層承擔（runtime-co
 | 2 | 依賴邊：每工具附 (a) CMake 去重數、(b) include 映射數、命令與命中數；(a)≠(b) 時逐 target 解釋 | 成立（不一致已逐個解釋；正例命中後才採信） |
 | 3 | 零修改：`git diff --stat origin/master` 恰 4 檔 | 成立（見下） |
 
-事前宣告送 parent 時 `send_message` 回「session parent not found」（`list_sessions linked:true` 回空），與 `v8-arch-guards-inventory` 同一情形；未經 parent 核定就寫了正文，由使用者在本會話核定補記（報告 §0 已記）。
+事前宣告送 parent 時 `send_message` 回「session parent not found」（`list_sessions linked:true` 回空），與 `v8-arch-guards-inventory` 同一情形；未經 parent 核定就寫了正文；**使用者 2026-11-13 於本會話核定**（PR #200）。另：PR 的第一次 CI 在 `Select CI scope` 失敗，原因是 `gh api` 讀 draft 旗標時 GitHub 回非 JSON（暫時故障），重跑即過，分支無變更。
 
 ## 主要發現（給 plugins-editor 與工具四批的宣告）
 
@@ -45,6 +45,6 @@ framework 退役、組合與第三方對接改由 plugins 層承擔（runtime-co
 
 ## 下一步
 
-- 使用者核定事前宣告的數字（40 格；邊 13／15、12／14、13／18、10／12）與報告；合併由使用者決定。
+- ~~使用者核定事前宣告的數字（40 格；邊 13／15、12／14、13／18、10／12）與報告~~ 已核定（2026-11-13）；合併由使用者決定。
 - plugins-editor 批的宣告以報告 §8 的候選與 §7 的行為差異為起點；editor-dialogs 的三個行為決定（§8）交使用者。
 - 工具四批的正向清單改掛 plugin target 時，以 §4 的 include 面為清單起點。

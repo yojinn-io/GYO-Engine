@@ -7,7 +7,7 @@
 
 ## 0. 件数の突き合わせ與判定（看結果前宣告）
 
-事前宣告（判定與數字）在開始後、掃描前以 `send_message` 送 parent，回「session parent not found」（`list_sessions linked:true` 回空，與 `v8-arch-guards-inventory` 同一情形），所以未經 parent 核定就寫了正文；請使用者在本會話核定，核定後補記於此。
+事前宣告（判定與數字）在開始後、掃描前以 `send_message` 送 parent，回「session parent not found」（`list_sessions linked:true` 回空，與 `v8-arch-guards-inventory` 同一情形），所以未經 parent 核定就寫了正文；**使用者 2026-11-13 於本會話核定**（數字與報告，「可以合併了」；PR #200）。
 
 | # | 判定（宣告） | 結果 |
 |---|---|---|
