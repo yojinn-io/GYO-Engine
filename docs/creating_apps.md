@@ -139,7 +139,7 @@ For shader-enabled content, supply the declared compiled bundles, for example `-
 
 <a id="manual-copy"></a>
 
-1. Copy an enabled game, currently `apps/object_fps_pvp`, to `apps/my_variant`. Disabled games (`object_fps`, `object_fps_v2`) no longer compile against the current engine API and must be migrated first (see the `inactive_products.md` lists under `docs/architecture/plans/`).
+1. Copy an enabled game, currently `apps/object_fps_pvp`, to `apps/my_variant`. The former disabled games `object_fps` and `object_fps_v2` were removed on 2026-11-12 (`v8-arch-remove-object-fps`).
 2. Copy `assets/object_fps_pvp` to `assets/my_variant` so content changes are independent. If the game has a Go module, review the copied `go.mod` module path (`gyo.local/<game>`) and its imports.
 3. Change `display_name` in the new `project.json` if desired. Review copied component requirements and relative shader sources.
 4. Add and enable `my_variant` in `engine/config/projects.csv` for the intended platforms.

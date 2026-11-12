@@ -235,8 +235,8 @@ Match 的模擬角色 `gyo-match-sim`（`MatchRuntimeHost::Body`）使用 `stead
 | lastResolvedCommand | 權威位置已完成的最後命令，含缺包替代步驟 | 最近收到封包的序號 |
 | UDP sequence | 同一傳輸 session 封包新舊 | Game Tick |
 
-兩端的 Tick 起點、追趕與停止歷史各自獨立，不視為同步時鐘。原有 object_fps／
-object_fps_v2 的 variable-frame gameplay 不受影響；本次只改 PvP。
+兩端的 Tick 起點、追趕與停止歷史各自獨立，不視為同步時鐘。本次只改 PvP；當時
+不受影響的 object_fps／object_fps_v2 已移除（2026-11-12，`v8-arch-remove-object-fps`）。
 
 ### 為什麼 initial lead 是持續成本
 
@@ -445,7 +445,7 @@ hold。連續選用新的最新快照而位置前進時不算hold。正式遊戲
 Client 丟棄舊 Authority Tick；背壓／catch-up／掉包會降低實際接收頻率。
 Welcome 不附送世界，Client 等待第一份有效 Snapshot。
 
-跨執行緒只交接 owning 值；不把 `IRuntimePort` borrowed view 傳給 I/O。
+跨執行緒只交接 owning 值；不把 borrowed view 傳給 I/O。
 socket 讀寫與序列化不在世界 Tick 內執行。
 
 ## 3. 兩份獨立 Protocol

@@ -189,57 +189,6 @@ bool PlaybackInterval::Crossed(const double eventSeconds) const noexcept {
     return next<=currentSeconds;
 }
 
-AnimationInstance::AnimationInstance(std::shared_ptr<const ModelAsset> model)
-    :model_(std::move(model)) {}
-
-Result AnimationInstance::Play(const std::size_t clipIndex,const PlaybackMode mode,
-                               const double transitionSeconds) {
-    if(!model_||!std::isfinite(transitionSeconds)||transitionSeconds<0)
-        return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Animation playback requires a model and a finite non-negative transition."));
-    auto sampled=SamplePose(*model_,clipIndex,0.0,mode,sampled_);
-    if(!sampled) return sampled;
-    // Capture the displayed pose when a transition interrupts another one.
-    // Keeping the source fixed avoids discontinuity and needs no old clock.
-    if(clipIndex_&&transitionSeconds>0) transitionSource_=pose_;
-    else {transitionSource_={};pose_=sampled_;}
-    clipIndex_=clipIndex;
-    mode_=mode;
-    timeSeconds_=0;
-    transitionSeconds_=transitionSource_.localTransforms.empty()?0:transitionSeconds;
-    transitionElapsedSeconds_=0;
-    return {};
-}
-
-ModelResult<PlaybackInterval> AnimationInstance::Advance(const double deltaSeconds) {
-    if(!model_||!clipIndex_||!std::isfinite(deltaSeconds)||deltaSeconds<0)
-        return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Animation advance requires an active clip and a finite non-negative delta."));
-    const double duration=model_->clips[*clipIndex_].durationSeconds;
-    const double next=timeSeconds_+deltaSeconds;
-    if(!std::isfinite(next)) return Base::Err(ModelError::Make(ModelErrorCode::InvalidArgument, "Animation playback time overflowed."));
-    const double current=mode_==PlaybackMode::Clamp?Math::Min(next,duration):next;
-    auto sampled=SamplePose(*model_,*clipIndex_,current,mode_,sampled_);
-    if(!sampled) return Base::Err(sampled.error());
-    transitionElapsedSeconds_=Math::Min(transitionSeconds_,transitionElapsedSeconds_+deltaSeconds);
-    if(transitionSeconds_>0&&transitionElapsedSeconds_<transitionSeconds_) {
-        auto blended=BlendPoses(*model_,transitionSource_,sampled_,
-            static_cast<float>(transitionElapsedSeconds_/transitionSeconds_),pose_);
-        if(!blended) return Base::Err(blended.error());
-    } else {
-        pose_=sampled_;
-        transitionSource_.localTransforms.clear();
-        transitionSource_.globalTransforms.clear();
-        transitionSeconds_=0;
-    }
-    const PlaybackInterval interval{timeSeconds_,current,duration,mode_};
-    timeSeconds_=current;
-    return interval;
-}
-
-bool AnimationInstance::IsFinished() const noexcept {
-    return model_&&clipIndex_&&mode_==PlaybackMode::Clamp&&
-           timeSeconds_>=model_->clips[*clipIndex_].durationSeconds;
-}
-
 Result SkinMesh(const ModelAsset& model,const std::size_t meshIndex,const Pose& pose,
                 std::vector<SkinnedVertex>& output) {
     if(meshIndex>=model.meshes.size()||pose.globalTransforms.size()!=model.nodes.size())

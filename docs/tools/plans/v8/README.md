@@ -16,7 +16,7 @@
 | 項目 | 現況 | 證據 |
 |---|---|---|
 | `tools/ui_editor` | 編輯 `gyo.ui` JSON 的獨立工具，release 工具（每個平台都打包 GUI 版）。ImGui＋SDL_Renderer，不連結遊戲、Input、SDL_GPU。資產目錄唯讀掛載，只輸出一個 JSON，不寫 catalog | `tools/ui_editor/README.md`、`tools/ui_editor/project.json`、[ui_toolchain.md](../../../ui_toolchain.md) |
-| `tools/object_fps_preview` | `requires_apps: {"game": "object_fps"}`；`object_fps` 在 `projects.csv` 停用、也已不能對現行 Engine 編譯；工具在 `tools.csv` 也停用 | `tools/object_fps_preview/project.json`、[tool_projects.md](../../../tool_projects.md) 末段 |
+| `tools/object_fps_preview` | `requires_apps: {"game": "object_fps"}`；`object_fps` 在 `projects.csv` 停用、也已不能對現行 Engine 編譯；工具在 `tools.csv` 也停用。**已移除**（2026-11-12，`v8-arch-remove-object-fps`） | git 歷史 `56b8dda3` 的 `tools/object_fps_preview/project.json` |
 | `engine/ui`（`GYO::Ui`） | `gyo.ui` v1 的元素集合是**封閉的**：`container`、`panel`、`image`、`text`、`button`、`horizontal_slider`、`fixed_step_list`。沒有文字輸入框。`UiInputFrame` 只有焦點、確認、取消、指標，沒有文字 | [ui_toolchain.md](../../../ui_toolchain.md)「JSON v1」、`engine/ui/include/engine/ui/UiTypes.hpp:129` |
 | `GYO::Ui`、ui_editor 的 Design Invariants | **沒有**。[ui_toolchain.md](../../../ui_toolchain.md) 與 [tool_projects.md](../../../tool_projects.md) 都沒有 `Design Invariants` 節 | `grep -n "Design Invariants" docs/ui_toolchain.md docs/tool_projects.md` 無結果 |
 | 大廳的按鈕 | 已經是 `gyo.ui` 的 `button`（`assets/object_fps_pvp/ui/pvp_lobby.json`）。每個按鈕重複寫一樣的 `background`、字級、對齊 | `pvp_lobby.json` |
@@ -25,9 +25,9 @@
 | Input 的 Design Invariants | 4：frame 不帶擷取政策、文字編輯政策與產品知識。1：frame 只能用新增來擴充 | [input.md](../../../architecture/input.md)「Design Invariants」 |
 | PvP 的地圖 | `arenas.json`（v1）列出 `pvp_arena.json`、`pvp_corners.json`。arena v1 = 尺寸、角色尺寸、**AABB 牆的清單**、出生點。載入在 `fps::pvp::Arena::Load`／`LoadInstalledArenas` | `assets/object_fps_pvp/*.json`、`apps/object_fps_pvp/include/RetroFPS/Pvp/Arena.hpp` |
 | arena 與協議 | arena 內容有 digest，Match 與 Client 比對。條文在 pv6 §2：**`Arena` 新增成員或改正規化＝wire 變更**；只改內容不是 wire 變更。pv7、pv8 都寫明「沒有改寫的條款原樣沿用」，兩者都沒改寫這一條；pv8 草稿還明寫蹲下參數「不進 `arena_digest`」。現行程式仍帶 `arena_digest`。pv8 重開中，新範圍有可能改這一條 | [protocol-v6](../../../object_fps_pvp/protocol-v6.zh-Hant.md) 第 51～52 行；[protocol-v7](../../../object_fps_pvp/protocol-v7.zh-Hant.md) 第 5 行；[protocol-v8](../../../object_fps_pvp/protocol-v8.zh-Hant.md) 第 4、54 行；`client_v7.proto:24`、`runtime_v7.proto:18`、`IpcHost.cpp:489` |
-| 舊產品的格子地圖 | `object_fps` 的 `GridMap`／`GridMapLoader`（ASCII 文字地圖，`assets/object_fps/maps/*.txt`）、`MapGeometryGenerator`。產品停用 | `apps/object_fps/src/World/`、`apps/object_fps/src/Rendering/MapGeometryGenerator.cpp` |
+| 舊產品的格子地圖 | `object_fps` 的 `GridMap`／`GridMapLoader`（ASCII 文字地圖，`assets/object_fps/maps/*.txt`）、`MapGeometryGenerator`。產品**已移除**（2026-11-12，`v8-arch-remove-object-fps`） | git 歷史 `56b8dda3` 的 `apps/object_fps/src/World/`、`apps/object_fps/src/Rendering/MapGeometryGenerator.cpp` |
 | PvP 裡的 `GridMap.hpp` | 從舊產品複製的標頭，經 `RetroFPS/Data/GameData.hpp` 被武器標頭間接包含；PvP 沒有它的載入器，地圖用的是 `Arena` 的 AABB 牆 | `apps/object_fps_pvp/include/RetroFPS/World/GridMap.hpp`、`Gameplay/Weapon/WeaponState.hpp:3` |
-| hitbox 的先例 | `object_fps_v2` 的 `hurt_regions`：每項 `id`、`start`／`end` 骨骼點（`node`＋可選 `offset`，模型座標）、`radius`、可選 `damage_multiplier` | [v2 enemies](../../../object_fps_v2/enemies.zh-Hant.md) 第 117 行附近 |
+| hitbox 的先例 | `object_fps_v2` 的 `hurt_regions`：每項 `id`、`start`／`end` 骨骼點（`node`＋可選 `offset`，模型座標）、`radius`、可選 `damage_multiplier`。產品**已移除**（2026-11-12，`v8-arch-remove-object-fps`） | git 歷史 `56b8dda3` 的 `docs/object_fps_v2/enemies.zh-Hant.md` 第 117 行附近 |
 | ImGui 後端 | 共通 Build 的 `IMGUI` 元件只對應 `imgui::sdl3_sdlrenderer3`。3D 視窗要 SDL_GPU，需要新的 ImGui 後端元件 | `build/cmake/GyoAppProject.cmake:131`、`build/cmake/GyoComponents.cmake:3` |
 
 ## 樹狀總覽

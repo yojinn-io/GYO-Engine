@@ -70,7 +70,6 @@ GUI editor 組裝於 `build/target/toolchain/bin`，透過唯讀 catalog 編輯 
 - [錯誤處理契約（Result／Error／Assert）](docs/architecture/error-handling.md)
 - [Trace 傳輸與日誌契約](docs/architecture/trace.md)
 - [渲染與 shader 契約](docs/rendering_architecture.zh-Hant.md)
-- [3D 資產與動畫限制](docs/architecture/3d-assets.md)
 - [發佈程序](docs/releasing.zh-Hant.md)
 
-`apps/` 底下每個遊戲都是獨立專案，引擎不依賴其中任何一個，也不定義通用遊戲 framework。目前啟用的是 `object_fps_pvp`（伺服器權威的 LAN 對戰，見[網路架構](docs/object_fps_pvp/network-architecture.zh-Hant.md)）；`object_fps` 與 `object_fps_v2` 已停用，Engine 的基礎統一（Math、Result、include 路徑、輸入層、Collision）之後須先遷移才能重新啟用，遷移清單見 `docs/architecture/plans/` 下各計畫的 `inactive_products.md`。目前不包含一般 scene 管理、完整物理、GPU skinning、PBR、scripting 或動態 plugin ABI。
+`apps/` 底下每個遊戲都是獨立專案，引擎不依賴其中任何一個，也不定義通用遊戲 framework。目前啟用的是 `object_fps_pvp`（伺服器權威的 LAN 對戰，見[網路架構](docs/object_fps_pvp/network-architecture.zh-Hant.md)）；舊的 `object_fps` 與 `object_fps_v2` 已移除（2026-11-12，`v8-arch-remove-object-fps`；需要時從 git 歷史 `56b8dda3` 讀）。目前不包含一般 scene 管理、完整物理、GPU skinning、PBR、scripting 或動態 plugin ABI。

@@ -61,7 +61,7 @@
 | 5 | (b) 讀 (c) 要顯式順序；慣例「呈現放模擬之後」記為限制 | scheduler §2；limits LIM-1 |
 | 6 | Client 的 Frame 與 Render World 分開 | runtime-composition §2、DI 1 |
 | 7 | Architecture Delta 三處同意（architecture.md:136、entity-store DI 4／DeferredChanges、determinism.md §4.7） | 文件修改排第一個文件批（plans/kernel/HANDOFF「下一步」） |
-| 8 | 移除 object_fps、object_fps_v2、object_fps_preview | 不是部件文件；批 `v8-arch-remove-object-fps`（plans/kernel/README） |
+| 8 | 移除 object_fps、object_fps_v2、object_fps_preview | 不是部件文件；批 `v8-arch-remove-object-fps`（plans/kernel/README）。**已移除**（2026-11-12） |
 | 9 | 獨占寫者以 System 計、Startup 不計；Body 拆欄 | world §3 |
 | 10 | Join／Leave 進 tick 內 | runtime-composition §3；limits LIM-5 |
 | 11 | (c) 的時間只來自 domain tick 與被記錄的 boundary 輸入 | determinism §2、DI 2 |

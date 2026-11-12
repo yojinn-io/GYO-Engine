@@ -66,8 +66,9 @@ product definition ──animation_events_asset_id──► text asset ──Par
 product: clip seconds → its playback (speed, stretch) → Engine time ─┘
 ```
 
-`BoundAnimationEvents::ForClip(clipIndex)` lists a clip's events in order. A consumer that plays a clip with
-`AnimationInstance` can test each event with `PlaybackInterval::Crossed`; a consumer that knows an action's whole
+`BoundAnimationEvents::ForClip(clipIndex)` lists a clip's events in order. A consumer that advances its own playback
+clock builds a `PlaybackInterval` per step and tests each event with `PlaybackInterval::Crossed` (the model viewer's
+`PlaybackClock` does); a consumer that knows an action's whole
 timeline ahead (PvP's reload, stretched over the authority's reload time) converts every moment at the start.
 
 ## Contracts

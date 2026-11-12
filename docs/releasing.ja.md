@@ -42,7 +42,7 @@ feature branch ──PR──> L1 ──CI gate──> merge ──> master 完�
 | ゲーム | `gyo-<game>-<platform>.tar.gz`（root `gyo-<game>`）。`object_fps_pvp` は client（`main`）と `match` を含む | `projects.csv` でそのゲームの `enabled` と platform 列が有効なもの。`macos` 列は `macos-arm64` と `macos-x64` の両方を有効にしますが、公開するのは `macos-arm64` だけです（`macos-x64` はローカル build 専用。第 5 節） | `apps/<game>`、`assets/<game>`、`build/acceptance/<game>`、`projects.csv` の行 |
 | ゲームの Go service | `gyo-<game>-<role>-<platform>.tar.gz`。`object_fps_pvp` は `gyo-object_fps_pvp-gateway-linux-x64.tar.gz` と `...-windows-x64.tar.gz` | `gyo_app_add_go_service(... PLATFORMS ...)` で宣言した platform だけ（gateway は Linux と Windows） | そのゲーム（`apps/<game>/go.mod`） |
 
-- 現在の registry で有効なゲームは `object_fps_pvp` だけです（`object_fps`、`object_fps_v2` は `enabled=0`）。`tools.csv` で `release=true` のツールは `ui_editor` だけで、`object_fps_preview` はゲームに依存するローカルツールなので配布しません。
+- 現在の registry にあるゲームは `object_fps_pvp` だけです（旧 `object_fps`、`object_fps_v2` と、それに依存するローカルツール `object_fps_preview` は削除済み。2026-11-12、`v8-arch-remove-object-fps`）。`tools.csv` で `release=true` のツールは `ui_editor` だけで、ゲームに依存するツールはローカルツールなので配布しません。
 - `services/gyo_gateway` は Engine 層の Go module（owner `engine`）です。HTTP、session、framing の再利用可能な仕組みを提供し、どのゲームにも依存しません。CMake は全構成でこれを記録するため、L1 の Linux 行と toolchain 行がゲームなしでも vet／test／race を実行します。単独の archive にはしません。
 - Train は registry から導出します。`tools` train（toolchain 3 platform）と、有効なゲームごとに 1 train（例：`object_fps_pvp`）です。ゲーム train にはそのゲームの native package と、Linux パッケージング行が `go-services.json` に記録した service archive が入ります。同じ release の client、match、gateway は同じ commit と version から作ります。`tools`、`toolchain` はゲーム id として使えません。
 - 配布物は実行可能な製品と必要な依存物です。Engine SDK や source archive は作りません。Toolchain にゲームの source／assets は入らず、ゲームパッケージに CI、tests、acceptance executable、editor、元のアートソースは入りません。Engine は各製品に静的リンクし、必要な third-party dynamic runtime を配置します。
@@ -433,7 +433,7 @@ python3 -m unittest discover -s tests/common/ci -v
 - 生成される product manifest は `share/gyo/products/<product>/manifest.json`（schema 3）です。空でない build configuration を要求し、executable を `owner.role` で登録して、owner、role、path、runtime_dependencies を記録します。ほかに required_files、native_files、owner ごとの checks を持ちます。依存物の和集合はコピー対象の決定だけに使い、linkage は実行ファイルごとの要求で検査するため、SDL GUI と SDL 不要の CLI を同じ package に置けます。
 - 共通 runner は `build/acceptance/common/run_package_checks.py`、native linkage 検査は同じ場所の `validate_package.py` です。専用規則は `build/acceptance/<owner>` に置きます。
 - CMake が生成する `<build>/packages/<product>/<configuration>/acceptance-context.json` を `--context` で runner に渡します。Context は manifest と build configuration に結び付き、`@CHECK_ROOT@`、`@PROBE:<role>@` の外部位置だけを解決し、検証コマンドや集合を変えません。`@EXECUTABLE:<role>@` は owner ごとの製品を参照し、検証とログの名前は `owner.name` です。Runner は製品の一時コピーへ probe を置けますが、正式な実行ファイルを上書きしません。製品には context、probe、Python 検証コードを含めません。Runtime は `bin/assets/<game>` だけを読みます。
-- Quick と Release の範囲、GPU suite の引数は owner の checks が決めます。Linux toolchain 行はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画テストを実行し、toolchain を含む全製品は自身の契約が宣言した GPU checks も独立に実行します。必要な機能の欠落、timeout、異常は失敗です。[Object_FPS の外部検証](object_fps/acceptance.ja.md)も参照してください。
+- Quick と Release の範囲、GPU suite の引数は owner の checks が決めます。Linux toolchain 行はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画テストを実行し、toolchain を含む全製品は自身の契約が宣言した GPU checks も独立に実行します。必要な機能の欠落、timeout、異常は失敗です。
 
 ### Archive と Draft の検証
 

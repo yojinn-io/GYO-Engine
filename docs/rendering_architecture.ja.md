@@ -201,7 +201,7 @@ Product manifest は `share/gyo/products/<product>/manifest.json` で、product/
 
 Quick と Release は同じ製品／アセットの組み立てを使用し、外側の契約が製品検証範囲を決めます。Linux toolchain job はゲームがなくても Xvfb／Lavapipe で共通エンジンの GPU 描画を検証し、ゲーム job は契約に宣言された GPU checks を別に実行します。これは software Vulkan の証拠であり、物理 GPU 検証ではありません。Windows/macOS hosted の結果も実機試験の代わりにはなりません。Trigger、検証水準 L1–L4、platform（macos-x64 を含む）、試用パッケージ、master snapshot、release train は[公開手順](releasing.ja.md)の第 3、5、7 節に従います。
 
-Object_FPS の startup/headless/GPU probe は独立した `gyo_<game>_acceptance` が所有し、ゲーム `main` へ注入しません。ゲーム本体は通常操作と `--gpu-driver` を持ち、診断、capture、対話的 viewmodel preview は外側の tests／design tool が所有します。[Object_FPS 検証](object_fps/acceptance.ja.md)と[公開手順](releasing.ja.md)を参照してください。
+製品の startup/headless/GPU probe は、その製品が `build/acceptance/<product>/` に登録する独立した受け入れ実行ファイル（`gyo_register_acceptance_probe`）が所有し、ゲーム `main` へ注入しません。ゲーム本体は通常操作と `--gpu-driver` を持ち、診断、capture、対話的 viewmodel preview は外側の tests／design tool が所有します。[公開手順](releasing.ja.md)を参照してください。
 
 <a id="r10"></a>
 ## 10. 検証状況、制限、参考資料

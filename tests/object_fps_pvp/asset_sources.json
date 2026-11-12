@@ -59,7 +59,7 @@
     "object_fps_pvp.model.animation.ual1_mannequin": {
       "source": "Universal Animation Library Standard pack (the FBX names UAL1_Standard.blend)",
       "license": "CC0",
-      "record": "docs/architecture/3d-assets.md (pack inventory and licenses); FBX metadata"
+      "record": "docs/object_fps_pvp/assets.zh-Hant.md appendix A (pack inventory and licenses); FBX metadata"
     },
     "object_fps_pvp.model.weapon.nailer_v2.world": {
       "source": "Made by the user in Blender (the FBX names the user's GYO-PVP project), delivered 2026-10-31",

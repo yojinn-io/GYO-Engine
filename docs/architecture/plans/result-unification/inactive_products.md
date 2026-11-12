@@ -1,5 +1,7 @@
 # Assert／Result 統一：未啟用產品的遷移清單
 
+2026-11-12：三個產品（`object_fps`、`object_fps_v2`、`object_fps_preview`）已移除（`v8-arch-remove-object-fps`），本清單只作歷史紀錄。
+
 量測日期：2026-10-04（R6）。對象：`f72bfbd`（R0–R5 合併後）。對照：Result 計畫開始前的 `eeebc1e`（math-foundation 完成時）。
 
 本計畫依範圍不修改 object_fps、object_fps_v2 與 object_fps_preview。這些產品重新啟用時，除了 [Math 的遷移清單](../math-foundation/inactive_products.md)，還要處理本文件列出的項目。量測在 scratch 建置中進行，repo 沒有修改。計畫與紀錄見 [README](README.md)、[HANDOFF](HANDOFF.md#r6-收尾)。
