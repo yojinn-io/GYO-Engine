@@ -142,6 +142,8 @@
 
 - 2026-11-12 **`v8-arch-migration-plan` 開始**（使用者同意 ultracode）：提案 Opus×3／high（風險優先、價值優先、成本優先）、統合 Fable／high、對抗 Opus／xhigh、修訂架構師。輸入：spec v0.3、target、audit、ci-readiness §4、pageguard 11 點、legacy-impact 處置、-detect 數字、windows 三條觀察。產出 `migration-plan.zh-Hant.md`（計畫層 §3 七項一次、各批 Feature→Contract→Architecture、模型／檔位、預算、未決）；不寫程式。證據 `build/evidence/kernel-migration-plan/`。
 
+- 2026-11-12 `v8-arch-migration-plan` ultracode 完成第一輪：三提案（`build/evidence/kernel-migration-plan/proposal-{risk,value,cost}.zh-Hant.md`）→ 統合稿 `migration-plan.zh-Hant.md`（790 行、32 批＋條件批 1、閘門 G1／G2a／G2b／G3、估 560～1,140 h、關鍵路徑 290～590 h；commit `7c077600`）→ 對抗檢查（Opus／xhigh）**blocker 4／should 19／nit 16**（`adversary-report.md`）：B-1 §6 預算編號與引用整體錯位一格、B-2 h7-scanner 的產品 host 掃描放 `tests/common/`（§7、J.4）、B-3 PvP 專屬 `MovementDiag` 放進共用 diagnostics plugin（§6／§9）、B-4 `match-sim` 需要的資產管線排在 G2a 之後。照計畫自己的受理判定 A1 不成立 → **架構師修訂待做**（含把 U2 plugin 選擇改為已定 `v8-arch-plugin-selection-data`）。使用者重啟 app 前停在這裡。
+
 ## 下一步
 
 - 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。
