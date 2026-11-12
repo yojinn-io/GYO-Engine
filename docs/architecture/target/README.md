@@ -32,7 +32,7 @@
 
 ## 目標 DI 與現況 DI 衝突時（架構師決定，2026-11-11）
 
-- **未遷移的程式照現況 DI**（`docs/architecture/*.md`）；**遷移批次照目標 DI**（`target/*.md`）。這是 AGENTS §3「改 Component 前先讀該 owner 的 Design Invariants」在兩套文件並存期間的解釋：一個 Component 在任一時刻只受一套 DI 約束，由它是否已遷移決定。
+- 遷移批內的新程式受 target 的 Design Invariants 約束；尚未遷移的舊程式受其 legacy 文件的 Design Invariants 約束。一批同時碰到兩者（例：新 System 要讀舊元件）時，以 target 為準，並在那批的事前宣告列出被取代的 legacy 條文、在 legacy 檔把它標為「已被取代（批次代號）」（措辭統一：架構師 2026-11-12，配合 `v8-arch-docs-legacy`）。這是 AGENTS §3「改 Component 前先讀該 owner 的 Design Invariants」在兩套文件並存期間的解釋：一個 Component 在任一時刻只受一套 DI 約束，由它是否已遷移決定。
 - 遷移批次的事前宣告要寫明它遷移哪些 Component、從此它們受哪份 target 文件約束；遷移完成後文件搬回，衝突自然消失。
 - 目標 DI 本身的變更仍是 Architecture Delta（§3），要使用者同意。
 
