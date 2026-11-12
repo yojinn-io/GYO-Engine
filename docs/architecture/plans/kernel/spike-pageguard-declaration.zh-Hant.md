@@ -1,6 +1,6 @@
 # 事前宣告：`v8-arch-kernel-spike-pageguard`（頁保護：存取驗證的第三層能不能攔住 L1、L6）
 
-更新：2026-11-12。Owner：架構（架構師會話）。**狀態：待使用者確認（判定、門檻、模型／檔位）；確認後才開工。**
+更新：2026-11-12。Owner：架構（架構師會話）。**狀態：使用者 2026-11-12「門檻照你定的，xhigh 同意，開始」；執行中。**
 
 決定來源：HANDOFF `v8-arch-kernel-spike-pageguard`（使用者 2026-11-11，側邊會話轉述：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時）；B-9 結案後歸「存取驗證（可關）」（`v8-arch-kernel-verification-not-assert`）：頁錯誤處理器把違規記進本次呼叫的 context、System 以 Err 回傳，不是 GYO_ASSERT。
 
