@@ -49,6 +49,7 @@
 | `v8-arch-framework-retire` | 2026-11-11（側邊會話轉述，audit §3.1）。framework 退役，不改 DI 2／6：組合與第三方對接由 plugin 承擔；Editor host 骨架＝提供 runner 的 plugin（finish 安裝，一 Runtime 一個，R-E6）；標準 Editor stage＝plugin 在 build 插入；新 top-level `plugins/`（§10 Delta 已同意；Engine 永不 include、產品工具只在 main 列）；三層改為 Engine／plugins／產品與工具；framework DI 整節廢止、docs/framework/ 標廢止；spec L.2、H.4.3、target/runtime-composition 改寫。使用者原則：思想不變，修改就是在破船上打補丁。架構師保留：選擇窗記帳與關窗提示必須進共用 plugin。 |
 | `v8-arch-kernel-verification-not-assert` | 2026-11-12（側邊會話轉述，spec-v03 停止報告 B-9 結案）。GYO_ASSERT 不動（常開、abort；Kernel 的便宜前置條件照用）。A.6 兩層存取核對與句柄 epoch 比對**不叫斷言，叫「驗證」（可關）**，成本與 World 大小成正比；驗證抓到的違規以 Err 作為 System 的回傳值（第 17 項；記進本次呼叫的 SystemContext——描述不可變，第二輪 N-6——跳板回 Err 帶 System 名／Plan 位置／id／模式／規則代號、Executor 記一次、World Interrupted；~~debug 另在記錯當下呼叫 assertion handler~~ 2026-11-12 刪，見 `v8-arch-kernel-break-hook`）。機制只剩兩種：GYO_ASSERT 與 Result。用詞：`Result<void, KernelError>` 是 System 的回傳契約（Ok 正常、Err 帶上下文的 Programmer Error）；驗證關掉時仍回 Ok；便宜那類（untyped Commands、Z5、S-13）永遠查。開關：**使用者定為啟動參數的執行期開關**（不是編譯期；程式碼永遠在，Host／runner 寫進 Kernel 設定 Resource，關閉時每次存取只多一個分支；A.6 兩層與句柄 epoch 都掛它）；開關狀態啟動時寫日誌並放成 Resource，「無違規」報告必附「驗證開著」；release 預設關、測試版預設開，皆明寫設定；關閉時此類不被偵測列入 LIM-3。使用者：「嗯，就是這個」。第 17 項理由改為「相對 GYO_ASSERT 的 abort，給出上下文鏈與 Interrupted」。 2026-11-12 追加（側邊會話轉述，使用者同意）：開關的四個條件（啟動後凍結、狀態進證據、預設跟建置變體且參數只能覆寫、關閉時零配置成本）與兩個限制（行程級共用、不是 (c) 資料），寫進 spec A.6、target/system-contract §2b、limits LIM-6。 |
 | `v8-arch-kernel-break-hook` | 2026-11-12（側邊會話轉述，第三輪 B-8 結案）。刪第 17 項「debug 另在記錯當下呼叫 assertion handler」。規則**一個事件只有一種性質**：GYO_ASSERT（終結）或以 Err 回傳的 Programmer Error，Err 的產生與回傳路上不呼叫 AssertionHandler、不呼叫終結出口。現場停改為啟動參數 `breakOnKernelError`（KernelSettings 的第二個參數，與驗證開關獨立、吃同樣四條件）：KernelError 建構處一個會返回的 break 掛鉤，返回後照常走 Err；不綁建置組態。參考出處（Go：error 值回傳＋最外層處理一次、panic＝GYO_ASSERT、無 assert 無 debug／release 二分、`runtime.Breakpoint()` 包旗標、`GODEBUG`）與不照搬的兩點寫進 spec §讀法／K.3 第 17 項、target/system-contract §2b、target/error-handling、error-handling.md。 |
+| `v8-arch-kernel-pending-paused` | 2026-11-12（使用者，主會話）。HANDOFF 未定的三項（lag win1 修正是否繼續、網路帳本位置與兩通道分流、DET-0～3）**暫停**：在新架構下是否成立都還不知道，改造完成前不討論、不排程；移到「暫停」節。 |
 | `v8-arch-determinism-table-fix` | 2026-11-11（側邊會話轉述）。區表三漏一錯採 (a)；條目照歸屬命名；PlayerAnimation 推進先由決定性線核對。（原記在現況區，依對抗檢查 S-10 補進決定表） |
 | `v8-arch-loading-schedule` | 2026-11-11（側邊會話轉述）。Loading schedule 契約七點（見現況區 2026-11-11 條目）。 |
 | `v8-arch-naming` | 2026-11-11（側邊會話轉述）。命名規範五條（target/naming）。 |
@@ -56,9 +57,11 @@
 
 ## 未定
 
+- AGENTS §2／§3 條文：風紀委員已在分支 `claude/judgment-agents-foundation-pressure` 起草（使用者 11-10 直接指示）；架構師 11-11 轉交的三點追加（實作薄、先一個 host 量成本；§3 七項計畫層寫一次；跨產品能力當 Feature）待使用者同意。
+
+## 暫停（使用者 2026-11-12：在新架構下是否成立都還不知道，改造完成前不討論、不排程）
 
 - 改造期間事故修正（lag win1）是否繼續。
-- AGENTS §2／§3 條文：風紀委員已在分支 `claude/judgment-agents-foundation-pressure` 起草（使用者 11-10 直接指示）；架構師 11-11 轉交的三點追加（實作薄、先一個 host 量成本；§3 七項計畫層寫一次；跨產品能力當 Feature）待使用者同意。
 - 網路：帳本放 Match 還是 Gateway；兩通道分流採不採。
 - 決定性 DET-0～DET-3（determinism.md §0）。
 
@@ -110,7 +113,7 @@
 - 2026-11-12 第二輪（Opus／high）4 blocker／10 should／4 nit（N-1～N-18）→ commit 929ca78e 處置；開關四條件 c64282d9。
 - 2026-11-12 第三輪（Opus／high）2 blocker／11 should／4 nit（B-1～B-17），並指出第二輪 9 項只修一半 → 除 B-8 外全部處置（spec 修訂記錄「第三輪對抗檢查後」）。**B-8 待使用者決定**（見未定）。
 - 2026-11-12 第四輪只讀複核（Opus／high）0 blocker／10 should／4 nit（N1～N14：`CurrentTick` 參數、Link inbound 分種類、序號本地配發、`ApplyStagedAssets`＋`LoadingState`、`KernelSettings` 時間點、E.2 第 ⑤ 步、Z5 複核範圍、stamp 改述、ClientSim 加 Loading、H-A1 移出啟動表、J-48～J-52）→ 全部處置（spec 修訂記錄「第四輪只讀複核後」）。B-8 由使用者決定（`v8-arch-kernel-break-hook`）並寫入。第五輪只對第四輪的 diff 複核：1 blocker（`LoadingProgress` 多寫者）／11 should／9 nit → 全部處置（spec 修訂記錄「第五輪差異複核後」）。對抗檢查到此收口（第四、五輪 blocker 分別 0、1，且都是前一輪新條文的收尾），開 docs PR。
-- 2026-11-12 **PR #182 已開**（docs-only，branch `claude/arch-kernel-spec-v03`，HEAD c155ef24＋本行）。合併等使用者說。使用者就寢前交代：做到開 PR 為止。
+- 2026-11-12 **PR #182 已合併**（`eb501731`；使用者「合併 #182」）。dev_log `docs/dev_logs/2026_11_12_arch_kernel_spec_v03.zh-Hant.md` 漏在同一 PR，補在後續小 PR。
 
 ## 下一步
 
