@@ -234,6 +234,11 @@ struct Violation {
     AccessKey key;
     std::uintptr_t address = 0;
     std::size_t dropped = 0;
+    // PageGuard: the World whose column was written; another World than the
+    // Run's when a System wrote a guarded column of a World that was inside
+    // its own Run. key.id is that World's id. nullptr for the other sources
+    // (the Run's World).
+    const void* world = nullptr;
 };
 
 // Page-guard diagnostics of one World.
@@ -578,6 +583,7 @@ private:
         }
         switch (step) {
         case GuardStep::EnterRun:
+            PageGuard::EnsureFaultHandler();  // still installed? (reinstalls and counts if not)
             guardActive_ = true;
             SetGuardedWritable(false);
             return;
@@ -628,18 +634,24 @@ private:
         }
     }
 
-    // The columns of this World the fault handler made writable during the
-    // call; every guarded column when it ran out of slots.
+    // The columns the fault handler made writable during the call, protected
+    // again; every guarded column of this World when it ran out of slots.
+    // A recorded fault can be on another World's column (that World is inside
+    // its own Run, so its column was guarded): it is protected again for that
+    // World. Simplification: the spike runs Worlds on one thread, so that
+    // World cannot leave its Run between the fault and this point; with
+    // Worlds on several threads this needs that World's cooperation. Faults
+    // past the slots are only known by count: every guarded column of this
+    // World is protected again, another World's dropped column is not.
     void ProtectFaulted(const Detail::RunContext& context) {
-        if (context.faultsDropped.load(std::memory_order_relaxed) != 0) {
-            SetGuardedWritable(false);
-            return;
-        }
         const std::size_t count = context.faultCount.load(std::memory_order_acquire);
         for (std::size_t index = 0; index < count; ++index) {
-            if (context.faults[index].world == this) {
-                SetColumnWritable(context.faults[index].column, false);
-            }
+            const Detail::PageFault& fault = context.faults[index];
+            World& owner = fault.world == this ? *this : *static_cast<World*>(const_cast<void*>(fault.world));
+            owner.SetColumnWritable(fault.column, false);
+        }
+        if (context.faultsDropped.load(std::memory_order_relaxed) != 0) {
+            SetGuardedWritable(false);
         }
     }
 

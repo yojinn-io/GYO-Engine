@@ -124,7 +124,7 @@ private:
         for (std::size_t index = 0; index < faults; ++index) {
             const Detail::PageFault& fault = context.faults[index];
             sink->push_back(Violation{Violation::Source::PageGuard, descriptor_.name,
-                                      AccessKey{AccessKind::Component, fault.column}, fault.address});
+                                      AccessKey{AccessKind::Component, fault.column}, fault.address, 0, fault.world});
         }
         if (dropped != 0) {
             sink->push_back(Violation{Violation::Source::PageGuardDropped, descriptor_.name,
@@ -237,6 +237,16 @@ private:
         const char* kind = World::KindName(violation.key.kind);
         switch (violation.source) {
         case Violation::Source::PageGuard:
+            if (violation.world != &world) {
+                // Another World's column: its id means nothing in this World's registry.
+                std::fprintf(stderr,
+                             "kernel spike page guard: System '%s' wrote component id %u of another World (0x%llx) "
+                             "at 0x%llx\n",
+                             violation.system.c_str(), violation.key.id,
+                             static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(violation.world)),
+                             static_cast<unsigned long long>(violation.address));
+                break;
+            }
             std::fprintf(stderr, "kernel spike page guard: System '%s' wrote %s '%s' (id %u) at 0x%llx without declaring a write\n",
                          violation.system.c_str(), kind, world.NameOf(violation.key), violation.key.id,
                          static_cast<unsigned long long>(violation.address));

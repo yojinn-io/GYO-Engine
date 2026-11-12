@@ -178,8 +178,19 @@ LONG CALLBACK OnException(EXCEPTION_POINTERS* pointers) {
 
 #else
 
+// The dispositions OnFault chains to: the ones installed before it (or, after
+// EnsureFaultHandler reinstalled it, the ones it found instead). Written under
+// installMutex while no fault is being handled (simplification: a reinstall
+// racing a foreign fault on another thread is not handled).
 struct sigaction previousSegv;
 struct sigaction previousBus;
+std::atomic<std::uint64_t> foreignSignals{0};
+std::atomic<std::uint64_t> handlerReinstalls{0};
+// Non-zero while this thread runs a previous handler from OnFault. A previous
+// handler that calls back into OnFault (it saved OnFault as its own previous
+// before a reinstall put OnFault in front of it again) then gets the default
+// action instead of an endless loop.
+constinit thread_local int chaining = 0;
 
 // A fault sets a small positive SEGV_ or BUS_ code. A signal sent by kill(),
 // raise() or sigqueue() has si_code <= 0 on Linux (SI_USER 0, SI_QUEUE and
@@ -193,20 +204,83 @@ bool SentByProcess(const siginfo_t* info) noexcept {
 #endif
 }
 
-void OnFault(int signal, siginfo_t* info, void*) {
-    if (!SentByProcess(info) && HandleFault(reinterpret_cast<std::uintptr_t>(info->si_addr))) {
-        return;  // the faulting instruction runs again and now succeeds
-    }
-    // Not a guarded column: give the signal back to the previous disposition.
-    // A real fault recurs when the instruction runs again; a sent signal is
-    // raised again (it stays blocked until this handler returns).
-    sigaction(signal, signal == SIGBUS ? &previousBus : &previousSegv, nullptr);
+// The default action for a signal that is not ours: reset the disposition to
+// SIG_DFL and return. A real fault recurs when the instruction runs again and
+// ends the process; a sent signal is raised again (it stays blocked until this
+// handler returns). The process is ending, so uninstalling the page guard here
+// loses nothing.
+void DefaultAction(int signal, const siginfo_t* info) noexcept {
+    struct sigaction fallback {};
+    fallback.sa_handler = SIG_DFL;
+    sigemptyset(&fallback.sa_mask);
+    sigaction(signal, &fallback, nullptr);
     if (SentByProcess(info)) {
         raise(signal);
     }
 }
 
+// Known limit: siginfo carries no access kind, so on POSIX an instruction
+// fetch from a guarded page (never done on purpose: column pages hold data)
+// is taken for a write; lifting the protection does not make the page
+// executable, the fetch faults again and the handler aborts with "repeated
+// fault". The Windows handler checks the access kind (ExceptionInformation[0]).
+void OnFault(int signal, siginfo_t* info, void* context) {
+    if (!SentByProcess(info) && HandleFault(reinterpret_cast<std::uintptr_t>(info->si_addr))) {
+        return;  // the faulting instruction runs again and now succeeds
+    }
+    // Not a guarded column: hand it to the previous handler and stay installed.
+    foreignSignals.fetch_add(1, std::memory_order_relaxed);
+    if (chaining != 0) {
+        DefaultAction(signal, info);
+        return;
+    }
+    const struct sigaction previous = signal == SIGBUS ? previousBus : previousSegv;
+    if ((previous.sa_flags & SA_SIGINFO) != 0) {
+        ++chaining;
+        previous.sa_sigaction(signal, info, context);
+        --chaining;
+        return;
+    }
+    if (previous.sa_handler == SIG_IGN && SentByProcess(info)) {
+        return;
+    }
+    if (previous.sa_handler == SIG_DFL || previous.sa_handler == SIG_IGN) {
+        // SIG_IGN for a real fault: returning would retry the instruction
+        // forever, and the kernel does not let a fault signal be ignored
+        // either, so it gets the default action.
+        DefaultAction(signal, info);
+        return;
+    }
+    ++chaining;
+    previous.sa_handler(signal);
+    --chaining;
+}
+
+struct sigaction HandlerAction() noexcept {
+    struct sigaction action {};
+    action.sa_sigaction = &OnFault;
+    action.sa_flags = SA_SIGINFO;
+    sigemptyset(&action.sa_mask);
+    return action;
+}
+
+// Installs OnFault for signal unless it is already there; what was there
+// becomes the disposition OnFault chains to. True when it installed.
+bool InstallFor(int signal, struct sigaction& previous) {
+    struct sigaction current {};
+    KERNEL_SPIKE_ASSERT(sigaction(signal, nullptr, &current) == 0, "page guard: sigaction query failed");
+    if ((current.sa_flags & SA_SIGINFO) != 0 && current.sa_sigaction == &OnFault) {
+        return false;
+    }
+    const struct sigaction action = HandlerAction();
+    KERNEL_SPIKE_ASSERT(sigaction(signal, &action, &previous) == 0, "page guard: sigaction failed");
+    return true;
+}
+
 #endif
+
+std::mutex installMutex;
+bool installed = false;
 
 } // namespace
 
@@ -263,24 +337,34 @@ bool SetWritable(std::byte* pages, std::size_t bytes, bool writable) noexcept {
 }
 
 void InstallFaultHandler() {
-    static std::once_flag once;
-    std::call_once(once, [] {
+    const std::lock_guard lock(installMutex);
+    if (installed) {
+        return;
+    }
 #if defined(_WIN32)
-        // First in the chain, so it runs before any SEH frame or the
-        // unhandled-exception filter (doctest installs one).
-        KERNEL_SPIKE_ASSERT(AddVectoredExceptionHandler(1, &OnException) != nullptr,
-                            "page guard: AddVectoredExceptionHandler failed");
+    // First in the chain, so it runs before any SEH frame or the
+    // unhandled-exception filter (doctest installs one).
+    KERNEL_SPIKE_ASSERT(AddVectoredExceptionHandler(1, &OnException) != nullptr,
+                        "page guard: AddVectoredExceptionHandler failed");
 #else
-        struct sigaction action {};
-        action.sa_sigaction = &OnFault;
-        action.sa_flags = SA_SIGINFO;
-        sigemptyset(&action.sa_mask);
-        // A write to a read-only page is SIGSEGV on Linux and may be SIGBUS on
-        // macOS; both go through the same handler.
-        KERNEL_SPIKE_ASSERT(sigaction(SIGSEGV, &action, &previousSegv) == 0, "page guard: sigaction(SIGSEGV) failed");
-        KERNEL_SPIKE_ASSERT(sigaction(SIGBUS, &action, &previousBus) == 0, "page guard: sigaction(SIGBUS) failed");
+    // A write to a read-only page is SIGSEGV on Linux and SIGBUS on macOS
+    // (measured on x86_64); both go through the same handler.
+    static_cast<void>(InstallFor(SIGSEGV, previousSegv));
+    static_cast<void>(InstallFor(SIGBUS, previousBus));
 #endif
-    });
+    installed = true;
+}
+
+void EnsureFaultHandler() {
+    const std::lock_guard lock(installMutex);
+    KERNEL_SPIKE_ASSERT(installed, "page guard: EnsureFaultHandler before InstallFaultHandler");
+#if !defined(_WIN32)
+    const bool segv = InstallFor(SIGSEGV, previousSegv);
+    const bool bus = InstallFor(SIGBUS, previousBus);
+    if (segv || bus) {
+        handlerReinstalls.fetch_add(1, std::memory_order_relaxed);
+    }
+#endif
 }
 
 void AddRange(const void* world, std::uint32_t column, std::byte* pages, std::size_t bytes) {
@@ -320,6 +404,17 @@ std::uint64_t HandledFaults() noexcept {
 
 std::uint64_t FaultsWithoutSystem() noexcept {
     return faultsWithoutSystem.load(std::memory_order_relaxed);
+}
+
+HandlerStats GetHandlerStats() noexcept {
+    HandlerStats stats;
+    stats.handledFaults = HandledFaults();
+    stats.faultsWithoutSystem = FaultsWithoutSystem();
+#if !defined(_WIN32)
+    stats.foreignSignals = foreignSignals.load(std::memory_order_relaxed);
+    stats.reinstalls = handlerReinstalls.load(std::memory_order_relaxed);
+#endif
+    return stats;
 }
 
 } // namespace KernelSpike::PageGuard

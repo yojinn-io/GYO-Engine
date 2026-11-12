@@ -264,6 +264,27 @@ TEST_CASE("PageGuard Bypass (b3), not caught: a const_cast write through Res<T> 
     CHECK(result.IsOk() == !kChecksOn);
 }
 
+// Declaration point 2, "protect again after it returns", for a declared column:
+// the next (c) System in the same Run finds it guarded.
+TEST_CASE("PageGuard Bypass after Write<T>: an undeclared write to a column the previous System declared as written") {
+    World world(MakeGuardRegistry(), WorldOptions{kPageGuard});
+    Populate(world);
+    const System writer = MakeSystem(world.Types(), "Writer", [](Write<Velocity> velocity) { velocity[0].dx = 2.0f; });
+    const System cheat = MakeSystem(world.Types(), "Cheat", [](Read<Velocity> velocity) {
+        const_cast<Velocity&>(velocity[1]).dx = 4.0f;
+    });
+
+    const RunResult result = Run(world, {&writer, &cheat});
+    CHECK(world.Get<Velocity>(0).dx == doctest::Approx(2.0f));
+    CHECK(world.Get<Velocity>(1).dx == doctest::Approx(4.0f));
+    if (kPageGuard) {
+        CheckCaught(world, result, IdOf<Velocity>(world), "Cheat");
+        CheckSecondLayer(result, AccessKey{AccessKind::Component, IdOf<Velocity>(world)}, "Cheat");
+    } else {
+        CHECK(result.IsOk());
+    }
+}
+
 // ---- Control
 
 TEST_CASE("PageGuard Control: a (c) System writes the columns it declared as written without a fault") {
@@ -474,6 +495,44 @@ TEST_CASE("PageGuard Continue: the Run returns Err, and the World can be written
     }
 }
 
+// A (c) System on World A writes a guarded column of World B while B is
+// inside its own Run (the probe puts B there; one thread cannot run both).
+TEST_CASE("PageGuard Continue: a write to another World's guarded column is returned with that World and guarded again") {
+    Registry small;
+    small.RegisterComponent<Health>("Health");  // A has 1 component, B has 4: B's ids do not exist in A
+    World a(std::move(small), WorldOptions{kPageGuard});
+    a.Push(Health{1});
+    World b(MakeGuardRegistry(), WorldOptions{kPageGuard});
+    Populate(b);
+    Health* target = const_cast<Health*>(&b.Get<Health>(1));
+    const ComponentId bHealth = IdOf<Health>(b);
+    REQUIRE(bHealth >= a.Types().Components().size());
+    const System cross = MakeSystem(a.Types(), "Cross", [target](Read<Health>) { target->points += 1; });
+
+    PageGuardProbe::EnterRun(b);
+    const std::uint64_t faultsBefore = PageGuard::HandledFaults();
+    const RunResult first = Run(a, {&cross});
+    // B's column is guarded again after Cross returned: the same write faults again.
+    const RunResult second = Run(a, {&cross});
+    PageGuardProbe::ExitRun(b);
+
+    CHECK(b.Get<Health>(1).points == 22);
+    if (!kPageGuard) {
+        CHECK(first.IsOk());
+        CHECK(second.IsOk());
+        return;
+    }
+    CHECK(PageGuard::HandledFaults() - faultsBefore == 2);
+    for (const RunResult* result : {&first, &second}) {
+        const std::vector<Violation> faults = Of(*result, Violation::Source::PageGuard);
+        REQUIRE(faults.size() == 1);
+        CHECK(faults[0].system == "Cross");
+        CHECK(faults[0].world == static_cast<const void*>(&b));
+        CHECK(faults[0].key == AccessKey{AccessKind::Component, bHealth});
+        CHECK(OnPages(b, bHealth, faults[0].address));
+    }
+}
+
 // ---- Limits (same result in both targets)
 
 TEST_CASE("PageGuard Limit (L6): a kept pointer written by host code in Ready after it used the World API on the column") {
@@ -506,8 +565,9 @@ TEST_CASE("PageGuard Limit (L3): a kept pointer written in a System that declare
     CHECK(world.Get<Position>(0).x == doctest::Approx(5.0f));
 }
 
-// ---- Cost (judgment 4): printed, not judged; the thresholds are judged in
-// the batch report. Debug target only (pageGuard on).
+// ---- Many columns: more faults than RunContext slots, and the cost
+// measurement (judgment 4; printed, not judged: the thresholds are judged in
+// the batch report; debug target only, pageGuard on).
 
 namespace {
 
@@ -526,6 +586,12 @@ void PushLanes(World& world, std::integer_sequence<int, N...>) {
     (world.Push(Lane<N>{static_cast<std::uint64_t>(N)}), ...);
 }
 
+// Row 0 of every lane, taken by host code in Ready (kept pointers).
+template <int... N>
+std::vector<std::uint64_t*> LaneTargets(World& world, std::integer_sequence<int, N...>) {
+    return {&world.GetMut<Lane<N>>(0).value...};
+}
+
 using Clock = std::chrono::steady_clock;
 
 double Micros(Clock::duration duration) {
@@ -539,6 +605,47 @@ double Median(std::vector<double> samples) {
 }
 
 } // namespace
+
+TEST_CASE("PageGuard Continue: more faulting columns in one call than the context has slots") {
+    constexpr int kLanes = 20;
+    constexpr std::size_t kSlots = Detail::RunContext::kFaultSlots;
+    static_assert(kLanes > static_cast<int>(kSlots));
+    Registry registry;
+    RegisterLanes(registry, std::make_integer_sequence<int, kLanes>{});
+    World world(std::move(registry), WorldOptions{kPageGuard});
+    PushLanes(world, std::make_integer_sequence<int, kLanes>{});
+    const std::vector<std::uint64_t*> targets = LaneTargets(world, std::make_integer_sequence<int, kLanes>{});
+    // Declares nothing; writes row 0 of all 20 lanes through kept pointers.
+    const System spray = MakeSystem(world.Types(), "Spray", [&targets]() {
+        for (std::uint64_t* target : targets) {
+            *target += 100;
+        }
+    });
+
+    for (int round = 1; round <= 2; ++round) {
+        CAPTURE(round);
+        const std::uint64_t faultsBefore = PageGuard::HandledFaults();
+        const RunResult result = Run(world, {&spray});
+        for (int lane = 0; lane < kLanes; ++lane) {
+            CHECK(*targets[static_cast<std::size_t>(lane)] == static_cast<std::uint64_t>(lane + 100 * round));
+        }
+        if (!kPageGuard) {
+            CHECK(result.IsOk());
+            continue;
+        }
+        // Round 2: the Run guards every column again, so each faults once more.
+        CHECK(PageGuard::HandledFaults() - faultsBefore == static_cast<std::uint64_t>(kLanes));
+        const std::vector<Violation> faults = Of(result, Violation::Source::PageGuard);
+        CHECK(faults.size() == kSlots);
+        for (std::size_t index = 0; index < faults.size(); ++index) {
+            CHECK(faults[index].key == AccessKey{AccessKind::Component, static_cast<std::uint32_t>(index)});
+        }
+        const std::vector<Violation> dropped = Of(result, Violation::Source::PageGuardDropped);
+        REQUIRE(dropped.size() == 1);
+        CHECK(dropped[0].system == "Spray");
+        CHECK(dropped[0].dropped == static_cast<std::size_t>(kLanes) - kSlots);
+    }
+}
 
 TEST_CASE("PageGuard Cost: protection calls, a System switch and a Run's full protection (printed, not judged)" *
           doctest::skip(!kPageGuard)) {
@@ -608,15 +715,30 @@ TEST_CASE("PageGuard Cost: protection calls, a System switch and a Run's full pr
     }
     CHECK(world.GuardStats().protectCalls - fullCallsBefore == 2u * kColumns * kSamples);
 
+    // 4. A (b) System's call: every guarded column lifted, then protected again.
+    const System zoneB = MakeSystem(world.Types(), "ZoneB", Zone::B, [](Write<Lane<3>> d) { d[0].value += 1; });
+    PageGuardProbe::EnterRun(world);
+    const std::uint64_t zoneBCallsBefore = world.GuardStats().protectCalls;
+    std::vector<double> zoneBSwitches;
+    for (int sample = 0; sample < kSamples; ++sample) {
+        const Clock::time_point start = Clock::now();
+        PageGuardProbe::Switch(world, zoneB, context);
+        zoneBSwitches.push_back(Micros(Clock::now() - start));
+    }
+    CHECK_MESSAGE(world.GuardStats().protectCalls - zoneBCallsBefore == 2u * kColumns * kSamples,
+                  "a (b) System costs 2 x |guarded columns| protection calls");
+    PageGuardProbe::ExitRun(world);
+
     const double protectUs = Median(oneCall);
     const double switchUs = Median(switches);
     const double fullUs = Median(fulls);
-    std::printf("PAGEGUARD_COST protect_us=%.3f switch_us=%.3f full_us=%.3f page_bytes=%zu\n", protectUs, switchUs,
-                fullUs, page);
+    const double zoneBUs = Median(zoneBSwitches);
+    std::printf("PAGEGUARD_COST protect_us=%.3f switch_us=%.3f full_us=%.3f zone_b_us=%.3f page_bytes=%zu\n", protectUs,
+                switchUs, fullUs, zoneBUs, page);
     std::printf("PAGEGUARD_COST_DETAIL to_readonly_us=%.3f to_writable_us=%.3f enter_us=%.3f exit_us=%.3f "
                 "columns=%d samples=%d\n",
                 Median(toReadOnly), Median(toWritable), Median(enters), Median(exits), kColumns, kSamples);
     std::fflush(stdout);
     MESSAGE("PAGEGUARD_COST protect_us=" << protectUs << " switch_us=" << switchUs << " full_us=" << fullUs
-                                         << " page_bytes=" << page);
+                                         << " zone_b_us=" << zoneBUs << " page_bytes=" << page);
 }

@@ -100,8 +100,12 @@ struct RunContext {
 static_assert(std::atomic<std::size_t>::is_always_lock_free, "the fault handler needs lock-free counters");
 
 // The spike's tlCurrent for the page guard: the context of the System call
-// running on this thread, or nullptr. constinit so the fault handler reads it
-// without a thread_local initialization call.
+// running on this thread, or nullptr. constinit removes C++'s dynamic
+// initialization guard, nothing more: on macOS the TLV storage of a thread is
+// still allocated (malloc) the first time that thread touches the variable.
+// A thread that ran a System has touched it already; the only path where the
+// fault handler can be the first toucher is a fault from a thread that never
+// ran a System (spike limit L7), which then aborts.
 inline constinit thread_local RunContext* runningContext = nullptr;
 
 class RunningScope final {
