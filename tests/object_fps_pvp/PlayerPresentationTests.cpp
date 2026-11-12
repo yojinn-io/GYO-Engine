@@ -1,10 +1,10 @@
 #include <doctest/doctest.h>
 
 #include "PresentationLegacyMath.hpp"
-#include "RetroFPS/App/WeaponPresentationDefinition.hpp"
-#include "RetroFPS/Pvp/Combat.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
-#include "RetroFPS/Pvp/PlayerPresentation.hpp"
+#include "RetroFPS/Present/WeaponPresentationDefinition.hpp"
+#include "RetroFPS/Sim/Combat.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
+#include "RetroFPS/Present/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/PvpApplication.hpp"
 #include "engine/asset/AssetCatalog.hpp"
 #include "engine/asset/AssetManager.hpp"

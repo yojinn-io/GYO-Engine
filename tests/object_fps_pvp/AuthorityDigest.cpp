@@ -393,8 +393,8 @@ public:
     void Tick() {
         const auto now = match_.TickCount() + 1;
         // Trusted host metadata: a reference's age is its Tick distance.
-        match_.Tick({now, TickSeconds}, [now](std::uint64_t observed) -> std::optional<std::chrono::nanoseconds> {
-            return std::chrono::nanoseconds(static_cast<std::int64_t>((now - observed) * 1'000'000'000.0 / AuthorityTickRate));
+        match_.Tick({now, TickSeconds}, [now](std::uint64_t observed) -> std::optional<std::int64_t> {
+            return static_cast<std::int64_t>((now - observed) * 1'000'000'000.0 / AuthorityTickRate);
         });
         Refresh();
         Record record("match");

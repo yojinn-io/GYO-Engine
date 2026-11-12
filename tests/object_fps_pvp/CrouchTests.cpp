@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
-#include "RetroFPS/Pvp/MovementRulesFile.hpp"
+#include "RetroFPS/Sim/MovementRulesFile.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
-#include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "RetroFPS/Sim/ShotQuery.hpp"
 
 #include <array>
 #include <cstdint>

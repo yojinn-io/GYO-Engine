@@ -14,18 +14,21 @@ import unittest
 REPOSITORY = Path(__file__).resolve().parents[2]
 SOURCE = REPOSITORY / 'apps/object_fps_pvp/src/Pvp'
 INCLUDE = REPOSITORY / 'apps/object_fps_pvp/include/RetroFPS/Pvp'
+# v8-product-kernel-prep-zones: the zone-C sources and the presentation moved out of Pvp/.
+SIM = REPOSITORY / 'apps/object_fps_pvp/src/Sim'
+PRESENT_INCLUDE = REPOSITORY / 'apps/object_fps_pvp/include/RetroFPS/Present'
 DECIDING = [
     SOURCE / 'PvpMatch.cpp',
     SOURCE / 'LocalPlayerPrediction.cpp',
     SOURCE / 'MatchRuntimeHost.cpp',
     INCLUDE / 'MatchRuntimeHost.hpp',
     INCLUDE / 'MatchSubstitutionRecords.hpp',
-    INCLUDE / 'SnapshotTimeline.hpp',
+    PRESENT_INCLUDE / 'SnapshotTimeline.hpp',
     # v7.1 outage-resync client-interrupted: the Client's interruption and timeout
     # decide from arrival times only (network-architecture §4).
     INCLUDE / 'ConnectionLiveness.hpp',
     SOURCE / 'PvpApplication.cpp',
-    SOURCE / 'ShotGate.cpp',
+    SIM / 'ShotGate.cpp',
 ]
 DIAGNOSTIC_SYMBOLS = [
     'ClockSync', 'ClockSample', 'ClockStamp', 'ClockWindow', 'has_clock', 'mutable_clock', '.clock()',
@@ -124,14 +127,15 @@ class DiagnosticIsolationTest(unittest.TestCase):
         # (MatchShotTrace.hpp). E and S became decision inputs in a1-shot-step
         # (pv7 §6, A1), so they left this list.
         for path in [SOURCE / 'PvpMatch.cpp', SOURCE / 'MatchRuntimeHost.cpp', INCLUDE / 'MatchRuntimeHost.hpp',
-                     SOURCE / 'ShotGate.cpp', SOURCE / 'LocalPlayerPrediction.cpp', INCLUDE / 'SnapshotTimeline.hpp']:
+                     SIM / 'ShotGate.cpp', SOURCE / 'LocalPlayerPrediction.cpp', PRESENT_INCLUDE / 'SnapshotTimeline.hpp']:
             text = path.read_text(encoding='utf-8')
             for symbol in ('viewTickQ16', 'view_tick'):
                 with self.subTest(file=path.name, symbol=symbol):
                     self.assertNotIn(symbol, text, f'{path.relative_to(REPOSITORY)} names {symbol!r} (D-2)')
 
     def test_the_estimator_stays_in_the_io_layer(self):
-        users = sorted(path.name for path in [*SOURCE.glob('*.cpp'), *INCLUDE.glob('*.hpp')]
+        # Every product source directory (Pvp, Sim, Present, App) after v8-product-kernel-prep-zones.
+        users = sorted(path.name for path in [*SOURCE.parent.rglob('*.cpp'), *INCLUDE.parent.rglob('*.hpp')]
                        if 'ClockSync' in path.read_text(encoding='utf-8'))
         self.assertEqual(users, ['ClientConnection.cpp', 'ClockSync.hpp', 'IpcHost.cpp'])
 

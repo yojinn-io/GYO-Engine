@@ -11,7 +11,7 @@ import unittest
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFINITIONS = {
-    'product C++': (REPOSITORY / 'apps/object_fps_pvp/include/RetroFPS/Pvp/Movement.hpp',
+    'product C++': (REPOSITORY / 'apps/object_fps_pvp/include/RetroFPS/Sim/Movement.hpp',
                     r'^inline constexpr std::uint32_t MaxPlayers = (\d+);$'),
     'product Go': (REPOSITORY / 'apps/object_fps_pvp/gateway/adapter/adapter.go',
                    r'^const MaxPlayers = (\d+)$'),

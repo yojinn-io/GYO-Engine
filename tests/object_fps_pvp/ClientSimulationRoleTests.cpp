@@ -4,7 +4,7 @@
 #include "RetroFPS/Pvp/ClientSimulationHistory.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/ClientSimulationRole.hpp"
-#include "RetroFPS/Pvp/ShotGate.hpp"
+#include "RetroFPS/Sim/ShotGate.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
 
 #include <algorithm>

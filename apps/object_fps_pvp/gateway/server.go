@@ -31,7 +31,7 @@ import (
 
 // sessionTimeout is T_max and connectionInterruptedAfter T_int (v7.1
 // outage-resync; network-architecture §4): the same values as the Client's
-// (Movement.hpp), bound by tests/object_fps_pvp/fixtures/connection_timing.json.
+// (ConnectionLiveness.hpp), bound by tests/object_fps_pvp/fixtures/connection_timing.json.
 // The Gateway counts T_max from the last uplink packet that refreshed the
 // session; T_int is the silence a rebinding needs (receivePacket) and the one that
 // restarts a Client's clock window (echo.go noteVerified).

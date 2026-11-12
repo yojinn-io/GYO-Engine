@@ -20,8 +20,8 @@
 // between drains; one that finds the buffer full is counted as dropped. The
 // Match's main thread drains them with the statistics window and writes them
 // (MatchShotTraceFile). Neither fails the Match; an I/O failure does.
-#include "RetroFPS/Pvp/Combat.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Sim/Combat.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
 #include "RetroFPS/Pvp/NativeFiles.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 #include "engine/os/Files.hpp"

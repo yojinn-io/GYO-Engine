@@ -261,6 +261,21 @@ set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS
 add_test(NAME "${GYO_CURRENT_APP}.kernel_prep_sites"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_kernel_prep_sites.py")
 set_tests_properties("${GYO_CURRENT_APP}.kernel_prep_sites" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# v8-product-kernel-prep-zones: the product's zone-C source lists (docs/architecture/target/zone-c-sources.zh-Hant.md)
+# scanned by the common J-17 scanner. The three scans are reports (--no-fail; they fail only on a contract error such as
+# a listed file that moved); zone_c_lists is the gate: src/Sim/*.cpp == confirmed + candidates, and the confirmed scan
+# has exactly the recorded residual.
+set(zone_scan "${GYO_REPOSITORY_ROOT}/tests/common/zone_scan/zone_scan.py")
+foreach(zone_list sources candidates rewrite)
+    add_test(NAME "${GYO_CURRENT_APP}.zone_c_scan_${zone_list}"
+        COMMAND "${Python3_EXECUTABLE}" "${zone_scan}" --root "${GYO_REPOSITORY_ROOT}"
+                --list "${CMAKE_CURRENT_SOURCE_DIR}/zone-c-${zone_list}.json"
+                --report "${CMAKE_CURRENT_BINARY_DIR}/zone_scan/zone-c-${zone_list}.json" --no-fail)
+    set_tests_properties("${GYO_CURRENT_APP}.zone_c_scan_${zone_list}" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
+endforeach()
+add_test(NAME "${GYO_CURRENT_APP}.zone_c_lists"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_zone_c_lists.py")
+set_tests_properties("${GYO_CURRENT_APP}.zone_c_lists" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
 # The log Data Contract v1 (docs/object_fps_pvp/log-contract.zh-Hant.md): writer pins, the frozen readers on
 # real samples, and the reverse guards.
 add_test(NAME "${GYO_CURRENT_APP}.log_contract"

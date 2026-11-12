@@ -7,7 +7,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Pvp/PointerCapture.hpp"
+#include "RetroFPS/Present/PointerCapture.hpp"
 
 #include <chrono>
 #include <cstddef>

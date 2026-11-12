@@ -1,10 +1,10 @@
 #pragma once
 
-#include "RetroFPS/Pvp/EntityColumns.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
-#include "RetroFPS/Pvp/Combat.hpp"
-#include "RetroFPS/Pvp/PlayerAnimation.hpp"
-#include "RetroFPS/Pvp/PlayerHitModel.hpp"
+#include "RetroFPS/Sim/EntityColumns.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
+#include "RetroFPS/Sim/Combat.hpp"
+#include "RetroFPS/Sim/PlayerAnimation.hpp"
+#include "RetroFPS/Sim/PlayerHitModel.hpp"
 #include "engine/runtime/FixedTickRuntime.hpp"
 
 #include <cstdint>
@@ -134,7 +134,7 @@ private:
         // A1 (pv7 §6, D-3): the reference age measured once at A; the first
         // due tick D (0 before); a Shot's one cooldown hold, until holdUntil.
         bool referenceMeasured{};
-        std::optional<std::chrono::nanoseconds> referenceAge;
+        std::optional<std::int64_t> referenceAge;
         std::uint64_t dueTick{};
         std::uint64_t holdUntil{};
         bool held{};

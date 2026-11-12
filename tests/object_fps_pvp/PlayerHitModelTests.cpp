@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Pvp/PlayerHitbox.hpp"
-#include "RetroFPS/Pvp/PlayerPresentation.hpp"
+#include "RetroFPS/Sim/PlayerHitbox.hpp"
+#include "RetroFPS/Present/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
-#include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "RetroFPS/Sim/ShotQuery.hpp"
 #include "hit_aim.hpp"
 #include "engine/math/linear/Matrix4.hpp"
 #include "engine/math/scalar/Scalar.hpp"

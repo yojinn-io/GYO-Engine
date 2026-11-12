@@ -1,13 +1,13 @@
 #pragma once
 
-#include "RetroFPS/Pvp/PvpSound.hpp"
+#include "RetroFPS/Present/PvpSound.hpp"
 #include "engine/render/RenderDeviceTypes.hpp"
 #include "engine/runtime/IRuntimeClient.hpp"
 #include "engine/time/MonotonicClock.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
-#include "RetroFPS/Pvp/Combat.hpp"
-#include "RetroFPS/Pvp/PlayerPresentation.hpp"
+#include "RetroFPS/Sim/Combat.hpp"
+#include "RetroFPS/Present/PlayerPresentation.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 
 #include <array>

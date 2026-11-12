@@ -4,9 +4,9 @@
 // every step with and without them bit for bit; the writer tests count the
 // lines against the movement trace (Match: Resolved, Client: Generated).
 
-#include "RetroFPS/Pvp/Arena.hpp"
+#include "RetroFPS/Sim/Arena.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
 #include "RetroFPS/Pvp/MovementDiag.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
@@ -249,7 +249,7 @@ TEST_CASE("PvP movement diagnostics count what a full queue loses") {
 // pm-detect-diag D4: what the diagnostics add to a tick. Skipped in CI; run with
 //   gyo_object_fps_pvp_tests -tc='*D4*' --no-skip
 // Method and thresholds: v8-product-pm-detect-diag-declaration.md section 4.
-#include "RetroFPS/Pvp/ShotQuery.hpp"
+#include "RetroFPS/Sim/ShotQuery.hpp"
 
 #include <algorithm>
 #include <cmath>
