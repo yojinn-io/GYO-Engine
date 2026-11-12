@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RetroFPS/Pvp/Combat.hpp"
+#include "RetroFPS/Sim/Combat.hpp"
 
 #include <array>
 #include <cstddef>

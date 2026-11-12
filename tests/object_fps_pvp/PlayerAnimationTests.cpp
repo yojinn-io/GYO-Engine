@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Pvp/PlayerAnimation.hpp"
+#include "RetroFPS/Sim/PlayerAnimation.hpp"
 
 #include <cstdint>
 #include <limits>

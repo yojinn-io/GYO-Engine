@@ -97,7 +97,7 @@ std::optional<CombatRules> ReadRules(const pb::Welcome& welcome) {
        !rules.maximum_reference_age_ms() || !rules.magazine_capacity() ||
        !rules.reload_ticks() || !rules.respawn_ticks())return {};
     return CombatRules{rules.maximum_hp(),rules.shot_damage(),rules.cooldown_ticks(),rules.shot_range(),
-        std::chrono::milliseconds{rules.maximum_reference_age_ms()},
+        static_cast<std::int64_t>(rules.maximum_reference_age_ms())*1'000'000,
         rules.magazine_capacity(),rules.reload_ticks(),rules.respawn_ticks(),rules.maximum_shot_damage()};
 }
 ShotRejection ReadRejection(pb::ShotRejection value) {
@@ -120,7 +120,7 @@ std::uint64_t WholeMillis(Clock::duration value) {
 }
 bool SameRules(const CombatRules& a,const CombatRules& b) {
     return a.maximumHp==b.maximumHp && a.shotDamage==b.shotDamage && a.cooldownTicks==b.cooldownTicks &&
-        a.shotRange==b.shotRange && a.maximumReferenceAge==b.maximumReferenceAge &&
+        a.shotRange==b.shotRange && a.maximumReferenceAgeNs==b.maximumReferenceAgeNs &&
         a.magazineCapacity==b.magazineCapacity && a.reloadTicks==b.reloadTicks && a.respawnTicks==b.respawnTicks;
 }
 }

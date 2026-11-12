@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Pvp/Arena.hpp"
+#include "RetroFPS/Sim/Arena.hpp"
 #include "RetroFPS/Pvp/MatchShotTrace.hpp"
 #include "RetroFPS/Pvp/NativeFiles.hpp"
 
@@ -89,7 +89,7 @@ TEST_CASE("PvP arena content digest changes with every member, order and signed 
     CHECK(ArenaContentDigest(arena) != FixtureDigest);
 }
 
-#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
 
 #include <array>

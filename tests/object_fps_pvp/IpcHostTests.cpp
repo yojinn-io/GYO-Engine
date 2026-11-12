@@ -2,7 +2,7 @@
 
 #include "RetroFPS/Pvp/IpcHost.hpp"
 #include "RetroFPS/Pvp/MatchRuntimeHost.hpp"
-#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
 #include "RetroFPS/Pvp/Wire.hpp"
 #include "runtime_v9.pb.h"
 
@@ -1538,6 +1538,9 @@ TEST_CASE("PvP IPC carries the hitbox fields and E, S and the view tick") {
     REQUIRE(ready->has_ready());
     CHECK(ready->ready().combat_rules().maximum_shot_damage() == PvpCombatRules.maximumShotDamage);
     CHECK(ready->ready().combat_rules().shot_damage() == PvpCombatRules.shotDamage);
+    // The integer-ns rule reaches the wire in milliseconds (v8-product-kernel-prep-zones): 250, as before.
+    CHECK(ready->ready().combat_rules().maximum_reference_age_ms() == 250);
+    CHECK(PvpCombatRules.maximumReferenceAgeNs == 250'000'000);
     gateway.Send(Join(4));
     static_cast<void>(ReceiveFirst(gateway, [](const auto& message) { return message.has_join_result(); }));
     auto action = Actions(4, {1}, 0);

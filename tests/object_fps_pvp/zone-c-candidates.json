@@ -1,0 +1,17 @@
+{
+  "format": "gyo.zone-c-sources",
+  "version": 1,
+  "generated_by": "manual",
+  "repo_commit": "3061e879",
+  "owner_root": "apps/object_fps_pvp",
+  "include_roots": [
+    "apps/object_fps_pvp/include"
+  ],
+  "files": [
+    "apps/object_fps_pvp/src/Sim/PlayerHitModel.cpp",
+    "apps/object_fps_pvp/src/Sim/PlayerHitbox.cpp",
+    "apps/object_fps_pvp/src/Sim/PlayerPose.cpp",
+    "apps/object_fps_pvp/src/Sim/ShotGate.cpp",
+    "apps/object_fps_pvp/src/Sim/ShotQuery.cpp"
+  ]
+}

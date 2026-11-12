@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Pvp/ShotQuery.hpp"
-#include "RetroFPS/Pvp/PlayerHitModel.hpp"
+#include "RetroFPS/Sim/ShotQuery.hpp"
+#include "RetroFPS/Sim/PlayerHitModel.hpp"
 
 #include <array>
 #include <cmath>

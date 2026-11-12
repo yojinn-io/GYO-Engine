@@ -46,12 +46,12 @@ gyo_app_add_library(client_simulation OUT_TARGET simulation
 # (v8-product-anim-rules-source-texture-free).
 gyo_app_add_library(player_content OUT_TARGET content
         SOURCES src/App/CharacterPresentationDefinition.cpp src/App/AnimationSetDefinition.cpp
-        src/Pvp/PlayerAnimationContent.cpp src/Pvp/PlayerHitbox.cpp src/Pvp/PlayerPose.cpp src/Pvp/PlayerAnimationDigest.cpp src/Pvp/PlayerHitModel.cpp
+        src/Sim/PlayerAnimationContent.cpp src/Sim/PlayerHitbox.cpp src/Sim/PlayerPose.cpp src/Sim/PlayerAnimationDigest.cpp src/Sim/PlayerHitModel.cpp
     PUBLIC_LIBRARIES ${domain} GYO::Render GYO::Model
     PRIVATE_LIBRARIES GYO::AssetUfbx nlohmann_json::nlohmann_json)
-gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Pvp/PointerCapture.cpp src/Pvp/PvpSound.cpp src/Pvp/ArenaMesh.cpp
-        src/Pvp/PlayerPresentation.cpp
-        src/App/WeaponViewModel.cpp src/App/WeaponPresentationDefinition.cpp src/App/WeaponEventSounds.cpp
+gyo_app_add_library(app_support OUT_TARGET support SOURCES src/Pvp/PvpApplication.cpp src/Pvp/ClientLog.cpp src/Present/PointerCapture.cpp src/Present/PvpSound.cpp src/Sim/ArenaMesh.cpp
+        src/Present/PlayerPresentation.cpp
+        src/Present/WeaponViewModel.cpp src/Present/WeaponPresentationDefinition.cpp src/Present/WeaponEventSounds.cpp
     PUBLIC_LIBRARIES ${domain} ${content} ${network} ${simulation} GYO::Render GYO::Model GYO::ModelRenderer
     # The weapon's gyo.event_sounds is read through the framework's JSON binding
     # (v8-product-event-sounds-migrate); its structure is in the public headers.

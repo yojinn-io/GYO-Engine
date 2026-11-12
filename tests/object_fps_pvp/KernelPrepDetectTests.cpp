@@ -51,8 +51,8 @@ std::optional<PlayerState> Player(const WorldSnapshot& snapshot, PlayerId player
 }
 
 // The reference age of the Match-level cases: the shots reference tick 1, published with age 0.
-std::optional<std::chrono::nanoseconds> ReferenceAge(std::uint64_t tick) {
-    return tick == 1 ? std::optional{0ns} : std::nullopt;
+std::optional<std::int64_t> ReferenceAge(std::uint64_t tick) {
+    return tick == 1 ? std::optional<std::int64_t>{0} : std::nullopt;
 }
 
 void Tick(PvpMatch& match) { match.Tick({match.TickCount() + 1, MovementTickSeconds}, ReferenceAge); }

@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Collision/CharacterCollision.hpp"
+#include "RetroFPS/Sim/CharacterCollision.hpp"
 #include "RetroFPS/Pvp/LocalPlayerPrediction.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/PvpMatch.hpp"
@@ -43,7 +43,7 @@ float HorizontalDistance(Engine::Math::Vec3 lhs, Engine::Math::Vec3 rhs) {
     return std::hypot(lhs.x - rhs.x, lhs.z - rhs.z);
 }
 void ClearBody(const Arena& arena, Engine::Math::Vec3 position) {
-    CHECK(fps::CanPlaceCharacterBody({position, arena.bodyHeight, arena.radius}, arena.WallGrid(), {}));
+    CHECK(fps::pvp::CanPlaceCharacterBody({position, arena.bodyHeight, arena.radius}, arena.WallGrid(), {}));
 }
 void Step(PvpMatch& match) { match.Tick({match.TickCount() + 1, MovementTickSeconds}); }
 

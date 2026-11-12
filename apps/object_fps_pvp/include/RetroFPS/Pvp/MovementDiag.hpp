@@ -7,7 +7,7 @@
 // bounded queue; this writer's own thread formats the lines, and the Engine
 // trace sink's thread writes the file, so the Match's authority lock only
 // holds the copy.
-#include "RetroFPS/Pvp/Movement.hpp"
+#include "RetroFPS/Sim/Movement.hpp"
 #include "RetroFPS/Pvp/MovementTrace.hpp"
 #include "RetroFPS/Pvp/MovementTraceWriter.hpp"
 

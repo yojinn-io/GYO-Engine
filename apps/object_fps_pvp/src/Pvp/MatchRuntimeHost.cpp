@@ -438,11 +438,11 @@ Engine::Runtime::FixedTickAdvance MatchRuntimeHost::Step(double elapsedSeconds, 
             pending.stagedSequences.clear();
             pending.dirty = false;
         }
-        match_.Tick(tick, [this](std::uint64_t observedTick) -> std::optional<std::chrono::nanoseconds> {
+        match_.Tick(tick, [this](std::uint64_t observedTick) -> std::optional<std::int64_t> {
             const auto reference = std::find_if(publishedReferences_.begin(), publishedReferences_.end(),
                 [&](const auto& entry) { return entry.tick == observedTick; });
             if (reference == publishedReferences_.end()) return std::nullopt;
-            return std::chrono::duration_cast<std::chrono::nanoseconds>(now_() - reference->publishedAt);
+            return std::chrono::duration_cast<std::chrono::nanoseconds>(now_() - reference->publishedAt).count();
         });
         auto state = match_.Snapshot();
         // Diagnostics only, while a handed request awaits its decision.

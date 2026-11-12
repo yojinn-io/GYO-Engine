@@ -1,19 +1,19 @@
 # Explicit game source groups. These are project-local, not an engine recipe.
 
 set(PVP_DOMAIN_SOURCES
-    src/Pvp/Arena.cpp
+    src/Sim/Arena.cpp
     src/Pvp/PvpMatch.cpp
-    src/Pvp/PlayerAnimation.cpp
-    src/Pvp/ShotQuery.cpp
-    src/Pvp/Movement.cpp
-    src/Pvp/MovementRulesFile.cpp
+    src/Sim/PlayerAnimation.cpp
+    src/Sim/ShotQuery.cpp
+    src/Sim/Movement.cpp
+    src/Sim/MovementRulesFile.cpp
     src/Pvp/LocalPlayerPrediction.cpp
-    src/Pvp/ShotGate.cpp
-    src/Pvp/HitFeedback.cpp
-    src/Pvp/SoundCues.cpp
+    src/Sim/ShotGate.cpp
+    src/Present/HitFeedback.cpp
+    src/Present/SoundCues.cpp
     src/Pvp/LogFile.cpp
     src/Pvp/NativeFiles.cpp
     src/Pvp/NetworkStatistics.cpp
-    src/Gameplay/Player/PlanarMovement.cpp
-    src/Collision/CharacterCollision.cpp
+    src/Sim/PlanarMovement.cpp
+    src/Sim/CharacterCollision.cpp
 )

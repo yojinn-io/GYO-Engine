@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "RetroFPS/Pvp/PvpMatch.hpp"
-#include "RetroFPS/Pvp/ShotGate.hpp"
+#include "RetroFPS/Sim/ShotGate.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -113,7 +113,7 @@ GatedRun RunGatedClicks(const CombatRules& rules, unsigned ticks, unsigned decis
     std::string error;
     REQUIRE(match.Join(1, error));
     REQUIRE(match.Join(2, error));
-    const ShotReferenceAge age = [](std::uint64_t) -> std::optional<std::chrono::nanoseconds> { return 0ns; };
+    const ShotReferenceAge age = [](std::uint64_t) -> std::optional<std::int64_t> { return 0; };
     const auto feed = [&] {
         for (const PlayerId id : {PlayerId{1}, PlayerId{2}}) {
             const auto snapshot = match.Snapshot();

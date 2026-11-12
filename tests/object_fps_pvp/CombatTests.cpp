@@ -34,8 +34,8 @@ void JoinCombatPlayers(PvpMatch& match) {
 }
 
 void CombatStep(PvpMatch& match, unsigned count = 1,
-    const ShotReferenceAge& age = [](std::uint64_t tick) -> std::optional<std::chrono::nanoseconds> {
-        return tick == 1 ? std::optional{0ns} : std::nullopt;
+    const ShotReferenceAge& age = [](std::uint64_t tick) -> std::optional<std::int64_t> {
+        return tick == 1 ? std::optional<std::int64_t>{0} : std::nullopt;
     }) {
     for (unsigned index = 0; index < count; ++index)
         match.Tick({match.TickCount() + 1, MovementTickSeconds}, age);
@@ -130,7 +130,7 @@ TEST_CASE("PvP reference expiry uses trusted resolution age and rejection consum
         JoinCombatPlayers(match);
         CombatStep(match);
         REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
-        CombatStep(match, 1, [=](std::uint64_t) { return std::optional{age}; });
+        CombatStep(match, 1, [=](std::uint64_t) { return std::optional<std::int64_t>{age.count()}; });
         const auto decision = Decisions(match).front();
         CHECK(decision.accepted == (age <= 250ms));
         CHECK(decision.rejection == (age <= 250ms ? ShotRejection::None : ShotRejection::Expired));
@@ -149,7 +149,7 @@ TEST_CASE("PvP reference expiry uses trusted resolution age and rejection consum
     const ActionBatch request{1, {{1, 1, 0, 0}}};
     REQUIRE(match.SubmitActions(request) == ActionAdmission::Accepted);
     REQUIRE(match.SubmitActions(request) == ActionAdmission::Accepted);
-    CombatStep(match, 1, [](std::uint64_t) { return std::optional{251ms}; });
+    CombatStep(match, 1, [](std::uint64_t) { return std::optional<std::int64_t>{251'000'000}; });
     const auto expired = Decisions(match).front();
     CHECK(expired.rejection == ShotRejection::Expired);
     REQUIRE(match.SubmitActions(request) == ActionAdmission::Accepted);
@@ -174,7 +174,7 @@ TEST_CASE("PvP unknown zero future and negative-age shot references receive term
     JoinCombatPlayers(match);
     CombatStep(match);
     REQUIRE(match.SubmitActions({1, {{1, 1, 0, 0}}}) == ActionAdmission::Accepted);
-    CombatStep(match, 1, [](std::uint64_t) { return std::optional{-1ns}; });
+    CombatStep(match, 1, [](std::uint64_t) { return std::optional<std::int64_t>{-1}; });
     CHECK(Decisions(match).front().rejection == ShotRejection::InvalidReference);
 }
 
@@ -445,7 +445,7 @@ TEST_CASE("PvP reload format and gameplay rejections remain terminal and side ef
     CombatStep(match);
     CHECK(Decisions(match).back().rejection == ShotRejection::InvalidReference);
     REQUIRE(match.SubmitActions({1, {{4, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
-    CombatStep(match, 1, [](std::uint64_t) { return std::optional{251ms}; });
+    CombatStep(match, 1, [](std::uint64_t) { return std::optional<std::int64_t>{251'000'000}; });
     CHECK(Decisions(match).back().rejection == ShotRejection::Expired);
     CHECK(CombatPlayer(match, 1) == spent);
     REQUIRE(match.SubmitActions({1, {{5, 1, 0, 0, ActionKind::Reload, 1}}}) == ActionAdmission::Accepted);
@@ -1126,8 +1126,8 @@ constexpr CombatRules OneHitRules{.shotDamage = 100000, .maximumShotDamage = 100
 
 // One command per mover per tick, so each mover's cursor L moves one step per tick.
 void StepMovers(PvpMatch& match, unsigned count = 1, std::initializer_list<PlayerId> movers = {1, 2},
-    const ShotReferenceAge& age = [](std::uint64_t tick) -> std::optional<std::chrono::nanoseconds> {
-        return tick == 1 ? std::optional{0ns} : std::nullopt;
+    const ShotReferenceAge& age = [](std::uint64_t tick) -> std::optional<std::int64_t> {
+        return tick == 1 ? std::optional<std::int64_t>{0} : std::nullopt;
     }) {
     for (unsigned index = 0; index < count; ++index) {
         for (const auto id : movers) MoveCombatPlayer(match, id);
@@ -1429,8 +1429,8 @@ TEST_CASE("PvP A1 measures the reference age once at hand-off") {
         auto match = A1Match();
         StepMovers(match, 5);
         unsigned calls{};
-        const ShotReferenceAge age = [&](std::uint64_t) -> std::optional<std::chrono::nanoseconds> {
-            return ++calls == 1 ? 200ms : 300ms;
+        const ShotReferenceAge age = [&](std::uint64_t) -> std::optional<std::int64_t> {
+            return ++calls == 1 ? 200'000'000 : 300'000'000;
         };
         REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 4)}}) == ActionAdmission::Accepted);
         StepMovers(match, 4, {1, 2}, age);
@@ -1441,7 +1441,7 @@ TEST_CASE("PvP A1 measures the reference age once at hand-off") {
         auto match = A1Match();
         StepMovers(match, 5);
         const auto a = match.TickCount() + 1;
-        const ShotReferenceAge age = [](std::uint64_t) -> std::optional<std::chrono::nanoseconds> { return 300ms; };
+        const ShotReferenceAge age = [](std::uint64_t) -> std::optional<std::int64_t> { return 300'000'000; };
         REQUIRE(match.SubmitActions({1, {StepShot(match, 1, 4)}}) == ActionAdmission::Accepted);
         StepMovers(match, 4, {1, 2}, age);
         CHECK(DecisionOf(match, 1).rejection == ShotRejection::Expired);

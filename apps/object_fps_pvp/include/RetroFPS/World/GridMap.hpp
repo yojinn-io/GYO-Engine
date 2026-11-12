@@ -1,6 +1,6 @@
 #pragma once
 
-#include "RetroFPS/World/GroundPoint.hpp"
+#include "RetroFPS/Sim/GroundPoint.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -53,11 +53,11 @@ public:
         return nextMapExitCell_;
     }
 
-    [[nodiscard]] GroundPoint GetSpawnPosition(float cellSize = 1.0f) const;
-    [[nodiscard]] GroundPoint GetCellCenter(
+    [[nodiscard]] pvp::GroundPoint GetSpawnPosition(float cellSize = 1.0f) const;
+    [[nodiscard]] pvp::GroundPoint GetCellCenter(
         GridCoordinate coordinate, float cellSize = 1.0f) const;
     [[nodiscard]] std::optional<GridCoordinate> TryGetCoordinateAtPosition(
-        GroundPoint position, float cellSize = 1.0f) const;
+        pvp::GroundPoint position, float cellSize = 1.0f) const;
 
     [[nodiscard]] TileType GetTile(std::size_t row, std::size_t column) const;
     [[nodiscard]] bool IsSolid(std::ptrdiff_t row, std::ptrdiff_t column) const noexcept;

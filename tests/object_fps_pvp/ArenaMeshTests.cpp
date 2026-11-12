@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "RetroFPS/Pvp/ArenaMesh.hpp"
+#include "RetroFPS/Sim/ArenaMesh.hpp"
 
 #include <bit>
 #include <cstdint>

@@ -517,8 +517,7 @@ struct IpcHost::Impl {
         rules->set_magazine_capacity(PvpCombatRules.magazineCapacity);rules->set_reload_ticks(wire::Counter(PvpCombatRules.reloadTicks));
         rules->set_respawn_ticks(wire::Counter(PvpCombatRules.respawnTicks));
         rules->set_maximum_shot_damage(PvpCombatRules.maximumShotDamage);
-        rules->set_maximum_reference_age_ms(static_cast<std::uint32_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(PvpCombatRules.maximumReferenceAge).count()));
+        rules->set_maximum_reference_age_ms(static_cast<std::uint32_t>(PvpCombatRules.maximumReferenceAgeNs / 1'000'000));
         session.controls.push_back(wire::Frame(ready.SerializeAsString()));
         StartRead();
         Pump();
