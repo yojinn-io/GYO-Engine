@@ -2,7 +2,7 @@
 
 日期：2026-11-12。Owner：架構（kernel 研究線）。事前宣告：[remove-object-fps-declaration.zh-Hant.md](remove-object-fps-declaration.zh-Hant.md)。PR #185（分支 `claude/arch-remove-object-fps`，基準 master `56b8dda3`）。證據：主 checkout `build/evidence/remove-object-fps/`（git 管理外；`before-*`／`after-*` 主會話、`impl/` 實作者、`review-report.md` 審查者）。
 
-件数の突き合わせ：一致——刪除檔 308（宣告 308／diff 308，逐檔相同）；修改檔 38（實作者 32＋commit 4 的 4＋審查後 2；全在宣告清單與審查處置內）；新增 2（宣告、dev_log）＋本報告。ctest（主會話基準環境 preset `test`）152→152、名單相同、全過；doctest 案例數 `engine_tests` 140→139、`gyo_model_tests` 24→22（第五個 commit 前 21）、其餘逐一相同；pvp 57 個測試項目的案例數前後相同。**三平台：待 PR #185 的 L1 artifact `tests.xml`**。
+件数の突き合わせ：一致——刪除檔 308（宣告 308／diff 308，逐檔相同）；修改檔 38（實作者 32＋commit 4 的 4＋審查後 2；全在宣告清單與審查處置內）；新增 2（宣告、dev_log）＋本報告。ctest（主會話基準環境 preset `test`）152→152、名單相同、全過；doctest 案例數 `engine_tests` 140→139、`gyo_model_tests` 24→22（第五個 commit 前 21）、其餘逐一相同；pvp 57 個測試項目的案例數前後相同。**三平台（L1 run 43188319281，commit `e9324903`）：linux-x64 ctest 138/138、windows-x64 142 過 1 skip（`os.console_close`，既有的 OS 子系統 skip、與本批無關）、macos-arm64 138/138；`engine_tests` 139、`gyo_model_tests` 22 三平台一致（讀 artifact `tests.xml`，存主 checkout `build/evidence/remove-object-fps/l1-43188319281/<platform>/`）。**
 
 ## 判定（照宣告原文）
 
@@ -11,7 +11,7 @@
 | 1 清單逐項 | **成立**：`--diff-filter=D` 308 檔與宣告集合 `comm -3` 為空；M 全在清單內；A＝2；R＝0 | `impl/j1-*.txt`；審查者獨立重做（review-report §判定 1） |
 | 2 共通層零修改（§7 實測） | **成立**：`build/`（`acceptance/object_fps*` 以外）、`.github/`、頂層 CMake、preset、`engine/`（兩型別以外）、`framework/`、`plugins/`、`tools/`、`tests/common/`（三檔以外）、`tests/framework/`、`apps/object_fps_pvp/` 零變更；commit 1 的兩份 CSV 只少 2／1 列、無 `+` 行 | `impl/j2-*.txt`；審查者重做 |
 | 3 零殘留 | **成立（commit 4 之後）**：非 docs 的 `git grep -P` 只剩 `entity_store_guard.py`／`test_entity_store_guard.py` 禁字表 3 行；docs 命中全在 dev_logs／checkup／舊計畫／已標「已移除」的句子；空目錄 0；`-DGYO_APPS=object_fps`、`object_fps_v2`、`-DGYO_TOOLS=object_fps_preview` 皆以 `GyoAppRegistry.cmake:239`／`GyoToolRegistry.cmake:79` 的「not registered」失敗 | `impl/j3-*.txt`、`impl/probe-*.log`、`after-empty-dirs.txt`；審查者重做 |
-| 4 建置與測試 | **本機成立**：preset `test`（AUTO／AUTO）configure／build 零錯誤；ctest 152/152；doctest 差額恰等於刪掉的案例（engine_tests −1；gyo_model_tests −3→第五個 commit 後 −2）；**三平台待 L1** | `after-build.log`、`after-ctest.log`、`before-/after-doctest-counts.tsv` |
+| 4 建置與測試 | **成立**：本機 preset `test`（AUTO／AUTO）configure／build 零錯誤；ctest 152/152；doctest 差額恰等於刪掉的案例（engine_tests −1；gyo_model_tests −3→第五個 commit 後 −2）；三平台 L1 全綠（138／142＋1 skip／138；engine_tests 139、gyo_model_tests 22 一致） | `after-build.log`、`after-ctest.log`、`before-/after-doctest-counts.tsv` |
 | 5 pvp 不受影響 | **成立**：pvp 57 個測試項目（含 python 與 go）名單相同，doctest 案例數逐一相同；pvp 原始碼零變更 | `before-/after-doctest-counts.tsv` diff |
 
 ## §7 實測的結論

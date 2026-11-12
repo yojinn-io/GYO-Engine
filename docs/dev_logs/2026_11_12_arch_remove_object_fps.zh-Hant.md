@@ -48,5 +48,5 @@
 - 主會話的判定 4、5（基準環境：主 checkout preset `test`，含 network 測試）：ctest 152→152 名單相同、全過；doctest 只差 `engine_tests` 140→139、`gyo_model_tests` 24→21（第五個 commit 後 22）；pvp 57 個測試項目的案例數逐一相同；空目錄 0；`test_asset_catalog` unittest 28/28。證據：主 checkout `build/evidence/remove-object-fps/`（`before-*`、`after-*` 為主會話；`impl/` 為實作者原本寫在 worktree `build/evidence-impl/` 的檔，已搬入；`review-report.md` 為審查者）。
 - 審查（Fable／high，只讀）：0 blocker／5 should／6 nit。S1 如上；S2～S4 文件過時已補；S5 `rendering_architecture.*` 第 204 行泛化後描述了不存在的 `gyo_<game>_acceptance`，改成原則句；N2、N3、N4 已改；N1（`<memory>`）保留；N6 大小寫不同的「Object_FPS」字樣交圖書管理員。
 - 宣告的前提錯誤（pvp 零引用）出在架構師的掃描：`xargs grep -P` 在 macOS 的 BSD grep 是無效選項，錯誤被 `2>/dev/null` 吞掉。已記入 HANDOFF 與記憶。
-- 三平台：PR #185 的 L1，數字待回填。
+- 三平台（L1 run 43188319281，commit `e9324903`）：linux-x64 ctest 138/138、windows-x64 142 過 1 skip（`os.console_close`，既有的 OS 子系統 skip、與本批無關）、macos-arm64 138/138；`engine_tests` 139、`gyo_model_tests` 22 三平台一致（讀 artifact `tests.xml`，存主 checkout `build/evidence/remove-object-fps/l1-43188319281/<platform>/`）。判定 4 成立。
 
