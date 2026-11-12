@@ -151,6 +151,8 @@
 
 - 2026-11-12 遷移計畫第二輪修訂（Opus／high）commit `128ec03e`；第三輪對抗（Opus／xhigh，限定範圍）**blocker 0**／should 8／nit 12，數字全部重算一致；第二輪 26 條中 21 已處置、5 只改一半。處置交 Opus 修訂者；之後 Opus／high 驗收點檢，再開 PR。使用者 2026-11-12 另開兩張卡：`v8-product-pvp-baseline`（Opus）、`v8-arch-guards-inventory`（Fable）。
 
+- 2026-11-13 `v8-arch-migration-plan` 稿完成（1050 行；三輪對抗 Opus／xhigh：4→1→0 blocker；驗收點檢 Opus／high：A1～A10 成立、數字一致；8 條半改已補）。合計 632～1,299 h、關鍵路徑 331～692 h、M3 115～247、M4 181～389。PR 開給使用者；**待使用者**：核准計畫、A9 文字修正（`v8-arch-migration-plan-a9`）、未決 U1～U14（U2 已定）。dev_log `2026_11_13_arch_kernel_migration_plan`。
+
 ## 下一步
 
 - 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。
