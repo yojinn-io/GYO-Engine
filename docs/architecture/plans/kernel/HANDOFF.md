@@ -118,7 +118,7 @@
 - 2026-11-12 使用者「可以下一批了」→ `-spike-pageguard` 事前宣告寫好（`spike-pageguard-declaration.zh-Hant.md`，branch `claude/arch-kernel-spike-pageguard`，draft PR），使用者同日「門檻照你定的，xhigh 同意，開始」→ 實作者子代理（Opus／xhigh，獨立 worktree，只 commit）已啟動；敵對檢查 Fable／xhigh 只讀排在實作回來後。估時實作 6 h（上限 9 h）。
 - 2026-11-12 實作者回來（約 45 分鐘；commit `ed9657f9` → 分支 `85312dc2`）。件数：新測試 16／既有 33，debug 49 過、release 48 過 1 skip；突變新 5／killed 5（全目錄 39/39）。**判定 1 照原文不成立**：(b3) Resource 裸指標寫攔不到（宣告範圍排除 Resource，但判定 1 列了 (b3)——宣告自相矛盾，架構師的錯）；宣告的 L6 形狀第二層本來就攔得到、原始 L6（host 在 Ready 寫）頁保護攔不到。L1、(b1)、(b2) 攔到；判定 2、5 成立；判定 4 中位數（µs，4 KiB 頁）：Debug 組態 protect 1.71／switch 6.30／full 207；Release 組態 1.99／7.25／197——全在門檻內（第一次記錄把兩組態標反，敵對檢查 S7 指出，已改）。敵對檢查（Fable／xhigh 只讀）回來：0 blocker／7 should／4 nit，報告 `build/evidence/kernel-pageguard/adversary-report.md`（主 checkout，git 管理外）；重現兩組態 tests 2／failures 0；判定 2、5 經重跑確認，突變五條都由宣告的性質殺掉；S1（外來故障後 handler 永久卸除、靜默失效）、S2（跨 World 故障歸因）、S3（返回後重保護與 dropped 路徑無行為測試）、S5（(b) System 成本 2×|欄| 未量）交回實作者修（r2）；S4、S6、N1～N4 寫進報告。敵對檢查者對判定 1 的看法：實作者「照原文不成立」是正確讀法；兩種讀法下對 A.6 的建議相同——L1 可由頁保護補、L6 不能。
 - 2026-11-12 r2（`defb759c`→分支 `a1e82e46`，15 分鐘）：S1／S2／S3／S5／N2／N3 已修；測試 52／51+1skip、突變 41/41；主會話獨立重跑兩組態一致（`verify-main-session-r2.txt`）。報告 `spike-pageguard-report.zh-Hant.md` 與 dev_log 已寫；PR #184 轉正式跑 L1（判定 3）；LIM-3 未改。
-- 2026-11-12 使用者定判定 1 讀法 (i) 照原文（`v8-arch-kernel-pageguard-reading`）；宣告檔狀態、報告、dev_log 同步。**#184 待 L1 綠後合併（使用者已授權）**；之後下一批由使用者排（`-remove-object-fps` 事前宣告，或遷移批規劃）。
+- 2026-11-12 使用者定判定 1 讀法 (i) 照原文（`v8-arch-kernel-pageguard-reading`）；宣告檔狀態、報告、dev_log 同步。判定 3 **成立**（L1 run 43169204148 三平台 xml 各 2／0；artifact 存主 checkout `build/evidence/kernel-pageguard/l1-43169204148/`）。#184 合併（使用者授權「L1 綠後合併」）；之後下一批由使用者排（`-remove-object-fps` 事前宣告，或遷移批規劃）。
 
 ## 下一步
 

@@ -21,6 +21,7 @@ spike 的範圍の限界 L1（寫了又寫回）與 L6（host 碰過欄後的繞
 
 ## 經緯
 
+- 判定 3 三平台：**成立**（L1 run 43169204148，三平台 `kernel-spike-tests.xml` 各 tests 2／failures 0，頁大小 4096／4096／16384；artifact 存 `build/evidence/kernel-pageguard/l1-43169204148/`）。
 - 第一輪 45 分鐘、r2 15 分鐘（估 6 h）。沒有碰到 §14 停止條件；判定 1 不成立依 §14 先報告使用者、不改測試。
 - macOS `raise(SIGSEGV)` 的 si_code＝0（非 `SI_USER`）→ `SentByProcess` 修正，證據為修正前後兩份探測輸出（無 doctest 迴歸測試，需 death test）。本機保護故障是 SIGBUS。
 - 敵對檢查 0 blocker／7 should／4 nit；S1（外來故障後 handler 永久卸除）以對抗方的探測程式重現（exit 138）→ r2 後兩次 Run 都攔到。

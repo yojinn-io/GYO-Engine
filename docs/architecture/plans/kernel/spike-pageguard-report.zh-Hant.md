@@ -2,7 +2,7 @@
 
 日期：2026-11-12。Owner：架構（kernel 研究線）。事前宣告：[spike-pageguard-declaration.zh-Hant.md](spike-pageguard-declaration.zh-Hant.md)。程式：`spikes/kernel/`（`PageGuard.hpp`／`src/PageGuard.cpp`／`tests/PageGuardTests.cpp`，commit `85312dc2`＋`a1e82e46`）。證據：主 checkout `build/evidence/kernel-pageguard/`（git 管理外；含實作者兩輪、敵對檢查報告 `adversary-report.md`、主會話驗證 `verify-main-session-r2.txt`）。
 
-件数の突き合わせ：一致——測試新加 19（第一輪 16＋r2 3）／既有 33，debug 目標 52 過、release 目標 51 過 1 skip（Cost 只在 debug）；突變新加 7／killed 7，全目錄 41/41；本機 Intel Mac 兩組態 ctest tests 2／failures 0（實作者、敵對檢查者、主會話三方各自重跑一致）。**三平台：待 PR #184 的 L1 artifact `kernel-spike-tests.xml`**，本報告不以本機代替。
+件数の突き合わせ：一致——測試新加 19（第一輪 16＋r2 3）／既有 33，debug 目標 52 過、release 目標 51 過 1 skip（Cost 只在 debug）；突變新加 7／killed 7，全目錄 41/41；本機 Intel Mac 兩組態 ctest tests 2／failures 0（實作者、敵對檢查者、主會話三方各自重跑一致）。**三平台（L1 run 43169204148，commit `549a8ca9`）：linux-x64 gcc／windows-x64 MSVC／macos-arm64 AppleClang 的 `kernel-spike-tests.xml` 各 tests 2／failures 0**（debug、release 兩個目標各一；release 目標 doctest 51 過 1 skip＝Cost 只在 debug；debug 目標的 doctest 統計行被 ctest 的 1024 位元組輸出門檻截掉，只剩 ctest 的 run／0 failures）；頁大小 4096／4096／16384。artifact 存主 checkout `build/evidence/kernel-pageguard/l1-43169204148/<platform>/`。
 
 ## 判定（照宣告原文）
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | 1 攔截（L1、L6、(b1)–(b3)） | **不成立（照原文）**：L1 ✓、(b1) ✓、(b2) ✓、宣告形狀的 L6 ✓；**(b3) ✗**——Resource 不在保護頁上，頁保護一筆都沒記（測試 `PageGuard Bypass (b3), not caught` 固定現況） | `ctest-*config.txt`；敵對檢查 B.1：違規的欄 id 與位址斷言有檢出力（探測突變 `adv-address-not-recorded` 被殺）、第二層關掉時 16 案例仍過（`adversary-layer2-off.txt`）、L1 的 volatile 寫在 `-O3` 仍到記憶體（`adversary-asm-L1-O3.txt`） |
 | 2 繼續執行、單次記錄 | 成立 | Continue 三案例；敵對檢查重跑確認；>16 欄的 dropped 路徑 r2 加測試 |
-| 3 三平台 | 本機 Intel Mac AppleClang 兩組態過、零警告；**三平台待 L1** | `build-*-r2.txt`、`verify-main-session-r2.txt`；敵對檢查讀碼未見會讓 gcc／MSVC 紅的點（B.5） |
+| 3 三平台 | **成立**：L1 run 43169204118／43169204148 的三平台 kernel spike 步驟全綠、xml 各 2／0；本機 Intel Mac AppleClang 兩組態過、零警告 | `l1-43169204148/*/kernel-spike-tests.xml`、`build-*-r2.txt`、`verify-main-session-r2.txt`；敵對檢查讀碼未見會讓 gcc／MSVC 紅的點（B.5） |
 | 4 成本 | 成立（門檻：單次 ≤ 10 µs、切換 ≤ 50 µs、全欄 ≤ 1 ms） | 見下表 |
 | 5 突變 | 成立：宣告五條全 killed，且各由宣告的性質殺掉（不是順便） | `adversary-mutation-probe.txt`；突變 4 以 SIGABRT 非零退出＋訊息判 killed，照宣告 |
 
@@ -53,7 +53,7 @@
 
 ## 範囲の限界（本批後）
 
-- L1：**本機頁保護開著時攔得到**（限 Exclusive 欄、(c) System）。LIM-3 不變，解除要等三平台綠、規格 A.6 收進第三層、遷移批實作通過同組測試（判定 1 的讀法已定為 (i)：本批不解除任何一條）。
+- L1：**本機頁保護開著時攔得到**（限 Exclusive 欄、(c) System）。LIM-3 不變，解除要等規格 A.6 收進第三層、遷移批實作通過同組測試（判定 1 的讀法已定為 (i)：本批不解除任何一條）。
 - L2、L3（r2 加測試 `PageGuard Limit (L3)` 固定）、L4、L5、L8：不變。
 - **L6：未解除**。原始形狀在 Ready 不受保護；要攔它，host 的寫入 API 得是閉包形（呼叫期間解除、返回後重保護），`GetMut` 回 `T&` 的形狀做不到——A.6／W-6b 層級的設計問題。
 - L7：其他執行緒故障時 `tlCurrent` 為空 → abort；macOS TLV 在該執行緒第一次存取可能 malloc；跨執行緒寫別的 World 會解除那欄直到該 World 下一個保護步驟。
