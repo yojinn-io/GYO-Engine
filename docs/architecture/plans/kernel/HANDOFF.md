@@ -72,7 +72,7 @@
 - 2026-11-11 PR #175、#177、#176、#174 依序合併（#176 合併前加註：ECS 列待 mechanism 規格後重判、D1～D4／D7／D8 延後；determinism.md E4 由 mechanism 吸收、DET-3 時機改 (c) 區遷移前、§4.7 指向 World）。
 - 2026-11-11 使用者：「後續我們直接先處理架構問題」→ 定停法 (a)、規格與 spike 同時開。本分支 `claude/arch-kernel-mechanism` 承接規格的產出；spike 在獨立卡的工作樹。
 
-- 2026-11-11 停法 (a) 通知後各線回報：產品線無進行中實作（#167、#168 已合併；#173 待使用者）；工具線無進行中卡（PathDialogRequests 交接未開工，維持）；voxel 線停於 ve-free-camera（#171）。三線 HANDOFF 的停線記錄各自在下次變更時補，不單開 PR。spike 卡 task_8f7c5a80 已掛出；規格 ultracode 背景執行中。
+- 2026-11-11 停法 (a) 通知後各線回報：產品線無進行中實作（#167、#168 已合併；#173 待使用者）；工具線無進行中卡（PathDialogRequests 交接未開工，維持）；voxel 線停於 ve-free-camera（#171）。三線 HANDOFF 的停線記錄各自在下次變更時補，不單開 PR（→ 2026-11-12 使用者改為由圖書管理員直接補三線）。spike 卡 task_8f7c5a80 已掛出；規格 ultracode 背景執行中。
 
 - 2026-11-11 spike 完成並經 Fable／xhigh 對抗審查（R-01～R-14，全部處置或記錄）；三輪突變 32→34 條全殺；分支 `claude/arch-kernel-spike`（5b473017 起）未開 PR。判定 1 待 L1（L1 不建 spikes/，改 workflow 待使用者 R-06）。使用者在側邊會話逐項對審查，R-01 與上限處置已定，R-06 之後待續。
 
