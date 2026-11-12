@@ -1,5 +1,7 @@
 # Object_FPS_PVP 聯網架構與操作
 
+> 現況文件。Kernel 改造後，網路改為 Link 家族的 System（設計稿 [plans/kernel/networking](../architecture/plans/kernel/networking.zh-Hant.md)、[kernel 規格](../architecture/plans/kernel/spec.zh-Hant.md) §I）；本文件由 Match／Client host 的遷移批修訂（遷移批待 `v8-arch-migration-plan` 排定）。
+
 本文件描述 Object_FPS_PVP 的 LAN 聯網與本機移動預測。macOS／Linux／Windows Client 經 LAN
 加入同一場 Match，Client 即時預測自己的移動，C++ Match 統一裁定移動與地圖碰撞。
 這是 GYO 固定 Tick 與外部驅動邊界的實際案例，不是通用 Multiplayer Protocol。
