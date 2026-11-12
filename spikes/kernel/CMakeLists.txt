@@ -7,6 +7,12 @@
 #      bypass access?
 # Results: docs/architecture/plans/kernel/spike-report.zh-Hant.md.
 #
+# v8-arch-kernel-spike-pageguard adds a third layer, a run-time page guard
+# (include/kernel_spike/PageGuard.hpp, src/PageGuard.cpp, tests/PageGuardTests.cpp):
+# can page protection catch the writes the first two layers cannot (spike
+# limits L1, L6), on all three L1 platforms, at an acceptable cost?
+# Declaration: docs/architecture/plans/kernel/spike-pageguard-declaration.zh-Hant.md.
+#
 # Not part of the GYO build graph: the root CMakeLists.txt does not add this
 # directory, no GYO target depends on it, and it includes no GYO module. It
 # reuses only the repository's pinned doctest (third_party/doctest).
@@ -33,22 +39,36 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/doctest
 
 add_library(gyo_kernel_spike INTERFACE)
 target_include_directories(gyo_kernel_spike INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# The page guard's platform layer (signal / vectored exception handler, page
+# allocation and protection); compiled into each consumer so no OS header
+# reaches the spike's headers.
+target_sources(gyo_kernel_spike INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src/PageGuard.cpp)
 
 set(GYO_KERNEL_SPIKE_TEST_SOURCES
     tests/Main.cpp
     tests/RegistryWorldTests.cpp
     tests/AccessDerivationTests.cpp
     tests/AccessCheckTests.cpp
+    tests/PageGuardTests.cpp
 )
 
 # The same sources twice: the debug target checks World access, the release
 # target defines NDEBUG and leaves KERNEL_SPIKE_ACCESS_CHECKS to its NDEBUG
 # default (off). Both are built in every configuration so one build shows both
 # behaviours; KERNEL_SPIKE_TEST_EXPECT_CHECKS tells the tests which one they are.
+# The page-guard tests use it too: pageGuard on in the debug target, off in the
+# release target.
+#
+# DOCTEST_CONFIG_NO_POSIX_SIGNALS: doctest otherwise installs its own SIGSEGV
+# handler around every test case, which would take the page guard's faults
+# (one fault handler per process; PageGuard.hpp). A real crash still fails the
+# test executable; doctest just does not print its fatal-signal report.
+# Windows needs no switch: doctest uses an unhandled-exception filter there,
+# and the page guard's vectored handler runs before it.
 function(gyo_kernel_spike_tests name)
     add_executable(${name} ${GYO_KERNEL_SPIKE_TEST_SOURCES})
     target_link_libraries(${name} PRIVATE gyo_kernel_spike doctest::doctest Threads::Threads)
-    target_compile_definitions(${name} PRIVATE ${ARGN})
+    target_compile_definitions(${name} PRIVATE DOCTEST_CONFIG_NO_POSIX_SIGNALS ${ARGN})
     target_compile_options(${name} PRIVATE
         "$<$<CXX_COMPILER_ID:MSVC>:/W4;/permissive-;/Zc:preprocessor;/Zc:__cplusplus;/EHsc>"
         "$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra;-Wpedantic>")

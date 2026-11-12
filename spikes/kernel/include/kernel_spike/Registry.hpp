@@ -21,6 +21,15 @@ using ComponentId = std::uint32_t;
 using ResourceId = std::uint32_t;
 using EventId = std::uint32_t;
 
+// A component's write policy (spec A.1 ColumnInfo; default Exclusive, A.8
+// trade-off 3). The spike only reads it for the page guard (World.hpp): an
+// Exclusive column is page-guarded when the World option is on, a Shared one
+// never is. Writer counting (D-E2) is not part of the spike.
+enum class WritePolicy : std::uint8_t {
+    Exclusive,
+    Shared,
+};
+
 // The only things the World knows about a stored type.
 struct TypeOps {
     const char* name;  // diagnostics only; given at registration, not from RTTI
@@ -84,11 +93,15 @@ public:
         void (*constructChannel)(void* at) noexcept = nullptr;
         void (*clearChannel)(void* channel) noexcept = nullptr;
         std::span<const std::byte> (*channelBytes)(const void* channel) noexcept = nullptr;
+        // Components only.
+        WritePolicy writePolicy = WritePolicy::Exclusive;
     };
 
     template <class T>
-    ComponentId RegisterComponent(const char* name) {
-        return Add(components_, Entry{TokenOf<T>(), OpsOf<T>(name)}, "component type registered twice");
+    ComponentId RegisterComponent(const char* name, WritePolicy writePolicy = WritePolicy::Exclusive) {
+        Entry entry{TokenOf<T>(), OpsOf<T>(name)};
+        entry.writePolicy = writePolicy;
+        return Add(components_, entry, "component type registered twice");
     }
 
     template <class T>
