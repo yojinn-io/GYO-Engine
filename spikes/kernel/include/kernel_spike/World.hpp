@@ -2,6 +2,7 @@
 
 #include "kernel_spike/Assert.hpp"
 #include "kernel_spike/Descriptor.hpp"
+#include "kernel_spike/PageGuard.hpp"
 #include "kernel_spike/Registry.hpp"
 
 #include <algorithm>
@@ -11,6 +12,7 @@
 #include <functional>
 #include <new>
 #include <span>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -29,6 +31,15 @@
 //     This is what sees writes that never call the World (const_cast, raw
 //     pointers, references kept from an earlier run).
 // Release builds (KERNEL_SPIKE_ACCESS_CHECKS 0) do neither.
+//
+// Page guard (WorldOptions::pageGuard, a run-time option in every build;
+// PageGuard.hpp): a third layer that catches the write itself. Off by
+// default; off means operator new storage and no protection call, exactly as
+// without the option. On: Exclusive columns get whole pages; a Run (System.hpp)
+// makes them read-only, lifts the protection of the columns a (c) System
+// declared as written for that System's call (all of them for a (b) System),
+// and makes them writable again when it ends. Faults are returned as Err
+// (Violation), alongside the second layer's differences.
 
 #if !defined(KERNEL_SPIKE_ACCESS_CHECKS)
 #if defined(NDEBUG)
@@ -50,13 +61,18 @@ inline void DeallocateBytes(std::byte* data, std::size_t align) noexcept {
     ::operator delete(data, std::align_val_t{align});
 }
 
-// A dense type-erased array.
+// A dense type-erased array. A page-guarded column (World option pageGuard,
+// Exclusive columns only) keeps its rows in whole pages of its own,
+// registered with the page guard's range table under (world, id); any other
+// column uses operator new.
 class Column final {
 public:
-    explicit Column(const TypeOps& ops) noexcept : ops_(ops) {}
+    Column(const TypeOps& ops, const void* world, ComponentId id, bool pageGuarded) noexcept
+        : ops_(ops), world_(world), id_(id), pageGuarded_(pageGuarded) {}
     Column(Column&& other) noexcept
-        : ops_(other.ops_), data_(std::exchange(other.data_, nullptr)), count_(std::exchange(other.count_, 0)),
-          capacity_(std::exchange(other.capacity_, 0)) {}
+        : ops_(other.ops_), world_(other.world_), id_(other.id_), pageGuarded_(other.pageGuarded_),
+          data_(std::exchange(other.data_, nullptr)), count_(std::exchange(other.count_, 0)),
+          capacity_(std::exchange(other.capacity_, 0)), pageBytes_(std::exchange(other.pageBytes_, 0)) {}
     Column(const Column&) = delete;
     Column& operator=(const Column&) = delete;
     Column& operator=(Column&&) = delete;
@@ -64,9 +80,7 @@ public:
         for (std::size_t row = 0; row < count_; ++row) {
             ops_.destroy(data_ + row * ops_.size);
         }
-        if (data_ != nullptr) {
-            DeallocateBytes(data_, ops_.align);
-        }
+        Release(data_, pageBytes_);
     }
 
     // Moves the object at source into a new last row.
@@ -79,28 +93,58 @@ public:
     [[nodiscard]] std::span<std::byte> Bytes() noexcept { return {data_, count_ * ops_.size}; }
     [[nodiscard]] std::span<const std::byte> Bytes() const noexcept { return {data_, count_ * ops_.size}; }
 
+    // The whole pages of a page-guarded column; empty for any other column
+    // and for a page-guarded column with no storage yet.
+    [[nodiscard]] std::span<std::byte> Pages() const noexcept {
+        return {pageBytes_ != 0 ? data_ : nullptr, pageBytes_};
+    }
+
 private:
     void Reserve(std::size_t rows) {
         if (rows <= capacity_) {
             return;
         }
         const std::size_t capacity = std::max({rows, capacity_ * 2, std::size_t{4}});
-        std::byte* data = AllocateBytes(capacity * ops_.size, ops_.align);
+        std::byte* data = nullptr;
+        std::size_t pageBytes = 0;
+        if (pageGuarded_) {
+            KERNEL_SPIKE_ASSERT(ops_.align <= PageGuard::PageSize(), "page guard: alignment larger than a page");
+            pageBytes = PageGuard::RoundUpToPages(capacity * ops_.size);
+            data = PageGuard::AllocatePages(pageBytes);
+            PageGuard::AddRange(world_, id_, data, pageBytes);
+        } else {
+            data = AllocateBytes(capacity * ops_.size, ops_.align);
+        }
         for (std::size_t row = 0; row < count_; ++row) {
             ops_.moveConstruct(data + row * ops_.size, data_ + row * ops_.size);
             ops_.destroy(data_ + row * ops_.size);
         }
-        if (data_ != nullptr) {
-            DeallocateBytes(data_, ops_.align);
-        }
+        Release(data_, pageBytes_);
         data_ = data;
         capacity_ = capacity;
+        pageBytes_ = pageBytes;
+    }
+
+    void Release(std::byte* data, std::size_t pageBytes) noexcept {
+        if (data == nullptr) {
+            return;
+        }
+        if (pageBytes != 0) {
+            PageGuard::RemoveRange(data);
+            PageGuard::FreePages(data, pageBytes);
+            return;
+        }
+        DeallocateBytes(data, ops_.align);
     }
 
     TypeOps ops_;
+    const void* world_;
+    ComponentId id_;
+    bool pageGuarded_;
     std::byte* data_ = nullptr;
     std::size_t count_ = 0;
     std::size_t capacity_ = 0;
+    std::size_t pageBytes_ = 0;  // 0 unless the storage is page-guarded
 };
 
 // Storage for at most one object (a resource, or an event channel).
@@ -156,13 +200,68 @@ private:
 
 } // namespace Detail
 
+class System;
+class Executor;
+struct PageGuardProbe;  // test access to the page guard's steps (cost measurement)
+
+// The spike's stand-in for the spec's KernelSettings (a construction argument
+// instead of a Resource written from start-up parameters).
+struct WorldOptions {
+    bool pageGuard = false;
+};
+
+// One entry of a Run's Err: the spike's stand-in for spec B-9's Siblings
+// list (a plain list).
+struct Violation {
+    enum class Source : std::uint8_t {
+        // Page guard: a (c) System wrote a guarded column it did not declare
+        // as written (the fault address is in address).
+        PageGuard,
+        // Page guard: more faults in one System call than RunContext has
+        // slots; dropped holds how many were not recorded.
+        PageGuardDropped,
+        // Second layer: storage the System did not declare as written differs
+        // after its call.
+        AfterSystem,
+        // Second layer: storage changed since the last comparison without the
+        // World API. Attributed to the previous segment, not to the next
+        // System, which is not called (spec E.2 step 0); system is empty.
+        BeforeSystem,
+    };
+
+    Source source;
+    std::string system;
+    AccessKey key;
+    std::uintptr_t address = 0;
+    std::size_t dropped = 0;
+    // PageGuard: the World whose column was written; another World than the
+    // Run's when a System wrote a guarded column of a World that was inside
+    // its own Run. key.id is that World's id. nullptr for the other sources
+    // (the Run's World).
+    const void* world = nullptr;
+};
+
+// Page-guard diagnostics of one World.
+struct PageGuardStats {
+    // Protection changes the World asked for (World::SetColumnWritable), one
+    // per column per change, including columns with no storage yet.
+    std::uint64_t protectCalls = 0;
+};
+
 class World final {
 public:
     using Command = std::function<void(World&)>;
 
-    explicit World(Registry registry) : registry_(std::move(registry)) {
-        for (const Registry::Entry& entry : registry_.Components()) {
-            columns_.emplace_back(entry.ops);
+    explicit World(Registry registry, WorldOptions options = {})
+        : registry_(std::move(registry)), pageGuard_(options.pageGuard) {
+        if (pageGuard_) {
+            PageGuard::InstallFaultHandler();
+        }
+        const std::span<const Registry::Entry> components = registry_.Components();
+        for (std::size_t id = 0; id < components.size(); ++id) {
+            const bool guarded = components[id].writePolicy == WritePolicy::Exclusive;
+            guarded_.push_back(guarded);
+            columns_.emplace_back(components[id].ops, this, static_cast<ComponentId>(id), pageGuard_ && guarded);
         }
         for (const Registry::Entry& entry : registry_.Resources()) {
             resources_.emplace_back(entry.ops);
@@ -180,6 +279,15 @@ public:
     World& operator=(const World&) = delete;
 
     [[nodiscard]] const Registry& Types() const noexcept { return registry_; }
+
+    // ---- Page-guard diagnostics.
+    [[nodiscard]] bool PageGuardEnabled() const noexcept { return pageGuard_; }
+    [[nodiscard]] const PageGuardStats& GuardStats() const noexcept { return guardStats_; }
+    // The pages of a page-guarded column; empty when the column is not
+    // page-guarded (Shared, or pageGuard off) or has no storage yet.
+    [[nodiscard]] std::span<const std::byte> GuardedPages(ComponentId id) const noexcept {
+        return columns_[id].Pages();
+    }
 
     // ---- Exclusive API: host and setup code, and deferred commands. A
     // structural change while a System runs is a Programmer Error in every
@@ -291,6 +399,8 @@ public:
 
 private:
     friend class System;
+    friend class Executor;
+    friend struct PageGuardProbe;
 
     [[nodiscard]] std::size_t StorageIndex(AccessKey key) const noexcept {
         switch (key.kind) {
@@ -404,8 +514,12 @@ private:
     }
 
     // Before a System runs: nothing may have changed since the last snapshot
-    // except through the World API.
-    void VerifyBetweenSystems() {
+    // except through the World API. Without sink (System::Run outside a Run)
+    // a change fails KERNEL_SPIKE_ASSERT; with sink (inside a Run) it is
+    // appended and the new bytes become the baseline. False when a change was
+    // appended.
+    bool VerifyBetweenSystems(std::vector<Violation>* sink = nullptr) {
+        bool unchanged = true;
         for (std::size_t index = 0; index < baseline_.size(); ++index) {
             if (dirty_[index]) {
                 Capture(index);
@@ -413,6 +527,12 @@ private:
             }
             if (!Unchanged(index)) {
                 const AccessKey key = KeyOfStorage(index);
+                if (sink != nullptr) {
+                    sink->push_back(Violation{Violation::Source::BeforeSystem, std::string(), key});
+                    Capture(index);
+                    unchanged = false;
+                    continue;
+                }
                 std::fprintf(stderr,
                              "kernel spike access check: %s '%s' changed outside any System without the World API\n",
                              KindName(key.kind), NameOf(key));
@@ -420,10 +540,12 @@ private:
                 KERNEL_SPIKE_FAIL("World storage changed outside any System without the World API");
             }
         }
+        return unchanged;
     }
 
-    // After a System ran: only what it declared as written may differ.
-    void VerifyAfterSystem(const SystemDescriptor& system) {
+    // After a System ran: only what it declared as written may differ. Sink:
+    // as VerifyBetweenSystems.
+    void VerifyAfterSystem(const SystemDescriptor& system, std::vector<Violation>* sink = nullptr) {
         for (std::size_t index = 0; index < baseline_.size(); ++index) {
             const AccessKey key = KeyOfStorage(index);
             if (system.DeclaresWrite(key)) {
@@ -431,6 +553,11 @@ private:
                 continue;
             }
             if (!Unchanged(index)) {
+                if (sink != nullptr) {
+                    sink->push_back(Violation{Violation::Source::AfterSystem, system.name, key});
+                    Capture(index);
+                    continue;
+                }
                 std::fprintf(stderr, "kernel spike access check: System '%s' changed %s '%s' without declaring a write\n",
                              system.name.c_str(), KindName(key.kind), NameOf(key));
                 std::fflush(stderr);
@@ -439,7 +566,111 @@ private:
         }
     }
 
+    // ---- Page guard (WorldOptions::pageGuard). Executor::Run and
+    // System::Step call Guard at the four points of a Run; every protection
+    // change goes through SetColumnWritable.
+
+    enum class GuardStep : std::uint8_t {
+        EnterRun,      // every guarded column read-only
+        BeforeSystem,  // (c): lift the columns the System declared as written; (b): lift all
+        AfterSystem,   // protect again what BeforeSystem and the fault handler lifted
+        ExitRun,       // every guarded column writable (host writes in Ready are not guarded)
+    };
+
+    void Guard(GuardStep step, const SystemDescriptor* system, const Detail::RunContext* context) {
+        if (!pageGuard_) {
+            return;
+        }
+        switch (step) {
+        case GuardStep::EnterRun:
+            PageGuard::EnsureFaultHandler();  // still installed? (reinstalls and counts if not)
+            guardActive_ = true;
+            SetGuardedWritable(false);
+            return;
+        case GuardStep::BeforeSystem:
+            if (!guardActive_) {
+                return;  // System::Run outside a Run
+            }
+            if (system->zone == Zone::B) {
+                // (b): its writes are checked by the two layers only.
+                SetGuardedWritable(true);
+                return;
+            }
+            SetDeclaredWritable(*system, true);
+            return;
+        case GuardStep::AfterSystem:
+            if (!guardActive_) {
+                return;
+            }
+            if (system->zone == Zone::B) {
+                SetGuardedWritable(false);
+                return;
+            }
+            SetDeclaredWritable(*system, false);
+            ProtectFaulted(*context);
+            return;
+        case GuardStep::ExitRun:
+            guardActive_ = false;
+            SetGuardedWritable(true);
+            return;
+        }
+    }
+
+    // Every guarded column.
+    void SetGuardedWritable(bool writable) {
+        for (std::size_t id = 0; id < guarded_.size(); ++id) {
+            if (guarded_[id]) {
+                SetColumnWritable(static_cast<ComponentId>(id), writable);
+            }
+        }
+    }
+
+    // The guarded columns a System declared as written.
+    void SetDeclaredWritable(const SystemDescriptor& system, bool writable) {
+        for (const AccessKey& key : system.writes) {
+            if (key.kind == AccessKind::Component && guarded_[key.id]) {
+                SetColumnWritable(key.id, writable);
+            }
+        }
+    }
+
+    // The columns the fault handler made writable during the call, protected
+    // again; every guarded column of this World when it ran out of slots.
+    // A recorded fault can be on another World's column (that World is inside
+    // its own Run, so its column was guarded): it is protected again for that
+    // World. Simplification: the spike runs Worlds on one thread, so that
+    // World cannot leave its Run between the fault and this point; with
+    // Worlds on several threads this needs that World's cooperation. Faults
+    // past the slots are only known by count: every guarded column of this
+    // World is protected again, another World's dropped column is not.
+    void ProtectFaulted(const Detail::RunContext& context) {
+        const std::size_t count = context.faultCount.load(std::memory_order_acquire);
+        for (std::size_t index = 0; index < count; ++index) {
+            const Detail::PageFault& fault = context.faults[index];
+            World& owner = fault.world == this ? *this : *static_cast<World*>(const_cast<void*>(fault.world));
+            owner.SetColumnWritable(fault.column, false);
+        }
+        if (context.faultsDropped.load(std::memory_order_relaxed) != 0) {
+            SetGuardedWritable(false);
+        }
+    }
+
+    void SetColumnWritable(ComponentId id, bool writable) {
+        ++guardStats_.protectCalls;
+        const std::span<std::byte> pages = columns_[id].Pages();
+        if (pages.empty()) {
+            return;  // no page-guarded storage (no rows yet, or the page guard is off)
+        }
+        const bool changed = PageGuard::SetWritable(pages.data(), pages.size(), writable);
+        KERNEL_SPIKE_ASSERT(changed, "page guard: the OS refused a protection change");
+    }
+
     Registry registry_;
+    bool pageGuard_;
+    bool guardActive_ = false;
+    // Per component: true for Exclusive (page-guarded when pageGuard_ is on).
+    std::vector<bool> guarded_;
+    PageGuardStats guardStats_;
     std::vector<Detail::Column> columns_;
     std::vector<Detail::Slot> resources_;
     std::vector<Detail::Slot> channels_;

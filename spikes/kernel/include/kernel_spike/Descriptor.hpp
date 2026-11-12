@@ -1,7 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <compare>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -25,6 +27,14 @@ enum class AccessMode : std::uint8_t {
     Write,
 };
 
+// The determinism zone a System runs in (spec G). The spike uses it only for
+// the page guard (World.hpp): writes during a (c) System are guarded, writes
+// during a (b) System are checked by the two access-check layers only.
+enum class Zone : std::uint8_t {
+    C,
+    B,
+};
+
 // Compile-time access entry. For Deferred, T is void.
 template <AccessKind K, class T>
 struct Access {
@@ -46,6 +56,9 @@ struct SystemDescriptor {
     // signature that reads and writes the same key, or writes it twice).
     std::vector<AccessKey> reads;
     std::vector<AccessKey> writes;
+    // Spike: defaults to C so the existing MakeSystem calls stay unchanged;
+    // the spec's System zone has no default (S-6).
+    Zone zone = Zone::C;
 
     [[nodiscard]] bool DeclaresRead(AccessKey key) const {
         return std::binary_search(reads.begin(), reads.end(), key);
@@ -64,16 +77,49 @@ namespace Detail {
 inline thread_local const SystemDescriptor* runningSystem = nullptr;
 inline thread_local const World* runningWorld = nullptr;
 
+// One page-guard fault: a write that hit a guarded page (PageGuard.hpp).
+struct PageFault {
+    const void* world;
+    std::uint32_t column;
+    std::uintptr_t address;
+};
+
+// The context of one System call: what the page-guard fault handler records
+// for it (spec A.6: violations go to this call's context, the descriptor is
+// immutable). The handler writes it from a POSIX signal handler or a Windows
+// vectored exception handler, so it is fixed size and never allocates; a
+// column is recorded once per call (its protection is lifted on the first
+// fault).
+struct RunContext {
+    static constexpr std::size_t kFaultSlots = 16;
+    PageFault faults[kFaultSlots] = {};
+    std::atomic<std::size_t> faultCount{0};
+    // Faults past kFaultSlots: counted, not recorded.
+    std::atomic<std::size_t> faultsDropped{0};
+};
+static_assert(std::atomic<std::size_t>::is_always_lock_free, "the fault handler needs lock-free counters");
+
+// The spike's tlCurrent for the page guard: the context of the System call
+// running on this thread, or nullptr. constinit removes C++'s dynamic
+// initialization guard, nothing more: on macOS the TLV storage of a thread is
+// still allocated (malloc) the first time that thread touches the variable.
+// A thread that ran a System has touched it already; the only path where the
+// fault handler can be the first toucher is a fault from a thread that never
+// ran a System (spike limit L7), which then aborts.
+inline constinit thread_local RunContext* runningContext = nullptr;
+
 class RunningScope final {
 public:
-    RunningScope(const SystemDescriptor& system, const World& world) noexcept {
+    RunningScope(const SystemDescriptor& system, const World& world, RunContext& context) noexcept {
         runningSystem = &system;
         runningWorld = &world;
+        runningContext = &context;
     }
     // Also runs when a test handler throws out of the System body.
     ~RunningScope() {
         runningSystem = nullptr;
         runningWorld = nullptr;
+        runningContext = nullptr;
     }
     RunningScope(const RunningScope&) = delete;
     RunningScope& operator=(const RunningScope&) = delete;

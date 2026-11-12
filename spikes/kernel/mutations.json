@@ -329,6 +329,83 @@
       "replace": "[&world, &total]() {\n        total += world.Get<Position>(0).x + world.Get<Position>(1).x;",
       "target": "gyo_kernel_spike_tests_debug",
       "expect": "Control: declared reads and writes never trip the check"
+    },
+    {
+      "id": "ks-pageguard-fault-not-recorded",
+      "what": "the page-guard fault handler lifts the protection but records nothing",
+      "file": "spikes/kernel/src/PageGuard.cpp",
+      "find": "    RecordFault(*context, *range, address);\n",
+      "replace": "",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "PageGuard Bypass \\(L1\\)",
+      "cases": "PageGuard*",
+      "note": "v8-arch-kernel-spike-pageguard. L1 is the shape only the page guard sees (no net change at the System boundary), so with nothing recorded its Run returns Ok."
+    },
+    {
+      "id": "ks-pageguard-zone-b-guarded",
+      "what": "a (b) System is guarded like a (c) System (only its declared writes lifted)",
+      "file": "spikes/kernel/include/kernel_spike/World.hpp",
+      "find": "            if (system->zone == Zone::B) {\n                // (b): its writes are checked by the two layers only.\n                SetGuardedWritable(true);\n                return;\n            }\n",
+      "replace": "",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "PageGuard Control: a \\(b\\) System writes any column",
+      "cases": "PageGuard*",
+      "note": "v8-arch-kernel-spike-pageguard."
+    },
+    {
+      "id": "ks-pageguard-shared-guarded",
+      "what": "Shared columns are page-guarded too (not only Exclusive ones)",
+      "file": "spikes/kernel/include/kernel_spike/World.hpp",
+      "find": "components[id].writePolicy == WritePolicy::Exclusive",
+      "replace": "true",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "PageGuard Control: a Shared column is not guarded",
+      "cases": "PageGuard*",
+      "note": "v8-arch-kernel-spike-pageguard."
+    },
+    {
+      "id": "ks-pageguard-protection-kept",
+      "what": "the fault handler records the fault but does not lift the column's protection",
+      "file": "spikes/kernel/src/PageGuard.cpp",
+      "find": "    if (!SetWritable(reinterpret_cast<std::byte*>(range->begin), range->end - range->begin, true)) {\n        Fatal(\"could not lift the protection of a guarded column\", address);\n    }\n",
+      "replace": "",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "repeated fault on a guarded column whose protection was already lifted",
+      "cases": "PageGuard*",
+      "note": "v8-arch-kernel-spike-pageguard. Killed by a non-zero exit, as the batch declaration allows for this mutant: the write faults again on the same column, the handler finds it already recorded and aborts (SIGABRT) with the expected message instead of retrying forever. run_mutations.py already counts any non-zero exit whose output matches as a failure, so the runner is unchanged."
+    },
+    {
+      "id": "ks-pageguard-off-not-early",
+      "what": "with pageGuard off the World still walks the guarded columns and asks for protection changes",
+      "file": "spikes/kernel/include/kernel_spike/World.hpp",
+      "find": "        if (!pageGuard_) {\n            return;\n        }\n",
+      "replace": "",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "PageGuard Control: pageGuard off makes no protection call",
+      "cases": "PageGuard*",
+      "note": "v8-arch-kernel-spike-pageguard. No storage is page-guarded when the option is off, so the extra calls change no protection; the per-World call count is what shows them."
+    },
+    {
+      "id": "ks-pageguard-declared-not-reprotected",
+      "what": "after a (c) System returns, the columns it declared as written stay writable for the rest of the Run",
+      "file": "spikes/kernel/include/kernel_spike/World.hpp",
+      "find": "            SetDeclaredWritable(*system, false);\n",
+      "replace": "",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "PageGuard Bypass after Write<T>",
+      "cases": "PageGuard*",
+      "note": "v8-arch-kernel-spike-pageguard r2 (adversary S3)."
+    },
+    {
+      "id": "ks-pageguard-faulted-not-reprotected",
+      "what": "after a (c) System returns, the columns the fault handler lifted are not protected again",
+      "file": "spikes/kernel/include/kernel_spike/World.hpp",
+      "find": "            ProtectFaulted(*context);\n",
+      "replace": "",
+      "target": "gyo_kernel_spike_tests_debug",
+      "expect": "PageGuard Continue: a write to another World's guarded column",
+      "cases": "PageGuard*",
+      "note": "v8-arch-kernel-spike-pageguard r2 (adversary S3). Observable only through another World: a Run ends at its first Err and the next Run protects every column of its own World again on entry, so a lifted column of the Run's own World is never seen unprotected; another World's column stays lifted unless ProtectFaulted protects it again."
     }
   ]
 }

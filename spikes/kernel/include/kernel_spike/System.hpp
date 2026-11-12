@@ -8,13 +8,23 @@
 #include "kernel_spike/TypeList.hpp"
 #include "kernel_spike/World.hpp"
 
+#include <cstdint>
+#include <cstdio>
 #include <functional>
+#include <initializer_list>
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 // A System is a function plus the descriptor derived from its parameter
 // types. There is no way to build a System from a hand-written descriptor.
+//
+// Two ways to call Systems: System::Run (one call, the original spike
+// shape: every access-check violation fails KERNEL_SPIKE_ASSERT; no page
+// guard), and Run(world, {systems...}) (the Executor's shape for the page
+// guard batch: the page guard is active for the whole Run, and page-guard
+// faults and second-layer differences come back as Err, a Violation list).
 
 namespace KernelSpike {
 
@@ -80,23 +90,50 @@ public:
     [[nodiscard]] const SystemDescriptor& Descriptor() const noexcept { return descriptor_; }
 
     // Runs the function once with fresh handles. With access checks on, the
-    // World verifies its storage before and after (World.hpp).
-    void Run(World& world) const {
-        KERNEL_SPIKE_ASSERT(Detail::runningSystem == nullptr, "a System run cannot start inside another System run");
-#if KERNEL_SPIKE_ACCESS_CHECKS
-        world.VerifyBetweenSystems();
-#endif
-        {
-            const Detail::RunningScope scope(descriptor_, world);
-            invoke_(world);
-        }
-#if KERNEL_SPIKE_ACCESS_CHECKS
-        world.VerifyAfterSystem(descriptor_);
-#endif
-    }
+    // World verifies its storage before and after (World.hpp); a violation
+    // fails KERNEL_SPIKE_ASSERT. The page guard is not active outside a Run.
+    void Run(World& world) const { Step(world, nullptr); }
 
 private:
     friend struct Detail::SystemFactory;
+    friend class Executor;
+
+    // One System call. Without sink, as Run above. With sink (inside a Run),
+    // the second layer's differences and the page-guard faults of this call
+    // are appended to it instead of failing KERNEL_SPIKE_ASSERT; the first
+    // layer (access-time check) still fails KERNEL_SPIKE_ASSERT, so it keeps
+    // stopping the System at the access (the original spike's tests rely on
+    // that).
+    void Step(World& world, std::vector<Violation>* sink) const {
+        KERNEL_SPIKE_ASSERT(Detail::runningSystem == nullptr, "a System run cannot start inside another System run");
+#if KERNEL_SPIKE_ACCESS_CHECKS
+        if (!world.VerifyBetweenSystems(sink)) {
+            return;  // attributed to the previous segment; this System is not called (spec E.2 step 0)
+        }
+#endif
+        Detail::RunContext context;
+        {
+            const Detail::RunningScope scope(descriptor_, world, context);
+            world.Guard(World::GuardStep::BeforeSystem, &descriptor_, &context);
+            invoke_(world);
+            world.Guard(World::GuardStep::AfterSystem, &descriptor_, &context);
+        }
+        const std::size_t faults = context.faultCount.load(std::memory_order_acquire);
+        const std::size_t dropped = context.faultsDropped.load(std::memory_order_relaxed);
+        KERNEL_SPIKE_ASSERT(sink != nullptr || (faults == 0 && dropped == 0), "page-guard fault outside a Run");
+        for (std::size_t index = 0; index < faults; ++index) {
+            const Detail::PageFault& fault = context.faults[index];
+            sink->push_back(Violation{Violation::Source::PageGuard, descriptor_.name,
+                                      AccessKey{AccessKind::Component, fault.column}, fault.address, 0, fault.world});
+        }
+        if (dropped != 0) {
+            sink->push_back(Violation{Violation::Source::PageGuardDropped, descriptor_.name,
+                                      AccessKey{AccessKind::Component, 0}, 0, dropped});
+        }
+#if KERNEL_SPIKE_ACCESS_CHECKS
+        world.VerifyAfterSystem(descriptor_, sink);
+#endif
+    }
 
     System(SystemDescriptor descriptor, std::function<void(World&)> invoke)
         : descriptor_(std::move(descriptor)), invoke_(std::move(invoke)) {}
@@ -109,8 +146,9 @@ namespace Detail {
 
 struct SystemFactory {
     template <class F>
-    static System Make(const Registry& registry, std::string name, F function) {
+    static System Make(const Registry& registry, std::string name, Zone zone, F function) {
         SystemDescriptor descriptor = Describe<F>(registry, std::move(name));
+        descriptor.zone = zone;
         return System(std::move(descriptor), [function = std::move(function)](World& world) mutable {
             Invoke(function, world, typename FunctionArgs<F>::Args{});
         });
@@ -127,10 +165,16 @@ struct SystemFactory {
 
 } // namespace Detail
 
-// A free function, a non-generic lambda, or a function object.
+// A free function, a non-generic lambda, or a function object. Zone C.
 template <class F>
 [[nodiscard]] System MakeSystem(const Registry& registry, std::string name, F function) {
-    return Detail::SystemFactory::Make(registry, std::move(name), std::move(function));
+    return Detail::SystemFactory::Make(registry, std::move(name), Zone::C, std::move(function));
+}
+
+// The same, in the given zone (the page guard guards (c) Systems only).
+template <class F>
+[[nodiscard]] System MakeSystem(const Registry& registry, std::string name, Zone zone, F function) {
+    return Detail::SystemFactory::Make(registry, std::move(name), zone, std::move(function));
 }
 
 // A member function called on object, which must outlive the System.
@@ -138,6 +182,94 @@ template <class C, class M>
     requires std::is_member_function_pointer_v<M>
 [[nodiscard]] System MakeSystem(const Registry& registry, std::string name, C& object, M member) {
     return Detail::SystemFactory::MakeMember(registry, std::move(name), object, member);
+}
+
+// The result of a Run: Ok when violations is empty, otherwise Err with every
+// violation of the System that ended the Run (a plain list in place of spec
+// B-9's Siblings).
+struct RunResult {
+    std::vector<Violation> violations;
+
+    [[nodiscard]] bool IsOk() const noexcept { return violations.empty(); }
+};
+
+// The spike's Executor: runs Systems in order on one World. The page guard
+// (WorldOptions::pageGuard) is active from entry to exit; Ready (outside a
+// Run) is not guarded. The first System that returns Err ends the Run (the
+// spec's Interrupted; the spike has no such state, so the World can Run
+// again).
+class Executor final {
+public:
+    [[nodiscard]] static RunResult Run(World& world, std::initializer_list<const System*> systems) {
+        KERNEL_SPIKE_ASSERT(Detail::runningSystem == nullptr, "a Run cannot start inside a System run");
+        RunResult result;
+        {
+            // ExitRun on every way out, including a KERNEL_SPIKE_ASSERT that a
+            // test handler turns into a throw.
+            const ExitScope exit(world);
+            world.Guard(World::GuardStep::EnterRun, nullptr, nullptr);
+            for (const System* system : systems) {
+                system->Step(world, &result.violations);
+                if (!result.violations.empty()) {
+                    break;
+                }
+            }
+        }
+        for (const Violation& violation : result.violations) {
+            Print(world, violation);
+        }
+        return result;
+    }
+
+private:
+    class ExitScope final {
+    public:
+        explicit ExitScope(World& world) noexcept : world_(world) {}
+        ~ExitScope() { world_.Guard(World::GuardStep::ExitRun, nullptr, nullptr); }
+        ExitScope(const ExitScope&) = delete;
+        ExitScope& operator=(const ExitScope&) = delete;
+
+    private:
+        World& world_;
+    };
+
+    static void Print(const World& world, const Violation& violation) {
+        const char* kind = World::KindName(violation.key.kind);
+        switch (violation.source) {
+        case Violation::Source::PageGuard:
+            if (violation.world != &world) {
+                // Another World's column: its id means nothing in this World's registry.
+                std::fprintf(stderr,
+                             "kernel spike page guard: System '%s' wrote component id %u of another World (0x%llx) "
+                             "at 0x%llx\n",
+                             violation.system.c_str(), violation.key.id,
+                             static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(violation.world)),
+                             static_cast<unsigned long long>(violation.address));
+                break;
+            }
+            std::fprintf(stderr, "kernel spike page guard: System '%s' wrote %s '%s' (id %u) at 0x%llx without declaring a write\n",
+                         violation.system.c_str(), kind, world.NameOf(violation.key), violation.key.id,
+                         static_cast<unsigned long long>(violation.address));
+            break;
+        case Violation::Source::PageGuardDropped:
+            std::fprintf(stderr, "kernel spike page guard: System '%s' faulted on %zu more columns than it could record\n",
+                         violation.system.c_str(), violation.dropped);
+            break;
+        case Violation::Source::AfterSystem:
+            std::fprintf(stderr, "kernel spike access check: System '%s' changed %s '%s' without declaring a write\n",
+                         violation.system.c_str(), kind, world.NameOf(violation.key));
+            break;
+        case Violation::Source::BeforeSystem:
+            std::fprintf(stderr, "kernel spike access check: %s '%s' changed outside any System without the World API\n",
+                         kind, world.NameOf(violation.key));
+            break;
+        }
+        std::fflush(stderr);
+    }
+};
+
+[[nodiscard]] inline RunResult Run(World& world, std::initializer_list<const System*> systems) {
+    return Executor::Run(world, systems);
 }
 
 } // namespace KernelSpike
