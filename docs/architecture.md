@@ -135,7 +135,7 @@ Optional SDL input, SDL_image, SDL_ttf, SDL renderer/SDL_GPU and ufbx adapters r
 
 The engine must not include game headers or understand Object_FPS asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. *(Amended 2026-11-11, user decision `v8-arch-kernel-delta-approved`, spec K.3 item 7.)* The Kernel enters the Engine: World, System contract, Registry, Scheduler and Executor (`architecture/plans/kernel/spec.zh-Hant.md` v0.3; target documents in `architecture/target/`). A plugin ABI and dynamic loading stay forbidden; no scene hierarchy and no service locator. Composition and third-party adaptation will live in the plugins layer (`plugins/`, target: `architecture/target/runtime-composition.zh-Hant.md` section 4), not in an umbrella framework; the framework concept retires (`v8-arch-framework-retire`). Until the migration batches land, the three-layer table above (Engine, Framework, Product) describes the running code. Of an ECS, the Engine today has the entity store ([contract](architecture/entity-store.md)); its columns become the World's storage (`architecture/determinism.md` section 4.7). The framework layer ([framework](framework/architecture.md)) is not an umbrella: no product has to go through it, a product that does not use it builds and runs without it, and its game part is extracted only when a second game puts the engine together in the same way.
 
-`RuntimeLoop` calls `ProcessEvents(frame)`, `Update(frame)` and `Render(frame)` in order. A phase returning `RuntimeControl::Stop` ends the loop immediately. `IRuntimePort<Snapshot, Command, Event>` is a typed observation/intent boundary; each game retains ownership of its payloads and legality rules. Borrowed observations remain valid only until the runtime advances.
+`RuntimeLoop` calls `ProcessEvents(frame)`, `Update(frame)` and `Render(frame)` in order. A phase returning `RuntimeControl::Stop` ends the loop immediately. The former typed observation/intent boundary `IRuntimePort` was removed on 2026-11-12 (`v8-arch-remove-object-fps`) together with its only user, a removed game.
 
 ### Fixed simulation time and product hosts
 
@@ -167,9 +167,9 @@ separate fixed-step role thread (`ClientSimulationRole`); the main thread owns
 the window, view and presentation. Client tick IDs
 and authority tick IDs are **not synchronized clocks**; no direct subtraction,
 execution-time mapping or latency estimate is valid. Presentation continues to
-use `RuntimeLoop` frames. Object_FPS v1 and v2 remain on their existing variable
-frame gameplay paths in this change; they have not been migrated to fixed
-simulation ticks.
+use `RuntimeLoop` frames. Object_FPS v1 and v2, which stayed on variable-frame
+gameplay paths in this change, were removed on 2026-11-12
+(`v8-arch-remove-object-fps`).
 
 ### Network infrastructure and Object_FPS_PVP ownership
 
@@ -267,7 +267,7 @@ Each game has a small `project.json` declaring engine components and an optional
 
 The normal `dev` product configuration disables `BUILD_TESTING`, `GYO_ENABLE_PACKAGING` and design tools. A single selected game can therefore build and run without `tests/`, tool sources or CI files. The `test` configuration selects default tools. The pull request merge gate (L1) builds the `ci-<os>` presets without extra selection arguments, covering every registry-enabled game and the default tools; packaging CI explicitly selects the release tools exported from the same CMake registry parser. `tools/ui_editor` also offers a thin standalone entry that forwards to this same root graph; it does not rebuild an independent copy of the engine composition rules.
 
-Game executables and their complete runnable content are assembled under `build/target/<game>/bin`. Packageable design tools are assembled under `build/target/toolchain/bin`. Non-packageable variants and the game-dependent Object_FPS preview are local tools under `build/target/_tools/<owner>/bin` and never join a release archive. CMake cache, object files, host tools and transient validation state remain under `build/target/_build/` or other generated target subdirectories. The generated output root may be overridden for isolated validation.
+Game executables and their complete runnable content are assembled under `build/target/<game>/bin`. Packageable design tools are assembled under `build/target/toolchain/bin`. Non-packageable variants and game-dependent tools are local tools under `build/target/_tools/<owner>/bin` and never join a release archive. CMake cache, object files, host tools and transient validation state remain under `build/target/_build/` or other generated target subdirectories. The generated output root may be overridden for isolated validation.
 
 Game support obtains generated app configuration through `gyo_use_app_config(target app)`, privately for exactly one app per target. It does not construct another owner's generated directory or publish every game's same-named `gyo/AppConfig.hpp` to consumers. See [tool registration](tool_projects.md) for data and manual steps.
 
@@ -298,7 +298,7 @@ Every selected game's content is synchronized on build and install. A missing so
 
 Editor full-content mounting parses `content.json` and its catalogs once. Validation, asset lists and previews use that same snapshot; a failed replacement keeps the previous mount. Mount changes and text-cache eviction occur at frame boundaries before drawing commands borrow textures. See [UI toolchain](ui_toolchain.md) for explicit full-content and single-catalog modes.
 
-`AssetManager` owns IDs/handles, catalog lookup, records, cache/lifetime and loader dispatch. Loaders create CPU values only. `NativeFileAssetSource` reads catalog-resolved bytes. `IRenderDevice` owns GPU upload, residency, synchronization and disposal. Shader compilers run at build time, never at game startup. See [rendering](rendering_architecture.zh-Hant.md) and [3D assets](architecture/3d-assets.md) for the concrete data contracts.
+`AssetManager` owns IDs/handles, catalog lookup, records, cache/lifetime and loader dispatch. Loaders create CPU values only. `NativeFileAssetSource` reads catalog-resolved bytes. `IRenderDevice` owns GPU upload, residency, synchronization and disposal. Shader compilers run at build time, never at game startup. See [rendering](rendering_architecture.zh-Hant.md) and [animation events](architecture/animation-events.md) for the concrete data contracts.
 
 ### Asset requests and logical IO position
 

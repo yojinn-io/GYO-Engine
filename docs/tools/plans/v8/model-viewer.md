@@ -22,7 +22,7 @@
 |---|---|---|
 | 動畫事件契約 | `gyo.anim_events` v1，Engine（`GYO::Model`）持有；有 `ParseAnimationEvents`、`BindAnimationEvents`，**沒有寫出（serializer）**。契約寫明「工具若自己留一份規則，要有和這個 parser 對齊的測試」 | [animation-events.md](../../../architecture/animation-events.md)「Contracts」、`engine/model/include/engine/model/AnimationEvents.hpp` |
 | 動畫事件的資料 | PvP 只有一份：`weapons/nailer_v2/viewmodel/viewmodel.anim_events.json`（`Armature\|Reload` 2.35 s `magazine_in`），catalog type `text` | `assets/object_fps_pvp/asset_catalog.json` 第 29 行 |
-| 模型的能力 | `ModelAsset`（節點、材質名與底色、蒙皮網格、片段）；`SamplePose`、`SkinMesh`、`AnimationInstance`、`PlaybackInterval::Crossed`；FBX 由 `UfbxModelLoader`（`IAssetLoader`）從位元組讀 | `engine/model/include/engine/model/{ModelAsset,Animation}.hpp`、`engine/model/backend/ufbx/` |
+| 模型的能力 | `ModelAsset`（節點、材質名與底色、蒙皮網格、片段）；`SamplePose`、`SkinMesh`、`PlaybackInterval::Crossed`；FBX 由 `UfbxModelLoader`（`IAssetLoader`）從位元組讀 | `engine/model/include/engine/model/{ModelAsset,Animation}.hpp`、`engine/model/backend/ufbx/` |
 | 材質與貼圖 | 模型只帶材質名稱；材質名 → 貼圖 ID 的對應是產品的（PvP 的 `character.json` 等） | `ModelAsset.hpp` 的 `Material` 註解 |
 | 工具的視窗 | framework 的 `RunImGuiShell`：ImGui 畫在 Engine 的 **SDL 2D 渲染器**上；沒有 3D 裝置。ImGui 的 SDL 渲染後端支援 64k 以上頂點（`RendererHasVtxOffset`） | [framework architecture.md](../../../framework/architecture.md)、`imgui_impl_sdlrenderer3.cpp`（ImGui v1.92.5）第 83 行 |
 | Engine 的 3D 繪製 | 已有 `GYO::ModelRenderer`（`ModelAsset`＋每個材質的可選貼圖與色調 → `RenderQueue`，PvP 用的同一條路）與 `Renderer`（需要 `ShaderLibrary`，從著色器 bundle 載入） | `engine/render/model/`、`engine/render/include/engine/render/{Renderer,ShaderLibrary}.hpp` |

@@ -70,7 +70,6 @@ Manual variants copy only `apps/<game>` and `assets/<game>`, then add a CSV row.
 - [Error handling contract (Result/Error/Assert)](docs/architecture/error-handling.md)
 - [Trace transport and log facade contract](docs/architecture/trace.md)
 - [Rendering and shader contract](docs/rendering_architecture.zh-Hant.md)
-- [3D asset ownership and animation limits](docs/architecture/3d-assets.md)
 - [Release procedure](docs/releasing.zh-Hant.md)
 
-Each game under `apps/` is an independent project; the engine depends on none of them and does not define a generic game framework. The active game is `object_fps_pvp` (server-authoritative LAN PvP; see the [network architecture](docs/object_fps_pvp/network-architecture.zh-Hant.md), in Traditional Chinese). `object_fps` and `object_fps_v2` are disabled and must be migrated after the engine foundation work (Math, Result, include paths, input layer, Collision) before they can be re-enabled; see the `inactive_products.md` lists under `docs/architecture/plans/`. General scene management, full physics, GPU skinning, PBR, scripting and a dynamic plugin ABI are outside the current implemented scope.
+Each game under `apps/` is an independent project; the engine depends on none of them and does not define a generic game framework. The active game is `object_fps_pvp` (server-authoritative LAN PvP; see the [network architecture](docs/object_fps_pvp/network-architecture.zh-Hant.md), in Traditional Chinese). The former `object_fps` and `object_fps_v2` were removed on 2026-11-12 (`v8-arch-remove-object-fps`); read them from git history at `56b8dda3` if needed. General scene management, full physics, GPU skinning, PBR, scripting and a dynamic plugin ABI are outside the current implemented scope.
