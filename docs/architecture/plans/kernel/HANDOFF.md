@@ -123,6 +123,8 @@
 
 - 2026-11-12 使用者問有沒有可並行的任務；架構師列表後，使用者決定先開 J-17 掃描器線與圖書管理員兩條，交接卡已寫（分支 `claude/arch-handoffs-j17-librarian`）。
 
+- 2026-11-12 `v8-arch-kernel-ci-readiness`（任務卡，子會話）完成：`ci-readiness.zh-Hant.md`。(1) 新子系統進 L1＝4 新增＋2 修改（`engine/kernel/`、`tests/common/kernel/`、`engine/CMakeLists.txt`、`tests/common/CMakeLists.txt` 各 1 行），`build/`／workflow 不動；假子系統本機 preset `test` 實走（#26 列出、建置、通過；多連一個 target 時 `gyo_expect_links` 讓 configure 失敗）。(2) spike 測試逐檔去處：Derivation 搬改→J-12、AccessCheck 搬改→J-5／J-6／J-3（斷言→Err、兩執行檔→一執行檔兩 World）、RegistryWorld 的事件與延後佇列兩案例**重寫**（spike 語意與 F-2／F-7 相反）、PageGuardTests 留 spike 等 A.6；**頁保護平台層不能放 `engine/kernel`**（OS 邊界守衛探測 27 筆）→ `engine/os`（Delta，交架構師）；突變目錄→`plans/kernel/scripts/`，執行器沿用 time-threads-trace 的；第三層測試獨立執行檔＋`SKIP_RETURN_CODE 77` 處理 sanitizer。(3) windows-x64 頁保護測試有跑且過（xml 與 LastTest.log 行號；handler 訊息是 VEH 執行的直接證據；debug 52/0 skip）；無 debugger／ASan 為推斷；VEH 風險十條（含 L1 主圖 RelWithDebInfo、spike 只有 Debug 證據；VEH handle 被丟掉）。零風險小修：沒有找到。證據 `build/evidence/kernel-ci-readiness/`。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。

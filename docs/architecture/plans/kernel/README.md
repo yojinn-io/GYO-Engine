@@ -31,6 +31,7 @@
 - [spike-pageguard-report.zh-Hant.md](spike-pageguard-report.zh-Hant.md)：`-spike-pageguard` 的報告（判定 1 照原文不成立，使用者 2026-11-12 定讀法 (i)；判定 2、3、4、5 成立）。
 - [audit-declaration.zh-Hant.md](audit-declaration.zh-Hant.md)：`-audit` 的事前宣告（已完成）。
 - [j17-scanner.zh-Hant.md](j17-scanner.zh-Hant.md)：**J-17 掃描器線的交接卡**（並行線；使用者 2026-11-12 同意分出；卡的現況由該線更新）。
+- [ci-readiness.zh-Hant.md](ci-readiness.zh-Hant.md)：`v8-arch-kernel-ci-readiness`（任務卡，2026-11-12）——新 Engine 子系統進 L1 的檔清單（假子系統實走）、spike 測試升格方案（逐檔搬／重寫／刪）、Windows VEH 在 CI 的證據與風險；共通層零修改。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
 
@@ -68,6 +69,7 @@ v8-arch-kernel
 
 ## dev_log
 
+- [2026_11_12_arch_kernel_ci_readiness.zh-Hant.md](../../../dev_logs/2026_11_12_arch_kernel_ci_readiness.zh-Hant.md)：-ci-readiness（任務卡）。
 - [2026_11_12_arch_kernel_spike_pageguard.zh-Hant.md](../../../dev_logs/2026_11_12_arch_kernel_spike_pageguard.zh-Hant.md)：-spike-pageguard。
 - [2026_11_12_arch_kernel_spec_v03.zh-Hant.md](../../../dev_logs/2026_11_12_arch_kernel_spec_v03.zh-Hant.md)：-spec-v03。
 - [2026_11_11_arch_kernel_audit.zh-Hant.md](../../../dev_logs/2026_11_11_arch_kernel_audit.zh-Hant.md)：-audit。
