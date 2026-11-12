@@ -40,3 +40,13 @@
 - Data Contract：`projects.csv`／`tools.csv` 只刪列，欄位不變。
 - 範圍の限界（宣告原文）：不驗 Product 的追加／複製；不重寫 git 歷史；`RetroFPS` namespace 留在 pvp；刪的是 CI 從未建置的停用產品。
 - 觀察到但不在本批處理：現行文件仍有不帶 `_pvp` 的「Object_FPS」字樣（`docs/rendering_architecture.*` 第 55、66、129、248 行，`docs/creating_apps.md` 第 87 行，`docs/architecture.md` 第 136、293 行，`docs/ui_toolchain.md` 第 203 行等），判定 3 的正規式（區分大小寫）抓不到；有的指產品族、有的指 v1，交圖書管理員點檢。
+
+## 追記（主會話，實作者停止之後）
+
+- 使用者 2026-11-12 選 (a)：`tests/object_fps_pvp/` 的 8 行文字由主會話以第四個 commit `4bb944cb` 改寫（`HitboxSurvey.cpp` 兩行註解、`test_asset_catalog.py` 三行自測假路徑改 `other_game`、`fixtures/hair_buns/README.zh-Hant.md` 兩行、`asset_sources.json` 一行出處改指 `docs/object_fps_pvp/assets.zh-Hant.md` 附錄 A）。判定 3 在此之後**成立**：非 docs 的 `git grep -P` 只剩 `entity_store_guard` 的禁字表 3 行。上文「三個 commit」「判定 3 不成立」「本批沒改 pvp 測試目錄」是停止當時的紀錄，保留不改。
+- 最終數字：刪 308、修 38（實作者 32＋commit 4 的 4＋主會話後續 2）、新增 2（宣告、本 dev_log）；審查後第五個 commit 把 `PlaybackInterval::Crossed` 的 5 個 CHECK 以同名 TEST_CASE 留在 `ModelTests.cpp`（審查 S1：那是保留型別的直接測試，刪掉是 §14.4 的「緩める面」，宣告沒寫明；留下沒有緩める面），所以 `gyo_model_tests` 24→22、合計少 3。
+- 主會話的判定 4、5（基準環境：主 checkout preset `test`，含 network 測試）：ctest 152→152 名單相同、全過；doctest 只差 `engine_tests` 140→139、`gyo_model_tests` 24→21（第五個 commit 後 22）；pvp 57 個測試項目的案例數逐一相同；空目錄 0；`test_asset_catalog` unittest 28/28。證據：主 checkout `build/evidence/remove-object-fps/`（`before-*`、`after-*` 為主會話；`impl/` 為實作者原本寫在 worktree `build/evidence-impl/` 的檔，已搬入；`review-report.md` 為審查者）。
+- 審查（Fable／high，只讀）：0 blocker／5 should／6 nit。S1 如上；S2～S4 文件過時已補；S5 `rendering_architecture.*` 第 204 行泛化後描述了不存在的 `gyo_<game>_acceptance`，改成原則句；N2、N3、N4 已改；N1（`<memory>`）保留；N6 大小寫不同的「Object_FPS」字樣交圖書管理員。
+- 宣告的前提錯誤（pvp 零引用）出在架構師的掃描：`xargs grep -P` 在 macOS 的 BSD grep 是無效選項，錯誤被 `2>/dev/null` 吞掉。已記入 HANDOFF 與記憶。
+- 三平台：PR #185 的 L1，數字待回填。
+

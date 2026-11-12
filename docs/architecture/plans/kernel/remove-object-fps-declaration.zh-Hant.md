@@ -25,7 +25,7 @@
 | Owner-specific Test | `tests/object_fps/`、`tests/object_fps_v2/` | 26、11 |
 | Owner-specific Validation | `build/acceptance/object_fps/`、`build/acceptance/object_fps_v2/` | 14、5 |
 | Engine 型別（使用者決定併入） | `engine/runtime/include/engine/runtime/IRuntimePort.hpp`（刪檔）；`engine/model/include/engine/model/Animation.hpp` 第 72～97 行 `AnimationInstance` 類別與 `engine/model/src/Animation.cpp` 第 192～241 行的定義（刪段；`PlaybackInterval`、`SamplePose`、`BlendPoses`、`TransferCompatibleAnimation`、`SkinMesh`、ufbx loader 全部保留——`PlaybackInterval` 仍被 `tools/model_viewer` 用） | 刪 1 檔、修 2 檔 |
-| Engine 型別的測試 | `tests/common/core/runtime/RuntimePortTests.cpp`（刪檔，1 個 TEST_CASE）＋ `tests/common/core/CMakeLists.txt` 第 16 行；`tests/common/model/ModelTests.cpp` 用 `AnimationInstance` 的 3 個 TEST_CASE（第 139、170、213 行起；其餘 14 個不動） | 刪 1 檔、修 2 檔 |
+| Engine 型別的測試 | `tests/common/core/runtime/RuntimePortTests.cpp`（刪檔，1 個 TEST_CASE）＋ `tests/common/core/CMakeLists.txt` 第 16 行；`tests/common/model/ModelTests.cpp` 用 `AnimationInstance` 的 3 個 TEST_CASE（第 139、170、213 行起；其餘不動；**宣告錯誤的修正**：原檔是 15 個 TEST_CASE 不是 17，刪 3 剩 12。審查 S1 後第三個案例的 `PlaybackInterval::Crossed` 5 個 CHECK 以同名案例保留，實際只刪 2 個案例、`gyo_model_tests` 24→22） | 刪 1 檔、修 2 檔 |
 | Reference（現行文件） | 見下「文件的處置」 | 修約 20 檔 |
 
 預計：**刪除 308 檔**（上表刪檔合計，含 `3d-assets.md`）、**修改約 26 檔**（2 登記＋4 共通測試／Engine＋約 20 文件）。實際數字由報告的件数の突き合わせ回填。

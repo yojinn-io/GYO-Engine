@@ -298,7 +298,7 @@ Every selected game's content is synchronized on build and install. A missing so
 
 Editor full-content mounting parses `content.json` and its catalogs once. Validation, asset lists and previews use that same snapshot; a failed replacement keeps the previous mount. Mount changes and text-cache eviction occur at frame boundaries before drawing commands borrow textures. See [UI toolchain](ui_toolchain.md) for explicit full-content and single-catalog modes.
 
-`AssetManager` owns IDs/handles, catalog lookup, records, cache/lifetime and loader dispatch. Loaders create CPU values only. `NativeFileAssetSource` reads catalog-resolved bytes. `IRenderDevice` owns GPU upload, residency, synchronization and disposal. Shader compilers run at build time, never at game startup. See [rendering](rendering_architecture.zh-Hant.md) and [animation events](architecture/animation-events.md) for the concrete data contracts.
+`AssetManager` owns IDs/handles, catalog lookup, records, cache/lifetime and loader dispatch. Loaders create CPU values only. `NativeFileAssetSource` reads catalog-resolved bytes. `IRenderDevice` owns GPU upload, residency, synchronization and disposal. Shader compilers run at build time, never at game startup. See [rendering](rendering_architecture.zh-Hant.md) for the concrete data contracts.
 
 ### Asset requests and logical IO position
 
