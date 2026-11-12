@@ -120,9 +120,11 @@
 - 2026-11-12 r2（`defb759c`→分支 `a1e82e46`，15 分鐘）：S1／S2／S3／S5／N2／N3 已修；測試 52／51+1skip、突變 41/41；主會話獨立重跑兩組態一致（`verify-main-session-r2.txt`）。報告 `spike-pageguard-report.zh-Hant.md` 與 dev_log 已寫；PR #184 轉正式跑 L1（判定 3）；LIM-3 未改。
 - 2026-11-12 使用者定判定 1 讀法 (i) 照原文（`v8-arch-kernel-pageguard-reading`）；宣告檔狀態、報告、dev_log 同步。判定 3 **成立**（L1 run 43169204148 三平台 xml 各 2／0；artifact 存主 checkout `build/evidence/kernel-pageguard/l1-43169204148/`）。#184 合併（使用者授權「L1 綠後合併」）；之後下一批由使用者排（`-remove-object-fps` 事前宣告，或遷移批規劃）。
 
+- 2026-11-12 `-remove-object-fps` 盤點（master `56b8dda3`）：待刪 307 檔（apps 71＋78、tools 5、tests 26＋11、acceptance 14＋5、assets 41＋49、docs 2＋3、IRuntimePort.hpp、RuntimePortTests.cpp）、修約 26 檔；pvp 經負向前瞻掃描零引用（只共用 namespace 名 RetroFPS）；共通層（build/cmake、build/ci、.github、頂層 CMake、tests/common）沒有一處寫死 object_fps——產品由兩份 CSV 列舉、tests／acceptance／assets／tools 目錄照名字慣例發現，所以預期共通層零修改，寫成判定 2（不成立＝§7 不成立，停下記 Delta）。3d-assets.md 記的素材包授權仍被 pvp 用（UAL mannequin），處置待使用者。宣告草案 commit 在分支 `claude/arch-remove-object-fps`。
+
 ## 下一步
 
-- `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
+- `v8-arch-remove-object-fps`：事前宣告草案已寫（`remove-object-fps-declaration.zh-Hant.md`，分支 `claude/arch-remove-object-fps`），待使用者核准三項（A owner 文件刪不刪、B `3d-assets.md` 授權段搬 pvp 還是留檔、C 判定 2 不成立時停下不修）。核准後實作 Opus／high → 審查 Fable／high → 主會話驗證 → PR。
 - ~~改造的第一個文件批~~ 已於 -spec-v03 做完（architecture.md、entity-store、determinism §4.7／4.7a／4.7b／4.2a、entity-model §5.2、error-handling、framework 廢止標示、mechanism §3.3）。
 - ~~-audit~~ 完成，六項待決已定 → 規格修訂（audit §6 七項）與第一個文件批合併規劃 → `-spike-pageguard`（事前宣告待寫）→ 改造批次計畫（§3 Delta 計畫層寫一次；以 audit 的成本形狀分批）。
 - 判定 1 的三平台：**成立**（L1 run 43018979148，PR #180；步驟第一次誤加在 build-and-validate.yml、已改到 cross-platform.yml）。PR #180 含 `spikes/` 以外的 `.github/workflows/cross-platform.yml` 改動，合併由使用者決定。
