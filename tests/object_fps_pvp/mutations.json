@@ -9394,7 +9394,7 @@
       "find": "    std::int64_t maximumReferenceAgeNs{250'000'000};\n",
       "replace": "    std::int64_t maximumReferenceAgeNs{25'000'000};\n",
       "check": "cpu",
-      "expect": "DecisionOf(match, 1).accepted"
+      "expect": "DecisionOf\\(match, 1\\)\\.accepted"
     },
     {
       "id": "kz-list-drops-a-file",
@@ -9424,7 +9424,7 @@
       "find": "PvpCombatRules.maximumReferenceAgeNs / 1'000'000));\n",
       "replace": "PvpCombatRules.maximumReferenceAgeNs / 100'000));\n",
       "check": "ipc",
-      "expect": "maximum_reference_age_ms() == 250"
+      "expect": "maximum_reference_age_ms\\(\\) == 250"
     }
   ]
 }
