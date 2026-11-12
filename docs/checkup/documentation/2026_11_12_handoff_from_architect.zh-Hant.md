@@ -25,7 +25,7 @@ PR #185（`claude/arch-remove-object-fps`，待 L1 與使用者合併）改了�
 - 每列：規則一句話｜唯一歸屬（owner＋文件節）｜守衛（測試／突變／審查）｜已知實作或引用處。
 - 頁首用法：寫「某個 Engine／framework 契約的直接後果」類規則前先查；查到引用，查不到登記並寫歸屬；歸屬有爭議交架構師。
 - 第一條：選擇窗記帳規則（每次請求新 tag、只認最新、Chosen／Cancelled 結束、Failed 不結束、可放棄）。歸屬 framework `Framework::PathDialogRequests<Purpose>`（`v8-tool-path-dialog-rule-handover`）；之前的現況是 platform-sdl DI 10＋ui_editor／audio_editor／model_viewer 各一份。
-- 工具線 2026-11-11 轉交的查證資料（建頁時照原始碽再查）：合規實作 ui_editor 的 `PathDialogRequests`、audio_editor 的 `ApplyDialogAnswers`；已知不合規 `tools/model_viewer/src/ViewerWindow.cpp`（`:43` `kContentDialog = 1` 固定 tag、`:112` 讀回答、`:621-627` 送請求；讀碼結論、未實機重現），處置併入 `v8-tool-path-dialog-rule-handover`、隨功能線暫停；工具線紀錄在 `docs/tools/plans/v8/HANDOFF.md`「已知缺陷（改造期間不修）」。
+- 工具線 2026-11-11 轉交的查證資料（建頁時照原始碼再查）：合規實作 ui_editor 的 `PathDialogRequests`、audio_editor 的 `ApplyDialogAnswers`；已知不合規 `tools/model_viewer/src/ViewerWindow.cpp`（`:43` `kContentDialog = 1` 固定 tag、`:112` 讀回答、`:621-627` 送請求；讀碼結論、未實機重現），處置併入 `v8-tool-path-dialog-rule-handover`、隨功能線暫停；工具線紀錄在 `docs/tools/plans/v8/HANDOFF.md`「已知缺陷（改造期間不修）」。
 - 注意：framework 已決定退役→`plugins/`（kernel HANDOFF `v8-arch-plugins-layer`，audit §3.1）。登記頁的「歸屬」寫目標歸屬時標明「目標（遷移批）」，現況另寫一欄，不要把兩者混在同一格。
 
 ## 4. 新舊架構文件的分隔（kernel HANDOFF `v8-arch-docs-next-folder`）

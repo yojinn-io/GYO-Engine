@@ -17,7 +17,7 @@ spec J-17（`spec.zh-Hant.md` 守衛表）要求一個「(c) 區來源檔清單�
 對清單裡的每個 (c) 來源檔（`.cpp`／`.hpp`／`.inl`），先把註解與字串字面值遮掉（規則 1、3、4 的第三方名稱也要掃註解外的程式碼；是否掃註解由本線決定並寫明），再掃：
 
 1. **include 而非函式名**：`engine/time/MonotonicClock.hpp`、`<chrono>`、`<random>`、`<thread>`、`<atomic>`、`<mutex>`、`<condition_variable>`、`<future>`、`<ctime>`，以及 OS／平台標頭（`<windows.h>`、`<unistd.h>`、`<pthread.h>`、`<sys/*>`、SDL 標頭）在 (c) 檔一律違規（S-8：(c) 區除 `Diagnostics` 外不得有 effect，所以 OS 標頭出現就能抓）。(c) 檔的時間型別用整數 ns（`std::int64_t`），不 include `<chrono>`。
-2. **匿名命名空間與命名空間範圔的非 const 變數**（不只 `static` 關鍵字）：`namespace { int counter; }`、`inline int x;`、`static int y;`、`thread_local`。排除 `constexpr`／`const`／函式宣告（參考 `tests/common/entity_store/entity_store_guard.py` 的 W4 判法，它已處理 `static int x(0);` 等邊界）。
+2. **匿名命名空間與命名空間範圍的非 const 變數**（不只 `static` 關鍵字）：`namespace { int counter; }`、`inline int x;`、`static int y;`、`thread_local`。排除 `constexpr`／`const`／函式宣告（參考 `tests/common/entity_store/entity_store_guard.py` 的 W4 判法，它已處理 `static int x(0);` 等邊界）。
 3. **第三方全域呼叫**：`ImGui::`、`SDL_Get*`／`SDL_*State` 類全域查詢、`TTF_*`、`Mix_*`；清單要可擴充、放資料檔不放程式。
 4. **時鐘別名**：`Time::Now`、`Time::NowNs`、`Clock::now`、`steady_clock`、`system_clock`、`high_resolution_clock`、`SDL_GetTicks*`、`SDL_GetPerformanceCounter`、`QueryPerformanceCounter`、`clock_gettime`、`gettimeofday`。
 5. **候選列（人工確認）**：`std::function`／lambda 捕獲 `this` 並存入成員；pimpl 裡的跨 tick 裸指標（audit 漏掃的第二類）。候選不算失敗，只列出。
