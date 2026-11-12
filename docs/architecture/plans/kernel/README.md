@@ -42,7 +42,7 @@ v8-arch-kernel
 ├── -spike   上段｜實作 Opus／xhigh（主會話的子代理）、審查 Fable／xhigh｜2～3 天｜獨立子目錄最小 C++ 原型，證明簽名推存取與受限句柄
 ├── -spec-v03  上段｜主會話 Fable／high 自寫、對抗 Opus／high 只讀｜規格修訂九項＋第一個文件批（Delta 文件修改）＋五輪對抗／複核（spec 修訂記錄）｜完成（PR #182，2026-11-12）
 ├── -spike-pageguard 上段｜實作 Opus／xhigh、敵對 Fable／xhigh｜頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、歸「存取驗證（可關）」的第三層（不是 GYO_ASSERT；頁錯誤處理器記違規、System 以 Err 回傳；B-9 結案後分類）；完成：判定 1 照原文不成立（讀法 (i)，使用者 2026-11-12）、2／4／5 成立、3 成立（L1 run 43169204148）；PR #184（2026-11-12）
-├── -j17-scanner 下段（並行線）｜規則與遮罩 Fable／xhigh、其餘 Fable／high、審查 Opus／high｜J-17 掃描器：ZS1～ZS7、自測 59、突變 16/16、pvp 基線兩份（確認 12 檔／候選 5 檔）、清單契約 v1｜實作完成，待 L1 與合併（卡 `j17-scanner.zh-Hant.md`）
+├── -j17-scanner 下段（並行線）｜規則與遮罩 Fable／xhigh、其餘 Fable／high、審查 Opus／high｜J-17 掃描器：ZS1～ZS7、自測 65、突變 18/18、pvp 基線兩份（確認 12 檔／候選 5 檔）、清單契約 v1｜實作完成，待 L1 與合併（卡 `j17-scanner.zh-Hant.md`）
 ├── remove-object-fps 中段｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview，**加 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance（含各自測試；使用者 2026-11-11）**（§7 完整刪除；兼驗 removability）｜待事前宣告
 └── -audit   **完成**｜Opus／high ×3、對抗 Fable／high（4/5）｜現有模組逐一「留／包／重寫」，給中間層成本
 ```
