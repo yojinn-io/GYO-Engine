@@ -68,6 +68,10 @@
 - 網路：帳本放 Match 還是 Gateway；兩通道分流採不採。
 - 決定性 DET-0～DET-3（determinism.md §0）。
 
+## 觀察（改造完成後重查；使用者 2026-11-12）
+
+- **CI 的 pvp 在 windows-x64 經常失敗（`[.cpu]` 類）**。使用者感覺是程式問題但指不出位置，要求記錄、改造完成後看還會不會出現。架構師 2026-11-12 掃最近 60 個失敗 run（10-01～11-12）：windows job 失敗 52 筆，能取到測試名的統計在主 checkout `build/evidence/ci-windows-cpu-flaky/tally.md`（git 管理外；含 tests.xml 與 job log 原文）。要點：(1) 兩條 Windows 專屬、與 runner 無關的證據——`object_fps_pvp.cpu` 10-24 run 40123864272 的 `DiagnosticFileTests.cpp:216` 在檔案仍被開著時 `remove_all` 失敗（「process cannot access the file」）；`gyo_trace_tests` 10-19 run 39284941980 的 `TraceSinkTests.cpp:155` Close 時尾行順序不符——都在診斷／trace，都是檔案句柄與執行緒順序。(2) 11-07 master run 42341360745 的 `native_window_evidence`、`action_runner` Timeout 仍只算疑似（pvp HANDOFF 已記）。(3) 其餘（client_delay_runner、hitbox_survey、log_contract、service_startup、gyo_os_tests、os.boundary_guard 等）多在開發中分支，分不出回歸還是波動。(4) 11-12 當天 master 三次紅是 macOS Quick acceptance job 被 cancelled，windows 全綠，原因未查。(5) **最乾淨的一條**：PR #190（只改文件）的 run 43200345263 attempt 1，windows-x64 `object_fps_pvp.cpu` ***Timeout 60 s，輸出停在 `role started … role=gyo-client-net／gyo-test-sim wait_backend=HighResolutionWaitableTimer` 之後（doctest 案例名被緩衝沒印出）；attempt 2 全過。變更不可能造成回歸，卡點在 RoleThread／wait backend（audit P5 `ClientSimulationRole`，判「重寫：Host 時鐘策略」）。**處置**：不在改造期間追（功能線停、診斷／trace 會隨 Diagnostics 服務化重寫）；遷移批規劃把「診斷與 trace 的檔案生命期與執行緒順序」與「RoleThread／wait backend 在 Windows 的啟動與等待」列為 (b)／服務區與 Host 重寫的驗收項；改造完成後以同一統計方法重掃一次比較。
+
 ## 現況（續）
 
 - 2026-11-11 PR #175、#177、#176、#174 依序合併（#176 合併前加註：ECS 列待 mechanism 規格後重判、D1～D4／D7／D8 延後；determinism.md E4 由 mechanism 吸收、DET-3 時機改 (c) 區遷移前、§4.7 指向 World）。
