@@ -115,6 +115,7 @@
 - 2026-11-12 第四輪只讀複核（Opus／high）0 blocker／10 should／4 nit（N1～N14：`CurrentTick` 參數、Link inbound 分種類、序號本地配發、`ApplyStagedAssets`＋`LoadingState`、`KernelSettings` 時間點、E.2 第 ⑤ 步、Z5 複核範圍、stamp 改述、ClientSim 加 Loading、H-A1 移出啟動表、J-48～J-52）→ 全部處置（spec 修訂記錄「第四輪只讀複核後」）。B-8 由使用者決定（`v8-arch-kernel-break-hook`）並寫入。第五輪只對第四輪的 diff 複核：1 blocker（`LoadingProgress` 多寫者）／11 should／9 nit → 全部處置（spec 修訂記錄「第五輪差異複核後」）。對抗檢查到此收口（第四、五輪 blocker 分別 0、1，且都是前一輪新條文的收尾），開 docs PR。
 - 2026-11-12 **PR #182 已合併**（`eb501731`；使用者「合併 #182」）。dev_log 補在 PR #183（已合併 `4bcc4bd8`）。
 - 2026-11-12 使用者「可以下一批了」→ `-spike-pageguard` 事前宣告寫好（`spike-pageguard-declaration.zh-Hant.md`，branch `claude/arch-kernel-spike-pageguard`，draft PR），使用者同日「門檻照你定的，xhigh 同意，開始」→ 實作者子代理（Opus／xhigh，獨立 worktree，只 commit）已啟動；敵對檢查 Fable／xhigh 只讀排在實作回來後。估時實作 6 h（上限 9 h）。
+- 2026-11-12 實作者回來（約 45 分鐘；commit `ed9657f9` → 分支 `85312dc2`）。件数：新測試 16／既有 33，debug 49 過、release 48 過 1 skip；突變新 5／killed 5（全目錄 39/39）。**判定 1 照原文不成立**：(b3) Resource 裸指標寫攔不到（宣告範圍排除 Resource，但判定 1 列了 (b3)——宣告自相矛盾，架構師的錯）；宣告的 L6 形狀第二層本來就攔得到、原始 L6（host 在 Ready 寫）頁保護攔不到。L1、(b1)、(b2) 攔到；判定 2、5 成立；判定 4 中位數 protect 1.99／switch 7.25／full 197 µs（Debug，4 KiB 頁）全在門檻內。敵對檢查（Fable／xhigh 只讀）進行中，報告存 `build/evidence/kernel-pageguard/adversary-report.md`。**待使用者決定判定 1 的讀法**（照原文不成立／改讀為「欄的 Bypass」——不放寬既有判定，只是宣告矛盾的解法），未決前不寫「成立」。
 
 ## 下一步
 
