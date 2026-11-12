@@ -1,6 +1,6 @@
 # 架構 v8：v8-arch-j17-scanner（J-17 掃描器：(c) 區來源檔的文字守衛、清單契約 v1、pvp 基線）
 
-日期：2026-11-12。Owner：架構（J-17 掃描器線，架構師開出的並行線）。計畫與記錄器：[交接卡 j17-scanner.zh-Hant.md](../architecture/plans/kernel/j17-scanner.zh-Hant.md)（判定門檻與基線清單在卡上，架構師 2026-11-12 核定）。PR：待開（本 dev_log 隨 PR 更新）。
+日期：2026-11-12。Owner：架構（J-17 掃描器線，架構師開出的並行線）。計畫與記錄器：[交接卡 j17-scanner.zh-Hant.md](../architecture/plans/kernel/j17-scanner.zh-Hant.md)（判定門檻與基線清單在卡上，架構師 2026-11-12 核定）。PR：[#192](https://github.com/yojinn-io/GYO-Engine/pull/192)。
 - 執行：J-17 線主會話（Fable）；規則與遮罩 xhigh、其餘 high；審查者 Opus／high（只讀，找誤報與漏報）。
 - 性質：新增守衛 Script＋ctest 測試（AGENTS §5：手動→Script，本線停在 Script）；文件（契約草案）。不改 Engine、不改 pvp、不改 preset 與 CI workflow。
 
@@ -50,13 +50,13 @@ spec J-17 要求對 Kernel 匯出的「(c) 區 System 來源檔清單」做文�
 1. 自測第一輪 58 條 3 失敗：一條是測試寫錯（`const char* s` 放在檔案層級本來就是可變全域，掃描器對）；兩條是掃描器缺陷——預設引數為字串字面值的函式宣告被讀成變數（遮罩後 `= ` 後面空了）、`extern template class X<int>;` 被讀成變數。修後 58 綠。
 2. 突變第一輪 13/16：兩條遮罩突變回報的是「行註解」突變的失敗（wrong_failure）、一條展開突變 survived。原因一：Python 以「大小＋mtime 秒」判 pyc 有效，`if X`→`if False and X` 長度相同、同一秒寫回，跑到上一條突變的 bytecode；修法 `-B`＋每次清 `__pycache__`（記進記憶 `python-mutation-pycache`）。原因二：展開範圍檢查是清單驗證之後的多餘防線（`include_roots` 已限制在 owner 下），對整合測試是等價突變；補一條直接呼叫解析函式的單元測試後可殺。第二輪 16/16。
 3. 基線第一輪 ZS2 命中 20＋8，逐行讀原文發現 12 處誤報：`enum class X {`（`class` 被數成識別字）、`const T &name` 無空格的參數（名稱前要求空白）。修正並補測試後 ZS2 剩 3 處、全為真；自測 60、突變重跑 16/16、基線重跑、獨立計數重做。這是看結果後**修實作**、不是改判定；判定 4 的門檻（突き合わせ）沒變。
-4. 審查（Opus／high，general-purpose 只讀子代理，對 commit `80c61a23`；每項都以合成檔實跑確認）：15 項——should 8（多字組合型別參數 `unsigned int a`；函式指標／陣列參考／`decltype` 參數；`inline namespace`（誤報且把內容藏起來）；`static Foo f(Bar{1})` 在第一個 `{` 被截斷而漏報；識別字引數的函式／變數歧義比文件寫的寬；前綴 raw string `LR"`／`u8R"` 與前綴字元字面值 `L'"'` 沒遮；owner 內的 `#include "../X.hpp"` 不展開；清單接受 `./`、`//`、`.` 等非正規路徑，`./owner` 會讓展開靜默失效）、nit 7（初始化子內的 `const` 被當成變數的 const；多重宣告子；`static thread_local` 重複計數；`<Windows.h>` 大小寫與 `SDL3_ttf/`；`typedef struct {…} Foo;`、`class API Foo {`；`// … \` 續行；大小寫不敏感檔案系統）。**處置**：should 8 項全修，nit 修 5 項（初始化子 const、重複計數、`Windows.h`／SDL 衛星、typedef／export 巨集、續行），未修 2 項寫進限界（多重宣告子、大小寫不敏感檔案系統）、「識別字引數讀成函式」的真實範圍改寫進限界；審查者另提一個政策點：`const char* names[]`（const 在指向物不在陣列）被報成可變，掃描器照「const 要落在變數本身」的嚴格讀法，**交架構師確認**。修正後補測試 5 組、突變 2 條，重跑：自測 65、突變 18/18、基線 M 由 39→40／19→20（`../App/AssetDefinitionHelpers.hpp` 現在會展開）、H 不變（26／9）、獨立計數仍一致。審查報告原文在會話內交付，**未保存**（處置逐項在本節與測試名 `test_*_review_*` 可對照）。
+4. 審查（Opus／high，general-purpose 只讀子代理，對 commit `80c61a23`；每項都以合成檔實跑確認）：15 項——should 8（多字組合型別參數 `unsigned int a`；函式指標／陣列參考／`decltype` 參數；`inline namespace`（誤報且把內容藏起來）；`static Foo f(Bar{1})` 在第一個 `{` 被截斷而漏報；識別字引數的函式／變數歧義比文件寫的寬；前綴 raw string `LR"`／`u8R"` 與前綴字元字面值 `L'"'` 沒遮；owner 內的 `#include "../X.hpp"` 不展開；清單接受 `./`、`//`、`.` 等非正規路徑，`./owner` 會讓展開靜默失效）、nit 7（初始化子內的 `const` 被當成變數的 const；多重宣告子；`static thread_local` 重複計數；`<Windows.h>` 大小寫與 `SDL3_ttf/`；`typedef struct {…} Foo;`、`class API Foo {`；`// … \` 續行；大小寫不敏感檔案系統）。**處置**：should 8 項全修，nit 修 5 項（初始化子 const、重複計數、`Windows.h`／SDL 衛星、typedef／export 巨集、續行），未修 2 項寫進限界（多重宣告子、大小寫不敏感檔案系統）、「識別字引數讀成函式」的真實範圍改寫進限界；審查者另提一個政策點：`const char* names[]`（const 在指向物不在陣列）被報成可變，掃描器照「const 要落在變數本身」的嚴格讀法，架構師同日定**維持嚴格**（陣列本身可寫；正確寫法 `const char* const names[]` 或 `constexpr std::array`），寫進卡 §1 與「給 -zones 批」節。修正後補測試 5 組、突變 2 條，重跑：自測 65、突變 18/18、基線 M 由 39→40／19→20（`../App/AssetDefinitionHelpers.hpp` 現在會展開）、H 不變（26／9）、獨立計數仍一致。審查報告原文在會話內交付，**未保存**（處置逐項在本節與測試名 `test_*_review_*` 可對照）。
 5. 估時：卡估 7.5 小時；實際約 5 小時（含等核定約 20 分鐘、審查者 8 分鐘）。
 
 ## 範囲の限界
 
 - 靜態文字掃描（卡原文）：執行期繞路、巨集與模板間接產生的呼叫、`using` 改名的別名掃不到。
-- ZS2：引數全是（可限定的）識別字的括號初始化——`Foo f(x);`、`Foo f(Foo::kDefault);`、`Foo f(x, y);`、`static int cache(kInit);`——照 C++ 的「x 是型別時為函式宣告」一律讀成函式，掃不到（審查第 5 項）；`int (*GetFn())(int);`（回傳函式指標的函式）會誤報；多重宣告子 `int* const cp = nullptr, q;` 只看最後一個 const，`q` 漏報；命名空間層級的巨集呼叫 `GYO_X(a, b);` 以引數形狀判，可能誤報或漏報（pvp 基線無此例）；`const char* names[]` 照嚴格讀法報成可變（政策點，待架構師）。
+- ZS2：引數全是（可限定的）識別字的括號初始化——`Foo f(x);`、`Foo f(Foo::kDefault);`、`Foo f(x, y);`、`static int cache(kInit);`——照 C++ 的「x 是型別時為函式宣告」一律讀成函式，掃不到（審查第 5 項）；`int (*GetFn())(int);`（回傳函式指標的函式）會誤報；多重宣告子 `int* const cp = nullptr, q;` 只看最後一個 const，`q` 漏報；命名空間層級的巨集呼叫 `GYO_X(a, b);` 以引數形狀判，可能誤報或漏報（pvp 基線無此例）；`const char* names[]` 照嚴格讀法報成可變（架構師定維持嚴格）。
 - 檔案系統大小寫：大小寫不敏感的系統（macOS、Windows）會解析到大小寫不同的 include 並以該拼法記錄，Linux 則不解析；同一標頭以兩種拼法 include 會掃兩次。pvp 基線無此例；L1 三平台的件數若不同，先查這一點。
 - ZS1 的 include 只認行首的 `#include`：`#include_next`、`/* c */ #include <chrono>`、`#include /* c */ "x"`、`#include \` 續行都不算（審查第 12 項 nit）。
 - ZS5 只是三個啟發式（存進成員的捕獲 lambda、`std::function` 成員、尾底線命名的裸指標／參考成員）；pvp 基線 0 候選，可能是啟發式太窄，產品線用時再調。
@@ -66,6 +66,6 @@ spec J-17 要求對 Kernel 匯出的「(c) 區 System 來源檔清單」做文�
 ## 架構報告
 
 - **Architecture Delta**：無新 Delta。新目錄 `tests/common/zone_scan/`（卡 §3 指定；不進 `engine/`、`tools/`）；新契約草案 `target/zone-c-sources.zh-Hant.md`（架構師核定，狀態仍 target：生產端 Kernel G-5 未實作）。
-- **新 Dependency**：`zone_scan.baseline` 讀 `apps/object_fps_pvp/` 的檔（經清單檔，不經 CMake target）。**觀測到的壓力（AGENTS §7／§9）**：兩份清單檔住在共通目錄 `tests/common/zone_scan/baseline/`，刪除 pvp 時要連帶刪它們，等於「刪 Product 需要改共通層」；spec J.4 也把 J-17 的產品端掃描列為「由 owner 持有」。本批照卡放共通目錄（pvp 零變更是本批的硬規則）；**建議**產品線 -zones 批把清單搬到 `tests/object_fps_pvp/`、由產品 CMake 註冊基線測試，共通層只留掃描器與自測。交架構師決定。
+- **新 Dependency**：`zone_scan.baseline` 讀 `apps/object_fps_pvp/` 的檔（經清單檔，不經 CMake target）。**觀測到的壓力（AGENTS §7／§9）**：兩份清單檔住在共通目錄 `tests/common/zone_scan/baseline/`，刪除 pvp 時要連帶刪它們，等於「刪 Product 需要改共通層」；spec J.4 也把 J-17 的產品端掃描列為「由 owner 持有」。本批照卡放共通目錄（pvp 零變更是本批的硬規則）；**建議**產品線 -zones 批把清單搬到 `tests/object_fps_pvp/`、由產品 CMake 註冊基線測試，共通層只留掃描器與自測。架構師 2026-11-12 同意，寫進卡「給 -zones 批」節。
 - **Data Contract**：`gyo.zone-c-sources` v1（新；target）。
 - **Code Smell**：無新增；基線列出的 pvp 違規屬 spec G.4 已知（G.4 第 3 條的全域診斷入口、`Combat.hpp`／`Movement.hpp` 的 `<chrono>`）。
