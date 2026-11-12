@@ -1,6 +1,6 @@
 # Voxel mesh (gyo.voxel_map, gyo.voxel_region; gyo.voxel_mesh, deprecated)
 
-Owner: Engine (`engine/voxel_mesh` → `GYO::VoxelMesh`; `engine/voxel_mesh/VoxelMesh.hpp`).
+Owner: Engine (`engine/voxel_mesh` → `GYO::VoxelMesh`; `engine/voxel_mesh/include/engine/voxel_mesh/VoxelMesh.hpp`).
 Plan and record: [voxel map editor](../tools/plans/v8/voxel-map-editor.md), batch v8-engine-voxel-mesh-contract
 (decisions v8-tool-voxel-offline-build, v8-tool-voxel-layers, v8-tool-voxel-units and
 v8-tool-voxel-artifact-encoding: a tool bakes a grid-built map offline; the game reads only the baked file, whose
@@ -219,7 +219,7 @@ mipmaps. The module returns its own vertex type and plain pixels: converting the
 - **Producers.** Any file that passes validation is valid, whoever wrote it. A producer reads what it wrote back with
   `ParseVoxelMesh` before it keeps it.
 - **Cost.** Parsing and expansion happen when content loads; nothing here runs per frame. Parsing scans the text
-  once for repeated keys and once to build the document (`engine/base/StrictJson.hpp`), so its time grows with the
+  once for repeated keys and once to build the document (`engine/base/include/engine/base/StrictJson.hpp`), so its time grows with the
   text, not with the number of objects in one array (survey section 5 (c) of the big-map plan: the 5.3 MB synthetic
   map took 1,580 ms before and 382 ms after, median of five, Intel Mac).
 

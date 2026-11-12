@@ -69,6 +69,9 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 - [数学基盤の契約](docs/architecture/math.md)
 - [エラー処理の契約（Result／Error／Assert）](docs/architecture/error-handling.md)
 - [トレース転送とログの契約](docs/architecture/trace.md)
+- [目標アーキテクチャ（kernel 改造、未実装）](docs/architecture/target/README.md)
+- [kernel 改造の計画](docs/architecture/plans/kernel/README.md)
+- [コンポーネント横断ルールの登録](docs/cross-component-rules.md)
 - [描画と shader 契約](docs/rendering_architecture.ja.md)
 - [公開手順](docs/releasing.ja.md)
 

@@ -1,7 +1,7 @@
 # 動畫事件 → 聲音（`gyo.event_sounds`）：framework 擁有的組合格式
 
 更新：2026-11-04。Owner：framework（`framework/`）。架構卡 `v8-arch-event-sounds-contract`。
-**狀態：兩批都完成（2026-11-04），等 PR 合併。** 先讀本頁，再讀 [交接](HANDOFF.md)。
+**狀態：兩批都完成（2026-11-04），等 PR 合併。**（2026-11-12 圖書管理員補註：後續：PR #145 已合併，`a3f145aa`） 先讀本頁，再讀 [交接](HANDOFF.md)。
 
 ## 代號對照
 

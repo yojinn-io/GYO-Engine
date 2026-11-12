@@ -2,7 +2,7 @@
 
 更新：2026-11-05（`v8-tool-voxel-map-plan`）。Owner：新工具 `voxel_map_editor`（編輯器、格子格式、build）；Engine（建置產物的格式與讀取器）；framework（3D 預覽元件，owner 是架構會話）；`object_fps_pvp`（arena v2、step-up）。記錄器是 [voxel-map-editor-HANDOFF.md](voxel-map-editor-HANDOFF.md)（2026-11-05 以前在工具線的 [HANDOFF](HANDOFF.md)），工具線的總覽在 [README](README.md)。
 
-**狀態：方案與分批已由使用者確認（2026-11-05）。還沒有實作；每一批等使用者說「開始」，開始前寫事前宣告。**
+**狀態：方案與分批已由使用者確認（2026-11-05）。還沒有實作；每一批等使用者說「開始」，開始前寫事前宣告。**（2026-11-12 圖書管理員補註：後續：core、window、cull、feel-1、free-camera 已完成並合併（PR #152、#158、#170、#171），見 voxel HANDOFF）
 
 ## 由來
 

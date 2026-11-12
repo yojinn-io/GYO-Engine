@@ -83,7 +83,7 @@
 - 2026-11-02：完整突變第一次執行（`build/evidence/framework-rework/pr-b-full-mutations/`）：重建成功、全量 CTest 123/123；framework 18/18、framework_catalog 12/12、io_user_files 14/14（Windows 限定 1 條 skipped）、platform_path_dialog 17/17、**framework_shell 25/26，判定不成立**（§14.1，先回報、不重跑）。stale 0。未 killed 的是 fw-shell-binding-missing（wrong_failure）：手動重現（`diagnose_fw-shell-binding-missing.txt`）configure 有失敗，但先觸發的是 ui_editor 自己的檢查「gyo_ui_editor GUI requires the GYO::ToolFrameworkImGui target」（`tools/ui_editor/CMakeLists.txt:61-63`，#131 加入），不是預期的 framework 檢查（`tests/framework/CMakeLists.txt` 的「…but no GYO::ToolFrameworkImGui」）。GyoBuild 先加工具（`build/cmake/GyoBuild.cmake:69`）再加 tests/framework（:92），所以選了 ui_editor 的樹裡 framework 的檢查被遮住；目前只有 ui_editor 會開 ImGui 元件，沒有任何樹能走到 framework 的檢查。不是 PR B 引入的（PR B 沒改這三個檔案；PR A 的完整執行在 #131 之前 killed）。性質（綁定沒被建就讓 configure 失敗）在這棵樹仍成立，只是由工具的檢查擋下。這批至今約 4.5 h。
 - 2026-11-02，使用者：「照 (a) 處理」。fw-shell-binding-missing 的預期改成兩種訊息都接受（framework 的「…but no GYO::ToolFrameworkImGui」或 ui_editor 的「requires the GYO::ToolFrameworkImGui target」），what 寫明限界：選了 ui_editor 的樹裡 framework 的檢查被遮住，沒有突變證明它。預檢：find 恰好一次；新的正規表示式對手動重現的實際輸出成立。事前宣告（重跑）：只跑這一條，要 killed、stale 0。第一次 25/26 保留在 `framework_shell_mutations.txt`。
 - 結果：fw-shell-binding-missing 1/1（`framework_shell_rerun.txt`）。完整突變合計 87/87、stale 0。v8-framework-invariants 完成，實際約 5 h（估 7～10 h）。[dev_log](../../../dev_logs/2026_11_02_framework_rework_invariants.zh-Hant.md) 含整條線的總結。
-- 下一步：開 PR B、跑 L1、等使用者決定合併；合併後通知工具線、IU-1 推動會話（附 merge commit）與架構會話（整條線完成，請健檢）。
+- 下一步：開 PR B、跑 L1、等使用者決定合併；合併後通知工具線、IU-1 推動會話（附 merge commit）與架構會話（整條線完成，請健檢）。（2026-11-12 圖書管理員補註：後續：PR B＝#134 已合併，`d03c01e2`）
 
 ### v8-framework-catalog-extra-fields 的事前宣告（2026-11-01，執行測試前）
 

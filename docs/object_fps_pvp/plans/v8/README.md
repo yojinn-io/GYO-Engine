@@ -1,7 +1,7 @@
 # PvP v8 分批計畫
 
 更新：2026-10-29（`v8-docs-plan-sync`：範圍、順序、分批、檔位與引擎，v8-product-scope、v8-product-order、v8-product-flow-after-tools、pv8-scope-crouch-sprint）；初版 2026-10-07。Owner：`object_fps_pvp`。
-**狀態：pv8 重開（`pv8-scope-reopen`），先寫 [需求問卷](pv8-requirements.md)；`v8-product-crouch` 尚未開始。** 代號規則見 [HANDOFF](HANDOFF.md) 的代號對照（`v8-docs-id-scheme`）。
+**狀態：pv8 重開（`pv8-scope-reopen`），先寫 [需求問卷](pv8-requirements.md)；`v8-product-crouch` 尚未開始。**（2026-11-12 圖書管理員補註：後續：crouch、pv8、pv9 都已完成並合併（PR #110、#128）；之後的批次見下方樹狀總覽與開發紀錄；2026-11-11 起功能線停在 kernel 改造之前） 代號規則見 [HANDOFF](HANDOFF.md) 的代號對照（`v8-docs-id-scheme`）。
 
 版本號：v8＝遊戲版本，pvN＝網路協議版本（見 [v6 交接](../v6/HANDOFF.md) D20）。v7.1 停在 pv7；**pv8 在 v8**（pv8-scope-crouch-sprint）。
 與前面版本的分工：[v7](../v7/README.md) 交付執行緒、時間、網路；[v7.1](../v7.1/README.md) 交付 pv7 與事故善後（v1.2.0 已發行，D242）；v8 補完一個基礎 FPS 的功能與工具。
@@ -33,8 +33,8 @@ v8-plan
 │   │   ├── pv8-seq-ceiling        「high｜Opus 5.5｜不改 wire：WireCounterMax 取代 uint64 上限檢查（完成）」
 │   │   ├── pv8-seq-narrow         「high（大小釘局部 xhigh）｜Opus 5.5｜序號 u64→u32、刪 match_id、預留號碼（完成）」
 │   │   └── v8-product-crouch                 「high（預測重播局部 xhigh）｜Opus 5.5｜碰撞高度、視角、遠端動畫、權威事前宣告（完成）」
-│   ├── hitbox-line                「PR 線：部位判定（hitbox-plan.md 第 2 版，以 Valorant 為基底，待核准）」
-│   ├── 素材結構標準化              「[asset-layout.md](asset-layout.md)（asset-layout 線，PR #125；合併前此連結在本分支不存在）」
+│   ├── hitbox-line                「PR 線：部位判定（hitbox-plan.md 第 2 版，以 Valorant 為基底；已核准 `v8-product-hitbox-plan-v2-approve`，各批隨 PR #128、#138、#143、#149 合併）」
+│   ├── 素材結構標準化              「[asset-layout.md](asset-layout.md)（asset-layout 線，PR #125 已合併 `bdb32188`）」
 │   │   ├── v8-product-anim-bottlenecks       「high｜Opus 5.5｜Match 端取樣耗時、載入、四平台決定性」（完成：B1、B2 通過，B3 平台間不一致）
 │   │   ├── pv9-hitbox-declare                「ultracode（先問）｜案 Opus 5.5、對抗 Sonnet 5.5｜protocol-v9 草稿、動畫狀態欄位、形狀契約」
 │   │   ├── pv9-rename                        「low｜Sonnet 5.5｜proto、Go 套件、CMake target 改名為 v9」
@@ -117,7 +117,7 @@ v8-plan
 PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR。
 
 - ①：`audio-line`、`pv8-line`、`hitbox-line` 三條。`audio-line` 不碰 wire，可以和 `pv8-line` 並行；`hitbox-line` 排在 `pv8-line` 之後。
-- `entity-line`（架構卡）：一條；四批同一個 PR（#140，2026-11-04 開），`match-entity-split` 不碰 wire。排在 `rewind-line` 之前（`v8-product-entity-model-start`），和 hitbox-line 剩下的 hit-presentation、hitbox-acceptance、real-match-acceptance-repair 不碰同一批檔案。
+- `entity-line`（架構卡）：一條；四批同一個 PR（#140，2026-11-04 開）（2026-11-12 圖書管理員補註：後續：#140 已合併，`e15e5e41`），`match-entity-split` 不碰 wire。排在 `rewind-line` 之前（`v8-product-entity-model-start`），和 hitbox-line 剩下的 hit-presentation、hitbox-acceptance、real-match-acceptance-repair 不碰同一批檔案。
 - ②：`v8-product-sprint` 一條（ADS 取消，v8-product-ads-cancel）。③：一條（`v8-product-lead-withdraw`、`v8-product-input-delay` 若太大再分）。④：每個工具一條。⑤：`v8-product-match-rules` 一條，其餘依開工時的分組。
 
 ## 不在 v8 的項目
@@ -176,12 +176,18 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | `v8-product-hit-gui-aim`（P2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hit_gui_aim.zh-Hant.md) |
 | `v8-product-hit-gui-aim-sdl` | [2026-11-04](../../../dev_logs/2026_11_04_pvp_v8_hit_gui_aim_sdl.zh-Hant.md) |
 | `v8-product-event-sounds-migrate`（L1、實聽未做） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_event_sounds_migrate.zh-Hant.md) |
-| `v8-product-pm-detect-diag`（審查、L1 未完） | [2026-11-07](../../../dev_logs/2026_11_07_pvp_v8_pm_detect_diag.zh-Hant.md) |
+| `v8-product-pm-detect-diag`（完成，PR #168 `24943706`） | [2026-11-07](../../../dev_logs/2026_11_07_pvp_v8_pm_detect_diag.zh-Hant.md) |
 | `v8-product-pa-broadphase` | [2026-11-07](../../../dev_logs/2026_11_07_pvp_v8_pa_broadphase.zh-Hant.md) |
 | `v8-product-hitbox-lag-l2`（工具；11/9 場次當探索，R 未定） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_hitbox_lag_l2.zh-Hant.md) |
 | `v8-product-hitbox-lag-shadow` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_hitbox_lag_shadow.zh-Hant.md) |
 | `v8-product-ui-action-check` | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md) |
 | `v8-product-hitbox-b5`（A2） | [2026-11-03](../../../dev_logs/2026_11_03_pvp_v8_hitbox_b5.zh-Hant.md) |
+| `v8-product-sfx`（PR #113；2026-11-12 圖書管理員補列） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_product_sfx.zh-Hant.md) |
+| `v8-product-lobby-text-field`（2026-11-12 補列） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_lobby_text_field.zh-Hant.md) |
+| `v8-product-lobby-fullwidth`（2026-11-12 補列） | [2026-10-30](../../../dev_logs/2026_10_30_pvp_v8_lobby_fullwidth.zh-Hant.md) |
+| 第三人稱武器換成 nailer（PR #120；2026-11-12 補列） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_nailer_tps.zh-Hant.md) |
+| `v8-product-arena-v2`（PR #152；2026-11-12 補列） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_arena_v2.zh-Hant.md) |
+| asset-layout 線（7 份） | 見 [asset-layout.md](asset-layout.md) |
 | `v8-product-kernel-prep-detect`（kernel 改造前置第一批） | [2026-11-12](../../../dev_logs/2026_11_12_pvp_kernel_prep_detect.zh-Hant.md) |
 
 ---

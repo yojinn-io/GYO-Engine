@@ -52,7 +52,7 @@ Shader ツールはビルドを実行する host 用、ゲームは実行先の 
 
 ```mermaid
 flowchart TD
-    A[Object_FPS: ゲームルールと表示] --> B[RenderQueue と MaterialDesc]
+    A[ゲーム（例：Object_FPS_PVP）：ゲームルールと表示] --> B[RenderQueue と MaterialDesc]
     B --> C[GYO Renderer]
     D[Bundle manifest と shader bytes] --> E[GYO ShaderLibrary]
     E --> C
@@ -63,7 +63,7 @@ flowchart TD
 
 | 要素 | 担当すること | 担当しないこと |
 |---|---|---|
-| Object_FPS | オブジェクト、カメラ、マテリアルの shader ID、武器動作 | SDL_GPU コマンド、shader 形式の選択 |
+| ゲーム（例：Object_FPS_PVP） | オブジェクト、カメラ、マテリアルの shader ID、武器動作 | SDL_GPU コマンド、shader 形式の選択 |
 | `ModelRenderer` | モデル／マテリアルの共有、インスタンスごとの CPU スキニング、動的 mesh の更新と解放 | アニメーションクロック、骨格のヒットボックス、ゲーム状態 |
 | `RenderQueue`／`MaterialDesc` | バックエンド非依存の形状、マテリアル、描画要求 | Native handle、ファイルのコンパイル |
 | `ShaderLibrary` | bundle のアトミックな追加、manifest の検証、不変 shader bytes の保持 | GPU pipeline やテクスチャの生成 |
@@ -126,7 +126,7 @@ flowchart TD
 
 HLSL のエントリーポイント名と成果物のエントリーポイント名は必ずしも同じではありません。例えば MSL 変換時に変更される場合があります。ツールは実際の成果物のエントリーポイントを runtime manifest に記録し、Renderer/device はその値を使います。
 
-ゲームの `assets/<name>/content.json` が catalog と shader bundles を宣言し、共通 CMake hook がアセットの組み立てとオフラインコンパイルを自動実行します。出力は `build/target/<name>/bin/assets/<name>/` の下に集約し、Object_FPS は現在 `shaders/builtin` のみを含みます。実際にカスタム shader を使うゲームだけが追加 bundle を宣言します。Runtime はこの一つのアセット root だけを読み、配布 manifest に build-only source パスを残さず、checkout への fallback もしません。コピー時は内部 shader ID と ABI を保持します。[ゲーム作成](creating_apps.md)を参照してください。
+ゲームの `assets/<name>/content.json` が catalog と shader bundles を宣言し、共通 CMake hook がアセットの組み立てとオフラインコンパイルを自動実行します。出力は `build/target/<name>/bin/assets/<name>/` の下に集約し、`object_fps_pvp` は現在 `shaders/builtin` のみを含みます。実際にカスタム shader を使うゲームだけが追加 bundle を宣言します。Runtime はこの一つのアセット root だけを読み、配布 manifest に build-only source パスを残さず、checkout への fallback もしません。コピー時は内部 shader ID と ABI を保持します。[ゲーム作成](creating_apps.md)を参照してください。
 
 <a id="r06"></a>
 ## 6. フレームとリソースのライフサイクル
@@ -245,7 +245,7 @@ Quick と Release は同じ製品／アセットの組み立てを使用し、�
 
 最新 [quick run 35097049659](https://github.com/yojinn-io/GYO-Engine/actions/runs/35097049659) は Linux の startup、shader 描画、package を検証しました。Windows の MSVC 初期化はツールチェーン用の `Platform=x64` を設定し、Windows 環境変数は大文字・小文字を区別しません。Package の識別には `GYO_PACKAGE_PLATFORM=windows-x64` を使い、報告と archive 引数への影響を避けます。
 
-上記 engine GPU smoke は frame のライフサイクル、動的 mesh、ViewModel 深度、カリング、UV、行列投影、alpha ブレンド、色処理を実際に検証しています。Object_FPS は両ドライバー、3 アスペクト比、各 7 カメラ条件で、銃口／tracer マーカーの中心差が 0.0000 ピクセル、数値参照投影との最大誤差が 0.3823 ピクセルでした。
+上記 engine GPU smoke は frame のライフサイクル、動的 mesh、ViewModel 深度、カリング、UV、行列投影、alpha ブレンド、色処理を実際に検証しています。削除済みの Object_FPS（v1、2026-11-12 削除）は当時、両ドライバー、3 アスペクト比、各 7 カメラ条件で、銃口／tracer マーカーの中心差が 0.0000 ピクセル、数値参照投影との最大誤差が 0.3823 ピクセルでした。
 
 Windows のプラットフォーム変数修正は、ローカルで MSVC を初期化した後に workflow の startup／archive ブロックを直接実行して確認しました。アーカイブ名、埋め込まれたプラットフォーム情報、SHA-256 はすべて合格です。記録は `build/ci-platform-env-check/result.log` にあり、修正後の GitHub 結果は新しい commit の CI で確認します。
 

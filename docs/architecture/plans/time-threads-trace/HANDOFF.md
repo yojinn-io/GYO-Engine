@@ -96,7 +96,7 @@
 
 ## TT-1 L2（只記錄，2026-10-09）
 
-- 程式：`tests/common/time/WakeRecord.cpp`（只在本機分支，未合併進 master；`gyo_time_wake_record`、`gyo_time_wake_record_window`，不是 CTest）。依消費端的決定，它不放進第一個使用者的 PR（那裡的量測宣告禁止之後的非文件變更），提交在本機分支 `claude/tt1-l2-wake-record`（`a8f9535`），之後的 PR 再合入。
+- 程式：`tests/common/time/WakeRecord.cpp`（只在本機分支，未合併進 master；（2026-11-12 圖書管理員補註：後續：已隨 PR #104 進 master，`354c9608`；）`gyo_time_wake_record`、`gyo_time_wake_record_window`，不是 CTest）。依消費端的決定，它不放進第一個使用者的 PR（那裡的量測宣告禁止之後的非文件變更），提交在本機分支 `claude/tt1-l2-wake-record`（`a8f9535`），之後的 PR 再合入。
 - 每種等待 30 秒、60 Hz 的絕對期限；兩種情境依序跑，每段前後各 5 秒 sleeper。主機正處於受干擾的狀態（sleeper 最大 34～36 ms，15 分鐘負載平均約 6）。
 - CLI（後端 Kqueue）：Waiter P50 0.065 ms、P99 4.01 ms（1786 次中 26 次超過 1 ms，最大 60 ms，與主機的尖峰同時）；cv P50 1.95、P99 4.19 ms；`sleep_until` P50 2.24、P99 4.22 ms。
 - Engine SDL 視窗：Waiter P50 0.060、P99 0.121、最大 0.66 ms（超過 1 ms 0 次）；cv P99 1.07 ms；`sleep_until` P99 1.11 ms。

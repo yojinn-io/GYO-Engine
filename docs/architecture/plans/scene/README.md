@@ -41,11 +41,11 @@
 - 產品程式沒有 inventory／pickup／interact／use；ActionKind 只有 Shot、Reload。
 - tool-chunked（PR #163）把 markers 讀寫核心與 `--marker-kinds` 放進 voxel_map_editor：照本線的原則是放錯位置，記為待搬（big-map todo #8）。
 
-## 開工時的 survey 範圔（`v8-arch-scene-survey`，上段；調查者 Opus／high、對抗檢查者 Fable／xhigh（比主會話強，開卡時確認）；估 12～18 h）
+## 開工時的 survey 範圍（`v8-arch-scene-survey`，上段；調查者 Opus／high、對抗檢查者 Fable／xhigh（比主會話強，開卡時確認）；估 12～18 h）
 
 要讀的參照（主要來源優先）：Minecraft（block entity、redstone 訊號模型、容器與 loot table、互動判定、方塊狀態同步）；Source／Hammer（entity I/O、logic_relay、math_counter、func_door 碰撞、trigger 體積、FGD）；
 Luanti（node metadata、node timer、formspec）；Godot（Area／Signal、scene instancing）與 UE（Level Blueprint 的 actor 連結，只看作者怎麼表達）；逃離塔科夫（loot 容器種類與密度、鑰匙與門、容器可見性、背包格子）；GYO 既有約束（上節）。
-每個參照一列：機制｜為什麼｜對 GYO 的當てはめ（owner）｜判定｜根據，對照 big-map proposal §2 的 G1～G10。
+每個參照一列：機制｜為什麼｜對 GYO 的套用（owner）｜判定｜根據，對照 big-map proposal §2 的 G1～G10。
 
 待決定事項各一節（業界怎麼做、建議、理由、不採的代價；不替使用者決定）：
 0. 場景契約：scene v1 的欄位（map id、markers、logic、rules）；一張地圖多場景；場景編輯器的範圍與它和 voxel 編輯器、framework 預覽元件的關係。

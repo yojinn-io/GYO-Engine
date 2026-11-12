@@ -1,10 +1,14 @@
 # Object_FPS_PVP 聯網架構與操作
 
+> **Legacy**（現況紀錄；`v8-arch-docs-legacy`，2026-11-12）。設計權威在 [`docs/architecture/target/`](../architecture/target/README.md)。本文件只更新兩類事實：仍存在的程式的現況、仍有測試守衛的 Design Invariants。現有程式受本文件的 Design Invariants 約束；新程式（`engine/kernel` 起）受 target 約束。Kernel 改造後，網路改為 Link 家族的 System（設計稿 [plans/kernel/networking](../architecture/plans/kernel/networking.zh-Hant.md)、[kernel 規格](../architecture/plans/kernel/spec.zh-Hant.md) §I）；本文件由 Match／Client host 的遷移批修訂（遷移批待 `v8-arch-migration-plan` 排定）。
+
 本文件描述 Object_FPS_PVP 的 LAN 聯網與本機移動預測。macOS／Linux／Windows Client 經 LAN
 加入同一場 Match，Client 即時預測自己的移動，C++ Match 統一裁定移動與地圖碰撞。
 這是 GYO 固定 Tick 與外部驅動邊界的實際案例，不是通用 Multiplayer Protocol。
 
-2026-10-21：目前 wire 為 pv7（[v7.1](plans/v7.1/README.md) 的 `pv7-merge`，PR #78 合併起），規則見
+2026-11-12 補註（圖書管理員）：目前 wire 為 **pv9**（PR #128 `802edaf1` 起；C++ `wire::ProtocolVersion` 與 Go `adapter.ProtocolVersion` 都是 9），規則見 [protocol-v9](protocol-v9.zh-Hant.md)，沒有改寫的條款依序沿用 [protocol-v8](protocol-v8.zh-Hant.md)、protocol-v7。下面 2026-10-21 的段落是當時的狀態；第 1 節的圖與第 3 節的版本號已改成 pv9，結構描述仍以 v7.1 穩定基線為準，待產品會話複核。
+
+2026-10-21：當時 wire 為 pv7（[v7.1](plans/v7.1/README.md) 的 `pv7-merge`，PR #78 合併起），規則見
 [protocol-v7](protocol-v7.zh-Hant.md)；沒有在其中改寫的條款沿用 [pv6 契約](protocol-v6.zh-Hant.md) 與
 [v5 契約](protocol-v5.zh-Hant.md)。日誌的格式見 [日誌 Data Contract](log-contract.zh-Hant.md)。程序與執行緒結構以
 [v7.1 穩定基線](plans/v7.1/STABLE_BASELINE.md)（2026-10-21 升格；v7 的結構加上 pv7 變更：Gateway 回到無狀態邊緣、
@@ -106,7 +110,7 @@ Client A / Client B (each process; v7 batch 04: three roles)
     snapshot history <= 64 -> Drain() (main) / DrainSimulation() (sim role)
          |
          v
-  HTTP control / UDP Client Protocol pv8 (client_v9.proto)
+  HTTP control / UDP Client Protocol pv9 (client_v9.proto)
          |
          v
   Product Go Gateway (goroutines; apps/object_fps_pvp/gateway) -- stateless edge (pv7 §2a)
@@ -123,7 +127,7 @@ Client A / Client B (each process; v7 batch 04: three roles)
     expire, logStatistics (ingress / drop counts), runDiagnostics, HTTP serve
          |
          v
-  loopback TCP / Runtime Protocol pv8 (runtime_v9.proto)
+  loopback TCP / Runtime Protocol pv9 (runtime_v9.proto)
          |
          v
   Match process (v7 batch 07)
@@ -156,18 +160,18 @@ Client 程序（產品 CMake 庫，apps/object_fps_pvp/CMakeLists.txt）
     client_simulation：ClientSimulationRole → ClientSimulationLoop → ClientSimulation
         │ SendInput / DrainSimulation          （GYO::Time、GYO::Threads）
         ▼
-    client_network：ClientConnection（asio、httplib、client_v7 Protobuf）
-    │ HTTP JSON 控制 / UDP Client Protocol pv7
+    client_network：ClientConnection（asio、httplib、client_v9 Protobuf）
+    │ HTTP JSON 控制 / UDP Client Protocol pv9
     ▼
 Object_FPS_PVP Go 組合層（無狀態邊緣，§7「Gateway：無狀態邊緣」）
     ├─ Room、容量、加入資格、Session → PlayerId
     ├─ ObjectFPS Adapter：schema / version / 欄位轉換（逐則檢查）
     ├─ runtime link：原樣轉送、每位玩家有界 FIFO、ingress／丟棄計數與 GatewayDropReport、心跳對時
     └─ 使用 services/gyo_gateway 的 HTTP / Session（含 token bucket 限速）/ framing
-    │ Runtime Protocol pv7 / loopback TCP
+    │ Runtime Protocol pv9 / loopback TCP
     ▼
 Match 程序
-    ipc：IpcHost（asio、runtime_v7 Protobuf）：讀寫、framing、action lane（結果重送到 ACK）
+    ipc：IpcHost（asio、runtime_v9 Protobuf）：讀寫、framing、action lane（結果重送到 ACK）
         │ 有界控制佇列 / per-player command window / owning Snapshot / 發布通知
         ▼
     runtime_host：MatchRuntimeHost：模擬角色、絕對期限、停止與 reset（GYO::Threads）
@@ -206,7 +210,7 @@ Room 是產品語意，路由與容量留在 `apps/object_fps_pvp/gateway`。產
 `replace gyo.local/gateway => ../../services/gyo_gateway` 使用公共基礎設施，沒有
 列舉產品的根目錄 `go.work`。CPP Engine 不依賴 Gateway 或任何具體產品。
 
-`match_domain` 不連 `PlayerController`、Client `Player`、`PlayerSettings`、SDL、UI
+`match_domain` 不連 Client 專用的程式（`client_simulation`、`app_support`）、SDL、UI
 或 Renderer。`ComputePlanarInput`／`ComputePlanarDisplacement` 與 numeric
 `MoveCharacterBody`／`CanPlaceCharacterBody` 承擔純規則。地圖到 AABB 的轉換獨立，
 不把滑鼠 delta、Camera 或 Campaign 狀態帶入權威世界。
@@ -451,7 +455,7 @@ socket 讀寫與序列化不在世界 Tick 內執行。
 ## 3. 兩份獨立 Protocol
 
 來源為產品的 `protocol/client_v9.proto` 與 `protocol/runtime_v9.proto`（Go 套件 `clientv9`／`runtimev9`），彼此不 import。
-目前兩者版本都為 8（pv8，v8 的 pv8-line；規則見 [protocol-v8](protocol-v8.zh-Hant.md)，沒有改寫的條款沿用 pv7），Client／Gateway／Match 必須一起升級，明確拒絕其他所有版本
+目前兩者版本都為 9（pv9，PR #128 起；規則見 [protocol-v9](protocol-v9.zh-Hant.md)，沒有改寫的條款依序沿用 protocol-v8、pv7），Client／Gateway／Match 必須一起升級，明確拒絕其他所有版本
 （C++ `wire::ProtocolVersion`、Go `adapter.ProtocolVersion`）。Adapter 明確映射兩份生成型別，
 Match 核心只接收普通 C++ domain 值。本節只列結構；送達語意、Gateway 的約束、對時與回聲、丟棄回報的細節見
 [protocol-v7](protocol-v7.zh-Hant.md) §2a～§4。
@@ -473,14 +477,14 @@ Runtime PlayerInput 的 PlayerId 來自已驗證的 Session 映射，不信任 C
 Adapter 驗證 Protobuf、版本、finite 數值、移動軸範圍與線上欄位範圍；Match 自行
 裁定出生位置、速度、合法視角與碰撞。Arena identity 不符時 Client 拒絕加入。
 
-### UDP（pv7；標頭配置自 v5 起不變）
+### UDP（pv9；標頭配置自 v5 起不變）
 
 最大 datagram 為 1,200 bytes，包括以下 24-byte big-endian header：
 
 | Offset | Bytes | 欄位 |
 |---|---:|---|
 | 0 | 4 | ASCII `GYOP` |
-| 4 | 2 | Client protocol version，現為 7 |
+| 4 | 2 | Client protocol version，現為 9 |
 | 6 | 2 | message type：Hello 1、Welcome 2、Input 3、Snapshot 4、Error 5、Actions 6、ActionResults 7 |
 | 8 | 8 | Session ID |
 | 16 | 4 | UDP sequence |

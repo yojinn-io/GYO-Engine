@@ -2,7 +2,7 @@
 
 更新：2026-11-04（第 2 版：`-render` 加入 (B′)，重比、重估，建議改為 (B′)；見文末「修訂紀錄」）。Owner：新工具 `model_viewer`（`tools/model_viewer/`，本批建立）。所屬 PR 線：anim-events-line（[assets.md](assets.md)「實作順序」）。記錄器是 [HANDOFF](HANDOFF.md)。
 
-**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；`v8-engine-sdl-renderer-texture` 完成（見「`v8-engine-sdl-renderer-texture` 實作後的結果」）；`-preview` 完成（見「`-preview` 實作後的結果」）；`-events` 完成（見「`-events` 實作後的結果」）；`-event-sounds` 完成（見「`-event-sounds` 實作後的結果」）；`-trial` 2026-11-04 開始。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
+**狀態：已核准（2026-11-04，第 2 版，全部照建議；見「決定紀錄」）。（2026-11-12 圖書管理員補註：後續：`-trial` 已完成，PR #146 已合併 `9e5359f6`；表中提到的 PR #145、#141 也已合併）`-core` 完成（見「`-core` 實作後的結果」）；`v8-engine-render-offscreen` 完成（見「`v8-engine-render-offscreen` 實作後的結果」）；`v8-engine-sdl-renderer-texture` 完成（見「`v8-engine-sdl-renderer-texture` 實作後的結果」）；`-preview` 完成（見「`-preview` 實作後的結果」）；`-events` 完成（見「`-events` 實作後的結果」）；`-event-sounds` 完成（見「`-event-sounds` 實作後的結果」）；`-trial` 2026-11-04 開始。** 本文件是 AGENTS §14.1 的事前宣告：判定、門檻、試行次數在看結果之前寫好，核准後不放寬。你核准之前不寫程式。
 
 ## 代號對照
 

@@ -84,7 +84,7 @@ Authors manually prepare engine-ready content from source art or editor exports 
 }
 ```
 
-An SDL_GPU game additionally lists its compiled bundles. Include a `game` bundle only when the game actually uses custom shaders; Object_FPS currently needs only `builtin`. A game with custom shaders can use:
+An SDL_GPU game additionally lists its compiled bundles. Include a `game` bundle only when the game actually uses custom shaders; `object_fps_pvp` currently needs only `builtin`. A game with custom shaders can use:
 
 ```json
 {

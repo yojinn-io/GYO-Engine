@@ -10,7 +10,7 @@
 ## 現況
 
 - 2026-11-04 13:31 JST 開工（本卡由架構會話代為轉達，使用者 2026-11-04 的三點決定見 [README](README.md)）。
-- 基底：PR #142（`claude/arch-layer-formats`）**尚未合併**（state OPEN）。本分支 `claude/recursing-dijkstra-38a360` 自 master `e15e5e41` fast-forward 到 #142 的 `ad348a0c`，以它為基底。PR 先以 `claude/arch-layer-formats` 為 base；#142 合併後改回 master。
+- 基底：PR #142（`claude/arch-layer-formats`）**尚未合併**（state OPEN）。（2026-11-12 圖書管理員補註：後續：#142 已合併，`4918b1fa`；本線改由 #145 承接，已合併，`a3f145aa`）本分支 `claude/recursing-dijkstra-38a360` 自 master `e15e5e41` fast-forward 到 #142 的 `ad348a0c`，以它為基底。PR 先以 `claude/arch-layer-formats` 為 base；#142 合併後改回 master。
 - 讀過：AGENTS.md、agents/navigator.md、agents/effort-gearbox.md、docs/framework/architecture.md（#142 版）、docs/architecture/animation-events.md、#142 的 diff、工具線的請求全文、PvP 現況程式（SoundCues、PvpSound、PvpApplication 換彈段）、framework 的 catalog 先例、守衛與連結檢查、anim_events 的測試與突變清單。
 - 第 1 批的事前陳述已交使用者（本檔「關卡」），核准前不寫契約文件。
 - 2026-11-04，使用者把主會話的模型切成 Opus 5.5，並說「照這份計劃開工」。第 1 批開工（檔位 high）。

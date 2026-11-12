@@ -15,7 +15,7 @@ tools/ui_editor/gyo_ui_editor --> GYO::Ui + optional read-only content snapshot
         +-------------------- no app dependency, catalog writes, or publishing
 ```
 
-`GYO::Ui` never knows what an action such as `object_fps_pvp.start_game` means.
+`GYO::Ui` never knows what an action such as `pvp.join` means.
 It emits an opaque, declared, typed action. The game adapter maps that id to a
 game command, and the game flow remains responsible for legality and effects.
 Likewise, the game owns wording, hierarchy, binding values and the consequence
@@ -200,9 +200,10 @@ gamma adjustment before an `SDR_LINEAR` sRGB swapchain performs the standard
 linear-to-sRGB conversion. `CompositeLayer::Overlay` is submitted afterwards,
 so HUD, menu text and fades are not altered by player display settings.
 
-Object_FPS stores Exposure and Gamma in its app runtime client. They persist
-across pause, main-menu and new-campaign transitions in one process, but are
-not part of gameplay snapshots and are not serialized.
+Exposure and Gamma are display settings owned by the game; the renderer only
+applies the values it is given. No current game exposes them (Object_FPS v1,
+removed on 2026-11-12, kept them in its app runtime client, outside gameplay
+snapshots and unserialized).
 
 ## Editor workflow
 
@@ -220,7 +221,7 @@ validation only, under `build/target/_tools/ui_editor/bin`; it is not packageabl
 The GUI default and both variants' component requirements live in the tool's
 `project.json`, not central CMake conditions. See [registering tools](tool_projects.md).
 
-The standalone target is `gyo_ui_editor` and does not link ObjectFPS, Input,
+The standalone target is `gyo_ui_editor` and does not link any game, Input,
 or SDL_GPU. ImGui supplies editor chrome. Canvas rectangles, clipping,
 ordering and hit testing come from the shared GYO UI evaluator.
 

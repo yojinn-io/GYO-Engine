@@ -1,7 +1,7 @@
 # v8 工具線計畫（④）
 
 更新：2026-10-30（`v8-tool-plan`）。Owner：三個工具各自的 owner（見各節）；本文件是 v8 ④ 的規劃，產品的 v8 計畫在 [object_fps_pvp v8 README](../../../object_fps_pvp/plans/v8/README.md)。
-**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`），等使用者核准；沒有實作。** 記錄器是 [HANDOFF](HANDOFF.md)。
+**狀態：先處理 UI Editor（`v8-tool-scope-ui-first`），等使用者核准；沒有實作。**（2026-11-12 圖書管理員補註：後續：UI Editor、audio_editor、model_viewer、voxel 地圖編輯器等多批已完成，見下方 dev_log 一覽；2026-11-11 起功能線停在 kernel 改造之前） 記錄器是 [HANDOFF](HANDOFF.md)。
 
 ## 定位
 
@@ -256,3 +256,6 @@ UI Editor 只處理遊戲選單等介面，不管 HUD（`v8-tool-ui-editor-scope
 | `v8-tool-voxel-map-plan` | [2026_11_05_tool_v8_voxel_map_plan](../../../dev_logs/2026_11_05_tool_v8_voxel_map_plan.zh-Hant.md) |
 | `v8-engine-voxel-mesh-contract` | [2026_11_05_engine_v8_voxel_mesh_contract](../../../dev_logs/2026_11_05_engine_v8_voxel_mesh_contract.zh-Hant.md) |
 | `v8-product-ui-action-check` | [2026_11_05_pvp_v8_ui_action_check](../../../dev_logs/2026_11_05_pvp_v8_ui_action_check.zh-Hant.md) |
+| `v8-tool-voxel-map-editor-core`（2026-11-12 圖書管理員補列） | [2026_11_05_tool_v8_voxel_map_editor_core](../../../dev_logs/2026_11_05_tool_v8_voxel_map_editor_core.zh-Hant.md) |
+| `v8-tool-voxel-map-editor-window`（2026-11-12 補列） | [2026_11_06_tool_v8_voxel_map_editor_window](../../../dev_logs/2026_11_06_tool_v8_voxel_map_editor_window.zh-Hant.md) |
+| voxel 編輯器下一階段的設計稿（架構師支援卡，PR #169；2026-11-12 補列） | [2026_11_07_arch_v8_voxel_editor_design](../../../dev_logs/2026_11_07_arch_v8_voxel_editor_design.zh-Hant.md) |

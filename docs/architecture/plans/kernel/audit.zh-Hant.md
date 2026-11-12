@@ -243,7 +243,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 | 模組 | 審查者（最終） | 複核者 | 一致 |
 |---|---|---|---|
 | engine/collision | 留 | 留 | ✓ |
-| engine/asset | 包（先收攏） | 包（先拆） | ✓（判定詞同；註記差異是 Q2 範圔的定義，§0 已定） |
+| engine/asset | 包（先收攏） | 包（先拆） | ✓（判定詞同；註記差異是 Q2 範圍的定義，§0 已定） |
 | engine/input | 包（先拆）＋留 | Host（backend/sdl）＋留（core） | ✗（後端） |
 | ui_editor `EditorApp` | 重寫（介面） | 重寫（介面層） | ✓ |
 | `LocalPlayerPrediction` | 重寫 | 重寫（先拆） | ✓ |
