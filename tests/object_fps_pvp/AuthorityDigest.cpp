@@ -33,6 +33,13 @@
 #include <string_view>
 #include <vector>
 
+// v8-product-pvp-baseline: BaselineRecord.cpp includes this file and defines
+// the two macros below to time each authority step; here the step runs as
+// written and the runner keeps its own main.
+#ifndef PVP_DIGEST_TIMED_STEP
+#define PVP_DIGEST_TIMED_STEP(...) __VA_ARGS__
+#endif
+
 namespace {
 using namespace fps::pvp;
 
@@ -393,9 +400,9 @@ public:
     void Tick() {
         const auto now = match_.TickCount() + 1;
         // Trusted host metadata: a reference's age is its Tick distance.
-        match_.Tick({now, TickSeconds}, [now](std::uint64_t observed) -> std::optional<std::int64_t> {
+        PVP_DIGEST_TIMED_STEP(match_.Tick({now, TickSeconds}, [now](std::uint64_t observed) -> std::optional<std::int64_t> {
             return static_cast<std::int64_t>((now - observed) * 1'000'000'000.0 / AuthorityTickRate);
-        });
+        }));
         Refresh();
         Record record("match");
         EncodeSnapshot(record, snapshot_);
@@ -660,7 +667,7 @@ void RunLink(LinkOptions options, unsigned scale, Digest& digest) {
         }
         if (now + 0.000001 >= nextTick) {
             nextTick += 1000.0 / 60.0;
-            match.Tick({match.TickCount() + 1, TickSeconds});
+            PVP_DIGEST_TIMED_STEP(match.Tick({match.TickCount() + 1, TickSeconds}));
             Record record("match");
             const auto snapshot = match.Snapshot();
             EncodeSnapshot(record, snapshot);
@@ -702,7 +709,7 @@ void RunHost(bool poorConnection, unsigned scale, Digest& digest) {
             }
         }
         clock += std::chrono::nanoseconds(1'000'000'000 / AuthorityTickRate);
-        static_cast<void>(host.Advance(TickSeconds));
+        PVP_DIGEST_TIMED_STEP(static_cast<void>(host.Advance(TickSeconds)));
         if (auto snapshot = host.TakeSnapshot()) latest = std::move(snapshot);
         Record record("host");
         if (latest) EncodeSnapshot(record, *latest);
@@ -847,6 +854,7 @@ std::vector<Scenario> Scenarios() {
     return list;
 }
 
+#ifndef PVP_DIGEST_NO_MAIN
 void Usage() {
     std::cout << "gyo_object_fps_pvp_authority_digest\n"
                  "  --list                         scenario names and golden flags\n"
@@ -865,8 +873,10 @@ std::string JsonString(std::string_view text) {
     }
     return out + '"';
 }
+#endif
 } // namespace
 
+#ifndef PVP_DIGEST_NO_MAIN
 int main(int argc, char** argv) {
     try {
         std::vector<std::string_view> args(argv + 1, argv + argc);
@@ -961,3 +971,4 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+#endif

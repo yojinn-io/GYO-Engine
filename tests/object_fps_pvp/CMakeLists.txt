@@ -474,3 +474,27 @@ add_test(NAME "${GYO_CURRENT_APP}.authority_digest"
         "-DGOLDEN=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/authority_golden.txt"
         "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/authority_digest" -P "${CMAKE_CURRENT_SOURCE_DIR}/authority_digest_check.cmake")
 set_tests_properties("${GYO_CURRENT_APP}.authority_digest" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 300)
+
+# v8-product-pvp-baseline: a report-only record of today's Match cost, the
+# kernel migration budget's denominator (plans/v8/v8-product-pvp-baseline-
+# declaration.md). It includes AuthorityDigest.cpp, so its replay scenarios are
+# the digest's, and checks the golden digests. Deliberately not a CTest: the
+# shared runner's microsecond timing is noise; it is run by hand.
+set(baseline_record "gyo_${GYO_CURRENT_APP}_baseline_record")
+add_executable(${baseline_record} BaselineRecord.cpp)
+target_compile_features(${baseline_record} PRIVATE cxx_std_20)
+set(baseline_processor "${CMAKE_SYSTEM_PROCESSOR}")
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    set(baseline_processor "${CMAKE_OSX_ARCHITECTURES}")
+endif()
+target_compile_definitions(${baseline_record} PRIVATE ${digest_arena_definitions}
+    PVP_BASELINE_GOLDEN="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/authority_golden.txt"
+    PVP_BASELINE_BUILD_TYPE="$<CONFIG>"
+    PVP_BASELINE_PLATFORM="${CMAKE_SYSTEM_NAME}-${baseline_processor}")
+target_link_libraries(${baseline_record} PRIVATE ${match_domain} ${runtime_host})
+if(WIN32)
+    target_compile_definitions(${baseline_record} PRIVATE NOMINMAX)
+endif()
+if(MSVC)
+    target_compile_options(${baseline_record} PRIVATE /utf-8)
+endif()
