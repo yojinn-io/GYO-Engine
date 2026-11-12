@@ -30,6 +30,7 @@
 - [spike-pageguard-declaration.zh-Hant.md](spike-pageguard-declaration.zh-Hant.md)：`-spike-pageguard` 的事前宣告（2026-11-12 開始）。
 - [spike-pageguard-report.zh-Hant.md](spike-pageguard-report.zh-Hant.md)：`-spike-pageguard` 的報告（判定 1 照原文不成立，使用者 2026-11-12 定讀法 (i)；判定 2、3、4、5 成立）。
 - [audit-declaration.zh-Hant.md](audit-declaration.zh-Hant.md)：`-audit` 的事前宣告（已完成）。
+- [j17-scanner.zh-Hant.md](j17-scanner.zh-Hant.md)：**J-17 掃描器線的交接卡**（並行線；使用者 2026-11-12 同意分出；卡的現況由該線更新）。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
 
