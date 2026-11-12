@@ -12,7 +12,7 @@
 
 計數方法：`git ls-files | grep -i mutation`（正例先命中 `tests/object_fps_pvp/mutations.json`）→ Python 逐檔讀 `mutants` 陣列長度（證據 `mutations-count.txt`）。執行器＝`run_mutations.py` 三支（object_fps_pvp、zone_scan、time-threads-trace；後者以 `--catalog` 跑 Engine 與工具的 22 份清單，plugins 遷移後仍是共用執行器）。
 
-判定（看結果前宣告，數字在開始時補、送 parent 核定；parent 會話以 `send_message` 找不到（`session parent not found`），所以核定改由使用者在本會話做，見 §7）：
+判定（看結果前宣告，數字在開始時補、送 parent 核定；parent 會話以 `send_message` 找不到（`session parent not found`），所以核定改由使用者在本會話做：**使用者 2026-11-12 於本卡會話核定**（數字 26 檔 1841 條、3 執行器，與報告），見 §7）：
 
 | # | 判定 | 結果 |
 |---|---|---|
@@ -316,7 +316,7 @@ C. **守衛的掃描根沒跟上新 top-level（空轉）**：
 - 本卡**沒有執行**任何守衛或突變；去處與第 7 欄都來自讀碼（規則、正規式、白名單、連結期望）與計畫文字，不是跑出來的結果。`find` 文字是否已過期（例如 #197 搬檔後）未逐條核對。
 - pvp 925 條的去處按**檔**分組（證據 `pvp-mutations-by-file.txt`），不是逐條；Match host 側 115 條裡原檔不動的資料型別可能改判留。工具四份清單按檔分「工具邏輯（留）／與 framework、視窗、對話框相關（重列）」，是初判。
 - 計畫分支 `claude/arch-migration-plan` 落後 master（缺 #197）；本卡路徑照 master，計畫文字照該分支（rev 在 `migration-plan.snapshot.rev`）。
-- 事前宣告的數字（26 檔 1841 條、3 執行器）送 parent 核定時，`send_message` 回「session parent not found」（`list_sessions linked:true` 也回空）；數字未經 parent 核定就寫了正文。使用者在本會話核定即可補上。
+- 事前宣告的數字（26 檔 1841 條、3 執行器）送 parent 核定時，`send_message` 回「session parent not found」（`list_sessions linked:true` 也回空）；數字未經 parent 核定就寫了正文；**使用者 2026-11-12 於本卡會話核定**（PR #198 的回覆「核定」）。
 - §2.18 的子列拆法只讀 `EntityModelTests.cpp` 的 CHECK；沒讀 `AuthorityDigest.cpp` 的 37 個情境內容。
 - 補遺（§2.22）只列遷移批會碰到、且本卡讀到的守衛；`tests/object_fps_pvp/CMakeLists.txt` 另有 60 多個 ctest（log_contract、wire_counter_sites、drop_reasons…）未逐個判性質——它們是產品批「測試、守衛與突變的去處」表的對象（計畫 §3 共通第一條），不在 21 列。
 
