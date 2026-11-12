@@ -36,6 +36,7 @@
 - [ci-readiness.zh-Hant.md](ci-readiness.zh-Hant.md)：`v8-arch-kernel-ci-readiness`（任務卡，2026-11-12）——新 Engine 子系統進 L1 的檔清單（假子系統實走）、spike 測試升格方案（逐檔搬／重寫／刪）、Windows VEH 在 CI 的證據與風險；共通層零修改。
 - [legacy-impact.zh-Hant.md](legacy-impact.zh-Hant.md)：`v8-arch-legacy-impact-scan`（任務卡，2026-11-12）——舊架構文件對新架構的影響掃描：37 檔的 DI／RC 三選一判定（衝突 4、被取代 36）、守衛會不會誤判新程式（1 個、有條件）、誤導句 33、target 對 legacy 的反向依賴 91 處；對抗複核 Opus／high 一致 8／不一致 2；只寫不改。
 - [guards-inventory.zh-Hant.md](guards-inventory.zh-Hant.md)：`v8-arch-guards-inventory`（任務卡，2026-11-12）——21 個 legacy 守衛（63 子列）與 26 檔 1841 條突變的逐列盤點：守的性質、來源條文、去處四選一、涉及的突變、預計的批、不動會把哪一批的新程式判違規；缺口 9、給架構師的問題 12、與遷移計畫 §5.2 的不一致 9。
+- [tool-hosts-inventory.zh-Hant.md](tool-hosts-inventory.zh-Hant.md)：`v8-arch-tool-hosts-inventory`（任務卡，2026-11-13）——四個工具 host 骨架 10 項 × 4 的盤點：各怎麼做、共用程度（framework 一份／各自一份）、依賴邊逐工具（CMake 13／12／13／10 vs. include 15／14／18／12，差異全由 PUBLIC 傳遞解釋）、性質來源與會撞到的守衛（引 guards-inventory）、工具專屬、重複但內容不同 15 列、plugin 切法候選 9 個（候選，不是決定）。
 - 產品線前置的交接卡：[docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md](../../../object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md)（`v8-product-kernel-prep`，2026-11-12）。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
@@ -76,6 +77,7 @@ v8-arch-kernel
 ## dev_log
 
 - [2026_11_12_arch_guards_inventory.zh-Hant.md](../../../dev_logs/2026_11_12_arch_guards_inventory.zh-Hant.md)：-guards-inventory（任務卡）。
+- [2026_11_13_arch_tool_hosts_inventory.zh-Hant.md](../../../dev_logs/2026_11_13_arch_tool_hosts_inventory.zh-Hant.md)：-tool-hosts-inventory（任務卡）。
 - [2026_11_12_arch_legacy_impact_scan.zh-Hant.md](../../../dev_logs/2026_11_12_arch_legacy_impact_scan.zh-Hant.md)：-legacy-impact-scan（任務卡）。
 - [2026_11_12_arch_j17_scanner.zh-Hant.md](../../../dev_logs/2026_11_12_arch_j17_scanner.zh-Hant.md)：-j17-scanner（J-17 掃描器線）。
 - [2026_11_12_arch_kernel_ci_readiness.zh-Hant.md](../../../dev_logs/2026_11_12_arch_kernel_ci_readiness.zh-Hant.md)：-ci-readiness（任務卡）。
