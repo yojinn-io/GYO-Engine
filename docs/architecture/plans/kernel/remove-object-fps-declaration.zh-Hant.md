@@ -1,6 +1,6 @@
 # 事前宣告：`v8-arch-remove-object-fps`（移除 object_fps、object_fps_v2、object_fps_preview，兼驗 §7 removability）
 
-更新：2026-11-12。Owner：架構（架構師會話）。**狀態：使用者 2026-11-12「A 刪、B 搬 pvp、C 照宣告，開始」；執行中。** 三項的決定：A owner 文件刪；B `3d-assets.md` 的授權段搬進 `docs/object_fps_pvp/assets.zh-Hant.md` 當附錄、刪檔；C 判定 2 不成立時停下記 Delta、不修。
+更新：2026-11-12。Owner：架構（架構師會話）。**狀態：使用者 2026-11-12「A 刪、B 搬 pvp、C 照宣告，開始」；執行中。** 三項的決定：A owner 文件刪；B `3d-assets.md` 的授權段搬進 `docs/object_fps_pvp/assets.zh-Hant.md` 當附錄、刪檔；C 判定 2 不成立時停下記 Delta、不修。**宣告錯誤的修正（使用者 2026-11-12 選 (a)）**：宣告「不碰」清單寫 pvp 零引用，實為架構師掃描錯誤（BSD grep 無 `-P`）；`tests/object_fps_pvp/` 的 8 行文字（`HitboxSurvey.cpp` 2 行註解、`test_asset_catalog.py` 3 行自測假路徑、`fixtures/hair_buns/README.zh-Hant.md` 2 行、`asset_sources.json` 1 行出處）由主會話以第四個 commit 改寫，判定 3 的 grep 範圍與零命中要求不變。
 
 決定來源：HANDOFF `v8-arch-remove-object-fps`（使用者 2026-11-11，側邊會話轉述，spec K.3 第 8 項：PvP 已有自己的生態，不需要這個「錨」；照 AGENTS §7 完整刪除、不留相容層；排成改造前的獨立批）；`v8-arch-remove-runtimeport-animinstance`（使用者 2026-11-11，audit 待決第 3 項：刪 `IRuntimePort` 與 `AnimationInstance` 含各自測試，併入本批；取樣函式與 ufbx loader 不動）。
 

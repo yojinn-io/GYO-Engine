@@ -1,6 +1,6 @@
 // v8-product-hitbox-survey (docs/object_fps_pvp/plans/v8/hitbox-plan.md): a
-// report-only diagnostic of the production player against the 11 object_fps_v2
-// hurt regions. It measures; it decides nothing. The Replacement Criteria
+// report-only diagnostic of the production player against the 11 hurt regions
+// inherited from the former single-player v2 product (removed 2026-11-12). It measures; it decides nothing. The Replacement Criteria
 // thresholds were declared before any result (v8-product-hitbox-replacement-thresholds).
 //
 // Body coordinates follow the renderer: (global point - anchor) * scale, feet
@@ -43,7 +43,8 @@ struct Region final {
     const char* end;  // equal to start: a sphere at the region's vertex centroid
 };
 
-// object_fps_v2's hurt_regions (assets/object_fps_v2/characters/enemies/melee.enemy.json).
+// The former v2 product's hurt_regions, copied as constants before that product was
+// removed (2026-11-12; the source file is in git history before that date).
 constexpr std::array<Region, 11> Regions{{
     {"head", "head", "Head", "Head"},
     {"torso", "body", "spine_01", "spine_03"},
