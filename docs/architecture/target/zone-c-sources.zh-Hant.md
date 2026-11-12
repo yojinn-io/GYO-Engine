@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-草案：2026-11-12（J-17 掃描器線，`v8-arch-j17-scanner`）。Owner：架構（契約的審核者是架構師會話；掃描器與自測由 J-17 掃描器線持有）。**待架構師核定；核定前掃描器不寫程式。**
+草案：2026-11-12（J-17 掃描器線，`v8-arch-j17-scanner`）；**架構師 2026-11-12 核定**（含 `owner_root`／`include_roots` 兩欄、同 owner 多份清單）。Owner：架構（契約的審核者是架構師會話；掃描器與自測由 J-17 掃描器線持有）。消費端（掃描器）在 `v8-arch-j17-scanner` 實作；生產端（Kernel 的 G-5 匯出）尚未實作，所以 Status 仍是 target。
 出處：spec G-5（啟動時匯出「(c) 區 System 來源檔清單」）、J-17（讀清單並掃描）、J.4（產品守衛）、B.5（(c) 檔的文字掃描清單）；交接卡 `plans/kernel/j17-scanner.zh-Hant.md` §2 的 v1 草案。AGENTS §8：契約資料可由手工、Script、別的工具產生；Runtime 不依賴產生它的工具。
 
 ## 1. 用途與兩端
@@ -46,14 +46,14 @@ Kernel（G-5 匯出；尚未實作）──┐
 
 - 未列在表內的頂層欄＝契約錯誤（嚴格；要加欄就進版本，§4）。
 - 只列來源檔，不列標頭：Kernel 從 `source_location`（spec B.1 的 `source`）只知道登記處所在的 `.cpp`。標頭由掃描器展開。
-- 一個 owner 一份清單。多個 owner 各一份，掃描器各跑一次（Product Removability：刪 owner＝刪它的清單與 ctest 列，共通層不改）。
+- 一份清單只列一個 owner 的檔；同一 owner 可有多份清單（例：已確認的 (c) 與候選的 (c)，架構師 2026-11-12），掃描器各跑一次、報告分開。多個 owner 各有自己的清單（Product Removability：刪 owner＝刪它的清單與 ctest 列，共通層不改）。
 
 ## 3. 標頭展開（消費端的規則，寫進契約以免兩端各解釀一套）
 
 - 展開對象：`files` 內每個檔，以及展開到的每個標頭，其中**引號形式**的 `#include "X"`（遮掉註解與字串後仍是 include 的行）。
 - 解析順序：先以含入檔所在目錄，再依序以 `include_roots` 各項；第一個存在的檔勝出（與 MSVC、gcc、clang 對引號 include 的順序一致）。
 - 範圍：解析出的路徑**必須在 `owner_root` 之下**才展開並掃描；之外的（Engine 標頭、第三方）不展開、不掃描——Engine 模組由各自的 Design Invariants 守衛（例 `tests/common/entity_store/entity_store_guard.py`），第三方由 determinism.md DET-2 處理。
-- 角括號 `#include <X>` 一律不展開（標準庫、系統、第三方）；它本身是不是違規由 Z1 判。
+- 角括號 `#include <X>` 一律不展開（標準庫、系統、第三方）；它本身是不是違規由 ZS1 判。
 - 深度：**不限（傳遞閉包）**，同一檔只掃一次。理由：spec J-17 點名的 `Combat.hpp` 從 `PvpMatch.cpp` 要經 `PvpMatch.hpp` 才到（深度 2）；而 (c) 程式能呼叫到的全域狀態就在它傳遞含入的標頭裡（spec G.4 第 3 條「全域在呼叫點」），限制深度會漏。
 - 解析不到的引號 include（例 `"nlohmann/json.hpp"`）寫進報告的「未展開」清單，不算錯誤、不算違規。
 - 報告中每個被展開的標頭附一條含入鏈（第一次到達它的路徑），讓產品批知道它為什麼被掃。
@@ -72,14 +72,14 @@ Kernel（G-5 匯出；尚未實作）──┐
 
 ## 5. 掃描器的輸出（契約的另一端；供 ctest 與產品批閱讀）
 
-- 文字（stdout）：一行一個發現，`<repo 相對路徑>:<行>: <規則> <文字>`；候選列（Z5）用 `Z5?`。最後一行摘要：`zone_scan: <N> file(s) listed, <M> scanned (<M−N> expanded headers), <L> lines, <H> finding(s), <C> candidate(s)`。
-- JSON 報告（`--report FILE`）：`{ "list": {...清單標頭四欄...}, "files_listed", "files_scanned", "lines", "findings": [{file, line, rule, text}], "candidates": [...], "per_rule": {"Z1": n, ...}, "expanded": [{file, via}], "unresolved_includes": [{file, line, include}] }`。這是 `zone_scan.baseline` 存進證據目錄的檔。
+- 文字（stdout）：一行一個發現，`<repo 相對路徑>:<行>: <規則> <文字>`；候選列（ZS5）用 `ZS5?`。最後一行摘要：`zone_scan: <N> file(s) listed, <M> scanned (<M−N> expanded headers), <L> lines, <H> finding(s), <C> candidate(s)`。
+- JSON 報告（`--report FILE`）：`{ "list": {...清單標頭四欄...}, "files_listed", "files_scanned", "lines", "findings": [{file, line, rule, text}], "candidates": [...], "per_rule": {"ZS1": n, ...}, "expanded": [{file, via}], "unresolved_includes": [{file, line, include}] }`。這是 `zone_scan.baseline` 存進證據目錄的檔。
 - 結束碼：0 乾淨（候選不算）、1 有違規、2 契約或用法錯誤。`--no-fail` 把 1 改成 0（基線用：只報告不判失敗）。
 
 ## 6. 與其他契約的關係
 
 - 這份清單不是 G-5 的另一份報告「(c) 區資料集」（對照 `DigestFields`）；那份另定。
-- 規則本體（Z1～Z6）屬掃描器，不屬清單；規則變了清單不變。規則的資料檔（第三方名稱、時鐘別名）放掃描器目錄，不放這裡。
+- 規則本體（ZS1～ZS7；ZS＝zone scan，與 spec G.1 的 Kernel 區規則 Z1～Z8 區分）屬掃描器，不屬清單；規則變了清單不變。規則的資料檔（第三方名稱、時鐘別名）放掃描器目錄，不放這裡。
 
 ## Design Invariants（草案；待核定後生效）
 
