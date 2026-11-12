@@ -5,6 +5,15 @@
 
 **狀態：使用者 2026-11-12 說「開始」（任務卡：使用者直接說開始也算核定）；架構師同日備查無異議**（三個偏離照實寫進報告與限界；審查者改 Sonnet／high；`AuthorityDigest.cpp` 的兩個巨集與 `BaselineRecord.cpp` 是量測用，遷移批 `v8-product-match-sim` 接手時一併處理，不留成常態）。 量什麼、怎麼量、幾次、對帳與穩定性的規則都在看到任何數字之前寫下，看結果後不改（AGENTS §14.1）。
 
+### 修訂
+
+1. **（2026-11-13，架構師轉達使用者對 U8 的決定）追加：Docker Linux 容器內量測。** 量測機器分三層：Intel Mac 原生＝開發參考；**Docker Linux 容器＝閘門判定用**；Linux 實機只在出問題且允許時確認；CI runner 不用。本卡追加：
+   - Dockerfile 放 `build/ci/linux-toolchain/Dockerfile`（不改 `.github/`），工具鏈照 L1 linux-x64 列實際使用的版本（2026-11-12 master 成功的 run 43244933991 的 log）：ubuntu 24.04、gcc-14 `14.2.0-4ubuntu2~24.04.1`、ninja-build `1.11.1-2`（apt）、cmake 3.31.6（runner 映像自帶；容器用 Kitware 官方二進位同版本）、Python 3.12、Go 1.23（setup-go 的 spec）。apt 套件清單照 `.github/actions/native-setup`。基底映像以 digest 釘住。
+   - 容器內跑同一套量測（M1～M7，同樣次數、同樣對帳與穩定性規則），建置用 `test` preset 的組態（RelWithDebInfo），編譯器 gcc-14。本機數字照舊保留，報告兩欄並列，容器的絕對數字標「容器內」。
+   - 記錄映像 digest、Docker Desktop 版本、VM 的 CPU 與記憶體、量測時的容器資源限制（`--cpus`、`--memory`）。
+   - 容器建不起來就寫進限界，不卡住。
+   - 範囲の限界追加：容器跑在 Docker Desktop 的 Linux VM 上（macOS 主機的虛擬化），不是 Linux 實機；計時含虛擬化的影響。
+
 ## 0. 為什麼（Feature → Contract → Architecture）
 
 - **Feature**：沒有新 Feature。本批給 §6 預算當分母：G2a、G2b 以「今天的 Match」比較，但今天沒有任何量測，§6 的數字全是推定（AGENTS §2「性能や資源に関わる Feature の計画は、判定に使う予算を書く」）。
