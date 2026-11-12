@@ -1,6 +1,6 @@
 # 交接卡：產品線的 kernel 改造前置（`v8-product-kernel-prep`）
 
-建立：2026-11-12（架構師會話）。Owner：**產品線會話**（`object_fps_pvp`）。本卡是計畫＋記錄器：現況節由產品線更新；每批照 AGENTS §14 寫事前宣告（`v8-product-kernel-prep-<批>-declaration.md`）、經使用者核准再開工；完成時 dev_log 與該批同一變更。
+建立：2026-11-12（架構師會話）。Owner：`object_fps_pvp`（內容歸產品）。**執行者：架構師開的任務卡**（使用者 2026-11-12：v8 產品會話只處理 v8 版本，改造與產品遷移完成後再接手）。本卡是計畫＋記錄器：現況節由執行的任務卡更新；每批照 AGENTS §14 寫事前宣告（`v8-product-kernel-prep-<批>-declaration.md`）、經使用者核准再開工；完成時 dev_log 與該批同一變更。
 架構師線是 Architecture Delta 與區判定的審核者；kernel 本體與 spec 修訂不在本卡。
 
 ## 前提
@@ -44,9 +44,9 @@
 - 架構師線：區判定有疑義、搬動碰到共通層、golden 或 digest 改變 → 停下回報。
 - 圖書管理員：dev_log 與本卡現況由產品線寫；缺漏由圖書管理員點檢。
 
-## 開場白（給使用者開會話時貼；會話確認職責後等「開始」）
+## 開場白（任務卡的 prompt 以此為底；會話確認職責後等「開始」）
 
-> 你是 GYO-Engine 的產品線會話（`object_fps_pvp`），做 kernel 改造的前置。交接卡：`docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；出處 `docs/architecture/plans/kernel/audit.zh-Hant.md` §1.3／§4.1／§3.4、`spec.zh-Hant.md` G.4、`docs/architecture/target/naming.zh-Hant.md` 第 4 條。功能線仍停（停法 (a)），只做卡上兩批。先讀卡、寫第一批的事前宣告給使用者核准，再開始。工作分支從 origin/master 開，HANDOFF（`docs/object_fps_pvp/plans/v8/HANDOFF.md`）每批開始與停止時更新。
+> 你是 GYO-Engine 架構師開出的任務卡，在 `object_fps_pvp` 上做 kernel 改造的前置（v8 產品會話不參與）。交接卡：`docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；出處 `docs/architecture/plans/kernel/audit.zh-Hant.md` §1.3／§4.1／§3.4、`spec.zh-Hant.md` G.4、`docs/architecture/target/naming.zh-Hant.md` 第 4 條。功能線仍停（停法 (a)），只做卡上兩批。先讀卡、寫第一批的事前宣告給使用者核准，再開始。工作分支從 origin/master 開，HANDOFF（`docs/object_fps_pvp/plans/v8/HANDOFF.md`）每批開始與停止時更新。
 
 ## 現況（產品線更新）
 
