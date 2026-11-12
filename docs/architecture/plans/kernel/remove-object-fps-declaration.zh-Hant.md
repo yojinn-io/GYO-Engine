@@ -1,6 +1,6 @@
 # 事前宣告：`v8-arch-remove-object-fps`（移除 object_fps、object_fps_v2、object_fps_preview，兼驗 §7 removability）
 
-更新：2026-11-12。Owner：架構（架構師會話）。**狀態：草案，待使用者核准（含下方「待使用者確認」三項）。**
+更新：2026-11-12。Owner：架構（架構師會話）。**狀態：使用者 2026-11-12「A 刪、B 搬 pvp、C 照宣告，開始」；執行中。** 三項的決定：A owner 文件刪；B `3d-assets.md` 的授權段搬進 `docs/object_fps_pvp/assets.zh-Hant.md` 當附錄、刪檔；C 判定 2 不成立時停下記 Delta、不修。
 
 決定來源：HANDOFF `v8-arch-remove-object-fps`（使用者 2026-11-11，側邊會話轉述，spec K.3 第 8 項：PvP 已有自己的生態，不需要這個「錨」；照 AGENTS §7 完整刪除、不留相容層；排成改造前的獨立批）；`v8-arch-remove-runtimeport-animinstance`（使用者 2026-11-11，audit 待決第 3 項：刪 `IRuntimePort` 與 `AnimationInstance` 含各自測試，併入本批；取樣函式與 ufbx loader 不動）。
 
@@ -20,7 +20,7 @@
 | Content（程式） | `apps/object_fps/`、`apps/object_fps_v2/` | 71、78 |
 | Content（工具） | `tools/object_fps_preview/`（`project.json` 宣告 `requires_apps.game = object_fps`） | 5 |
 | Content（資產） | `assets/object_fps/`、`assets/object_fps_v2/`（約 55 MB、46 MB；不走 LFS） | 41、49 |
-| Content（owner 文件） | `docs/object_fps/`、`docs/object_fps_v2/` | 2、3（待使用者確認 A） |
+| Content（owner 文件） | `docs/object_fps/`、`docs/object_fps_v2/`；`docs/architecture/3d-assets.md`（授權段先搬進 pvp 的 assets 文件；使用者決定 B） | 2、3、1 |
 | Registration | `engine/config/projects.csv` 的 `object_fps`、`object_fps_v2` 兩列；`engine/config/tools.csv` 的 `object_fps_preview` 一列 | 修改 2 檔 |
 | Owner-specific Test | `tests/object_fps/`、`tests/object_fps_v2/` | 26、11 |
 | Owner-specific Validation | `build/acceptance/object_fps/`、`build/acceptance/object_fps_v2/` | 14、5 |
@@ -28,7 +28,7 @@
 | Engine 型別的測試 | `tests/common/core/runtime/RuntimePortTests.cpp`（刪檔，1 個 TEST_CASE）＋ `tests/common/core/CMakeLists.txt` 第 16 行；`tests/common/model/ModelTests.cpp` 用 `AnimationInstance` 的 3 個 TEST_CASE（第 139、170、213 行起；其餘 14 個不動） | 刪 1 檔、修 2 檔 |
 | Reference（現行文件） | 見下「文件的處置」 | 修約 20 檔 |
 
-預計：**刪除 307 檔**（上表刪檔合計）、**修改約 26 檔**（2 登記＋4 共通測試／Engine＋約 20 文件）。實際數字由報告的件数の突き合わせ回填。
+預計：**刪除 308 檔**（上表刪檔合計，含 `3d-assets.md`）、**修改約 26 檔**（2 登記＋4 共通測試／Engine＋約 20 文件）。實際數字由報告的件数の突き合わせ回填。
 
 ### 不碰
 
@@ -43,7 +43,7 @@
 - **現行文件改措辭**（把「停用、待遷移」改成「已移除（本批 PR）」，或把 object_fps 的例子換成 pvp 的）：`README.md`／`README.en.md`／`README.zh-Hant.md` 第 76 行；`docs/architecture.md` 第 138 行（`IRuntimePort` 段）；`docs/architecture/animation-events.md` 第 70 行（`AnimationInstance` 改為 `PlaybackInterval::Crossed` 的呼叫者）；`docs/creating_apps.md` 第 142 行；`docs/tool_projects.md` 第 12、25～26、64、74 行（`requires_apps` 的例子換成假想名或 pvp）；`docs/releasing.zh-Hant.md`／`.ja.md` 第 45 行附近；`docs/rendering_architecture.zh-Hant.md`／`.ja.md` 第 204 行附近；`docs/ui_toolchain.md` 第 18 行的例子字串；`docs/object_fps_pvp/assets.zh-Hant.md` 第 9、12 行；`docs/object_fps_pvp/network-architecture.zh-Hant.md` 第 238～239、448 行；`docs/object_fps_pvp/entity-model.zh-Hant.md` 第 59 行（指向已刪檔，改成「已移除；見 git 歷史 `56b8dda3`」）。
 - **計畫文件標記完成**：`docs/architecture/target/README.md` 第 64 行（第 8 項）；`docs/architecture/plans/kernel/README.md`、`HANDOFF.md`、`spec.zh-Hant.md` K.3 第 8 項與 L.1 表、`audit.zh-Hant.md`／三份 audit-part 的對應列（加「已移除」）；`docs/tools/plans/v8/README.md` 第 19、28、30 行、`model-viewer.md` 第 25 行（刪 `AnimationInstance`）。
 - **三份 `inactive_products.md`**（foundation-followups、math-foundation、result-unification）：檔頭加一行「2026-11-12：三個產品已移除（PR #N），本清單只作歷史紀錄」，內容不改。
-- **`docs/architecture/3d-assets.md`**：待使用者確認 B。
+- **`docs/architecture/3d-assets.md`**：第 146～212 行的素材包授權記錄搬進 `docs/object_fps_pvp/assets.zh-Hant.md` 當附錄（翻成正體中文、保留原文的授權事實與日期），刪檔；`docs/object_fps_pvp/assets.zh-Hant.md` 第 12 行改指附錄（使用者決定 B）。
 
 ## 做法
 
@@ -63,7 +63,7 @@
 4. **建置與測試**：本機 Intel Mac preset `test`（`GYO_APPS=AUTO`、`GYO_TOOLS=AUTO`）configure／build 零錯誤、ctest 全過；ctest 的測試**數**前後相同（兩個產品 `enabled=0`，`tests/object_fps*` 本來就不在 AUTO 建置裡），doctest 案例數：`engine_tests` 減 1、model 測試減 3、其餘每個測試執行檔的案例數前後相同。PR 的 L1 三平台（linux-x64、windows-x64、macos-arm64）與 Package trial 全綠；數字從 L1 artifact 的 `tests.xml` 讀，不從日誌摘要。
 5. **pvp 不受影響**：`object_fps_pvp` 的建置目標集合（`gyo-build.json` 或 `cmake --build --target help` 的 pvp 目標）、ctest 數、每個 pvp 測試執行檔的 doctest 案例數，前後逐一相同。
 
-件数の突き合わせ：報告以「刪除檔數（宣告 307／diff D）、修改檔數（宣告 ≤ 26／diff M）、ctest 數（前／後）、doctest 案例數（前／後／差＝4）、三平台 tests.xml 的 tests／failures」開頭。不一致＝不確定受理，等使用者。
+件数の突き合わせ：報告以「刪除檔數（宣告 308／diff D）、修改檔數（宣告 ≤ 26／diff M）、ctest 數（前／後）、doctest 案例數（前／後／差＝4）、三平台 tests.xml 的 tests／failures」開頭。不一致＝不確定受理，等使用者。
 
 ## 範囲の限界（本批不解、報告要列）
 
