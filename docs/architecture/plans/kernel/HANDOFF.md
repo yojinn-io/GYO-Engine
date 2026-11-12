@@ -123,6 +123,8 @@
 
 - 2026-11-12 使用者問有沒有可並行的任務；架構師列表後，使用者決定先開 J-17 掃描器線與圖書管理員兩條，交接卡已寫（分支 `claude/arch-handoffs-j17-librarian`）。
 
+- 2026-11-12 **`v8-arch-j17-scanner`（J-17 掃描器線，並行線）**：架構師核定判定門檻與清單格式 v1（六題處置：ZS1～ZS7、加 ZS7 雜湊、效果類標頭、`owner_root`／`include_roots`、遮罩、P9 改候選清單）後實作。`tests/common/zone_scan/`：掃描器、自測 59、突變 16/16、pvp 基線兩份（確認 12 檔 43 違規／候選 5 檔 17 違規，件数の突き合わせ一致）；共通層只加 `tests/common/CMakeLists.txt` 1 行。清單契約草案 `target/zone-c-sources.zh-Hant.md`。待 L1 三平台與使用者合併；詳見卡 `j17-scanner.zh-Hant.md` 現況。
+
 ## 下一步
 
 - `v8-arch-remove-object-fps`（改造前的獨立批；事前宣告：刪除清單、共通層零修改的驗證方式、CI 綠、§7 清單逐項）。
