@@ -57,13 +57,49 @@ Kernel 的 G-5 啟動報告之一是「(c) 區 System 來源檔清單」。kerne
 今天的 pvp 不是 (c) 合規的（spec J-17 自己寫了 `Combat.hpp`、`Movement.hpp` 的 `<chrono>` 型別用法要改），所以基線一定有命中；基線的用途是給 pvp「位置＝區」整理批當起點與驗收門檻（整理後命中要歸零）。
 不改 pvp 的任何檔。
 
-## 判定（看結果前宣告；開始實作前由本線補齊數字門檻，架構師核定）
+## 判定（看結果前宣告；數字門檻由本線 2026-11-12 補齊，待架構師核定）
 
-1. 自測：7 種合成違規各被對應規則抓到，6 種反例零誤報；任一不成立＝不成立。
-2. 突變：每條規則至少一個突變，全部 killed。
-3. 共通層零修改（第 3 點）。
-4. 基線報告：命中數與逐行清單存證據目錄；件数の突き合わせ寫「掃了幾檔、幾行、幾命中、每規則幾命中」。
-5. 三平台：L1 跑 `zone_scan.selftest` 綠（Windows 的路徑分隔與編碼要過；參考 `portable-verification` 的做法）。
+架構師原文五條保留；每條下面是本線補的數字門檻與判法。看結果後不緩。
+
+1. **自測**（`zone_scan.selftest`＝`python -m unittest`）：
+   - 正例 **7**（卡 §4 的七種）：每種一個合成檔，**只**被指定的規則抓到、行號正確（`static int` → Z2、`std::random_device` → Z6、匿名命名空間 `int counter` → Z2、`Time::Now()` → Z4、`ImGui::GetIO()` → Z3、`SDL_GetMouseState()` → Z3、`[this]` lambda 存進成員 → Z5 候選且**不**計入違規）。
+   - 反例 **6**（卡 §4 的六種）：`static constexpr`、`const` 全域、函式宣告、註解裡的 `ImGui::`、字串裡的 `<chrono>`、`std::int64_t` 的 ns 時間——各一個合成檔，**0** 違規、**0** 候選。
+   - 另加每條規則各至少 1 個正例與 1 個反例（Z1 的 include 清單逐項、Z2 的 `inline int x;`／`thread_local`／類別靜態成員／`extern`、遮罩的邊界：區塊註解、raw string、數字分隔 `1'000`、include 行本身是字串）；數量在報告列出，不設上限。
+   - 成立＝unittest 全綠且 7＋6 逐一對應；任一不成立＝判定 1 不成立。
+2. **突變**（`tests/common/zone_scan/mutations.json`＋`run_mutations.py`，照 pvp 的做法）：至少 **8** 條——Z1～Z6 各 1（刪規則或改正規式）、遮罩 1（註解不遮）、清單版本檢查 1（接受未知版本）。killed 只算「`zone_scan.selftest` 失敗且輸出含該突變宣告的測試名」；survived／stale／wrong_failure 各自計數。成立＝**8/8 killed**（或實際條數全殺）。
+3. **共通層零修改**：`git diff --stat origin/master...HEAD` 中，`tests/`、`engine/`、`framework/`、`apps/`、`tools/`、`build/` 之下**既有檔**的變更只有 `tests/common/CMakeLists.txt` 一個檔、**+1 行**（`add_subdirectory(zone_scan)`）；新增檔全在 `tests/common/zone_scan/`；`apps/object_fps_pvp/` **0** 變更。文件（本卡、target 草案、dev_log、kernel README、HANDOFF）不計。成立＝這三個數字成立。
+4. **基線報告**（`zone_scan.baseline`，`--no-fail`，證據目錄 `build/evidence/zone-scan/baseline-<date>/`）：報告寫「清單 N 檔、展開後 M 檔、L 行、H 違規、C 候選、每規則 n(Z1)…n(Z6)」。件数の突き合わせ三條：(a) `H ＝ Σ n(Zk)` ＝ 違規行數；(b) `M ＝ N ＋ 展開標頭數`，與報告 `expanded` 清單長度一致；(c) **獨立計數**：對同一組 M 檔，以 `git grep -nP` 各算一次 Z1 的 `^\s*#\s*include\s*<(chrono|random|thread|atomic|mutex|condition_variable|future|ctime)>` 與 Z4 的時鐘別名，件數須等於報告的 n(Z1) include 子集與 n(Z4)（差異只允許在遮罩差——註解或字串裡的樣本——且逐行列出）。三條皆一致＝「一致」；否則寫「不一致（…）」並停下不確定判定 4。基線有命中是預期（spec J-17 自己點名 `Combat.hpp:5`、`Movement.hpp:8`），**命中數不是門檻**。
+5. **三平台**：L1（linux-x64、windows-x64、macos-arm64）的 ctest 都含 `zone_scan.selftest` passed 與 `zone_scan.baseline` passed（**3/3 平台、2/2 測試**）；Windows 上 baseline 報告的路徑全是正斜線、檔案以 UTF-8 讀寫（在 CI 的 tests.xml 讀印出值）。任一平台 skipped 或 failed＝不成立。
+
+## 基線清單 v1（手寫；依 audit §1.3 的 zone 欄與 §4.5；待架構師核定）
+
+| 來源檔（`apps/object_fps_pvp/`） | audit 列 | zone 欄 | 列入 |
+|---|---|---|---|
+| `src/Collision/CharacterCollision.cpp` | §1.3 `src/Collision` | C | 是 |
+| `src/Gameplay/Player/PlanarMovement.cpp` | §1.3 `src/Gameplay` | C | 是 |
+| `src/Pvp/PvpMatch.cpp` | P1 | C | 是（展開到 `PvpMatch.hpp` → `Combat.hpp`、`Movement.hpp`、`MovementTrace.hpp`、`MovementDiag.hpp` 等） |
+| `src/Pvp/ClientSimulation.cpp` | P5 | Host 時鐘（B）；內部跑 (c) 預測 | 是（卡 §5 點名） |
+| `src/Pvp/ClientSimulationRole.cpp` | P5 | 同列；RoleThread 與 `Body` 是 Host | **否**（Host 執行緒；(c) 的部分在 `ClientSimulation.cpp`） |
+| `src/Pvp/LocalPlayerPrediction.cpp` | P6 | C（PredictStep）＋B（TrackPhase） | 是 |
+| `src/Pvp/Movement.cpp` | P7 | C | 是 |
+| `src/Pvp/PlayerAnimation.cpp` | P9 | C（推進進 digest） | 是 |
+| `src/Pvp/ShotQuery.cpp`、`ShotGate.cpp`、`PlayerHitModel.cpp`、`PlayerHitbox.cpp`、`PlayerPose.cpp` | P9 | 中間地帶（DET-1：E1 前明示為 (b)） | **否**（E1 後翻 (c) 時加入） |
+| `src/Pvp/Arena.cpp`、`ArenaMesh.cpp`、`MovementRulesFile.cpp`、`PlayerAnimationContent.cpp`、`PlayerAnimationDigest.cpp` | P13 | C（內容身分、契約資料） | 是 |
+| `src/Pvp/NativeFiles.cpp` | P13 | 包（`Io:file`，(b) System 或 Host） | **否** |
+| `src/Pvp/MatchRuntimeHost.cpp` | P2 | 混合：Host（B）＋Ingress（B）＋Judge（(c)） | **否**（Judge 是 Host 檔內的一段函式；拆成 System 後再列。列入會讓基線被 Host 的時鐘命中淹沒） |
+| 其餘 `src/Pvp/*.cpp`、`src/App/*.cpp` | P2～P4、P8、P10～P12、`src/App` | B | 否 |
+
+結果：清單 **12** 檔。`owner_root = apps/object_fps_pvp`、`include_roots = [apps/object_fps_pvp/include]`。
+清單檔放 `tests/common/zone_scan/baseline/object_fps_pvp.zone-c-sources.json`（守衛持有；pvp 不改）。
+
+## 提給架構師的問題（開始前；本線的建議在括號內）
+
+1. **規則代號衝突**：spec G.1 已用 `Z1～Z8` 指 Kernel 的區規則（Z4＝無 effect、Z6＝rollback）；本卡的掃描規則也叫 `Z1～Z6`。同一份報告裡「Z4」會有兩個意思。（建議改用 `ZS1～ZS6`，ZS＝zone scan；本卡與 target 草案的代號隨決定改。核定前本卡沿用 Z。）
+2. **`std::hash`**：spec B.5 的 (c) 檔掃描清單含 `std::hash`，spec 修訂記錄第 1389 行也寫「五條規則是對 B.5 既有清單（`thread_local`、`std::hash`、`rand`）的追加，不取代」，但卡的六條沒有它。（建議加第七條「雜湊」：`std::hash`、`unordered_`；entity_store 守衛 W2 已有同樣的正規式可借。）
+3. **效果類標頭**：S-8 說 (c) 除 Diagnostics 外不得有 effect，卡的 Z1 只列時鐘、執行緒、OS 與 SDL 標頭；`<fstream>`、`<filesystem>`、`<iostream>` 是檔案與串流效果。（建議加進 Z1 的資料檔；不加也可，但要寫進範囲の限界。）
+4. **清單格式加兩欄**：`owner_root`、`include_roots`（target 草案 §2）。沒有它們，掃描器解析不了 `"RetroFPS/Pvp/Movement.hpp"` 這種引號 include；從 CMake 讀是工具職能，不做。
+5. **註解不掃**：六條規則都在遮掉註解與字串之後掃（卡 §1 留給本線決定）；理由是卡 §4 的反例「註解裡的 `ImGui::`」要求零誤報。
+6. 基線清單的四個「否」（上表粗體）是本線的判讀，請確認。
 
 ## 範囲の限界
 
@@ -97,3 +133,4 @@ Kernel 的 G-5 啟動報告之一是「(c) 區 System 來源檔清單」。kerne
 ## 現況（本線更新）
 
 - 2026-11-12 交接卡建立（架構師）。未開始。
+- 2026-11-12 J-17 線開工（分支 `claude/arch-j17-scanner`，自 `2b4618f9`）。讀完卡、spec §G／J-17／J.4／B.5、audit §1.3／§4.5／§5／§6、三份參考實作。補齊「判定」的數字門檻、寫基線清單 v1（12 檔）、寫清單格式 v1 草案 `docs/architecture/target/zone-c-sources.zh-Hant.md`、列六個問題，送架構師核定。**核定前不寫程式。**
