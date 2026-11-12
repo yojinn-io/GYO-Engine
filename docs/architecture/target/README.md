@@ -14,6 +14,7 @@
 
 - 平鋪，不分子資料夾：檔名＝搬回後在 `docs/architecture/` 的檔名。例：`target/world.zh-Hant.md` → `docs/architecture/world.zh-Hant.md`。工作線（kernel）不是文件的最終位置，所以不出現在路徑裡；搬回只是 `git mv`。
 - 搬回時若取代現況的同名文件，取代後刪除舊檔（歷史留在 git），不並存。
+- 搬回的時機：逐部件，在該部件的遷移批完成時；遷移前不整體改寫現況文件，只在有 target 對應的現況文件檔頭加一行「現況文件；目標見 target/…；遷移批完成時取代」（架構師 2026-11-12；遷移批待 `v8-arch-migration-plan` 排定）。framework 三份已標 deprecated 的文件保留到 `framework/` 程式被 plugins 遷移批刪除時，同一個 PR 一起刪。
 
 ## 狀態標記
 

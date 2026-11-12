@@ -1,5 +1,7 @@
 # GYO entity store
 
+> Current document. The kernel's World, which builds on this store, is designed in [`target/world.zh-Hant.md`](target/world.zh-Hant.md); this document is revised when that migration batch completes (the batch is to be set by `v8-arch-migration-plan`).
+
 Owner: Engine (`engine/entity_store` → `GYO::EntityStore`, namespace `Engine::EntityStore`; decided 2026-11-05).
 Plan, evidence and record: [entity-store](plans/entity-store/README.md) (the reference survey, the Architecture Delta
 with its mapping to the first consumer's clauses, and the batches). Implementation is batch `v8-arch-entity-store-impl`.

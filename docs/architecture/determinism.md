@@ -1,5 +1,7 @@
 # Determinism
 
+> Current document. Target design: [`target/determinism.md`](target/determinism.md); it replaces this document when the component's migration batch completes (the batch is to be set by `v8-arch-migration-plan`).
+
 Updated 2026-11-11. Owner: Engine (architecture). Written by task card `v8-arch-determinism-levels` (docs only; no code,
 flag or golden changed). **Status: proposal.** The `Design Invariants` section below is a candidate; it binds only
 after the user approves it. The decisions the user has to make are in section 0. The guard-expansion plan and the

@@ -1,5 +1,7 @@
 # GYO architecture
 
+> Current architecture. The target design after the kernel rework is in [`architecture/target/`](architecture/target/README.md); each component's current document is replaced by its target version when that component's migration batch completes (the batch is to be set by `v8-arch-migration-plan`).
+
 This document describes the current repository boundaries. The engine supplies reusable C++ mechanisms; games own gameplay and content; design tools consume the same public engine APIs. Engine libraries are linked statically into game and tool executables. Native third-party runtime libraries are deployed beside those products where required.
 
 This document owns engine-wide architecture, dependency directions and shared rules. Detailed game architecture, gameplay policies and product data contracts belong in `docs/<game>/`. Engine subsystem documents describe reusable mechanisms; dated development logs record implementation history and validation evidence.

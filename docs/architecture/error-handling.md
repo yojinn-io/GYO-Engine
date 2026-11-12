@@ -1,5 +1,7 @@
 # GYO error handling
 
+> Current document. Target design: [`target/error-handling.md`](target/error-handling.md); it replaces this document when the component's migration batch completes (the batch is to be set by `v8-arch-migration-plan`).
+
 GYO separates failures by who can do something about them:
 
 ```text
