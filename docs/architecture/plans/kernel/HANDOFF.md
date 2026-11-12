@@ -161,6 +161,8 @@
 
 - 2026-11-13 `v8-arch-migration-plan` 稿完成（1050 行；三輪對抗 Opus／xhigh：4→1→0 blocker；驗收點檢 Opus／high：A1～A10 成立、數字一致；8 條半改已補）。合計 632～1,299 h、關鍵路徑 331～692 h、M3 115～247、M4 181～389。PR 開給使用者；**待使用者**：核准計畫、A9 文字修正（`v8-arch-migration-plan-a9`）、未決 U1～U14（U2 已定）。dev_log `2026_11_13_arch_kernel_migration_plan`。
 
+- 2026-11-13（夜間，使用者就寢）`v8-arch-a6-revision` 事前宣告草稿寫好（`a6-revision-declaration.zh-Hant.md`，分支 `claude/arch-a6-revision` 自計畫分支開）；**待使用者核准後開工**。kernel-scaffold、h7-scanner 兩張卡已掛（等使用者點開；h7 的模型照計畫 Fable，考量用量開卡時可選 Opus）。pvp-baseline 卡在容器內重量（U8）。
+
 ## 下一步
 
 - 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。
