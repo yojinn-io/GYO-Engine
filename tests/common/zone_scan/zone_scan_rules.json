@@ -4,14 +4,41 @@
   "ZS1": {
     "headers": [
       "engine/time/MonotonicClock.hpp",
-      "chrono", "ctime", "time.h",
+      "chrono",
+      "ctime",
+      "time.h",
       "random",
-      "thread", "atomic", "mutex", "condition_variable", "future", "shared_mutex", "stop_token", "semaphore", "latch", "barrier", "pthread.h", "threads.h", "stdatomic.h",
-      "windows.h", "unistd.h",
+      "thread",
+      "atomic",
+      "mutex",
+      "condition_variable",
+      "future",
+      "shared_mutex",
+      "stop_token",
+      "semaphore",
+      "latch",
+      "barrier",
+      "pthread.h",
+      "threads.h",
+      "stdatomic.h",
+      "windows.h",
+      "unistd.h",
       "SDL.h",
-      "fstream", "filesystem", "iostream", "cstdio", "stdio.h"
+      "fstream",
+      "filesystem",
+      "iostream",
+      "cstdio",
+      "stdio.h"
     ],
-    "header_prefixes": ["sys/", "SDL3/", "SDL2/", "SDL_"]
+    "header_prefixes": [
+      "sys/",
+      "SDL3/",
+      "SDL2/",
+      "SDL_",
+      "SDL3_ttf/",
+      "SDL3_mixer/",
+      "SDL3_image/"
+    ]
   },
   "ZS3": {
     "patterns": [

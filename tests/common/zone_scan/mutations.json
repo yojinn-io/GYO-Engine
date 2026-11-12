@@ -1,19 +1,19 @@
 {
   "version": 1,
-  "description": "Declared mutants of the zone-C scanner (judgement 2 of j17-scanner.zh-Hant.md): at least one per rule ZS1..ZS7, three for the masking, one for the list version check, plus header expansion and list validation. A mutant is killed only when the self-test fails with the expected test name (run_mutations.py).",
+  "description": "Declared mutants of the zone-C scanner (judgement 2 of j17-scanner.zh-Hant.md): at least one per rule ZS1..ZS7, four for the masking, one for the list version check, plus header expansion, header-name case and list validation. A mutant is killed only when the self-test fails with the expected test name (run_mutations.py).",
   "mutants": [
     {
       "id": "zs1-chrono-removed",
       "file": "zone_scan_rules.json",
-      "find": "\"chrono\", \"ctime\", \"time.h\",",
-      "replace": "\"ctime\", \"time.h\",",
+      "find": "    \"chrono\",\n",
+      "replace": "",
       "expect": "test_zs1_banned_headers_angle_form"
     },
     {
       "id": "zs1-prefix-check-removed",
       "file": "zone_scan.py",
-      "find": "return target in self.zs1_headers or target.startswith(self.zs1_prefixes)",
-      "replace": "return target in self.zs1_headers",
+      "find": "return lowered in self.zs1_headers or lowered.startswith(self.zs1_prefixes)",
+      "replace": "return lowered in self.zs1_headers",
       "expect": "test_zs1_banned_headers_angle_form"
     },
     {
@@ -33,8 +33,8 @@
     {
       "id": "zs2-namespace-variable-dropped",
       "file": "zone_scan.py",
-      "find": "    return \"variable\", squash(raw_text)\n\n\ndef namespace_scope_variables",
-      "replace": "    return \"other\", None\n\n\ndef namespace_scope_variables",
+      "find": "    return \"variable\", squash(raw_text)\n\n\ndef declarators_only",
+      "replace": "    return \"other\", None\n\n\ndef declarators_only",
       "expect": "test_positive_anonymous_namespace_counter"
     },
     {
@@ -89,8 +89,8 @@
     {
       "id": "mask-string-literal-kept",
       "file": "zone_scan.py",
-      "find": "        elif c in \"\\\"'\" and not (c == \"'\"",
-      "replace": "        elif False and c in \"\\\"'\" and not (c == \"'\"",
+      "find": "        elif (c in \"\\\"'\" and not (c == \"'\" and identifier_before(text, i))) or \\\n",
+      "replace": "        elif False or \\\n",
       "expect": "test_negative_chrono_in_string"
     },
     {
@@ -103,8 +103,8 @@
     {
       "id": "expansion-leaves-owner",
       "file": "zone_scan.py",
-      "find": "        if not (value == owner_root or value.startswith(owner_root + \"/\")):\n            continue\n",
-      "replace": "",
+      "find": "        if value is None or not (value == owner_root or value.startswith(owner_root + \"/\")):\n            continue\n",
+      "replace": "        if value is None:\n            continue\n",
       "expect": "test_resolution_never_leaves_owner_root"
     },
     {
@@ -113,6 +113,20 @@
       "find": "    if files != sorted(files):\n        errors.append(\"list: files must be sorted (byte order)\")\n",
       "replace": "",
       "expect": "test_path_rules_are_enforced"
+    },
+    {
+      "id": "mask-raw-string-prefix-dropped",
+      "file": "zone_scan.py",
+      "find": "RAW_STRING_START = re.compile(r'(?:u8|u|U|L)?R\"')",
+      "replace": "RAW_STRING_START = re.compile(r'R\"')",
+      "expect": "test_prefixed_raw_strings_and_literals_are_masked"
+    },
+    {
+      "id": "zs1-case-sensitive-header",
+      "file": "zone_scan.py",
+      "find": "        lowered = target.lower()  # include names are case-insensitive on Windows (<Windows.h>)",
+      "replace": "        lowered = target",
+      "expect": "test_zs1_header_names_are_case_insensitive_and_sdl_satellites_count"
     }
   ]
 }

@@ -167,6 +167,11 @@ class RuleZS1Includes(OwnerTree):
                                           "#include <algorithm>\n#include <span>\n#include <optional>\n#include <cmath>\n#include <map>\n"
                                           '#include "engine/math/scalar/Angle.hpp"\n'))
 
+    def test_zs1_header_names_are_case_insensitive_and_sdl_satellites_count(self):
+        # Review item 12 (2026-11-12): <Windows.h> is the usual spelling; SDL3_ttf is an SDL header.
+        self.assertOnly(self.scan_source("#include <Windows.h>\n"), 1, "ZS1", "<Windows.h>")
+        self.assertOnly(self.scan_source("#include <SDL3_ttf/SDL_ttf.h>\n"), 1, "ZS1", "<SDL3_ttf/SDL_ttf.h>")
+
     def test_zs1_include_spelled_with_spaces(self):
         self.assertOnly(self.scan_source("  #  include   <chrono>\n"), 1, "ZS1", "<chrono>")
 
@@ -258,10 +263,47 @@ class RuleZS2State(OwnerTree):
     def test_zs2_file_scope_without_namespace(self):
         self.assertOnly(self.scan_source("#include <cstdint>\nint fileScope = 0;\nint F();\n"), 2, "ZS2", "int fileScope")
 
-    def test_zs2_lone_identifier_argument_reads_as_function(self):
+    def test_zs2_review_function_shapes_pass(self):
+        # Review items 1, 2, 3, 13 (2026-11-12): multi-word builtin types, function-pointer, array-reference and
+        # decltype parameters, inline namespace, typedef struct, export macro.
+        for body in ("int F6(unsigned int a, long long b, signed char c);",
+                     "void F(unsigned long long n);",
+                     "struct S { static void F(unsigned int a); };",
+                     "int F3(int (*cb)(int));",
+                     "void F(std::span<const Foo> items, Foo* (*make)(int));",
+                     "template <std::size_t N> void F(const char (&s)[N]);",
+                     "struct S20 { static void Run(int (&arr)[4]); };",
+                     "void F(decltype(x) y);",
+                     "inline namespace V1 { int F(); }",
+                     "typedef struct { int a; } Foo;",
+                     "typedef struct Tag { int a; } Foo, *FooPtr;",
+                     "class OWN_API Foo { int x; };",
+                     "int F() { return 1; }\nint G();"):
+            with self.subTest(body=body):
+                self.assertClean(self.scan_source("namespace Own {\n" + body + "\n}\n"))
+
+    def test_zs2_review_variables_are_reported(self):
+        # Review items 3, 4, 9, 11 (2026-11-12).
+        cases = {
+            "inline namespace V1 {\nint g;\n}": (3, "int g"),
+            "void F() {\nstatic Foo f(Bar{1});\n}": (3, "static Foo f(Bar{1})"),
+            "static std::vector<int> v(std::vector<int>{1, 2});": (2, "static std::vector<int> v("),
+            "auto handler = [](const int e) { return e; };": (2, "auto handler"),
+            "int g = sizeof(const int);": (2, "int g"),
+            "struct S { static thread_local int n; };": (2, "static thread_local int n"),
+            "void G() {\nstatic thread_local int n = 0;\n}": (3, "static thread_local int n"),
+            "int F() { return 1; }\nint afterwards;": (3, "int afterwards"),
+        }
+        for body, (line, text) in cases.items():
+            with self.subTest(body=body):
+                self.assertOnly(self.scan_source("namespace Own {\n" + body + "\n}\n"), line, "ZS2", text)
+
+    def test_zs2_identifier_only_arguments_read_as_function(self):
         # Limit, stated in the card: `Foo f(x);` is a function declaration when x names a type; the
-        # scanner reads every lone identifier that way.
-        self.assertClean(self.scan_source("namespace Own {\nFoo f(x);\n}\n"))
+        # scanner reads every argument list made only of (qualified) identifiers that way (review item 5).
+        for body in ("Foo f(x);", "Foo f(Foo::kDefault);", "Foo f(x, y);"):
+            with self.subTest(body=body):
+                self.assertClean(self.scan_source("namespace Own {\n" + body + "\n}\n"))
 
 
 class RuleZS3ZS4ZS6ZS7Names(OwnerTree):
@@ -345,6 +387,16 @@ class Masking(OwnerTree):
     def test_character_literal_with_brace_does_not_break_scopes(self):
         self.assertOnly(self.scan_source("namespace Own {\nchar Open() { return '{'; }\nint afterwards;\n}\n"), 3, "ZS2", "int afterwards")
 
+    def test_prefixed_raw_strings_and_literals_are_masked(self):
+        # Review item 6 (2026-11-12): LR"(...)", u8R"(...)", L'"', u8'"'.
+        report = self.scan_source('namespace Own {\nvoid F() {\n    const wchar_t* s = LR"(abc " ImGui::GetIO )";\n'
+                                  '    auto t = u8R"(x " SDL_GetMouseState() )";\n    constexpr wchar_t c = L\'"\';\n    auto d = u8\'"\';\n}\nint g;\n}\n')
+        self.assertOnly(report, 8, "ZS2", "int g")
+
+    def test_line_comment_continued_by_backslash(self):
+        # Review item 14 (2026-11-12): line splicing happens before comments are removed.
+        self.assertClean(self.scan_source("namespace Own {\n// comment \\\nint g;\nvoid F();\n}\n"))
+
     def test_preprocessor_lines_do_not_count_as_namespace_statements(self):
         self.assertClean(self.scan_source("#pragma once\n#define OWN_VALUE 1\n#if OWN_VALUE\nnamespace Own {\nint F();\n}\n#endif\n"))
 
@@ -397,11 +449,13 @@ class Expansion(OwnerTree):
         self.assertIsNone(zone_scan.resolve_quoted_include(self.root, OWNER + "/src/A.cpp", "time/Other.hpp", ["engine"], OWNER))
         self.assertIsNone(zone_scan.resolve_quoted_include(self.root, "engine/time/A.cpp", "Other.hpp", [], OWNER))
 
-    def test_dot_dot_in_include_is_not_followed(self):
+    def test_dot_dot_in_include_is_followed_only_inside_the_owner(self):
+        # Review item 7 (2026-11-12): `..` is normalised, then containment under owner_root decides.
         self.write(OWNER + "/include/Own/A.hpp", HEADER + "#include <chrono>\n")
-        report = self.scan([self.write(OWNER + "/src/A.cpp", '#include "../include/Own/A.hpp"\n')])
-        self.assertClean(report)
-        self.assertEqual(len(report["unresolved_includes"]), 1)
+        self.write("engine/Outside.hpp", HEADER + "#include <random>\n")
+        report = self.scan([self.write(OWNER + "/src/A.cpp", '#include "../include/Own/A.hpp"\n#include "../../engine/Outside.hpp"\n')])
+        self.assertEqual(self.findings(report), [(OWNER + "/include/Own/A.hpp", 2, "ZS1", "<chrono>")])
+        self.assertEqual([u["include"] for u in report["unresolved_includes"]], ["../../engine/Outside.hpp"])
 
 
 class ListContract(OwnerTree):
@@ -445,6 +499,14 @@ class ListContract(OwnerTree):
         self.assertRefused("include_roots item 'other/include' is not under owner_root", include_roots=["other/include"])
         self.assertRefused("is not a directory", include_roots=[OWNER + "/missing"])
         self.assertRefused("repo_commit 'xyz' must be 7 to 40 hexadecimal digits", repo_commit="xyz")
+        # Review item 8 (2026-11-12): only canonical paths; owner_root must be a directory.
+        self.assertRefused("canonical", owner_root="./" + OWNER, include_roots=["./" + OWNER + "/include"], files=["./" + self.source])
+        self.assertRefused("canonical", files=[OWNER + "/./src/A.cpp"])
+        self.assertRefused("canonical", files=[OWNER + "//src/A.cpp"])
+        self.assertRefused("canonical", owner_root=OWNER + "/.")
+        self.assertRefused("is not a directory under", owner_root="missing", include_roots=[], files=[])
+        self.assertRefused("include_roots must not repeat", include_roots=[OWNER + "/include", OWNER + "/include"])
+        self.assertRefused("generated_by must be a non-empty string", generated_by="   ")
 
     def test_empty_file_list_is_clean(self):
         report = self.scan([])

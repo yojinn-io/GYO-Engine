@@ -55,11 +55,13 @@ RULES = ("ZS1", "ZS2", "ZS3", "ZS4", "ZS5", "ZS6", "ZS7")
 DEFAULT_RULES = Path(__file__).resolve().with_name("zone_scan_rules.json")
 
 INCLUDE = re.compile(r"^[ \t]*#[ \t]*include[ \t]*([<\"])([^>\"]+)[>\"]")
+RAW_STRING_START = re.compile(r'(?:u8|u|U|L)?R"')
+LITERAL_PREFIX = re.compile(r"""(?:u8|u|U|L)(["'])""")
 INCLUDE_LINE = re.compile(r"^[ \t]*#[ \t]*include\b")
 STATIC = re.compile(r"\b(?:static|thread_local)\b")
 CONST_WORDS = re.compile(r"\b(?:constexpr|consteval)\b")
 TEMPLATE_HEAD = re.compile(r"^\s*template\s*<")
-SKIP_HEAD = re.compile(r"^\s*(?:namespace|using|typedef|static_assert|friend|concept|requires|export|import|module|asm|goto|return|extern\s+template)\b")
+SKIP_HEAD = re.compile(r"^\s*(?:(?:inline\s+)?namespace|using|typedef|static_assert|friend|concept|requires|export|import|module|asm|goto|return|extern\s+template)\b")
 TYPE_HEAD = re.compile(r"^\s*(?:struct|class|union|enum)\b")
 TYPE_KEYWORDS = frozenset(("struct", "class", "union", "enum", "final", "alignas", "typename", "const", "volatile"))
 FIRST_WORD = re.compile(r"\s*([A-Za-z_]\w*)")
@@ -68,10 +70,13 @@ ARGUMENT_WORDS = frozenset(("nullptr", "true", "false", "this", "sizeof", "align
 PARAMETER = re.compile(
     r"^\s*(?:(?:const|volatile|typename|struct|class|enum|union)\s+)*"
     r"(?:::)?[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*"            # a type name, possibly qualified
+    r"(?:\s+(?:unsigned|signed|long|short|int|char|double|float|const|volatile)\b)*"  # multi-word builtin types
     r"(?:\s*(?:const|volatile|&&|&|\*|\.\.\.))*"          # cv, references, pointers, pack
     r"(?:\s*[A-Za-z_]\w*)?"                               # an optional parameter name (`&name` has no space)
     r"(?:\s*\[\s*\d*\s*\])*"                              # array bounds
     r"(?:\s*=\s*[^,]*)?\s*$")                             # a default argument (blank when it was a literal)
+FUNCTION_POINTER_PARAMETER = re.compile(r"^\s*(?:const\s+)?[\w:\s*&]+\(\s*[*&]+\s*\w*\s*\)\s*(?:\(|\[)")
+DECLTYPE_PARAMETER = re.compile(r"^\s*(?:const\s+)?decltype\s*\(")
 LAMBDA_INTO_MEMBER = re.compile(r"(?:\bthis->\w+|\b\w+_)\s*(?:=|\.(?:push_back|emplace_back|emplace|insert|assign)\s*\()\s*\[(?:this|=|&)")
 FUNCTION_MEMBER = re.compile(r"\bstd::(?:move_only_)?function\s*<.*>\s*\w+\s*(?:;|=|\{)")
 POINTER_MEMBER = re.compile(r"^\s*(?:const\s+)?(?:std::)?[A-Z]\w*(?:::\w+)*(?:<[^;]*>)?\s*(?:const\s*)?[*&]\s*(?:const\s+)?[a-z]\w*_\s*(?:=|;|\{)")
@@ -94,22 +99,29 @@ def blank_comments_and_literals(text):
         c = text[i]
         if text.startswith("//", i):
             end = text.find("\n", i)
+            while 0 <= end and text[:end].rstrip("\r").endswith("\\"):  # a line comment continued by a backslash
+                end = text.find("\n", end + 1)
             end = n if end < 0 else end
-            out.append(" " * (end - i)); i = end
+            out.append(re.sub(r"[^\n]", " ", text[i:end])); i = end
         elif text.startswith("/*", i):
             end = text.find("*/", i + 2)
             end = n if end < 0 else end + 2
             out.append(re.sub(r"[^\n]", " ", text[i:end])); i = end
-        elif c == "R" and text.startswith('R"', i) and (i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")):
-            delimiter_end = text.find("(", i + 2)
+        elif c in "RLuU" and (prefix := RAW_STRING_START.match(text, i)) and not identifier_before(text, i):
+            quote = prefix.end() - 1
+            delimiter_end = text.find("(", quote + 1)
             if delimiter_end < 0:
                 out.append(c); i += 1
                 continue
-            closing = ")" + text[i + 2:delimiter_end] + '"'
+            closing = ")" + text[quote + 1:delimiter_end] + '"'
             end = text.find(closing, delimiter_end)
             end = n if end < 0 else end + len(closing)
             out.append(re.sub(r"[^\n]", " ", text[i:end])); i = end
-        elif c in "\"'" and not (c == "'" and i > 0 and (text[i - 1].isalnum() or text[i - 1] == "_")):
+        elif (c in "\"'" and not (c == "'" and identifier_before(text, i))) or \
+                (c in "LuU" and LITERAL_PREFIX.match(text, i) and not identifier_before(text, i)):
+            if c not in "\"'":  # a prefixed literal: L"..", u8"..", u'..'
+                c = LITERAL_PREFIX.match(text, i).group(1)
+                out.append(" " * (LITERAL_PREFIX.match(text, i).end() - 1 - i)); i = LITERAL_PREFIX.match(text, i).end() - 1
             j = i + 1
             while j < n and text[j] != c and text[j] != "\n":
                 j += 2 if text[j] == "\\" else 1
@@ -118,6 +130,10 @@ def blank_comments_and_literals(text):
         else:
             out.append(c); i += 1
     return "".join(out)
+
+
+def identifier_before(text, i):
+    return i > 0 and (text[i - 1].isalnum() or text[i - 1] == "_")
 
 
 def blank_preprocessor_lines(code):
@@ -171,7 +187,15 @@ def first_parentheses(text, raw):
     open_paren = flat.find("(")
     if open_paren < 0:
         return None, None
-    close_paren = flat.find(")", open_paren)
+    depth, close_paren = 0, -1
+    for j in range(open_paren, len(flat)):
+        if flat[j] == "(":
+            depth += 1
+        elif flat[j] == ")":
+            depth -= 1
+            if depth == 0:
+                close_paren = j
+                break
     if close_paren < 0:
         return flat[open_paren + 1:], raw[kept[open_paren] + 1:]
     return flat[open_paren + 1:close_paren], raw[kept[open_paren] + 1:kept[close_paren]]
@@ -200,9 +224,15 @@ def strip_template_head(text):
 def is_immutable(declaration):
     """True when the declared object itself cannot change: constexpr, consteval, or a const that
     applies to the variable (after the last * or &, or with no pointer / reference at all)."""
-    if CONST_WORDS.search(declaration):
-        return True
     flat = strip_template_arguments(declaration)
+    assignment = first_top_level_assignment(flat)
+    if assignment >= 0:
+        flat = flat[:assignment]  # a const inside the initializer belongs to the initializer
+    cut = flat.find("(")
+    if cut >= 0 and not re.match(r"^\s*(?:const\s+)?decltype\b", flat):
+        flat = flat[:cut]
+    if CONST_WORDS.search(flat):
+        return True
     consts = [m.start() for m in re.finditer(r"\bconst\b", flat)]
     if not consts:
         return False
@@ -239,6 +269,8 @@ def parenthesised_is_parameter_list(inside, raw_inside):
         first = FIRST_WORD.match(item)
         if not first or first.group(1) in ARGUMENT_WORDS or item[0].isdigit() or item[0] in "-+!~*&(":
             return False
+        if FUNCTION_POINTER_PARAMETER.match(item) or DECLTYPE_PARAMETER.match(item):
+            continue  # `int (*cb)(int)`, `const char (&s)[N]`, `decltype(x) y`
         if not PARAMETER.match(item):
             return False
     return True
@@ -261,13 +293,25 @@ def first_top_level_assignment(text):
     return -1
 
 
+def declaration_end(code, start):
+    """Offset of the first `;`, or of a `{` or assignment `=` outside parentheses, after start."""
+    depth = 0
+    for i in range(start, len(code)):
+        c = code[i]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth = max(0, depth - 1)
+        elif c == ";":
+            return i
+        elif depth == 0 and (c == "{" or (c == "=" and code[i - 1] not in "=!<>" and code[i + 1:i + 2] != "=")):
+            return i
+    return len(code)
+
+
 def static_declaration_is_variable(code, start, raw):
     """True when the static / thread_local declaration starting at start declares a variable."""
-    end = len(code)
-    for terminator in (";", "{", "="):
-        found = code.find(terminator, start)
-        if 0 <= found < end:
-            end = found
+    end = declaration_end(code, start)
     declaration = code[start:end]
     if is_immutable(declaration):
         return False
@@ -289,7 +333,7 @@ def namespace_statement_kind(head, raw_head):
     if not stripped:
         return "skip", None
     if SKIP_HEAD.match(text):
-        return ("namespace" if stripped.startswith("namespace") else "skip"), None
+        return ("namespace" if re.match(r"(?:inline\s+)?namespace\b", stripped) else "skip"), None
     if stripped == "extern":  # extern "C" { ... } with the literal blanked
         return "namespace", None
     if TYPE_HEAD.match(text):
@@ -297,8 +341,8 @@ def namespace_statement_kind(head, raw_head):
         # variable (two identifiers after the keyword, no base clause).
         words = [w for w in IDENTIFIER.findall(strip_template_arguments(re.sub(r"\[\[[^\]]*\]\]", "", stripped)))
                  if w not in TYPE_KEYWORDS]
-        if ":" in stripped or len(words) <= 1:
-            return "class", None
+        if ":" in stripped or len(words) <= 1 or any(re.fullmatch(r"[A-Z][A-Z0-9_]+", w) for w in words):
+            return "class", None  # an ALL_CAPS word is an export macro, not a declarator
         return "variable", squash(raw_text)
     if STATIC.search(text):
         return "skip", None  # reported by the static rule
@@ -321,6 +365,15 @@ def namespace_statement_kind(head, raw_head):
     return "variable", squash(raw_text)
 
 
+def declarators_only(trailer):
+    """True when the text after a closing brace holds only declarators (`s`, `*p, q[4]`), not a
+    statement with its own type (`int afterwards`)."""
+    flat = strip_template_arguments(trailer)
+    if not IDENTIFIER.search(flat):
+        return True
+    return re.search(r"[A-Za-z_]\w*\s+[A-Za-z_]\w*", flat) is None
+
+
 def namespace_scope_variables(code, raw):
     """Yields (line, text) for mutable variables declared at namespace scope. code has comments,
     literals and preprocessor lines blanked; raw is the original text (same offsets)."""
@@ -328,7 +381,8 @@ def namespace_scope_variables(code, raw):
     statement_start = 0
     depth = 0  # parentheses and brackets inside the current statement
     i, n = 0, len(code)
-    trailer_start = None  # after `}` of a class at namespace scope: declarators until `;`
+    trailer_start = None  # after `}` at namespace scope: text until `;` (declarators only after a class)
+    trailer_is_declarator = False
     while i < n:
         c = code[i]
         if c in "([":
@@ -344,6 +398,8 @@ def namespace_scope_variables(code, raw):
                     scopes.append("other")
                 else:
                     scopes.append(kind if kind in ("namespace", "class") else "other")
+                    if kind == "class" and re.match(r"^\s*typedef\b", head):
+                        scopes[-1] = "other"
             else:
                 scopes.append("other")
             statement_start = i + 1
@@ -351,12 +407,15 @@ def namespace_scope_variables(code, raw):
         elif c == "}" and depth == 0:
             closed = scopes.pop() if len(scopes) > 1 else "namespace"
             statement_start = i + 1
-            trailer_start = i + 1 if (closed == "class" and scopes[-1] == "namespace") else None
+            trailer_start = i + 1 if scopes[-1] == "namespace" else None
+            trailer_is_declarator = closed == "class"
         elif c == ";" and depth == 0:
             if scopes[-1] == "namespace":
-                if trailer_start is not None:
+                if trailer_start is not None and declarators_only(code[trailer_start:i]):
+                    # `struct S {...} s;` declares a variable; `typedef struct {...} Foo;` and a function
+                    # body's trailing `;` do not.
                     trailer = code[trailer_start:i]
-                    if IDENTIFIER.search(strip_template_head(trailer)) and not is_immutable(trailer):
+                    if trailer_is_declarator and IDENTIFIER.search(trailer) and not is_immutable(trailer):
                         yield line_of(code, trailer_start + (len(trailer) - len(trailer.lstrip()))), squash(raw[trailer_start:i])
                 else:
                     head = code[statement_start:i]
@@ -376,14 +435,15 @@ class Rules:
         try:
             if data.get("version") != 1:
                 raise ContractError(f"rules: unsupported rules version {data.get('version')!r} (supported: 1)")
-            self.zs1_headers = frozenset(data["ZS1"]["headers"])
-            self.zs1_prefixes = tuple(data["ZS1"]["header_prefixes"])
+            self.zs1_headers = frozenset(h.lower() for h in data["ZS1"]["headers"])
+            self.zs1_prefixes = tuple(p.lower() for p in data["ZS1"]["header_prefixes"])
             self.patterns = {rule: [re.compile(p) for p in data[rule]["patterns"]] for rule in ("ZS3", "ZS4", "ZS6", "ZS7")}
         except (KeyError, TypeError, re.error) as error:
             raise ContractError(f"rules: malformed rules file ({error})")
 
     def banned_header(self, target):
-        return target in self.zs1_headers or target.startswith(self.zs1_prefixes)
+        lowered = target.lower()  # include names are case-insensitive on Windows (<Windows.h>)
+        return lowered in self.zs1_headers or lowered.startswith(self.zs1_prefixes)
 
 
 def load_rules(path):
@@ -413,10 +473,14 @@ def scan_text(relative, raw, rules):
         for pattern in rules.patterns[rule]:
             for match in pattern.finditer(code):
                 findings.append((line_of(code, match.start()), rule, match.group(0).rstrip("( ")))
+    previous_end = -1
     for match in STATIC.finditer(code):
+        adjacent = previous_end >= 0 and code[previous_end:match.start()].strip() == ""
+        previous_end = match.end()
+        if adjacent:
+            continue  # `static thread_local`: one declaration, one finding
         if static_declaration_is_variable(code, match.start(), raw):
-            end = min(x for x in (code.find(";", match.start()), code.find("{", match.start()), code.find("=", match.start()), len(code)) if x >= 0)
-            findings.append((line_of(code, match.start()), "ZS2", squash(code[match.start():end])))
+            findings.append((line_of(code, match.start()), "ZS2", squash(code[match.start():declaration_end(code, match.start())])))
     structural = blank_preprocessor_lines(code)
     for line, text in namespace_scope_variables(structural, raw):
         findings.append((line, "ZS2", text))
@@ -440,9 +504,9 @@ def validate_path(label, value, owner_root=None):
         raise ContractError(f"list: {label} must be a non-empty string, got {value!r}")
     if "\\" in value:
         raise ContractError(f"list: {label} {value!r} uses a backslash; paths are forward-slash, repo-relative")
-    pure = PurePosixPath(value)
-    if pure.is_absolute() or value.startswith("/") or ".." in pure.parts or value.endswith("/"):
-        raise ContractError(f"list: {label} {value!r} must be repo-relative without '..' or a trailing slash")
+    parts = value.split("/")
+    if value.startswith("/") or any(p in ("", ".", "..") for p in parts):
+        raise ContractError(f"list: {label} {value!r} must be repo-relative and canonical (no leading or trailing slash, no '//', '.' or '..')")
     if owner_root is not None and not (value == owner_root or value.startswith(owner_root + "/")):
         raise ContractError(f"list: {label} {value!r} is not under owner_root {owner_root!r}")
 
@@ -469,7 +533,7 @@ def load_list(path, root):
         errors.append(f"list: missing field(s) {missing}")
     if errors:
         raise ContractError("\n".join(errors))
-    if not isinstance(data["generated_by"], str) or not data["generated_by"]:
+    if not isinstance(data["generated_by"], str) or not data["generated_by"].strip():
         errors.append("list: generated_by must be a non-empty string")
     if not isinstance(data["repo_commit"], str) or not re.fullmatch(r"[0-9a-fA-F]{7,40}", data["repo_commit"]):
         errors.append(f"list: repo_commit {data['repo_commit']!r} must be 7 to 40 hexadecimal digits")
@@ -478,8 +542,12 @@ def load_list(path, root):
     except ContractError as error:
         errors.append(str(error))
     owner_root = data["owner_root"] if isinstance(data["owner_root"], str) else ""
+    if owner_root and not errors and not (Path(root) / owner_root).is_dir():
+        errors.append(f"list: owner_root {owner_root!r} is not a directory under {root}")
     if not isinstance(data["include_roots"], list):
         errors.append("list: include_roots must be an array")
+    elif len(set(map(str, data["include_roots"]))) != len(data["include_roots"]):
+        errors.append("list: include_roots must not repeat")
     else:
         for item in data["include_roots"]:
             try:
@@ -518,18 +586,31 @@ def load_list(path, root):
 def resolve_quoted_include(root, including, target, include_roots, owner_root):
     """Repo-relative posix path of a quoted include, or None when it does not resolve under
     owner_root. Order: the including file's directory, then include_roots."""
-    if "\\" in target or target.startswith("/") or ".." in PurePosixPath(target).parts:
+    if "\\" in target or target.startswith("/"):
         return None
     candidates = [PurePosixPath(including).parent / target] + [PurePosixPath(r) / target for r in include_roots]
     for candidate in candidates:
-        value = candidate.as_posix()
-        if value.startswith("./"):
-            value = value[2:]
-        if not (value == owner_root or value.startswith(owner_root + "/")):
+        value = normalize_posix(candidate.as_posix())
+        if value is None or not (value == owner_root or value.startswith(owner_root + "/")):
             continue
         if (Path(root) / value).is_file():
             return value
     return None
+
+
+def normalize_posix(value):
+    """Collapses `.` and `..` segments of a relative posix path; None when it climbs above the root."""
+    parts = []
+    for part in value.split("/"):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if not parts:
+                return None
+            parts.pop()
+        else:
+            parts.append(part)
+    return "/".join(parts)
 
 
 def read_source(root, relative):
