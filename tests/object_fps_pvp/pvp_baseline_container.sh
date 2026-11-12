@@ -4,7 +4,7 @@
 # hand, never by CI. Inside the container:
 #   build    SOURCE_TAR=/in/src.tar  -> /work/src (a git archive), the test preset
 #            configuration, the measured targets and a local Gateway
-#   measure  OUT=/out                -> the declaration's M1..M7 into OUT
+#   measure  OUT=/out [REPS=5] [RUNS=5] [DURATION=600] -> the declaration's M1..M7 into OUT
 # /work is a Docker volume, so a measure run sees the build run's tree.
 set -euo pipefail
 phase=${1:?build or measure}
@@ -36,7 +36,7 @@ measure)
         sha256sum "$record" "$match" "$build/pvp-baseline/gateway" \
             "$build/acceptance/object_fps_pvp/gyo_object_fps_pvp_quad_probe" "$arena"
     } > "$out/machine.txt" 2>&1
-    for i in 0 1 2 3 4; do
+    for i in $(seq 0 $(( ${REPS:-5} - 1 ))); do
         echo "rep $i before: $(cat /proc/loadavg)" >> "$out/replay/load.txt"
         ps -eo pcpu,comm --sort=-pcpu | head -11 >> "$out/replay/load.txt"
         "$record" --replay --out "$out/replay/replay-$i.csv" --samples "$out/replay/samples-$i.csv"
