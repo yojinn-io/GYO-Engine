@@ -70,7 +70,6 @@ GUI editor は `build/target/toolchain/bin` に組み立てます。読み取り
 - [エラー処理の契約（Result／Error／Assert）](docs/architecture/error-handling.md)
 - [トレース転送とログの契約](docs/architecture/trace.md)
 - [描画と shader 契約](docs/rendering_architecture.ja.md)
-- [3D アセットとアニメーションの制約](docs/architecture/3d-assets.md)
 - [公開手順](docs/releasing.ja.md)
 
-`apps/` 配下の各ゲームは独立したプロジェクトであり、エンジンはそのいずれにも依存せず、汎用ゲーム framework も定義しません。現在有効なのは `object_fps_pvp`（サーバー権威の LAN 対戦。[ネットワーク構成](docs/object_fps_pvp/network-architecture.zh-Hant.md)）です。`object_fps` と `object_fps_v2` は無効化されており、Engine の基盤統一（Math、Result、include パス、入力層、Collision）の後は移行してから再有効化する必要があります。移行一覧は `docs/architecture/plans/` 配下の各計画の `inactive_products.md` です。一般的な scene 管理、完全な物理、GPU skinning、PBR、scripting、動的 plugin ABI は現在の実装範囲外です。
+`apps/` 配下の各ゲームは独立したプロジェクトであり、エンジンはそのいずれにも依存せず、汎用ゲーム framework も定義しません。現在有効なのは `object_fps_pvp`（サーバー権威の LAN 対戦。[ネットワーク構成](docs/object_fps_pvp/network-architecture.zh-Hant.md)）です。旧 `object_fps` と `object_fps_v2` は削除済みです（2026-11-12、`v8-arch-remove-object-fps`。必要なら git 履歴 `56b8dda3` を参照）。一般的な scene 管理、完全な物理、GPU skinning、PBR、scripting、動的 plugin ABI は現在の実装範囲外です。

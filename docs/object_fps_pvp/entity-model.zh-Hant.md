@@ -56,7 +56,7 @@
 ### 1.5 本 repo 的現成先例
 
 - `players_`、`shapes_`、`actionsCombat_` 都是 `std::map<PlayerId, …>`（`PvpMatch.hpp:165-171`）；`Snapshot()` 照 map 順序推成三個平行陣列（`PvpMatch.cpp:592-604`）。「按 id 升冪的平行陣列」在快照層已存在，只是由 `std::map` 隱含保證，沒有條文與守衛。
-- 單機版 `EnemySystem`（`apps/object_fps/src/Gameplay/Enemy/EnemySystem.cpp`）：`nextEnemyId_` 單調配發、用盡報錯不回繞（:599-601、:626）；`enemies_` 與 `snapshots_` 是同索引平行 vector，push_back 加保序 erase（:633、:645-657）。能借：單調 id 與明確用盡錯誤、保序刪除、「刪實體＝同索引刪所有平行陣列」。不能借：浮點秒、AoS 的 `RuntimeEnemy`。
+- 單機版 `EnemySystem`（已移除；見 git 歷史 `56b8dda3` 的 `apps/object_fps/src/Gameplay/Enemy/EnemySystem.cpp`）：`nextEnemyId_` 單調配發、用盡報錯不回繞（:599-601、:626）；`enemies_` 與 `snapshots_` 是同索引平行 vector，push_back 加保序 erase（:633、:645-657）。能借：單調 id 與明確用盡錯誤、保序刪除、「刪實體＝同索引刪所有平行陣列」。不能借：浮點秒、AoS 的 `RuntimeEnemy`。
 
 ## 2. 第 1 件：單一 EntityId 空間
 

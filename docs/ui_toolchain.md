@@ -15,7 +15,7 @@ tools/ui_editor/gyo_ui_editor --> GYO::Ui + optional read-only content snapshot
         +-------------------- no app dependency, catalog writes, or publishing
 ```
 
-`GYO::Ui` never knows what an action such as `object_fps.start_game` means.
+`GYO::Ui` never knows what an action such as `object_fps_pvp.start_game` means.
 It emits an opaque, declared, typed action. The game adapter maps that id to a
 game command, and the game flow remains responsible for legality and effects.
 Likewise, the game owns wording, hierarchy, binding values and the consequence

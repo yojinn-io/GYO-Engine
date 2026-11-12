@@ -89,8 +89,8 @@
 | miniaudio（依 #176 事實） | **是（執行緒）**：engine 層自帶 job 執行緒與 spinlock；device 層 callback（§2.1、§1.8 第 3 條） | 未記 | 未記（#176 無） | 是（engine 層） | 不適用（B） | **服務**（device 層＝與今天 SDL 音訊回呼同位置）；engine 層**不相容**（搶執行緒） | 與 #176 一致 |
 | EnTT v4（依 #176 事實） | 否：無迴圈；signal／organizer 可不用（§2.1） | 未記（#176 記「刪除 swap-and-pop 重排」，表示疊代中的位置不穩） | #176 未記（**未查證**） | 否：不開執行緒；registry 非 thread-safe（§1.1 表） | 視用途 | **不判**：World 儲存層「借還是自寫」不在本批（事前宣告「不在本批做」）；事實照抄 | 待 World 實作批以 W-1～W-11 逐條核對 |
 | host 工具鏈：DXC、SDL_shadercross、SPIRV-Cross（`build/cmake` 釘版本；不在 `third_party/`） | 不適用 | 不適用 | 不適用 | 不適用 | 不適用（建置期） | **不適用**（不連進任何 Runtime） | #176 §1.9；Kernel 不涉及 |
-| 未審：`apps/object_fps` | — | — | — | — | — | 未審 | 使用者 K.3 第 8 項：移除（獨立批 `v8-arch-remove-object-fps`） |
-| 未審：`apps/object_fps_v2` | — | — | — | — | — | 未審 | 同上 |
+| 未審：`apps/object_fps` | — | — | — | — | — | 未審 | 使用者 K.3 第 8 項：移除（獨立批 `v8-arch-remove-object-fps`）。**已移除**（2026-11-12） |
+| 未審：`apps/object_fps_v2` | — | — | — | — | — | 未審 | 同上。**已移除**（2026-11-12） |
 | 未審：`services/gyo_gateway` | — | — | — | — | — | 未審 | 外部服務（Go）；另一行程，經訊息邊界接入（spec I.1）。同理：`apps/object_fps_pvp/gateway`（Go）與 `protocol/` 不在掃描根，未審 |
 
 ## 4. 判定分佈

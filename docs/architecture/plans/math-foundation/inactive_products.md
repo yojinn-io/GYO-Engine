@@ -1,5 +1,7 @@
 # Math 基礎統一：未啟用產品的遷移清單
 
+2026-11-12：三個產品（`object_fps`、`object_fps_v2`、`object_fps_preview`）已移除（`v8-arch-remove-object-fps`），本清單只作歷史紀錄。
+
 量測日期：2026-10-04（B7）。對象：`2117570`（Math 遷移做到 B6c；之後只做不改公開名稱的內部清理與文件）。對照：B0 基準 `0bd5363`。
 
 本計畫依「未啟用產品除外」的範圍，不修改 object_fps、object_fps_v2 與 object_fps_preview。舊名稱移除後，它們重新啟用時需要先遷移；本文件是遷移清單。量測在 scratch 建置中進行，repo 沒有修改。計畫與紀錄見 [README](README.md)、[HANDOFF](HANDOFF.md#b7-收尾)。之後的 Result 統一又增加了遷移項目，見 [Result 統一的遷移清單](../result-unification/inactive_products.md)；重新啟用時兩份都要處理。

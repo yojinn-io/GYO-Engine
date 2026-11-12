@@ -32,7 +32,7 @@
 | collision | 留 | 純查詢；`StaticAabbGrid` 跨 tick 時放不可變 Resource | 0～2 h |
 | entity_store | 留＋成為 World 欄的實作 | W-1、W-2 的演算法；Delta 計入 World 批 | 0 h |
 | map_markers、voxel_mesh、net、math | 留 | 純函式；math 的 E1 是 determinism 線 | 0 h |
-| model | 留（取樣、loader）＋包或刪（`AnimationInstance`） | ufbx loader 是 (c) 內容身分；`AnimationInstance` 只有 object_fps_v2 用 | 1～4 h |
+| model | 留（取樣、loader）＋包或刪（`AnimationInstance`） | ufbx loader 是 (c) 內容身分；`AnimationInstance` 只有 object_fps_v2 用（**已移除**，2026-11-12，`v8-arch-remove-object-fps`） | 1～4 h |
 | asset | 包（先收攏） | 五個協作者的參考要先收進同一個 Resource；`Update` 內同步 IO 要宣告 `Io:file` | 8～20 h |
 | input | **Host**（`SdlInput` 後端，pump 的零件）＋留（`InputActionMap`、`PhysicalInputFrame`） | 後端讀 SDL 全域、持 `platform_`、只由 Host 的 pump 呼叫，產物是 boundary 資料 `PhysicalInputFrame`；主會話依對抗複核重判（§8）：審查者最終的「包（先拆）」是把狀態機拆出後的設計選項，不是現況的判定 | 4～10 h |
 | io | 包（檔案服務）＋留（路徑、Uri、記憶體串流） | `WriteFileAtomically` 讀時鐘與亂數，(c) 檔不得 include | 2～6 h |
@@ -42,7 +42,7 @@
 | os、time、threads | Host | adaptor；(c) 檔不得 include time | 0～4 h |
 | platform | Host | pump、live frame、dialog 登記表與 `thread_local` 無法成 Resource | 4～10 h |
 | audio、trace | 服務 | 自有執行緒；`Submitter` 是帶親和的 Resource | 2～6 h 各 |
-| runtime | 重寫（`RuntimeLoop`／`IRuntimeClient`）＋Host（`FixedTickRuntime`）＋刪除候選（`IRuntimePort`） | 三段硬編碼調度由 Host＋ScheduleDef 取代 | 8～20 h |
+| runtime | 重寫（`RuntimeLoop`／`IRuntimeClient`）＋Host（`FixedTickRuntime`）＋刪除候選（`IRuntimePort`，**已移除**，2026-11-12） | 三段硬編碼調度由 Host＋ScheduleDef 取代 | 8～20 h |
 | config | 不適用 | `projects.csv` 列有要移除的兩個產品，移除批一併刪 | 0 h |
 
 分佈（重判後）：留 8、包 5、Host 5、服務 2、重寫 1、不適用 1。工時 52～150 h。
@@ -60,7 +60,7 @@
 | audio_editor | client Host；`PreviewPlayer` 包；核心留 | — | 8～16 h |
 | model_viewer | client Host；預覽與音訊包；文件留 | `pendingAction_` 跨幀捕獲 `this`，改成資料 | 16～32 h |
 | ui_editor | client Host；`EditorApp` 重寫（介面）；其餘包或留 | `EditorApp` 存下兄弟物件的參考 | 32～56 h |
-| object_fps_preview | 未審 | K.3 第 8 項移除 | — |
+| object_fps_preview | 未審 | K.3 第 8 項移除（**已移除**，2026-11-12，`v8-arch-remove-object-fps`） | — |
 
 分佈（細分）：framework Host 3、包 2、留 8；工具 Host 4（client）、重寫 1、包 15、留 9 組、量測 harness 2 不適用。工時 framework 33～66 h、工具 80～152 h。
 
@@ -114,10 +114,10 @@
 | input 後端 | 包 | Host | 讀 SDL 全域、持 `platform_`、只由 Host 的 pump 呼叫；審查者與對抗複核者不一致，主會話重判為 Host（§8） |
 | platform | 包（Host 擁有） | Host | 永不銷毀的登記表與 `thread_local` 無法成 Resource |
 | `FixedTickRuntime` | 留 | Host | 決定這一幀跑幾次 FixedUpdate（H.7、G-6） |
-| `IRuntimePort` | -audit 定 | 刪除候選 | 移除 object_fps／v2 後只剩自己的測試；形狀與 Link 相反 |
+| `IRuntimePort` | -audit 定 | 刪除候選 | 移除 object_fps／v2 後只剩自己的測試；形狀與 Link 相反（**已移除**，2026-11-12，`v8-arch-remove-object-fps`） |
 | ui | 包 | 包＋`UiRenderer` 局部重寫 | 跨 World 指標 |
 | asset | 包 | 包（先收攏） | 五個協作者由組合根各自持有 |
-| model | 動畫推進包 | `AnimationInstance` 刪除候選；ufbx loader 是 (c) | — |
+| model | 動畫推進包 | `AnimationInstance` 刪除候選（**已移除**，2026-11-12）；ufbx loader 是 (c) | — |
 | `WindowShell`、`ImGuiShell` | 重寫骨架／包 | framework 退役：兩者的職責由 runner plugin 與 ImGui／SDL plugin 承擔；PvP 不用 WindowShell | §3.1（使用者決定） |
 | `src/App`、`NativeFiles` | 未列／留 | 包（先拆）／包 | — |
 | `IpcHost` 同步碰權威 | `:685` | `:645`、`:685` | — |
@@ -166,7 +166,7 @@ spec G.4 第 3 條要移動的呼叫點「改成宣告的 `Diagnostics` 副作�
 
 ### 3.6 其他待決
 
-- ~~`IRuntimePort` 刪除~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：刪除 `IRuntimePort`（engine/runtime）與 `AnimationInstance`（engine/model），含各自的測試（`tests/common/core/runtime/RuntimePortTests.cpp`、`tests/common/model/ModelTests.cpp` 中 AnimationInstance 的部分），併入 `v8-arch-remove-object-fps` 批一起做 §7 的完整清理。使用者原話：不光概念不同，連使用者都不存在了。取樣函式（`SamplePose`／`BlendPoses`／`SkinMesh`）與 ufbx loader 不動。
+- ~~`IRuntimePort` 刪除~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：刪除 `IRuntimePort`（engine/runtime）與 `AnimationInstance`（engine/model），含各自的測試（`tests/common/core/runtime/RuntimePortTests.cpp`、`tests/common/model/ModelTests.cpp` 中 AnimationInstance 的部分），併入 `v8-arch-remove-object-fps` 批一起做 §7 的完整清理。使用者原話：不光概念不同，連使用者都不存在了。取樣函式（`SamplePose`／`BlendPoses`／`SkinMesh`）與 ufbx loader 不動。**已移除**（2026-11-12，`v8-arch-remove-object-fps`）。
 - ~~`AssetManager` 屬 Frame World 還是 Render World~~ **已決定（使用者 2026-11-11，側邊會話轉述）：不選 World，照 Bevy 的資產模型拆開**——請求與狀態 Resource（`AssetServer` 形狀）、每型別一個 `Assets<T>` Resource（Handle 帶引用計數）在文件／Frame World；loader 由各 plugin 登記（ufbx 是函式庫）；載入是外部服務（IO 執行緒加交換點，與 Link 同形），完成依請求順序在同步點套用；內容身分是 (c)，Startup 的資產全載完才凍結；GPU 資源是渲染 World 的 Resource（`RenderAssets<T>`），Extract 搬「哪些變了」。`AssetManager` 物件消失，`UiRenderer`、`WeaponViewModel` 的跨 World 指標問題隨之消失。另：**命名規範待定**，這類名字遷移時都要改（target/assets.zh-Hant.md §2）。部件文件：`target/assets.zh-Hant.md`。
 - 四個工具 host 骨架的重複（選擇窗記帳三種實作、關窗提示 3/4）是 framework 標準 plugin 的候選（framework DI 5）；model_viewer `ViewerWindow.cpp:112-113` 的記帳缺陷屬工具行為變更，不在遷移批順手改。
 - protobuf generated pool：若 Egress System 直接編碼，要比照 I-5 明列例外。

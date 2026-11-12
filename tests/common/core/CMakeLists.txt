@@ -13,7 +13,6 @@ add_executable(engine_tests
     asset/SoundLoaderTests.cpp
     runtime/RuntimeLoopTests.cpp
     runtime/FixedTickRuntimeTests.cpp
-    runtime/RuntimePortTests.cpp
     io/BufferedStreamTests.cpp
     io/NativeFileSystemTests.cpp
     io/StreamReaderTests.cpp

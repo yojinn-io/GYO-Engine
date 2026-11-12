@@ -447,10 +447,10 @@ class AssetLayoutSelfTests(unittest.TestCase):
                  ('tools/other.py', 'Load("characters/other/Other.fbx")')]
         self.assertEqual(asset_path_mentions(texts, catalog()), [
             ('engine/Loader.cpp', 'weapons/nailer_v2/world/Nailer2_TPS.fbx'), ('tools/editor.py', 'assets/object_fps_pvp')])
-        products = [('tests/object_fps_v2/Assets.cpp', 'Load("weapons/nailer_v2/world/Nailer2_TPS.fbx");'),
-                    ('apps/object_fps/Root.cpp', 'Mount("assets/object_fps_pvp");')]
+        products = [('tests/other_game/Assets.cpp', 'Load("weapons/nailer_v2/world/Nailer2_TPS.fbx");'),
+                    ('apps/other_game/Root.cpp', 'Mount("assets/object_fps_pvp");')]
         self.assertEqual(asset_path_mentions(products, catalog(), catalog_paths=False),
-                         [('apps/object_fps/Root.cpp', 'assets/object_fps_pvp')])
+                         [('apps/other_game/Root.cpp', 'assets/object_fps_pvp')])
 
     def test_the_owner_scan_covers_every_common_layer(self):
         # A new top-level folder is scanned without editing this test.
