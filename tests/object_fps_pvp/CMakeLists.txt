@@ -7,7 +7,7 @@ add_executable(${tests} TestMain.cpp PvpMatchTests.cpp PredictionTests.cpp Predi
     ArenaDigestTests.cpp ShotGateTests.cpp HitFeedbackTests.cpp SoundCuesTests.cpp ClientSimulationTests.cpp ClientSimulationRoleTests.cpp
     NetworkStatisticsTests.cpp MatchHostRoleTests.cpp IngressStatisticsTests.cpp MatchIngressLedgerTests.cpp
     DiagnosticFileTests.cpp SessionSummaryTests.cpp ConnectionLivenessTests.cpp AddressTextTests.cpp EntityModelTests.cpp EntityColumnsTests.cpp
-    LobbyActionsTests.cpp ArenaV2Tests.cpp WallGridEquivalenceTests.cpp MovementDiagTests.cpp)
+    LobbyActionsTests.cpp ArenaV2Tests.cpp WallGridEquivalenceTests.cpp MovementDiagTests.cpp KernelPrepDetectTests.cpp)
 target_compile_features(${tests} PRIVATE cxx_std_20)
 target_compile_definitions(${tests} PRIVATE PVP_DOMAIN_TEST_ARENA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/arena.json"
     PVP_INGRESS_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/ingress_v1"
@@ -28,6 +28,10 @@ endif()
 add_test(NAME "${GYO_CURRENT_APP}.cpu" COMMAND ${tests})
 # The movement recovery matrix runs the v6 and the product command paths.
 set_tests_properties("${GYO_CURRENT_APP}.cpu" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 60)
+# v8-product-kernel-prep-detect: the characterization cases alone (KernelPrepDetectTests.cpp), so the
+# kp-* mutants of mutations.json are judged by them and not by the rest of the suite.
+add_test(NAME "${GYO_CURRENT_APP}.kernel_prep_detect" COMMAND ${tests} "-tc=kernel-prep*")
+set_tests_properties("${GYO_CURRENT_APP}.kernel_prep_detect" PROPERTIES LABELS "cpu;gameplay;pvp" TIMEOUT 120)
 
 # The Match IPC over real loopback TCP (asio and the runtime contract), kept
 # apart so the domain test target gains no transport dependency.
@@ -252,6 +256,11 @@ set_tests_properties("${GYO_CURRENT_APP}.wire_counter_sites" PROPERTIES LABELS "
 add_test(NAME "${GYO_CURRENT_APP}.diagnostic_isolation"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_diagnostic_isolation.py")
 set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
+# v8-product-kernel-prep-detect: ratchet of the wall-clock reads, global diagnostic entries and I/O-thread
+# touches of the authority in src/Pvp (spec G.4); the whitelist records today's sites, it permits nothing.
+add_test(NAME "${GYO_CURRENT_APP}.kernel_prep_sites"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_kernel_prep_sites.py")
+set_tests_properties("${GYO_CURRENT_APP}.kernel_prep_sites" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
 # The log Data Contract v1 (docs/object_fps_pvp/log-contract.zh-Hant.md): writer pins, the frozen readers on
 # real samples, and the reverse guards.
 add_test(NAME "${GYO_CURRENT_APP}.log_contract"

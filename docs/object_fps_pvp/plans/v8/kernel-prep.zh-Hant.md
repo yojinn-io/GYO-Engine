@@ -20,7 +20,7 @@
 | D3 `connectionQualityFailures` 的寫點 | 進 digest，但今天只寫在 snapshot 複本上（audit §4.1） | 特徵測試固定「寫在哪個物件、哪個時點進 digest」 | 不改歸屬 |
 
 判定（事前宣告再補數字）：D1、D3 的特徵測試在今天的程式上**過**，且對應的突變（把死亡改成下一 tick 套用；把 failures 寫到另一處）會**失敗**；D2 的守衛對白名單過、對合成的新增讀點失敗；34 個 golden、`AuthorityDigest` 全部不變；pvp 既有測試全過；`engine/`、`framework/`、`tests/common/`、`build/`、`.github/` 零修改。
-估時 4～6 小時。模型／檔位建議：下段，Opus／high；D2 的掃描正規式 xhigh（只這段）。
+估時 4～6 小時。模型／檔位建議：下段，Opus／high；D2 的掃描正規式 xhigh（只這段）。（實際：Fable 5.1／high，D2 段 xhigh；golden 實為 37 行，上表「34」是舊數，以 37 為準。）
 
 ## 第二批：`v8-product-kernel-prep-zones`（等 J-17 掃描器的基線報告）
 
@@ -51,3 +51,4 @@
 ## 現況（產品線更新）
 
 - 2026-11-12 交接卡建立（架構師）。未開始。
+- 2026-11-12 第一批 `v8-product-kernel-prep-detect` 完成（任務卡會話，實作約 4 h）：[事前宣告](v8-product-kernel-prep-detect-declaration.md)、[dev_log](../../../dev_logs/2026_11_12_pvp_kernel_prep_detect.zh-Hant.md)。D1 固定 T=35／R=215（R−T=180，Match 層與 host 層相同）；D2 守衛 `tests/object_fps_pvp/test_kernel_prep_sites.py` 白名單 47 列（W 12、G 13、A 22）；D3 固定 failures 在 kW 當 tick 進發布快照、Match 的 `Snapshot()` 恒 0。突變 6／6 killed，golden 37 不變，pvp 57 測試全過，共通層零修改。回報架構師：audit 未列的讀點（dev_log「spec G.4 補列候選」）。golden 數改為 37。L1 待 PR。

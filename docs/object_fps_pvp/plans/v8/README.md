@@ -188,6 +188,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | 第三人稱武器換成 nailer（PR #120；2026-11-12 補列） | [2026-10-31](../../../dev_logs/2026_10_31_pvp_v8_nailer_tps.zh-Hant.md) |
 | `v8-product-arena-v2`（PR #152；2026-11-12 補列） | [2026-11-05](../../../dev_logs/2026_11_05_pvp_v8_arena_v2.zh-Hant.md) |
 | asset-layout 線（7 份） | 見 [asset-layout.md](asset-layout.md) |
+| `v8-product-kernel-prep-detect`（kernel 改造前置第一批） | [2026-11-12](../../../dev_logs/2026_11_12_pvp_kernel_prep_detect.zh-Hant.md) |
 
 ---
 
