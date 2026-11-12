@@ -156,6 +156,14 @@ TEST_CASE("pose blends retain hierarchy and normalize shortest-arc rotations") {
     CHECK_FALSE(BlendPoses(model,from,to,0.5F,output));
 }
 
+TEST_CASE("playback intervals report an event once across exact and wrapped boundaries") {
+    CHECK(PlaybackInterval{0,0.5,2,PlaybackMode::Clamp}.Crossed(0.5));
+    CHECK_FALSE(PlaybackInterval{0.5,0.6,2,PlaybackMode::Clamp}.Crossed(0.5));
+    CHECK(PlaybackInterval{1.8,2.2,2,PlaybackMode::Loop}.Crossed(0.1));
+    CHECK_FALSE(PlaybackInterval{1.8,2.2,2,PlaybackMode::Loop}.Crossed(0.3));
+    CHECK_FALSE(PlaybackInterval{0,1,2,PlaybackMode::Clamp}.Crossed(0));
+}
+
 TEST_CASE("compatible animation transfer preserves proportions and converts rest frames and units") {
     const float half=std::sqrt(0.5F);
     ModelAsset source,target;
