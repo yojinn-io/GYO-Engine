@@ -1,6 +1,6 @@
 # Map markers (gyo.map_markers)
 
-Owner: Engine (`engine/map_markers` → `GYO::MapMarkers`; `engine/map_markers/MapMarkers.hpp`).
+Owner: Engine (`engine/map_markers` → `GYO::MapMarkers`; `engine/map_markers/include/engine/map_markers/MapMarkers.hpp`).
 Plan and record: [big map](plans/big-map/README.md), batch v8-arch-big-map-engine-format (decision
 v8-arch-big-map-markers-owner: Engine owns the format, a product owns the meaning, a tool edits it).
 

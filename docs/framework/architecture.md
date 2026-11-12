@@ -1,6 +1,8 @@
 # GYO Framework
 
-> Status: deprecated. The framework concept retires (`v8-arch-framework-retire`, 2026-11-11): its two duties, composing Engine capabilities and adapting third parties, move to the plugins layer (`docs/architecture/target/runtime-composition.zh-Hant.md` section 4). The code and this document stay in force for the existing programs until their migration batch; the Design Invariants below are not amended; they retire with the component (the data-contract invariants in `event-sounds.md` and `preview.md` carry over to their plugins instead). No new work targets the framework.
+> **Legacy** (current-state record; `v8-arch-docs-legacy`, 2026-11-12). Design authority is [`docs/architecture/target/`](../architecture/target/README.md). This document takes only two kinds of updates: the current state of code that still exists, and Design Invariants that tests still guard. Existing code is bound by this document's Design Invariants; new code (from `engine/kernel` on) by target. The file is deleted together with the `framework/` code by the plugins migration batch.
+>
+> Deprecated. The framework concept retires (`v8-arch-framework-retire`, 2026-11-11): its two duties, composing Engine capabilities and adapting third parties, move to the plugins layer (`docs/architecture/target/runtime-composition.zh-Hant.md` section 4). The code and this document stay in force for the existing programs until their migration batch; the Design Invariants below are not amended; they retire with the component (the data-contract invariants in `event-sounds.md` and `preview.md` carry over to their plugins instead). No new work targets the framework.
 
 The layer games and tools share, between the engine and the products that use
 it (`v8-tool-framework-top-level`). The engine supplies mechanisms that do not

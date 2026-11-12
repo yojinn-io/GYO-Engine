@@ -2,7 +2,7 @@
 
 日期：2026-11-07。分支 `claude/pvp-v8-lag-l2-biome-kit`。主會話 Opus 5.5／high；審查者 Opus 5.5／high（general-purpose 子 agent，唯讀）。估 4～6 h。
 
-**狀態：D1～D5 與審查完成；D6（L1）未跑。** [事前宣告](../object_fps_pvp/plans/v8/v8-product-pm-detect-diag-declaration.md)使用者 2026-11-07 照推薦核准（`-diag-scope` (a) 每步都記、`-radius` (a) 維持 0.25）。
+**狀態：D1～D5 與審查完成；D6（L1）未跑。**（2026-11-12 圖書管理員補註：後續：L1 三平台通過，PR #168 已合併，`24943706`） [事前宣告](../object_fps_pvp/plans/v8/v8-product-pm-detect-diag-declaration.md)使用者 2026-11-07 照推薦核准（`-diag-scope` (a) 每步都記、`-radius` (a) 維持 0.25）。
 
 ## 為什麼
 

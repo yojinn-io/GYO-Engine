@@ -62,7 +62,7 @@
   - 守衛的 g1～g4 都以預期訊息失敗。g2 是 configure 時的連結守衛，產品的突變工具為此加了 `expect_build_failure`，工具的單元測試補了一個案例。
   - 紀錄：scratchpad 的 `mutants-sdl-j1.log`、`mutants-sdl-j1.json`。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
 - **舊判定的突變**：唯讀調查時在 scratch 量測（腳本 `scratchpad/mut/run.py`）。PointerCapture.cpp 的 30 個突變殺 28 個：p01 是等價突變，p24 存活。SdlInput 的 s01～s04、s06 由舊判定殺掉，s05 存活。（2026-10-31 補註：這裡的 scratchpad 內容已經不在，未保留）
-- **突變（L5、L3 處理後重跑）**：產品 34／34（加 v-p31）；Engine `m-inside-stale`、`m-focus-gain-state` 2／2；v-p33（等價）在新判定下通過。紀錄：scratchpad 的 `mutants-sdl-j1-full.log`。
+- **突變（L5、L3 處理後重跑）**：產品 34／34（加 v-p31）；Engine `m-inside-stale`、`m-focus-gain-state` 2／2；v-p33（等價）在新判定下通過。紀錄：scratchpad 的 `mutants-sdl-j1-full.log`。（2026-11-12 補註：這裡的 scratchpad 內容已經不在，未保留）
 - **獨立核對**（另一位審查者，2026-10-23）：
   - 自寫錄製程式，以 oracle 的狀態（而非政策的）作期待值，並由 oracle 獨立計數 `releasesWhileCaptured`；結果與 fixture 的資料列逐位元組相同。
   - 每幀清除、T2 的處理與產品、舊 harness 等價。

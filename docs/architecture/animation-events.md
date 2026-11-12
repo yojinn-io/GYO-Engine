@@ -1,6 +1,6 @@
 # Animation events (gyo.anim_events)
 
-Owner: Engine, the model and animation owner (`engine/model` → `GYO::Model`; `engine/model/AnimationEvents.hpp`).
+Owner: Engine, the model and animation owner (`engine/model` → `GYO::Model`; `engine/model/include/engine/model/AnimationEvents.hpp`).
 Plan and record: [tools v8 asset toolchain](../tools/plans/v8/assets.md), batch v8-tool-assets-anim-events
 (decision v8-tool-assets-anim-events-format: a generic format whose contract belongs to the animation owner, data
 in each product, tools that know only this format).

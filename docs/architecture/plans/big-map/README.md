@@ -8,7 +8,7 @@
 | 代號 | 白話 |
 |---|---|
 | `v8-arch-big-map` | 整條線：讓一張地圖從「一份文件」變成「可用座標定址的區塊集合」，撐得住塔科夫 raid 規模（約 1 km²、cell 0.5 m、4 人房） |
-| `v8-arch-big-map-survey` | 本批：用實際讀到的來源與量測，檢驗方案 v0.1；產出「採る／改装／採らない」表、六個未決事項的建議、三項量測 |
+| `v8-arch-big-map-survey` | 本批：用實際讀到的來源與量測，檢驗方案 v0.1；產出「採用／改裝／不採用」表、六個未決事項的建議、三項量測 |
 | `v8-arch-big-map-engine-map` | Engine 的區塊地圖格式（索引＋region）、標記層、靜態碰撞 broadphase、解析加速；2026-11-06 拆成下面兩批 |
 | `v8-arch-big-map-engine-grid` | 第一批（PR 1）：`GYO::Collision` 的靜態 broadphase＋`ParseVoxelMesh` 的解析替換（契約不變） |
 | `v8-arch-big-map-engine-format` | 第二批（PR 2）：`gyo.voxel_map`／`gyo.voxel_region`、`ValidateVoxelChunk`、新模組 `GYO::MapMarkers`、v1 退役 |
@@ -34,7 +34,7 @@ v8-arch-big-map
 └── -product-arena-v3  產品會話 owner｜arena v3、markers 賦義、broadphase、撤 1024、Client region mesh＋剔除、遷移
 ```
 
-| 批次 | 段 | 模型／ギア | Owner | 狀態 |
+| 批次 | 段 | 模型／檔位 | Owner | 狀態 |
 |---|---|---|---|---|
 | `-survey` | 上段（Architecture 判斷的根據） | 調查者 Opus／high；對抗檢查者 Fable／xhigh（使用者已同意） | 架構 | 完成；六項照建議定案 |
 | `-engine-grid` | 上段（Engine 公開介面、DI） | 實作者 Opus／high；審查者 Opus（engine-grid 會話）；驗證者 Fable／xhigh | Engine | 完成（PR #161，merge `c70e8fdc`） |

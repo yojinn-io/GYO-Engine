@@ -42,7 +42,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 |---|---|---|---|---|
 | `v8-engine-audio-plan` | high｜Opus 5.5（主對話） | 3～5 h | 完成（2026-10-30 核准；[dev_log](../../../dev_logs/2026_10_30_engine_audio_plan.zh-Hant.md)） | 本夾三份文件 |
 | `v8-engine-audio-core` | high｜繼承 | 3～4 h | 完成（2026-10-30；本機 core 35／35、突變 9／9；[dev_log](../../../dev_logs/2026_10_30_engine_audio_core.zh-Hant.md)） | 片段庫、聲部混音、離線 `Render`、統計與收支；`docs/architecture/audio.md`（契約與 Design Invariants） |
-| `v8-engine-audio-schedule` | high；時間換算、遲到、SPSC 局部 xhigh（`xhigh-reviewer`，引擎繼承） | 4～5 h | 未開始 | 提交端（有界 SPSC）、時間戳 → 樣本位置、遲到的規則 |
+| `v8-engine-audio-schedule` | high；時間換算、遲到、SPSC 局部 xhigh（`xhigh-reviewer`，引擎繼承） | 4～5 h | 完成（2026-10-30，PR #112；[dev_log](../../../dev_logs/2026_10_30_engine_audio_schedule.zh-Hant.md)） | 提交端（有界 SPSC）、時間戳 → 樣本位置、遲到的規則 |
 | `v8-engine-audio-sdl` | high｜繼承 | 3～5 h | 完成（2026-10-30；test 97／97、突變 5／5；[dev_log](../../../dev_logs/2026_10_30_engine_audio_sdl.zh-Hant.md)） | `GYO::AudioBackendSDL`：SDL 音效串流的回呼、AUDIO 子系統計數、G1～G3 擴充、`dummy`／`disk` 驅動的 L1 |
 | `v8-engine-audio-record` | medium（執行與紀錄）；分析程式 high｜繼承 | 2～4 h | 完成（2026-10-30；錨點版 L2 299／299；[dev_log](../../../dev_logs/2026_10_30_engine_audio_record.zh-Hant.md)） | Engine 自己的 L2（`disk` 驅動、只記錄）、相關突變、dev_log |
 | `v8-engine-audio-windows-blocks` | medium｜繼承 | 1 h | 完成（2026-10-31；Windows 需要約 44.4 ms ≤ 60 ms；[dev_log](../../../dev_logs/2026_10_31_engine_audio_windows_blocks.zh-Hant.md)） | Windows 實機的區塊與回呼間隔量測（只記錄，不改程式） |
@@ -53,6 +53,8 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 | `v8-engine-audio-control-playhead` | xhigh｜繼承＋Sonnet 5.5 的對抗式檢查 | 3～4 h | 完成（2026-10-31；core 39／39、test 110／110、突變 70／70＋TSan 6／6＋ASan 1／1、xhigh 審查與 Sonnet 對抗式檢查已處置；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_playhead.zh-Hant.md)） | `PlayheadBoard`、`Mixer::PlayheadOf`、交錯測試、「不讀 board」的原始碼檢查 |
 | `v8-engine-audio-control-live` | medium，測試程式 high｜繼承 | 2～3 h | 完成（2026-10-31；完整突變 82／82＋TSan 6／6＋ASan 1／1、test 110／110、core 39／39；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_live.zh-Hant.md)） | dummy／disk 驅動上的停止、換片段、播放頭；`docs/architecture.md` |
 | `v8-engine-audio-disk-stop-window` | high｜繼承（Opus 5.5）；驗證者 Opus 5.5／high | 2 h（續 1.5 h） | 完成（2026-11-04；判定變更經使用者核准；`au-sdl-*` 突變 13／13；[dev_log](../../../dev_logs/2026_11_04_engine_audio_disk_stop_window.zh-Hant.md)） | `audio_sdl.disk` 停止 frame 偶發失敗：檔案開頭的標記與取走 stop 的 block 範圍 |
+
+另見 [`audio_sdl.disk` 在 macOS arm64 偶發失敗的修正](../../../dev_logs/2026_10_30_engine_audio_disk_flake.zh-Hant.md)（2026-11-12 圖書管理員補列）。
 
 `v8-engine-audio` 合計 12～18 h（與消費端計畫的估時相同）。檔位與引擎的說明見 [PLAN](PLAN.md)「分批」。
 

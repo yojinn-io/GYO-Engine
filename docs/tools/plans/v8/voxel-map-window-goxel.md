@@ -165,7 +165,7 @@ L3 時由使用者看。
 | P1 | **影格時間**：本機 Intel Mac，RelWithDebInfo，1280×720；像建築的合成圖（tool-chunked 的 `measure-map` 產生的同一張，768 區塊）。600 幀，丟掉前 60 幀。<br>- (a) 不編輯：p95 ≤ 16.7 ms；<br>- (b) 每幀用 Brush（大小 1）改一格，位置依固定序列輪流落在區塊內部與邊界：p95 ≤ 33 ms。<br>件數：要求的幀數＝量到的幀數；編輯失敗為 0。不一致時不判定，交使用者。 |
 | L3 | 使用者用 Goxel 式工具做一張有二樓與階梯的地圖，放幾個標記，存檔；`verify-map` 與 `check-markers` 通過；目視 T-junction |
 
-## 分批、模型、ギア、估時
+## 分批、模型、檔位、估時
 
 ```text
 v8-tool-voxel-window-1（上段：Data Contract 的寫出、DI 5／7）
@@ -176,7 +176,7 @@ v8-tool-voxel-window-1（上段：Data Contract 的寫出、DI 5／7）
 └── vw1-measure   Opus／medium｜2～3 h   ：P1，接著 L3（使用者）
 ```
 
-| 角色 | 模型／ギア | 理由 |
+| 角色 | 模型／檔位 | 理由 |
 |---|---|---|
 | 實作者 | Opus 5.5／high（本會話） | 上段 |
 | 審查者 | Opus／high（另一個子 Agent） | 上段 |

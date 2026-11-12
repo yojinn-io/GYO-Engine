@@ -1,7 +1,7 @@
 # 輸入與呈現：分批計畫與進度
 
 更新：2026-10-22（IP-3、IP-4 完成，含 L3）；2026-10-21（IP-3／IP-4 核准，D31）；2026-10-14。Owner：Engine（`engine/input`、`engine/input/backend/sdl`、`engine/platform/sdl`、`engine/render/backend/sdl_gpu`；IP-5 原本另含 `engine/io` 的原子寫入，2026-10-09 延後；`engine/runtime` 只讀）。
-**狀態：IP-1 完成**（2026-10-05，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`））；IP-2 完成（縮小交付，D19），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-04 建立。
+**狀態：IP-1 完成**（2026-10-05，PR [#50](https://github.com/yojinn-io/GYO-Engine/pull/50) 已合併（`56e0033`））；IP-2 完成（縮小交付，D19），PR [#53](https://github.com/yojinn-io/GYO-Engine/pull/53) 已合併（`db1815c`）。本文件與 [PLAN](PLAN.md)、[HANDOFF](HANDOFF.md) 於 2026-10-04 建立。（2026-11-12 圖書管理員補註：後續：IP-3、IP-4 也已完成，隨 PR #85 合併，`054b08f2`；見下表）
 2026-10-08：消費端的新版本規劃中，使用者修訂 D19（D27：多角色的執行緒由 [時間、執行緒與 Trace](../time-threads-trace/README.md) 提供，角色本身由消費端做），並決定 SDL 隔離與顯示接續在本計畫，編為 IP-3～IP-5（D28，未開始）。
 2026-10-14：消費端 D76 的連帶：IP-3、IP-4 的第一個消費端（消費端的去 SDL 遷移）移到消費端的下一個版本（重構版）；IP-5 的第一個消費端（玩家選擇解析度、視窗模式與 FPS 上限）移到再下一個版本，和設定 UI 一起做。本計畫的 IP-3～IP-5 範圍與檔位不變，不重新規劃；開始時點跟著第一個消費端。
 2026-10-05：IP-2 的消費端條件（拖動重現與量測基線 B0）已由消費端完成；縮放時的停頓落在事件處理而非 render，IP-2 開始時須先處理，見 [HANDOFF](HANDOFF.md) 未結事項。

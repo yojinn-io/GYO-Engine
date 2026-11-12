@@ -26,7 +26,7 @@
 | `asset-std-scope` | 標準只寫在 PvP（[素材標準](../../assets.zh-Hant.md)＋`tests/object_fps_pvp/test_asset_catalog.py`），刪 PvP 時一起刪。共通層不出現 PvP 的路徑（AGENTS §7、§9）。 |
 | `asset-std-invariants` | 素材標準加 Design Invariants 節與 Replacement Criteria。「依路徑載入的檔放哪裡」不寫成固定清單：hitbox 由誰、怎麼讀還沒定。條文先給使用者看，同意後才提交。 |
 | `asset-source-home` | 原始檔（DCC 原檔、交付包、原始錄音）不進 repo，放 repo 外的儲存。 |
-| `asset-source-record`（調整） | 來源與授權記錄併進 doc 批（原本要併進 `v8-product-sfx`，但 sfx 已合併、沒有做）。pack 的授權沿用 [3d-assets.md](../../../architecture/3d-assets.md) 已有的紀錄，不在兩處維護；沒有資料的寫 unrecorded，不猜。做成守衛會讀的檔。 |
+| `asset-source-record`（調整） | 來源與授權記錄併進 doc 批（原本要併進 `v8-product-sfx`，但 sfx 已合併、沒有做）。pack 的授權沿用 `3d-assets.md` 已有的紀錄（2026-11-12 註：該檔已刪，授權紀錄搬到 [assets.zh-Hant.md 附錄 A](../../assets.zh-Hant.md#附錄-a素材包清單與授權記錄)），不在兩處維護；沒有資料的寫 unrecorded，不猜。做成守衛會讀的檔。 |
 | `assets-common-retire` | 刪 `assets/common`。 |
 | `asset-buns-fixture` | buns 與頭髮貼圖改成 `PlayerPresentationTests` 專用的測試 fixture，不再出貨。 |
 | `asset-id-check` | 守衛只檢查 id 的語法，以及 type 和副檔名是否對得上；不檢查 kind 段（否則 1/3 的既有 id 會成為永久例外）。 |

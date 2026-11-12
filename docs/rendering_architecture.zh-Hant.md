@@ -52,7 +52,7 @@ Shader 工具屬於建置主機（host），遊戲屬於執行目標（target）
 
 ```mermaid
 flowchart TD
-    A[Object_FPS: 遊戲規則與呈現] --> B[RenderQueue 與 MaterialDesc]
+    A[遊戲（例：Object_FPS_PVP）：遊戲規則與呈現] --> B[RenderQueue 與 MaterialDesc]
     B --> C[GYO Renderer]
     D[Bundle manifest 與 shader bytes] --> E[GYO ShaderLibrary]
     E --> C
@@ -63,7 +63,7 @@ flowchart TD
 
 | 元件 | 負責 | 不負責 |
 |---|---|---|
-| Object_FPS | 決定物件、相機、材質 shader ID、武器動作 | SDL_GPU 命令、shader 格式選擇 |
+| 遊戲（例：Object_FPS_PVP） | 決定物件、相機、材質 shader ID、武器動作 | SDL_GPU 命令、shader 格式選擇 |
 | `ModelRenderer` | 共用模型／材質資源、每實例 CPU 蒙皮、動態 mesh 更新與回收 | 動畫時鐘、骨骼受擊區或遊戲狀態 |
 | `RenderQueue`／`MaterialDesc` | 中立的幾何、材質與畫面提交資料 | Native handle 或檔案編譯 |
 | `ShaderLibrary` | 原子載入 bundle、驗證 manifest、保存不可變 shader bytes | 建立 GPU pipeline 或紋理 |
@@ -126,7 +126,7 @@ flowchart TD
 
 原始 HLSL 入口名稱與產物入口不一定相同；例如轉成 MSL 後可能改名。工具把產物的真實入口寫入 runtime manifest，Renderer/device 讀取該值。
 
-遊戲的 `assets/<name>/content.json` 宣告 catalog 與 shader bundles；CMake 透過共通 hook 自動呼叫資產組裝與離線編譯。組裝結果位於 `build/target/<name>/bin/assets/<name>/`，Object_FPS 目前僅包含 `shaders/builtin`；實際使用自訂 shader 的遊戲才宣告其他 bundle。Runtime 只讀取這一個資產根，部署 manifest 不含 build-only source 路徑，也不回退至 checkout。手動複製遊戲時保留內部 shader ID 與 ABI，見[建立遊戲](creating_apps.md)。
+遊戲的 `assets/<name>/content.json` 宣告 catalog 與 shader bundles；CMake 透過共通 hook 自動呼叫資產組裝與離線編譯。組裝結果位於 `build/target/<name>/bin/assets/<name>/`，`object_fps_pvp` 目前僅包含 `shaders/builtin`；實際使用自訂 shader 的遊戲才宣告其他 bundle。Runtime 只讀取這一個資產根，部署 manifest 不含 build-only source 路徑，也不回退至 checkout。手動複製遊戲時保留內部 shader ID 與 ABI，見[建立遊戲](creating_apps.md)。
 
 <a id="r06"></a>
 ## 6. 一幀與資源生命週期
@@ -245,7 +245,7 @@ Quick 與 Release 使用同一產品與資產組裝流程，產品驗收深度�
 
 最新 [quick run 35097049659](https://github.com/yojinn-io/GYO-Engine/actions/runs/35097049659) 已驗證 Linux startup、shader 渲染與封裝。Windows 的 MSVC 初始化會設定工具鏈用的 `Platform=x64`，而 Windows 環境變數不分大小寫；因此套件識別改用 `GYO_PACKAGE_PLATFORM=windows-x64`，避免污染報告與封裝參數。
 
-上述 engine GPU smoke 實際涵蓋 frame 生命週期、動態 mesh、ViewModel 深度、剔除、UV、矩陣投影、alpha 混合與色彩處理。Object_FPS 在兩種驅動、三種寬高比、各 7 組攝影機情境中，槍口／tracer 標記中心差為 0.0000 像素，數值參考投影最大誤差為 0.3823 像素。
+上述 engine GPU smoke 實際涵蓋 frame 生命週期、動態 mesh、ViewModel 深度、剔除、UV、矩陣投影、alpha 混合與色彩處理。已移除的 Object_FPS（v1，2026-11-12 移除）當時在兩種驅動、三種寬高比、各 7 組攝影機情境中，槍口／tracer 標記中心差為 0.0000 像素，數值參考投影最大誤差為 0.3823 像素。
 
 Windows 平台變數修正已在本機初始化 MSVC 後，直接執行 workflow 的 startup／archive 區塊驗證；封裝名稱、內嵌平台資料與 SHA-256 均通過。記錄位於 `build/ci-platform-env-check/result.log`，GitHub 修正後結果仍待新 commit 的 CI。
 

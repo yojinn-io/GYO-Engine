@@ -1,5 +1,7 @@
 # GYO architecture
 
+> **Legacy** (current-state record; `v8-arch-docs-legacy`, 2026-11-12). Design authority is [`docs/architecture/target/`](architecture/target/README.md). This document takes only two kinds of updates: the current state of code that still exists, and Design Invariants that tests still guard. Existing code is bound by this document's Design Invariants; new code (from `engine/kernel` on) by target. Each component's current document is deleted and its target version moved here when that component's migration batch completes (the batch is set by `v8-arch-migration-plan`).
+
 This document describes the current repository boundaries. The engine supplies reusable C++ mechanisms; games own gameplay and content; design tools consume the same public engine APIs. Engine libraries are linked statically into game and tool executables. Native third-party runtime libraries are deployed beside those products where required.
 
 This document owns engine-wide architecture, dependency directions and shared rules. Detailed game architecture, gameplay policies and product data contracts belong in `docs/<game>/`. Engine subsystem documents describe reusable mechanisms; dated development logs record implementation history and validation evidence.
@@ -48,6 +50,8 @@ GYO-Engine/
 `build/` contains maintained development support. Only `build/target/` and older local generated output are disposable output; do not delete all of `build/`. Existing local caches are not migrated or committed. Fresh CMake configurations use `build/target/_build/<preset>`.
 
 `apps/` contains game code. It does not carry test runners, package scripts, editor code, vendor source archives or CI definitions. Tests consume game libraries from outside the game. Root `tools/` is reserved for design support such as UI and map editing. Root `framework/` holds what several products share above the engine: dependencies point game or tool → framework → engine, the engine never names it, and it is built only while a selected product uses it ([framework](framework/architecture.md)). Compilation, integration and release orchestration belong to `build/`. Shader compilation is a rendering responsibility and its implementation stays with `engine/render/shaders/pipeline/`.
+
+A rule that several components must follow because it is a direct consequence of one Engine or framework contract has a single owner, recorded in [cross-component rules](cross-component-rules.md); the other places cite that row instead of restating the rule.
 
 ## Layers: admission and format ownership
 
@@ -133,7 +137,7 @@ Which of these results must reproduce across platforms bit for bit, which only o
 
 Optional SDL input, SDL_image, SDL_ttf, SDL renderer/SDL_GPU and ufbx adapters remain explicit choices. Backend-neutral core builds do not fetch SDL merely because another application uses it. Public neutral contracts do not expose native SDL/GPU pointers; concrete adapter APIs may expose their own native interoperability surface.
 
-The engine must not include game headers or understand Object_FPS asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. *(Amended 2026-11-11, user decision `v8-arch-kernel-delta-approved`, spec K.3 item 7.)* The Kernel enters the Engine: World, System contract, Registry, Scheduler and Executor (`architecture/plans/kernel/spec.zh-Hant.md` v0.3; target documents in `architecture/target/`). A plugin ABI and dynamic loading stay forbidden; no scene hierarchy and no service locator. Composition and third-party adaptation will live in the plugins layer (`plugins/`, target: `architecture/target/runtime-composition.zh-Hant.md` section 4), not in an umbrella framework; the framework concept retires (`v8-arch-framework-retire`). Until the migration batches land, the three-layer table above (Engine, Framework, Product) describes the running code. Of an ECS, the Engine today has the entity store ([contract](architecture/entity-store.md)); its columns become the World's storage (`architecture/determinism.md` section 4.7). The framework layer ([framework](framework/architecture.md)) is not an umbrella: no product has to go through it, a product that does not use it builds and runs without it, and its game part is extracted only when a second game puts the engine together in the same way.
+The engine must not include game headers or understand any game's asset names. Tests and game-specific design adapters may depend on game libraries; the game and engine runtime must not depend on those support layers. *(Amended 2026-11-11, user decision `v8-arch-kernel-delta-approved`, spec K.3 item 7.)* The Kernel enters the Engine: World, System contract, Registry, Scheduler and Executor (`architecture/plans/kernel/spec.zh-Hant.md` v0.3; target documents in `architecture/target/`). A plugin ABI and dynamic loading stay forbidden; no scene hierarchy and no service locator. Composition and third-party adaptation will live in the plugins layer (`plugins/`, target: `architecture/target/runtime-composition.zh-Hant.md` section 4), not in an umbrella framework; the framework concept retires (`v8-arch-framework-retire`). Until the migration batches land, the three-layer table above (Engine, Framework, Product) describes the running code. Of an ECS, the Engine today has the entity store ([contract](architecture/entity-store.md)); its columns become the World's storage (`architecture/determinism.md` section 4.7). The framework layer ([framework](framework/architecture.md)) is not an umbrella: no product has to go through it, a product that does not use it builds and runs without it, and its game part is extracted only when a second game puts the engine together in the same way.
 
 `RuntimeLoop` calls `ProcessEvents(frame)`, `Update(frame)` and `Render(frame)` in order. A phase returning `RuntimeControl::Stop` ends the loop immediately. The former typed observation/intent boundary `IRuntimePort` was removed on 2026-11-12 (`v8-arch-remove-object-fps`) together with its only user, a removed game.
 
@@ -196,8 +200,8 @@ synthetic vectors (`tests/common/net/fixtures/gyop_datagram_vectors.json`);
 message kinds and protocol versions stay with the product.
 
 `match_domain` contains the product's pure movement/collision policy and owning
-world values. It does not reuse the client-oriented `PlayerController`, camera,
-mouse settings or Campaign. Map-to-geometry conversion remains separate from
+world values. It does not link client-only code (`client_simulation`, `app_support`), camera,
+mouse settings, SDL, UI or the renderer. Map-to-geometry conversion remains separate from
 the numeric collision functions. The client and runtime protocols are distinct,
 versioned Object_FPS_PVP contracts; neither is a universal GYO protocol.
 
@@ -290,7 +294,7 @@ Authors decide which source material becomes runtime content. Source archives an
 
 `assets/<game>/content.json` lists catalogs and shader bundles. Build-only shader `source` fields identify input specs. The deployed content descriptor contains only relative runtime paths; build-only shader source fields are omitted. Runtime loading does not require the source tree. A content path inside the root follows one rule, `Engine::Asset::IsRelativeContentPath` (`ContentManifest.hpp`), which tools that write catalogs share. A game owns all of its deployed resources, including copies of reusable content and compiled builtin shaders. Runtime loading uses only `bin/assets/<game>/`; there is no separate shared mount or source-tree fallback.
 
-The current Object_FPS runtime layout includes `asset_catalog.json`, gameplay data, models, textures, UI/font assets and `shaders/builtin`. Custom shader validation belongs to `tests/common`, using its own channel-swap fixture; the game does not ship or require it. Its white texture retains the internal ID `common.texture.white` but is a game-owned file. Existing AssetIds and shader IDs are content contracts, not deployment directory names; a manual game copy does not need global identifier replacement.
+The current `object_fps_pvp` runtime layout includes `asset_catalog.json`, gameplay rules, models, textures, UI/font assets and `shaders/builtin`. Custom shader validation belongs to `tests/common`, using its own channel-swap fixture; the game does not ship or require it. Existing AssetIds and shader IDs are content contracts, not deployment directory names; a manual game copy does not need global identifier replacement.
 
 Python assembly and package validation share the pure data rules in `build/content_contract.py`. Runtime and Editor use native C++ parsing, checked against the same valid/invalid fixtures. Every catalog requires integer `version: 1`, an `assets` array, and object entries with nonempty string `id`, `type` and `path`. IDs must be unique across the entire content collection. Normalized relative paths, reserved names and shader-directory overlaps use the same rules. Custom types, additional fields and distinct IDs referring to one file remain supported.
 

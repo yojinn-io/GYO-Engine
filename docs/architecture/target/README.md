@@ -14,6 +14,10 @@
 
 - 平鋪，不分子資料夾：檔名＝搬回後在 `docs/architecture/` 的檔名。例：`target/world.zh-Hant.md` → `docs/architecture/world.zh-Hant.md`。工作線（kernel）不是文件的最終位置，所以不出現在路徑裡；搬回只是 `git mv`。
 - 搬回時若取代現況的同名文件，取代後刪除舊檔（歷史留在 git），不並存。
+- 搬回的時機：逐部件，在該部件的遷移批完成時；遷移前不整體改寫現況文件，只在有 target 對應的現況文件檔頭加一行「現況文件；目標見 target/…；遷移批完成時取代」（架構師 2026-11-12；遷移批待 `v8-arch-migration-plan` 排定）。framework 三份已標 deprecated 的文件保留到 `framework/` 程式被 plugins 遷移批刪除時，同一個 PR 一起刪。
+- **設計權威與 legacy（`v8-arch-docs-legacy`，使用者 2026-11-12，取代 `v8-arch-docs-next-folder` 的並存做法）**：所有架構設計決定只寫在 target；下列舊檔降級為 legacy（現況紀錄），檔頭一行以 `> **Legacy**` 開頭，凍結設計內容，只更新兩類事實：仍存在的程式的現況描述、仍有測試守衛的 Design Invariants（例如 entity-store DI 8／9、OS DI、determinism DI 1～3）。另外，被遷移批取代的條文要標「已被取代（批次代號）」（見下方「目標 DI 與現況 DI 衝突時」）。原地標示、不搬資料夾（圖書管理員 2026-11-12，使用者同意：約 300 個引用含程式註解、守衛測試與不改寫的 dev_log；部件遷移完成時本來就會刪檔）。
+  - legacy 清單：`docs/architecture.md`、`architecture/entity-store.md`、`architecture/determinism.md`、`architecture/error-handling.md`、`docs/framework/` 三份（architecture、event-sounds、preview）、`object_fps_pvp/entity-model.zh-Hant.md`、`object_fps_pvp/network-architecture.zh-Hant.md`。操作類文件（建置、發佈、creating_apps、tool_projects、ui_toolchain）沒有 target 對應，不標 legacy。
+  - 遷移期間，現有程式受其 legacy 文件的 Design Invariants 約束；新程式（`engine/kernel` 起）受 target 約束。判斷依據是程式是舊是新，不是文件日期。一個部件遷移完成時，legacy 檔刪、target 檔搬回 `docs/architecture/`，檔名照本節的對照。framework 三份隨 `framework/` 程式被 plugins 遷移批刪除時一起刪。
 
 ## 狀態標記
 
@@ -28,7 +32,7 @@
 
 ## 目標 DI 與現況 DI 衝突時（架構師決定，2026-11-11）
 
-- **未遷移的程式照現況 DI**（`docs/architecture/*.md`）；**遷移批次照目標 DI**（`target/*.md`）。這是 AGENTS §3「改 Component 前先讀該 owner 的 Design Invariants」在兩套文件並存期間的解釋：一個 Component 在任一時刻只受一套 DI 約束，由它是否已遷移決定。
+- 遷移批內的新程式受 target 的 Design Invariants 約束；尚未遷移的舊程式受其 legacy 文件的 Design Invariants 約束。一批同時碰到兩者（例：新 System 要讀舊元件）時，以 target 為準，並在那批的事前宣告列出被取代的 legacy 條文、在 legacy 檔把它標為「已被取代（批次代號）」（措辭統一：架構師 2026-11-12，配合 `v8-arch-docs-legacy`）。這是 AGENTS §3「改 Component 前先讀該 owner 的 Design Invariants」在兩套文件並存期間的解釋：一個 Component 在任一時刻只受一套 DI 約束，由它是否已遷移決定。
 - 遷移批次的事前宣告要寫明它遷移哪些 Component、從此它們受哪份 target 文件約束；遷移完成後文件搬回，衝突自然消失。
 - 目標 DI 本身的變更仍是 Architecture Delta（§3），要使用者同意。
 
