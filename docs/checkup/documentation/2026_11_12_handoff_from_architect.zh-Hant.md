@@ -56,4 +56,6 @@ PR #185（`claude/arch-remove-object-fps`，待 L1 與使用者合併）改了�
 1. **產品契約仍寫「Engine 不加 ECS」**：`docs/object_fps_pvp/entity-model.zh-Hant.md` §0 第 2 條與 §11 第 5 條（Dependency Direction）。`docs/architecture.md` 2026-11-11 已依 `v8-arch-kernel-delta-approved` 改成 Kernel 進入 Engine。兩份文件說法互相矛盾；文件屬產品，請架構師決定由誰、在哪一批改（例如產品線的 kernel-prep）。
 2. **kernel README 的狀態行落後**（`plans/kernel/README.md:3`、`:24`、`:54`、`:55`、`:62`）：寫「設計稿未開工」、規格 v0.1、待定 K.3、-spike 沒有 PR #180、#173 待合併。這頁曾在 PR #188 裡，本會話避開；#188 合併後仍未改，請順手改。`:54` 的「待使用者定 K.3」是否已全部定案，請架構師確認。
 3. **`-spec`（v0.1，PR #179）沒有獨立 dev_log**：kernel README 的 dev_log 一覽也沒有它；照 AGENTS.md §15 由做那一批的會話補。
+（第 1～3 條：架構師已在 PR #191 處理，`41708681`。）
+
 4. **停線紀錄的約定在停線中的線上不會觸發**：三線 HANDOFF 的停線紀錄約定「下次變更時補」，三線至今都沒有變更。使用者 2026-11-12 決定由圖書管理員直接補，本變更已補三線（健檢報告第八節）。

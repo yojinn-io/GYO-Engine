@@ -45,8 +45,8 @@
 
 | 位置 | 問題 | 交給 |
 |---|---|---|
-| `architecture/plans/kernel/README.md:3`、`:24`、`:54`、`:55`、`:62` | 狀態寫「設計稿未開工」、規格 v0.1、待定 K.3、-spike 沒寫 PR #180、#173 待合併 | 架構師（PR #188 已合併，這頁仍未改） |
-| kernel 線 `-spec`（v0.1，PR #179） | 沒有獨立 dev_log | 架構師（dev_log 由做那一批的會話寫） |
+| `architecture/plans/kernel/README.md:3`、`:24`、`:54`、`:55`、`:62` | 狀態寫「設計稿未開工」、規格 v0.1、待定 K.3、-spike 沒寫 PR #180、#173 待合併 | 架構師；已由 PR #191 修正（`41708681`） |
+| kernel 線 `-spec`（v0.1，PR #179） | 沒有獨立 dev_log | 架構師；PR #191 補了 `2026_11_11_arch_kernel_spec` |
 | `object_fps_pvp/plans/v8/HANDOFF.md:3`、`:47`、`:50-51`、`:54`、`:217` | 狀態行停在 10-30；audio、工具計畫、sfx 的來源、#127 都已完成或合併 | 產品會話（PR #188 已合併，這頁仍未改） |
 | `object_fps_pvp/plans/v8/README.md` 的樹狀總覽 | audio-line 三批、pv8-design、anim-authority、hitbox 各批等沒有標 ✓ | 產品會話 |
 | `docs/tools/plans/v8/HANDOFF.md` 的「已知缺陷（改造期間不修）」 | 寫在分支 `claude/v8-tool-line-records-2`（`920b6fc6`），沒有開 PR，master 上沒有 | 工具線 |
