@@ -82,6 +82,7 @@ README 三語、`releasing`、`rendering_architecture`：標題結構、程式�
 - 頂層現況文件沒有頁首 Status 行；`determinism.md`、`error-handling.md`、`entity-store.md`、`architecture.md` 指向 target 的段落都以 `v8-arch-kernel-delta-approved`／spec K.3 為據，措辭一致，連結都通。
 - `target/README.md` 的目錄和 spec 引用的 target 檔一致（spec 沒有引用 scheduler，目錄有）。
 - 舊架構文件何時換（使用者要求與架構師確認，2026-11-12）：逐部件，在該部件的遷移批完成時由 target 版取代、舊檔刪；遷移批待 `v8-arch-migration-plan` 排定。遷移前只做整體標示：本變更在 `architecture.md`、`determinism.md`、`error-handling.md`、`entity-store.md` 檔頭加一行指向 target（不是 Status 行）；framework 三份 deprecated 文件保留到 `framework/` 程式刪除時一起刪。規則寫進 `target/README.md`「命名」節。
+- 之後使用者核准 `v8-arch-docs-legacy`（架構師轉達，使用者 2026-11-12 在本會話確認）：設計權威即刻移到 `target/`，上述檔頭行改為 `> **Legacy**` 標示，清單擴大到 framework 三份與 `entity-model`、`network-architecture`；原地標示、不搬到 `legacy/` 資料夾（約 300 個引用，含約 40 處程式註解與守衛測試、約 70 處不改寫的 dev_log；部件遷移完成時本來就會刪檔）。規則寫進 `target/README.md`，檢查清單第 9 項加 legacy 的檢查。
 - framework 三份文件用 `> Status: deprecated`：它們不在 `docs/architecture/`，不受 target 的兩種 Status 規則約束。
 
 ## 八、規則的遵守（第 7 項）

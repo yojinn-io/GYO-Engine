@@ -1,6 +1,6 @@
 # GYO entity store
 
-> Current document. The kernel's World, which builds on this store, is designed in [`target/world.zh-Hant.md`](target/world.zh-Hant.md); this document is revised when that migration batch completes (the batch is to be set by `v8-arch-migration-plan`).
+> **Legacy** (current-state record; `v8-arch-docs-legacy`, 2026-11-12). Design authority is [`docs/architecture/target/`](target/README.md). This document takes only two kinds of updates: the current state of code that still exists, and Design Invariants that tests still guard. Existing code is bound by this document's Design Invariants; new code (from `engine/kernel` on) by target. The kernel's World, which builds on this store, is designed in [`target/world.zh-Hant.md`](target/world.zh-Hant.md); this document is revised when that migration batch completes (the batch is set by `v8-arch-migration-plan`).
 
 Owner: Engine (`engine/entity_store` → `GYO::EntityStore`, namespace `Engine::EntityStore`; decided 2026-11-05).
 Plan, evidence and record: [entity-store](plans/entity-store/README.md) (the reference survey, the Architecture Delta

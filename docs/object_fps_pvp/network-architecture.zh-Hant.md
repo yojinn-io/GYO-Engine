@@ -1,6 +1,6 @@
 # Object_FPS_PVP 聯網架構與操作
 
-> 現況文件。Kernel 改造後，網路改為 Link 家族的 System（設計稿 [plans/kernel/networking](../architecture/plans/kernel/networking.zh-Hant.md)、[kernel 規格](../architecture/plans/kernel/spec.zh-Hant.md) §I）；本文件由 Match／Client host 的遷移批修訂（遷移批待 `v8-arch-migration-plan` 排定）。
+> **Legacy**（現況紀錄；`v8-arch-docs-legacy`，2026-11-12）。設計權威在 [`docs/architecture/target/`](../architecture/target/README.md)。本文件只更新兩類事實：仍存在的程式的現況、仍有測試守衛的 Design Invariants。現有程式受本文件的 Design Invariants 約束；新程式（`engine/kernel` 起）受 target 約束。Kernel 改造後，網路改為 Link 家族的 System（設計稿 [plans/kernel/networking](../architecture/plans/kernel/networking.zh-Hant.md)、[kernel 規格](../architecture/plans/kernel/spec.zh-Hant.md) §I）；本文件由 Match／Client host 的遷移批修訂（遷移批待 `v8-arch-migration-plan` 排定）。
 
 本文件描述 Object_FPS_PVP 的 LAN 聯網與本機移動預測。macOS／Linux／Windows Client 經 LAN
 加入同一場 Match，Client 即時預測自己的移動，C++ Match 統一裁定移動與地圖碰撞。

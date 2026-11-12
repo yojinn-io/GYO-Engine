@@ -1,5 +1,7 @@
 # PvP Match 的實體資料模型（ECS 資料佈局）
 
+> **Legacy**（現況紀錄；`v8-arch-docs-legacy`，2026-11-12）。設計權威在 [`docs/architecture/target/`](../architecture/target/README.md)。本文件只更新兩類事實：仍存在的程式的現況、仍有測試守衛的 Design Invariants。現有程式受本文件的 Design Invariants 約束；新程式（`engine/kernel` 起）受 target 約束。目標設計：[`target/world.zh-Hant.md`](../architecture/target/world.zh-Hant.md) 與 [kernel 規格](../architecture/plans/kernel/spec.zh-Hant.md)；本文件由 Match host 的遷移批修訂（遷移批待 `v8-arch-migration-plan` 排定）。
+
 更新：2026-11-01（`v8-product-entity-contract`）。Owner：`object_fps_pvp`。**狀態：定稿（`v8-product-entity-contract-approve`，2026-11-01）：§12 的 8 個決定全部照建議；`Design Invariants` 節與 Replacement Criteria 作為 Architecture Delta 已核准（AGENTS §3）。** 之後修改條文或門檻都是新的 Architecture Delta。「實作現況」（2026-11-03，`v8-product-match-entity-split` S5）：Match 內部已是五欄（`bodies_`、`combats_`、`animations_`、`actionLedgers_`、`connections_`）＋兩個 Tick 快取（`tickShapes_`、`actionStartCombats_`），E-5、E-7、E-8 的 Match 內部已落地，`RequireEntityOrder` 守 E-5／E-9 的快照順序；E-2、E-3 的配發器與 E-12 的待辦機制在第一個非玩家批才有程式（條文生效、程式尚無非玩家實體）。
 
 推導：ultracode（偵察 2×Opus 5.5、提案 3×Opus 5.5、統合 Fable 5.1、敵對檢查 Opus 5.5 xhigh），紀錄在 [v8 HANDOFF](plans/v8/HANDOFF.md)，各 agent 的原始輸出存在主 checkout 的 `build/evidence/v8-product-entity-contract/`（git 管理外）。敵對檢查的 must 3、should 12、note 7 全部處置，見本文末「敵對檢查的處置」。程式行號以工作樹 `1c598a83` 為準，定稿前逐一重核。

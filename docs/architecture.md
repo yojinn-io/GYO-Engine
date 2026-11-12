@@ -1,6 +1,6 @@
 # GYO architecture
 
-> Current architecture. The target design after the kernel rework is in [`architecture/target/`](architecture/target/README.md); each component's current document is replaced by its target version when that component's migration batch completes (the batch is to be set by `v8-arch-migration-plan`).
+> **Legacy** (current-state record; `v8-arch-docs-legacy`, 2026-11-12). Design authority is [`docs/architecture/target/`](architecture/target/README.md). This document takes only two kinds of updates: the current state of code that still exists, and Design Invariants that tests still guard. Existing code is bound by this document's Design Invariants; new code (from `engine/kernel` on) by target. Each component's current document is deleted and its target version moved here when that component's migration batch completes (the batch is set by `v8-arch-migration-plan`).
 
 This document describes the current repository boundaries. The engine supplies reusable C++ mechanisms; games own gameplay and content; design tools consume the same public engine APIs. Engine libraries are linked statically into game and tool executables. Native third-party runtime libraries are deployed beside those products where required.
 
