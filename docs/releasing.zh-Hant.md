@@ -42,7 +42,7 @@ feature branch ──PR──> L1 ──CI gate──> 合併 ──> master 完
 | 遊戲 | `gyo-<game>-<platform>.tar.gz`（根目錄 `gyo-<game>`）；`object_fps_pvp` 含 client（`main`）與 `match` | `projects.csv` 中該遊戲 `enabled` 與平台欄位都啟用者；`macos` 欄同時啟用 `macos-arm64` 與 `macos-x64`，但只發布 `macos-arm64`（`macos-x64` 只供本機建置，見第 5 節） | `apps/<game>`、`assets/<game>`、`build/acceptance/<game>`、`projects.csv` 的那一列 |
 | 遊戲的 Go 服務 | `gyo-<game>-<role>-<platform>.tar.gz`；`object_fps_pvp` 為 `gyo-object_fps_pvp-gateway-linux-x64.tar.gz` 與 `...-windows-x64.tar.gz` | 只有 `gyo_app_add_go_service(... PLATFORMS ...)` 宣告的平台（gateway 為 Linux 與 Windows） | 該遊戲（`apps/<game>/go.mod`） |
 
-- 目前登錄中啟用的遊戲只有 `object_fps_pvp`（`object_fps`、`object_fps_v2` 為 `enabled=0`）。`tools.csv` 中 `release=true` 的工具只有 `ui_editor`；`object_fps_preview` 依賴遊戲，是本機工具，不進入發佈包。
+- 目前登錄中的遊戲只有 `object_fps_pvp`（舊的 `object_fps`、`object_fps_v2` 與依賴它的本機工具 `object_fps_preview` 已移除，2026-11-12，`v8-arch-remove-object-fps`）。`tools.csv` 中 `release=true` 的工具只有 `ui_editor`；依賴遊戲的工具是本機工具，不進入發佈包。
 - `services/gyo_gateway` 是 Engine 層的 Go module（擁有者 `engine`），提供可重複使用的 HTTP、session 與 framing 機制，不依賴任何遊戲。CMake 在每種配置都記錄它，所以 L1 的 Linux 列與 toolchain 列即使沒有遊戲也會執行 vet／test／race。它不單獨產生壓縮檔。
 - Train 由登錄推導：`tools` train（三平台 toolchain），以及每個啟用遊戲各一條 train（例如 `object_fps_pvp`）。遊戲 train 包含該遊戲的原生套件，以及 Linux 封裝列在 `go-services.json` 記錄的服務壓縮檔。同一個 release 的 client、match 與 gateway 來自同一 commit 與同一版本。`tools`、`toolchain` 不能作為遊戲 id。
 - 發佈物是可執行產品與必要依賴，不提供 Engine SDK 或 source archive。Toolchain 不帶遊戲 source／assets；遊戲包不帶 CI、tests、acceptance executable、editor 或來源美術。引擎靜態連結進各產品，第三方動態 runtime 按需要部署。
@@ -433,7 +433,7 @@ python3 -m unittest discover -s tests/common/ci -v
 - 生成的 product manifest 位於 `share/gyo/products/<product>/manifest.json`（schema 3），要求非空的建置 configuration。Executable 以 `owner.role` 登錄，各自記錄 owner、role、path、runtime_dependencies；另有 required_files、native_files 及 owner 所屬的 checks。Native 依賴聯集只決定複製哪些檔案，linkage 檢查逐一使用程式自己的需求，因此同包的 SDL GUI 與無 SDL CLI 可以共存。
 - 共用 runner 位於 `build/acceptance/common/run_package_checks.py`，native linkage 檢查位於同目錄的 `validate_package.py`；專屬規則在 `build/acceptance/<owner>`。
 - CMake 生成 `<build>/packages/<product>/<configuration>/acceptance-context.json`，以 `--context` 傳給 runner。Context 綁定 manifest 與建置配置，只解析 `@CHECK_ROOT@`、`@PROBE:<role>@` 所需的外部位置，不改變檢查命令或集合。`@EXECUTABLE:<role>@` 依 owner 查找產品，檢查與日誌以 `owner.name` 識別。Runner 可以在產品臨時副本中放入 probe，但不能覆寫正式程式；正式產品不包含 context、probe 或 Python 驗收程式。遊戲 runtime 僅讀 `bin/assets/<game>`。
-- Quick 與 Release 的驗收深度及 GPU suite 參數由 owner 自己的 checks 決定。Linux toolchain 列即使沒有遊戲，也以 Xvfb／Lavapipe 執行通用引擎 GPU 渲染測試；所有產品（包含 toolchain）另外執行其 contract 宣告的 GPU checks。缺少所需能力、逾時或錯誤皆為失敗。另見 [Object_FPS 的外部驗收](object_fps/acceptance.zh-Hant.md)。
+- Quick 與 Release 的驗收深度及 GPU suite 參數由 owner 自己的 checks 決定。Linux toolchain 列即使沒有遊戲，也以 Xvfb／Lavapipe 執行通用引擎 GPU 渲染測試；所有產品（包含 toolchain）另外執行其 contract 宣告的 GPU checks。缺少所需能力、逾時或錯誤皆為失敗。
 
 ### 壓縮檔與 Draft 驗證
 

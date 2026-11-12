@@ -1169,7 +1169,7 @@ Gateway → 外部執行緒 → `LinkMembershipInbound`／`LinkInputInbound`（�
 5. ~~讀 (c) 的 (b) System 必須與 (c) 寫者有顯式順序~~ **已決定（使用者 2026-11-11，側邊會話轉述）**：採規格，否則 D-E8。配套慣例「呈現放在模擬之後的 stage」記為**限制**（`docs/architecture/target/limits.zh-Hant.md`）：成本落在呈現 System 的數量，產品線遷移時確認；修改條件＝K.2 第 3 條。
 6. ~~Client 的 Frame 與 Render 兩個 World 合併還是獨立~~ **已決定（使用者 2026-11-11，側邊會話轉述）：分開**（規格推薦案）。渲染 World 自己的 Registry，只經 Extract 唯讀來源，渲染無反饋由機制守（H-6、J-43、DI-KS 13）。理由：合起來看著簡單、代價很高。部件文件：`docs/architecture/target/runtime-composition.zh-Hant.md`。
 7. ~~Architecture Delta~~ **已決定（使用者 2026-11-11 同意，側邊會話轉述）**，三處：(1) `docs/architecture.md:136` 的禁令改為「Kernel 進 Engine，含 World／System／Scheduler／Executor；plugin ABI 與動態載入仍禁止」；(2) entity-store DI 4 延伸到 insert／remove、DI 5 對 store 本身仍成立、proposed 的 `DeferredChanges`（3b）撤回由 World 延後佇列取代；(3) determinism.md §4.7 正式化。七項說明以 spec 與 mechanism 為計畫層的一次書寫，各批引用（AGENTS §3 新條款，PR #178）。**文件修改本身排進改造的第一個文件批**，不在此做。
-8. ~~`apps/object_fps`、`object_fps_v2`~~ **已決定（使用者 2026-11-11，側邊會話轉述）：移除**，含 `tools/object_fps_preview` 的依賴，照 AGENTS §7 完整刪除（內容、登記、專用測試、支援程式、引用），不留相容層。理由：PvP 已有自己的生態，不需要這個「錨」。排成**改造前的獨立批**（`v8-arch-remove-object-fps`，待事前宣告）；它同時驗證 §7 的 removability——刪掉後共通層不該需要修改，若需要，記為 Delta。L.4 列同步。
+8. ~~`apps/object_fps`、`object_fps_v2`~~ **已決定（使用者 2026-11-11，側邊會話轉述）：移除**，含 `tools/object_fps_preview` 的依賴，照 AGENTS §7 完整刪除（內容、登記、專用測試、支援程式、引用），不留相容層。理由：PvP 已有自己的生態，不需要這個「錨」。排成**改造前的獨立批**（`v8-arch-remove-object-fps`，待事前宣告）；它同時驗證 §7 的 removability——刪掉後共通層不該需要修改，若需要，記為 Delta。L.4 列同步。**已移除**（2026-11-12，`v8-arch-remove-object-fps`）。
 
 修訂輪（對抗檢查後）新增：
 
@@ -1207,11 +1207,11 @@ Gateway → 外部執行緒 → `LinkMembershipInbound`／`LinkInputInbound`（�
 | `trace` | 362 | writer 執行緒（`TraceSink.hpp`） | 服務 | `Diagnostics` 副作用的接收端；System 只推已序列化的列 |
 | `runtime`：`FixedTickRuntime` | 291（整個模組） | 純累加器，呼叫者給 elapsed；自有 `tickId_`（`:54-56`、`:68` Reset 歸 0、`:76`） | 留（Host 的時鐘工具） | `TickContext.deltaSeconds`（double，`:19`）由 `FixedStep.stepNs` 取代（G-6）；`tickId_` 不再是 tick 的來源，只供 Host 決定呼叫 `Run` 幾次（B5） |
 | `runtime`：`RuntimeLoop`、`IRuntimeClient` | — | ProcessEvents／Update／Render 三段（`IRuntimeClient.hpp:12-14`）；live frame（`RuntimeLoop.hpp:11-37`） | 重寫 | 三段是硬編碼的調度，由 Host 加 ScheduleDef 取代；live frame 是平台約束，留成 Host 的職責（H.7） |
-| `runtime`：`IRuntimePort` | — | Query／Submit／Events（`IRuntimePort.hpp:17-19`） | **刪除**（使用者 2026-11-11；併入 `v8-arch-remove-object-fps`，含 `RuntimePortTests.cpp`） | 只有 object_fps 與 v2 在用；借用視圖的形狀與 Link 相反，不能當 Link 的前身 |
+| `runtime`：`IRuntimePort` | — | Query／Submit／Events（`IRuntimePort.hpp:17-19`） | **刪除**（使用者 2026-11-11；併入 `v8-arch-remove-object-fps`，含 `RuntimePortTests.cpp`）。**已移除**（2026-11-12） | 只有 object_fps 與 v2 在用；借用視圖的形狀與 Link 相反，不能當 Link 的前身 |
 | `platform`（sdl） | 1285 | `PumpEvents`；`thread_local`（`SdlPlatform.cpp:61`、`:73`、`:75`；`SdlLogBridge.cpp:24`，修訂：S17） | 包（Host 擁有） | 違反 I-3 第 3 條，不能當葉子；pump 是 Host 的步驟，事件以 `PlatformEvents` boundary 進 World（O2、P1）；platform-sdl.md DI 7「observer 與 live frame 內不得做 operation」是 Host 的 pump 與 live frame 處理器要守的，不進 System |
 | `input` | 1156 | `BeginFrame`／`HandleEvent`／`EndFrame`（呼叫序 `PvpApplication.cpp:1111-1119`） | 後端包；`InputActionMap` 留 | 每幀狀態機變 Resource 加 `Input` stage 的 System |
 | `asset` | 3333 | `AssetManager::BeginFrame`（`:59`）、`Update`（`:62`）；`LoaderRegistry` 已有 K3 形狀；`detail/TypeId.hpp:37` 的 `static const` token（B.6 風險 5） | 包（**拆成三類 Resource**，使用者 2026-11-11：請求狀態、每型別 `Assets<T>`、渲染 World 的 GPU 資源；載入是外部服務、完成依請求順序套用；`AssetManager` 物件消失）；loader 留（由 plugin 登記） | 原稿「`ResMut<AssetManager>`」作廢；見 `target/assets.zh-Hant.md` |
-| `model` | 1174 | 取樣純函式；ufbx loader；`Advance` 2 處 | 取樣留；loader 留（asset loader；是 (c) 內容身分，determinism.md §4.9）；**`AnimationInstance` 刪除**（使用者 2026-11-11；只有 object_fps_v2 在用；併入 `v8-arch-remove-object-fps`，含 `ModelTests.cpp` 的對應部分） | 取樣是 (b)（determinism.md §4.2） |
+| `model` | 1174 | 取樣純函式；ufbx loader；`Advance` 2 處 | 取樣留；loader 留（asset loader；是 (c) 內容身分，determinism.md §4.9）；**`AnimationInstance` 刪除**（使用者 2026-11-11；只有 object_fps_v2 在用；併入 `v8-arch-remove-object-fps`，含 `ModelTests.cpp` 的對應部分）。`AnimationInstance` **已移除**（2026-11-12） | 取樣是 (b)（determinism.md §4.2） |
 | `render` | 4300 | `Renderer::Render(queue)`；裝置綁建立它的執行緒（未複核） | 包（渲染 World 的 Resource，親和 `GraphicsContextOwner`）；`RenderQueue` 是 extract 的目標 | blueprint §5 R1 列 |
 | `ui` | 4471 | `UiRuntime::Update`（`UiRuntime.hpp:86`）含焦點狀態 | 包；版面與編解碼留；`UiRenderer` 局部重寫（audit）——改讀 Frame World 的 `Assets<T>` 與渲染 World 的 GPU 資源，不再持 `AssetManager*`；名字照待定的命名規範改 | 狀態變 Resource |
 | `audio` | 1619 | Mixer 的 SDL 回呼執行緒（`Mixer.cpp`、`VoiceMixer.cpp` 有 atomic） | 服務；`Submitter` 是 Resource | 整數混音契約不變；Submitter 綁第一個呼叫它的執行緒→親和 |
@@ -1253,10 +1253,10 @@ Gateway → 外部執行緒 → `LinkMembershipInbound`／`LinkInputInbound`（�
 
 | 對象 | 行數 | 初判 |
 |---|---|---|
-| `apps/object_fps`、`apps/object_fps_v2` | 約 10k 各 | **移除**（使用者 2026-11-11，K.3 第 8 項）：含 `tools/object_fps_preview` 的依賴，照 §7 完整刪除；改造前的獨立批，兼驗 removability |
+| `apps/object_fps`、`apps/object_fps_v2` | 約 10k 各 | **移除**（使用者 2026-11-11，K.3 第 8 項）：含 `tools/object_fps_preview` 的依賴，照 §7 完整刪除；改造前的獨立批，兼驗 removability。**已移除**（2026-11-12，`v8-arch-remove-object-fps`） |
 | `tools/voxel_map_editor` | 5967 | `EditSession` 包（文件 World 的 Resource）；`EditorClient` 重寫成 Editor host（H.4.3） |
 | `tools/audio_editor`、`model_viewer`、`ui_editor` | 1852／3453／6260 | 未審；同為 ImGuiShell 形狀，預期判定同 voxel_map_editor |
-| `tools/object_fps_preview` | 144 | 隨 object_fps 移除（K.3 第 8 項） |
+| `tools/object_fps_preview` | 144 | 隨 object_fps 移除（K.3 第 8 項）。**已移除**（2026-11-12，`v8-arch-remove-object-fps`） |
 
 ### L.5 中間層成本的形狀（未估工時）
 

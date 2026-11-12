@@ -1,15 +1,15 @@
 # PvP 素材標準（object_fps_pvp）
 
-更新：2026-10-31。Owner：`object_fps_pvp`。決定與批次見 [asset-layout 計畫](plans/v8/asset-layout.md)。
+更新：2026-11-12。Owner：`object_fps_pvp`。決定與批次見 [asset-layout 計畫](plans/v8/asset-layout.md)。
 
 本文件規定 `assets/object_fps_pvp/` 底下的檔案放哪裡、怎麼命名、怎麼記錄來源。檢查寫在 `tests/object_fps_pvp/test_asset_catalog.py`（CTest `object_fps_pvp.asset_catalog`）。
 
 ## 1. 範圍
 
-- 只適用 `assets/object_fps_pvp/`。停用的 `object_fps`、`object_fps_v2` 凍結：不搬、不去重、不套用本標準。
+- 只適用 `assets/object_fps_pvp/`。舊的 `object_fps`、`object_fps_v2` 已移除（2026-11-12，`v8-arch-remove-object-fps`）。
 - 標準只寫在本文件與 PvP 自己的測試裡。Engine、共通層、工具不知道這些路徑（AGENTS §7、§9），刪 PvP 時一起刪。
 - 素材根的位置（`assets/<id>`）、`content.json`、打包契約是 Engine 的契約，不在本文件的範圍，見 [creating_apps.md](../creating_apps.md)。
-- v1 的素材組裝與 pack 清單見 [3d-assets.md](../architecture/3d-assets.md)。那份文件描述 `object_fps`，本文件不改寫它，只引用它記錄的 pack 授權。
+- pack 清單與授權記錄見[附錄 A](#附錄-a素材包清單與授權記錄)。原本記在描述 `object_fps`（v1）的 `docs/architecture/3d-assets.md`，該產品已移除（2026-11-12，`v8-arch-remove-object-fps`），授權段移入本文件、原文件刪除。
 
 ## 2. 結構
 
@@ -117,7 +117,7 @@ assets/object_fps_pvp/
   - `source`：來自哪裡（pack 名、交付者、轉換方式）。
   - `license`：授權。沒有資料時寫 `unrecorded`，不猜。
   - `record`：這個事實記在哪裡（文件、commit、檔案本身的 metadata）。
-- pack 的授權（例如 Universal Animation Library、Universal Base Characters 為 CC0）記錄在 [3d-assets.md](../architecture/3d-assets.md)。這裡只指向它，不在兩處維護同一事實。
+- pack 的授權（例如 Universal Animation Library、Universal Base Characters 為 CC0）記錄在[附錄 A](#附錄-a素材包清單與授權記錄)。只在那裡維護，不在兩處維護同一事實。
 - text 項目由作者在 repo 裡寫，來源就是 git 歷史，不用記。
 - 原始檔（DCC 原檔、交付包、原始錄音）不進 repo，放 repo 外的美術儲存：主 checkout 的 `build/art-source/object_fps_pvp/<對象>/<交付版本>/`（git 不追蹤，不上 GitHub）。對象的路徑和本資料夾裡的一致，例如 `weapons/nailer_v2/viewmodel/version02/`。
   - 這裡的檔大多無法從 repo 重建：清建置輸出時只清 `build/target/`，不要整個清掉 `build/`。說明與清單在該資料夾的 `README.md`。
@@ -160,3 +160,42 @@ assets/object_fps_pvp/
 2. 新增一種素材時，必須改守衛的判斷邏輯，而不只是在表裡加一行。
 3. 例外不減反增：連續兩批都需要新增例外。
 4. 第二個啟用中的 product 需要同一套標準，或工具需要讀這套標準才能把素材放對位置。這時標準要變成明確的 Data Contract，屬 Architecture Delta。
+
+## 附錄 A：素材包清單與授權記錄
+
+2026-11-12 自 `docs/architecture/3d-assets.md` 第 146～212 行移入（`v8-arch-remove-object-fps`）。原文件描述已移除的 `object_fps`（v1）的素材組裝，隨該產品刪除；這一段記的素材包授權仍有效，因為 `assets/object_fps_pvp/animations/ual_mannequin/` 用的是同一個包，所以歸到實際使用者 PvP。下文照原文翻譯，事實與日期不改；描述 v1 組裝行為的句子保留為當時的紀錄。原文見 git 歷史 `56b8dda3`。
+
+### A.1 歷史來源清單
+
+2026-09-20 的歷史來源清單記錄了 **511 個檔／1,076,255,418 bytes**，包含 189 個 FBX、72 個 Blender 檔、10 個 Blender 備份、61 組 OBJ/MTL、18 組 glTF/BIN、5 個 GLB、66 個 PNG，以及隨附的參考資料、readme 與授權檔。清單（`apps/object_fps/art_source/source_inventory.json`，放在本機的美術儲存，從未進 repo）的每一筆記錄原始絕對路徑、相對於 repo 的封存路徑、bytes、SHA-256、runtime 複本與只留在原始檔的理由。Runtime 對應另記 catalog ID 與 type。二進位 FBX 的項目含 mesh／骨骼／材質／片段的 metadata 與材質樣板、骨骼階層、原始 rest／bind 指紋、座標設定與原始權重統計；glTF/GLB 的項目含外部引用是否存在。其他創作檔只記身分與格式，不解碼。
+
+| 封存的 pack | 檔數 | 選進 runtime 的內容／延後的內容 |
+| --- | ---: | --- |
+| Animated FPS Guns, June 2018 | 25 | 只有 Pistol。其他武器、Blender 與 OBJ 留在原始檔。 |
+| Retro Weapon Pack V1 | 130 | 全部只留在原始檔：分開的手臂／槍與 84 個只含動畫的 FBX（手臂 70、槍 14）需要額外組裝／外部綁定。 |
+| Ultimate Gun Pack, July 2019 | 222 | 只有 Pistol_1。其他武器／配件與其他格式留在原始檔。 |
+| Universal Animation Library Standard | 9 | Standard FBX 與它自己的 mannequin。Root Motion 與其他格式留在原始檔。 |
+| Universal Animation Library 2 Standard | 13 | 全部延後，包括 Root Motion 與分開的女性 mannequin。 |
+| Universal Base Characters Standard | 112 | 兩個 FullBody FBX 與六份角色專屬的貼圖複本。其餘髮型、變體、normal／roughness 貼圖與其他格式留在原始檔。 |
+
+### A.2 模型的限制（當時的檢查結果）
+
+兩個 superhero 模型有三個原始 mesh、65 個骨骼節點，沒有片段。UAL1 與 UAL2 各含一個 mannequin mesh、65 個骨骼節點與 43 個片段。檢查原始檔發現這些人形來源的骨骼名稱／階層相同，但 superhero 的 rest transform 與蒙皮綁定和兩個動畫庫不同。UAL1／UAL2 在比對過的本地 rest transform 與 bind 矩陣上一致；這不代表 Engine 實作了節點對節點的對應。Retro 的手臂與其動畫檔共用 63 根骨骼的階層，同樣不能把一個檔的節點索引匯入另一個檔。Animated Pistol 有七個骨骼節點、四個 skin cluster，每個控制點最多兩個影響。
+
+因此（v1 的）可執行組裝只在 AnimationSet 的 canonical model ID 與不可變的來源模型歸屬都和角色／武器模型相符時才接受它。不同檔案即使骨骼名稱或階層相同也拒絕。原始指紋是清單的證據，不是相容性的關卡；節點索引、參考姿勢、單位、座標轉換與綁定都有關係。不提供 retargeting、外部綁定、root motion 抽取或新的動畫狀態機。UAL1 只和它自己的 mannequin 一起使用。superhero 的定義刻意沒有 AnimationSet。
+
+匯入器維持既有的「取最大四個權重再正規化」。正權重超過四個的原始控制點：
+
+| 原始身體 mesh | 受影響的控制點 | 捨棄的權重占原始總權重的最大比例 |
+| --- | ---: | ---: |
+| Superhero male | 275 / 6,287 (4.374%) | 7.6608% |
+| Superhero female | 130 / 6,408 (2.029%) | 2.2612% |
+| UAL mannequin | 145 / 6,994 (2.073%) | 9.5054% |
+
+這些數字指原始控制點，不是 renderer 拆開後的頂點。CPU 蒙皮測試涵蓋的是匯入後的表示；它們不證明和保留所有原始權重的 DCC 工具逐像素相同。
+
+部分原始 glTF 引用了不存在的 `T_Eye_Normal_png.png`，男性模型另有 `T_Hair_1_Normal_png.png`；對應的不帶 `_png` 的檔在 pack 的其他位置。清單保留並回報這些缺失的引用。選用的 runtime FBX／base-color PNG 路徑不依賴那些 glTF 引用；原檔不改寫。
+
+### A.3 授權
+
+Ultimate Gun Pack、兩個 UAL pack 與 Universal Base Characters 隨附的本地授權檔都寫明 CC0。Retro 隨附的 `Readme.pdf` 允許個人／商業使用，並寫明不需要標示出處。Animated FPS Guns 沒有隨附授權檔或 readme，所以它的授權狀態在這份封存裡仍未記錄；不把其他 pack 的 CC0 套到它身上。所有隨附的授權／參考檔都逐 byte 保留在各自的 pack 裡。這是隨附文件的紀錄，不是替代授權，也不對未提供的條款做任何主張。

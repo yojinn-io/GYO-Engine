@@ -1,6 +1,5 @@
 name,description,version,enabled,default,release,windows,linux,macos
 ui_editor,GYO UI Editor,1,true,true,true,true,true,true
-object_fps_preview,Object FPS local design preview,1,false,false,false,true,true,true
 audio_editor,GYO Audio Editor,1,true,true,false,true,true,true
 model_viewer,GYO Model Viewer,1,true,true,false,true,true,true
 voxel_map_editor,GYO Voxel Map Editor,1,true,true,false,true,true,true

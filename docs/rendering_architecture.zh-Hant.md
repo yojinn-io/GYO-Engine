@@ -201,7 +201,7 @@ Product manifest 是 `share/gyo/products/<product>/manifest.json`，記錄 produ
 
 Quick 與 Release 使用同一產品與資產組裝流程，產品驗收深度由外部 contract 決定。Linux toolchain job 固定使用 Xvfb／Lavapipe 驗證共通引擎 GPU 渲染，沒有 app 時也執行；遊戲 job 另執行 contract 宣告的 GPU checks。這是軟體 Vulkan 證據，不是實體 GPU 驗證。Windows/macOS hosted 結果也不能取代實機測試。觸發條件、驗證等級 L1–L4、平台（含 macos-x64）、試用套件、master snapshot 與 release train 以[版本發佈](releasing.zh-Hant.md)第 3、5、7 節為準。
 
-Object_FPS 的 startup/headless/GPU probe 位於獨立 `gyo_<game>_acceptance`，不注入遊戲 `main`。遊戲執行檔保留正常遊戲操作與 `--gpu-driver`；診斷、截圖、互動 viewmodel preview 由外部 tests／design tool 擁有。詳見 [Object_FPS 驗收](object_fps/acceptance.zh-Hant.md)及[版本發佈](releasing.zh-Hant.md)。
+產品的 startup/headless/GPU probe 由該產品在 `build/acceptance/<product>/` 註冊的獨立驗收執行檔擁有（`gyo_register_acceptance_probe`），不注入遊戲 `main`。遊戲執行檔保留正常遊戲操作與 `--gpu-driver`；診斷、截圖、互動 viewmodel preview 由外部 tests／design tool 擁有。詳見[版本發佈](releasing.zh-Hant.md)。
 
 <a id="r10"></a>
 ## 10. 驗證狀態、限制與參考

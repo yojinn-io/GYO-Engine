@@ -9,7 +9,7 @@ Root `tools/` contains design support. Compiler, integration and release support
 ```csv
 name,description,version,enabled,default,release,windows,linux,macos
 ui_editor,GYO UI Editor,1,true,true,true,true,true,true
-object_fps_preview,Object FPS local design preview,1,false,false,false,true,true,true
+model_viewer,GYO Model Viewer,1,true,true,false,true,true,true
 ```
 
 Boolean columns accept `true`, `false`, `1` or `0`. The description/version fields are notes. `enabled` and platform flags permit selection; `default` selects a tool in `AUTO`; `release` selects its default variant for that platform's toolchain. Release selection must be nonempty on every supported package platform (windows-x64, linux-x64, macos-arm64, macos-x64; the `macos` flag covers both macOS architectures). The CMake parser is authoritative for both local builds and CI; directory discovery and a second Python CSV parser are not selection mechanisms.
@@ -21,14 +21,14 @@ cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=
 cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor
 # Local CLI-only mode.
 cmake --preset dev -DGYO_APPS= -DGYO_TOOLS=ui_editor:cli
-# A game-specific preview requires that game to be selected separately.
-# (object_fps_preview and object_fps are currently disabled; see the note below.)
-cmake --preset dev -DGYO_APPS=object_fps -DGYO_TOOLS=object_fps_preview
+# A game-specific preview requires that game to be selected separately
+# (pvp_preview is a hypothetical tool id).
+cmake --preset dev -DGYO_APPS=object_fps_pvp -DGYO_TOOLS=pvp_preview
 ```
 
-An explicit list uses semicolons, for example `-DGYO_TOOLS=ui_editor;object_fps_preview` (quote the entire argument in the shell). `GYO_TOOLS=AUTO` selects enabled default tools on the current platform. `dev` and `core` default to no tools, while `test` selects `AUTO`. Use separate build trees and output roots for concurrent configurations.
+An explicit list uses semicolons, for example `-DGYO_TOOLS=ui_editor;model_viewer` (quote the entire argument in the shell). `GYO_TOOLS=AUTO` selects enabled default tools on the current platform. `dev` and `core` default to no tools, while `test` selects `AUTO`. Use separate build trees and output roots for concurrent configurations.
 
-Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `build/target/_tools/<owner>/bin`. Object_FPS preview depends on game libraries and content, so it remains local. The preview is currently disabled in `tools.csv`, so selecting it fails with "not enabled"; Object_FPS is disabled in `projects.csv` and no longer compiles against the current engine API. Both must be re-enabled after the game is migrated ([Math](architecture/plans/math-foundation/inactive_products.md), [Result](architecture/plans/result-unification/inactive_products.md), [foundation follow-ups](architecture/plans/foundation-followups/inactive_products.md)). It cannot simultaneously be a fixed game-independent release tool. UI Editor's standalone `cmake -S tools/ui_editor -B build/target/_build/ui-editor` entry forwards to the same graph and accepts `-DGYO_TOOLS=ui_editor:cli`.
+Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `build/target/_tools/<owner>/bin`. A game-specific preview depends on game libraries and content, so it remains local; it cannot simultaneously be a fixed game-independent release tool. (The former Object_FPS preview was removed on 2026-11-12 together with its game, `v8-arch-remove-object-fps`.) UI Editor's standalone `cmake -S tools/ui_editor -B build/target/_build/ui-editor` entry forwards to the same graph and accepts `-DGYO_TOOLS=ui_editor:cli`.
 
 ## Add a tool by hand
 
@@ -61,7 +61,7 @@ Packageable tools go to `build/target/toolchain/bin`; local-only tools go to `bu
 5. Add owner tests under `tests/<id>` and release checks under `build/acceptance/<id>/checks.json`. Every release tool must execute one of its registered executable or probe roles in both `quick` and `release` on each selected release platform. Missing coverage fails configuration.
 6. Build, run from the assembled directory, install into a separate stage, and run declared acceptance. Only after the manual sequence is clear should a script automate those same operations.
 
-Game-specific local tools declare dependencies as aliases, such as `"requires_apps": {"game": "object_fps"}`. Tool code resolves the alias with `gyo_tool_app_dependency(game app)` and uses the existing app target/config helpers. A missing selected app is an error, not a request to silently enable it. No shared Build, runner or workflow edits are needed for a new tool.
+Game-specific local tools declare dependencies as aliases, such as `"requires_apps": {"game": "object_fps_pvp"}`. Tool code resolves the alias with `gyo_tool_app_dependency(game app)` and uses the existing app target/config helpers. A missing selected app is an error, not a request to silently enable it. No shared Build, runner or workflow edits are needed for a new tool.
 
 ## Acceptance and package roles
 
@@ -71,6 +71,6 @@ The product manifest records the nonempty build `configuration`, installed execu
 
 ## Migrating an old build tree
 
-The former `GYO_BUILD_UI_EDITOR`, `GYO_UI_EDITOR_BUILD_GUI` and `GYO_BUILD_OBJECT_FPS_PREVIEW` variables are removed. Use `GYO_TOOLS=ui_editor`, `ui_editor:cli`, or `object_fps_preview`. Do not retain both interfaces in presets or local IDE options. Remove the three obsolete cache entries, or configure a fresh build tree with the new selection; reloading an old cache does not remove saved variables automatically. Never delete all of `build/`: maintained development support lives there.
+The former `GYO_BUILD_UI_EDITOR`, `GYO_UI_EDITOR_BUILD_GUI` and `GYO_BUILD_OBJECT_FPS_PREVIEW` variables are removed. Use `GYO_TOOLS=ui_editor` or `ui_editor:cli`; the Object_FPS preview that replaced `GYO_BUILD_OBJECT_FPS_PREVIEW` was removed on 2026-11-12 (`v8-arch-remove-object-fps`). Do not retain both interfaces in presets or local IDE options. Remove the three obsolete cache entries, or configure a fresh build tree with the new selection; reloading an old cache does not remove saved variables automatically. Never delete all of `build/`: maintained development support lives there.
 
 Schema 2 product manifests and old probe-directory invocation are superseded. Reconfigure, build and reinstall to regenerate schema 3 manifests and matching acceptance contexts before running current acceptance scripts. Local outputs and old reports are not evidence for the new contract.
