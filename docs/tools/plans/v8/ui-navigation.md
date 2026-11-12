@@ -37,7 +37,7 @@
 ## 不做的事（範圍的限界）
 
 - 不做頁面切換，也不改 `gyo.ui`。(B) 等暫停選單、畫面設定要加頁面時，以實際的頁數再決定。
-- 不碰 `object_fps_v2`（`ObjectFpsUi.cpp:462` 的 TODO、`CanvasFor`）。v2 有同樣的問題，要做另排一批。
+- 不碰 `object_fps_v2`（`ObjectFpsUi.cpp:462` 的 TODO、`CanvasFor`）。v2 有同樣的問題，要做另排一批。（2026-11-12 註：`object_fps_v2` 已移除，`v8-arch-remove-object-fps`；此條失效。）
 - 不把比對函式放進 framework。目前只有 PvP 用它；v2 也要用時，照「多處使用的共通功能先放 framework」再搬。
 
 ## 判定（§14.1，先宣告，結果出來後不放寬）

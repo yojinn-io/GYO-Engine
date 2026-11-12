@@ -42,8 +42,8 @@
 - 2026-10-31：`v8-engine-audio-control-live` 完成：dummy 驅動上停止、換片段、播放頭；disk 驅動上開啟後載入的片段聽得到，停止 frame 等於以錨點重算的值（連跑 30 次通過）；突變 `au-sdl-render-anchor-shifted`。PR 線合併前的完整突變（D184）：`mutations.json` 82／82、TSan 6／6、ASan 1／1；test 110／110、core 39／39。`docs/architecture.md` 的 Audio 列與「audio control layer」一段已補。dev_log：[2026_10_31_engine_audio_control_live](../../../dev_logs/2026_10_31_engine_audio_control_live.zh-Hant.md)。控制層的分支 `claude/v8-engine-audio-control`（未推送）；四平台 CI 未跑。
 - 2026-11-04：#138 合併後的 master CI（run 41775642108，linux-x64）在 disk 守衛「stops it at its mapped frame」失敗。使用者說「在這裡切分」，開始 `v8-engine-audio-disk-stop-window`（high，估 2 h）。切分：Test 自身，環境觸發，實作照契約。主因是 SDL 在 `Open` resume 前把靜音寫進 disk 檔（檔案比 mixer 多一個 block）；次要是測試執行緒在 sentAt 與入列之間被耽擱。使用者先選「照選項 1 修」（放寬範圍），查出主因後停下（AGENTS §14：原因改變前提），再選「標記加放寬」。
 - 2026-11-04：`v8-engine-audio-disk-stop-window` 實作完成、**判定變更待使用者核准**（Design Invariant 10 的守衛，AGENTS §14.4）：測試在 mixer 的 frame 0 放標記並扣掉檔案開頭，候選範圍延伸到 `Stop()` 返回後第一個 block，遲到計數須和結果一致；新增暫停 1 ms／3 ms 一案；`au-sdl-*` 突變 13／13；閒置 200、滿載 100 次通過。驗證者指出未守住的一面：後端在串流開頭加入的固定延遲（V1）。分支 `claude/v8-engine-audio-disk-stop-window`。dev_log：[2026_11_04_engine_audio_disk_stop_window](../../../dev_logs/2026_11_04_engine_audio_disk_stop_window.zh-Hant.md)。
-- 2026-11-04：使用者「核准並開 PR」：判定變更核准，接受「後端在串流開頭加入的固定延遲不再被 disk 守衛抓到」（列入未結事項）。推送並開 PR。
-- 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。
+- 2026-11-04：使用者「核准並開 PR」：判定變更核准，接受「後端在串流開頭加入的固定延遲不再被 disk 守衛抓到」（列入未結事項）。推送並開 PR。（2026-11-12 圖書管理員補註：後續：disk-stop-window 已隨 PR #148 合併，`4a88f67f`）
+- 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。（2026-11-12 圖書管理員補註：後續：sfx-l2 已隨 PR #113 合併，`d8cca12a`；Engine 的 audio-control 已隨 PR #139 合併，`8a713b1e`）
 
 ## 代號對照
 

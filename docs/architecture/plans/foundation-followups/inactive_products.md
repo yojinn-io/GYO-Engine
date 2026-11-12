@@ -2,7 +2,7 @@
 
 2026-11-12：三個產品（`object_fps`、`object_fps_v2`、`object_fps_preview`）已移除（`v8-arch-remove-object-fps`），本清單只作歷史紀錄。
 
-建立：2026-10-04（計畫落盤時）。基準：master `05042fa`。**本計畫各批都未開始；本文件目前只列「預計造成的遷移需求」，沒有任何量測。**
+建立：2026-10-04（計畫落盤時）。基準：master `05042fa`。**本計畫各批都未開始；本文件目前只列「預計造成的遷移需求」，沒有任何量測。**（2026-11-12 圖書管理員補註：後續：各批已完成，量測與後續見第 5 節之後）
 
 本計畫依範圍不修改 object_fps、object_fps_v2 與 object_fps_preview。各批改動 Engine 公開介面、共通測試或登錄資料後，這些產品重新啟用前需要先遷移；本文件是遷移清單。
 重新啟用時，除了本文件，還要處理 [Math 的遷移清單](../math-foundation/inactive_products.md) 與 [Result 統一的遷移清單](../result-unification/inactive_products.md)。計畫與紀錄見 [README](README.md)、[HANDOFF](HANDOFF.md)。

@@ -42,16 +42,16 @@
 
 ## 3. 業界參照（憑記憶寫，survey 批要以實際資料核對）
 
-| 參照 | 機制 | 為什麼這麼做 | 對 GYO 的當てはめ | 判定 |
+| 參照 | 機制 | 為什麼這麼做 | 對 GYO 的套用 | 判定 |
 |---|---|---|---|---|
-| Minecraft | 世界切成 16×16 的 chunk 柱，柱內再切 16³ 的 section；一個 region 檔放 32×32 個 chunk；block 用 palette 壓縮 | 讀寫、網路、重建 mesh 的單位都要夠小；region 檔避免幾萬個小檔 | 區塊＝16³（和工具的 `gyo.voxel_grid` 一致）；一張地圖＝索引＋區塊產物；palette 已有 | **採る**（區塊 16³、索引＋區塊） |
+| Minecraft | 世界切成 16×16 的 chunk 柱，柱內再切 16³ 的 section；一個 region 檔放 32×32 個 chunk；block 用 palette 壓縮 | 讀寫、網路、重建 mesh 的單位都要夠小；region 檔避免幾萬個小檔 | 區塊＝16³（和工具的 `gyo.voxel_grid` 一致）；一張地圖＝索引＋區塊產物；palette 已有 | **採用**（區塊 16³、索引＋區塊） |
 | Minecraft | 伺服器只對每位玩家附近 view distance 內的 chunk 送資料、只在 simulation distance 內跑邏輯 | 伺服器成本和地圖大小無關，只和人數有關 | Match 的「活動範圍」＝玩家附近的區塊；和 entity-model 的 100 m interest 同一套想法 | **改裝**（Match 載入集合要由世界決定性地導出，見第 5 節） |
 | Luanti（Minetest） | MapBlock 16³；地圖放 SQLite，以區塊座標為鍵；伺服器只模擬 active block range 內的區塊；Client 自己把 block 變 mesh | 開源、文件完整、設計最接近「伺服器權威＋Client 建 mesh」 | 證明「展開在 Client」可行；但 GYO 的烘焙（剔面、合併盒）在工具，不在 Client（G1、G6） | **改裝**（active range 的概念採；Client 建 mesh 不採，烘焙留在工具） |
-| Veloren | 伺服器依「region」訂閱同步實體；地形區塊串流給 Client；ECS | 開源的開放世界多人範例；實體同步與地形串流分開 | 地形是資產、實體是 wire：GYO 已是這個分法（arena 由資產載入、digest 覆蓋）；只需確認大地圖仍不上 wire | **採る**（地形不上 wire 的分法） |
-| Godot GridMap | cell 以 octant（預設 8³）分組，每個 octant 烘一個 mesh＋碰撞；navmesh 也按 octant | 編輯一格只重烘一個 octant；draw call 按 octant | 工具的增量重建單位＝區塊；Client 每區塊一個 draw（或合併鄰接區塊） | **採る**（每區塊一個 mesh；使用者先前已指定參考） |
+| Veloren | 伺服器依「region」訂閱同步實體；地形區塊串流給 Client；ECS | 開源的開放世界多人範例；實體同步與地形串流分開 | 地形是資產、實體是 wire：GYO 已是這個分法（arena 由資產載入、digest 覆蓋）；只需確認大地圖仍不上 wire | **採用**（地形不上 wire 的分法） |
+| Godot GridMap | cell 以 octant（預設 8³）分組，每個 octant 烘一個 mesh＋碰撞；navmesh 也按 octant | 編輯一格只重烘一個 octant；draw call 按 octant | 工具的增量重建單位＝區塊；Client 每區塊一個 draw（或合併鄰接區塊） | **採用**（每區塊一個 mesh；使用者先前已指定參考） |
 | UE5 World Partition | 執行期以格子 cell 串流；HLOD 給遠處；Data Layers；One File Per Actor 給多人編輯 | 把「作者怎麼放」和「執行期怎麼載」分開；遠處用低精度代理 | 串流格子＝我們的區塊索引；HLOD 現在不需要（遠處先不畫或畫整區塊的盒子） | **改裝**（串流格子採；HLOD、Data Layers、OFPA 不採） |
-| 物理引擎 broadphase（均勻格／spatial hash；Jolt、Bullet） | 靜態盒子先依格子分桶，查詢只看相鄰桶 | O(walls) 變 O(附近) | Engine `Collision` 加「靜態 AABB 的均勻格 broadphase」；疊代順序以區塊鍵排序保決定性（G3） | **採る**（Engine 中立能力；兩個產品端：Match、Client 預測） |
-| 光照、AO、LOD、程序生成 | — | — | Engine RC 2 明寫頂點屬性要離開軸就換；現在沒有 Feature 點名 | **採らない**（記為 RC 候選） |
+| 物理引擎 broadphase（均勻格／spatial hash；Jolt、Bullet） | 靜態盒子先依格子分桶，查詢只看相鄰桶 | O(walls) 變 O(附近) | Engine `Collision` 加「靜態 AABB 的均勻格 broadphase」；疊代順序以區塊鍵排序保決定性（G3） | **採用**（Engine 中立能力；兩個產品端：Match、Client 預測） |
+| 光照、AO、LOD、程序生成 | — | — | Engine RC 2 明寫頂點屬性要離開軸就換；現在沒有 Feature 點名 | **不採用**（記為 RC 候選） |
 
 ## 4. 對照後的候選契約（討論用，不是定案）
 
@@ -91,7 +91,7 @@
 
 1. **目標規模**（Feature 的數字，只有你能定）：地圖大小與密度的量級、同房人數、可接受的載入時間、編輯延遲。
    沒有這些數字，RC 的「需要」無法判定，分區塊的大小也定不下來。
-2. **Match 第一步整張載入＋broadphase，活動範圔延後**——同意這個順序嗎？
+2. **Match 第一步整張載入＋broadphase，活動範圍延後**——同意這個順序嗎？
 3. **格式**：維持 JSON 文字（可手寫、可 diff，G10），分區塊後單檔小；或容許二進位編碼作為第二種編碼？
 4. **區塊大小**：16³（與 `gyo.voxel_grid` 一致）；或更大（32³）減少索引與 draw 數？
 5. **window 批怎麼接**：(a) 先做小修（Engine `ValidateVoxelMesh(document)`，約把 2.7 s 降到 0.2 s）讓 window 批繼續，
@@ -109,7 +109,7 @@
 | 面向 | 塔科夫模型對 GYO 的含意 | 對第 6 節決定的影響 |
 |---|---|---|
 | Match 載入 | 全圖載入碰撞＋全圖模擬 AI（塔科夫的 scav 是伺服器全圖跑的）；4 人房讓每收件人 snapshot 預算（1200 B）不緊 | 偏向「整張載入＋broadphase」；活動範圍不是第一需求。survey 仍要核對塔科夫怎麼處理伺服器端 AI 成本 |
-| Client 渲染 | 視距可達數百公尺（狙擊是玩法）；一張 km² 等級的 voxel 圖若 cell 1 m、只剔面不合併，地面就上百萬四邊形 | **greedy 合併從「候選」變成必要**（工具的烘焙，G6）；每區塊一個 mesh＋視錐／距離剔除是底線；LOD／遠處代理從「採らない」改成 **RC 候選要量**。區塊編碼與區塊大小由此決定 |
+| Client 渲染 | 視距可達數百公尺（狙擊是玩法）；一張 km² 等級的 voxel 圖若 cell 1 m、只剔面不合併，地面就上百萬四邊形 | **greedy 合併從「候選」變成必要**（工具的烘焙，G6）；每區塊一個 mesh＋視錐／距離剔除是底線；LOD／遠處代理從「不採用」改成 **RC 候選要量**。區塊編碼與區塊大小由此決定 |
 | 地圖內容不只幾何 | 區域（任務區、boss 區、隱藏區、怪物溢出區）、出生點、撤離點、寶箱、陷阱、遊蕩怪物的路徑 | 需要**第二層資料：標記層**（點、體積、路徑，帶不透明的名字與鍵值）。Engine／framework 可擁有中立的標記格式（名字不透明，比照 `gyo.anim_events` 的先例：Engine 解析、產品賦義），產品定義意義；編輯器只放置與命名，不知道「boss 區」是什麼（G1、AGENTS §8） |
 | 實體 | 怪物、寶箱、陷阱都是實體（entity-model E-1、E-4：Boss 與小怪是實體不是專用訊息；容器在 30 m 可見性） | 和 `v8-arch-entity-store`（ECS 容器）同一條線：大地圖＋多實體＋interest 100 m 是容器的第一個真實壓力；AI 尋路要靠地圖導出的導航資料（Godot GridMap 按 octant 烘 navmesh 的先例）——不在本案，但區塊格式要留得住 |
 | 編輯方式 | 塔科夫地圖是多人長期手工；我們是單人編輯器 | One File Per Actor 仍不採；但「區塊各自一檔」讓 diff 與 undo 有自然的粒度 |
@@ -143,10 +143,10 @@ window 批**等分區塊契約定案**，不先做小修。
 
 - **段／模型／檔位**：上段（Architecture 判斷的根據）。調查者 Opus／high；對抗檢查者 Fable／xhigh（比主會話強，開卡時要使用者同意；
   不同意就用 Opus 並在報告寫明同模型）。估時 8～12 h（範圍比第一稿多了塔科夫、標記層、greedy／LOD 三項）；超過 1.5 倍停下回報。
-- **目的**：用**實際讀到的資料**（不是記憶）核對第 3 節，產出一張「採る／改装／採らない」表，作為之後 Engine／產品契約的 DI 根據；
+- **目的**：用**實際讀到的資料**（不是記憶）核對第 3 節，產出一張「採用／改裝／不採用」表，作為之後 Engine／產品契約的 DI 根據；
   並為第 6 節的四個決定各給出證據與建議，讓使用者能決定。
 - **要讀的參照與每個要回答的問題**（主要來源優先：官方文件、原始碼；維基只當索引）：
-  1. Minecraft（區塊格式、region 檔、view distance 與 simulation distance）：區塊大小與分層為何；伺服器怎麼決定模擬範圔；
+  1. Minecraft（區塊格式、region 檔、view distance 與 simulation distance）：區塊大小與分層為何；伺服器怎麼決定模擬範圍；
      palette 編碰的理由。
   2. Luanti／Minetest（`MapBlock`、`active_block_range`、map database）：伺服器只模擬活動區塊時，權威與決定性怎麼處理；
      未載入區塊的碰撞怎麼辦；為何選 SQLite 以座標為鍵。
@@ -155,7 +155,7 @@ window 批**等分區塊契約定案**，不先做小修。
   5. UE5 World Partition（runtime grid、streaming、HLOD、One File Per Actor）：作者配置與執行期載入分離的做法；
      哪些是我們現在不需要的。
   6. 一個物理引擎的靜態 broadphase（Jolt 或 Bullet）：均勻格／樹的取捨；查詢順序是否決定性。
-- **每個參照寫一列**：機制｜為什麼這麼做｜對 GYO 的當てはめ（指出 owner：Engine／framework／工具／產品）｜判定｜根據（URL 或檔案與行）。
+- **每個參照寫一列**：機制｜為什麼這麼做｜對 GYO 的套用（指出 owner：Engine／framework／工具／產品）｜判定｜根據（URL 或檔案與行）。
   判定要對照第 2 節 G1～G10；違反的寫出衝突與改裝方式。
 - **待決定事項各一節**：(1) 規模分級（以塔科夫 raid 地圖為上限、cell 0.5 m 重算數量級）；(2) Match 的模擬模型
   （全圖模擬 vs 遠處 AI 降頻／凍結；權威與決定性怎麼寫）；(3) 區塊編碼（JSON 可讀 vs 載入速度；3 萬個區塊時索引與區塊檔怎麼讀）；
@@ -165,11 +165,11 @@ window 批**等分區塊契約定案**，不先做小修。
 - **補量測（先檢測再評估，G8）**：用現有工具與合成圖量 (a) 只畫不重建的畫面時間（framework OffscreenPreview、497k 頂點）、
   (b) Match 一 tick 線性掃 20,691 盒子的成本（Movement 的 supported＋ShotQuery 一槍）、(c) Engine 讀 5.3 MB 文字的時間拆解
   （解析 vs 規則檢查）。只量，不改程式；寫明件數突き合わせ。
-- **「採らない」的項目**寫成之後 Engine／工具 Replacement Criteria 的候選（第 3 節最後一列的做法）。
+- **「不採用」的項目**寫成之後 Engine／工具 Replacement Criteria 的候選（第 3 節最後一列的做法）。
 - **產出**：`docs/architecture/plans/big-map/README.md`（計畫、批次一覽）、`HANDOFF.md`（記錄器）、`survey.zh-Hant.md`（表與四節）；
   dev_log `docs/dev_logs/2026_MM_DD_arch_v8_big_map_survey.zh-Hant.md`；證據 `build/evidence/big-map/survey/`（量測 CSV、讀過的來源清單）。
   第 3 節憑記憶寫的內容若與來源不符，以來源為準並標出修正。
-- **對抗檢查**：檢查者讀 survey 與來源，試圖否定每個「採る」的理由與四個建議；找出調查者沒讀的來源；結果附在 survey 末。
+- **對抗檢查**：檢查者讀 survey 與來源，試圖否定每個「採用」的理由與四個建議；找出調查者沒讀的來源；結果附在 survey 末。
 - **結束**：停下，回報使用者四個決定。不開 contract 批、不改 Engine／工具／產品程式碼、不改 PR #152 的文件。
 
 ## 9. survey 之後（不在本次開卡範圍，寫出來只為看見全貌）

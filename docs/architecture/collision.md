@@ -1,12 +1,12 @@
 # Collision: the static broadphase
 
-Owner: Engine (`engine/collision` → `GYO::Collision`; `engine/collision/StaticAabbGrid.hpp`).
+Owner: Engine (`engine/collision` → `GYO::Collision`; `engine/collision/include/engine/collision/StaticAabbGrid.hpp`).
 Plan and record: [big map](plans/big-map/README.md), batch v8-arch-big-map-engine-grid (survey: one moving body's
 step over 20,691 boxes costs about 2.2 ms with a linear scan, about half of a 60 Hz tick for four).
 
 This page covers the static broadphase only. The exact queries (`RaycastAabb`, `SweepVerticalCapsuleAgainstAabb`,
 `OverlapVerticalCapsuleAabb` and the rest), their numeric semantics and their single 1e-7 tolerance are stated in
-`engine/collision/Collision.hpp`; the module's place is in the [module table](../architecture.md).
+`engine/collision/include/engine/collision/Collision.hpp`; the module's place is in the [module table](../architecture.md).
 
 **Status (2026-11-06): added by v8-arch-big-map-engine-grid (PR #161).** No product uses it yet; object_fps_pvp is planned to
 replace its linear scans with it (v8-arch-big-map-product-arena-v3).

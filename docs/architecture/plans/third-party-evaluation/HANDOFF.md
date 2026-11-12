@@ -1,6 +1,6 @@
 # 第三方方案評估（third-party-evaluation）：交接
 
-更新：2026-11-10。**狀態：評估完成、對抗檢查處置完成，PR [#176](https://github.com/yojinn-io/GYO-Engine/pull/176) 已開（docs-only），停下等使用者決定 D1～D9（evaluation §4）。** 分支 `claude/arch-third-party-evaluation`（自 master `a75152d8` 切出）。卡片由架構師會話（「[Job][架構師]例行架構掃描」）開出。
+更新：2026-11-10。**狀態：評估完成、對抗檢查處置完成，PR [#176](https://github.com/yojinn-io/GYO-Engine/pull/176) 已開（docs-only），停下等使用者決定 D1～D9（evaluation §4）。**（2026-11-12 圖書管理員補註：後續：#176 已合併，`a75b2ec1`） 分支 `claude/arch-third-party-evaluation`（自 master `a75152d8` 切出）。卡片由架構師會話（「[Job][架構師]例行架構掃描」）開出。
 本文件是持續記錄器：每批開始、里程碑、停止時，與工作在同一變更中更新。停下或回報前，先更新「現況」。
 
 ## 代號對照

@@ -24,7 +24,7 @@
 ## 1. 方法與來源
 
 - **調查者**：主會話 Opus 5.5／high（開工時是 Fable 5.1，之後由使用者切成計畫指定的 Opus 5.5）。
-  九項參照由三個子 Agent（general-purpose、Opus 5.5、high）讀主要來源，只回事實與來源；**判定（下表「當てはめ」與「判定」欄）由調查者做**。
+  九項參照由三個子 Agent（general-purpose、Opus 5.5、high）讀主要來源，只回事實與來源；**判定（下表「套用」與「判定」欄）由調查者做**。
 - **來源的性質**（每列的「根據」都標出）：原始碼（釘選 commit）＞官方文件＞開發者部落格＞社群 wiki＞媒體。
   - Luanti `b4c73357a6159e48810dea24428f3ebaa24dd345`、Veloren `7daa95fd53ae62aa185d31ad316d0cabfe2d70ac`、Godot `8cc3a574e26e3640227861aef8266f2fd4fbb650`、
     Jolt `0f69a6b8f0bd562f23a29b27a665d2dab1524917`、Bullet3 `d3afe76132fc76b0f9b2359cbaef47a3766e7fbb`（GitHub／GitLab master，2026-11-06 讀）。下表的行號只對這些 commit 有效。
@@ -37,100 +37,100 @@
 
 ## 2. 九項參照
 
-判定欄：**採る**（照用）、**改装**（用其想法，改寫成符合 G1～G10 的形狀）、**採らない**（現在不用；寫成第 6 節的 Replacement Criteria 候選）。
+判定欄：**採用**（照用）、**改裝**（用其想法，改寫成符合 G1～G10 的形狀）、**不採用**（現在不用；寫成第 6 節的 Replacement Criteria 候選）。
 G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 
 ### 2.1 Minecraft（Java Edition）
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| 16×16 的 chunk 柱、全高；柱內切 16³ 的 section；整柱一起載入 | **一手理由未找到**。wiki 只說 section 用於顯示與部分機制 | 驗證與重烘的單位＝16³ 區塊，和工具的 `gyo.voxel_grid` `ChunkSize = 16` 一致（工具 owner）。GYO 不需要「柱」：v0.1 是 3D 區塊，空區塊省略 | 採る（16³）；改装（不用柱） | (wiki) https://minecraft.wiki/w/Chunk |
-| region 檔：32×32 chunk 一檔、4 KiB sector、位置表＋timestamp；取代 Alpha 的一 chunk 一檔 | 一檔一 chunk 的檔案數太多（取代 Alpha 格式的歷史）；32 的理由未找到 | 「檔案單位≠編輯單位」：region 是檔案單位（Engine 格式）。GYO 用 JSON 文字（G10），不用 sector 二進位 | 改装 | (wiki) https://minecraft.wiki/w/Region_file_format |
-| 每 section 一個 palette＋packed 索引（最少 4 bit）；網路協議超過 8 bit 改用全域 id | 壓縮：全石頭的 section 不必每格 15 bit | v0.1 是全圖共用 palette（≤256），四邊形帶 palette 索引；文字格式不靠 bit packing 省空間 | 採らない（RC 候選：每區塊 palette） | (wiki) https://minecraft.wiki/w/Chunk_format 、https://minecraft.wiki/w/Java_Edition_protocol/Chunk_format |
-| view-distance 與 simulation-distance 分開（預設 10、21w38a 加入）；ticket／load level；模擬距離外的實體「不處理但仍可存取」，等區塊等級回升後再處理（wiki 對恢復條件的描述不一致） | Mojang：讓視距可以大、CPU 負擔小 | 「Client 收什麼」與「Match 模擬什麼」分開，GYO 已是這樣（地形是資產、實體 interest 100 m 在 Match）。模擬範圍是玩法決定（第 4.1 節） | 改装（若採用，載入集合要由權威位置決定性導出，G4） | https://www.minecraft.net/en-us/article/minecraft-snapshot-21w38a ；(wiki) https://minecraft.wiki/w/Server.properties |
-| 1.17 起實體存在另一組 region 檔 | 未說明 | 靜態幾何與實體分開存。GYO 的標記層（markers）與幾何（region）分檔是同一方向 | 採る（分檔） | (wiki) Chunk_format 的 History |
+| 16×16 的 chunk 柱、全高；柱內切 16³ 的 section；整柱一起載入 | **一手理由未找到**。wiki 只說 section 用於顯示與部分機制 | 驗證與重烘的單位＝16³ 區塊，和工具的 `gyo.voxel_grid` `ChunkSize = 16` 一致（工具 owner）。GYO 不需要「柱」：v0.1 是 3D 區塊，空區塊省略 | 採用（16³）；改裝（不用柱） | (wiki) https://minecraft.wiki/w/Chunk |
+| region 檔：32×32 chunk 一檔、4 KiB sector、位置表＋timestamp；取代 Alpha 的一 chunk 一檔 | 一檔一 chunk 的檔案數太多（取代 Alpha 格式的歷史）；32 的理由未找到 | 「檔案單位≠編輯單位」：region 是檔案單位（Engine 格式）。GYO 用 JSON 文字（G10），不用 sector 二進位 | 改裝 | (wiki) https://minecraft.wiki/w/Region_file_format |
+| 每 section 一個 palette＋packed 索引（最少 4 bit）；網路協議超過 8 bit 改用全域 id | 壓縮：全石頭的 section 不必每格 15 bit | v0.1 是全圖共用 palette（≤256），四邊形帶 palette 索引；文字格式不靠 bit packing 省空間 | 不採用（RC 候選：每區塊 palette） | (wiki) https://minecraft.wiki/w/Chunk_format 、https://minecraft.wiki/w/Java_Edition_protocol/Chunk_format |
+| view-distance 與 simulation-distance 分開（預設 10、21w38a 加入）；ticket／load level；模擬距離外的實體「不處理但仍可存取」，等區塊等級回升後再處理（wiki 對恢復條件的描述不一致） | Mojang：讓視距可以大、CPU 負擔小 | 「Client 收什麼」與「Match 模擬什麼」分開，GYO 已是這樣（地形是資產、實體 interest 100 m 在 Match）。模擬範圍是玩法決定（第 4.1 節） | 改裝（若採用，載入集合要由權威位置決定性導出，G4） | https://www.minecraft.net/en-us/article/minecraft-snapshot-21w38a ；(wiki) https://minecraft.wiki/w/Server.properties |
+| 1.17 起實體存在另一組 region 檔 | 未說明 | 靜態幾何與實體分開存。GYO 的標記層（markers）與幾何（region）分檔是同一方向 | 採用（分檔） | (wiki) Chunk_format 的 History |
 
 ### 2.2 Luanti（原 Minetest）
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| MapBlock 16³（`MAP_BLOCKSIZE 16`）；每個 block 自帶 name→id 對照 | 16 的理由未找到 | 同 2.1 第一列 | 採る（16³） | `src/constants.h:64`、`doc/world_format.md:262-266` |
-| 地圖存在資料庫，以 block 座標為鍵（SQLite；5.12 起新庫主鍵是 `(x,z,y)`，舊的整數鍵仍可讀） | 原本一 block 一檔，「檔案系統撐不住」；鍵的順序決定哪種範圍查詢快 | 「以座標為鍵、有全序」採用：region 清單依 `at` 遞增、區塊依座標遞增（G3）。資料庫不採：資產要能手寫與 diff（G10）、資產目錄與守衛以檔為單位 | 改装 | `doc/world_format.md:269-293`、`src/database/database-sqlite3.cpp:225-264` |
-| 伺服器只讓玩家周圍 `active_block_range`（預設 4 block）的 block 活動，每 2 s 重算；離開的物件存成靜態資料，回來時以經過時間補算 | 物件與 ABM 只在活動區塊跑 | 「遠處凍結＋回來補算」是模擬模型的一個選項（4.1）。**Luanti 沒有決定性**：ABM 順序每輪隨機打亂。照搬不行 | 採らない（現在）；改装候選 | `builtin/settingtypes.txt:1210-1211, 2309-2341`、`src/serverenvironment.cpp:85-150, 879-963, 1009, 1640-1780` |
-| 碰撞遇到未載入的 block：整列當實心；周圍全都沒載入時速度歸零 | 沒有載入就不知道節點的碰撞形狀 | v0.1 Match 整張載入，不存在「未載入」。若之後做活動範圍，規則要先寫明「判定碰到未載入區塊」怎麼辦（或證明不可能） | 採らない（現在）；寫進 RC 候選 | `src/collision.cpp:250-262, 294-298, 483-491` |
-| Client 自己把 MapBlock 變成 mesh（多執行緒），`client_mesh_chunk` 預設把 2³ 個 block 合成一個 mesh 以減少 draw | 減少 draw call | GYO 的烘焙（剔面、合併）在工具，Engine 只展開（G1、G6）；Client 不建 mesh。「多個區塊合成一個 draw」採用：v0.1 以 region 為渲染單位 | 改装 | `src/client/mesh_generator_thread.cpp:289-348`、`builtin/settingtypes.txt:2063-2069` |
+| MapBlock 16³（`MAP_BLOCKSIZE 16`）；每個 block 自帶 name→id 對照 | 16 的理由未找到 | 同 2.1 第一列 | 採用（16³） | `src/constants.h:64`、`doc/world_format.md:262-266` |
+| 地圖存在資料庫，以 block 座標為鍵（SQLite；5.12 起新庫主鍵是 `(x,z,y)`，舊的整數鍵仍可讀） | 原本一 block 一檔，「檔案系統撐不住」；鍵的順序決定哪種範圍查詢快 | 「以座標為鍵、有全序」採用：region 清單依 `at` 遞增、區塊依座標遞增（G3）。資料庫不採：資產要能手寫與 diff（G10）、資產目錄與守衛以檔為單位 | 改裝 | `doc/world_format.md:269-293`、`src/database/database-sqlite3.cpp:225-264` |
+| 伺服器只讓玩家周圍 `active_block_range`（預設 4 block）的 block 活動，每 2 s 重算；離開的物件存成靜態資料，回來時以經過時間補算 | 物件與 ABM 只在活動區塊跑 | 「遠處凍結＋回來補算」是模擬模型的一個選項（4.1）。**Luanti 沒有決定性**：ABM 順序每輪隨機打亂。照搬不行 | 不採用（現在）；改裝候選 | `builtin/settingtypes.txt:1210-1211, 2309-2341`、`src/serverenvironment.cpp:85-150, 879-963, 1009, 1640-1780` |
+| 碰撞遇到未載入的 block：整列當實心；周圍全都沒載入時速度歸零 | 沒有載入就不知道節點的碰撞形狀 | v0.1 Match 整張載入，不存在「未載入」。若之後做活動範圍，規則要先寫明「判定碰到未載入區塊」怎麼辦（或證明不可能） | 不採用（現在）；寫進 RC 候選 | `src/collision.cpp:250-262, 294-298, 483-491` |
+| Client 自己把 MapBlock 變成 mesh（多執行緒），`client_mesh_chunk` 預設把 2³ 個 block 合成一個 mesh 以減少 draw | 減少 draw call | GYO 的烘焙（剔面、合併）在工具，Engine 只展開（G1、G6）；Client 不建 mesh。「多個區塊合成一個 draw」採用：v0.1 以 region 為渲染單位 | 改裝 | `src/client/mesh_generator_thread.cpp:289-348`、`builtin/settingtypes.txt:2063-2069` |
 
 ### 2.3 Veloren
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| 地形與實體同步走兩條 stream；地形視距與實體視距分開 | 未說明 | GYO 已是「地形是資產、實體是 wire」；大地圖仍不上 wire（產品） | 採る（維持現狀） | `client/src/lib.rs:321-322, 540-541` |
-| Client 依視距一圈圈拉 chunk（最多 12 個待處理、每 tick 2 個）；伺服器每位玩家固定載入半徑 6 的螺旋 | 防「改視距重載」作弊；保持玩家附近的實體模擬 | Client 的背景串流不在 v0.1（Client 全部 region 載入後才 ready）。記為 RC 候選 | 採らない（現在） | `client/src/lib.rs:2429-2530`、`server/src/sys/msg/terrain.rs:83-143` |
-| 實體訂閱以 2D region（512 block）為單位，換 chunk 時才更新，有 tether 防抖 | 決定哪些實體要同步給哪個 Client | GYO 的 interest 是 Match 的純函數、依距離（entity-model §4.2），不需要 region 訂閱 | 採らない | `common/src/region.rs:48-74`、`server/src/sys/subscription.rs:21-160` |
-| 玩家物理**預設 Client 權威**，伺服器檢查速度與位置後接受；可選或強制伺服器權威 | 容許延遲 | GYO 是伺服器權威（E-8），不採 | 採らない | `server/src/sys/msg/in_game.rs:141-159, 456-543` |
-| 所有玩家視距外的 chunk 卸載，裡面的 NPC **刪除**，交給 rtsim 粗模擬 | 「移除所有玩家視距外的 NPC」 | 兩層模擬（近處精細、遠處粗略）是模擬模型的另一個選項（4.1） | 採らない（現在）；RC 候選 | `server/src/lib.rs:979-1040` |
+| 地形與實體同步走兩條 stream；地形視距與實體視距分開 | 未說明 | GYO 已是「地形是資產、實體是 wire」；大地圖仍不上 wire（產品） | 採用（維持現狀） | `client/src/lib.rs:321-322, 540-541` |
+| Client 依視距一圈圈拉 chunk（最多 12 個待處理、每 tick 2 個）；伺服器每位玩家固定載入半徑 6 的螺旋 | 防「改視距重載」作弊；保持玩家附近的實體模擬 | Client 的背景串流不在 v0.1（Client 全部 region 載入後才 ready）。記為 RC 候選 | 不採用（現在） | `client/src/lib.rs:2429-2530`、`server/src/sys/msg/terrain.rs:83-143` |
+| 實體訂閱以 2D region（512 block）為單位，換 chunk 時才更新，有 tether 防抖 | 決定哪些實體要同步給哪個 Client | GYO 的 interest 是 Match 的純函數、依距離（entity-model §4.2），不需要 region 訂閱 | 不採用 | `common/src/region.rs:48-74`、`server/src/sys/subscription.rs:21-160` |
+| 玩家物理**預設 Client 權威**，伺服器檢查速度與位置後接受；可選或強制伺服器權威 | 容許延遲 | GYO 是伺服器權威（E-8），不採 | 不採用 | `server/src/sys/msg/in_game.rs:141-159, 456-543` |
+| 所有玩家視距外的 chunk 卸載，裡面的 NPC **刪除**，交給 rtsim 粗模擬 | 「移除所有玩家視距外的 NPC」 | 兩層模擬（近處精細、遠處粗略）是模擬模型的另一個選項（4.1） | 不採用（現在）；RC 候選 | `server/src/lib.rs:979-1040` |
 
 ### 2.4 Godot GridMap
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| 格子以 octant 分組（`cell_octant_size` 預設 8，可 1～1024）；編輯一格只把它的 octant 標髒，下一幀只重建髒 octant | 文件：為了有效率的渲染與物理；**8 的理由未找到** | 工具的增量重烘單位＝區塊（16³）。髒區塊＋受影響的鄰接區塊（剔面看鄰格）—Godot 的 octant 各自獨立，沒有跨 octant 剔面，所以 GYO 多一步 | 採る（工具 owner） | `modules/gridmap/grid_map.h:175-176`、`grid_map.cpp:512-600, 773-1007` |
-| 每 octant 一個 static body，所有格的碰撞形狀加在上面；每種 item 一個 MultiMesh | 未說明 | 碰撞盒不跨區塊（v0.1 §11.6）和「每 octant 一個 body」同方向。渲染不同：GYO 不用 instancing，烘成面 | 改装 | `grid_map.h:104-132`、`grid_map.cpp:877-888, 941-985` |
-| **導航是每格一個 NavigationServer 區域**（proposal 記成「每 octant 烘 navmesh」是錯的）；另可由 NavigationRegion3D 從 GridMap 幾何烘焙 | — | 導航不在本案；格式要留得住區塊鍵，之後由產品或工具從碰撞盒導出 | 採らない（現在） | `grid_map.cpp:892-930, 1924-2080` |
-| `make_baked_meshes`：每 octant×材質合成一個 mesh 給光照烘焙；之後任何編輯就丟掉 | 給 LightmapGI | GYO 沒有光照烘焙（Engine RC 2） | 採らない | `grid_map.cpp:1795-1872` |
+| 格子以 octant 分組（`cell_octant_size` 預設 8，可 1～1024）；編輯一格只把它的 octant 標髒，下一幀只重建髒 octant | 文件：為了有效率的渲染與物理；**8 的理由未找到** | 工具的增量重烘單位＝區塊（16³）。髒區塊＋受影響的鄰接區塊（剔面看鄰格）—Godot 的 octant 各自獨立，沒有跨 octant 剔面，所以 GYO 多一步 | 採用（工具 owner） | `modules/gridmap/grid_map.h:175-176`、`grid_map.cpp:512-600, 773-1007` |
+| 每 octant 一個 static body，所有格的碰撞形狀加在上面；每種 item 一個 MultiMesh | 未說明 | 碰撞盒不跨區塊（v0.1 §11.6）和「每 octant 一個 body」同方向。渲染不同：GYO 不用 instancing，烘成面 | 改裝 | `grid_map.h:104-132`、`grid_map.cpp:877-888, 941-985` |
+| **導航是每格一個 NavigationServer 區域**（proposal 記成「每 octant 烘 navmesh」是錯的）；另可由 NavigationRegion3D 從 GridMap 幾何烘焙 | — | 導航不在本案；格式要留得住區塊鍵，之後由產品或工具從碰撞盒導出 | 不採用（現在） | `grid_map.cpp:892-930, 1924-2080` |
+| `make_baked_meshes`：每 octant×材質合成一個 mesh 給光照烘焙；之後任何編輯就丟掉 | 給 LightmapGI | GYO 沒有光照烘焙（Engine RC 2） | 不採用 | `grid_map.cpp:1795-1872` |
 | 格子座標每軸 int16 | 未說明 | GYO 的上限由 Engine 規則 8（±2²⁰ 單位）決定，0.5 m 時遠大於 km² | 參考 | `grid_map.h:56-86` |
 
 ### 2.5 UE5 World Partition
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| 一個持久 level 切成串流格子；actor 自由擺放，依設定被指派到 cell；串流來源預設是 PlayerController。預設 cell 大小與距離沒寫（例子 256 m／768 m） | 取代手動的 sublevel，自動依距離串流 | 「作者怎麼放」與「執行期怎麼載」分開：GYO 的作者資料是工具的格子（`gyo.voxel_grid`），執行期是烘好的 region。已是這個分法 | 採る（維持） | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition-in-unreal-engine |
+| 一個持久 level 切成串流格子；actor 自由擺放，依設定被指派到 cell；串流來源預設是 PlayerController。預設 cell 大小與距離沒寫（例子 256 m／768 m） | 取代手動的 sublevel，自動依距離串流 | 「作者怎麼放」與「執行期怎麼載」分開：GYO 的作者資料是工具的格子（`gyo.voxel_grid`），執行期是烘好的 region。已是這個分法 | 採用（維持） | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition-in-unreal-engine |
 | 伺服器串流由 `wp.Runtime.EnableServerStreaming` 控制；UE 5.1 的 KB 文章說開了可以「只串流玩家來源，而不是全部載入」 | 未說明（只有 KB 文章開頭可讀；預設值文件沒寫） | **推論**：不開時伺服器整張載入。只能當 v0.1「Match 整張載入」的弱旁證 | 參考（推論） | https://forums.unrealengine.com/t/knowledge-base-world-partition-server-streaming/688971 |
-| HLOD：未載入 cell 的代理（Instancing／Merged Mesh／Simplified Mesh），每層自己的格子 | 遠處內容、減少 draw | 現在不需要（4.6） | 採らない；RC 候選 | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition---hierarchical-level-of-detail-in-unreal-engine |
-| One File Per Actor：每個 actor 一檔，**只在編輯器**，cook 後嵌回 level；不限於 WP | 多人同時編輯一個 level | GYO 是單人編輯器。region 各自一檔已給 diff 與存檔的粒度 | 採らない | https://dev.epicgames.com/documentation/en-us/unreal-engine/one-file-per-actor-in-unreal-engine |
-| Data Layers：編輯器層與執行期層（Loaded／Activated），多人遊戲只有伺服器能啟用；用途是任務、進度、季節變化 | 同一張地圖的內容變化 | 現在沒有 Feature 點名「同圖不同內容」 | 採らない；RC 候選 | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition---data-layers-in-unreal-engine |
+| HLOD：未載入 cell 的代理（Instancing／Merged Mesh／Simplified Mesh），每層自己的格子 | 遠處內容、減少 draw | 現在不需要（4.6） | 不採用；RC 候選 | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition---hierarchical-level-of-detail-in-unreal-engine |
+| One File Per Actor：每個 actor 一檔，**只在編輯器**，cook 後嵌回 level；不限於 WP | 多人同時編輯一個 level | GYO 是單人編輯器。region 各自一檔已給 diff 與存檔的粒度 | 不採用 | https://dev.epicgames.com/documentation/en-us/unreal-engine/one-file-per-actor-in-unreal-engine |
+| Data Layers：編輯器層與執行期層（Loaded／Activated），多人遊戲只有伺服器能啟用；用途是任務、進度、季節變化 | 同一張地圖的內容變化 | 現在沒有 Feature 點名「同圖不同內容」 | 不採用；RC 候選 | https://dev.epicgames.com/documentation/en-us/unreal-engine/world-partition---data-layers-in-unreal-engine |
 
 ### 2.6 物理引擎的靜態 broadphase（Jolt、Bullet）
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| Jolt：四叉 AABB 樹（每節點 4 子），每 broadphase 層一棵；建議靜態一層、動態一層；大量加入要批次或之後最佳化 | 4 子＝一個 SIMD 指令測 4 盒；靜態物體很少更新、更新又貴 | GYO 只有靜態盒（地形），不需要動態樹。v0.1 選均勻格 | 改装 | Jolt `Docs/Architecture.md:579-595, 35-42` |
-| **Jolt 明寫 broadphase 查詢不是決定性的**；原因是多執行緒修改、移動中的物體讓樹的邊界放寬到下次維護為止。建議在收集結果時以精確邊界再測、並一致排序；有一個線性掃描的「參考實作」可換用 | 多執行緒的動態 broadphase | 這個原因對 GYO「單執行緒、靜態、建好後不變」的格子不成立；要帶走的是「結果的順序與平手要定義」。GYO 的契約「每個查詢的結果＝對全部盒子依索引順序線性掃描的結果」**沒有現成來源**，是把 Jolt 的建議與參考實作寫成契約，守衛是與線性掃描逐一比對（Engine `GYO::Collision`）。**平手規則要依查詢分別寫**：現在的 Movement 取先到的（`<`），ShotQuery 對牆取後到的（`<=`）；後者對結果沒有影響（牆的命中只帶距離），但契約要寫明 | 改装 | Jolt `Docs/Architecture.md:787-812`、`BroadPhaseBruteForce.h:12` |
-| Jolt 在求解前把 contact 與 constraint 排序（雜湊鍵，平手用 body id） | 「為了決定性的模擬」 | 同一想法：平手以索引（或 EntityId，entity-model §5.1）決定 | 採る（平手規則） | Jolt `ContactConstraintManager.cpp:1487-1505` |
-| Bullet：動態樹（固定／動態兩棵）、三軸 sweep-and-prune（要事先給世界範圍）、O(n²) 的 simple broadphase 只當 unit test 的參考；可選依 id 排序 pair 以求決定性；**CPU 沒有均勻格** | 樹：插入刪除快；SAP：大量物體 | 均勻格 vs 樹：**一手的取捨來源沒找到**（Ericson《Real-Time Collision Detection》第 7 章沒讀）。GYO 的盒子靜態、軸對齊、大小有上限（區塊內合併）、密度大致均勻，均勻格的前提成立；「密度大致均勻」是**假設**：手工地圖是建築密集處加空地。對抗檢查者指出 Ericson 第 7 章（調查者未讀）的做法：格長取最大物體、大小差異大時用分層格（hierarchical grid），比直接換樹便宜 | 改装（均勻格）；RC 候選（分層格，再來才是樹） | Bullet `btDbvtBroadphase.h:59-72, 123`、`btAxisSweep3.h:30-45`、`btSimpleBroadphase.h:39-40`、`btDispatcher.h:50, 65` |
+| Jolt：四叉 AABB 樹（每節點 4 子），每 broadphase 層一棵；建議靜態一層、動態一層；大量加入要批次或之後最佳化 | 4 子＝一個 SIMD 指令測 4 盒；靜態物體很少更新、更新又貴 | GYO 只有靜態盒（地形），不需要動態樹。v0.1 選均勻格 | 改裝 | Jolt `Docs/Architecture.md:579-595, 35-42` |
+| **Jolt 明寫 broadphase 查詢不是決定性的**；原因是多執行緒修改、移動中的物體讓樹的邊界放寬到下次維護為止。建議在收集結果時以精確邊界再測、並一致排序；有一個線性掃描的「參考實作」可換用 | 多執行緒的動態 broadphase | 這個原因對 GYO「單執行緒、靜態、建好後不變」的格子不成立；要帶走的是「結果的順序與平手要定義」。GYO 的契約「每個查詢的結果＝對全部盒子依索引順序線性掃描的結果」**沒有現成來源**，是把 Jolt 的建議與參考實作寫成契約，守衛是與線性掃描逐一比對（Engine `GYO::Collision`）。**平手規則要依查詢分別寫**：現在的 Movement 取先到的（`<`），ShotQuery 對牆取後到的（`<=`）；後者對結果沒有影響（牆的命中只帶距離），但契約要寫明 | 改裝 | Jolt `Docs/Architecture.md:787-812`、`BroadPhaseBruteForce.h:12` |
+| Jolt 在求解前把 contact 與 constraint 排序（雜湊鍵，平手用 body id） | 「為了決定性的模擬」 | 同一想法：平手以索引（或 EntityId，entity-model §5.1）決定 | 採用（平手規則） | Jolt `ContactConstraintManager.cpp:1487-1505` |
+| Bullet：動態樹（固定／動態兩棵）、三軸 sweep-and-prune（要事先給世界範圍）、O(n²) 的 simple broadphase 只當 unit test 的參考；可選依 id 排序 pair 以求決定性；**CPU 沒有均勻格** | 樹：插入刪除快；SAP：大量物體 | 均勻格 vs 樹：**一手的取捨來源沒找到**（Ericson《Real-Time Collision Detection》第 7 章沒讀）。GYO 的盒子靜態、軸對齊、大小有上限（區塊內合併）、密度大致均勻，均勻格的前提成立；「密度大致均勻」是**假設**：手工地圖是建築密集處加空地。對抗檢查者指出 Ericson 第 7 章（調查者未讀）的做法：格長取最大物體、大小差異大時用分層格（hierarchical grid），比直接換樹便宜 | 改裝（均勻格）；RC 候選（分層格，再來才是樹） | Bullet `btDbvtBroadphase.h:59-72, 123`、`btAxisSweep3.h:30-45`、`btSimpleBroadphase.h:39-40`、`btDispatcher.h:50, 65` |
 
 ### 2.7 逃離塔科夫（規模參照）
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| 每圖玩家 9～16；AI 上限（BotMax）19～48；每區域 2～8；Boss 可超出上限 | 未說明 | GYO 4 人房；AI 上限的量級 30 左右可作為 Match 每 tick 的設計點（產品） | 採る（規模參照） | Fandom 各圖頁（準官方社群 wiki）；SPT `project/assets/database/locations/*/base.json`（社群擷取） |
+| 每圖玩家 9～16；AI 上限（BotMax）19～48；每區域 2～8；Boss 可超出上限 | 未說明 | GYO 4 人房；AI 上限的量級 30 左右可作為 Match 每 tick 的設計點（產品） | 採用（規模參照） | Fandom 各圖頁（準官方社群 wiki）；SPT `project/assets/database/locations/*/base.json`（社群擷取） |
 | 設定裡有 `DistToActivate`（260～330 m）與 `DistToSleep`（300～350 m）兩個欄位，位於 bot 的位置修正設定中 | 未說明 | **推論**（只從欄位名推）：bot 依與玩家的距離睡眠與喚醒，是「遠處凍結」的實例；決定性未知 | 參考（推論，4.1） | SPT 同上（社群擷取，非官方） |
-| 地圖影像邊界 0.3～1.9 km²（含不可玩區）；raid 35～50 分鐘 | — | 「約 1 km²、0.5 m」在範圍內 | 採る（規模參照） | tarkov.dev `src/data/maps.json`（社群工具） |
-| 區域、spawn 點、Boss 區、撤離點以**字串名**對應到 Unity 場景物件；spawn 點帶陣營、類別、區域名、半徑 | 未說明 | 標記層的形狀（點＋名字＋鍵值；區域以名字被引用）與 v0.1 §11.3 一致 | 採る（標記層的形狀） | SPT 同上 |
+| 地圖影像邊界 0.3～1.9 km²（含不可玩區）；raid 35～50 分鐘 | — | 「約 1 km²、0.5 m」在範圍內 | 採用（規模參照） | tarkov.dev `src/data/maps.json`（社群工具） |
+| 區域、spawn 點、Boss 區、撤離點以**字串名**對應到 Unity 場景物件；spawn 點帶陣營、類別、區域名、半徑 | 未說明 | 標記層的形狀（點＋名字＋鍵值；區域以名字被引用）與 v0.1 §11.3 一致 | 採用（標記層的形狀） | SPT 同上 |
 | PvE 單人 raid 在本機跑，組隊與 Streets 用伺服器（2024）；Streets 的伺服器系統調整（2023）；新的 culling（2023） | 排隊時間、rubberbanding、效能 | 塔科夫在大地圖上也遇到伺服器負載與畫面剔除問題；GYO 的 broadphase 與 region 剔除對應這兩點 | 參考 | 媒體轉述的 patch notes（見 R3 報告的 URL） |
 | 未確認：AI 是否在線上 raid 的伺服器上跑、進 raid 時是否整圖載入、LOD 設定 | — | — | 未確認 | — |
 
 ### 2.8 標記層的業界做法
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| Source：地圖的 entity lump 逐一解析，`classname` 與 keyvalue 都是字串；遊戲 DLL 以字串工廠建立類別、以 datadesc 對應欄位；**未知 classname 只警告並跳過** | 意義在遊戲的類別裡，不在地圖格式裡 | Engine 擁有中立格式（點、盒、路徑、`kind`、`tags`，名字不透明），產品賦義（v0.1 §11.3）。**改装**：Source 對未知名字寬容；GYO 由產品把未知 kind 當載入錯誤（抓錯字，G4 嚴格的精神） | 改装 | Valve `source-sdk-2013` `src/game/server/mapentities.cpp`、`src/game/shared/baseentity_shared.cpp` |
-| FGD：遊戲提供給編輯器的定義檔（點類、體積類、鍵的型別與預設）；編輯 FGD 不會產生實體 | 編輯器需要知道遊戲期待什麼 | v0.1 的產品 `marker_kinds.json` 就是 FGD 的角色：編輯器當調色盤讀、不解釋 | 採る | Valve `halflife` `game/dmc/dmc.fgd`；Valve wiki 只看到搜尋摘要 |
-| Godot：Marker3D（位置提示）、Area3D（進出偵測）、Path3D（曲線）；groups 是名字，引擎不賦義 | — | 點、體積、路徑三種幾何的分法相同 | 採る（三種幾何） | https://docs.godotengine.org/en/stable/classes/class_marker3d.html 、class_area3d.html、class_path3d.html、tutorials/scripting/groups.html |
-| UE：Target Point（生成點、AI 路徑點）；Gameplay Tags 由專案定義在字典，編輯器只接受字典裡的 | 專案決定意義 | 同 FGD | 採る | https://dev.epicgames.com/documentation/en-us/unreal-engine/using-gameplay-tags-in-unreal-engine |
-| Minecraft：structure block 的 data 模式存一個字串，由各結構的程式解釋；生怪規則（距玩家 24～128 格、上限、光照、生態域權重）在程式與資料包 | 意義在程式 | 生怪規則是產品的玩法（不在格式裡）；標記只給位置與名字 | 採る（分工） | (wiki) https://minecraft.wiki/w/Structure_Block 、https://minecraft.wiki/w/Mob_spawning |
+| Source：地圖的 entity lump 逐一解析，`classname` 與 keyvalue 都是字串；遊戲 DLL 以字串工廠建立類別、以 datadesc 對應欄位；**未知 classname 只警告並跳過** | 意義在遊戲的類別裡，不在地圖格式裡 | Engine 擁有中立格式（點、盒、路徑、`kind`、`tags`，名字不透明），產品賦義（v0.1 §11.3）。**改裝**：Source 對未知名字寬容；GYO 由產品把未知 kind 當載入錯誤（抓錯字，G4 嚴格的精神） | 改裝 | Valve `source-sdk-2013` `src/game/server/mapentities.cpp`、`src/game/shared/baseentity_shared.cpp` |
+| FGD：遊戲提供給編輯器的定義檔（點類、體積類、鍵的型別與預設）；編輯 FGD 不會產生實體 | 編輯器需要知道遊戲期待什麼 | v0.1 的產品 `marker_kinds.json` 就是 FGD 的角色：編輯器當調色盤讀、不解釋 | 採用 | Valve `halflife` `game/dmc/dmc.fgd`；Valve wiki 只看到搜尋摘要 |
+| Godot：Marker3D（位置提示）、Area3D（進出偵測）、Path3D（曲線）；groups 是名字，引擎不賦義 | — | 點、體積、路徑三種幾何的分法相同 | 採用（三種幾何） | https://docs.godotengine.org/en/stable/classes/class_marker3d.html 、class_area3d.html、class_path3d.html、tutorials/scripting/groups.html |
+| UE：Target Point（生成點、AI 路徑點）；Gameplay Tags 由專案定義在字典，編輯器只接受字典裡的 | 專案決定意義 | 同 FGD | 採用 | https://dev.epicgames.com/documentation/en-us/unreal-engine/using-gameplay-tags-in-unreal-engine |
+| Minecraft：structure block 的 data 模式存一個字串，由各結構的程式解釋；生怪規則（距玩家 24～128 格、上限、光照、生態域權重）在程式與資料包 | 意義在程式 | 生怪規則是產品的玩法（不在格式裡）；標記只給位置與名字 | 採用（分工） | (wiki) https://minecraft.wiki/w/Structure_Block 、https://minecraft.wiki/w/Mob_spawning |
 
 共同模式：**引擎擁有格式（字串名、鍵值、幾何），遊戲擁有意義，編輯器的可選種類由遊戲提供。** owner 的判斷見 4.4。
 
 ### 2.9 greedy 合併與 LOD
 
-| 機制 | 為什麼 | 對 GYO 的當てはめ（owner） | 判定 | 根據 |
+| 機制 | 為什麼 | 對 GYO 的套用（owner） | 判定 | 根據 |
 |---|---|---|---|---|
-| greedy：每軸切片，以固定字典序反覆取最大矩形；文章寫明以總序取唯一的最小元素，所以結果在固定順序下唯一；不一定最少（≤8 倍最佳） | 線性時間 | 進工具的烘焙（G6）；掃描順序寫進工具 DI 3 的決定性（同一格子→同一位元組）。Engine 規則 6 的 `w`、`h` 已支持 | 採る（工具 owner） | https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/ |
-| 縮減依形狀：實心 8³ 384→6、地形 6634→1983、雜訊 2198→1670、球 4770→2100；成本和只剔面相當（65³：92～198 ms 對 82～297 ms） | — | 平坦的地面與牆面縮減大，雜訊幾乎無效。合成圖是雜訊，不能代表手工地圖 | 採る；GYO 數字未量（4.5） | 同上、https://0fps.net/2012/07/07/meshing-minecraft-part-2/ |
-| 合併的代價在貼圖（貼圖集要每 tile 重複 UV）、光照、AO：只能合併光照與 AO 相同的面 | — | GYO 每面一色、uv 取 palette 貼圖的 texel 中心（`voxel-mesh.md`）、無光照、無 AO → **這些代價都不存在**。Godot Voxel Tools 的頂點色 mesher 預設開 greedy，是同一情況 | 採る | https://0fps.net/2013/07/09/texture-atlases-wrapping-and-mip-mapping/ 、https://voxel-tools.readthedocs.io/en/latest/api/VoxelMesherCubes/ |
+| greedy：每軸切片，以固定字典序反覆取最大矩形；文章寫明以總序取唯一的最小元素，所以結果在固定順序下唯一；不一定最少（≤8 倍最佳） | 線性時間 | 進工具的烘焙（G6）；掃描順序寫進工具 DI 3 的決定性（同一格子→同一位元組）。Engine 規則 6 的 `w`、`h` 已支持 | 採用（工具 owner） | https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/ |
+| 縮減依形狀：實心 8³ 384→6、地形 6634→1983、雜訊 2198→1670、球 4770→2100；成本和只剔面相當（65³：92～198 ms 對 82～297 ms） | — | 平坦的地面與牆面縮減大，雜訊幾乎無效。合成圖是雜訊，不能代表手工地圖 | 採用；GYO 數字未量（4.5） | 同上、https://0fps.net/2012/07/07/meshing-minecraft-part-2/ |
+| 合併的代價在貼圖（貼圖集要每 tile 重複 UV）、光照、AO：只能合併光照與 AO 相同的面 | — | GYO 每面一色、uv 取 palette 貼圖的 texel 中心（`voxel-mesh.md`）、無光照、無 AO → **這些代價都不存在**。Godot Voxel Tools 的頂點色 mesher 預設開 greedy，是同一情況 | 採用 | https://0fps.net/2013/07/09/texture-atlases-wrapping-and-mip-mapping/ 、https://voxel-tools.readthedocs.io/en/latest/api/VoxelMesherCubes/ |
 | T-junction：合併後的大面與鄰接小面的頂點不對齊，可能有像素裂縫；0fps 第二篇作者提到但不確定是否真有問題，論壇有爭議 | — | 要在工具批用實際地圖目視確認；不行就只在同一平面內合併到 T 不出現（或加縫的處理） | 未確認（4.5） | 0fps part 2 留言、Urho3D 論壇（R3 報告） |
-| LOD：Minecraft 原版沒有（以 chunk 視距控制）；Distant Horizons 為 256＋chunk（4 km 以上）視距另開一個 pass；Luanti 沒有，`viewing_range` 預設 200 node；Voxel Tools 的平滑地形用 Transvoxel | 極遠距離的畫面 | 1 km² 的視距在 Minecraft 的 chunk 視距範圍內（約 64 chunk），業界在這個距離多數不用 LOD | 採らない（現在）；RC 候選（4.6） | https://modrinth.com/mod/distanthorizons 、Luanti `builtin/settingtypes.txt` |
+| LOD：Minecraft 原版沒有（以 chunk 視距控制）；Distant Horizons 為 256＋chunk（4 km 以上）視距另開一個 pass；Luanti 沒有，`viewing_range` 預設 200 node；Voxel Tools 的平滑地形用 Transvoxel | 極遠距離的畫面 | 1 km² 的視距在 Minecraft 的 chunk 視距範圍內（約 64 chunk），業界在這個距離多數不用 LOD | 不採用（現在）；RC 候選（4.6） | https://modrinth.com/mod/distanthorizons 、Luanti `builtin/settingtypes.txt` |
 
 ## 3. proposal 第 3 節（憑記憶）的修正
 
@@ -370,7 +370,7 @@ G1～G10 見 [proposal §2](proposal-v0.1.zh-Hant.md)。
 - **文字量的推算**（由合成圖的實際比例）：檔內每個四邊形約 33.8 B、每個碰撞盒約 54.8 B（縮排一層）。
   10⁶ 四邊形＋10⁶ 盒 ≈ 89 MB；10⁵＋10⁵ ≈ 9 MB。proposal §11.7 的「100～500 MB ⚠」需要每種 10⁶ 以上才會到；仍是未量的估算。
 
-## 6. Replacement Criteria 的候選（「採らない」的項目）
+## 6. Replacement Criteria 的候選（「不採用」的項目）
 
 contract 批（engine-map、tool-chunked、product-arena-v3）寫正式的 Design Invariants 與 Replacement Criteria 時，從這裡挑。條件都寫成量得到或觀察得到的形式。
 
@@ -401,11 +401,11 @@ contract 批（engine-map、tool-chunked、product-arena-v3）寫正式的 Desig
 | 項目 | 檢查者判定 | 處置 |
 |---|---|---|
 | §2.1、§2.2、§2.3、§2.4、§2.8、§4.2、§4.6 | 成立 | 不改；§4.6 的 Minecraft 比較（半徑對直徑）依指正改寫，結論不變 |
-| §2.1 Minecraft「暫停、回來恢復」 | 弱い：wiki 原文是「不處理但可存取」，恢復條件自相矛盾 | 改成原文的意思 |
-| §2.5 UE 伺服器「預設整張載入」 | 弱い：預設值文件沒寫，§4.1 卻寫成事實 | §2.5、§4.1 改標「推論」 |
-| §2.6 Jolt 非決定性 → 自立等價契約 | 弱い：Jolt 的原因（多執行緒、動態樹）對靜態格不成立；平手規則 Movement 取先、ShotQuery 取後 | §0、§2.6 改寫：帶走的是「順序與平手寫進契約、與暴力掃描比對」；平手依查詢分別寫 |
-| §2.6 均勻格 | 弱い：「密度均勻」是假設；分層格沒列 | 標為假設；RC 候選加分層格（Ericson 第 7 章，調查者未讀） |
-| §2.7 塔科夫睡眠 | 弱い：數字屬實，但「依距離睡眠」只從欄位名推 | §0、§2.7、§3、§4.1 改標「推論」 |
+| §2.1 Minecraft「暫停、回來恢復」 | 弱：wiki 原文是「不處理但可存取」，恢復條件自相矛盾 | 改成原文的意思 |
+| §2.5 UE 伺服器「預設整張載入」 | 弱：預設值文件沒寫，§4.1 卻寫成事實 | §2.5、§4.1 改標「推論」 |
+| §2.6 Jolt 非決定性 → 自立等價契約 | 弱：Jolt 的原因（多執行緒、動態樹）對靜態格不成立；平手規則 Movement 取先、ShotQuery 取後 | §0、§2.6 改寫：帶走的是「順序與平手寫進契約、與暴力掃描比對」；平手依查詢分別寫 |
+| §2.6 均勻格 | 弱：「密度均勻」是假設；分層格沒列 | 標為假設；RC 候選加分層格（Ericson 第 7 章，調查者未讀） |
+| §2.7 塔科夫睡眠 | 弱：數字屬實，但「依距離睡眠」只從欄位名推 | §0、§2.7、§3、§4.1 改標「推論」 |
 | §2.9 greedy 的措辭 | 成立，措辭要改（唯一性是文章寫的；T-junction 作者有談） | 改措辭 |
 | §4.1 先全圖模擬 | 成立（理由裡的兩個推論要標） | 已標 |
 | §4.3 JSON＋換解析 | **數字崩れる，方向成立**：4 MB/s 不是速率，22 s 外推無效 | §0、§4.3、§5(c) 重寫；刪除 22 s；加「SAX 查重複鍵＋普通解析」的最小改法 |

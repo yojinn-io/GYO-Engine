@@ -48,7 +48,7 @@ v71-plan                              「v7.1 hotfix：先檢測、再評估；w
 │   ├── incident-close ✓◆             「medium｜事故紀錄結案」
 │   ├── observability-tools ✓         「high｜相位決策進 trace、增量計數、加寬偵測器、遺失種子」
 │   └── re-evaluate ✓                 「medium｜用新數據重新評估相位追蹤與 D44，交使用者排序」
-└── after-re-evaluate ▶               「D158 判斷還需要的項目；D159 核准，worker-probe-repair 提到最前面」
+└── after-re-evaluate ▶（2026-11-12 圖書管理員補註：v7.1 已發布為 v1.2.0（2026-10-29，PR #101 `62fd7ebf`）；剩下的是排在 v7.1 之後的工作，見 HANDOFF）               「D158 判斷還需要的項目；D159 核准，worker-probe-repair 提到最前面」
     ├── 0 worker-probe-repair ✓       「high｜修好 worker probe（決策點 C）」
     ├── 1 系統與引擎
     │   ├── sdl-isolation-plan ✓      「ultracode｜IP-3／IP-4 的 PLAN、公開介面審查、遷移清單（D160 核准）」
@@ -208,4 +208,7 @@ PR 內只改 `docs/` 的推送沿用 L1（docs-increment）。合併前確認四
 - [Windows 上的 worker 驗收（D216～D231）與 lan15-windows（D232～D240）](../../../dev_logs/2026_10_29_pvp_v71_worker_windows_and_lan15.zh-Hant.md)（未通過的部分記為已知限界，D231、D240）
 - [quality-window-log：連線品質窗口失敗時，Match 寫出是哪個條件成立](../../../dev_logs/2026_10_29_pvp_v71_quality_window_log.zh-Hant.md)（lan15 之後補的檢測；判定與 UI 不變）
 - [worker-wake-phase：worker 探針的 ACK 檢查避開 Client 的 Hello、查明 D226 的計時器喚醒](../../../dev_logs/2026_10_29_pvp_v71_worker_wake_phase.zh-Hant.md)（D243～D245；產品不變）
+- [after-re-evaluate：系統其餘＋觀測＋測試](../../../dev_logs/2026_10_24_pvp_v71_system_observe_test.zh-Hant.md)（PR #95 `37d533d5`；2026-11-12 圖書管理員補列）
+- [人物換成 Player_V19、第一人稱換成 nailer_v2](../../../dev_logs/2026_10_29_pvp_v71_player_v19_nailer.zh-Hant.md)（隨 PR #96 合併；2026-11-12 補列）
+- [人物模型換成 Player_V20（v1.2.0）](../../../dev_logs/2026_10_29_pvp_v71_player_v20.zh-Hant.md)（PR #101 `62fd7ebf`；2026-11-12 補列）
 

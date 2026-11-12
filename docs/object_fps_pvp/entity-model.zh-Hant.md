@@ -56,6 +56,8 @@
 
 ### 1.5 本 repo 的現成先例
 
+（2026-11-12 圖書管理員補註：本節是 2026-11-01 撰寫時、`match-entity-split` 之前的狀態；現在 `PvpMatch.hpp` 的成員已改為 `bodies_`、`combats_`、`animations_`、`actionLedgers_`、`connections_` 等欄，行號也已移動。）
+
 - `players_`、`shapes_`、`actionsCombat_` 都是 `std::map<PlayerId, …>`（`PvpMatch.hpp:165-171`）；`Snapshot()` 照 map 順序推成三個平行陣列（`PvpMatch.cpp:592-604`）。「按 id 升冪的平行陣列」在快照層已存在，只是由 `std::map` 隱含保證，沒有條文與守衛。
 - 單機版 `EnemySystem`（已移除；見 git 歷史 `56b8dda3` 的 `apps/object_fps/src/Gameplay/Enemy/EnemySystem.cpp`）：`nextEnemyId_` 單調配發、用盡報錯不回繞（:599-601、:626）；`enemies_` 與 `snapshots_` 是同索引平行 vector，push_back 加保序 erase（:633、:645-657）。能借：單調 id 與明確用盡錯誤、保序刪除、「刪實體＝同索引刪所有平行陣列」。不能借：浮點秒、AoS 的 `RuntimeEnemy`。
 
@@ -295,7 +297,7 @@ inline constexpr EntityId MatchEntityIdLast  = 0x0FFF'FFFF;  // 2^28−1：契�
 | 守衛 | 批 | 做法與斷言 | 突變（應被殺） |
 |---|---|---|---|
 | G1 `EntityColumnsStayOrdered` | split | 3 個 id 依降冪 Join（3, 2, 1），每 Tick 檢查 Snapshot 三個 vector 的 id 序列嚴格升冪＝{1,2,3}；Leave(1)→{2,3}；再 Join(1)→{1,2,3}；跑 120 Tick。另在 `RequireEntityOrder` 加 GYO_ASSERT 讓 37 個 golden 情境每 Tick 經過它。既有 golden 殺不掉 append 突變，所以必須是單元測試，不新增 digest 情境（情境數維持 42） | M1 `InsertEntity` 改 push_back；M2 `EraseEntity` 改 swap-and-pop；M4 Snapshot 反向走欄（2026-11-06 註：M1、M2 已從產品突變目錄退役，機制由 Engine 突變目錄 `docs/architecture/plans/entity-store/scripts/mutations.json` 的 `es-row2-insert-appends`、`es-row2-erase-swap-and-pop` 以 common 測試守；使用者決定，`v8-arch-entity-store-impl-3a`） |
-| G2 `EraseEntityRemovesEveryColumn` | split | Join 兩人、開槍讓 `tickShapes_`、`actionStartCombats_` 有值，Leave(1)。**觀測手段**：friend 測試存取器 `ColumnIdsForTest()` 回傳各欄（含快取）的 id 序列，斷言都不含 1；另加 Join(1)＋跑 Tick，依靠 `InsertEntity` 的重複 Assert（GYO_CHECK_ASSERTS）；公開 API：`GetActionResults(1)` 等 nullopt、`ContainsPlayer(1)` false、Snapshot 三 vector 同長 | M3 `EraseEntity` 漏刪 `animations_`；漏刪 `connections_` |
+| G2 `EraseEntityRemovesEveryColumn` | split | Join 兩人、開槍讓 `tickShapes_`、`actionStartCombats_` 有值，Leave(1)。**觀測手段**：friend 測試存取器 `PvpMatchTestAccess::ColumnIds` 回傳各欄（含快取）的 id 序列，斷言都不含 1；另加 Join(1)＋跑 Tick，依靠 `InsertEntity` 的重複 Assert（GYO_CHECK_ASSERTS）；公開 API：`GetActionResults(1)` 等 nullopt、`ContainsPlayer(1)` false、Snapshot 三 vector 同長 | M3 `EraseEntity` 漏刪 `animations_`；漏刪 `connections_` |
 | G3 `PublicationComponentsAgree` | 缺陷批（先 Red） | 重現 host-poor-connection 的逐出（`MatchRuntimeHost::JudgeConnectionQuality`），斷言 publication 的 players、combat、animation id 序列相同；發布前 `RequireValidSnapshot`。現況 Red | host 的 `EraseEntity(WorldSnapshot&)` 漏刪 animation |
 | G4 `MatchEntityIdsMonotonic` | 第一個非玩家批 | 連續配發嚴格遞增、第一個是 `MatchEntityIdFirst`；Destroy 後再配不重用；Reset 後回 First；以私有測試 seam 把 `nextEntityId_` 設到接近 `MatchEntityIdLast`：最後一個成功、再配報錯（依決定 6）不回繞 | 重用最近刪除的 id；從 1 起配；用盡時回繞；`>` 改 `>=` |
 | G5 `JoinRejectsMatchRangeId`＋Go 上限測試＋常數核對 | pv10 | `Join(MatchEntityIdFirst)`、`Join(PlayerEntityIdLast+1)` 回 `invalid_player`；`Join(PlayerEntityIdLast)` 接受。`player_id_ceiling_test.go` 的期待值移到 `PlayerEntityIdLast`。Python 讀原始碼核對 C++ 與 Go 的常數 | 拿掉值域檢查；兩邊常數不一致 |

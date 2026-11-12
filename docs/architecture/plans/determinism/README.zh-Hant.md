@@ -2,7 +2,7 @@
 
 更新：2026-11-11。Owner：Engine（架構）。任務卡由架構師會話（例行架構掃描）於 2026-11-10 開出，起因是使用者在 side chat 提出
 「GYO 的決定性要哪一級，各模組為它付了什麼」（第三方評估 PR #176 的 D0，排在 D1、D2 之前）。
-**狀態：契約草稿完成並經對抗檢查修正（[determinism.md](../../determinism.md)，英文），停下等使用者決定 DET-0～DET-3。** 只寫文件：不改程式、旗標、golden。
+**狀態：契約草稿完成並經對抗檢查修正（[determinism.md](../../determinism.md)，英文），停下等使用者決定 DET-0～DET-3。**（2026-11-12 圖書管理員補註：後續：2026-11-12 DET-0～DET-3 定為暫停，見 kernel HANDOFF 的 `v8-arch-kernel-pending-paused`） 只寫文件：不改程式、旗標、golden。
 
 ## 這是什麼
 

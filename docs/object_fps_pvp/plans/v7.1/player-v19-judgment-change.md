@@ -5,7 +5,7 @@
   - J-accessory 原話：「核准頭髮判定變更，包含「沒宣告配件時頭髮是否呈現只靠截圖」的放寬。」
 - 起因：人物換成 `characters/player/Player_V19.fbx`（自帶頭髮、沒有配件）；第一人稱換成 `weapons/nailer_v2/viewmodel/`（取代 PvP 的 Mark23），並保留模型上 15° 的偏航以展示槍身，再仰 8.2115° 讓槍身延長線穿過準星。
 - 兩項都不是 Design Invariants 的守衛；都有放寬的一面，所以照 §14.4 先做突變檢查與另一位審查者（Sonnet 子 Agent，只讀）的核對，再請使用者核准。
-- 證據放在本機 scratchpad（未提交）；結論與數字記在本文件。
+- 證據放在本機 scratchpad（未提交）；結論與數字記在本文件。（2026-11-12 補註：這裡的 scratchpad 內容已經不在，未保留）
 
 ## J-muzzle：正式第一人稱槍口的特性測試
 

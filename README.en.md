@@ -69,6 +69,9 @@ Manual variants copy only `apps/<game>` and `assets/<game>`, then add a CSV row.
 - [Math foundation contract](docs/architecture/math.md)
 - [Error handling contract (Result/Error/Assert)](docs/architecture/error-handling.md)
 - [Trace transport and log facade contract](docs/architecture/trace.md)
+- [Target architecture (kernel rework, not implemented)](docs/architecture/target/README.md)
+- [Kernel rework plan](docs/architecture/plans/kernel/README.md)
+- [Cross-component rules](docs/cross-component-rules.md)
 - [Rendering and shader contract](docs/rendering_architecture.zh-Hant.md)
 - [Release procedure](docs/releasing.zh-Hant.md)
 
