@@ -29,9 +29,10 @@
 - [spec-v03-declaration.zh-Hant.md](spec-v03-declaration.zh-Hant.md)：`-spec-v03` 的事前宣告（完成，PR #182，2026-11-12）。
 - [spike-pageguard-declaration.zh-Hant.md](spike-pageguard-declaration.zh-Hant.md)：`-spike-pageguard` 的事前宣告（完成，PR #184，2026-11-12）。
 - [remove-object-fps-declaration.zh-Hant.md](remove-object-fps-declaration.zh-Hant.md)：`-remove-object-fps` 的事前宣告（核准並執行，PR #185，2026-11-12）。
-- [remove-object-fps-report.zh-Hant.md](remove-object-fps-report.zh-Hant.md)：`-remove-object-fps` 的報告（判定 1、2、3、5 成立；4 本機成立、三平台待 L1；§7 實測：共通層零修改）。
+- [remove-object-fps-report.zh-Hant.md](remove-object-fps-report.zh-Hant.md)：`-remove-object-fps` 的報告（判定 1～5 全部成立；§7 實測：共通層零修改）。
 - [spike-pageguard-report.zh-Hant.md](spike-pageguard-report.zh-Hant.md)：`-spike-pageguard` 的報告（判定 1 照原文不成立，使用者 2026-11-12 定讀法 (i)；判定 2、3、4、5 成立）。
 - [audit-declaration.zh-Hant.md](audit-declaration.zh-Hant.md)：`-audit` 的事前宣告（已完成）。
+- [j17-scanner.zh-Hant.md](j17-scanner.zh-Hant.md)：**J-17 掃描器線的交接卡**（並行線；使用者 2026-11-12 同意分出；卡的現況由該線更新）。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
 
@@ -43,7 +44,7 @@ v8-arch-kernel
 ├── -spike   上段｜實作 Opus／xhigh（主會話的子代理）、審查 Fable／xhigh｜2～3 天｜獨立子目錄最小 C++ 原型，證明簽名推存取與受限句柄
 ├── -spec-v03  上段｜主會話 Fable／high 自寫、對抗 Opus／high 只讀｜規格修訂九項＋第一個文件批（Delta 文件修改）＋五輪對抗／複核（spec 修訂記錄）｜完成（PR #182，2026-11-12）
 ├── -spike-pageguard 上段｜實作 Opus／xhigh、敵對 Fable／xhigh｜頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、歸「存取驗證（可關）」的第三層（不是 GYO_ASSERT；頁錯誤處理器記違規、System 以 Err 回傳；B-9 結案後分類）；完成：判定 1 照原文不成立（讀法 (i)，使用者 2026-11-12）、2／4／5 成立、3 成立（L1 run 43169204148）；PR #184（2026-11-12）
-├── remove-object-fps 上段｜實作 Opus／high、審查 Fable／high｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview，**加 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance（含各自測試；使用者 2026-11-11）**（§7 完整刪除；兼驗 removability：共通層零修改是判定，不成立就記 Delta 不修）｜完成：判定 1、2、3、5 成立，§7 實測共通層零修改；PR #185 待 L1 與使用者合併（2026-11-12）
+├── remove-object-fps 上段｜實作 Opus／high、審查 Fable／high｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview，**加 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance（含各自測試；使用者 2026-11-11）**（§7 完整刪除；兼驗 removability：共通層零修改是判定，不成立就記 Delta 不修）｜完成：判定 1～5 成立（三平台 L1 run 43188319281），§7 實測共通層零修改；PR #185（2026-11-12）
 └── -audit   **完成**｜Opus／high ×3、對抗 Fable／high（4/5）｜現有模組逐一「留／包／重寫」，給中間層成本
 ```
 
