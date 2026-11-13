@@ -56,7 +56,9 @@
 - 「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」。架構師保留：四個工具重複的選擇窗記帳與關窗提示必須真的進共用 plugin，否則是 framework 的老問題換名。
 - 組合格式（catalog plan、event sounds）是資料契約，owner 是提供該 plugin 的人；純函式（EventSounds、CatalogPlan、PreviewCamera、UiTextInput、json binding）是函式庫，與層無關。
 
-## Design Invariants（候選；核准後成為正式條文）
+## Design Invariants
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
 

@@ -12,7 +12,7 @@
 
 ## Design Invariants
 
-候選：使用者核准目標 DI 清單（遷移計畫 §7 U13）後成為正式條文。本節的變更是 Architecture Delta（AGENTS §3）。
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 <a id="di-ks-1"></a>
 **DI-KS 1.** **描述從簽名推出，一份。** System 的資料存取集合等於其參數型別的 Contribution 聯集（含 bundle 的延後寫、`SetRead` 在 finish 展開的讀；`ExclusiveWorld` 的 Contribution 是「讀全部、寫 zone=B 且 Shared 的全部」）；登記 API 不接受手寫的第二份存取宣告；System 是無狀態的可呼叫物，參數只能是 `ParamTraits` 特化過的型別，句柄不可複製、不可移動。守衛：J-10～J-12。（DI-K2 的推導半；S-1～S-4、S-13）

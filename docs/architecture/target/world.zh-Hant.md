@@ -62,7 +62,9 @@
 
 資料模型（欄的 SoA 佈局、ColumnInfo 的 zone／writePolicy／role／rollback）、A.2 的操作與允許的狀態、A.4 參考失效規則、A.5 不變量 W-1～W-11、A.6 的 C++ 實現手段與存取驗證兩層，見 spec §A。這些在規格核准前仍是草案。
 
-## Design Invariants（候選；核准後成為正式條文）
+## Design Invariants
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
 

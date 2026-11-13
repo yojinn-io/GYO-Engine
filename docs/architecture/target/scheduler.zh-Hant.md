@@ -16,7 +16,9 @@
 - 區規則下 (c) 與 (b) 的 System 互相衝突只可能是「(b) 讀 (c) 資料」（呈現讀模擬）。這種衝突照第 1 節處理：任一方是 C 就是錯誤，所以呈現 System 必須與 (c) 寫者有顯式順序，或位於不同 stage。
 - **配套慣例是限制**：呈現放在模擬之後的 stage，一條 stage 界線就給了全部順序，不必逐個寫 before／after。成本落在呈現 System 的數量（每個讀 (c) 的呈現 System 都要落在正確的 stage）；產品線在遷移時確認。修改條件與解除方式見 `limits.zh-Hant.md`。
 
-## Design Invariants（候選；核准後成為正式條文）
+## Design Invariants
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
 

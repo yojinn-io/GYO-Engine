@@ -28,7 +28,9 @@ The current contract's section on error types ends with "GYO has no global error
 
 The legacy file carries a marker on that sentence pointing here; its text is not rewritten until the kernel's migration batch replaces the file.
 
-## Design Invariants (candidates; become binding once approved)
+## Design Invariants
+
+In force: approved by the user on 2026-11-13 (kernel HANDOFF `v8-arch-target-di-approved`). A change to this section is an Architecture Delta (AGENTS section 3) and needs the user's agreement.
 
 Item numbers are unchanged. An item marked "bound by kernel DI-KS n" has its full text only in that clause of the kernel page; the others are specific to this component.
 

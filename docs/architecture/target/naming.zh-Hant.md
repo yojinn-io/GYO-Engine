@@ -23,7 +23,9 @@
 - 文件裡引用現況程式時仍用舊名（它們還存在）；引用目標架構的東西用新名。
 - 決定性區表（determinism.md §4）的條目照歸屬命名：以欄與 System 命名（例 `AnimationState` 欄、`AdvanceAnimation` System），函式庫名只在證據欄（audit §4.5 的處置）。
 
-## Design Invariants（候選；核准後成為正式條文）
+## Design Invariants
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 1. **namespace 與目錄一一對應**，Kernel／Engine／Plugins／產品四個根。對應以「目錄 ↔ namespace」的一張表給定，不要求兩邊拼字相同（例：`RetroFPS/Sim` ↔ `fps::pvp::sim`；產品的根 namespace 由產品定）。守衛：掃描（檔案路徑與 namespace 不符即違規；`v8-arch-kernel-scaffold` 新增，J-9 掃描器擴充）。
 2. **System 是動詞片語、資料是名詞、Event 是過去式、Plugin 帶後綴**。守衛：登記時的名稱檢查（Registry 可對 System 名做詞性白名單的弱檢查）＋審查。

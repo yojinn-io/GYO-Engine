@@ -45,7 +45,9 @@
 - 可呼叫物是非成員函式（`AddSystem<&Fn>()`，非型別模板引數）或無捕獲 lambda（以型別傳入）。有捕獲的 lambda、成員函式、泛型 lambda、多載的 `operator()` 編譯失敗：捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道。
 - (c) 區的 System 不得有 `Local<T>`、不得宣告外部副作用（**唯一例外 `Diagnostics`**：只寫不讀回的診斷句柄 `DiagnosticsWriter<T>`，不進存取集合、不產生衝突邊；spec S-8 v0.3）、不得用變更過濾、不得持 `ExclusiveWorld`（spec Z4）。
 
-## Design Invariants（候選；核准後成為正式條文）
+## Design Invariants
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
 

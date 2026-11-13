@@ -21,7 +21,9 @@
 
 使用者 2026-11-11 要求：`UiRenderer`、`WeaponViewModel` 這類名字都要改——它們在新架構裡不再是持指標的物件，而是 System 與 Resource；遷移批時照新架構的命名規範重命名。命名規範已定（使用者 2026-11-11）：見 `naming.zh-Hant.md` 五條；`UiRenderer` → `Ui::LayoutText` 類 System 加 `GpuFontAtlas` 類 Resource，`WeaponViewModel` → `Present::WeaponPose` 欄加 `AnimateWeapon` System。
 
-## Design Invariants（候選；核准後成為正式條文）
+## Design Invariants
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 1. **沒有資產總管物件**：請求狀態、`Assets<T>`、GPU 資源是三類 Resource，各在它們的 World；System 以句柄存取，不持指標。守衛：掃描（無 `AssetManager*`／`&` 成員）；spec J-5。
 2. **載入是外部服務，完成的資產經 Loading 的 Ingress stage 進暫存、由 (c) System 依請求序號的連續前綴套用**：IO 執行緒不碰 World；套用順序與批次切分都與完成時序無關。守衛：等價測試（打亂完成順序，`Assets<T>` 的內容與 Handle 序列相同）。
