@@ -37,7 +37,7 @@
 * 変更範囲をできるだけ局所化する。
 * 既存の設計意図が不明な場合、それを「誤り」と仮定しない。
 * Product / Module / Tool の owner を確認してから、その責務を変更する。
-* Engine または framework の Contract から直接出てくる規則
+* Engine、framework、plugins の Contract から直接出てくる規則
   （例：「Contract は X しか保証しないので、使う側はすべて Y をする」）を実装する前に、
   `docs/cross-component-rules.md` と、他の Product・Tool の同じ実装を調べる。
   見つかれば引用または共用し、自分の言葉で書き直さない。見つからなければ owner を決めて登録する。
