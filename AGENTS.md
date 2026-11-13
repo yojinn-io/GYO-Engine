@@ -37,7 +37,7 @@
 * 変更範囲をできるだけ局所化する。
 * 既存の設計意図が不明な場合、それを「誤り」と仮定しない。
 * Product / Module / Tool の owner を確認してから、その責務を変更する。
-* Engine または plugins の Contract から直接出てくる規則
+* Engine または再利用可能な層の Contract から直接出てくる規則
   （例：「Contract は X しか保証しないので、使う側はすべて Y をする」）を実装する前に、
   `docs/cross-component-rules.md` と、他の Product・Tool の同じ実装を調べる。
   見つかれば引用または共用し、自分の言葉で書き直さない。見つからなければ owner を決めて登録する。
@@ -98,7 +98,7 @@ wire の相手、Test の判定）の変更が必要になるか。
 必要になり、その量が上に積むほど増える構造を**基盤 Architecture** とし、それ以外を**応用 Architecture** とする。
 
 * 基盤の例：Engine の公開 Interface と Subsystem の境界、wire protocol、Data Contract の Format と Version の方針、
-  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、plugins 層の共通構造。
+  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、再利用可能な層の共通構造。
 * 応用の例：Product・Tool の内部構造、Product-local の Registration、一つの Product の中で閉じる Adapter。
 * どちらか判断できない場合は、基盤として扱う。
 * 基盤として扱う計画は、基盤と判断した理由（上に積まれるもの）を書く。
@@ -250,13 +250,7 @@ Architecture Delta は禁止事項ではない。
 
 * 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下。Engine は `docs/architecture/` 配下）に
   見出し `Design Invariants` の節として書く。
-* Engine の Design Invariants は次の三種類の文書にある。
-  * `docs/architecture/target/`：目標の設計。
-  * `docs/architecture/*.md` のうち、冒頭に `> **Legacy**` 行がある文書：現況の記録。まだ移行していない既存のプログラムを拘束し、設計の内容は凍結されている。
-  * `docs/architecture/*.md` のうち、Legacy 行がない文書：正式の文書（target に対応がない Component の文書、または target から戻った文書）。
-  Engine の Component を変更する前に、まず `docs/architecture/target/kernel.zh-Hant.md` の Design Invariants を読む。
-  移行期間中に Component がどちらの Design Invariants に従うか、および Replacement Criteria と範囲の限界を
-  limits 頁（LIM-n）で書くときの扱いは、`docs/architecture/target/README.md` に従う。
+* Engine の Design Invariants がどの文書にあり、移行期間にどれが効くかは、`docs/architecture/target/README.md` に従う。
   見出しは文書の言語にかかわらず、この英語表記のまま変えない（翻訳による意味のずれと探し漏れを防ぐため）。
 * 可能なものは、ガードとなる Test も用意する。
 * Component を変更する前に、その owner の `Design Invariants` 節を読む。
@@ -360,23 +354,18 @@ Tool 化や Platform 化そのものを目的にしてはならない。
 
 Engine は再利用可能な機能を提供し、
 Application と設計支援ツールはその機能を利用する。
-plugins は、Engine の機能の組み合わせと、第三者の Library の接続を担う。各 plugin は選んでも外してもよい。
 
 基本的な Dependency Direction は以下とする。
 
 ```text
-Application ──→ plugins ──→ Engine
-Editor      ──→ plugins ──→ Engine
-（Application と Editor は Engine を直接使ってもよい）
+Application ──→ Engine
+Editor      ──→ Engine
 ```
 
 Engine は具体的な Application や Editor に依存してはならない。
-Engine は plugins を参照しない（include しない）。
-Product・Tool がどの plugin を使うかは、その Registration Data（`project.json`）にだけ書く
-（`docs/architecture/target/runtime-composition.zh-Hant.md` の §4 と Design Invariant 2）。
-
-framework は 2026-11-11 に退役した。`framework/` のコードは、各移行バッチまで既存のプログラムのために残るだけである。
-新しい作業は framework を対象にしない。
+Engine と Product・Tool の間に、Engine の機能の組み合わせや第三者の接続を担う再利用可能な層を置く場合、
+その層も Engine から参照されない（下位の層は上位の層を参照しない）。
+現在の層の構成と依存の規則は、`docs/architecture/target/runtime-composition.zh-Hant.md` §4 に書く。
 
 Architecture の分離は、
 Directory の配置や命名だけで判断しない。
