@@ -61,8 +61,8 @@
     {
       "id": "wl-kernel-entry-removed",
       "file": "h7_scan_rules.json",
-      "find": "\"type\": \"GYO::Kernel::Runtime\"",
-      "replace": "\"type\": \"GYO::Kernel::RuntimeX\"",
+      "find": "\"type\": \"GYO::Kernel::App\"",
+      "replace": "\"type\": \"GYO::Kernel::AppX\"",
       "expect": "test_n02_kernel_runtime_run"
     },
     {
