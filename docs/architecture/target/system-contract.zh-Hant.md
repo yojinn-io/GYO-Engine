@@ -34,6 +34,10 @@
 3. **預設跟建置變體，參數只能覆寫**：release 預設關、測試版預設開（寫在建置變體）；啟動參數可在 release 開（場次）或在測試版關（量純效能），兩個方向都在日誌標「被參數覆寫」。
 4. **關閉時零配置成本**：邊界比對的快照緩衝只在開著時配置；關閉只剩每次存取一個分支。
 
+**「驗證開著」報告的欄位**（條件 2 的固定內容；`v8-arch-a6-revision`）：驗證開關的值與是否被參數覆寫、`breakOnKernelError` 的值、被 `ColumnInfo` 開關排除的大欄清單。若採用存取驗證第三層（頁保護；spec A.6 的條件化條文，採用與否待使用者在閘門 G2a 後決定），再加兩欄：「第三層開著」與 `reinstalls`（行程內的故障處理器被別人取代後重裝的次數；大於 0 時報告不得省略）。
+
+**與 `field-session.md` Design Invariant 3 的關係**（澄清；`v8-arch-legacy-impact-dispositions` 衝突 3）：那一條（「Test code apart from release code… A runtime flag inside the release binary is not separation」）的主詞是場次的**收集碼**——超出產品正常記錄的高頻記錄。Kernel 的存取驗證與 `breakOnKernelError` 不是收集碼，是 Engine 的正確性檢查，程式碼永遠在；它們的執行期開關不違反那一條，`field-session.md` 不改。反過來也成立：場次的高頻記錄（每 tick、每幀）仍照那一條走編譯期變體，不得以這個開關為理由放進 release。開關的值是場次事實的一部分，進場次記錄 header（條件 2）。
+
 限制（`limits.zh-Hant.md` LIM-6）：參數是行程級，三個 Runtime 共用同一值，無 per-Runtime 粒度（目前無需求，列為 Replacement Criteria 候選）；參數不是 (c) 資料——不影響模擬結果，只影響會不會查到違規，不進 digest、不進快照。
 
 ## 3. 無狀態與禁止的形狀（spec S-1、B.4 第 1 點）
@@ -43,12 +47,14 @@
 
 ## Design Invariants（候選；核准後成為正式條文）
 
-1. **描述從簽名推出，一份**；登記 API 不接受手寫存取宣告；句柄不可複製、不可移動。守衛：spec J-10～J-12。
-2. **System 回 `Result<void, KernelError>`——回傳契約，不是錯誤通道；Ok 是正常路徑**；Err 帶上下文、逐層包裝（驗證違規與 System 自己的 Err 是並列清單，不互包）、Executor 只處理一次並 Interrupted，任何組態都不靜默。守衛：spec J-10（回傳型別）、J-32b、J-45（release 目標也要看到 Err 與 Interrupted）、J-35。
-3. **System 無狀態**：無捕獲、無 `this`；(c) 區無 `Local`。守衛：spec J-10、J-14。
+條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
+
+1. **描述從簽名推出，一份**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1) 約束：**全文與守衛見該條，改動前必讀**。
+2. **System 回 `Result<void, KernelError>`，不靜默**——受 kernel [DI-KS 2](kernel.zh-Hant.md#di-ks-2) 約束：**全文與守衛見該條，改動前必讀**。
+3. **System 無狀態；(c) 區無 `Local`**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1)、[DI-KS 12](kernel.zh-Hant.md#di-ks-12) 約束：**全文與守衛見該條，改動前必讀**。
 
 ### Replacement Criteria（候選）
 
 - LIM-3：存取驗證（可關）攔不到的形狀，以及驗證關閉時攔不到的全部（詳細在 `limits.zh-Hant.md`）。
 - LIM-6：驗證開關是行程級，三個 Runtime 共用；出現 per-Runtime 粒度的需求時置換開關的放法。
-- **契約不可靠**（spec K.2 第 1 條，使用者 2026-11-11 核准的三分項）：(a) 判定 1（簽名推存取集合）在任一 L1 編譯器不成立 → 退回「顯式宣告＋存取驗證」；(b) System 自己執行緒上經 World API 的存取在驗證開著時攔不到 → 核對層重寫；(c) 上線後一個版本內兩次以上「宣告與實際存取不符、兩層核對與掃描都攔不到、且不屬 LIM-3 已列形狀」→ 評估頁保護或縮小「包」的範圍。目前狀態：(a) 三平台成立（L1 run 43018979148）；(b) 成立（spike (c1)–(c5)）；(c) 尚無案例。
+- **契約不可靠**——受 kernel [RC 1](kernel.zh-Hant.md#rc-1) 約束，改動前必讀該條；三分項與目前狀態在那一頁。

@@ -321,13 +321,18 @@
 |---|---|---|---|
 | EnTT | 無迴圈；signal／organizer 可不用 | 容器配 id、刪除重排 → 和 Match 的 id 契約衝突 | 可當資料層 plugin，但 GYO 要的順序不變式它不給 |
 | Flecs | pipeline／system／observer＝scheduler＋event bus；可開 worker | stage／merge 順序非 id 順序 | **和 Kernel 搶位置**，且順序不決定 |
-| Jolt | 無迴圈；JobSystem 可單執行緒或外接；**全域** Factory／allocator／Trace | PhysicsSystem 持有位置（第二份狀態） | 可當能力；衝突在狀態權威 |
-| Recast／Detour | 無迴圈、無執行緒；`dtAlloc`／`dtAssert` hook 是程序全域 | `dtNavMeshQuery` 有內部可變狀態（節點池），每個查詢者持自己的一份；TileCache 與 Crowd 各有自己的狀態副本（避免或限定） | 可當能力 |
-| ImGui／RmlUi | 呼叫端驅動；RmlUi 的 `Initialise`／`Set*Interface`／`RegisterPlugin` 是程序全域 | UI 狀態在它們手上（ImGui 的 io、RmlUi 的 Context） | 可當能力；衝突在資料契約；RmlUi 無法一個 world 一份 |
+| Jolt | 無迴圈；JobSystem 可單執行緒或外接；**全域** Factory／allocator／Trace | PhysicsSystem 持有位置（第二份狀態） | 可當能力；衝突在狀態權威〔依 spec v0.2 重核（kernel audit §4.4；`v8-arch-a6-revision` 落字）：收窄為**包**（先拆開它的全域與狀態；只限 (b) World，不進 (c)）〕 |
+| Recast／Detour | 無迴圈、無執行緒；`dtAlloc`／`dtAssert` hook 是程序全域 | `dtNavMeshQuery` 有內部可變狀態（節點池），每個查詢者持自己的一份；TileCache 與 Crowd 各有自己的狀態副本（避免或限定） | 可當能力〔依 spec v0.2 重核（kernel audit §4.4；`v8-arch-a6-revision` 落字）：收窄為**包**（先拆）〕 |
+| ImGui／RmlUi | 呼叫端驅動；RmlUi 的 `Initialise`／`Set*Interface`／`RegisterPlugin` 是程序全域 | UI 狀態在它們手上（ImGui 的 io、RmlUi 的 Context） | 可當能力；衝突在資料契約；RmlUi 無法一個 world 一份〔依 spec v0.2 重核（kernel audit §4.4；`v8-arch-a6-revision` 落字）：ImGui 收窄為**包**（全域 context 明列為例外）〕 |
 | miniaudio | engine 層自帶 job 執行緒與 spinlock；device 層 callback | — | device 層可；engine 層和 Kernel 搶執行緒 |
 | Effekseer | Manager 有 worker 執行緒選項與 Begin／EndUpdate | 效果實例在 Manager | 關 worker 後可由 Stage 驅動；渲染在它手上 |
-| SDL_GPU | 主執行緒規則（swapchain、pump） | — | Kernel 的 Stage 約束要寫「present 只在視窗執行緒」 |
+| SDL_GPU | 主執行緒規則（swapchain、pump） | — | Kernel 的 Stage 約束要寫「present 只在視窗執行緒」〔依 spec v0.2 重核（kernel audit §4.4；`v8-arch-a6-revision` 落字）：不是 Stage 約束，是 Resource 的執行緒親和（spec H-3）〕 |
 | zstd／LZ4／meshoptimizer | 純函式 | — | 無關 |
+| asio（新列；依 spec v0.2 重核，kernel audit §1.3、§4.4） | 見 audit §1.3 | 不進 World | 服務的內部實作（隨 Match 的 IPC 與 Client 的連線）；與 World 只經 Link 類 Resource 在交換點交換 |
+| httplib（新列；同上） | 見 audit §1.3 | 不進 World | 同 asio |
+| protobuf（新列；同上） | 見 audit §1.3 | 不進 World | 同 asio；產生碼的 pool 若改由 Egress System 直接編碼，要明列為例外（由遷移批定） |
+| nlohmann（新列；同上） | 見 audit §1.3 | — | 葉子；契約資料的解析在 (c)（小數經 `strtod`） |
+| doctest（新列；同上） | — | — | 不適用（只在測試） |
 
 結論：使用者願景稿 §12 的「是否需要統一 Scheduler」——沒有一個候選方案能提供 Match 需要的「決定性的 Stage 序列」；Flecs 最像 Kernel，卻明寫順序不保證。Kernel 若要做，是 GYO 自己的協定（架構師 2026-11-10 的看法），候選方案都是它下面的能力。
 

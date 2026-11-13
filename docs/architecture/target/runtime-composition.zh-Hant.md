@@ -40,6 +40,7 @@
 - Editor 的組合與 Client **同形**：文件 World（兼 Frame）加渲染 World，Extract 單向、唯讀。
 - 文件 World 產出場景（幾何、相機）與 **UI 繪製資料**（ImGui draw list，CPU 端頂點與指令，(b) 資料）；兩者經 Extract 進渲染 World。合成在渲染 World：先畫場景到 render target，再畫 UI draw list；預覽視窗是 draw list 裡引用該 render target 的貼圖 id，由渲染 World 解析。**沒有影像回到文件 World；H-6 原樣、不開例外、沒有晚一幀。**
 - 選取與編輯用 CPU 射線打文件 World 的幾何，不依賴影像。
+- **預覽的每一幀各自成立**（`v8-arch-a6-revision`；取代 legacy `docs/framework/preview.md` Design Invariant 4 的寫法，`v8-arch-legacy-impact-dispositions` 衝突 2）：每一幀的 render target 在渲染 World 合成，UI draw list 以貼圖 id 引用它；一幀的預覽內容只取決於那一幀 Extract 進來的資料。沒有讀回影像（readback）、沒有把影像上傳回視窗 renderer 的步驟、不沿用上一幀的影像。preview.md 的 DI 1～3、5 守的性質（預覽屬於使用它的工具、中性、由 Engine 繪製、建在有 Engine target 的地方）由 offscreen-preview plugin 承接，條文寫在 plugins 層的 owner 文件（`docs/plugins/`，`v8-arch-plugins-foundation` 建）；那些條文裡以 readback 為詞的句子屆時改寫，`PreviewTests` 的 PV2～PV5 與 `pv-*` 突變在 `v8-arch-plugins-editor` 重寫，不搬（其中 PV2、PV5 的讀回判定退役；遷移計畫 §5.2 第 10 列）。
 - ImGui 是 plugin，拆兩半：輸入與 widget 邏輯是文件 World 的 System；draw list 的 GPU 繪製是渲染 World 的 System。今天 `OffscreenPreview` 的 readback 與 `ImGuiShell` 的「一個函式從 NewFrame 到 Present」消失。參考：Bevy 的 bevy_egui。
 - 使用者原則：不要用舊思路處理新架構——「readback 放哪」三個選項（晚一幀、H-6 例外、文件與渲染合一）全部不採。
 
@@ -48,19 +49,23 @@
 - **三層改為**：Engine（Kernel＋能力）／**plugins**（`plugins/`：組合與第三方對接，每個 plugin 可選可刪）／產品與工具（plugin 清單＋Run）。層與目錄叫 plugins，單個才叫 plugin（使用者 2026-11-11）。framework 是舊架構的產物，其兩個核心職責（組合 Engine 能力、對接第三方）在 plugin 機制下都由 plugin 承擔，概念淘汰；`docs/framework/` 的 Design Invariants 整節廢止（第一個文件批）。
 - **runner plugin**：Editor host 的骨架（行程入口、pump、交換點）是一個在 finish 安裝 runner 的 plugin（照 Bevy `WinitPlugin::set_runner`）；一個 Runtime 只能有一個 runner（spec R-E6）；沒有 plugin 安裝時由 Host 程式自己跑。
 - **標準 Editor stage 序**＝plugin 群在 build 插入 stage（spec C.2 第 2 點）；ImGui、SDL 的相容在各自的 plugin 內實現，全域 context 明列例外。
-- **`plugins/` 是新的 top-level**（AGENTS §10 Delta，已同意）：每個 plugin 一個 target、自己的依賴正向清單；Engine 永不 include 它；產品與工具只在 main 列它。
+- **`plugins/` 是新的 top-level**（AGENTS §10 Delta，已同意）：每個 plugin 一個 target、自己的依賴正向清單；Engine 永不 include 它。
+- **plugin 的選擇是資料，不是程式**（使用者 2026-11-12 決定，`v8-arch-plugin-selection-data`；取代上一版「產品與工具只在 main 列它」）：產品與工具在 `project.json` 加 `plugins` 欄列要用的 plugin；共通 CMake 讀它連結對應的 plugin target，並**由建置產生登記的編譯單元**（與今天 `components` → `GyoComponents.cmake` 同一條路）；`main` 保持薄，只呼叫 runner plugin 或 Host 自跑。同一事實只在 `project.json` 一處（AGENTS §9）；加一個產品仍是「內容＋登記資料」就完結（§7、§12 Add／Clone）。代價：plugin 的初始化順序由資料或 plugin 自己宣告的依賴決定，不靠 main 的呼叫順序；缺 plugin 或依賴衝突是 Contract 的明確錯誤（§9）。System 本身的登記仍是程式（plugin 的 build 函式向 Registry 登記），不從資料讀。
+- **plugins 受 OS 邊界守衛掃描**（`v8-arch-a6-revision`；`v8-arch-guards-inventory-dispositions` Q1）：`plugins/` 與 `engine/` 一樣在 OS 邊界守衛的掃描根之內——plugin 不直接含 OS 標頭、不直接呼叫 OS API，要 OS 能力就經 `engine/os`。plugin 對它所包的第三方（SDL、ImGui）是第三方邊界，不是 OS 邊界：只有該第三方的 adapter plugin 可以在公開標頭露出它的型別，規則寫在那個 plugin 的 owner 文件（Q2）。守衛掃描根的變更由 `v8-arch-plugins-foundation` 的事前宣告提（DI 守衛的變更，使用者核准）。
 - 「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」。架構師保留：四個工具重複的選擇窗記帳與關窗提示必須真的進共用 plugin，否則是 framework 的老問題換名。
 - 組合格式（catalog plan、event sounds）是資料契約，owner 是提供該 plugin 的人；純函式（EventSounds、CatalogPlan、PreviewCamera、UiTextInput、json binding）是函式庫，與層無關。
 
 ## Design Invariants（候選；核准後成為正式條文）
 
-1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
-2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；產品與工具只在 main 列 plugin。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）。
+條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
+
+1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋；渲染 World 有自己的 Registry**——受 kernel [DI-KS 13](kernel.zh-Hant.md#di-ks-13) 約束：**全文與守衛見該條，改動前必讀**。
+2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；**產品與工具的 plugin 選擇只寫在 `project.json`（資料），登記由建置產生，`main` 不手寫 plugin 清單**。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）；守衛掃 `main` 與產品程式不直接引用 plugin 的 build 函式（名稱由 plugins 規劃批定）。
 3. **世界內容只經 Loading schedule 進來（且只經它的 Ingress stage 進 (c)）；對局 tick 計數在 ready 時為 0、第一個模擬 tick 是 1，Loading 期間 `tick[Fixed]` 不推進；`tick[Loading]` 是批次計數，(c) System 可讀它（S-4）但等價測試不比它；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄；Loading 非 Ingress stage 的 System 不得讀 external Resource）；等價測試（分批數不同、資產完成順序打亂：ready 時 (c) 欄與 Resource 逐位元相同，排除 role=Input 的暫存（`AssetStaging`、`MembershipRequests`、`InputRing`，修剪時機隨批數而異）與 `tick[Loading]`；spec J-51）；掃描（Peer 元件不掛在 Player 實體）。
-4. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
+4. **一個 World 一條執行緒**——受 kernel [DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。
 
 ### Replacement Criteria（候選）
 
 - LIM-5：Join／Leave 在 tick 內，加入與離開晚最多一 tick；不解除（詳細在 `limits.zh-Hant.md`）。
 - 渲染需要寫回模擬 World（例如渲染驅動的 LOD 狀態要進判定）→ 不是放寬 DI 1，而是把那份狀態搬到來源 World 由模擬側的 System 寫，渲染仍只讀。
-- 第一個真實能力接進機制時仍要改 Host 迴圈或 Kernel 本體，或 Host 的協調邏輯在兩個以上 host 重複 → 「Host 又長回來」，停下（spec K.2 第 7 條）。
+- **Host 又長回來**——受 kernel [RC 7](kernel.zh-Hant.md#rc-7) 約束，改動前必讀該條。

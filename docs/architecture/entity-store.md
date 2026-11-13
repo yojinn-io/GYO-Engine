@@ -125,12 +125,15 @@ frozen phases); the Delta lists them and the mutants that move here.
 
 ## Design Invariants
 
+> Markers dated 2026-11-13 were added by `v8-arch-a6-revision` (the re-tagging of the legacy clauses, `plans/kernel/a6-revision-report.zh-Hant.md`). "Superseded" means the clause will hold for no code once the component's migration batch lands; "compatible, wording update" means it keeps binding the same code and only its wording or mechanism changes. A marker changes nothing for existing code before that batch, and the clause text itself is not rewritten here.
+
 1. **The key is given, never made.** The store's key is `EntityId`, an unsigned 64-bit integer the caller gives. The
    store never allots, recycles or reserves an id value, carries no generation bits, and knows no id range or entity
    kind; it relies on the caller's allotters never reusing an id. Reason: who allots ids, in which ranges and whether
    they may be reused is policy that differs between consumers; a store that allotted would own that policy.
    Evidence: survey §2.1 `Entity` row, §2.2 version-bits row, §4.2 Entity-key row, §5 Entity row (neither reference
    has a container that does not allot, §4.1 row 2); consumer: E-2, E-3, E-4.
+   *(2026-11-13, `v8-arch-a6-revision`: **compatible, wording update.** "Given, never made" keeps binding the store. Under the kernel the key format has generation bits which the store does not interpret, and whether an id is reused is the product allotter's policy: `target/world.zh-Hant.md` section 1.)*
 2. **Order is an invariant, not an operation.** Every column is strictly ascending by key with no duplicates.
    `InsertEntity` inserts at the `lower_bound` position and `EraseEntity` preserves order; the store has no other
    function that changes membership (no append, swap-and-pop, tombstone, bulk assign or sort). Reason: an order that
@@ -144,6 +147,7 @@ frozen phases); the Delta lists them and the mutants that move here.
    a column, and applying changes in recording order would make the result depend on the order rules ran. Evidence:
    survey §3b, §2.1 `Commands` row, §4.2 Commands row (the purpose of Bevy's Commands adapted, not ported);
    consumer: E-12.
+   *(2026-11-13, `v8-arch-a6-revision`: **compatible, wording update.** The authority for the deferred queue and its order is `target/kernel.zh-Hant.md` DI-KS 9; the store-side half, "the store only provides the ordered insert and erase", is unchanged.)*
 5. **The store runs nothing.** No system, scheduler, world, resource, context variable, event, observer or hook, no
    app or plugin; it calls no user code (the withdrawn `DeferredChanges::Apply` callbacks are gone). Reason: the store is a data
    structure; who runs what and when belongs to its consumer, and the Engine has no umbrella framework
@@ -182,8 +186,10 @@ platform, never by the store.
 1. A consumer must recycle ids within one allotter generation, or an allotter can no longer guarantee no reuse:
    propose a generation in the key and decide whether that consumer's digests encode it; Invariant 1 changes.
    Mirrors RC-2; survey §4.1 row 1.
+   *(2026-11-13, `v8-arch-a6-revision`: **superseded.** The key format already carries generation bits and reuse is the allotter's policy: `target/world.zh-Hant.md` section 1.)*
 2. Two or more consumers need the same allotment policy, or anyone asks the store to allot or to hold a second
    allotment policy: propose a separate Engine allotter beside the store, never inside it. Survey §4.1 row 2.
+   *(2026-11-13, `v8-arch-a6-revision`: **compatible, wording update.** "Never inside the store" keeps binding the store; the proposal changes: the allotter is the product's Resource, not a separate Engine allotter (`target/world.zh-Hant.md` section 1).)*
 3. A consumer measures more than 4,000 simultaneous entities, or column maintenance (insert, erase, lookup, merges)
    above 1 ms p95 per tick: propose another structure (paging, an index) that keeps Invariant 2's order. Mirrors
    RC-1; survey §4.1 rows 3 and 12.
@@ -196,14 +202,17 @@ platform, never by the store.
    or tuple of columns joined by ascending id with the same skip rule) is hand-written in more than 3 places in one
    consumer, counted by that consumer: propose a query layer as its own component. Derived from RC-4; survey §4.1
    row 4.
+   *(2026-11-13, `v8-arch-a6-revision`: **superseded.** Multi-column queries are part of the World contract, not something to wait for: `target/world.zh-Hant.md` section 1.)*
 6. A replicated channel becomes a delta against an acknowledged baseline and the consumer's "compare with the last
    sent value" exceeds 1 ms p95 per tick, or a non-replication consumer needs component-level change sets: propose
    change ticks, with a plan for marking every write point (survey §3c reason a). Survey §4.1 row 5.
+   *(2026-11-13, `v8-arch-a6-revision`: **superseded.** Change stamps are decided and live in the World, not in the store: `target/world.zh-Hant.md` sections 2 and 6.)*
 7. A tick measured over budget needs parallel iteration proved bit-identical to ascending sequential order: use the
    Engine Job capability; propose no scheduler in the store. Survey §4.1 row 6.
 8. A second product needs the same world, resource or app/plugin assembly around the store: it is a framework-layer
    question (`docs/architecture.md:129`); the plugin ABI ban must be revisited by the user first. Survey §4.1 rows
    7 and 8.
+   *(2026-11-13, `v8-arch-a6-revision`: **superseded.** The Kernel is in the Engine and the framework retires in favour of the plugins layer: `target/runtime-composition.zh-Hant.md` section 4. The line number above is stale; it meant the ban at the end of the "Runtime boundaries" section.)*
 9. A named rule must read, in the same phase, an entity it just spawned, or must stop seeing one it just destroyed,
    and a fixed sync point cannot serve it: Invariant 4 is wrong; propose a redesign of the deferred changes, not
    events or observers. Survey §4.1 row 9.

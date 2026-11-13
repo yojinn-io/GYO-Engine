@@ -262,22 +262,24 @@ inline constexpr EntityId MatchEntityIdLast  = 0x0FFF'FFFF;  // 2^28−1：契�
 
 ## Design Invariants
 
+> 2026-11-13 的標註由 `v8-arch-a6-revision` 加上（legacy 條文的重標，`docs/architecture/plans/kernel/a6-revision-report.zh-Hant.md`）。「已被取代」＝該部件的遷移批完成後，這一條對任何程式都不再成立；「相容（措辭更新）」＝它繼續約束同一份程式，只有措辭或機制換了。遷移批完成前，標註不改變現有程式受的約束；條文本身不在這裡改寫，目標措辭在 [`target/entity-model.zh-Hant.md`](target/entity-model.zh-Hant.md) §2。
+
 本節是 Architecture Delta（AGENTS §3），新增與之後的每一處修改都要使用者同意。守衛測試的設計在 §7；「審查」表示只能靠 code review（AGENTS §13），照 network-architecture 的先例寫明。
 
 | 編號 | 原則 | 維持的性質 | 未來修改時要問的問題 | 守衛 |
 |---|---|---|---|---|
 | E-1 | 一個 EntityId 空間；0＝無 | 命中、攻擊者、物品、事件、屍體都用同一個 id，不分種類，不需要對照表 | 是否為某種實體另開一套 id、對照表，或 `HIT_*` 種類加各自的 id？ | 審查；G5 |
 | E-2 | 兩段配發：[1, PlayerEntityIdLast] 由 Gateway 配給連線實體，[MatchEntityIdFirst, MatchEntityIdLast] 由 PvpMatch 配；EntityId＝player_id 不轉換；段界常數在 Match 端私有標頭一處定義，跨語言核對 | 同一世代內不撞號；玩家的 id、wire、digest 一個位元組都不變；Gateway 不持 Match 狀態的副本 | 是否讓 Match 配玩家 id、讓 Client／Gateway／host 配 Match 段，或第三個配發者？ | G5、Gateway 上限測試、常數核對 |
-| E-3 | Match 段單調、不回收、Reset 歸回 First、用盡報錯不回繞；Client 沒有配 id 的程式路徑；本地預測用 (自己的 id, ActionId) 當暫時鍵 | 一個 id 永遠不會指到另一個實體，不需要 generation；快照能逐實體比對、id 能直接進 digest | 是否回收 id、讓計數器跨 Reset，或讓 Client 先建實體再等權威改號？（是→RC-2／RC-5） | G4、G6 |
+| E-3 | Match 段單調、不回收、Reset 歸回 First、用盡報錯不回繞；Client 沒有配 id 的程式路徑；本地預測用 (自己的 id, ActionId) 當暫時鍵〔2026-11-13 `v8-arch-a6-revision`：**相容（措辭更新）**——配發策略仍是這一條；「Reset 歸回 First」改為世代切換＝重建 World，「不需要 generation」改為格式含 generation、PvP 恆 0〕 | 一個 id 永遠不會指到另一個實體，不需要 generation；快照能逐實體比對、id 能直接進 digest | 是否回收 id、讓計數器跨 Reset，或讓 Client 先建實體再等權威改號？（是→RC-2／RC-5） | G4、G6 |
 | E-4 | 段只表示配發者，不表示種類；種類只來自標籤；系統以「有沒有元件」挑實體，不以種類分支判定；輸入來源（Connection、Brain）不是實體元件；讀段界常數的只有配發器、Join 的值域檢查、Gateway 的上限與單則檢查 | 加一個種類只要加資料與元件組合，不必改每個系統；AI 不帶連線狀態 | 是否用 id 高位元或大小判斷「是不是玩家」？是否寫了 `if (kind == …)` 改判定？是否把命令視窗或品質放進 Body？ | 審查（測不到） |
 | E-5 | 每個元件欄依 EntityId 嚴格升冪、無重複；插入用 lower_bound、刪除保序；實體的欄成員關係恰等於種類表 | 迭代順序只取決於 id，不取決於增刪歷史 | 是否用了 swap-and-pop、unordered 容器、append 一個較小的 id，或某欄沒跟著刪？ | G1、`RequireEntityOrder`（2026-11-05 註：機制部分——升冪插入、保序刪除、二分查找——改由 Engine 的 common 測試 `gyo_entity_store_tests` 與 Engine 突變目錄的 `es-row2-insert-appends`、`es-row2-erase-swap-and-pop` 守（產品的 M1、M2 於 2026-11-06 退役）；G1、`RequireEntityOrder` 守「成員關係恰等於種類表」與快照順序；entity-store Delta） |
 | E-6 | 跨實體平手鍵只用 EntityId 升冪；段界因此是判定的一部分 | 判定結果不依容器而定；同樣輸入得到同樣 digest | 是否改了段界、配發順序或平手鍵？（是→升 digest version） | G7、authority_digest |
-| E-7 | 刪實體只走 `PvpMatch::EraseEntity`，從所有欄、輸入來源、快取、歷史同時刪；snapshot 列的刪除只走 `EraseEntity(WorldSnapshot&, id)`；發布前 `RequireValidSnapshot` | 沒有孤兒元件（反例：`MatchRuntimeHost.cpp:759-760` 逐出時只刪 players 與 combat） | 是否在某處手刪某一欄？host 是否在 Snapshot 之後自己刪？ | G2、G3 |
+| E-7 | 刪實體只走 `PvpMatch::EraseEntity`，從所有欄、輸入來源、快取、歷史同時刪；snapshot 列的刪除只走 `EraseEntity(WorldSnapshot&, id)`；發布前 `RequireValidSnapshot`〔2026-11-13 `v8-arch-a6-revision`：**相容（措辭更新）**——「沒有孤兒元件」仍約束產品；欄的同時刪除改由 World 的 `Despawn` 保證，World 以外的輸入來源、快取、歷史仍由產品清〕 | 沒有孤兒元件（反例：`MatchRuntimeHost.cpp:759-760` 逐出時只刪 players 與 combat） | 是否在某處手刪某一欄？host 是否在 Snapshot 之後自己刪？ | G2、G3 |
 | E-8 | 元件是權威；Tick 內派生暫存（tickShapes_、actionStartCombats_、interest 集合、PoseHistory）可從元件重建，不進 snapshot、不進 digest；送出排程狀態（priority accumulator）不參與判定、不進 digest；interest 參數不改變權威 digest | 權威只有一份；可見性不改變判定 | 這個欄位是否要知道「元件已經有什麼」？是的話它是元件。是否讓過濾結果回流到判定或交給 Gateway？ | G8、G9 |
 | E-9 | id 的數值與順序進權威 digest，每欄依 EntityId 升冪編碼；新種類與新欄只在出現時才編碼；連線實體的 `player` 列欄序不變 | 加新種類不讓既有情境的 golden 變 | 是否改動既有列的欄位順序或穿插？ | authority_digest（37 golden） |
 | E-10 | AI 的亂數只來自 `Brain.rngState`，由 (matchSeed, EntityId) 導出並進 digest；判定路徵不讀時鐘、指標位址、unordered 容器順序；沒有 Connection 的射手不量 reference age | Match 自己一致、可在 digest 重現（問卷 4-6） | 是否用 `std::random_device`、時鐘或共用一條亂數流？AI 是否走到 host 的 reference age 回呼？ | G10 |
 | E-11 | 每個元件在契約表有 Replication 欄；投影是每元件一支手寫函式；過濾只在 Match，Gateway 只在單則訊息內分送與檢查 | 不出現執行期屬性系統；Gateway 仍是無狀態邊緣 | 是否加了反射、屬性表或讓 Gateway 依內容過濾？ | 審查；`state_whitelist_test.go` |
-| E-12 | Tick 內不改任何欄的成員；生成與刪除記入待辦，在固定階段依 EntityId 升冪套用；新 id 依裁決順序配發 | 裁決途中持有的參照不失效；結果不取決於生成／刪除發生的順序 | 是否在 `ResolveActions`、`Decide`、移動迴圈裡直接 Insert／Erase？ | `GYO_ASSERT(!inTick_)`＋突變 |
+| E-12 | Tick 內不改任何欄的成員；生成與刪除記入待辦，在固定階段依 EntityId 升冪套用；新 id 依裁決順序配發〔2026-11-13 `v8-arch-a6-revision`：**相容（措辭更新）**——性質不變；「Tick 內不改成員、固定階段依 id 套用」改由 Kernel 保證（`docs/architecture/target/kernel.zh-Hant.md` DI-KS 9），「新 id 依裁決順序配發」仍是產品的配發器〕 | 裁決途中持有的參照不失效；結果不取決於生成／刪除發生的順序 | 是否在 `ResolveActions`、`Decide`、移動迴圈裡直接 Insert／Erase？ | `GYO_ASSERT(!inTick_)`＋突變 |
 
 **過渡期（不是 RC，是預定的演進）**：Body 欄在 split 期間存整份 `PlayerState`（含游標與 host 診斷欄位）；拆成 Body＋InputCursor 的時機是第一個 AI 批，digest 編碼器重組舊欄序（E-9）。
 
@@ -286,7 +288,7 @@ inline constexpr EntityId MatchEntityIdLast  = 0x0FFF'FFFF;  // 2^28−1：契�
 任一條出現就停止修補，向使用者提出「重建或修改」（AGENTS §3）。門檻數字已核准（決定 7 (a)）。
 
 - RC-1：同時存在的實體實測超過 4,000（需求的 10 倍），或在 Linux Match 上實測欄維護（insert、erase、lower_bound、合併）每 Tick 的 p95 超過 1 ms（16.7 ms 預算的 6%）→ 換結構（例如分頁或索引），但不得換成會改變順序的結構。
-- RC-2：需要回收 id（一個世代內實際用盡，或需要跨世代保留 id）→ E-3 不成立，引入 generation 位元（照 EnTT `combine`／`next` 或 flecs 的遮罩）。
+- RC-2：需要回收 id（一個世代內實際用盡，或需要跨世代保留 id）→ E-3 不成立，引入 generation 位元（照 EnTT `combine`／`next` 或 flecs 的遮罩）。〔2026-11-13 `v8-arch-a6-revision`：**相容（措辭更新）**——條件仍是產品的置換條件；處置從「引入 generation 位元」改為「改配發策略」，因為鍵格式已含 generation〕
 - RC-3：元件組合從固定表變成執行期動態加減且成為多數，或種類超過 16 個 → 種類表不再是標籤。
 - RC-4（判定系統）：加一種實體要改超過 3 個**判定用的自由函數**（移動、射擊、生死、動畫、AI 決策），或得改守衛本體而不是只改種類表與它自己的測試，或重做 E-5／E-7 的驗證 → 模型失效。
 - RC-4b（複寫）：每加一個可複寫元件要改的位置（C++ WorldSnapshot、IpcHost 投影、adapter.go 逐欄複製與檢查、ClientConnection 解碼、RequireValidSnapshot、EraseEntity(WorldSnapshot&)）超過 6 處，或位置清單無法列舉 → 投影層失效，考慮以資料描述投影。

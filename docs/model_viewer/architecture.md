@@ -53,6 +53,7 @@ Meeting one of these stops further repair: propose to the user whether to repair
    Engine's offscreen drawing with a synchronous readback and upload misses the frame-time judgment (P1 in
    [model-viewer.md](../tools/plans/v8/model-viewer.md)). Propose the next step (an asynchronous readback, a smaller
    preview, moving the ImGui binding to SDL_GPU); do not patch it in the viewer.
+   *(2026-11-13, `v8-arch-a6-revision`: **compatible, wording update.** The first half (the viewer has to draw itself) keeps binding the viewer. The second half, from "or Engine's offscreen drawing with a synchronous readback" on, and its three proposals no longer apply once the viewer is migrated: the target has no readback, the preview's render target is composed in the render World (`docs/architecture/target/runtime-composition.zh-Hant.md` section 3b). The clause binds the existing code as written until `v8-product-tool-model-viewer` rewrites it.)*
 2. Editing reaches beyond these two formats (hit volumes, animation sets, material bindings), turning the viewer
    into a general model editor.
 3. A preview of another model's clips is needed (retargeting, blending): `gyo.anim_events` Replacement Criterion 2.

@@ -18,9 +18,21 @@ The current contract separates Programmer Error (`GYO_ASSERT`, the program is wr
 
 The user's principle behind this row: no silent handling. The earlier draft's "always-on check macro" was rejected in favour of this shape.
 
+## Relation to "no error chains" in the current contract (`v8-arch-a6-revision`; legacy-impact conflict 1)
+
+The current contract's section on error types ends with "GYO has no global error enum, no error chains and no type-erased error categories". Under the kernel that sentence is **narrowed, not withdrawn**:
+
+- `Engine::Base::Error<Code>` and every module error type carry **no chain** (unchanged): `code`, `message`, `detail`; at a module boundary the inner error's code name and detail go into `detail`.
+- `KernelError` is the **one** error type that carries a chain. It has two directions, and the two words are kept apart everywhere (spec §0): the **context chain** is vertical, one error wrapped with one layer of context at each level on the way out (Kernel API, System, Executor); the **sibling list** is horizontal, independent errors of one System call (each access-verification violation, and the System's own `Err`) listed side by side and never wrapped into one another. Each sibling has its own context chain.
+- "No global error enum" and "no type-erased error categories" hold for `KernelError` too: how its rule ids are declared is set by the declaration of `v8-arch-kernel-world-exec`.
+
+The legacy file carries a marker on that sentence pointing here; its text is not rewritten until the kernel's migration batch replaces the file.
+
 ## Design Invariants (candidates; become binding once approved)
 
-1. **A runtime-data Programmer Error is reported as `Result<void, KernelError>` with full context, wrapped layer by layer (verification violations and the System's own `Err` are siblings in one error list, not nested), logged exactly once by the Executor, and ends in `Interrupted`; no build configuration swallows it.** Guards: spec J-32b, J-45, J-35.
+Item numbers are unchanged. An item marked "bound by kernel DI-KS n" has its full text only in that clause of the kernel page; the others are specific to this component.
+
+1. **A runtime-data Programmer Error is returned as `Result<void, KernelError>`, logged once by the Executor, and never silent**: bound by kernel [DI-KS 2](kernel.zh-Hant.md#di-ks-2): **full text and guards are in that clause; read it before changing this component**.
 2. **`Base::Result` stays a pure value**: no logging, no handler inside it; the Executor's handler is the only place a kernel error is logged. Guard: review; spec J-9 scan of the kernel directory for log calls outside the Executor.
 
 ### Replacement Criteria (candidates)
