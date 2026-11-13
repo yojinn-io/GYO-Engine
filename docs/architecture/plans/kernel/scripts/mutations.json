@@ -6,8 +6,8 @@
       "id": "ks-k1-registry-ignored",
       "what": "K1 reads no registered id",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "                for spelling in {identifier, camel_case(identifier)}:",
-      "replace": "                for spelling in ():",
+      "find": "                for pattern in registered_patterns(identifier):",
+      "replace": "                for pattern in ():",
       "expect": "FAIL: test_k1_registered_product_id_is_reported",
       "command": [
         "{python}",
@@ -26,8 +26,8 @@
       "id": "ks-k1-camel-dropped",
       "what": "K1 drops the CamelCase spelling of registered ids",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "                for spelling in {identifier, camel_case(identifier)}:",
-      "replace": "                for spelling in {identifier}:",
+      "find": "    return [snake, camel]",
+      "replace": "    return [snake]",
       "expect": "FAIL: test_k1_registered_id_in_camel_case_is_reported",
       "command": [
         "{python}",
@@ -848,8 +848,8 @@
       "id": "ks-adv-registry-case-sensitive",
       "what": "registered ids are matched case-sensitively (review B9)",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "patterns.append(re.compile(re.escape(spelling), re.IGNORECASE))",
-      "replace": "patterns.append(re.compile(re.escape(spelling)))",
+      "find": "+ r\"(?![A-Za-z0-9])\", re.IGNORECASE)",
+      "replace": "+ r\"(?![A-Za-z0-9])\")",
       "expect": "FAIL: test_k1_registered_id_ignores_case",
       "command": [
         "{python}",
@@ -1481,6 +1481,26 @@
         "tests/common/kernel",
         "-p",
         "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k1-word-boundary-dropped",
+      "what": "K1 matches registered ids anywhere, without word boundaries (architect 2026-11-13, review A8)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    snake = re.compile(r\"(?<![A-Za-z0-9])\" + re.escape(identifier) + r\"(?![A-Za-z0-9])\", re.IGNORECASE)\n    camel = re.compile(r\"(?<![A-Z])\" + re.escape(camel_case(identifier)) + r\"(?![a-z])\")",
+      "replace": "    snake = re.compile(re.escape(identifier), re.IGNORECASE)\n    camel = re.compile(re.escape(camel_case(identifier)), re.IGNORECASE)",
+      "expect": "FAIL: test_k1_registered_id_matches_as_a_word_not_inside_other_words",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
         "-v"
       ]
     }

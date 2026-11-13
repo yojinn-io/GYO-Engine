@@ -100,6 +100,28 @@ class GuardTree(unittest.TestCase):
         self.header("struct SpaceRaceState {};")
         self.assertReported("K1", "SpaceRace")
 
+    def test_k1_registered_id_matches_as_a_word_not_inside_other_words(self):
+        # Architect 2026-11-13 (review A8): an id like arena must not turn every word containing it red.
+        self.write("engine/config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
+        for text in ("struct Marenal {};", "inline int parenage = 0;"):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertClean()
+
+    def test_k1_registered_id_as_a_camel_case_word_is_reported(self):
+        self.write("engine/config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
+        for text, needle in (("struct FrameArena {};", "Arena (registered id arena"),
+                             ("struct ArenaHost {};", "Arena (registered id arena")):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertReported("K1", needle)
+
+    def test_k1_registered_id_message_names_both_readings(self):
+        self.header("struct ObjectFpsPvpHost {};")
+        line = next(p for p in guard.check(self.root) if ": K1 ObjectFpsPvp" in p)
+        self.assertIn("change the kernel", line)
+        self.assertIn("change that product's registered id", line)
+
     def test_k1_product_alias_is_reported(self):
         self.header("// see RetroFPS/Sim")
         self.assertReported("K1", "RetroFPS")

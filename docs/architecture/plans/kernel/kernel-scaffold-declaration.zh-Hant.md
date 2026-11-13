@@ -117,6 +117,7 @@
 - **LIM（本批）-4**：naming DI 1 只有 `engine/kernel` 一列根表，不預做讀取機制；DI 2（詞性）不做（「登記時的弱檢查＋審查」，屬 Registry）。產品的列屬產品 owner，之後應由產品側的資料給（與 zone-c-sources 清單同一種做法），由第一個需要它的產品批（match-sim）在宣告裡提，不在共通腳本裡加產品列。
 - **LIM（本批）-5**：K4 白名單的 `TypeKey<T>` 符號名是暫定名 `typeKeyTag`；registry-schedule 定案時改腳本（審查可見）。
 - **LIM（本批）-6**：突變只在本機 Intel Mac 跑（mutation-rerun-scope；不進 CI）。
+- **LIM（本批）-7**（架構師 2026-11-13 定，審查 A6 前半）：J-9 只看帶 `static`／`thread_local` 關鍵字的宣告，看不到 namespace 範圍的 `inline int g = 0;`、匿名 namespace 變數與 `extern`。本批不擴大：文字掃描要判 namespace 範圍的變數定義得做語法近似，誤報與漏報都多，而且本批 kernel 是 INTERFACE、沒有目的檔可查。去處：`v8-arch-kernel-registry-schedule`（第一個有 `.cpp` 的批）的事前宣告新增**符號層**的檢查——對 kernel 靜態庫看可寫資料段（.data／.bss）的符號，白名單恰好是 `tlCurrent` 與 `TypeKey` 的那個符號；Linux 與 macOS 用 `nm`，Windows 先記為限界。
 - 共通 LIM-2／3／6：本批不寫 System，不適用。
 
 ## 7. 給架構師的問題（已答，2026-11-13）
@@ -133,5 +134,7 @@
 
 - 2026-11-13 架構師核定（訊息來自架構師會話；初稿 `a7f6f899`）。6 點修訂：(1) DI 出處改引 target/kernel 頁與 naming DI 4；(2) N1 反向加 `plugins/`、不存在的反向根跳過，自測兩種各一例；(3) K1 別名逐個註出處、角色詞另一組、反例加 `matches`／`Matcher`／`rematch`；(4) LIM-4 寫產品列的方向；(5) Fable 只用一次；(6) `neutral_names_guard` 不碰。全部已改入本檔。
 
-- 2026-11-13 結果（細節與證據見 [dev_log](../../../dev_logs/2026_11_13_arch_kernel_scaffold.zh-Hant.md)）：判定 1～8 成立。L1 第一輪 `b31bae5a`（run 43352865028）與最終程式 `0a2b2f7b` 的第二輪（run 43355513501）三平台綠；樣本 (a)(b) 在 windows-x64 各一次無失敗，照 U5 分工（核心三條 (a)、其餘 (b)）。突變 78/78（初版 37 條＋審查後 41 條）。Fable 審查與敵對檢查（一次）找到程式碼 11 項、存活 22＋1 處；本批修 A1～A5、A6 後半、A7、A9 與全部存活處，A6 前半（無 `static` 的可變全域）與 A8（登記 id 子字串比對）交架構師判斷。
+- 2026-11-13 結果（細節與證據見 [dev_log](../../../dev_logs/2026_11_13_arch_kernel_scaffold.zh-Hant.md)）：判定 1～8 成立。L1 第一輪 `b31bae5a`（run 43352865028）與最終程式 `0a2b2f7b` 的第二輪（run 43355513501）三平台綠；樣本 (a)(b) 在 windows-x64 各一次無失敗，照 U5 分工（核心三條 (a)、其餘 (b)）。突變 79/79（初版 37 條＋審查後 41 條＋A8 修訂 1 條）。Fable 審查與敵對檢查（一次）找到程式碼 11 項、存活 22＋1 處；本批修 A1～A5、A6 後半、A7、A9 與全部存活處，A6 前半與 A8 交架構師判斷，結果見下兩條。
 - 與宣告的差異：§3.1 K0（無法掃描的檔案類型）與 K5 的「無法讀取的 include 目標」是審查後新增的判定（締める面）；K4 的函式判定改寫以消除對合法函式形狀的誤報；naming 的 SUFFIXES 與 J-9 共用並加 `.m`／`.mm`。§2 檔案清單不變。
+- 2026-11-13 核定後的修訂（架構師，審查 A8）：K1 對登記 id 改為**詞邊界**比對。snake 形不分大小寫、以非字母數字（含 `_`）或首尾為界；CamelCase 形分大小寫、從詞頭（前面不是大寫字母）到詞尾（後面不是小寫字母）。id `arena` 時 `Marenal`、`parenage` 不命中，`FrameArena`、`ArenaHost` 仍命中（刻意：產品名當前綴的 `ObjectFpsPvpHost` 不能漏）。命中訊息寫兩種讀法與處置：Kernel 用了產品名＝改 Kernel；新登記的產品 id 是 Engine 通用詞＝改產品的登記 id（代價落在新產品命名，不落在共通層；AGENTS §7、§12）。締める面：無。緩める面：`Marenal` 類（登記 id 出現在另一個詞的中間）不再報；「Kernel 不含產品名」的性質不變。自測加 3 個（4 個詞）、突變加 `ks-k1-word-boundary-dropped`，本機 79/79。
+- 2026-11-13 A6 前半：本批不擴大，記為 LIM（本批）-7（§6）。

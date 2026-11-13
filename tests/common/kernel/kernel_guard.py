@@ -9,8 +9,17 @@ docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md section 3.
 Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
 
   K1  a product or tool name, or a connection-role word, in code or comments (CMakeLists.txt included):
-        (i)   the ids registered in engine/config/projects.csv and engine/config/tools.csv, as written and in
-              CamelCase, ignoring case. Adding a product needs no change here; a removed product's id is no
+        (i)   the ids registered in engine/config/projects.csv and engine/config/tools.csv, as words:
+              - as written (snake form), ignoring case, bounded by the start or end of the text or by a character
+                that is not a letter or digit ("_" is a boundary): id arena matches arena, ARENA_SIZE, k_arena;
+              - in CamelCase, case-sensitive, from the start of a word (no uppercase letter before it, so an
+                identifier start or a lowercase-to-uppercase turn) to the end of a word (no lowercase letter
+                after it): Arena matches FrameArena and ArenaHost, not Marenal, parenage or Arenas.
+              A product name used as a prefix (ObjectFpsPvpHost) is still caught; matching whole identifiers only
+              would miss it. A hit has two readings, and the message names both: the kernel uses a product's
+              name (change the kernel), or a newly registered product id is an Engine generic word (change the
+              product's registered id). The cost of a collision falls on the new product's name, not on the
+              common layer (AGENTS 7, 12). Adding a product needs no change here; a removed product's id is no
               longer banned once its registration row is gone.
         (ii)  PRODUCT_ALIASES: names of registered products that the registry id does not spell.
         (iii) ROLE_WORDS: connection-role words (entity_store W1).
@@ -153,8 +162,15 @@ def camel_case(identifier):
     return "".join(part[:1].upper() + part[1:] for part in identifier.split("_") if part)
 
 
+def registered_patterns(identifier):
+    """The two K1 word patterns for one registered id (see K1 (i))."""
+    snake = re.compile(r"(?<![A-Za-z0-9])" + re.escape(identifier) + r"(?![A-Za-z0-9])", re.IGNORECASE)
+    camel = re.compile(r"(?<![A-Z])" + re.escape(camel_case(identifier)) + r"(?![a-z])")
+    return [snake, camel]
+
+
 def registered_names(root):
-    """(patterns, problems): K1 patterns for every registered id, and findings for an unreadable registry."""
+    """(patterns, problems): (pattern, id) for every registered id, and findings for an unreadable registry."""
     patterns, problems = [], []
     for relative in REGISTRIES:
         path = Path(root) / relative
@@ -170,8 +186,8 @@ def registered_names(root):
                 identifier = (row.get("name") or "").strip()
                 if not identifier:
                     continue
-                for spelling in {identifier, camel_case(identifier)}:
-                    patterns.append(re.compile(re.escape(spelling), re.IGNORECASE))
+                for pattern in registered_patterns(identifier):
+                    patterns.append((pattern, identifier))
     return patterns, problems
 
 
@@ -217,7 +233,13 @@ def allowed_static(declaration):
 
 def file_findings(relative, raw, name_patterns):
     """(line, rule, text) for one file."""
-    for pattern in name_patterns + [re.compile(p) for p in PRODUCT_ALIASES + ROLE_WORDS]:
+    for pattern, identifier in name_patterns:
+        for match in pattern.finditer(raw):
+            yield line_of(raw, match.start()), "K1", (
+                f"{match.group(0)} (registered id {identifier}: either the kernel uses a product's name, so change "
+                f"the kernel, or a newly registered product id is an Engine generic word, so change that "
+                f"product's registered id)")
+    for pattern in [re.compile(p) for p in PRODUCT_ALIASES + ROLE_WORDS]:
         for match in pattern.finditer(raw):
             yield line_of(raw, match.start()), "K1", match.group(0)
     if Path(relative).suffix not in SUFFIXES:
