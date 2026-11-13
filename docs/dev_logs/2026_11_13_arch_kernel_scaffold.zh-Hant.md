@@ -58,6 +58,16 @@
 - **符號層的可寫全域檢查**（架構師 2026-11-13 定，承接審查 A6 前半）：J-9 是關鍵字制的文字掃描，看不到 namespace 範圍的 `inline int g = 0;`、匿名 namespace 變數與 `extern`；用文字近似語法誤報與漏報都多，而 scaffold 的 kernel 是 INTERFACE、沒有目的檔。`v8-arch-kernel-registry-schedule` 是第一個有 `.cpp` 的批，它的事前宣告必須新增：對 kernel 靜態庫看可寫資料段（.data／.bss）的符號，白名單恰好是 `tlCurrent` 與 `TypeKey` 的那個符號（屆時定名，取代暫名 `typeKeyTag`）；Linux 與 macOS 用 `nm`，Windows 先記為限界。
 - J-10 的分工與三個注意見上節「U5 的分工」。
 
+## 停止（2026-11-13，AGENTS §14.1）
+
+A8 修訂後的第三輪 L1（`eb47b6ec`，run 43357263283）windows-x64 失敗，判定 2 在最終 commit 上不成立。依 §14.1「宣告的判定不成立時，重跑或修正前先報告使用者」，沒有重跑。
+
+- 失敗的只有產品測試 `object_fps_pvp.cpu`（Timeout，60.01 s）。kernel 的 5 個測試在三平台的 tests.xml 都 pass，linux-x64、macos-arm64 全綠。
+- 同一測試在 windows-x64 前兩輪的耗時是 54.13 s、30.93 s；Linux 約 17～37 s、macOS 約 16 s。Windows 一直貼著 60 s 的上限。
+- 第二輪到第三輪之間只改了 `kernel_guard.py`、它的自測、突變目錄與文件，沒有 C++ 或產品檔。kernel 測試總共約 2 s，ctest 並行時也只多佔一個 slot。
+- 切分（§14.1 的三類）：實作（本批）的可能性低，理由如上；環境（runner 速度）的可能性高，理由是同一 commit 系列裡耗時在 31～60 s 之間大幅波動；測試自身（60 s 上限偏緊）也有可能。只靠這三輪無法斷定，屬「切分不了」。
+- 證據：`build/evidence/kernel-scaffold/l1-43357263283/`（三平台 tests.xml、三個 job log）。
+
 ## 範囲の限界（宣告 §6）
 
 STATIC＋PRIVATE 連 `GYO::Os` 不在本批；MSVC `/W4` 零警告只由 L1 判，且 repo 沒有 `/WX`，所以是讀 build log 確認（兩輪 windows-x64 log 中 kernel 測試都是 0 警告）；樣本是測試用最小版、非 J-10 條目；J-9 看不到無 `static` 的可變全域（LIM-7，交 registry-schedule 的符號層檢查）；naming 只有一列根表、DI 2 不做、產品列由產品側資料給（match-sim 提）；`typeKeyTag` 是暫名；突變只在本機跑。
