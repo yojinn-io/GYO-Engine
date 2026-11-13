@@ -5,6 +5,13 @@
 
 **狀態：使用者 2026-11-13 核准**（「照建議，核准」：U-L5 量測時段實機閒置、U-M0 加計時底線、U-M1 Mac 兩欄重用；§9 其餘已答）。量什麼、怎麼量、幾次、對帳與統計的算法都在看到任何新數字之前寫下，看結果後不改（AGENTS §14.1）。正式量測的時段開跑前另取同意（§11）。
 
+### 準備時的補充（2026-11-13，量測前；不改量什麼、幾次與統計）
+
+1. **`/work` 路徑**：被量的 ELF 內寫死 `/work/src/...`（`baseline_record` 讀 `assets/object_fps_pvp/maps/pvp_arena.json`、`tests/object_fps_pvp/fixtures/` 的兩個檔）。LN 要跑同一份檔，實機上 `/work` 必須指向投遞資料夾下的 `work/`；這需要使用者以 sudo 建一個符號連結（我不執行 sudo），量完可刪。LD 把同一個 `work/` bind mount 到 `/work`，所以兩個環境讀的是同一批檔案。
+2. **LD 的容器形態**：每個量測項目各 `docker run` 一個容器（交錯所需），以呼叫者的 uid 執行（輸出檔不用 sudo 就能刪）；MD 是一個容器跑完全部、以 root 執行。容器的啟動與使用者身分都不在計時範圍內。寫進報告的限界。
+3. **睡眠**：實機（無系統電池，接市電）的 GNOME 設定「接電源時閒置不睡眠」本來就是 `nothing`；`systemd-inhibit` 經 ssh 被 polkit 拒絕，所以量測以 `NO_INHIBIT=1` 跑，不改任何設定。實機上有使用者的桌面程式與 unattended-upgrades，量測時段請關掉桌面程式；負載照 §3.3 記錄。
+4. **乾跑**（不算量測）：LN 路徑在 Mac 的同映像容器內、LD 路徑在 Mac 主機以 docker CLI，各跑過一次短版（最終版腳本）；實機上 `preflight` 的 Docker 段已通過（image id 相同、LD 內 5／5 個 SHA-256 相同、`nproc` 8、`memory.max` 4 GiB）。正式量測前，在實機以短版交錯（LN＋LD）再跑一次，輸出丟棄。
+
 ## 0. 為什麼（Feature → Contract → Architecture）
 
 - **起因**：前一張卡 `v8-product-pvp-baseline`（[報告](../../../object_fps_pvp/plans/v8/pvp-baseline-report.zh-Hant.md)）在閘門用的 Docker 容器（Intel Mac 上的 Docker Desktop）量 10 次，µs 級指標（M1 重放 tick p95、M3 重放載入、M7 冷啟動）的散佈＝(max−min)／中位數都超過 10%，照宣告停下。
