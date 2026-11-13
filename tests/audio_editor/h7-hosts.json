@@ -1,0 +1,14 @@
+{
+  "format": "gyo.h7-hosts",
+  "version": 1,
+  "generated_by": "manual",
+  "repo_commit": "899b3e38",
+  "owner_root": "tools/audio_editor",
+  "include_roots": [
+    "tools/audio_editor/include"
+  ],
+  "files": [
+    "tools/audio_editor/src/AudioEditorWindow.cpp",
+    "tools/audio_editor/src/Main.cpp"
+  ]
+}
