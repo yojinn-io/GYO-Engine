@@ -539,10 +539,14 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         for (EntityId id : despawns) {
             const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);
             if (at == entities_.end() || *at != id) continue;
+            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole
+            // entity; then destroy in ascending ComponentId (W-7). (Architect's recommendation (a), pending the user.)
             for (std::size_t c = 0; c < columns_.size(); ++c) {
                 if (!columns_[c]->Contains(id)) continue;
                 auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);
                 if (!hooked) return hooked;
+            }
+            for (std::size_t c = 0; c < columns_.size(); ++c) {
                 columns_[c]->Erase(id);
             }
             entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));

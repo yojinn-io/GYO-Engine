@@ -3146,8 +3146,8 @@
       "id": "we-j7-despawn-reverse",
       "what": "J-7: a despawn destroys in descending ComponentId",
       "file": "engine/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
-      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }",
+      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                columns_[c]->Erase(id);\n            }",
       "target": "gyo_kernel_tests",
       "cases": "J-7:*",
       "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:1\",\\ \"0:1\"\\}"
@@ -3985,6 +3985,16 @@
         "tests/common/kernel/store_stamp_guard.py"
       ],
       "expect": "S1 changeTick"
+    },
+    {
+      "id": "we-despawn-onremove-interleaved",
+      "what": "F.2 step 2 (pending (a)): OnRemove and destroy interleave per component",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }",
+      "replace": "                if (!hooked) return hooked;\n                columns_[c]->Erase(id);\n            }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\) == \"mode-removed sees tag:7\""
     }
   ]
 }

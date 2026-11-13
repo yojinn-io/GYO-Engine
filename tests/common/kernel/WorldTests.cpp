@@ -531,6 +531,16 @@ SystemResult LogRemoveTag(HookCtx ctx, Query<Read<Tag>> tags) {
     Log().push_back("remove-tag:" + std::to_string(ctx.Entity()) + "=" + std::to_string(tag != nullptr ? tag->t : -1));
     return Ok();
 }
+SystemResult DespawnOneAtTickOne(Despawn despawn, CurrentTick tick) {
+    if (tick.Tick() == 1) return despawn.Entity(1);
+    return Ok();
+}
+// OnRemove of Mode reads Tag (a smaller ComponentId) of the same entity during its despawn.
+SystemResult ModeRemovedSeesTag(HookCtx ctx, Query<Read<Tag>> tags) {
+    const Tag* tag = tags.Get<Tag>(ctx.Entity());
+    Log().push_back("mode-removed sees tag:" + std::to_string(tag != nullptr ? tag->t : -1));
+    return Ok();
+}
 SystemResult SpawnAlive(SpawnWithId<Bundle<Mode>> spawn) {
     spawn.New(1, Mode{1});
     return Ok();
@@ -562,6 +572,19 @@ TEST_CASE("J-32: two Systems, one key: the later Plan position wins; an overwrit
         KERNEL_REQUIRE_RUN_OK(rig->Run());
         CHECK(Join(Log()) == "remove-tag:2=2");
         CHECK(rig->world().Get<Tag>(1)->t == 10);
+    }
+    SUBCASE("a despawn runs every OnRemove before destroying anything (the whole entity is readable)") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&DespawnOneAtTickOne>(B("DespawnOneAtTickOne", "A"));
+            r.Hook<Mode, &ModeRemovedSeesTag>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesTag", .zone = Zone::B});
+        });
+        rig->world().Insert(1, Tag{7});
+        rig->world().Insert(1, Mode{1});
+        Log().clear();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK(Join(Log()) == "mode-removed sees tag:7");
+        CHECK_FALSE(rig->world().Alive(1));
     }
     SUBCASE("SpawnWithId of an alive id that this window does not despawn fails a GYO_ASSERT") {
         auto rig = MakeRig([](Registrar& r) {
