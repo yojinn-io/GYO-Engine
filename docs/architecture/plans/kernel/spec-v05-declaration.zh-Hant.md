@@ -122,6 +122,19 @@ S-9 與 S-12 互相牽動，一起看。
 
 **取捨**：(b) 是收緊，DI-KS 8 的條文不用改（它已經蘊含這條），只改 spec G.1 Z4 與 J-38 的案例；實作要加一項檢查（不在本批）。
 
+### A-6　F.2 第 7 步（Resource 操作）沒有發出者：刪掉，還是補一個句柄（架構師 2026-11-14 轉達卡 06 world-exec 的發現）
+
+**現況**：spec F.2 第 7 步寫「Resource 操作：依 (ResourceId 升冪, planPos 升冪, recSeq 升冪)」，但 v1 的參數型別裡沒有任何句柄能記錄 Resource 的延後插入／移除（全文掃 `InsertResource`／`RemoveResource`／「Resource 操作」只命中第 664 行這一處）。卡 06 照 spec 實作了這一步，結果是到不了的死碼（卡 06 dev_log〈未加入〉，PR #218，未合併）。
+
+**機制**：Resource 目前只經 `ResMut<T>` 即時寫；登記在 finish 前完成，執行期不增減。第 7 步的排序鍵是預留給「延後插入／移除 Resource」的，但沒有 Feature 指名要它。
+
+**選項**：
+- (a) **建議**：刪掉第 7 步的內容，**保留編號**寫「（v0.5 刪除：v1 無發出者）」，第 8 步不改號（world-exec 的程式註解與 dev_log 都以「0～8 步」引用）。實作的死碼在後續批刪。日後若有 Feature 需要，再在 spec 修訂裡定它的位置與排序鍵。
+- (b) 保留第 7 步，補一個句柄（例如 `Commands` 加 Resource 的延後插入／移除）。要有指名的 Feature（AGENTS §2 Derivation Order），目前找不到。
+- (c) 保留第 7 步不動，註明「v1 無發出者，預留」。
+
+**取捨**：(a) 讓規格與可達的行為一致，代價是日後加回時要重決它在 0～8 步中的位置（同步點的順序影響決定性，屆時是基盤變更）。(c) 省掉那次重決，但留下一條沒有 Feature 支撐、沒有測試能到達的規則（AGENTS §1「將來可能需要」不是根據）。(b) 目前沒有根據。
+
 ---
 
 ## B. 機械性修正（照已定事實改）
@@ -145,8 +158,9 @@ S-9 與 S-12 互相牽動，一起看。
 
 | B-15 | spec A.5 W-8、A.6〈與 EntityStore 的關係〉（架構師 2026-11-13 轉達卡 06 world-exec 的定案） | world-exec 採 `Cell<T>` 包法。W-8 加「元件型別須 nothrow move assignable」，檢查欄指向 world-exec 的 `static_assert`（照它實際的位置寫）；A.6 的「兩者語義相同；spike 選其一並報告」改成「已定 `Cell<T>` 包法（world-exec；`target/world.zh-Hant.md` §6）」。 |
 | B-16 | spec 中提到 store 不持 stamp 的地方（A.6、L.1 `entity_store` 列的 DI 6） | target/world §6 承諾的文字掃描由卡 06 實作為 `tests/common/kernel/store_stamp_guard.py`（ctest `kernel.store_stamp_guard`）；spec 若有引用處，守衛欄對上這個名字。 |
+| B-17 | spec A.6 第二層第 2 點、E.2 System 的第 ⓪ 步（架構師 2026-11-14 轉達卡 06 的發現） | 在 Serial Executor 下第 ⓪ 步（呼叫前比對）到不了：一次 `Run` 開頭的 Ready 窗口比對、同步點套用後重取的快照已涵蓋它能抓到的變化。補一句事實：「Serial 下由 Run 開頭比對與同步點後的重取快照涵蓋，⓪ 不會命中；保留給 Parallel Executor」。不改步驟、不改語義。 |
 
-B-3～B-11 只改事實、不改設計；每處註明引用的決定行。**B-15、B-16 的前提**：卡 06 已合併到 master（2026-11-14 確認時 `target/world.zh-Hant.md` §6 的定案句與 `store_stamp_guard.py` 還不在 origin/master）。動手時若還沒合併，就停下回報架構師，不引用未合併的檔名。
+B-3～B-11 只改事實、不改設計；每處註明引用的決定行。**B-15～B-17 的前提**：卡 06（PR #218）已合併到 master（2026-11-14 確認時 `target/world.zh-Hant.md` §6 的定案句與 `store_stamp_guard.py` 還不在 origin/master）。動手時若還沒合併，就停下回報架構師，不引用未合併的檔名。
 
 ---
 
@@ -178,9 +192,10 @@ B-3～B-11 只改事實、不改設計；每處註明引用的決定行。**B-15
 
 ## 範囲の限界
 
-- A 的決定若要改程式（A-1 B、A-2 (b)(c)、A-4 (b)、A-5 (b)），本批只改規格與計畫；程式、測試與守衛的改動在後續批，那之前**規格與實作不一致**，HANDOFF〈未結事項〉記回頭驗的時點。
+- A 的決定若要改程式（A-1 B、A-2 (b)(c)、A-4 (b)、A-5 (b)、A-6 (a)(b)），本批只改規格與計畫；程式、測試與守衛的改動在後續批，那之前**規格與實作不一致**，HANDOFF〈未結事項〉記回頭驗的時點。
 - A-1 的 Shared 出口：PvP 的配發器是否在 digestSet 未查證（只影響選項 A 的代價描述）。
 - A-3 S-9 (b)：重量的時間窗（舊路徑還在時）與 2～4 h 是推定。
+- 卡 06 另有兩題 F.2 讀法（hook 佇列是否依 schedule 分開、despawn 是否先跑全部 OnRemove）待使用者定；定了由架構師轉來，再決定進 A 還是 B。
 - 繼承的限界：LIM-3（規格文字改了，掃描與檢查的檢出力要在實作批用突變證明）。
 
 ## 停止條件
@@ -196,4 +211,4 @@ B-3～B-11 只改事實、不改設計；每處註明引用的決定行。**B-15
 
 ## 件数の突き合わせ（報告開頭的口徑）
 
-「A 決定 5／5 進 HANDOFF；B 修正 n／16 列落字；錯誤代號重疊 4→0；legacy 行號引用 0→0；過時句 2→0；diff 檔數（docs 以外 0）」。
+「A 決定 6／6 進 HANDOFF；B 修正 n／17 列落字；錯誤代號重疊 4→0；legacy 行號引用 0→0；過時句 2→0；diff 檔數（docs 以外 0）」。
