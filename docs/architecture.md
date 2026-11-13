@@ -51,7 +51,7 @@ GYO-Engine/
 
 `apps/` contains game code. It does not carry test runners, package scripts, editor code, vendor source archives or CI definitions. Tests consume game libraries from outside the game. Root `tools/` is reserved for design support such as UI and map editing. Root `framework/` holds what several products share above the engine: dependencies point game or tool → framework → engine, the engine never names it, and it is built only while a selected product uses it ([framework](framework/architecture.md)). Compilation, integration and release orchestration belong to `build/`. Shader compilation is a rendering responsibility and its implementation stays with `engine/render/shaders/pipeline/`.
 
-A rule that several components must follow because it is a direct consequence of one Engine or framework contract has a single owner, recorded in [cross-component rules](cross-component-rules.md); the other places cite that row instead of restating the rule.
+A rule that several components must follow because it is a direct consequence of one Engine or plugins contract has a single owner, recorded in [cross-component rules](cross-component-rules.md); the other places cite that row instead of restating the rule.
 
 ## Layers: admission and format ownership
 
