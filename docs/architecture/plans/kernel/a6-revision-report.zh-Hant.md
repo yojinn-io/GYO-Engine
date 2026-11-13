@@ -10,8 +10,8 @@
 
 還要使用者定的：
 
-1. **目標 DI 清單的一次核准**（遷移計畫 §7 U13）：清單在 `docs/architecture/target/README.md`〈目標 Design Invariants 清單〉，兩層共 34 條。
-2. **`neutral_names_guard` 要不要停止掃兩份契約文件**（Q10）：§14.4 的 1～5 在本報告〈Q10〉。
+1. **目標 DI 清單的一次核准**（遷移計畫 §7 U13）：清單在 `docs/architecture/target/README.md`〈目標 Design Invariants 清單〉，兩層共 34 條。**已核准**（2026-11-13，`v8-arch-target-di-approved`）。
+2. **`neutral_names_guard` 要不要停止掃兩份契約文件**（Q10）：§14.4 的 1～5 在本報告〈Q10〉。**已定：不放寬**（2026-11-13）。
 3. **36 條裡有 23 條沒有在所在的檔加標註**：宣告的逐檔清單與這 36 條實際所在的檔不對應。要不要由本批補標，見〈36 條重標〉末段。
 
 另有一點請在決定採用頁保護時（U1）一起看：spec A.6 第三層第 6 點——同一種誤用（System 以外寫到欄）在第三層關著時是 Err，開著時是終結。
@@ -83,7 +83,9 @@
 - `Combat.hpp`：(c)，留在 Sim。**與計畫第 41 列「對齊 audit P1 分組」的措辭不同**：區一致（都是 C），初判不同（它是「留」，P1 的「重寫」指 `PvpMatch`）；以 L.3.1 為準。
 - Match 的 build 清單裡的兩個 Present 檔、兩個 Present 標頭含入 `PvpMatch.hpp`、`Sim/PlayerPose` 裡只給 Client 用的函式：都是呈現；搬動由 match-sim 做。
 
-## Q10：`neutral_names_guard` 停止掃兩份契約文件（§14.4 的 1～5；待使用者）
+## Q10：`neutral_names_guard` 停止掃兩份契約文件（§14.4 的 1～5）
+
+**已定（使用者 2026-11-13）：不放寬，維持現狀**；決定行 kernel HANDOFF `v8-arch-neutral-names-guard-keep`。下面的 1～5 留作當時提案的紀錄，沒有執行。
 
 1. **守的性質**：使用這支守衛的 Engine 模組（voxel_mesh、map_markers），它的程式、測試與契約文件都不出現七個玩法名詞（spawn、boss、loot、extract、patrol、team、zone）。
 2. **緩める面**：改後，`docs/architecture/voxel-mesh.md` 與 `map-markers.md` 裡出現這些詞不再讓測試失敗。例：在 voxel-mesh.md 的範例裡寫「loot zone」，以前失敗、改後通過。
