@@ -109,6 +109,16 @@ class Classification(unittest.TestCase):
         self.assertIn("DW.ref.__gxx_personality_v0", foreign)
         self.assert_found({"DW.ref.other"}, "DW.ref.other")
 
+    def test_assembler_section_labels_are_toolchain_data(self):
+        _, foreign = self.assert_clean(guard.parse_darwin(darwin_with(
+            "0000000000000040 (__DATA,__data) non-external ltmp5",
+            "0000000000000048 (__DATA,__bss) non-external ltmp7")))
+        self.assertIn("ltmp5", foreign)
+        self.assertIn("ltmp7", foreign)
+        for name in ("ltmp", "ltmpx", "xltmp5", "GYO::Kernel::ltmp5"):
+            with self.subTest(name=name):
+                self.assert_found({name}, name)
+
     def test_required_name_missing_fails_the_run(self):
         # An empty symbol table (nm read nothing writable) must not pass when the anchor is required.
         present, _, findings = guard.classify(set())
@@ -123,7 +133,7 @@ class Classification(unittest.TestCase):
     def test_allowlist_is_exactly_two_kernel_names_and_two_foreign_names(self):
         self.assertEqual(set(guard.KERNEL_ALLOWED), {"TypeKey anchor", "tlCurrent"})
         self.assertEqual(set(guard.FOREIGN), {"GYO::Base assertion handler", "GYO::Base assertion reentry flag"})
-        self.assertEqual(set(guard.TOOLCHAIN), {"GCC personality reference"})
+        self.assertEqual(set(guard.TOOLCHAIN), {"GCC personality reference", "assembler section label"})
 
     def test_lookalikes_of_allowed_names_are_found(self):
         for name in ("GYO::Kernel::Detail::TypeKeyOf<int>::typeKeyAnchorCopy",

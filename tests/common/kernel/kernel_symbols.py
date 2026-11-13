@@ -12,8 +12,8 @@ those symbols with nm and allows only:
                    defines an inline variable. They belong to that module, not to the kernel: GYO::Base's
                    assertion handler and its thread_local reentry flag (engine/base/include/engine/base/Assert.hpp;
                    spec B.5 names both). They are reported on their own line, never silently;
-  TOOLCHAIN        data the compiler emits for exception handling (GCC's DW.ref.__gxx_personality_v0), reported
-                   the same way.
+  TOOLCHAIN        names the toolchain emits that are not variables (GCC's DW.ref.__gxx_personality_v0; the arm64
+                   assembler's section-start labels ltmpN), reported the same way.
 --require NAME makes an allowed name mandatory (a positive control: an empty result cannot pass).
 
 Writable sections: on ELF (Linux) .data*, .bss*, .tdata*, .tbss*, not .data.rel.ro* (read-only after relocation);
@@ -43,10 +43,13 @@ FOREIGN = {
     "GYO::Base assertion handler": re.compile(r"^Engine::Base::Detail::assertionHandler$"),
     "GYO::Base assertion reentry flag": re.compile(r"^Engine::Base::Detail::reportingAssertion$"),
 }
-# Data the compiler emits for exception handling, not a variable of any source: GCC's indirect reference to the
-# C++ personality routine (DW.ref.__gxx_personality_v0, in .data.rel.local on ELF).
+# Names the toolchain emits that are not a variable of any source: GCC's indirect reference to the C++
+# personality routine (DW.ref.__gxx_personality_v0, in .data.rel.local on ELF) and assembler section labels.
 TOOLCHAIN = {
     "GCC personality reference": re.compile(r"^DW\.ref\.__gxx_personality_v0$"),
+    # The assembler's local label at the start of a section (arm64 Mach-O: "ltmp5", non-external). A variable in that
+    # section still has its own symbol, which is judged by name.
+    "assembler section label": re.compile(r"^ltmp\d+$"),
 }
 ELF_WRITABLE = re.compile(r"^\.(?:data|bss|tdata|tbss)(?:\.|$)")
 ELF_READ_ONLY = re.compile(r"^\.data\.rel\.ro(?:\.|$)")
