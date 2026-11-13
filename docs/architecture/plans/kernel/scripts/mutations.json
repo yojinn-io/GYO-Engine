@@ -1,0 +1,1508 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the kernel scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check, and the two compile-failure sample shapes of spec J-10 (migration plan U5). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir build/target/_build/test --cmake <cmake>. Later kernel batches add their mutants here.",
+  "mutants": [
+    {
+      "id": "ks-k1-registry-ignored",
+      "what": "K1 reads no registered id",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "                for pattern in registered_patterns(identifier):",
+      "replace": "                for pattern in ():",
+      "expect": "FAIL: test_k1_registered_product_id_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k1-camel-dropped",
+      "what": "K1 drops the CamelCase spelling of registered ids",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    return [snake, camel]",
+      "replace": "    return [snake]",
+      "expect": "FAIL: test_k1_registered_id_in_camel_case_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k1-aliases-dropped",
+      "what": "K1 drops the product aliases",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "[re.compile(p) for p in PRODUCT_ALIASES + ROLE_WORDS]",
+      "replace": "[re.compile(p) for p in ROLE_WORDS]",
+      "expect": "FAIL: test_k1_product_alias_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k1-roles-dropped",
+      "what": "K1 drops the connection-role words",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "[re.compile(p) for p in PRODUCT_ALIASES + ROLE_WORDS]",
+      "replace": "[re.compile(p) for p in PRODUCT_ALIASES]",
+      "expect": "FAIL: test_k1_role_word_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k1-registry-missing-silent",
+      "what": "K1 skips a missing registry silently",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "            problems.append(f\"{relative}: K1 registry missing (product names cannot be checked)\")\n            continue",
+      "replace": "            continue",
+      "expect": "FAIL: test_k1_missing_registry_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k1-cmake-unscanned",
+      "what": "K1 does not read CMakeLists.txt",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    return path.suffix in SUFFIXES or path.name == \"CMakeLists.txt\"",
+      "replace": "    return path.suffix in SUFFIXES",
+      "expect": "FAIL: test_k1_name_in_cmakelists_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k2-unordered-dropped",
+      "what": "K2 no longer reports unordered containers",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K2 = re.compile(r\"\\bunordered_\\w*|",
+      "replace": "K2 = re.compile(r\"",
+      "expect": "FAIL: test_k2_unordered_container_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k3-headers-off",
+      "what": "K3 ignores banned headers",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        if kind == \"<\" and target in K3_HEADERS:",
+      "replace": "        if False:",
+      "expect": "FAIL: test_k3_clock_header_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k3-thread-dropped",
+      "what": "K3 drops std::thread",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "s?rand|thread|jthread",
+      "replace": "s?rand|jthread",
+      "expect": "FAIL: test_k3_thread_name_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k4-off",
+      "what": "K4 reports no static variable",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        if is_variable and not allowed_static(",
+      "replace": "        if False and not allowed_static(",
+      "expect": "FAIL: test_k4_function_local_static_cache_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k4-third-symbol",
+      "what": "K4 allowlist gains a third symbol",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    \"typeKeyTag\": r\"^static\\s+inline\\s+char\\s+typeKeyTag\\s*$\",",
+      "replace": "    \"typeKeyTag\": r\"^static\\s+inline\\s+char\\s+typeKeyTag\\s*$\",\n    \"cache\": r\"^static int cache$\",",
+      "expect": "FAIL: test_k4_allowlist_is_exactly_two_symbols",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k4-type-unchecked",
+      "what": "K4 allowlist matches by name only, not by declaration shape",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    return any(re.match(pattern, shape) for pattern in ALLOWED_STATICS.values())",
+      "replace": "    return any(name in shape for name in ALLOWED_STATICS)",
+      "expect": "FAIL: test_k4_allowlisted_name_with_the_wrong_type_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k5-off",
+      "what": "K5 accepts any include",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        if not (project or (kind == \"<\" and target in STANDARD_HEADERS)):",
+      "replace": "        if False:",
+      "expect": "FAIL: test_k5_capability_module_include_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k6-calls-off",
+      "what": "K6 no longer reports log calls",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    if not executor_file:\n        for match in K6.finditer(code):",
+      "replace": "    if False:\n        for match in K6.finditer(code):",
+      "expect": "FAIL: test_k6_log_call_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k6-every-file-exempt",
+      "what": "K6 exempts every file, not only the Executor",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    executor_file = Path(relative).name.startswith(\"Executor\")",
+      "replace": "    executor_file = True",
+      "expect": "FAIL: test_k6_log_header_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k7-near-dropped",
+      "what": "K7 drops near",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K7 = re.compile(r\"\\b(?:far|near|FAR|NEAR)\\b\")",
+      "replace": "K7 = re.compile(r\"\\b(?:far|FAR|NEAR)\\b\")",
+      "expect": "FAIL: test_k7_near_identifier_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k-root-empty-passes",
+      "what": "J-9 passes when engine/kernel is missing",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        return [f\"{SCANNED}: no source to scan (moved or renamed? update this guard)\"]",
+      "replace": "        return []",
+      "expect": "FAIL: test_missing_scan_root_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-forward-off",
+      "what": "N1 forward reports no namespace",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "                elif full and not within(full, mapped):",
+      "replace": "                elif False:",
+      "expect": "FAIL: test_n1_old_engine_namespace_in_kernel_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-prefix-loose",
+      "what": "N1 accepts a namespace that only starts with the mapped name",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "    return name == mapped or name.startswith(mapped + \"::\")",
+      "replace": "    return name == mapped or name.startswith(mapped)",
+      "expect": "FAIL: test_n1_similar_prefix_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-alias-off",
+      "what": "N1 no longer reports a namespace alias",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "                elif full.startswith(\"=\"):",
+      "replace": "                elif False:",
+      "expect": "FAIL: test_n1_namespace_alias_at_file_scope_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-reverse-off",
+      "what": "N1 reverse reports nothing",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "                    if not full.startswith((\"=\", \"?\")) and within(full, mapped):",
+      "replace": "                    if False:",
+      "expect": "FAIL: test_n1_kernel_namespace_outside_kernel_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-nested-lost",
+      "what": "N1 forgets enclosing namespaces",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "            enclosing = \"::\".join(n for n in stack if n)",
+      "replace": "            enclosing = \"\"",
+      "expect": "FAIL: test_n1_nested_kernel_namespace_outside_kernel_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-missing-reverse-root-fails",
+      "what": "N1 treats a missing reverse root as a finding",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "                continue  # a reverse root that does not exist yet (plugins/) is skipped, not a finding",
+      "replace": "                problems.append(f\"{reverse_root}: missing\"); continue",
+      "expect": "FAIL: test_missing_reverse_root_is_skipped_not_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-plugins-dropped",
+      "what": "N1 reverse no longer scans plugins/",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "REVERSE_ROOTS = (\"engine\", \"apps\", \"tools\", \"framework\", \"plugins\", \"tests\")",
+      "replace": "REVERSE_ROOTS = (\"engine\", \"apps\", \"tools\", \"framework\", \"tests\")",
+      "expect": "FAIL: test_n1_kernel_namespace_under_a_future_root_is_reported_once_it_exists",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-mapped-root-silent",
+      "what": "naming guard passes when engine/kernel is missing",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "            problems.append(f\"{directory}: no source to scan (moved or renamed? update this guard)\")\n            continue",
+      "replace": "            continue",
+      "expect": "FAIL: test_missing_mapped_root_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n3-off",
+      "what": "N3 reports no suffix",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "                if ROLE_SUFFIX.search(name.split(\"::\")[-1]):",
+      "replace": "                if False:",
+      "expect": "FAIL: test_n3_host_suffix_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n3-using-dropped",
+      "what": "N3 no longer reads using aliases",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "    r\"|\\busing\\s+(\\w+)\\s*=\"\n",
+      "replace": "    r\"|\\busing\\s+(\\w+)\\s*=(?!)\"\n",
+      "expect": "FAIL: test_n3_runtime_alias_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n3-suffix-dropped",
+      "what": "N3 drops the Controller suffix",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "ROLE_SUFFIXES = (\"Manager\", \"Renderer\", \"ViewModel\", \"Host\", \"Shell\", \"Runtime\", \"Controller\")",
+      "replace": "ROLE_SUFFIXES = (\"Manager\", \"Renderer\", \"ViewModel\", \"Host\", \"Shell\", \"Runtime\")",
+      "expect": "FAIL: test_role_suffixes_are_naming_rule_5",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-real-product-name",
+      "what": "a registered product name enters engine/kernel (spec J-9 mutation: add a product name)",
+      "file": "engine/kernel/include/engine/kernel/Kernel.hpp",
+      "find": "namespace GYO::Kernel {\n}",
+      "replace": "namespace GYO::Kernel {\nstruct ObjectFpsPvpState {};\n}",
+      "expect": "K1 ObjectFpsPvp",
+      "command": [
+        "{python}",
+        "-B",
+        "tests/common/kernel/kernel_guard.py"
+      ]
+    },
+    {
+      "id": "ks-real-log-call",
+      "what": "a log call enters engine/kernel outside the Executor",
+      "file": "engine/kernel/include/engine/kernel/Kernel.hpp",
+      "find": "namespace GYO::Kernel {\n}",
+      "replace": "namespace GYO::Kernel {\ninline void Report() { printf(\"x\"); }\n}",
+      "expect": "K6 printf",
+      "command": [
+        "{python}",
+        "-B",
+        "tests/common/kernel/kernel_guard.py"
+      ]
+    },
+    {
+      "id": "ks-real-role-suffix",
+      "what": "a type with a role suffix enters engine/kernel",
+      "file": "engine/kernel/include/engine/kernel/Kernel.hpp",
+      "find": "namespace GYO::Kernel {\n}",
+      "replace": "namespace GYO::Kernel {\nstruct WorldHost {};\n}",
+      "expect": "N3 type WorldHost",
+      "command": [
+        "{python}",
+        "-B",
+        "tests/common/kernel/naming_guard.py"
+      ]
+    },
+    {
+      "id": "ks-real-old-namespace",
+      "what": "engine/kernel uses the old Engine:: namespace",
+      "file": "engine/kernel/include/engine/kernel/Kernel.hpp",
+      "find": "namespace GYO::Kernel {\n}",
+      "replace": "namespace Engine::Kernel {\n}",
+      "expect": "N1 namespace Engine::Kernel",
+      "command": [
+        "{python}",
+        "-B",
+        "tests/common/kernel/naming_guard.py"
+      ]
+    },
+    {
+      "id": "ks-links-extra",
+      "what": "gyo_kernel links one more target (Delta-1 dependency)",
+      "file": "engine/kernel/CMakeLists.txt",
+      "find": "target_link_libraries(gyo_kernel INTERFACE GYO::Base)",
+      "replace": "target_link_libraries(gyo_kernel INTERFACE GYO::Base GYO::Math)",
+      "expect": "gyo_kernel links .*expected exactly GYO::Base",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true
+    },
+    {
+      "id": "ks-sample-a-no-assert",
+      "what": "sample (a): the registration point no longer rejects a callable with state",
+      "file": "tests/common/kernel/compile_fail/SampleContract.hpp",
+      "find": "    static_assert(kAccepted<Callable>, \"GYO_KERNEL_SAMPLE_REJECTED: a system callable has state\");",
+      "replace": "    (void)sizeof(Callable);",
+      "expect": "kernel\\.compile_fail_sample: a callable with state compiled",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true
+    },
+    {
+      "id": "ks-sample-a-control-broken",
+      "what": "sample (a): the control no longer compiles",
+      "file": "tests/common/kernel/compile_fail/RejectsCapturingCallable.cpp",
+      "find": "    const auto system = [](int input) { return input + 1; };",
+      "replace": "    const auto system = [value](int input) { return input + 1; };",
+      "expect": "kernel\\.compile_fail_sample: the control .* did not",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true
+    },
+    {
+      "id": "ks-sample-a-wrong-failure",
+      "what": "sample (a): the rejected build fails for another reason, before the registration point is reached",
+      "file": "tests/common/kernel/compile_fail/RejectsCapturingCallable.cpp",
+      "find": "    const auto system = [value](int input) { return input + value; };",
+      "replace": "    const auto system = undeclared_name;",
+      "expect": "kernel\\.compile_fail_sample: the rejected build failed without",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true
+    },
+    {
+      "id": "ks-sample-b-reference-accepted",
+      "what": "sample (b): the trait accepts a capture by reference (sample (a) does not build that case)",
+      "file": "tests/common/kernel/compile_fail/SampleContract.hpp",
+      "find": "inline constexpr bool kAccepted = std::is_empty_v<Callable>;",
+      "replace": "inline constexpr bool kAccepted = std::is_empty_v<Callable> || sizeof(Callable) == sizeof(void*);",
+      "expect": "kAccepted<decltype\\(by_reference\\)>",
+      "target": "gyo_kernel_tests",
+      "cases": "Kernel compile-failure sample (b)*"
+    },
+    {
+      "id": "ks-adv-line-comment-to-eof",
+      "what": "a // comment swallows the rest of the file (review B1)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "            end = text.find(\"\\n\", i)\n            end = n if end < 0 else end\n",
+      "replace": "            end = n\n",
+      "expect": "FAIL: test_findings_after_a_line_comment_are_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-block-comment-off",
+      "what": "block comments are not blanked (review: only more false positives)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        elif text.startswith(\"/*\", i):",
+      "replace": "        elif False:",
+      "expect": "FAIL: test_findings_after_a_block_comment_raw_string_and_digit_separator_are_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-executor-exempt-all",
+      "what": "the Executor file is exempt from every rule (review B2)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    if Path(relative).suffix not in SUFFIXES:\n        return",
+      "replace": "    if Path(relative).suffix not in SUFFIXES or Path(relative).name.startswith(\"Executor\"):\n        return",
+      "expect": "FAIL: test_executor_file_is_checked_by_every_other_rule",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-stack-never-pops",
+      "what": "namespace braces are never closed (review B3)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "            if stack:\n                stack.pop()",
+      "replace": "            pass",
+      "expect": "FAIL: test_n1_second_namespace_in_a_file_is_checked",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-include-allowlist-widened",
+      "what": "the project include allowlist gains engine/os (review B4)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\", \"engine/os/\")",
+      "expect": "FAIL: test_k5_project_allowlist_is_exactly_base_and_kernel",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-standard-headers-widened",
+      "what": "platform headers enter the standard header list (review B5)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    cstdio cstdlib cstring ctime cuchar cwchar cwctype\n",
+      "replace": "    cstdio cstdlib cstring ctime cuchar cwchar cwctype pthread.h unistd.h\n",
+      "expect": "FAIL: test_k5_platform_and_third_party_headers_are_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-reverse-roots-shrunk",
+      "what": "reverse roots lose apps, tools and framework (review B6)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "REVERSE_ROOTS = (\"engine\", \"apps\", \"tools\", \"framework\", \"plugins\", \"tests\")",
+      "replace": "REVERSE_ROOTS = (\"engine\", \"plugins\", \"tests\")",
+      "expect": "FAIL: test_n1_reverse_roots_are_pinned",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-kernel-suffixes-shrunk",
+      "what": "J-9 reads only .cpp and .hpp (review B7)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "SUFFIXES = {\".c\", \".cc\", \".cpp\", \".cxx\", \".h\", \".hh\", \".hpp\", \".hxx\", \".inl\", \".ipp\", \".tpp\", \".inc\", \".ixx\"}",
+      "replace": "SUFFIXES = {\".cpp\", \".hpp\"}",
+      "expect": "FAIL: test_template_implementation_file_is_scanned",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-naming-suffixes-shrunk",
+      "what": "the naming guard reads only .cpp and .hpp (review B8)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "SUFFIXES = KERNEL_SUFFIXES | {\".m\", \".mm\"}",
+      "replace": "SUFFIXES = {\".cpp\", \".hpp\"}",
+      "expect": "FAIL: test_n1_every_source_type_is_scanned",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-registry-case-sensitive",
+      "what": "registered ids are matched case-sensitively (review B9)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "+ r\"(?![A-Za-z0-9])\", re.IGNORECASE)",
+      "replace": "+ r\"(?![A-Za-z0-9])\")",
+      "expect": "FAIL: test_k1_registered_id_ignores_case",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-alias-dropped-fps-pvp",
+      "what": "the product alias r\"fps::pvp\", is dropped (review B10-B12)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    r\"fps::pvp\",     # object_fps_pvp: C++ namespace of its code; the id splits as object/fps/pvp, not fps::pvp\n",
+      "replace": "",
+      "expect": "FAIL: test_k1_every_product_alias_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-alias-dropped-pvp",
+      "what": "the product alias r\"\\b[Pp]vp\", is dropped (review B10-B12)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    r\"\\b[Pp]vp\",     # object_fps_pvp: the short product word used in its type names (PvpMatch); only the id's last part\n",
+      "replace": "",
+      "expect": "FAIL: test_k1_every_product_alias_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-alias-dropped-gyo-tools",
+      "what": "the product alias r\"Gyo::Tools\", is dropped (review B10-B12)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    r\"Gyo::Tools\",   # the four tools (tools.csv): their shared C++ namespace root; not part of any tool id\n",
+      "replace": "",
+      "expect": "FAIL: test_k1_every_product_alias_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-role-player-case",
+      "what": "the role word matches Player only (review B13)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "r\"[Pp]layer\"",
+      "replace": "r\"Player\"",
+      "expect": "FAIL: test_k1_every_role_word_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-k3-headers-shrunk",
+      "what": "K3 bans only <chrono> (review B14)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K3_HEADERS = (\"chrono\", \"random\", \"thread\", \"atomic\", \"mutex\", \"condition_variable\", \"future\", \"shared_mutex\",\n              \"stop_token\", \"semaphore\", \"latch\", \"barrier\", \"ctime\", \"time.h\", \"execution\")",
+      "replace": "K3_HEADERS = (\"chrono\",)",
+      "expect": "FAIL: test_k3_every_banned_header_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-k3-names-shrunk",
+      "what": "K3 bans only std::thread and std::atomic (review B15)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "mt19937\\w*|s?rand|thread|jthread|this_thread|atomic\\w*|mutex|execution\"\n                r\"|clock|time)",
+      "replace": "thread|atomic\\w*)",
+      "expect": "FAIL: test_k3_every_banned_name_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-k3-srand-call",
+      "what": "K3 call pattern drops srand (review B16)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "(?:::)?(?:s?rand|time|clock)\\s*\\(",
+      "replace": "(?:::)?(?:rand|time|clock)\\s*\\(",
+      "expect": "FAIL: test_k3_every_banned_call_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-log-headers-cstdio",
+      "what": "K6 drops <cstdio> (review B17)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "LOG_HEADERS = (\"iostream\", \"cstdio\", \"print\", \"engine/base/Log.hpp\")",
+      "replace": "LOG_HEADERS = (\"iostream\", \"print\", \"engine/base/Log.hpp\")",
+      "expect": "FAIL: test_k6_every_log_header_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-k6-set-log-handler",
+      "what": "K6 drops SetLogHandler (review B18)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "r\"\\bLog\\s*\\(|\\bSetLogHandler\\b|",
+      "replace": "r\"\\bLog\\s*\\(|",
+      "expect": "FAIL: test_k6_every_log_call_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-standard-header-in-quotes",
+      "what": "a standard header in quotes is accepted (review B19)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "(kind == \"<\" and target in STANDARD_HEADERS)",
+      "replace": "(target in STANDARD_HEADERS)",
+      "expect": "FAIL: test_k5_standard_header_in_quotes_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-string-to-eof",
+      "what": "an unterminated string swallows the rest of the file (review B20)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "while j < n and text[j] != c and text[j] != \"\\n\":",
+      "replace": "while j < n and text[j] != c:",
+      "expect": "FAIL: test_finding_after_an_unterminated_string_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-n3-keywords-shrunk",
+      "what": "N3 reads only class, struct and enum class (review B21)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "r\"\\b(?:class|struct|union|enum(?:\\s+(?:class|struct))?|concept)\\s+",
+      "replace": "r\"\\b(?:class|struct|enum\\s+class)\\s+",
+      "expect": "FAIL: test_n3_every_declaration_keyword_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-adv-n3-attributes-dropped",
+      "what": "N3 no longer skips attributes and alignas (review B22)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "(?:\\[\\[[^\\]]*\\]\\]\\s*)?(?:alignas\\s*\\([^)]*\\)\\s*)?\"\n",
+      "replace": "\"\n",
+      "expect": "FAIL: test_n3_every_declaration_keyword_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k0-silent",
+      "what": "a file type the guard cannot scan passes silently (review A1)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "            problems.append(f\"{relative}:1: K0 file type this guard does not scan ({path.suffix or path.name})\")\n            continue",
+      "replace": "            continue",
+      "expect": "FAIL: test_unscanned_file_type_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k5-parent-directory",
+      "what": "a project include with .. is accepted (review A2)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": " and \"..\" not in target.split(\"/\")",
+      "replace": "",
+      "expect": "FAIL: test_k5_parent_directory_in_a_project_include_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k5-unreadable-silent",
+      "what": "an unreadable include target passes (review A3)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "            yield number, \"K5\", \"unreadable include target: \" + raw_line.strip()\n            continue",
+      "replace": "            continue",
+      "expect": "FAIL: test_macro_include_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k5-splitlines",
+      "what": "raw and code lines are split with splitlines (review A3)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "zip(raw.split(\"\\n\"), code.split(\"\\n\"))",
+      "replace": "zip(raw.splitlines(), code.splitlines())",
+      "expect": "FAIL: test_form_feed_in_a_comment_does_not_shift_lines",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k5-bom",
+      "what": "files are read without dropping a BOM (review A3)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "raw = path.read_text(encoding=\"utf-8-sig\")",
+      "replace": "raw = path.read_text(encoding=\"utf-8\")",
+      "expect": "FAIL: test_include_on_the_first_line_after_a_bom_is_read",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k5-directive-include-only",
+      "what": "only #include is read as a directive (review A3)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "(?:#|%:)[ \\t]*(?:include_next|include|import)\\b",
+      "replace": "#[ \\t]*include\\b",
+      "expect": "FAIL: test_import_and_digraph_include_are_read",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k4-constexpr-after-only",
+      "what": "constexpr before static is not seen (review A5)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "re.search(r\"\\b(?:constexpr|consteval)\\b\", prefix + declaration)",
+      "replace": "re.search(r\"\\b(?:constexpr|consteval)\\b\", declaration)",
+      "expect": "FAIL: test_k4_legal_function_and_constant_shapes_pass",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k4-attribute-parameter",
+      "what": "an attribute at the start of the parameters reads as initialization (review A5)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    if text == \"\" or text.startswith(\"[[\"):",
+      "replace": "    if text == \"\":",
+      "expect": "FAIL: test_k4_legal_function_and_constant_shapes_pass",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k4-any-name-is-a-parameter",
+      "what": "a single name in parentheses reads as a parameter list (review A5)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    return rest != \"\" and not rest.startswith((\",\", \"+\", \"-\", \"/\", \"%\", \"|\", \"^\", \"?\", \".\"))",
+      "replace": "    return True",
+      "expect": "FAIL: test_k4_direct_initialized_from_a_name_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k4-type-key-shape-loose",
+      "what": "the typeKeyTag shape accepts any type (review A6)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "\"typeKeyTag\": r\"^static\\s+inline\\s+char\\s+typeKeyTag\\s*$\",",
+      "replace": "\"typeKeyTag\": r\"^static.*typeKeyTag\\s*$\",",
+      "expect": "FAIL: test_k4_allowlisted_names_with_another_shape_are_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k7-uppercase-dropped",
+      "what": "K7 drops FAR and NEAR (review A7)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "K7 = re.compile(r\"\\b(?:far|near|FAR|NEAR)\\b\")",
+      "replace": "K7 = re.compile(r\"\\b(?:far|near)\\b\")",
+      "expect": "FAIL: test_k7_uppercase_macros_are_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k2-bare-hash-dropped",
+      "what": "K2 drops hash< under using namespace std (review A7)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "|\\bstd::hash\\b|(?<![\\w:])hash\\s*<\")",
+      "replace": "|\\bstd::hash\\b\")",
+      "expect": "FAIL: test_k2_hash_under_using_namespace_std_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-linkage-block-named",
+      "what": "a linkage block counts as a named namespace (review A9)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "stack.append(pending if pending is not None else None)",
+      "replace": "stack.append(pending if pending is not None else \"linkage\")",
+      "expect": "FAIL: test_n1_namespace_inside_a_linkage_block_is_checked",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-attribute-unread",
+      "what": "an attributed namespace is not read (review A9)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "NAMESPACE = re.compile(r\"namespace\\s*(?:\\[\\[[^\\]]*\\]\\]\\s*)?(",
+      "replace": "NAMESPACE = re.compile(r\"namespace\\s*(",
+      "expect": "FAIL: test_n1_attributed_namespace_is_read",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-unreadable-silent",
+      "what": "an unreadable namespace declaration is not reported as such (review A9)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "                if full.startswith(\"?\"):",
+      "replace": "                if False:",
+      "expect": "FAIL: test_n1_unreadable_namespace_declaration_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n1-inline-substring",
+      "what": "inline is removed as a substring (review A9: Mainline)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "r\"\\s+|\\binline\\b\"",
+      "replace": "r\"\\s+|inline\"",
+      "expect": "FAIL: test_n1_inline_nested_namespace_keeps_its_name",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n3-typedef-dropped",
+      "what": "N3 drops typedef (review A9)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "\n    r\"|\\btypedef\\b[^;{}]*?(\\w+)\\s*(?:\\[[^\\]]*\\]\\s*)*;\")",
+      "replace": "\n    r\"|(?!)(\\w+)\")",
+      "expect": "FAIL: test_n3_every_declaration_keyword_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-n3-qualified-dropped",
+      "what": "N3 reads only the first part of a qualified name (review A9)",
+      "file": "tests/common/kernel/naming_guard.py",
+      "find": "    r\"(\\w+(?:\\s*::\\s*\\w+)*)\"",
+      "replace": "    r\"(\\w+)\"",
+      "expect": "FAIL: test_n3_every_declaration_keyword_is_reported",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_naming_guard.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "ks-k1-word-boundary-dropped",
+      "what": "K1 matches registered ids anywhere, without word boundaries (architect 2026-11-13, review A8)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    snake = re.compile(r\"(?<![A-Za-z0-9])\" + re.escape(identifier) + r\"(?![A-Za-z0-9])\", re.IGNORECASE)\n    camel = re.compile(r\"(?<![A-Z])\" + re.escape(camel_case(identifier)) + r\"(?![a-z])\")",
+      "replace": "    snake = re.compile(re.escape(identifier), re.IGNORECASE)\n    camel = re.compile(re.escape(camel_case(identifier)), re.IGNORECASE)",
+      "expect": "FAIL: test_k1_registered_id_matches_as_a_word_not_inside_other_words",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ]
+    }
+  ]
+}
