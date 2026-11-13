@@ -9,11 +9,13 @@
 
 | 代號 | 白話 |
 |---|---|
+| `v8-arch-json-library-survey` | J3 定了之後比較 JSON 函式庫（六條判準實測、只列建議）；2026-11-13 宣告待核准 |
 | `v8-arch-third-party-evaluation` | 使用者 2026-11-10 問「Engine 裡有大量重複的輪子，是否需要自己實作」；對 14 個子系統逐列比較自製與成熟開源方案，給判定與取捨，不替使用者決定 |
 
 ## 文件
 
 - [逐列評估](evaluation.zh-Hant.md)：每列的 GYO 現況、Feature 需求、候選方案的事實、**限制（採用後會卡在哪裡）**、判定、代價、要使用者決定的事；末節是對抗檢查與逐條回應。
+- [JSON 函式庫調查的事前宣告](json-library-survey-declaration.zh-Hant.md)（`v8-arch-json-library-survey`，待核准）。
 - [交接（HANDOFF）](HANDOFF.md)：記錄器（起因、模型／檔位、估時、經過、決定）。
 - 來源清單：主 checkout `build/evidence/third-party-evaluation/sources.txt`（git 不追蹤；偵察子代理的原始報告也在同一夾）。
 

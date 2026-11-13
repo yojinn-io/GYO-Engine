@@ -41,3 +41,14 @@
 - 2026-11-11：使用者「先停下，和架構師商量好了再說」。本會話停止，D0～D9 與 DET-0～3 都等使用者；PR #176 維持開啟（不合併、不再改）。
 
 - 2026-11-11（架構師，合併前加註）：使用者定方向 `v8-arch-kernel-bring-into-gyo`（mechanism.zh-Hant.md，PR #175 已合併）。ECS 列「自製（維持）」在新前提下不成立，標為待重判（Scheduler 自寫已定；World 儲存層借 EnTT 或自寫待規格與 spike）；D1～D4、D7、D8 標延後。同一提交順帶修 determinism.md 三處（E4 改為「由 mechanism §3.1 吸收」、DET-3 的 E1／E3 時機改為「(c) 區 System 遷移前」、§4.7 EntityStore 指向 World 契約）。
+
+## `v8-arch-json-library-survey`（JSON 函式庫的選擇調查，2026-11-13 起）
+
+| 代號 | 白話 |
+|---|---|
+| `v8-arch-json-library-survey` | J3（Engine 的中性文件樹＋唯一 adapter）定了之後，比較哪個 JSON 函式庫適合當那個 adapter；六條判準實測，結論只列建議 |
+
+- 卡片：架構師會話開出。分支 `claude/arch-json-library-survey`（自 `origin/master` `b9bf1962`）。模型／檔位：Opus 5.5／high；審查擬 Fable／high（待使用者同意）。
+- 估時：宣告 1.5 h、本機實測 5～7 h、CI 2～3 h、報告與審查 3～4 h，合計 11.5～15.5 h。
+- 2026-11-13：讀規劃稿 #212 §4 未決 1、本夾 evaluation、`StrictJson.hpp`、`AnimationEvents.cpp`、determinism.md §4.6；以 `git grep -P` 重數使用點（Engine 8＋建置期 1、framework 2、apps 7、tools 18；輸出存主 checkout `build/evidence/json-library-survey/usage-grep-20261113.txt`）；以 `gh api` 查候選版本、授權、大小。本機是 macOS x86_64，不在 L1 三平台內。
+- 2026-11-13：寫完事前宣告 [`json-library-survey-declaration.zh-Hant.md`](json-library-survey-declaration.zh-Hant.md)。**現況：停下等使用者核准（下載清單、三平台跑法 A／B／C、候選增刪、判準細則、審查模型）。未下載任何東西。**
