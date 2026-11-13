@@ -46,9 +46,10 @@
 
 | 代號 | 白話 |
 |---|---|
-| `v8-arch-json-library-survey` | J3（Engine 的中性文件樹＋唯一 adapter）定了之後，比較哪個 JSON 函式庫適合當那個 adapter；六條判準實測，結論只列建議 |
+| `v8-arch-json-library-survey` | 比較 JSON 函式庫，並寫出每個候選在 J1～J4（未決 1）下的意義；方向與函式庫都未定，六條判準實測，結論只列建議 |
 
 - 卡片：架構師會話開出。分支 `claude/arch-json-library-survey`（自 `origin/master` `b9bf1962`）。模型／檔位：Opus 5.5／high；審查擬 Fable／high（待使用者同意）。
 - 估時：宣告 1.5 h、本機實測 5～7 h、CI 2～3 h、報告與審查 3～4 h，合計 11.5～15.5 h。
 - 2026-11-13：讀規劃稿 #212 §4 未決 1、本夾 evaluation、`StrictJson.hpp`、`AnimationEvents.cpp`、determinism.md §4.6；以 `git grep -P` 重數使用點（Engine 8＋建置期 1、framework 2、apps 7、tools 18；輸出存主 checkout `build/evidence/json-library-survey/usage-grep-20261113.txt`）；以 `gh api` 查候選版本、授權、大小。本機是 macOS x86_64，不在 L1 三平台內。
 - 2026-11-13：寫完事前宣告 [`json-library-survey-declaration.zh-Hant.md`](json-library-survey-declaration.zh-Hant.md)。**現況：停下等使用者核准（下載清單、三平台跑法 A／B／C、候選增刪、判準細則、審查模型）。未下載任何東西。**
+- 2026-11-13：架構師轉達使用者更正——未決 1 不是 J3，方向與函式庫都未定。宣告改為不以 J3 為前提：判準 3 分「原文路（J2／J3）」與「候選轉換路（J1／J4）」各自判定，3b 不過寫成該選項不成立、不停下；新增 §3.7「對各方向的影響」；審查者選項加入架構師建議（Opus 另一代理）。仍停下等使用者核准。
