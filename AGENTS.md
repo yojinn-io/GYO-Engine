@@ -37,6 +37,11 @@
 * 変更範囲をできるだけ局所化する。
 * 既存の設計意図が不明な場合、それを「誤り」と仮定しない。
 * Product / Module / Tool の owner を確認してから、その責務を変更する。
+* Engine または framework の Contract から直接出てくる規則
+  （例：「Contract は X しか保証しないので、使う側はすべて Y をする」）を実装する前に、
+  `docs/cross-component-rules.md` と、他の Product・Tool の同じ実装を調べる。
+  見つかれば引用または共用し、自分の言葉で書き直さない。見つからなければ owner を決めて登録する。
+  owner がはっきりしない、または争いがある場合は、Feature の作業の中で決めない（登録ページの手順に従う）。
 
 ### MUST NOT
 
@@ -367,6 +372,9 @@ Product の追加・複製・削除によって検証する。
 * 新しい Dependency Edge を追加する場合、既存の Dependency Direction を確認する。
 * Product 間依存が必要な場合は明示する。
 * Product 固有 Knowledge を reusable Engine layer へ漏らさない。
+* Engine と、Product に依存しない共通層に、型・関数・Format のフィールドを追加または改名するときは、
+  その名前が誰の概念を指すかを確かめる
+  （名前は概念の tag である。詳しくは `docs/architecture/target/naming.zh-Hant.md` の Design Invariant 4）。
 
 ### MUST NOT
 
@@ -721,6 +729,8 @@ Architecture Drift を確認する。
 * Product-specific Branch が共通層へ追加された箇所
 * Editor / Runtime Boundary の破壊
 * Product Removability を阻害する Reference
+* Engine・共通層の名前が Product の概念を指していないか。
+  名前が中立でも、中立の値に特定の Product だけが分かる処理をしていないか。
 * 他の Component が権威を持つ状態の写し、またはそれに基づく判断の追加
 * Component の Design Invariants に反する変更
 
