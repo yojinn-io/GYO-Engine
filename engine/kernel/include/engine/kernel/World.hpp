@@ -359,8 +359,16 @@ private:
     // The current sync window's deferred records and the hook queue (records
     // of hooks, applied first at the next sync point: spec F.2 step 0).
     std::vector<Detail::Record> window_;
-    std::vector<Detail::Record> hookQueue_;
-    std::uint32_t hookRecSeq_ = 0;
+    // One hook queue per schedule: a hook's records are applied at step 0 of the next
+    // sync point of the schedule that ran it, so another schedule run in between does
+    // not change a (c) result (architect's recommendation (a), pending the user).
+    struct HookQueue {
+        std::string schedule;
+        std::vector<Detail::Record> records;
+        std::uint32_t recSeq = 0;
+    };
+    std::vector<HookQueue> hookQueues_;
+    [[nodiscard]] HookQueue& HookQueueOf(std::string_view schedule);
 
     ChangeStamp stamp_ = 0;
     std::uint64_t syncEpoch_ = 0;

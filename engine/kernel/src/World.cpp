@@ -62,6 +62,16 @@ World::World(const Registry& registry, std::string name)
     static_cast<Detail::ResourceSlot<KernelSettings>&>(*resources_[data.kernelSettings]).value = KernelSettings{};
     excluded_.assign(columns_.size(), false);
     for (const Detail::HookRecord& hook : data.hooks) hookAccess_.push_back(Detail::MakeAccessDesc(hook.access));
+    // Made up front: a bucket's address never changes while a hook records into it.
+    for (const Detail::ScheduleRecord& schedule : data.schedules) hookQueues_.push_back(HookQueue{schedule.options.name, {}, 0});
+}
+
+World::HookQueue& World::HookQueueOf(std::string_view schedule) {
+    for (HookQueue& queue : hookQueues_) {
+        if (queue.schedule == schedule) return queue;
+    }
+    GYO_ASSERT(false && "no hook queue for this schedule");
+    return hookQueues_.front();
 }
 
 // Spec W-7: columns in ascending ComponentId order, each in ascending EntityId order (Column's destructor).
@@ -437,8 +447,9 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.lastRun = 0;
     call.callSerial = ++callSerial_;
     call.syncEpoch = syncEpoch_;
-    call.queue = &hookQueue_;
-    call.recSeq = &hookRecSeq_;
+    HookQueue& queue = HookQueueOf(schedule);
+    call.queue = &queue.records;
+    call.recSeq = &queue.recSeq;
     call.hookEntity = entity;
     call.hookComponent = component;
     // Layer 2 around a hook (spec A.6): a hook writes no storage directly (its
@@ -647,9 +658,10 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     };
 
     // Step 0: the previous window's hook records first; hooks they trigger record into the next window.
-    std::vector<Record> hookRecords = std::move(hookQueue_);
-    hookQueue_.clear();
-    hookRecSeq_ = 0;
+    HookQueue& queue = HookQueueOf(schedule);
+    std::vector<Record> hookRecords = std::move(queue.records);
+    queue.records.clear();
+    queue.recSeq = 0;
     std::vector<Record> windowRecords = std::move(window_);
     window_.clear();
     const std::vector<Record> none;
@@ -663,8 +675,10 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
 void World::DiscardDeferred() noexcept {
     window_.clear();
-    hookQueue_.clear();
-    hookRecSeq_ = 0;
+    for (HookQueue& queue : hookQueues_) {
+        queue.records.clear();
+        queue.recSeq = 0;
+    }
 }
 
 void World::TrimEvents(Domain domain) {

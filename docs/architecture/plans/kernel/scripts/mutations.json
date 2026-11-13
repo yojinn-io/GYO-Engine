@@ -3377,7 +3377,7 @@
       "what": "J-34 (F-4): hook records applied in the same Applying",
       "file": "engine/kernel/src/World.cpp",
       "find": "    if (Result rest = phase(windowRecords, none); !rest) return rest;",
-      "replace": "    if (Result rest = phase(windowRecords, none); !rest) return rest;\n    {\n        std::vector<Record> again = std::move(hookQueue_);\n        hookQueue_.clear();\n        if (Result now = phase(again, none); !now) return now;\n    }",
+      "replace": "    if (Result rest = phase(windowRecords, none); !rest) return rest;\n    {\n        std::vector<Record> again = std::move(queue.records);\n        queue.records.clear();\n        if (Result now = phase(again, none); !now) return now;\n    }",
       "target": "gyo_kernel_tests",
       "cases": "J-34:*",
       "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"first:4\\ second:4\\ modes@1:0\""
@@ -3995,6 +3995,16 @@
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "Join\\(Log\\(\\)\\) == \"mode-removed sees tag:7\""
+    },
+    {
+      "id": "we-hook-queue-one-per-world",
+      "what": "F.2 step 0 (pending (a)): one hook queue for the whole World (another schedule's sync point applies it)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    HookQueue& queue = HookQueueOf(schedule);\n    std::vector<Record> hookRecords = std::move(queue.records);",
+      "replace": "    HookQueue& queue = hookQueues_.front();\n    for (HookQueue& other : hookQueues_) {\n        if (&other != &queue) {\n            for (Record& r : other.records) queue.records.push_back(std::move(r));\n            other.records.clear();\n        }\n    }\n    std::vector<Record> hookRecords = std::move(queue.records);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "another schedule's sync point applied Tick's hook records"
     }
   ]
 }
