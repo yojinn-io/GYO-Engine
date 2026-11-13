@@ -163,6 +163,25 @@
 - **simdjson**：J2／J3 下，嚴格檢查用 DOM、原文用 On-Demand，要解析兩遍（DOM 交不出小數的原文；DOM 有 `number_as_string(true)` 可把大整數存成文字，`simdjson.h:7060`，沒有測）；沒有可改的樹，寫出靠 adapter 自己（中性樹本來就自己保存順序，所以這點在 J2／J3 下影響小）；超出 64 位元的整數預設拒絕。J1／J4 下不適合（沒有可改的 DOM，資產目錄改寫要每處自己重寫）。
 - **jsoncons**：預設接受註解（要明設 `allow_comments(false)`）；不成對的代理跳脫被靜默改寫且 adapter 補不上（除非自己再掃原文）；整數沒有原文。
 
+### 3.1 使用者在 #212 複核中提到的形狀（未定，只是讓差異看得清楚）
+
+形狀：選一個基礎 JSON 函式庫，包上 GYO 自己的介面，Engine 只經它唯一的內部 adapter 連那個函式庫（不完全自寫；理由是維護與 bug 的成本）。位置上大致對應 J3，但**數字怎麼交給 Engine 沒有定**，所以下表兩條路都列：(A) adapter 交出數字原文、由 Engine 轉（3a＋3b）；(B) adapter 用函式庫自己的轉換、交出 double／整數（3c）。數字以外的項目兩條路相同。
+
+「包裝層要補的」＝依本批實測，adapter（或 GYO 介面）在函式庫之上要自己做的事。
+
+| 候選 | 嚴格解析要補的（判準 1） | 重複鍵（判準 2） | 數字：路 A 要補的 | 數字：路 B 要補的 | 寫出與順序（判準 4） | 包裝的形狀 |
+|---|---|---|---|---|---|---|
+| nlohmann | 擋「數字後接 NUL」（今天就沒擋）；其餘與今天相同 | adapter 在 SAX 事件裡做（今天 `StrictJson` 的做法） | 整數沒有原文：要從整數值重組，`-0` 的符號救不回；超大數整份被拒（與 Engine 會拒的結果相同） | 無（`-0` 讀成 `+0.0`、範圍外整份被拒，與今天相同） | `ordered_json` 直接可用 | C++ header-only；今天就在用 |
+| Boost.JSON | 溢位數字被接受成 ±inf：路 A 由 Engine 擋，路 B 由 adapter 檢查 `isinf`；`max_depth` 要設 | 只能在 handler 做（DOM 丟重複鍵），所以 adapter 要用 handler 自己建 GYO 的樹 | 無（handler 帶原文，0 不一致） | 要設 `number_precision::precise`（預設不精確）；範圍外給 ±inf 要擋 | DOM 可用（`stable_erase`）；但若中性樹是 GYO 自己的，寫出也要 adapter 從 GYO 樹轉；預設寫出是大寫 E | C++；header-only（`src.hpp`）或連結；依賴 Boost 標頭（`boost/` 184 MB） |
+| yyjson | 以 `NOFLAG` 讀：無；以原文旗標讀：溢位數字被接受（同 Boost，路 A 由 Engine 擋） | adapter 走訪 DOM（DOM 保留重複成員） | 無（`YYJSON_READ_NUMBER_AS_RAW`，0 不一致） | 無（`-0`→`+0.0`、範圍外整份被拒） | 可變 DOM 可用；改值宜用 `yyjson_mut_obj_replace` | C 介面，adapter 要包成 C++（記憶體由 doc 管）；單一 `.c`＋`.h` |
+| simdjson | DOM 解析：無（比今天嚴：超出 64 位元的整數被拒） | adapter 走訪 DOM | 原文要另用 On-Demand 再解析一遍（DOM 交不出小數原文） | 無（範圍外與大整數整份被拒） | 沒有可改的樹：寫出要 adapter 用 builder 自己做 | C++；單檔 10 MB；Apache-2.0 要附 NOTICE |
+
+讀法：
+
+- **重複鍵與嚴格解析放哪裡**：六個候選（上表四個加 RapidJSON、jsoncons）都能放在 adapter 裡，GYO 介面可以規定「交出來的樹鍵已唯一、文字已是嚴格 JSON」。差別只在做法：事件類（nlohmann、Boost.JSON）在同一遍做，DOM 類（yyjson、simdjson）解析後走訪一遍。
+- **GYO 介面若有自己的樹**（不直接把函式庫的 DOM 給 Engine 看），每個候選都要「讀 → 轉成 GYO 樹」與「GYO 樹 → 寫出」兩段；這時函式庫 DOM 能不能改、保不保留順序就不重要，simdjson 的缺點變小、Boost.JSON 要用 handler 的代價也變小。GYO 介面若直接借用函式庫的 DOM，鍵順序與可改性就由函式庫決定（simdjson 不行，Boost.JSON 要記得 `stable_erase`）。
+- **數字的路**是另一個決定：路 B 下 6 個候選在生成集上都和參考值一致，差別只在 `-0`、範圍外與大整數的處理；路 A 下要能交出原文，nlohmann、jsoncons 交不出整數原文。
+
 ## 4. 結論（只列建議，由使用者選）
 
 方向與函式庫是兩個決定，下面依方向分開寫。
