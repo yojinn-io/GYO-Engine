@@ -6,9 +6,9 @@ stamp field or decide on one (entity-store Design Invariant 6 and target/world s
 a stamp field, or deciding on a stamp, is a violation").
 
 Scans every file under engine/entity_store/ (code and comments, CMakeLists.txt included) for the words
-  S1  stamp(s), Stamp(s) and words ending in them (ChangeStamp), added, changed, Added, Changed, lastRun, last_run,
-      tick(s); each as a word or the start of a camelCase identifier (StampOf, tickOf), not inside a longer
-      lowercase word (unchanged, stampede, ticket pass).
+  S1  stamp(s), added, changed, tick(s), last_run as a word or a camelCase start (tickOf); Stamp, Added, Changed,
+      Tick, LastRun as a part of any identifier (ChangeStamp, changeTick, lastChanged, isAdded, lastRun); not inside
+      a longer lowercase word (unchanged, stampede, ticket pass).
 A hit has one reading: the store learned about change detection, which belongs to engine/kernel.
 The scan root must exist and hold files: an empty or missing root is a finding, so the guard never passes by
 scanning nothing. Files are read as UTF-8; a file that cannot be read is a finding.
@@ -22,7 +22,10 @@ import sys
 from pathlib import Path
 
 SCANNED = "engine/entity_store"
-S1 = re.compile(r"(?<![A-Za-z0-9])(?:[Ss]tamps?|\w*Stamps?|added|changed|Added|Changed|last_?[Rr]un|[Tt]icks?)(?![a-z])")
+# A lowercase word at a word start (stamp, changed, tick, last_run), or a capitalized part anywhere in a camelCase
+# identifier (ChangeStamp, changeTick, lastChanged, isAdded, lastRun).
+S1 = re.compile(r"(?<![A-Za-z0-9])(?:stamps?|added|changed|ticks?|last_run)(?![a-z])"
+                r"|[A-Za-z0-9_]*(?:Stamps?|Added|Changed|Ticks?|LastRun|lastRun)(?![a-z])")
 
 
 def findings(root):

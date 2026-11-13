@@ -27,6 +27,7 @@ struct Vel { std::int32_t v; };    // zone C, Exclusive, rollback Yes
 struct Tag { std::int32_t t; };    // zone B, Shared
 struct Mode { std::int32_t m; };   // zone B, Exclusive
 struct Boundary { std::int32_t b; };  // zone C, role Input (a boundary column)
+struct CShared { std::int32_t s; };   // zone C, Shared (the zone half of F-10 and S-13)
 struct Out { std::int64_t value; };   // resource, zone B, Shared
 struct Flag { std::int32_t on; };     // resource, zone B, Exclusive
 struct CRes { std::int64_t value; };  // resource, zone C, rollback Yes
@@ -55,6 +56,7 @@ inline void Data(Registrar& r, bool allotter = false) {
     r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Component<Mode>({.name = "Mode", .zone = Zone::B});
     r.Component<Boundary>({.name = "Boundary", .zone = Zone::C, .role = Role::Input});
+    r.Component<CShared>({.name = "CShared", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
     r.Resource<Out>({.name = "Out", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
     r.Resource<Flag>({.name = "Flag", .zone = Zone::B});
     r.Resource<CRes>({.name = "CRes", .zone = Zone::C, .rollback = Rollback::Yes});

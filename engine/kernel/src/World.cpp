@@ -367,6 +367,7 @@ ResourceBase* AllotterSlot(World& world) noexcept {
 std::optional<EntityId> Allot(World& world) {
     ResourceBase* slot = AllotterSlot(world);
     GYO_ASSERT(slot != nullptr && world.data_->allotterOps.allot != nullptr);  // D-E3 at Finish
+    slot->changed = world.stamp_;  // W-11: the allotter is written
     return world.data_->allotterOps.allot(*slot);
 }
 
@@ -440,18 +441,22 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     call.recSeq = &hookRecSeq_;
     call.hookEntity = entity;
     call.hookComponent = component;
+    // Layer 2 around a hook (spec A.6): a hook writes no storage directly (its
+    // writes are deferred records, events and diagnostics), so every storage but
+    // the event buffers it declares must be unchanged by the call.
+    if (verification_) TakeSnapshots();
     Engine::Base::Result<void, KernelError> result = [&]() -> Engine::Base::Result<void, KernelError> {
         Detail::CallScope scope(call);
         return record.run(call);
     }();
-    std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), {});
+    std::vector<std::string> changed;
+    if (verification_) changed = CompareAfter(hookAccess_[hook]);
+    std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed);
     if (!error) return {};
-    KernelError failed(KernelErrorCode::HookFailed, "hook '" + record.name + "' failed at sync point step " +
-                                                        std::to_string(planPos) + " of schedule '" +
-                                                        std::string(schedule) + "'");
-    failed.world = name_;
-    failed.siblings.push_back(std::move(*error));
-    return Engine::Base::Err(std::move(failed));
+    // One more layer of the context chain (vertical), not a sibling: the leaves keep their codes and rules.
+    error->Wrap("hook '" + record.name + "' at sync point step " + std::to_string(planPos) + " of schedule '" +
+                std::string(schedule) + "'");
+    return Engine::Base::Err(std::move(*error));
 }
 
 Engine::Base::Result<void, KernelError> World::RunHooks(HookTrigger trigger, EntityId entity, ComponentId component,
@@ -800,7 +805,7 @@ constexpr std::uint32_t kSummaryVersion = 1;
 // Format "gyo.kernel.world-summary" version 1: the format string and version;
 // the alive entities (count, each u64); every column in ComponentId order
 // (cell count, then each key as u64 and the value's object bytes as a list);
-// every resource in ResourceId order (present flag, object bytes); every event
+// every resource in ResourceId order but KernelSettings (present flag, object bytes); every event
 // buffer in EventTypeId order (record count, each payload's bytes). No stamp,
 // tick, Plan position or seq is hashed. A value's padding bytes are hashed as
 // they are: the kernel tests use types without padding.
@@ -819,10 +824,13 @@ Fingerprint World::Summary() const {
             out.Raw(column->ValueBytesAt(i));
         }
     }
-    out.U32(resources_.size());
-    for (const auto& resource : resources_) {
-        out.U8(resource->Present() ? 1U : 0U);
-        out.Raw(resource->StorageBytes());
+    // KernelSettings is not simulation data (LIM-6: not in a digest): left out, so the
+    // summary does not depend on the verification switch.
+    out.U32(resources_.size() - 1);
+    for (std::size_t r = 0; r < resources_.size(); ++r) {
+        if (r == data_->kernelSettings) continue;
+        out.U8(resources_[r]->Present() ? 1U : 0U);
+        out.Raw(resources_[r]->StorageBytes());
     }
     out.U32(events_.size());
     for (const auto& buffer : events_) {

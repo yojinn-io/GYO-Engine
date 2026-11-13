@@ -195,6 +195,25 @@ TEST_CASE("J-3: a structural change while Running fails a GYO_ASSERT; a Spawn is
     }
 }
 
+namespace {
+// Changes a column's membership behind the World API's back: only the always-on epoch check after the call sees it.
+SystemResult EraseBehindTheApi(Query<Read<Tag>>) {
+    Detail::ColumnAt(*KeptWorld(), Detail::ComponentIdOf(*KeptWorld(), KeyOf<Tag>())).Erase(1);
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-3: a membership change inside a System call fails the epoch check") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&EraseBehindTheApi>(B("EraseBehindTheApi", "A"));
+    }, false);
+    rig->world().Insert(1, Tag{1});
+    KeptWorld() = &rig->world();
+    GYO_CHECK_ASSERTS(rig->Run());
+    KeptWorld() = nullptr;
+}
+
 // ---- J-7 (W-7)
 
 namespace {
@@ -268,6 +287,11 @@ namespace {
 template <class A>
 concept HasReset = requires(A allotter) { allotter.Reset(); };
 
+SystemResult SpawnIntoAllotterRange(SpawnWithId<Bundle<Tag>> spawn) {
+    spawn.New(150, Tag{150});
+    return Ok();
+}
+
 SystemResult SpawnEveryTick(Spawn<Bundle<Tag>> spawn) {
     auto id = spawn.New(Tag{1});
     if (!id) return Engine::Base::Err(std::move(id).error().Wrap("SpawnEveryTick"));
@@ -307,6 +331,16 @@ TEST_CASE("J-8: the allotter is monotonic, reports exhaustion and never wraps; n
     CHECK(rig->world().State() == WorldState::Interrupted);
     CHECK(rig->recorded.size() == 1);
     CHECK(rig->world().Keys<Tag>() == std::vector<EntityId>{100, 101});
+
+    // SpawnWithId with an id of this World's allotter range: a GYO_ASSERT at the sync point (spec A.1).
+    {
+        auto ranged = MakeRig([](Registrar& r) {
+            Data(r, true);
+            r.AddSystem<&SpawnIntoAllotterRange>(B("SpawnIntoAllotterRange", "A"));
+        });
+        ranged->world().SetResource(RangeAllotter::Of(100, 199));
+        GYO_CHECK_ASSERTS(ranged->Run());
+    }
 
     // A Spawn without an allotter: D-E3 at Finish.
     const Built none = Finish({{"test", [](Registrar& r) {
@@ -447,7 +481,7 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         CHECK(rig->world().Get<Tag>(9)->t == 200);
         const std::string summary = rig->world().Summary().Text();
         MESSAGE("J-32 golden summary: " << summary);
-        CHECK(summary == "1:f48fda098824c68d4e19122188ec479619e06a15b6e101936ee4aae5d60c0bc4");
+        CHECK(summary == "1:9b47697704716f9a716d98380ce62743da6a3b6d2a51368e5cc2bacf4cd2e587");
     }
     SUBCASE("despawn then spawn with the same id: the new entity lives, hooks see remove then add; inserts into a gone entity are dropped") {
         auto rig = MakeRig([](Registrar& r) {
@@ -473,6 +507,69 @@ TEST_CASE("J-32: the sync point's result depends only on the records, in spec F.
         // Despawns in ascending EntityId (3, 4, 9 although recorded 4, 9, 3), then the
         // spawn's OnAdd and the new Tag cell's, in ascending (EntityId, ComponentId).
         CHECK(Join(Log()) == "remove-mode:3 remove-mode:4 remove-mode:9 add-tag:1 add-mode:4 add-tag:8");
+    }
+}
+
+namespace {
+
+SystemResult EarlyTwoRecords(CommandsFor<Inserts<Tag>, Removes<>> commands) {
+    commands.Insert(5, Tag{1});
+    commands.Insert(5, Tag{2});
+    return Ok();
+}
+SystemResult LateOneRecord(CommandsFor<Inserts<Tag>, Removes<>> commands) {
+    commands.Insert(5, Tag{3});
+    return Ok();
+}
+SystemResult OverwriteAndRemove(CommandsFor<Inserts<Tag>, Removes<Tag>> commands) {
+    commands.Insert(1, Tag{10});  // an overwrite: no OnAdd
+    commands.Remove<Tag>(2);      // OnRemove before the cell goes
+    return Ok();
+}
+SystemResult LogRemoveTag(HookCtx ctx, Query<Read<Tag>> tags) {
+    const Tag* tag = tags.Get<Tag>(ctx.Entity());
+    Log().push_back("remove-tag:" + std::to_string(ctx.Entity()) + "=" + std::to_string(tag != nullptr ? tag->t : -1));
+    return Ok();
+}
+SystemResult SpawnAlive(SpawnWithId<Bundle<Mode>> spawn) {
+    spawn.New(1, Mode{1});
+    return Ok();
+}
+
+} // namespace
+
+TEST_CASE("J-32: two Systems, one key: the later Plan position wins; an overwrite is not an add; a Remove runs OnRemove") {
+    SUBCASE("two Systems, one key: the later Plan position wins") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&EarlyTwoRecords>(B("EarlyTwoRecords", "A"));
+            r.AddSystem<&LateOneRecord>(B("LateOneRecord", "A", {}, {"EarlyTwoRecords"}));
+        });
+        rig->world().Insert(5, Mode{0});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK(rig->world().Get<Tag>(5)->t == 3);
+    }
+    SUBCASE("an overwrite is not an add; a Remove runs OnRemove while the cell is readable") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&OverwriteAndRemove>(B("OverwriteAndRemove", "A"));
+            r.Hook<Tag, &LogAddTag>(HookTrigger::OnAdd, {.name = "LogAddTag", .zone = Zone::B});
+            r.Hook<Tag, &LogRemoveTag>(HookTrigger::OnRemove, {.name = "LogRemoveTag", .zone = Zone::B});
+        });
+        rig->world().Insert(1, Tag{1});
+        rig->world().Insert(2, Tag{2});
+        Log().clear();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK(Join(Log()) == "remove-tag:2=2");
+        CHECK(rig->world().Get<Tag>(1)->t == 10);
+    }
+    SUBCASE("SpawnWithId of an alive id that this window does not despawn fails a GYO_ASSERT") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&SpawnAlive>(B("SpawnAlive", "A"));
+        });
+        rig->world().Insert(1, Tag{1});
+        GYO_CHECK_ASSERTS(rig->Run());
     }
 }
 
@@ -545,6 +642,7 @@ SystemResult RecordOnSystemPath(HookCtx ctx) {
     return Ok();
 }
 SystemResult HookWritesPos(Query<Write<Pos>>) { return Ok(); }
+SystemResult SystemTakesHookCtx(HookCtx) { return Ok(); }
 SystemResult HookReadsPos(Query<Read<Pos>>) { return Ok(); }
 
 } // namespace
@@ -573,6 +671,13 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
         KeptWorld() = &rig->world();
         GYO_CHECK_ASSERTS(rig->Run());
         KeptWorld() = nullptr;
+    }
+    SUBCASE("HookCtx in a System fails a GYO_ASSERT when fetched") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&SystemTakesHookCtx>(B("SystemTakesHookCtx", "A"));
+        });
+        GYO_CHECK_ASSERTS(rig->Run());
     }
     SUBCASE("two conflicting hooks on one trigger, one of them zone C: D-E9") {
         const Built built = Finish({{"test", [](Registrar& r) {
@@ -635,4 +740,6 @@ TEST_CASE("J-36: an event is read once by every reader: this tick after its writ
     for (int tick = 0; tick < 3; ++tick) KERNEL_REQUIRE_RUN_OK(rig->Run());
     CHECK(Join(Log()) == std::string("early@1: late@1: 99 11 12 21 ") +
                              "early@2: 99 11 12 21 late@2: early@3: late@3:");
+    // Kept to the end of the next tick, then trimmed: nothing is left after tick 3.
+    CHECK(rig->world().EventPayloads<Ping>().empty());
 }

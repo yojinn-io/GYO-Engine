@@ -57,6 +57,13 @@ class StoreStampGuardTest(unittest.TestCase):
         self.assertIn("S1 added", out)
         self.assertIn("S1 tick", out)
 
+    def test_camel_case_parts_are_reported(self):
+        status, out = run({"engine/entity_store/a.hpp": "int changeTick; int lastChanged; bool isAdded;\n"})
+        self.assertEqual(status, 1)
+        self.assertIn("S1 changeTick", out)
+        self.assertIn("S1 lastChanged", out)
+        self.assertIn("S1 isAdded", out)
+
     def test_words_that_only_contain_the_letters_pass(self):
         status, out = run({"engine/entity_store/a.hpp": CLEAN + "// unchanged order; padded; ticket; stampede-free\n"})
         self.assertEqual(status, 0, out)

@@ -760,7 +760,7 @@ class Extract;
 template <class T>
 class Extract<Read<T>> final : Detail::Handle {
     // Extract runs with rollback-extract (spec H.6); a Plan never reaches one before that.
-    GYO_KERNEL_HANDLE(Extract) : Handle(call) { GYO_ASSERT(!"Extract parameters run with rollback-extract"); }
+    GYO_KERNEL_HANDLE(Extract) : Handle(call) { GYO_ASSERT(call.world == nullptr && "Extract parameters run with rollback-extract"); }
 };
 template <class T>
 struct ParamTraits<Extract<Read<T>>>
@@ -770,7 +770,7 @@ struct ParamTraits<Extract<Read<T>>>
 
 template <class R>
 class ExtractRes final : Detail::Handle {
-    GYO_KERNEL_HANDLE(ExtractRes) : Handle(call) { GYO_ASSERT(!"Extract parameters run with rollback-extract"); }
+    GYO_KERNEL_HANDLE(ExtractRes) : Handle(call) { GYO_ASSERT(call.world == nullptr && "Extract parameters run with rollback-extract"); }
 };
 template <class R>
 struct ParamTraits<ExtractRes<R>> : Detail::HandleTraits<ExtractRes<R>, TypeList<Access::ExtractResourceRead<R>>, true> {

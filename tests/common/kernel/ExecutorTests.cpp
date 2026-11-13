@@ -177,6 +177,28 @@ TEST_CASE("J-29: a run condition sees the step before it, is evaluated every run
 // ---- J-30 (X-5, W-11)
 
 namespace {
+SystemResult SeeAdded(Query<Read<Tag>, Added<Tag>> added) {
+    Log().push_back("added:" + std::to_string(added.Count()));
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-30: Added sees new cells only; tickStamps keep a tick's first stamp") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&SeeAdded>(B("SeeAdded", "A"));
+    });
+    rig->world().Insert(1, Tag{1});
+    Log().clear();
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    rig->world().GetMut<Tag>(1)->t = 2;  // changed, not added
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(Join(Log()) == "added:1 added:0");
+    CHECK(rig->world().TickStamp(Domain::Fixed, 1) == std::optional<ChangeStamp>(1));
+    CHECK(rig->world().TickStamp(Domain::Fixed, 2) == std::optional<ChangeStamp>(5));
+}
+
+namespace {
 
 bool NeverRuns(Res<Flag>) { return false; }
 SystemResult SkippedWriter(Query<Write<Tag>>) { return Ok(); }
@@ -238,6 +260,15 @@ SystemResult UntypedIntoShared(Commands commands) {
     if (auto r = commands.Insert(1, Tag{5}); !r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
+SystemResult UntypedIntoZoneCShared(Commands commands) {
+    if (auto r = commands.Insert(1, CShared{1}); !r) return Engine::Base::Err(std::move(r).error());
+    return Ok();
+}
+// Drops the kernel Err and returns another one: both are reported.
+SystemResult DroppedBesideOwn(Commands commands) {
+    static_cast<void>(commands.Insert(1, Pos{1}));
+    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "own"));
+}
 // Drops the Err it got: the Executor reports it all the same.
 SystemResult UntypedDropped(Commands commands) {
     static_cast<void>(commands.Insert(1, Pos{1}));
@@ -289,6 +320,24 @@ TEST_CASE("J-32b: untyped Commands on zone C or Exclusive data and a zone B desp
         }, false);
         CheckErrOnce(*rig, KernelErrorCode::UntypedWrite, "F-10");
     }
+    SUBCASE("untyped insert into a zone C, Shared column") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&UntypedIntoZoneCShared>(B("UntypedIntoZoneCShared", "A"));
+        }, false);
+        rig->world().Insert(1, Tag{0});
+        CheckErrOnce(*rig, KernelErrorCode::UntypedWrite, "F-10");
+    }
+    SUBCASE("a dropped Err beside the System's own Err") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&DroppedBesideOwn>(B("DroppedBesideOwn", "A"));
+        }, false);
+        const auto result = rig->Run();
+        REQUIRE_FALSE(static_cast<bool>(result));
+        CHECK(result.error().Has(KernelErrorCode::UntypedWrite));
+        CHECK(result.error().Has(KernelErrorCode::SystemFailed));
+    }
     SUBCASE("a zone B despawn of an entity with a zone C column") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
@@ -335,6 +384,65 @@ SystemResult SpawnThenErr(SpawnWithId<Bundle<Tag>> spawn, DiagnosticsWriter<Note
 
 } // namespace
 
+namespace {
+SystemResult SpawnTagOne(SpawnWithId<Bundle<Tag>> spawn) {
+    spawn.New(1, Tag{1});
+    return Ok();
+}
+SystemResult HookReturnsErr(HookCtx) {
+    return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed, "the hook's own Err"));
+}
+SystemResult HookWritesThroughReadPointer(HookCtx, Query<Read<Pos>> pos) {
+    if (const Pos* p = pos.Get<Pos>(2)) const_cast<Pos*>(p)->x = 64;
+    return Ok();
+}
+SystemResult HookDespawnsZoneC(HookCtx ctx, Despawn despawn) {
+    return despawn.Entity(ctx.Entity() + 1);
+}
+} // namespace
+
+TEST_CASE("J-35: a hook returns Err: the World is interrupted and the leaf keeps its code and rule") {
+    SUBCASE("a hook returns its own Err") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&SpawnTagOne>(B("SpawnTagOne", "A"));
+            r.Hook<Tag, &HookReturnsErr>(HookTrigger::OnAdd, {.name = "HookReturnsErr", .zone = Zone::B});
+        }, false);
+        const auto result = rig->Run();
+        CHECK(HasCode(result, KernelErrorCode::SystemFailed));
+        REQUIRE_FALSE(static_cast<bool>(result));
+        CHECK(result.error().Text().find("hook 'HookReturnsErr'") != std::string::npos);
+        CHECK(rig->world().State() == WorldState::Interrupted);
+        CHECK(rig->recorded.size() == 1);
+    }
+    SUBCASE("a hook writes through a read pointer: caught by the comparison around the hook") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&SpawnTagOne>(B("SpawnTagOne", "A"));
+            r.Hook<Tag, &HookWritesThroughReadPointer>(HookTrigger::OnAdd, {.name = "HookWritesThroughReadPointer", .zone = Zone::B});
+        }, true);
+        rig->world().Insert(2, Pos{2});
+        const auto result = rig->Run();
+        CHECK(HasCode(result, KernelErrorCode::BoundaryChange));
+        REQUIRE_FALSE(static_cast<bool>(result));
+        CHECK(result.error().Text().find("hook 'HookWritesThroughReadPointer'") != std::string::npos);
+    }
+    SUBCASE("a zone B hook despawns zone C data: Z5 with its rule") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&SpawnTagOne>(B("SpawnTagOne", "A"));
+            r.Hook<Tag, &HookDespawnsZoneC>(HookTrigger::OnAdd, {.name = "HookDespawnsZoneC", .zone = Zone::B});
+        }, false);
+        rig->world().Insert(2, Pos{2});
+        const auto result = rig->Run();
+        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
+        REQUIRE_FALSE(static_cast<bool>(result));
+        bool z5 = false;
+        for (const KernelError* leaf : result.error().Leaves()) z5 = z5 || leaf->rule == "Z5";
+        CHECK(z5);
+    }
+}
+
 TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World: records dropped, diagnostics kept, no further Run") {
     SUBCASE("a System throws") {
         auto rig = MakeRig([](Registrar& r) {
@@ -363,9 +471,10 @@ TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World
         GYO_CHECK_ASSERTS(rig->Run());
     }
     SUBCASE("the comparison before the first step finds a Host write through a kept pointer") {
+        // The first stage is empty: the first step is a sync point, whose snapshot must not hide the write.
         auto build = [](Registrar& r) {
             Data(r);
-            r.AddSystem<&Idle>(B("Idle", "A"));
+            r.AddSystem<&Idle>(B("Idle", "B"));
         };
         auto rig = MakeRig(build, true);
         rig->world().Insert(1, Tag{1});
@@ -378,6 +487,7 @@ TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World
         CHECK(result.error().Text().find("Ready window") != std::string::npos);
         CHECK(rig->world().State() == WorldState::Interrupted);
         GYO_CHECK_ASSERTS(rig->Run());
+        GYO_CHECK_ASSERTS(rig->world().Insert(2, Tag{2}));  // an Interrupted World takes no Host write
         // Restore arrives with rollback-extract; rebuilding the World (a new App) is the other way back.
         App rebuilt(*rig->built.registry, "rebuilt");
         rebuilt.SetErrorHandler([](const KernelError&) {});
@@ -401,6 +511,11 @@ SystemResult ExclusiveWritesExclusive(ExclusiveWorld world) {
 }
 SystemResult ExclusiveSpawns(ExclusiveWorld world) {
     auto r = world.Spawn();
+    if (!r) return Engine::Base::Err(std::move(r).error());
+    return Ok();
+}
+SystemResult ExclusiveWritesZoneCShared(ExclusiveWorld world) {
+    auto r = world.GetMut<CShared>(1);
     if (!r) return Engine::Base::Err(std::move(r).error());
     return Ok();
 }
@@ -440,6 +555,11 @@ TEST_CASE("J-45: ExclusiveWorld writes only zone B Shared data; anything else, a
     }
     SUBCASE("Exclusive write") {
         auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesExclusive>(B("X", "A")); }, false);
+        CheckErrOnce(*rig, KernelErrorCode::ExclusiveWorldWrite, "S-13");
+    }
+    SUBCASE("zone C, Shared write") {
+        auto rig = ExclusiveRig([](Registrar& r) { r.AddSystem<&ExclusiveWritesZoneCShared>(B("X", "A")); }, false);
+        rig->world().Insert(1, CShared{0});
         CheckErrOnce(*rig, KernelErrorCode::ExclusiveWorldWrite, "S-13");
     }
     SUBCASE("spawn") {
@@ -496,6 +616,24 @@ TEST_CASE("J-50: KernelSettings is read when the first Run starts and cannot cha
     KeptWorld() = nullptr;
     CHECK(HasCode(result, KernelErrorCode::AccessViolation));
     CHECK(rig->app->Verification().accessVerification);
+
+    // breakOnKernelError: the returning break hook is called where the error is made, then the Err goes on.
+    for (const bool breakOn : {true, false}) {
+        auto breaking = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&ReadUndeclared>(B("ReadUndeclared", "A"));
+        });
+        breaking->world().SetResource(KernelSettings{true, breakOn});
+        int breaks = 0;
+        breaking->world().SetBreakHook([&breaks](const KernelError&) { ++breaks; });
+        breaking->world().Insert(1, Pos{1});
+        KeptWorld() = &breaking->world();
+        const auto broken = breaking->Run();
+        KeptWorld() = nullptr;
+        CHECK(HasCode(broken, KernelErrorCode::AccessViolation));
+        CHECK_MESSAGE((breaks > 0) == breakOn, "breakOnKernelError " << breakOn << ", break hook calls " << breaks);
+        CHECK(breaking->app->Verification().breakOnKernelError == breakOn);
+    }
 }
 
 // ---- J-52 (F.2 steps 0 and 2, B-12)
@@ -539,6 +677,16 @@ SystemResult ZoneCHookInsertsPos(HookCtx, CommandsFor<Inserts<Pos>, Removes<>> c
 }
 SystemResult ZoneBDespawnsAtTwo(Despawn despawn, CurrentTick tick) {
     if (tick.Tick() == 2) return despawn.Entity(1);
+    return Ok();
+}
+
+SystemResult ZoneCRespawns(SpawnWithId<Bundle<Pos>> spawn) {
+    spawn.New(1, Pos{1});
+    return Ok();
+}
+bool FlagIsOn(Res<Flag> flag) { return flag->on != 0; }
+SystemResult SeeChangesWhenOn(Query<Read<Tag>, Changed<Tag>> changed) {
+    Log().push_back("changed:" + std::to_string(changed.Count()));
     return Ok();
 }
 
@@ -590,6 +738,33 @@ TEST_CASE("J-52: the Z5 recheck at the sync point; Changed and Local are per mou
         CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
         CHECK(rig->world().Alive(1));
         CHECK(rig->world().Get<Pos>(1) == nullptr);
+    }
+    SUBCASE("a zone C SpawnWithId in the same window") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            r.AddSystem<&ZoneBDespawns>(B("ZoneBDespawns", "A"));
+            r.AddSystem<&ZoneCRespawns>(C("ZoneCRespawns", "A"));
+        }, false);
+        rig->world().Insert(0, Tag{0});
+        rig->world().Insert(1, Tag{1});
+        const auto result = rig->Run();
+        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
+        CHECK(rig->world().Alive(0));
+    }
+    SUBCASE("a skipped mount keeps its last-run stamp") {
+        auto rig = MakeRig([](Registrar& r) {
+            Data(r);
+            SystemOptions options = B("SeeChangesWhenOn", "A");
+            options.mounts[0].conditions.push_back(Condition<&FlagIsOn>("FlagIsOn"));
+            r.AddSystem<&SeeChangesWhenOn>(std::move(options));
+        });
+        rig->world().SetResource(Flag{0});
+        rig->world().Insert(1, Tag{1});
+        Log().clear();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());  // skipped
+        rig->world().SetResource(Flag{1});
+        KERNEL_REQUIRE_RUN_OK(rig->Run());  // runs: the insert made before the skipped run is still a change
+        CHECK(Join(Log()) == "changed:1");
     }
     SUBCASE("a zone C column applied at step 0 is seen by step 2's recheck") {
         ScheduleOptions one;

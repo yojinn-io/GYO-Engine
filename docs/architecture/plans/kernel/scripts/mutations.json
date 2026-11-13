@@ -1108,7 +1108,7 @@
       "id": "ks-k5-parent-directory",
       "what": "a project include with .. is accepted (review A2)",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": " and \"..\" not in target.split(\"/\")",
+      "find": " and \"..\" not in re.split(r\"[/\\\\]\", target)",
       "replace": "",
       "expect": "FAIL: test_k5_parent_directory_in_a_project_include_is_reported",
       "command": [
@@ -1602,7 +1602,7 @@
       "replace": "    } else if constexpr (false && (!std::is_empty_v<F> || !std::is_default_constructible_v<F>) &&",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true,
-      "expect": "variant CAPTURE compiled"
+      "expect": "variant CAPTURE (compiled|failed without)"
     },
     {
       "id": "rs-sample-return-accepted",
@@ -1612,7 +1612,7 @@
       "replace": "    if constexpr (false) {\n        return Rejection::ReturnType;",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true,
-      "expect": "variant RETURN compiled"
+      "expect": "variant RETURN (compiled|failed without)"
     },
     {
       "id": "rs-sample-parameter-unchecked",
@@ -3000,7 +3000,7 @@
       "replace": "cells.push_back(Cell<T>{id, stamp, stamp, std::move(value)});",
       "target": "gyo_kernel_tests",
       "cases": "J-1:*",
-      "expect": "TEST CASE:  J-1:"
+      "expect": "static_cast<bool>\\(kernelRunResult\\)"
     },
     {
       "id": "we-j1-erase-swap-pop",
@@ -3010,7 +3010,7 @@
       "replace": "        Cell<T>* found = Engine::EntityStore::FindEntity(cells, id);\n        if (found == nullptr) return false;\n        std::swap(*found, cells.back());\n        cells.pop_back();",
       "target": "gyo_kernel_tests",
       "cases": "J-1:*",
-      "expect": "TEST CASE:  J-1:"
+      "expect": "static_cast<bool>\\(kernelRunResult\\)"
     },
     {
       "id": "we-j2-alive-append",
@@ -3020,7 +3020,7 @@
       "replace": "    entities_.push_back(id);",
       "target": "gyo_kernel_tests",
       "cases": "J-2:*",
-      "expect": "TEST CASE:  J-2:"
+      "expect": "static_cast<bool>\\(result\\)"
     },
     {
       "id": "we-j3-structural-allowed",
@@ -3030,7 +3030,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-3:*",
-      "expect": "expected GYO_ASSERT to fail"
+      "expect": "rig\\->Run\\(\\)"
     },
     {
       "id": "we-j3-spawn-immediate",
@@ -3060,7 +3060,7 @@
       "replace": "    return;",
       "target": "gyo_kernel_tests",
       "cases": "J-4:*",
-      "expect": "TEST CASE:  J-4:"
+      "expect": "HasCode\\(result,\\ KernelErrorCode::StaleHandle\\)"
     },
     {
       "id": "we-j4-boundary-off",
@@ -3070,7 +3070,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-4:*",
-      "expect": "TEST CASE:  J-4:"
+      "expect": "HasCode\\(second,\\ KernelErrorCode::BoundaryChange\\)"
     },
     {
       "id": "we-f6-empty-sync-no-epoch",
@@ -3080,7 +3080,7 @@
       "replace": "    // Step 8.\n    if (!windowRecords.empty()) ++syncEpoch_;",
       "target": "gyo_kernel_tests",
       "cases": "J-33:*",
-      "expect": "TEST CASE:  J-33:"
+      "expect": "rig\\->world\\(\\)\\.SyncEpoch\\(\\)\\ ==\\ epochBefore\\ \\+\\ 4"
     },
     {
       "id": "we-j5-layer1-off",
@@ -3090,7 +3090,7 @@
       "replace": "        return;\n        const Detail::AccessDesc& access = *call->access;",
       "target": "gyo_kernel_tests",
       "cases": "J-5:*",
-      "expect": "TEST CASE:  J-5:"
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
     },
     {
       "id": "we-j5-id-not-mode",
@@ -3100,7 +3100,7 @@
       "replace": "            if (true) {",
       "target": "gyo_kernel_tests",
       "cases": "J-5:*",
-      "expect": "TEST CASE:  J-5:"
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
     },
     {
       "id": "we-j5-boundary-off",
@@ -3110,7 +3110,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-5:*",
-      "expect": "TEST CASE:  J-5:"
+      "expect": "HasCode\\(on,\\ KernelErrorCode::BoundaryChange\\)"
     },
     {
       "id": "we-j3-16-violations-dropped",
@@ -3120,7 +3120,7 @@
       "replace": "    std::vector<KernelError> list;",
       "target": "gyo_kernel_tests",
       "cases": "J-5:*",
-      "expect": "TEST CASE:  J-5:"
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
     },
     {
       "id": "we-j6-no-current-call",
@@ -3130,7 +3130,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-6:*",
-      "expect": "expected GYO_ASSERT to fail"
+      "expect": "rig\\->Run\\(\\)"
     },
     {
       "id": "we-j6b-host-zone-c",
@@ -3140,7 +3140,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-6:*",
-      "expect": "expected GYO_ASSERT to fail"
+      "expect": "world\\.Insert\\(2,\\ Pos\\{2\\}\\)"
     },
     {
       "id": "we-j7-despawn-reverse",
@@ -3150,7 +3150,7 @@
       "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
       "target": "gyo_kernel_tests",
       "cases": "J-7:*",
-      "expect": "TEST CASE:  J-7:"
+      "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:1\",\\ \"0:1\"\\}"
     },
     {
       "id": "we-j7-world-dtor-reverse",
@@ -3160,7 +3160,7 @@
       "replace": "    for (auto it = columns_.rbegin(); it != columns_.rend(); ++it) it->reset();",
       "target": "gyo_kernel_tests",
       "cases": "J-7:*",
-      "expect": "TEST CASE:  J-7:"
+      "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:3\",\\ \"1:5\",\\ \"0:3\",\\ \"0:5\"\\}"
     },
     {
       "id": "we-j7-column-dtor-descending",
@@ -3170,7 +3170,7 @@
       "replace": "        while (!cells.empty()) cells.pop_back();",
       "target": "gyo_kernel_tests",
       "cases": "J-7:*",
-      "expect": "TEST CASE:  J-7:"
+      "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:3\",\\ \"1:5\",\\ \"0:3\",\\ \"0:5\"\\}"
     },
     {
       "id": "we-j8-allotter-wraps",
@@ -3180,7 +3180,7 @@
       "replace": "        if (id == last) {\n            next = first;\n        } else {",
       "target": "gyo_kernel_tests",
       "cases": "J-8:*",
-      "expect": "TEST CASE:  J-8:"
+      "expect": "allotter\\.Allot\\(\\)\\ ==\\ std::nullopt"
     },
     {
       "id": "we-j8-allotter-reset",
@@ -3200,7 +3200,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-26:*",
-      "expect": "TEST CASE:  J-26:"
+      "expect": "Log\\(\\)\\ ==\\ expected"
     },
     {
       "id": "we-j29-condition-cached",
@@ -3210,7 +3210,7 @@
       "replace": "                for (const ConditionRef& condition : mount.conditions) {\n                    if (runs && mountState.lastRun == 0 && !condition.Evaluator()(call)) runs = false;",
       "target": "gyo_kernel_tests",
       "cases": "J-29:*",
-      "expect": "TEST CASE:  J-29:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"guarded@1\\ condition\\ condition\\ condition\\ condition\""
     },
     {
       "id": "we-j29-set-once",
@@ -3220,7 +3220,7 @@
       "replace": "                        for (const ConditionRef& condition : set.conditions) {\n                            static int evaluated = 0;\n                            if (runs && evaluated++ == 0 && !condition.Evaluator()(call)) runs = false;",
       "target": "gyo_kernel_tests",
       "cases": "J-29:*",
-      "expect": "TEST CASE:  J-29:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"guarded@1\\ condition\\ condition\\ condition\\ condition\""
     },
     {
       "id": "we-j30-skip-no-stamp",
@@ -3230,7 +3230,7 @@
       "replace": "                // (4)\n                if (!runs) return {};\n                call.stamp = ++world.stamp_;",
       "target": "gyo_kernel_tests",
       "cases": "J-30:*",
-      "expect": "TEST CASE:  J-30:"
+      "expect": "first\\ ==\\ std::vector<ChangeStamp>\\{0,\\ 6,\\ 3,\\ 1,\\ 12,\\ 9,\\ 1\\}"
     },
     {
       "id": "we-j30-stamp-after-call",
@@ -3240,7 +3240,7 @@
       "replace": "                auto ran = system.run(call);\n                call.stamp = ++world.stamp_;\n                mountState.lastRun = call.stamp;\n                return ran;",
       "target": "gyo_kernel_tests",
       "cases": "J-30:*",
-      "expect": "TEST CASE:  J-30:"
+      "expect": "rig\\->world\\(\\)\\.TickStamp\\(Domain::Fixed,\\ 2\\)\\ ==\\ std::optional<ChangeStamp>\\(5\\)"
     },
     {
       "id": "we-w11-mut-no-mark",
@@ -3250,7 +3250,7 @@
       "replace": "        return cell_->value;",
       "target": "gyo_kernel_tests",
       "cases": "J-11:*",
-      "expect": "TEST CASE:  J-11:"
+      "expect": "Mirror\\(\\)\\ ==\\ full"
     },
     {
       "id": "we-w11-mut-no-mark-j30",
@@ -3260,7 +3260,7 @@
       "replace": "        return cell_->value;",
       "target": "gyo_kernel_tests",
       "cases": "J-30:*",
-      "expect": "TEST CASE:  J-30:"
+      "expect": "first\\ ==\\ std::vector<ChangeStamp>\\{0,\\ 6,\\ 3,\\ 1,\\ 12,\\ 9,\\ 1\\}"
     },
     {
       "id": "we-j32-despawn-record-order",
@@ -3270,7 +3270,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
-      "expect": "TEST CASE:  J-32:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-mode:3\\ remove\\-mode:4\\ remove\\-mode:9\\ add\\-tag:1\\ add\\-mode:4\\ add\\-tag:8\""
     },
     {
       "id": "we-j32-onadd-record-order",
@@ -3280,7 +3280,7 @@
       "replace": "        if (false) std::sort(added.begin(), added.end(),",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
-      "expect": "TEST CASE:  J-32:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-mode:3\\ remove\\-mode:4\\ remove\\-mode:9\\ add\\-tag:1\\ add\\-mode:4\\ add\\-tag:8\""
     },
     {
       "id": "we-j32-spawn-before-despawn",
@@ -3300,7 +3300,7 @@
       "replace": "            Record& winner = *inserts[i];",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
-      "expect": "TEST CASE:  J-32:"
+      "expect": "rig\\->world\\(\\)\\.Get<Tag>\\(3\\)\\->t\\ ==\\ 2"
     },
     {
       "id": "we-j32-drop-recseq",
@@ -3320,7 +3320,7 @@
       "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "TEST CASE:  J-32b:"
+      "expect": "static_cast<bool>\\(result\\)"
     },
     {
       "id": "we-j32b-debug-only",
@@ -3330,7 +3330,7 @@
       "replace": "std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "TEST CASE:  J-32b:"
+      "expect": "static_cast<bool>\\(result\\)"
     },
     {
       "id": "we-j32b-z5-record-off",
@@ -3340,7 +3340,7 @@
       "replace": "    return std::nullopt;",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "TEST CASE:  J-32b:"
+      "expect": "result\\.error\\(\\)\\.Text\\(\\)\\.find\\(\"System\\ 'ZoneBDespawnsZoneC'\"\\)\\ !=\\ std::string::npos"
     },
     {
       "id": "we-j3-16-executor-swallows",
@@ -3350,7 +3350,7 @@
       "replace": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed); false && error) {",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "TEST CASE:  J-32b:"
+      "expect": "static_cast<bool>\\(result\\)"
     },
     {
       "id": "we-j32b-dropped-err-lost",
@@ -3360,7 +3360,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "TEST CASE:  J-32b:"
+      "expect": "static_cast<bool>\\(result\\)"
     },
     {
       "id": "we-j33-apply-after-each-system",
@@ -3370,7 +3370,7 @@
       "replace": "            static_cast<void>(world.ApplySync(position, scheduleName, world.stamp_));\n            previousStep = StepText(scheduleName, position, system.options.name);\n            break;",
       "target": "gyo_kernel_tests",
       "cases": "J-33:*",
-      "expect": "TEST CASE:  J-33:"
+      "expect": "static_cast<bool>\\(kernelRunResult\\)"
     },
     {
       "id": "we-j34-hook-immediate",
@@ -3380,7 +3380,7 @@
       "replace": "    if (Result rest = phase(windowRecords, none); !rest) return rest;\n    {\n        std::vector<Record> again = std::move(hookQueue_);\n        hookQueue_.clear();\n        if (Result now = phase(again, none); !now) return now;\n    }",
       "target": "gyo_kernel_tests",
       "cases": "J-34:*",
-      "expect": "TEST CASE:  J-34:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"first:4\\ second:4\\ modes@1:0\""
     },
     {
       "id": "we-j34-hook-reverse",
@@ -3390,7 +3390,7 @@
       "replace": "    for (std::size_t h = data_->hooks.size(); h-- > 0;) {\n        const Detail::HookRecord& hook = data_->hooks[h];",
       "target": "gyo_kernel_tests",
       "cases": "J-34:*",
-      "expect": "TEST CASE:  J-34:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"first:4\\ second:4\\ modes@1:0\""
     },
     {
       "id": "we-j34-f5-off",
@@ -3400,7 +3400,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-34:*",
-      "expect": "expected GYO_ASSERT to fail"
+      "expect": "rig\\->Run\\(\\)"
     },
     {
       "id": "we-j35-err-not-interrupted",
@@ -3410,7 +3410,7 @@
       "replace": "    world_.state_ = WorldState::Ready;\n    world_.DiscardDeferred();",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
-      "expect": "TEST CASE:  J-35:"
+      "expect": "rig\\->Run\\(\\)"
     },
     {
       "id": "we-j35-throw-not-interrupted",
@@ -3420,7 +3420,7 @@
       "replace": "            state_ = WorldState::Ready;\n            (world_.*discard_)();",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
-      "expect": "TEST CASE:  J-35:"
+      "expect": "rig\\->world\\(\\)\\.State\\(\\)\\ ==\\ WorldState::Interrupted"
     },
     {
       "id": "we-j35-diagnostics-dropped",
@@ -3430,7 +3430,7 @@
       "replace": "void World::DiscardDeferred() noexcept {\n    diagnostics_.clear();\n    window_.clear();",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
-      "expect": "TEST CASE:  J-35:"
+      "expect": "rig\\->world\\(\\)\\.Diagnostics<Note>\\(\\)\\.size\\(\\)\\ ==\\ 1"
     },
     {
       "id": "we-j36-no-same-tick",
@@ -3440,7 +3440,7 @@
       "replace": "            const bool current = false;",
       "target": "gyo_kernel_tests",
       "cases": "J-36:*",
-      "expect": "TEST CASE:  J-36:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
     },
     {
       "id": "we-j36-trim-early",
@@ -3450,7 +3450,7 @@
       "replace": "events_[e]->Trim(ticks_[DomainIndex(domain)] + 1);",
       "target": "gyo_kernel_tests",
       "cases": "J-36:*",
-      "expect": "TEST CASE:  J-36:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
     },
     {
       "id": "we-j36-swap-compare",
@@ -3460,7 +3460,7 @@
       "replace": "record.tick == tick_ - 1 && record.writerPos < position_;",
       "target": "gyo_kernel_tests",
       "cases": "J-36:*",
-      "expect": "TEST CASE:  J-36:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
     },
     {
       "id": "we-j36-hook-writerpos-zero",
@@ -3470,7 +3470,7 @@
       "replace": "    call.planPos = 0;\n    call.zone = record.zone;",
       "target": "gyo_kernel_tests",
       "cases": "J-36:*",
-      "expect": "TEST CASE:  J-36:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
     },
     {
       "id": "we-j45-exclusive-unchecked",
@@ -3480,7 +3480,7 @@
       "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
       "target": "gyo_kernel_tests",
       "cases": "J-45:*",
-      "expect": "TEST CASE:  J-45:"
+      "expect": "static_cast<bool>\\(result\\)"
     },
     {
       "id": "we-j45-debug-only",
@@ -3490,7 +3490,7 @@
       "replace": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
       "target": "gyo_kernel_tests",
       "cases": "J-45:*",
-      "expect": "TEST CASE:  J-45:"
+      "expect": "static_cast<bool>\\(result\\)"
     },
     {
       "id": "we-j50-settings-writable",
@@ -3500,7 +3500,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-50:*",
-      "expect": "expected GYO_ASSERT to fail"
+      "expect": "clean\\->world\\(\\)\\.SetResource\\(KernelSettings\\{true,\\ false\\}\\)"
     },
     {
       "id": "we-j50-settings-not-read",
@@ -3510,7 +3510,7 @@
       "replace": "        world.verification_ = false;",
       "target": "gyo_kernel_tests",
       "cases": "J-50:*",
-      "expect": "TEST CASE:  J-50:"
+      "expect": "HasCode\\(result,\\ KernelErrorCode::AccessViolation\\)"
     },
     {
       "id": "we-j52-recheck-pending-only",
@@ -3520,7 +3520,7 @@
       "replace": "                if (false) {\n                    reason = \"it has zone C component",
       "target": "gyo_kernel_tests",
       "cases": "J-52:*",
-      "expect": "TEST CASE:  J-52:"
+      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
     },
     {
       "id": "we-j52-step0-unchecked",
@@ -3530,7 +3530,7 @@
       "replace": "    if (Result step0 = phase(hookRecords, none); !step0) return step0;",
       "target": "gyo_kernel_tests",
       "cases": "J-52:*",
-      "expect": "TEST CASE:  J-52:"
+      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
     },
     {
       "id": "we-j52-per-system-mount-state",
@@ -3540,7 +3540,7 @@
       "replace": "            MountState& mountState = state.mounts[0];",
       "target": "gyo_kernel_tests",
       "cases": "J-52:*",
-      "expect": "TEST CASE:  J-52:"
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"A\\ run1\\ changed:1\\ B\\ run1\\ changed:1\\ A\\ run2\\ changed:1\\ A\\ run3\\ changed:0\""
     },
     {
       "id": "we-j53-after-diff-dropped",
@@ -3550,7 +3550,7 @@
       "replace": "    for (const std::string& storage : std::vector<std::string>{}) {",
       "target": "gyo_kernel_tests",
       "cases": "J-53:*",
-      "expect": "TEST CASE:  J-53:"
+      "expect": "HasCode\\(result,\\ KernelErrorCode::BoundaryChange\\)"
     },
     {
       "id": "we-j53-step5-skipped-when-false",
@@ -3560,7 +3560,7 @@
       "replace": "            if (std::optional<KernelError> error = (call.stamp == mountState.lastRun ? Detail::CombineCall(call, std::move(result), changed) : std::nullopt)) {",
       "target": "gyo_kernel_tests",
       "cases": "J-53:*",
-      "expect": "TEST CASE:  J-53:"
+      "expect": "HasCode\\(result,\\ KernelErrorCode::AccessViolation\\)"
     },
     {
       "id": "we-j12-fetch-side-effect",
@@ -3570,7 +3570,7 @@
       "replace": "stamp_(call.stamp++) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
       "target": "gyo_kernel_tests",
       "cases": "J-12:*",
-      "expect": "TEST CASE:  J-12:"
+      "expect": "world\\.Stamps<Tag>\\(1\\)\\->second\\ ==\\ 1"
     },
     {
       "id": "we-sym-tlcurrent-renamed",
@@ -3731,6 +3731,260 @@
         "tests/common/kernel/store_stamp_guard.py"
       ],
       "expect": "S1 changed"
+    },
+    {
+      "id": "we-adv-hook-err-swallowed",
+      "what": "J.3 #16 (Fable): a hook Err and a hook violation are dropped",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (!error) return {};\n    // One more layer",
+      "replace": "    return {};\n    // One more layer",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::SystemFailed\\)"
+    },
+    {
+      "id": "we-adv-dropped-err-beside-own-err-lost",
+      "what": "J.3 #16 (Fable): a kernel Err the System dropped is lost when it returns another Err",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            if (!ContainsError(own, returned)) list.push_back(std::move(returned));\n",
+      "replace": "            if (false && !ContainsError(own, returned)) list.push_back(std::move(returned));\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "result\\.error\\(\\)\\.Has\\(KernelErrorCode::UntypedWrite\\)"
+    },
+    {
+      "id": "we-adv-untyped-zone-half",
+      "what": "F-10 (Fable): untyped Commands checks only the write policy",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
+      "replace": "    if (info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-adv-exclusive-zone-half",
+      "what": "S-13 (Fable): ExclusiveWorld checks only the write policy",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "replace": "    if (info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-adv-z5-ignores-spawnwithid",
+      "what": "J-52 (Fable): the Z5 recheck ignores a pending zone C SpawnWithId",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    if (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId)) {",
+      "replace": "                    if (other.kind == RecordKind::Insert) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
+    },
+    {
+      "id": "we-adv-insert-key-recseq-first",
+      "what": "J-32 (Fable): the insert key orders recSeq before planPos",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "auto insertKey = [](const Record* r) { return std::make_tuple(r->entity, r->id, r->planPos, r->recSeq); };",
+      "replace": "auto insertKey = [](const Record* r) { return std::make_tuple(r->entity, r->id, r->recSeq, r->planPos); };",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "rig\\->world\\(\\)\\.Get<Tag>\\(5\\)\\->t\\ ==\\ 3"
+    },
+    {
+      "id": "we-adv-j4-serial-half-dropped",
+      "what": "J-4 (Fable): only the sync epoch is compared",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (call->callSerial == callSerial && world.syncEpoch_ == syncEpoch) return;",
+      "replace": "    if (world.syncEpoch_ == syncEpoch) return;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::StaleHandle\\)"
+    },
+    {
+      "id": "we-adv-ready-window-compare-off",
+      "what": "J-35 (Fable): no comparison when Run starts",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (world.verification_) {\n        const std::vector<std::string> changed = world.CompareBefore();",
+      "replace": "    if (false) {\n        const std::vector<std::string> changed = world.CompareBefore();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::PreCallChange\\)"
+    },
+    {
+      "id": "we-adv-excluded-columns-not-reported",
+      "what": "LIM-6 condition 2 (Fable): the report omits excluded columns",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        if (world_.excluded_[c]) report.excludedColumns.push_back(data.components[c].name);",
+      "replace": "        if (false && world_.excluded_[c]) report.excludedColumns.push_back(data.components[c].name);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "rig\\->app\\->Verification\\(\\)\\.excludedColumns\\ ==\\ std::vector<std::string>\\{\"Pos\"\\}"
+    },
+    {
+      "id": "we-adv-break-hook-not-read",
+      "what": "LIM-6 (Fable): breakOnKernelError is never read",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;",
+      "replace": "        world.breakOnKernelError_ = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-50:*",
+      "expect": "\\(breaks\\ >\\ 0\\)\\ ==\\ breakOn"
+    },
+    {
+      "id": "we-adv-overwrite-fires-onadd",
+      "what": "F.2 step 6 (Fable): an overwrite runs OnAdd",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            } else if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp)) {",
+      "replace": "            } else if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp); true) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-tag:2=2\""
+    },
+    {
+      "id": "we-adv-remove-skips-onremove",
+      "what": "F.2 step 3 (Fable): a Remove runs no OnRemove",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);",
+      "replace": "            columns_[component]->Erase(id);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-tag:2=2\""
+    },
+    {
+      "id": "we-adv-spawn-alive-assert-removed",
+      "what": "F.2 step 4 (Fable): SpawnWithId of an alive id is not stopped",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!std::binary_search(entities_.begin(), entities_.end(), spawn.entity));  // alive, not despawned\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-adv-spawnwithid-allotter-range-assert-removed",
+      "what": "A.1 (Fable): SpawnWithId into the allotter range is not stopped",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                GYO_ASSERT(!data_->allotterOps.owns(*resources_[*data_->allotter], spawn.entity));\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "ranged\\->Run\\(\\)"
+    },
+    {
+      "id": "we-adv-skip-updates-lastrun",
+      "what": "B-12 (Fable): a skipped mount moves its last-run stamp",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                if (!runs) return {};\n                mountState.lastRun = call.stamp;",
+      "replace": "                mountState.lastRun = call.stamp;\n                if (!runs) return {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"changed:1\""
+    },
+    {
+      "id": "we-adv-added-is-changed",
+      "what": "Added<T> filters by the changed stamp (Fable)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        return (added ? column.AddedAt(low) : column.ChangedAt(low)) > lastRun_;",
+      "replace": "        return (added ? column.ChangedAt(low) : column.ChangedAt(low)) > lastRun_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"added:1\\ added:0\""
+    },
+    {
+      "id": "we-adv-event-trim-never",
+      "what": "F.3 (Fable): the trim drops nothing",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "events_[e]->Trim(ticks_[DomainIndex(domain)]);",
+      "replace": "events_[e]->Trim(0);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "rig\\->world\\(\\)\\.EventPayloads<Ping>\\(\\)\\.empty\\(\\)"
+    },
+    {
+      "id": "we-adv-tickstamp-never-recorded",
+      "what": "A.1 tickStamps (Fable): never kept",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        slot = World::TickStampSlot{tick, world.stamp_ + 1, true};",
+      "replace": "        slot = World::TickStampSlot{tick, world.stamp_ + 1, false};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "rig\\->world\\(\\)\\.TickStamp\\(Domain::Fixed,\\ 1\\)\\ ==\\ std::optional<ChangeStamp>\\(1\\)"
+    },
+    {
+      "id": "we-adv-epoch-assert-removed",
+      "what": "J-3 W-3 (Fable): the membership epoch assertion is gone",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            GYO_ASSERT(world.MembershipEpoch() == structure);\n",
+      "replace": "            static_cast<void>(structure);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-3:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-adv-hookctx-in-system-allowed",
+      "what": "F.4 (Fable): HookCtx in a System is not stopped",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        GYO_ASSERT(call.hook);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-adv-interrupted-write-allowed",
+      "what": "E.5 (Fable): a Host write to an Interrupted World is not stopped",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        GYO_ASSERT(mode == Detail::kModeRead);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "rig\\->world\\(\\)\\.Insert\\(2,\\ Tag\\{2\\}\\)"
+    },
+    {
+      "id": "we-adv-host-write-current-stamp",
+      "what": "J-30 (Fable): a Host write in Ready carries the current stamp",
+      "file": "engine/kernel/include/engine/kernel/World.hpp",
+      "find": "return state_ == WorldState::Ready ? stamp_ + 1 : stamp_; }",
+      "replace": "return stamp_; }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"added:1\\ added:0\""
+    },
+    {
+      "id": "we-adv-j6b-host-zone-c-resource",
+      "what": "J-6 W-6b (Fable): the Host writes a zone C state resource after the first Run",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input || info.external);\n",
+      "replace": "            static_cast<void>(info);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "world\\.SetResource\\(CRes\\{1\\}\\)"
+    },
+    {
+      "id": "we-adv-hook-layer2-off",
+      "what": "A.6 (review should 2): no comparison around a hook",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (verification_) changed = CompareAfter(hookAccess_[hook]);",
+      "replace": "    if (false) changed = CompareAfter(hookAccess_[hook]);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "we-adv-stamp-guard-camel-suffix",
+      "what": "target/world 6 (Fable): entity_store names changeTick and lastChanged",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "// swap-and-pop, no tombstone).",
+      "replace": "// swap-and-pop, no tombstone; changeTick and lastChanged are kept).",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/store_stamp_guard.py"
+      ],
+      "expect": "S1 changeTick"
     }
   ]
 }

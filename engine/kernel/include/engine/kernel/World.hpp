@@ -217,6 +217,17 @@ public:
         return out;
     }
 
+    // Takes the World end of DiagnosticsWriter<R>: returns the records and empties
+    // the buffer (the Host's exchange point; B-13). Ready and Interrupted.
+    template <class R>
+    [[nodiscard]] std::vector<R> TakeDiagnostics() {
+        std::vector<R> out = Diagnostics<R>();
+        for (auto& [key, buffer] : diagnostics_) {
+            if (key == KeyOf<R>()) static_cast<Detail::DiagnosticsBuffer<R>&>(*buffer).entries.clear();
+        }
+        return out;
+    }
+
     // ---- Stamps, ticks, counters
 
     // The last stamp taken (spec A.1).
@@ -357,6 +368,7 @@ private:
     // +1 at every change of the alive-entity list (spec A.1 epoch, with the columns' own).
     std::uint64_t entitiesEpoch_ = 0;
     std::uint64_t droppedMissingEntity_ = 0;
+    static_assert(static_cast<std::size_t>(Domain::Loading) + 1 == 4, "one tick per Domain value");
     std::array<std::uint64_t, 4> ticks_{};
     static constexpr std::size_t kTickStampSlots = 256;
     struct TickStampSlot {

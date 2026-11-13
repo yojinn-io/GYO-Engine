@@ -23,6 +23,7 @@
 #include "engine/entity_store/EntityId.hpp"
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <memory>

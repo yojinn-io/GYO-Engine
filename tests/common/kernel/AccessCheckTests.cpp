@@ -214,17 +214,36 @@ TEST_CASE("J-5: a declared read taken as a write through the World API: caught w
     CHECK_MESSAGE(static_cast<bool>(off), Text(off));
 }
 
+namespace {
+SystemResult TamperExcludedPos(Query<Read<Vel>>) {
+    const_cast<Pos*>(g_keptPos)->x = 31;
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-5: excluded columns are left out of the comparison and listed in the report") {
+    auto rig = RigWith([](Registrar& r) {
+        r.AddSystem<&KeepPos>(B("KeepPos", "A"));
+        r.AddSystem<&TamperExcludedPos>(B("TamperExcludedPos", "B"));
+    }, true, "excluded");
+    rig->world().ExcludeFromVerification<Pos>();
+    KERNEL_REQUIRE_RUN_OK(rig->Run());  // not seen: Pos is excluded (the report says so)
+    g_keptPos = nullptr;
+    CHECK(rig->app->Verification().excludedColumns == std::vector<std::string>{"Pos"});
+    CHECK(rig->world().Get<Pos>(1)->x == 31);
+}
+
 TEST_CASE("J-4: a handle kept past its call is a violation; a kept const T& written in a later run is caught; read only is not") {
     SUBCASE("a handle used in another call") {
         // A handle cannot be copied, moved or kept by a System (the compile-failure
         // sample HANDLE_COPY); a pointer to one dies with the call. So the handle
         // here is made by the test through ParamTraits::Fetch for a call that is
         // over (serial 0), and stays alive while a System uses it.
-        auto rig = RigWith([](Registrar& r) { r.AddSystem<&UseKeptHandle>(B("UseKeptHandle", "B")); }, true, "handles");
+        auto rig = RigWith([](Registrar& r) { r.AddSystem<&UseKeptHandle>(B("UseKeptHandle", "A")); }, true, "handles");
         Detail::SystemContext over;
         over.world = &rig->world();
         over.callSerial = 0;
-        over.syncEpoch = 0;
+        over.syncEpoch = rig->world().SyncEpoch();  // the same window: only the call serial differs
         const Res<Out> kept = ParamTraits<Res<Out>>::Fetch(over);
         g_keptHandle = &kept;
         const auto result = rig->Run();

@@ -90,3 +90,13 @@
 ## 10. 若失敗
 
 loading、rollback-extract、四個 host 都假設 World 與 Executor 照契約運作，會白做；plan-dryrun（閘門 G1）只用到 Registry 與 Plan，不受影響。
+
+## 核定後的修訂（實作中；2026-11-14）
+
+1. **K5（`kernel_guard.py` 的 include 白名單）加 `engine/entity_store/`**：第 5 節原列「留」，但 Delta-3 的 include 會被 K5 判違規。架構師判斷屬 DI 守衛的判定變更（AGENTS §14.4），交使用者；**使用者 2026-11-13 核准**（架構師會話轉達）。§14.4 的 1～5：(1) 守的性質：Kernel 是 Base 之上的葉子，只 include 標準庫、Base、自己（Delta-1）；(2) 緩める面：`engine/entity_store/` 下的 include（不含 `..`）由失敗變通過；(3) 締める面：無（同時另外收緊：`..` 以 `/` 或 `\` 分割判斷，舊的反斜線繞路被擋，見第 2 點）；(4) 緩めた面的性質由改寫後的 `gyo_expect_links(gyo_kernel GYO::Base GYO::EntityStore)` 守（多一條邊即 configure 失敗），其他模組、產品、`engine/entity_store_extra/` 與經 entity_store 的 `..` 仍是 K5 違規，自測各一條；(5) 根據：遷移計畫 §4 Delta-3（使用者已同意）、本宣告第 2 節的 CMake 連結。突變 6/6 killed（`ks-adv-include-allowlist-widened` 改寫、`we-k5-*` 5 條）。驗證者：Opus／high 另一代理以實際資料確認 1～5 全部成立（與作者同為 Opus 系，照實記）。
+2. **K5 的 `..` 判斷收緊**（締める面，事後報告）：驗證者指出 `"engine/base/..\os\x.hpp"` 在 HEAD 就能繞過（只以 `/` 分割）。改為以 `/` 或 `\` 分割；自測加兩條；突變 `we-k5-backslash-parent`、`ks-k5-parent-directory`（find 改寫）killed。
+3. **`target/world.zh-Hant.md` §6 原文承諾的「文字掃描（world-exec 新增）」**：實作為 `tests/common/kernel/store_stamp_guard.py`（ctest `kernel.store_stamp_guard`＋自測）；新增守衛、締める面。
+4. **spec W-8 多一條 nothrow move 指派**（Cell<T> 包法的後果，寫進 world §6 定案句）：架構師同意，交卡 05 同步 spec。
+5. **World 摘要（D-9）排除 KernelSettings**（LIM-6：不進 digest）；J-32 的 golden 尚未合併過，隨之重取（不是放寬既有判定）。
+6. **待使用者決定（架構師建議 (a)）**：(i) hook 佇列依記錄它的 schedule 分桶、只在同一 schedule 的下一個同步點套用；(ii) despawn 時先對全部元件跑 OnRemove、再依 ComponentId 升冪 destroy。兩者各以獨立 commit 照 (a) 先做，選 (b) 時 revert。
+7. **LIM-6 四條件中「預設跟建置變體」「被參數覆寫」「啟動日誌」**屬 Host／runner，列為本批限界，由 host 系各批（match-host、client-sim、client-frame、工具 host 的遷移批）承接。

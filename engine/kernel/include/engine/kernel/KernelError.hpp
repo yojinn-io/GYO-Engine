@@ -57,8 +57,6 @@ enum class KernelErrorCode : std::uint8_t {
     AllotterExhausted,
     // Spec W-1 checked after a sync point with verification on.
     StructureBroken,
-    // A hook returned Err (spec F.4); context names the hook and its sync point.
-    HookFailed,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;

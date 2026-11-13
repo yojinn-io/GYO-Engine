@@ -29,7 +29,6 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::ExclusiveWorldWrite: return "ExclusiveWorldWrite";
     case KernelErrorCode::AllotterExhausted: return "AllotterExhausted";
     case KernelErrorCode::StructureBroken: return "StructureBroken";
-    case KernelErrorCode::HookFailed: return "HookFailed";
     }
     return "Unknown";
 }
