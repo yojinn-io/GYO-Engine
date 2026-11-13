@@ -53,3 +53,4 @@
 - 2026-11-13：讀規劃稿 #212 §4 未決 1、本夾 evaluation、`StrictJson.hpp`、`AnimationEvents.cpp`、determinism.md §4.6；以 `git grep -P` 重數使用點（Engine 8＋建置期 1、framework 2、apps 7、tools 18；輸出存主 checkout `build/evidence/json-library-survey/usage-grep-20261113.txt`）；以 `gh api` 查候選版本、授權、大小。本機是 macOS x86_64，不在 L1 三平台內。
 - 2026-11-13：寫完事前宣告 [`json-library-survey-declaration.zh-Hant.md`](json-library-survey-declaration.zh-Hant.md)。**現況：停下等使用者核准（下載清單、三平台跑法 A／B／C、候選增刪、判準細則、審查模型）。未下載任何東西。**
 - 2026-11-13：架構師轉達使用者更正——未決 1 不是 J3，方向與函式庫都未定。宣告改為不以 J3 為前提：判準 3 分「原文路（J2／J3）」與「候選轉換路（J1／J4）」各自判定，3b 不過寫成該選項不成立、不停下；新增 §3.7「對各方向的影響」；審查者選項加入架構師建議（Opus 另一代理）。仍停下等使用者核准。
+- 2026-11-13：使用者選三平台跑法 **C（只在本機）**。宣告 §5 記錄：3b、3c 與判準 5 的三平台部分記「確認できない」；估時改 9.5～12.5 h。其餘四項（下載清單、候選增刪、判準細則、審查者）待使用者核准，仍未下載。
