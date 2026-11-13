@@ -1,7 +1,7 @@
 """Position = zone (naming rule 4; v8-product-kernel-prep-zones): the product's zone-C source lists
 agree with the Sim directory, and the confirmed list's scan has exactly the recorded residual.
 
-Three lists (docs/architecture/target/zone-c-sources.zh-Hant.md, format v1) live here:
+Three lists (docs/architecture/zone-c-sources.zh-Hant.md, format v1) live here:
   zone-c-sources.json     the confirmed zone-C sources (audit section 1.3 "keep"), all in src/Sim
   zone-c-candidates.json  P9 (shot geometry and pose): zone (b) until DET-1 E1, also in src/Sim
   zone-c-rewrite.json     P1/P5/P6: their (c) core is rewritten into Sim by the kernel migration;

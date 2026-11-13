@@ -12,7 +12,7 @@
 
 ## Design Invariants
 
-候選：使用者核准目標 DI 清單（遷移計畫 §7 U13）後成為正式條文。本節的變更是 Architecture Delta（AGENTS §3）。
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 <a id="di-ks-1"></a>
 **DI-KS 1.** **描述從簽名推出，一份。** System 的資料存取集合等於其參數型別的 Contribution 聯集（含 bundle 的延後寫、`SetRead` 在 finish 展開的讀；`ExclusiveWorld` 的 Contribution 是「讀全部、寫 zone=B 且 Shared 的全部」）；登記 API 不接受手寫的第二份存取宣告；System 是無狀態的可呼叫物，參數只能是 `ParamTraits` 特化過的型別，句柄不可複製、不可移動。守衛：J-10～J-12。（DI-K2 的推導半；S-1～S-4、S-13）
@@ -73,7 +73,7 @@
 
 ### Replacement Criteria
 
-候選。符合任一條時，停止在 Kernel 上修補，向使用者提出「修還是重建」。跨部件的限制與解除條件在 `limits.zh-Hant.md`（LIM-1～LIM-6），本節不重複。
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。符合任一條時，停止在 Kernel 上修補，向使用者提出「修還是重建」。跨部件的限制與解除條件在 `limits.zh-Hant.md`（LIM-1～LIM-6），本節不重複。
 
 <a id="rc-1"></a>
 **RC 1.** **契約不可靠**（修訂：S8。原稿的條件「判定 (2) 在任一編譯器不成立」已被 spike 的「判定 2 部分不成立」觸發，但觸發的部分是 mechanism §3.5 事前寫明的上限（不經 World 的讀取），不是推導或核對本身失效；而且原稿的處置「退回顯式宣告」對那種形狀同樣無效。條件改寫成只指向本機制真正依賴的性質）：(a) spike 判定 (1)（簽名推存取集合）在任一 L1 編譯器不成立；或 (b) 「System 自己的執行緒上經 World API 的存取」在驗證開著時攔不到（A.6 第一層失效；2026-11-12 改名，原文「在 debug 攔不到」）；或 (c) 上線後「宣告與實際存取不符、A.6 兩層核對與 J-17 掃描都攔不到、且不屬於 spike〈判定 2 的上限〉已列的形狀」的案例在一個版本內出現兩次以上。→ (a)：退回「顯式宣告＋存取驗證」（bevy_core:29、:64）；(b)：核對層重寫；(c)：評估頁保護（spike 報告末段）或縮小「包」的範圍。中間層照 mechanism §1 全部重寫。（blueprint RC 3）**這條的改寫已由使用者 2026-11-11 核准**（K.3 第 13 項）。

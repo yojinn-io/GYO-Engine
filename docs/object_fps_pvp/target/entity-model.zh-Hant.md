@@ -38,7 +38,7 @@ legacy 檔的 `Design Invariants`（E-1～E-12）與 Replacement Criteria 在 `v
 
 ## Design Invariants
 
-候選。上表 E-3、E-7、E-12 的目標措辭在使用者核准目標 DI 清單（遷移計畫 §7 U13）後成為遷移後新程式的條文，條號沿用 E-n。守衛（G1、G2、G3、G7、G11、G13）對應的條文由 `v8-product-match-sim` 與 `v8-product-match-host` 寫入本節（遷移計畫 §5.2 第 18 列）；寫入前本節只有上表三條。
+上表 E-3、E-7、E-12 的目標措辭是遷移後新程式的條文，條號沿用 E-n。正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。守衛（G1、G2、G3、G7、G11、G13）對應的條文由 `v8-product-match-sim` 與 `v8-product-match-host` 寫入本節（遷移計畫 §5.2 第 18 列）；寫入前本節只有上表三條。
 
 ### Replacement Criteria
 
