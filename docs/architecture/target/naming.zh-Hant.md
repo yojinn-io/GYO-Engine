@@ -29,7 +29,7 @@
 2. **System 是動詞片語、資料是名詞、Event 是過去式、Plugin 帶後綴**。守衛：登記時的名稱檢查（Registry 可對 System 名做詞性白名單的弱檢查）＋審查。
 3. **第 5 條的後綴在 Kernel、Engine、Plugins 的新程式中不出現**。守衛：掃描（`Manager|Renderer|ViewModel|Host|Shell|Runtime|Controller` 作為型別名尾；白名單只有仍存在的舊程式，隨遷移縮小）。
 
-4. **Engine 的名字中性**（`v8-arch-a6-revision`；承接 legacy `docs/architecture.md`〈Layers〉check 1 的性質，條文不變、只換落點）：`engine/` 的函式、型別、格式，其簽名、欄位與文件不出現產品名、玩法概念、或一個名字對某個產品的意義；出現就不屬於 Engine。plugins 層的同一條性質寫在 `docs/plugins/` 的層 DI（`v8-arch-plugins-foundation` 建）。守衛：`neutral_names_guard.py`（voxel-mesh、map-markers，既有）；Kernel 目錄的產品名禁字表（`v8-arch-kernel-scaffold` 新增，J-9）；其餘靠審查。
+4. **名字是概念的 tag；Engine 的名字只指 Engine 的概念。** `engine/` 裡出現產品的詞，就是 Engine 裡有了產品的概念，那個東西不屬於 Engine。名字乾淨不等於概念乾淨：對一個中性的值做只有某個產品懂的處理，同樣違反本條。守衛：名字由掃描查（`neutral_names_guard.py`，voxel-mesh 與 map-markers；Kernel 目錄的產品名禁字表，`v8-arch-kernel-scaffold` 新增，J-9）；名字查不到的由審查查。（使用者 2026-11-13：名字是一個概念的極簡 tag，所以這一條既是命名也是分層；分層那邊引用到這裡——`runtime-composition.zh-Hant.md` §4。承接 legacy `docs/architecture.md`〈Layers〉check 1。plugins 層的同一條性質寫在 `docs/plugins/` 的層 DI，`v8-arch-plugins-foundation` 建。）
 
 ### Replacement Criteria（候選）
 

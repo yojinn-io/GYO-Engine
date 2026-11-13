@@ -115,7 +115,7 @@
 | runtime-composition | DI 2 | 一個 Runtime 一個 runner；Engine 不含入 plugin；plugin 的選擇是資料 | 新；framework 的 DI 隨 framework 刪除，其中 DI 6 的性質由這一條承接，DI 1、DI 3 的性質由 plugins 層的 DI（`docs/plugins/`，plugins-foundation 建）承接 |
 | runtime-composition | DI 3 | 世界內容只經 Loading 進來；Player 與 Peer 是不同實體 | 新；entity-model §5.2 已加修訂註 |
 | naming | DI 1～3 | namespace 與目錄對應；詞性；禁止舊角色後綴 | 新 |
-| naming | DI 4 | Engine 的名字中性 | 相容：`docs/architecture.md`〈Layers〉check 1（換落點） |
+| naming | DI 4 | 名字是概念的 tag；Engine 的名字只指 Engine 的概念（分層由 runtime-composition §4 引用） | 相容並加嚴：承接 `docs/architecture.md`〈Layers〉check 1；「名字乾淨不等於概念乾淨」一句是新增（使用者 2026-11-13） |
 | assets | DI 1～3 | 沒有資產總管物件；載入是外部服務、依請求序套用；內容身分是 (c) | 取代 `docs/architecture.md` 的 `AssetManager` 一句 |
 | zone-c-sources | DI 1～3（草案） | 清單只說哪些檔；版本進格式；不含產品名分支 | 新 |
 | 產品 `docs/object_fps_pvp/target/entity-model.zh-Hant.md` | E-3、E-7、E-12 | 配發策略；沒有孤兒元件；Tick 內不改成員 | 相容（措辭更新）：entity-model 同號條 |
