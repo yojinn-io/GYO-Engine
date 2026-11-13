@@ -117,9 +117,9 @@ ALLOWED_STATICS = {
     # Access verification module: a thread_local pointer to the current System's context, read only while
     # verification is on; takes no part in ordering or results.
     "tlCurrent": r"^(?:static\s+|inline\s+)*thread_local\s+(?:const\s+)?[\w:<>]+\s*\*\s*tlCurrent\s*$",
-    # TypeKey<T>'s static inline char: only its address is used, as a lookup key (W-10 second sentence).
-    # Provisional name; the registry-schedule batch fixes it (declaration LIM-5).
-    "typeKeyTag": r"^static\s+inline\s+char\s+typeKeyTag\s*$",
+    # TypeKey<T>'s static inline char (engine/kernel/include/engine/kernel/TypeKey.hpp, Detail::TypeKeyOf<T>):
+    # only its address is used, as a lookup key (W-10 second sentence). Named by the registry-schedule batch.
+    "typeKeyAnchor": r"^static\s+inline\s+char\s+typeKeyAnchor\s*$",
 }
 
 

@@ -197,12 +197,12 @@ class GuardTree(unittest.TestCase):
         self.assertClean()
 
     def test_k4_allowlisted_type_key_char_passes(self):
-        self.header("template <typename T>\nstruct TypeKey { static inline char typeKeyTag; };")
+        self.header("template <typename T>\nstruct TypeKey { static inline char typeKeyAnchor; };")
         self.assertClean()
 
     def test_k4_allowlisted_name_with_the_wrong_type_is_reported(self):
-        self.header("template <typename T>\nstruct TypeKey { static inline int typeKeyTag; };")
-        self.assertReported("K4", "typeKeyTag")
+        self.header("template <typename T>\nstruct TypeKey { static inline int typeKeyAnchor; };")
+        self.assertReported("K4", "typeKeyAnchor")
 
     def test_k4_tlcurrent_without_thread_local_is_reported(self):
         self.header("struct Context {};\nstatic Context* tlCurrent = nullptr;")
@@ -210,7 +210,7 @@ class GuardTree(unittest.TestCase):
 
     def test_k4_allowlist_is_exactly_two_symbols(self):
         # spec J-9: adding a third symbol to the allowlist must fail this self-test.
-        self.assertEqual(set(guard.ALLOWED_STATICS), {"tlCurrent", "typeKeyTag"})
+        self.assertEqual(set(guard.ALLOWED_STATICS), {"tlCurrent", "typeKeyAnchor"})
 
     # K5 ---------------------------------------------------------------------------------------------------------
 
@@ -391,8 +391,8 @@ struct Shapes {
         self.assertReported("K4", "static")
 
     def test_k4_allowlisted_names_with_another_shape_are_reported(self):
-        for text in ("template <typename T>\nstruct TypeKey { static inline int typeKeyTag; };",
-                     "struct Map {};\ntemplate <typename T>\nstruct TypeKey { static inline Map typeKeyTag; };",
+        for text in ("template <typename T>\nstruct TypeKey { static inline int typeKeyAnchor; };",
+                     "struct Map {};\ntemplate <typename T>\nstruct TypeKey { static inline Map typeKeyAnchor; };",
                      "struct Map {};\nthread_local Map tlCurrent;",
                      "static thread_local int evil, tlCurrent;"):
             with self.subTest(text=text):

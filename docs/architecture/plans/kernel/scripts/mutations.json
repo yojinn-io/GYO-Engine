@@ -206,8 +206,8 @@
       "id": "ks-k4-third-symbol",
       "what": "K4 allowlist gains a third symbol",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "    \"typeKeyTag\": r\"^static\\s+inline\\s+char\\s+typeKeyTag\\s*$\",",
-      "replace": "    \"typeKeyTag\": r\"^static\\s+inline\\s+char\\s+typeKeyTag\\s*$\",\n    \"cache\": r\"^static int cache$\",",
+      "find": "    \"typeKeyAnchor\": r\"^static\\s+inline\\s+char\\s+typeKeyAnchor\\s*$\",",
+      "replace": "    \"typeKeyAnchor\": r\"^static\\s+inline\\s+char\\s+typeKeyAnchor\\s*$\",\n    \"cache\": r\"^static int cache$\",",
       "expect": "FAIL: test_k4_allowlist_is_exactly_two_symbols",
       "command": [
         "{python}",
@@ -1306,10 +1306,10 @@
     },
     {
       "id": "ks-k4-type-key-shape-loose",
-      "what": "the typeKeyTag shape accepts any type (review A6)",
+      "what": "the typeKeyAnchor shape accepts any type (review A6)",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "\"typeKeyTag\": r\"^static\\s+inline\\s+char\\s+typeKeyTag\\s*$\",",
-      "replace": "\"typeKeyTag\": r\"^static.*typeKeyTag\\s*$\",",
+      "find": "\"typeKeyAnchor\": r\"^static\\s+inline\\s+char\\s+typeKeyAnchor\\s*$\",",
+      "replace": "\"typeKeyAnchor\": r\"^static.*typeKeyAnchor\\s*$\",",
       "expect": "FAIL: test_k4_allowlisted_names_with_another_shape_are_reported",
       "command": [
         "{python}",
