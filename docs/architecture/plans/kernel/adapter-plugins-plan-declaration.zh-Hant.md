@@ -1,6 +1,6 @@
 # 事前宣告：`v8-arch-adapter-plugins-plan`（外部組件改成 adapter plugin 的規劃批）
 
-更新：2026-11-13。Owner：架構（架構師會話）。**狀態：草案，待使用者核准；核准前不開工、不改任何文件。**
+更新：2026-11-13。Owner：架構（架構師會話）。**狀態：已核准（使用者 2026-11-13「核准，開始」）。**
 
 出處（全部已定，本批不重開）：kernel `HANDOFF.md` 決定行 `v8-arch-external-components-as-adapters`（立場、三條原則、方向 C、plugin 兩類、細節六題）、`v8-arch-engine-or-plugin-criteria`（留 Engine 還是 plugin 的判斷順序）、`v8-arch-plugin-selection-data`、`v8-arch-framework-retire`、`v8-arch-docs-scope-of-target`、`v8-arch-architecture-entry`；遷移計畫 `migration-plan.zh-Hant.md` §3.11（plugins-foundation）、§3.12（net-link）、§3.18（wrap-render）、§3.20（plugins-frame）、§3.24（plugins-editor）、§3.25～3.28（工具四批）、§4 Delta-2／5／6、§5.2；`target/runtime-composition.zh-Hant.md` §4；`guards-inventory.zh-Hant.md` Q1、Q2；`tool-hosts-inventory` 報告 §8。
 
