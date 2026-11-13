@@ -188,7 +188,7 @@ spec H.7 每列都對到現況（product-thirdparty §6 表）。例外：`Movem
 
 ### 4.4 (d) 第三方重核（對 #176 判定總表）
 
-**判定欄沒有改判**。§2.1「Kernel／plugin 相容性」收窄四處：Recast／Detour 與 Jolt「可當能力」→ 包（先拆；Jolt 只限 (b) World）；ImGui「可當能力」→ 包（全域 context 明列例外）；SDL_GPU「Stage 約束」→ H-3 親和。#176 的 14 列不含 asio、httplib、protobuf、nlohmann、doctest，相容性在 §1.3。回寫 #176 判定總表的差異清單＝這四處加五個新列，標「依 spec v0.2 重核」（下一次文件批）。
+**判定欄沒有改判**。§2.1「Kernel／plugin 相容性」收窄四處：Recast／Detour 與 Jolt「可當能力」→ 包（先拆；Jolt 只限 (b) World）；ImGui「可當能力」→ 包（全域 context 明列例外）；SDL_GPU「Stage 約束」→ H-3 親和。#176 的 14 列不含 asio、httplib、protobuf、nlohmann、doctest，相容性在 §1.3。回寫 #176 判定總表的差異清單＝這四處加五個新列，標「依 spec v0.2 重核」（下一次文件批）。**已落字**（2026-11-13，`v8-arch-a6-revision`）：`third-party-evaluation/evaluation.zh-Hant.md` §2.1 的表——四處在原結論後加方括號註（原文保留），五個新列加在表尾；#176 的判定總表（該資料夾 README）沒有改判，未動。
 
 ### 4.5 (e) 決定性區表（determinism.md §4）的回對（主會話合併）
 

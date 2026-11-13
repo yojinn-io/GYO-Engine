@@ -1,6 +1,8 @@
 # Determinism
 
 > **Legacy** (current-state record; `v8-arch-docs-legacy`, 2026-11-12). Design authority is [`docs/architecture/target/`](target/README.md). This document takes only two kinds of updates: the current state of code that still exists, and Design Invariants that tests still guard. Existing code is bound by this document's Design Invariants; new code (from `engine/kernel` on) by target. Target design: [`target/determinism.md`](target/determinism.md); it replaces this document when the migration batch completes (the batch is set by `v8-arch-migration-plan`).
+>
+> 2026-11-13 (`v8-arch-a6-revision`): sections 1, 2 and 4 (with 4.7a and 4.7b, without the candidate 4.2a) were copied to `target/determinism.md` under the same section numbers; **the authority for those three sections is now the target page** and the copies here are frozen. Sections 0, 3, 5 to 9 and 4.2a, the plan items E0 to E5 and the Design Invariants and Replacement Criteria below stay here: they belong to the determinism line, which is paused (kernel `HANDOFF.md`), and where they go is decided before the closeout batch deletes this file. In section 4.7b, "`target/determinism.md` section 2" now means its section 11 (that page's own sections were renumbered 10 to 13).
 
 Updated 2026-11-11. Owner: Engine (architecture). Written by task card `v8-arch-determinism-levels` (docs only; no code,
 flag or golden changed). **Status: proposal.** The `Design Invariants` section below is a candidate; it binds only

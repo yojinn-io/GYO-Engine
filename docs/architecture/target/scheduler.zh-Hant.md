@@ -18,12 +18,14 @@
 
 ## Design Invariants（候選；核准後成為正式條文）
 
-1. **衝突與順序分開存**：Plan 的建立只讀兩種邊；衝突邊不隱含先後。守衛：spec J-21、J-22。
-2. **(c) 的歧義是啟動錯誤，(b) 依登記序平手，無豁免**：守衛 spec J-22、J-23、J-44（(c) System 登記順序的排列測試：要嘛全部 D-E8，要嘛結果不變）。
-3. **Plan 唯一且建一次**：只取決於登記序與宣告，不依雜湊、位址、執行緒、平台；Running 期間不重建。守衛：spec J-20。
+條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
+
+1. **衝突與順序分開存**——受 kernel [DI-KS 5](kernel.zh-Hant.md#di-ks-5) 約束：**全文與守衛見該條，改動前必讀**。
+2. **(c) 的歧義是啟動錯誤，(b) 依登記序平手，無豁免**——受 kernel [DI-KS 5](kernel.zh-Hant.md#di-ks-5) 約束：**全文與守衛見該條，改動前必讀**。
+3. **Plan 唯一且建一次**——受 kernel [DI-KS 3](kernel.zh-Hant.md#di-ks-3) 約束：**全文與守衛見該條，改動前必讀**。
 
 ### Replacement Criteria（候選）
 
 - LIM-2：v1 只有 Serial，任何 Parallel 宣告是啟動錯誤；解除條件＝量到 tick 超預算且有逐位元等價的守衛（spec J-27）（詳細在 `limits.zh-Hant.md`）。
 - LIM-1：(b) 讀 (c) 要顯式順序；為消除 D-E8 加的順序宣告一半以上與資料流無關 → 區劃錯了，重審區劃（詳細在 `limits.zh-Hant.md`）。
-- 為表達需求必須引入依賴求解以外的排序（優先權數字、依資料值決定順序、執行期改 Plan）→ 第二種排序機制，停下（spec K.2 第 4 條）。
+- **第二種排序機制**——受 kernel [RC 4](kernel.zh-Hant.md#rc-4) 約束，改動前必讀該條。
