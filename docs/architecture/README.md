@@ -26,8 +26,8 @@ What every batch's pre-declaration must check when it moves architecture to a ne
 
 How the layers between the Engine and products or tools are composed, and the dependency rules between them:
 [`target/runtime-composition.zh-Hant.md`](target/runtime-composition.zh-Hant.md) §4.
-An Engine-owned plugin (maintained with the Engine) and an extension under `plugins/` (maintained outside it, for
-example networking) are two different owners; the same §4 says how to tell them apart.
+The same §4 also says where an adapter for an external component lives, and distinguishes Engine-owned plugins
+(planned, not yet defined) from extensions under `plugins/`.
 
 ## Naming
 

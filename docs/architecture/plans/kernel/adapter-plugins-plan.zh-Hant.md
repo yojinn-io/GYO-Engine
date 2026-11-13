@@ -1,23 +1,23 @@
 # 外部組件改成 adapter plugin 的規劃（修訂稿）：`v8-arch-adapter-plugins-plan`
 
-件数の突き合わせ：engine 頂層模組 **23＝23**（事前宣告與 `ls engine` 一致）；third_party **10＝10**（一致）；建置期外部組件 **3**（事前宣告寫 2——**不一致**：偵察 A 多查出 SPIRV-Cross，`engine/render/shaders/pipeline/cmake/Dependencies.cmake` 的 `gyo_spirvcross`、`src/main.cpp` 含 `<spirv_cross_c.h>`；不是判定失敗，三份提案的重數都是 3）；歸類表主列 **36＝23＋10＋3**（一致），另有後端子列 7 與建置期工具子列 1；後端 **9＝9**（一致：7 個子列＋本身就是後端的 platform、net 兩個主列）；受影響批：既有 **17**＋新增 **2**（偵察 B 數 17；本稿既有批也是 17，**數目一致、組成差一處**：偵察 B 列了 wrap-assets，本稿判它不變；本稿另列 closeout（過渡登記表與含入棘輪的歸零判定））。**對抗檢查後**：engine 外含入後端標頭的檔 **65**（統合稿寫「約 67」，沿用成本案未重數——**不一致**，已改；apps 4、build 3、framework 6、tests 39、tools 13）；後端公開非 native 標頭的外部型別記號 **5 行、4 檔，全為註解**（統合稿寫「只命中 2 處註解」——**不一致**，已改；「型別 0 件」的結論不變）；`engine/net` 的消費者 **6 處**（統合稿列 1 處——**不一致**，已補）；asio、httplib 的 CMake 連結者 **7 行**（apps 2、tests 2、acceptance 3；統合稿未數）；對抗檢查 blocker 6／should 13／nit 8 ＝ 處置記錄 27 條（**一致**，文末）；掃描與重算在主 checkout `build/evidence/adapter-plugins-plan/reviser-scan.{py,txt}`、`reviser-sum.{py,txt}`。**第二次修訂（複核與討論後）**：歸類表主列 36 不變（新讀法下 0 列與已定歸屬相反）；configure 錯誤 9 → **3**；補遺二的新守衛 7 → **3**（N1 改為只掃 `engine/`、N2、N3；N4～N7 刪）；未決 17 → **0**（17 題全部已定，§4）；受影響批：既有 17＋新增 **3**（adapters-relocate、json-adapter 由條件改非條件、規劃批 B1）；計畫的批 36 → **37**（非條件 34 → 36、條件 2 → 1）；非條件合計 681～1,400 → **700～1,448 h**；重算在同目錄 `reviser2-sum.{py,txt}`（git 管理外）。
+件数の突き合わせ：engine 頂層模組 **23＝23**（事前宣告與 `ls engine` 一致）；third_party **10＝10**（一致）；建置期外部組件 **3**（事前宣告寫 2——**不一致**：偵察 A 多查出 SPIRV-Cross，`engine/render/shaders/pipeline/cmake/Dependencies.cmake` 的 `gyo_spirvcross`、`src/main.cpp` 含 `<spirv_cross_c.h>`；不是判定失敗，三份提案的重數都是 3）；歸類表主列 **36＝23＋10＋3**（一致），另有後端子列 7 與建置期工具子列 1；後端 **9＝9**（一致：7 個子列＋本身就是後端的 platform、net 兩個主列）；受影響批：既有 **17**＋新增 **2**（偵察 B 數 17；本稿既有批也是 17，**數目一致、組成差一處**：偵察 B 列了 wrap-assets，本稿判它不變；本稿另列 closeout（過渡登記表的歸零判定；含入棘輪已在第二次修訂刪））。**對抗檢查後**：engine 外含入後端標頭的檔 **65**（統合稿寫「約 67」，沿用成本案未重數——**不一致**，已改；apps 4、build 3、framework 6、tests 39、tools 13）；後端公開非 native 標頭的外部型別記號 **5 行、4 檔，全為註解**（統合稿寫「只命中 2 處註解」——**不一致**，已改；「型別 0 件」的結論不變）；`engine/net` 的消費者 **6 處**（統合稿列 1 處——**不一致**，已補）；asio、httplib 的 CMake 連結者 **7 行**（apps 2、tests 2、acceptance 3；統合稿未數）；對抗檢查 blocker 6／should 13／nit 8 ＝ 處置記錄 27 條（**一致**，文末）；掃描與重算在主 checkout `build/evidence/adapter-plugins-plan/reviser-scan.{py,txt}`、`reviser-sum.{py,txt}`。**第二次修訂（複核與討論後）**：歸類表主列 36 不變（新讀法下 0 列與已定歸屬相反）；configure 錯誤 9 → **3**（最終檢查 S-6 更正：選擇欄的錯誤 3 種；9 種中實際拿掉 4 種，`dependency-cycle`、`invalid-backend` 改列登記資料的驗證錯誤，§3.4）；補遺二的新守衛 7 → **3**（N1 改為只掃 `engine/`、N2、N3；N4～N7 刪）；未決 17 → **0**（17 題全部已定，§4）；受影響批：既有 17＋新增 **3**（adapters-relocate、json-adapter 由條件改非條件、規劃批 B1）；計畫的批 36 → **37**（非條件 34 → 36、條件 2 → 1）；非條件合計 681～1,400 → **700～1,448 h**；重算在同目錄 `reviser2-sum.{py,txt}`（git 管理外）。**第三次修訂（Fable 最終檢查後）**：最終檢查 blocker 4／should 18／nit 7 ＝ 處置記錄 29 條（**一致**，文末）；未決 18、19 新增並已定（使用者 2026-11-13，主會話「照建議」）；計畫的批 37 不變；非條件合計 700～1,448 → **701～1,450 h**；關鍵路徑 332～694 → **333～696 h**；重算在同目錄 `reviser3-sum.{py,txt}`（git 管理外）。
 
-- 狀態：**第二次修訂稿（複核與討論後；17 題全部已定；待 Fable 檢查最終稿一次——判定 6 (c)）**；第一次修訂稿（Fable／high 敵對檢查一次之後）的內容見 git 歷史 `b647de39`。日期 2026-11-13。Owner：架構（架構師會話）。
-- 性質：ultracode 小編制的統合（事前宣告 `adapter-plugins-plan-declaration.zh-Hant.md` §4）：偵察 Opus／high ×2、提案 Opus／high ×3（①風險與可逆、②價值、③成本）、統合 Opus／high；敵對檢查 Fable／high 一次（blocker 6／should 13／nit 8，報告在主 checkout `build/evidence/adapter-plugins-plan/adversary-report.md`）；修訂 Opus／high（第一次；逐條處置見文末「對抗檢查處置記錄」）；第二次修訂 Opus／high（照 review 決定行與未決的決定；文末「複核與討論後的修訂記錄」）。
+- 狀態：**第三次修訂稿（Fable 最終檢查一次之後——判定 6 (c)；未決 18、19 已定；交主會話的條目見文末「最終檢查處置記錄」）**；第二次修訂稿見 git 歷史 `86de8f39`；第一次修訂稿（Fable／high 敵對檢查一次之後）的內容見 git 歷史 `b647de39`。日期 2026-11-13。Owner：架構（架構師會話）。
+- 性質：ultracode 小編制的統合（事前宣告 `adapter-plugins-plan-declaration.zh-Hant.md` §4）：偵察 Opus／high ×2、提案 Opus／high ×3（①風險與可逆、②價值、③成本）、統合 Opus／high；敵對檢查 Fable／high 一次（blocker 6／should 13／nit 8，報告在主 checkout `build/evidence/adapter-plugins-plan/adversary-report.md`）；修訂 Opus／high（第一次；逐條處置見文末「對抗檢查處置記錄」）；第二次修訂 Opus／high（照 review 決定行與未決的決定；文末「複核與討論後的修訂記錄」）；Fable／high 最終檢查一次（blocker 4／should 18／nit 7，報告在主 checkout `build/evidence/adapter-plugins-plan/adversary-final.md`）；第三次修訂 Opus／high（文末「最終檢查處置記錄」）。
 - 基準：工作樹 `GYO-Engine-arch`，分支 `claude/arch-adapter-plugins-plan`；統合稿在 HEAD `fd012f4b` 上寫、提交為 `9bcb959b`；修訂時已併入 master（`b77ba68b`，含 PR #210 的入口 README），修訂未提交。偵察與三份提案的原文在主 checkout `build/evidence/adapter-plugins-plan/`（`recon-engine.md`、`recon-plan.md`、`proposal-{risk,value,cost}.md`、`proposal-risk-scan.{py,txt}`；git 管理外）。
 - 已定前提（不重開）：kernel `HANDOFF.md` 決定行 `v8-arch-external-components-as-adapters`（立場、三條原則、方向 C、plugin 兩類、細節六題 (a)～(f)）、`v8-arch-engine-or-plugin-criteria`、`v8-arch-plugin-selection-data`、`v8-arch-framework-retire`、`v8-arch-docs-scope-of-target`、`v8-arch-architecture-entry`；**`v8-arch-adapter-plugins-review`**（2026-11-13，複核討論；與上列決定行不同處以它為準）與 HANDOFF 現況末尾「#212 的使用者決定」兩行；未決 1 的使用者原話（主會話轉達）。本稿的「建議」都交使用者；「推定」＝無出處的估計；「未查證」＝本次沒讀到能確認的出處。
-- 本稿改的其他檔：`migration-plan.zh-Hant.md`（文末「修訂記錄（v8-arch-adapter-plugins-plan）」列出改了哪些段）、`target/runtime-composition.zh-Hant.md` §4（本文；只寫使用者已裁決的內容，待定的讀法都在本檔 §4；Design Invariants 節不動，逐位元比對）、`docs/architecture/README.md`（產出 6：`Layers and dependencies` 條目刪「待寫入 §4」那一句；入口已由 PR #210 合併進 master；第二次修訂在同一條目加一句區分「Engine 自有 plugin」與「`plugins/` 的擴展」）。第二次修訂：runtime-composition §4 照 review 決定行改寫（只寫已裁決的內容；Design Invariants 節不動，md5 相同）。
+- 本稿改的其他檔：`migration-plan.zh-Hant.md`（文末「修訂記錄（v8-arch-adapter-plugins-plan）」列出改了哪些段）、`target/runtime-composition.zh-Hant.md` §4（本文；只寫使用者已裁決的內容，待定的讀法都在本檔 §4；Design Invariants 節不動，逐位元比對）、`docs/architecture/README.md`（產出 6：`Layers and dependencies` 條目刪「待寫入 §4」那一句；入口已由 PR #210 合併進 master；第二次修訂在同一條目加一句區分「Engine 自有 plugin」與「`plugins/` 的擴展」）。第二次修訂：runtime-composition §4 照 review 決定行改寫（只寫已裁決的內容；Design Invariants 節不動，md5 相同）。第三次修訂：runtime-composition §4 本文的新舊句互註、JSON 的轉換改 fast_float、shader 編譯步驟留在共通內容管線（未決 18、19；DI 節與 HEAD 逐位元相同）；入口 README 那一句改成只指路（最終檢查 S-16）。
 
 ## 0. 結論（先寫；第二次修訂後）
 
 1. **根因與方向**（`v8-arch-adapter-plugins-review`）：第一次修訂把「怎麼碰外部組件」（軸 1，三原則）綁到「能力放哪」（軸 2，判斷順序）——選項 C「adapter 都是 plugin」加草稿 DI 5「Engine 不連外部組件」，使判為 Engine 的能力（JSON、audio core、model 取樣）被強推成 plugin、逐個開例外。改為：**軸 2 決定歸屬**（判斷順序，第一問用 Q-b 檢查，(b) 讀作「產品會在多個實作之間選的規則」）；**軸 1 在哪一層都適用**——Engine 的能力用到外部組件時 adapter 在 Engine 裡，歸 plugin 的能力 adapter 在那個 plugin（選項 C 改窄），產品獨有的能力屬於產品、產品連外部組件時經對接它的 plugin（R3）。plugin 是組成單位，不等於在 Engine 外面；「Engine 自有 plugin」另開規劃批 B1。
-2. **Feature 2、3 的機制在 plugins-foundation 段 (i) 交付**：選擇欄一次升到 version 2（components 併入、刪除），可執行單位（app 的 role、tool 的 variant）各自一份、**只寫 plugin 名**；「用到哪些需要後端的能力」由段 (i) 宣告先驗以 CMake 連結圖推導，不可行時回宣告式（plugin 登記資料寫 `requires_capabilities`），兩種情況產品都不另寫；選了 plugin 自動補它依賴的 plugin；configure 錯誤只有三種（缺後端、多後端、選了或依賴了不存在的 plugin）；還沒搬進 `plugins/` 的後端以過渡登記表掛最終名；登記格式預留「Engine 自有 plugin」一類的形狀、不實作（§3）。產品與工具因這次改造多出的步驟只有「在選擇欄寫要用的 plugin」（Feature 2 本身）與 R3 的「產品連外部組件經對接它的 plugin」。
+2. **Feature 2、3 的機制在 plugins-foundation 段 (i) 交付**：選擇欄一次升到 version 2（components 併入、刪除），可執行單位（app 的 role、tool 的 variant）各自一份、**只寫 plugin 名**；「用到哪些需要後端的能力」由段 (i) 宣告先驗以 CMake 連結圖推導，不可行時回宣告式（plugin 登記資料寫 `requires_capabilities`），兩種情況產品都不另寫；選了 plugin 自動補它依賴的 plugin；選擇欄的 configure 錯誤只有三種（缺後端、多後端、選了或依賴了不存在的 plugin；登記資料的驗證錯誤另計，§3.4）；還沒搬進 `plugins/` 的後端以過渡登記表掛最終名；登記格式預留「Engine 自有 plugin」一類的形狀、不實作（§3）。產品與工具因這次改造多出的步驟不只「在選擇欄寫要用的 plugin」（Feature 2 本身）與 R3 的「產品連外部組件經對接它的 plugin」兩條，照實列在文末〈仍往產品加步驟的條目〉（最終檢查 S-2、S-3、S-4；推導不可行、回宣告式時再多一條）。
 3. **Feature 1 只對 Engine 承諾（範圍 (α)）**：「升級一個外部組件只改對接它的那一塊」對 Engine 成立；產品用了 plugin 露出的第三方型別（(iii) 允許），升級時產品自己負責。「升級」靠型別隔離今天已大致成立：9 個後端的非 native 公開標頭含入外部組件 0 件、型別 0 件（§2）。守衛只守 Engine 這一側（Engine 側的含入與連結掃描、標頭衛生），產品側的棘輪與白名單全部刪。
-4. **歸屬**（§1）：model 取樣規則、audio core、ui、JSON 留 Engine（固化或 Q-b 不成立，不是例外）；**JSON 已定**——一個 Engine 的 JSON 模組以 **yyjson** 為唯一的函式庫 adapter，數字走原文路（adapter 交出原文、Engine 以 `std::from_chars` 轉），介面是 GYO 自己的（未決 1）；網路（含 `engine/net`）在 plugin；SDL 家族與 shader 建置期工具在 SDL plugin（P2）；ImGui 是第 2 類 plugin，它官方的 SDL3／SDL_GPU 後端放進 SDL plugin 內的 `sdl_imgui` target（RC (ii) 選 (ii)）。
-5. **搬法**：ufbx 由 assets-core 登記、成為唯一的 ufbx adapter（`plugins/ufbx/` 在 assets-core 建，未決 16 (a)）；`engine/net` 併進 net-link；`v8-arch-json-adapter`（非條件批）在 G2a 後、adapters-relocate 之前做，shader 工具在它搬進 SDL plugin 之前改用 Engine 的 JSON 介面；SDL 家族、ufbx 與 shader 工具在 adapters-relocate 一次只搬不改形狀進 `plugins/`，wrap-render 再在 plugins 裡改形狀（§5 取捨 T4）。
-6. **計畫合計（非條件批）**：原計畫 632～1,299 h → 第一次修訂 681～1,400 h → **本修訂 700～1,448 h**（非條件 36 批，全為推定；其中規劃批 B1 8～16 h 與由條件改為非條件的 json-adapter 21～42 h 是新算入的；不含這兩批時 671～1,390 h，比第一次修訂少 10 h）。**超出 RC-11 的錨點 1,299 h**（上限多 149 h）；錨點不調（review 決定行）——這次複核就是對「計畫越修越大」的回應，觸發點 1,948.5 h 未到。關鍵路徑 332～694 h 不變。重算：主 checkout `build/evidence/adapter-plugins-plan/reviser2-sum.{py,txt}`。
+4. **歸屬**（§1）：model 取樣規則、audio core、ui、JSON 留 Engine（固化或 Q-b 不成立，不是例外）；**JSON 已定**——一個 Engine 的 JSON 模組以 **yyjson** 為唯一的函式庫 adapter，數字走原文路（adapter 交出原文、以 fast_float 轉——未決 18：浮點 `std::from_chars` 在 macOS 部署目標 13.3 不可用），介面是 GYO 自己的（未決 1）；網路（含 `engine/net`）在 plugin；SDL 家族與 shader 編譯工具在 SDL plugin（P2；shader 的編譯步驟留在共通內容管線、從已選 plugin 的登記資料找編譯器——未決 19）；ImGui 是第 2 類 plugin，它官方的 SDL3／SDL_GPU 後端放進 SDL plugin 內的 `sdl_imgui` target（RC (ii) 選 (ii)）。
+5. **搬法**：ufbx 由 assets-core 登記、成為唯一的 ufbx adapter（`plugins/ufbx/` 在 assets-core 建，未決 16 (a)）；`engine/net` 併進 net-link；`v8-arch-json-adapter`（非條件批）在 G2a 後、adapters-relocate 之前做，shader 工具在它搬進 SDL plugin 之前改用 Engine 的 JSON 介面；SDL 家族、ufbx 與 shader 編譯工具在 adapters-relocate 一次只搬不改形狀進 `plugins/`（唯一改形狀的一處是共通內容管線改由登記資料找編譯器，未決 19），wrap-render 再在 plugins 裡改形狀（§5 取捨 T4）。
+6. **計畫合計（非條件批）**：原計畫 632～1,299 h → 第一次修訂 681～1,400 h → 第二次修訂 700～1,448 h → **最終檢查後 701～1,450 h**（json-adapter ＋1～2（fast_float，未決 18）；SDL 2D 的刪除 1～2 由 plugins-editor 移到 runtime-loop-retire，B-2；以下括號是第二次修訂的說明：非條件 36 批，全為推定；其中規劃批 B1 8～16 h 與由條件改為非條件的 json-adapter 21～42 h 是新算入的；不含這兩批時 671～1,390 h，比第一次修訂少 10 h）。**超出 RC-11 的錨點 1,299 h**（上限多 149 h）；錨點不調（review 決定行）——這次複核就是對「計畫越修越大」的回應，觸發點 1,948.5 h 未到。關鍵路徑 332～694 h 不變。最終檢查後：上限超出錨點 151 h；關鍵路徑 333～696 h（runtime-loop-retire 在路徑上）。重算：主 checkout `build/evidence/adapter-plugins-plan/reviser2-sum.{py,txt}`；最終檢查後 `reviser3-sum.{py,txt}`。
 7. **受影響的批**（計畫修訂記錄逐段列出）：既有 17 批（plugins-foundation、assets-core、match-sim、net-link、diagnostics-service、match-host、wrap-render、plugins-frame、client-link、client-frame、plugins-editor、工具四批、framework-delete、closeout）＋新增 3 批（adapters-relocate、json-adapter、規劃批 `v8-arch-engine-own-plugins-plan`＝B1）。
-8. **未決**：17 題全部已定（§4 逐題引決定行）。Design Invariants 的增改（DI 2 增補、新 DI 5、DI 6、兩條 RC）使用者已同意，文字照 review 決定行改寫；落字時點在 plugins-foundation 的事前宣告之前，本修訂不改 target 的 DI 節（§4 未決 11）。
+8. **未決**：17 題全部已定（§4 逐題引決定行）；最終檢查後新增未決 18（macOS 上的數字轉換）、19（shader 編譯步驟與共通 build 的邊），使用者 2026-11-13 已定（主會話「照建議」，§4）；最終檢查的其他條目中要改使用者已定項、或屬新設計決定的，列在文末處置記錄「交主會話」。Design Invariants 的增改（DI 2 增補、新 DI 5、DI 6、兩條 RC）使用者已同意，文字照 review 決定行改寫；落字時點在 plugins-foundation 的事前宣告之前，本修訂不改 target 的 DI 節（§4 未決 11）。
 
 ---
 
@@ -41,10 +41,10 @@
 | 1a | └ asset 的 sdl_image loader | 成立 | 有（SDL_image） | 會被替換 | **第 1 類**：SDL_image plugin，宣告依賴 SDL plugin | 已定 (e) | `gyo_asset_sdl_image`（`engine/CMakeLists.txt`，`if(TARGET SDL3_image::SDL3_image)` 內）；`SdlImageTextureLoader.hpp` 位於 `GYO::Engine` 的公開 include 目錄 |
 | 2 | audio（core：`Mixer`、`Submitter`、`ClipBank`） | 成立（Match 不用） | 無（輸出在後端） | 固化：整數混音與跨平台記錄雜湊是 DI（audio.md DI 8、9）；bus／effect 是 audio.md RC 預留的擴充點，但產品不在多個 mixer 實作之間選（(b) 的新讀法）；`Mixer`／`Submitter` 也是 SDL 音訊輸出所實作的中性介面 | **留 Engine** | **已定**（review 決定行 (3)；未決 3） | `engine/audio/include/engine/audio/Mixer.hpp` `Mixer`、`Submitter`；`tests/common/audio/CharacterizationTests.cpp`（跨平台錄製雜湊，label `cpu`）；`gyo_expect_audio_links` |
 | 2a | └ audio/backend/sdl | 成立 | 有（SDL） | 會被替換 | **第 1 類**：SDL plugin 的音訊輸出部分 | 已定 (e) | `gyo_audio_sdl` `SdlAudioOutput::Open(Mixer&&, …)` |
-| 3 | base | **不成立** | — | — | 留 Engine | 已定（準則明列 Base） | `gyo_base`（INTERFACE）；`engine/base/include/engine/base/StrictJson.hpp` `ParseStrictJson`（只以模板參數接 nlohmann；json-adapter 改成經 Engine 的 JSON 模組，未決 1 已定） |
+| 3 | base | **不成立** | — | — | 留 Engine | 已定（準則明列 Base） | `gyo_base`（INTERFACE）；`engine/base/include/engine/base/StrictJson.hpp` `ParseStrictJson`（只以模板參數接 nlohmann；json-adapter 把 `StrictJson.hpp` 自 base 移出、併入 Engine 的 JSON 模組——base 不依賴 JSON 模組，最終檢查 S-11；未決 1 已定） |
 | 4 | collision | 成立 | 無 | 固化 | 留 Engine | **已定** | 準則決定行；`gyo_collision` |
-| 5 | config | 不適用（不是程式模組） | — | — | 不適用：`projects.csv`、`tools.csv` 是 Product Registration 資料，留原處 | 建議 | `engine/config/`；讀者 `build/cmake/GyoApps.cmake`、`GyoTools.cmake` |
-| 6 | entity_store | **不成立**（World 欄的實作，Delta-3） | — | — | 留 Engine | 建議（由 Delta-3 推出） | `gyo_entity_store`；計畫 §4 Delta-3 |
+| 5 | config | 不適用（不是程式模組） | — | — | 不適用：`projects.csv`、`tools.csv` 是 Product Registration 資料，留原處 | 事實判定（不是程式模組；不在 17 題內；最終檢查 N-4） | `engine/config/`；讀者 `build/cmake/GyoApps.cmake`、`GyoTools.cmake` |
+| 6 | entity_store | **不成立**（World 欄的實作，Delta-3） | — | — | 留 Engine | 已定（由已同意的 Delta-3 推出；不在 17 題內；最終檢查 N-4） | `gyo_entity_store`；計畫 §4 Delta-3 |
 | 7 | input（core：`PhysicalInputFrame`、`InputActionMap`） | 成立（Match 不用） | 無 | 固化：後端要填的 Engine 詞彙 | 留 Engine（中性介面＝Engine 的能力） | 已定方向（未決 13，各遷移批確認） | `engine/input/include/engine/input/PhysicalInputFrame.hpp`；`gyo_input` 只 PRIVATE 連 `GYO::Base` |
 | 7a | └ input/backend/sdl（含 native） | 成立 | 有（SDL） | 會被替換 | **第 1 類**：SDL plugin 的輸入部分 | 已定 (e) | `gyo_input_sdl` `SdlInput`、`SdlInputInjector`；`gyo_input_sdl_native` `HandleNativeEvent` |
 | 8 | io | 不成立：`IFileSystem`、`IStream` 是資產載入的詞彙，`Assets<T>` 依賴它；若成 plugin，Engine 的 asset 就要 include plugin（違 Delta-2 第 5 項） | 對 OS 有，但已經 `engine/os`；無第三方 | （若 Q1 判成立：固化——資產載入的詞彙；照順序仍留 Engine） | 留 Engine（介面與同步實作）；IO 執行緒服務已是 plugin（計畫 §3.11 asset-io） | 已定方向（未決 13，各遷移批確認） | 併入 `GYO::Engine`；`IFileSystem`、`IFileWatcher`、`IStream`；計畫 §3.19 `WriteFileAtomically` |
@@ -53,13 +53,13 @@
 | 11 | math | 成立 | 無 | 固化 | 留 Engine | **已定** | 準則決定行；`gyo_math` |
 | 12 | model（core：`ModelAsset`、`AnimationEvents`、取樣） | 成立 | 無 | 固化：`ModelAsset`／`AnimationEvents` 是契約詞彙（ufbx adapter 輸出的中性型別）；取樣規則是 Engine 定的標準（E1 改的是這個標準；determinism §4.2，今天 (b)、同平台 golden），產品不在多個取樣規則之間選（(b) 的新讀法） | **留 Engine** | **已定**（review 決定行 (3)；未決 3） | `engine/model/include/engine/model/ModelAsset.hpp`；`engine/model/src/AnimationEvents.cpp`；`gyo_expect_model_links` |
 | 12a | └ model/backend/ufbx | 成立 | 有（ufbx） | 會被替換 | **第 1 類**：ufbx plugin | 已定 (e) | `gyo_asset_ufbx` `UfbxModelLoader`（PRIVATE 連 `gyo_ufbx`）；消費者 `apps/object_fps_pvp/src/Sim/PlayerAnimationContent.cpp`（Match）與 `src/Pvp/PvpApplication.cpp`（Client）都直接 `loaders.Register(std::make_unique<…UfbxModelLoader>())` |
-| 13 | net | 成立（Engine 的其他模組都不用它；使用者是 object_fps_pvp 與它的測試、acceptance） | 有（wire 的資料框；與 Go gateway 共用的跨語言契約） | — | **第 2 類**：網路 plugin，與 asio／httplib／protobuf 同一個 plugin | **已定 (f)**；owner＝網路 plugin 的 owner，也是 `services/gyo_gateway` 的 owner（review (7)，O1） | `engine/net/include/engine/net/GyopDatagram.hpp` `EncodeGyopDatagram`、`DecodeGyopDatagram`；`gyo_net` 只連 `GYO::Base`；消費者：`apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`、apps CMake 的 `GYO::Net` 2 處、`tests/object_fps_pvp/CMakeLists.txt` 的 `GYO::Net`、`build/acceptance/object_fps_pvp/worker_main.cpp`（`EncodeGyopDatagram`）、`tests/common/net`；向量檔 `tests/common/net/fixtures/gyop_datagram_vectors.json` 另被 `services/gyo_gateway/framing/vectors_test.go` 讀（GYOP 與 Go gateway framing 逐位元組共用，`GyopDatagram.hpp` 檔頭；契約與向量檔放在兩個實作之外——未決 14 G-b，已定） |
+| 13 | net | 成立（Engine 的其他模組都不用它；使用者是 object_fps_pvp 與它的測試、acceptance） | 有（wire 的資料框；與 Go gateway 共用的跨語言契約）——**本列的歸屬由決定 (f) 得到，不由判斷順序推出**：`engine/net` 本身只做位元組的編解碼、不做 IO、不連外部組件；`gyo.voxel_mesh`、`gyo.ui`、`gyo.map_markers` 也是與另一個行程共用的位元組契約而 Q2a 判「無」，所以本列不作為「資料契約模組→plugin」的先例（若要寫成規則，候選的區別是「對端是執行中、經網路的外部行程」，未經使用者確認；最終檢查 S-18） | — | **第 2 類**：網路 plugin，與 asio／httplib／protobuf 同一個 plugin | **已定 (f)**；owner＝網路 plugin 的 owner，也是 `services/gyo_gateway` 的 owner（review (7)，O1） | `engine/net/include/engine/net/GyopDatagram.hpp` `EncodeGyopDatagram`、`DecodeGyopDatagram`；`gyo_net` 只連 `GYO::Base`；消費者：`apps/object_fps_pvp/include/RetroFPS/Pvp/Wire.hpp`、apps CMake 的 `GYO::Net` 2 處、`tests/object_fps_pvp/CMakeLists.txt` 的 `GYO::Net`、`build/acceptance/object_fps_pvp/worker_main.cpp`（`EncodeGyopDatagram`）、`tests/common/net`；向量檔 `tests/common/net/fixtures/gyop_datagram_vectors.json` 另被 `services/gyo_gateway/framing/vectors_test.go` 讀（GYOP 與 Go gateway framing 逐位元組共用，`GyopDatagram.hpp` 檔頭；契約與向量檔放在兩個實作之外——未決 14 G-b，已定） |
 | 14 | os | **不成立** | — | — | 留 Engine | 已定（準則明列） | os.md DI 1～3 |
 | 15 | platform（今天只有 `sdl/`；本身就是後端） | 成立（Kernel 不需要視窗） | 有（視窗、事件） | 會被替換 | **第 1 類**：SDL plugin 的核心；**Engine 要新立中性的 platform 契約**（今天不存在，§2） | 已定 (e)；中性契約＝Engine 的能力（Q-b 附句） | `engine/platform/CMakeLists.txt` 只有 `add_subdirectory(sdl)`；`SdlPlatform`、`PlatformEvent`、`PathDialogRequest`、`SdlLogBridge`、`GyoMain`（`gyo_platform_sdl_main`） |
 | 16 | render（core：`IRenderDevice`、`Renderer`、`ShaderLibrary`、`gyo_model_renderer`） | 成立（headless Match 不畫） | 無（GPU 在後端） | 固化：`IRenderDevice` 是 Engine 的詞彙；渲染 World 的組合規則在 kernel DI-KS 13 | 留 Engine（中性介面＝Engine 的能力） | 已定方向（未決 13，各遷移批確認） | `engine/render/include/engine/render/IRenderDevice.hpp`；`engine/render/src/ShaderLibrary.cpp` |
-| 16a | └ render/backend/sdl（2D，含 native） | 成立 | 有（SDL_Renderer） | 會被替換 | **第 1 類**：SDL plugin 的 2D 部分；**plugins-editor 退役**（未決 9 I1，已定） | 已定 (e) | `gyo_render_backend_sdl` `SdlRenderer`（未實作 `IRenderDevice`）；`SdlRendererNative.hpp` |
+| 16a | └ render/backend/sdl（2D，含 native） | 成立 | 有（SDL_Renderer） | 會被替換 | **第 1 類**：SDL plugin 的 2D 部分；**退役**（未決 9 I1，已定；新 plugin 在 plugins-editor 不用它，四工具、framework、`tests/common/runtime_sdl` 遷完後在 runtime-loop-retire 刪——最終檢查 B-2） | 已定 (e) | `gyo_render_backend_sdl` `SdlRenderer`（未實作 `IRenderDevice`）；`SdlRendererNative.hpp` |
 | 16b | └ render/backend/sdl_gpu | 成立 | 有（SDL_GPU） | 會被替換 | **第 1 類**：SDL plugin 的 GPU 部分 | 已定 (e) | `gyo_render_backend_sdl_gpu` `SdlGpuRenderDevice final : public IRenderDevice` |
-| 16c | └ render/shaders/pipeline（建置期工具，組件見 34～36） | 不進執行檔 | — | — | **SDL plugin 的 GPU 部分**：shader 編譯工具、內建 shader 的編譯步驟、`ShaderLibrary` 挑 SPIR-V／DXIL／MSL 的那段；Engine 留 HLSL 原始碼與 shader ABI；工具的 JSON 改用 Engine 的 JSON 介面（不在 plugin 另連函式庫） | **已定**（未決 2 B；JSON 句：未決 1） | `gyo_shader_tool`；`build/cmake/GyoShaders.cmake` `_gyo_require_shader_tool`；`pipeline/src/main.cpp`（今天含 nlohmann） |
+| 16c | └ render/shaders/pipeline（建置期工具，組件見 34～36） | 不進執行檔 | — | — | **SDL plugin 的 GPU 部分**：shader 編譯工具、`ShaderLibrary` 挑 SPIR-V／DXIL／MSL 的那段；**編譯步驟留在共通內容管線**（`GyoContent.cmake` 讀產品 `content.json` 的 `shader_bundles`），從已選 plugin 的登記資料找編譯器（未決 19）；Engine 留 HLSL 原始碼與 shader ABI；工具的 JSON 改用 Engine 的 JSON 介面（不在 plugin 另連函式庫） | **已定**（未決 2 B；編譯步驟：未決 19；JSON 句：未決 1） | `gyo_shader_tool`；`build/cmake/GyoShaders.cmake` `_gyo_require_shader_tool`；`pipeline/src/main.cpp`（今天含 nlohmann） |
 | 17 | runtime（`RuntimeLoop`、`IRuntimeClient`；`FixedTickRuntime`） | `RuntimeLoop`／`IRuntimeClient`：成立（Kernel 取代它）；`FixedTickRuntime`：成立（Kernel 的 Scheduler 推進 tick） | `FixedTickRuntime`：無第三方；時鐘經 `engine/time` | `FixedTickRuntime`：會變的規則（runner 的時鐘策略，計畫 §3.21 client-sim 的「runner 的時鐘策略」）；`RuntimeLoop`：被 Kernel 取代 | `RuntimeLoop`／`IRuntimeClient`：刪除（runtime-loop-retire，計畫 §3.31）；`FixedTickRuntime`：照順序 plugin——進 runner plugin（計畫 §3.31 已排） | 已排程 | `engine/runtime` 併入 `GYO::Engine` |
 | 18 | text（core：`ITextRasterizer`） | 成立 | 無 | 固化（Engine 詞彙） | 留 Engine（中性介面＝Engine 的能力） | 已定方向（未決 13，各遷移批確認） | `engine/text/include/engine/text/ITextRasterizer.hpp` |
 | 18a | └ text/backend/sdl_ttf | 成立 | 有（SDL_ttf） | 會被替換 | **第 1 類**：SDL_ttf plugin，宣告依賴 SDL plugin | 已定 (e) | `gyo_text_backend_sdl_ttf` `SdlTtfTextRasterizer::Create` |
@@ -77,9 +77,9 @@
 | 25 | doctest | 不適用（只在測試：tests 154 檔、spikes 2 檔；不進 Engine、plugin、產品執行檔） | 已定（未決 6：測試框架與夾具不受原則 (1) 限制） | `doctest::doctest` 的連結者只有 tests 與 spikes |
 | 26 | httplib | **第 2 類**：網路 plugin 的內部實作 | 已定 (f) | 今天在產品：`ClientConnection.cpp`；acceptance：`network_main.cpp`、`worker_main.cpp`；CMake 連結者 apps 1 行、acceptance 3 行（與 asio 同行者合計 7 行） |
 | 27 | imgui | **第 2 類**：imgui plugin；ImGui 官方的 SDL3 平台後端與 SDL_GPU 繪製後端放進 **SDL plugin 內的獨立 target（例 `sdl_imgui`）**，只有選了 imgui 的產品連它（取代 `imgui::sdl3_sdlrenderer3`） | 已定（RC (ii) 選 (ii)；工具可直接呼叫 ImGui：未決 7 取消限制） | `framework/bindings/imgui` `ImGuiShell.cpp`；工具 9 檔直接含 `<imgui.h>`（audio_editor 1、model_viewer 1、ui_editor 6、voxel_map_editor 1）；`imgui::sdl3_sdlrenderer3` PUBLIC 連 SDL3（ImGui 的 SDL glue＝第二處 SDL 呼叫，由 `sdl_imgui` 收進 SDL plugin） |
-| 28 | nlohmann_json → **yyjson** | **Engine 的能力**（契約資料解析；Q-b：Engine 讀自己的資料契約，拿掉會壞）：一個 Engine 的 JSON 模組是唯一連 JSON 函式庫的地方（函式庫＝yyjson），其他 6 模組與 shader 工具改用它；介面是 GYO 自己的、用 Engine 的詞（使用者拿不到函式庫的 DOM 型別）；數字走原文路（adapter 交原文、Engine 以 `std::from_chars` 轉） | **已定**（未決 1，使用者原話見 §4） | 今天 nlohmann：engine 6 模組 9 個 `.cpp`（asset 2、render 2——其一是建置期 `pipeline/src/main.cpp`——、ui 2、map_markers、voxel_mesh、model；全部 PRIVATE；公開標頭 0 件）＋第 7 個模組 base 的 `StrictJson.hpp`（API 形狀依賴）；apps 7、tools 17、framework 2、tests 20、acceptance 6 檔（產品自己的事：R3、(α)） |
+| 28 | nlohmann_json → **yyjson** | **Engine 的能力**（契約資料解析；Q-b：Engine 讀自己的資料契約，拿掉會壞）：一個 Engine 的 JSON 模組是唯一連 JSON 函式庫的地方（函式庫＝yyjson），其他 6 模組與 shader 工具改用它；介面是 GYO 自己的、用 Engine 的詞（使用者拿不到函式庫的 DOM 型別）；數字走原文路（adapter 交原文、以 fast_float 轉；fast_float 也只在這個 adapter） | **已定**（未決 1，使用者原話見 §4；轉換：未決 18） | 今天 nlohmann：engine 6 模組 9 個 `.cpp`（asset 2、render 2——其一是建置期 `pipeline/src/main.cpp`——、ui 2、map_markers、voxel_mesh、model；全部 PRIVATE；公開標頭 0 件）＋第 7 個模組 base 的 `StrictJson.hpp`（API 形狀依賴）；apps 7、tools 17、framework 2、tests 20、acceptance 6 檔（產品自己的事：R3、(α)） |
 | 29 | protobuf | **第 2 類**：網路 plugin 擁有執行期函式庫的加入、版本與 protoc 規則；產品的 generated code 是產品經網路 plugin 用它（R3、(iii)），不設列名 | 已定 (f)＋未決 8（A；列名機制刪，review (5)） | `IpcHost.cpp` 含 `google/protobuf/unknown_field_set.h`；`runtime_v9`／`client_v9` 的 `.pb.cc` 由 `protobuf::protoc` 在產品建置期產生 |
-| 30 | sdl3 | **第 1 類**：SDL plugin（一個 adapter；內含核心、視窗、輸入、2D、GPU、音訊輸出等後端 target——P2，未決 5 已定；另含 `sdl_imgui` 與 shader 建置期工具） | 已定 (e) | 今天分散在 `engine/{platform,input,render,audio}` 的 9 個 target（含 3 個 `*Native` 與 OBJECT 的 `gyo_platform_sdl_main`／`GYO::PlatformSDLMain`）；engine 外直接含入：`tools/ui_editor/src/AssetPreviewContext.cpp`、tests/common 10 檔、`tests/ui_editor/PreviewAssetTests.cpp`（另用 `ImGui_ImplSDLRenderer3_*`） |
+| 30 | sdl3 | **第 1 類**：SDL plugin（一個 adapter；內含核心、視窗、輸入、2D、GPU、音訊輸出等後端 target——P2，未決 5 已定；另含 `sdl_imgui` 與 shader 編譯工具） | 已定 (e) | 今天分散在 `engine/{platform,input,render,audio}` 的 9 個 target（含 3 個 `*Native` 與 OBJECT 的 `gyo_platform_sdl_main`／`GYO::PlatformSDLMain`）；engine 外直接含入：`tools/ui_editor/src/AssetPreviewContext.cpp`、tests/common 10 檔、`tests/ui_editor/PreviewAssetTests.cpp`（另用 `ImGui_ImplSDLRenderer3_*`） |
 | 31 | sdl3_image | **第 1 類**：SDL_image plugin，宣告依賴 SDL plugin | 已定 (e) | 只有 `engine/CMakeLists.txt` 連它 |
 | 32 | sdl3_ttf | **第 1 類**：SDL_ttf plugin，宣告依賴 SDL plugin | 已定 (e) | 只有 `engine/text` 與 `engine/text/backend/sdl_ttf` 連它 |
 | 33 | ufbx | **第 1 類**：ufbx plugin | 已定 (e) | 只有 `engine/model` 連它；Match 經 `player_content` 的 PRIVATE_LIBRARIES 直接連 `GYO::AssetUfbx`（繞過 component 名） |
@@ -100,9 +100,9 @@
 
 | 後端 | 公開標頭乾淨 | Engine 內的中性介面 | 要改的符號與去向 | 批 | 估時（推定） |
 |---|---|---|---|---|---|
-| platform/sdl | 是（`class NativeAccess;` 前置宣告；`PlatformEvent` 以不透明指標持有事件） | **無**；消費者直接寫 `Engine::Platform::Sdl::SdlPlatform`（engine 外：apps 3、tools 11、framework 6、tests 29、acceptance 6 檔） | 在 `engine/platform` 新立**中性 platform 契約**：`PlatformEvents` boundary 的型別、建窗、把事件抽進 boundary、live frame 掛鉤、剪貼簿、路徑對話框請求／回覆（`PathDialogRequest`／`PathDialogAnswer` 今天已不含 SDL，可改名搬入）、log 橋接、行程入口。**不做鏡像 `SdlPlatform` 的大類別**（三案一致：遷移後產品不直接碰 platform，鏡像類別在遷移完成時變死介面）；形式（抽象類、函式表或 Resource＋System）由 wrap-render 的事前宣告定。`NativeWindow()`／`NativeEvent()` 只給 SDL 家族與 SDL plugin 自己的測試 | 介面：wrap-render；搬家：adapters-relocate | 4～8（風險、價值兩案同值；成本案 2～4 計在 audit platform 之內） |
+| platform/sdl | 是（`class NativeAccess;` 前置宣告；`PlatformEvent` 以不透明指標持有事件） | **無**；消費者直接寫 `Engine::Platform::Sdl::SdlPlatform`（engine 外：apps 3、tools 11、framework 6、tests 29、acceptance 6 檔） | 在 `engine/platform` 新立**中性 platform 契約**：`PlatformEvents` boundary 的型別、建窗、把事件抽進 boundary、live frame 掛鉤、剪貼簿、路徑對話框請求／回覆（`PathDialogRequest`／`PathDialogAnswer` 今天已不含 SDL，可改名搬入）、log 橋接、行程入口。**不做鏡像 `SdlPlatform` 的大類別**（三案一致：遷移後產品不直接碰 platform，鏡像類別在遷移完成時變死介面）；形式（抽象類、函式表或 Resource＋System）由 wrap-render 的事前宣告定（第一次修訂的「`NativeWindow()`／`NativeEvent()` 只給 SDL 家族與 SDL plugin 自己的測試」刪：照 (iii) 不設使用者白名單，見下文〈`*Native` target 的去處〉；依賴者能對 SDL 型別做什麼未定，最終檢查 S-5） | 介面：wrap-render；搬家：adapters-relocate | 4～8（風險、價值兩案同值；成本案 2～4 計在 audit platform 之內） |
 | input/backend/sdl | 是 | 輸出資料中性（`PhysicalInputFrame`、`InputEvent`）；沒有「來源」介面 | 來源不需要類別介面：SDL plugin 的 pump 填 boundary；`SdlInputInjector`（以類名計 tests 1 檔、acceptance 2 檔；以含入 `SdlInputInjection.hpp` 計 tests 2 檔——`SdlInputInjectionTests.cpp`、`HeaderHygieneTests.cpp`——、acceptance 2 檔；統合稿的「tests 6」重現不出來，已改）需要中性的注入名，或留在 SDL plugin 的測試支援（二選一由 wrap-render 宣告定）；與 `SdlPlatform&` 的配對留在 SDL plugin 內部 | wrap-render | 0～4 |
-| render/backend/sdl（2D） | 是 | **無**；`SdlRenderer` 不實作 `IRenderDevice` | 使用者只有 ImGui 的 SDL 繪製（`framework/bindings/imgui` 經 `RenderBackendSDLNative`）與 `framework/include/gyo/framework/PreviewTexture.hpp` `UploadFrame`（readback 上傳，隨 readback 退役）；工具 4 檔、tests 7 檔。**不設計 2D 中性介面**：I1 已定（未決 9），plugins-editor 退役 | plugins-editor | 1～2 |
+| render/backend/sdl（2D） | 是 | **無**；`SdlRenderer` 不實作 `IRenderDevice` | 使用者只有 ImGui 的 SDL 繪製（`framework/bindings/imgui` 經 `RenderBackendSDLNative`）與 `framework/include/gyo/framework/PreviewTexture.hpp` `UploadFrame`（readback 上傳，隨 readback 退役）；工具 4 檔、tests 7 檔。**不設計 2D 中性介面**：I1 已定（未決 9）；新 plugin 在 plugins-editor 不用它，使用者（四工具、framework、`tests/common/runtime_sdl`）遷完後刪（最終檢查 B-2） | 不用：plugins-editor；刪：runtime-loop-retire | 1～2（刪除，計在 runtime-loop-retire） |
 | render/backend/sdl_gpu | 是 | `IRenderDevice` ✓（對 Client 與 GPU 預覽；對 ImGui draw list 沒有裁切矩形與索引子範圍的繪製——`engine/render/include` 只命中 `RenderDeviceTypes.hpp` 一句「non-indexed」註解與 handle 的 `index`；**第二次修訂**：ImGui 改用官方 SDL_GPU 後端（`sdl_imgui`，在 SDL plugin 內直接用 SDL_GPU）後，擴充是否還需要由 plugins-editor 的宣告確認） | 兩個**靜態工廠** `SdlGpuRenderDevice::Create(SdlPlatform&, …)`、`CreateOffscreen(SdlPlatform&, …)`（唯一的建構子是 private 的 `explicit SdlGpuRenderDevice(std::unique_ptr<Impl>)`）→改在 SDL plugin 內呼叫、以 `IRenderDevice` 交出；`SetFrameSize` 是**離屏專用**（非離屏回 `UnsupportedOperation`），測試以外唯一的呼叫者是 `framework/src/Preview.cpp`——與 `ReadFrame` 同一條要退役的 readback 路徑，隨 plugins-editor 的 offscreen-preview（無 readback）處置，**不進 `IRenderDevice`**（統合稿的「`SetFrameSize` 進中性介面或交 runner」刪）；`SaveCaptureBmp`／`SceneCaptureFile` 在介面外（擷取由 wrap-render 宣告定去向） | wrap-render（介面擴充若需要在 plugins-editor） | 1～4（擴充若需要另 0～4，計在 plugins-editor） |
 | text/backend/sdl_ttf | 是 | `ITextRasterizer` ✓ | 只改建立方式：`Create()`→plugin 的 build 函式登記 | 搬家：adapters-relocate；登記：wrap-render | 0～1 |
 | audio/backend/sdl | 是（命名空間 `Engine::Audio::Sdl`，其他後端是 `…::Backend::…`） | 沒有輸出介面類；中性的是被拉取的 `Mixer`、`Submitter`；輸出的設定、錨點、統計沒有中性型別 | 不另設輸出介面類：SDL plugin 的 build 函式開裝置、拉 `Mixer`。但產品與工具今天用到的不只 `Mixer`／`Submitter`（對抗檢查 B-3 (a)）：`apps/object_fps_pvp/src/Present/PvpSound.cpp` 用 `SdlAudioOutputConfig`、`std::vector<OutputAnchor>`（經 `TakeAnchors`）與 `SdlAudioOutput::Open`；`tools/audio_editor/src/AudioEditorWindow.cpp`、`tools/model_viewer/src/PreviewSounds.cpp` 直接持有 `SdlAudioOutput`；公開面另有 `Stats()`（`SdlAudioOutputStats`）、`DriverName()`、`DeviceSampleFrames()`——這些型別由 SDL plugin 定義；**第二次修訂**：照 (iii) 與 (α)，產品與工具用 SDL plugin 露出的型別是允許的、升級時產品自己負責，所以「成為 Engine 的詞」不再是要求——成為中性型別、或留為 SDL plugin 對依賴者露出的型別，由 wrap-render 的宣告定；命名空間在搬家時統一 | 形狀（與是否立中性型別）：wrap-render；搬家：adapters-relocate | 2～5（中性型別 0～2 計在 wrap-render 的增量） |
@@ -110,13 +110,13 @@
 | model/backend/ufbx | 是 | `IAssetLoader` ✓ | 消費者直接建構 `UfbxModelLoader`（apps 2、tools 2、tests 7）→改由 ufbx plugin 的 build 函式登記；**取代計畫的 pvp 最小 ufbx plugin（S3-3）與 model-assets plugin**——兩者都會成為 ufbx 的第二個 adapter（原則 (2)） | 登記：assets-core（`plugins/ufbx/`，未決 16 (a) 已定）；搬家：adapters-relocate | 登記 1～2；搬家 1～2 |
 | net | 是（整個模組不連任何外部組件） | 本身就是中性的 GYOP 編解碼 | 整個模組搬進網路 plugin（決定 (f)，不是因為不乾淨）；改全部消費者：`Wire.hpp` 的含入、apps CMake 的 `GYO::Net` 2 處、`tests/object_fps_pvp/CMakeLists.txt` 的 `GYO::Net`、`build/acceptance/object_fps_pvp/worker_main.cpp` 的含入與連結；`tests/common/net` 跟著搬（只搬不改，§14.4）——但它的向量檔 `fixtures/gyop_datagram_vectors.json` 也被 `services/gyo_gateway/framing/vectors_test.go` 以相對路徑讀（C++ 與 Go 共用），**只搬 C++ 那一半會弄斷 Go 的契約測試**；向量檔放在兩個實作之外（未決 14 G-b，已定），GYOP 的 owner＝網路 plugin 的 owner、也是 `services/gyo_gateway` 的 owner（review (7)）；判定加「Go 測試照跑」 | net-link | 3～6 |
 
-**`*Native` target 的去處**：`GYO::PlatformSDLNative`、`GYO::InputBackendSDLNative`、`GYO::RenderBackendSDLNative` 在 engine 外的消費者是 `framework/bindings/imgui`、`tools/ui_editor`（`EditorWindow.cpp`）、tests。target §3b 的 ImGui 兩半（輸入是文件 World 的 System、讀 Engine 的輸入；draw list 由渲染 World 繪製）做成之後，ImGui 不再需要 `SDL_Window*`／`SDL_Renderer*`；`AssetPreviewContext.cpp` 的直接 SDL 含入在 tool-ui 去掉。**第二次修訂**：照 (iii)，`*Native` 是 SDL plugin 對依賴它的產品與 plugin 露出的部分，**不設使用者白名單**（review：G04／N5 刪）；ImGui 的 SDL 後端收進 SDL plugin 內的 `sdl_imgui` 後，SDL plugin 外不再有 SDL 呼叫（RC (ii)：整個 repo 的 SDL 呼叫只在 sdl plugin）。SDL 家族內部互傳 `SDL_Window*` 是 SDL plugin 內部的事（P2）。
+**`*Native` target 的去處**：`GYO::PlatformSDLNative`、`GYO::InputBackendSDLNative`、`GYO::RenderBackendSDLNative` 在 engine 外的消費者是 `framework/bindings/imgui`、`tools/ui_editor`（`EditorWindow.cpp`）、tests。target §3b 的 ImGui 兩半（輸入是文件 World 的 System、讀 Engine 的輸入；draw list 由渲染 World 繪製）做成之後，ImGui 不再需要 `SDL_Window*`／`SDL_Renderer*`；`AssetPreviewContext.cpp` 的直接 SDL 含入在 tool-ui 去掉。**第二次修訂**：照 (iii)，`*Native` 是 SDL plugin 對依賴它的產品與 plugin 露出的部分，**不設使用者白名單**（review：G04／N5 刪）；ImGui 的 SDL 後端收進 SDL plugin 內的 `sdl_imgui` 後，SDL plugin 外不再有 SDL 呼叫（RC (ii)：整個 repo 的 SDL 呼叫只在 sdl plugin）。**交界未定**（最終檢查 S-5，交主會話）：依賴者拿到 SDL plugin 露出的 SDL 型別能做什麼（只能持有與傳遞，或也能呼叫 `SDL_*`）；測試夾具（未決 6：不受原則 (1) 限制；例 `tests/ui_editor/PreviewAssetTests.cpp` 直接含 SDL3 並用 `ImGui_ImplSDLRenderer3_*`）算不算在「整個 repo」內。SDL 家族內部互傳 `SDL_Window*` 是 SDL plugin 內部的事（P2）。
 
 **消費者寫具體類名**（**第二次修訂**：照 (α)，產品與工具寫 SDL plugin 的具體類名不再是要歸零的判定；下段的「歸零」改讀為「重寫時自然消失的部分照實記錄」）：三案一致，**不在中性介面立好時就改這些檔**——apps 與 tools 的這些檔在 client-frame 與工具四批會整個重寫（main＝Run），framework 會被刪；提前改＝在即將消失的程式上製造衝突（RC-7）。adapters-relocate 只改它們的含入路徑與 target 名（機械修改），類名不動；歸零在 client-frame（apps）、工具四批（tools）、framework-delete（framework）。tests 隨 SDL plugin 搬成 plugin 自己的測試。
 
 **Engine 外要改的其他地方**（歸批）：`AssetPreviewContext.cpp` 的 `<SDL3/SDL.h>`→tool-ui；`ImGuiShell.cpp`、`EditorWindow.cpp` 的 Native 使用→plugins-editor／tool-ui；apps 的 asio／httplib→match-host、client-link（隨 IO 改經 net-link 服務自然移出；不是判定，R3）；`player_content` 的 `GYO::AssetUfbx` 直連→match-sim；`GyoRuntimeDeployment.cmake` `gyo_install_product_target` 與 `GyoPackaging.cmake` 兩處以 `component MATCHES "^SDL_" OR component STREQUAL IMGUI` 推定要裝 SDL 的共享庫（AGENTS §9「命名規則だけを利用して Product の意味を推測しない」）→plugins-foundation 段 (i) 改讀登記資料的 `runtime_dependencies`；後端選擇的第二個入口 `GyoRenderOptions.cmake` 的 `GYO_RENDER_DEVICE`／`GYO_BUILD_SDL_GPU_BACKEND`／`GYO_REQUIRE_SDL_GPU`→段 (i) 定處置（計畫 §3.11）；產品 SDL link guard（`tests/object_fps_pvp/CMakeLists.txt` 的 `entry MATCHES "^SDL3(_image)?(::|-)"`）**漏了 `SDL3_ttf`**（風險提案查到、本統合重驗）→adapters-relocate 補（締める面）。
 
-**合計**：新立中性契約 1 個（platform）、中性注入名 0～1 個、audio 輸出的中性型別（設定、錨點、統計）1 組、sdl_image 標頭移出 Engine 公開 include 目錄 1 處、`*Native` 收窄 3 個；`IRenderDevice` 擴充 0～1 處（裁切、索引子範圍；是否需要由 plugins-editor 確認）。統合稿的「`IRenderDevice` 補尺寸 1 處」刪（`SetFrameSize` 隨 readback 退役，沒有留下來的消費者）。工時分散在 wrap-render（+5～10；扣掉移到 adapters-relocate 的 `if(TARGET)` 硬性化 1～2，淨 +4～8，見計畫 §3.18 修訂）、adapters-relocate、plugins-editor（擴充若需要 0～4）。
+**合計**：新立中性契約 1 個（platform）、中性注入名 0～1 個、audio 輸出的設定／錨點／統計成為中性型別或留為 SDL plugin 露出的型別（wrap-render 的宣告定；第二次修訂）、sdl_image 標頭移出 Engine 公開 include 目錄 1 處、`*Native` 收進 SDL plugin 3 個（不設使用者白名單；第二次修訂。這兩處的舊寫法是最終檢查 N-1 指出的殘句）；`IRenderDevice` 擴充 0～1 處（裁切、索引子範圍；是否需要由 plugins-editor 確認）。統合稿的「`IRenderDevice` 補尺寸 1 處」刪（`SetFrameSize` 隨 readback 退役，沒有留下來的消費者）。工時分散在 wrap-render（+5～10；扣掉移到 adapters-relocate 的 `if(TARGET)` 硬性化 1～2，淨 +4～8，見計畫 §3.18 修訂）、adapters-relocate、plugins-editor（擴充若需要 0～4）。
 
 
 ### platform-sdl.md 整份的去向（對抗檢查 S-6；HANDOFF 決定行末句「`platform-sdl.md` 不加標註，隨這題整份重看」）
@@ -136,7 +136,7 @@
 | DI 9 | 後端不帶擷取政策、文字編輯政策與產品知識 | `target/platform`＋plugins 層 DI（`docs/plugins/README`：無產品名） | wrap-render／plugins-foundation | 審查＋層 DI 的守衛 |
 | DI 10 | 一個請求在 OS 回一次時得到一個回覆 | `target/platform`（路徑對話框的請求／回覆搬進中性契約） | wrap-render | `PathDialogTests.cpp`、pd-* 突變隨搬（改寫：路徑與型別名） |
 | RC 1 | 需要第二個非 SDL 後端時提出中性 platform 介面 | **由本修訂提前滿足**：使用者的 `v8-arch-external-components-as-adapters`（Feature 1 的「替換」、方向 C）是 AGENTS §2 的予見の根拠 1（名指しされた Feature），所以中性契約現在就立（wrap-render），不等第二個後端；這條 RC 在 `docs/plugins/sdl` 改寫成「中性契約不足以讓 SDL plugin 實作→回 Engine 補契約，不在 plugin 內繞」 | adapters-relocate | — |
-| RC 2 | ImGui binding 與 ui_editor 預覽以外不得用 Native | `docs/plugins/sdl`，改寫成 (iii) 的形（依賴 SDL plugin 的產品與 plugin 可用；不設白名單——review 刪 G04） | adapters-relocate | — |
+| RC 2 | ImGui binding 與 ui_editor 預覽以外不得用 Native | `docs/plugins/sdl`，改寫成 (iii) 的形（依賴 SDL plugin 的產品與 plugin 可用；不設白名單——review 刪 G04；可用的範圍見 §2〈`*Native` target 的去處〉的未定交界） | adapters-relocate | — |
 | RC 3～9 | `PlatformEvent` 欄位外露、時間戳與 log 橋接的重驗、pump 離開主執行緒、非同步 OS 回覆、對話框回呼 | 與對應 DI 同落點（3、4、5、6、7、8 隨 `target/platform`；9 隨 `docs/plugins/sdl`） | wrap-render／adapters-relocate | — |
 
 統合稿「流程事項」把「SDL_Init 的分工」列為未查證；DI 8 已有答案，已改引。
@@ -149,7 +149,7 @@
 
 ### 3.1 單位：每個可執行單位一份選擇
 
-- app 新增 `roles.<role>`，名稱與 `gyo_app_add_executable(<role> …)` 相同（object_fps_pvp：`main`、`match`）；tool 沿用 `variants.<v>`，`role_components` 改名 `role_plugins`（`build/cmake/GyoToolRegistry.cmake` 讀它；四個工具都沒寫）。同一個讀取函式處理兩種形狀，只差路徑前綴。
+- app 新增 `roles.<role>`，名稱與 `gyo_app_add_executable(<role> …)` 相同（object_fps_pvp：`main`、`match`）；tool 沿用 `variants.<v>`；今天 variant 下依 role 分的 `role_components`（`build/cmake/GyoToolRegistry.cmake` 讀它；四個工具都沒寫）併入選擇欄——欄名（候選 `plugins`；保留 role 層時候選 `role_plugins`）由段 (i) 定，計畫 §3.25～3.28 照同一寫法（最終檢查 N-3）。同一個讀取函式處理兩種形狀，只差路徑前綴。
 - 理由：Feature 2 的例子「headless 的 Match 不連視窗與 GPU」今天靠產品 CMake 達成——`apps/object_fps_pvp/project.json` 的 `components` 是全產品聯集，Match 與 Client 的差別寫在 `apps/object_fps_pvp/CMakeLists.txt`（同一事實兩處）。頂層一個清單表達不了 Feature 2。
 - role 名：哪些 role 存在由 `roles` 的鍵宣告，CMake 以名字引用；引用不存在的 role 時讀取函式本來就會報錯，**不另設錯誤代號、不做兩向檢查**（review：S02 刪）。
 
@@ -164,7 +164,8 @@
 ```
 
 - 名稱都是示意；欄名候選 **`plugins`**（runtime-composition §4、DI 2、Delta-5 都已用這個詞），由段 (i) 定。
-- **不寫 `backs`**（review：S03 刪）。「這個單位用到哪些需要後端的能力」：**段 (i) 的事前宣告先驗以 CMake 連結圖推導**——Engine 的能力模組在自己的 CMake 宣告「需要一個後端」，一個單位的連結閉包（產品自己的程式＋所選 plugin）含那個模組的 target，就是用到那個能力；後端＝所選 plugin 中提供該能力的那一個。**推導不可行時回宣告式**：各 plugin 在登記資料寫 `requires_capabilities`（S08 留），產品自己直接用到的能力由產品自己的 plugin 宣告。兩種情況產品的選擇欄都只寫名字。先驗的內容與成本由段 (i) 宣告寫明（configure 階段讀連結閉包要處理 generator expression 與 `INTERFACE` 傳遞——未查證）。
+- 例子裡的 `fps_pvp_client`、`fps_pvp_sim` 是產品自己的 plugin：main＝Run、System 的登記仍是程式（plugin 的 build 函式，計畫 §3.11 Contract），產品的 System 要經某個 build 函式登記，所以照目前的機制產品程式實際上要包成產品目錄下的 plugin——與 R3「包成 plugin 是產品內部的選擇」要對一句，未定、交主會話（最終檢查 S-3 (2)）。
+- **不寫 `backs`**（review：S03 刪）。「這個單位用到哪些需要後端的能力」：**段 (i) 的事前宣告先驗以 CMake 連結圖推導**——Engine 的能力模組在自己的 CMake 宣告「需要一個後端」，一個單位的連結閉包（產品自己的程式＋所選 plugin）含那個模組的 target，就是用到那個能力；後端＝所選 plugin 中提供該能力的那一個。**先驗要回答的反例**（最終檢查 S-2）：headless 的 Match 今天就連著 `GYO::Render`（`apps/object_fps_pvp/CMakeLists.txt:50` 的 `player_content` PUBLIC 連 `GYO::Render GYO::Model`，`:66` 的 `match` 連 `${content}`）——照這條規則 Match「用到 GPU」、要報缺後端，與 Feature 2 的例子相反；只用 `Mixer` 離線混音的 headless 工具變體同理。「連了中性模組」不等於「需要後端」，先驗要說明怎麼分，分不出就判推導不可行。**推導不可行時回宣告式**：各 plugin 在登記資料寫 `requires_capabilities`（S08 留），產品自己直接用到的能力由產品自己的 plugin 宣告——**回宣告式時這是產品側多出的一步**（產品要有自己的 plugin 與 `plugin.json`、在裡面寫 `requires_capabilities`；文末〈仍往產品加步驟的條目〉）。兩種情況產品的選擇欄都只寫名字。先驗的內容與成本由段 (i) 宣告寫明（configure 階段讀連結閉包要處理 generator expression 與 `INTERFACE` 傳遞——未查證）。
 - **只連用到的能力 target**：Feature 2 在同一個 SDL plugin 內部也成立（只用音訊輸出的單位不連視窗後端），原則 (2)「一個 adapter」與 Feature 2 不衝突（P2，未決 5）。
 - 初始化順序由 plugin 登記資料的 `requires` 做確定性的拓撲排序（同層以名稱排）；清單順序不帶語義。
 - **自動補依賴**（review：S04 反轉）：選了 `sdl_image` 就帶上 `sdl`；不補不會讓任何東西壞，只會多一個產品步驟。今天 `GyoComponents.cmake` 的推導（SDL_GPU 推出 SDL_PLATFORM）是同一性質，行為保留；`tests/common/cmake/ComponentTests.cmake` 的斷言隨名稱改寫（判定不放寬，§14.4 的四選一由段 (i) 宣告列）。
@@ -181,12 +182,12 @@
 
 - `class`：`backend`（第 1 類）／`extension`（第 2 類）——決定 (d)：類別寫在登記資料，目錄不分。
 - **預留的形狀（B1）**：登記格式留一個欄位（或值域）區分「Engine 自有 plugin」與「`plugins/` 的擴展」兩種 owner；本計畫只定形狀、不實作、不讀它，語義由規劃批 `v8-arch-engine-own-plugins-plan` 定。
-- `provides`：能力→target。第 1 類的附加條「實作 Engine 定的後端介面，不新增能力」的機械形是讀取端的資料驗證（只有 `backend` 可寫、值必須是 Engine 宣告過的能力），屬 plugin 作者側、實作細節，不是選擇欄的錯誤代號。
+- `provides`：能力→target。第 1 類的附加條「實作 Engine 定的後端介面，不新增能力」的機械形是讀取端的資料驗證（只有 `backend` 可寫、值必須是 Engine 宣告過的能力），屬 plugin 作者側、實作細節，不是選擇欄的錯誤代號，但仍是 configure 時的登記資料驗證錯誤（§3.4 末）。
 - `requires`：plugin 之間的依賴宣告（決定 (e)：SDL_image、SDL_ttf 都寫 `["sdl"]`）。依賴是 plugin 層級，連結是 target 層級：`sdl_image` 依賴 SDL plugin 的 `base`，不連視窗後端。
 - `requires_capabilities`：只在推導不可行、回宣告式時出現（§3.2）。
 - `runtime_dependencies`：打包用；取代 `GyoRuntimeDeployment.cmake`、`GyoPackaging.cmake` 以 `SDL_` 前綴推定（§2 末段；AGENTS §9 的命名推測）。
 - **Engine 的能力宣告**寫在各能力模組自己的 CMake（例：`gyo_engine_capability(gpu_device INTERFACE GYO::Render NEEDS_BACKEND)` 在 `engine/render/CMakeLists.txt`）。不放在 Kernel：target/kernel DI-KS 15 規定 Kernel 的程式碼與 Registry 不含能力的名字。
-- imgui plugin 需要一個平台與繪製後端（SDL plugin 的 `sdl_imgui` 提供）：「選了 imgui 就要有人提供它」沿用 DI 6 的檢查（RC (ii) 的決定）；這個需求由誰宣告、能力名叫什麼，由 plugins-editor 的宣告定。
+- imgui plugin 需要一個平台與繪製後端（SDL plugin 的 `sdl_imgui` 提供）：「選了 imgui 就要有人提供它」沿用 DI 6 的檢查（RC (ii) 的決定）。**未定，交主會話**（最終檢查 S-1；登記格式在段 (i) 定案，下列不能全推給 plugins-editor，要在段 (i) 的宣告之前定）：(1) 上面「`provides` 的值必須是 Engine 宣告過的能力」與這個需求不相容——imgui 的需求不是 Engine 宣告的能力，要嘛 plugin 也能宣告「需要後端」的需求，要嘛寫明 DI 6 只管 Engine 的能力、imgui 的後端另一種檢查；(2) `sdl_imgui` 編 ImGui 的後端檔、含 `imgui.h`，是第 1 類 plugin 的一個 target 依賴第 2 類 plugin；`requires` 是 plugin 層級又會自動補——寫了，每個選 sdl 的單位都被補上 imgui，不寫，初始化順序與「只有選了 imgui 的單位連它」沒有資料可依，target 層級的可選依賴怎麼表達要定；(3) 刪 imgui plugin 時 `sdl_imgui` 跟著壞，計畫 §3.24「每個 plugin 的刪除驗證（刪它只壞依賴它的工具）」對它的預期要寫（不得用 `if(TARGET …)` 式的靜默消失）；(4) target 頁第 1 類的附加條「實作 Engine 定的後端介面」對 `sdl_imgui` 的讀法（(iii)：imgui plugin 對依賴者露出 ImGui）。
 
 ### 3.4 configure 錯誤（三種）
 
@@ -194,22 +195,22 @@
 |---|---|
 | 缺後端 | 單位用到的能力，所選 plugin 中沒有一個提供 |
 | 多後端 | 單位用到的能力，所選 plugin 中有兩個以上提供 |
-| plugin 不存在 | 選擇欄或 `requires` 指名的 plugin 沒有登記（含過渡登記表） |
+| plugin 不存在 | 選擇欄或 `requires` 指名的 plugin，在 `plugin.json` 與過渡登記表兩處都查不到（最終檢查 N-7） |
 
 - 決定 (b)：「必備」相對於該單位用到的能力——headless 的 Match 不用視窗與 GPU，就不報錯、也不連。
-- 訊息要指名能力與 plugin；代號與訊息格式是實作細節（review：S11、S12 降級），由段 (i) 定。
-- 刪除的（review 決定行）：`role-mismatch`（S02）、`unused-backend`（S10）、`not-provided`（`backs` 已刪）、`missing-dependency`（自動補依賴後只剩「不存在」）、`dependency-cycle` 與 `invalid-backend`（實作細節：登記資料的驗證，產品碰不到）。
+- 訊息要指名能力與 plugin；代號與訊息格式是實作細節（review：S11、S12 降級），由段 (i) 定；但三種各要有可區分的片段，N2 的突變才能只在預期的那一種失敗時算檢出（AGENTS §14.2；最終檢查 S-6）。
+- 拿掉的（review 決定行）：`role-mismatch`（S02）、`unused-backend`（S10）、`not-provided`（`backs` 已刪）、`missing-dependency`（自動補依賴後只剩「不存在」）——實際拿掉的是這四種。`dependency-cycle` 與 `invalid-backend` **行為仍在**（計畫 §3.11 判定 (3) 仍要求循環依賴讓 configure 失敗並指名；§3.3 的 `provides` 驗證），改列為**登記資料的驗證錯誤**、不算選擇欄的錯誤；產品目錄下的 plugin 用同一格式，所以產品也會碰到（第二次修訂寫「產品碰不到」不成立；最終檢查 S-6）。
 - 選擇欄的契約測試：三種各一個合成夾具反例（§5.2 補遺二 N2）。
 
 ### 3.5 版本與過渡
 
 - **只升一次版**：plugins-foundation 段 (i) 一次做「v1→v2、`plugins` 進來、`components` 刪除」，六份 `project.json` 同批升；讀取端只認 v2（計畫 §3.11 判定 (6) 已定不做兩版相容）。
-- **過渡登記表**（review：留表、刪棘輪）：共通 build 資料裡一份表（位置由段 (i) 定），列「plugin 名已定、實作還不是 `plugins/<name>/` 的 plugin」——還在 Engine 的後端（sdl、sdl_image、sdl_ttf）、`FRAMEWORK`（實作在 `framework/`）、`IMGUI`（實作在 `framework/bindings/imgui`）；ufbx 在 assets-core 就移成自己的 `plugin.json`（未決 16 (a)）。每列寫 plugin 名、`class`、`provides`、`base`、`runtime_dependencies`、指向今天的 target、退出的批（sdl 家族＝adapters-relocate；`IMGUI`＝plugins-editor；`FRAMEWORK`＝framework-delete）；回宣告式時另帶 `requires_capabilities`（手寫的近似，第一次修訂對抗 S-2 的限界；推導可行時不需要）。
+- **過渡登記表**（review：留表、刪棘輪）：共通 build 資料裡一份表（位置由段 (i) 定），列「plugin 名已定、實作還不是 `plugins/<name>/` 的 plugin」——還在 Engine 的後端（sdl、sdl_image、sdl_ttf）、ufbx（段 (i) 到 assets-core 之間：六份 `project.json` 在段 (i) 就寫最終名，`plugins/ufbx/plugin.json` 到 assets-core 才建；最終檢查 N-6）、`FRAMEWORK`（實作在 `framework/`）、`IMGUI`（實作在 `framework/bindings/imgui`）；ufbx 在 assets-core 移成自己的 `plugin.json`（未決 16 (a)）。每列寫 plugin 名、`class`、`provides`、`base`、`runtime_dependencies`、指向今天的 target、退出的批（sdl 家族＝adapters-relocate；ufbx＝assets-core；`IMGUI`＝framework-delete——最後一個連 framework `ImGuiShell` 的工具遷完之後，最終檢查 B-2；新的 imgui plugin 在 plugins-editor 建，過渡期兩者的名稱怎麼並存由 plugins-editor 的宣告定；`FRAMEWORK`＝framework-delete）；回宣告式時另帶 `requires_capabilities`（手寫的近似，第一次修訂對抗 S-2 的限界；推導可行時不需要）。
   - 產品從段 (i) 起就寫最終的 plugin 名；某 adapter 搬家時，把那一列移成它自己的 `plugin.json`，產品資料一行都不改。
-  - **不設「只減不增」的常駐守衛**；closeout 判一次「0 列」。JSON 不在表裡（JSON 是 Engine 的能力、adapter 在 Engine 內）。
+  - **不設「只減不增」的常駐守衛**；closeout 判一次「0 列」。JSON 不在表裡（JSON 是 Engine 的能力、adapter 在 Engine 內）。**Engine 自有 plugin（B1）不借用這張表**：表只收有退出批的過渡列；closeout 的 0 列不因 B1 放寬（最終檢查 S-7）。
   - 不採「先建一個只有登記檔、沒有程式的 `plugins/<name>/`」：會出現名為 SDL plugin、卻什麼都不擁有的目錄（§5 取捨 T6）。
 - 一併被取代（段 (i)）：`GyoAppProject.cmake` `gyo_app_link_components` 的名稱→target 表、`GyoComponents.cmake` 的 `GYO_KNOWN_COMPONENTS`（推導的行為併入自動補依賴）、`GYO_BUILD_*_LOADER` 選項、以 `SDL_` 前綴推定的打包依賴（兩處）、產品 CMake 的 `PUBLIC_COMPONENTS`／`PRIVATE_COMPONENTS`／`COMPONENTS` 參數（函式庫層級的連結怎麼表達由段 (i) 定，計畫 §3.11）、`GyoRenderOptions.cmake` 的後端選項（降為「能不能建 GPU 後端」的開關）、`tests/common/Requirements.cmake` 的 `GYO_COMMON_TEST_COMPONENTS`。`GYO_TEST_PROFILE=full` 改為「選全部 plugin、每個能力一個後端」；同一能力出現第二個後端時改成每個後端一個測試單位，不放寬「多後端」。`GYO_ENABLE_<COMPONENT>` 改由選擇推導。`tests/common/ci/app_copy_integration.py` 的複製前綴加 `plugins/`。
-- 產品與工具的 CMake 寫不寫 plugin 的 target 名：DI 2 增補第三點是條文（未決 11），**不設產品側白名單**（review：N4 刪）；各遷移批把產品改成「選擇欄＋Run」時自然消失。
+- 產品與工具的 CMake 寫不寫 plugin 的 target 名：DI 2 增補第三點是條文（未決 11），**不設產品側白名單**（review：N4 刪）；各遷移批把產品改成「選擇欄＋Run」時自然消失。**最終檢查 S-3 (1)**：這條沒有守衛、closeout 也不掃，且與未決 8 A（產品的 generated code 連網路 plugin 提供的 protobuf target、用它的 protoc 規則）、R3（產品目錄下的 plugin 的 CMake 必然寫 target 名）衝突；刪第三點或改成能檢查的形（例：只禁產品 CMake 直接連第三方的 target）是改使用者已核准的 DI 增補，交主會話；在定之前列在文末〈仍往產品加步驟的條目〉。
 
 ### 3.6 不建議的形狀
 
@@ -220,22 +221,22 @@
 
 ---
 
-## 4. 未決 17 題的處置（第二次修訂：全部已定）
+## 4. 未決的處置（17 題在第二次修訂時全部已定；最終檢查後新增 18、19，已定）
 
 第一次修訂時這節是「交使用者的未決」，每題附選項、代價、建議。使用者在 #212 的討論與複核中逐題定了；本節只寫決定與它在計畫裡的落點，選項的比較見 git 歷史（`b647de39`）與決定行。引用：**HO-212**＝kernel `HANDOFF.md` 現況末尾「#212 的使用者決定」兩行；**review**＝決定行 `v8-arch-adapter-plugins-review`；兩者不同處以 review 為準。
 
 ### 未決 1（JSON）——已定
 
-- **使用者原話**：「yyjson，數字走原文路。（直接加GYO的介面，內化到Engine中未來有變化，也有介面作為緩衝）」；方向的前一句：「我想把 json＋介面內化到 Engine 中沒問題吧」（主 checkout `build/evidence/adapter-plugins-plan/discussion-notes.md`〈追加（JSON）〉；主會話轉達）。調查：`docs/architecture/plans/third-party-evaluation/json-library-survey.zh-Hant.md`（`v8-arch-json-library-survey`，PR #216，已在 master；本分支尚未併入）。
+- **使用者原話**：「yyjson，數字走原文路。（直接加GYO的介面，內化到Engine中未來有變化，也有介面作為緩衝）」；方向的前一句：「我想把 json＋介面內化到 Engine 中沒問題吧」（主 checkout `build/evidence/adapter-plugins-plan/discussion-notes.md`〈追加（JSON）〉；主會話轉達）。調查：`docs/architecture/plans/third-party-evaluation/json-library-survey.zh-Hant.md`（`v8-arch-json-library-survey`，PR #216，已在 master；本分支已在 `86de8f39` 併入）。
 - **讀法**：一般規則的實例，不是例外——JSON 解析是 Engine 的能力（Q-b：nlohmann 今天用在 Engine 7 個模組讀自己的資料契約：asset、ui、map_markers、voxel_mesh、model、render、base；拿掉會壞），所以 adapter 在 Engine 裡（軸 1）。今天未達軸 1 的兩點：一組件一 adapter（7 個模組各自直連）、介面用 Engine 的詞（`StrictJson.hpp` 以 nlohmann 型別為模板參數，使用者拿到 nlohmann 的 DOM）。
-- **定案**：一個 Engine 的 JSON 模組是唯一連 JSON 函式庫的地方，函式庫＝**yyjson**；其他 6 個模組與 shader 建置期工具改用它；介面是 GYO 自己的（Engine 的詞，使用者拿不到函式庫的 DOM 型別，換函式庫時那些模組不用改）；**數字走原文路**：adapter 以 `YYJSON_READ_NUMBER_AS_RAW` 交出原文，Engine 以 `std::from_chars` 轉。
-- **介面契約要寫明的行為差異**（調查報告 §1、§2.3、§3）：`-0` 讀成 `-0.0`（今天 nlohmann 讀成整數 0；repo 內的 JSON 沒有 `-0`）；下溢（`1e-400` 等）由今天的 `+0.0` 變成錯誤（libstdc++ 的 `from_chars` 回 `result_out_of_range`）；超出範圍的小數在原文旗標下 yyjson 會接受，由 Engine 的轉換擋下；今天 `StrictJson` 接受「`123`＋NUL」，新介面照嚴格解析拒絕；UTF-8 BOM 由接受變拒絕（repo 內容 70 檔無 BOM）。後三項是**締める面**，在 json-adapter 的宣告寫明。
-- **限界**：調查只在 linux-x64（Docker）實測；windows-x64、macos-arm64 的原文路要在 json-adapter 以同一組數字向量於 L1 驗 0 不一致。
-- **計畫的落點**：`v8-arch-json-adapter` 回到計畫、**不再是條件批**（計畫 §3.17c）；在 G2a 後、adapters-relocate 之前（shader 工具在搬進 SDL plugin 之前改用 Engine 的 JSON 介面，不在 plugin 裡另連一份函式庫）。產品、工具、測試直接用 nlohmann（apps 7、tools 17、framework 2、tests 20、acceptance 6 檔）不在這批：照 R3 與 (α) 是產品自己的事。
+- **定案**：一個 Engine 的 JSON 模組是唯一連 JSON 函式庫的地方，函式庫＝**yyjson**；其他 6 個模組與 shader 建置期工具改用它；介面是 GYO 自己的（Engine 的詞，使用者拿不到函式庫的 DOM 型別，換函式庫時那些模組不用改）；**數字走原文路**：adapter 以 `YYJSON_READ_NUMBER_AS_RAW` 交出原文，轉換用 **fast_float**（未決 18；原定「Engine 以 `std::from_chars` 轉」在 macOS 部署目標 13.3 編不過）。
+- **介面契約要寫明的行為差異**（調查報告 §1、§2.3、§3）：`-0` 讀成 `-0.0`（今天 nlohmann 讀成整數 0；repo 內的 JSON 沒有 `-0`）；下溢（`1e-400` 等）由今天的 `+0.0` 變成錯誤（libstdc++ 的 `from_chars` 回 `result_out_of_range`）；超出範圍的小數在原文旗標下 yyjson 會接受，由 Engine 的轉換擋下（今天 nlohmann 也拒絕，不是締める面）；今天 `StrictJson` 接受「`123`＋NUL」，新介面照嚴格解析拒絕；UTF-8 BOM 由接受變拒絕（repo 內容 70 檔無 BOM）；另有超出 64 位元的整數（今天 nlohmann 轉成 double，原文路下整數欄得到範圍錯誤）與整數欄的 `-0`（最終檢查 S-11 (3)）。**締める面**是下溢、「`123`＋NUL」、BOM 三項（第二次修訂寫「後三項」數錯：超出範圍的小數今天就拒絕），在 json-adapter 的宣告寫明；下溢與溢位的回報改由 fast_float 對齊這條契約（調查量的是 libstdc++ 的 `from_chars`）。七份資料契約的驗證規則因此收緊（計畫 Delta-7 第 3 項、§3.17c；最終檢查 S-10）。
+- **限界**：調查只在 linux-x64（Docker）以 libstdc++ 的 `from_chars` 實測；轉換改 fast_float 後（未決 18），三平台（含 macOS 部署目標 13.3）的原文路要在 json-adapter 以同一組數字向量於 L1 驗 0 不一致；fast_float 的版本、授權、C++20 與三平台編譯在 json-adapter 開工第一步查證，不過就停、回報。
+- **計畫的落點**：`v8-arch-json-adapter` 回到計畫、**不再是條件批**（計畫 §3.17c）；在 G2a 後、adapters-relocate 之前（shader 工具在搬進 SDL plugin 之前改用 Engine 的 JSON 介面，不在 plugin 裡另連一份函式庫；這條串行不是技術依賴——決定行原文是「shader 工具搬進 SDL plugin 後也改用它」——拿不拿掉交主會話，最終檢查 S-12）。產品、工具、測試直接用 nlohmann（apps 7、tools 17、framework 2、tests 20、acceptance 6 檔）不在這批：照 R3 與 (α) 是產品自己的事。
 
-### 未決 2（建置期工具 `engine/render/shaders/pipeline`）——已定 B（HO-212）
+### 未決 2（建置期工具 `engine/render/shaders/pipeline`）——已定 B（HO-212）；編譯步驟的位置由未決 19 改
 
-shader 編譯工具、內建 shader 的編譯步驟、`ShaderLibrary` 挑 SPIR-V／DXIL／MSL 的那段搬進 SDL plugin 的 GPU 部分；Engine 留 HLSL 原始碼與 shader ABI；SDL_shadercross 先不換；CI 的 shader 快取鍵路徑在 `.github/` 兩個 workflow，由使用者自己改（使用者：「這樣關於 SDL 的部分就已經全部放在 Plugin 裡面了」）。工具的 JSON 改用 Engine 的 JSON 介面（未決 1）。落點：工具與編譯步驟的搬家在 adapters-relocate（只搬不改形狀；工具自抓的那份 SDL3 也在 SDL plugin 內）；`ShaderLibrary` 的格式挑選搬家是改形狀，在 wrap-render。
+shader 編譯工具、內建 shader 的編譯步驟、`ShaderLibrary` 挑 SPIR-V／DXIL／MSL 的那段搬進 SDL plugin 的 GPU 部分；Engine 留 HLSL 原始碼與 shader ABI；SDL_shadercross 先不換；CI 的 shader 快取鍵路徑在 `.github/` 兩個 workflow，由使用者自己改（使用者：「這樣關於 SDL 的部分就已經全部放在 Plugin 裡面了」）。工具的 JSON 改用 Engine 的 JSON 介面（未決 1）。落點：工具的搬家在 adapters-relocate（只搬不改形狀）；**編譯步驟留在共通內容管線**、改由已選 plugin 的登記資料找編譯器（未決 19，取代「編譯步驟搬進 SDL plugin」）；SDL 的版本有兩處——執行期的 `third_party/sdl3/CMakeLists.txt:13` 不搬、工具自抓的那份（`pipeline/cmake/Dependencies.cmake:25`）隨工具進 SDL plugin（第二次修訂寫「也在 SDL plugin 內」不準確；最終檢查 B-3）；`ShaderLibrary` 的格式挑選搬家是改形狀，在 wrap-render。
 
 ### 未決 3（model 取樣規則與 audio core）——已定：留 Engine（review (3)，改動 HO-212 的 (a)）
 
@@ -266,7 +267,7 @@ shader 編譯工具、內建 shader 的編譯步驟、`ShaderLibrary` 挑 SPIR-V
 
 ### 未決 9（SDL 2D renderer）——已定 I1（HO-212）
 
-SDL 2D renderer 在 plugins-editor 退役；接受 audio_editor、ui_editor 需要 GPU。ImGui 的繪製用官方 SDL_GPU 後端（`sdl_imgui`）；`IRenderDevice` 是否還要擴充（裁切、索引子範圍）由 plugins-editor 的宣告確認（用官方後端時可能不需要）。
+SDL 2D renderer 退役（新 plugin 在 plugins-editor 不用它；四工具、framework、`tests/common/runtime_sdl` 遷完後在 runtime-loop-retire 刪——最終檢查 B-2）；接受 audio_editor、ui_editor 需要 GPU。ImGui 的繪製用官方 SDL_GPU 後端（`sdl_imgui`）；`IRenderDevice` 是否還要擴充（裁切、索引子範圍）由 plugins-editor 的宣告確認（用官方後端時可能不需要）。
 
 ### 未決 10（target §4 的 Q2 句）——已定 (iii)（HO-212）
 
@@ -277,13 +278,13 @@ SDL 2D renderer 在 plugins-editor 退役；接受 audio_editor、ui_editor 需�
 使用者在 HO-212 一起核准 DI 2 增補、新 DI 5（依 (iii) 改窄）、DI 6 與兩條 RC；review (2) 再改寫 DI 5 的末句。**目前 `target/runtime-composition.zh-Hant.md` 的 Design Invariants 節只有 DI 1～4，沒有 DI 5、DI 6**，本修訂不新增（修訂前後該節 md5 相同，見文末）。**落字時點：plugins-foundation 的事前宣告之前**（N2 與 Engine 側掃描以它們為依據），由架構師在那時寫進 DI 節，文字如下：
 
 - **DI 2 增補**（加在「產品與工具的 plugin 選擇只寫在 `project.json`」之後）：選擇以可執行單位（role、variant）為粒度；第 1 類後端也經同一個欄選擇；產品與工具的 CMake 不寫 plugin 或後端的 target 名。守衛：N2；第三點不設白名單（review：N4 刪）。
-- **新 DI 5**：「外部組件的型別與呼叫只在它的 adapter，每個組件一個 adapter：歸 plugin 的能力，adapter 在那個 plugin；**Engine 只在判斷順序判定屬 Engine 的能力裡、經它唯一的 adapter 連外部組件**。Engine 的標頭，以及 adapter 實作 Engine 介面的部分，只用 Engine 的詞；adapter 可以對依賴它的產品與 plugin 露出第三方型別。」守衛：Engine 側的含入與連結掃描（N1，只掃 `engine/`）＋plugin 版標頭衛生守衛（adapters-relocate）＋依賴方向掃描。Engine 目前唯一的外部組件 adapter 是 JSON 模組（yyjson）。
+- **新 DI 5**：「外部組件的型別與呼叫只在它的 adapter，每個組件一個 adapter：歸 plugin 的能力，adapter 在那個 plugin；**Engine 只在判斷順序判定屬 Engine 的能力裡、經它唯一的 adapter 連外部組件**。Engine 的標頭，以及 adapter 實作 Engine 介面的部分，只用 Engine 的詞；adapter 可以對依賴它的產品與 plugin 露出第三方型別。」守衛：Engine 側的含入與連結掃描（N1，只掃 `engine/`）＋plugin 版標頭衛生守衛（adapters-relocate）＋依賴方向掃描。Engine 目前唯一的外部組件 adapter 是 JSON 模組（yyjson 與 fast_float，兩個組件都只在這個 adapter；未決 18）。
 - **新 DI 6**：「每個可執行單位用到的、需要後端的能力恰好有一個已選後端；缺或多是 configure 錯誤並指名能力。」守衛：§3.4 的三個合成反例（N2）。
 - **新 RC 兩條**：(i) 升級一個第 1 類 adapter 時，它輸出的內容身分 (c) 改變（例：ufbx 的載入結果變了，`AnimationContentDigest` 跟著變）→ 不是「只改 adapter」，走內容身分的版本流程；(ii) 同一組件的對接出現在第二個 plugin 時，不放寬 DI 5，而是把對接搬回它的 adapter；介面不足就回 Engine 補介面。**RC (ii) 已用一次**：ImGui 的 SDL 後端放進 SDL plugin 內的 `sdl_imgui`，不在 imgui plugin（review）。
 
 ### 未決 12（計畫 §8 的三處）——已定（review）
 
-RC-8：Delta-7 算第 1 個（照規劃稿）；RC-11：錨點 1,299 h **不調**；RC-12：**刪**（RC-8 已涵蓋）。
+RC-8：Delta-7 算第 1 個（照規劃稿；最終檢查 S-8：B1 依定義產出新 Delta，RC-8 的「若」不成立，二選一交主會話）；RC-11：錨點 1,299 h **不調**；RC-12：**刪**（RC-8 已涵蓋）。
 
 ### 未決 13（其餘能力模組的歸屬）——已定（review）
 
@@ -303,12 +304,26 @@ assets-core 建 `plugins/ufbx/`，只放 build 函式、`plugin.json`（`base` �
 
 ### 未決 17（U4 的代價變了）——已知悉（review）
 
-刪減後重算：2' 階段＝rollback-extract 25～46＋json-adapter 21～42＋adapters-relocate 22～45＋wrap-render 24～65＋wrap-assets 9～20＋plugins-frame 14～30＝**115～248 h**（U4 當時 70～153 h），且 adapters-relocate 改的不只 kernel／engine。§7 是已定事項，計畫不改它的文字。
+刪減後重算：2' 階段＝rollback-extract 25～46＋json-adapter 21～42＋adapters-relocate 22～45＋wrap-render 24～65＋wrap-assets 9～20＋plugins-frame 14～30＝**115～248 h**（U4 當時 70～153 h；最終檢查後 json-adapter 22～44、合計 **116～250 h**；使用者在第一次修訂時看到的是 93～201 h，數字變大，回報時要再提一次——最終檢查 S-9，交主會話），且 adapters-relocate 改的不只 kernel／engine。§7 是已定事項，計畫不改它的文字。
+
+### 未決 18（macOS 上浮點 `std::from_chars` 不可用；最終檢查 B-1）——已定 (b)（使用者 2026-11-13，主會話「照建議」）
+
+- **事實與證據**：(1) 本機實測（Apple clang 21.0.0、SDK 26.5、`-std=c++20 -mmacosx-version-min=13.3`，只呼叫 `std::from_chars(const char*, const char*, double&)` 的檔）：`error: 'from_chars' is unavailable: introduced in macOS 26.0`（`__charconv/from_chars_floating_point.h:63`）；同檔以 `-mmacosx-version-min=26.0` 編譯通過。第三次修訂時重做一次，結果相同（小程式在會話暫存區，未保存）。(2) 部署目標 13.3：`CMakeLists.txt:7`、`CMakePresets.json:102`（Metal 離線編譯也讀同一值，`build/cmake/GyoShaders.cmake:104-107`）。(3) L1 的 macos-arm64 釘 Xcode 16.4（`.github/actions/native-setup/action.yml:76`）；那一版的 libc++ 有沒有浮點多載是依版本的推斷，沒在 runner 上實測。(4) repo 內今天沒有浮點 `from_chars`（`git grep -P 'from_chars'` 排除 docs 與 third_party 只命中 `apps/object_fps_pvp/src/Pvp/IpcHost.cpp:882`，整數）。(5) 調查卡事前宣告寫「部署目標 13.3，libc++ 的浮點 `from_chars` 可用」（`docs/architecture/plans/third-party-evaluation/json-library-survey-declaration.zh-Hant.md:130`），與 (1) 相反；調查只在 linux-x64 跑。
+- **選項與代價**（最終檢查 B-1 的「後果」）：改部署目標與 CI 的 Xcode——產品的最低 macOS 版本跟著升到 26；macOS 另走一條路——違 json-adapter 的停止條件「不在 adapter 裡為某平台開分支」；**(b) 數字仍走原文路，轉換改用 fast_float**——多一個外部組件（header-only），放在 Engine 的 JSON 模組的 adapter 裡，三平台同一份實作。
+- **決定 (b)**：數字仍走原文路（adapter 交出原文），轉換改用 **fast_float**（header-only），三平台用同一份實作；fast_float 是第二個外部組件，放在 Engine 的 JSON 模組的 adapter 裡（一組件一 adapter：它只在那裡出現）。
+- **落點**：計畫 §3.17c 的 Contract 與受理判定照改——以調查卡同一組數字向量在 L1 三平台驗 0 不一致（含 macOS 部署目標 13.3）；開工第一步查證 fast_float 的版本、授權、C++20 與三平台編譯（主會話轉達：架構師的建議來自知識、未查證；查證不過就停、回報）；`std::from_chars` 的句子在本稿 §0、§1 第 28 列、未決 1、計畫 §2.2、§3.17c、Delta-7、§5.2 N1、target 頁 §4 都改掉；json-adapter 估時 ＋1～2（fast_float 的加入、查證與三平台編譯；推定）＝22～44 h。HANDOFF 決定行 `v8-arch-json-yyjson-raw-number` 的「Engine 以 `std::from_chars` 轉」要由主會話記一行改寫（處置記錄 S-17 一併列）。
+
+### 未決 19（shader 工具搬家造成共通 build → 特定 plugin 的新邊；最終檢查 B-3）——已定 (b)（使用者 2026-11-13，主會話「照建議」）
+
+- **事實與證據**：shader 的編譯步驟是共通 build 的產品內容管線，不只是 Engine 的事——`build/cmake/GyoContent.cmake:24-37` 讀產品 `content.json` 的 `shader_bundles`、`include(GyoShaders.cmake)` 後呼叫 `gyo_add_shader_bundle`（`assets/object_fps_pvp/content.json:6` 有這一欄）；`build/cmake/GyoBuild.cmake:109-120` 把 `shader_bundles`／`shader_host_tools` 寫進 `gyo-build.json`，`build/assemble_runtime.py:38`、`build/acceptance/common/package_contract.py:238` 與 `.github/` 兩個 workflow 讀它。第二次修訂把「內建 shader 的編譯步驟」寫成隨工具搬進 `plugins/sdl`：那樣共通 build 要指到一個具體的 plugin（共通層 → 特定 plugin 的新邊），刪 sdl plugin 要改共通 build（AGENTS §7、§9），而計畫 Delta-7 第 5 項寫「方向不變」、第 4 項漏列 `GyoContent.cmake`。另：執行期 SDL3 的版本釘在 `third_party/sdl3/CMakeLists.txt:13`（`release-3.4.0`），工具自抓的一份在 `engine/render/shaders/pipeline/cmake/Dependencies.cmake:25`——第二次修訂寫「兩份都在 SDL plugin 內」不成立，`third_party/` 本計畫不搬。
+- **選項與代價**：編譯步驟隨工具搬進 SDL plugin——共通 build → 特定 plugin 的邊，刪 plugin 要改共通層；**(b) 編譯步驟留在共通內容管線，只搬編譯器**——共通管線從已選 plugin 的登記資料找編譯器（宣告式），登記資料多一項宣告。
+- **決定 (b)**：shader 的編譯步驟留在共通的內容管線（`GyoContent.cmake` 讀 `shader_bundles`）；只有編譯器本身（`engine/render/shaders/pipeline` 的工具）搬進 SDL plugin；共通管線從**已選 plugin 的登記資料**找到編譯器（宣告式，不含產品名、不以名字推斷）。
+- **落點**：計畫 Delta-7 第 4 項補 `GyoContent.cmake`、`GyoBuild.cmake` 的 shader 記錄、`assemble_runtime.py`、`package_contract.py`；第 5 項寫出「共通 build 解讀登記資料」這條（與 components／plugins 同一條路，不是指到特定 plugin 的邊）；§3.17b 的 Feature、Contract（唯一不是只搬的一處）、範圍、判定 (10b)（刪提供編譯器的 plugin 登記時共通管線零修改）、範囲の限界（SDL 兩處版本）照實改；本稿 §0、§1 第 16c 列、未決 2、target 頁 §4「SDL 家族」一條同步。估時不變（adapters-relocate 的 shader 項 1～3 h 內，推定）。由 adapters-relocate 宣告定的細節：登記資料的欄名；`content.json` 是產品層、選擇欄是單位層，以哪些單位的選擇找編譯器。
 
 ### 流程事項
 
-- `docs/architecture/README.md` 的 `Layers and dependencies` 條目：本修訂只加一句區分「Engine 自有 plugin」與「`plugins/` 的擴展」並指向 runtime-composition §4（檔案歸圖書管理員，只動這一條）。
-- 未查證、交執行批先查：Windows 上把 SDL3.dll 放到測試執行檔旁的機制在搬家後是否照舊（adapters-relocate 宣告第一步）；ImGui 官方 SDL3／SDL_GPU 後端的版本與授權（plugins-editor 開工時）；段 (i) 的 CMake 連結圖推導是否可行（段 (i) 宣告先驗）；shader 工具（獨立的 host 專案，交叉編譯時為 host 建）連 Engine 的 JSON 模組的建置方式（json-adapter 宣告）。
+- `docs/architecture/README.md` 的 `Layers and dependencies` 條目：第二次修訂加一句區分「Engine 自有 plugin」與「`plugins/` 的擴展」；第三次修訂把它改成只指路（不持規則；Engine 自有 plugin 標「planned, not yet defined」——最終檢查 S-16）（檔案歸圖書管理員，只動這一條）。
+- 未查證、交執行批先查：Windows 上把 SDL3.dll 放到測試執行檔旁的機制在搬家後是否照舊（adapters-relocate 宣告第一步）；ImGui 官方 SDL3／SDL_GPU 後端的版本與授權（plugins-editor 開工時）；段 (i) 的 CMake 連結圖推導是否可行（段 (i) 宣告先驗）；shader 工具（獨立的 host 專案，交叉編譯時為 host 建）連 Engine 的 JSON 模組的建置方式（json-adapter 宣告）；fast_float 的版本、授權、C++20 與三平台編譯（json-adapter 開工第一步，未決 18）。
 - **待更正**（本批不改那兩份檔，交圖書管理員或下一次碰它們的批）：`docs/architecture/plans/foundation-followups/PLAN.md:583`「Engine 已擁有 Go 版（`services/gyo_gateway/framing/framing.go`）」——owner 已改為網路 plugin 的 owner（review (7)）；`docs/architecture/plans/kernel/spec.zh-Hant.md:1262` Gateway 列「外部，不變」——owner 是網路 plugin 的 owner，不是 Engine 之外的無主服務。
 
 ---
@@ -346,6 +361,7 @@ assets-core 建 `plugins/ufbx/`，只放 build 函式、`plugin.json`（`base` �
 - **T12**（守衛）：產品側的棘輪與白名單全刪（N1 的產品側、N4、N5、N7）；過渡登記表留表刪棘輪（N6 刪，closeout 判一次 0 列）；只留 Engine 側掃描（N1 改為只掃 `engine/`）、N2（三種錯誤）、N3。
 - **T14**（估時）：本修訂 700～1,448 h（非條件 36 批；其中 B1 8～16 與 json-adapter 21～42 是新算入的；不含這兩批 671～1,390）。
 - **T15**（RC-8）：Delta-7 算第 1 個（已定）。
+- **T4**（最終檢查 N-2）：上表的「階段 2' 鏈 68～155 h」是第一次修訂的數；第二次修訂 90～202 h、最終檢查後 91～204 h，仍短於 G2a → client-sim 125～260 h；G2a 後 Engine／plugins 線的瓶頸效果仍未重算。
 - **歸屬的判法**：第一次修訂的「推論 R3」退役（Q-b 附句「中性介面算 Engine 的能力」取代）；model core、audio core 從「待使用者」改為照新 (b) 讀法留 Engine。
 
 ---
@@ -429,14 +445,78 @@ assets-core 建 `plugins/ufbx/`，只放 build 函式、`plugin.json`（`base` �
 | （review 提案 §3.2，決定行未逐項列） | 錯誤代號 `not-provided`、`dependency-cycle`、`invalid-backend` 與固定訊息格式（S11、S12）；過渡登記表的棘輪 N6（G05）；各批宣告的「新增必填項」與額外的突變一覽敵對檢查重述（G19、P09～P13） | 降為實作細節或刪（併回各批事前宣告的既有欄位）；**修訂者照 review 提案處理，決定行沒有逐項寫，請主會話確認** |
 | RC (ii) 選 (ii) | imgui 的平台半與繪製半自寫（+8～16 h） | 刪；ImGui 官方後端進 SDL plugin 的 `sdl_imgui` |
 
-configure 錯誤 9 → 3；補遺二的新守衛 7 → 3（N1 改為 Engine 側、N2、N3）。
+configure 錯誤 9 → 3（最終檢查 S-6：選擇欄的錯誤 3 種；9 種中實際拿掉 4 種，另兩種改列登記資料的驗證錯誤）；補遺二的新守衛 7 → 3（N1 改為 Engine 側、N2、N3）。
 
 **保留的**（review §3.1，守 Engine 與 adapter 的邊界或 Feature 本身）：判斷順序、三原則（對 Engine）、兩類 plugin、SDL 家族、P2、未決 2 B、(iii)、DI 5（改寫）、DI 6、兩條 RC、SDL 2D 退役；選擇欄與三種錯誤；Engine 側的含入與連結掃描、Engine 標頭衛生與 plugin 版標頭衛生守衛、搬家後的含入根不沿用 `engine/` 前綴、中性 platform 契約的合成實作測試、byte 級等價、ctest 名單相同、產品 SDL link guard 補 `SDL3_ttf`；新批 adapters-relocate（範圍限於機械搬動）。
 
-**還留下的「往產品或工具加步驟」的條目**：(1) 在選擇欄寫要用的 plugin（Feature 2 本身）；(2) R3：產品連外部組件時經對接它的 plugin，沒有就在產品目錄下做。遷移批對產品與工具的一次性改寫（tool-ui 去掉直接的 SDL 呼叫、client-frame 的 main＝選擇＋Run 等）是遷移本身，不是之後的日常步驟。
+**還留下的「往產品或工具加步驟」的條目**：第二次修訂寫「(1) 在選擇欄寫要用的 plugin；(2) R3」兩條，不準（最終檢查 S-2、S-3、S-4）；照實的清單見文末〈仍往產品加步驟的條目〉。遷移批對產品與工具的一次性改寫（tool-ui 去掉直接的 SDL 呼叫、client-frame 的 main＝選擇＋Run 等）是遷移本身，不是之後的日常步驟。
 
 **件数**：批（計畫）37＝非條件 36＋條件 1（pageguard-os）；第一次修訂 36＝非條件 34＋條件 2。新增 B1（規劃批）；json-adapter 由條件改非條件。重算（腳本與輸出：主 checkout `build/evidence/adapter-plugins-plan/reviser2-sum.{py,txt}`）：非條件合計 700～1,448 h（原計畫 632～1,299；第一次修訂 681～1,400）；關鍵路徑 332～694 h 不變。
 
 **Design Invariants 節**：`target/runtime-composition.zh-Hant.md` 的 Design Invariants 節修訂前後 md5 相同（`be34398d97c60983a79c1d4041828b6e`，與 HEAD `effa46cc` 一致）；DI 5、DI 6、DI 2 增補的落字時點在 plugins-foundation 的事前宣告之前（§4 未決 11）。
 
 **修訂者沒有把握的地方**：(1) 上表倒數第二行——決定行沒逐項列的 review 提案項（S11、S12、G05、G19、P09～P13）照提案刪或降級；(2) json-adapter 的 21～42 h 是推定（yyjson 是 C 函式庫、包一層 C++ adapter；沒有 GYO 內的先例）；(3) 段 (i) 的 CMake 連結圖推導可行性未查證，回宣告式時過渡登記表要帶手寫的 `requires_capabilities`（第一次修訂對抗 S-2 的限界回來）；(4) round2 一句的改寫是否算在「16 (a)」裡；(5) B1 的估時 8～16 h 與排程（Kernel 線內、功能線重開前，依賴段 (i)）是推定，它產出的執行批的成本沒有算進合計；(6) shader 工具是交叉編譯時為 host 建的獨立專案，連 Engine 的 JSON 模組的方式未查證。(7) RC (ii) 的用語「整個 repo 的 SDL 呼叫只在 sdl plugin」與未決 6「測試夾具不受原則 (1) 限制」的交界：`tests/ui_editor/PreviewAssetTests.cpp` 今天直接含 SDL3，本稿交 plugins-editor 的四選一，沒有判它違反 RC (ii)。
+
+---
+
+## 仍往產品加步驟的條目（最終檢查後；照實列）
+
+使用者的方向：規則只放在 Engine 與 adapter 的邊界。第三次修訂能刪的已刪（第二次修訂刪了產品側的棘輪、白名單、四種錯誤等）；下列刪不了，或刪不刪要改使用者已定項、要新的設計決定，照實列出。遷移批對產品與工具的一次性改寫（main＝選擇＋Run、tool-ui 去掉直接的 SDL 呼叫等）是遷移本身，不列。
+
+| # | 條目 | 性質 | 出處 | 狀態 |
+|---|---|---|---|---|
+| 1 | 在選擇欄寫要用的 plugin | 常設；Feature 2 本身 | §3.2 | 使用者已定 |
+| 2 | 產品連外部組件時經對接它的 plugin，沒有就在產品目錄下做 | 常設；R3 的硬規則 | §4 未決 6 | 使用者已定 |
+| 3 | 產品與工具的 CMake 不寫 plugin 或後端的 target 名（DI 2 增補第三點） | 常設條文；沒有守衛、closeout 不掃；與未決 8 A、R3 衝突 | §3.5 末、§4 未決 11 | 交主會話（最終檢查 S-3 (1)；刪或改成能檢查的形＝改使用者已核准的 DI 增補） |
+| 4 | 產品的 System 要經 plugin 的 build 函式登記——照目前機制，產品程式實際上要包成產品目錄下的 plugin（例 `fps_pvp_client`、`fps_pvp_sim`、工具專有的編輯 System） | 常設；與 R3「包成 plugin 是產品內部的選擇」不一致 | §3.2、計畫 §3.11 Contract、§3.25～3.28 | 交主會話（S-3 (2)） |
+| 5 | 回宣告式時，產品在自己的 plugin 的 `plugin.json` 寫 `requires_capabilities` | 條件：段 (i) 判 CMake 連結圖推導不可行時才有；推導本身在 Match 連 `GYO::Render` 的反例上要先過 | §3.2、§3.3 | 由段 (i) 的先驗決定是否出現（S-2） |
+| 6 | 用了 `content.json` 的 `shader_bundles` 的產品，要選一個在登記資料宣告提供 shader 編譯器的 plugin | 常設的隱含條件；object_fps_pvp 的 Client 已選 sdl，多數情況已滿足；沒選時是指名的 configure 錯誤；以哪些單位的選擇為準由 adapters-relocate 宣告定 | §4 未決 19、計畫 §3.17b | 未決 19 (b) 的結果（使用者已定） |
+| 7 | 工具每多含一個已選 plugin 的公開標頭，要改工具守衛的正向清單並照 §14.4 核准 | 過渡：adapters-relocate 起，到工具四批換成不必逐個標頭核准的形為止 | 計畫 §3.17b、§3.25～3.28、§5.2 第 11 列 | 過渡期限已寫（S-4）；換成什麼形由工具四批宣告定、交使用者 |
+
+第二次修訂寫「只剩兩條（1、2）」不準；上表是最終檢查（S-2、S-3、S-4）後的清單。
+
+---
+
+## 最終檢查處置記錄（Fable／high 一次）
+
+報告：主 checkout `build/evidence/adapter-plugins-plan/adversary-final.md`（blocker 4／should 18／nit 7，git 管理外）。修訂：Opus／high（第三次）。事實重驗：`git grep -n -I -P` 以 Python 包（回傳碼 0＝命中、1＝無命中、其他＝中止；stderr 不丟；正例 `#\s*include\s*<SDL3/` 在 `engine/platform/sdl/native` 命中 `SdlPlatformNative.hpp:7`），掃描腳本在會話暫存區、未保存（只作出所，不作判定）；B-1 的編譯實測在本機重做一次（同一結果）；批數與工時重算在 `reviser3-sum.{py,txt}`。處置三種：**修正**（照報告的最小修正改）、**交使用者**（本次兩題都已由使用者定）、**交主會話**（要改使用者已定項、或報告建議的方案本身是新設計決定；本稿只寫事實與「未定」的指路，不選方案）。「修正＋交主會話」＝事實已改，選擇交主會話。
+
+**統計**：blocker 4＝修正 2（B-2、B-4）、交使用者 2（B-1→未決 18、B-3→未決 19，皆已定 (b)）；should 18＝修正 10（S-2、S-4、S-6、S-7、S-10、S-11、S-13、S-15、S-16、S-18）、修正＋交主會話 5（S-1、S-3、S-5、S-8、S-14）、交主會話 3（S-9、S-12、S-17）；nit 7＝修正 7。合計 29 條。
+
+| # | 處置 | 內容 |
+|---|---|---|
+| B-1 | 交使用者→**已定 (b)**（未決 18） | 事實重驗成立（本機 Apple clang 21／SDK 26.5、部署目標 13.3 編譯失敗，26.0 通過）。使用者定：原文路不變，轉換改 fast_float（JSON 模組 adapter 內的第二個外部組件）。落字：§0、§1 第 28 列、§4 未決 1／18；計畫 §2.1、§2.2、§3.17c（Contract、開工第一步查證、macOS 13.3、停止條件、估時 22～44）、Delta-7、§3.32、§5.2 N1；target 頁 §4 的 JSON 句 |
+| B-2 | 修正 | plugins-editor 的判定改為「新的 imgui／offscreen-preview plugin 不用 2D renderer」；2D 的使用者（四工具 `project.json` 的 `SDL_RENDERER`、工具程式的 `SdlRenderer`、framework 的 `ImGuiShell`／`PreviewTexture`、`tests/common/runtime_sdl`）歸零在工具四批、`imgui::sdl3_sdlrenderer3` 在 framework-delete 刪、2D target 在 runtime-loop-retire 刪（`runtime_sdl` 同時用 `RuntimeLoop`，是最後一個使用者）；`IMGUI` 過渡列退出改 framework-delete；過渡期 `sdl_imgui` 與 `imgui::sdl3_sdlrenderer3` 不進同一執行檔。估時 1～2 h 由 plugins-editor（22～49）移到 runtime-loop-retire（8～19），關鍵路徑 +1～2。§1 第 16a 列、§2 2D 列、§3.5、§4 未決 9；計畫 §2.1、§2.2、§2.3、§3.24、§3.29、§3.31、Delta-7 各批差分 |
+| B-3 | 交使用者→**已定 (b)**（未決 19）＋事實更正 | 使用者定：編譯步驟留在共通內容管線、只搬編譯器、共通管線從已選 plugin 的登記資料找編譯器。落字：Delta-7 第 4 項（`GyoContent`、`GyoBuild` 的 shader 記錄、`assemble_runtime.py`、`package_contract.py`）、第 5 項（共通 build → 登記資料這條，取代「方向不變」）、§3.17b（Feature、Contract、範圍、判定 (10b)、範囲の限界）、§2.1、§2.2；本稿 §0、§1 第 16c 列、未決 2、target 頁「SDL 家族」。事實更正：SDL 執行期版本在 `third_party/sdl3/CMakeLists.txt:13`、工具自抓的在 `pipeline/cmake/Dependencies.cmake:25`——不是「兩份都在 SDL plugin 內」；Feature 句加 `third_party/` 的版本釘選 |
+| B-4 | 修正 | 計畫 §3.17b Contract「四列」改「三列」 |
+| S-1 | 修正＋交主會話 | 修正：計畫 §3.24 刪「imgui plugin 的輸入讀 `PhysicalInputFrame`」（官方 SDL3 後端吃 SDL 事件）；§3.3、§3.24、Delta-7 第 5 項把四點寫成「未定」並指出要在段 (i) 宣告前定。交主會話：plugin 能否宣告「需要後端」或 DI 6 只管 Engine 能力；`sdl_imgui` → imgui 的 target 層級可選依賴怎麼表達；刪 imgui plugin 時的預期；(iii) 對 `sdl_imgui` 的讀法；與 target §3b「輸入讀 Engine 的輸入」怎麼對上——都是登記格式與 target 層的新設計決定 |
+| S-2 | 修正 | 反例（`apps/object_fps_pvp/CMakeLists.txt:50`、`:66`，重驗成立）寫進段 (i) 先驗的輸入（§3.2、計畫 §3.11）；回宣告式時的產品步驟寫明並列入〈仍往產品加步驟的條目〉第 5 條；§0 第 2 點與修訂記錄的「只剩兩條」改掉 |
+| S-3 | 修正＋交主會話 | 修正：「只剩兩條」改成照實清單（〈仍往產品加步驟的條目〉7 條）；(3) `shader_bundles` 的隱含選擇照未決 19 列第 6 條；(4) 列第 5 條。交主會話：(1) DI 2 增補第三點（使用者已核准的 DI 增補；刪或改寫要使用者）；(2) 產品 System 經 plugin build 函式登記與 R3「內部選擇」的對齊（R3 是使用者決定） |
+| S-4 | 修正 | 確切路徑寫成過渡：計畫 §3.25～3.28、§5.2 第 11 列——工具四批換成不必逐個標頭核准的形（候選由選擇欄推導），照 §14.4 交使用者；過渡期的負擔列第 7 條 |
+| S-5 | 修正＋交主會話 | 修正：§2 platform 列的殘句（`NativeWindow()`／`NativeEvent()` 只給 SDL 家族）刪。交主會話：依賴者拿到 SDL 型別能做什麼、測試夾具算不算在「整個 repo」內（使用者決定 (iii)、RC (ii)、未決 6 之間的交界；報告也建議交使用者確認）；§2〈`*Native` target 的去處〉與去向表 RC 2 列寫成「未定」 |
+| S-6 | 修正 | 件数行、§3.4、§0、修訂記錄與計畫 §3.11：選擇欄的錯誤 3 種；實際拿掉 4 種；`dependency-cycle`、`invalid-backend` 改列登記資料的驗證錯誤（行為仍在、產品也會碰到）；判定 (13) 加「三種各有可區分的片段」（AGENTS §14.2，片段內容由宣告定） |
+| S-7 | 修正 | §3.5、計畫 §3.11、§3.29、§3.31b、§3.32：Engine 自有 plugin 不借用過渡登記表；closeout 的 0 列不因 B1 放寬 |
+| S-8 | 修正＋交主會話 | 修正：RC-11 加「B1 完成時把執行批的估時加入重判」；§3.31b 加必答題（執行批與功能線重開的先後）。交主會話：RC-8 的二選一（B1 的 Delta 算不算新發現）——改的是使用者已定的未決 12 |
+| S-9 | 交主會話 | 事實寫進計畫 §3.17c〈並行〉與 §3.16 差分（BU-4／BU-6 分母在 nlohmann 上量；`biome.voxel_mesh.json` 41.2 對 3.8 ms）；處置（重量分母＝動已核准的閘門定義，或 json-adapter 移到 G2b 後＝動排程）交主會話；未決 17 寫明 116～250 h 要再向使用者提一次 |
+| S-10 | 修正 | Delta-7 第 3 項加 Data Contract（七份契約的驗證規則收緊；版本逐份由宣告定、交使用者）；§3.17c「格式與版本不變」改「格式不變；驗證規則的變更列在宣告」，並寫工具端 nlohmann 與 Runtime 不一致的風險 |
+| S-11 | 修正 | 計畫 §3.17c 加「實作前提」四點：`StrictJson.hpp` 自 base 移出、併入 JSON 模組（base 不依賴 JSON 模組）；向量在 git 管理外（54 MB），L1 以 `probe/gen.py`（種子 20261113）重生或放子集；行為差異補超出 64 位元的整數、整數欄的 `-0`；map_markers、voxel_mesh 的連結期望含 nlohmann（`tests/common/{map_markers,voxel_mesh}/CMakeLists.txt:27/:20`，重驗成立）；未決 1 的「後三項」數錯改正 |
+| S-12 | 交主會話 | 串行依賴不是技術依賴（決定行原文「shader 工具搬進 SDL plugin 後也改用它」），但拿掉它會動階段 2' 鏈與 N1 在 adapters-relocate 的判定（json-adapter 未完成時 `engine/` 仍有 nlohmann 的 7 處直連，N1 要另寫過渡）——屬排程與守衛的新決定；未決 1 的落點加一句指路 |
+| S-13 | 修正 | 三處硬寫路徑（`os_boundary_guard.py:34`、`test_os_boundary_guard.py:106`、`test_workflow_gates.py:684`，重驗成立；工具含 `<filesystem>`／`<fstream>`）列進計畫 §2.2、§3.17b、§5.2 第 4 列、Delta-7 第 4 項；寫明是 target 頁「plugin 不直接呼叫 OS API」對 host 建置期工具的例外，處置由 adapters-relocate 宣告定，`R4_EXCLUDED` 改動照 §14.4 交使用者 |
+| S-14 | 修正＋交主會話 | 修正：四處（`GyoBuild.cmake:34`、`GyoGo.cmake:17`／`:82`、`GoServiceTests.cmake:27`、`go_checks.py`，重驗成立）列進計畫 §3.12、Delta-7 第 4、6 項。交主會話：網路 plugin 的 owner 怎麼在 Go module 登記表達（契約加一種 owner，或登記移進 `plugins/net_link`）——Product Registration 結構的新決定 |
+| S-15 | 修正 | target 頁 §4 本文：第一條、ImGui／SDL 相容、`plugins/` top-level、第 1 類附加條各加指向新句的括號；ui 加「目前；各遷移批確認」。DI 節與 HEAD 逐位元相同 |
+| S-16 | 修正 | `docs/architecture/README.md` 那一句改成只指路：「The same §4 also says where an adapter for an external component lives, and distinguishes Engine-owned plugins (planned, not yet defined) from extensions under `plugins/`.」 |
+| S-17 | 交主會話 | 本修訂不改 HANDOFF、dev_log。要改的：HANDOFF〈未定〉把 model 取樣／audio core 與「其餘能力模組」結案（review 已定）；〈現況（續）〉補第二次修訂一行（37 批、700～1,448 h、17 題全定）與第三次修訂一行（最終檢查 4／18／7、未決 18、19 已定、701～1,450 h、關鍵路徑 333～696 h、交主會話清單）；記 round2 一句的改寫（未決 16 (a)：「開工只依賴 world-exec；結束依賴 loading 與 plugins-foundation 段 (i)」）；決定行 `v8-arch-json-yyjson-raw-number` 的「Engine 以 `std::from_chars` 轉」改由 fast_float 轉（或另立決定行記未決 18 (b)），另記未決 19 (b) 的決定行；dev_log `docs/dev_logs/2026_11_13_arch_adapter_plugins_plan.zh-Hant.md` 的內容、判定表（判定 6 的結果以最終檢查報告為準）與數字更新到第三次修訂 |
+| S-18 | 修正 | §1 第 13 列：歸屬由決定 (f) 得到、不由判斷順序推出；寫明不作為資料契約模組的先例（候選的區別句標「未經使用者確認」） |
+| N-1 | 修正 | 件数行「含入棘輪」、§2 合計的「`*Native` 收窄 3 個」「audio 中性型別 1 組」、未決 1「本分支尚未併入」改正 |
+| N-2 | 修正 | §5〈複核後的修正〉加 T4：階段 2' 鏈 90～202（第二次）／91～204（最終檢查後）；瓶頸效果仍未重算 |
+| N-3 | 修正 | §3.1 與計畫 §3.25～3.28 統一寫法：`variants.<v>` 下的選擇欄（今天依 role 分的 `role_components`，`GyoToolRegistry.cmake:165-182`），欄名與是否保留 role 層由段 (i) 定 |
+| N-4 | 修正 | §1 第 5 列改「事實判定（不在 17 題內）」、第 6 列改「已定（由已同意的 Delta-3 推出）」 |
+| N-5 | 修正（知悉） | 計畫第三次修訂記錄記一句；歷史段不改寫 |
+| N-6 | 修正 | §3.5、計畫 §3.11：段 (i) 到 assets-core 之間 ufbx 也有一列過渡登記，退出批 assets-core |
+| N-7 | 修正 | §3.4「plugin 不存在」改為「在 `plugin.json` 與過渡登記表兩處都查不到」 |
+
+**交主會話的條目**（本稿只寫事實與指路）：S-1（`sdl_imgui` 的登記與依賴四點、與 target §3b 的對齊）、S-3 (1)(2)（DI 2 增補第三點；產品 System 的登記與 R3）、S-5（SDL 型別的使用範圍與測試夾具）、S-8（RC-8 的二選一）、S-9（G2b 量測與 json-adapter 的先後；116～250 h 再提）、S-12（json-adapter → adapters-relocate 的串行）、S-14（Go module 的 owner 表達）、S-17（HANDOFF 與 dev_log）。
+
+**重算**：`reviser3-sum.txt`——批 37（非條件 36＋條件 1）；樹 37＝表 37＝§3 標題 33＋工具 4；非條件 701～1,450 h（第二次修訂 700～1,448）；關鍵路徑 333～696 h；M3 116～249、M4 182～391；階段 2' 鏈 91～204；U4 的代價 116～250；工具線 85～168；RC-11 超出錨點 151 h。target 頁 Design Invariants 節與 HEAD 逐位元相同（md5 `878c626d471dd673b4c1968f75cf9eca`，以「`\n## Design Invariants` 到下一個 `## `」切出、1,494 字元；與報告的 md5 切法不同，比的是同一切法下工作樹對 HEAD）。
+
+**修訂者沒有把握的地方**：(1) fast_float 的 +1～2 h 與 2D 刪除移批的 1～2 h 都是推定；(2) B-2 把 2D target 的刪除放在 runtime-loop-retire，是因為 `tests/common/runtime_sdl` 同時用 `RuntimeLoop`；若那個測試在更早的批改寫掉 2D 的使用，刪除可提前到 framework-delete（由宣告定）；(3) S-6 的「可區分的片段」是照 AGENTS §14.2 的要求寫回，與 review「訊息格式是實作細節」的降級不衝突（只要求可區分、不固定格式），但請主會話確認這個讀法；(4) S-7 的「Engine 自有 plugin 不借用過渡登記表」對 B1 先加了一條限制，理由是過渡表的定義（每列有退出批），不是替 B1 定語義。
