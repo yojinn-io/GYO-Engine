@@ -138,3 +138,4 @@
 - 與宣告的差異：§3.1 K0（無法掃描的檔案類型）與 K5 的「無法讀取的 include 目標」是審查後新增的判定（締める面）；K4 的函式判定改寫以消除對合法函式形狀的誤報；naming 的 SUFFIXES 與 J-9 共用並加 `.m`／`.mm`。§2 檔案清單不變。
 - 2026-11-13 核定後的修訂（架構師，審查 A8）：K1 對登記 id 改為**詞邊界**比對。snake 形不分大小寫、以非字母數字（含 `_`）或首尾為界；CamelCase 形分大小寫、從詞頭（前面不是大寫字母）到詞尾（後面不是小寫字母）。id `arena` 時 `Marenal`、`parenage` 不命中，`FrameArena`、`ArenaHost` 仍命中（刻意：產品名當前綴的 `ObjectFpsPvpHost` 不能漏）。命中訊息寫兩種讀法與處置：Kernel 用了產品名＝改 Kernel；新登記的產品 id 是 Engine 通用詞＝改產品的登記 id（代價落在新產品命名，不落在共通層；AGENTS §7、§12）。締める面：無。緩める面：`Marenal` 類（登記 id 出現在另一個詞的中間）不再報；「Kernel 不含產品名」的性質不變。自測加 3 個（4 個詞）、突變加 `ks-k1-word-boundary-dropped`，本機 79/79。
 - 2026-11-13 A6 前半：本批不擴大，記為 LIM（本批）-7（§6）。
+- 2026-11-13 A8 修訂後的 L1（`eb47b6ec`，run 43357263283）：attempt 1 windows-x64 因產品測試 `object_fps_pvp.cpu` 逾時失敗（已登記觀察項 `v8-arch-ci-windows-observation`），依 §14.1 停下報告；使用者決定重跑一次、判定文字不改。attempt 2 三平台綠（該測試 38.17 s），判定 2 成立。兩次都記在 dev_log〈停止〉。

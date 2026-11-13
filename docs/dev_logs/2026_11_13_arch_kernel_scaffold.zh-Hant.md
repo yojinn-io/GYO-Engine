@@ -6,7 +6,7 @@
 
 ## 件数の突き合わせ
 
-**一致**——L1 tests.xml 裡 kernel 的 5 個 ctest：第一輪（`b31bae5a`，run 43352865028）linux-x64 5＋core 5、windows-x64 5、macos-arm64 5，共 20 個全 pass、0 skip；第二輪（最終程式 `0a2b2f7b`，run 43355513501）同樣 20 個全 pass、0 skip。突變：79 條＝killed 79、survived 0、wrong_failure 0、stale 0、skipped 0（第六輪，A8 修訂後）。審查者的敵對檢查：試 34 個突變，killed 7、存活 27（其中 22 處檢出力下降、1 處只增誤報、4 處等價或造作）；22＋1 處全部補了自測與突變。
+**一致**——L1 裡 kernel 的 5 個 ctest（最終 commit `eb47b6ec` 的 run 43357263283 attempt 2：三平台＋core 共 20 個全 pass；attempt 1 windows-x64 因已登記的產品測試逾時失敗，見〈停止〉）。前幾輪：第一輪（`b31bae5a`，run 43352865028）linux-x64 5＋core 5、windows-x64 5、macos-arm64 5，共 20 個全 pass、0 skip；第二輪（最終程式 `0a2b2f7b`，run 43355513501）同樣 20 個全 pass、0 skip。突變：79 條＝killed 79、survived 0、wrong_failure 0、stale 0、skipped 0（第六輪，A8 修訂後）。審查者的敵對檢查：試 34 個突變，killed 7、存活 27（其中 22 處檢出力下降、1 處只增誤報、4 處等價或造作）；22＋1 處全部補了自測與突變。
 
 ## 做了什麼
 
@@ -25,7 +25,7 @@
 | # | 判定 | 結果 |
 |---|---|---|
 | 1 | 清單外零檔 | 成立：`git diff --name-only origin/master...HEAD` 對 17 檔清單，清單外 0（Python 比對，正例 `engine/CMakeLists.txt` 先命中） |
-| 2 | L1 三平台綠、5 個 ctest × 3 份 tests.xml、Linux core 另驗 | 成立：兩輪都是三平台 L1 job success、tests.xml 3×5＝15 加 core-tests.xml 5 全 pass；最終程式是第二輪 run 43355513501 |
+| 2 | L1 三平台綠、5 個 ctest × 3 份、Linux core 另驗 | 成立：最終 commit `eb47b6ec` 的 run 43357263283 attempt 2 三平台 success，kernel 測試 3×5＋core 5 全 pass。attempt 1 的 windows-x64 失敗（產品測試逾時）記在〈停止〉。前兩輪（b31bae5a、0a2b2f7b）也成立 |
 | 3 | 兩種樣本先過 windows-x64 | 成立：windows-x64 configure log 兩輪都是對照組編過、拒絕組以 `GYO_KERNEL_SAMPLE_REJECTED` 失敗（745／411 ms、621／286 ms），(b) 的 case 在 `gyo_kernel_tests` 過。三平台各兩次，(a)(b) 失敗 0 次 |
 | 4 | J-9 自測正反例 | 成立（70 個；K1 三組各有正例、`Despawn`／`ExtractRes`／`zone`／`matches`／`Matcher`／`rematch`／`nearest` 等反例不誤報；白名單恰 2 個） |
 | 5 | naming 自測 | 成立（31 個；兩種根的行為各一例） |
@@ -68,6 +68,15 @@ A8 修訂後的第三輪 L1（`eb47b6ec`，run 43357263283）windows-x64 失敗�
 - 這是已登記的觀察項，不是新現象：kernel HANDOFF〈觀察（改造完成後重查）〉與決定行 `v8-arch-ci-windows-observation`（使用者 2026-11-12：改造期間不追查，由 plugins-foundation／client-link 收口、closeout 重掃）。統計在主 checkout `build/evidence/ci-windows-cpu-flaky/tally.md`；只改文件的 PR #190（run 43200345263）也出現過同一測試 60 s 逾時。本批三輪的耗時已追加到該 tally（2026-11-13 補記）。
 - 切分（§14.1 的三類）：實作（本批）的可能性低，理由如上，且只改文件的 PR 也出現過（獨立根據）；環境（runner 速度）的可能性高，理由是同一 commit 系列裡耗時在 31～60 s 之間大幅波動；測試自身（60 s 上限偏緊）也有可能。只靠這三輪無法斷定，屬「切分不了」。
 - 證據：`build/evidence/kernel-scaffold/l1-43357263283/`（三平台 tests.xml、三個 job log）。
+
+**解除（使用者決定 (a)，經架構師轉達）**：重跑一次、兩次都記錄、判定 2 的文字不改。
+
+| 次 | run | windows-x64 `object_fps_pvp.cpu` | kernel 的 5 個測試 | L1 |
+|---|---|---|---|---|
+| 第一次 | 43357263283 attempt 1 | ***Timeout 60.01 s | 三平台＋core 全 pass | windows-x64 failure |
+| 第二次 | 43357263283 attempt 2（同 commit `eb47b6ec`） | Passed 38.17 s | 三平台＋core 共 20 個全 pass | 三平台 success、CI gate success |
+
+`gh run rerun --failed` 實際重跑了三個 L1 job（不只 windows-x64）。attempt 2 的 log 在 `l1-43357263283/attempt2/`；兩次的耗時已追加到 `ci-windows-cpu-flaky/tally.md`。判定 2 以最終 commit 的 attempt 2 成立，attempt 1 的失敗保留在本節（§14.1：不以後來的成功覆蓋）。
 
 ## 範囲の限界（宣告 §6）
 
