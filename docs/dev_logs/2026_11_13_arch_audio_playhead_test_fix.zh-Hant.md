@@ -86,4 +86,6 @@ L1 linux-x64 run 43365900431：TEST_CASE「Audio Mixer playheads stay consistent
 - stop-report.md、stop-report-2.md、stop-report-3.md、redesign-proposal.md、investigation.md、probe/（探針原始碼與輸出）；
 - option-a/（(A) 的宣告、驗收、mutants-2.txt、mutants-tsan.txt、doc-edits-draft.md）；
 - final/（最終宣告 declaration.md、core-100.txt、tsan-5.txt、final.diff、section-14-4.md）。
-- L1 三平台的達標時間：PR 的 CI 後補記。
+- L1 三平台的達標時間（PR #215，run 43422008388，三種模式的 reached in；上限 20 s）：
+  linux-x64 完整樹 362.4／289.9／280.2 ms、core 樹 238.0／239.2／232.9 ms；macos-arm64 497.7／491.4／489.7 ms；windows-x64 923.7／847.3／761.6 ms。最慢 923.7 ms，餘裕約 21 倍（架構師的下限 3 倍）。三平台全部通過。
+  證據：主 checkout 的 `build/evidence/audio-playhead-test-fix/l1-run-43422008388/`（各平台的 tests.xml）。
