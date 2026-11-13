@@ -65,7 +65,8 @@ A8 修訂後的第三輪 L1（`eb47b6ec`，run 43357263283）windows-x64 失敗�
 - 失敗的只有產品測試 `object_fps_pvp.cpu`（Timeout，60.01 s）。kernel 的 5 個測試在三平台的 tests.xml 都 pass，linux-x64、macos-arm64 全綠。
 - 同一測試在 windows-x64 前兩輪的耗時是 54.13 s、30.93 s；Linux 約 17～37 s、macOS 約 16 s。Windows 一直貼著 60 s 的上限。
 - 第二輪到第三輪之間只改了 `kernel_guard.py`、它的自測、突變目錄與文件，沒有 C++ 或產品檔。kernel 測試總共約 2 s，ctest 並行時也只多佔一個 slot。
-- 切分（§14.1 的三類）：實作（本批）的可能性低，理由如上；環境（runner 速度）的可能性高，理由是同一 commit 系列裡耗時在 31～60 s 之間大幅波動；測試自身（60 s 上限偏緊）也有可能。只靠這三輪無法斷定，屬「切分不了」。
+- 這是已登記的觀察項，不是新現象：kernel HANDOFF〈觀察（改造完成後重查）〉與決定行 `v8-arch-ci-windows-observation`（使用者 2026-11-12：改造期間不追查，由 plugins-foundation／client-link 收口、closeout 重掃）。統計在主 checkout `build/evidence/ci-windows-cpu-flaky/tally.md`；只改文件的 PR #190（run 43200345263）也出現過同一測試 60 s 逾時。本批三輪的耗時已追加到該 tally（2026-11-13 補記）。
+- 切分（§14.1 的三類）：實作（本批）的可能性低，理由如上，且只改文件的 PR 也出現過（獨立根據）；環境（runner 速度）的可能性高，理由是同一 commit 系列裡耗時在 31～60 s 之間大幅波動；測試自身（60 s 上限偏緊）也有可能。只靠這三輪無法斷定，屬「切分不了」。
 - 證據：`build/evidence/kernel-scaffold/l1-43357263283/`（三平台 tests.xml、三個 job log）。
 
 ## 範囲の限界（宣告 §6）
