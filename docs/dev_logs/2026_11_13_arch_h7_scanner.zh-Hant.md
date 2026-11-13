@@ -21,8 +21,8 @@ H-7 要求 host 不排 System 順序。只掃 include 會漏掉「不 include `R
 
 | # | 判定 | 結果 |
 |---|---|---|
-| 1 | 合成自測 | **成立**：120 條全綠（審查前 48、審查後補 72）；正例 13（`test_p01`～`test_p13`）、反例 11（`test_n01`～`test_n11`）逐一對應。Python 3.14 與 3.9.6 都實跑通過 |
-| 2 | 突變 | **成立**：最終 98/98 killed（宣告下限 16；審查前 22/22，敵對檢查後擴為 98，第二輪 95/98、補強後第三輪全殺）。敵對檢查者 Fable，找到 64 處，加入後的檢出 98/98：見「審查與敵對檢查」節 |
+| 1 | 合成自測 | **成立**：124 條全綠（審查前 48、審查後補 72、三個動詞補 4）；宣告的正例 13（`test_p01`～`test_p13`）、反例 11（`test_n01`～`test_n11`）逐一對應，另有三個動詞的正例 `test_p12b`～`test_p12d` 與反例 `test_n04b`。Python 3.14 與 3.9.6 都實跑通過 |
+| 2 | 突變 | **成立**：最終 **104/104 killed**（宣告下限 16；審查前 22/22，敵對檢查後擴為 98，第二輪 95/98、補強後第三輪 98/98；架構師加三個動詞後加 6 條＝104）。敵對檢查者 Fable，找到 64 處，加入後的檢出 98/98：見「審查與敵對檢查」節 |
 | 3 | 掃描方法 | **成立**：Python `-I -B`；非 UTF-8 與讀檔失敗結束碼 2（自測）；獨立計數用 `git grep -nP`，先以 `MatchRuntimeHost.cpp:441` 正例命中、結束碼 0／1 以外視為失敗、stderr 不丟 |
 | 4 | 共通層、無 owner | **成立**：`h7_scan.empty` passed（`PASS_REGULAR_EXPRESSION`）；`tests/common/` 既有檔只有 `tests/common/CMakeLists.txt` +1 行；`apps/`、`tools/`、`engine/`、`framework/` 0 變更；owner 的既有檔只動各自 `CMakeLists.txt` |
 | 5 | Removability | **成立**：自測 `test_removing_one_owner_changes_nothing_else`（合成 owner alpha／beta，刪 alpha 後 beta 報告逐欄相同、共通層位元組不變、`nothing to scan` 仍綠）；實際建置只選 voxel_map_editor（`GYO_APPS=`、`GYO_TOOLS=voxel_map_editor`）時 `ctest -R h7_scan` 3/3 passed |
@@ -89,13 +89,17 @@ H-7 要求 host 不排 System 順序。只掃 include 會漏掉「不 include `R
 - 結果：第二輪 **95/98** killed，存活 3：`hard-alias-untyped-dropped`（自測輸入在更早的檢查就被擋下）、`hard-call-result-allowed`（另一行測試碼產生的非白名單假宣告掩蓋了它）、`expansion-cycle`（突變在深度 50 自停、不是無窮迴圈）。前兩者補自測、第三者把突變改成真的拿掉防重入檢查、自測改用 30 秒逾時的子行程。第三輪 **98/98 killed**。
 - 不另加的：第 3 層 `a25f`（摘要的展開數算法，與 `report-scanned-count` 同一路徑、同一自測已殺）；試過不計入的 9 處照審查者判斷（等價或規格未定）。
 
-### 給架構師的觀察（不在本批改）
+### 給架構師的觀察與處置
 
-- spec H-7 的 (b) 禁止名單是 `Tick`／`Advance`／`Update`／`Step`／`Run`，白名單卻寫 Kernel 的 `Run`／`Rewind`／`Replay`。`Rewind`／`Replay` 不在禁止名單，所以 host 呼叫任何型別的 `Rewind`／`Replay` 都不會被報，白名單裡的這兩項今天沒有作用。要不要把兩者加進禁止名單（加了之後只有 Kernel 型別能呼叫），是規格的決定。
+- 觀察：spec H-7 的 (b) 禁止名單是 `Tick`／`Advance`／`Update`／`Step`／`Run`，白名單卻寫 Kernel 的 `Run`／`Rewind`／`Replay`；`Rewind`／`Replay` 不在禁止名單，所以白名單那兩項沒有作用。
+- **架構師 2026-11-13 處置（締める面，在 #207 內做）**：`H7b.methods` 加 `Rewind`、`Replay`、`Restore`（target/kernel DI-KS 12 的「Rewind／Restore／Replay 只由 Host 在 Ready 呼叫」指 Kernel 的那一組；host 對產品自己的型別呼叫同名動詞，就是在 Kernel 之外手寫回滾）；Kernel 白名單的 methods 同步為 `Run`、`Rewind`、`Replay`、`Restore`。自測加正例 3（產品型別上的三個動詞被報：`test_p12b`～`test_p12d`）、反例 n03／n04 恢復為 Kernel 型別上不報並加 `test_n04b`（`Restore`）；突變加 6（刪三個動詞各一、Kernel 白名單少三個動詞各一）＝ **104** 條。五個 owner 的基線重數：**不變**（host 清單裡沒有這三個動詞的呼叫；`LocalPlayerPrediction::Reconcile` 的回滾不在 host 清單）。件数の突き合わせ的獨立 grep 樣式加這三個詞，仍一致。
+- 限界 L4 的改寫：架構師同意（如實揭露、不是放寬）。
 
 ## 與計畫／規格的差異
 
 - 掃描器放 `tests/common/h7_scan/`，spec H-7 寫 `plans/kernel/scripts/h7_scan.py`；spec 的字樣由架構師下次碰 spec 時改（Q5）。
+- H7-b 禁止名單比 spec H-7 多 `Rewind`、`Replay`、`Restore`（架構師 2026-11-13 決定；spec 的字樣由架構師下次碰 spec 時補）。
+- 限界 L4：宣告 §7 的原字樣「同名宣告不分作用域，只有兩個白名單型別才會誤放」→ 新字樣「真正宣告在閉包外或讀不了的形、閉包內恰有同名白名單成員時放行」；原因是審查 B-1 收緊後剩下的形（架構師同意）。
 - owner 清單不帶白名單（計畫 §3.4 字面「傳自己的檔案清單與白名單」）；白名單只有共通規則資料一份，比計畫字面更嚴（Q2）。
 - 白名單比對比宣告更嚴（經緯 2）；審查後再收緊（未解析的宣告位置、參數形宣告與 `using` 證據只認清單檔、限定的成員呼叫一律報），限界 L4 的條文隨之改寫（待架構師確認）。
 - 清單接受標頭（宣告 §3 寫只收來源檔；L5 的補救要靠它）。
@@ -120,7 +124,7 @@ H-7 要求 host 不排 System 順序。只掃 include 會漏掉「不 include `R
 
 ## 證據
 
-主 checkout `build/evidence/h7-scanner/`（git 管理外，本機 macOS）：`reconcile.py`、`reconcile.txt`、`reconcile-detail.json`、五個 owner 的 `*.report.json`／`*.stdout.txt`、`mutations-round1.json`、`removability-configure.log`、`removability-ctest.txt`、`adversarial-survivors.json`（審查者的 64 處存活一覽）、`mutations-round2.{json,txt}`、`mutations-round3.{json,txt}`。
+主 checkout `build/evidence/h7-scanner/`（git 管理外，本機 macOS）：`reconcile.py`、`reconcile.txt`、`reconcile-detail.json`、五個 owner 的 `*.report.json`／`*.stdout.txt`、`mutations-round1.json`、`removability-configure.log`、`removability-ctest.txt`、`adversarial-survivors.json`（審查者的 64 處存活一覽）、`mutations-round2.{json,txt}`、`mutations-round3.{json,txt}`、`mutations-round4.{json,txt}`。
 
 ## 下一步
 
