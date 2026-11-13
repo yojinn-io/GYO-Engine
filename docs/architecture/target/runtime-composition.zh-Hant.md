@@ -47,6 +47,7 @@
 ## 4. framework 退役；組合與第三方對接由 plugins 層承擔（使用者 2026-11-11 決定，audit §3.1）
 
 - **三層改為**：Engine（Kernel＋能力）／**plugins**（`plugins/`：組合與第三方對接，每個 plugin 可選可刪）／產品與工具（plugin 清單＋Run）。層與目錄叫 plugins，單個才叫 plugin（使用者 2026-11-11）。framework 是舊架構的產物，其兩個核心職責（組合 Engine 能力、對接第三方）在 plugin 機制下都由 plugin 承擔，概念淘汰；`docs/framework/` 的 Design Invariants 整節廢止（第一個文件批）。
+- **一個東西屬於哪一層，先看它的名字指的是誰的概念**：名字是概念的 tag，Engine 的名字只指 Engine 的概念——條文在 [`naming.zh-Hant.md`](naming.zh-Hant.md) Design Invariant 4，分層的判斷引用那一條，不在這裡另寫一份。
 - **runner plugin**：Editor host 的骨架（行程入口、pump、交換點）是一個在 finish 安裝 runner 的 plugin（照 Bevy `WinitPlugin::set_runner`）；一個 Runtime 只能有一個 runner（spec R-E6）；沒有 plugin 安裝時由 Host 程式自己跑。
 - **標準 Editor stage 序**＝plugin 群在 build 插入 stage（spec C.2 第 2 點）；ImGui、SDL 的相容在各自的 plugin 內實現，全域 context 明列例外。
 - **`plugins/` 是新的 top-level**（AGENTS §10 Delta，已同意）：每個 plugin 一個 target、自己的依賴正向清單；Engine 永不 include 它。
@@ -55,7 +56,9 @@
 - 「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」。架構師保留：四個工具重複的選擇窗記帳與關窗提示必須真的進共用 plugin，否則是 framework 的老問題換名。
 - 組合格式（catalog plan、event sounds）是資料契約，owner 是提供該 plugin 的人；純函式（EventSounds、CatalogPlan、PreviewCamera、UiTextInput、json binding）是函式庫，與層無關。
 
-## Design Invariants（候選；核准後成為正式條文）
+## Design Invariants
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。本節的變更是 Architecture Delta（AGENTS §3），要使用者同意。
 
 條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
 
@@ -64,7 +67,9 @@
 3. **世界內容只經 Loading schedule 進來（且只經它的 Ingress stage 進 (c)）；對局 tick 計數在 ready 時為 0、第一個模擬 tick 是 1，Loading 期間 `tick[Fixed]` 不推進；`tick[Loading]` 是批次計數，(c) System 可讀它（S-4）但等價測試不比它；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄；Loading 非 Ingress stage 的 System 不得讀 external Resource）；等價測試（分批數不同、資產完成順序打亂：ready 時 (c) 欄與 Resource 逐位元相同，排除 role=Input 的暫存（`AssetStaging`、`MembershipRequests`、`InputRing`，修剪時機隨批數而異）與 `tick[Loading]`；spec J-51）；掃描（Peer 元件不掛在 Player 實體）。
 4. **一個 World 一條執行緒**——受 kernel [DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。
 
-### Replacement Criteria（候選）
+### Replacement Criteria
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。
 
 - LIM-5：Join／Leave 在 tick 內，加入與離開晚最多一 tick；不解除（詳細在 `limits.zh-Hant.md`）。
 - 渲染需要寫回模擬 World（例如渲染驅動的 LOD 狀態要進判定）→ 不是放寬 DI 1，而是把那份狀態搬到來源 World 由模擬側的 System 寫，渲染仍只讀。

@@ -1,7 +1,7 @@
 """Text scan of zone-C (cross-platform deterministic) source files: spec J-17 of
 docs/architecture/plans/kernel/spec.zh-Hant.md, rules and judgement in
 docs/architecture/plans/kernel/j17-scanner.zh-Hant.md, the list contract in
-docs/architecture/target/zone-c-sources.zh-Hant.md.
+docs/architecture/zone-c-sources.zh-Hant.md.
 
 Input: a list file (format "gyo.zone-c-sources", version 1) naming the .cpp files of one owner that
 contain zone-C Systems. Every listed file is scanned, and so is every header it reaches through

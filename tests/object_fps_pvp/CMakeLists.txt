@@ -261,7 +261,7 @@ set_tests_properties("${GYO_CURRENT_APP}.diagnostic_isolation" PROPERTIES LABELS
 add_test(NAME "${GYO_CURRENT_APP}.kernel_prep_sites"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_kernel_prep_sites.py")
 set_tests_properties("${GYO_CURRENT_APP}.kernel_prep_sites" PROPERTIES LABELS "cpu;pvp" TIMEOUT 60)
-# v8-product-kernel-prep-zones: the product's zone-C source lists (docs/architecture/target/zone-c-sources.zh-Hant.md)
+# v8-product-kernel-prep-zones: the product's zone-C source lists (docs/architecture/zone-c-sources.zh-Hant.md)
 # scanned by the common J-17 scanner. The three scans are reports (--no-fail; they fail only on a contract error such as
 # a listed file that moved); zone_c_lists is the gate: src/Sim/*.cpp == confirmed + candidates, and the confirmed scan
 # has exactly the recorded residual.

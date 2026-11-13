@@ -1,9 +1,9 @@
 # (c) 區來源檔清單（資料契約 `gyo.zone-c-sources` v1）
 
-> Status: target, not implemented
+更新：2026-11-13。Owner：架構（契約的審核者是架構師會話；掃描器與自測在 `tests/common/zone_scan/`）。**狀態：正式**（使用者 2026-11-13 核定，`v8-arch-zone-c-sources-promote`；草案 2026-11-12，`v8-arch-j17-scanner`，含 `owner_root`／`include_roots` 兩欄、同 owner 多份清單）。消費端（掃描器）已實作並在 CI 執行；生產端今天是產品手寫的清單（PvP 的三份在 `tests/object_fps_pvp/`），Kernel 的 G-5 匯出落地後改由匯出產生——格式不變，裝不下時照文末的 Replacement Criteria。
 
-草案：2026-11-12（J-17 掃描器線，`v8-arch-j17-scanner`）；**架構師 2026-11-12 核定**（含 `owner_root`／`include_roots` 兩欄、同 owner 多份清單）。Owner：架構（契約的審核者是架構師會話；掃描器與自測由 J-17 掃描器線持有）。消費端（掃描器）在 `v8-arch-j17-scanner` 實作；生產端（Kernel 的 G-5 匯出）尚未實作，所以 Status 仍是 target。
-出處：spec G-5（啟動時匯出「(c) 區 System 來源檔清單」）、J-17（讀清單並掃描）、J.4（產品守衛）、B.5（(c) 檔的文字掃描清單）；交接卡 `plans/kernel/j17-scanner.zh-Hant.md` §2 的 v1 草案。AGENTS §8：契約資料可由手工、Script、別的工具產生；Runtime 不依賴產生它的工具。
+這份契約是寫給三種人的：產品遷移批裡新增 (c) System 檔、要把它列進清單的人；改掃描器的人；將來實作 Kernel 匯出的人。三條 Design Invariants 擋的是兩種漂移：清單長出判斷邏輯，掃描器長出產品特例。
+出處：spec G-5（啟動時匯出「(c) 區 System 來源檔清單」）、J-17（讀清單並掃描）、J.4（產品守衛）、B.5（(c) 檔的文字掃描清單）；交接卡 `docs/architecture/plans/kernel/j17-scanner.zh-Hant.md` §2 的 v1 草案。AGENTS §8：契約資料可由手工、Script、別的工具產生；Runtime 不依賴產生它的工具。
 
 ## 1. 用途與兩端
 
@@ -81,7 +81,7 @@ Kernel（G-5 匯出；尚未實作）──┐
 - 這份清單不是 G-5 的另一份報告「(c) 區資料集」（對照 `DigestFields`）；那份另定。
 - 規則本體（ZS1～ZS7；ZS＝zone scan，與 spec G.1 的 Kernel 區規則 Z1～Z8 區分）屬掃描器，不屬清單；規則變了清單不變。規則的資料檔（第三方名稱、時鐘別名）放掃描器目錄，不放這裡。
 
-## Design Invariants（草案；待核定後生效）
+## Design Invariants
 
 1. 清單只說「哪些檔」，不說「怎麼判」：生產端不展開標頭、不預判規則；消費端不讀 CMake、不讀 Kernel 內部結構。
 2. `version` 進格式；消費端拒絕不認得的版本，不猜。
