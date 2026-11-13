@@ -127,8 +127,8 @@
 
 本機是 **macOS x86_64**（Intel i9），不是 L1 的三平台之一（linux-x64、windows-x64、macos-arm64）。所以：
 
-- **本機可做**：判準 1、2、3a、3c、4、6 的全部，判準 5 的 macOS clang 編譯與授權、維護；3b 的 macOS libc++ 結果（輔助，非 L1；部署目標 13.3，libc++ 的浮點 `from_chars` 可用）。
-- **一定要三平台的**：判準 3b（三套標準庫的 `from_chars`：libstdc++、MSVC STL、libc++ arm64），判準 5 的三平台編譯（尤其 MSVC）。判準 1、2、3a、4 的邏輯與平台無關，三平台各跑一次作確認。
+- **本機可做**：判準 1、2、3a、4、6 的全部，3c 的 macOS x86_64 結果（輔助），判準 5 的 macOS clang 編譯與授權、維護；3b 的 macOS libc++ 結果（輔助，非 L1；部署目標 13.3，libc++ 的浮點 `from_chars` 可用）。
+- **一定要三平台的**：判準 3b（三套標準庫的 `from_chars`：libstdc++、MSVC STL、libc++ arm64）與 3c（候選自己的轉換；nlohmann 經各平台 libc 的 `strtod`），判準 5 的三平台編譯（尤其 MSVC）。判準 1、2、3a、4 的邏輯與平台無關，三平台各跑一次作確認。
 
 | 選項 | 做法 | 代價 | 限制 |
 |---|---|---|---|
