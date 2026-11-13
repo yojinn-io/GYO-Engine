@@ -79,6 +79,7 @@ v8-arch-kernel
 
 ## dev_log
 
+- [2026_11_13_arch_adapter_plugins_plan.zh-Hant.md](../../../dev_logs/2026_11_13_arch_adapter_plugins_plan.zh-Hant.md)：-adapter-plugins-plan（規劃批；[宣告](adapter-plugins-plan-declaration.zh-Hant.md)、[規劃稿](adapter-plugins-plan.zh-Hant.md)）。
 - [2026_11_13_arch_h7_scanner.zh-Hant.md](../../../dev_logs/2026_11_13_arch_h7_scanner.zh-Hant.md)：-h7-scanner（任務卡；[宣告](h7-scanner-declaration.zh-Hant.md)）。
 - [2026_11_13_arch_kernel_scaffold.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_scaffold.zh-Hant.md)：-kernel-scaffold（[宣告](kernel-scaffold-declaration.zh-Hant.md)）。
 - [2026_11_13_arch_kernel_a6_revision.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_a6_revision.zh-Hant.md)：-a6-revision（spec v0.4、Kernel 的 DI 落 target；[宣告](a6-revision-declaration.zh-Hant.md)、[報告](a6-revision-report.zh-Hant.md)）。

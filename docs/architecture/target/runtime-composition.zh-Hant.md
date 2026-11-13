@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-更新：2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §H（多 World 與 schedule 的組合）、§0 用語。
+更新：2026-11-13。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §H（多 World 與 schedule 的組合）、§0 用語。
 本文件只寫**使用者已裁決**的部分；規格中仍標「待使用者」的條目不在這裡。
 
 ## 1. 名詞（spec §0）
@@ -52,12 +52,12 @@
 - **標準 Editor stage 序**＝plugin 群在 build 插入 stage（spec C.2 第 2 點）；ImGui、SDL 的相容在各自的 plugin 內實現，全域 context 明列例外。
 - **`plugins/` 是新的 top-level**（AGENTS §10 Delta，已同意）：每個 plugin 一個 target、自己的依賴正向清單；Engine 永不 include 它。
 - **plugin 的選擇是資料，不是程式**（使用者 2026-11-12 決定，`v8-arch-plugin-selection-data`；取代上一版「產品與工具只在 main 列它」）：產品與工具在 `project.json` 加 `plugins` 欄列要用的 plugin（使用者 2026-11-13 決定：今天的 components 與 plugins 併成同一個選擇欄，見下方「同一個選擇欄」；`v8-arch-external-components-as-adapters` 細節 (a)）；共通 CMake 讀它連結對應的 plugin target，並**由建置產生登記的編譯單元**（與今天 `components` → `GyoComponents.cmake` 同一條路）；`main` 保持薄，只呼叫 runner plugin 或 Host 自跑。同一事實只在 `project.json` 一處（AGENTS §9）；加一個產品仍是「內容＋登記資料」就完結（§7、§12 Add／Clone）。代價：plugin 的初始化順序由資料或 plugin 自己宣告的依賴決定，不靠 main 的呼叫順序；缺 plugin 或依賴衝突是 Contract 的明確錯誤（§9）。System 本身的登記仍是程式（plugin 的 build 函式向 Registry 登記），不從資料讀。
-- **plugins 受 OS 邊界守衛掃描**（`v8-arch-a6-revision`；`v8-arch-guards-inventory-dispositions` Q1）：`plugins/` 與 `engine/` 一樣在 OS 邊界守衛的掃描根之內——plugin 不直接含 OS 標頭、不直接呼叫 OS API，要 OS 能力就經 `engine/os`。plugin 對它所包的第三方（SDL、ImGui）是第三方邊界，不是 OS 邊界：只有該第三方的 adapter plugin 可以在公開標頭露出它的型別，規則寫在那個 plugin 的 owner 文件（Q2）。〔此句與下方原則 (3)「adapter 對外的介面用 Engine 的詞」的關係待使用者定：`plans/kernel/adapter-plugins-plan.zh-Hant.md` §4 未決 10。〕守衛掃描根的變更由 `v8-arch-plugins-foundation` 的事前宣告提（DI 守衛的變更，使用者核准）。
-- **一個模組留 Engine 還是成為 plugin，照這個先後判**（使用者 2026-11-13 決定，`v8-arch-engine-or-plugin-criteria`）：第一問——沒有這個模組，Engine 是否成立？不成立→一定留 Engine（Kernel、時間、執行緒、OS、錯誤處理、Base 這一類）。Engine 沒有它也成立時，再看兩條：(a) 有沒有對外的介面；(b) 它是固化的基礎（換掉它，上面的底層邏輯全部跟著變），還是會變、會被替換的規則。沒有對外介面、而且是固化的基礎→仍留 Engine；有對外介面，或是會變、會被替換的規則→plugin。已定：collision、math 留 Engine；網路（含 `engine/net` 的 GYOP 編解碼）是 plugin。〔(a) 的讀法——面向 Engine 以外的系統（第三方組件、OS 裝置、網路、外部行程），Engine 自己定的中性 C++ 介面不算——待使用者確認：`plans/kernel/adapter-plugins-plan.zh-Hant.md` §4 未決 4。〕各模組的歸類表在同檔 §1。
-- **外部組件是可升級、可替換的後端，不是選定的基礎**（使用者 2026-11-13 決定，`v8-arch-external-components-as-adapters`；刻意與 Bevy 不同）：三條原則——(1) 外部組件的型別與呼叫只出現在它的 adapter 裡；(2) 一個外部組件只有一個 adapter；(3) adapter 對外的介面由 Engine 定、用 Engine 的詞、不跟外部組件的版本變。判斷用的一句：**升級或換掉一個外部組件，只改對接它的那一塊**。方向：adapter 都是 plugin，Engine 只留中性介面。範囲の限界：「升級」靠型別隔離今天就成立；「替換成另一個組件」要到第二個實作出現才算驗證過，在那之前只是預留。〔原則 (2) 對 SDL 本身的讀法（一個 adapter＝一個 plugin、內部可有多個能力 target）待使用者確認：同檔 §4 未決 5；三原則套到哪些層（產品與工具的直接使用、測試框架、建置期工具）：未決 2、6。〕
+- **plugins 受 OS 邊界守衛掃描**（`v8-arch-a6-revision`；`v8-arch-guards-inventory-dispositions` Q1）：`plugins/` 與 `engine/` 一樣在 OS 邊界守衛的掃描根之內——plugin 不直接含 OS 標頭、不直接呼叫 OS API，要 OS 能力就經 `engine/os`。plugin 對它所包的第三方（SDL、ImGui）是第三方邊界，不是 OS 邊界：只有該第三方的 adapter plugin 可以在公開標頭露出它的型別，規則寫在那個 plugin 的 owner 文件（Q2）。守衛掃描根的變更由 `v8-arch-plugins-foundation` 的事前宣告提（DI 守衛的變更，使用者核准）。
+- **一個模組留 Engine 還是成為 plugin，照這個先後判**（使用者 2026-11-13 決定，`v8-arch-engine-or-plugin-criteria`）：第一問——沒有這個模組，Engine 是否成立？不成立→一定留 Engine（Kernel、時間、執行緒、OS、錯誤處理、Base 這一類）。Engine 沒有它也成立時，再看兩條：(a) 有沒有對外的介面；(b) 它是固化的基礎（換掉它，上面的底層邏輯全部跟著變），還是會變、會被替換的規則。沒有對外介面、而且是固化的基礎→仍留 Engine；有對外介面，或是會變、會被替換的規則→plugin。已定：collision、math 留 Engine；網路（含 `engine/net` 的 GYOP 編解碼）是 plugin。
+- **外部組件是可升級、可替換的後端，不是選定的基礎**（使用者 2026-11-13 決定，`v8-arch-external-components-as-adapters`；刻意與 Bevy 不同）：三條原則——(1) 外部組件的型別與呼叫只出現在它的 adapter 裡；(2) 一個外部組件只有一個 adapter；(3) adapter 對外的介面由 Engine 定、用 Engine 的詞、不跟外部組件的版本變。判斷用的一句：**升級或換掉一個外部組件，只改對接它的那一塊**。方向：adapter 都是 plugin，Engine 只留中性介面。範囲の限界：「升級」靠型別隔離今天就成立；「替換成另一個組件」要到第二個實作出現才算驗證過，在那之前只是預留。
 - **plugin 分兩類，共用一份層規則**（同一決定行，細節 (c)(d)(e)(f)）：第 1 類＝Engine 必備的後端（沒有它，對應的能力跑不起來：SDL 的視窗、輸入、GPU、音訊輸出等；SDL_image、SDL_ttf、ufbx）；第 2 類＝第三方能力提昇（加上去才多一種能力：ImGui、網路）。兩類共用層規則，第 1 類多一條：**實作 Engine 定的後端介面，不新增能力**；沒選必備的後端在 build 時就發現。目錄不分，類別寫在各 plugin 的登記資料。
-- **同一個選擇欄**（同一決定行，細節 (a)(b)）：兩類 plugin 用 `project.json` 的同一個選擇欄（今天的 components 與 plugins 併成一種選擇；欄名與形狀由 `v8-arch-plugins-foundation` 定，提案在同檔 §3）。「必備」不另開欄：Engine 的能力宣告「我需要一個後端」；產品用到某能力卻沒選它的後端、或選了兩個，是明確錯誤，在建置的 configure 階段報出是哪個能力缺後端。「必備」相對於產品用到的能力：headless 的 Match 不用視窗與 GPU，就不需要、也不連它們的後端。能力名不進 Kernel（kernel DI-KS 15）。
-- **SDL 家族各自一個 plugin**（同一決定行，細節 (e)）：SDL、SDL_image、SDL_ttf 各自一個 plugin；SDL_image 與 SDL_ttf 在登記資料宣告依賴 SDL 那個 plugin——plugin 之間的依賴是宣告，缺了是 configure 錯誤、不自動補；初始化順序依宣告的依賴決定。
+- **同一個選擇欄**（同一決定行，細節 (a)(b)）：兩類 plugin 用 `project.json` 的同一個選擇欄（今天的 components 與 plugins 併成一種選擇；欄名與形狀由 `v8-arch-plugins-foundation` 定）。「必備」不另開欄：Engine 的能力宣告「我需要一個後端」；產品用到某能力卻沒選它的後端、或選了兩個，是明確錯誤，在建置的 configure 階段報出是哪個能力缺後端。「必備」相對於產品用到的能力：headless 的 Match 不用視窗與 GPU，就不需要、也不連它們的後端。能力名不進 Kernel（kernel DI-KS 15）。
+- **SDL 家族各自一個 plugin**（同一決定行，細節 (e)）：SDL、SDL_image、SDL_ttf 各自一個 plugin；SDL_image 與 SDL_ttf 都宣告依賴 SDL 那個 plugin——plugin 之間的依賴是宣告。
 - 「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」。架構師保留：四個工具重複的選擇窗記帳與關窗提示必須真的進共用 plugin，否則是 framework 的老問題換名。
 - 組合格式（catalog plan、event sounds）是資料契約，owner 是提供該 plugin 的人；純函式（EventSounds、CatalogPlan、PreviewCamera、UiTextInput、json binding）是函式庫，與層無關。
 
