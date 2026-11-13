@@ -17,7 +17,7 @@ ZS = h7_scan.zone_scan_functions()
 RULES = h7_scan.load_rules(h7_scan.DEFAULT_RULES)
 
 FIXED = "Engine::Runtime::FixedTickRuntime"
-KERNEL = "GYO::Kernel::Runtime"
+KERNEL = "GYO::Kernel::App"
 
 
 class Tree:
@@ -118,6 +118,10 @@ class Positives(Base):
 
     def test_p12_product_type_named_runtime(self):
         self.assert_only(self.host("game::Runtime r;\nvoid F() { r.Run(); }\n"), 2, "H7-b")
+
+    def test_p12c_product_type_named_like_the_kernel_app(self):
+        # The kernel's type is GYO::Kernel::App; a product's own App is not it.
+        self.assert_only(self.host("game::App r;\nvoid F() { r.Run(); }\n"), 2, "H7-b")
 
     def test_p12b_product_rewind(self):
         self.assert_only(self.host("game::Prediction p;\nvoid F() { p.Rewind(3); }\n"), 2, "H7-b")
@@ -520,7 +524,7 @@ class Peeling(Base):
         self.assert_only(self.host("using game::FixedTickRuntime;\nFixedTickRuntime t;\nvoid F() { t.Advance(1.0); }\n"), 3, "H7-b")
 
     def test_suffix_with_other_qualifier_is_reported(self):
-        self.assert_only(self.host("using namespace GYO;\ngame::Runtime r;\nvoid F() { r.Run(); }\n"), 3, "H7-b")
+        self.assert_only(self.host("using namespace GYO;\ngame::App r;\nvoid F() { r.Run(); }\n"), 3, "H7-b")
 
     def test_partial_qualification_with_using_declaration_is_reported(self):
         body = f"using {FIXED};\nRuntime::FixedTickRuntime t;\nvoid F() {{ t.Advance(1.0); }}\n"

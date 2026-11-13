@@ -103,7 +103,7 @@ class GuardTree(unittest.TestCase):
     def test_k1_registered_id_matches_as_a_word_not_inside_other_words(self):
         # Architect 2026-11-13 (review A8): an id like arena must not turn every word containing it red.
         self.write("engine/config/projects.csv", PROJECTS + "arena,new,v1,1,1,1,1\n")
-        for text in ("struct Marenal {};", "inline int parenage = 0;"):
+        for text in ("struct Marenal {};", "constexpr int parenage = 0;"):
             with self.subTest(text=text):
                 self.header(text)
                 self.assertClean()
@@ -197,20 +197,43 @@ class GuardTree(unittest.TestCase):
         self.assertClean()
 
     def test_k4_allowlisted_type_key_char_passes(self):
-        self.header("template <typename T>\nstruct TypeKey { static inline char typeKeyTag; };")
+        self.header("template <typename T>\nstruct TypeKey { static inline char typeKeyAnchor; };")
         self.assertClean()
 
     def test_k4_allowlisted_name_with_the_wrong_type_is_reported(self):
-        self.header("template <typename T>\nstruct TypeKey { static inline int typeKeyTag; };")
-        self.assertReported("K4", "typeKeyTag")
+        self.header("template <typename T>\nstruct TypeKey { static inline int typeKeyAnchor; };")
+        self.assertReported("K4", "typeKeyAnchor")
 
     def test_k4_tlcurrent_without_thread_local_is_reported(self):
         self.header("struct Context {};\nstatic Context* tlCurrent = nullptr;")
         self.assertReported("K4", "tlCurrent")
 
+    def test_k4_inline_variable_without_static_is_reported(self):
+        # Review B8: not seen by the static rule, and not in the library when no kernel source odr-uses it.
+        for text, name in (("inline int headerCounter = 0;", "headerCounter"),
+                           ("struct Map {};\ninline Map cache;", "cache"),
+                           ("inline int counter{0};", "counter"),
+                           ("inline const char* label = nullptr;", "label"),
+                           ("namespace Detail {\ninline int nested = 1;\n}", "nested")):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertReported("K4", "inline " + name)
+
+    def test_k4_inline_constants_functions_and_namespaces_pass(self):
+        for text in ("inline constexpr int kLimit = 16;",
+                     "constexpr inline int kOther = 1;",
+                     "inline const int kConst = 1;",
+                     "inline char* const kFixed = nullptr;",
+                     "inline int Twice(int x) { return x * 2; }",
+                     "inline void Reset() {}",
+                     "inline namespace v1 {}"):
+            with self.subTest(text=text):
+                self.header(text)
+                self.assertClean()
+
     def test_k4_allowlist_is_exactly_two_symbols(self):
         # spec J-9: adding a third symbol to the allowlist must fail this self-test.
-        self.assertEqual(set(guard.ALLOWED_STATICS), {"tlCurrent", "typeKeyTag"})
+        self.assertEqual(set(guard.ALLOWED_STATICS), {"tlCurrent", "typeKeyAnchor"})
 
     # K5 ---------------------------------------------------------------------------------------------------------
 
@@ -264,7 +287,7 @@ class GuardTree(unittest.TestCase):
         self.assertReported("K4", "static cache")
 
     def test_findings_after_a_block_comment_raw_string_and_digit_separator_are_reported(self):
-        self.header('/* block static int z;\n comment */ inline const char* raw = R"x(static int y;)x";\n'
+        self.header('/* block static int z;\n comment */ inline constexpr const char* raw = R"x(static int y;)x";\n'
                     "inline constexpr int big = 1'000;\nstd::unordered_map<int, int> index;")
         problems = guard.check(self.root)
         self.assertTrue(any(": K2 unordered_map" in p for p in problems), problems)
@@ -391,8 +414,8 @@ struct Shapes {
         self.assertReported("K4", "static")
 
     def test_k4_allowlisted_names_with_another_shape_are_reported(self):
-        for text in ("template <typename T>\nstruct TypeKey { static inline int typeKeyTag; };",
-                     "struct Map {};\ntemplate <typename T>\nstruct TypeKey { static inline Map typeKeyTag; };",
+        for text in ("template <typename T>\nstruct TypeKey { static inline int typeKeyAnchor; };",
+                     "struct Map {};\ntemplate <typename T>\nstruct TypeKey { static inline Map typeKeyAnchor; };",
                      "struct Map {};\nthread_local Map tlCurrent;",
                      "static thread_local int evil, tlCurrent;"):
             with self.subTest(text=text):
