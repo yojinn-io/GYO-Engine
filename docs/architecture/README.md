@@ -25,9 +25,9 @@ What every batch's pre-declaration must check when it moves architecture to a ne
 ## Layers and dependencies
 
 How the layers between the Engine and products or tools are composed, and the dependency rules between them:
-[`target/runtime-composition.zh-Hant.md`](target/runtime-composition.zh-Hant.md) §4. Decisions not yet written into §4
-(the backend plugin planning batch will add them): kernel HANDOFF `v8-arch-engine-or-plugin-criteria` and
-`v8-arch-external-components-as-adapters`, in [`plans/kernel/HANDOFF.md`](plans/kernel/HANDOFF.md).
+[`target/runtime-composition.zh-Hant.md`](target/runtime-composition.zh-Hant.md) §4.
+The same §4 also says where an adapter for an external component lives, and distinguishes Engine-owned plugins
+(planned, not yet defined) from extensions under `plugins/`.
 
 ## Naming
 
