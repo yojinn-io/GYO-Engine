@@ -118,7 +118,64 @@ class GuardTree(unittest.TestCase):
         self.assertEqual(guard.check(self.root),
                          ["engine/kernel: no source to scan (moved or renamed? update this guard)"])
 
+    def test_n1_second_namespace_in_a_file_is_checked(self):
+        self.kernel_header("namespace GYO::Kernel {\n}\nnamespace Engine::Other {\n}\n")
+        self.assertReported("N1", "namespace Engine::Other (expected GYO::Kernel)")
+
+    def test_n1_second_namespace_outside_kernel_is_checked(self):
+        self.write("engine/time/src/Leak.cpp", "namespace Engine::Time {\n}\nnamespace GYO::Kernel {\n}\n")
+        self.assertReported("N1", "engine/time/src/Leak.cpp:3: N1 namespace GYO::Kernel opened outside")
+
+    def test_n1_namespace_inside_a_linkage_block_is_checked(self):
+        self.kernel_header('extern "C++" {\nnamespace Evil {\n}\n}\n')
+        self.assertReported("N1", "namespace Evil (expected GYO::Kernel)")
+
+    def test_n1_namespace_inside_an_anonymous_namespace_is_checked(self):
+        self.kernel_header("namespace {\nnamespace Evil {\n}\n}\n")
+        self.assertReported("N1", "namespace Evil (expected GYO::Kernel)")
+
+    def test_n1_attributed_namespace_is_read(self):
+        self.kernel_header("namespace [[deprecated]] Evil {\n}\n")
+        self.assertReported("N1", "namespace Evil (expected GYO::Kernel)")
+
+    def test_n1_unreadable_namespace_declaration_is_reported(self):
+        self.kernel_header("#define OPEN {\nnamespace GYO::Kernel OPEN\n}\n")
+        self.assertReported("N1", "unreadable namespace declaration")
+
+    def test_n1_inline_nested_namespace_keeps_its_name(self):
+        self.kernel_header("namespace GYO::Kernel::inline Mainline {\n}\nnamespace Mainline {\n}\n")
+        self.assertReported("N1", "namespace Mainline (expected GYO::Kernel)")
+
+    def test_n1_every_reverse_root_is_scanned(self):
+        for root in guard.REVERSE_ROOTS:
+            with self.subTest(root=root):
+                self.write(f"{root}/sample/Leak.cpp", "namespace GYO::Kernel {\n}\n")
+                self.assertReported("N1", f"{root}/sample/Leak.cpp:1: N1 namespace GYO::Kernel opened outside")
+                (self.root / f"{root}/sample/Leak.cpp").unlink()
+
+    def test_n1_reverse_roots_are_pinned(self):
+        self.assertEqual(guard.REVERSE_ROOTS, ("engine", "apps", "tools", "framework", "plugins", "tests"))
+
+    def test_n1_every_source_type_is_scanned(self):
+        # A fixed list, not guard.SUFFIXES: shrinking the guard's set must fail here.
+        for suffix in (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp", ".inc",
+                       ".ixx", ".m", ".mm"):
+            with self.subTest(suffix=suffix):
+                self.write(f"engine/time/src/Leak{suffix}", "namespace GYO::Kernel {\n}\n")
+                self.assertReported("N1", f"engine/time/src/Leak{suffix}:1: N1 namespace GYO::Kernel opened outside")
+                (self.root / f"engine/time/src/Leak{suffix}").unlink()
+
     # N3 ---------------------------------------------------------------------------------------------------------
+    def test_n3_every_declaration_keyword_is_reported(self):
+        for text, name in (("union DataShell { int a; };", "DataShell"), ("enum struct ModeController { A };", "ModeController"),
+                           ("template <typename T>\nconcept TaskManager = sizeof(T) > 0;", "TaskManager"),
+                           ("struct [[nodiscard]] TaskRuntime {};", "TaskRuntime"),
+                           ("struct alignas(16) GpuHost {};", "GpuHost"), ("typedef int ViewModel;", "ViewModel"),
+                           ("typedef int ArrayShell[4];", "ArrayShell"), ("struct Detail::ImplHost {};", "ImplHost")):
+            with self.subTest(text=text):
+                self.kernel_header("namespace GYO::Kernel {\n" + text + "\n}\n")
+                self.assertReported("N3", name)
+
 
     def test_n3_host_suffix_is_reported(self):
         self.kernel_header("namespace GYO::Kernel {\nstruct WorldHost {};\n}\n")

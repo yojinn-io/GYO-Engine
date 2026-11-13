@@ -51,7 +51,8 @@ set_tests_properties(kernel.guard kernel.guard_selftest kernel.naming_guard kern
 function(gyo_kernel_compile_fail_sample)
     set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/RejectsCapturingCallable.cpp")
-    set(includes "${GYO_REPOSITORY_ROOT}/engine/kernel/include;${CMAKE_CURRENT_SOURCE_DIR}/compile_fail")
+    # The include directories GYO::Kernel gives its users (kernel and base), plus the sample's own.
+    set(includes "${GYO_REPOSITORY_ROOT}/engine/kernel/include;${GYO_REPOSITORY_ROOT}/engine/base/include;${CMAKE_CURRENT_SOURCE_DIR}/compile_fail")
     set(marker "GYO_KERNEL_SAMPLE_REJECTED")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
         "${source}" "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/SampleContract.hpp")
