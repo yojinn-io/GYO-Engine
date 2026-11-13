@@ -250,7 +250,7 @@ Architecture Delta は禁止事項ではない。
 
 * 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下。Engine は `docs/architecture/` 配下）に
   見出し `Design Invariants` の節として書く。
-* Engine の Design Invariants がどの文書にあり、どれが効くかは、`docs/architecture/target/README.md` に従う。
+* Engine の Design Invariants がどの文書にあり、どれが効くかは、`docs/architecture/README.md` の〈Design Invariants〉に従う。
   見出しは文書の言語にかかわらず、この英語表記のまま変えない（翻訳による意味のずれと探し漏れを防ぐため）。
 * 可能なものは、ガードとなる Test も用意する。
 * Component を変更する前に、その owner の `Design Invariants` 節を読む。
@@ -307,7 +307,7 @@ over:
 
 Architecture を新しい形へ移すバッチでは、上の Prefer を選ぶ前に、各選択肢について
 「旧い形に置き場所を探していないか」を確かめる。そうであれば、変更が小さくても採らない
-（`docs/architecture/target/README.md`「每批事前宣告的檢查項」）。
+（`docs/architecture/README.md` の〈Batch declaration checks〉）。
 
 局所的であることと、責務が正しいことは別である。
 
@@ -365,7 +365,7 @@ Editor      ──→ Engine
 Engine は具体的な Application や Editor に依存してはならない。
 Engine と Product・Tool の間に、Engine の機能の組み合わせや第三者の接続を担う再利用可能な層を置く場合、
 その層も Engine から参照されない（下位の層は上位の層を参照しない）。
-層の構成と依存の規則は、`docs/architecture/target/runtime-composition.zh-Hant.md` §4 に書く。
+層の構成と依存の規則は、`docs/architecture/README.md` の〈Layers and dependencies〉から辿る。
 
 外部の Component（第三者の Library、Platform の API など）は、更新も交換もありうる backend として扱い、
 選び終えた土台として扱わない。判断の一文：外部 Component を更新または交換するとき、変わるのはそれにつなぐ部分だけである。
@@ -391,7 +391,7 @@ Product の追加・複製・削除によって検証する。
 * Product 固有 Knowledge を reusable Engine layer へ漏らさない。
 * Engine と再利用可能な層に、型・関数・Format のフィールドを追加または改名するときは、
   その名前が誰の概念を指すかを確かめる
-  （名前は概念の tag である。詳しくは `docs/architecture/target/naming.zh-Hant.md` の Design Invariant 4）。
+  （名前は概念の tag である。詳しくは `docs/architecture/README.md` の〈Naming〉）。
 
 ### MUST NOT
 

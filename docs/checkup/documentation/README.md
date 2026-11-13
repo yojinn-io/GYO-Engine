@@ -23,6 +23,7 @@ Owner：文件整理。本資料夾只放文件健檢；架構漂移健檢由另
    - `limits.zh-Hant.md` 的 LIM 編號唯一、不重用、搬動不改號；解除的條目標 `Lifted in <batch-id>` 而沒有刪除。
    - 每條 LIM 的狀態和它所在的資料夾一致（`target, not implemented` 在 `target/`，`implemented in` 在頂層）。
    - 部件文件 Replacement Criteria 引用的 LIM 編號都存在，且附一句摘要。
+   - 入口 `docs/architecture/README.md`（2026-11-13 起）：四個固定條目（`Design Invariants`、`Batch declaration checks`、`Layers and dependencies`、`Naming`）的名字沒變，連結與錨點都有效（錨點由中文標題產生，標題一改就斷）；條目指向的權威文件仍是 target 或已搬回的頂層檔，搬回後連結有跟著改。
    - legacy（2026-11-12 起，`v8-arch-docs-legacy`）：`target/README.md` 列的 legacy 檔，檔頭一行以 `> **Legacy**` 開頭；抽查上次以來對 legacy 檔的變更，只限「仍存在的程式的現況」與「仍有測試守衛的 Design Invariants」兩類（加上把被取代的條文標「已被取代（批次代號）」），新的設計決定寫在 legacy 檔就回報架構師。
 
 不算問題的：dev_log 與帶日期的快照是歷史紀錄，本文不改寫，只在狀態行補「後續」；明確標示為歷史的舊路徑；
