@@ -31,7 +31,7 @@
 
 - 未驗 §12 Add／Clone。
 - git 歷史保留約 100 MB 資產。
-- `RetroFPS` namespace 留在 pvp（target/naming 第 1 條，遷移批）。
+- `RetroFPS` include 目錄名留在 pvp（更正 2026-11-12：程式 namespace 是 `fps::pvp`，不是 `RetroFPS`）（target/naming 第 1 條，遷移批）。
 - `PlaybackInterval::Crossed` 的直接測試只剩留回的 5 個 CHECK；`AnimationInstance` 的行為（Play／Advance／轉場）不再有測試，因型別已刪。
 - 現行文件的「Object_FPS」字樣（指產品族或 v1）未整理。
 - 刪除的是停用產品，CI 從未建置它們；判定 4 驗的是「刪了以後其他東西還成立」。

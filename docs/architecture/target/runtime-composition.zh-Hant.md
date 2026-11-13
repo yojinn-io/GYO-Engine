@@ -48,14 +48,15 @@
 - **三層改為**：Engine（Kernel＋能力）／**plugins**（`plugins/`：組合與第三方對接，每個 plugin 可選可刪）／產品與工具（plugin 清單＋Run）。層與目錄叫 plugins，單個才叫 plugin（使用者 2026-11-11）。framework 是舊架構的產物，其兩個核心職責（組合 Engine 能力、對接第三方）在 plugin 機制下都由 plugin 承擔，概念淘汰；`docs/framework/` 的 Design Invariants 整節廢止（第一個文件批）。
 - **runner plugin**：Editor host 的骨架（行程入口、pump、交換點）是一個在 finish 安裝 runner 的 plugin（照 Bevy `WinitPlugin::set_runner`）；一個 Runtime 只能有一個 runner（spec R-E6）；沒有 plugin 安裝時由 Host 程式自己跑。
 - **標準 Editor stage 序**＝plugin 群在 build 插入 stage（spec C.2 第 2 點）；ImGui、SDL 的相容在各自的 plugin 內實現，全域 context 明列例外。
-- **`plugins/` 是新的 top-level**（AGENTS §10 Delta，已同意）：每個 plugin 一個 target、自己的依賴正向清單；Engine 永不 include 它；產品與工具只在 main 列它。
+- **`plugins/` 是新的 top-level**（AGENTS §10 Delta，已同意）：每個 plugin 一個 target、自己的依賴正向清單；Engine 永不 include 它。
+- **plugin 的選擇是資料，不是程式**（使用者 2026-11-12 決定，`v8-arch-plugin-selection-data`；取代上一版「產品與工具只在 main 列它」）：產品與工具在 `project.json` 加 `plugins` 欄列要用的 plugin；共通 CMake 讀它連結對應的 plugin target，並**由建置產生登記的編譯單元**（與今天 `components` → `GyoComponents.cmake` 同一條路）；`main` 保持薄，只呼叫 runner plugin 或 Host 自跑。同一事實只在 `project.json` 一處（AGENTS §9）；加一個產品仍是「內容＋登記資料」就完結（§7、§12 Add／Clone）。代價：plugin 的初始化順序由資料或 plugin 自己宣告的依賴決定，不靠 main 的呼叫順序；缺 plugin 或依賴衝突是 Contract 的明確錯誤（§9）。System 本身的登記仍是程式（plugin 的 build 函式向 Registry 登記），不從資料讀。
 - 「兩個以上產品以同一方式組合者先進 framework」→「先成為共用 plugin」。架構師保留：四個工具重複的選擇窗記帳與關窗提示必須真的進共用 plugin，否則是 framework 的老問題換名。
 - 組合格式（catalog plan、event sounds）是資料契約，owner 是提供該 plugin 的人；純函式（EventSounds、CatalogPlan、PreviewCamera、UiTextInput、json binding）是函式庫，與層無關。
 
 ## Design Invariants（候選；核准後成為正式條文）
 
 1. **渲染只經 Extract 以 const 方式讀來源 World，無反饋**；渲染 World 有自己的 Registry；來源 Registry 先凍結。守衛：spec J-43（含編譯失敗測試 `Extract<Write>`）、J-16。
-2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；產品與工具只在 main 列 plugin。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）。
+2. **一個 Runtime 只有一個 runner，由 plugin 在 finish 安裝或 Host 自跑**；Engine 不 include 任何 plugin；**產品與工具的 plugin 選擇只寫在 `project.json`（資料），登記由建置產生，`main` 不手寫 plugin 清單**。守衛：spec R-E6；依賴方向掃描（`engine/` 不 include `plugins/`）；守衛掃 `main` 與產品程式不直接引用 plugin 的 build 函式（名稱由 plugins 規劃批定）。
 3. **世界內容只經 Loading schedule 進來（且只經它的 Ingress stage 進 (c)）；對局 tick 計數在 ready 時為 0、第一個模擬 tick 是 1，Loading 期間 `tick[Fixed]` 不推進；`tick[Loading]` 是批次計數，(c) System 可讀它（S-4）但等價測試不比它；Player 與 Peer 是不同實體**。守衛：啟動檢查（Startup 的 System 不得寫世界內容欄；Loading 非 Ingress stage 的 System 不得讀 external Resource）；等價測試（分批數不同、資產完成順序打亂：ready 時 (c) 欄與 Resource 逐位元相同，排除 role=Input 的暫存（`AssetStaging`、`MembershipRequests`、`InputRing`，修剪時機隨批數而異）與 `tick[Loading]`；spec J-51）；掃描（Peer 元件不掛在 Player 實體）。
 4. **一個 World 一條執行緒**：同一 World 的所有 schedule 綁同一執行緒；不同執行緒上的時鐘是不同的 World，只經 Host 交換點交換。守衛：spec J-15、J-6；finish 檢查 H-2。
 

@@ -69,7 +69,7 @@
 
 - 不驗證「Product 的**追加**／複製只改登記與內容」（§12 Product Add／Clone）：那要一個新產品當樣本，留給改造後的第一個新 host。
 - 不重寫 git 歷史：資產留在歷史裡，clone 大小不變。
-- `RetroFPS` namespace 留在 pvp：命名歸屬由 target/naming 第 1 條在遷移批處理，不在本批改名。
+- `RetroFPS` namespace 留在 pvp：命名歸屬由 target/naming 第 1 條在遷移批處理，不在本批改名。（更正 2026-11-12：pvp 的程式 namespace 是 `fps::pvp`，`RetroFPS` 只是 include 目錄名；「共用 namespace」的說法有誤，共用的是目錄名。）
 - 刪除的是**停用**產品，CI 從未建置它們；判定 4 驗的是「刪了以後其他東西還成立」，不是「刪前它們能建」。
 - `docs/architecture/plans/<舊計畫>/inactive_products.md` 記的遷移需求隨產品一起作廢，只標註不刪：它們也是當時 Engine 改了什麼公開介面的紀錄。
 - 本批不評估 object_fps／v2 有沒有值得搬進 pvp 的設計（hit rules 的部位倍率已在 `v8-product-hit-rules-v2-values` 搬過；`MapGeometryGenerator`、`GridMap` 的參考價值由 voxel 線在需要時從 git 歷史讀）。
