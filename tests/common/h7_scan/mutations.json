@@ -33,8 +33,8 @@
     {
       "id": "h7b-run-removed",
       "file": "h7_scan_rules.json",
-      "find": "      \"Step\",\n      \"Run\"\n",
-      "replace": "      \"Step\"\n",
+      "find": "      \"Step\",\n      \"Run\",\n",
+      "replace": "      \"Step\",\n",
       "expect": "test_p05_h7b_loop_run"
     },
     {
@@ -687,6 +687,48 @@
       "find": "    report[\"findings\"].sort(key=key)\n",
       "replace": "",
       "expect": "test_findings_sorted_by_file_and_line"
+    },
+    {
+      "id": "h7b-rewind-removed",
+      "file": "h7_scan_rules.json",
+      "find": "      \"Run\",\n      \"Rewind\",\n      \"Replay\",\n      \"Restore\"\n    ]",
+      "replace": "      \"Run\",\n      \"Replay\",\n      \"Restore\"\n    ]",
+      "expect": "test_p12b_product_rewind"
+    },
+    {
+      "id": "h7b-replay-removed",
+      "file": "h7_scan_rules.json",
+      "find": "      \"Rewind\",\n      \"Replay\",\n      \"Restore\"\n    ]",
+      "replace": "      \"Rewind\",\n      \"Restore\"\n    ]",
+      "expect": "test_p12c_product_replay"
+    },
+    {
+      "id": "h7b-restore-removed",
+      "file": "h7_scan_rules.json",
+      "find": "      \"Replay\",\n      \"Restore\"\n    ]\n  },",
+      "replace": "      \"Replay\"\n    ]\n  },",
+      "expect": "test_p12d_product_restore"
+    },
+    {
+      "id": "wl-kernel-rewind-not-allowed",
+      "file": "h7_scan_rules.json",
+      "find": "        \"Run\",\n        \"Rewind\",\n        \"Replay\",\n        \"Restore\"\n      ],",
+      "replace": "        \"Run\",\n        \"Replay\",\n        \"Restore\"\n      ],",
+      "expect": "test_n03_kernel_runtime_rewind"
+    },
+    {
+      "id": "wl-kernel-replay-not-allowed",
+      "file": "h7_scan_rules.json",
+      "find": "        \"Rewind\",\n        \"Replay\",\n        \"Restore\"\n      ],",
+      "replace": "        \"Rewind\",\n        \"Restore\"\n      ],",
+      "expect": "test_n04_kernel_runtime_replay"
+    },
+    {
+      "id": "wl-kernel-restore-not-allowed",
+      "file": "h7_scan_rules.json",
+      "find": "        \"Replay\",\n        \"Restore\"\n      ],",
+      "replace": "        \"Replay\"\n      ],",
+      "expect": "test_n04b_kernel_runtime_restore"
     }
   ]
 }

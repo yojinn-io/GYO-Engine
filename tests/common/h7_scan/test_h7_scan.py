@@ -119,6 +119,15 @@ class Positives(Base):
     def test_p12_product_type_named_runtime(self):
         self.assert_only(self.host("game::Runtime r;\nvoid F() { r.Run(); }\n"), 2, "H7-b")
 
+    def test_p12b_product_rewind(self):
+        self.assert_only(self.host("game::Prediction p;\nvoid F() { p.Rewind(3); }\n"), 2, "H7-b")
+
+    def test_p12c_product_replay(self):
+        self.assert_only(self.host("game::Prediction p;\nvoid F() { p.Replay(); }\n"), 2, "H7-b")
+
+    def test_p12d_product_restore(self):
+        self.assert_only(self.host("game::Prediction p;\nvoid F() { p.Restore(snapshot); }\n"), 2, "H7-b")
+
     def test_p13_receiver_without_declaration(self):
         report = self.host("void F() {\n    Get().Run();\n    v[0].Tick();\n    unknown.Step();\n}\n")
         self.assertEqual(self.findings(report), [("host.cpp", 2, "H7-b"), ("host.cpp", 3, "H7-b"), ("host.cpp", 4, "H7-b")])
@@ -138,16 +147,13 @@ class Negatives(Base):
         self.assert_clean(self.host(f"{KERNEL} rt;\nvoid F() {{ rt.Run(); }}\n"))
 
     def test_n03_kernel_runtime_rewind(self):
-        # Rewind is not in H7b.methods (spec H-7 bans Tick/Advance/Update/Step/Run), so it is never a candidate,
-        # on the kernel type or any other; the whitelist entry only records the spec. Reported to the architect.
-        report = self.host(f"{KERNEL} rt;\ngame::Thing g;\nvoid F() {{ rt.Rewind(3); g.Rewind(3); }}\n")
-        self.assert_clean(report)
-        self.assertEqual(report["whitelisted"], [])
+        self.assert_clean(self.host(f"{KERNEL} rt;\nvoid F() {{ rt.Rewind(3); }}\n"))
 
     def test_n04_kernel_runtime_replay(self):
-        report = self.host(f"{KERNEL} rt;\ngame::Thing g;\nvoid F() {{ rt.Replay(); g.Replay(); }}\n")
-        self.assert_clean(report)
-        self.assertEqual(report["whitelisted"], [])
+        self.assert_clean(self.host(f"{KERNEL} rt;\nvoid F() {{ rt.Replay(); }}\n"))
+
+    def test_n04b_kernel_runtime_restore(self):
+        self.assert_clean(self.host(f"{KERNEL} rt;\nvoid F() {{ rt.Restore(snapshot); }}\n"))
 
     def test_n05_auto_copy_of_whitelisted(self):
         body = f"class H {{\n    {FIXED} ticks_;\n    void F() {{\n        auto preview = ticks_;\n        preview.Advance(0.0);\n    }}\n}};\n"

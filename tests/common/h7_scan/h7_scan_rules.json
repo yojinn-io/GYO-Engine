@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Rule data of the H-7 host scan (h7_scan.py; spec H-7, target/kernel DI-KS 15). H7a: last path segment of a banned include, either include form, case-insensitive. H7b: member-call names a host must not call on a product or capability module. whitelist: the only types (fully qualified) whose listed methods a host may call; owners cannot extend it. unwrap: wrappers peeled off a declared type before the whitelist comparison (exact qualified names). Extend here, not in the script.",
+  "description": "Rule data of the H-7 host scan (h7_scan.py; spec H-7, target/kernel DI-KS 15). H7a: last path segment of a banned include, either include form, case-insensitive. H7b: member-call names a host must not call on a product or capability module (spec H-7 (b); Rewind / Replay / Restore added by the architect 2026-11-13: on a non-kernel type they are rollback written outside the Kernel, target/kernel DI-KS 12). whitelist: the only types (fully qualified) whose listed methods a host may call; owners cannot extend it. unwrap: wrappers peeled off a declared type before the whitelist comparison (exact qualified names). Extend here, not in the script.",
   "H7a": {
     "headers": [
       "IRuntimeClient.hpp",
@@ -13,7 +13,10 @@
       "Advance",
       "Update",
       "Step",
-      "Run"
+      "Run",
+      "Rewind",
+      "Replay",
+      "Restore"
     ]
   },
   "whitelist": [
@@ -29,7 +32,8 @@
       "methods": [
         "Run",
         "Rewind",
-        "Replay"
+        "Replay",
+        "Restore"
       ],
       "note": "PROVISIONAL name. The namespace GYO::Kernel is fixed (target/naming rule 1); the type name is not, and target/naming rule 5 forbids a Runtime suffix, so the final name differs. The batch that names it (registry-schedule or world-exec) changes this entry and the selftest's kernel negative case."
     }
