@@ -28,7 +28,7 @@ H-7 要求 host 不排 System 順序。只掃 include 會漏掉「不 include `R
 | 5 | Removability | **成立**：自測 `test_removing_one_owner_changes_nothing_else`（合成 owner alpha／beta，刪 alpha 後 beta 報告逐欄相同、共通層位元組不變、`nothing to scan` 仍綠）；實際建置只選 voxel_map_editor（`GYO_APPS=`、`GYO_TOOLS=voxel_map_editor`）時 `ctest -R h7_scan` 3/3 passed |
 | 6 | 五個 owner 的基線 | **成立**：本機 7 個 h7 ctest passed；pvp 兩個 `--expect-finding` 在報告中；`MatchRuntimeHost.cpp:385` 的 `ticker_.Advance` 在 `whitelisted`。基線見下表 |
 | 7 | 件数の突き合わせ | **一致**（下節） |
-| 8 | 三平台 | 待 L1（PR 後補 run id） |
+| 8 | 三平台 | **成立**：L1 run 43362195890（合併 master 後的 `e7278994`）linux-x64／windows-x64／macos-arm64 的 tests.xml 中 `h7_scan.selftest`、`h7_scan.empty` 與五個 owner 的 `<owner>.h7_scan` 共 7/7 執行且無失敗（3/3 平台）；Windows 的 pvp 掃描輸出路徑全為正斜線。artifact 存主 checkout `build/evidence/h7-scanner/l1-43362195890/` |
 
 ## 基線（只報告；歸零目標）
 
@@ -128,5 +128,5 @@ H-7 要求 host 不排 System 順序。只掃 include 會漏掉「不 include `R
 
 ## 下一步
 
-- L1 三平台（判定 8）；合併由使用者決定。
+- ~~L1 三平台（判定 8）~~ 成立；使用者 2026-11-13 指示 L1 綠後合併。
 - match-host 批拿掉 `match_.Tick` 的 pin、client-sim／client-frame 批拿掉 `loop_.Run` 的 pin；Kernel 定名批改白名單一行。

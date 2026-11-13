@@ -51,7 +51,7 @@ v8-arch-kernel
 ├── -spec-v03  上段｜主會話 Fable／high 自寫、對抗 Opus／high 只讀｜規格修訂九項＋第一個文件批（Delta 文件修改）＋五輪對抗／複核（spec 修訂記錄）｜完成（PR #182，2026-11-12）
 ├── -spike-pageguard 上段｜實作 Opus／xhigh、敵對 Fable／xhigh｜頁保護：只對寫設保護、只保護獨占寫入的欄、只在 (c) 區 System 執行時、歸「存取驗證（可關）」的第三層（不是 GYO_ASSERT；頁錯誤處理器記違規、System 以 Err 回傳；B-9 結案後分類）；完成：判定 1 照原文不成立（讀法 (i)，使用者 2026-11-12）、2／4／5 成立、3 成立（L1 run 43169204148）；PR #184（2026-11-12）
 ├── -j17-scanner 下段（並行線）｜規則與遮罩 Fable／xhigh、其餘 Fable／high、審查 Opus／high｜J-17 掃描器：ZS1～ZS7、自測 65、突變 18/18、pvp 基線兩份（確認 12 檔／候選 5 檔）、清單契約 v1｜實作完成，待 L1 與合併（卡 `j17-scanner.zh-Hant.md`）
-├── -h7-scanner 下段（遷移計畫 §3.4）｜實作 Opus／high（型別近似 xhigh）、審查與敵對檢查 Fable／high｜H-7 呼叫點掃描器：共通 `tests/common/h7_scan/`（自測 124、突變 104/104，Fable 審查與敵對檢查已處置）＋五個 owner 的 `h7-hosts.json`（18 檔，基線 H7-a 2／H7-b 11，只報告）｜實作完成，待 L1 與合併（[宣告](h7-scanner-declaration.zh-Hant.md)）
+├── -h7-scanner 下段（遷移計畫 §3.4）｜實作 Opus／high（型別近似 xhigh）、審查與敵對檢查 Fable／high｜H-7 呼叫點掃描器：共通 `tests/common/h7_scan/`（自測 124、突變 104/104，Fable 審查與敵對檢查已處置）＋五個 owner 的 `h7-hosts.json`（18 檔，基線 H7-a 2／H7-b 11，只報告）｜完成（L1 run 43362195890 三平台綠；PR #207；[宣告](h7-scanner-declaration.zh-Hant.md)）
 ├── remove-object-fps 上段｜實作 Opus／high、審查 Fable／high｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview，**加 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance（含各自測試；使用者 2026-11-11）**（§7 完整刪除；兼驗 removability：共通層零修改是判定，不成立就記 Delta 不修）｜完成：判定 1～5 成立（三平台 L1 run 43188319281），§7 實測共通層零修改；PR #185（2026-11-12）
 ├── -kernel-scaffold 上段｜實作 Opus／high、審查＋敵對檢查 Fable／high（一次）｜kernel 進 L1 的腳手架：`engine/kernel`（INTERFACE、只連 Base）、J-9 與 naming DI 1／3 掃描、J-10 兩種樣本、突變 37｜完成，待合併（PR #204；突變 79/79；[宣告](kernel-scaffold-declaration.zh-Hant.md)）
 └── -audit   **完成**｜Opus／high ×3、對抗 Fable／high（4/5）｜現有模組逐一「留／包／重寫」，給中間層成本
