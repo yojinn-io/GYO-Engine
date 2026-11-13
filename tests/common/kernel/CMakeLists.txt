@@ -16,6 +16,9 @@ set(GYO_KERNEL_TEST_SOURCES
     SchedulerTests.cpp
     ZoneCExportTests.cpp
     CoverageTests.cpp
+    WorldTests.cpp
+    ExecutorTests.cpp
+    AccessCheckTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )
@@ -43,12 +46,15 @@ gyo_kernel_test_executable(gyo_kernel_tests ${GYO_KERNEL_TEST_SOURCES})
 list(REVERSE GYO_KERNEL_TEST_SOURCES)
 gyo_kernel_test_executable(gyo_kernel_tests_reversed ${GYO_KERNEL_TEST_SOURCES})
 
-# One ctest per J entry of the registry-schedule batch (declaration section 2),
-# so each appears by name in the L1 tests.xml (declaration judgement 2). The
-# doctest cases of entry J-n are named "J-n: ...".
+# One ctest per J entry of the registry-schedule batch (declaration section 2)
+# and of the world-exec batch (world-exec declaration judgement 2), so each
+# appears by name in the L1 tests.xml. The doctest cases of entry J-n are named
+# "J-n: ..." ("J-32:*" does not match "J-32b: ...").
 set(GYO_KERNEL_J_ENTRIES
+    J-1 J-2 J-3 J-4 J-5 J-6 J-7 J-8
     J-10 J-11 J-12 J-13 J-14 J-15 J-16 J-17 J-18 J-19 J-20 J-21 J-22 J-23 J-24 J-25
-    J-27 J-28 J-37 J-38 J-39 J-40 J-41 J-44 J-47)
+    J-26 J-27 J-28 J-29 J-30 J-31 J-32 J-32b J-33 J-34 J-35 J-36 J-37 J-38 J-39 J-40 J-41
+    J-44 J-45 J-47 J-50 J-52 J-53)
 # A filter that matches no case would pass silently, so a run of zero cases fails.
 foreach(entry IN LISTS GYO_KERNEL_J_ENTRIES)
     add_test(NAME kernel.${entry} COMMAND gyo_kernel_tests "--test-case=${entry}:*")
@@ -84,6 +90,12 @@ add_test(NAME kernel.naming_guard
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/naming_guard.py" --root "${GYO_REPOSITORY_ROOT}")
 add_test(NAME kernel.naming_guard_selftest
     COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_naming_guard.py" -v)
+# kernel.store_stamp_guard: engine/entity_store holds no change stamp (target/world section 6; world-exec).
+add_test(NAME kernel.store_stamp_guard
+    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/store_stamp_guard.py" --root "${GYO_REPOSITORY_ROOT}")
+add_test(NAME kernel.store_stamp_guard_selftest
+    COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_store_stamp_guard.py" -v)
+set_tests_properties(kernel.store_stamp_guard kernel.store_stamp_guard_selftest PROPERTIES LABELS "cpu" TIMEOUT 60)
 add_test(NAME kernel.J-17_zone_scan
     COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/zone_c_export_check.py"
         --root "${GYO_REPOSITORY_ROOT}" --list "${CMAKE_CURRENT_BINARY_DIR}/kernel_zone_c_sources.json")
@@ -92,7 +104,8 @@ set_tests_properties(kernel.guard kernel.guard_selftest kernel.naming_guard kern
     kernel.J-17_zone_scan PROPERTIES LABELS "cpu" TIMEOUT 60)
 
 # Writable data symbols of the kernel library (registry-schedule declaration
-# section 3 item 1, judgement 9): what kernel_guard's K4 cannot see (a
+# section 3 item 1, judgement 9; world-exec makes both allowed names required,
+# so the set is exactly the two of spec A.6: world-exec declaration section 3 item 1): what kernel_guard's K4 cannot see (a
 # namespace-scope variable without "static"). nm on Linux and macOS; Windows is
 # a declared limit (MSVC has no nm; dumpbin's output has another shape).
 if(NOT MSVC AND NOT CMAKE_NM)
@@ -101,7 +114,8 @@ endif()
 if(NOT MSVC)
     add_test(NAME kernel.symbols
         COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/kernel_symbols.py"
-            --nm "${CMAKE_NM}" --library "$<TARGET_FILE:gyo_kernel>" --require "TypeKey anchor")
+            --nm "${CMAKE_NM}" --library "$<TARGET_FILE:gyo_kernel>" --require "TypeKey anchor"
+            --require tlCurrent)
     set_tests_properties(kernel.symbols PROPERTIES LABELS "cpu" TIMEOUT 60)
 endif()
 add_test(NAME kernel.symbols_selftest
@@ -117,6 +131,15 @@ if(MSVC)
     target_compile_options(gyo_kernel_finish_record PRIVATE /bigobj)
 endif()
 
+# BU-2 record executable (migration plan section 6; world-exec declaration
+# judgement 8): the kernel's own overhead on a synthetic Registry. Not a ctest
+# either; run by hand in Release, output under build/evidence/kernel-world-exec/.
+add_executable(gyo_kernel_world_exec_record WorldExecRecord.cpp)
+target_link_libraries(gyo_kernel_world_exec_record PRIVATE GYO::Kernel)
+if(MSVC)
+    target_compile_options(gyo_kernel_world_exec_record PRIVATE /bigobj)
+endif()
+
 # Compile-failure samples (a) (spec J-10, migration plan U5; after the review
 # also J-11, J-13, member functions and hooks): one source, built
 # at configure time once per variant. The control must compile, so a failure of
@@ -130,8 +153,9 @@ endif()
 function(gyo_kernel_compile_fail_samples)
     set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/SystemContractSample.cpp")
-    # The include directories GYO::Kernel gives its users (kernel and base).
-    set(includes "${GYO_REPOSITORY_ROOT}/engine/kernel/include;${GYO_REPOSITORY_ROOT}/engine/base/include")
+    # The include directories GYO::Kernel gives its users (kernel, base and,
+    # since world-exec's Delta-3, entity_store).
+    set(includes "${GYO_REPOSITORY_ROOT}/engine/kernel/include;${GYO_REPOSITORY_ROOT}/engine/base/include;${GYO_REPOSITORY_ROOT}/engine/entity_store/include")
     # try_compile does not inherit directory compile options; MSVC needs the
     # standard-conforming preprocessor that engine/base/Assert.hpp requires
     # (build/cmake/GyoBuild.cmake) and the conformance mode the kernel builds with.
@@ -159,7 +183,8 @@ function(gyo_kernel_compile_fail_samples)
     foreach(variant IN ITEMS CAPTURE:GYO_KERNEL_REJECT_CAPTURE WORLD:GYO_KERNEL_REJECT_PARAMETER
                              RETURN:GYO_KERNEL_REJECT_RETURN SELF_CONFLICT:GYO_KERNEL_REJECT_SELF_CONFLICT
                              CONDITION_WRITE:GYO_KERNEL_REJECT_CONDITION_WRITE
-                             MEMBER:GYO_KERNEL_REJECT_MEMBER_FUNCTION HOOK_PARAMETER:GYO_KERNEL_REJECT_PARAMETER)
+                             MEMBER:GYO_KERNEL_REJECT_MEMBER_FUNCTION HOOK_PARAMETER:GYO_KERNEL_REJECT_PARAMETER
+                             HANDLE_COPY:GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE)
         string(REPLACE ":" ";" parts "${variant}")
         list(GET parts 0 name)
         list(GET parts 1 marker)
@@ -188,11 +213,12 @@ endfunction()
 gyo_kernel_compile_fail_samples()
 
 # Delta-1 of the migration plan: the kernel is a leaf directly above GYO::Base;
-# its links, private and interface alike, are exactly GYO::Base.
+# Delta-3 (world-exec) adds GYO::EntityStore, whose algorithms keep the World's
+# columns. Its links, private and interface alike, are exactly these two.
 # gyo_expect_links is defined with the time tests, which configure first.
 # Checked once the whole project is configured, so an edge added later from
 # another directory is seen too.
 function(gyo_expect_kernel_links)
-    gyo_expect_links(gyo_kernel GYO::Base)
+    gyo_expect_links(gyo_kernel GYO::Base GYO::EntityStore)
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_kernel_links)

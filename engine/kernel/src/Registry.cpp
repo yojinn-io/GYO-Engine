@@ -19,8 +19,58 @@ namespace GYO::Kernel {
 std::string_view ToString(KernelErrorCode code) noexcept {
     switch (code) {
     case KernelErrorCode::SystemFailed: return "SystemFailed";
+    case KernelErrorCode::Siblings: return "Siblings";
+    case KernelErrorCode::AccessViolation: return "AccessViolation";
+    case KernelErrorCode::BoundaryChange: return "BoundaryChange";
+    case KernelErrorCode::PreCallChange: return "PreCallChange";
+    case KernelErrorCode::StaleHandle: return "StaleHandle";
+    case KernelErrorCode::UntypedWrite: return "UntypedWrite";
+    case KernelErrorCode::ZoneCDespawn: return "ZoneCDespawn";
+    case KernelErrorCode::ExclusiveWorldWrite: return "ExclusiveWorldWrite";
+    case KernelErrorCode::AllotterExhausted: return "AllotterExhausted";
+    case KernelErrorCode::StructureBroken: return "StructureBroken";
+    case KernelErrorCode::HookFailed: return "HookFailed";
     }
     return "Unknown";
+}
+
+std::vector<const KernelError*> KernelError::Leaves() const {
+    std::vector<const KernelError*> out;
+    if (code != KernelErrorCode::Siblings) {
+        out.push_back(this);
+        return out;
+    }
+    for (const KernelError& sibling : siblings) {
+        for (const KernelError* leaf : sibling.Leaves()) out.push_back(leaf);
+    }
+    return out;
+}
+
+bool KernelError::Has(KernelErrorCode wanted) const {
+    for (const KernelError* leaf : Leaves()) {
+        if (leaf->code == wanted) return true;
+    }
+    return false;
+}
+
+namespace {
+void AppendText(const KernelError& error, std::string& out, const std::string& indent) {
+    out += indent;
+    out += std::string(ToString(error.code));
+    if (!error.rule.empty()) out += " [" + error.rule + "]";
+    out += ": " + error.message;
+    if (!error.detail.empty()) out += " (" + error.detail + ")";
+    if (!error.world.empty()) out += " world=" + error.world;
+    out += "\n";
+    for (const std::string& layer : error.context) out += indent + "  at " + layer + "\n";
+    for (const KernelError& sibling : error.siblings) AppendText(sibling, out, indent + "  ");
+}
+} // namespace
+
+std::string KernelError::Text() const {
+    std::string out;
+    AppendText(*this, out, "");
+    return out;
 }
 
 std::string_view ToString(StartupReportCode code) noexcept {
@@ -316,7 +366,7 @@ void FinishContext::InstallRunner(std::string_view runner) {
     registry_->data_->runnerOwners.push_back(plugin_);
 }
 
-ComponentId Registrar::RegisterComponent(TypeKey key, Shape shape, ComponentOptions options) {
+ComponentId Registrar::RegisterComponent(TypeKey key, Shape shape, ComponentOptions options, Detail::MakeColumnFn make) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<ComponentId>(data.components.size());
@@ -327,15 +377,16 @@ ComponentId Registrar::RegisterComponent(TypeKey key, Shape shape, ComponentOpti
     data.components.push_back(ColumnInfo{std::move(options.name), shape.size, shape.align, shape.trivialRelocate,
                                          options.writePolicy, options.zone, options.role, options.rollback,
                                          data.OwnerName(plugin_)});
+    data.columnMakers.push_back(make);
     return id;
 }
 
 ComponentId TypeKeyCollisionProbe::RegisterComponent(Registrar& registrar, TypeKey key, std::size_t size,
                                                      std::size_t align, ComponentOptions options) {
-    return registrar.RegisterComponent(key, Registrar::Shape{size, align, true}, std::move(options));
+    return registrar.RegisterComponent(key, Registrar::Shape{size, align, true}, std::move(options), nullptr);
 }
 
-ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions options) {
+ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions options, Detail::MakeResourceFn make) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<ResourceId>(data.resources.size());
@@ -346,10 +397,11 @@ ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions
     data.resources.push_back(ResourceInfo{std::move(options.name), shape.size, shape.align, options.writePolicy,
                                           options.zone, options.role, options.rollback, options.external,
                                           std::move(options.affinity), data.OwnerName(plugin_)});
+    data.resourceMakers.push_back(make);
     return id;
 }
 
-EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions options) {
+EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions options, Detail::MakeEventsFn make) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<EventTypeId>(data.events.size());
@@ -358,6 +410,7 @@ EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions opti
         return existing != nullptr ? existing->id : 0;
     }
     data.events.push_back(EventInfo{std::move(options.name), options.domain, options.zone, data.OwnerName(plugin_)});
+    data.eventMakers.push_back(make);
     return id;
 }
 
@@ -416,9 +469,10 @@ void Registrar::MarkDigestSet(TypeKey set) {
                {data.OwnerName(plugin_)});
 }
 
-void Registrar::DeclareAllotter(TypeKey resource) {
+void Registrar::DeclareAllotter(TypeKey resource, Detail::AllotterOps ops) {
     GYO_ASSERT(data_->building);
     data_->allotterDeclarations.push_back(resource);
+    data_->allotterDeclarationOps.push_back(ops);
     data_->allotterOwners.push_back(plugin_);
 }
 
@@ -472,7 +526,7 @@ void Registrar::Set(SetOptions options, std::vector<ConditionRef> conditions) {
 }
 
 RegistrationSeq Registrar::RegisterSystem(SystemOptions options, Detail::ResolveFn resolve, bool extractOnly,
-                                          std::source_location source) {
+                                          Detail::RunFn run, std::source_location source) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto seq = static_cast<RegistrationSeq>(data.systems.size());
@@ -486,15 +540,16 @@ RegistrationSeq Registrar::RegisterSystem(SystemOptions options, Detail::Resolve
             break;
         }
     }
-    data.systems.push_back(Detail::SystemRecord{std::move(options), resolve, extractOnly, source, plugin_, seq, {}, {}, false});
+    data.systems.push_back(
+        Detail::SystemRecord{std::move(options), resolve, extractOnly, run, source, plugin_, seq, {}, {}, false});
     return seq;
 }
 
 void Registrar::RegisterHook(TypeKey component, HookTrigger trigger, HookOptions options, Detail::ResolveFn resolve,
-                             std::source_location source) {
+                             Detail::RunFn run, std::source_location source) {
     GYO_ASSERT(data_->building);
-    data_->hooks.push_back(Detail::HookRecord{std::move(options.name), options.zone, component, trigger, resolve, source,
-                                              plugin_, std::nullopt, {}});
+    data_->hooks.push_back(Detail::HookRecord{std::move(options.name), options.zone, component, trigger, resolve, run,
+                                              source, plugin_, std::nullopt, {}});
 }
 
 // ---- FrozenRegistry
@@ -571,6 +626,7 @@ Registry::Registry(std::vector<Plugin*> plugins)
     data.resources.push_back(ResourceInfo{"KernelSettings", sizeof(KernelSettings), alignof(KernelSettings),
                                           WritePolicy::Exclusive, Zone::B, Role::State, Rollback::No, true,
                                           Affinity::Any(), Detail::kKernelOwnerName});
+    data.resourceMakers.push_back(&Detail::MakeResource<KernelSettings>);
     data.effects.push_back(Detail::EffectRecord{Detail::kDiagnosticsEffect, Detail::kKernelOwner});
 }
 
@@ -682,6 +738,7 @@ void CheckData(RegistryData& data) {
                        {data.resources[*data.allotter].name, data.resources[entry->id].name});
         } else {
             data.allotter = entry->id;
+            data.allotterOps = data.allotterDeclarationOps[i];
         }
     }
     // Named sets.

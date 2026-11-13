@@ -29,8 +29,8 @@
 // handed to Build (spec R-2).
 //
 // The App type (GYO::Kernel::App: one World, its Registry, its schedules and
-// their executor policy; kernel HANDOFF v8-arch-kernel-app-name) owns a
-// Registry; it arrives with world-exec.
+// their executor policy; kernel HANDOFF v8-arch-kernel-app-name) runs a frozen
+// Registry's schedules (App.hpp).
 
 namespace GYO::Kernel {
 
@@ -82,25 +82,30 @@ class ConditionRef {
 public:
     [[nodiscard]] const std::string& Name() const noexcept { return name_; }
     [[nodiscard]] Detail::ResolveFn Resolver() const noexcept { return resolve_; }
+    [[nodiscard]] Detail::ConditionFn Evaluator() const noexcept { return evaluate_; }
 
 private:
     template <auto Fn>
     friend ConditionRef Condition(std::string name);
     template <class F>
     friend ConditionRef Condition(std::string name);
-    ConditionRef(std::string name, Detail::ResolveFn resolve) : name_(std::move(name)), resolve_(resolve) {}
+    ConditionRef(std::string name, Detail::ResolveFn resolve, Detail::ConditionFn evaluate)
+        : name_(std::move(name)), resolve_(resolve), evaluate_(evaluate) {}
 
     std::string name_;
     Detail::ResolveFn resolve_ = nullptr;
+    Detail::ConditionFn evaluate_ = nullptr;
 };
 
 template <auto Fn>
 [[nodiscard]] ConditionRef Condition(std::string name) {
     Detail::RequireAccepted<ConditionRejectionOfFunction<Fn>()>();
     if constexpr (ConditionRejectionOfFunction<Fn>() == Rejection::None) {
-        return ConditionRef{std::move(name), Detail::ResolverOf<typename Detail::Signature<decltype(Fn)>::Pointer>::value};
+        using Pointer = typename Detail::Signature<decltype(Fn)>::Pointer;
+        return ConditionRef{std::move(name), Detail::ResolverOf<Pointer>::value,
+                            &Detail::InvokerOf<Pointer>::template CallFunction<Fn>};
     } else {
-        return ConditionRef{std::move(name), nullptr};
+        return ConditionRef{std::move(name), nullptr, nullptr};
     }
 }
 
@@ -108,10 +113,11 @@ template <class F>
 [[nodiscard]] ConditionRef Condition(std::string name) {
     Detail::RequireAccepted<ConditionRejectionOf<F>()>();
     if constexpr (ConditionRejectionOf<F>() == Rejection::None) {
-        return ConditionRef{std::move(name),
-                            Detail::ResolverOf<typename Detail::Signature<decltype(&F::operator())>::Pointer>::value};
+        using Pointer = typename Detail::Signature<decltype(&F::operator())>::Pointer;
+        return ConditionRef{std::move(name), Detail::ResolverOf<Pointer>::value,
+                            &Detail::InvokerOf<Pointer>::template CallLambda<F>};
     } else {
-        return ConditionRef{std::move(name), nullptr};
+        return ConditionRef{std::move(name), nullptr, nullptr};
     }
 }
 
@@ -175,19 +181,23 @@ public:
     template <class T>
     ComponentId Component(ComponentOptions options) {
         static_assert(std::is_object_v<T> && !std::is_const_v<T>, "a component is a non-const object type");
-        return RegisterComponent(KeyOf<T>(), Shape::Of<T>(), std::move(options));
+        // Spec W-8, plus move assignment: a column is a std::vector of cells kept
+        // in key order by engine/entity_store (target/world section 6, layout 2).
+        static_assert(Detail::kStorable<T>,
+                      "a component is nothrow move constructible, move assignable and destructible (spec W-8)");
+        return RegisterComponent(KeyOf<T>(), Shape::Of<T>(), std::move(options), &Detail::MakeColumn<T>);
     }
 
     template <class T>
     ResourceId Resource(ResourceOptions options) {
         static_assert(std::is_object_v<T> && !std::is_const_v<T>, "a resource is a non-const object type");
-        return RegisterResource(KeyOf<T>(), Shape::Of<T>(), std::move(options));
+        return RegisterResource(KeyOf<T>(), Shape::Of<T>(), std::move(options), &Detail::MakeResource<T>);
     }
 
     template <class E>
     EventTypeId Event(EventOptions options) {
         static_assert(std::is_object_v<E> && !std::is_const_v<E>, "an event is a non-const object type");
-        return RegisterEvent(KeyOf<E>(), Shape::Of<E>(), std::move(options));
+        return RegisterEvent(KeyOf<E>(), Shape::Of<E>(), std::move(options), &Detail::MakeEvents<E>);
     }
 
     // An effect id (spec C.1 effects): an opaque side-effect class such as
@@ -217,7 +227,8 @@ public:
     // writes it; without one, a Spawn parameter is D-E3.
     template <class T>
     void Allotter() {
-        DeclareAllotter(KeyOf<T>());
+        static_assert(EntityAllotter<T>, "an allotter has std::optional<EntityId> Allot() and bool Owns(EntityId) const");
+        DeclareAllotter(KeyOf<T>(), Detail::AllotterOps{&Detail::AllotIn<T>, &Detail::OwnsIn<T>});
     }
 
     void Schedule(ScheduleOptions options);
@@ -229,8 +240,10 @@ public:
     RegistrationSeq AddSystem(SystemOptions options, std::source_location source = std::source_location::current()) {
         Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();
         if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None) {
-            using Resolver = Detail::ResolverOf<typename Detail::Signature<decltype(Fn)>::Pointer>;
-            return RegisterSystem(std::move(options), Resolver::value, Resolver::extractOnly, source);
+            using Pointer = typename Detail::Signature<decltype(Fn)>::Pointer;
+            using Resolver = Detail::ResolverOf<Pointer>;
+            return RegisterSystem(std::move(options), Resolver::value, Resolver::extractOnly,
+                                  &Detail::InvokerOf<Pointer>::template CallFunction<Fn>, source);
         } else {
             return 0;
         }
@@ -240,8 +253,10 @@ public:
     RegistrationSeq AddSystem(SystemOptions options, std::source_location source = std::source_location::current()) {
         Detail::RequireAccepted<SystemRejectionOf<F>()>();
         if constexpr (SystemRejectionOf<F>() == Rejection::None) {
-            using Resolver = Detail::ResolverOf<typename Detail::Signature<decltype(&F::operator())>::Pointer>;
-            return RegisterSystem(std::move(options), Resolver::value, Resolver::extractOnly, source);
+            using Pointer = typename Detail::Signature<decltype(&F::operator())>::Pointer;
+            using Resolver = Detail::ResolverOf<Pointer>;
+            return RegisterSystem(std::move(options), Resolver::value, Resolver::extractOnly,
+                                  &Detail::InvokerOf<Pointer>::template CallLambda<F>, source);
         } else {
             return 0;
         }
@@ -253,7 +268,8 @@ public:
     void Hook(HookTrigger trigger, HookOptions options, std::source_location source = std::source_location::current()) {
         Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();
         if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None) {
-            RegisterHook(KeyOf<T>(), trigger, std::move(options), Detail::ResolverOf<typename Detail::Signature<decltype(Fn)>::Pointer>::value, source);
+            RegisterHook(KeyOf<T>(), trigger, std::move(options), Detail::ResolverOf<typename Detail::Signature<decltype(Fn)>::Pointer>::value,
+                         &Detail::InvokerOf<typename Detail::Signature<decltype(Fn)>::Pointer>::template CallFunction<Fn>, source);
         }
     }
 
@@ -274,17 +290,17 @@ private:
 
     Registrar(Detail::RegistryData& data, std::uint32_t plugin) : data_(&data), plugin_(plugin) {}
 
-    ComponentId RegisterComponent(TypeKey key, Shape shape, ComponentOptions options);
-    ResourceId RegisterResource(TypeKey key, Shape shape, ResourceOptions options);
-    EventTypeId RegisterEvent(TypeKey key, Shape shape, EventOptions options);
+    ComponentId RegisterComponent(TypeKey key, Shape shape, ComponentOptions options, Detail::MakeColumnFn make);
+    ResourceId RegisterResource(TypeKey key, Shape shape, ResourceOptions options, Detail::MakeResourceFn make);
+    EventTypeId RegisterEvent(TypeKey key, Shape shape, EventOptions options, Detail::MakeEventsFn make);
     SetId RegisterNamedSet(TypeKey key, std::string name);
     void AddSetMember(TypeKey set, TypeKey component);
     void MarkDigestSet(TypeKey set);
-    void DeclareAllotter(TypeKey resource);
-    RegistrationSeq RegisterSystem(SystemOptions options, Detail::ResolveFn resolve, bool extractOnly,
+    void DeclareAllotter(TypeKey resource, Detail::AllotterOps ops);
+    RegistrationSeq RegisterSystem(SystemOptions options, Detail::ResolveFn resolve, bool extractOnly, Detail::RunFn run,
                                    std::source_location source);
     void RegisterHook(TypeKey component, HookTrigger trigger, HookOptions options, Detail::ResolveFn resolve,
-                      std::source_location source);
+                      Detail::RunFn run, std::source_location source);
 
     Detail::RegistryData* data_;
     std::uint32_t plugin_;
@@ -496,6 +512,8 @@ public:
 private:
     friend class FinishContext;
     friend struct SchedulerShuffleProbe;
+    // The World is made from the frozen tables (storage factories, hooks, the allotter).
+    friend class World;
     std::unique_ptr<Detail::RegistryData> data_;
     FrozenRegistry frozen_;
 };

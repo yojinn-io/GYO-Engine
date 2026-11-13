@@ -12,10 +12,18 @@
 // Two error types of the kernel.
 //
 // KernelError: what a System returns on its Err side (target/kernel DI-KS 2,
-// target/system-contract section 2). Result<void, KernelError> is the return
-// contract of every System, not an error channel: Ok is the normal path. The
-// Executor, the context chain and sibling lists arrive with world-exec; this
-// batch only fixes the type a System signature must return (spec S-2, J-10).
+// target/system-contract section 2, target/error-handling.md). Result<void,
+// KernelError> is the return contract of every System, not an error channel:
+// Ok is the normal path. KernelError is the one kernel error type with a chain
+// (target/error-handling "Relation to no error chains"), in two directions:
+//   context   the context chain, vertical: each layer on the way out (kernel
+//             API, System, Executor) adds one line, innermost first;
+//   siblings  the sibling list, horizontal: independent errors of one System
+//             call (each access-verification violation, the System's own Err)
+//             side by side, never wrapped into one another (code Siblings).
+// rule names the broken rule ("W-5", "F-10", "Z5", "S-13", ...); world names the
+// World the error was found in (spec A.6: a violation carries the World's
+// identity). The code enum is the kernel module's own (no global error enum).
 //
 // StartupReport: every startup error of one Registry::Finish, collected and
 // reported at once (spec D.2, D-5). A startup error is a Runtime Error of the
@@ -25,9 +33,32 @@
 namespace GYO::Kernel {
 
 enum class KernelErrorCode : std::uint8_t {
-    // Spec F-10 / S-13 / Z5 and the access verification (spec A.6) fill this
-    // list in world-exec.
+    // A System's own Err (the System's code chose this one).
     SystemFailed = 1,
+    // Several independent errors of one call; see siblings.
+    Siblings,
+    // Access verification layer 1 (spec A.6, W-5): an undeclared (id, mode) through the World API.
+    AccessViolation,
+    // Access verification layer 2 after a call (spec A.6, E.2 step 5): storage the System did not declare as
+    // written changed.
+    BoundaryChange,
+    // Access verification layer 2 before a call (spec A.6, E.2 step 0): storage changed outside the World API
+    // since the last comparison; blamed on the previous step or the Ready window, not on the next System.
+    PreCallChange,
+    // Spec W-4: a handle used outside the System call that fetched it, or after a sync point.
+    StaleHandle,
+    // Spec F.1, F-10: untyped Commands on a zone C or Exclusive column.
+    UntypedWrite,
+    // Spec Z5: a zone B emitter despawns an entity with zone C columns (when recorded, or the sync point's recheck).
+    ZoneCDespawn,
+    // Spec S-13: an ExclusiveWorld write outside zone B Shared data, or an untyped spawn.
+    ExclusiveWorldWrite,
+    // Spec A.1, W-9: the allotter's range is used up (reported, never wrapped).
+    AllotterExhausted,
+    // Spec W-1 checked after a sync point with verification on.
+    StructureBroken,
+    // A hook returned Err (spec F.4); context names the hook and its sync point.
+    HookFailed,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;
@@ -36,9 +67,30 @@ struct KernelError {
     KernelErrorCode code;
     std::string message;
     std::string detail;
+    std::string rule;
+    std::string world;
+    std::vector<std::string> context;
+    std::vector<KernelError> siblings;
 
     KernelError(KernelErrorCode errorCode, std::string errorMessage, std::string errorDetail = {})
         : code(errorCode), message(std::move(errorMessage)), detail(std::move(errorDetail)) {}
+
+    // Adds one layer of context (the context chain) and returns *this.
+    KernelError& Wrap(std::string layer) & {
+        context.push_back(std::move(layer));
+        return *this;
+    }
+    KernelError&& Wrap(std::string layer) && {
+        context.push_back(std::move(layer));
+        return std::move(*this);
+    }
+
+    // Every leaf error: this one, or each sibling's leaves for code Siblings.
+    [[nodiscard]] std::vector<const KernelError*> Leaves() const;
+    // Whether any leaf has this code.
+    [[nodiscard]] bool Has(KernelErrorCode wanted) const;
+    // The whole chain as text, one line per layer and sibling (what the Executor's handler logs).
+    [[nodiscard]] std::string Text() const;
 };
 
 // The startup error codes of spec D.2's table (D-E1 to D-E19, R-E1 to R-E6,

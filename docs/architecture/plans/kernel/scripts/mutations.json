@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here.",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. world-exec (docs/architecture/plans/kernel/world-exec-declaration.zh-Hant.md, sections 5 and 6; ids we-): spec J-1 to J-8, J-11/J-12 run-time halves, J-26, J-29 to J-36, J-32b, J-45, J-50, J-52, J-53, the J.3 priority mutants 1, 7, 8, 9, 12, 13 and 16, the HANDLE_COPY compile-failure sample and the tlCurrent symbol requirement (judgement 6); ks-links-extra rewritten for Delta-3. Later kernel batches add their mutants here.",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -616,11 +616,11 @@
     },
     {
       "id": "ks-links-extra",
-      "what": "gyo_kernel links one more target (Delta-1 dependency)",
+      "what": "gyo_kernel links one more target (Delta-1 and Delta-3 dependencies)",
       "file": "engine/kernel/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_kernel PUBLIC GYO::Base)",
-      "replace": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::Math)",
-      "expect": "gyo_kernel links .*expected exactly GYO::Base",
+      "find": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore)",
+      "replace": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::EntityStore GYO::Math)",
+      "expect": "gyo_kernel links GYO::Base;GYO::EntityStore;GYO::Math; expected exactly",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true
     },
@@ -708,9 +708,9 @@
       "id": "ks-adv-include-allowlist-widened",
       "what": "the project include allowlist gains engine/os (review B4)",
       "file": "tests/common/kernel/kernel_guard.py",
-      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\")",
-      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\", \"engine/os/\")",
-      "expect": "FAIL: test_k5_project_allowlist_is_exactly_base_and_kernel",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\", \"engine/os/\")",
+      "expect": "FAIL: test_k5_project_allowlist_is_exactly_base_entity_store_and_kernel",
       "command": [
         "{python}",
         "-B",
@@ -2991,6 +2991,746 @@
         "-v"
       ],
       "expect": "FAIL: test_(gcc_personality|assembler_section)"
+    },
+    {
+      "id": "we-j1-insert-append",
+      "what": "J-1: a column insert appends instead of keeping key order",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "Engine::EntityStore::InsertEntity(cells, Cell<T>{id, stamp, stamp, std::move(value)});",
+      "replace": "cells.push_back(Cell<T>{id, stamp, stamp, std::move(value)});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-1:*",
+      "expect": "TEST CASE:  J-1:"
+    },
+    {
+      "id": "we-j1-erase-swap-pop",
+      "what": "J-1: a column erase swaps with the last cell and pops",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "        if (!Engine::EntityStore::EraseEntity(cells, id)) return false;",
+      "replace": "        Cell<T>* found = Engine::EntityStore::FindEntity(cells, id);\n        if (found == nullptr) return false;\n        std::swap(*found, cells.back());\n        cells.pop_back();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-1:*",
+      "expect": "TEST CASE:  J-1:"
+    },
+    {
+      "id": "we-j2-alive-append",
+      "what": "J-2 (J.3 #7): the alive-entity list keeps insertion order",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    entities_.insert(at, id);",
+      "replace": "    entities_.push_back(id);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-2:*",
+      "expect": "TEST CASE:  J-2:"
+    },
+    {
+      "id": "we-j3-structural-allowed",
+      "what": "J-3: a structural World API call while Running is allowed",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        GYO_ASSERT(!structural);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-3:*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "we-j3-spawn-immediate",
+      "what": "J-3, J-31: Spawn applies its bundle inside the call (the epoch check catches it)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        Detail::Push(call, std::move(record));\n        return *id;",
+      "replace": "        for (auto& part : record.bundle) part.value->PutInto(Detail::ColumnAt(*world_, part.component), *id, 0);\n        return *id;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-3:*",
+      "expect": "GYO_ASSERT failed: world\\.MembershipEpoch\\(\\) == structure"
+    },
+    {
+      "id": "we-j4-handle-copyable",
+      "what": "J-4: kernel handles become copyable (and so movable)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    Handle(const Handle&) = delete;\n    Handle& operator=(const Handle&) = delete;",
+      "replace": "    Handle(const Handle&) = default;\n    Handle& operator=(const Handle&) = default;",
+      "target": "gyo_kernel_tests",
+      "expect": "variant HANDLE_COPY compiled",
+      "expect_build_failure": true
+    },
+    {
+      "id": "we-j4-handle-check-off",
+      "what": "J-4: the handle serial / sync-epoch check never reports",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (call->callSerial == callSerial && world.syncEpoch_ == syncEpoch) return;",
+      "replace": "    return;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "TEST CASE:  J-4:"
+    },
+    {
+      "id": "we-j4-boundary-off",
+      "what": "J-4: the comparison after the call finds nothing",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!declaredWrite(kind, id) && snapshot.valid && Differs(snapshot, bytes)) changed.push_back(name);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "TEST CASE:  J-4:"
+    },
+    {
+      "id": "we-f6-empty-sync-no-epoch",
+      "what": "J-33 (F-6): an empty sync point does not advance the sync epoch",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    // Step 8.\n    ++syncEpoch_;",
+      "replace": "    // Step 8.\n    if (!windowRecords.empty()) ++syncEpoch_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-33:*",
+      "expect": "TEST CASE:  J-33:"
+    },
+    {
+      "id": "we-j5-layer1-off",
+      "what": "J-5: layer 1 never checks",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!verification_) return;\n        const Detail::AccessDesc& access = *call->access;",
+      "replace": "        return;\n        const Detail::AccessDesc& access = *call->access;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "TEST CASE:  J-5:"
+    },
+    {
+      "id": "we-j5-id-not-mode",
+      "what": "J-5 (J.3 #12): layer 1 compares the id, not the mode",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            if ((entry->modes & mode) == mode || (mode == Detail::kModeRead && (entry->modes & Detail::kModeWrite) != 0)) {",
+      "replace": "            if (true) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "TEST CASE:  J-5:"
+    },
+    {
+      "id": "we-j5-boundary-off",
+      "what": "J-5: the comparison after the call finds nothing",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!declaredWrite(kind, id) && snapshot.valid && Differs(snapshot, bytes)) changed.push_back(name);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "TEST CASE:  J-5:"
+    },
+    {
+      "id": "we-j3-16-violations-dropped",
+      "what": "J-5 (J.3 #16): violations of a call are dropped instead of returned as Err",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    std::vector<KernelError> list = std::move(call.errors);",
+      "replace": "    std::vector<KernelError> list;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "TEST CASE:  J-5:"
+    },
+    {
+      "id": "we-j6-no-current-call",
+      "what": "J-6 (W-6): a World access while Running with no current System is allowed",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        // W-6: in a run, only a System or hook of this World on this thread touches it.\n        GYO_ASSERT(call != nullptr);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "we-j6b-host-zone-c",
+      "what": "J-6 (W-6b): the Host writes zone C state after the first Run",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "we-j7-despawn-reverse",
+      "what": "J-7: a despawn destroys in descending ComponentId",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
+      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
+      "target": "gyo_kernel_tests",
+      "cases": "J-7:*",
+      "expect": "TEST CASE:  J-7:"
+    },
+    {
+      "id": "we-j7-world-dtor-reverse",
+      "what": "J-7: the World destroys its columns in descending ComponentId",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (auto& column : columns_) column.reset();",
+      "replace": "    for (auto it = columns_.rbegin(); it != columns_.rend(); ++it) it->reset();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-7:*",
+      "expect": "TEST CASE:  J-7:"
+    },
+    {
+      "id": "we-j7-column-dtor-descending",
+      "what": "J-7: a column destroys its cells in descending EntityId",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "        std::reverse(cells.begin(), cells.end());\n        while (!cells.empty()) cells.pop_back();",
+      "replace": "        while (!cells.empty()) cells.pop_back();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-7:*",
+      "expect": "TEST CASE:  J-7:"
+    },
+    {
+      "id": "we-j8-allotter-wraps",
+      "what": "J-8 (J.3 #9): the allotter wraps to its first id when used up",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "        if (id == last) {\n            exhausted = true;\n        } else {",
+      "replace": "        if (id == last) {\n            next = first;\n        } else {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "TEST CASE:  J-8:"
+    },
+    {
+      "id": "we-j8-allotter-reset",
+      "what": "J-8: the allotter gains a Reset",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n};",
+      "replace": "    [[nodiscard]] bool Owns(EntityId id) const noexcept { return first <= id && id <= last; }\n    void Reset() noexcept { next = first; exhausted = false; }\n};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "RangeAllotter must not have a Reset"
+    },
+    {
+      "id": "we-j26-false-condition-runs",
+      "what": "J-26: a System whose condition is false runs",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                if (!runs) return {};\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-26:*",
+      "expect": "TEST CASE:  J-26:"
+    },
+    {
+      "id": "we-j29-condition-cached",
+      "what": "J-29: a mount condition is evaluated only until the System first ran",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                for (const ConditionRef& condition : mount.conditions) {\n                    if (runs && !condition.Evaluator()(call)) runs = false;",
+      "replace": "                for (const ConditionRef& condition : mount.conditions) {\n                    if (runs && mountState.lastRun == 0 && !condition.Evaluator()(call)) runs = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-29:*",
+      "expect": "TEST CASE:  J-29:"
+    },
+    {
+      "id": "we-j29-set-once",
+      "what": "J-29: a set condition is evaluated once, not once per member",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                        for (const ConditionRef& condition : set.conditions) {\n                            if (runs && !condition.Evaluator()(call)) runs = false;",
+      "replace": "                        for (const ConditionRef& condition : set.conditions) {\n                            static int evaluated = 0;\n                            if (runs && evaluated++ == 0 && !condition.Evaluator()(call)) runs = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-29:*",
+      "expect": "TEST CASE:  J-29:"
+    },
+    {
+      "id": "we-j30-skip-no-stamp",
+      "what": "J-30 (X-5): a skipped System takes no stamp",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                call.stamp = ++world.stamp_;\n                // (4)\n                if (!runs) return {};",
+      "replace": "                // (4)\n                if (!runs) return {};\n                call.stamp = ++world.stamp_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "TEST CASE:  J-30:"
+    },
+    {
+      "id": "we-j30-stamp-after-call",
+      "what": "J-30 (J.3 #8): the stamp is taken when the call completes",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                mountState.lastRun = call.stamp;\n                return system.run(call);",
+      "replace": "                auto ran = system.run(call);\n                call.stamp = ++world.stamp_;\n                mountState.lastRun = call.stamp;\n                return ran;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "TEST CASE:  J-30:"
+    },
+    {
+      "id": "we-w11-mut-no-mark",
+      "what": "J-11 (W-11): Mut gives the value for writing without marking the changed stamp",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        cell_->changed = stamp_;\n        return cell_->value;",
+      "replace": "        return cell_->value;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-11:*",
+      "expect": "TEST CASE:  J-11:"
+    },
+    {
+      "id": "we-w11-mut-no-mark-j30",
+      "what": "J-30 (W-11): Mut gives the value for writing without marking the changed stamp",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        cell_->changed = stamp_;\n        return cell_->value;",
+      "replace": "        return cell_->value;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "TEST CASE:  J-30:"
+    },
+    {
+      "id": "we-j32-despawn-record-order",
+      "what": "J-32 (J.3 #1): despawns applied in record order",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "TEST CASE:  J-32:"
+    },
+    {
+      "id": "we-j32-onadd-record-order",
+      "what": "J-32 (J.3 #1): OnAdd in the order cells were added",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        std::sort(added.begin(), added.end(),",
+      "replace": "        if (false) std::sort(added.begin(), added.end(),",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "TEST CASE:  J-32:"
+    },
+    {
+      "id": "we-j32-spawn-before-despawn",
+      "what": "J-32: spawn and remove applied before despawn",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, ascending EntityId.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        std::sort(spawns.begin(), spawns.end(), [](const Record* a, const Record* b) { return a->entity < b->entity; });\n        for (std::size_t i = 0; i < spawns.size(); ++i) {\n            Record& spawn = *spawns[i];\n            GYO_ASSERT(i == 0 || spawns[i - 1]->entity != spawn.entity);  // one id spawned twice in a window\n            GYO_ASSERT(!std::binary_search(entities_.begin(), entities_.end(), spawn.entity));  // alive, not despawned\n            if (spawn.withId && data_->allotter) {\n                // SpawnWithId must not use an id of this World's allotter range (spec A.1).\n                GYO_ASSERT(!data_->allotterOps.owns(*resources_[*data_->allotter], spawn.entity));\n            }\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n",
+      "replace": "        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, ascending EntityId.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        std::sort(spawns.begin(), spawns.end(), [](const Record* a, const Record* b) { return a->entity < b->entity; });\n        for (std::size_t i = 0; i < spawns.size(); ++i) {\n            Record& spawn = *spawns[i];\n            GYO_ASSERT(i == 0 || spawns[i - 1]->entity != spawn.entity);  // one id spawned twice in a window\n            GYO_ASSERT(!std::binary_search(entities_.begin(), entities_.end(), spawn.entity));  // alive, not despawned\n            if (spawn.withId && data_->allotter) {\n                // SpawnWithId must not use an id of this World's allotter range (spec A.1).\n                GYO_ASSERT(!data_->allotterOps.owns(*resources_[*data_->allotter], spawn.entity));\n            }\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "GYO_ASSERT failed: !std::binary_search"
+    },
+    {
+      "id": "we-j32-winner-first",
+      "what": "J-32: the smallest (planPos, recSeq) of a key wins",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            Record& winner = *inserts[end - 1];",
+      "replace": "            Record& winner = *inserts[i];",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "TEST CASE:  J-32:"
+    },
+    {
+      "id": "we-j32-drop-recseq",
+      "what": "J-32 (J.3 #13): the insert key drops recSeq",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "auto insertKey = [](const Record* r) { return std::make_tuple(r->entity, r->id, r->planPos, r->recSeq); };",
+      "replace": "auto insertKey = [](const Record* r) { return std::make_tuple(r->entity, r->id, r->planPos); };",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "GYO_ASSERT failed: insertKey"
+    },
+    {
+      "id": "we-j32b-untyped-unchecked",
+      "what": "J-32b (F-10): untyped Commands write any column",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
+      "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::UntypedWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "TEST CASE:  J-32b:"
+    },
+    {
+      "id": "we-j32b-debug-only",
+      "what": "J-32b (J.3 #16): the untyped check only in a debug build (the release-like target must fail)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {\n",
+      "replace": "std::optional<KernelError> CheckUntypedCommand(SystemContext& call, ComponentId component, EntityId entity, bool insert) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "TEST CASE:  J-32b:"
+    },
+    {
+      "id": "we-j32b-z5-record-off",
+      "what": "J-32b (Z5): a zone B despawn of zone C data is not checked when recorded",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (call.zone != Zone::B) return std::nullopt;",
+      "replace": "    return std::nullopt;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "TEST CASE:  J-32b:"
+    },
+    {
+      "id": "we-j3-16-executor-swallows",
+      "what": "J-32b (J.3 #16): the Executor swallows a call's Err",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed)) {",
+      "replace": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed); false && error) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "TEST CASE:  J-32b:"
+    },
+    {
+      "id": "we-j32b-dropped-err-lost",
+      "what": "J-32b (J.3 #16): a kernel Err the System dropped is lost",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (KernelError& dropped : call.returned) list.push_back(std::move(dropped));\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "TEST CASE:  J-32b:"
+    },
+    {
+      "id": "we-j33-apply-after-each-system",
+      "what": "J-33 (F-3): a sync point is applied after every System",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            previousStep = StepText(scheduleName, position, system.options.name);\n            break;",
+      "replace": "            static_cast<void>(world.ApplySync(position, scheduleName, world.stamp_));\n            previousStep = StepText(scheduleName, position, system.options.name);\n            break;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-33:*",
+      "expect": "TEST CASE:  J-33:"
+    },
+    {
+      "id": "we-j34-hook-immediate",
+      "what": "J-34 (F-4): hook records applied in the same Applying",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (Result rest = phase(windowRecords, none); !rest) return rest;",
+      "replace": "    if (Result rest = phase(windowRecords, none); !rest) return rest;\n    {\n        std::vector<Record> again = std::move(hookQueue_);\n        hookQueue_.clear();\n        if (Result now = phase(again, none); !now) return now;\n    }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "TEST CASE:  J-34:"
+    },
+    {
+      "id": "we-j34-hook-reverse",
+      "what": "J-34 (F-4): hooks of one trigger run in reverse registration order",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (std::size_t h = 0; h < data_->hooks.size(); ++h) {\n        const Detail::HookRecord& hook = data_->hooks[h];",
+      "replace": "    for (std::size_t h = data_->hooks.size(); h-- > 0;) {\n        const Detail::HookRecord& hook = data_->hooks[h];",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "TEST CASE:  J-34:"
+    },
+    {
+      "id": "we-j34-f5-off",
+      "what": "J-34 (F-5): a record on the System path while Applying is allowed",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    GYO_ASSERT(world.state_ != WorldState::Applying || call.hook);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "we-j35-err-not-interrupted",
+      "what": "J-35 (X-9): an Err does not interrupt the World",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    world_.state_ = WorldState::Interrupted;\n    world_.DiscardDeferred();",
+      "replace": "    world_.state_ = WorldState::Ready;\n    world_.DiscardDeferred();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "TEST CASE:  J-35:"
+    },
+    {
+      "id": "we-j35-throw-not-interrupted",
+      "what": "J-35 (E.5): an exception does not interrupt the World",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            state_ = WorldState::Interrupted;\n            (world_.*discard_)();",
+      "replace": "            state_ = WorldState::Ready;\n            (world_.*discard_)();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "TEST CASE:  J-35:"
+    },
+    {
+      "id": "we-j35-diagnostics-dropped",
+      "what": "J-35 (B-13): an interruption drops the diagnostics buffers",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "void World::DiscardDeferred() noexcept {\n    window_.clear();",
+      "replace": "void World::DiscardDeferred() noexcept {\n    diagnostics_.clear();\n    window_.clear();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "TEST CASE:  J-35:"
+    },
+    {
+      "id": "we-j36-no-same-tick",
+      "what": "J-36 (F-7): a reader after its writer reads only the next tick",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "            const bool current = record.tick == tick_ && record.writerPos < position_;",
+      "replace": "            const bool current = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "TEST CASE:  J-36:"
+    },
+    {
+      "id": "we-j36-trim-early",
+      "what": "J-36 (F-7): the trim drops the current tick too",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "events_[e]->Trim(ticks_[DomainIndex(domain)]);",
+      "replace": "events_[e]->Trim(ticks_[DomainIndex(domain)] + 1);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "TEST CASE:  J-36:"
+    },
+    {
+      "id": "we-j36-swap-compare",
+      "what": "J-36: the previous tick's records compared the wrong way",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "record.tick == tick_ - 1 && record.writerPos > position_;",
+      "replace": "record.tick == tick_ - 1 && record.writerPos < position_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "TEST CASE:  J-36:"
+    },
+    {
+      "id": "we-j36-hook-writerpos-zero",
+      "what": "J-36: a hook's events and records carry Plan position 0",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    call.planPos = planPos;\n    call.zone = record.zone;",
+      "replace": "    call.planPos = 0;\n    call.zone = record.zone;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "TEST CASE:  J-36:"
+    },
+    {
+      "id": "we-j45-exclusive-unchecked",
+      "what": "J-45 (S-13): ExclusiveWorld writes any column",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "TEST CASE:  J-45:"
+    },
+    {
+      "id": "we-j45-debug-only",
+      "what": "J-45 (J.3 #16): the ExclusiveWorld check only in a debug build",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n",
+      "replace": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "TEST CASE:  J-45:"
+    },
+    {
+      "id": "we-j50-settings-writable",
+      "what": "J-50 (W-6b): KernelSettings writable after the first Run",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!hasRun_ || id != data_->kernelSettings);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-50:*",
+      "expect": "expected GYO_ASSERT to fail"
+    },
+    {
+      "id": "we-j50-settings-not-read",
+      "what": "J-50: the first Run does not read the verification switch",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.verification_ = settings.value && settings.value->accessVerification;",
+      "replace": "        world.verification_ = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-50:*",
+      "expect": "TEST CASE:  J-50:"
+    },
+    {
+      "id": "we-j52-recheck-pending-only",
+      "what": "J-52: the Z5 recheck looks only at pending zone C inserts",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (data_->components[c].zone == Zone::C && columns_[c]->Contains(target)) {\n                    reason = \"it has zone C component",
+      "replace": "                if (false) {\n                    reason = \"it has zone C component",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "TEST CASE:  J-52:"
+    },
+    {
+      "id": "we-j52-step0-unchecked",
+      "what": "J-52: step 0 does not look at the window's zone C inserts",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (Result step0 = phase(hookRecords, windowRecords); !step0) return step0;",
+      "replace": "    if (Result step0 = phase(hookRecords, none); !step0) return step0;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "TEST CASE:  J-52:"
+    },
+    {
+      "id": "we-j52-per-system-mount-state",
+      "what": "J-52 (B-12): last-run stamp and Local per System, not per mount",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            MountState& mountState = state.mounts[mountIndex];",
+      "replace": "            MountState& mountState = state.mounts[0];",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "TEST CASE:  J-52:"
+    },
+    {
+      "id": "we-j53-after-diff-dropped",
+      "what": "J-53: differences of the comparison after the call are not reported",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (const std::string& storage : changed) {",
+      "replace": "    for (const std::string& storage : std::vector<std::string>{}) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-53:*",
+      "expect": "TEST CASE:  J-53:"
+    },
+    {
+      "id": "we-j53-step5-skipped-when-false",
+      "what": "J-53: step 5 is skipped when a condition is false",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed)) {",
+      "replace": "            if (std::optional<KernelError> error = (call.stamp == mountState.lastRun ? Detail::CombineCall(call, std::move(result), changed) : std::nullopt)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-53:*",
+      "expect": "TEST CASE:  J-53:"
+    },
+    {
+      "id": "we-j12-fetch-side-effect",
+      "what": "J-12 (B.4 point 7): a Fetch with a side effect (ResMut advances the call's stamp)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "stamp_(call.stamp) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
+      "replace": "stamp_(call.stamp++) {}\n\npublic:\n    [[nodiscard]] bool Present() const {\n        Check(\"ResMut\");",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*",
+      "expect": "TEST CASE:  J-12:"
+    },
+    {
+      "id": "we-sym-tlcurrent-renamed",
+      "what": "judgement 6: tlCurrent is renamed, so the required allowed symbol is missing",
+      "file": "engine/kernel/src/Verification.cpp",
+      "find": "thread_local SystemContext* tlCurrent = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrent;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrent = call;\n}",
+      "replace": "thread_local SystemContext* tlCurrentCall = nullptr;\n\nSystemContext* CurrentThreadCall() noexcept {\n    return tlCurrentCall;\n}\n\nvoid SetCurrentThreadCall(SystemContext* call) noexcept {\n    tlCurrentCall = call;\n}",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build",
+        "--require",
+        "TypeKey anchor",
+        "--require",
+        "tlCurrent"
+      ],
+      "expect": "required allowed symbol missing: tlCurrent",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "we-k5-any-engine-prefix",
+      "what": "K5 (Delta-3 widening): the allowlist becomes any engine/ include",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/\",)",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k5_other_engine_modules_and_products_are_reported"
+    },
+    {
+      "id": "we-k5-entity-store-prefix-unbounded",
+      "what": "K5: the entity_store entry loses its trailing slash (engine/entity_store_extra passes)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store\", \"engine/kernel/\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k5_other_engine_modules_and_products_are_reported"
+    },
+    {
+      "id": "we-k5-entity-store-dropped",
+      "what": "K5: entity_store is not allowed (the real kernel include is reported)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_guard.py"
+      ],
+      "expect": "K5 engine/entity_store/EntityColumns.hpp"
+    },
+    {
+      "id": "we-k5-entity-store-dropped-selftest",
+      "what": "K5: entity_store is not allowed (the self-test's passing case fails)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/entity_store/\", \"engine/kernel/\")",
+      "replace": "ALLOWED_PROJECT_INCLUDES = (\"engine/base/\", \"engine/kernel/\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k5_entity_store_include_passes"
+    },
+    {
+      "id": "we-k5-backslash-parent",
+      "what": "K5: '..' is looked for between '/' only (a backslash path escapes)",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "\"..\" not in re.split(r\"[/\\\\]\", target)",
+      "replace": "\"..\" not in target.split(\"/\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k5_parent_directory_in_a_project_include_is_reported"
+    },
+    {
+      "id": "we-stamp-guard-rule-off",
+      "what": "target/world section 6 guard: the stamp words are never reported",
+      "file": "tests/common/kernel/store_stamp_guard.py",
+      "find": "            for match in S1.finditer(line):",
+      "replace": "            for match in S1.finditer(\"\"):",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_store_stamp_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_(stamp|change|added)"
+    },
+    {
+      "id": "we-stamp-guard-store-names-stamp",
+      "what": "target/world section 6: engine/entity_store names a stamp (in a comment)",
+      "file": "engine/entity_store/include/engine/entity_store/EntityColumns.hpp",
+      "find": "// swap-and-pop, no tombstone).",
+      "replace": "// swap-and-pop, no tombstone; the changed stamp is kept).",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/store_stamp_guard.py"
+      ],
+      "expect": "S1 changed"
     }
   ]
 }
