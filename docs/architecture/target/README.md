@@ -17,9 +17,15 @@
 - 平鋪，不分子資料夾：檔名＝搬回後在 `docs/architecture/` 的檔名。例：`target/world.zh-Hant.md` → `docs/architecture/world.zh-Hant.md`。工作線（kernel）不是文件的最終位置，所以不出現在路徑裡；搬回只是 `git mv`。
 - 搬回時若取代現況的同名文件，取代後刪除舊檔（歷史留在 git），不並存。
 - 搬回的時機：逐部件，在該部件的遷移批完成時；遷移前不整體改寫現況文件，只在有 target 對應的現況文件檔頭加一行「現況文件；目標見 target/…；遷移批完成時取代」（架構師 2026-11-12；遷移批待 `v8-arch-migration-plan` 排定）。framework 三份已標 deprecated 的文件保留到 `framework/` 程式被 plugins 遷移批刪除時，同一個 PR 一起刪。
-- **設計權威與 legacy（`v8-arch-docs-legacy`，使用者 2026-11-12，取代 `v8-arch-docs-next-folder` 的並存做法）**：所有架構設計決定只寫在 target；下列舊檔降級為 legacy（現況紀錄），檔頭一行以 `> **Legacy**` 開頭，凍結設計內容，只更新兩類事實：仍存在的程式的現況描述、仍有測試守衛的 Design Invariants（例如 entity-store DI 8／9、OS DI、determinism DI 1～3）。另外，被遷移批取代的條文要標「已被取代（批次代號）」（見下方「目標 DI 與現況 DI 衝突時」）。原地標示、不搬資料夾（圖書管理員 2026-11-12，使用者同意：約 300 個引用含程式註解、守衛測試與不改寫的 dev_log；部件遷移完成時本來就會刪檔）。
+- **設計權威與 legacy（`v8-arch-docs-legacy`，使用者 2026-11-12，取代 `v8-arch-docs-next-folder` 的並存做法）**：所有**改變目標架構的**設計決定只寫在 target（範圍見下方「沒有 target 對應的頂層文件」）；下列舊檔降級為 legacy（現況紀錄），檔頭一行以 `> **Legacy**` 開頭，凍結設計內容，只更新兩類事實：仍存在的程式的現況描述、仍有測試守衛的 Design Invariants（例如 entity-store DI 8／9、OS DI、determinism DI 1～3）。另外，被遷移批取代的條文要標「已被取代（批次代號）」（見下方「目標 DI 與現況 DI 衝突時」）。原地標示、不搬資料夾（圖書管理員 2026-11-12，使用者同意：約 300 個引用含程式註解、守衛測試與不改寫的 dev_log；部件遷移完成時本來就會刪檔）。
   - legacy 清單：`docs/architecture.md`、`architecture/entity-store.md`、`architecture/determinism.md`、`architecture/error-handling.md`、`docs/framework/` 三份（architecture、event-sounds、preview）、`object_fps_pvp/entity-model.zh-Hant.md`、`object_fps_pvp/network-architecture.zh-Hant.md`。操作類文件（建置、發佈、creating_apps、tool_projects、ui_toolchain）沒有 target 對應，不標 legacy。
   - 遷移期間，現有程式受其 legacy 文件的 Design Invariants 約束；新程式（`engine/kernel` 起）受 target 約束。判斷依據是程式是舊是新，不是文件日期。一個部件遷移完成時，legacy 檔刪、target 檔搬回 `docs/architecture/`，檔名照本節的對照。framework 三份隨 `framework/` 程式被 plugins 遷移批刪除時一起刪。
+
+- **沒有 target 對應的頂層文件**（`v8-arch-docs-scope-of-target`，架構師 2026-11-13）：頂層文件分三種——有 `> **Legacy**` 行的是現況紀錄；沒有 Legacy 行的是正式文件（沒有 target 對應的部件，或已搬回）；target/ 是目標。一個部件的新設計決定寫在哪裡，看它**會不會因改造而改變**：
+  - 改造會改變它（成為 plugin、改成 Resource 或 Host 零件、介面要重定）：在 target/ 開對應檔寫，同一批在頂層原檔加 Legacy 行（開 target 檔的那一批就標，不等遷移完成）。今天屬這一類而還沒有 target 檔的：audio、input、platform-sdl、trace、io（依 `v8-arch-external-components-as-adapters` 與 `v8-arch-engine-or-plugin-criteria`，由規劃批 `v8-arch-adapter-plugins-plan` 逐個定）。
+  - 改造不改變它（留 Engine 且形狀不變，例 collision、math、os、threads、time）：頂層原檔就是權威，新決定直接寫在那裡，不開 target 檔。
+  - 一個部件改歸哪一類由架構師在規劃批定、記進 kernel HANDOFF；在定之前，碰到它的新設計決定先問架構師。
+- 文件層級的 Legacy 行與條文層級的「已被取代／相容（措辭更新）」標註是兩件事：前者標整份文件（開 target 檔時），後者標單一條文（`v8-arch-legacy-marks-by-migration-batch`：由各部件的遷移批在動到它時標）。
 
 ## 狀態標記
 
