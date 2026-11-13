@@ -57,10 +57,13 @@ TEST_CASE("J-14: a System, component, resource or event without a zone fails at 
                               r.Resource<TestRes>({.name = "TestRes"});
                               r.Event<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
                               r.Schedule(FixedSchedule());
-                              r.AddSystem<&ReadPos>(Sys("ReadPos", Zone::Unset, Simulate()));
+                              SystemOptions o;  // no zone given: the default must not stand for one
+                              o.name = "ReadPos";
+                              o.mounts = Simulate();
+                              r.AddSystem<&ReadPos>(o);
                           }}});
+    CHECK(KernelTest::ErrorCount(built, StartupCode::DE7) == 4);
     REQUIRE_FALSE(static_cast<bool>(built.result));
-    CHECK(built.result.error().Count(StartupCode::DE7) == 4);
     CHECK(HasRule(built, StartupCode::DE7, "S-6"));
 }
 
@@ -104,7 +107,7 @@ TEST_CASE("J-14: a zone C System declaring Io:file fails; DiagnosticsWriter pass
 
 TEST_CASE("J-15: a second writer of an Exclusive column fails, whatever the write path") {
     struct Case {
-        const char* what;
+        std::string what;
         std::function<void(Registrar&)> second;
     };
     const std::vector<Case> cases{
@@ -127,8 +130,8 @@ TEST_CASE("J-15: a second writer of an Exclusive column fails, whatever the writ
             r.AddSystem<&WritePos>(Sys("WritePos", Zone::C, {m}));
             c.second(r);
         });
+        CHECK(KernelTest::ErrorCount(built, StartupCode::DE2) == 1);
         REQUIRE_FALSE(static_cast<bool>(built.result));
-        CHECK(built.result.error().Count(StartupCode::DE2) == 1);
         const StartupError& error = built.result.error().errors.front();
         CHECK(error.rule == "S-11");
         CHECK(error.subjects.size() == 3);  // the column and both writers
@@ -181,8 +184,8 @@ TEST_CASE("J-37: an event used outside its domain's clock schedule fails") {
     Built crossDomain = FinishOne([](Registrar& r) {
         r.AddSystem<&ReadEvent>(Sys("ReadEvent", Zone::B, {At("Update", "First")}));  // Fixed event in Frame
     });
+    CHECK(KernelTest::ErrorCount(crossDomain, StartupCode::FE1) == 1);
     REQUIRE_FALSE(static_cast<bool>(crossDomain.result));
-    CHECK(crossDomain.result.error().Count(StartupCode::FE1) == 1);
     Built nonClock = FinishOne([](Registrar& r) {
         ScheduleOptions s;
         s.name = "FixedLate";
@@ -191,8 +194,8 @@ TEST_CASE("J-37: an event used outside its domain's clock schedule fails") {
         r.Schedule(s);
         r.AddSystem<&WriteEvent>(Sys("WriteEvent", Zone::C, {At("FixedLate", "Late")}));
     });
+    CHECK(KernelTest::ErrorCount(nonClock, StartupCode::FE1) == 1);
     REQUIRE_FALSE(static_cast<bool>(nonClock.result));
-    CHECK(nonClock.result.error().Count(StartupCode::FE1) == 1);
     Built inClock = FinishOne([](Registrar& r) {
         r.AddSystem<&WriteEvent>(Sys("WriteEvent", Zone::C, Simulate()));
         r.AddSystem<&ReadEvent>(Sys("ReadEvent", Zone::C, {At("FixedUpdate", "Present")}));
@@ -361,5 +364,5 @@ TEST_CASE("J-24: D-E7 (S-13 ExclusiveWorld in zone C), F-E1 and D-E2 from minima
                                            r.Event<TestEvent>({.name = "TestEvent", .zone = Zone::C});
                                            r.Schedule(FixedSchedule());
                                        }}});
-    CHECK(eventWithoutDomain.result.error().Has(StartupCode::FE1));
+    CHECK(KernelTest::HasError(eventWithoutDomain, StartupCode::FE1));
 }

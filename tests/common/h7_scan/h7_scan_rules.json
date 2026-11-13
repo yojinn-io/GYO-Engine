@@ -28,14 +28,14 @@
       "note": "the fixed-step accumulator, a clock tool of the runner (spec H-7, H.7 row 2)"
     },
     {
-      "type": "GYO::Kernel::Runtime",
+      "type": "GYO::Kernel::App",
       "methods": [
         "Run",
         "Rewind",
         "Replay",
         "Restore"
       ],
-      "note": "PROVISIONAL name. The namespace GYO::Kernel is fixed (target/naming rule 1); the type name is not, and target/naming rule 5 forbids a Runtime suffix, so the final name differs. The batch that names it (registry-schedule or world-exec) changes this entry and the selftest's kernel negative case."
+      "note": "the kernel's App (one World, its Registry, its schedules; kernel HANDOFF v8-arch-kernel-app-name, named by v8-arch-kernel-registry-schedule): Host calls its Run, Rewind, Replay, Restore (spec H-7)"
     }
   ],
   "unwrap": [

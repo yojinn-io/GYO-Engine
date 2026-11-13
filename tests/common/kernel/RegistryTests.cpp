@@ -128,8 +128,8 @@ TEST_CASE("J-19: a duplicate plugin name is R-E1 and the duplicate is not built"
     TestPlugin host("host", Schedules);
     Registry registry({&a, &b, &host});
     const auto result = registry.Finish();
+    CHECK(KernelTest::ErrorCount(result, StartupCode::RE1) == 1);
     REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK(result.error().Count(StartupCode::RE1) == 1);
     CHECK(a.builds == 1);
     CHECK(b.builds == 0);
     CHECK_FALSE(registry.IsFrozen());
@@ -140,8 +140,8 @@ TEST_CASE("J-19: a missing or later required plugin is R-E3; the kernel does not
     TestPlugin late("late", [](Registrar& r) { Life(r); Schedules(r); });
     Registry registry({&early, &late});
     const auto result = registry.Finish();
+    CHECK(KernelTest::ErrorCount(result, StartupCode::RE3) == 2);
     REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK(result.error().Count(StartupCode::RE3) == 2);
     CHECK(result.error().detail.find("comes later") != std::string::npos);
     CHECK(result.error().detail.find("not in the Host's list") != std::string::npos);
 }
@@ -151,8 +151,8 @@ TEST_CASE("J-19: a type registered by two plugins is R-E2") {
                               r.Component<TestPos>({.name = "TestPosAgain", .zone = Zone::C});
                               Schedules(r);
                           }}});
+    CHECK(KernelTest::ErrorCount(built, StartupCode::RE2) == 1);
     REQUIRE_FALSE(static_cast<bool>(built.result));
-    CHECK(built.result.error().Count(StartupCode::RE2) == 1);
     const StartupError& error = built.result.error().errors.front();
     CHECK(std::find(error.subjects.begin(), error.subjects.end(), "movement") != error.subjects.end());
     CHECK(std::find(error.subjects.begin(), error.subjects.end(), "again") != error.subjects.end());
@@ -167,8 +167,8 @@ TEST_CASE("J-19: removing the owner plugin gives R-E4 to every System that uses 
     Built with = Finish({{"movement", Movement}, {"host", host}});
     KERNEL_REQUIRE_OK(with);
     Built without = Finish({{"host", host}});
+    CHECK(KernelTest::ErrorCount(without, StartupCode::RE4) == 2);
     REQUIRE_FALSE(static_cast<bool>(without.result));
-    CHECK(without.result.error().Count(StartupCode::RE4) == 2);
     CHECK(without.result.error().detail.find("ReadPos") != std::string::npos);
     CHECK(without.result.error().detail.find("ReadVel") != std::string::npos);
 }
@@ -187,16 +187,16 @@ TEST_CASE("J-24: R-E5 (two types share one key) and R-E6 (two runners) are repor
                                                                            {.name = "Forged", .zone = Zone::C});
                                   Schedules(r);
                               }}});
+    CHECK(KernelTest::ErrorCount(collision, StartupCode::RE5) == 1);
     REQUIRE_FALSE(static_cast<bool>(collision.result));
-    CHECK(collision.result.error().Count(StartupCode::RE5) == 1);
-    CHECK(collision.result.error().Count(StartupCode::RE2) == 0);
+    CHECK(KernelTest::ErrorCount(collision, StartupCode::RE2) == 0);
 
     TestPlugin a("window", Movement, {}, [](const FrozenRegistry&, FinishContext& c) { c.InstallRunner("window"); });
     TestPlugin b("headless", Schedules, {}, [](const FrozenRegistry&, FinishContext& c) { c.InstallRunner("headless"); });
     Registry registry({&a, &b});
     const auto result = registry.Finish();
+    CHECK(KernelTest::ErrorCount(result, StartupCode::RE6) == 1);
     REQUIRE_FALSE(static_cast<bool>(result));
-    CHECK(result.error().Count(StartupCode::RE6) == 1);
     CHECK(result.error().errors.front().subjects == std::vector<std::string>{"window", "headless"});
 
     TestPlugin one("window", Movement, {}, [](const FrozenRegistry&, FinishContext& c) { c.InstallRunner("window"); });

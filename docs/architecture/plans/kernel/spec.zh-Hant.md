@@ -39,7 +39,7 @@
 
 | 用語 | 定義 |
 |---|---|
-| Runtime | 一個 World、它的 Registry、它的 schedule 集合，加上每個 schedule 的 Executor 策略與執行緒綁定 |
+| Runtime | 一個 World、它的 Registry、它的 schedule 集合，加上每個 schedule 的 Executor 策略與執行緒綁定。型別名 `App`（`GYO::Kernel::App`，`v8-arch-kernel-app-name`）；本稿其餘「Runtime」是概念名 |
 | Host | 建立一或多個 Runtime、擁有執行緒、時鐘、外部服務與交換點的那一層＝**提供 runner 的 plugin**（行程入口、pump、交換點、多時鐘協調）**加產品的 `main`**（plugin 清單加 Run）。framework 已退役（audit §3.1）；v0.3 |
 | World | 一個 Runtime 的資料容器：欄、Resource、事件緩衝、延後佇列、change stamp、狀態 |
 | System | 一個無狀態的可呼叫物加一份描述（`SystemDescriptor`）。描述的一半從參數型別推出，另一半在登記時顯式宣告 |
@@ -939,7 +939,7 @@ Feature（Derivation Order）：**loading 頁面與分批載入**——按組件
 | H-4 | Match 與 Client 宣稱「同一份模擬」時，兩端 `cFingerprint` 相同 | 產品守衛：兩個 Runtime 的組合各自產生指紋並比對 |
 | H-5 | 回滾等價：從狀態 s 直接跑 k 個 tick，與「跑到 tNow、Rewind 到 t0、Replay 回 tNow」所得 World 的回滾集合位元組逐位元相同（stamps 除外）；ingress 在兩種跑法中寫進 ring 的內容相同 | J-42；突變：還原時漏掉事件緩衝、漏掉配發器、不還原 domain tick、ingress 在 Replay 中執行、InputRing 標成 rollback=Yes |
 | H-6 | extract 對來源只讀：`Extract<Write<…>>` 不存在（編譯期擋下）；驗證開著時來源 World 在 extract 期間任何寫入都記為違規；渲染 Runtime 不得以任何參數寫回來源（含 boundary Resource）；來源 Registry 先凍結 | J-43、J-16；編譯失敗測試 |
-| H-7 | Host（runner plugin 加產品 main）不決定 System 順序：已遷移的 host 只呼叫 `Run`、`Rewind`／`Replay` 與交換點，不依序呼叫模組的 `Update`／`Tick`／`Advance`；一個 host 不會一半在機制上。**守衛兩條**（v0.3，audit §3.5）：(a) 不 include `IRuntimeClient.hpp`／`RuntimeLoop.hpp`；(b) **呼叫點規則**——host 原始碼不得呼叫**產品或能力模組型別**的成員 `Tick`／`Advance`／`Update`／`Step`／`Run`，以及 `Rewind`／`Replay`／`Restore`（v0.4 補：Kernel 的同名動詞之外，host 對自己的型別呼叫這三個就是在 Kernel 之外手寫回滾；`v8-arch-h7-scanner` 核定時加）（今天 `MatchRuntimeHost.cpp:441` 的 `match_.Tick` 與 `ClientSimulationRole.cpp:196` 的 `loop_.Run` 不 include 卻手排順序，只掃 include 會漏）。**白名單**（v0.4：已實作，掃描器 `tests/common/h7_scan/`，白名單是規則資料 `h7_scan_rules.json` 一份；各 owner 的 host 清單 `tests/<owner>/h7-hosts.json` 不帶白名單；依型別判不依名字）：Kernel 的 `Run`／`Rewind`／`Replay`／`Restore`（型別名未定，資料暫寫 `GYO::Kernel::Runtime`，定名的批改一行）、`Engine::Runtime::FixedTickRuntime::Advance`（固定步累加器，runner plugin 的時鐘工具，H.7 第 2 列；今天 `MatchRuntimeHost.cpp:385`、`LocalPlayerPrediction.cpp:410`）；修訂 B-3／N-9） | 文字掃描 host 的原始碼（兩條規則；清單由 audit §4.2 的 `h7_include_scan.txt` 起）；審查（mechanism §7、v0.2 §10.4） |
+| H-7 | Host（runner plugin 加產品 main）不決定 System 順序：已遷移的 host 只呼叫 `Run`、`Rewind`／`Replay` 與交換點，不依序呼叫模組的 `Update`／`Tick`／`Advance`；一個 host 不會一半在機制上。**守衛兩條**（v0.3，audit §3.5）：(a) 不 include `IRuntimeClient.hpp`／`RuntimeLoop.hpp`；(b) **呼叫點規則**——host 原始碼不得呼叫**產品或能力模組型別**的成員 `Tick`／`Advance`／`Update`／`Step`／`Run`，以及 `Rewind`／`Replay`／`Restore`（v0.4 補：Kernel 的同名動詞之外，host 對自己的型別呼叫這三個就是在 Kernel 之外手寫回滾；`v8-arch-h7-scanner` 核定時加）（今天 `MatchRuntimeHost.cpp:441` 的 `match_.Tick` 與 `ClientSimulationRole.cpp:196` 的 `loop_.Run` 不 include 卻手排順序，只掃 include 會漏）。**白名單**（v0.4：已實作，掃描器 `tests/common/h7_scan/`，白名單是規則資料 `h7_scan_rules.json` 一份；各 owner 的 host 清單 `tests/<owner>/h7-hosts.json` 不帶白名單；依型別判不依名字）：Kernel 的 `Run`／`Rewind`／`Replay`／`Restore`（型別名 `App`，資料寫 `GYO::Kernel::App`；`v8-arch-kernel-registry-schedule` 改）、`Engine::Runtime::FixedTickRuntime::Advance`（固定步累加器，runner plugin 的時鐘工具，H.7 第 2 列；今天 `MatchRuntimeHost.cpp:385`、`LocalPlayerPrediction.cpp:410`）；修訂 B-3／N-9） | 文字掃描 host 的原始碼（兩條規則；清單由 audit §4.2 的 `h7_include_scan.txt` 起）；審查（mechanism §7、v0.2 §10.4） |
 | H-8 | `rollbackEnabled` 的 schedule 上，有非 `Diagnostics` 外部副作用的 System 必須有 `NotInRollback` 條件或宣告 `rollbackSafe`，否則啟動錯誤 | J-42b |
 | H-9 | Rewind／Restore／Replay 只能由 Host 在 Ready 狀態呼叫；在 System 內呼叫斷言 | J-42 |
 | H-10 | `rollbackEnabled` 的 schedule 上，每個 `ingress = true` 的 System 都有 `NotInRollback` 條件（不能以 `rollbackSafe` 代替：ingress 寫 ring，就是會改歷史）；`role = Input` 的資料 `rollback = No`（Z8）（修訂：B7） | D-E15、D-E7；J-42 |
@@ -1416,6 +1416,10 @@ bevy_core.md 沒有證據行（要查證得回到 `~/Code/GitHome/bevy` 原始�
 ---
 
 ## 修訂記錄
+
+### v0.4 補記（2026-11-13，`v8-arch-kernel-registry-schedule`）
+
+- §0 用語表「Runtime」列加型別名 `App`（使用者決定 `v8-arch-kernel-app-name`；架構師解讀：只改以 C++ 型別引用它的地方）。H-7 白名單的暫名 `GYO::Kernel::Runtime` 改 `GYO::Kernel::App`。其餘「Runtime」是概念名，不改；`FixedTickRuntime`、`UiRuntime`、`Engine::Runtime` 是現況程式的型別名，不改。
 
 ### v0.4（2026-11-13，`v8-arch-a6-revision`）
 

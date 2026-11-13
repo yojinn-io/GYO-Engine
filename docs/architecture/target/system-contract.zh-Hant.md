@@ -2,7 +2,7 @@
 
 > Status: target, not implemented
 
-更新：2026-11-11。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §B（System 契約）、§E.5（例外與錯誤）。
+更新：2026-11-13（`v8-arch-kernel-registry-schedule`：§4 API 名稱）。Owner：架構（架構師會話）。規格來源：`docs/architecture/plans/kernel/spec.zh-Hant.md` §B（System 契約）、§E.5（例外與錯誤）。
 本文件只寫**使用者已裁決**的部分；規格中仍標「待使用者」的條目不在這裡。
 
 ## 1. 描述從簽名推出，一份（mechanism §3.1 審查修正 4）
@@ -44,6 +44,25 @@
 
 - 可呼叫物是非成員函式（`AddSystem<&Fn>()`，非型別模板引數）或無捕獲 lambda（以型別傳入）。有捕獲的 lambda、成員函式、泛型 lambda、多載的 `operator()` 編譯失敗：捕獲與 `this` 是 World 以外的隱藏狀態與繞路通道。
 - (c) 區的 System 不得有 `Local<T>`、不得宣告外部副作用（**唯一例外 `Diagnostics`**：只寫不讀回的診斷句柄 `DiagnosticsWriter<T>`，不進存取集合、不產生衝突邊；spec S-8 v0.3）、不得用變更過濾、不得持 `ExclusiveWorld`（spec Z4）。
+
+## 4. API 名稱（`v8-arch-kernel-registry-schedule` 定；只對應名字與條文，不改上面的規則）
+
+程式在 `engine/kernel/include/engine/kernel/`（`Params.hpp`、`SystemTraits.hpp`、`Registry.hpp`、`KernelError.hpp`）。spec 稱為 Runtime 的那個型別（一個 World、它的 Registry、它的 schedule 集合加每個 schedule 的執行策略）型別名是 **`App`**（`GYO::Kernel::App`；kernel HANDOFF `v8-arch-kernel-app-name`），實體在 world-exec。
+
+| 名字 | 是什麼 | 對應條文 |
+|---|---|---|
+| `Registrar::AddSystem<&Fn>(SystemOptions)`、`Registrar::AddSystem<Lambda>(SystemOptions)` | 登記 System：非成員函式以非型別模板引數、無捕獲 lambda 以型別傳入 | spec B.4 第 1 點；§3 |
+| `SystemResult` | `Engine::Base::Result<void, KernelError>`，System 的回傳型別 | §2；spec S-2 |
+| `SystemOptions` | 顯式的一半：`name`、`zone`（沒有預設，`Zone::Unset`＝D-E7）、`ingress`、`affinity`、`effects`、`rollbackSafe`、`mounts` | spec B.1 declared、S-6 |
+| 參數型別 | `Query<Read<T>, Write<T>, With<T>, Without<T>, Changed<T>, Added<T>>`、`Res<T>`、`ResMut<T>`、`EventReader<E>`、`EventWriter<E>`、`Commands`、`CommandsFor<Inserts<…>, Removes<…>>`、`Spawn<Bundle<…>>`、`SpawnWithId<Bundle<…>>`、`Despawn`、`Local<T>`、`CurrentTick`、`DiagnosticsWriter<T>`、`SetRead<SetTag>`、`ExclusiveWorld`、`Extract<Read<T>>`、`ExtractRes<R>` | spec B.4 第 4 點 |
+| `ParamTraits<P>`（`valid`、`readOnly`、`Contribution`） | 參數型別的特化；`Contribution` 是 `TypeList<Access::…>`，存取項在 `Access.hpp` | spec B.4 第 3 點；DI-KS 1 |
+| `Condition<&Fn>(name)`、`Condition<Lambda>(name)`（`ConditionRef`） | run 條件：回 `bool`、參數全唯讀 | spec E.4、S-5 |
+| `Rejection`、`SystemRejectionOf<F>()`、`SystemRejectionOfFunction<Fn>()`、`ConditionRejectionOf…` | 簽名被拒的理由（測試讀它）；登記點以 `static_assert` 擋，訊息帶 `GYO_KERNEL_REJECT_…` 標記 | spec S-1～S-3、S-5、S-10、J-10、J-11、J-13 |
+| `AccessSet`、`AccessKey`、`AccessKind` | finish 後以 id 表示的推導存取（reads、writes、membershipReads、deferredWrites、setReads、extractReads 與旗標） | spec B.1 derived、S-4 |
+| `KernelSettings` | Kernel 自己的 Resource（ResourceId 0，登記在所有 plugin 之前）；System 宣告 `Res`／`ResMut` 它＝D-E18 | §2b；spec D-E18 |
+| `StartupError`（`code`、`step`、`rule`、`subjects`、`sources`）、`StartupReport` | 啟動錯誤一次全部回報；`code` 與 `step` 不同時，`step` 是 D.2 的步驟代號（親和：X-E2／X-E3 與 D-E10；(c) Parallel 無守衛：X-E1 與 D-E11） | spec D.2、D-5、C.4 |
+| `Registry`、`Plugin`、`Registrar`、`FinishContext`、`FrozenRegistry` | 生命週期：`Registry(plugins).Finish()` 依序 build → requires 檢查 → finish → 凍結 → Plan；`FinishContext::InstallRunner`（第二個＝R-E6） | spec C.2、C.5 |
+| `FrozenRegistry::ExportZoneCSources` | G-5：(c) System 的登記處 `.cpp` 以 `gyo.zone-c-sources` v1 匯出（`generated_by = "gyo-kernel-report"`） | spec G-5；`docs/architecture/zone-c-sources.zh-Hant.md` |
 
 ## Design Invariants
 

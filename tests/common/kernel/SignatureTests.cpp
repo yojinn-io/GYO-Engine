@@ -145,37 +145,38 @@ TEST_CASE("J-13: a run condition has read-only parameters and returns bool") {
 }
 
 TEST_CASE("J-12: every parameter type's Contribution equals the hand-written expectation (types)") {
+    // Checked at run time (the values are compile-time constants), so a broken Contribution is a test failure
+    // that names the parameter type, not a build failure.
     using namespace GYO::Kernel::Access;
-    static_assert(SameSet<C<Query<Read<TestPos>>>, TypeList<ComponentRead<TestPos>>>);
-    static_assert(SameSet<C<Query<Write<TestPos>, Read<TestVel>>>,
+    CHECK(SameSet<C<Query<Read<TestPos>>>, TypeList<ComponentRead<TestPos>>>);
+    CHECK(SameSet<C<Query<Write<TestPos>, Read<TestVel>>>,
                           TypeList<ComponentWrite<TestPos>, ComponentRead<TestVel>>>);
-    static_assert(SameSet<C<Query<Read<TestPos>, With<TestMarker>, Without<TestMode>>>,
+    CHECK(SameSet<C<Query<Read<TestPos>, With<TestMarker>, Without<TestMode>>>,
                           TypeList<ComponentRead<TestPos>, Membership<TestMarker>, Membership<TestMode>>>);
-    static_assert(SameSet<C<Query<Read<TestPos>, Changed<TestVel>>>,
+    CHECK(SameSet<C<Query<Read<TestPos>, Changed<TestVel>>>,
                           TypeList<ComponentRead<TestPos>, ChangeFilter<TestVel>>>);
-    static_assert(SameSet<C<Query<Read<TestMode>, Added<TestMarker>>>,
+    CHECK(SameSet<C<Query<Read<TestMode>, Added<TestMarker>>>,
                           TypeList<ComponentRead<TestMode>, ChangeFilter<TestMarker>>>);
-    static_assert(SameSet<C<Res<TestRes>>, TypeList<ResourceRead<TestRes>>>);
-    static_assert(SameSet<C<ResMut<TestRes>>, TypeList<ResourceWrite<TestRes>>>);
-    static_assert(SameSet<C<EventReader<TestEvent>>, TypeList<EventRead<TestEvent>>>);
-    static_assert(SameSet<C<EventWriter<TestEvent>>, TypeList<EventWrite<TestEvent>>>);
-    static_assert(SameSet<C<Commands>, TypeList<UntypedCommands>>);
-    static_assert(SameSet<C<CommandsFor<Inserts<TestHealth>, Removes<TestMarker>>>,
+    CHECK(SameSet<C<Res<TestRes>>, TypeList<ResourceRead<TestRes>>>);
+    CHECK(SameSet<C<ResMut<TestRes>>, TypeList<ResourceWrite<TestRes>>>);
+    CHECK(SameSet<C<EventReader<TestEvent>>, TypeList<EventRead<TestEvent>>>);
+    CHECK(SameSet<C<EventWriter<TestEvent>>, TypeList<EventWrite<TestEvent>>>);
+    CHECK(SameSet<C<Commands>, TypeList<UntypedCommands>>);
+    CHECK(SameSet<C<CommandsFor<Inserts<TestHealth>, Removes<TestMarker>>>,
                           TypeList<DeferredWrite<TestHealth>, DeferredWrite<TestMarker>>>);
-    static_assert(SameSet<C<GYO::Kernel::Spawn<Bundle<TestPos, TestVel>>>,
+    CHECK(SameSet<C<GYO::Kernel::Spawn<Bundle<TestPos, TestVel>>>,
                           TypeList<Access::Spawn, DeferredWrite<TestPos>, DeferredWrite<TestVel>>>);
-    static_assert(SameSet<C<SpawnWithId<Bundle<TestHealth>>>, TypeList<DeferredWrite<TestHealth>>>);
-    static_assert(SameSet<C<GYO::Kernel::Despawn>, TypeList<Access::Despawn>>);
-    static_assert(SameSet<C<SetRead<ReplicatedSet>>, TypeList<SetReadOf<ReplicatedSet>>>);
-    static_assert(SameSet<C<Local<std::int32_t>>, TypeList<LocalState<std::int32_t>>>);
-    static_assert(SameSet<C<ExclusiveWorld>, TypeList<WholeWorld>>);
-    static_assert(SameSet<C<CurrentTick>, TypeList<DomainTickRead>>);
-    static_assert(SameSet<C<DiagnosticsWriter<TestRecord>>, TypeList<Access::Diagnostics<TestRecord>>>);
-    static_assert(SameSet<C<Extract<Read<TestPos>>>, TypeList<ExtractComponentRead<TestPos>>>);
-    static_assert(SameSet<C<ExtractRes<TestRes>>, TypeList<ExtractResourceRead<TestRes>>>);
+    CHECK(SameSet<C<SpawnWithId<Bundle<TestHealth>>>, TypeList<DeferredWrite<TestHealth>>>);
+    CHECK(SameSet<C<GYO::Kernel::Despawn>, TypeList<Access::Despawn>>);
+    CHECK(SameSet<C<SetRead<ReplicatedSet>>, TypeList<SetReadOf<ReplicatedSet>>>);
+    CHECK(SameSet<C<Local<std::int32_t>>, TypeList<LocalState<std::int32_t>>>);
+    CHECK(SameSet<C<ExclusiveWorld>, TypeList<WholeWorld>>);
+    CHECK(SameSet<C<CurrentTick>, TypeList<DomainTickRead>>);
+    CHECK(SameSet<C<DiagnosticsWriter<TestRecord>>, TypeList<Access::Diagnostics<TestRecord>>>);
+    CHECK(SameSet<C<Extract<Read<TestPos>>>, TypeList<ExtractComponentRead<TestPos>>>);
+    CHECK(SameSet<C<ExtractRes<TestRes>>, TypeList<ExtractResourceRead<TestRes>>>);
     // A bundle that loses a component is a different set (the J-12 mutation "bundle not in the access set").
-    static_assert(!SameSet<C<GYO::Kernel::Spawn<Bundle<TestPos, TestVel>>>, TypeList<Access::Spawn, DeferredWrite<TestPos>>>);
-    CHECK(true);
+    CHECK(!SameSet<C<GYO::Kernel::Spawn<Bundle<TestPos, TestVel>>>, TypeList<Access::Spawn, DeferredWrite<TestPos>>>);
 }
 
 namespace {

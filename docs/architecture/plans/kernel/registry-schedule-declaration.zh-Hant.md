@@ -19,6 +19,8 @@
 | spike 測試的搬改 | `spikes/kernel/tests/AccessDerivationTests.cpp` 搬改為 J-12；`RegistryWorldTests.cpp` 的 Registry 部分搬改為 J-18／J-19，其餘重寫（ci-readiness §2.2）。`spikes/kernel/` 本身不刪（刪除在 `v8-arch-ci-spike-retire`） |
 | target 文件 | `target/scheduler.zh-Hant.md`、`target/system-contract.zh-Hant.md`：寫入本批定的 API 名稱（只加名字與它對應的條文，不改已核准的 Design Invariants；要改 DI 的列給使用者） |
 | 其他 | `docs/architecture/plans/kernel/scripts/mutations.json`（本批的突變）；dev_log；kernel README 與 HANDOFF |
+| h7 白名單（核定後的修訂 1） | `tests/common/h7_scan/` 的三檔：`h7_scan_rules.json`（白名單的 Kernel 型別名）、`test_h7_scan.py`（自測的同一名字）、`mutations.json`（h7 那條突變的 find 字串） |
+| 型別名註記（核定後的修訂 2） | `spec.zh-Hant.md`（§0 用語表、H-7 白名單暫名、修訂記錄）；`target/runtime-composition.zh-Hant.md` §1「名詞」Runtime 定義後一句 |
 
 不動：`build/`、`.github/`、`plugins/`（還不存在）、`apps/`、`tools/`、`framework/`、既有守衛（第 5 節）。範圍外還要改檔才能完成＝停止條件。
 
@@ -102,3 +104,12 @@
 ## 10. 若失敗
 
 後面全部白做（World、Executor、四個 host 都假設同一 Registry 得同一 Plan、三平台相同）。plan-dryrun（閘門 G1）、world-exec、plugins-foundation 的最小形都不開工。
+
+## 核定後的修訂（宣告錯誤的修正；架構師 2026-11-13 核定，緩める面：無，除第 4 點的縮窄另述）
+
+1. **§2 範圍表補 h7_scan 三檔**：§3 第 4 點已授權改 h7 白名單，但 §2 漏列。補一列；判定 1 的比對清單列入。h7 自己那條突變改了 find，本機重跑 h7 的相關突變一次，結果寫進 dev_log。
+2. **型別名註記的範圍**（選項 (a)）：「凡指型別處」解讀為以 C++ 型別引用它的地方。spec §0 用語表加一句、修訂記錄一行，spec 內以 C++ 型別寫的 Kernel 名改 `App`（只有 H-7 白名單一處，`git grep -nP 'Runtime(::|&|\*|<)'` 與反引號形式查，正例先命中）；target 只改範圍內的 system-contract 與 `runtime-composition` §1 一句。其餘 target 檔不動。
+3. **判定 9 改成「⊆ 白名單」**：`tlCurrent` 屬 world-exec，本批不會有。條件：(i) 防空轉正例——檢查同時斷言 TypeKey 的符號確實在（`--require`）；(ii) 突變兩條：加 `inline int g` 被抓；段名清單弄錯（漏 .bss／__data）讓正例失敗。world-exec 加 `tlCurrent` 後收回成「恰等於兩個」（締める面；kernel HANDOFF 記一行）。GYO::Base 的兩個 inline 變數（`assertionHandler`、`reportingAssertion`）出現在 kernel 的目的檔裡，報告另列為「外來」，不算 kernel 的符號。
+4. **J-11、J-12、J-44 的執行半交 world-exec**（遷移計畫 §3.5 受理判定的縮窄）：J-11 的「全量對增量重建」等價、J-12 的「兩種參數順序檢查 `Fetch` 無順序相依」、J-44 的「World 摘要不變」要 World 與執行，本批不做；本批做描述半（J-44＝20 種排列下全部 D-E8，或每對衝突 System 的先後不變）。world-exec 的事前宣告必須把這三個半條列進判定（kernel HANDOFF 記一行）。
+5. **錯誤代號兩欄**：一筆錯誤帶「代號」與「步驟代號」。親和不符＝代號 X-E2／X-E3、步驟 D-E10；(c) Parallel 無守衛＝代號 X-E1、步驟 D-E11（v1 另報 D-E17）。J-24 以「代號或步驟代號」比對，同一問題只報一筆。X-E1 的「守衛測試存在且帶 cpu 標籤」v1 只查 guard id 非空，其餘記限界。spec D.2 與 E 節的代號重疊留給架構師下次修 spec 時統一。
+

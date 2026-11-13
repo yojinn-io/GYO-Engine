@@ -173,6 +173,20 @@ inline bool HasRule(const Built& built, StartupCode code, std::string_view rule)
                        [&](const StartupError& e) { return e.Is(code) && e.rule == rule; });
 }
 
+// Safe on a successful Finish (0 / false), so a mutant that removes a check is a failed CHECK naming the code,
+// not a crash in error() (AGENTS 14.2: the expected failure must be identifiable).
+inline std::size_t ErrorCount(const Built& built, StartupCode code) {
+    return built.result ? 0 : built.result.error().Count(code);
+}
+
+inline bool HasError(const Built& built, StartupCode code) {
+    return ErrorCount(built, code) > 0;
+}
+
+inline std::size_t ErrorCount(const Engine::Base::Result<void, StartupReport>& result, StartupCode code) {
+    return result ? 0 : result.error().Count(code);
+}
+
 inline std::vector<std::string> SystemSteps(const Plan& plan) {
     std::vector<std::string> names;
     for (const Step& step : plan.steps) {

@@ -80,6 +80,12 @@ void MixedRegistry(Registrar& r) {
     r.AddSystem<&WriteMarker>(Sys("MarkLate", Zone::B, {At("Update", "First")}));
     r.AddSystem<&ReadMarker>(Sys("ShowMark", Zone::B, {At("Update", "First")}));
     r.AddSystem<&Nothing>(Sys("Idle", Zone::B, {At("Update", "Second")}));
+    // Two (c) Systems with no conflict and no declared order: their order comes only from the tie key
+    // (registrationSeq), so a key that depends on container order changes this Plan under the shuffle.
+    const auto first = [](Query<Read<SharedC>>) -> SystemResult { return {}; };
+    const auto second = [](Query<Read<SharedC>>) -> SystemResult { return {}; };
+    r.AddSystem<decltype(first)>(Sys("FreeFirst", Zone::C, {At("FixedUpdate", "Present")}));
+    r.AddSystem<decltype(second)>(Sys("FreeSecond", Zone::C, {At("FixedUpdate", "Present")}));
 }
 
 void DeferredRegistry(Registrar& r) {
@@ -120,8 +126,8 @@ struct Golden {
 // Plan fingerprints of FixedUpdate and Registry fingerprints of the three golden
 // registries; the same on every L1 platform (declaration judgement 4).
 constexpr std::array<Golden, 3> kGoldens{{
-    {"mixed", &MixedRegistry, "1:6923a0ac70207fd9d6b583292f6e2802a73be9a1d0f645b69037afe32f8a2a5a",
-     "1:15d920daefba46e1a4b812e57fe4c63f62e26f599729b361d0c150d54bdedf04"},
+    {"mixed", &MixedRegistry, "1:19c809655efc5a2d7887bc522793c9e9b2cd99fd728fd68cb554c11396d6bb5c",
+     "1:26223cbafc01a99143197a38b599893e25af955e3c46862568c77b7d8307419a"},
     {"deferred", &DeferredRegistry, "1:a6a8b455af3e5b799e81574a1e0e977f58aec75d8dee1245a9b2600fbca40277",
      "1:5fc7f8765ea715fd6873435c1e55813f85eff911205208698d19725f426828b4"},
     {"events", &EventRegistry, "1:71e9a081a30f3bf3e4cf5ef7eac6cdea2042a81196aea64b534ae9e7ce4c9668",
@@ -168,7 +174,7 @@ TEST_CASE("J-20: the golden Plans' step order") {
     Built mixed = BuildGolden(kGoldens[0]);
     KERNEL_REQUIRE_OK(mixed);
     CHECK(SystemSteps(*mixed.registry->Frozen().PlanOf("FixedUpdate")) ==
-          std::vector<std::string>{"StepA", "StepB", "CheckAB", "ShowA"});
+          std::vector<std::string>{"StepA", "StepB", "CheckAB", "ShowA", "FreeFirst", "FreeSecond"});
     CHECK(SystemSteps(*mixed.registry->Frozen().PlanOf("Update")) ==
           std::vector<std::string>{"MarkLate", "ShowMark", "Idle"});
     Built deferred = BuildGolden(kGoldens[1]);
@@ -208,8 +214,8 @@ TEST_CASE("J-22: (c) ambiguity fails for immediate writes, deferred-deferred wri
         r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
         r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
     });
+    CHECK(KernelTest::ErrorCount(immediate, StartupCode::DE8) == 1);
     REQUIRE_FALSE(static_cast<bool>(immediate.result));
-    CHECK(immediate.result.error().Count(StartupCode::DE8) == 1);
     const StartupError& error = immediate.result.error().errors.front();
     CHECK(error.subjects[0] == "WriteA");
     CHECK(error.subjects[1] == "ReadA");
@@ -219,22 +225,22 @@ TEST_CASE("J-22: (c) ambiguity fails for immediate writes, deferred-deferred wri
         r.AddSystem<&InsertA>(Sys("InsertA", Zone::C, Sim()));
         r.AddSystem<&InsertA2>(Sys("InsertA2", Zone::C, Sim()));
     });
+    CHECK(KernelTest::ErrorCount(deferred, StartupCode::DE8) == 1);
     REQUIRE_FALSE(static_cast<bool>(deferred.result));
-    CHECK(deferred.result.error().Count(StartupCode::DE8) == 1);
 
     Built events = WithShared([](Registrar& r) {
         r.AddSystem<&SendEvent>(Sys("SendEvent", Zone::C, Sim()));
         r.AddSystem<&SendEvent2>(Sys("SendEvent2", Zone::C, Sim()));
     });
+    CHECK(KernelTest::ErrorCount(events, StartupCode::DE8) == 1);
     REQUIRE_FALSE(static_cast<bool>(events.result));
-    CHECK(events.result.error().Count(StartupCode::DE8) == 1);
 
     // (b) reading (c) data with no order to its (c) writer is ambiguous too (scheduler section 2).
     Built presentation = WithShared([](Registrar& r) {
         r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim()));
         r.AddSystem<&ReadA>(Sys("ShowA", Zone::B, Sim()));
     });
-    CHECK(presentation.result.error().Count(StartupCode::DE8) == 1);
+    CHECK(KernelTest::ErrorCount(presentation, StartupCode::DE8) == 1);
 }
 
 TEST_CASE("J-22: adding before or after makes the (c) cases pass") {
@@ -305,8 +311,8 @@ TEST_CASE("J-25: With and Without do not remove a conflict") {
         r.AddSystem<&WriteAWithB>(Sys("WithB", Zone::C, Sim()));
         r.AddSystem<&WriteAWithoutB>(Sys("WithoutB", Zone::C, Sim()));
     });
+    CHECK(KernelTest::ErrorCount(built, StartupCode::DE8) == 1);
     REQUIRE_FALSE(static_cast<bool>(built.result));
-    CHECK(built.result.error().Count(StartupCode::DE8) == 1);
 }
 
 // ---- J-27 (D-E17 half; LIM-2)
@@ -322,9 +328,9 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
         r.Schedule(s);
         r.AddSystem<&ReadMarker>(Sys("Draw", Zone::B, {At("Ui", "Draw")}));
     });
+    CHECK(KernelTest::ErrorCount(bOnly, StartupCode::DE17) == 1);
     REQUIRE_FALSE(static_cast<bool>(bOnly.result));
-    CHECK(bOnly.result.error().Count(StartupCode::DE17) == 1);
-    CHECK_FALSE(bOnly.result.error().Has(StartupCode::XE1));
+    CHECK_FALSE(KernelTest::HasError(bOnly, StartupCode::XE1));
     Built c = WithShared([](Registrar& r) {
         ScheduleOptions s;
         s.name = "FixedParallel";
@@ -334,10 +340,10 @@ TEST_CASE("J-27: any Parallel schedule fails in v1; a (c) Parallel schedule with
         r.Schedule(s);
         r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, {At("FixedParallel", "Run")}));
     });
+    CHECK(KernelTest::HasError(c, StartupCode::DE17));
     REQUIRE_FALSE(static_cast<bool>(c.result));
-    CHECK(c.result.error().Has(StartupCode::DE17));
-    CHECK(c.result.error().Count(StartupCode::XE1) == 1);
-    CHECK(c.result.error().Count(StartupCode::DE11) == 1);
+    CHECK(KernelTest::ErrorCount(c, StartupCode::XE1) == 1);
+    CHECK(KernelTest::ErrorCount(c, StartupCode::DE11) == 1);
 }
 
 // ---- J-28 (finish half; X-3, H-3)
@@ -358,9 +364,9 @@ TEST_CASE("J-28: a Main System on a role runner fails (X-E2); a named role on an
                               o.affinity = Affinity::Named(kMainRole);
                               r.AddSystem<&ReadMarker>(o);
                           }}});
+    CHECK(KernelTest::ErrorCount(main, StartupCode::XE2) == 1);
     REQUIRE_FALSE(static_cast<bool>(main.result));
-    CHECK(main.result.error().Count(StartupCode::XE2) == 1);
-    CHECK(main.result.error().Count(StartupCode::DE10) == 1);
+    CHECK(KernelTest::ErrorCount(main, StartupCode::DE10) == 1);
     Built named = Finish({{"test", [&](Registrar& r) {
                                RegisterCommonData(r);
                                roleSchedule(r);
@@ -368,7 +374,7 @@ TEST_CASE("J-28: a Main System on a role runner fails (X-E2); a named role on an
                                o.affinity = Affinity::Named("audio");
                                r.AddSystem<&ReadMarker>(o);
                            }}});
-    CHECK(named.result.error().Count(StartupCode::XE3) == 1);
+    CHECK(KernelTest::ErrorCount(named, StartupCode::XE3) == 1);
     Built resource = Finish({{"test", [&](Registrar& r) {
                                   RegisterCommonData(r);
                                   r.Resource<TestLink>({.name = "Window", .zone = Zone::B, .external = true,
@@ -377,7 +383,7 @@ TEST_CASE("J-28: a Main System on a role runner fails (X-E2); a named role on an
                                   const auto touch = [](Res<TestLink>) -> SystemResult { return {}; };
                                   r.AddSystem<decltype(touch)>(Sys("TouchWindow", Zone::B, {At("Update", "First")}));
                               }}});
-    CHECK(resource.result.error().Count(StartupCode::XE2) == 1);
+    CHECK(KernelTest::ErrorCount(resource, StartupCode::XE2) == 1);
     Built fine = Finish({{"test", [&](Registrar& r) {
                               RegisterCommonData(r);
                               roleSchedule(r);
@@ -445,8 +451,8 @@ TEST_CASE("J-44: 20 registration orders of (c) Systems: either all D-E8, or ever
     CHECK(reference == std::vector<bool>{true, true, true, true, true});
     for (const auto& permutation : orders) {
         Built built = Permuted(kAmbiguous, permutation);
+        CHECK(KernelTest::ErrorCount(built, StartupCode::DE8) >= 1);
         REQUIRE_FALSE(static_cast<bool>(built.result));
-        CHECK(built.result.error().Count(StartupCode::DE8) >= 1);
     }
 }
 
@@ -457,42 +463,42 @@ TEST_CASE("J-24: D-E1 (missing schedule or stage), D-E19 (two mounts in one sche
         r.AddSystem<&ReadPos>(Sys("NoSchedule", Zone::C, {At("Nowhere", "Run")}));
         r.AddSystem<&ReadMarker>(Sys("NoStage", Zone::B, {At("Update", "Nowhere")}));
     });
-    CHECK(missing.result.error().Count(StartupCode::DE1) == 2);
+    CHECK(KernelTest::ErrorCount(missing, StartupCode::DE1) == 2);
     Built twice = FinishOne([](Registrar& r) {
         r.AddSystem<&ReadMarker>(Sys("Twice", Zone::B, {At("Update", "First"), At("Update", "Second")}));
     });
-    CHECK(twice.result.error().Count(StartupCode::DE19) == 1);
+    CHECK(KernelTest::ErrorCount(twice, StartupCode::DE19) == 1);
 }
 
 TEST_CASE("J-24: D-E3 (Spawn without an allotter), D-E18 (Res of KernelSettings)") {
     Built spawn = FinishOne([](Registrar& r) { r.AddSystem<&SpawnPos>(Sys("SpawnPos", Zone::C, Sim())); });
-    CHECK(spawn.result.error().Count(StartupCode::DE3) == 1);
+    CHECK(KernelTest::ErrorCount(spawn, StartupCode::DE3) == 1);
     Built settings = FinishOne([](Registrar& r) {
         r.AddSystem<&ReadSettings>(Sys("ReadSettings", Zone::B, {At("Update", "First")}));
     });
-    CHECK(settings.result.error().Count(StartupCode::DE18) == 1);
+    CHECK(KernelTest::ErrorCount(settings, StartupCode::DE18) == 1);
     const auto writes = [](ResMut<KernelSettings>) -> SystemResult { return {}; };
     Built settingsMut = FinishOne([&](Registrar& r) {
         r.AddSystem<decltype(writes)>(Sys("WriteSettings", Zone::B, {At("Update", "First")}));
     });
-    CHECK(settingsMut.result.error().Count(StartupCode::DE18) == 1);
+    CHECK(KernelTest::ErrorCount(settingsMut, StartupCode::DE18) == 1);
 }
 
 TEST_CASE("J-24: D-E4 (missing target), D-E5 (against stage order), D-E6 (cycle)") {
     Built target = WithShared([](Registrar& r) { r.AddSystem<&WriteA>(Sys("WriteA", Zone::C, Sim({"Gone"}))); });
-    REQUIRE(target.result.error().Count(StartupCode::DE4) == 1);
+    REQUIRE(KernelTest::ErrorCount(target, StartupCode::DE4) == 1);
     CHECK(target.result.error().errors.front().subjects == std::vector<std::string>{"WriteA", "Gone"});
     Built stage = WithShared([](Registrar& r) {
         r.AddSystem<&WriteA>(Sys("Early", Zone::C, Sim()));
         r.AddSystem<&ReadA>(Sys("Late", Zone::C, {At("FixedUpdate", "Present", {"Early"})}));
     });
-    CHECK(stage.result.error().Count(StartupCode::DE5) == 1);
+    CHECK(KernelTest::ErrorCount(stage, StartupCode::DE5) == 1);
     Built cycle = WithShared([](Registrar& r) {
         r.AddSystem<&WriteA>(Sys("One", Zone::C, Sim({"Two"})));
         r.AddSystem<&ReadA>(Sys("Two", Zone::C, Sim({"Three"})));
         r.AddSystem<&ReadB>(Sys("Three", Zone::C, Sim({"One"})));
     });
-    REQUIRE(cycle.result.error().Count(StartupCode::DE6) == 1);
+    REQUIRE(KernelTest::ErrorCount(cycle, StartupCode::DE6) == 1);
     CHECK(cycle.result.error().errors.front().subjects.size() == 3);
 }
 
@@ -501,7 +507,7 @@ TEST_CASE("J-24: D-E9 (zone C hooks on one trigger conflict)") {
         r.Hook<TestPos, &HookWritesA>(HookTrigger::OnAdd, {.name = "WriteOnAdd", .zone = Zone::C});
         r.Hook<TestPos, &HookReadsA>(HookTrigger::OnAdd, {.name = "ReadOnAdd", .zone = Zone::C});
     });
-    REQUIRE(built.result.error().Count(StartupCode::DE9) == 1);
+    REQUIRE(KernelTest::ErrorCount(built, StartupCode::DE9) == 1);
     CHECK(built.result.error().errors.front().subjects[0] == "WriteOnAdd");
     KERNEL_REQUIRE_OK(WithShared([](Registrar& r) {
         r.Hook<TestPos, &HookWritesA>(HookTrigger::OnAdd, {.name = "WriteOnAdd", .zone = Zone::C});
@@ -515,13 +521,13 @@ TEST_CASE("J-24: D-E12 (clock schedules per domain), D-E13 (one World on two thr
         s.name = "SecondFrame";
         r.Schedule(s);
     });
-    CHECK(twoClocks.result.error().Count(StartupCode::DE12) == 1);
+    CHECK(KernelTest::ErrorCount(twoClocks, StartupCode::DE12) == 1);
     Built noClock = Finish({{"test", [](Registrar& r) {
                                 ScheduleOptions s = UpdateSchedule();
                                 s.clock = false;
                                 r.Schedule(s);
                             }}});
-    CHECK(noClock.result.error().Count(StartupCode::DE12) == 1);
+    CHECK(KernelTest::ErrorCount(noClock, StartupCode::DE12) == 1);
     Built threads = FinishOne([](Registrar& r) {
         ScheduleOptions s = UpdateSchedule();
         s.name = "Late";
@@ -529,7 +535,7 @@ TEST_CASE("J-24: D-E12 (clock schedules per domain), D-E13 (one World on two thr
         s.runner = "other";
         r.Schedule(s);
     });
-    CHECK(threads.result.error().Count(StartupCode::DE13) == 1);
+    CHECK(KernelTest::ErrorCount(threads, StartupCode::DE13) == 1);
 }
 
 TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
@@ -545,7 +551,7 @@ TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
         r.AddSystem<&ExtractPos>(Sys("ExtractPos", Zone::B, {At("Extract", "Copy")}));
     };
     Built unset = Finish({{"render", build}});
-    CHECK(unset.result.error().Count(StartupCode::DE14) == 1);
+    CHECK(KernelTest::ErrorCount(unset, StartupCode::DE14) == 1);
     TestPlugin sourcePlugin("source", [](Registrar& r) {
         r.Component<TestPos>({.name = "TestPos", .zone = Zone::C});
         r.Schedule(FixedSchedule());
@@ -555,7 +561,7 @@ TEST_CASE("J-24: D-E14 (extract source not frozen or not set)") {
     Registry render({&renderPlugin});
     render.SetExtractSource(source);  // source not finished yet
     const auto result = render.Finish();
-    CHECK(result.error().Count(StartupCode::DE14) == 1);
+    CHECK(KernelTest::ErrorCount(result, StartupCode::DE14) == 1);
 }
 
 TEST_CASE("J-24: D-E15 (ingress without NotInRollback), D-E16 (Derived read before any writer)") {
@@ -569,7 +575,7 @@ TEST_CASE("J-24: D-E15 (ingress without NotInRollback), D-E16 (Derived read befo
             r.AddSystem<&WriteInput>(o);
         };
     };
-    CHECK(FinishOne(ingress(false), true).result.error().Count(StartupCode::DE15) == 1);
+    CHECK(KernelTest::ErrorCount(FinishOne(ingress(false), true), StartupCode::DE15) == 1);
     KERNEL_REQUIRE_OK(FinishOne(ingress(true), true));
     const auto derived = [](bool writerFirst) {
         return [writerFirst](Registrar& r) {
@@ -580,7 +586,7 @@ TEST_CASE("J-24: D-E15 (ingress without NotInRollback), D-E16 (Derived read befo
                                                                                    : std::vector<std::string>{"Recompute"})));
         };
     };
-    CHECK(FinishOne(derived(false), true).result.error().Count(StartupCode::DE16) == 1);
+    CHECK(KernelTest::ErrorCount(FinishOne(derived(false), true), StartupCode::DE16) == 1);
     KERNEL_REQUIRE_OK(FinishOne(derived(true), true));
 }
 

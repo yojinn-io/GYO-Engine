@@ -11,7 +11,10 @@ those symbols with nm and allows only:
   FOREIGN          symbols the kernel's object files carry because they include another module's header that
                    defines an inline variable. They belong to that module, not to the kernel: GYO::Base's
                    assertion handler and its thread_local reentry flag (engine/base/include/engine/base/Assert.hpp;
-                   spec B.5 names both). They are reported on their own line, never silently.
+                   spec B.5 names both). They are reported on their own line, never silently;
+  TOOLCHAIN        data the compiler emits for exception handling (GCC's DW.ref.__gxx_personality_v0), reported
+                   the same way.
+--require NAME makes an allowed name mandatory (a positive control: an empty result cannot pass).
 
 Writable sections: on ELF (Linux) .data*, .bss*, .tdata*, .tbss*, not .data.rel.ro* (read-only after relocation);
 on Mach-O (macOS) the __DATA segment's __data, __bss, __common and __thread_* sections, not __const. A symbol's
@@ -23,13 +26,14 @@ Windows is not covered (MSVC has no nm; dumpbin prints another shape): declared 
 
 On macOS the nm -m output is demangled with c++filt.
 
-Usage: python3 kernel_symbols.py --nm NM --library LIBRARY [--format auto|sysv|darwin]
+Usage: python3 kernel_symbols.py --nm NM (--library LIBRARY | --library-newest DIR) [--format auto|sysv|darwin]
 """
 import argparse
 import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 KERNEL_ALLOWED = {
     "TypeKey anchor": re.compile(r"^GYO::Kernel::Detail::TypeKeyOf<.+>::typeKeyAnchor$"),
@@ -38,6 +42,11 @@ KERNEL_ALLOWED = {
 FOREIGN = {
     "GYO::Base assertion handler": re.compile(r"^Engine::Base::Detail::assertionHandler$"),
     "GYO::Base assertion reentry flag": re.compile(r"^Engine::Base::Detail::reportingAssertion$"),
+}
+# Data the compiler emits for exception handling, not a variable of any source: GCC's indirect reference to the
+# C++ personality routine (DW.ref.__gxx_personality_v0, in .data.rel.local on ELF).
+TOOLCHAIN = {
+    "GCC personality reference": re.compile(r"^DW\.ref\.__gxx_personality_v0$"),
 }
 ELF_WRITABLE = re.compile(r"^\.(?:data|bss|tdata|tbss)(?:\.|$)")
 ELF_READ_ONLY = re.compile(r"^\.data\.rel\.ro(?:\.|$)")
@@ -83,7 +92,8 @@ def classify(symbols):
         if allowed:
             present.update(allowed)
             continue
-        if any(pattern.match(name) for pattern in FOREIGN.values()):
+        if any(pattern.match(name) for pattern in FOREIGN.values()) or \
+                any(pattern.match(name) for pattern in TOOLCHAIN.values()):
             foreign.append(name)
             continue
         findings.append(name)
@@ -113,9 +123,22 @@ def run_nm(nm, library, kind):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--nm", required=True)
-    parser.add_argument("--library", required=True)
+    library = parser.add_mutually_exclusive_group(required=True)
+    library.add_argument("--library")
+    # For the mutation catalog, whose commands cannot name a build directory: the most recently built kernel
+    # library under DIR (the one the mutation runner just rebuilt).
+    library.add_argument("--library-newest", metavar="DIR")
     parser.add_argument("--format", choices=("auto", "sysv", "darwin"), default="auto")
+    # Allowed names that must be present: a positive control, so an unreadable symbol table or a wrong section
+    # list (an empty result) cannot pass (architect 2026-11-13, judgement 9 condition (i)).
+    parser.add_argument("--require", action="append", default=[], choices=sorted(KERNEL_ALLOWED))
     args = parser.parse_args(argv)
+    if args.library_newest:
+        found = sorted(Path(args.library_newest).rglob("libgyo_kernel.a"), key=lambda p: p.stat().st_mtime)
+        if not found:
+            print(f"kernel symbols: no libgyo_kernel.a under {args.library_newest}")
+            return 2
+        args.library = str(found[-1])
     kind = args.format if args.format != "auto" else ("darwin" if sys.platform == "darwin" else "sysv")
     try:
         text = run_nm(args.nm, args.library, kind)
@@ -130,11 +153,15 @@ def main(argv=None):
     for label in KERNEL_ALLOWED:
         print(f"kernel symbols: allowed {label}: {'present' if label in present else 'absent'}")
     for name in foreign:
-        print(f"kernel symbols: foreign (another module's inline variable): {name}")
+        print(f"kernel symbols: foreign (another module's inline variable, or toolchain data): {name}")
     for name in findings:
         print(f"kernel symbols: writable data symbol not allowed: {name}")
-    if findings:
-        print(f"kernel symbols: {len(findings)} finding(s) (declaration judgement 9; spec J-9, A.6)")
+    missing = [label for label in args.require if label not in present]
+    for label in missing:
+        print(f"kernel symbols: required allowed symbol missing: {label} (is the symbol table read, and the "
+              f"section list right?)")
+    if findings or missing:
+        print(f"kernel symbols: {len(findings) + len(missing)} finding(s) (declaration judgement 9; spec J-9, A.6)")
         return 1
     print(f"kernel symbols: clean ({len(symbols)} writable symbol(s), {nm_kind(kind)})")
     return 0

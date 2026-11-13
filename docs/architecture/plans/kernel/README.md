@@ -54,6 +54,7 @@ v8-arch-kernel
 ├── -h7-scanner 下段（遷移計畫 §3.4）｜實作 Opus／high（型別近似 xhigh）、審查與敵對檢查 Fable／high｜H-7 呼叫點掃描器：共通 `tests/common/h7_scan/`（自測 124、突變 104/104，Fable 審查與敵對檢查已處置）＋五個 owner 的 `h7-hosts.json`（18 檔，基線 H7-a 2／H7-b 11，只報告）｜完成，已合併（PR #207，2026-11-13；L1 run 43362195890 三平台綠；[宣告](h7-scanner-declaration.zh-Hant.md)）
 ├── remove-object-fps 上段｜實作 Opus／high、審查 Fable／high｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview，**加 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance（含各自測試；使用者 2026-11-11）**（§7 完整刪除；兼驗 removability：共通層零修改是判定，不成立就記 Delta 不修）｜完成：判定 1～5 成立（三平台 L1 run 43188319281），§7 實測共通層零修改；PR #185（2026-11-12）
 ├── -kernel-scaffold 上段｜實作 Opus／high、審查＋敵對檢查 Fable／high（一次）｜kernel 進 L1 的腳手架：`engine/kernel`（INTERFACE、只連 Base）、J-9 與 naming DI 1／3 掃描、J-10 兩種樣本、突變 37｜完成，已合併（PR #204，2026-11-13；突變 79/79；[宣告](kernel-scaffold-declaration.zh-Hant.md)）
+├── -kernel-registry-schedule 上段｜實作 Opus／xhigh、審查＋敵對檢查 Fable／xhigh（一次）｜Registry、簽名推描述（全部參數型別）、Scheduler、Plan 與指紋、區規則與錯誤代號表、G-5 匯出、資料流邊比例、符號層的可寫全域檢查、BU-3｜實作中（[宣告](registry-schedule-declaration.zh-Hant.md)）
 └── -audit   **完成**｜Opus／high ×3、對抗 Fable／high（4/5）｜現有模組逐一「留／包／重寫」，給中間層成本
 ```
 
@@ -79,6 +80,7 @@ v8-arch-kernel
 
 ## dev_log
 
+- [2026_11_13_arch_kernel_registry_schedule.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_registry_schedule.zh-Hant.md)：-kernel-registry-schedule（任務卡；[宣告](registry-schedule-declaration.zh-Hant.md)）。
 - [2026_11_13_arch_h7_scanner.zh-Hant.md](../../../dev_logs/2026_11_13_arch_h7_scanner.zh-Hant.md)：-h7-scanner（任務卡；[宣告](h7-scanner-declaration.zh-Hant.md)）。
 - [2026_11_13_arch_kernel_scaffold.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_scaffold.zh-Hant.md)：-kernel-scaffold（[宣告](kernel-scaffold-declaration.zh-Hant.md)）。
 - [2026_11_13_arch_kernel_a6_revision.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_a6_revision.zh-Hant.md)：-a6-revision（spec v0.4、Kernel 的 DI 落 target；[宣告](a6-revision-declaration.zh-Hant.md)、[報告](a6-revision-report.zh-Hant.md)）。

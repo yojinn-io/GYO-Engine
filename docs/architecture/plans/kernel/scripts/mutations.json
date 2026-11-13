@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check, and the two compile-failure sample shapes of spec J-10 (migration plan U5). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir build/target/_build/test --cmake <cmake>. Later kernel batches add their mutants here.",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here.",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -565,9 +565,9 @@
     {
       "id": "ks-real-product-name",
       "what": "a registered product name enters engine/kernel (spec J-9 mutation: add a product name)",
-      "file": "engine/kernel/include/engine/kernel/Kernel.hpp",
-      "find": "namespace GYO::Kernel {\n}",
-      "replace": "namespace GYO::Kernel {\nstruct ObjectFpsPvpState {};\n}",
+      "file": "engine/kernel/include/engine/kernel/Plan.hpp",
+      "find": "namespace GYO::Kernel {\n\n// A SHA-256",
+      "replace": "namespace GYO::Kernel {\nstruct ObjectFpsPvpState {};\n\n// A SHA-256",
       "expect": "K1 ObjectFpsPvp",
       "command": [
         "{python}",
@@ -578,9 +578,9 @@
     {
       "id": "ks-real-log-call",
       "what": "a log call enters engine/kernel outside the Executor",
-      "file": "engine/kernel/include/engine/kernel/Kernel.hpp",
-      "find": "namespace GYO::Kernel {\n}",
-      "replace": "namespace GYO::Kernel {\ninline void Report() { printf(\"x\"); }\n}",
+      "file": "engine/kernel/include/engine/kernel/Plan.hpp",
+      "find": "namespace GYO::Kernel {\n\n// A SHA-256",
+      "replace": "namespace GYO::Kernel {\ninline void Report() { printf(\"x\"); }\n\n// A SHA-256",
       "expect": "K6 printf",
       "command": [
         "{python}",
@@ -591,9 +591,9 @@
     {
       "id": "ks-real-role-suffix",
       "what": "a type with a role suffix enters engine/kernel",
-      "file": "engine/kernel/include/engine/kernel/Kernel.hpp",
-      "find": "namespace GYO::Kernel {\n}",
-      "replace": "namespace GYO::Kernel {\nstruct WorldHost {};\n}",
+      "file": "engine/kernel/include/engine/kernel/Plan.hpp",
+      "find": "namespace GYO::Kernel {\n\n// A SHA-256",
+      "replace": "namespace GYO::Kernel {\nstruct WorldHost {};\n\n// A SHA-256",
       "expect": "N3 type WorldHost",
       "command": [
         "{python}",
@@ -604,9 +604,9 @@
     {
       "id": "ks-real-old-namespace",
       "what": "engine/kernel uses the old Engine:: namespace",
-      "file": "engine/kernel/include/engine/kernel/Kernel.hpp",
-      "find": "namespace GYO::Kernel {\n}",
-      "replace": "namespace Engine::Kernel {\n}",
+      "file": "engine/kernel/include/engine/kernel/Plan.hpp",
+      "find": "namespace GYO::Kernel {\n\n// A SHA-256",
+      "replace": "namespace Engine::Kernel {\n\n// A SHA-256",
       "expect": "N1 namespace Engine::Kernel",
       "command": [
         "{python}",
@@ -618,51 +618,11 @@
       "id": "ks-links-extra",
       "what": "gyo_kernel links one more target (Delta-1 dependency)",
       "file": "engine/kernel/CMakeLists.txt",
-      "find": "target_link_libraries(gyo_kernel INTERFACE GYO::Base)",
-      "replace": "target_link_libraries(gyo_kernel INTERFACE GYO::Base GYO::Math)",
+      "find": "target_link_libraries(gyo_kernel PUBLIC GYO::Base)",
+      "replace": "target_link_libraries(gyo_kernel PUBLIC GYO::Base GYO::Math)",
       "expect": "gyo_kernel links .*expected exactly GYO::Base",
       "target": "gyo_kernel_tests",
       "expect_build_failure": true
-    },
-    {
-      "id": "ks-sample-a-no-assert",
-      "what": "sample (a): the registration point no longer rejects a callable with state",
-      "file": "tests/common/kernel/compile_fail/SampleContract.hpp",
-      "find": "    static_assert(kAccepted<Callable>, \"GYO_KERNEL_SAMPLE_REJECTED: a system callable has state\");",
-      "replace": "    (void)sizeof(Callable);",
-      "expect": "kernel\\.compile_fail_sample: a callable with state compiled",
-      "target": "gyo_kernel_tests",
-      "expect_build_failure": true
-    },
-    {
-      "id": "ks-sample-a-control-broken",
-      "what": "sample (a): the control no longer compiles",
-      "file": "tests/common/kernel/compile_fail/RejectsCapturingCallable.cpp",
-      "find": "    const auto system = [](int input) { return input + 1; };",
-      "replace": "    const auto system = [value](int input) { return input + 1; };",
-      "expect": "kernel\\.compile_fail_sample: the control .* did not",
-      "target": "gyo_kernel_tests",
-      "expect_build_failure": true
-    },
-    {
-      "id": "ks-sample-a-wrong-failure",
-      "what": "sample (a): the rejected build fails for another reason, before the registration point is reached",
-      "file": "tests/common/kernel/compile_fail/RejectsCapturingCallable.cpp",
-      "find": "    const auto system = [value](int input) { return input + value; };",
-      "replace": "    const auto system = undeclared_name;",
-      "expect": "kernel\\.compile_fail_sample: the rejected build failed without",
-      "target": "gyo_kernel_tests",
-      "expect_build_failure": true
-    },
-    {
-      "id": "ks-sample-b-reference-accepted",
-      "what": "sample (b): the trait accepts a capture by reference (sample (a) does not build that case)",
-      "file": "tests/common/kernel/compile_fail/SampleContract.hpp",
-      "find": "inline constexpr bool kAccepted = std::is_empty_v<Callable>;",
-      "replace": "inline constexpr bool kAccepted = std::is_empty_v<Callable> || sizeof(Callable) == sizeof(void*);",
-      "expect": "kAccepted<decltype\\(by_reference\\)>",
-      "target": "gyo_kernel_tests",
-      "cases": "Kernel compile-failure sample (b)*"
     },
     {
       "id": "ks-adv-line-comment-to-eof",
@@ -1502,6 +1462,936 @@
         "-p",
         "test_kernel_guard.py",
         "-v"
+      ]
+    },
+    {
+      "id": "rs-j3-2-ambiguity-tie-j22",
+      "what": "J.3 #2: (c) ambiguity becomes a registration-order tie (J-22)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "if (sa.options.zone == Zone::C || sb.options.zone == Zone::C) {",
+      "replace": "if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-22:*",
+      "expect": "immediate\\.result"
+    },
+    {
+      "id": "rs-j3-2-ambiguity-tie-j44",
+      "what": "J.3 #2: (c) ambiguity becomes a registration-order tie (J-44)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "if (sa.options.zone == Zone::C || sb.options.zone == Zone::C) {",
+      "replace": "if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-44:*",
+      "expect": "Permuted\\(kAmbiguous|built\\.result"
+    },
+    {
+      "id": "rs-j3-3-deferred-not-counted",
+      "what": "J.3 #3: deferred writes do not conflict (J-22)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "if (Intersects(a.access.deferredWrites, b.access.deferredWrites, &component)) {",
+      "replace": "if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-22:*",
+      "expect": "deferred\\.result"
+    },
+    {
+      "id": "rs-j3-3-event-writes-not-counted",
+      "what": "J.3 #3: event writes do not count (J-22)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "(mode == AccessMode::Read ? access.reads : access.writes).push_back({AccessKind::Event, *id});",
+      "replace": "if (mode == AccessMode::Read) access.reads.push_back({AccessKind::Event, *id});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-22:*",
+      "expect": "events\\.result"
+    },
+    {
+      "id": "rs-j3-4-z1-removed",
+      "what": "J.3 #4: the Z1 contamination check is removed (J-40)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (ZoneOf(data, key) == Zone::C) continue;\n            const bool writes",
+      "replace": "            continue;\n            const bool writes",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*",
+      "expect": "\"Z1\""
+    },
+    {
+      "id": "rs-j3-4-z2-removed",
+      "what": "J.3 #4: the Z2 contamination check is removed (J-40)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    for (const AccessKey& key : WrittenKeys(access)) {\n        if (ZoneOf(data, key) != Zone::C) continue;",
+      "replace": "    for (const AccessKey& key : WrittenKeys(access)) {\n        continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*",
+      "expect": "\"Z2\""
+    },
+    {
+      "id": "rs-j3-5-changed-allowed",
+      "what": "J.3 #5: zone C may filter by Changed / Added (J-38)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (access.changeFilters) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-38:*",
+      "expect": "\"S-9\""
+    },
+    {
+      "id": "rs-j3-6-tie-by-name",
+      "what": "J.3 #6: (b) ties are broken by name (J-23)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                    AddTieEdge(a, b);",
+      "replace": "                    if (sa.options.name < sb.options.name) AddTieEdge(a, b); else AddTieEdge(b, a);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-23:*",
+      "expect": "SystemSteps"
+    },
+    {
+      "id": "rs-j3-6-unstable-key",
+      "what": "J.3 #6: the Plan's tie key is the node index, not registrationSeq (J-20)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "return IsSystem(node) ? std::make_pair(0, static_cast<std::size_t>(nodes_[node].system)) : std::make_pair(1, node);",
+      "replace": "return std::make_pair(IsSystem(node) ? 0 : 1, node);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-20:*",
+      "expect": "shuffled\\.registry->Frozen\\(\\)\\.PlanOf\\(\"FixedUpdate\"\\)"
+    },
+    {
+      "id": "rs-j3-11-skip-hooks",
+      "what": "J.3 #11: exclusive writer count skips hooks (J-15)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                writers[key].emplace_back(\"hook \" + hook.name, SourceText(hook.source));",
+      "replace": "                (void)hook;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-15:*",
+      "expect": "c\\.what := \"?hook"
+    },
+    {
+      "id": "rs-j3-11-skip-deferred",
+      "what": "J.3 #11: exclusive writer count skips CommandsFor and bundles (J-15)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        for (const AccessKey& key : WrittenKeys(system.access)) {",
+      "replace": "        for (const AccessKey& key : system.access.writes) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-15:*",
+      "expect": "c\\.what := \"?deferred insert"
+    },
+    {
+      "id": "rs-j3-11-skip-bundle",
+      "what": "J.3 #11: Spawn's bundle is not in the access set (J-15)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "TypeList<Access::Spawn, Access::DeferredWrite<C>...>, false> {};",
+      "replace": "TypeList<Access::Spawn>, false> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-15:*",
+      "expect": "c\\.what := \"?Spawn bundle"
+    },
+    {
+      "id": "rs-j3-14-z1-reads-only",
+      "what": "J.3 #14: Z1 looks at reads only, not writes and With / Without (J-40)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        for (const AccessKey& key : TouchedKeys(access)) {\n            if (ZoneOf(data, key) == Zone::C) continue;",
+      "replace": "        for (const AccessKey& key : access.reads) {\n            if (ZoneOf(data, key) == Zone::C) continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*",
+      "expect": "FilterWithB|FilterWithoutB|WriteModeFromC"
+    },
+    {
+      "id": "rs-sample-capture-accepted",
+      "what": "J-10 sample (a): a capturing lambda is no longer rejected",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    } else if constexpr (!std::is_empty_v<F> || !std::is_default_constructible_v<F> ||",
+      "replace": "    } else if constexpr (false && (!std::is_empty_v<F> || !std::is_default_constructible_v<F>) &&",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true,
+      "expect": "variant CAPTURE compiled"
+    },
+    {
+      "id": "rs-sample-return-accepted",
+      "what": "J-10 sample (a): a void return is no longer rejected",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    if constexpr (!std::is_same_v<typename Sig::Return, SystemResult>) {\n        return Rejection::ReturnType;",
+      "replace": "    if constexpr (false) {\n        return Rejection::ReturnType;",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true,
+      "expect": "variant RETURN compiled"
+    },
+    {
+      "id": "rs-sample-parameter-unchecked",
+      "what": "J-10 sample (a): parameters without ParamTraits are not rejected by the contract",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    } else if constexpr (!Facts::allValid) {\n        return Rejection::Parameter;",
+      "replace": "    } else if constexpr (false) {\n        return Rejection::Parameter;",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true,
+      "expect": "variant WORLD failed without"
+    },
+    {
+      "id": "rs-sample-control-broken",
+      "what": "J-10 sample (a): the control no longer compiles",
+      "file": "tests/common/kernel/compile_fail/SystemContractSample.cpp",
+      "find": "    const auto system = [](Query<Read<SamplePos>>) -> SystemResult { return {}; };",
+      "replace": "    const auto system = [value](Query<Read<SamplePos>>) -> SystemResult { return {}; };",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true,
+      "expect": "the control did not"
+    },
+    {
+      "id": "rs-sample-wrong-failure",
+      "what": "J-10 sample (a): the capture variant fails for another reason",
+      "file": "tests/common/kernel/compile_fail/SystemContractSample.cpp",
+      "find": "    const auto system = [value](Query<Read<SamplePos>>) -> SystemResult { return value > 0 ? SystemResult{} : SystemResult{}; };",
+      "replace": "    const auto system = undeclared_name;",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true,
+      "expect": "variant CAPTURE failed without"
+    },
+    {
+      "id": "rs-j10-member-accepted",
+      "what": "J-10: a member function is not told apart",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    if constexpr (Sig::member) {\n        return Rejection::MemberFunction;\n    } else if constexpr (!Sig::function) {\n        return Rejection::NotCallable;\n    } else {\n        return Detail::CheckSystemSignature<Sig>();",
+      "replace": "    if constexpr (false) {\n        return Rejection::MemberFunction;\n    } else if constexpr (!Sig::function) {\n        return Rejection::NotCallable;\n    } else {\n        return Detail::CheckSystemSignature<Sig>();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-10:*",
+      "expect": "Rejection::MemberFunction"
+    },
+    {
+      "id": "rs-j10-exclusive-world-not-alone",
+      "what": "J-10: ExclusiveWorld beside other parameters is accepted",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "} else if constexpr (Valid::soleCount > 0 && sizeof...(P) != 1) {",
+      "replace": "} else if constexpr (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-10:*",
+      "expect": "ExclusiveWorldNotAlone"
+    },
+    {
+      "id": "rs-j10-seventeen",
+      "what": "J-10: 17 parameters are accepted",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    if constexpr (Facts::count > kMaxParameters) {",
+      "replace": "    if constexpr (Facts::count > kMaxParameters + 1) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-10:*",
+      "expect": "TooManyParameters"
+    },
+    {
+      "id": "rs-j11-self-conflict-off",
+      "what": "J-11: the self-conflict check is removed",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    static constexpr bool value = (One<E>::value || ...);",
+      "replace": "    static constexpr bool value = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-11:*",
+      "expect": "SelfConflict"
+    },
+    {
+      "id": "rs-j11-read-write-allowed",
+      "what": "J-11: reading and writing one column is allowed (only double writes caught)",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "        : std::bool_constant<(CountOf<List, Access::ComponentWrite<T>>::value > 1) ||\n                             Contains<List, Access::ComponentRead<T>>> {};",
+      "replace": "        : std::bool_constant<(CountOf<List, Access::ComponentWrite<T>>::value > 1)> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-11:*",
+      "expect": "ReadsAndWrites"
+    },
+    {
+      "id": "rs-j13-condition-write-allowed",
+      "what": "J-13: a run condition with a write parameter is accepted",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "                if constexpr (sizeof...(P) == 0 || ValidParamFacts<P...>::readOnly) {",
+      "replace": "                if constexpr (true) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-13:*",
+      "expect": "ConditionNotReadOnly"
+    },
+    {
+      "id": "rs-j12-write-term-dropped",
+      "what": "J-12: a parameter's Contribution misses a type (Query Write)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    static constexpr bool readOnly = false;\n    using Contribution = TypeList<Access::ComponentWrite<T>>;",
+      "replace": "    static constexpr bool readOnly = false;\n    using Contribution = TypeList<>;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*",
+      "expect": "ComponentWrite<TestPos>|MovePos"
+    },
+    {
+      "id": "rs-j12-bundle-dropped",
+      "what": "J-12: the bundle is not in the access set",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "TypeList<Access::Spawn, Access::DeferredWrite<C>...>, false> {};",
+      "replace": "TypeList<Access::Spawn>, false> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*",
+      "expect": "Spawn<Bundle<TestPos, TestVel>>|SpawnBodies"
+    },
+    {
+      "id": "rs-j12-condition-reads-dropped",
+      "what": "J-12: run condition reads do not join the System's reads",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                condition.resolve(conditionResolver);\n                for (const AccessKey& key : conditionResolver.access.reads) resolver.access.reads.push_back(key);\n                for (ComponentId id : conditionResolver.access.membershipReads) resolver.access.membershipReads.push_back(id);\n                resolver.access.changeFilters",
+      "replace": "                condition.resolve(conditionResolver);\n                resolver.access.changeFilters",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*",
+      "expect": "GatedWrite"
+    },
+    {
+      "id": "rs-j12-tick-one-mount",
+      "what": "J-12: CurrentTick counts only the first mount's domain",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                        access.reads.push_back({AccessKind::DomainTick, static_cast<std::uint32_t>(schedule->options.domain)});",
+      "replace": "                        access.reads.push_back({AccessKind::DomainTick, static_cast<std::uint32_t>(schedule->options.domain)});\n                        break;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*",
+      "expect": "StampTick"
+    },
+    {
+      "id": "rs-j14-default-zone-b",
+      "what": "J-14: a System's zone defaults to B",
+      "file": "engine/kernel/include/engine/kernel/Registry.hpp",
+      "find": "    std::string name;\n    Zone zone = Zone::Unset;\n    // Zone B only",
+      "replace": "    std::string name;\n    Zone zone = Zone::B;\n    // Zone B only",
+      "target": "gyo_kernel_tests",
+      "cases": "J-14:*",
+      "expect": "ErrorCount\\(built, StartupCode::DE7\\) == 4"
+    },
+    {
+      "id": "rs-j14-local-allowed",
+      "what": "J-14: zone C may hold Local",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (access.local) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-14:*",
+      "expect": "\"S-7\""
+    },
+    {
+      "id": "rs-j14-effects-allowed",
+      "what": "J-14: zone C may declare any effect",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            for (EffectId effect : system.effects) {\n                data.Error(StartupCode::DE7, \"S-8\",",
+      "replace": "            for (EffectId effect : std::vector<EffectId>{}) {\n                data.Error(StartupCode::DE7, \"S-8\",",
+      "target": "gyo_kernel_tests",
+      "cases": "J-14:*",
+      "expect": "io, StartupCode::DE7, \"S-8\""
+    },
+    {
+      "id": "rs-j15-startup-counted",
+      "what": "J-15: Startup writers count",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (schedule != nullptr && !schedule->options.startup) counted = true;",
+      "replace": "            if (schedule != nullptr) counted = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-15:*",
+      "expect": "\\(startup\\)\\.result"
+    },
+    {
+      "id": "rs-j16-digest-shared-allowed",
+      "what": "J-16: a Shared column in the digest set is accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                if (data.components[member].writePolicy == WritePolicy::Shared) {",
+      "replace": "                if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-16:*",
+      "expect": "\"S-12\""
+    },
+    {
+      "id": "rs-j17-no-dedup",
+      "what": "J-17: the export lists a file once per System",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    files.erase(std::unique(files.begin(), files.end()), files.end());\n    std::string out",
+      "replace": "    std::string out",
+      "target": "gyo_kernel_tests",
+      "cases": "J-17:*",
+      "expect": "text\\.find\\(file, text\\.find\\(file\\)"
+    },
+    {
+      "id": "rs-j17-generated-by",
+      "what": "J-17: the export claims to be hand-written",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "\"generated_by\\\": \\\"gyo-kernel-report\\\"",
+      "replace": "\"generated_by\\\": \\\"manual\\\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-17:*",
+      "expect": "generated_by"
+    },
+    {
+      "id": "rs-j17-zone-b-listed",
+      "what": "J-17: zone B Systems are listed too",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        if (system.options.zone != Zone::C) continue;\n        const std::string path",
+      "replace": "        const std::string path",
+      "target": "gyo_kernel_tests",
+      "cases": "J-17:*",
+      "expect": "static_cast<bool>\\(empty\\)"
+    },
+    {
+      "id": "rs-j18-plugins-reversed",
+      "what": "J-18: plugins are built in reverse list order",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    for (std::size_t i = 0; i < data.plugins.size(); ++i) {\n        if (!data.plugins[i].built) continue;\n        Registrar registrar(data, static_cast<std::uint32_t>(i));",
+      "replace": "    for (std::size_t j = data.plugins.size(); j-- > 0;) {\n        const std::size_t i = j;\n        if (!data.plugins[i].built) continue;\n        Registrar registrar(data, static_cast<std::uint32_t>(i));",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*",
+      "expect": "ComponentIdOf<TestPos>\\(\\) == 0U"
+    },
+    {
+      "id": "rs-j19-duplicate-built",
+      "what": "J-19: a duplicate plugin is built anyway",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (!data.plugins[i].built) continue;\n        Registrar registrar(",
+      "replace": "        Registrar registrar(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-19:*",
+      "expect": "b\\.builds == 0"
+    },
+    {
+      "id": "rs-j19-requires-unchecked",
+      "what": "J-19: requires is not checked",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (!earlier) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-19:*",
+      "expect": "ErrorCount\\(.*StartupCode::RE3\\)"
+    },
+    {
+      "id": "rs-j19-type-twice-allowed",
+      "what": "J-19: a type may be registered twice",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (const TypeEntry* existing = data.FindType(key)) {\n        if (existing->size",
+      "replace": "    if (const TypeEntry* existing = (data.FindType(key), nullptr)) {\n        if (existing->size",
+      "target": "gyo_kernel_tests",
+      "cases": "J-19:*",
+      "expect": "ErrorCount\\(.*StartupCode::RE2\\)"
+    },
+    {
+      "id": "rs-j19-unregistered-silent",
+      "what": "J-19: an unregistered type is not reported",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        data_.Error(StartupCode::RE4, \"R-6\",\n                    subject_ + \" references a \"",
+      "replace": "        if (false) data_.Error(StartupCode::RE4, \"R-6\",\n                    subject_ + \" references a \"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-19:*",
+      "expect": "ErrorCount\\(.*StartupCode::RE4\\)"
+    },
+    {
+      "id": "rs-j21-no-tie-edge",
+      "what": "J-21: (b) ties add no order edge",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                    AddTieEdge(a, b);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-21:*",
+      "expect": "GYO_ASSERT failed"
+    },
+    {
+      "id": "rs-j22-deferred-vs-read",
+      "what": "J-22: a deferred write against an immediate read counts as a conflict",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "    if (Intersects(a.access.deferredWrites, b.access.deferredWrites, &component)) {",
+      "replace": "    std::vector<ComponentId> readsB;\n    for (const AccessKey& k : b.access.reads) if (k.kind == AccessKind::Component) readsB.push_back(k.id);\n    if (Intersects(a.access.deferredWrites, b.access.deferredWrites, &component) || Intersects(a.access.deferredWrites, readsB, &component)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-22:*",
+      "expect": "pairs that are not ambiguous"
+    },
+    {
+      "id": "rs-j27-parallel-allowed",
+      "what": "J-27: a Parallel schedule is accepted (D-E17 removed)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (s.executor == ExecutorKind::Parallel) {\n            data.Error(StartupCode::DE17,",
+      "replace": "        if (false) {\n            data.Error(StartupCode::DE17,",
+      "target": "gyo_kernel_tests",
+      "cases": "J-27:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE17\\)"
+    },
+    {
+      "id": "rs-j27-guard-unchecked",
+      "what": "J-27: a (c) Parallel schedule without a guard is accepted (X-E1 removed)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty()) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-27:*",
+      "expect": "ErrorCount\\(.*StartupCode::XE1\\)"
+    },
+    {
+      "id": "rs-j28-affinity-unchecked",
+      "what": "J-28: thread roles are not checked",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                if (affinity.IsAny() || affinity.role == s.runner) return;",
+      "replace": "                return;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-28:*",
+      "expect": "ErrorCount\\(.*StartupCode::XE2\\)"
+    },
+    {
+      "id": "rs-j28-main-is-named",
+      "what": "J-28: a Main role is reported as a named role",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                const bool main = affinity.role == kMainRole;",
+      "replace": "                const bool main = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-28:*",
+      "expect": "ErrorCount\\(.*StartupCode::XE2\\)"
+    },
+    {
+      "id": "rs-j24-stop-at-first",
+      "what": "J-24: Finish stops at the first errors found",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    Detail::CheckExclusiveWriters(data);\n    Detail::CheckHookConflicts(data);\n    Detail::BuildPlans(data);",
+      "replace": "    if (!data.errors.empty()) return Engine::Base::Err(StartupReport(std::move(data.errors)));\n    Detail::CheckExclusiveWriters(data);\n    Detail::CheckHookConflicts(data);\n    Detail::BuildPlans(data);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "report\\.Has\\(StartupCode::DE4\\)"
+    },
+    {
+      "id": "rs-j24-de1-removed",
+      "what": "J-24: a missing schedule is not reported",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (record == nullptr) {\n                data.Error(StartupCode::DE1,",
+      "replace": "            if (record == nullptr) {\n                continue;\n                data.Error(StartupCode::DE1,",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE1\\)"
+    },
+    {
+      "id": "rs-j24-de3-removed",
+      "what": "J-24: Spawn without an allotter is not reported",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                data.Error(StartupCode::DE3, \"A.1\",",
+      "replace": "                if (false) data.Error(StartupCode::DE3, \"A.1\",",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE3\\)"
+    },
+    {
+      "id": "rs-j24-de5-removed",
+      "what": "J-24: an order against stage order is ignored silently",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "        if (sf > st) {\n            Error(StartupCode::DE5,",
+      "replace": "        if (sf > st) {\n            return;\n            Error(StartupCode::DE5,",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE5\\)"
+    },
+    {
+      "id": "rs-j24-de9-removed",
+      "what": "J-24: zone C hook conflicts are not reported",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (a.zone != Zone::C && b.zone != Zone::C) continue;",
+      "replace": "            continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE9\\)"
+    },
+    {
+      "id": "rs-j24-de12-removed",
+      "what": "J-24: clock schedules per domain are not counted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (names.size() != 1) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE12\\)"
+    },
+    {
+      "id": "rs-j24-de13-removed",
+      "what": "J-24: schedules on different runners are accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (other.runner != first.runner && !other.runner.empty() && !first.runner.empty()) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE13\\)"
+    },
+    {
+      "id": "rs-j24-de14-removed",
+      "what": "J-24: an unfrozen extract source is accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (resolver.usesExtract && (data.extractSource == nullptr || !data.extractSource->frozen)) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE14\\)"
+    },
+    {
+      "id": "rs-j24-de15-removed",
+      "what": "J-24: ingress without NotInRollback is accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (system.options.ingress && s.rollbackEnabled && !mount.notInRollback) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE15\\)"
+    },
+    {
+      "id": "rs-j24-de16-removed",
+      "what": "J-24: a Derived read with no writer before it is accepted",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                if (!written) {\n                    Error(StartupCode::DE16,",
+      "replace": "                if (false) {\n                    Error(StartupCode::DE16,",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE16\\)"
+    },
+    {
+      "id": "rs-j24-de18-resmut-only",
+      "what": "J-24: only ResMut of KernelSettings is reported",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (*id == data_.kernelSettings) {",
+      "replace": "            if (*id == data_.kernelSettings && mode == AccessMode::Write) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(settings, StartupCode::DE18\\)"
+    },
+    {
+      "id": "rs-j24-de19-removed",
+      "what": "J-24: two mounts in one schedule are accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (!mountedSchedules.insert(s.name).second) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE19\\)"
+    },
+    {
+      "id": "rs-j24-re5-reported-as-re2",
+      "what": "J-24: a key collision is reported as a duplicate",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (existing->size != size || existing->align != align || existing->role != role) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::RE5\\)"
+    },
+    {
+      "id": "rs-j24-re6-removed",
+      "what": "J-24: two runners are accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (data.runners.size() > 1) {",
+      "replace": "    if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::RE6\\)"
+    },
+    {
+      "id": "rs-j24-de6-removed",
+      "what": "J-24: a cycle is not reported",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "        Error(StartupCode::DE6, \"D.2\", \"order cycle in schedule '\"",
+      "replace": "        return false;\n        Error(StartupCode::DE6, \"D.2\", \"order cycle in schedule '\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE6\\)"
+    },
+    {
+      "id": "rs-j24-de4-removed",
+      "what": "J-24: a missing before / after target is ignored (every name exists)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "    bool Exists(const std::string& name) const {\n        if (systemByName_",
+      "replace": "    bool Exists(const std::string& name) const {\n        return true;\n        if (systemByName_",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(.*StartupCode::DE4\\)"
+    },
+    {
+      "id": "rs-j37-event-domain-unchecked",
+      "what": "J-37: events are not checked against the clock schedule",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                if (!s.clock || s.domain != event.domain) {",
+      "replace": "                if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-37:*",
+      "expect": "ErrorCount\\(.*StartupCode::FE1\\)"
+    },
+    {
+      "id": "rs-j37-nonclock-allowed",
+      "what": "J-37: a non-clock schedule of the event's domain may use it",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                if (!s.clock || s.domain != event.domain) {",
+      "replace": "                if (s.domain != event.domain) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-37:*",
+      "expect": "nonClock"
+    },
+    {
+      "id": "rs-j39-ingress-for-all",
+      "what": "J-39 / J-40: the ingress exemption covers every zone B System",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (ingress && IsInput(data, key)) continue;  // Z3",
+      "replace": "        if (IsInput(data, key)) continue;  // Z3",
+      "target": "gyo_kernel_tests",
+      "cases": "J-39:*",
+      "expect": "bWritesInput, StartupCode::DE7, \"Z2\""
+    },
+    {
+      "id": "rs-j39-boundary-c-write",
+      "what": "J-39: zone C may write boundary input",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        for (const AccessKey& key : written) {\n            if (IsInput(data, key)) {",
+      "replace": "        for (const AccessKey& key : written) {\n            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-39:*",
+      "expect": "\"Z3\""
+    },
+    {
+      "id": "rs-j40-z8-removed",
+      "what": "J-40: role=Input with rollback is accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (info.role == Role::Input && info.rollback != Rollback::No) {\n            data.Error(StartupCode::DE7, \"Z8\", \"resource '\"",
+      "replace": "        if (false) {\n            data.Error(StartupCode::DE7, \"Z8\", \"resource '\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*",
+      "expect": "\"Z8\""
+    },
+    {
+      "id": "rs-j40-ingress-stage-unchecked",
+      "what": "J-40: ingress outside the ingress stage is accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (system.options.ingress && (s.ingressStage.empty() || mount.stage != s.ingressStage)) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*",
+      "expect": "\"Z3\""
+    },
+    {
+      "id": "rs-j41-writes-unchecked",
+      "what": "J-41: Z1 / Z7 catch reads only",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            const bool writes = std::binary_search(written.begin(), written.end(), key);",
+      "replace": "            if (std::binary_search(written.begin(), written.end(), key)) continue;\n            const bool writes = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-41:*",
+      "expect": "\"Z7\""
+    },
+    {
+      "id": "rs-j47-late-members-dropped",
+      "what": "J-47: the set expansion drops members added by later plugins",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            set.members.push_back(entry->id);",
+      "replace": "            if (set.memberOwners[i] == set.owner) set.members.push_back(entry->id);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-47:*",
+      "expect": "info->access\\.reads"
+    },
+    {
+      "id": "rs-sym-inline-g",
+      "what": "judgement 9: a namespace-scope inline variable in the kernel (no static keyword)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "Plugin::~Plugin() = default;",
+      "replace": "inline int g = 0;\nPlugin::~Plugin() { ++g; }",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build"
+      ],
+      "expect": "not allowed: GYO::Kernel::g",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "rs-sym-anonymous",
+      "what": "judgement 9: an anonymous-namespace variable in the kernel",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "Plugin::~Plugin() = default;",
+      "replace": "namespace { int counter = 0; }\nPlugin::~Plugin() { ++counter; }",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build"
+      ],
+      "expect": "not allowed: .*anonymous namespace.*counter",
+      "platforms": [
+        "darwin",
+        "linux"
+      ]
+    },
+    {
+      "id": "rs-sym-third-allowed",
+      "what": "judgement 9: a third kernel symbol is allowed",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "    \"tlCurrent\": re.compile(r\"^GYO::Kernel::(?:\\w+::)*tlCurrent$\"),",
+      "replace": "    \"tlCurrent\": re.compile(r\"^GYO::Kernel::(?:\\w+::)*tlCurrent$\"),\n    \"cache\": re.compile(r\"^GYO::Kernel::cache$\"),",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_allowlist_is_exactly_two"
+    },
+    {
+      "id": "rs-sym-bss-unread",
+      "what": "judgement 9: ELF .bss is not read as writable",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "ELF_WRITABLE = re.compile(r\"^\\.(?:data|bss|tdata|tbss)(?:\\.|$)\")",
+      "replace": "ELF_WRITABLE = re.compile(r\"^\\.(?:data|tdata|tbss)(?:\\.|$)\")",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_inline_variable_without_static_is_found"
+    },
+    {
+      "id": "rs-sym-common-unread",
+      "what": "judgement 9: Mach-O __common is not read as writable",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "DARWIN_WRITABLE = {\"__data\", \"__bss\", \"__common\", \"__thread_vars\", \"__thread_data\", \"__thread_bss\"}",
+      "replace": "DARWIN_WRITABLE = {\"__data\", \"__bss\", \"__thread_vars\", \"__thread_data\", \"__thread_bss\"}",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_inline_variable_without_static_is_found"
+    },
+    {
+      "id": "rs-sym-relro-counted",
+      "what": "judgement 9: .data.rel.ro counts as writable",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "        if not value or not ELF_WRITABLE.match(section) or ELF_READ_ONLY.match(section):",
+      "replace": "        if not value or not ELF_WRITABLE.match(section):",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_sysv_read_only_and_text_and_undefined_are_not_writable"
+    },
+    {
+      "id": "rs-sym-tlv-kept",
+      "what": "judgement 9: a $tlv$init companion is reported under another name",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "        name = re.sub(r\"\\$tlv\\$init$\", \"\", name)\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_tlv_companion_is_named_after_its_variable"
+    },
+    {
+      "id": "rs-sym-foreign-wide",
+      "what": "judgement 9: every Engine::Base symbol counts as foreign",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "    \"GYO::Base assertion handler\": re.compile(r\"^Engine::Base::Detail::assertionHandler$\"),",
+      "replace": "    \"GYO::Base assertion handler\": re.compile(r\"^Engine::Base::.*$\"),",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_lookalikes_of_allowed_names_are_found"
+    },
+    {
+      "id": "rs-sym-darwin-data-unread",
+      "what": "judgement 9 condition (ii): Mach-O __data missing from the section list; the required TypeKey anchor is then absent",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "DARWIN_WRITABLE = {\"__data\", \"__bss\", \"__common\", \"__thread_vars\", \"__thread_data\", \"__thread_bss\"}",
+      "replace": "DARWIN_WRITABLE = {\"__bss\", \"__common\", \"__thread_vars\", \"__thread_data\", \"__thread_bss\"}",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build",
+        "--require",
+        "TypeKey anchor"
+      ],
+      "expect": "required allowed symbol missing: TypeKey anchor",
+      "platforms": [
+        "darwin"
+      ]
+    },
+    {
+      "id": "rs-sym-elf-bss-unread",
+      "what": "judgement 9 condition (ii): ELF .bss missing from the section list; the required TypeKey anchor is then absent",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "ELF_WRITABLE = re.compile(r\"^\\.(?:data|bss|tdata|tbss)(?:\\.|$)\")",
+      "replace": "ELF_WRITABLE = re.compile(r\"^\\.(?:data|tdata|tbss)(?:\\.|$)\")",
+      "target": "gyo_kernel",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_symbols.py",
+        "--nm",
+        "nm",
+        "--library-newest",
+        "build",
+        "--require",
+        "TypeKey anchor"
+      ],
+      "expect": "required allowed symbol missing: TypeKey anchor",
+      "platforms": [
+        "linux"
       ]
     }
   ]

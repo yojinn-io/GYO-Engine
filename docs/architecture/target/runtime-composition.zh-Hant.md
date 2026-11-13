@@ -7,7 +7,7 @@
 
 ## 1. 名詞（spec §0）
 
-- **Runtime**＝一個 World、它的 Registry、它的 schedule 集合，加每個 schedule 的 Executor 策略與執行緒綁定。
+- **Runtime**＝一個 World、它的 Registry、它的 schedule 集合，加每個 schedule 的 Executor 策略與執行緒綁定。型別名 `App`（`GYO::Kernel::App`；kernel HANDOFF `v8-arch-kernel-app-name`）。
 - **Host**＝建立一或多個 Runtime、擁有執行緒、時鐘、外部服務與交換點的那一層：**提供 runner 的 plugin**（行程入口、pump、交換點、多時鐘協調）加產品的 `main`（plugin 清單加 Run）；framework 已退役（§4）。
 - 一個 World 一條擁有執行緒；兩個時鐘在不同執行緒就是兩個 World，經 Host 的交換點交換（spec H-2）。
 

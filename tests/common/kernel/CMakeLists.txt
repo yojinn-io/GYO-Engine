@@ -96,7 +96,7 @@ set_tests_properties(kernel.guard kernel.guard_selftest kernel.naming_guard kern
 if(NOT MSVC AND CMAKE_NM)
     add_test(NAME kernel.symbols
         COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/kernel_symbols.py"
-            --nm "${CMAKE_NM}" --library "$<TARGET_FILE:gyo_kernel>")
+            --nm "${CMAKE_NM}" --library "$<TARGET_FILE:gyo_kernel>" --require "TypeKey anchor")
     set_tests_properties(kernel.symbols PROPERTIES LABELS "cpu" TIMEOUT 60)
 endif()
 add_test(NAME kernel.symbols_selftest
@@ -126,13 +126,20 @@ function(gyo_kernel_compile_fail_samples)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/compile_fail/SystemContractSample.cpp")
     # The include directories GYO::Kernel gives its users (kernel and base).
     set(includes "${GYO_REPOSITORY_ROOT}/engine/kernel/include;${GYO_REPOSITORY_ROOT}/engine/base/include")
+    # try_compile does not inherit directory compile options; MSVC needs the
+    # standard-conforming preprocessor that engine/base/Assert.hpp requires
+    # (build/cmake/GyoBuild.cmake) and the conformance mode the kernel builds with.
+    set(flags)
+    if(MSVC)
+        set(flags /Zc:preprocessor /permissive-)
+    endif()
     file(GLOB kernel_headers "${GYO_REPOSITORY_ROOT}/engine/kernel/include/engine/kernel/*.hpp")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${source}" ${kernel_headers})
 
     string(TIMESTAMP start "%s%f")
     try_compile(accepted SOURCES "${source}"
         CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${includes}"
-        COMPILE_DEFINITIONS -DGYO_KERNEL_SAMPLE_ACCEPTED
+        COMPILE_DEFINITIONS -DGYO_KERNEL_SAMPLE_ACCEPTED ${flags}
         CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON
         OUTPUT_VARIABLE accepted_output
         NO_CACHE)
@@ -151,7 +158,7 @@ function(gyo_kernel_compile_fail_samples)
         string(TIMESTAMP before "%s%f")
         try_compile(rejected SOURCES "${source}"
             CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${includes}"
-            COMPILE_DEFINITIONS -DGYO_KERNEL_SAMPLE_${name}
+            COMPILE_DEFINITIONS -DGYO_KERNEL_SAMPLE_${name} ${flags}
             CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON
             OUTPUT_VARIABLE rejected_output
             NO_CACHE)

@@ -44,17 +44,24 @@ void RegisterColumns(Registrar& r, std::integer_sequence<int, C...>) {
      ...);
 }
 
-template <int... S>
-void RegisterSystems(Registrar& r, std::integer_sequence<int, S...>) {
-    (
-        [&r] {
-            Mount m;
-            m.schedule = "Update";
-            m.stage = "Stage" + std::to_string(S % kStages);
-            if (S % 10 == 0 && S + kStages < kSystems) m.before = {"System" + std::to_string(S + kStages)};
-            r.AddSystem<&Work<S>>({.name = "System" + std::to_string(S), .zone = Zone::B, .mounts = {m}});
-        }(),
-        ...);
+template <int S>
+void RegisterOne(Registrar& r) {
+    Mount m;
+    m.schedule = "Update";
+    m.stage = "Stage" + std::to_string(S % kStages);
+    if (S % 10 == 0 && S + kStages < kSystems) m.before = {"System" + std::to_string(S + kStages)};
+    r.AddSystem<&Work<S>>({.name = "System" + std::to_string(S), .zone = Zone::B, .mounts = {m}});
+}
+
+// In chunks of 100: one fold over 500 arguments exceeds AppleClang's expression nesting limit (256).
+template <int Offset, int... S>
+void RegisterChunk(Registrar& r, std::integer_sequence<int, S...>) {
+    (RegisterOne<Offset + S>(r), ...);
+}
+
+template <int... Chunk>
+void RegisterSystems(Registrar& r, std::integer_sequence<int, Chunk...>) {
+    (RegisterChunk<Chunk * 100>(r, std::make_integer_sequence<int, 100>{}), ...);
 }
 
 class SyntheticPlugin final : public Plugin {
@@ -68,7 +75,7 @@ public:
         s.clock = true;
         for (int i = 0; i < kStages; ++i) s.stages.push_back("Stage" + std::to_string(i));
         r.Schedule(s);
-        RegisterSystems(r, std::make_integer_sequence<int, kSystems>{});
+        RegisterSystems(r, std::make_integer_sequence<int, kSystems / 100>{});
     }
 };
 
