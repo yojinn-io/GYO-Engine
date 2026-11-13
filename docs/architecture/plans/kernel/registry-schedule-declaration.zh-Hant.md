@@ -1,6 +1,6 @@
 # 事前宣告：`v8-arch-kernel-registry-schedule`（Registry、簽名推描述、Scheduler、Plan）
 
-更新：2026-11-13。Owner：架構（架構師會話寫宣告；實作建議由架構師開的任務卡執行）。**狀態：草案，待使用者核准；核准前不開工。**
+更新：2026-11-13。Owner：架構（架構師會話寫宣告；實作建議由架構師開的任務卡執行）。**狀態：已核准（使用者 2026-11-13：「名字用 App，xhigh 同意，核准開始」）。**
 
 出處：遷移計畫 `migration-plan.zh-Hant.md` §3.5（本批）、§3 共通、§4 Delta-1、§6 BU-3、§7 U5；`target/kernel.zh-Hant.md`（DI-KS 1、3、4、5、6、7、8、10、15 與 RC 1、3、4）；`target/scheduler.zh-Hant.md`、`target/system-contract.zh-Hant.md`、`target/naming.zh-Hant.md`、`target/world.zh-Hant.md` §3；`docs/architecture/zone-c-sources.zh-Hant.md`（`gyo.zone-c-sources` v1）；spec §B（System 契約）、§C（Registry）、§D（Scheduler）、§G.1（區規則）、J.2、J.3；kernel `HANDOFF.md` 現況「kernel-scaffold 合併後交給後續批的事」「h7-scanner 合併後交給後續批的事」。
 
@@ -29,7 +29,9 @@
 3. **編譯失敗樣本的分工**（U5 已定）：J-10、J-11、J-13 用 try_compile（要有對照組；CMake 會把訊息折行，比對時去掉換行；include 目錄與 `GYO::Kernel` 一致），其餘用 trait＋doctest。
 4. **h7-scanner 的白名單**：若本批定了 Kernel 執行器型別的名字（第 4 節），同批改 `tests/common/h7_scan/h7_scan_rules.json` 一行與它的自測反例；若名字留到 world-exec，本批不碰。
 
-## 4. 要使用者定的事（開工前）
+## 4. 要使用者定的事（開工前）——**已定**
+
+**使用者 2026-11-13 定：型別名用 `App`（選項 (a)）；實作者 Opus／xhigh 同意。** kernel HANDOFF 決定行 `v8-arch-kernel-app-name`。
 
 **Kernel 執行器型別的名字**。spec 用 `Runtime` 稱呼「一個 World、它的 Registry、它的 schedule 集合加每個 schedule 的執行策略」，但 target/naming 第 5 條禁止新程式用 `Runtime` 當型別名尾，兩者衝突（遷移計畫 §3.5 指定本批處理）。選項：
 
