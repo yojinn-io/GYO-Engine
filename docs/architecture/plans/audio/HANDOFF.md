@@ -44,6 +44,7 @@
 - 2026-11-04：`v8-engine-audio-disk-stop-window` 實作完成、**判定變更待使用者核准**（Design Invariant 10 的守衛，AGENTS §14.4）：測試在 mixer 的 frame 0 放標記並扣掉檔案開頭，候選範圍延伸到 `Stop()` 返回後第一個 block，遲到計數須和結果一致；新增暫停 1 ms／3 ms 一案；`au-sdl-*` 突變 13／13；閒置 200、滿載 100 次通過。驗證者指出未守住的一面：後端在串流開頭加入的固定延遲（V1）。分支 `claude/v8-engine-audio-disk-stop-window`。dev_log：[2026_11_04_engine_audio_disk_stop_window](../../../dev_logs/2026_11_04_engine_audio_disk_stop_window.zh-Hant.md)。
 - 2026-11-04：使用者「核准並開 PR」：判定變更核准，接受「後端在串流開頭加入的固定延遲不再被 disk 守衛抓到」（列入未結事項）。推送並開 PR。（2026-11-12 圖書管理員補註：後續：disk-stop-window 已隨 PR #148 合併，`4a88f67f`）
 - 分支：`claude/v8-engine-audio-95a496`（已合併，PR #112）；後續在 `claude/v8-product-sfx-l2`（切自消費端的 v8 計畫分支，未推送）。（2026-11-12 圖書管理員補註：後續：sfx-l2 已隨 PR #113 合併，`d8cca12a`；Engine 的 audio-control 已隨 PR #139 合併，`8a713b1e`）
+- 2026-11-13：`v8-arch-audio-playhead-test-fix`（架構師的任務卡）：舊的 TSan 輪詢案在 CI 曾一個音都沒讀就通過，換成確定性的逐區塊案與 TSan 壓力案（獨立 CTest `gyo_audio_playhead_stress`，TSan 建置每輪上限 60 s、其餘 20 s）；DI 4 守衛文字經使用者核准；並行下同一音的讀取順序仍靠 board 窮舉交錯測試與 review。dev_log：[2026_11_13_arch_audio_playhead_test_fix](../../../dev_logs/2026_11_13_arch_audio_playhead_test_fix.zh-Hant.md)。
 
 ## 代號對照
 

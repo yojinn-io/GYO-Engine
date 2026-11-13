@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <thread>
 #include <vector>
@@ -273,19 +274,24 @@ TEST_CASE("Audio playhead board never reports another sound's state, in any inte
     CHECK(checked == 2 * (56 + 35));
 }
 
-TEST_CASE("Audio Mixer playheads stay consistent while another thread polls them") {
-    // Declared for ThreadSanitizer: 5 runs of 10^5 polls each (one run per
-    // test execution), no time bound. Every reported position of one sound only
-    // grows and stays within its clip.
-    // The rendering thread also owns the submitter: it keeps playing clips of
-    // different lengths and stopping some, so voices are reused all along. The
-    // reader polls every handle issued so far and checks that each one's
-    // position never passes its own clip, only grows, and that a sound never
-    // comes back once reported not playing after it played.
-    constexpr int kSounds = 400;
+// The two cases below share one workload: clips of three lengths, three voices,
+// one new sound at a time and every fourth sound stopped 1 ms after it starts,
+// so voices are reused all along. Every reported position of one sound only
+// grows, stays within its own clip, and a sound never comes back once reported
+// not playing after it played.
+namespace {
+
+constexpr std::uint32_t kReuseLengths[] = {150, 300, 600};
+
+struct ReuseRig final {
+    Mixer mixer;
+    std::vector<ClipId> clips;
+};
+
+ReuseRig MakeReuseRig() {
     ClipBank bank;
     std::vector<ClipId> clips;
-    for (const std::uint32_t frames : {150u, 300u, 600u}) {
+    for (const std::uint32_t frames : kReuseLengths) {
         const std::vector<std::int16_t> samples(frames, 100);
         clips.push_back(*bank.Add(Engine::Base::ConstSpan<std::int16_t>(samples.data(), samples.size()), 1, kSampleRate));
     }
@@ -294,48 +300,237 @@ TEST_CASE("Audio Mixer playheads stay consistent while another thread polls them
     config.maxVoices = 3;
     auto created = Mixer::Create(config, std::move(bank));
     REQUIRE(created.has_value());
-    Mixer mixer = std::move(created).value();
-    std::vector<std::atomic<std::uint64_t>> handles(kSounds);
-    std::atomic<int> issued{0};
-    std::atomic<bool> done{false};
-    std::atomic<int> bad{0};
-    std::thread reader([&] {
-        const std::uint32_t lengths[] = {150, 300, 600};
-        std::vector<std::uint32_t> last(kSounds, 0);
-        std::vector<bool> ended(kSounds, false);
-        for (int poll = 0; poll < 100000; ++poll) {
-            const int known = issued.load(std::memory_order_acquire);
-            for (int s = 0; s < known; ++s) {
-                const SoundHandle sound{handles[s].load(std::memory_order_relaxed)};
-                if (!sound) continue;
-                const Playhead now = mixer.PlayheadOf(sound);
-                if (now.status == Playhead::Status::NotPlaying) {
-                    if (last[s] > 0) ended[s] = true;
-                    continue;
+    return ReuseRig{std::move(created).value(), std::move(clips)};
+}
+
+// What one reader knows about each sound, and the checks on each read.
+struct ReuseTrack final {
+    std::vector<std::uint32_t> last;
+    std::vector<char> ended;
+    std::vector<char> playing; // read Playing at least once
+    int bad = 0;
+    std::uint64_t playingReads = 0;
+    std::uint64_t sequenceReads = 0; // reads compared with an earlier read of the same sound
+
+    explicit ReuseTrack(const std::size_t sounds) : last(sounds, 0), ended(sounds, 0), playing(sounds, 0) {}
+
+    void Reset(const std::size_t s) {
+        last[s] = 0;
+        ended[s] = 0;
+        playing[s] = 0;
+    }
+
+    void Check(const std::size_t s, const std::uint32_t length, const Playhead now) {
+        if (now.status == Playhead::Status::NotPlaying) {
+            if (last[s] > 0) ended[s] = 1;
+            return;
+        }
+        if (now.status == Playhead::Status::Playing) {
+            playing[s] = 1;
+            ++playingReads;
+        }
+        if (ended[s] || last[s] > 0) ++sequenceReads;
+        if (ended[s] || now.clipFrame < last[s] || now.clipFrame > length) ++bad;
+        last[s] = now.clipFrame;
+    }
+};
+
+} // namespace
+
+TEST_CASE("Audio Mixer playheads stay consistent while voices are reused, block by block") {
+    // Deterministic: one thread plays, renders and reads every issued sound
+    // after each block. A sound every 4 blocks of 64 frames keeps at most three
+    // sounding (the longest clip lasts 10 blocks), so none is dropped and every
+    // sound that is not stopped is read Playing. Each sound starts at the first
+    // frame of the block it is played in, so after k blocks a playing sound is
+    // exactly at frame 64 k, and it is reported Playing exactly while it is not
+    // stopped and 64 k is short of its clip: a position that belongs to another
+    // sound, is not published, or a sound reported ended too early, shows here.
+    constexpr int kSounds = 400;
+    constexpr int kBlocksPerSound = 4;
+    ReuseRig rig = MakeReuseRig();
+    auto submitter = rig.mixer.CreateSubmitter();
+    REQUIRE(submitter.has_value());
+    std::vector<SoundHandle> sounds;
+    std::vector<int> firstBlock;
+    ReuseTrack track(kSounds);
+    int wrongFrame = 0;
+    int wrongStatus = 0;
+    TimePoint anchor = kAnchor;
+    std::vector<std::int16_t> out(std::size_t{64} * kChannels);
+    int extra = 0;
+    for (int block = 0;; ++block) {
+        if (block % kBlocksPerSound == 0 && sounds.size() < std::size_t{kSounds}) {
+            const std::size_t s = sounds.size();
+            const SoundHandle sound = submitter->Play({rig.clips[s % 3], anchor});
+            REQUIRE(sound);
+            sounds.push_back(sound);
+            firstBlock.push_back(block);
+            if ((s + 1) % 4 == 0) REQUIRE(submitter->Stop(sound, anchor + Ms(1)));
+        }
+        rig.mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+        anchor += Ns(1'333'333);
+        for (std::size_t s = 0; s < sounds.size(); ++s) {
+            const Playhead now = rig.mixer.PlayheadOf(sounds[s]);
+            track.Check(s, kReuseLengths[s % 3], now);
+            const auto blocks = static_cast<std::uint32_t>(block - firstBlock[s] + 1);
+            if (now.status == Playhead::Status::Playing && now.clipFrame != 64 * blocks) ++wrongFrame;
+            // A stopped sound ends 48 frames into its first block; no clip length is a multiple of 64.
+            const bool stopped = (s + 1) % 4 == 0;
+            const bool expectPlaying = !stopped && 64 * blocks < kReuseLengths[s % 3];
+            if ((now.status == Playhead::Status::Playing) != expectPlaying) ++wrongStatus;
+        }
+        if (sounds.size() == std::size_t{kSounds} && ++extra > 20) break; // the last clip ends within 10 blocks
+    }
+    int missed = 0;    // not stopped, yet never read Playing
+    int notEnded = 0;  // still reported scheduled or playing at the end
+    int played = 0;
+    for (std::size_t s = 0; s < sounds.size(); ++s) {
+        if ((s + 1) % 4 != 0 && !track.playing[s]) ++missed;
+        if (rig.mixer.PlayheadOf(sounds[s]).status != Playhead::Status::NotPlaying) ++notEnded;
+        if (track.playing[s]) ++played;
+    }
+    CHECK(rig.mixer.Stats().droppedNoVoice == 0);
+    CHECK(missed == 0);
+    CHECK(notEnded == 0);
+    CHECK(played > 3); // more sounds than voices: voices were reused
+    CHECK(track.bad == 0);
+    CHECK(wrongFrame == 0);
+    CHECK(wrongStatus == 0);
+}
+
+// The bound on one run of the stress case below. Under ThreadSanitizer every
+// atomic and memory access is instrumented, and the same work took 11 to 19 s
+// (slowest 19.4 s), so the bound there is three times the slowest. Other builds,
+// CI among them, reach the counts in well under a second and keep 20 s. Chosen
+// when the case is compiled, so a build without ThreadSanitizer never gets 60 s.
+#if defined(__SANITIZE_THREAD__)
+#define GYO_AUDIO_TEST_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define GYO_AUDIO_TEST_TSAN 1
+#endif
+#endif
+#if defined(GYO_AUDIO_TEST_TSAN)
+constexpr std::chrono::seconds kStressRunBound{60};
+#else
+constexpr std::chrono::seconds kStressRunBound{20};
+#endif
+
+TEST_CASE("Audio Mixer playheads stay consistent under a polling thread (ThreadSanitizer stress)") {
+    // A ThreadSanitizer scene first: its own CTest (gyo_audio_playhead_stress).
+    // The rendering thread owns the submitter and keeps playing a sound every
+    // second 64-frame block (about 2.7 sounding on average, so a few are
+    // dropped for want of a voice) and stopping every fourth, until the reader
+    // has what it came for: kOverlapPolls polls made while the renderer runs
+    // and kPlayingReads reads of a playing sound. Not reaching both within
+    // kStressRunBound makes the run invalid, and it fails. The reader polls the last kWindow
+    // sounds issued, with the checks of the case above. Handles live in a ring
+    // the renderer never waits on; a slot the renderer may have reused since
+    // the reader loaded it is skipped: all ring accesses are seq_cst and the
+    // renderer raises `writing` before it stores a slot, so a load of the new
+    // value is followed by a `writing` that shows it. Each execution makes three runs:
+    // free, the reader polling first, and the renderer playing kHeadStart sounds
+    // out first (the schedules that once left nothing checked). Declared for
+    // ThreadSanitizer: 5 executions.
+    // What this case guards: data races on the playhead path (ThreadSanitizer),
+    // and that every single read, taken while voices are reused under it, is
+    // within its clip. What it does not: that one sound's reads only grow and
+    // never come back. Under ThreadSanitizer a poll outlasts the longest clip,
+    // so a sound is seldom read twice ("sequence reads" counts the reads that
+    // were compared with an earlier one, for information only). Those
+    // properties rest on the case above, deterministic, and, while another
+    // thread reads, on the board's exhaustive interleaving case and review.
+    constexpr std::uint64_t kRing = 1024;
+    constexpr std::uint64_t kWindow = 400; // as many sounds back as the case this replaced ever had
+    constexpr std::uint64_t kOverlapPolls = 100000;
+    constexpr std::uint64_t kPlayingReads = 1000;
+    constexpr std::uint64_t kHeadStart = 1000;
+    static_assert(kWindow < kRing);
+    for (const int mode : {0, 1, 2}) {
+        CAPTURE(mode); // 0 free, 1 reader first, 2 renderer first
+        ReuseRig rig = MakeReuseRig();
+        std::vector<std::atomic<std::uint64_t>> ring(kRing);
+        std::atomic<std::uint64_t> writing{0}; // sounds whose slot the renderer has started to write
+        std::atomic<std::uint64_t> issued{0};  // sounds whose slot is written
+        std::atomic<std::uint64_t> polls{0};
+        std::atomic<bool> active{false};
+        std::atomic<bool> stop{false};
+        const auto started = std::chrono::steady_clock::now();
+        const auto deadline = started + kStressRunBound;
+        ReuseTrack track(kRing);
+        std::vector<std::uint64_t> tracked(kRing, ~std::uint64_t{0}); // the sound each track slot follows
+        std::uint64_t overlap = 0;
+        double reachedMs = -1.0;
+        std::thread reader([&] {
+            std::vector<std::uint64_t> seen(kWindow);
+            if (mode == 2) {
+                while (issued.load() < kHeadStart && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
+            }
+            for (std::uint64_t poll = 0;; ++poll) {
+                const bool wasActive = active.load(std::memory_order_acquire);
+                const std::uint64_t known = issued.load();
+                // Newest first: under ThreadSanitizer a poll can take longer than a
+                // clip plays, and the newest sounds are the ones still sounding.
+                const std::uint64_t oldest = known > kWindow ? known - kWindow : 0;
+                for (std::uint64_t n = known; n-- > oldest;) seen[known - 1 - n] = ring[n % kRing].load();
+                const std::uint64_t written = writing.load(); // after every slot load above
+                for (std::uint64_t n = known; n-- > oldest;) {
+                    if (written > n + kRing) continue; // the slot may have held sound n + kRing when loaded
+                    const SoundHandle sound{seen[known - 1 - n]};
+                    const std::size_t slot = static_cast<std::size_t>(n % kRing);
+                    if (tracked[slot] != n) {
+                        tracked[slot] = n;
+                        track.Reset(slot);
+                    }
+                    track.Check(slot, kReuseLengths[n % 3], rig.mixer.PlayheadOf(sound));
                 }
-                if (ended[s] || now.clipFrame < last[s] || now.clipFrame > lengths[s % 3]) ++bad;
-                last[s] = now.clipFrame;
+                polls.store(poll + 1, std::memory_order_release);
+                if (wasActive && active.load(std::memory_order_acquire)) ++overlap;
+                if (overlap >= kOverlapPolls && track.playingReads >= kPlayingReads) {
+                    reachedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+                    break;
+                }
+                if (poll % 256 == 0 && std::chrono::steady_clock::now() > deadline) break;
+            }
+            stop.store(true, std::memory_order_release);
+        });
+        if (mode == 1) {
+            while (polls.load(std::memory_order_acquire) < kOverlapPolls && !stop.load(std::memory_order_acquire)) {
+                std::this_thread::yield();
             }
         }
-        done.store(true, std::memory_order_release);
-    });
-    auto submitter = mixer.CreateSubmitter();
-    REQUIRE(submitter.has_value());
-    TimePoint anchor = kAnchor;
-    int next = 0;
-    std::vector<std::int16_t> out(std::size_t{64} * kChannels);
-    while (!done.load(std::memory_order_acquire)) {
-        if (next < kSounds) {
-            const SoundHandle sound = submitter->Play({clips[static_cast<std::size_t>(next % 3)], anchor});
-            handles[static_cast<std::size_t>(next)].store(sound.value, std::memory_order_relaxed);
-            ++next;
-            issued.store(next, std::memory_order_release);
-            if (next % 4 == 0) static_cast<void>(submitter->Stop(sound, anchor + Ms(1)));
+        auto submitter = rig.mixer.CreateSubmitter();
+        REQUIRE(submitter.has_value());
+        active.store(true, std::memory_order_release);
+        TimePoint anchor = kAnchor;
+        std::uint64_t next = 0;
+        std::vector<std::int16_t> out(std::size_t{64} * kChannels);
+        for (std::uint64_t block = 0; !stop.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline;
+             ++block) {
+            if (block % 2 == 0) {
+                const SoundHandle sound = submitter->Play({rig.clips[static_cast<std::size_t>(next % 3)], anchor});
+                writing.store(next + 1);
+                ring[next % kRing].store(sound.value);
+                ++next;
+                issued.store(next);
+                if (next % 4 == 0) static_cast<void>(submitter->Stop(sound, anchor + Ms(1)));
+            }
+            rig.mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
+            anchor += Ns(1'333'333);
         }
-        mixer.Render(Engine::Base::Span<std::int16_t>(out.data(), out.size()), anchor);
-        anchor += Ns(1'333'333);
+        active.store(false, std::memory_order_release);
+        stop.store(true, std::memory_order_release);
+        reader.join();
+        // Always printed: the time each platform takes to reach the counts is the
+        // margin the thresholds are judged by.
+        std::printf("playhead stress mode %d: reached in %.1f ms (-1: not reached, bound %lld s), overlap polls %llu, "
+                    "playing reads %llu, sequence reads %llu, sounds issued %llu\n",
+                    mode, reachedMs, static_cast<long long>(kStressRunBound.count()), static_cast<unsigned long long>(overlap),
+                    static_cast<unsigned long long>(track.playingReads),
+                    static_cast<unsigned long long>(track.sequenceReads), static_cast<unsigned long long>(next));
+        CHECK(overlap >= kOverlapPolls);
+        CHECK(track.playingReads >= kPlayingReads);
+        CHECK(track.bad == 0);
     }
-    reader.join();
-    CHECK(next > 0);
-    CHECK(bad.load() == 0);
 }

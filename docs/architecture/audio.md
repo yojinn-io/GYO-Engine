@@ -168,8 +168,15 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
    thread writes the playhead board and keeps its own copy of the tags it published);
    "playhead board never reports another sound's state, in any interleaving" (every interleaving of one read with a
    voice's reuse, driven through the board's own writer); "output does not depend on someone reading playheads";
-   "reports a sound scheduled, playing, then not playing"; the ThreadSanitizer poll "playheads stay consistent while
-   another thread polls them" (voices reused all along); "audio thread never reads the playhead board"
+   "reports a sound scheduled, playing, then not playing"; "playheads stay consistent while voices are reused, block by
+   block" (deterministic: every issued sound is read after every block; a playing sound is exactly at 64 frames per
+   block it has played, it is reported Playing exactly while it is not stopped and short of its clip's end, its
+   positions only grow, and it never comes back once not playing); the ThreadSanitizer poll "playheads stay consistent
+   under a polling thread" (its own CTest, `gyo_audio_playhead_stress`; voices reused all along; three schedules, free,
+   reader first and renderer first, each of which must reach 10^5 polls overlapping the renderer and 10^3 reads of a
+   playing sound within its bound, 20 s, 60 s under ThreadSanitizer, or the run fails; it guards data races and that
+   each single read is within its clip, not the order of one sound's reads, which a poll under ThreadSanitizer
+   outlasts); "audio thread never reads the playhead board"
    (`gyo_audio_board_readers`, a source check that the board is read only in `Mixer::PlayheadOf`). The board holds
    only atomics, so weakening any of its memory orders is invisible to ThreadSanitizer and to these tests (they
    interleave sequentially consistent steps); that half rests on the ordering argument in `PlayheadBoard.hpp` and
