@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the H-7 host scanner (judgement 2 of docs/architecture/plans/kernel/h7-scanner-declaration.zh-Hant.md): rules H7-a and H7-b, the whitelist discrimination by type, masking, the list contract, --expect-finding, the empty run and the shared-scanner check. A mutant is killed only when the self-test fails and its output names the expected test (run_mutations.py).",
+  "description": "Declared mutants of the H-7 host scanner (judgement 2 of docs/architecture/plans/kernel/h7-scanner-declaration.zh-Hant.md), with the survivors of the adversarial check (Fable, 2026-11-13; dev_log review section) added: rules H7-a and H7-b and their missed forms, the fail-closed hardening, the whitelist discrimination by type, masking, the list and rules contracts, exit statuses, --expect-finding, report fields. A mutant is killed only when the self-test fails and its output names the expected test (run_mutations.py).",
   "mutants": [
     {
       "id": "h7a-iruntime-client-removed",
@@ -19,8 +19,8 @@
     {
       "id": "h7a-header-expansion-dropped",
       "file": "h7_scan.py",
-      "find": "                elif resolved not in visited:",
-      "replace": "                elif False:",
+      "find": "                if resolved is not None and resolved not in visited:",
+      "replace": "                if False:",
       "expect": "test_p03_h7a_through_owner_header"
     },
     {
@@ -40,14 +40,14 @@
     {
       "id": "h7b-arrow-form-dropped",
       "file": "h7_scan.py",
-      "find": "(?P<op>\\.|->)\\s*(?P<method>",
-      "replace": "(?P<op>\\.)\\s*(?P<method>",
+      "find": "(?P<op>\\.|->)\\s*(?:template",
+      "replace": "(?P<op>\\.)\\s*(?:template",
       "expect": "test_p06_h7b_arrow_update_through_unique_ptr"
     },
     {
       "id": "h7b-template-form-dropped",
       "file": "h7_scan.py",
-      "find": "\\b\\s*(?:{TEMPLATE_ARGS}\\s*)?\\(\")",
+      "find": "\\b\\s*(?:<[^;{{}}]*?>\\s*)?\\(\")",
       "replace": "\\b\\s*\\(\")",
       "expect": "test_p09_h7b_template_arguments"
     },
@@ -75,7 +75,7 @@
     {
       "id": "wl-unqualified-without-using",
       "file": "h7_scan.py",
-      "find": "            if any(re.search(e, text) for e in evidence for text in texts):",
+      "find": "            if any(re.search(e, listed_text) for e in evidence):",
       "replace": "            if True:",
       "expect": "test_p11_unqualified_whitelisted_name_without_using"
     },
@@ -89,7 +89,7 @@
     {
       "id": "wl-auto-hop-dropped",
       "file": "h7_scan.py",
-      "find": "        if not alias or not hop or len(hop) != len(declarations(alias, texts)):",
+      "find": "        if not hop or len(hop) != len(hop_all):",
       "replace": "        if True:",
       "expect": "test_n05_auto_copy_of_whitelisted"
     },
@@ -103,8 +103,8 @@
     {
       "id": "wl-any-declaration-suffices",
       "file": "h7_scan.py",
-      "find": "    return all(matches_whitelist(t, method, rules, texts) for t in unique)",
-      "replace": "    return any(matches_whitelist(t, method, rules, texts) for t in unique)",
+      "find": "    return all(matches_whitelist(t, method, rules, listed_text) for t in unique)",
+      "replace": "    return any(matches_whitelist(t, method, rules, listed_text) for t in unique)",
       "expect": "test_all_declarations_must_match"
     },
     {
@@ -155,6 +155,538 @@
       "find": "    unknown = sorted(set(data) - set(LIST_FIELDS))",
       "replace": "    unknown = []",
       "expect": "test_owner_whitelist_field_rejected"
+    },
+    {
+      "id": "hard-comma-position-dropped",
+      "file": "h7_scan.py",
+      "find": "(rf\",\\s*[*&]*\\s*\\b{word}\\s*[;={{(\\[,)]\", ",
+      "replace": "(",
+      "expect": "test_multi_declarator_receiver_is_reported"
+    },
+    {
+      "id": "hard-colon-position-dropped",
+      "file": "h7_scan.py",
+      "find": "rf\"\\b{word}\\s*:(?!:)\", ",
+      "replace": "",
+      "expect": "test_range_for_receiver_is_reported"
+    },
+    {
+      "id": "hard-bracket-position-dropped",
+      "file": "h7_scan.py",
+      "find": ", rf\"\\[[^\\[\\]]*\\b{word}\\b[^\\[\\]]*\\]\")",
+      "replace": ",)",
+      "expect": "test_structured_binding_receiver_is_reported"
+    },
+    {
+      "id": "hard-parameter-from-headers",
+      "file": "h7_scan.py",
+      "find": "    found = [(t, a) for i, text in enumerate(texts) for t, parameter, a in declarations(receiver, [text])\n             if i == 0 or not parameter]",
+      "replace": "    found = [(t, a) for i, text in enumerate(texts) for t, parameter, a in declarations(receiver, [text])]",
+      "expect": "test_parameter_in_owner_header_is_not_evidence"
+    },
+    {
+      "id": "hard-using-from-headers",
+      "file": "h7_scan.py",
+      "find": "                allowed, types = resolve_receiver(receiver, method, rules, texts, masked)",
+      "replace": "                allowed, types = resolve_receiver(receiver, method, rules, texts, \"\\n\".join(texts))",
+      "expect": "test_using_namespace_in_owner_header_is_not_evidence"
+    },
+    {
+      "id": "hard-auto-member-chain",
+      "file": "h7_scan.py",
+      "find": "hop = re.match(rf\"\\s*({IDENT})\\s*;\"",
+      "replace": "hop = re.match(rf\"\\s*(?:[\\w.]*(?:\\.|->))?({IDENT})\\s*;\"",
+      "expect": "test_auto_copy_of_member_chain_is_reported"
+    },
+    {
+      "id": "hard-alias-untyped-dropped",
+      "file": "h7_scan.py",
+      "find": "        if not alias or untyped_position(alias, texts):",
+      "replace": "        if not alias:",
+      "expect": "test_auto_alias_in_untyped_position_is_reported"
+    },
+    {
+      "id": "hard-call-result-allowed",
+      "file": "h7_scan.py",
+      "find": "    if receiver in (\")\", \"]\", \"}\") or untyped_position(receiver, texts):",
+      "replace": "    if untyped_position(receiver, texts):",
+      "expect": "test_call_result_receiver_never_whitelisted"
+    },
+    {
+      "id": "hard-brace-receiver-dropped",
+      "file": "h7_scan.py",
+      "find": "(?P<receiver>{IDENT}|[)\\]}}])",
+      "replace": "(?P<receiver>{IDENT}|[)\\]])",
+      "expect": "test_braced_temporary_receiver_is_reported"
+    },
+    {
+      "id": "hard-qualified-member-allowed",
+      "file": "h7_scan.py",
+      "find": "            if qualifier:\n                allowed, types = False, \"?\"\n            else:\n                allowed, types = resolve_receiver(",
+      "replace": "            if False:\n                allowed, types = False, \"?\"\n            else:\n                allowed, types = resolve_receiver(",
+      "expect": "test_qualified_member_call_is_reported"
+    },
+    {
+      "id": "hard-qualifier-form-dropped",
+      "file": "h7_scan.py",
+      "find": "(?P<qualifier>(?:{IDENT}\\s*::\\s*)*)",
+      "replace": "(?P<qualifier>)",
+      "expect": "test_qualified_member_call_is_reported"
+    },
+    {
+      "id": "hard-template-keyword-dropped",
+      "file": "h7_scan.py",
+      "find": "(?:template\\s+)?(?P<qualifier>",
+      "replace": "(?P<qualifier>",
+      "expect": "test_template_keyword_call_is_reported"
+    },
+    {
+      "id": "h7b-template-args-narrow",
+      "file": "h7_scan.py",
+      "find": "(?:<[^;{{}}]*?>\\s*)?\\(",
+      "replace": "(?:<[^;{{}}()<>]*>\\s*)?\\(",
+      "expect": "test_h7b_nested_and_parenthesised_template_arguments"
+    },
+    {
+      "id": "h7b-newline-before-op",
+      "file": "h7_scan.py",
+      "find": "[)\\]}}])\\s*(?P<op>",
+      "replace": "[)\\]}}])(?P<op>",
+      "expect": "test_h7b_newline_around_operator"
+    },
+    {
+      "id": "h7b-newline-after-op",
+      "file": "h7_scan.py",
+      "find": "(?P<op>\\.|->)\\s*(?:template",
+      "replace": "(?P<op>\\.|->)(?:template",
+      "expect": "test_h7b_newline_around_operator"
+    },
+    {
+      "id": "h7b-space-before-paren",
+      "file": "h7_scan.py",
+      "find": "(?P<method>{alternatives})\\b\\s*(?:<[^;{{}}]*?>\\s*)?\\(",
+      "replace": "(?P<method>{alternatives})\\b(?:<[^;{{}}]*?>)?\\(",
+      "expect": "test_h7b_space_before_parenthesis"
+    },
+    {
+      "id": "h7a-indented-dropped",
+      "file": "h7_scan.py",
+      "find": "DIRECTIVE = re.compile(r\"^[ \\t]*#[ \\t]*include\\b\")",
+      "replace": "DIRECTIVE = re.compile(r\"^#include\\b\")",
+      "expect": "test_h7a_indented_include"
+    },
+    {
+      "id": "h7a-case-sensitive",
+      "file": "h7_scan.py",
+      "find": ".split(\"/\")[-1].lower() in rules.headers",
+      "replace": ".split(\"/\")[-1] in (\"IRuntimeClient.hpp\", \"RuntimeLoop.hpp\")",
+      "expect": "test_h7a_case_insensitive"
+    },
+    {
+      "id": "h7a-backslash-not-normalised",
+      "file": "h7_scan.py",
+      "find": "target.replace(\"\\\\\", \"/\").split(\"/\")[-1]",
+      "replace": "target.split(\"/\")[-1]",
+      "expect": "test_h7a_backslash_path"
+    },
+    {
+      "id": "h7a-raw-read-through-comments-dropped",
+      "file": "h7_scan.py",
+      "find": "            if raw_line[j] == '\"' and not masked_line[offset:j].strip():",
+      "replace": "            if raw_line[j] == '\"' and not raw_line[offset:j].strip():",
+      "expect": "test_h7a_comments_between_tokens"
+    },
+    {
+      "id": "h7a-bom-kept",
+      "file": "h7_scan.py",
+      "find": "read_text(encoding=\"utf-8-sig\")",
+      "replace": "read_text(encoding=\"utf-8\")",
+      "expect": "test_h7a_after_bom"
+    },
+    {
+      "id": "h7a-transitive-dropped",
+      "file": "h7_scan.py",
+      "find": "                    queue.append((resolved, chain + [resolved]))",
+      "replace": "                    queue.append((resolved, chain + [resolved])) if len(chain) < 2 else None",
+      "expect": "test_h7a_transitive_owner_header"
+    },
+    {
+      "id": "h7a-angle-not-expanded",
+      "file": "h7_scan.py",
+      "find": "                    resolved = resolve_angle_include(root, target, include_roots, owner_root)",
+      "replace": "                    resolved = None",
+      "expect": "test_h7a_angle_owner_header_expanded"
+    },
+    {
+      "id": "h7a-masked-check-dropped",
+      "file": "h7_scan.py",
+      "find": "        directive = DIRECTIVE.match(masked_line)",
+      "replace": "        directive = DIRECTIVE.match(raw_line)",
+      "expect": "test_n08_comments_and_strings"
+    },
+    {
+      "id": "expansion-cycle",
+      "file": "h7_scan.py",
+      "find": "                if resolved is not None and resolved not in visited:",
+      "replace": "                if resolved is not None:",
+      "expect": "test_include_cycle_terminates"
+    },
+    {
+      "id": "h7b-scans-expanded-headers",
+      "file": "h7_scan.py",
+      "find": "    for listed in listing[\"files\"]:\n        masked = masked_of[listed][1]",
+      "replace": "    for listed in [f for f in masked_of if f in closure_of or True]:\n        if listed not in closure_of: closure_of[listed] = [listed]\n        masked = masked_of[listed][1]",
+      "expect": "test_h7b_not_scanned_in_expanded_headers"
+    },
+    {
+      "id": "listed-header-rejected",
+      "file": "h7_scan.py",
+      "find": "LISTABLE_SUFFIXES = (\".cpp\", \".cc\", \".cxx\", \".hpp\", \".h\", \".hh\", \".hxx\", \".inl\", \".ipp\")",
+      "replace": "LISTABLE_SUFFIXES = (\".cpp\", \".cc\", \".cxx\")",
+      "expect": "test_listed_header_is_scanned_for_h7b"
+    },
+    {
+      "id": "peel-shared-ptr-removed",
+      "file": "h7_scan_rules.json",
+      "find": "    \"std::shared_ptr\",\n",
+      "replace": "",
+      "expect": "test_shared_ptr_of_whitelisted"
+    },
+    {
+      "id": "peel-optional-removed",
+      "file": "h7_scan_rules.json",
+      "find": "    \"std::unique_ptr\",\n    \"std::shared_ptr\",\n    \"std::optional\",\n",
+      "replace": "    \"std::unique_ptr\",\n    \"std::shared_ptr\",\n",
+      "expect": "test_optional_of_whitelisted"
+    },
+    {
+      "id": "peel-reference-wrapper-removed",
+      "file": "h7_scan_rules.json",
+      "find": "    \"std::optional\",\n    \"std::reference_wrapper\"\n",
+      "replace": "    \"std::optional\"\n",
+      "expect": "test_reference_wrapper_of_whitelisted"
+    },
+    {
+      "id": "peel-const-inside-kept",
+      "file": "h7_scan.py",
+      "find": "        text = re.sub(r\"^(?:(?:const|volatile)\\s+)+\", \"\", text)\n",
+      "replace": "",
+      "expect": "test_unique_ptr_of_const_whitelisted"
+    },
+    {
+      "id": "peel-any-template",
+      "file": "h7_scan.py",
+      "find": "        if wrapped and wrapped.group(\"outer\") in unwrap:",
+      "replace": "        if wrapped:",
+      "expect": "test_unlisted_template_is_not_peeled"
+    },
+    {
+      "id": "peel-strips-pointer",
+      "file": "h7_scan.py",
+      "find": "            text = wrapped.group(\"inner\")\n",
+      "replace": "            text = wrapped.group(\"inner\").rstrip(\"*&\")\n",
+      "expect": "test_pointer_inside_wrapper_is_reported"
+    },
+    {
+      "id": "decl-return-counted",
+      "file": "h7_scan.py",
+      "find": "            if split_qualified(type_text)[0] in NOT_A_TYPE:\n                continue\n",
+      "replace": "",
+      "expect": "test_return_statement_is_not_a_declaration"
+    },
+    {
+      "id": "decl-close-paren-dropped",
+      "file": "h7_scan.py",
+      "find": "\\s*\\b{re.escape(name)}\\s*(?P<after>[;{{=(,)\\[])",
+      "replace": "\\s*\\b{re.escape(name)}\\s*(?P<after>[;{{=(,\\[])",
+      "expect": "test_last_parameter_and_east_const"
+    },
+    {
+      "id": "decl-const-decor-dropped",
+      "file": "h7_scan.py",
+      "find": "(?:\\*|&|&&|\\bconst\\b|\\bvolatile\\b)",
+      "replace": "(?:\\*|&|&&)",
+      "expect": "test_last_parameter_and_east_const"
+    },
+    {
+      "id": "decl-bracket-dropped",
+      "file": "h7_scan.py",
+      "find": "\\s*\\b{re.escape(name)}\\s*(?P<after>[;{{=(,)\\[])",
+      "replace": "\\s*\\b{re.escape(name)}\\s*(?P<after>[;{{=(,)])",
+      "expect": "test_array_pointer_and_constructor_forms"
+    },
+    {
+      "id": "decl-paren-dropped",
+      "file": "h7_scan.py",
+      "find": "\\s*\\b{re.escape(name)}\\s*(?P<after>[;{{=(,)\\[])",
+      "replace": "\\s*\\b{re.escape(name)}\\s*(?P<after>[;{{=,)\\[])",
+      "expect": "test_array_pointer_and_constructor_forms"
+    },
+    {
+      "id": "decl-pointer-decor-dropped",
+      "file": "h7_scan.py",
+      "find": "(?:\\*|&|&&|\\bconst\\b|\\bvolatile\\b)",
+      "replace": "(?:&|&&|\\bconst\\b|\\bvolatile\\b)",
+      "expect": "test_array_pointer_and_constructor_forms"
+    },
+    {
+      "id": "wl-using-namespace-any",
+      "file": "h7_scan.py",
+      "find": "rf\"\\busing\\s+namespace\\s+(?:::\\s*)?{spaced(qualified[:-n])}\\s*;\"",
+      "replace": "rf\"\\busing\\s+namespace\\s+[\\w:\\s]+?;\"",
+      "expect": "test_using_namespace_of_other_namespace_is_reported"
+    },
+    {
+      "id": "wl-using-declaration-any",
+      "file": "h7_scan.py",
+      "find": "rf\"\\busing\\s+(?:::\\s*)?{spaced(qualified)}\\s*;\"",
+      "replace": "rf\"\\busing\\s+(?:\\w+\\s*::\\s*)*{re.escape(qualified[-1])}\\s*;\"",
+      "expect": "test_using_declaration_of_other_namespace_is_reported"
+    },
+    {
+      "id": "wl-suffix-last-segment-only",
+      "file": "h7_scan.py",
+      "find": "list(qualified[-n:]) == declared",
+      "replace": "qualified[-1] == declared[-1]",
+      "expect": "test_suffix_with_other_qualifier_is_reported"
+    },
+    {
+      "id": "wl-using-declaration-for-suffix",
+      "file": "h7_scan.py",
+      "find": "            if n == 1:\n                evidence.append(",
+      "replace": "            if True:\n                evidence.append(",
+      "expect": "test_partial_qualification_with_using_declaration_is_reported"
+    },
+    {
+      "id": "contract-missing-field",
+      "file": "h7_scan.py",
+      "find": "    missing = [f for f in LIST_FIELDS if f not in data]",
+      "replace": "    missing = []",
+      "expect": "test_missing_field_rejected"
+    },
+    {
+      "id": "contract-generated-by",
+      "file": "h7_scan.py",
+      "find": "    if not isinstance(data[\"generated_by\"], str) or not data[\"generated_by\"].strip():",
+      "replace": "    if False:",
+      "expect": "test_blank_generated_by_rejected"
+    },
+    {
+      "id": "contract-repo-commit",
+      "file": "h7_scan.py",
+      "find": "    if not isinstance(data[\"repo_commit\"], str) or not re.fullmatch(r\"[0-9a-fA-F]{7,40}\", data[\"repo_commit\"]):",
+      "replace": "    if False:",
+      "expect": "test_bad_repo_commit_rejected"
+    },
+    {
+      "id": "contract-include-root-owner",
+      "file": "h7_scan.py",
+      "find": "zs.validate_path(\"include_roots item\", item, owner_root)",
+      "replace": "zs.validate_path(\"include_roots item\", item)",
+      "expect": "test_include_root_outside_owner_rejected"
+    },
+    {
+      "id": "contract-include-root-exists",
+      "file": "h7_scan.py",
+      "find": "            if not (Path(root) / item).is_dir():",
+      "replace": "            if False:",
+      "expect": "test_missing_include_root_rejected"
+    },
+    {
+      "id": "contract-include-root-repeat",
+      "file": "h7_scan.py",
+      "find": "or len(set(roots)) != len(roots):",
+      "replace": ":",
+      "expect": "test_repeated_include_roots_rejected"
+    },
+    {
+      "id": "contract-file-owner",
+      "file": "h7_scan.py",
+      "find": "zs.validate_path(\"files item\", item, owner_root)",
+      "replace": "zs.validate_path(\"files item\", item)",
+      "expect": "test_file_outside_owner_rejected"
+    },
+    {
+      "id": "contract-file-sorted",
+      "file": "h7_scan.py",
+      "find": "    if files != sorted(files):",
+      "replace": "    if False:",
+      "expect": "test_unsorted_files_rejected"
+    },
+    {
+      "id": "contract-file-repeat",
+      "file": "h7_scan.py",
+      "find": "    if len(set(files)) != len(files):",
+      "replace": "    if False:",
+      "expect": "test_repeated_files_rejected"
+    },
+    {
+      "id": "contract-file-empty",
+      "file": "h7_scan.py",
+      "find": "    if not files:\n        errors.append(\"list: files must name at least one host file\")\n",
+      "replace": "",
+      "expect": "test_empty_files_rejected"
+    },
+    {
+      "id": "contract-file-types",
+      "file": "h7_scan.py",
+      "find": "    if not isinstance(files, list) or not all(isinstance(f, str) for f in files):",
+      "replace": "    if not isinstance(files, list):",
+      "expect": "test_non_string_files_rejected"
+    },
+    {
+      "id": "contract-file-suffix",
+      "file": "h7_scan.py",
+      "find": "        if not item.endswith(LISTABLE_SUFFIXES):",
+      "replace": "        if False:",
+      "expect": "test_non_cpp_file_rejected"
+    },
+    {
+      "id": "contract-version-bool",
+      "file": "h7_scan.py",
+      "find": " or isinstance(version, bool)",
+      "replace": "",
+      "expect": "test_boolean_and_float_version_rejected"
+    },
+    {
+      "id": "contract-not-object",
+      "file": "h7_scan.py",
+      "find": "    if not isinstance(data, dict):\n        raise ContractError(f\"list: {path} is not a JSON object\")\n",
+      "replace": "",
+      "expect": "test_list_not_an_object_rejected"
+    },
+    {
+      "id": "contract-list-json",
+      "file": "h7_scan.py",
+      "find": "    except (OSError, json.JSONDecodeError) as error:\n        raise ContractError(f\"list: cannot read",
+      "replace": "    except OSError as error:\n        raise ContractError(f\"list: cannot read",
+      "expect": "test_list_not_json_rejected"
+    },
+    {
+      "id": "rules-version",
+      "file": "h7_scan.py",
+      "find": "    if not isinstance(data, dict) or data.get(\"version\") != 1:",
+      "replace": "    if not isinstance(data, dict):",
+      "expect": "test_rules_unknown_version_rejected"
+    },
+    {
+      "id": "rules-methods-checked",
+      "file": "h7_scan.py",
+      "find": "self.methods = tuple(strings(data[\"H7b\"][\"methods\"], \"H7b.methods\"))",
+      "replace": "self.methods = tuple(data[\"H7b\"][\"methods\"])",
+      "expect": "test_rules_empty_or_non_string_methods_rejected"
+    },
+    {
+      "id": "rules-malformed",
+      "file": "h7_scan.py",
+      "find": "        except (KeyError, TypeError, AttributeError) as error:\n            raise ContractError(f\"rules: malformed",
+      "replace": "        except ZeroDivisionError as error:\n            raise ContractError(f\"rules: malformed",
+      "expect": "test_malformed_rules_rejected"
+    },
+    {
+      "id": "rules-file-missing",
+      "file": "h7_scan.py",
+      "find": "    except (OSError, json.JSONDecodeError) as error:\n        raise ContractError(f\"rules: cannot read",
+      "replace": "    except json.JSONDecodeError as error:\n        raise ContractError(f\"rules: cannot read",
+      "expect": "test_missing_rules_file_rejected"
+    },
+    {
+      "id": "report-unwritable",
+      "file": "h7_scan.py",
+      "find": "            except OSError as error:\n                raise ContractError(f\"h7_scan: cannot write the report",
+      "replace": "            except ZeroDivisionError as error:\n                raise ContractError(f\"h7_scan: cannot write the report",
+      "expect": "test_unwritable_report_rejected"
+    },
+    {
+      "id": "source-oserror-swallowed",
+      "file": "h7_scan.py",
+      "find": "    except (OSError, UnicodeDecodeError) as error:\n        raise ContractError(f\"h7_scan: cannot read",
+      "replace": "    except OSError as error:\n        raise ContractError(f\"h7_scan: cannot read",
+      "expect": "test_unreadable_header_is_an_error"
+    },
+    {
+      "id": "expect-without-list",
+      "file": "h7_scan.py",
+      "find": "            if expectations:\n                raise ContractError(\"--expect-finding needs at least one --list\")\n",
+      "replace": "",
+      "expect": "test_expect_finding_without_list_rejected"
+    },
+    {
+      "id": "expect-unknown-rule",
+      "file": "h7_scan.py",
+      "find": "if len(parts) != 3 or parts[1] not in RULES or not parts[0]:",
+      "replace": "if len(parts) != 3:",
+      "expect": "test_expect_finding_unknown_rule_rejected"
+    },
+    {
+      "id": "expect-file-ignored",
+      "file": "h7_scan.py",
+      "find": "f[\"file\"] == path and f[\"rule\"] == rule and regex.search(f[\"text\"])",
+      "replace": "f[\"rule\"] == rule and regex.search(f[\"text\"])",
+      "expect": "test_expect_finding_other_file_fails"
+    },
+    {
+      "id": "expect-rule-ignored",
+      "file": "h7_scan.py",
+      "find": "f[\"file\"] == path and f[\"rule\"] == rule and regex.search(f[\"text\"])",
+      "replace": "f[\"file\"] == path and regex.search(f[\"text\"])",
+      "expect": "test_expect_finding_other_rule_fails"
+    },
+    {
+      "id": "expect-text-ignored",
+      "file": "h7_scan.py",
+      "find": "f[\"file\"] == path and f[\"rule\"] == rule and regex.search(f[\"text\"])",
+      "replace": "f[\"file\"] == path and f[\"rule\"] == rule",
+      "expect": "test_expect_finding_other_text_fails"
+    },
+    {
+      "id": "lists-only-first",
+      "file": "h7_scan.py",
+      "find": "        reports = [scan(args.root, path, rules, zs) for path in args.list]",
+      "replace": "        reports = [scan(args.root, path, rules, zs) for path in args.list[:1]]",
+      "expect": "test_two_lists_both_scanned"
+    },
+    {
+      "id": "zone-scan-import-error",
+      "file": "h7_scan.py",
+      "find": "        raise ContractError(f\"h7_scan: cannot import the zone-C scanner from {directory} ({error})\")",
+      "replace": "        raise",
+      "expect": "test_zone_scan_import_error_fails_loudly"
+    },
+    {
+      "id": "report-unresolved-dropped",
+      "file": "h7_scan.py",
+      "find": "                        if entry not in report[\"unresolved_includes\"]:\n                            report[\"unresolved_includes\"].append(entry)\n",
+      "replace": "                        pass\n",
+      "expect": "test_unresolved_and_expanded_reported"
+    },
+    {
+      "id": "report-expanded-dropped",
+      "file": "h7_scan.py",
+      "find": "                    report[\"expanded\"].append({\"file\": relative, \"via\": chain})",
+      "replace": "                    pass",
+      "expect": "test_unresolved_and_expanded_reported"
+    },
+    {
+      "id": "report-scanned-count",
+      "file": "h7_scan.py",
+      "find": "                report[\"files_scanned\"] += 1",
+      "replace": "                report[\"files_scanned\"] += (relative == listed)",
+      "expect": "test_summary_counts|test_unresolved_and_expanded_reported"
+    },
+    {
+      "id": "report-whitelisted-count",
+      "file": "h7_scan.py",
+      "find": "f\"{len(report['whitelisted'])} whitelisted\")",
+      "replace": "f\"0 whitelisted\")",
+      "expect": "test_summary_counts"
+    },
+    {
+      "id": "report-findings-unsorted",
+      "file": "h7_scan.py",
+      "find": "    report[\"findings\"].sort(key=key)\n",
+      "replace": "",
+      "expect": "test_findings_sorted_by_file_and_line"
     }
   ]
 }

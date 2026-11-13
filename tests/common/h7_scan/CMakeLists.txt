@@ -5,8 +5,8 @@
 # Each owner registers its own host list and scan in tests/<owner>/ (spec J.4); nothing here names a product.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME h7_scan.selftest
-    COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_*.py" -v)
+    COMMAND "${Python3_EXECUTABLE}" -I -B -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}" -p "test_*.py" -v)
 add_test(NAME h7_scan.empty
-    COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/h7_scan.py")
+    COMMAND "${Python3_EXECUTABLE}" -I -B "${CMAKE_CURRENT_SOURCE_DIR}/h7_scan.py")
 set_tests_properties(h7_scan.selftest h7_scan.empty PROPERTIES LABELS "cpu" TIMEOUT 120)
 set_tests_properties(h7_scan.empty PROPERTIES PASS_REGULAR_EXPRESSION "^h7_scan: nothing to scan")

@@ -281,7 +281,7 @@ set_tests_properties("${GYO_CURRENT_APP}.zone_c_lists" PROPERTIES LABELS "cpu;pv
 # module calls the kernel migration removes. It fails only on a contract error or when one of the two pinned sites
 # (plan section 3.4, judgement 6) is no longer reported; match-host and client-sim / client-frame drop the pins.
 add_test(NAME "${GYO_CURRENT_APP}.h7_scan"
-    COMMAND "${Python3_EXECUTABLE}" -B "${GYO_REPOSITORY_ROOT}/tests/common/h7_scan/h7_scan.py" --root "${GYO_REPOSITORY_ROOT}"
+    COMMAND "${Python3_EXECUTABLE}" -I -B "${GYO_REPOSITORY_ROOT}/tests/common/h7_scan/h7_scan.py" --root "${GYO_REPOSITORY_ROOT}"
             --list "${CMAKE_CURRENT_SOURCE_DIR}/h7-hosts.json" --report "${CMAKE_CURRENT_BINARY_DIR}/h7_scan/h7-hosts.json" --no-fail
             --expect-finding "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp|H7-b|^match_\\.Tick "
             --expect-finding "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp|H7-b|^loop_\\.Run ")

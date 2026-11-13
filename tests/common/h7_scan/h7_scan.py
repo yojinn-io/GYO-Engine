@@ -1,6 +1,7 @@
 """Text scan of host source files for spec H-7 (target/kernel.zh-Hant.md DI-KS 15: a host does not order
 Systems; a migrated host calls only Run, Rewind / Replay and the exchange points). Declaration and
-judgement: docs/architecture/plans/kernel/h7-scanner-declaration.zh-Hant.md.
+judgement: docs/architecture/plans/kernel/h7-scanner-declaration.zh-Hant.md; the review changes are in
+docs/dev_logs/2026_11_13_arch_h7_scanner.zh-Hant.md.
 
 Input: one list file per owner (zero or more --list). With no list the scan prints
 `h7_scan: nothing to scan` and exits 0: the common layer assumes no product (AGENTS.md section 7).
@@ -9,43 +10,58 @@ List contract, format "gyo.h7-hosts", version 1 (owned here; there is no target/
 
   { "format": "gyo.h7-hosts", "version": 1, "generated_by": "manual", "repo_commit": "<7-40 hex>",
     "owner_root": "<repo-relative dir>", "include_roots": ["<dir under owner_root>", ...],
-    "files": ["<repo-relative .cpp under owner_root>", ...] }
+    "files": ["<repo-relative source or header under owner_root>", ...] }
 
-  Forward slashes, repo-relative, canonical; files sorted (byte order), unique, existing, source files
-  only. No other field: in particular an owner cannot add whitelist entries. An unknown format, an
-  unknown version, an unknown or missing field is a contract error (exit 2); the scanner never guesses.
+  Forward slashes, repo-relative, canonical; files sorted (byte order), unique, existing, at least one;
+  a header may be listed when it holds host code (inline). No other field: in particular an owner cannot
+  add whitelist entries. An unknown format, an unknown version, an unknown or missing field, a field of
+  the wrong type is a contract error (exit 2); the scanner never guesses.
 
 Comments, string and character literals are blanked first (the masking of the zone-C scanner,
 tests/common/zone_scan/zone_scan.py, imported, not copied; when that module or one of the three
-functions is missing the scan fails with exit 2). Rules (names in h7_scan_rules.json):
+functions is missing the scan fails with exit 2). Sources are read as UTF-8 (a BOM is dropped).
+Rules (names in h7_scan_rules.json):
 
   H7-a  an #include whose last path segment is a banned header (IRuntimeClient.hpp, RuntimeLoop.hpp),
-        either form, case-insensitive. Scanned in the listed files and in every header they reach
-        through quoted includes resolving under owner_root (transitive, each once; `via` is the chain).
-  H7-b  a member call `<receiver> (. | ->) <Method> [<template args>] (` in a listed file, Method one of
-        Tick, Advance, Update, Step, Run, unless the receiver's type is on the whitelist for that method.
-        Not counted: `this->` calls, calls without a receiver, qualified calls (`Foo::Run(`).
+        either form, case-insensitive, also with comments between the tokens. Scanned in the listed
+        files and in every header they reach through includes that resolve under owner_root (quoted:
+        the including directory, then include_roots; angle: include_roots only), transitively, each
+        once; `via` is the chain. Not seen: #include MACRO, #include_next, #import, a backslash-continued
+        directive.
+  H7-b  a member call `<receiver> (. | ->) [template] [Qualifier::] <Method> [<template args>] (` in a
+        listed file, Method one of Tick, Advance, Update, Step, Run, unless the receiver's type is on the
+        whitelist for that method. Not counted: `this->` calls, calls without a receiver, qualified free
+        calls (`Foo::Run(`). A qualified member call (`x.Base::Tick(`) is always reported.
 
-Whitelist by type, approximated without a C++ parser; every uncertainty is reported (fail closed):
+Whitelist by type, approximated without a C++ parser; uncertainty is reported (fail closed):
   1. The receiver is the last identifier before the operator (`session_.clock.Advance` -> clock). A
-     receiver ending in `)` or `]` has no knowable type: reported, type `?`.
-  2. Its declarations are searched in the listed file and its expanded owner headers: `<Type> [*&] name`
-     followed by ; { = ( , ) or [. `auto name = other;` is followed one hop to `other`; a second hop, an
-     auto with any other initializer, or no declaration at all: reported, type `?`.
-  3. Wrappers in the rule data (std::unique_ptr, ...) and cv / pointer / reference are peeled.
-  4. A declared type D matches a whitelist type Q when D == Q (a leading :: allowed), or D is a proper
-     suffix of Q and the scanned text has `using namespace <the rest of Q's namespace>;`, or D is Q's
-     last segment and the text has `using Q;`. The method must be on that entry.
-  5. Every declaration found must match; any other: reported with the declared types.
+     receiver ending in `)`, `]` or `}` has no knowable type: reported, type `?`.
+  2. The receiver is reported (type `?`) when its name stands anywhere in the listed file or its
+     expanded owner headers in a declaration position this scan cannot type: after a comma
+     (`Product other, clock;`), before a single colon (range-for, bit-field), or inside brackets
+     (structured binding, lambda capture).
+  3. Declarations `<Type> [*&const] name` followed by ; { = ( , ) or [ are collected from the listed
+     file and its expanded owner headers; a declaration ending in `,` or `)` (a parameter) counts only
+     in the listed file itself. `auto name = other;` is followed one hop to the bare identifier `other`;
+     a second hop, an auto with any other initializer, or no declaration: reported, type `?`.
+  4. Wrappers in the rule data (std::unique_ptr, ...) and cv / pointer / reference are peeled.
+  5. A declared type D matches a whitelist type Q when D == Q (a leading :: allowed), or D is a proper
+     suffix of Q and the listed file itself has `using namespace <the rest of Q's namespace>;`, or D is
+     Q's last segment and the listed file has `using Q;`. The method must be on that entry.
+  6. Every declaration found must match; any other: reported with the declared types.
+  Known gap (limit L4 of the dev_log): a same-name whitelisted variable or member visible in the
+  closure while the receiver's real declaration is outside it (a base class of another owner) or in a
+  form step 3 does not read (a std::function member, a macro, a function returning the type) passes.
 
 Output: one line per finding `<path>:<line>: <rule> <text>`, then
 `h7_scan: <N> file(s) listed, <M> scanned (<E> expanded headers), <H> finding(s), <W> whitelisted` per
-list. `--report FILE` writes JSON {"reports": [per list: list, files_listed, files_scanned, findings,
-whitelisted, this_calls, per_rule, expanded, unresolved_includes], "per_rule": totals}.
+list. `--report FILE` writes JSON {"reports": [per list: list, list_path, files_listed, files_scanned,
+findings, whitelisted, this_calls, per_rule, expanded, unresolved_includes], "per_rule": totals}; the
+receiver's types are in each H7-b text as `[type=...]`.
 `--expect-finding "<path>|<rule>|<regex>"` (repeatable): exit 1 unless a finding of that file and rule
 has a text matching the regex, even with --no-fail (an owner pins sites it knows must be reported).
 Exit status: 0 clean or nothing to scan, 1 findings (0 with --no-fail) or a missing expected finding,
-2 contract or usage error (also an unreadable or non-UTF-8 source file).
+2 contract or usage error (also an unreadable or non-UTF-8 source file and an unwritable report).
 
 Usage: python3 h7_scan.py [--list LIST.json ...] [--root REPOSITORY] [--rules RULES.json]
                           [--report FILE] [--no-fail] [--expect-finding SPEC ...]
@@ -56,7 +72,7 @@ import json
 import re
 import sys
 from collections import deque
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 DIRECTORY = Path(__file__).resolve().parent
 ZONE_SCAN_DIRECTORY = DIRECTORY.parent / "zone_scan"
@@ -64,12 +80,11 @@ DEFAULT_RULES = DIRECTORY / "h7_scan_rules.json"
 FORMAT = "gyo.h7-hosts"
 SUPPORTED_VERSIONS = (1,)
 LIST_FIELDS = ("format", "version", "generated_by", "repo_commit", "owner_root", "include_roots", "files")
-SOURCE_SUFFIXES = (".cpp", ".cc", ".cxx")
+LISTABLE_SUFFIXES = (".cpp", ".cc", ".cxx", ".hpp", ".h", ".hh", ".hxx", ".inl", ".ipp")
 RULES = ("H7-a", "H7-b")
 ZONE_SCAN_NAMES = ("blank_comments_and_literals", "resolve_quoted_include", "validate_path")
 
-INCLUDE = re.compile(r"^[ \t]*#[ \t]*include[ \t]*([<\"])([^>\"]+)[>\"]")
-MASKED_INCLUDE = re.compile(r"^[ \t]*#[ \t]*include\b")
+DIRECTIVE = re.compile(r"^[ \t]*#[ \t]*include\b")
 IDENT = r"[A-Za-z_]\w*"
 TEMPLATE_ARGS = r"<(?:[^<>;{}()]|<[^<>;{}()]*>)*>"
 QUALIFIED_TYPE = rf"(?:::\s*)?{IDENT}(?:\s*{TEMPLATE_ARGS})?(?:\s*::\s*{IDENT}(?:\s*{TEMPLATE_ARGS})?)*"
@@ -108,36 +123,50 @@ def zone_scan_functions(directory=None):
 # ----------------------------------------------------------------------------------------------
 # Rules
 
+def strings(value, label):
+    if not isinstance(value, list) or not value or not all(isinstance(v, str) and v for v in value):
+        raise ContractError(f"rules: {label} must be a non-empty array of non-empty strings")
+    return value
+
+
 class Rules:
     def __init__(self, data):
+        if not isinstance(data, dict) or data.get("version") != 1:
+            raise ContractError(f"rules: unsupported version {data.get('version') if isinstance(data, dict) else data!r}")
         try:
-            if data.get("version") != 1:
-                raise ContractError(f"rules: unsupported version {data.get('version')!r}")
-            self.headers = frozenset(h.lower() for h in data["H7a"]["headers"])
-            self.methods = tuple(data["H7b"]["methods"])
-            self.whitelist = [(tuple(split_qualified(e["type"])), frozenset(e["methods"])) for e in data["whitelist"]]
-            self.unwrap = frozenset(data["unwrap"])
+            self.headers = frozenset(h.lower() for h in strings(data["H7a"]["headers"], "H7a.headers"))
+            self.methods = tuple(strings(data["H7b"]["methods"], "H7b.methods"))
+            self.whitelist = [(tuple(split_qualified(e["type"])), frozenset(strings(e["methods"], "whitelist methods")))
+                              for e in data["whitelist"]]
+            self.unwrap = frozenset(strings(data["unwrap"], "unwrap"))
         except (KeyError, TypeError, AttributeError) as error:
             raise ContractError(f"rules: malformed rule data ({error!r})")
-        if not self.headers or not self.methods:
-            raise ContractError("rules: H7a.headers and H7b.methods must not be empty")
         alternatives = "|".join(re.escape(m) for m in self.methods)
         self.call = re.compile(
-            rf"(?P<receiver>{IDENT}|[)\]])\s*(?P<op>\.|->)\s*(?P<method>{alternatives})\b\s*(?:{TEMPLATE_ARGS}\s*)?\(")
+            rf"(?P<receiver>{IDENT}|[)\]}}])\s*(?P<op>\.|->)\s*(?:template\s+)?(?P<qualifier>(?:{IDENT}\s*::\s*)*)"
+            rf"(?P<method>{alternatives})\b\s*(?:<[^;{{}}]*?>\s*)?\(")
 
 
 def load_rules(path):
     try:
-        return Rules(json.loads(Path(path).read_text(encoding="utf-8")))
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ContractError(f"rules: cannot read {path} ({error})")
+    return Rules(data)
 
 
 def split_qualified(text):
+    if not isinstance(text, str) or not text:
+        raise TypeError(f"type name {text!r}")
     text = re.sub(r"\s+", "", text)
     if text.startswith("::"):
         text = text[2:]
-    return [part for part in text.split("::")]
+    return text.split("::")
+
+
+def spaced(qualified):
+    """A regular expression for a qualified name with optional spaces around each ::."""
+    return r"\s*::\s*".join(re.escape(part) for part in qualified)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -173,34 +202,35 @@ def load_list(path, root, zs):
         zs.validate_path("owner_root", owner_root)
         if not (Path(root) / owner_root).is_dir():
             errors.append(f"list: owner_root {owner_root!r} is not a directory under {root}")
-    except Exception as error:  # zone_scan.ContractError; any failure is a contract error here
+    except Exception as error:  # zone_scan.ContractError
         errors.append(str(error))
         owner_root = None
-    if not isinstance(data["include_roots"], list) or len(set(map(str, data["include_roots"]))) != len(data["include_roots"]):
-        errors.append("list: include_roots must be an array without repeats")
+    roots = data["include_roots"]
+    if not isinstance(roots, list) or not all(isinstance(r, str) for r in roots) or len(set(roots)) != len(roots):
+        errors.append("list: include_roots must be an array of strings without repeats")
     elif owner_root:
-        for item in data["include_roots"]:
+        for item in roots:
             try:
                 zs.validate_path("include_roots item", item, owner_root)
-            except Exception as error:  # zone_scan.ContractError; any failure is a contract error here
+            except Exception as error:
                 errors.append(str(error))
                 continue
             if not (Path(root) / item).is_dir():
                 errors.append(f"list: include_roots item {item!r} is not a directory")
-    files = data["files"] if isinstance(data["files"], list) else None
-    if files is None:
-        errors.append("list: files must be an array")
-        files = []
+    files = data["files"]
+    if not isinstance(files, list) or not all(isinstance(f, str) for f in files):
+        errors.append("list: files must be an array of strings")
+        raise ContractError("\n".join(errors))
     if not files:
-        errors.append("list: files must name at least one host source")
+        errors.append("list: files must name at least one host file")
     for item in files:
         try:
             zs.validate_path("files item", item, owner_root)
-        except Exception as error:  # zone_scan.ContractError; any failure is a contract error here
+        except Exception as error:
             errors.append(str(error))
             continue
-        if not item.endswith(SOURCE_SUFFIXES):
-            errors.append(f"list: files item {item!r} is not a source file ({', '.join(SOURCE_SUFFIXES)})")
+        if not item.endswith(LISTABLE_SUFFIXES):
+            errors.append(f"list: files item {item!r} is not a C++ source or header ({', '.join(LISTABLE_SUFFIXES)})")
         elif not (Path(root) / item).is_file():
             errors.append(f"list: files item {item!r} does not exist under {root}")
     if files != sorted(files):
@@ -214,7 +244,7 @@ def load_list(path, root, zs):
 
 def read_source(root, relative):
     try:
-        return (Path(root) / relative).read_text(encoding="utf-8")
+        return (Path(root) / relative).read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError) as error:
         raise ContractError(f"h7_scan: cannot read {relative} as UTF-8 ({error})")
 
@@ -223,39 +253,46 @@ def read_source(root, relative):
 # Type resolution (the whitelist by type)
 
 def declarations(name, texts):
-    """[(type text, initializer identifier or None)] of every declaration of `name` in the masked texts."""
+    """[(type text, ends like a parameter, auto alias or None)] of every declaration of `name`."""
     pattern = re.compile(
-        rf"(?<![\w.:>])(?<!->)(?P<type>{QUALIFIED_TYPE})(?P<decor>(?:\s*(?:\*|&|&&|\bconst\b|\bvolatile\b))*)"
+        rf"(?<![\w.:>)])(?P<type>{QUALIFIED_TYPE})(?P<decor>(?:\s*(?:\*|&|&&|\bconst\b|\bvolatile\b))*)"
         rf"\s*\b{re.escape(name)}\s*(?P<after>[;{{=(,)\[])")
     found = []
     for text in texts:
         for match in pattern.finditer(text):
-            type_text = re.sub(r"\s+", "", match.group("type"))
+            type_text = re.sub(r"\s+", " ", match.group("type")).strip()
             if split_qualified(type_text)[0] in NOT_A_TYPE:
                 continue
             alias = None
             if type_text == "auto":
-                rest = text[match.end("after"):]
-                hop = re.match(rf"\s*(?:[\w.]*(?:\.|->))?({IDENT})\s*;", rest) if match.group("after") == "=" else None
+                hop = re.match(rf"\s*({IDENT})\s*;", text[match.end("after"):]) if match.group("after") == "=" else None
                 alias = hop.group(1) if hop else ""
-            found.append((type_text, alias))
+            found.append((type_text, match.group("after") in ",)", alias))
     return found
+
+
+def untyped_position(name, texts):
+    """True when `name` stands in a declaration position this scan cannot type (step 2)."""
+    word = re.escape(name)
+    patterns = (rf",\s*[*&]*\s*\b{word}\s*[;={{(\[,)]", rf"\b{word}\s*:(?!:)", rf"\[[^\[\]]*\b{word}\b[^\[\]]*\]")
+    return any(re.search(p, text) for p in patterns for text in texts)
 
 
 def peel(type_text, unwrap):
     """The declared type without cv, pointers, references and the listed wrappers."""
-    text = re.sub(r"\s+", "", type_text)
+    text = type_text.strip()
     while True:
-        text = re.sub(r"^(?:const|volatile)(?=[A-Za-z_:])", "", text)
+        text = re.sub(r"\s*(::|<|>|,|\*|&)\s*", r"\1", text)
+        text = re.sub(r"^(?:(?:const|volatile)\s+)+", "", text)
         text = text[2:] if text.startswith("::") else text
         wrapped = WRAPPED.match(text)
         if wrapped and wrapped.group("outer") in unwrap:
-            text = wrapped.group("inner").rstrip("*&")
+            text = wrapped.group("inner")
             continue
         return text
 
 
-def matches_whitelist(type_text, method, rules, texts):
+def matches_whitelist(type_text, method, rules, listed_text):
     declared = split_qualified(peel(type_text, rules.unwrap))
     for qualified, methods in rules.whitelist:
         if method not in methods:
@@ -264,20 +301,20 @@ def matches_whitelist(type_text, method, rules, texts):
             return True
         n = len(declared)
         if 0 < n < len(qualified) and list(qualified[-n:]) == declared:
-            prefix = "::".join(qualified[:-n])
-            evidence = [rf"\busing\s+namespace\s+(?:::)?{re.escape(prefix).replace('::', r'\s*::\s*')}\s*;"]
+            evidence = [rf"\busing\s+namespace\s+(?:::\s*)?{spaced(qualified[:-n])}\s*;"]
             if n == 1:
-                evidence.append(rf"\busing\s+(?:::)?{re.escape('::'.join(qualified)).replace('::', r'\s*::\s*')}\s*;")
-            if any(re.search(e, text) for e in evidence for text in texts):
+                evidence.append(rf"\busing\s+(?:::\s*)?{spaced(qualified)}\s*;")
+            if any(re.search(e, listed_text) for e in evidence):
                 return True
     return False
 
 
-def resolve_receiver(receiver, method, rules, texts):
-    """(whitelisted?, description of the declared types)."""
-    if receiver in (")", "]"):
+def resolve_receiver(receiver, method, rules, texts, listed_text):
+    """(whitelisted?, description of the declared types). texts[0] is the listed file."""
+    if receiver in (")", "]", "}") or untyped_position(receiver, texts):
         return False, "?"
-    found = declarations(receiver, texts)
+    found = [(t, a) for i, text in enumerate(texts) for t, parameter, a in declarations(receiver, [text])
+             if i == 0 or not parameter]
     if not found:
         return False, "?"
     types = []
@@ -285,12 +322,16 @@ def resolve_receiver(receiver, method, rules, texts):
         if alias is None:
             types.append(type_text)
             continue
-        hop = [t for t, a in declarations(alias, texts) if a is None] if alias else []
-        if not alias or not hop or len(hop) != len(declarations(alias, texts)):
+        if not alias or untyped_position(alias, texts):
+            return False, "?"
+        hop_all = [(t, a) for i, text in enumerate(texts) for t, parameter, a in declarations(alias, [text])
+                   if i == 0 or not parameter]
+        hop = [t for t, a in hop_all if a is None]
+        if not hop or len(hop) != len(hop_all):
             return False, "?"
         types.extend(hop)
     unique = sorted(set(types))
-    return all(matches_whitelist(t, method, rules, texts) for t in unique), ",".join(unique)
+    return all(matches_whitelist(t, method, rules, listed_text) for t in unique), ",".join(unique)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -301,15 +342,35 @@ def line_of(text, offset):
 
 
 def includes_of(raw, masked):
-    """[(line, target, form)] of the #include lines that are code, not comment text."""
+    """[(line, target, form)] of the #include directives that are code, read through comments."""
     found = []
-    raw_lines, masked_lines = raw.split("\n"), masked.split("\n")
-    for number, (raw_line, masked_line) in enumerate(zip(raw_lines, masked_lines), start=1):
-        if MASKED_INCLUDE.match(masked_line):
-            match = INCLUDE.match(raw_line)
-            if match:
-                found.append((number, match.group(2).strip(), match.group(1)))
+    for number, (raw_line, masked_line) in enumerate(zip(raw.split("\n"), masked.split("\n")), start=1):
+        directive = DIRECTIVE.match(masked_line)
+        if not directive:
+            continue
+        rest = masked_line[directive.end():]
+        angle = re.match(r"\s*<([^>]+)>", rest)
+        if angle:
+            found.append((number, angle.group(1).strip(), "<"))
+            continue
+        offset = directive.end()
+        for j in range(offset, len(raw_line)):  # the quoted path is blanked in the masked line: read it raw
+            if raw_line[j] == '"' and not masked_line[offset:j].strip():
+                end = raw_line.find('"', j + 1)
+                if end > j + 1:
+                    found.append((number, raw_line[j + 1:end].strip(), '"'))
+                break
     return found
+
+
+def resolve_angle_include(root, target, include_roots, owner_root):
+    for include_root in include_roots:
+        value = PurePosixPath(include_root, target).as_posix()
+        if ".." in value.split("/") or not value.startswith(owner_root + "/"):
+            continue
+        if (Path(root) / value).is_file():
+            return value
+    return None
 
 
 def scan(root, list_path, rules, zs):
@@ -334,19 +395,20 @@ def scan(root, list_path, rules, zs):
                 masked_of[relative] = (raw, zs.blank_comments_and_literals(raw))
                 chain_of[relative] = chain
                 report["files_scanned"] += 1
-                if relative != listed and relative not in listing["files"]:
+                if relative not in listing["files"]:
                     report["expanded"].append({"file": relative, "via": chain})
             closure.append(relative)
             raw, masked = masked_of[relative]
             for line, target, form in includes_of(raw, masked):
-                if form != '"':
-                    continue
-                resolved = zs.resolve_quoted_include(str(root), relative, target, include_roots, owner_root)
-                if resolved is None:
-                    entry = {"file": relative, "line": line, "include": target}
-                    if entry not in report["unresolved_includes"]:
-                        report["unresolved_includes"].append(entry)
-                elif resolved not in visited:
+                if form == '"':
+                    resolved = zs.resolve_quoted_include(str(root), relative, target, include_roots, owner_root)
+                    if resolved is None:
+                        entry = {"file": relative, "line": line, "include": target}
+                        if entry not in report["unresolved_includes"]:
+                            report["unresolved_includes"].append(entry)
+                else:
+                    resolved = resolve_angle_include(root, target, include_roots, owner_root)
+                if resolved is not None and resolved not in visited:
                     visited.add(resolved)
                     queue.append((resolved, chain + [resolved]))
         closure_of[listed] = closure
@@ -363,11 +425,15 @@ def scan(root, list_path, rules, zs):
         for match in rules.call.finditer(masked):
             receiver, method = match.group("receiver"), match.group("method")
             line = line_of(masked, match.start("op"))
-            text = f"{receiver}{match.group('op')}{method}"
+            qualifier = re.sub(r"\s+", "", match.group("qualifier"))
+            text = f"{receiver}{match.group('op')}{qualifier}{method}"
             if receiver == "this":
                 report["this_calls"].append({"file": listed, "line": line, "text": text})
                 continue
-            allowed, types = resolve_receiver(receiver, method, rules, texts)
+            if qualifier:
+                allowed, types = False, "?"
+            else:
+                allowed, types = resolve_receiver(receiver, method, rules, texts, masked)
             entry = {"file": listed, "line": line, "rule": "H7-b", "text": f"{text} [type={types}]"}
             (report["whitelisted"] if allowed else report["findings"]).append(entry)
     for finding in report["findings"]:
@@ -419,22 +485,25 @@ def main(argv=None):
         zs = zone_scan_functions()
         rules = load_rules(args.rules)
         reports = [scan(args.root, path, rules, zs) for path in args.list]
+        findings = [f for report in reports for f in report["findings"]]
+        if args.report:
+            totals = {rule: sum(r["per_rule"][rule] for r in reports) for rule in RULES}
+            try:
+                Path(args.report).parent.mkdir(parents=True, exist_ok=True)
+                Path(args.report).write_text(json.dumps({"reports": reports, "per_rule": totals}, indent=2,
+                                                        ensure_ascii=False) + "\n", encoding="utf-8")
+            except OSError as error:
+                raise ContractError(f"h7_scan: cannot write the report {args.report} ({error})")
     except ContractError as error:
         print(str(error), file=sys.stderr)
         return 2
     for report in reports:
         for line in format_lines(report):
             print(line)
-    findings = [f for report in reports for f in report["findings"]]
     absent = [spec for spec, (path, rule, regex) in zip(args.expect_finding, expectations)
               if not any(f["file"] == path and f["rule"] == rule and regex.search(f["text"]) for f in findings)]
     for spec in absent:
         print(f"h7_scan: expected finding absent: {spec}", file=sys.stderr)
-    if args.report:
-        totals = {rule: sum(r["per_rule"][rule] for r in reports) for rule in RULES}
-        Path(args.report).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.report).write_text(json.dumps({"reports": reports, "per_rule": totals}, indent=2, ensure_ascii=False) + "\n",
-                                     encoding="utf-8")
     if absent:
         return 1
     if findings and not args.no_fail:

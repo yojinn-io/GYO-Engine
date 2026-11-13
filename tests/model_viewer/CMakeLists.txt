@@ -43,6 +43,6 @@ set_tests_properties(gyo_model_viewer.dependency_guard gyo_model_viewer.dependen
 # files in h7-hosts.json, scanned by the common scanner. A report, not a gate (--no-fail): it lists the hand-ordered
 # module calls the kernel migration removes; it fails only on a contract error.
 add_test(NAME gyo_model_viewer.h7_scan
-    COMMAND "${Python3_EXECUTABLE}" -B "${GYO_REPOSITORY_ROOT}/tests/common/h7_scan/h7_scan.py" --root "${GYO_REPOSITORY_ROOT}"
+    COMMAND "${Python3_EXECUTABLE}" -I -B "${GYO_REPOSITORY_ROOT}/tests/common/h7_scan/h7_scan.py" --root "${GYO_REPOSITORY_ROOT}"
             --list "${CMAKE_CURRENT_SOURCE_DIR}/h7-hosts.json" --report "${CMAKE_CURRENT_BINARY_DIR}/h7_scan/h7-hosts.json" --no-fail)
 set_tests_properties(gyo_model_viewer.h7_scan PROPERTIES LABELS "cpu;editor" TIMEOUT 120)
