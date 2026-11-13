@@ -1,0 +1,15 @@
+{
+  "format": "gyo.h7-hosts",
+  "version": 1,
+  "generated_by": "manual",
+  "repo_commit": "899b3e38",
+  "owner_root": "tools/voxel_map_editor",
+  "include_roots": [
+    "tools/voxel_map_editor/include"
+  ],
+  "files": [
+    "tools/voxel_map_editor/src/Main.cpp",
+    "tools/voxel_map_editor/src/window/EditorWindow.cpp",
+    "tools/voxel_map_editor/src/window/PreviewMeasure.cpp"
+  ]
+}

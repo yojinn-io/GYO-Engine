@@ -276,6 +276,16 @@ endforeach()
 add_test(NAME "${GYO_CURRENT_APP}.zone_c_lists"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_zone_c_lists.py")
 set_tests_properties("${GYO_CURRENT_APP}.zone_c_lists" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
+# H-7 host scan (spec H-7, J.4; docs/architecture/plans/kernel/h7-scanner-declaration.zh-Hant.md): this owner's host
+# files in h7-hosts.json, scanned by the common scanner. A report, not a gate (--no-fail): it lists the hand-ordered
+# module calls the kernel migration removes. It fails only on a contract error or when one of the two pinned sites
+# (plan section 3.4, judgement 6) is no longer reported; match-host and client-sim / client-frame drop the pins.
+add_test(NAME "${GYO_CURRENT_APP}.h7_scan"
+    COMMAND "${Python3_EXECUTABLE}" -B "${GYO_REPOSITORY_ROOT}/tests/common/h7_scan/h7_scan.py" --root "${GYO_REPOSITORY_ROOT}"
+            --list "${CMAKE_CURRENT_SOURCE_DIR}/h7-hosts.json" --report "${CMAKE_CURRENT_BINARY_DIR}/h7_scan/h7-hosts.json" --no-fail
+            --expect-finding "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp|H7-b|^match_\\.Tick "
+            --expect-finding "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp|H7-b|^loop_\\.Run ")
+set_tests_properties("${GYO_CURRENT_APP}.h7_scan" PROPERTIES LABELS "cpu;pvp" TIMEOUT 120)
 # The log Data Contract v1 (docs/object_fps_pvp/log-contract.zh-Hant.md): writer pins, the frozen readers on
 # real samples, and the reverse guards.
 add_test(NAME "${GYO_CURRENT_APP}.log_contract"

@@ -1,0 +1,15 @@
+{
+  "format": "gyo.h7-hosts",
+  "version": 1,
+  "generated_by": "manual",
+  "repo_commit": "899b3e38",
+  "owner_root": "tools/model_viewer",
+  "include_roots": [
+    "tools/model_viewer/include"
+  ],
+  "files": [
+    "tools/model_viewer/src/Main.cpp",
+    "tools/model_viewer/src/PreviewMeasure.cpp",
+    "tools/model_viewer/src/ViewerWindow.cpp"
+  ]
+}

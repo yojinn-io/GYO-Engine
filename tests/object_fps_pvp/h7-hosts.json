@@ -1,0 +1,20 @@
+{
+  "format": "gyo.h7-hosts",
+  "version": 1,
+  "generated_by": "manual",
+  "repo_commit": "899b3e38",
+  "owner_root": "apps/object_fps_pvp",
+  "include_roots": [
+    "apps/object_fps_pvp/include"
+  ],
+  "files": [
+    "apps/object_fps_pvp/main.cpp",
+    "apps/object_fps_pvp/match_main.cpp",
+    "apps/object_fps_pvp/src/Pvp/ClientConnection.cpp",
+    "apps/object_fps_pvp/src/Pvp/ClientSimulation.cpp",
+    "apps/object_fps_pvp/src/Pvp/ClientSimulationRole.cpp",
+    "apps/object_fps_pvp/src/Pvp/IpcHost.cpp",
+    "apps/object_fps_pvp/src/Pvp/MatchRuntimeHost.cpp",
+    "apps/object_fps_pvp/src/Pvp/PvpApplication.cpp"
+  ]
+}

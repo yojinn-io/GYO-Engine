@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "description": "Declared mutants of the H-7 host scanner (judgement 2 of docs/architecture/plans/kernel/h7-scanner-declaration.zh-Hant.md): rules H7-a and H7-b, the whitelist discrimination by type, masking, the list contract, --expect-finding, the empty run and the shared-scanner check. A mutant is killed only when the self-test fails and its output names the expected test (run_mutations.py).",
+  "mutants": [
+    {
+      "id": "h7a-iruntime-client-removed",
+      "file": "h7_scan_rules.json",
+      "find": "      \"IRuntimeClient.hpp\",\n",
+      "replace": "",
+      "expect": "test_p01_h7a_include_iruntime_client"
+    },
+    {
+      "id": "h7a-runtime-loop-removed",
+      "file": "h7_scan_rules.json",
+      "find": "      \"IRuntimeClient.hpp\",\n      \"RuntimeLoop.hpp\"\n",
+      "replace": "      \"IRuntimeClient.hpp\"\n",
+      "expect": "test_p02_h7a_include_runtime_loop_angle"
+    },
+    {
+      "id": "h7a-header-expansion-dropped",
+      "file": "h7_scan.py",
+      "find": "                elif resolved not in visited:",
+      "replace": "                elif False:",
+      "expect": "test_p03_h7a_through_owner_header"
+    },
+    {
+      "id": "h7b-tick-removed",
+      "file": "h7_scan_rules.json",
+      "find": "      \"Tick\",\n",
+      "replace": "",
+      "expect": "test_p04_h7b_member_tick"
+    },
+    {
+      "id": "h7b-run-removed",
+      "file": "h7_scan_rules.json",
+      "find": "      \"Step\",\n      \"Run\"\n",
+      "replace": "      \"Step\"\n",
+      "expect": "test_p05_h7b_loop_run"
+    },
+    {
+      "id": "h7b-arrow-form-dropped",
+      "file": "h7_scan.py",
+      "find": "(?P<op>\\.|->)\\s*(?P<method>",
+      "replace": "(?P<op>\\.)\\s*(?P<method>",
+      "expect": "test_p06_h7b_arrow_update_through_unique_ptr"
+    },
+    {
+      "id": "h7b-template-form-dropped",
+      "file": "h7_scan.py",
+      "find": "\\b\\s*(?:{TEMPLATE_ARGS}\\s*)?\\(\")",
+      "replace": "\\b\\s*\\(\")",
+      "expect": "test_p09_h7b_template_arguments"
+    },
+    {
+      "id": "wl-fixed-tick-entry-removed",
+      "file": "h7_scan_rules.json",
+      "find": "\"type\": \"Engine::Runtime::FixedTickRuntime\"",
+      "replace": "\"type\": \"Engine::Runtime::FixedTickRuntimeX\"",
+      "expect": "test_n01_fixed_tick_advance"
+    },
+    {
+      "id": "wl-kernel-entry-removed",
+      "file": "h7_scan_rules.json",
+      "find": "\"type\": \"GYO::Kernel::Runtime\"",
+      "replace": "\"type\": \"GYO::Kernel::RuntimeX\"",
+      "expect": "test_n02_kernel_runtime_run"
+    },
+    {
+      "id": "wl-method-not-checked",
+      "file": "h7_scan.py",
+      "find": "        if method not in methods:\n            continue\n",
+      "replace": "",
+      "expect": "test_p10_whitelisted_type_with_other_method"
+    },
+    {
+      "id": "wl-unqualified-without-using",
+      "file": "h7_scan.py",
+      "find": "            if any(re.search(e, text) for e in evidence for text in texts):",
+      "replace": "            if True:",
+      "expect": "test_p11_unqualified_whitelisted_name_without_using"
+    },
+    {
+      "id": "wl-unique-ptr-not-peeled",
+      "file": "h7_scan.py",
+      "find": "        if wrapped and wrapped.group(\"outer\") in unwrap:",
+      "replace": "        if False:",
+      "expect": "test_n06_unique_ptr_of_whitelisted"
+    },
+    {
+      "id": "wl-auto-hop-dropped",
+      "file": "h7_scan.py",
+      "find": "        if not alias or not hop or len(hop) != len(declarations(alias, texts)):",
+      "replace": "        if True:",
+      "expect": "test_n05_auto_copy_of_whitelisted"
+    },
+    {
+      "id": "wl-no-declaration-allowed",
+      "file": "h7_scan.py",
+      "find": "    if not found:\n        return False, \"?\"",
+      "replace": "    if not found:\n        return True, \"?\"",
+      "expect": "test_p13_receiver_without_declaration"
+    },
+    {
+      "id": "wl-any-declaration-suffices",
+      "file": "h7_scan.py",
+      "find": "    return all(matches_whitelist(t, method, rules, texts) for t in unique)",
+      "replace": "    return any(matches_whitelist(t, method, rules, texts) for t in unique)",
+      "expect": "test_all_declarations_must_match"
+    },
+    {
+      "id": "masking-disabled",
+      "file": "h7_scan.py",
+      "find": "masked_of[relative] = (raw, zs.blank_comments_and_literals(raw))",
+      "replace": "masked_of[relative] = (raw, raw)",
+      "expect": "test_n08_comments_and_strings"
+    },
+    {
+      "id": "version-check-accepts-unknown",
+      "file": "h7_scan.py",
+      "find": "or version not in SUPPORTED_VERSIONS:",
+      "replace": "or False:",
+      "expect": "test_unknown_version_rejected"
+    },
+    {
+      "id": "expect-finding-ignored",
+      "file": "h7_scan.py",
+      "find": "    if absent:\n        return 1\n",
+      "replace": "",
+      "expect": "test_expect_finding_missing_fails"
+    },
+    {
+      "id": "nothing-to-scan-fails",
+      "file": "h7_scan.py",
+      "find": "            print(\"h7_scan: nothing to scan\")\n            return 0",
+      "replace": "            print(\"h7_scan: nothing to scan\")\n            return 1",
+      "expect": "test_nothing_to_scan"
+    },
+    {
+      "id": "zone-scan-names-not-checked",
+      "file": "h7_scan.py",
+      "find": "    missing = [name for name in ZONE_SCAN_NAMES if not callable(getattr(module, name, None))]",
+      "replace": "    missing = []",
+      "expect": "test_zone_scan_without_the_three_functions_fails_loudly"
+    },
+    {
+      "id": "this-receiver-not-excluded",
+      "file": "h7_scan.py",
+      "find": "            if receiver == \"this\":",
+      "replace": "            if False:",
+      "expect": "test_n09_this_free_and_definitions"
+    },
+    {
+      "id": "owner-unknown-field-accepted",
+      "file": "h7_scan.py",
+      "find": "    unknown = sorted(set(data) - set(LIST_FIELDS))",
+      "replace": "    unknown = []",
+      "expect": "test_owner_whitelist_field_rejected"
+    }
+  ]
+}
