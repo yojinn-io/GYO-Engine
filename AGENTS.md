@@ -37,6 +37,11 @@
 * 変更範囲をできるだけ局所化する。
 * 既存の設計意図が不明な場合、それを「誤り」と仮定しない。
 * Product / Module / Tool の owner を確認してから、その責務を変更する。
+* Engine または再利用可能な層の Contract から直接出てくる規則
+  （例：「Contract は X しか保証しないので、使う側はすべて Y をする」）を実装する前に、
+  `docs/cross-component-rules.md` と、他の Product・Tool の同じ実装を調べる。
+  見つかれば引用または共用し、自分の言葉で書き直さない。見つからなければ owner を決めて登録する。
+  owner がはっきりしない、または争いがある場合は、Feature の作業の中で決めない（登録ページの手順に従う）。
 
 ### MUST NOT
 
@@ -93,7 +98,7 @@ wire の相手、Test の判定）の変更が必要になるか。
 必要になり、その量が上に積むほど増える構造を**基盤 Architecture** とし、それ以外を**応用 Architecture** とする。
 
 * 基盤の例：Engine の公開 Interface と Subsystem の境界、wire protocol、Data Contract の Format と Version の方針、
-  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、framework の共通構造。
+  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、再利用可能な層の共通構造。
 * 応用の例：Product・Tool の内部構造、Product-local の Registration、一つの Product の中で閉じる Adapter。
 * どちらか判断できない場合は、基盤として扱う。
 * 基盤として扱う計画は、基盤と判断した理由（上に積まれるもの）を書く。
@@ -245,6 +250,7 @@ Architecture Delta は禁止事項ではない。
 
 * 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下。Engine は `docs/architecture/` 配下）に
   見出し `Design Invariants` の節として書く。
+* Engine の Design Invariants がどの文書にあり、どれが効くかは、`docs/architecture/target/README.md` に従う。
   見出しは文書の言語にかかわらず、この英語表記のまま変えない（翻訳による意味のずれと探し漏れを防ぐため）。
 * 可能なものは、ガードとなる Test も用意する。
 * Component を変更する前に、その owner の `Design Invariants` 節を読む。
@@ -298,6 +304,10 @@ over:
 * 任意条件を記述可能な設定言語
 
 ただし、一時的な workaround を永続設計として固定しない。
+
+Architecture を新しい形へ移すバッチでは、上の Prefer を選ぶ前に、各選択肢について
+「旧い形に置き場所を探していないか」を確かめる。そうであれば、変更が小さくても採らない
+（`docs/architecture/target/README.md`「每批事前宣告的檢查項」）。
 
 局所的であることと、責務が正しいことは別である。
 
@@ -353,6 +363,18 @@ Editor      ──→ Engine
 ```
 
 Engine は具体的な Application や Editor に依存してはならない。
+Engine と Product・Tool の間に、Engine の機能の組み合わせや第三者の接続を担う再利用可能な層を置く場合、
+その層も Engine から参照されない（下位の層は上位の層を参照しない）。
+層の構成と依存の規則は、`docs/architecture/target/runtime-composition.zh-Hant.md` §4 に書く。
+
+外部の Component（第三者の Library、Platform の API など）は、更新も交換もありうる backend として扱い、
+選び終えた土台として扱わない。判断の一文：外部 Component を更新または交換するとき、変わるのはそれにつなぐ部分だけである。
+
+* 外部 Component の型と呼び出しは、その Component の adapter の中にだけ現れる。
+* 一つの外部 Component に、adapter は一つだけ置く。
+* adapter が外に見せる Interface は、使う側が自分の言葉で決め、外部 Component の Version に合わせて変えない。
+
+adapter をどの層に置くか、何を一つの外部 Component と数えるかは、架構の文書に書く。
 
 Architecture の分離は、
 Directory の配置や命名だけで判断しない。
@@ -367,6 +389,9 @@ Product の追加・複製・削除によって検証する。
 * 新しい Dependency Edge を追加する場合、既存の Dependency Direction を確認する。
 * Product 間依存が必要な場合は明示する。
 * Product 固有 Knowledge を reusable Engine layer へ漏らさない。
+* Engine と再利用可能な層に、型・関数・Format のフィールドを追加または改名するときは、
+  その名前が誰の概念を指すかを確かめる
+  （名前は概念の tag である。詳しくは `docs/architecture/target/naming.zh-Hant.md` の Design Invariant 4）。
 
 ### MUST NOT
 
@@ -721,6 +746,8 @@ Architecture Drift を確認する。
 * Product-specific Branch が共通層へ追加された箇所
 * Editor / Runtime Boundary の破壊
 * Product Removability を阻害する Reference
+* Engine・再利用可能な層の名前が Product の概念を指していないか。
+  名前が中立でも、中立の値に特定の Product だけが分かる処理をしていないか。
 * 他の Component が権威を持つ状態の写し、またはそれに基づく判断の追加
 * Component の Design Invariants に反する変更
 
