@@ -250,6 +250,10 @@ Architecture Delta は禁止事項ではない。
 
 * 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下。Engine は `docs/architecture/` 配下）に
   見出し `Design Invariants` の節として書く。
+* Engine の Design Invariants は、現況が `docs/architecture/*.md`、目標が `docs/architecture/target/` にある。
+  Engine の Component を変更する前に、まず `docs/architecture/target/kernel.zh-Hant.md` の Design Invariants を読む。
+  移行期間中に Component がどちらの Design Invariants に従うか、および Replacement Criteria と範囲の限界を
+  limits 頁（LIM-n）で書くときの扱いは、`docs/architecture/target/README.md` に従う。
   見出しは文書の言語にかかわらず、この英語表記のまま変えない（翻訳による意味のずれと探し漏れを防ぐため）。
 * 可能なものは、ガードとなる Test も用意する。
 * Component を変更する前に、その owner の `Design Invariants` 節を読む。
@@ -304,6 +308,10 @@ over:
 
 ただし、一時的な workaround を永続設計として固定しない。
 
+目標 Architecture へ移行するバッチでは、上の Prefer を選ぶ前に、各選択肢について
+「旧い形に置き場所を探していないか」を確かめる。そうであれば、変更が小さくても採らない
+（`docs/architecture/target/README.md`「每批事前宣告的檢查項」）。
+
 局所的であることと、責務が正しいことは別である。
 
 Product Boundary や Dependency Direction を破壊する workaround を、
@@ -349,15 +357,23 @@ Tool 化や Platform 化そのものを目的にしてはならない。
 
 Engine は再利用可能な機能を提供し、
 Application と設計支援ツールはその機能を利用する。
+plugins は、Engine の機能の組み合わせと、第三者の Library の接続を担う。各 plugin は選んでも外してもよい。
 
 基本的な Dependency Direction は以下とする。
 
 ```text
-Application ──→ Engine
-Editor      ──→ Engine
+Application ──→ plugins ──→ Engine
+Editor      ──→ plugins ──→ Engine
+（Application と Editor は Engine を直接使ってもよい）
 ```
 
 Engine は具体的な Application や Editor に依存してはならない。
+Engine は plugins を参照しない（include しない）。
+Product・Tool がどの plugin を使うかは、その Registration Data（`project.json`）にだけ書く
+（`docs/architecture/target/runtime-composition.zh-Hant.md` の §4 と Design Invariant 2）。
+
+framework は 2026-11-11 に退役した。`framework/` のコードは、各移行バッチまで既存のプログラムのために残るだけである。
+新しい作業は framework を対象にしない。
 
 Architecture の分離は、
 Directory の配置や命名だけで判断しない。
