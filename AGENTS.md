@@ -250,7 +250,10 @@ Architecture Delta は禁止事項ではない。
 
 * 各 owner は、変えてはならない設計意図を、その owner の Architecture 文書（`docs/<owner>/` 配下。Engine は `docs/architecture/` 配下）に
   見出し `Design Invariants` の節として書く。
-* Engine の Design Invariants は、現況が `docs/architecture/*.md`、目標が `docs/architecture/target/` にある。
+* Engine の Design Invariants は次の三種類の文書にある。
+  * `docs/architecture/target/`：目標の設計。
+  * `docs/architecture/*.md` のうち、冒頭に `> **Legacy**` 行がある文書：現況の記録。まだ移行していない既存のプログラムを拘束し、設計の内容は凍結されている。
+  * `docs/architecture/*.md` のうち、Legacy 行がない文書：正式の文書（target に対応がない Component の文書、または target から戻った文書）。
   Engine の Component を変更する前に、まず `docs/architecture/target/kernel.zh-Hant.md` の Design Invariants を読む。
   移行期間中に Component がどちらの Design Invariants に従うか、および Replacement Criteria と範囲の限界を
   limits 頁（LIM-n）で書くときの扱いは、`docs/architecture/target/README.md` に従う。
