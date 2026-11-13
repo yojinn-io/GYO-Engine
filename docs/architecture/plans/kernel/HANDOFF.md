@@ -84,6 +84,8 @@
 
 ## 未結事項（closeout 前不得刪；每項寫回頭驗的時點）
 
+- **target 文件搬回時，AGENTS.md 的引用路徑要同一批改**（圖書管理員 2026-11-13 提醒）：風紀委員的 AGENTS.md 追加（PR #208）§6 引用 `docs/architecture/target/naming.zh-Hant.md` 的 Design Invariant 4。naming 那份在遷移搬回 `docs/architecture/` 時，AGENTS.md §6 的路徑要在同一批改（AGENTS 的改動要使用者同意）。搬回 target 任何一份文件的批，事前宣告都要先 `git grep` 該路徑在 AGENTS.md、`agents/`、守衛與程式註解裡的引用並列出。回頭驗的時點：每個搬回 target 文件的批；closeout 時 target/ 應已空。
+
 - **U14 可能的設計缺陷**（使用者 2026-11-13）：v1 以「Welcome 隱含 ready」實現 Loading 的 ready（Match 只在 `LoadingState = Ready` 後接受 join），因此 Match 的 Loading「玩家」stage 在 v1 不生成初始成員、spec H.2b 第 4 點與 target/runtime-composition §3a 的路徑只在合成測試成立。回頭驗的時點：pv10 補 ready 事件時；在此之前 loading、match-sim、match-host 的範囲の限界都要列它。
 
 ## 暫停（使用者 2026-11-12：在新架構下是否成立都還不知道，改造完成前不討論、不排程）
