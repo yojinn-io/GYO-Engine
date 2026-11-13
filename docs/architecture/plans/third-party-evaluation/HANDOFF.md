@@ -41,3 +41,21 @@
 - 2026-11-11：使用者「先停下，和架構師商量好了再說」。本會話停止，D0～D9 與 DET-0～3 都等使用者；PR #176 維持開啟（不合併、不再改）。
 
 - 2026-11-11（架構師，合併前加註）：使用者定方向 `v8-arch-kernel-bring-into-gyo`（mechanism.zh-Hant.md，PR #175 已合併）。ECS 列「自製（維持）」在新前提下不成立，標為待重判（Scheduler 自寫已定；World 儲存層借 EnTT 或自寫待規格與 spike）；D1～D4、D7、D8 標延後。同一提交順帶修 determinism.md 三處（E4 改為「由 mechanism §3.1 吸收」、DET-3 的 E1／E3 時機改為「(c) 區 System 遷移前」、§4.7 EntityStore 指向 World 契約）。
+
+## `v8-arch-json-library-survey`（JSON 函式庫的選擇調查，2026-11-13 起）
+
+| 代號 | 白話 |
+|---|---|
+| `v8-arch-json-library-survey` | 比較 JSON 函式庫，並寫出每個候選在 J1～J4（未決 1）下的意義；方向與函式庫都未定，六條判準實測，結論只列建議 |
+
+- 卡片：架構師會話開出。分支 `claude/arch-json-library-survey`（自 `origin/master` `b9bf1962`）。模型／檔位：Opus 5.5／high；審查擬 Fable／high（待使用者同意）。
+- 估時：宣告 1.5 h、本機實測 5～7 h、CI 2～3 h、報告與審查 3～4 h，合計 11.5～15.5 h。
+- 2026-11-13：讀規劃稿 #212 §4 未決 1、本夾 evaluation、`StrictJson.hpp`、`AnimationEvents.cpp`、determinism.md §4.6；以 `git grep -P` 重數使用點（Engine 8＋建置期 1、framework 2、apps 7、tools 18；輸出存主 checkout `build/evidence/json-library-survey/usage-grep-20261113.txt`）；以 `gh api` 查候選版本、授權、大小。本機是 macOS x86_64，不在 L1 三平台內。
+- 2026-11-13：寫完事前宣告 [`json-library-survey-declaration.zh-Hant.md`](json-library-survey-declaration.zh-Hant.md)。**現況：停下等使用者核准（下載清單、三平台跑法 A／B／C、候選增刪、判準細則、審查模型）。未下載任何東西。**
+- 2026-11-13：架構師轉達使用者更正——未決 1 不是 J3，方向與函式庫都未定。宣告改為不以 J3 為前提：判準 3 分「原文路（J2／J3）」與「候選轉換路（J1／J4）」各自判定，3b 不過寫成該選項不成立、不停下；新增 §3.7「對各方向的影響」；審查者選項加入架構師建議（Opus 另一代理）。仍停下等使用者核准。
+- 2026-11-13：使用者選三平台跑法 **C（只在本機）**。宣告 §5 記錄：3b、3c 與判準 5 的三平台部分記「確認できない」；估時改 9.5～12.5 h。其餘四項（下載清單、候選增刪、判準細則、審查者）待使用者核准，仍未下載。
+- 2026-11-13：使用者追加「測試放到 Docker 下」。宣告 §5.1、§5.2：用本機既有映像 `gyo-linux-toolchain:l1-20261112`（L1 linux-x64 工具鏈，不拉新映像），編譯與執行時斷網、只掛證據目錄；linux-x64 全部判準實測，windows-x64 與 macos-arm64 的 3b、3c、編譯記「確認できない」；本機 macOS 原生不跑。
+- 2026-11-13 約 20:30：使用者核准全部下載。下載與 SHA-256 核對（Boost、simdjson 對上 GitHub digest；nlohmann 以 repo 的 FetchContent checkout 比對）；寫實測程式與向量（種子 20261113）；容器內兩次實測（第二次只重跑判準 3：比對腳本原把整數依表示法比，改依值比並加範圍內整數檔）；補寫出格式與警告數的觀察；查授權與維護。
+- 2026-11-13 約 21:50：報告 [`json-library-survey.zh-Hant.md`](json-library-survey.zh-Hant.md) 與 dev_log 寫完；只讀複查（Opus 另一代理）進行中。
+- 2026-11-13 約 22:20：複查交回 14 條（must 4、should 6、note 4），全部接受並修正報告（jsoncons 判準 1 改判不通過；補跑 yyjson 原文旗標下的判準 1，只記錄；揭露判準 3 第二次的判定範圍變更；補記容器執行紀錄）。**現況：push、開 PR、回報架構師；方向與函式庫等使用者選。**
+- 2026-11-13：架構師知會使用者在 #212 複核中提到的形狀（選一個函式庫、包 GYO 介面、Engine 內唯一 adapter；數字的路未說）。報告加 §3.1：該形狀下各候選要補的（嚴格解析、重複鍵、數字兩條路、寫出、包裝形狀），不合併成前提。PR #216 追加推送。
