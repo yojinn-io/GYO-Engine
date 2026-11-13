@@ -55,6 +55,8 @@ A rule that several components must follow because it is a direct consequence of
 
 ## Layers: admission and format ownership
 
+> 2026-11-13 (`v8-arch-a6-revision`): for new code the three layers are Engine, plugins, and products and tools (`architecture/target/runtime-composition.zh-Hant.md` section 4); the Framework row, checks 2 and 4 and the framework dependency guard below describe the running code until the plugins batches land and are superseded then. Check 1 (an Engine function, type or format names no product, gameplay concept or meaning of a name) does not retire: its target clause is `architecture/target/naming.zh-Hant.md` Design Invariant 4.
+
 Three layers, each admitting a thing by questions that can be answered yes or no from the change alone, not by
 rank. "The engine is the most general layer" orders the layers; it does not say where a new piece goes. The same
 questions decide which layer owns a data format (AGENTS.md section 8): the dependency rules above place code and

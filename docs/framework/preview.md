@@ -3,6 +3,8 @@
 > **Legacy** (current-state record; `v8-arch-docs-legacy`, 2026-11-12). Design authority is [`docs/architecture/target/`](../architecture/target/README.md). This document takes only two kinds of updates: the current state of code that still exists, and Design Invariants that tests still guard. Existing code is bound by this document's Design Invariants; new code (from `engine/kernel` on) by target. The file is deleted together with the `framework/` code by the plugins migration batch.
 >
 > Deprecated. The framework concept retires (`v8-arch-framework-retire`, 2026-11-11): its two duties, composing Engine capabilities and adapting third parties, move to the plugins layer (`docs/architecture/target/runtime-composition.zh-Hant.md` section 4). The code and this document stay in force for the existing programs until their migration batch. The data contract and its Design Invariants below carry over: their owner moves from the framework to the plugin that provides them (audit section 10.1); only the framework's own structural invariants (`architecture.md`) retire with it. No new work targets the framework.
+>
+> Narrowed 2026-11-13 (`v8-arch-a6-revision`, user decision of 2026-11-11 "data flows forward only", legacy-impact conflict 2): what carries over to the offscreen-preview plugin is the **properties** of Design Invariants 1 to 3 and 5; **Design Invariant 4 and Replacement Criterion 4 are superseded** and are not carried over. The target clause is `docs/architecture/target/runtime-composition.zh-Hant.md` section 3b: a frame's render target is composed in the render World and the UI draw list refers to it by texture id; there is no readback and no upload. Sentences in invariants 3 and 5 and criterion 2 that speak of a readback are rewritten when the plugin's own document is written (`v8-arch-plugins-foundation`). Until `v8-arch-plugins-editor` rewrites the preview, every invariant below still binds the existing framework code.
 
 Owner: the framework (`framework/`), target `GYO::ToolFrameworkPreview`, headers `gyo/framework/Preview.hpp`,
 `gyo/framework/PreviewTexture.hpp` and `gyo/framework/PreviewCamera.hpp`. Plan and record:
@@ -84,6 +86,7 @@ A change against any item below is an Architecture Delta that needs the user's a
    `UploadFrame` leaves the texture holding that frame's bytes at its size. Guard: PV2 to PV5 in
    `tests/framework/PreviewTests.cpp` and the `pv-*` mutants
    (`docs/architecture/plans/framework-preview/scripts/framework_preview_mutations.json`).
+   *(2026-11-13, `v8-arch-a6-revision`: **superseded**; see the note at the top of this file.)*
 5. **Built where its Engine targets are.** `GYO::ToolFrameworkPreview` is built wherever the build has Engine's SDL
    GPU backend and SDL renderer, and only there; it reaches SDL only through them (framework Design Invariant 2).
    Guard: the configure-time check in `tests/framework/CMakeLists.txt` (mutant `fw-link-preview-missing`) and the
@@ -99,6 +102,7 @@ Meeting one of these stops further repair: propose to the user whether to repair
 3. Serving one product needs a flag, callback or option that the other does not use.
 4. A synchronous readback per frame misses a client's frame-time judgment (the model viewer's P1): propose the next
    step (an asynchronous readback, a smaller preview, drawing into the window's GPU device) instead of patching it here.
+   *(2026-11-13, `v8-arch-a6-revision`: **superseded.** All three proposals keep the readback; the target composes the frame in the render World instead, see the note at the top of this file.)*
 
 ## Using it
 

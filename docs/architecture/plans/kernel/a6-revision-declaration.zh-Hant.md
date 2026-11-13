@@ -1,6 +1,6 @@
 # 事前宣告：`v8-arch-a6-revision`（spec A.6 修訂＋legacy 處置＋kernel DI 落 target）
 
-更新：2026-11-13。Owner：架構（架構師會話自寫）。**狀態：草案，待使用者核准；核准前不改任何文件。**
+更新：2026-11-13。Owner：架構（架構師會話自寫）。**狀態：已核准（使用者 2026-11-13，側邊會話轉述）；修訂見文末〈停止條件 3 的處置〉。**
 出處：遷移計畫 `migration-plan.zh-Hant.md` §3.1（已核准，`v8-arch-migration-plan-approved`）、§5 歸本批的 24 列、§7 已定的 U1（第三層延到 G2a 後定）、U13（目標 DI 一次核准、清單兩層）、U14（未結事項）；HANDOFF 決定行 `v8-arch-legacy-impact-dispositions`（含 S-18 修正）、`v8-arch-guards-inventory-dispositions`（Q1、Q8、Q10）、`v8-arch-plugin-selection-data`、`v8-arch-guards-migrate-with-code`。
 
 ## 目的（Feature → Contract → Architecture，照計畫 §3.1）
@@ -68,3 +68,14 @@
 ## 若失敗
 
 後面每批的事前宣告沒有穩定條號可引、宣告不能核准；照計畫 §3 共通「宣告未核准＝不開工」，程式批（registry-schedule 起）也不開工。
+
+## 停止條件 3 的處置（2026-11-13，開工後；宣告錯誤的修正，事後報告）
+
+開工後在寫任何 kernel 頁之前發現：spec K.1 的 DI-KS 15 條落成一頁時，11 條與既有部件頁的 DI 是同一性質（共 17 條部件頁 DI），兩邊都不是對方的超集合；沒有互相矛盾的條。宣告同時要求「15 條落一頁」與「重複就停」，是宣告自己的矛盾。照停止條件停下、列給使用者。
+
+**使用者的決定**（2026-11-13，側邊會話轉述，後兩句是主會話直接輸入）：採 (b)——Kernel 是核心，DI-KS 15 條全文集中在 `target/kernel.zh-Hant.md`；部件頁**保留條款標題**，內容改成**連到 kernel 頁的單一條款**（細到條款，不是整頁引用），並強調必讀；部件特有的規則留在部件頁、不進 kernel 頁；不只約束 Kernel 的條文要拆，拆不開的列給使用者。理由：所有條款的出處要有一個明確的位置，文件太散反而沒人讀。
+
+對宣告的修正：
+- **判定 5** 改為：target/README 的清單分「第一層：跨部件，先讀＝kernel 頁」「第二層：各部件特有的條文」，每條附 legacy 對照；清單的全文條數＝kernel 頁條數＋各部件頁特有條數之和；部件頁的連結條不計入。
+- 範圍表「`target/kernel.zh-Hant.md`（新）」一列的做法照上面的決定；另加：部件頁（world、system-contract、scheduler、runtime-composition、determinism、error-handling）的 DI 節改寫為連結條＋特有條，條號不變。
+- 部件頁同性質的條裡、spec K.1 沒有逐字寫到的句子與守衛，併進 kernel 頁對應的條，以〔併自 …〕標出處，不丟。

@@ -14,7 +14,7 @@
    - Plugin：加 `Plugin` 後綴。
    - Schedule／stage：階段名（`Loading`、`FixedUpdate`；`Ingress`、`Simulate`、`Judge`、`Egress`）。
 3. **World＝前綴**（照 Bevy）：渲染 World 的資料 `Gpu*`／`Extracted*`；boundary 輸入帶 `Sample`／`Input`（`HostClockSample`、`InputRing`）；文件／主 World 不加前綴。
-4. **決定性區＝位置不是名字**：(c) 的 System 與欄集中在產品的一個 namespace／目錄（例 `ObjectFpsPvp::Sim::`），(b) 在 `::Present::`、`::Ingress::` 等。區仍是宣告並啟動檢查（spec G.1）；目錄讓 J-17 的掃描有對象。這是 GYO 自己的一條，Bevy 沒有區的概念。
+4. **決定性區＝位置不是名字**：(c) 的 System 與欄集中在產品的一個 namespace／目錄（例：PvP 的 namespace `fps::pvp::sim`，對應 include 目錄 `RetroFPS/Sim`——`RetroFPS` 是 include 目錄名，不是 namespace；`v8-product-kernel-prep-zones-gate`），(b) 在 `present`、`ingress` 等對應的 namespace／目錄。區仍是宣告並啟動檢查（spec G.1）；目錄讓 J-17 的掃描有對象。這是 GYO 自己的一條，Bevy 沒有區的概念。
 5. **禁止舊架構的角色後綴**：`Manager`、`Renderer`、`ViewModel`、`Host`、`Shell`、`Runtime`、`Controller`——它們命名「擁有東西的物件」，正是機制要消掉的形狀。例：`UiRenderer` → `Ui::LayoutText` 類 System 加 `GpuFontAtlas` 類 Resource；`WeaponViewModel` → `Present::WeaponPose` 欄加 `AnimateWeapon` System（使用者確認：這兩個照同一思路改）。
 
 ## 適用
@@ -25,9 +25,11 @@
 
 ## Design Invariants（候選；核准後成為正式條文）
 
-1. **namespace 與目錄一一對應**，Kernel／Engine／Plugins／產品四個根。守衛：掃描（檔案路徑與 namespace 不符即違規）。
+1. **namespace 與目錄一一對應**，Kernel／Engine／Plugins／產品四個根。對應以「目錄 ↔ namespace」的一張表給定，不要求兩邊拼字相同（例：`RetroFPS/Sim` ↔ `fps::pvp::sim`；產品的根 namespace 由產品定）。守衛：掃描（檔案路徑與 namespace 不符即違規；`v8-arch-kernel-scaffold` 新增，J-9 掃描器擴充）。
 2. **System 是動詞片語、資料是名詞、Event 是過去式、Plugin 帶後綴**。守衛：登記時的名稱檢查（Registry 可對 System 名做詞性白名單的弱檢查）＋審查。
 3. **第 5 條的後綴在 Kernel、Engine、Plugins 的新程式中不出現**。守衛：掃描（`Manager|Renderer|ViewModel|Host|Shell|Runtime|Controller` 作為型別名尾；白名單只有仍存在的舊程式，隨遷移縮小）。
+
+4. **Engine 的名字中性**（`v8-arch-a6-revision`；承接 legacy `docs/architecture.md`〈Layers〉check 1 的性質，條文不變、只換落點）：`engine/` 的函式、型別、格式，其簽名、欄位與文件不出現產品名、玩法概念、或一個名字對某個產品的意義；出現就不屬於 Engine。plugins 層的同一條性質寫在 `docs/plugins/` 的層 DI（`v8-arch-plugins-foundation` 建）。守衛：`neutral_names_guard.py`（voxel-mesh、map-markers，既有）；Kernel 目錄的產品名禁字表（`v8-arch-kernel-scaffold` 新增，J-9）；其餘靠審查。
 
 ### Replacement Criteria（候選）
 

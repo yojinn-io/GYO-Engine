@@ -77,6 +77,7 @@ v8-arch-kernel
 
 ## dev_log
 
+- [2026_11_13_arch_kernel_a6_revision.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_a6_revision.zh-Hant.md)：-a6-revision（spec v0.4、Kernel 的 DI 落 target；[宣告](a6-revision-declaration.zh-Hant.md)、[報告](a6-revision-report.zh-Hant.md)）。
 - [2026_11_12_arch_guards_inventory.zh-Hant.md](../../../dev_logs/2026_11_12_arch_guards_inventory.zh-Hant.md)：-guards-inventory（任務卡）。
 - [2026_11_13_arch_tool_hosts_inventory.zh-Hant.md](../../../dev_logs/2026_11_13_arch_tool_hosts_inventory.zh-Hant.md)：-tool-hosts-inventory（任務卡）。
 - [2026_11_12_arch_legacy_impact_scan.zh-Hant.md](../../../dev_logs/2026_11_12_arch_legacy_impact_scan.zh-Hant.md)：-legacy-impact-scan（任務卡）。

@@ -27,7 +27,7 @@
 ## 3. 寫入政策：預設獨占（使用者 2026-11-11 決定，spec K.3 第 3 項）
 
 - 每個欄與 Resource 的 `ColumnInfo.writePolicy ∈ {Exclusive, Shared}`，**預設 Exclusive**；登記時標 `Shared` 才允許多寫者。宣告進 authority digest 的欄禁 Shared（spec S-12）。
-- **獨占是啟動時數寫者的檢查**（spec D-E2：同一 World、所有非 Startup schedule 中，寫者**以 System 計**（使用者 2026-11-11 決定，K.3 第 9 項；不以 owner plugin 計，否則檢查的粒度變成程式碼組織而非資料流）、含型別化 Commands、Spawn 的 bundle、hook，至多一個；Startup schedule 的寫者不計）。後果：PvP 今天由三段程式寫的 Body 要依 entity-model 的欄位分類拆欄，不併 System、不改 Shared——使用者：不拆的話架構改造就沒有意義。範圍與 golden 影響由 -audit 量，**執行期零成本、不是鎖**；Exclusive 與 Shared 的執行期行為完全相同。Bevy 等於全 Shared、順序隱性；本機制把「最後寫贏」換成「唯一寫者定合併規則」。不採資料庫式的執行期仲裁（鎖、MVCC）：寫入路徑慢 20～100 倍且買不到決定性。
+- **獨占是啟動時數寫者的檢查**（spec D-E2：同一 World、所有非 Startup schedule 中，寫者**以 System 計**（使用者 2026-11-11 決定，K.3 第 9 項；不以 owner plugin 計，否則檢查的粒度變成程式碼組織而非資料流）、含型別化 Commands、Spawn 的 bundle、hook，至多一個；Startup schedule 的寫者不計）。後果：PvP 今天由三段程式寫的 Body 要依產品自己的欄位分類拆欄（分類表在產品的目標文件 `docs/object_fps_pvp/target/entity-model.zh-Hant.md` §1，不在本文件——產品的欄位不進 Engine 層的設計文件），不併 System、不改 Shared——使用者：不拆的話架構改造就沒有意義。範圍與 golden 影響由 -audit 量，**執行期零成本、不是鎖**；Exclusive 與 Shared 的執行期行為完全相同。Bevy 等於全 Shared、順序隱性；本機制把「最後寫贏」換成「唯一寫者定合併規則」。不採資料庫式的執行期仲裁（鎖、MVCC）：寫入路徑慢 20～100 倍且買不到決定性。
 - **資料路徑**：獨占欄預設由它唯一的寫者直接寫，不需要事件。只有多個來源要影響同一欄時才用漏斗——各來源發事件或寫自己的中間欄，唯一寫者讀取、套用合併規則、寫欄；漏斗可以是事件也可以是中間欄，是可選的路徑（使用者更正：不是標準進料方式）。事件也有寫者，(c) 區多個 `EventWriter<E>` 之間仍要顯式順序。整欄替換（`Restore`）只用於跨 World 接收權威狀態，不是 World 內的寫法。
 
 | 資料 | 寫入政策 | 資料怎麼進來 | 為什麼 |
@@ -49,18 +49,29 @@
 - 理由：「schedule 在 domain 內的序」沒有定義、Host 也沒被約束照它執行，另一個 schedule 若在修剪點之後執行就會靜默漏讀；與其漏讀不如禁止。
 - 讀取規則無游標：位置在寫者之後的讀者本 tick 就讀到，之前的下 tick 讀到；緩衝保留到下一 tick 末；被 run 條件跳過的讀者錯過那個 tick 的事件（寫明）。
 
-## 6. 其餘（照規格 §A，待實作時搬進本文件）
+## 6. 欄的儲存與 `entity_store` 的關係（通用規則；`v8-arch-a6-revision`）
+
+- **`engine/entity_store` 不持有、不讀寫 change stamp。** store 的 Design Invariant 6（狀態權威、沒有 change tick）對 store 本身繼續成立；stamp 是 World 的東西，它的儲存與讀寫只在 `engine/kernel`。
+- World 的一個欄有三樣東西：鍵（`keys`）、值、每格的 `added`／`changed` stamp。規格 A.6 留了兩種佈局，哪一種由 `v8-arch-kernel-world-exec` 的事前宣告定，兩種都守上一條：
+  1. **分開存（SoA）**：鍵、值、stamp 各一個陣列，World 用 store 的「回傳位置」查找版本同步搬動平行陣列。stamp 陣列是 kernel 的成員。
+  2. **格子包法**：元素型別是 kernel 定義的格子（鍵、兩個 stamp、值），直接重用 store 的排序容器。stamp 在元素裡，但元素型別與對 stamp 的每一次讀寫都在 kernel；store 只把它當不透明的元素搬動。
+- 判斷一個改動有沒有違反本節：`engine/entity_store` 的原始碼裡出現 stamp 的欄位名、或依 stamp 做任何判斷，就是違反。守衛：審查加文字掃描（world-exec 新增）；spec J-30。
+- 本文件不列任何產品的欄位名。產品欄位怎麼分、哪些進 digest，寫在該產品自己的目標文件。
+
+## 7. 其餘（照規格 §A，待實作時搬進本文件）
 
 資料模型（欄的 SoA 佈局、ColumnInfo 的 zone／writePolicy／role／rollback）、A.2 的操作與允許的狀態、A.4 參考失效規則、A.5 不變量 W-1～W-11、A.6 的 C++ 實現手段與存取驗證兩層，見 spec §A。這些在規格核准前仍是草案。
 
 ## Design Invariants（候選；核准後成為正式條文）
 
-1. **鍵的疊代順序只來自數值**：World 對 `EntityId` 只做 64 位元整數比較，不解讀 index／generation；任何疊代、交集、同步點套用的順序都以此為鍵。守衛：spec J-1、J-2。
-2. **World 不配發、不重用鍵**：配發器是產品的 Resource；World 內沒有配發、回收、歸零的操作；世代切換＝重建 World。守衛：spec J-8（含突變「用盡時回繞」「加 Reset 歸零」）。
+條號不變。標「受 kernel DI-KS n 約束」的條，全文只在 kernel 頁的那一條；其餘是本部件特有的條文。
+
+1. **鍵的疊代順序只來自數值**——受 kernel [DI-KS 3](kernel.zh-Hant.md#di-ks-3) 約束：**全文與守衛見該條，改動前必讀**。
+2. **World 不配發、不重用鍵；世代切換＝重建 World**——受 kernel [DI-KS 4](kernel.zh-Hant.md#di-ks-4)、[DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。
 3. **stamp 是依 Plan 順序推進的全域計數、單調、不進 (c)**：跳過的 System 也消耗；同一 World 的執行歷史相同時序列相同；Changed／Added 的「上次執行」以掛點為單位；不回滾；(c) 區禁變更過濾。守衛：spec J-30、J-38、J-52。
-4. **寫入政策預設獨占，獨占是啟動檢查**：未標 Shared 的欄與 Resource 在一個 World 的所有非 Startup schedule 中寫者至多一個（以 System 計，含型別化 Commands、Spawn 的 bundle、hook）；第二個寫者是啟動錯誤；執行期不加鎖、不仲裁；進 digest 的欄不得 Shared。守衛：spec J-15、J-16。
-5. **結構變更只在同步點、順序寫死、Despawn 不是寫者**：Running 期間成員不變；同步點依「hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource」套用，每階段依 id，despawn 冪等且對窗開始不存在的 id 無作用；Despawn 不計入獨占寫者、不產生衝突邊，(c) 的保護由 Z5。守衛：spec J-3、J-31、J-32、J-32b（突變：spawn 先於 despawn、不去重、依記錄順序套用）。
-6. **事件屬於一個 clock domain，只在它的 clock schedule 內讀寫；無游標，依 Plan 位置讀**。守衛：spec J-36、J-37。
+4. **寫入政策預設獨占，獨占是啟動檢查**——受 kernel [DI-KS 6](kernel.zh-Hant.md#di-ks-6) 約束：**全文與守衛見該條，改動前必讀**。
+5. **結構變更只在同步點、順序寫死、Despawn 不是寫者**——受 kernel [DI-KS 9](kernel.zh-Hant.md#di-ks-9) 約束：**全文與守衛見該條，改動前必讀**。
+6. **事件屬於一個 clock domain，只在它的 clock schedule 內讀寫**——受 kernel [DI-KS 10](kernel.zh-Hant.md#di-ks-10)、[DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。
 
 ### Replacement Criteria（候選）
 
