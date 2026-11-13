@@ -95,7 +95,7 @@
 
 | 守衛／突變 | 性質 | 去處 | 理由 |
 |---|---|---|---|
-| `neutral_names_guard`（WORDS） | voxel_mesh／map_markers 不含 gameplay 名詞 | **留**（不套到 kernel；**腳本與掛載都不碰**） | 性質不同（gameplay 名詞≠產品名）；kernel 用 J-9 自寫表。Q10（是否停止掃兩份契約文件）等使用者，使用者沒有明說前不動 |
+| `neutral_names_guard`（WORDS） | voxel_mesh／map_markers 不含 gameplay 名詞 | **留**（不套到 kernel；**腳本與掛載都不碰**） | 性質不同（gameplay 名詞≠產品名）；kernel 用 J-9 自寫表。Q10 使用者 2026-11-13 定不放寬、維持現狀（kernel HANDOFF `v8-arch-neutral-names-guard-keep`）：腳本、WORDS、兩個模組的掛載都不改 |
 | `os_boundary_guard` | `engine/` 無 OS 標頭／巨集／API | **留** | kernel 無 OS 碼；新檔在掃描根下，自動涵蓋 |
 | OS 編譯定義檢查 | 同上（CMake 側） | **留** | 同上 |
 | `ProcessCodePageCheck` | 每個可執行檔有 UTF-8 manifest | **留** | `gyo_kernel_tests` 由 `GyoCodePage.cmake` 自動套 |
@@ -133,4 +133,5 @@
 
 - 2026-11-13 架構師核定（訊息來自架構師會話；初稿 `a7f6f899`）。6 點修訂：(1) DI 出處改引 target/kernel 頁與 naming DI 4；(2) N1 反向加 `plugins/`、不存在的反向根跳過，自測兩種各一例；(3) K1 別名逐個註出處、角色詞另一組、反例加 `matches`／`Matcher`／`rematch`；(4) LIM-4 寫產品列的方向；(5) Fable 只用一次；(6) `neutral_names_guard` 不碰。全部已改入本檔。
 
-（結果於完成時回寫。）
+- 2026-11-13 結果（細節與證據見 [dev_log](../../../dev_logs/2026_11_13_arch_kernel_scaffold.zh-Hant.md)）：判定 1～8 成立。L1 第一輪 `b31bae5a`（run 43352865028）與最終程式 `0a2b2f7b` 的第二輪（run 43355513501）三平台綠；樣本 (a)(b) 在 windows-x64 各一次無失敗，照 U5 分工（核心三條 (a)、其餘 (b)）。突變 78/78（初版 37 條＋審查後 41 條）。Fable 審查與敵對檢查（一次）找到程式碼 11 項、存活 22＋1 處；本批修 A1～A5、A6 後半、A7、A9 與全部存活處，A6 前半（無 `static` 的可變全域）與 A8（登記 id 子字串比對）交架構師判斷。
+- 與宣告的差異：§3.1 K0（無法掃描的檔案類型）與 K5 的「無法讀取的 include 目標」是審查後新增的判定（締める面）；K4 的函式判定改寫以消除對合法函式形狀的誤報；naming 的 SUFFIXES 與 J-9 共用並加 `.m`／`.mm`。§2 檔案清單不變。
