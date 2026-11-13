@@ -55,7 +55,9 @@
 2. **System 回 `Result<void, KernelError>`，不靜默**——受 kernel [DI-KS 2](kernel.zh-Hant.md#di-ks-2) 約束：**全文與守衛見該條，改動前必讀**。
 3. **System 無狀態；(c) 區無 `Local`**——受 kernel [DI-KS 1](kernel.zh-Hant.md#di-ks-1)、[DI-KS 12](kernel.zh-Hant.md#di-ks-12) 約束：**全文與守衛見該條，改動前必讀**。
 
-### Replacement Criteria（候選）
+### Replacement Criteria
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。
 
 - LIM-3：存取驗證（可關）攔不到的形狀，以及驗證關閉時攔不到的全部（詳細在 `limits.zh-Hant.md`）。
 - LIM-6：驗證開關是行程級，三個 Runtime 共用；出現 per-Runtime 粒度的需求時置換開關的放法。

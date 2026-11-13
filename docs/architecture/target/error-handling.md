@@ -37,6 +37,8 @@ Item numbers are unchanged. An item marked "bound by kernel DI-KS n" has its ful
 1. **A runtime-data Programmer Error is returned as `Result<void, KernelError>`, logged once by the Executor, and never silent**: bound by kernel [DI-KS 2](kernel.zh-Hant.md#di-ks-2): **full text and guards are in that clause; read it before changing this component**.
 2. **`Base::Result` stays a pure value**: no logging, no handler inside it; the Executor's handler is the only place a kernel error is logged. Guard: review; spec J-9 scan of the kernel directory for log calls outside the Executor.
 
-### Replacement Criteria (candidates)
+### Replacement Criteria
+
+In force: approved by the user on 2026-11-13 (kernel HANDOFF `v8-arch-target-di-approved`).
 
 - If a kernel error path needs to be recoverable (the run continues after an `Err`), this row is wrong for that path: it is a Runtime Error and belongs to the existing `Result` row with a module error type, not to this one.

@@ -29,6 +29,8 @@
 2. **載入是外部服務，完成的資產經 Loading 的 Ingress stage 進暫存、由 (c) System 依請求序號的連續前綴套用**：IO 執行緒不碰 World；套用順序與批次切分都與完成時序無關。守衛：等價測試（打亂完成順序，`Assets<T>` 的內容與 Handle 序列相同）。
 3. **內容身分是 (c)，由 (c) System 從暫存的位元組算；世界內容的資產在 Loading 宣告 ready 前載完**（Startup 不載內容；runtime-composition §3a）。守衛：determinism.md §4.9 的既有 digest；「資產未就緒即 ready」是 Loading 的 System 以 Err 回傳的 Programmer Error。
 
-### Replacement Criteria（候選）
+### Replacement Criteria
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。
 
 - 出現必須在 Running 期間串流載入並進 (c) 的資產 → 本文件第 1 節第 4 點的「ready 前載完」要重審（lightyear／Bevy 的串流模型），不是在 `Assets<T>` 上加特例。

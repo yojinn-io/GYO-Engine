@@ -75,7 +75,9 @@
 5. **結構變更只在同步點、順序寫死、Despawn 不是寫者**——受 kernel [DI-KS 9](kernel.zh-Hant.md#di-ks-9) 約束：**全文與守衛見該條，改動前必讀**。
 6. **事件屬於一個 clock domain，只在它的 clock schedule 內讀寫**——受 kernel [DI-KS 10](kernel.zh-Hant.md#di-ks-10)、[DI-KS 14](kernel.zh-Hant.md#di-ks-14) 約束：**全文與守衛見該條，改動前必讀**。
 
-### Replacement Criteria（候選）
+### Replacement Criteria
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。
 
 - LIM-4：進 digest 的欄不得 Shared；為繞過獨占檢查改 Shared 兩次以上 → 重新劃分元件（詳細在 `limits.zh-Hant.md`）。
 - 某個產品需要 World 解讀 generation（例如由 World 拒絕 stale 鍵），或需要第二個鍵空間的對照表 → 鍵的形狀要重新設計，不在 World 上加分支。

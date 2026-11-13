@@ -171,7 +171,9 @@ Item numbers are unchanged. An item marked "bound by kernel DI-KS n" has its ful
 2. **(c) time comes only from the domain tick and recorded boundary inputs.** The kernel half (a boundary resource is written only by the Host while the World is `Ready` or by an ingress System in the ingress stage; the domain tick is advanced only by the first step of its clock schedule and is written by no System and not by the Host directly; a startup error otherwise) is kernel [DI-KS 8](kernel.zh-Hant.md#di-ks-8), required reading. Specific to this page, binding products and Hosts: no (c) source file reads a clock (`<chrono>`, `engine/time`); the Host samples the clock once per wake-up and records it as `HostClockSample`; the arrival time travels with each inbound message as data. Guards: the source-file scan over the product's (c) lists (spec J-17, `docs/architecture/zone-c-sources.zh-Hant.md`); the digest runner's scripted clock; review.
 3. **(c) randomness is per-entity rollback state seeded by the product.** The kernel half (the kernel has no random source) is kernel [DI-KS 15](kernel.zh-Hant.md#di-ks-15), required reading. Specific to this page, binding products: random state is a zone=C component with `rollback = Yes`, seeded by the product and included in its digest; no shared random resource. Guard: the product's digest.
 
-### Replacement Criteria (candidates)
+### Replacement Criteria
+
+In force: approved by the user on 2026-11-13 (kernel HANDOFF `v8-arch-target-di-approved`).
 
 - LIM-2: v1 is Serial only; see `limits.zh-Hant.md`.
 - If a (c) rule can be stated only with time that is neither the tick nor a recorded input, the input model is wrong: add the recorded input, do not open a clock read.

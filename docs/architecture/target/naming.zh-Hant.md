@@ -33,6 +33,8 @@
 
 4. **名字是概念的 tag；Engine 的名字只指 Engine 的概念。** `engine/` 裡出現產品的詞，就是 Engine 裡有了產品的概念，那個東西不屬於 Engine。名字乾淨不等於概念乾淨：對一個中性的值做只有某個產品懂的處理，同樣違反本條。守衛：名字由掃描查（`neutral_names_guard.py`，voxel-mesh 與 map-markers；Kernel 目錄的產品名禁字表，`v8-arch-kernel-scaffold` 新增，J-9）；名字查不到的由審查查。（使用者 2026-11-13：名字是一個概念的極簡 tag，所以這一條既是命名也是分層；分層那邊引用到這裡——`runtime-composition.zh-Hant.md` §4。承接 legacy `docs/architecture.md`〈Layers〉check 1。plugins 層的同一條性質寫在 `docs/plugins/` 的層 DI，`v8-arch-plugins-foundation` 建。）
 
-### Replacement Criteria（候選）
+### Replacement Criteria
+
+正式：使用者 2026-11-13 核准（kernel HANDOFF `v8-arch-target-di-approved`）。
 
 - 某類東西用五條都命不出名（例如同時是 System 又是 Resource 的形狀）→ 不是命名問題，是那個東西的形狀錯了，回到機制判。
