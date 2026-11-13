@@ -1,6 +1,6 @@
 # 架構 v8：v8-arch-json-library-survey（JSON 函式庫的選擇調查）
 
-件數の突き合わせ：一致——7 候選 × 6 判準＝42 格（實測 36、文件判定 1、不評 5）；各判準的送出數與收到數相同（唯一例外：simdjson 拒絕含超出 64 位元整數的整數檔，另以範圍內 10,008 個重量，送收一致；報告開頭有細目）。
+件數の突き合わせ：不一致——simdjson 的整數檔送 10,010、收 1（整份被拒，屬候選行為；列為計數した破棄，另以宣告外的範圍內 10,008 個重量，送收一致）；其餘各判準送收一致。7 候選 × 6 判準＝42 格（實測 36、文件判定 1、不評 5）。依 AGENTS §14 冒頭，判定全部等使用者確認。
 
 日期：2026-11-13。分支 `claude/arch-json-library-survey`（自 `origin/master` `b9bf1962`）。卡片由架構師會話（「[Job][架構師]例行架構掃描」）開出。
 作者：Opus 5.5／high（卡片指定）。複查：Opus 另一代理／high（只讀；架構師建議，與作者同模型，見報告 §7）。
@@ -24,13 +24,13 @@
 - 第一次全跑後發現比對腳本的錯：整數用表示法比（`u:0`≠`i:0`），而且 simdjson 會因檔中 2 個超出範圍的整數拒絕整份。改成依值比、另加範圍內整數的檔，只重跑判準 3。浮點部分兩次相同。
 - 補兩項只記錄的觀察：寫出時的數字格式、函式庫標頭不加 `-isystem` 的警告數。
 - 查授權（讀下載後的檔）與維護狀態（`gh api`，2026-11-13）。
-- 只讀複查（Opus 另一代理），結果見報告 §7。
+- 只讀複查（general-purpose、Opus 5.5／high、只讀；與作者同模型）：73 格，14 條（must 4、should 6、note 4），全部接受。改判 1 格：jsoncons 判準 1 條件通過→不通過（不成對的代理跳脫被靜默改寫，初稿寫的補法不成立）。另依複查 #2 補跑 yyjson 在原文旗標下的判準 1（只記錄）：多接受 5 個溢位數字，與 Boost.JSON 相同。其餘是理由的更正（§4 的 J1／J4 理由、Boost 不是多人維護）、揭露（判準 3 第二次的判定範圍變更）、補記（容器執行紀錄 `results/docker-runs.txt`、旗標、下溢的行為差異、未測項目）。逐條在報告 §7。
 
 ## 結果（linux-x64，Docker；windows-x64、macos-arm64 確認できない）
 
-- 判準 1：yyjson、simdjson 通過；Boost.JSON、jsoncons 條件通過；nlohmann（今天的 `StrictJson`）與 RapidJSON 因接受 `123`＋NUL（JSONTestSuite 的 `n_`）判不通過。repo 內 70 個 JSON，6 個候選與基準結果相同。
+- 判準 1：yyjson、simdjson 通過（yyjson 以 `NOFLAG` 量；原文旗標下多接受 5 個溢位數字，只記錄）；Boost.JSON 條件通過；jsoncons 不通過（代理跳脫被靜默改寫）；nlohmann（今天的 `StrictJson`）與 RapidJSON 因接受 `123`＋NUL（JSONTestSuite 的 `n_`）判不通過。repo 內 70 個 JSON，6 個候選與基準結果相同。
 - 判準 2：6 個全對；偵測都能放在 adapter（handler／SAX／visitor 或走訪保留重複成員的 DOM）。
-- 判準 3：`std::from_chars`（libstdc++）對 Python 參考值 0 件不一致（固定 36、生成 200,000、整數 10,008）。原文路：Boost.JSON、yyjson、simdjson 0 不一致；nlohmann、jsoncons 交不出整數原文（`-0` 失去符號）；nlohmann、RapidJSON 拒絕含超大數的整份文件。候選轉換路：生成集上 6 個都 0 不一致，差異只在 `-0`（6 個都當整數 0）與超出範圍的數。repo 內的 JSON 沒有 `-0`。
+- 判準 3：`std::from_chars`（libstdc++）對 Python 參考值 0 件不一致（固定 36、生成 200,000、整數 10,008）。原文路：Boost.JSON、yyjson、simdjson 0 不一致；nlohmann、jsoncons 交不出整數原文（`-0` 失去符號）；nlohmann、RapidJSON 拒絕含超大數的整份文件。候選轉換路：生成集上 6 個都 0 不一致，差異只在 `-0`（6 個都當整數 0）與超出範圍的數。repo 內的 JSON 沒有 `-0`。下溢（`1e-400` 等）在原文路會變成錯誤（今天讀成 `+0.0`）。
 - 判準 4：6 個都保留順序；simdjson 沒有可改的樹，條件通過。
 - 判準 5：linux 編譯 6 個都通過；授權都寬鬆；都有人維護，RapidJSON 實質停止（12 個月 1 commit、release 停在 2016）。glaze 要 C++23，不通過。
 - 判準 6（只記錄）：yyjson 與 simdjson 最快，nlohmann 最慢（biome 1.4 MB：3.8／4.3 對 41.2 ms）。

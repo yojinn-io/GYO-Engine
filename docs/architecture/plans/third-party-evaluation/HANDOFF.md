@@ -56,5 +56,5 @@
 - 2026-11-13：使用者選三平台跑法 **C（只在本機）**。宣告 §5 記錄：3b、3c 與判準 5 的三平台部分記「確認できない」；估時改 9.5～12.5 h。其餘四項（下載清單、候選增刪、判準細則、審查者）待使用者核准，仍未下載。
 - 2026-11-13：使用者追加「測試放到 Docker 下」。宣告 §5.1、§5.2：用本機既有映像 `gyo-linux-toolchain:l1-20261112`（L1 linux-x64 工具鏈，不拉新映像），編譯與執行時斷網、只掛證據目錄；linux-x64 全部判準實測，windows-x64 與 macos-arm64 的 3b、3c、編譯記「確認できない」；本機 macOS 原生不跑。
 - 2026-11-13 約 20:30：使用者核准全部下載。下載與 SHA-256 核對（Boost、simdjson 對上 GitHub digest；nlohmann 以 repo 的 FetchContent checkout 比對）；寫實測程式與向量（種子 20261113）；容器內兩次實測（第二次只重跑判準 3：比對腳本原把整數依表示法比，改依值比並加範圍內整數檔）；補寫出格式與警告數的觀察；查授權與維護。
-- 2026-11-13 約 21:50：報告 [`json-library-survey.zh-Hant.md`](json-library-survey.zh-Hant.md) 與 dev_log 寫完；只讀複查（Opus 另一代理）進行中。**現況：等複查，之後 push、開 PR、回報架構師；方向與函式庫由使用者選。**
-
+- 2026-11-13 約 21:50：報告 [`json-library-survey.zh-Hant.md`](json-library-survey.zh-Hant.md) 與 dev_log 寫完；只讀複查（Opus 另一代理）進行中。
+- 2026-11-13 約 22:20：複查交回 14 條（must 4、should 6、note 4），全部接受並修正報告（jsoncons 判準 1 改判不通過；補跑 yyjson 原文旗標下的判準 1，只記錄；揭露判準 3 第二次的判定範圍變更；補記容器執行紀錄）。**現況：push、開 PR、回報架構師；方向與函式庫等使用者選。**
