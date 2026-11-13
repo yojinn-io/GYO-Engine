@@ -508,3 +508,10 @@ endif()
 if(MSVC)
     target_compile_options(${baseline_record} PRIVATE /utf-8)
 endif()
+
+# The cost of the clock the baseline record times with (v8-arch-measure-env-
+# baseline M0). Separate so the baseline record's binary stays unchanged; not
+# a CTest for the same reason as the record.
+set(timer_floor "gyo_${GYO_CURRENT_APP}_timer_floor")
+add_executable(${timer_floor} TimerFloor.cpp)
+target_compile_features(${timer_floor} PRIVATE cxx_std_20)
