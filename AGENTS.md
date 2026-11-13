@@ -37,7 +37,7 @@
 * 変更範囲をできるだけ局所化する。
 * 既存の設計意図が不明な場合、それを「誤り」と仮定しない。
 * Product / Module / Tool の owner を確認してから、その責務を変更する。
-* Engine、framework、plugins の Contract から直接出てくる規則
+* Engine または plugins の Contract から直接出てくる規則
   （例：「Contract は X しか保証しないので、使う側はすべて Y をする」）を実装する前に、
   `docs/cross-component-rules.md` と、他の Product・Tool の同じ実装を調べる。
   見つかれば引用または共用し、自分の言葉で書き直さない。見つからなければ owner を決めて登録する。
@@ -98,7 +98,7 @@ wire の相手、Test の判定）の変更が必要になるか。
 必要になり、その量が上に積むほど増える構造を**基盤 Architecture** とし、それ以外を**応用 Architecture** とする。
 
 * 基盤の例：Engine の公開 Interface と Subsystem の境界、wire protocol、Data Contract の Format と Version の方針、
-  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、framework の共通構造。
+  State Authority の割り当て（§3）、Thread・Lifecycle・時刻のモデル、メモリと資源の管理方式、plugins 層の共通構造。
 * 応用の例：Product・Tool の内部構造、Product-local の Registration、一つの Product の中で閉じる Adapter。
 * どちらか判断できない場合は、基盤として扱う。
 * 基盤として扱う計画は、基盤と判断した理由（上に積まれるもの）を書く。
