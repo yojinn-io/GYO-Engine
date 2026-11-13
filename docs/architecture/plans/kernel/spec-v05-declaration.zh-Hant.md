@@ -143,7 +143,10 @@ S-9 與 S-12 互相牽動，一起看。
 | B-13 | spec 檔頭、文末 | 狀態改 v0.5；修訂記錄加「v0.5（`v8-arch-spec-v05`）」一節，逐條列 A 的決定與 B 的修正。 |
 | B-14 | 遷移計畫 §2.1 G1／G2b、§3.12、§3.16、§3.17b／c、§4 Delta-7、規劃稿處置記錄 | 依 A-2、A-3 的決定改條文；規劃稿〈最終檢查處置記錄〉的 S-9、S-12、S-14 加「已定（決定行代號）」一欄，不改當時的處置文字。 |
 
-B-3～B-11 只改事實、不改設計；每處註明引用的決定行。
+| B-15 | spec A.5 W-8、A.6〈與 EntityStore 的關係〉（架構師 2026-11-13 轉達卡 06 world-exec 的定案） | world-exec 採 `Cell<T>` 包法。W-8 加「元件型別須 nothrow move assignable」，檢查欄指向 world-exec 的 `static_assert`（照它實際的位置寫）；A.6 的「兩者語義相同；spike 選其一並報告」改成「已定 `Cell<T>` 包法（world-exec；`target/world.zh-Hant.md` §6）」。 |
+| B-16 | spec 中提到 store 不持 stamp 的地方（A.6、L.1 `entity_store` 列的 DI 6） | target/world §6 承諾的文字掃描由卡 06 實作為 `tests/common/kernel/store_stamp_guard.py`（ctest `kernel.store_stamp_guard`）；spec 若有引用處，守衛欄對上這個名字。 |
+
+B-3～B-11 只改事實、不改設計；每處註明引用的決定行。**B-15、B-16 的前提**：卡 06 已合併到 master（2026-11-14 確認時 `target/world.zh-Hant.md` §6 的定案句與 `store_stamp_guard.py` 還不在 origin/master）。動手時若還沒合併，就停下回報架構師，不引用未合併的檔名。
 
 ---
 
@@ -193,4 +196,4 @@ B-3～B-11 只改事實、不改設計；每處註明引用的決定行。
 
 ## 件数の突き合わせ（報告開頭的口徑）
 
-「A 決定 5／5 進 HANDOFF；B 修正 n／14 列落字；錯誤代號重疊 4→0；legacy 行號引用 0→0；過時句 2→0；diff 檔數（docs 以外 0）」。
+「A 決定 5／5 進 HANDOFF；B 修正 n／16 列落字；錯誤代號重疊 4→0；legacy 行號引用 0→0；過時句 2→0；diff 檔數（docs 以外 0）」。
