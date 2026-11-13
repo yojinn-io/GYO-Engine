@@ -367,6 +367,15 @@ Engine と Product・Tool の間に、Engine の機能の組み合わせや第�
 その層も Engine から参照されない（下位の層は上位の層を参照しない）。
 現在の層の構成と依存の規則は、`docs/architecture/target/runtime-composition.zh-Hant.md` §4 に書く。
 
+外部の Component（第三者の Library、Platform の API など）は、更新も交換もありうる backend として扱い、
+選び終えた土台として扱わない。判断の一文：外部 Component を更新または交換するとき、変わるのはそれにつなぐ部分だけである。
+
+* 外部 Component の型と呼び出しは、その Component の adapter の中にだけ現れる。
+* 一つの外部 Component に、adapter は一つだけ置く。
+* adapter が外に見せる Interface は、使う側が自分の言葉で決め、外部 Component の Version に合わせて変えない。
+
+adapter をどの層に置くかは、架構の文書に書く。
+
 Architecture の分離は、
 Directory の配置や命名だけで判断しない。
 
