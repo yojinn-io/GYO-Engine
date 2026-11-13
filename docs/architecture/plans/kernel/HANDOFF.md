@@ -85,6 +85,8 @@
 
 - AGENTS §2／§3 條文：風紀委員已在分支 `claude/judgment-agents-foundation-pressure` 起草（使用者 11-10 直接指示）；架構師 11-11 轉交的三點追加（實作薄、先一個 host 量成本；§3 七項計畫層寫一次；跨產品能力當 Feature）待使用者同意。
 
+- **U8 修訂提案**（`v8-arch-measure-env-baseline`，[報告](measure-env-baseline-report.zh-Hant.md) §6；決定行由使用者寫）：閘門判定改在 Linux 實機上的 Docker 容器（同一映像、同一份二進位，基線與判定同一環境）；載入（BU-6 重放）在容器只到邊緣——保留 §6 的＋100 ms 絕對項，或該項改在 Linux 實機原生判（待定）；Intel Mac 原生留作開發參考（同機前後比；RSS 與載入不用）；Intel Mac 的 Docker Desktop 不當閘門（載入不可、host p95 邊緣）；Linux 實機計時要處理頻率跳動；CI runner 照舊不用。
+
 ## 未結事項（closeout 前不得刪；每項寫回頭驗的時點）
 
 - **target 文件搬回或新建時，Engine 架構文件入口 README 的連結要同一批改**（圖書管理員 2026-11-13 提醒；使用者同日定 AGENTS 無狀態：AGENTS 只指「入口 README 的〈條目〉」，不寫 target 路徑，所以 AGENTS 不必隨搬動而改）。入口由圖書管理員建、持有檔案與位置；四個條目各連到哪一份權威文件由架構師定，架構師在搬回或新建權威文件的那一批同時改入口的連結。搬回 target 任何一份文件的批，事前宣告都要先 `git grep` 該路徑在入口 README、`agents/`、守衛與程式註解裡的引用並列出。回頭驗的時點：每個搬回或新建權威文件的批；closeout 時 target/ 應已空。
@@ -189,6 +191,8 @@
 - 2026-11-13 registry-schedule 交給 world-exec 的事（架構師核定宣告修訂時定）：(1) **判定 9 收回成「恰等於兩個」**——本批的符號層檢查（`tests/common/kernel/kernel_symbols.py`）是「可寫資料段的符號 ⊆ {TypeKey 錨點、`tlCurrent`}」並以 `--require "TypeKey anchor"` 防空轉；world-exec 加入 `tlCurrent` 後在 ctest 加 `--require tlCurrent`（締める面）。(2) **三個執行半條列進 world-exec 的事前宣告判定**：J-11 的「全量對增量重建」等價（W-11）、J-12 的「兩種參數順序檢查 `Fetch` 無順序相依」（B.4 第 7 點）、J-44 的「World 摘要不變」（D-9）；本批只做描述半（宣告「核定後的修訂」第 4 點）。
 
 - 2026-11-13 `v8-arch-kernel-registry-schedule` **實作完成，L1 三平台綠，待使用者合併（PR #213）**：判定 1～12 成立（最終 commit `30bf1ef5` 的 L1 run 43399625415 三平台綠，J 條目 25×3＝75 全 pass）；突變 187＝186 killed＋1 只在 Linux；Fable／xhigh 審查（高 2、中 8、低中 6、低 9）已處置或記限界；架構師核定宣告修訂 12 點（B5 資料流字面為判定、B6 C 指紋版本 2、B3 修剪位置、B8 白名單＋K4 inline、B7 try_compile、C4、C5 留待）。dev_log `docs/dev_logs/2026_11_13_arch_kernel_registry_schedule.zh-Hant.md`。
+- 2026-11-13 `v8-arch-measure-env-baseline`（任務卡，Opus 5.5；分支 `claude/arch-measure-env-baseline`）**完成，待使用者定與合併**（[報告](measure-env-baseline-report.zh-Hant.md)、[dev_log](../../../dev_logs/2026_11_13_arch_measure_env_baseline.zh-Hant.md)）：件数の突き合わせ四環境一致；Linux 實機原生（LN）與其上的 Docker（LD）交錯量，重放 tick 四分位距比約 1%、LD／LN 中位數比 0.97～1.02（容器化本身只加少量雜訊，載入例外）；Intel Mac 的 Docker（MD，同一份 ELF）四分位距比在多數指標大 2.7～42 倍；照宣告 §7 推法（相對倍數）BU-1、冷啟動最便宜可做＝Intel Mac 原生，BU-4 RSS＝容器，載入（BU-6 重放）＝Linux 實機原生（容器邊緣）；§6 的絕對項（＋0.25 ms、＋100 ms）交 U12。**待架構師核／使用者定**：(1) 前一張卡報告的容器 World 峰值應為 4,552 B（寫成 Mac 的 4,104 B；不改寫，U12 用 4,552）；(2) Linux 實機量測開頭有約 1～2 秒偏快（LN 第 0 次快約 36%；短暫 boost 的推測），之後閘門宣告要處理頻率跳動；(3) U8 提案（未定節）；(4) BU-4 RSS 分母：Linux 容器內 RSS 可單獨當分母。U12 的 §6 重核排在本卡之後。
+
 ## 下一步
 
 - 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。
