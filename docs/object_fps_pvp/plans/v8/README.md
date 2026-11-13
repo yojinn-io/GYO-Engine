@@ -190,6 +190,7 @@ PR 以功能線為單位、盡量少開；文件同步併進同一條線的 PR�
 | asset-layout 線（7 份） | 見 [asset-layout.md](asset-layout.md) |
 | `v8-product-kernel-prep-detect`（kernel 改造前置第一批） | [2026-11-12](../../../dev_logs/2026_11_12_pvp_kernel_prep_detect.zh-Hant.md) |
 | `v8-product-kernel-prep-zones`（kernel 改造前置第二批：位置＝區） | [2026-11-12](../../../dev_logs/2026_11_12_pvp_kernel_prep_zones.zh-Hant.md) |
+| `v8-product-pvp-baseline`（今天的 Match 量多少；遷移計畫 §6 的分母） | [2026-11-13](../../../dev_logs/2026_11_13_pvp_baseline.zh-Hant.md) |
 
 ---
 
