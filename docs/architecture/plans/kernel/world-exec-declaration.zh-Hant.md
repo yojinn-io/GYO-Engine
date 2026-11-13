@@ -1,6 +1,6 @@
 # 事前宣告：`v8-arch-kernel-world-exec`（World 與 Serial Executor；存取驗證兩層）
 
-更新：2026-11-13。Owner：架構（架構師會話寫宣告；實作建議由架構師開的任務卡執行）。**狀態：草案，待使用者核准；核准前不開工。**
+更新：2026-11-13。Owner：架構（架構師會話寫宣告；實作建議由架構師開的任務卡執行）。**狀態：已核准（使用者 2026-11-13「核准」；含第 4 節第 2 點的實作檔位 Opus／xhigh）。**
 
 出處：遷移計畫 `migration-plan.zh-Hant.md` §3.7（本批）、§3 共通、§4 Delta-1、Delta-3、§6 BU-2；`target/kernel.zh-Hant.md`（DI-KS 2、3、4、6、9、10、11、12、14 與 RC 1、6、9、10）；`target/world.zh-Hant.md`、`target/system-contract.zh-Hant.md` §2、§2b、`target/error-handling.md`、`target/limits.zh-Hant.md`（LIM-3、LIM-6）；spec §A（World）、§E（Executor）、§F（延後佇列、hook、事件）、J.2、J.3；kernel `HANDOFF.md` 現況「registry-schedule 交給 world-exec 的事」、決定行 `v8-arch-migration-plan-undecided` 的 U1。
 
