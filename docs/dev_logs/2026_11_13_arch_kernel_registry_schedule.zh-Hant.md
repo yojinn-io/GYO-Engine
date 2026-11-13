@@ -7,7 +7,7 @@
 
 ## 件数の突き合わせ
 
-**一致**——審查前最後一輪 L1（run 43391922180，`dfc6e49e`）：宣告的 25 個 J 條目（`kernel.J-10`～`kernel.J-47`，見 §2）在 linux-x64、windows-x64、macos-arm64 三份 tests.xml 各 25、全 pass（25×3＝75）；Linux core preset 另 25 全 pass。kernel 的 ctest 總數 linux／macOS 34、windows 33（沒有 `kernel.symbols`，宣告 §7 的限界）。審查後的最終 commit 的 L1 數字見文末〈最終 L1〉。突變（本機 macOS）：本批相關 187 條＝killed 186、只在 Linux 跑 1（`rs-sym-elf-bss-unread`）、survived 0、wrong_failure 0、stale 0（第六輪＋第七輪重跑的 10 條）。h7：104/104（第一輪 103，1 條因自測反例仍寫 `game::Runtime` 存活，修正後重跑相關 2 條 killed）。
+**一致**——審查前最後一輪 L1（run 43391922180，`dfc6e49e`）：宣告的 25 個 J 條目（`kernel.J-10`～`kernel.J-47`，見 §2）在 linux-x64、windows-x64、macos-arm64 三份 tests.xml 各 25、全 pass（25×3＝75）；Linux core preset 另 25 全 pass。kernel 的 ctest 總數 linux／macOS 34、windows 33（沒有 `kernel.symbols`，宣告 §7 的限界）。審查後的最終 commit（`30bf1ef5`，run 43399625415）同樣 25×3＝75 全 pass，見文末〈最終 L1〉。突變（本機 macOS）：本批相關 187 條＝killed 186、只在 Linux 跑 1（`rs-sym-elf-bss-unread`）、survived 0、wrong_failure 0、stale 0（第六輪＋第七輪重跑的 10 條）。h7：104/104（第一輪 103，1 條因自測反例仍寫 `game::Runtime` 存活，修正後重跑相關 2 條 killed）。
 
 ## 做了什麼
 
@@ -27,7 +27,7 @@
 | # | 判定 | 結果 |
 |---|---|---|
 | 1 | 範圍 | 成立（最終 commit 前以 Python 比對 `git diff --name-only origin/master...HEAD` 對宣告 §2＋修訂 1、2；範圍外 0；正例 `apps/` 路徑先命中） |
-| 2 | L1 三平台、J 條目 × 3 | 審查前最後一輪成立（上節）；最終 commit 見〈最終 L1〉 |
+| 2 | L1 三平台、J 條目 × 3 | 成立：最終 commit `30bf1ef5`（run 43399625415）三平台綠、25×3＝75 全 pass；審查前最後一輪（run 43391922180）也成立 |
 | 3 | J-12 全參數型別 | 成立（20 個簽名＋run 條件與 set 條件併入；型別層與 id 層逐一比對）。`Fetch` 無順序相依的半條交 world-exec（修訂 4） |
 | 4 | Plan／Registry 指紋 golden 三平台相同 | 成立（三個合成 Registry 的 FixedUpdate Plan 指紋與 Registry 指紋、J-18 的 Registry 指紋；審查者在第四平台 macOS x64 也相同） |
 | 5 | J-44 20 種排列、J-22 不算歧義的配對 | 成立（描述半；World 摘要的半條交 world-exec，修訂 4） |
@@ -76,4 +76,4 @@
 
 ## 最終 L1
 
-（最終 commit 推送後填。）
+**一致**——最終程式的 commit `30bf1ef5`，run 43399625415（workflow_dispatch）：L1 三平台與 CI gate 全 success。宣告的 25 個 J 條目在 linux-x64、windows-x64、macos-arm64 三份 tests.xml 各 25、全 pass（25×3＝75）；Linux core preset 另 25 全 pass。kernel 的 ctest 總數 linux／macOS 34（含 `kernel.symbols`）、windows 33；h7 的 ctest 三平台全 pass。tests.xml 在 `build/evidence/kernel-registry-schedule/l1-43399625415/`。之後只改本 dev_log、README、HANDOFF 的文件 commit 不改程式。

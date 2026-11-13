@@ -188,7 +188,7 @@
 - 2026-11-13 `v8-arch-kernel-registry-schedule`（任務卡，Opus 5.5／xhigh；分支 `claude/arch-kernel-registry-schedule`，自已核准宣告的分支開）**開工**。範圍、判定 12 條、停止條件照 `registry-schedule-declaration.zh-Hant.md`；已向架構師確認兩件範圍事（h7_scan 三檔是否列入判定 1、「Runtime（型別名 App）」註記逐處或只在 spec §0）。
 - 2026-11-13 registry-schedule 交給 world-exec 的事（架構師核定宣告修訂時定）：(1) **判定 9 收回成「恰等於兩個」**——本批的符號層檢查（`tests/common/kernel/kernel_symbols.py`）是「可寫資料段的符號 ⊆ {TypeKey 錨點、`tlCurrent`}」並以 `--require "TypeKey anchor"` 防空轉；world-exec 加入 `tlCurrent` 後在 ctest 加 `--require tlCurrent`（締める面）。(2) **三個執行半條列進 world-exec 的事前宣告判定**：J-11 的「全量對增量重建」等價（W-11）、J-12 的「兩種參數順序檢查 `Fetch` 無順序相依」（B.4 第 7 點）、J-44 的「World 摘要不變」（D-9）；本批只做描述半（宣告「核定後的修訂」第 4 點）。
 
-- 2026-11-13 `v8-arch-kernel-registry-schedule` **實作完成，待 L1 與合併**：判定 1～12 本機成立（L1 審查前最後一輪 run 43391922180 三平台綠，J 條目 25×3；最終 commit 的 L1 見 PR）；突變 187＝186 killed＋1 只在 Linux；Fable／xhigh 審查（高 2、中 8、低中 6、低 9）已處置或記限界；架構師核定宣告修訂 12 點（B5 資料流字面為判定、B6 C 指紋版本 2、B3 修剪位置、B8 白名單＋K4 inline、B7 try_compile、C4、C5 留待）。dev_log `docs/dev_logs/2026_11_13_arch_kernel_registry_schedule.zh-Hant.md`。
+- 2026-11-13 `v8-arch-kernel-registry-schedule` **實作完成，L1 三平台綠，待使用者合併（PR #213）**：判定 1～12 成立（最終 commit `30bf1ef5` 的 L1 run 43399625415 三平台綠，J 條目 25×3＝75 全 pass）；突變 187＝186 killed＋1 只在 Linux；Fable／xhigh 審查（高 2、中 8、低中 6、低 9）已處置或記限界；架構師核定宣告修訂 12 點（B5 資料流字面為判定、B6 C 指紋版本 2、B3 修剪位置、B8 白名單＋K4 inline、B7 try_compile、C4、C5 留待）。dev_log `docs/dev_logs/2026_11_13_arch_kernel_registry_schedule.zh-Hant.md`。
 ## 下一步
 
 - 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。
