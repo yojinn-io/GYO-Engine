@@ -80,7 +80,7 @@
 
 ## 目標 Design Invariants 清單（兩層；`v8-arch-a6-revision`，供使用者一次核准——遷移計畫 §7 U13）
 
-全文條數 **34**＝kernel 頁 15＋各部件頁特有 19（其中 3 條在產品的 target 檔 `docs/object_fps_pvp/target/entity-model.zh-Hant.md`；只算 `docs/architecture/target/` 是 31）。部件頁裡「受 kernel DI-KS n 約束」的條保留標題、內容連到 kernel 頁的那一條：整條都是連結的 15 條不計入；determinism 的 DI 2、DI 3 各拆成兩半（Kernel 的半條是連結，產品與 Host 的半條是本頁特有），算在第二層。「對 legacy」欄：**新**＝legacy 沒有這一條；**相容**＝與仍生效的 legacy 條文同向；**相容（措辭更新）**＝同一性質、措辭或機制換了；**取代**＝該部件遷移完成後 legacy 的那一條不再成立。逐條重標的依據在 `plans/kernel/a6-revision-report.zh-Hant.md`。
+全文條數 **34**＝kernel 頁 15＋各部件頁特有 13＋資料契約 3＋產品的 target 檔 3（`docs/object_fps_pvp/target/entity-model.zh-Hant.md`）。部件頁裡「受 kernel DI-KS n 約束」的條保留標題、內容連到 kernel 頁的那一條：整條都是連結的 15 條不計入；determinism 的 DI 2、DI 3 各拆成兩半（Kernel 的半條是連結，產品與 Host 的半條是本頁特有），算在第二層。「對 legacy」欄：**新**＝legacy 沒有這一條；**相容**＝與仍生效的 legacy 條文同向；**相容（措辭更新）**＝同一性質、措辭或機制換了；**取代**＝該部件遷移完成後 legacy 的那一條不再成立。逐條重標的依據在 `plans/kernel/a6-revision-report.zh-Hant.md`。
 
 ### 第一層：跨部件，先讀——[kernel.zh-Hant.md](kernel.zh-Hant.md)
 
@@ -117,8 +117,13 @@
 | naming | DI 1～3 | namespace 與目錄對應；詞性；禁止舊角色後綴 | 新 |
 | naming | DI 4 | Engine 的名字中性 | 相容：`docs/architecture.md`〈Layers〉check 1（換落點） |
 | assets | DI 1～3 | 沒有資產總管物件；載入是外部服務、依請求序套用；內容身分是 (c) | 取代 `docs/architecture.md` 的 `AssetManager` 一句 |
-| zone-c-sources | DI 1～3（草案） | 清單只說哪些檔；版本進格式；不含產品名分支 | 新 |
 | 產品 `docs/object_fps_pvp/target/entity-model.zh-Hant.md` | E-3、E-7、E-12 | 配發策略；沒有孤兒元件；Tick 內不改成員 | 相容（措辭更新）：entity-model 同號條 |
+
+### 資料契約（不屬於任何部件；已實作，位於 `docs/architecture/`）
+
+| 文件 | 條 | 一句 | 狀態 |
+|---|---|---|---|
+| [`../zone-c-sources.zh-Hant.md`](../zone-c-sources.zh-Hant.md)（`gyo.zone-c-sources` v1） | DI 1～3 | 清單只說哪些檔、不說怎麼判；版本進格式、不認得就拒絕；清單與掃描器都不含產品名的分支 | **正式**（使用者 2026-11-13 核定，`v8-arch-zone-c-sources-promote`）。生產端＝產品（將來是 Kernel 的啟動匯出），消費端＝共用掃描器 `tests/common/zone_scan/` |
 
 ## 來源與引用
 
