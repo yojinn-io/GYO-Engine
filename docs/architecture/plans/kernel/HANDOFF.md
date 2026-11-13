@@ -77,7 +77,7 @@
 
 ## 未定
 
-- **Engine 的能力模組哪些留 Engine、哪些是 plugin 的界線**（`v8-arch-external-components-as-adapters` 細節六的延伸；規劃批 `v8-arch-adapter-plugins-plan` 查清後交使用者）：使用者把網路整個放 plugin 的理由是「Engine 的核心是管理資料流與整合能力，不是有沒有某一個功能」。這句話對不含第三方的其他能力模組（例 audio 的整數混音、collision、model 取樣）是否也適用、界線怎麼畫，使用者沒有說，不由架構師推廣。
+- **Engine 的能力模組哪些留 Engine、哪些是 plugin 的界線**（`v8-arch-external-components-as-adapters` 的延伸；規劃批 `v8-arch-adapter-plugins-plan` 查清後交使用者）。使用者 2026-11-13（側邊會話轉達）給了判斷的**兩個條件**：(a) 有沒有對外的介面；(b) 它是固化的基礎（換掉它，上面的底層邏輯全部跟著變，像基礎理論），還是會變、會被替換的規則。原話：「collision、math 第一沒有對外介面。第二，做成 plugin 完全沒有任何好處，因為這些算法大部分都是固化的東西，我切換之後整個底層邏輯都會變（類似於基礎理論）。model 的取樣規則，這個倒是可能會出現變化，可以考慮放 plugin，如果有新模型，我可以不修改 engine 標準就能對接。audio 也是同樣的邏輯。」**已定：collision、math 留 Engine。** **候選（使用者說「可以考慮」，不是已定）：model 的取樣規則、audio 傾向 plugin**——規劃批當候選去查，查清後交使用者定。規劃批要查的後果：model 取樣今天被判定呼叫（命中幾何的姿勢取樣，determinism §4.2 的中間地帶），成為 plugin 時決定性的守衛與「Engine 定的標準」（取樣介面）要一起設計；audio 的整數混音有跨平台的記錄雜湊守衛（determinism §4.5）。**仍待使用者**：「對外」是否也含行程外（wire、檔案、裝置）而不只第三方函式庫——這決定 `engine/net` 的純編解碼算不算有對外介面；「網路放 plugin」含 `engine/net` 是架構師的讀法，待確認。架構師先前提的準則「是不是機制的一部分」收掉，改用使用者的兩個條件。
 
 - AGENTS §2／§3 條文：風紀委員已在分支 `claude/judgment-agents-foundation-pressure` 起草（使用者 11-10 直接指示）；架構師 11-11 轉交的三點追加（實作薄、先一個 host 量成本；§3 七項計畫層寫一次；跨產品能力當 Feature）待使用者同意。
 
