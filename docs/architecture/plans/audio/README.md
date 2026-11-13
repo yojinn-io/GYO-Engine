@@ -53,6 +53,7 @@ GYO::Base ◄── GYO::Time ◄── GYO::Audio ◄── GYO::AudioBackendSD
 | `v8-engine-audio-control-playhead` | xhigh｜繼承＋Sonnet 5.5 的對抗式檢查 | 3～4 h | 完成（2026-10-31；core 39／39、test 110／110、突變 70／70＋TSan 6／6＋ASan 1／1、xhigh 審查與 Sonnet 對抗式檢查已處置；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_playhead.zh-Hant.md)） | `PlayheadBoard`、`Mixer::PlayheadOf`、交錯測試、「不讀 board」的原始碼檢查 |
 | `v8-engine-audio-control-live` | medium，測試程式 high｜繼承 | 2～3 h | 完成（2026-10-31；完整突變 82／82＋TSan 6／6＋ASan 1／1、test 110／110、core 39／39；[dev_log](../../../dev_logs/2026_10_31_engine_audio_control_live.zh-Hant.md)） | dummy／disk 驅動上的停止、換片段、播放頭；`docs/architecture.md` |
 | `v8-engine-audio-disk-stop-window` | high｜繼承（Opus 5.5）；驗證者 Opus 5.5／high | 2 h（續 1.5 h） | 完成（2026-11-04；判定變更經使用者核准；`au-sdl-*` 突變 13／13；[dev_log](../../../dev_logs/2026_11_04_engine_audio_disk_stop_window.zh-Hant.md)） | `audio_sdl.disk` 停止 frame 偶發失敗：檔案開頭的標記與取走 stop 的 block 範圍 |
+| `v8-arch-audio-playhead-test-fix` | high｜Opus 5.5；對抗式檢查與 §14.4 驗證 Fable／high | 卡未估（實走約 5 h 牆鐘，三次停止） | 完成（2026-11-13；DI 4 守衛變更經使用者核准；core 100/100、TSan 5/5、突變 23/24＋TSan 1/1（存活 1 照實記錄）；[dev_log](../../../dev_logs/2026_11_13_arch_audio_playhead_test_fix.zh-Hant.md)） | 播放頭輪詢測試的測試方法重訂：確定性逐區塊案＋TSan 壓力案（獨立 CTest，TSan 建置上限 60 s） |
 
 另見 [`audio_sdl.disk` 在 macOS arm64 偶發失敗的修正](../../../dev_logs/2026_10_30_engine_audio_disk_flake.zh-Hant.md)（2026-11-12 圖書管理員補列）。
 

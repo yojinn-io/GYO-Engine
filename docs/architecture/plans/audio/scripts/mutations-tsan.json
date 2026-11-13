@@ -61,6 +61,16 @@
       "target": "gyo_audio_tests",
       "cases": "*while another thread renders*",
       "expect": "ThreadSanitizer"
+    },
+    {
+      "id": "au-ctl-stress-reader-reads-audio-state",
+      "what": "PlayheadOf reads a field only the audio thread writes (published), outside the board (Fable check, place 5)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (!state_->board.Read(sound.value, read)) return Playhead{};",
+      "replace": "    if (state_->published[0] == ~std::uint64_t{0} || !state_->board.Read(sound.value, read)) return Playhead{};",
+      "target": "gyo_audio_tests",
+      "cases": "*under a polling thread*",
+      "expect": "ThreadSanitizer: data race"
     }
   ]
 }

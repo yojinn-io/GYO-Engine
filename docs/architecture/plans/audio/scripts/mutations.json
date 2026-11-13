@@ -961,6 +961,106 @@
       ],
       "timeout": 180,
       "expect": "CHECK\\( found \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-reuse-never-playing",
+      "what": "PlayheadOf reports every sound as not playing (block-by-block case)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (!state_ || !sound.Valid()) return Playhead{};\n",
+      "replace": "    if (state_ || !state_) return Playhead{};\n",
+      "target": "gyo_audio_tests",
+      "cases": "*block by block*",
+      "expect": "CHECK\\( missed == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-reuse-not-published",
+      "what": "A voice's position is published only when it is assigned (block-by-block case)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "            state.board.Publish(i, position);",
+      "replace": "            static_cast<void>(position);",
+      "target": "gyo_audio_tests",
+      "cases": "*block by block*",
+      "expect": "CHECK\\( wrongFrame == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-reuse-not-cleared-on-end",
+      "what": "An ended voice keeps its published sound (block-by-block case)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "                state.board.Clear(i);\n",
+      "replace": "",
+      "target": "gyo_audio_tests",
+      "cases": "*block by block*",
+      "expect": "CHECK\\( notEnded == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-reuse-position-past-clip",
+      "what": "PlayheadOf reports twice the position, past the clip's end (block-by-block case)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "static_cast<std::uint32_t>(read & 0xFFFF'FFFFu)}",
+      "replace": "static_cast<std::uint32_t>((read & 0xFFFF'FFFFu) * 2)}",
+      "target": "gyo_audio_tests",
+      "cases": "*block by block*",
+      "expect": "CHECK\\( track.bad == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stress-never-playing",
+      "what": "PlayheadOf reports every sound as not playing: the stress run never reaches its playing reads and is invalid (takes 3 x 20 s)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (!state_ || !sound.Valid()) return Playhead{};\n",
+      "replace": "    if (state_ || !state_) return Playhead{};\n",
+      "target": "gyo_audio_tests",
+      "cases": "*under a polling thread*",
+      "expect": "CHECK\\( track.playingReads >= kPlayingReads \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stress-position-past-clip",
+      "what": "PlayheadOf reports twice the position, past the clip's end (stress case, the secondary value checks)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "static_cast<std::uint32_t>(read & 0xFFFF'FFFFu)}",
+      "replace": "static_cast<std::uint32_t>((read & 0xFFFF'FFFFu) * 2)}",
+      "target": "gyo_audio_tests",
+      "cases": "*under a polling thread*",
+      "expect": "CHECK\\( track.bad == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-reuse-ends-early",
+      "what": "The audio thread clears a playing sound's playhead after its first block instead of publishing its position (Fable check, place 1)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "            state.board.Publish(i, position);",
+      "replace": "            state.board.Clear(i);",
+      "target": "gyo_audio_tests",
+      "cases": "*block by block*",
+      "expect": "CHECK\\( wrongStatus == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-reuse-ended-comes-back",
+      "what": "PlayheadOf reports NotPlaying at positions 128 and 384, then Playing again (the never-comes-back check; Fable check, place 2)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "    if (!state_->board.Read(sound.value, read)) return Playhead{};",
+      "replace": "    if (!state_->board.Read(sound.value, read) || (read & 0xFF) == 128) return Playhead{};",
+      "target": "gyo_audio_tests",
+      "cases": "*block by block*",
+      "expect": "CHECK\\( track.bad == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-reuse-position-goes-back",
+      "what": "PlayheadOf reports the position modulo 128, so it goes back without passing the clip (the only-grows check; Fable check, place 3)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "static_cast<std::uint32_t>(read & 0xFFFF'FFFFu)}",
+      "replace": "static_cast<std::uint32_t>((read & 0xFFFF'FFFFu) % 128)}",
+      "target": "gyo_audio_tests",
+      "cases": "*block by block*",
+      "expect": "CHECK\\( track.bad == 0 \\) is NOT correct"
+    },
+    {
+      "id": "au-ctl-stress-reassign-every-block",
+      "what": "The audio thread reassigns every voice's board slot every block, so a concurrent reader can briefly see a playing sound as not playing (Fable check, place 4; concurrent only)",
+      "file": "engine/audio/src/Mixer.cpp",
+      "find": "        if (state.published[i] != voice.cookie) {",
+      "replace": "        if (true) {",
+      "target": "gyo_audio_tests",
+      "cases": "*under a polling thread*",
+      "expect": "CHECK\\( track.bad == 0 \\) is NOT correct"
     }
   ]
 }
