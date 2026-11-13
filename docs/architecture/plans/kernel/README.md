@@ -37,6 +37,7 @@
 - [legacy-impact.zh-Hant.md](legacy-impact.zh-Hant.md)：`v8-arch-legacy-impact-scan`（任務卡，2026-11-12）——舊架構文件對新架構的影響掃描：37 檔的 DI／RC 三選一判定（衝突 4、被取代 36）、守衛會不會誤判新程式（1 個、有條件）、誤導句 33、target 對 legacy 的反向依賴 91 處；對抗複核 Opus／high 一致 8／不一致 2；只寫不改。
 - [guards-inventory.zh-Hant.md](guards-inventory.zh-Hant.md)：`v8-arch-guards-inventory`（任務卡，2026-11-12）——21 個 legacy 守衛（63 子列）與 26 檔 1841 條突變的逐列盤點：守的性質、來源條文、去處四選一、涉及的突變、預計的批、不動會把哪一批的新程式判違規；缺口 9、給架構師的問題 12、與遷移計畫 §5.2 的不一致 9。
 - [tool-hosts-inventory.zh-Hant.md](tool-hosts-inventory.zh-Hant.md)：`v8-arch-tool-hosts-inventory`（任務卡，2026-11-13）——四個工具 host 骨架 10 項 × 4 的盤點：各怎麼做、共用程度（framework 一份／各自一份）、依賴邊逐工具（CMake 13／12／13／10 vs. include 15／14／18／12，差異全由 PUBLIC 傳遞解釋）、性質來源與會撞到的守衛（引 guards-inventory）、工具專屬、重複但內容不同 15 列、plugin 切法候選 9 個（候選，不是決定）。
+- [measure-env-baseline-declaration.zh-Hant.md](measure-env-baseline-declaration.zh-Hant.md)、[measure-env-baseline-report.zh-Hant.md](measure-env-baseline-report.zh-Hant.md)：`v8-arch-measure-env-baseline`（任務卡，2026-11-13）——四環境的實機對比基線（只記錄、不判）：四種散佈量並列、LN↔LD 的容器化偏移、任務分級建議（Intel Mac 可做／需容器／需 Linux 實機）、U8 修訂提案與 BU-4 RSS 分母建議（使用者定）。
 - 產品線前置的交接卡：[docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md](../../../object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md)（`v8-product-kernel-prep`，2026-11-12）。
 - [migration-plan.zh-Hant.md](migration-plan.zh-Hant.md)：**遷移批規劃（`v8-arch-migration-plan`；稿完成、待使用者核准）**——34 批＋條件批、閘門 G1／G2a／G2b／G3、§3 七項（Delta-1～6）、各批 Feature→Contract→Architecture 與模型／檔位、預算 BU-1～BU-8（多為推定）、未決 U1～U14、守衛與突變隨程式遷移的橫切規則；三輪對抗＋驗收點檢，處置記錄在文末。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
@@ -55,6 +56,8 @@ v8-arch-kernel
 ├── remove-object-fps 上段｜實作 Opus／high、審查 Fable／high｜改造前獨立批｜移除 apps/object_fps、object_fps_v2、tools/object_fps_preview，**加 engine/runtime 的 IRuntimePort 與 engine/model 的 AnimationInstance（含各自測試；使用者 2026-11-11）**（§7 完整刪除；兼驗 removability：共通層零修改是判定，不成立就記 Delta 不修）｜完成：判定 1～5 成立（三平台 L1 run 43188319281），§7 實測共通層零修改；PR #185（2026-11-12）
 ├── -kernel-scaffold 上段｜實作 Opus／high、審查＋敵對檢查 Fable／high（一次）｜kernel 進 L1 的腳手架：`engine/kernel`（INTERFACE、只連 Base）、J-9 與 naming DI 1／3 掃描、J-10 兩種樣本、突變 37｜完成，已合併（PR #204，2026-11-13；突變 79/79；[宣告](kernel-scaffold-declaration.zh-Hant.md)）
 ├── -kernel-registry-schedule 上段｜實作 Opus／xhigh、審查＋敵對檢查 Fable／xhigh（一次）｜Registry、簽名推描述（全部參數型別）、Scheduler、Plan 與指紋、區規則與錯誤代號表、G-5 匯出、資料流邊比例、符號層的可寫全域檢查、BU-3｜實作完成、L1 三平台綠（run 43399625415），已合併（PR #213，b9bf1962；突變 186/186＋Linux 限定 1；Fable 審查高 2／中 8 已處置；BU-3 14.4 ms；[宣告](registry-schedule-declaration.zh-Hant.md)，核定後修訂 12 點）
+├── -kernel-registry-schedule 上段｜實作 Opus／xhigh、審查＋敵對檢查 Fable／xhigh（一次）｜Registry、簽名推描述（全部參數型別）、Scheduler、Plan 與指紋、區規則與錯誤代號表、G-5 匯出、資料流邊比例、符號層的可寫全域檢查、BU-3｜實作完成、L1 三平台綠（run 43399625415），待合併（PR #213；突變 186/186＋Linux 限定 1；Fable 審查高 2／中 8 已處置；BU-3 14.4 ms；[宣告](registry-schedule-declaration.zh-Hant.md)，核定後修訂 12 點）
+├── -measure-env-baseline 下段（任務卡）｜準備與量測 Opus／medium、分析 Opus／high、審查 Sonnet／high｜四環境（Linux 實機原生／Linux 實機上的 Docker／Intel Mac 上的 Docker／Intel Mac 原生）實機對比基線：件數一致；LN、LD 的重放 tick 四分位距比約 1%、容器化的中位數偏移 ≤3%；任務分級建議與 U8 提案交使用者
 └── -audit   **完成**｜Opus／high ×3、對抗 Fable／high（4/5）｜現有模組逐一「留／包／重寫」，給中間層成本
 ```
 
@@ -80,6 +83,7 @@ v8-arch-kernel
 
 ## dev_log
 
+- [2026_11_13_arch_measure_env_baseline.zh-Hant.md](../../../dev_logs/2026_11_13_arch_measure_env_baseline.zh-Hant.md)：-measure-env-baseline（任務卡；[宣告](measure-env-baseline-declaration.zh-Hant.md)、[報告](measure-env-baseline-report.zh-Hant.md)）。
 - [2026_11_13_arch_kernel_registry_schedule.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_registry_schedule.zh-Hant.md)：-kernel-registry-schedule（任務卡；[宣告](registry-schedule-declaration.zh-Hant.md)）。
 - [2026_11_13_arch_adapter_plugins_plan.zh-Hant.md](../../../dev_logs/2026_11_13_arch_adapter_plugins_plan.zh-Hant.md)：-adapter-plugins-plan（規劃批；[宣告](adapter-plugins-plan-declaration.zh-Hant.md)、[規劃稿](adapter-plugins-plan.zh-Hant.md)）。
 - [2026_11_13_arch_h7_scanner.zh-Hant.md](../../../dev_logs/2026_11_13_arch_h7_scanner.zh-Hant.md)：-h7-scanner（任務卡；[宣告](h7-scanner-declaration.zh-Hant.md)）。

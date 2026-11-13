@@ -34,3 +34,12 @@ Owner：架構（架構師會話）。只動 `docs/`。宣告：`docs/architectu
 主 checkout（Intel Mac）`build/evidence/adapter-plugins-plan/`（git 管理外）：偵察兩份、提案三份、統合筆記與加總腳本、敵對檢查報告、修訂者的掃描與加總腳本、點檢報告。
 
 用時：workflow 約 71 分鐘＋修訂 24 分鐘＋點檢 7 分鐘＋主會話處置（估 8～16 h 內）。
+
+## 複核之後（同日追加）
+
+1. 使用者對第一稿的疑慮：「這個規範其實是給 Engine 套上了鐐銬。」架構師以 Opus／high 盤點 74 條規範性條目、寫複核意見；使用者在討論卡逐項談，定出根因（三原則被綁到能力歸屬）與一組改動已定項（決定行 `v8-arch-adapter-plugins-review`）。未決 1 結案為 yyjson＋原文路（`v8-arch-json-yyjson-raw-number`）。
+2. 第二次修訂（Opus／high）照決定改寫；判定 6 (c) 的 Fable／high 檢查一次：blocker 4／should 18／nit 7。Fable 本機實測浮點 `std::from_chars` 在 macOS 13.3 不可用；shader 工具搬家會產生共通 build → plugin 的邊。兩題交使用者，定為 fast_float 與只搬編譯器（`v8-arch-json-fast-float`、`v8-arch-shader-compiler-in-sdl-plugin`）。
+3. 第三次修訂（Opus／high）處置全部 29 條；七條交主會話的待定項列在規劃稿處置記錄，要在各自指定的批之前定。
+4. 結果：37 批、非條件 701～1,450 h、關鍵路徑 333～696 h；configure 錯誤 9→3；補遺二守衛 7→3。判定 6 以「Fable 檢查一次、處置後」記為成立（使用者的 (c)）；第三次修訂沒有再經不同模型檢查。
+
+證據：主 checkout `build/evidence/adapter-plugins-plan/` 的 `review-inventory.md`、`discussion-notes.md`、`adversary-final.md`、`reviser2-sum.*`、`reviser3-sum.*`。
