@@ -114,6 +114,10 @@ TEST_CASE("J-15: a second writer of an Exclusive column fails, whatever the writ
         {"immediate", [](Registrar& r) { r.AddSystem<&WritePosAgain>(Sys("WritePosAgain", Zone::C, Simulate())); }},
         {"deferred insert", [](Registrar& r) { r.AddSystem<&InsertPos>(Sys("InsertPos", Zone::C, Simulate())); }},
         {"deferred remove", [](Registrar& r) { r.AddSystem<&RemovePos>(Sys("RemovePos", Zone::C, Simulate())); }},
+        // The allotter is Shared here on purpose: with the default (Exclusive) two spawning Systems are already
+        // D-E2 through the allotter, and this case is about the bundle. Whether an allotter should be counted as an
+        // exclusive column at all (spec W-9 says spawners are serialized by their conflict) is open for the
+        // architect (registry-schedule declaration, limits; PvP's ApplyMembership uses SpawnWithId, not the allotter).
         {"Spawn bundle", [](Registrar& r) {
              r.Resource<TestAllotter>({.name = "TestAllotter", .zone = Zone::C, .writePolicy = WritePolicy::Shared,
                                        .rollback = Rollback::Yes});

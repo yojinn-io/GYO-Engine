@@ -40,23 +40,23 @@ def darwin_with(*lines):
 
 
 class Classification(unittest.TestCase):
-    def assert_clean(self, symbols):
-        present, foreign, findings = guard.classify(symbols)
+    def assert_clean(self, symbols, kind=None):
+        present, foreign, findings = guard.classify(symbols, kind)
         self.assertEqual(findings, [])
         return present, foreign
 
-    def assert_found(self, symbols, name):
-        _, _, findings = guard.classify(symbols)
+    def assert_found(self, symbols, name, kind=None):
+        _, _, findings = guard.classify(symbols, kind)
         self.assertIn(name, findings)
 
     def test_sysv_baseline_is_clean_with_the_anchor_present(self):
-        present, foreign = self.assert_clean(guard.parse_sysv(SYSV))
+        present, foreign = self.assert_clean(guard.parse_sysv(SYSV), "sysv")
         self.assertEqual(present, {"TypeKey anchor"})
         self.assertEqual(foreign, ["Engine::Base::Detail::assertionHandler",
                                    "Engine::Base::Detail::reportingAssertion"])
 
     def test_darwin_baseline_is_clean_with_the_anchor_present(self):
-        present, foreign = self.assert_clean(guard.parse_darwin(DARWIN))
+        present, foreign = self.assert_clean(guard.parse_darwin(DARWIN), "darwin")
         self.assertEqual(present, {"TypeKey anchor"})
         self.assertEqual(sorted(foreign), ["Engine::Base::Detail::assertionHandler",
                                            "Engine::Base::Detail::reportingAssertion"])
@@ -105,19 +105,25 @@ class Classification(unittest.TestCase):
     def test_gcc_personality_reference_is_toolchain_data(self):
         present, foreign = self.assert_clean(guard.parse_sysv(sysv_with(
             "DW.ref.__gxx_personality_v0|0000000000000000|   V  |            OBJECT|0000000000000008|     |"
-            ".data.rel.local.DW.ref.__gxx_personality_v0")))
+            ".data.rel.local.DW.ref.__gxx_personality_v0")), "sysv")
         self.assertIn("DW.ref.__gxx_personality_v0", foreign)
-        self.assert_found({"DW.ref.other"}, "DW.ref.other")
+        for name in ("DW.ref.other", "DW.ref.foo", "DW.ref.__gxx_personality_v0x"):
+            with self.subTest(name=name):
+                self.assert_found({name}, name, "sysv")
+        # Only on ELF: in a Mach-O symbol table the same name is a finding.
+        self.assert_found({"DW.ref.__gxx_personality_v0"}, "DW.ref.__gxx_personality_v0", "darwin")
 
     def test_assembler_section_labels_are_toolchain_data(self):
         _, foreign = self.assert_clean(guard.parse_darwin(darwin_with(
             "0000000000000040 (__DATA,__data) non-external ltmp5",
-            "0000000000000048 (__DATA,__bss) non-external ltmp7")))
+            "0000000000000048 (__DATA,__bss) non-external ltmp7")), "darwin")
         self.assertIn("ltmp5", foreign)
         self.assertIn("ltmp7", foreign)
-        for name in ("ltmp", "ltmpx", "xltmp5", "GYO::Kernel::ltmp5"):
+        for name in ("ltmp", "ltmpx", "ltmpX", "xltmp5", "GYO::Kernel::ltmp5"):
             with self.subTest(name=name):
-                self.assert_found({name}, name)
+                self.assert_found({name}, name, "darwin")
+        # Only on Mach-O: in an ELF symbol table the label is a finding.
+        self.assert_found({"ltmp5"}, "ltmp5", "sysv")
 
     def test_required_name_missing_fails_the_run(self):
         # An empty symbol table (nm read nothing writable) must not pass when the anchor is required.
@@ -144,6 +150,31 @@ class Classification(unittest.TestCase):
                      "Engine::Base::Detail::logHandler"):
             with self.subTest(name=name):
                 self.assert_found({name}, name)
+
+
+class Main(unittest.TestCase):
+    """main() with nm replaced in-process, so the exit codes are checked on every platform."""
+
+    def run_main(self, text, *extra):
+        original = guard.run_nm
+        guard.run_nm = lambda nm, library, kind: text
+        try:
+            return guard.main(["--nm", "nm", "--library", "lib.a", "--format", "sysv", *extra])
+        finally:
+            guard.run_nm = original
+
+    def test_main_is_clean_on_the_baseline(self):
+        self.assertEqual(self.run_main(SYSV, "--require", "TypeKey anchor"), 0)
+
+    def test_main_exits_one_for_a_finding(self):
+        self.assertEqual(self.run_main(sysv_with(
+            "GYO::Kernel::g|0000000000000000|   u  |            OBJECT|0000000000000004|     |.bss._ZN3GYO6Kernel1gE")), 1)
+
+    def test_main_fails_when_a_required_name_is_absent(self):
+        self.assertEqual(self.run_main(SYSV, "--require", "tlCurrent"), 1)
+
+    def test_main_fails_when_nm_prints_nothing(self):
+        self.assertEqual(self.run_main(""), 2)
 
 
 if __name__ == "__main__":

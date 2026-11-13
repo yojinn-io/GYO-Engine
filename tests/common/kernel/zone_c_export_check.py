@@ -4,9 +4,9 @@ Runs tests/common/zone_scan/zone_scan.py on the list the kernel exported for the
 (tests/common/kernel/zone_c_fixture/SyntheticSimulation.cpp; written by the gyo_kernel_tests case "J-17: the
 G-5 export ...") and checks that the scanner reads it (exit status 1: findings, not 2: contract error) and finds
 exactly the planted findings: ZS1 1, ZS2 1, ZS6 1, nothing else; and that the list header is the kernel's
-(generated_by gyo-kernel-report, one file).
+(generated_by gyo-kernel-report, the two fixture files in byte order).
 
-Usage: python3 zone_c_export_check.py --root REPOSITORY --list EXPORTED.json
+Usage: python3 zone_c_export_check.py --root REPOSITORY (--list EXPORTED.json | --export-with GYO_KERNEL_TESTS)
 Exit status 0 when every check holds; 1 otherwise (each failed check is printed).
 """
 import argparse
@@ -17,14 +17,27 @@ import tempfile
 from pathlib import Path
 
 EXPECTED_PER_RULE = {"ZS1": 1, "ZS2": 1, "ZS6": 1}
-EXPECTED_FILES = ["tests/common/kernel/zone_c_fixture/SyntheticSimulation.cpp"]
+EXPECTED_FILES = ["tests/common/kernel/zone_c_fixture/AnotherSimulation.cpp",
+                  "tests/common/kernel/zone_c_fixture/SyntheticSimulation.cpp"]
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--root", required=True)
-    parser.add_argument("--list", required=True)
+    parser.add_argument("--list")
+    # For the mutation catalog: run the export case of this gyo_kernel_tests first; the list is then the one it
+    # writes next to itself (GYO_KERNEL_TEST_BINARY_DIR is the executable's directory).
+    parser.add_argument("--export-with", metavar="EXE")
     args = parser.parse_args(argv)
+    if args.export_with:
+        exported = Path(args.list) if args.list else Path(args.export_with).resolve().parent / "kernel_zone_c_sources.json"
+        exported.unlink(missing_ok=True)  # never check a list left by an earlier run
+        subprocess.run([args.export_with, "--test-case=J-17: the G-5 export*"], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.STDOUT, timeout=120)
+        if not args.list:
+            args.list = str(Path(args.export_with).resolve().parent / "kernel_zone_c_sources.json")
+    if not args.list:
+        parser.error("--list or --export-with is required")
     root = Path(args.root)
     problems = []
     listed = json.loads(Path(args.list).read_text(encoding="utf-8"))
@@ -47,8 +60,8 @@ def main(argv=None):
             per_rule = {rule: count for rule, count in report.get("per_rule", {}).items() if count}
             if per_rule != EXPECTED_PER_RULE:
                 problems.append(f"findings per rule {per_rule}, expected {EXPECTED_PER_RULE}")
-            if report.get("files_listed") != 1:
-                problems.append(f"files_listed {report.get('files_listed')}, expected 1")
+            if report.get("files_listed") != 2:
+                problems.append(f"files_listed {report.get('files_listed')}, expected 2")
         else:
             problems.append("zone_scan.py wrote no report")
     for problem in problems:

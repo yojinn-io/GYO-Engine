@@ -125,6 +125,8 @@ struct RegistryData {
 
     std::vector<StartupError> errors;
     bool finished = false;
+    // True only while plugins' Build functions run (Registrar asserts it).
+    bool building = false;
     bool frozen = false;
     std::vector<Plan> plans;
     std::vector<TieBreak> ties;

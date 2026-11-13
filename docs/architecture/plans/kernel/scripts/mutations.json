@@ -1542,7 +1542,7 @@
       "replace": "                    if (sa.options.name < sb.options.name) AddTieEdge(a, b); else AddTieEdge(b, a);",
       "target": "gyo_kernel_tests",
       "cases": "J-23:*",
-      "expect": "SystemSteps"
+      "expect": "\\{\"Zeta\", \"Alpha\", \"Mid\"\\}"
     },
     {
       "id": "rs-j3-6-unstable-key",
@@ -1646,13 +1646,13 @@
     },
     {
       "id": "rs-j10-member-accepted",
-      "what": "J-10: a member function is not told apart",
+      "what": "J-10: a member function is not told apart (caught at configure by the try_compile samples since the review added them)",
       "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
       "find": "    if constexpr (Sig::member) {\n        return Rejection::MemberFunction;\n    } else if constexpr (!Sig::function) {\n        return Rejection::NotCallable;\n    } else {\n        return Detail::CheckSystemSignature<Sig>();",
       "replace": "    if constexpr (false) {\n        return Rejection::MemberFunction;\n    } else if constexpr (!Sig::function) {\n        return Rejection::NotCallable;\n    } else {\n        return Detail::CheckSystemSignature<Sig>();",
       "target": "gyo_kernel_tests",
-      "cases": "J-10:*",
-      "expect": "Rejection::MemberFunction"
+      "expect": "variant MEMBER failed without",
+      "expect_build_failure": true
     },
     {
       "id": "rs-j10-exclusive-world-not-alone",
@@ -1676,13 +1676,13 @@
     },
     {
       "id": "rs-j11-self-conflict-off",
-      "what": "J-11: the self-conflict check is removed",
+      "what": "J-11: the self-conflict check is removed (caught at configure by the try_compile samples since the review added them)",
       "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
       "find": "    static constexpr bool value = (One<E>::value || ...);",
       "replace": "    static constexpr bool value = false;",
       "target": "gyo_kernel_tests",
-      "cases": "J-11:*",
-      "expect": "SelfConflict"
+      "expect": "variant SELF_CONFLICT compiled",
+      "expect_build_failure": true
     },
     {
       "id": "rs-j11-read-write-allowed",
@@ -1696,23 +1696,23 @@
     },
     {
       "id": "rs-j13-condition-write-allowed",
-      "what": "J-13: a run condition with a write parameter is accepted",
+      "what": "J-13: a run condition with a write parameter is accepted (caught at configure by the try_compile samples since the review added them)",
       "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
       "find": "                if constexpr (sizeof...(P) == 0 || ValidParamFacts<P...>::readOnly) {",
       "replace": "                if constexpr (true) {",
       "target": "gyo_kernel_tests",
-      "cases": "J-13:*",
-      "expect": "ConditionNotReadOnly"
+      "expect": "variant CONDITION_WRITE compiled",
+      "expect_build_failure": true
     },
     {
       "id": "rs-j12-write-term-dropped",
-      "what": "J-12: a parameter's Contribution misses a type (Query Write)",
+      "what": "J-12: a parameter's Contribution misses a type (Query Write) (caught at configure by the try_compile samples since the review added them)",
       "file": "engine/kernel/include/engine/kernel/Params.hpp",
       "find": "    static constexpr bool readOnly = false;\n    using Contribution = TypeList<Access::ComponentWrite<T>>;",
       "replace": "    static constexpr bool readOnly = false;\n    using Contribution = TypeList<>;",
       "target": "gyo_kernel_tests",
-      "cases": "J-12:*",
-      "expect": "ComponentWrite<TestPos>|MovePos"
+      "expect": "variant SELF_CONFLICT compiled",
+      "expect_build_failure": true
     },
     {
       "id": "rs-j12-bundle-dropped",
@@ -1728,8 +1728,8 @@
       "id": "rs-j12-condition-reads-dropped",
       "what": "J-12: run condition reads do not join the System's reads",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "                condition.resolve(conditionResolver);\n                for (const AccessKey& key : conditionResolver.access.reads) resolver.access.reads.push_back(key);\n                for (ComponentId id : conditionResolver.access.membershipReads) resolver.access.membershipReads.push_back(id);\n                resolver.access.changeFilters",
-      "replace": "                condition.resolve(conditionResolver);\n                resolver.access.changeFilters",
+      "find": "    into.access.reads.insert(into.access.reads.end(), condition.access.reads.begin(), condition.access.reads.end());\n",
+      "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-12:*",
       "expect": "GatedWrite"
@@ -1858,8 +1858,8 @@
       "id": "rs-j19-type-twice-allowed",
       "what": "J-19: a type may be registered twice",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "    if (const TypeEntry* existing = data.FindType(key)) {\n        if (existing->size",
-      "replace": "    if (const TypeEntry* existing = (data.FindType(key), nullptr)) {\n        if (existing->size",
+      "find": "    if (const TypeEntry* existing = data.FindType(key)) {\n        // Same role",
+      "replace": "    if (const TypeEntry* existing = (data.FindType(key), nullptr)) {\n        // Same role",
       "target": "gyo_kernel_tests",
       "cases": "J-19:*",
       "expect": "ErrorCount\\(.*StartupCode::RE2\\)"
@@ -1882,7 +1882,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-21:*",
-      "expect": "GYO_ASSERT failed"
+      "expect": "GYO_ASSERT failed: reach_->Test\\(a, b\\) \\? position\\[a\\] < position\\[b\\]"
     },
     {
       "id": "rs-j22-deferred-vs-read",
@@ -1908,8 +1908,8 @@
       "id": "rs-j27-guard-unchecked",
       "what": "J-27: a (c) Parallel schedule without a guard is accepted (X-E1 removed)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "            if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty()) {",
-      "replace": "            if (false) {",
+      "find": "            if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty() &&",
+      "replace": "            if (false &&",
       "target": "gyo_kernel_tests",
       "cases": "J-27:*",
       "expect": "ErrorCount\\(.*StartupCode::XE1\\)"
@@ -1958,8 +1958,8 @@
       "id": "rs-j24-de3-removed",
       "what": "J-24: Spawn without an allotter is not reported",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "                data.Error(StartupCode::DE3, \"A.1\",",
-      "replace": "                if (false) data.Error(StartupCode::DE3, \"A.1\",",
+      "find": "                data.Error(StartupCode::DE3, \"A.1\",\n                           subject + \" spawns entities, but this World declares no allotter (use",
+      "replace": "                if (false) data.Error(StartupCode::DE3, \"A.1\",\n                           subject + \" spawns entities, but this World declares no allotter (use",
       "target": "gyo_kernel_tests",
       "cases": "J-24:*",
       "expect": "ErrorCount\\(.*StartupCode::DE3\\)"
@@ -2058,7 +2058,7 @@
       "id": "rs-j24-re5-reported-as-re2",
       "what": "J-24: a key collision is reported as a duplicate",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (existing->size != size || existing->align != align || existing->role != role) {",
+      "find": "        if (existing->role == role && (existing->size != size || existing->align != align)) {",
       "replace": "        if (false) {",
       "target": "gyo_kernel_tests",
       "cases": "J-24:*",
@@ -2393,6 +2393,604 @@
       "platforms": [
         "linux"
       ]
+    },
+    {
+      "id": "rs-adv-exclusive-no-conflict",
+      "what": "D.1 condition 2: ExclusiveWorld no longer conflicts with the Systems of its stage (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "    if (a.access.exclusive || b.access.exclusive) return \"ExclusiveWorld\";",
+      "replace": "    if (false) return \"ExclusiveWorld\";",
+      "expect": "ErrorCount\\(exclusive, StartupCode::DE8\\)",
+      "target": "gyo_kernel_tests",
+      "cases": "J-22:*"
+    },
+    {
+      "id": "rs-adv-effect-no-conflict",
+      "what": "D.1 condition 3: two Systems declaring one effect no longer conflict (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "    if (Intersects(a.effects, b.effects, &effect)) return",
+      "replace": "    if (false) return",
+      "expect": "sameEffect",
+      "target": "gyo_kernel_tests",
+      "cases": "J-23:*"
+    },
+    {
+      "id": "rs-adv-set-order-dropped",
+      "what": "a set's before / after is not applied to its members (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "            if (members == setMembers_.end()) continue;",
+      "replace": "            continue;",
+      "expect": "setPlan",
+      "target": "gyo_kernel_tests",
+      "cases": "J-21:*"
+    },
+    {
+      "id": "rs-adv-set-conditions-dropped",
+      "what": "a set's run-condition reads do not join its members' reads (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                    if (set.options.schedule != mount.schedule || set.options.name != setName) continue;",
+      "replace": "                    continue;",
+      "expect": "AccessKind::Resource, res",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*"
+    },
+    {
+      "id": "rs-adv-z6-system-removed",
+      "what": "Z6: a zone C System may write data that does not roll back in a rollback-enabled schedule (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                    if (rollback != Rollback::Yes && rollback != Rollback::Derived) {",
+      "replace": "                    if (false) {",
+      "expect": "\"Z6\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*"
+    },
+    {
+      "id": "rs-adv-z6-hook-removed",
+      "what": "Z6: a zone C hook may write data that is not rollback=Yes (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                if (key.kind != AccessKind::Event && RollbackOf(data, key) != Rollback::Yes) {",
+      "replace": "                if (false) {",
+      "expect": "hookNoRollback",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*"
+    },
+    {
+      "id": "rs-adv-hook-zone-rules-off",
+      "what": "Z1 / Z2 are not applied to hooks (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        CheckZoneAccess(data, subject, hook.name, hook.zone, false, hook.access, SourceText(hook.source));",
+      "replace": "",
+      "expect": "hookWritesC",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*"
+    },
+    {
+      "id": "rs-adv-hook-unset-zone-ok",
+      "what": "S-6: a hook without a zone is accepted (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (hook.zone == Zone::Unset) {",
+      "replace": "        if (false) {",
+      "expect": "hookNoZone",
+      "target": "gyo_kernel_tests",
+      "cases": "J-14:*"
+    },
+    {
+      "id": "rs-adv-domain-tick-is-zone-b",
+      "what": "the domain tick is not (c)-readable: a zone C System with CurrentTick is rejected (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    case AccessKind::DomainTick: return Zone::C;",
+      "replace": "    case AccessKind::DomainTick: return Zone::B;",
+      "expect": "readsTick",
+      "target": "gyo_kernel_tests",
+      "cases": "J-39:*"
+    },
+    {
+      "id": "rs-adv-z8-component-removed",
+      "what": "Z8 is not applied to components (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (info.role == Role::Input && info.rollback != Rollback::No) {\n            data.Error(StartupCode::DE7, \"Z8\", \"component '\"",
+      "replace": "        if (false) {\n            data.Error(StartupCode::DE7, \"Z8\", \"component '\"",
+      "expect": "rollbackInputColumn",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*"
+    },
+    {
+      "id": "rs-adv-condition-change-filter-dropped",
+      "what": "S-9 through a run condition: its Changed / Added filter does not reach the System (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    into.access.changeFilters = into.access.changeFilters || condition.access.changeFilters;\n",
+      "replace": "",
+      "expect": "conditionChanged",
+      "target": "gyo_kernel_tests",
+      "cases": "J-38:*"
+    },
+    {
+      "id": "rs-adv-condition-settings-dropped",
+      "what": "D-E18 through a run condition is not reported (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    into.kernelSettings = into.kernelSettings || condition.kernelSettings;\n",
+      "replace": "",
+      "expect": "conditionSettings",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*"
+    },
+    {
+      "id": "rs-adv-exclusive-resource-writers-skipped",
+      "what": "D-E2 counts component writers only (resources skipped) (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (key.kind == AccessKind::Component || key.kind == AccessKind::Resource) {\n                writers[key].emplace_back(system.options.name",
+      "replace": "            if (key.kind == AccessKind::Component) {\n                writers[key].emplace_back(system.options.name",
+      "expect": "ErrorCount\\(resource, StartupCode::DE2\\)",
+      "target": "gyo_kernel_tests",
+      "cases": "J-15:*"
+    },
+    {
+      "id": "rs-adv-derived-deferred-writer-counts",
+      "what": "D-E16 accepts a deferred writer as the writer before a Derived read (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                    const auto& writes = SystemOf(w).access.writes;",
+      "replace": "                    const auto writes = Written(SystemOf(w).access);",
+      "expect": "deferredOnly",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*"
+    },
+    {
+      "id": "rs-adv-derived-any-schedule",
+      "what": "D-E16 is reported in schedules without rollback too (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "        if (!s_.rollbackEnabled) return;",
+      "replace": "",
+      "expect": "derivedNoRollback",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*"
+    },
+    {
+      "id": "rs-adv-cfp-all-zones",
+      "what": "the C fingerprint hashes zone B Systems too (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        if (system.options.zone == Zone::C) SystemBytes(out, system);",
+      "replace": "        SystemBytes(out, system);",
+      "expect": "withZoneBOnlyChange",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*"
+    },
+    {
+      "id": "rs-adv-cfp-header-only",
+      "what": "the C fingerprint hashes nothing but its header (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    Header(out, \"gyo.kernel.registry-c\", kCFingerprintVersion);",
+      "replace": "    Header(out, \"gyo.kernel.registry-c\", kCFingerprintVersion);\n    return out.Finish(kCFingerprintVersion);",
+      "expect": "withZoneCChange",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*"
+    },
+    {
+      "id": "rs-adv-fp-rollback-enabled-dropped",
+      "what": "the Registry fingerprint ignores a schedule's rollbackEnabled (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.Flag(s.rollbackEnabled);",
+      "replace": "    out.Flag(false);",
+      "expect": "field := \"?rollbackEnabled",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*"
+    },
+    {
+      "id": "rs-adv-fp-hook-access-dropped",
+      "what": "the Registry fingerprint ignores hook access sets (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        out.Enum(hook.zone);\n        Access(out, hook.access);",
+      "replace": "        out.Enum(hook.zone);",
+      "expect": "field := \"?hook access",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*"
+    },
+    {
+      "id": "rs-adv-fp-ingress-dropped",
+      "what": "the Registry fingerprint ignores a System's ingress flag (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.Flag(system.options.ingress);",
+      "replace": "    out.Flag(false);",
+      "expect": "field := \"?ingress",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*"
+    },
+    {
+      "id": "rs-adv-export-unsorted",
+      "what": "G-5 export: files are not sorted (contract: byte order) (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    std::sort(files.begin(), files.end());\n    files.erase(",
+      "replace": "    files.erase(",
+      "expect": "secondFile",
+      "target": "gyo_kernel_tests",
+      "cases": "J-17:*"
+    },
+    {
+      "id": "rs-adv-declared-edge-not-deduped",
+      "what": "a before / after pair declared from both ends is counted twice in the dataflow ratio (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "            if (declaredPairs_.insert(pair).second) {",
+      "replace": "            if ((declaredPairs_.insert(pair), true)) {",
+      "expect": "declaredEdges\\.size\\(\\) == 5",
+      "target": "gyo_kernel_tests",
+      "cases": "Plan export*"
+    },
+    {
+      "id": "rs-adv-system-name-twice",
+      "what": "two Systems with one name are accepted (before / after then resolves to the later one) (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (existing.options.name == options.name) {",
+      "replace": "        if (false) {",
+      "expect": "sameName",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*"
+    },
+    {
+      "id": "rs-adv-event-trim-unknown",
+      "what": "an eventTrim naming no sync point is accepted (no trim step at all) (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (!s.eventTrim.empty() && syncNames.count(s.eventTrim) == 0 && stages.count(s.eventTrim) == 0) {",
+      "replace": "        if (false) {",
+      "expect": "unknownTrim",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*"
+    },
+    {
+      "id": "rs-adv-extract-outside-extract-schedule",
+      "what": "Extract parameters are accepted outside an extract schedule (H-6) (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (system.extractOnly && !s.extract) {",
+      "replace": "            if (false) {",
+      "expect": "\"H-6\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*"
+    },
+    {
+      "id": "rs-adv-no-mount-accepted",
+      "what": "a System with no mount is accepted (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (system.options.mounts.empty()) {",
+      "replace": "        if (false) {",
+      "expect": "noMount",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*"
+    },
+    {
+      "id": "rs-adv-assert-self-conflict-removed",
+      "what": "J-11 at the registration point: AddSystem accepts a self-conflicting signature (and silently registers nothing) (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    static_assert(R != Rejection::SelfConflict,",
+      "replace": "    static_assert(true,",
+      "expect": "variant SELF_CONFLICT compiled",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true
+    },
+    {
+      "id": "rs-adv-assert-condition-write-removed",
+      "what": "J-13 at the registration point: Condition accepts a writing parameter (and yields a condition with no resolver) (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    static_assert(R != Rejection::ConditionNotReadOnly,",
+      "replace": "    static_assert(true,",
+      "expect": "variant CONDITION_WRITE compiled",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true
+    },
+    {
+      "id": "rs-adv-assert-member-removed",
+      "what": "J-10 at the registration point: AddSystem accepts a member function (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/include/engine/kernel/SystemTraits.hpp",
+      "find": "    static_assert(R != Rejection::MemberFunction,",
+      "replace": "    static_assert(true,",
+      "expect": "variant MEMBER compiled",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true
+    },
+    {
+      "id": "rs-adv-hook-unchecked",
+      "what": "Registrar::Hook no longer checks the hook's signature (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/include/engine/kernel/Registry.hpp",
+      "find": "        Detail::RequireAccepted<SystemRejectionOfFunction<Fn>()>();\n        if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None) {\n            RegisterHook(",
+      "replace": "        if constexpr (SystemRejectionOfFunction<Fn>() == Rejection::None) {\n            RegisterHook(",
+      "expect": "variant HOOK_PARAMETER compiled",
+      "target": "gyo_kernel_tests",
+      "expect_build_failure": true
+    },
+    {
+      "id": "rs-adv-sym-require-ignored",
+      "what": "judgement 9 condition (i): --require is ignored (the positive control never fails) (Fable adversarial check, 2026-11-13)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "    missing = [label for label in args.require if label not in present]",
+      "replace": "    missing = []",
+      "expect": "FAIL: test_main_fails_when_a_required_name_is_absent",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "rs-adv-sym-findings-exit-zero",
+      "what": "judgement 9: a finding is printed but the run exits 0 (Fable adversarial check, 2026-11-13)",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "    if findings or missing:",
+      "replace": "    if missing:",
+      "expect": "FAIL: test_main_exits_one_for_a_finding",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ]
+    },
+    {
+      "id": "rs-adv-export-repo-commit-dropped",
+      "what": "judgement 8: the export drops repo_commit (only zone_scan.py's contract check sees it) (Fable adversarial check, 2026-11-13)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out += \"  \\\"repo_commit\\\": \" + Detail::JsonString(options.repoCommit) + \",\\n\";",
+      "replace": "",
+      "expect": "zone_scan\\.py exited 2",
+      "target": "gyo_kernel_tests",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/zone_c_export_check.py",
+        "--root",
+        ".",
+        "--export-with",
+        "{exe:gyo_kernel_tests}"
+      ]
+    },
+    {
+      "id": "rs-fix-a1-cycle-walk-successors",
+      "what": "A1: the cycle report walks successors again (runs off the cycle)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "            for (std::size_t from : pred[current]) {",
+      "replace": "            for (std::size_t from : succ_[current]) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "GYO_ASSERT failed: next != kNone|cycle == std::vector"
+    },
+    {
+      "id": "rs-fix-b2-stop-after-declared-edges",
+      "what": "B2: a schedule stops at its first D-E4 / D-E5",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "        DeclaredEdges();\n",
+      "replace": "        DeclaredEdges();\n        if (failed_) return;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(built, StartupCode::DE8\\) == 1"
+    },
+    {
+      "id": "rs-fix-b4-finish-before-resolve",
+      "what": "B4: plugins' Finish runs before Systems are listed",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    Detail::FillSystemInfos(data);\n    if (data.errors.empty()) {",
+      "replace": "    if (data.errors.empty()) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-19:*",
+      "expect": "systems == 1"
+    },
+    {
+      "id": "rs-fix-c2-xe1-per-system",
+      "what": "C2: X-E1 is reported once per zone C System",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": " &&\n                unguardedParallel.insert(s.name).second) {",
+      "replace": ") {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-27:*",
+      "expect": "ErrorCount\\(built, StartupCode::XE1\\) == 1"
+    },
+    {
+      "id": "rs-fix-c1-hook-spawn-unchecked",
+      "what": "C1: a hook that spawns without an allotter is accepted",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                data.Error(StartupCode::DE3, \"A.1\", subject + \" spawns entities, but this World declares no allotter\",",
+      "replace": "                if (false) data.Error(StartupCode::DE3, \"A.1\", subject + \" spawns entities, but this World declares no allotter\",",
+      "target": "gyo_kernel_tests",
+      "cases": "J-24:*",
+      "expect": "ErrorCount\\(hookSpawn"
+    },
+    {
+      "id": "rs-fix-c1-hook-local-allowed",
+      "what": "C1: a zone C hook may keep Local",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            forbid(resolver.access.local, \"S-7\", \"has Local<T> (state outside the World)\");",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-14:*",
+      "expect": "hookLocal"
+    },
+    {
+      "id": "rs-b5-literal-counts-deferred",
+      "what": "B5: the judged ratio counts u's deferred writes",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                const bool dataflow = Intersects<AccessKey>(u.writes, touched, nullptr);",
+      "replace": "                const bool dataflow = Intersects<AccessKey>(Written(u), touched, nullptr);",
+      "target": "gyo_kernel_tests",
+      "cases": "Plan export*",
+      "expect": "NonDataflowEdges\\(\\) == 2"
+    },
+    {
+      "id": "rs-b5-literal-counts-membership",
+      "what": "B5: the judged ratio counts v's With / Without",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                std::vector<AccessKey> touched = v.reads;\n",
+      "replace": "                std::vector<AccessKey> touched = ReadOrMembership(v);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "Plan export*",
+      "expect": "NonDataflowEdges\\(\\) == 2"
+    },
+    {
+      "id": "rs-b5-extended-is-literal",
+      "what": "B5: the extended ratio is the literal one",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "                const bool extended = Intersects<AccessKey>(Written(u), touchedExtended, nullptr);",
+      "replace": "                const bool extended = dataflow;",
+      "target": "gyo_kernel_tests",
+      "cases": "Plan export*",
+      "expect": "NonDataflowEdgesExtended\\(\\) == 0"
+    },
+    {
+      "id": "rs-b3-trim-not-pinned",
+      "what": "B3: the trim is not pinned after its named sync point",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "        PinEventTrim();\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-20:*",
+      "expect": "trim < PositionOf\\(plan, \"After\"\\)|trim == mid \\+ 1"
+    },
+    {
+      "id": "rs-b3-trim-ignores-declared",
+      "what": "B3: eventTrim is ignored (the trim always follows the last stage end; Fable)",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "find": "            const std::string trimAt = s_.eventTrim.empty() ? s_.stages.back() : s_.eventTrim;",
+      "replace": "            const std::string trimAt = s_.stages.back();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-20:*",
+      "expect": "trim == mid \\+ 1"
+    },
+    {
+      "id": "rs-c4-ingress-anywhere",
+      "what": "C4: the ingress stage may be any stage",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": " && s.stages.front() != s.ingressStage) {",
+      "replace": " && false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-40:*",
+      "expect": "ingressNotFirst|inserted"
+    },
+    {
+      "id": "rs-b6-cfp-hooks-dropped",
+      "what": "B6: the C fingerprint leaves out zone C hooks",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        if (hook.zone != Zone::C) continue;\n        out.Str(hook.name);",
+      "replace": "        continue;\n        out.Str(hook.name);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*",
+      "expect": "change := \"?hook"
+    },
+    {
+      "id": "rs-b6-cfp-schedule-dropped",
+      "what": "B6: the C fingerprint leaves out the schedule's rollbackEnabled",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "            out.Flag(schedule->options.rollbackEnabled);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*",
+      "expect": "change := \"?rollback"
+    },
+    {
+      "id": "rs-b6-cfp-sync-dropped",
+      "what": "B6: the C fingerprint leaves out the sync points between zone C steps",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "            if (step.kind != StepKind::System || data.systems[step.system].options.zone == Zone::C) reduced.push_back(&step);",
+      "replace": "            if (step.kind == StepKind::System && data.systems[step.system].options.zone == Zone::C) reduced.push_back(&step);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*",
+      "expect": "change := \"?sync"
+    },
+    {
+      "id": "rs-b6-cfp-version-1",
+      "what": "B6: the C fingerprint keeps format version 1",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 2;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 1;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*",
+      "expect": "CFingerprint\\(\\)\\.version == 2U"
+    },
+    {
+      "id": "rs-b8-k4-inline-rule-removed",
+      "what": "B8: K4 no longer reports inline variables",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "        finding = inline_variable(code, match.start())",
+      "replace": "        finding = None",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k4_inline_variable_without_static_is_reported"
+    },
+    {
+      "id": "rs-b8-k4-inline-const-pointee",
+      "what": "B8: a const pointee counts as a const variable",
+      "file": "tests/common/kernel/kernel_guard.py",
+      "find": "    if \"*\" in declarator:\n        if re.search(r\"\\bconst\\b\", pointer_part[1]):",
+      "replace": "    if \"*\" in declarator:\n        if re.search(r\"\\bconst\\b\", declarator):",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_guard.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_k4_inline_variable_without_static_is_reported"
+    },
+    {
+      "id": "rs-b8-header-inline-unused",
+      "what": "B8: a header-only inline variable that no kernel source odr-uses (not in libgyo_kernel.a): K4 sees it (Fable)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "namespace GYO::Kernel {\n\n// ---- Query terms",
+      "replace": "namespace GYO::Kernel {\n\ninline int headerCounter = 0;\ninline int BumpHeaderCounter() { return ++headerCounter; }\n\n// ---- Query terms",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "tests/common/kernel/kernel_guard.py"
+      ],
+      "expect": "K4 inline headerCounter"
+    },
+    {
+      "id": "rs-b8-toolchain-any-format",
+      "what": "B8: toolchain names apply in every symbol-table format",
+      "file": "tests/common/kernel/kernel_symbols.py",
+      "find": "any(fmt == kind and pattern.match(name) for fmt, pattern in TOOLCHAIN.values())",
+      "replace": "any(pattern.match(name) for fmt, pattern in TOOLCHAIN.values())",
+      "command": [
+        "{python}",
+        "-I",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/kernel",
+        "-p",
+        "test_kernel_symbols.py",
+        "-v"
+      ],
+      "expect": "FAIL: test_(gcc_personality|assembler_section)"
     }
   ]
 }

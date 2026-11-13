@@ -37,8 +37,11 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       like a parameter list (a type keyword, an attribute, or a name followed by more than ")"). A single bare
       name or a literal in the parentheses reads as direct initialization ("static int x(0);", "static T x(y);")
       and is reported (fail closed). ALLOWED_STATICS names exactly two symbols (spec A.6), each with the exact
-      declaration shape it must have; the self-test fails when a third is added. Rule limit: only declarations
-      with the keyword are seen (spec J-9 is keyword-based); a namespace-scope "inline int g;" is left to review.
+      declaration shape it must have; the self-test fails when a third is added.
+      Also an "inline" variable without static / thread_local (a namespace-scope "inline int g = 0;"): it has
+      static storage like a static one, and when no kernel source odr-uses it, the library's symbol table (the
+      writable-symbol guard kernel_symbols.py) never sees it (review B8; architect 2026-11-13). Allowed: constexpr
+      or consteval, const applied to the variable (not only to a pointee), inline functions and inline namespaces.
   K5  an include outside an allowlist: a C++ standard library header (STANDARD_HEADERS) in angle brackets, or a
       project include under engine/base/ or engine/kernel/ with no ".." in it. No capability module, no platform
       header. An include directive (#include, #include_next, #import, %:include) whose target cannot be read
@@ -106,6 +109,7 @@ STANDARD_HEADERS = frozenset("""
     cstdio cstdlib cstring ctime cuchar cwchar cwctype
 """.split())
 STATIC = re.compile(r"\b(?:static|thread_local)\b")
+INLINE = re.compile(r"\binline\b")
 TYPE_KEYWORDS = frozenset("void bool char wchar_t char8_t char16_t char32_t short int long float double signed "
                            "unsigned auto const volatile decltype typename struct class enum".split())
 DECLARED_NAME = re.compile(r"(\w+)\s*(?:\[[^\]]*\]\s*)*$")
@@ -225,6 +229,43 @@ def static_declaration(code, start):
     return end, not parameter_list(inside), (prefix + declaration).strip()
 
 
+def inline_variable(code, start):
+    """The variable name when the "inline" at start declares a mutable variable that K4's static rule does not
+    cover; None otherwise (an inline function or namespace, constexpr, const, or a static / thread_local one)."""
+    if re.match(r"inline\s+namespace\b", code[start:]):
+        return None
+    statement_start = max(code.rfind(";", 0, start), code.rfind("{", 0, start), code.rfind("}", 0, start)) + 1
+    prefix = code[statement_start:start]
+    if re.search(r"\b(?:static|thread_local|constexpr|consteval)\b", prefix):
+        return None  # static / thread_local: the static rule; constexpr before inline: immutable
+    end = len(code)
+    for terminator in (";", "{", "="):
+        found = code.find(terminator, start)
+        if 0 <= found < end:
+            end = found
+    declaration = code[start:end]
+    if re.search(r"\b(?:static|thread_local)\b", declaration):
+        return None  # "inline static ...": the static rule sees it
+    if re.search(r"\b(?:constexpr|consteval)\b", declaration):
+        return None
+    open_paren = declaration.find("(")
+    if open_paren >= 0:
+        close_paren = declaration.rfind(")")
+        inside = declaration[open_paren + 1:close_paren if close_paren > open_paren else len(declaration)]
+        if parameter_list(inside):
+            return None  # a function
+    name = DECLARED_NAME.search(declaration.split("(")[0].strip())
+    declarator = declaration.split("(")[0]
+    # const on the variable itself: "inline const int x", "inline int const x", "inline T* const p"; not a pointee only.
+    pointer_part = declarator.rsplit("*", 1)
+    if "*" in declarator:
+        if re.search(r"\bconst\b", pointer_part[1]):
+            return None
+    elif re.search(r"\bconst\b", declarator):
+        return None
+    return name.group(1) if name else "(unnamed)"
+
+
 def allowed_static(declaration):
     """True when the declaration has exactly one of the allowlisted shapes (one declarator, the exact type)."""
     shape = re.sub(r"\s+", " ", declaration)
@@ -278,6 +319,10 @@ def file_findings(relative, raw, name_patterns):
         if is_variable and not allowed_static(declaration):
             name = re.search(r"(\w+)\W*$", declaration)
             yield line_of(code, match.start()), "K4", f"{match.group(0)} {name.group(1) if name else '(unnamed)'}"
+    for match in INLINE.finditer(code):
+        finding = inline_variable(code, match.start())
+        if finding:
+            yield line_of(code, match.start()), "K4", "inline " + finding
     if not executor_file:
         for match in K6.finditer(code):
             yield line_of(code, match.start()), "K6", match.group(0).rstrip("( ")

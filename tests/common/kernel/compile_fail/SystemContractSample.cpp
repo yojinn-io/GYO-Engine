@@ -12,6 +12,12 @@
 //                                GYO_KERNEL_REJECT_PARAMETER.
 //   GYO_KERNEL_SAMPLE_RETURN     a System returning void; must fail with
 //                                GYO_KERNEL_REJECT_RETURN.
+// Added after the batch's review (registration-point checks beyond J-10's three
+// core shapes, so removing a static_assert is caught at the registration point):
+//   GYO_KERNEL_SAMPLE_SELF_CONFLICT     J-11: one column written twice -> GYO_KERNEL_REJECT_SELF_CONFLICT
+//   GYO_KERNEL_SAMPLE_CONDITION_WRITE   J-13: a run condition that writes -> GYO_KERNEL_REJECT_CONDITION_WRITE
+//   GYO_KERNEL_SAMPLE_MEMBER            J-10: a member function -> GYO_KERNEL_REJECT_MEMBER_FUNCTION
+//   GYO_KERNEL_SAMPLE_HOOK_PARAMETER    a hook with a World& parameter -> GYO_KERNEL_REJECT_PARAMETER
 #include "engine/kernel/Kernel.hpp"
 
 namespace {
@@ -26,6 +32,11 @@ struct World {};  // stands for the kernel World type
 SystemResult ReadSample(Query<Read<SamplePos>>) { return {}; }
 SystemResult TakesWorld(World&) { return {}; }
 void ReturnsVoid(Query<Read<SamplePos>>) {}
+SystemResult WritesTwice(Query<Write<SamplePos>>, Query<Write<SamplePos>>) { return {}; }
+bool ConditionWrites(Query<Write<SamplePos>>) { return true; }
+struct Holder {
+    SystemResult Member(Query<Read<SamplePos>>) { return {}; }
+};
 
 } // namespace
 
@@ -34,6 +45,8 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     (void)&ReadSample;
     (void)&TakesWorld;
     (void)&ReturnsVoid;
+    (void)&WritesTwice;
+    (void)&ConditionWrites;
 #if defined(GYO_KERNEL_SAMPLE_ACCEPTED)
     const auto system = [](Query<Read<SamplePos>>) -> SystemResult { return {}; };
     registrar.AddSystem<decltype(system)>({.name = "Lambda"});
@@ -45,6 +58,14 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     registrar.AddSystem<&TakesWorld>({.name = "TakesWorld"});
 #elif defined(GYO_KERNEL_SAMPLE_RETURN)
     registrar.AddSystem<&ReturnsVoid>({.name = "ReturnsVoid"});
+#elif defined(GYO_KERNEL_SAMPLE_SELF_CONFLICT)
+    registrar.AddSystem<&WritesTwice>({.name = "WritesTwice"});
+#elif defined(GYO_KERNEL_SAMPLE_CONDITION_WRITE)
+    (void)Condition<&ConditionWrites>("ConditionWrites");
+#elif defined(GYO_KERNEL_SAMPLE_MEMBER)
+    registrar.AddSystem<&Holder::Member>({.name = "Member"});
+#elif defined(GYO_KERNEL_SAMPLE_HOOK_PARAMETER)
+    registrar.Hook<SamplePos, &TakesWorld>(HookTrigger::OnAdd, {.name = "HookTakesWorld"});
 #else
     (void)registrar;
 #endif

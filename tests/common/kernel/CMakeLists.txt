@@ -15,7 +15,9 @@ set(GYO_KERNEL_TEST_SOURCES
     ZoneRuleTests.cpp
     SchedulerTests.cpp
     ZoneCExportTests.cpp
+    CoverageTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
+    zone_c_fixture/AnotherSimulation.cpp
 )
 function(gyo_kernel_test_executable name)
     add_executable(${name} ${ARGN})
@@ -93,7 +95,10 @@ set_tests_properties(kernel.guard kernel.guard_selftest kernel.naming_guard kern
 # section 3 item 1, judgement 9): what kernel_guard's K4 cannot see (a
 # namespace-scope variable without "static"). nm on Linux and macOS; Windows is
 # a declared limit (MSVC has no nm; dumpbin's output has another shape).
-if(NOT MSVC AND CMAKE_NM)
+if(NOT MSVC AND NOT CMAKE_NM)
+    message(FATAL_ERROR "kernel.symbols: no nm found (CMAKE_NM); the writable-symbol guard would silently vanish")
+endif()
+if(NOT MSVC)
     add_test(NAME kernel.symbols
         COMMAND "${Python3_EXECUTABLE}" -B "${CMAKE_CURRENT_SOURCE_DIR}/kernel_symbols.py"
             --nm "${CMAKE_NM}" --library "$<TARGET_FILE:gyo_kernel>" --require "TypeKey anchor")
@@ -112,7 +117,8 @@ if(MSVC)
     target_compile_options(gyo_kernel_finish_record PRIVATE /bigobj)
 endif()
 
-# Compile-failure samples (a) (spec J-10, migration plan U5): one source, built
+# Compile-failure samples (a) (spec J-10, migration plan U5; after the review
+# also J-11, J-13, member functions and hooks): one source, built
 # at configure time once per variant. The control must compile, so a failure of
 # another variant comes from the sample, not from include paths or flags; each
 # rejected variant must fail, and with its own static_assert marker, so a
@@ -151,7 +157,9 @@ function(gyo_kernel_compile_fail_samples)
     endif()
     set(summary "control compiled in ${control_ms} ms")
     foreach(variant IN ITEMS CAPTURE:GYO_KERNEL_REJECT_CAPTURE WORLD:GYO_KERNEL_REJECT_PARAMETER
-                             RETURN:GYO_KERNEL_REJECT_RETURN)
+                             RETURN:GYO_KERNEL_REJECT_RETURN SELF_CONFLICT:GYO_KERNEL_REJECT_SELF_CONFLICT
+                             CONDITION_WRITE:GYO_KERNEL_REJECT_CONDITION_WRITE
+                             MEMBER:GYO_KERNEL_REJECT_MEMBER_FUNCTION HOOK_PARAMETER:GYO_KERNEL_REJECT_PARAMETER)
         string(REPLACE ":" ";" parts "${variant}")
         list(GET parts 0 name)
         list(GET parts 1 marker)

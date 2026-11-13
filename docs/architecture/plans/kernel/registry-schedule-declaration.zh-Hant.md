@@ -113,3 +113,10 @@
 4. **J-11、J-12、J-44 的執行半交 world-exec**（遷移計畫 §3.5 受理判定的縮窄）：J-11 的「全量對增量重建」等價、J-12 的「兩種參數順序檢查 `Fetch` 無順序相依」、J-44 的「World 摘要不變」要 World 與執行，本批不做；本批做描述半（J-44＝20 種排列下全部 D-E8，或每對衝突 System 的先後不變）。world-exec 的事前宣告必須把這三個半條列進判定（kernel HANDOFF 記一行）。
 5. **錯誤代號兩欄**：一筆錯誤帶「代號」與「步驟代號」。親和不符＝代號 X-E2／X-E3、步驟 D-E10；(c) Parallel 無守衛＝代號 X-E1、步驟 D-E11（v1 另報 D-E17）。J-24 以「代號或步驟代號」比對，同一問題只報一筆。X-E1 的「守衛測試存在且帶 cpu 標籤」v1 只查 guard id 非空，其餘記限界。spec D.2 與 E 節的代號重疊留給架構師下次修 spec 時統一。
 
+6. **資料流邊比例（審查 B5）**：判定（G1 (ii)）用遷移計畫的字面定義 `writes(u) ∩ (reads(v) ∪ writes(v))`，writes＝立即寫（欄、Resource、事件、配發器），reads＝立即讀（含 run 條件與 SetRead 展開）。實作原本多算的兩種（u 的延後寫、v 的 With／Without）保留為匯出的第二個比例 `non_dataflow_edges_extended`（擴充定義，不判定）。要不要擴充定義是遷移計畫的條文，交使用者（架構師轉）。字面是較嚴的一邊。
+7. **C 指紋（審查 B6）**：補 zone C 的 hook、跑 zone C System 的 schedule 的 `rollbackEnabled`／stage 序列／`eventTrim`，以及該 schedule 的 Plan 只留 zone C step 與全部同步點、事件修剪（同步點相對 (c) step 的位置）；各段先寫數量。格式版本升為 2（`Fingerprint::version`）。收緊。
+8. **事件修剪的位置（審查 B3）**：`eventTrim` 指具名同步點時，修剪緊接在該同步點之後，排在它之後的節點都在修剪之後（與 stage 末的寫法同義）。golden 是本批新設：三個 golden 與 J-18 的 Registry 指紋都不含具名同步點的修剪，數值沒變（只有 J-20 mixed 的 golden 因審查前加入一對無順序約束的 System 重設過一次，見 dev_log）。
+9. **判定 9 的白名單補兩個工具鏈名字（審查 B8）**：GCC 的 `DW.ref.__gxx_personality_v0`（只在 ELF 的符號表適用，例外處理的間接參考）與 arm64 Mach-O 組譯器的區段起點標籤 `^ltmp\d+$`（只在 Mach-O 的符號表適用）。各以完整比對、各附理由註解與 lookalike 自測（`DW.ref.foo`、`ltmpX` 必須被報；換了格式也必須被報）；報告另列「外來或工具鏈」，不算 kernel 的符號。另：**K4 加規則**——沒有 `static`／`thread_local` 的 `inline` 變數（命名空間範圍）＝違規，`constexpr`／`consteval`／變數本身 `const`、inline 函式、inline namespace 不算；只在標頭、kernel `.cpp` 沒 odr-use 的形狀由它抓（符號表看不到）。收緊；自測加正反例、突變兩條。既有兩個自測以 `inline int …`／`inline const char* …` 當其他規則的載體，換成 `constexpr` 載體（判定不變）。
+10. **try_compile 的分工（審查 B7）**：照宣告字面，J-11（自我衝突）、J-13（條件帶寫入）、成員函式、hook 參數四個變體補成 try_compile（各自的 `GYO_KERNEL_REJECT_…` 標記；對照組照 scaffold 的做法）；trait＋doctest 仍保留。
+11. **ingress stage 必須是第一個 stage（審查 C4）**：Z3 寫的條件，只比名字是漏檢；以 D-E7（規則 Z3）報。收緊。
+12. **配發器的獨占（審查 C5）不在本批定**：預設 Exclusive 時兩個 `Spawn` 的 System＝D-E2（較嚴）；spec W-9 說 spawn 由衝突序列化，兩者的關係交使用者（架構師下次修 spec）。J-15 的 Spawn 案例把配發器設 Shared 以隔開這件事，測試加註。PvP 的 `ApplyMembership` 以 `SpawnWithId` 生成（spec H.2b 第 4 點），不經配發器，所以 plan-dryrun 不受影響（已對照 spec 確認）。記為本批限界。

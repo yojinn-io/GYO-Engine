@@ -616,7 +616,7 @@ TEST_CASE("Plan export: 5 before/after edges, 2 without dataflow, prints 40%") {
         r.AddSystem<&ReadA>(Sys("E2", Zone::C, Sim()));
         r.AddSystem<&WriteB>(Sys("E3", Zone::C, Sim({"E5"}, {"E2"})));  // E2->E3 none (E2 writes nothing), E3->E5 dataflow
         r.AddSystem<&WriteC>(Sys("E4", Zone::C, Sim({"E6"})));  // E4->E6 dataflow (C read by E6)
-        r.AddSystem<&ReadB>(Sys("E5", Zone::C, Sim()));
+        r.AddSystem<&ReadB>(Sys("E5", Zone::C, Sim({}, {"E3"})));  // E3->E5 declared from both ends: one edge
         r.AddSystem<&ReadC>(Sys("E6", Zone::C, Sim()));
     });
     KERNEL_REQUIRE_OK(built);

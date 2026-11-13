@@ -139,8 +139,11 @@ public:
         direct_ = std::make_unique<BitRows>(nodes_.size());
         succ_.assign(nodes_.size(), {});
         StageEdges();
+        // Errors are collected, not returned on (spec D.2, D-5): D-E4 / D-E5 leave
+        // out one edge and the analysis goes on; only a cycle stops it (no order
+        // to analyse). The Plan is built only when this schedule had no error.
         DeclaredEdges();
-        if (failed_) return;
+        PinEventTrim();
         if (data_.schedulerShuffle != 0) {
             for (auto& list : succ_) {
                 if (!list.empty()) std::rotate(list.begin(), list.begin() + data_.schedulerShuffle % list.size(), list.end());
@@ -150,7 +153,6 @@ public:
         if (!TopologicalOrder(order)) return;
         Closure(order);
         Conflicts();
-        if (failed_) return;
         DerivedOrder();
         if (failed_) return;
         MakePlan();
@@ -229,6 +231,19 @@ private:
         }
     }
 
+    // The event trim follows its sync point immediately: everything ordered
+    // after that sync point (declared "after" it, or the stage end) comes after
+    // the trim too, so a named sync point and a stage end mean the same thing
+    // (review B3; architect 2026-11-13). Runs after the declared edges, which
+    // add the sync point's successors.
+    void PinEventTrim() {
+        if (trim_ == kNone) return;
+        const std::vector<std::size_t> after = succ_[trimAfter_];
+        for (std::size_t node : after) {
+            if (node != trim_) AddEdge(trim_, node);
+        }
+    }
+
     // Nodes a before / after name stands for: a System mounted here, a sync
     // point, or every member of a set of this schedule.
     std::vector<std::size_t> Resolve(const std::string& name) const {
@@ -268,12 +283,18 @@ private:
             if (declaredPairs_.insert(pair).second) {
                 const AccessSet& u = SystemOf(from).access;
                 const AccessSet& v = SystemOf(to).access;
-                std::vector<AccessKey> touched = ReadOrMembership(v);
-                const std::vector<AccessKey> writtenV = Written(v);
-                touched.insert(touched.end(), writtenV.begin(), writtenV.end());
+                // The plan's definition: immediate writes against immediate reads and writes.
+                std::vector<AccessKey> touched = v.reads;
+                touched.insert(touched.end(), v.writes.begin(), v.writes.end());
                 std::sort(touched.begin(), touched.end());
-                const bool dataflow = Intersects<AccessKey>(Written(u), touched, nullptr);
-                edges_.push_back(DeclaredEdge{nodes_[from].name, nodes_[to].name, dataflow});
+                const bool dataflow = Intersects<AccessKey>(u.writes, touched, nullptr);
+                // Extended: deferred writes of u, and With / Without of v, count too.
+                std::vector<AccessKey> touchedExtended = ReadOrMembership(v);
+                const std::vector<AccessKey> writtenV = Written(v);
+                touchedExtended.insert(touchedExtended.end(), writtenV.begin(), writtenV.end());
+                std::sort(touchedExtended.begin(), touchedExtended.end());
+                const bool extended = Intersects<AccessKey>(Written(u), touchedExtended, nullptr);
+                edges_.push_back(DeclaredEdge{nodes_[from].name, nodes_[to].name, dataflow, extended});
             }
         }
         if (sf == st) AddEdge(from, to);
@@ -356,12 +377,19 @@ private:
             for (std::size_t to : succ_[node]) if (--indegree[to] == 0) ready.insert(to);
         }
         if (order.size() == nodes_.size()) return true;
-        // Report one cycle among the remaining nodes: walk successors that are
-        // still blocked from the lowest blocked node until a node repeats.
-        std::vector<bool> blocked(nodes_.size(), false);
-        for (std::size_t node = 0; node < nodes_.size(); ++node) blocked[node] = indegree[node] > 0;
+        // Report one cycle among the remaining nodes. A node Kahn could not take
+        // has an untaken predecessor, so walking untaken predecessors from the
+        // lowest untaken node must repeat a node: that segment is a cycle (found
+        // backwards, reported forwards). Walking successors instead can leave the
+        // cycle downstream of it and run off the graph.
+        std::vector<bool> taken(nodes_.size(), false);
+        for (std::size_t node : order) taken[node] = true;
+        std::vector<std::vector<std::size_t>> pred(nodes_.size());
+        for (std::size_t from = 0; from < nodes_.size(); ++from) {
+            for (std::size_t to : succ_[from]) pred[to].push_back(from);
+        }
         std::size_t start = 0;
-        while (!blocked[start]) ++start;
+        while (taken[start]) ++start;
         std::vector<std::size_t> path;
         std::vector<std::size_t> seenAt(nodes_.size(), kNone);
         std::size_t current = start;
@@ -369,18 +397,22 @@ private:
             seenAt[current] = path.size();
             path.push_back(current);
             std::size_t next = kNone;
-            for (std::size_t to : succ_[current]) {
-                if (blocked[to] && (next == kNone || to < next)) next = to;
+            for (std::size_t from : pred[current]) {
+                if (!taken[from] && (next == kNone || from < next)) next = from;
             }
+            GYO_ASSERT(next != kNone);
             current = next;
         }
+        path.erase(path.begin(), path.begin() + static_cast<std::ptrdiff_t>(seenAt[current]));
+        std::reverse(path.begin(), path.end());
+        path.push_back(path.front());
         std::vector<std::string> cycle;
         std::string text;
-        for (std::size_t i = seenAt[current]; i < path.size(); ++i) {
+        for (std::size_t i = 0; i + 1 < path.size(); ++i) {
             cycle.push_back(nodes_[path[i]].name);
             text += nodes_[path[i]].name + " -> ";
         }
-        text += nodes_[current].name;
+        text += nodes_[path.back()].name;
         Error(StartupCode::DE6, "D.2", "order cycle in schedule '" + s_.name + "': " + text, cycle);
         return false;
     }

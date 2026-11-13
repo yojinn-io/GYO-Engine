@@ -17,8 +17,11 @@
 // set); hooks (name, component, trigger, zone, access); then every Plan's
 // fingerprint in schedule order. Registration sites (file paths) are never
 // hashed: they differ per checkout.
-// C fingerprint: only zone C data, zone C Systems (with mounts and access) and,
-// per schedule, the order of its zone C System steps (spec H.3).
+// C fingerprint (format 2): only zone C data, zone C Systems (with mounts and
+// access) and zone C hooks, each section counted; and for every schedule that
+// runs a zone C System, its rollbackEnabled, stages and eventTrim, and its Plan
+// reduced to the zone C System steps plus every sync point and the trim
+// (spec H.3; review B6).
 // Plan fingerprint: schedule name, domain, then each step's kind and name.
 // Sizes are hashed as the platform reports them; a type whose size differs
 // between platforms gives different fingerprints there (the kernel tests use
@@ -44,6 +47,9 @@ namespace Detail {
 namespace {
 
 constexpr std::uint32_t kFingerprintVersion = 1;
+// The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
+// schedules that hold zone C steps, and the sync points around those steps.
+constexpr std::uint32_t kCFingerprintVersion = 2;
 
 class Bytes {
 public:
@@ -76,17 +82,17 @@ public:
             U32(key.id);
         }
     }
-    [[nodiscard]] Fingerprint Finish() const {
-        return Fingerprint{kFingerprintVersion, Engine::Base::Sha256(bytes_)};
+    [[nodiscard]] Fingerprint Finish(std::uint32_t version = kFingerprintVersion) const {
+        return Fingerprint{version, Engine::Base::Sha256(bytes_)};
     }
 
 private:
     std::vector<std::byte> bytes_;
 };
 
-void Header(Bytes& out, const char* format) {
+void Header(Bytes& out, const char* format, std::uint32_t version = kFingerprintVersion) {
     out.Str(format);
-    out.U32(kFingerprintVersion);
+    out.U32(version);
 }
 
 void Access(Bytes& out, const AccessSet& access) {
@@ -112,7 +118,7 @@ void MountBytes(Bytes& out, const Mount& mount) {
     out.Strings(mount.after);
     out.Strings(mount.sets);
     out.U32(mount.conditions.size());
-    for (const ConditionRef& condition : mount.conditions) out.Str(condition.name);
+    for (const ConditionRef& condition : mount.conditions) out.Str(condition.Name());
     out.Flag(mount.notInRollback);
 }
 
@@ -274,7 +280,7 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
         out.Strings(set.options.before);
         out.Strings(set.options.after);
         out.U32(set.conditions.size());
-        for (const ConditionRef& condition : set.conditions) out.Str(condition.name);
+        for (const ConditionRef& condition : set.conditions) out.Str(condition.Name());
     }
     out.U32(data.systems.size());
     for (const SystemRecord& system : data.systems) SystemBytes(out, system);
@@ -293,33 +299,71 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
 
 Fingerprint CFingerprintOf(const RegistryData& data) {
     Bytes out;
-    Header(out, "gyo.kernel.registry-c");
+    Header(out, "gyo.kernel.registry-c", kCFingerprintVersion);
+    // Each section is counted first, so moving an item between sections changes the bytes.
+    const auto count = [](const auto& items, auto&& pick) {
+        std::uint32_t n = 0;
+        for (const auto& item : items) n += pick(item) ? 1U : 0U;
+        return n;
+    };
+    out.U32(count(data.components, [](const ColumnInfo& c) { return c.zone == Zone::C; }));
     for (std::size_t id = 0; id < data.components.size(); ++id) {
         if (data.components[id].zone != Zone::C) continue;
         out.U32(id);
         ColumnBytes(out, data.components[id]);
     }
+    out.U32(count(data.resources, [](const ResourceInfo& r) { return r.zone == Zone::C; }));
     for (std::size_t id = 0; id < data.resources.size(); ++id) {
         if (data.resources[id].zone != Zone::C) continue;
         out.U32(id);
         ResourceBytes(out, data.resources[id]);
     }
+    out.U32(count(data.events, [](const EventInfo& e) { return e.zone == Zone::C; }));
     for (std::size_t id = 0; id < data.events.size(); ++id) {
         if (data.events[id].zone != Zone::C) continue;
         out.U32(id);
         out.Str(data.events[id].name);
         out.Enum(data.events[id].domain);
     }
+    out.U32(count(data.systems, [](const SystemRecord& s) { return s.options.zone == Zone::C; }));
     for (const SystemRecord& system : data.systems) {
         if (system.options.zone == Zone::C) SystemBytes(out, system);
     }
+    out.U32(count(data.hooks, [](const HookRecord& h) { return h.zone == Zone::C; }));
+    for (const HookRecord& hook : data.hooks) {
+        if (hook.zone != Zone::C) continue;
+        out.Str(hook.name);
+        out.U32(hook.componentId.value_or(0));
+        out.Enum(hook.trigger);
+        Access(out, hook.access);
+    }
+    // Every schedule that runs a zone C System: its properties that change (c)
+    // results (rollback, stage sequence, event trim) and its Plan reduced to the
+    // zone C steps with the sync points and trim between them, which decide in
+    // which window a deferred write lands.
     for (const Plan& plan : data.plans) {
-        out.Str(plan.schedule);
+        bool holdsC = false;
         for (const Step& step : plan.steps) {
-            if (step.kind == StepKind::System && data.systems[step.system].options.zone == Zone::C) out.Str(step.name);
+            holdsC = holdsC || (step.kind == StepKind::System && data.systems[step.system].options.zone == Zone::C);
+        }
+        if (!holdsC) continue;
+        out.Str(plan.schedule);
+        if (const ScheduleRecord* schedule = data.FindSchedule(plan.schedule)) {
+            out.Flag(schedule->options.rollbackEnabled);
+            out.Strings(schedule->options.stages);
+            out.Str(schedule->options.eventTrim);
+        }
+        std::vector<const Step*> reduced;
+        for (const Step& step : plan.steps) {
+            if (step.kind != StepKind::System || data.systems[step.system].options.zone == Zone::C) reduced.push_back(&step);
+        }
+        out.U32(reduced.size());
+        for (const Step* step : reduced) {
+            out.Enum(step->kind);
+            out.Str(step->name);
         }
     }
-    return out.Finish();
+    return out.Finish(kCFingerprintVersion);
 }
 
 } // namespace Detail
@@ -352,11 +396,17 @@ std::string FrozenRegistry::ExportPlans() const {
             out += "\n";
         }
         for (const DeclaredEdge& edge : plan.declaredEdges) {
-            out += "  edge " + edge.from + " -> " + edge.to + (edge.dataflow ? " dataflow" : " non-dataflow") + "\n";
+            out += "  edge " + edge.from + " -> " + edge.to + (edge.dataflow ? " dataflow" : " non-dataflow") +
+                   (edge.dataflowExtended ? " extended=dataflow" : " extended=non-dataflow") + "\n";
         }
+        // The judged ratio (the migration plan's definition), then the extended one beside it.
         const std::size_t non = plan.NonDataflowEdges();
         out += "  non_dataflow_edges " + std::to_string(non) + "/" + std::to_string(plan.declaredEdges.size()) + " " +
                Detail::Percent(non, plan.declaredEdges.size()) + "\n";
+        const std::size_t nonExtended = plan.NonDataflowEdgesExtended();
+        out += "  non_dataflow_edges_extended " + std::to_string(nonExtended) + "/" +
+               std::to_string(plan.declaredEdges.size()) + " " + Detail::Percent(nonExtended, plan.declaredEdges.size()) +
+               " (extended definition: deferred writes and membership count; not judged)\n";
         for (const TieBreak& tie : data.ties) {
             if (tie.schedule == plan.schedule) out += "  tie " + tie.first + " -> " + tie.second + " (registration order)\n";
         }

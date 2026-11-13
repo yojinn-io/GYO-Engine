@@ -42,6 +42,9 @@ class Registry;
 // runner; there is no Registrar here, so registering is impossible by type.
 class FinishContext {
 public:
+    FinishContext(const FinishContext&) = delete;
+    FinishContext& operator=(const FinishContext&) = delete;
+
     // One runner per App; a second is R-E6. The runner callable arrives with
     // the batches that run schedules; this batch records who installs it.
     void InstallRunner(std::string_view runner);
@@ -73,9 +76,22 @@ protected:
 
 // A run condition (spec E.4): a function or captureless lambda returning bool
 // with read-only parameters (S-5). Its reads join the System's reads (S-4).
-struct ConditionRef {
-    std::string name;
-    Detail::ResolveFn resolve = nullptr;
+// Made only by Condition<>: its access comes from the condition's signature,
+// never written by hand (DI-KS 1: no second, hand-written access declaration).
+class ConditionRef {
+public:
+    [[nodiscard]] const std::string& Name() const noexcept { return name_; }
+    [[nodiscard]] Detail::ResolveFn Resolver() const noexcept { return resolve_; }
+
+private:
+    template <auto Fn>
+    friend ConditionRef Condition(std::string name);
+    template <class F>
+    friend ConditionRef Condition(std::string name);
+    ConditionRef(std::string name, Detail::ResolveFn resolve) : name_(std::move(name)), resolve_(resolve) {}
+
+    std::string name_;
+    Detail::ResolveFn resolve_ = nullptr;
 };
 
 template <auto Fn>
@@ -147,9 +163,15 @@ namespace Detail {
 struct RegistryData;
 }
 
-// Handed to Plugin::Build only (spec C.5).
+// Handed to Plugin::Build only (spec C.5). Not copyable or movable, and every
+// registration asserts that the Registry is still in its build phase, so a
+// Registrar kept past Build (a copy is impossible, a pointer is caught) cannot
+// register after Finish (spec R-2; GYO_ASSERT: a Programmer Error).
 class Registrar {
 public:
+    Registrar(const Registrar&) = delete;
+    Registrar& operator=(const Registrar&) = delete;
+
     template <class T>
     ComponentId Component(ComponentOptions options) {
         static_assert(std::is_object_v<T> && !std::is_const_v<T>, "a component is a non-const object type");

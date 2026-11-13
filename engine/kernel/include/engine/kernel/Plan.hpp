@@ -42,12 +42,21 @@ struct Step {
 };
 
 // A declared before / after edge between two Systems of a schedule, after set
-// expansion, with whether it carries data (migration plan section 3.5, G1
-// predicate (ii)): from writes something to reads or writes.
+// expansion, with whether it carries data.
+//   dataflow          the migration plan's definition (section 2.1, G1 predicate
+//                     (ii)), the one G1 judges by: writes(u) ∩ (reads(v) ∪
+//                     writes(v)) ≠ ∅ with writes = immediate writes (columns,
+//                     resources, events, the allotter) and reads = immediate
+//                     reads (run conditions and SetRead expansions included).
+//   dataflowExtended  also counts u's deferred writes and v's With / Without
+//                     (membership); reported beside it, not judged by (architect
+//                     2026-11-13: whether to extend the definition is the plan's
+//                     to decide).
 struct DeclaredEdge {
     std::string from;
     std::string to;
     bool dataflow;
+    bool dataflowExtended;
 };
 
 struct Plan {
@@ -58,6 +67,7 @@ struct Plan {
     Fingerprint fingerprint;
 
     [[nodiscard]] std::size_t NonDataflowEdges() const noexcept;
+    [[nodiscard]] std::size_t NonDataflowEdgesExtended() const noexcept;
 };
 
 } // namespace GYO::Kernel

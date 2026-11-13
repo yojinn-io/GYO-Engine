@@ -9,6 +9,7 @@
 #include <fstream>
 
 void RegisterSyntheticSimulation(GYO::Kernel::Registrar& registrar);
+void RegisterAnotherSimulation(GYO::Kernel::Registrar& registrar);
 
 namespace {
 
@@ -21,7 +22,7 @@ constexpr const char* kFixtureRoot = "tests/common/kernel/zone_c_fixture";
 } // namespace
 
 TEST_CASE("J-17: the G-5 export lists the zone C fixture file as gyo.zone-c-sources v1") {
-    Built built = Finish({{"synthetic", RegisterSyntheticSimulation}});
+    Built built = Finish({{"synthetic", RegisterSyntheticSimulation}, {"another", RegisterAnotherSimulation}});
     KERNEL_REQUIRE_OK(built);
     ZoneCSourcesOptions options{GYO_KERNEL_TEST_REPOSITORY_ROOT, kFixtureRoot, {}, "0000000"};
     const auto exported = built.registry->Frozen().ExportZoneCSources(options);
@@ -35,6 +36,10 @@ TEST_CASE("J-17: the G-5 export lists the zone C fixture file as gyo.zone-c-sour
     const std::string file = "\"tests/common/kernel/zone_c_fixture/SyntheticSimulation.cpp\"";
     REQUIRE(text.find(file) != std::string::npos);
     CHECK(text.find(file, text.find(file) + 1) == std::string::npos);
+    // Registered second, sorted first (byte order).
+    const std::string secondFile = "\"tests/common/kernel/zone_c_fixture/AnotherSimulation.cpp\"";
+    REQUIRE(text.find(secondFile) != std::string::npos);
+    CHECK(text.find(secondFile) < text.find(file));
     std::ofstream out(std::string(GYO_KERNEL_TEST_BINARY_DIR) + "/kernel_zone_c_sources.json", std::ios::binary);
     out << text;
     REQUIRE(out.good());

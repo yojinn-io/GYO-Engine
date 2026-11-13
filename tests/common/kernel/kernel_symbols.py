@@ -45,11 +45,13 @@ FOREIGN = {
 }
 # Names the toolchain emits that are not a variable of any source: GCC's indirect reference to the C++
 # personality routine (DW.ref.__gxx_personality_v0, in .data.rel.local on ELF) and assembler section labels.
+# Each entry is matched whole and only for the symbol-table format where the toolchain emits it.
 TOOLCHAIN = {
-    "GCC personality reference": re.compile(r"^DW\.ref\.__gxx_personality_v0$"),
-    # The assembler's local label at the start of a section (arm64 Mach-O: "ltmp5", non-external). A variable in that
-    # section still has its own symbol, which is judged by name.
-    "assembler section label": re.compile(r"^ltmp\d+$"),
+    # GCC on ELF (Linux): the indirect reference to the C++ personality routine used by exception handling tables.
+    "GCC personality reference": ("sysv", re.compile(r"^DW\.ref\.__gxx_personality_v0$")),
+    # The arm64 Mach-O assembler's non-external label at the start of a section ("ltmp5"). A variable in that section
+    # still has its own symbol, which is judged by name.
+    "assembler section label": ("darwin", re.compile(r"^ltmp\d+$")),
 }
 ELF_WRITABLE = re.compile(r"^\.(?:data|bss|tdata|tbss)(?:\.|$)")
 ELF_READ_ONLY = re.compile(r"^\.data\.rel\.ro(?:\.|$)")
@@ -87,8 +89,9 @@ def parse_darwin(text):
     return symbols
 
 
-def classify(symbols):
-    """(present allowed names, foreign symbols, findings)."""
+def classify(symbols, kind=None):
+    """(present allowed names, foreign symbols, findings). kind is "sysv" or "darwin": the format the symbols were
+    read from, which decides the toolchain names that apply (None: none apply)."""
     present, foreign, findings = set(), [], []
     for name in sorted(symbols):
         allowed = [label for label, pattern in KERNEL_ALLOWED.items() if pattern.match(name)]
@@ -96,7 +99,7 @@ def classify(symbols):
             present.update(allowed)
             continue
         if any(pattern.match(name) for pattern in FOREIGN.values()) or \
-                any(pattern.match(name) for pattern in TOOLCHAIN.values()):
+                any(fmt == kind and pattern.match(name) for fmt, pattern in TOOLCHAIN.values()):
             foreign.append(name)
             continue
         findings.append(name)
@@ -152,7 +155,7 @@ def main(argv=None):
         print("kernel symbols: nm printed nothing for the library")
         return 2
     symbols = parse_darwin(text) if kind == "darwin" else parse_sysv(text)
-    present, foreign, findings = classify(symbols)
+    present, foreign, findings = classify(symbols, kind)
     for label in KERNEL_ALLOWED:
         print(f"kernel symbols: allowed {label}: {'present' if label in present else 'absent'}")
     for name in foreign:

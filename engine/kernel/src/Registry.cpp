@@ -93,6 +93,11 @@ std::size_t Plan::NonDataflowEdges() const noexcept {
         std::count_if(declaredEdges.begin(), declaredEdges.end(), [](const DeclaredEdge& e) { return !e.dataflow; }));
 }
 
+std::size_t Plan::NonDataflowEdgesExtended() const noexcept {
+    return static_cast<std::size_t>(std::count_if(declaredEdges.begin(), declaredEdges.end(),
+                                                  [](const DeclaredEdge& e) { return !e.dataflowExtended; }));
+}
+
 Plugin::~Plugin() = default;
 
 std::vector<std::string_view> Plugin::Requires() const {
@@ -179,7 +184,8 @@ void SortUnique(std::vector<T>& values) {
 std::optional<std::uint32_t> ClaimType(RegistryData& data, TypeKey key, std::size_t size, std::size_t align,
                                        TypeRole role, std::uint32_t id, std::uint32_t owner, const std::string& name) {
     if (const TypeEntry* existing = data.FindType(key)) {
-        if (existing->size != size || existing->align != align || existing->role != role) {
+        // Same role, different shape: the key cannot be one type (R-E5). Anything else is a second registration.
+        if (existing->role == role && (existing->size != size || existing->align != align)) {
             data.Error(StartupCode::RE5, "C.4",
                        "TypeKey collision: two different types share one key (" + std::string(RoleName(existing->role)) +
                            " registered by " + data.OwnerName(existing->owner) + ", " + RoleName(role) + " '" + name +
@@ -305,11 +311,13 @@ void Normalize(AccessSet& access) {
 // ---- FinishContext, Registrar
 
 void FinishContext::InstallRunner(std::string_view runner) {
+    GYO_ASSERT(registry_->data_->finished && !registry_->data_->building && !registry_->data_->frozen);
     registry_->data_->runners.emplace_back(runner);
     registry_->data_->runnerOwners.push_back(plugin_);
 }
 
 ComponentId Registrar::RegisterComponent(TypeKey key, Shape shape, ComponentOptions options) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<ComponentId>(data.components.size());
     if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Component, id, plugin_, options.name)) {
@@ -328,6 +336,7 @@ ComponentId TypeKeyCollisionProbe::RegisterComponent(Registrar& registrar, TypeK
 }
 
 ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions options) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<ResourceId>(data.resources.size());
     if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Resource, id, plugin_, options.name)) {
@@ -341,6 +350,7 @@ ResourceId Registrar::RegisterResource(TypeKey key, Shape shape, ResourceOptions
 }
 
 EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions options) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<EventTypeId>(data.events.size());
     if (!Detail::ClaimType(data, key, shape.size, shape.align, Detail::TypeRole::Event, id, plugin_, options.name)) {
@@ -352,6 +362,7 @@ EventTypeId Registrar::RegisterEvent(TypeKey key, Shape shape, EventOptions opti
 }
 
 EffectId Registrar::Effect(std::string name) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     for (std::size_t i = 0; i < data.effects.size(); ++i) {
         if (data.effects[i].name == name) {
@@ -367,6 +378,7 @@ EffectId Registrar::Effect(std::string name) {
 }
 
 SetId Registrar::RegisterNamedSet(TypeKey key, std::string name) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto id = static_cast<SetId>(data.namedSets.size());
     if (!Detail::ClaimType(data, key, 0, 0, Detail::TypeRole::SetTag, id, plugin_, name)) {
@@ -378,6 +390,7 @@ SetId Registrar::RegisterNamedSet(TypeKey key, std::string name) {
 }
 
 void Registrar::AddSetMember(TypeKey set, TypeKey component) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     for (Detail::NamedSetRecord& record : data.namedSets) {
         if (record.key == set) {
@@ -391,6 +404,7 @@ void Registrar::AddSetMember(TypeKey set, TypeKey component) {
 }
 
 void Registrar::MarkDigestSet(TypeKey set) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     for (Detail::NamedSetRecord& record : data.namedSets) {
         if (record.key == set) {
@@ -403,11 +417,13 @@ void Registrar::MarkDigestSet(TypeKey set) {
 }
 
 void Registrar::DeclareAllotter(TypeKey resource) {
+    GYO_ASSERT(data_->building);
     data_->allotterDeclarations.push_back(resource);
     data_->allotterOwners.push_back(plugin_);
 }
 
 void Registrar::Schedule(ScheduleOptions options) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     if (const Detail::ScheduleRecord* existing = data.FindSchedule(options.name)) {
         data.Error(StartupCode::RE2, "C.2", "schedule '" + options.name + "' registered twice (first by " +
@@ -419,6 +435,7 @@ void Registrar::Schedule(ScheduleOptions options) {
 }
 
 void Registrar::InsertStage(std::string_view schedule, std::string_view anchor, StagePlace place, std::string stage) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     for (Detail::ScheduleRecord& record : data.schedules) {
         if (record.options.name != schedule) continue;
@@ -441,6 +458,7 @@ void Registrar::InsertStage(std::string_view schedule, std::string_view anchor, 
 }
 
 void Registrar::Set(SetOptions options, std::vector<ConditionRef> conditions) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     for (const Detail::SetRecord& existing : data.sets) {
         if (existing.options.schedule == options.schedule && existing.options.name == options.name) {
@@ -455,6 +473,7 @@ void Registrar::Set(SetOptions options, std::vector<ConditionRef> conditions) {
 
 RegistrationSeq Registrar::RegisterSystem(SystemOptions options, Detail::ResolveFn resolve, bool extractOnly,
                                           std::source_location source) {
+    GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
     const auto seq = static_cast<RegistrationSeq>(data.systems.size());
     for (const Detail::SystemRecord& existing : data.systems) {
@@ -473,6 +492,7 @@ RegistrationSeq Registrar::RegisterSystem(SystemOptions options, Detail::Resolve
 
 void Registrar::RegisterHook(TypeKey component, HookTrigger trigger, HookOptions options, Detail::ResolveFn resolve,
                              std::source_location source) {
+    GYO_ASSERT(data_->building);
     data_->hooks.push_back(Detail::HookRecord{std::move(options.name), options.zone, component, trigger, resolve, source,
                                               plugin_, std::nullopt, {}});
 }
@@ -705,6 +725,10 @@ void CheckSchedules(RegistryData& data) {
         if (s.stages.empty()) {
             data.Error(StartupCode::DE1, "D.1", "schedule '" + s.name + "' has no stage", {s.name});
         }
+        if (!s.ingressStage.empty() && stages.count(s.ingressStage) != 0 && s.stages.front() != s.ingressStage) {
+            data.Error(StartupCode::DE7, "Z3", "schedule '" + s.name + "' names ingress stage '" + s.ingressStage +
+                                                   "', which is not its first stage", {s.name});
+        }
         if (!s.ingressStage.empty() && stages.count(s.ingressStage) == 0) {
             data.Error(StartupCode::DE1, "Z3", "schedule '" + s.name + "' names ingress stage '" + s.ingressStage +
                                                    "', which it does not have", {s.name});
@@ -767,6 +791,25 @@ void CheckSchedules(RegistryData& data) {
     }
 }
 
+// A run condition's access joins its System's (spec S-4, E.4): every read,
+// filter, set read, domain tick and the KernelSettings and extract flags, so
+// the System's checks (S-9, D-E18, Z1, D-E14) see it. Conditions are read-only
+// by type (S-5), so nothing is written.
+void MergeCondition(SystemResolver& into, const SystemResolver& condition) {
+    into.access.reads.insert(into.access.reads.end(), condition.access.reads.begin(), condition.access.reads.end());
+    into.access.membershipReads.insert(into.access.membershipReads.end(), condition.access.membershipReads.begin(),
+                                       condition.access.membershipReads.end());
+    into.access.setReads.insert(into.access.setReads.end(), condition.access.setReads.begin(),
+                                condition.access.setReads.end());
+    into.access.extractReads.insert(into.access.extractReads.end(), condition.access.extractReads.begin(),
+                                    condition.access.extractReads.end());
+    into.access.changeFilters = into.access.changeFilters || condition.access.changeFilters;
+    into.access.local = into.access.local || condition.access.local;
+    into.domainTick = into.domainTick || condition.domainTick;
+    into.kernelSettings = into.kernelSettings || condition.kernelSettings;
+    into.usesExtract = into.usesExtract || condition.usesExtract;
+}
+
 void ResolveSystems(RegistryData& data) {
     for (SystemRecord& system : data.systems) {
         const std::string subject = "System '" + system.options.name + "'";
@@ -774,30 +817,22 @@ void ResolveSystems(RegistryData& data) {
         system.resolve(resolver);
         for (const Mount& mount : system.options.mounts) {
             for (const ConditionRef& condition : mount.conditions) {
-                if (condition.resolve == nullptr) continue;
-                SystemResolver conditionResolver(data, subject + " run condition '" + condition.name + "'",
+                if (condition.Resolver() == nullptr) continue;
+                SystemResolver conditionResolver(data, subject + " run condition '" + condition.Name() + "'",
                                                  SourceText(system.source));
-                condition.resolve(conditionResolver);
-                for (const AccessKey& key : conditionResolver.access.reads) resolver.access.reads.push_back(key);
-                for (ComponentId id : conditionResolver.access.membershipReads) resolver.access.membershipReads.push_back(id);
-                resolver.access.changeFilters = resolver.access.changeFilters || conditionResolver.access.changeFilters;
-                resolver.access.setReads.insert(resolver.access.setReads.end(), conditionResolver.access.setReads.begin(),
-                                                conditionResolver.access.setReads.end());
-                resolver.domainTick = resolver.domainTick || conditionResolver.domainTick;
-                resolver.kernelSettings = resolver.kernelSettings || conditionResolver.kernelSettings;
+                condition.Resolver()(conditionResolver);
+                MergeCondition(resolver, conditionResolver);
             }
             // Set conditions join every member's reads (spec E.4).
             for (const std::string& setName : mount.sets) {
                 for (SetRecord& set : data.sets) {
                     if (set.options.schedule != mount.schedule || set.options.name != setName) continue;
                     for (const ConditionRef& condition : set.conditions) {
-                        if (condition.resolve == nullptr) continue;
-                        SystemResolver conditionResolver(data, "set '" + setName + "' run condition '" + condition.name + "'",
+                        if (condition.Resolver() == nullptr) continue;
+                        SystemResolver conditionResolver(data, "set '" + setName + "' run condition '" + condition.Name() + "'",
                                                          SourceText(system.source));
-                        condition.resolve(conditionResolver);
-                        for (const AccessKey& key : conditionResolver.access.reads) resolver.access.reads.push_back(key);
-                        for (ComponentId id : conditionResolver.access.membershipReads)
-                            resolver.access.membershipReads.push_back(id);
+                        condition.Resolver()(conditionResolver);
+                        MergeCondition(resolver, conditionResolver);
                     }
                 }
             }
@@ -891,8 +926,32 @@ void ResolveSystems(RegistryData& data) {
                 resolver.access.reads.push_back({AccessKind::Component, member});
             }
         }
-        if (resolver.access.spawn && data.allotter) {
-            resolver.access.writes.push_back({AccessKind::Resource, *data.allotter});
+        if (resolver.access.spawn) {
+            if (data.allotter) {
+                resolver.access.writes.push_back({AccessKind::Resource, *data.allotter});
+            } else {
+                data.Error(StartupCode::DE3, "A.1", subject + " spawns entities, but this World declares no allotter",
+                           {hook.name}, {SourceText(hook.source)});
+            }
+        }
+        if (resolver.kernelSettings) {
+            data.Error(StartupCode::DE18, "A.6", subject + " declares Res or ResMut of KernelSettings",
+                       {hook.name, "KernelSettings"}, {SourceText(hook.source)});
+        }
+        if (resolver.usesExtract) {
+            data.Error(StartupCode::DE7, "H-6", subject + " has Extract parameters; only extract-schedule Systems may",
+                       {hook.name}, {SourceText(hook.source)});
+        }
+        if (hook.zone == Zone::C) {
+            const auto forbid = [&](bool present, const char* rule, const char* what) {
+                if (present) {
+                    data.Error(StartupCode::DE7, rule, subject + " is zone C and " + what, {hook.name},
+                               {SourceText(hook.source)});
+                }
+            };
+            forbid(resolver.access.local, "S-7", "has Local<T> (state outside the World)");
+            forbid(resolver.access.changeFilters, "S-9", "filters by Changed or Added");
+            forbid(resolver.access.exclusive, "S-13", "takes ExclusiveWorld");
         }
         Normalize(resolver.access);
         hook.access = std::move(resolver.access);
@@ -994,6 +1053,8 @@ void CheckZoneAccess(RegistryData& data, const std::string& subject, const std::
 }
 
 void CheckSystems(RegistryData& data) {
+    // One X-E1 per schedule (the first zone C System found names it), not one per System.
+    std::set<std::string> unguardedParallel;
     bool anyRollback = false;
     for (const ScheduleRecord& schedule : data.schedules) anyRollback = anyRollback || schedule.options.rollbackEnabled;
 
@@ -1110,7 +1171,8 @@ void CheckSystems(RegistryData& data) {
                                   subject + " (through resource '" + data.resources[key.id].name + "')");
                 }
             }
-            if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty()) {
+            if (s.executor == ExecutorKind::Parallel && zone == Zone::C && s.parallelGuardTest.empty() &&
+                unguardedParallel.insert(s.name).second) {
                 data.Error(StartupCode::XE1, StartupCode::DE11, "X-2",
                            "schedule '" + s.name + "' declares Parallel and holds zone C System '" + name +
                                "', but names no Serial-versus-Parallel guard test",
@@ -1231,13 +1293,22 @@ Engine::Base::Result<void, StartupReport> Registry::Finish() {
     data.finished = true;
 
     Detail::CheckPluginList(data);
+    data.building = true;
     for (std::size_t i = 0; i < data.plugins.size(); ++i) {
         if (!data.plugins[i].built) continue;
         Registrar registrar(data, static_cast<std::uint32_t>(i));
         data.plugins[i].plugin->Build(registrar);
     }
-    // Plugins' Finish reads final ids (spec C.2 point 4); with build errors
-    // the ids are not final, so it is not called.
+    data.building = false;
+    // Registration is closed: resolve what plugins' Finish may read (named set
+    // members, the allotter, Systems' access sets) before calling it, so it reads
+    // final ids and sets (spec C.2 point 4). Plans and the Registry fingerprint
+    // come after Finish, as in spec C.2 points 5 and 6. With errors so far the
+    // ids are not final, so plugins' Finish is not called.
+    Detail::CheckData(data);
+    Detail::CheckSchedules(data);
+    Detail::ResolveSystems(data);
+    Detail::FillSystemInfos(data);
     if (data.errors.empty()) {
         for (std::size_t i = 0; i < data.plugins.size(); ++i) {
             if (!data.plugins[i].built) continue;
@@ -1246,9 +1317,6 @@ Engine::Base::Result<void, StartupReport> Registry::Finish() {
         }
         Detail::CheckRunners(data);
     }
-    Detail::CheckData(data);
-    Detail::CheckSchedules(data);
-    Detail::ResolveSystems(data);
     Detail::CheckSystems(data);
     Detail::CheckExclusiveWriters(data);
     Detail::CheckHookConflicts(data);
@@ -1258,7 +1326,6 @@ Engine::Base::Result<void, StartupReport> Registry::Finish() {
         data.ties.clear();
         return Engine::Base::Err(StartupReport(std::move(data.errors)));
     }
-    Detail::FillSystemInfos(data);
     for (Plan& plan : data.plans) {
         plan.fingerprint = Detail::PlanFingerprintOf(plan);
     }
