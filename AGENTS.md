@@ -380,7 +380,7 @@ Product の追加・複製・削除によって検証する。
 * 新しい Dependency Edge を追加する場合、既存の Dependency Direction を確認する。
 * Product 間依存が必要な場合は明示する。
 * Product 固有 Knowledge を reusable Engine layer へ漏らさない。
-* Engine と、Product に依存しない共通層に、型・関数・Format のフィールドを追加または改名するときは、
+* Engine と再利用可能な層に、型・関数・Format のフィールドを追加または改名するときは、
   その名前が誰の概念を指すかを確かめる
   （名前は概念の tag である。詳しくは `docs/architecture/target/naming.zh-Hant.md` の Design Invariant 4）。
 
@@ -737,7 +737,7 @@ Architecture Drift を確認する。
 * Product-specific Branch が共通層へ追加された箇所
 * Editor / Runtime Boundary の破壊
 * Product Removability を阻害する Reference
-* Engine・共通層の名前が Product の概念を指していないか。
+* Engine・再利用可能な層の名前が Product の概念を指していないか。
   名前が中立でも、中立の値に特定の Product だけが分かる処理をしていないか。
 * 他の Component が権威を持つ状態の写し、またはそれに基づく判断の追加
 * Component の Design Invariants に反する変更
