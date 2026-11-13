@@ -92,7 +92,7 @@
 
 ### 判準 6：效能（只記錄）
 
-本機 macOS x86_64，Release（`-O2`），以 repo 中最大的 JSON 內容檔與一份合成的 10 MB 檔，量「解析＋走訪全部數值」的時間，21 次取中位數。只記錄，不當門檻，不在三平台量。
+容器內（§5.1），Release（`-O2`），以 repo 中最大的 JSON 內容檔與一份合成的 10 MB 檔，量「解析＋走訪全部數值」的時間，21 次取中位數。只記錄，不當門檻，不在三平台量。
 
 ### 3.7 對各方向的影響（報告的一節，不是判準）
 
@@ -121,7 +121,7 @@
 | jsoncons | https://codeload.github.com/danielaparker/jsoncons/tar.gz/refs/tags/v1.10.0 | v1.10.0 | 約 3～10 MB（估） | `lib/jsoncons-1.10.0/` |
 | JSONTestSuite（只取 `test_parsing/`） | https://github.com/nst/JSONTestSuite（`git clone --filter=blob:none --sparse` 後只 checkout `test_parsing`） | master `1ef36fa0` | 318 檔，約 1 MB 以內（估；整個 repo 87 MB，不整個取） | `corpus/JSONTestSuite-1ef36fa0/` |
 
-合計約 75～85 MB 下載、解壓後約 300 MB 以內。每個檔下載後記 SHA-256 與實際大小到 `downloads.txt`；release 有 `.asc` 或 `.sha256` 的（nlohmann、Boost）一併核對。（使用者選 C：只在本機下載與執行。）
+合計約 75～85 MB 下載、解壓後約 300 MB 以內。每個檔下載後記 SHA-256 與實際大小到 `downloads.txt`；release 有 `.asc` 或 `.sha256` 的（nlohmann、Boost）一併核對。（使用者選 C：只在本機；實測在 Docker 容器內，§5.1。下載在主機上進行（放進掛載目錄），解壓與編譯、執行都在容器內。）
 
 ## 5. 三平台怎麼跑（要使用者決定）
 
@@ -138,15 +138,25 @@
 
 建議 A，理由：只有 CI 有 macos-arm64；與 L1 同映像；不碰 master 的 `.github/` 與主建置。
 
-**使用者 2026-11-13 決定：C（只在本機）。** 因此：
-- 不改任何 `.github/`、不開臨時分支、不用實機腳本。
-- 判準 3 的 3b、3c 只有本機 macOS x86_64（Apple clang 21、libc++、部署目標 13.3）一個平台的結果；兩條路的三平台判定在報告記「確認できない（只量 macOS x86_64，非 L1 平台）」，不判通過。
-- 判準 5 的編譯只有 macOS clang；Windows（MSVC）與 Linux（gcc）記「確認できない」。候選的官方 CI 平台以文件讀取，標明來源，不當作 GYO 的實測。
-- 這些「確認できない」的格照 AGENTS §14 冒頭寫成範圍的限制；之後由使用者決定要不要補三平台（例：選定候選後在其遷移批的 L1 上驗）。
+**使用者 2026-11-13 決定：C（只在本機），且實測放在 Docker 下。** 因此：
+
+### 5.1 容器
+
+- **映像**：本機已有的 `gyo-linux-toolchain:l1-20261112`（id `sha256:4b443a12811…`；由 repo 的 `build/ci/linux-toolchain/Dockerfile` 建成，基底 `ubuntu:24.04@sha256:2198e4c6…`；gcc-14 14.2.0-4ubuntu2~24.04.1、cmake 3.31.6、ninja 1.11.1、Python 3.12.3；照 L1 linux-x64 的工具鏈，出處 `docs/object_fps_pvp/plans/v8/pvp-baseline-report.zh-Hant.md`）。**不拉新映像、不改 Dockerfile**。開工時以 `docker image inspect` 核對 id，不符就停下報告。
+- **掛載**：只掛主 checkout 的 `build/evidence/json-library-survey/`（`lib/`、`corpus/` 唯讀，`probe/` 唯讀，`results/` 可寫）；不掛 repo 原始碼與 home。
+- **隔離**：編譯與執行時 `--network none`；資源限制沿用基線報告的 `--cpuset-cpus=8-15 --memory=4g`（記憶 warn-before-heavy-local-runs：本批的負載是編譯 6 個函式庫的小程式與 20 萬個字串，量級遠小於 km² 預覽）。
+- **主機上做的**：下載與 SHA-256 核對（`curl`）、`gh api` 查維護狀態、比對結果（`python3 -I`）。主機上不編譯、不執行下載物。
+
+### 5.2 平台覆蓋
+
+- **linux-x64（容器內，gcc-14／libstdc++）**：判準 1～6 全部實測。這是 L1 平台之一、工具鏈與 L1 相同，但跑在 Docker Desktop 的 linuxkit VM 上（x86_64 Intel 主機），不是 GitHub runner；報告寫明。
+- **windows-x64（MSVC STL）、macos-arm64（libc++）**：判準 3 的 3b、3c 與判準 5 的編譯記「確認できない（選項 C）」，不判通過。候選的官方 CI 平台以文件讀取、標明來源，不當作 GYO 的實測。
+- 本機 macOS x86_64 原生不跑（使用者要求在 Docker 下；它也不是 L1 平台）。
+- 判準 3 的兩條路（原文路、候選轉換路）只能判「linux-x64 上 0 件不一致」；三平台判定留給使用者決定之後要不要補（例：選定候選後在其遷移批的 L1 上驗）。這是 AGENTS §14 冒頭的範圍限制，後續批的事前宣告要照寫。
 
 ## 6. 證據、時間、停止條件
 
-- **證據位置**：主 checkout `build/evidence/json-library-survey/`（本機 macOS x86_64）：`downloads.txt`（URL、版本、SHA-256、大小）、`usage-grep-20261113.txt`、`probe/`（實測程式、生成與比對腳本、種子）、`results/<平台>/<候選>-<判準>.txt`、`maintenance-20261113.json`（`gh api` 原始回應）。報告與 dev_log 只寫結論與判定用的數字，引用這些路徑。
+- **證據位置**：主 checkout `build/evidence/json-library-survey/`（本機 macOS x86_64 的主機磁碟；實測在容器內產出）：`downloads.txt`（URL、版本、SHA-256、大小）、`usage-grep-20261113.txt`、`probe/`（實測程式、生成與比對腳本、種子）、`results/linux-x64-docker/<候選>-<判準>.txt`、`container.txt`（映像 id、`docker run` 命令全文、gcc 版本）、`maintenance-20261113.json`（`gh api` 原始回應）。報告與 dev_log 只寫結論與判定用的數字，引用這些路徑。
 - **件數的突き合わせ**：報告與 dev_log 開頭一行：候選 7 × 判準 6＝42 格，實測 36、文件 1、不評 5（判準 3、5 的三平台部分在選項 C 下另計「確認できない」）；另寫每個判準送出的向量數與收到的結果數（例：判準 1 每候選 318＋約 20 個，結果行數相同；3b 每平台 200,000＋約 40 個）。不一致時不下判定、先報告。
 - **估時**：宣告 1.5 h（已用）；本機實測 5～7 h；不跑 CI（選 C）；報告、dev_log、審查與回應 3～4 h；合計 **9.5～12.5 h**。超過 1.5 倍（19 h）或單一問題累計 > 2 h 就停下報告（記憶 time-box；AGENTS §14 冒頭）。
 - **停止條件**（AGENTS §14 冒頭）：同一判準的測法改 2 次仍無結論；任何候選的實測需要改 repo 的程式或建置；CI 需要改 master 的 `.github/`。
@@ -156,7 +166,7 @@
 ## 7. 要使用者決定的事
 
 1. **核准 §4 的下載清單**（來源、版本、大小、位置）。
-2. ~~三平台的跑法~~：**已定 C（只在本機）**，2026-11-13。
+2. ~~三平台的跑法~~：**已定 C（只在本機），實測放在 Docker 下（§5.1）**，2026-11-13。
 3. **候選的增刪**：新增 jsoncons；glaze 只做文件判定（C++23）；不採 taoJSON。要不要改。
 4. **判準 5 的「有人維護」定義**（未 archived 且 12 個月內 commit > 0；release 停滯另標風險）與判準 1 的「條件通過」分級，是否接受。
 5. **審查者**：(a) Opus 另一代理（架構師建議）或 (b) Fable／high。
