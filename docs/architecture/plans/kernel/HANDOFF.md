@@ -216,6 +216,8 @@
 
 - 2026-11-14 R0 追加（使用者：「你可以去看下之前的 kernel 的設計。裡面很多東西是可以拿過來的。」）：舊 Kernel 的設計與程式另做一項盤點（宣告 §4.5，Opus／high ×2），逐項判照帶、換位置、換理由、帶程式或不帶。同時使用者把主會話換成 Fable 5.2：統合由主會話做，檢查者照 navigator 上段表換成 Opus／xhigh。
 
+- 2026-11-14 **R0 帶過去清單 v2 完成，待使用者逐項核准**（[清單](rebuild-r0-carry-list.zh-Hant.md)）：四份盤點（Opus／high）→ 統合（主會話 Fable）→ 別模型檢查（Opus／xhigh，blocker 5／should 15／nit 8，全部採用）；另採原架構師會話轉來的四點。主要結論：engine 帶 base（不含 StrictJson）、math、os，time／threads／io／audio core 帶過去並重審；第三方只帶 doctest；Kernel 程式 R0b 不帶、R2 依盤點整段搬回；target 11 頁不帶、R1 重寫；gyo2 開新的決定紀錄；R0b 拆四個 PR，並提議修改宣告的判定 4、5。證據：主 checkout `build/evidence/rebuild-r0/`。
+
 ## 下一步
 
 - **進行中**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，已核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
