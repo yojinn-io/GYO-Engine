@@ -480,6 +480,12 @@ void Registrar::RequireExplicitZones() {
     data_->explicitZones = true;
 }
 
+void Registrar::RequireExplicitOrder() {
+    GYO_ASSERT(data_->building);
+    std::vector<std::uint32_t>& owners = data_->explicitOrderOwners;
+    if (std::find(owners.begin(), owners.end(), plugin_) == owners.end()) owners.push_back(plugin_);
+}
+
 void Registrar::Schedule(ScheduleOptions options) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
