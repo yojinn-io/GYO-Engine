@@ -121,7 +121,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 共同的一條：`KernelSettings` 不給讀。它是驗證的開關，現在的規則不准任何 System 讀（D-E18），理由是開關不能影響模擬結果。
 
-**已定（使用者 2026-11-15，`v8-arch-gyo2-exclusive-declared-writes`）：`ExclusiveWorld` 帶寫入的宣告。** 原話：「選項三，這是我想選的，首先只有這個類似於玩家狀態數據，如果被shared，我但是出問題我無法查出誰寫的。」（側邊會話，經四樣格式轉達；完整紀錄在 HANDOFF。）我原本建議的是第一欄。
+**已定（使用者 2026-11-15，`v8-arch-gyo2-exclusive-declared-writes`）：`ExclusiveWorld` 帶寫入的宣告。** 原話（照使用者同日的更正）：「選項三，這是我想選的，首先只有這個類似於玩家狀態數據，如果被shared，我擔心出問題我無法查出誰寫的。」（側邊會話，經四樣格式轉達；打錯字的原文與更正都記在 HANDOFF。）我原本建議的是第一欄。
 
 照這個決定，我補的細節（**還沒有經你判**，不同意就改）：
 - **寫 Resource 一律要列在宣告裡。** 沒標 `Shared` 的列了就算進「只有一個寫者」的啟動檢查；標 `Shared` 的也要列，這樣寫者清單才列得出它。沒列的 Resource 經 `ExclusiveWorld` 寫，回 Err。
