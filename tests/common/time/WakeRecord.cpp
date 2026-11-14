@@ -4,14 +4,10 @@
 // std::condition_variable::wait_until and std::this_thread::sleep_until, and how
 // late each wake came. Then notify to wake: another thread notifies at 60 Hz and
 // the waiting one records how long after the notify it woke, for the Waiter and
-// a condition_variable. The window build keeps an Engine SDL window open and
-// pumps its events between waits, as a process with a window does. Not a CTest:
-// timing on a shared host is never a pass condition.
+// a condition_variable. The process has no window. Not a CTest: timing on a
+// shared host is never a pass condition.
 #include "engine/time/MonotonicClock.hpp"
 #include "engine/time/Waiter.hpp"
-#ifdef GYO_WAKE_RECORD_WINDOW
-#include "engine/platform/sdl/SdlPlatform.hpp"
-#endif
 
 #include <algorithm>
 #include <atomic>
@@ -118,19 +114,10 @@ int main(int argc, char** argv) {
         else if (key == "--output") output = argv[index + 1];
         else { std::cerr << "unknown option " << key << '\n'; return 2; }
     }
-    std::function<void()> between = [] {};
-    std::string mode = "cli";
-#ifdef GYO_WAKE_RECORD_WINDOW
-    auto platform = Engine::Platform::Sdl::SdlPlatform::Create({"GYO wake record", 640, 360, false});
-    if (!platform) { std::cerr << "cannot open the window\n"; return 1; }
-    between = [&] { static_cast<void>(platform.value()->PumpEvents()); };
-    mode = "window";
-    // Let the window finish appearing before measuring.
-    for (const auto until = Now() + std::chrono::seconds(1); Now() < until;) {
-        between();
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-#endif
+    // What a process does between two waits; nothing without a window. The
+    // record keeps its "mode" field so earlier records stay comparable.
+    const std::function<void()> between = [] {};
+    const std::string mode = "cli";
     auto waiter = Engine::Time::Waiter::Create();
     if (!waiter) { std::cerr << "no wait primitive\n"; return 1; }
     std::mutex mutex;
