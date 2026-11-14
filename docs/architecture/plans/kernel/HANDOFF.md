@@ -264,6 +264,8 @@
 
 - 2026-11-14 **時間、固定步與跨時鐘事件的設計提案 v1 沒有通過檢查**：[rebuild-time-design.zh-Hant.md](rebuild-time-design.zh-Hant.md)；別模型檢查（Opus／xhigh）blocker 7、should 17、nit 8，報告在主 checkout `build/evidence/gyo2-mechanism/time-design-checker-opus.md`，v1 在同資料夾的 `time-design-v1.md`。主要問題：runner 的順序只適用 Match（Client 兩條執行緒三個 World、單機的幀率、有視窗的主執行緒都不成立）；跨時鐘事件只在一個 World 裡分析；tick 多了一份；漏了 `HostClockSample` 與交換點；會換掉 10 月 30 日音效用產品時間軸的做法；把未判的寫成定過的。原因：沒有從規格已有的設計（H.2、H.4、H.7、G.2）與 v7 的計畫出發。v2 重做，還沒開始。名字使用者已說照命名規範（`v8-arch-gyo2-contract-review-replies`）。
 
+- 2026-11-14 **合併**（使用者「可以合併」）：PR #224（文件、兩張圖、AGENTS §6）已併入 `gyo2`（9e329cad）。機制的分支開了 PR #225（`claude/gyo2-mechanism` → `gyo2`，含刪除舊實現的那些 commit 與機制的骨架；已先併入 #224 的內容）。本機完整 ctest 93 個過 90 個，失敗的是已知的 3 個（`os.boundary_guard`、`cmake.Component`、`build.ci`，R0b-3 待核准）。三平台的 L1 第一次在這條分支上跑；確認只剩已知的失敗後合併，有新的失敗先修。之後的文件修改在分支 `claude/gyo2-docs-next`（從合併後的 `gyo2` 切出）。
+
 ## 下一步
 
 - **進行中**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，已核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
