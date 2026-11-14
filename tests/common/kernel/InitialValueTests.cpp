@@ -378,3 +378,187 @@ TEST_CASE("initial value: declarations the Registry refuses") {
         CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
     }
 }
+
+// ---- Cases added by the adversarial check (v8-arch-gyo2-funnel-check): each
+// kills a mutant of the funnel that the cases above let through.
+
+namespace {
+
+struct Ballast { std::int32_t b; };  // a resource, to name a resource where a component is expected
+
+Body BodyFromBallast(const Ballast& ballast) { return Body{ballast.b}; }
+Ballast BallastFromRequest(const BodyAt& request) { return Ballast{request.x}; }
+Body BodyFromMass(const Mass& mass) { return Body{mass.m * 10}; }
+
+SystemResult RequestAdded(HookCtx ctx) {
+    Seen().push_back("request:" + std::to_string(ctx.Entity()));
+    return Ok();
+}
+SystemResult MassAdded(HookCtx ctx) {
+    Seen().push_back("mass:" + std::to_string(ctx.Entity()));
+    return Ok();
+}
+SystemResult LabelAdded(HookCtx ctx) {
+    Seen().push_back("label:" + std::to_string(ctx.Entity()));
+    return Ok();
+}
+
+// A Crate appears at the sync point after the Request stage; its OnAdd hook
+// records a BodyAt, which the next sync point (after the Use stage) applies at
+// its step 0, together with this window's own record (a Label insert).
+SystemResult SpawnsCrate(Spawn<Bundle<Crate>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Crate{2});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+SystemResult CrateAsksForBody(HookCtx ctx, CommandsFor<Inserts<BodyAt>, Removes<>> commands) {
+    commands.Insert(ctx.Entity(), BodyAt{4});
+    return Ok();
+}
+SystemResult LabelsCrates(Query<Read<Crate>> crates, CommandsFor<Inserts<Label>, Removes<>> commands, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    crates.ForEach([&commands](EntityId id, const Crate&) { commands.Insert(id, Label{1}); });
+    return Ok();
+}
+
+SystemResult SpawnsMass(Spawn<Bundle<Mass>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Mass{5});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+
+} // namespace
+
+TEST_CASE("initial value: the filled cell carries the stamp of the sync point that added the request") {
+    // Added<T> and Changed<T> compare stamps: a filled cell stamped other than
+    // its request would be missed by, or shown again to, a System's next run.
+    auto rig = Start([](Registrar& r) {
+        Data(r);
+        r.InitialValue<Body, &BodyFromRequest>();
+        r.InitialValue<Mass, &MassFromBody>();
+        r.AddSystem<&RequestOne>(In("RequestOne", "Request"));
+    });
+    REQUIRE(rig->product);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(rig->world().Entities().size() == 1);
+    const EntityId id = rig->world().Entities()[0];
+    const auto request = rig->world().Stamps<BodyAt>(id);
+    const auto body = rig->world().Stamps<Body>(id);
+    const auto mass = rig->world().Stamps<Mass>(id);
+    REQUIRE(request);
+    REQUIRE(body);
+    REQUIRE(mass);
+    CHECK(body->first == request->first);
+    CHECK(body->second == request->second);
+    CHECK(mass->first == request->first);
+    CHECK(mass->second == request->second);
+}
+
+TEST_CASE("initial value: OnAdd runs once for the request and once for every link of a chain") {
+    auto rig = Start([](Registrar& r) {
+        Data(r);
+        r.InitialValue<Body, &BodyFromRequest>();
+        r.InitialValue<Mass, &MassFromBody>();
+        r.InitialValue<Label, &LabelFromMass>();
+        r.AddSystem<&RequestOne>(In("RequestOne", "Request"));
+        r.Hook<BodyAt, &RequestAdded>(HookTrigger::OnAdd, {.name = "RequestAdded"});
+        r.Hook<Body, &BodyAdded>(HookTrigger::OnAdd, {.name = "BodyAdded"});
+        r.Hook<Mass, &MassAdded>(HookTrigger::OnAdd, {.name = "MassAdded"});
+        r.Hook<Label, &LabelAdded>(HookTrigger::OnAdd, {.name = "LabelAdded"});
+    });
+    REQUIRE(rig->product);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(rig->world().Entities().size() == 1);
+    CHECK(SeenCount("request:") == 1);
+    CHECK(SeenCount("hook:") == 1);
+    CHECK(SeenCount("mass:") == 1);
+    CHECK(SeenCount("label:") == 1);
+}
+
+TEST_CASE("initial value: a request recorded by a hook is filled at the next sync point") {
+    auto rig = Start([](Registrar& r) {
+        Data(r);
+        r.InitialValue<Body, &BodyFromRequest>();
+        r.AddSystem<&SpawnsCrate>(In("SpawnsCrate", "Request"));
+        r.AddSystem<&LabelsCrates>(In("LabelsCrates", "Use"));
+        r.Hook<Crate, &CrateAsksForBody>(HookTrigger::OnAdd, {.name = "CrateAsksForBody"});
+    });
+    REQUIRE(rig->product);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(rig->world().Entities().size() == 1);
+    const EntityId id = rig->world().Entities()[0];
+    REQUIRE(rig->world().Get<Label>(id) != nullptr);  // the window of that sync point was not empty
+    REQUIRE(rig->world().Get<BodyAt>(id) != nullptr);
+    REQUIRE(rig->world().Get<Body>(id) != nullptr);
+    CHECK(rig->world().Get<Body>(id)->x == 40);
+    // Filled where the hook's record was applied, one sync point after the Crate.
+    const auto crate = rig->world().Stamps<Crate>(id);
+    const auto request = rig->world().Stamps<BodyAt>(id);
+    const auto body = rig->world().Stamps<Body>(id);
+    REQUIRE(crate);
+    REQUIRE(request);
+    REQUIRE(body);
+    CHECK(crate->first < request->first);
+    CHECK(body->first == request->first);
+}
+
+TEST_CASE("initial value: one request gives the first value of two components") {
+    // Foreign is registered by this plugin here, so it may declare it too.
+    auto rig = Start([](Registrar& r) {
+        Data(r);
+        r.Component<Foreign>({.name = "Foreign"});
+        r.InitialValue<Body, &BodyFromRequest>();
+        r.InitialValue<Foreign, &ForeignFromRequest>();
+        r.AddSystem<&RequestOne>(In("RequestOne", "Request"));
+    });
+    REQUIRE(rig->product);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(rig->world().Entities().size() == 1);
+    const EntityId id = rig->world().Entities()[0];
+    REQUIRE(rig->world().Get<Body>(id) != nullptr);
+    REQUIRE(rig->world().Get<Foreign>(id) != nullptr);
+    CHECK(rig->world().Get<Body>(id)->x == 30);
+    CHECK(rig->world().Get<Foreign>(id)->f == 3);
+}
+
+TEST_CASE("initial value: a resource is neither a request nor a component with an initial value") {
+    // Data registers five components, so a resource id is also a valid
+    // component index: a check that looks at the id alone would pass.
+    SUBCASE("the request is a resource") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            Data(r);
+            r.Resource<Ballast>({.name = "Ballast"});
+            r.InitialValue<Body, &BodyFromBallast>();
+        }}});
+        CHECK_MESSAGE(HasRule(built, StartupCode::RE4, "InitialValue"), Describe(built));
+    }
+    SUBCASE("the component is a resource") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            Data(r);
+            r.Resource<Ballast>({.name = "Ballast"});
+            r.InitialValue<Ballast, &BallastFromRequest>();
+        }}});
+        CHECK_MESSAGE(HasRule(built, StartupCode::RE4, "InitialValue"), Describe(built));
+    }
+}
+
+TEST_CASE("initial value: two declarations that name each other stop at one sync point") {
+    // Body from Mass and Mass from Body: the spawned Mass fills Body, and Body
+    // does not overwrite the Mass it came from.
+    auto rig = Start([](Registrar& r) {
+        Data(r);
+        r.InitialValue<Body, &BodyFromMass>();
+        r.InitialValue<Mass, &MassFromBody>();
+        r.AddSystem<&SpawnsMass>(In("SpawnsMass", "Request"));
+    });
+    REQUIRE(rig->product);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(rig->world().Entities().size() == 1);
+    const EntityId id = rig->world().Entities()[0];
+    REQUIRE(rig->world().Get<Body>(id) != nullptr);
+    REQUIRE(rig->world().Get<Mass>(id) != nullptr);
+    CHECK(rig->world().Get<Body>(id)->x == 50);
+    CHECK(rig->world().Get<Mass>(id)->m == 5);
+}
