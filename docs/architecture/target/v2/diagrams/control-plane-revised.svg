@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="680" viewBox="0 0 680 790" role="img"><title>基礎的 System 契約：兩半契約、三種分析結果、執行計畫</title><desc>上方 System 契約分為型別推導與顯式宣告兩半，資料自己也可以宣告獨占寫入。中段分析產出三種不同處置：資料衝突交序列化、依賴循環與獨占違反是啟動錯誤、歧義預設穩定平手並讓人看得到。下方是執行計畫交給 Executor，以及執行時每個 System 都受的三處約束。決定性的契約屬於另一層，不在這張圖。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="680" viewBox="0 0 680 826" role="img"><title>基礎的 System 契約：兩半契約、三種分析結果、執行計畫</title><desc>上方 System 契約分為型別推導與顯式宣告兩半，資料自己也可以宣告獨占寫入。中段分析產出三種不同處置：資料衝突交序列化、依賴循環與獨占違反是啟動錯誤、歧義預設穩定平手並讓人看得到。下方是執行計畫交給 Executor（獨占 World 的 System 可在執行中再跑一張 schedule），以及執行時每個 System 都受的三處約束。決定性的契約屬於另一層，不在這張圖。2026-11-15 依使用者 11-14 的決定更新。</desc>
 <style>
   svg { font-family: -apple-system, "Segoe UI", "Noto Sans CJK TC", "PingFang TC", sans-serif; }
   .c-coral  { fill: #fbe9e4; stroke: #c4654a; }
@@ -10,14 +10,14 @@
   .arr { stroke: #666; fill: none; stroke-width: 1.2; }
   rect[fill="none"] { fill: none; }
 </style>
-<rect width="680" height="790" fill="#ffffff"/>
+<rect width="680" height="826" fill="#ffffff"/>
 <defs><marker id="a7" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
 <text class="th" x="340" y="24" text-anchor="middle">System 契約：兩半，來源不同</text>
 <g class="c-coral"><rect x="40" y="40" width="290" height="110" rx="8" stroke-width="0.5"/>
 <text class="th" x="185" y="58" text-anchor="middle" dominant-baseline="central">從參數型別推導（編譯期，不手寫）</text>
 <text class="ts" x="185" y="80" text-anchor="middle" dominant-baseline="central">Component Read／Write</text>
 <text class="ts" x="185" y="98" text-anchor="middle" dominant-baseline="central">Resource Read／Write</text>
-<text class="ts" x="185" y="116" text-anchor="middle" dominant-baseline="central">事件讀者／寫者、延後佇列的參數</text>
+<text class="ts" x="185" y="116" text-anchor="middle" dominant-baseline="central">事件讀者／寫者、延後佇列、獨占 World 的參數</text>
 <text class="ts" x="185" y="136" text-anchor="middle" dominant-baseline="central">可信度：World 的存取驗證攔得到</text></g>
 <g class="c-coral"><rect x="350" y="40" width="290" height="110" rx="8" stroke-width="0.5"/>
 <text class="th" x="495" y="58" text-anchor="middle" dominant-baseline="central">顯式宣告（登記時寫）</text>
@@ -55,27 +55,29 @@
 <text class="ts" x="545" y="386" text-anchor="middle" dominant-baseline="central">換 plugin 順序靜默改掉</text>
 <text class="ts" x="545" y="402" text-anchor="middle" dominant-baseline="central">嚴格模式（選用）：啟動錯誤</text></g>
 <line x1="340" y1="412" x2="340" y2="440" class="arr" marker-end="url(#a7)"/>
-<g class="c-purple"><rect x="40" y="442" width="600" height="70" rx="8" stroke-width="0.5"/>
+<g class="c-purple"><rect x="40" y="442" width="600" height="88" rx="8" stroke-width="0.5"/>
 <text class="th" x="340" y="460" text-anchor="middle" dominant-baseline="central">執行計畫 → Executor</text>
 <text class="ts" x="340" y="482" text-anchor="middle" dominant-baseline="central">Serial：第一版只有它。Parallel：沒有衝突的才可以並行，第一版不做</text>
-<text class="ts" x="340" y="500" text-anchor="middle" dominant-baseline="central">執行緒親和決定落點；條件在跑時求值；同步點＝每階段末預設，schedule 可加宣告</text></g>
-<line x1="340" y1="512" x2="340" y2="540" class="arr" stroke-dasharray="4 4"/>
-<text class="th" x="340" y="560" text-anchor="middle">執行時，每個 System 都受的三處約束</text>
-<g class="c-teal"><rect x="40" y="576" width="190" height="64" rx="8" stroke-width="0.5"/>
-<text class="th" x="135" y="594" text-anchor="middle" dominant-baseline="central">World</text>
-<text class="ts" x="135" y="612" text-anchor="middle" dominant-baseline="central">同步點後參考失效</text>
-<text class="ts" x="135" y="628" text-anchor="middle" dominant-baseline="central">疊代中只進佇列</text></g>
-<g class="c-teal"><rect x="245" y="576" width="190" height="64" rx="8" stroke-width="0.5"/>
-<text class="th" x="340" y="594" text-anchor="middle" dominant-baseline="central">Executor</text>
-<text class="ts" x="340" y="612" text-anchor="middle" dominant-baseline="central">順序固定，照執行計畫</text>
-<text class="ts" x="340" y="628" text-anchor="middle" dominant-baseline="central">不依雜湊、指標、完成的先後</text></g>
-<g class="c-teal"><rect x="450" y="576" width="190" height="64" rx="8" stroke-width="0.5"/>
-<text class="th" x="545" y="594" text-anchor="middle" dominant-baseline="central">交換點</text>
-<text class="ts" x="545" y="612" text-anchor="middle" dominant-baseline="central">外部訊息只在同步點進入</text>
-<text class="ts" x="545" y="628" text-anchor="middle" dominant-baseline="central">經交換用的 Resource 進出</text></g>
-<text class="ts" x="340" y="672" text-anchor="middle">事件：寫入者之後的 System 本 tick 可讀；緩衝保留到下一 tick 末，不是一律延一 tick</text>
-<text class="ts" x="340" y="692" text-anchor="middle">組裝（setup）與 runner 保留的協調：多個時鐘、Product 啟停、IO 與 World 交換的同步點；IoC 消不掉，也不該消</text>
-<text class="ts" x="340" y="712" text-anchor="middle">繞過受控介面的全域存取：機制攔不到，靠葉子模組「無全域狀態」條件與審查，這是 C++ 版的誠實上限</text>
-<text class="ts" x="340" y="744" text-anchor="middle">外部系統不持有、不修改 World；外部 → 輸入的交換點 → World → System → 輸出的交換點 → 外部</text>
-<text class="ts" x="340" y="764" text-anchor="middle">外部不知道 World 的布局。決定性的契約屬於另一層，不在這張圖</text>
+<text class="ts" x="340" y="500" text-anchor="middle" dominant-baseline="central">執行緒親和決定落點；條件在跑時求值；同步點＝每階段末預設，schedule 可加宣告</text>
+<text class="ts" x="340" y="518" text-anchor="middle" dominant-baseline="central">獨占 World 的 System 可在執行中再跑一張 schedule（固定步就是這樣驅動的）</text></g>
+<line x1="340" y1="530" x2="340" y2="558" class="arr" stroke-dasharray="4 4"/>
+<text class="th" x="340" y="578" text-anchor="middle">執行時，每個 System 都受的三處約束</text>
+<g class="c-teal"><rect x="40" y="594" width="190" height="64" rx="8" stroke-width="0.5"/>
+<text class="th" x="135" y="612" text-anchor="middle" dominant-baseline="central">World</text>
+<text class="ts" x="135" y="630" text-anchor="middle" dominant-baseline="central">同步點後參考失效</text>
+<text class="ts" x="135" y="646" text-anchor="middle" dominant-baseline="central">疊代中只進佇列</text></g>
+<g class="c-teal"><rect x="245" y="594" width="190" height="64" rx="8" stroke-width="0.5"/>
+<text class="th" x="340" y="612" text-anchor="middle" dominant-baseline="central">Executor</text>
+<text class="ts" x="340" y="630" text-anchor="middle" dominant-baseline="central">順序固定，照執行計畫</text>
+<text class="ts" x="340" y="646" text-anchor="middle" dominant-baseline="central">不依雜湊、指標、完成的先後</text></g>
+<g class="c-teal"><rect x="450" y="594" width="190" height="64" rx="8" stroke-width="0.5"/>
+<text class="th" x="545" y="612" text-anchor="middle" dominant-baseline="central">交換點</text>
+<text class="ts" x="545" y="630" text-anchor="middle" dominant-baseline="central">外部資料只在兩次 Run 之間進出</text>
+<text class="ts" x="545" y="646" text-anchor="middle" dominant-baseline="central">經交換用的 Resource 進出</text></g>
+<text class="ts" x="340" y="690" text-anchor="middle">事件：寫入者之後的 System 當個 tick 可讀；每個讀者一個游標，留到讀過或碰到上限（丟了有記錄）</text>
+<text class="ts" x="340" y="710" text-anchor="middle">組裝：建 World、選登記單位。runner：取樣時間、跑外層的 schedule、等待、交換點、啟停；IoC 消不掉，也不該消</text>
+<text class="ts" x="340" y="730" text-anchor="middle">時間：World 裡的 Resource；System 讀通用的時間，進固定步時自動換成固定步的值；暫停與倍率另有一個 Resource</text>
+<text class="ts" x="340" y="750" text-anchor="middle">繞過受控介面的全域存取：機制攔不到，靠葉子模組「無全域狀態」條件與審查，這是 C++ 版的誠實上限</text>
+<text class="ts" x="340" y="782" text-anchor="middle">外部不持有、不修改 World，也不知道它的布局；外部 → 交換點（進）→ World → System → 交換點（出）→ 外部</text>
+<text class="ts" x="340" y="802" text-anchor="middle">一個 Product 可以有多個 World（順序固定），彼此只在交換點交換，或經 Extract 唯讀。決定性的契約屬於另一層，不在這張圖</text>
 </svg>
