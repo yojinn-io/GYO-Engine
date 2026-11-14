@@ -1,6 +1,6 @@
-# 時間、固定步、runner、跨時鐘事件：設計提案 v2（修訂 3）
+# 時間、固定步、runner、跨時鐘事件：設計 v2（修訂 4）
 
-更新：2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：提案，待使用者決定第 2 節的事。還沒有實作。**
+更新：2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：主要的決定已定（第 0 節，使用者 2026-11-14）。還沒有實作；每一批動工前另有事前宣告。**
 
 經過：
 - v1 沒有通過別模型的檢查（blocker 7），作廢。v1 與報告在主 checkout `build/evidence/gyo2-mechanism/`。
@@ -17,6 +17,51 @@
 用詞：這份文件裡「時間基準」指 `Time::MonotonicClock`；「時鐘」指事件與 schedule 所屬的 `Domain`（`Fixed`、`Frame`、`Loading`，舊稱 clock domain）；「tick」只指固定步的步數，其他的寫「計數」。
 
 ---
+
+- 修訂 3 照 B 改寫的部分送了檢查（Opus／xhigh）：blocker 3、should 10、nit 9，報告在同一個資料夾的 `time-design-v2r3-b-check-opus.md`。主要發現：Kernel 那一批比修訂 3 寫的大得多（十四項）；「驅動固定步的 System 更新 `FixedTime`」在現有規則下做不到；「先只給 Engine 的 System 用」擋不住。
+- 之後照使用者的要求把八項各過一遍 Bevy 與我們的歷史（`scout-c-bevy-eight-items.md`、`scout-d-history-eight-items.md`），整理成三套做法；使用者選「方案二，固定步選方案一的」。
+- **這一份（修訂 4）加了第 0 節，並改掉檢查指出的錯誤。第 2 節以後的選項表是決定之前寫的，留作紀錄；和第 0 節不一致的地方以第 0 節為準。**
+
+---
+
+## 0. 已定的事（使用者 2026-11-14）
+
+| 題目 | 定了什麼 | HANDOFF 的代號 |
+|---|---|---|
+| 固定步由誰累加、由誰驅動 | World 裡的 System（選項 B，Bevy 的做法） | `v8-arch-gyo2-fixed-step-in-world` |
+| 那個 System 怎麼跑固定步 | 獨占 World 的 System 可以跑任何一張 schedule，開放給所有作者（照 Bevy） | `v8-arch-gyo2-time-plan-two` |
+| System 讀哪個時間 | 有一個通用的時間：平常是可縮放的時間，進固定步前自動換成固定步的值 | 同上 |
+| 多個 World 由誰持有 | 一個 `Product` 可以有多個 World，順序固定 | 同上 |
+| 追不上時 | 超過上限的整步從可縮放的時間扣掉，丟了多少有記錄 | 同上 |
+| 事件 | 每個讀者一個游標；留到讀過或碰到上限，丟了有記錄；可回滾的 schedule 不參與 | 同上；方向是 `v8-arch-gyo2-cross-clock-events-open` |
+| 暫停與倍率 | 另一個「想要的暫停與倍率」的 Resource，時間的 System 讀它 | 同上 |
+| 時間的程式放哪 | 型別留在 `engine/time`；兩個 System 放別的 Module | 同上 |
+| 經網路、兩個 World 之間的事件 | 這一輪定形狀，做法照 bevy_replicon 那一型（作者照常寫讀、中間送、帶 tick），PvP 移植時做 | 同上 |
+
+**還沒定的**（都不擋 Kernel 那一批的事前宣告，會寫在各批的事前宣告裡請你定）：
+
+- 沒畫面的 runner 算 Engine 的 Module 還是 Engine 外的 Plugin（第 9 節 (a)；「方案二」沒有明列這一項）。
+- Engine 那個驅動固定步的 System 掛在哪個 stage；外層的 stage 骨架由 Engine 給還是由組裝的程式給。
+- 沒畫面的產品（Match）外層那張 schedule 屬於哪個時鐘。
+- 獨占 World 的 System 怎麼讀寫 Resource（現在它只能碰元件，而且必須是唯一的參數）；`FixedTime` 與通用的時間會有兩個寫者，要不要標成可多寫。
+- Loading 由誰跑（驅動固定步的 System 巢狀跑、runner 先跑、或等「狀態的轉換」一起定）。
+- 既有條文與守衛測試的變更：在各批的事前宣告逐項請你核准（AGENTS §14.4）。
+
+**Kernel 那一批（K0）要改的東西**（檢查報告的清單，細節與行號在報告裡）：
+
+| # | 現在的行為 | 要變成什麼 |
+|---|---|---|
+| 1 | `Run` 斷言 World 是閒置（Ready） | 正在執行的 System 可以發起；同一張 schedule 不能在執行中再跑自己 |
+| 2 | 裡面那張跑完把 World 設回閒置 | 回到「執行中」（深度計數） |
+| 3 | 外層每個 System 跑完檢查「實體有沒有增減」，有就斷言 | 巢狀執行造成的增減不算。這是既有的 Design Invariant（DI-KS 9）與守衛 J-3 的變更，要你核准 |
+| 4 | 延後的變更整個 World 只有一個佇列 | 每一層執行各自的佇列；或進入巢狀前先套用 |
+| 5 | 存取驗證會把巢狀期間的寫入誤報 | 進入巢狀時先結算外層 System 的寫入，再重拍快照 |
+| 6 | 外層 System 手上的句柄在同步點之後算過期 | 巢狀回來後更新 |
+| 7 | 獨占的寫入用進場時的 stamp | 巢狀回來後用新的 stamp |
+| 8 | 裡面那張出錯會記一次並中斷；外層再回傳就記第二次 | 整件事只記一次；外層吞掉錯誤也不能讓中斷的 World 恢復 |
+| 9 | System 拿不到「跑 schedule」的入口 | 加介面 |
+| 10 | 獨占 World 的參數沒有 Resource 的介面、必須是唯一的參數 | 見上面「還沒定的」 |
+| 11～14 | tick、hook 的佇列、事件的修剪、和同一個 stage 其他 System 的衝突 | 多半不必改，但要寫清楚並加測試 |
 
 ## 1. 這份設計要解決什麼
 
@@ -215,8 +260,8 @@ B 要做的事：
 |---|---|---|
 | 時間 | `double` 秒 | 整數奈秒 |
 | tick 計數 | 有 | 沒有；tick 只在 World |
-| 追趕上限 | 自己丟整步，不回報給時間那一層 | 上限由呼叫的人給；超過的整步從累加器拿掉並**回報數量**，上一層照這個數量從 `VirtualTime` 扣（決定 3 甲） |
-| 介面 | `Advance(elapsed, callback)` | `Add(delta, 上限)` 回傳這一輪跑幾步、拿掉幾步；`Overstep()`；`UntilNextStep()`；`Reset()` |
+| 追趕上限 | 自己丟整步，不回報給時間那一層 | 不丟步。時間的 System 在寫 `VirtualTime` 之前已經把超過上限的整步扣掉（第 3.4 節），所以累加器只斷言這一輪沒有超過上限 |
+| 介面 | `Advance(elapsed, callback)` | `Add(delta)` 回傳這一輪跑幾步；`Overstep()`；`UntilNextStep()`；`Reset()` |
 | 放哪裡 | `engine/runtime`，用到 `engine/math` | `engine/time`，只用標準函式庫（`time.md` DI 10 不變） |
 
 ---
@@ -372,7 +417,7 @@ v2 初稿把它們綁成「甲或乙」，而且把甲寫成「不加游標」�
 | 另一個時鐘的讀者 | 游標 | 游標 | 每個（事件、時鐘）一個水位 |
 | 可回滾的 schedule | 維持依位置讀、不參與跨時鐘（第 6.3 節） | 同左 | 同左 |
 | 讀者被 run 條件跳過那一次 | 不會錯過，下次補讀（在上限以內） | 同時鐘：錯過；跨時鐘：補讀 | 都錯過 |
-| 讀者長期沒執行、之後又執行 | 一次讀到累積的舊事件（最多到上限）；它沒讀的期間，紀錄一直留著 | 跨時鐘的讀者同左 | 沒有這個問題（以 schedule 為單位，schedule 有跑就算讀過） |
+| 讀者長期沒執行、之後又執行 | 一次讀到累積的舊事件（最多到上限）；它沒讀的期間，紀錄一直留著 | 跨時鐘的讀者同左 | 沒有這個問題；但固定步改由外層 schedule 中間的 System 跑之後，甲會漏事件：排在它前面的每幀 System 永遠讀不到這一輪固定步寫的 |
 | 作者要記幾套規則 | 一套（只有做回滾的產品要多記一套） | 兩套，依讀者和事件的關係 | 兩套 |
 | 系譜 | 游標的粒度是 Bevy 的（`message_cursor.rs`）；保留的方式不是（見下）。R0 盤點的「兩種模式」；審計對「無游標」的判定 | — | v1 的提議 |
 | 改到什麼 | 同時鐘的讀法也變：帶條件的讀者不再漏讀（改善），但長期沒執行的讀者會讀到舊事件、並拉住保留（代價）。Match 不回滾，它的讀法也跟著變。現有的事件測試 J-36、J-37 的判定要改，照規則要你核准 | 只多一條跨時鐘的讀法；J-37 的跨時鐘案例要改 | 同乙 |
@@ -441,7 +486,10 @@ master 的 target 條文在 `gyo2` 上是「R0 決定不帶，但檔案還在、
 | 規格 F.3「跨時鐘的傳遞是 Host 交換點的職責」 | 同一個 World 內由 Kernel 做 | 規格寫的 |
 | K.3 第 15 項「同一時鐘下的另一張 schedule 用元件或 Resource」 | **不變** | 你選的 |
 | 規格 H.2「共用 World 時每幀寫、固定步讀的資料必須經 Ingress」 | 只對可回滾的 schedule 留著 | 規格寫的 |
-| 規格 G-6、H.2、H.7「固定步累加在 Host」；target `determinism` §4.7b；規格 H-9「重跑只能在 Ready、不在任何 System 內」的精神 | 推翻（決定 1：B）：累加在 World 裡的 System；獨占的 System 可以跑一張 schedule | 規格寫的；推翻是你 2026-11-14 定的 |
+| 規格 G-6、H.2、H.7「固定步累加在 Host」；target `determinism` §4.7b；target `kernel` DI-KS 15「Host 保留多時鐘」 | 推翻：累加在 World 裡的 System；獨占的 System 可以跑一張 schedule | 規格寫的；推翻是你 2026-11-14 定的 |
+| 規格 H-9、target `kernel` DI-KS 12（回滾的重跑只由 Host 在閒置時呼叫） | **不變**。你定的是固定步由誰驅動，沒有談回滾；回滾那一批再定 | 規格寫的 |
+| target `kernel` DI-KS 9、規格 W-3「執行期間成員不變」；守衛 J-3 | 巢狀執行造成的成員變化排除在外。K0 的事前宣告列五點請你核准 | 規格寫的 |
+| target `kernel` DI-KS 1（獨占 World 的參數的存取宣告）、規格 S-10、S-13、E.2 第 1 步、W-4；守衛 J-10、J-45、J-35 | 跟著 K0 改；細目在 K0 的事前宣告 | 規格寫的 |
 | `FixedTickRuntime` 的型別與語義 | `TickAccumulator`：整數、不記 tick | 改名是你定的 |
 | blueprint §4「max_delta 截斷讓時間消失」；概念稿 E9b | 決定 3 | 架構師寫的候選；未判 |
 | 「一個 Runtime 一個 runner」（規格:387；target `runtime-composition` DI 2） | 選甲：一個 `Product` 一個 | 側邊會話轉述 |
@@ -501,7 +549,7 @@ Module `runner`：
 
 Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者恰好一次；保留有上限，超過的處置在登記時指定，丟棄一定有記錄；可回滾的 schedule 不參與跨時鐘、不用游標；游標的序號不回滾。
 
-`TickAccumulator`（加進 `time.md`）：整數；不記 tick；不讀時間基準；拿掉的整步全部回報，不靜默。
+`TickAccumulator`（加進 `time.md`）：整數；不記 tick；不讀時間基準；不丟時間（扣整步是時間的 System 的事）。
 
 ---
 
@@ -563,7 +611,7 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 | 另外已定、還沒排的 | 登記單位拆成 `Module`／`Plugin` 兩種型別與兩份登記檔（`v8-arch-gyo2-module-plugin-registers`）；KeepTool（`v8-arch-gyo2-keeptool`，會帶回 SDL 與 ImGui，需要有視窗的 runner） | 建議在 T2 之前或一起做型別拆分；KeepTool 在 T3、T5 之後 |
 | 之後 | World 之間的事件；回滾 | 名指的 Feature |
 
-每一批開工前各有事前宣告；判定用的測試先列突變。K0、T1、T4 彼此不相依，可以並行。
+每一批開工前各有事前宣告；判定用的測試先列突變。K0 和 T2 都要改 `Product::Run`，K0 和 T4 都要改事件的修剪與 Executor，所以要排先後：K0 → T2 → T4。T1 可以和 K0 並行。K0 是這幾批裡最大的。
 
 ---
 
