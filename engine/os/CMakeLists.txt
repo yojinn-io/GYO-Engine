@@ -1,7 +1,7 @@
 # The operating-system layer: the only Engine code that includes OS headers or
 # branches on the OS (docs/architecture/os.md). A leaf directly above
 # GYO::Base: it links nothing else, no other Engine module, no SDL and no
-# product, so every module above it, GYO::Engine included, may use it.
+# product, so every module above it may use it.
 # Sources that do not depend on the OS live in src/common; one source per OS
 # family lives under src/<os> and is selected here (the build layer may branch
 # on the OS). The thread naming and priority calls moved from engine/threads
