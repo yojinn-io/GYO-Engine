@@ -376,11 +376,12 @@ class WorkflowGateTests(unittest.TestCase):
         for product, tools, assemble in (("toolchain", "", "false"), ("toolchain", "alpha:gui", "true"),
                                          ("toolchain", "alpha:gui;beta:cli", "true"), ("sample", "", "true")):
             with self.subTest(product=product, tools=tools), tempfile.TemporaryDirectory() as temporary:
+                # A relative output path: Git Bash on Windows need not parse a drive path.
                 output = Path(temporary) / "output"
                 environment = dict(os.environ, GYO_PRODUCT=product, GYO_SELECTED_TOOLS=tools,
-                                   GYO_PACKAGE_PLATFORM="linux-x64", GITHUB_OUTPUT=str(output))
-                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-c", script], env=environment,
-                                        capture_output=True, text=True, timeout=10)
+                                   GYO_PACKAGE_PLATFORM="linux-x64", GITHUB_OUTPUT="output")
+                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-c", script], cwd=temporary,
+                                        env=environment, capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(output.read_text(), f"assemble={assemble}\n")
                 # A skip is announced with its reason; an assembled row announces nothing.
