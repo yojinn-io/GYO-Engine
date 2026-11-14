@@ -88,9 +88,13 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 | 種類 | 用在哪裡 | 發生時 |
 |---|---|---|
 | `GYO_ASSERT` | 便宜的前置條件與內部不變量 | 每一種建置都檢查；失敗就終止程式 |
-| `Result` 的 `Err` | System 這次執行沒有正常結束 | 帶著上下文一路回傳，由 Executor 處理一次 |
+| `Result` 的 `Err` | 程式有 bug（Programmer Error），而且要留下它一路經過哪裡 | 帶著上下文一路回傳，由 Executor 處理一次 |
 
 `Result<void, KernelError>` 是 System 的**回傳契約**，不是把錯誤送去別處的通道：每個 System 都回傳它，`Ok` 是正常的路。
+
+**什麼該回 `Err`，什麼不該**（使用者 2026-11-11 定的定位，2026-11-14 再次確認）：
+- **回到 Executor 的 `Err` 代表 bug。** 用 `Result` 而不直接斷言，不是因為可以恢復，是為了留下清楚的路徑；退到最外層，它仍然是 Programmer Error。
+- **執行時的狀況不回 `Err`。** 檔案不在、資料格式不對、對方斷線，這些是程式要處理的正常情形：System 自己處理（記成狀態、發事件、顯示訊息），然後回 `Ok`。讀檔失敗就回 `Err`，會讓整個 World 停下。
 
 **System 裡怎麼寫**：呼叫的東西回了 `Err`，就包一層自己的上下文再回傳。System 自己不記錄、不印。
 
@@ -111,7 +115,9 @@ SystemResult SpawnsWave(Spawn<Bundle<Position, Velocity, Health>> spawn) {
 1. 把完整的上下文鏈交給產品登記的 handler（`Product::SetErrorHandler`）。要不要寫日誌、寫到哪裡，由 handler 決定。
 2. World 進入中斷狀態（`Interrupted`），這次 Run 結束，回傳同一個 `Err`。
 3. 這次呼叫已經記下、還沒套用的延後變更全部丟掉，不會套用一半。
-4. 之後再對這個 World 呼叫 Run 是斷言，直到重建 World。
+4. 之後再對這個 World 呼叫 Run 是斷言，直到重建 World。理由：跑到一半的狀態，不能被下一個 tick 當成完整的狀態用。這對三類產品都成立。
+
+**World 中斷之後仍然可以讀**，只是不能再寫、不能再跑。工具要救還沒存檔的內容，就在這時候把資料讀出來另存：存成另一個檔，不蓋掉原檔，因為讀到的可能是改到一半的狀態。
 
 上面那個 System 在配發器只剩兩個 id 時，handler 收到的內容是（骨架測試實際印出的）：
 
