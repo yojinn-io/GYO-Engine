@@ -1,6 +1,6 @@
 # 事前宣告：`v8-arch-engine-own-plugins-plan`（規劃批 B1：Engine 模組改為 Engine 自有 plugin、由 App 組裝）
 
-更新：2026-11-13。Owner：架構（架構師會話開出的任務卡 04）。**狀態：待使用者核准。**
+更新：2026-11-13。Owner：架構（架構師會話開出的任務卡 04）。**狀態：已核准（使用者 2026-11-14「核准，選 A」）。**
 
 出處（已定，本批不重開）：kernel `HANDOFF.md` 決定行 `v8-arch-adapter-plugins-review`（方向往 Bevy 靠、B1 另開、owner 與組成形式分開、R3）、`v8-arch-plugin-selection-data`、`v8-arch-engine-or-plugin-criteria`、`v8-arch-external-components-as-adapters`、`v8-arch-target-di-approved`；HANDOFF 現況「使用者對 #212 的方向性疑慮」；遷移計畫 `migration-plan.zh-Hant.md` §3.11（plugins-foundation）、§3.31b（本批的占位）、§3.32（closeout）、§4、§8 RC-8／RC-11；規劃稿 `adapter-plugins-plan.zh-Hant.md` 最終檢查處置記錄 S-1、S-3、S-5、S-8 與文末〈仍往產品加步驟的條目〉；`target/runtime-composition.zh-Hant.md` §1、§4、Design Invariants；kernel `spec.zh-Hant.md` §C.2～C.6。
 
