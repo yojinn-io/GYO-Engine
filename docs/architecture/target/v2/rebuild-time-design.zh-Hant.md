@@ -1,4 +1,4 @@
-# 時間、固定步、runner、跨時鐘事件：設計提案 v2（修訂 2）
+# 時間、固定步、runner、跨時鐘事件：設計提案 v2（修訂 3）
 
 更新：2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：提案，待使用者決定第 2 節的事。還沒有實作。**
 
@@ -7,7 +7,8 @@
 - v2 初稿（commit 5785c4d0）也送了檢查（Opus／xhigh）：blocker 5、should 16、nit 12。主要問題是**我把被否決的選項寫歪了**（決定 1、2、4 的選項表）、兩個保證對 PvP 不成立、跨 World 的橋有洞而且沒有使用者。報告在主 checkout `build/evidence/gyo2-time-v2/time-design-v2-checker-opus.md`。
 - 修訂 1（46b8246a）照那份報告改：第 4、5.1、6 節的選項改用實際的差異來比，我原先的幾個理由撤回。
 - 修訂 1 送了範圍較窄的複查（Opus／high）：上一輪的 blocker 大多解決，另有 blocker 3（決定 1 的表有一列是我修訂時新寫錯的；選項 C 被我默默刪了；你同日定的 Module／Plugin 兩種型別沒有反映）、should 10、nit 8。報告在同一個資料夾的 `time-design-v2r1-recheck-opus.md`。
-- 這一份（修訂 2）是照複查改過的，**改完沒有再送檢查**。
+- 修訂 2 照複查改過，改完沒有再送檢查。
+- **決定 1 已定：B**（使用者 2026-11-14，側邊會話，`v8-arch-gyo2-fixed-step-in-world`）。這一份（修訂 3）把跟著決定 1 的部分照 B 改寫：第 3.1、3.3、4.2、5.2、5.5、8、11 節。**這些改寫沒有送檢查。**
 
 寫法：每件事分三種標明——**你定過的**（附出處）、**規格或架構師寫的、沒有單獨問過你的**、**沒判過的**。沒判過的寫成選項。
 
@@ -47,15 +48,16 @@
 
 ## 2. 需要你決定的事（先看這裡）
 
-「建議」是我的判斷，附理由與代價；選別的也做得出來。決定 1 與決定 2 是地基。
+「建議」是我的判斷，附理由與代價；選別的也做得出來。決定 1（已定）與決定 2 是地基。
 
 | # | 要定什麼 | 選項 | 我的建議 | 建議的代價 | 細節 |
 |---|---|---|---|---|---|
-| 決定 1 | **固定步由誰累加、由誰驅動**（概念稿 U7，沒判過） | A＝runner 累加、runner 驅動；B＝World 裡一個獨占的 System（Bevy）；C＝狀態在 World、runner 驅動 | A，但 A 是舊的形狀，請看第 4 節再定 | 暫停與倍率要經請求；要讓每幀寫的指令同一輪進固定步，每幀那一側得拆成兩張 schedule | 第 4 節 |
+| 決定 1 | **固定步由誰累加、由誰驅動** | — | **已定：B**（World 裡一個獨占的 System，Bevy 的做法）。我原本建議 A | Kernel 要先支援「System 執行中再跑一張 schedule」 | 第 4 節 |
+| 決定 1b | **要不要有一個「通用的時間」**（選 B 帶出來的；側邊會話提過，你還沒回答） | 甲＝做：System 讀一個通用的時間，在固定步裡它自動是固定步的值（Bevy）；乙＝不做：System 自己選讀哪一個 | 甲 | 多一個意思會隨所在位置改變的 Resource | 第 3.1 節 |
 | 決定 2 | **多個 World 由誰持有**（U8，沒判過） | 甲＝型別 `Product` 可以有多個 World；乙＝`Product` 維持一個 World，多個 `Product` 由組裝的程式與 runner 管 | 甲 | `Product` 變大；有四個問題實作前要先定（第 5.1 節） | 第 5.1 節 |
 | 決定 3 | **追不上時怎麼辦**（E9b，沒判過） | 甲＝超過上限的整步從可縮放的時間扣掉並記帳；乙＝累加器自己丟（舊）；丙＝不設上限；丁＝設上限但不丟，欠著往後追 | 甲 | 卡住之後遊戲裡的時間比真實時間少；倍率大於 1 時快轉會被壓 | 第 3.4 節 |
 | 決定 4 | **事件的讀者怎麼記「讀到哪裡」**（方向你定了：放開、照 Bevy；機制沒定） | 丙＝全部的讀者都有游標，可回滾的 schedule 例外；乙＝只有跨時鐘的讀者有游標；甲＝跨時鐘以整張 schedule 為單位記一個水位 | 丙 | 同一個時鐘的讀法也變；長期沒執行的讀者重新執行時會讀到舊事件；守衛測試的判定要改 | 第 6 節 |
-| 決定 5 | **暫停與倍率怎麼下達**（只在決定 1 選 A 時要定） | 甲＝System 寫請求，runner 下一輪套用；乙＝System 直接改時間的 Resource | 甲 | 晚一輪生效；多一個請求的 Resource | 第 3.3 節 |
+| 決定 5 | **暫停與倍率寫在哪個 Resource**（選 B 之後剩下的小題） | 甲＝另一個「想要的暫停與倍率」的 Resource，時間的 System 讀它；乙＝直接寫 `VirtualTime`，把它標成可以多個 System 寫 | 甲 | 多一個 Resource | 第 3.3 節 |
 | 決定 6 | **兩個放哪裡** | (a) 沒畫面的 runner：算 Engine 的 Module，還是 Engine 外的 Plugin；(b) 時間的型別：`engine/time`，還是新的 Module | (a) Module；(b) `engine/time` | (a) Engine 多一個 Module；(b) `engine/time` 多了會被放進 World 的型別 | 第 9 節 |
 | 決定 7 | **兩個 World 之間的事件現在做不做** | 甲＝這一輪只定形狀，PvP 移植時名指了事件再做；乙＝現在就做 | 甲 | 「兼容網路」這一輪只有形狀與規則，沒有可以跑的東西 | 第 6.4 節 |
 | 決定 8 | **同意第 8 節列的既有條文與測試的變更** | — | — | — | 第 8 節 |
@@ -92,14 +94,27 @@ Time::MonotonicClock（唯一的時間基準）
 | `FixedTime` | `step`、`overstep` | 不放 tick |
 
 - 全部用整數奈秒。倍率是浮點數，只在算「這一輪前進多少」時乘一次，乘完取整數。
-- 三個都是 (b) 區的 Resource。**在哪裡寫、誰寫，跟著決定 1**：選 A 是 runner 在交換點寫；選 B 是 World 裡的 System 寫（Bevy 的做法）。
+- 三個都是 (b) 區的 Resource。**誰寫（決定 1：B）**：runner 每輪只把取樣的時間點寫進 World（一個對外交換用的 Resource，在交換點「進」）；外層 schedule 最前面的「時間的 System」從它算出 `RealTime` 與 `VirtualTime`；驅動固定步的 System 更新 `FixedTime`。這兩個 System 由 Engine 提供。
 - **`FixedTime` 不放 tick**（規格 G.7 取捨 3、H-1；規格寫的，我認為理由獨立成立）：tick 要和事件緩衝一起被還原，放進 Resource 就有兩個來源。現在第幾個 tick 只經 `CurrentTick` 讀。累加器也不記 tick。
 - 步長只在一處手動維持：組裝時給 runner 的設定。`FixedTime.step` 與 PvP 的 `FixedStep{stepNs}` 都由它寫入。
 - **System 不自己讀時間基準**。不是 System 的 Engine 程式照舊讀（等待器醒來後重讀、音效後端每塊取樣、IO 的到達時刻）。
 
-**兩個作者會踩的坑**（檢查指出的，沒有解法就不該說「作者不必管」）：
-- 「讀哪個時間就決定跟不跟著暫停」只對**讀時間的** System 成立。靠輸入動的 System（滑鼠轉視角）不讀時間，暫停時照樣在動，作者仍然要自己擋。
-- 固定步裡的 System 該用的是 `FixedTime.step`。它如果讀了 `VirtualTime.delta`，拿到的是這一輪的量，一輪跑 k 步就被用了 k 次。Bevy 的解法是在固定步裡把通用的 `Time` 換成 Fixed。`RealTime.delta` 在固定步裡也有同樣的問題。這份設計的提議：**固定步的 schedule 裡讀 `VirtualTime` 或 `RealTime` 是啟動錯誤**（要 Kernel 加一個「這個 Resource 在某個時鐘的 schedule 裡不能讀」的登記；列在第 8 節）。固定步裡要診斷用的真實時間時另外想辦法，這份設計沒有給。
+**通用的時間（決定 1b）**
+
+選 B 之後多出一個要定的事，側邊會話提過、你還沒回答：
+
+- Bevy 另有一個通用的 `Time`：平常它等於 Virtual 的值；進固定步之前被換成 Fixed 的值，跑完換回來。作者的 System 只讀這一個，放在每幀或固定步都是對的。
+- 不做的話，作者要自己選讀 `VirtualTime` 還是 `FixedTime`。固定步裡的 System 如果讀了 `VirtualTime.delta`，拿到的是這一輪的量，一輪跑 k 步就被用了 k 次。
+
+| | 甲（建議）：做通用的時間 | 乙：不做 |
+|---|---|---|
+| 作者 | 一般只讀通用的那一個；要特定的才讀 `RealTime`／`VirtualTime`／`FixedTime` | 自己選；選錯沒有人擋，除非另外加啟動檢查 |
+| 機制 | 驅動固定步的 System 每跑一步前寫它、跑完還原（它本來就獨占 World） | 無 |
+| 代價 | 多一個 Resource，而且它的意思隨所在的位置不同 | 作者要多懂一件事 |
+
+建議甲：作者的負擔不能增加，這是 Bevy 選它的理由，也適用這裡。名字待定（不能叫 `Time`，會和 `GYO::Time` 撞）。
+
+**作者仍然要自己管的一件事**：「讀哪個時間就決定跟不跟著暫停」只對讀時間的 System 成立。靠輸入動的 System（滑鼠轉視角）不讀時間，暫停時照樣在動。
 
 ### 3.2 決定性區的時間不變
 
@@ -110,23 +125,25 @@ Time::MonotonicClock（唯一的時間基準）
 - PvP 的 `HostClockSample` 是產品那一層的 boundary 輸入，由 PvP 的 plugin 在交換點寫，用的是同一次取樣。機制保證的只有「一次醒來只有一個取樣值」。
 - 沒有呼叫 `RequireExplicitZones` 的產品沒有 (c) 區，不受這一節限制。
 
-### 3.3 暫停與倍率（決定 5；只在決定 1 選 A 時要定）
+### 3.3 暫停與倍率（決定 5）
 
-**沒判過的**：誰來改、何時生效。選 B 時照 Bevy：System 直接寫 `VirtualTime`，沒有這個決定。
+決定 1 選 B 之後：暫停與倍率由 System 改，時間的 System 下一輪套用（和 Bevy 相同：`virt.rs:28-40`）。
 
-選 A 時，建議（甲）：
-- Module 登記一個請求的 Resource `TimeControl{paused, scale}`，標成可以多個 System 寫（暫停選單、失焦、除錯台都會寫）。
-- runner 在下一輪的交換點讀它，套到 `VirtualTime`。**下一輪生效**，和 Bevy 相同（`virt.rs:28-40`）。
-- 誰是權威：「想要的暫停與倍率」在 World 的 `TimeControl`；「取樣、累加的餘數、這一輪實際套用的值」在 runner；`VirtualTime` 是後者的投影。
+側邊會話向你說「決定 5 不用定」。我核對後發現**還剩一個小題**，因為 GYO 有一條 Bevy 沒有的規則：Resource 預設只准一個 System 寫。時間的 System 每輪要寫 `VirtualTime`，暫停選單的 System 也要寫暫停——兩個寫者。
 
-為什麼不選乙：runner 每輪也要寫 `VirtualTime`，就有兩種寫者，其中 runner 那一邊「獨占寫入」的檢查看不到。
+| | 甲（建議） | 乙 |
+|---|---|---|
+| 做法 | 「想要的暫停與倍率」放另一個 Resource（暫稱 `TimeControl`），產品的 System 寫它；時間的 System 讀它、套到 `VirtualTime` | 產品的 System 直接寫 `VirtualTime`；把它標成可以多個 System 寫 |
+| 寫者 | 各只有一個（`TimeControl` 本身標成可多寫：暫停選單、失焦、除錯台） | `VirtualTime` 有 Engine 的與產品的兩種寫者 |
+| PvP「本機的暫停不能影響對局的固定步」 | 模擬的 World 不登記 `TimeControl`，就沒有人能暫停；啟動檢查保證 | `VirtualTime` 一定存在，擋不住；要靠審查 |
 
-細節：
-- 取消暫停後第一輪的 `delta` 是一輪的真實經過時間，不會把暫停期間的時間一次灌進來（runner 每輪都取樣）。
-- 取消暫停的 System 必須在每幀那一側（固定步不跑）。沒有每幀 schedule 的產品（沒畫面）暫停後，只有交換函式能取消（例如收到外部的指令）。
-- **可不可以暫停是組裝時的結構**：沒有登記 `TimeControl` 的 World 沒有人能要求暫停。PvP 的 Match 與 Client 的模擬 World 都不登記它，由啟動檢查保證（用到沒登記的型別是啟動錯誤）。存取是以型別為單位，沒辦法「只開放倍率、不開放暫停」，所以不能讓 PvP 登記一個只開一半的 `TimeControl`。
-- **PvP Client 的對時**（把固定步調快調慢）：方向是走倍率——11 月 10 日網路設計稿 N6 的做法（「改 virtual 速度，步長不動」，lightyear 也是；N6 自己標「要變形」，還包括大誤差時直接跳 tick）。它需要一個只有倍率、沒有暫停的請求，和 `TimeControl` 是兩個型別；怎麼給（另一個請求的型別，或 PvP 的 runner 設定）**移植 PvP 時定，這份設計沒有做**。v2 初稿提的「可換的前進量算法」撤回：只有一個使用者，而且會讓截斷出現第二處。
-- 現在 PvP 的相位修正和倍率**只有瞬時的比例相同**（每輪最多套用經過時間的 25% ≈ 倍率 0.75 到 1.25）。有三點不同，移植時要重新設計：(1) 舊的是有目標量的位移，在同一輪套用、修到就停；倍率經請求要下一輪才生效，會修過頭，要另外的控制；(2) 舊的對「加快」有追趕容量的限制，就是為了不讓加快變成丟步——倍率 1.25 碰到長的一輪時會超過上限，被決定 3 甲扣掉，正是舊程式要防的；(3) 舊的在剛起步與空窗時另有一處截斷（一輪最多算一步），照原樣搬過來會讓截斷出現第二處，違反下面的 DI 5。
+建議甲。這不是地基，可以到實作那一批的事前宣告再定。
+
+細節（兩個選項都一樣）：
+- 取消暫停後第一輪的量是一輪的真實經過時間，不會把暫停期間的時間一次灌進來。
+- 暫停時固定步不跑，但外層的 schedule 每輪照跑，所以取消暫停的 System 放在外層就讀得到。
+- **PvP Client 的對時**（把固定步調快調慢）：方向是走倍率——11 月 10 日網路設計稿 N6 的做法（「改 virtual 速度，步長不動」，lightyear 也是；N6 自己標「要變形」，還包括大誤差時直接跳 tick）。它要的是只有倍率、沒有暫停的東西，**移植 PvP 時定，這份設計沒有做**。
+- 現在 PvP 的相位修正和倍率**只有瞬時的比例相同**（每輪最多套用經過時間的 25% ≈ 倍率 0.75 到 1.25）。有三點不同，移植時要重新設計：(1) 舊的是有目標量的位移，在同一輪套用、修到就停；倍率下一輪才生效，會修過頭，要另外的控制；(2) 舊的對「加快」有追趕容量的限制，就是為了不讓加快變成丟步——倍率 1.25 碰到長的一輪時會超過上限，被決定 3 甲扣掉，正是舊程式要防的；(3) 舊的在剛起步與空窗時另有一處截斷，照原樣搬過來會讓截斷出現第二處。
 
 ### 3.4 追不上時怎麼辦（決定 3）
 
@@ -146,9 +163,11 @@ Time::MonotonicClock（唯一的時間基準）
 
 沒有固定步的 World（只有每幀）：`VirtualTime` 一輪的量設一個上限，超過的同樣記進 `discarded`。
 
+決定 1 選 B 之後，甲由時間的 System 做：它讀得到 `FixedTime`（還差多少、步長），所以算得出這一輪會超過幾步，在寫 `VirtualTime` 之前就扣掉。Bevy 是在 Virtual 那一層設一個總量的上限（250 ms）並丟掉，沒有記帳，也不保整步。
+
 ---
 
-## 4. 固定步由誰驅動（決定 1）
+## 4. 固定步由誰驅動（決定 1：已定 B）
 
 **你定過的**：`FixedTickRuntime` 可以帶過來但名字要改。v0.2 §10.1：「GYO 的 Match Simulation 需要維持獨立的 60Hz 更新節奏。如果 Fixed Tick 被 Frame Update 直接驅動，就可能出現不理想的執行時序及延遲。新架構需要能夠表達：…Simulation Clock…Frame Clock…兩者可以共享部分資料，但不應因此被迫共享同一個執行節奏。」
 
@@ -174,27 +193,23 @@ Time::MonotonicClock（唯一的時間基準）
 | 作者要寫什麼 | 無 | 無 | 無 |
 | 固定步在自己的執行緒 | 可以 | 可以 | 可以 |
 
-### 4.2 我的建議與它的弱點
+### 4.2 結果：B（使用者 2026-11-14）
 
-建議 A。理由只有兩個，都不是「舊程式就是這樣」。**理由 1 只排除 B，不排除 C；A 對 C 只靠理由 2。**
+原話（側邊會話轉達，`v8-arch-gyo2-fixed-step-in-world`）：「我看了下架構，A的做法其實沒有沒World都能成立。反而world變成的多餘的東西了。B反而是不錯的選擇。」「選擇B，轉回去。」
 
-1. **Kernel 不必支援「跑到一半再跑一張 schedule」。** 現在 Kernel 有一條簡單的規則：一次只有一張 schedule 在跑，World 在兩次之間是 Ready。同步點、延後的變更、存取驗證的快照、出錯時的中斷，都靠這條規則。B 要打開它。這是 B 最大的成本，也是風險最高的地方。
-2. **時間與迴圈只有一個主人。** 取樣、暫停、上限、等多久、跑幾步，全在 runner，World 裡只有結果。C 把累加的狀態放進 World，就有兩種寫者，而且做回滾、摘要、存檔的產品要記得把它排除。A 加上請求的 Resource（決定 5）其實是把 C 的那個 Resource 拆成「想要的」（World，System 寫）與「實際的」（runner）兩半，各只有一個寫者。
+我原本建議 A，理由是 Kernel 不必支援「跑到一半再跑一張 schedule」、時間與迴圈只有一個主人。你沒有採。上面的比較表留作紀錄。
 
-A 的弱點（照實列）：
-- 它是舊的形狀。審計與 R0 清單都點名它是沿用。如果你覺得上面兩個理由不夠，就該選 B。
-- 要讓每幀那一側寫的指令同一輪進固定步，每幀那一側得拆成兩張 schedule，而且其中一張不能用事件（上表）。不拆就晚一輪。B 沒有這個代價。
-- 回滾要重跑固定步時，System 不能當場發動（上表）。回滾還沒有設計，這一點要和它一起比。
-- 暫停與倍率要多一個請求的 Resource。
-- 之後如果因為別的理由（工具的 Inspector）加了 U10，B 的最大成本就不存在了，那時可以重新考慮。這一條我會寫進 Replacement Criteria。
+B 要做的事：
 
-如果你選 C：第 3.3 節的請求不需要，其餘和 A 相同，但要接受兩種寫者。
+1. **Kernel：獨占 World 的 System 可以在執行中跑一張 schedule。** 現在 `Run` 要求 World 是 Ready，System 執行中是 Running，所以這是斷言。要重新確認的地方：同步點與延後的變更（外層那張跑到一半，裡面那張有自己的同步點）、hook 的佇列（現在每張 schedule 一個）、存取驗證的快照、裡面那張回 Err 時外層怎麼中斷、tick 的推進與事件的修剪。這一批排在最前面，事前宣告先給你看。
+2. **這同時是概念稿未判項 U10 的一部分。** 你選的是 B；U10（獨占整個 World 的存取）你沒有另外表態。這份設計只取 U10 裡「獨占的 System 可以跑一張 schedule」這一點，而且先只給 Engine 自己那個驅動固定步的 System 用。U10 的其餘（獨占的 System 能寫什麼、給不給一般作者用）仍未判。
+3. **外層的 schedule。** 有固定步的 World 都有一張每輪跑一次的外層 schedule，驅動固定步的 System 掛在它的某個 stage。沒畫面的產品也一樣（外層可以只有這一個 System）。固定步之前、之後各能排什麼，由 stage 決定——所以「UI 的指令同一輪進固定步」不必拆 schedule。
+4. **累加的狀態在 World**（`FixedTime`，(b) 區）。做回滾、摘要、存檔的產品要把它排除。
+5. **概念稿 E5**「System 執行中再跑一個 System 是 Programmer Error」推翻（限於上面第 2 點的範圍）。
 
-如果你選 B：第 3.3 節的請求不需要；第 5 節的 runner 變薄（取樣、跑外層的 schedule、等待）；T1、T2 的內容要改，而且 Kernel 要先做巢狀執行。
+### 4.3 累加器：`TickAccumulator`
 
-### 4.3 累加器：`TickAccumulator`（A、B 都用）
-
-**你定過的**：帶過來、改名。
+**你定過的**：帶過來、改名。選 B 之後，累加的狀態（步長、餘數）放在 `FixedTime` 這個 Resource；`TickAccumulator` 是算術的那一部分，由驅動固定步的 System 用。
 
 | | 舊的 `FixedTickRuntime` | 新 |
 |---|---|---|
@@ -206,7 +221,7 @@ A 的弱點（照實列）：
 
 ---
 
-## 5. runner（以下照決定 1 選 A 寫；選 B 時哪些會變，各處有註）
+## 5. runner（決定 1 選 B 之後，runner 是薄的）
 
 ### 5.1 多個 World 由誰持有（決定 2）
 
@@ -241,14 +256,15 @@ A 的弱點（照實列）：
 - runner＝**一個函式，擁有迴圈**（Bevy 的 `set_runner`：`bevy_app/src/app.rs:203-227`）。`Product::Run()`（不帶參數）把控制權交給它，它回傳時產品結束。
 - 現有的 `Product::Run(schedule)` 是 runner 用的原語，保留並改名 `RunSchedule`。沒有安裝 runner 的產品（測試）照舊自己呼叫它。
 - Kernel 不擁有執行緒、不讀時間基準。
-- runner 從 schedule 的登記（哪一張是 `Fixed` 的、哪一張是 `Frame` 的）知道要跑什麼，不另外登記一份。這只回答了「schedule 的清單由誰給」（概念稿 U17）的一小部分；一個時鐘要不要有多張 schedule、由誰排它們的順序，仍然沒判。
+- runner 每輪做三件事：取樣、跑外層的那張 schedule、等待。固定步由外層 schedule 裡的 System 跑，runner 不管。哪一張是外層，由組裝時告訴 runner。「schedule 的清單由誰給」（概念稿 U17）其餘的部分仍然沒判。
 
 舊 Host 的職責（規格 H.7 的表）現在歸誰：
 
 | 職責 | 歸誰 |
 |---|---|
 | 建 World、選 plugin 清單 | 組裝的程式 |
-| 固定步累加、等待、這一輪跑幾次 | runner（決定 1 選 A） |
+| 固定步累加、這一輪跑幾次 | World 裡驅動固定步的 System（決定 1：B） |
+| 取樣、等待 | runner |
 | 建立執行緒、停止與 join 的順序 | runner（它建的執行緒它負責收；`RoleThread` 的契約要求擁有者決定順序） |
 | 交換點 | runner 呼叫；內容由各 plugin 登記（第 5.3 節） |
 | 出錯之後 | runner 拿到 Err 就停下所有迴圈，把 Err 從 `Product::Run()` 回傳；World 留著可以讀（你定過：中斷後可讀，工具要能把未存的內容讀出來另存）。之後怎麼辦（結束、另存）是組裝的程式的事 |
@@ -280,20 +296,21 @@ runner 不直接呼叫 `Time::Now()` 與等待器，經兩個可換的零件：
 
 ### 5.5 三種組合的順序
 
-零件相同，組法不同。工具（③）目前用（二），通常沒有固定步。Loading 在三種裡都一樣（（三）裡它跟著模擬的 World，在模擬那條執行緒）：好之前每輪跑 Loading 的 schedule 一批；產品說好了（組裝時給的判斷函式）之後，累加器歸零、下一輪的 `delta` 從 0 起算，才開始跑固定步。
+Loading 在三種裡都一樣：好之前外層每輪跑 Loading 的 schedule 一批；產品說好了之後，`FixedTime` 的餘數歸零，才開始跑固定步。由驅動固定步的 System 判斷（它讀產品的一個 Resource），不是 runner。工具（③）目前用（二），通常沒有固定步。
 
-**(一) 沒畫面、只有固定步**（Match、專用伺服器、多數測試）。一條執行緒：
+**(一) 沒畫面**（Match、專用伺服器、多數測試）。一條執行緒：
 
 ```
 每次醒來：
   1. 取樣
-  2. 交換點「進」
-  3. Loading 一批；或累加並跑 k 次固定步
+  2. 交換點「進」（寫取樣的時間點、收外部資料）
+  3. 跑外層的 schedule：
+       時間的 System → 驅動固定步的 System（Loading 一批，或跑 k 次固定步）→ 其餘
   4. 交換點「出」
-  5. 等到「取樣時刻 ＋ 離下一步還差的時間」
+  5. 讀 FixedTime，等到「取樣時刻 ＋ 離下一步還差的時間」
 ```
 
-第 5 步：還差的是可縮放的時間，除以倍率才是真實時間；暫停或倍率為 0 時改用組裝時給的閒置間隔。期限是時間基準上的絕對時間點，和舊的 Match 相同（`MatchRuntimeHost.cpp:531-534`）。
+第 5 步：還差的是可縮放的時間，除以倍率才是真實時間；暫停或倍率為 0 時改用組裝時給的閒置間隔。期限是時間基準上的絕對時間點，和舊的 Match 相同（`MatchRuntimeHost.cpp:531-534`）。Bevy 沒畫面的 runner 是「至少隔多久」，不對準格點；這一步是 GYO 多做的。
 
 **(二) 有視窗、固定步與每幀同一個 World、同一條執行緒**（單機最簡單的組法）：
 
@@ -302,30 +319,30 @@ runner 不直接呼叫 `Time::Now()` 與等待器，經兩個可換的零件：
   1. 處理 OS 事件
   2. 取樣
   3. 交換點「進」
-  4. Loading 一批；或累加並跑 k 次固定步（0 到多次）
-  5. 跑每幀的 schedule
-  6. 交換點「出」
-  7. Extract 到渲染的 World，跑渲染的 schedule，送出畫面
-  8. 等待由畫面決定（垂直同步或幀率上限），不等 tick
+  4. 跑每幀的 schedule（它就是外層）：
+       時間的 System → 輸入、UI → 驅動固定步的 System（0 到多次）→ 其餘的每幀邏輯
+  5. 交換點「出」
+  6. Extract 到渲染的 World，跑渲染的 schedule，送出畫面
+  7. 等待由畫面決定（垂直同步或幀率上限），不等 tick
 ```
 
 - 幀率不被 tick 頻率鎖住。主執行緒卡住時模擬也會停，不能接受的產品用（三）。
-- 第一幀、或這一幀跑 0 個固定步：畫面那一側拿到的 `overstep` 照常；內插要的「上一個狀態」由產品自己留（機制不替它存）。
-- 沒寫的：第 7 步渲染的 World 拿到的時間是哪一輪的值、由誰寫。Extract 那一批定。
+- 第一幀、或這一幀跑 0 個固定步：內插要的「上一個狀態」由產品自己留（機制不替它存）。
+- 沒寫的：第 6 步渲染的 World 拿到的時間是哪一輪的值、由誰寫。Extract 那一批定。
 
 **(三) 固定步在自己的執行緒**（PvP 的 Client）：
 
 ```
 模擬的執行緒：同（一），驅動模擬的 World
-主執行緒：同（二）但沒有第 4 步的固定步
+主執行緒：同（二）但外層裡沒有驅動固定步的 System
 兩個 World 之間：只在各自的交換點交換
 ```
 
 - 兩條執行緒各自取樣（v7 第 04 批的設計）。「主執行緒停 250 ms 時模擬仍每步產生命令」（v7 的判定）在這裡成立，條件是交換函式不等待另一條執行緒。
 - runner 建立並負責收模擬的執行緒。
-- **沒寫的**：暫停的請求在畫面的 World、累加器在模擬那條執行緒，怎麼傳；兩個 World 之間的資料是「只留最新一份」還是佇列、誰持有；兩條執行緒的 `RealTime` 不同步時，跨 World 的時間以誰為準。這些在 PvP 移植、名指了要傳什麼的時候定。
+- **沒寫的**：暫停的請求在畫面的 World、固定步在模擬的 World，怎麼傳；兩個 World 之間的資料是「只留最新一份」還是佇列、誰持有；兩條執行緒的 `RealTime` 不同步時，跨 World 的時間以誰為準。這些在 PvP 移植、名指了要傳什麼的時候定。
 
-**現在做得出來的**：（一）和它的測試；（二）（三）的迴圈邏輯可以用腳本時間與假的畫面等待來測。真正有視窗的 runner 要等平台的 Module（SDL）帶回來，屬於移植，要你同意才動。
+**現在做得出來的**：（一）和它的測試；（二）（三）的迴圈邏輯可以用腳本時間與假的畫面等待來測。真正有視窗的 runner 要等平台的 Module（SDL）帶回來——你已經定了 KeepTool 那一批（`v8-arch-gyo2-keeptool`），它會帶回 SDL。
 
 ---
 
@@ -424,7 +441,7 @@ master 的 target 條文在 `gyo2` 上是「R0 決定不帶，但檔案還在、
 | 規格 F.3「跨時鐘的傳遞是 Host 交換點的職責」 | 同一個 World 內由 Kernel 做 | 規格寫的 |
 | K.3 第 15 項「同一時鐘下的另一張 schedule 用元件或 Resource」 | **不變** | 你選的 |
 | 規格 H.2「共用 World 時每幀寫、固定步讀的資料必須經 Ingress」 | 只對可回滾的 schedule 留著 | 規格寫的 |
-| 規格 G-6、H.2、H.7「固定步累加在 Host」；target `determinism` §4.7b | 選 A：照做，理由換成第 4.2 節。選 B：推翻 | 規格寫的 |
+| 規格 G-6、H.2、H.7「固定步累加在 Host」；target `determinism` §4.7b；規格 H-9「重跑只能在 Ready、不在任何 System 內」的精神 | 推翻（決定 1：B）：累加在 World 裡的 System；獨占的 System 可以跑一張 schedule | 規格寫的；推翻是你 2026-11-14 定的 |
 | `FixedTickRuntime` 的型別與語義 | `TickAccumulator`：整數、不記 tick | 改名是你定的 |
 | blueprint §4「max_delta 截斷讓時間消失」；概念稿 E9b | 決定 3 | 架構師寫的候選；未判 |
 | 「一個 Runtime 一個 runner」（規格:387；target `runtime-composition` DI 2） | 選甲：一個 `Product` 一個 | 側邊會話轉述 |
@@ -432,7 +449,8 @@ master 的 target 條文在 `gyo2` 上是「R0 決定不帶，但檔案還在、
 | target `runtime-composition` §2「Client 有三個 Runtime」寫成 Engine 的通則 | 不當通則；是 PvP 的組合 | 三個 World 是你為 PvP 定的 |
 | `time.md` DI 1、DI 10、Replacement Criterion 4 | **不變**（期限仍是時間基準上的時間點） | 你定的／照草稿同意的 |
 | 概念稿的未判項 U4、U7、U8、E9b、E10a、E10d | 由決定 1～4 收口；U10、U15、U17 仍未判 | — |
-| 概念稿 E5「System 執行中再跑一個 System 是 Programmer Error」 | 選 A、C：不變。選 B：推翻 | 架構師寫的 |
+| 概念稿 E5「System 執行中再跑一個 System 是 Programmer Error」 | 推翻，範圍限於「獨占 World 的 System 跑一張 schedule」 | 架構師寫的；推翻跟著決定 1 |
+| 概念稿 U10「獨占整個 World 的存取」 | 取其中一點（跑一張 schedule），其餘仍未判 | 你沒有對 U10 另外表態 |
 | blueprint P3「多個時鐘、單一權威驅動點，Time 只是投影」；P6「跨固定步的事件要留多久由時間那一側負責」；§5「BeforeFixed 累積、AfterFixed 清除寫進契約」 | P3：決定 1。P6 與 §5 那一句：不採（保留改成「留到讀過或碰到上限」，由 Kernel 負責） | 架構師從 Bevy 的審閱抽出的候選 |
 | target `scheduler` 的 `ScheduleOptions` 欄位表（`runner`）；target `world` 談跨時鐘禁止的本文 | 跟著上面的改名與放開 | — |
 | R0 帶過去清單「不帶的核心：Host 持有固定步累加器」「事件讀者的兩種模式」 | 決定 1、決定 4 | 你以底稿核准 |
@@ -444,12 +462,13 @@ master 的 target 條文在 `gyo2` 上是「R0 決定不帶，但檔案還在、
 | 位置 | 改動 |
 |---|---|
 | `engine/time` | 新增 `TickAccumulator`；新增三個時間的型別與 `TimeControl`（決定 6） |
-| 新 Module `engine/runner` | 取樣與等待的零件、交換點的呼叫、三種組合的迴圈 |
+| 新 Module `engine/runner` | 取樣與等待的零件、交換點的呼叫、薄的迴圈；時間的 System 與驅動固定步的 System |
+| Kernel 的執行 | 獨占 World 的 System 可以在執行中跑一張 schedule（`Product`、Executor、`World` 的狀態、同步點、hook 佇列、存取驗證、出錯的處置） |
 | `Product` | `Run(schedule)` 改名 `RunSchedule`；新增 `Run()`；選甲時可以有多個 World。`Product.hpp`、`World.hpp` 註解裡的 Host、`Run` 跟著改 |
 | `FinishContext::InstallRunner` | 連函式一起安裝；新增交換函式的登記。登記單位拆成 `Module`／`Plugin` 兩種型別是另一個已定的變更（`v8-arch-gyo2-module-plugin-registers`），不在這份設計的批次裡，但這裡的登記要在它之後或一起做 |
 | `ScheduleOptions.runner` | 改名 `threadRole`（它的意思是「哪個執行緒角色呼叫」）。會碰到 `Declarations.hpp`、D-E13 與 X-3 的訊息、指紋的文字輸出 |
 | 事件 | 游標或水位、保留與上限、`EventReader` 給 tick、修剪的規則、啟動檢查 |
-| Resource 的登記 | 新增兩種：「System 不能寫」（時間的 Resource）、「某個時鐘的 schedule 裡不能讀」（`VirtualTime` 在固定步） |
+| Resource 的登記 | 修訂 2 提的兩種新登記（「System 不能寫」「某個時鐘裡不能讀」）選 B 之後不需要：時間的 Resource 由 System 寫，照一般的寫者規則；讀錯時間的問題由決定 1b 處理 |
 
 **測試與守衛**（判定會變的，各批開工前照 AGENTS §14.4 列五點請你核准）
 
@@ -457,27 +476,28 @@ master 的 target 條文在 `gyo2` 上是「R0 決定不帶，但檔案還在、
 - 選丙時 J-36、J-37 的同時鐘讀法。
 - J-24 的 R-E6（`RegistryTests.cpp`）與 `InstallRunner` 的簽名。
 - 用到 `ScheduleOptions.runner` 的測試（`SchedulerTests.cpp`）。
-- 新的登記欄位（事件的上限、交換函式、Resource 的兩種新登記）要進 Registry 指紋，J-18 的 golden 會變。
+- 新的登記欄位（事件的上限、交換函式）要進 Registry 指紋，J-18 的 golden 會變。
+- 「`Run` 要求 World 是 Ready」的斷言測試（巢狀執行現在是斷言）：判定要改。
 
 **Architecture Delta 的七項**（AGENTS §3）：
 
 1. 需要它的 Feature：第 1 節的表。
 2. 現在的問題：沒有人負責時間與迴圈，五件事只做一半。
-3. 變動的邊界：新增 Engine 的 Module `runner`；Kernel 新增交換函式的登記、事件的游標與保留、Resource 的兩種新登記；選甲時 `Product` 持有多個 World 與多份 Registry。
+3. 變動的邊界：新增 Engine 的 Module `runner`；Kernel 新增「獨占的 System 跑一張 schedule」、交換函式的登記、事件的游標與保留；選甲時 `Product` 持有多個 World 與多份 Registry。
 4. 影響：`engine/kernel`、`engine/time`、新的 `engine/runner`；上面列的測試。產品與工具目前都不在 `gyo2` 上。
 5. 依賴方向：`runner` → `kernel`、`time`、`threads`。`kernel` 不依賴 `runner`、`time`。`time` 照舊只依賴 base。之後 audio 等 Module 要讀 `RealTime` 時，依賴的是 `time` 裡的型別，不是 `runner`。
-6. Ownership：取樣、累加的餘數、實際套用的暫停與倍率歸 runner（選 A）；想要的暫停與倍率歸 World 的 `TimeControl`；「現在第幾個 tick」歸 World，不變；同一個 World 內跨時鐘事件的傳遞從 Host 的職責變成 Kernel 的職責。
+6. Ownership：取樣歸 runner；時間的三個 Resource、累加的餘數歸 World，由 Engine 的兩個 System 寫（決定 1：B）；「現在第幾個 tick」歸 World，不變；「這一輪跑幾次固定步」從 Host 的職責變成 World 裡一個 System 的職責；同一個 World 內跨時鐘事件的傳遞從 Host 的職責變成 Kernel 的職責。
 7. 為什麼不能更小：只補 runner 而不定時間，每個產品會各寫一套時間的 Resource；只開放跨時鐘事件而不改保留，一輪多個 tick 時就會漏。多 World 的持有者（決定 2）現在定，是因為 Extract 與交換點都要知道「另一個 World 是誰」；可以更小的是跨 World 的事件，所以延後（決定 7）。
 
 **Design Invariants 與 Replacement Criteria**（草案，各批實作前定稿並附守衛）：
 
 Module `runner`：
 - DI 1：一條執行緒的一次醒來只取樣一次；這一輪的時間 Resource 與交換函式都用同一個值。
-- DI 2：時間的 Resource 只有 runner 寫。守衛：Kernel 的「System 不能寫」登記，宣告寫它的 System 是啟動錯誤。
+- DI 2：`RealTime`、`VirtualTime`、`FixedTime` 各只有一個寫者，都是 Engine 的 System（既有的獨占寫入檢查就是守衛）；runner 只寫取樣的時間點。
 - DI 3：runner 不排 System 的順序，只呼叫「跑一張 schedule」與交換函式。
 - DI 4：取樣與等待都經可注入的零件。
 - DI 5（只對有固定步的 World）：`VirtualTime` 前進的量等於固定步前進的量加上餘數的變化；超過上限的只在一處扣，而且扣整步。
-- Replacement Criteria：(a) 某個產品的迴圈用這些零件拼不出來；(b) 交換函式要知道別的交換函式的內部狀態才能正確；(c) 時間的 Resource 需要第二個寫者；(d) Kernel 因為別的理由有了「System 執行中跑一張 schedule」，那時重新比較決定 1 的 B。
+- Replacement Criteria：(a) 某個產品的迴圈用這些零件拼不出來；(b) 交換函式要知道別的交換函式的內部狀態才能正確；(c) 時間的 Resource 需要第二個寫者；(d) 「獨占的 System 跑一張 schedule」讓 Kernel 的同步點、存取驗證或出錯處置出現修不完的特例——那時重新比較決定 1 的 A、C。
 
 Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者恰好一次；保留有上限，超過的處置在登記時指定，丟棄一定有記錄；可回滾的 schedule 不參與跨時鐘、不用游標；游標的序號不回滾。
 
@@ -530,25 +550,28 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 
 ---
 
-## 11. 你決定之後的批次（照決定 1 選 A、決定 2 選甲、決定 4 選丙排）
+## 11. 批次（決定 1：B；其餘照我建議的選項排，你改了就重排）
 
 | 批 | 內容 | 依賴 |
 |---|---|---|
-| T1 | `TickAccumulator` 與時間的型別（`engine/time`） | 決定 1、3、6 |
-| T2 | Kernel：可呼叫的 runner、交換函式的登記、Resource 的兩種新登記、`threadRole` 與 `RunSchedule` 的改名 | 決定 1、8 |
-| T3 | Module `runner`：取樣與等待的零件、`TimeControl`、組合（一）與測試 | T1、T2、決定 5 |
+| K0 | Kernel：獨占 World 的 System 可以在執行中跑一張 schedule。**事前宣告先給你看** | 決定 1（已定） |
+| T1 | `TickAccumulator` 與時間的型別（`engine/time`） | 決定 3、6 |
+| T2 | Kernel：可呼叫的 runner、交換函式的登記、`threadRole` 與 `RunSchedule` 的改名 | 決定 8 |
+| T3 | Module `runner`：取樣與等待的零件、薄的迴圈、時間的 System、驅動固定步的 System、組合（一）與測試 | K0、T1、T2、決定 1b、3、5 |
 | T4 | Kernel：事件的游標、保留、上限、啟動檢查 | 決定 4、8 |
-| T5 | `Product` 多個 World；Extract 的執行；組合（二）（三）的迴圈邏輯 | 決定 2；先定 5.1 表裡的三個問題 |
-| 之後 | World 之間的事件；有視窗的 runner；回滾 | 名指的 Feature；移植要你同意 |
+| T5 | `Product` 多個 World；Extract 的執行；組合（二）（三）的迴圈邏輯 | 決定 2；先定 5.1 表裡的四個問題 |
+| 另外已定、還沒排的 | 登記單位拆成 `Module`／`Plugin` 兩種型別與兩份登記檔（`v8-arch-gyo2-module-plugin-registers`）；KeepTool（`v8-arch-gyo2-keeptool`，會帶回 SDL 與 ImGui，需要有視窗的 runner） | 建議在 T2 之前或一起做型別拆分；KeepTool 在 T3、T5 之後 |
+| 之後 | World 之間的事件；回滾 | 名指的 Feature |
 
-每一批開工前各有事前宣告；判定用的測試先列突變。決定 1 選 B 時，T2、T3 要重排，而且前面多一批「Kernel：System 執行中跑一張 schedule」。
+每一批開工前各有事前宣告；判定用的測試先列突變。K0、T1、T4 彼此不相依，可以並行。
 
 ---
 
 ## 12. 範圍的限界
 
 - 這是設計提案，沒有寫程式，沒有量測。第 5.5 節的順序是從現有程式與 Bevy 讀出來整理的，沒有跑過。
-- 這份設計送過兩輪別模型的檢查（Opus／xhigh 一輪、Opus／high 複查一輪）。這一份（修訂 2）照複查改完之後**沒有再送檢查**；修訂 1 就曾經在修改時引入新的錯，這一份也可能有。
+- 這份設計送過兩輪別模型的檢查（Opus／xhigh 一輪、Opus／high 複查一輪）。修訂 2 照複查改完之後沒有再送檢查；修訂 3 照決定 1：B 改寫的部分也**沒有送檢查**。修訂 1 就曾經在修改時引入新的錯，這一份也可能有。
+- 兩輪檢查都是在「建議 A」的前提下做的。B 的做法只有比較表那幾列被查過；第 4.2 節列的 B 要做的事、第 5.5 節照 B 改的順序，是我寫的，沒有人查。K0 的事前宣告會另外送檢查。
 - Bevy 的行為引自偵察 B 與檢查者的讀碼（Bevy 6a911653f）。
 - 你的原話一律引自 `HANDOFF.md`、同詞異義表與你的原稿，沒有重讀 11 月 11 日側邊會話的原始紀錄檔。
 - 我的解讀、要你確認的有兩處：E9b 讀成「不可以靜默」（第 3.4 節）；「也要兼容網絡部分」的三點回應（第 6.4 節）。
