@@ -19,6 +19,7 @@ set(GYO_KERNEL_TEST_SOURCES
     WorldTests.cpp
     ExecutorTests.cpp
     AccessCheckTests.cpp
+    InitialValueTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )

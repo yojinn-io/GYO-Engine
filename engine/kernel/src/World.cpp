@@ -628,10 +628,40 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             i = end;
         }
 
-        // Step 6: OnAdd for new cells, (EntityId, ComponentId) ascending; an overwrite is not an add.
-        std::sort(added.begin(), added.end(), [](const NewCell& a, const NewCell& b) {
+        const auto byCell = [](const NewCell& a, const NewCell& b) {
             return a.entity != b.entity ? a.entity < b.entity : a.component < b.component;
-        });
+        };
+
+        // Step 5a: initial values (Registrar::InitialValue). Every cell added by
+        // steps 4 and 5 is looked at once, (EntityId, ComponentId) ascending; a
+        // cell this step adds is looked at in the next round, so a chain of
+        // declarations completes at this sync point. A Target the entity
+        // already has is left as it is, so a round adds each cell at most once
+        // and the rounds end.
+        if (!data_->initialValues.empty()) {
+            const auto& rules = data_->initialValues;
+            std::vector<NewCell> round = added;
+            while (!round.empty()) {
+                std::sort(round.begin(), round.end(), byCell);
+                std::vector<NewCell> next;
+                for (const NewCell& cell : round) {
+                    auto rule = std::lower_bound(rules.begin(), rules.end(), cell.component,
+                                                 [](const Detail::InitialValueRecord& r, ComponentId request) {
+                                                     return r.requestId < request;
+                                                 });
+                    for (; rule != rules.end() && rule->requestId == cell.component; ++rule) {
+                        if (rule->put(*columns_[rule->requestId], *columns_[rule->targetId], cell.entity, stamp)) {
+                            next.push_back(NewCell{cell.entity, rule->targetId});
+                        }
+                    }
+                }
+                added.insert(added.end(), next.begin(), next.end());
+                round = std::move(next);
+            }
+        }
+
+        // Step 6: OnAdd for new cells, (EntityId, ComponentId) ascending; an overwrite is not an add.
+        std::sort(added.begin(), added.end(), byCell);
         for (const NewCell& cell : added) {
             auto hooked = RunHooks(HookTrigger::OnAdd, cell.entity, cell.component, planPos, schedule, stamp);
             if (!hooked) return hooked;

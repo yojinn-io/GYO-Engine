@@ -272,6 +272,36 @@ struct Snapshot {
 };
 
 using MakeColumnFn = std::unique_ptr<ColumnBase> (*)();
+
+// Registrar::InitialValue. Puts Fn(the Request cell of id) into the Target
+// column when the entity has no Target; true when a cell was added.
+using InitialValueFn = bool (*)(const ColumnBase& request, ColumnBase& target, EntityId id, ChangeStamp stamp);
+
+template <class Target, class Request, auto Fn>
+bool PutInitialValue(const ColumnBase& request, ColumnBase& target, EntityId id, ChangeStamp stamp) {
+    auto& to = static_cast<Column<Target>&>(target);
+    if (to.Find(id) != nullptr) return false;
+    const Cell<Request>* from = static_cast<const Column<Request>&>(request).Find(id);
+    GYO_ASSERT(from != nullptr);
+    return to.Put(id, Fn(from->value), stamp);
+}
+
+// The shape Registrar::InitialValue accepts: Target (*)(const Request&).
+template <class Target, class F>
+struct InitialValueRequest {
+    static constexpr bool valid = false;
+    using Type = void;
+};
+template <class Target, class Request>
+struct InitialValueRequest<Target, Target (*)(const Request&)> {
+    static constexpr bool valid = true;
+    using Type = Request;
+};
+template <class Target, class Request>
+struct InitialValueRequest<Target, Target (*)(const Request&) noexcept> {
+    static constexpr bool valid = true;
+    using Type = Request;
+};
 using MakeResourceFn = std::unique_ptr<ResourceBase> (*)();
 using MakeEventsFn = std::unique_ptr<EventBufferBase> (*)();
 

@@ -30,6 +30,10 @@ namespace {
 struct Position { std::int32_t x; std::int32_t y; };
 struct Velocity { std::int32_t dx; std::int32_t dy; };
 struct Health { std::int32_t hp; };
+// What a System that wants a new thing spawns. It names no component it does
+// not write: Position, Velocity and Health each take their first value from it
+// (Registrar::InitialValue in GameData).
+struct Arrival { std::int32_t x; std::int32_t y; std::int32_t dx; std::int32_t dy; std::int32_t hp; };
 struct Armor { std::int32_t points; };
 struct Gravity { std::int32_t g; };
 struct Paused { std::int32_t on; };
@@ -58,10 +62,14 @@ SystemOptions In(std::string name, std::string stage, std::vector<std::string> b
     return o;
 }
 
+Position PositionOf(const Arrival& arrival) { return Position{arrival.x, arrival.y}; }
+Velocity VelocityOf(const Arrival& arrival) { return Velocity{arrival.dx, arrival.dy}; }
+Health HealthOf(const Arrival& arrival) { return Health{arrival.hp}; }
+
 // One new thing per tick for the first three ticks; the count is the System's own state.
-SystemResult Spawner(Spawn<Bundle<Position, Velocity, Health>> spawn, Local<std::int32_t> spawned) {
+SystemResult Spawner(Spawn<Bundle<Arrival>> spawn, Local<std::int32_t> spawned) {
     if (*spawned >= 3) return Ok();
-    auto made = spawn.New(Position{0, 10}, Velocity{1, 0}, Health{2});
+    auto made = spawn.New(Arrival{0, 10, 1, 0, 2});
     if (!made) return Engine::Base::Err(std::move(made).error());
     ++*spawned;
     return Ok();
@@ -119,12 +127,18 @@ SystemResult LogDeath(HookCtx ctx) {
     return Ok();
 }
 
-// Spawner and the Systems that update a component both write it, so the
-// spawned components are declared Shared (see the Exclusive case below).
+// Every component keeps the default, Exclusive: Move is the one writer of
+// Position, ApplyGravity of Velocity, ApplyHits of Health. Spawner writes only
+// Arrival; the kernel fills the other three in at the sync point where an
+// Arrival appears.
 void GameData(Registrar& r) {
-    r.Component<Position>({.name = "Position", .writePolicy = WritePolicy::Shared});
-    r.Component<Velocity>({.name = "Velocity", .writePolicy = WritePolicy::Shared});
-    r.Component<Health>({.name = "Health", .writePolicy = WritePolicy::Shared});
+    r.Component<Position>({.name = "Position"});
+    r.Component<Velocity>({.name = "Velocity"});
+    r.Component<Health>({.name = "Health"});
+    r.Component<Arrival>({.name = "Arrival"});
+    r.InitialValue<Position, &PositionOf>();
+    r.InitialValue<Velocity, &VelocityOf>();
+    r.InitialValue<Health, &HealthOf>();
     r.Resource<Gravity>({.name = "Gravity"});
     r.Resource<Paused>({.name = "Paused"});
     r.Resource<Stats>({.name = "Stats", .writePolicy = WritePolicy::Shared});
@@ -200,6 +214,9 @@ TEST_CASE("skeleton: eight ticks of the game give the hand-worked result") {
     CHECK(world.Get<Position>(102)->x == 2);
     CHECK(world.Get<Position>(102)->y == 7);
     CHECK(world.Resource<Stats>()->hits == 0);
+    // The request stays on the entity; nothing reads it after the first sync point.
+    REQUIRE(world.Get<Arrival>(102) != nullptr);
+    CHECK(world.Get<Arrival>(102)->y == 10);
 
     // Tick 5: the first thing is below the floor. The hit sent by
     // HurtBelowFloor reaches ApplyHits in the same tick.
@@ -257,9 +274,9 @@ namespace {
 
 // An inner operation fails; the System adds its own layer of context and
 // returns the error. It does not log: the Executor's handler does, once.
-SystemResult SpawnsWave(Spawn<Bundle<Position, Velocity, Health>> spawn) {
+SystemResult SpawnsWave(Spawn<Bundle<Arrival>> spawn) {
     for (int member = 0; member < 3; ++member) {
-        auto made = spawn.New(Position{0, 0}, Velocity{0, 0}, Health{1});
+        auto made = spawn.New(Arrival{0, 0, 0, 0, 1});
         if (!made) {
             return Engine::Base::Err(std::move(made).error().Wrap("SpawnsWave: wave member " + std::to_string(member)));
         }
@@ -331,8 +348,10 @@ TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and 
 }
 
 TEST_CASE("skeleton: two writers with no order are tied by registration and listed") {
+    // Two Systems may write one component only when it is declared Shared.
     auto rig = WorldTest::MakeRig([](Registrar& r) {
-        GameData(r);
+        r.Component<Position>({.name = "Position", .writePolicy = WritePolicy::Shared});
+        r.Schedule(GameTick());
         r.AddSystem<&WritePositionA>(In("AddOne", "Simulate"));
         r.AddSystem<&WritePositionB>(In("Double", "Simulate"));
     });
