@@ -258,11 +258,16 @@ TEST_CASE("J-40: Z6 for Systems and hooks, Z2 for a zone B hook, Z8 for a compon
     CHECK(HasRule(rollbackInputColumn, StartupCode::DE7, "Z8"));
 }
 
-TEST_CASE("J-14: a hook without a zone fails; a zone C hook with Local fails") {
+TEST_CASE("J-14: a hook without a zone fails under RequireExplicitZones and is zone B without it; a zone C hook "
+          "with Local fails") {
     Built hookNoZone = FinishOne([](Registrar& r) {
+        r.RequireExplicitZones();
         r.Hook<TestMarker, &HookWritesMode>(HookTrigger::OnAdd, {.name = "OnMarker"});
     });
     CHECK(HasRule(hookNoZone, StartupCode::DE7, "S-6"));
+    KERNEL_REQUIRE_OK(FinishOne([](Registrar& r) {
+        r.Hook<TestMarker, &HookWritesMode>(HookTrigger::OnAdd, {.name = "OnMarker"});
+    }));
     Built hookLocal = FinishOne([](Registrar& r) {
         r.Hook<TestVel, &HookKeepsLocal>(HookTrigger::OnAdd, {.name = "OnVel", .zone = Zone::C});
     });

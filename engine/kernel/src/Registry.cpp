@@ -475,6 +475,11 @@ void Registrar::DeclareAllotter(TypeKey resource, Detail::AllotterOps ops) {
     data_->allotterOwners.push_back(plugin_);
 }
 
+void Registrar::RequireExplicitZones() {
+    GYO_ASSERT(data_->building);
+    data_->explicitZones = true;
+}
+
 void Registrar::Schedule(ScheduleOptions options) {
     GYO_ASSERT(data_->building);
     Detail::RegistryData& data = *data_;
@@ -686,6 +691,22 @@ void CheckPluginList(RegistryData& data) {
             }
         }
     }
+}
+
+// A zone left Unset is zone B unless a plugin asked for explicit zones
+// (Registrar::RequireExplicitZones). Runs once registration is closed and
+// before every check, so the zone rules, the Plans and the fingerprints all
+// see the zone the declaration ends up with.
+void ApplyDefaultZones(RegistryData& data) {
+    if (data.explicitZones) return;
+    const auto fill = [](Zone& zone) {
+        if (zone == Zone::Unset) zone = Zone::B;
+    };
+    for (ColumnInfo& info : data.components) fill(info.zone);
+    for (ResourceInfo& info : data.resources) fill(info.zone);
+    for (EventInfo& info : data.events) fill(info.zone);
+    for (SystemRecord& system : data.systems) fill(system.options.zone);
+    for (HookRecord& hook : data.hooks) fill(hook.zone);
 }
 
 void CheckData(RegistryData& data) {
@@ -1361,6 +1382,7 @@ Engine::Base::Result<void, StartupReport> Registry::Finish() {
     // final ids and sets (spec C.2 point 4). Plans and the Registry fingerprint
     // come after Finish, as in spec C.2 points 5 and 6. With errors so far the
     // ids are not final, so plugins' Finish is not called.
+    Detail::ApplyDefaultZones(data);
     Detail::CheckData(data);
     Detail::CheckSchedules(data);
     Detail::ResolveSystems(data);

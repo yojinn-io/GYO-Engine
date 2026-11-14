@@ -21,9 +21,11 @@ using EffectId = std::uint32_t;
 using SetId = std::uint32_t;
 using RegistrationSeq = std::uint32_t;
 
-// The determinism zone (spec G; target/determinism.md section 2). There is no
-// default: Unset is reported at finish (D-E7, spec S-6), so a forgotten zone
-// never silently becomes (b) or (c).
+// The determinism zone (spec G; target/determinism.md section 2). A zone left
+// Unset is zone B: a product that has no (c) data never writes a zone. A
+// product that needs every zone written out calls
+// Registrar::RequireExplicitZones; Unset is then reported at finish (D-E7,
+// spec S-6), so a forgotten zone never silently becomes (b).
 enum class Zone : std::uint8_t {
     Unset,
     C,

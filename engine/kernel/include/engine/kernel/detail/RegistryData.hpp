@@ -132,6 +132,8 @@ struct RegistryData {
     std::uint32_t schedulerShuffle = 0;
     bool extractSourceSet = false;
 
+    // Registrar::RequireExplicitZones: an Unset zone is an error instead of zone B.
+    bool explicitZones = false;
     std::vector<StartupError> errors;
     bool finished = false;
     // True only while plugins' Build functions run (Registrar asserts it).

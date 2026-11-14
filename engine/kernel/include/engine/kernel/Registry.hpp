@@ -231,6 +231,12 @@ public:
         DeclareAllotter(KeyOf<T>(), Detail::AllotterOps{&Detail::AllotIn<T>, &Detail::OwnsIn<T>});
     }
 
+    // Makes a zone left Unset a startup error (D-E7, S-6) for the whole
+    // Registry instead of zone B. Called by the plugin that owns the product's
+    // (c) data, so a forgotten zone cannot pass as (b). Any plugin may call it;
+    // calling it twice is the same as once.
+    void RequireExplicitZones();
+
     void Schedule(ScheduleOptions options);
     // Inserts a stage before or after an existing stage of a schedule (spec C.2 point 2).
     void InsertStage(std::string_view schedule, std::string_view anchor, StagePlace place, std::string stage);
