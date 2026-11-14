@@ -7,7 +7,7 @@
 
 ## 件数の突き合わせ
 
-（L1 完成後填入：宣告判定 2 的 J 條目 × 三平台）
+**一致**——L1 run 43544830837（commit 18fab91d）：宣告判定 2 的 J 條目＋執行半條 26 個（J-1～J-8、J-11、J-12、J-26、J-29～J-37、J-32b、J-44、J-45、J-50、J-52、J-53）在 linux-x64、windows-x64、macos-arm64 三份 tests.xml 各 26、全 pass（26×3＝78）；kernel 的 ctest 總數 linux／macOS 58、windows 57（沒有 `kernel.symbols`，前批限界），非 pass 0。
 
 ## 做了什麼
 
@@ -25,14 +25,14 @@
 | # | 判定 | 結果 |
 |---|---|---|
 | 1 | 範圍 | 成立：`git diff --name-only origin/master...HEAD`＋作業樹 33 檔全在宣告第 2 節（Python 比對；正例 `apps/demo/x.cpp` 先命中） |
-| 2 | L1 三平台、J 條目 × 3 | （L1 完成後填入） |
+| 2 | L1 三平台、J 條目 × 3 | 成立：run 43544830837 三平台與 CI gate 綠，26×3＝78 全 pass |
 | 3 | 存取驗證 | 本機成立：三種繞路在驗證開著時以 Err 攔下（BoundaryChange／AccessViolation，帶 world 名），關著時 Ok；同一執行檔兩個 World；報告帶 `accessVerification`、`breakOnKernelError`、排除欄；debugger 欄位以 `doctest::detail::isDebuggerActive()` 印（Windows 上即 `IsDebuggerPresent()`；不 include 平台標頭，因 OS 邊界守衛） |
-| 4 | 套用順序的決定性 | 本機：J-32 golden 已取（三平台待 L1）；J-44 的 20 種排列 World 摘要相同 |
+| 4 | 套用順序的決定性 | J-32 golden 三平台逐位元相同（三平台 J-32 pass）；J-44 的 20 種排列 World 摘要相同 |
 | 5 | Interrupted 與 release | 本機成立（RelWithDebInfo＝NDEBUG 定義，測試印出）；診斷緩衝在 Interrupted 後可讀 |
-| 6 | 符號層 | 本機 macOS 成立（TypeKey anchor 與 tlCurrent 都在，另兩個是 Base 的 foreign）；Linux 待 L1 |
+| 6 | 符號層 | 成立：`kernel.symbols --require tlCurrent` 在 linux-x64、macos-arm64 pass（Windows 不做，前批限界） |
 | 7 | 突變 | 成立：本批相關最終 96/96 killed（期待文字列全部是失敗的 CHECK 式或專屬訊息）；J.3 第 1、7、8、9、12、13、16 條都在；Fable 敵對檢查 47 處、存活 33 處 → 加入 26 條（不加的 7 條見下）；之後兩個待決 commit 再加 2 條，killed；既有 rs-／ks- 205/208＋3 條處置後 killed、Linux 限定 1 條 skip |
 | 8 | BU-2 | 只記錄（本機 Intel Mac、RelWithDebInfo）：一次 Run（400×8 欄、20 個 (c) System＋生滅）p50 17.1 µs、p95 17.7 µs；System 派發 0.78 µs／個；空同步點 0.16 µs；生滅（4 生 4 滅、8 欄）400 實體 p95 14.0 µs、4,000 實體 p95 142 µs；驗證開著 400 實體 p95 2.9 ms、4,000 實體 p95 29.8 ms（第二層斜率 27.9 µs／KiB） |
-| 9 | 既有守衛不變紅 | 本機 core 全 109 ctest 綠；L1 待 |
+| 9 | 既有守衛不變紅 | 成立：L1 三平台綠 |
 
 ## 經緯
 
@@ -76,4 +76,5 @@
 
 ## L1
 
-（PR 後填入）
+- 第一輪（run 43466333145，PR #218）：windows-x64 編譯失敗——`ExecutorTests.cpp:284` 把 `std::string_view` 串進 doctest 的訊息，MSVC 下 doctest 只前置宣告 `std::ostream`。切分：**測試的缺陷**（不是實作、不是環境）；改成 `std::string`（commit 18fab91d）。macos-arm64 因 fail-fast 取消、linux-x64 綠。
+- 第二輪（run 43544830837，commit 18fab91d）：三平台與 CI gate 綠。tests.xml 在主 checkout `build/evidence/kernel-world-exec/l1-43544830837/`。
