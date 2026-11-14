@@ -311,6 +311,12 @@ public:
     // point too. Several Requests may name one Target: on an entity that gets
     // more than one of them at one sync point, the Request with the lower
     // ComponentId gives the value.
+    //
+    // Zone rules: a System or hook that inserts or spawns Request writes Target,
+    // through chains of declarations, for Z1, Z2, Z3 and Z6 (not for the writer
+    // count), so the funnel allows what a direct write allows. Writing Request
+    // in place or removing it fills nothing and does not count. A zone C Target takes its
+    // value from a zone C Request only (Z1).
     template <class Target, auto Fn>
     void InitialValue(std::source_location source = std::source_location::current()) {
         using Shape = Detail::InitialValueRequest<Target, decltype(Fn)>;
@@ -411,6 +417,10 @@ struct AccessSet {
     std::vector<ComponentId> membershipReads;
     // CommandsFor inserts and removes, Spawn / SpawnWithId bundles.
     std::vector<ComponentId> deferredWrites;
+    // The part of deferredWrites that can add a cell: CommandsFor inserts and
+    // bundle components, not removes. Only these make a sync point fill a
+    // component (Registrar::InitialValue); not hashed in the fingerprints.
+    std::vector<ComponentId> deferredInserts;
     std::vector<SetId> setReads;
     // Component and resource ids of the extract source Registry.
     std::vector<AccessKey> extractReads;

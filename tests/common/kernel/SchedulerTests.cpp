@@ -127,11 +127,11 @@ struct Golden {
 // registries; the same on every L1 platform (declaration judgement 4).
 constexpr std::array<Golden, 3> kGoldens{{
     {"mixed", &MixedRegistry, "1:19c809655efc5a2d7887bc522793c9e9b2cd99fd728fd68cb554c11396d6bb5c",
-     "1:26223cbafc01a99143197a38b599893e25af955e3c46862568c77b7d8307419a"},
+     "2:f8d88e20bb6bfe4b9934b2aee719fc973951412440cbc536b3a9b89de7fce3e5"},
     {"deferred", &DeferredRegistry, "1:a6a8b455af3e5b799e81574a1e0e977f58aec75d8dee1245a9b2600fbca40277",
-     "1:5fc7f8765ea715fd6873435c1e55813f85eff911205208698d19725f426828b4"},
+     "2:17e3841504da0c7004eb7272e2b0768a46202f02e2d77962c8b53f6f53b8b868"},
     {"events", &EventRegistry, "1:71e9a081a30f3bf3e4cf5ef7eac6cdea2042a81196aea64b534ae9e7ce4c9668",
-     "1:1a8883951c850b347d38485ecb93f0cbf99475cbdccb31d21f90d63ac7a6d5c5"},
+     "2:e1fc19c7c1aeb8f0b2e3f48caef21eb6aac4e8ec1c1c5112f5f9506abed6a83e"},
 }};
 
 Built BuildGolden(const Golden& golden, std::uint32_t shuffle = 0) {
