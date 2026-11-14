@@ -43,6 +43,8 @@
 - [global-audit.zh-Hant.md](global-audit.zh-Hant.md)：**全局計畫審計（2026-11-14）**——舊架構污染、PvP 污染與合理的分類，架構基本前提的對抗；使用者據第 5 節定了範圍與停點。
 - [rebuild-declaration.zh-Hant.md](rebuild-declaration.zh-Hant.md)：`v8-arch-rebuild` 的事前宣告（草稿，待使用者核准）——新分支 `gyo2` 重建：階段 R0～R6；R0 帶過去清單與同詞異義表。
 - [rebuild-diagram-review.zh-Hant.md](rebuild-diagram-review.zh-Hant.md)：11 月 11 日三張圖（`diagrams/`）的重新評審——用詞、思路、資料的流向分開判；能不能復用與四處偏離的選項（待使用者確認）。
+- [system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)：作者怎麼寫一個 System（現況的說明頁）；[rebuild-1111-decisions-status.zh-Hant.md](rebuild-1111-decisions-status.zh-Hant.md)：11 月 11 日那批機制的決定在 gyo2 上的現況；[rebuild-time-design.zh-Hant.md](rebuild-time-design.zh-Hant.md)：時間、固定步與跨時鐘事件的設計提案（v1，未通過檢查）。
+- dev_log：[2026_11_14_gyo2_mechanism_skeleton](../../../dev_logs/2026_11_14_gyo2_mechanism_skeleton.zh-Hant.md)（機制的骨架跑通）。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
 
