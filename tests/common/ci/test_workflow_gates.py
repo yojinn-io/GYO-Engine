@@ -359,6 +359,33 @@ class WorkflowGateTests(unittest.TestCase):
             if "cmake --install" in step or "python build/ci/common/archive_package.py" in step:
                 self.assertNotIn("if: matrix.kind", step)
 
+    def test_only_a_toolchain_row_without_tools_skips_its_package_and_says_so(self):
+        native = job_block(self.shared, "native")
+        plan = step_with(native, "id: package_plan")
+        self.assertIn("shell: bash", plan)
+        self.assertLess(native.index("id: package_plan"), native.index("id: package\n"))
+        for marker in ("id: package\n", "id: package_validation", "id: smoke", "id: archive"):
+            with self.subTest(step=marker):
+                self.assertIn("        if: steps.package_plan.outputs.assemble == 'true'\n", step_with(native, marker))
+        upload = step_with(native, "name: gyo-package-${{ matrix.product }}-${{ matrix.platform }}")
+        self.assertIn("steps.archive.outcome == 'success'", upload)
+        bash = find_bash()
+        if bash is None:
+            self.skipTest("Native Bash is unavailable")
+        script = run_script(plan)
+        for product, tools, assemble in (("toolchain", "", "false"), ("toolchain", "alpha:gui", "true"),
+                                         ("toolchain", "alpha:gui;beta:cli", "true"), ("sample", "", "true")):
+            with self.subTest(product=product, tools=tools), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "output"
+                environment = dict(os.environ, GYO_PRODUCT=product, GYO_SELECTED_TOOLS=tools,
+                                   GYO_PACKAGE_PLATFORM="linux-x64", GITHUB_OUTPUT=str(output))
+                result = subprocess.run([bash, "--noprofile", "--norc", "-e", "-c", script], env=environment,
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output.read_text(), f"assemble={assemble}\n")
+                # A skip is announced with its reason; an assembled row announces nothing.
+                self.assertEqual("::notice::No tool is registered for linux-x64" in result.stdout, assemble == "false")
+
     def test_registered_tools_have_no_build_switch_of_their_own_unless_none_is_registered(self):
         # Tools are selected only through GYO_TOOLS: no registered tool may come
         # back as its own GYO_BUILD_<TOOL> or GYO_<TOOL>_BUILD_GUI switch. The
@@ -383,18 +410,6 @@ class WorkflowGateTests(unittest.TestCase):
         upload = step_using(native, "actions/upload-artifact")
         self.assertNotIn("product-copy", upload)
 
-    def test_toolchain_baseline_runs_common_gpu_tests_without_game_checks(self):
-        native = job_block(self.shared, "native")
-        step = next(step for step in re.split(r"(?m)^      - ", native)
-                    if "id: gpu_smoke" in step)
-        self.assertIn("matrix.kind == 'toolchain' || steps.package.outputs.has_gpu == 'true'", step)
-        self.assertIn('if [ "$GYO_PRODUCT" = toolchain ]; then', step)
-        self.assertIn("-L gpu -R '^render\\.'", step)
-        self.assertIn("--no-tests=error --output-on-failure", step)
-        self.assertIn("set -euo pipefail", step)
-        self.assertIn("common-gpu-tests.xml", step)
-        self.assertNotIn("continue-on-error", step)
-
     def test_toolchain_and_declared_product_gpu_checks_are_independent(self):
         native = job_block(self.shared, "native")
         step = next(step for step in re.split(r"(?m)^      - ", native)
@@ -406,38 +421,35 @@ class WorkflowGateTests(unittest.TestCase):
         self.assertNotIn("--probe-directory", native)
         self.assertNotIn("GPU_SMOKE_SUITE", native)
 
-    def test_actual_gpu_branches_run_both_and_propagate_either_failure(self):
+    def test_actual_product_gpu_branch_runs_and_propagates_failure(self):
         bash = find_bash()
         if bash is None:
             self.skipTest("Native Bash is unavailable")
         native = job_block(self.shared, "native")
         step = next(step for step in re.split(r"(?m)^      - ", native) if "id: gpu_smoke" in step)
-        start = step.index('          if [ "$GYO_PRODUCT" = toolchain ]; then')
+        start = step.index('          if [ "$HAS_PRODUCT_GPU" = true ]; then')
         script = textwrap.dedent(step[start:]).strip()
-        # Run the workflow's actual branch selection with external GPU processes
-        # substituted; the scripts and failure propagation are not duplicated.
+        # Run the workflow's actual branch with the external GPU process
+        # substituted; the script and failure propagation are not duplicated.
         prefix = '''set -euo pipefail
 xvfb-run() {
   case " $* " in
-    *" ctest "*) printf 'baseline\\n' >> calls; return "$BASELINE_STATUS" ;;
     *" python "*) printf 'product\\n' >> calls; return "$PRODUCT_STATUS" ;;
     *) return 99 ;;
   esac
 }
 '''
-        for baseline, product in ((0, 0), (1, 0), (0, 1)):
-            with self.subTest(baseline=baseline, product=product), tempfile.TemporaryDirectory() as temporary:
+        for product in (0, 1):
+            with self.subTest(product=product), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 (root / "build/target/_build/test/logs").mkdir(parents=True)
-                environment = dict(os.environ, GYO_PRODUCT="toolchain", HAS_PRODUCT_GPU="true",
+                environment = dict(os.environ, GYO_PRODUCT="sample", HAS_PRODUCT_GPU="true",
                     PRESET="test", GITHUB_WORKSPACE=".", GYO_PACKAGE_PLATFORM="linux-x64", GYO_BUILD_CONFIG="Release",
-                    SOURCE_COMMIT="0" * 40, ACCEPTANCE_PROFILE="release",
-                    BASELINE_STATUS=str(baseline), PRODUCT_STATUS=str(product))
+                    SOURCE_COMMIT="0" * 40, ACCEPTANCE_PROFILE="release", PRODUCT_STATUS=str(product))
                 result = subprocess.run([bash, "--noprofile", "--norc", "-c", prefix + script],
                     cwd=root, env=environment, capture_output=True, text=True, timeout=10)
-                self.assertEqual(result.returncode == 0, baseline == product == 0, result.stderr)
-                calls = (root / "calls").read_text().splitlines()
-                self.assertEqual(calls, ["baseline"] if baseline else ["baseline", "product"])
+                self.assertEqual(result.returncode == 0, product == 0, result.stderr)
+                self.assertEqual((root / "calls").read_text().splitlines(), ["product"])
 
     def test_presets_separate_products_quality_and_engineering(self):
         document = json.loads((ROOT / "CMakePresets.json").read_text(encoding="utf-8"))
@@ -663,10 +675,7 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         for marker in ("id: configure", "id: build", "id: tests", "id: shaders", "id: core"):
             with self.subTest(step=marker):
                 assert_native_commands_propagate(self, run_script(step_with(l1, marker)))
-        gpu = run_script(step_with(l1, "id: gpu"))
-        self.assertTrue(gpu.startswith("set -euo pipefail\n"), gpu)
-        self.assertNotRegex(gpu, r"exit 0|\|\| true")
-        for marker in ("id: shaders", "id: gpu", "id: core"):
+        for marker in ("id: shaders", "id: core"):
             with self.subTest(step=marker):
                 self.assertIn("runner.os == 'Linux'", step_with(l1, marker))
         self.assertIn("steps.configure.outputs.has_shader_tools == 'true'", step_with(l1, "id: shaders"))
@@ -693,20 +702,6 @@ python() { printf '%s\\n' "$@" > python-arguments; }
                 self.assertLess(text.index("set(CMAKE_CXX_STANDARD 20)"), text.index("set(CMAKE_CXX_SCAN_FOR_MODULES OFF)"))
         build = (ROOT / "build/cmake/GyoBuild.cmake").read_text(encoding="utf-8")
         self.assertLess(build.index("set(CMAKE_CXX_SCAN_FOR_MODULES OFF)"), build.index("add_subdirectory("))
-
-    def test_l1_and_toolchain_gpu_baselines_share_one_command(self):
-        native = job_block(self.shared, "native")
-        l1 = job_block(self.quick, "l1")
-        native_gpu = run_script(step_with(native, "id: gpu_smoke"))
-        l1_gpu = run_script(step_with(l1, "id: gpu"))
-        setup_end = "vulkaninfo --summary"
-        native_setup = native_gpu[:native_gpu.index("\n", native_gpu.index(setup_end))]
-        self.assertTrue(l1_gpu.startswith(native_setup + "\n"), "L1 must reuse the Lavapipe/Xvfb setup verbatim")
-        native_ctest = native_gpu[native_gpu.index("xvfb-run -a -s '-screen 0 1920x1080x24' ctest"):]
-        native_ctest = native_ctest[:native_ctest.index("\nfi")]
-        self.assertEqual(textwrap.dedent(native_ctest.replace("\n  ", "\n")).strip(),
-                         l1_gpu[len(native_setup):].strip())
-        self.assertIn("-L gpu -R '^render\\.'", l1_gpu)
 
     def test_shared_toolchain_setup_and_compiler_cache_ownership(self):
         native = job_block(self.shared, "native")

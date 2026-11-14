@@ -124,7 +124,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.GYO_HOST_TOOLS }}
-          key: shader-tools-v3-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}-${{ hashFiles('engine/render/shaders/pipeline/**', 'build/cmake/GyoShaders.cmake', 'engine/base/include/engine/base/Sha256.hpp') }}
+          # No source hash while the shader tool sources are absent (gyo2 has no
+          # render module); hash the tool's sources again when they return.
+          key: shader-tools-v3-sccache-${{ matrix.host }}-${{ matrix.toolchain }}-${{ steps.setup.outputs.compiler }}
 
       - name: Build the selected graph and its tests
         id: build
@@ -169,8 +171,25 @@ jobs:
           python tests/common/ci/app_copy_integration.py --repository "$env:GITHUB_WORKSPACE" --workdir "build/target/_build/$env:PRESET-app-copy" --reuse-cache "build/target/_build/$env:PRESET/CMakeCache.txt" --parallel $env:CMAKE_BUILD_PARALLEL_LEVEL --logs "build/target/_build/$env:PRESET/logs/app-copy" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/app-copy.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # A toolchain package holds the selected tools. With no tool registered
+      # (the tool registry export selects none on every platform) the row still
+      # builds and tests the engine, but has nothing to assemble: the package
+      # steps below are skipped and this step says so. Every app row, and every
+      # toolchain row with a tool, assembles its package as before.
+      - name: Decide whether this row has a package to assemble
+        id: package_plan
+        shell: bash
+        run: |
+          if [ "$GYO_PRODUCT" = toolchain ] && [ -z "$GYO_SELECTED_TOOLS" ]; then
+            echo "::notice::No tool is registered for $GYO_PACKAGE_PLATFORM: the toolchain row assembles, checks and archives no package (skipped: install, package checks, installed acceptance, archive, upload)."
+            echo "assemble=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "assemble=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Assemble the selected product package
         id: package
+        if: steps.package_plan.outputs.assemble == 'true'
         run: |
           cmake --install "build/target/_build/$env:PRESET" --component $env:GYO_PRODUCT --prefix "$env:GITHUB_WORKSPACE/build/target/_build/$env:PRESET/stage" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/install.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -179,6 +198,7 @@ jobs:
 
       - name: Validate installed native dependencies
         id: package_validation
+        if: steps.package_plan.outputs.assemble == 'true'
         run: |
           python build/acceptance/common/validate_package.py --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --logs "build/target/_build/$env:PRESET/logs" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/package-linkage-check.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -186,14 +206,17 @@ jobs:
       - name: Run installed product acceptance
         id: smoke
         timeout-minutes: 20
+        if: steps.package_plan.outputs.assemble == 'true'
         run: |
           python build/acceptance/common/run_package_checks.py --context "build/target/_build/$env:PRESET/packages/$env:GYO_PRODUCT/$env:GYO_BUILD_CONFIG/acceptance-context.json" --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --platform $env:GYO_PACKAGE_PLATFORM --revision $env:SOURCE_COMMIT --profile $env:ACCEPTANCE_PROFILE --logs "build/target/_build/$env:PRESET/logs" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/installed-checks.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Run common engine and declared product Linux GPU checks
+      # The engine has no render module, so no common engine GPU test runs here;
+      # a product that declares GPU checks still runs them on Lavapipe.
+      - name: Run declared product Linux GPU checks
         id: gpu_smoke
         timeout-minutes: 20
-        if: runner.os == 'Linux' && (matrix.kind == 'toolchain' || steps.package.outputs.has_gpu == 'true')
+        if: runner.os == 'Linux' && steps.package.outputs.has_gpu == 'true'
         shell: bash
         env:
           HAS_PRODUCT_GPU: ${{ steps.package.outputs.has_gpu }}
@@ -213,13 +236,6 @@ jobs:
           mkdir -p "$XDG_RUNTIME_DIR"
           chmod 700 "$XDG_RUNTIME_DIR"
           xvfb-run -a -s '-screen 0 1920x1080x24' vulkaninfo --summary > "build/target/_build/$PRESET/logs/vulkan-info.log" 2>&1
-          if [ "$GYO_PRODUCT" = toolchain ]; then
-            xvfb-run -a -s '-screen 0 1920x1080x24' ctest \
-              --test-dir "build/target/_build/$PRESET" -L gpu -R '^render\.' \
-              --no-tests=error --output-on-failure \
-              --output-junit "$GITHUB_WORKSPACE/build/target/_build/$PRESET/logs/common-gpu-tests.xml" \
-              2>&1 | tee "build/target/_build/$PRESET/logs/common-gpu-tests.log"
-          fi
           if [ "$HAS_PRODUCT_GPU" = true ]; then
             xvfb-run -a -s '-screen 0 1920x1080x24' python build/acceptance/common/run_package_checks.py \
               --gpu --driver vulkan --context "build/target/_build/$PRESET/packages/$GYO_PRODUCT/$GYO_BUILD_CONFIG/acceptance-context.json" --stage "build/target/_build/$PRESET/stage" --product "$GYO_PRODUCT" \
@@ -229,6 +245,7 @@ jobs:
 
       - name: Archive the verified product package
         id: archive
+        if: steps.package_plan.outputs.assemble == 'true'
         run: |
           python build/ci/common/archive_package.py --stage "build/target/_build/$env:PRESET/stage" --product $env:GYO_PRODUCT --output "build/target/_build/$env:PRESET/gyo-$env:GYO_PRODUCT-$env:GYO_PACKAGE_PLATFORM.tar.gz" --revision $env:SOURCE_COMMIT --platform $env:GYO_PACKAGE_PLATFORM --cpu-execution $env:GYO_CPU_EXECUTION --smoke-report "build/target/_build/$env:PRESET/logs/acceptance.json" 2>&1 | Tee-Object "build/target/_build/$env:PRESET/logs/archive.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -352,7 +369,7 @@ jobs:
           | Core baseline | $env:CORE_RESULT |
           | Independent app copy (Windows release baseline) | $env:APP_COPY_RESULT |
           | Installed product acceptance | $env:SMOKE_RESULT |
-          | Linux software GPU / engine baseline | $env:GPU_RESULT |
+          | Linux software GPU (declared product checks) | $env:GPU_RESULT |
           | Archive and checksum | $env:ARCHIVE_RESULT |
           | Go vet / test / race (Linux) | $env:GO_RESULT |
           | Go service archives (Linux cross-builds) | $env:GO_SERVICES_RESULT |
