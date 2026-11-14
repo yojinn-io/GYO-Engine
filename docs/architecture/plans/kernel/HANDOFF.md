@@ -262,6 +262,8 @@
 
 - 2026-11-14 **11 月 11 日那批機制的決定在 gyo2 上的現況**（使用者經原架構師會話：「11 月 11 日做了十幾個決策，還有 Result 的錯誤反饋。把機制類的整理一下，交給 GYO2 處理。」清單 A～F 六組，G 組不放）：[rebuild-1111-decisions-status.zh-Hant.md](rebuild-1111-decisions-status.zh-Hant.md)。逐項對照分支 `claude/gyo2-mechanism` 的程式：絕大多數是「帶，而且已經在程式裡」（K.3-1、2、3、4、5、9、14、15、17 與 11-12 的兩次補充、`InsertStage`）；只做一半的：runner 的安裝（只記錄、不能呼叫）、Extract（只有宣告與啟動檢查，執行未做）、boundary 輸入；還沒有程式的：資產模型、Loading 的分批、Editor 的前向資料流、時間的 Resource。要使用者定的 5 件：生成的 bundle 算不算寫者、同步點的套用順序（含原架構師會話補的矛盾：取捨表寫選 generation 模型就改回先進先出，K.3-1 選了 generation 卻沒改回）、跨時鐘的事件、時間與固定步、出錯之後只能重建 World。
 
+- 2026-11-14 **時間、固定步與跨時鐘事件的設計提案 v1 沒有通過檢查**：[rebuild-time-design.zh-Hant.md](rebuild-time-design.zh-Hant.md)；別模型檢查（Opus／xhigh）blocker 7、should 17、nit 8，報告在主 checkout `build/evidence/gyo2-mechanism/time-design-checker-opus.md`，v1 在同資料夾的 `time-design-v1.md`。主要問題：runner 的順序只適用 Match（Client 兩條執行緒三個 World、單機的幀率、有視窗的主執行緒都不成立）；跨時鐘事件只在一個 World 裡分析；tick 多了一份；漏了 `HostClockSample` 與交換點；會換掉 10 月 30 日音效用產品時間軸的做法；把未判的寫成定過的。原因：沒有從規格已有的設計（H.2、H.4、H.7、G.2）與 v7 的計畫出發。v2 重做，還沒開始。名字使用者已說照命名規範（`v8-arch-gyo2-contract-review-replies`）。
+
 ## 下一步
 
 - **進行中**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，已核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
