@@ -30,3 +30,11 @@
 ## 證據
 
 主 checkout（這台 Intel Mac）`/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-mechanism/`：`funnel-mutants.log`、`funnel-ctest-full.log`。突變的腳本未保存（會話的暫存區）。
+
+## 補記：對抗檢查與區規則的修正（同日）
+
+- 任務卡 `v8-arch-gyo2-funnel-check`（Opus／xhigh）檢查這一批，找到 3 個 blocker、3 個 should、3 個 nit；補 6 個測試（PR #229）。
+- blocker 都是同一個原因：啟動檢查只查「(c) 的目標要 (c) 的請求」，System 與 hook 平常要過的區規則沒有套到機制代寫的元件上。
+- 修正（分支 `claude/gyo2-funnel-zone-fix`）：元件與請求的區、role、rollback 必須都相同（D-E7：Z1／Z2、Z3、Z6）；(c) 區的宣告的檔案列進 (c) 區原始檔清單；區域別名 `Shape` 改名（避免遮住私有的 `Registrar::Shape`）；說明頁的規則更正兩條。
+- 驗證：新增 7 個案例；其中 6 個在修正前失敗（`red.log`），修正後全過（`green.log`）；突變 7 條全部由預期的案例抓到（`mutants.log`）；完整 ctest 93／93（`ctest-full.log`）。證據在主 checkout（這台 Intel Mac）`/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-funnel-zone-fix/`；檢查卡的證據在同層的 `gyo2-funnel-check/`。
+- 上面「沒有做別模型的對抗檢查」一句因此更新：已做（Opus）。修正本身沒有再做一次別模型的檢查。

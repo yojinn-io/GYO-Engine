@@ -87,6 +87,8 @@ GYO2 線的持續記錄（使用者 2026-11-14：GYO2 的文件放 `docs/archite
 
 - 2026-11-14 **漏斗工具實作**（`v8-arch-gyo2-count-reverted-funnel-a` 的選項 A；使用者「CI 修好之後直接做漏斗工具」）：`Registrar::InitialValue<Target, Fn>()`，分支 `claude/gyo2-funnel`，commit a53a5622。元件的擁有者宣告「初始值從哪個請求元件、用哪個純函式算」；機制在同步點的加上元件之後、OnAdd 之前補上。寫者的數法沒有改。架構師自己定的細節（已經有的不蓋、覆寫請求不重補、請求留著、可以串、多個請求時取 ComponentId 小的、只有擁有者能宣告、(c) 區只能從 (c) 區取值、Host 的 API 不補）列在[說明頁](system-contract-page.zh-Hant.md)第 8 節，交使用者看。測試 `InitialValueTests.cpp` 8 個案例；突變 8 條都由預期的案例失敗抓到（主 checkout `build/evidence/gyo2-mechanism/funnel-mutants.log`）；本機完整 ctest 93／93。骨架測試改成漏斗寫法，Position、Velocity、Health 回到預設的獨占。**沒做**：Registry 指紋與 C 指紋還沒把這個宣告算進去（要改 J-18 的 golden，等使用者核准）。
 
+- 2026-11-14 **漏斗工具的對抗檢查與修正**（任務卡 `v8-arch-gyo2-funnel-check`，檢查者 Opus／xhigh；作者是主會話 Fable）。檢查找到 3 個 blocker：`InitialValue` 能繞過區的規則——(b) 區的 ingress 經 Input 的請求造出 (c) 區的 State（Z2、Z3）、(c) 區的 System 經請求造出 Input 資料（Z3）、有回滾時 (c) 區的 System 間接寫出不回滾的資料（Z6）；啟動檢查原本只查「(c) 的目標要 (c) 的請求」。主會話修正（分支 `claude/gyo2-funnel-zone-fix`，疊在檢查卡的 PR #229 上）：**元件與它的請求必須區、role、rollback 都相同**，否則 D-E7；理由是「誰能寫請求誰就經宣告寫到元件」，三樣相同時區的規則本來就准他直接寫。這是架構師定的規則，比檢查指出的三種情形寬（凡是不同都擋），交使用者看。同批：(c) 區元件的初始值函式的檔案列進 (c) 區原始檔清單（檢查的 S1）；說明頁「取 ComponentId 小的」更正為只在同一輪成立（S2）；(c) 的請求給 (b) 的目標也擋（S3，同一條規則）。先 Red（6 個案例在修正前失敗）後 Green；突變 7 條都由預期的案例抓到；本機完整 ctest 93／93。檢查卡另補 6 個測試、9 條新突變（補測試前抓到 3 條，補後 9 條）。**仍沒做**：指紋（方案已由檢查卡寫好：Registry 指紋與 C 指紋各加一段、版本加一，要改 J-18 等 5 個 golden，等使用者核准）。檢查列的作者會踩的坑（請求留著、覆寫不重補、Host 的 API 不補、調整 plugin 順序會換掉勝出的請求）記在檢查卡的報告，等使用者看十條規則時一起定。
+
 ## 下一步
 
 - 待使用者：(1) 漏斗工具的細節（說明頁第 8 節的十條規則）；(2) 把初始值的宣告算進 Registry 指紋與 C 指紋——要改 J-18 的 golden 與指紋的格式版本，照 AGENTS §14.4 需要核准；(3) R0b-3 與表不同的做法（報告 3.1 節）；(4) System 契約說明頁整頁的確認；(5) hook 記下的變更何時生效（U3）。

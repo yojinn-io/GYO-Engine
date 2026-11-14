@@ -366,7 +366,7 @@ TEST_CASE("initial value: declarations the Registry refuses") {
             r.Schedule(Tick());
             r.InitialValue<Body, &BodyFromRequest>();
         }}});
-        CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z1"), Describe(built));
+        CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z2"), Describe(built));
     }
     SUBCASE("zone C from zone C is accepted") {
         const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
@@ -561,4 +561,153 @@ TEST_CASE("initial value: two declarations that name each other stop at one sync
     REQUIRE(rig->world().Get<Mass>(id) != nullptr);
     CHECK(rig->world().Get<Body>(id)->x == 50);
     CHECK(rig->world().Get<Mass>(id)->m == 5);
+}
+
+// ---- The zone rules hold through a declaration (found by the adversarial
+// check, v8-arch-gyo2-funnel-check): whoever may write the request writes the
+// component through it, so the two must be the same kind of data.
+
+namespace {
+
+struct Seat { std::int32_t s; };       // zone C, State
+struct SeatInput { std::int32_t s; };  // zone C, role Input (no rollback: Z8)
+struct Spark { std::int32_t s; };      // zone C, State, rolls back
+struct Gate { std::int32_t g; };       // zone B
+Seat SeatFromInput(const SeatInput& in) { return Seat{in.s * 2}; }
+SeatInput InputFromSpark(const Spark& spark) { return SeatInput{spark.s}; }
+Seat SeatFromSpark(const Spark& spark) { return Seat{spark.s}; }
+Gate GateFromSpark(const Spark& spark) { return Gate{spark.s}; }
+Mass MassFromRequest(const BodyAt& request) { return Mass{request.x}; }
+
+SystemResult IngressAsksForSeat(CommandsFor<Inserts<SeatInput>, Removes<>> commands, CurrentTick tick) {
+    if (tick.Tick() == 1) commands.Insert(7, SeatInput{3});
+    return Ok();
+}
+SystemResult SimulationSpawnsSpark(Spawn<Bundle<Spark>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Spark{4});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+SystemResult SpawnsRequestAndCrate(Spawn<Bundle<BodyAt, Crate>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(BodyAt{3}, Crate{1});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+
+// seatRollsBack: whether Seat rolls back like Spark does.
+void SeatData(Registrar& r, bool rollbackSchedule, bool seatRollsBack) {
+    r.Component<Seat>({.name = "Seat", .zone = Zone::C, .rollback = seatRollsBack ? Rollback::Yes : Rollback::No});
+    r.Component<SeatInput>({.name = "SeatInput", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .role = Role::Input});
+    r.Component<Spark>({.name = "Spark", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+    r.Component<Gate>({.name = "Gate", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    // Zone C (rolls back with the World): zone C Systems spawn.
+    r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+    r.Allotter<RangeAllotter>();
+    r.Schedule(KernelTest::FixedSchedule(rollbackSchedule));
+}
+
+SystemOptions Ingress(std::string name) {
+    SystemOptions o = KernelTest::Sys(std::move(name), Zone::B, {At("FixedUpdate", "Ingress")});
+    o.ingress = true;
+    return o;
+}
+
+SystemOptions Simulation(std::string name) {
+    return KernelTest::Sys(std::move(name), Zone::C, {At("FixedUpdate", "Simulate")});
+}
+
+} // namespace
+
+TEST_CASE("initial value: zone C State data does not take its value from a Role::Input request (Z3)") {
+    // Only the Host and ingress Systems (zone B) write Input data; through this
+    // declaration an ingress System would make zone C State data (Z2).
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, false, true);
+        r.InitialValue<Seat, &SeatFromInput>();
+        r.AddSystem<&IngressAsksForSeat>(Ingress("IngressAsksForSeat"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z3"), Describe(built));
+}
+
+TEST_CASE("initial value: Role::Input data does not take its value from a zone C State request (Z3)") {
+    // A zone C System may not write Input data (Z3); through this declaration its spawn would.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, false, true);
+        r.InitialValue<SeatInput, &InputFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z3"), Describe(built));
+}
+
+TEST_CASE("initial value: data that does not roll back takes no value from a request that does (Z6)") {
+    // In a rollback-enabled schedule a zone C System may not write data that
+    // does not roll back (Z6); through this declaration its spawn would.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, true, false);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z6"), Describe(built));
+}
+
+TEST_CASE("initial value: zone B data does not take its value from a zone C request (Z1)") {
+    // A zone C System touches zone C data only (Z1); through this declaration its spawn would write zone B data.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, false, true);
+        r.InitialValue<Gate, &GateFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z1"), Describe(built));
+}
+
+TEST_CASE("initial value: a component and its request of the same zone, role and rollback are accepted and filled") {
+    auto rig = WorldTest::MakeRig([](Registrar& r) {
+        SeatData(r, true, true);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    });
+    REQUIRE(rig->product);
+    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    KERNEL_REQUIRE_RUN_OK(rig->Run("FixedUpdate"));
+    REQUIRE(rig->world().Entities().size() == 1);
+    const EntityId id = rig->world().Entities()[0];
+    REQUIRE(rig->world().Get<Seat>(id) != nullptr);
+    CHECK(rig->world().Get<Seat>(id)->s == 4);
+}
+
+TEST_CASE("initial value: the source file of a zone C declaration is in the zone C sources export") {
+    // The function that computes zone C data is zone C code: the determinism
+    // scan (spec G-5) must see the file that declares it, System or not.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, false, true);
+        r.InitialValue<Seat, &SeatFromSpark>();
+    }}});
+    KERNEL_REQUIRE_OK(built);
+    ZoneCSourcesOptions options{GYO_KERNEL_TEST_REPOSITORY_ROOT, "tests/common/kernel", {}, "0000000"};
+    const auto exported = built.registry->Frozen().ExportZoneCSources(options);
+    REQUIRE(static_cast<bool>(exported));
+    CHECK_MESSAGE(exported.value().find("tests/common/kernel/InitialValueTests.cpp") != std::string::npos, exported.value());
+}
+
+TEST_CASE("initial value: a request that appears through a chain is looked at after the direct requests") {
+    // Mass (from BodyAt) and Crate both give Body a value. Mass has the lower
+    // ComponentId, but it only appears in the second round, after Crate was
+    // looked at: Crate gives the value. "The lower ComponentId" holds among
+    // the requests of one round.
+    auto rig = Start([](Registrar& r) {
+        Data(r);
+        r.InitialValue<Mass, &MassFromRequest>();
+        r.InitialValue<Body, &BodyFromMass>();
+        r.InitialValue<Body, &BodyFromCrate>();
+        r.AddSystem<&SpawnsRequestAndCrate>(In("SpawnsRequestAndCrate", "Request"));
+    });
+    REQUIRE(rig->product);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(rig->world().Entities().size() == 1);
+    const EntityId id = rig->world().Entities()[0];
+    REQUIRE(rig->world().Get<Mass>(id) != nullptr);
+    REQUIRE(rig->world().Get<Body>(id) != nullptr);
+    CHECK(rig->world().Get<Body>(id)->x == 8);  // BodyFromCrate(1), not BodyFromMass(3) = 30
 }

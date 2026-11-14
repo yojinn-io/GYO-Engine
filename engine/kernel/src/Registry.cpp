@@ -835,11 +835,37 @@ void CheckInitialValues(RegistryData& data) {
                        {targetInfo.name, requestInfo.name}, {source});
             continue;
         }
-        // The value of a zone C component is computed from zone C data only (Z1).
-        if (targetInfo.zone == Zone::C && requestInfo.zone != Zone::C) {
-            data.Error(StartupCode::DE7, "Z1",
-                       "the initial value of zone C component '" + targetInfo.name + "' comes from '" + requestInfo.name +
-                           "', which is zone " + ZoneName(requestInfo.zone),
+        // Whoever may write the request writes the component through this
+        // declaration, and the zone rules of a write depend only on the zone,
+        // role and rollback of the data written. So the two must agree on all
+        // three: then no System reaches data through a declaration that it
+        // could not write directly. The rule named is the one a mismatch
+        // would let a System get around.
+        if (targetInfo.zone != requestInfo.zone) {
+            const bool intoC = targetInfo.zone == Zone::C;
+            data.Error(StartupCode::DE7, intoC ? "Z2" : "Z1",
+                       "the initial value of zone " + std::string(ZoneName(targetInfo.zone)) + " component '" +
+                           targetInfo.name + "' comes from '" + requestInfo.name + "', which is zone " +
+                           ZoneName(requestInfo.zone) +
+                           (intoC ? "; a System outside zone C would make zone C data"
+                                  : "; a zone C System would write data outside zone C") +
+                           " (a component and its request are the same zone)",
+                       {targetInfo.name, requestInfo.name}, {source});
+            continue;
+        }
+        if (targetInfo.role != requestInfo.role) {
+            data.Error(StartupCode::DE7, "Z3",
+                       "the initial value of component '" + targetInfo.name + "' comes from '" + requestInfo.name +
+                           "', and only one of the two has role Input; the Systems that may write Input data and the "
+                           "Systems that may write the rest are different (a component and its request have the same role)",
+                       {targetInfo.name, requestInfo.name}, {source});
+            continue;
+        }
+        if (targetInfo.rollback != requestInfo.rollback) {
+            data.Error(StartupCode::DE7, "Z6",
+                       "the initial value of component '" + targetInfo.name + "' comes from '" + requestInfo.name +
+                           "', and the two do not roll back alike; after a rollback one would be restored without the "
+                           "other (a component and its request have the same rollback)",
                        {targetInfo.name, requestInfo.name}, {source});
             continue;
         }

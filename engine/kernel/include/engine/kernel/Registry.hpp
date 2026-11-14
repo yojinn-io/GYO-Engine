@@ -292,14 +292,19 @@ public:
     // does nothing; the Request cell stays on the entity. A Target that is
     // itself the Request of another declaration is filled at the same sync
     // point too. Several Requests may name one Target: on an entity that gets
-    // more than one of them at one sync point, the Request with the lower
-    // ComponentId gives the value.
+    // more than one of them in one round, the Request with the lower
+    // ComponentId gives the value; a Request that appears through a chain is
+    // looked at in the next round, after the direct ones.
+    //
+    // Target and Request are the same kind of data: the same zone, role and
+    // rollback (D-E7 otherwise). Whoever may write Request writes Target
+    // through the declaration, so the zone rules must allow it the direct write.
     template <class Target, auto Fn>
     void InitialValue(std::source_location source = std::source_location::current()) {
-        using Shape = Detail::InitialValueRequest<Target, decltype(Fn)>;
-        static_assert(Shape::valid, "InitialValue<Target, Fn>: Fn is a function `Target Fn(const Request&)`");
-        if constexpr (Shape::valid) {
-            using Request = typename Shape::Type;
+        using Signature = Detail::InitialValueRequest<Target, decltype(Fn)>;
+        static_assert(Signature::valid, "InitialValue<Target, Fn>: Fn is a function `Target Fn(const Request&)`");
+        if constexpr (Signature::valid) {
+            using Request = typename Signature::Type;
             static_assert(!std::is_same_v<Target, Request>, "a component is not its own initial value request");
             RegisterInitialValue(KeyOf<Target>(), KeyOf<Request>(), &Detail::PutInitialValue<Target, Request, Fn>, source);
         }
