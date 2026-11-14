@@ -2,9 +2,6 @@
 # Math sits directly above it. Every module may link either.
 add_subdirectory(base)
 add_subdirectory(math)
-# The general mechanism (Registry, System contract, Scheduler, Plan) is a leaf
-# directly above Base.
-add_subdirectory(kernel)
 # The OS layer sits directly above Base and below every module that needs the
 # operating system (docs/architecture/os.md).
 add_subdirectory(os)
