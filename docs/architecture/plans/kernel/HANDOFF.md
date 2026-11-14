@@ -22,7 +22,7 @@
 | 代號 | 內容 |
 |---|---|
 | `v8-arch-kernel-foundation-first` | 2026-11-10。基盤的協定不等壓力、先設計；功能層才等壓力。寫進 AGENTS §2 的修訂待風紀委員處理（使用者同意後）。 |
-| `v8-arch-kernel-bring-into-gyo` | 2026-11-11。要的是 Bevy 的抽象能力（World／System Contract／Scheduler／Executor）帶入現有 GYO，不是 GYO2；架構改造完成前功能線停。 |
+| `v8-arch-kernel-bring-into-gyo` | 2026-11-11。要的是 Bevy 的抽象能力（World／System Contract／Scheduler／Executor）帶入現有 GYO，不是 GYO2；架構改造完成前功能線停。 **（2026-11-14 由 `v8-arch-gyo2-in-repo` 取代。）** |
 | `v8-arch-kernel-pause-mode` | 2026-11-11。停功能線的定義＝(a)：已開工的卡做到下一個關卡停、更新 HANDOFF；不開新功能卡。事故修正是否繼續仍未定。 |
 | `v8-arch-kernel-delegation` | 2026-11-11。此次架構調整（含 spike）由架構師全權負責：各批自開自跑、每批關卡回報；本線 docs-only PR 在 CI 綠後架構師直接合併並回報；碰 Design Invariants、`spikes/` 以外的程式、Delta 七項仍先給使用者。使用者封存原 spike 卡（task_8f7c5a80），spike 改由架構師會話的子代理執行。 |
 | `v8-arch-kernel-control` | 2026-11-11。使用者：GYO 最大的架構調整，**會話的控制權在主會話**（架構師會話），不交給別的會話或任務卡，避免會話間傳遞造成語意偏差；子代理可以開（使用者澄清「不開並行」指的是控制權，不是禁止子代理）。架構師：各批由主會話開子代理執行、主會話收結果並逐項讀過；原核准的「規格與 spike 同時開」照舊。 |
@@ -84,6 +84,10 @@
 | `v8-arch-loading-schedule` | 2026-11-11（側邊會話轉述）。Loading schedule 契約七點（見現況區 2026-11-11 條目）。 |
 | `v8-arch-naming` | 2026-11-11（側邊會話轉述）。命名規範五條（target/naming）。 |
 | `v8-arch-kernel-first-batches` | 2026-11-11。規格（`v8-arch-kernel-spec`，ultracode）、spike（`v8-arch-kernel-spike`）、審查（`v8-arch-kernel-audit`）同時開，audit 等 spec；全部由主會話控制（`v8-arch-kernel-control`）。模型／檔位見 README。 |
+| `v8-arch-engine-scope-general` | 2026-11-14（使用者，主會話）。「我的目標依然是通用引擎，但是如何強化 FPS、PVP 不影響其他通用遊戲的設計製作，其實機制是沒問題的。例如我做一個 2D 橫版通關遊戲，Engine 的機制也必然要支持。」依據：[全局審計](global-audit.zh-Hant.md) 第 5.1 節。 |
+| `v8-arch-gyo2-in-repo` | 2026-11-14（使用者，主會話）。「其實就是 GYO2，但是還是放在 GYO 的 git repo 中。」取代 `v8-arch-kernel-bring-into-gyo`：新架構不受舊程式的名詞與模組邊界約束，舊程式是參考，不是約束；仍在同一個 repo。 |
+| `v8-arch-single-player-no-complexity` | 2026-11-14（使用者，主會話）。單機要支援：「能支持，並且不要增加複雜度。只要作者和玩家感受不到差異，多些性能開銷實際上沒有問題。」 |
+| `v8-arch-rederive-medium` | 2026-11-14（使用者，主會話）。停點選「中」：凍結 World 資料模型、檢測先行，再定重新推導的範圍；「其實現在有壞味道，但基礎邏輯還沒問題。」使用者補充：「實際上現在就是全停的情況，但是架構上我不知道現在混亂程度有多少。現在新舊框架混在一起，而且我怕你自己也區分不開。」→ 下一批的事前宣告把「新舊框架地圖」排在第一步（[rederive-detect 事前宣告](rederive-detect-declaration.zh-Hant.md) §5.0）。 |
 
 ## 未定
 
@@ -204,7 +208,12 @@
 
 - 2026-11-13 `v8-arch-adapter-plugins-plan` 複核後的兩次修訂（Opus／high）：第二次照 `v8-arch-adapter-plugins-review` 與 `v8-arch-json-yyjson-raw-number` 改寫（configure 錯誤 9→3、補遺二守衛 7→3、產品側棘輪與白名單刪除、json-adapter 改非條件、新增規劃批 B1 `v8-arch-engine-own-plugins-plan`）；**判定 6 (c) 的 Fable／high 檢查一次**：blocker 4／should 18／nit 7（主要：浮點 `from_chars` 在 macOS 13.3 不可用、shader 工具搬家造成共通 build → plugin 的邊、plugins-editor 的刪除與批序矛盾）；第三次修訂處置全部，B-1、B-3 交使用者後定（`v8-arch-json-fast-float`、`v8-arch-shader-compiler-in-sdl-plugin`）。重算：37 批、非條件 701～1,450 h、關鍵路徑 333～696 h；RC-11 錨點 1,299 h 不調、照實寫超出 151 h；U4 當時接受的代價 70～153 h 現為 116～250 h（知悉）。往產品加步驟的規則照實列 7 條（規劃稿文末），其中 2 條是使用者已定的 Feature 本身。round2 那一句（assets-core 只依賴 world-exec／loading）改為「assets-core 的結束另依賴 plugins-foundation 段 (i)」（未決 16 (a)）。**仍待定、要在指定批之前決定**：`sdl_imgui` 的依賴與登記表達、DI 2 增補第三點與 R3 的關係、產品 System 經 plugin build 函式登記與 R3 的張力、依賴者對 SDL 型別能做什麼、RC-8 對 B1、json-adapter 混進 G2b 基線、json-adapter→adapters-relocate 的串行、Gateway 的 Go module owner 表達（規劃稿處置記錄 S-1、S-3、S-5、S-8、S-9、S-12、S-14）。
 
+- 2026-11-14 **全局計畫審計完成**（[global-audit.zh-Hant.md](global-audit.zh-Hant.md)、[dev_log](../../../dev_logs/2026_11_14_arch_global_audit.zh-Hant.md)）：方向成立——Kernel 的資料模型、Host 契約與部分 Kernel API 是照舊實作與 PvP 塑形、而且對所有 World 生效；主要上游是舊實作的附帶性質（`std::map` 的順序、舊程式持參照、`PvpMatch::Reset()`、`FixedTickRuntime`）；核心機制站得住。卡 01～06 與卡 08 已封存（匯總：主 checkout `build/evidence/card-archive-2026-11-14/SUMMARY.md`；卡 01、05 的分支推到 origin，卡 08 存 patch）。
+- 2026-11-14 **凍結**（`v8-arch-rederive-medium`）：PR #218 不合併；DI-KS 3 的 W-1、DI-KS 4 的配發與世代、DI-KS 9、RC 6 處置句、Delta-3 不再往上積；zone 等 PvP 概念的 Kernel API 不再新增使用處；依賴 World 的批暫停；卡 01、02、03、05、08 與 #219 的後續暫停。下一批 `v8-arch-rederive-detect` 的事前宣告待使用者核准。
+
 ## 下一步
+
+- **下一批**：`v8-arch-rederive-detect`（[事前宣告](rederive-detect-declaration.zh-Hant.md)，待使用者核准）：新舊框架地圖 → 概念出處表 → 一個工具與 2D 橫版的宣告級試跑 → 依事前宣告的判定規則定重新推導的範圍。
 
 - 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。
 - 架構師線的下一批：遷移批規劃（§3 Delta 計畫層七項、以 audit 的成本形狀分批、plugin 邊界）＋ A.6 修訂吸收 pageguard 的 11 點；等 J-17 清單格式核定與 CI 卡的結論一起排。

@@ -40,6 +40,8 @@
 - [measure-env-baseline-declaration.zh-Hant.md](measure-env-baseline-declaration.zh-Hant.md)、[measure-env-baseline-report.zh-Hant.md](measure-env-baseline-report.zh-Hant.md)：`v8-arch-measure-env-baseline`（任務卡，2026-11-13）——四環境的實機對比基線（只記錄、不判）：四種散佈量並列、LN↔LD 的容器化偏移、任務分級建議（Intel Mac 可做／需容器／需 Linux 實機）、U8 修訂提案與 BU-4 RSS 分母建議（使用者定）。
 - 產品線前置的交接卡：[docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md](../../../object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md)（`v8-product-kernel-prep`，2026-11-12）。
 - [migration-plan.zh-Hant.md](migration-plan.zh-Hant.md)：**遷移批規劃（`v8-arch-migration-plan`；稿完成、待使用者核准）**——34 批＋條件批、閘門 G1／G2a／G2b／G3、§3 七項（Delta-1～6）、各批 Feature→Contract→Architecture 與模型／檔位、預算 BU-1～BU-8（多為推定）、未決 U1～U14、守衛與突變隨程式遷移的橫切規則；三輪對抗＋驗收點檢，處置記錄在文末。
+- [global-audit.zh-Hant.md](global-audit.zh-Hant.md)：**全局計畫審計（2026-11-14）**——舊架構污染、PvP 污染與合理的分類，架構基本前提的對抗；使用者據第 5 節定了範圍與停點。
+- [rederive-detect-declaration.zh-Hant.md](rederive-detect-declaration.zh-Hant.md)：`v8-arch-rederive-detect` 的事前宣告（草稿，待使用者核准）——凍結 World 資料模型；新舊框架地圖、概念出處表、宣告級試跑。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
 
@@ -83,6 +85,7 @@ v8-arch-kernel
 
 ## dev_log
 
+- [2026_11_14_arch_global_audit.zh-Hant.md](../../../dev_logs/2026_11_14_arch_global_audit.zh-Hant.md)：-global-audit（全局計畫審計）。
 - [2026_11_13_arch_measure_env_baseline.zh-Hant.md](../../../dev_logs/2026_11_13_arch_measure_env_baseline.zh-Hant.md)：-measure-env-baseline（任務卡；[宣告](measure-env-baseline-declaration.zh-Hant.md)、[報告](measure-env-baseline-report.zh-Hant.md)）。
 - [2026_11_13_arch_kernel_registry_schedule.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_registry_schedule.zh-Hant.md)：-kernel-registry-schedule（任務卡；[宣告](registry-schedule-declaration.zh-Hant.md)）。
 - [2026_11_13_arch_adapter_plugins_plan.zh-Hant.md](../../../dev_logs/2026_11_13_arch_adapter_plugins_plan.zh-Hant.md)：-adapter-plugins-plan（規劃批；[宣告](adapter-plugins-plan-declaration.zh-Hant.md)、[規劃稿](adapter-plugins-plan.zh-Hant.md)）。
