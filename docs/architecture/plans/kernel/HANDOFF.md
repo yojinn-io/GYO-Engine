@@ -103,6 +103,7 @@
 | `v8-arch-gyo2-network-diagram-after-mechanism` | 2026-11-14（使用者，主會話）。「這 2 幅圖先記著。網絡那幅先不急，你把 Engine 機制實現了再說。」→ `mechanism-runtime.svg` 與 `control-plane-revised.svg`（gyo2 線改過的版本）留作通用機制的參考圖；`networking-systems.svg` 不動，等通用機制實作完成（R2）之後再處理，和「PvP 最後」一致。這句話是排順序，不是開工的指示；R2 之前的關卡照舊等使用者確認。 |
 | `v8-arch-gyo2-build-from-1111-concept` | 2026-11-14（使用者，主會話）。「先建立底層機制…架構圖都給你了，之前的 Master 裡又有一批設計稿。你…拿過來用呀，如果你分不清新舊，你問下就可以了。」並重貼先前經架構師轉達的內容（概念層＝blueprint、mechanism、networking、spike-report，11 日之後幾乎沒動、大多站得住；大量堆積在 11 日之後；spec v0.2 只取概念部分；K.3 採規格的幾項與 mechanism 的規則表要用三類產品重過）。→ **基準定為 11 月 11 日的概念層（f8b6f74b 的四份文件）加 gyo2 線改過的兩張圖；直接實作通用機制，不再先做盤點與分析；分不清新舊時用短問題問使用者。** 架構師的錯：收到「開始」後去跑三份盤點（被使用者停掉）；接著搬了 master 11 月 13 日的 `engine/kernel`（11 日之後的堆積，含決定性區），已撤回（分支 `claude/gyo2-mechanism`，8c104e06）。程式起點改為 11 日的 spike。 |
 | `v8-arch-gyo2-skeleton-first` | 2026-11-14（使用者，主會話）。對「撤回 11 月 13 日的 engine/kernel」：「13 號的東西，也不全是受污染的。你去看看已經實作的東西再來說話。」→ 架構師讀了 13 日的 `engine/kernel` 全部標頭與 Scheduler／Registry 的結構：骨架（從簽名推存取、System 參數、`Result` 回傳、`Local`、`ExclusiveWorld`、唯讀的 Extract、Plugin 兩段生命週期、Scheduler、啟動錯誤一次收齊、hook 登記）與兩張圖一致；決定性與 PvP 的部分是嵌在裡面的 `Zone`、`Role`／ingress、`Rollback`、`DigestSet`、`CFingerprint`、zone C 匯出等。撤回已取消。使用者核准切法：「1、2、3 照你說的切。先把骨架跑通，然後做一個 unit test。看下骨架能否按照預想的運行，極限是多少。通過了，就確認 System 契約，才開始定系統。」＝(1) 留下骨架；(2) 把 `Zone` 從基礎機制拿掉，Scheduler 的歧義一律平手並列出；(3) `Role`、`Rollback`、`DigestSet`、`CFingerprint`、zone C 匯出一起拿掉。`Domain` 寫死的四個值、元件預設獨占、`SetRead` 三樣使用者未回覆，暫不動。順序：骨架跑通 → unit test（行為與極限）→ 確認 System 契約 → 才定各個系統。 |
+| `v8-arch-gyo2-use-entity-store` | 2026-11-14（使用者，主會話）。對「把 entity_store 的四個函式收進機制內部、不帶回那個模組」：「關於 entity_store，你都不用開源的 ECS 了，你又不用 entity_store…你想幹甚麼。」→ **World 的儲存用 `engine/entity_store` 模組本身**，從 master 帶回 gyo2（連同它的測試），機制照 #218 連結 `GYO::EntityStore`。修訂 R0 帶過去清單的「entity_store 不帶」。架構師的錯：為了守 R0 的「不帶」，卻叫實作者把同一套演算法抄一份進機制，等於同樣的形狀再多一份重複。 |
 
 ## 未定
 
@@ -244,7 +245,7 @@
 
 - 2026-11-14 **通用機制的實作開始**（`v8-arch-gyo2-build-from-1111-concept`）：分支 `claude/gyo2-mechanism`（從 `claude/gyo2-r0b-delete` 切出，工作樹 `../GYO-Engine-r0b`）。基準＝11 日的概念層與兩張圖；程式從 11 日的 spike（`spikes/kernel`，f8b6f74b 的版本）搬起，照機制圖的鏈做：型別登記→id、簽名→存取集合、分析→衝突邊與順序邊、執行計畫、Serial Executor、最小的 World。上面「從單機與工具的需要查缺什麼」那一批取消。
 
-- 2026-11-14 **修正上一條的程式起點**（`v8-arch-gyo2-skeleton-first`）：不從 spike 重搬，直接用 13 日的 `engine/kernel` 加 #218 分支（`origin/claude/arch-kernel-world-exec`）的 World 與 Executor。分支 `claude/gyo2-mechanism` 上：40477b48 帶入 13 日的機制 → 8c104e06 誤撤回 → 68356534 放回。進行中：實作 agent（Opus／high）帶入 #218 的 World 與 Executor（`entity_store` 的四個函式收進機制內部，不帶回那個模組）、`App` 改名 `Product`、切掉決定性的部分，每步一個本機 commit；之後架構師審查並寫骨架的 unit test（行為與極限）。證據：主 checkout `build/evidence/gyo2-mechanism/`。
+- 2026-11-14 **修正上一條的程式起點**（`v8-arch-gyo2-skeleton-first`）：不從 spike 重搬，直接用 13 日的 `engine/kernel` 加 #218 分支（`origin/claude/arch-kernel-world-exec`）的 World 與 Executor。分支 `claude/gyo2-mechanism` 上：40477b48 帶入 13 日的機制 → 8c104e06 誤撤回 → 68356534 放回。進行中：實作 agent（Opus／high）帶入 #218 的 World 與 Executor（儲存用 `engine/entity_store` 模組本身，從 master 帶回；`v8-arch-gyo2-use-entity-store`）、`App` 改名 `Product`、切掉決定性的部分，每步一個本機 commit；之後架構師審查並寫骨架的 unit test（行為與極限）。證據：主 checkout `build/evidence/gyo2-mechanism/`。
 
 ## 下一步
 
