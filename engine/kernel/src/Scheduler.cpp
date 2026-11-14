@@ -13,10 +13,13 @@
 //      holds ExclusiveWorld, both declare one effect, or both defer a write of
 //      one component (spec D.1 conditions 1 to 4);
 //   4. a conflicting pair with no order path is ambiguous: either side zone C
-//      is D-E8; both zone B get an edge from the lower registrationSeq to the
-//      higher (spec D.2 step 10). Pairs are taken in (seq, seq) order and the
+//      is D-E8; both zone B is D-E8 too when a plugin called
+//      Registrar::RequireExplicitOrder (rule M3b), otherwise the pair gets an
+//      edge from the lower registrationSeq to the higher and is listed as a
+//      tie (spec D.2 step 10). Pairs are taken in (seq, seq) order and the
 //      reachability is updated after each added edge, so the result is fixed
-//      and acyclic;
+//      and acyclic. An error adds no edge, so every ambiguous pair of the
+//      schedule is reported, not only the first;
 //   5. the Plan: Kahn's algorithm taking, among ready nodes, the System with
 //      the lowest registrationSeq; a sync point or the trim only when no
 //      System is ready (spec D.2 step 12). The tie key is registrationSeq
@@ -163,6 +166,27 @@ private:
                std::vector<std::string> sources = {}) {
         data_.Error(code, std::move(rule), std::move(message), std::move(subjects), std::move(sources));
         failed_ = true;
+    }
+
+    // An ambiguous zone B pair under Registrar::RequireExplicitOrder (rule M3b):
+    // names both Systems, what they conflict on, where, who asked for explicit
+    // order, and how to fix it.
+    void ExplicitOrderError(const SystemRecord& first, const SystemRecord& second, std::size_t stage,
+                            const std::string& on) {
+        std::string requiredBy;
+        std::vector<std::string> subjects{first.options.name, second.options.name, on, s_.name};
+        for (std::uint32_t owner : data_.explicitOrderOwners) {
+            const std::string plugin = data_.OwnerName(owner);
+            requiredBy += (requiredBy.empty() ? "'" : ", '") + plugin + "'";
+            subjects.push_back(plugin);
+        }
+        Error(StartupCode::DE8, "M3b",
+              "Systems '" + first.options.name + "' and '" + second.options.name + "' in stage " + s_.stages[stage] +
+                  " of schedule '" + s_.name + "' conflict on " + on +
+                  " with no order, and explicit order is required (RequireExplicitOrder, by " + requiredBy +
+                  "): declare '" + first.options.name + "' before or after '" + second.options.name +
+                  "' (a before / after of either System, or of a set it is in)",
+              std::move(subjects), {SourceText(first.source), SourceText(second.source)});
     }
 
     const SystemRecord& SystemOf(std::size_t node) const { return data_.systems[nodes_[node].system]; }
@@ -461,6 +485,10 @@ private:
                                   s_.stages[stage] + " of schedule '" + s_.name + "' conflict on " + on +
                                   " with no order, and one is zone C: declare before or after",
                               {sa.options.name, sb.options.name, on}, {SourceText(sa.source), SourceText(sb.source)});
+                        continue;
+                    }
+                    if (!data_.explicitOrderOwners.empty()) {
+                        ExplicitOrderError(sa, sb, stage, on);
                         continue;
                     }
                     AddTieEdge(a, b);
