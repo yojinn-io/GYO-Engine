@@ -158,7 +158,7 @@ v3 和 v2 的差別：
 ## 6. 要使用者確認的事
 
 1. **第 1 節的界線**：這張表只管名字；定義照現況寫，內容與歸屬留給去留登記表。
-2. **Plugin 的兩個意思**：「Engine 外的可選部分」（第 0 節）與通用機制的「`Plugin` 型別」（登記單位）是兩件事。照現行程式，Module 也要透過一個 `Plugin` 型別向 Registry 登記它的元件與 System；這會讓「SDL 是 Module，卻用 `Plugin` 型別登記」。要不要替其中一個換名字，請你決定。
+2. **Plugin 的兩個意思**：「Engine 外的可選部分」（第 0 節）與通用機制的「`Plugin` 型別」（登記單位）是兩件事。現行程式裡，`Plugin` 型別的子類別只出現在 kernel 的測試裡，沒有任何 Module 用它。之後若有 Module 要把元件、Resource 或 System 放進 World（例：SDL 把輸入寫進 World），就得寫一個 `Plugin` 型別的子類別，名字會變成「SDL 是 Module，型別卻叫 `SdlPlugin`」。Module 要不要往 World 登記還沒定；要不要替 `Plugin` 型別換名字，請你決定。
 3. **Product 的兩個意思**：中文「產品」（Game 或 Tool）與 `Product` 型別（一個 World 加上 Executor）。v3 用中文與程式碼格式區分；若覺得仍會混淆，請你決定要不要另取型別名。
 4. **Kernel 算不算 Module**：照 Module 的判準，少了通用機制，遊戲也不成立；但[命名規範](rebuild-naming.zh-Hant.md) N17 把通用機制（`GYO::Kernel::`）與 Module（`GYO::Engine::<Module>::`）分成兩個根。v3 照 N17 把兩者分開寫。
 
