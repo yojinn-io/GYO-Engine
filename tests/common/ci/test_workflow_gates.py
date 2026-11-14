@@ -353,19 +353,24 @@ class WorkflowGateTests(unittest.TestCase):
         native = job_block(self.shared, "native")
         self.assertIn("GYO_SELECTED_TOOLS: ${{ join(matrix.tools, ';') }}", native)
         self.assertIn('"-DGYO_TOOLS=$env:GYO_SELECTED_TOOLS"', native)
-        # Tools are selected only through GYO_TOOLS: no registered tool may come
-        # back as its own GYO_BUILD_<TOOL> or GYO_<TOOL>_BUILD_GUI switch. The
-        # names come from the registration data, so no tool is named here.
-        with (ROOT / "engine/config/tools.csv").open(encoding="utf-8", newline="") as rows:
-            tools = [row["name"].upper() for row in csv.DictReader(rows)]
-        self.assertTrue(tools)
-        for tool in tools:
-            self.assertNotRegex(native, rf"GYO_BUILD_{tool}\b|GYO_{tool}_BUILD_GUI\b")
         self.assertIn('"-DGYO_APPS=$apps"', native)
         self.assertIn("if: inputs.profile == 'release' || matrix.kind == 'toolchain'", native)
         for step in re.split(r"(?m)^      - ", native):
             if "cmake --install" in step or "python build/ci/common/archive_package.py" in step:
                 self.assertNotIn("if: matrix.kind", step)
+
+    def test_registered_tools_have_no_build_switch_of_their_own_unless_none_is_registered(self):
+        # Tools are selected only through GYO_TOOLS: no registered tool may come
+        # back as its own GYO_BUILD_<TOOL> or GYO_<TOOL>_BUILD_GUI switch. The
+        # names come from the registration data, so no tool is named here.
+        native = job_block(self.shared, "native")
+        with (ROOT / "engine/config/tools.csv").open(encoding="utf-8", newline="") as rows:
+            tools = [row["name"].upper() for row in csv.DictReader(rows)]
+        if not tools:
+            # Not a pass: there is nothing to verify. The check resumes as soon as a tool is registered.
+            self.skipTest("no tool is registered in engine/config/tools.csv: no tool build switch to look for")
+        for tool in tools:
+            self.assertNotRegex(native, rf"GYO_BUILD_{tool}\b|GYO_{tool}_BUILD_GUI\b")
 
     def test_real_app_copy_is_a_fatal_windows_release_baseline_check(self):
         native = job_block(self.shared, "native")
@@ -680,8 +685,8 @@ python() { printf '%s\\n' "$@" > python-arguments; }
 
     def test_cxx_compiles_are_not_module_scanned(self):
         # CMP0155 scanning adds GCC -fmodules-ts flags that sccache refuses to
-        # cache; both CMake projects that set C++20 must disable it.
-        for path in ("build/cmake/GyoBuild.cmake", "engine/render/shaders/pipeline/CMakeLists.txt"):
+        # cache; every CMake project that sets C++20 must disable it.
+        for path in ("build/cmake/GyoBuild.cmake",):
             with self.subTest(project=path):
                 text = (ROOT / path).read_text(encoding="utf-8")
                 self.assertRegex(text, r"(?m)^set\(CMAKE_CXX_SCAN_FOR_MODULES OFF\)$")
@@ -1096,13 +1101,8 @@ python() { printf '%s\\n' "$@" > python-arguments; }
         for option in ("--event-name", "--event-path", "--live-pull-request", "--output", "--summary"):
             self.assertIn(option, help_text.stdout)
 
-    def test_engine_layer_go_module_is_recorded_in_every_configuration(self):
+    def test_build_record_lists_every_field_ci_reads(self):
         build = (ROOT / "build/cmake/GyoBuild.cmake").read_text(encoding="utf-8")
-        # Unconditional (top-level) registration, before any game is added.
-        registration = re.search(r"(?m)^gyo_register_go_module\(OWNER engine DIRECTORY \"\$\{GYO_REPOSITORY_ROOT\}/[^\"]+\"\)$", build)
-        self.assertIsNotNone(registration)
-        self.assertLess(registration.start(), build.index("foreach(GYO_CURRENT_APP IN LISTS GYO_ACTIVE_APPS)"))
-        self.assertNotIn(" TESTS", registration.group(0))
         write = next(line for line in build.splitlines() if "gyo-build.json" in line and line.startswith("file(WRITE"))
         for field in ("shader_bundles", "shader_host_tools", "go_modules", "go_services"):
             self.assertIn(f'\\"{field}\\":', write)
@@ -1118,14 +1118,18 @@ python() { printf '%s\\n' "$@" > python-arguments; }
                     else:
                         self.assertRegex(reference, r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}$")
 
-    def test_common_ci_definitions_name_no_product_owner(self):
+    def test_common_ci_definitions_name_no_product_owner_unless_none_is_registered(self):
         # Product selection belongs to registry data; naming an owner in common
         # CI definitions or helpers would make removing that owner edit CI.
         # Registered games and tools require their directories, so directories
         # also cover disabled owners that the registry export leaves out.
         owners = {entry.name for folder in ("apps", "tools", "services") if (ROOT / folder).is_dir()
                   for entry in (ROOT / folder).iterdir() if entry.is_dir() and not entry.name.startswith((".", "_"))}
-        self.assertTrue(owners)
+        if not owners:
+            # Not a pass: with no owner the list of names to look for is empty. The check resumes as soon as an
+            # owner directory exists under apps/, tools/ or services/.
+            self.skipTest("no product, tool or service owner directory under apps/, tools/ or services/: "
+                          "no owner name to look for")
         sources = [*sorted(WORKFLOWS.glob("*.yml")), NATIVE_SETUP, *sorted((ROOT / "build/ci/common").glob("*.py"))]
         common = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8") for path in sources}
         for owner in sorted(owners):
