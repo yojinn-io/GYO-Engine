@@ -236,6 +236,8 @@
 
 - 2026-11-14 **三張圖的重新評審**（使用者經原架構師會話轉達「把這四處偏離和三張圖轉給 GYO2，讓他重新評審和參考，看下是否還能復用」；主會話追加「還是有舊架構的用詞和思路在」「數據流向是非常不錯的參考」「tick 不用換」）：[rebuild-diagram-review.zh-Hant.md](rebuild-diagram-review.zh-Hant.md) v2。別模型檢查（Opus／xhigh）blocker 3／should 16／nit 11，全部採用。結論：三張圖重畫，流向當參考（14 條資料流裡 9 條可以、3 條部分、2 條不行）；舊的或 PvP 的思路 4 條、部分 3 條、撤回 3 條；套用順序（U2）、hook（U3）、固定步（U7）三項仍未判，只列選項與代價；套用順序使用者 11 月 11 日支持過兩種（審查補充 5 與 K.3 第 4、12 項）。待使用者確認。證據：主 checkout `build/evidence/rebuild-concept/`（`diagram-review-v1.md`、`diagram-review-checker-opus.md`、`spec-master-snapshot.md`）。
 
+- 2026-11-14 **開始：從單機與工具的需要查通用機制缺什麼**（使用者「開始」；概念層重構稿 1.6 (4) 的那一輪，等於 R1 的前半）。做法：三份盤點（Opus／high，唯讀）——單機＝git 歷史裡的 `apps/object_fps`（`0d05cc4e~1`，真實的單機戰役產品；先前說「②沒有真實產品」不對）、工具＝master 的四個工具與三份架構文件、成熟參考＝本機 Bevy 的遊戲與工具範例——→ 主會話統合成一份文件（每個 Feature 一列：要什麼、概念層有沒有、對應哪個未判項或是新的缺口）→ 別模型檢查（Opus／xhigh）→ 交使用者。只列需要與缺口，不做設計決定。估計 1.5 小時，超過 2 小時 15 分停下回報。證據：主 checkout `build/evidence/rebuild-r1-needs/`。
+
 ## 下一步
 
 - **進行中**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，已核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
