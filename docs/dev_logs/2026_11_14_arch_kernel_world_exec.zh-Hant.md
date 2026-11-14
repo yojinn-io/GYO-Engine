@@ -63,7 +63,7 @@
 ## 給架構師
 
 - spec W-8 加「nothrow move 指派」（Cell<T> 包法的後果）——已轉卡 05。
-- 待使用者：hook 佇列依 schedule 分桶（36612cb5）、despawn 先跑全部 OnRemove（3d87d916），建議 (a)；選 (b) 時 revert 該 commit。
+- 待使用者：hook 佇列依 schedule 分桶（36612cb5）、despawn 先跑全部 OnRemove（3d87d916），建議 (a)；選 (b) 時 revert 該 commit。（2026-11-14 架構師通知：使用者要求重審 spec F.8 取捨 2「hook 的變更進下一窗」本身；第 1 題暫停、36612cb5 維持待決，結論若改為「同一同步點內連鎖套用到清空」則 36612cb5 會被取代）
 - spec F.2 第 7 步的 Resource 操作沒有 v1 參數型別能發出（死碼）；要不要在 spec 補一個句柄或刪這一步，交 spec 修訂。
 - E.2 ⓪ 在 Serial 下不可達（Run 開頭的 Ready 窗口比對與同步點後的重取快照涵蓋）；Parallel 實作時才有意義。
 
