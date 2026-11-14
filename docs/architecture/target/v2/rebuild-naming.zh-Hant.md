@@ -64,6 +64,7 @@
 | N18 | System 的名字是動詞片語 | `StepMovement`、`ExtractMeshes` | 你的決定（第 2 條） |
 | N19 | ECS 元件與 Resource 的名字是名詞 | `Position`、`FrameTime` | 你的決定（第 2 條） |
 | N20 | `Plugin` 型別的名字以 `Plugin` 結尾 | `AudioPlugin` | 你的決定（第 2 條） |
+| N20b | 登記的單位有兩種型別：`GYO::Kernel::Module`（Engine 裡的 Module 用）與 `GYO::Kernel::Plugin`（Engine 外的 Plugin 用）。`Module` 型別的名字以 `Module` 結尾。兩份清單叫「Module 登記檔」「Plugin 登記檔」 | `SdlModule`、`NetPlugin` | 你 2026-11-14 的決定（拆成兩種型別；名字授權照命名規範訂，`v8-arch-gyo2-module-plugin-registers`）。程式還沒改 |
 | N21 | plugin 套件的目錄名小寫 | `plugins/sdl/` | 提案；層與目錄叫 plugins 是你的決定（2026-11-11） |
 | N22 | 事件的名字用過去式 | `AssetLoaded` | 你的決定（第 2 條） |
 | N22b | schedule 與 stage 用階段名 | `Loading`、`FixedUpdate`；`Simulate` | 你的決定（第 2 條） |
