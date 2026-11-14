@@ -1,0 +1,272 @@
+{
+  "version": 1,
+  "description": "Mutants for the CI policy cases that R0b-3 added or changed and for the cases its adversarial check added (v8-arch-gyo2-r0b3-closeout). A mutant is killed only when the named case fails. Run from the repository root with cmake on PATH: python3 -B tests/common/mutation/run_mutations.py --build-dir <any existing directory> --catalog tests/common/ci/r0b3_mutations.json (no target is built; remove __pycache__ under tests/common/ci and build/ first).",
+  "mutants": [
+    {
+      "id": "ci-broken-release-selection",
+      "what": "the repository registers a tool that no platform selects for release",
+      "file": "engine/config/tools.csv",
+      "find": "name,description,version,enabled,default,release,windows,linux,macos\n",
+      "replace": "name,description,version,enabled,default,release,windows,linux,macos\nsampletool,,,true,true,false,true,true,true\n",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_app_registry.py"
+      ],
+      "expect": "(FAIL|ERROR): test_repository_registries_export_for_ci "
+    },
+    {
+      "id": "ci-gpu-no-pipefail",
+      "what": "the declared product GPU step loses its 'set -euo pipefail'",
+      "file": ".github/workflows/build-and-validate.yml",
+      "find": "          set -euo pipefail\n          mapfile -t icds",
+      "replace": "          mapfile -t icds",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_toolchain_and_declared_product_gpu_checks_are_independent "
+    },
+    {
+      "id": "ci-second-cxx20-project",
+      "what": "another CMake file sets C++20 and does not disable module scanning",
+      "file": "build/cmake/GyoApps.cmake",
+      "find": "include_guard(GLOBAL)\n",
+      "replace": "include_guard(GLOBAL)\nset(CMAKE_CXX_STANDARD 20)\n",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_cxx_compiles_are_not_module_scanned "
+    },
+    {
+      "id": "ci-scan-off-removed",
+      "what": "the main build no longer disables module scanning",
+      "file": "build/cmake/GyoBuild.cmake",
+      "find": "set(CMAKE_CXX_SCAN_FOR_MODULES OFF)\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_cxx_compiles_are_not_module_scanned "
+    },
+    {
+      "id": "ci-shader-target-without-hash",
+      "what": "the shader tool target is defined while the cache key hashes no source",
+      "file": "build/cmake/GyoApps.cmake",
+      "find": "include_guard(GLOBAL)\n",
+      "replace": "include_guard(GLOBAL)\nExternalProject_Add(gyo_shader_host_tools SOURCE_DIR x)\n",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_shader_tool_cache_key_hashes_the_tool_sources_once_they_exist "
+    },
+    {
+      "id": "ci-plan-every-toolchain-row",
+      "what": "package_plan skips every toolchain row, with or without tools",
+      "file": ".github/workflows/build-and-validate.yml",
+      "find": "if [ \"$GYO_PRODUCT\" = toolchain ] && [ -z \"$GYO_SELECTED_TOOLS\" ]; then",
+      "replace": "if [ \"$GYO_PRODUCT\" = toolchain ]; then",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_only_a_toolchain_row_without_tools_skips_its_package_and_says_so "
+    },
+    {
+      "id": "ci-plan-every-row-without-tools",
+      "what": "package_plan skips every row without tools, app rows too",
+      "file": ".github/workflows/build-and-validate.yml",
+      "find": "if [ \"$GYO_PRODUCT\" = toolchain ] && [ -z \"$GYO_SELECTED_TOOLS\" ]; then",
+      "replace": "if [ -z \"$GYO_SELECTED_TOOLS\" ]; then",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_only_a_toolchain_row_without_tools_skips_its_package_and_says_so "
+    },
+    {
+      "id": "ci-plan-archive-unconditional",
+      "what": "the archive step ignores package_plan",
+      "file": ".github/workflows/build-and-validate.yml",
+      "find": "        id: archive\n        if: steps.package_plan.outputs.assemble == 'true'\n",
+      "replace": "        id: archive\n",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_only_a_toolchain_row_without_tools_skips_its_package_and_says_so "
+    },
+    {
+      "id": "ci-plan-no-notice",
+      "what": "a skipped package is not announced",
+      "file": ".github/workflows/build-and-validate.yml",
+      "find": "echo \"::notice::No tool is registered",
+      "replace": "true \"::notice::No tool is registered",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_only_a_toolchain_row_without_tools_skips_its_package_and_says_so "
+    },
+    {
+      "id": "ci-build-record-field",
+      "what": "the build record drops a field CI reads",
+      "file": "build/cmake/GyoBuild.cmake",
+      "find": "\\\"go_modules\\\":${_gyo_go_modules},",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_workflow_gates.py"
+      ],
+      "expect": "(FAIL|ERROR): test_build_record_lists_every_field_ci_reads "
+    },
+    {
+      "id": "ci-python-partial-empty",
+      "what": "the Python consumer accepts a selection that is empty on some platforms only",
+      "file": "build/ci/common/app_registry.py",
+      "find": "if any(selected.values()) and not all(selected.values()):",
+      "replace": "if False:",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_app_registry.py"
+      ],
+      "expect": "(FAIL|ERROR): test_selection_empty_on_only_some_platforms_is_rejected "
+    },
+    {
+      "id": "ci-python-silent-empty",
+      "what": "the Python consumer accepts an empty registry without saying so",
+      "file": "build/ci/common/app_registry.py",
+      "find": "        print(\"No tool is registered: the toolchain rows select no tool and assemble no package\", file=sys.stderr)",
+      "replace": "        pass",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_app_registry.py"
+      ],
+      "expect": "(FAIL|ERROR): test_empty_tool_registry_selects_no_tool_on_every_platform_and_says_so "
+    },
+    {
+      "id": "ci-cmake-empty-never-refused",
+      "what": "CMake exports an empty selection for a registry that lists tools",
+      "file": "build/cmake/GyoToolRegistry.cmake",
+      "find": "if(selected_count EQUAL 0 AND count GREATER 0)",
+      "replace": "if(FALSE)",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_app_registry.py"
+      ],
+      "expect": "(FAIL|ERROR): test_registered_tools_without_a_release_selection_are_rejected "
+    },
+    {
+      "id": "ci-tools-train-without-tools",
+      "what": "the release CLI accepts the tools train while no tool is registered",
+      "file": "build/ci/common/release_pipeline.py",
+      "find": "    if train_id == TOOLS_TRAIN and not any(selected_tools.values()):",
+      "replace": "    if False:",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/ci",
+        "-p",
+        "test_release_pipeline.py"
+      ],
+      "expect": "(FAIL|ERROR): test_cli_refuses_the_tools_train_while_no_tool_is_registered "
+    }
+  ]
+}
