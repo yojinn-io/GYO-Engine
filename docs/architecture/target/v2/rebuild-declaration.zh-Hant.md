@@ -2,7 +2,7 @@
 
 更新：2026-11-14。Owner：架構（架構師會話）。**狀態：已核准（使用者 2026-11-14「核准，開始 R0」）。R0 的[帶過去清單](rebuild-r0-carry-list.zh-Hant.md)已核准（使用者 2026-11-14「1 到 9 照建議」）；**判定 4 與判定 5 以清單第 7 節的修訂為準**。R0b 進行中。** 分支名稱照 `gyo2`；第 9 節第 3 題（第一個搬的產品）留到 R1 結束；第 8 節的 PR 處置（關閉 #218、#219，合併 #220）屬對外動作，等使用者另行指示。
 
-出處：[全局審計](global-audit.zh-Hant.md)；kernel `HANDOFF.md` 決定行：
+出處：[全局審計](global-audit.zh-Hant.md)；[HANDOFF.md](HANDOFF.md) 決定行：
 - `v8-arch-engine-scope-general`
 - `v8-arch-gyo2-in-repo`
 - `v8-arch-single-player-no-complexity`

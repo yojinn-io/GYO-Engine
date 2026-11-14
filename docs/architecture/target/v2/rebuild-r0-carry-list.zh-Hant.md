@@ -161,7 +161,7 @@ v2 的方案：
 | `math.md`、legacy `error-handling.md` | 帶過去（base 與 math 的契約說明）。兩者沒有 Design Invariants 節，R1 補 |
 | AGENTS.md、`agents/`、cross-component-rules（CCR-1 那一列留 master）、checkup 的三份 README、`creating_apps`、`tool_projects`、`releasing.*`、`field-session.md` | 帶過去；後幾份的產品例子在 R0b 的文件 PR 改 |
 | dev_logs、checkup 的報告、`docs/architecture/plans/` 的舊計畫、其餘 legacy 頂層文件、產品與工具文件、`docs/framework` 等 | 不帶 |
-| gyo2 自己的計畫 | 新資料夾 `docs/architecture/plans/rebuild/`：README、HANDOFF（新的決定紀錄）、全局審計、rebuild 宣告、本清單 |
+| gyo2 自己的計畫 | 新資料夾 `docs/architecture/target/v2/`（原寫 `docs/architecture/plans/rebuild/`；使用者 2026-11-14 定在 `target/v2`）：README、HANDOFF（新的決定紀錄）、全局審計、rebuild 宣告、本清單 |
 | README 三語 | R0b 的文件 PR 重寫 |
 
 決定紀錄：
