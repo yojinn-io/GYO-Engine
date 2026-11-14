@@ -99,7 +99,7 @@ v3 和 v2 的差別：
 | Resource | World 裡不屬於任何實體的值；每個型別最多一個。例：設定、統計、和外部交換資料的緩衝 | 加限定詞 | 一律寫英文「Resource」。中文「資源」留給性能預算與 OS 資源（記憶體、檔案、執行緒）。GPU 上的物件叫什麼，另定 |
 | System | 一個普通函式，World 在 schedule 裡呼叫它。參數的型別就是它的存取宣告（讀什麼、寫什麼）；回傳 `SystemResult`。詳見 [System 說明頁](system-contract-page.zh-Hant.md) | 沿用 | AGENTS 的「子系統」寫全稱「Subsystem」 |
 | Schedule | 一組 System 與它們的執行計畫：有名字、屬於一個 clock domain（或不屬於）、分成依序執行的 stage、指定由哪個執行緒角色呼叫。System 的先後由 `before`／`after` 排出，不照登記的先後。名字由產品給，通用機制不內建任何 schedule | 沿用 | 動詞「排程」的一般語意照用 |
-| Plugin | **Engine 外的可選部分**：少了它，完整的遊戲仍然成立，只是功能受限。例：網路、ImGui。以 `plugins/` 下的一個套件交付 | 加限定詞 | 通用機制的登記單位寫「`Plugin` 型別」：一個在啟動時向 Registry 登記元件、Resource、事件、System 與 schedule 的類別，只在啟動時被呼叫。兩者的關係見第 6 節第 2 點。AGENTS 的「Plugin System」照原文。和 Module 是一對，見 4.3 |
+| Plugin | **Engine 外的可選部分**：少了它，完整的遊戲仍然成立，只是功能受限。例：網路、ImGui。以 `plugins/` 下的一個套件交付 | 加限定詞 | 一個 Plugin 往 World 登記用的類別寫「`Plugin` 型別」：啟動時向 Registry 登記元件、Resource、事件、System 與 schedule，只在啟動時被呼叫。Module 用的另一種是「`Module` 型別」（見 4.3）。現行程式只有單一的 `Plugin` 型別，Module 也用它；拆成兩種是使用者 2026-11-14 的決定，程式還沒改（第 6 節第 2 點）。AGENTS 的「Plugin System」照原文。和 Module 是一對，見 4.3 |
 | Product | **`Product` 型別**：一個 World、建出它的凍結 Registry，以及依序執行 schedule 的 Executor，三者的組合。它本身不持有執行緒；`Run(schedule)` 由 runner 呼叫。System 回 `Err` 時，它把錯誤交給產品登記的 handler 一次，並讓 World 進入 Interrupted | 加限定詞 | AGENTS 的 Product（有 owner 的遊戲或工具）寫中文「產品」；產品分 Game 與 Tool 兩種。程式與文件裡寫成 `Product`（程式碼格式）時才指型別。「App」不用 |
 | Extract | 從一個 World 單向讀資料到另一個 World 的步驟：在標成 extract 的 schedule 裡，System 用 `Extract<Read<T>>`、`ExtractRes<T>` 唯讀地看來源 World，寫進自己的 World。來源不能寫。典型用途是把模擬的資料交給渲染 | 沿用 | 同左 |
 | Asset | 一份從檔案載入、在程式裡用 id 或 handle 參照的內容（模型、貼圖、聲音、關卡資料等）。gyo2 目前還沒有 asset 的程式 | 沿用 | `assets/` 是內容根目錄的名字 |
@@ -126,7 +126,7 @@ v3 和 v2 的差別：
 | Snapshot | 不單用 | 加限定詞 | 某一刻狀態的完整拷貝，依用途寫「wire 快照」（網路上傳給對方的狀態）、「回滾快照」（倒回去重算用）、「驗證快照」（比對兩次執行是否一致用） |
 | Registry、登記表 | **Registry**：收下產品給的 `Plugin` 清單，依序讓每個 plugin 登記，檢查全部登記，凍結，並替每個 schedule 排出執行計畫（Plan）。凍結後不能再登記 | 加限定詞 | 建置系統的產品清單寫「產品登記檔」。決定舊概念去留的那張表寫「去留登記表」 |
 | Layer | 不單用 | 加限定詞 | 「架構層」：Engine、plugins、產品這種依賴方向固定的分層。「基盤／應用之分」：AGENTS §2 依「改了它上面要跟著改多少」的分法。「渲染層」：畫面合成的一層 |
-| Module | **Engine 內的必要部分**：少了它，完整的遊戲不成立。以 `engine/<名字>/` 一個目錄、一個 CMake target 交付。接第三方函式庫的也算，例：JSON 函式庫、SDL | 沿用 | Go 的 module、C++20 的 module 照各自語言的意思，寫「Go module」「C++ module」。和 Plugin 是一對：差別是 Engine 內或外，判準是「少了它，完整的遊戲還成不成立」 |
+| Module | **Engine 內的必要部分**：少了它，完整的遊戲不成立。以 `engine/<名字>/` 一個目錄、一個 CMake target 交付。接第三方函式庫的也算，例：JSON 函式庫、SDL | 沿用 | Go 的 module、C++20 的 module 照各自語言的意思，寫「Go module」「C++ module」。一個 Module 往 World 登記用的類別寫「`Module` 型別」（使用者 2026-11-14 定拆型別，程式還沒改；不進 World 的 Module 沒有它）。Module 的登記檔寫「Module 登記檔」。和 Plugin 是一對：差別是 Engine 內或外，判準是「少了它，完整的遊戲還成不成立」 |
 | Stage | 不單用 | 加限定詞 | schedule 的一段寫「stage（舊）」：一個 schedule 由幾個 stage 依序組成，每個 stage 結束時有一個同步點，套用這段裡記下的延後變更。打包的暫存目錄、shader 的階段（`ShaderStage`）照各自領域的詞。「stage」不當動詞用 |
 | Scene | 不單用 | 不用它命名新概念 | 關卡的資料寫「關卡內容」，渲染的輸入寫「渲染輸入」。可以生成的實體範本（Bevy 的 Scene）要不要有，另判 |
 | Input | **玩家的輸入**（鍵盤、滑鼠、手把），以及處理它的輸入模組 | 加限定詞 | 欄角色 Input（可以被入口 System 寫的決定性資料）寫「Input 欄角色（舊）」 |
@@ -162,7 +162,10 @@ v3 和 v2 的差別：
    - **使用者 2026-11-14 的決定**（原話）：「OK，那還是我的標準，但是建立2張登記表，一個Module，一個Plugin。Module優先與Plugin」；對「純函式庫要不要進表」：「純函數也登記，但是需要標明純函數式。不會被被World使用。」；對「這張表的用途是 (a) 看得到 Engine 有什麼、產品用了什麼，或 (b) 執行時擋下沒登記的使用」：「(a)，照你的建議做」。
    - 照這個決定：Module 與 Plugin 的分法仍是「少了它，完整的遊戲還成不成立」。Module 清單與 Plugin 清單各一份，放在建置層、只有一處；每一列寫名字、標記（進 World／不進 World）、依賴；CMake 照它 link；執行時的 Registry 只收「進 World」的登記單位，由這份清單產生，不另外手寫；Module 排在 Plugin 前面。標記叫「不進 World」（library-only），不叫「純函數」：JSON、ufbx 會配置記憶體、有的會讀檔。
    - 同日再確認（原話）：「拆成兩種型別，優先也包含依賴方向」。也就是：登記單位拆成 Module 用與 Plugin 用兩種型別，取代單一的 `Plugin` 型別；「Module 優先」包含順序（Module 先登記）與依賴方向（Plugin 可以依賴 Module，Module 不能依賴 Plugin）。
-   - 還沒定：兩種型別與兩張表的名字（「登記表」已被去留登記表用掉，暫稱「Module 清單」「Plugin 清單」）。
+   - 名字（使用者同日：「你參照命名規則起就行」，由本會話照[命名規範](rebuild-naming.zh-Hant.md)起）：
+     - 兩種型別：`GYO::Kernel::Module` 與 `GYO::Kernel::Plugin`。名字直接指使用者的兩個概念（N5：名字是概念的標籤）；放在通用機制的命名空間（N17）。
+     - 子類別的名字：Plugin 照 N20 以 `Plugin` 結尾（例 `NetPlugin`）；Module 比照以 `Module` 結尾（例 `SdlModule`）。N20 目前只寫 Plugin，Module 這一半要補進命名規範。
+     - 兩份清單：「Module 登記檔」「Plugin 登記檔」，比照既有的「產品登記檔」（N8）；不叫「登記表」，因為那個詞已被去留登記表用掉。
 3. **Product 的兩個意思**：中文「產品」（Game 或 Tool）與 `Product` 型別（一個 World 加上 Executor）。v3 用中文與程式碼格式區分；若覺得仍會混淆，請你決定要不要另取型別名。
 4. **Kernel 算不算 Module**：照 Module 的判準，少了通用機制，遊戲也不成立；但[命名規範](rebuild-naming.zh-Hant.md) N17 把通用機制（`GYO::Kernel::`）與 Module（`GYO::Engine::<Module>::`）分成兩個根。v3 照 N17 把兩者分開寫。
 
