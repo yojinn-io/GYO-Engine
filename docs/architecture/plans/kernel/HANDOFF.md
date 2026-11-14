@@ -93,6 +93,7 @@
 | `v8-arch-gyo2-no-master-merge` | 2026-11-14（使用者，主會話）。「master 不用放到 gyo2，現在 gyo2 分支上做好，然後再搬到 master 上去。」master 不併進 gyo2；R0b-1 取消。同日補充：「現在 gyo2 是新的工作空間，通過驗證和移植之後才會取代 master，而且並不是分段取代，而是 gyo2 整體完成才能搬回去。」 |
 | `v8-arch-gyo2-mechanism-before-pvp` | 2026-11-14（使用者，主會話）。「PVP 先不急搬，而是你先把底層機制先建好。再動 pvp」。順序：R1（推導）→ R2（核心機制）先完成並驗證，PvP 的移植（R5）排在最後，不為了早點搬 PvP 而壓縮底層。 |
 | `v8-arch-gyo2-migration-needs-consent` | 2026-11-14（使用者，主會話）。「4、5 注意，先不動工具和產品，現在就是造架構設計做好機制，我同意移植才動。」目前的範圍只有 R0b、R1（架構設計）、R2（機制）。工具與產品的移植（R3～R5）每一個都要使用者明說同意才開始；同日補充：「你可以自己做 2D、3D 樣本來測試。」——架構師可以自建 2D、3D 的測試樣本來驗證機制；樣本不是既有工具或產品的移植，不需要另外同意。素材來源（使用者）：「3D 動畫、骨骼的資源你可以去 master 裡面拿。2D 素材，你可以找最早的 object_fps 裡有。」——3D：master 的 `assets/object_fps_pvp/`（`animations/ual_mannequin`、`characters/player`）；2D：已刪除的 `assets/object_fps/`（刪除 commit 0d05cc4e 的前一版有 `textures/enemies`、`world`、`weapons`、`sky`、`ui`；更早的版本在 git 歷史裡）。只複製樣本用到的素材檔進 gyo2，不帶產品的程式。 |
+| `v8-arch-rebuild-judgment-rules` | 2026-11-14（使用者，主會話）。「你得建立一個機制區分舊的設計哪些有問題哪些沒有問題，我跑重審和開 gyo2 就是為了這個。你一步一步來，別急著動工，把邊界和定義處理好了。我確認之後再來，別把之前的錯誤又重犯。」→ [判斷舊設計的機制](rebuild-judgment-rules.zh-Hant.md)（設計元素、三類產品、兩種成本、什麼算理由、內容／名字／歸屬三題、六種結論、把關與登記表）；使用者「確認，先做步驟 1 同詞異義表」。之後每一步都等使用者確認。 |
 
 ## 未定
 
