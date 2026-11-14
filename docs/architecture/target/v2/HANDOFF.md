@@ -101,6 +101,8 @@ GYO2 線的持續記錄（使用者 2026-11-14：GYO2 的文件放 `docs/archite
 
 - 2026-11-14 **時間、固定步、runner、跨時鐘事件的設計 v2**（使用者「照這個順序，先做時間與 runner 的設計 v2」）：[rebuild-time-design.zh-Hant.md](rebuild-time-design.zh-Hant.md)，分支 `claude/gyo2-time-design`。兩份偵察（Opus／high）→ 初稿（5785c4d0）→ 別模型檢查（Opus／xhigh）blocker 5、should 16、nit 12 → 修訂 1（46b8246a）→ 範圍較窄的複查中。證據在主 checkout `build/evidence/gyo2-time-v2/`。還沒交給使用者。
 
+- 2026-11-14 **PR #227、#232、#230 併入 `gyo2`**（使用者在各張卡裡說合併）：#227 同詞異義表 v3（686a8edb）；#232 命名規範 N20、N7、N8、N21（79fad9cb）；#230 R0b-3 的對抗檢查與收尾（15ec34f1），OS 邊界守衛的一條收緊隨合併生效。合併後使用者指示在 `gyo2` 上手動觸發 Cross-platform CI：run 43600646685 通過（L1 三平台；Quick acceptance 第一次實跑，零工具時打包步驟都 skipped）。三張卡已由使用者封存。
+
 ## 下一步
 
 - 待使用者：(1) 漏斗工具的細節（說明頁第 8 節的十條規則）；(2) 把初始值的宣告算進 Registry 指紋與 C 指紋——要改 J-18 的 golden 與指紋的格式版本，照 AGENTS §14.4 需要核准；(3) R0b-3 與表不同的做法（報告 3.1 節）；(4) System 契約說明頁整頁的確認；(5) hook 記下的變更何時生效（U3）。
