@@ -121,16 +121,9 @@ function(gyo_app_link_components target visibility)
     endif()
     gyo_validate_components(${ARGN})
     get_property(declared GLOBAL PROPERTY GYO_APP_${GYO_APP_ID}_COMPONENTS)
-    set(SDL_PLATFORM GYO::PlatformSDL)
-    set(SDL_RENDERER GYO::RenderBackendSDL)
-    set(SDL_GPU GYO::RenderBackendSDLGPU)
-    set(SDL_INPUT GYO::InputBackendSDL)
-    set(SDL_AUDIO GYO::AudioBackendSDL)
-    set(SDL_IMAGE GYO::AssetSdlImage)
-    set(SDL_TTF GYO::TextBackendSDLTTF)
-    set(UFBX GYO::AssetUfbx)
-    set(IMGUI imgui::sdl3_sdlrenderer3)
-    set(FRAMEWORK GYO::ToolFramework)
+    # Component -> target table. No component has a target in this tree: the
+    # SDL, ufbx and ImGui backends were removed with their modules, so linking
+    # any component stops at the "unavailable" error below.
     foreach(component IN LISTS ARGN)
         # SDL platform is also an implicit dependency of its renderer/input APIs.
         set(available "${declared}")

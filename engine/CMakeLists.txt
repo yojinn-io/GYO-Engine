@@ -1,111 +1,15 @@
 # Base is the lowest engine layer (failure handling: Assert, Result, Error);
-# Math sits directly above it. Every module, GYO::Engine included, may link
-# either.
+# Math sits directly above it. Every module may link either.
 add_subdirectory(base)
 add_subdirectory(math)
-# The entity store is a header-only leaf directly above Base, like Math
-# (docs/architecture/entity-store.md).
-add_subdirectory(entity_store)
-add_subdirectory(kernel)
 # The OS layer sits directly above Base and below every module that needs the
 # operating system (docs/architecture/os.md).
 add_subdirectory(os)
-# The engine time base, role threads and trace transport sit directly above
-# Base, below GYO::Engine, so modules that do not link the engine library may
-# use them.
+# The engine time base and role threads sit directly above Base.
 add_subdirectory(time)
 add_subdirectory(threads)
-add_subdirectory(trace)
-# The audio mixer sits above the time base; its SDL output backend is separate
-# (docs/architecture/audio.md).
+# File systems, paths and streams above Base, Math and the OS layer
+# (docs/architecture/io.md).
+add_subdirectory(io)
+# The audio mixer sits above the time base (docs/architecture/audio.md).
 add_subdirectory(audio)
-
-add_library(engine STATIC)
-add_library(GYO::Engine ALIAS engine)
-target_compile_features(engine PUBLIC cxx_std_20)
-
-target_include_directories(engine PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/io/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/asset/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/runtime/include
-)
-
-target_sources(engine
-    PRIVATE
-    # runtime
-    runtime/src/RuntimeLoop.cpp
-
-    # io/fs
-    io/src/fs/DirectoryIterator.cpp
-    io/src/fs/MountTable.cpp
-    io/src/fs/NativeFileSystem.cpp
-    io/src/fs/Vfs.cpp
-    # io/helpers
-    io/src/helpers/ReadAllBytes.cpp
-    io/src/helpers/ReadAllText.cpp
-    io/src/helpers/WriteAllBytes.cpp
-    io/src/helpers/WriteAllText.cpp
-    io/src/helpers/UserFiles.cpp
-    io/src/helpers/WriteFileAtomically.cpp
-    # io/path
-    io/src/path/PathUtils.cpp
-    io/src/path/Uri.cpp
-    # io/stream
-    io/src/stream/MemoryStream.cpp
-    io/src/stream/SpanStream.cpp
-    io/src/stream/BufferedStream.cpp
-    io/src/stream/StreamReader.cpp
-    io/src/stream/StreamWriter.cpp
-
-    # asset/catalog
-    asset/src/catalog/CatalogParser.cpp
-    # asset/loaders
-    asset/src/loaders/BinaryLoader.cpp
-    asset/src/loaders/FontLoader.cpp
-    asset/src/loaders/SoundLoader.cpp
-    asset/src/loaders/TextLoader.cpp
-    asset/src/loaders/TextureLoader.cpp
-    # asset/
-    asset/src/ContentManifest.cpp
-    asset/src/AssetCatalog.cpp
-    asset/src/AssetManager.cpp
-    asset/src/AssetPathResolver.cpp
-    asset/src/AssetPipeline.cpp
-    asset/src/AssetWatcher.cpp
-    asset/src/LoaderRegistry.cpp
-    asset/src/NativeFileAssetSource.cpp
-)
-target_link_libraries(engine
-    PUBLIC GYO::Base GYO::Math GYO::Time
-    # engine/io's native file system calls the OS layer; no engine/io public header names an engine/os type.
-    PRIVATE nlohmann_json::nlohmann_json GYO::Os
-)
-
-# SDL_image is an optional decoder implementation. GYO::Engine remains
-# backend-neutral and continues to configure without SDL or SDL_image.
-if(TARGET SDL3_image::SDL3_image)
-    add_library(gyo_asset_sdl_image STATIC
-        asset/src/loaders/sdl_image/SdlImageTextureLoader.cpp
-    )
-    add_library(GYO::AssetSdlImage ALIAS gyo_asset_sdl_image)
-
-    target_link_libraries(gyo_asset_sdl_image
-        PUBLIC GYO::Engine
-        PRIVATE SDL3_image::SDL3_image SDL3::SDL3
-    )
-endif()
-
-add_subdirectory(model)
-# The baked geometry of grid-built maps (docs/architecture/voxel-mesh.md).
-add_subdirectory(voxel_mesh)
-# Named points, boxes and paths placed on a map (docs/architecture/map-markers.md).
-add_subdirectory(map_markers)
-add_subdirectory(collision)
-add_subdirectory(net)
-add_subdirectory(text)
-if(GYO_ENABLE_SDL_PLATFORM)
-    add_subdirectory(platform)
-endif()
-add_subdirectory(input)
-add_subdirectory(render)
-add_subdirectory(ui)
