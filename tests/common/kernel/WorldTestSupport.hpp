@@ -78,14 +78,14 @@ inline SystemOptions C(std::string name, std::string stage, std::vector<std::str
     return Sys(std::move(name), Zone::C, {At("Tick", std::move(stage), std::move(before), std::move(after))});
 }
 
-// A finished Registry, an App over it and the errors its handler recorded.
+// A finished Registry, a Product over it and the errors its handler recorded.
 struct Rig {
     Built built;
-    std::unique_ptr<App> app;
+    std::unique_ptr<Product> product;
     std::vector<KernelError> recorded;
 
-    World& world() { return app->GetWorld(); }
-    Engine::Base::Result<void, KernelError> Run(std::string_view schedule = "Tick") { return app->Run(schedule); }
+    World& world() { return product->GetWorld(); }
+    Engine::Base::Result<void, KernelError> Run(std::string_view schedule = "Tick") { return product->Run(schedule); }
 };
 
 // verification: the KernelSettings switch written in the Ready window before the first Run.
@@ -97,9 +97,9 @@ inline std::unique_ptr<Rig> MakeRig(std::function<void(Registrar&)> build, bool 
         FAIL("Finish failed: " << Describe(rig->built));
         return rig;
     }
-    rig->app = std::make_unique<App>(*rig->built.registry, std::move(worldName));
+    rig->product = std::make_unique<Product>(*rig->built.registry, std::move(worldName));
     Rig* raw = rig.get();
-    rig->app->SetErrorHandler([raw](const KernelError& error) { raw->recorded.push_back(error); });
+    rig->product->SetErrorHandler([raw](const KernelError& error) { raw->recorded.push_back(error); });
     rig->world().SetResource(KernelSettings{verification, false});
     return rig;
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-// App (spec section 0 "Runtime", E; kernel HANDOFF v8-arch-kernel-app-name):
+// Product (spec section 0 "Runtime", E; kernel HANDOFF v8-arch-kernel-app-name):
 // one World, the frozen Registry it was made from, and the Serial Executor
 // that runs that Registry's schedules (target/kernel DI-KS 2, 9, 14; spec E.2).
 //
@@ -20,9 +20,9 @@
 // Interrupted, every record not yet applied is discarded, diagnostics are kept,
 // and Run returns the Err (spec E.5). An exception from a System or hook is not
 // caught: the World becomes Interrupted the same way and the exception goes on.
-// Running an Interrupted World is a GYO_ASSERT (rebuild it: a new App).
+// Running an Interrupted World is a GYO_ASSERT (rebuild it: a new Product).
 //
-// v1 is Serial only (LIM-2). The App owns no thread (DI-KS 15): Run is called
+// v1 is Serial only (LIM-2). The Product owns no thread (DI-KS 15): Run is called
 // on the schedule's runner thread by the Host.
 
 #include "engine/base/Result.hpp"
@@ -41,14 +41,14 @@
 
 namespace GYO::Kernel {
 
-class App {
+class Product {
 public:
-    // registry must be frozen and outlive the App. worldName identifies this
-    // App's World in errors and verification reports (spec A.6).
-    explicit App(const Registry& registry, std::string worldName = {});
-    ~App();
-    App(const App&) = delete;
-    App& operator=(const App&) = delete;
+    // registry must be frozen and outlive the Product. worldName identifies this
+    // Product's World in errors and verification reports (spec A.6).
+    explicit Product(const Registry& registry, std::string worldName = {});
+    ~Product();
+    Product(const Product&) = delete;
+    Product& operator=(const Product&) = delete;
 
     [[nodiscard]] World& GetWorld() noexcept { return world_; }
     [[nodiscard]] const World& GetWorld() const noexcept { return world_; }

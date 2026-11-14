@@ -49,7 +49,7 @@ struct AccessEntry {
 };
 
 // The access description a System and a hook share (spec F.6: tlCurrent points
-// to it for both). Derived from the Registry's AccessSet when the App is made.
+// to it for both). Derived from the Registry's AccessSet when the Product is made.
 struct AccessDesc {
     std::vector<AccessEntry> entries;
     // ExclusiveWorld: reads every column and resource; writes zone B Shared data

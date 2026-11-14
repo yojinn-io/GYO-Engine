@@ -88,7 +88,7 @@ struct ResourceOptions {
     WritePolicy writePolicy = WritePolicy::Exclusive;
     Role role = Role::State;
     Rollback rollback = Rollback::No;
-    // Exchanged with the outside of the App (spec I.2); always zone B (Z1, Z7).
+    // Exchanged with the outside of the Product (spec I.2); always zone B (Z1, Z7).
     bool external = false;
     Affinity affinity;
 };

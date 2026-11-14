@@ -1,9 +1,9 @@
-// The Serial Executor (spec E.2, E.5; App.hpp). The only kernel file that logs:
+// The Serial Executor (spec E.2, E.5; Product.hpp). The only kernel file that logs:
 // its default handler writes a kernel error's whole chain to stderr once
 // (target/error-handling DI 2; tests/common/kernel/kernel_guard.py K6 exempts
 // files named Executor*).
 
-#include "engine/kernel/App.hpp"
+#include "engine/kernel/Product.hpp"
 
 #include "engine/kernel/detail/RegistryData.hpp"
 
@@ -26,7 +26,7 @@ void DefaultHandler(const KernelError& error) {
 
 } // namespace
 
-App::App(const Registry& registry, std::string worldName)
+Product::Product(const Registry& registry, std::string worldName)
     : registry_(&registry), world_(registry, std::move(worldName)), handler_(&DefaultHandler) {
     const Detail::RegistryData& data = *world_.data_;
     for (const Detail::SystemRecord& system : data.systems) {
@@ -37,9 +37,9 @@ App::App(const Registry& registry, std::string worldName)
     }
 }
 
-App::~App() = default;
+Product::~Product() = default;
 
-VerificationReport App::Verification() const {
+VerificationReport Product::Verification() const {
     VerificationReport report;
     report.world = world_.name_;
     report.accessVerification = world_.verification_;
@@ -51,7 +51,7 @@ VerificationReport App::Verification() const {
     return report;
 }
 
-Engine::Base::Result<void, KernelError> App::Fail(KernelError error) {
+Engine::Base::Result<void, KernelError> Product::Fail(KernelError error) {
     error.world = world_.name_;
     world_.state_ = WorldState::Interrupted;
     world_.DiscardDeferred();
@@ -90,7 +90,7 @@ std::string StepText(const std::string& schedule, std::uint32_t position, const 
 
 } // namespace
 
-Engine::Base::Result<void, KernelError> App::Run(std::string_view schedule) {
+Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) {
     World& world = world_;
     // E.5: an Interrupted World runs no more; X-9.
     GYO_ASSERT(world.state_ == WorldState::Ready);

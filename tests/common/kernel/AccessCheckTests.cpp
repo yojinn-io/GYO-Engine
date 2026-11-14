@@ -142,7 +142,7 @@ TEST_CASE("J-5: control: declared reads and writes never trip verification") {
     KeptWorld() = &rig->world();
     for (int i = 0; i < 2; ++i) KERNEL_REQUIRE_RUN_OK(rig->Run());
     // The "no violation" report carries the switch (target/system-contract 2b condition 2).
-    const VerificationReport report = rig->app->Verification();
+    const VerificationReport report = rig->product->Verification();
     CHECK(report.accessVerification);
     CHECK_FALSE(report.breakOnKernelError);
     CHECK(report.world == "control");
@@ -173,7 +173,7 @@ TEST_CASE("J-5: (a) a reference kept from Read<T> and written in another System:
 
     KERNEL_REQUIRE_RUN_OK(pair.off->Run());
     CHECK(pair.off->world().Get<Pos>(1)->x == 99);
-    CHECK_FALSE(pair.off->app->Verification().accessVerification);
+    CHECK_FALSE(pair.off->product->Verification().accessVerification);
     g_keptPos = nullptr;
 }
 
@@ -229,7 +229,7 @@ TEST_CASE("J-5: excluded columns are left out of the comparison and listed in th
     rig->world().ExcludeFromVerification<Pos>();
     KERNEL_REQUIRE_RUN_OK(rig->Run());  // not seen: Pos is excluded (the report says so)
     g_keptPos = nullptr;
-    CHECK(rig->app->Verification().excludedColumns == std::vector<std::string>{"Pos"});
+    CHECK(rig->product->Verification().excludedColumns == std::vector<std::string>{"Pos"});
     CHECK(rig->world().Get<Pos>(1)->x == 31);
 }
 

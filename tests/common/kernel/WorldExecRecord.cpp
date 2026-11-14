@@ -146,8 +146,8 @@ Stats Measure(int mode, std::uint64_t entities, int runs, bool verification) {
         std::fprintf(stderr, "Finish failed (mode %d)\n", mode);
         std::exit(2);
     }
-    App app(registry, "record");
-    World& world = app.GetWorld();
+    Product product(registry, "record");
+    World& world = product.GetWorld();
     world.SetResource(KernelSettings{verification, false});
     for (std::uint64_t id = 0; id < entities; ++id) {
         world.Insert(id, Col<0>{});
@@ -165,7 +165,7 @@ Stats Measure(int mode, std::uint64_t entities, int runs, bool verification) {
     const int warmup = std::min(runs / 10, 1000);
     for (int i = 0; i < runs + warmup; ++i) {
         const auto start = std::chrono::steady_clock::now();
-        const auto result = app.Run("Tick");
+        const auto result = product.Run("Tick");
         const auto end = std::chrono::steady_clock::now();
         if (!result) {
             std::fprintf(stderr, "Run failed: %s\n", result.error().Text().c_str());

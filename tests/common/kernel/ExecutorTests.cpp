@@ -488,8 +488,8 @@ TEST_CASE("J-35: a throw, a System Err or a kernel-level Err interrupt the World
         CHECK(rig->world().State() == WorldState::Interrupted);
         GYO_CHECK_ASSERTS(rig->Run());
         GYO_CHECK_ASSERTS(rig->world().Insert(2, Tag{2}));  // an Interrupted World takes no Host write
-        // Restore arrives with rollback-extract; rebuilding the World (a new App) is the other way back.
-        App rebuilt(*rig->built.registry, "rebuilt");
+        // Restore arrives with rollback-extract; rebuilding the World (a new Product) is the other way back.
+        Product rebuilt(*rig->built.registry, "rebuilt");
         rebuilt.SetErrorHandler([](const KernelError&) {});
         KERNEL_REQUIRE_RUN_OK(rebuilt.Run("Tick"));
     }
@@ -615,7 +615,7 @@ TEST_CASE("J-50: KernelSettings is read when the first Run starts and cannot cha
     const auto result = rig->Run();
     KeptWorld() = nullptr;
     CHECK(HasCode(result, KernelErrorCode::AccessViolation));
-    CHECK(rig->app->Verification().accessVerification);
+    CHECK(rig->product->Verification().accessVerification);
 
     // breakOnKernelError: the returning break hook is called where the error is made, then the Err goes on.
     for (const bool breakOn : {true, false}) {
@@ -632,7 +632,7 @@ TEST_CASE("J-50: KernelSettings is read when the first Run starts and cannot cha
         KeptWorld() = nullptr;
         CHECK(HasCode(broken, KernelErrorCode::AccessViolation));
         CHECK_MESSAGE((breaks > 0) == breakOn, "breakOnKernelError " << breakOn << ", break hook calls " << breaks);
-        CHECK(breaking->app->Verification().breakOnKernelError == breakOn);
+        CHECK(breaking->product->Verification().breakOnKernelError == breakOn);
     }
 }
 

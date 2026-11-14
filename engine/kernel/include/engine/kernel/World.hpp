@@ -3,7 +3,7 @@
 // World (spec A; target/world.zh-Hant.md; target/kernel DI-KS 2, 3, 4, 6, 9,
 // 10, 11, 14).
 //
-// One App's data: columns, resources, event buffers, the deferred queue,
+// One Product's data: columns, resources, event buffers, the deferred queue,
 // change stamps, domain ticks and its state. Made from a frozen Registry; its
 // lifetime is one generation (spec A.1: a generation change is a new World,
 // made from the same frozen Registry).
@@ -46,7 +46,7 @@
 
 namespace GYO::Kernel {
 
-class App;
+class Product;
 
 // Spec A.1 state (Building is the Registry's: a World is made only from a frozen Registry).
 enum class WorldState : std::uint8_t {
@@ -263,7 +263,7 @@ public:
     void SetBreakHook(std::function<void(const KernelError&)> hook) { breakHook_ = std::move(hook); }
 
 private:
-    friend class App;
+    friend class Product;
     friend Detail::SystemContext* Detail::CurrentCall(World&) noexcept;
     friend Detail::SystemContext& Detail::RequireCall(World&);
     friend ComponentId Detail::ComponentIdOf(const World&, TypeKey);
@@ -311,7 +311,7 @@ private:
     [[nodiscard]] ChangeStamp WriteStamp() const noexcept { return state_ == WorldState::Ready ? stamp_ + 1 : stamp_; }
     void MarkApiWritten(Detail::EntryKind kind, std::uint32_t id) const;
 
-    // ---- Executor side (App, World.cpp)
+    // ---- Executor side (Product, World.cpp)
 
     // F.2: applies the window's deferred records and the hook queue; Err from a
     // hook or the Z5 recheck. stamp: the sync point's stamp.

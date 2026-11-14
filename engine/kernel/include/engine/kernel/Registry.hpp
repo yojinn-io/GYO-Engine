@@ -28,9 +28,9 @@
 // once (spec D.2, D-5). After Finish nothing can register: Registrar is only
 // handed to Build (spec R-2).
 //
-// The App type (GYO::Kernel::App: one World, its Registry, its schedules and
+// The Product type (GYO::Kernel::Product: one World, its Registry, its schedules and
 // their executor policy; kernel HANDOFF v8-arch-kernel-app-name) runs a frozen
-// Registry's schedules (App.hpp).
+// Registry's schedules (Product.hpp).
 
 namespace GYO::Kernel {
 
@@ -45,7 +45,7 @@ public:
     FinishContext(const FinishContext&) = delete;
     FinishContext& operator=(const FinishContext&) = delete;
 
-    // One runner per App; a second is R-E6. The runner callable arrives with
+    // One runner per Product; a second is R-E6. The runner callable arrives with
     // the batches that run schedules; this batch records who installs it.
     void InstallRunner(std::string_view runner);
 
@@ -464,7 +464,7 @@ public:
     // Fingerprints (spec C.2 point 5, H-4, J-18, J-20). Each carries its
     // format version; see Fingerprint.cpp for the exact bytes hashed.
     [[nodiscard]] Fingerprint RegistryFingerprint() const;
-    // Only the zone C part (spec H.3: two Apps share one FixedUpdate when their
+    // Only the zone C part (spec H.3: two Products share one FixedUpdate when their
     // cFingerprints match).
     [[nodiscard]] Fingerprint CFingerprint() const;
 

@@ -116,7 +116,7 @@ std::string_view ToString(StartupCode code) noexcept {
 
 StartupReport::StartupReport(std::vector<StartupError> found)
     : code(StartupReportCode::StartupFailed),
-      message("the App cannot start: " + std::to_string(found.size()) + " startup error(s)"),
+      message("the Product cannot start: " + std::to_string(found.size()) + " startup error(s)"),
       errors(std::move(found)) {
     for (const StartupError& error : errors) {
         if (!detail.empty()) detail += "\n";
@@ -1155,7 +1155,7 @@ void CheckSystems(RegistryData& data) {
             const ScheduleRecord* record = data.FindSchedule(mount.schedule);
             if (record == nullptr) {
                 data.Error(StartupCode::DE1, "D.2", subject + " is mounted in schedule '" + mount.schedule +
-                                                        "', which this App does not have",
+                                                        "', which this Product does not have",
                            {name, mount.schedule}, {source});
                 continue;
             }
@@ -1327,7 +1327,7 @@ void CheckRunners(RegistryData& data) {
     if (data.runners.size() > 1) {
         std::vector<std::string> subjects;
         for (std::uint32_t owner : data.runnerOwners) subjects.push_back(data.OwnerName(owner));
-        data.Error(StartupCode::RE6, "C.2", "two plugins install a runner; an App has one", std::move(subjects));
+        data.Error(StartupCode::RE6, "C.2", "two plugins install a runner; a Product has one", std::move(subjects));
     }
 }
 
