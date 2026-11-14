@@ -95,7 +95,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | 詞 | 現有的意思（出處） | 處置 | 新文件的寫法 |
 |---|---|---|---|
 | Runtime | (i) 錯誤契約的 Runtime Error（帶過來）；(ii) AGENTS §8 的 Runtime：執行中的遊戲，相對於 Editor（AGENTS.md:522）；(iii) 舊的 `engine/runtime` 模組與 `UiRuntime`（不帶）；(iv) 舊 Kernel 設計：後來定名 App 的那個型別 | 不用它命名新概念 | (i)(ii) 照用。(iv) 寫「App」 |
-| Host | (i) AGENTS.md:147 的 host：搭載基盤的一個應用；(ii) CI 的 host：建置機；(iii) 舊程式的 `MatchRuntimeHost`、`IpcHost`（不帶）；(iv) 舊 Kernel 設計：提供 runner 的一方加 main | 不用它命名新概念 | (i)(ii) 照原文。(iv)：已確認的只有名字的方向，Host 改說「main」與「runner」。main 指產品的進入點函式，就是 C++ 的 `main()`。runner 指跑迴圈的函式（Bevy 的 `set_runner`，`bevy_app/src/app.rs:224`）。舊 Host 做的事各自歸誰，登記表判，這裡不分 |
+| Host | (i) AGENTS.md:147 的 host：搭載基盤的一個應用；(ii) CI 的 host：建置機；(iii) 舊程式的 `MatchRuntimeHost`、`IpcHost`（不帶）；(iv) 舊 Kernel 設計：提供 runner 的一方加 main | 不用它命名新概念 | (i)(ii) 照原文。(iv)：Host 改說「組裝（setup）」與「runner」（使用者 2026-11-14 定名「組裝（setup）」；先前的提案「main」看起來像主執行緒，舊設計裡執行緒的角色也有一個叫 Main）。組裝指產品啟動時建 App、列出要用的東西的那一段。runner 指跑迴圈的函式（Bevy 的 `set_runner`，`bevy_app/src/app.rs:224`）。舊 Host 做的事各自歸誰，登記表判，這裡不分 |
 | Shell | 舊 framework 的 `WindowShellClient`、`ImGuiShellClient`（不帶） | 不用它命名新概念 | gyo2 上沒有對應的概念。CI 的 shell 是另一回事 |
 | Session | (i) AGENTS.md:276 的 session；(ii) 工具的編輯階段；(iii) 實機場次（field-session）；(iv) 連線 | 不用它命名新概念 | 各處的一般語意照用 |
 | Service | (i) 獨立行程的後端服務：`services/`、Go service；(ii) 舊 Kernel 設計：World 之外做 IO 的「外部服務」 | 加限定詞 | 不加限定時指 (i)。(ii) 寫「World 外的 IO（舊稱外部服務）」 |
@@ -110,7 +110,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | 詞 | 底稿的建議 | 本表 |
 |---|---|---|
 | Runtime | 禁用 | 不用它命名新概念；Runtime Error 與 AGENTS 的用法照用 |
-| Host | 改名為 runner 加 main | 名字照此；職責歸屬不在這裡分 |
+| Host | 改名為 runner 加 main | 改說「組裝（setup）」與「runner」；職責歸屬不在這裡分 |
 | Domain | 改名為 clock | 寫「clock domain（舊）」；「時鐘」被 time 模組先占 |
 | Scene | 照 Bevy 重新定義 | 不用它命名新概念：Bevy 的 Scene 是實體範本，是另一個概念 |
 | Role | 執行緒的改叫 ThreadRole | 執行緒的保有原詞（帶過來的 threads 先占） |
@@ -143,7 +143,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
    - **Component**：AGENTS 的「部件」、ECS 元件、os 的「路徑的一段」三方相撞。建議：AGENTS 不改；新文件裡 ECS 的一律寫「ECS 元件」，引用 AGENTS 時寫「部件」。若你想改 AGENTS 的用詞，那是風紀委員的事，要另外處理。
    - **Plugin**：你 11 月 11 日說「單個才叫 plugin」，指套件。舊 Kernel 設計另有一個叫 `Plugin` 的登記類別。建議分開寫「plugin 套件」與「`Plugin` 型別」。
    - **App**：名字是你定的。v1 用「一個 World 加 Registry 加 schedules」定義它，那是舊設計的內容，而且和 Bevy 的 App 不同：Bevy 的 App 底下有多個 SubApp，每個 SubApp 一個 World。v2 只保留名字，內容等登記表判。
-4. **Host 只定名字**：改說 main 與 runner。舊 Host 做的事各自歸誰，留給登記表。
+4. **Host 只定名字**：改說「組裝（setup）」與「runner」（「組裝」已由你定名）。舊 Host 做的事各自歸誰，留給登記表。
 
 ## 8. 範囲の限界
 
