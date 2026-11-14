@@ -435,11 +435,11 @@ v1 提議「Executor 第一版只有主執行緒」，把落點的概念一起�
 
 ## 7. 怎麼復用
 
-1. **圖一、圖二只換名字，直接沿用**（使用者 2026-11-14：「mechanism-runtime.svg 這個圖，你改圖裡面的名字就行了。邏輯和流向幾乎沒變。」「control-plane-revised.svg 這個也是。」）。已在 gyo2 線改好；11 月 11 日的原版在 `57cd323b`。
+1. **圖一、圖二只換名字，直接沿用**（使用者 2026-11-14：「mechanism-runtime.svg 這個圖，你改圖裡面的名字就行了。邏輯和流向幾乎沒變。」「control-plane-revised.svg 這個也是。」）。已在 gyo2 線改好，改過的兩張放在本資料夾的 [`diagrams/`](diagrams/)；11 月 11 日的原版留在 `docs/architecture/plans/kernel/diagrams/`（同 `57cd323b`）。
    - 換的名字：Runtime→Product；Host→組裝（setup）與 runner（「被取代的」那一行寫「舊 Host」）；欄→ECS 元件；句柄→System 參數；change tick→stamp；外部服務→World 外的 IO；標題的「Client、Match、Editor」→「每個 Game、Tool」。
    - 圖二另把 11 月 12 日加上的規格用詞「InputRing／MembershipRequests／AssetStaging」改回 11 月 11 日的「InputRing[tick]」。
    - 沒有動的：決定性區的寫法、Gateway 的例子、葉子模組、Entity、debug 的那一行、圖的結構與箭頭。本文第 1 到 3 節對這些的判定不因此改變。
-   - 圖三（`networking-systems.svg`）沒有動。
+   - 圖三（`networking-systems.svg`）沒有動，留在 `docs/architecture/plans/kernel/diagrams/`。
    - **圖二另外調整成「基礎的 System 契約」**（使用者同日：「control-plane-revised.svg 不過要重新調整一下，這個是基礎的 System 契約」）。調整的內容照本文第 3 節的判定：
      - 顯式宣告的一半拿掉「決定性區 (c)／(b)」。
      - 資料的契約拿掉「進 digest 的元件預設獨占＝AGENTS §3」，只留「可宣告獨占寫入」。

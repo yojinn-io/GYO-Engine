@@ -113,7 +113,7 @@
 
 ## 5. 登記表
 
-放在 `docs/architecture/plans/rebuild/`，是舊設計去留的唯一來源。每列：
+放在 `docs/architecture/target/v2/`（原寫 `docs/architecture/plans/rebuild/`；使用者 2026-11-14 定在 `target/v2`），是舊設計去留的唯一來源。每列：
 
 | 欄 | 內容 |
 |---|---|
