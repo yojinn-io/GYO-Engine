@@ -441,21 +441,37 @@ Engine::Base::Result<std::string, KernelError> FrozenRegistry::ExportZoneCSource
     const std::string root = Detail::Normalize(options.repositoryRoot) + "/";
     const std::string owner = Detail::Normalize(options.ownerRoot);
     std::vector<std::string> files;
-    for (const Detail::SystemRecord& system : data.systems) {
-        if (system.options.zone != Zone::C) continue;
-        const std::string path = Detail::Normalize(system.source.file_name());
+    // what: "a zone C System", "the initial value of a zone C component".
+    const auto add = [&](const std::source_location& source, const std::string& what,
+                         const std::string& name) -> Engine::Base::Result<void, KernelError> {
+        const std::string path = Detail::Normalize(source.file_name());
         if (!Detail::StartsWith(path, root)) {
             return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed,
-                                                 "a zone C System is registered outside the repository root",
-                                                 system.options.name + ": " + path));
+                                                 what + " is registered outside the repository root", name + ": " + path));
         }
         const std::string relative = path.substr(root.size());
         if (relative.rfind(owner + "/", 0) != 0) {
             return Engine::Base::Err(KernelError(KernelErrorCode::SystemFailed,
-                                                 "a zone C System is registered outside the owner root " + owner,
-                                                 system.options.name + ": " + relative));
+                                                 what + " is registered outside the owner root " + owner,
+                                                 name + ": " + relative));
         }
         files.push_back(relative);
+        return {};
+    };
+    for (const Detail::SystemRecord& system : data.systems) {
+        if (system.options.zone != Zone::C) continue;
+        if (auto added = add(system.source, "a zone C System", system.options.name); !added) {
+            return Engine::Base::Err(std::move(added).error());
+        }
+    }
+    // The function of Registrar::InitialValue computes the component's value:
+    // for a zone C component it is zone C code, declared where it is registered.
+    for (const Detail::InitialValueRecord& record : data.initialValues) {
+        const ColumnInfo& target = data.components[record.targetId];
+        if (target.zone != Zone::C) continue;
+        if (auto added = add(record.source, "the initial value of a zone C component", target.name); !added) {
+            return Engine::Base::Err(std::move(added).error());
+        }
     }
     std::sort(files.begin(), files.end());
     files.erase(std::unique(files.begin(), files.end()), files.end());
