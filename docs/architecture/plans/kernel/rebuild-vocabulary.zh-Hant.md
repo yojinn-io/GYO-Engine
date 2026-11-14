@@ -32,11 +32,24 @@
 - SDL 的接入歸 Engine，是 Module。
 
 這個分法帶出的後續（都還沒做，列著等之後判）：
-- 帶過來的 audio、之後的渲染與輸入，各自算 Module 還是 Plugin，要用同一個問題逐一問。沒有畫面的 Match 也是一個要想的例子：它沒有渲染仍然成立。
+- 帶過來的 audio、之後的渲染與輸入，各自算 Module 還是 Plugin，要用同一個問題逐一問。
 - R0 的帶過去清單當時沒有帶 SDL 與 JSON（base 不含 StrictJson）；之後帶回來時歸 Module。
-- AGENTS §6 寫「Engine 與產品之間的再利用層」與 adapter 放哪一層由架構文件定；這個分法要寫進 gyo2 的架構文件，並請風紀委員看 AGENTS 的用詞要不要跟著改。
+- AGENTS §6 寫「Engine 與產品之間的再利用層」與 adapter 放哪一層由架構文件定；這個分法要寫進 gyo2 的架構文件。AGENTS 的用詞要改（見下）。
 
-還要確認的一點：**舊設計裡定名為 `App` 的那個型別**（一個 World 加它的 schedules 與 runner 的那個東西）。Tool 也會有一個，所以它不適合叫 Game。它是照舊叫 App，還是另外取名，待確認。
+**同日再追加**（回覆上面三個後續）：
+
+> Match 不算完整遊戲，而且這個應該屬於產品端。
+
+> （AGENTS §6 的用詞）改，雖然 master 還在用，不過以 GYO2 優先。
+
+> （舊設計裡定名為 App 的那個型別）這個不叫 App 了，太模糊 直接用 Product
+
+定下來的：
+- **舊設計裡叫 `App` 的那個型別改叫 Product。** 取代 2026-11-13 的 `v8-arch-kernel-app-name`。「App」這個詞在 gyo2 的新文件裡不用。
+- **「遊戲成不成立」看的是完整的遊戲。** Match 不算完整的遊戲，它屬於產品端；不拿它當 Module 分法的反例。
+- **AGENTS §6 的用詞要改**，以 gyo2 為準；master 的 AGENTS 不動。條文的改法另給使用者看過再改。
+
+還沒併進其他文件的：[概念層重構稿](rebuild-concept.zh-Hant.md)與[命名規範草稿](rebuild-naming.zh-Hant.md)裡寫 App 的地方，下次修訂時一起改成 Product。
 
 還沒改、等確認讀法的：
 - **「有問題的是解釋」**：我的讀法是，詞本身是通用的技術名詞，照用；我寫的解釋把它們說成「舊 Kernel 設計的…」「PvP 的…」，還加了「（舊）」這類限定，這才是問題。v3 要把每個詞的解釋改成通用的技術定義，系譜（哪個舊程式、哪份舊文件用過）移到附錄。
@@ -98,7 +111,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | System | (i) AGENTS 的 Subsystem＝子系統；(ii) 舊 Kernel 設計：一個 System 函式 | 沿用 | 「System」指 (ii)。(i) 寫全稱「Subsystem」 |
 | Schedule | 舊 Kernel 設計：一組排好順序的 System；Bevy 同詞（`bevy_ecs/src/schedule/schedule.rs:413`）。audio 的 `Scheduled` 是動詞的一般語意 | 沿用 | 同左 |
 | Plugin | (i) 使用者 2026-11-11：「層與目錄叫 plugins，單個才叫 plugin」，單個指 `plugins/` 下的一個套件；(ii) 舊 Kernel 設計：登記的類別 `Plugin`（`Registry.hpp:60`）；Bevy 的 `Plugin` 是這個意思（`bevy_app/src/plugin.rs:57`）；(iii) AGENTS.md:659「Plugin System」指外掛機制 | 加限定詞 | (i) 寫「plugin 套件」；(ii) 寫「`Plugin` 型別」；(iii) 照 AGENTS 的原文。層名「plugins」是你定的，目前照用；之後維持不維持，由 R1 與登記表判。和 Module 是一對，見 4.3 的 Module 列 |
-| App | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：把原本叫 Runtime 的型別定名為 `App`（使用者 2026-11-13「名字用 App」，是在宣告的選項裡選的） | 加限定詞 | (iv) 的名字保留，寫「App」。它裡面有什麼、含幾個 World、runner 歸誰，登記表判，這裡不定義。(i) 寫「產品」；產品分 Game 與 Tool 兩種（使用者 2026-11-14）。(ii) 寫 Game。(iv) 這個型別叫什麼待確認，見第 0 節 |
+| App | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：把原本叫 Runtime 的型別定名為 `App`（使用者 2026-11-13「名字用 App」，是在宣告的選項裡選的） | 加限定詞 | (iv) 的名字保留，寫「App」。它裡面有什麼、含幾個 World、runner 歸誰，登記表判，這裡不定義。(i) 寫「產品」；產品分 Game 與 Tool 兩種（使用者 2026-11-14）。(ii) 寫 Game。(iv) 改叫 Product（使用者 2026-11-14：「不叫 App 了，太模糊」）。「App」在新文件裡不用 |
 | Extract | 舊 Kernel 設計：把資料從主 World 單向取到渲染 World；Bevy 同詞 | 沿用 | 同左 |
 | Asset | (i) `assets/<產品>` 內容根目錄；(ii) 舊程式的 `AssetManager`、`AssetHandle`；(iii) 舊 Kernel 設計的 `Assets<T>`；Bevy 的 `Assets`（`bevy_asset/src/assets.rs:288`） | 沿用 | 一份載入後的內容。`assets/` 是內容根目錄的名字 |
 | Handle | (i) 舊程式的 `AssetHandle`：id 加世代的記號，不讓資產保持存活；(ii) audio 的 `SoundHandle`：一次播放的 id（`Mixer.hpp:50`，帶過來）；(iii) OS 的 handle；(iv) 舊 Kernel 設計的「句柄」：System 參數的基底，也拿來說實體的鍵；(v) Bevy 的 `Handle<A>`（`bevy_asset/src/handle.rs:115`）：強參照會讓資產保持存活，和 (i) 不同 | 加限定詞 | (iv) 不用「句柄」：寫「System 參數」「實體的鍵」。(i)(ii)(iii) 各自寫全名。資產的參照要不要保活，登記表判 |
@@ -136,7 +149,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 
 | 詞 | 現有的意思（出處） | 處置 | 新文件的寫法 |
 |---|---|---|---|
-| Runtime | (i) 錯誤契約的 Runtime Error（帶過來）；(ii) AGENTS §8 的 Runtime：執行中的遊戲，相對於 Editor（AGENTS.md:522）；(iii) 舊的 `engine/runtime` 模組與 `UiRuntime`（不帶）；(iv) 舊 Kernel 設計：後來定名 App 的那個型別 | 替換 | (iv) 寫「App」。(i) Runtime Error 與 (ii) AGENTS 的 Runtime 是別的意思，照用 |
+| Runtime | (i) 錯誤契約的 Runtime Error（帶過來）；(ii) AGENTS §8 的 Runtime：執行中的遊戲，相對於 Editor（AGENTS.md:522）；(iii) 舊的 `engine/runtime` 模組與 `UiRuntime`（不帶）；(iv) 舊 Kernel 設計：後來定名 App 的那個型別 | 替換 | (iv) 寫「Product」。(i) Runtime Error 與 (ii) AGENTS 的 Runtime 是別的意思，照用 |
 | Host | (i) AGENTS.md:147 的 host：搭載基盤的一個應用；(ii) CI 的 host：建置機；(iii) 舊程式的 `MatchRuntimeHost`、`IpcHost`（不帶）；(iv) 舊 Kernel 設計：提供 runner 的一方加 main | 替換 | (i)(ii) 照原文。(iv)：Host 改說「組裝（setup）」與「runner」（使用者 2026-11-14 定名「組裝（setup）」；先前的提案「main」看起來像主執行緒，舊設計裡執行緒的角色也有一個叫 Main）。組裝指產品啟動時建 App、列出要用的東西的那一段。runner 指跑迴圈的函式（Bevy 的 `set_runner`，`bevy_app/src/app.rs:224`）。舊 Host 做的事各自歸誰，登記表判，這裡不分 |
 | Shell | 舊 framework 的 `WindowShellClient`、`ImGuiShellClient`（不帶） | 暫留 | 遇到時解釋。gyo2 上目前沒有對應的概念；CI 的 shell 是另一回事 |
 | Session | (i) AGENTS.md:276 的 session；(ii) 工具的編輯階段；(iii) 實機場次（field-session）；(iv) 連線 | 暫留 | 遇到時解釋它指哪一種 |

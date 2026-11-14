@@ -27,7 +27,7 @@
 
 | # | 規則 | 來源 |
 |---|---|---|
-| N7 | 這些詞在中文文件裡保留英文原詞：World、Entity、System、Schedule、Resource、App、Extract、runner、stamp、`Plugin`（指型別時）、`Commands` | 表 |
+| N7 | 這些詞在中文文件裡保留英文原詞：World、Entity、System、Schedule、Resource、Product（原寫 App，使用者 2026-11-14 改）、Extract、runner、stamp、`Plugin`（指型別時）、`Commands` | 表 |
 | N8 | 這些詞用中文：ECS 元件、組裝（setup）、同步點、交換點、決定性區、plugin 套件、通用機制、產品登記檔、去留登記表 | 表；「組裝（setup）」是你的決定（2026-11-14） |
 | N9 | 「資源」留給預算與 OS 資源；ECS 的寫 Resource。「部件」指 AGENTS 的 Component；ECS 的寫「ECS 元件」 | 表 |
 | N10 | 文件的語言照檔案原本的語言；commit 與 PR 用日語；程式註解用英文 | 既有的規則，不變 |

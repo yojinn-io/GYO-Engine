@@ -96,6 +96,7 @@
 | `v8-arch-rebuild-judgment-rules` | 2026-11-14（使用者，主會話）。「你得建立一個機制區分舊的設計哪些有問題哪些沒有問題，我跑重審和開 gyo2 就是為了這個。你一步一步來，別急著動工，把邊界和定義處理好了。我確認之後再來，別把之前的錯誤又重犯。」→ [判斷舊設計的機制](rebuild-judgment-rules.zh-Hant.md)（設計元素、三類產品、兩種成本、什麼算理由、內容／名字／歸屬三題、六種結論、把關與登記表）；使用者「確認，先做步驟 1 同詞異義表」。之後每一步都等使用者確認。 |
 | `v8-arch-gyo2-vocabulary-feedback` | 2026-11-14（使用者，主會話）。對[同詞異義表](rebuild-vocabulary.zh-Hant.md) v2：「技術名詞大多沒問題，有問題的是解釋，這個改掉就好。而關鍵在於角色詞『Runtime、Host』這 2 個可以替換。Shell 和 Session 可以暫留，遇到時可以解釋。而且 Module 這個概念很不錯，Engine 內部的第三方叫 Module，Engine 外部的第三份叫 Plugin」。另：「tick 不用換呀。這個概念不光是網絡，單機遊戲也有用到的。」已改：Runtime、Host＝替換；Shell、Session＝暫留；tick 照用。待確認讀法後出 v3：解釋改成通用的技術定義；Module／Plugin 的「第三方」指什麼。 |
 | `v8-arch-gyo2-module-plugin-game-tool` | 2026-11-14（使用者，主會話）。「（App）這個可以換掉，用 Game 就好，產品實際上有 2 種，一種是 Game，另一種是 Tool」「Module：例如：第三方 Json lib、SDL（引擎沒有，遊戲就不成立的）。Plugin：網絡插件、ImGUI（引擎沒有，遊戲依然成立，但是功能受限）」「這個正好解決了我糾結的 SDL 的歸屬問題。」→ 產品分 Game 與 Tool；Module（Engine 內、少了遊戲不成立）與 Plugin（Engine 外、少了仍成立但功能受限）；SDL 歸 Engine 的 Module。舊設計的 `App` 型別叫什麼待確認。記在[同詞異義表](rebuild-vocabulary.zh-Hant.md)第 0 節。 |
+| `v8-arch-gyo2-product-type-name` | 2026-11-14（使用者，主會話；取代 `v8-arch-kernel-app-name`）。對「舊設計裡定名為 App 的那個型別…它照舊叫 App，還是另外取名？」：「這個不叫 App 了，太模糊 直接用 Product」。同時：「Match 不算完整遊戲，而且這個應該屬於產品端。」（Module 的分法看的是完整的遊戲）；對 AGENTS §6 的用詞：「改，雖然 master 還在用，不過以 GYO2 優先。」（只改 gyo2 上的 AGENTS；條文的改法先給使用者看）。 |
 
 ## 未定
 

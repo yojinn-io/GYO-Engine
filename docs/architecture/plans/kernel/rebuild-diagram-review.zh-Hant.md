@@ -55,7 +55,7 @@
 
 | 圖上的詞 | 來源 | 處置 |
 |---|---|---|
-| Runtime | v0.2（41 處）；舊程式 `Engine::Runtime`、`FixedTickRuntime` | 替換。新的名字原定 App（你 11 月 13 日）；11 月 14 日你說 App 可以換成 Game，適用到哪裡還在確認，見同詞異義表第 0 節 |
+| Runtime | v0.2（41 處）；舊程式 `Engine::Runtime`、`FixedTickRuntime` | 替換：Product（你 11 月 14 日；取代 11 月 13 日的 App）。本文其他地方寫的 App 都指它 |
 | Host | v0.2 §10.4「Runtime Host」；舊程式 `MatchRuntimeHost` | 替換：組裝（setup）與 runner（你已定） |
 | Client、Match、Editor | v0.2 §9 寫 Client、Server、Editor，是舉例 | 當例子可以；Match 是 PvP 的詞 |
 | tick | 固定步的一步；舊程式 `TickContext`；v0.2 §10.1 | **照用**（你 11 月 14 日） |
