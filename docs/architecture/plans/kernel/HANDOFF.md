@@ -225,6 +225,8 @@
 
 - 2026-11-14 **R0 清單核准，R0b 開始**（`v8-arch-rebuild-r0-approved`、`v8-arch-gyo2-no-master-merge`）：R0b-2 刪除與建置修補 → R0b-3 守衛與 CI 政策測試的判定變更（§14.4，交使用者）→ R0b-4 文件。
 
+- 2026-11-14 判斷機制（步驟 0）已確認；步驟 1 同詞異義表提案完成、別模型檢查中。原架構師會話轉達使用者的指示「重點審核概念層」（使用者認為 11 日的設計還可以）：核對 f8b6f74b 之後 blueprint、networking、spike-report 零修改、mechanism 改 3 行、spec +252／−143；已在[判斷機制](rebuild-judgment-rules.zh-Hant.md) §7 提議把步驟 2、3 的對象改成 11 日的概念層，待使用者確認。R0b-2 本機完成、未開 PR；R0b-3、R0b-4、R1 都停著。
+
 ## 下一步
 
 - **進行中**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，已核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
