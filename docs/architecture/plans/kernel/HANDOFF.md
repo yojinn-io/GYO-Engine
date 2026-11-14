@@ -95,6 +95,7 @@
 | `v8-arch-gyo2-migration-needs-consent` | 2026-11-14（使用者，主會話）。「4、5 注意，先不動工具和產品，現在就是造架構設計做好機制，我同意移植才動。」目前的範圍只有 R0b、R1（架構設計）、R2（機制）。工具與產品的移植（R3～R5）每一個都要使用者明說同意才開始；同日補充：「你可以自己做 2D、3D 樣本來測試。」——架構師可以自建 2D、3D 的測試樣本來驗證機制；樣本不是既有工具或產品的移植，不需要另外同意。素材來源（使用者）：「3D 動畫、骨骼的資源你可以去 master 裡面拿。2D 素材，你可以找最早的 object_fps 裡有。」——3D：master 的 `assets/object_fps_pvp/`（`animations/ual_mannequin`、`characters/player`）；2D：已刪除的 `assets/object_fps/`（刪除 commit 0d05cc4e 的前一版有 `textures/enemies`、`world`、`weapons`、`sky`、`ui`；更早的版本在 git 歷史裡）。只複製樣本用到的素材檔進 gyo2，不帶產品的程式。 |
 | `v8-arch-rebuild-judgment-rules` | 2026-11-14（使用者，主會話）。「你得建立一個機制區分舊的設計哪些有問題哪些沒有問題，我跑重審和開 gyo2 就是為了這個。你一步一步來，別急著動工，把邊界和定義處理好了。我確認之後再來，別把之前的錯誤又重犯。」→ [判斷舊設計的機制](rebuild-judgment-rules.zh-Hant.md)（設計元素、三類產品、兩種成本、什麼算理由、內容／名字／歸屬三題、六種結論、把關與登記表）；使用者「確認，先做步驟 1 同詞異義表」。之後每一步都等使用者確認。 |
 | `v8-arch-gyo2-vocabulary-feedback` | 2026-11-14（使用者，主會話）。對[同詞異義表](rebuild-vocabulary.zh-Hant.md) v2：「技術名詞大多沒問題，有問題的是解釋，這個改掉就好。而關鍵在於角色詞『Runtime、Host』這 2 個可以替換。Shell 和 Session 可以暫留，遇到時可以解釋。而且 Module 這個概念很不錯，Engine 內部的第三方叫 Module，Engine 外部的第三份叫 Plugin」。另：「tick 不用換呀。這個概念不光是網絡，單機遊戲也有用到的。」已改：Runtime、Host＝替換；Shell、Session＝暫留；tick 照用。待確認讀法後出 v3：解釋改成通用的技術定義；Module／Plugin 的「第三方」指什麼。 |
+| `v8-arch-gyo2-module-plugin-game-tool` | 2026-11-14（使用者，主會話）。「（App）這個可以換掉，用 Game 就好，產品實際上有 2 種，一種是 Game，另一種是 Tool」「Module：例如：第三方 Json lib、SDL（引擎沒有，遊戲就不成立的）。Plugin：網絡插件、ImGUI（引擎沒有，遊戲依然成立，但是功能受限）」「這個正好解決了我糾結的 SDL 的歸屬問題。」→ 產品分 Game 與 Tool；Module（Engine 內、少了遊戲不成立）與 Plugin（Engine 外、少了仍成立但功能受限）；SDL 歸 Engine 的 Module。舊設計的 `App` 型別叫什麼待確認。記在[同詞異義表](rebuild-vocabulary.zh-Hant.md)第 0 節。 |
 
 ## 未定
 
@@ -227,6 +228,8 @@
 - 2026-11-14 **R0 清單核准，R0b 開始**（`v8-arch-rebuild-r0-approved`、`v8-arch-gyo2-no-master-merge`）：R0b-2 刪除與建置修補 → R0b-3 守衛與 CI 政策測試的判定變更（§14.4，交使用者）→ R0b-4 文件。
 
 - 2026-11-14 判斷機制（步驟 0）已確認；步驟 1 同詞異義表提案完成、別模型檢查中。原架構師會話轉達使用者的指示「重點審核概念層」（使用者認為 11 日的設計還可以）：核對 f8b6f74b 之後 blueprint、networking、spike-report 零修改、mechanism 改 3 行、spec +252／−143；已在[判斷機制](rebuild-judgment-rules.zh-Hant.md) §7 提議把步驟 2、3 的對象改成 11 日的概念層，待使用者確認。R0b-2 本機完成、未開 PR；R0b-3、R0b-4、R1 都停著。
+
+- 2026-11-14 **三張圖的重新評審**（使用者經原架構師會話轉達「把這四處偏離和三張圖轉給 GYO2，讓他重新評審和參考，看下是否還能復用」；主會話追加「還是有舊架構的用詞和思路在」「數據流向是非常不錯的參考」「tick 不用換」）：[rebuild-diagram-review.zh-Hant.md](rebuild-diagram-review.zh-Hant.md) v2。別模型檢查（Opus／xhigh）blocker 3／should 16／nit 11，全部採用。結論：三張圖重畫，流向當參考（14 條資料流裡 9 條可以、3 條部分、2 條不行）；舊的或 PvP 的思路 4 條、部分 3 條、撤回 3 條；套用順序（U2）、hook（U3）、固定步（U7）三項仍未判，只列選項與代價；套用順序使用者 11 月 11 日支持過兩種（審查補充 5 與 K.3 第 4、12 項）。待使用者確認。證據：主 checkout `build/evidence/rebuild-concept/`（`diagram-review-v1.md`、`diagram-review-checker-opus.md`、`spec-master-snapshot.md`）。
 
 ## 下一步
 

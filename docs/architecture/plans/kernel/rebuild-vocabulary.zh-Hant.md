@@ -14,9 +14,31 @@
 - Tick：本來就是照用；「現有的意思」裡把它寫成 PvP 的 tick，那是解釋的問題，v3 一起改。
 - Module、Plugin：把原話記在兩列裡（4.1、4.3）。
 
+**同日追加**（回覆這張表的 App 列，以及上面 Module／Plugin 的提問）：
+
+> 這個可以換掉，用 Game 就好，產品實際上有 2 種，一種是 Game，另一種是 Tool
+
+> Module：例如：第三方 Json lib、SDL（引擎沒有，遊戲就不成立的）。Plugin：網絡插件、ImGUI（引擎沒有，遊戲依然成立，但是功能受限）
+
+> 這個正好解決了我糾結的 SDL 的歸屬問題。
+
+照這段話定下來的：
+- **產品分兩種：Game 與 Tool。** 「App」不再拿來指產品的種類；原本寫「遊戲類產品」或 KIND app 的地方寫 Game。
+- **Module 與 Plugin 的分法是「少了它，遊戲還成不成立」**，不是「接不接第三方」：
+  - Module：在 Engine 裡。少了它，遊戲不成立。例：JSON 函式庫、SDL。
+  - Plugin：在 Engine 外。少了它，遊戲仍然成立，只是功能受限。例：網路、ImGui。
+- SDL 的接入歸 Engine，是 Module。
+
+這個分法帶出的後續（都還沒做，列著等之後判）：
+- 帶過來的 audio、之後的渲染與輸入，各自算 Module 還是 Plugin，要用同一個問題逐一問。沒有畫面的 Match 也是一個要想的例子：它沒有渲染仍然成立。
+- R0 的帶過去清單當時沒有帶 SDL 與 JSON（base 不含 StrictJson）；之後帶回來時歸 Module。
+- AGENTS §6 寫「Engine 與產品之間的再利用層」與 adapter 放哪一層由架構文件定；這個分法要寫進 gyo2 的架構文件，並請風紀委員看 AGENTS 的用詞要不要跟著改。
+
+還要確認的一點：**舊設計裡定名為 `App` 的那個型別**（一個 World 加它的 schedules 與 runner 的那個東西）。Tool 也會有一個，所以它不適合叫 Game。它是照舊叫 App，還是另外取名，待確認。
+
 還沒改、等確認讀法的：
 - **「有問題的是解釋」**：我的讀法是，詞本身是通用的技術名詞，照用；我寫的解釋把它們說成「舊 Kernel 設計的…」「PvP 的…」，還加了「（舊）」這類限定，這才是問題。v3 要把每個詞的解釋改成通用的技術定義，系譜（哪個舊程式、哪份舊文件用過）移到附錄。
-- **Module 與 Plugin 的「第三方」指什麼**：見 4.3 的 Module 列。
+- ~~Module 與 Plugin 的「第三方」指什麼~~：已由上面的追加回答。
 
 出處：[判斷舊設計的機制](rebuild-judgment-rules.zh-Hant.md) 第 2 題（名字）。過程：
 - 底稿是盤點 (b) 第 4 節的 20 個詞。
@@ -74,7 +96,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | System | (i) AGENTS 的 Subsystem＝子系統；(ii) 舊 Kernel 設計：一個 System 函式 | 沿用 | 「System」指 (ii)。(i) 寫全稱「Subsystem」 |
 | Schedule | 舊 Kernel 設計：一組排好順序的 System；Bevy 同詞（`bevy_ecs/src/schedule/schedule.rs:413`）。audio 的 `Scheduled` 是動詞的一般語意 | 沿用 | 同左 |
 | Plugin | (i) 使用者 2026-11-11：「層與目錄叫 plugins，單個才叫 plugin」，單個指 `plugins/` 下的一個套件；(ii) 舊 Kernel 設計：登記的類別 `Plugin`（`Registry.hpp:60`）；Bevy 的 `Plugin` 是這個意思（`bevy_app/src/plugin.rs:57`）；(iii) AGENTS.md:659「Plugin System」指外掛機制 | 加限定詞 | (i) 寫「plugin 套件」；(ii) 寫「`Plugin` 型別」；(iii) 照 AGENTS 的原文。層名「plugins」是你定的，目前照用；之後維持不維持，由 R1 與登記表判。和 Module 是一對，見 4.3 的 Module 列 |
-| App | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：把原本叫 Runtime 的型別定名為 `App`（使用者 2026-11-13「名字用 App」，是在宣告的選項裡選的） | 加限定詞 | (iv) 的名字保留，寫「App」。它裡面有什麼、含幾個 World、runner 歸誰，登記表判，這裡不定義。(i) 寫「產品」。(ii) 寫「遊戲類產品」或直接寫 KIND app |
+| App | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：把原本叫 Runtime 的型別定名為 `App`（使用者 2026-11-13「名字用 App」，是在宣告的選項裡選的） | 加限定詞 | (iv) 的名字保留，寫「App」。它裡面有什麼、含幾個 World、runner 歸誰，登記表判，這裡不定義。(i) 寫「產品」；產品分 Game 與 Tool 兩種（使用者 2026-11-14）。(ii) 寫 Game。(iv) 這個型別叫什麼待確認，見第 0 節 |
 | Extract | 舊 Kernel 設計：把資料從主 World 單向取到渲染 World；Bevy 同詞 | 沿用 | 同左 |
 | Asset | (i) `assets/<產品>` 內容根目錄；(ii) 舊程式的 `AssetManager`、`AssetHandle`；(iii) 舊 Kernel 設計的 `Assets<T>`；Bevy 的 `Assets`（`bevy_asset/src/assets.rs:288`） | 沿用 | 一份載入後的內容。`assets/` 是內容根目錄的名字 |
 | Handle | (i) 舊程式的 `AssetHandle`：id 加世代的記號，不讓資產保持存活；(ii) audio 的 `SoundHandle`：一次播放的 id（`Mixer.hpp:50`，帶過來）；(iii) OS 的 handle；(iv) 舊 Kernel 設計的「句柄」：System 參數的基底，也拿來說實體的鍵；(v) Bevy 的 `Handle<A>`（`bevy_asset/src/handle.rs:115`）：強參照會讓資產保持存活，和 (i) 不同 | 加限定詞 | (iv) 不用「句柄」：寫「System 參數」「實體的鍵」。(i)(ii)(iii) 各自寫全名。資產的參照要不要保活，登記表判 |
@@ -100,7 +122,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | Snapshot | (i) PvP wire 的狀態：`WorldSnapshot`、`SnapshotFrame`；(ii) 舊 Kernel 設計：回滾用、驗證用的快照 | 加限定詞 | 「wire 快照」「回滾快照」「驗證快照」 |
 | Registry、登記表 | (i) 舊 Kernel 設計：型別與 System 的登記（`Registry.hpp`）；(ii) 建置的產品登記：`GyoAppRegistry.cmake`、`projects.csv`；(iii) `LoaderRegistry`（不帶）；(iv) 判斷機制第 5 節的登記表 | 加限定詞 | (i)「型別與 System 的 Registry」；(ii)「產品登記檔」；(iv)「去留登記表」 |
 | Layer | (i) AGENTS §6 的架構層；(ii) AGENTS §2「層の区別」：基盤與應用；(iii) 渲染的層：`CompositeLayer`（`RenderTypes.hpp:98`） | 加限定詞 | 「架構層」「基盤／應用之分」「渲染層」 |
-| Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module | 沿用 | 不加限定時指 (i)。使用者 2026-11-14：「Module 這個概念很不錯，Engine 內部的第三方叫 Module，Engine 外部的第三份叫 Plugin」。也就是 Module 與 Plugin 是一對：差別在 Engine 之內或之外。「第三方」指什麼，待確認：(a) 接第三方函式庫或平台 API 的那一塊；(b) 通用機制以外、可以拿掉或換掉的任何一塊 |
+| Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module | 沿用 | 不加限定時指 (i)。使用者 2026-11-14：「Module 這個概念很不錯，Engine 內部的第三方叫 Module，Engine 外部的第三份叫 Plugin」。也就是 Module 與 Plugin 是一對：差別在 Engine 之內或之外。分法（使用者同日追加）：少了它遊戲不成立的是 Module（例：JSON 函式庫、SDL）；少了它遊戲仍成立、只是功能受限的是 Plugin（例：網路、ImGui） |
 | Stage | (i) 打包的 stage 目錄；(ii) `ShaderStage`（`ShaderTypes.hpp:18`）；(iii) 舊 Kernel 設計：schedule 裡固定順序的一段；(iv) 舊設計的動詞：`StageMembershipRequests`；Bevy 沒有 stage，用 `SystemSet` | 加限定詞 | (iii) 寫「stage（舊）」。(iv) 不沿用這個動詞。(i)(ii) 是各自領域的詞 |
 | Scene | (i) `SceneCapture`（`Renderer.hpp:12`）、`PreviewScene`；(ii) 舊 Kernel 設計：Loading 的「場景」階段、渲染的輸入；(iii) Bevy 的 `Scene`（`bevy_scene/src/scene.rs:49`）：可以生成的實體範本，和 (i)(ii) 都不同 | 不用它命名新概念 | 關卡的資料寫「關卡內容」，渲染的輸入寫「渲染輸入」。之後要不要有「實體範本」這個概念，登記表判 |
 | Input | (i) 玩家的輸入、輸入模組；(ii) 舊 Kernel 設計：欄角色 `Input`、boundary 輸入 | 加限定詞 | 不加限定時指 (i)。(ii) 寫「Input 欄角色（舊）」 |
