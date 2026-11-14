@@ -20,6 +20,7 @@ set(GYO_KERNEL_TEST_SOURCES
     ExecutorTests.cpp
     AccessCheckTests.cpp
     InitialValueTests.cpp
+    StrictOrderTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )
@@ -62,9 +63,11 @@ foreach(entry IN LISTS GYO_KERNEL_J_ENTRIES)
 endforeach()
 # Everything else in the executable (the Plan export and its dataflow ratio),
 # plus the J-18 link-order run.
-add_test(NAME kernel.others COMMAND gyo_kernel_tests "--test-case-exclude=J-*")
+add_test(NAME kernel.others COMMAND gyo_kernel_tests "--test-case-exclude=J-*,strict order:*")
+# Registrar::RequireExplicitOrder (batch v8-arch-gyo2-strict-order; StrictOrderTests.cpp).
+add_test(NAME kernel.strict_order COMMAND gyo_kernel_tests "--test-case=strict order:*")
 add_test(NAME kernel.J-18_link_order COMMAND gyo_kernel_tests_reversed "--test-case=J-18:*")
-foreach(test IN LISTS GYO_KERNEL_J_ENTRIES ITEMS others J-18_link_order)
+foreach(test IN LISTS GYO_KERNEL_J_ENTRIES ITEMS others strict_order J-18_link_order)
     set_tests_properties(kernel.${test} PROPERTIES LABELS "cpu" TIMEOUT 60
         FAIL_REGULAR_EXPRESSION "test cases: +0 [|]")
 endforeach()

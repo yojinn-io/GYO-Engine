@@ -237,6 +237,23 @@ public:
     // calling it twice is the same as once.
     void RequireExplicitZones();
 
+    // Makes an ambiguous pair a startup error (D-E8, rule M3b) for the whole
+    // Registry instead of a tie by registration order. An ambiguous pair is two
+    // Systems of one stage of one schedule whose access conflicts (spec D.1
+    // conditions 1 to 4) with no order path between them; a pair with a zone C
+    // side is D-E8 with or without this call. Every such pair of every schedule
+    // is reported at once, and each is fixed by declaring an order (a before /
+    // after of either System, or of a set it is in). There is no exemption for
+    // a pair: a Serial schedule runs the two in some order anyway, and
+    // before / after is how that order is written down. Without this call the
+    // pair is tied by registrationSeq and listed in FrozenRegistry::TieBreaks.
+    // Called by the plugin that must not let the Host's plugin order decide a
+    // conflicting pair; any plugin may call it; calling it twice is the same
+    // as once. It only adds startup errors: a Registry that finishes with it
+    // has the same tables and Plans as without it, so no fingerprint holds it
+    // (as with RequireExplicitZones).
+    void RequireExplicitOrder();
+
     void Schedule(ScheduleOptions options);
     // Inserts a stage before or after an existing stage of a schedule (spec C.2 point 2).
     void InsertStage(std::string_view schedule, std::string_view anchor, StagePlace place, std::string stage);
@@ -451,7 +468,8 @@ struct SystemInfo {
 };
 
 // One (b) pair the Scheduler ordered by registration (spec D.2 step 10): listed
-// at diagnostic level.
+// at diagnostic level. Under Registrar::RequireExplicitOrder there is none:
+// such a pair is D-E8 instead.
 struct TieBreak {
     std::string schedule;
     std::string first;
