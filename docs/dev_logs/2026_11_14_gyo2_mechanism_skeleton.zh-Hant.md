@@ -9,7 +9,7 @@
 - **帶回 `tests/common/zone_scan`**（決定性區的掃描器），讓機制的 J-17 測試能跑。
 - **型別 `App` 改名 `Product`**（使用者，`v8-arch-gyo2-product-type-name`）。
 - **`Zone` 不填視為 B**；要每個區都明寫的產品呼叫 `Registrar::RequireExplicitZones`，才把「沒填是啟動錯誤」打開（使用者選 B，`v8-arch-gyo2-zone-default-b`）。其餘決定性的東西（`Role`、`Rollback`、`DigestSet`、`CFingerprint`、zone C 匯出）沒有動。
-- **`Query::Count()` 直接讀元件儲存的大小**，不走一遍；多條件的查詢改用 `CountMatching()`（使用者指出，`v8-arch-gyo2-contract-review-replies`）。
+- **`Query::Count()` 改過一次又改回原樣**：先改成「一個元件時直接讀儲存的大小、多條件另用 `CountMatching()`」（5b6ea19a），使用者確認那是基於誤會之後要求完全改回（「一個函數，不能有 2 種不同的行為」），已還原。現在和帶進來時一樣：一個 `Count()`，任何查詢都能用，一律走一遍。
 - **骨架測試** `tests/common/kernel/SkeletonTests.cpp`：照單機作者的寫法，整個檔不填任何 zone、role、rollback。
 
 ## 經過
@@ -23,7 +23,7 @@
 
 - 機制、entity_store、zone_scan 的測試：64 個全過。
 - 完整的 ctest：另有 3 個失敗，`os.boundary_guard`、`cmake.Component`、`build.ci`。它們在帶入機制之前就失敗，原因是先前刪除產品（R0b-2）留下的守衛與 CI 政策測試，處置是 R0b-3 的 11 項判定變更，還等使用者核准。
-- 骨架測試的行為部分：9 個案例。生成、重力、移動、事件當 tick 送達、hook、`Local`、run 條件；System 回傳 Err 時 handler 只收到一次、鏈上有 System 名與作者包的那一層、World 進入中斷、未套用的延後變更被丟掉；同一個同步點裡先生成再刪除的實體活下來、先加上再移除的元件還在；兩個寫者沒寫順序時依登記順序平手並列出；預設獨占拒絕第二個寫者；`Count()` 與 `CountMatching()`。
+- 骨架測試的行為部分：8 個案例。生成、重力、移動、事件當 tick 送達、hook、`Local`、run 條件；System 回傳 Err 時 handler 只收到一次、鏈上有 System 名與作者包的那一層、World 進入中斷、未套用的延後變更被丟掉；同一個同步點裡先生成再刪除的實體活下來、先加上再移除的元件還在；兩個寫者沒寫順序時依登記順序平手並列出；預設獨占拒絕第二個寫者。
 - 骨架測試的極限部分只量不設門檻，量一次、沒有重複取樣。單執行緒、存取驗證關：
   - 啟動分析：1000 個互不衝突的 System 108 ms；1000 個都寫同一個元件 1.6 s（平手 499,500 對）。
   - 每個 tick 一個 System：兩個元件的移動，1 千實體 0.17 ms、1 萬 1.9 ms、10 萬 20.7 ms；四個元件 0.28／3.0／30.7 ms；刪除 100 個實體 0.2／3.7／68.9 ms；生成 100 個約 0.1 ms，與實體數無關。
