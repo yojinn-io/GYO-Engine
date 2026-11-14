@@ -253,6 +253,44 @@ TEST_CASE("skeleton: a System that returns Err stops the Run and interrupts the 
     CHECK(rig->recorded.size() == 1);
 }
 
+namespace {
+
+// An inner operation fails; the System adds its own layer of context and
+// returns the error. It does not log: the Executor's handler does, once.
+SystemResult SpawnsWave(Spawn<Bundle<Position, Velocity, Health>> spawn) {
+    for (int member = 0; member < 3; ++member) {
+        auto made = spawn.New(Position{0, 0}, Velocity{0, 0}, Health{1});
+        if (!made) {
+            return Engine::Base::Err(std::move(made).error().Wrap("SpawnsWave: wave member " + std::to_string(member)));
+        }
+    }
+    return Ok();
+}
+
+} // namespace
+
+TEST_CASE("skeleton: an Err reaches the handler once, with the chain of where it happened") {
+    auto rig = WorldTest::MakeRig([](Registrar& r) {
+        GameData(r);
+        r.AddSystem<&SpawnsWave>(In("SpawnsWave", "Input"));
+    });
+    REQUIRE(rig->product);
+    rig->world().SetResource(RangeAllotter::Of(1, 2));  // room for two of the three
+    const auto result = rig->Run();
+    REQUIRE_FALSE(static_cast<bool>(result));
+    CHECK(result.error().Has(KernelErrorCode::AllotterExhausted));
+    const std::string text = result.error().Text();
+    CHECK_MESSAGE(text.find("SpawnsWave: wave member 2") != std::string::npos, text);
+    CHECK_MESSAGE(text.find("System 'SpawnsWave'") != std::string::npos, text);
+    CHECK_MESSAGE(text.find("schedule 'Tick'") != std::string::npos, text);
+    CHECK(rig->recorded.size() == 1);
+    CHECK(rig->world().State() == WorldState::Interrupted);
+    // What the failed call had queued is dropped, not half applied.
+    CHECK(rig->world().Entities().empty());
+    std::printf("\n[skeleton] an Err as the Executor's handler receives it:\n%s\n", text.c_str());
+    std::fflush(stdout);
+}
+
 TEST_CASE("skeleton: two writers with no order are tied by registration and listed") {
     auto rig = WorldTest::MakeRig([](Registrar& r) {
         GameData(r);
