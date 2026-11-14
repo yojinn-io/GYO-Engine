@@ -222,3 +222,11 @@ function(gyo_expect_kernel_links)
     gyo_expect_links(gyo_kernel GYO::Base GYO::EntityStore)
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL gyo_expect_kernel_links)
+
+# The skeleton end to end, written without any zone, role or rollback
+# (SkeletonTests.cpp): behaviour cases, and limit cases that only print timings
+# (read them in the test output; they assert correctness, not time).
+gyo_kernel_test_executable(gyo_kernel_skeleton_tests TestMain.cpp SkeletonTests.cpp)
+add_test(NAME kernel.skeleton COMMAND gyo_kernel_skeleton_tests "--test-case=skeleton:*")
+add_test(NAME kernel.skeleton_limits COMMAND gyo_kernel_skeleton_tests "--test-case=limits:*")
+set_tests_properties(kernel.skeleton kernel.skeleton_limits PROPERTIES LABELS "cpu" TIMEOUT 300)
