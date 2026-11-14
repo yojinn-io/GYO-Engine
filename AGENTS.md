@@ -369,18 +369,24 @@ Tool 化や Platform 化そのものを目的にしてはならない。
 ## 6. Dependency and Product Boundaries
 
 Engine は再利用可能な機能を提供し、
-Application と設計支援ツールはその機能を利用する。
+Product はその機能を利用する。Product は Game と Tool の二種類である。
 
 基本的な Dependency Direction は以下とする。
 
 ```text
-Application ──→ Engine
-Editor      ──→ Engine
+Game ──→ Engine
+Tool ──→ Engine
 ```
 
-Engine は具体的な Application や Editor に依存してはならない。
-Engine と Product・Tool の間に、Engine の機能の組み合わせや第三者の接続を担う再利用可能な層を置く場合、
-その層も Engine から参照されない（下位の層は上位の層を参照しない）。
+Engine は具体的な Game や Tool に依存してはならない。
+
+再利用可能な部品は Module と Plugin に分ける。
+判断の一文：それがないと、完全な Game が成立しないか。
+
+* Module：Engine の中に置く。それがないと Game が成立しない（例：JSON の Library、SDL）。
+* Plugin：Engine の外に置く。それがなくても Game は成立するが、機能が限られる（例：ネットワーク、ImGui）。
+
+Plugin は Engine から参照されない（下位の層は上位の層を参照しない）。
 層の構成と依存の規則は、`docs/architecture/README.md` の〈Layers and dependencies〉から辿る。
 
 外部の Component（第三者の Library、Platform の API など）は、更新も交換もありうる backend として扱い、
@@ -390,7 +396,8 @@ Engine と Product・Tool の間に、Engine の機能の組み合わせや第�
 * 一つの外部 Component に、adapter は一つだけ置く。
 * adapter が外に見せる Interface は、使う側が自分の言葉で決め、外部 Component の Version に合わせて変えない。
 
-adapter をどの層に置くか、何を一つの外部 Component と数えるかは、架構の文書に書く。
+adapter を Module に置くか Plugin に置くかは、上の判断の一文で決める。
+何を一つの外部 Component と数えるかは、架構の文書に書く。
 
 Architecture の分離は、
 Directory の配置や命名だけで判断しない。
@@ -399,9 +406,8 @@ Product の追加・複製・削除によって検証する。
 
 ### MUST
 
-* Lower-level infrastructure MUST NOT depend on application-specific code.
-* Application-specific code MAY depend on reusable engine infrastructure.
-* Editor MAY depend on reusable engine infrastructure.
+* Lower-level infrastructure MUST NOT depend on Product-specific code.
+* Game-specific and Tool-specific code MAY depend on reusable engine infrastructure.
 * 新しい Dependency Edge を追加する場合、既存の Dependency Direction を確認する。
 * Product 間依存が必要な場合は明示する。
 * Product 固有 Knowledge を reusable Engine layer へ漏らさない。
@@ -411,8 +417,8 @@ Product の追加・複製・削除によって検証する。
 
 ### MUST NOT
 
-* Engine から具体的な Game / Application を参照しない。
-* Engine から具体的な Editor を参照しない。
+* Engine から具体的な Game を参照しない。
+* Engine から具体的な Tool を参照しない。
 * 共通層での具体的な Product 名による分岐の禁止は §9 を参照。
 * 暗黙の Product 間依存を作らない。
 * 循環依存を新しく作らない。
