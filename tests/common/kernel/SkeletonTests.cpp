@@ -291,6 +291,45 @@ TEST_CASE("skeleton: an Err reaches the handler once, with the chain of where it
     std::fflush(stdout);
 }
 
+namespace {
+
+struct Shield { std::int32_t points; };
+
+// Both orders an author might write inside one System. At the sync point the
+// changes of one kind are applied together, in a fixed order of kinds (remove
+// before spawn and insert), not in the order they were recorded.
+SystemResult RecordsBothOrders(Spawn<Bundle<Armor>> spawn, Despawn despawn,
+                               CommandsFor<Inserts<Shield>, Removes<Shield>> shields) {
+    auto made = spawn.New(Armor{1});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    if (auto r = despawn.Entity(made.value()); !r) return Engine::Base::Err(std::move(r).error());
+    shields.Insert(1, Shield{7});
+    shields.Remove<Shield>(1);
+    return Ok();
+}
+
+} // namespace
+
+TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and insert, whatever the recorded order") {
+    auto rig = WorldTest::MakeRig([](Registrar& r) {
+        GameData(r);
+        r.Component<Armor>({.name = "Armor"});
+        r.Component<Shield>({.name = "Shield"});
+        r.AddSystem<&RecordsBothOrders>(In("RecordsBothOrders", "Input"));
+    });
+    REQUIRE(rig->product);
+    World& world = rig->world();
+    world.SetResource(RangeAllotter::Of(500, 599));
+    world.Insert(1, Position{0, 0});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    // Spawned, then despawned in the same call: the despawn finds nothing yet, the spawn stays.
+    CHECK(world.Alive(500));
+    CHECK(world.Get<Armor>(500) != nullptr);
+    // Inserted, then removed in the same call: the remove runs first, the insert stays.
+    REQUIRE(world.Get<Shield>(1) != nullptr);
+    CHECK(world.Get<Shield>(1)->points == 7);
+}
+
 TEST_CASE("skeleton: two writers with no order are tied by registration and listed") {
     auto rig = WorldTest::MakeRig([](Registrar& r) {
         GameData(r);
