@@ -103,7 +103,6 @@ class Rules(GuardTree):
         self.write("tests/sample/SampleTests.cpp", "void F() { std::ofstream out(\"x\"); }\n")
         self.write("build/acceptance/sample/main.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.write("engine/os/src/posix/Files.cpp", "void F() { std::ifstream in(\"x\"); }\n")
-        self.write("engine/render/shaders/pipeline/src/main.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.assertClean()
 
     def test_direct_file_access_in_products_and_tools_is_reported(self):
@@ -166,9 +165,33 @@ class Rules(GuardTree):
         (self.root / "engine/base/src").mkdir(exist_ok=True)
         self.assertReported("engine: no C/C++ source scanned")
 
-    def test_an_existing_product_root_without_sources_fails(self):
+    def test_an_empty_tests_root_fails(self):
+        (self.root / "tests/common/base/BaseTests.cpp").unlink()
+        self.assertReported("tests: no C/C++ source scanned")
+
+    def test_product_roots_without_sources_are_skipped_and_named(self):
+        # No product or tool is registered: apps and tools are absent, build/acceptance holds only scripts.
+        self.write("build/acceptance/common/check.py", "print('x')\n")
+        skipped = []
+        self.assertEqual(guard.check(self.root, skipped=skipped), [])
+        self.assertEqual(skipped, ["apps (does not exist)", "tools (does not exist)",
+                                   "build/acceptance (holds no C/C++ source)"])
         self.write("apps/sample/project.json", "{}\n")
-        self.assertReported("apps: no C/C++ source scanned")
+        skipped = []
+        self.assertEqual(guard.check(self.root, skipped=skipped), [])
+        self.assertIn("apps (holds no C/C++ source)", skipped)
+
+    def test_a_product_root_is_scanned_again_once_it_holds_sources(self):
+        self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
+        skipped = []
+        problems = guard.check(self.root, skipped=skipped)
+        self.assertIn("apps/sample/src/a.cpp:1: R2 __linux__", problems)
+        self.assertFalse(any(entry.startswith("apps ") for entry in skipped), skipped)
+
+    def test_render_shader_tool_is_runtime_code_for_r4(self):
+        # The host shader tool's exclusion left with engine/render; runtime code under engine/ is covered again.
+        self.write("engine/render/shaders/pipeline/src/main.cpp", "void F() { std::ifstream in(\"x\"); }\n")
+        self.assertReported("engine/render/shaders/pipeline/src/main.cpp:1: R4 std::ifstream")
 
     def test_roots_name_no_product(self):
         # Removing or adding a product must leave the scanned roots unchanged (AGENTS.md sections 7 and 9).
