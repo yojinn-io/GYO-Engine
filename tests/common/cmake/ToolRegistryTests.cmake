@@ -97,10 +97,32 @@ foreach(index RANGE 0 3)
     equal("${tool}" audio:gui "Release mode")
 endforeach()
 file(WRITE "${work}/empty.csv" "${header}\n")
-# The framework layer is not a tool (docs/framework/architecture.md, Design Invariant 1).
-file(WRITE "${work}/framework.csv" "${header}\nframework,,,false,false,false,true,true,true\n")
-fails(reserved_framework "Reserved tool name 'framework'" -DCASE=read "-DCSV=${work}/framework.csv")
-fails(empty_release "No release tools" -DCASE=export "-DCSV=${work}/empty.csv" "-DROOT=${work}")
+# The tool registry shares the app registry's reserved names (common, toolchain).
+file(WRITE "${work}/reserved.csv" "${header}\ntoolchain,,,false,false,false,true,true,true\n")
+fails(reserved_toolchain "Reserved tool name 'toolchain'" -DCASE=read "-DCSV=${work}/reserved.csv")
+# A registry that lists tools must select a release tool on every platform.
+file(WRITE "${work}/no_release.csv" "${header}\nidle,,,true,true,false,true,true,true\n")
+fails(no_release "No release tools selected for windows" -DCASE=export "-DCSV=${work}/no_release.csv" "-DROOT=${work}")
+file(WRITE "${work}/tools/linux_tool/project.json" "${valid}")
+file(WRITE "${work}/linux_release.csv" "${header}\nlinux_tool,,,true,true,true,false,true,false\n")
+fails(missing_platform_release "No release tools selected for windows" -DCASE=export
+    "-DCSV=${work}/linux_release.csv" "-DROOT=${work}")
+# An empty registry selects no tool on any platform and says so; every
+# release platform still gets its toolchain row.
+execute_process(COMMAND "${CMAKE_COMMAND}" "-DGYO_TOOL_REGISTRY_FILE=${work}/empty.csv" "-DGYO_REPOSITORY_ROOT=${work}"
+    -P "${repository}/build/cmake/ExportToolRegistry.cmake" RESULT_VARIABLE result OUTPUT_VARIABLE out ERROR_VARIABLE err)
+if(NOT result EQUAL 0 OR NOT "${err}" MATCHES "No tool is registered")
+    message(FATAL_ERROR "Empty tool registry export: expected success with a notice, got ${result}: ${out}${err}")
+endif()
+string(JSON count LENGTH "${out}" include)
+equal("${count}" 4 "Empty registry platform baseline")
+foreach(index RANGE 0 3)
+    string(JSON platform GET "${out}" include ${index} platform)
+    list(GET expected_platforms ${index} expected_platform)
+    equal("${platform}" "${expected_platform}" "Empty registry platform ${index}")
+    string(JSON count LENGTH "${out}" include ${index} tools)
+    equal("${count}" 0 "Empty registry selects no tool")
+endforeach()
 file(WRITE "${work}/tools/audio/project.json" [=[{"version":1,"default_variant":"cli","requires_apps":{},"variants":{"cli":{"components":[],"packageable":false}}}]=])
 fails(local_release "not packageable" -DCASE=export "-DROOT=${work}")
 file(WRITE "${work}/tools/audio/project.json" "${valid}")
