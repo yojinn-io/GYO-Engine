@@ -279,6 +279,32 @@ public:
         }
     }
 
+    // The initial value of component Target, declared by the plugin that owns
+    // Target: when a cell of Request appears on an entity at a sync point (a
+    // spawn bundle, or an insert onto an entity that had none) and the entity
+    // has no Target, the kernel puts Fn(request) there at that same sync point,
+    // before the OnAdd hooks. Fn is a function `Target Fn(const Request&)`.
+    //
+    // This is how a component with one writing System gets its first value
+    // from other Systems: they spawn or insert Request (usually Shared), and
+    // only the writer of Target appears in Target's writer count. A Target the
+    // entity already has is left as it is; overwriting an existing Request cell
+    // does nothing; the Request cell stays on the entity. A Target that is
+    // itself the Request of another declaration is filled at the same sync
+    // point too. Several Requests may name one Target: on an entity that gets
+    // more than one of them at one sync point, the Request with the lower
+    // ComponentId gives the value.
+    template <class Target, auto Fn>
+    void InitialValue(std::source_location source = std::source_location::current()) {
+        using Shape = Detail::InitialValueRequest<Target, decltype(Fn)>;
+        static_assert(Shape::valid, "InitialValue<Target, Fn>: Fn is a function `Target Fn(const Request&)`");
+        if constexpr (Shape::valid) {
+            using Request = typename Shape::Type;
+            static_assert(!std::is_same_v<Target, Request>, "a component is not its own initial value request");
+            RegisterInitialValue(KeyOf<Target>(), KeyOf<Request>(), &Detail::PutInitialValue<Target, Request, Fn>, source);
+        }
+    }
+
 private:
     friend class Registry;
     friend struct TypeKeyCollisionProbe;
@@ -307,6 +333,7 @@ private:
                                    std::source_location source);
     void RegisterHook(TypeKey component, HookTrigger trigger, HookOptions options, Detail::ResolveFn resolve,
                       Detail::RunFn run, std::source_location source);
+    void RegisterInitialValue(TypeKey target, TypeKey request, Detail::InitialValueFn put, std::source_location source);
 
     Detail::RegistryData* data_;
     std::uint32_t plugin_;

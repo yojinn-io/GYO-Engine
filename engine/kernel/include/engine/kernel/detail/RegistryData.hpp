@@ -102,6 +102,17 @@ struct HookRecord {
     AccessSet access;
 };
 
+struct InitialValueRecord {
+    TypeKey target;
+    TypeKey request;
+    InitialValueFn put;
+    std::source_location source;
+    std::uint32_t owner;
+    // Filled at finish.
+    ComponentId targetId = 0;
+    ComponentId requestId = 0;
+};
+
 struct RegistryData {
     std::vector<PluginRecord> plugins;
     std::vector<TypeEntry> types;
@@ -114,6 +125,8 @@ struct RegistryData {
     std::vector<SetRecord> sets;
     std::vector<SystemRecord> systems;
     std::vector<HookRecord> hooks;
+    // After finish: (requestId, targetId) ascending, the order the World applies them in.
+    std::vector<InitialValueRecord> initialValues;
     // The World's storage factories, one per component, resource and event id
     // (Detail/Storage.hpp); the World is made from them (World.cpp).
     std::vector<MakeColumnFn> columnMakers;

@@ -556,6 +556,12 @@ void Registrar::RegisterHook(TypeKey component, HookTrigger trigger, HookOptions
                                               source, plugin_, std::nullopt, {}});
 }
 
+void Registrar::RegisterInitialValue(TypeKey target, TypeKey request, Detail::InitialValueFn put,
+                                     std::source_location source) {
+    GYO_ASSERT(data_->building);
+    data_->initialValues.push_back(Detail::InitialValueRecord{target, request, put, source, plugin_});
+}
+
 // ---- FrozenRegistry
 
 std::span<const ColumnInfo> FrozenRegistry::Components() const noexcept { return data_->components; }
@@ -786,6 +792,65 @@ void CheckData(RegistryData& data) {
             }
         }
     }
+}
+
+// Registrar::InitialValue: resolves the two components of every declaration and
+// leaves the valid ones in (requestId, targetId) order.
+void CheckInitialValues(RegistryData& data) {
+    std::vector<InitialValueRecord> valid;
+    for (InitialValueRecord& record : data.initialValues) {
+        const std::string declarer = data.OwnerName(record.owner);
+        const std::string source = SourceText(record.source);
+        const TypeEntry* target = data.FindType(record.target);
+        const TypeEntry* request = data.FindType(record.request);
+        if (target == nullptr || target->role != TypeRole::Component) {
+            data.Error(StartupCode::RE4, "InitialValue",
+                       declarer + " declares the initial value of a type that is not a registered component", {declarer},
+                       {source});
+            continue;
+        }
+        const ColumnInfo& targetInfo = data.components[target->id];
+        if (request == nullptr || request->role != TypeRole::Component) {
+            data.Error(StartupCode::RE4, "InitialValue",
+                       "the initial value of component '" + targetInfo.name +
+                           "' comes from a type that is not a registered component",
+                       {targetInfo.name, declarer}, {source});
+            continue;
+        }
+        const ColumnInfo& requestInfo = data.components[request->id];
+        if (target->owner != record.owner) {
+            data.Error(StartupCode::RE4, "InitialValue",
+                       declarer + " declares the initial value of component '" + targetInfo.name + "', which " +
+                           targetInfo.ownerPlugin + " owns; only the owner of a component declares its initial value",
+                       {targetInfo.name, declarer, targetInfo.ownerPlugin}, {source});
+            continue;
+        }
+        const bool repeated = std::any_of(valid.begin(), valid.end(), [&](const InitialValueRecord& other) {
+            return other.targetId == target->id && other.requestId == request->id;
+        });
+        if (repeated) {
+            data.Error(StartupCode::RE2, "InitialValue",
+                       "the initial value of component '" + targetInfo.name + "' from '" + requestInfo.name +
+                           "' is declared twice",
+                       {targetInfo.name, requestInfo.name}, {source});
+            continue;
+        }
+        // The value of a zone C component is computed from zone C data only (Z1).
+        if (targetInfo.zone == Zone::C && requestInfo.zone != Zone::C) {
+            data.Error(StartupCode::DE7, "Z1",
+                       "the initial value of zone C component '" + targetInfo.name + "' comes from '" + requestInfo.name +
+                           "', which is zone " + ZoneName(requestInfo.zone),
+                       {targetInfo.name, requestInfo.name}, {source});
+            continue;
+        }
+        record.targetId = target->id;
+        record.requestId = request->id;
+        valid.push_back(record);
+    }
+    std::sort(valid.begin(), valid.end(), [](const InitialValueRecord& a, const InitialValueRecord& b) {
+        return a.requestId != b.requestId ? a.requestId < b.requestId : a.targetId < b.targetId;
+    });
+    data.initialValues = std::move(valid);
 }
 
 void CheckSchedules(RegistryData& data) {
@@ -1384,6 +1449,7 @@ Engine::Base::Result<void, StartupReport> Registry::Finish() {
     // ids are not final, so plugins' Finish is not called.
     Detail::ApplyDefaultZones(data);
     Detail::CheckData(data);
+    Detail::CheckInitialValues(data);
     Detail::CheckSchedules(data);
     Detail::ResolveSystems(data);
     Detail::FillSystemInfos(data);
