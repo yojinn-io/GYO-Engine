@@ -155,7 +155,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | Session | (i) AGENTS.md:276 的 session；(ii) 工具的編輯階段；(iii) 實機場次（field-session）；(iv) 連線 | 暫留 | 遇到時解釋它指哪一種 |
 | Service | (i) 獨立行程的後端服務：`services/`、Go service；(ii) 舊 Kernel 設計：World 之外做 IO 的「外部服務」 | 加限定詞 | 不加限定時指 (i)。(ii) 寫「World 外的 IO（舊稱外部服務）」 |
 | Link | (i) 連結的一般語意：CMake 的 link、AGENTS.md:526；(ii) 舊 Kernel 設計：和外部交換資料的 Resource，舊 spec §0 另稱 external Resource | 加限定詞 | 不加限定時指 (i)。(ii) 寫「external Resource（舊）」 |
-| Kernel | (i) `engine/kernel` 與它的設計；(ii) 「kernel 改造」計畫線；(iii) spike | 寫「X（舊）」 | 「Kernel」只用來指舊的 `engine/kernel` 與它的設計。新的概念用判斷機制的詞「通用機制」；它之後叫什麼、要不要分塊，R1 定 |
+| Kernel | (i) `engine/kernel` 與它的設計；(ii) 「kernel 改造」計畫線；(iii) spike | 沿用 | 通用機制的程式與目錄就叫 Kernel（`engine/kernel`、`GYO::Kernel`；11 月 11 日命名規範第 1 條，2026-11-14 轉入並由架構師訂，見 [rebuild-naming](rebuild-naming.zh-Hant.md)）。文件裡解釋它是什麼時寫「通用機制」。v2 原寫「Kernel 只指舊的」，已改 |
 | Engine | (i) 架構層與 `engine/` 目錄；(ii) CMake target `GYO::Engine`（R0b 之後不存在） | 沿用 | 指 (i) |
 | Product、Tool | AGENTS：Product＝有 owner 的遊戲或工具；Tool＝設計支援工具 | 沿用 | 同 AGENTS |
 | Player、Peer、Match、Gateway；PvP 意思的 Client | PvP 產品的概念；舊 Kernel 的條文裡也出現 | 沿用 | 產品的詞。通用機制的文件要舉例時，標明是 PvP 的例子。「client」的一般語意不在此限 |
