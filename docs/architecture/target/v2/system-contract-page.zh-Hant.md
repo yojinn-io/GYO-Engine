@@ -2,6 +2,8 @@
 
 更新：2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
+**本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
+
 ## 1. 一個 System 長這樣
 
 ```cpp
