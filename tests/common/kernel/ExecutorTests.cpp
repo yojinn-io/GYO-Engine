@@ -281,7 +281,7 @@ SystemResult ZoneBDespawnsZoneC(Despawn despawn) {
 
 void CheckErrOnce(Rig& rig, KernelErrorCode code, const char* rule) {
     const auto result = rig.Run();
-    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "expected Err " << ToString(code));
+    REQUIRE_FALSE_MESSAGE(static_cast<bool>(result), "expected Err " << std::string(ToString(code)));
     CHECK_MESSAGE(result.error().Has(code), result.error().Text());
     bool ruled = false;
     for (const KernelError* leaf : result.error().Leaves()) ruled = ruled || leaf->rule == rule;
