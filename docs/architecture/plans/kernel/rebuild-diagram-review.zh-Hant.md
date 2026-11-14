@@ -429,8 +429,12 @@ v1 提議「Executor 第一版只有主執行緒」，把落點的概念一起�
 
 ## 7. 怎麼復用
 
-1. **三張舊圖不改。** 它們是 11 月 11 日概念層的紀錄，留在原處當歷史。
-2. **概念層成為基準之後，在 gyo2 重畫，拿 1.3 的流向當參考。**
+1. **圖一、圖二只換名字，直接沿用**（使用者 2026-11-14：「mechanism-runtime.svg 這個圖，你改圖裡面的名字就行了。邏輯和流向幾乎沒變。」「control-plane-revised.svg 這個也是。」）。已在 gyo2 線改好；11 月 11 日的原版在 `57cd323b`。
+   - 換的名字：Runtime→Product；Host→組裝（setup）與 runner（「被取代的」那一行寫「舊 Host」）；欄→ECS 元件；句柄→System 參數；change tick→stamp；外部服務→World 外的 IO；標題的「Client、Match、Editor」→「每個 Game、Tool」。
+   - 圖二另把 11 月 12 日加上的規格用詞「InputRing／MembershipRequests／AssetStaging」改回 11 月 11 日的「InputRing[tick]」。
+   - 沒有動的：決定性區的寫法、Gateway 的例子、葉子模組、Entity、debug 的那一行、圖的結構與箭頭。本文第 1 到 3 節對這些的判定不因此改變。
+   - 圖三（`networking-systems.svg`）沒有動。
+2. **圖一、圖二沒畫的部分，概念層成為基準之後另外補畫，拿 1.3 的流向當參考。**
    - L1～L5、L7 畫成「通用機制」的圖：啟動時的管線，加執行時 System 存取資料的路。把 L4 沒畫的其他存取點（交換點、同步點、Extract）補上。
    - L9～L12 畫成「一步之內的資料流」：進、算、導出、出。用②當例子；③等小工具的樣本驗過再畫。
    - 補上 1.3 末尾那 7 條沒畫的流向。

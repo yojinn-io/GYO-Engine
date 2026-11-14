@@ -98,6 +98,7 @@
 | `v8-arch-gyo2-module-plugin-game-tool` | 2026-11-14（使用者，主會話）。「（App）這個可以換掉，用 Game 就好，產品實際上有 2 種，一種是 Game，另一種是 Tool」「Module：例如：第三方 Json lib、SDL（引擎沒有，遊戲就不成立的）。Plugin：網絡插件、ImGUI（引擎沒有，遊戲依然成立，但是功能受限）」「這個正好解決了我糾結的 SDL 的歸屬問題。」→ 產品分 Game 與 Tool；Module（Engine 內、少了遊戲不成立）與 Plugin（Engine 外、少了仍成立但功能受限）；SDL 歸 Engine 的 Module。舊設計的 `App` 型別叫什麼待確認。記在[同詞異義表](rebuild-vocabulary.zh-Hant.md)第 0 節。 |
 | `v8-arch-gyo2-product-type-name` | 2026-11-14（使用者，主會話；取代 `v8-arch-kernel-app-name`）。對「舊設計裡定名為 App 的那個型別…它照舊叫 App，還是另外取名？」：「這個不叫 App 了，太模糊 直接用 Product」。同時：「Match 不算完整遊戲，而且這個應該屬於產品端。」（Module 的分法看的是完整的遊戲）；對 AGENTS §6 的用詞：「改，雖然 master 還在用，不過以 GYO2 優先。」（只改 gyo2 上的 AGENTS；條文的改法先給使用者看）。 |
 | `v8-arch-gyo2-agents-s6-terms` | 2026-11-14（使用者，主會話）。「AGENTS §6 照你擬的改」。只改 gyo2 線的 AGENTS.md §6（master 的不動，「以 GYO2 優先」）：Application／Editor → Product（Game と Tool の二種類）；「Engine と Product・Tool の間の再利用可能な層」→ Module と Plugin の区別と判断の一文（それがないと完全な Game が成立しないか）；adapter の置き場所はその一文で決める；MUST／MUST NOT の用語を合わせる。§6 以外（§8 的 Application／Editor、各處把 Tool 與 Product 並列的寫法）還沒掃，待使用者決定要不要交風紀委員全篇處理。 |
+| `v8-arch-gyo2-diagrams-rename-only` | 2026-11-14（使用者，主會話）。「mechanism-runtime.svg 這個圖，你改圖裡面的名字就行了。邏輯和流向幾乎沒變。」「control-plane-revised.svg 這個也是。」→ 兩張圖在 gyo2 線只換名字後沿用（Runtime→Product、Host→組裝（setup）與 runner、欄→ECS 元件、句柄→System 參數、change tick→stamp、外部服務→World 外的 IO）；結構與箭頭不動。換掉的清單與沒動的部分記在[三張圖的重新評審](rebuild-diagram-review.zh-Hant.md)第 7 節。`networking-systems.svg` 不動。 |
 
 ## 未定
 
