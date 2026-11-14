@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "description": "Name data of the zone-C source scan (zone_scan.py). ZS1: include targets, exact or by prefix, either include form. ZS3, ZS4, ZS6, ZS7: Python regular expressions matched against code with comments and literals blanked. ZS2 and ZS5 are structural and live in the script. Extend here, not in the script (docs/architecture/plans/kernel/j17-scanner.zh-Hant.md section 1).",
+  "ZS1": {
+    "headers": [
+      "engine/time/MonotonicClock.hpp",
+      "chrono",
+      "ctime",
+      "time.h",
+      "random",
+      "thread",
+      "atomic",
+      "mutex",
+      "condition_variable",
+      "future",
+      "shared_mutex",
+      "stop_token",
+      "semaphore",
+      "latch",
+      "barrier",
+      "pthread.h",
+      "threads.h",
+      "stdatomic.h",
+      "windows.h",
+      "unistd.h",
+      "SDL.h",
+      "fstream",
+      "filesystem",
+      "iostream",
+      "cstdio",
+      "stdio.h"
+    ],
+    "header_prefixes": [
+      "sys/",
+      "SDL3/",
+      "SDL2/",
+      "SDL_",
+      "SDL3_ttf/",
+      "SDL3_mixer/",
+      "SDL3_image/"
+    ]
+  },
+  "ZS3": {
+    "patterns": [
+      "\\bImGui::\\w+",
+      "\\bSDL_Get(?!Ticks|PerformanceCounter|PerformanceFrequency)\\w*",
+      "\\bSDL_\\w*State\\b",
+      "\\bTTF_\\w+",
+      "\\bMix_\\w+"
+    ]
+  },
+  "ZS4": {
+    "patterns": [
+      "\\bTime::Now(?:Ns)?\\b",
+      "\\bClock::now\\b",
+      "\\b\\w*(?:steady|system|high_resolution)_clock\\b",
+      "\\bSDL_GetTicks\\w*",
+      "\\bSDL_GetPerformanceCounter\\b",
+      "\\bSDL_GetPerformanceFrequency\\b",
+      "\\bQueryPerformanceCounter\\b",
+      "\\bclock_gettime\\b",
+      "\\bgettimeofday\\b",
+      "\\bmach_absolute_time\\b"
+    ]
+  },
+  "ZS6": {
+    "patterns": [
+      "(?<![\\w.])(?:std::)?s?rand\\s*\\(",
+      "\\brandom_device\\b",
+      "\\bmt19937\\w*",
+      "\\bstd::uniform_\\w+"
+    ]
+  },
+  "ZS7": {
+    "patterns": [
+      "\\bstd::hash\\b",
+      "\\bunordered_\\w+"
+    ]
+  }
+}

@@ -7,6 +7,7 @@ add_subdirectory(time)
 # After time: its directory defines gyo_expect_links.
 add_subdirectory(entity_store)
 add_subdirectory(kernel)
+add_subdirectory(zone_scan)
 add_subdirectory(os)
 add_subdirectory(audio)
 add_subdirectory(cmake)
