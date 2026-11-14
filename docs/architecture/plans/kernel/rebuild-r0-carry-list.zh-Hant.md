@@ -1,6 +1,6 @@
 # R0：帶過去清單（`v8-arch-rebuild`）
 
-更新：2026-11-14。Owner：架構（架構師會話）。**狀態：v2，交使用者逐項核准（第 8 節）。修訂後沒有再檢查。**
+更新：2026-11-14。Owner：架構（架構師會話）。**狀態：已核准（使用者 2026-11-14「1 到 9 照建議」）。使用者同時指示：master 不併進 gyo2，gyo2 做好後再搬到 master——第 7 節的 R0b-1 取消。v2 修訂後沒有再檢查。**
 
 出處：[rebuild 事前宣告](rebuild-declaration.zh-Hant.md) §4。對象是 `origin/gyo2` = master 08566260。
 
@@ -156,7 +156,7 @@ v2 的方案：
 |---|---|
 | `docs/architecture/target/` 全部 11 頁 | 不帶。R1 寫新的。三份 v1 想先帶的頁（error-handling、naming、system-contract）裡有 PvP 的詞與指向 kernel 頁的 DI，改寫等於改 DI，屬 R1 |
 | 入口 `docs/architecture/README.md` | 帶過去。四個固定節在 R1 完成前的指向，由圖書管理員（檔案 owner）依第 8 節第 7 題的決定改寫 |
-| 「事前宣告的檢查項」條文（#223，現在在 `target/README.md`） | 帶過去：整段搬到一個不在 target 下的規則頁，位置交圖書管理員 |
+| 「事前宣告的檢查項」條文 | gyo2 上的 `target/README.md` 有 #222 之前的版本；#223 的細目在 master、不併過來。R0b-4 把 gyo2 現有的條文搬到不在 target 下的規則頁，並依 AGENTS §4 補上三欄的細目（內容與 #223 一致，重寫進 gyo2，不是合併）；位置交圖書管理員 |
 | 帶過去模組的架構文件：os、time、threads、io、audio；collision 若帶則 collision | 帶過去，開頭加註：這是 master 08566260 的條文，連到 plans 的連結以 `master@08566260:<path>` 讀；重審點見本檔附錄 |
 | `math.md`、legacy `error-handling.md` | 帶過去（base 與 math 的契約說明）。兩者沒有 Design Invariants 節，R1 補 |
 | AGENTS.md、`agents/`、cross-component-rules（CCR-1 那一列留 master）、checkup 的三份 README、`creating_apps`、`tool_projects`、`releasing.*`、`field-session.md` | 帶過去；後幾份的產品例子在 R0b 的文件 PR 改 |
@@ -175,11 +175,10 @@ v2 的方案：
 
 ## 7. R0b 的做法與判定
 
-v1 說「R0b 只改 CMake」不實。R0b 拆成四個 PR，都進 gyo2：
+v1 說「R0b 只改 CMake」不實。R0b 拆成三個 PR，都進 gyo2（原訂的 R0b-1「把 master 併進 gyo2」已由使用者取消）：
 
 | PR | 內容 | 性質 |
 |---|---|---|
-| R0b-1 | 把 master 併進 gyo2（帶進 #220、#223） | 同步 |
 | R0b-2 | 刪除不帶的目錄與檔；讓剩下的集合建置並通過 L1 | 刪除與建置修補。io 另立 target 是 Build Graph 的變更，照 AGENTS §3 寫 Architecture Delta |
 | R0b-3 | 守衛與 CI 政策測試的判定變更 | AGENTS §14.4：逐條寫 1～5，緩める面交使用者核准後才 commit |
 | R0b-4 | 文件：入口、`plans/rebuild/`、README 三語、模組文件加註、說明文件的例子、突變執行器搬家 | 文件與搬移 |
@@ -197,7 +196,7 @@ R0b-3 已知的項目（開工時補全）：
 
 **宣告的判定要改兩條（交使用者核准，AGENTS §14.1：結果出來前定）**
 
-- **判定 4**：原文「第一個 PR 只做刪除與讓建置通過」。改成上表的四個 PR，L1 三平台綠的對象是 R0b-2 與 R0b-3。
+- **判定 4**：原文「第一個 PR 只做刪除與讓建置通過」。改成上表的三個 PR，L1 三平台綠的對象是 R0b-2 與 R0b-3。
 - **判定 5**：原文「被刪的目錄名與模組名，在新分支中零命中」。
   - 這條無法機械判定：render、input、text、model、net、ui、asset、runtime 都是一般英文詞。
   - 新判定：

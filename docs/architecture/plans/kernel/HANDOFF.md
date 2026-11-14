@@ -89,6 +89,8 @@
 | `v8-arch-single-player-no-complexity` | 2026-11-14（使用者，主會話）。單機要支援：「能支持，並且不要增加複雜度。只要作者和玩家感受不到差異，多些性能開銷實際上沒有問題。」 |
 | `v8-arch-rederive-medium` | 2026-11-14（使用者，主會話）。停點選「中」：凍結 World 資料模型、檢測先行，再定重新推導的範圍；「其實現在有壞味道，但基礎邏輯還沒問題。」使用者補充：「實際上現在就是全停的情況，但是架構上我不知道現在混亂程度有多少。現在新舊框架混在一起，而且我怕你自己也區分不開。」（同日改走 `v8-arch-rebuild-branch`。） |
 | `v8-arch-rebuild-branch` | 2026-11-14（使用者，主會話）。「如果是人類的做法，現在最好的方式就是開一個新分支，在那個新分支里移除掉所有的舊實現重新搭建新的架構。完成之後再把產品一直過去。」「走新分支重建，改寫宣告吧」「你先開一個新分支，不要在 master 上做。」取代 `v8-arch-rederive-medium` 的停點：長期分支 `gyo2`（從 master 08566260 切出），舊實現在 `gyo2` 上刪除，產品依新架構逐一搬回；master 凍結、只收事故修正。計畫：[rebuild 事前宣告](rebuild-declaration.zh-Hant.md)。 |
+| `v8-arch-rebuild-r0-approved` | 2026-11-14（使用者，主會話）。「1 到 9 照建議」：核准 [R0 帶過去清單](rebuild-r0-carry-list.zh-Hant.md) 第 8 節九項——engine 帶 base（不含 StrictJson）、math、os，time／threads／io／audio core 帶過去並重審；collision、model 等用到它的產品搬回時再取回；第三方只帶 doctest；Kernel 程式 R0b 不帶、R2 整段搬回；`-ffp-contract=off` 留；target 11 頁不帶、R1 重寫；入口四節寫「R1 進行中，暫以 master@08566260 為參考，不具約束力」；宣告的判定 4、5 照清單第 7 節修訂；MathCharacterizationTests 帶、不當設計的判官。 |
+| `v8-arch-gyo2-no-master-merge` | 2026-11-14（使用者，主會話）。「master 不用放到 gyo2，現在 gyo2 分支上做好，然後再搬到 master 上去。」master 不併進 gyo2；R0b-1 取消。 |
 
 ## 未定
 
@@ -217,6 +219,8 @@
 - 2026-11-14 R0 追加（使用者：「你可以去看下之前的 kernel 的設計。裡面很多東西是可以拿過來的。」）：舊 Kernel 的設計與程式另做一項盤點（宣告 §4.5，Opus／high ×2），逐項判照帶、換位置、換理由、帶程式或不帶。同時使用者把主會話換成 Fable 5.2：統合由主會話做，檢查者照 navigator 上段表換成 Opus／xhigh。
 
 - 2026-11-14 **R0 帶過去清單 v2 完成，待使用者逐項核准**（[清單](rebuild-r0-carry-list.zh-Hant.md)）：四份盤點（Opus／high）→ 統合（主會話 Fable）→ 別模型檢查（Opus／xhigh，blocker 5／should 15／nit 8，全部採用）；另採原架構師會話轉來的四點。主要結論：engine 帶 base（不含 StrictJson）、math、os，time／threads／io／audio core 帶過去並重審；第三方只帶 doctest；Kernel 程式 R0b 不帶、R2 依盤點整段搬回；target 11 頁不帶、R1 重寫；gyo2 開新的決定紀錄；R0b 拆四個 PR，並提議修改宣告的判定 4、5。證據：主 checkout `build/evidence/rebuild-r0/`。
+
+- 2026-11-14 **R0 清單核准，R0b 開始**（`v8-arch-rebuild-r0-approved`、`v8-arch-gyo2-no-master-merge`）：R0b-2 刪除與建置修補 → R0b-3 守衛與 CI 政策測試的判定變更（§14.4，交使用者）→ R0b-4 文件。
 
 ## 下一步
 
