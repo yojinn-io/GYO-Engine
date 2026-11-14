@@ -253,6 +253,8 @@
 
 - 2026-11-14 **System 契約的說明頁**（使用者：「整理成一頁給我看，第 2 點先去翻歷史」「別忘了，還有 Result 的錯誤回報機制。這個落下了。」）：[system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)，寫的是分支 `claude/gyo2-mechanism` 上能跑的程式：System 的寫法、參數一覽、登記時寫什麼、機制替作者做什麼、錯誤怎麼回報（`GYO_ASSERT` 與 `Result` 兩種；System 包一層上下文回傳、Executor 處理一次、World Interrupted；附 2026-11-11／11-12 的決定出處）、寫樣本時碰到的四件事。骨架測試補了一個錯誤回報的案例（行為現為 6 案例 57 個檢查）。翻歷史的結果：「生成的 bundle 也算寫者」是規格對抗檢查的修訂 B3（架構師接受），不是使用者 11-11 那次討論定的；「執行中一個 System 生成、另一個更新同一個元件」規格、目標文件、決定表都沒談；`Despawn` 不算寫者（K.3 第 4 項）。待使用者確認 System 契約。
 
+- 2026-11-14 **11 月 11 日那批機制的決定在 gyo2 上的現況**（使用者經原架構師會話：「11 月 11 日做了十幾個決策，還有 Result 的錯誤反饋。把機制類的整理一下，交給 GYO2 處理。」清單 A～F 六組，G 組不放）：[rebuild-1111-decisions-status.zh-Hant.md](rebuild-1111-decisions-status.zh-Hant.md)。逐項對照分支 `claude/gyo2-mechanism` 的程式：絕大多數是「帶，而且已經在程式裡」（K.3-1、2、3、4、5、9、14、15、17 與 11-12 的兩次補充、`InsertStage`）；只做一半的：runner 的安裝（只記錄、不能呼叫）、Extract（只有宣告與啟動檢查，執行未做）、boundary 輸入；還沒有程式的：資產模型、Loading 的分批、Editor 的前向資料流、時間的 Resource。要使用者定的 5 件：生成的 bundle 算不算寫者、同步點的套用順序（含原架構師會話補的矛盾：取捨表寫選 generation 模型就改回先進先出，K.3-1 選了 generation 卻沒改回）、跨時鐘的事件、時間與固定步、出錯之後只能重建 World。
+
 ## 下一步
 
 - **進行中**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，已核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
