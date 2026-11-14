@@ -29,6 +29,9 @@
 機能実装では、既存アーキテクチャを理解した上で、
 必要最小限の変更を優先する。
 
+基盤 Architecture（§2）を新しく作る、または新しい形へ移す作業では、変更の少なさを選択肢の決め手にしない。
+決め手は、支える Feature と Contract である（§2 Derivation Order、§4）。
+
 ### MUST
 
 * 既存コードを確認してから変更する。
@@ -308,6 +311,18 @@ over:
 Architecture を新しい形へ移すバッチでは、上の Prefer を選ぶ前に、各選択肢について
 「旧い形に置き場所を探していないか」を確かめる。そうであれば、変更が小さくても採らない
 （`docs/architecture/README.md` の〈Batch declaration checks〉）。
+
+この確認は、禁止の一文だけでは働かない。基盤 Architecture の選択肢を事前宣言や計画でユーザーに示すときは、
+各選択肢について次を書く。
+
+* 系譜：その形がどこから来たか（旧い構造、参考実装、新しく導いたもの）。
+* 退けた選択肢と、決め手にした理由。
+* その形を必要とする Feature と Product（§2 Derivation Order）。
+
+既存の Test・ガード・golden・ミューテーションを変えずに済むことは、決め手にしない（費用として比較に書いてよい）。
+ただし、その Test が守る性質が、計画で名指しした Feature または Contract そのものである場合は、この限りでない。
+事前宣言をユーザーに出す前に、作成者と別の Agent が、上の三項目と決め手を確かめる。
+確かめる項目の詳細は `docs/architecture/README.md` の〈Batch declaration checks〉に従う。
 
 局所的であることと、責務が正しいことは別である。
 
@@ -750,6 +765,7 @@ Architecture Drift を確認する。
   名前が中立でも、中立の値に特定の Product だけが分かる処理をしていないか。
 * 他の Component が権威を持つ状態の写し、またはそれに基づく判断の追加
 * Component の Design Invariants に反する変更
+* 基盤の選択肢の決め手が、既存の Test・ガードを変えずに済むことになっていないか（§4）
 
 Code Style や Formatting の問題より、
 Architecture / Ownership / Dependency の問題を優先する。
@@ -874,6 +890,7 @@ Test が正しいと決めつけて実装を合わせることも、実装が正
 * Design Invariants のガード Test は、緩める面の有無にかかわらず、1〜5 を示してユーザーの承認を得る。
 * 閾値、試行回数、再試行の規則は §14.1 に従う。
   事前宣言した判定は、この節によっても、結果を見た後に緩めない。
+* 判定を変える手順の費用は、Architecture の選択肢を決める理由にしない（§4）。
 
 ---
 
