@@ -47,7 +47,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 
 | 參數 | 用來做什麼 | 算什麼存取 |
 |---|---|---|
-| `Query<Read<T>, Write<U>, With<V>, Without<W>, Changed<X>, Added<Y>>` | 依 id 由小到大走過符合的實體；`Read` 拿到 `const T&`，`Write` 拿到 `Mut<U>` | 讀 T、寫 U；其餘是篩選 |
+| `Query<Read<T>, Write<U>, With<V>, Without<W>, Changed<X>, Added<Y>>` | 依 id 由小到大走過符合的實體；`Read` 拿到 `const T&`，`Write` 拿到 `Mut<U>`。只有一個元件時 `Count()` 直接給個數 | 讀 T、寫 U；其餘是篩選 |
 | `Res<T>`、`ResMut<T>` | 讀、寫一個 Resource | 讀、寫 T |
 | `EventReader<E>`、`EventWriter<E>` | 讀、送事件 | 讀、寫 E |
 | `Spawn<Bundle<A, B…>>` | 生成實體，當場拿到 id；下一個同步點才看得到 | 寫配發器；延後寫 A、B… |
@@ -147,7 +147,7 @@ AllotterExhausted [W-9]: the entity allotter's range is used up world=test-world
 1. **生成實體的 System 也算那些元件的寫者。** 「一個 System 生成、另一個更新」的元件，在預設獨占之下是啟動錯誤。使用者 2026-11-14 定：數法不改，這種情形由作者用漏斗處理，Engine 提供漏斗的工具（第 8 節）。樣本目前把 Position、Velocity、Health 標成 Shared 才過，是暫時的；工具的形式定了之後改成漏斗的寫法。
 2. **事件一定要指定時鐘**，而且只能在那個時鐘的 schedule 裡讀寫。
 3. **System 沒有捕獲**，所以要記東西只有兩條路：`Local<T>`（自己的），或 Resource（共用的）。
-4. **`Query` 的 `Count()` 會真的走一遍**，不是讀一個現成的數字。
+4. **`Count()` 直接讀現成的數字，不走一遍**（使用者 2026-11-14 指出原本會走一遍、要改；已改）。只有「一個元件」的查詢才有現成的數字，所以只有這種查詢有 `Count()`。帶篩選或多個元件的查詢，沒有地方存著它的個數；要數就用 `CountMatching()`，名字不同，讓作者看得出它會走一遍。對多個元件的查詢呼叫 `Count()` 是編譯錯誤。
 5. **同一個同步點裡，同類的變更排在一起執行，不照記錄的先後。** 順序固定是：刪除實體→移除元件→生成實體→加上元件，每一類裡依 id。所以有兩個和直覺相反的結果（骨架測試驗過）：
    - 同一個 System 裡**先生成再刪除**同一個新實體：實體活下來。因為刪除先執行，那時實體還不存在。
    - 同一個 System 裡**先加上再移除**同一個元件：元件還在。因為移除先執行，之後才加上。
