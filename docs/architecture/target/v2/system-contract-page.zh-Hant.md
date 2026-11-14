@@ -79,6 +79,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 ## 5. 機制替作者做的
 
 - **排順序**：照 `before`／`after`，不照登記的先後。兩個 System 寫同一個東西又沒寫先後：依登記的先後，並列在一張清單裡。
+  - **嚴格模式（選用）**：產品可以呼叫 `Registrar::RequireExplicitOrder()`（任何 plugin 都能呼叫，對整個 Registry 生效）。打開之後，兩個衝突又沒寫先後的 System 是啟動錯誤 D-E8，錯誤會點名兩個 System、衝突的資料、schedule，以及要寫 `before`／`after`；一次啟動把所有這樣的組都報出來。沒有豁免。
 - **同步點**：每個 stage 結束時套用延後的變更。在前一個 stage 生成的實體，下一個 stage 就看得到。
 - **事件**：排在寫入者後面的 System，當個 tick 就讀得到。
 - **hook**：元件被加上或移除時，在同步點呼叫登記的函式。
@@ -159,6 +160,8 @@ AllotterExhausted [W-9]: the entity allotter's range is used up world=test-world
    這個順序是使用者 2026-11-11 問清楚後定的（`v8-arch-gyo2-sync-order-keep` 有原話）：兩個 System 之間的結果因此不隨登記的先後改變；刪除排在生成前面，是為了同一個同步點裡用同一個 id 重新加入。要「這個 tick 不要了」的作者，自己不要記那筆生成或加上。
 
 6. **每個有 `Spawn` 參數的 System 都算配發器（allotter）那個 Resource 的寫者。** 兩個以上的 System 會生成實體時，配發器要標 `Shared`，否則啟動時報「獨占但有兩個寫者」。寫漏斗的測試時碰到的；這是現況，沒有改。
+
+7. **打開嚴格模式之後，有三種情形一定要寫順序**：兩個生成實體的 System（都寫配發器）、兩個寫診斷的 System、`ExclusiveWorld` 的 System 和同一個 stage 的其他 System。hook 不在嚴格模式的範圍內（hook 沒有 `before`／`after`）。
 
 ## 8. 「生成者算寫者」：歷史與決定
 
