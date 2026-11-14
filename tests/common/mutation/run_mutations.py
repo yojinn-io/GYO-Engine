@@ -18,7 +18,7 @@ file is restored afterwards. Python only, with subprocess timeouts, so it runs
 the same on Windows, Linux and macOS.
 
 Usage (from the repository root):
-  python3 docs/architecture/plans/time-threads-trace/scripts/run_mutations.py \
+  python3 tests/common/mutation/run_mutations.py \
       --build-dir build/target/_build/test [--cmake PATH] [--only ID ...] [--catalog FILE]
 --catalog runs another Engine plan's catalog in the same format (default: the
 mutations.json next to this script).
@@ -31,7 +31,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPOSITORY = Path(__file__).resolve().parents[5]
+REPOSITORY = Path(__file__).resolve().parents[3]
 CATALOG = Path(__file__).resolve().with_name("mutations.json")
 
 
