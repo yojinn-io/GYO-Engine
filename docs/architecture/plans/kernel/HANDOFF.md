@@ -212,9 +212,11 @@
 - 2026-11-14 **全局計畫審計完成**（[global-audit.zh-Hant.md](global-audit.zh-Hant.md)、[dev_log](../../../dev_logs/2026_11_14_arch_global_audit.zh-Hant.md)）：方向成立——Kernel 的資料模型、Host 契約與部分 Kernel API 是照舊實作與 PvP 塑形、而且對所有 World 生效；主要上游是舊實作的附帶性質（`std::map` 的順序、舊程式持參照、`PvpMatch::Reset()`、`FixedTickRuntime`）；核心機制站得住。卡 01～06 與卡 08 已封存（匯總：主 checkout `build/evidence/card-archive-2026-11-14/SUMMARY.md`；卡 01、05 的分支推到 origin，卡 08 存 patch）。
 - 2026-11-14 **凍結**（`v8-arch-rederive-medium`）：PR #218 不合併；DI-KS 3 的 W-1、DI-KS 4 的配發與世代、DI-KS 9、RC 6 處置句、Delta-3 不再往上積；zone 等 PvP 概念的 Kernel API 不再新增使用處；依賴 World 的批暫停；卡 01、02、03、05、08 與 #219 的後續暫停。之後改走新分支重建（`v8-arch-rebuild-branch`），凍結由「master 凍結」取代。
 
+- 2026-11-14 **`v8-arch-rebuild` 事前宣告核准**（使用者「核准，開始 R0」）：R0 開始——盤點 (a) engine／third_party／產品、(b) 工具鏈／測試基礎設施／文件與同詞異義表（Opus／high ×2）→ 主會話統合 → Fable／high 別模型檢查 → 交使用者逐項核准。
+
 ## 下一步
 
-- **下一批**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，待使用者核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
+- **進行中**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，已核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
 
 - 並行線：J-17 掃描器線（任務卡已開始；等它的清單格式草案來核定）、圖書管理員（已確認職責，等使用者「開始」）、CI 準備卡（`v8-arch-kernel-ci-readiness`，已開始）、產品線前置兩批（交接卡 `docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md`；`-detect` 可開、`-zones` 等 J-17 基線）。
 - 架構師線的下一批：遷移批規劃（§3 Delta 計畫層七項、以 audit 的成本形狀分批、plugin 邊界）＋ A.6 修訂吸收 pageguard 的 11 點；等 J-17 清單格式核定與 CI 卡的結論一起排。
