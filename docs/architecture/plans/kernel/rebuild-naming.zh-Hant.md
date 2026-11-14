@@ -4,6 +4,12 @@
 
 使用者（2026-11-14）：「你後面做好表之後，也做一個命名規範。」
 
+使用者（2026-11-14，架構師主會話，經該會話轉達）：「這個命名規範，1-4 轉過去就好。」
+- 指的是 2026-11-11 的命名規範五條（`master` 的 `docs/architecture/target/naming.zh-Hant.md`，決定代號 `v8-arch-naming`；那次的原話不在 repo 裡）。
+- 比過的：使用者看了那五條，以及這份草稿先前對它們的處理（第 1 條當事實、第 2 條當提案、第 3～5 條列為不定），之後說了上面這一句。第 5 條（禁用 Manager、Renderer、ViewModel、Host、Shell、Runtime、Controller 等後綴）不轉。
+- 理由：使用者沒有說。1～4 是照原文定案，還是併進這份之後再確認，使用者也沒有說；這份照「併入、標明出處、併入後的寫法待確認」處理。
+- 併入的位置：第 1 條→N17 與第 3 節末；第 2 條→第 4 節；第 3 條→N23；第 4 條→N24。
+
 適用範圍：gyo2 上新寫的文件與程式。帶過來的程式與 AGENTS 不回頭改。
 
 每一條都標了來源：
@@ -42,41 +48,43 @@
 | N14 | 一個目錄一個 CMake target：`gyo_<模組>`，別名 `GYO::<模組>` | `gyo_time`、`GYO::Time` | 事實 |
 | N15 | 型別、函式用大寫開頭的駝峰；成員變數小寫開頭、結尾加底線；常數 `k` 開頭；巨集 `GYO_` 開頭全大寫 | `RoleThread`、`StopRequested()`、`state_`、`kSampleRate`、`GYO_ASSERT` | 事實 |
 | N16 | 檔名等於它主要的型別名 | `RoleThread.hpp`、`RoleThread.cpp` | 事實 |
-| N17 | 目錄、namespace、target 三者的模組名要對得上 | — | 事實；舊命名條文第 1 條也是這個意思 |
+| N17 | 歸屬＝namespace 與目錄一一對應。目錄、namespace、target 三者的名字要對得上。根的寫法：通用機制 `GYO::Kernel::`；Engine 的 Module `GYO::Engine::<Module>::`；Plugin `GYO::Plugins::<plugin>::`；產品 `<產品>::` | `engine/kernel`↔`GYO::Kernel` | 你的決定（11 月 11 日命名規範第 1 條，2026-11-14 轉入）。原文寫「能力」的地方，照今天的用詞寫 Module |
 
 已知的不一致，帶過來的程式不改，先記著：
 - io 的 namespace 是 `Engine::IO`，target 是 `GYO::Io`。新模組的寫法：只有第一個字母大寫，例如 `Io`、`Os`。
-- namespace 的根是 `Engine::`，target 別名的根是 `GYO::`。舊的命名條文寫的是 `GYO::Kernel::`、`GYO::Engine::<能力>::`，和程式的現況不符。新寫的程式照現況的 `Engine::<模組>`；要不要統一成一個根，見第 5 節。
+- **namespace 的根，程式的現況和 N17 不一致**：通用機制的程式用 `GYO::Kernel`，合 N17；帶過來的模組（base、math、os、time、threads、io、audio）與 entity_store 用 `Engine::<模組>`，N17 寫的是 `GYO::Engine::<Module>`。新寫的 Module 照 N17；帶過來的要不要改，見第 6 節。
 
 ## 4. ECS 相關的命名（提案）
 
-這幾條出自舊命名條文的第 2 條「分類＝詞性」。它們是慣例，不是設計；例子換成不帶產品的詞。
+這幾條是 11 月 11 日命名規範的第 2 條「分類＝詞性」（照 Bevy），2026-11-14 轉入。例子用不帶產品的詞；原文的 PvP 例子（`ApplyMembership`、`PlayerJoined`、`Judge`）是 PvP 產品的，不放在這裡。
 
 | # | 規則 | 例子 | 來源 |
 |---|---|---|---|
-| N18 | System 的名字是動詞片語 | `StepMovement`、`ExtractMeshes` | 提案 |
-| N19 | ECS 元件與 Resource 的名字是名詞 | `Position`、`FrameTime` | 提案 |
-| N20 | `Plugin` 型別的名字以 `Plugin` 結尾 | `AudioPlugin` | 提案 |
+| N18 | System 的名字是動詞片語 | `StepMovement`、`ExtractMeshes` | 你的決定（第 2 條） |
+| N19 | ECS 元件與 Resource 的名字是名詞 | `Position`、`FrameTime` | 你的決定（第 2 條） |
+| N20 | `Plugin` 型別的名字以 `Plugin` 結尾 | `AudioPlugin` | 你的決定（第 2 條） |
 | N21 | plugin 套件的目錄名小寫 | `plugins/sdl/` | 提案；層與目錄叫 plugins 是你的決定（2026-11-11） |
-| N22 | 寫進 World 事件緩衝的事件，名字用過去式 | `AssetLoaded` | 提案 |
+| N22 | 事件的名字用過去式 | `AssetLoaded` | 你的決定（第 2 條） |
+| N22b | schedule 與 stage 用階段名 | `Loading`、`FixedUpdate`；`Simulate` | 你的決定（第 2 條） |
+| N23 | World＝前綴（照 Bevy）：渲染 World 的資料用 `Gpu*`、`Extracted*`；boundary 輸入帶 `Sample` 或 `Input`；文件的 World 與主 World 不加前綴 | `ExtractedMeshes`、`HostClockSample` | 你的決定（第 3 條） |
+| N24 | 決定性區＝位置，不是名字：決定性區的 System 與資料集中在產品的一個 namespace 與目錄，其餘放在各自對應的 namespace 與目錄。區仍然要宣告並在啟動時檢查；目錄讓掃描有對象。只有呼叫 `RequireExplicitZones` 的產品需要照這一條放（`Zone` 預設 B，`v8-arch-gyo2-zone-default-b`） | PvP 的例子：namespace `fps::pvp::sim` | 你的決定（第 4 條）。這一條是 GYO 自己的，Bevy 沒有區 |
 
 ## 5. 現在不定的
 
 | 項目 | 為什麼不定 |
 |---|---|
-| 型別不用 `Manager`、`Host`、`Shell`、`Runtime`、`Controller`、`Renderer`、`ViewModel` 這類後綴（舊命名條文第 5 條） | 來源只有轉述，沒有你的原話；它的理由是內容主張，要過去留登記表 |
-| 渲染 World 的資料加 `Gpu`、`Extracted` 前綴；boundary 輸入加 `Sample`、`Input`（舊第 3 條） | 跟著設計走：渲染 World、boundary（舊）都還沒判 |
-| 決定性區的 System 與資料集中在產品的一個 namespace（舊第 4 條） | 屬決定性那一層，等它的設計 |
-| 通用機制的目錄、namespace、target 叫什麼 | R1 定；「Kernel」現在只指舊的 |
-| `Engine::` 與 `GYO::` 兩個根要不要統一；`Engine::IO` 要不要改成 `Engine::Io` | 要改帶過來的程式，不在現在的範圍；要改的話另外提 |
+| 型別不用 `Manager`、`Host`、`Shell`、`Runtime`、`Controller`、`Renderer`、`ViewModel` 這類後綴（舊命名條文第 5 條） | 你 2026-11-14 說只轉 1～4，這一條不轉 |
+| `Engine::IO` 要不要改成 `Io` | 要改帶過來的程式；和第 6 節第 5 點一起定 |
 | World 的事件緩衝叫 Event 還是照 Bevy 叫 Message | 和事件的設計一起定 |
 
 ## 6. 要你確認的事
 
 1. 第 1、2 節：詞的用法與中英文的寫法。
 2. 第 3 節：新程式照帶過來的程式的慣例。
-3. 第 4 節：ECS 相關的五條慣例。
-4. 第 5 節：這六項現在不定。
+3. 第 4 節：N18～N24 是你 11 月 11 日的第 2、3、4 條，併入後的寫法對不對。
+4. 第 5 節：剩下這三項現在不定。
+5. **通用機制就叫 Kernel**：N17 與程式的現況都是 `engine/kernel`、`GYO::Kernel`。同詞異義表先前寫「Kernel 只指舊的，新的叫通用機制」，要跟著改成：程式與目錄叫 Kernel，文件裡說明它是什麼時寫「通用機制」。
+6. **帶過來的模組的 namespace 根**：現況是 `Engine::<模組>`，N17 寫 `GYO::Engine::<Module>`。要不要把帶過來的程式改成 N17 的寫法（一次機械式的改名，約九個模組），還是現況留著、只要求新寫的照 N17。
 
 ## 7. 範囲の限界
 
