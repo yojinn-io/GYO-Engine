@@ -6,7 +6,7 @@ v3 和 v2 的差別：
 - 詞條不增不減，處置大多不變（變的見附錄 B）。
 - 「意思」一欄改寫成技術定義：讀者不必知道這個專案的歷史，也看得懂這個詞在 GYO2 指什麼。
 - 每個詞以前在哪個檔、指什麼、為什麼換，移到附錄 A（系譜）。
-- `gyo2` 的 `engine/kernel` 已經實作的概念（World、schedule、stage、clock domain、mount 等），照現行程式定義，不再寫「X（舊）」。它們該不該留，仍由去留登記表判（第 1 節）。
+- 詞與寫法照 v2，只改解釋。要換名字的只有角色詞（Runtime、Host，第 0 節）。
 
 ## 0. 使用者的回饋（2026-11-14，主會話）
 
@@ -80,7 +80,7 @@ v3 和 v2 的差別：
 |---|---|
 | 沿用 | 只有一個意思，照用 |
 | 加限定詞 | 幾個意思都在用；寫出每個意思的說法，並標明不加限定時指哪一個 |
-| 寫「X（舊）」 | 只在引用 master 或舊文件、而 gyo2 沒有對應的概念時用。v3 的表裡沒有詞條用這個處置 |
+| 寫「X（舊）」 | 舊設計的概念還沒判；引用時加「（舊）」 |
 | 不用它命名新概念 | 這個詞意思太多或已被先占；一般語意與既有的型別名照用 |
 | 替換 | 舊的角色詞，新文件改用另一個詞（使用者 2026-11-14） |
 | 暫留 | 不特別處理；文件裡遇到時當場解釋它指什麼（使用者 2026-11-14） |
@@ -109,14 +109,14 @@ v3 和 v2 的差別：
 
 | 詞 | 在 GYO2 的意思 | 處置 | 其他意思與寫法 |
 |---|---|---|---|
-| Frame | **畫面幀**：畫面畫一次 | 加限定詞 | audio 的取樣幀（每個聲道各一個取樣，48000 幀＝1 秒）寫「音訊幀」。名為 Frame 的 clock domain 寫「Frame domain」 |
-| Tick | 一個 clock domain 前進一步，以及它的步數。每個 clock domain 有自己的 tick 數，由該 domain 的 clock schedule 每跑一次加一。固定步長的模擬（Fixed domain）最常用它，單機與連線都一樣 | 加限定詞 | 變更偵測用的計數寫「stamp」。其他的計數（批次數、重試數）寫「計數」，不叫 tick |
-| Clock、Time | **時鐘**：真實時間的來源，例：time 模組的 `MonotonicClock`（單調、不會倒退）。命名空間 `GYO::Time` 已被 time 模組占用 | 加限定詞 | 「clock domain」是另一回事：一條獨立推進的時間線（Fixed、Frame、Loading），各有自己的 tick 與 schedule。World 裡的時間 Resource 叫什麼另定，要避開 `GYO::Time` |
-| Domain | 不單用 | 不用它命名新概念 | 時間線寫「clock domain」（程式的型別名是 `Domain`）。錯誤來源的分類寫全名（os 的 `NativeErrorDomain`）。產品的領域照產品的說法 |
-| Mount | **檔案系統的掛載**：把一個實體目錄或封包接到虛擬路徑底下，例：io 的 `MountTable`、`MountPoint` | 加限定詞 | System 在哪個 schedule 的哪個 stage 執行（連同先後、所屬的 set、run 條件）寫「System 的掛點（mount）」；一個 System 可以有多個掛點，每個 schedule 最多一個 |
+| Frame | **畫面幀**：畫面畫一次 | 加限定詞 | audio 的取樣幀（每個聲道各一個取樣，48000 幀＝1 秒）寫「音訊幀」。名為 Frame 的 clock domain 寫「Frame domain（舊）」 |
+| Tick | 固定步長的模擬前進一步，以及它的步數。單機與連線都用 | 加限定詞 | 變更偵測用的計數寫「stamp」。其他的計數（批次數、重試數）寫「計數」，不叫 tick |
+| Clock、Time | **時鐘**：真實時間的來源，例：time 模組的 `MonotonicClock`（單調、不會倒退）。命名空間 `GYO::Time` 已被 time 模組占用 | 加限定詞 | 「clock domain（舊）」是另一回事：一條獨立推進的時間線（Fixed、Frame、Loading），各有自己的 tick 與 schedule。World 裡的時間 Resource 叫什麼另定，要避開 `GYO::Time` |
+| Domain | 不單用 | 不用它命名新概念 | 時間線寫「clock domain（舊）」（程式的型別名是 `Domain`）。錯誤來源的分類寫全名（os 的 `NativeErrorDomain`）。產品的領域照產品的說法 |
+| Mount | **檔案系統的掛載**：把一個實體目錄或封包接到虛擬路徑底下，例：io 的 `MountTable`、`MountPoint` | 加限定詞 | System 在哪個 schedule 的哪個 stage 執行（連同先後、所屬的 set、run 條件）寫「掛點（舊）」；一個 System 可以有多個掛點，每個 schedule 最多一個 |
 | Command | 一般語意：一個要執行的指令。各模組內部的指令型別寫全名（例：audio 內部的 `Detail::Command`） | 加限定詞 | 延後到同步點才套用的結構變更（加減元件）寫「`Commands`」或「延後的變更」 |
 | Sample | **音訊的取樣** | 加限定詞 | 從外部讀進 World 的一筆輸入，型別名以 `Sample` 或 `Input` 結尾（[命名規範](rebuild-naming.zh-Hant.md) N23）；文件裡寫「boundary 輸入」 |
-| Role | **執行緒角色**：一條有名字、有固定職責的執行緒，例：threads 的 `RoleThread`；System 的執行緒親和也用角色名指定（`"Main"` 是平台的主執行緒） | 加限定詞 | ECS 元件的 State／Input 之分寫「欄角色」。建置登記表的 ROLE 欄照欄名 |
+| Role | **執行緒角色**：一條有名字、有固定職責的執行緒，例：threads 的 `RoleThread`；System 的執行緒親和也用角色名指定（`"Main"` 是平台的主執行緒） | 加限定詞 | ECS 元件的 State／Input 之分寫「欄角色（舊）」。建置登記表的 ROLE 欄照欄名 |
 
 ### 4.3 其他一詞多義的詞
 
@@ -127,10 +127,10 @@ v3 和 v2 的差別：
 | Registry、登記表 | **Registry**：收下產品給的 `Plugin` 清單，依序讓每個 plugin 登記，檢查全部登記，凍結，並替每個 schedule 排出執行計畫（Plan）。凍結後不能再登記 | 加限定詞 | 建置系統的產品清單寫「產品登記檔」。決定舊概念去留的那張表寫「去留登記表」 |
 | Layer | 不單用 | 加限定詞 | 「架構層」：Engine、plugins、產品這種依賴方向固定的分層。「基盤／應用之分」：AGENTS §2 依「改了它上面要跟著改多少」的分法。「渲染層」：畫面合成的一層 |
 | Module | **Engine 內的必要部分**：少了它，完整的遊戲不成立。以 `engine/<名字>/` 一個目錄、一個 CMake target 交付。接第三方函式庫的也算，例：JSON 函式庫、SDL | 沿用 | Go 的 module、C++20 的 module 照各自語言的意思，寫「Go module」「C++ module」。和 Plugin 是一對：差別是 Engine 內或外，判準是「少了它，完整的遊戲還成不成立」 |
-| Stage | **schedule 的一段**：一個 schedule 由幾個 stage 依序組成；每個 stage 結束時有一個同步點，套用這段裡記下的延後變更。stage 的名字由產品給 | 加限定詞 | 打包的暫存目錄、shader 的階段（`ShaderStage`）照各自領域的詞。「stage」不當動詞用 |
+| Stage | 不單用 | 加限定詞 | schedule 的一段寫「stage（舊）」：一個 schedule 由幾個 stage 依序組成，每個 stage 結束時有一個同步點，套用這段裡記下的延後變更。打包的暫存目錄、shader 的階段（`ShaderStage`）照各自領域的詞。「stage」不當動詞用 |
 | Scene | 不單用 | 不用它命名新概念 | 關卡的資料寫「關卡內容」，渲染的輸入寫「渲染輸入」。可以生成的實體範本（Bevy 的 Scene）要不要有，另判 |
-| Input | **玩家的輸入**（鍵盤、滑鼠、手把），以及處理它的輸入模組 | 加限定詞 | 欄角色 Input（可以被入口 System 寫的決定性資料）寫「Input 欄角色」 |
-| Boundary | **架構的邊界**：AGENTS 的 Architecture／Product／Module Boundary | 加限定詞 | 從外部進入 World 的資料寫「boundary 輸入」（欄角色是 Input 的資料）。存取驗證在 System 前後比對資料寫「boundary 比對」 |
+| Input | **玩家的輸入**（鍵盤、滑鼠、手把），以及處理它的輸入模組 | 加限定詞 | 欄角色 Input（可以被入口 System 寫的決定性資料）寫「Input 欄角色（舊）」 |
+| Boundary | **架構的邊界**：AGENTS 的 Architecture／Product／Module Boundary | 加限定詞 | 從外部進入 World 的資料寫「boundary Resource（舊）」 |
 | Zone | 不單用 | 加限定詞 | 「決定性區」：一筆資料或一個 System 承諾的決定性等級。C 區＝跨平台逐位元相同；B 區（預設）＝同一個執行檔在同一個平台上每次相同。「時區」：時間的時區 |
 | Target | **CMake 的 target**：一個建置產物（函式庫或執行檔）與它的依賴 | 加限定詞 | 「render target」寫全稱。`docs/architecture/target/` 這個目錄寫「目標條文」 |
 
@@ -142,8 +142,8 @@ v3 和 v2 的差別：
 | Host | 不拿來指元件或型別 | 替換 | 原本 Host 做的事分兩個詞：**組裝（setup）**＝產品啟動時列出要用的 `Plugin`、建 Registry 與 `Product` 的那一段；**runner**＝跑主迴圈、反覆呼叫 `Product::Run` 的函式（每個 `Product` 一個，由某個 `Plugin` 在啟動時裝上）。哪件事歸誰，由去留登記表判。AGENTS §2 的 host（搭載基盤的一個應用）與 CI 的 host（建置機）照原文 |
 | Shell | 目前沒有對應的概念 | 暫留 | 遇到時解釋。命令列的 shell 照一般語意 |
 | Session | 一段有開始與結束的期間 | 暫留 | 遇到時解釋它指哪一種：AGENTS 的 session、工具的編輯階段、實機場次、一條連線 |
-| Service | **獨立行程的後端服務**：例：`services/` 下的 Go service | 加限定詞 | 在 World 之外替 System 做 IO 的部分寫「World 外的 IO」 |
-| Link | 一般語意：連結、連結器的 link（例：CMake 的 link） | 加限定詞 | 和 `Product` 外部交換資料的 Resource 寫「external Resource」（登記時標 `external`，一律在 B 區） |
+| Service | **獨立行程的後端服務**：例：`services/` 下的 Go service | 加限定詞 | 在 World 之外替 System 做 IO 的部分寫「World 外的 IO（舊稱外部服務）」 |
+| Link | 一般語意：連結、連結器的 link（例：CMake 的 link） | 加限定詞 | 和 `Product` 外部交換資料的 Resource 寫「external Resource（舊）」（登記時標 `external`，一律在 B 區） |
 | Kernel | **通用機制**：World、Registry、System、schedule、Executor、`Product` 這些各產品共用的 ECS 機制。程式在 `engine/kernel`，命名空間 `GYO::Kernel`（[命名規範](rebuild-naming.zh-Hant.md) N17） | 沿用 | 文件裡解釋它是什麼時寫「通用機制」 |
 | Engine | **各產品共用的那一層**：`engine/` 目錄，包含通用機制與各 Module。不依賴任何產品 | 沿用 | 同左 |
 | Product、Tool | **產品**：有 owner 的遊戲或工具，分 Game 與 Tool 兩種；Tool 是設計支援工具（例：編輯器） | 沿用 | 寫成 `Product`（程式碼格式）時指 4.1 的型別 |
@@ -194,14 +194,14 @@ v3 和 v2 的差別：
 
 | 詞 | 以前的意思與出處 | v3 怎麼處理 |
 |---|---|---|
-| Frame | (i) 畫面的一幀；(ii) audio：`kSampleRate = 48000; // frames per second`（`AudioFormat.hpp:10`）；(iii) 舊 Kernel 設計的 `Domain::Frame` 與 Frame World | (iii) 在 gyo2 是 `Domain::Frame`，寫「Frame domain」，不再加「（舊）」 |
-| Tick | (i) 固定步的步數：`TickContext`（master 的 `FixedTickRuntime.hpp:17`，沒帶過來）、PvP 的 tick；(ii) 舊 Kernel 設計：domain tick，也拿來指 Loading 的批次計數；(iii) Bevy 的 `Tick`：變更偵測的計數（`bevy_ecs/src/change_detection/tick.rs:23`） | v2 把 (i) 寫成「PvP 的 tick」，使用者指出 tick 不只網路用。v3 照 gyo2 程式定義成 clock domain 的步數（`World::Tick(Domain)`、`CurrentTick`），見附錄 B |
-| Clock、Time | (i) time 的 `MonotonicClock`、`TimePoint`（`MonotonicClock.hpp:18-19`）；(ii) 舊 Kernel 設計的 clock domain、`HostClockSample`；(iii) Bevy 的 `Time<T>` Resource | (ii) 在 gyo2 是 `Domain`，寫「clock domain」 |
-| Domain | (i) os 的 `NativeErrorDomain`（`OsError.hpp:46`）；(ii) PvP 文件的 match_domain；(iii) 舊 Kernel 設計：clock domain，封閉列舉（`Declarations.hpp:54`） | (iii) 寫「clock domain」 |
-| Mount | (i) io 的 `MountTable`、`MountPoint`（`engine/io/include/engine/io/fs/MountTable.hpp:88`）；(ii) 舊 scheduler 的 `Mount`：System 掛在哪個 schedule | (ii) 在 gyo2 是 `Registry.hpp` 的 `Mount`，寫「System 的掛點（mount）」 |
+| Frame | (i) 畫面的一幀；(ii) audio：`kSampleRate = 48000; // frames per second`（`AudioFormat.hpp:10`）；(iii) 舊 Kernel 設計的 `Domain::Frame` 與 Frame World | (iii) 寫「Frame domain（舊）」 |
+| Tick | (i) 固定步的步數：`TickContext`（master 的 `FixedTickRuntime.hpp:17`，沒帶過來）、PvP 的 tick；(ii) 舊 Kernel 設計：domain tick，也拿來指 Loading 的批次計數；(iii) Bevy 的 `Tick`：變更偵測的計數（`bevy_ecs/src/change_detection/tick.rs:23`） | v2 把 (i) 寫成「PvP 的 tick」，使用者指出 tick 不只網路用（第 0 節）。v3 只改解釋，不加限定仍指 (i) |
+| Clock、Time | (i) time 的 `MonotonicClock`、`TimePoint`（`MonotonicClock.hpp:18-19`）；(ii) 舊 Kernel 設計的 clock domain、`HostClockSample`；(iii) Bevy 的 `Time<T>` Resource | (ii) 寫「clock domain（舊）」 |
+| Domain | (i) os 的 `NativeErrorDomain`（`OsError.hpp:46`）；(ii) PvP 文件的 match_domain；(iii) 舊 Kernel 設計：clock domain，封閉列舉（`Declarations.hpp:54`） | (iii) 寫「clock domain（舊）」 |
+| Mount | (i) io 的 `MountTable`、`MountPoint`（`engine/io/include/engine/io/fs/MountTable.hpp:88`）；(ii) 舊 scheduler 的 `Mount`：System 掛在哪個 schedule | (ii) 寫「掛點（舊）」 |
 | Command | (i) audio 內部的 `Detail::Command`（`Mixer.hpp:17`）；(ii) 舊 Kernel 設計的 `Commands`；Bevy 的 `Commands` | 同 v2 |
 | Sample | (i) audio 的取樣；(ii) 舊命名條文：boundary 輸入帶 `Sample` 後綴 | (ii) 已由命名規範 N23 定案（2026-11-14），不再「由登記表判」 |
-| Role | (i) threads 的 `RoleThread`（`RoleThread.hpp:67`）；舊 Kernel 的 `Affinity::role` 同義；(ii) 舊 Kernel 設計：欄的角色 State／Input（`Declarations.hpp:41`）；(iii) 建置登記的 ROLE 欄 | (ii) 寫「欄角色」，不再加「（舊）」 |
+| Role | (i) threads 的 `RoleThread`（`RoleThread.hpp:67`）；舊 Kernel 的 `Affinity::role` 同義；(ii) 舊 Kernel 設計：欄的角色 State／Input（`Declarations.hpp:41`）；(iii) 建置登記的 ROLE 欄 | (ii) 寫「欄角色（舊）」 |
 
 ### A.3 其他一詞多義的詞
 
@@ -212,10 +212,10 @@ v3 和 v2 的差別：
 | Registry、登記表 | (i) 舊 Kernel 設計的 `Registry.hpp`；(ii) 建置的 `GyoAppRegistry.cmake`、`projects.csv`；(iii) `LoaderRegistry`（沒帶過來）；(iv) [判斷機制](rebuild-judgment-rules.zh-Hant.md)第 5 節的登記表 | (i) 照程式定義 |
 | Layer | (i) AGENTS §6 的架構層；(ii) AGENTS §2「層の区別」；(iii) `CompositeLayer`（`RenderTypes.hpp:98`） | 同 v2 |
 | Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module。使用者 2026-11-14 給了 Module 與 Plugin 的分法（第 0 節） | 照第 0 節定義 |
-| Stage | (i) 打包的 stage 目錄；(ii) `ShaderStage`（`ShaderTypes.hpp:18`）；(iii) 舊 Kernel 設計：schedule 裡固定順序的一段；(iv) 舊設計的動詞：`StageMembershipRequests`；Bevy 沒有 stage，用 `SystemSet` | (iii) 在 gyo2 是 `ScheduleOptions::stages`，不再加「（舊）」 |
+| Stage | (i) 打包的 stage 目錄；(ii) `ShaderStage`（`ShaderTypes.hpp:18`）；(iii) 舊 Kernel 設計：schedule 裡固定順序的一段；(iv) 舊設計的動詞：`StageMembershipRequests`；Bevy 沒有 stage，用 `SystemSet` | (iii) 寫「stage（舊）」 |
 | Scene | (i) `SceneCapture`（`Renderer.hpp:12`）、`PreviewScene`；(ii) 舊 Kernel 設計：Loading 的「場景」階段、渲染的輸入；(iii) Bevy 的 `Scene`（`bevy_scene/src/scene.rs:49`）：可以生成的實體範本 | 同 v2 |
-| Input | (i) 玩家的輸入、輸入模組；(ii) 舊 Kernel 設計：欄角色 `Input`、boundary 輸入 | (ii) 寫「Input 欄角色」，不再加「（舊）」 |
-| Boundary | (i) AGENTS 的 Architecture／Product／Module Boundary；(ii) 舊 Kernel 設計的 boundary Resource | (ii) 在 gyo2 程式裡是欄角色 Input 的資料，寫「boundary 輸入」；另補程式裡的「boundary 比對」 |
+| Input | (i) 玩家的輸入、輸入模組；(ii) 舊 Kernel 設計：欄角色 `Input`、boundary 輸入 | (ii) 寫「Input 欄角色（舊）」 |
+| Boundary | (i) AGENTS 的 Architecture／Product／Module Boundary；(ii) 舊 Kernel 設計的 boundary Resource | (ii) 寫「boundary Resource（舊）」 |
 | Zone | (i) os 的時區；(ii) 舊 Kernel 設計：決定性的區 | (ii) 照程式（`Zone::C`、`Zone::B`，預設 B）與 `determinism.md` 的等級定義 |
 | Target | (i) CMake 的 target；(ii) render target；(iii) `docs/architecture/target/`：改造期間的目標條文 | 同 v2 |
 
@@ -227,8 +227,8 @@ v3 和 v2 的差別：
 | Host | (i) AGENTS.md:147 的 host；(ii) CI 的 host；(iii) 舊程式的 `MatchRuntimeHost`、`IpcHost`（沒帶過來）；(iv) 舊 Kernel 設計：提供 runner 的一方加 main | 替換（使用者 2026-11-14）。先前的提案「main」看起來像主執行緒（執行緒角色也有一個叫 Main），所以使用者定名「組裝（setup）」。runner 的說法照 Bevy 的 `set_runner`（`bevy_app/src/app.rs:224`）。gyo2 程式的註解仍寫 Host（例：`Registry.hpp` 的 "the Host's list"、`Declarations.hpp` 的 "Given by the Host"） |
 | Shell | 舊 framework 的 `WindowShellClient`、`ImGuiShellClient`（沒帶過來） | 暫留 |
 | Session | (i) AGENTS.md:276 的 session；(ii) 工具的編輯階段；(iii) 實機場次（field-session）；(iv) 連線 | 暫留 |
-| Service | (i) `services/`、Go service；(ii) 舊 Kernel 設計：World 之外做 IO 的「外部服務」 | (ii) 寫「World 外的 IO」 |
-| Link | (i) CMake 的 link、AGENTS.md:526；(ii) 舊 Kernel 設計：和外部交換資料的 Resource，舊 spec §0 另稱 external Resource | (ii) 在 gyo2 是 `ResourceOptions::external`，寫「external Resource」，不再加「（舊）」 |
+| Service | (i) `services/`、Go service；(ii) 舊 Kernel 設計：World 之外做 IO 的「外部服務」 | (ii) 寫「World 外的 IO（舊稱外部服務）」 |
+| Link | (i) CMake 的 link、AGENTS.md:526；(ii) 舊 Kernel 設計：和外部交換資料的 Resource，舊 spec §0 另稱 external Resource | (ii) 寫「external Resource（舊）」 |
 | Kernel | (i) `engine/kernel` 與它的設計；(ii) 「kernel 改造」計畫線；(iii) spike | 2026-11-11 命名規範第 1 條；2026-11-14 轉入並由架構師訂（`v8-arch-gyo2-naming-1-to-4`）。v2 原寫「Kernel 只指舊的」，已改 |
 | Engine | (i) 架構層與 `engine/` 目錄；(ii) CMake target `GYO::Engine`（R0b 之後不存在） | 指 (i) |
 | Product、Tool | AGENTS：Product＝有 owner 的遊戲或工具；Tool＝設計支援工具 | 加上使用者 2026-11-14 的 Game／Tool 之分 |
@@ -241,12 +241,9 @@ v3 和 v2 的差別：
 | 詞 | v2 | v3 | 理由 |
 |---|---|---|---|
 | 全部 | 意思欄寫出處與舊設計 | 意思欄寫技術定義，出處移到附錄 A | 使用者 2026-11-14 回饋 |
-| Frame、Clock、Domain、Mount、Role、Stage、Input、Boundary、Link | 寫「X（舊）」 | 照 gyo2 現行程式定義，寫限定詞（「Frame domain」「clock domain」「System 的掛點」「欄角色」等），不加「（舊）」 | 這些概念已在 gyo2 的 `engine/kernel` 實作；「（舊）」是使用者指出的解釋問題之一。去留仍由登記表判 |
-| Tick | 不加限定指固定步的步數 | 不加限定指 clock domain 的步數（固定步是最常見的一種） | gyo2 的程式每個 clock domain 都有 tick（`World::Tick(Domain)`） |
 | Sample | 第二個意思「隨 boundary（舊）由登記表判」 | 引用 N23 | N23 已定案 |
 | Plugin | 不加限定寫「plugin 套件」 | 不加限定指「Engine 外的可選部分」 | 使用者 2026-11-14 的 Module／Plugin 分法 |
 | App → Product | 詞條名 App，v2 已記「改叫 Product」 | 詞條名改成 Product（不算新增詞條，是同一列改名） | 使用者 2026-11-14：「直接用 Product」 |
-| §3「寫 X（舊）」 | 多列使用 | 保留這個處置，但限於 gyo2 沒有對應概念時；v3 沒有列用它 | 同上 |
 
 ### B.2 v2 相對底稿（盤點 b）
 
@@ -254,18 +251,18 @@ v3 和 v2 的差別：
 |---|---|---|
 | Runtime | 禁用 | 不用它命名新概念；Runtime Error 與 AGENTS 的用法照用（後由使用者改為替換） |
 | Host | 改名為 runner 加 main | 改說「組裝（setup）」與「runner」；職責歸屬不在這裡分 |
-| Domain | 改名為 clock | 寫「clock domain」；「時鐘」被 time 模組先占 |
+| Domain | 改名為 clock | 寫「clock domain（舊）」；「時鐘」被 time 模組先占 |
 | Scene | 照 Bevy 重新定義 | 不用它命名新概念：Bevy 的 Scene 是實體範本，是另一個概念 |
 | Role | 執行緒的改叫 ThreadRole | 執行緒的保有原詞（帶過來的 threads 先占） |
-| Service | IO 的概念改叫 IO worker | 寫「World 外的 IO」：worker 會和執行緒的角色相撞 |
-| Frame | World F 照 Bevy 改名 | 寫「Frame domain」；另補音訊幀 |
+| Service | IO 的概念改叫 IO worker | 寫「World 外的 IO（舊稱外部服務）」：worker 會和執行緒的角色相撞 |
+| Frame | World F 照 Bevy 改名 | 寫「Frame domain（舊）」；另補音訊幀 |
 | Layer | 渲染的叫 RenderLayers | 寫「渲染層」；另補 AGENTS §2 的意思 |
 | App | 沿用 Bevy 的意思；建置的改名 game 或 product | 名字保留、不定義內容（後由使用者改為 Product） |
 | Component | ECS 沿用，建置的改名 | 四個意思各加限定詞；AGENTS 的照原文 |
 | Plugin | 只當登記單位 | 「plugin 套件」與「`Plugin` 型別」分開 |
 | Kernel | 改名或拆開，交 R1 | 只指舊的（後改：通用機制的程式與目錄叫 Kernel） |
-| Link | Kernel 層換中性的名字 | 寫「external Resource」 |
-| Stage | 改名 | 寫「stage」 |
+| Link | Kernel 層換中性的名字 | 寫「external Resource（舊）」 |
+| Stage | 改名 | 寫「stage（舊）」 |
 | Tick | 重新定義並寫明 | 只指固定步的步數；其他的寫 stamp 或計數 |
 
 底稿沒有、v2 補的詞：Entity、System、Schedule、Extract、Handle、Event、Snapshot、Registry／登記表、Module、Zone、Engine、Target、Clock／Time、Mount、Command、Sample、Input、Boundary，以及 Product／Tool 與 PvP 的產品詞。
