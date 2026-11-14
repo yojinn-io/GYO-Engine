@@ -115,7 +115,7 @@ v3 和 v2 的差別：
 | Domain | 不單用 | 不用它命名新概念 | 時間線寫「clock domain（舊）」（程式的型別名是 `Domain`）。錯誤來源的分類寫全名（os 的 `NativeErrorDomain`）。產品的領域照產品的說法 |
 | Mount | **檔案系統的掛載**：把一個實體目錄或封包接到虛擬路徑底下，例：io 的 `MountTable`、`MountPoint` | 加限定詞 | System 在哪個 schedule 的哪個 stage 執行（連同先後、所屬的 set、run 條件）寫「掛點（舊）」；一個 System 可以有多個掛點，每個 schedule 最多一個 |
 | Command | 一般語意：一個要執行的指令。各模組內部的指令型別寫全名（例：audio 內部的 `Detail::Command`） | 加限定詞 | 延後到同步點才套用的結構變更（加減元件）寫「`Commands`」或「延後的變更」 |
-| Sample | **音訊的取樣** | 加限定詞 | 從外部讀進 World 的一筆輸入，型別名以 `Sample` 或 `Input` 結尾（[命名規範](rebuild-naming.zh-Hant.md) N23）；文件裡寫「boundary 輸入」 |
+| Sample | **音訊的取樣** | 加限定詞 | 從外部讀進 World 的一筆輸入，型別名以 `Sample` 或 `Input` 結尾（[命名規範](rebuild-naming.zh-Hant.md) N23） |
 | Role | **執行緒角色**：一條有名字、有固定職責的執行緒，例：threads 的 `RoleThread`；System 的執行緒親和也用角色名指定（`"Main"` 是平台的主執行緒） | 加限定詞 | ECS 元件的 State／Input 之分寫「欄角色（舊）」。建置登記表的 ROLE 欄照欄名 |
 
 ### 4.3 其他一詞多義的詞
