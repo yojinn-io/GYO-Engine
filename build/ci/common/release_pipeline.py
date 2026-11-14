@@ -23,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from release_support import (RELEASE_PLATFORMS, Package, ReleaseError, archive_name, checksum_document, describe_item,
                              load_packages, load_services, parse_boolean, service_archive_name, validate_checksum,
                              validate_commit, validate_item, validate_tag_name, validate_expected_pairs)
-from release_channels import (SNAPSHOT_KEEP, Train, derive_trains, latest_other_snapshot, parse_release_tag,
-                              parse_snapshot_tag, prepare_event, render_notes, resolve_train,
+from release_channels import (SNAPSHOT_KEEP, TOOLS_TRAIN, Train, derive_trains, latest_other_snapshot,
+                              parse_release_tag, parse_snapshot_tag, prepare_event, render_notes, resolve_train,
                               select_expired_snapshots, select_orphan_snapshot_tags, snapshot_tag,
                               train_release_evidence, validate_evidence_reference)
 from app_registry import export_registry, export_tools
@@ -529,6 +529,16 @@ def load_train_archives(train: Train, commit: str, package_directory: Path, serv
     return packages + services, expected_services
 
 
+def require_train_content(train_id: str, selected_tools: dict[str, list[str]]) -> None:
+    """The tools train delivers the toolchain package, which holds the release
+    tools. With no tool registered no toolchain package is assembled, so the
+    train has nothing to deliver: say so before any build or remote work
+    instead of failing on missing archives afterwards."""
+    if train_id == TOOLS_TRAIN and not any(selected_tools.values()):
+        raise ReleaseError(f"Train {TOOLS_TRAIN} has nothing to release: no tool is registered, so no toolchain "
+                           "package is assembled. Register a release tool first")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -570,11 +580,13 @@ def main() -> None:
             event = json.loads(args.event_path.read_text(encoding="utf-8"))
             result = prepare_event(args.event_name, event, args.commit, args.ref, trains=trains,
                                    evidence=lambda train: train_release_evidence(train, args.acceptance_root))
+            require_train_content(result["train"], selected_tools)
         else:
             from release_support import git
             if git("rev-parse", "HEAD") != args.commit:
                 raise ReleaseError("Release checkout does not match the selected source commit")
             train = resolve_train(trains, args.train)
+            require_train_content(train.id, selected_tools)
             profile = "release" if args.command == "draft" else "quick"
             items, expected_services = load_train_archives(train, args.commit, args.package_directory,
                                                            args.service_directory, selected_tools, profile)

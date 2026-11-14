@@ -11,9 +11,10 @@ line is "path rule count # reason": the file must exist and its finding count fo
 a new site fails and a removed one asks for the entry to shrink. The Engine allowlist (tests/common/os) may list
 engine/ and tests/common/; any other allowlist only files under its own directory.
 
-A root that must hold sources (REQUIRED_ROOTS) and holds none is a finding: the root moved or the scan broke. The
-other roots hold products, tools and their acceptance programs; while none is registered such a root may be absent or
-hold no C/C++ source, and the guard skips it and names it in the output. It is scanned again as soon as it holds one.
+A root that must hold sources (REQUIRED_ROOTS) and is absent or holds none is a finding: the root moved, the scan
+broke or --root is not the repository. The other roots hold products, tools and their acceptance programs; while none
+is registered such a root may be absent or hold no C/C++ source, and the guard skips it and names it in the output.
+It is scanned again as soon as it holds one.
 
 Usage: python3 os_boundary_guard.py [--root REPOSITORY]
 Exit status 0 when clean; 1 with one line per finding otherwise.
@@ -29,7 +30,7 @@ from pathlib import Path
 # leaves this list unchanged (AGENTS.md sections 7 and 9).
 ROOTS = ("engine", "apps", "tools", "build/acceptance", "tests")
 RUNTIME_ROOTS = ("engine", "apps", "tools")
-# Roots that always hold C/C++ sources; the others are skipped, and reported as skipped, while they hold none.
+# Roots that always exist and hold C/C++ sources; the others are skipped, and reported as skipped, while they hold none.
 REQUIRED_ROOTS = ("engine", "tests")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"}
 # Never scanned: the OS layer's own tests (they may assert per OS), vendored code and build output. engine/os/src is
@@ -247,8 +248,8 @@ def check(root, roots=ROOTS, skipped=None):
     problems, found = [], {}
     for top, relative, path in scanned_files(root, roots):
         if relative is None:
-            if path == EMPTY_ROOT and top in REQUIRED_ROOTS:
-                problems.append(f"{top}: no C/C++ source scanned; is the root right?")
+            if top in REQUIRED_ROOTS:
+                problems.append(f"{top}: no C/C++ source scanned ({path}); is the root right?")
             elif skipped is not None:
                 skipped.append(f"{top} ({path})")
             continue

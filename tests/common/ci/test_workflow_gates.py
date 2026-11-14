@@ -150,6 +150,20 @@ def step_using(job: str, action: str) -> str:
     raise AssertionError(f"Required workflow action is missing: {action}")
 
 
+def cmake_sources() -> dict[str, str]:
+    """Every CMake file of the checkout outside vendored code, as {repository path: text}.
+
+    The files are found, not listed, so a check over them covers a CMake project that is added or comes back.
+    Git names them (tracked files and new files it does not ignore), so build output and local evidence stay out.
+    """
+    listing = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--",
+                              "CMakeLists.txt", "*/CMakeLists.txt", "*.cmake"],
+                             cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=60, check=True)
+    names = sorted({name for name in listing.stdout.split("\0") if name and not name.startswith("third_party/")})
+    return {name: (ROOT / name).read_text(encoding="utf-8", errors="replace")
+            for name in names if (ROOT / name).is_file()}
+
+
 def find_bash() -> str | None:
     candidates = []
     if os.name == "nt":
@@ -349,6 +363,24 @@ class WorkflowGateTests(unittest.TestCase):
             self.assertIn(f"steps.configure.outputs.{field} == 'true'", step)
             self.assertNotIn("exit 0", step)
 
+    def test_shader_tool_cache_key_hashes_the_tool_sources_once_they_exist(self):
+        # The host shader tools are cached between runs. While no CMake file
+        # defines their target the cache step never runs (has_shader_tools is
+        # false) and its key carries no source hash. Once a CMake file defines
+        # the target, the key must hash the tool's sources, or a tool built
+        # from older sources would be restored.
+        definition = re.compile(
+            r"\b(?:ExternalProject_Add|add_custom_target|add_executable)\(\s*gyo_shader_host_tools\b")
+        defined = sorted(path for path, text in cmake_sources().items() if definition.search(text))
+        if not defined:
+            # Not a pass: there is no tool source to hash. The check resumes as soon as the target is defined.
+            self.skipTest("no CMake file defines the gyo_shader_host_tools target: no shader tool source to hash")
+        for workflow, job in ((self.shared, "native"), (self.quick, "l1")):
+            with self.subTest(job=job):
+                cache = step_with(job_block(workflow, job), "path: ${{ env.GYO_HOST_TOOLS }}")
+                key = next(line for line in cache.splitlines() if line.strip().startswith("key: shader-tools-"))
+                self.assertIn("hashFiles(", key, f"{defined} define the shader tool target")
+
     def test_every_platform_packages_toolchain_without_games(self):
         native = job_block(self.shared, "native")
         self.assertIn("GYO_SELECTED_TOOLS: ${{ join(matrix.tools, ';') }}", native)
@@ -417,6 +449,10 @@ class WorkflowGateTests(unittest.TestCase):
                     if "id: gpu_smoke" in step)
         self.assertIn("HAS_PRODUCT_GPU: ${{ steps.package.outputs.has_gpu }}", step)
         self.assertIn('if [ "$HAS_PRODUCT_GPU" = true ]; then', step)
+        # The step pipes its checks into tee: without pipefail a failed check would pass.
+        self.assertIn("shell: bash", step)
+        self.assertTrue(run_script(step).startswith("set -euo pipefail\n"), step)
+        self.assertNotIn("continue-on-error", step)
         self.assertNotRegex(step, r"(?m)^\s*else\s*$")
         self.assertIn("--context", step)
         self.assertNotIn("--probe-directory", native)
@@ -695,10 +731,14 @@ python() { printf '%s\\n' "$@" > python-arguments; }
 
     def test_cxx_compiles_are_not_module_scanned(self):
         # CMP0155 scanning adds GCC -fmodules-ts flags that sccache refuses to
-        # cache; every CMake project that sets C++20 must disable it.
-        for path in ("build/cmake/GyoBuild.cmake",):
+        # cache; every CMake file that sets C++20 must disable it. The files
+        # are found, not listed: a separately configured project (such as a
+        # host tool) is covered as soon as it exists.
+        projects = {path: text for path, text in cmake_sources().items()
+                    if re.search(r"(?m)^\s*set\(CMAKE_CXX_STANDARD 20\)", text)}
+        self.assertIn("build/cmake/GyoBuild.cmake", projects)
+        for path, text in sorted(projects.items()):
             with self.subTest(project=path):
-                text = (ROOT / path).read_text(encoding="utf-8")
                 self.assertRegex(text, r"(?m)^set\(CMAKE_CXX_SCAN_FOR_MODULES OFF\)$")
                 self.assertLess(text.index("set(CMAKE_CXX_STANDARD 20)"), text.index("set(CMAKE_CXX_SCAN_FOR_MODULES OFF)"))
         build = (ROOT / "build/cmake/GyoBuild.cmake").read_text(encoding="utf-8")

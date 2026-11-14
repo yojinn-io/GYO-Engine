@@ -1,6 +1,7 @@
 """Verify real CMake selection reaches CI matrices and release preflight unchanged."""
 
 import contextlib
+import csv
 import io
 import json
 from pathlib import Path
@@ -105,6 +106,24 @@ class RegistryMatrixTests(unittest.TestCase):
         with mock.patch.object(app_registry.subprocess, "run", side_effect=fake_export), \
                 self.assertRaisesRegex(ValueError, "invalid tool selection"):
             app_registry.export_tools(self.tool_registry, repository_root=self.root)
+
+    def test_repository_registries_export_for_ci(self):
+        # The registries of this checkout, whatever they hold. The release
+        # rules (a release tool on every platform, a packageable default
+        # variant) are checked by the export alone, and the workflows export
+        # only after the pull request gate; this case exports at the gate.
+        # No tool is selected exactly when none is registered.
+        with (ROOT / "engine/config/tools.csv").open(encoding="utf-8-sig", newline="") as rows:
+            registered = [row["name"] for row in csv.DictReader(rows)]
+        with contextlib.redirect_stderr(io.StringIO()) as stderr:
+            tools = app_registry.export_tools()
+            pairs = export_registry()
+        self.assertEqual(list(tools), list(RELEASE_PLATFORMS))
+        self.assertEqual(all(tools.values()), bool(registered), tools)
+        self.assertEqual("No tool is registered" in stderr.getvalue(), not registered)
+        selected = {tool.split(":", 1)[0] for row in tools.values() for tool in row}
+        self.assertLessEqual(selected, set(registered))
+        self.assertTrue(all(platform in RELEASE_PLATFORMS for _, platform in pairs))
 
     def test_prepare_release_accepts_empty_registry_without_remote_work(self):
         self.write_registry("")

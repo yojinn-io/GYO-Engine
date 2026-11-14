@@ -1,0 +1,500 @@
+{
+  "version": 1,
+  "description": "Mutants of the OS boundary guard (tests/common/os/os_boundary_guard.py) that its self-test must kill. Each mutant breaks the guard itself; it is killed only when the named self-test case fails. Run from the repository root: python3 -B tests/common/mutation/run_mutations.py --build-dir <any existing directory> --catalog tests/common/os/guard_mutations.json (no target is built; remove tests/common/os/__pycache__ first so no stale bytecode is read). Written by v8-arch-gyo2-r0b3-closeout (adversarial check of R0b-3 by another model).",
+  "mutants": [
+    {
+      "id": "bg-required-tests",
+      "what": "tests is no longer a required root",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "REQUIRED_ROOTS = (\"engine\", \"tests\")",
+      "replace": "REQUIRED_ROOTS = (\"engine\",)",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_an_empty_tests_root_fails "
+    },
+    {
+      "id": "bg-required-none",
+      "what": "no root is required: an empty engine root is skipped",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "REQUIRED_ROOTS = (\"engine\", \"tests\")",
+      "replace": "REQUIRED_ROOTS = ()",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_an_empty_root_fails "
+    },
+    {
+      "id": "bg-required-missing",
+      "what": "a required root that does not exist is skipped instead of reported",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "            if top in REQUIRED_ROOTS:",
+      "replace": "            if path == EMPTY_ROOT and top in REQUIRED_ROOTS:",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_a_missing_required_root_fails "
+    },
+    {
+      "id": "bg-skip-unnamed",
+      "what": "a skipped product root is not named",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "skipped.append(f\"{top} ({path})\")",
+      "replace": "pass",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_product_roots_without_sources_are_skipped_and_named "
+    },
+    {
+      "id": "bg-products-never-scanned",
+      "what": "product roots are never scanned, with or without sources",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "        if not base.is_dir():\n            yield top, None, MISSING_ROOT",
+      "replace": "        if top not in REQUIRED_ROOTS or not base.is_dir():\n            yield top, None, MISSING_ROOT",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_a_product_root_is_scanned_again_once_it_holds_sources "
+    },
+    {
+      "id": "bg-main-silent-skip",
+      "what": "the command line does not print the skipped roots",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "    for entry in skipped:\n",
+      "replace": "    for entry in []:\n",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_main_names_skipped_roots_and_passes "
+    },
+    {
+      "id": "bg-main-exit-0",
+      "what": "the command line exits 0 with findings",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "        return 1\n    print(\"OS boundary guard: no OS knowledge",
+      "replace": "        return 0\n    print(\"OS boundary guard: no OS knowledge",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_main_reports_findings_with_exit_status_1 "
+    },
+    {
+      "id": "bg-r4-render-excluded",
+      "what": "R4 excludes the render shader tool again",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "R4_EXCLUDED = (\"engine/os/\",)",
+      "replace": "R4_EXCLUDED = (\"engine/os/\", \"engine/render/shaders/pipeline/\")",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_render_shader_tool_is_runtime_code_for_r4 "
+    },
+    {
+      "id": "bg-r4-os-headers",
+      "what": "R4 covers engine/os public headers",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "R4_EXCLUDED = (\"engine/os/\",)",
+      "replace": "R4_EXCLUDED = ()",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_direct_file_access_in_tests_and_in_engine_os_is_allowed "
+    },
+    {
+      "id": "bg-suffix-h",
+      "what": ".h files are not scanned",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "\".h\", ",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_every_source_suffix_is_scanned "
+    },
+    {
+      "id": "bg-suffix-c",
+      "what": ".c files are not scanned",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "{\".c\", ",
+      "replace": "{",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_every_source_suffix_is_scanned "
+    },
+    {
+      "id": "bg-suffix-mm",
+      "what": ".mm files are not scanned",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": ", \".mm\"}",
+      "replace": "}",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_every_source_suffix_is_scanned "
+    },
+    {
+      "id": "bg-suffix-inl",
+      "what": ".inl files are not scanned",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "\".inl\", ",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_every_source_suffix_is_scanned "
+    },
+    {
+      "id": "bg-excluded-wider",
+      "what": "one more directory is never scanned",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "EXCLUDED = (\"tests/common/os/\", \"third_party/\", \"build/target/\")",
+      "replace": "EXCLUDED = (\"tests/common/os/\", \"tests/common/time/\", \"third_party/\", \"build/target/\")",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_exclusions_and_required_roots_are_pinned "
+    },
+    {
+      "id": "bg-os-tests-scanned",
+      "what": "the OS layer's own tests are scanned",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "EXCLUDED = (\"tests/common/os/\", \"third_party/\", \"build/target/\")",
+      "replace": "EXCLUDED = (\"third_party/\", \"build/target/\")",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_os_layer_tests_may_assert_per_os "
+    },
+    {
+      "id": "bg-engine-allowlist-scope",
+      "what": "the Engine allowlist may list product files",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "ENGINE_ALLOWLIST_SCOPE = (\"engine/\", \"tests/common/\")",
+      "replace": "ENGINE_ALLOWLIST_SCOPE = (\"engine/\", \"tests/common/\", \"apps/\", \"tests/\")",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_engine_allowlist_covers_only_engine_and_common_tests "
+    },
+    {
+      "id": "bg-macro-dropped",
+      "what": "an OS macro leaves the R2 list",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "\"__FreeBSD__\", ",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_rule_lists_do_not_shrink "
+    },
+    {
+      "id": "bg-header-dropped",
+      "what": "an OS header leaves the R1 list",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "r\"pthread\\.h\", ",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_rule_lists_do_not_shrink "
+    },
+    {
+      "id": "bg-api-dropped",
+      "what": "an OS API leaves the R3 list",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "\"GetLastError\", ",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_rule_lists_do_not_shrink "
+    },
+    {
+      "id": "bg-fs-op-dropped",
+      "what": "a file-system operation leaves the R4 list",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "\"create_directories\", ",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_rule_lists_do_not_shrink "
+    },
+    {
+      "id": "bg-elif-unchecked",
+      "what": "#elif, #elifdef and #elifndef conditions are not checked",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "(?:if|ifdef|ifndef|elif|elifdef|elifndef)",
+      "replace": "(?:if|ifdef|ifndef)",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_every_conditional_directive_is_checked "
+    },
+    {
+      "id": "bg-new-site-allowed",
+      "what": "more findings than allowlisted pass",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "        elif len(lines) > allowed[0]:",
+      "replace": "        elif False:",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_new_site_fails "
+    },
+    {
+      "id": "bg-no-shrink",
+      "what": "fewer findings than allowlisted pass",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "        if actual < count:",
+      "replace": "        if False:",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_removed_site_asks_to_shrink "
+    },
+    {
+      "id": "bg-entry-of-missing-file",
+      "what": "an allowlist entry of a missing file is accepted",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "            if not (root / path).is_file():",
+      "replace": "            if False:",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_missing_file_fails "
+    },
+    {
+      "id": "bg-os-sources-checked",
+      "what": "engine/os/src is checked for OS branches",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "    if os_source:\n        return\n",
+      "replace": "",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_os_header_in_engine_os_sources_is_allowed "
+    },
+    {
+      "id": "bg-unlisted-finding-dropped",
+      "what": "a finding without an allowlist entry is dropped",
+      "file": "tests/common/os/os_boundary_guard.py",
+      "find": "        if allowed is None:\n            problems.extend(lines)",
+      "replace": "        if allowed is None:\n            pass",
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests/common/os",
+        "-p",
+        "test_*.py"
+      ],
+      "expect": "(FAIL|ERROR): test_os_header_outside_engine_os_is_reported "
+    }
+  ]
+}
