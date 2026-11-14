@@ -34,8 +34,8 @@
 
 | # | 規則 | 來源 |
 |---|---|---|
-| N7 | 這些詞在中文文件裡保留英文原詞：World、Entity、System、Schedule、Resource、Product（原寫 App，使用者 2026-11-14 改）、Extract、runner、stamp、`Plugin`（指型別時）、`Commands` | 表 |
-| N8 | 這些詞用中文：ECS 元件、組裝（setup）、同步點、交換點、決定性區、plugin 套件、通用機制、產品登記檔、去留登記表 | 表；「組裝（setup）」是你的決定（2026-11-14） |
+| N7 | 這些詞在中文文件裡保留英文原詞：World、Entity、System、Schedule、Resource、Product（原寫 App，使用者 2026-11-14 改）、Extract、runner、stamp、`Plugin` 與 `Module`（指型別時）、`Commands` | 表 |
+| N8 | 這些詞用中文：ECS 元件、組裝（setup）、同步點、交換點、決定性區、plugin 套件、通用機制、產品登記檔、Module 登記檔、Plugin 登記檔、去留登記表 | 表；「組裝（setup）」是你的決定（2026-11-14） |
 | N9 | 「資源」留給預算與 OS 資源；ECS 的寫 Resource。「部件」指 AGENTS 的 Component；ECS 的寫「ECS 元件」 | 表 |
 | N10 | 文件的語言照檔案原本的語言；commit 與 PR 用日語；程式註解用英文 | 既有的規則，不變 |
 
@@ -63,9 +63,8 @@
 |---|---|---|---|
 | N18 | System 的名字是動詞片語 | `StepMovement`、`ExtractMeshes` | 你的決定（第 2 條） |
 | N19 | ECS 元件與 Resource 的名字是名詞 | `Position`、`FrameTime` | 你的決定（第 2 條） |
-| N20 | `Plugin` 型別的名字以 `Plugin` 結尾 | `AudioPlugin` | 你的決定（第 2 條） |
-| N20b | 登記的單位有兩種型別：`GYO::Kernel::Module`（Engine 裡的 Module 用）與 `GYO::Kernel::Plugin`（Engine 外的 Plugin 用）。`Module` 型別的名字以 `Module` 結尾。兩份清單叫「Module 登記檔」「Plugin 登記檔」 | `SdlModule`、`NetPlugin` | 你 2026-11-14 的決定（拆成兩種型別；名字授權照命名規範訂，`v8-arch-gyo2-module-plugin-registers`）。程式還沒改 |
-| N21 | plugin 套件的目錄名小寫 | `plugins/sdl/` | 提案；層與目錄叫 plugins 是你的決定（2026-11-11） |
+| N20 | `Plugin` 型別的名字以 `Plugin` 結尾；`Module` 型別的名字以 `Module` 結尾 | `AudioPlugin`；`SdlModule` | 你的決定（第 2 條）。Module 這一半：使用者 2026-11-14 把登記單位拆成 `Module` 與 `Plugin` 兩種型別，名字交由這個會話照規範起（「你參照命名規則起就行」），比照 Plugin 這一半；見[同詞異義表](rebuild-vocabulary.zh-Hant.md)第 6 節第 2 點 |
+| N21 | plugin 套件的目錄名小寫 | `plugins/net/`（SDL 是 Module，不放 plugins，使用者 2026-11-14） | 提案；層與目錄叫 plugins 是你的決定（2026-11-11） |
 | N22 | 事件的名字用過去式 | `AssetLoaded` | 你的決定（第 2 條） |
 | N22b | schedule 與 stage 用階段名 | `Loading`、`FixedUpdate`；`Simulate` | 你的決定（第 2 條） |
 | N23 | World＝前綴（照 Bevy）：渲染 World 的資料用 `Gpu*`、`Extracted*`；boundary 輸入帶 `Sample` 或 `Input`；文件的 World 與主 World 不加前綴 | `ExtractedMeshes`、`HostClockSample` | 你的決定（第 3 條） |
