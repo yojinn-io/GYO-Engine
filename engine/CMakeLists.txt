@@ -2,6 +2,9 @@
 # Math sits directly above it. Every module may link either.
 add_subdirectory(base)
 add_subdirectory(math)
+# The entity store is a header-only leaf directly above Base, like Math
+# (docs/architecture/entity-store.md).
+add_subdirectory(entity_store)
 # The general mechanism (Registry, System contract, Scheduler, Plan) is a leaf
 # directly above Base.
 add_subdirectory(kernel)

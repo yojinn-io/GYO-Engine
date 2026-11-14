@@ -78,6 +78,7 @@ struct SystemRecord {
     SystemOptions options;
     ResolveFn resolve;
     bool extractOnly;
+    RunFn run;
     std::source_location source;
     std::uint32_t owner;
     RegistrationSeq seq;
@@ -93,6 +94,7 @@ struct HookRecord {
     TypeKey component;
     HookTrigger trigger;
     ResolveFn resolve;
+    RunFn run;
     std::source_location source;
     std::uint32_t owner;
     // Filled at finish.
@@ -112,7 +114,14 @@ struct RegistryData {
     std::vector<SetRecord> sets;
     std::vector<SystemRecord> systems;
     std::vector<HookRecord> hooks;
+    // The World's storage factories, one per component, resource and event id
+    // (Detail/Storage.hpp); the World is made from them (World.cpp).
+    std::vector<MakeColumnFn> columnMakers;
+    std::vector<MakeResourceFn> resourceMakers;
+    std::vector<MakeEventsFn> eventMakers;
     std::vector<TypeKey> allotterDeclarations;
+    std::vector<AllotterOps> allotterDeclarationOps;
+    AllotterOps allotterOps;
     std::vector<std::uint32_t> allotterOwners;
     std::optional<ResourceId> allotter;
     ResourceId kernelSettings = 0;
