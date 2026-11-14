@@ -101,6 +101,7 @@
 | `v8-arch-gyo2-diagrams-rename-only` | 2026-11-14（使用者，主會話）。「mechanism-runtime.svg 這個圖，你改圖裡面的名字就行了。邏輯和流向幾乎沒變。」「control-plane-revised.svg 這個也是。」→ 兩張圖在 gyo2 線只換名字後沿用（Runtime→Product、Host→組裝（setup）與 runner、欄→ECS 元件、句柄→System 參數、change tick→stamp、外部服務→World 外的 IO）；結構與箭頭不動。換掉的清單與沒動的部分記在[三張圖的重新評審](rebuild-diagram-review.zh-Hant.md)第 7 節。`networking-systems.svg` 不動。 |
 | `v8-arch-gyo2-control-plane-base-contract` | 2026-11-14（使用者，主會話）。「control-plane-revised.svg 不過要重新調整一下，這個是基礎的 System 契約」→ 圖二調整成只含基礎的 System 契約：拿掉決定性區、digest、Gateway 與 Snapshot 的寫法；歧義預設穩定平手並讓人看得到、嚴格模式選用；下半換成每個 System 都受的三處約束。調整的清單在[三張圖的重新評審](rebuild-diagram-review.zh-Hant.md)第 7 節。調整的範圍是架構師照評審第 3 節的判定做的，待使用者看圖確認。 |
 | `v8-arch-gyo2-network-diagram-after-mechanism` | 2026-11-14（使用者，主會話）。「這 2 幅圖先記著。網絡那幅先不急，你把 Engine 機制實現了再說。」→ `mechanism-runtime.svg` 與 `control-plane-revised.svg`（gyo2 線改過的版本）留作通用機制的參考圖；`networking-systems.svg` 不動，等通用機制實作完成（R2）之後再處理，和「PvP 最後」一致。這句話是排順序，不是開工的指示；R2 之前的關卡照舊等使用者確認。 |
+| `v8-arch-gyo2-build-from-1111-concept` | 2026-11-14（使用者，主會話）。「先建立底層機制…架構圖都給你了，之前的 Master 裡又有一批設計稿。你…拿過來用呀，如果你分不清新舊，你問下就可以了。」並重貼先前經架構師轉達的內容（概念層＝blueprint、mechanism、networking、spike-report，11 日之後幾乎沒動、大多站得住；大量堆積在 11 日之後；spec v0.2 只取概念部分；K.3 採規格的幾項與 mechanism 的規則表要用三類產品重過）。→ **基準定為 11 月 11 日的概念層（f8b6f74b 的四份文件）加 gyo2 線改過的兩張圖；直接實作通用機制，不再先做盤點與分析；分不清新舊時用短問題問使用者。** 架構師的錯：收到「開始」後去跑三份盤點（被使用者停掉）；接著搬了 master 11 月 13 日的 `engine/kernel`（11 日之後的堆積，含決定性區），已撤回（分支 `claude/gyo2-mechanism`，8c104e06）。程式起點改為 11 日的 spike。 |
 
 ## 未定
 
@@ -239,6 +240,8 @@
 - 2026-11-14 **開始：從單機與工具的需要查通用機制缺什麼**（使用者「開始」；概念層重構稿 1.6 (4) 的那一輪，等於 R1 的前半）。做法：三份盤點（Opus／high，唯讀）——單機＝git 歷史裡的 `apps/object_fps`（`0d05cc4e~1`，真實的單機戰役產品；先前說「②沒有真實產品」不對）、工具＝master 的四個工具與三份架構文件、成熟參考＝本機 Bevy 的遊戲與工具範例——→ 主會話統合成一份文件（每個 Feature 一列：要什麼、概念層有沒有、對應哪個未判項或是新的缺口）→ 別模型檢查（Opus／xhigh）→ 交使用者。只列需要與缺口，不做設計決定。估計 1.5 小時，超過 2 小時 15 分停下回報。證據：主 checkout `build/evidence/rebuild-r1-needs/`。
 
 - 2026-11-14 **上一條的三份盤點都被使用者停掉**（三個子 agent 先後收到「stopped by user」，沒有附說明）。沒有任何一份交回報告；沒有重開。這一批目前沒有產出，等使用者說明要不要做、怎麼做。
+
+- 2026-11-14 **通用機制的實作開始**（`v8-arch-gyo2-build-from-1111-concept`）：分支 `claude/gyo2-mechanism`（從 `claude/gyo2-r0b-delete` 切出，工作樹 `../GYO-Engine-r0b`）。基準＝11 日的概念層與兩張圖；程式從 11 日的 spike（`spikes/kernel`，f8b6f74b 的版本）搬起，照機制圖的鏈做：型別登記→id、簽名→存取集合、分析→衝突邊與順序邊、執行計畫、Serial Executor、最小的 World。上面「從單機與工具的需要查缺什麼」那一批取消。
 
 ## 下一步
 
