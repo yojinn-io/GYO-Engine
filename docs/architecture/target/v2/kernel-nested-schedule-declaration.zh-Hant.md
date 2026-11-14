@@ -121,7 +121,15 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 共同的一條：`KernelSettings` 不給讀。它是驗證的開關，現在的規則不准任何 System 讀（D-E18），理由是開關不能影響模擬結果。
 
-**我的建議：加在 `ExclusiveWorld` 上。** 理由：規則一致（獨占的 System 一律只能寫 `Shared` 的資料）。通用的時間本來就會有兩個寫者，不論選哪個都得標 `Shared`；第三個選項多保住的只有 `FixedTime` 一個。要說清楚的一點：之後可以在旁邊加第三個選項的寫法，原本的寫法不會壞；但要讓它發揮作用，得把 `FixedTime` 從 `Shared` 改回單一寫者，那時在這段期間合法寫它的其他 System 會在啟動時報錯。中間少掉的保護不是免費拿得回來的。
+**已定（使用者 2026-11-15，`v8-arch-gyo2-exclusive-declared-writes`）：`ExclusiveWorld` 帶寫入的宣告。** 原話：「選項三，這是我想選的，首先只有這個類似於玩家狀態數據，如果被shared，我但是出問題我無法查出誰寫的。」（側邊會話，經四樣格式轉達；完整紀錄在 HANDOFF。）我原本建議的是第一欄。
+
+照這個決定，我補的細節（**還沒有經你判**，不同意就改）：
+- **寫 Resource 一律要列在宣告裡。** 沒標 `Shared` 的列了就算進「只有一個寫者」的啟動檢查；標 `Shared` 的也要列，這樣寫者清單才列得出它。沒列的 Resource 經 `ExclusiveWorld` 寫，回 Err。
+- **讀不必列**：讀任何 Resource（`KernelSettings` 除外）。
+- **列出來的必須是 (b) 區的 Resource**，否則啟動時報錯（獨占的 System 不碰 (c) 區的資料，既有規則 S-13）。
+- **宣告只管 Resource。** 元件的規則照舊（只能寫 (b) 區 `Shared` 的元件，不必列）。要不要讓元件也能列，不在這一批定。
+- 它仍然是那個 System 唯一的參數（守衛 J-10 不變）。
+- 已知的限制（你定之前看過）：通用的時間有兩個寫者，仍然得標 `Shared`；兩個寫者都列得出來，但第三個人來寫，啟動時不會報錯。
 
 ### 3.3 能跑哪幾張：「任何一張 schedule」包不包含 Startup 與 extract
 
@@ -172,7 +180,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 ## 4. 要改的程式
 
-以下照我的建議寫（各層各自的佇列；Resource 加在 `ExclusiveWorld` 上；Startup 與 extract 不准巢狀跑；介面不交出指標）。你選別的，這張表跟著改。
+以下照已定的兩件（各層各自的佇列；`ExclusiveWorld` 帶寫入的宣告）與我對另外兩件的建議（Startup 與 extract 不准巢狀跑；介面不交出指標）寫。你選別的，這張表跟著改。
 
 | # | 位置 | 現在 | 改成 |
 |---|---|---|---|
@@ -185,7 +193,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | 7 | 同檔：寫入用的 stamp | 進場時的 stamp | `RunSchedule` 回來後取一個新的 stamp（計數加一，不是沿用） |
 | 8 | `Executor.cpp` 的 `Fail` 與步驟的迴圈 | 設成中斷並呼叫錯誤處理；步驟之間不看狀態 | 巢狀時設成中斷、留下錯誤，不呼叫處理函式；裡面的錯誤併進外層這次呼叫的清單；最外層統一呼叫一次。每個 System 回來後看 World 有沒有中斷，中斷就停；沒有留下錯誤（例外）時補一個。中斷的 World 再被要求跑：不執行，回傳留下的錯誤 |
 | 9 | `detail/Context.hpp`、`Product.hpp` | System 拿不到執行器 | 呼叫的上下文帶執行器的指標；`ExclusiveWorld::RunSchedule(名字)`。註：T2 會把 `Product::Run` 改名，T5 會讓一個 `Product` 有多個 World，這個指標要指到「這個 World 的執行器」 |
-| 10 | `Params.hpp`、`World.cpp` | `ExclusiveWorld` 沒有 Resource 的介面；「只能寫 (b) 區 `Shared`」的檢查只認得元件 | 加讀與寫值；檢查補上 Resource 的版本；`KernelSettings` 回 Err |
+| 10 | `Params.hpp`、`SystemTraits.hpp`、`World.cpp`、`Registry.cpp` | `ExclusiveWorld` 沒有 Resource 的介面，也不帶任何宣告 | 新的寫法 `ExclusiveWorld<Writes<…>>`（不帶宣告的 `ExclusiveWorld` 照舊可用，名字怎麼並存實作時定）。從簽名推存取：列出來的 Resource 記成這個 System 的寫入，所以「只有一個寫者」的啟動檢查（D-E2）與寫者清單都數得到它。啟動檢查加一條：列出來的必須是 (b) 區的 Resource。執行期：讀任何 Resource（`KernelSettings` 回 Err）；寫沒列的回 Err |
 | 11 | `Params.hpp` | `Get` 回傳指標、`GetMut` 回傳 `Mut` | 換成在閉包裡存取；閉包裡呼叫 `RunSchedule` 回 Err |
 | 12 | `KernelError.hpp`、`Registry.cpp` 的 `ToString` | — | 新增錯誤碼（加在列舉的最後）：schedule 正在執行中、名字不存在、這張不能巢狀跑、hook 裡不能跑、閉包裡不能跑、巢狀執行被例外中止 |
 | 13 | 不改、但要寫測試固定下來的 | tick 由裡面那張推進；hook 的佇列每張 schedule 一個；事件每個 tick 修剪；巢狀的同步點期間，呼叫的上下文會還原成外層的 | 行為不變 |
@@ -194,7 +202,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 **作者的負擔（不改程式，但要寫明）**：獨占的 System 和同一個 stage 的每個 System 都算衝突。打開嚴格模式時，同一個 stage 的每個 System 都得和它寫明先後；(c) 區的 System 不論有沒有嚴格模式都要寫。
 
-**不碰**：`World::ApplySync` 套用的規則、事件的讀法、`Scheduler.cpp`、`Fingerprint.cpp`、`Registry.cpp` 的啟動檢查（只加 `ToString` 的幾行）、漏斗工具、`.github/`、`build/`。
+**不碰**：`World::ApplySync` 套用的規則、事件的讀法、`Scheduler.cpp`、`Fingerprint.cpp`、漏斗工具、`.github/`、`build/`。`Registry.cpp` 只動第 10 項的啟動檢查與第 12 項的 `ToString`。
 
 **和別的分支的先後**：PR #229 與 #233（疊在 #229 上）都改 `Registry.cpp`、`Fingerprint.cpp`、golden 與突變清單 `mutations.json`。這一批等它們合併後才開工。
 
@@ -226,17 +234,18 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 |---|---|---|
 | 概念稿 E5「System 執行中再跑 System 是 Programmer Error」 | 拿掉 | 跟著你定的 `v8-arch-gyo2-time-plan-two`（選固定步方案一的直接結果） |
 | 規格 E.2 第 1 步「`Run` 斷言 World 是閒置」；規格 A 的狀態「執行中（哪張、第幾步）」 | 加上「或由獨占 System 發起」；狀態變成一疊 | 跟著上一條 |
-| target `kernel` **DI-KS 1**、規格 S-13（`ExclusiveWorld` 的存取與 S-13 的理由句） | 加上「可以跑 schedule」；「讀全部」補上「`KernelSettings` 除外」；理由句補一句：它跑的 schedule 裡的 System 各自照自己的宣告被數，不經由它 | **DI** |
+| target `kernel` **DI-KS 1**、規格 S-13（`ExclusiveWorld` 的存取與 S-13 的理由句） | 加上「可以跑 schedule」；「讀全部」補上「`KernelSettings` 除外」；加上「寫 Resource 要列在宣告裡，列出來的算寫者」。理由句「寫者的規則不必列舉它」要改：它列出來的 Resource 被數；它跑的 schedule 裡的 System 各自照自己的宣告被數 | **DI** |
+| target `kernel` **DI-KS 6**、規格 B.3（「只有一個寫者」的計數） | 計數的對象加上「獨占的 System 列出來的 Resource」 | **DI**（只收緊：以前數不到的現在數得到） |
 | target `kernel` **DI-KS 9**（變更只在宣告的同步點套用；結果不依記錄順序） | 「各層各自的佇列」時：加一句「記下的變更在記它的那張 schedule 的同步點套用」，其餘不變。選自動加同步點時兩句都要改 | **DI** |
 | target `kernel` **DI-KS 6**（Startup 的 System 不算寫者） | 不准巢狀跑或由 Kernel 保證時：不變。放行時：要改 | 放行時是 **DI** |
 | 規格 **W-4**、A.4 與守衛 J-4 | 獨占 System 的句柄在巢狀回來後重新有效（第 6 項）；從它拿出去的參考照 W-4 失效。J-4 加巢狀的案例 | 句柄那一半是放寬，實作後列五點請你核准 |
 | **LIM-3**、規格 B.5 | 維持既有的限界時：各補一筆「巢狀時，呼叫內的舊指標」。介面不交出指標時：註明 `ExclusiveWorld` 沒有這個形狀 | 你同意過的限界的文字變更 |
 | target `world` DI 3、規格 E.2「stamp 依執行計畫的順序推進」 | 巢狀回來後在計畫的步驟之外多取一個 stamp（第 7 項）。stamp 仍然只增不減、執行歷史相同則序列相同 | **DI**（文字要補） |
-| 守衛 J-45（`ExclusiveWorld` 只能寫 (b) 區 `Shared` 的資料） | 加 Resource 的案例；既有案例的寫法跟著介面改，判定不變 | 只收緊 |
+| 守衛 J-45（`ExclusiveWorld` 只能寫 (b) 區 `Shared` 的資料） | 元件的判定不變（寫法跟著介面改）。Resource 是新的規則（列了才能寫），另加案例 | 只收緊 |
 | 守衛 J-35（出錯只記一次） | 加巢狀的案例 | 只收緊 |
-| 守衛 J-10（`ExclusiveWorld` 是唯一的參數） | 不變（選放寬「唯一的參數」時才要改，另列五點） | — |
+| 守衛 J-10（`ExclusiveWorld` 是唯一的參數） | 不變；加一案：帶宣告的寫法也必須是唯一的參數 | 只收緊 |
 | 「同步點只在 stage 結尾與宣告的位置」（規格 D.2） | 不變（選自動加同步點時才要改） | — |
-| 執行計畫、Registry、C 指紋的 golden（J-18 等） | **不變**：不碰 `Scheduler.cpp` 與 `Fingerprint.cpp`，`ExclusiveWorld` 的存取種類不變，新的錯誤碼加在最後。#229 會把這些 golden 改成版本 2，合併後再確認一次 | 已查 |
+| 執行計畫、Registry、C 指紋的 golden（J-18 等） | **不變**：不碰 `Scheduler.cpp` 與 `Fingerprint.cpp`；不帶宣告的 `ExclusiveWorld` 存取種類不變，既有的 golden 沒有用到帶宣告的寫法；新的錯誤碼加在最後。#229 會把這些 golden 改成版本 2，合併後再確認一次 | 已查 |
 | 規格 H.5 的 H-A1、H-9、DI-KS 12（回滾與重跑只由外面在閒置時呼叫） | **不變**，不在這一批。「不能跑正在執行中的那一張」是這一批的新規則，另給編號 | — |
 
 ---
@@ -267,10 +276,13 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | 跑自己 | 跑正在執行中的 schedule：回 Err。A 跑 B、B 再跑 A 也是 |
 | 兩層 | A 跑 B、B 裡的獨占 System 跑 C：順序與 tick 都對 |
 | hook | 裡面那張的同步點觸發 hook，照常執行；hook 裡呼叫 `RunSchedule`：回 Err |
-| Resource | 讀任何 Resource；寫 `Shared` 的成功；寫沒標 `Shared` 的或 (c) 區的回 Err；讀 `KernelSettings` 回 Err |
+| Resource：讀 | 讀任何 Resource；讀 `KernelSettings` 回 Err |
+| Resource：寫 | 列在宣告裡的（單一寫者的、`Shared` 的各一）寫得進去；沒列的回 Err |
+| Resource：寫者的計數 | 獨占的 System 列了一個單一寫者的 Resource，另一個 System 也用 `ResMut` 寫它：啟動時報「有第二個寫者」，兩個 System 都被點名 |
+| Resource：宣告的檢查 | 列了 (c) 區的 Resource：啟動時報錯。帶宣告的 `ExclusiveWorld` 加上第二個參數：編譯不過 |
 | 指紋不變 | 有獨占 System 的 schedule，執行計畫與三種指紋和加這一批之前相同 |
 
-**判定 2：檢出力。** 突變清單在實作前由實作者（Opus）定案，交別的模型（Fable）檢查——找出「把實作改壞而測試仍然全過」的地方並補上。至少包含：跑完設回閒置；成員檢查整個拿掉；跑過 schedule 的 System 完全不查成員；進入巢狀前只重拍、不先比對；任何呼叫都可以進入巢狀；外層的紀錄在裡面那張的同步點被套用；巢狀前不重拍快照；巢狀後不更新句柄；巢狀後不換 stamp；錯誤處理呼叫兩次；吞掉錯誤後 World 恢復；外層回別的 Err 時丟掉裡面那個；中斷的 World 照跑；例外之後深度不還原；跑自己不擋；跑自己只查最內層；hook 裡可以跑；閉包裡可以跑；Startup 或 extract 也放行；名字不存在改成斷言；Resource 的寫入不查；`KernelSettings` 也給讀。只有預期的那個案例失敗才算抓到；建置失敗不算。
+**判定 2：檢出力。** 突變清單在實作前由實作者（Opus）定案，交別的模型（Fable）檢查——找出「把實作改壞而測試仍然全過」的地方並補上。至少包含：跑完設回閒置；成員檢查整個拿掉；跑過 schedule 的 System 完全不查成員；進入巢狀前只重拍、不先比對；任何呼叫都可以進入巢狀；外層的紀錄在裡面那張的同步點被套用；巢狀前不重拍快照；巢狀後不更新句柄；巢狀後不換 stamp；錯誤處理呼叫兩次；吞掉錯誤後 World 恢復；外層回別的 Err 時丟掉裡面那個；中斷的 World 照跑；例外之後深度不還原；跑自己不擋；跑自己只查最內層；hook 裡可以跑；閉包裡可以跑；Startup 或 extract 也放行；名字不存在改成斷言；沒列的 Resource 也給寫；列出來的不算進寫者的計數；列 (c) 區的不擋；`KernelSettings` 也給讀。只有預期的那個案例失敗才算抓到；建置失敗不算。
 
 **判定 3：沒有回歸。** 本機完整 ctest 全過；三平台 L1（linux-x64、windows-x64、macos-arm64）全過。既有測試除了第 5 節列的，一個判定都不改。
 
@@ -288,7 +300,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | 審查 | Fable（主會話） | 和實作者不同模型 |
 | 突變清單的對抗檢查、第 5 節五點的驗證 | Fable／high | 和定清單的人（Opus）不同模型 |
 
-時間的估計：實作與測試 5 到 8 小時（agent 的時間），審查與對抗檢查 1 到 2 小時。超過估計的 1.5 倍，或同一個問題換了兩次做法還沒結論，就停下來回報（AGENTS §14）。
+時間的估計：實作與測試 6 到 10 小時（agent 的時間；帶宣告的寫法要改從簽名推存取與啟動檢查，比修訂 2 初估多），審查與對抗檢查 1 到 2 小時。超過估計的 1.5 倍，或同一個問題換了兩次做法還沒結論，就停下來回報（AGENTS §14）。
 
 ---
 
@@ -296,7 +308,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 設計第 8 節已經列了七項。這一批的差分：
 
-- **邊界**：Kernel 的執行從「一次一張 schedule」變成「可以巢狀」；`ExclusiveWorld` 的能力多了「跑 schedule」與 Resource 的讀寫，讀寫元件的介面換形狀。
+- **邊界**：Kernel 的執行從「一次一張 schedule」變成「可以巢狀」；`ExclusiveWorld` 的能力多了「跑 schedule」與 Resource 的讀寫（寫要宣告），讀寫元件的介面換形狀。
 - **依賴方向**：不變。
 - **Ownership**：「什麼時候跑哪一張 schedule」原本完全屬於 Kernel 外面的呼叫者；之後 World 裡的獨占 System 也能決定。
 - **為什麼不能更小**：比它小的做法有兩個（登記式、由執行計畫重複執行），你已經選了開放給所有作者的這一個。
@@ -320,6 +332,6 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 - 修訂 2 改寫後沒有再送檢查。
 - Bevy 的做法只根據偵察報告第八節，其中一部分是偵察者讀碼的推論；沒有人重讀 Bevy 原始碼。
 - **巢狀的組成不在 C 指紋裡。** C 指紋只涵蓋有 (c) System 的 schedule。「哪個 (b) 區的獨占 System、跑哪一張 (c) 的 schedule、跑幾次」不在裡面。以前這是外面的呼叫者決定的（同樣不在指紋裡），之後變成產品登記的 System 決定。只在 Client 多跑一次固定步，規格 H-4 抓不到。這一批不處理，留給 PvP 移植時定。
-- 閉包介面的型別細節要到實作時才定；同時讀寫多個元件的寫法還沒設計。
+- 帶宣告的寫法與不帶宣告的 `ExclusiveWorld` 兩個名字怎麼並存、閉包介面的型別細節，要到實作時才定；同時讀寫多個元件的寫法還沒設計。
 - 回滾、Inspector、復原都還沒設計。這個入口夠不夠它們用，沒有分析。
 - 效能沒有量。
