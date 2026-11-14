@@ -100,6 +100,7 @@
 | `v8-arch-gyo2-agents-s6-terms` | 2026-11-14（使用者，主會話）。「AGENTS §6 照你擬的改」。只改 gyo2 線的 AGENTS.md §6（master 的不動，「以 GYO2 優先」）：Application／Editor → Product（Game と Tool の二種類）；「Engine と Product・Tool の間の再利用可能な層」→ Module と Plugin の区別と判断の一文（それがないと完全な Game が成立しないか）；adapter の置き場所はその一文で決める；MUST／MUST NOT の用語を合わせる。§6 以外（§8 的 Application／Editor、各處把 Tool 與 Product 並列的寫法）還沒掃，待使用者決定要不要交風紀委員全篇處理。 |
 | `v8-arch-gyo2-diagrams-rename-only` | 2026-11-14（使用者，主會話）。「mechanism-runtime.svg 這個圖，你改圖裡面的名字就行了。邏輯和流向幾乎沒變。」「control-plane-revised.svg 這個也是。」→ 兩張圖在 gyo2 線只換名字後沿用（Runtime→Product、Host→組裝（setup）與 runner、欄→ECS 元件、句柄→System 參數、change tick→stamp、外部服務→World 外的 IO）；結構與箭頭不動。換掉的清單與沒動的部分記在[三張圖的重新評審](rebuild-diagram-review.zh-Hant.md)第 7 節。`networking-systems.svg` 不動。 |
 | `v8-arch-gyo2-control-plane-base-contract` | 2026-11-14（使用者，主會話）。「control-plane-revised.svg 不過要重新調整一下，這個是基礎的 System 契約」→ 圖二調整成只含基礎的 System 契約：拿掉決定性區、digest、Gateway 與 Snapshot 的寫法；歧義預設穩定平手並讓人看得到、嚴格模式選用；下半換成每個 System 都受的三處約束。調整的清單在[三張圖的重新評審](rebuild-diagram-review.zh-Hant.md)第 7 節。調整的範圍是架構師照評審第 3 節的判定做的，待使用者看圖確認。 |
+| `v8-arch-gyo2-network-diagram-after-mechanism` | 2026-11-14（使用者，主會話）。「這 2 幅圖先記著。網絡那幅先不急，你把 Engine 機制實現了再說。」→ `mechanism-runtime.svg` 與 `control-plane-revised.svg`（gyo2 線改過的版本）留作通用機制的參考圖；`networking-systems.svg` 不動，等通用機制實作完成（R2）之後再處理，和「PvP 最後」一致。這句話是排順序，不是開工的指示；R2 之前的關卡照舊等使用者確認。 |
 
 ## 未定
 
