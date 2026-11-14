@@ -163,10 +163,10 @@ TEST_CASE("J-12: every parameter type's Contribution equals the hand-written exp
     CHECK(SameSet<C<EventWriter<TestEvent>>, TypeList<EventWrite<TestEvent>>>);
     CHECK(SameSet<C<Commands>, TypeList<UntypedCommands>>);
     CHECK(SameSet<C<CommandsFor<Inserts<TestHealth>, Removes<TestMarker>>>,
-                          TypeList<DeferredWrite<TestHealth>, DeferredWrite<TestMarker>>>);
+                          TypeList<DeferredInsert<TestHealth>, DeferredWrite<TestMarker>>>);
     CHECK(SameSet<C<GYO::Kernel::Spawn<Bundle<TestPos, TestVel>>>,
-                          TypeList<Access::Spawn, DeferredWrite<TestPos>, DeferredWrite<TestVel>>>);
-    CHECK(SameSet<C<SpawnWithId<Bundle<TestHealth>>>, TypeList<DeferredWrite<TestHealth>>>);
+                          TypeList<Access::Spawn, DeferredInsert<TestPos>, DeferredInsert<TestVel>>>);
+    CHECK(SameSet<C<SpawnWithId<Bundle<TestHealth>>>, TypeList<DeferredInsert<TestHealth>>>);
     CHECK(SameSet<C<GYO::Kernel::Despawn>, TypeList<Access::Despawn>>);
     CHECK(SameSet<C<SetRead<ReplicatedSet>>, TypeList<SetReadOf<ReplicatedSet>>>);
     CHECK(SameSet<C<Local<std::int32_t>>, TypeList<LocalState<std::int32_t>>>);
@@ -176,7 +176,7 @@ TEST_CASE("J-12: every parameter type's Contribution equals the hand-written exp
     CHECK(SameSet<C<Extract<Read<TestPos>>>, TypeList<ExtractComponentRead<TestPos>>>);
     CHECK(SameSet<C<ExtractRes<TestRes>>, TypeList<ExtractResourceRead<TestRes>>>);
     // A bundle that loses a component is a different set (the J-12 mutation "bundle not in the access set").
-    CHECK(!SameSet<C<GYO::Kernel::Spawn<Bundle<TestPos, TestVel>>>, TypeList<Access::Spawn, DeferredWrite<TestPos>>>);
+    CHECK(!SameSet<C<GYO::Kernel::Spawn<Bundle<TestPos, TestVel>>>, TypeList<Access::Spawn, DeferredInsert<TestPos>>>);
 }
 
 namespace {

@@ -919,3 +919,307 @@ TEST_CASE("initial value: a zone C hook's request does not fill zone B data (Z1,
     CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z1"), Describe(built));
     CHECK_MESSAGE(Describe(built).find("hook 'SparkAsksForSeat'") != std::string::npos, Describe(built));
 }
+
+// ---- Second adversarial check (Fable) of the zone rules through the funnel,
+// and the user's decisions after it (2026-11-15): a write in place or a remove
+// of a request fills nothing and does not count; the declaration's Z1 holds for
+// role=Input components too.
+namespace {
+
+struct Raw { std::int32_t r; };      // zone B, Shared
+struct Ledger { std::int32_t n; };   // a resource, zone C
+SeatInput InputFromRaw(const Raw& raw) { return SeatInput{raw.r}; }
+Spark SparkFromEmber(const Ember& ember) { return Spark{ember.e}; }
+
+SystemResult MutatesSpark(Query<Write<Spark>> sparks) {
+    sparks.ForEach([](EntityId, Mut<Spark> spark) { spark->s += 1; });
+    return Ok();
+}
+SystemResult ReadsSpark(Query<Read<Spark>> sparks) {
+    sparks.ForEach([](EntityId, const Spark&) {});
+    return Ok();
+}
+SystemResult FiltersBySpark(Query<Read<Ember>, With<Spark>> embers) {
+    embers.ForEach([](EntityId, const Ember&) {});
+    return Ok();
+}
+SystemResult IngressInsertsRaw(CommandsFor<Inserts<Raw>, Removes<>> commands, CurrentTick tick) {
+    if (tick.Tick() == 1) commands.Insert(7, Raw{3});
+    return Ok();
+}
+SystemResult SpawnsSparkAndEmber(Spawn<Bundle<Spark, Ember>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Spark{4}, Ember{5});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+SystemResult SpawnsSparkAndSeat(Spawn<Bundle<Spark, Seat>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Spark{4}, Seat{5});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+SystemResult SpawnsEmberWritesLedger(Spawn<Bundle<Ember>> spawn, ResMut<Ledger> ledger, CurrentTick tick) {
+    (void)ledger;
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Ember{5});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+
+// FixedUpdate rolls back, Update does not. The spawner of Spark sits in Update, so the
+// Seat it fills (which does not roll back) is allowed; extra adds a System to FixedUpdate.
+Built SeatNoRollbackWith(std::function<void(Registrar&)> extra) {
+    return KernelTest::Finish({{"test", [extra = std::move(extra)](Registrar& r) {
+        SeatData(r, Rollback::No, true);
+        r.Schedule(KernelTest::UpdateSchedule());
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(KernelTest::Sys("SimulationSpawnsSpark", Zone::C, {At("Update", "First")}));
+        extra(r);
+    }}});
+}
+
+} // namespace
+
+TEST_CASE("initial value: a System that only reads or filters by a request does not write the component it fills") {
+    const Built base = SeatNoRollbackWith([](Registrar&) {});
+    REQUIRE_MESSAGE(static_cast<bool>(base.result), Describe(base));
+    const Built reads = SeatNoRollbackWith([](Registrar& r) { r.AddSystem<&ReadsSpark>(Simulation("ReadsSpark")); });
+    CHECK_MESSAGE(static_cast<bool>(reads.result), Describe(reads));
+    const Built filters = SeatNoRollbackWith([](Registrar& r) { r.AddSystem<&FiltersBySpark>(Simulation("FiltersBySpark")); });
+    CHECK_MESSAGE(static_cast<bool>(filters.result), Describe(filters));
+}
+
+// In place: Write<T> adds no cell, so it fills nothing (user decision 2026-11-15).
+TEST_CASE("initial value: a System that writes request cells in place does not write the component") {
+    const Built built = SeatNoRollbackWith([](Registrar& r) { r.AddSystem<&MutatesSpark>(Simulation("MutatesSpark")); });
+    CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+}
+
+TEST_CASE("initial value: a component the System writes itself gets no funnel note") {
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, true);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SpawnsSparkAndSeat>(Simulation("SpawnsSparkAndSeat"));
+    }}});
+    REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z6"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("writes 'Seat', which does not roll back") != std::string::npos, Describe(built));
+    CHECK_MESSAGE(Describe(built).find("'Seat' (filled from") == std::string::npos, Describe(built));
+}
+
+TEST_CASE("initial value: a resource with the id of a filled component gets no funnel note") {
+    // ResourceId: KernelSettings 0, Allotter 1, Ledger 2. ComponentId: Seat 0, SeatInput 1, Spark 2.
+    const auto build = [](Rollback ledger) {
+        return KernelTest::Finish({{"test", [ledger](Registrar& r) {
+            SeatData(r, Rollback::No, true);
+            r.Resource<Ledger>({.name = "Ledger", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = ledger});
+            r.InitialValue<Spark, &SparkFromEmber>();
+            r.AddSystem<&SpawnsEmberWritesLedger>(Simulation("SpawnsEmberWritesLedger"));
+        }}});
+    };
+    const Built ids = build(Rollback::Yes);
+    REQUIRE_MESSAGE(static_cast<bool>(ids.result), Describe(ids));
+    REQUIRE(ids.registry->Frozen().ResourceIdOf<Ledger>() == ids.registry->Frozen().ComponentIdOf<Spark>());
+    const Built built = build(Rollback::No);
+    REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z6"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("'Ledger', which does not roll back") != std::string::npos, Describe(built));
+    CHECK_MESSAGE(Describe(built).find("'Ledger' (filled from") == std::string::npos, Describe(built));
+}
+
+TEST_CASE("initial value: every zone error of a filled component says which request fills it") {
+    SUBCASE("Z1: zone C System, zone B component") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            SeatData(r, Rollback::No, false);
+            r.InitialValue<Gate, &GateFromSpark>();
+            r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+        }}});
+        REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z1"), Describe(built));
+        CHECK_MESSAGE(Describe(built).find("writes 'Gate' (filled from 'Spark' by Registrar::InitialValue)") != std::string::npos,
+                      Describe(built));
+    }
+    SUBCASE("Z2: ingress System, zone C State component") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            SeatData(r, Rollback::No, false);
+            r.InitialValue<Seat, &SeatFromInput>();
+            r.AddSystem<&IngressAsksForSeat>(Ingress("IngressAsksForSeat"));
+        }}});
+        REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z2"), Describe(built));
+        CHECK_MESSAGE(Describe(built).find("'Seat' (filled from 'SeatInput' by Registrar::InitialValue)") != std::string::npos,
+                      Describe(built));
+    }
+    SUBCASE("Z6: zone C hook, Derived component") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            SeatData(r, Rollback::Derived, true);
+            r.InitialValue<Seat, &SeatFromEmber>();
+            r.Hook<Spark, &SparkAsksForSeat>(HookTrigger::OnAdd, {.name = "SparkAsksForSeat", .zone = Zone::C});
+        }}});
+        REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z6"), Describe(built));
+        CHECK_MESSAGE(Describe(built).find("hook 'SparkAsksForSeat' is zone C and writes 'Seat' (filled from 'Ember' by "
+                                           "Registrar::InitialValue)") != std::string::npos,
+                      Describe(built));
+    }
+}
+
+TEST_CASE("initial value: a hook that records the request is not a writer of the Exclusive component") {
+    // Body is Exclusive and Advance writes it; the hook asks through BodyAt.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        Data(r);
+        r.InitialValue<Body, &BodyFromRequest>();
+        r.AddSystem<&SpawnsCrate>(In("SpawnsCrate", "Request"));
+        r.AddSystem<&Advance>(In("Advance", "Use"));
+        r.Hook<Crate, &CrateAsksForBody>(HookTrigger::OnAdd, {.name = "CrateAsksForBody"});
+    }}});
+    CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+}
+
+TEST_CASE("initial value: with two written requests of one component the error names one of them, the same every time") {
+    // Current rule: the request visited first, which is the one with the higher ComponentId
+    // (Ember), although on an entity with both the lower one (Spark) gives the value.
+    for (const bool emberFirst : {false, true}) {
+        CAPTURE(emberFirst);
+        const Built built = KernelTest::Finish({{"test", [emberFirst](Registrar& r) {
+            SeatData(r, Rollback::No, true);
+            if (emberFirst) r.InitialValue<Seat, &SeatFromEmber>();
+            r.InitialValue<Seat, &SeatFromSpark>();
+            if (!emberFirst) r.InitialValue<Seat, &SeatFromEmber>();
+            r.AddSystem<&SpawnsSparkAndEmber>(Simulation("SpawnsSparkAndEmber"));
+        }}});
+        REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z6"), Describe(built));
+        CHECK_MESSAGE(Describe(built).find("writes 'Seat' (filled from 'Ember' by Registrar::InitialValue)") != std::string::npos,
+                      Describe(built));
+    }
+}
+
+TEST_CASE("initial value: a zone C role=Input component does not take its value from zone B data either") {
+    // Current rule (the kept declaration rule). An ingress System may write SeatInput itself
+    // from zone B data; through the funnel the same is refused where it is declared.
+    const auto build = [](bool funnel) {
+        return KernelTest::Finish({{"test", [funnel](Registrar& r) {
+            SeatData(r, Rollback::No, false);
+            r.Component<Raw>({.name = "Raw", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            if (funnel) {
+                r.InitialValue<SeatInput, &InputFromRaw>();
+                r.AddSystem<&IngressInsertsRaw>(Ingress("IngressInsertsRaw"));
+            } else {
+                r.AddSystem<&IngressAsksForSeat>(Ingress("IngressWritesSeatInput"));
+            }
+        }}});
+    };
+    const Built direct = build(false);
+    CHECK_MESSAGE(static_cast<bool>(direct.result), Describe(direct));
+    const Built funnel = build(true);
+    CHECK_MESSAGE(HasRule(funnel, StartupCode::DE7, "Z1"), Describe(funnel));
+}
+
+TEST_CASE("initial value: every component a request fills is checked, not only the first") {
+    // Spark fills Seat (ComponentId 0, allowed) and Gate (ComponentId 3, zone B: Z1).
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, false);
+        r.InitialValue<Gate, &GateFromSpark>();
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z1"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("'Gate'") != std::string::npos, Describe(built));
+}
+
+TEST_CASE("initial value: an ingress System fills role=Input data from its role=Input request") {
+    // The case "role=Input from role=Input: ingress writes both" above has no System, so since
+    // c94c303f it checks nothing; here an ingress System writes the request.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        r.Component<SeatInput>({.name = "SeatInput", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .role = Role::Input});
+        r.Component<Seat>({.name = "Seat", .zone = Zone::C, .role = Role::Input});
+        r.Schedule(KernelTest::FixedSchedule(false));
+        r.InitialValue<Seat, &SeatFromInput>();
+        r.AddSystem<&IngressAsksForSeat>(Ingress("IngressAsksForSeat"));
+    }}});
+    CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+}
+
+namespace {
+
+SystemResult RemovesSpark(CommandsFor<Inserts<>, Removes<Spark>> commands, CurrentTick tick) {
+    if (tick.Tick() == 2) commands.Remove<Spark>(7);
+    return Ok();
+}
+// "Use the request, then take it away": a zone C hook on the filled component removes the request.
+SystemResult SeatAddedRemovesSpark(HookCtx ctx, CommandsFor<Inserts<>, Removes<Spark>> commands) {
+    commands.Remove<Spark>(ctx.Entity());
+    return Ok();
+}
+SystemResult SpawnsSparkWritesSeat(Spawn<Bundle<Spark>> spawn, Query<Write<Seat>> seats, CurrentTick tick) {
+    seats.ForEach([](EntityId, Mut<Seat> seat) { seat->s += 1; });
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Spark{4});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+
+} // namespace
+
+TEST_CASE("initial value: a System or hook that only removes a request does not write the component") {
+    SUBCASE("a zone C System in a rollback-enabled schedule removes Spark") {
+        const Built built = SeatNoRollbackWith([](Registrar& r) { r.AddSystem<&RemovesSpark>(Simulation("RemovesSpark")); });
+        CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+    }
+    SUBCASE("a zone C hook removes the request once the Derived component is filled") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            SeatData(r, Rollback::Derived, true);
+            r.InitialValue<Seat, &SeatFromSpark>();
+            r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+            r.Hook<Seat, &SeatAddedRemovesSpark>(HookTrigger::OnAdd, {.name = "SeatAddedRemovesSpark", .zone = Zone::C});
+        }}});
+        CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+    }
+}
+
+TEST_CASE("initial value: a chain goes on through a component the System also writes in place") {
+    // The System spawns Spark and writes Seat in place; Spark fills Seat, Seat
+    // fills SeatInput: the spawn still writes SeatInput (Z3), though the System
+    // names Seat itself.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, false);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.InitialValue<SeatInput, &InputFromSeat>();
+        r.AddSystem<&SpawnsSparkWritesSeat>(Simulation("SpawnsSparkWritesSeat"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z3"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("'SeatInput' (filled from 'Seat'") != std::string::npos, Describe(built));
+}
+
+namespace {
+
+SystemResult SpawnsEmberAndSpark(Spawn<Bundle<Ember, Spark>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Ember{5}, Spark{4});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+
+} // namespace
+
+TEST_CASE("initial value: a component the System writes in place is its own write, not a funnel write") {
+    // The System writes Seat in place and spawns Spark, which fills Seat: the
+    // error is about its own write of Seat, with no funnel note.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, true);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SpawnsSparkWritesSeat>(Simulation("SpawnsSparkWritesSeat"));
+    }}});
+    REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z6"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("writes 'Seat', which does not roll back") != std::string::npos, Describe(built));
+    CHECK_MESSAGE(Describe(built).find("'Seat' (filled from") == std::string::npos, Describe(built));
+}
+
+TEST_CASE("initial value: the request an error names does not depend on the order of the bundle") {
+    // Same as the case with two written requests, with the bundle in the other order.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, true);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.InitialValue<Seat, &SeatFromEmber>();
+        r.AddSystem<&SpawnsEmberAndSpark>(Simulation("SpawnsEmberAndSpark"));
+    }}});
+    REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z6"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("writes 'Seat' (filled from 'Ember' by Registrar::InitialValue)") != std::string::npos,
+                  Describe(built));
+}

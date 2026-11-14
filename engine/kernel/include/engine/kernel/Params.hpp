@@ -523,7 +523,7 @@ public:
 template <class... I, class... R>
 struct ParamTraits<CommandsFor<Inserts<I...>, Removes<R...>>>
     : Detail::HandleTraits<CommandsFor<Inserts<I...>, Removes<R...>>,
-                           TypeList<Access::DeferredWrite<I>..., Access::DeferredWrite<R>...>, false> {};
+                           TypeList<Access::DeferredInsert<I>..., Access::DeferredWrite<R>...>, false> {};
 
 // Spawns with an id from the World's allotter: writes the allotter and defers
 // a write of every bundle component (spec A.1, B3).
@@ -556,7 +556,7 @@ public:
 };
 template <class... C>
 struct ParamTraits<Spawn<Bundle<C...>>>
-    : Detail::HandleTraits<Spawn<Bundle<C...>>, TypeList<Access::Spawn, Access::DeferredWrite<C>...>, false> {};
+    : Detail::HandleTraits<Spawn<Bundle<C...>>, TypeList<Access::Spawn, Access::DeferredInsert<C>...>, false> {};
 
 // Spawns with a given id: the bundle's deferred writes, no allotter (spec A.1).
 template <class B>
@@ -584,7 +584,7 @@ public:
 };
 template <class... C>
 struct ParamTraits<SpawnWithId<Bundle<C...>>>
-    : Detail::HandleTraits<SpawnWithId<Bundle<C...>>, TypeList<Access::DeferredWrite<C>...>, false> {};
+    : Detail::HandleTraits<SpawnWithId<Bundle<C...>>, TypeList<Access::DeferredInsert<C>...>, false> {};
 
 // Not a writer, no conflict edge (spec B.3, B.9 trade-off 1); Z5 at run time.
 class Despawn final : Detail::Handle {
