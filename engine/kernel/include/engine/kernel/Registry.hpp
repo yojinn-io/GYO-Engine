@@ -294,6 +294,11 @@ public:
     // point too. Several Requests may name one Target: on an entity that gets
     // more than one of them at one sync point, the Request with the lower
     // ComponentId gives the value.
+    //
+    // Zone rules: a System or hook that writes Request writes Target, through
+    // chains of declarations, for Z1, Z2, Z3 and Z6 (not for the writer count),
+    // so the funnel allows what a direct write allows. A zone C Target takes its
+    // value from a zone C Request only (Z1).
     template <class Target, auto Fn>
     void InitialValue(std::source_location source = std::source_location::current()) {
         using Shape = Detail::InitialValueRequest<Target, decltype(Fn)>;

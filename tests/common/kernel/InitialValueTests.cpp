@@ -563,9 +563,11 @@ TEST_CASE("initial value: two declarations that name each other stop at one sync
     CHECK(rig->world().Get<Mass>(id)->m == 5);
 }
 
-// ---- The zone rules a System writing the component would meet (Z2, Z3, Z6),
-// and the fingerprints (v8-arch-gyo2-funnel-check; user decision 2026-11-14:
-// B1 to B3 are refused, the fingerprints take the declarations, plan A).
+// ---- The zone rules and the fingerprints (v8-arch-gyo2-funnel-check). User
+// decisions 2026-11-14: B1 to B3 are refused; the fingerprints take the
+// declarations (plan A); for the zone rules, a System or hook that writes a
+// request writes the components it fills (FunnelWrites in Registry.cpp), so the
+// rules are the ones of a direct write, not a copy of them.
 
 namespace {
 
@@ -690,7 +692,6 @@ TEST_CASE("initial value: a declaration changes the Registry fingerprint and, fo
             if (which == 2) r.InitialValue<Gate, &GateFromSpark>();
             if (which == 3) r.InitialValue<Gate, &GateFromSeat>();
             if (which == 4) r.InitialValue<Seat, &SeatFromEmber>();
-            r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
         }}});
     };
     const Built none = build(0);
@@ -714,4 +715,207 @@ TEST_CASE("initial value: a declaration changes the Registry fingerprint and, fo
     CHECK(zoneC.registry->Frozen().CFingerprint() != otherZoneCRequest.registry->Frozen().CFingerprint());
     CHECK(base.RegistryFingerprint().version == 2U);
     CHECK(base.CFingerprint().version == 3U);
+}
+
+namespace {
+
+struct Mark { std::int32_t m; };       // zone B, does not roll back
+struct GateIn { std::int32_t g; };     // zone B, role Input
+SeatInput InputFromSeat(const Seat& seat) { return SeatInput{seat.s}; }
+Mark MarkFromGate(const Gate& gate) { return Mark{gate.g}; }
+Gate GateFromInput(const SeatInput& in) { return Gate{in.s}; }
+GateIn GateInFromGate(const Gate& gate) { return GateIn{gate.g}; }
+Ember EmberFromSpark(const Spark& spark) { return Ember{spark.s}; }
+
+SystemResult SparkAsksForSeat(HookCtx ctx, CommandsFor<Inserts<Ember>, Removes<>> commands) {
+    commands.Insert(ctx.Entity(), Ember{1});
+    return Ok();
+}
+SystemResult WritesGate(CommandsFor<Inserts<Gate>, Removes<>> commands, CurrentTick tick) {
+    if (tick.Tick() == 1) commands.Insert(7, Gate{1});
+    return Ok();
+}
+SystemResult WritesGateIn(Query<Write<GateIn>>) { return Ok(); }
+
+SystemOptions Presentation(std::string name) {
+    return KernelTest::Sys(std::move(name), Zone::B, {At("FixedUpdate", "Present")});
+}
+
+// which: 1 Seat from Spark, 2 Perch from Spark, 3 both (Seat declared first), 4 both (Perch declared first).
+struct Perch { std::int32_t p; };  // zone C, State: a second component filled from Spark
+Perch PerchFromSpark(const Spark& spark) { return Perch{spark.s}; }
+Built PerchVariant(int which) {
+    return KernelTest::Finish({{"test", [which](Registrar& r) {
+        SeatData(r, Rollback::No, false);
+        r.Component<Perch>({.name = "Perch", .zone = Zone::C});
+        if (which == 1 || which == 3) r.InitialValue<Seat, &SeatFromSpark>();
+        if (which == 2 || which == 3 || which == 4) r.InitialValue<Perch, &PerchFromSpark>();
+        if (which == 4) r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+}
+
+} // namespace
+
+TEST_CASE("initial value: the error names the System that writes the request and the declaration it goes through") {
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, true);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    REQUIRE_MESSAGE(HasRule(built, StartupCode::DE7, "Z6"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("SimulationSpawnsSpark") != std::string::npos, Describe(built));
+    CHECK_MESSAGE(Describe(built).find("filled from 'Spark' by Registrar::InitialValue") != std::string::npos, Describe(built));
+}
+
+TEST_CASE("initial value: a zone C hook meets the hook's Z6 through the funnel too (Yes only, not Derived)") {
+    // Seat is Derived: a zone C System may write it (Z6 takes Yes or Derived),
+    // a zone C hook may not (Yes only). The hook writes Ember, which rolls back;
+    // Ember fills Seat, so the hook writes Seat.
+    const auto build = [](bool hook) {
+        return KernelTest::Finish({{"test", [hook](Registrar& r) {
+            SeatData(r, Rollback::Derived, true);
+            r.InitialValue<Seat, &SeatFromEmber>();
+            if (hook) {
+                r.Hook<Spark, &SparkAsksForSeat>(HookTrigger::OnAdd, {.name = "SparkAsksForSeat", .zone = Zone::C});
+            } else {
+                r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+                r.InitialValue<Ember, &EmberFromSpark>();
+            }
+        }}});
+    };
+    const Built byHook = build(true);
+    CHECK_MESSAGE(HasRule(byHook, StartupCode::DE7, "Z6"), Describe(byHook));
+    const Built bySystem = build(false);
+    CHECK_MESSAGE(static_cast<bool>(bySystem.result), Describe(bySystem));
+}
+
+TEST_CASE("initial value: Z6 is checked per schedule, as for a direct write") {
+    // FixedUpdate rolls back, Update does not: the same spawn of Spark fills a
+    // Seat that does not roll back; refused in FixedUpdate only.
+    const auto build = [](const char* schedule, const char* stage) {
+        return KernelTest::Finish({{"test", [schedule, stage](Registrar& r) {
+            SeatData(r, Rollback::No, true);
+            r.Schedule(KernelTest::UpdateSchedule());
+            r.InitialValue<Seat, &SeatFromSpark>();
+            r.AddSystem<&SimulationSpawnsSpark>(KernelTest::Sys("SimulationSpawnsSpark", Zone::C, {At(schedule, stage)}));
+        }}});
+    };
+    const Built fixed = build("FixedUpdate", "Simulate");
+    CHECK_MESSAGE(HasRule(fixed, StartupCode::DE7, "Z6"), Describe(fixed));
+    const Built update = build("Update", "First");
+    CHECK_MESSAGE(static_cast<bool>(update.result), Describe(update));
+}
+
+TEST_CASE("initial value: a chain of declarations carries the write to its last link") {
+    // Spark fills Seat, Seat fills SeatInput: the zone C System that spawns
+    // Spark writes role=Input data (Z3).
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, false);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.InitialValue<SeatInput, &InputFromSeat>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z3"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("filled from 'Seat'") != std::string::npos, Describe(built));
+}
+
+TEST_CASE("initial value: a zone C System's request does not fill zone B data (Z1)") {
+    // A zone C System does not write zone B data; through the funnel it would.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, false);
+        r.InitialValue<Gate, &GateFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z1"), Describe(built));
+}
+
+TEST_CASE("initial value: what a direct write may do, the funnel may do") {
+    SUBCASE("an ingress System fills zone B data from its role=Input request") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            SeatData(r, Rollback::No, false);
+            r.InitialValue<Gate, &GateFromInput>();
+            r.AddSystem<&IngressAsksForSeat>(Ingress("IngressAsksForSeat"));
+        }}});
+        CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+    }
+    SUBCASE("a zone B System fills zone B data that does not roll back, in a World with rollback") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            SeatData(r, Rollback::Yes, true);
+            r.Component<Mark>({.name = "Mark", .zone = Zone::B});
+            r.InitialValue<Mark, &MarkFromGate>();
+            r.AddSystem<&WritesGate>(Presentation("WritesGate"));
+        }}});
+        CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+    }
+    SUBCASE("a zone B role=Input component: a zone B System writes it directly, so through the funnel too") {
+        const auto build = [](bool funnel) {
+            return KernelTest::Finish({{"test", [funnel](Registrar& r) {
+                SeatData(r, Rollback::No, false);
+                r.Component<GateIn>({.name = "GateIn", .zone = Zone::B, .role = Role::Input});
+                if (funnel) {
+                    r.InitialValue<GateIn, &GateInFromGate>();
+                    r.AddSystem<&WritesGate>(Presentation("WritesGate"));
+                } else {
+                    r.AddSystem<&WritesGateIn>(Presentation("WritesGateIn"));
+                }
+            }}});
+        };
+        const Built direct = build(false);
+        const Built funnel = build(true);
+        CHECK_MESSAGE(static_cast<bool>(direct.result), Describe(direct));
+        CHECK_MESSAGE(static_cast<bool>(funnel.result), Describe(funnel));
+    }
+    SUBCASE("no System or hook writes the request: nothing is filled, nothing to check") {
+        // Only the Host could write SeatInput here, and the Host's writes are not filled.
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            SeatData(r, Rollback::No, true);
+            r.InitialValue<Seat, &SeatFromInput>();
+        }}});
+        CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+    }
+}
+
+// Added by the second adversarial check (Fable).
+TEST_CASE("initial value: the fingerprints tell which component a declaration fills, not the order of the declarations") {
+    const Built seat = PerchVariant(1);
+    const Built perch = PerchVariant(2);
+    const Built seatFirst = PerchVariant(3);
+    const Built perchFirst = PerchVariant(4);
+    REQUIRE_MESSAGE(static_cast<bool>(seat.result), Describe(seat));
+    REQUIRE_MESSAGE(static_cast<bool>(perch.result), Describe(perch));
+    REQUIRE_MESSAGE(static_cast<bool>(seatFirst.result), Describe(seatFirst));
+    REQUIRE_MESSAGE(static_cast<bool>(perchFirst.result), Describe(perchFirst));
+    // Same request, another zone C component: both fingerprints differ.
+    CHECK(seat.registry->Frozen().RegistryFingerprint() != perch.registry->Frozen().RegistryFingerprint());
+    CHECK(seat.registry->Frozen().CFingerprint() != perch.registry->Frozen().CFingerprint());
+    // The same two declarations in either order: the same fingerprints.
+    CHECK(seatFirst.registry->Frozen().RegistryFingerprint() == perchFirst.registry->Frozen().RegistryFingerprint());
+    CHECK(seatFirst.registry->Frozen().CFingerprint() == perchFirst.registry->Frozen().CFingerprint());
+}
+
+TEST_CASE("initial value: golden fingerprints of a Registry with two declarations") {
+    // The first golden that holds declarations; the same on every L1 platform.
+    const Built both = PerchVariant(3);
+    REQUIRE_MESSAGE(static_cast<bool>(both.result), Describe(both));
+    MESSAGE("two declarations: registry " << both.registry->Frozen().RegistryFingerprint().Text() << " C "
+                                          << both.registry->Frozen().CFingerprint().Text());
+    CHECK(both.registry->Frozen().RegistryFingerprint().Text() ==
+          std::string("2:0f512f58e0b333856742972c936b2a61225fc431b4fae698440a74d84c580140"));
+    CHECK(both.registry->Frozen().CFingerprint().Text() ==
+          std::string("3:8a03c911233d87c73fe04e1fcab2cf986ddf71fe63757b247e9fd0199972656a"));
+}
+
+namespace {
+Gate GateFromEmber(const Ember& ember) { return Gate{ember.e}; }
+} // namespace
+
+TEST_CASE("initial value: a zone C hook's request does not fill zone B data (Z1, hook path)") {
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, false);
+        r.InitialValue<Gate, &GateFromEmber>();
+        r.Hook<Spark, &SparkAsksForSeat>(HookTrigger::OnAdd, {.name = "SparkAsksForSeat", .zone = Zone::C});
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z1"), Describe(built));
+    CHECK_MESSAGE(Describe(built).find("hook 'SparkAsksForSeat'") != std::string::npos, Describe(built));
 }

@@ -795,13 +795,10 @@ void CheckData(RegistryData& data) {
 }
 
 // Registrar::InitialValue: resolves the two components of every declaration and
-// leaves the valid ones in (requestId, targetId) order. The kernel writes the
-// component at a sync point on behalf of whoever wrote the request, so the
-// zone rules a System writing it directly would meet are checked here: who can
-// write the request decides who, in effect, writes the component.
+// leaves the valid ones in (requestId, targetId) order. Who writes a request
+// writes, in effect, its component: the zone rules check that in CheckSystems
+// (FunnelWrites), not here.
 void CheckInitialValues(RegistryData& data) {
-    bool anyRollback = false;
-    for (const ScheduleRecord& schedule : data.schedules) anyRollback = anyRollback || schedule.options.rollbackEnabled;
     std::vector<InitialValueRecord> valid;
     for (InitialValueRecord& record : data.initialValues) {
         const std::string declarer = data.OwnerName(record.owner);
@@ -840,42 +837,12 @@ void CheckInitialValues(RegistryData& data) {
                        {targetInfo.name, requestInfo.name}, {source});
             continue;
         }
-        // The value of a zone C component is computed from zone C data only (Z1).
+        // The value of a zone C component is computed from zone C data only (Z1):
+        // Fn is (c) computation whatever System writes the request.
         if (targetInfo.zone == Zone::C && requestInfo.zone != Zone::C) {
             data.Error(StartupCode::DE7, "Z1",
                        "the initial value of zone C component '" + targetInfo.name + "' comes from '" + requestInfo.name +
                            "', which is zone " + ZoneName(requestInfo.zone),
-                       {targetInfo.name, requestInfo.name}, {source});
-            continue;
-        }
-        // Only the Host and ingress (zone B) Systems write role=Input data, and
-        // the Host's writes are not filled; so a role=Input request is written by
-        // a zone B System, which may write no zone C State data (Z2).
-        if (targetInfo.zone == Zone::C && targetInfo.role != Role::Input && requestInfo.role == Role::Input) {
-            data.Error(StartupCode::DE7, "Z2",
-                       "the initial value of zone C component '" + targetInfo.name + "' comes from role=Input '" +
-                           requestInfo.name + "', which ingress (zone B) Systems write; zone B writes no zone C State data",
-                       {targetInfo.name, requestInfo.name}, {source});
-            continue;
-        }
-        // role=Input data is written by the Host and ingress Systems only (Z3); a
-        // request that is not Input is written by other Systems.
-        if (targetInfo.role == Role::Input && requestInfo.role != Role::Input) {
-            data.Error(StartupCode::DE7, "Z3",
-                       "the initial value of role=Input component '" + targetInfo.name + "' comes from '" +
-                           requestInfo.name + "', which is not role=Input; only the Host and ingress Systems write boundary input",
-                       {targetInfo.name, requestInfo.name}, {source});
-            continue;
-        }
-        // Its request is zone C State data, written by zone C Systems: in a World
-        // with a rollback-enabled schedule the component must roll back (Z6, as
-        // for the Systems themselves: Yes or Derived).
-        if (anyRollback && targetInfo.zone == Zone::C && targetInfo.role != Role::Input &&
-            targetInfo.rollback != Rollback::Yes && targetInfo.rollback != Rollback::Derived) {
-            data.Error(StartupCode::DE7, "Z6",
-                       "the initial value of zone C component '" + targetInfo.name +
-                           "', which does not roll back, comes from '" + requestInfo.name +
-                           "' in a World with a rollback-enabled schedule",
                        {targetInfo.name, requestInfo.name}, {source});
             continue;
         }
@@ -1193,9 +1160,52 @@ std::vector<AccessKey> TouchedKeys(const AccessSet& access) {
     return keys;
 }
 
-// Z1, Z2 (first half), Z7 and the boundary rule for one System or hook.
+// Registrar::InitialValue: the kernel fills a component at the sync point for
+// whoever wrote its request, so for the zone rules (Z1, Z2, Z3, Z6, Z7) a System
+// or hook writes every component its written requests fill, through chains of
+// declarations. Not for the writer count (D-E2): not counting them is what the
+// funnel is for. Maps each such component to the request it is filled from;
+// components the access set writes itself are not listed.
+std::map<ComponentId, ComponentId> FunnelWrites(const RegistryData& data, const AccessSet& access) {
+    std::map<ComponentId, ComponentId> reached;
+    std::vector<ComponentId> pending;
+    for (const AccessKey& key : WrittenKeys(access)) {
+        if (key.kind == AccessKind::Component) pending.push_back(key.id);
+    }
+    std::set<ComponentId> seen(pending.begin(), pending.end());
+    while (!pending.empty()) {
+        const ComponentId request = pending.back();
+        pending.pop_back();
+        for (const InitialValueRecord& rule : data.initialValues) {
+            if (rule.requestId != request || !seen.insert(rule.targetId).second) continue;
+            reached.emplace(rule.targetId, request);
+            pending.push_back(rule.targetId);
+        }
+    }
+    return reached;
+}
+
+// The access set the zone rules check: access plus the components it fills (FunnelWrites).
+AccessSet ZoneAccess(const AccessSet& access, const std::map<ComponentId, ComponentId>& funnel) {
+    AccessSet out = access;
+    for (const auto& entry : funnel) out.deferredWrites.push_back(entry.first);
+    SortUnique(out.deferredWrites);
+    return out;
+}
+
+// " (filled from 'R' by Registrar::InitialValue)" for a component written only through the funnel.
+std::string FunnelNote(const RegistryData& data, const std::map<ComponentId, ComponentId>& funnel, const AccessKey& key) {
+    if (key.kind != AccessKind::Component) return {};
+    const auto found = funnel.find(key.id);
+    if (found == funnel.end()) return {};
+    return " (filled from '" + data.components[found->second].name + "' by Registrar::InitialValue)";
+}
+
+// Z1, Z2 (first half), Z7 and the boundary rule for one System or hook. access
+// includes the components the funnel fills for it (ZoneAccess); funnel names them.
 void CheckZoneAccess(RegistryData& data, const std::string& subject, const std::string& name, Zone zone, bool ingress,
-                     const AccessSet& access, const std::string& source) {
+                     const AccessSet& access, const std::map<ComponentId, ComponentId>& funnel,
+                     const std::string& source) {
     if (zone == Zone::Unset) {
         return;  // already S-6; zone rules need a zone
     }
@@ -1206,15 +1216,16 @@ void CheckZoneAccess(RegistryData& data, const std::string& subject, const std::
             const bool writes = std::binary_search(written.begin(), written.end(), key);
             const bool external = IsExternal(data, key);
             data.Error(StartupCode::DE7, writes && external ? "Z7" : "Z1",
-                       subject + " is zone C but " + (writes ? "writes" : "reads") + " '" + NameOf(data, key) + "', which is " +
+                       subject + " is zone C but " + (writes ? "writes" : "reads") + " '" + NameOf(data, key) + "'" +
+                           FunnelNote(data, funnel, key) + ", which is " +
                            (external ? "external (always zone B)" : "zone " + std::string(ZoneName(ZoneOf(data, key)))),
                        {name, NameOf(data, key)}, {source});
         }
         for (const AccessKey& key : written) {
             if (IsInput(data, key)) {
                 data.Error(StartupCode::DE7, "Z3",
-                           subject + " is zone C and writes role=Input data '" + NameOf(data, key) +
-                               "'; only the Host and ingress Systems write boundary input",
+                           subject + " is zone C and writes role=Input data '" + NameOf(data, key) + "'" +
+                               FunnelNote(data, funnel, key) + "; only the Host and ingress Systems write boundary input",
                            {name, NameOf(data, key)}, {source});
             }
         }
@@ -1225,7 +1236,7 @@ void CheckZoneAccess(RegistryData& data, const std::string& subject, const std::
         if (ingress && IsInput(data, key)) continue;  // Z3
         data.Error(StartupCode::DE7, "Z2",
                    subject + " is zone " + ZoneName(zone) + (ingress ? " (ingress)" : "") + " but writes zone C data '" +
-                       NameOf(data, key) + "'" + (ingress ? " whose role is not Input" : ""),
+                       NameOf(data, key) + "'" + FunnelNote(data, funnel, key) + (ingress ? " whose role is not Input" : ""),
                    {name, NameOf(data, key)}, {source});
     }
 }
@@ -1270,7 +1281,9 @@ void CheckSystems(RegistryData& data) {
                            {name}, {source});
             }
         }
-        CheckZoneAccess(data, subject, name, zone, system.options.ingress, access, source);
+        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);
+        const AccessSet zoneAccess = ZoneAccess(access, funnel);
+        CheckZoneAccess(data, subject, name, zone, system.options.ingress, zoneAccess, funnel, source);
 
         std::set<std::string> mountedSchedules;
         for (const Mount& mount : system.options.mounts) {
@@ -1309,13 +1322,13 @@ void CheckSystems(RegistryData& data) {
                            {name, s.name}, {source});
             }
             if (zone == Zone::C && s.rollbackEnabled) {
-                for (const AccessKey& key : WrittenKeys(access)) {
+                for (const AccessKey& key : WrittenKeys(zoneAccess)) {
                     if (key.kind == AccessKind::Event) continue;
                     const Rollback rollback = RollbackOf(data, key);
                     if (rollback != Rollback::Yes && rollback != Rollback::Derived) {
                         data.Error(StartupCode::DE7, "Z6",
                                    subject + " is zone C in rollback-enabled schedule '" + s.name + "' and writes '" +
-                                       NameOf(data, key) + "', which does not roll back",
+                                       NameOf(data, key) + "'" + FunnelNote(data, funnel, key) + ", which does not roll back",
                                    {name, NameOf(data, key), s.name}, {source});
                     }
                 }
@@ -1360,13 +1373,15 @@ void CheckSystems(RegistryData& data) {
     }
     for (const HookRecord& hook : data.hooks) {
         const std::string subject = "hook '" + hook.name + "'";
-        CheckZoneAccess(data, subject, hook.name, hook.zone, false, hook.access, SourceText(hook.source));
+        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, hook.access);
+        const AccessSet zoneAccess = ZoneAccess(hook.access, funnel);
+        CheckZoneAccess(data, subject, hook.name, hook.zone, false, zoneAccess, funnel, SourceText(hook.source));
         if (hook.zone == Zone::C && anyRollback) {
-            for (const AccessKey& key : WrittenKeys(hook.access)) {
+            for (const AccessKey& key : WrittenKeys(zoneAccess)) {
                 if (key.kind != AccessKind::Event && RollbackOf(data, key) != Rollback::Yes) {
                     data.Error(StartupCode::DE7, "Z6",
-                               subject + " is zone C and writes '" + NameOf(data, key) +
-                                   "', which is not rollback=Yes, in a World with a rollback-enabled schedule",
+                               subject + " is zone C and writes '" + NameOf(data, key) + "'" + FunnelNote(data, funnel, key) +
+                                   ", which is not rollback=Yes, in a World with a rollback-enabled schedule",
                                {hook.name, NameOf(data, key)}, {SourceText(hook.source)});
                 }
             }
