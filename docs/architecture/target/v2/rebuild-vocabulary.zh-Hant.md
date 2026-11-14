@@ -159,6 +159,9 @@ v3 和 v2 的差別：
 
 1. **第 1 節的界線**：這張表只管名字；定義照現況寫，內容與歸屬留給去留登記表。
 2. **Plugin 的兩個意思**：「Engine 外的可選部分」（第 0 節）與通用機制的「`Plugin` 型別」（登記單位）是兩件事。現行程式裡，`Plugin` 型別的子類別只出現在 kernel 的測試裡，沒有任何 Module 用它。之後若有 Module 要把元件、Resource 或 System 放進 World（例：SDL 把輸入寫進 World），就得寫一個 `Plugin` 型別的子類別，名字會變成「SDL 是 Module，型別卻叫 `SdlPlugin`」。Module 要不要往 World 登記還沒定；要不要替 `Plugin` 型別換名字，請你決定。
+   - **使用者 2026-11-14 的決定**（原話）：「OK，那還是我的標準，但是建立2張登記表，一個Module，一個Plugin。Module優先與Plugin」；對「純函式庫要不要進表」：「純函數也登記，但是需要標明純函數式。不會被被World使用。」；對「這張表的用途是 (a) 看得到 Engine 有什麼、產品用了什麼，或 (b) 執行時擋下沒登記的使用」：「(a)，照你的建議做」。
+   - 照這個決定：Module 與 Plugin 的分法仍是「少了它，完整的遊戲還成不成立」。Module 清單與 Plugin 清單各一份，放在建置層、只有一處；每一列寫名字、標記（進 World／不進 World）、依賴；CMake 照它 link；執行時的 Registry 只收「進 World」的登記單位，由這份清單產生，不另外手寫；Module 排在 Plugin 前面。標記叫「不進 World」（library-only），不叫「純函數」：JSON、ufbx 會配置記憶體、有的會讀檔。
+   - 還沒確認：登記單位是否拆成 Module 用與 Plugin 用兩種型別（取代單一的 `Plugin` 型別）；「Module 優先」是否也包含依賴方向（Plugin 可依賴 Module，反之不行）；兩張表的名字（「登記表」已被去留登記表用掉，暫稱「Module 清單」「Plugin 清單」）。
 3. **Product 的兩個意思**：中文「產品」（Game 或 Tool）與 `Product` 型別（一個 World 加上 Executor）。v3 用中文與程式碼格式區分；若覺得仍會混淆，請你決定要不要另取型別名。
 4. **Kernel 算不算 Module**：照 Module 的判準，少了通用機制，遊戲也不成立；但[命名規範](rebuild-naming.zh-Hant.md) N17 把通用機制（`GYO::Kernel::`）與 Module（`GYO::Engine::<Module>::`）分成兩個根。v3 照 N17 把兩者分開寫。
 
