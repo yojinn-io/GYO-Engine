@@ -2,6 +2,8 @@
 
 更新：2026-11-14。Owner：架構（架構師會話）。**狀態：R0b-2 本機完成，未開 PR。使用者 2026-11-14 指示先停下、把判斷機制的邊界與定義定好再動工；R0b-3（第 3 節的 11 項判定變更）暫不進行。**
 
+**2026-11-14 更新：R0b-2 與 R0b-3 都已併入 `gyo2`（PR #225，6b37078b）。** 使用者指示「fix CI」後做了第 3 節的 11 項與兩處 workflow 修改；三平台 L1 通過。實際做法與表不同的地方記在第 3.1 節。
+
 件数の突き合わせ：一致。分支 `claude/gyo2-r0b-delete`（HEAD 0857762d，未開 PR）：刪除前 1992 檔（基底 a56fa94a）→ 刪除後 983 檔；刪 1010、新增 1（`engine/io/CMakeLists.txt`）、改名 1（突變執行器）、修改 16，1992−1010+1＝983。刪除的目錄 59 個。頂層目錄從 13 個變成 7 個；`engine/` 留 7 個模組加 config。正例：刪除前的掃描命中 `engine/CMakeLists.txt:24 GYO::Engine`。
 
 實作：Opus／high 的實作 agent（6 個 commit；中途因行程結束被中斷一次，之後恢復並交了報告，原文在證據 `implementer-report.md`）。主會話重跑了三個失敗的測試核對。
@@ -62,6 +64,17 @@
 | 11 | 「每個平台至少一個 release 工具」：`GyoToolRegistry.cmake:237`，由 `ToolRegistryTests.cmake:103` 守 | 工具登記是空的：`app_registry.py` 的 export_tools 失敗，L1 的打包矩陣與 package-trial 會失敗 | 工具登記為空時，toolchain 的 package 不含工具、照常產生；有登記但某平台沒有 release 工具時仍報錯 | 「零工具」不再是錯誤 | 「有工具卻漏了某個平台」仍報錯 |
 
 第 4、5、11 項是真的放寬：沒有產品與工具的期間，這幾條檢查是空的。替代做法是留一個假的產品登記讓它們有對象，但 AGENTS §7 禁止為了檢查留 Dummy。
+
+### 3.1 實際做法與表不同的地方（2026-11-14，實作 agent Opus／high；待使用者事後確認）
+
+- **第 11 項做不到「toolchain 的 package 照常產生」**：沒有工具時 toolchain 這個產品不會登記，而 package 契約規定 package 至少要有一個執行檔。改成：沒有工具的 toolchain 那一列跳過打包的步驟（install、package 檢查、installed acceptance、smoke、archive），並用 notice 寫明原因（`build-and-validate.yml` 的 `package_plan`）。放寬的面：零工具時不產生 toolchain 的 package。有工具或是產品的列照舊。這條路徑只在 Quick acceptance 與 Trial packages 跑，PR #225 上沒有實跑。
+- **第 11 項的 Python 端**：`build/ci/common/app_registry.py` 的 `export_tools` 也要接受「所有平台都沒有工具」，否則 CMake 的修改不生效。只有部分平台是空的照樣拒絕。
+- **第 3 項多刪一段**：`ComponentTests.cmake` 的 explicit_device 整段（表只列其中兩行；同段的另一個斷言用的選項也已不存在）。108-113 行沒有刪，只拿掉 `GYO_BUILD_SDL_GPU_BACKEND`，保留 IMAGE、TTF、UFBX 三個明確選項的組合檢查。
+- **第 9 項比表窄**：只有產品類的根（apps、tools、build/acceptance）沒有 C++ 時跳過並列出；engine、tests 是空的仍然報錯。
+- **第 10 項**：工具登記那一端的保留名測試改用 `toolchain`（原本用 `framework`），讓工具端仍有保留名的檢查。
+- **第 8 項**：draft 案例也改讀測試自己的產品登記。
+- **沒做**：`tests/common/time` 的 3 筆死碼；`prepare-release.yml` 與 `app_copy_integration`（不在 PR 的路徑上，沒有走查）。
+- **檢查**：第 4、5、8、9、11 項做了反向驗證（暫時放入合成的工具、產品、原始檔，檢查恢復並抓到違規），紀錄在主 checkout `build/evidence/gyo2-mechanism/r0b3-reverse.log`。沒有做別模型的對抗檢查。
 
 ## 4. 隨模組刪除的守衛（它們守的性質，R1、R2 重建時參考）
 

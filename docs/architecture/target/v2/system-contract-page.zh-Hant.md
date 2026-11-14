@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是分支 `claude/gyo2-mechanism` 上已經能跑的程式，不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`（同分支）。
+更新：2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 ## 1. 一個 System 長這樣
 
@@ -71,6 +71,8 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 - **不必寫**：決定性區、role、rollback。不填就是一般的資料。
 
 資料的登記只要名字。兩個例外：事件要寫它屬於哪個時鐘（Fixed 或 Frame）；元件預設只准一個 System 寫，要多個寫者得標 `Shared`。
+
+元件還可以多寫一行**初始值的宣告**（第 8 節）：`r.InitialValue<Position, &PositionOf>();`——「`Position` 的第一個值從 `Arrival` 這個請求、用 `PositionOf` 算」。生成者只生成請求，機制在同步點把元件補上。
 
 ## 5. 機制替作者做的
 
@@ -144,7 +146,7 @@ AllotterExhausted [W-9]: the entity allotter's range is used up world=test-world
 
 ## 7. 寫樣本時實際碰到的
 
-1. **生成實體的 System 也算那些元件的寫者。** 「一個 System 生成、另一個更新」的元件，在預設獨占之下是啟動錯誤。使用者 2026-11-14 定：數法不改，這種情形由作者用漏斗處理，Engine 提供漏斗的工具（第 8 節）。工具的形式也定了：登記元件時宣告「它的初始值從哪個請求、用哪個函式算」，機制在同一個同步點補上。工具還沒實作；樣本目前把 Position、Velocity、Health 標成 Shared 才過，是暫時的。
+1. **生成實體的 System 也算那些元件的寫者。** 「一個 System 生成、另一個更新」的元件，在預設獨占之下是啟動錯誤。使用者 2026-11-14 定：數法不改，這種情形由作者用漏斗處理，Engine 提供漏斗的工具（第 8 節）。工具的形式也定了：登記元件時宣告「它的初始值從哪個請求、用哪個函式算」，機制在同一個同步點補上。工具已實作（`Registrar::InitialValue`）；樣本的 Position、Velocity、Health 回到預設的獨占。
 2. **事件一定要指定時鐘**，而且只能在那個時鐘的 schedule 裡讀寫。
 3. **System 沒有捕獲**，所以要記東西只有兩條路：`Local<T>`（自己的），或 Resource（共用的）。
 4. **`Query` 的 `Count()` 數的是「符合這個查詢的實體有幾個」，會真的走一遍**，不是讀某個容器的大小。它只有這一種行為，任何查詢都一樣。（2026-11-14 曾改成「一個元件時直接讀大小」，使用者確認那是誤會後要求完全改回：「一個函數，不能有 2 種不同的行為。」）
@@ -154,13 +156,43 @@ AllotterExhausted [W-9]: the entity allotter's range is used up world=test-world
 
    這個順序是使用者 2026-11-11 問清楚後定的（`v8-arch-gyo2-sync-order-keep` 有原話）：兩個 System 之間的結果因此不隨登記的先後改變；刪除排在生成前面，是為了同一個同步點裡用同一個 id 重新加入。要「這個 tick 不要了」的作者，自己不要記那筆生成或加上。
 
+6. **每個有 `Spawn` 參數的 System 都算配發器（allotter）那個 Resource 的寫者。** 兩個以上的 System 會生成實體時，配發器要標 `Shared`，否則啟動時報「獨占但有兩個寫者」。寫漏斗的測試時碰到的；這是現況，沒有改。
+
 ## 8. 「生成者算寫者」：歷史與決定
 
 **決定**（使用者 2026-11-14，`v8-arch-gyo2-spawn-writer-funnel`）：「Despawn 是機制，不能當成普通的實作參考。選 3 項，讓作者自己做處理，但是 Engine 提供漏斗工具支持。」
 - 寫者的數法不改：生成的 bundle 照舊算寫者。
 - 「一個 System 生成、另一個更新」的元件，由作者用漏斗：生成者只放一個請求，由那個元件唯一的寫者補上真正的元件。
-- Engine 提供漏斗的工具。形式（使用者同日：「漏斗用選項 A」）：照 Bevy 的 required components 調整——登記元件時宣告它的初始值從哪個請求、用哪個函式算；生成者只生成請求，機制在請求出現的同一個同步點把元件補上。寫者的數法不動。作者想自己決定寫入順序時不用這個工具：多個 System 照指定的先後寫，就把元件標 Shared 並寫 before／after；維持一個寫者但自己排來源的先後，就由那個寫者在函式裡讀請求或事件自己套用。還沒實作。
+- Engine 提供漏斗的工具。形式（使用者同日：「漏斗用選項 A」）：照 Bevy 的 required components 調整——登記元件時宣告它的初始值從哪個請求、用哪個函式算；生成者只生成請求，機制在請求出現的同一個同步點把元件補上。寫者的數法不動。作者想自己決定寫入順序時不用這個工具：多個 System 照指定的先後寫，就把元件標 Shared 並寫 before／after；維持一個寫者但自己排來源的先後，就由那個寫者在函式裡讀請求或事件自己套用。已實作，用法與規則見下。
 - 「比照 Despawn，生成也不算寫者」被否決：Despawn 不算寫者是機制自己的規定，不能拿來類比一般的實作。
+
+**用法**（`Registrar::InitialValue`，2026-11-14 實作；測試 `tests/common/kernel/InitialValueTests.cpp`）：
+
+```cpp
+struct Arrival { std::int32_t x, y, dx, dy, hp; };                 // 請求：生成者只生成這個
+Position PositionOf(const Arrival& a) { return Position{a.x, a.y}; }  // 純函式：請求 → 初始值
+
+r.Component<Position>({.name = "Position"});   // 預設獨占；唯一的寫者是 Move
+r.Component<Arrival>({.name = "Arrival"});
+r.InitialValue<Position, &PositionOf>();
+
+SystemResult Spawner(Spawn<Bundle<Arrival>> spawn) { ... spawn.New(Arrival{0, 10, 1, 0, 2}); ... }
+```
+
+它不是作者在 System 裡呼叫的 helper，是登記時的宣告，和 hook 同一類：作者宣告規則，機制在同步點執行。規則：
+
+- **什麼時候補**：請求的元件在同步點「新出現」在一個實體上時（生成的 bundle 裡有它，或加到原本沒有它的實體上）。補在加上元件之後、OnAdd 的 hook 之前，所以下一個 stage 的 System 看得到，`Added<T>` 與 OnAdd 也照常。
+- **已經有的不蓋**：實體已經有那個元件（例如 bundle 裡自己放了），就不動它。
+- **覆寫請求不重補**：對已經有請求的實體再寫一次請求，不會重算元件。
+- **請求留在實體上**，機制不替作者移除。
+- **可以串**：`Position` 從 `Arrival`、`Bounds` 從 `Position`，在同一個同步點補完。
+- **多個請求給同一個元件**：一個實體同時得到兩個請求時，用先登記的那個請求元件的值（ComponentId 較小者）。
+- **只有元件的擁有者能宣告**：宣告的 plugin 必須是登記那個元件的 plugin；請求可以是別的 plugin 的元件。
+- **決定性區**：(c) 區的元件只能從 (c) 區的請求取值（啟動錯誤 D-E7／Z1）。沒填區的產品不受影響。
+- **Host 直接寫 World 的 API 不補**（`World::Insert`），和 hook 一樣只在同步點。
+- **寫者的數法沒有改**：補值的是機制，不是 System，不進寫者的計數；把元件直接放進 bundle 的 System 照舊算寫者。
+
+還沒做的一件：Registry 的指紋與 C 指紋沒有把這個宣告算進去。算進去要改 J-18 的 golden（守衛測試），等使用者核准。
 
 **歷史**：
 

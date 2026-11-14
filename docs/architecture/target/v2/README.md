@@ -35,7 +35,9 @@
 ## dev_log
 
 - [2026_11_14_arch_global_audit.zh-Hant.md](../../../dev_logs/2026_11_14_arch_global_audit.zh-Hant.md)：全局計畫審計。
-- `2026_11_14_gyo2_mechanism_skeleton.zh-Hant.md`：機制的骨架（在分支 `claude/gyo2-mechanism`，PR #225 合併後出現在 `docs/dev_logs/`）。
+- [2026_11_14_gyo2_mechanism_skeleton.zh-Hant.md](../../../dev_logs/2026_11_14_gyo2_mechanism_skeleton.zh-Hant.md)：機制的骨架跑通。
+- [2026_11_14_gyo2_r0b3_ci.zh-Hant.md](../../../dev_logs/2026_11_14_gyo2_r0b3_ci.zh-Hant.md)：R0b-3（守衛與 CI 政策的調整），PR #225 併入。
+- [2026_11_14_gyo2_initial_value.zh-Hant.md](../../../dev_logs/2026_11_14_gyo2_initial_value.zh-Hant.md)：漏斗工具 `Registrar::InitialValue`。
 
 ## 沒有搬過來的
 

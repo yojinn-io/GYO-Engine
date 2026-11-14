@@ -5,9 +5,9 @@ GYO2 線的持續記錄（使用者 2026-11-14：GYO2 的文件放 `docs/archite
 
 ## 現況
 
-- 分支：`gyo2`（長期分支；master 凍結）。機制在 `claude/gyo2-mechanism`（PR #225 → `gyo2`，工作樹 `../GYO-Engine-r0b`）；文件在 `claude/gyo2-docs-next`（工作樹 `../GYO-Engine-rederive`）。
-- 骨架（Registry、Scheduler、World、Executor、`Product`）在 gyo2 上跑通，unit test 與極限的量測完成（[說明頁](system-contract-page.zh-Hant.md)）。
-- 進行中：PR #225 的 CI（R0b-3：CI 政策測試與守衛的判定變更，[報告](rebuild-r0b-report.zh-Hant.md)第 3 節）。CI 修好之後直接做漏斗工具（`v8-arch-gyo2-count-reverted-funnel-a`）。
+- 分支：`gyo2`（長期分支；master 凍結）。機制的骨架與 R0b-3 已併入（PR #225，6b37078b；三平台 L1 通過）。
+- 進行中：分支 `claude/gyo2-funnel`（工作樹 `../GYO-Engine-r0b`）——漏斗工具 `Registrar::InitialValue` 與文件搬到 `target/v2/` 的那些 commit，一條 PR。
+- 骨架（Registry、Scheduler、World、Executor、`Product`）在 gyo2 上跑通；骨架測試已改成漏斗的寫法，生成的元件回到預設的獨占（[說明頁](system-contract-page.zh-Hant.md)第 8 節）。
 - 文件的位置：GYO2 線的文件都在本資料夾（`v8-arch-gyo2-docs-target-v2`）。
 
 ## 決定（使用者）
@@ -83,12 +83,14 @@ GYO2 線的持續記錄（使用者 2026-11-14：GYO2 的文件放 `docs/archite
 
 - 2026-11-14 **文件搬到 `docs/architecture/target/v2/`**（`v8-arch-gyo2-docs-target-v2`）：十四份文件與兩張圖搬過來、連結改寫；本頁從 `plans/kernel/HANDOFF.md` 拆出。分支 `claude/gyo2-mechanism` 上引用舊路徑的地方（dev_log、README）等 R0b-3 的修改交回後在那條分支改。
 
+- 2026-11-14 **R0b-3 完成，PR #225 併入 `gyo2`**（使用者「fix CI」；先前已說「可以合併」）：實作 agent（Opus／high）照[報告](rebuild-r0b-report.zh-Hant.md)第 3 節的 11 項與兩處 workflow 修改做，架構師審過。本機 ctest 93／93、CI 政策測試 250 個通過（2 個註明理由的 skip）；L1 run 43592395256（commit dd5948e1）linux-x64、windows-x64、macos-arm64 都通過——機制的程式第一次在 MSVC 與 gcc 上編過。做法與表不同的地方（零工具時跳過 toolchain 的打包等）記在報告 3.1 節，待使用者事後確認。合併 commit 6b37078b。
+
+- 2026-11-14 **漏斗工具實作**（`v8-arch-gyo2-count-reverted-funnel-a` 的選項 A；使用者「CI 修好之後直接做漏斗工具」）：`Registrar::InitialValue<Target, Fn>()`，分支 `claude/gyo2-funnel`，commit a53a5622。元件的擁有者宣告「初始值從哪個請求元件、用哪個純函式算」；機制在同步點的加上元件之後、OnAdd 之前補上。寫者的數法沒有改。架構師自己定的細節（已經有的不蓋、覆寫請求不重補、請求留著、可以串、多個請求時取 ComponentId 小的、只有擁有者能宣告、(c) 區只能從 (c) 區取值、Host 的 API 不補）列在[說明頁](system-contract-page.zh-Hant.md)第 8 節，交使用者看。測試 `InitialValueTests.cpp` 8 個案例；突變 8 條都由預期的案例失敗抓到（主 checkout `build/evidence/gyo2-mechanism/funnel-mutants.log`）；本機完整 ctest 93／93。骨架測試改成漏斗寫法，Position、Velocity、Health 回到預設的獨占。**沒做**：Registry 指紋與 C 指紋還沒把這個宣告算進去（要改 J-18 的 golden，等使用者核准）。
+
 ## 下一步
 
-- PR #225：R0b-3 的修改審過、三平台 L1 通過後合併（使用者已說「可以合併」）。
-- 漏斗工具（選項 A）：登記元件時宣告「初始值從哪個請求元件、用哪個函式算」，機制在同一個同步點補上；寫者的數法不動。做完把骨架測試的範例改成漏斗寫法，生成的元件回到預設的獨占。
+- 待使用者：(1) 漏斗工具的細節（說明頁第 8 節的十條規則）；(2) 把初始值的宣告算進 Registry 指紋與 C 指紋——要改 J-18 的 golden 與指紋的格式版本，照 AGENTS §14.4 需要核准；(3) R0b-3 與表不同的做法（報告 3.1 節）；(4) System 契約說明頁整頁的確認；(5) hook 記下的變更何時生效（U3）。
 - 時間、固定步、跨時鐘事件的設計 v2：從規格 H.2／H.4／H.7／G.2 與 v7 的計畫出發（v1 沒通過檢查）；名字已定（`TickAccumulator`、`RealTime`／`GameTime`／`FixedTime`、Module `runner`）。
 - 同詞異義表 v3：解釋改寫成一般的技術定義，系譜移到附錄。
 - namespace 根的改名批：System 契約確認之後、任何產品移植之前。
 - 還沒做的 11 月 11 日決定：runner 的安裝（可呼叫）、Extract 的執行、boundary 輸入、資產模型、Loading 的分批（[對照表](rebuild-1111-decisions-status.zh-Hant.md)）。
-- 待使用者：System 契約說明頁整頁的確認；hook 記下的變更何時生效（U3）。
