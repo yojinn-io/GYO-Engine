@@ -41,7 +41,7 @@
 - 產品線前置的交接卡：[docs/object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md](../../../object_fps_pvp/plans/v8/kernel-prep.zh-Hant.md)（`v8-product-kernel-prep`，2026-11-12）。
 - [migration-plan.zh-Hant.md](migration-plan.zh-Hant.md)：**遷移批規劃（`v8-arch-migration-plan`；稿完成、待使用者核准）**——34 批＋條件批、閘門 G1／G2a／G2b／G3、§3 七項（Delta-1～6）、各批 Feature→Contract→Architecture 與模型／檔位、預算 BU-1～BU-8（多為推定）、未決 U1～U14、守衛與突變隨程式遷移的橫切規則；三輪對抗＋驗收點檢，處置記錄在文末。
 - [global-audit.zh-Hant.md](global-audit.zh-Hant.md)：**全局計畫審計（2026-11-14）**——舊架構污染、PvP 污染與合理的分類，架構基本前提的對抗；使用者據第 5 節定了範圍與停點。
-- [rederive-detect-declaration.zh-Hant.md](rederive-detect-declaration.zh-Hant.md)：`v8-arch-rederive-detect` 的事前宣告（草稿，待使用者核准）——凍結 World 資料模型；新舊框架地圖、概念出處表、宣告級試跑。
+- [rebuild-declaration.zh-Hant.md](rebuild-declaration.zh-Hant.md)：`v8-arch-rebuild` 的事前宣告（草稿，待使用者核准）——新分支 `gyo2` 重建：階段 R0～R6；R0 帶過去清單與同詞異義表。
 - [HANDOFF.md](HANDOFF.md)：記錄器。
 - `docs/architecture/target/`（圖書管理員 2026-11-11 定）：**目標架構的部件文件**，只寫使用者已裁決的部分；首篇 [kernel/world.zh-Hant.md](../../target/world.zh-Hant.md)（鍵格式與配發策略、change stamp）。
 

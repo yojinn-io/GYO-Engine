@@ -1,6 +1,6 @@
 # 全局計畫審計：舊架構污染、PvP 污染與合理（v8-arch-global-audit）
 
-更新：2026-11-14。Owner：架構（架構師會話）。**狀態：審計完成；使用者 2026-11-14 已依第 5 節定了範圍與停點（kernel `HANDOFF.md` 決定行 `v8-arch-engine-scope-general`、`v8-arch-gyo2-in-repo`、`v8-arch-single-player-no-complexity`、`v8-arch-rederive-medium`）。下一批：[rederive-detect 事前宣告](rederive-detect-declaration.zh-Hant.md)。**
+更新：2026-11-14。Owner：架構（架構師會話）。**狀態：審計完成；使用者 2026-11-14 已依第 5 節定了範圍與停點（kernel `HANDOFF.md` 決定行 `v8-arch-engine-scope-general`、`v8-arch-gyo2-in-repo`、`v8-arch-single-player-no-complexity`、`v8-arch-rederive-medium`），之後改走新分支重建（`v8-arch-rebuild-branch`）。下一批：[rebuild 事前宣告](rebuild-declaration.zh-Hant.md)。**
 
 使用者的要求：檢查哪些地方受舊架構污染導致決策偏差、哪些受 PvP 的設計污染、哪些合理，並附一次架構基本前提的對抗。使用者的判斷：「現在的決策都是局部決策，最嚴重的是架構上的偏差，越到實作越明顯，整個架構都開始偏回之前系統的形狀。」
 

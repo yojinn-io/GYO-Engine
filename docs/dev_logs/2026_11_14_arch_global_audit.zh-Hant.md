@@ -25,6 +25,7 @@
 1. 第一次開的三個 Opus 審計被使用者停掉。使用者的意思是「審計用 Fable 跑」，架構師誤讀成「統合用 Fable」。照使用者的編制重開。
 2. Fable 對 v1 的抽查：13 項屬實，6 項不實或誇大。不實的項目都已在 v2 改正。
 3. 使用者看過 v2 第 5 節後，定了四件事，見 kernel HANDOFF 決定行：目標是通用引擎、實質是 GYO2 但放在 GYO repo、單機要支援且不增加複雜度、停點選「中」。
+4. 同日使用者提出新分支重建，架構師同意並補三點（帶過去清單由使用者逐項核准、第一個搬的產品不是 PvP、master 凍結）。使用者決定走新分支（`v8-arch-rebuild-branch`），並要求先開分支、不在 master 上做。長期分支 `gyo2` 從 master 08566260 切出；本批的文件以 PR 進 `gyo2`。「中」的宣告草稿改寫成 [rebuild 事前宣告](../architecture/plans/kernel/rebuild-declaration.zh-Hant.md)。
 
 ## 證據
 
