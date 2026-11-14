@@ -232,26 +232,30 @@ public:
     [[nodiscard]] std::vector<EntityId> Entities() const {
         Check("Query");
         std::vector<EntityId> out;
-        const Detail::ColumnBase* driver = nullptr;
-        for (std::size_t i = 0; i < kTerms; ++i) {
-            if (kKinds[i] == TermKind::Without) continue;
-            const Detail::ColumnBase& column = Detail::ColumnAt(*world_, ids_[i]);
-            if (driver == nullptr || column.Size() < driver->Size()) driver = &column;
-        }
-        if (driver == nullptr) {
-            for (EntityId id : Detail::AliveEntities(*world_)) {
-                if (Matches(id)) out.push_back(id);
-            }
-            return out;
-        }
-        for (std::size_t i = 0; i < driver->Size(); ++i) {
-            const EntityId id = driver->KeyAt(i);
-            if (Matches(id)) out.push_back(id);
-        }
+        Walk([&out](EntityId id) { out.push_back(id); });
         return out;
     }
 
-    [[nodiscard]] std::size_t Count() const { return Entities().size(); }
+    // The number of entities that have the component, read from its storage:
+    // no walk. Only a Query of exactly one Read, Write or With term has such a
+    // number; any other Query has no stored count and offers CountMatching.
+    [[nodiscard]] std::size_t Count() const
+        requires(kTerms == 1 &&
+                 (kKinds[0] == TermKind::Read || kKinds[0] == TermKind::Write || kKinds[0] == TermKind::With))
+    {
+        Check("Query");
+        return Detail::ColumnAt(*world_, ids_[0]).Size();
+    }
+
+    // The number of matching entities, found by walking the Query (the cost of
+    // one ForEach without the values; nothing is allocated).
+    [[nodiscard]] std::size_t CountMatching() const {
+        Check("Query");
+        std::size_t count = 0;
+        Walk([&count](EntityId) { ++count; });
+        return count;
+    }
+
     [[nodiscard]] bool Contains(EntityId id) const {
         Check("Query");
         return Matches(id);
@@ -288,6 +292,27 @@ public:
     }
 
 private:
+    // Calls visit(id) for every matching entity in ascending EntityId order.
+    template <class Visit>
+    void Walk(Visit&& visit) const {
+        const Detail::ColumnBase* driver = nullptr;
+        for (std::size_t i = 0; i < kTerms; ++i) {
+            if (kKinds[i] == TermKind::Without) continue;
+            const Detail::ColumnBase& column = Detail::ColumnAt(*world_, ids_[i]);
+            if (driver == nullptr || column.Size() < driver->Size()) driver = &column;
+        }
+        if (driver == nullptr) {
+            for (EntityId id : Detail::AliveEntities(*world_)) {
+                if (Matches(id)) visit(id);
+            }
+            return;
+        }
+        for (std::size_t i = 0; i < driver->Size(); ++i) {
+            const EntityId id = driver->KeyAt(i);
+            if (Matches(id)) visit(id);
+        }
+    }
+
     [[nodiscard]] bool Matches(EntityId id) const {
         for (std::size_t i = 0; i < kTerms; ++i) {
             const Detail::ColumnBase& column = Detail::ColumnAt(*world_, ids_[i]);

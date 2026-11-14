@@ -178,7 +178,7 @@ TEST_CASE("J-29: a run condition sees the step before it, is evaluated every run
 
 namespace {
 SystemResult SeeAdded(Query<Read<Tag>, Added<Tag>> added) {
-    Log().push_back("added:" + std::to_string(added.Count()));
+    Log().push_back("added:" + std::to_string(added.CountMatching()));
     return Ok();
 }
 } // namespace
@@ -686,7 +686,7 @@ SystemResult ZoneCRespawns(SpawnWithId<Bundle<Pos>> spawn) {
 }
 bool FlagIsOn(Res<Flag> flag) { return flag->on != 0; }
 SystemResult SeeChangesWhenOn(Query<Read<Tag>, Changed<Tag>> changed) {
-    Log().push_back("changed:" + std::to_string(changed.Count()));
+    Log().push_back("changed:" + std::to_string(changed.CountMatching()));
     return Ok();
 }
 
@@ -694,7 +694,7 @@ SystemResult SeeChangesWhenOn(Query<Read<Tag>, Changed<Tag>> changed) {
 SystemResult SeeChanges(Query<Read<Tag>, Changed<Tag>> changed, Local<std::int32_t> runs, CurrentTick tick) {
     *runs += 1;
     Log().push_back(std::string(tick.Clock() == Domain::Fixed ? "A" : "B") + " run" + std::to_string(*runs) + " changed:" +
-                    std::to_string(changed.Count()));
+                    std::to_string(changed.CountMatching()));
     return Ok();
 }
 
@@ -983,7 +983,7 @@ SystemResult P3(Query<Read<Cc>> q) {
     return Ok();
 }
 SystemResult P4(Query<Read<Ca>, Read<Cc>> q) {
-    static_cast<void>(q.Count());
+    static_cast<void>(q.CountMatching());
     return Ok();
 }
 

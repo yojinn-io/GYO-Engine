@@ -330,6 +330,33 @@ TEST_CASE("skeleton: one sync point applies despawn and remove before spawn and 
     CHECK(world.Get<Shield>(1)->points == 7);
 }
 
+namespace {
+
+SystemResult CountsBothWays(Query<Read<Position>> all, Query<Read<Position>, With<Health>> alive, ResMut<Stats> stats) {
+    // One component: the number its storage already keeps. Two terms: a walk.
+    stats->hits = static_cast<std::int64_t>(all.Count());
+    stats->unpausedTicks = static_cast<std::int64_t>(alive.CountMatching());
+    return Ok();
+}
+
+} // namespace
+
+TEST_CASE("skeleton: Count reads the size of one component; a Query of several terms is counted by walking") {
+    auto rig = WorldTest::MakeRig([](Registrar& r) {
+        GameData(r);
+        r.AddSystem<&CountsBothWays>(In("CountsBothWays", "Simulate"));
+    });
+    REQUIRE(rig->product);
+    World& world = rig->world();
+    world.SetResource(Stats{0, 0});
+    for (EntityId id = 1; id <= 5; ++id) world.Insert(id, Position{0, 0});
+    world.Insert(2, Health{1});
+    world.Insert(4, Health{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(world.Resource<Stats>()->hits == 5);
+    CHECK(world.Resource<Stats>()->unpausedTicks == 2);
+}
+
 TEST_CASE("skeleton: two writers with no order are tied by registration and listed") {
     auto rig = WorldTest::MakeRig([](Registrar& r) {
         GameData(r);
