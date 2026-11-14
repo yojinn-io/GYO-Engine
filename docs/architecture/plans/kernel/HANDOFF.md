@@ -99,6 +99,7 @@
 | `v8-arch-gyo2-product-type-name` | 2026-11-14（使用者，主會話；取代 `v8-arch-kernel-app-name`）。對「舊設計裡定名為 App 的那個型別…它照舊叫 App，還是另外取名？」：「這個不叫 App 了，太模糊 直接用 Product」。同時：「Match 不算完整遊戲，而且這個應該屬於產品端。」（Module 的分法看的是完整的遊戲）；對 AGENTS §6 的用詞：「改，雖然 master 還在用，不過以 GYO2 優先。」（只改 gyo2 上的 AGENTS；條文的改法先給使用者看）。 |
 | `v8-arch-gyo2-agents-s6-terms` | 2026-11-14（使用者，主會話）。「AGENTS §6 照你擬的改」。只改 gyo2 線的 AGENTS.md §6（master 的不動，「以 GYO2 優先」）：Application／Editor → Product（Game と Tool の二種類）；「Engine と Product・Tool の間の再利用可能な層」→ Module と Plugin の区別と判断の一文（それがないと完全な Game が成立しないか）；adapter の置き場所はその一文で決める；MUST／MUST NOT の用語を合わせる。§6 以外（§8 的 Application／Editor、各處把 Tool 與 Product 並列的寫法）還沒掃，待使用者決定要不要交風紀委員全篇處理。 |
 | `v8-arch-gyo2-diagrams-rename-only` | 2026-11-14（使用者，主會話）。「mechanism-runtime.svg 這個圖，你改圖裡面的名字就行了。邏輯和流向幾乎沒變。」「control-plane-revised.svg 這個也是。」→ 兩張圖在 gyo2 線只換名字後沿用（Runtime→Product、Host→組裝（setup）與 runner、欄→ECS 元件、句柄→System 參數、change tick→stamp、外部服務→World 外的 IO）；結構與箭頭不動。換掉的清單與沒動的部分記在[三張圖的重新評審](rebuild-diagram-review.zh-Hant.md)第 7 節。`networking-systems.svg` 不動。 |
+| `v8-arch-gyo2-control-plane-base-contract` | 2026-11-14（使用者，主會話）。「control-plane-revised.svg 不過要重新調整一下，這個是基礎的 System 契約」→ 圖二調整成只含基礎的 System 契約：拿掉決定性區、digest、Gateway 與 Snapshot 的寫法；歧義預設穩定平手並讓人看得到、嚴格模式選用；下半換成每個 System 都受的三處約束。調整的清單在[三張圖的重新評審](rebuild-diagram-review.zh-Hant.md)第 7 節。調整的範圍是架構師照評審第 3 節的判定做的，待使用者看圖確認。 |
 
 ## 未定
 
