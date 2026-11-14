@@ -43,7 +43,8 @@ Scans every C/C++ file and CMakeLists.txt under engine/kernel/ for:
       writable-symbol guard kernel_symbols.py) never sees it (review B8; architect 2026-11-13). Allowed: constexpr
       or consteval, const applied to the variable (not only to a pointee), inline functions and inline namespaces.
   K5  an include outside an allowlist: a C++ standard library header (STANDARD_HEADERS) in angle brackets, or a
-      project include under engine/base/ or engine/kernel/ with no ".." in it. No capability module, no platform
+      project include under engine/base/, engine/entity_store/ (Delta-3, world-exec) or engine/kernel/ with no ".."
+      in it. No capability module, no platform
       header. An include directive (#include, #include_next, #import, %:include) whose target cannot be read
       as <...> or "..." (a macro, for example) is reported too (fail closed).
   K6  a log call outside the Executor: Log(, SetLogHandler, an include of engine/base/Log.hpp, <iostream>,
@@ -96,7 +97,10 @@ K6 = re.compile(r"\bLog\s*\(|\bSetLogHandler\b|\bstd::(?:c(?:out|err|log)|printl
 K7 = re.compile(r"\b(?:far|near|FAR|NEAR)\b")
 DIRECTIVE = re.compile(r"^[ \t]*(?:#|%:)[ \t]*(?:include_next|include|import)\b")
 TARGET = re.compile(r"[ \t]*([<\"])([^>\"]+)[>\"]")
-ALLOWED_PROJECT_INCLUDES = ("engine/base/", "engine/kernel/")
+# engine/entity_store/: Delta-3 of the migration plan (user 2026-11-13, world-exec): the World's columns are kept by
+# entity_store's algorithms (target/world section 6, layout 2). The link side is pinned by
+# gyo_expect_links(gyo_kernel GYO::Base GYO::EntityStore) in tests/common/kernel/CMakeLists.txt.
+ALLOWED_PROJECT_INCLUDES = ("engine/base/", "engine/entity_store/", "engine/kernel/")
 STANDARD_HEADERS = frozenset("""
     algorithm any array atomic barrier bit bitset charconv chrono compare complex concepts condition_variable
     coroutine deque exception execution expected filesystem flat_map flat_set format forward_list fstream
@@ -303,7 +307,8 @@ def file_findings(relative, raw, name_patterns):
             yield number, "K3", "<" + target + ">"
         if target in LOG_HEADERS and not executor_file:
             yield number, "K6", target
-        project = target.startswith(ALLOWED_PROJECT_INCLUDES) and ".." not in target.split("/")
+        # ".." between "/" or "\\" separators (a backslash path reaches outside the allowlist on Windows too).
+        project = target.startswith(ALLOWED_PROJECT_INCLUDES) and ".." not in re.split(r"[/\\]", target)
         if not (project or (kind == "<" and target in STANDARD_HEADERS)):
             yield number, "K5", target
     for match in K2.finditer(code):

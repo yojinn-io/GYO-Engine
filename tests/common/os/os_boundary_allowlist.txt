@@ -11,7 +11,3 @@ engine/time/src/Waiter.cpp R3 10  # kqueue, kevent, GetLastError
 # or stay as permanent entries with the reason written here.
 tests/common/time/WaiterTests.cpp R2 2  # expected backend per OS (os-wait-backend)
 tests/common/threads/RoleThreadTests.cpp R2 4  # permanent: what a role reports applied per OS; os-threads-backend kept its judgments (PLAN 7.14) and reads the OS back in tests/common/os/ThreadTests.cpp
-tests/common/trace/TraceSinkTests.cpp R2 2  # CRLF on Windows and /dev/full on Linux (permanent unless moved)
-tests/common/core/asset/AssetPathResolverTests.cpp R2 1  # an absolute path per OS (os-close)
-tests/common/platform_sdl/EntryTests.cpp R1 1  # sys/wait.h to read a child's exit status (permanent)
-tests/common/platform_sdl/EntryTests.cpp R2 2  # child-process exit status per OS (permanent)

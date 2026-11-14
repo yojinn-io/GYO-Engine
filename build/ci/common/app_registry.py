@@ -65,7 +65,12 @@ def export_registry(registry: Path | None = None, *, cmake="cmake") -> list[tupl
 
 
 def export_tools(registry: Path | None = None, *, cmake="cmake", repository_root: Path | None = None) -> dict[str, list[str]]:
-    """Consume CMake's release selection, including each tool's default variant."""
+    """Consume CMake's release selection, including each tool's default variant.
+
+    Every release platform selects at least one tool, except when no tool is
+    registered at all: then CMake selects none on every platform and says so.
+    A selection that is empty on some platforms only is invalid.
+    """
     with TemporaryDirectory(prefix="gyo-tools-registry-") as work:
         output = Path(work) / "tools.json"
         command = [cmake, f"-DGYO_OUTPUT={output}"]
@@ -85,7 +90,7 @@ def export_tools(registry: Path | None = None, *, cmake="cmake", repository_root
         if not isinstance(row, dict) or row.get("platform") not in PLATFORMS:
             raise ValueError("CMake tool registry exporter returned an invalid platform")
         platform, tools = row["platform"], row.get("tools")
-        if (platform in selected or not isinstance(tools, list) or not tools
+        if (platform in selected or not isinstance(tools, list)
                 or any(not isinstance(tool, str) or not re.fullmatch(r"[a-z][a-z0-9_]*:[a-z][a-z0-9_]*", tool)
                        for tool in tools)
                 or len({tool.split(":", 1)[0] for tool in tools}) != len(tools)):
@@ -93,6 +98,10 @@ def export_tools(registry: Path | None = None, *, cmake="cmake", repository_root
         selected[platform] = tools
     if not set(RELEASE_PLATFORMS) <= set(selected):
         raise ValueError("CMake tool registry exporter must select tools for every release platform")
+    if any(selected.values()) and not all(selected.values()):
+        raise ValueError("CMake tool registry exporter returned an invalid tool selection")
+    if not any(selected.values()):
+        print("No tool is registered: the toolchain rows select no tool and assemble no package", file=sys.stderr)
     return {platform: selected[platform] for platform in RELEASE_PLATFORMS}
 
 

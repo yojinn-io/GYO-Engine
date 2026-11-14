@@ -51,8 +51,9 @@ std::vector<Mount> Simulate() { return {At("FixedUpdate", "Simulate")}; }
 
 // ---- J-14 (S-6, S-7, S-8)
 
-TEST_CASE("J-14: a System, component, resource or event without a zone fails at finish") {
+TEST_CASE("J-14: with RequireExplicitZones, a System, component, resource or event without a zone fails at finish") {
     Built built = Finish({{"test", [](Registrar& r) {
+                              r.RequireExplicitZones();
                               r.Component<TestPos>({.name = "TestPos"});
                               r.Resource<TestRes>({.name = "TestRes"});
                               r.Event<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
@@ -65,6 +66,48 @@ TEST_CASE("J-14: a System, component, resource or event without a zone fails at 
     CHECK(KernelTest::ErrorCount(built, StartupCode::DE7) == 4);
     REQUIRE_FALSE(static_cast<bool>(built.result));
     CHECK(HasRule(built, StartupCode::DE7, "S-6"));
+}
+
+TEST_CASE("J-14: without RequireExplicitZones, a zone left unset is zone B") {
+    Built built = Finish({{"test", [](Registrar& r) {
+                              r.Component<TestPos>({.name = "TestPos"});
+                              r.Resource<TestRes>({.name = "TestRes"});
+                              r.Event<TestEvent>({.name = "TestEvent", .domain = Domain::Fixed});
+                              r.Schedule(FixedSchedule());
+                              SystemOptions o;  // no zone given
+                              o.name = "ReadPos";
+                              o.mounts = Simulate();
+                              r.AddSystem<&ReadPos>(o);
+                          }}});
+    KERNEL_REQUIRE_OK(built);
+    const FrozenRegistry& frozen = built.registry->Frozen();
+    bool sawComponent = false;
+    for (const ColumnInfo& info : frozen.Components()) {
+        if (info.name == "TestPos") {
+            sawComponent = true;
+            CHECK(info.zone == Zone::B);
+        }
+    }
+    CHECK(sawComponent);
+    bool sawResource = false;
+    for (const ResourceInfo& info : frozen.Resources()) {
+        if (info.name == "TestRes") {
+            sawResource = true;
+            CHECK(info.zone == Zone::B);
+        }
+    }
+    CHECK(sawResource);
+    bool sawEvent = false;
+    for (const EventInfo& info : frozen.Events()) {
+        if (info.name == "TestEvent") {
+            sawEvent = true;
+            CHECK(info.zone == Zone::B);
+        }
+    }
+    CHECK(sawEvent);
+    const SystemInfo* system = frozen.SystemNamed("ReadPos");
+    REQUIRE(system != nullptr);
+    CHECK(system->zone == Zone::B);
 }
 
 TEST_CASE("J-14: a zone C System with Local fails; zone B with Local passes") {

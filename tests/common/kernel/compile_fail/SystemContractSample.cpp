@@ -18,7 +18,13 @@
 //   GYO_KERNEL_SAMPLE_CONDITION_WRITE   J-13: a run condition that writes -> GYO_KERNEL_REJECT_CONDITION_WRITE
 //   GYO_KERNEL_SAMPLE_MEMBER            J-10: a member function -> GYO_KERNEL_REJECT_MEMBER_FUNCTION
 //   GYO_KERNEL_SAMPLE_HOOK_PARAMETER    a hook with a World& parameter -> GYO_KERNEL_REJECT_PARAMETER
+// Added by world-exec (spec J-4, "a handle kept in Local or a static does not compile"):
+//   GYO_KERNEL_SAMPLE_HANDLE_COPY       requires a handle to be copyable or movable; must fail with
+//                                       GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE (a handle that could be
+//                                       copied or moved could be kept past its call)
 #include "engine/kernel/Kernel.hpp"
+
+#include <type_traits>
 
 namespace {
 
@@ -66,6 +72,12 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
     registrar.AddSystem<&Holder::Member>({.name = "Member"});
 #elif defined(GYO_KERNEL_SAMPLE_HOOK_PARAMETER)
     registrar.Hook<SamplePos, &TakesWorld>(HookTrigger::OnAdd, {.name = "HookTakesWorld"});
+#elif defined(GYO_KERNEL_SAMPLE_HANDLE_COPY)
+    (void)registrar;
+    static_assert(std::is_copy_constructible_v<Query<Read<SamplePos>>> || std::is_move_constructible_v<Query<Read<SamplePos>>> ||
+                      std::is_copy_constructible_v<Res<SamplePos>> || std::is_move_constructible_v<Res<SamplePos>> ||
+                      std::is_copy_constructible_v<Commands> || std::is_move_constructible_v<Commands>,
+                  "GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE: kernel handles are neither copyable nor movable");
 #else
     (void)registrar;
 #endif

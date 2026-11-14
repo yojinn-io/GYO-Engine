@@ -596,6 +596,7 @@ TEST_CASE("J-24: several errors of different codes come back in one report") {
         r.AddSystem<&ReadA>(Sys("ReadA", Zone::C, Sim()));
         r.AddSystem<&SpawnPos>(Sys("SpawnPos", Zone::C, Sim()));
         r.AddSystem<&ReadSettings>(Sys("ReadSettings", Zone::B, {At("Update", "First")}));
+        r.RequireExplicitZones();
         r.AddSystem<&ReadMarker>(Sys("NoZone", Zone::Unset, {At("Update", "First")}));
     });
     REQUIRE_FALSE(static_cast<bool>(built.result));

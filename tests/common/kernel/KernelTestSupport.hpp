@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -36,7 +37,13 @@ struct TestRes { std::int64_t value; };
 struct TestOtherRes { std::int64_t value; };
 struct TestLink { std::uint32_t handle; };
 struct TestFrameTime { std::int64_t ns; };
-struct TestAllotter { std::uint64_t next; };
+// Satisfies EntityAllotter with one 8-byte member, so its registered shape (and
+// the Registry fingerprint goldens of registry-schedule) stays as it was.
+struct TestAllotter {
+    std::uint64_t next;
+    std::optional<EntityId> Allot() { return next++; }
+    bool Owns(EntityId) const { return false; }
+};
 struct TestRecord { std::uint32_t code; };
 struct ReplicatedSet {};
 struct DigestTag {};

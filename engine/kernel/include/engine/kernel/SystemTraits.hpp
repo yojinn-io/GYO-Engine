@@ -277,6 +277,28 @@ void ResolveParams(AccessResolver& resolver) {
     ((resolver.Parameter(position++), ResolveEntries(resolver, typename ParamTraits<P>::Contribution{})), ...);
 }
 
+// The type-erased call of a System, hook or run condition (spec B.4 points 7
+// and 9): one function per callable; the handles are prvalues that initialize
+// the by-value parameters directly, so no tuple and no move is involved. Fetch
+// has no side effect, so the unspecified argument evaluation order (MSVC and
+// Clang differ) cannot change a result.
+using RunFn = SystemResult (*)(SystemContext&);
+using ConditionFn = bool (*)(SystemContext&);
+
+template <class Sig>
+struct InvokerOf;
+template <class R, class... P>
+struct InvokerOf<R (*)(P...)> {
+    template <auto Fn>
+    static R CallFunction([[maybe_unused]] SystemContext& call) {
+        return Fn(ParamTraits<P>::Fetch(call)...);
+    }
+    template <class F>
+    static R CallLambda([[maybe_unused]] SystemContext& call) {
+        return F{}(ParamTraits<P>::Fetch(call)...);
+    }
+};
+
 template <class Sig>
 struct ResolverOf;
 template <class R, class... P>

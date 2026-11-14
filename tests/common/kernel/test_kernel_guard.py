@@ -424,11 +424,17 @@ struct Shapes {
 
     # K5 coverage: the allowlists are pinned (B4, B5, B19, A2) ---------------------------------------------------
 
-    def test_k5_project_allowlist_is_exactly_base_and_kernel(self):
-        self.assertEqual(guard.ALLOWED_PROJECT_INCLUDES, ("engine/base/", "engine/kernel/"))
+    def test_k5_project_allowlist_is_exactly_base_entity_store_and_kernel(self):
+        # Delta-3 (world-exec, user 2026-11-13) added engine/entity_store/; nothing else.
+        self.assertEqual(guard.ALLOWED_PROJECT_INCLUDES, ("engine/base/", "engine/entity_store/", "engine/kernel/"))
+
+    def test_k5_entity_store_include_passes(self):
+        self.write("engine/kernel/src/Uses.cpp", '#include "engine/entity_store/EntityColumns.hpp"\n')
+        self.assertClean()
 
     def test_k5_other_engine_modules_and_products_are_reported(self):
-        for target in ("engine/os/Thread.hpp", "engine/entity_store/EntityColumns.hpp", "apps/demo/Demo.hpp"):
+        for target in ("engine/os/Thread.hpp", "engine/entity_store_extra/Columns.hpp", "engine/math/Vec3.hpp",
+                       "engine/render/RenderDevice.hpp", "apps/demo/Demo.hpp"):
             with self.subTest(target=target):
                 self.write("engine/kernel/src/Uses.cpp", f'#include "{target}"\n')
                 self.assertReported("K5", target)
@@ -444,7 +450,9 @@ struct Shapes {
         self.assertReported("K5", "vector")
 
     def test_k5_parent_directory_in_a_project_include_is_reported(self):
-        for target in ("engine/kernel/../render/RenderDevice.hpp", "engine/base/../os/Thread.hpp"):
+        for target in ("engine/kernel/../render/RenderDevice.hpp", "engine/base/../os/Thread.hpp",
+                       "engine/entity_store/../os/Thread.hpp", "engine/entity_store/..\\os\\Thread.hpp",
+                       "engine/base/..\\os\\Thread.hpp"):
             with self.subTest(target=target):
                 self.write("engine/kernel/src/Uses.cpp", f'#include "{target}"\n')
                 self.assertReported("K5", target)

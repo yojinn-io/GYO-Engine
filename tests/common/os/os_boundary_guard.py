@@ -11,6 +11,10 @@ line is "path rule count # reason": the file must exist and its finding count fo
 a new site fails and a removed one asks for the entry to shrink. The Engine allowlist (tests/common/os) may list
 engine/ and tests/common/; any other allowlist only files under its own directory.
 
+A root that must hold sources (REQUIRED_ROOTS) and holds none is a finding: the root moved or the scan broke. The
+other roots hold products, tools and their acceptance programs; while none is registered such a root may be absent or
+hold no C/C++ source, and the guard skips it and names it in the output. It is scanned again as soon as it holds one.
+
 Usage: python3 os_boundary_guard.py [--root REPOSITORY]
 Exit status 0 when clean; 1 with one line per finding otherwise.
 """
@@ -25,13 +29,15 @@ from pathlib import Path
 # leaves this list unchanged (AGENTS.md sections 7 and 9).
 ROOTS = ("engine", "apps", "tools", "build/acceptance", "tests")
 RUNTIME_ROOTS = ("engine", "apps", "tools")
+# Roots that always hold C/C++ sources; the others are skipped, and reported as skipped, while they hold none.
+REQUIRED_ROOTS = ("engine", "tests")
 SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm"}
 # Never scanned: the OS layer's own tests (they may assert per OS), vendored code and build output. engine/os/src is
 # scanned for R5 only; engine/os/include for everything, since public headers must not leak the OS either.
 EXCLUDED = ("tests/common/os/", "third_party/", "build/target/")
 OS_SOURCES = "engine/os/src/"
-# Runtime code that R4 does not cover: the OS layer itself and the separately configured host shader tool.
-R4_EXCLUDED = ("engine/os/", "engine/render/shaders/pipeline/")
+# Runtime code that R4 does not cover: the OS layer itself.
+R4_EXCLUDED = ("engine/os/",)
 ENGINE_ALLOWLIST_DIRECTORY = "tests/common/os"
 ENGINE_ALLOWLIST_SCOPE = ("engine/", "tests/common/")
 ALLOWLIST_NAME = "os_boundary_allowlist.txt"
@@ -177,10 +183,16 @@ def file_findings(relative, text):
                     yield number, "R4", match.group(0).rstrip("( ")
 
 
+MISSING_ROOT = "does not exist"
+EMPTY_ROOT = "holds no C/C++ source"
+
+
 def scanned_files(root, roots):
+    """Yields (root, relative, path) per scanned file, or (root, None, reason) for a root with nothing to scan."""
     for top in roots:
         base = root / top
         if not base.is_dir():
+            yield top, None, MISSING_ROOT
             continue
         count = 0
         for path in sorted(base.rglob("*")):
@@ -190,7 +202,7 @@ def scanned_files(root, roots):
             count += 1
             yield top, relative, path
         if count == 0:
-            yield top, None, None
+            yield top, None, EMPTY_ROOT
 
 
 def load_allowlists(root, roots):
@@ -227,12 +239,18 @@ def load_allowlists(root, roots):
     return entries, problems
 
 
-def check(root, roots=ROOTS):
-    """Returns the list of problem lines (empty when the tree satisfies the invariants)."""
+def check(root, roots=ROOTS, skipped=None):
+    """Returns the list of problem lines (empty when the tree satisfies the invariants).
+
+    Each root left unscanned is appended to skipped, when given, as "root (reason)".
+    """
     problems, found = [], {}
     for top, relative, path in scanned_files(root, roots):
         if relative is None:
-            problems.append(f"{top}: no C/C++ source scanned; is the root right?")
+            if path == EMPTY_ROOT and top in REQUIRED_ROOTS:
+                problems.append(f"{top}: no C/C++ source scanned; is the root right?")
+            elif skipped is not None:
+                skipped.append(f"{top} ({path})")
             continue
         for number, rule, match in file_findings(relative, path.read_text(encoding="utf-8", errors="replace")):
             found.setdefault((relative, rule), []).append(f"{relative}:{number}: {rule} {match}")
@@ -257,7 +275,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[3])
     args = parser.parse_args(argv)
-    problems = check(args.root.resolve())
+    skipped = []
+    problems = check(args.root.resolve(), skipped=skipped)
+    for entry in skipped:
+        print(f"OS boundary guard: skipped root {entry}; it is scanned again once it holds a C/C++ source")
     for line in problems:
         print(f"OS boundary guard: {line}")
     if problems:

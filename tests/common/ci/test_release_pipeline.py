@@ -334,6 +334,22 @@ class PackageTests(unittest.TestCase):
             raise RuntimeError("Refusing cleanup outside the test workspace")
         shutil.rmtree(target)
 
+    def tool_registry_arguments(self):
+        """A synthetic tool registry with one packageable release tool on every platform.
+
+        The CLI cases below read it instead of the repository's registry, so they
+        exercise the release flow whatever products and tools the checkout holds.
+        """
+        registry = self.work / "tools.csv"
+        registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n"
+                            "sample_tool,,,true,false,true,true,true,true\n", encoding="utf-8")
+        descriptor = self.work / "tool-sources/tools/sample_tool/project.json"
+        descriptor.parent.mkdir(parents=True)
+        descriptor.write_text(json.dumps({"version": 1, "default_variant": "native", "requires_apps": {},
+                                          "variants": {"native": {"components": [], "packageable": True}}}),
+                              encoding="utf-8")
+        return ["--tool-registry", str(registry), "--repository-root", str(self.work / "tool-sources")]
+
     def write_packages(self, inputs=None):
         for item in inputs or packages():
             (self.work / item.name).write_bytes(item.data)
@@ -390,7 +406,7 @@ class PackageTests(unittest.TestCase):
             sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
             "prepare", "--event-path", str(event_path), "--event-name", "workflow_dispatch", "--ref", "refs/heads/main",
             "--commit", commit, "--output", str(output_path),
-            "--registry", str(registry),
+            "--registry", str(registry), *self.tool_registry_arguments(),
         ], text=True, capture_output=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(output_path.read_text(encoding="utf-8"),
@@ -402,6 +418,7 @@ class PackageTests(unittest.TestCase):
         registry, contracts = self.work / "projects.csv", self.work / "contracts"
         registry.write_text("name,description,version,enabled,windows,linux,macos\n"
                             "sample_app,,,true,true,false,false\n", encoding="utf-8")
+        tool_registry = self.tool_registry_arguments()
         contract = contracts / "build/acceptance/sample_app/checks.json"
         contract.parent.mkdir(parents=True)
         contract.write_text(json.dumps({"version": 1, "checks": [], "release_evidence": [
@@ -417,7 +434,7 @@ class PackageTests(unittest.TestCase):
                 sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
                 "prepare", "--event-path", str(event_path), "--event-name", "workflow_dispatch",
                 "--ref", "refs/heads/main", "--commit", commit, "--output", str(output_path),
-                "--registry", str(registry), "--acceptance-root", str(contracts),
+                "--registry", str(registry), *tool_registry, "--acceptance-root", str(contracts),
             ], text=True, capture_output=True, check=False)
             return result, output_path
 
@@ -440,11 +457,15 @@ class PackageTests(unittest.TestCase):
     def test_draft_cli_reads_a_dash_value_in_the_workflow_form(self):
         # The workflow passes --l4-evidence=VALUE, which argparse never reads
         # as another option; the mismatched commit stops before any API call.
+        registry = self.work / "projects.csv"
+        registry.write_text("name,description,version,enabled,windows,linux,macos\n"
+                            "sample_app,,,true,true,false,false\n", encoding="utf-8")
         result = subprocess.run([
             sys.executable, str(ROOT / "build/ci/common/release_pipeline.py"),
             "draft", "--train", "sample_app", "--tag", "sample_app-v1.0.0", "--commit", "0" * 40,
             "--prerelease", "false", "--package-directory", str(self.work), "--service-directory", str(self.work),
             "--l4-evidence=-issue#12", "--output", str(self.work / "outputs.txt"),
+            "--registry", str(registry), *self.tool_registry_arguments(),
         ], text=True, capture_output=True, check=False, env={**os.environ, "GH_TOKEN": "", "GH_REPO": ""})
         self.assertEqual(result.returncode, 1)
         self.assertNotIn("expected one argument", result.stderr)

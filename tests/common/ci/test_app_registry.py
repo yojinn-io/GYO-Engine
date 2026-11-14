@@ -1,10 +1,13 @@
 """Verify real CMake selection reaches CI matrices and release preflight unchanged."""
 
+import contextlib
+import io
 import json
 from pathlib import Path
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 for folder in ("build", "build/ci/common", "build/acceptance/common"):
@@ -73,12 +76,35 @@ class RegistryMatrixTests(unittest.TestCase):
         self.assertEqual(tools, {"windows-x64": ["alpha:native"],
             "linux-x64": ["alpha:native", "beta:native"], "macos-arm64": ["alpha:native"]})
 
-    def test_empty_release_tool_selection_is_rejected(self):
+    def test_registered_tools_without_a_release_selection_are_rejected(self):
+        registry = self.root / "tools.csv"
+        registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n"
+                            "local,Local,,1,1,0,1,1,1\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "registry export failed"):
+            app_registry.export_tools(registry, repository_root=self.root)
+
+    def test_empty_tool_registry_selects_no_tool_on_every_platform_and_says_so(self):
         registry = self.root / "tools.csv"
         registry.write_text("name,description,version,enabled,default,release,windows,linux,macos\n",
                             encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "registry export failed"):
-            app_registry.export_tools(registry, repository_root=self.root)
+        with contextlib.redirect_stderr(io.StringIO()) as stderr:
+            tools = app_registry.export_tools(registry, repository_root=self.root)
+        self.assertEqual(tools, {platform: [] for platform in RELEASE_PLATFORMS})
+        self.assertIn("No tool is registered", stderr.getvalue())
+
+    def test_selection_empty_on_only_some_platforms_is_rejected(self):
+        # CMake never exports this; the consumer still refuses it rather than
+        # reading it as "no tool registered".
+        def fake_export(command, **_):
+            output = Path(next(argument for argument in command if argument.startswith("-DGYO_OUTPUT="))
+                          .split("=", 1)[1])
+            rows = [{"platform": platform, "tools": ["alpha:native"] if index else []}
+                    for index, platform in enumerate(RELEASE_PLATFORMS)]
+            output.write_text(json.dumps({"include": rows}), encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, "", "")
+        with mock.patch.object(app_registry.subprocess, "run", side_effect=fake_export), \
+                self.assertRaisesRegex(ValueError, "invalid tool selection"):
+            app_registry.export_tools(self.tool_registry, repository_root=self.root)
 
     def test_prepare_release_accepts_empty_registry_without_remote_work(self):
         self.write_registry("")
