@@ -1,6 +1,22 @@
 # 同詞異義表（`v8-arch-rebuild` 步驟 1）
 
-更新：2026-11-14。Owner：架構（架構師會話）。**狀態：v2，交使用者確認（第 7 節）。v2 修訂後沒有再檢查。**
+更新：2026-11-14。Owner：架構（架構師會話）。**狀態：v2 加使用者 2026-11-14 的回饋（第 0 節）。角色詞的處置已照回饋改；「解釋要改」與 Module／Plugin 的定義還在向使用者確認讀法，確認後出 v3。v2 修訂後沒有再檢查。**
+
+## 0. 使用者的回饋（2026-11-14，主會話）
+
+> 其上上面的技術名詞大多沒問題，有問題的是解釋，這個改掉就好。而關鍵在於角色詞「Runtime、Host」這 2 個可以替換。Shell 和 Session 可以暫留，遇到時可以解釋。而且 Module 這個概念很不錯，Engine 內部的第三方叫 Module，Engine 外部的第三份叫 Plugin
+
+> tick 不用換呀。這個概念不光是網絡，單機遊戲也有用到的。
+
+照這段話已經改的：
+- Runtime、Host：處置改成「替換」（4.4）。
+- Shell、Session：處置改成「暫留」，遇到時解釋（4.4）。
+- Tick：本來就是照用；「現有的意思」裡把它寫成 PvP 的 tick，那是解釋的問題，v3 一起改。
+- Module、Plugin：把原話記在兩列裡（4.1、4.3）。
+
+還沒改、等確認讀法的：
+- **「有問題的是解釋」**：我的讀法是，詞本身是通用的技術名詞，照用；我寫的解釋把它們說成「舊 Kernel 設計的…」「PvP 的…」，還加了「（舊）」這類限定，這才是問題。v3 要把每個詞的解釋改成通用的技術定義，系譜（哪個舊程式、哪份舊文件用過）移到附錄。
+- **Module 與 Plugin 的「第三方」指什麼**：見 4.3 的 Module 列。
 
 出處：[判斷舊設計的機制](rebuild-judgment-rules.zh-Hant.md) 第 2 題（名字）。過程：
 - 底稿是盤點 (b) 第 4 節的 20 個詞。
@@ -42,6 +58,8 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | 加限定詞 | 幾個意思都在用；寫出每個意思的說法，並標明不加限定時指哪一個 |
 | 寫「X（舊）」 | 舊設計的概念還沒判；引用時加「（舊）」 |
 | 不用它命名新概念 | 這個詞意思太多或已被先占；一般語意與既有的型別名照用 |
+| 替換 | 舊的角色詞，新文件改用另一個詞（使用者 2026-11-14） |
+| 暫留 | 不特別處理；文件裡遇到時當場解釋它指什麼（使用者 2026-11-14） |
 
 ## 4. 表
 
@@ -55,7 +73,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | Resource | (i) AGENTS 的「資源」：性能與資源的預算、OS 資源；(ii) 舊程式的 `ModelResource`、`TextResource`、`ResourceHandle`（都不帶）；(iii) 舊 Kernel 設計：ECS 的 Resource；Bevy 同詞（`bevy_ecs/src/resource.rs:87`） | 加限定詞 | (iii) 一律寫英文「Resource」。中文「資源」留給 (i)。GPU 上的物件叫什麼、是不是 Resource，登記表判 |
 | System | (i) AGENTS 的 Subsystem＝子系統；(ii) 舊 Kernel 設計：一個 System 函式 | 沿用 | 「System」指 (ii)。(i) 寫全稱「Subsystem」 |
 | Schedule | 舊 Kernel 設計：一組排好順序的 System；Bevy 同詞（`bevy_ecs/src/schedule/schedule.rs:413`）。audio 的 `Scheduled` 是動詞的一般語意 | 沿用 | 同左 |
-| Plugin | (i) 使用者 2026-11-11：「層與目錄叫 plugins，單個才叫 plugin」，單個指 `plugins/` 下的一個套件；(ii) 舊 Kernel 設計：登記的類別 `Plugin`（`Registry.hpp:60`）；Bevy 的 `Plugin` 是這個意思（`bevy_app/src/plugin.rs:57`）；(iii) AGENTS.md:659「Plugin System」指外掛機制 | 加限定詞 | (i) 寫「plugin 套件」；(ii) 寫「`Plugin` 型別」；(iii) 照 AGENTS 的原文。層名「plugins」是你定的，目前照用；之後維持不維持，由 R1 與登記表判 |
+| Plugin | (i) 使用者 2026-11-11：「層與目錄叫 plugins，單個才叫 plugin」，單個指 `plugins/` 下的一個套件；(ii) 舊 Kernel 設計：登記的類別 `Plugin`（`Registry.hpp:60`）；Bevy 的 `Plugin` 是這個意思（`bevy_app/src/plugin.rs:57`）；(iii) AGENTS.md:659「Plugin System」指外掛機制 | 加限定詞 | (i) 寫「plugin 套件」；(ii) 寫「`Plugin` 型別」；(iii) 照 AGENTS 的原文。層名「plugins」是你定的，目前照用；之後維持不維持，由 R1 與登記表判。和 Module 是一對，見 4.3 的 Module 列 |
 | App | (i) AGENTS 的 Application＝產品（AGENTS.md:377）；(ii) 建置的 KIND app 與 `apps/` 目錄；(iii) 舊產品的類別 `EditorApp`、`PvpApplication`；(iv) 舊 Kernel 設計：把原本叫 Runtime 的型別定名為 `App`（使用者 2026-11-13「名字用 App」，是在宣告的選項裡選的） | 加限定詞 | (iv) 的名字保留，寫「App」。它裡面有什麼、含幾個 World、runner 歸誰，登記表判，這裡不定義。(i) 寫「產品」。(ii) 寫「遊戲類產品」或直接寫 KIND app |
 | Extract | 舊 Kernel 設計：把資料從主 World 單向取到渲染 World；Bevy 同詞 | 沿用 | 同左 |
 | Asset | (i) `assets/<產品>` 內容根目錄；(ii) 舊程式的 `AssetManager`、`AssetHandle`；(iii) 舊 Kernel 設計的 `Assets<T>`；Bevy 的 `Assets`（`bevy_asset/src/assets.rs:288`） | 沿用 | 一份載入後的內容。`assets/` 是內容根目錄的名字 |
@@ -82,7 +100,7 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 | Snapshot | (i) PvP wire 的狀態：`WorldSnapshot`、`SnapshotFrame`；(ii) 舊 Kernel 設計：回滾用、驗證用的快照 | 加限定詞 | 「wire 快照」「回滾快照」「驗證快照」 |
 | Registry、登記表 | (i) 舊 Kernel 設計：型別與 System 的登記（`Registry.hpp`）；(ii) 建置的產品登記：`GyoAppRegistry.cmake`、`projects.csv`；(iii) `LoaderRegistry`（不帶）；(iv) 判斷機制第 5 節的登記表 | 加限定詞 | (i)「型別與 System 的 Registry」；(ii)「產品登記檔」；(iv)「去留登記表」 |
 | Layer | (i) AGENTS §6 的架構層；(ii) AGENTS §2「層の区別」：基盤與應用；(iii) 渲染的層：`CompositeLayer`（`RenderTypes.hpp:98`） | 加限定詞 | 「架構層」「基盤／應用之分」「渲染層」 |
-| Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module | 加限定詞 | 不加限定時指 (i) |
+| Module | (i) engine 的模組；(ii) Go module；(iii) C++20 module | 沿用 | 不加限定時指 (i)。使用者 2026-11-14：「Module 這個概念很不錯，Engine 內部的第三方叫 Module，Engine 外部的第三份叫 Plugin」。也就是 Module 與 Plugin 是一對：差別在 Engine 之內或之外。「第三方」指什麼，待確認：(a) 接第三方函式庫或平台 API 的那一塊；(b) 通用機制以外、可以拿掉或換掉的任何一塊 |
 | Stage | (i) 打包的 stage 目錄；(ii) `ShaderStage`（`ShaderTypes.hpp:18`）；(iii) 舊 Kernel 設計：schedule 裡固定順序的一段；(iv) 舊設計的動詞：`StageMembershipRequests`；Bevy 沒有 stage，用 `SystemSet` | 加限定詞 | (iii) 寫「stage（舊）」。(iv) 不沿用這個動詞。(i)(ii) 是各自領域的詞 |
 | Scene | (i) `SceneCapture`（`Renderer.hpp:12`）、`PreviewScene`；(ii) 舊 Kernel 設計：Loading 的「場景」階段、渲染的輸入；(iii) Bevy 的 `Scene`（`bevy_scene/src/scene.rs:49`）：可以生成的實體範本，和 (i)(ii) 都不同 | 不用它命名新概念 | 關卡的資料寫「關卡內容」，渲染的輸入寫「渲染輸入」。之後要不要有「實體範本」這個概念，登記表判 |
 | Input | (i) 玩家的輸入、輸入模組；(ii) 舊 Kernel 設計：欄角色 `Input`、boundary 輸入 | 加限定詞 | 不加限定時指 (i)。(ii) 寫「Input 欄角色（舊）」 |
@@ -94,10 +112,10 @@ v1 的準則 4「角色後綴不當型別名」拿掉了：
 
 | 詞 | 現有的意思（出處） | 處置 | 新文件的寫法 |
 |---|---|---|---|
-| Runtime | (i) 錯誤契約的 Runtime Error（帶過來）；(ii) AGENTS §8 的 Runtime：執行中的遊戲，相對於 Editor（AGENTS.md:522）；(iii) 舊的 `engine/runtime` 模組與 `UiRuntime`（不帶）；(iv) 舊 Kernel 設計：後來定名 App 的那個型別 | 不用它命名新概念 | (i)(ii) 照用。(iv) 寫「App」 |
-| Host | (i) AGENTS.md:147 的 host：搭載基盤的一個應用；(ii) CI 的 host：建置機；(iii) 舊程式的 `MatchRuntimeHost`、`IpcHost`（不帶）；(iv) 舊 Kernel 設計：提供 runner 的一方加 main | 不用它命名新概念 | (i)(ii) 照原文。(iv)：Host 改說「組裝（setup）」與「runner」（使用者 2026-11-14 定名「組裝（setup）」；先前的提案「main」看起來像主執行緒，舊設計裡執行緒的角色也有一個叫 Main）。組裝指產品啟動時建 App、列出要用的東西的那一段。runner 指跑迴圈的函式（Bevy 的 `set_runner`，`bevy_app/src/app.rs:224`）。舊 Host 做的事各自歸誰，登記表判，這裡不分 |
-| Shell | 舊 framework 的 `WindowShellClient`、`ImGuiShellClient`（不帶） | 不用它命名新概念 | gyo2 上沒有對應的概念。CI 的 shell 是另一回事 |
-| Session | (i) AGENTS.md:276 的 session；(ii) 工具的編輯階段；(iii) 實機場次（field-session）；(iv) 連線 | 不用它命名新概念 | 各處的一般語意照用 |
+| Runtime | (i) 錯誤契約的 Runtime Error（帶過來）；(ii) AGENTS §8 的 Runtime：執行中的遊戲，相對於 Editor（AGENTS.md:522）；(iii) 舊的 `engine/runtime` 模組與 `UiRuntime`（不帶）；(iv) 舊 Kernel 設計：後來定名 App 的那個型別 | 替換 | (iv) 寫「App」。(i) Runtime Error 與 (ii) AGENTS 的 Runtime 是別的意思，照用 |
+| Host | (i) AGENTS.md:147 的 host：搭載基盤的一個應用；(ii) CI 的 host：建置機；(iii) 舊程式的 `MatchRuntimeHost`、`IpcHost`（不帶）；(iv) 舊 Kernel 設計：提供 runner 的一方加 main | 替換 | (i)(ii) 照原文。(iv)：Host 改說「組裝（setup）」與「runner」（使用者 2026-11-14 定名「組裝（setup）」；先前的提案「main」看起來像主執行緒，舊設計裡執行緒的角色也有一個叫 Main）。組裝指產品啟動時建 App、列出要用的東西的那一段。runner 指跑迴圈的函式（Bevy 的 `set_runner`，`bevy_app/src/app.rs:224`）。舊 Host 做的事各自歸誰，登記表判，這裡不分 |
+| Shell | 舊 framework 的 `WindowShellClient`、`ImGuiShellClient`（不帶） | 暫留 | 遇到時解釋。gyo2 上目前沒有對應的概念；CI 的 shell 是另一回事 |
+| Session | (i) AGENTS.md:276 的 session；(ii) 工具的編輯階段；(iii) 實機場次（field-session）；(iv) 連線 | 暫留 | 遇到時解釋它指哪一種 |
 | Service | (i) 獨立行程的後端服務：`services/`、Go service；(ii) 舊 Kernel 設計：World 之外做 IO 的「外部服務」 | 加限定詞 | 不加限定時指 (i)。(ii) 寫「World 外的 IO（舊稱外部服務）」 |
 | Link | (i) 連結的一般語意：CMake 的 link、AGENTS.md:526；(ii) 舊 Kernel 設計：和外部交換資料的 Resource，舊 spec §0 另稱 external Resource | 加限定詞 | 不加限定時指 (i)。(ii) 寫「external Resource（舊）」 |
 | Kernel | (i) `engine/kernel` 與它的設計；(ii) 「kernel 改造」計畫線；(iii) spike | 寫「X（舊）」 | 「Kernel」只用來指舊的 `engine/kernel` 與它的設計。新的概念用判斷機制的詞「通用機制」；它之後叫什麼、要不要分塊，R1 定 |

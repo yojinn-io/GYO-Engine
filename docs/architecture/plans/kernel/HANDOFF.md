@@ -94,6 +94,7 @@
 | `v8-arch-gyo2-mechanism-before-pvp` | 2026-11-14（使用者，主會話）。「PVP 先不急搬，而是你先把底層機制先建好。再動 pvp」。順序：R1（推導）→ R2（核心機制）先完成並驗證，PvP 的移植（R5）排在最後，不為了早點搬 PvP 而壓縮底層。 |
 | `v8-arch-gyo2-migration-needs-consent` | 2026-11-14（使用者，主會話）。「4、5 注意，先不動工具和產品，現在就是造架構設計做好機制，我同意移植才動。」目前的範圍只有 R0b、R1（架構設計）、R2（機制）。工具與產品的移植（R3～R5）每一個都要使用者明說同意才開始；同日補充：「你可以自己做 2D、3D 樣本來測試。」——架構師可以自建 2D、3D 的測試樣本來驗證機制；樣本不是既有工具或產品的移植，不需要另外同意。素材來源（使用者）：「3D 動畫、骨骼的資源你可以去 master 裡面拿。2D 素材，你可以找最早的 object_fps 裡有。」——3D：master 的 `assets/object_fps_pvp/`（`animations/ual_mannequin`、`characters/player`）；2D：已刪除的 `assets/object_fps/`（刪除 commit 0d05cc4e 的前一版有 `textures/enemies`、`world`、`weapons`、`sky`、`ui`；更早的版本在 git 歷史裡）。只複製樣本用到的素材檔進 gyo2，不帶產品的程式。 |
 | `v8-arch-rebuild-judgment-rules` | 2026-11-14（使用者，主會話）。「你得建立一個機制區分舊的設計哪些有問題哪些沒有問題，我跑重審和開 gyo2 就是為了這個。你一步一步來，別急著動工，把邊界和定義處理好了。我確認之後再來，別把之前的錯誤又重犯。」→ [判斷舊設計的機制](rebuild-judgment-rules.zh-Hant.md)（設計元素、三類產品、兩種成本、什麼算理由、內容／名字／歸屬三題、六種結論、把關與登記表）；使用者「確認，先做步驟 1 同詞異義表」。之後每一步都等使用者確認。 |
+| `v8-arch-gyo2-vocabulary-feedback` | 2026-11-14（使用者，主會話）。對[同詞異義表](rebuild-vocabulary.zh-Hant.md) v2：「技術名詞大多沒問題，有問題的是解釋，這個改掉就好。而關鍵在於角色詞『Runtime、Host』這 2 個可以替換。Shell 和 Session 可以暫留，遇到時可以解釋。而且 Module 這個概念很不錯，Engine 內部的第三方叫 Module，Engine 外部的第三份叫 Plugin」。另：「tick 不用換呀。這個概念不光是網絡，單機遊戲也有用到的。」已改：Runtime、Host＝替換；Shell、Session＝暫留；tick 照用。待確認讀法後出 v3：解釋改成通用的技術定義；Module／Plugin 的「第三方」指什麼。 |
 
 ## 未定
 
