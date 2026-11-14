@@ -63,7 +63,7 @@
 |---|---|---|---|
 | N18 | System 的名字是動詞片語 | `StepMovement`、`ExtractMeshes` | 你的決定（第 2 條） |
 | N19 | ECS 元件與 Resource 的名字是名詞 | `Position`、`FrameTime` | 你的決定（第 2 條） |
-| N20 | `Plugin` 型別的名字以 `Plugin` 結尾 | `AudioPlugin` | 你的決定（第 2 條） |
+| N20 | `Plugin` 型別的名字以 `Plugin` 結尾；`Module` 型別的名字以 `Module` 結尾 | `AudioPlugin`；`SdlModule` | 你的決定（第 2 條）。Module 這一半：使用者 2026-11-14 把登記單位拆成 `Module` 與 `Plugin` 兩種型別，名字交由這個會話照規範起（「你參照命名規則起就行」），比照 Plugin 這一半；見[同詞異義表](rebuild-vocabulary.zh-Hant.md)第 6 節第 2 點 |
 | N21 | plugin 套件的目錄名小寫 | `plugins/sdl/` | 提案；層與目錄叫 plugins 是你的決定（2026-11-11） |
 | N22 | 事件的名字用過去式 | `AssetLoaded` | 你的決定（第 2 條） |
 | N22b | schedule 與 stage 用階段名 | `Loading`、`FixedUpdate`；`Simulate` | 你的決定（第 2 條） |
