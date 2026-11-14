@@ -83,6 +83,7 @@ v8-arch-kernel
 
 ## dev_log
 
+- [2026_11_14_arch_engine_own_plugins_plan.zh-Hant.md](../../../dev_logs/2026_11_14_arch_engine_own_plugins_plan.zh-Hant.md)：-engine-own-plugins-plan（規劃批 B1；[宣告](engine-own-plugins-plan-declaration.zh-Hant.md)、[規劃稿](engine-own-plugins-plan.zh-Hant.md)）。
 - [2026_11_13_arch_measure_env_baseline.zh-Hant.md](../../../dev_logs/2026_11_13_arch_measure_env_baseline.zh-Hant.md)：-measure-env-baseline（任務卡；[宣告](measure-env-baseline-declaration.zh-Hant.md)、[報告](measure-env-baseline-report.zh-Hant.md)）。
 - [2026_11_13_arch_kernel_registry_schedule.zh-Hant.md](../../../dev_logs/2026_11_13_arch_kernel_registry_schedule.zh-Hant.md)：-kernel-registry-schedule（任務卡；[宣告](registry-schedule-declaration.zh-Hant.md)）。
 - [2026_11_13_arch_adapter_plugins_plan.zh-Hant.md](../../../dev_logs/2026_11_13_arch_adapter_plugins_plan.zh-Hant.md)：-adapter-plugins-plan（規劃批；[宣告](adapter-plugins-plan-declaration.zh-Hant.md)、[規劃稿](adapter-plugins-plan.zh-Hant.md)）。
