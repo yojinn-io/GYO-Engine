@@ -95,7 +95,7 @@ blocker：沒有。R0b-3 併入 `gyo2` 的內容不需要撤回。
 | should S3 | **OS 邊界守衛的自我測試抓不到 16 種把守衛改壞的改法**（26 條突變只抓到 10 條）。包括：命令列永遠回 0、不印跳過的根、少掃一種副檔名（`.h`、`.c`、`.mm`、`.inl`）、多排除一個目錄、Engine 名單可以列產品檔、從規則清單拿掉一個 OS 標頭／巨集／API／檔案操作、不查 `#elif` | `os-guard-mutations-before.log`（10／26）、`os-guard-mutations-after.log`（26／26） | 已補 10 個案例；突變清單放在 `tests/common/os/guard_mutations.json` |
 | should S4 | **GPU 檢查步驟自己的失敗傳遞判定被連帶刪掉。** 刪 render 的 GPU 案例時（7c22edba），`gpu_smoke` 這一步的 `set -euo pipefail` 斷言也沒了；這一步現在跑的是產品宣告的 GPU 檢查，與 render 模組無關。實際影響小（`shell: bash` 時 GitHub 本來就帶 `-eo pipefail`，少的是 `-u`），但判定確實消失 | `probes.log` P2；`ci-policy-mutations-before.log` 的 `ci-gpu-no-pipefail: survived` | 已補回（`shell: bash`、腳本以 `set -euo pipefail` 開頭、沒有 `continue-on-error`） |
 | should S5 | **零工具時 `Prepare Release` 選 tools 這條線，會跑完整個發佈建置才失敗。** 第一個 job 放行；三平台 release 驗證跑完後，draft 步驟以「缺 6 個檔」失敗。不會建立 tag 或 release（檢查在第一個遠端寫入之前） | `release-walkthrough.log` W2（prepare exit 0）、W3（draft exit 1） | 已改：prepare、draft、snapshot 都在讀 archive 之前以「Train tools has nothing to release: no tool is registered」停下；登記一個 release 工具就恢復 |
-| should S6 | **snapshot 流程在零工具時每次都會紅**（等使用者決定，見 3.2.7）。預設分支的 push 會為 tools 線開 `Snapshot / tools` job，零工具時沒有 package 可發，job 失敗。`gyo2` 不是預設分支，現在碰不到；`gyo2` 取代 master 而工具還沒回來時就會出現。不影響 CI gate（gate 不依賴 snapshot） | `release-walkthrough.log` W1（trains 仍列出 tools）、W4（snapshot exit 1） | 沒改（要改發佈線的契約，而且只有預設分支的 push 能驗證） |
+| should S6 | **snapshot 流程在零工具時每次都會紅**（使用者已決定用 KeepTool 處理，見 3.2.7；這個 PR 不含）。預設分支的 push 會為 tools 線開 `Snapshot / tools` job，零工具時沒有 package 可發，job 失敗。`gyo2` 不是預設分支，現在碰不到；`gyo2` 取代 master 而工具還沒回來時就會出現。不影響 CI gate（gate 不依賴 snapshot） | `release-walkthrough.log` W1（trains 仍列出 tools）、W4（snapshot exit 1） | 沒改（要改發佈線的契約，而且只有預設分支的 push 能驗證） |
 | nit N1 | 第 7 項與 shader 工具 cache key 的雜湊，都是「回來時要有人記得改」，不會自動恢復 | `probes.log` P4、P5 | 已補成自動的：設 C++20 的 CMake 檔改用搜尋找出；一旦有 CMake 檔定義 `gyo_shader_host_tools`，就要求 cache key 帶 `hashFiles`（沒有這個 target 時是註明理由的 skip） |
 | nit N2 | 既有的 OS 突變清單（`docs/architecture/plans/os-subsystem/scripts/mutations.json`）149 條裡有 17 條指向已刪的檔；共通執行器遇到不存在的檔會直接例外結束，而不是回報 stale | `os-guard-mutations-existing.log` | 沒改（不在這張卡的範圍；清單要在 R0b-4 或工具回來時重整） |
 | nit N3 | `package_plan` 的依據是傳下來的工具清單是不是空的。傳遞鏈由既有案例釘住，但如果它斷了而登記有工具，Quick／Trial 會跳過打包、印出不正確的 notice、結論仍是通過；只有發佈流程會因缺 package 失敗 | 讀碼；3.2.3 | 沒改，只記錄 |
@@ -151,6 +151,7 @@ workflow 那端（`package_plan`）用 `GYO_SELECTED_TOOLS` 是否為空來決�
 | 既有 OS 清單裡與守衛有關、檔案仍在的 | `docs/architecture/plans/os-subsystem/scripts/mutations.json` | — | 14／14（另 3 條指向已刪的檔，沒跑） |
 
 - 執行方式：共通執行器 `tests/common/mutation/run_mutations.py --catalog …`，Python 加 `-B`，每次執行前清 `__pycache__`。
+- `ci-broken-release-selection` 在知道 KeepTool 要登記之後改過一次：原本是「多登記一個不是 release 的工具」，只在零工具時才會讓匯出失敗；改成「登記一個沒有描述檔的 release 工具」，不論登記表裡還有什麼都會失敗。零工具與有一個 release 工具兩種狀態下都抓到（`ci-policy-mutation-registry-independent.log`）。
 - CMake 那幾項（第 3、10、11 項）的突變寫在 `reverse_checks.py`（3a–3d、10a–10c、11i），因為共通執行器沒有 cmake 的占位符；它們存在證據目錄，不在 repo 的清單裡。
 - 兩份新清單放在測試旁邊，不在 `docs/` 的計畫目錄（這張卡不能動其他文件）。要不要搬，由圖書管理員決定。
 
@@ -177,10 +178,31 @@ workflow 那端（`package_plan`）用 `GYO_SELECTED_TOOLS` 是否為空來決�
 #### 3.2.7 等使用者決定的事
 
 - **要再放寬的判定：沒有。**
-- **S6，snapshot 的 tools 線在零工具時怎麼辦。** 選項：
+- **S6，snapshot 的 tools 線在零工具時怎麼辦。** 當時列的選項：
   - (a) `release_channels.py trains` 在沒有工具時不列 tools 線並印出理由，workflow 對空的 matrix 加條件；工具回來自動恢復。要改「tools 線永遠存在」這個發佈契約，而且只有預設分支的 push 能真的驗證。
   - (b) 不改：`gyo2` 成為預設分支而工具還沒回來的期間，每次 push 的 `Snapshot / tools` 都是紅的（gate 不受影響），訊息現在會寫明原因。
   - (c) 重看前提：`gyo2` 取代 master 之前先讓工具回來（R3），這個狀態就不會出現。
+- **S6 的決定（使用者 2026-11-14，在這張卡的會話裡；原話）**：「S6，你做一個KeepTool佔位」，接著補充「但是不是純佔位，需要保障基礎的ImGUI沒問題，輸入法也能用。」
+  - 意思：不採 (a)、(b)；登記一個叫 KeepTool 的工具，讓 tools 線一直有東西可打包。它不是空殼：它要能證明基礎的 ImGui 可以跑、輸入法可以用。這等於 (c) 的具體形式——第一個回來的工具就是 KeepTool。
+  - **這張卡沒有做 KeepTool，PR #230 不含它。** 原因：`gyo2` 上沒有 SDL、沒有 ImGui、沒有 `plugins/`；platform、input、text、ui、render 都在「不帶、由 R1 重新推導」的名單（[帶過去清單](rebuild-r0-carry-list.zh-Hant.md)第 2 節）。帶 ImGui 與輸入法的 KeepTool 需要下表的東西，等於 R3 的第一個產品加上 R1 要定的幾個基礎位置，超出這張卡的範圍（卡上寫明不改 `engine/`；[重建宣告](rebuild-declaration.zh-Hant.md)第 3 節目前的範圍只到 R2）。照 AGENTS §14 開頭的規定停下回報，由架構師會話排成自己的一批。
+  - 不擋 PR #230 合併：`gyo2` 不是預設分支，S6 現在不會發生。
+
+  | KeepTool 需要的東西 | `gyo2` 上的現況 | 參考（master） |
+  |---|---|---|
+  | 工具的登記、建置、打包、驗收的機制 | 都在，沒有對象而已（`GyoTools.cmake`、`GyoPackaging.cmake`、`build/acceptance/common/`；3.2.5 的實跑證明沒有工具時它們被跳過） | `tests/common/cmake/ProjectCompositionTests.cmake` 裡的合成工具是最小的形狀 |
+  | SDL（Module，在 Engine 裡）：視窗、事件、文字輸入事件 | 沒有。`third_party/` 只剩 doctest；adapter 的位置由 R1 定 | `third_party/sdl3`，含 macOS 輸入法的 patch `gyo-cocoa-ime-composing-keydown.patch` |
+  | 一個繪圖後端（ImGui 要畫得出來） | 沒有。render 不帶 | SDL_Renderer 的後端最小 |
+  | ImGui（Plugin，在 Engine 外） | 沒有；`plugins/` 目錄還不存在。`GyoComponents.cmake` 仍認得 `IMGUI`、`SDL_*` 這些元件名，但沒有對應的 target | `third_party/imgui`；舊 framework 的 ImGui 綁定（`docs/framework/architecture.md` 第 86、194～196 行：輸入法的組字畫在 ImGui 的文字游標處） |
+  | 文字輸入的契約（組字、確定、候選視窗的位置、UTF-8） | 沒有。input、text 不帶 | 同上 |
+  | 驗收 | — | 見下面第 2 點 |
+
+  檢查者的看法（Fable 自己的判斷，不是使用者的決定）：
+  1. KeepTool 適合當 R3 的第一個產品，也適合當 R1 的名指 Feature：它小，卻一次用到 Module（SDL）、Plugin（ImGui）、Tool 三層與打包；SDL adapter 放哪、ImGui plugin 怎麼接、文字輸入的契約要保證什麼，都可以從它推出來（AGENTS §2 的 Feature → Contract → Architecture）。
+  2. 「輸入法能用」CI 驗不到：runner 沒有輸入法。CI 能驗的是「文字輸入事件的路徑」（合成的組字與確定事件進得了 ImGui 的輸入框、候選視窗位置有設）；真的輸入法要在 Windows、macOS、Linux 實機上按一次。現在的發佈規則是「tools 線不需要實機證據」（`release_channels.py` 的 `train_release_evidence`），要不要為 KeepTool 改，得一起定。
+  3. KeepTool 讓 S6 不發生，但沒有修 S6：哪天 KeepTool 被刪而沒有別的工具，S6 會回來。(a) 仍然可以另外做。
+  4. `gyo2` 成為預設分支後，每次 push 會發一個只含 KeepTool 的 `tools-snapshot-…` prerelease（保留最新 5 個）。
+  5. 登記名要小寫（`[a-z][a-z0-9_]*`），例如 `keep_tool`。
+  6. AGENTS §7 禁止「為了引擎的驗證而要求留著某個工具」。KeepTool 不違反它的條件是：刪掉 KeepTool（登記列加它自己的目錄）之後，引擎與 CI 仍然成立——這正是 PR #230 驗過的零工具狀態。KeepTool 的文件要寫明移除條件（AGENTS §3 的 Replacement Criteria）。
 - **第 3 節表中第 8 項的更正**（S1）與 **3.1 節各項的事後確認**：3.1 的做法經這次核對都成立；「零工具時跳過打包」已實跑（3.2.5）。
 
 #### 3.2.8 產品、工具、render 回來時的狀況
@@ -190,10 +212,10 @@ workflow 那端（`package_plan`）用 `GYO_SELECTED_TOOLS` 是否為空來決�
 要隨模組重建（不會自動回來）：第 3 項的 render 選項政策、第 6 項「Engine 名義的 Go module 無條件登記」、L1 與 toolchain 列的 render GPU 測試步驟、`hashFiles` 的實際內容（這一批的案例只要求「要有」）。
 
 要記進 HANDOFF 的事（這張卡不能改 HANDOFF）：
-- R0b-3 已做過別模型的對抗檢查（PR #230）；blocker 0、should 6（5 個已修、1 個待決定）、nit 4。
+- R0b-3 已做過別模型的對抗檢查（PR #230）；blocker 0、should 6（5 個已修；S6 由 KeepTool 處理，另開一批）、nit 4。
 - OS 邊界守衛收緊一條（必要的根不存在＝問題）；守衛測試新增釘住排除目錄與規則清單的案例。
 - 兩份新的突變清單的位置；既有 OS 清單有 17 條過期（N2）。
-- snapshot 的 tools 線（S6）要在 `gyo2` 取代 master 之前決定。
+- S6 的決定（使用者 2026-11-14）：做 KeepTool——不是純佔位，要保障基礎的 ImGui 與輸入法；這張卡沒做，要由架構師排成一批（3.2.7）。原話、比過的選項、理由、出處都在 3.2.7。
 - 這一批的 dev_log（`docs/dev_logs/2026_11_14_gyo2_r0b3_closeout.zh-Hant.md`）要列進 `target/v2/README` 的一覽（這張卡不能改 README）。
 
 #### 3.2.9 範囲の限界
@@ -204,7 +226,7 @@ workflow 那端（`package_plan`）用 `GYO_SELECTED_TOOLS` 是否為空來決�
 - download-artifact 在沒有符合的 artifact 時的行為沒有實測；draft 步驟不論下載結果如何都會因缺檔而失敗（本機以空目錄確認）。
 - 對抗檢查由主會話（Fable）自己做，沒有第二個檢查者；新增的兩份突變清單是檢查者自己寫的，沒有再給別的模型看。
 - 沒有檢查 R0b-2 的刪除本身（判定 5 的重掃仍待 R0b-3 完成後另做）。
-- 證據：這台 Intel Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-r0b3-closeout/`：`reverse_checks.py`、`reverse-checks.log`、`probes.log`、`absence-scans.log`、`os-guard-mutations-{before,after,existing}.log`、`ci-policy-mutations-{before,after}.log`、`release-walkthrough.log`、`app-copy.log`、`app-copy-logs/`、`baseline-*.log`、`final-ctest.log`、`final-ci-policy.log`、`ctest-list-{before,after}.txt`、`trial-run-43596922844.json`、`trial-run-43596922844-notices.log`。
+- 證據：這台 Intel Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-r0b3-closeout/`：`reverse_checks.py`、`reverse-checks.log`、`probes.log`、`absence-scans.log`、`os-guard-mutations-{before,after,existing}.log`、`ci-policy-mutations-{before,after}.log`、`release-walkthrough.log`、`app-copy.log`、`app-copy-logs/`、`baseline-*.log`、`final-ctest.log`、`final-ci-policy.log`、`ctest-list-{before,after}.txt`、`trial-run-43596922844.json`、`trial-run-43596922844-notices.log`、`ci-policy-mutation-registry-independent.log`。
 
 ## 4. 隨模組刪除的守衛（它們守的性質，R1、R2 重建時參考）
 

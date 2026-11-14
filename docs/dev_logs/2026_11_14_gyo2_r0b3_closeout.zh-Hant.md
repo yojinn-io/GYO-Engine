@@ -37,6 +37,11 @@ R0b-3（刪掉產品與工具之後，為了讓 CI 通過而調整的守衛與 C
 - CI（PR #230）：run [43596915160](https://github.com/yojinn-io/GYO-Engine/actions/runs/43596915160)（commit 4071a9a9）：linux-x64、windows-x64、macos-arm64 的 L1 都通過；Select CI scope 與 CI gate 通過。之後只改 `docs/` 的 commit 不再跑 L1（docs-increment）。
 - Package trial（手動觸發）：run [43596922844](https://github.com/yojinn-io/GYO-Engine/actions/runs/43596922844)（Package trial，`workflow_dispatch`，commit 4071a9a9）：結論 success。prepare 的 stderr 有「No tool is registered」。三個 toolchain 列（linux-x64、windows-x64、macos-arm64）：configure、建置、測試（93、96、93 個全過）、core 基線都跑了；`package_plan` 各印一則 notice「No tool is registered for ＜平台＞…」；install、package 檢查、installed acceptance、GPU、archive、上傳 6 步都是 skipped；Linux 列寫出並上傳空的服務紀錄（`gyo-service-toolchain`）；沒有任何 `gyo-package-*` artifact。`CI validation` 通過。步驟清單與 notice 存在證據的 `trial-run-43596922844.json`、`trial-run-43596922844-notices.log`。Quick acceptance 沒有另外觸發（同一支 workflow、同樣的輸入）。
 
+## 之後
+
+- 使用者看過報告後決定 S6 的處理（2026-11-14）：登記一個工具 KeepTool，而且不是純佔位——要保障基礎的 ImGui 與輸入法。`gyo2` 上沒有 SDL 與 ImGui，這超出這張卡的範圍，沒有做；需要的東西與檢查者的看法記在 R0b 報告 3.2.7，由架構師會話排成一批。
+- 因為 KeepTool 會讓登記表不再是空的，把 `ci-broken-release-selection` 這條突變改成不依賴「零工具」的形式，兩種登記狀態下都抓到。
+
 ## 沒有驗證到的
 
 - `Prepare Release` 與 snapshot 沒有在 CI 上跑（會建立 tag 或發佈）。
@@ -45,4 +50,4 @@ R0b-3（刪掉產品與工具之後，為了讓 CI 通過而調整的守衛與 C
 
 ## 證據
 
-這台 Intel Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-r0b3-closeout/`：`reverse_checks.py`、`reverse-checks.log`、`probes.log`、`absence-scans.log`、`os-guard-mutations-{before,after,existing}.log`、`ci-policy-mutations-{before,after}.log`、`release-walkthrough.log`、`app-copy.log`、`app-copy-logs/`、`baseline-*.log`、`final-ctest.log`、`final-ci-policy.log`、`ctest-list-{before,after}.txt`、`trial-run-43596922844.json`、`trial-run-43596922844-notices.log`。
+這台 Intel Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-r0b3-closeout/`：`reverse_checks.py`、`reverse-checks.log`、`probes.log`、`absence-scans.log`、`os-guard-mutations-{before,after,existing}.log`、`ci-policy-mutations-{before,after}.log`、`release-walkthrough.log`、`app-copy.log`、`app-copy-logs/`、`baseline-*.log`、`final-ctest.log`、`final-ci-policy.log`、`ctest-list-{before,after}.txt`、`trial-run-43596922844.json`、`trial-run-43596922844-notices.log`、`ci-policy-mutation-registry-independent.log`。
