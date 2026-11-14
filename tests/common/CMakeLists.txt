@@ -5,6 +5,7 @@ add_subdirectory(math)
 add_subdirectory(threads)
 add_subdirectory(time)
 # After time: its directory defines gyo_expect_links.
+add_subdirectory(kernel)
 add_subdirectory(os)
 add_subdirectory(audio)
 add_subdirectory(cmake)
