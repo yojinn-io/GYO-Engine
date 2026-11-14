@@ -5,15 +5,9 @@ set_tests_properties(gyo_time_tests PROPERTIES LABELS "cpu" TIMEOUT 60)
 
 # TT-1 L2 (record only, run by hand under a declaration): wake precision of the
 # engine Waiter against condition_variable and sleep_until, in a process without
-# a window and in one with an Engine SDL window. Deliberately not CTests.
+# a window. Deliberately not a CTest.
 add_executable(gyo_time_wake_record WakeRecord.cpp)
 target_link_libraries(gyo_time_wake_record PRIVATE GYO::Time)
-if(TARGET GYO::PlatformSDL)
-    add_executable(gyo_time_wake_record_window WakeRecord.cpp)
-    target_compile_definitions(gyo_time_wake_record_window PRIVATE GYO_WAKE_RECORD_WINDOW)
-    target_link_libraries(gyo_time_wake_record_window PRIVATE GYO::Time GYO::PlatformSDL)
-    gyo_copy_runtime_dlls(gyo_time_wake_record_window)
-endif()
 
 # The time base and role threads stay leaves above GYO::Base: their links,
 # private and interface alike, are exactly these, so no SDL or engine library
