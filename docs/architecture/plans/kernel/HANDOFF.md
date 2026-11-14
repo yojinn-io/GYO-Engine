@@ -251,6 +251,8 @@
 
 - 2026-11-14 **骨架跑通，unit test 完成**（分支 `claude/gyo2-mechanism`，已推送，未開 PR）。commit：2cfe42b2 帶入 #218 的 World 與 Executor、`engine/entity_store` 與它的測試（實作 agent Opus／high）→ d28c4ca5 `App` 改名 `Product` → 22ed0c61 帶回 `tests/common/zone_scan` → 66771291 `Zone` 預設 B 與 `RequireExplicitZones`（架構師）→ c2e080f8 骨架測試 `tests/common/kernel/SkeletonTests.cpp`（架構師）。機制、entity_store、zone_scan 共 64 個測試全過（本機 Intel Mac，preset `core`，RelWithDebInfo）；完整 ctest 另有 3 個與本工作無關的既有失敗（`os.boundary_guard`、`cmake.Component`、`build.ci`，屬 R0b-3）。骨架測試：行為 5 案例 48 個檢查（不填任何 zone／role／rollback 的單機式場景：生成、重力、移動、事件當 tick 送達、hook、`Local`、run 條件、System 回傳錯誤、平手清單、預設獨占拒絕第二個寫者），極限 2 案例只量不設門檻。量到的數字（單執行緒，存取驗證關）：啟動分析 1000 個 System 唯讀 108 ms、全部寫同一元件 1.6 s（平手 499,500 對）；每 tick 一個兩元件的 System：1 千實體 0.17 ms、1 萬 1.9 ms、10 萬 20.7 ms；四元件 0.28／3.0／30.7 ms；刪 100 個實體 0.2／3.7／68.9 ms；生成 100 個約 0.1 ms（與實體數無關）。log：主 checkout `build/evidence/gyo2-mechanism/skeleton-behaviour-1.log`、`skeleton-limits-1.log`、`skeleton-ctest-all.log`。下一步：使用者看數字、確認 System 契約，之後才定各個系統。
 
+- 2026-11-14 **System 契約的說明頁**（使用者：「整理成一頁給我看，第 2 點先去翻歷史」「別忘了，還有 Result 的錯誤回報機制。這個落下了。」）：[system-contract-page.zh-Hant.md](system-contract-page.zh-Hant.md)，寫的是分支 `claude/gyo2-mechanism` 上能跑的程式：System 的寫法、參數一覽、登記時寫什麼、機制替作者做什麼、錯誤怎麼回報（`GYO_ASSERT` 與 `Result` 兩種；System 包一層上下文回傳、Executor 處理一次、World Interrupted；附 2026-11-11／11-12 的決定出處）、寫樣本時碰到的四件事。骨架測試補了一個錯誤回報的案例（行為現為 6 案例 57 個檢查）。翻歷史的結果：「生成的 bundle 也算寫者」是規格對抗檢查的修訂 B3（架構師接受），不是使用者 11-11 那次討論定的；「執行中一個 System 生成、另一個更新同一個元件」規格、目標文件、決定表都沒談；`Despawn` 不算寫者（K.3 第 4 項）。待使用者確認 System 契約。
+
 ## 下一步
 
 - **進行中**：`v8-arch-rebuild` 的 R0（[事前宣告](rebuild-declaration.zh-Hant.md)，已核准）：帶過去清單與同詞異義表 → 使用者逐項核准 → R0b 在 `gyo2` 刪除舊實現。
