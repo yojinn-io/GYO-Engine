@@ -1,4 +1,7 @@
 """Self-test of os_boundary_guard.py on synthetic trees (no repository file is read)."""
+import contextlib
+import io
+import shutil
 import sys
 import tempfile
 import unittest
@@ -63,6 +66,15 @@ class Rules(GuardTree):
         for macro in macros:
             self.assertReported(f"R2 {macro}")
 
+    def test_every_conditional_directive_is_checked(self):
+        self.write("engine/a/A.cpp", "#if 1\n#elif defined(_WIN32)\n#endif\n#ifndef __APPLE__\n#endif\n#if 0\n"
+                                     "#elifdef __linux__\n#elifndef __unix__\n#endif\n"
+                                     "  #  if defined(__ANDROID__)\n#endif\n")
+        problems = self.problems()
+        for line, macro in ((2, "_WIN32"), (4, "__APPLE__"), (7, "__linux__"), (8, "__unix__"), (10, "__ANDROID__")):
+            with self.subTest(line=line):
+                self.assertIn(f"engine/a/A.cpp:{line}: R2 {macro}", problems)
+
     def test_has_include_of_an_os_header_is_reported(self):
         self.write("engine/a/A.cpp", "#if __has_include(<unistd.h>)\n#endif\n")
         self.assertReported("engine/a/A.cpp:1: R2 __has_include(<unistd.h>)")
@@ -103,6 +115,7 @@ class Rules(GuardTree):
         self.write("tests/sample/SampleTests.cpp", "void F() { std::ofstream out(\"x\"); }\n")
         self.write("build/acceptance/sample/main.cpp", "void F() { std::ifstream in(\"x\"); }\n")
         self.write("engine/os/src/posix/Files.cpp", "void F() { std::ifstream in(\"x\"); }\n")
+        self.write("engine/os/include/engine/os/Files.hpp", "inline void F() { std::ifstream in(\"x\"); }\n")
         self.assertClean()
 
     def test_direct_file_access_in_products_and_tools_is_reported(self):
@@ -169,6 +182,18 @@ class Rules(GuardTree):
         (self.root / "tests/common/base/BaseTests.cpp").unlink()
         self.assertReported("tests: no C/C++ source scanned")
 
+    def test_a_missing_required_root_fails(self):
+        # A moved root or a wrong --root must not read as "nothing to report".
+        shutil.rmtree(self.root / "tests")
+        self.assertReported("tests: no C/C++ source scanned (does not exist)")
+        shutil.rmtree(self.root / "engine")
+        skipped = []
+        problems = guard.check(self.root, skipped=skipped)
+        self.assertEqual(problems, ["engine: no C/C++ source scanned (does not exist); is the root right?",
+                                    "tests: no C/C++ source scanned (does not exist); is the root right?"])
+        self.assertEqual(skipped, ["apps (does not exist)", "tools (does not exist)",
+                                   "build/acceptance (does not exist)"])
+
     def test_product_roots_without_sources_are_skipped_and_named(self):
         # No product or tool is registered: apps and tools are absent, build/acceptance holds only scripts.
         self.write("build/acceptance/common/check.py", "print('x')\n")
@@ -197,6 +222,89 @@ class Rules(GuardTree):
         # Removing or adding a product must leave the scanned roots unchanged (AGENTS.md sections 7 and 9).
         self.assertEqual(guard.ROOTS, ("engine", "apps", "tools", "build/acceptance", "tests"))
         self.assertEqual(guard.RUNTIME_ROOTS, ("engine", "apps", "tools"))
+
+    def test_exclusions_and_required_roots_are_pinned(self):
+        # Each of these narrows the guard when it grows (an exclusion, an allowlist scope) or shrinks (a required
+        # root): changing one changes this test, so it is a visible change of the guard's judgment.
+        self.assertEqual(guard.EXCLUDED, ("tests/common/os/", "third_party/", "build/target/"))
+        self.assertEqual(guard.R4_EXCLUDED, ("engine/os/",))
+        self.assertEqual(guard.REQUIRED_ROOTS, ("engine", "tests"))
+        self.assertEqual(guard.ENGINE_ALLOWLIST_SCOPE, ("engine/", "tests/common/"))
+
+    def test_os_layer_tests_may_assert_per_os(self):
+        self.write("tests/common/os/FilesTests.cpp", "#include <windows.h>\n#ifdef _WIN32\n#endif\n"
+                                                     "void F() { GetLastError(); }\n")
+        self.assertClean()
+
+    def test_every_source_suffix_is_scanned(self):
+        suffixes = (".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm")
+        for suffix in suffixes:
+            self.write(f"engine/a/File{suffix}", "#ifdef _WIN32\n#endif\n")
+        problems = self.problems()
+        for suffix in suffixes:
+            with self.subTest(suffix=suffix):
+                self.assertIn(f"engine/a/File{suffix}:1: R2 _WIN32", problems)
+
+
+class RuleLists(GuardTree):
+    """The rule lists are the wording of the invariant: an entry may be added, none may silently go."""
+
+    @staticmethod
+    def sample(entry):
+        # One name that a list entry (a literal or a small pattern) matches.
+        for pattern, text in (("2?", "2"), ('[^>\\"]+', "x.h"), ("\\w+", "X"), ("\\.", ".")):
+            entry = entry.replace(pattern, text)
+        return entry
+
+    def test_rule_lists_do_not_shrink(self):
+        lists = (("R1", guard.OS_HEADERS, 45, "#include <{}>"), ("R2", guard.OS_MACROS, 20, "#ifdef {}\n#endif"),
+                 ("R3", guard.OS_APIS, 32, "void F() {{ {}(); }}"),
+                 ("R4", guard.FILESYSTEM_OPERATIONS, 40, "void F() {{ std::filesystem::{}(p); }}"))
+        for rule, entries, least, template in lists:
+            self.assertGreaterEqual(len(entries), least, f"{rule}: an entry was removed from the rule list")
+            self.assertEqual(len(set(entries)), len(entries), rule)
+            names = [self.sample(entry) for entry in entries]
+            lines = [line for name in names for line in template.format(name).split("\n")]
+            self.write(f"engine/a/{rule}.cpp", "\n".join(lines) + "\n")
+        problems = self.problems()
+        for rule, entries, _, template in lists:
+            step = template.count("\n") + 1
+            prefix = "std::filesystem::" if rule == "R4" else ""
+            for index, entry in enumerate(entries):
+                with self.subTest(rule=rule, entry=entry):
+                    line = index * step + 1
+                    self.assertIn(f"engine/a/{rule}.cpp:{line}: {rule} {prefix}{self.sample(entry)}", problems)
+
+
+class CommandLine(GuardTree):
+    def run_main(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = guard.main(["--root", str(self.root)])
+        return status, output.getvalue()
+
+    def test_main_reports_findings_with_exit_status_1(self):
+        self.write("engine/a/A.cpp", "#ifdef _WIN32\n#endif\n")
+        status, output = self.run_main()
+        self.assertEqual(status, 1)
+        self.assertIn("OS boundary guard: engine/a/A.cpp:1: R2 _WIN32\n", output)
+        self.assertIn("OS boundary guard: 1 problems", output)
+
+    def test_main_names_skipped_roots_and_passes(self):
+        status, output = self.run_main()
+        self.assertEqual(status, 0)
+        for root in ("apps", "tools", "build/acceptance"):
+            self.assertIn(f"OS boundary guard: skipped root {root} (does not exist); it is scanned again", output)
+        self.assertNotIn("skipped root engine", output)
+        self.assertNotIn("skipped root tests", output)
+
+    def test_main_fails_on_a_directory_that_is_not_the_repository(self):
+        with tempfile.TemporaryDirectory() as empty:
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                status = guard.main(["--root", empty])
+        self.assertEqual(status, 1)
+        self.assertIn("engine: no C/C++ source scanned (does not exist)", output.getvalue())
 
 
 class Allowlists(GuardTree):
@@ -227,6 +335,14 @@ class Allowlists(GuardTree):
                    "engine/time/src/Wait.cpp R2 2\nengine/time/src/Wait.cpp R2 2\nengine/time/src/Wait.cpp R9 1\n")
         self.assertReported("duplicate entry")
         self.assertReported("expected 'path rule count'")
+
+    def test_engine_allowlist_covers_only_engine_and_common_tests(self):
+        self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")
+        self.write("tests/sample/SampleTests.cpp", "#ifdef __linux__\n#endif\n")
+        for path in ("apps/sample/src/a.cpp", "tests/sample/SampleTests.cpp"):
+            with self.subTest(path=path):
+                self.write("tests/common/os/os_boundary_allowlist.txt", f"{path} R2 1\n")
+                self.assertReported(f"{path} is outside this allowlist's directory (engine/, tests/common/)")
 
     def test_product_allowlist_covers_only_its_own_tree(self):
         self.write("apps/sample/src/a.cpp", "#ifdef __linux__\n#endif\n")

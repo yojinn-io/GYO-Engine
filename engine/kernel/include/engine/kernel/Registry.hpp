@@ -237,6 +237,23 @@ public:
     // calling it twice is the same as once.
     void RequireExplicitZones();
 
+    // Makes an ambiguous pair a startup error (D-E8, rule M3b) for the whole
+    // Registry instead of a tie by registration order. An ambiguous pair is two
+    // Systems of one stage of one schedule whose access conflicts (spec D.1
+    // conditions 1 to 4) with no order path between them; a pair with a zone C
+    // side is D-E8 with or without this call. Every such pair of every schedule
+    // is reported at once, and each is fixed by declaring an order (a before /
+    // after of either System, or of a set it is in). There is no exemption for
+    // a pair: a Serial schedule runs the two in some order anyway, and
+    // before / after is how that order is written down. Without this call the
+    // pair is tied by registrationSeq and listed in FrozenRegistry::TieBreaks.
+    // Called by the plugin that must not let the Host's plugin order decide a
+    // conflicting pair; any plugin may call it; calling it twice is the same
+    // as once. It only adds startup errors: a Registry that finishes with it
+    // has the same tables and Plans as without it, so no fingerprint holds it
+    // (as with RequireExplicitZones).
+    void RequireExplicitOrder();
+
     void Schedule(ScheduleOptions options);
     // Inserts a stage before or after an existing stage of a schedule (spec C.2 point 2).
     void InsertStage(std::string_view schedule, std::string_view anchor, StagePlace place, std::string stage);
@@ -296,9 +313,10 @@ public:
     // ComponentId gives the value; a Request that appears through a chain is
     // looked at in the next round, after the direct ones.
     //
-    // Zone rules: a System or hook that writes Request writes Target, through
-    // chains of declarations, for Z1, Z2, Z3 and Z6 (not for the writer count),
-    // so the funnel allows what a direct write allows. A zone C Target takes its
+    // Zone rules: a System or hook that inserts or spawns Request writes Target,
+    // through chains of declarations, for Z1, Z2, Z3 and Z6 (not for the writer
+    // count), so the funnel allows what a direct write allows. Writing Request
+    // in place or removing it fills nothing and does not count. A zone C Target takes its
     // value from a zone C Request only (Z1).
     template <class Target, auto Fn>
     void InitialValue(std::source_location source = std::source_location::current()) {
@@ -400,6 +418,10 @@ struct AccessSet {
     std::vector<ComponentId> membershipReads;
     // CommandsFor inserts and removes, Spawn / SpawnWithId bundles.
     std::vector<ComponentId> deferredWrites;
+    // The part of deferredWrites that can add a cell: CommandsFor inserts and
+    // bundle components, not removes. Only these make a sync point fill a
+    // component (Registrar::InitialValue); not hashed in the fingerprints.
+    std::vector<ComponentId> deferredInserts;
     std::vector<SetId> setReads;
     // Component and resource ids of the extract source Registry.
     std::vector<AccessKey> extractReads;
@@ -457,7 +479,8 @@ struct SystemInfo {
 };
 
 // One (b) pair the Scheduler ordered by registration (spec D.2 step 10): listed
-// at diagnostic level.
+// at diagnostic level. Under Registrar::RequireExplicitOrder there is none:
+// such a pair is D-E8 instead.
 struct TieBreak {
     std::string schedule;
     std::string first;

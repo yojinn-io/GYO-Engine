@@ -292,6 +292,12 @@ public:
     void DeferredWrite(TypeKey component) override {
         if (const auto id = Lookup(component, TypeRole::Component, "component")) access.deferredWrites.push_back(*id);
     }
+    void DeferredInsert(TypeKey component) override {
+        if (const auto id = Lookup(component, TypeRole::Component, "component")) {
+            access.deferredWrites.push_back(*id);
+            access.deferredInserts.push_back(*id);
+        }
+    }
     void Despawn() override { access.despawn = true; }
     void Spawn() override { access.spawn = true; }
     void UntypedCommands() override { access.untypedCommands = true; }
@@ -349,6 +355,7 @@ void Normalize(AccessSet& access) {
     SortUnique(access.writes);
     SortUnique(access.membershipReads);
     SortUnique(access.deferredWrites);
+    SortUnique(access.deferredInserts);
     SortUnique(access.setReads);
     SortUnique(access.extractReads);
 }
@@ -478,6 +485,12 @@ void Registrar::DeclareAllotter(TypeKey resource, Detail::AllotterOps ops) {
 void Registrar::RequireExplicitZones() {
     GYO_ASSERT(data_->building);
     data_->explicitZones = true;
+}
+
+void Registrar::RequireExplicitOrder() {
+    GYO_ASSERT(data_->building);
+    std::vector<std::uint32_t>& owners = data_->explicitOrderOwners;
+    if (std::find(owners.begin(), owners.end(), plugin_) == owners.end()) owners.push_back(plugin_);
 }
 
 void Registrar::Schedule(ScheduleOptions options) {
@@ -1161,17 +1174,16 @@ std::vector<AccessKey> TouchedKeys(const AccessSet& access) {
 }
 
 // Registrar::InitialValue: the kernel fills a component at the sync point for
-// whoever wrote its request, so for the zone rules (Z1, Z2, Z3, Z6, Z7) a System
-// or hook writes every component its written requests fill, through chains of
-// declarations. Not for the writer count (D-E2): not counting them is what the
-// funnel is for. Maps each such component to the request it is filled from;
-// components the access set writes itself are not listed.
+// whoever added a cell of its request, so for the zone rules (Z1, Z2, Z3, Z6,
+// Z7) a System or hook writes every component the requests it inserts or
+// spawns fill, through chains of declarations. A write in place or a remove of
+// a request adds no cell and fills nothing, so it does not count. Not for the
+// writer count (D-E2): not counting them is what the funnel is for. Maps each
+// such component to the request it is filled from; components the access set
+// writes itself are not listed.
 std::map<ComponentId, ComponentId> FunnelWrites(const RegistryData& data, const AccessSet& access) {
     std::map<ComponentId, ComponentId> reached;
-    std::vector<ComponentId> pending;
-    for (const AccessKey& key : WrittenKeys(access)) {
-        if (key.kind == AccessKind::Component) pending.push_back(key.id);
-    }
+    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());
     std::set<ComponentId> seen(pending.begin(), pending.end());
     while (!pending.empty()) {
         const ComponentId request = pending.back();
@@ -1181,6 +1193,9 @@ std::map<ComponentId, ComponentId> FunnelWrites(const RegistryData& data, const 
             reached.emplace(rule.targetId, request);
             pending.push_back(rule.targetId);
         }
+    }
+    for (const AccessKey& key : WrittenKeys(access)) {
+        if (key.kind == AccessKind::Component) reached.erase(key.id);
     }
     return reached;
 }

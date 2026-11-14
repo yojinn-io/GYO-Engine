@@ -147,6 +147,9 @@ struct RegistryData {
 
     // Registrar::RequireExplicitZones: an Unset zone is an error instead of zone B.
     bool explicitZones = false;
+    // Registrar::RequireExplicitOrder: the plugins that called it, in call order,
+    // each once. Not empty: an ambiguous pair is D-E8 instead of a tie.
+    std::vector<std::uint32_t> explicitOrderOwners;
     std::vector<StartupError> errors;
     bool finished = false;
     // True only while plugins' Build functions run (Registrar asserts it).

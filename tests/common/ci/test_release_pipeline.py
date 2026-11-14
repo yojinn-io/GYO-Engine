@@ -413,6 +413,39 @@ class PackageTests(unittest.TestCase):
                          f"tag=sample_app-v9876.5432.10101\ncommit={commit}\nprerelease=false\n"
                          "train=sample_app\nproduct=sample_app\nl4_items=\nl4_evidence=\n")
 
+    def test_cli_refuses_the_tools_train_while_no_tool_is_registered(self):
+        # No tool, no toolchain package: Prepare Release stops at its first
+        # job, and a draft or snapshot stops before reading any archive, each
+        # with the reason. A registered release tool lifts the refusal.
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        registry, tools = self.work / "projects.csv", self.work / "tools.csv"
+        registry.write_text("name,description,version,enabled,windows,linux,macos\n", encoding="utf-8")
+        tools.write_text("name,description,version,enabled,default,release,windows,linux,macos\n", encoding="utf-8")
+        event = self.work / "event.json"
+        event.write_text(json.dumps({"inputs": {"train": "tools", "version": "v2099.12.1"}}), encoding="utf-8")
+        output = self.work / "outputs.txt"
+        script = [sys.executable, str(ROOT / "build/ci/common/release_pipeline.py")]
+        empty = ["--registry", str(registry), "--tool-registry", str(tools), "--repository-root", str(self.work)]
+        prepare = ["prepare", "--event-path", str(event), "--event-name", "workflow_dispatch",
+                   "--ref", "refs/heads/main", "--commit", commit, "--output", str(output)]
+        archives = ["--train", "tools", "--commit", commit, "--package-directory", str(self.work),
+                    "--service-directory", str(self.work), "--output", str(output)]
+        commands = {"prepare": prepare,
+                    "draft": ["draft", "--tag", "tools-v2099.12.1", "--prerelease", "false", *archives],
+                    "snapshot": ["snapshot", *archives]}
+        environment = {**os.environ, "GH_TOKEN": "", "GH_REPO": ""}
+        for name, command in commands.items():
+            with self.subTest(command=name):
+                result = subprocess.run([*script, *command, *empty], text=True, capture_output=True, check=False,
+                                        env=environment)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("Train tools has nothing to release: no tool is registered", result.stderr)
+                self.assertFalse(output.exists())
+        result = subprocess.run([*script, *prepare, "--registry", str(registry), *self.tool_registry_arguments()],
+                                text=True, capture_output=True, check=False, env=environment)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("tag=tools-v2099.12.1\n", output.read_text(encoding="utf-8"))
+
     def test_prepare_cli_requires_the_declared_release_evidence(self):
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         registry, contracts = self.work / "projects.csv", self.work / "contracts"
