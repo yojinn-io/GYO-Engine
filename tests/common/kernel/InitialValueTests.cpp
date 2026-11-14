@@ -562,3 +562,156 @@ TEST_CASE("initial value: two declarations that name each other stop at one sync
     CHECK(rig->world().Get<Body>(id)->x == 50);
     CHECK(rig->world().Get<Mass>(id)->m == 5);
 }
+
+// ---- The zone rules a System writing the component would meet (Z2, Z3, Z6),
+// and the fingerprints (v8-arch-gyo2-funnel-check; user decision 2026-11-14:
+// B1 to B3 are refused, the fingerprints take the declarations, plan A).
+
+namespace {
+
+struct Seat { std::int32_t s; };       // zone C
+struct SeatInput { std::int32_t s; };  // zone C, role Input (no rollback: Z8)
+struct Spark { std::int32_t s; };      // zone C, State, rolls back
+struct Gate { std::int32_t g; };       // zone B
+struct Ember { std::int32_t e; };      // zone C, State, rolls back: a second request of Seat
+Seat SeatFromInput(const SeatInput& in) { return Seat{in.s * 2}; }
+SeatInput InputFromSpark(const Spark& spark) { return SeatInput{spark.s}; }
+Seat SeatFromSpark(const Spark& spark) { return Seat{spark.s}; }
+Gate GateFromSpark(const Spark& spark) { return Gate{spark.s}; }
+Gate GateFromSeat(const Seat& seat) { return Gate{seat.s}; }
+Seat SeatFromEmber(const Ember& ember) { return Seat{ember.e}; }
+
+SystemResult IngressAsksForSeat(CommandsFor<Inserts<SeatInput>, Removes<>> commands, CurrentTick tick) {
+    if (tick.Tick() == 1) commands.Insert(7, SeatInput{3});
+    return Ok();
+}
+SystemResult SimulationSpawnsSpark(Spawn<Bundle<Spark>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(Spark{4});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+
+// seatRollback: Seat's rollback; worldRollback: FixedUpdate is rollback-enabled.
+void SeatData(Registrar& r, Rollback seatRollback, bool worldRollback) {
+    r.Component<Seat>({.name = "Seat", .zone = Zone::C, .rollback = seatRollback});
+    r.Component<SeatInput>({.name = "SeatInput", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .role = Role::Input});
+    r.Component<Spark>({.name = "Spark", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+    r.Component<Gate>({.name = "Gate", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+    r.Component<Ember>({.name = "Ember", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+    // Zone C, rolling back with the World: zone C Systems spawn.
+    r.Resource<RangeAllotter>({.name = "Allotter", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .rollback = Rollback::Yes});
+    r.Allotter<RangeAllotter>();
+    r.Schedule(KernelTest::FixedSchedule(worldRollback));
+}
+
+SystemOptions Ingress(std::string name) {
+    SystemOptions o = KernelTest::Sys(std::move(name), Zone::B, {At("FixedUpdate", "Ingress")});
+    o.ingress = true;
+    return o;
+}
+
+SystemOptions Simulation(std::string name) {
+    return KernelTest::Sys(std::move(name), Zone::C, {At("FixedUpdate", "Simulate")});
+}
+
+} // namespace
+
+TEST_CASE("initial value: zone C State data does not take its value from a role=Input request (Z2)") {
+    // Only ingress (zone B) Systems write the request, so through the funnel
+    // they would write zone C State data.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, false);
+        r.InitialValue<Seat, &SeatFromInput>();
+        r.AddSystem<&IngressAsksForSeat>(Ingress("IngressAsksForSeat"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z2"), Describe(built));
+}
+
+TEST_CASE("initial value: role=Input data does not take its value from a request that is not Input (Z3)") {
+    // A zone C System may not write Input data; through the funnel its spawn would.
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, false);
+        r.InitialValue<SeatInput, &InputFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    CHECK_MESSAGE(HasRule(built, StartupCode::DE7, "Z3"), Describe(built));
+}
+
+TEST_CASE("initial value: in a World with rollback, zone C data takes an initial value only if it rolls back (Z6)") {
+    // A zone C System in a rollback-enabled schedule may not write data that
+    // does not roll back; through the funnel its spawn of Spark would.
+    const Built refused = KernelTest::Finish({{"test", [](Registrar& r) {
+        SeatData(r, Rollback::No, true);
+        r.InitialValue<Seat, &SeatFromSpark>();
+        r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+    }}});
+    CHECK_MESSAGE(HasRule(refused, StartupCode::DE7, "Z6"), Describe(refused));
+    // Yes and Derived pass, as for a System's own writes.
+    for (const Rollback rollback : {Rollback::Yes, Rollback::Derived}) {
+        CAPTURE(static_cast<int>(rollback));
+        const Built accepted = KernelTest::Finish({{"test", [rollback](Registrar& r) {
+            SeatData(r, rollback, true);
+            r.InitialValue<Seat, &SeatFromSpark>();
+            r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+        }}});
+        CHECK_MESSAGE(static_cast<bool>(accepted.result), Describe(accepted));
+    }
+}
+
+TEST_CASE("initial value: the combinations the zone rules allow") {
+    SUBCASE("role=Input from role=Input: ingress writes both") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            r.Component<SeatInput>({.name = "SeatInput", .zone = Zone::C, .writePolicy = WritePolicy::Shared, .role = Role::Input});
+            r.Component<Seat>({.name = "Seat", .zone = Zone::C, .role = Role::Input});
+            r.Schedule(KernelTest::FixedSchedule(true));
+            r.InitialValue<Seat, &SeatFromInput>();
+        }}});
+        CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+    }
+    SUBCASE("zone C State that does not roll back, in a World without rollback") {
+        const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+            SeatData(r, Rollback::No, false);
+            r.InitialValue<Seat, &SeatFromSpark>();
+            r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+        }}});
+        CHECK_MESSAGE(static_cast<bool>(built.result), Describe(built));
+    }
+}
+
+TEST_CASE("initial value: a declaration changes the Registry fingerprint and, for zone C, the C fingerprint") {
+    // which: 0 none, 1 a zone C component (Seat), 2 a zone B component (Gate),
+    // 3 the same zone B component from another request, 4 the same zone C
+    // component from another zone C request.
+    const auto build = [](int which) {
+        return KernelTest::Finish({{"test", [which](Registrar& r) {
+            SeatData(r, Rollback::No, false);
+            if (which == 1) r.InitialValue<Seat, &SeatFromSpark>();
+            if (which == 2) r.InitialValue<Gate, &GateFromSpark>();
+            if (which == 3) r.InitialValue<Gate, &GateFromSeat>();
+            if (which == 4) r.InitialValue<Seat, &SeatFromEmber>();
+            r.AddSystem<&SimulationSpawnsSpark>(Simulation("SimulationSpawnsSpark"));
+        }}});
+    };
+    const Built none = build(0);
+    const Built zoneC = build(1);
+    const Built zoneB = build(2);
+    const Built otherRequest = build(3);
+    const Built otherZoneCRequest = build(4);
+    REQUIRE_MESSAGE(static_cast<bool>(none.result), Describe(none));
+    REQUIRE_MESSAGE(static_cast<bool>(zoneC.result), Describe(zoneC));
+    REQUIRE_MESSAGE(static_cast<bool>(zoneB.result), Describe(zoneB));
+    REQUIRE_MESSAGE(static_cast<bool>(otherRequest.result), Describe(otherRequest));
+    REQUIRE_MESSAGE(static_cast<bool>(otherZoneCRequest.result), Describe(otherZoneCRequest));
+    const FrozenRegistry& base = none.registry->Frozen();
+    CHECK(base.RegistryFingerprint() != zoneC.registry->Frozen().RegistryFingerprint());
+    CHECK(base.RegistryFingerprint() != zoneB.registry->Frozen().RegistryFingerprint());
+    CHECK(zoneC.registry->Frozen().RegistryFingerprint() != zoneB.registry->Frozen().RegistryFingerprint());
+    CHECK(zoneB.registry->Frozen().RegistryFingerprint() != otherRequest.registry->Frozen().RegistryFingerprint());
+    CHECK(base.CFingerprint() != zoneC.registry->Frozen().CFingerprint());
+    CHECK(base.CFingerprint() == zoneB.registry->Frozen().CFingerprint());  // zone B only: the C part is the same
+    // One zone C declaration each, from different requests: the C part differs.
+    CHECK(zoneC.registry->Frozen().CFingerprint() != otherZoneCRequest.registry->Frozen().CFingerprint());
+    CHECK(base.RegistryFingerprint().version == 2U);
+    CHECK(base.CFingerprint().version == 3U);
+}

@@ -7,18 +7,22 @@
 //     underlying value);
 //   - a list is its length as u32, then its elements;
 //   - every fingerprint starts with its format string and version
-//     ("gyo.kernel.registry", "gyo.kernel.registry-c", "gyo.kernel.plan"; 1).
-// Registry fingerprint: plugin names in list order; components, resources,
+//     ("gyo.kernel.registry" 2, "gyo.kernel.registry-c" 3, "gyo.kernel.plan" 1).
+// Registry fingerprint (format 2): plugin names in list order; components, resources,
 // events in id order (name, size, align, zone, writePolicy, role, rollback;
 // resources add external and affinity; events have name, domain, zone);
 // effects; named sets (name, members, digest); the allotter; schedules (every
 // ScheduleOptions field); sets; Systems in registrationSeq order (name, zone,
 // ingress, affinity, effects, rollbackSafe, mounts with every field, access
-// set); hooks (name, component, trigger, zone, access); then every Plan's
-// fingerprint in schedule order. Registration sites (file paths) are never
+// set); hooks (name, component, trigger, zone, access); initial value
+// declarations (Registrar::InitialValue; target and request ComponentId, in the
+// (requestId, targetId) order Finish leaves them in); then every Plan's
+// fingerprint in schedule order. The function of a declaration is not hashed:
+// its address differs per build. Registration sites (file paths) are never
 // hashed: they differ per checkout.
-// C fingerprint (format 2): only zone C data, zone C Systems (with mounts and
-// access) and zone C hooks, each section counted; and for every schedule that
+// C fingerprint (format 3): only zone C data, zone C Systems (with mounts and
+// access), zone C hooks and the initial value declarations of zone C
+// components, each section counted; and for every schedule that
 // runs a zone C System, its rollbackEnabled, stages and eventTrim, and its Plan
 // reduced to the zone C System steps plus every sync point and the trim
 // (spec H.3; review B6).
@@ -47,9 +51,13 @@ namespace Detail {
 namespace {
 
 constexpr std::uint32_t kFingerprintVersion = 1;
+// The Registry fingerprint's format: 2 since initial value declarations are
+// hashed (v8-arch-gyo2-funnel-check). The Plan fingerprint stays at 1.
+constexpr std::uint32_t kRegistryFingerprintVersion = 2;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
-// schedules that hold zone C steps, and the sync points around those steps.
-constexpr std::uint32_t kCFingerprintVersion = 2;
+// schedules that hold zone C steps, and the sync points around those steps; 3
+// since the initial value declarations of zone C components.
+constexpr std::uint32_t kCFingerprintVersion = 3;
 
 class Bytes {
 public:
@@ -248,7 +256,7 @@ Fingerprint PlanFingerprintOf(const Plan& plan) {
 
 Fingerprint RegistryFingerprintOf(const RegistryData& data) {
     Bytes out;
-    Header(out, "gyo.kernel.registry");
+    Header(out, "gyo.kernel.registry", kRegistryFingerprintVersion);
     out.U32(data.plugins.size());
     for (const PluginRecord& plugin : data.plugins) out.Str(plugin.name);
     out.U32(data.components.size());
@@ -292,9 +300,14 @@ Fingerprint RegistryFingerprintOf(const RegistryData& data) {
         out.Enum(hook.zone);
         Access(out, hook.access);
     }
+    out.U32(data.initialValues.size());
+    for (const InitialValueRecord& rule : data.initialValues) {
+        out.U32(rule.targetId);
+        out.U32(rule.requestId);
+    }
     out.U32(data.plans.size());
     for (const Plan& plan : data.plans) out.Str(plan.fingerprint.Text());
-    return out.Finish();
+    return out.Finish(kRegistryFingerprintVersion);
 }
 
 Fingerprint CFingerprintOf(const RegistryData& data) {
@@ -336,6 +349,15 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
         out.U32(hook.componentId.value_or(0));
         out.Enum(hook.trigger);
         Access(out, hook.access);
+    }
+    // The kernel writes these components at sync points: a declaration changes (c) results.
+    out.U32(count(data.initialValues, [&data](const InitialValueRecord& rule) {
+        return data.components[rule.targetId].zone == Zone::C;
+    }));
+    for (const InitialValueRecord& rule : data.initialValues) {
+        if (data.components[rule.targetId].zone != Zone::C) continue;
+        out.U32(rule.targetId);
+        out.U32(rule.requestId);
     }
     // Every schedule that runs a zone C System: its properties that change (c)
     // results (rollback, stage sequence, event trim) and its Plan reduced to the

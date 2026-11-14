@@ -795,8 +795,13 @@ void CheckData(RegistryData& data) {
 }
 
 // Registrar::InitialValue: resolves the two components of every declaration and
-// leaves the valid ones in (requestId, targetId) order.
+// leaves the valid ones in (requestId, targetId) order. The kernel writes the
+// component at a sync point on behalf of whoever wrote the request, so the
+// zone rules a System writing it directly would meet are checked here: who can
+// write the request decides who, in effect, writes the component.
 void CheckInitialValues(RegistryData& data) {
+    bool anyRollback = false;
+    for (const ScheduleRecord& schedule : data.schedules) anyRollback = anyRollback || schedule.options.rollbackEnabled;
     std::vector<InitialValueRecord> valid;
     for (InitialValueRecord& record : data.initialValues) {
         const std::string declarer = data.OwnerName(record.owner);
@@ -840,6 +845,37 @@ void CheckInitialValues(RegistryData& data) {
             data.Error(StartupCode::DE7, "Z1",
                        "the initial value of zone C component '" + targetInfo.name + "' comes from '" + requestInfo.name +
                            "', which is zone " + ZoneName(requestInfo.zone),
+                       {targetInfo.name, requestInfo.name}, {source});
+            continue;
+        }
+        // Only the Host and ingress (zone B) Systems write role=Input data, and
+        // the Host's writes are not filled; so a role=Input request is written by
+        // a zone B System, which may write no zone C State data (Z2).
+        if (targetInfo.zone == Zone::C && targetInfo.role != Role::Input && requestInfo.role == Role::Input) {
+            data.Error(StartupCode::DE7, "Z2",
+                       "the initial value of zone C component '" + targetInfo.name + "' comes from role=Input '" +
+                           requestInfo.name + "', which ingress (zone B) Systems write; zone B writes no zone C State data",
+                       {targetInfo.name, requestInfo.name}, {source});
+            continue;
+        }
+        // role=Input data is written by the Host and ingress Systems only (Z3); a
+        // request that is not Input is written by other Systems.
+        if (targetInfo.role == Role::Input && requestInfo.role != Role::Input) {
+            data.Error(StartupCode::DE7, "Z3",
+                       "the initial value of role=Input component '" + targetInfo.name + "' comes from '" +
+                           requestInfo.name + "', which is not role=Input; only the Host and ingress Systems write boundary input",
+                       {targetInfo.name, requestInfo.name}, {source});
+            continue;
+        }
+        // Its request is zone C State data, written by zone C Systems: in a World
+        // with a rollback-enabled schedule the component must roll back (Z6, as
+        // for the Systems themselves: Yes or Derived).
+        if (anyRollback && targetInfo.zone == Zone::C && targetInfo.role != Role::Input &&
+            targetInfo.rollback != Rollback::Yes && targetInfo.rollback != Rollback::Derived) {
+            data.Error(StartupCode::DE7, "Z6",
+                       "the initial value of zone C component '" + targetInfo.name +
+                           "', which does not roll back, comes from '" + requestInfo.name +
+                           "' in a World with a rollback-enabled schedule",
                        {targetInfo.name, requestInfo.name}, {source});
             continue;
         }
