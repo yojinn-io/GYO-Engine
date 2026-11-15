@@ -22,7 +22,7 @@
 
 | 名字 | 是什麼 | 對應條文 |
 |---|---|---|
-| `ScheduleOptions` | Host 給的 ScheduleDef：`domain`、`startup`、`clock`、`extract`、`rollbackEnabled`、`stages`、`ingressStage`、`syncPoints`、`eventTrim`、`executor`、`parallelGuardTest`、`runner` | spec D.1 |
+| `ScheduleOptions` | Host 給的 ScheduleDef：`domain`、`startup`、`clock`、`extract`、`rollbackEnabled`、`stages`、`ingressStage`、`syncPoints`、`eventTrim`、`executor`、`parallelGuardTest`、`runner`、`hookRoundLimit`（可選，spec F-12；進執行計畫指紋，含 (c) System 的 schedule 也進 C 指紋） | spec D.1 |
 | `Registrar::Schedule`、`Registrar::InsertStage` | 登記 schedule；在既有 stage 前後插入 stage | spec C.2 第 2 點 |
 | `Mount` | 一個掛點：`schedule`、`stage`、`before`、`after`、`sets`、`conditions`、`notInRollback` | spec B.1 mounts；D-E19 |
 | `Registrar::Set`（`SetOptions`） | 具名的 System 群組：before／after 與 run 條件一次給全部成員 | spec C.1 sets、E.4 |
@@ -30,7 +30,7 @@
 | `Plan::declaredEdges`（`DeclaredEdge`）、`Plan::NonDataflowEdges` | before／after 邊（set 展開後的 System 對）與是否為資料流邊 | 遷移計畫 §3.5、G1 謂詞 (ii)、RC 3 |
 | `FrozenRegistry::TieBreaks`（`TieBreak`） | (b) 依 registrationSeq 加的順序，以診斷等級列出 | spec D.2 第 10 步、D-4 |
 | `Fingerprint`（`version`、`sha256`、`Text()`＝`"<版本>:<64 位十六進位>"`） | Plan 指紋、Registry 指紋、C 指紋；版本進雜湊的位元組也進文字 | spec C.2 第 5 點、H-4、J-18、J-20 |
-| `FrozenRegistry::ExportPlans` | Plan 的文字匯出（`gyo.kernel.plans 1`）：步驟、指紋、每條 before／after 邊、`non_dataflow_edges n/m p%`、平手 | 遷移計畫 §3.5 |
+| `FrozenRegistry::ExportPlans` | Plan 的文字匯出（`gyo.kernel.plans 2`）：步驟、每張 schedule 的 `hook-round-limit`、指紋、每條 before／after 邊、`non_dataflow_edges n/m p%`、平手 | 遷移計畫 §3.5 |
 | `ExecutorKind::Serial`／`Parallel` | v1 只有 Serial；任何 Parallel＝D-E17 | LIM-2、spec X-2 |
 
 Plan 的平手鍵寫成程式的規則（Kahn 演算法）：可選節點中取 registrationSeq 最小的 System；沒有可選的 System 時才取同步點或事件修剪（同步點因此盡量晚）。(b) 歧義對依 (seqA, seqB) 的順序處理，每加一條邊就更新可達性，結果固定且無環。

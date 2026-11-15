@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -150,6 +151,10 @@ struct ScheduleOptions {
     std::string parallelGuardTest;
     // The thread role that calls Run (spec D.1 runner).
     std::string runner = kMainRole;
+    // The most hook rounds after the last sync point of a Run (spec F-12). Empty:
+    // the World's KernelSettings::hookRoundLimit. 0 is D-E20. In the Plan
+    // fingerprint and, for a schedule that runs a zone C System, the C fingerprint.
+    std::optional<std::uint32_t> hookRoundLimit;
 };
 
 } // namespace GYO::Kernel

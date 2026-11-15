@@ -685,7 +685,7 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
         CHECK(Join(Log()) == "first:4 second:4 modes@1:0");
         CHECK(rig->world().Get<Mode>(4) != nullptr);
     }
-    SUBCASE("a hook's records wait for the next sync point of its own schedule") {
+    SUBCASE("a hook's records left at the last sync point are applied before Run returns") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             ScheduleOptions other;
@@ -698,10 +698,10 @@ TEST_CASE("J-34: hooks run in registration order, their changes belong to the ne
             r.Hook<Tag, &HookFirst>(HookTrigger::OnAdd, {.name = "HookFirst", .zone = Zone::B});
         });
         Log().clear();
-        KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));  // Tag at the last sync point of Tick; HookFirst records Mode
+        // Tag at the last sync point of Tick; HookFirst records Mode, applied by the hook rounds right after it.
+        KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));
+        CHECK_MESSAGE(rig->world().Get<Mode>(4) != nullptr, "J-34: Tick's hook records were left after its Run (spec F-12)");
         KERNEL_REQUIRE_RUN_OK(rig->Run("Other"));
-        CHECK_MESSAGE(rig->world().Get<Mode>(4) == nullptr, "another schedule's sync point applied Tick's hook records");
-        KERNEL_REQUIRE_RUN_OK(rig->Run("Tick"));  // applied at step 0 of Tick's first sync point
         CHECK(rig->world().Get<Mode>(4) != nullptr);
     }
     SUBCASE("a record on the System path while Applying fails a GYO_ASSERT") {

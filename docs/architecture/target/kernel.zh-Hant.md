@@ -46,7 +46,7 @@
 〔併自 determinism DI 1、DI 2 的 Kernel 半條〕區沒有預設值；違反是啟動錯誤，不是執行期檢查。boundary Resource 只由 Host（World 在 Ready 時）或 ingress System（在 ingress stage）寫，其他 System 宣告寫它是啟動錯誤；domain tick 只由該 domain 的 clock schedule 的 `Run` 第一步推進，任何 System 宣告寫它是啟動錯誤、Host 也不直接寫它（J-39；DI-KS 12）。Kernel 驗不到函式體有沒有自己讀時鐘：那一半是產品與 Host 的規則，寫在 `determinism.md` DI 2、DI 3。
 
 <a id="di-ks-9"></a>
-**DI-KS 9.** **結構變更延後、在宣告的同步點依「hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource」套用，每階段依 id，同鍵依 (planPos, recSeq)，鍵唯一。** Running 期間成員不變；hook 的變更屬下一窗；結果不依 System 之間的記錄順序。守衛：J-3、J-31～J-34。（K4；W-3、F-1～F-5；延伸 entity-store DI 4；修訂：B1／S4）
+**DI-KS 9.** **結構變更延後，在宣告的同步點，以及計畫最後一個同步點之後的 hook 清空輪，依「hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource」套用，每階段依 id，同鍵依 (planPos, recSeq)，鍵唯一。** Running 期間成員不變；hook 的變更屬下一窗——最後一個同步點觸發的，在接下來的清空輪一輪一輪套用到空，每一輪是一次完整的套用，連鎖超過上限是 Err（spec F-12）；每次 `Run` 開始與結束時，這張 schedule 的 hook 佇列都是空的；結果不依 System 之間的記錄順序。守衛：J-3、J-31～J-34、J-54。（K4；W-3、F-1～F-5、F-12；延伸 entity-store DI 4；修訂：B1／S4；清空輪（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准））
 〔併自 world DI 5〕despawn 冪等（同一 id 記兩次只處理一次），對窗開始時不存在的 id 無作用；Despawn 不計入獨占寫者、不產生衝突邊，(c) 資料的保護由 Z5。補守衛：J-32b（突變：spawn 先於 despawn、不去重、依記錄順序套用）。
 
 <a id="di-ks-10"></a>
@@ -114,3 +114,6 @@
 
 <a id="rc-13"></a>
 **RC 13.** **每加一個 System 或 plugin 都要重新驗證 Kernel 本體的守衛**（突變名單以外）。→ Kernel 不是穩定的基盤。
+
+<a id="rc-14"></a>
+**RC 14.** **hook 的連鎖上限成為負擔**：符合任一條——上限的錯誤出現在正確的內容上（連鎖本來就該那麼長，卻得靠調高上限才跑得過），同一個版本內兩次以上；或為了讓某一張 schedule 的連鎖做完，得把清空的輪改成別的時機（例如中段的同步點也要清空）。→ 停下來重看 hook 的模型：每個同步點把連鎖做完（Bevy 的做法，使用者 2026-11-15 不採），或 hook 不准記延後的變更（使用者比過、沒選）。「兩次以上」沒有根據，是提案者給的。（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准）

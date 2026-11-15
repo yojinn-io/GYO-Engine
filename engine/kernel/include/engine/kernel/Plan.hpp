@@ -4,12 +4,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 // Plan (spec D.1): one per schedule, built once at Finish, never rebuilt
 // (DI-KS 3, spec D-1, D-6). Serial order of System steps, sync points and the
-// event trim. It depends only on registration order and declarations: not on
+// event trim. The hook rounds after the last sync point (spec F-12) are done
+// by the Executor and are not a step; the Plan fingerprint's format version
+// says the rule is there. It depends only on registration order and declarations: not on
 // hash order, addresses, threads or platform.
 
 namespace GYO::Kernel {
@@ -64,6 +67,9 @@ struct Plan {
     Domain domain = Domain::None;
     std::vector<Step> steps;
     std::vector<DeclaredEdge> declaredEdges;
+    // The schedule's ScheduleOptions::hookRoundLimit (spec F-12): the hook rounds
+    // after the last sync point are not a step, but the limit is in the fingerprint.
+    std::optional<std::uint32_t> hookRoundLimit;
     Fingerprint fingerprint;
 
     [[nodiscard]] std::size_t NonDataflowEdges() const noexcept;
