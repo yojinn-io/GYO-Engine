@@ -1,6 +1,6 @@
 # hook 的紀錄在 schedule 跑完時套用（`v8-arch-gyo2-hook-flush`）
 
-日期：2026-11-15。分支 `claude/gyo2-hook-flush-fa1569`（從 `gyo2` 3a06056b 開出）。PR：見 HANDOFF（開 PR 後補）。
+日期：2026-11-15。分支 `claude/gyo2-hook-flush-fa1569`（從 `gyo2` 3a06056b 開出）。PR [#234](https://github.com/yojinn-io/GYO-Engine/pull/234)（目標 `gyo2`）。
 
 這一批由任務卡「hook 的紀錄在 schedule 跑完時套用」做（GYO2 重建主會話開出）。事前宣告：[hook-flush-declaration.zh-Hant.md](../architecture/target/v2/hook-flush-declaration.zh-Hant.md)（修訂 3，使用者 2026-11-15「三組都核准，開始實作」）。
 
