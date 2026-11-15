@@ -30,6 +30,14 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::AllotterExhausted: return "AllotterExhausted";
     case KernelErrorCode::StructureBroken: return "StructureBroken";
     case KernelErrorCode::HookRoundLimit: return "HookRoundLimit";
+    case KernelErrorCode::ScheduleRunning: return "ScheduleRunning";
+    case KernelErrorCode::UnknownSchedule: return "UnknownSchedule";
+    case KernelErrorCode::ExtractNotNestable: return "ExtractNotNestable";
+    case KernelErrorCode::HookRunsSchedule: return "HookRunsSchedule";
+    case KernelErrorCode::ClosureRunsSchedule: return "ClosureRunsSchedule";
+    case KernelErrorCode::UndeclaredResourceWrite: return "UndeclaredResourceWrite";
+    case KernelErrorCode::UnreadableResource: return "UnreadableResource";
+    case KernelErrorCode::NestedRunAborted: return "NestedRunAborted";
     }
     return "Unknown";
 }
@@ -1106,6 +1114,13 @@ void ResolveSystems(RegistryData& data) {
             data.Error(StartupCode::DE7, "H-6", subject + " has Extract parameters; only extract-schedule Systems may",
                        {hook.name}, {SourceText(hook.source)});
         }
+        if (resolver.access.exclusive && std::any_of(resolver.access.writes.begin(), resolver.access.writes.end(),
+                                                     [](const AccessKey& key) { return key.kind == AccessKind::Resource; })) {
+            // Spec S-18 (K0): a hook writes through deferred records; it lists no resource writes.
+            data.Error(StartupCode::DE7, "S-18",
+                       subject + " takes ExclusiveWorld<Writes<...>>; a hook may take ExclusiveWorld<> only",
+                       {hook.name}, {SourceText(hook.source)});
+        }
         if (hook.zone == Zone::C) {
             const auto forbid = [&](bool present, const char* rule, const char* what) {
                 if (present) {
@@ -1301,6 +1316,13 @@ void CheckSystems(RegistryData& data) {
                 data.Error(StartupCode::DE7, "Z3", subject + " is zone C and ingress; ingress Systems are zone B",
                            {name}, {source});
             }
+        }
+        if (access.exclusive && system.options.ingress) {
+            // Spec S-17 (K0): Z2's ingress exception would let it write zone C boundary input.
+            data.Error(StartupCode::DE7, "S-17",
+                       subject + " takes ExclusiveWorld and is ingress; an ingress System declares the boundary input "
+                                 "it writes in its signature",
+                       {name}, {source});
         }
         const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);
         const AccessSet zoneAccess = ZoneAccess(access, funnel);

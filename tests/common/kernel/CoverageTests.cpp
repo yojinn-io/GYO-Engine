@@ -31,7 +31,7 @@ SystemResult Nothing() { return Ok(); }
 SystemResult InsertA(CommandsFor<Inserts<SharedA>, Removes<>>) { return Ok(); }
 SystemResult FilterWithA(Query<Write<SharedB>, With<SharedA>>) { return Ok(); }
 SystemResult WriteInputRes(ResMut<TestInput>) { return Ok(); }
-SystemResult EditWorld(ExclusiveWorld) { return Ok(); }
+SystemResult EditWorld(ExclusiveWorld<>) { return Ok(); }
 SystemResult ReadMarker(Query<Read<TestMarker>>) { return Ok(); }
 SystemResult ReadMarkerC(Query<Read<TestVel>>) { return Ok(); }
 SystemResult WriteRes(ResMut<TestRes>) { return Ok(); }

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <exception>
 #include <optional>
 #include <string>
 #include <utility>
@@ -37,6 +38,7 @@ Product::Product(const Registry& registry, std::string worldName)
         state.mounts.resize(system.options.mounts.size());
         systems_.push_back(std::move(state));
     }
+    world_.executor_ = this;
 }
 
 Product::~Product() = default;
@@ -53,49 +55,88 @@ VerificationReport Product::Verification() const {
     return report;
 }
 
-Engine::Base::Result<void, KernelError> Product::Fail(KernelError error) {
+Engine::Base::Result<void, KernelError> Product::Fail(KernelError error, bool nested) {
     error.world = world_.name_;
     world_.state_ = WorldState::Interrupted;
     world_.DiscardDeferred();
+    if (nested) {
+        // K0 (spec E.5): reported once, by the outermost Run; the first error stays.
+        if (!world_.leftError_) world_.leftError_ = error;
+        return Engine::Base::Err(std::move(error));
+    }
     if (handler_) handler_(error);
     return Engine::Base::Err(std::move(error));
 }
 
 namespace {
 
-// Spec E.5: an exception out of a System or hook is not caught; on the way
-// out the World becomes Interrupted and the records not yet applied are dropped.
-class RunGuard {
-public:
-    explicit RunGuard(World& world, WorldState& state, void (World::*discard)() noexcept)
-        : world_(world), state_(state), discard_(discard) {}
-    ~RunGuard() {
-        if (armed_) {
-            state_ = WorldState::Interrupted;
-            (world_.*discard_)();
-        }
-    }
-    RunGuard(const RunGuard&) = delete;
-    RunGuard& operator=(const RunGuard&) = delete;
-    void Disarm() noexcept { armed_ = false; }
-
-private:
-    World& world_;
-    WorldState& state_;
-    void (World::*discard_)() noexcept;
-    bool armed_ = true;
-};
-
 std::string StepText(const std::string& schedule, std::uint32_t position, const std::string& name) {
     return "step " + std::to_string(position) + " '" + name + "' of schedule '" + schedule + "'";
 }
 
+// Whether list holds error already (one error, wrapped by more levels, is the same error).
+bool Listed(const std::vector<KernelError>& list, const KernelError& error) {
+    return std::any_of(list.begin(), list.end(), [&](const KernelError& e) {
+        return e.code == error.code && e.rule == error.rule && e.message == error.message && e.detail == error.detail;
+    });
+}
+
+// what: the nested run, as "schedule 'Name'" or "a schedule run by System 'Name'".
+KernelError NestedAbortError(const World& world, const std::string& what) {
+    KernelError error(KernelErrorCode::NestedRunAborted,
+                      "an exception left the nested run of " + what +
+                          " and an outer System caught it; the World is interrupted");
+    error.rule = "X-16";
+    error.world = world.Name();
+    return error;
+}
+
 } // namespace
+
+// Spec E.5 and K0: one level of the run stack. An exception from a System or
+// hook is not caught; on the way out the World becomes Interrupted and the
+// records not yet applied are dropped; a nested level also leaves
+// NestedRunAborted for the outermost Run (the outer System may catch the
+// exception and return).
+class Product::LevelGuard {
+public:
+    LevelGuard(World& world, std::string_view schedule, bool nested)
+        : world_(world), schedule_(schedule), nested_(nested), exceptions_(std::uncaught_exceptions()) {
+        world_.runStack_.push_back(World::RunLevel{schedule, world_.window_.size(), world_.MembershipEpoch()});
+    }
+    ~LevelGuard() {
+        world_.runStack_.pop_back();
+        if (std::uncaught_exceptions() > exceptions_) {
+            world_.state_ = WorldState::Interrupted;
+            world_.DiscardDeferred();
+            if (nested_ && !world_.leftError_) {
+                world_.leftError_ = NestedAbortError(world_, "schedule '" + std::string(schedule_) + "'");
+            }
+        }
+    }
+    LevelGuard(const LevelGuard&) = delete;
+    LevelGuard& operator=(const LevelGuard&) = delete;
+
+private:
+    World& world_;
+    std::string_view schedule_;
+    bool nested_;
+    int exceptions_;
+};
 
 Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) {
     World& world = world_;
-    // E.5: an Interrupted World runs no more; X-9.
+    // E.5: an Interrupted World runs no more (X-9). A System reaching this
+    // through a kept pointer finds the World Running: also a GYO_ASSERT (only
+    // ExclusiveWorld::RunSchedule runs a schedule from inside a System, K0).
     GYO_ASSERT(world.state_ == WorldState::Ready);
+    const Detail::ScheduleRecord* record = world.data_->FindSchedule(std::string(schedule));
+    GYO_ASSERT(record != nullptr);
+    return RunPlan(record->options.name, false);
+}
+
+Engine::Base::Result<void, KernelError> Product::RunPlan(std::string_view schedule, bool nested) {
+    World& world = world_;
     const Detail::RegistryData& data = *world_.data_;
     const std::string scheduleName(schedule);
     const Plan* plan = registry_->Frozen().PlanOf(scheduleName);
@@ -113,7 +154,8 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
         GYO_ASSERT(world.hookRoundLimit_ >= 1);
         world.hasRun_ = true;
     }
-    // The domain tick: advanced only by the domain's clock schedule's Run, first (spec section 0, B5).
+    // The domain tick: advanced only by the domain's clock schedule's Run, first
+    // (spec section 0, B5); a nested Run of it too (K0).
     if (record->options.clock) {
         const std::size_t d = static_cast<std::size_t>(domain);
         const std::uint64_t tick = ++world.ticks_[d];
@@ -124,8 +166,9 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
     // The Ready window (spec A.6 layer 2, E.2 step 0): a change since the last
     // comparison that did not go through the World API is the Host's or a
     // reference kept outside a System; checked before any step, so a sync point
-    // at the start of the Plan cannot hide it.
-    if (world.verification_) {
+    // at the start of the Plan cannot hide it. A nested Run has no Ready window:
+    // the entry compared the outer System's changes and took fresh snapshots.
+    if (!nested && world.verification_) {
         const std::vector<std::string> changed = world.CompareBefore();
         if (!changed.empty()) {
             std::string list;
@@ -136,7 +179,7 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
             error.world = world.name_;
             error.Wrap("Ready window before Run of schedule '" + scheduleName + "'");
             if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
-            return Fail(std::move(error));
+            return Fail(std::move(error), nested);
         }
     }
 
@@ -150,8 +193,9 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
     }
 
     world.state_ = WorldState::Running;
-    RunGuard guard(world, world.state_, &World::DiscardDeferred);
-    std::uint64_t structure = world.MembershipEpoch();
+    LevelGuard guard(world, record->options.name, nested);
+    // This level's entry of the run stack (indexed: a nested Run grows the stack).
+    const std::size_t level = world.runStack_.size() - 1;
     std::string previousStep;
 
     // W-1 with verification on, then fresh snapshots (after a sync point and after the hook rounds).
@@ -194,17 +238,18 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
                                           ": " + list + "; " + system.options.name + " was not called");
                     error.rule = "A.6";
                     error.world = world.name_;
-                    error.Wrap(previousStep.empty() ? std::string("Ready window before Run of schedule '") + scheduleName + "'"
-                                                    : "after " + previousStep);
+                    error.Wrap(!previousStep.empty() ? "after " + previousStep
+                               : nested          ? std::string("entry of the nested run of schedule '") + scheduleName + "'"
+                                                 : std::string("Ready window before Run of schedule '") + scheduleName + "'");
                     if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
-                    guard.Disarm();
-                    return Fail(std::move(error));
+                    return Fail(std::move(error), nested);
                 }
             }
 
             std::uint32_t recSeq = 0;
             Detail::SystemContext call;
             call.world = &world;
+            call.executor = this;
             call.access = &state.access;
             call.name = system.options.name;
             call.schedule = scheduleName;
@@ -242,15 +287,26 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
                 mountState.lastRun = call.stamp;
                 return system.run(call);
             }();
-            // W-3: no System call changes membership.
-            GYO_ASSERT(world.MembershipEpoch() == structure);
+            // W-3: no System call changes membership; a nested run it made set a
+            // new baseline when it returned (K0), so a change of its own before
+            // or after that run is still caught.
+            GYO_ASSERT(world.MembershipEpoch() == world.runStack_[level].structure);
             // (5) The comparison after the call, also when (4) was skipped.
             std::vector<std::string> changed;
             if (world.verification_) changed = world.CompareAfter(state.access);
-            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed)) {
+            const bool interrupted = world.state_ == WorldState::Interrupted;
+            if (interrupted && world.leftError_ && !Listed(call.returned, *world.leftError_)) {
+                // K0: the error a nested run of this call left (failed, refused, or
+                // left by an exception the System caught) is this call's error,
+                // whatever the System returned; listed once.
+                call.returned.push_back(*world.leftError_);
+            }
+            std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed);
+            // An Interrupted World stops here; a nested level always leaves its error, this is a guard.
+            if (interrupted && !error) error = NestedAbortError(world, "a schedule run by System '" + system.options.name + "'");
+            if (error) {
                 error->Wrap("Executor: " + StepText(scheduleName, position, system.options.name));
-                guard.Disarm();
-                return Fail(std::move(*error));
+                return Fail(std::move(*error), nested);
             }
             previousStep = StepText(scheduleName, position, system.options.name);
             break;
@@ -263,12 +319,10 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
             if (!applied) {
                 KernelError error = std::move(applied).error();
                 error.Wrap("Executor: " + StepText(scheduleName, position, step.name));
-                guard.Disarm();
-                return Fail(std::move(error));
+                return Fail(std::move(error), nested);
             }
             if (std::optional<KernelError> error = checkStructure(StepText(scheduleName, position, step.name))) {
-                guard.Disarm();
-                return Fail(std::move(*error));
+                return Fail(std::move(*error), nested);
             }
             if (position == lastSync) {
                 // Spec F-12: the hook rounds. Each applies the whole hook queue like a sync
@@ -297,11 +351,11 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
                         error.world = world.name_;
                         error.Wrap(roundText(round));
                         if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
-                        guard.Disarm();
-                        return Fail(std::move(error));
+                        return Fail(std::move(error), nested);
                     }
                     ++round;
-                    GYO_ASSERT(world.window_.empty());
+                    // This level's records are all applied (the outer levels' wait: K0).
+                    GYO_ASSERT(world.window_.size() == world.runStack_[level].windowBase);
                     world.roundRecorders_.clear();
                     world.trackRoundRecorders_ = true;
                     const ChangeStamp roundStamp = ++world.stamp_;
@@ -312,18 +366,16 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
                     if (!applied) {
                         KernelError error = std::move(applied).error();
                         error.Wrap(roundText(round));
-                        guard.Disarm();
-                        return Fail(std::move(error));
+                        return Fail(std::move(error), nested);
                     }
                 }
                 if (round > 0) {
                     if (std::optional<KernelError> error = checkStructure(roundText(round))) {
-                        guard.Disarm();
-                        return Fail(std::move(*error));
+                        return Fail(std::move(*error), nested);
                     }
                 }
             }
-            structure = world.MembershipEpoch();
+            world.runStack_[level].structure = world.MembershipEpoch();
             previousStep = StepText(scheduleName, position, step.name);
             break;
         }
@@ -334,11 +386,118 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
             break;
         }
     }
-    // Spec F-12: the hook rounds left nothing behind (and no System record is pending).
-    GYO_ASSERT(world.window_.empty() && world.HookQueueOf(scheduleName).records.empty());
-    world.state_ = WorldState::Ready;
-    guard.Disarm();
+    // Spec F-12: the hook rounds left nothing behind (and no System record of this level is pending).
+    GYO_ASSERT(world.window_.size() == world.runStack_[level].windowBase && world.HookQueueOf(scheduleName).records.empty());
+    // A nested Run returns to its outer System: the World is still running (K0).
+    if (!nested) world.state_ = WorldState::Ready;
     return {};
 }
+
+Engine::Base::Result<void, KernelError> Product::RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
+                                                               bool inClosure) {
+    World& world = world_;
+    const Detail::RegistryData& data = *world.data_;
+    // Only ExclusiveWorld<...> reaches here: a System or a zone B hook holding it.
+    GYO_ASSERT(call.access != nullptr && call.access->wholeWorld);
+    const std::string who = std::string(call.hook ? "hook '" : "System '") + std::string(call.name) + "'";
+    const std::string target = "schedule '" + std::string(schedule) + "'";
+    // A refused call: an Err of this call (listed even when the System drops
+    // it), the World interrupted, the error left for the outermost Run.
+    auto refuse = [&](KernelErrorCode code, const char* rule, std::string message) {
+        return Fail(Detail::CallError(call, code, rule, std::move(message)), true);
+    };
+    if (call.hook) {
+        return refuse(KernelErrorCode::HookRunsSchedule, "X-13",
+                      who + " runs " + target + ": a hook runs while a sync point applies its records, so it runs no schedule");
+    }
+    if (inClosure) {
+        return refuse(KernelErrorCode::ClosureRunsSchedule, "X-14",
+                      who + " runs " + target + " inside a Read or Modify closure: the value the closure holds would "
+                                                "not survive the schedule's sync points");
+    }
+    const Detail::ScheduleRecord* record = data.FindSchedule(std::string(schedule));
+    if (record == nullptr) {
+        return refuse(KernelErrorCode::UnknownSchedule, "X-12", who + " runs " + target + ", which is not registered");
+    }
+    if (record->options.extract) {
+        return refuse(KernelErrorCode::ExtractNotNestable, "X-15",
+                      who + " runs extract " + target + ": an extract schedule runs with rollback-extract only");
+    }
+    for (const World::RunLevel& running : world.runStack_) {
+        if (running.schedule == record->options.name) {
+            return refuse(KernelErrorCode::ScheduleRunning, "X-11",
+                          who + " runs " + target + ", which is running already: one schedule runs once at a time");
+        }
+    }
+    if (world.state_ == WorldState::Interrupted) {
+        // Spec E.5 (K0): an Interrupted World runs nothing; the error a nested
+        // level left is returned (the Executor lists it once, at the boundary).
+        return Engine::Base::Err(world.leftError_ ? *world.leftError_
+                                                  : NestedAbortError(world, "schedule '" + std::string(schedule) + "'"));
+    }
+    // W-3: up to here the System changed no membership behind the World API; a
+    // change found now would otherwise be hidden by the nested run's baseline.
+    GYO_ASSERT(world.MembershipEpoch() == world.runStack_.back().structure);
+    // Spec A.6 layer 2: the System's own changes so far are compared as at its
+    // boundary, on its own account; then fresh snapshots, so the inner
+    // schedule's first comparison does not take them for the inner step's.
+    if (world.verification_) {
+        const std::vector<std::string> changed = world.CompareAfter(*call.access);
+        if (!changed.empty()) {
+            std::vector<KernelError> list;
+            for (const std::string& storage : changed) {
+                KernelError error(KernelErrorCode::BoundaryChange,
+                                  "'" + storage + "' changed during " + who + " (schedule '" + std::string(call.schedule) +
+                                      "', step " + std::to_string(call.planPos) +
+                                      ") before it ran " + target + ", which it does not declare writing; " + target +
+                                      " was not run");
+                error.rule = "A.6";
+                error.world = world.name_;
+                if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
+                list.push_back(std::move(error));
+            }
+            KernelError error = list.front();
+            if (list.size() > 1) {
+                error = KernelError(KernelErrorCode::Siblings, std::to_string(list.size()) + " errors before " + who +
+                                                                   " ran " + target);
+                error.world = world.name_;
+                error.siblings = std::move(list);
+            }
+            return Fail(std::move(error), true);
+        }
+    }
+    // On every way back (an exception the System may catch included): the outer
+    // step's new membership baseline and fresh snapshots, since what the inner
+    // schedule changed is not the outer System's.
+    class Rebase {
+    public:
+        explicit Rebase(World& world) noexcept : world_(world) {}
+        ~Rebase() {
+            world_.runStack_.back().structure = world_.MembershipEpoch();
+            if (world_.verification_) world_.TakeSnapshots();
+        }
+        Rebase(const Rebase&) = delete;
+        Rebase& operator=(const Rebase&) = delete;
+
+    private:
+        World& world_;
+    };
+    Engine::Base::Result<void, KernelError> ran = [&] {
+        Rebase rebase(world);
+        return RunPlan(record->options.name, true);
+    }();
+    // A failed run left its error (Fail): the Executor lists it as this call's
+    // error when the System returns, whatever the System does with it.
+    return ran;
+}
+
+namespace Detail {
+
+Engine::Base::Result<void, KernelError> RunNested(SystemContext& call, std::string_view schedule, bool inClosure) {
+    GYO_ASSERT(call.executor != nullptr);
+    return call.executor->RunNestedFrom(call, schedule, inClosure);
+}
+
+} // namespace Detail
 
 } // namespace GYO::Kernel

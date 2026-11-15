@@ -320,6 +320,10 @@ private:
     friend std::optional<KernelError> Detail::CheckUntypedCommand(Detail::SystemContext&, ComponentId, EntityId, bool);
     friend std::optional<KernelError> Detail::CheckDespawn(Detail::SystemContext&, EntityId);
     friend std::optional<KernelError> Detail::CheckExclusiveWrite(Detail::SystemContext&, ComponentId, EntityId);
+    friend std::optional<KernelError> Detail::CheckExclusiveResourceWrite(Detail::SystemContext&, ResourceId, bool);
+    friend std::optional<KernelError> Detail::CheckExclusiveRead(Detail::SystemContext&, ResourceId);
+    friend std::uint64_t Detail::CurrentSyncEpoch(const World&) noexcept;
+    friend ChangeStamp Detail::NextStamp(World&) noexcept;
     friend Detail::ResourceBase* Detail::AllotterSlot(World&) noexcept;
     friend std::optional<EntityId> Detail::Allot(World&);
     friend Detail::DiagnosticsBase* Detail::FindDiagnostics(World&, TypeKey) noexcept;
@@ -348,9 +352,11 @@ private:
 
     // ---- Executor side (Product, World.cpp)
 
-    // F.2: applies the window's deferred records and the hook queue (spawn records
-    // that cannot spawn are dropped and recorded, spec F-13); Err from a
-    // hook or the Z5 recheck. stamp: the sync point's stamp.
+    // F.2: applies the running level's deferred records (window_ from its
+    // windowBase; K0) and the schedule's hook queue (spawn records that cannot
+    // spawn are dropped and recorded, spec F-13); Err from a hook or the Z5
+    // recheck, which also looks at the records the outer levels keep and their
+    // schedules' hook queues. stamp: the sync point's stamp.
     Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
                                                       ChangeStamp stamp);
     // Spec F-13: counts one dropped spawn and appends its diagnostics record.
@@ -394,9 +400,27 @@ private:
     std::vector<std::unique_ptr<Detail::EventBufferBase>> events_;
     std::vector<std::pair<TypeKey, std::unique_ptr<Detail::DiagnosticsBase>>> diagnostics_;
 
-    // The current sync window's deferred records and the hook queue (records
-    // of hooks, applied first at the next sync point: spec F.2 step 0).
+    // The current sync window's deferred records. With nested runs (K0) one
+    // container holds every level's records: a level's own records are the tail
+    // from its windowBase (RunLevel), applied and cut off at that level's sync
+    // points; the outer levels' records wait, untouched, for their own.
     std::vector<Detail::Record> window_;
+    // K0: the schedules running now, outermost first (spec E.2; Product::Run
+    // pushes the first, ExclusiveWorld::RunSchedule the others). A schedule is on
+    // it at most once (X-11).
+    struct RunLevel {
+        // The Registry's string.
+        std::string_view schedule;
+        // Where this level's deferred records start in window_.
+        std::size_t windowBase = 0;
+        // The membership epoch the running step started from (W-3): a System
+        // call leaves it unchanged; a nested run sets a new one when it returns.
+        std::uint64_t structure = 0;
+    };
+    std::vector<RunLevel> runStack_;
+    // K0 (spec E.5): the first error of a nested level, kept for the outermost
+    // Run, which reports once; a later RunSchedule of the Interrupted World returns it.
+    std::optional<KernelError> leftError_;
     // One hook queue per schedule: a hook's records are applied at step 0 of the
     // next sync point of the Run that recorded them; those left at the last sync
     // point are applied by the hook rounds right after it (spec F-12), so the
@@ -441,6 +465,9 @@ private:
     std::vector<bool> excluded_;
 
     std::vector<Detail::AccessDesc> hookAccess_;
+    // The Product running this World (set by it): a hook's call carries it too,
+    // so ExclusiveWorld::RunSchedule in a hook reaches the refusal (X-13).
+    Product* executor_ = nullptr;
     std::function<void(const KernelError&)> breakHook_;
 };
 

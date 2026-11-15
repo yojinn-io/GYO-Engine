@@ -60,6 +60,26 @@ enum class KernelErrorCode : std::uint8_t {
     // Spec F-12: the hook rounds after the last sync point of a Run did not empty
     // the schedule's hook queue within the limit.
     HookRoundLimit,
+    // The codes below come with nested runs (ExclusiveWorld::RunSchedule; K0,
+    // v8-arch-gyo2-nested-schedule). Each refusal interrupts the World and is
+    // reported once, by the outermost Run.
+    // Spec X-11: the schedule is running already (this level or an outer one).
+    ScheduleRunning,
+    // Spec X-12: no schedule of that name is registered.
+    UnknownSchedule,
+    // Spec X-15: an extract schedule is not run from inside a System.
+    ExtractNotNestable,
+    // Spec X-13: a hook runs while a sync point applies its records, so it runs no schedule.
+    HookRunsSchedule,
+    // Spec X-14: a schedule is not run from inside a Read or Modify closure.
+    ClosureRunsSchedule,
+    // Spec S-14: an ExclusiveWorld write to a single-writer resource its Writes<...> does not list.
+    UndeclaredResourceWrite,
+    // Spec S-15: an ExclusiveWorld read of KernelSettings; S-16: of a resource
+    // whose thread affinity the schedule's runner does not satisfy.
+    UnreadableResource,
+    // Spec X-16: an exception left a nested run (the outer System caught it).
+    NestedRunAborted,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;

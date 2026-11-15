@@ -35,7 +35,7 @@ SystemResult WriteEvent(EventWriter<TestEvent>) { return Ok(); }
 SystemResult ReadEvent(EventReader<TestEvent>) { return Ok(); }
 SystemResult ReadFrameEvent(EventReader<TestFrameEvent>) { return Ok(); }
 SystemResult ReadSet(SetRead<ReplicatedSet>) { return Ok(); }
-SystemResult EditWorld(ExclusiveWorld) { return Ok(); }
+SystemResult EditWorld(ExclusiveWorld<>) { return Ok(); }
 bool OtherResIsSet(Res<TestOtherRes>) { return true; }
 SystemResult HookWritesPos(Query<Write<TestPos>>) { return Ok(); }
 
