@@ -420,7 +420,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 2. 中斷時每一層還沒套用的紀錄都丟掉。
 
 **Resource 的讀寫（帶寫入的宣告）**
-3. 【已定：使用者 2026-11-15「可以，下一條」】寫 Resource 一律要列，標 `Shared` 的也要列；讀不必列。沒列就寫：優先做成編譯不過（要寫哪個 Resource 在型別上看得出來），實作時確認做不到才退回執行期回 Err。
+3. 【已定：使用者 2026-11-15「可以，下一條」。**之後使用者修正了這一條所依據的理由**（`v8-arch-gyo2-shared-means-no-owner`：「shared的情況本身就是不需要知道誰寫的。要保證誰寫，別開shared。」）；照新的說法這一條可能改成「只有單一寫者的要列，`Shared` 的不用列」——那是分支會話推的，待使用者確認】寫 Resource 一律要列，標 `Shared` 的也要列；讀不必列。沒列就寫：優先做成編譯不過（要寫哪個 Resource 在型別上看得出來），實作時確認做不到才退回執行期回 Err。
 4. 宣告只管 Resource，元件的規則照舊。
 5. 只能讀寫值，不能新增或移除 Resource。
 6. 獨占的 System 不能同時是 ingress；hook 不能用帶宣告的寫法。

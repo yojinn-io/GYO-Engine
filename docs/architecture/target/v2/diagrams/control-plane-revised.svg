@@ -25,7 +25,7 @@
 <text class="ts" x="495" y="98" text-anchor="middle" dominant-baseline="central">執行緒親和：主、worker、專用</text>
 <text class="ts" x="495" y="116" text-anchor="middle" dominant-baseline="central">外部副作用：socket、檔案、GPU</text>
 <text class="ts" x="495" y="136" text-anchor="middle" dominant-baseline="central">可信度：審查</text></g>
-<text class="ts" x="340" y="170" text-anchor="middle">資料自己也帶契約：ECS 元件可宣告「獨占寫入」（保證它只有一個寫者）</text>
+<text class="ts" x="340" y="170" text-anchor="middle">資料自己也帶契約：元件與 Resource 預設只准一個寫者；標 Shared 才准多個</text>
 <line x1="340" y1="178" x2="340" y2="204" class="arr" marker-end="url(#a7)"/>
 <g class="c-purple"><rect x="40" y="206" width="600" height="56" rx="8" stroke-width="0.5"/>
 <text class="th" x="340" y="224" text-anchor="middle" dominant-baseline="central">分析（每個 schedule 一次，凍結後）</text>
@@ -35,7 +35,7 @@
 <line x1="540" y1="262" x2="540" y2="290" class="arr" marker-end="url(#a7)"/>
 <g class="c-teal"><rect x="40" y="292" width="190" height="120" rx="8" stroke-width="0.5"/>
 <text class="th" x="135" y="310" text-anchor="middle" dominant-baseline="central">資料衝突</text>
-<text class="ts" x="135" y="332" text-anchor="middle" dominant-baseline="central">兩者都寫 Position</text>
+<text class="ts" x="135" y="332" text-anchor="middle" dominant-baseline="central">一讀一寫，或都寫標 Shared 的資料</text>
 <text class="ts" x="135" y="350" text-anchor="middle" dominant-baseline="central">不是錯誤</text>
 <text class="ts" x="135" y="368" text-anchor="middle" dominant-baseline="central">處置：不並行，序列化</text>
 <text class="ts" x="135" y="386" text-anchor="middle" dominant-baseline="central">先後由順序邊或平手策略定</text>
@@ -43,7 +43,7 @@
 <g class="c-gray"><rect x="245" y="292" width="190" height="120" rx="8" stroke-width="0.5"/>
 <text class="th" x="340" y="310" text-anchor="middle" dominant-baseline="central">啟動錯誤</text>
 <text class="ts" x="340" y="332" text-anchor="middle" dominant-baseline="central">順序邊成環</text>
-<text class="ts" x="340" y="350" text-anchor="middle" dominant-baseline="central">獨占寫入的元件有第二個寫者</text>
+<text class="ts" x="340" y="350" text-anchor="middle" dominant-baseline="central">單一寫者的資料有第二個寫者</text>
 <text class="ts" x="340" y="368" text-anchor="middle" dominant-baseline="central">讀的 resource 沒人登記</text>
 <text class="ts" x="340" y="386" text-anchor="middle" dominant-baseline="central">掛到此 Product 沒有的 schedule</text>
 <text class="ts" x="340" y="402" text-anchor="middle" dominant-baseline="central">錯不錯由對應契約定，不由 Scheduler 定</text></g>
