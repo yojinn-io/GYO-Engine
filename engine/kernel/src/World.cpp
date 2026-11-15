@@ -651,7 +651,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);
             if (at == entities_.end() || *at != id) continue;
             // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole
-            // entity; then destroy in ascending ComponentId (W-7). (Architect's recommendation (a), pending the user.)
+            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)
             for (std::size_t c = 0; c < columns_.size(); ++c) {
                 if (!columns_[c]->Contains(id)) continue;
                 auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);

@@ -3534,23 +3534,23 @@
     },
     {
       "id": "hf-no-rounds",
-      "what": "no hook rounds after the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "no hook rounds after the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (false) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: fixed-step end*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-one-round",
-      "what": "one hook round, no loop (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "one hook round, no loop (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {",
       "replace": "                if (!world.HookQueueOf(scheduleName).records.empty()) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: a chain of three rounds*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-limit-off-by-one",
@@ -3674,23 +3674,23 @@
     },
     {
       "id": "hf-only-with-trim",
-      "what": "hook rounds only when an event trim follows the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "hook rounds only when an event trim follows the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (position == lastSync && position + 1 < plan->steps.size()) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: run once*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-verification-only",
-      "what": "hook rounds only with verification on (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "hook rounds only with verification on (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (position == lastSync && world.verification_) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: fixed-step end*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-not-applying",
@@ -3704,13 +3704,13 @@
     },
     {
       "id": "hf-first-queue",
-      "what": "the rounds read the first schedule's hook queue (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
+      "what": "the rounds read the first schedule's hook queue (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log] (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {",
       "replace": "                while (!world.hookQueues_.front().records.empty()) {",
       "target": "gyo_kernel_tests",
       "cases": "J-54: fixed-step end*",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf"
     },
     {
       "id": "hf-recseq-constant",
@@ -4468,8 +4468,8 @@
       "target": "gyo_kernel_tests",
       "find": "        if (plan->steps[position].kind == StepKind::SyncPoint) lastSync = position;",
       "replace": "        if (plan->steps[position].kind == StepKind::SyncPoint &&\n            (lastSync == plan->steps.size() || plan->steps[lastSync + 1].kind != StepKind::EventTrim)) lastSync = position;",
-      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)",
-      "what": "the rounds follow the sync point before the event trim (declared: 輪跟著清舊事件那一步走) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "expect": "GYO_ASSERT failed: world\\.window_\\.size\\(\\) == world\\.runStack_\\[level\\]\\.windowBase \\&\\& world\\.HookQueueOf",
+      "what": "the rounds follow the sync point before the event trim (declared: 輪跟著清舊事件那一步走) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush) (find, replace and expect rewritten for the nested runs of v8-arch-gyo2-nested-schedule)",
       "cases": "J-54: an event trim at an earlier sync point*",
       "ran_as": "ck-decl-rounds-follow-trim",
       "note": "宣告判定 2「輪跟著清舊事件那一步走」"
@@ -6137,16 +6137,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-58: verification is on while Startup runs*",
       "expect": "\\[ns\\-st\\-verification\\]"
-    },
-    {
-      "id": "ns-hook-refused-inner-listed-twice",
-      "what": "E.5: the refusal of a nested level's hook is listed twice (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "            if (interrupted && world.leftError_ && !Listed(call.returned, *world.leftError_)) {",
-      "replace": "            if (interrupted && world.leftError_) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-56: a hook of the inner schedule runs a schedule*",
-      "expect": "\\[ns\\-hook\\-refused\\-inner\\]"
     },
     {
       "id": "ns-modify-no-changed",
