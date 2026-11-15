@@ -57,6 +57,9 @@ enum class KernelErrorCode : std::uint8_t {
     AllotterExhausted,
     // Spec W-1 checked after a sync point with verification on.
     StructureBroken,
+    // Spec F-12: the hook rounds after the last sync point of a Run did not empty
+    // the schedule's hook queue within the limit.
+    HookRoundLimit,
 };
 
 [[nodiscard]] std::string_view ToString(KernelErrorCode code) noexcept;
@@ -91,12 +94,12 @@ struct KernelError {
     [[nodiscard]] std::string Text() const;
 };
 
-// The startup error codes of spec D.2's table (D-E1 to D-E19, R-E1 to R-E6,
+// The startup error codes of spec D.2's table (D-E1 to D-E20, R-E1 to R-E6,
 // X-E1 to X-E3, F-E1). The enum value is not part of any fingerprint or file:
 // the text form (ToString) is.
 enum class StartupCode : std::uint8_t {
     DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE8, DE9, DE10,
-    DE11, DE12, DE13, DE14, DE15, DE16, DE17, DE18, DE19,
+    DE11, DE12, DE13, DE14, DE15, DE16, DE17, DE18, DE19, DE20,
     RE1, RE2, RE3, RE4, RE5, RE6,
     XE1, XE2, XE3,
     FE1,

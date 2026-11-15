@@ -541,6 +541,7 @@ private:
         Plan plan;
         plan.schedule = s_.name;
         plan.domain = s_.domain;
+        plan.hookRoundLimit = s_.hookRoundLimit;
         std::vector<std::size_t> position(nodes_.size(), 0);
         while (!ready.empty()) {
             const std::size_t node = nodeOf[*ready.begin()];

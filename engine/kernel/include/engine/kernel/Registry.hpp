@@ -380,12 +380,16 @@ struct SchedulerShuffleProbe {
 };
 
 // The kernel's own resource (spec section "reading" / A.6): the access
-// verification switch and breakOnKernelError, written by the Host before the
-// first Run, read only by the kernel. Registered by the Registry before any
-// plugin (ResourceId 0); a System that declares Res or ResMut of it is D-E18.
+// verification switch, breakOnKernelError and the product's default hook round
+// limit (spec F-12), written by the Host before the first Run, read only by the
+// kernel (cached when the first Run starts). One per World. Registered by the
+// Registry before any plugin (ResourceId 0); a System that declares Res or
+// ResMut of it is D-E18. hookRoundLimit is not a startup switch (LIM-6 does not
+// apply to it) and is in no fingerprint; 0 is a GYO_ASSERT at the first Run.
 struct KernelSettings {
     bool accessVerification = false;
     bool breakOnKernelError = false;
+    std::uint32_t hookRoundLimit = 8;
 };
 
 enum class AccessKind : std::uint8_t {

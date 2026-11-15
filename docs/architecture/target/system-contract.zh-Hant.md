@@ -59,7 +59,7 @@
 | `Condition<&Fn>(name)`、`Condition<Lambda>(name)`（`ConditionRef`） | run 條件：回 `bool`、參數全唯讀 | spec E.4、S-5 |
 | `Rejection`、`SystemRejectionOf<F>()`、`SystemRejectionOfFunction<Fn>()`、`ConditionRejectionOf…` | 簽名被拒的理由（測試讀它）；登記點以 `static_assert` 擋，訊息帶 `GYO_KERNEL_REJECT_…` 標記 | spec S-1～S-3、S-5、S-10、J-10、J-11、J-13 |
 | `AccessSet`、`AccessKey`、`AccessKind` | finish 後以 id 表示的推導存取（reads、writes、membershipReads、deferredWrites、setReads、extractReads 與旗標） | spec B.1 derived、S-4 |
-| `KernelSettings` | Kernel 自己的 Resource（ResourceId 0，登記在所有 plugin 之前）；System 宣告 `Res`／`ResMut` 它＝D-E18 | §2b；spec D-E18 |
+| `KernelSettings` | Kernel 自己的 Resource（ResourceId 0，登記在所有 plugin 之前，每個 World 一份）：驗證開關、`breakOnKernelError`、hook 輪上限的預設 `hookRoundLimit`（spec F-12）；System 宣告 `Res`／`ResMut` 它＝D-E18 | §2b；spec D-E18 |
 | `StartupError`（`code`、`step`、`rule`、`subjects`、`sources`）、`StartupReport` | 啟動錯誤一次全部回報；`code` 與 `step` 不同時，`step` 是 D.2 的步驟代號（親和：X-E2／X-E3 與 D-E10；(c) Parallel 無守衛：X-E1 與 D-E11） | spec D.2、D-5、C.4 |
 | `Registry`、`Plugin`、`Registrar`、`FinishContext`、`FrozenRegistry` | 生命週期：`Registry(plugins).Finish()` 依序 build → requires 檢查 → finish → 凍結 → Plan；`FinishContext::InstallRunner`（第二個＝R-E6） | spec C.2、C.5 |
 | `FrozenRegistry::ExportZoneCSources` | G-5：(c) System 的登記處 `.cpp` 以 `gyo.zone-c-sources` v1 匯出（`generated_by = "gyo-kernel-report"`） | spec G-5；`docs/architecture/zone-c-sources.zh-Hant.md` |

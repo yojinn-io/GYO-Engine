@@ -450,6 +450,7 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
     HookQueue& queue = HookQueueOf(schedule);
     call.queue = &queue.records;
     call.recSeq = &queue.recSeq;
+    const std::size_t recordsBefore = queue.records.size();
     call.hookEntity = entity;
     call.hookComponent = component;
     // Layer 2 around a hook (spec A.6): a hook writes no storage directly (its
@@ -460,6 +461,7 @@ Engine::Base::Result<void, KernelError> World::RunHook(std::size_t hook, EntityI
         Detail::CallScope scope(call);
         return record.run(call);
     }();
+    if (trackRoundRecorders_ && queue.records.size() > recordsBefore) roundRecorders_.push_back(hook);
     std::vector<std::string> changed;
     if (verification_) changed = CompareAfter(hookAccess_[hook]);
     std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed);

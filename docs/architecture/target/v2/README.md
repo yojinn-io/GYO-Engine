@@ -35,6 +35,7 @@
 - [rebuild-declaration.zh-Hant.md](rebuild-declaration.zh-Hant.md)：`v8-arch-rebuild` 的事前宣告（階段 R0～R6）。
 - [rebuild-r0-carry-list.zh-Hant.md](rebuild-r0-carry-list.zh-Hant.md)：R0 帶過去清單（已核准）。
 - [rebuild-r0b-report.zh-Hant.md](rebuild-r0b-report.zh-Hant.md)：R0b 的報告（刪除舊實現；第 3 節是 R0b-3 的判定變更）。
+- [hook-flush-declaration.zh-Hant.md](hook-flush-declaration.zh-Hant.md)：`v8-arch-gyo2-hook-flush` 的事前宣告（hook 的紀錄在 schedule 跑完時套用；修訂 3，使用者 2026-11-15 核准）。
 
 ## dev_log
 
@@ -44,6 +45,7 @@
 - [2026_11_14_gyo2_initial_value.zh-Hant.md](../../../dev_logs/2026_11_14_gyo2_initial_value.zh-Hant.md)：漏斗工具 `Registrar::InitialValue`。
 - [2026_11_14_gyo2_strict_order.zh-Hant.md](../../../dev_logs/2026_11_14_gyo2_strict_order.zh-Hant.md)：歧義的嚴格模式 `Registrar::RequireExplicitOrder`。
 - [2026_11_15_gyo2_funnel_check.zh-Hant.md](../../../dev_logs/2026_11_15_gyo2_funnel_check.zh-Hant.md)：漏斗工具的對抗檢查與區規則，PR #229 併入（標記為需要產品測試）。
+- [2026_11_15_gyo2_hook_flush.zh-Hant.md](../../../dev_logs/2026_11_15_gyo2_hook_flush.zh-Hant.md)：hook 的紀錄在 schedule 跑完時套用（清空輪、兩層上限、指紋升版）。
 
 ## 沒有搬過來的
 
