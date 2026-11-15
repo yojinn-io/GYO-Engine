@@ -420,7 +420,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 2. 中斷時每一層還沒套用的紀錄都丟掉。
 
 **Resource 的讀寫（帶寫入的宣告）**
-3. 寫 Resource 一律要列，標 `Shared` 的也要列；讀不必列。
+3. 【已定：使用者 2026-11-15「可以，下一條」】寫 Resource 一律要列，標 `Shared` 的也要列；讀不必列。沒列就寫：優先做成編譯不過（要寫哪個 Resource 在型別上看得出來），實作時確認做不到才退回執行期回 Err。
 4. 宣告只管 Resource，元件的規則照舊。
 5. 只能讀寫值，不能新增或移除 Resource。
 6. 獨占的 System 不能同時是 ingress；hook 不能用帶宣告的寫法。
