@@ -1,6 +1,6 @@
 # 事前宣告：獨占 World 的 System 可以跑一張 schedule（`v8-arch-gyo2-nested-schedule`）
 
-更新：2026-11-15（修訂 6）。Owner：架構（GYO2 重建會話）。**狀態：方向與修訂 5 第 10 節的二十三條細節，使用者都已定。還要你判的七件列在第 10 節（五個是我照你的決定補的細節，兩個是核准）。核准之前不動工。**
+更新：2026-11-15（修訂 6）。Owner：架構（GYO2 重建會話）。**狀態：使用者已核准（2026-11-15）——第 10 節七件都已定，包含 J-3、J-45 放寬的方向與要動的 Design Invariants。開工前還剩兩步：(1) 第 6 節有一個案例的期待要等 `v8-arch-gyo2-spawn-reject` 合併後補完，再請使用者核准一次判定；(2) 使用者說開工。**
 
 這一份是整份改寫：把 2026-11-15 當天定的事全部併進正文，不再用「待你判」的註記疊在舊文字上。各題當時的選項表與我建議時的理由不再抄一遍，留在修訂 5（提交 `eccda9bb` 的這個檔）；你的原話與理由以 [HANDOFF](HANDOFF.md) 的決定表為準。
 
@@ -23,7 +23,7 @@
 
 ```cpp
 // 例：驅動固定步的 System（它本身是下一批的事，這裡只是示意）
-SystemResult DriveFixedSteps(ExclusiveWorld world) {
+SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
     for (int i = 0; i < steps; ++i) {
         if (auto ran = world.RunSchedule("FixedUpdate"); !ran) return Engine::Base::Err(std::move(ran).error());
     }
@@ -48,7 +48,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 用詞：這份宣告裡的「主程式」指 World 外面呼叫 `Product::Run` 的那一段程式——[用詞表](rebuild-vocabulary.zh-Hant.md)的 runner，以及測試或工具直接呼叫的情形。不用已經替換掉的角色詞。
 
-1. **誰能跑別的 schedule**：以 `ExclusiveWorld`（帶不帶寫入的宣告都算）為參數的 System。既有規則：它是那個 System 唯一的參數，只能是 (b) 區。
+1. **誰能跑別的 schedule**：以 `ExclusiveWorld<…>` 為參數的 System（什麼都不列寫 `ExclusiveWorld<>`，要寫單一寫者的 Resource 寫 `ExclusiveWorld<Writes<…>>`；一個名字，`v8-arch-gyo2-nested-declaration-approved`）。既有規則：它是那個 System 唯一的參數，只能是 (b) 區。
    - run 條件不能：它不能持有 `ExclusiveWorld`（編譯期就擋）。
    - hook 不能：hook 是在同步點套用到一半時被呼叫的，這時再跑一張 schedule 會改到正在走的資料。
    - 一般的 System 繞路（例如經全域指標）呼叫 `Product::Run`：照舊斷言。
@@ -64,7 +64,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
    - 開局裡有 System 回報錯誤：觸發它的那一次執行回報錯誤，World 中斷，原本要跑的那張不跑、它的 tick 也不推進。開局花的時間算在觸發它的那一次執行裡。
 6. **讀寫資料的形狀**（第 3.2、3.4 節）：
    - 元件與 Resource 都在閉包裡讀寫：`world.Read<T>(實體, f)`、`world.Modify<T>(實體, f)`；Resource 不帶實體。介面不交出指標。
-   - 閉包可以回傳值，例如 `int hp = …Read<Health>(玩家, [](const Health& h) { return h.value; })`。指標、參考、檢視這類「指回 World 裡面」的型別在編譯期擋掉；整份複本可以。
+   - 閉包可以回傳值，例如 `int hp = …Read<Health>(玩家, [](const Health& h) { return h.value; })`。指標、參考、檢視、迭代器這類「指回 World 裡面」的型別在編譯期擋掉，放在 `std::pair`／`std::tuple` 裡面的也擋（所以 `return std::tie(...)` 編譯不過）；整份複本可以。
    - 元件：讀任何元件；寫只准 (b) 區、標 `Shared` 的（既有規則）。
    - Resource：讀任何 Resource（`KernelSettings` 與執行緒親和不合的除外）。標 `Shared` 的可以直接寫，不用列；單一寫者的要列在宣告 `ExclusiveWorld<Writes<…>>` 裡才能寫，列了就算進寫者。只能讀寫值，不能新增或移除 Resource。
    - 實體沒有那個元件、或 Resource 不存在：不呼叫 f，結果說明「沒有」。
@@ -130,7 +130,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 1. 一個 World 只准一張打上 Startup 記號的 schedule，名字由組裝的人取（Kernel 不內建名字；DI-KS 15 關於名字的部分不動，關於「啟停」的那一詞要補例外，見第 5.3 節與第 10 節第 7 件）。打第二張是啟動錯誤。所有 Plugin 與主程式把開局的 System 登記到這一張；Plugin 帶來的是 System，不是 schedule。
 2. 這個 World 第一次執行任何一張不是 Startup 的 schedule 時，Kernel 先把 Startup 跑完，之後不再跑；Startup 一定是這個 World 第一個執行的（`v8-arch-gyo2-startup-before-any-schedule`；先前記的字面「帶時鐘的」由它改掉）。先後：runner 呼叫 `Run(X)`、World 閒置、Startup 還沒跑過時，Kernel 先完整地執行一次 Startup——它自己的進場、驗證的比對、同步點、hook 的清空輪、回到閒置——再開始 `Run(X)` 的全部步驟（包含推進 tick）。所以「`Run` 的第一步推進 tick」不用改，Startup 的寫入不會被算成第一個 tick 的寫入；也不會有「外層跑到一半才觸發」的情形。沒有登記 Startup 的 World 什麼都不發生。
-3. 主程式可以在第一幀之前先明確呼叫一次；Kernel 之後看到已經跑過就不再自動跑。
+3. 主程式可以在第一幀之前先明確呼叫一次；Kernel 之後看到已經跑過就不再自動跑。主程式明確呼叫第二次、或 Kernel 已經自動跑過之後才呼叫：斷言（和從外面呼叫的其他錯同一種；只有主程式自己的程式碼走得到，System 與外面送進來的資料碰不到）。
 4. System 裡巢狀跑 Startup：回 Err。
 5. Startup 執行中不准跑任何別的 schedule：回 Err。物理預熱這類「開局之後先空跑幾步」由作者自己做一個 System（每幀那張裡的獨占 System，加一個旗標 Resource 記著做過了沒）；說明頁給寫法。
 6. Startup 裡的 System 回報錯誤：觸發它的那一次執行回報錯誤，World 中斷，觸發的那張 schedule 一個 System 都不跑、tick 不推進。
@@ -147,8 +147,8 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 背景：以前同步點不會發生在一個 System 呼叫的中途。這一批之後，`auto* p = world.Get<T>(e); world.RunSchedule(...); 用 p` 這種正常的寫法就會用到懸空的指標。所以介面改成不交出指標。
 
 - 讀寫都在閉包裡：`world.Read<T>(e, f)`、`world.Modify<T>(e, f)`；Resource 用同一種寫法，不帶實體。
-- **閉包可以回傳值**（使用者：輸出參數「是非常老派的做法」，而且看不出那段程式會不會改到傳進去的變數）。編譯期擋掉「指回 World 裡面」的回傳型別；整份複本可以。擋哪些型別見第 10 節第 4 件。
-- 擋不住的：藏在作者結構裡的指標、把位址寫進閉包捕獲的變數。這是刻意繞路，歸在既有的限界（LIM-3），說明頁講明。
+- **閉包可以回傳值**（使用者：輸出參數「是非常老派的做法」，而且看不出那段程式會不會改到傳進去的變數）。編譯期擋掉「指回 World 裡面」的回傳型別；整份複本可以。擋的清單：指標；參考；`Mut`；`std::reference_wrapper`；標準庫的檢視（用標準的概念 `std::ranges::view` 判斷，涵蓋 `std::string_view`、`std::span` 與 ranges 的各種 view）；迭代器（`std::input_or_output_iterator`）；`std::pair`／`std::tuple` 裡面的每一項也照這張清單檢查。
+- 擋不住的：藏在作者自己的結構或 `std::optional` 裡的指標、把位址寫進閉包捕獲的變數。這是刻意繞路，歸在既有的限界（LIM-3），說明頁講明。
 - 對象不存在時不呼叫閉包，結果說明「沒有」。
 - 閉包裡呼叫 `RunSchedule` 回 Err。閉包裡可以再開閉包。
 - 變更的記號由 `Modify` 在呼叫當下設，一律記變更（f 沒有真的改值也算）。
@@ -168,14 +168,14 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | 7 | 同檔：寫入用的 stamp | 進場時的 stamp | `RunSchedule` 回來後取一個新的 stamp（計數加一，不是沿用）。`Modify` 在呼叫當下用句柄現在的 stamp 記變更 |
 | 8 | `Executor.cpp` 的 `Fail` 與步驟的迴圈 | 設成中斷並呼叫錯誤處理；步驟之間不看狀態 | 巢狀時設成中斷、留下錯誤，不呼叫處理函式；裡面的錯誤併進外層這次呼叫的清單；最外層統一呼叫一次。每個 System 回來後看 World 有沒有中斷，中斷就停；沒有留下錯誤（例外）時補一個。中斷的 World 再被要求跑：不執行，回傳留下的錯誤 |
 | 9 | `detail/Context.hpp`、`Product.hpp` | System 拿不到執行器 | 呼叫的上下文帶執行器的指標；`ExclusiveWorld::RunSchedule(名字)`。註：T2 會把 `Product::Run` 改名，T5 會讓一個 `Product` 有多個 World，這個指標要指到「這個 World 的執行器」 |
-| 10 | `Params.hpp`、`SystemTraits.hpp`、`World.cpp`、`Registry.cpp` | `ExclusiveWorld` 沒有 Resource 的介面，也不帶任何宣告 | 新的寫法 `ExclusiveWorld<Writes<…>>`。C++ 裡同一個名字不能既是類別又是樣板，所以不帶宣告的寫法也要跟著定（第 10 節第 5 件「帶宣告的寫法叫什麼」）。在 #229 給 `AccessSet` 加的 `deferredInserts` 欄位之上做。列出來的 Resource 用現有的「寫 Resource」這一種存取記在 System 上，所以「只有一個寫者」的啟動檢查（D-E2）、(c) 區的擋下（Z2）、列 `KernelSettings` 的擋下（D-E18）、執行緒親和的檢查、Registry 指紋都自動成立。另外加兩條啟動檢查：獨占的 System 不能同時是 ingress；hook 不能用帶宣告的寫法。執行期的規則照第 3.2 節 |
-| 11 | `Params.hpp` | `Get` 回傳指標、`GetMut` 回傳 `Mut` | 換成 `Read<T>(實體, f)`、`Modify<T>(實體, f)`（Resource 不帶實體）。f 可以回傳值；回傳型別屬於「閉包不准回傳的型別」（第 10 節第 4 件）那張清單的，用 `requires` 約束擋掉（測試用 `requires` 運算式確認，不靠建置失敗）。結果帶三種情形：有（連同 f 的回傳值）、沒有、錯誤；確切的型別實作時定。f 執行期間呼叫 `RunSchedule` 回 Err（句柄上記深度） |
-| 12 | `Executor.cpp`、`World.cpp`、`Registry.cpp` | 執行器不知道 Startup 跑過沒有；Startup 的張數沒有限制 | World 記兩件事：Startup 跑過了沒、Startup 是不是正在執行中。runner 從外面執行任何一張不是 Startup 的 schedule、Startup 還沒跑過時：先完整地執行一次 Startup（進場、讀 `KernelSettings`、驗證的比對、同步點、hook 的清空輪、回到閒置），再開始原本那張的全部步驟；Startup 出錯就不跑原本要跑的那張、不推進它的 tick。主程式明確呼叫 Startup：還沒跑過就跑，並記成跑過。巢狀跑 Startup、Startup 執行中巢狀跑別的：回 Err。啟動檢查加一條：一個 World 有第二張 Startup 就報錯。**從外面呼叫的行為會變**（以前不呼叫就不會跑、重跑不會被擋） |
+| 10 | `Params.hpp`、`SystemTraits.hpp`、`World.cpp`、`Registry.cpp` | `ExclusiveWorld` 沒有 Resource 的介面，也不帶任何宣告 | `ExclusiveWorld` 改成樣板，一個名字：帶宣告寫 `ExclusiveWorld<Writes<…>>`，什麼都不列寫 `ExclusiveWorld<>`（C++ 裡同一個名字不能既是類別又是樣板）。在 #229 給 `AccessSet` 加的 `deferredInserts` 欄位之上做。列出來的 Resource 用現有的「寫 Resource」這一種存取記在 System 上，所以「只有一個寫者」的啟動檢查（D-E2）、(c) 區的擋下（Z2）、列 `KernelSettings` 的擋下（D-E18）、執行緒親和的檢查、Registry 指紋都自動成立。另外加兩條啟動檢查：獨占的 System 不能同時是 ingress；hook 不能用帶宣告的寫法。執行期的規則照第 3.2 節 |
+| 11 | `Params.hpp` | `Get` 回傳指標、`GetMut` 回傳 `Mut` | 換成 `Read<T>(實體, f)`、`Modify<T>(實體, f)`（Resource 不帶實體）。f 可以回傳值；回傳型別屬於第 3.4 節那張清單的（含 `pair`／`tuple` 裡面的項），用 `requires` 約束擋掉（測試用 `requires` 運算式確認，不靠建置失敗）。結果帶三種情形：有（連同 f 的回傳值）、沒有、錯誤；確切的型別實作時定。f 執行期間呼叫 `RunSchedule` 回 Err（句柄上記深度） |
+| 12 | `Executor.cpp`、`World.cpp`、`Registry.cpp` | 執行器不知道 Startup 跑過沒有；Startup 的張數沒有限制 | World 記兩件事：Startup 跑過了沒、Startup 是不是正在執行中。runner 從外面執行任何一張不是 Startup 的 schedule、Startup 還沒跑過時：先完整地執行一次 Startup（進場、讀 `KernelSettings`、驗證的比對、同步點、hook 的清空輪、回到閒置），再開始原本那張的全部步驟；Startup 出錯就不跑原本要跑的那張、不推進它的 tick。主程式明確呼叫 Startup：還沒跑過就跑，並記成跑過；已經跑過（明確呼叫過，或自動跑過）再呼叫是斷言。巢狀跑 Startup、Startup 執行中巢狀跑別的：回 Err。啟動檢查加一條：一個 World 有第二張 Startup 就報錯。**從外面呼叫的行為會變**（以前不呼叫就不會跑、重跑不會被擋） |
 | 13 | `KernelError.hpp`、`Registry.cpp` 的 `ToString` | — | 新增錯誤碼（加在列舉的最後）：schedule 正在執行中、名字不存在、作者的 System 不能跑 Startup、Startup 執行中不能跑別的 schedule、extract 不能巢狀跑、hook 裡不能跑、閉包裡不能跑、寫沒列在宣告裡的單一寫者 Resource、讀不給讀的 Resource（`KernelSettings`、執行緒親和不合的）、巢狀執行被例外中止。啟動錯誤加一個：第二張 Startup。每一種拒絕的規則代號（`error.rule`）照現有的編號往下排，案例指定代號 |
 | 14 | `Fingerprint.cpp` | 三個常數：執行計畫的格式 `kFingerprintVersion = 2`、Registry 的 `kRegistryFingerprintVersion = 2`、C 指紋的 `kCFingerprintVersion = 4` | 執行計畫的加到 3、C 的加到 5（和 hook 那一批一樣；`v8-arch-gyo2-spawn-reject` 如果先加過，就以開工時的值為準各再加一）；Registry 的常數不動，但它的值會跟著變（它把每張執行計畫的指紋文字算進去，`Fingerprint.cpp:318`）。寫死指紋的測試有四處，固定值都要換、判定不變：J-20（`SchedulerTests.cpp:131-136`）、J-18（`RegistryTests.cpp:41`）、J-54（`HookFlushTests.cpp:882-886`）、initial value（`InitialValueTests.cpp:903-906`）。見第 5.4 節與第 10 節第 2 件 |
 | 15 | 不改、但要寫測試固定下來的 | tick 由裡面那張推進；hook 的佇列每張 schedule 一個；裡面那張的執行不套用、也不丟掉外層 schedule 的 hook 佇列（hook 那一批交過來的）；事件每個 tick 修剪；巢狀的同步點期間，呼叫的上下文會還原成外層的 | 行為不變 |
 
-測試：新檔 `tests/common/kernel/NestedRunTests.cpp`。既有測試要跟著介面改寫法的：守衛 J-45 的五個函式（`ExecutorTests.cpp:502-527`）；照「帶宣告的寫法叫什麼」（第 10 節第 5 件）的結果，`SignatureTests.cpp`、`CoverageTests.cpp`、`ZoneRuleTests.cpp` 裡用到 `ExclusiveWorld` 的簽名可能要動（判定都不變；動不動到它們不是選寫法的理由）。
+測試：新檔 `tests/common/kernel/NestedRunTests.cpp`。既有測試要跟著介面改寫法的：守衛 J-45 的五個函式（`ExecutorTests.cpp:502-527`）；`SignatureTests.cpp`、`CoverageTests.cpp`、`ZoneRuleTests.cpp` 裡用到 `ExclusiveWorld` 的簽名改寫成 `ExclusiveWorld<>`（判定都不變）。
 
 文件：[說明頁](system-contract-page.zh-Hant.md)加第 11 節列的內容、HANDOFF、dev_log；`docs/cross-component-rules.md` 查有沒有同樣的規則，沒有就登記（裡面那張回 Err 要往上傳；hook 不跑 schedule；裡面那張看不到外層還沒套用的變更）。
 
@@ -261,7 +261,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 ## 6. 判定（先宣告，結果出來之後不放寬）
 
-**判定 1：行為。** `NestedRunTests.cpp` 的案例全部通過。有兩個案例的期待要等別的事定了才寫得出來（表裡標【待定】）：「主程式呼叫開局的時機不對」（第 10 節第 3 件）與 `v8-arch-gyo2-spawn-reject` 合併後的行為。那兩件定了之後，我把這兩案補完、再請你核准一次判定，之後才開工。
+**判定 1：行為。** `NestedRunTests.cpp` 的案例全部通過。有一個案例的期待要等 `v8-arch-gyo2-spawn-reject` 合併後才寫得出來（表裡標【待定】）。那一批合併之後，我把這一案補完、再請你核准一次判定，之後才開工。
 
 | 案例 | 驗什麼 |
 |---|---|
@@ -278,7 +278,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | 存取驗證不誤報 | 驗證打開：獨占 System 在跑 schedule 的前後各寫一次 (b) 區 `Shared` 的元件與列出來的 Resource，不報錯 |
 | 存取驗證照樣抓得到 | 驗證打開：(1) 裡面那張的 System 寫了沒宣告的資料，報錯並點名它；(2) 獨占 System 在進入巢狀前寫了不准寫的資料，記在它自己頭上，裡面那張沒有跑；(3) 獨占 System 經 World 的公開介面繞路寫沒列的單一寫者 Resource：在存取當下報（W-5）；(4) 經存下來的位址寫它：在 System 的邊界比對時報 |
 | 句柄與 stamp | 裡面那張跑兩次；外層在兩次之間用 `Modify` 寫入，裡面那張第二次執行時帶 `Changed` 的 System 看得到。驗證打開時，裡面那張出錯後外層再用句柄，不會多報一個「句柄過期」 |
-| 閉包 | f 回傳整份複本或數值：可以，拿得到值；`std::string`、`std::vector` 這類複本不會被誤擋。f 回傳「閉包不准回傳的型別」（第 10 節第 4 件）清單上的型別（每一種各一案）：不被接受（用 `requires` 運算式在測試裡確認）。實體沒有那個元件：不呼叫 f，結果說明沒有。閉包裡再開閉包讀另一個元件：可以。閉包裡跑 schedule：回 Err。介面上沒有 `Get`、`GetMut` 這兩個名字 |
+| 閉包 | f 回傳整份複本或數值：可以，拿得到值；`std::string`、`std::vector` 這類複本不會被誤擋。f 回傳第 3.4 節清單上的型別（每一種各一案，含 `std::tie(...)` 與裝著指標的 `std::pair`）：不被接受（用 `requires` 運算式在測試裡確認）。實體沒有那個元件：不呼叫 f，結果說明沒有。閉包裡再開閉包讀另一個元件：可以。閉包裡跑 schedule：回 Err。介面上沒有 `Get`、`GetMut` 這兩個名字 |
 | 出錯記一次 | 裡面那張的 System 回 Err：錯誤處理只被呼叫一次，錯誤裡有裡面的 System、裡面的 schedule、外層的 System；World 中斷 |
 | 外層回別的 Err | 裡面的錯誤仍然在清單裡 |
 | 吞掉錯誤 | 外層 System 收到 Err 卻回 Ok：World 仍然中斷，錯誤仍然報出一次。裡面出錯、跑自己、名字不存在、跑 Startup、Startup 執行中跑別的、extract、hook 裡跑、閉包裡跑，各一案 |
@@ -295,7 +295,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | Startup：自動跑 | 登記一張 Startup 與一張帶時鐘的 schedule，主程式只跑後者兩次：Startup 的 System 執行一次，而且在後者第一個 System 之前；第二次不再跑。沒有登記 Startup：照常執行 |
 | Startup：自動跑的先後 | Startup 的 System 讀到的 tick 是還沒推進的值；帶時鐘那張的第一個 tick 記下的第一個 stamp 是它自己第一步的，不是 Startup 的。Startup 最後一個同步點的 hook 記的變更，在自動跑的這一次結尾也清空。驗證打開：自動跑之後接著跑原本那張，不誤報「World 介面以外的改動」 |
 | Startup：主程式先呼叫 | 主程式先明確跑一次 Startup，再跑別的：Startup 的 System 總共只執行一次 |
-| Startup：被拒絕 | (1) 獨占的 System 巢狀跑 Startup：回 Err（Startup 跑過之後一案；用主程式先跑別的 schedule 觸發的那一次裡再呼叫一案）。(2) Startup 裡的獨占 System 巢狀跑別的 schedule：回 Err，訊息裡有那個 System 與那張 schedule 的名字。(3) 登記兩張 Startup：啟動時報錯（指定規則代號）。(4) 主程式的呼叫時機不對：照「主程式呼叫開局的時機不對」（第 10 節第 3 件）定的反應【待定】 |
+| Startup：被拒絕 | (1) 獨占的 System 巢狀跑 Startup：回 Err（Startup 跑過之後一案；用主程式先跑別的 schedule 觸發的那一次裡再呼叫一案）。(2) Startup 裡的獨占 System 巢狀跑別的 schedule：回 Err，訊息裡有那個 System 與那張 schedule 的名字。(3) 登記兩張 Startup：啟動時報錯（指定規則代號）。(4) 主程式明確呼叫第二次、Kernel 自動跑過之後才明確呼叫，各一案：斷言 |
 | Startup：出錯 | Startup 裡的 System 回 Err：觸發它的那次 `Run` 回 Err、World 中斷、原本要跑的那張一個 System 都沒有執行、它的 tick 沒有推進 |
 | Startup：哪些 schedule 會觸發 | 第一次執行的是帶時鐘的 schedule、是同一個時鐘域裡不推進 tick 的 schedule，各一案：都先跑完 Startup。外層不推進 tick、裡面的獨占 System 跑帶時鐘的那張：Startup 在外層第一個 System 之前就跑完了，不在巢狀裡觸發 |
 | 指紋 | 有獨占 System（不帶宣告）的 schedule：除了版本號以外的內容和加這一批之前相同（把執行計畫與 C 的兩個常數換回舊值重算，四處的結果和舊的固定值相同） |
@@ -305,9 +305,9 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 - 每層的紀錄：外層的紀錄在裡面那張的同步點被套用；回來後外層的那一段不見了；Z5 的重查不看外層的紀錄；只看最近一層；不看外層的 hook 佇列；不看外層用指定編號的生成；裡面那張套用了外層 schedule 的 hook 佇列；裡面那張丟掉了外層 schedule 的 hook 佇列；裡面那張的清空輪套用了外層的那一段。
 - 驗證、句柄、stamp：巢狀前不重拍快照；巢狀後不更新句柄；只在成功時更新句柄；巢狀後不換 stamp。
 - 出錯：錯誤處理呼叫兩次；吞掉錯誤後 World 恢復；外層回別的 Err 時丟掉裡面那個；中斷的 World 照跑。
-- 閉包：清單上的每一種型別各一個「不擋了」的突變。
+- 閉包：清單上的每一種型別各一個「不擋了」的突變；`pair`／`tuple` 裡面的項不檢查了。
 - Resource：沒列的單一寫者 Resource 也給寫；第一層驗證把沒列的單一寫者 Resource 當成已宣告；第二層驗證把它當成已宣告；`Shared` 的 Resource 反而不給寫；親和不合的 Resource 也給讀；列出來的不算進寫者的計數；獨占的 System 可以是 ingress；`KernelSettings` 也給讀。
-- Startup：不自動跑；自動跑了兩次；自動跑排在觸發的那張的第一個 System 之後；主程式先呼叫過仍然再自動跑一次；作者的 System 可以跑 Startup；Startup 執行中可以跑別的；兩張 Startup 不報錯；Startup 出錯後仍然跑原本要跑的那張；Startup 出錯後仍然推進了 tick；自動跑排在 tick 推進之後；自動跑的那一次不做 hook 的清空輪；自動跑之後不重拍驗證的快照。
+- Startup：已經跑過之後外面再明確呼叫不斷言；不自動跑；自動跑了兩次；自動跑排在觸發的那張的第一個 System 之後；主程式先呼叫過仍然再自動跑一次；作者的 System 可以跑 Startup；Startup 執行中可以跑別的；兩張 Startup 不報錯；Startup 出錯後仍然跑原本要跑的那張；Startup 出錯後仍然推進了 tick；自動跑排在 tick 推進之後；自動跑的那一次不做 hook 的清空輪；自動跑之後不重拍驗證的快照。
 
 只有預期的那個案例失敗才算抓到（啟動檢查的案例要指定規則代號）；建置失敗不算。
 
@@ -347,8 +347,8 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 3. 一般的 System 執行期間成員不變；獨占的 System 只有在它跑的 schedule 裡成員才會變。守衛：J-3 原有的案例、「獨占 System 自己繞路改成員」。
 4. 記下的延後變更，只在記它的那張 schedule 的同步點、用那張的位置套用；巢狀不會讓它在別張的同步點被套用，hook 的佇列也一樣；中斷時每一層的都丟掉（這一句是實作的約定：中斷的 World 不會再執行，丟不丟從外面觀察不到，所以沒有守衛）。守衛：「外層留著的變更」「外層的 hook 佇列不被裡面那張動到」。
 5. 只有獨占的 System 能進入巢狀；hook、run 條件、一般的 System 不能。守衛：「一般 System 繞路跑 schedule」「hook」。
-6. `ExclusiveWorld` 不交出指回 World 裡面的東西：元件與 Resource 都只在閉包裡存取；閉包的回傳型別不能是清單上的那幾種（清單見第 10 節第 4 件）；閉包裡不能跑 schedule。藏在作者結構裡的指標、寫進捕獲變數的位址攔不到，屬於既有的限界（LIM-3），說明頁要給「需要的值在閉包裡取出來回傳」的寫法。守衛：「閉包」。C++ 沒辦法一般性地檢查「介面上沒有任何回傳指標的函式」，其餘靠審查。
-7. 一個 World 至多一張 Startup。它由 Kernel 在這個 World 第一次執行別的 schedule 之前跑完一次，是這個 World 第一個執行的，之後不再跑；作者的 System 不能跑它，也改不了它的位置；它執行中不能跑別的 schedule。（記下的假設見第 3.3 節。）守衛：六個 Startup 的案例。
+6. `ExclusiveWorld` 不交出指回 World 裡面的東西：元件與 Resource 都只在閉包裡存取；閉包的回傳型別不能是第 3.4 節清單上的那幾種（含 `pair`／`tuple` 裡面的項）；閉包裡不能跑 schedule。藏在作者自己的結構或 `optional` 裡的指標、寫進捕獲變數的位址攔不到，屬於既有的限界（LIM-3），說明頁要給「需要的值在閉包裡取出來回傳」的寫法。守衛：「閉包」。C++ 沒辦法一般性地檢查「介面上沒有任何回傳指標的函式」，其餘靠審查。
+7. 一個 World 至多一張 Startup。它由 Kernel 在這個 World 第一次執行別的 schedule 之前跑完一次，是這個 World 第一個執行的，之後不再跑；作者的 System 不能跑它，也改不了它的位置；它執行中不能跑別的 schedule；外面明確呼叫只准在它還沒跑過時一次。（記下的假設見第 3.3 節。）守衛：六個 Startup 的案例。
 8. 獨占的 System 寫單一寫者的 Resource 一定有宣告：列出來的算寫者，沒列的寫不進去，驗證的兩層也不把它當成已宣告。標 `Shared` 的資料不在這條裡（「要保證誰寫，別開 shared」）。守衛：「Resource：寫」「Resource：寫者的計數」「存取驗證照樣抓得到 (3)(4)」。
 
 **Replacement Criteria**：實作時發現巢狀執行另外需要的特例，超出這份宣告第 4 節的清單，累計到三個；或巢狀執行的缺陷在合併後於兩個不同的地方各出現一次。碰到就停下來，重新比較登記式與由執行計畫重複執行兩個做法。
@@ -369,89 +369,21 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 ---
 
-## 10. 還要你判的（七件裡第 1 件已定，剩六件）
+## 10. 修訂 6 補的七件（都已定，2026-11-15）
 
-前五件是我照你的決定補的細節，你沒有判過；每一件的建議都只是我的。後兩件是核准。
+都是使用者在分支會話「來一件件來」逐件定的，原話在 [HANDOFF](HANDOFF.md)。當時的選項表在這個檔的提交 `3dc52e17`。
 
-### 第 1 件：開局在哪些 schedule 之前跑【已定：任何一張不是 Startup 的，`v8-arch-gyo2-startup-before-any-schedule`】
-
-使用者 2026-11-15（分支會話「來一件件來」轉達）。判準是他的話：「應該排在「tick開始前」否則光是同步tick就要最一堆判斷。」兩個做法都滿足這個判準；他要求「用問題和case來判斷」之後選了較嚴的這一個。
-
-找到的遊戲例子（分支會話讀了 Bevy 的原始碼）：遊戲一啟動就進入「主選單」這個初始狀態；作者在開局放設定（按鍵對應、UI 設定），在「進入主選單時」用那些設定生成按鈕。Bevy 把「進入初始狀態」排在開局之前，這個寫法就讀不到設定，是 Bevy 作者常踩的坑。「進入某個狀態時跑一次」是不推進 tick 的 schedule；照這個決定，它執行之前開局已經跑完。
-
-沒有採用的：只看帶時鐘的（原本記的字面）——不推進 tick 的 schedule 可以排在開局前面，「外層不推進 tick、裡面去跑帶時鐘的」要另外設計。代價（採用的這一個）：工具不能在開局之前單獨跑任何一張 schedule。選項表在這個檔的提交 `c4e483a3`。
-
-### 第 2 件：自動跑開局不寫進執行計畫，版本號加一
-
-例子：Match 和 Client 連線時互相比對指紋，確認兩邊的執行方式相同。
-
-照你在 hook 那一批定的慣例（`v8-arch-gyo2-hook-flush-not-in-plan-bump-versions`，「至少能看到。」）：別張 schedule 的執行計畫裡不會多一步「先跑開局」；把執行計畫的格式版本從 2 加到 3、C 指紋的從 4 加到 5，一次涵蓋這一批全部的行為變更（巢狀、自動跑開局）。Registry 的版本號不加，但它的值會跟著變。寫死指紋的測試有四處（J-20、J-18、J-54、initial value），固定值跟著換、判定不變；它們是守衛測試，五點在第 5.4 節，這一件同時請你核准那四處。
-
-另一個做法是把「還沒跑過就先跑開局」寫成每張計畫的第一步；計畫的內容會變得看執行期的狀態，沒有先例。我的建議：照慣例。
-
-### 第 3 件：主程式呼叫開局的時機不對時怎麼反應
-
-指的是：主程式明確呼叫了第二次，或 Kernel 已經自動跑過之後才呼叫。只有主程式自己的程式碼走得到這裡；System 走不到（System 裡呼叫一律回 Err），外面送進來的資料也碰不到。
-
-| | 斷言（程式終止） | 回報錯誤 | 當作已經跑過，什麼都不做 |
+| 件 | 定下的 | 使用者的話 | 代號 |
 |---|---|---|---|
-| 行為 | 當場終止，指出位置 | `Run` 回 Err，World 中斷 | 回 Ok |
-| 系譜 | 從外面呼叫的其他錯（名字不存在、World 不是閒置）現在都是斷言；你先前看過的條件「從外面呼叫被拒絕是斷言」（`v8-arch-gyo2-startup-once-by-kernel`） | 和 System 裡被拒絕的呼叫同一種 | 新導出的 |
-| 代價 | 整個程序終止；測試或工具得自己記著有沒有呼叫過 | 主程式要多處理一種錯誤；World 中斷之後不能再用 | 主程式寫錯（例如以為開局會再執行一次）時沒有任何訊息 |
-| 需要它的 Feature | 測試與工具「只跑開局再檢查」（分支會話給的用途，不是你說的） | 同左 | 同左 |
+| 1. 開局在哪些 schedule 之前跑 | 任何一張不是 Startup 的 schedule 之前；開局一定最先 | 判準：「應該排在「tick開始前」否則光是同步tick就要最一堆判斷。」；對分支會話的看法回「可以」 | `v8-arch-gyo2-startup-before-any-schedule` |
+| 2. 自動跑開局與指紋 | 不寫進執行計畫；執行計畫的格式版本與 C 指紋的版本各加一（以開工時的值為準）；Registry 的版本號不加、值會變。四處寫死指紋的守衛測試換固定值（第 5.4 節） | 「照建議」 | `v8-arch-gyo2-nested-declaration-approved` |
+| 3. 主程式呼叫開局的時機不對 | 斷言 | 「照建議」 | 同上 |
+| 4. 閉包不准回傳的型別 | 第 3.4 節的清單；`pair`／`tuple` 裡面的每一項也檢查 | 「照建議」 | 同上 |
+| 5. 帶宣告的寫法叫什麼 | 一個名字：`ExclusiveWorld<Writes<…>>`／`ExclusiveWorld<>` | 「一個名字就行。」 | 同上 |
+| 6. J-3、J-45 放寬的方向 | 同意方向（第 5.1、5.2 節）。實作後附突變的結果與別的模型的驗證，你核准了才合併 | 「沒問題。」 | 同上 |
+| 7. 要動的 Design Invariants | 核准第 5.3 節標 DI 的七列與第 8 節新增的八條；DI-KS 15 是看過「名字不動、『啟停』補一句例外」之後同意的 | 「同意，不改都進行不下去。」 | 同上 |
 
-我的建議：斷言。理由：和從外面呼叫的其他錯同一種處理；走得到這裡的只有主程式自己的程式碼。
-
-### 第 4 件：閉包不准回傳哪些型別
-
-```cpp
-int hp   = world.Read<Health>(player, [](const Health& h) { return h.value; });   // 可以：數值
-Health c = world.Read<Health>(player, [](const Health& h) { return h; });         // 可以：整份複本
-auto* p  = world.Read<Health>(player, [](const Health& h) { return &h; });        // 編譯不過：指標
-auto  t  = world.Read<Health>(player, [](const Health& h) { return std::tie(h.hp, h.armor); });  // 見下
-```
-（示意；結果還帶「有沒有這個元件」，確切的型別實作時定。）
-
-你定的是「指標、參考、標準庫的檢視型別」在編譯期擋，完整的清單沒有定。我擬的清單（新導出的，用標準的概念判斷）：
-
-- 指標；參考；`Mut`；`std::reference_wrapper`。
-- 標準庫的檢視：用標準的概念 `std::ranges::view` 判斷，涵蓋 `std::string_view`、`std::span` 與 ranges 的各種 view。
-- 迭代器（例如 `return h.items.begin();`）：用標準的概念 `std::input_or_output_iterator` 判斷。
-
-要你定的是 `std::pair`／`std::tuple` 這一層。`return std::tie(h.hp, h.armor);` 是一次回傳多個值的正常寫法，它回傳的是裝著參考的 tuple；只擋「直接是清單上的型別」的話，這個寫法編譯會過，拿到的是懸空的參考。
-
-| | 只擋直接是清單上的型別 | 連 `pair`／`tuple` 的元素也檢查 |
-|---|---|---|
-| `std::tie(...)` | 編譯會過，之後懸空 | 編譯不過 |
-| 包在 `std::optional` 或作者的結構裡的指標 | 擋不住 | 擋不住（說明頁講明，LIM-3） |
-| 代價 | 一種正常的寫法會出錯而沒有訊息 | 多幾行樣板 |
-| 需要它的 Feature | 固定步的驅動要讀出「還差多少時間、這一輪跑幾步」這類多個值 | 同左 |
-
-我的建議：連 `pair`／`tuple` 的元素也檢查。（第五次檢查指出我原本把 `std::tie` 歸成「刻意繞路」是錯的。）
-
-### 第 5 件：帶宣告的寫法叫什麼
-
-你定的是「`ExclusiveWorld` 帶寫入的宣告」，例子寫成 `ExclusiveWorld<Writes<FixedTime>>`。C++ 裡同一個名字不能既是一般的類別、又是帶 `<…>` 的樣板，所以不帶宣告的寫法得跟著定。
-
-| | 一個名字，不帶宣告時寫 `ExclusiveWorld<>` | 兩個名字：`ExclusiveWorld` 照舊，帶宣告的另取一個 |
-|---|---|---|
-| 作者寫的 | `SystemResult Tool(ExclusiveWorld<> world)`／`SystemResult Drive(ExclusiveWorld<Writes<FixedTime>> world)` | `SystemResult Tool(ExclusiveWorld world)`／`SystemResult Drive(ExclusiveWorldWith<Writes<FixedTime>> world)`（名字待定） |
-| 概念與名字 | 一個概念一個名字；`<>` 看得出「什麼都沒宣告」 | 一個概念兩個名字 |
-| 代價 | 不帶宣告的每個簽名多寫 `<>`；現有用到它的簽名（只有 Kernel 的測試，四個檔）要改寫法，判定不變 | 多一個要記的名字 |
-| 系譜 | 新導出的；和你定的寫法同一個名字 | 新導出的 |
-| 需要它的 Feature | 固定步的驅動（要寫單一寫者的時間 Resource） | 同左 |
-
-我的建議：一個名字。
-
-### 第 6 件：核准兩條守衛放寬的方向
-
-第 5.1 節（J-3：獨占的 System 跑的 schedule 可以改成員）與第 5.2 節（J-45：單一寫者的 Resource 列在宣告裡就可以寫）。現在請你同意方向；實作後我附上突變的結果與別的模型對五點的驗證，你核准了才合併。
-
-### 第 7 件：核准要動的 Design Invariants
-
-第 5.3 節標「DI」的七列，與第 8 節要新增的八條。其中兩處請特別看：
-- **DI-KS 15**：你定「一個 World 只准一張 Startup」時聽到的是「不動 DI-KS 15」，那說的是不內建名字；「Startup 由 Kernel 跑」會在它的「啟停」那一詞上加一句例外。
-- **第 8 節第 7 條**已照第 1 件的結果（任何一張不是 Startup 的 schedule 之前）寫。
+第 2～6 件使用者沒有另外說理由；分支會話給的建議理由記在 HANDOFF，標明是分支會話的。第 4 件的迭代器那一項沒有單獨拿出來問，是連同「照建議」一起過的。
 
 ### 修訂 5 第 10 節二十三條的結果（紀錄）
 
