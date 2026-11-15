@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported).",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported). spawn-reject (docs/architecture/target/v2/spawn-reject-declaration.zh-Hant.md, section 6 judgement 2; ids sr-): the sync point drops the spawn records it cannot apply (spec F-13, J-55); it removed we-adv-spawn-alive-assert-removed and we-adv-spawnwithid-allotter-range-assert-removed, whose find was a removed GYO_ASSERT (sr-assert-alive and sr-assert-range replace them).",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -2907,13 +2907,13 @@
     },
     {
       "id": "rs-b6-cfp-version-1",
-      "what": "B6: the C fingerprint keeps an earlier format version (4 since the hook rounds, v8-arch-gyo2-hook-flush)",
+      "what": "B6: the C fingerprint keeps an earlier format version (5 since the sync point drops spawn records, v8-arch-gyo2-spawn-reject; find and expect rewritten)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 4;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 5;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "CFingerprint\\(\\)\\.version == 4U"
+      "expect": "CFingerprint\\(\\)\\.version == 5U"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -3874,23 +3874,23 @@
     },
     {
       "id": "hf-plan-version-kept",
-      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12) (find and expect rewritten for version 3 by v8-arch-gyo2-spawn-reject)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 2;",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 3;",
       "replace": "constexpr std::uint32_t kFingerprintVersion = 1;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "planOf\\(none,\\ \"Tick\"\\)\\.version\\ ==\\ 2U"
+      "expect": "planOf\\(none,\\ \"Tick\"\\)\\.version\\ ==\\ 3U"
     },
     {
       "id": "hf-c-version-kept",
-      "what": "the C fingerprint format stays 3 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "the C fingerprint format stays 4, the hook-flush format (v8-arch-gyo2-hook-flush, spec F-12; find, replace and expect rewritten for version 5 by v8-arch-gyo2-spawn-reject)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 4;",
-      "replace": "constexpr std::uint32_t kCFingerprintVersion = 3;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 4;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: the schedule's limit is in*",
-      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 4U"
+      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 5U"
     },
     {
       "id": "hf-registry-schedule-field",
@@ -4151,26 +4151,6 @@
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
       "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-tag:2=2\""
-    },
-    {
-      "id": "we-adv-spawn-alive-assert-removed",
-      "what": "F.2 step 4 (Fable): SpawnWithId of an alive id is not stopped (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "            GYO_ASSERT(!std::binary_search(entities_.begin(), entities_.end(), spawn.entity));  // alive, not despawned\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-32:*",
-      "expect": "SpawnWithId\\ of\\ an\\ alive\\ id\\ that\\ this\\ window\\ does\\ not\\ despawn\\ fails\\ a\\ GYO_ASSERT"
-    },
-    {
-      "id": "we-adv-spawnwithid-allotter-range-assert-removed",
-      "what": "A.1 (Fable): SpawnWithId into the allotter range is not stopped (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "                GYO_ASSERT(!data_->allotterOps.owns(*resources_[*data_->allotter], spawn.entity));\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-8:*",
-      "expect": "ranged\\->Run\\(\\)"
     },
     {
       "id": "we-j26-false-condition-runs",
@@ -4637,6 +4617,816 @@
       "expect": "clean\\->world\\(\\)\\.SetResource\\(KernelSettings\\{true,\\ false\\}\\)",
       "ran_as": "we-j50-settings-writable",
       "note": "master 的 we-*，沒搬；J-54 的「第一次 Run 之後改 KernelSettings」靠它守的斷言"
+    },
+    {
+      "id": "sr-alive-applied",
+      "what": "F-13: a spawn into an alive id is applied (merged into the old entity) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (std::binary_search(entities_.begin(), entities_.end(), id)) {",
+      "replace": "                if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ 7\\ keeps\\ Body\\ 1"
+    },
+    {
+      "id": "sr-no-record",
+      "what": "F-13: a dropped spawn appends no RejectedSpawn record (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{tick, false, std::move(rejected)});\n",
+      "replace": "    (void)found;\n    (void)tick;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ one\\ record"
+    },
+    {
+      "id": "sr-no-count",
+      "what": "F-13: a dropped spawn is not counted (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    ++rejectedSpawns_;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ one\\ dropped\\ spawn\\ counted"
+    },
+    {
+      "id": "sr-break-after-drop",
+      "what": "F-13: after a dropped spawn the step spawns no later id (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            first = end;\n        }\n",
+      "replace": "            first = std::any_of(dropped.begin(), dropped.end(), [](const auto& v) { return v.has_value(); }) ? spawns.size() : end;\n        }\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ 8\\ spawns\\ with\\ Body\\ 80"
+    },
+    {
+      "id": "sr-dropped-cells-added",
+      "what": "F-13: an alive id's dropped record still goes to step 5a and OnAdd (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "replace": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                            for (Detail::BundleValue& part : spawns[c]->bundle) added.push_back(NewCell{spawns[c]->entity, part.component});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ 7\\ has\\ no\\ initial\\ value"
+    },
+    {
+      "id": "sr-dropped-onadd-only",
+      "what": "F-13: an alive id's dropped record runs OnAdd (no initial value) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "replace": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                            for (Detail::BundleValue& part : spawns[c]->bundle) (void)RunHooks(HookTrigger::OnAdd, id, part.component, planPos, schedule, stamp);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ OnAdd\\ for\\ 8\\ and\\ 9\\ only"
+    },
+    {
+      "id": "sr-same-emitter-cells-added",
+      "what": "F-13: one emitter's later record still goes to step 5a and OnAdd (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);",
+      "replace": "                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                        for (Detail::BundleValue& part : spawns[candidates[k]]->bundle) added.push_back(NewCell{spawns[candidates[k]]->entity, part.component});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ no\\-onadd\\ same\\-emitter:\\ OnAdd\\ for\\ 9\\ once"
+    },
+    {
+      "id": "sr-two-emitters-cells-added",
+      "what": "F-13: two emitters' dropped records still go to step 5a and OnAdd (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);",
+      "replace": "                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                        for (Detail::BundleValue& part : spawns[c]->bundle) added.push_back(NewCell{spawns[c]->entity, part.component});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ no\\-onadd\\ two\\-emitters:\\ OnAdd\\ for\\ 5\\ only"
+    },
+    {
+      "id": "sr-range-cells-added",
+      "what": "F-13: a record in the allotter range still goes to step 5a and OnAdd (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});",
+      "replace": "                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                    for (Detail::BundleValue& part : spawns[i]->bundle) added.push_back(NewCell{spawns[i]->entity, part.component});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ no\\-onadd\\ range:\\ no\\ OnAdd"
+    },
+    {
+      "id": "sr-cross-phase-cells-added",
+      "what": "F-13: a record of an id step 0 spawned still goes to step 5a and OnAdd (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);",
+      "replace": "                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                            for (Detail::BundleValue& part : spawns[c]->bundle) added.push_back(NewCell{spawns[c]->entity, part.component});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ no\\-onadd\\ cross\\-phase:\\ OnAdd\\ for\\ 11\\ once"
+    },
+    {
+      "id": "sr-dropped-made-alive",
+      "what": "F-13: a dropped spawn's id still becomes alive (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));",
+      "replace": "            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n            MakeAlive(spawn.entity);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "J\\-8:\\ a\\ SpawnWithId\\ into\\ the\\ allotter\\ range\\ does\\ not\\ spawn"
+    },
+    {
+      "id": "sr-assert-alive",
+      "what": "F-13: back to the GYO_ASSERT on an alive id (replaces we-adv-spawn-alive-assert-removed, whose find was that assert) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "replace": "                            GYO_ASSERT(false && \"alive, not despawned\");",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "GYO_ASSERT\\ failed:\\ false\\ \\&\\&\\ \"alive,\\ not\\ despawned\"[\\s\\S]*TEST\\ CASE:\\ \\ J\\-55:\\ an\\ alive\\ id"
+    },
+    {
+      "id": "sr-assert-range",
+      "what": "F-13: back to the GYO_ASSERT on an id of the allotter range (replaces we-adv-spawnwithid-allotter-range-assert-removed) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});",
+      "replace": "                    GYO_ASSERT(false && \"in the allotter range\");",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "GYO_ASSERT\\ failed:\\ false\\ \\&\\&\\ \"in\\ the\\ allotter\\ range\"[\\s\\S]*TEST\\ CASE:\\ \\ J\\-8:"
+    },
+    {
+      "id": "sr-reason-alive-as-twice",
+      "what": "F-13: an alive id reported as spawned twice (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "replace": "                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, std::string_view{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ reason\\ IdAlive"
+    },
+    {
+      "id": "sr-alive-second-as-twice",
+      "what": "F-13: the second record of an alive id reported as spawned twice (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "replace": "                            dropped[c - first].emplace(c == candidates.front() ? SpawnRejectReason::IdAlive : SpawnRejectReason::IdSpawnedTwice, std::string_view{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ alive\\-twice:\\ both\\ IdAlive"
+    },
+    {
+      "id": "sr-reason-twice-as-alive",
+      "what": "F-13: a second record of one emitter reported as alive (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);",
+      "replace": "                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdAlive, head.emitter);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ one\\-call\\-twice:\\ reason\\ IdSpawnedTwice"
+    },
+    {
+      "id": "sr-reason-range-as-alive",
+      "what": "F-13: an id of the allotter range reported as alive (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});",
+      "replace": "                    dropped[i - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ range\\-first:\\ reason\\ IdInAllotterRange"
+    },
+    {
+      "id": "sr-range-after-alive",
+      "what": "F-13: the range is checked after alive (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "replace": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id) &&\n                    !std::binary_search(entities_.begin(), entities_.end(), id)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ range\\-first:\\ reason\\ IdInAllotterRange"
+    },
+    {
+      "id": "sr-range-after-twice",
+      "what": "F-13: the range is checked only for an id recorded once (after spawned twice) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "replace": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id) && end - first == 1) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ range\\-before\\-twice:\\ 100\\ has\\ the\\ allotter's\\ spawn"
+    },
+    {
+      "id": "sr-range-removed",
+      "what": "F-13: no range check (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "replace": "                if (false && spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "J\\-8:\\ a\\ SpawnWithId\\ into\\ the\\ allotter\\ range\\ does\\ not\\ spawn"
+    },
+    {
+      "id": "sr-range-removed-respawn",
+      "what": "F-13: no range check, seen by the despawn-then-spawn case (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "replace": "                if (false && spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55: the allotter's range: despawn then spawn*",
+      "expect": "J\\-55\\ range\\-respawn:\\ 150\\ is\\ gone"
+    },
+    {
+      "id": "sr-range-removed-insert",
+      "what": "F-13: no range check, seen by the insert case (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "replace": "                if (false && spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55: the allotter's range: an insert*",
+      "expect": "J\\-55\\ range\\-insert:\\ the\\ insert\\ is\\ dropped\\ and\\ counted"
+    },
+    {
+      "id": "sr-range-on-spawn",
+      "what": "F-13: the range check applies to Spawn (the allotter's own ids) too (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "replace": "                if (data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ range\\-spawn:\\ 100\\ and\\ 101\\ spawn"
+    },
+    {
+      "id": "sr-range-absent-checked",
+      "what": "F-13: an allotter whose resource is absent owns every id (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/detail/Storage.hpp",
+      "find": "    return slot.value && slot.value->Owns(id);",
+      "replace": "    return !slot.value || slot.value->Owns(id);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ range\\-absent:\\ 100\\ spawns"
+    },
+    {
+      "id": "sr-range-recorded-first",
+      "what": "F-13: a record in the allotter range is recorded before the id's other records (not in key order) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});",
+      "replace": "                    reject(*spawns[i], SpawnRejectReason::IdInAllotterRange, {});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ order\\-in\\-one\\-id:\\ the\\ records\\ are\\ in\\ \\(id,\\ planPos,\\ recSeq\\)\\ order"
+    },
+    {
+      "id": "sr-alive-before-despawn",
+      "what": "F-13: alive judged before this phase's despawns (an id despawned in the phase counts as alive) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (std::binary_search(entities_.begin(), entities_.end(), id)) {",
+      "replace": "                if (std::binary_search(entities_.begin(), entities_.end(), id) ||\n                    std::any_of(records.begin(), records.end(), [&](const Record& d) { return d.kind == RecordKind::Despawn && d.entity == id; })) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ rejoin:\\ the\\ new\\ 7\\ lives"
+    },
+    {
+      "id": "sr-spawned-here-kept",
+      "what": "F-13: the ids spawned at this sync point are kept across sync points (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    std::vector<std::pair<EntityId, std::string_view>> spawnedHere;\n",
+      "replace": "    static std::vector<std::pair<EntityId, std::string_view>> spawnedHere;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55: an id spawned at the previous sync point*",
+      "expect": "J\\-55\\ previous\\-sync:\\ reason\\ IdAlive"
+    },
+    {
+      "id": "sr-dropped-counts-as-spawned",
+      "what": "F-13: a record dropped as alive is listed as spawned at this sync point (declared 「被丟的那筆算進生成過」) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "replace": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                            if (c == candidates.front() && !spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, spawns[c]->emitter});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ dropped\\-not\\-spawned:\\ both\\ IdAlive,\\ the\\ window's\\ names\\ no\\ other\\ emitter"
+    },
+    {
+      "id": "sr-spawned-here-no-id-match",
+      "what": "F-13: the spawned-at-this-sync-point lookup does not compare the id (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;",
+      "replace": "                const bool spawnedAtThisSyncPoint = here != spawnedHere.end();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ smaller\\-alive\\-id:\\ 7\\ is\\ IdAlive\\ with\\ no\\ other\\ emitter"
+    },
+    {
+      "id": "sr-cross-phase-as-alive",
+      "what": "F-13: an id spawned by step 0 and again by the window is reported as alive (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});",
+      "replace": "                    (void)here;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ cross\\-phase:\\ reason\\ IdSpawnedTwice"
+    },
+    {
+      "id": "sr-cross-phase-not-alive",
+      "what": "F-13: an id spawned by step 0 is dropped even when the window despawned it first (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (std::binary_search(entities_.begin(), entities_.end(), id)) {",
+      "replace": "                if (spawnedAtThisSyncPoint || std::binary_search(entities_.begin(), entities_.end(), id)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ cross\\-phase\\-respawn:\\ 11\\ has\\ the\\ window's\\ value"
+    },
+    {
+      "id": "sr-key-no-recseq",
+      "what": "F-6: the spawn key misses recSeq (caught by the adjacent-key assert) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };",
+      "replace": "        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, std::uint32_t{0}); };",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55: one emitter*",
+      "expect": "GYO_ASSERT\\ failed:\\ spawnKey"
+    },
+    {
+      "id": "sr-key-id-only",
+      "what": "F-6: the spawn key is the id alone, the old sort (caught by the adjacent-key assert) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };",
+      "replace": "        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, std::uint32_t{0}, std::uint32_t{0}); };",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55: two emitters*",
+      "expect": "GYO_ASSERT\\ failed:\\ spawnKey"
+    },
+    {
+      "id": "sr-key-recseq-first",
+      "what": "F-6: recSeq before planPos in the spawn key (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };",
+      "replace": "        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->recSeq, r->planPos); };",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ two\\-emitters:\\ records\\ in\\ Plan\\ order,\\ each\\ names\\ the\\ other"
+    },
+    {
+      "id": "sr-key-no-recseq-no-assert",
+      "what": "F-6: the spawn key misses recSeq and the adjacent-key assert is gone (only the unspecified order of std::sort for equal keys can show it; run on macOS libc++ only) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }",
+      "replace": "        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, std::uint32_t{0}); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55: many*",
+      "expect": "J\\-55\\ many:\\ every\\ id\\ keeps\\ its\\ first\\ record"
+    },
+    {
+      "id": "sr-keep-last",
+      "what": "F-13: one emitter's records of one id keep the last (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    accepted.push_back(spawns[candidates.front()]);",
+      "replace": "                    accepted.push_back(spawns[candidates.back()]);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ one\\-call\\-twice:\\ 9\\ keeps\\ the\\ first\\ value"
+    },
+    {
+      "id": "sr-one-emitter-all-dropped",
+      "what": "F-13: one emitter's repeated records of one id are all dropped (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {",
+      "replace": "                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; }) && candidates.size() == 1) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ one\\-call\\-twice:\\ 9\\ keeps\\ the\\ first\\ value"
+    },
+    {
+      "id": "sr-two-emitters-keep-first",
+      "what": "F-13: two emitters' records of one id keep the first (registration order decides) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {",
+      "replace": "                                       [&](std::size_t) { return true; })) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ registration\\-order\\-alone:\\ the\\ World\\ is\\ the\\ same\\ in\\ both\\ orders"
+    },
+    {
+      "id": "sr-one-emitter-first-two-only",
+      "what": "F-13: one emitter judged from the first two records only (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                } else if (std::all_of(candidates.begin(), candidates.end(),",
+      "replace": "                } else if (std::all_of(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(std::min<std::size_t>(candidates.size(), 2)),",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ three\\-records:\\ 9\\ is\\ not\\ spawned\\ \\(the\\ System\\ with\\ two\\ records\\ first\\)"
+    },
+    {
+      "id": "sr-one-emitter-head-tail-only",
+      "what": "F-13: one emitter judged from the first and last records only (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {",
+      "replace": "                                       [&](std::size_t) { return spawns[candidates.back()]->emitterKey == head.emitterKey; })) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ hooks\\-a\\-b\\-a:\\ 30\\ is\\ not\\ spawned"
+    },
+    {
+      "id": "sr-emitter-by-name",
+      "what": "F-13: one emitter judged by name (two hooks of one name count as one) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {",
+      "replace": "                                       [&](std::size_t c) { return spawns[c]->emitter == head.emitter; })) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ two\\-hooks:\\ 30\\ is\\ not\\ spawned"
+    },
+    {
+      "id": "sr-emitter-by-planpos",
+      "what": "F-13: one emitter judged by planPos (every hook of a sync point counts as one) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {",
+      "replace": "                                       [&](std::size_t c) { return spawns[c]->planPos == head.planPos; })) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ two\\-hooks:\\ 30\\ is\\ not\\ spawned"
+    },
+    {
+      "id": "sr-emitter-per-call",
+      "what": "F-13: one emitter judged per call (two calls of one hook count as two) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    record.emitterKey = call.access;\n",
+      "replace": "    record.emitterKey = reinterpret_cast<const void*>(static_cast<std::uintptr_t>(call.callSerial));\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ one\\-hook\\-twice:\\ 30\\ keeps\\ the\\ first\\ call's\\ value"
+    },
+    {
+      "id": "sr-both-applied",
+      "what": "F-13: every record of one emitter is applied (the later overwrites) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    accepted.push_back(spawns[candidates.front()]);",
+      "replace": "                    for (std::size_t c : candidates) accepted.push_back(spawns[c]);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ one\\-call\\-twice:\\ 9\\ keeps\\ the\\ first\\ value"
+    },
+    {
+      "id": "sr-emitter-hook-name-lost",
+      "what": "F-13: a hook's record names no emitter (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.emitter = std::string(spawn.emitter);",
+      "replace": "            rejected.emitter = spawn.emitterHook ? std::string() : std::string(spawn.emitter);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ mid\\-hook:\\ emitter\\ is\\ the\\ hook's\\ name"
+    },
+    {
+      "id": "sr-emitter-is-hook-false",
+      "what": "F-13: emitterIsHook always false (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.emitterIsHook = spawn.emitterHook;",
+      "replace": "            rejected.emitterIsHook = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ mid\\-hook:\\ emitter\\ is\\ a\\ hook"
+    },
+    {
+      "id": "sr-step-is-applied",
+      "what": "F-13: step written as the sync point that dropped it (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.step = spawn.planPos;",
+      "replace": "            rejected.step = planPos;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ mid\\-hook:\\ step\\ is\\ the\\ sync\\ point\\ that\\ triggered\\ it"
+    },
+    {
+      "id": "sr-applied-is-step",
+      "what": "F-13: appliedAt written as the record's position (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.appliedAt = planPos;",
+      "replace": "            rejected.appliedAt = spawn.planPos;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ mid\\-hook:\\ appliedAt\\ is\\ the\\ next\\ sync\\ point"
+    },
+    {
+      "id": "sr-zone-always-b",
+      "what": "F-13: emitterZone always B (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.emitterZone = spawn.emitterZone;",
+      "replace": "            rejected.emitterZone = Zone::B;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ zone\\-c:\\ emitter\\ zone\\ C"
+    },
+    {
+      "id": "sr-tick-one",
+      "what": "F-13: tick always 1 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.tick = tickOfSchedule();",
+      "replace": "            rejected.tick = 1;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ second\\-tick:\\ tick\\ 2"
+    },
+    {
+      "id": "sr-tick-fixed-domain",
+      "what": "F-13: tick always the Fixed domain's (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejectTick = ticks_[DomainIndex(scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None)];\n",
+      "replace": "            rejectTick = ticks_[DomainIndex(Domain::Fixed)];\n            (void)scheduleRecord;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ early:\\ tick\\ 1\\ \\(the\\ Frame\\ domain's\\),\\ not\\ the\\ Fixed\\ domain's\\ 2"
+    },
+    {
+      "id": "sr-tick-cached-for-world",
+      "what": "F-13: the lazily looked-up tick is kept across sync points (static) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    std::optional<std::uint64_t> rejectTick;\n",
+      "replace": "    static std::optional<std::uint64_t> rejectTick;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ second\\-tick:\\ tick\\ 2"
+    },
+    {
+      "id": "sr-schedule-first",
+      "what": "F-13: schedule written as the first registered schedule (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.schedule = std::string(schedule);",
+      "replace": "            rejected.schedule = data_->schedules.front().options.name;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ schedule"
+    },
+    {
+      "id": "sr-schedule-always-tick",
+      "what": "F-13: schedule always written as Tick (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.schedule = std::string(schedule);",
+      "replace": "            rejected.schedule = \"Tick\";",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ early:\\ schedule\\ Early"
+    },
+    {
+      "id": "sr-other-empty",
+      "what": "F-13: otherEmitter never written (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.otherEmitter = std::string(other);",
+      "replace": "            rejected.otherEmitter = std::string();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ cross\\-phase:\\ other\\ emitter\\ is\\ the\\ hook"
+    },
+    {
+      "id": "sr-from-allotter-false",
+      "what": "F-13: fromAllotter always false (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.fromAllotter = !spawn.withId;",
+      "replace": "            rejected.fromAllotter = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ allotter\\-collision:\\ from\\ the\\ allotter"
+    },
+    {
+      "id": "sr-count-capped",
+      "what": "F-13: the count stops at 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    ++rejectedSpawns_;\n",
+      "replace": "    rejectedSpawns_ = std::min<std::uint64_t>(rejectedSpawns_ + 1, 2);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ many:\\ 64\\ counted"
+    },
+    {
+      "id": "sr-records-capped",
+      "what": "3.3: the records stop at 8 (a cap the user did not choose) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{tick, false, std::move(rejected)});\n",
+      "replace": "    if (static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.size() >= 8) return;\n    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{tick, false, std::move(rejected)});\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ many:\\ 64\\ records"
+    },
+    {
+      "id": "sr-take-resets-count",
+      "what": "F-13: TakeDiagnostics resets the count (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/World.hpp",
+      "find": "            if (key == KeyOf<R>()) static_cast<Detail::DiagnosticsBuffer<R>&>(*buffer).entries.clear();",
+      "replace": "            if (key == KeyOf<R>()) static_cast<Detail::DiagnosticsBuffer<R>&>(*buffer).entries.clear();\n            rejectedSpawns_ = 0;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ take:\\ the\\ count\\ is\\ 3"
+    },
+    {
+      "id": "sr-discard-clears-records",
+      "what": "F-13: an Interrupted World drops the records (DiscardDeferred clears the diagnostics) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "void World::DiscardDeferred() noexcept {\n    window_.clear();",
+      "replace": "void World::DiscardDeferred() noexcept {\n    window_.clear();\n    diagnostics_.clear();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ interrupted:\\ the\\ record\\ is\\ kept"
+    },
+    {
+      "id": "sr-discard-resets-count",
+      "what": "F-13: an Interrupted World resets the count (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "void World::DiscardDeferred() noexcept {\n    window_.clear();",
+      "replace": "void World::DiscardDeferred() noexcept {\n    window_.clear();\n    rejectedSpawns_ = 0;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ interrupted:\\ the\\ count\\ is\\ kept"
+    },
+    {
+      "id": "sr-drop-is-err",
+      "what": "F-13: a dropped spawn ends the sync point with an Err (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);",
+      "replace": "                if (dropped[i - first]) return Engine::Base::Err(kernelError(KernelErrorCode::StructureBroken, \"F-13\", \"dropped\"));",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ player\\-7:\\ Run\\ ok"
+    },
+    {
+      "id": "sr-drop-takes-stamp",
+      "what": "F-13: a dropped spawn takes a stamp (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.tick = tickOfSchedule();",
+      "replace": "            rejected.tick = tickOfSchedule();\n            ++stamp_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ no\\-stamp:\\ the\\ same\\ stamp\\ and\\ sync\\ epoch\\ steps\\ with\\ and\\ without\\ a\\ dropped\\ spawn"
+    },
+    {
+      "id": "sr-drop-breaks",
+      "what": "F-13: a dropped spawn calls the break hook (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    ++rejectedSpawns_;\n",
+      "replace": "    ++rejectedSpawns_;\n    if (breakOnKernelError_ && breakHook_) breakHook_(KernelError(KernelErrorCode::StructureBroken, \"dropped\"));\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ no\\-break:\\ the\\ break\\ hook\\ is\\ not\\ called"
+    },
+    {
+      "id": "sr-records-unsorted",
+      "what": "F-13: spawns ordered by (planPos, recSeq) without the id (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey",
+      "replace": "                  [&](const Record* a, const Record* b) { return std::make_tuple(a->planPos, a->recSeq) < std::make_tuple(b->planPos, b->recSeq); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ order:\\ 7\\ before\\ 9"
+    },
+    {
+      "id": "sr-z5-skips-spawn",
+      "what": "Z5 recheck: a zone C SpawnWithId in the window no longer counts (it might be dropped) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    if (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId)) {",
+      "replace": "                    if (other.kind == RecordKind::Insert) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ z5:\\ Z5\\ as\\ before"
+    },
+    {
+      "id": "sr-same-call-inserts-dropped",
+      "what": "3.2: inserts of the call whose spawn was dropped are dropped too (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            if (!std::binary_search(entities_.begin(), entities_.end(), winner.entity)) {",
+      "replace": "            if (!std::binary_search(entities_.begin(), entities_.end(), winner.entity) ||\n                std::any_of(records.begin(), records.end(), [&](const Record& s) { return s.kind == RecordKind::Spawn && s.entity == winner.entity && s.planPos == winner.planPos; })) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ same\\-call:\\ the\\ insert\\ lands\\ on\\ the\\ alive\\ 7"
+    },
+    {
+      "id": "sr-same-call-removes-dropped",
+      "what": "3.2: removes of an id the window spawns are skipped (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;",
+      "replace": "        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            if (std::any_of(records.begin(), records.end(), [&, target = id](const Record& s) { return s.kind == RecordKind::Spawn && s.entity == target; })) continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ same\\-call:\\ the\\ remove\\ lands\\ on\\ the\\ alive\\ 7"
+    },
+    {
+      "id": "sr-allotter-collision-asserts",
+      "what": "2.5: a Spawn (allotter) id that collides fails a GYO_ASSERT (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "replace": "                            GYO_ASSERT(spawns[c]->withId);\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55: an allotter id*",
+      "expect": "GYO_ASSERT\\ failed:\\ spawns\\[c\\]\\->withId"
+    },
+    {
+      "id": "sr-zone-c-own-cells",
+      "what": "3.4 / LIM-7: a zone C spawn writes its bundle when the alive entity has no zone C data (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (std::binary_search(entities_.begin(), entities_.end(), id)) {",
+      "replace": "                if (std::binary_search(entities_.begin(), entities_.end(), id) && head.emitterZone != Zone::C) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ zone\\-c:\\ 7\\ gets\\ no\\ zone\\ C\\ data"
+    },
+    {
+      "id": "sr-plan-version-not-bumped",
+      "what": "fingerprint: the Plan fingerprint version stays 2 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 3;",
+      "replace": "constexpr std::uint32_t kFingerprintVersion = 2;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ versions:\\ Plan\\ fingerprint\\ version\\ 3"
+    },
+    {
+      "id": "sr-c-version-not-bumped",
+      "what": "fingerprint: the C fingerprint version stays 4 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 4;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ versions:\\ C\\ fingerprint\\ version\\ 5"
+    },
+    {
+      "id": "sr-j32-alive-applied",
+      "what": "J-32 guard: a spawn into an alive id is applied (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (std::binary_search(entities_.begin(), entities_.end(), id)) {",
+      "replace": "                if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "J\\-32:\\ the\\ dropped\\ spawn\\ wrote\\ no\\ bundle\\ component"
+    },
+    {
+      "id": "sr-j32-no-count",
+      "what": "J-32 guard: not counted (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    ++rejectedSpawns_;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "J\\-32:\\ the\\ dropped\\ spawn\\ is\\ counted"
+    },
+    {
+      "id": "sr-j32-no-record",
+      "what": "J-32 guard: not recorded (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{tick, false, std::move(rejected)});\n",
+      "replace": "    (void)found;\n    (void)tick;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "J\\-32:\\ the\\ dropped\\ spawn\\ is\\ recorded"
+    },
+    {
+      "id": "sr-j32-reason",
+      "what": "J-32 guard: the reason is wrong (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "replace": "                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, std::string_view{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "J\\-32:\\ the\\ reason\\ is\\ IdAlive"
+    },
+    {
+      "id": "sr-j8-no-count",
+      "what": "J-8 guard: not counted (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    ++rejectedSpawns_;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "J\\-8:\\ the\\ dropped\\ spawn\\ is\\ counted"
+    },
+    {
+      "id": "sr-j8-no-record",
+      "what": "J-8 guard: not recorded (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(\n        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{tick, false, std::move(rejected)});\n",
+      "replace": "    (void)found;\n    (void)tick;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "J\\-8:\\ the\\ dropped\\ spawn\\ is\\ recorded"
+    },
+    {
+      "id": "sr-j8-reason",
+      "what": "J-8 guard: the reason is wrong (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});",
+      "replace": "                    dropped[i - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "J\\-8:\\ the\\ reason\\ is\\ IdInAllotterRange"
+    },
+    {
+      "id": "sr-j8-allots-later",
+      "what": "J-8 guard: the dropped id is taken (made alive), so the allotter's later 150 collides (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));",
+      "replace": "            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n            MakeAlive(spawn.entity);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "J\\-8:\\ the\\ allotter\\ later\\ allots\\ 149,\\ 150\\ and\\ 151"
+    },
+    {
+      "id": "sr-static-assert-removed",
+      "what": "3.1: a product System may write RejectedSpawn records (the static_assert is gone; caught at configure by the try_compile samples) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "    static_assert(!std::is_same_v<Record, RejectedSpawn>,\n                  \"GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: RejectedSpawn is the kernel's own diagnostics record (spec F-13)\");\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "expect": "variant KERNEL_DIAGNOSTICS compiled",
+      "expect_build_failure": true
     }
   ]
 }

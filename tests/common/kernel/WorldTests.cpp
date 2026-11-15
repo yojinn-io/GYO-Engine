@@ -287,8 +287,17 @@ namespace {
 template <class A>
 concept HasReset = requires(A allotter) { allotter.Reset(); };
 
-SystemResult SpawnIntoAllotterRange(SpawnWithId<Bundle<Tag>> spawn) {
-    spawn.New(150, Tag{150});
+SystemResult SpawnIntoAllotterRangeOnce(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
+    if (tick.Tick() == 1) spawn.New(150, Tag{150});
+    return Ok();
+}
+
+SystemResult SpawnThriceAtTickTwo(Spawn<Bundle<Tag>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 2) return Ok();
+    for (int i = 0; i < 3; ++i) {
+        auto id = spawn.New(Tag{2});
+        if (!id) return Engine::Base::Err(std::move(id).error().Wrap("SpawnThriceAtTickTwo"));
+    }
     return Ok();
 }
 
@@ -332,14 +341,25 @@ TEST_CASE("J-8: the allotter is monotonic, reports exhaustion and never wraps; n
     CHECK(rig->recorded.size() == 1);
     CHECK(rig->world().Keys<Tag>() == std::vector<EntityId>{100, 101});
 
-    // SpawnWithId with an id of this World's allotter range: a GYO_ASSERT at the sync point (spec A.1).
+    // SpawnWithId with an id of this World's allotter range: dropped and recorded at the sync point (spec F-13);
+    // the allotter later allots that id without a collision.
     {
         auto ranged = MakeRig([](Registrar& r) {
             Data(r, true);
-            r.AddSystem<&SpawnIntoAllotterRange>(B("SpawnIntoAllotterRange", "A"));
+            r.AddSystem<&SpawnIntoAllotterRangeOnce>(B("SpawnIntoAllotterRangeOnce", "A"));
+            r.AddSystem<&SpawnThriceAtTickTwo>(B("SpawnThriceAtTickTwo", "B"));
         });
-        ranged->world().SetResource(RangeAllotter::Of(100, 199));
-        GYO_CHECK_ASSERTS(ranged->Run());
+        ranged->world().SetResource(RangeAllotter::Of(149, 151));
+        KERNEL_REQUIRE_RUN_OK(ranged->Run());
+        CHECK_MESSAGE(!ranged->world().Alive(150), "J-8: a SpawnWithId into the allotter range does not spawn");
+        CHECK_MESSAGE(ranged->world().RejectedSpawns() == 1, "J-8: the dropped spawn is counted");
+        const std::vector<RejectedSpawn> rejected = ranged->world().Diagnostics<RejectedSpawn>();
+        REQUIRE_MESSAGE(rejected.size() == 1, "J-8: the dropped spawn is recorded");
+        CHECK_MESSAGE(rejected[0].reason == SpawnRejectReason::IdInAllotterRange, "J-8: the reason is IdInAllotterRange");
+        KERNEL_REQUIRE_RUN_OK(ranged->Run());
+        CHECK_MESSAGE((ranged->world().Keys<Tag>() == std::vector<EntityId>{149, 150, 151}),
+                      "J-8: the allotter later allots 149, 150 and 151");
+        CHECK(ranged->world().RejectedSpawns() == 1);
     }
 
     // A Spawn without an allotter: D-E3 at Finish.
@@ -586,13 +606,26 @@ TEST_CASE("J-32: two Systems, one key: the later Plan position wins; an overwrit
         CHECK(Join(Log()) == "mode-removed sees tag:7");
         CHECK_FALSE(rig->world().Alive(1));
     }
-    SUBCASE("SpawnWithId of an alive id that this window does not despawn fails a GYO_ASSERT") {
+    SUBCASE("SpawnWithId of an alive id that this window does not despawn is dropped and recorded") {
         auto rig = MakeRig([](Registrar& r) {
             Data(r);
             r.AddSystem<&SpawnAlive>(B("SpawnAlive", "A"));
         });
         rig->world().Insert(1, Tag{1});
-        GYO_CHECK_ASSERTS(rig->Run());
+        const auto before = rig->world().Stamps<Tag>(1);
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK(rig->world().State() == WorldState::Ready);
+        CHECK_MESSAGE(rig->world().Get<Mode>(1) == nullptr, "J-32: the dropped spawn wrote no bundle component");
+        REQUIRE(rig->world().Get<Tag>(1) != nullptr);
+        CHECK(rig->world().Get<Tag>(1)->t == 1);
+        CHECK(rig->world().Stamps<Tag>(1) == before);
+        CHECK_MESSAGE(rig->world().RejectedSpawns() == 1, "J-32: the dropped spawn is counted");
+        const std::vector<RejectedSpawn> rejected = rig->world().Diagnostics<RejectedSpawn>();
+        REQUIRE_MESSAGE(rejected.size() == 1, "J-32: the dropped spawn is recorded");
+        CHECK(rejected[0].entity == 1);
+        CHECK_MESSAGE(rejected[0].reason == SpawnRejectReason::IdAlive, "J-32: the reason is IdAlive");
+        CHECK(rejected[0].emitter == "SpawnAlive");
+        CHECK(rejected[0].schedule == "Tick");
     }
 }
 

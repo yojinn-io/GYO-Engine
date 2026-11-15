@@ -67,6 +67,38 @@ struct VerificationReport {
     std::vector<std::string> excludedColumns;
 };
 
+// Spec F-13: why a spawn record was dropped at a sync point.
+enum class SpawnRejectReason : std::uint8_t {
+    IdInAllotterRange,
+    IdSpawnedTwice,
+    IdAlive,
+};
+
+// Spec F-13: one dropped spawn record, a diagnostics record of the kernel's own:
+// read with World::Diagnostics<RejectedSpawn>() and taken with TakeDiagnostics
+// between two Runs. A product System may not write this type.
+struct RejectedSpawn {
+    EntityId entity = 0;
+    SpawnRejectReason reason = SpawnRejectReason::IdAlive;
+    // The System or hook that recorded the spawn.
+    std::string emitter;
+    bool emitterIsHook = false;
+    Zone emitterZone = Zone::B;
+    // Recorded by Spawn (the allotter's id), not SpawnWithId.
+    bool fromAllotter = false;
+    // The schedule whose sync point dropped it.
+    std::string schedule;
+    // The record's Plan position: a System's step; for a hook, the sync point that triggered it.
+    std::uint32_t step = 0;
+    // The sync point that dropped it (for a hook round, the last sync point of the Plan).
+    std::uint32_t appliedAt = 0;
+    // The schedule's domain tick (0 without a clock).
+    std::uint64_t tick = 0;
+    // IdSpawnedTwice only: the other emitter (the one whose record was kept, or
+    // another emitter of the same id when all were dropped).
+    std::string otherEmitter;
+};
+
 class World {
 public:
     // registry must be frozen and outlive the World.
@@ -200,7 +232,8 @@ public:
         return out;
     }
 
-    // ---- Diagnostics (B-13): the World end of DiagnosticsWriter<R>; kept when
+    // ---- Diagnostics (B-13): the World end of DiagnosticsWriter<R>, and of the
+    // kernel's own RejectedSpawn records (spec F-13); kept when
     // Interrupted. Readable in Ready and Interrupted.
 
     template <class R>
@@ -240,6 +273,8 @@ public:
     [[nodiscard]] std::optional<ChangeStamp> TickStamp(Domain domain, std::uint64_t tick) const noexcept;
     // Spec F.2 step 5: inserts dropped because the entity was gone (a result, not an error).
     [[nodiscard]] std::uint64_t DroppedMissingEntity() const noexcept { return droppedMissingEntity_; }
+    // Spec F-13: spawn records dropped at sync points over the World's life (TakeDiagnostics does not reset it).
+    [[nodiscard]] std::uint64_t RejectedSpawns() const noexcept { return rejectedSpawns_; }
 
     // ---- Verification (spec A.6)
 
@@ -313,10 +348,13 @@ private:
 
     // ---- Executor side (Product, World.cpp)
 
-    // F.2: applies the window's deferred records and the hook queue; Err from a
+    // F.2: applies the window's deferred records and the hook queue (spawn records
+    // that cannot spawn are dropped and recorded, spec F-13); Err from a
     // hook or the Z5 recheck. stamp: the sync point's stamp.
     Engine::Base::Result<void, KernelError> ApplySync(std::uint32_t planPos, std::string_view schedule,
                                                       ChangeStamp stamp);
+    // Spec F-13: counts one dropped spawn and appends its diagnostics record.
+    void RecordRejectedSpawn(RejectedSpawn rejected);
     // Spec E.5: discards every record not yet applied (hook queue included).
     void DiscardDeferred() noexcept;
     // F.3 trim of one domain's buffers: drops records before the current tick.
@@ -384,6 +422,7 @@ private:
     // +1 at every change of the alive-entity list (spec A.1 epoch, with the columns' own).
     std::uint64_t entitiesEpoch_ = 0;
     std::uint64_t droppedMissingEntity_ = 0;
+    std::uint64_t rejectedSpawns_ = 0;
     static_assert(static_cast<std::size_t>(Domain::Loading) + 1 == 4, "one tick per Domain value");
     std::array<std::uint64_t, 4> ticks_{};
     static constexpr std::size_t kTickStampSlots = 256;

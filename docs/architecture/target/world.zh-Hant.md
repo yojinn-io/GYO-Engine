@@ -41,6 +41,7 @@
 - 生成、刪除、加欄、移欄在 System 執行期間只進延後佇列；Running 期間成員不變（spec W-3）。
 - **Despawn 不算獨占寫者、不產生衝突邊**：它是成員關係的結束，不是值的寫入；同一窗內的查詢結果不受 despawn 記錄影響。(c) 資料的保護由區規則 Z5（帶 (c) 欄的實體只能由 (c) 的 System 刪除；記錄當下查、以 Err 回傳，F.2 第 2 步再複核本窗 (c) 的待套用 insert／spawn）。
 - **同步點的套用順序寫死**（spec F.2）：hook 佇列 → despawn → remove → spawn → insert → OnAdd → resource。計畫最後一個同步點之後的 hook 清空輪，每一輪用同一個順序套用（spec F-12）。despawn 階段依 EntityId 升冪、冪等（同一 id 記兩次只處理一次）、對窗開始時不存在的 id 無作用。despawn 排在 spawn 之前，是為了同一窗內「刪 X 再以同 id 生成 X」（重連）成立。
+- **生成那一步丟掉不能生成的那一筆**（spec F-13；kernel [DI-KS 9](kernel.zh-Hant.md#di-ks-9)）：往活著的 id 生成、同一個同步點生成同一個 id 兩次、`SpawnWithId` 的 id 落在配發器的範圍——那一筆丟掉並留 `RejectedSpawn` 明細，不是錯誤，`Run` 照常（`v8-arch-gyo2-spawn-reject`，使用者 2026-11-15）。
 - 說明案例（使用者）：同一 tick 玩家 10 中彈死亡又退出。Combat 在 tick 內已寫下玩家 7 的擊殺——結構凍結，玩家 10 仍在；同步點才刪它。所以擊殺成立，而且與 despawn 的排序無關。若產品要「退出者不算被擊殺」，那是 Combat 與 ApplyMembership 兩個 System 的 Plan 順序與規則問題，(c) 區的歧義檢查會強迫把順序寫明，不是 despawn 該管的。
 
 ## 5. 事件只在該 domain 的 clock schedule 內讀寫（使用者 2026-11-11 決定，spec K.3 第 15 項）

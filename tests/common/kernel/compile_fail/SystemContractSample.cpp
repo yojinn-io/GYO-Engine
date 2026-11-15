@@ -22,6 +22,8 @@
 //   GYO_KERNEL_SAMPLE_HANDLE_COPY       requires a handle to be copyable or movable; must fail with
 //                                       GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE (a handle that could be
 //                                       copied or moved could be kept past its call)
+//   GYO_KERNEL_SAMPLE_KERNEL_DIAGNOSTICS a System writing the kernel's own RejectedSpawn records
+//                                       (spec F-13) -> GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS
 #include "engine/kernel/Kernel.hpp"
 
 #include <type_traits>
@@ -78,6 +80,9 @@ void KernelSampleRegistration(Registrar& registrar, int value) {
                       std::is_copy_constructible_v<Res<SamplePos>> || std::is_move_constructible_v<Res<SamplePos>> ||
                       std::is_copy_constructible_v<Commands> || std::is_move_constructible_v<Commands>,
                   "GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE: kernel handles are neither copyable nor movable");
+#elif defined(GYO_KERNEL_SAMPLE_KERNEL_DIAGNOSTICS)
+    const auto system = [](DiagnosticsWriter<RejectedSpawn>) -> SystemResult { return {}; };
+    registrar.AddSystem<decltype(system)>({.name = "WritesKernelRecords"});
 #else
     (void)registrar;
 #endif

@@ -330,7 +330,7 @@ struct AllotterOps {
 // What Registrar::Allotter<T> requires of an allotter resource (spec A.1, W-9):
 // Allot gives the next id or nothing when the range is used up (an error is
 // reported, never a wrap); Owns says whether an id is in this World's range
-// (SpawnWithId must not use one: spec A.1, a GYO_ASSERT at the sync point).
+// (a SpawnWithId with one is dropped at the sync point: spec F-13).
 template <class A>
 concept EntityAllotter = requires(A allotter, const A& constant, EntityId id) {
     { allotter.Allot() } -> std::same_as<std::optional<EntityId>>;

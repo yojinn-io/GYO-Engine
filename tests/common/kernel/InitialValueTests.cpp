@@ -714,7 +714,7 @@ TEST_CASE("initial value: a declaration changes the Registry fingerprint and, fo
     // One zone C declaration each, from different requests: the C part differs.
     CHECK(zoneC.registry->Frozen().CFingerprint() != otherZoneCRequest.registry->Frozen().CFingerprint());
     CHECK(base.RegistryFingerprint().version == 2U);
-    CHECK(base.CFingerprint().version == 4U);
+    CHECK(base.CFingerprint().version == 5U);
 }
 
 namespace {
@@ -901,9 +901,9 @@ TEST_CASE("initial value: golden fingerprints of a Registry with two declaration
     MESSAGE("two declarations: registry " << both.registry->Frozen().RegistryFingerprint().Text() << " C "
                                           << both.registry->Frozen().CFingerprint().Text());
     CHECK(both.registry->Frozen().RegistryFingerprint().Text() ==
-          std::string("2:574c05b3099b10ee0a8352aebb9cea5c76c17fdf4fc2c106d72b0ac11ce80a7b"));
+          std::string("2:6ca07796f68037287651d03a41b71f7a36b5573e96d9d1032da293a441fbd8ab"));
     CHECK(both.registry->Frozen().CFingerprint().Text() ==
-          std::string("4:81dffcf95d506f758c440274f0b6268508ffd802e12208a9752258efcb116f3f"));
+          std::string("5:d5659ccfd90ade8172e3f54e2b449c3d19d490d9b3ccc143f9d222795a11ba9c"));
 }
 
 namespace {
