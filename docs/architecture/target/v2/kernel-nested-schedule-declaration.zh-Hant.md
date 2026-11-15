@@ -44,6 +44,8 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 ## 2. 作者看到的行為
 
+用詞：這份宣告裡的「主程式」指 World 外面呼叫 `Product::Run` 的那一段程式——[用詞表](rebuild-vocabulary.zh-Hant.md)的 runner，以及測試或工具直接呼叫的情形。不用已經替換掉的角色詞。
+
 1. **誰能跑別的 schedule**：以 `ExclusiveWorld`（帶不帶寫入的宣告都算）為參數的 System。既有規則：它是那個 System 唯一的參數，只能是 (b) 區。
    - run 條件不能：它不能持有 `ExclusiveWorld`（編譯期就擋）。
    - hook 不能：hook 是在同步點套用到一半時被呼叫的，這時再跑一張 schedule 會改到正在走的資料。
@@ -222,7 +224,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | target `kernel` **DI-KS 2**（`ExclusiveWorld` 對 (c) 區或單一寫者資料的寫入一律回 Err） | 改成：元件照舊；Resource 標 `Shared` 的照舊可以寫，單一寫者的列在宣告裡才能寫 | **DI**（有放寬，見 5.2） |
 | target `kernel` **DI-KS 6**、規格 B.3、`Declarations.hpp` 的註解（「只有一個寫者」的計數；Startup 的 System 不算寫者，它在別的 schedule 之前跑一次） | 計數的對象加上「獨占的 System 列出來的 Resource」。Startup 的豁免不變；它的理由從靠外面只呼叫一次，變成 Kernel 自己跑、自己擋；條文加上第 3.3 節的規則與記下的假設。規格 `:261`「`ExclusiveWorld` 寫不到單一寫者的欄，所以不計」要改 | **DI** |
 | 規格 D.2 的啟動檢查 | 加一條：一個 World 有第二張 Startup | 只收緊（現有的三處測試都只有一張） |
-| target `kernel` **DI-KS 15**（Kernel 不內建 schedule 名、Host 決定什麼時候跑哪一張） | 名字照舊不內建。補一句例外：Startup 什麼時候跑由 Kernel 決定（Host 可以在第一幀之前先呼叫一次） | **DI**（文字要補） |
+| target `kernel` **DI-KS 15**（Kernel 不內建 schedule 名；什麼時候跑哪一張由 World 外面的 runner 決定——條文原文用的是已經替換掉的角色詞，改寫時一併換成 runner） | 名字照舊不內建。補一句例外：Startup 什麼時候跑由 Kernel 決定（runner 可以在第一幀之前先呼叫一次） | **DI**（文字要補） |
 | target `kernel` **DI-KS 9**、規格 W-3、target `world` 第 41 行（Running 期間成員不變；變更只在宣告的同步點套用；結果不依記錄順序） | 「Running 期間成員不變」改成「一般的 System 執行期間成員不變；獨占的 System 只在它跑的 schedule 的同步點變」。加一句「記下的變更在記它的那張 schedule 的同步點、用那張的位置套用」。其餘不變 | **DI**（放寬的面就是 5.1） |
 | 規格 **W-4**、A.4 與守衛 J-4 | 獨占 System 的句柄在巢狀回來後重新有效（第 6 項）。J-4 加巢狀的案例 | 放寬，實作後列五點請你核准 |
 | **LIM-3**、規格 B.5 | 註明 `ExclusiveWorld` 沒有「呼叫內的舊指標」這個形狀；刻意把閉包裡的位址帶到外面的（存進捕獲的變數、藏在回傳的結構裡）仍在限界內 | 你同意過的限界的文字變更 |
