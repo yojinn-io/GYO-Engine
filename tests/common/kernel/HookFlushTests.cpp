@@ -763,3 +763,140 @@ TEST_CASE("J-54: an Err before the last sync point: no round, the queued hook re
     CHECK(rig->world().Get<Trail>(1) == nullptr);
     CHECK(rig->recorded.size() == 1);
 }
+
+// ---- Added after the adversarial check of the mutant list (Fable, high): each case
+// names the mutants (hf-*) that survived the cases above and that it kills.
+
+namespace {
+
+SystemResult TrailAddsScoreAndMarker(HookCtx ctx, CommandsFor<Inserts<Score, Marker>, Removes<>> commands) {
+    commands.Insert(ctx.Entity(), Score{1});
+    commands.Insert(ctx.Entity(), Marker{1});
+    return Ok();
+}
+SystemResult QuietOnMarker(HookCtx) { return Ok(); }
+SystemResult MarkerAddsBomb(HookCtx ctx, CommandsFor<Inserts<Bomb>, Removes<>> commands) {
+    commands.Insert(ctx.Entity(), Bomb{1});
+    return Ok();
+}
+SystemResult ScoreAddsFuse(HookCtx ctx, CommandsFor<Inserts<Fuse>, Removes<>> commands) {
+    commands.Insert(ctx.Entity(), Fuse{1});
+    return Ok();
+}
+SystemResult TrailAddsFuse(HookCtx ctx, CommandsFor<Inserts<Fuse>, Removes<>> commands) {
+    commands.Insert(ctx.Entity(), Fuse{1});
+    return Ok();
+}
+
+} // namespace
+
+// hf-limit-source-always-settings, hf-limit-msg-round-number, hf-limit-layer-round-zero, hf-recorders-not-cleared,
+// hf-recorders-every-called-hook, hf-limit-names-first-call-order, hf-tostring-hookroundlimit, hf-limit-break-hook-twice.
+TEST_CASE("J-54: at a schedule's own limit: whose limit, which round, only the last round's recording hooks in registration order") {
+    Limits limits;
+    limits.tick = 2U;
+    auto rig = MakeFlushRig(
+        [](Registrar& r) {
+            r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
+            // Records at the last sync point, before round 1.
+            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
+            // Round 2 (the last): Score's hook is called before Marker's (ComponentId order), but is registered after it.
+            r.Hook<Marker, &QuietOnMarker>(HookTrigger::OnAdd, {.name = "QuietOnMarker", .zone = Zone::B});
+            r.Hook<Marker, &MarkerAddsBomb>(HookTrigger::OnAdd, {.name = "MarkerAddsBomb", .zone = Zone::B});
+            r.Hook<Score, &ScoreAddsFuse>(HookTrigger::OnAdd, {.name = "ScoreAddsFuse", .zone = Zone::B});
+            // Round 1 only.
+            r.Hook<Trail, &TrailAddsScoreAndMarker>(HookTrigger::OnAdd, {.name = "TrailAddsScoreAndMarker", .zone = Zone::B});
+        },
+        limits, false, 8U, true);
+    int breaks = 0;
+    rig->world().SetBreakHook([&breaks](const KernelError&) { ++breaks; });
+    const auto result = rig->Run();
+    REQUIRE_FALSE(static_cast<bool>(result));
+    REQUIRE(result.error().code == KernelErrorCode::HookRoundLimit);
+    const std::string& message = result.error().message;
+    CHECK_MESSAGE(message.find("within 2 rounds (the limit of the schedule's declaration)") != std::string::npos,
+                  "J-54: the limit's source is not the schedule's declaration: " << message);
+    CHECK_MESSAGE(message.find("2 records remain, recorded in round 2 by hook ") != std::string::npos,
+                  "J-54: the limit's message names another round: " << message);
+    CHECK_MESSAGE(message.find("by hook 'MarkerAddsBomb', 'ScoreAddsFuse'") != std::string::npos,
+                  "J-54: the last round's recording hooks are not in registration order: " << message);
+    CHECK_MESSAGE(message.find("QuietOnMarker") == std::string::npos, "J-54: a hook that recorded nothing is named: " << message);
+    CHECK_MESSAGE(message.find("TrailAddsScoreAndMarker") == std::string::npos, "J-54: a hook of an earlier round is named: " << message);
+    const std::string text = result.error().Text();
+    CHECK_MESSAGE(text.find("HookRoundLimit [F-12]: ") == 0, "J-54: the error code's text: " << text);
+    const Plan* plan = rig->built.registry->Frozen().PlanOf("Tick");
+    REQUIRE(plan != nullptr);
+    CHECK_MESSAGE(text.find("hook round 2 at sync point step " + std::to_string(PositionOf(*plan, "C"))) != std::string::npos,
+                  "J-54: the limit's layer names another round: " << text);
+    CHECK_MESSAGE(breaks == 1, "J-54: the limit's Err called the break hook " << breaks << " times");
+}
+
+// hf-round-err-layer-always-one.
+TEST_CASE("J-54: an Err in round 2 says round 2; round 1 stays") {
+    auto rig = MakeFlushRig(
+        [](Registrar& r) {
+            r.AddSystem<&SpawnBullet>(Put("SpawnBullet", "Tick", "C"));
+            r.Hook<Bullet, &AddTrail>(HookTrigger::OnAdd, {.name = "AddTrail", .zone = Zone::B});
+            r.Hook<Trail, &TrailAddsFuse>(HookTrigger::OnAdd, {.name = "TrailAddsFuse", .zone = Zone::B});
+            r.Hook<Fuse, &Explode>(HookTrigger::OnAdd, {.name = "Explode", .zone = Zone::B});
+        },
+        {}, false);
+    const auto result = rig->Run();
+    CHECK(HasCode(result, KernelErrorCode::SystemFailed));
+    REQUIRE_FALSE(static_cast<bool>(result));
+    CHECK_MESSAGE(result.error().Text().find("hook round 2 at sync point step") != std::string::npos,
+                  "J-54: an Err in round 2 names another round: " << result.error().Text());
+    CHECK(rig->world().Get<Trail>(1) != nullptr);
+}
+
+// hf-settings-absent-limit-one.
+TEST_CASE("J-54: a World whose KernelSettings was removed before the first Run uses the default limit of 8") {
+    auto ok = MakeFlushRig(ChainSystems, {}, false);
+    ok->world().RemoveResource<KernelSettings>();
+    const auto eight = RunChain(*ok, 8);
+    CHECK_MESSAGE(static_cast<bool>(eight), "J-54: a World without KernelSettings did not use the default limit of 8: " << Text(eight));
+    auto over = MakeFlushRig(ChainSystems, {}, false);
+    over->world().RemoveResource<KernelSettings>();
+    CHECK_MESSAGE(HasCode(RunChain(*over, 9), KernelErrorCode::HookRoundLimit), "J-54: a World without KernelSettings has no limit of 8");
+}
+
+// hf-c-fp-eight-as-unset, hf-plan-fp-value-shifted, hf-c-fp-value-shifted, hf-registry-fp-schedule-field-when-declared,
+// hf-export-limit-line-moved. The three texts are fixed values (the same on the L1 platforms: fixed-width types only).
+TEST_CASE("J-54: a declared limit's fingerprints are fixed values; a declared 8 is not 'not declared' in the C fingerprint") {
+    auto build = [](Limits limits) {
+        return Finish({{"test", [limits](Registrar& r) {
+                            Base(r, limits);
+                            r.AddSystem<&ZoneCReadsPos>(Put("ZoneCReadsPos", "Tick", "A", Zone::C));
+                        }}});
+    };
+    const Built none = build({});
+    KERNEL_REQUIRE_OK(none);
+    Limits tick5;
+    tick5.tick = 5U;
+    Limits tick8;
+    tick8.tick = 8U;
+    const Built t5 = build(tick5);
+    const Built t8 = build(tick8);
+    CHECK_MESSAGE(t8.registry->Frozen().CFingerprint() != none.registry->Frozen().CFingerprint(),
+                  "J-54: the C fingerprint hashes a declared 8 as 'not declared'");
+    CHECK_MESSAGE(t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text() == "2:eff453e797bb2d7d064e1c4dc070dc0518673066cb9e88ded84436380269842b",
+                  "J-54: Plan fingerprint of a declared limit of 5: " << t5.registry->Frozen().PlanOf("Tick")->fingerprint.Text());
+    CHECK_MESSAGE(t5.registry->Frozen().CFingerprint().Text() == "4:dd2050d213093045dc7a655da82cb8302159fc4b373527d30513aa8716b6fa75",
+                  "J-54: C fingerprint of a declared limit of 5: " << t5.registry->Frozen().CFingerprint().Text());
+    CHECK_MESSAGE(t5.registry->Frozen().RegistryFingerprint().Text() == "2:7fcb545bf1b575175e6b280a309925d77b6d3dedfc549d28f36e0a16c2a3a7c9",
+                  "J-54: Registry fingerprint of a declared limit of 5: " << t5.registry->Frozen().RegistryFingerprint().Text());
+    const std::string report = t5.registry->Frozen().ExportPlans();
+    CHECK_MESSAGE(report.find("  hook-round-limit 5\n  fingerprint 2:") != std::string::npos,
+                  "J-54: the export's hook-round-limit line is not right before the fingerprint line");
+}
+
+// hf-tostring-de20, hf-de20-no-names.
+TEST_CASE("J-54: D-E20 prints as D-E20 and names the schedule") {
+    Limits limits;
+    limits.tick = 0U;
+    const Built built = Finish({{"test", [limits](Registrar& r) { Base(r, limits); }}});
+    CHECK_MESSAGE(Codes(built) == std::vector<std::string>{"D-E20"}, "J-54: D-E20's text: " << Describe(built));
+    REQUIRE_FALSE(static_cast<bool>(built.result));
+    REQUIRE(built.result.error().errors.size() == 1);
+    CHECK_MESSAGE(built.result.error().errors.front().subjects == std::vector<std::string>{"Tick"}, "J-54: D-E20 does not name the schedule");
+}

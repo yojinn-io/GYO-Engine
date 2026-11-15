@@ -775,7 +775,7 @@ TEST_CASE("J-52: the Z5 recheck at the sync point; Changed and Local are per mou
         rig->world().Insert(0, Tag{0});
         rig->world().Insert(1, Tag{1});
         const auto result = rig->Run();
-        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
+        CHECK_MESSAGE(HasCode(result, KernelErrorCode::ZoneCDespawn), "J-52: a zone C SpawnWithId in the window is rechecked");
         CHECK(rig->world().Alive(0));
     }
     SUBCASE("a skipped mount keeps its last-run stamp") {

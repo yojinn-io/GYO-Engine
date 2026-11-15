@@ -3534,7 +3534,7 @@
     },
     {
       "id": "hf-no-rounds",
-      "what": "no hook rounds after the last sync point (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "no hook rounds after the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (false) {",
@@ -3544,7 +3544,7 @@
     },
     {
       "id": "hf-one-round",
-      "what": "one hook round, no loop (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "one hook round, no loop (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {",
       "replace": "                if (!world.HookQueueOf(scheduleName).records.empty()) {",
@@ -3580,7 +3580,7 @@
       "replace": "                const std::uint32_t limit = world.hookRoundLimit_;",
       "target": "gyo_kernel_tests",
       "cases": "J-54: a schedule's own limit*",
-      "expect": "J\\-54:\\ the\\ schedule's\\ limit\\ of\\ 5\\ not\\ used"
+      "expect": "the\\ schedule's\\ limit\\ of\\ 5\\ not\\ used\\ \\(depth\\ 5\\ failed\\)"
     },
     {
       "id": "hf-limit-larger-of-two",
@@ -3664,7 +3664,7 @@
     },
     {
       "id": "hf-startup-skipped",
-      "what": "no hook rounds in a startup schedule (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "no hook rounds in a startup schedule (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (position == lastSync && !record->options.startup) {",
@@ -3674,7 +3674,7 @@
     },
     {
       "id": "hf-only-with-trim",
-      "what": "hook rounds only when an event trim follows the last sync point (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "hook rounds only when an event trim follows the last sync point (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (position == lastSync && position + 1 < plan->steps.size()) {",
@@ -3684,7 +3684,7 @@
     },
     {
       "id": "hf-verification-only",
-      "what": "hook rounds only with verification on (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "hook rounds only with verification on (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "            if (position == lastSync) {",
       "replace": "            if (position == lastSync && world.verification_) {",
@@ -3704,7 +3704,7 @@
     },
     {
       "id": "hf-first-queue",
-      "what": "the rounds read the first schedule's hook queue (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "the rounds read the first schedule's hook queue (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {",
       "replace": "                while (!world.hookQueues_.front().records.empty()) {",
@@ -3763,16 +3763,6 @@
       "expect": "Occurrences\\(message,\\ \"'FanQ'\"\\)\\ ==\\ 1"
     },
     {
-      "id": "hf-limit-names-call-order",
-      "what": "the limit's message names hooks in call order (v8-arch-gyo2-hook-flush, spec F-12)",
-      "file": "engine/kernel/src/Executor.cpp",
-      "find": "                        std::sort(recorders.begin(), recorders.end());\n",
-      "replace": "",
-      "target": "gyo_kernel_tests",
-      "cases": "J-54: at the limit*",
-      "expect": "Occurrences\\(message,\\ \"'FanQ'\"\\)\\ ==\\ 1"
-    },
-    {
       "id": "hf-limit-source-wrong",
       "what": "the limit's message names the wrong source of the limit (v8-arch-gyo2-hook-flush, spec F-12)",
       "file": "engine/kernel/src/Executor.cpp",
@@ -3784,7 +3774,7 @@
     },
     {
       "id": "hf-limit-not-err",
-      "what": "at the limit the rest is left in the queue, no Err (v8-arch-gyo2-hook-flush, spec F-12)",
+      "what": "at the limit the rest is left in the queue, no Err (v8-arch-gyo2-hook-flush, spec F-12) [caught by the Run-end GYO_ASSERT; with both Run asserts removed the case's own CHECK catches it: mutation-check-fable noasserts.log]",
       "file": "engine/kernel/src/Executor.cpp",
       "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
       "replace": "                        break;\n                    }\n                    ++round;",
@@ -3970,7 +3960,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-34:*",
-      "expect": "rig\\->Run\\(\\)"
+      "expect": "a\\ record\\ on\\ the\\ System\\ path\\ while\\ Applying\\ fails\\ a\\ GYO_ASSERT"
     },
     {
       "id": "we-j35-err-not-interrupted",
@@ -3980,7 +3970,7 @@
       "replace": "    world_.state_ = WorldState::Ready;\n    world_.DiscardDeferred();",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
-      "expect": "rig\\->Run\\(\\)"
+      "expect": "a\\ System\\ returns\\ Err"
     },
     {
       "id": "we-j35-throw-not-interrupted",
@@ -3990,7 +3980,7 @@
       "replace": "            state_ = WorldState::Ready;\n            (world_.*discard_)();",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
-      "expect": "rig\\->world\\(\\)\\.State\\(\\)\\ ==\\ WorldState::Interrupted"
+      "expect": "a\\ System\\ throws"
     },
     {
       "id": "we-j35-diagnostics-dropped",
@@ -4000,7 +3990,7 @@
       "replace": "void World::DiscardDeferred() noexcept {\n    diagnostics_.clear();\n    window_.clear();",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
-      "expect": "rig\\->world\\(\\)\\.Diagnostics<Note>\\(\\)\\.size\\(\\)\\ ==\\ 1"
+      "expect": "a\\ System\\ throws"
     },
     {
       "id": "we-f6-empty-sync-no-epoch",
@@ -4020,7 +4010,7 @@
       "replace": "    if (Result step0 = phase(hookRecords, none); !step0) return step0;",
       "target": "gyo_kernel_tests",
       "cases": "J-52:*",
-      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
+      "expect": "J\\-52: step 0 rechecks the hook's despawn against the window"
     },
     {
       "id": "we-j52-recheck-pending-only",
@@ -4030,7 +4020,7 @@
       "replace": "                if (false) {\n                    reason = \"it has zone C component",
       "target": "gyo_kernel_tests",
       "cases": "J-52:*",
-      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
+      "expect": "J\\-52: step 2 sees the zone C column step 0 applied"
     },
     {
       "id": "we-adv-z5-ignores-spawnwithid",
@@ -4040,7 +4030,7 @@
       "replace": "                    if (other.kind == RecordKind::Insert) {",
       "target": "gyo_kernel_tests",
       "cases": "J-52:*",
-      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
+      "expect": "J\\-52: a zone C SpawnWithId in the window is rechecked"
     },
     {
       "id": "we-j36-hook-writerpos-zero",
@@ -4060,7 +4050,7 @@
       "replace": "    return {};\n    // One more layer",
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
-      "expect": "HasCode\\(result,\\ KernelErrorCode::SystemFailed\\)"
+      "expect": "a\\ hook\\ returns\\ its\\ own\\ Err"
     },
     {
       "id": "we-j33-apply-after-each-system",
@@ -4070,7 +4060,7 @@
       "replace": "            static_cast<void>(world.ApplySync(position, scheduleName, world.stamp_));\n            previousStep = StepText(scheduleName, position, system.options.name);\n            break;",
       "target": "gyo_kernel_tests",
       "cases": "J-33:*",
-      "expect": "static_cast<bool>\\(kernelRunResult\\)"
+      "expect": "changed\\ outside\\ the\\ World\\ API\\ before\\ step\\ 1\\ 'SeeBeforeMid'"
     },
     {
       "id": "we-adv-ready-window-compare-off",
@@ -4084,10 +4074,10 @@
     },
     {
       "id": "we-j7-despawn-reverse",
-      "what": "J-7: a despawn destroys in descending ComponentId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "what": "J-7: a despawn destroys in descending ComponentId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush) (find retargeted to the destroy loop by the adversarial check: in gyo2 the old find hit the OnRemove loop)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
-      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }",
+      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                columns_[c]->Erase(id);\n            }",
       "target": "gyo_kernel_tests",
       "cases": "J-7:*",
       "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:1\",\\ \"0:1\"\\}"
@@ -4170,7 +4160,7 @@
       "replace": "",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
-      "expect": "rig\\->Run\\(\\)"
+      "expect": "SpawnWithId\\ of\\ an\\ alive\\ id\\ that\\ this\\ window\\ does\\ not\\ despawn\\ fails\\ a\\ GYO_ASSERT"
     },
     {
       "id": "we-adv-spawnwithid-allotter-range-assert-removed",
@@ -4240,7 +4230,7 @@
       "replace": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed); false && error) {",
       "target": "gyo_kernel_tests",
       "cases": "J-32b:*",
-      "expect": "static_cast<bool>\\(result\\)"
+      "expect": "expected\\ Err\\ UntypedWrite"
     },
     {
       "id": "we-j50-settings-not-read",
@@ -4310,7 +4300,7 @@
       "replace": "            static_cast<void>(structure);\n",
       "target": "gyo_kernel_tests",
       "cases": "J-3:*",
-      "expect": "rig\\->Run\\(\\)"
+      "expect": "J\\-3:\\ a\\ membership\\ change\\ inside\\ a\\ System\\ call\\ fails\\ the\\ epoch\\ check"
     },
     {
       "id": "we-adv-hook-layer2-off",
@@ -4321,6 +4311,332 @@
       "target": "gyo_kernel_tests",
       "cases": "J-35:*",
       "expect": "HasCode\\(result,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "hf-limit-source-always-settings",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "(record->options.hookRoundLimit ? \"schedule's declaration\" : \"World's KernelSettings\")",
+      "replace": "\"World's KernelSettings\"",
+      "expect": "J\\-54: the limit's source is not the schedule's declaration",
+      "what": "the limit's message never says the limit is the schedule's (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at a schedule's own limit*"
+    },
+    {
+      "id": "hf-limit-msg-round-number",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "\" records remain, recorded in round \" + std::to_string(round) + \" by hook \" + names);",
+      "replace": "\" records remain, recorded in round \" + std::to_string(round + 1) + \" by hook \" + names);",
+      "expect": "J\\-54: the limit's message names another round",
+      "what": "the limit's message names the wrong round (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at a schedule's own limit*"
+    },
+    {
+      "id": "hf-limit-layer-round-zero",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "error.world = world.name_;\n                        error.Wrap(roundText(round));",
+      "replace": "error.world = world.name_;\n                        error.Wrap(roundText(0));",
+      "expect": "J\\-54: the limit's layer names another round",
+      "what": "the limit's context layer names round 0 (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at a schedule's own limit*"
+    },
+    {
+      "id": "hf-round-err-layer-always-one",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "KernelError error = std::move(applied).error();\n                        error.Wrap(roundText(round));",
+      "replace": "KernelError error = std::move(applied).error();\n                        error.Wrap(roundText(1));",
+      "expect": "J\\-54: an Err in round 2 names another round",
+      "what": "an Err in a round always says round 1 (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: an Err in round 2*"
+    },
+    {
+      "id": "hf-recorders-not-cleared",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "                    world.roundRecorders_.clear();\n",
+      "replace": "",
+      "expect": "J\\-54: a hook of an earlier round is named",
+      "what": "the limit's message names the hooks of every round, not the last one (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at a schedule's own limit*"
+    },
+    {
+      "id": "hf-recorders-every-called-hook",
+      "file": "engine/kernel/src/World.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "if (trackRoundRecorders_ && queue.records.size() > recordsBefore) roundRecorders_.push_back(hook);",
+      "replace": "if (trackRoundRecorders_) roundRecorders_.push_back(hook);",
+      "expect": "J\\-54: a hook that recorded nothing is named",
+      "what": "the limit's message names every hook called in the last round, recording or not (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at a schedule's own limit*"
+    },
+    {
+      "id": "hf-limit-names-first-call-order",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "                        std::sort(recorders.begin(), recorders.end());\n                        recorders.erase(std::unique(recorders.begin(), recorders.end()), recorders.end());\n",
+      "replace": "                        {\n                            std::vector<std::size_t> seen;\n                            for (std::size_t h : recorders) {\n                                if (std::find(seen.begin(), seen.end(), h) == seen.end()) seen.push_back(h);\n                            }\n                            recorders = seen;\n                        }\n",
+      "expect": "J\\-54: the last round's recording hooks are not in registration order",
+      "what": "the limit's message names hooks in first-call order, not registration order (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at a schedule's own limit*"
+    },
+    {
+      "id": "hf-settings-absent-limit-one",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;",
+      "replace": "settings.value ? settings.value->hookRoundLimit : 1U;",
+      "expect": "J\\-54: a World without KernelSettings did not use the default limit of 8",
+      "what": "a World whose KernelSettings was removed gets a limit of 1 (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a World whose KernelSettings was removed*"
+    },
+    {
+      "id": "hf-c-fp-eight-as-unset",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "            out.Flag(schedule->options.hookRoundLimit.has_value());\n            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);\n",
+      "replace": "            const bool declared = schedule->options.hookRoundLimit.has_value() && *schedule->options.hookRoundLimit != 8U;\n            out.Flag(declared);\n            if (declared) out.U32(*schedule->options.hookRoundLimit);\n",
+      "expect": "J\\-54: the C fingerprint hashes a declared 8 as 'not declared'",
+      "what": "the C fingerprint hashes a declared 8 as 'not declared' (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a declared limit's fingerprints*"
+    },
+    {
+      "id": "hf-plan-fp-value-shifted",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "    if (plan.hookRoundLimit) out.U32(*plan.hookRoundLimit);\n",
+      "replace": "    if (plan.hookRoundLimit) out.U32(*plan.hookRoundLimit + 1U);\n",
+      "expect": "J\\-54: Plan fingerprint of a declared limit of 5",
+      "what": "the Plan fingerprint hashes limit + 1 (another encoding of the declared value) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a declared limit's fingerprints*"
+    },
+    {
+      "id": "hf-c-fp-value-shifted",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);\n",
+      "replace": "            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit + 1U);\n",
+      "expect": "J\\-54: C fingerprint of a declared limit of 5",
+      "what": "the C fingerprint hashes limit + 1 (another encoding of the declared value) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a declared limit's fingerprints*"
+    },
+    {
+      "id": "hf-registry-fp-schedule-field-when-declared",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "    out.Str(s.runner);\n}",
+      "replace": "    out.Str(s.runner);\n    if (s.hookRoundLimit) out.U32(*s.hookRoundLimit);\n}",
+      "expect": "J\\-54: Registry fingerprint of a declared limit of 5",
+      "what": "the Registry fingerprint's schedule section hashes a declared limit (format changed, version not; the goldens without a limit stay) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a declared limit's fingerprints*"
+    },
+    {
+      "id": "hf-export-limit-line-moved",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "        out += \"  hook-round-limit \" + (plan.hookRoundLimit ? std::to_string(*plan.hookRoundLimit) : std::string(\"default\")) + \"\\n\";\n        out += \"  fingerprint \" + plan.fingerprint.Text() + \"\\n\";\n",
+      "replace": "        out += \"  fingerprint \" + plan.fingerprint.Text() + \"\\n\";\n        out += \"  hook-round-limit \" + (plan.hookRoundLimit ? std::to_string(*plan.hookRoundLimit) : std::string(\"default\")) + \"\\n\";\n",
+      "expect": "J\\-54: the export's hook\\-round\\-limit line is not right before the fingerprint line",
+      "what": "ExportPlans prints the limit after the fingerprint line (format 2 says before) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a declared limit's fingerprints*"
+    },
+    {
+      "id": "hf-tostring-hookroundlimit",
+      "file": "engine/kernel/src/Registry.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "    case KernelErrorCode::HookRoundLimit: return \"HookRoundLimit\";",
+      "replace": "    case KernelErrorCode::HookRoundLimit: return \"StructureBroken\";",
+      "expect": "J\\-54: the error code's text",
+      "what": "the new error code prints as another code (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at a schedule's own limit*"
+    },
+    {
+      "id": "hf-tostring-de20",
+      "file": "engine/kernel/src/Registry.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "    case StartupCode::DE20: return \"D-E20\";",
+      "replace": "    case StartupCode::DE20: return \"D-E19\";",
+      "expect": "J\\-54: D\\-E20's text",
+      "what": "D-E20 prints as D-E19 (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: D-E20 prints*"
+    },
+    {
+      "id": "hf-de20-no-names",
+      "file": "engine/kernel/src/Registry.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "\"' declares a hook round limit of 0 (at least 1)\",\n                       {s.name});",
+      "replace": "\"' declares a hook round limit of 0 (at least 1)\",\n                       {});",
+      "expect": "J\\-54: D\\-E20 does not name the schedule",
+      "what": "D-E20 does not name the schedule (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: D-E20 prints*"
+    },
+    {
+      "id": "hf-limit-break-hook-twice",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "replace": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "expect": "J\\-54: the limit's Err called the break hook 2 times",
+      "what": "the limit's Err calls the break hook twice (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at a schedule's own limit*"
+    },
+    {
+      "id": "hf-rounds-follow-trim",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "        if (plan->steps[position].kind == StepKind::SyncPoint) lastSync = position;",
+      "replace": "        if (plan->steps[position].kind == StepKind::SyncPoint &&\n            (lastSync == plan->steps.size() || plan->steps[lastSync + 1].kind != StepKind::EventTrim)) lastSync = position;",
+      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)",
+      "what": "the rounds follow the sync point before the event trim (declared: 輪跟著清舊事件那一步走) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: an event trim at an earlier sync point*",
+      "ran_as": "ck-decl-rounds-follow-trim",
+      "note": "宣告判定 2「輪跟著清舊事件那一步走」"
+    },
+    {
+      "id": "hf-limit-not-interrupted",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "replace": "                        guard.Disarm();\n                        world.DiscardDeferred();\n                        if (handler_) handler_(error);\n                        world.state_ = WorldState::Ready;\n                        return Engine::Base::Err(std::move(error));\n                    }\n                    ++round;",
+      "expect": "rig\\->world\\(\\)\\.State\\(\\)\\ ==\\ WorldState::Interrupted",
+      "what": "at the limit the World is not interrupted (declared: 不中斷) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: at the limit*",
+      "ran_as": "ck-decl-limit-not-interrupted",
+      "note": "宣告判定 2「不中斷」"
+    },
+    {
+      "id": "hf-round-count-kept",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "                std::uint32_t round = 0;\n",
+      "replace": "                static std::uint32_t kept = 0;\n                std::uint32_t& round = kept;\n",
+      "expect": "static_cast<bool>\\(kernelRunResult\\)",
+      "what": "the round count is not reset per Run (declared: 輪數不歸零) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: the rounds are counted from 1*",
+      "ran_as": "ck-decl-round-count-kept",
+      "note": "宣告判定 2「輪數不歸零」"
+    },
+    {
+      "id": "hf-trim-before-rounds",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "            if (position == lastSync) {\n",
+      "replace": "            if (position == lastSync) {\n                if (position + 1 < plan->steps.size() && plan->steps[position + 1].kind == StepKind::EventTrim) world.TrimEvents(domain);\n",
+      "expect": "J\\-54:\\ the\\ event\\ trim\\ ran\\ after\\ an\\ Err\\ in\\ a\\ round",
+      "what": "the event trim runs before the rounds (declared: 清空排到清舊事件之後) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: an Err in a round*",
+      "ran_as": "ck-decl-rounds-after-trim",
+      "note": "宣告判定 2「清空排到清舊事件之後」"
+    },
+    {
+      "id": "hf-round-skips-despawn",
+      "file": "engine/kernel/src/World.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);",
+      "replace": "            if (r.kind == RecordKind::Despawn && !trackRoundRecorders_) despawns.push_back(r.entity);",
+      "expect": "JoinLog\\(\\)\\ ==\\ \"removed:3\\ removed:4\"",
+      "what": "a round applies no despawn (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a round is a whole application*",
+      "ran_as": "ck-decl-round-skips-despawn",
+      "note": "宣告判定 2「輪的套用另寫一份只處理生成與插入」"
+    },
+    {
+      "id": "hf-round-skips-remove",
+      "file": "engine/kernel/src/World.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);",
+      "replace": "            if (r.kind == RecordKind::Remove && !trackRoundRecorders_) removes.emplace_back(r.entity, r.id);",
+      "expect": "JoinLog\\(\\)\\ ==\\ \"removed:3\\ removed:4\"",
+      "what": "a round applies no remove (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a round is a whole application*",
+      "ran_as": "ck-decl-round-skips-remove",
+      "note": "同上"
+    },
+    {
+      "id": "hf-round-skips-initial-values",
+      "file": "engine/kernel/src/World.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "        if (!data_->initialValues.empty()) {",
+      "replace": "        if (!data_->initialValues.empty() && !trackRoundRecorders_) {",
+      "expect": "rig\\->world\\(\\)\\.Get<Filled>\\(1\\)\\ !=\\ nullptr",
+      "what": "a round fills no initial value (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a round is a whole application*",
+      "ran_as": "ck-decl-round-skips-initial-values",
+      "note": "同上"
+    },
+    {
+      "id": "hf-round-skips-z5",
+      "file": "engine/kernel/src/World.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "            if (despawn.kind != RecordKind::Despawn || despawn.emitterZone != Zone::B) continue;",
+      "replace": "            if (despawn.kind != RecordKind::Despawn || despawn.emitterZone != Zone::B || trackRoundRecorders_) continue;",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)",
+      "what": "a round does no Z5 recheck (declared: 輪的套用另寫一份只處理生成與插入) (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a round is a whole application*",
+      "ran_as": "ck-decl-round-skips-z5",
+      "note": "同上"
+    },
+    {
+      "id": "hf-round-skips-onremove",
+      "file": "engine/kernel/src/World.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;",
+      "replace": "                if (trackRoundRecorders_) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;",
+      "expect": "JoinLog\\(\\)\\ ==\\ \"removed:3\\ removed:4\"",
+      "what": "a round's despawn runs no OnRemove (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: a round is a whole application*",
+      "ran_as": "ck-round-skips-onremove-despawn",
+      "note": "同上"
+    },
+    {
+      "id": "hf-plan-limit-not-carried",
+      "file": "engine/kernel/src/Scheduler.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "        plan.hookRoundLimit = s_.hookRoundLimit;\n",
+      "replace": "",
+      "expect": "planOf\\(t5,\\ \"Tick\"\\)\\ !=\\ planOf\\(none,\\ \"Tick\"\\)",
+      "what": "the Scheduler does not carry the schedule's limit into the Plan (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: the schedule's limit is in*",
+      "ran_as": "ck-plan-limit-not-carried",
+      "note": "宣告沒列：Scheduler 沒把指定值帶進 Plan"
+    },
+    {
+      "id": "hf-default-limit-nine",
+      "file": "engine/kernel/include/engine/kernel/Registry.hpp",
+      "target": "gyo_kernel_tests",
+      "find": "    std::uint32_t hookRoundLimit = 8;",
+      "replace": "    std::uint32_t hookRoundLimit = 9;",
+      "expect": "J\\-54:\\ a\\ chain\\ of\\ 9\\ rounds\\ passed\\ the\\ default\\ limit",
+      "what": "the default limit is 9 (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: the default limit*",
+      "ran_as": "ck-default-limit-nine",
+      "note": "宣告沒列：預設值本身（8）"
+    },
+    {
+      "id": "hf-limit-check-before-empty",
+      "file": "engine/kernel/src/Executor.cpp",
+      "target": "gyo_kernel_tests",
+      "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {\n                    if (round == limit) {",
+      "replace": "                while (round == limit || !world.HookQueueOf(scheduleName).records.empty()) {\n                    if (round == limit) {",
+      "expect": "static_cast<bool>\\(kernelRunResult\\)",
+      "what": "the limit is an Err even when round N emptied the queue (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "cases": "J-54: the default limit*",
+      "ran_as": "ck-limit-check-before-empty",
+      "note": "宣告沒列：第 N 輪清空了仍然回 Err"
+    },
+    {
+      "id": "we-j50-settings-writable",
+      "what": "J-50 (W-6b): KernelSettings writable after the first Run (added after the adversarial check of the mutant list, v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!hasRun_ || id != data_->kernelSettings);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-50:*",
+      "expect": "clean\\->world\\(\\)\\.SetResource\\(KernelSettings\\{true,\\ false\\}\\)",
+      "ran_as": "we-j50-settings-writable",
+      "note": "master 的 we-*，沒搬；J-54 的「第一次 Run 之後改 KernelSettings」靠它守的斷言"
     }
   ]
 }
