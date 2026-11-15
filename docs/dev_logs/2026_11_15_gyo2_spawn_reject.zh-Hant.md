@@ -1,6 +1,6 @@
 # 同步點丟掉不能生成的那一筆（`v8-arch-gyo2-spawn-reject`）
 
-日期：2026-11-15。分支 `claude/gyo2-spawn-reject-da0c9b`（從 `gyo2` `bd11575a` 開出）。PR：（開好後補）（目標 `gyo2`）。
+日期：2026-11-15。分支 `claude/gyo2-spawn-reject-da0c9b`（從 `gyo2` `bd11575a` 開出）。PR [#235](https://github.com/yojinn-io/GYO-Engine/pull/235)（目標 `gyo2`）。
 
 這一批由任務卡「v8-arch-gyo2-spawn-reject」做（GYO2 重建主會話開出）。事前宣告：[spawn-reject-declaration.zh-Hant.md](../architecture/target/v2/spawn-reject-declaration.zh-Hant.md)（修訂 2，使用者 2026-11-15「核准」）。
 
