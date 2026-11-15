@@ -41,6 +41,7 @@
 - [2026_11_14_gyo2_r0b3_ci.zh-Hant.md](../../../dev_logs/2026_11_14_gyo2_r0b3_ci.zh-Hant.md)：R0b-3（守衛與 CI 政策的調整），PR #225 併入。
 - [2026_11_14_gyo2_initial_value.zh-Hant.md](../../../dev_logs/2026_11_14_gyo2_initial_value.zh-Hant.md)：漏斗工具 `Registrar::InitialValue`。
 - [2026_11_14_gyo2_strict_order.zh-Hant.md](../../../dev_logs/2026_11_14_gyo2_strict_order.zh-Hant.md)：歧義的嚴格模式 `Registrar::RequireExplicitOrder`。
+- [2026_11_15_gyo2_funnel_check.zh-Hant.md](../../../dev_logs/2026_11_15_gyo2_funnel_check.zh-Hant.md)：漏斗工具的對抗檢查與區規則，PR #229 併入（標記為需要產品測試）。
 
 ## 沒有搬過來的
 

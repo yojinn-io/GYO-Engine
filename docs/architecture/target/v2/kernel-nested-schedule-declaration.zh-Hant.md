@@ -254,7 +254,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 
 **不碰**：`World::ApplySync` 套用的順序、事件的讀法、`Scheduler.cpp`、`Fingerprint.cpp`、漏斗工具、`.github/`、`build/`。`Registry.cpp` 只動第 10 項的兩條啟動檢查與第 13 項的 `ToString`。
 
-**和別的分支的先後**：PR #229 已經併入 `gyo2`（2026-11-15）。PR #233 還開著，它改 `Fingerprint.cpp` 與測試。這一批等 #233 合併後才開工。#229 給公開結構 `AccessSet` 加了一個欄位（`deferredInserts`），第 10 項要在那之上做。
+**和別的分支的先後**：PR #229 與 #233 都已經併入 `gyo2`（2026-11-15，#233 的合併是 3a06056b）。這一批從那之後的 `gyo2` 開工。#229 給公開結構 `AccessSet` 加了一個欄位（`deferredInserts`），第 10 項要在那之上做。
 
 ---
 

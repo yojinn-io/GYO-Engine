@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B docs/architecture/plans/time-threads-trace/scripts/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here.",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections.",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -1578,7 +1578,7 @@
       "id": "rs-j3-11-skip-bundle",
       "what": "J.3 #11: Spawn's bundle is not in the access set (J-15)",
       "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "TypeList<Access::Spawn, Access::DeferredWrite<C>...>, false> {};",
+      "find": "TypeList<Access::Spawn, Access::DeferredInsert<C>...>, false> {};",
       "replace": "TypeList<Access::Spawn>, false> {};",
       "target": "gyo_kernel_tests",
       "cases": "J-15:*",
@@ -1718,7 +1718,7 @@
       "id": "rs-j12-bundle-dropped",
       "what": "J-12: the bundle is not in the access set",
       "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "TypeList<Access::Spawn, Access::DeferredWrite<C>...>, false> {};",
+      "find": "TypeList<Access::Spawn, Access::DeferredInsert<C>...>, false> {};",
       "replace": "TypeList<Access::Spawn>, false> {};",
       "target": "gyo_kernel_tests",
       "cases": "J-12:*",
@@ -2458,7 +2458,7 @@
       "id": "rs-adv-hook-zone-rules-off",
       "what": "Z1 / Z2 are not applied to hooks (Fable adversarial check, 2026-11-13)",
       "file": "engine/kernel/src/Registry.cpp",
-      "find": "        CheckZoneAccess(data, subject, hook.name, hook.zone, false, hook.access, SourceText(hook.source));",
+      "find": "        CheckZoneAccess(data, subject, hook.name, hook.zone, false, zoneAccess, funnel, SourceText(hook.source));",
       "replace": "",
       "expect": "hookWritesC",
       "target": "gyo_kernel_tests",
@@ -2907,13 +2907,13 @@
     },
     {
       "id": "rs-b6-cfp-version-1",
-      "what": "B6: the C fingerprint keeps format version 1",
+      "what": "B6: the C fingerprint keeps an earlier format version (3 since the initial value declarations)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 2;",
-      "replace": "constexpr std::uint32_t kCFingerprintVersion = 1;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 3;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "CFingerprint\\(\\)\\.version == 2U"
+      "expect": "CFingerprint\\(\\)\\.version == 3U"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -2991,6 +2991,546 @@
         "-v"
       ],
       "expect": "FAIL: test_(gcc_personality|assembler_section)"
+    },
+    {
+      "id": "rs-iv-fc1-round-unsorted",
+      "what": "step 5a does not sort a round by (EntityId, ComponentId) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                std::sort(round.begin(), round.end(), byCell);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: with two requests on one entity the lower ComponentId gives the value"
+    },
+    {
+      "id": "rs-iv-fc2-fill-stamp-off",
+      "what": "a filled cell is stamped one past its sync point (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "cell.entity, stamp)) {",
+      "replace": "cell.entity, stamp + 1)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: the filled cell carries the stamp of the sync point"
+    },
+    {
+      "id": "rs-iv-fc3-step0-skipped",
+      "what": "step 5a does not run for the hook records applied at step 0 (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "if (!data_->initialValues.empty()) {",
+      "replace": "if (!data_->initialValues.empty() && pending.empty()) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a request recorded by a hook is filled at the next sync point"
+    },
+    {
+      "id": "rs-iv-fc4-request-role-unchecked",
+      "what": "a resource is accepted as a request (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "if (request == nullptr || request->role != TypeRole::Component) {",
+      "replace": "if (request == nullptr) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a resource is neither a request nor a component with an initial value"
+    },
+    {
+      "id": "rs-iv-fc5-target-role-unchecked",
+      "what": "a resource is accepted as the component of a declaration (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "if (target == nullptr || target->role != TypeRole::Component) {",
+      "replace": "if (target == nullptr) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a resource is neither a request nor a component with an initial value"
+    },
+    {
+      "id": "rs-iv-fc6-append-round-not-next",
+      "what": "the cells of a round, not the ones it filled, are added to the OnAdd list (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "added.insert(added.end(), next.begin(), next.end());",
+      "replace": "added.insert(added.end(), round.begin(), round.end());",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (a component the entity already has is left as it is|OnAdd runs once for the request and once for every link of a chain)"
+    },
+    {
+      "id": "rs-iv-fc7-repeat-by-request-only",
+      "what": "two declarations with one request count as the same declaration (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "return other.targetId == target->id && other.requestId == request->id;",
+      "replace": "return other.requestId == request->id;",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: one request gives the first value of two components"
+    },
+    {
+      "id": "rs-iv-fc8-first-rule-only",
+      "what": "a request applies only its first declaration (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "for (; rule != rules.end() && rule->requestId == cell.component; ++rule) {",
+      "replace": "for (; rule != rules.end() && rule->requestId == cell.component; rule = rules.end()) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: one request gives the first value of two components"
+    },
+    {
+      "id": "rs-iv-fc9-owner-of-either",
+      "what": "the owner of the request may declare too (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "if (target->owner != record.owner) {",
+      "replace": "if (target->owner != record.owner && request->owner != record.owner) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "only the owner of a component declares its initial value"
+    },
+    {
+      "id": "rs-iv-ff1-registry-section-dropped",
+      "what": "the Registry fingerprint leaves out the declarations (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.U32(data.initialValues.size());\n    for (const InitialValueRecord& rule : data.initialValues) {\n        out.U32(rule.targetId);\n        out.U32(rule.requestId);\n    }\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+(initial value: a declaration changes the Registry fingerprint|J-18: ids follow|J-20: the Plan is built)"
+    },
+    {
+      "id": "rs-iv-ff2-registry-request-not-hashed",
+      "what": "the Registry fingerprint leaves out the request of a declaration (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        out.U32(rule.targetId);\n        out.U32(rule.requestId);\n    }\n    out.U32(data.plans.size());",
+      "replace": "        out.U32(rule.targetId);\n    }\n    out.U32(data.plans.size());",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: a declaration changes the Registry fingerprint"
+    },
+    {
+      "id": "rs-iv-ff3-C-section-dropped",
+      "what": "the C fingerprint hashes only the number of zone C declarations (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    for (const InitialValueRecord& rule : data.initialValues) {\n        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.targetId);\n        out.U32(rule.requestId);\n    }\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: a declaration changes the Registry fingerprint and, for zone C, the C fingerprint"
+    },
+    {
+      "id": "rs-iv-ff4-C-takes-zone-B",
+      "what": "the C fingerprint takes declarations of zone B components too (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: a declaration changes the Registry fingerprint and, for zone C, the C fingerprint"
+    },
+    {
+      "id": "rs-iv-fb5-sort-tiebreak-dropped",
+      "what": "Finish orders declarations by request only (fingerprints follow declaration order) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "return a.requestId != b.requestId ? a.requestId < b.requestId : a.targetId < b.targetId;",
+      "replace": "return a.requestId < b.requestId;",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: (a declaration changes the Registry fingerprint|the fingerprints tell which component|golden fingerprints of a Registry with two declarations)"
+    },
+    {
+      "id": "rs-iv-fb6-C-target-not-hashed",
+      "what": "the C fingerprint leaves out the component of a declaration (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.targetId);\n        out.U32(rule.requestId);\n",
+      "replace": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.requestId);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: (a declaration changes the Registry fingerprint|the fingerprints tell which component|golden fingerprints of a Registry with two declarations)"
+    },
+    {
+      "id": "rs-iv-fb7-registry-target-not-hashed",
+      "what": "the Registry fingerprint leaves out the component of a declaration (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        out.U32(rule.targetId);\n        out.U32(rule.requestId);\n    }\n    out.U32(data.plans.size());",
+      "replace": "        out.U32(rule.requestId);\n    }\n    out.U32(data.plans.size());",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: (a declaration changes the Registry fingerprint|the fingerprints tell which component|golden fingerprints of a Registry with two declarations)"
+    },
+    {
+      "id": "rs-iv-fb8-C-request-not-hashed",
+      "what": "the C fingerprint leaves out the request of a declaration (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.targetId);\n        out.U32(rule.requestId);\n",
+      "replace": "        if (data.components[rule.targetId].zone != Zone::C) continue;\n        out.U32(rule.targetId);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: (a declaration changes the Registry fingerprint|the fingerprints tell which component|golden fingerprints of a Registry with two declarations)"
+    },
+    {
+      "id": "rs-iv-fb9-C-filter-by-request-zone",
+      "what": "the C fingerprint picks declarations by the request's zone (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        return data.components[rule.targetId].zone == Zone::C;\n    }));\n    for (const InitialValueRecord& rule : data.initialValues) {\n        if (data.components[rule.targetId].zone != Zone::C) continue;",
+      "replace": "        return data.components[rule.requestId].zone == Zone::C;\n    }));\n    for (const InitialValueRecord& rule : data.initialValues) {\n        if (data.components[rule.requestId].zone != Zone::C) continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: (a declaration changes the Registry fingerprint|the fingerprints tell which component|golden fingerprints of a Registry with two declarations)"
+    },
+    {
+      "id": "rs-iv-fb11-C-count-dropped",
+      "what": "the C fingerprint does not count its declarations (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.U32(count(data.initialValues, [&data](const InitialValueRecord& rule) {\n        return data.components[rule.targetId].zone == Zone::C;\n    }));\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*,J-18:*,J-20:*",
+      "expect": "TEST CASE:\\s+initial value: (a declaration changes the Registry fingerprint|the fingerprints tell which component|golden fingerprints of a Registry with two declarations)"
+    },
+    {
+      "id": "rs-iv-fn1-funnel-empty",
+      "what": "a System or hook fills nothing through its requests (zone rules) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());",
+      "replace": "    std::vector<ComponentId> pending;",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (zone C State data does not take its value from a role=Input request|role=Input data does not take its value|in a World with rollback)"
+    },
+    {
+      "id": "rs-iv-fn2-funnel-not-transitive",
+      "what": "a chain of declarations stops at its first link (zone rules) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            pending.push_back(rule.targetId);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a chain of declarations carries the write to its last link"
+    },
+    {
+      "id": "rs-iv-fn3-system-zone-without-funnel",
+      "what": "Z1, Z2, Z3 of a System ignore what its requests fill (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "CheckZoneAccess(data, subject, name, zone, system.options.ingress, zoneAccess, funnel, source);",
+      "replace": "CheckZoneAccess(data, subject, name, zone, system.options.ingress, access, funnel, source);",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (zone C State data does not take its value from a role=Input request|role=Input data does not take its value|a chain of declarations|a zone C System's request does not fill zone B data)"
+    },
+    {
+      "id": "rs-iv-fn4-system-Z6-without-funnel",
+      "what": "Z6 of a System ignores what its requests fill (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                for (const AccessKey& key : WrittenKeys(zoneAccess)) {\n                    if (key.kind == AccessKind::Event) continue;",
+      "replace": "                for (const AccessKey& key : WrittenKeys(access)) {\n                    if (key.kind == AccessKind::Event) continue;",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (in a World with rollback|Z6 is checked per schedule|the error names the System)"
+    },
+    {
+      "id": "rs-iv-fn5-hook-zone-without-funnel",
+      "what": "Z1, Z2, Z3 of a hook ignore what its requests fill (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "CheckZoneAccess(data, subject, hook.name, hook.zone, false, zoneAccess, funnel, SourceText(hook.source));",
+      "replace": "CheckZoneAccess(data, subject, hook.name, hook.zone, false, hook.access, funnel, SourceText(hook.source));",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a zone C hook's request does not fill zone B data"
+    },
+    {
+      "id": "rs-iv-fn6-hook-Z6-without-funnel",
+      "what": "Z6 of a hook ignores what its requests fill (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            for (const AccessKey& key : WrittenKeys(zoneAccess)) {\n                if (key.kind != AccessKind::Event && RollbackOf(data, key) != Rollback::Yes) {",
+      "replace": "            for (const AccessKey& key : WrittenKeys(hook.access)) {\n                if (key.kind != AccessKind::Event && RollbackOf(data, key) != Rollback::Yes) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a zone C hook meets the hook's Z6 through the funnel too"
+    },
+    {
+      "id": "rs-iv-fn7-zone-access-unchanged",
+      "what": "the zone rules' access set does not take the filled components (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    for (const auto& entry : funnel) out.deferredWrites.push_back(entry.first);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (zone C State data does not take its value from a role=Input request|role=Input data does not take its value|in a World with rollback)"
+    },
+    {
+      "id": "rs-iv-fn8-funnel-note-empty",
+      "what": "an error through the funnel does not name the request (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (found == funnel.end()) return {};",
+      "replace": "    if (found != funnel.end() || true) return {};",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (the error names the System|a chain of declarations)"
+    },
+    {
+      "id": "rs-iv-fn9-funnel-counts-as-writer",
+      "what": "filled components count as writers (D-E2) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);\n        const AccessSet zoneAccess = ZoneAccess(access, funnel);\n        CheckZoneAccess(data, subject, name, zone, system.options.ingress, zoneAccess, funnel, source);",
+      "replace": "        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);\n        const AccessSet zoneAccess = ZoneAccess(access, funnel);\n        const_cast<SystemRecord&>(system).access = zoneAccess;\n        CheckZoneAccess(data, subject, name, zone, system.options.ingress, zoneAccess, funnel, source);",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: two Systems request, one System writes, and the component stays Exclusive"
+    },
+    {
+      "id": "rs-iv-registry-version-1",
+      "what": "the Registry fingerprint keeps format version 1 (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kRegistryFingerprintVersion = 2;",
+      "replace": "constexpr std::uint32_t kRegistryFingerprintVersion = 1;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18:*",
+      "expect": "RegistryFingerprint\\(\\)\\.version == 2U"
+    },
+    {
+      "id": "rs-iv-fx4-note-for-any-kind",
+      "what": "a resource with the id of a filled component gets a funnel note (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    if (key.kind != AccessKind::Component) return {};\n    const auto found = funnel.find(key.id);",
+      "replace": "    const auto found = funnel.find(key.id);",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a resource with the id of a filled component gets no funnel note"
+    },
+    {
+      "id": "rs-iv-fx5-note-dropped-Z1-site",
+      "what": "a Z1 / Z7 error through the funnel does not name the request (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "\"'\" +\n                           FunnelNote(data, funnel, key) + \", which is \" +",
+      "replace": "\"'\" +\n                           std::string() + \", which is \" +",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: every zone error of a filled component says which request fills it"
+    },
+    {
+      "id": "rs-iv-fx6-note-dropped-Z3-site",
+      "what": "a Z3 error through the funnel does not name the request (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "\"'\" +\n                               FunnelNote(data, funnel, key) + \"; only the Host and ingress Systems write boundary input\",",
+      "replace": "\"'\" +\n                               std::string() + \"; only the Host and ingress Systems write boundary input\",",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a chain of declarations carries the write to its last link"
+    },
+    {
+      "id": "rs-iv-fx7-note-dropped-Z2-site",
+      "what": "a Z2 error through the funnel does not name the request (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "NameOf(data, key) + \"'\" + FunnelNote(data, funnel, key) + (ingress ? \" whose role is not Input\" : \"\"),",
+      "replace": "NameOf(data, key) + \"'\" + (ingress ? \" whose role is not Input\" : \"\"),",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: every zone error of a filled component says which request fills it"
+    },
+    {
+      "id": "rs-iv-fx8-note-dropped-system-Z6-site",
+      "what": "a System's Z6 error through the funnel does not name the request (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "NameOf(data, key) + \"'\" + FunnelNote(data, funnel, key) + \", which does not roll back\",",
+      "replace": "NameOf(data, key) + \"'\" + \", which does not roll back\",",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: the error names the System that writes the request"
+    },
+    {
+      "id": "rs-iv-fx9-note-dropped-hook-Z6-site",
+      "what": "a hook's Z6 error through the funnel does not name the request (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "subject + \" is zone C and writes '\" + NameOf(data, key) + \"'\" + FunnelNote(data, funnel, key) +\n",
+      "replace": "subject + \" is zone C and writes '\" + NameOf(data, key) + \"'\" +\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: every zone error of a filled component says which request fills it"
+    },
+    {
+      "id": "rs-iv-fx10-hook-funnel-counts-as-writer",
+      "what": "components a hook's requests fill count as its writes (D-E2) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        const AccessSet zoneAccess = ZoneAccess(hook.access, funnel);\n",
+      "replace": "        const AccessSet zoneAccess = ZoneAccess(hook.access, funnel);\n        const_cast<HookRecord&>(hook).access = zoneAccess;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a hook that records the request is not a writer of the Exclusive component"
+    },
+    {
+      "id": "rs-iv-fx11-visit-lowest-first",
+      "what": "the walk takes the lowest request first (the request an error names changes) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        const ComponentId request = pending.back();\n        pending.pop_back();",
+      "replace": "        const ComponentId request = pending.front();\n        pending.erase(pending.begin());",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: with two written requests of one component the error names one of them, the same every time"
+    },
+    {
+      "id": "rs-iv-fx12-declaration-Z1-dropped",
+      "what": "the declaration's Z1 (zone C component from zone C request) is dropped (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (targetInfo.zone == Zone::C && requestInfo.zone != Zone::C) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "a zone C component takes its value from zone C data only"
+    },
+    {
+      "id": "rs-iv-fx13-declaration-Z1-exempts-input",
+      "what": "the declaration's Z1 exempts role=Input components (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (targetInfo.zone == Zone::C && requestInfo.zone != Zone::C) {",
+      "replace": "        if (targetInfo.zone == Zone::C && targetInfo.role != Role::Input && requestInfo.zone != Zone::C) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a zone C role=Input component does not take its value from zone B data either"
+    },
+    {
+      "id": "rs-iv-fx14-funnel-zone-C-systems-only",
+      "what": "only zone C Systems write through the funnel (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);\n",
+      "replace": "        const std::map<ComponentId, ComponentId> funnel = zone == Zone::C ? FunnelWrites(data, access) : std::map<ComponentId, ComponentId>{};\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: zone C State data does not take its value from a role=Input request"
+    },
+    {
+      "id": "rs-iv-fx15-funnel-zone-B-systems-only",
+      "what": "only zone B Systems write through the funnel (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        const std::map<ComponentId, ComponentId> funnel = FunnelWrites(data, access);\n",
+      "replace": "        const std::map<ComponentId, ComponentId> funnel = zone != Zone::C ? FunnelWrites(data, access) : std::map<ComponentId, ComponentId>{};\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (role=Input data does not take its value|in a World with rollback|a zone C System's request does not fill zone B data)"
+    },
+    {
+      "id": "rs-iv-fx16-one-declaration-per-request",
+      "what": "a request fills only the component of its first declaration (zone rules) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            reached.emplace(rule.targetId, request);\n            pending.push_back(rule.targetId);\n",
+      "replace": "            reached.emplace(rule.targetId, request);\n            pending.push_back(rule.targetId);\n            break;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: every component a request fills is checked, not only the first"
+    },
+    {
+      "id": "rs-iv-fx17-ingress-input-exemption-not-through-funnel",
+      "what": "the ingress role=Input exemption does not hold through the funnel (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (ingress && IsInput(data, key)) continue;  // Z3",
+      "replace": "        if (ingress && IsInput(data, key) && FunnelNote(data, funnel, key).empty()) continue;  // Z3",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: an ingress System fills role=Input data from its role=Input request"
+    },
+    {
+      "id": "rs-iv-fx18-system-Z6-derived-not-through-funnel",
+      "what": "a System's Z6 refuses Derived through the funnel (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "                    if (rollback != Rollback::Yes && rollback != Rollback::Derived) {",
+      "replace": "                    if (rollback != Rollback::Yes && (rollback != Rollback::Derived || !FunnelNote(data, funnel, key).empty())) {",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (in a World with rollback|a zone C hook meets the hook's Z6 through the funnel too)"
+    },
+    {
+      "id": "rs-iv-fd1-seed-all-deferred-writes",
+      "what": "removes of a request count as funnel writes (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n",
+      "replace": "    std::vector<ComponentId> pending(access.deferredWrites.begin(), access.deferredWrites.end());\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a System or hook that only removes a request does not write the component"
+    },
+    {
+      "id": "rs-iv-fd2-seed-writes-in-place",
+      "what": "writes of a request in place count as funnel writes (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n",
+      "replace": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n    for (const AccessKey& key : access.writes) {\n        if (key.kind == AccessKind::Component) pending.push_back(key.id);\n    }\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a System that writes request cells in place does not write the component"
+    },
+    {
+      "id": "rs-iv-fd3-seed-reads",
+      "what": "reads and membership filters of a request count as funnel writes (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n",
+      "replace": "    std::vector<ComponentId> pending(access.deferredInserts.begin(), access.deferredInserts.end());\n    for (const AccessKey& key : access.reads) {\n        if (key.kind == AccessKind::Component) pending.push_back(key.id);\n    }\n    for (ComponentId id : access.membershipReads) pending.push_back(id);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a System that only reads or filters by a request does not write the component it fills"
+    },
+    {
+      "id": "rs-iv-fd4-resolver-insert-not-recorded",
+      "what": "inserts and bundle components are not recorded as deferredInserts (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            access.deferredInserts.push_back(*id);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: (zone C State data does not take its value from a role=Input request|role=Input data does not take its value|in a World with rollback)"
+    },
+    {
+      "id": "rs-iv-fd5-commandsfor-inserts-as-writes",
+      "what": "CommandsFor inserts contribute DeferredWrite, not DeferredInsert (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "TypeList<Access::DeferredInsert<I>..., Access::DeferredWrite<R>...>, false> {};",
+      "replace": "TypeList<Access::DeferredWrite<I>..., Access::DeferredWrite<R>...>, false> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*,initial value:*",
+      "expect": "TEST CASE:\\s+(J-12: every parameter type's Contribution|initial value: zone C State data does not take its value from a role=Input request)"
+    },
+    {
+      "id": "rs-iv-fd6-spawn-bundle-as-writes",
+      "what": "Spawn bundle components contribute DeferredWrite, not DeferredInsert (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "TypeList<Access::Spawn, Access::DeferredInsert<C>...>, false> {};",
+      "replace": "TypeList<Access::Spawn, Access::DeferredWrite<C>...>, false> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*,initial value:*",
+      "expect": "TEST CASE:\\s+(J-12: every parameter type's Contribution|initial value: role=Input data does not take its value)"
+    },
+    {
+      "id": "rs-iv-fd7-spawnwithid-bundle-as-writes",
+      "what": "SpawnWithId bundle components contribute DeferredWrite, not DeferredInsert (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "TypeList<Access::DeferredInsert<C>...>, false> {};",
+      "replace": "TypeList<Access::DeferredWrite<C>...>, false> {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-12:*",
+      "expect": "TEST CASE:\\s+J-12: every parameter type's Contribution"
+    },
+    {
+      "id": "rs-iv-fd8-written-not-excluded",
+      "what": "a component the System writes itself is listed as a funnel write (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    for (const AccessKey& key : WrittenKeys(access)) {\n        if (key.kind == AccessKind::Component) reached.erase(key.id);\n    }\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a component the System writes in place is its own write"
+    },
+    {
+      "id": "rs-iv-fd9-written-block-the-walk",
+      "what": "a component the System writes itself stops the walk of a chain (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    std::set<ComponentId> seen(pending.begin(), pending.end());\n",
+      "replace": "    std::set<ComponentId> seen(pending.begin(), pending.end());\n    for (const AccessKey& key : WrittenKeys(access)) {\n        if (key.kind == AccessKind::Component) seen.insert(key.id);\n    }\n",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: a chain goes on through a component the System also writes in place"
+    },
+    {
+      "id": "rs-iv-fd10-inserts-not-sorted",
+      "what": "deferredInserts are not sorted (the request an error names follows the bundle order) (initial value, v8-arch-gyo2-funnel-check)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "    SortUnique(access.deferredInserts);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "initial value:*",
+      "expect": "TEST CASE:\\s+initial value: the request an error names does not depend on the order of the bundle"
     }
   ]
 }

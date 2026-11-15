@@ -14,7 +14,8 @@
 //   reads / writes         ComponentRead/Write, ResourceRead/Write, EventRead/Write, DomainTickRead
 //   membershipReads        Membership (With / Without)
 //   changeFilters          ChangeFilter (Changed / Added); also a membership read of its type
-//   deferred               DeferredWrite (insert / remove / bundle), Despawn, Spawn (spawn also writes the allotter)
+//   deferred               DeferredInsert (insert / bundle: adds cells), DeferredWrite (remove), Despawn,
+//                          Spawn (spawn also writes the allotter)
 //   setReads               SetReadOf (expanded at finish to the named set's components)
 //   diagnostics            Diagnostics (effect Diagnostics; no access, no conflict; spec S-8 exception)
 //   local                  LocalState
@@ -44,6 +45,8 @@ public:
     virtual void Membership(TypeKey component) = 0;
     virtual void ChangeFilter(TypeKey component) = 0;
     virtual void DeferredWrite(TypeKey component) = 0;
+    // A deferred write that can add a cell (an insert or a bundle component): also a DeferredWrite.
+    virtual void DeferredInsert(TypeKey component) = 0;
     virtual void Despawn() = 0;
     virtual void Spawn() = 0;
     virtual void UntypedCommands() = 0;
@@ -104,6 +107,10 @@ struct ChangeFilter {
 template <class T>
 struct DeferredWrite {
     static void Resolve(Detail::AccessResolver& resolver) { resolver.DeferredWrite(KeyOf<T>()); }
+};
+template <class T>
+struct DeferredInsert {
+    static void Resolve(Detail::AccessResolver& resolver) { resolver.DeferredInsert(KeyOf<T>()); }
 };
 struct Despawn {
     static void Resolve(Detail::AccessResolver& resolver) { resolver.Despawn(); }

@@ -309,14 +309,21 @@ public:
     // does nothing; the Request cell stays on the entity. A Target that is
     // itself the Request of another declaration is filled at the same sync
     // point too. Several Requests may name one Target: on an entity that gets
-    // more than one of them at one sync point, the Request with the lower
-    // ComponentId gives the value.
+    // more than one of them in one round, the Request with the lower
+    // ComponentId gives the value; a Request that appears through a chain is
+    // looked at in the next round, after the direct ones.
+    //
+    // Zone rules: a System or hook that inserts or spawns Request writes Target,
+    // through chains of declarations, for Z1, Z2, Z3 and Z6 (not for the writer
+    // count), so the funnel allows what a direct write allows. Writing Request
+    // in place or removing it fills nothing and does not count. A zone C Target takes its
+    // value from a zone C Request only (Z1).
     template <class Target, auto Fn>
     void InitialValue(std::source_location source = std::source_location::current()) {
-        using Shape = Detail::InitialValueRequest<Target, decltype(Fn)>;
-        static_assert(Shape::valid, "InitialValue<Target, Fn>: Fn is a function `Target Fn(const Request&)`");
-        if constexpr (Shape::valid) {
-            using Request = typename Shape::Type;
+        using Signature = Detail::InitialValueRequest<Target, decltype(Fn)>;
+        static_assert(Signature::valid, "InitialValue<Target, Fn>: Fn is a function `Target Fn(const Request&)`");
+        if constexpr (Signature::valid) {
+            using Request = typename Signature::Type;
             static_assert(!std::is_same_v<Target, Request>, "a component is not its own initial value request");
             RegisterInitialValue(KeyOf<Target>(), KeyOf<Request>(), &Detail::PutInitialValue<Target, Request, Fn>, source);
         }
@@ -411,6 +418,10 @@ struct AccessSet {
     std::vector<ComponentId> membershipReads;
     // CommandsFor inserts and removes, Spawn / SpawnWithId bundles.
     std::vector<ComponentId> deferredWrites;
+    // The part of deferredWrites that can add a cell: CommandsFor inserts and
+    // bundle components, not removes. Only these make a sync point fill a
+    // component (Registrar::InitialValue); not hashed in the fingerprints.
+    std::vector<ComponentId> deferredInserts;
     std::vector<SetId> setReads;
     // Component and resource ids of the extract source Registry.
     std::vector<AccessKey> extractReads;
