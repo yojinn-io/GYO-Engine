@@ -359,9 +359,11 @@ private:
     // The current sync window's deferred records and the hook queue (records
     // of hooks, applied first at the next sync point: spec F.2 step 0).
     std::vector<Detail::Record> window_;
-    // One hook queue per schedule: a hook's records are applied at step 0 of the next
-    // sync point of the schedule that ran it, so another schedule run in between does
-    // not change a (c) result (architect's recommendation (a), pending the user).
+    // One hook queue per schedule: a hook's records are applied at step 0 of the
+    // next sync point of the Run that recorded them; those left at the last sync
+    // point are applied by the hook rounds right after it (spec F-12), so the
+    // queue is empty when a Run ends and when one starts. Per schedule, so a Run
+    // never touches another schedule's queue (the K0 nesting relies on it).
     struct HookQueue {
         std::string schedule;
         std::vector<Detail::Record> records;
@@ -369,6 +371,12 @@ private:
     };
     std::vector<HookQueue> hookQueues_;
     [[nodiscard]] HookQueue& HookQueueOf(std::string_view schedule);
+    // Spec F-12: the product's default hook round limit (KernelSettings, cached
+    // when the first Run starts), and the hooks that recorded during the current
+    // hook round (HookData index, call order; for the limit's message).
+    std::uint32_t hookRoundLimit_ = 8;
+    bool trackRoundRecorders_ = false;
+    std::vector<std::size_t> roundRecorders_;
 
     ChangeStamp stamp_ = 0;
     std::uint64_t syncEpoch_ = 0;

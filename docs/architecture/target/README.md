@@ -108,7 +108,7 @@
 | [DI-KS 6](kernel.zh-Hant.md#di-ks-6) | 獨占寫入是啟動檢查；進 digest 的欄必須獨占 | 新（AGENTS §3 狀態權威在 Kernel 的落點） |
 | [DI-KS 7](kernel.zh-Hant.md#di-ks-7) | (c) 預設 Serial；Parallel 要逐位元守衛 | 新 |
 | [DI-KS 8](kernel.zh-Hant.md#di-ks-8) | 區規則 Z1～Z8 是啟動檢查 | 相容：legacy determinism DI 1、DI 4 |
-| [DI-KS 9](kernel.zh-Hant.md#di-ks-9) | 結構變更延後，在同步點依固定順序套用 | 相容（措辭更新）：entity-store DI 4；entity-model E-12 |
+| [DI-KS 9](kernel.zh-Hant.md#di-ks-9) | 結構變更延後，在同步點（與最後一個同步點之後的 hook 清空輪）依固定順序套用 | 相容（措辭更新）：entity-store DI 4；entity-model E-12 |
 | [DI-KS 10](kernel.zh-Hant.md#di-ks-10) | 事件無游標、不跨 clock domain | 新 |
 | [DI-KS 11](kernel.zh-Hant.md#di-ks-11) | hook 只有 OnAdd 與 OnRemove | 新 |
 | [DI-KS 12](kernel.zh-Hant.md#di-ks-12) | 回滾所需的狀態全在 World，固定步可重入 | 新 |

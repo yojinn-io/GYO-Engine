@@ -9,7 +9,9 @@
 
 #include "engine/base/Assert.hpp"
 
+#include <algorithm>
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -106,6 +108,9 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
         const auto& settings = static_cast<const Detail::ResourceSlot<KernelSettings>&>(*world.resources_[data.kernelSettings]);
         world.verification_ = settings.value && settings.value->accessVerification;
         world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;
+        world.hookRoundLimit_ = settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;
+        // Spec F-12: a limit of 0 is the Host's misuse (a precondition).
+        GYO_ASSERT(world.hookRoundLimit_ >= 1);
         world.hasRun_ = true;
     }
     // The domain tick: advanced only by the domain's clock schedule's Run, first (spec section 0, B5).
@@ -135,10 +140,34 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
         }
     }
 
+    // Spec F-12: a Run leaves its schedule's hook queue empty (Host writes run
+    // no hook; an Err or a throw discards every queue), so the next one starts empty.
+    GYO_ASSERT(world.HookQueueOf(scheduleName).records.empty());
+    // Spec F-12: the hook rounds follow the last sync point of the Plan.
+    std::uint32_t lastSync = static_cast<std::uint32_t>(plan->steps.size());
+    for (std::uint32_t position = 0; position < plan->steps.size(); ++position) {
+        if (plan->steps[position].kind == StepKind::SyncPoint) lastSync = position;
+    }
+
     world.state_ = WorldState::Running;
     RunGuard guard(world, world.state_, &World::DiscardDeferred);
     std::uint64_t structure = world.MembershipEpoch();
     std::string previousStep;
+
+    // W-1 with verification on, then fresh snapshots (after a sync point and after the hook rounds).
+    auto checkStructure = [&](const std::string& text) -> std::optional<KernelError> {
+        if (!world.verification_) return std::nullopt;
+        if (std::optional<std::string> problem = world.StructureProblem()) {
+            KernelError error(KernelErrorCode::StructureBroken, *problem);
+            error.rule = "W-1";
+            error.world = world.name_;
+            error.Wrap("Executor: " + text);
+            if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
+            return error;
+        }
+        world.TakeSnapshots();
+        return std::nullopt;
+    };
 
     for (std::uint32_t position = 0; position < plan->steps.size(); ++position) {
         const Step& step = plan->steps[position];
@@ -237,17 +266,62 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
                 guard.Disarm();
                 return Fail(std::move(error));
             }
-            if (world.verification_) {
-                if (std::optional<std::string> problem = world.StructureProblem()) {
-                    KernelError error(KernelErrorCode::StructureBroken, *problem);
-                    error.rule = "W-1";
-                    error.world = world.name_;
-                    error.Wrap("Executor: " + StepText(scheduleName, position, step.name));
-                    if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
-                    guard.Disarm();
-                    return Fail(std::move(error));
+            if (std::optional<KernelError> error = checkStructure(StepText(scheduleName, position, step.name))) {
+                guard.Disarm();
+                return Fail(std::move(*error));
+            }
+            if (position == lastSync) {
+                // Spec F-12: the hook rounds. Each applies the whole hook queue like a sync
+                // point's step 0 (its own stamp, syncEpoch + 1); hooks it triggers record
+                // into the queue for the next round. Not a Plan step.
+                const std::uint32_t limit = record->options.hookRoundLimit.value_or(world.hookRoundLimit_);
+                std::uint32_t round = 0;
+                auto roundText = [&](std::uint32_t r) {
+                    return "Executor: hook round " + std::to_string(r) + " at sync point step " + std::to_string(position) +
+                           " of schedule '" + scheduleName + "'";
+                };
+                while (!world.HookQueueOf(scheduleName).records.empty()) {
+                    if (round == limit) {
+                        std::vector<std::size_t> recorders = world.roundRecorders_;
+                        std::sort(recorders.begin(), recorders.end());
+                        recorders.erase(std::unique(recorders.begin(), recorders.end()), recorders.end());
+                        std::string names;
+                        for (std::size_t hook : recorders) names += (names.empty() ? "'" : ", '") + data.hooks[hook].name + "'";
+                        KernelError error(KernelErrorCode::HookRoundLimit,
+                                          "the hook rounds of schedule '" + scheduleName + "' did not empty its hook queue within " +
+                                              std::to_string(limit) + " rounds (the limit of the " +
+                                              (record->options.hookRoundLimit ? "schedule's declaration" : "World's KernelSettings") +
+                                              "): " + std::to_string(world.HookQueueOf(scheduleName).records.size()) +
+                                              " records remain, recorded in round " + std::to_string(round) + " by hook " + names);
+                        error.rule = "F-12";
+                        error.world = world.name_;
+                        error.Wrap(roundText(round));
+                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);
+                        guard.Disarm();
+                        return Fail(std::move(error));
+                    }
+                    ++round;
+                    GYO_ASSERT(world.window_.empty());
+                    world.roundRecorders_.clear();
+                    world.trackRoundRecorders_ = true;
+                    const ChangeStamp roundStamp = ++world.stamp_;
+                    world.state_ = WorldState::Applying;
+                    Engine::Base::Result<void, KernelError> applied = world.ApplySync(position, scheduleName, roundStamp);
+                    world.state_ = WorldState::Running;
+                    world.trackRoundRecorders_ = false;
+                    if (!applied) {
+                        KernelError error = std::move(applied).error();
+                        error.Wrap(roundText(round));
+                        guard.Disarm();
+                        return Fail(std::move(error));
+                    }
                 }
-                world.TakeSnapshots();
+                if (round > 0) {
+                    if (std::optional<KernelError> error = checkStructure(roundText(round))) {
+                        guard.Disarm();
+                        return Fail(std::move(*error));
+                    }
+                }
             }
             structure = world.MembershipEpoch();
             previousStep = StepText(scheduleName, position, step.name);
@@ -260,6 +334,8 @@ Engine::Base::Result<void, KernelError> Product::Run(std::string_view schedule) 
             break;
         }
     }
+    // Spec F-12: the hook rounds left nothing behind (and no System record is pending).
+    GYO_ASSERT(world.window_.empty() && world.HookQueueOf(scheduleName).records.empty());
     world.state_ = WorldState::Ready;
     guard.Disarm();
     return {};

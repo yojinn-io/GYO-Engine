@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections.",
+  "description": "Declared mutants of the kernel batches. kernel-scaffold (docs/architecture/plans/kernel/kernel-scaffold-declaration.zh-Hant.md, section 5; ids ks-): spec J-9 guard, target/naming DI 1 and 3 guard, Delta-1 link check. registry-schedule (docs/architecture/plans/kernel/registry-schedule-declaration.zh-Hant.md, sections 5 and 6; ids rs-): spec J-10 to J-47 of the batch, the J.3 priority mutants 2, 3, 4, 5, 6, 11 and 14, the compile-failure samples (a) of J-10 (replacing the scaffold's sample mutants), and the writable-symbol guard (judgement 9). A mutant is killed only when its check fails with the expected message (AGENTS 14.2); every check is a common test (no product test). Run from the repository root with python3 -I -B tests/common/mutation/run_mutations.py --catalog docs/architecture/plans/kernel/scripts/mutations.json --build-dir <build dir with tests> --cmake <cmake>; the rs-sym- command mutants read the newest libgyo_kernel.a under build/ (the one the runner just rebuilt) and need nm on PATH; they run on macOS and Linux only. Later kernel batches add their mutants here. Initial value (Registrar::InitialValue; v8-arch-gyo2-funnel-check, ids rs-iv-): step 5a of the sync point, the declaration checks, the zone rules through the funnel (FunnelWrites) and the fingerprint sections. hook-flush (docs/architecture/target/v2/hook-flush-declaration.zh-Hant.md, section 6 judgement 2; ids hf-): the hook rounds after the last sync point (spec F-12, J-54), the two-level limit, the fingerprint formats; plus the world-exec mutants (ids we-) of claude/arch-kernel-world-exec 50cb2050 whose find lies in the functions this batch changes, carried into gyo2 and re-run on its base (we-j7-despawn-reverse survives there: a known gap, reported).",
   "mutants": [
     {
       "id": "ks-k1-registry-ignored",
@@ -2907,13 +2907,13 @@
     },
     {
       "id": "rs-b6-cfp-version-1",
-      "what": "B6: the C fingerprint keeps an earlier format version (3 since the initial value declarations)",
+      "what": "B6: the C fingerprint keeps an earlier format version (4 since the hook rounds, v8-arch-gyo2-hook-flush)",
       "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 3;",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 4;",
       "replace": "constexpr std::uint32_t kCFingerprintVersion = 2;",
       "target": "gyo_kernel_tests",
       "cases": "J-18:*",
-      "expect": "CFingerprint\\(\\)\\.version == 3U"
+      "expect": "CFingerprint\\(\\)\\.version == 4U"
     },
     {
       "id": "rs-b8-k4-inline-rule-removed",
@@ -3531,6 +3531,796 @@
       "target": "gyo_kernel_tests",
       "cases": "initial value:*",
       "expect": "TEST CASE:\\s+initial value: the request an error names does not depend on the order of the bundle"
+    },
+    {
+      "id": "hf-no-rounds",
+      "what": "no hook rounds after the last sync point (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (position == lastSync) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: fixed-step end*",
+      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+    },
+    {
+      "id": "hf-one-round",
+      "what": "one hook round, no loop (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {",
+      "replace": "                if (!world.HookQueueOf(scheduleName).records.empty()) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: a chain of three rounds*",
+      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+    },
+    {
+      "id": "hf-limit-off-by-one",
+      "what": "the limit lets one more round through (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                    if (round == limit) {",
+      "replace": "                    if (round > limit) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the default limit*",
+      "expect": "J\\-54:\\ a\\ chain\\ of\\ 9\\ rounds\\ passed\\ the\\ default\\ limit"
+    },
+    {
+      "id": "hf-limit-hardcoded",
+      "what": "the limit is always 8 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                const std::uint32_t limit = record->options.hookRoundLimit.value_or(world.hookRoundLimit_);",
+      "replace": "                const std::uint32_t limit = 8;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the product's default*",
+      "expect": "J\\-54:\\ KernelSettings::hookRoundLimit\\ not\\ read"
+    },
+    {
+      "id": "hf-schedule-limit-ignored",
+      "what": "the schedule's limit is not read (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                const std::uint32_t limit = record->options.hookRoundLimit.value_or(world.hookRoundLimit_);",
+      "replace": "                const std::uint32_t limit = world.hookRoundLimit_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: a schedule's own limit*",
+      "expect": "J\\-54:\\ the\\ schedule's\\ limit\\ of\\ 5\\ not\\ used"
+    },
+    {
+      "id": "hf-limit-larger-of-two",
+      "what": "the larger of the two limits is used (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                const std::uint32_t limit = record->options.hookRoundLimit.value_or(world.hookRoundLimit_);",
+      "replace": "                const std::uint32_t limit = std::max(record->options.hookRoundLimit.value_or(0U), world.hookRoundLimit_);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: a schedule's own limit*",
+      "expect": "J\\-54:\\ the\\ smaller\\ of\\ the\\ two\\ limits\\ was\\ not\\ the\\ schedule's"
+    },
+    {
+      "id": "hf-product-limit-not-read",
+      "what": "KernelSettings::hookRoundLimit is not cached (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.hookRoundLimit_ = settings.value ? settings.value->hookRoundLimit : KernelSettings{}.hookRoundLimit;",
+      "replace": "        world.hookRoundLimit_ = KernelSettings{}.hookRoundLimit;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the product's default*",
+      "expect": "J\\-54:\\ KernelSettings::hookRoundLimit\\ not\\ read"
+    },
+    {
+      "id": "hf-product-limit-static",
+      "what": "the product's default is one value for the process (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/include/engine/kernel/World.hpp",
+      "find": "    std::uint32_t hookRoundLimit_ = 8;",
+      "replace": "    static inline std::uint32_t hookRoundLimit_ = 8;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the product's default is per World*",
+      "expect": "J\\-54:\\ another\\ World's\\ KernelSettings\\ changed\\ this\\ World's\\ limit"
+    },
+    {
+      "id": "hf-round-no-stamp",
+      "what": "a round takes no stamp of its own (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                    const ChangeStamp roundStamp = ++world.stamp_;",
+      "replace": "                    const ChangeStamp roundStamp = world.stamp_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: a chain of three rounds*",
+      "expect": "J\\-54:\\ a\\ round\\ takes\\ no\\ stamp\\ of\\ its\\ own"
+    },
+    {
+      "id": "hf-round-no-epoch",
+      "what": "a round adds no sync epoch (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                    world.trackRoundRecorders_ = false;\n",
+      "replace": "                    world.trackRoundRecorders_ = false;\n                    --world.syncEpoch_;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: a chain of three rounds*",
+      "expect": "J\\-54:\\ a\\ round\\ does\\ not\\ add\\ a\\ sync\\ epoch"
+    },
+    {
+      "id": "hf-rounds-every-sync",
+      "what": "hook rounds after every sync point (the rejected 'finish the chain at each sync point') (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (position == lastSync) {",
+      "replace": "            if (true) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: mid-Plan*",
+      "expect": "JoinLog\\(\\)\\ ==\\ \"B:0\\ C:1\""
+    },
+    {
+      "id": "hf-mid-records-wait-for-rounds",
+      "what": "step 0 of a mid-Plan sync point leaves the hook queue to the rounds (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    std::vector<Record> hookRecords = std::move(queue.records);\n    queue.records.clear();\n    queue.recSeq = 0;",
+      "replace": "    std::vector<Record> hookRecords;\n    if (trackRoundRecorders_) {\n        hookRecords = std::move(queue.records);\n        queue.records.clear();\n        queue.recSeq = 0;\n    }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: mid-Plan*",
+      "expect": "JoinLog\\(\\)\\ ==\\ \"B:0\\ C:1\""
+    },
+    {
+      "id": "hf-first-sync-point",
+      "what": "the rounds follow the first sync point, not the last (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        if (plan->steps[position].kind == StepKind::SyncPoint) lastSync = position;",
+      "replace": "        if (plan->steps[position].kind == StepKind::SyncPoint && lastSync == plan->steps.size()) lastSync = position;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: mid-Plan*",
+      "expect": "JoinLog\\(\\)\\ ==\\ \"B:0\\ C:1\""
+    },
+    {
+      "id": "hf-startup-skipped",
+      "what": "no hook rounds in a startup schedule (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (position == lastSync) {",
+      "replace": "            if (position == lastSync && !record->options.startup) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: run once*",
+      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+    },
+    {
+      "id": "hf-only-with-trim",
+      "what": "hook rounds only when an event trim follows the last sync point (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (position == lastSync) {",
+      "replace": "            if (position == lastSync && position + 1 < plan->steps.size()) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: run once*",
+      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+    },
+    {
+      "id": "hf-verification-only",
+      "what": "hook rounds only with verification on (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (position == lastSync) {",
+      "replace": "            if (position == lastSync && world.verification_) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: fixed-step end*",
+      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+    },
+    {
+      "id": "hf-not-applying",
+      "what": "a round is applied while the World is Running (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                    world.state_ = WorldState::Applying;\n                    Engine::Base::Result<void, KernelError> applied = world.ApplySync(position, scheduleName, roundStamp);",
+      "replace": "                    Engine::Base::Result<void, KernelError> applied = world.ApplySync(position, scheduleName, roundStamp);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: a round is applied while*",
+      "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ rig\\->Run\\(\\)"
+    },
+    {
+      "id": "hf-first-queue",
+      "what": "the rounds read the first schedule's hook queue (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                while (!world.HookQueueOf(scheduleName).records.empty()) {",
+      "replace": "                while (!world.hookQueues_.front().records.empty()) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: fixed-step end*",
+      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+    },
+    {
+      "id": "hf-recseq-constant",
+      "what": "hook records of one queue share recSeq 0 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    record.recSeq = (*call.recSeq)++;",
+      "replace": "    record.recSeq = call.hook ? 0U : (*call.recSeq)++;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: two hooks insert one cell*",
+      "expect": "GYO_ASSERT\\ failed:\\ insertKey"
+    },
+    {
+      "id": "hf-round-error-unwrapped",
+      "what": "an Err in a round lacks the round's layer (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                        KernelError error = std::move(applied).error();\n                        error.Wrap(roundText(round));",
+      "replace": "                        KernelError error = std::move(applied).error();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: an Err in a round*",
+      "expect": "result\\.error\\(\\)\\.Text\\(\\)\\.find\\(\"hook\\ round\\ 1\"\\)\\ !=\\ std::string::npos"
+    },
+    {
+      "id": "hf-round-position-plan-size",
+      "what": "a round's hooks are at the Plan length, not the last sync point (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "world.ApplySync(position, scheduleName, roundStamp);",
+      "replace": "world.ApplySync(static_cast<std::uint32_t>(plan->steps.size()), scheduleName, roundStamp);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: an Err in a round*",
+      "expect": "J\\-54:\\ the\\ round's\\ hook\\ is\\ not\\ at\\ the\\ last\\ sync\\ point"
+    },
+    {
+      "id": "hf-limit-no-names",
+      "what": "the limit's message names no hook (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "\" by hook \" + names);",
+      "replace": "\" by hook \");",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: at the limit*",
+      "expect": "message\\.find\\(\"by\\ hook\\ 'FanP',\\ 'FanQ'\"\\)"
+    },
+    {
+      "id": "hf-limit-names-not-unique",
+      "what": "the limit's message repeats a hook (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                        recorders.erase(std::unique(recorders.begin(), recorders.end()), recorders.end());\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: at the limit*",
+      "expect": "Occurrences\\(message,\\ \"'FanQ'\"\\)\\ ==\\ 1"
+    },
+    {
+      "id": "hf-limit-names-call-order",
+      "what": "the limit's message names hooks in call order (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                        std::sort(recorders.begin(), recorders.end());\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: at the limit*",
+      "expect": "Occurrences\\(message,\\ \"'FanQ'\"\\)\\ ==\\ 1"
+    },
+    {
+      "id": "hf-limit-source-wrong",
+      "what": "the limit's message names the wrong source of the limit (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "(record->options.hookRoundLimit ? \"schedule's declaration\" : \"World's KernelSettings\")",
+      "replace": "\"schedule's declaration\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: at the limit*",
+      "expect": "message\\.find\\(\"World's\\ KernelSettings\"\\)"
+    },
+    {
+      "id": "hf-limit-not-err",
+      "what": "at the limit the rest is left in the queue, no Err (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "replace": "                        break;\n                    }\n                    ++round;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the default limit*",
+      "expect": "GYO_ASSERT\\ failed:\\ world\\.window_\\.empty\\(\\)\\ \\&\\&\\ world\\.HookQueueOf\\(scheduleName\\)\\.records\\.empty\\(\\)"
+    },
+    {
+      "id": "hf-limit-no-break-hook",
+      "what": "the limit's Err calls no break hook (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                        if (world.breakOnKernelError_ && world.breakHook_) world.breakHook_(error);\n                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "replace": "                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: at the limit*",
+      "expect": "\\(breaks\\ >\\ 0\\)\\ ==\\ breakOn"
+    },
+    {
+      "id": "hf-limit-handler-twice",
+      "what": "the limit's Err reaches the handler twice (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                        guard.Disarm();\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "replace": "                        guard.Disarm();\n                        if (handler_) handler_(error);\n                        return Fail(std::move(error));\n                    }\n                    ++round;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: at the limit*",
+      "expect": "J\\-54:\\ the\\ handler\\ ran\\ 2\\ times"
+    },
+    {
+      "id": "hf-schedule-zero-allowed",
+      "what": "a schedule's limit of 0 is not D-E20 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (s.hookRoundLimit && *s.hookRoundLimit == 0) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: KernelSettings is read*",
+      "expect": "HasError\\(built,\\ StartupCode::DE20\\)"
+    },
+    {
+      "id": "hf-product-zero-allowed",
+      "what": "a product default of 0 is not a GYO_ASSERT (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        GYO_ASSERT(world.hookRoundLimit_ >= 1);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: KernelSettings is read*",
+      "expect": "expected\\ GYO_ASSERT\\ to\\ fail:\\ RunChain\\(\\*rig,\\ 0\\)"
+    },
+    {
+      "id": "hf-plan-fp-no-limit",
+      "what": "the Plan fingerprint does not hash the schedule's limit (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.Flag(plan.hookRoundLimit.has_value());\n    if (plan.hookRoundLimit) out.U32(*plan.hookRoundLimit);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "planOf\\(t5,\\ \"Tick\"\\)\\ !=\\ planOf\\(none,\\ \"Tick\"\\)"
+    },
+    {
+      "id": "hf-plan-fp-presence-only",
+      "what": "the Plan fingerprint hashes only whether a limit is declared (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    if (plan.hookRoundLimit) out.U32(*plan.hookRoundLimit);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "planOf\\(t5,\\ \"Tick\"\\)\\ !=\\ planOf\\(t6,\\ \"Tick\"\\)"
+    },
+    {
+      "id": "hf-plan-fp-unset-as-default",
+      "what": "the Plan fingerprint hashes 'not declared' as 8 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.Flag(plan.hookRoundLimit.has_value());\n    if (plan.hookRoundLimit) out.U32(*plan.hookRoundLimit);\n",
+      "replace": "    out.U32(plan.hookRoundLimit.value_or(8U));\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "planOf\\(t8,\\ \"Tick\"\\)\\ !=\\ planOf\\(none,\\ \"Tick\"\\)"
+    },
+    {
+      "id": "hf-c-fp-no-limit",
+      "what": "the C fingerprint does not hash the schedule's limit (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "            out.Flag(schedule->options.hookRoundLimit.has_value());\n            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "t5\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\ !=\\ none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)"
+    },
+    {
+      "id": "hf-c-fp-presence-only",
+      "what": "the C fingerprint hashes only whether a limit is declared (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "t5\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\ !=\\ t6\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)"
+    },
+    {
+      "id": "hf-plan-version-kept",
+      "what": "the Plan fingerprint format stays 1 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 2;",
+      "replace": "constexpr std::uint32_t kFingerprintVersion = 1;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "planOf\\(none,\\ \"Tick\"\\)\\.version\\ ==\\ 2U"
+    },
+    {
+      "id": "hf-c-version-kept",
+      "what": "the C fingerprint format stays 3 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 4;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 3;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "none\\.registry\\->Frozen\\(\\)\\.CFingerprint\\(\\)\\.version\\ ==\\ 4U"
+    },
+    {
+      "id": "hf-registry-schedule-field",
+      "what": "the Registry fingerprint's schedule section hashes the limit (its format changes, its version does not) (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    out.Str(s.runner);\n}",
+      "replace": "    out.Str(s.runner);\n    out.U32(s.hookRoundLimit.value_or(0U));\n}",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18: ids follow*",
+      "expect": "frozen\\.RegistryFingerprint\\(\\)\\.Text\\(\\)\\ ==\\ kJ18RegistryGolden"
+    },
+    {
+      "id": "hf-export-no-limit",
+      "what": "the Plan export does not print the limit (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "        out += \"  hook-round-limit \" + (plan.hookRoundLimit ? std::to_string(*plan.hookRoundLimit) : std::string(\"default\")) + \"\\n\";\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "report\\.find\\(\"\\ \\ hook\\-round\\-limit\\ 5\\\\n\"\\)\\ !=\\ std::string::npos"
+    },
+    {
+      "id": "hf-export-version-kept",
+      "what": "the Plan export format stays 1 (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "    std::string out = \"gyo.kernel.plans 2\\n\";",
+      "replace": "    std::string out = \"gyo.kernel.plans 1\\n\";",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "report\\.find\\(\"gyo\\.kernel\\.plans\\ 2\"\\)\\ ==\\ 0"
+    },
+    {
+      "id": "hf-no-snapshot-after-rounds",
+      "what": "no W-1 check and fresh snapshots after the rounds (v8-arch-gyo2-hook-flush, spec F-12)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                if (round > 0) {\n",
+      "replace": "                if (false) {\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: with verification on*",
+      "expect": "J\\-54:\\ the\\ round's\\ change\\ was\\ blamed\\ on\\ the\\ Ready\\ window"
+    },
+    {
+      "id": "we-j34-hook-immediate",
+      "what": "J-34 (F-4): hook records applied in the same Applying (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (Result rest = phase(windowRecords, none); !rest) return rest;",
+      "replace": "    if (Result rest = phase(windowRecords, none); !rest) return rest;\n    {\n        std::vector<Record> again = std::move(queue.records);\n        queue.records.clear();\n        queue.recSeq = 0;\n        if (Result now = phase(again, none); !now) return now;\n    }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"first:4\\ second:4\\ modes@1:0\""
+    },
+    {
+      "id": "we-j34-hook-reverse",
+      "what": "J-34 (F-4): hooks of one trigger run in reverse registration order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (std::size_t h = 0; h < data_->hooks.size(); ++h) {\n        const Detail::HookRecord& hook = data_->hooks[h];",
+      "replace": "    for (std::size_t h = data_->hooks.size(); h-- > 0;) {\n        const Detail::HookRecord& hook = data_->hooks[h];",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"first:4\\ second:4\\ modes@1:0\""
+    },
+    {
+      "id": "we-j34-f5-off",
+      "what": "J-34 (F-5): a record on the System path while Applying is allowed (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    GYO_ASSERT(world.state_ != WorldState::Applying || call.hook);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-34:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-j35-err-not-interrupted",
+      "what": "J-35 (X-9): an Err does not interrupt the World (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    world_.state_ = WorldState::Interrupted;\n    world_.DiscardDeferred();",
+      "replace": "    world_.state_ = WorldState::Ready;\n    world_.DiscardDeferred();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-j35-throw-not-interrupted",
+      "what": "J-35 (E.5): an exception does not interrupt the World (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            state_ = WorldState::Interrupted;\n            (world_.*discard_)();",
+      "replace": "            state_ = WorldState::Ready;\n            (world_.*discard_)();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "rig\\->world\\(\\)\\.State\\(\\)\\ ==\\ WorldState::Interrupted"
+    },
+    {
+      "id": "we-j35-diagnostics-dropped",
+      "what": "J-35 (B-13): an interruption drops the diagnostics buffers (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "void World::DiscardDeferred() noexcept {\n    window_.clear();",
+      "replace": "void World::DiscardDeferred() noexcept {\n    diagnostics_.clear();\n    window_.clear();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "rig\\->world\\(\\)\\.Diagnostics<Note>\\(\\)\\.size\\(\\)\\ ==\\ 1"
+    },
+    {
+      "id": "we-f6-empty-sync-no-epoch",
+      "what": "J-33 (F-6): an empty sync point does not advance the sync epoch (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    // Step 8.\n    ++syncEpoch_;",
+      "replace": "    // Step 8.\n    if (!windowRecords.empty()) ++syncEpoch_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-33:*",
+      "expect": "rig\\->world\\(\\)\\.SyncEpoch\\(\\)\\ ==\\ epochBefore\\ \\+\\ 4"
+    },
+    {
+      "id": "we-j52-step0-unchecked",
+      "what": "J-52: step 0 does not look at the window's zone C inserts (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (Result step0 = phase(hookRecords, windowRecords); !step0) return step0;",
+      "replace": "    if (Result step0 = phase(hookRecords, none); !step0) return step0;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
+    },
+    {
+      "id": "we-j52-recheck-pending-only",
+      "what": "J-52: the Z5 recheck looks only at pending zone C inserts (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (data_->components[c].zone == Zone::C && columns_[c]->Contains(target)) {\n                    reason = \"it has zone C component",
+      "replace": "                if (false) {\n                    reason = \"it has zone C component",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
+    },
+    {
+      "id": "we-adv-z5-ignores-spawnwithid",
+      "what": "J-52 (Fable): the Z5 recheck ignores a pending zone C SpawnWithId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                    if (other.kind == RecordKind::Insert || (other.kind == RecordKind::Spawn && other.withId)) {",
+      "replace": "                    if (other.kind == RecordKind::Insert) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::ZoneCDespawn\\)"
+    },
+    {
+      "id": "we-j36-hook-writerpos-zero",
+      "what": "J-36: a hook's events and records carry Plan position 0 (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    call.planPos = planPos;\n    call.zone = record.zone;",
+      "replace": "    call.planPos = 0;\n    call.zone = record.zone;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-36:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ std::string\\(\"early@1:\\ late@1:\\ 99\\ 11\\ 12\\ 21\\ \"\\)\\ \\+\\ \"early@2:\\ 99\\ 11\\ 12\\ 21\\ late@2:\\ early@3:\\ late@3:\""
+    },
+    {
+      "id": "we-adv-hook-err-swallowed",
+      "what": "J.3 #16 (Fable): a hook Err and a hook violation are dropped (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (!error) return {};\n    // One more layer",
+      "replace": "    return {};\n    // One more layer",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::SystemFailed\\)"
+    },
+    {
+      "id": "we-j33-apply-after-each-system",
+      "what": "J-33 (F-3): a sync point is applied after every System (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            previousStep = StepText(scheduleName, position, system.options.name);\n            break;",
+      "replace": "            static_cast<void>(world.ApplySync(position, scheduleName, world.stamp_));\n            previousStep = StepText(scheduleName, position, system.options.name);\n            break;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-33:*",
+      "expect": "static_cast<bool>\\(kernelRunResult\\)"
+    },
+    {
+      "id": "we-adv-ready-window-compare-off",
+      "what": "J-35 (Fable): no comparison when Run starts (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (world.verification_) {\n        const std::vector<std::string> changed = world.CompareBefore();",
+      "replace": "    if (false) {\n        const std::vector<std::string> changed = world.CompareBefore();",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::PreCallChange\\)"
+    },
+    {
+      "id": "we-j7-despawn-reverse",
+      "what": "J-7: a despawn destroys in descending ComponentId (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
+      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked",
+      "target": "gyo_kernel_tests",
+      "cases": "J-7:*",
+      "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:1\",\\ \"0:1\"\\}"
+    },
+    {
+      "id": "we-j32-despawn-record-order",
+      "what": "J-32 (J.3 #1): despawns applied in record order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-mode:3\\ remove\\-mode:4\\ remove\\-mode:9\\ add\\-tag:1\\ add\\-mode:4\\ add\\-tag:8\""
+    },
+    {
+      "id": "we-j32-onadd-record-order",
+      "what": "J-32 (J.3 #1): OnAdd in the order cells were added (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        std::sort(added.begin(), added.end(),",
+      "replace": "        if (false) std::sort(added.begin(), added.end(),",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-mode:3\\ remove\\-mode:4\\ remove\\-mode:9\\ add\\-tag:1\\ add\\-mode:4\\ add\\-tag:8\""
+    },
+    {
+      "id": "we-j32-winner-first",
+      "what": "J-32: the smallest (planPos, recSeq) of a key wins (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            Record& winner = *inserts[end - 1];",
+      "replace": "            Record& winner = *inserts[i];",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "rig\\->world\\(\\)\\.Get<Tag>\\(3\\)\\->t\\ ==\\ 2"
+    },
+    {
+      "id": "we-j32-drop-recseq",
+      "what": "J-32 (J.3 #13): the insert key drops recSeq (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "auto insertKey = [](const Record* r) { return std::make_tuple(r->entity, r->id, r->planPos, r->recSeq); };",
+      "replace": "auto insertKey = [](const Record* r) { return std::make_tuple(r->entity, r->id, r->planPos); };",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "GYO_ASSERT failed: insertKey"
+    },
+    {
+      "id": "we-adv-insert-key-recseq-first",
+      "what": "J-32 (Fable): the insert key orders recSeq before planPos (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "auto insertKey = [](const Record* r) { return std::make_tuple(r->entity, r->id, r->planPos, r->recSeq); };",
+      "replace": "auto insertKey = [](const Record* r) { return std::make_tuple(r->entity, r->id, r->recSeq, r->planPos); };",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "rig\\->world\\(\\)\\.Get<Tag>\\(5\\)\\->t\\ ==\\ 3"
+    },
+    {
+      "id": "we-adv-overwrite-fires-onadd",
+      "what": "F.2 step 6 (Fable): an overwrite runs OnAdd (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            } else if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp)) {",
+      "replace": "            } else if (winner.value->PutInto(*columns_[winner.id], winner.entity, stamp); true) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-tag:2=2\""
+    },
+    {
+      "id": "we-adv-remove-skips-onremove",
+      "what": "F.2 step 3 (Fable): a Remove runs no OnRemove (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);",
+      "replace": "            columns_[component]->Erase(id);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"remove\\-tag:2=2\""
+    },
+    {
+      "id": "we-adv-spawn-alive-assert-removed",
+      "what": "F.2 step 4 (Fable): SpawnWithId of an alive id is not stopped (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!std::binary_search(entities_.begin(), entities_.end(), spawn.entity));  // alive, not despawned\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-adv-spawnwithid-allotter-range-assert-removed",
+      "what": "A.1 (Fable): SpawnWithId into the allotter range is not stopped (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                GYO_ASSERT(!data_->allotterOps.owns(*resources_[*data_->allotter], spawn.entity));\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-8:*",
+      "expect": "ranged\\->Run\\(\\)"
+    },
+    {
+      "id": "we-j26-false-condition-runs",
+      "what": "J-26: a System whose condition is false runs (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                if (!runs) return {};\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-26:*",
+      "expect": "Log\\(\\)\\ ==\\ expected"
+    },
+    {
+      "id": "we-j29-condition-cached",
+      "what": "J-29: a mount condition is evaluated only until the System first ran (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                for (const ConditionRef& condition : mount.conditions) {\n                    if (runs && !condition.Evaluator()(call)) runs = false;",
+      "replace": "                for (const ConditionRef& condition : mount.conditions) {\n                    if (runs && mountState.lastRun == 0 && !condition.Evaluator()(call)) runs = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-29:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"guarded@1\\ condition\\ condition\\ condition\\ condition\""
+    },
+    {
+      "id": "we-j29-set-once",
+      "what": "J-29: a set condition is evaluated once, not once per member (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                        for (const ConditionRef& condition : set.conditions) {\n                            if (runs && !condition.Evaluator()(call)) runs = false;",
+      "replace": "                        for (const ConditionRef& condition : set.conditions) {\n                            static int evaluated = 0;\n                            if (runs && evaluated++ == 0 && !condition.Evaluator()(call)) runs = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-29:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"guarded@1\\ condition\\ condition\\ condition\\ condition\""
+    },
+    {
+      "id": "we-j30-skip-no-stamp",
+      "what": "J-30 (X-5): a skipped System takes no stamp (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                call.stamp = ++world.stamp_;\n                // (4)\n                if (!runs) return {};",
+      "replace": "                // (4)\n                if (!runs) return {};\n                call.stamp = ++world.stamp_;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "first\\ ==\\ std::vector<ChangeStamp>\\{0,\\ 6,\\ 3,\\ 1,\\ 12,\\ 9,\\ 1\\}"
+    },
+    {
+      "id": "we-j30-stamp-after-call",
+      "what": "J-30 (J.3 #8): the stamp is taken when the call completes (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                mountState.lastRun = call.stamp;\n                return system.run(call);",
+      "replace": "                auto ran = system.run(call);\n                call.stamp = ++world.stamp_;\n                mountState.lastRun = call.stamp;\n                return ran;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "rig\\->world\\(\\)\\.TickStamp\\(Domain::Fixed,\\ 2\\)\\ ==\\ std::optional<ChangeStamp>\\(5\\)"
+    },
+    {
+      "id": "we-j3-16-executor-swallows",
+      "what": "J-32b (J.3 #16): the Executor swallows a call's Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed)) {",
+      "replace": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed); false && error) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j50-settings-not-read",
+      "what": "J-50: the first Run does not read the verification switch (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.verification_ = settings.value && settings.value->accessVerification;",
+      "replace": "        world.verification_ = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-50:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::AccessViolation\\)"
+    },
+    {
+      "id": "we-j52-per-system-mount-state",
+      "what": "J-52 (B-12): last-run stamp and Local per System, not per mount (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            MountState& mountState = state.mounts[mountIndex];",
+      "replace": "            MountState& mountState = state.mounts[0];",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"A\\ run1\\ changed:1\\ B\\ run1\\ changed:1\\ A\\ run2\\ changed:1\\ A\\ run3\\ changed:0\""
+    },
+    {
+      "id": "we-j53-step5-skipped-when-false",
+      "what": "J-53: step 5 is skipped when a condition is false (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            if (std::optional<KernelError> error = Detail::CombineCall(call, std::move(result), changed)) {",
+      "replace": "            if (std::optional<KernelError> error = (call.stamp == mountState.lastRun ? Detail::CombineCall(call, std::move(result), changed) : std::nullopt)) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-53:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::AccessViolation\\)"
+    },
+    {
+      "id": "we-adv-break-hook-not-read",
+      "what": "LIM-6 (Fable): breakOnKernelError is never read (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        world.breakOnKernelError_ = settings.value && settings.value->breakOnKernelError;",
+      "replace": "        world.breakOnKernelError_ = false;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-50:*",
+      "expect": "\\(breaks\\ >\\ 0\\)\\ ==\\ breakOn"
+    },
+    {
+      "id": "we-adv-skip-updates-lastrun",
+      "what": "B-12 (Fable): a skipped mount moves its last-run stamp (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "                if (!runs) return {};\n                mountState.lastRun = call.stamp;",
+      "replace": "                mountState.lastRun = call.stamp;\n                if (!runs) return {};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-52:*",
+      "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"changed:1\""
+    },
+    {
+      "id": "we-adv-tickstamp-never-recorded",
+      "what": "A.1 tickStamps (Fable): never kept (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "        slot = World::TickStampSlot{tick, world.stamp_ + 1, true};",
+      "replace": "        slot = World::TickStampSlot{tick, world.stamp_ + 1, false};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-30:*",
+      "expect": "rig\\->world\\(\\)\\.TickStamp\\(Domain::Fixed,\\ 1\\)\\ ==\\ std::optional<ChangeStamp>\\(1\\)"
+    },
+    {
+      "id": "we-adv-epoch-assert-removed",
+      "what": "J-3 W-3 (Fable): the membership epoch assertion is gone (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "            GYO_ASSERT(world.MembershipEpoch() == structure);\n",
+      "replace": "            static_cast<void>(structure);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-3:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-adv-hook-layer2-off",
+      "what": "A.6 (review should 2): no comparison around a hook (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (verification_) changed = CompareAfter(hookAccess_[hook]);",
+      "replace": "    if (false) changed = CompareAfter(hookAccess_[hook]);",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::BoundaryChange\\)"
     }
   ]
 }

@@ -29,6 +29,7 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::ExclusiveWorldWrite: return "ExclusiveWorldWrite";
     case KernelErrorCode::AllotterExhausted: return "AllotterExhausted";
     case KernelErrorCode::StructureBroken: return "StructureBroken";
+    case KernelErrorCode::HookRoundLimit: return "HookRoundLimit";
     }
     return "Unknown";
 }
@@ -100,6 +101,7 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE17: return "D-E17";
     case StartupCode::DE18: return "D-E18";
     case StartupCode::DE19: return "D-E19";
+    case StartupCode::DE20: return "D-E20";
     case StartupCode::RE1: return "R-E1";
     case StartupCode::RE2: return "R-E2";
     case StartupCode::RE3: return "R-E3";
@@ -882,6 +884,10 @@ void CheckSchedules(RegistryData& data) {
         }
         if (s.stages.empty()) {
             data.Error(StartupCode::DE1, "D.1", "schedule '" + s.name + "' has no stage", {s.name});
+        }
+        if (s.hookRoundLimit && *s.hookRoundLimit == 0) {
+            data.Error(StartupCode::DE20, "F-12", "schedule '" + s.name + "' declares a hook round limit of 0 (at least 1)",
+                       {s.name});
         }
         if (!s.ingressStage.empty() && stages.count(s.ingressStage) != 0 && s.stages.front() != s.ingressStage) {
             data.Error(StartupCode::DE7, "Z3", "schedule '" + s.name + "' names ingress stage '" + s.ingressStage +

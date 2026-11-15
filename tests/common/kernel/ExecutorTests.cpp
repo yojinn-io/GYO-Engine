@@ -675,8 +675,13 @@ SystemResult ZoneCHookInsertsPos(HookCtx, CommandsFor<Inserts<Pos>, Removes<>> c
     commands.Insert(1, Pos{1});
     return Ok();
 }
-SystemResult ZoneBDespawnsAtTwo(Despawn despawn, CurrentTick tick) {
-    if (tick.Tick() == 2) return despawn.Entity(1);
+
+SystemResult ZoneCInsertsAtOne(CommandsFor<Inserts<Pos>, Removes<>> commands, CurrentTick tick) {
+    if (tick.Tick() == 1) commands.Insert(1, Pos{2});
+    return Ok();
+}
+SystemResult ZoneBDespawnsAtOne(Despawn despawn, CurrentTick tick) {
+    if (tick.Tick() == 1) return despawn.Entity(1);
     return Ok();
 }
 
@@ -717,6 +722,28 @@ TEST_CASE("J-52: the Z5 recheck at the sync point; Changed and Local are per mou
         CHECK(rig->world().Alive(1));
     }
     SUBCASE("a zone B hook's despawn and a zone C insert in the hook's next window") {
+        ScheduleOptions two;
+        two.name = "Tick";
+        two.domain = Domain::Fixed;
+        two.clock = true;
+        two.stages = {"A", "B"};
+        auto rig = MakeRig([two](Registrar& r) {
+            r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
+            r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
+            r.Component<Mode>({.name = "Mode", .zone = Zone::B});
+            r.Schedule(two);
+            r.AddSystem<&InsertTagOnce>(B("InsertTagOnce", "A"));
+            r.AddSystem<&ZoneCInsertsAtOne>(C("ZoneCInsertsAtOne", "B"));
+            r.Hook<Tag, &HookDespawns>(HookTrigger::OnAdd, {.name = "HookDespawns", .zone = Zone::B});
+        }, false);
+        rig->world().Insert(1, Mode{0});
+        // Tag added at the end of A; the hook records despawn(1); B's window inserts Pos into 1; B's step 0 rechecks.
+        const auto result = rig->Run();
+        CHECK_MESSAGE(HasCode(result, KernelErrorCode::ZoneCDespawn), "J-52: step 0 rechecks the hook's despawn against the window");
+        CHECK(rig->world().Alive(1));
+        CHECK(rig->world().Get<Pos>(1) == nullptr);
+    }
+    SUBCASE("one stage: a hook's despawn at the only sync point is applied by the hook rounds of the same Run") {
         ScheduleOptions one;
         one.name = "Tick";
         one.domain = Domain::Fixed;
@@ -732,11 +759,11 @@ TEST_CASE("J-52: the Z5 recheck at the sync point; Changed and Local are per mou
             r.Hook<Tag, &HookDespawns>(HookTrigger::OnAdd, {.name = "HookDespawns", .zone = Zone::B});
         }, false);
         rig->world().Insert(1, Mode{0});
-        KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 1: Tag added at the only sync point; the hook records despawn(1)
-        CHECK(rig->world().Alive(1));
-        const auto result = rig->Run();  // tick 2: a zone C insert into 1 in the window; step 0 rechecks
-        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
-        CHECK(rig->world().Alive(1));
+        KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 1: Tag added; the hook's despawn(1) is applied by the hook rounds
+        CHECK_FALSE(rig->world().Alive(1));
+        const std::uint64_t dropped = rig->world().DroppedMissingEntity();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 2: the zone C insert into 1 finds no entity: dropped, no Err
+        CHECK(rig->world().DroppedMissingEntity() == dropped + 1);
         CHECK(rig->world().Get<Pos>(1) == nullptr);
     }
     SUBCASE("a zone C SpawnWithId in the same window") {
@@ -767,26 +794,29 @@ TEST_CASE("J-52: the Z5 recheck at the sync point; Changed and Local are per mou
         CHECK(Join(Log()) == "changed:1");
     }
     SUBCASE("a zone C column applied at step 0 is seen by step 2's recheck") {
-        ScheduleOptions one;
-        one.name = "Tick";
-        one.domain = Domain::Fixed;
-        one.clock = true;
-        one.stages = {"A"};
-        auto rig = MakeRig([one](Registrar& r) {
+        ScheduleOptions two;
+        two.name = "Tick";
+        two.domain = Domain::Fixed;
+        two.clock = true;
+        two.stages = {"A", "B"};
+        auto rig = MakeRig([two](Registrar& r) {
             r.Component<Pos>({.name = "Pos", .zone = Zone::C, .rollback = Rollback::Yes});
             r.Component<Vel>({.name = "Vel", .zone = Zone::C, .rollback = Rollback::Yes});
             r.Component<Tag>({.name = "Tag", .zone = Zone::B, .writePolicy = WritePolicy::Shared});
-            r.Schedule(one);
+            r.Schedule(two);
             r.AddSystem<&SpawnVelOnce>(C("SpawnVelOnce", "A"));
-            r.AddSystem<&ZoneBDespawnsAtTwo>(B("ZoneBDespawnsAtTwo", "A"));
+            r.AddSystem<&ZoneBDespawnsAtOne>(B("ZoneBDespawnsAtOne", "B"));
             r.Hook<Vel, &ZoneCHookInsertsPos>(HookTrigger::OnAdd, {.name = "ZoneCHookInsertsPos", .zone = Zone::C});
         }, false);
         rig->world().Insert(1, Tag{1});
-        KERNEL_REQUIRE_RUN_OK(rig->Run());  // tick 1: Vel on 2; the zone C hook records Pos into 1
-        CHECK(rig->world().Get<Pos>(1) == nullptr);
-        const auto result = rig->Run();  // tick 2: despawn(1) recorded while 1 has only Tag
-        CHECK(HasCode(result, KernelErrorCode::ZoneCDespawn));
+        // Vel on 2 at the end of A; the zone C hook records Pos into 1; B records despawn(1) while 1 has only Tag.
+        const auto result = rig->Run();
+        CHECK_MESSAGE(HasCode(result, KernelErrorCode::ZoneCDespawn), "J-52: step 2 sees the zone C column step 0 applied");
         CHECK(rig->world().Alive(1));
+        // The sync point's recheck caught it, not the check when the despawn was recorded.
+        REQUIRE_FALSE(static_cast<bool>(result));
+        CHECK(result.error().Text().find("at the sync point") != std::string::npos);
+        CHECK(result.error().Text().find("System 'ZoneBDespawnsAtOne'") == std::string::npos);
     }
     SUBCASE("two mounts keep their own last-run stamp and Local") {
         auto rig = MakeRig([](Registrar& r) {

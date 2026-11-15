@@ -93,7 +93,7 @@ Executor 的 Serial／Parallel 是策略，不是決定性本身。序列化只�
 ### 3.4 事件與同步點（補充 6）
 
 - 事件：寫入者之後的 System **本 tick 就可讀**；緩衝保留到下一 tick 末尾，只是為了讓跨 tick 的讀者不漏。不是一律延一 tick（原圖照 Bevy 雙緩衝畫過頭）。
-- 延後佇列：每個階段結束是預設同步點；schedule 可以多宣告。每個 schedule 何時套用佇列、何時交換事件緩衝，要寫在 schedule 的定義裡。
+- 延後佇列：每個階段結束是預設同步點；schedule 可以多宣告。每個 schedule 何時套用佇列、何時交換事件緩衝，要寫在 schedule 的定義裡。hook 佇列例外：計畫最後一個同步點之後，執行器把它套用到空（spec F-12）；不寫進計畫，以執行計畫與 C 指紋的版本號表示（使用者 2026-11-15，`v8-arch-gyo2-hook-flush-not-in-plan-bump-versions`）。
 
 ### 3.5 C++ 的誠實上限
 

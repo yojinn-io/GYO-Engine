@@ -7,12 +7,13 @@
 //     underlying value);
 //   - a list is its length as u32, then its elements;
 //   - every fingerprint starts with its format string and version
-//     ("gyo.kernel.registry" 2, "gyo.kernel.registry-c" 3, "gyo.kernel.plan" 1).
+//     ("gyo.kernel.registry" 2, "gyo.kernel.registry-c" 4, "gyo.kernel.plan" 2).
 // Registry fingerprint (format 2): plugin names in list order; components, resources,
 // events in id order (name, size, align, zone, writePolicy, role, rollback;
 // resources add external and affinity; events have name, domain, zone);
 // effects; named sets (name, members, digest); the allotter; schedules (every
-// ScheduleOptions field); sets; Systems in registrationSeq order (name, zone,
+// ScheduleOptions field but hookRoundLimit, which the Plan fingerprint holds:
+// adding it here would change this format, whose version stays 2); sets; Systems in registrationSeq order (name, zone,
 // ingress, affinity, effects, rollbackSafe, mounts with every field, access
 // set); hooks (name, component, trigger, zone, access); initial value
 // declarations (Registrar::InitialValue; target and request ComponentId, in the
@@ -20,13 +21,17 @@
 // fingerprint in schedule order. The function of a declaration is not hashed:
 // its address differs per build. Registration sites (file paths) are never
 // hashed: they differ per checkout.
-// C fingerprint (format 3): only zone C data, zone C Systems (with mounts and
+// C fingerprint (format 4): only zone C data, zone C Systems (with mounts and
 // access), zone C hooks and the initial value declarations of zone C
 // components, each section counted; and for every schedule that
-// runs a zone C System, its rollbackEnabled, stages and eventTrim, and its Plan
-// reduced to the zone C System steps plus every sync point and the trim
-// (spec H.3; review B6).
-// Plan fingerprint: schedule name, domain, then each step's kind and name.
+// runs a zone C System, its rollbackEnabled, stages, eventTrim and hook round
+// limit (a flag, then the value when declared), and its Plan reduced to the
+// zone C System steps plus every sync point and the trim (spec H.3; review B6).
+// Plan fingerprint (format 2): schedule name, domain, each step's kind and
+// name, then the hook round limit (a flag, then the value when declared).
+// The hook rounds after the last sync point (spec F-12) are not a step; the
+// Plan and C formats were raised (1 to 2, 3 to 4) when they were added, so the
+// rule shows in both fingerprints (v8-arch-gyo2-hook-flush-not-in-plan-bump-versions).
 // Sizes are hashed as the platform reports them; a type whose size differs
 // between platforms gives different fingerprints there (the kernel tests use
 // fixed-width types).
@@ -50,14 +55,17 @@ std::string Fingerprint::Text() const {
 namespace Detail {
 namespace {
 
-constexpr std::uint32_t kFingerprintVersion = 1;
+// The Plan fingerprint's format: 2 since the hook rounds after the last sync
+// point and the schedule's hook round limit (v8-arch-gyo2-hook-flush).
+constexpr std::uint32_t kFingerprintVersion = 2;
 // The Registry fingerprint's format: 2 since initial value declarations are
-// hashed (v8-arch-gyo2-funnel-check). The Plan fingerprint stays at 1.
+// hashed (v8-arch-gyo2-funnel-check).
 constexpr std::uint32_t kRegistryFingerprintVersion = 2;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
 // schedules that hold zone C steps, and the sync points around those steps; 3
-// since the initial value declarations of zone C components.
-constexpr std::uint32_t kCFingerprintVersion = 3;
+// since the initial value declarations of zone C components; 4 since the hook
+// rounds after the last sync point and the schedule's hook round limit.
+constexpr std::uint32_t kCFingerprintVersion = 4;
 
 class Bytes {
 public:
@@ -192,6 +200,8 @@ void PlanBytes(Bytes& out, const Plan& plan) {
         out.Enum(step.kind);
         out.Str(step.name);
     }
+    out.Flag(plan.hookRoundLimit.has_value());
+    if (plan.hookRoundLimit) out.U32(*plan.hookRoundLimit);
 }
 
 std::string Percent(std::size_t part, std::size_t whole) {
@@ -374,6 +384,8 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
             out.Flag(schedule->options.rollbackEnabled);
             out.Strings(schedule->options.stages);
             out.Str(schedule->options.eventTrim);
+            out.Flag(schedule->options.hookRoundLimit.has_value());
+            if (schedule->options.hookRoundLimit) out.U32(*schedule->options.hookRoundLimit);
         }
         std::vector<const Step*> reduced;
         for (const Step& step : plan.steps) {
@@ -392,7 +404,7 @@ Fingerprint CFingerprintOf(const RegistryData& data) {
 
 std::string FrozenRegistry::ExportPlans() const {
     const Detail::RegistryData& data = *data_;
-    std::string out = "gyo.kernel.plans 1\n";
+    std::string out = "gyo.kernel.plans 2\n";
     out += "registry " + Detail::RegistryFingerprintOf(data).Text() + "\n";
     out += "registry_c " + Detail::CFingerprintOf(data).Text() + "\n";
     for (const Plan& plan : data.plans) {
@@ -404,6 +416,7 @@ std::string FrozenRegistry::ExportPlans() const {
                    " rollback=" + (schedule->options.rollbackEnabled ? "1" : "0") + " runner=" + schedule->options.runner;
         }
         out += "\n";
+        out += "  hook-round-limit " + (plan.hookRoundLimit ? std::to_string(*plan.hookRoundLimit) : std::string("default")) + "\n";
         out += "  fingerprint " + plan.fingerprint.Text() + "\n";
         for (std::size_t i = 0; i < plan.steps.size(); ++i) {
             const Step& step = plan.steps[i];

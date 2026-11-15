@@ -14,7 +14,12 @@
 //              "after" (also when (4) was skipped); every error of the call is
 //              one sibling list with the System's own Err; (6) tlCurrent cleared;
 //   SyncPoint  a stamp; the deferred records applied in the order of spec F.2;
-//              with verification on, W-1; the sync epoch +1;
+//              with verification on, W-1; the sync epoch +1; after the last
+//              sync point of the Plan, the hook rounds (spec F-12): the
+//              schedule's hook queue applied round after round until it is
+//              empty, each round with its own stamp and sync epoch, at most
+//              the schedule's hookRoundLimit or else KernelSettings'
+//              (HookRoundLimit Err past it); then W-1 again. Not a Plan step;
 //   EventTrim  the domain's records before the current tick dropped (F.3).
 // An Err from any source is recorded once (the handler), the World becomes
 // Interrupted, every record not yet applied is discarded, diagnostics are kept,
