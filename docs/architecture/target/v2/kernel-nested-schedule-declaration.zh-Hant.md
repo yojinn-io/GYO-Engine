@@ -1,6 +1,6 @@
 # 事前宣告：獨占 World 的 System 可以跑一張 schedule（`v8-arch-gyo2-nested-schedule`）
 
-更新：2026-11-15（修訂 6）。Owner：架構（GYO2 重建會話）。**狀態：使用者已核准（2026-11-15）——第 10 節七件都已定，包含 J-3、J-45 放寬的方向與要動的 Design Invariants。開工前還剩兩步：(1) 第 6 節有一個案例的期待要等 `v8-arch-gyo2-spawn-reject` 合併後補完，再請使用者核准一次判定；(2) 使用者說開工。**
+更新：2026-11-15（修訂 6，`v8-arch-gyo2-spawn-reject` 合併後補完）。Owner：架構（GYO2 重建會話）。**狀態：使用者已核准（2026-11-15）——第 10 節七件都已定，包含 J-3、J-45 放寬的方向與要動的 Design Invariants。`v8-arch-gyo2-spawn-reject`（PR #235，3743eaa8）合併後，第 6 節原本待定的那一個案例與第 5.4 節指紋固定值的清單已補完（下面標「合併後補的」）；這兩處請使用者再核准一次判定，核准後開工（使用者：「走完就開」）。**
 
 這一份是整份改寫：把 2026-11-15 當天定的事全部併進正文，不再用「待你判」的註記疊在舊文字上。各題當時的選項表與我建議時的理由不再抄一遍，留在修訂 5（提交 `eccda9bb` 的這個檔）；你的原話與理由以 [HANDOFF](HANDOFF.md) 的決定表為準。
 
@@ -172,7 +172,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 | 11 | `Params.hpp` | `Get` 回傳指標、`GetMut` 回傳 `Mut` | 換成 `Read<T>(實體, f)`、`Modify<T>(實體, f)`（Resource 不帶實體）。f 可以回傳值；回傳型別屬於第 3.4 節那張清單的（含 `pair`／`tuple` 裡面的項），用 `requires` 約束擋掉（測試用 `requires` 運算式確認，不靠建置失敗）。結果帶三種情形：有（連同 f 的回傳值）、沒有、錯誤；確切的型別實作時定。f 執行期間呼叫 `RunSchedule` 回 Err（句柄上記深度） |
 | 12 | `Executor.cpp`、`World.cpp`、`Registry.cpp` | 執行器不知道 Startup 跑過沒有；Startup 的張數沒有限制 | World 記兩件事：Startup 跑過了沒、Startup 是不是正在執行中。runner 從外面執行任何一張不是 Startup 的 schedule、Startup 還沒跑過時：先完整地執行一次 Startup（進場、讀 `KernelSettings`、驗證的比對、同步點、hook 的清空輪、回到閒置），再開始原本那張的全部步驟；Startup 出錯就不跑原本要跑的那張、不推進它的 tick。主程式明確呼叫 Startup：還沒跑過就跑，並記成跑過；已經跑過（明確呼叫過，或自動跑過）再呼叫是斷言。巢狀跑 Startup、Startup 執行中巢狀跑別的：回 Err。啟動檢查加一條：一個 World 有第二張 Startup 就報錯。**從外面呼叫的行為會變**（以前不呼叫就不會跑、重跑不會被擋） |
 | 13 | `KernelError.hpp`、`Registry.cpp` 的 `ToString` | — | 新增錯誤碼（加在列舉的最後）：schedule 正在執行中、名字不存在、作者的 System 不能跑 Startup、Startup 執行中不能跑別的 schedule、extract 不能巢狀跑、hook 裡不能跑、閉包裡不能跑、寫沒列在宣告裡的單一寫者 Resource、讀不給讀的 Resource（`KernelSettings`、執行緒親和不合的）、巢狀執行被例外中止。啟動錯誤加一個：第二張 Startup。每一種拒絕的規則代號（`error.rule`）照現有的編號往下排，案例指定代號 |
-| 14 | `Fingerprint.cpp` | 三個常數：執行計畫的格式 `kFingerprintVersion = 2`、Registry 的 `kRegistryFingerprintVersion = 2`、C 指紋的 `kCFingerprintVersion = 4` | 執行計畫的加到 3、C 的加到 5（和 hook 那一批一樣；`v8-arch-gyo2-spawn-reject` 如果先加過，就以開工時的值為準各再加一）；Registry 的常數不動，但它的值會跟著變（它把每張執行計畫的指紋文字算進去，`Fingerprint.cpp:318`）。寫死指紋的測試有四處，固定值都要換、判定不變：J-20（`SchedulerTests.cpp:131-136`）、J-18（`RegistryTests.cpp:41`）、J-54（`HookFlushTests.cpp:882-886`）、initial value（`InitialValueTests.cpp:903-906`）。`v8-arch-gyo2-spawn-reject` 的檢查者實測會變的測試是 8 個（同一處檔案裡有好幾個測試），開工時以那一批合併後的清單為準，補進第 5.4 節再請你看。見第 5.4 節與第 10 節第 2 件 |
+| 14 | `Fingerprint.cpp` | 三個常數（#235 合併後的值）：執行計畫的格式 `kFingerprintVersion = 3`、Registry 的 `kRegistryFingerprintVersion = 2`、C 指紋的 `kCFingerprintVersion = 5` | 執行計畫的加到 4、C 的加到 6；Registry 的常數不動，但它的值會跟著變（它把每張執行計畫的指紋文字算進去，`Fingerprint.cpp:318`）。寫死版本或指紋的地方見第 5.4 節的清單（合併後補的），判定都不變 |
 | 15 | 不改、但要寫測試固定下來的 | tick 由裡面那張推進；hook 的佇列每張 schedule 一個；裡面那張的執行不套用、也不丟掉外層 schedule 的 hook 佇列（hook 那一批交過來的）；事件每個 tick 修剪；巢狀的同步點期間，呼叫的上下文會還原成外層的 | 行為不變 |
 
 測試：新檔 `tests/common/kernel/NestedRunTests.cpp`。既有測試要跟著介面改寫法的：守衛 J-45 的五個函式（`ExecutorTests.cpp:502-527`）；`SignatureTests.cpp`、`CoverageTests.cpp`、`ZoneRuleTests.cpp` 裡用到 `ExclusiveWorld` 的簽名改寫成 `ExclusiveWorld<>`（判定都不變）。
@@ -183,7 +183,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 
 **不碰**：`World::ApplySync` 套用的順序、事件的讀法、`Scheduler.cpp`、漏斗工具、`.github/`、`build/`。`Fingerprint.cpp` 只動第 14 項的兩個常數（執行計畫的與 C 的）；`Registry.cpp` 只動第 10、12 項的三條啟動檢查與第 13 項的 `ToString`。
 
-**和別的分支的先後**：從併入 #234（hook 的清空）與 `v8-arch-gyo2-spawn-reject` 之後的 `gyo2` 開工。
+**和別的分支的先後**：從併入 #234（hook 的清空）與 #235（`v8-arch-gyo2-spawn-reject`，3743eaa8）之後的 `gyo2` 開工。
 
 ---
 
@@ -242,26 +242,42 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 | 守衛 J-10（`ExclusiveWorld` 是唯一的參數） | 判定不變；加一案：帶宣告的寫法也必須是唯一的參數 | 只收緊 |
 | 守衛 J-15（Startup 的寫者不算；`Shared` 的兩個寫者可以） | 判定不變；加一案：獨占的 System 列出來的單一寫者 Resource 有第二個寫者，報錯 | 只收緊 |
 | 守衛 J-54（hook 那一批；其中兩案明確呼叫一次 Startup） | 行為的判定不變（明確呼叫一次仍然合法）；它寫死的指紋固定值要換（第 5.4 節） | 見 5.4 |
-| 寫死指紋的四處測試（J-20、J-18、J-54、initial value） | 固定值換成新的；判定不變。除了版本號，指紋的內容不變：不碰 `Scheduler.cpp`；新的錯誤碼加在列舉的最後、不進指紋；新的啟動檢查不進指紋；帶宣告的寫法列出來的 Resource 用現有的「寫 Resource」存取，只有用到它的 Registry 指紋內容才會多這一筆 | 見 5.4 |
+| 寫死指紋版本與固定值的測試（J-18、J-20、J-54、J-55、initial value、coverage；清單在 5.4） | 固定值換成新的；判定不變。除了版本號，指紋的內容不變：不碰 `Scheduler.cpp`；新的錯誤碼加在列舉的最後、不進指紋；新的啟動檢查不進指紋；帶宣告的寫法列出來的 Resource 用現有的「寫 Resource」存取，只有用到它的 Registry 指紋內容才會多這一筆 | 見 5.4 |
 | 「同步點只在 stage 結尾與宣告的位置」（規格 D.2） | 不變 | — |
 | 規格 `:1308`（編輯器檢視器用 `ExclusiveWorld` 的說明） | 讀寫的寫法跟著改 | 文字 |
 | 規格 H.5 的 H-A1、H-9、DI-KS 12（回滾與重跑只由外面在閒置時呼叫） | **不變**，不在這一批 | — |
 
-### 5.4 四處寫死的指紋固定值（期待值變、判定不變）
+### 5.4 寫死的指紋版本與固定值（期待值變、判定不變；合併後補的清單）
 
 1. **它們守的性質**：同樣的登記內容算出同樣的指紋（三個平台相同）；格式改了，版本號要跟著變。
-2. **放寬的面**：無。換的是期待的字串；「算出來的要等於寫死的」這個判定不變。
+2. **放寬的面**：無。換的是期待的數字與字串；「算出來的要等於寫死的」這個判定不變。
 3. **收緊的面**：無。
-4. **原本的性質誰還守著**：同一批測試，用新的固定值。
-5. **根據與證據**：`Fingerprint.cpp:60-68`、`:318`；四處測試的位置見第 4 節第 14 項；慣例 `v8-arch-gyo2-hook-flush-not-in-plan-bump-versions`。
+4. **原本的性質誰還守著**：同一批測試，用新的值。
+5. **根據與證據**：`Fingerprint.cpp:60-68`、`:318`；慣例 `v8-arch-gyo2-hook-flush-not-in-plan-bump-versions`；清單照 `v8-arch-gyo2-spawn-reject` 那一批實測過的位置（那一批只改兩個版本常數時，失敗的正好是這些位置，8 個案例）加上那一批新增的一案。
 
-它們是守衛測試，所以即使沒有放寬面也列在這裡請你核准（併在第 10 節第 2 件）。HANDOFF 交代「事前宣告要查」的兩件：C 指紋不包含執行計畫的版本（`Fingerprint.cpp:376-398` 算的是精簡後的步驟），所以 C 的版本要自己加；Registry 指紋在 gyo2 上只有 Kernel 自己的介面與測試在用（`git grep` 查 `engine/`），有沒有存檔或重播拿它比對——gyo2 上沒有這些功能，之後加的時候要知道這個值在這一批變過。
+執行計畫 3→4、C 指紋 5→6 之後要換的地方（行號是 #235 合併後的 `gyo2`，3743eaa8）：
+
+| 位置 | 守衛 | 現在 | 之後 |
+|---|---|---|---|
+| `RegistryTests.cpp:41` | J-18 的 Registry 指紋 | `2:ffda…` | `2:` 新值 |
+| `SchedulerTests.cpp:132-137` | J-20 的三組（執行計畫指紋、Registry 指紋） | `3:…`、`2:…` | `4:` 新值、`2:` 新值 |
+| `SchedulerTests.cpp:636` | 匯出的文字裡執行計畫指紋的版本 | `"fingerprint 3:"` | `"fingerprint 4:"` |
+| `HookFlushTests.cpp:483-484` | J-54 的版本 | `3U`、`5U` | `4U`、`6U`（`:485` 的 Registry `2U` 不變） |
+| `HookFlushTests.cpp:882-886` | J-54 指定上限時的三種指紋 | `3:…`、`5:…`、`2:…` | `4:`、`6:`、`2:` 新值 |
+| `HookFlushTests.cpp:889` | 匯出的文字 | `…fingerprint 3:` | `…fingerprint 4:` |
+| `InitialValueTests.cpp:717`、`CoverageTests.cpp:504` | C 指紋的版本 | `== 5U` | `== 6U` |
+| `InitialValueTests.cpp:904`、`:906` | 初始值的 Registry 指紋、C 指紋 | `2:6ca0…`、`5:d565…` | `2:` 新值、`6:` 新值 |
+| `SpawnRejectTests.cpp:795-796` | J-55 的版本（#235 新增的一案） | `3U`、`5U` | `4U`、`6U`（`:797` 的 Registry `2U` 不變） |
+
+`mutations.json` 裡 `find` 寫著版本常數的突變（`:2912`、`:3879`、`:3889`、`:5325`、`:5335`）照新值重寫。實作時先只改兩個常數跑一次完整的 Kernel 測試，確認失敗的位置正好是這張表、沒有多也沒有少，再換值。
+
+它們是守衛測試，所以即使沒有放寬面也列在這裡請你核准。HANDOFF 交代「事前宣告要查」的兩件：C 指紋不包含執行計畫的版本（`Fingerprint.cpp:376-398` 算的是精簡後的步驟），所以 C 的版本要自己加；Registry 指紋在 gyo2 上只有 Kernel 自己的介面與測試在用（`git grep` 查 `engine/`），有沒有存檔或重播拿它比對——gyo2 上沒有這些功能，之後加的時候要知道這個值在這一批變過。
 
 ---
 
 ## 6. 判定（先宣告，結果出來之後不放寬）
 
-**判定 1：行為。** `NestedRunTests.cpp` 的案例全部通過。有一個案例的期待要等 `v8-arch-gyo2-spawn-reject` 合併後才寫得出來（表裡標【待定】）。那一批合併之後，我把這一案補完、再請你核准一次判定，之後才開工。
+**判定 1：行為。** `NestedRunTests.cpp` 的案例全部通過。原本要等 `v8-arch-gyo2-spawn-reject` 合併才寫得出來的那一個案例（「外層刪除後裡面用同一個編號生成」），那一批合併（3743eaa8）之後已經補完；連同第 5.4 節的清單請你再核准一次，之後開工。
 
 | 案例 | 驗什麼 |
 |---|---|
@@ -274,7 +290,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 | 外層留著的變更 | 同一個 stage 前面的 System 記了延後的變更：裡面那張看不到、不出錯（裡面那張有 hook 的清空輪時也一樣，清空輪不會把外層的那一段拿去套用）；外層的同步點照外層的位置套用，結果和不跑巢狀時相同；排在獨占 System 後面的 System 記的變更也在同一個同步點套用 |
 | 外層的插入碰上裡面的刪除 | (1) 外層 (b) 區的 System 記了往 E 的插入，裡面那張刪了 E：外層的同步點丟掉那一筆，計數加一，不出錯。(2) 外層 (c) 區的 System 記了往 E 的插入，裡面那張的 (b) 區 System 刪 E：裡面那張的同步點回報 Z5 的錯誤，E 沒有被刪，訊息指出那筆紀錄在外層的哪張 schedule。(3) 三層（A 跑 B、B 跑 C），紀錄在最外層：一樣回報。(4) 那筆插入是外層 schedule 的 (c) 區 hook 記的（還在 hook 的佇列裡）：一樣回報。(5) 外層 (c) 區用指定的編號生成 E：一樣回報 |
 | 外層的 hook 佇列不被裡面那張動到 | 外層 schedule 的 hook 佇列裡有紀錄時跑裡面那張：裡面那張跑完，外層的那幾筆還在、沒有被套用，等外層自己跑完時才套用 |
-| 外層刪除後裡面用同一個編號生成 | 外層記了刪除 E（E 還活著），裡面那張用指定的編號生成 E：固定實際的行為。`v8-arch-gyo2-spawn-reject` 合併之後的期待是「裡面那筆生成被丟掉並計數，外層的刪除照常刪掉舊的」；開工時照那一批合併後的行為寫定【待定】 |
+| 外層刪除後裡面用同一個編號生成（合併後補的） | 照 `v8-arch-gyo2-spawn-reject` 合併後的行為，兩種情形各一案。(1) 舊的還活著：外層記了刪除 E，裡面那張用指定的編號生成 E——裡面那筆生成被丟掉，留一筆明細（理由是「編號還活著」、schedule 是裡面那張）、總數加一，舊的 E 原封不動，裡面那張照常跑完、不回報錯誤；回到外層後，外層的同步點照常刪掉舊的 E。最後 E 不存在。(2) 舊的不在：外層記了刪除 E（E 本來就不在），裡面那張生成 E 成功；回到外層後，外層的同步點把新的 E 刪掉。最後 E 不存在，沒有明細。兩種都和說明頁寫的「要避開的排法」一致 |
 | 存取驗證不誤報 | 驗證打開：獨占 System 在跑 schedule 的前後各寫一次 (b) 區 `Shared` 的元件與列出來的 Resource，不報錯 |
 | 存取驗證照樣抓得到 | 驗證打開：(1) 裡面那張的 System 寫了沒宣告的資料，報錯並點名它；(2) 獨占 System 在進入巢狀前寫了不准寫的資料，記在它自己頭上，裡面那張沒有跑；(3) 獨占 System 經 World 的公開介面繞路寫沒列的單一寫者 Resource：在存取當下報（W-5）；(4) 經存下來的位址寫它：在 System 的邊界比對時報 |
 | 句柄與 stamp | 裡面那張跑兩次；外層在兩次之間用 `Modify` 寫入，裡面那張第二次執行時帶 `Changed` 的 System 看得到。驗證打開時，裡面那張出錯後外層再用句柄，不會多報一個「句柄過期」 |
@@ -298,7 +314,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 | Startup：被拒絕 | (1) 獨占的 System 巢狀跑 Startup：回 Err（Startup 跑過之後一案；用主程式先跑別的 schedule 觸發的那一次裡再呼叫一案）。(2) Startup 裡的獨占 System 巢狀跑別的 schedule：回 Err，訊息裡有那個 System 與那張 schedule 的名字。(3) 登記兩張 Startup：啟動時報錯（指定規則代號）。(4) 主程式明確呼叫第二次、Kernel 自動跑過之後才明確呼叫，各一案：斷言 |
 | Startup：出錯 | Startup 裡的 System 回 Err：觸發它的那次 `Run` 回 Err、World 中斷、原本要跑的那張一個 System 都沒有執行、它的 tick 沒有推進 |
 | Startup：哪些 schedule 會觸發 | 第一次執行的是帶時鐘的 schedule、是同一個時鐘域裡不推進 tick 的 schedule，各一案：都先跑完 Startup。外層不推進 tick、裡面的獨占 System 跑帶時鐘的那張：Startup 在外層第一個 System 之前就跑完了，不在巢狀裡觸發 |
-| 指紋 | 有獨占 System（不帶宣告）的 schedule：除了版本號以外的內容和加這一批之前相同（把執行計畫與 C 的兩個常數換回舊值重算，四處的結果和舊的固定值相同） |
+| 指紋 | 有獨占 System（不帶宣告）的 schedule：除了版本號以外的內容和加這一批之前相同（把執行計畫與 C 的兩個常數換回舊值重算，第 5.4 節每一處的結果和舊的固定值相同） |
 
 **判定 2：檢出力。** 突變清單在實作前由實作者（Opus）定案，交別的模型（Fable）檢查——找出「把實作改壞而測試仍然全過」的地方並補上。至少包含：
 - 執行器：跑完設回閒置；成員檢查整個拿掉；跑過 schedule 的 System 完全不查成員；進入巢狀前只重拍、不先比對；任何呼叫都可以進入巢狀；例外之後深度不還原；跑自己不擋；跑自己只查最內層；hook 裡可以跑；閉包裡可以跑；extract 也放行；名字不存在改成斷言。
@@ -376,7 +392,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
 | 件 | 定下的 | 使用者的話 | 代號 |
 |---|---|---|---|
 | 1. 開局在哪些 schedule 之前跑 | 任何一張不是 Startup 的 schedule 之前；開局一定最先 | 判準：「應該排在「tick開始前」否則光是同步tick就要最一堆判斷。」；對分支會話的看法回「可以」 | `v8-arch-gyo2-startup-before-any-schedule` |
-| 2. 自動跑開局與指紋 | 不寫進執行計畫；執行計畫的格式版本與 C 指紋的版本各加一（以開工時的值為準）；Registry 的版本號不加、值會變。四處寫死指紋的守衛測試換固定值（第 5.4 節） | 「照建議」 | `v8-arch-gyo2-nested-declaration-approved` |
+| 2. 自動跑開局與指紋 | 不寫進執行計畫；執行計畫的格式版本與 C 指紋的版本各加一（以開工時的值為準）；Registry 的版本號不加、值會變。四處寫死指紋的守衛測試換固定值（第 5.4 節；#235 合併後清單補成那一節的表，多了版本的檢查與兩個檔，請再核准一次） | 「照建議」 | `v8-arch-gyo2-nested-declaration-approved` |
 | 3. 主程式呼叫開局的時機不對 | 斷言 | 「照建議」 | 同上 |
 | 4. 閉包不准回傳的型別 | 第 3.4 節的清單；`pair`／`tuple` 裡面的每一項也檢查 | 「照建議」 | 同上 |
 | 5. 帶宣告的寫法叫什麼 | 一個名字：`ExclusiveWorld<Writes<…>>`／`ExclusiveWorld<>` | 「一個名字就行。」 | 同上 |
