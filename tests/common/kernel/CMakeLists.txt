@@ -22,6 +22,7 @@ set(GYO_KERNEL_TEST_SOURCES
     InitialValueTests.cpp
     StrictOrderTests.cpp
     HookFlushTests.cpp
+    SpawnRejectTests.cpp
     zone_c_fixture/SyntheticSimulation.cpp
     zone_c_fixture/AnotherSimulation.cpp
 )
@@ -57,7 +58,7 @@ set(GYO_KERNEL_J_ENTRIES
     J-1 J-2 J-3 J-4 J-5 J-6 J-7 J-8
     J-10 J-11 J-12 J-13 J-14 J-15 J-16 J-17 J-18 J-19 J-20 J-21 J-22 J-23 J-24 J-25
     J-26 J-27 J-28 J-29 J-30 J-31 J-32 J-32b J-33 J-34 J-35 J-36 J-37 J-38 J-39 J-40 J-41
-    J-44 J-45 J-47 J-50 J-52 J-53 J-54)
+    J-44 J-45 J-47 J-50 J-52 J-53 J-54 J-55)
 # A filter that matches no case would pass silently, so a run of zero cases fails.
 foreach(entry IN LISTS GYO_KERNEL_J_ENTRIES)
     add_test(NAME kernel.${entry} COMMAND gyo_kernel_tests "--test-case=${entry}:*")
@@ -189,7 +190,8 @@ function(gyo_kernel_compile_fail_samples)
                              RETURN:GYO_KERNEL_REJECT_RETURN SELF_CONFLICT:GYO_KERNEL_REJECT_SELF_CONFLICT
                              CONDITION_WRITE:GYO_KERNEL_REJECT_CONDITION_WRITE
                              MEMBER:GYO_KERNEL_REJECT_MEMBER_FUNCTION HOOK_PARAMETER:GYO_KERNEL_REJECT_PARAMETER
-                             HANDLE_COPY:GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE)
+                             HANDLE_COPY:GYO_KERNEL_SAMPLE_HANDLE_NOT_COPYABLE
+                             KERNEL_DIAGNOSTICS:GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS)
         string(REPLACE ":" ";" parts "${variant}")
         list(GET parts 0 name)
         list(GET parts 1 marker)

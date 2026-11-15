@@ -1,6 +1,6 @@
 # 事前宣告：同步點丟掉不能生成的那一筆（`v8-arch-gyo2-spawn-reject`）
 
-更新：2026-11-15（修訂 2）。Owner：架構（GYO2 重建主會話開出的任務卡）。**狀態：草稿，待使用者核准。核准之前不改 `engine/` 與 `tests/`（5.4 的試做沒有提交、已還原）。**
+更新：2026-11-15（修訂 2）。Owner：架構（GYO2 重建主會話開出的任務卡）。**狀態：使用者 2026-11-15 核准（「核准」）。**
 
 經過：
 - 修訂 0：照使用者的決定寫；實作前做了試做（5.4）。送別模型檢查（Fable／xhigh，唯讀，兼 §14.4 的驗證者）：blocker 3、should 13、nit 8（報告：主 checkout `build/evidence/gyo2-spawn-reject/declaration-check-r1-fable.md`；實驗 `check-r1-experiments/`）。
