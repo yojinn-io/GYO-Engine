@@ -1223,3 +1223,74 @@ TEST_CASE("initial value: the request an error names does not depend on the orde
     CHECK_MESSAGE(Describe(built).find("writes 'Seat' (filled from 'Ember' by Registrar::InitialValue)") != std::string::npos,
                   Describe(built));
 }
+
+// ---- Follow-ups of the adversarial check (v8-arch-gyo2-funnel-check, S1 and S2).
+
+namespace {
+
+Mass MassFromRequest(const BodyAt& request) { return Mass{request.x}; }
+
+SystemResult SpawnsRequestAndCrate(Spawn<Bundle<BodyAt, Crate>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    auto made = spawn.New(BodyAt{3}, Crate{1});
+    if (!made) return Engine::Base::Err(std::move(made).error());
+    return Ok();
+}
+
+} // namespace
+
+TEST_CASE("initial value: the source file of a zone C declaration is in the zone C sources export") {
+    // The function that computes zone C data is zone C code: the determinism
+    // scan (spec G-5) must see the file that declares it, System or not.
+    const auto build = [](bool declare) {
+        return KernelTest::Finish({{"test", [declare](Registrar& r) {
+            SeatData(r, Rollback::Yes, false);
+            if (declare) r.InitialValue<Seat, &SeatFromSpark>();
+        }}});
+    };
+    ZoneCSourcesOptions options{GYO_KERNEL_TEST_REPOSITORY_ROOT, "tests/common/kernel", {}, "0000000"};
+    const Built with = build(true);
+    KERNEL_REQUIRE_OK(with);
+    const auto exported = with.registry->Frozen().ExportZoneCSources(options);
+    REQUIRE(static_cast<bool>(exported));
+    CHECK_MESSAGE(exported.value().find("tests/common/kernel/InitialValueTests.cpp") != std::string::npos, exported.value());
+    // Without the declaration this Registry has no zone C code in this file.
+    const Built without = build(false);
+    KERNEL_REQUIRE_OK(without);
+    const auto bare = without.registry->Frozen().ExportZoneCSources(options);
+    REQUIRE(static_cast<bool>(bare));
+    CHECK_MESSAGE(bare.value().find("InitialValueTests.cpp") == std::string::npos, bare.value());
+}
+
+TEST_CASE("initial value: a zone B declaration adds no file to the zone C sources export") {
+    const Built built = KernelTest::Finish({{"test", [](Registrar& r) {
+        Data(r);
+        r.InitialValue<Body, &BodyFromRequest>();
+    }}});
+    KERNEL_REQUIRE_OK(built);
+    ZoneCSourcesOptions options{GYO_KERNEL_TEST_REPOSITORY_ROOT, "tests/common/kernel", {}, "0000000"};
+    const auto exported = built.registry->Frozen().ExportZoneCSources(options);
+    REQUIRE(static_cast<bool>(exported));
+    CHECK_MESSAGE(exported.value().find("InitialValueTests.cpp") == std::string::npos, exported.value());
+}
+
+TEST_CASE("initial value: a request that appears through a chain is looked at after the direct requests") {
+    // Mass (from BodyAt) and Crate both give Body a value. Mass has the lower
+    // ComponentId, but it only appears in the second round, after Crate was
+    // looked at: Crate gives the value. "The lower ComponentId" holds among
+    // the requests of one round.
+    auto rig = Start([](Registrar& r) {
+        Data(r);
+        r.InitialValue<Mass, &MassFromRequest>();
+        r.InitialValue<Body, &BodyFromMass>();
+        r.InitialValue<Body, &BodyFromCrate>();
+        r.AddSystem<&SpawnsRequestAndCrate>(In("SpawnsRequestAndCrate", "Request"));
+    });
+    REQUIRE(rig->product);
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    REQUIRE(rig->world().Entities().size() == 1);
+    const EntityId id = rig->world().Entities()[0];
+    REQUIRE(rig->world().Get<Mass>(id) != nullptr);
+    REQUIRE(rig->world().Get<Body>(id) != nullptr);
+    CHECK(rig->world().Get<Body>(id)->x == 8);  // BodyFromCrate(1), not BodyFromMass(3) = 30
+}
