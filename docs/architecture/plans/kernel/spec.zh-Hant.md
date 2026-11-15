@@ -63,7 +63,7 @@
 
 ```text
 World
-├── state        : Building | Ready | Running(plan, step) | Applying(sync point) | Interrupted
+├── state        : Building | Ready | Running(一疊：每層 plan, step；K0 起獨占 System 跑的 schedule 疊在上面) | Applying(sync point) | Interrupted
 ├── registry     : const Registry*（finish 後凍結）
 ├── ownerThread  : 只有這條執行緒能存取 World（W-6）
 ├── entities     : vector<EntityId>，嚴格升冪：這個 World 所有活著的實體
@@ -118,7 +118,7 @@ ownerPlugin
 - Resource 在 Running 期間不搬動位址。
 
 **ChangeStamp**
-- `uint64`。每一個 Plan 步驟（System 或同步點）開始時，World 取下一個值：stamp 是**依 Plan 順序推進的全域計數**，跨同一 World 的所有 schedule 單調；條件為假被跳過的 System 也消耗它的值（X-5）。除了執行計畫的每一步，「跑完時清空的每一輪」也各取一個新的記號；記號仍然只往前走（F-12（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准））。取值依 Plan 順序而不依完成先後，所以 Parallel 時與 Serial 相同；同一 World 的 schedule 執行歷史相同時，stamp 序列相同。stamp 不是 (c) 資料（Loading 的批數、Frame 與 Fixed 的交錯會改變它的值，但不改變 (c) 結果——(c) 禁變更過濾，S-9）。
+- `uint64`。每一個 Plan 步驟（System 或同步點）開始時，World 取下一個值：stamp 是**依 Plan 順序推進的全域計數**，跨同一 World 的所有 schedule 單調；條件為假被跳過的 System 也消耗它的值（X-5）。除了執行計畫的每一步，「跑完時清空的每一輪」與「巢狀回來之後」也各取一個新的記號；記號仍然只往前走（F-12（`v8-arch-gyo2-hook-flush`，使用者 2026-11-15 核准）；巢狀（K0，`v8-arch-gyo2-nested-schedule`））；執行歷史相同則序列相同。取值依 Plan 順序而不依完成先後，所以 Parallel 時與 Serial 相同；同一 World 的 schedule 執行歷史相同時，stamp 序列相同。stamp 不是 (c) 資料（Loading 的批數、Frame 與 Fixed 的交錯會改變它的值，但不改變 (c) 結果——(c) 禁變更過濾，S-9）。
 - `tickStamps[domain]` 記每個 tick 的第一個 stamp。複製層用它把「Ledger 已確認到 tick T」換算成 stamp 界線（`changed > tickStamps[T+1] − 1`），這就是 networking 圖 3 第 2 點的機制形式。
 - stamp **不是** (c) 資料：不進回滾快照、不回滾、(c) 區 System 不得用它過濾（G-6）。
 - 見 A.6 取捨 2：這與 DI-K5／networking §1 第 7 條「變更以遊戲 tick 標記」不同。
@@ -620,7 +620,7 @@ Executor 狀態（每個 Runtime 一份）：`hasRun`（第一次 Run 進入 Run
 | X-2 | 含 zone=C System 的 schedule 預設 Serial；宣告 Parallel 必須指名一個存在、帶 `cpu` 標籤、比對 Serial 與 Parallel 逐位元相同的守衛測試，否則 X-E1；v1 任何 Parallel 宣告都是 D-E17（修訂：S11） | J-27 |
 | X-3 | 親和：schedule 中每個 System 與 Resource 的親和都必須由 runner 滿足；不滿足是 X-E2／X-E3；執行時不符則 GYO_ASSERT | J-28 |
 | X-4 | run 條件每次執行前求值一次，結果不快取 | J-29：條件讀的 Resource 在前一步被改，條件看到新值 |
-| X-5 | 被跳過的 System 也消耗 stamp；「跑完時清空的每一輪」也各取一個（F-12）；同一 World 的 schedule 執行歷史相同時 stamp 序列相同；Parallel 與 Serial 相同 | J-30、J-54 |
+| X-5 | 被跳過的 System 也消耗 stamp；「跑完時清空的每一輪」與「巢狀回來之後」也各取一個（F-12；K0）；同一 World 的 schedule 執行歷史相同時 stamp 序列相同；Parallel 與 Serial 相同 | J-30、J-54 |
 | X-6 | v1 不跨執行緒轉送單一 System | 啟動檢查 X-E2／X-E3；審查 |
 | X-7 | Parallel 時每個 System 的 stamp、佇列套用順序、事件 seq 都與 Serial 相同 | J-27 的守衛（Parallel 實作時啟用） |
 | X-8 | Executor 不讀時鐘、不讀亂數、不依執行緒數決定任何順序；worker 數由設定決定、與機器無關 | J-9 文字掃描 |
@@ -774,7 +774,7 @@ resourceOps : vector<{ResourceId, insert|remove, bytes, planPos, recSeq}>
 | Z2 | zone=C 的資料只由 zone=C 的 System 或 hook 寫入（含 bundle 與 `EntityAllotter`）；例外見 Z3。Runtime 的回滾還原與 Host 在 Ready 狀態對 boundary Resource 的寫入不算 |
 | Z3 | zone=B 且 `ingress = true` 的 System 可寫 `role = Input` 的 zone=C 資料；它必須位於 ScheduleDef 指定為 ingress 的 stage（schedule 的第一個 stage）；可以讀並消費（清空）**自己那一份**收件 external Resource（`LinkMembershipInbound`、`LinkInputInbound`、`AssetInbox`；zone=B 寫 zone=B 的 external 不觸及 Z1／Z7） |
 | Z4 | zone=C 的 System：無 effect（S-8；`Diagnostics` 例外，v0.3）、無 Local（S-7）、無 Changed／Added（S-9）、無 `ExclusiveWorld`（S-13） |
-| Z5 | Despawn 一個帶有 zone=C 欄的實體，發出者必須是 zone=C。檢查：**記錄當下**（Running 期間成員凍結，W-3，所以記錄時就能查目標實體有沒有 zone=C 欄；(b) 發出者 → 記進本次呼叫的 context、跳板回 Err）；套用時 F.2 第 2 步再複核本窗 (c) 的待套用 insert／spawn（B-11）；finish 時對 (b) System 的 `Despawn` 無法靜態判斷目標，不做啟動檢查 |
+| Z5 | Despawn 一個帶有 zone=C 欄的實體，發出者必須是 zone=C。檢查：**記錄當下**（Running 期間成員凍結，W-3，所以記錄時就能查目標實體有沒有 zone=C 欄；(b) 發出者 → 記進本次呼叫的 context、跳板回 Err）；套用時 F.2 第 2 步再複核本窗 (c) 的待套用 insert／spawn（B-11），K0 起也看外面每一層留著的紀錄與那幾張 schedule 的 hook 佇列（指定編號的生成也算；訊息指出在哪一層、哪張 schedule）；finish 時對 (b) System 的 `Despawn` 無法靜態判斷目標，不做啟動檢查 |
 | Z6 | `rollbackEnabled` 的 schedule 上，zone=C 的 System 寫的每個欄與 Resource 必須是 `rollback ∈ {Yes, Derived}`（Derived 另受 D-E16 的順序條件）；zone=C 的 hook 寫的必須是 `rollback = Yes`（修訂：S12） |
 | Z7 | zone=C 的 System 不得寫 `external` Resource（`ResMut<Link>` 在 (c) 是 D-E7）；由 Z1 的「全部存取」涵蓋，單列是為了 J-41 的案例（修訂：B2） |
 | Z8 | `role = Input` 的欄與 Resource 必須 `rollback = No`（修訂：B7）：輸入是以 tick 為鍵的歷史，Rewind 不得抹掉 t0 之後已記錄的輸入，Replay 從它讀 |

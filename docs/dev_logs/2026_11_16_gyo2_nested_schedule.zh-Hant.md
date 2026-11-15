@@ -1,8 +1,8 @@
 # 獨占 World 的 System 可以跑一張 schedule（`v8-arch-gyo2-nested-schedule`，K0）
 
-日期：2026-11-16。分支 `claude/gyo2-nested-schedule-381f0f`（從 `gyo2` `3743eaa8` 開出）。PR：（開好後補）（目標 `gyo2`）。
+日期：2026-11-16。分支 `claude/gyo2-nested-schedule-381f0f`（從 `gyo2` `3743eaa8` 開出）。PR [#239](https://github.com/yojinn-io/GYO-Engine/pull/239)（目標 `gyo2`）。
 
-這一批由任務卡 gyo2-nested-schedule 做（GYO2 重建主會話開出）。事前宣告：K0 事前宣告修訂 6（`docs/architecture/target/v2/kernel-nested-schedule-declaration.zh-Hant.md`，在分支 `claude/gyo2-time-design`；使用者 2026-11-16「核准 K0」，`v8-arch-gyo2-k0-judgement-approved`）。實作者 Opus；宣告第 7 節的五處另由 Opus／xhigh 逐行複核；突變清單的對抗檢查 Fable／high。
+這一批由任務卡 gyo2-nested-schedule 做（GYO2 重建主會話開出）。事前宣告：[K0 事前宣告修訂 6](../architecture/target/v2/kernel-nested-schedule-declaration.zh-Hant.md)（#237 併進 `gyo2`；使用者 2026-11-16「核准 K0」，`v8-arch-gyo2-k0-judgement-approved`）。實作者 Opus；宣告第 7 節的五處另由 Opus／xhigh 逐行複核；突變清單的對抗檢查 Fable／high。
 
 ## 做了什麼
 
@@ -19,10 +19,46 @@
    - 句柄：`RunSchedule` 回來後（成功、失敗、被拒絕都一樣）句柄的同步點記號更新成 World 現在的，寫入的 stamp 換成新取的一個。
 2. **`ExclusiveWorld` 的新介面**（第 10、11 項）：一個名字的樣板，`ExclusiveWorld<>` 與 `ExclusiveWorld<Writes<R…>>`；別的寫法（例如 `ExclusiveWorld<Write<R>>`）由帶標記的 `static_assert` 擋。`Get`／`GetMut` 拿掉，換成閉包：`Read<T>(實體, f)`、`Modify<T>(實體, f)`、`Read<R>(f)`、`Modify<R>(f)`；結果是 `Result<std::optional<值>, KernelError>`（f 回 `void` 時是 `Result<bool, KernelError>`：有沒有呼叫 f）。f 的回傳型別用 `requires` 擋 `Detail::PointsIntoWorld`（指標、參考、`Mut`、`std::reference_wrapper`、任何長度的 `std::span`、`std::ranges::view`、迭代器；`pair`／`tuple` 遞迴看每一項；const 也看）。Resource 的規則：讀擋 `KernelSettings` 與親和不合（S-15，新代碼 `UnreadableResource`）；寫 (b) 區 `Shared` 的與列出來的，(c) 區照 S-13，(b) 區沒列的單一寫者是 S-14（新代碼 `UndeclaredResourceWrite`）。列出來的是 System 的「寫 Resource」存取，D-E2、Z2、D-E18、親和、Registry 指紋都自動成立。兩條新的啟動檢查（D-E7，S-14）：獨占的 System 設了 ingress 的旗標；hook 用帶宣告的寫法。
 3. **開局由 Kernel 跑**（第 12 項）：World 記 `startupRan_`、`startupRunning_`。`Product::Run(X)`：X 是 Startup → 斷言還沒跑過，記成跑過，跑；不是 → 有 Startup 而且還沒跑過時先完整跑一次（失敗就回傳、X 不跑、tick 不推進），再跑 X（tick 的推進在 `RunPlan` 的開頭，所以字面不用改）。新的啟動錯誤 D-E21（一個 World 第二張 Startup，規則 H-12）。
-4. **錯誤碼**（第 13 項）：`KernelErrorCode` 最後加十個（`ScheduleRunning`、`UnknownSchedule`、`StartupNotNestable`、`StartupRunning`、`ExtractNotNestable`、`HookRunsSchedule`、`ClosureRunsSchedule`、`UndeclaredResourceWrite`、`UnreadableResource`、`NestedRunAborted`）；規則代號照現有的往下排：X-11～X-16、H-12、S-14、S-15。
+4. **錯誤碼**（第 13 項）：`KernelErrorCode` 最後加十個（`ScheduleRunning`、`UnknownSchedule`、`StartupNotNestable`、`StartupRunning`、`ExtractNotNestable`、`HookRunsSchedule`、`ClosureRunsSchedule`、`UndeclaredResourceWrite`、`UnreadableResource`、`NestedRunAborted`）；規則代號照現有的往下排，每一種拒絕一個：X-11～X-16、H-12（作者的 System 跑 Startup）、H-13（Startup 執行中跑別的）、S-14（沒列的單一寫者 Resource）、S-15（讀 `KernelSettings`）、S-16（讀親和不合的 Resource）、S-17（獨占的 System 兼 ingress）、S-18（hook 用帶宣告的寫法）。最初 H-13、S-16 併在 H-12、S-15，S-17、S-18 併在 S-14；Opus／xhigh 的複核指出和宣告第 4 節第 13 項「每一種拒絕的規則代號」不合，拆開（主會話確認可以）。
 5. **指紋**（第 14 項）：執行計畫的格式 3→4、C 的 5→6；Registry 的版本不動、值跟著變。第 5.4 節的固定值換新值。
 6. **測試**：新檔 `NestedRunTests.cpp`（J-56 巢狀執行、J-57 `ExclusiveWorld` 的讀寫、J-58 開局；含 J-10、J-15、J-50 各加的一案），`CMakeLists.txt` 加來源與 J-56～J-58 的 ctest 項。既有測試只動宣告第 5 節列的：J-45 的五個函式改寫成 `Read`／`Modify`；`SignatureTests`、`CoverageTests`、`ZoneRuleTests` 的簽名改成 `ExclusiveWorld<>`；第 5.4 節的指紋固定值（J-55 的兩句訊息文字跟著改成新版本號）。
 7. **文件**：target `kernel.zh-Hant.md`（DI-KS 1、2、6、9、15 改寫；DI-KS 16～23 與 RC 15 新增）、`world.zh-Hant.md`、`limits.zh-Hant.md`（LIM-3）、舊規格 `spec.zh-Hant.md`（第 5.3 節列的各處，加 S-14、S-15、X-11～X-16、H-12、D-E21、J-56～J-58）、概念稿 E5 標拿掉、說明頁 `system-contract-page.zh-Hant.md` 第 3 節一列與第 11 節（三張表、重入與要避開的排法、閉包、開局）、`docs/cross-component-rules.md` 登記 CCR-2、`target/v2/README.md` 的索引。
+
+## 和宣告不一致或待定
+
+- **巢狀入口的「World 已中斷」檢查排在哪裡（待使用者判）**：宣告第 2 節第 8 點寫「中斷之後再呼叫 `RunSchedule`：不執行，直接回傳留下的那個錯誤」；判定 1「裡面丟出例外」的第二案要用「接住例外之後同一個 System 再呼叫，回傳的是留下的錯誤，而不是『正在執行中』」驗堆疊有沒有還原，這只有在「正在執行中」的檢查排在「已中斷」之前才分得出來。宣告沒定先後。現在的做法：先做各種拒絕，全部通過才看「已中斷」——第 2 節第 8 點只對合法的呼叫成立（已經中斷、又寫錯的呼叫拿到新的拒絕錯誤；錯誤處理仍然只呼叫一次）。已回報主會話，主會話列給使用者判；選「已中斷排第一」的話，要改的是入口那幾行、那一案的說法與 `ns-guard-not-popped-on-throw`（記成從外面看不到）。
+- **宣告第 1 節的三段合成兩個提交**：`RunSchedule` 是新的 `ExclusiveWorld<…>` 的成員，所以「巢狀執行」與「新介面」在同一個提交（ad1045f7），開局在下一個（6b23e941）。PR 說明列了每一段在哪些檔、哪些函式。
+
+## 宣告第 5.3 節、第 8 節與文件的對照
+
+| 宣告的列 | 改在哪裡 |
+|---|---|
+| 概念稿 E5 拿掉 | `target/v2/rebuild-concept.zh-Hant.md` E5 那一列、§3.9 |
+| 規格 E.2 第 1 步、規格 A 的狀態 | `plans/kernel/spec.zh-Hant.md` A.1 的 state（Running 變成一疊）、E.2 第 1 步（「或由獨占 System 發起」） |
+| DI-KS 1、S-10、S-13（讀全部的例外、`Writes`、S-13 的理由句） | `target/kernel.zh-Hant.md` DI-KS 1；spec §讀法的 `KernelSettings` 那一句、S-10、S-13（理由句只對元件成立）、新 S-14、S-15、S-16 |
+| DI-KS 2 | `target/kernel.zh-Hant.md` DI-KS 2 |
+| DI-KS 6、規格 B.3、`Declarations.hpp` 的註解、spec `:261` | `target/kernel.zh-Hant.md` DI-KS 6；spec B.3「不算寫者」那一段；`engine/kernel/include/engine/kernel/Declarations.hpp` 的 `ScheduleOptions::startup` 註解 |
+| 規格 D.2 第二張 Startup | spec D.2 的 8l（D-E21）、D-5 與 J-24 的範圍（D-E1～D-E21）；另加 8m（S-17、S-18） |
+| 規格 E.2（`Run` 的步驟）、DI-KS 8、A 的 clock | spec E.2 第 0 步；A.2「推進 domain tick」那一列；DI-KS 8 的字面不變 |
+| DI-KS 15 | `target/kernel.zh-Hant.md` DI-KS 15（啟停的例外；角色詞換成 runner） |
+| DI-KS 9、規格 W-3、target `world` 第 41 行 | `target/kernel.zh-Hant.md` DI-KS 9；spec W-3；`target/world.zh-Hant.md` §3 那一條 |
+| 規格 W-4、A.4、J-4 | spec W-4、A.4 新的一條、J-4 那一列；案例 J-56「句柄與 stamp」兩案、「裡面丟出例外」 |
+| LIM-3、規格 B.5 | `target/limits.zh-Hant.md` LIM-3；spec B.5 新的一列 |
+| target `world` DI 3、規格 E.2 的 stamp | `target/world.zh-Hant.md` §2 與 DI 3；spec A.1 的 stamp 與 X-5 |
+| 規格 Z5 | spec Z5 那一列（重查的範圍加上外面每一層） |
+| 規格 E.2（步驟的迴圈） | spec E.2 第 3 步 |
+| 規格 E.5 | spec E.5 新的一條；`target/kernel.zh-Hant.md` DI-KS 17 |
+| 規格 X-9 | spec X-9；新 X-11～X-16 |
+| 守衛 J-35、J-50、J-10、J-15 | spec J.2 各列加一句；案例在 `NestedRunTests.cpp` |
+| 守衛 J-54 與寫死指紋的測試 | 第 5.4 節的固定值（`RegistryTests`、`SchedulerTests`、`HookFlushTests`、`InitialValueTests`、`CoverageTests`、`SpawnRejectTests`） |
+| 規格 D.2「同步點只在 stage 結尾與宣告的位置」 | 不變 |
+| 規格 `:1308`（編輯器檢視器） | spec S-13 那一列的最後一句 |
+| H-A1、H-9、DI-KS 12 | 不變 |
+| 第 8 節八條 Design Invariants | `target/kernel.zh-Hant.md` DI-KS 16～23（新增的一節「巢狀執行」），各條寫了守衛的案例 |
+| 第 8 節 Replacement Criteria | `target/kernel.zh-Hant.md` RC 15 |
+| 第 11 節說明頁 | `target/v2/system-contract-page.zh-Hant.md` 第 3 節 `ExclusiveWorld` 那一列、第 11 節（11.1 誰能跑與拒絕、11.2 三張表與後果、11.3 重入與要避開的排法、11.4 閉包、11.5 開局） |
+| 第 4 節「文件」：cross-component-rules | `docs/cross-component-rules.md` CCR-2 |
+| 新的 H-13（宣告寫在 H-12 裡的那一條） | spec H.8 新的一列；`target/kernel.zh-Hant.md` DI-KS 22 |
 
 ## 開工前的兩個確認
 
