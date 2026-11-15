@@ -165,6 +165,8 @@ workflow 那端（`package_plan`）用 `GYO_SELECTED_TOOLS` 是否為空來決�
 | `prepare-release.yml`，train＝某個遊戲 | 沒有登記任何遊戲，`Unknown release train` 在第一個 job 失敗 | 讀碼（`resolve_train`） |
 | `app_copy_integration`（只在 Windows 的 toolchain 列、profile release 跑） | 把 engine、third_party、build/cmake 複製出去，放入兩份 fixture 遊戲，configure、建置、install、執行，兩個遊戲各印出自己的身分。零產品的 gyo2 上通過：新增與複製產品只靠產品內容與登記 | 本機（Intel Mac）實跑：`app-copy.log`、`app-copy-logs/`。**Windows 上沒有跑**（release profile 沒有觸發） |
 
+**合併後的補記**（使用者 2026-11-14「併進下一條線的文件更新」；卡留下的文字，主會話補）：合併後（`gyo2` 15ec34f1，PR #230 的 merge commit）手動觸發 Cross-platform CI：run [43600646685](https://github.com/yojinn-io/GYO-Engine/actions/runs/43600646685) success。L1 三平台通過；Quick acceptance 三個 toolchain 列通過，install、package 檢查、installed acceptance、archive、上傳都是 skipped，`CI validation` 通過（Quick acceptance 這條路徑第一次實跑，之前只跑過 Package trial）；CI gate 通過；`Report dispatched L1` 成功；snapshot 兩個 job skipped，沒有建立 tag 或發佈。合併前 `gyo2` 已前進到 79fad9cb（#227、#228、#232），PR 上的 L1 是對合併前的 base 跑的，這一次才是合併後的樹。步驟清單：主 checkout `build/evidence/gyo2-r0b3-closeout/gyo2-dispatch-run-43600646685.json`；合併前的本機試合檢查：同目錄 `pre-merge-check.log`。
+
 #### 3.2.6 OS 邊界守衛的判定變更（AGENTS.md §14.4 的五點；Design Invariants 的守衛，合併這個 PR 即表示核准）
 
 1. 守的性質：OS 的東西只在 `engine/os`；而且守衛真的掃到了該掃的根。
@@ -227,6 +229,7 @@ workflow 那端（`package_plan`）用 `GYO_SELECTED_TOOLS` 是否為空來決�
 - 對抗檢查由主會話（Fable）自己做，沒有第二個檢查者；新增的兩份突變清單是檢查者自己寫的，沒有再給別的模型看。
 - 沒有檢查 R0b-2 的刪除本身（判定 5 的重掃仍待 R0b-3 完成後另做）。
 - 證據：這台 Intel Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-r0b3-closeout/`：`reverse_checks.py`、`reverse-checks.log`、`probes.log`、`absence-scans.log`、`os-guard-mutations-{before,after,existing}.log`、`ci-policy-mutations-{before,after}.log`、`release-walkthrough.log`、`app-copy.log`、`app-copy-logs/`、`baseline-*.log`、`final-ctest.log`、`final-ci-policy.log`、`ctest-list-{before,after}.txt`、`trial-run-43596922844.json`、`trial-run-43596922844-notices.log`、`ci-policy-mutation-registry-independent.log`。
+- **合併後補記**：三平台 L1 與 Quick acceptance 已在合併後的樹（`gyo2` 15ec34f1）實跑通過，run 43600646685（見 3.2.5 的補記）。上面寫「沒有實跑」的 Quick acceptance 路徑因此已實跑一次。
 
 ## 4. 隨模組刪除的守衛（它們守的性質，R1、R2 重建時參考）
 
