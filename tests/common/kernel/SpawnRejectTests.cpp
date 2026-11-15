@@ -1097,3 +1097,30 @@ TEST_CASE("J-55: a dropped record triggers no OnAdd and no initial value, whatev
         CHECK_MESSAGE(Join(Log()) == "add:11", "J-55 no-onadd cross-phase: OnAdd for 11 once");
     }
 }
+
+// Two hooks spawn one id at step 0 (both dropped); a System of the window spawns it too. Each phase of a sync
+// point is judged on its own (user 2026-11-15): the window has one emitter and the id is not alive, so it spawns.
+namespace {
+SystemResult SpawnThirtyAtTickOne(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
+    if (tick.Tick() == 1) spawn.New(30, Tag{30});
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-55: two hooks collide at step 0 and a System of the window spawns the id: each phase is judged on its own") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r);
+        r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
+        r.Hook<Signal, &HookSpawnThirtyFirst>(HookTrigger::OnAdd, {.name = "HookSpawnThirtyFirst", .zone = Zone::B});
+        r.Hook<Signal, &HookSpawnThirtySecond>(HookTrigger::OnAdd, {.name = "HookSpawnThirtySecond", .zone = Zone::B});
+        r.AddSystem<&SpawnThirtyAtTickOne>(In("SpawnThirtyAtTickOne", "B"));
+    });
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE((rig->world().Get<Tag>(30) != nullptr && rig->world().Get<Tag>(30)->t == 30 && rig->world().Get<Body>(30) == nullptr),
+                  "J-55 phases-apart: the window's spawn of 30 applies");
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    CHECK_MESSAGE((rejected.size() == 2 && rejected[0].emitterIsHook && rejected[1].emitterIsHook &&
+                   rejected[0].reason == SpawnRejectReason::IdSpawnedTwice && rejected[1].reason == SpawnRejectReason::IdSpawnedTwice),
+                  "J-55 phases-apart: the two hooks' records are dropped");
+}
+

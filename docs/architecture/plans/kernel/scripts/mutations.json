@@ -5112,7 +5112,7 @@
       "id": "sr-tick-one",
       "what": "F-13: tick always 1 (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "            rejected.tick = tick;",
+      "find": "            rejected.tick = tickOfSchedule();",
       "replace": "            rejected.tick = 1;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
@@ -5122,11 +5122,21 @@
       "id": "sr-tick-fixed-domain",
       "what": "F-13: tick always the Fixed domain's (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "    const std::uint64_t tick = ticks_[DomainIndex(scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None)];\n",
-      "replace": "    const std::uint64_t tick = ticks_[DomainIndex(Domain::Fixed)];\n    (void)scheduleRecord;\n",
+      "find": "            rejectTick = ticks_[DomainIndex(scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None)];\n",
+      "replace": "            rejectTick = ticks_[DomainIndex(Domain::Fixed)];\n            (void)scheduleRecord;\n",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ early:\\ tick\\ 1\\ \\(the\\ Frame\\ domain's\\),\\ not\\ the\\ Fixed\\ domain's\\ 2"
+    },
+    {
+      "id": "sr-tick-cached-for-world",
+      "what": "F-13: the lazily looked-up tick is kept across sync points (static) (added after the adversarial check of the mutant list) (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    std::optional<std::uint64_t> rejectTick;\n",
+      "replace": "    static std::optional<std::uint64_t> rejectTick;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-55:*",
+      "expect": "J\\-55\\ second\\-tick:\\ tick\\ 2"
     },
     {
       "id": "sr-schedule-first",
@@ -5232,8 +5242,8 @@
       "id": "sr-drop-takes-stamp",
       "what": "F-13: a dropped spawn takes a stamp (v8-arch-gyo2-spawn-reject, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "            rejected.tick = tick;",
-      "replace": "            rejected.tick = tick;\n            ++stamp_;",
+      "find": "            rejected.tick = tickOfSchedule();",
+      "replace": "            rejected.tick = tickOfSchedule();\n            ++stamp_;",
       "target": "gyo_kernel_tests",
       "cases": "J-55:*",
       "expect": "J\\-55\\ no\\-stamp:\\ the\\ same\\ stamp\\ and\\ sync\\ epoch\\ steps\\ with\\ and\\ without\\ a\\ dropped\\ spawn"

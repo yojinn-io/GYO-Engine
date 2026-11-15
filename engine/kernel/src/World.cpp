@@ -515,8 +515,15 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
     // Spec F-13: the ids spawned at this sync point (both phases), ascending, with who spawned each.
     std::vector<std::pair<EntityId, std::string_view>> spawnedHere;
-    const Detail::ScheduleRecord* scheduleRecord = data_->FindSchedule(std::string(schedule));
-    const std::uint64_t tick = ticks_[DomainIndex(scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None)];
+    // The schedule's domain tick for a RejectedSpawn record, looked up only when one is dropped.
+    std::optional<std::uint64_t> rejectTick;
+    auto tickOfSchedule = [&]() {
+        if (!rejectTick) {
+            const Detail::ScheduleRecord* scheduleRecord = data_->FindSchedule(std::string(schedule));
+            rejectTick = ticks_[DomainIndex(scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None)];
+        }
+        return *rejectTick;
+    };
 
     // One phase: step 0 applies the hook queue this way, steps 1 to 7 the window's records.
     // pending: records of the same window not applied by this phase (step 0
@@ -619,7 +626,7 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             rejected.schedule = std::string(schedule);
             rejected.step = spawn.planPos;
             rejected.appliedAt = planPos;
-            rejected.tick = tick;
+            rejected.tick = tickOfSchedule();
             rejected.otherEmitter = std::string(other);
             RecordRejectedSpawn(std::move(rejected));
         };

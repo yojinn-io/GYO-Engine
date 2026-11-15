@@ -11,9 +11,9 @@
 3. **排序鍵**：第 4 步改成依 `(EntityId, planPos, recSeq)` 排序，並照規格 F.6 斷言相鄰鍵不相等（原本只照 id 排序、不穩定）。
 4. **明細與總數**：`RejectedSpawn`（entity、reason、emitter、emitterIsHook、emitterZone、fromAllotter、schedule、step、appliedAt、tick、otherEmitter）放進 World 現有的診斷紀錄，runner 在兩次 `Run` 之間以 `Diagnostics<RejectedSpawn>()`／`TakeDiagnostics<RejectedSpawn>()` 讀；`World::RejectedSpawns()` 一生只增不減。不設上限；World 中斷後保留；不叫 break 掛鉤。`DiagnosticsWriter<RejectedSpawn>` 由 `static_assert` 擋下（產品的紀錄不混進 Kernel 的明細）。
 5. **指紋**：執行計畫指紋版本 2→3、C 指紋 4→5（慣例 `v8-arch-gyo2-hook-flush-not-in-plan-bump-versions`）；Registry 指紋版本不變（值因含執行計畫指紋的文字而變）。
-6. **測試**：新檔 `SpawnRejectTests.cpp`（J-55，35 個案例、含子案例；其中 14 個是突變清單的對抗檢查之後補的）；`CMakeLists.txt` 加來源與 `GYO_KERNEL_J_ENTRIES` 的 J-55（不加的話 `kernel.others` 排除 `J-*`，J-55 不會在 ctest 跑）；`compile_fail` 加 `KERNEL_DIAGNOSTICS` 變體。
+6. **測試**：新檔 `SpawnRejectTests.cpp`（J-55，36 個案例、含子案例；其中 14 個是突變清單的對抗檢查之後補的，1 個是主會話審查之後補的）；`CMakeLists.txt` 加來源與 `GYO_KERNEL_J_ENTRIES` 的 J-55（不加的話 `kernel.others` 排除 `J-*`，J-55 不會在 ctest 跑）；`compile_fail` 加 `KERNEL_DIAGNOSTICS` 變體。
 7. **守衛的判定變更**（AGENTS §14.4，使用者核准）：J-32 子案例「往活著的編號生成」與 J-8 裡「配發器範圍」那一段，從「期待斷言」改成「期待丟掉、舊實體不動、明細與總數」；J-8 改用配發器 `[149, 151]`，之後配發器依序配到 149、150、151。指紋的 8 個固定值換新值（判定不變）。
-8. **突變**：`mutations.json` 加 `sr-*` 80 個（照宣告寫的與實作時補的 55 個，對抗檢查之後補的 25 個）；拿掉 `we-adv-spawn-alive-assert-removed`、`we-adv-spawnwithid-allotter-range-assert-removed`（`find` 是被拿掉的斷言，由 `sr-assert-alive`、`sr-assert-range` 取代）；`rs-b6-cfp-version-1`、`hf-plan-version-kept`、`hf-c-version-kept` 的 `find`／`expect` 照新版本重寫。
+8. **突變**：`mutations.json` 加 `sr-*` 81 個（照宣告寫的與實作時補的 55 個，對抗檢查之後補的 25 個，審查之後補的 1 個）；拿掉 `we-adv-spawn-alive-assert-removed`、`we-adv-spawnwithid-allotter-range-assert-removed`（`find` 是被拿掉的斷言，由 `sr-assert-alive`、`sr-assert-range` 取代）；`rs-b6-cfp-version-1`、`hf-plan-version-kept`、`hf-c-version-kept` 的 `find`／`expect` 照新版本重寫。
 9. **文件**：規格（A.1、H.2b 第 4 點、F.2 第 4 步與「結果」、F.6、F-13（新）、J-49 的突變說明、J-55（新））；target `kernel.zh-Hant.md` DI-KS 9 加一句、`world.zh-Hant.md`、`limits.zh-Hant.md` LIM-7（新）；說明頁第 10 節「生成被丟掉的時候」與第 6 節一句；`target/v2/README.md` 的索引。
 
 ## 使用者在卡片裡的決定（都已轉給主會話記進 HANDOFF）
@@ -34,7 +34,7 @@
 
 ## 檢證
 
-- **本機（macOS；`uname -m` 是 x86_64）**：完整 `ctest` 96 個全過；`gyo_kernel_tests` 233 個案例、`gyo_kernel_tests_reversed` 233 個全過；`compile_fail` 的樣本在設定時跑（`KERNEL_DIAGNOSTICS rejected with GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS`）。
+- **本機（macOS；`uname -m` 是 x86_64）**：完整 `ctest` 96 個全過；`gyo_kernel_tests` 234 個案例、`gyo_kernel_tests_reversed` 全過；`compile_fail` 的樣本在設定時跑（`KERNEL_DIAGNOSTICS rejected with GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS`）。
 - **指紋**：只改兩個版本常數時失敗的位置與宣告第 4 節的表一致（宣告的檢查者實測；實作後第一次跑也是同樣 8 個案例失敗、其他全過）。
 - **突變**（照 `mutation-rerun-scope`）：新的 `sr-*` 55 個；`World.cpp`、`Executor.cpp`、`Fingerprint.cpp` 的全部（三條斷言以前是別的突變的隱性保險，照 `find` 的位置挑會漏）；被改到的測試抓的（J-8、J-18、J-20、J-32、J-54、初始值的指紋、`ExportPlans`）；`rs-iv-fb5-sort-tiebreak-dropped`。共 198 個：197 killed、1 wrong_failure（`sr-range-on-spawn`：前一個子案例的 `REQUIRE` 失敗中止了整個案例，預期那一句沒跑到）。把那個子案例拆成獨立的案例（判定不變）後，它與同一組 6 個重跑全部 killed。
 - **突變清單的對抗檢查**：Fable／xhigh（唯讀子代理，在自己的 worktree 跑實驗；報告 `impl/mutation-check-fable.md`）。存活的缺口 7 項（10 個突變存活）、expect 問題 6 項、漏做或和宣告不同 6 項、測試的錯 2 項。照報告處理：
@@ -45,6 +45,8 @@
   - 檢查者也確認了：兩個 System 的案例真的互不衝突、計畫順序是登記順序、「跨兩次套用」確實走第 0 步。
   - 改實作與加案例之後的突變重跑：`sr-*` 80 個加 `World.cpp` 的既有突變，共 113 個，113 killed（`mutants-run3.log`；`Executor.cpp`、`Fingerprint.cpp` 與其他相關的既有突變在第一次重跑時已全部 killed，這次的改動只在第 4 步）。
 - **L1 三平台**：（補）
+
+- **主會話的審查（PR #235）**：沒有擋合併的問題。兩點已處理：(1) 效能——`ApplySync` 不再每個同步點查一次 schedule，tick 只在第一次要記明細時才查；(2) 「第 0 步兩個 hook 撞號（兩筆都丟）、窗裡一個 System 又生成同一個編號」——現在窗裡那筆照常生成。列給使用者兩個選項（依套用分開判／整個同步點一起判），使用者問「現實的遊戲實作中，會有人寫這種代碼而不會發現嗎？Engine提供的是機制。」之後定：「對，就這樣。如果規則訂太死，Engine就失去了活力。遊戲類型很多，而且方向也多，我不能保證限制太死了，我在做其他遊戲時能否撐住。」→ 依套用分開判；DI-KS 9 的「同一個同步點裡」改「同一次套用裡」並寫明兩次套用各自判；補案例；說明頁寫明。之後 `sr-*` 81 個加 `World.cpp` 的既有突變共 114 個重跑，114 killed（`mutants-run4.log`）。
 
 ## 經過
 
@@ -73,4 +75,4 @@
 
 - `spike/`：核准前的試做（`spike.patch`、`spike_mutants.py`、`spike-mutants.log`）。
 - `declaration-check-r1-fable.md`、`check-r1-experiments/`：宣告的對抗檢查。
-- `impl/`：建置與測試（`configure1.log`、`build1.log`～`build6.log`、`kernel-tests1.log`～`kernel-tests3.log`、`reversed2.log`～`reversed4.log`、`ctest1.log`～`ctest3.log`）；突變（`make_sr_mutants.py`、`rerun-ids.txt`、`rerun-ids-2.txt`、`mutants-run1.log`～`mutants-run3.log`）；突變清單的對抗檢查（`mutation-check-fable.md`、`mutation-check-fable-experiments/`）。
+- `impl/`：建置與測試（`configure1.log`、`build1.log`～`build6.log`、`kernel-tests1.log`～`kernel-tests3.log`、`reversed2.log`～`reversed4.log`、`ctest1.log`～`ctest3.log`）；突變（`make_sr_mutants.py`、`rerun-ids.txt`、`rerun-ids-2.txt`、`rerun-ids-3.txt`、`mutants-run1.log`～`mutants-run4.log`）；突變清單的對抗檢查（`mutation-check-fable.md`、`mutation-check-fable-experiments/`）。
