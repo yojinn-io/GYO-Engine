@@ -67,7 +67,15 @@
 
 ## 檢證
 
-（突變與 L1 的結果在跑完後補。）
+- **本機（macOS；`uname -m` 是 x86_64）**：`gyo_kernel_tests` 316 個案例、`gyo_kernel_tests_reversed` 全過；完整 `ctest` 99 個全過（`impl/ctest2.log`）。分段提交的第一段（巢狀執行與新介面，指紋與固定值還是舊的）自己建置、302 個案例全過（`impl/commit1-tests.log`）。
+- **L1 三平台**：PR #239 的 run 43739603395（93176ef5），linux-x64、windows-x64、macos-arm64 全過，CI gate 通過。J-56～J-58 與指紋的固定值在 L1 裡跑（`cpu` 標籤），所以新的固定值三平台相同。前一輪 43739283181 是被下一次推送取消的，不是失敗。
+- **突變清單**（宣告判定 2）：實作前寫成 `mutant-list-r0.md`，交 Fable／high 對抗檢查（`mutant-list-check-fable.md`：會存活的改壞 18、預期不對 15、漏列 2、疑點判斷 6、和宣告不一致 4）。照報告補了案例與突變；它指出的「例外路徑的成員基準與快照」在檢查回來之前已經自己發現並改成 RAII。
+- **逐行複核**（宣告第 7 節的五處）：Opus／xhigh（`impl-review-opus-xhigh.md`）：錯誤 1（例外返回時句柄的同步點記號與 stamp 沒更新——已修成 RAII 並補案例）、和宣告不一致 1（規則代號共用——已拆開）、測試的缺口 7（都補了：失敗路徑的快照、三層中間那一層的 hook 佇列、開局時驗證已打開、裡面那層的 hook 被拒絕、外層兩筆寫同一格、取日誌前的 `REQUIRE`、空規則代號的檢查）、建議 4（訊息的措辭、`ApplySync` 的防呆斷言、巢狀時第一個 System 前的比對訊息採納；解構子裡配置記憶體記一筆）。
+- **突變的結果**（`mutation-rerun-scope`）：
+  - 新的 `ns-*`：第一輪 79／101 killed——沒抓到的 22 個逐一探查（`impl/probe1/`）：多數是測試的寫法讓 runner 認不出（共用的檢查函式把標記印成指標；doctest 的 `-tc` 以逗號分隔，案例名有逗號的過濾到 0 個案例）、少數是期待寫錯或前提不成立（開局的同步點之後有 hook 重拍了快照、Z5 訊息本來就含外層的 schedule 名、例外之外沒有路徑會留下舊快照）；`ns-closure-reference` 放行後 `requires` 運算式要形成 `optional<T&>` 而建置失敗，改成直接查約束；`ns-closure-span` 在這個標準庫上等價（固定長度的 `span` 本來就算檢視），拿掉，程式照宣告第 9 節保留明列。修正之後第二輪 103／104 killed（`impl/mutants-run3.log`）；存活的 `ns-hook-refused-inner-listed-twice` 在它的案例裡等價（併進留下的錯誤時那次呼叫的清單是空的），拿掉，起作用的情形由 `ns-left-error-listed-twice` 守。最後 103 個全部 killed。
+  - 既有的相關突變：`find` 落在這一批改過的檔或由改過的測試抓的 323 個，317 killed；6 個 `hf-*` 的 expect 寫的是 K0 改名前的 Run 結尾斷言，改寫後 6／6 killed（`impl/mutants-run4-existing.log`、`impl/mutants-run5-hf.log`）。另有 16 個既有突變的 `find` 照新程式重寫（`impl/rewrite_existing_mutants.py`）。`ks-links-extra`、`ks-adv-include-allowlist-widened`、`ks-k5-parent-directory`、`rs-j17-zone-b-listed` 在這一批之前就對不上（#235 的 dev_log 已記），沒有跑。
+  - 範圍外：#238（測試舊帳那張卡）會搬進來的 32 個裡，目標在 `World.cpp`、`Params.hpp`、`Executor.cpp` 的 17 個不在這一輪；#238 合併後再併一次 `gyo2`，跟著改 `find`、重跑。
+- **突變跑在哪裡**：為了不在跑突變時擋住提交，突變跑在一個暫時的 worktree（`git worktree add --detach`，從暫時的提交物件開出，不是分支）。
 
 - **指紋判定**（判定 1 最後一列）：把兩個版本常數換回 3、5 重算，第 5.4 節每一處都和舊的固定值相同（完整的 Kernel 測試在舊常數與舊固定值下全過，`impl/fingerprint-old-constants.log`）。舊的固定值裡沒有獨占 System 的 schedule，所以另外做了一個探針：一張 schedule 掛一個不帶宣告的獨占 System 與一個 (c) 區 System，用 `3743eaa8` 的 Kernel 與這一批（常數換回舊值）各編一次，三種指紋逐字相同（`fingerprint-exclusive/`）。
 
