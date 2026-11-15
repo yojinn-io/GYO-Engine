@@ -141,7 +141,7 @@ Time::MonotonicClock（唯一的時間基準）
 - 全部用整數奈秒。倍率是浮點數，只在算「這一輪前進多少」時乘一次，乘完取整數。
 - 三個都是 (b) 區的 Resource。**誰寫（決定 1：B）**：runner 每輪只把取樣的時間點寫進 World（一個對外交換用的 Resource，在交換點「進」）；外層 schedule 最前面的「時間的 System」從它算出 `RealTime` 與 `VirtualTime`；驅動固定步的 System 更新 `FixedTime`。這兩個 System 由 Engine 提供。
 - **`FixedTime` 不放 tick**（規格 G.7 取捨 3、H-1；規格寫的，我認為理由獨立成立）：tick 要和事件緩衝一起被還原，放進 Resource 就有兩個來源。現在第幾個 tick 只經 `CurrentTick` 讀。累加器也不記 tick。
-- 步長只在一處手動維持：組裝時給 runner 的設定。`FixedTime.step` 與 PvP 的 `FixedStep{stepNs}` 都由它寫入。
+- 步長只在一處手動維持：組裝時給 runner 的設定。`FixedTime.step` 與 PvP 的 `FixedStep{stepNs}` 都由它寫入。步長存成整數奈秒，組裝時可以用頻率或時間長度給，預設 64 Hz（使用者 2026-11-16，`v8-arch-gyo2-t1-three-items`；PvP 移植時也改成 64 Hz）。
 - **System 不自己讀時間基準**。不是 System 的 Engine 程式照舊讀（等待器醒來後重讀、音效後端每塊取樣、IO 的到達時刻）。
 
 **通用的時間（決定 1b）**
