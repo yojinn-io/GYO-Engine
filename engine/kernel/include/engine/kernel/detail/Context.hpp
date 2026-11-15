@@ -26,6 +26,8 @@ namespace GYO::Kernel {
 
 class World;
 struct AccessSet;
+// The kernel's own diagnostics record of a dropped spawn (World.hpp; spec F-13).
+struct RejectedSpawn;
 
 namespace Detail {
 
@@ -84,6 +86,12 @@ struct Record {
     Zone emitterZone = Zone::B;
     // SpawnWithId (no allotter) as opposed to Spawn.
     bool withId = false;
+    // Who recorded it (spec F-13's RejectedSpawn): the System's or hook's name (the Registry's string).
+    std::string_view emitter;
+    bool emitterHook = false;
+    // One per System and per hook (its access description); compared for equality only
+    // (spec F-13: records of one id from one emitter keep the first).
+    const void* emitterKey = nullptr;
     std::unique_ptr<ValueBox> value;
     std::vector<BundleValue> bundle;
 

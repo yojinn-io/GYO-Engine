@@ -567,10 +567,11 @@ class SpawnWithId<Bundle<C...>> final : Detail::Handle {
     GYO_KERNEL_HANDLE(SpawnWithId) : Handle(call) {}
 
 public:
-    // Spawns with an id allotted elsewhere (spec A.1). The id must not be alive
-    // at the sync point unless this window despawns it, and must not be in this
-    // World's allotter range (GYO_ASSERT at the sync point). A duplicate id that
-    // comes from outside data is the caller's to reject first (spec A.1).
+    // Spawns with an id allotted elsewhere (spec A.1). At the sync point the
+    // record is dropped and recorded, not an error, when the id is in this World's
+    // allotter range, is spawned twice there or is alive and not despawned in the
+    // same phase (spec F-13; World::Diagnostics<RejectedSpawn>). A System that must
+    // answer the sender may still check first.
     void New(EntityId id, C... values) {
         Check("SpawnWithId");
         Detail::SystemContext& call = Detail::RequireCall(*world_);
@@ -654,6 +655,8 @@ struct ParamTraits<CurrentTick> : Detail::HandleTraits<CurrentTick, TypeList<Acc
 // Diagnostics, no access entry, no conflict edge.
 template <class Record>
 class DiagnosticsWriter final : Detail::Handle {
+    static_assert(!std::is_same_v<Record, RejectedSpawn>,
+                  "GYO_KERNEL_REJECT_KERNEL_DIAGNOSTICS: RejectedSpawn is the kernel's own diagnostics record (spec F-13)");
     GYO_KERNEL_HANDLE(DiagnosticsWriter) : Handle(call), tick_(call.tick) {}
 
 public:

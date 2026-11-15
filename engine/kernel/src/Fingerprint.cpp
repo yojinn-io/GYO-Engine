@@ -56,16 +56,18 @@ namespace Detail {
 namespace {
 
 // The Plan fingerprint's format: 2 since the hook rounds after the last sync
-// point and the schedule's hook round limit (v8-arch-gyo2-hook-flush).
-constexpr std::uint32_t kFingerprintVersion = 2;
+// point and the schedule's hook round limit (v8-arch-gyo2-hook-flush); 3 since
+// the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject).
+constexpr std::uint32_t kFingerprintVersion = 3;
 // The Registry fingerprint's format: 2 since initial value declarations are
 // hashed (v8-arch-gyo2-funnel-check).
 constexpr std::uint32_t kRegistryFingerprintVersion = 2;
 // The C fingerprint's format: 2 since the review (B6) added zone C hooks, the
 // schedules that hold zone C steps, and the sync points around those steps; 3
 // since the initial value declarations of zone C components; 4 since the hook
-// rounds after the last sync point and the schedule's hook round limit.
-constexpr std::uint32_t kCFingerprintVersion = 4;
+// rounds after the last sync point and the schedule's hook round limit; 5 since
+// the sync point drops spawn records it cannot apply (v8-arch-gyo2-spawn-reject).
+constexpr std::uint32_t kCFingerprintVersion = 5;
 
 class Bytes {
 public:

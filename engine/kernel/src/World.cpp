@@ -324,6 +324,9 @@ void Push(SystemContext& call, Record record) {
     record.planPos = call.planPos;
     record.recSeq = (*call.recSeq)++;
     record.emitterZone = call.zone;
+    record.emitter = call.name;
+    record.emitterHook = call.hook;
+    record.emitterKey = call.access;
     call.queue->push_back(std::move(record));
 }
 
@@ -510,6 +513,18 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
         return error;
     };
 
+    // Spec F-13: the ids spawned at this sync point (both phases), ascending, with who spawned each.
+    std::vector<std::pair<EntityId, std::string_view>> spawnedHere;
+    // The schedule's domain tick for a RejectedSpawn record, looked up only when one is dropped.
+    std::optional<std::uint64_t> rejectTick;
+    auto tickOfSchedule = [&]() {
+        if (!rejectTick) {
+            const Detail::ScheduleRecord* scheduleRecord = data_->FindSchedule(std::string(schedule));
+            rejectTick = ticks_[DomainIndex(scheduleRecord != nullptr ? scheduleRecord->options.domain : Domain::None)];
+        }
+        return *rejectTick;
+    };
+
     // One phase: step 0 applies the hook queue this way, steps 1 to 7 the window's records.
     // pending: records of the same window not applied by this phase (step 0
     // checks the window's zone C inserts too: a zone B hook's despawn recorded
@@ -582,20 +597,97 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
 
         std::vector<NewCell> added;
 
-        // Step 4: spawn, ascending EntityId.
+        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a
+        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec
+        // F-13), not an error. Each record takes the first reason that holds of: its
+        // id is in this World's allotter range (SpawnWithId only); the id is spawned
+        // twice at this sync point; the id is alive. Of the records of one id left
+        // after the range check, those of one emitter keep the first (recSeq order);
+        // those of two or more emitters are all dropped, so the result never depends
+        // on the registration order of Systems or hooks that do not conflict.
         std::vector<Record*> spawns;
         for (Record& r : records) {
             if (r.kind == RecordKind::Spawn) spawns.push_back(&r);
         }
-        std::sort(spawns.begin(), spawns.end(), [](const Record* a, const Record* b) { return a->entity < b->entity; });
-        for (std::size_t i = 0; i < spawns.size(); ++i) {
-            Record& spawn = *spawns[i];
-            GYO_ASSERT(i == 0 || spawns[i - 1]->entity != spawn.entity);  // one id spawned twice in a window
-            GYO_ASSERT(!std::binary_search(entities_.begin(), entities_.end(), spawn.entity));  // alive, not despawned
-            if (spawn.withId && data_->allotter) {
-                // SpawnWithId must not use an id of this World's allotter range (spec A.1).
-                GYO_ASSERT(!data_->allotterOps.owns(*resources_[*data_->allotter], spawn.entity));
+        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };
+        std::sort(spawns.begin(), spawns.end(),
+                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });
+        for (std::size_t i = 1; i < spawns.size(); ++i) {
+            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)
+        }
+        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {
+            RejectedSpawn rejected;
+            rejected.entity = spawn.entity;
+            rejected.reason = reason;
+            rejected.emitter = std::string(spawn.emitter);
+            rejected.emitterIsHook = spawn.emitterHook;
+            rejected.emitterZone = spawn.emitterZone;
+            rejected.fromAllotter = !spawn.withId;
+            rejected.schedule = std::string(schedule);
+            rejected.step = spawn.planPos;
+            rejected.appliedAt = planPos;
+            rejected.tick = tickOfSchedule();
+            rejected.otherEmitter = std::string(other);
+            RecordRejectedSpawn(std::move(rejected));
+        };
+        std::vector<Record*> accepted;
+        for (std::size_t first = 0; first < spawns.size();) {
+            const EntityId id = spawns[first]->entity;
+            std::size_t end = first + 1;
+            while (end < spawns.size() && spawns[end]->entity == id) ++end;
+            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.
+            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);
+            std::vector<std::size_t> candidates;
+            for (std::size_t i = first; i < end; ++i) {
+                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {
+                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});
+                } else {
+                    candidates.push_back(i);
+                }
             }
+            if (!candidates.empty()) {
+                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,
+                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {
+                                                       return s.first < key;
+                                                   });
+                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;
+                const Record& head = *spawns[candidates.front()];
+                if (std::binary_search(entities_.begin(), entities_.end(), id)) {
+                    for (std::size_t c : candidates) {
+                        if (spawnedAtThisSyncPoint) {
+                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);
+                        } else {
+                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});
+                        }
+                    }
+                } else if (std::all_of(candidates.begin(), candidates.end(),
+                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {
+                    for (std::size_t k = 1; k < candidates.size(); ++k) {
+                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);
+                    }
+                    // An id spawned by step 0 and despawned by this phase is listed already.
+                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});
+                    accepted.push_back(spawns[candidates.front()]);
+                } else {
+                    for (std::size_t c : candidates) {
+                        std::string_view other;
+                        for (std::size_t o : candidates) {
+                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {
+                                other = spawns[o]->emitter;
+                                break;
+                            }
+                        }
+                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);
+                    }
+                }
+            }
+            for (std::size_t i = first; i < end; ++i) {
+                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);
+            }
+            first = end;
+        }
+        for (Record* candidate : accepted) {
+            Record& spawn = *candidate;
             MakeAlive(spawn.entity);
             for (Detail::BundleValue& part : spawn.bundle) {
                 if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {
@@ -703,6 +795,19 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
     // Step 8.
     ++syncEpoch_;
     return {};
+}
+
+void World::RecordRejectedSpawn(RejectedSpawn rejected) {
+    ++rejectedSpawns_;
+    Detail::DiagnosticsBase* found = Detail::FindDiagnostics(*this, KeyOf<RejectedSpawn>());
+    if (found == nullptr) {
+        auto made = std::make_unique<Detail::DiagnosticsBuffer<RejectedSpawn>>();
+        found = made.get();
+        Detail::AddDiagnostics(*this, KeyOf<RejectedSpawn>(), std::move(made));
+    }
+    const std::uint64_t tick = rejected.tick;
+    static_cast<Detail::DiagnosticsBuffer<RejectedSpawn>*>(found)->entries.push_back(
+        Detail::DiagnosticsBuffer<RejectedSpawn>::Entry{tick, false, std::move(rejected)});
 }
 
 void World::DiscardDeferred() noexcept {
