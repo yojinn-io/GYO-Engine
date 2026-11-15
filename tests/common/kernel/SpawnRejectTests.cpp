@@ -595,65 +595,67 @@ TEST_CASE("J-55: the record's tick is the schedule's domain tick") {
     CHECK_MESSAGE(rejected[0].tick == 2, "J-55 second-tick: tick 2");
 }
 
-TEST_CASE("J-55: the allotter's range") {
-    SUBCASE("in the range comes before alive") {
-        auto rig = MakeRig([](Registrar& r) {
-            Base(r, true);
-            r.AddSystem<&SpawnHundred>(In("SpawnHundred", "A"));
-        });
-        rig->world().SetResource(RangeAllotter::Of(100, 101));
-        rig->world().Insert(100, Tag{1});
-        KERNEL_REQUIRE_RUN_OK(rig->Run());
-        const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
-        REQUIRE_MESSAGE(rejected.size() == 1, "J-55 range-first: one record");
-        CHECK_MESSAGE(rejected[0].reason == SpawnRejectReason::IdInAllotterRange, "J-55 range-first: reason IdInAllotterRange");
-    }
-    SUBCASE("in the range comes before spawned twice") {
-        auto rig = MakeRig([](Registrar& r) {
-            Base(r, true);
-            r.AddSystem<&AllotOne>(In("AllotOne", "A"));
-            r.AddSystem<&SpawnHundredTag>(In("SpawnHundredTag", "A"));
-        });
-        rig->world().SetResource(RangeAllotter::Of(100, 101));
-        KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(BodyIs(rig->world(), 100, 1), "J-55 range-before-twice: 100 has the allotter's spawn");
-        CHECK(rig->world().Get<Tag>(100) == nullptr);
-        const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
-        REQUIRE_MESSAGE(rejected.size() == 1, "J-55 range-before-twice: one record");
-        CHECK_MESSAGE(rejected[0].reason == SpawnRejectReason::IdInAllotterRange, "J-55 range-before-twice: reason IdInAllotterRange");
-    }
-    SUBCASE("an allotter whose resource is absent is not checked") {
-        auto rig = MakeRig([](Registrar& r) {
-            Base(r, true);
-            r.AddSystem<&SpawnHundred>(In("SpawnHundred", "A"));
-        });
-        KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(BodyIs(rig->world(), 100, 100), "J-55 range-absent: 100 spawns");
-        CHECK(rig->world().RejectedSpawns() == 0);
-    }
-    SUBCASE("despawn then spawn in the range: the despawn applies, the spawn is dropped") {
-        auto rig = MakeRig([](Registrar& r) {
-            Base(r, true);
-            r.AddSystem<&DespawnThenSpawnHundredFifty>(In("DespawnThenSpawnHundredFifty", "A"));
-        });
-        rig->world().SetResource(RangeAllotter::Of(100, 199));
-        rig->world().Insert(150, Tag{1});
-        KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK_MESSAGE(!rig->world().Alive(150), "J-55 range-respawn: 150 is gone");
-        const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
-        REQUIRE_MESSAGE(rejected.size() == 1, "J-55 range-respawn: one record");
-        CHECK(rejected[0].reason == SpawnRejectReason::IdInAllotterRange);
-    }
-    SUBCASE("an insert into a dropped id that is not alive is dropped too") {
-        auto rig = MakeRig([](Registrar& r) {
-            Base(r, true);
-            r.AddSystem<&SpawnHundredFiftyAndInsert>(In("SpawnHundredFiftyAndInsert", "A"));
-        });
-        rig->world().SetResource(RangeAllotter::Of(100, 199));
-        KERNEL_REQUIRE_RUN_OK(rig->Run());
-        CHECK(!rig->world().Alive(150));
-        CHECK_MESSAGE(rig->world().DroppedMissingEntity() == 1, "J-55 range-insert: the insert is dropped and counted");
-    }
+TEST_CASE("J-55: the allotter's range: in the range comes before alive") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r, true);
+        r.AddSystem<&SpawnHundred>(In("SpawnHundred", "A"));
+    });
+    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().Insert(100, Tag{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 1, "J-55 range-first: one record");
+    CHECK_MESSAGE(rejected[0].reason == SpawnRejectReason::IdInAllotterRange, "J-55 range-first: reason IdInAllotterRange");
+}
+
+TEST_CASE("J-55: the allotter's range: in the range comes before spawned twice") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r, true);
+        r.AddSystem<&AllotOne>(In("AllotOne", "A"));
+        r.AddSystem<&SpawnHundredTag>(In("SpawnHundredTag", "A"));
+    });
+    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(BodyIs(rig->world(), 100, 1), "J-55 range-before-twice: 100 has the allotter's spawn");
+    CHECK(rig->world().Get<Tag>(100) == nullptr);
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 1, "J-55 range-before-twice: one record");
+    CHECK_MESSAGE(rejected[0].reason == SpawnRejectReason::IdInAllotterRange, "J-55 range-before-twice: reason IdInAllotterRange");
+}
+
+TEST_CASE("J-55: the allotter's range: an allotter whose resource is absent is not checked") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r, true);
+        r.AddSystem<&SpawnHundred>(In("SpawnHundred", "A"));
+    });
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(BodyIs(rig->world(), 100, 100), "J-55 range-absent: 100 spawns");
+    CHECK(rig->world().RejectedSpawns() == 0);
+}
+
+TEST_CASE("J-55: the allotter's range: despawn then spawn in the range: the despawn applies, the spawn is dropped") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r, true);
+        r.AddSystem<&DespawnThenSpawnHundredFifty>(In("DespawnThenSpawnHundredFifty", "A"));
+    });
+    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    rig->world().Insert(150, Tag{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(!rig->world().Alive(150), "J-55 range-respawn: 150 is gone");
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 1, "J-55 range-respawn: one record");
+    CHECK(rejected[0].reason == SpawnRejectReason::IdInAllotterRange);
+}
+
+TEST_CASE("J-55: the allotter's range: an insert into a dropped id that is not alive is dropped too") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r, true);
+        r.AddSystem<&SpawnHundredFiftyAndInsert>(In("SpawnHundredFiftyAndInsert", "A"));
+    });
+    rig->world().SetResource(RangeAllotter::Of(100, 199));
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(!rig->world().Alive(150));
+    CHECK_MESSAGE(rig->world().DroppedMissingEntity() == 1, "J-55 range-insert: the insert is dropped and counted");
 }
 
 // Its own case, so a failure of another range case cannot stop it before its check.
@@ -793,4 +795,305 @@ TEST_CASE("J-55: the fingerprint versions") {
     CHECK_MESSAGE(frozen.PlanOf("Tick")->fingerprint.version == 3U, "J-55 versions: Plan fingerprint version 3");
     CHECK_MESSAGE(frozen.CFingerprint().version == 5U, "J-55 versions: C fingerprint version 5");
     CHECK_MESSAGE(frozen.RegistryFingerprint().version == 2U, "J-55 versions: Registry fingerprint version 2");
+}
+
+// ---- Cases added after the adversarial check of the mutant list (Fable, v8-arch-gyo2-spawn-reject)
+
+namespace {
+
+struct CVel { std::int32_t v; };  // zone C (registered by the X-55 rigs that need it)
+
+SystemResult FlagSignalLabelSignal(SpawnWithId<Bundle<Signal>> signal, SpawnWithId<Bundle<Label>> label, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    signal.New(20, Signal{20});
+    label.New(21, Label{21});
+    signal.New(22, Signal{22});
+    return Ok();
+}
+SystemResult HookASpawnsThirty(HookCtx ctx, SpawnWithId<Bundle<Body>> spawn) {
+    spawn.New(30, Body{static_cast<std::int32_t>(ctx.Entity())});
+    return Ok();
+}
+SystemResult HookBSpawnsThirty(HookCtx ctx, SpawnWithId<Bundle<Body>> spawn) {
+    spawn.New(30, Body{static_cast<std::int32_t>(ctx.Entity()) + 1000});
+    return Ok();
+}
+SystemResult EarlySpawnsSeven(SpawnWithId<Bundle<Body>> spawn) {
+    spawn.New(7, Body{70});
+    return Ok();
+}
+SystemResult SpawnSevenAndElevenAtTickOne(SpawnWithId<Bundle<Body>> spawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    spawn.New(7, Body{77});
+    spawn.New(11, Body{1111});
+    return Ok();
+}
+SystemResult SpawnElevenTagAtTickOne(SpawnWithId<Bundle<Tag>> spawn, CurrentTick tick) {
+    if (tick.Tick() == 1) spawn.New(11, Tag{11});
+    return Ok();
+}
+SystemResult ZoneCSpawnsNinePos(SpawnWithId<Bundle<CPos>> spawn) {
+    spawn.New(9, CPos{9});
+    return Ok();
+}
+SystemResult ZoneCSpawnsNineVel(SpawnWithId<Bundle<CVel>> spawn) {
+    spawn.New(9, CVel{9});
+    return Ok();
+}
+SystemResult ZoneCSpawnsNinePosAgain(SpawnWithId<Bundle<CPos>> spawn) {
+    spawn.New(9, CPos{10});
+    return Ok();
+}
+
+Fingerprint ThreeRecords(bool twiceFirst, bool& nineAlive, std::vector<RejectedSpawn>& rejected) {
+    auto rig = MakeRig([twiceFirst](Registrar& r) {
+        Base(r);
+        if (twiceFirst) {
+            r.AddSystem<&SpawnNineTwice>(In("SpawnNineTwice", "A"));
+            r.AddSystem<&SpawnNineTag>(In("SpawnNineTag", "A"));
+        } else {
+            r.AddSystem<&SpawnNineTag>(In("SpawnNineTag", "A"));
+            r.AddSystem<&SpawnNineTwice>(In("SpawnNineTwice", "A"));
+        }
+    });
+    const auto result = rig->Run();
+    REQUIRE_MESSAGE(static_cast<bool>(result), Text(result));
+    nineAlive = rig->world().Alive(9);
+    rejected = Rejected(rig->world());
+    return rig->world().Summary();
+}
+
+} // namespace
+
+TEST_CASE("J-55: a spawn dropped by step 0 as IdAlive does not count as spawned at this sync point") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r);
+        r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
+        r.Hook<Signal, &HookSpawnsSeven>(HookTrigger::OnAdd, {.name = "HookSpawnsSeven", .zone = Zone::B});
+        r.AddSystem<&SpawnSevenAtTickOne>(In("SpawnSevenAtTickOne", "B"));
+    });
+    rig->world().Insert(7, Body{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(BodyIs(rig->world(), 7, 1));
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 2, "J-55 dropped-not-spawned: two records");
+    CHECK_MESSAGE((rejected[0].emitterIsHook && rejected[1].emitter == "SpawnSevenAtTickOne"),
+                  "J-55 dropped-not-spawned: the hook's record first, then the System's");
+    CHECK_MESSAGE((rejected[0].reason == SpawnRejectReason::IdAlive && rejected[1].reason == SpawnRejectReason::IdAlive &&
+                   rejected[1].otherEmitter.empty()),
+                  "J-55 dropped-not-spawned: both IdAlive, the window's names no other emitter");
+}
+
+TEST_CASE("J-55: three records of one id from two Systems are all dropped, in both registration orders") {
+    bool nineAlive = true;
+    std::vector<RejectedSpawn> rejected;
+    const Fingerprint first = ThreeRecords(true, nineAlive, rejected);
+    CHECK_MESSAGE(!nineAlive, "J-55 three-records: 9 is not spawned (the System with two records first)");
+    REQUIRE_MESSAGE(rejected.size() == 3, "J-55 three-records: three records");
+    CHECK_MESSAGE((rejected[0].emitter == "SpawnNineTwice" && rejected[1].emitter == "SpawnNineTwice" && rejected[2].emitter == "SpawnNineTag"),
+                  "J-55 three-records: Plan order follows the registration order");
+    CHECK_MESSAGE((rejected[0].otherEmitter == "SpawnNineTag" && rejected[1].otherEmitter == "SpawnNineTag" &&
+                   rejected[2].otherEmitter == "SpawnNineTwice"),
+                  "J-55 three-records: each names the other emitter");
+    const Fingerprint second = ThreeRecords(false, nineAlive, rejected);
+    CHECK_MESSAGE(!nineAlive, "J-55 three-records: 9 is not spawned (the System with one record first)");
+    REQUIRE(rejected.size() == 3);
+    CHECK_MESSAGE(rejected[0].emitter == "SpawnNineTag", "J-55 three-records: the Plan order is reversed with the registration order");
+    CHECK_MESSAGE(first == second, "J-55 three-records: the World is the same in both orders");
+}
+
+TEST_CASE("J-55: one hook called before and after another hook: all three records of the id are dropped") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r);
+        r.AddSystem<&FlagSignalLabelSignal>(In("FlagSignalLabelSignal", "A"));
+        r.Hook<Signal, &HookASpawnsThirty>(HookTrigger::OnAdd, {.name = "HookASpawnsThirty", .zone = Zone::B});
+        r.Hook<Label, &HookBSpawnsThirty>(HookTrigger::OnAdd, {.name = "HookBSpawnsThirty", .zone = Zone::B});
+    });
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(!rig->world().Alive(30), "J-55 hooks-a-b-a: 30 is not spawned");
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 3, "J-55 hooks-a-b-a: three records");
+    CHECK_MESSAGE((rejected[0].emitter == "HookASpawnsThirty" && rejected[1].emitter == "HookBSpawnsThirty" &&
+                   rejected[2].emitter == "HookASpawnsThirty"),
+                  "J-55 hooks-a-b-a: the calls are A, B, A");
+}
+
+TEST_CASE("J-55: an alive id is IdAlive although step 0 spawned a larger id at this sync point") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r);
+        r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
+        r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven", .zone = Zone::B});
+        r.AddSystem<&SpawnSevenAndElevenAtTickOne>(In("SpawnSevenAndElevenAtTickOne", "B"));
+    });
+    rig->world().Insert(7, Body{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK(BodyIs(rig->world(), 11, 1100));
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 2, "J-55 smaller-alive-id: two records");
+    CHECK_MESSAGE((rejected[0].entity == 7 && rejected[0].reason == SpawnRejectReason::IdAlive && rejected[0].otherEmitter.empty()),
+                  "J-55 smaller-alive-id: 7 is IdAlive with no other emitter");
+    CHECK_MESSAGE((rejected[1].entity == 11 && rejected[1].reason == SpawnRejectReason::IdSpawnedTwice &&
+                   rejected[1].otherEmitter == "HookSpawnsEleven"),
+                  "J-55 smaller-alive-id: 11 is IdSpawnedTwice, the hook is the other emitter");
+}
+
+TEST_CASE("J-55: the record's tick and schedule are those of the schedule that dropped it") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r);
+        r.AddSystem<&EarlySpawnsSeven>(Sys("EarlySpawnsSeven", Zone::B, {KernelTest::At("Early", "X")}));
+    });
+    rig->world().Insert(7, Body{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    KERNEL_REQUIRE_RUN_OK(rig->Run("Early"));
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 1, "J-55 early: one record");
+    CHECK_MESSAGE(rejected[0].tick == 1, "J-55 early: tick 1 (the Frame domain's), not the Fixed domain's 2");
+    CHECK_MESSAGE(rejected[0].schedule == "Early", "J-55 early: schedule Early");
+}
+
+// Order of the records of one id: a Spawn (allotter) record that collides, then a SpawnWithId in the range.
+TEST_CASE("J-55: records of one id are in (planPos, recSeq) order when one is in the range and one is alive") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r, true);
+        r.AddSystem<&AllotOne>(In("AllotOne", "A"));
+        r.AddSystem<&SpawnHundredTag>(In("SpawnHundredTag", "A"));
+    });
+    rig->world().SetResource(RangeAllotter::Of(100, 101));
+    rig->world().Insert(100, Label{1});
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 2, "J-55 order-in-one-id: two records");
+    CHECK_MESSAGE(StepOf(*rig, "AllotOne") < StepOf(*rig, "SpawnHundredTag"), "J-55 order-in-one-id: AllotOne is first in the Plan");
+    CHECK_MESSAGE((rejected[0].emitter == "AllotOne" && rejected[0].reason == SpawnRejectReason::IdAlive &&
+                   rejected[1].emitter == "SpawnHundredTag" && rejected[1].reason == SpawnRejectReason::IdInAllotterRange),
+                  "J-55 order-in-one-id: the records are in (id, planPos, recSeq) order");
+}
+
+// The declared case "across two phases, the window despawns first" with the System after it.
+TEST_CASE("J-55: step 0 spawned it; the window despawns and spawns it and another System spawns it too") {
+    auto rig = MakeRig([](Registrar& r) {
+        Base(r);
+        r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
+        r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven", .zone = Zone::B});
+        r.AddSystem<&DespawnThenSpawnElevenAtTickOne>(In("DespawnThenSpawnElevenAtTickOne", "B"));
+        r.AddSystem<&SpawnElevenTagAtTickOne>(In("SpawnElevenTagAtTickOne", "B"));
+    });
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(!rig->world().Alive(11), "J-55 respawn-two-emitters: 11 is gone (despawned, both spawns dropped)");
+    const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+    REQUIRE_MESSAGE(rejected.size() == 2, "J-55 respawn-two-emitters: two records");
+    CHECK_MESSAGE((rejected[0].reason == SpawnRejectReason::IdSpawnedTwice && rejected[0].otherEmitter == "SpawnElevenTagAtTickOne" &&
+                   rejected[1].reason == SpawnRejectReason::IdSpawnedTwice && rejected[1].otherEmitter == "DespawnThenSpawnElevenAtTickOne"),
+                  "J-55 respawn-two-emitters: each names the other System, not the hook");
+}
+
+// Whether the two Systems of "two emitters" really do not conflict: the same shape in zone C,
+// where a conflict without a declared order is a Finish error.
+TEST_CASE("J-55: two zone C Systems with disjoint bundles do not conflict; with one bundle they do") {
+    SUBCASE("disjoint bundles: Finish succeeds in both orders, both spawns of 9 are dropped, the World is the same") {
+        Fingerprint summaries[2];
+        for (int order = 0; order < 2; ++order) {
+            auto rig = MakeRig([order](Registrar& r) {
+                Base(r);
+                r.Component<CVel>({.name = "CVel", .zone = Zone::C, .rollback = Rollback::Yes});
+                if (order == 0) {
+                    r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
+                    r.AddSystem<&ZoneCSpawnsNineVel>(In("ZoneCSpawnsNineVel", "A", Zone::C));
+                } else {
+                    r.AddSystem<&ZoneCSpawnsNineVel>(In("ZoneCSpawnsNineVel", "A", Zone::C));
+                    r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
+                }
+            });
+            KERNEL_REQUIRE_RUN_OK(rig->Run());
+            CHECK_MESSAGE(!rig->world().Alive(9), "J-55 zone-c-pair: 9 is not spawned");
+            const std::vector<RejectedSpawn> rejected = Rejected(rig->world());
+            REQUIRE(rejected.size() == 2);
+            CHECK_MESSAGE(rejected[0].emitter == (order == 0 ? "ZoneCSpawnsNinePos" : "ZoneCSpawnsNineVel"),
+                          "J-55 zone-c-pair: the Plan order follows the registration order");
+            summaries[order] = rig->world().Summary();
+        }
+        CHECK_MESSAGE(summaries[0] == summaries[1], "J-55 zone-c-pair: the World is the same in both orders");
+    }
+    SUBCASE("one bundle: the two Systems conflict, Finish fails without a declared order") {
+        Built built = Finish({{"test", [](Registrar& r) {
+                                   Base(r);
+                                   r.AddSystem<&ZoneCSpawnsNinePos>(In("ZoneCSpawnsNinePos", "A", Zone::C));
+                                   r.AddSystem<&ZoneCSpawnsNinePosAgain>(In("ZoneCSpawnsNinePosAgain", "A", Zone::C));
+                               }}});
+        CHECK_MESSAGE(!built.result, "J-55 zone-c-pair: Finish fails for two zone C Systems that spawn one bundle");
+        MESSAGE(Describe(built));
+    }
+}
+
+// The registration-order sentence alone (no REQUIRE of the record count before it).
+TEST_CASE("J-55: two emitters: the World is the same in both registration orders (alone)") {
+    bool nineAlive = true;
+    bool fiveAlive = false;
+    std::vector<RejectedSpawn> rejected;
+    const Fingerprint first = TwoEmitters(true, nineAlive, rejected, fiveAlive);
+    const std::string firstEmitter = rejected.empty() ? std::string() : rejected[0].emitter;
+    const Fingerprint second = TwoEmitters(false, nineAlive, rejected, fiveAlive);
+    const std::string secondEmitter = rejected.empty() ? std::string() : rejected[0].emitter;
+    CHECK_MESSAGE(first == second, "J-55 registration-order-alone: the World is the same in both orders");
+    CHECK_MESSAGE((firstEmitter == "SpawnFiveThenNine" && secondEmitter == "SpawnNineTag"),
+                  "J-55 registration-order-alone: the Plan order is the registration order in both rigs");
+}
+
+namespace {
+SystemResult SpawnHundredFifty(SpawnWithId<Bundle<Body>> spawn) {
+    spawn.New(150, Body{150});
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-55: a dropped record triggers no OnAdd and no initial value, whatever the reason") {
+    SUBCASE("one emitter's second record") {
+        auto rig = MakeRig([](Registrar& r) {
+            Base(r);
+            r.InitialValue<Seen, &SeenFromBody>();
+            r.AddSystem<&SpawnNineTwice>(In("SpawnNineTwice", "A"));
+            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
+        });
+        Log().clear();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(Join(Log()) == "add:9", "J-55 no-onadd same-emitter: OnAdd for 9 once");
+        CHECK_MESSAGE((rig->world().Get<Seen>(9) != nullptr && rig->world().Get<Seen>(9)->s == 92),
+                      "J-55 no-onadd same-emitter: the initial value comes from the kept record");
+    }
+    SUBCASE("two emitters, all dropped") {
+        auto rig = MakeRig([](Registrar& r) {
+            Base(r);
+            r.AddSystem<&SpawnFiveThenNine>(In("SpawnFiveThenNine", "A"));
+            r.AddSystem<&SpawnNineTag>(In("SpawnNineTag", "A"));
+            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
+            r.Hook<Tag, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddTag", .zone = Zone::B});
+        });
+        Log().clear();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(Join(Log()) == "add:5", "J-55 no-onadd two-emitters: OnAdd for 5 only");
+    }
+    SUBCASE("in the allotter's range") {
+        auto rig = MakeRig([](Registrar& r) {
+            Base(r, true);
+            r.AddSystem<&SpawnHundredFifty>(In("SpawnHundredFifty", "A"));
+            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
+        });
+        rig->world().SetResource(RangeAllotter::Of(100, 199));
+        Log().clear();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(Join(Log()).empty(), "J-55 no-onadd range: no OnAdd");
+    }
+    SUBCASE("step 0 spawned the id") {
+        auto rig = MakeRig([](Registrar& r) {
+            Base(r);
+            r.AddSystem<&FlagTwenty>(In("FlagTwenty", "A"));
+            r.Hook<Signal, &HookSpawnsEleven>(HookTrigger::OnAdd, {.name = "HookSpawnsEleven", .zone = Zone::B});
+            r.AddSystem<&SpawnElevenAtTickOne>(In("SpawnElevenAtTickOne", "B"));
+            r.Hook<Body, &LogAddBody>(HookTrigger::OnAdd, {.name = "LogAddBody", .zone = Zone::B});
+        });
+        Log().clear();
+        KERNEL_REQUIRE_RUN_OK(rig->Run());
+        CHECK_MESSAGE(Join(Log()) == "add:11", "J-55 no-onadd cross-phase: OnAdd for 11 once");
+    }
 }

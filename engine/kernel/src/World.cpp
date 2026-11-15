@@ -628,54 +628,56 @@ Engine::Base::Result<void, KernelError> World::ApplySync(std::uint32_t planPos, 
             const EntityId id = spawns[first]->entity;
             std::size_t end = first + 1;
             while (end < spawns.size() && spawns[end]->entity == id) ++end;
-            std::vector<Record*> candidates;
+            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.
+            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);
+            std::vector<std::size_t> candidates;
             for (std::size_t i = first; i < end; ++i) {
-                Record& spawn = *spawns[i];
-                if (spawn.withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {
-                    reject(spawn, SpawnRejectReason::IdInAllotterRange, {});
+                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {
+                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});
                 } else {
-                    candidates.push_back(&spawn);
+                    candidates.push_back(i);
                 }
             }
-            first = end;
-            if (candidates.empty()) continue;
-            const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,
-                                               [](const std::pair<EntityId, std::string_view>& s, EntityId key) {
-                                                   return s.first < key;
-                                               });
-            const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;
-            if (std::binary_search(entities_.begin(), entities_.end(), id)) {
-                for (Record* spawn : candidates) {
-                    if (spawnedAtThisSyncPoint) {
-                        reject(*spawn, SpawnRejectReason::IdSpawnedTwice, here->second);
-                    } else {
-                        reject(*spawn, SpawnRejectReason::IdAlive, {});
+            if (!candidates.empty()) {
+                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,
+                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {
+                                                       return s.first < key;
+                                                   });
+                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;
+                const Record& head = *spawns[candidates.front()];
+                if (std::binary_search(entities_.begin(), entities_.end(), id)) {
+                    for (std::size_t c : candidates) {
+                        if (spawnedAtThisSyncPoint) {
+                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);
+                        } else {
+                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});
+                        }
+                    }
+                } else if (std::all_of(candidates.begin(), candidates.end(),
+                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {
+                    for (std::size_t k = 1; k < candidates.size(); ++k) {
+                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);
+                    }
+                    // An id spawned by step 0 and despawned by this phase is listed already.
+                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});
+                    accepted.push_back(spawns[candidates.front()]);
+                } else {
+                    for (std::size_t c : candidates) {
+                        std::string_view other;
+                        for (std::size_t o : candidates) {
+                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {
+                                other = spawns[o]->emitter;
+                                break;
+                            }
+                        }
+                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);
                     }
                 }
-                continue;
             }
-            const Record& head = *candidates.front();
-            const auto otherOf = [&](const Record& spawn) -> std::string_view {
-                for (const Record* other : candidates) {
-                    if (other->emitterKey != spawn.emitterKey) return other->emitter;
-                }
-                return spawn.emitter;
-            };
-            const bool oneEmitter = std::all_of(candidates.begin(), candidates.end(),
-                                                [&](const Record* r) { return r->emitterKey == head.emitterKey; });
-            if (!oneEmitter) {
-                for (Record* spawn : candidates) reject(*spawn, SpawnRejectReason::IdSpawnedTwice, otherOf(*spawn));
-                continue;
+            for (std::size_t i = first; i < end; ++i) {
+                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);
             }
-            for (std::size_t i = 1; i < candidates.size(); ++i) {
-                reject(*candidates[i], SpawnRejectReason::IdSpawnedTwice, head.emitter);
-            }
-            if (spawnedAtThisSyncPoint) {
-                here->second = head.emitter;
-            } else {
-                spawnedHere.insert(here, {id, head.emitter});
-            }
-            accepted.push_back(candidates.front());
+            first = end;
         }
         for (Record* candidate : accepted) {
             Record& spawn = *candidate;
