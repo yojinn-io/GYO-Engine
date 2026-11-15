@@ -57,7 +57,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 5. **讀寫資料的形狀**（第 3.2、3.4 節）：
    - 元件與 Resource 都在閉包裡讀寫：`world.Read<T>(實體, f)`、`world.Modify<T>(實體, f)`；Resource 不帶實體。介面不交出指標。
    - 元件：讀任何元件；寫只准 (b) 區、標 `Shared` 的（既有規則）。
-   - Resource：讀任何 Resource（`KernelSettings` 除外）；寫只准列在宣告 `ExclusiveWorld<Writes<…>>` 裡的。不帶宣告的 `ExclusiveWorld` 不能寫 Resource。只能讀寫值，不能新增或移除 Resource。
+   - Resource：讀任何 Resource（`KernelSettings` 除外）。寫的規則和元件同一條：標 `Shared` 的可以直接寫，不用列；單一寫者的要列在宣告 `ExclusiveWorld<Writes<…>>` 裡才能寫，列了就算進寫者（使用者 2026-11-15 改定，`v8-arch-gyo2-shared-means-no-owner`）。只能讀寫值，不能新增或移除 Resource。
    - 實體沒有那個元件、或 Resource 不存在：不呼叫 f，回傳值說明「沒有」。
 6. **跑完之後外層的 System 繼續執行**：手上的 `ExclusiveWorld` 照常可用；之後的寫入用新取的變更記號（stamp），別的 System 的變更偵測看得到。
 7. **裡面那張出錯**：
@@ -142,10 +142,10 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 **已定（使用者 2026-11-15，`v8-arch-gyo2-exclusive-declared-writes`）：`ExclusiveWorld` 帶寫入的宣告。** 原話（照使用者同日的更正）：「選項三，這是我想選的，首先只有這個類似於玩家狀態數據，如果被shared，我擔心出問題我無法查出誰寫的。」（側邊會話，經四樣格式轉達；打錯字的原文與更正都記在 HANDOFF。）我原本建議的是第一欄。
 
 照這個決定，我補的細節（**還沒有經你判**，不同意就改）：
-- **寫 Resource 一律要列在宣告裡。** 沒標 `Shared` 的列了就算進「只有一個寫者」的啟動檢查；標 `Shared` 的也要列，這樣寫者清單才列得出它。沒列的 Resource 經 `ExclusiveWorld` 寫，回 Err。
+- **只有單一寫者的 Resource 要列；標 `Shared` 的不用列**（使用者 2026-11-15 改定，`v8-arch-gyo2-shared-means-no-owner`）。使用者的話：「shared的情況本身就是不需要知道誰寫的。要保證誰寫，別開shared。」單一寫者的列了就算進「只有一個寫者」的啟動檢查；沒列就寫單一寫者的 Resource，回 Err。（修訂 5 原本寫「一律要列，`Shared` 的也要列」，那是照使用者後來修正掉的理由寫的。）
 - **讀不必列**：讀任何 Resource（`KernelSettings` 除外）。
 - **列出來的必須是 (b) 區的 Resource**，否則啟動時報錯（獨占的 System 不碰 (c) 區的資料，既有規則 S-13）。
-- **宣告只管 Resource。** 元件的規則照舊（只能寫 (b) 區 `Shared` 的元件，不必列）。要不要讓元件也能列，不在這一批定。
+- **元件照舊**（使用者 2026-11-15 改定，`v8-arch-gyo2-shared-means-no-owner`）：獨占的 System 只能寫 (b) 區、標 `Shared` 的元件，不用列。所以 Resource 與元件是同一條規則，差別只在 Resource 多了「單一寫者的列了就能寫」。
 - 它仍然是那個 System 唯一的參數（守衛 J-10 不變）。
 - 只能讀寫值，不能新增或移除 Resource（否則獨占的 System 自己就會記延後的變更）。
 - 獨占的 System 不能同時是 ingress；hook 不能用帶宣告的寫法。
@@ -235,12 +235,12 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | 2 | 同檔：狀態的切換與 `RunGuard` | 跑完設回閒置 | 記深度；裡面那張跑完回到「執行中」，最外層跑完才回閒置。作者的 System 接住例外時也要還原（RAII） |
 | 3 | 同檔：每個 System 跑完的成員檢查 | 實體有增減就斷言 | 進入巢狀前先比對一次（到這裡為止不能有增減——抓得到獨占 System 自己繞路改的）；回來後以跑完的狀態為新的基準，再往下比（第 5.1 節） |
 | 4 ★ | `World.cpp`：延後的佇列 | 整個 World 一個 | 每一層執行各自一個（照 hook 佇列的做法）：進入巢狀時把外層的另外存起來，裡面那張用空的；回來後還原。外層的仍然用外層的位置、在外層的同步點套用。外層的佇列存在 World 的一個堆疊上（不放在執行器的區域變數裡，同步點才拿得到）。**中斷時每一層的都丟掉。** 規則 Z5 在同步點的重查，也看外層留著的紀錄：堆疊上**每一層**的佇列，加上堆疊上每張 schedule 的 hook 佇列（第 3.1 節） |
-| 5 ★ | `Executor.cpp`、`World.cpp`：存取驗證 | 裡面那張開始時的比對會把外層 System 的寫入當成「World 介面以外的改動」。兩層驗證都把「整個 World」的存取當成可以寫 (b) 區 `Shared` 的 Resource | 進入巢狀前先把到目前為止的改動算在外層 System 頭上並檢查（有違規就記進這次呼叫的錯誤清單，不進入巢狀），再重拍快照；回來後再重拍。「整個 World」的存取不再隱含可以寫 Resource，只認列在宣告裡的 |
+| 5 ★ | `Executor.cpp`、`World.cpp`：存取驗證 | 裡面那張開始時的比對會把外層 System 的寫入當成「World 介面以外的改動」。兩層驗證都把「整個 World」的存取當成可以寫 (b) 區 `Shared` 的資料 | 進入巢狀前先把到目前為止的改動算在外層 System 頭上並檢查（有違規就記進這次呼叫的錯誤清單，不進入巢狀），再重拍快照；回來後再重拍。「整個 World」的存取照舊算可以寫 (b) 區 `Shared` 的資料；另外加上列在宣告裡的單一寫者 Resource |
 | 6 | `Params.hpp`：句柄的過期檢查 | 同步點之後句柄算過期 | `RunSchedule` 回來後更新這個 `ExclusiveWorld` 的記號；成功或失敗的返回路徑都更新 |
 | 7 | 同檔：寫入用的 stamp | 進場時的 stamp | `RunSchedule` 回來後取一個新的 stamp（計數加一，不是沿用）。`Modify` 在呼叫當下用句柄現在的 stamp 記變更，這是唯一換 stamp 的地方 |
 | 8 | `Executor.cpp` 的 `Fail` 與步驟的迴圈 | 設成中斷並呼叫錯誤處理；步驟之間不看狀態 | 巢狀時設成中斷、留下錯誤，不呼叫處理函式；裡面的錯誤併進外層這次呼叫的清單；最外層統一呼叫一次。每個 System 回來後看 World 有沒有中斷，中斷就停；沒有留下錯誤（例外）時補一個。中斷的 World 再被要求跑：不執行，回傳留下的錯誤 |
 | 9 | `detail/Context.hpp`、`Product.hpp` | System 拿不到執行器 | 呼叫的上下文帶執行器的指標；`ExclusiveWorld::RunSchedule(名字)`。註：T2 會把 `Product::Run` 改名，T5 會讓一個 `Product` 有多個 World，這個指標要指到「這個 World 的執行器」 |
-| 10 ★ | `Params.hpp`、`SystemTraits.hpp`、`World.cpp`、`Registry.cpp` | `ExclusiveWorld` 沒有 Resource 的介面，也不帶任何宣告 | 新的寫法 `ExclusiveWorld<Writes<…>>`；不帶宣告的 `ExclusiveWorld` 照舊可用（兩個名字怎麼並存實作時定，原則是既有的簽名不必改）。列出來的 Resource 用現有的「寫 Resource」這一種存取記在 System 上，所以下面這些**不必另外寫**：「只有一個寫者」的啟動檢查（D-E2）、(c) 區的擋下（Z2）、列 `KernelSettings` 的擋下（D-E18）、執行緒親和的檢查、Registry 指紋。要另外加的只有兩條啟動檢查：獨占的 System 不能同時是 ingress（否則 Z2 的例外會放它寫 (c) 區）；hook 不能用帶宣告的寫法。執行期：讀任何 Resource（`KernelSettings` 回 Err；執行緒親和和這個 World 的 runner 不合的 Resource 也回 Err——一般的 System 讀它會在啟動時被擋，獨占的 System 的讀不在簽名上，只能執行期擋）；寫沒列的回 Err；不能新增或移除 Resource |
+| 10 ★ | `Params.hpp`、`SystemTraits.hpp`、`World.cpp`、`Registry.cpp` | `ExclusiveWorld` 沒有 Resource 的介面，也不帶任何宣告 | 新的寫法 `ExclusiveWorld<Writes<…>>`；不帶宣告的 `ExclusiveWorld` 照舊可用（兩個名字怎麼並存實作時定，原則是既有的簽名不必改）。列出來的 Resource 用現有的「寫 Resource」這一種存取記在 System 上，所以下面這些**不必另外寫**：「只有一個寫者」的啟動檢查（D-E2）、(c) 區的擋下（Z2）、列 `KernelSettings` 的擋下（D-E18）、執行緒親和的檢查、Registry 指紋。要另外加的只有兩條啟動檢查：獨占的 System 不能同時是 ingress（否則 Z2 的例外會放它寫 (c) 區）；hook 不能用帶宣告的寫法。執行期：讀任何 Resource（`KernelSettings` 回 Err；執行緒親和和這個 World 的 runner 不合的 Resource 也回 Err——一般的 System 讀它會在啟動時被擋，獨占的 System 的讀不在簽名上，只能執行期擋）；標 `Shared` 的可以直接寫；單一寫者的要列了才能寫，沒列回 Err（Resource 是不是 `Shared` 要到登記時才知道，所以這條在執行期擋，和元件現在的檢查同一種）；不能新增或移除 Resource |
 | 11 ★ | `Params.hpp` | `Get` 回傳指標、`GetMut` 回傳 `Mut` | 換成 `Read<T>(實體, f)`、`Modify<T>(實體, f)`（Resource 不帶實體）。f 必須回傳 void（用 `requires` 約束，測試用 `requires` 運算式確認回傳值的 f 不被接受），所以 `return &t;` 這種寫法帶不出指標；把位址寫進閉包捕獲的變數仍然攔不到（LIM-3）。`Modify` 一律記變更，f 沒有真的改值也算；`Read`／`Modify` 自己回傳「有沒有這個元件」或錯誤。f 執行期間呼叫 `RunSchedule` 回 Err（句柄上記深度）。閉包裡可以再開閉包 |
 | 12 ★ | `Executor.cpp`、`World.cpp` | 執行器不知道 Startup 跑過沒有 | 記三件事：每一張 Startup 跑過了沒；帶時鐘的 schedule 有沒有 System 執行完過；有沒有 Startup 正在執行中。不符合第 3.3 節條件的 Startup：從外面呼叫是斷言，巢狀呼叫回 Err。**Startup 執行中，巢狀跑別的 schedule 回 Err。** `ExclusiveWorld` 加唯讀的查詢「這張 Startup 跑完了沒」：只接受 Startup 的名字（別的回 Err）；成功跑完才是真，執行中、被拒絕、跑到一半出錯都是假。**從外面呼叫的行為會變**（以前重跑 Startup 不會被擋） |
 | 13 | `KernelError.hpp`、`Registry.cpp` 的 `ToString` | — | 新增錯誤碼（加在列舉的最後）：schedule 正在執行中、名字不存在、Startup 不能跑、Startup 執行中不能巢狀、extract 不能巢狀跑、hook 裡不能跑、閉包裡不能跑、沒列在宣告裡的 Resource（讀 `KernelSettings` 也用這一個）、巢狀執行被例外中止 |
@@ -278,9 +278,9 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 2. **放寬的面**（你定的，`v8-arch-gyo2-exclusive-declared-writes`）：
    - 規則上：獨占的 System 寫單一寫者的 Resource，以前不准（S-13），之後列在宣告裡就可以。
    - 程式上：`ExclusiveWorld` 現在根本沒有 Resource 的介面，今天唯一走得到的是繞路（經 World 的公開介面寫）。繞路寫「列出來的、單一寫者的 R」，以前驗證的兩層都會報，之後 R 算已宣告，不報。
-3. **收緊的面**：
-   - 規則上：獨占的 System 寫 `Shared` 的 Resource，以前可以（S-13），之後沒列在宣告裡就不行。
-   - 程式上：繞路寫「沒列的 `Shared` Resource」，以前驗證不報，之後報（只在驗證打開時）。經新介面寫沒列的回 Err，是新介面的行為，不算「以前→之後」。
+3. **收緊的面**：無。標 `Shared` 的 Resource 照舊可以寫，不用列（使用者 2026-11-15 改定，`v8-arch-gyo2-shared-means-no-owner`）。
+
+
 4. **放寬之後，原本的性質誰還守著**：列出來的 Resource 算進寫者的計數，別人也寫它就在啟動時報「有第二個寫者」（D-E2，守衛 J-15）。也就是從「寫不到」變成「寫了會被數到」。元件的規則不變。(c) 區的仍然寫不到（Z2）。例外照舊：只掛在 Startup 的獨占 System，它列出來的 Resource 不計（Startup 的豁免）。
 5. **根據與證據**：HANDOFF `v8-arch-gyo2-exclusive-declared-writes`；規格 `spec.zh-Hant.md:261`、`:336`、`:1094`；`target/kernel.zh-Hant.md:22`；檢查報告 `k0-declaration-r3-check-opus.md` 的 B1。
 
@@ -294,8 +294,8 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 |---|---|---|
 | 概念稿 E5「System 執行中再跑 System 是 Programmer Error」 | 拿掉 | 跟著你定的 `v8-arch-gyo2-time-plan-two` |
 | 規格 E.2 第 1 步「`Run` 斷言 World 是閒置」；規格 A 的狀態「執行中（哪張、第幾步）」 | 加上「或由獨占 System 發起」；狀態變成一疊。加上：不符合條件的 Startup 是斷言 | 跟著上一條；Startup 那一句是從外面呼叫的行為變更（只收緊） |
-| target `kernel` **DI-KS 1**、規格 S-10、S-13 | 加上「可以跑 schedule」；「讀全部」補上「`KernelSettings` 除外」（規格 §讀法 `:21` 說它讀得到 `KernelSettings`「無害」，那一句要改）；加上「寫 Resource 要列在宣告裡，列出來的算寫者」。S-10「視為寫全部 (b) 區 `Shared`」改成「元件照舊；Resource 只算列出來的」。S-13 的理由句「寫者的規則不必列舉它」要改 | **DI** |
-| target `kernel` **DI-KS 2**（`ExclusiveWorld` 對 (c) 區或單一寫者資料的寫入一律回 Err） | 改成：元件照舊；Resource 只能寫列在宣告裡的，列出來的不限 `Shared` | **DI**（有放寬，見 5.2） |
+| target `kernel` **DI-KS 1**、規格 S-10、S-13 | 加上「可以跑 schedule」；「讀全部」補上「`KernelSettings` 除外」（規格 §讀法 `:21` 說它讀得到 `KernelSettings`「無害」，那一句要改）；加上「單一寫者的 Resource 列在宣告裡才能寫，列出來的算寫者」。S-10「視為寫全部 (b) 區 `Shared`」不變，另加列出來的。S-13 的理由句「寫者的規則不必列舉它」要改 | **DI** |
+| target `kernel` **DI-KS 2**（`ExclusiveWorld` 對 (c) 區或單一寫者資料的寫入一律回 Err） | 改成：元件照舊；Resource 標 `Shared` 的照舊可以寫，單一寫者的列在宣告裡才能寫 | **DI**（有放寬，見 5.2） |
 | target `kernel` **DI-KS 6**、規格 B.3（「只有一個寫者」的計數；Startup 的 System 不算寫者） | 計數的對象加上「獨占的 System 列出來的 Resource」。Startup 的豁免不變；它的理由「只跑一次、在帶時鐘的 schedule 之前」從靠外面只呼叫一次，變成 Kernel 擋；條文加上第 3.3 節的條件與記下的假設。規格 `:261`「`ExclusiveWorld` 寫不到單一寫者的欄，所以不計」要改 | **DI** |
 | target `kernel` **DI-KS 9**、規格 W-3、target `world` 第 41 行（Running 期間成員不變；變更只在宣告的同步點套用；結果不依記錄順序） | 「Running 期間成員不變」改成「一般的 System 執行期間成員不變；獨占的 System 只在它跑的 schedule 的同步點變」。加一句「記下的變更在記它的那張 schedule 的同步點、用那張的位置套用」。其餘不變 | **DI**（放寬的面就是 5.1） |
 | 規格 **W-4**、A.4 與守衛 J-4 | 獨占 System 的句柄在巢狀回來後重新有效（第 6 項）。J-4 加巢狀的案例 | 放寬，實作後列五點請你核准 |
@@ -332,7 +332,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | 外層的插入碰上裡面的刪除 | (1) 外層 (b) 區的 System 記了往 E 的插入，裡面那張刪了 E：外層的同步點丟掉那一筆，計數加一，不出錯。(2) 外層 **(c) 區**的 System 記了往 E 的插入，裡面那張的 (b) 區 System 刪 E：裡面那張的同步點回報 Z5 的錯誤，E 沒有被刪。(3) 三層（A 跑 B、B 跑 C），紀錄在最外層：一樣回報。(4) 那筆插入是外層 schedule 的 (c) 區 hook 記的（還在 hook 的佇列裡）：一樣回報 |
 | 外層刪除後裡面用同一個 id 生成 | 外層記了刪除 E，裡面那張 `SpawnWithId` 生成 E：固定實際的行為（照現在的程式是斷言） |
 | 存取驗證不誤報 | 驗證打開：獨占 System 在跑 schedule 的前後各寫一次 (b) 區 `Shared` 的元件與列出來的 Resource，不報錯 |
-| 存取驗證照樣抓得到 | 驗證打開：(1) 裡面那張的 System 寫了沒宣告的資料，報錯並點名它；(2) 獨占 System 在進入巢狀前寫了不准寫的資料，記在它自己頭上，裡面那張沒有跑；(3) 獨占 System 經 World 的公開介面繞路寫沒列的 `Shared` Resource：在存取當下報（W-5）；(4) 經存下來的位址寫：在 System 的邊界比對時報 |
+| 存取驗證照樣抓得到 | 驗證打開：(1) 裡面那張的 System 寫了沒宣告的資料，報錯並點名它；(2) 獨占 System 在進入巢狀前寫了不准寫的資料，記在它自己頭上，裡面那張沒有跑；(3) 獨占 System 經 World 的公開介面繞路寫沒列的**單一寫者** Resource：在存取當下報（W-5）；(4) 經存下來的位址寫它：在 System 的邊界比對時報 |
 | 句柄與 stamp | 裡面那張跑兩次；外層在兩次之間用 `Modify` 寫入，**裡面那張第二次執行時帶 `Changed` 的 System** 看得到。驗證打開時，裡面那張出錯後外層再用句柄，不會多報一個「句柄過期」 |
 | 閉包 | 回傳值的 f 不被接受（用 `requires` 運算式在測試裡確認，不靠建置失敗）。實體沒有那個元件：不呼叫 f，回傳值說明沒有。閉包裡再開閉包讀另一個元件：可以。閉包裡跑 schedule：回 Err |
 | 出錯記一次 | 裡面那張的 System 回 Err：錯誤處理只被呼叫一次，錯誤裡有裡面的 System、裡面的 schedule、外層的 System；World 中斷 |
@@ -344,7 +344,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | 兩層 | A 跑 B、B 裡的獨占 System 跑 C：順序與 tick 都對 |
 | hook | 裡面那張的同步點觸發 hook，照常執行；hook 裡呼叫 `RunSchedule`：回 Err |
 | Resource：讀 | 讀任何 Resource；讀 `KernelSettings` 回 Err；讀執行緒親和不合的 Resource 回 Err；Resource 不存在：不呼叫 f |
-| Resource：寫 | 列在宣告裡的（單一寫者的、`Shared` 的各一）寫得進去；沒列的 `Shared` Resource 回 Err；不帶宣告的 `ExclusiveWorld` 寫 Resource 回 Err |
+| Resource：寫 | 列在宣告裡的單一寫者 Resource 寫得進去；標 `Shared` 的不用列也寫得進去（帶不帶宣告的 `ExclusiveWorld` 都可以）；沒列的單一寫者 Resource 回 Err |
 | Resource：寫者的計數 | 獨占的 System 列了一個單一寫者的 Resource，另一個 System 也用 `ResMut` 寫它：啟動時報 D-E2，兩個 System 都被點名 |
 | Resource：宣告的檢查 | 列了 (c) 區的 Resource：啟動時報 Z2。列了 `KernelSettings`：報 D-E18。獨占的 System 設了 ingress 的旗標並掛在 ingress 的 stage：報新的那一條（指定規則代號）；沒設旗標、只是掛在那個 stage 的：通過。hook 用帶宣告的寫法：報新的那一條。帶宣告的 `ExclusiveWorld` 加上第二個參數：編譯不過 |
 | Startup：可以跑的那一次 | (1) 從外面跑一次；(2) 外層不帶時鐘的 schedule 裡的獨占 System 跑一次；(3) 外層帶時鐘的 schedule 裡、排在最前面的獨占 System，用「跑完了沒」的查詢，**連跑兩個 tick**：Startup 的 System 只執行一次，第二個 tick 不出錯 |
@@ -352,7 +352,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 | Startup：邊界 | 帶時鐘的 schedule 裡只有被 run 條件跳過的 System：之後仍然可以跑 Startup。兩張 Startup：各可以跑一次 |
 | 指紋不變 | 有獨占 System（不帶宣告）的 schedule，執行計畫與三種指紋和加這一批之前相同 |
 
-**判定 2：檢出力。** 突變清單在實作前由實作者（Opus）定案，交別的模型（Fable）檢查——找出「把實作改壞而測試仍然全過」的地方並補上。至少包含：跑完設回閒置；成員檢查整個拿掉；跑過 schedule 的 System 完全不查成員；進入巢狀前只重拍、不先比對；任何呼叫都可以進入巢狀；外層的紀錄在裡面那張的同步點被套用；回來後不還原外層的佇列；Z5 的重查不看外層的紀錄；Z5 的重查只看最近一層；Z5 的重查不看外層的 hook 佇列；巢狀前不重拍快照；巢狀後不更新句柄；只在成功時更新句柄；巢狀後不換 stamp；錯誤處理呼叫兩次；吞掉錯誤後 World 恢復；外層回別的 Err 時丟掉裡面那個；中斷的 World 照跑；例外之後深度不還原；跑自己不擋；跑自己只查最內層；hook 裡可以跑；閉包裡可以跑；f 可以回傳值；Startup 可以跑第二次；帶時鐘的 System 執行完之後還能跑 Startup；條件改成「開始執行」（外層帶時鐘時連第一次都被拒絕）；被跳過的 System 也算執行完；Startup 執行中可以巢狀；extract 也放行；名字不存在改成斷言；沒列的 Resource 也給寫；第一層驗證仍把沒列的 `Shared` Resource 當成已宣告；第二層驗證仍把它當成已宣告；親和不合的 Resource 也給讀；列出來的不算進寫者的計數；獨占的 System 可以是 ingress；`KernelSettings` 也給讀。只有預期的那個案例失敗才算抓到（啟動檢查的案例要指定規則代號）；建置失敗不算。
+**判定 2：檢出力。** 突變清單在實作前由實作者（Opus）定案，交別的模型（Fable）檢查——找出「把實作改壞而測試仍然全過」的地方並補上。至少包含：跑完設回閒置；成員檢查整個拿掉；跑過 schedule 的 System 完全不查成員；進入巢狀前只重拍、不先比對；任何呼叫都可以進入巢狀；外層的紀錄在裡面那張的同步點被套用；回來後不還原外層的佇列；Z5 的重查不看外層的紀錄；Z5 的重查只看最近一層；Z5 的重查不看外層的 hook 佇列；巢狀前不重拍快照；巢狀後不更新句柄；只在成功時更新句柄；巢狀後不換 stamp；錯誤處理呼叫兩次；吞掉錯誤後 World 恢復；外層回別的 Err 時丟掉裡面那個；中斷的 World 照跑；例外之後深度不還原；跑自己不擋；跑自己只查最內層；hook 裡可以跑；閉包裡可以跑；f 可以回傳值；Startup 可以跑第二次；帶時鐘的 System 執行完之後還能跑 Startup；條件改成「開始執行」（外層帶時鐘時連第一次都被拒絕）；被跳過的 System 也算執行完；Startup 執行中可以巢狀；extract 也放行；名字不存在改成斷言；沒列的單一寫者 Resource 也給寫；第一層驗證把沒列的單一寫者 Resource 當成已宣告；第二層驗證把它當成已宣告；`Shared` 的 Resource 反而不給寫；親和不合的 Resource 也給讀；列出來的不算進寫者的計數；獨占的 System 可以是 ingress；`KernelSettings` 也給讀。只有預期的那個案例失敗才算抓到（啟動檢查的案例要指定規則代號）；建置失敗不算。
 
 **判定 3：沒有回歸。** 本機完整 ctest 全過；三平台 L1（linux-x64、windows-x64、macos-arm64）全過。既有測試除了第 5 節列的，一個判定都不改。
 
@@ -392,7 +392,7 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 5. 只有獨占的 System 能進入巢狀；hook、run 條件、一般的 System 不能。守衛：「一般 System 繞路跑 schedule」「hook」。
 6. `ExclusiveWorld` 不交出指標或 `Mut`：元件與 Resource 都只在閉包裡存取，閉包不能回傳值，閉包裡不能跑 schedule。擋得住的是 `return &t;`；把位址寫進閉包捕獲的變數攔不到，屬於既有的限界（LIM-3），說明頁要給「大的元件在閉包裡讀完」的寫法。守衛：「閉包」；介面上沒有 `Get`、`GetMut` 這兩個名字（編譯期檢查這兩個名字不存在）。C++ 沒辦法一般性地檢查「介面上沒有任何回傳指標的函式」，其餘靠審查。
 7. Startup 的每一張在一個 World 裡只執行一次，而且在任何帶時鐘的 schedule 的 System 執行完之前；Startup 執行中不巢狀跑別的 schedule。不論從外面或巢狀呼叫。例外要寫明：發起 Startup 的那個獨占 System 自己，在呼叫之前可以讀寫它列出來的 Resource。（記下的假設見第 3.3 節；外層的骨架定了之後可能要改。）守衛：三個 Startup 的案例。
-8. 經 `ExclusiveWorld` 寫 Resource 一定有宣告：列出來的算寫者，沒列的寫不進去，驗證的兩層也不把它當成已宣告。守衛：「Resource：寫」「Resource：寫者的計數」「存取驗證照樣抓得到 (3)」。
+8. 獨占的 System 寫單一寫者的 Resource 一定有宣告：列出來的算寫者，沒列的寫不進去，驗證的兩層也不把它當成已宣告。標 `Shared` 的資料不在這條裡（「要保證誰寫，別開 shared」）。守衛：「Resource：寫」「Resource：寫者的計數」「存取驗證照樣抓得到 (3)(4)」。
 
 **Replacement Criteria**：實作時發現巢狀執行另外需要的特例，超出這份宣告第 4 節的清單，累計到三個；或巢狀執行的缺陷在合併後於兩個不同的地方各出現一次。碰到就停下來，重新比較登記式與由執行計畫重複執行兩個做法。
 
@@ -420,11 +420,11 @@ SystemResult DriveFixedSteps(ExclusiveWorld world) {
 2. 中斷時每一層還沒套用的紀錄都丟掉。
 
 **Resource 的讀寫（帶寫入的宣告）**
-3. 【已定：使用者 2026-11-15「可以，下一條」。**之後使用者修正了這一條所依據的理由**（`v8-arch-gyo2-shared-means-no-owner`：「shared的情況本身就是不需要知道誰寫的。要保證誰寫，別開shared。」）；照新的說法這一條可能改成「只有單一寫者的要列，`Shared` 的不用列」——那是分支會話推的，待使用者確認】寫 Resource 一律要列，標 `Shared` 的也要列；讀不必列。沒列就寫：優先做成編譯不過（要寫哪個 Resource 在型別上看得出來），實作時確認做不到才退回執行期回 Err。
-4. 宣告只管 Resource，元件的規則照舊。
+3. 【**改定**：使用者 2026-11-15「第 1、2 都照新的說法改」，`v8-arch-gyo2-shared-means-no-owner`】只有單一寫者的 Resource 要列；標 `Shared` 的不用列；讀不必列。（先前定的是「一律要列，`Shared` 的也要列」，使用者修正了它所依據的理由之後改掉。沒列就寫單一寫者的，在執行期回 Err。）
+4. 【已定：同上】元件照舊：只能寫 (b) 區 `Shared` 的元件，不用列。
 5. 只能讀寫值，不能新增或移除 Resource。
 6. 獨占的 System 不能同時是 ingress；hook 不能用帶宣告的寫法。
-7. 驗證的兩層不再把「整個 World」的存取當成可以寫 `Shared` 的 Resource。
+7. 驗證的兩層照舊把「整個 World」的存取當成可以寫 (b) 區 `Shared` 的資料，另外加上列出來的單一寫者 Resource。（跟著第 3 條改定；修訂 5 原本寫「不再當成可以寫 `Shared` 的 Resource」。）
 
 **Startup**
 8. 條件第 2 條的「執行過」改成「執行完一次呼叫」；被 run 條件跳過的不算。**記下的假設那一句的「開始執行之前」也要跟著改成「執行完之前」**——那是你看過的文字，我沒有直接改，等你說。
