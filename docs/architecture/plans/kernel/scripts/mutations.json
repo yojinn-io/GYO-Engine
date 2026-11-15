@@ -4083,6 +4083,46 @@
       "expect": "DtorLog\\(\\)\\ ==\\ std::vector<std::string>\\{\"1:1\",\\ \"0:1\"\\}"
     },
     {
+      "id": "td-despawn-onremove-descending",
+      "what": "F.2 step 2: a despawn calls OnRemove in descending ComponentId (the property we-j7-despawn-reverse hit before its find was retargeted) (v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "replace": "            for (std::size_t c = columns_.size(); c-- > 0;) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "a despawn calls the OnRemove of each component the entity has, once, in ascending ComponentId"
+    },
+    {
+      "id": "we-despawn-onremove-interleaved",
+      "what": "F.2 step 2: OnRemove and destroy interleave per component (the user chose every OnRemove first, 2026-11-16) (carried from claude/arch-kernel-world-exec 3d87d916 by v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }",
+      "replace": "                if (!hooked) return hooked;\n                columns_[c]->Erase(id);\n            }",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "Join\\(Log\\(\\)\\) == \"mode-removed sees tag:7\""
+    },
+    {
+      "id": "td-despawn-onremove-absent-components",
+      "what": "F.2 step 2: a despawn calls OnRemove for components the entity does not have (v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "replace": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c)",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "a despawn calls the OnRemove of each component the entity has, once, in ascending ComponentId"
+    },
+    {
+      "id": "td-despawn-cells-kept",
+      "what": "F.2 step 2: a despawn destroys no cell (caught first by the kernel's W-1 structure check, before the case's own CHECK) (v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(",
+      "replace": "            entities_.erase(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "StructureBroken \\[W-1\\]: column 'Tag' has entity 1, which is not alive"
+    },
+    {
       "id": "we-j32-despawn-record-order",
       "what": "J-32 (J.3 #1): despawns applied in record order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
       "file": "engine/kernel/src/World.cpp",
