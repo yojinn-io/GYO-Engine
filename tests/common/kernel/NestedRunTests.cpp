@@ -19,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -1966,4 +1967,101 @@ TEST_CASE("J-58: Startup's sync point changes membership with no hook: verificat
     const auto result = rig->Run("Tick");
     CHECK_MESSAGE(static_cast<bool>(result), "[ns-st-verify-plain] " << Text(result));
     CHECK(rig->world().Get<Mode>(31) != nullptr);
+}
+
+// ---- Added after the verification of the five points (Fable/high, AGENTS 14.4;
+// build/evidence/gyo2-nested-schedule/five-points-verify/)
+
+namespace {
+SystemResult DriveThenOverwrite(ExclusiveWorld<> world) {
+    if (auto ran = world.RunSchedule("Tick"); !ran) return Engine::Base::Err(std::move(ran).error());
+    KeptWorld()->Insert(1, Tag{5});  // an existing cell: a structural World API call, but no membership change
+    Log().push_back("overwrite went through");
+    return Ok();
+}
+ExclusiveWorld<>* g_keptExclusive = nullptr;
+SystemResult UseKeptExclusive(ExclusiveWorld<>) {
+    const Detail::SystemContext& call = Current();
+    const std::size_t before = call.errors.size();
+    static_cast<void>(g_keptExclusive->Read<Tag>(1, [](const Tag& t) { return t.t; }));
+    const std::size_t afterRead = call.errors.size();
+    auto ran = g_keptExclusive->RunSchedule("Tick");
+    const std::size_t afterRun = call.errors.size();
+    static_cast<void>(g_keptExclusive->Read<Tag>(1, [](const Tag& t) { return t.t; }));
+    const std::size_t afterSecond = call.errors.size();
+    Log().push_back("reports " + std::to_string(afterRead - before) + " " + std::to_string(afterRun - afterRead) + " " +
+                    std::to_string(afterSecond - afterRun) + (ran ? " ran ok" : " run failed"));
+    return Ok();
+}
+SystemResult BootWritesListedFlag(ExclusiveWorld<Writes<Flag>> world) {
+    auto r = world.Modify<Flag>([](Flag& f) { f.on = 21; });
+    if (!r) return Engine::Base::Err(std::move(r).error());
+    return Ok();
+}
+} // namespace
+
+TEST_CASE("J-56: back in the outer System a World API overwrite of an existing cell (no membership change) still fails a GYO_ASSERT") {
+    // The membership check cannot see this one: only "the World is still Running" stops it.
+    auto rig = NestRig([](Registrar& r) {
+        Nest(r);
+        r.AddSystem<&DriveThenOverwrite>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&LogCall>(In("InA", "Tick", "A"));
+    }, false);
+    rig->world().Insert(1, Tag{1});
+    KeptWorld() = &rig->world();
+    GYO_CHECK_ASSERTS(rig->Run("Frame"));
+    KeptWorld() = nullptr;
+    CHECK_MESSAGE(!Logged("overwrite went through"), "[ns-back-overwrite] " << Joined());
+    CHECK(Logged("InA@Tick#1"));
+}
+
+TEST_CASE("J-56: ExclusiveWorld handles are neither copyable nor movable") {
+    CHECK_MESSAGE(!std::is_copy_constructible_v<ExclusiveWorld<>>, "[ns-exclusive-not-movable] copy");
+    CHECK_MESSAGE(!std::is_move_constructible_v<ExclusiveWorld<>>, "[ns-exclusive-not-movable] move");
+    CHECK_MESSAGE(!std::is_copy_constructible_v<ExclusiveWorld<Writes<Flag>>>, "[ns-exclusive-not-movable] copy, declared");
+    CHECK_MESSAGE(!std::is_move_constructible_v<ExclusiveWorld<Writes<Flag>>>, "[ns-exclusive-not-movable] move, declared");
+}
+
+TEST_CASE("J-56: verification on: another call's ExclusiveWorld handle is reported before, during and after its RunSchedule") {
+    // W-4's loosening is only for the handle of the running call: renewing it must not adopt another call.
+    auto rig = NestRig([](Registrar& r) {
+        Nest(r);
+        r.AddSystem<&UseKeptExclusive>(In("Driver", "Frame", "Drive"));
+        r.AddSystem<&SpawnSeventy>(In("Spawn70", "Tick", "A"));
+    });
+    rig->world().Insert(1, Tag{1});
+    Detail::SystemContext over;
+    over.world = &rig->world();
+    over.callSerial = 0;
+    over.syncEpoch = rig->world().SyncEpoch();
+    ExclusiveWorld<> kept = ParamTraits<ExclusiveWorld<>>::Fetch(over);
+    g_keptExclusive = &kept;
+    const auto result = rig->Run("Frame");
+    g_keptExclusive = nullptr;
+    CHECK_MESSAGE(HasCode(result, KernelErrorCode::StaleHandle), "[ns-w4-other-call] " << Text(result));
+    CHECK_MESSAGE(Logged("reports 1 1 1 ran ok"), "[ns-w4-other-call] " << Joined());
+}
+
+TEST_CASE("J-15: a resource listed by an exclusive System mounted on Startup only is not counted; on Startup and Frame it is") {
+    {
+        auto rig = NestRig([](Registrar& r) {
+            Nest(r);
+            r.Schedule(BootSchedule());
+            r.AddSystem<&BootWritesListedFlag>(In("BootWriter", "Boot", "S"));
+            r.AddSystem<&AlsoWritesFlag>(In("AlsoWritesFlag", "Tick", "A"));
+        });
+        REQUIRE_MESSAGE(static_cast<bool>(rig->built.result), "[ns-st-exempt-listed] " << Describe(rig->built));
+        rig->world().SetResource(Flag{0});
+        const auto result = rig->Run("Tick");
+        CHECK_MESSAGE(static_cast<bool>(result), "[ns-st-exempt-listed] " << Text(result));
+        CHECK(rig->world().Resource<Flag>()->on == 22);
+    }
+    const Built built = Finish({{"test", [](Registrar& r) {
+                                    Nest(r);
+                                    r.Schedule(BootSchedule());
+                                    r.AddSystem<&BootWritesListedFlag>(
+                                        Sys("BootAndFrame", Zone::B, {At("Boot", "S"), At("Frame", "Drive")}));
+                                    r.AddSystem<&AlsoWritesFlag>(In("AlsoWritesFlag", "Tick", "A"));
+                                }}});
+    CHECK_MESSAGE(HasError(built, StartupCode::DE2), "[ns-st-exempt-listed-counted] " << Describe(built));
 }

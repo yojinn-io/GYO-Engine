@@ -6040,7 +6040,7 @@
     },
     {
       "id": "ns-res-affinity-readable",
-      "what": "S-15: a resource whose affinity the runner does not satisfy is read (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "what": "S-16: a resource whose affinity the runner does not satisfy is read (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
       "file": "engine/kernel/src/World.cpp",
       "find": "    if (!info.affinity.IsAny() && info.affinity.role != runner) {",
       "replace": "    if (false) {",
@@ -6137,6 +6137,96 @@
       "target": "gyo_kernel_tests",
       "cases": "J-58: verification is on while Startup runs*",
       "expect": "\\[ns\\-st\\-verification\\]"
+    },
+    {
+      "id": "ns-decl-ingress-allowed",
+      "what": "S-14: an exclusive System may be ingress (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (access.exclusive && system.options.ingress) {",
+      "replace": "        if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: declarations*",
+      "expect": "\\[ns\\-decl\\-ingress\\]"
+    },
+    {
+      "id": "ns-decl-ingress-by-stage",
+      "what": "S-14: reported for an exclusive System in the ingress stage, flag or not (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (access.exclusive && system.options.ingress) {",
+      "replace": "        if (access.exclusive && (system.options.ingress || system.options.mounts.front().stage == \"In\")) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: declarations: a listed zone C*",
+      "expect": "\\[ns\\-decl\\-ingress\\-stage\\]"
+    },
+    {
+      "id": "ns-decl-hook-writes-allowed",
+      "what": "S-14: a hook may take ExclusiveWorld<Writes<...>> (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "        if (resolver.access.exclusive && std::any_of(",
+      "replace": "        if (false && std::any_of(",
+      "target": "gyo_kernel_tests",
+      "cases": "J-57: declarations: a listed zone C*",
+      "expect": "\\[ns\\-decl\\-hook\\]"
+    },
+    {
+      "id": "ns-two-startups-allowed",
+      "what": "H-12: two Startup schedules are not an error (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (!startupSchedule.empty()) {",
+      "replace": "            if (false) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-58: two Startup schedules*",
+      "expect": "\\[ns\\-st\\-two\\]"
+    },
+    {
+      "id": "ns-j45-zone-c-writable",
+      "what": "S-13 (J-45): ExclusiveWorld writes a zone C column (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
+      "replace": "    if (info.writePolicy == WritePolicy::Shared || info.zone == Zone::C) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "expected Err ExclusiveWorldWrite"
+    },
+    {
+      "id": "ns-j45-exclusive-writable",
+      "what": "S-13 (J-45): ExclusiveWorld writes a zone B single-writer column (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
+      "replace": "    if (info.zone == Zone::B) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "expected Err ExclusiveWorldWrite"
+    },
+    {
+      "id": "ns-j45-spawn-ok",
+      "what": "S-13 (J-45): ExclusiveWorld::Spawn returns Ok (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        return Engine::Base::Err(Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::ExclusiveWorldWrite,\n                                                   \"S-13\", \"ExclusiveWorld cannot spawn: there is no untyped spawn\"));",
+      "replace": "        return EntityId{0};",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "expected Err ExclusiveWorldWrite"
+    },
+    {
+      "id": "ns-plan-version-not-bumped",
+      "what": "the Plan fingerprint format stays 3 (the kernel runs Startup; a System runs a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kFingerprintVersion = 4;",
+      "replace": "constexpr std::uint32_t kFingerprintVersion = 3;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-54: the schedule's limit is in*",
+      "expect": "planOf\\(none, \\\"Tick\\\"\\)\\.version == 4U"
+    },
+    {
+      "id": "ns-c-version-not-bumped",
+      "what": "the C fingerprint format stays 5 (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Fingerprint.cpp",
+      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
+      "replace": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-18: the C fingerprint sees*",
+      "expect": "CFingerprint\\(\\)\\.version == 6U"
     },
     {
       "id": "ns-modify-no-changed",
@@ -6369,94 +6459,54 @@
       "expect": "\\[ns\\-closure\\-const\\]"
     },
     {
-      "id": "ns-decl-ingress-allowed",
-      "what": "S-14: an exclusive System may be ingress (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (access.exclusive && system.options.ingress) {",
-      "replace": "        if (false) {",
+      "id": "ns-nested-end-ready-overwrite",
+      "what": "a nested Run sets the World back to Ready (seen by a World API overwrite, no membership change) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Executor.cpp",
+      "find": "    if (!nested) world.state_ = WorldState::Ready;",
+      "replace": "    world.state_ = WorldState::Ready;",
       "target": "gyo_kernel_tests",
-      "cases": "J-57: declarations*",
-      "expect": "\\[ns\\-decl\\-ingress\\]"
+      "cases": "J-56: back in the outer System a World API overwrite*",
+      "expect": "\\[ns\\-back\\-overwrite\\]"
     },
     {
-      "id": "ns-decl-ingress-by-stage",
-      "what": "S-14: reported for an exclusive System in the ingress stage, flag or not (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (access.exclusive && system.options.ingress) {",
-      "replace": "        if (access.exclusive && (system.options.ingress || system.options.mounts.front().stage == \"In\")) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: declarations: a listed zone C*",
-      "expect": "\\[ns\\-decl\\-ingress\\-stage\\]"
-    },
-    {
-      "id": "ns-decl-hook-writes-allowed",
-      "what": "S-14: a hook may take ExclusiveWorld<Writes<...>> (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "        if (resolver.access.exclusive && std::any_of(",
-      "replace": "        if (false && std::any_of(",
-      "target": "gyo_kernel_tests",
-      "cases": "J-57: declarations: a listed zone C*",
-      "expect": "\\[ns\\-decl\\-hook\\]"
-    },
-    {
-      "id": "ns-two-startups-allowed",
-      "what": "H-12: two Startup schedules are not an error (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Registry.cpp",
-      "find": "            if (!startupSchedule.empty()) {",
-      "replace": "            if (false) {",
-      "target": "gyo_kernel_tests",
-      "cases": "J-58: two Startup schedules*",
-      "expect": "\\[ns\\-st\\-two\\]"
-    },
-    {
-      "id": "ns-j45-zone-c-writable",
-      "what": "S-13 (J-45): ExclusiveWorld writes a zone C column (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
-      "replace": "    if (info.writePolicy == WritePolicy::Shared || info.zone == Zone::C) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "expected Err ExclusiveWorldWrite"
-    },
-    {
-      "id": "ns-j45-exclusive-writable",
-      "what": "S-13 (J-45): ExclusiveWorld writes a zone B single-writer column (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/World.cpp",
-      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
-      "replace": "    if (info.zone == Zone::B) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite, \"S-13\",\n                     \"ExclusiveWorld write of component '\"",
-      "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "expected Err ExclusiveWorldWrite"
-    },
-    {
-      "id": "ns-j45-spawn-ok",
-      "what": "S-13 (J-45): ExclusiveWorld::Spawn returns Ok (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "id": "ns-exclusive-movable",
+      "what": "B.4 point 8: ExclusiveWorld gets a move constructor (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
       "file": "engine/kernel/include/engine/kernel/Params.hpp",
-      "find": "        return Engine::Base::Err(Detail::CallError(Detail::RequireCall(*world_), KernelErrorCode::ExclusiveWorldWrite,\n                                                   \"S-13\", \"ExclusiveWorld cannot spawn: there is no untyped spawn\"));",
-      "replace": "        return EntityId{0};",
+      "find": "    ChangeStamp stamp_;\n    std::uint32_t closures_ = 0;\n};",
+      "replace": "public:\n    ExclusiveWorld(ExclusiveWorld&& other) noexcept;\n\nprivate:\n    ChangeStamp stamp_;\n    std::uint32_t closures_ = 0;\n};",
       "target": "gyo_kernel_tests",
-      "cases": "J-45:*",
-      "expect": "expected Err ExclusiveWorldWrite"
+      "cases": "J-56: ExclusiveWorld handles are neither*",
+      "expect": "\\[ns\\-exclusive\\-not\\-movable\\]"
     },
     {
-      "id": "ns-plan-version-not-bumped",
-      "what": "the Plan fingerprint format stays 3 (the kernel runs Startup; a System runs a schedule) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kFingerprintVersion = 4;",
-      "replace": "constexpr std::uint32_t kFingerprintVersion = 3;",
+      "id": "ns-renew-adopts-call",
+      "what": "W-4: renewing the handle after RunSchedule also adopts the running call (another call's handle stops being stale) (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "                self.syncEpoch_ = Detail::CurrentSyncEpoch(*self.world_);",
+      "replace": "                self.syncEpoch_ = Detail::CurrentSyncEpoch(*self.world_);\n                self.callSerial_ = Detail::RequireCall(*self.world_).callSerial;",
       "target": "gyo_kernel_tests",
-      "cases": "J-54: the schedule's limit is in*",
-      "expect": "planOf\\(none, \\\"Tick\\\"\\)\\.version == 4U"
+      "cases": "J-56: verification on: another call's ExclusiveWorld handle*",
+      "expect": "\\[ns\\-w4\\-other\\-call\\]"
     },
     {
-      "id": "ns-c-version-not-bumped",
-      "what": "the C fingerprint format stays 5 (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
-      "file": "engine/kernel/src/Fingerprint.cpp",
-      "find": "constexpr std::uint32_t kCFingerprintVersion = 6;",
-      "replace": "constexpr std::uint32_t kCFingerprintVersion = 5;",
+      "id": "ns-modify-resource-checks-after-call",
+      "what": "S-14: a resource Modify calls f and only then checks the write (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        if (auto error = Detail::CheckExclusiveResourceWrite(call, resource, Detail::OneOf<T, Listed...>)) {\n            return Engine::Base::Err(std::move(*error));\n        }\n        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));\n        if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();\n        slot.changed = stamp_;\n        return Call<T&>(f, *slot.value);",
+      "replace": "        auto& slot = static_cast<Detail::ResourceSlot<T>&>(Detail::ResourceAt(*world_, resource));\n        if (!slot.value) return Absent<std::invoke_result_t<F&, T&>>();\n        slot.changed = stamp_;\n        auto done = Call<T&>(f, *slot.value);\n        if (auto error = Detail::CheckExclusiveResourceWrite(call, resource, Detail::OneOf<T, Listed...>)) {\n            return Engine::Base::Err(std::move(*error));\n        }\n        return done;",
       "target": "gyo_kernel_tests",
-      "cases": "J-18: the C fingerprint sees*",
-      "expect": "CFingerprint\\(\\)\\.version == 6U"
+      "cases": "J-57: refused writes and reads*",
+      "expect": "\\[ns\\-refused\\-untouched\\]"
+    },
+    {
+      "id": "ns-startup-listed-counted",
+      "what": "B.3: a Startup-only exclusive System's listed resource is counted as a writer (v8-arch-gyo2-nested-schedule, declaration section 6 judgement 2)",
+      "file": "engine/kernel/src/Registry.cpp",
+      "find": "            if (schedule != nullptr && !schedule->options.startup) counted = true;",
+      "replace": "            if (schedule != nullptr) counted = true;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-15: a resource listed by an exclusive System mounted on Startup only*",
+      "expect": "Finish failed: D-E2 S-11: 'Flag' is Exclusive but has 2 writers"
     }
   ]
 }
