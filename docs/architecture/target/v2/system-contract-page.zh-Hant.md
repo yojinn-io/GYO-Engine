@@ -1,6 +1,6 @@
 # 作者怎麼寫一個 System（一頁；現況）
 
-更新：2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
+更新：2026-11-16（第 3 節 `ExclusiveWorld` 那一列、第 11 節：K0 `v8-arch-gyo2-nested-schedule`）；2026-11-14。Owner：架構（GYO2 重建會話）。**狀態：給使用者確認 System 契約用的說明頁。寫的是 `gyo2` 上已經能跑的程式（機制的骨架在 PR #225 併入；第 8 節的初始值宣告在分支 `claude/gyo2-funnel`），不是新設計。** 例子取自 `tests/common/kernel/SkeletonTests.cpp`。
 
 **本頁例子裡的型別（`Position`、`Velocity`、`Health`、`Arrival`、`Hit`、`Stats` 等）都是範例產品自己定義的，Engine 裡沒有。** Engine 提供的是 `Query`、`Res`、`Spawn`、`Registrar::InitialValue` 這些泛型的機制；元件叫什麼、有哪些、初始值怎麼算，都由產品決定。
 
@@ -59,7 +59,7 @@ r.AddSystem<&ApplyHits>({.name = "ApplyHits", .mounts = {At("Tick", "Simulate", 
 | `Commands` | 延後加減元件，型別在函式體裡才決定；只能動標成 Shared 的元件 | 執行時檢查 |
 | `Local<T>` | 這個 System 自己的狀態，跨 tick 保留 | 無 |
 | `CurrentTick` | 現在是第幾個 tick | 讀 tick |
-| `ExclusiveWorld` | 看到並修改整個 World；必須是唯一的參數 | 整個 World |
+| `ExclusiveWorld<>`、`ExclusiveWorld<Writes<R…>>` | 在閉包裡讀寫整個 World（`Read<T>`、`Modify<T>`）、跑別的 schedule（`RunSchedule`）；必須是唯一的參數；只能是 (b) 區（第 11 節） | 讀全部；寫 (b) 區 `Shared` 的，加上列出來的單一寫者 Resource |
 | `Extract<Read<T>>`、`ExtractRes<T>` | 在 extract 的 schedule 裡讀來源 World；沒有寫的版本 | 讀來源 |
 | `SetRead<Tag>`、`DiagnosticsWriter<R>` | 讀一組具名的元件；寫診斷紀錄 | 讀；無 |
 
@@ -303,4 +303,88 @@ SystemResult Spawner(Spawn<Bundle<Arrival>> spawn) { ... spawn.New(Arrival{0, 10
 - **單機**：只有一端，不會分岔；同一個 World 的生成都走配發器就好；用指定編號生成時避開配發器的那一段（撞到會被丟掉，明細查得到）。
 
 **還是會讓 World 中斷的情形**：(b) 區的 System 記了刪除某個編號、同一窗 (c) 區的 System 又用那個編號生成，照區規則 Z5 回報錯誤（就算那筆生成之後會被丟掉）。這是 Z5 的既有規則，不是被丟掉的那一套。
+
+## 11. 獨占的 System 跑另一張 schedule
+
+（K0，`v8-arch-gyo2-nested-schedule`，使用者 2026-11-15～16 核准。條文在 [Kernel 文件](../kernel.zh-Hant.md#di-ks-16) DI-KS 16～23。）
+
+用射擊遊戲當例子：每一幀依序「讀輸入 → 跑固定步（0 到數步）→ 算畫面」。遊戲開始時先跑一次開局（Startup）：放進固定的設定，例如規則的參數、按鍵的對應；地圖這類世界內容不走開局，走 Loading。
+
+「跑固定步」可以由 World 裡的一個 System 來做：參數是 `ExclusiveWorld<…>` 的 System，在執行中呼叫 `RunSchedule`，跑幾次由它自己決定。
+
+```cpp
+// 驅動固定步的 System（示意：它本身是下一批的事；steps 從時間的 Resource 算出來）
+SystemResult DriveFixedSteps(ExclusiveWorld<> world) {
+    auto steps = world.Read<StepBudget>([](const StepBudget& budget) { return budget.steps; });
+    if (!steps) return Engine::Base::Err(std::move(steps).error());
+    for (int i = 0; i < steps->value_or(0); ++i) {
+        if (auto ran = world.RunSchedule("FixedUpdate"); !ran) return Engine::Base::Err(std::move(ran).error());
+    }
+    return Ok();
+}
+```
+
+### 11.1 誰能跑、能跑哪一張、什麼會被拒絕
+
+- 只有 `ExclusiveWorld<…>` 的 System（只能是 (b) 區、而且是唯一的參數）。run 條件拿不到它；hook 拿得到 `ExclusiveWorld<>`，但在 hook 裡跑 schedule 會被拒絕。一般的 System 經全域指標呼叫 `Product::Run` 是斷言。
+- 能跑這個 World 登記過的任何一張，除了開局（Startup）與 extract。可以多層（A 跑 B，B 裡的獨占 System 再跑 C）；沒有層數上限，正在執行的那張（任何一層）不能再跑。
+- 被拒絕的呼叫回 Err：跑正在執行中的（`ScheduleRunning`，X-11）、名字不存在（`UnknownSchedule`，X-12）、hook 裡（`HookRunsSchedule`，X-13）、`Read`／`Modify` 的閉包裡（`ClosureRunsSchedule`，X-14）、extract（`ExtractNotNestable`，X-15）、開局（`StartupNotNestable`，H-12）、開局執行中跑別的（`StartupRunning`，H-13）。這些都是程式的 bug：**World 會中斷，錯誤只報一次；外層的 System 吞掉它回 Ok 也一樣**（和 Bevy 的 `try_run_schedule` 可以接住繼續跑不同）。
+- 裡面那張照常完整執行：它的 System、同步點、hook、跑完時的清空輪、tick 的推進（它是帶時鐘的時）、事件的修剪，和從外面跑它一樣。
+- 裡面那張出錯：World 立刻中斷，`RunSchedule` 回 Err，外層的 System 應該把它往上回傳。錯誤處理只呼叫一次，拿到的錯誤包含裡面那一步與外層的 System；外層回傳別的 Err 時兩個都在清單裡；中斷之後再呼叫 `RunSchedule` 不執行、回傳留下的錯誤；裡面丟出例外、外層接住，執行器停下並補「巢狀執行被例外中止」（`NestedRunAborted`）。
+- 跑完之後外層的 System 繼續執行：手上的 `ExclusiveWorld` 照常可用，之後的寫入用新取的變更記號（別的 System 的 `Changed` 看得到）。裡面出錯之後，經 `ExclusiveWorld` 的寫入照樣寫得進去（World 已經中斷，只供診斷）。
+
+### 11.2 延後的變更在哪裡套用
+
+規則只有一句：**記下的變更，在記它的那張 schedule 的下一個同步點套用。** 外層還沒套用的留在外層，裡面那張看不到；獨占的 System 自己沒有記延後變更的路徑。
+
+**每次都一樣的**
+
+| 情形 | 結果 |
+|---|---|
+| 「讀輸入」排在跑固定步的前一個 stage，它記下「生成子彈」 | 下一個固定步就有子彈 |
+| 固定步裡面自己記的變更 | 同一個固定步的下一個 stage 就看得到 |
+| 排在跑固定步後面的 System 記的變更 | 下一幀的固定步看得到 |
+
+**不保證每次一樣的，與避開的排法**
+
+| 情形 | 會怎樣 | 怎麼排可以避開 | 代價 |
+|---|---|---|---|
+| 「讀輸入」和跑固定步放在同一個 stage、排在它前面 | 這一幀跑了幾步，子彈就晚幾步出現 | 跑固定步的 System 自己佔一個 stage，或在它前面宣告一個同步點。Engine 自己提供的那個 System 照這樣放 | 不用改 Kernel；作者要照這個排法 |
+| 每幀那張生成的東西觸發的 hook 再記的變更 | 晚幾個固定步生效不固定；上一列的排法救不了 | 沒有不花成本的排法。要每次一樣，改由固定步裡的 System 來做這件事 | — |
+| 一幀對應幾個固定步 | 取決於真實經過的時間 | 輸入帶著「在第幾個固定步生效」交給固定步（像網路遊戲的輸入緩衝） | 另一套機制，Engine 這一批不提供 |
+
+**每次都一樣、但要先知道的規則**
+
+和跑固定步的 System 同一個 stage、排在它前面的 System 記的變更，會在這一幀所有固定步之後才套用。所以：外層拿掉 C、裡面加上 C，最後沒有 C；外層寫 1、裡面寫 2，最後是 1；外層生成的實體，這一幀的固定步裡還不存在。照上面第一列的排法就不會碰到。
+
+其他要知道的後果：
+
+- 外層 (b) 區記了往實體 E 的插入，裡面那張刪了 E：外層的同步點丟掉那一筆，有計數（`DroppedMissingEntity`）。
+- 外層 (c) 區記了往 E 的插入（或用指定的編號生成 E），裡面那張 (b) 區刪 E：裡面那張的同步點照 Z5 回報錯誤，E 不刪；訊息指出那筆紀錄在哪一層、哪張 schedule（在外層 schedule 的 hook 佇列裡的也算）。反過來（外層 (b) 區刪 E，裡面 (c) 區往 E 插入）：裡面先套用，外層的同步點重查時回報 Z5。
+- 同步點觸發的 hook 再記的變更，進的是「正在套用的那張 schedule」的 hook 佇列，在那張跑完時清空；外層 schedule 的 hook 佇列不被裡面那張動到。
+
+**作者的負擔**：獨占的 System 和同一個 stage 的每個 System 都算衝突。打開嚴格模式時，同一個 stage 的每個 System 都得和它寫明先後；(c) 區的 System 不論有沒有嚴格模式都要寫。
+
+### 11.3 玩家離開又用同一個編號加入
+
+- **重入的標準寫法**：處理加入的 System 不管舊的角色在不在，先記刪除那個編號、再用同一個編號生成，兩筆配成一對。兩筆在同一個同步點，固定的順序是先刪再生，所以舊的被刪、新的留下；寫在固定步裡也一樣。只寫生成而舊的還在：那一筆生成會被機制丟掉並留下紀錄（第 10 節）。
+- **要避開的排法**：外層（每幀那張）記了刪除某個編號，同一幀的固定步裡不要用同一個編號生成——外層那筆刪除在固定步之後才套用，新的會被它刪掉（舊的還活著時，裡面那筆生成先被丟掉並留明細，之後舊的照樣被外層刪掉）。把處理離開與處理加入放在同一張 schedule 就不會碰到。Engine 不為這件事另加機制（`v8-arch-gyo2-nested-same-id-respawn-not-engine`）。
+
+### 11.4 讀寫資料：閉包
+
+- 元件與 Resource 都在閉包裡讀寫：`world.Read<T>(實體, f)`、`world.Modify<T>(實體, f)`；Resource 不帶實體：`world.Read<R>(f)`、`world.Modify<R>(f)`。介面不交出指標（沒有 `Get`、`GetMut`）。
+- 閉包可以回傳值：`auto hp = world.Read<Health>(player, [](const Health& h) { return h.value; });`。結果是 `Result<std::optional<值>, KernelError>`：Err 是規則擋下了；沒有值是實體沒有那個元件（或 Resource 不存在），f 沒有被呼叫；f 回 `void` 時結果是「有沒有呼叫 f」。
+- **需要的值在閉包裡取出來回傳**；不要回傳指標、參考、`Mut`、`std::reference_wrapper`、`std::span`、`std::string_view` 這類檢視、迭代器（編譯不過，放在 `std::pair`／`std::tuple` 裡也一樣，所以 `return std::tie(...)` 編譯不過）；也不要把它們藏在自己的結構、`std::optional` 裡或存到外面的變數（編譯會過，但 `RunSchedule` 之後就是懸空的，屬於 LIM-3）。
+- 閉包裡可以再開閉包；閉包裡不能跑 schedule（回 Err）。`Modify` 在呼叫 f 的當下記變更，f 沒有真的改值也算。
+- **元件**：讀任何元件；寫只准 (b) 區、標 `Shared` 的，其他回 Err（S-13）。
+- **Resource**：讀任何 Resource，`KernelSettings` 回 Err（S-15），執行緒親和和這張 schedule 的 runner 不合的回 Err（S-16）。寫：標 `Shared` 的直接寫、不用列；**只有一個寫者的要列在宣告裡** `ExclusiveWorld<Writes<Score, Round>>`，列了就算進「只有一個寫者」的啟動檢查（別的 System 也寫它就是 D-E2）；沒列的寫入回 Err（S-14）。列出來的必須是 (b) 區（列 (c) 區是 Z2、列 `KernelSettings` 是 D-E18）。只能讀寫值，不能新增或移除 Resource。（使用者：「要保證誰寫，別開 shared。」）
+- 獨占的 System 不能同時是 ingress（啟動錯誤，S-17）；hook 只能用 `ExclusiveWorld<>`（不帶宣告；S-18）。
+
+### 11.5 開局（Startup）
+
+- 開局要做的事寫成 System，登記到打了 Startup 記號的那一張 schedule（名字由組裝的人取；一個 World 只准一張，第二張是 D-E21）；先後用現有的 before／after。Plugin 帶來的是 System，不是 schedule。
+- 什麼時候跑由 Kernel 決定，作者與 Plugin 都改不了：這個 World 第一次執行任何一張不是 Startup 的 schedule 時，Kernel 先把開局完整跑完（在那張推進 tick 之前），之後不再跑。主程式可以在第一幀之前自己先呼叫一次（例如測試或工具只想跑開局再檢查）；已經跑過再呼叫是斷言。
+- 開局只放固定的設定，世界內容走 Loading。開局裡不能跑別的 schedule（回 Err）；作者的 System 不能跑開局（回 Err）。
+- 開局裡有 System 回報錯誤：觸發它的那一次執行回報錯誤，World 中斷，原本要跑的那張不跑、它的 tick 也不推進。
+- **開局之後要先空跑幾步（例如物理預熱）**：自己寫一個 System——每幀那張裡的獨占 System，讀一個旗標 Resource（列在 `Writes<…>` 裡），還沒做過就跑幾次固定步、把旗標設起來。
 
