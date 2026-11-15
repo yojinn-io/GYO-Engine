@@ -26,21 +26,58 @@ PR [#236](https://github.com/yojinn-io/GYO-Engine/pull/236)（目標 `gyo2`；�
 - 四個突變實際跑一次：4/4 killed，都是預期的訊息（`part1-mutants.log`）。
 
 
-## 第二件：刪除實體時 OnRemove 的先後（等使用者判）
+## 第二件：刪除實體時 OnRemove 的先後
 
 查了有沒有使用者的決定：沒有。
 
 - `World.cpp` `ApplySync` 第 2 步的做法（先對每個元件依 ComponentId 升冪叫 OnRemove，全部叫完才依 ComponentId 升冪銷毀）來自 `claude/arch-kernel-world-exec` 的 3d87d916，commit 訊息寫「架構師建議 (a)、使用者決定待ち」，選另一種讀法時 revert。
-- 那條線的宣告第 6 節第 (ii) 項、dev_log、master 的 kernel HANDOFF 都記「待使用者」；後來使用者重審的是同一項的第 (i) 題（hook 佇列），hook 那一批定案；第 (ii) 題沒有再出現。
+- 那條線的宣告第 6 節、dev_log、master 的 kernel HANDOFF 都記「待使用者」；後來使用者重審的是同一節的另一題（hook 佇列屬於哪張 schedule），hook 那一批定案；刪除時 OnRemove 這一題沒有再出現。
 - GYO2 的決定表（`claude/gyo2-time-design` 的 HANDOFF）、`target/` 的 Design Invariants、hook 與 spawn-reject 兩批的宣告都沒有這一項的決定。`v8-arch-gyo2-sync-order-keep` 定的是各階段的先後（刪除→移除→生成…），不是刪除這一步裡 OnRemove 與銷毀的交錯。
 - 規格 F.2 第 2 步「對該實體的每個元件依 ComponentId 升冪執行 OnRemove，再移除並 `destroy`」兩種讀法都說得通；W-7 只定了銷毀的順序。
 - 現有測試：`WorldTests.cpp` J-32 的子案例「a despawn runs every OnRemove before destroying anything」（3d87d916 加的）只登記一個 hook，所以分得出「交錯」與「先全部叫完」，但守不到「OnRemove 依 ComponentId 升冪叫」——兩種讀法都要這個先後，現在沒有測試守。
 
-選項已交使用者（含遊戲的例子、系譜、代價），判了才寫守衛與突變。
+**使用者的決定**（2026-11-16，這張卡的會話）：「照建議」——採「先全部通知，再一起銷毀」（維持現在的程式）。卡片列給使用者的兩個選項：
+
+| | 先全部通知，再一起銷毀 | 每個元件通知完就銷毀，再處理下一個 |
+|---|---|---|
+| 例子（玩家 10 被刪除，「背包」的 OnRemove 要讀「位置」把道具掉在原地） | 讀得到 | 「位置」的 ComponentId 較小、已先被銷毀，讀不到 |
+| hook 讀得到什麼 | 整個實體，和登記順序無關 | 只有 ComponentId 比自己大的元件，換登記順序會靜默改結果 |
+| 和「逐個移除全部元件」比 | 不同 | 相同 |
+| 系譜 | Bevy 的 despawn（`bevy_ecs/src/world/entity_access/world_mut.rs:1705-1790`，先觸發全部元件的 hook 再拿掉實體）；gyo2 現在的程式 | world-exec 在 3d87d916 之前的程式 |
+| 代價 | 不改程式 | 要 revert 3d87d916、改寫 J-32 子案例 |
+
+卡片標的建議與理由（不是使用者說的）：hook 讀得到什麼不隨登記順序改變、和 Bevy 一致。已照四樣（原話、比過的選項、理由、出處）轉給主會話。`World.cpp` 那行「pending the user」的註解屬於 `engine/`，這張卡不改，已告訴主會話。
+
+**守衛**：`WorldTests.cpp` 新增兩個案例。「J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed」：實體 1 有 Tag、Mode、Badge（ComponentId 2、3、7；Badge 是 World 最高的欄；插入順序 Badge、Tag、Mode），另有 hook 掛在它沒有的 Spare（6）上；hook 依 ComponentId 遞減的順序登記，Tag 掛兩個。判定：hook 的呼叫順序是 Tag 的兩個（依登記順序）、Mode、Badge，各一次，Spare 的不叫，`HookCtx::Component()` 對；每個 hook 讀得到另外的元件；刪除後三格都沒了；同一窗刪的 id 3（從沒活過）不碰到活著的實體 4；活著但沒有格子的實體 6 離開活清單。「J-32: an Err from a despawn's OnRemove hook is the Run's Err」：Mode 的 OnRemove 回 Err，Run 是 Err 且點名那個 hook（Err 之後實體的狀態不判，見下）。
+
+**突變**（放在 `we-j7-despawn-reverse` 之後）：
+
+| 突變 | 改壞的地方 | 抓到它的判定 |
+|---|---|---|
+| `td-despawn-onremove-descending` | OnRemove 依 ComponentId 遞減叫（`we-j7-despawn-reverse` 在 `find` 被改到銷毀迴圈之前打的性質） | 新案例「呼叫順序」那一句 |
+| `td-despawn-onremove-absent-components` | 對實體沒有的元件也叫 OnRemove | 同上 |
+| `td-despawn-cells-kept` | 不銷毀格子 | Kernel 的 W-1 結構檢查（「column 'Tag' has entity 1, which is not alive」）先於案例自己的判定 |
+| `we-despawn-onremove-interleaved` | 每個元件通知完就銷毀（從 world-exec 3d87d916 搬來） | 既有子案例「mode-removed sees tag:7」 |
+
+上表是第一版；對抗檢查之後的增補見下。
+
+`td-despawn-cells-kept` 第一次跑是 wrong_failure：期待的是案例自己的訊息，實際先被 W-1 擋下；手動套用確認後把 expect 改成 W-1 的那一句（`cells-kept-manual.log`）。這 4 個加上 `we-j7-despawn-reverse`、`hf-round-skips-despawn`、`hf-round-skips-onremove` 一起跑：7/7 killed（`part2-mutants-run1.log`、`part2-mutants-run2.log`）。
+
+**突變清單的對抗檢查**：Fable 5.2／high（唯讀，在自己的工作樹 da6b39e9 做實驗）。它寫了 15 個候選、全部實際跑過：存活 13（其中 2 個是等價突變）、wrong_failure 1、killed 1；既有 5 個重跑 5/5 killed。處理：
+
+- **屬於已定約束或規格明文、補了判定**（案例改寫成：Spare 先登記、Badge 成為 World 最高的欄；Tag 掛兩個 OnRemove hook；log 記 `HookCtx::Component()`；同一窗再刪一個從沒活過、比活著的實體 4 小的 id 3，與一個活著但一格都沒有的實體 6；另一個新案例讓 Mode 的 OnRemove 回 Err）：最高欄的 OnRemove 被漏掉、最高欄的格子沒銷毀、同一元件的兩個 hook 反序或只叫第一個、`HookCtx::Component()` 錯、對沒活著的 id 碰到下一個活著的、沒有格子的實體留在活清單、OnRemove 的 Err 被吞掉。這 8 個寫成 `td-adv-*` 加進清單。
+- **expect 收緊**：`td-despawn-cells-kept` 的訊息在既有子案例與新案例都會出現，改成綁住新案例的名字；`td-despawn-onremove-descending`、`td-despawn-onremove-absent-components` 原本共用一句，改用 doctest 印出的 `values:` 那一行，分得出彼此。
+- **等價突變，不加**：不遞增 `entitiesEpoch_`（只給 Executor 的 W-3 斷言用，同步點之後會重讀）；不去重（第二次處理同一 id 時它已不在活清單，被「只對活著的」擋掉）。
+- **使用者沒判過、先列給使用者，不加判定**：同一窗刪兩個實體時，後一個的 OnRemove 執行時前一個是否已整個消失（2 個候選：先叫完所有實體的 OnRemove 才銷毀、依 (ComponentId, EntityId) 跨實體交錯）；OnRemove 回 Err 之後實體留下的狀態（2 個候選：先移出活清單再叫 OnRemove——按規格 F.4 寫的 hook 只讀自己的實體，看不出差別，只在 Err 時看得出；Err 時仍把實體銷毀）。
+- **文字還沒跟上決定**（不在這張卡的範圍，已告訴主會話）：`World.cpp` 第 2 步的註解仍寫「pending the user」；規格 F.2 第 2 步仍是兩種讀法都通的那句，這個約束還沒寫進規格或 Design Invariants。
+
+檢查者的候選清單、每個突變的輸出與 log 已搬到 `mutation-check-fable/`。
+
+增補後，這一批的 13 個突變（`td-*` 11 個、`we-despawn-onremove-interleaved`、`we-j7-despawn-reverse`）一起跑：12 killed、1 wrong_failure（`td-adv-despawn-dead-id-check-weakened`：手動套用後看到 W-1 結構檢查先擋下「column 'Tag' has entity 4, which is not alive」，案例自己那句到不了；expect 改成綁住新案例名字的 W-1 訊息後 killed）。結果 13/13（`part2-mutants-run3.log`、`part2-mutants-run4.log`、`dead-id-manual.log`）。
 
 ## 第三件：還沒搬的 world-exec 突變（清點）
 
-來源：`claude/arch-kernel-world-exec` 的 50cb2050，`we-` 開頭的 91 個。`gyo2`（3743eaa8）有其中 37 個；沒有的 54 個裡，`we-adv-spawn-alive-assert-removed`、`we-adv-spawnwithid-allotter-range-assert-removed` 是 #235 故意拿掉的（打的斷言改成丟掉，由 `sr-assert-alive`、`sr-assert-range` 取代），所以要清點的是 52 個。另外該分支在 50cb2050 之後還有兩個（`we-despawn-onremove-interleaved`、`we-hook-queue-one-per-world`），不在這 52 個裡：前者屬第二件、等使用者的決定；後者打的是「同步點只套用自己這張 schedule 的 hook 佇列」（`ApplySync` 第 0 步；突變把它改成整個 World 一個），這個性質在 `gyo2` 還在、但沒有突變守，期待的訊息所在的案例也不在 `gyo2`；K0 宣告第 4 節第 15 項要寫測試固定「hook 的佇列每張 schedule 一個」，目標又在同步點的套用裡，所以列「等 K0」。
+來源：`claude/arch-kernel-world-exec` 的 50cb2050，`we-` 開頭的 91 個。`gyo2`（3743eaa8）有其中 37 個；沒有的 54 個裡，`we-adv-spawn-alive-assert-removed`、`we-adv-spawnwithid-allotter-range-assert-removed` 是 #235 故意拿掉的（打的斷言改成丟掉，由 `sr-assert-alive`、`sr-assert-range` 取代），所以要清點的是 52 個。另外該分支在 50cb2050 之後還有兩個（`we-despawn-onremove-interleaved`、`we-hook-queue-one-per-world`），不在這 52 個裡：前者屬第二件，使用者判了之後已搬（見第二件）；後者打的是「同步點只套用自己這張 schedule 的 hook 佇列」（`ApplySync` 第 0 步；突變把它改成整個 World 一個），這個性質在 `gyo2` 還在、但沒有突變守，期待的訊息所在的案例也不在 `gyo2`；K0 宣告第 4 節第 15 項要寫測試固定「hook 的佇列每張 schedule 一個」，目標又在同步點的套用裡，所以列「等 K0」。
 
 分類的依據：K0（`v8-arch-gyo2-nested-schedule`）宣告第 4 節要改的函式——執行器的入口、步驟迴圈與 `Fail`、成員檢查、延後的佇列與同步點的套用、存取驗證的重拍（呼叫後的比對）、句柄的過期檢查、`ExclusiveWorld`（含第 5.1、5.2 節要放寬的 J-3、J-45）、呼叫錯誤的合併（第 8 項「裡面的錯誤併進外層這次呼叫的清單」）。目標在這些函式裡的列「等 K0」。`World::Access` 整個函式列「等 K0」：K0 第 10、13 項要在「整個 World」的存取上加 Resource 的規則與「讀不給讀的 Resource」的錯誤，可能改到它，這是保守的判斷。
 
@@ -107,4 +144,4 @@ PR [#236](https://github.com/yojinn-io/GYO-Engine/pull/236)（目標 `gyo2`；�
 
 ## 證據
 
-全部在這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-test-debts/`（git 不追蹤）：`configure1.log`、`build1.log`；第一件 `find-scan-base.log`、`part1-mutants.log`；第三件 `we-missing.json`（54 個沒搬的原文）、`locate.py`（找目標所在的函式）、`part3-candidates.json`、`part3-ids.txt`、`part3-candidates-run1.log`、`part3-candidates-run2.log`、`part3-catalog-run.log`。
+全部在這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-test-debts/`（git 不追蹤）：`configure1.log`、`build1.log`；第一件 `find-scan-base.log`、`part1-mutants.log`；第三件 `we-missing.json`（54 個沒搬的原文）、`locate.py`（找目標所在的函式）、`part3-candidates.json`、`part3-ids.txt`、`part3-candidates-run1.log`、`part3-candidates-run2.log`、`part3-catalog-run.log`；第二件 `j32-run.log`、`j32-run2.log`、`cells-kept-manual.log`、`dead-id-manual.log`、`part2-ids.txt`、`part2-mutants-run1.log`～`part2-mutants-run4.log`、`ctest1.log`、`ctest2.log`（本機 `cpu|shader` 96/96）、對抗檢查 `mutation-check-fable/`。
