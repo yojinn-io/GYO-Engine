@@ -609,6 +609,7 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 | T4 | Kernel：事件的游標、保留、上限、啟動檢查 | 決定 4、8 |
 | T5 | `Product` 多個 World；Extract 的執行；組合（二）（三）的迴圈邏輯 | 決定 2；先定 5.1 表裡的四個問題 |
 | 另外已定、還沒排的 | 登記單位拆成 `Module`／`Plugin` 兩種型別與兩份登記檔（`v8-arch-gyo2-module-plugin-registers`）；KeepTool（`v8-arch-gyo2-keeptool`，會帶回 SDL 與 ImGui，需要有視窗的 runner） | 建議在 T2 之前或一起做型別拆分；KeepTool 在 T3、T5 之後 |
+| 狀態機（使用者 2026-11-15 要求排上日程，`v8-arch-gyo2-state-machine-scheduled`） | 遊戲狀態的切換（進主選單、進關卡、進暫停）；進入／離開狀態時跑一次的 schedule。範圍、要不要照 Bevy 的 States、排在哪一批之後：**待使用者定** | 用得到 K0（由 System 跑一張 schedule）；其餘待定 |
 | 之後 | World 之間的事件；回滾 | 名指的 Feature |
 
 每一批開工前各有事前宣告；判定用的測試先列突變。K0 和 T2 都要改 `Product::Run`，K0 和 T4 都要改事件的修剪與 Executor，所以要排先後：K0 → T2 → T4。T1 可以和 K0 並行。K0 是這幾批裡最大的。
