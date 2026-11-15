@@ -32,6 +32,8 @@ std::string_view ToString(KernelErrorCode code) noexcept {
     case KernelErrorCode::HookRoundLimit: return "HookRoundLimit";
     case KernelErrorCode::ScheduleRunning: return "ScheduleRunning";
     case KernelErrorCode::UnknownSchedule: return "UnknownSchedule";
+    case KernelErrorCode::StartupNotNestable: return "StartupNotNestable";
+    case KernelErrorCode::StartupRunning: return "StartupRunning";
     case KernelErrorCode::ExtractNotNestable: return "ExtractNotNestable";
     case KernelErrorCode::HookRunsSchedule: return "HookRunsSchedule";
     case KernelErrorCode::ClosureRunsSchedule: return "ClosureRunsSchedule";
@@ -110,6 +112,7 @@ std::string_view ToString(StartupCode code) noexcept {
     case StartupCode::DE18: return "D-E18";
     case StartupCode::DE19: return "D-E19";
     case StartupCode::DE20: return "D-E20";
+    case StartupCode::DE21: return "D-E21";
     case StartupCode::RE1: return "R-E1";
     case StartupCode::RE2: return "R-E2";
     case StartupCode::RE3: return "R-E3";
@@ -882,6 +885,7 @@ void CheckInitialValues(RegistryData& data) {
 void CheckSchedules(RegistryData& data) {
     std::map<Domain, std::vector<std::string>> clocks;
     std::set<Domain> usedDomains;
+    std::string startupSchedule;
     for (const ScheduleRecord& record : data.schedules) {
         const ScheduleOptions& s = record.options;
         std::set<std::string> stages;
@@ -922,6 +926,15 @@ void CheckSchedules(RegistryData& data) {
                                                    "', which is neither a stage end nor a sync point", {s.name});
         }
         if (s.startup) {
+            // Spec H-12: one Startup schedule per World; every plugin's startup Systems go into it.
+            if (!startupSchedule.empty()) {
+                data.Error(StartupCode::DE21, "H-12",
+                           "schedules '" + startupSchedule + "' and '" + s.name +
+                               "' are both Startup schedules; a World has at most one",
+                           {startupSchedule, s.name});
+            } else {
+                startupSchedule = s.name;
+            }
             if (s.clock || s.domain != Domain::None) {
                 data.Error(StartupCode::DE12, "H-1", "startup schedule '" + s.name + "' has a clock or a domain", {s.name});
             }

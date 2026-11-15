@@ -38,7 +38,7 @@ void Schedules(Registrar& r) {
 // this order). Same value on linux-x64, windows-x64 and macos-arm64
 // (declaration judgement 4); gyo_kernel_tests_reversed checks it too (link order).
 inline constexpr const char* kJ18RegistryGolden =
-    "2:ffda73dfb9eadf51bc7e6e08c57c8f9d6dd3762e87d523fcb59d65ec1704a456";
+    "2:1162cbf8b5eb8d24bbda07184d0a4dd1467a439a407a8a344bdf271db4feec9c";
 
 TEST_CASE("J-18: ids follow the Host's plugin order and the order inside each plugin") {
     Built built = Finish({{"movement", Movement}, {"life", Life}, {"host", [](Registrar& r) {

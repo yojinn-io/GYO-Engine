@@ -36,6 +36,11 @@
 // outermost Run, which reports it once with the outer System's context; the
 // Executor stops after every System that returns to an Interrupted World.
 //
+// Startup (spec H-12): a World has at most one Startup schedule. The first Run
+// of any other schedule runs it whole first (its tick, if any, after it); the
+// main program may run it itself before that, once. A second Run of Startup is
+// a GYO_ASSERT.
+//
 // v1 is Serial only (LIM-2). The Product owns no thread (DI-KS 15): Run is called
 // on the schedule's runner thread by the Host.
 
@@ -68,8 +73,9 @@ public:
     [[nodiscard]] World& GetWorld() noexcept { return world_; }
     [[nodiscard]] const World& GetWorld() const noexcept { return world_; }
 
-    // Runs one schedule's Plan once (spec E.2). GYO_ASSERT: the World is Ready
-    // (so not from inside a System) and the schedule exists.
+    // Runs one schedule's Plan once (spec E.2), first Startup when it has not
+    // run (H-12). GYO_ASSERT: the World is Ready (so not from inside a System),
+    // the schedule exists, and Startup is run at most once.
     Engine::Base::Result<void, KernelError> Run(std::string_view schedule);
 
     // The Executor's handler: called once per Err (target/error-handling DI 2:
@@ -96,6 +102,8 @@ private:
     // One schedule's Plan (spec E.2): the outermost level, or nested inside the
     // running exclusive System's call.
     Engine::Base::Result<void, KernelError> RunPlan(std::string_view schedule, bool nested);
+    // Spec H-12: marks Startup as run and runs it while startupRunning_ is set.
+    Engine::Base::Result<void, KernelError> RunStartup(std::string_view schedule);
     Engine::Base::Result<void, KernelError> RunNestedFrom(Detail::SystemContext& call, std::string_view schedule,
                                                           bool inClosure);
     // Spec E.5: interrupts the World and drops every record. The outermost level
@@ -111,6 +119,8 @@ private:
     World world_;
     std::vector<SystemState> systems_;
     std::function<void(const KernelError&)> handler_;
+    // The World's Startup schedule (at most one, D-E21), if any.
+    std::optional<std::string> startup_;
 };
 
 } // namespace GYO::Kernel

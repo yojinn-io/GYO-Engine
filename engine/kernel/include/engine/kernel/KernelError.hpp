@@ -67,6 +67,10 @@ enum class KernelErrorCode : std::uint8_t {
     ScheduleRunning,
     // Spec X-12: no schedule of that name is registered.
     UnknownSchedule,
+    // Spec H-12: Startup is run by the kernel only; a System cannot run it.
+    StartupNotNestable,
+    // Spec H-13: while Startup runs, no other schedule runs.
+    StartupRunning,
     // Spec X-15: an extract schedule is not run from inside a System.
     ExtractNotNestable,
     // Spec X-13: a hook runs while a sync point applies its records, so it runs no schedule.
@@ -114,12 +118,14 @@ struct KernelError {
     [[nodiscard]] std::string Text() const;
 };
 
-// The startup error codes of spec D.2's table (D-E1 to D-E20, R-E1 to R-E6,
+// The startup error codes of spec D.2's table (D-E1 to D-E21, R-E1 to R-E6,
 // X-E1 to X-E3, F-E1). The enum value is not part of any fingerprint or file:
 // the text form (ToString) is.
 enum class StartupCode : std::uint8_t {
     DE1 = 1, DE2, DE3, DE4, DE5, DE6, DE7, DE8, DE9, DE10,
     DE11, DE12, DE13, DE14, DE15, DE16, DE17, DE18, DE19, DE20,
+    // A World with two Startup schedules (spec H-12; v8-arch-gyo2-nested-schedule).
+    DE21,
     RE1, RE2, RE3, RE4, RE5, RE6,
     XE1, XE2, XE3,
     FE1,
