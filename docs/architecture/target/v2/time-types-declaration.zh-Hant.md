@@ -22,7 +22,7 @@
 | `RealTime` | 真實時間：這一輪取樣的時間點、和上一輪的差、累計。附一個更新它的純函式 |
 | `VirtualTime` | 可暫停、可縮放的時間：這一輪的量、累計、這一輪乘上去的倍率、這一輪有沒有暫停、累計扣掉的量 |
 | `FixedTime` | 固定步：步長、離上一個固定步過了多久（內插用）。**沒有累計，也沒有 tick**（設計第 3.1 節） |
-| 通用的時間（名字見第 3 節第 1 條） | 這一輪的量與累計。平常等於 `VirtualTime` 的值，固定步裡是固定步的值 |
+| 通用的時間 `ActiveTime` | 這一輪的量與累計。平常等於 `VirtualTime` 的值，固定步裡是固定步的值 |
 | `TimeControl` | 想要的暫停與倍率（產品寫它，時間的 System 下一次執行時套用） |
 | `TickAccumulator` | 累加器：加進一段時間，回傳這一輪跑幾步，留下不足一步的餘數。整數奈秒，不記 tick |
 | `AdvanceVirtual(…)` | 一個純函式：給這一輪的真實經過時間、`TimeControl`、上限、累加器現在的餘數，算出 `VirtualTime` 這一輪該前進多少、扣掉多少 |
@@ -56,15 +56,13 @@
 
 ---
 
-## 3. 要你定的（四條）與要你知道的（五條）
+## 3. 要你定的（四條，第 1 條已定）與要你知道的（五條）
 
 ### 要你定的
 
-1. **通用的時間叫什麼。** 初稿我訂 `CurrentTime`（和 Kernel 的 `CurrentTick` 成對）。檢查指出這個成對會誤導：
-   - `CurrentTick` 是 System 的參數，由 Kernel 依「正在跑的那一張 schedule」給值，巢狀時也對，(c) 區讀得到。
-   - 通用的時間是 Resource，值靠驅動固定步的 System 切換，(c) 區讀不到。作者自己巢狀跑一張固定步的 schedule 時，`CurrentTick` 會是固定步的 tick，通用的時間卻還是可縮放的那個值——兩者正好在名字暗示它們一致的地方不一致。
-
-   候選：`CurrentTime`（短，但有上面的問題）、`ScheduleTime`（準確但長，也像是 Kernel 給的）、`CommonTime`（「通用的時間」的直譯）。不能叫 `Time`（和 `GYO::Time` 這個 Module 撞名）。我沒有把握哪個好，請你選或另給。只是名字，不影響其他。
+1. **【已定：`ActiveTime`，使用者 2026-11-16，`v8-arch-gyo2-active-time-name`】通用的時間叫什麼。** 使用者對分支會話的提案 `ActiveTime` 回「可以。一併記錄到文檔中。」命名對照的規範用 v2 那一份（[rebuild-naming.zh-Hant.md](rebuild-naming.zh-Hant.md)）。
+   - 比過的：`CurrentTime`（初稿；和 Kernel 的 `CurrentTick` 成對會誤導——`CurrentTick` 由 Kernel 依正在跑的 schedule 給值、(c) 區讀得到；通用的時間是 Resource，值靠驅動固定步的 System 切換、(c) 區讀不到）、`ScheduleTime`、`CommonTime`、`StepTime`（`Step` 在 Kernel 已指執行計畫的一步）。不能叫 `Time`（和 `GYO::Time` 這個 Module 撞名）。
+   - 使用者沒有另外說理由。分支會話照規範給的理由（不是使用者的話）：形狀是「限定詞＋Time」，和 `RealTime`、`VirtualTime`、`FixedTime` 並排（N19）；`Current` 與 `Schedule` 是 Kernel 的概念標籤，而這個值不是 Kernel 給的（N5）；`ActiveTime` 的限定詞說的是「正在作用的那一種」。
 2. **沒有固定步的 World，一輪的量要不要設上限。** 你定的「扣整步」講的是有固定步的情形。沒有固定步時：
    - 設上限（Bevy 的做法，預設 250 ms）：超過的部分扣掉，記進 `discarded`。卡住之後不會一輪跳一大段。
    - 不設：卡住多久就前進多久。
@@ -100,7 +98,7 @@
 
 | 位置 | 內容 |
 |---|---|
-| `engine/time/include/engine/time/TimeTypes.hpp`（新） | `RealTime`、`VirtualTime`、`FixedTime`、通用的時間、`TimeControl`、上限的設定 |
+| `engine/time/include/engine/time/TimeTypes.hpp`（新） | `RealTime`、`VirtualTime`、`FixedTime`、`ActiveTime`（通用的時間）、`TimeControl`、上限的設定 |
 | `engine/time/include/engine/time/TickAccumulator.hpp`（新） | `TickAccumulator`、`AdvanceVirtual`、更新 `RealTime` 的函式 |
 | `engine/time/CMakeLists.txt` | 開頭說明這個 Module 的註解補上新的型別；連結的東西不變 |
 | `tests/common/time/TimeTypesTests.cpp`（新）、`tests/common/time/CMakeLists.txt` | 測試 |
