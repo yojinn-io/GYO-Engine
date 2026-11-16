@@ -754,6 +754,58 @@ TEST_CASE("J-32: a despawn runs every OnRemove in ascending ComponentId before a
     CHECK(world.Get<Spare>(4)->s == 2);
 }
 
+namespace {
+
+// These two hooks read the other despawned entity's Tag, which spec F.4 does not
+// let a hook do (a hook reads its own entity); the kernel does not stop it, so the
+// test uses it to see the order across entities (user 2026-11-16: one entity is
+// finished, cells destroyed and gone from the alive list, before the next one's
+// OnRemove runs).
+std::string OtherTag(const HookCtx& ctx, const Query<Read<Tag>>& tags) {
+    const EntityId other = ctx.Entity() == 1 ? EntityId{2} : EntityId{1};
+    const Tag* tag = tags.Get<Tag>(other);
+    return Seen("other-tag", tag ? &tag->t : nullptr);
+}
+SystemResult TagRemovedSeesOther(HookCtx ctx, Query<Read<Tag>> tags) {
+    Log().push_back("tag-removed:" + std::to_string(ctx.Entity()) + "(" + OtherTag(ctx, tags) + ")");
+    return Ok();
+}
+SystemResult ModeRemovedSeesOther(HookCtx ctx, Query<Read<Tag>> tags) {
+    Log().push_back("mode-removed:" + std::to_string(ctx.Entity()) + "(" + OtherTag(ctx, tags) + ")");
+    return Ok();
+}
+// Recorded 2 then 1: the despawn step sorts them.
+SystemResult DespawnTwoThenOne(Despawn despawn, CurrentTick tick) {
+    if (tick.Tick() != 1) return Ok();
+    if (auto r = despawn.Entity(2); !r) return r;
+    return despawn.Entity(1);
+}
+
+} // namespace
+
+TEST_CASE("J-32: two despawns in one window: one entity is finished before the next one's OnRemove runs") {
+    auto rig = MakeRig([](Registrar& r) {
+        Data(r);
+        r.AddSystem<&DespawnTwoThenOne>(B("DespawnTwoThenOne", "A"));
+        r.Hook<Tag, &TagRemovedSeesOther>(HookTrigger::OnRemove, {.name = "TagRemovedSeesOther", .zone = Zone::B});
+        r.Hook<Mode, &ModeRemovedSeesOther>(HookTrigger::OnRemove, {.name = "ModeRemovedSeesOther", .zone = Zone::B});
+    });
+    World& world = rig->world();
+    world.Insert(1, Tag{10});
+    world.Insert(1, Mode{1});
+    world.Insert(2, Tag{20});
+    world.Insert(2, Mode{2});
+    Log().clear();
+    KERNEL_REQUIRE_RUN_OK(rig->Run());
+    CHECK_MESSAGE(CallOrder(Log()) == "tag-removed:1 mode-removed:1 tag-removed:2 mode-removed:2",
+                  "J-32: despawns run in ascending EntityId, each entity's OnRemove hooks together");
+    CHECK_MESSAGE(Join(Log()) == "tag-removed:1(other-tag=20) mode-removed:1(other-tag=20) "
+                                 "tag-removed:2(other-tag=gone) mode-removed:2(other-tag=gone)",
+                  "J-32: an earlier despawned entity is gone when a later one's OnRemove runs");
+    CHECK_FALSE(world.Alive(1));
+    CHECK_FALSE(world.Alive(2));
+}
+
 TEST_CASE("J-32: an Err from a despawn's OnRemove hook is the Run's Err") {
     auto rig = MakeRig([](Registrar& r) {
         RegisterDespawnOrderData(r);

@@ -48,7 +48,7 @@ PR [#236](https://github.com/yojinn-io/GYO-Engine/pull/236)（目標 `gyo2`；�
 
 卡片標的建議與理由（不是使用者說的）：hook 讀得到什麼不隨登記順序改變、和 Bevy 一致。已照四樣（原話、比過的選項、理由、出處）轉給主會話。`World.cpp` 那行「pending the user」的註解屬於 `engine/`，這張卡不改，已告訴主會話。
 
-**守衛**：`WorldTests.cpp` 新增兩個案例。「J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed」：實體 1 有 Tag、Mode、Badge（ComponentId 2、3、7；Badge 是 World 最高的欄；插入順序 Badge、Tag、Mode），另有 hook 掛在它沒有的 Spare（6）上；hook 依 ComponentId 遞減的順序登記，Tag 掛兩個。判定：hook 的呼叫順序是 Tag 的兩個（依登記順序）、Mode、Badge，各一次，Spare 的不叫，`HookCtx::Component()` 對；每個 hook 讀得到另外的元件；刪除後三格都沒了；同一窗刪的 id 3（從沒活過）不碰到活著的實體 4；活著但沒有格子的實體 6 離開活清單。「J-32: an Err from a despawn's OnRemove hook is the Run's Err」：Mode 的 OnRemove 回 Err，Run 是 Err 且點名那個 hook（Err 之後實體的狀態不判，見下）。
+**守衛**：`WorldTests.cpp` 新增三個案例（第三個見下面的「使用者沒判過」那一項）。「J-32: a despawn runs every OnRemove in ascending ComponentId before any cell is destroyed」：實體 1 有 Tag、Mode、Badge（ComponentId 2、3、7；Badge 是 World 最高的欄；插入順序 Badge、Tag、Mode），另有 hook 掛在它沒有的 Spare（6）上；hook 依 ComponentId 遞減的順序登記，Tag 掛兩個。判定：hook 的呼叫順序是 Tag 的兩個（依登記順序）、Mode、Badge，各一次，Spare 的不叫，`HookCtx::Component()` 對；每個 hook 讀得到另外的元件；刪除後三格都沒了；同一窗刪的 id 3（從沒活過）不碰到活著的實體 4；活著但沒有格子的實體 6 離開活清單。「J-32: an Err from a despawn's OnRemove hook is the Run's Err」：Mode 的 OnRemove 回 Err，Run 是 Err 且點名那個 hook（Err 之後實體的狀態不判，見下）。
 
 **突變**（放在 `we-j7-despawn-reverse` 之後）：
 
@@ -68,12 +68,17 @@ PR [#236](https://github.com/yojinn-io/GYO-Engine/pull/236)（目標 `gyo2`；�
 - **屬於已定約束或規格明文、補了判定**（案例改寫成：Spare 先登記、Badge 成為 World 最高的欄；Tag 掛兩個 OnRemove hook；log 記 `HookCtx::Component()`；同一窗再刪一個從沒活過、比活著的實體 4 小的 id 3，與一個活著但一格都沒有的實體 6；另一個新案例讓 Mode 的 OnRemove 回 Err）：最高欄的 OnRemove 被漏掉、最高欄的格子沒銷毀、同一元件的兩個 hook 反序或只叫第一個、`HookCtx::Component()` 錯、對沒活著的 id 碰到下一個活著的、沒有格子的實體留在活清單、OnRemove 的 Err 被吞掉。這 8 個寫成 `td-adv-*` 加進清單。
 - **expect 收緊**：`td-despawn-cells-kept` 的訊息在既有子案例與新案例都會出現，改成綁住新案例的名字；`td-despawn-onremove-descending`、`td-despawn-onremove-absent-components` 原本共用一句，改用 doctest 印出的 `values:` 那一行，分得出彼此。
 - **等價突變，不加**：不遞增 `entitiesEpoch_`（只給 Executor 的 W-3 斷言用，同步點之後會重讀）；不去重（第二次處理同一 id 時它已不在活清單，被「只對活著的」擋掉）。
-- **使用者沒判過、先列給使用者，不加判定**：同一窗刪兩個實體時，後一個的 OnRemove 執行時前一個是否已整個消失（2 個候選：先叫完所有實體的 OnRemove 才銷毀、依 (ComponentId, EntityId) 跨實體交錯）；OnRemove 回 Err 之後實體留下的狀態（2 個候選：先移出活清單再叫 OnRemove——按規格 F.4 寫的 hook 只讀自己的實體，看不出差別，只在 Err 時看得出；Err 時仍把實體銷毀）。
+- **使用者沒判過、先列給使用者**：同一窗刪兩個實體時，後一個的 OnRemove 執行時前一個是否已整個消失（2 個候選：先叫完所有實體的 OnRemove 才銷毀、依 (ComponentId, EntityId) 跨實體交錯）；OnRemove 回 Err 之後實體留下的狀態（2 個候選：先移出活清單再叫 OnRemove——按規格 F.4 寫的 hook 只讀自己的實體，看不出差別，只在 Err 時看得出；Err 時仍把實體銷毀）。使用者 2026-11-16「待判一、二都照建議。」：
+  - **一個實體處理完，才處理下一個**（OnRemove 全叫、格子銷毀、移出活清單，依 EntityId 升冪；維持現在的程式，Bevy 的系譜，規格 F.2 照字面讀）。補案例「J-32: two despawns in one window: one entity is finished before the next one's OnRemove runs」：實體 1、2 都有 Tag 與 Mode，記錄順序 2、1，hook 讀另一個實體的 Tag（規格 F.4 不讓 hook 這樣讀，Kernel 沒擋，案例借它觀察跨實體的先後）。檢查者的兩個候選加進清單（`td-adv-despawn-all-entities-onremove-before-any-destroy`、`td-adv-despawn-onremove-component-major-across-entities`），expect 用 `values:` 那一行。
+  - **OnRemove 回 Err 之後實體的狀態不訂成約束**，記成範圍的限界：Err 之後 World 中斷、只能讀、要重建，這個狀態只對除錯有意義；現在的程式是實體完整留著、後面元件的 hook 沒叫，沒有測試守，之後改了也不會被抓到。「先移出活清單再叫 OnRemove」與「Err 時仍銷毀」兩個候選因此不加。
+  - 兩個決定已照四樣轉給主會話。
 - **文字還沒跟上決定**（不在這張卡的範圍，已告訴主會話）：`World.cpp` 第 2 步的註解仍寫「pending the user」；規格 F.2 第 2 步仍是兩種讀法都通的那句，這個約束還沒寫進規格或 Design Invariants。
 
 檢查者的候選清單、每個突變的輸出與 log 已搬到 `mutation-check-fable/`。
 
 增補後，這一批的 13 個突變（`td-*` 11 個、`we-despawn-onremove-interleaved`、`we-j7-despawn-reverse`）一起跑：12 killed、1 wrong_failure（`td-adv-despawn-dead-id-check-weakened`：手動套用後看到 W-1 結構檢查先擋下「column 'Tag' has entity 4, which is not alive」，案例自己那句到不了；expect 改成綁住新案例名字的 W-1 訊息後 killed）。結果 13/13（`part2-mutants-run3.log`、`part2-mutants-run4.log`、`dead-id-manual.log`）。
+
+加上使用者定的跨實體先後之後，這一批的 15 個（`td-*` 13 個、`we-despawn-onremove-interleaved`、`we-j7-despawn-reverse`）一起重跑：15/15 killed（`part2-mutants-run5.log`）。注意：`td-adv-despawn-onremove-component-major-across-entities` 的 `find` 含 `World.cpp` 第 2 步那兩行註解（包括「pending the user」那一行）；之後改那行註解的批次要同時重寫這個 `find`（`td-adv-despawn-dead-id-check-weakened` 的 `find` 含註解的第一行）。
 
 ## 第三件：還沒搬的 world-exec 突變（清點）
 
@@ -144,4 +149,4 @@ PR [#236](https://github.com/yojinn-io/GYO-Engine/pull/236)（目標 `gyo2`；�
 
 ## 證據
 
-全部在這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-test-debts/`（git 不追蹤）：`configure1.log`、`build1.log`；第一件 `find-scan-base.log`、`part1-mutants.log`；第三件 `we-missing.json`（54 個沒搬的原文）、`locate.py`（找目標所在的函式）、`part3-candidates.json`、`part3-ids.txt`、`part3-candidates-run1.log`、`part3-candidates-run2.log`、`part3-catalog-run.log`；第二件 `j32-run.log`、`j32-run2.log`、`cells-kept-manual.log`、`dead-id-manual.log`、`part2-ids.txt`、`part2-mutants-run1.log`～`part2-mutants-run4.log`、`ctest1.log`、`ctest2.log`（本機 `cpu|shader` 96/96）、對抗檢查 `mutation-check-fable/`。
+全部在這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-test-debts/`（git 不追蹤）：`configure1.log`、`build1.log`；第一件 `find-scan-base.log`、`part1-mutants.log`；第三件 `we-missing.json`（54 個沒搬的原文）、`locate.py`（找目標所在的函式）、`part3-candidates.json`、`part3-ids.txt`、`part3-candidates-run1.log`、`part3-candidates-run2.log`、`part3-catalog-run.log`；第二件 `j32-run.log`、`j32-run2.log`、`cells-kept-manual.log`、`dead-id-manual.log`、`part2-ids.txt`、`part2-mutants-run1.log`～`part2-mutants-run5.log`、`j32-run3.log`、`ctest1.log`～`ctest3.log`（本機 `cpu|shader` 96/96）、對抗檢查 `mutation-check-fable/`。

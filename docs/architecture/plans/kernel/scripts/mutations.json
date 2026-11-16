@@ -4203,6 +4203,26 @@
       "expect": "values: CHECK\\( tag-removed:1/0 tag-removed-second:1/0 mode-removed:1/0 badge-removed:1/0 == "
     },
     {
+      "id": "td-adv-despawn-all-entities-onremove-before-any-destroy",
+      "what": "F.2 step 2: the OnRemove hooks of every despawned entity run before any entity's cells are destroyed (per entity order kept) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n",
+      "replace": "                if (!hooked) return hooked;\n            }\n        }\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed:1\\(other-tag=20\\) mode-removed:1\\(other-tag=20\\) tag-removed:2\\(other-tag=10\\) mode-removed:2\\(other-tag=10\\) == "
+    },
+    {
+      "id": "td-adv-despawn-onremove-component-major-across-entities",
+      "what": "F.2 step 2: OnRemove runs in (ComponentId, EntityId) order across the despawned entities instead of (EntityId, ComponentId) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Architect's recommendation (a), pending the user.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n",
+      "replace": "        for (std::size_t c = 0; c < columns_.size(); ++c) {\n            for (EntityId id : despawns) {\n                if (!std::binary_search(entities_.begin(), entities_.end(), id)) continue;\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n        }\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "values: CHECK\\( tag-removed:1 tag-removed:2 mode-removed:1 mode-removed:2 == "
+    },
+    {
       "id": "we-j32-despawn-record-order",
       "what": "J-32 (J.3 #1): despawns applied in record order (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-hook-flush)",
       "file": "engine/kernel/src/World.cpp",
