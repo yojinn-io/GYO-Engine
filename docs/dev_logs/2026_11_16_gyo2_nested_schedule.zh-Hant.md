@@ -79,7 +79,9 @@
 
 - **指紋判定**（判定 1 最後一列）：把兩個版本常數換回 3、5 重算，第 5.4 節每一處都和舊的固定值相同（完整的 Kernel 測試在舊常數與舊固定值下全過，`impl/fingerprint-old-constants.log`）。舊的固定值裡沒有獨占 System 的 schedule，所以另外做了一個探針：一張 schedule 掛一個不帶宣告的獨占 System 與一個 (c) 區 System，用 `3743eaa8` 的 Kernel 與這一批（常數換回舊值）各編一次，三種指紋逐字相同（`fingerprint-exclusive/`）。
 
-## 守衛的判定變更（AGENTS §14.4；宣告判定 4，**待使用者核准**）
+## 守衛的判定變更（AGENTS §14.4；宣告判定 4）
+
+**使用者核准**（2026-11-16，任務卡 gyo2-nested-schedule 的選擇框）：對「核准這三組的判定變更嗎？」選了「三組都核准」（說明：照 dev_log〈守衛的判定變更〉的五點核准 J-3、J-45、W-4／J-4，合併仍另外說）。沒有另外打字。
 
 批次 `v8-arch-gyo2-nested-schedule`。作者：實作者（Opus）。用射擊遊戲當例子：每一幀「讀輸入 → 跑固定步 → 算畫面」，跑固定步的是一個持有 `ExclusiveWorld<>` 的 System（下稱「驅動的 System」）。
 
