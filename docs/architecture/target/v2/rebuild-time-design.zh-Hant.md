@@ -387,7 +387,7 @@ Loading 在三種裡都一樣：好之前外層每輪跑 Loading 的 schedule �
 - runner 建立並負責收模擬的執行緒。
 - **沒寫的**：暫停的請求在畫面的 World、固定步在模擬的 World，怎麼傳；兩個 World 之間的資料是「只留最新一份」還是佇列、誰持有；兩條執行緒的 `RealTime` 不同步時，跨 World 的時間以誰為準。這些在 PvP 移植、名指了要傳什麼的時候定。
 
-**現在做得出來的**：（一）和它的測試；（二）（三）的迴圈邏輯可以用腳本時間與假的畫面等待來測。真正有視窗的 runner 要等平台的 Module（SDL）帶回來——你已經定了 KeepTool 那一批（`v8-arch-gyo2-keeptool`），它會帶回 SDL。
+**現在做得出來的**：（一）和它的測試；（二）（三）的迴圈邏輯可以用腳本時間與假的畫面等待來測。真正有視窗的 runner 要等平台的 Plugin（SDL；2026-11-16 起 SDL 是 Plugin）帶回來——你已經定了 KeepTool 那一批（`v8-arch-gyo2-keeptool`），它會帶回 SDL。
 
 ---
 
@@ -575,6 +575,7 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 - 你定過的：判準是「少了它，完整的 Game 成不成立」；登記的單位有 `Module` 與 `Plugin` 兩種型別。
 - 我的套用（不是你定的）：沒有東西跑迴圈，遊戲不成立，所以沒畫面的 runner 是 Engine 的 Module（`engine/runner`），由一個 `Module` 型別（例如 `RunnerModule`）安裝；有視窗的 runner 由平台那個 Module（SDL）提供。
 - 另一個選項：放 Engine 外當 Plugin。那樣 Engine 自己的測試就沒有 runner 可用，除非測試各自寫迴圈。
+- 2026-11-16 註：判準改成「誰維護、介面是誰的」（`v8-arch-gyo2-module-plugin-owner-definition`，[同詞異義表](rebuild-vocabulary.zh-Hant.md)第 0 節末）。沒畫面的 runner 是我們維護、介面是我們的，照新判準仍是 Module，結論不變（這是套用，不是使用者另外定的）；有視窗的 runner 由 SDL 那個 Plugin 提供。
 
 (b) 時間的型別（`RealTime` 等）：
 - 你說的是「參考 Bevy 重構 **GYO::Time**」。同詞異義表只要求名字避開 `GYO::Time`（不要叫 `Time`），沒說位置。
@@ -591,7 +592,7 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 - **回滾**：`gyo2` 上還沒有。這份設計只留一條規則：可回滾的 schedule 不參與跨時鐘事件。
 - **兩個 World 之間的事件**：只定形狀（決定 7）。
 - **有輸入才更新的工具**：沒有名指的 Feature。
-- **有視窗的 runner、OS modal loop 期間繼續畫**：要平台的 Module（SDL），移植要你同意。有游標的讀者被跳過時不會漏讀，所以它不會反過來要求改事件的設計；對 runner 契約的影響沒有分析。
+- **有視窗的 runner、OS modal loop 期間繼續畫**：要平台的 Plugin（SDL），移植要你同意。有游標的讀者被跳過時不會漏讀，所以它不會反過來要求改事件的設計；對 runner 契約的影響沒有分析。
 - **單機的聲音時刻**：接音效那一批。
 - **PvP 的對時算法怎麼對到倍率**：移植時。
 - **帶過來的 `time`、`threads`、`audio` 的重審**：這份設計只確認了 `time.md` 的 DI 1、DI 10、Replacement Criterion 4 不受影響。

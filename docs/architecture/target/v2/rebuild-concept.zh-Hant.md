@@ -99,7 +99,7 @@
 
 | # | 元素 | 結論 | 說明 |
 |---|---|---|---|
-| X1 | 網路不在核心裡，是核心之上的 plugin（ME §4、NW §1 的結論） | 照帶 | ①專用。AGENTS §6 |
+| X1 | 網路不在核心裡，是核心之上的 plugin（ME §4、NW §1 的結論） | 照帶 | ①專用。AGENTS §6。2026-11-16 註：網路改為 Module（`NetModule`，在 Engine 裡、Kernel 之外），見[同詞異義表](rebuild-vocabulary.zh-Hant.md)第 0 節末 |
 | X2 | 「兩個 netcode 套件用到引擎的哪八件事，就是核心的最小協定」（NW 第 5 行） | 不帶 | 這是推導的方法，不是設計。只憑參考實作不成根據（AGENTS §2）。八條本身已在 1.2 逐條從三類產品重新判過：七條半成立，K8b 換位置 |
 | X3 | 和外部交換的佇列是 Resource，不是 System（ME §4 第 4 點的 Link） | 照帶、換名字 | 通用的說法是「交換 Resource」；Link 這個名字留給網路 |
 | X4 | Ledger 與 Visibility 是元件；複製讀 stamp；Match 與 Client 共用同一份固定步的 System（ME §4 第 1～3 點） | 換位置 | 網路層與 PvP 產品的設計。它們對通用機制的要求只有 K6、K7 與 K8b 的「不擋重跑」 |
