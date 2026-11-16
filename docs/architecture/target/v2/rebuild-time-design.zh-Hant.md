@@ -609,8 +609,9 @@ Kernel 的事件（取代 DI-KS 10）：每筆紀錄對每個有游標的讀者�
 | T4 | Kernel：事件的游標、保留、上限、啟動檢查 | 決定 4、8 |
 | T5 | `Product` 多個 World；Extract 的執行；組合（二）（三）的迴圈邏輯 | 決定 2；先定 5.1 表裡的四個問題 |
 | 另外已定、還沒排的 | 登記單位拆成 `Module`／`Plugin` 兩種型別與兩份登記檔（`v8-arch-gyo2-module-plugin-registers`）；KeepTool（`v8-arch-gyo2-keeptool`，會帶回 SDL 與 ImGui，需要有視窗的 runner） | 建議在 T2 之前或一起做型別拆分；KeepTool 在 T3、T5 之後 |
-| 狀態機（使用者 2026-11-15，`v8-arch-gyo2-state-machine-scheduled`、`v8-arch-gyo2-k0-start-and-state-machine-plan`） | 遊戲狀態的切換（進主選單、進關卡、進暫停）：狀態的值、進入／離開狀態時跑一次的 schedule、只在某個狀態下才跑的 System（用 run 條件讀狀態）。Bevy 的 States 當參考實作，不照搬 | 排在 T3 之後（要用 K0 與 T3 的每幀骨架） |
-| (c) 區的獨占套用（使用者 2026-11-15～16，`v8-arch-gyo2-zone-c-exclusive-apply`） | Kernel：允許 (c) 區的獨占 System，登記時列出它要寫的 (c) 區 Resource 與它會跑的 schedule，啟動時檢查，C 指紋收進這一筆。推翻規格 S-13，改 DI-KS 2、Z2 與 C 指紋的內容。**另有事前宣告** | 排在狀態機那一批之後；需要 K0 |
+| 狀態機 (b) 區（`v8-arch-gyo2-state-machine`；宣告已核准 2026-11-16，`v8-arch-gyo2-state-machine-declaration-approved`） | Engine 的 Module `engine/state_machine`，Kernel 不改：每個值一張進入／離開的 schedule、子狀態一層、兩種要求、狀態機不碰時間。宣告在分支 `claude/gyo2-state-machine-520d19`（25c3949b）。估 8 到 11 小時 | K0、T3 併入之後，使用者說開始 |
+| (c) 區的獨占套用（使用者 2026-11-15～16，`v8-arch-gyo2-zone-c-exclusive-apply`） | Kernel：允許 (c) 區的獨占 System，登記時列出它要寫的 (c) 區 Resource 與它會跑的 schedule，啟動時檢查，C 指紋收進這一筆。推翻規格 S-13，改 DI-KS 2、Z2 與 C 指紋的內容；K0 寫下的「獨占的 System 只能是 (b) 區」那幾句跟著改。**另有事前宣告** | 狀態機 (b) 區之後；需要 K0 |
+| 狀態機 (c) 區（`v8-arch-gyo2-state-machine-zone-c-both-shapes`） | Module 這一側的 (c) 區：介面已在狀態機的宣告裡定（`RegisterStateMachine<S, Zone::C>(…, Change)`，那一批用約束擋下）；`Change` 這個參數要不要留，到這一批再問使用者。**另有事前宣告** | (c) 區的獨占套用之後 |
 | 之後 | World 之間的事件；回滾 | 名指的 Feature |
 
 每一批開工前各有事前宣告；判定用的測試先列突變。K0 和 T2 都要改 `Product::Run`，K0 和 T4 都要改事件的修剪與 Executor，所以要排先後：K0 → T2 → T4。T1 可以和 K0 並行。K0 是這幾批裡最大的。
