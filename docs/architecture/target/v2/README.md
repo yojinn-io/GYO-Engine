@@ -49,6 +49,7 @@
 - [2026_11_15_gyo2_hook_flush.zh-Hant.md](../../../dev_logs/2026_11_15_gyo2_hook_flush.zh-Hant.md)：hook 的紀錄在 schedule 跑完時套用（清空輪、兩層上限、指紋升版）。
 - [2026_11_15_gyo2_spawn_reject.zh-Hant.md](../../../dev_logs/2026_11_15_gyo2_spawn_reject.zh-Hant.md)：同步點丟掉不能生成的那一筆（三條斷言改成丟掉、留明細與總數、LIM-7、指紋升版）。
 - [2026_11_16_gyo2_nested_schedule.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_nested_schedule.zh-Hant.md)：K0，獨占 World 的 System 可以跑一張 schedule（巢狀執行、`ExclusiveWorld<…>` 的閉包與帶寫入的宣告、開局由 Kernel 跑、指紋升版）。
+- [2026_11_16_gyo2_module_plugin_definition.zh-Hant.md](../../../dev_logs/2026_11_16_gyo2_module_plugin_definition.zh-Hant.md)：Module／Plugin 的定義改成「誰維護、介面是誰的」，AGENTS §6 與 v2 文件對齊。
 
 ## 沒有搬過來的
 
