@@ -4216,7 +4216,7 @@
       "id": "td-adv-despawn-onremove-component-major-across-entities",
       "what": "F.2 step 2: OnRemove runs in (ComponentId, EntityId) order across the despawned entities instead of (EntityId, ComponentId) (found by the adversarial check of the mutant list, Fable; the user chose 2026-11-16 one entity finished before the next; v8-arch-gyo2-test-debts)",
       "file": "engine/kernel/src/World.cpp",
-      "find": "        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Architect's recommendation (a), pending the user.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n",
+      "find": "        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n",
       "replace": "        for (std::size_t c = 0; c < columns_.size(); ++c) {\n            for (EntityId id : despawns) {\n                if (!std::binary_search(entities_.begin(), entities_.end(), id)) continue;\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n        }\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n",
       "target": "gyo_kernel_tests",
       "cases": "J-32:*",
@@ -4835,6 +4835,206 @@
       "target": "gyo_kernel_tests",
       "cases": "J-30:*",
       "expect": "Join\\(Log\\(\\)\\)\\ ==\\ \"added:1\\ added:0\""
+    },
+    {
+      "id": "we-j3-structural-allowed",
+      "what": "J-3: a structural World API call while Running is allowed (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        GYO_ASSERT(!structural);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-3:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-j3-spawn-immediate",
+      "what": "J-3, J-31: Spawn applies its bundle inside the call (the epoch check catches it) (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0; expect follows the K0 membership assert, which compares per run level)",
+      "file": "engine/kernel/include/engine/kernel/Params.hpp",
+      "find": "        Detail::Push(call, std::move(record));\n        return *id;",
+      "replace": "        for (auto& part : record.bundle) part.value->PutInto(Detail::ColumnAt(*world_, part.component), *id, 0);\n        return *id;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-3:*",
+      "expect": "GYO_ASSERT failed: world\\.MembershipEpoch\\(\\) == world\\.runStack_\\[level\\]\\.structure"
+    },
+    {
+      "id": "we-j4-handle-check-off",
+      "what": "J-4: the handle serial / sync-epoch check never reports (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (call->callSerial == callSerial && world.syncEpoch_ == syncEpoch) return;",
+      "replace": "    return;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::StaleHandle\\)"
+    },
+    {
+      "id": "we-j4-boundary-off",
+      "what": "J-4: the comparison after the call finds nothing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!declaredWrite(kind, id) && snapshot.valid && Differs(snapshot, bytes)) changed.push_back(name);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "HasCode\\(second,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "we-j5-layer1-off",
+      "what": "J-5: layer 1 never checks (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!verification_) return;\n        const Detail::AccessDesc& access = *call->access;",
+      "replace": "        return;\n        const Detail::AccessDesc& access = *call->access;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
+    },
+    {
+      "id": "we-j5-id-not-mode",
+      "what": "J-5 (J.3 #12): layer 1 compares the id, not the mode (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            if ((entry->modes & mode) == mode || (mode == Detail::kModeRead && (entry->modes & Detail::kModeWrite) != 0)) {",
+      "replace": "            if (true) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
+    },
+    {
+      "id": "we-j5-boundary-off",
+      "what": "J-5: the comparison after the call finds nothing (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        if (!declaredWrite(kind, id) && snapshot.valid && Differs(snapshot, bytes)) changed.push_back(name);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "HasCode\\(on,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "we-j3-16-violations-dropped",
+      "what": "J-5 (J.3 #16): violations of a call are dropped instead of returned as Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    std::vector<KernelError> list = std::move(call.errors);",
+      "replace": "    std::vector<KernelError> list;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-5:*",
+      "expect": "HasCode\\(on,\\ KernelErrorCode::AccessViolation\\)"
+    },
+    {
+      "id": "we-j6-no-current-call",
+      "what": "J-6 (W-6): a World access while Running with no current System is allowed (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        // W-6: in a run, only a System or hook of this World on this thread touches it.\n        GYO_ASSERT(call != nullptr);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "rig\\->Run\\(\\)"
+    },
+    {
+      "id": "we-j6b-host-zone-c",
+      "what": "J-6 (W-6b): the Host writes zone C state after the first Run (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "world\\.Insert\\(2,\\ Pos\\{2\\}\\)"
+    },
+    {
+      "id": "we-j32-spawn-before-despawn",
+      "what": "J-32: spawn and remove applied before despawn (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts; find rebuilt from the post-K0 ApplySync: step 2 moved after step 4)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.emitterZone = spawn.emitterZone;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.tick = tickOfSchedule();\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n",
+      "replace": "        // Step 3: remove, (EntityId, ComponentId) ascending; OnRemove while the cell is still readable.\n        std::vector<std::pair<EntityId, ComponentId>> removes;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Remove) removes.emplace_back(r.entity, r.id);\n        }\n        std::sort(removes.begin(), removes.end());\n        removes.erase(std::unique(removes.begin(), removes.end()), removes.end());\n        for (const auto& [id, component] : removes) {\n            if (!columns_[component]->Contains(id)) continue;\n            auto hooked = RunHooks(HookTrigger::OnRemove, id, component, planPos, schedule, stamp);\n            if (!hooked) return hooked;\n            columns_[component]->Erase(id);\n        }\n\n        std::vector<NewCell> added;\n\n        // Step 4: spawn, (EntityId, planPos, recSeq) ascending, the key unique in a\n        // phase (F.1, F.6). A record that cannot spawn is dropped and recorded (spec\n        // F-13), not an error. Each record takes the first reason that holds of: its\n        // id is in this World's allotter range (SpawnWithId only); the id is spawned\n        // twice at this sync point; the id is alive. Of the records of one id left\n        // after the range check, those of one emitter keep the first (recSeq order);\n        // those of two or more emitters are all dropped, so the result never depends\n        // on the registration order of Systems or hooks that do not conflict.\n        std::vector<Record*> spawns;\n        for (Record& r : records) {\n            if (r.kind == RecordKind::Spawn) spawns.push_back(&r);\n        }\n        auto spawnKey = [](const Record* r) { return std::make_tuple(r->entity, r->planPos, r->recSeq); };\n        std::sort(spawns.begin(), spawns.end(),\n                  [&](const Record* a, const Record* b) { return spawnKey(a) < spawnKey(b); });\n        for (std::size_t i = 1; i < spawns.size(); ++i) {\n            GYO_ASSERT(spawnKey(spawns[i - 1]) != spawnKey(spawns[i]));  // the key is unique in a phase (F.1)\n        }\n        auto reject = [&](const Record& spawn, SpawnRejectReason reason, std::string_view other) {\n            RejectedSpawn rejected;\n            rejected.entity = spawn.entity;\n            rejected.reason = reason;\n            rejected.emitter = std::string(spawn.emitter);\n            rejected.emitterIsHook = spawn.emitterHook;\n            rejected.emitterZone = spawn.emitterZone;\n            rejected.fromAllotter = !spawn.withId;\n            rejected.schedule = std::string(schedule);\n            rejected.step = spawn.planPos;\n            rejected.appliedAt = planPos;\n            rejected.tick = tickOfSchedule();\n            rejected.otherEmitter = std::string(other);\n            RecordRejectedSpawn(std::move(rejected));\n        };\n        std::vector<Record*> accepted;\n        for (std::size_t first = 0; first < spawns.size();) {\n            const EntityId id = spawns[first]->entity;\n            std::size_t end = first + 1;\n            while (end < spawns.size() && spawns[end]->entity == id) ++end;\n            // One verdict per record of the id; the dropped ones are recorded afterwards, in key order.\n            std::vector<std::optional<std::pair<SpawnRejectReason, std::string_view>>> dropped(end - first);\n            std::vector<std::size_t> candidates;\n            for (std::size_t i = first; i < end; ++i) {\n                if (spawns[i]->withId && data_->allotter && data_->allotterOps.owns(*resources_[*data_->allotter], id)) {\n                    dropped[i - first].emplace(SpawnRejectReason::IdInAllotterRange, std::string_view{});\n                } else {\n                    candidates.push_back(i);\n                }\n            }\n            if (!candidates.empty()) {\n                const auto here = std::lower_bound(spawnedHere.begin(), spawnedHere.end(), id,\n                                                   [](const std::pair<EntityId, std::string_view>& s, EntityId key) {\n                                                       return s.first < key;\n                                                   });\n                const bool spawnedAtThisSyncPoint = here != spawnedHere.end() && here->first == id;\n                const Record& head = *spawns[candidates.front()];\n                if (std::binary_search(entities_.begin(), entities_.end(), id)) {\n                    for (std::size_t c : candidates) {\n                        if (spawnedAtThisSyncPoint) {\n                            dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, here->second);\n                        } else {\n                            dropped[c - first].emplace(SpawnRejectReason::IdAlive, std::string_view{});\n                        }\n                    }\n                } else if (std::all_of(candidates.begin(), candidates.end(),\n                                       [&](std::size_t c) { return spawns[c]->emitterKey == head.emitterKey; })) {\n                    for (std::size_t k = 1; k < candidates.size(); ++k) {\n                        dropped[candidates[k] - first].emplace(SpawnRejectReason::IdSpawnedTwice, head.emitter);\n                    }\n                    // An id spawned by step 0 and despawned by this phase is listed already.\n                    if (!spawnedAtThisSyncPoint) spawnedHere.insert(here, {id, head.emitter});\n                    accepted.push_back(spawns[candidates.front()]);\n                } else {\n                    for (std::size_t c : candidates) {\n                        std::string_view other;\n                        for (std::size_t o : candidates) {\n                            if (spawns[o]->emitterKey != spawns[c]->emitterKey) {\n                                other = spawns[o]->emitter;\n                                break;\n                            }\n                        }\n                        dropped[c - first].emplace(SpawnRejectReason::IdSpawnedTwice, other);\n                    }\n                }\n            }\n            for (std::size_t i = first; i < end; ++i) {\n                if (dropped[i - first]) reject(*spawns[i], dropped[i - first]->first, dropped[i - first]->second);\n            }\n            first = end;\n        }\n        for (Record* candidate : accepted) {\n            Record& spawn = *candidate;\n            MakeAlive(spawn.entity);\n            for (Detail::BundleValue& part : spawn.bundle) {\n                if (part.value->PutInto(*columns_[part.component], spawn.entity, stamp)) {\n                    added.push_back(NewCell{spawn.entity, part.component});\n                }\n            }\n        }\n\n        // Step 2: despawn, ascending EntityId, only entities alive now, idempotent.\n        std::vector<EntityId> despawns;\n        for (const Record& r : records) {\n            if (r.kind == RecordKind::Despawn) despawns.push_back(r.entity);\n        }\n        std::sort(despawns.begin(), despawns.end());\n        despawns.erase(std::unique(despawns.begin(), despawns.end()), despawns.end());\n        for (EntityId id : despawns) {\n            const auto at = std::lower_bound(entities_.begin(), entities_.end(), id);\n            if (at == entities_.end() || *at != id) continue;\n            // OnRemove for every component first (ascending ComponentId), so each hook still reads the whole\n            // entity; then destroy in ascending ComponentId (W-7). (Decided by the user, v8-arch-gyo2-despawn-notify-all-then-destroy.)\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                if (!columns_[c]->Contains(id)) continue;\n                auto hooked = RunHooks(HookTrigger::OnRemove, id, static_cast<ComponentId>(c), planPos, schedule, stamp);\n                if (!hooked) return hooked;\n            }\n            for (std::size_t c = 0; c < columns_.size(); ++c) {\n                columns_[c]->Erase(id);\n            }\n            entities_.erase(std::lower_bound(entities_.begin(), entities_.end(), id));\n            ++entitiesEpoch_;\n        }\n\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32:*",
+      "expect": "despawn then spawn with the same id: the new entity lives[^=]*CHECK\\( world\\.Alive\\(4\\) \\) is NOT correct"
+    },
+    {
+      "id": "we-j32b-dropped-err-lost",
+      "what": "J-32b (J.3 #16): a kernel Err the System dropped is lost (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        for (KernelError& dropped : call.returned) list.push_back(std::move(dropped));\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j45-exclusive-unchecked",
+      "what": "J-45 (S-13): ExclusiveWorld writes any column (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "replace": "    return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j45-debug-only",
+      "what": "J-45 (J.3 #16): the ExclusiveWorld check only in a debug build (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n",
+      "replace": "std::optional<KernelError> CheckExclusiveWrite(SystemContext& call, ComponentId component, EntityId entity) {\n#if defined(NDEBUG)\n    return std::nullopt;\n#endif\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-j53-after-diff-dropped",
+      "what": "J-53: differences of the comparison after the call are not reported (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    for (const std::string& storage : changed) {",
+      "replace": "    for (const std::string& storage : std::vector<std::string>{}) {",
+      "target": "gyo_kernel_tests",
+      "cases": "J-53:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::BoundaryChange\\)"
+    },
+    {
+      "id": "we-adv-dropped-err-beside-own-err-lost",
+      "what": "J.3 #16 (Fable): a kernel Err the System dropped is lost when it returns another Err (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            if (!ContainsError(own, returned)) list.push_back(std::move(returned));\n",
+      "replace": "            if (false && !ContainsError(own, returned)) list.push_back(std::move(returned));\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-32b:*",
+      "expect": "result\\.error\\(\\)\\.Has\\(KernelErrorCode::UntypedWrite\\)"
+    },
+    {
+      "id": "we-adv-exclusive-zone-half",
+      "what": "S-13 (Fable): ExclusiveWorld checks only the write policy (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (info.zone == Zone::B && info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "replace": "    if (info.writePolicy == WritePolicy::Shared) return std::nullopt;\n    return CallError(call, KernelErrorCode::ExclusiveWorldWrite",
+      "target": "gyo_kernel_tests",
+      "cases": "J-45:*",
+      "expect": "static_cast<bool>\\(result\\)"
+    },
+    {
+      "id": "we-adv-j4-serial-half-dropped",
+      "what": "J-4 (Fable): only the sync epoch is compared (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "    if (call->callSerial == callSerial && world.syncEpoch_ == syncEpoch) return;",
+      "replace": "    if (world.syncEpoch_ == syncEpoch) return;",
+      "target": "gyo_kernel_tests",
+      "cases": "J-4:*",
+      "expect": "HasCode\\(result,\\ KernelErrorCode::StaleHandle\\)"
+    },
+    {
+      "id": "we-adv-interrupted-write-allowed",
+      "what": "E.5 (Fable): a Host write to an Interrupted World is not stopped (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "        GYO_ASSERT(mode == Detail::kModeRead);\n",
+      "replace": "",
+      "target": "gyo_kernel_tests",
+      "cases": "J-35:*",
+      "expect": "rig\\->world\\(\\)\\.Insert\\(2,\\ Tag\\{2\\}\\)"
+    },
+    {
+      "id": "we-adv-j6b-host-zone-c-resource",
+      "what": "J-6 W-6b (Fable): the Host writes a zone C state resource after the first Run (carried from claude/arch-kernel-world-exec 50cb2050 by v8-arch-gyo2-test-debts after K0 merged)",
+      "file": "engine/kernel/src/World.cpp",
+      "find": "            GYO_ASSERT(!hasRun_ || info.zone != Zone::C || info.role == Role::Input || info.external);\n",
+      "replace": "            static_cast<void>(info);\n",
+      "target": "gyo_kernel_tests",
+      "cases": "J-6:*",
+      "expect": "world\\.SetResource\\(CRes\\{1\\}\\)"
     },
     {
       "id": "hf-limit-source-always-settings",

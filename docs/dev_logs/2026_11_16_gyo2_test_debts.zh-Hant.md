@@ -147,6 +147,23 @@ PR [#236](https://github.com/yojinn-io/GYO-Engine/pull/236)（目標 `gyo2`；�
 
 「等 K0」的 20 個（加上 `we-hook-queue-one-per-world` 共 21 個）沒有在 `gyo2` 上跑：K0 合併後目標的文字會變，到時照合併後的程式重寫 `find`、再跑，搬了會存活的列給使用者。目標都在 K0 會改的函式裡，不在這張卡先搬，是為了不讓 K0 在實作中途替這些條目重寫 `find`。
 
+## K0 合併之後（`gyo2` cb6bccca）
+
+主會話通知 K0（PR #239）已併入 `gyo2`，#236、#238 和 `gyo2` 衝突。照通知做了四件：
+
+1. **併入 `gyo2`**：先併進 #236 的分支（只有 `target/v2/README.md` 的 dev_log 索引衝突，兩行都留），再把 #236 的分支併進 #238 的分支（沒有衝突）。`mutations.json` 兩邊的新條目都留，沒有重排或重新格式化；`tests/common/kernel` 沒有衝突。合併後完整掃描：只有 `td-adv-despawn-onremove-component-major-across-entities` 的 `find` 對不上——K0 把 `World.cpp` 第 2 步那行註解改成指向 `v8-arch-gyo2-despawn-notify-all-then-destroy`，`find` 照新註解改寫（註解已是定案的文字）。合併後本機建置、ctest `cpu|shader` 99/99（`build8-postk0.log`、`ctest4-postk0.log`）。
+2. **已搬的 32 個裡，目標在 K0 改過的檔的 17 個**（`World.cpp` 8、`Params.hpp` 8、`Executor.cpp` 1）：`find` 都還在目標檔裡正好出現一次，照 K0 之後的程式重跑。
+3. **原本「等 K0」的 21 個**：照第三件的規則處理、實際跑過（候選清單 `k0-wait-candidates.json`、`k0-wait-run1.log`，手動套用的輸出 `manual-*.log`、`spawn-before-despawn-manual.log`）：
+   - 現在就能搬，照原文（`find`、`expect` 不變）：18 個。其中打 `CheckExclusiveWrite` 的三個（`we-j45-exclusive-unchecked`、`we-j45-debug-only`、`we-adv-exclusive-zone-half`）：K0 改的是 Resource 的寫入（另有 `CheckExclusiveResourceWrite`）與生成；元件寫入的判定沒變，J-45 的案例已改用 K0 的新介面（`Modify` 閉包、`ExclusiveWorld<>`），照樣抓到。打 `CheckHandle` 的兩個（`we-j4-handle-check-off`、`we-adv-j4-serial-half-dropped`）：函式本身 K0 沒改（K0 改的是 `ExclusiveWorld` 在 `RunSchedule` 之後更新記號），J-4 照樣抓到。
+   - 現在就能搬，重寫 `expect`：`we-j3-spawn-immediate`。K0 把成員檢查的斷言改成依執行的層比對，訊息變成 `world.MembershipEpoch() == world.runStack_[level].structure`。
+   - 現在就能搬，重寫 `find` 與 `expect`：`we-j32-spawn-before-despawn`。`find` 改成「第 2 步到第 5 步之前」的整段，`replace` 把第 2 步搬到第 4 步之後；原本期待的斷言已被 #235 改成丟掉，現在由 J-32「despawn then spawn with the same id」子案例的 `world.Alive(4)` 抓到，`expect` 綁住那個子案例。
+   - 不搬：`we-hook-queue-one-per-world`。只跑 J-34 時存活；跑整個 `gyo_kernel_tests` 時被 K0 的 J-56「the outer schedule's hook queue is neither applied nor dropped by the inner schedule」抓到。同一個位置、同一個性質（同步點只套用自己這張 schedule 的 hook 佇列）已經由 K0 的 `ns-inner-applies-outer-hooks` 守；不巢狀時，`Run` 開頭的斷言保證這張的佇列是空的，所以別張 schedule 的紀錄進不來。
+   - 搬了會存活：0。
+   新條目 20 個放在 `we-adv-host-write-current-stamp` 之後。
+4. **重跑範圍**：從正式清單一起跑 52 個——上面 17 個、新搬的 20 個、第二件的 15 個（`World.cpp` K0 也改過）：52/52 killed（`postk0-run.log`）。
+
+第三件的合計因此變成：52 個裡搬進 `gyo2` 的 52 個（第一次 32 個，K0 之後 20 個），不搬 0 個；另外 50cb2050 之後才有的兩個：`we-despawn-onremove-interleaved` 已搬（第二件），`we-hook-queue-one-per-world` 不搬。
+
 ## 證據
 
-全部在這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-test-debts/`（git 不追蹤）：`configure1.log`、`build1.log`；第一件 `find-scan-base.log`、`part1-mutants.log`；第三件 `we-missing.json`（54 個沒搬的原文）、`locate.py`（找目標所在的函式）、`part3-candidates.json`、`part3-ids.txt`、`part3-candidates-run1.log`、`part3-candidates-run2.log`、`part3-catalog-run.log`；第二件 `j32-run.log`、`j32-run2.log`、`cells-kept-manual.log`、`dead-id-manual.log`、`part2-ids.txt`、`part2-mutants-run1.log`～`part2-mutants-run5.log`、`j32-run3.log`、`ctest1.log`～`ctest3.log`（本機 `cpu|shader` 96/96）、對抗檢查 `mutation-check-fable/`。
+全部在這台 Mac 的主 checkout `/Users/karasu/Code/Source/GYO-Engine/build/evidence/gyo2-test-debts/`（git 不追蹤）：`configure1.log`、`build1.log`；第一件 `find-scan-base.log`、`part1-mutants.log`；第三件 `we-missing.json`（54 個沒搬的原文）、`locate.py`（找目標所在的函式）、`part3-candidates.json`、`part3-ids.txt`、`part3-candidates-run1.log`、`part3-candidates-run2.log`、`part3-catalog-run.log`；第二件 `j32-run.log`、`j32-run2.log`、`cells-kept-manual.log`、`dead-id-manual.log`、`part2-ids.txt`、`part2-mutants-run1.log`～`part2-mutants-run5.log`、`j32-run3.log`、`ctest1.log`～`ctest3.log`（本機 `cpu|shader` 96/96）、對抗檢查 `mutation-check-fable/`；K0 合併之後 `post-k0-scan.log`、`build8-postk0.log`、`ctest4-postk0.log`、`k0-wait-21.json`、`k0-wait-candidates.json`、`k0-wait-run1.log`、`j32-spawn-before-despawn.json`、`spawn-before-despawn-manual.log`、`manual-we-j3-spawn-immediate.log`、`manual-we-hook-queue-one-per-world.log`、`postk0-ids.txt`、`postk0-run.log`。
